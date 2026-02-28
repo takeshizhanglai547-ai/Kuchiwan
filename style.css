@@ -1,0 +1,302 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  color: #00ffcc;
+  user-select: none;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── HUD ── */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+.hidden { display: none !important; }
+
+/* Player status (bottom-left) */
+#player-status {
+  position: absolute;
+  bottom: 32px; left: 24px;
+  width: 280px;
+}
+
+/* Enemy status (top-center) */
+#enemy-status {
+  position: absolute;
+  top: 24px; left: 50%;
+  transform: translateX(-50%);
+  width: 360px;
+  text-align: center;
+}
+
+#enemy-name-label {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: #ff4444;
+  margin-bottom: 4px;
+}
+
+#phase-label {
+  font-size: 10px;
+  color: #ff8800;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+/* Weapon status (bottom-right) */
+#weapon-status {
+  position: absolute;
+  bottom: 32px; right: 24px;
+  text-align: right;
+}
+
+.weapon-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.w-label { color: #888; font-size: 10px; letter-spacing: 2px; }
+.w-icon  { color: #00ffcc; font-size: 14px; }
+.w-val   { color: #fff; font-size: 14px; min-width: 36px; text-align: right; }
+
+/* Bars */
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.status-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  width: 24px;
+  color: #888;
+}
+
+.status-val {
+  font-size: 11px;
+  color: #ccc;
+  min-width: 48px;
+  text-align: right;
+}
+
+.bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  width: 100%;
+  transition: width 0.15s ease;
+  position: relative;
+}
+
+.bar-ap     { background: linear-gradient(90deg, #00ffcc, #00aaff); box-shadow: 0 0 8px #00ffcc88; }
+.bar-en     { background: linear-gradient(90deg, #ffaa00, #ff6600); box-shadow: 0 0 8px #ffaa0088; }
+.bar-enemy  { background: linear-gradient(90deg, #ff4444, #ff0000); box-shadow: 0 0 8px #ff444488; }
+
+/* Lock-on overlay */
+#lock-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lock-ring {
+  position: absolute;
+  width: 60px; height: 60px;
+  border: 2px solid #ff4444;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  box-shadow: 0 0 12px #ff4444, inset 0 0 12px #ff444422;
+  animation: lockPulse 0.6s ease-in-out infinite alternate;
+}
+
+.lock-ring.locked {
+  border-color: #ff0000;
+  box-shadow: 0 0 20px #ff0000, inset 0 0 20px #ff000033;
+  animation: none;
+}
+
+@keyframes lockPulse {
+  from { opacity: 0.6; transform: translate(-50%,-50%) scale(0.95); }
+  to   { opacity: 1;   transform: translate(-50%,-50%) scale(1.05); }
+}
+
+/* Crosshair */
+#crosshair {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px; height: 24px;
+}
+
+.ch-h {
+  position: absolute;
+  top: 50%; left: 0;
+  width: 100%; height: 1px;
+  background: rgba(0,255,200,0.7);
+  transform: translateY(-50%);
+}
+
+.ch-v {
+  position: absolute;
+  left: 50%; top: 0;
+  height: 100%; width: 1px;
+  background: rgba(0,255,200,0.7);
+  transform: translateX(-50%);
+}
+
+/* Center info */
+#center-info {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, calc(-50% + 60px));
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #ff8800;
+  text-align: center;
+  text-shadow: 0 0 12px #ff8800;
+  pointer-events: none;
+}
+
+/* ── START SCREEN ── */
+#start-screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 32px;
+  background: radial-gradient(ellipse at center, #0a0a1a 0%, #000 100%);
+  z-index: 100;
+}
+
+.title-block { text-align: center; }
+
+.title-main {
+  font-size: clamp(48px, 10vw, 96px);
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: #00ffcc;
+  text-shadow: 0 0 30px #00ffcc, 0 0 60px #00ffcc44;
+  line-height: 1;
+}
+
+.title-sub {
+  font-size: 11px;
+  letter-spacing: 5px;
+  color: #446;
+  margin: 8px 0;
+}
+
+.controls-block {
+  background: rgba(0,255,200,0.04);
+  border: 1px solid rgba(0,255,200,0.15);
+  padding: 24px 40px;
+  text-align: center;
+}
+
+.controls-block h3 {
+  font-size: 11px;
+  letter-spacing: 6px;
+  color: #00ffcc;
+  margin-bottom: 16px;
+}
+
+.ctrl-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 32px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.ctrl-grid span:nth-child(odd)  { color: #00ffcc; font-weight: bold; }
+.ctrl-grid span:nth-child(even) { color: #778; }
+
+#start-btn {
+  background: transparent;
+  border: 1px solid #00ffcc;
+  color: #00ffcc;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  letter-spacing: 6px;
+  padding: 14px 48px;
+  cursor: pointer;
+  text-shadow: 0 0 10px #00ffcc;
+  box-shadow: 0 0 20px rgba(0,255,200,0.2);
+  transition: all 0.2s;
+}
+
+#start-btn:hover {
+  background: rgba(0,255,200,0.1);
+  box-shadow: 0 0 40px rgba(0,255,200,0.4);
+}
+
+/* ── RESULT SCREEN ── */
+#result-screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 24px;
+  background: rgba(0,0,0,0.85);
+  z-index: 100;
+}
+
+#result-title {
+  font-size: clamp(36px, 8vw, 72px);
+  font-weight: 900;
+  letter-spacing: 8px;
+  text-shadow: 0 0 30px currentColor;
+}
+
+#result-sub {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #668;
+}
+
+#retry-btn {
+  background: transparent;
+  border: 1px solid #00ffcc;
+  color: #00ffcc;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 5px;
+  padding: 12px 40px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#retry-btn:hover {
+  background: rgba(0,255,200,0.1);
+}
+
+/* Damage flash */
+@keyframes damageFlash {
+  0%   { background: rgba(255,0,0,0.35); }
+  100% { background: transparent; }
+}
+
+.damage-flash::after {
+  content: '';
+  position: fixed; inset: 0;
+  animation: damageFlash 0.25s ease-out forwards;
+  pointer-events: none;
+  z-index: 50;
+}
