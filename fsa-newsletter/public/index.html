@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>金融庁ニュースレター 自動生成システム</title>
+  <style>
+    /* ===== リセット & 基本スタイル ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #1a2744;
+      --navy-light: #243566;
+      --gold: #c4a44a;
+      --gold-light: #ddc878;
+      --cream: #f8f5ee;
+      --white: #ffffff;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-400: #9a9a9a;
+      --gray-700: #444444;
+      --text: #2c2c2c;
+      --border: #d4c9aa;
+      --accent-red: #8b1a1a;
+      --shadow: 0 4px 24px rgba(26, 39, 68, 0.12);
+      --shadow-sm: 0 2px 8px rgba(26, 39, 68, 0.08);
+    }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP',
+                   'Yu Gothic UI', 'Meiryo', sans-serif;
+      background: var(--gray-100);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    /* ===== ヘッダー ===== */
+    .app-header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+      color: var(--white);
+      padding: 0;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-logo {
+      width: 44px;
+      height: 44px;
+      background: var(--gold);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .header-subtitle {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 0.03em;
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .api-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.75);
+      padding: 6px 12px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .api-status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6ee7b7;
+      flex-shrink: 0;
+    }
+
+    .api-status.no-key .dot { background: #fca5a5; }
+
+    /* ===== メインレイアウト ===== */
+    .app-main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 28px 32px;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ===== サイドパネル ===== */
+    .sidebar {
+      position: sticky;
+      top: 92px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 14px 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-body { padding: 18px; }
+
+    /* ===== コントロール ===== */
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 6px;
+      letter-spacing: 0.03em;
+    }
+
+    .control-select, .control-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 7px;
+      font-size: 0.85rem;
+      color: var(--text);
+      background: var(--white);
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .control-select:focus, .control-input:focus {
+      outline: none;
+      border-color: var(--navy);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .toggle-label {
+      font-size: 0.82rem;
+      color: var(--gray-700);
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--gray-200);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .toggle input:checked ~ .toggle-slider { background: var(--navy); }
+    .toggle input:checked ~ .toggle-slider::before { transform: translateX(18px); }
+
+    /* ===== ボタン ===== */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      letter-spacing: 0.03em;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+      color: white;
+      width: 100%;
+      padding: 13px 20px;
+      font-size: 0.92rem;
+      box-shadow: 0 3px 10px rgba(26,39,68,0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 16px rgba(26,39,68,0.4);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--cream);
+      color: var(--navy);
+      border: 1.5px solid var(--border);
+      width: 100%;
+      font-size: 0.82rem;
+    }
+
+    .btn-secondary:hover { background: var(--gray-200); }
+
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+      color: var(--navy);
+      box-shadow: 0 3px 10px rgba(196,164,74,0.3);
+    }
+
+    .btn-gold:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 16px rgba(196,164,74,0.45);
+    }
+
+    .btn-sm {
+      padding: 7px 14px;
+      font-size: 0.78rem;
+    }
+
+    /* ===== 進捗表示 ===== */
+    .progress-panel {
+      display: none;
+    }
+
+    .progress-panel.active { display: block; }
+
+    .progress-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--gray-200);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+      transition: all 0.3s;
+    }
+
+    .step-icon.active {
+      background: var(--navy);
+      color: white;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .step-icon.done { background: #6ee7b7; color: var(--navy); animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(26,39,68,0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(26,39,68,0); }
+    }
+
+    .step-text {
+      font-size: 0.82rem;
+      color: var(--gray-700);
+      padding-top: 4px;
+    }
+
+    .thinking-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(196,164,74,0.1);
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--navy);
+      margin-top: 8px;
+    }
+
+    .thinking-indicator.active { display: flex; }
+
+    .thinking-dots span {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--gold);
+      margin: 0 1px;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-5px); }
+    }
+
+    /* ===== 報告書リスト ===== */
+    .reports-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .report-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      border: 1px solid var(--gray-200);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .report-item:hover { background: var(--cream); border-color: var(--border); }
+    .report-item.selected { background: rgba(26,39,68,0.06); border-color: var(--navy); }
+
+    .report-check {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: var(--navy);
+    }
+
+    .report-info { flex: 1; min-width: 0; }
+
+    .report-title {
+      font-size: 0.78rem;
+      color: var(--text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .report-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 3px;
+    }
+
+    .report-date { font-size: 0.68rem; color: var(--gray-400); }
+
+    .report-badge {
+      font-size: 0.62rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-report { background: #dbeafe; color: #1d4ed8; }
+    .badge-guideline { background: #d1fae5; color: #065f46; }
+    .badge-enforcement { background: #fee2e2; color: #991b1b; }
+    .badge-public-comment { background: #fef3c7; color: #92400e; }
+    .badge-regulation { background: #ede9fe; color: #5b21b6; }
+    .badge-alert { background: #fce7f3; color: #9d174d; }
+    .badge-general { background: var(--gray-200); color: var(--gray-700); }
+
+    /* ===== メインコンテンツエリア ===== */
+    .content-area {
+      min-height: 600px;
+    }
+
+    /* ===== ウェルカム画面 ===== */
+    .welcome-screen {
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      padding: 48px 40px;
+      text-align: center;
+    }
+
+    .welcome-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+
+    .welcome-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 12px;
+      letter-spacing: 0.03em;
+    }
+
+    .welcome-desc {
+      font-size: 0.92rem;
+      color: var(--gray-700);
+      max-width: 500px;
+      margin: 0 auto 32px;
+      line-height: 1.8;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 0 auto 32px;
+      max-width: 600px;
+    }
+
+    .feature-card {
+      padding: 16px;
+      background: var(--cream);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .feature-icon { font-size: 28px; margin-bottom: 8px; }
+
+    .feature-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+
+    .feature-desc { font-size: 0.74rem; color: var(--gray-700); line-height: 1.5; }
+
+    /* ===== ニュースレター表示 ===== */
+    .newsletter-viewer {
+      display: none;
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .newsletter-viewer.active { display: block; }
+
+    .viewer-toolbar {
+      background: var(--navy);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .viewer-title {
+      color: white;
+      font-size: 0.88rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .viewer-actions { display: flex; gap: 8px; }
+
+    .newsletter-content-wrapper {
+      background: #f0ece2;
+      padding: 32px;
+      min-height: 400px;
+    }
+
+    /* ===== ニュースレター本体スタイル ===== */
+    .newsletter {
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--white);
+      box-shadow: 0 4px 32px rgba(0,0,0,0.15);
+    }
+
+    .newsletter-header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 0;
+    }
+
+    .newsletter-meta {
+      padding: 28px 40px;
+      border-bottom: 3px solid var(--gold);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .newsletter .firm-name {
+      font-size: 0.78rem;
+      letter-spacing: 0.15em;
+      color: var(--gold);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .newsletter .newsletter-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin: 6px 0;
+    }
+
+    .newsletter .issue-info {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.05em;
+    }
+
+    .newsletter .header-decoration {
+      text-align: right;
+      color: var(--gold);
+      opacity: 0.4;
+      font-size: 2.5rem;
+    }
+
+    .newsletter .foreword {
+      padding: 28px 40px;
+      background: var(--cream);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .newsletter .foreword h2 {
+      font-size: 0.78rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .newsletter .foreword p {
+      font-size: 0.92rem;
+      color: var(--navy);
+      line-height: 1.9;
+    }
+
+    .newsletter .topic-section {
+      padding: 32px 40px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .newsletter .topic-section:last-of-type { border-bottom: none; }
+
+    .newsletter .topic-header {
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--cream);
+    }
+
+    .newsletter .topic-category {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 3px;
+      background: var(--navy);
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+
+    .newsletter .topic-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--navy);
+      line-height: 1.5;
+      margin: 6px 0;
+    }
+
+    .newsletter .topic-date {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+
+    .newsletter h3 {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin: 18px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .newsletter p {
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.9;
+      margin-bottom: 12px;
+    }
+
+    .newsletter ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .newsletter ul li {
+      padding: 5px 0 5px 18px;
+      position: relative;
+      font-size: 0.88rem;
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    .newsletter ul li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--gold);
+      font-size: 0.8rem;
+    }
+
+    .newsletter .topic-summary { background: rgba(26,39,68,0.03); padding: 16px; border-radius: 6px; margin-bottom: 16px; }
+    .newsletter .legal-significance { border-left: 3px solid var(--navy); padding-left: 16px; }
+    .newsletter .practical-points { background: rgba(196,164,74,0.08); padding: 16px; border-radius: 6px; border: 1px solid rgba(196,164,74,0.3); }
+    .newsletter .outlook { font-style: italic; opacity: 0.85; }
+
+    .newsletter .conclusion {
+      padding: 28px 40px;
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .newsletter .conclusion h2 {
+      font-size: 0.78rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 14px;
+    }
+
+    .newsletter .conclusion p { color: rgba(255,255,255,0.88); font-size: 0.9rem; }
+
+    .newsletter .disclaimer {
+      padding: 18px 40px;
+      background: var(--gray-100);
+      border-top: 2px solid var(--gold);
+    }
+
+    .newsletter .disclaimer p {
+      font-size: 0.72rem;
+      color: var(--gray-400);
+      line-height: 1.7;
+    }
+
+    /* ===== ストリーミングカーソル ===== */
+    .streaming-cursor::after {
+      content: '▋';
+      animation: blink 0.8s ease-in-out infinite;
+      color: var(--gold);
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ===== スケルトンローダー ===== */
+    .skeleton {
+      background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===== トースト通知 ===== */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .toast {
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: white;
+      box-shadow: var(--shadow);
+      animation: slideIn 0.3s ease;
+      max-width: 320px;
+    }
+
+    .toast-success { background: #065f46; }
+    .toast-error { background: var(--accent-red); }
+    .toast-info { background: var(--navy); }
+
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ===== レスポンシブ ===== */
+    @media (max-width: 900px) {
+      .app-main {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+      .sidebar { position: static; }
+      .features-grid { grid-template-columns: 1fr; }
+      .header-inner { padding: 12px 16px; }
+    }
+
+    /* ===== プリント用スタイル ===== */
+    @media print {
+      .app-header, .sidebar, .viewer-toolbar { display: none !important; }
+      .app-main { display: block; padding: 0; }
+      .newsletter-viewer { display: block !important; box-shadow: none; }
+      .newsletter-content-wrapper { padding: 0; background: white; }
+      .newsletter { box-shadow: none; max-width: 100%; }
+    }
+
+    /* ===== スクロールバー ===== */
+    .reports-list::-webkit-scrollbar { width: 5px; }
+    .reports-list::-webkit-scrollbar-track { background: var(--gray-100); }
+    .reports-list::-webkit-scrollbar-thumb { background: var(--gray-400); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ===== アプリヘッダー ===== -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <div class="header-logo">⚖️</div>
+      <div>
+        <div class="header-title">金融庁ニュースレター 自動生成システム</div>
+        <div class="header-subtitle">FSA Reports → AI Analysis → Law Firm Newsletter</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="api-status" id="apiStatus">
+        <div class="dot"></div>
+        <span>確認中...</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== メインレイアウト ===== -->
+<main class="app-main">
+
+  <!-- ===== サイドバー ===== -->
+  <aside class="sidebar">
+
+    <!-- 設定パネル -->
+    <div class="panel">
+      <div class="panel-header">⚙️ 設定</div>
+      <div class="panel-body">
+        <div class="control-group">
+          <label class="control-label">取得件数</label>
+          <select class="control-select" id="maxItems">
+            <option value="5">5件</option>
+            <option value="8" selected>8件</option>
+            <option value="12">12件</option>
+            <option value="15">15件（最大）</option>
+          </select>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">デモモード（APIキー不要）</span>
+          <label class="toggle">
+            <input type="checkbox" id="demoMode">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">思考プロセスを表示</span>
+          <label class="toggle">
+            <input type="checkbox" id="showThinking">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 操作パネル -->
+    <div class="panel">
+      <div class="panel-header">🚀 操作</div>
+      <div class="panel-body">
+        <button class="btn btn-primary" id="btnFetchAndGenerate" onclick="runFullPipeline()">
+          <span>📰</span>
+          <span>取得 → 生成（一括実行）</span>
+        </button>
+        <br>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+          <button class="btn btn-secondary" onclick="fetchReports()">
+            🔍 情報取得のみ
+          </button>
+          <button class="btn btn-secondary" onclick="generateFromSelected()">
+            ✍️ 選択して生成
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 進捗パネル -->
+    <div class="panel progress-panel" id="progressPanel">
+      <div class="panel-header">📊 進捗</div>
+      <div class="panel-body">
+        <div class="progress-step">
+          <div class="step-icon" id="step1Icon">1</div>
+          <div class="step-text" id="step1Text">金融庁サイト確認待ち</div>
+        </div>
+        <div class="progress-step">
+          <div class="step-icon" id="step2Icon">2</div>
+          <div class="step-text" id="step2Text">AI分析・生成待ち</div>
+        </div>
+        <div class="progress-step">
+          <div class="step-icon" id="step3Icon">3</div>
+          <div class="step-text" id="step3Text">ニュースレター完成待ち</div>
+        </div>
+
+        <div class="thinking-indicator" id="thinkingIndicator">
+          <span>🧠 Claude思考中</span>
+          <div class="thinking-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 取得済み報告書パネル -->
+    <div class="panel" id="reportsPanel" style="display:none;">
+      <div class="panel-header">
+        📋 取得済み報告書
+        <span id="reportsCount" style="margin-left:auto;font-weight:400;font-size:0.75rem;"></span>
+      </div>
+      <div class="panel-body">
+        <div class="reports-list" id="reportsList"></div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-gold btn-sm" onclick="generateFromSelected()" style="width:100%;">
+            ✍️ 選択した報告書でニュースレター生成
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ===== コンテンツエリア ===== -->
+  <div class="content-area">
+
+    <!-- ウェルカム画面 -->
+    <div class="welcome-screen" id="welcomeScreen">
+      <div class="welcome-icon">📰</div>
+      <h1 class="welcome-title">金融庁ニュースレター自動生成</h1>
+      <p class="welcome-desc">
+        金融庁ウェブサイトの最新報告書・発表資料を自動取得し、<br>
+        Claude AIが大手法律事務所スタイルのニュースレターを生成します。
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <div class="feature-title">自動情報収集</div>
+          <div class="feature-desc">金融庁サイトから最新の報告書・監督指針・行政処分を自動取得</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <div class="feature-title">AI法的分析</div>
+          <div class="feature-desc">Claude Opus 4.6が深い法的分析と実務上の示唆を提供</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📄</div>
+          <div class="feature-title">プロ品質の文書</div>
+          <div class="feature-desc">大手法律事務所水準のニュースレターを即時生成</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-gold" style="display:inline-flex;padding:14px 32px;font-size:1rem;" onclick="runFullPipeline()">
+        🚀 今すぐ生成する
+      </button>
+    </div>
+
+    <!-- ニュースレタービューア -->
+    <div class="newsletter-viewer" id="newsletterViewer">
+      <div class="viewer-toolbar">
+        <div class="viewer-title">
+          📰 金融規制ニュースレター
+          <span id="generatedAt" style="font-weight:400;font-size:0.75rem;color:rgba(255,255,255,0.6);"></span>
+        </div>
+        <div class="viewer-actions">
+          <button class="btn btn-secondary btn-sm" onclick="copyNewsletter()">📋 コピー</button>
+          <button class="btn btn-secondary btn-sm" onclick="printNewsletter()">🖨️ 印刷</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetView()">✕ 閉じる</button>
+        </div>
+      </div>
+      <div class="newsletter-content-wrapper">
+        <div id="newsletterContent"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- トースト通知コンテナ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  // ===== 状態管理 =====
+  let fetchedReports = [];
+  let selectedReports = new Set();
+  let isGenerating = false;
+
+  // ===== 初期化 =====
+  async function init() {
+    await checkApiStatus();
+  }
+
+  async function checkApiStatus() {
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      const statusEl = document.getElementById('apiStatus');
+      if (data.hasApiKey) {
+        statusEl.innerHTML = '<div class="dot"></div><span>Claude API 接続済み</span>';
+        statusEl.className = 'api-status';
+      } else {
+        statusEl.innerHTML = '<div class="dot"></div><span>デモモード（APIキー未設定）</span>';
+        statusEl.className = 'api-status no-key';
+        document.getElementById('demoMode').checked = true;
+      }
+    } catch (e) {
+      console.error('ヘルスチェックエラー:', e);
+    }
+  }
+
+  // ===== 進捗UI更新 =====
+  function showProgressPanel() {
+    document.getElementById('progressPanel').classList.add('active');
+  }
+
+  function updateStep(step, status, text) {
+    const icon = document.getElementById(`step${step}Icon`);
+    const textEl = document.getElementById(`step${step}Text`);
+    if (text) textEl.textContent = text;
+
+    icon.className = 'step-icon';
+    if (status === 'active') icon.classList.add('active');
+    else if (status === 'done') {
+      icon.classList.add('done');
+      icon.textContent = '✓';
+    }
+  }
+
+  function setThinking(active) {
+    const indicator = document.getElementById('thinkingIndicator');
+    const showThinking = document.getElementById('showThinking').checked;
+    if (active && showThinking) {
+      indicator.classList.add('active');
+    } else {
+      indicator.classList.remove('active');
+    }
+  }
+
+  // ===== 報告書リスト表示 =====
+  function renderReportsList(reports) {
+    const container = document.getElementById('reportsList');
+    const panel = document.getElementById('reportsPanel');
+    const count = document.getElementById('reportsCount');
+
+    count.textContent = `${reports.length}件`;
+    panel.style.display = 'block';
+
+    container.innerHTML = reports.map((r, i) => {
+      const badgeClass = `badge-${r.category || 'general'}`;
+      return `
+        <div class="report-item" onclick="toggleReport(${i}, this)">
+          <input type="checkbox" class="report-check" id="chk${i}" onchange="updateSelection(${i}, this.checked)">
+          <div class="report-info">
+            <div class="report-title">${escapeHtml(r.title)}</div>
+            <div class="report-meta">
+              <span class="report-date">${r.date || ''}</span>
+              <span class="report-badge ${badgeClass}">${escapeHtml(r.categoryLabel || r.category || '')}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // デフォルトで全選択
+    reports.forEach((_, i) => {
+      document.getElementById(`chk${i}`).checked = true;
+      selectedReports.add(i);
+      document.querySelectorAll('.report-item')[i].classList.add('selected');
+    });
+  }
+
+  function toggleReport(index, el) {
+    const chk = document.getElementById(`chk${index}`);
+    chk.checked = !chk.checked;
+    updateSelection(index, chk.checked);
+    el.classList.toggle('selected', chk.checked);
+  }
+
+  function updateSelection(index, checked) {
+    if (checked) selectedReports.add(index);
+    else selectedReports.delete(index);
+    document.querySelectorAll('.report-item')[index].classList.toggle('selected', checked);
+  }
+
+  // ===== ニュースレタービューア =====
+  function showNewsletterViewer() {
+    document.getElementById('welcomeScreen').style.display = 'none';
+    const viewer = document.getElementById('newsletterViewer');
+    viewer.classList.add('active');
+    document.getElementById('newsletterContent').innerHTML = '';
+    document.getElementById('generatedAt').textContent =
+      `生成日時: ${new Date().toLocaleString('ja-JP')}`;
+  }
+
+  function appendNewsletterHtml(html) {
+    const content = document.getElementById('newsletterContent');
+    // 蓄積されたHTMLを追加
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    // ストリーミング中はカーソル表示
+    const existingContent = content.innerHTML;
+    content.innerHTML = existingContent + html;
+  }
+
+  function finalizeNewsletter(html) {
+    if (html) {
+      document.getElementById('newsletterContent').innerHTML = html;
+    }
+    // カーソルアニメーション停止
+    document.querySelectorAll('.streaming-cursor').forEach(el => {
+      el.classList.remove('streaming-cursor');
+    });
+  }
+
+  // ===== メイン処理: 一括パイプライン =====
+  async function runFullPipeline() {
+    if (isGenerating) return;
+    isGenerating = true;
+
+    const btn = document.getElementById('btnFetchAndGenerate');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span><span>生成中...</span>';
+
+    const useDemo = document.getElementById('demoMode').checked;
+    const maxItems = document.getElementById('maxItems').value;
+
+    showProgressPanel();
+    updateStep(1, 'active', '金融庁サイトからデータ取得中...');
+    updateStep(2, '', 'AI分析・生成待ち');
+    updateStep(3, '', 'ニュースレター完成待ち');
+
+    let fullHtml = '';
+    let contentStarted = false;
+
+    try {
+      const url = `/api/full-pipeline?sample=${useDemo}&max=${maxItems}`;
+      const eventSource = new EventSource(url);
+
+      eventSource.addEventListener('step', (e) => {
+        const data = JSON.parse(e.data);
+        if (data.step === 1) updateStep(1, 'active', data.message);
+        if (data.step === 2) {
+          updateStep(1, 'done');
+          updateStep(2, 'active', data.message);
+        }
+      });
+
+      eventSource.addEventListener('reports_fetched', (e) => {
+        const data = JSON.parse(e.data);
+        fetchedReports = data.reports;
+        renderReportsList(data.reports);
+        showToast(`${data.count}件の報告書を取得しました`, 'success');
+      });
+
+      eventSource.addEventListener('thinking_start', () => {
+        setThinking(true);
+        updateStep(2, 'active', 'Claude が深く考察中...');
+      });
+
+      eventSource.addEventListener('thinking_end', () => {
+        setThinking(false);
+        updateStep(2, 'active', 'ニュースレター執筆中...');
+      });
+
+      eventSource.addEventListener('content_start', () => {
+        if (!contentStarted) {
+          contentStarted = true;
+          showNewsletterViewer();
+          updateStep(2, 'done');
+          updateStep(3, 'active', 'ニュースレター生成中...');
+        }
+      });
+
+      eventSource.addEventListener('newsletter_html', (e) => {
+        // デモモード: 完全なHTMLを一括受信
+        const data = JSON.parse(e.data);
+        showNewsletterViewer();
+        document.getElementById('newsletterContent').innerHTML = data.html;
+        updateStep(1, 'done');
+        updateStep(2, 'done');
+        updateStep(3, 'done', 'ニュースレター完成！');
+      });
+
+      eventSource.addEventListener('newsletter_chunk', (e) => {
+        const data = JSON.parse(e.data);
+        fullHtml += data.html;
+        // リアルタイム更新（デバッグなしモードでは最終的に一括更新）
+        document.getElementById('newsletterContent').innerHTML = fullHtml;
+      });
+
+      eventSource.addEventListener('newsletter_complete', () => {
+        finalizeNewsletter(fullHtml);
+        updateStep(3, 'done', '✅ ニュースレター完成！');
+        showToast('ニュースレターが生成されました！', 'success');
+      });
+
+      eventSource.addEventListener('done', () => {
+        eventSource.close();
+        isGenerating = false;
+        btn.disabled = false;
+        btn.innerHTML = '<span>📰</span><span>取得 → 生成（一括実行）</span>';
+        updateStep(3, 'done', '✅ 完了');
+        showToast('処理が完了しました', 'info');
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        let message = '接続エラー';
+        try {
+          const data = JSON.parse(e.data);
+          message = data.message || message;
+        } catch {}
+        eventSource.close();
+        isGenerating = false;
+        btn.disabled = false;
+        btn.innerHTML = '<span>📰</span><span>取得 → 生成（一括実行）</span>';
+        showToast(`エラー: ${message}`, 'error');
+      });
+
+      eventSource.onerror = () => {
+        if (!isGenerating) return;
+        eventSource.close();
+        isGenerating = false;
+        btn.disabled = false;
+        btn.innerHTML = '<span>📰</span><span>取得 → 生成（一括実行）</span>';
+      };
+
+    } catch (error) {
+      console.error(error);
+      isGenerating = false;
+      btn.disabled = false;
+      btn.innerHTML = '<span>📰</span><span>取得 → 生成（一括実行）</span>';
+      showToast(`エラー: ${error.message}`, 'error');
+    }
+  }
+
+  // ===== 報告書のみ取得 =====
+  async function fetchReports() {
+    const useDemo = document.getElementById('demoMode').checked;
+    const maxItems = document.getElementById('maxItems').value;
+
+    showProgressPanel();
+    updateStep(1, 'active', '金融庁サイトから取得中...');
+
+    try {
+      const res = await fetch(`/api/fsa-news?sample=${useDemo}&max=${maxItems}`);
+      const data = await res.json();
+
+      if (data.success) {
+        fetchedReports = data.items;
+        renderReportsList(data.items);
+        updateStep(1, 'done', `${data.items.length}件取得完了`);
+        showToast(`${data.items.length}件の報告書を取得しました`, 'success');
+      } else {
+        throw new Error(data.error || '取得失敗');
+      }
+    } catch (error) {
+      updateStep(1, '', 'エラーが発生しました');
+      showToast(`エラー: ${error.message}`, 'error');
+    }
+  }
+
+  // ===== 選択した報告書でニュースレター生成 =====
+  async function generateFromSelected() {
+    if (fetchedReports.length === 0) {
+      showToast('先に報告書を取得してください', 'error');
+      return;
+    }
+    if (isGenerating) return;
+
+    const selected = Array.from(selectedReports).map(i => fetchedReports[i]);
+    if (selected.length === 0) {
+      showToast('生成する報告書を選択してください', 'error');
+      return;
+    }
+
+    isGenerating = true;
+    const useDemo = document.getElementById('demoMode').checked;
+
+    showProgressPanel();
+    updateStep(2, 'active', 'ニュースレター生成中...');
+    showNewsletterViewer();
+
+    let fullHtml = '';
+
+    try {
+      const res = await fetch('/api/generate-newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reports: selected, useDemo })
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.html) {
+                fullHtml += data.html;
+                document.getElementById('newsletterContent').innerHTML = fullHtml;
+              }
+            } catch {}
+          }
+        }
+      }
+
+      updateStep(2, 'done');
+      updateStep(3, 'done', '✅ 完了');
+      showToast('ニュースレターが生成されました！', 'success');
+
+    } catch (error) {
+      showToast(`エラー: ${error.message}`, 'error');
+    }
+
+    isGenerating = false;
+  }
+
+  // ===== ユーティリティ =====
+  function resetView() {
+    document.getElementById('newsletterViewer').classList.remove('active');
+    document.getElementById('welcomeScreen').style.display = 'block';
+  }
+
+  function copyNewsletter() {
+    const text = document.getElementById('newsletterContent').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('クリップボードにコピーしました', 'success');
+    });
+  }
+
+  function printNewsletter() {
+    window.print();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
+  }
+
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.animation = 'slideIn 0.3s ease reverse';
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  }
+
+  // ===== 起動 =====
+  init();
+</script>
+</body>
+</html>
