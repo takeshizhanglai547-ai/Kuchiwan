@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KUCHIWAN - 3D Mech Shooter</title>
+  <title>KUCHIWAN: IRON CLASH – 3D Mech Battle</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,21 +13,26 @@
   <div id="hud" class="hidden">
     <!-- Player Status -->
     <div id="player-status">
+      <div class="pilot-name">KUCHIWAN</div>
       <div class="status-row">
         <span class="status-label">AP</span>
         <div class="bar-wrap"><div id="ap-bar" class="bar bar-ap"></div></div>
-        <span id="ap-val" class="status-val">10000</span>
+        <span id="ap-val" class="status-val">12000</span>
       </div>
       <div class="status-row">
         <span class="status-label">EN</span>
         <div class="bar-wrap"><div id="en-bar" class="bar bar-en"></div></div>
+      </div>
+      <div class="status-row">
+        <span class="status-label">QB</span>
+        <div class="bar-wrap"><div id="qb-bar" class="bar bar-qb"></div></div>
       </div>
     </div>
 
     <!-- Weapon -->
     <div id="weapon-status">
       <div class="weapon-row"><span class="w-label">RIFLE</span><span class="w-icon">▣</span><span id="ammo-count" class="w-val">∞</span></div>
-      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">32</span></div>
+      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">36</span></div>
     </div>
 
     <!-- Lock-on -->
@@ -37,7 +42,7 @@
 
     <!-- Enemy Status -->
     <div id="enemy-status" class="hidden">
-      <div id="enemy-name-label">ENEMY</div>
+      <div id="enemy-name-label">IRON GHOST</div>
       <div class="status-row">
         <span class="status-label">AP</span>
         <div class="bar-wrap"><div id="enemy-ap-bar" class="bar bar-enemy"></div></div>
@@ -59,9 +64,10 @@
   <!-- Start Screen -->
   <div id="start-screen">
     <div class="title-block">
-      <div class="title-sub">AC-STYLE 3D MECH DANMAKU SHOOTER</div>
+      <div class="title-sub">AC-STYLE 3D MECH BATTLE</div>
       <h1 class="title-main">KUCHIWAN</h1>
-      <div class="title-sub">口湾</div>
+      <div class="title-sub2">IRON CLASH</div>
+      <div class="title-sub">口湾 vs IRON GHOST</div>
     </div>
     <div class="controls-block">
       <h3>── CONTROLS ──</h3>
@@ -71,12 +77,13 @@
         <span>左クリック</span><span>ライフル射撃</span>
         <span>右クリック</span><span>ミサイル発射</span>
         <span>Shift</span><span>ブースト（高速移動）</span>
+        <span>E</span><span>クイックブースト（瞬間回避）</span>
         <span>Space</span><span>上昇</span>
         <span>Ctrl</span><span>下降</span>
         <span>Q</span><span>ロックオン切替</span>
       </div>
     </div>
-    <button id="start-btn">── START MISSION ──</button>
+    <button id="start-btn">── ENGAGE IRON GHOST ──</button>
   </div>
 
   <!-- Game Over / Clear -->

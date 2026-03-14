@@ -108,6 +108,7 @@ body {
 
 .bar-ap     { background: linear-gradient(90deg, #00ffcc, #00aaff); box-shadow: 0 0 8px #00ffcc88; }
 .bar-en     { background: linear-gradient(90deg, #ffaa00, #ff6600); box-shadow: 0 0 8px #ffaa0088; }
+.bar-qb     { background: linear-gradient(90deg, #ffffff, #aaddff); box-shadow: 0 0 8px #ffffff66; }
 .bar-enemy  { background: linear-gradient(90deg, #ff4444, #ff0000); box-shadow: 0 0 8px #ff444488; }
 
 /* Lock-on overlay */
@@ -202,6 +203,23 @@ body {
   letter-spacing: 5px;
   color: #446;
   margin: 8px 0;
+}
+
+.title-sub2 {
+  font-size: clamp(20px, 4vw, 36px);
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: #ff3322;
+  text-shadow: 0 0 20px #ff332288;
+  margin: 4px 0;
+}
+
+.pilot-name {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: #00ffcc;
+  margin-bottom: 6px;
+  text-shadow: 0 0 8px #00ffcc66;
 }
 
 .controls-block {
