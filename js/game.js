@@ -767,11 +767,14 @@ class Game {
     this.clock     = new THREE.Clock();
     this.shakeTime = 0;
 
-    this._isMobile = ('ontouchstart' in window) || window.matchMedia('(pointer: coarse)').matches;
+    // Robust mobile detection: use maxTouchPoints as primary (works on iOS Safari)
+    this._isMobile = navigator.maxTouchPoints > 0
+                  || ('ontouchstart' in window)
+                  || window.matchMedia('(pointer: coarse)').matches;
 
     this._setupHUD();
     this._setupEvents();
-    if (this._isMobile) this._setupTouchControls();
+    this._setupTouchControls(); // always set up; shows only on mobile
     this._loop();
   }
 
@@ -914,14 +917,32 @@ class Game {
       this.pointerLocked = (document.pointerLockElement === $('gameCanvas'));
     });
 
-    $('start-btn').addEventListener('click', () => this._startGame());
-    $('retry-btn').addEventListener('click', () => location.reload());
+    // Support both click (desktop) and touchend (mobile) for start/retry
+    const onStart = () => this._startGame();
+    const onRetry = () => location.reload();
+    $('start-btn').addEventListener('click',    onStart);
+    $('start-btn').addEventListener('touchend', e => { e.preventDefault(); onStart(); }, { passive: false });
+    $('retry-btn').addEventListener('click',    onRetry);
+    $('retry-btn').addEventListener('touchend', e => { e.preventDefault(); onRetry(); }, { passive: false });
   }
 
-  /* ── Touch Controls (Mobile) ── */
+  /* ── Touch Controls ──
+     Always registered. UI is only shown when _isMobile is true.
+     On first touch, _isMobile is forced true (catches missed detections). */
   _setupTouchControls() {
-    // Inject mobile control info into start screen
-    const info = document.createElement('div');
+    // Force mobile mode on first touch (failsafe for mis-detection)
+    const forceMobile = () => {
+      if (!this._isMobile) {
+        this._isMobile = true;
+        infoEl.style.display = '';
+        $('touch-controls').classList.remove('hidden');
+      }
+    };
+    document.addEventListener('touchstart', forceMobile, { once: true, passive: true });
+
+    // Inject mobile control info into start screen (hidden on desktop)
+    const infoEl = document.createElement('div');
+    const info = infoEl;
     info.className = 'mobile-ctrl-info';
     info.innerHTML = `
       <h3>── タッチ操作 ──</h3>
@@ -936,6 +957,8 @@ class Game {
         <span>LOCK</span><span>ロックオン切替</span>
       </div>
     `;
+    // Hide on desktop until a touch is detected
+    if (!this._isMobile) info.style.display = 'none';
     $('start-screen').insertBefore(info, $('start-btn'));
 
     // Virtual joystick
@@ -1046,7 +1069,7 @@ class Game {
 
     if (this._isMobile) {
       $('touch-controls').classList.remove('hidden');
-    } else {
+    } else if ($('gameCanvas').requestPointerLock) {
       $('gameCanvas').requestPointerLock();
     }
 
