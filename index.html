@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>KUCHIWAN - IRON CLASH 3D</title>
+  <title>KUCHIWAN - WAN vs NYA 3D</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden;
@@ -416,104 +416,174 @@ function die(){
 
 // ── DRAW FUNCTIONS ───────────────────────────────────
 
+// Draw cat enemy in 3D projected space
+function drawCatFace(r, boss) {
+  var TABBY='#6b4820', STRIPE='#2e1a08', CREAM='#f0e8d0', WHITE='#fffaf2';
+  var eyeCol = boss ? '#ff4400' : '#22dd44';
+  var ratio = boss ? (arguments[2]||1) : 1;
+
+  // Body
+  ctx.fillStyle = boss ? STRIPE : TABBY;
+  ctx.beginPath(); ctx.ellipse(0,r*0.25,r*0.62,r*0.5,0,0,Math.PI*2); ctx.fill();
+  // White chest
+  ctx.fillStyle = WHITE;
+  ctx.beginPath(); ctx.ellipse(0,r*0.32,r*0.32,r*0.38,0,0,Math.PI*2); ctx.fill();
+  // Body tabby stripes
+  ctx.strokeStyle = STRIPE; ctx.lineWidth = r*0.07; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-r*0.55,r*0.05); ctx.lineTo(-r*0.4,r*0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( r*0.55,r*0.05); ctx.lineTo( r*0.4,r*0.5); ctx.stroke();
+  // Tail
+  ctx.strokeStyle = boss ? STRIPE : TABBY; ctx.lineWidth = r*(boss?0.16:0.12); ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(boss?r*0.68:r*0.58, r*0.38, r*(boss?0.38:0.3), Math.PI*1.15, Math.PI*0.35, false);
+  ctx.stroke();
+  // Legs
+  ctx.fillStyle = boss ? STRIPE : TABBY;
+  ctx.beginPath(); ctx.ellipse(-r*0.32,r*0.7,r*0.16,r*0.3,-0.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.32,r*0.7,r*0.16,r*0.3, 0.1,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = WHITE;
+  ctx.beginPath(); ctx.ellipse(-r*0.32,r*0.88,r*0.14,r*0.1,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.32,r*0.88,r*0.14,r*0.1,0,0,Math.PI*2); ctx.fill();
+  // Head
+  ctx.fillStyle = boss ? STRIPE : TABBY;
+  ctx.shadowColor = boss?'#cc2200':'#334400'; ctx.shadowBlur = Math.min(r*0.4,10);
+  ctx.beginPath(); ctx.arc(0,-r*0.32,r*(boss?0.52:0.44),0,Math.PI*2); ctx.fill();
+  // Face white area
+  ctx.fillStyle = boss ? '#ccc0a8' : CREAM;
+  ctx.beginPath(); ctx.ellipse(0,-r*0.22,r*0.26,r*0.32,0,0,Math.PI*2); ctx.fill();
+  // Head stripes
+  ctx.strokeStyle = STRIPE; ctx.lineWidth = r*0.065;
+  ctx.beginPath(); ctx.moveTo(-r*0.42,-r*0.6); ctx.lineTo(-r*0.3,-r*0.24); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-r*0.28,-r*0.68); ctx.lineTo(-r*0.18,-r*0.28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( r*0.42,-r*0.6); ctx.lineTo( r*0.3,-r*0.24); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( r*0.28,-r*0.68); ctx.lineTo( r*0.18,-r*0.28); ctx.stroke();
+  // Ears
+  ctx.fillStyle = boss ? STRIPE : TABBY; ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.moveTo(-r*0.32,-r*0.68); ctx.lineTo(-r*0.54,-r*(boss?1.22:1.1)); ctx.lineTo(-r*0.08,-r*0.75); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo( r*0.32,-r*0.68); ctx.lineTo( r*0.54,-r*(boss?1.22:1.1)); ctx.lineTo( r*0.08,-r*0.75); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = boss ? '#ff7070' : '#ffaaaa';
+  ctx.beginPath(); ctx.moveTo(-r*0.31,-r*0.71); ctx.lineTo(-r*0.48,-r*(boss?1.12:1.0)); ctx.lineTo(-r*0.12,-r*0.76); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo( r*0.31,-r*0.71); ctx.lineTo( r*0.48,-r*(boss?1.12:1.0)); ctx.lineTo( r*0.12,-r*0.76); ctx.closePath(); ctx.fill();
+  // Eyes (glowing)
+  ctx.fillStyle = eyeCol; ctx.shadowColor = eyeCol; ctx.shadowBlur = Math.min(r*(boss?0.9:0.65),boss?20:12);
+  ctx.beginPath(); ctx.ellipse(-r*0.18,-r*0.38,r*0.13,r*0.11,-0.18,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.18,-r*0.38,r*0.13,r*0.11, 0.18,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#000'; ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.ellipse(-r*0.18,-r*0.38,r*0.035,r*0.1,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.18,-r*0.38,r*0.035,r*0.1,0,0,Math.PI*2); ctx.fill();
+  // Nose (pink triangle)
+  ctx.fillStyle = boss ? '#ff6060' : '#ff99aa';
+  ctx.beginPath(); ctx.moveTo(-r*0.07,-r*0.14); ctx.lineTo(r*0.07,-r*0.14); ctx.lineTo(0,-r*0.07); ctx.closePath(); ctx.fill();
+  // Mouth
+  ctx.strokeStyle = '#553333'; ctx.lineWidth = r*0.04; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0,-r*0.07); ctx.lineTo(-r*0.1,r*0.01); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,-r*0.07); ctx.lineTo( r*0.1,r*0.01); ctx.stroke();
+  // Whiskers
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = r*0.025; ctx.lineCap = 'butt';
+  for (var w=-1;w<=1;w+=2) {
+    ctx.beginPath(); ctx.moveTo(w*r*0.08,-r*0.12); ctx.lineTo(w*r*0.6,-r*0.1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w*r*0.08,-r*0.09); ctx.lineTo(w*r*0.6, r*0.02); ctx.stroke();
+  }
+}
+
 function drawEnemy3D(e){
   var p=project(e.x,0,e.z);
   if (!p||p.y>H*0.92||p.y<HZ-8) return;
   var r=p.s*(e.boss?3.2:1.4); if (r<3) return;
   ctx.save(); ctx.translate(p.x,p.y);
-  var GR='#383838', DK='#161616';
-  if (e.boss){
-    var glowC=e.hp/e.maxHp>0.5?'#0055ff':'#00aaff';
-    var eyeC=e.hp/e.maxHp>0.5?'#ff4400':'#ff0000';
-    ctx.shadowColor=glowC; ctx.shadowBlur=Math.min(r*0.5,16);
-    ctx.strokeStyle=GR; ctx.lineWidth=r*0.15; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-r*0.5,-r*0.18); ctx.lineTo(-r*1.5,-r*0.9); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r*0.5,-r*0.18); ctx.lineTo( r*1.5,-r*0.9); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r*0.55,r*0.15); ctx.lineTo(-r*1.55,r*0.35); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r*0.55,r*0.15); ctx.lineTo( r*1.55,r*0.35); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r*0.45,r*0.5); ctx.lineTo(-r*1.05,r*1.3); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r*0.45,r*0.5); ctx.lineTo( r*1.05,r*1.3); ctx.stroke();
-    ctx.fillStyle='#111';
-    ctx.beginPath(); ctx.moveTo(0,-r); ctx.lineTo(r*0.75,-r*0.45); ctx.lineTo(r*0.88,r*0.28);
-    ctx.lineTo(r*0.4,r*0.82); ctx.lineTo(-r*0.4,r*0.82); ctx.lineTo(-r*0.88,r*0.28); ctx.lineTo(-r*0.75,-r*0.45); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=GR; ctx.fillRect(-r*0.65,-r*0.52,r*1.3,r*0.48);
-    ctx.fillStyle=glowC; ctx.shadowColor='#00aaff'; ctx.shadowBlur=Math.min(r*0.8,22);
-    ctx.fillRect(-r*0.42,-r*0.4,r*0.37,r*0.65); ctx.fillRect(r*0.05,-r*0.4,r*0.37,r*0.65);
-    ctx.fillStyle='#001133'; ctx.fillRect(-r*0.05,-r*0.4,r*0.1,r*0.65);
-    ctx.fillStyle='#555'; ctx.fillRect(-r*0.3,-r*1.12,r*0.6,r*0.2);
-    ctx.fillStyle=eyeC; ctx.shadowColor=eyeC; ctx.shadowBlur=Math.min(r*0.6,18);
-    ctx.beginPath(); ctx.arc(0,-r*1.02,r*0.15,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#1a1a1a'; ctx.shadowBlur=0;
-    ctx.fillRect(-r*0.22,-r*1.58,r*0.16,r*0.55); ctx.fillRect(r*0.06,-r*1.58,r*0.16,r*0.55);
-  } else {
-    ctx.shadowColor='#0033bb'; ctx.shadowBlur=Math.min(r*0.6,10);
-    ctx.strokeStyle=GR; ctx.lineWidth=r*0.22; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-r*0.28,r*0.28); ctx.lineTo(-r*0.72,r*0.95); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r*0.28,r*0.28); ctx.lineTo( r*0.72,r*0.95); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r*0.4,-r*0.05); ctx.lineTo(-r*1.05,r*0.2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r*0.4,-r*0.05); ctx.lineTo( r*1.05,r*0.2); ctx.stroke();
-    ctx.fillStyle=DK;
-    ctx.beginPath(); ctx.moveTo(0,-r*0.7); ctx.lineTo(r*0.54,-r*0.22); ctx.lineTo(r*0.46,r*0.5);
-    ctx.lineTo(-r*0.46,r*0.5); ctx.lineTo(-r*0.54,-r*0.22); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=GR; ctx.fillRect(-r*0.42,-r*0.36,r*0.84,r*0.36);
-    ctx.fillStyle='#0044ff'; ctx.shadowColor='#0088ff'; ctx.shadowBlur=Math.min(r*0.8,14);
-    ctx.fillRect(-r*0.17,-r*0.25,r*0.34,r*0.5);
-    ctx.fillStyle='#505050'; ctx.fillRect(-r*0.24,-r*0.86,r*0.48,r*0.24);
-    ctx.fillStyle='#ff2200'; ctx.shadowColor='#ff0000'; ctx.shadowBlur=Math.min(r*0.6,10);
-    ctx.beginPath(); ctx.arc(0,-r*0.76,r*0.1,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#111'; ctx.shadowBlur=0; ctx.fillRect(-r*0.05,-r*1.08,r*0.1,r*0.26);
-  }
+  drawCatFace(r, e.boss, e.hp/e.maxHp);
   if (r>8){
     var bw=r*2.2, ratio=Math.max(0,e.hp/e.maxHp);
-    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(-bw*0.5,r*1.45,bw,4);
-    ctx.fillStyle=e.boss?(ratio>0.5?'#ff6600':'#ff0000'):'#2266ff';
-    ctx.fillRect(-bw*0.5,r*1.45,bw*ratio,4);
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(-bw*0.5,r*1.05,bw,4);
+    ctx.fillStyle=e.boss?(ratio>0.5?'#ff8800':'#ff2200'):'#22cc44';
+    ctx.fillRect(-bw*0.5,r*1.05,bw*ratio,4);
   }
   ctx.restore();
 }
 
+// Shiba Inu viewed from behind — the player character
 function drawPlayerBack(){
   var cx=W/2+(playerX-camX)*60, cy=H*0.82;
-  var r=Math.min(W,H)*0.085;
-  cx=Math.max(r*1.6,Math.min(W-r*1.6,cx));
+  var r=Math.min(W,H)*0.092;
+  cx=Math.max(r*1.8,Math.min(W-r*1.8,cx));
   ctx.save(); ctx.translate(cx,cy);
-  var WH='#d8d8ec', NV='#18205a', RD='#bb1515';
-  // Thruster floor glow
-  ctx.globalAlpha=0.18; ctx.fillStyle='#0044ff'; ctx.shadowColor='#0066ff'; ctx.shadowBlur=r*0.8;
-  ctx.beginPath(); ctx.ellipse(0,r*1.1,r*0.8,r*0.18,0,0,Math.PI*2); ctx.fill();
-  ctx.globalAlpha=1;
-  ctx.shadowColor='#4466ff'; ctx.shadowBlur=14;
-  // Left wing binder
-  ctx.fillStyle=RD;
-  ctx.save(); ctx.translate(-r*1.55,-r*0.35); ctx.rotate(-0.18);
-  ctx.fillRect(-r*0.14,-r*1.1,r*0.26,r*1.12); ctx.fillRect(-r*0.92,-r*1.05,r*0.85,r*0.22); ctx.fillRect(-r*0.82,-r*0.58,r*0.72,r*0.16); ctx.restore();
-  // Right wing binder
-  ctx.save(); ctx.translate(r*1.55,-r*0.35); ctx.rotate(0.18);
-  ctx.fillRect(-r*0.12,-r*1.1,r*0.26,r*1.12); ctx.fillRect(r*0.07,-r*1.05,r*0.85,r*0.22); ctx.fillRect(r*0.1,-r*0.58,r*0.72,r*0.16); ctx.restore();
-  // Legs
-  ctx.fillStyle=NV; ctx.fillRect(-r*0.44,r*0.4,r*0.36,r*0.68); ctx.fillRect(r*0.08,r*0.4,r*0.36,r*0.68);
-  ctx.fillStyle=WH; ctx.fillRect(-r*0.47,r*0.6,r*0.4,r*0.22); ctx.fillRect(r*0.07,r*0.6,r*0.4,r*0.22);
-  ctx.fillStyle='#111'; ctx.fillRect(-r*0.48,r*1.04,r*0.42,r*0.15); ctx.fillRect(r*0.06,r*1.04,r*0.42,r*0.15);
-  // Torso back
-  ctx.fillStyle=NV; ctx.fillRect(-r*0.58,-r*0.3,r*1.16,r*0.72);
-  ctx.fillStyle='#0e1438'; ctx.fillRect(-r*0.42,-r*0.52,r*0.84,r*0.38);
-  ctx.fillStyle=WH; ctx.fillRect(-r*0.9,-r*0.36,r*0.36,r*0.55); ctx.fillRect(r*0.54,-r*0.36,r*0.36,r*0.55);
-  // Head back
-  ctx.fillStyle=WH; ctx.fillRect(-r*0.24,-r*0.74,r*0.48,r*0.46);
-  ctx.fillStyle=RD; ctx.fillRect(-r*0.24,-r*0.74,r*0.48,r*0.1);
-  // V-fin
-  ctx.strokeStyle=WH; ctx.lineWidth=r*0.045; ctx.lineCap='round'; ctx.shadowColor='#fff'; ctx.shadowBlur=6;
-  ctx.beginPath(); ctx.moveTo(-r*0.05,-r*0.74); ctx.lineTo(-r*0.18,-r*1.1); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo( r*0.05,-r*0.74); ctx.lineTo( r*0.18,-r*1.1); ctx.stroke();
-  // Thrusters
-  ctx.fillStyle='#00aaff'; ctx.shadowColor='#00ccff'; ctx.shadowBlur=r*0.6;
-  ctx.beginPath(); ctx.arc(-r*0.22,-r*0.3,r*0.14,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc( r*0.22,-r*0.3,r*0.14,0,Math.PI*2); ctx.fill();
-  var fl=0.55+0.45*Math.sin(frame*0.18);
-  ctx.fillStyle='#aaddff'; ctx.shadowBlur=r*0.3; ctx.globalAlpha=fl;
-  ctx.beginPath(); ctx.arc(-r*0.22,-r*0.3+r*0.24*fl,r*0.09,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc( r*0.22,-r*0.3+r*0.24*fl,r*0.09,0,Math.PI*2); ctx.fill();
+
+  var RUST='#c4692a', ORANGE='#d4823c', CREAM='#f5e8d0', LTCREAM='#fffaf0', DARK='#5a2a0a';
+
+  // Shadow under paws
+  ctx.globalAlpha=0.22; ctx.fillStyle='#224488'; ctx.shadowColor='#0055ff'; ctx.shadowBlur=r*0.9;
+  ctx.beginPath(); ctx.ellipse(0,r*1.02,r*0.75,r*0.17,0,0,Math.PI*2); ctx.fill();
   ctx.globalAlpha=1; ctx.shadowBlur=0;
+
+  // Back legs (behind body, partially visible)
+  ctx.fillStyle=RUST;
+  ctx.beginPath(); ctx.ellipse(-r*0.42,r*0.68,r*0.22,r*0.38,-0.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.42,r*0.68,r*0.22,r*0.38, 0.12,0,Math.PI*2); ctx.fill();
+  // Paws
+  ctx.fillStyle=CREAM;
+  ctx.beginPath(); ctx.ellipse(-r*0.42,r*0.92,r*0.2,r*0.13,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.42,r*0.92,r*0.2,r*0.13,0,0,Math.PI*2); ctx.fill();
+
+  // Main body (fluffy round back)
+  ctx.fillStyle=RUST;
+  ctx.beginPath(); ctx.ellipse(0,r*0.1,r*0.72,r*0.62,0,0,Math.PI*2); ctx.fill();
+  // Cream sides (fluffy undercoat visible at edges)
+  ctx.fillStyle=CREAM;
+  ctx.beginPath(); ctx.ellipse(-r*0.56,r*0.18,r*0.26,r*0.42,-0.25,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.56,r*0.18,r*0.26,r*0.42, 0.25,0,Math.PI*2); ctx.fill();
+  // Fur texture strokes
+  ctx.strokeStyle=ORANGE; ctx.lineWidth=r*0.035; ctx.lineCap='round';
+  for (var i=-3;i<=3;i++){
+    ctx.globalAlpha=0.35;
+    ctx.beginPath(); ctx.moveTo(i*r*0.18,-r*0.28); ctx.lineTo(i*r*0.22+r*0.04,r*0.12); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // Curled tail (Shiba characteristic — over the back)
+  ctx.save();
+  ctx.strokeStyle=RUST; ctx.lineWidth=r*0.3; ctx.lineCap='round';
+  ctx.shadowColor=RUST; ctx.shadowBlur=4;
+  ctx.beginPath(); ctx.arc(r*0.28,-r*0.42,r*0.44,Math.PI*0.85,Math.PI*0.1,true); ctx.stroke();
+  // Tail tip (cream)
+  ctx.strokeStyle=CREAM; ctx.lineWidth=r*0.13;
+  ctx.beginPath(); ctx.arc(r*0.28,-r*0.42,r*0.44,Math.PI*0.9,Math.PI*0.55,true); ctx.stroke();
+  ctx.restore();
+
+  // Head (round, back view)
+  ctx.fillStyle=RUST; ctx.shadowColor='#aa5520'; ctx.shadowBlur=r*0.25;
+  ctx.beginPath(); ctx.arc(0,-r*0.52,r*0.46,0,Math.PI*2); ctx.fill();
+  // Head back lighter centre
+  ctx.fillStyle=ORANGE;
+  ctx.beginPath(); ctx.ellipse(0,-r*0.52,r*0.3,r*0.4,0,0,Math.PI*2); ctx.fill();
+
+  // Ears (perky triangular, back view)
+  ctx.shadowBlur=0;
+  ctx.fillStyle=RUST;
+  ctx.beginPath(); ctx.moveTo(-r*0.24,-r*0.82); ctx.lineTo(-r*0.5,-r*1.36); ctx.lineTo(-r*0.01,-r*0.98); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo( r*0.24,-r*0.82); ctx.lineTo( r*0.5,-r*1.36); ctx.lineTo( r*0.01,-r*0.98); ctx.closePath(); ctx.fill();
+  // Inner ear
+  ctx.fillStyle='#d09060';
+  ctx.beginPath(); ctx.moveTo(-r*0.25,-r*0.86); ctx.lineTo(-r*0.44,-r*1.22); ctx.lineTo(-r*0.06,-r*0.99); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo( r*0.25,-r*0.86); ctx.lineTo( r*0.44,-r*1.22); ctx.lineTo( r*0.06,-r*0.99); ctx.closePath(); ctx.fill();
+
+  // Red collar
+  ctx.fillStyle='#cc1111'; ctx.shadowColor='#ff2222'; ctx.shadowBlur=7;
+  ctx.beginPath(); ctx.rect(-r*0.42,-r*0.18,r*0.84,r*0.13); ctx.fill();
+  // Collar tag (gold)
+  ctx.fillStyle='#ffcc00'; ctx.shadowColor='#ffee44'; ctx.shadowBlur=8;
+  ctx.beginPath(); ctx.arc(0,-r*0.1,r*0.075,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Paw bounce animation (running glow)
+  var fl=0.5+0.5*Math.sin(frame*0.2);
+  var fl2=0.5+0.5*Math.sin(frame*0.2+Math.PI);
+  ctx.globalAlpha=fl*0.55;
+  ctx.fillStyle='#88ccff'; ctx.shadowColor='#00aaff'; ctx.shadowBlur=r*0.5;
+  ctx.beginPath(); ctx.ellipse(-r*0.42,r*0.96+fl*r*0.06,r*0.12,r*0.07,0,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=fl2*0.55;
+  ctx.beginPath(); ctx.ellipse( r*0.42,r*0.96+fl2*r*0.06,r*0.12,r*0.07,0,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+
   ctx.restore();
 }
 
@@ -596,8 +666,8 @@ function draw(){
   // HUD (no shake)
   for (var i=0;i<enemies.length;i++) if (enemies[i].boss){
     ctx.fillStyle='#ff6600'; ctx.font='11px Courier New'; ctx.textAlign='center'; ctx.shadowBlur=0;
-    ctx.fillText('IRON GHOST',W/2,14);
-    hpBar(W/2,18,220,enemies[i].hp,enemies[i].maxHp,enemies[i].hp/enemies[i].maxHp>0.5?'#ff6600':'#ff1100');
+    ctx.fillText('ニャン将軍',W/2,14);
+    hpBar(W/2,18,220,enemies[i].hp,enemies[i].maxHp,enemies[i].hp/enemies[i].maxHp>0.5?'#ff8800':'#ff1100');
   }
   var hbw=Math.min(W*0.38,160);
   ctx.fillStyle='#aaddff'; ctx.font='bold 11px Courier New'; ctx.textAlign='left'; ctx.shadowBlur=0;
@@ -608,7 +678,7 @@ function draw(){
   ctx.fillText('WAVE '+Math.max(1,waveNum)+'/5',W-10,26);
 
   if (waveCleared&&waveTimer>0&&waveNum<WAVES.length){
-    var msg=waveNum===WAVES.length-1?'⚠ BOSS INCOMING ⚠':'WAVE '+(waveNum+1)+' / 5  INCOMING';
+    var msg=waveNum===WAVES.length-1?'⚠ ニャン将軍 接近中！ ⚠':'WAVE '+(waveNum+1)+' / 5  ニャンコ来るぞ！';
     ctx.textAlign='center'; ctx.fillStyle='#00ffff'; ctx.font='bold '+Math.min(W*0.04,14)+'px Courier New';
     ctx.fillText(msg,W/2,H*0.11);
   }
@@ -616,18 +686,18 @@ function draw(){
 }
 
 function drawStart(){
-  glow('KUCHIWAN',W/2,H*0.20,'#00ffff',Math.min(W*0.14,54));
-  glow('IRON CLASH  3D',W/2,H*0.30,'#ff4400',Math.min(W*0.08,30));
-  ctx.textAlign='center'; ctx.fillStyle='#7799aa'; ctx.font=Math.min(W*0.038,14)+'px Courier New';
-  ctx.fillText('口湾  vs  IRON GHOST',W/2,H*0.38);
+  glow('KUCHIWAN',W/2,H*0.20,'#ffaa44',Math.min(W*0.14,54));
+  glow('WAN vs NYA  3D',W/2,H*0.30,'#ff4400',Math.min(W*0.08,30));
+  ctx.textAlign='center'; ctx.fillStyle='#ccaa77'; ctx.font=Math.min(W*0.038,14)+'px Courier New';
+  ctx.fillText('柴犬  vs  ニャン軍団',W/2,H*0.38);
   var cw=Math.min(W*0.82,300),cx=W/2-cw/2,cy=H*0.44,ch=H*0.26;
   ctx.strokeStyle='rgba(0,200,255,0.28)'; ctx.lineWidth=1; ctx.strokeRect(cx,cy,cw,ch);
   ctx.font=Math.min(W*0.036,13)+'px Courier New';
-  ctx.fillStyle='#00ccff'; ctx.fillText('─ CONTROLS ─',W/2,cy+ch*0.2);
-  ctx.fillStyle='#aacccc';
+  ctx.fillStyle='#ffcc66'; ctx.fillText('─ CONTROLS ─',W/2,cy+ch*0.2);
+  ctx.fillStyle='#ddcc99';
   ctx.fillText('左サム：左右移動',W/2,cy+ch*0.42);
   ctx.fillText('右サム：照準・射撃',W/2,cy+ch*0.58);
-  ctx.fillStyle='#88aaaa'; ctx.fillText('5ウェーブを突破せよ',W/2,cy+ch*0.78);
+  ctx.fillStyle='#bbaa77'; ctx.fillText('ニャン軍団5ウェーブを撃退せよ！',W/2,cy+ch*0.78);
   var pulse=(Math.sin(frame*0.055)+1)/2;
   var bw=Math.min(W*0.78,290),bh=54,bx=W/2-bw/2,by=H*0.78;
   ctx.globalAlpha=0.55+pulse*0.45;
@@ -635,15 +705,15 @@ function drawStart(){
   ctx.strokeRect(bx,by,bw,bh);
   ctx.fillStyle='rgba(0,255,255,'+(0.06+pulse*0.09)+')'; ctx.fillRect(bx,by,bw,bh);
   ctx.fillStyle='#00ffff'; ctx.font='bold '+Math.min(W*0.05,18)+'px Courier New';
-  ctx.textAlign='center'; ctx.shadowBlur=10; ctx.fillText('— ENGAGE IRON GHOST —',W/2,by+bh/2+7);
+  ctx.textAlign='center'; ctx.shadowBlur=10; ctx.fillText('— ニャン軍団に立ち向かえ！ —',W/2,by+bh/2+7);
   ctx.globalAlpha=1; ctx.shadowBlur=0;
-  ctx.fillStyle='rgba(100,200,100,0.4)'; ctx.font=Math.min(W*0.03,11)+'px Courier New';
-  ctx.fillText('※タップでBGM開始',W/2,H*0.95);
+  ctx.fillStyle='rgba(200,180,100,0.4)'; ctx.font=Math.min(W*0.03,11)+'px Courier New';
+  ctx.fillText('🐕 タップでBGM開始 🐕',W/2,H*0.95);
 }
 function drawDead(){
   ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
-  glow('UNIT',W/2,H*0.34,'#ff2200',Math.min(W*0.11,44));
-  glow('DESTROYED',W/2,H*0.46,'#ff2200',Math.min(W*0.11,44));
+  glow('WAN WAN',W/2,H*0.34,'#ff6622',Math.min(W*0.11,44));
+  glow('DOOOOWN',W/2,H*0.46,'#ff4400',Math.min(W*0.11,44));
   ctx.textAlign='center'; ctx.fillStyle='#aaaaaa'; ctx.font=Math.min(W*0.045,16)+'px Courier New';
   ctx.fillText('SCORE: '+score,W/2,H*0.57); ctx.fillText('WAVE: '+waveNum+'/5',W/2,H*0.64);
   var pulse=(Math.sin(frame*0.06)+1)/2;
@@ -652,8 +722,8 @@ function drawDead(){
 }
 function drawWin(){
   ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
-  glow('MISSION',W/2,H*0.32,'#00ff88',Math.min(W*0.1,40));
-  glow('COMPLETE',W/2,H*0.44,'#00ff88',Math.min(W*0.1,40));
+  glow('ニャン軍団',W/2,H*0.32,'#ffcc44',Math.min(W*0.1,40));
+  glow('全滅！！',W/2,H*0.44,'#ffcc44',Math.min(W*0.1,40));
   ctx.textAlign='center'; ctx.fillStyle='#ffff00'; ctx.font=Math.min(W*0.05,18)+'px Courier New';
   ctx.fillText('FINAL SCORE: '+score,W/2,H*0.57);
   var pulse=(Math.sin(frame*0.06)+1)/2;
