@@ -93,6 +93,30 @@
     <button id="retry-btn">RETRY</button>
   </div>
 
+  <!-- Touch Controls (mobile) -->
+  <div id="touch-controls" class="hidden">
+    <!-- Left: Virtual Joystick + Up/Down -->
+    <div id="vjoy-area">
+      <div id="btn-up" class="touch-btn small-btn">▲</div>
+      <div id="vjoy-base"><div id="vjoy-handle"></div></div>
+      <div id="btn-down" class="touch-btn small-btn">▼</div>
+    </div>
+    <!-- Right: Action Buttons -->
+    <div id="action-area">
+      <div class="action-row">
+        <div id="btn-lock" class="touch-btn">LOCK</div>
+        <div id="btn-qb" class="touch-btn">QB</div>
+      </div>
+      <div class="action-row">
+        <div id="btn-fire" class="touch-btn fire-btn">FIRE</div>
+        <div id="btn-missile" class="touch-btn">MSL</div>
+      </div>
+      <div class="action-row">
+        <div id="btn-boost" class="touch-btn boost-btn">BOOST</div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="js/game.js"></script>
 </body>

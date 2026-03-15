@@ -899,6 +899,7 @@ class Game {
     this.shakeTime = 0;
 
     this._setupEvents();
+    this._setupTouchControls();
     this._setupHUD();
     this._loop();
   }
@@ -1081,10 +1082,164 @@ class Game {
     $('retry-btn').addEventListener('click', () => location.reload());
   }
 
+  /* ── Touch Controls ── */
+  _setupTouchControls() {
+    const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!isMobile) return;
+
+    // Inject mobile controls info into start screen
+    const mobileInfo = document.createElement('div');
+    mobileInfo.className = 'mobile-ctrl-info';
+    mobileInfo.innerHTML = `
+      <h3>── タッチ操作 ──</h3>
+      <div class="mobile-ctrl-grid">
+        <span>左スティック</span><span>移動</span>
+        <span>右エリア ドラッグ</span><span>カメラ / 照準</span>
+        <span>▲ / ▼</span><span>上昇 / 下降</span>
+        <span>FIRE (長押し)</span><span>ライフル射撃</span>
+        <span>MSL (長押し)</span><span>ミサイル発射</span>
+        <span>QB</span><span>クイックブースト</span>
+        <span>BOOST (長押し)</span><span>高速移動</span>
+        <span>LOCK</span><span>ロックオン切替</span>
+      </div>
+    `;
+    const startScreen = $('start-screen');
+    startScreen.insertBefore(mobileInfo, $('start-btn'));
+
+    // --- Virtual Joystick ---
+    const vjoyBase   = $('vjoy-base');
+    const vjoyHandle = $('vjoy-handle');
+    const JRADIUS    = 42;
+    let joyTouchId = null;
+    let joyCx = 0, joyCy = 0;
+
+    const updateJoy = (tx, ty) => {
+      let dx = tx - joyCx;
+      let dy = ty - joyCy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > JRADIUS) { dx = dx / dist * JRADIUS; dy = dy / dist * JRADIUS; }
+      vjoyHandle.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      const th = JRADIUS * 0.3;
+      this.keys['KeyW'] = dy < -th;
+      this.keys['KeyS'] = dy >  th;
+      this.keys['KeyA'] = dx < -th;
+      this.keys['KeyD'] = dx >  th;
+    };
+
+    const resetJoy = () => {
+      joyTouchId = null;
+      vjoyHandle.style.transform = 'translate(-50%, -50%)';
+      this.keys['KeyW'] = this.keys['KeyS'] = this.keys['KeyA'] = this.keys['KeyD'] = false;
+    };
+
+    vjoyBase.addEventListener('touchstart', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (joyTouchId !== null) return;
+      const t = e.changedTouches[0];
+      joyTouchId = t.identifier;
+      const r = vjoyBase.getBoundingClientRect();
+      joyCx = r.left + r.width / 2;
+      joyCy = r.top  + r.height / 2;
+      updateJoy(t.clientX, t.clientY);
+    }, { passive: false });
+
+    // --- Camera & general touch routing ---
+    const buttonIds = new Set();
+    const camTouches = {};
+
+    document.addEventListener('touchstart', e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joyTouchId) continue;
+        if (buttonIds.has(t.identifier)) continue;
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && (el.classList.contains('touch-btn') || el.closest('#vjoy-area'))) continue;
+        camTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joyTouchId) {
+          updateJoy(t.clientX, t.clientY);
+        } else if (camTouches[t.identifier]) {
+          const prev = camTouches[t.identifier];
+          this.camYaw   -= (t.clientX - prev.x) * 0.006;
+          this.camPitch  = clamp(this.camPitch - (t.clientY - prev.y) * 0.004, -0.4, 0.7);
+          camTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+        }
+      }
+    }, { passive: false });
+
+    const onTouchEnd = e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joyTouchId) resetJoy();
+        delete camTouches[t.identifier];
+        buttonIds.delete(t.identifier);
+      }
+    };
+    document.addEventListener('touchend',    onTouchEnd);
+    document.addEventListener('touchcancel', onTouchEnd);
+
+    // --- Action Buttons ---
+    const addBtn = (id, onStart, onEnd) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('touchstart', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        for (let i = 0; i < e.changedTouches.length; i++) buttonIds.add(e.changedTouches[i].identifier);
+        onStart();
+        el.classList.add('active');
+      }, { passive: false });
+      const end = e => { e.preventDefault(); if (onEnd) onEnd(); el.classList.remove('active'); };
+      el.addEventListener('touchend',    end, { passive: false });
+      el.addEventListener('touchcancel', end, { passive: false });
+    };
+
+    addBtn('btn-up',
+      () => { this.keys['Space'] = true; },
+      () => { this.keys['Space'] = false; }
+    );
+    addBtn('btn-down',
+      () => { this.keys['ControlLeft'] = true; },
+      () => { this.keys['ControlLeft'] = false; }
+    );
+    addBtn('btn-fire',
+      () => { this.mouse.down = true; },
+      () => { this.mouse.down = false; }
+    );
+    addBtn('btn-missile',
+      () => { this.mouse.rightDown = true; },
+      () => { this.mouse.rightDown = false; }
+    );
+    addBtn('btn-qb',
+      () => { if (this.gameState === 'playing') this._triggerQB(); }
+    );
+    addBtn('btn-boost',
+      () => { this.keys['ShiftLeft'] = true; },
+      () => { this.keys['ShiftLeft'] = false; }
+    );
+    addBtn('btn-lock', () => {
+      if (this.gameState !== 'playing') return;
+      this.lockOn = !this.lockOn;
+      if (!this.lockOn) $('lock-ring').style.display = 'none';
+    });
+  }
+
   _startGame() {
     $('start-screen').classList.add('hidden');
     $('hud').classList.remove('hidden');
-    $('gameCanvas').requestPointerLock();
+    this._isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (this._isMobile) {
+      $('touch-controls').classList.remove('hidden');
+    } else {
+      $('gameCanvas').requestPointerLock();
+    }
     this.gameState = 'playing';
 
     this.enemy = new IronGhost(this.scene, this.bullets, this.particles, this.player.pos);
