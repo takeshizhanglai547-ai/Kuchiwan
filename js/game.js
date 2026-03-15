@@ -917,29 +917,18 @@ class Game {
       this.pointerLocked = (document.pointerLockElement === $('gameCanvas'));
     });
 
-    // Support both click (desktop) and touchend (mobile) for start/retry
+    // Use touchstart for mobile (fires before any DOM mutation; preventDefault stops
+    // subsequent click so _startGame won't be called twice)
     const onStart = () => this._startGame();
     const onRetry = () => location.reload();
-    $('start-btn').addEventListener('click',    onStart);
-    $('start-btn').addEventListener('touchend', e => { e.preventDefault(); onStart(); }, { passive: false });
-    $('retry-btn').addEventListener('click',    onRetry);
-    $('retry-btn').addEventListener('touchend', e => { e.preventDefault(); onRetry(); }, { passive: false });
+    $('start-btn').addEventListener('click', onStart);
+    $('start-btn').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); onStart(); }, { passive: false });
+    $('retry-btn').addEventListener('click', onRetry);
+    $('retry-btn').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); onRetry(); }, { passive: false });
   }
 
-  /* ── Touch Controls ──
-     Always registered. UI is only shown when _isMobile is true.
-     On first touch, _isMobile is forced true (catches missed detections). */
+  /* ── Touch Controls ── */
   _setupTouchControls() {
-    // Force mobile mode on first touch (failsafe for mis-detection)
-    const forceMobile = () => {
-      if (!this._isMobile) {
-        this._isMobile = true;
-        infoEl.style.display = '';
-        $('touch-controls').classList.remove('hidden');
-      }
-    };
-    document.addEventListener('touchstart', forceMobile, { once: true, passive: true });
-
     // Inject mobile control info into start screen (hidden on desktop)
     const infoEl = document.createElement('div');
     const info = infoEl;
@@ -957,7 +946,7 @@ class Game {
         <span>LOCK</span><span>ロックオン切替</span>
       </div>
     `;
-    // Hide on desktop until a touch is detected
+    // Hide on desktop until confirmed mobile
     if (!this._isMobile) info.style.display = 'none';
     $('start-screen').insertBefore(info, $('start-btn'));
 
@@ -1064,6 +1053,12 @@ class Game {
 
   /* ── Start Game ── */
   _startGame() {
+    if (this.gameState !== 'start') return; // prevent double-fire
+    // Fallback: if touchstart reached here but detection was false, fix now
+    if (!this._isMobile) {
+      this._isMobile = navigator.maxTouchPoints > 0 || ('ontouchstart' in window);
+    }
+
     $('start-screen').classList.add('hidden');
     $('hud').classList.remove('hidden');
 
