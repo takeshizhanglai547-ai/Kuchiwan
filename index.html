@@ -2,122 +2,583 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KUCHIWAN: IRON CLASH – 3D Mech Battle</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>KUCHIWAN - IRON CLASH</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      position: fixed;
+      top: 0; left: 0;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+<canvas id="c"></canvas>
+<script>
+'use strict';
 
-  <!-- HUD -->
-  <div id="hud" class="hidden">
-    <!-- Player Status -->
-    <div id="player-status">
-      <div class="pilot-name">KUCHIWAN</div>
-      <div class="status-row">
-        <span class="status-label">AP</span>
-        <div class="bar-wrap"><div id="ap-bar" class="bar bar-ap"></div></div>
-        <span id="ap-val" class="status-val">12000</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">EN</span>
-        <div class="bar-wrap"><div id="en-bar" class="bar bar-en"></div></div>
-      </div>
-      <div class="status-row">
-        <span class="status-label">QB</span>
-        <div class="bar-wrap"><div id="qb-bar" class="bar bar-qb"></div></div>
-      </div>
-    </div>
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
 
-    <!-- Weapon -->
-    <div id="weapon-status">
-      <div class="weapon-row"><span class="w-label">RIFLE</span><span class="w-icon">▣</span><span id="ammo-count" class="w-val">∞</span></div>
-      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">36</span></div>
-    </div>
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
 
-    <!-- Lock-on -->
-    <div id="lock-overlay">
-      <div id="lock-ring" class="lock-ring"></div>
-    </div>
+// ── INPUT ──────────────────────────────────────────────
+var STICK_MAX = 55;
+var sticks = [
+  { active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 },
+  { active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 },
+];
 
-    <!-- Enemy Status -->
-    <div id="enemy-status" class="hidden">
-      <div id="enemy-name-label">IRON GHOST</div>
-      <div class="status-row">
-        <span class="status-label">AP</span>
-        <div class="bar-wrap"><div id="enemy-ap-bar" class="bar bar-enemy"></div></div>
-        <span id="enemy-ap-val" class="status-val"></span>
-      </div>
-      <div id="phase-label"></div>
-    </div>
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    if (gameState !== 'play') {
+      onTap();
+      return;
+    }
+    var si = t.clientX < canvas.width / 2 ? 0 : 1;
+    if (!sticks[si].active) {
+      sticks[si].active = true;
+      sticks[si].id = t.identifier;
+      sticks[si].sx = t.clientX;
+      sticks[si].sy = t.clientY;
+      sticks[si].dx = 0;
+      sticks[si].dy = 0;
+    }
+  }
+}, { passive: false });
 
-    <!-- Center info -->
-    <div id="center-info"></div>
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    for (var s = 0; s < 2; s++) {
+      if (sticks[s].active && sticks[s].id === t.identifier) {
+        var dx = t.clientX - sticks[s].sx;
+        var dy = t.clientY - sticks[s].sy;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        if (len > STICK_MAX) { dx = dx / len * STICK_MAX; dy = dy / len * STICK_MAX; }
+        sticks[s].dx = dx;
+        sticks[s].dy = dy;
+      }
+    }
+  }
+}, { passive: false });
 
-    <!-- Crosshair -->
-    <div id="crosshair">
-      <div class="ch-h"></div>
-      <div class="ch-v"></div>
-    </div>
-  </div>
+function endTouches(e) {
+  e.preventDefault();
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    for (var s = 0; s < 2; s++) {
+      if (sticks[s].id === t.identifier) {
+        sticks[s].active = false;
+        sticks[s].id = -1;
+        sticks[s].dx = 0;
+        sticks[s].dy = 0;
+      }
+    }
+  }
+}
+canvas.addEventListener('touchend', endTouches, { passive: false });
+canvas.addEventListener('touchcancel', endTouches, { passive: false });
 
-  <!-- Start Screen -->
-  <div id="start-screen">
-    <div class="title-block">
-      <div class="title-sub">AC-STYLE 3D MECH BATTLE</div>
-      <h1 class="title-main">KUCHIWAN</h1>
-      <div class="title-sub2">IRON CLASH</div>
-      <div class="title-sub">口湾 vs IRON GHOST</div>
-    </div>
-    <div class="controls-block">
-      <h3>── CONTROLS ──</h3>
-      <div class="ctrl-grid">
-        <span>WASD</span><span>移動</span>
-        <span>マウス</span><span>照準 / カメラ</span>
-        <span>左クリック</span><span>ライフル射撃</span>
-        <span>右クリック</span><span>ミサイル発射</span>
-        <span>Shift</span><span>ブースト（高速移動）</span>
-        <span>E</span><span>クイックブースト（瞬間回避）</span>
-        <span>Space</span><span>上昇</span>
-        <span>Ctrl</span><span>下降</span>
-        <span>Q</span><span>ロックオン切替</span>
-      </div>
-    </div>
-    <button id="start-btn">── ENGAGE IRON GHOST ──</button>
-  </div>
+// ── GAME STATE ─────────────────────────────────────────
+var gameState = 'start';
+var score = 0;
+var waveNum = 0;
+var frame = 0;
+var shake = 0;
+var player, enemies, bullets, particles;
 
-  <!-- Game Over / Clear -->
-  <div id="result-screen" class="hidden">
-    <div id="result-title"></div>
-    <div id="result-sub"></div>
-    <button id="retry-btn">RETRY</button>
-  </div>
+function onTap() {
+  if (gameState === 'start') {
+    gameState = 'play';
+    initGame();
+  } else if (gameState === 'dead' || gameState === 'win') {
+    gameState = 'start';
+  }
+}
 
-  <!-- Touch Controls (mobile) -->
-  <div id="touch-controls" class="hidden">
-    <!-- Left: Virtual Joystick + Up/Down -->
-    <div id="vjoy-area">
-      <div id="btn-up" class="touch-btn small-btn">▲</div>
-      <div id="vjoy-base"><div id="vjoy-handle"></div></div>
-      <div id="btn-down" class="touch-btn small-btn">▼</div>
-    </div>
-    <!-- Right: Action Buttons -->
-    <div id="action-area">
-      <div class="action-row">
-        <div id="btn-lock" class="touch-btn">LOCK</div>
-        <div id="btn-qb" class="touch-btn">QB</div>
-      </div>
-      <div class="action-row">
-        <div id="btn-fire" class="touch-btn fire-btn">FIRE</div>
-        <div id="btn-missile" class="touch-btn">MSL</div>
-      </div>
-      <div class="action-row">
-        <div id="btn-boost" class="touch-btn boost-btn">BOOST</div>
-      </div>
-    </div>
-  </div>
+function initGame() {
+  score = 0;
+  waveNum = 0;
+  frame = 0;
+  player = {
+    x: canvas.width / 2,
+    y: canvas.height * 0.65,
+    r: 18,
+    hp: 100, maxHp: 100,
+    angle: -Math.PI / 2,
+    fireCd: 0,
+    iframes: 0,
+  };
+  enemies = [];
+  bullets = [];
+  particles = [];
+  nextWave();
+}
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-  <script src="js/game.js"></script>
+var WAVES = [
+  { n: 3,  hp: 40,  spd: 1.2, frate: 150, bdmg: 8,  bspd: 4, boss: false },
+  { n: 5,  hp: 60,  spd: 1.4, frate: 120, bdmg: 10, bspd: 5, boss: false },
+  { n: 7,  hp: 80,  spd: 1.6, frate: 95,  bdmg: 12, bspd: 5, boss: false },
+  { n: 9,  hp: 100, spd: 1.8, frate: 75,  bdmg: 15, bspd: 6, boss: false },
+  { n: 1,  hp: 450, spd: 1.4, frate: 45,  bdmg: 20, bspd: 6, boss: true  },
+];
+
+function nextWave() {
+  if (waveNum >= WAVES.length) { gameState = 'win'; return; }
+  var cfg = WAVES[waveNum];
+  waveNum++;
+  var W = canvas.width, H = canvas.height;
+  for (var i = 0; i < cfg.n; i++) {
+    var ex, ey;
+    if (cfg.boss) {
+      ex = W / 2; ey = H * 0.15;
+    } else {
+      var a = (i / cfg.n) * Math.PI * 2;
+      var d = Math.min(W, H) * 0.42;
+      ex = Math.max(50, Math.min(W - 50, W / 2 + Math.cos(a) * d));
+      ey = Math.max(50, Math.min(H - 50, H / 2 + Math.sin(a) * d));
+    }
+    enemies.push({
+      x: ex, y: ey,
+      r: cfg.boss ? 34 : 16,
+      hp: cfg.hp, maxHp: cfg.hp,
+      spd: cfg.spd,
+      fcd: Math.random() * cfg.frate,
+      frate: cfg.frate,
+      bdmg: cfg.bdmg,
+      bspd: cfg.bspd,
+      boss: cfg.boss,
+      angle: 0,
+      bt: 0,
+    });
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────
+function burst(x, y, color, n, spd) {
+  for (var i = 0; i < n; i++) {
+    var a = Math.random() * Math.PI * 2;
+    var s = (spd || 3) * (0.4 + Math.random() * 0.8);
+    particles.push({ x: x, y: y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+      life: 1, decay: 0.022 + Math.random()*0.022, r: 1.5 + Math.random()*3, color: color });
+  }
+}
+
+function addBullet(x, y, vx, vy, owner, dmg, r, color) {
+  bullets.push({ x: x, y: y, vx: vx, vy: vy, owner: owner, dmg: dmg, r: r, color: color });
+}
+
+// ── UPDATE ────────────────────────────────────────────
+function update() {
+  if (gameState !== 'play') return;
+  frame++;
+  if (shake > 0) shake *= 0.8;
+
+  var sl = sticks[0];
+  if (sl.active) {
+    var mlen = Math.sqrt(sl.dx*sl.dx + sl.dy*sl.dy);
+    if (mlen > 6) {
+      player.x += (sl.dx / STICK_MAX) * 5.5;
+      player.y += (sl.dy / STICK_MAX) * 5.5;
+      player.angle = Math.atan2(sl.dy, sl.dx);
+    }
+  }
+  player.x = Math.max(player.r, Math.min(canvas.width  - player.r, player.x));
+  player.y = Math.max(player.r, Math.min(canvas.height - player.r, player.y));
+
+  if (player.fireCd > 0) player.fireCd--;
+  var sr = sticks[1];
+  if (sr.active) {
+    var slen = Math.sqrt(sr.dx*sr.dx + sr.dy*sr.dy);
+    if (slen > 14 && player.fireCd <= 0) {
+      var ax = sr.dx / slen, ay = sr.dy / slen;
+      player.angle = Math.atan2(sr.dy, sr.dx);
+      addBullet(player.x, player.y, ax*13, ay*13, 'p', 25, 4, '#00ffff');
+      player.fireCd = 11;
+      burst(player.x + ax*22, player.y + ay*22, '#00ccff', 3, 2);
+    }
+  }
+  if (player.iframes > 0) player.iframes--;
+
+  var W = canvas.width, H = canvas.height;
+  for (var i = enemies.length - 1; i >= 0; i--) {
+    var e = enemies[i];
+    var dx = player.x - e.x, dy = player.y - e.y;
+    var dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    e.angle = Math.atan2(dy, dx);
+
+    if (e.boss) {
+      e.bt++;
+      var tx = W/2 + Math.sin(e.bt * 0.018) * (W * 0.32);
+      var ty = H * 0.18;
+      var tdx = tx - e.x, tdy = ty - e.y, tl = Math.sqrt(tdx*tdx+tdy*tdy)||1;
+      if (tl > 3) { e.x += tdx/tl*2; e.y += tdy/tl*2; }
+      e.fcd--;
+      if (e.fcd <= 0) {
+        e.fcd = e.frate;
+        var ba = Math.atan2(dy, dx);
+        var shots = e.hp / e.maxHp > 0.5 ? 3 : 5;
+        for (var s = 0; s < shots; s++) {
+          var sa = ba + (s - Math.floor(shots/2)) * 0.22;
+          var bspd2 = e.bspd * (e.hp / e.maxHp > 0.5 ? 1 : 1.35);
+          addBullet(e.x, e.y, Math.cos(sa)*bspd2, Math.sin(sa)*bspd2, 'e', e.bdmg, 6, '#ff6600');
+        }
+      }
+    } else {
+      var stopD = e.r + player.r + 25;
+      if (dist > stopD) { e.x += dx/dist*e.spd; e.y += dy/dist*e.spd; }
+      e.fcd--;
+      if (e.fcd <= 0) {
+        e.fcd = e.frate;
+        addBullet(e.x, e.y, dx/dist*e.bspd, dy/dist*e.bspd, 'e', e.bdmg, 4, '#ff2266');
+      }
+    }
+
+    e.x = Math.max(e.r, Math.min(W-e.r, e.x));
+    e.y = Math.max(e.r, Math.min(H-e.r, e.y));
+
+    if (dist < e.r + player.r && player.iframes <= 0) {
+      player.hp -= e.boss ? 25 : 10;
+      player.iframes = 45;
+      shake = e.boss ? 22 : 14;
+      burst(player.x, player.y, '#ff4400', 12, 4);
+      if (player.hp <= 0) { player.hp = 0; die(); return; }
+    }
+  }
+
+  for (var i = bullets.length - 1; i >= 0; i--) {
+    var b = bullets[i];
+    b.x += b.vx; b.y += b.vy;
+    if (b.x < -30 || b.x > canvas.width+30 || b.y < -30 || b.y > canvas.height+30) {
+      bullets.splice(i, 1); continue;
+    }
+
+    if (b.owner === 'p') {
+      var hit = false;
+      for (var j = enemies.length - 1; j >= 0; j--) {
+        var e2 = enemies[j];
+        var bex = b.x-e2.x, bey = b.y-e2.y;
+        if (Math.sqrt(bex*bex+bey*bey) < e2.r + b.r) {
+          e2.hp -= b.dmg;
+          burst(b.x, b.y, '#00ffff', 6, 3);
+          bullets.splice(i, 1); hit = true;
+          if (e2.hp <= 0) {
+            burst(e2.x, e2.y, e2.boss ? '#ff8800' : '#ff4400', e2.boss ? 55 : 22, e2.boss ? 5 : 3);
+            score += e2.boss ? 5000 : 200;
+            shake = e2.boss ? 25 : 5;
+            enemies.splice(j, 1);
+          }
+          break;
+        }
+      }
+      if (hit) continue;
+    }
+
+    if (b.owner === 'e' && player.iframes <= 0) {
+      var bpx = b.x-player.x, bpy = b.y-player.y;
+      if (Math.sqrt(bpx*bpx+bpy*bpy) < player.r + b.r) {
+        player.hp -= b.dmg;
+        player.iframes = 22;
+        shake = 10;
+        burst(b.x, b.y, '#ff2200', 8, 3);
+        bullets.splice(i, 1);
+        if (player.hp <= 0) { player.hp = 0; die(); return; }
+        continue;
+      }
+    }
+  }
+
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.92; p.vy *= 0.92;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  if (enemies.length === 0) nextWave();
+}
+
+function die() {
+  gameState = 'dead';
+  burst(player.x, player.y, '#00ffff', 40, 5);
+  burst(player.x, player.y, '#ff4400', 35, 3);
+  shake = 30;
+}
+
+// ── DRAW ──────────────────────────────────────────────
+function drawMech(x, y, r, angle, color, flicker) {
+  if (flicker && frame % 6 < 3) return;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, -r);
+  ctx.lineTo(r*0.55, r*0.25);
+  ctx.lineTo(r*0.28, r*0.72);
+  ctx.lineTo(-r*0.28, r*0.72);
+  ctx.lineTo(-r*0.55, r*0.25);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.72, r*0.08, r*0.3, r*0.14,  0.45, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-r*0.72, r*0.08, r*0.3, r*0.14, -0.45, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 20;
+  ctx.beginPath(); ctx.arc(0, -r*0.1, r*0.2, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawBoss(x, y, r, angle, hpRatio) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2);
+  var color = hpRatio > 0.5 ? '#ff4400' : '#ff0000';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, -r);
+  ctx.lineTo(r*0.72, -r*0.5);
+  ctx.lineTo(r*0.88, r*0.28);
+  ctx.lineTo(r*0.42, r*0.82);
+  ctx.lineTo(-r*0.42, r*0.82);
+  ctx.lineTo(-r*0.88, r*0.28);
+  ctx.lineTo(-r*0.72, -r*0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath(); ctx.arc(0, 0, r*0.48, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = hpRatio > 0.5 ? '#ff8800' : '#ff1100';
+  ctx.shadowColor = ctx.fillStyle;
+  ctx.shadowBlur = 35;
+  ctx.beginPath(); ctx.arc(0, 0, r*0.28, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#666';
+  ctx.shadowBlur = 0;
+  ctx.fillRect(-r*0.18, -r*1.15, r*0.14, r*0.52);
+  ctx.fillRect( r*0.04, -r*1.15, r*0.14, r*0.52);
+  ctx.restore();
+}
+
+function hpBar(cx, y, w, hp, maxHp, color) {
+  var ratio = Math.max(0, hp / maxHp);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(cx - w/2, y, w, 5);
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - w/2, y, w * ratio, 5);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx - w/2, y, w, 5);
+}
+
+function glow(text, x, y, color, size) {
+  ctx.save();
+  ctx.font = 'bold ' + size + 'px Courier New';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function draw() {
+  var W = canvas.width, H = canvas.height;
+  var sx = 0, sy = 0;
+  if (shake > 1) { sx = (Math.random()-0.5)*shake*2; sy = (Math.random()-0.5)*shake*2; }
+
+  ctx.fillStyle = '#000814';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(0,140,200,0.07)';
+  ctx.lineWidth = 1;
+  var gs = 62, off = (frame * 0.4) % gs;
+  for (var x2 = off - gs; x2 < W + gs; x2 += gs) {
+    ctx.beginPath(); ctx.moveTo(x2, 0); ctx.lineTo(x2, H); ctx.stroke();
+  }
+  for (var y2 = off - gs; y2 < H + gs; y2 += gs) {
+    ctx.beginPath(); ctx.moveTo(0, y2); ctx.lineTo(W, y2); ctx.stroke();
+  }
+
+  if (gameState === 'start') { drawStart(W, H); return; }
+  if (gameState === 'dead')  { drawDead(W, H);  return; }
+  if (gameState === 'win')   { drawWin(W, H);   return; }
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  ctx.shadowBlur = 6;
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * Math.max(0.1, p.life), 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  for (var i = 0; i < bullets.length; i++) {
+    var b = bullets[i];
+    ctx.fillStyle = b.color;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 0.28;
+    ctx.beginPath(); ctx.arc(b.x - b.vx*1.8, b.y - b.vy*1.8, b.r*0.65, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.shadowBlur = 0;
+
+  for (var i = 0; i < enemies.length; i++) {
+    var e = enemies[i];
+    if (e.boss) {
+      drawBoss(e.x, e.y, e.r, e.angle, e.hp/e.maxHp);
+      ctx.fillStyle = '#ff6600';
+      ctx.font = '11px Courier New';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 0;
+      ctx.fillText('IRON GHOST', W/2, 14);
+      hpBar(W/2, 18, 210, e.hp, e.maxHp, e.hp/e.maxHp > 0.5 ? '#ff6600' : '#ff1100');
+    } else {
+      drawMech(e.x, e.y, e.r, e.angle, '#ff2266', false);
+      hpBar(e.x, e.y - e.r - 11, e.r*2.6, e.hp, e.maxHp, '#ff2266');
+    }
+  }
+
+  drawMech(player.x, player.y, player.r, player.angle, '#00ccff', player.iframes > 0);
+
+  for (var s = 0; s < 2; s++) {
+    var st = sticks[s];
+    if (!st.active) continue;
+    ctx.strokeStyle = 'rgba(0,200,255,0.22)';
+    ctx.lineWidth = 2; ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(st.sx, st.sy, STICK_MAX, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,200,255,0.3)';
+    ctx.beginPath(); ctx.arc(st.sx+st.dx, st.sy+st.dy, 24, 0, Math.PI*2); ctx.fill();
+  }
+
+  var hbw = Math.min(W * 0.38, 150);
+  ctx.fillStyle = '#00ffff';
+  ctx.font = 'bold 11px Courier New';
+  ctx.textAlign = 'left';
+  ctx.fillText('HP: ' + Math.max(0, Math.ceil(player.hp)), 10, 11);
+  hpBar(hbw/2 + 10, 14, hbw, player.hp, player.maxHp,
+    player.hp > 50 ? '#00ff66' : player.hp > 25 ? '#ffcc00' : '#ff2200');
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#00ffff';
+  ctx.fillText(score + ' pts', W-10, 12);
+  ctx.fillText('WAVE ' + waveNum + '/5', W-10, 26);
+
+  ctx.restore();
+}
+
+function drawStart(W, H) {
+  glow('KUCHIWAN', W/2, H*0.20, '#00ffff', Math.min(W*0.14, 54));
+  glow('IRON CLASH', W/2, H*0.30, '#ff4400', Math.min(W*0.08, 32));
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7799aa';
+  ctx.font = Math.min(W*0.038, 14) + 'px Courier New';
+  ctx.fillText('口湾  vs  IRON GHOST', W/2, H*0.38);
+
+  var cw = Math.min(W*0.82, 300), cx = W/2 - cw/2;
+  var cy = H*0.44, ch = H*0.26;
+  ctx.strokeStyle = 'rgba(0,200,255,0.28)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx, cy, cw, ch);
+  var fs = Math.min(W*0.036, 13);
+  ctx.font = fs + 'px Courier New';
+  ctx.fillStyle = '#00ccff';
+  ctx.fillText('─ CONTROLS ─', W/2, cy + ch*0.2);
+  ctx.fillStyle = '#aacccc';
+  ctx.fillText('左サム：移動', W/2, cy + ch*0.42);
+  ctx.fillText('右サム：射撃方向', W/2, cy + ch*0.58);
+  ctx.fillStyle = '#88aaaa';
+  ctx.fillText('5ウェーブを突破せよ', W/2, cy + ch*0.78);
+
+  var pulse = (Math.sin(frame * 0.055) + 1) / 2;
+  var bw = Math.min(W*0.78, 290), bh = 54;
+  var bx = W/2 - bw/2, by = H*0.78;
+  ctx.globalAlpha = 0.55 + pulse * 0.45;
+  ctx.strokeStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 18 * pulse;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = 'rgba(0,255,255,' + (0.06 + pulse*0.09) + ')';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = '#00ffff';
+  ctx.font = 'bold ' + Math.min(W*0.05, 18) + 'px Courier New';
+  ctx.textAlign = 'center';
+  ctx.shadowBlur = 10;
+  ctx.fillText('— ENGAGE IRON GHOST —', W/2, by + bh/2 + 7);
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+}
+
+function drawDead(W, H) {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, W, H);
+  glow('UNIT', W/2, H*0.34, '#ff2200', Math.min(W*0.11, 44));
+  glow('DESTROYED', W/2, H*0.46, '#ff2200', Math.min(W*0.11, 44));
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#aaaaaa';
+  ctx.font = Math.min(W*0.045, 16) + 'px Courier New';
+  ctx.fillText('SCORE: ' + score, W/2, H*0.57);
+  ctx.fillText('WAVE: ' + waveNum + '/5', W/2, H*0.64);
+  var pulse = (Math.sin(frame * 0.06) + 1) / 2;
+  ctx.globalAlpha = 0.5 + pulse*0.5;
+  ctx.fillStyle = '#ff6600';
+  ctx.font = Math.min(W*0.042, 15) + 'px Courier New';
+  ctx.fillText('タップしてスタートへ', W/2, H*0.77);
+  ctx.globalAlpha = 1;
+}
+
+function drawWin(W, H) {
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, W, H);
+  glow('MISSION', W/2, H*0.32, '#00ff88', Math.min(W*0.1, 40));
+  glow('COMPLETE', W/2, H*0.44, '#00ff88', Math.min(W*0.1, 40));
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffff00';
+  ctx.font = Math.min(W*0.05, 18) + 'px Courier New';
+  ctx.fillText('FINAL SCORE: ' + score, W/2, H*0.57);
+  var pulse = (Math.sin(frame * 0.06) + 1) / 2;
+  ctx.globalAlpha = 0.5 + pulse*0.5;
+  ctx.fillStyle = '#00ffff';
+  ctx.font = Math.min(W*0.042, 15) + 'px Courier New';
+  ctx.fillText('タップしてスタートへ', W/2, H*0.72);
+  ctx.globalAlpha = 1;
+}
+
+// ── MAIN LOOP ─────────────────────────────────────────
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
 </body>
 </html>
