@@ -1084,7 +1084,7 @@ class Game {
 
   /* ── Touch Controls ── */
   _setupTouchControls() {
-    const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const isMobile = window.matchMedia('(pointer: coarse)').matches;
     if (!isMobile) return;
 
     // Inject mobile controls info into start screen
@@ -1234,7 +1234,7 @@ class Game {
   _startGame() {
     $('start-screen').classList.add('hidden');
     $('hud').classList.remove('hidden');
-    this._isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    this._isMobile = window.matchMedia('(pointer: coarse)').matches;
     if (this._isMobile) {
       $('touch-controls').classList.remove('hidden');
     } else {
