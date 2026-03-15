@@ -917,20 +917,19 @@ class Game {
       this.pointerLocked = (document.pointerLockElement === $('gameCanvas'));
     });
 
-    // Use touchstart for mobile (fires before any DOM mutation; preventDefault stops
-    // subsequent click so _startGame won't be called twice)
     const onStart = () => this._startGame();
     const onRetry = () => location.reload();
-    // Desktop: click on button
     $('start-btn').addEventListener('click', onStart);
     $('retry-btn').addEventListener('click', onRetry);
-    // Mobile: touchstart on entire start-screen (button tap area is small;
-    // any tap on the screen is more reliable on iOS)
-    $('start-screen').addEventListener('touchstart', e => {
+    $('retry-btn').addEventListener('touchstart', e => { e.preventDefault(); onRetry(); }, { passive: false });
+
+    // iOS: document-level touchstart is the only 100% reliable trigger.
+    // start-screen with overflow CSS causes iOS to swallow the event as a scroll.
+    document.addEventListener('touchstart', e => {
+      if (this.gameState !== 'start') return;
       e.preventDefault();
       onStart();
     }, { passive: false });
-    $('retry-btn').addEventListener('touchstart', e => { e.preventDefault(); onRetry(); }, { passive: false });
   }
 
   /* ── Touch Controls ── */
