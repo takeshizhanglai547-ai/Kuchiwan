@@ -921,10 +921,16 @@ class Game {
     // subsequent click so _startGame won't be called twice)
     const onStart = () => this._startGame();
     const onRetry = () => location.reload();
+    // Desktop: click on button
     $('start-btn').addEventListener('click', onStart);
-    $('start-btn').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); onStart(); }, { passive: false });
     $('retry-btn').addEventListener('click', onRetry);
-    $('retry-btn').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); onRetry(); }, { passive: false });
+    // Mobile: touchstart on entire start-screen (button tap area is small;
+    // any tap on the screen is more reliable on iOS)
+    $('start-screen').addEventListener('touchstart', e => {
+      e.preventDefault();
+      onStart();
+    }, { passive: false });
+    $('retry-btn').addEventListener('touchstart', e => { e.preventDefault(); onRetry(); }, { passive: false });
   }
 
   /* ── Touch Controls ── */
