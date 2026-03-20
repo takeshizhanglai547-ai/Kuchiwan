@@ -43,40 +43,113 @@ function randSign() { return Math.random() < 0.5 ? 1 : -1; }
    MECH BUILDER  –  angular low-poly bodies
 ───────────────────────────────────────── */
 const MechBuilder = {
-  /* Creates a player mech group */
+  /* Shared geometry helpers */
+  _box(w, h, d, m, x, y, z, rx, ry, rz) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.position.set(x, y, z);
+    if (rx) mesh.rotation.x = rx;
+    if (ry) mesh.rotation.y = ry;
+    if (rz) mesh.rotation.z = rz;
+    mesh.castShadow = true;
+    return mesh;
+  },
+  _cyl(rT, rB, h, seg, m, x, y, z, rx, ry, rz) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rT, rB, h, seg), m);
+    mesh.position.set(x, y, z);
+    if (rx) mesh.rotation.x = rx;
+    if (ry) mesh.rotation.y = ry;
+    if (rz) mesh.rotation.z = rz;
+    mesh.castShadow = true;
+    return mesh;
+  },
+
+  /* Creates a detailed AC-style player mech */
   player() {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a4a6a, metalness: 0.8, roughness: 0.3 });
-    const acMat = new THREE.MeshStandardMaterial({ color: 0x002244, metalness: 0.9, roughness: 0.2 });
-    const glowMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x00ffcc, emissiveIntensity: 1.2, metalness: 0, roughness: 1 });
+    const box = this._box;
+    const cyl = this._cyl;
 
-    const box = (w, h, d, m, x, y, z, rx, ry, rz) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-      mesh.position.set(x, y, z);
-      if (rx) mesh.rotation.x = rx;
-      if (ry) mesh.rotation.y = ry;
-      if (rz) mesh.rotation.z = rz;
-      mesh.castShadow = true;
-      return mesh;
+    // Materials
+    const mat    = new THREE.MeshStandardMaterial({ color: 0x1a4a6a, metalness: 0.8, roughness: 0.3 });
+    const acMat  = new THREE.MeshStandardMaterial({ color: 0x002244, metalness: 0.9, roughness: 0.2 });
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0a1a2a, metalness: 0.95, roughness: 0.15 });
+    const glowMat  = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x00ffcc, emissiveIntensity: 1.2, metalness: 0, roughness: 1 });
+    const pipeMat  = new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.7, roughness: 0.4 });
+    const ventMat  = new THREE.MeshStandardMaterial({ color: 0x001122, metalness: 0.6, roughness: 0.5 });
+
+    // === CORE TORSO (layered armor) ===
+    g.add(box(2.4, 2.0, 1.4, mat, 0, 0, 0));                    // Main chest
+    g.add(box(2.6, 0.4, 1.5, acMat, 0, 0.8, 0));                // Upper chest plate
+    g.add(box(2.0, 0.3, 1.5, acMat, 0, -0.7, 0));               // Lower chest plate
+    g.add(box(1.8, 1.4, 0.3, frameMat, 0, 0, 0.85));            // Front armor panel
+    g.add(box(0.6, 0.6, 0.1, glowMat, 0, 0.2, 0.92));           // Chest reactor glow
+    // Side torso vents
+    g.add(box(0.15, 0.8, 0.6, ventMat, -1.25, 0, 0.2));
+    g.add(box(0.15, 0.8, 0.6, ventMat,  1.25, 0, 0.2));
+    // Rear torso armor
+    g.add(box(2.0, 1.6, 0.3, acMat, 0, 0.1, -0.85));
+    // Waist / hip joint
+    g.add(box(2.0, 0.5, 1.2, frameMat, 0, -1.1, 0));
+    g.add(box(2.6, 0.3, 0.8, acMat, 0, -1.0, 0));               // Hip armor skirt
+
+    // === HEAD (angular, visor style) ===
+    const head = new THREE.Group();
+    head.add(box(1.0, 0.7, 0.9, acMat, 0, 0, 0));               // Main head
+    head.add(box(1.1, 0.2, 0.95, frameMat, 0, 0.25, 0));        // Top crest
+    head.add(box(0.8, 0.15, 0.05, glowMat, 0, 0.05, 0.5));      // Eye visor
+    head.add(box(0.3, 0.08, 0.05, glowMat, 0, -0.1, 0.5));      // Chin sensor
+    // Antenna
+    head.add(box(0.06, 0.4, 0.06, frameMat, -0.5, 0.35, 0));
+    head.add(box(0.06, 0.4, 0.06, frameMat,  0.5, 0.35, 0));
+    // Cheek guards
+    head.add(box(0.2, 0.5, 0.7, acMat, -0.55, -0.1, 0.1));
+    head.add(box(0.2, 0.5, 0.7, acMat,  0.55, -0.1, 0.1));
+    head.position.set(0, 1.4, 0);
+    g.add(head);
+
+    // === SHOULDERS (layered AC-style) ===
+    const buildShoulder = (side) => {
+      const sx = side * 1.9;
+      const sg = new THREE.Group();
+      sg.add(box(1.2, 0.8, 1.0, acMat, 0, 0, 0));               // Main plate
+      sg.add(box(1.3, 0.2, 1.05, frameMat, 0, 0.35, 0));        // Top edge
+      sg.add(box(0.2, 0.6, 0.9, mat, side * 0.55, -0.1, 0));    // Outer plate
+      // Shoulder vent slits
+      for (let i = 0; i < 3; i++) {
+        sg.add(box(0.08, 0.06, 0.7, glowMat, side * 0.4, 0.15 - i * 0.15, 0));
+      }
+      sg.position.set(sx, 0.5, 0);
+      return sg;
     };
+    g.add(buildShoulder(-1));
+    g.add(buildShoulder(1));
 
-    // Torso
-    g.add(box(2.4, 2.0, 1.4, mat, 0, 0, 0));
-    // Head
-    g.add(box(1.0, 0.7, 0.9, acMat, 0, 1.4, 0));
-    // Eye visor
-    g.add(box(0.8, 0.15, 0.05, glowMat, 0, 1.45, 0.5));
-    // Shoulders
-    g.add(box(1.0, 0.7, 0.9, acMat, -1.9, 0.5, 0));
-    g.add(box(1.0, 0.7, 0.9, acMat,  1.9, 0.5, 0));
-    // Arms
-    g.add(box(0.5, 1.4, 0.5, mat, -1.6, -0.4, 0));
-    g.add(box(0.5, 1.4, 0.5, mat,  1.6, -0.4, 0));
-    // Cannons
+    // === ARMS (upper + forearm + elbow joint) ===
+    const buildArm = (side) => {
+      const sx = side * 1.6;
+      const ag = new THREE.Group();
+      ag.add(box(0.5, 0.8, 0.5, mat, 0, 0.1, 0));               // Upper arm
+      ag.add(cyl(0.2, 0.2, 0.3, 8, frameMat, 0, -0.35, 0));     // Elbow joint
+      ag.add(box(0.45, 0.7, 0.5, acMat, 0, -0.8, 0));           // Forearm
+      ag.add(box(0.2, 0.15, 0.55, frameMat, side * 0.15, -0.5, 0));  // Forearm detail
+      ag.position.set(sx, -0.3, 0);
+      return ag;
+    };
+    g.add(buildArm(-1));
+    g.add(buildArm(1));
+
+    // === CANNONS (weapon arms with barrel detail) ===
     const cannon = (x) => {
       const cg = new THREE.Group();
-      cg.add(box(0.3, 0.3, 1.6, acMat, 0, 0, 0.5));
-      cg.add(box(0.12, 0.12, 0.4, glowMat, 0, 0, 1.4));
+      cg.add(box(0.35, 0.35, 1.8, acMat, 0, 0, 0.6));           // Main barrel housing
+      cg.add(cyl(0.1, 0.1, 1.0, 8, frameMat, 0, 0, 1.0));       // Inner barrel (rotated)
+      cg.children[1].rotation.x = Math.PI / 2;
+      cg.add(box(0.45, 0.15, 0.5, mat, 0, 0.15, 0.2));          // Top rail
+      cg.add(box(0.12, 0.12, 0.4, glowMat, 0, 0, 1.55));        // Muzzle glow
+      cg.add(cyl(0.15, 0.18, 0.2, 6, frameMat, 0, 0, 1.5));     // Muzzle brake
+      cg.children[4].rotation.x = Math.PI / 2;
+      // Ammo box
+      cg.add(box(0.25, 0.3, 0.3, pipeMat, 0.2, -0.15, 0));
       cg.position.set(x, -0.7, 0.2);
       return cg;
     };
@@ -86,76 +159,212 @@ const MechBuilder = {
     g.userData.cannonL = leftCannon;
     g.userData.cannonR = rightCannon;
 
-    // Legs
-    g.add(box(0.7, 1.6, 0.7, mat, -0.7, -1.7, 0));
-    g.add(box(0.7, 1.6, 0.7, mat,  0.7, -1.7, 0));
-    // Feet
-    g.add(box(0.8, 0.4, 1.0, acMat, -0.7, -2.7, 0.15));
-    g.add(box(0.8, 0.4, 1.0, acMat,  0.7, -2.7, 0.15));
-    // Back boosters
-    const boosterMat = new THREE.MeshStandardMaterial({ color: 0x333, metalness: 0.9, roughness: 0.2 });
-    g.add(box(0.5, 1.2, 0.5, boosterMat, -0.8, 0.3, -0.9));
-    g.add(box(0.5, 1.2, 0.5, boosterMat,  0.8, 0.3, -0.9));
-    g.userData.boosterL = g.children[g.children.length - 2];
-    g.userData.boosterR = g.children[g.children.length - 1];
+    // === LEGS (reverse-joint AC style) ===
+    const buildLeg = (side) => {
+      const sx = side * 0.7;
+      const lg = new THREE.Group();
+      // Upper leg (thigh)
+      lg.add(box(0.7, 0.9, 0.7, mat, 0, 0, 0));
+      lg.add(box(0.8, 0.3, 0.75, acMat, 0, 0.25, 0));           // Thigh armor
+      // Knee joint
+      lg.add(cyl(0.25, 0.25, 0.3, 8, frameMat, 0, -0.55, 0));
+      // Lower leg (shin) – angled back slightly
+      lg.add(box(0.6, 1.0, 0.65, acMat, 0, -1.15, -0.15));
+      lg.add(box(0.3, 0.8, 0.15, frameMat, 0, -1.1, 0.2));      // Shin plate
+      // Ankle
+      lg.add(cyl(0.18, 0.18, 0.2, 8, frameMat, 0, -1.7, -0.1));
+      // Foot
+      lg.add(box(0.8, 0.3, 1.2, acMat, 0, -1.95, 0.1));         // Main foot
+      lg.add(box(0.6, 0.1, 0.4, frameMat, 0, -1.85, 0.7));      // Toe plate
+      lg.add(box(0.4, 0.15, 0.3, mat, 0, -1.85, -0.35));        // Heel
+      lg.position.set(sx, -1.3, 0);
+      return lg;
+    };
+    g.add(buildLeg(-1));
+    g.add(buildLeg(1));
+
+    // === BACKPACK (boosters + equipment) ===
+    const backpack = new THREE.Group();
+    // Main pack
+    backpack.add(box(1.8, 1.4, 0.6, acMat, 0, 0.3, 0));
+    backpack.add(box(1.4, 0.8, 0.3, mat, 0, 0.3, -0.35));       // Rear panel
+    // Booster housings
+    const boosterMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.9, roughness: 0.2 });
+    const boosterGlowMat = new THREE.MeshStandardMaterial({ color: 0x003355, emissive: 0x003355, emissiveIntensity: 0.5, roughness: 1 });
+    const buildBooster = (bx) => {
+      const bg = new THREE.Group();
+      bg.add(box(0.5, 1.2, 0.5, boosterMat, 0, 0, 0));          // Housing
+      bg.add(box(0.55, 0.15, 0.55, frameMat, 0, 0.55, 0));      // Top cap
+      bg.add(cyl(0.2, 0.25, 0.3, 8, boosterGlowMat, 0, -0.65, 0)); // Nozzle
+      bg.position.set(bx, 0, 0);
+      return bg;
+    };
+    const boosterL = buildBooster(-0.8);
+    const boosterR = buildBooster( 0.8);
+    backpack.add(boosterL, boosterR);
+    // Missile pods on top
+    backpack.add(box(0.4, 0.3, 0.4, pipeMat, -0.4, 1.1, 0));
+    backpack.add(box(0.4, 0.3, 0.4, pipeMat,  0.4, 1.1, 0));
+    // Thruster pipes
+    backpack.add(cyl(0.06, 0.06, 0.8, 6, pipeMat, -0.6, -0.2, 0.4, 0.5, 0, 0));
+    backpack.add(cyl(0.06, 0.06, 0.8, 6, pipeMat,  0.6, -0.2, 0.4, 0.5, 0, 0));
+    backpack.position.set(0, 0, -0.9);
+    g.add(backpack);
+
+    // Store booster refs for glow animation
+    g.userData.boosterL = boosterL.children[0];
+    g.userData.boosterR = boosterR.children[0];
 
     return g;
   },
 
-  /* Creates an enemy boss mech group */
+  /* Creates a detailed enemy boss mech */
   enemy(phase) {
     const g = new THREE.Group();
+    const box = this._box;
+    const cyl = this._cyl;
+
     const colors = [0x6a1a1a, 0x8b0000, 0xff2200];
     const baseColor = colors[Math.min(phase, 2)];
     const mat  = new THREE.MeshStandardMaterial({ color: baseColor, metalness: 0.85, roughness: 0.25 });
     const mat2 = new THREE.MeshStandardMaterial({ color: 0x220000, metalness: 0.95, roughness: 0.15 });
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x110000, metalness: 0.9, roughness: 0.2 });
     const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0xff3300, emissiveIntensity: 2, roughness: 1 });
-
-    const box = (w, h, d, m, x, y, z, rx, ry, rz) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-      mesh.position.set(x, y, z);
-      if (rx) mesh.rotation.x = rx;
-      if (ry) mesh.rotation.y = ry;
-      if (rz) mesh.rotation.z = rz;
-      mesh.castShadow = true;
-      return mesh;
-    };
+    const pipeMat = new THREE.MeshStandardMaterial({ color: 0x331111, metalness: 0.7, roughness: 0.4 });
 
     const s = 1.6; // scale factor
-    // Main body
-    g.add(box(3.2*s, 2.8*s, 2.0*s, mat, 0, 0, 0));
-    // Head
-    g.add(box(1.6*s, 1.0*s, 1.4*s, mat2, 0, 2.0*s, 0));
-    // Eyes
-    g.add(box(0.5*s, 0.2*s, 0.05, eyeMat, -0.4*s, 2.05*s, 0.72*s));
-    g.add(box(0.5*s, 0.2*s, 0.05, eyeMat,  0.4*s, 2.05*s, 0.72*s));
-    // Shoulder plates
-    g.add(box(2.0*s, 1.0*s, 1.6*s, mat2, -2.8*s, 0.6*s, 0));
-    g.add(box(2.0*s, 1.0*s, 1.6*s, mat2,  2.8*s, 0.6*s, 0));
-    // Upper arms
-    g.add(box(0.8*s, 1.8*s, 0.8*s, mat, -2.8*s, -0.6*s, 0));
-    g.add(box(0.8*s, 1.8*s, 0.8*s, mat,  2.8*s, -0.6*s, 0));
-    // Heavy cannons
-    const hcannon = (x, idx) => {
+
+    // === CORE TORSO ===
+    g.add(box(3.2*s, 2.8*s, 2.0*s, mat, 0, 0, 0));              // Main body
+    g.add(box(3.4*s, 0.5*s, 2.1*s, mat2, 0, 1.0*s, 0));         // Upper chest plate
+    g.add(box(2.8*s, 0.4*s, 2.1*s, mat2, 0, -1.0*s, 0));        // Lower plate
+    g.add(box(2.4*s, 2.0*s, 0.3*s, frameMat, 0, 0, 1.05*s));    // Front armor
+    g.add(box(0.8*s, 0.8*s, 0.1*s, eyeMat, 0, 0.2*s, 1.12*s));  // Core reactor
+    // Side armor panels
+    g.add(box(0.3*s, 2.0*s, 1.4*s, mat2, -1.7*s, 0, 0));
+    g.add(box(0.3*s, 2.0*s, 1.4*s, mat2,  1.7*s, 0, 0));
+    // Rear panel
+    g.add(box(2.8*s, 2.2*s, 0.3*s, mat2, 0, 0, -1.05*s));
+    // Waist
+    g.add(box(2.8*s, 0.6*s, 1.6*s, frameMat, 0, -1.5*s, 0));
+    g.add(box(3.2*s, 0.3*s, 1.2*s, mat, 0, -1.4*s, 0));         // Skirt armor
+
+    // === HEAD ===
+    const head = new THREE.Group();
+    head.add(box(1.6*s, 1.0*s, 1.4*s, mat2, 0, 0, 0));          // Main head
+    head.add(box(1.7*s, 0.25*s, 1.45*s, frameMat, 0, 0.4*s, 0)); // Crown
+    // Dual eyes
+    head.add(box(0.5*s, 0.2*s, 0.05, eyeMat, -0.4*s, 0.05*s, 0.72*s));
+    head.add(box(0.5*s, 0.2*s, 0.05, eyeMat,  0.4*s, 0.05*s, 0.72*s));
+    // Horn / crest
+    head.add(box(0.15*s, 0.6*s, 0.15*s, mat, 0, 0.7*s, 0.2*s));
+    head.add(box(0.08*s, 0.3*s, 0.08*s, eyeMat, 0, 1.0*s, 0.2*s));
+    // Cheek armor
+    head.add(box(0.3*s, 0.7*s, 1.0*s, mat, -0.85*s, -0.15*s, 0.1*s));
+    head.add(box(0.3*s, 0.7*s, 1.0*s, mat,  0.85*s, -0.15*s, 0.1*s));
+    // Jaw plate
+    head.add(box(1.2*s, 0.2*s, 0.6*s, frameMat, 0, -0.4*s, 0.3*s));
+    head.position.set(0, 2.0*s, 0);
+    g.add(head);
+
+    // === SHOULDERS (massive, layered) ===
+    const buildShoulder = (side) => {
+      const sg = new THREE.Group();
+      sg.add(box(2.0*s, 1.0*s, 1.6*s, mat2, 0, 0, 0));          // Main plate
+      sg.add(box(2.1*s, 0.25*s, 1.65*s, frameMat, 0, 0.4*s, 0)); // Top edge
+      sg.add(box(0.4*s, 0.8*s, 1.4*s, mat, side * 0.85*s, -0.1*s, 0)); // Outer plate
+      // Vent slits
+      for (let i = 0; i < 4; i++) {
+        sg.add(box(0.1*s, 0.06*s, 1.2*s, eyeMat, side * 0.3*s, 0.2*s - i * 0.13*s, 0));
+      }
+      // Spike detail
+      sg.add(box(0.1*s, 0.4*s, 0.1*s, mat, side * 0.95*s, 0.5*s, 0));
+      sg.position.set(side * 2.8*s, 0.6*s, 0);
+      return sg;
+    };
+    g.add(buildShoulder(-1));
+    g.add(buildShoulder(1));
+
+    // === ARMS ===
+    const buildArm = (side) => {
+      const ag = new THREE.Group();
+      ag.add(box(0.8*s, 1.0*s, 0.8*s, mat, 0, 0, 0));           // Upper arm
+      ag.add(cyl(0.35*s, 0.35*s, 0.3*s, 8, frameMat, 0, -0.6*s, 0)); // Elbow
+      ag.add(box(0.7*s, 0.9*s, 0.7*s, mat2, 0, -1.2*s, 0));     // Forearm
+      ag.add(box(0.4*s, 0.2*s, 0.8*s, frameMat, side * 0.15*s, -0.9*s, 0)); // Forearm detail
+      ag.position.set(side * 2.8*s, -0.6*s, 0);
+      return ag;
+    };
+    g.add(buildArm(-1));
+    g.add(buildArm(1));
+
+    // === HEAVY CANNONS ===
+    const hcannon = (x) => {
       const cg = new THREE.Group();
+      // Dual barrel housing
       cg.add(box(0.5*s, 0.5*s, 2.4*s, mat2, 0, 0.3*s, 0.8*s));
       cg.add(box(0.5*s, 0.5*s, 2.4*s, mat2, 0, -0.3*s, 0.8*s));
-      cg.add(box(0.2*s, 0.2*s, 0.5*s, eyeMat, 0, 0.3*s, 1.95*s));
-      cg.add(box(0.2*s, 0.2*s, 0.5*s, eyeMat, 0, -0.3*s, 1.95*s));
+      // Barrel shrouds
+      cg.add(cyl(0.15*s, 0.15*s, 1.0*s, 8, frameMat, 0, 0.3*s, 1.5*s));
+      cg.children[2].rotation.x = Math.PI / 2;
+      cg.add(cyl(0.15*s, 0.15*s, 1.0*s, 8, frameMat, 0, -0.3*s, 1.5*s));
+      cg.children[3].rotation.x = Math.PI / 2;
+      // Muzzle glow
+      cg.add(box(0.2*s, 0.2*s, 0.5*s, eyeMat, 0, 0.3*s, 2.05*s));
+      cg.add(box(0.2*s, 0.2*s, 0.5*s, eyeMat, 0, -0.3*s, 2.05*s));
+      // Connecting frame
+      cg.add(box(0.6*s, 0.15*s, 1.8*s, frameMat, 0, 0, 0.8*s));
+      // Ammo feed
+      cg.add(box(0.3*s, 0.4*s, 0.5*s, pipeMat, 0.3*s, 0, 0.2*s));
       cg.position.set(x, -1.2*s, 0.2*s);
       return cg;
     };
-    const cannonL = hcannon(-2.8*s, 0);
-    const cannonR = hcannon( 2.8*s, 1);
+    const cannonL = hcannon(-2.8*s);
+    const cannonR = hcannon( 2.8*s);
     g.add(cannonL, cannonR);
     g.userData.cannonL = cannonL;
     g.userData.cannonR = cannonR;
 
-    // Legs
-    g.add(box(1.0*s, 2.0*s, 1.0*s, mat, -1.0*s, -2.4*s, 0));
-    g.add(box(1.0*s, 2.0*s, 1.0*s, mat,  1.0*s, -2.4*s, 0));
-    g.add(box(1.2*s, 0.6*s, 1.4*s, mat2, -1.0*s, -3.6*s, 0.2*s));
-    g.add(box(1.2*s, 0.6*s, 1.4*s, mat2,  1.0*s, -3.6*s, 0.2*s));
+    // === LEGS (heavy, armored) ===
+    const buildLeg = (side) => {
+      const lg = new THREE.Group();
+      // Thigh
+      lg.add(box(1.0*s, 1.2*s, 1.0*s, mat, 0, 0, 0));
+      lg.add(box(1.1*s, 0.3*s, 1.05*s, mat2, 0, 0.4*s, 0));    // Thigh armor
+      // Knee
+      lg.add(cyl(0.4*s, 0.4*s, 0.35*s, 8, frameMat, 0, -0.7*s, 0));
+      // Shin
+      lg.add(box(0.9*s, 1.3*s, 0.9*s, mat2, 0, -1.6*s, -0.1*s));
+      lg.add(box(0.5*s, 1.0*s, 0.2*s, frameMat, 0, -1.5*s, 0.4*s)); // Shin guard
+      // Ankle
+      lg.add(cyl(0.3*s, 0.3*s, 0.25*s, 8, frameMat, 0, -2.3*s, 0));
+      // Foot
+      lg.add(box(1.2*s, 0.4*s, 1.6*s, mat2, 0, -2.65*s, 0.15*s));
+      lg.add(box(0.8*s, 0.15*s, 0.5*s, frameMat, 0, -2.5*s, 0.9*s)); // Toe
+      lg.add(box(0.5*s, 0.2*s, 0.4*s, mat, 0, -2.55*s, -0.5*s));     // Heel
+      lg.position.set(side * 1.0*s, -2.0*s, 0);
+      return lg;
+    };
+    g.add(buildLeg(-1));
+    g.add(buildLeg(1));
+
+    // === BACKPACK (massive thruster unit) ===
+    const backpack = new THREE.Group();
+    backpack.add(box(2.8*s, 2.0*s, 0.8*s, mat2, 0, 0.4*s, 0));  // Main housing
+    backpack.add(box(2.2*s, 1.2*s, 0.3*s, mat, 0, 0.4*s, -0.45*s)); // Rear
+    // Large thrusters
+    for (let i = -1; i <= 1; i += 2) {
+      backpack.add(cyl(0.4*s, 0.5*s, 0.5*s, 8, frameMat, i * 0.9*s, -0.3*s, -0.1*s));
+      backpack.add(cyl(0.35*s, 0.35*s, 0.15*s, 8, eyeMat, i * 0.9*s, -0.55*s, -0.1*s));
+    }
+    // Wing-like stabilizers
+    backpack.add(box(0.8*s, 0.1*s, 1.2*s, mat, -1.6*s, 0.8*s, -0.3*s, 0, 0, -0.15));
+    backpack.add(box(0.8*s, 0.1*s, 1.2*s, mat,  1.6*s, 0.8*s, -0.3*s, 0, 0,  0.15));
+    // Top missile pods
+    backpack.add(box(0.5*s, 0.4*s, 0.6*s, pipeMat, -0.7*s, 1.5*s, 0));
+    backpack.add(box(0.5*s, 0.4*s, 0.6*s, pipeMat,  0.7*s, 1.5*s, 0));
+    backpack.position.set(0, 0, -1.3*s);
+    g.add(backpack);
 
     return g;
   }
