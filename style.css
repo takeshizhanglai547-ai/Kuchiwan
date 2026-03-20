@@ -287,6 +287,109 @@ body {
   background: rgba(0,255,200,0.1);
 }
 
+/* ── TOUCH CONTROLS ── */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Joystick zone – left half of screen */
+#joystick-zone {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 50%; height: 60%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#joystick-base {
+  position: absolute;
+  left: 80px; bottom: 100px;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,255,200,0.3);
+  background: rgba(0,255,200,0.05);
+}
+
+#joystick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 48px; height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: rgba(0,255,200,0.35);
+  border: 2px solid rgba(0,255,200,0.6);
+  box-shadow: 0 0 12px rgba(0,255,200,0.3);
+}
+
+/* Action buttons – right side */
+#touch-buttons {
+  position: absolute;
+  right: 16px; bottom: 80px;
+  display: grid;
+  grid-template-areas:
+    ".     up   lock"
+    "fire  msl  boost"
+    ".     down .";
+  grid-template-columns: 64px 64px 64px;
+  grid-template-rows: 56px 64px 56px;
+  gap: 8px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(0,255,200,0.3);
+  background: rgba(0,20,30,0.6);
+  color: #00ffcc;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.touch-btn:active, .touch-btn.active {
+  background: rgba(0,255,200,0.25);
+  box-shadow: 0 0 16px rgba(0,255,200,0.4);
+}
+
+.touch-btn-fire    { grid-area: fire;  border-color: rgba(0,255,255,0.5); color: #00ffff; }
+.touch-btn-missile { grid-area: msl;   border-color: rgba(255,136,0,0.5); color: #ff8800; }
+.touch-btn-boost   { grid-area: boost; border-color: rgba(0,170,255,0.5); color: #00aaff; }
+.touch-btn-lock    { grid-area: lock;  border-color: rgba(255,68,68,0.5); color: #ff4444; }
+.touch-btn-up      { grid-area: up;    font-size: 16px; }
+.touch-btn-down    { grid-area: down;  font-size: 16px; }
+
+/* Camera touch zone (right half, above buttons) */
+#camera-touch-zone {
+  position: absolute;
+  right: 0; top: 0;
+  width: 50%; height: 55%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 768px), (pointer: coarse) {
+  #player-status { bottom: 16px; left: 12px; width: 200px; }
+  #weapon-status { bottom: 16px; right: 210px; }
+  #enemy-status  { width: 260px; }
+  .status-label  { font-size: 9px; }
+  .status-val    { font-size: 10px; }
+  .weapon-row    { font-size: 10px; }
+}
+
 /* Damage flash */
 @keyframes damageFlash {
   0%   { background: rgba(255,0,0,0.35); }

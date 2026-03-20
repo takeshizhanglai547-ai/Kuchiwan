@@ -54,6 +54,25 @@
       <div class="ch-h"></div>
       <div class="ch-v"></div>
     </div>
+
+    <!-- Touch Controls (mobile only) -->
+    <div id="touch-controls" class="hidden">
+      <!-- Virtual Joystick (left) -->
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+      <!-- Action Buttons (right) -->
+      <div id="touch-buttons">
+        <button class="touch-btn touch-btn-fire" id="btn-fire">FIRE</button>
+        <button class="touch-btn touch-btn-missile" id="btn-missile">MSL</button>
+        <button class="touch-btn touch-btn-boost" id="btn-boost">BST</button>
+        <button class="touch-btn touch-btn-lock" id="btn-lock">LOCK</button>
+        <button class="touch-btn touch-btn-up" id="btn-up">▲</button>
+        <button class="touch-btn touch-btn-down" id="btn-down">▼</button>
+      </div>
+    </div>
   </div>
 
   <!-- Start Screen -->
@@ -63,7 +82,7 @@
       <h1 class="title-main">KUCHIWAN</h1>
       <div class="title-sub">口湾</div>
     </div>
-    <div class="controls-block">
+    <div class="controls-block" id="controls-desktop">
       <h3>── CONTROLS ──</h3>
       <div class="ctrl-grid">
         <span>WASD</span><span>移動</span>
@@ -74,6 +93,18 @@
         <span>Space</span><span>上昇</span>
         <span>Ctrl</span><span>下降</span>
         <span>Q</span><span>ロックオン切替</span>
+      </div>
+    </div>
+    <div class="controls-block hidden" id="controls-mobile">
+      <h3>── CONTROLS ──</h3>
+      <div class="ctrl-grid">
+        <span>左スティック</span><span>移動</span>
+        <span>右エリア</span><span>カメラ操作</span>
+        <span>FIRE</span><span>ライフル射撃</span>
+        <span>MSL</span><span>ミサイル発射</span>
+        <span>BST</span><span>ブースト</span>
+        <span>LOCK</span><span>ロックオン</span>
+        <span>▲ / ▼</span><span>上昇 / 下降</span>
       </div>
     </div>
     <button id="start-btn">── START MISSION ──</button>

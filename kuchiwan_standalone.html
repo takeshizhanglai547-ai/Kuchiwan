@@ -294,6 +294,30 @@ body {
   background: rgba(0,255,200,0.1);
 }
 
+/* ── TOUCH CONTROLS ── */
+#touch-controls { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+#joystick-zone { position: absolute; left: 0; bottom: 0; width: 50%; height: 60%; pointer-events: auto; touch-action: none; }
+#joystick-base { position: absolute; left: 80px; bottom: 100px; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(0,255,200,0.3); background: rgba(0,255,200,0.05); }
+#joystick-knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(0,255,200,0.35); border: 2px solid rgba(0,255,200,0.6); box-shadow: 0 0 12px rgba(0,255,200,0.3); }
+#touch-buttons { position: absolute; right: 16px; bottom: 80px; display: grid; grid-template-areas: ". up lock" "fire msl boost" ". down ."; grid-template-columns: 64px 64px 64px; grid-template-rows: 56px 64px 56px; gap: 8px; pointer-events: auto; touch-action: none; }
+.touch-btn { display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid rgba(0,255,200,0.3); background: rgba(0,20,30,0.6); color: #00ffcc; font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold; letter-spacing: 1px; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; transition: background 0.1s; }
+.touch-btn:active, .touch-btn.active { background: rgba(0,255,200,0.25); box-shadow: 0 0 16px rgba(0,255,200,0.4); }
+.touch-btn-fire { grid-area: fire; border-color: rgba(0,255,255,0.5); color: #00ffff; }
+.touch-btn-missile { grid-area: msl; border-color: rgba(255,136,0,0.5); color: #ff8800; }
+.touch-btn-boost { grid-area: boost; border-color: rgba(0,170,255,0.5); color: #00aaff; }
+.touch-btn-lock { grid-area: lock; border-color: rgba(255,68,68,0.5); color: #ff4444; }
+.touch-btn-up { grid-area: up; font-size: 16px; }
+.touch-btn-down { grid-area: down; font-size: 16px; }
+#camera-touch-zone { position: absolute; right: 0; top: 0; width: 50%; height: 55%; pointer-events: auto; touch-action: none; }
+@media (max-width: 768px), (pointer: coarse) {
+  #player-status { bottom: 16px; left: 12px; width: 200px; }
+  #weapon-status { bottom: 16px; right: 210px; }
+  #enemy-status { width: 260px; }
+  .status-label { font-size: 9px; }
+  .status-val { font-size: 10px; }
+  .weapon-row { font-size: 10px; }
+}
+
 /* Damage flash */
 @keyframes damageFlash {
   0%   { background: rgba(255,0,0,0.35); }
@@ -358,6 +382,23 @@ body {
       <div class="ch-h"></div>
       <div class="ch-v"></div>
     </div>
+
+    <!-- Touch Controls (mobile only) -->
+    <div id="touch-controls" class="hidden">
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+      <div id="touch-buttons">
+        <button class="touch-btn touch-btn-fire" id="btn-fire">FIRE</button>
+        <button class="touch-btn touch-btn-missile" id="btn-missile">MSL</button>
+        <button class="touch-btn touch-btn-boost" id="btn-boost">BST</button>
+        <button class="touch-btn touch-btn-lock" id="btn-lock">LOCK</button>
+        <button class="touch-btn touch-btn-up" id="btn-up">▲</button>
+        <button class="touch-btn touch-btn-down" id="btn-down">▼</button>
+      </div>
+    </div>
   </div>
 
   <!-- Start Screen -->
@@ -367,7 +408,7 @@ body {
       <h1 class="title-main">KUCHIWAN</h1>
       <div class="title-sub">口湾</div>
     </div>
-    <div class="controls-block">
+    <div class="controls-block" id="controls-desktop">
       <h3>── CONTROLS ──</h3>
       <div class="ctrl-grid">
         <span>WASD</span><span>移動</span>
@@ -378,6 +419,18 @@ body {
         <span>Space</span><span>上昇</span>
         <span>Ctrl</span><span>下降</span>
         <span>Q</span><span>ロックオン切替</span>
+      </div>
+    </div>
+    <div class="controls-block hidden" id="controls-mobile">
+      <h3>── CONTROLS ──</h3>
+      <div class="ctrl-grid">
+        <span>左スティック</span><span>移動</span>
+        <span>右エリア</span><span>カメラ操作</span>
+        <span>FIRE</span><span>ライフル射撃</span>
+        <span>MSL</span><span>ミサイル発射</span>
+        <span>BST</span><span>ブースト</span>
+        <span>LOCK</span><span>ロックオン</span>
+        <span>▲ / ▼</span><span>上昇 / 下降</span>
       </div>
     </div>
     <button id="start-btn">── START MISSION ──</button>
@@ -1137,6 +1190,7 @@ class Game {
 
     this._setupEvents();
     this._setupHUD();
+    this.touch = new TouchController(this);
     this._loop();
   }
 
@@ -1277,7 +1331,8 @@ class Game {
   _startGame() {
     $('start-screen').classList.add('hidden');
     $('hud').classList.remove('hidden');
-    $('gameCanvas').requestPointerLock();
+    if (!this.touch.isMobile) $('gameCanvas').requestPointerLock();
+    else this.pointer = true;
     this.gameState = 'playing';
 
     // Spawn enemy boss
@@ -1596,6 +1651,7 @@ class Game {
     if (this.rings) this.rings.forEach(r => { r.rotation.z += r.userData.rotSpeed; });
 
     if (this.gameState === 'playing') {
+      this.touch.applyInput();
       this._updatePlayer(dt);
       this._updateCamera(dt);
       this._updateShooting(dt);
@@ -1619,6 +1675,160 @@ class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+}
+
+/* ─────────────────────────────────────────
+   TOUCH CONTROLLER
+───────────────────────────────────────── */
+class TouchController {
+  constructor(game) {
+    this.game = game;
+    this.isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.joystick = { active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0 };
+    this.camera   = { active: false, id: null, lx: 0, ly: 0 };
+    this.buttons  = { fire: false, missile: false, boost: false, up: false, down: false };
+    if (this.isMobile) this._setup();
+  }
+
+  _setup() {
+    const tc = $('touch-controls');
+    if (tc) tc.classList.remove('hidden');
+    const cd = $('controls-desktop');
+    const cm = $('controls-mobile');
+    if (cd) cd.classList.add('hidden');
+    if (cm) cm.classList.remove('hidden');
+
+    const hud = $('hud');
+    if (hud && !$('camera-touch-zone')) {
+      const ctz = document.createElement('div');
+      ctz.id = 'camera-touch-zone';
+      hud.querySelector('#touch-controls').appendChild(ctz);
+    }
+
+    this._setupJoystick();
+    this._setupCamera();
+    this._setupButtons();
+    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  }
+
+  _setupJoystick() {
+    const zone = $('joystick-zone'), base = $('joystick-base'), knob = $('joystick-knob');
+    if (!zone || !base || !knob) return;
+    const maxDist = 45;
+
+    zone.addEventListener('touchstart', e => {
+      if (this.joystick.active) return;
+      const t = e.changedTouches[0];
+      this.joystick.active = true;
+      this.joystick.id = t.identifier;
+      const r = base.getBoundingClientRect();
+      this.joystick.cx = r.left + r.width / 2;
+      this.joystick.cy = r.top + r.height / 2;
+      this._updateJoystick(t.clientX, t.clientY, knob, maxDist);
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.joystick.id) {
+          e.preventDefault();
+          this._updateJoystick(t.clientX, t.clientY, knob, maxDist);
+        }
+      }
+    }, { passive: false });
+
+    const endJ = e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.joystick.id) {
+          this.joystick.active = false; this.joystick.id = null;
+          this.joystick.dx = 0; this.joystick.dy = 0;
+          knob.style.transform = 'none'; knob.style.left = '50%'; knob.style.top = '50%';
+        }
+      }
+    };
+    zone.addEventListener('touchend', endJ);
+    zone.addEventListener('touchcancel', endJ);
+  }
+
+  _updateJoystick(tx, ty, knob, maxDist) {
+    let dx = tx - this.joystick.cx, dy = ty - this.joystick.cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > maxDist) { dx = dx / dist * maxDist; dy = dy / dist * maxDist; }
+    this.joystick.dx = dx / maxDist;
+    this.joystick.dy = dy / maxDist;
+    knob.style.left = `calc(50% + ${dx}px)`;
+    knob.style.top  = `calc(50% + ${dy}px)`;
+  }
+
+  _setupCamera() {
+    const zone = $('camera-touch-zone');
+    if (!zone) return;
+
+    zone.addEventListener('touchstart', e => {
+      if (this.camera.active) return;
+      const t = e.changedTouches[0];
+      this.camera.active = true; this.camera.id = t.identifier;
+      this.camera.lx = t.clientX; this.camera.ly = t.clientY;
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.camera.id) {
+          e.preventDefault();
+          const dx = t.clientX - this.camera.lx, dy = t.clientY - this.camera.ly;
+          this.game.camYaw -= dx * 0.004;
+          this.game.camPitch = clamp(this.game.camPitch - dy * 0.003, -0.4, 0.7);
+          this.camera.lx = t.clientX; this.camera.ly = t.clientY;
+        }
+      }
+    }, { passive: false });
+
+    const endC = e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.camera.id) { this.camera.active = false; this.camera.id = null; }
+      }
+    };
+    zone.addEventListener('touchend', endC);
+    zone.addEventListener('touchcancel', endC);
+  }
+
+  _setupButtons() {
+    const bind = (id, key) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('touchstart', e => { e.preventDefault(); this.buttons[key] = true; el.classList.add('active'); }, { passive: false });
+      el.addEventListener('touchend', e => { e.preventDefault(); this.buttons[key] = false; el.classList.remove('active'); }, { passive: false });
+      el.addEventListener('touchcancel', () => { this.buttons[key] = false; el.classList.remove('active'); });
+    };
+    bind('btn-fire', 'fire');
+    bind('btn-missile', 'missile');
+    bind('btn-boost', 'boost');
+    bind('btn-up', 'up');
+    bind('btn-down', 'down');
+
+    const lockEl = $('btn-lock');
+    if (lockEl) {
+      lockEl.addEventListener('touchstart', e => {
+        e.preventDefault();
+        this.game.lockOn = !this.game.lockOn;
+        if (!this.game.lockOn) { $('lock-ring').style.display = 'none'; }
+        lockEl.classList.toggle('active', this.game.lockOn);
+      }, { passive: false });
+    }
+  }
+
+  applyInput() {
+    if (!this.isMobile) return;
+    const g = this.game, j = this.joystick, deadzone = 0.15;
+    g.keys['KeyW'] = j.dy < -deadzone;
+    g.keys['KeyS'] = j.dy >  deadzone;
+    g.keys['KeyA'] = j.dx < -deadzone;
+    g.keys['KeyD'] = j.dx >  deadzone;
+    g.mouse.down      = this.buttons.fire;
+    g.mouse.rightDown = this.buttons.missile;
+    g.keys['ShiftLeft']   = this.buttons.boost;
+    g.keys['Space']       = this.buttons.up;
+    g.keys['ControlLeft'] = this.buttons.down;
   }
 }
 

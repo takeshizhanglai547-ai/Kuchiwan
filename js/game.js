@@ -782,6 +782,7 @@ class Game {
 
     this._setupEvents();
     this._setupHUD();
+    this.touch = new TouchController(this);
     this._loop();
   }
 
@@ -922,7 +923,8 @@ class Game {
   _startGame() {
     $('start-screen').classList.add('hidden');
     $('hud').classList.remove('hidden');
-    $('gameCanvas').requestPointerLock();
+    if (!this.touch.isMobile) $('gameCanvas').requestPointerLock();
+    else this.pointer = true; // enable camera on mobile without pointer lock
     this.gameState = 'playing';
 
     // Spawn enemy boss
@@ -1242,6 +1244,7 @@ class Game {
     if (this.rings) this.rings.forEach(r => { r.rotation.z += r.userData.rotSpeed; });
 
     if (this.gameState === 'playing') {
+      this.touch.applyInput();
       this._updatePlayer(dt);
       this._updateCamera(dt);
       this._updateShooting(dt);
@@ -1265,6 +1268,200 @@ class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+}
+
+/* ─────────────────────────────────────────
+   TOUCH CONTROLLER
+───────────────────────────────────────── */
+class TouchController {
+  constructor(game) {
+    this.game = game;
+    this.isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.joystick = { active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0 };
+    this.camera   = { active: false, id: null, lx: 0, ly: 0 };
+    this.buttons  = { fire: false, missile: false, boost: false, up: false, down: false };
+
+    if (this.isMobile) this._setup();
+  }
+
+  _setup() {
+    // Show mobile UI, hide desktop controls
+    const tc = $('touch-controls');
+    if (tc) tc.classList.remove('hidden');
+    const cd = $('controls-desktop');
+    const cm = $('controls-mobile');
+    if (cd) cd.classList.add('hidden');
+    if (cm) cm.classList.remove('hidden');
+
+    // Create camera touch zone dynamically
+    const hud = $('hud');
+    if (hud && !$('camera-touch-zone')) {
+      const ctz = document.createElement('div');
+      ctz.id = 'camera-touch-zone';
+      hud.querySelector('#touch-controls').appendChild(ctz);
+    }
+
+    this._setupJoystick();
+    this._setupCamera();
+    this._setupButtons();
+
+    // Prevent page scrolling/zooming
+    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  }
+
+  _setupJoystick() {
+    const zone = $('joystick-zone');
+    const base = $('joystick-base');
+    const knob = $('joystick-knob');
+    if (!zone || !base || !knob) return;
+
+    const maxDist = 45;
+
+    zone.addEventListener('touchstart', e => {
+      if (this.joystick.active) return;
+      const t = e.changedTouches[0];
+      this.joystick.active = true;
+      this.joystick.id = t.identifier;
+      const r = base.getBoundingClientRect();
+      this.joystick.cx = r.left + r.width / 2;
+      this.joystick.cy = r.top + r.height / 2;
+      this._updateJoystick(t.clientX, t.clientY, knob, maxDist);
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.joystick.id) {
+          e.preventDefault();
+          this._updateJoystick(t.clientX, t.clientY, knob, maxDist);
+        }
+      }
+    }, { passive: false });
+
+    const endJoystick = e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.joystick.id) {
+          this.joystick.active = false;
+          this.joystick.id = null;
+          this.joystick.dx = 0;
+          this.joystick.dy = 0;
+          knob.style.transform = 'none';
+          knob.style.left = '50%';
+          knob.style.top = '50%';
+        }
+      }
+    };
+    zone.addEventListener('touchend', endJoystick);
+    zone.addEventListener('touchcancel', endJoystick);
+  }
+
+  _updateJoystick(tx, ty, knob, maxDist) {
+    let dx = tx - this.joystick.cx;
+    let dy = ty - this.joystick.cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > maxDist) { dx = dx / dist * maxDist; dy = dy / dist * maxDist; }
+    this.joystick.dx = dx / maxDist;  // -1 to 1
+    this.joystick.dy = dy / maxDist;
+    knob.style.left = `calc(50% + ${dx}px)`;
+    knob.style.top  = `calc(50% + ${dy}px)`;
+  }
+
+  _setupCamera() {
+    const zone = $('camera-touch-zone');
+    if (!zone) return;
+
+    zone.addEventListener('touchstart', e => {
+      if (this.camera.active) return;
+      const t = e.changedTouches[0];
+      this.camera.active = true;
+      this.camera.id = t.identifier;
+      this.camera.lx = t.clientX;
+      this.camera.ly = t.clientY;
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.camera.id) {
+          e.preventDefault();
+          const dx = t.clientX - this.camera.lx;
+          const dy = t.clientY - this.camera.ly;
+          this.game.camYaw  -= dx * 0.004;
+          this.game.camPitch = clamp(this.game.camPitch - dy * 0.003, -0.4, 0.7);
+          this.camera.lx = t.clientX;
+          this.camera.ly = t.clientY;
+        }
+      }
+    }, { passive: false });
+
+    const endCam = e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.camera.id) {
+          this.camera.active = false;
+          this.camera.id = null;
+        }
+      }
+    };
+    zone.addEventListener('touchend', endCam);
+    zone.addEventListener('touchcancel', endCam);
+  }
+
+  _setupButtons() {
+    const bind = (id, key) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('touchstart', e => {
+        e.preventDefault();
+        this.buttons[key] = true;
+        el.classList.add('active');
+      }, { passive: false });
+      el.addEventListener('touchend', e => {
+        e.preventDefault();
+        this.buttons[key] = false;
+        el.classList.remove('active');
+      }, { passive: false });
+      el.addEventListener('touchcancel', e => {
+        this.buttons[key] = false;
+        el.classList.remove('active');
+      });
+    };
+
+    bind('btn-fire', 'fire');
+    bind('btn-missile', 'missile');
+    bind('btn-boost', 'boost');
+    bind('btn-up', 'up');
+    bind('btn-down', 'down');
+
+    // Lock is a toggle
+    const lockEl = $('btn-lock');
+    if (lockEl) {
+      lockEl.addEventListener('touchstart', e => {
+        e.preventDefault();
+        this.game.lockOn = !this.game.lockOn;
+        if (!this.game.lockOn) { $('lock-ring').style.display = 'none'; }
+        lockEl.classList.toggle('active', this.game.lockOn);
+      }, { passive: false });
+    }
+  }
+
+  /* Inject touch state into the game's key/mouse maps */
+  applyInput() {
+    if (!this.isMobile) return;
+    const g = this.game;
+    const j = this.joystick;
+
+    // Joystick → WASD keys
+    const deadzone = 0.15;
+    g.keys['KeyW'] = j.dy < -deadzone;
+    g.keys['KeyS'] = j.dy >  deadzone;
+    g.keys['KeyA'] = j.dx < -deadzone;
+    g.keys['KeyD'] = j.dx >  deadzone;
+
+    // Buttons
+    g.mouse.down      = this.buttons.fire;
+    g.mouse.rightDown = this.buttons.missile;
+    g.keys['ShiftLeft'] = this.buttons.boost;
+    g.keys['Space']     = this.buttons.up;
+    g.keys['ControlLeft'] = this.buttons.down;
   }
 }
 
