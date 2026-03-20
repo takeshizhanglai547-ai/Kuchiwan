@@ -1393,15 +1393,47 @@ class Game {
     else if (keys['KeyD']) this.playerMesh.rotation.z = lerp(this.playerMesh.rotation.z, -0.18, 0.1);
     else this.playerMesh.rotation.z = lerp(this.playerMesh.rotation.z, 0, 0.1);
 
-    // Booster glow
+    // Booster glow (reuse material, no clone)
     const bl = this.playerMesh.userData.boosterL;
     const br = this.playerMesh.userData.boosterR;
     if (bl && br) {
+      if (!bl._boostMat) {
+        bl._boostMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.9, roughness: 0.2, emissive: 0x003355, emissiveIntensity: 0.1 });
+        bl.material = bl._boostMat;
+        br.material = bl._boostMat;
+      }
       const intensity = canBoost ? (0.8 + Math.random() * 0.4) : 0.1;
-      bl.material = bl.material.clone();
-      bl.material.emissiveIntensity = intensity;
-      bl.material.emissive = new THREE.Color(canBoost ? 0x00aaff : 0x003355);
-      br.material = bl.material;
+      bl._boostMat.emissiveIntensity = intensity;
+      bl._boostMat.emissive.setHex(canBoost ? 0x00aaff : 0x003355);
+    }
+
+    // Booster flame meshes
+    if (!this._boosterFlames) {
+      const flameMat = new THREE.MeshBasicMaterial({ color: 0x00ccff, transparent: true, opacity: 0.7 });
+      const flameGeo = new THREE.ConeGeometry(0.18, 1.2, 6);
+      flameGeo.rotateX(Math.PI);
+      const flameL = new THREE.Mesh(flameGeo, flameMat);
+      const flameR = new THREE.Mesh(flameGeo.clone(), flameMat);
+      this._boosterFlames = { L: flameL, R: flameR, mat: flameMat };
+      const bpk = this.playerMesh.children[this.playerMesh.children.length - 1];
+      if (bpk && bpk.children) {
+        const nozzleL = bpk.children[2];
+        const nozzleR = bpk.children[3];
+        if (nozzleL && nozzleL.isGroup) { flameL.position.set(0, -1.3, 0); nozzleL.add(flameL); }
+        else { flameL.position.set(-0.8, -1.0, -0.9); this.playerMesh.add(flameL); }
+        if (nozzleR && nozzleR.isGroup) { flameR.position.set(0, -1.3, 0); nozzleR.add(flameR); }
+        else { flameR.position.set(0.8, -1.0, -0.9); this.playerMesh.add(flameR); }
+      }
+    }
+    const flames = this._boosterFlames;
+    const flameActive = canBoost && move.length() > 0;
+    flames.L.visible = flameActive;
+    flames.R.visible = flameActive;
+    if (flameActive) {
+      const s = 0.7 + Math.random() * 0.6;
+      flames.L.scale.set(1, s, 1);
+      flames.R.scale.set(1, s, 1);
+      flames.mat.opacity = 0.5 + Math.random() * 0.3;
     }
   }
 
