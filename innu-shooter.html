@@ -148,6 +148,119 @@ function scheduleBGM(ac, type, id) {
   }
 }
 
+// ── INPUT ──────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+const touch = {
+  joy: { active:false, id:-1, sx:0, sy:0, dx:0, dy:0 },
+  shot: false,
+  bombPressed: false,
+};
+
+function touchZone(x, y) {
+  if (x < W * 0.6) return 'joy';
+  if (y > H * 0.7)  return 'shot';
+  return 'bomb';
+}
+function toCanvas(cx, cy) {
+  return {
+    x: cx / (canvas.clientWidth  / W),
+    y: cy / (canvas.clientHeight / H),
+  };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  try { getAudio().resume(); } catch(_){}
+  for (const t2 of e.changedTouches) {
+    const {x, y} = toCanvas(t2.clientX, t2.clientY);
+    const z = touchZone(x, y);
+    if (z === 'joy' && !touch.joy.active)
+      touch.joy = { active:true, id:t2.identifier, sx:x, sy:y, dx:0, dy:0 };
+    else if (z === 'shot') touch.shot = true;
+    else if (z === 'bomb') touch.bombPressed = true;
+  }
+}, { passive:false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t2 of e.changedTouches) {
+    if (t2.identifier === touch.joy.id) {
+      const {x, y} = toCanvas(t2.clientX, t2.clientY);
+      touch.joy.dx = x - touch.joy.sx;
+      touch.joy.dy = y - touch.joy.sy;
+    }
+  }
+}, { passive:false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t2 of e.changedTouches) {
+    if (t2.identifier === touch.joy.id)
+      touch.joy = { active:false, id:-1, sx:0, sy:0, dx:0, dy:0 };
+    const {x, y} = toCanvas(t2.clientX, t2.clientY);
+    const z = touchZone(x, y);
+    if (z === 'shot') touch.shot = false;
+  }
+}, { passive:false });
+
+function getInput() {
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft']  || keys['KeyA']) dx -= 1;
+  if (keys['ArrowRight'] || keys['KeyD']) dx += 1;
+  if (keys['ArrowUp']    || keys['KeyW']) dy -= 1;
+  if (keys['ArrowDown']  || keys['KeyS']) dy += 1;
+
+  if (touch.joy.active) {
+    const JD = 40;
+    const jx = touch.joy.dx, jy = touch.joy.dy;
+    const d  = Math.sqrt(jx*jx + jy*jy);
+    if (d > 5) { dx += jx / Math.max(d, JD); dy += jy / Math.max(d, JD); }
+  }
+
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len > 1) { dx /= len; dy /= len; }
+
+  const shooting = !!(keys['KeyZ'] || keys['Space'] || touch.shot);
+  const bomb     = !!(keys['KeyX'] || touch.bombPressed);
+  if (touch.bombPressed) touch.bombPressed = false;
+  return { dx, dy, shooting, bomb };
+}
+
+function drawTouchUI() {
+  // Joystick ring
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(75, H-65, 38, 0, Math.PI*2); ctx.stroke();
+  if (touch.joy.active) {
+    const jx = touch.joy.sx, jy = touch.joy.sy;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(jx, jy, 38, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    const nx = Math.max(-30, Math.min(30, touch.joy.dx));
+    const ny = Math.max(-30, Math.min(30, touch.joy.dy));
+    ctx.beginPath(); ctx.arc(jx+nx, jy+ny, 16, 0, Math.PI*2); ctx.fill();
+  }
+  // SHOT button
+  ctx.fillStyle = touch.shot ? 'rgba(255,220,0,0.55)' : 'rgba(255,200,0,0.22)';
+  ctx.beginPath(); ctx.arc(W-42, H-52, 26, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,220,0,0.65)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('SHOT', W-42, H-52);
+  // BOMB button
+  ctx.fillStyle = 'rgba(80,180,255,0.22)';
+  ctx.beginPath(); ctx.arc(W-42, H-110, 20, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(80,200,255,0.65)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 8px monospace';
+  ctx.fillText('BOMB', W-42, H-110);
+}
+
 // ── PLACEHOLDER ────────────────────────────────────────────
 ctx.fillStyle = '#1a0040';
 ctx.fillRect(0, 0, W, H);
