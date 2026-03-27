@@ -30,6 +30,124 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
+// ── WEB AUDIO ──────────────────────────────────────────────
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function sfx(type) {
+  try {
+    const ac = getAudio();
+    const t  = ac.currentTime;
+    function beep(freq0, freq1, dur, wave, vol) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type = wave;
+      o.frequency.setValueAtTime(freq0, t);
+      if (freq1 !== freq0) o.frequency.exponentialRampToValueAtTime(freq1, t + dur);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.start(t); o.stop(t + dur);
+    }
+    if (type === 'shoot')   beep(880, 440, 0.07, 'square',   0.13);
+    if (type === 'hit')     beep(150,  80, 0.12, 'square',   0.18);
+    if (type === 'explode') beep(200,  50, 0.22, 'sawtooth', 0.28);
+    if (type === 'bomb')    beep( 60,  30, 0.55, 'sawtooth', 0.45);
+    if (type === 'powerup') {
+      [440,660,880].forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.connect(g); g.connect(ac.destination);
+        o.type = 'triangle'; o.frequency.setValueAtTime(f, t + i*0.1);
+        g.gain.setValueAtTime(0.18, t + i*0.1);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i*0.1 + 0.12);
+        o.start(t + i*0.1); o.stop(t + i*0.1 + 0.15);
+      });
+    }
+    if (type === 'gameover') {
+      [880,660,440,220].forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.connect(g); g.connect(ac.destination);
+        o.type = 'square'; o.frequency.setValueAtTime(f, t + i*0.2);
+        g.gain.setValueAtTime(0.18, t + i*0.2);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i*0.2 + 0.18);
+        o.start(t + i*0.2); o.stop(t + i*0.2 + 0.2);
+      });
+    }
+  } catch(e) {}
+}
+
+// BGM scheduler
+let bgmType = null;
+let bgmMaster = null;
+let bgmLoopId = 0;
+
+function stopBGM() {
+  bgmLoopId++;
+  if (bgmMaster) { try { bgmMaster.disconnect(); } catch(e){} bgmMaster = null; }
+  bgmType = null;
+}
+
+function playBGM(type) {
+  if (bgmType === type) return;
+  stopBGM();
+  bgmType = type;
+  try {
+    const ac = getAudio();
+    bgmMaster = ac.createGain();
+    bgmMaster.gain.setValueAtTime(0.10, ac.currentTime);
+    bgmMaster.connect(ac.destination);
+    const id = ++bgmLoopId;
+    scheduleBGM(ac, type, id);
+  } catch(e) {}
+}
+
+function note(ac, master, freq, start, dur, wave, vol) {
+  if (!freq) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(master);
+  o.type = wave; o.frequency.setValueAtTime(freq, start);
+  g.gain.setValueAtTime(vol, start);
+  g.gain.exponentialRampToValueAtTime(0.001, start + dur * 0.85);
+  o.start(start); o.stop(start + dur);
+}
+
+function scheduleBGM(ac, type, id) {
+  if (bgmLoopId !== id || !bgmMaster) return;
+  let t = ac.currentTime + 0.05;
+
+  if (type === 'title') {
+    const mel = [[523,.15],[659,.15],[784,.15],[1047,.3],[784,.15],[659,.15],[523,.3],
+                 [587,.15],[698,.15],[880,.15],[1175,.3],[880,.15],[698,.15],[587,.45]];
+    let total = 0;
+    mel.forEach(([f,d]) => { note(ac, bgmMaster, f, t+total, d, 'square', 0.25); total+=d; });
+    setTimeout(() => scheduleBGM(ac, type, id), (total - 0.05) * 1000);
+
+  } else if (type === 'stage') {
+    const mel = [[784,.1],[784,.1],[0,.05],[880,.1],[784,.1],[0,.05],[698,.1],[784,.2],[0,.1],
+                 [659,.1],[659,.1],[0,.05],[784,.1],[659,.1],[0,.05],[587,.1],[659,.2],[0,.15]];
+    const bas = [[131,.2],[131,.2],[147,.2],[131,.2],[123,.2],[123,.2],[131,.2],[131,.2]];
+    let mt=0, bt=0, total=0;
+    mel.forEach(([f,d]) => { note(ac, bgmMaster, f, t+mt, d, 'square',   0.22); mt+=d; total=mt; });
+    bas.forEach(([f,d]) => { note(ac, bgmMaster, f, t+bt, d, 'sawtooth', 0.12); bt+=d; });
+    setTimeout(() => scheduleBGM(ac, type, id), (total - 0.05) * 1000);
+
+  } else if (type === 'boss') {
+    const mel = [[220,.1],[0,.05],[220,.1],[0,.05],[262,.1],[247,.1],[233,.2],
+                 [196,.1],[0,.05],[196,.1],[0,.05],[233,.1],[220,.1],[196,.2],
+                 [175,.1],[0,.05],[175,.1],[0,.05],[220,.1],[196,.1],[175,.2],[0,.1]];
+    let total = 0;
+    mel.forEach(([f,d]) => {
+      note(ac, bgmMaster, f,   t+total, d, 'sawtooth', 0.18);
+      note(ac, bgmMaster, f*2, t+total, d, 'square',   0.09);
+      total += d;
+    });
+    setTimeout(() => scheduleBGM(ac, type, id), (total - 0.05) * 1000);
+  }
+}
+
 // ── PLACEHOLDER ────────────────────────────────────────────
 ctx.fillStyle = '#1a0040';
 ctx.fillRect(0, 0, W, H);
