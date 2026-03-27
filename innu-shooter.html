@@ -594,13 +594,449 @@ function drawHUD(pl, score) {
   ctx.fillText(String(score).padStart(8,'0'), W-5, 14);
 }
 
-// ── PLACEHOLDER ────────────────────────────────────────────
-ctx.fillStyle = '#1a0040';
-ctx.fillRect(0, 0, W, H);
-ctx.fillStyle = '#fff';
-ctx.font = '16px monospace';
-ctx.textAlign = 'center';
-ctx.fillText('Loading...', W/2, H/2);
+// ── GAME STATE ─────────────────────────────────────────────
+const G = {
+  state:'title', score:0, hiScore:0, stage:1,
+  time:0, stateTime:0, waveTimer:0, waveIdx:0,
+};
+const PL = {
+  x:W/2, y:H-80, speed:3.5,
+  lives:3, bombs:3, power:1, invincible:0,
+  shootTimer:0, shotRate:0.12,
+};
+let pBullets=[], eBullets=[], enemies=[], powerups=[], boss=null, bombFx=null;
+
+// ── WAVE TABLES ────────────────────────────────────────────
+const WAVES = {
+  1:[
+    {t:1,  type:'pom',  x:80,  vy:1.5,count:3,dx:0,  hp:3, sr:3.0, pat:'down'},
+    {t:3,  type:'pom',  x:240, vy:1.5,count:3,dx:0,  hp:3, sr:3.0, pat:'down'},
+    {t:6,  type:'pom',  x:W/2, vy:1.2,count:5,dx:0,  hp:3, sr:2.5, pat:'spread'},
+    {t:10, type:'shiba',x:100, vy:1.0,count:2,dx:0.5, hp:5, sr:2.0, pat:'aimed'},
+    {t:12, type:'shiba',x:220, vy:1.0,count:2,dx:-0.5,hp:5, sr:2.0, pat:'aimed'},
+    {t:17, type:'pom',  x:W/2, vy:1.5,count:6,dx:0,  hp:3, sr:2.0, pat:'spread'},
+    {t:22, type:'mini', x:W/2, vy:0.4,count:1,dx:0,  hp:60,sr:1.5, pat:'circle'},
+    {t:33, type:'boss', x:W/2},
+  ],
+  2:[
+    {t:1,  type:'shiba',x:60,  vy:1.5,count:4,dx:0.8, hp:6, sr:2.0, pat:'aimed'},
+    {t:4,  type:'pom',  x:W/2, vy:2.0,count:6,dx:0,  hp:4, sr:2.0, pat:'spread3'},
+    {t:8,  type:'shiba',x:260, vy:1.2,count:3,dx:-0.8,hp:6, sr:1.8, pat:'aimed'},
+    {t:12, type:'pom',  x:40,  vy:1.8,count:4,dx:0,  hp:4, sr:1.8, pat:'spread'},
+    {t:12, type:'pom',  x:280, vy:1.8,count:4,dx:0,  hp:4, sr:1.8, pat:'spread'},
+    {t:18, type:'mini', x:W/2, vy:0.5,count:1,dx:0,  hp:90,sr:1.2, pat:'circle'},
+    {t:30, type:'mini', x:100, vy:0.4,count:1,dx:0,  hp:70,sr:1.2, pat:'spread'},
+    {t:30, type:'mini', x:220, vy:0.4,count:1,dx:0,  hp:70,sr:1.2, pat:'spread'},
+    {t:40, type:'boss', x:W/2},
+  ],
+  3:[
+    {t:1,  type:'shiba',x:W/2, vy:2.0,count:6,dx:0,  hp:8, sr:1.5, pat:'circle'},
+    {t:5,  type:'pom',  x:60,  vy:2.5,count:5,dx:1.0, hp:5, sr:1.5, pat:'spread3'},
+    {t:5,  type:'pom',  x:260, vy:2.5,count:5,dx:-1.0,hp:5, sr:1.5, pat:'spread3'},
+    {t:10, type:'shiba',x:W/2, vy:1.5,count:4,dx:0,  hp:8, sr:1.2, pat:'aimed'},
+    {t:16, type:'mini', x:100, vy:0.6,count:1,dx:0,  hp:110,sr:1.0,pat:'circle'},
+    {t:16, type:'mini', x:220, vy:0.6,count:1,dx:0,  hp:110,sr:1.0,pat:'aimed'},
+    {t:26, type:'shiba',x:80,  vy:2.0,count:8,dx:0,  hp:10,sr:1.0, pat:'aimed'},
+    {t:33, type:'mini', x:W/2, vy:0.4,count:1,dx:0,  hp:130,sr:0.8,pat:'circle'},
+    {t:44, type:'boss', x:W/2},
+  ],
+};
+
+function spawnWave(w) {
+  if (w.type === 'boss') { startBossIntro(); return; }
+  const sp = 35, n = w.count;
+  for(let i=0;i<n;i++){
+    const ox = (i-(n-1)/2)*sp;
+    enemies.push({
+      type:w.type, x:w.x+ox, y:-30,
+      vy:w.vy, dx:w.dx, hp:w.hp, maxHp:w.hp,
+      shootTimer:0.5+Math.random(), shootRate:w.sr,
+      pat:w.pat, dead:false,
+    });
+  }
+}
+
+// ── ENEMY SHOOTING ─────────────────────────────────────────
+function fireEnemy(e) {
+  const dx=PL.x-e.x, dy=PL.y-e.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+  function eb(vx,vy,type){ eBullets.push({x:e.x,y:e.y,vx,vy,type}); }
+  if (e.pat==='down')    eb(0,3,'round');
+  else if (e.pat==='aimed') eb((dx/d)*3,(dy/d)*3,'fast');
+  else if (e.pat==='spread'){
+    [-0.3,0,0.3].forEach(a=>{
+      const ang=Math.atan2(dy,dx)+a;
+      eb(Math.cos(ang)*2.5,Math.sin(ang)*2.5,'round');
+    });
+  } else if (e.pat==='spread3'){
+    [-0.5,-0.25,0,0.25,0.5].forEach(a=>{
+      eb(Math.sin(a)*2, 2.5+Math.cos(a)*0.5,'round');
+    });
+  } else if (e.pat==='circle'){
+    const n=e.type==='mini'?8:6;
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2;
+      eb(Math.cos(a)*2,Math.sin(a)*2,'round');
+    }
+  }
+}
+
+// ── BOSS ───────────────────────────────────────────────────
+function createBoss() {
+  const hp = 2000+G.stage*600;
+  return {x:W/2,y:-90,targetY:85,hp,maxHp:hp,
+          phase:1,angle:0,moveTimer:0,targetX:W/2,
+          shootTimer:1,patTimer:0,patIdx:0,dead:false};
+}
+
+function updateBoss(dt) {
+  if(!boss||boss.dead) return;
+  boss.angle += dt*1.3;
+  // Move in
+  if(boss.y < boss.targetY) boss.y += 55*dt;
+  // Horizontal drift
+  boss.moveTimer -= dt;
+  if(boss.moveTimer<=0){ boss.targetX=60+Math.random()*(W-120); boss.moveTimer=1.5+Math.random(); }
+  boss.x += (boss.targetX-boss.x)*dt*1.6;
+  // Phase
+  const r=boss.hp/boss.maxHp;
+  if(r<0.33 && boss.phase<3){ boss.phase=3; spawnExp(boss.x,boss.y,30,'#f00','#f80'); sfx('explode'); }
+  else if(r<0.66 && boss.phase<2){ boss.phase=2; spawnExp(boss.x,boss.y,20,'#c0f','#f0c'); sfx('explode'); }
+  // Shoot
+  boss.shootTimer -= dt;
+  boss.patTimer    -= dt;
+  if(boss.patTimer<=0){ boss.patIdx=(boss.patIdx+1)%4; boss.patTimer=5-boss.phase; }
+  if(boss.shootTimer<=0){
+    boss.shootTimer = boss.phase===3?0.32:boss.phase===2?0.48:0.68;
+    fireBoss();
+  }
+}
+
+function fireBoss() {
+  const bx=boss.x, by=boss.y, p=boss.phase, pat=boss.patIdx;
+  function eb(vx,vy,type){ eBullets.push({x:bx,y:by,vx,vy,type}); }
+  if(pat===0){ // circle
+    const n=8+p*4;
+    for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2+boss.angle; const spd=2+p*0.4; eb(Math.cos(a)*spd,Math.sin(a)*spd,p>=3?'big':'round');}
+  } else if(pat===1){ // aimed burst
+    const dx=PL.x-bx,dy=PL.y-by,d=Math.sqrt(dx*dx+dy*dy)||1;
+    const sp=p>=2?3:2;
+    for(let i=-sp;i<=sp;i++){const a=Math.atan2(dy,dx)+i*0.14; const spd=2.5+p*0.4; eb(Math.cos(a)*spd,Math.sin(a)*spd,'fast');}
+  } else if(pat===2 && p>=2){ // spiral
+    for(let j=0;j<2;j++){const a=boss.angle*2+j*Math.PI; eb(Math.cos(a)*2.3,Math.sin(a)*2.3,'spiral');}
+  } else if(pat===3 && p>=3){ // 16-way
+    for(let i=0;i<16;i++){const a=(i/16)*Math.PI*2; eb(Math.cos(a)*2.8,Math.sin(a)*2.8,'big');}
+  } else { // fallback aimed
+    const dx=PL.x-bx,dy=PL.y-by,d=Math.sqrt(dx*dx+dy*dy)||1;
+    eb((dx/d)*2.5,(dy/d)*2.5,'round');
+  }
+}
+
+// ── PLAYER ACTIONS ─────────────────────────────────────────
+function playerShoot(dt, inp) {
+  PL.shootTimer -= dt;
+  if(inp.shooting && PL.shootTimer<=0){
+    PL.shootTimer = PL.shotRate;
+    sfx('shoot');
+    const pw=PL.power;
+    function pb(vx,vy){ pBullets.push({x:PL.x,y:PL.y-20,vx,vy}); }
+    pb(0,-9);
+    if(pw>=2){ pb(-0.3,-8.5); pb(0.3,-8.5); }
+    if(pw>=3){ pb(-0.9,-8);   pb(0.9,-8);   }
+    if(pw>=5){ pb(-1.6,-7);   pb(1.6,-7);   }
+  }
+}
+
+function useBomb() {
+  if(PL.bombs<=0) return;
+  PL.bombs--; sfx('bomb');
+  bombFx = {timer:0};
+  eBullets = [];
+  enemies.forEach(e=>{ e.hp-=50; spawnExp(e.x,e.y,5,'#ff0','#f80'); });
+  enemies = enemies.filter(e=>e.hp>0);
+  if(boss){ boss.hp-=300; spawnExp(boss.x,boss.y,20,'#ff0','#f80'); }
+}
+
+function playerHit() {
+  sfx('hit'); PL.lives--; PL.invincible=3;
+  PL.power = Math.max(1,PL.power-1);
+  spawnExp(PL.x,PL.y,20,'#fff','#faa');
+  eBullets=[];
+  if(PL.lives<=0){
+    sfx('gameover');
+    setTimeout(()=>{ if(G.score>G.hiScore)G.hiScore=G.score; G.state='game_over'; G.stateTime=0; stopBGM(); },800);
+  }
+}
+
+// ── COLLISION ──────────────────────────────────────────────
+function checkCollisions() {
+  // Player bullets → enemies
+  for(let bi=pBullets.length-1;bi>=0;bi--){
+    const b=pBullets[bi]; let hit=false;
+    for(let ei=enemies.length-1;ei>=0;ei--){
+      const e=enemies[ei];
+      const r=e.type==='mini'?20:12;
+      if(Math.hypot(b.x-e.x,b.y-e.y)<r){
+        hit=true; e.hp--;
+        if(e.hp<=0){
+          spawnExp(e.x,e.y,e.type==='mini'?20:10,'#f80','#ff0');
+          sfx('explode');
+          G.score += e.type==='mini'?500:100;
+          if(Math.random()<(e.type==='mini'?0.6:0.15)) powerups.push({x:e.x,y:e.y,vy:1.5});
+          enemies.splice(ei,1);
+        }
+        break;
+      }
+    }
+    if(!hit && boss && !boss.dead && Math.hypot(b.x-boss.x,b.y-boss.y)<32){
+      hit=true;
+      boss.hp -= PL.power>=3?12:PL.power>=2?8:5;
+      if(boss.hp<=0){
+        boss.hp=0; boss.dead=true;
+        spawnExp(boss.x,boss.y,60,'#f00','#ff0'); sfx('explode');
+        G.score += 5000*G.stage;
+        setTimeout(()=>sfx('explode'),300); setTimeout(()=>sfx('explode'),600);
+        if(G.stage>=3) setTimeout(()=>{ G.state='ending'; G.stateTime=0; },2200);
+        else           setTimeout(()=>{ G.stage++; startGame(G.stage); },2200);
+      }
+    }
+    if(hit || b.y<-20 || b.x<-20 || b.x>W+20) pBullets.splice(bi,1);
+  }
+  // Enemy bullets → player
+  if(PL.invincible>0) return;
+  for(let bi=eBullets.length-1;bi>=0;bi--){
+    if(Math.hypot(eBullets[bi].x-PL.x,eBullets[bi].y-PL.y)<7){
+      eBullets.splice(bi,1); playerHit(); return;
+    }
+  }
+  // Enemies → player
+  for(const e of enemies){
+    if(Math.hypot(e.x-PL.x,e.y-PL.y)<14){ playerHit(); return; }
+  }
+  // Powerups → player
+  for(let pi=powerups.length-1;pi>=0;pi--){
+    if(Math.hypot(powerups[pi].x-PL.x,powerups[pi].y-PL.y)<16){
+      powerups.splice(pi,1);
+      if(PL.power<5){ PL.power++; sfx('powerup'); } else G.score+=200;
+    }
+  }
+}
+
+// ── GAME INIT ──────────────────────────────────────────────
+function startGame(stage) {
+  G.stage=stage||1; G.state='playing'; G.stateTime=0;
+  G.waveTimer=0; G.waveIdx=0;
+  Object.assign(PL,{x:W/2,y:H-80,lives:3,bombs:3,power:1,invincible:2,shootTimer:0});
+  pBullets=[]; eBullets=[]; enemies=[]; powerups=[]; boss=null; bombFx=null;
+  particles.length=0;
+  playBGM('stage');
+}
+
+function startBossIntro() {
+  G.state='boss_intro'; G.stateTime=0;
+  enemies=[]; eBullets=[];
+  boss=createBoss();
+  playBGM('boss');
+}
+
+// ── GAME LOOP ──────────────────────────────────────────────
+function updateCommon(dt, inp) {
+  PL.x += inp.dx*PL.speed; PL.y += inp.dy*PL.speed;
+  PL.x = Math.max(15,Math.min(W-15,PL.x));
+  PL.y = Math.max(30,Math.min(H-20,PL.y));
+  if(PL.invincible>0) PL.invincible-=dt;
+  playerShoot(dt,inp);
+  if(inp.bomb) useBomb();
+  pBullets.forEach(b=>{b.x+=b.vx;b.y+=b.vy;});
+  pBullets=pBullets.filter(b=>b.y>-30&&b.x>-30&&b.x<W+30);
+  eBullets.forEach(b=>{b.x+=b.vx;b.y+=b.vy;});
+  eBullets=eBullets.filter(b=>b.y<H+30&&b.y>-30&&b.x>-30&&b.x<W+30);
+  powerups.forEach(p=>{p.y+=p.vy;}); powerups=powerups.filter(p=>p.y<H+20);
+  if(bombFx){ bombFx.timer+=dt; if(bombFx.timer>1) bombFx=null; }
+  updateParticles();
+  checkCollisions();
+}
+
+function updatePlaying(dt) {
+  G.waveTimer+=dt;
+  const ws=WAVES[G.stage]||WAVES[1];
+  while(G.waveIdx<ws.length && ws[G.waveIdx].t<=G.waveTimer) spawnWave(ws[G.waveIdx++]);
+  updateCommon(dt, getInput());
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i]; e.y+=e.vy; e.x+=e.dx;
+    if(e.x<20||e.x>W-20) e.dx*=-1;
+    if(e.y>H+60){ enemies.splice(i,1); continue; }
+    e.shootTimer-=dt;
+    if(e.shootTimer<=0){ e.shootTimer=e.shootRate; fireEnemy(e); }
+  }
+}
+
+function drawScene() {
+  powerups.forEach(p=>drawPowerup(p.x,p.y,G.time));
+  pBullets.forEach(b=>drawBone(b.x,b.y));
+  eBullets.forEach(b=>drawEBullet(b.x,b.y,b.type));
+  enemies.forEach(e=>{
+    if(e.type==='pom')   drawPom(e.x,e.y,G.time);
+    else if(e.type==='shiba') drawShiba(e.x,e.y,G.time);
+    else if(e.type==='mini')  drawMiniBoss(e.x,e.y,G.time,e.hp,e.maxHp);
+  });
+  if(boss&&!boss.dead) drawBoss(boss.x,boss.y,G.time,boss.hp,boss.maxHp,boss.phase);
+  if(PL.lives>0) drawPlayer(PL.x,PL.y,G.time,PL.invincible>0);
+  drawParticles();
+  if(bombFx) drawBombEffect(PL.x,PL.y,bombFx.timer);
+  drawHUD(PL,G.score);
+  drawTouchUI();
+}
+
+// ── SCREENS ────────────────────────────────────────────────
+let titleBlink=0;
+function drawTitle(dt) {
+  playBGM('title');
+  titleBlink+=dt;
+  // Title
+  ctx.font='bold 30px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#220044'; ctx.fillText('イッヌ大作戦',W/2+2,102);
+  const tg=ctx.createLinearGradient(0,80,0,120);
+  tg.addColorStop(0,'#ffff00'); tg.addColorStop(0.5,'#ff8800'); tg.addColorStop(1,'#ff4400');
+  ctx.fillStyle=tg; ctx.fillText('イッヌ大作戦',W/2,100);
+  ctx.fillStyle='#aaf'; ctx.font='11px monospace';
+  ctx.fillText('INNU DAISAKUSEN',W/2,130);
+  ctx.fillText('BULLET HELL SHOOTER',W/2,145);
+  // Player preview
+  drawPlayer(W/2-55, 220, G.time, false);
+  // Boss preview
+  ctx.save(); ctx.scale(0.4,0.4);
+  drawBoss((W/2+70)/0.4, 220/0.4, G.time, 2000,2000,1);
+  ctx.restore();
+  // Hi-score
+  ctx.fillStyle='#ffdd00'; ctx.font='10px monospace';
+  ctx.fillText(`HI-SCORE: ${String(G.hiScore).padStart(8,'0')}`,W/2,295);
+  // Blink
+  if(Math.sin(titleBlink*3)>0){
+    ctx.fillStyle='#fff'; ctx.font='bold 11px monospace';
+    ctx.fillText('PRESS Z / TAP TO START',W/2,335);
+  }
+  ctx.fillStyle='#666'; ctx.font='8px monospace';
+  ctx.fillText('ARROWS/WASD: MOVE  Z/SPACE: SHOT  X: BOMB',W/2,375);
+  ctx.fillText('TOUCH: JOYSTICK | SHOT | BOMB',W/2,388);
+  drawTouchUI();
+  if(keys['KeyZ']||keys['Space']||keys['Enter']||touch.bombPressed||touch.shot){
+    touch.bombPressed=false; touch.shot=false;
+    G.score=0; startGame(1); try{getAudio().resume();}catch(_){}
+  }
+}
+
+function drawBossIntro() {
+  if(boss) drawBoss(boss.x,boss.y,G.time,boss.hp,boss.maxHp,1);
+  drawPlayer(PL.x,PL.y,G.time,false); drawParticles();
+  if(Math.sin(G.stateTime*8)>0){ ctx.fillStyle='rgba(255,0,0,0.13)'; ctx.fillRect(0,0,W,H); }
+  if(G.stateTime<2.5){
+    ctx.fillStyle='#f00'; ctx.font='bold 16px monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('!! WARNING !!',W/2,H/2-20);
+    ctx.fillStyle='#fcc'; ctx.font='11px monospace';
+    ctx.fillText('ダークワンワン大帝',W/2,H/2+5);
+    ctx.fillText('DARK WANWAN EMPEROR',W/2,H/2+22);
+  }
+  drawHUD(PL,G.score);
+}
+
+function drawStageClear() {
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+  const fl=Math.sin(G.stateTime*5)>0;
+  ctx.fillStyle=fl?'#ff0':'#fff'; ctx.font='bold 22px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('STAGE CLEAR!',W/2,H/2-20);
+  ctx.fillStyle='#aff'; ctx.font='11px monospace';
+  ctx.fillText(`SCORE: ${G.score}`,W/2,H/2+12);
+  ctx.fillText(`STAGE ${G.stage} START!`,W/2,H/2+30);
+  drawPlayer(W/2, H/2+85, G.time*2, false);
+}
+
+function drawGameOver() {
+  ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#f22'; ctx.font='bold 26px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('GAME OVER',W/2,H/2-55);
+  ctx.fillStyle='#fff'; ctx.font='11px monospace';
+  ctx.fillText(`SCORE: ${G.score}`,W/2,H/2-10);
+  ctx.fillText(`HI-SCORE: ${G.hiScore}`,W/2,H/2+8);
+  if(Math.sin(G.stateTime*2)>0){
+    ctx.fillStyle='#aaf'; ctx.font='10px monospace';
+    ctx.fillText('PRESS Z / TAP TO RETRY',W/2,H/2+38);
+  }
+  ctx.globalAlpha=0.55; drawPlayer(W/2,H/2+85,0,false); ctx.globalAlpha=1;
+  ctx.fillStyle='#888'; ctx.font='10px monospace'; ctx.fillText('x_x',W/2,H/2+112);
+  drawTouchUI();
+  if(keys['KeyZ']||keys['Space']||touch.bombPressed||touch.shot){
+    touch.bombPressed=false; touch.shot=false; G.score=0; startGame(1);
+  }
+}
+
+function drawEnding(dt) {
+  const t=G.stateTime;
+  if(Math.random()<0.25) spawnExp(Math.random()*W,Math.random()*H*0.5,4,'#ff0','#f80');
+  updateParticles(); drawParticles();
+  ctx.fillStyle='rgba(0,0,12,0.45)'; ctx.fillRect(0,0,W,H);
+  if(t>0.8){
+    const tg=ctx.createLinearGradient(0,65,0,115);
+    tg.addColorStop(0,'#ff0'); tg.addColorStop(1,'#f80');
+    ctx.fillStyle=tg; ctx.font='bold 20px monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('CONGRATULATIONS!',W/2,88);
+    ctx.fillStyle='#fcc'; ctx.font='10px monospace';
+    ctx.fillText('ダークワンワン大帝を倒した！',W/2,112);
+  }
+  if(t>1.8){ drawPlayer(W/2,195,G.time*3,false); }
+  if(t>2.5){
+    ctx.fillStyle='#fff'; ctx.font='10px monospace';
+    ctx.textAlign='center'; ctx.fillText('イッヌは世界を救った！',W/2,245);
+    ctx.fillStyle='#ff0'; ctx.font='11px monospace';
+    ctx.fillText(`FINAL SCORE: ${G.score}`,W/2,278);
+    ctx.fillStyle='#aaf';
+    ctx.fillText(`HI-SCORE: ${Math.max(G.score,G.hiScore)}`,W/2,296);
+  }
+  if(t>5 && Math.sin(t*2)>0){
+    ctx.fillStyle='#afa'; ctx.font='bold 9px monospace';
+    ctx.fillText('PRESS Z / TAP TO TITLE',W/2,365);
+  }
+  if(t>5 && (keys['KeyZ']||keys['Space']||touch.bombPressed||touch.shot)){
+    touch.bombPressed=false; touch.shot=false;
+    G.hiScore=Math.max(G.score,G.hiScore); G.score=0;
+    G.state='title'; G.stateTime=0; stopBGM();
+  }
+  drawTouchUI();
+}
+
+// ── MAIN LOOP ──────────────────────────────────────────────
+let lastT=0;
+function loop(ts) {
+  const dt=Math.min((ts-lastT)/1000, 0.05); lastT=ts;
+  G.time+=dt; G.stateTime+=dt;
+  ctx.clearRect(0,0,W,H);
+  const bgIdx = (G.state==='boss'||G.state==='boss_intro') ? G.stage : G.stage-1;
+  updateStars(); drawBackground(bgIdx);
+
+  if(G.state==='title'){
+    drawTitle(dt);
+  } else if(G.state==='playing'){
+    updatePlaying(dt); drawScene();
+  } else if(G.state==='boss_intro'){
+    if(boss) boss.y=Math.min(boss.targetY,boss.y+45*dt);
+    if(G.stateTime>3.5){ G.state='boss'; G.stateTime=0; }
+    drawBossIntro();
+  } else if(G.state==='boss'){
+    updateCommon(dt,getInput()); updateBoss(dt); drawScene();
+  } else if(G.state==='stage_clear'){
+    drawScene(); drawStageClear();
+    if(G.stateTime>3.2) startGame(G.stage);
+  } else if(G.state==='game_over'){
+    drawBackground(G.stage-1); drawGameOver();
+  } else if(G.state==='ending'){
+    drawBackground(3); drawEnding(dt);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(ts=>{ lastT=ts; requestAnimationFrame(loop); });
 </script>
 </body>
 </html>
