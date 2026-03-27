@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>イッヌ大作戦 - Bullet Hell Shooter</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;touch-action:none;font-family:monospace;}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+// ── CONSTANTS ──────────────────────────────────────────────
+const W = 320, H = 480;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.width  = W;
+  canvas.height = H;
+  canvas.style.width  = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── PLACEHOLDER ────────────────────────────────────────────
+ctx.fillStyle = '#1a0040';
+ctx.fillRect(0, 0, W, H);
+ctx.fillStyle = '#fff';
+ctx.font = '16px monospace';
+ctx.textAlign = 'center';
+ctx.fillText('Loading...', W/2, H/2);
+</script>
+</body>
+</html>
