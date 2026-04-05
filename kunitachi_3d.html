@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>国立駅周辺 3Dモデル - Kunitachi 3D Explorer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#000;font-family:'Helvetica Neue',sans-serif}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+#info{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;
+  background:rgba(0,0,0,0.7);padding:12px 24px;border-radius:8px;font-size:14px;
+  text-align:center;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.1)}
+#compass{position:absolute;top:20px;right:20px;width:80px;height:80px;
+  background:rgba(0,0,0,0.6);border-radius:50%;border:2px solid rgba(255,255,255,0.3)}
+#compass canvas{width:80px;height:80px}
+#minimap{position:absolute;top:20px;left:20px;width:180px;height:180px;
+  background:rgba(0,0,0,0.6);border-radius:8px;border:1px solid rgba(255,255,255,0.2);overflow:hidden}
+#minimap canvas{width:180px;height:180px}
+#location{position:absolute;top:210px;left:20px;color:#fff;font-size:12px;
+  background:rgba(0,0,0,0.6);padding:6px 12px;border-radius:4px}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:20px;height:20px;opacity:0.4}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:#fff}
+#crosshair::before{width:2px;height:20px;left:9px;top:0}
+#crosshair::after{width:20px;height:2px;left:0;top:9px}
+#startScreen{position:fixed;top:0;left:0;width:100%;height:100%;
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:100;color:#fff}
+#startScreen h1{font-size:42px;margin-bottom:8px;letter-spacing:2px}
+#startScreen h2{font-size:18px;color:#aaa;margin-bottom:40px;font-weight:normal}
+#startScreen .controls{text-align:left;font-size:14px;color:#ccc;line-height:2}
+#startScreen .controls span{color:#4fc3f7;font-weight:bold}
+#startBtn{margin-top:30px;padding:14px 48px;font-size:18px;background:#4fc3f7;
+  color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:bold;
+  pointer-events:all;transition:all 0.3s}
+#startBtn:hover{background:#81d4fa;transform:scale(1.05)}
+#loading{position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;
+  display:none;align-items:center;justify-content:center;z-index:99;color:#fff;
+  flex-direction:column}
+#loading .bar{width:300px;height:4px;background:#333;border-radius:2px;margin-top:20px}
+#loading .fill{height:100%;background:#4fc3f7;border-radius:2px;width:0%;transition:width 0.3s}
+#fps{position:absolute;top:210px;right:20px;color:#0f0;font-size:12px;
+  font-family:monospace;background:rgba(0,0,0,0.5);padding:4px 8px;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="startScreen">
+  <h1>国立駅周辺 3D</h1>
+  <h2>Kunitachi Station Area - 3D Explorer</h2>
+  <div class="controls">
+    <span>W A S D</span> — 移動 / Move<br>
+    <span>マウス</span> — 視点操作 / Look around<br>
+    <span>Shift</span> — ダッシュ / Run<br>
+    <span>Space</span> — ジャンプ / Jump<br>
+    <span>E</span> — テレポート / Teleport to landmarks<br>
+    <span>M</span> — ミニマップ切替 / Toggle minimap<br>
+    <span>T</span> — 時間帯変更 / Change time of day
+  </div>
+  <button id="startBtn">探索開始 / Start Exploring</button>
+</div>
+<div id="loading"><div>Loading Kunitachi...</div><div class="bar"><div class="fill" id="loadFill"></div></div></div>
+<div id="hud">
+  <div id="info">国立駅南口ロータリー / Kunitachi Station South Rotary</div>
+  <div id="minimap"><canvas id="minimapCanvas" width="360" height="360"></canvas></div>
+  <div id="location">35.6839°N, 139.4436°E</div>
+  <div id="crosshair"></div>
+  <div id="fps">60 FPS</div>
+  <div id="compass"><canvas id="compassCanvas" width="160" height="160"></canvas></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/kunitachi3d.js"></script>
+</body>
+</html>
