@@ -870,6 +870,7 @@ function animate(){
   const dt = Math.min(clock.getDelta(), 0.05);
 
   updateMovement(dt);
+  updateNPCs(dt);
   updateHUD();
   drawMinimap();
   drawCompass();
@@ -889,6 +890,8 @@ async function buildScene(onProgress){
     {name:'並木道を植樹中...', fn:plantTrees},
     {name:'街灯を設置中...', fn:buildStreetLamps},
     {name:'一橋大学を建設中...', fn:buildUniversity},
+    {name:'テクスチャを生成中...', fn:()=>{ initTextures(); applyTextures(); }},
+    {name:'歩行者を配置中...', fn:()=>spawnNPCs(80)},
   ];
   for(let i=0; i<steps.length; i++){
     onProgress((i+1)/steps.length, steps[i].name);
@@ -937,3 +940,365 @@ if(document.readyState==='loading'){
 }
 
 })();
+
+// ============================================================
+// === EXTENSIONS: Procedural Textures & NPCs ===
+// ============================================================
+
+// --- Procedural Texture Generation (Canvas-based) ---
+function makeCanvas(size){
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  return c;
+}
+
+function makeAsphaltTexture(){
+  const c = makeCanvas(256);
+  const x = c.getContext('2d');
+  // Base dark gray
+  x.fillStyle = '#3a3a3a';
+  x.fillRect(0,0,256,256);
+  // Noise
+  for(let i=0;i<3000;i++){
+    const v = 30+Math.random()*40;
+    x.fillStyle = `rgb(${v},${v},${v})`;
+    x.fillRect(Math.random()*256, Math.random()*256, 1+Math.random()*2, 1+Math.random()*2);
+  }
+  // Cracks
+  x.strokeStyle = 'rgba(20,20,20,0.5)';
+  x.lineWidth = 0.5;
+  for(let i=0;i<8;i++){
+    x.beginPath();
+    x.moveTo(Math.random()*256, Math.random()*256);
+    x.lineTo(Math.random()*256, Math.random()*256);
+    x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeGrassTexture(){
+  const c = makeCanvas(256);
+  const x = c.getContext('2d');
+  x.fillStyle = '#4a7c3f';
+  x.fillRect(0,0,256,256);
+  for(let i=0;i<5000;i++){
+    const g = 80+Math.random()*60;
+    x.fillStyle = `rgb(${30+Math.random()*30},${g+30},${30+Math.random()*30})`;
+    x.fillRect(Math.random()*256, Math.random()*256, 1, 2+Math.random()*2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeSidewalkTexture(){
+  const c = makeCanvas(256);
+  const x = c.getContext('2d');
+  x.fillStyle = '#aaaaaa';
+  x.fillRect(0,0,256,256);
+  // Tile pattern
+  x.strokeStyle = '#888';
+  x.lineWidth = 2;
+  for(let i=0;i<=256;i+=64){
+    x.beginPath(); x.moveTo(i,0); x.lineTo(i,256); x.stroke();
+    x.beginPath(); x.moveTo(0,i); x.lineTo(256,i); x.stroke();
+  }
+  // Speckle
+  for(let i=0;i<2000;i++){
+    const v = 140+Math.random()*60;
+    x.fillStyle = `rgb(${v},${v},${v})`;
+    x.fillRect(Math.random()*256, Math.random()*256, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeBrickTexture(color){
+  const c = makeCanvas(256);
+  const x = c.getContext('2d');
+  const base = color || '#8b4513';
+  x.fillStyle = base;
+  x.fillRect(0,0,256,256);
+  // Brick pattern
+  const bw=32, bh=16;
+  for(let row=0; row<256/bh; row++){
+    const offset = (row%2)*bw/2;
+    for(let col=-1; col<256/bw+1; col++){
+      const bx=col*bw+offset, by=row*bh;
+      const r = 100+Math.random()*60;
+      const g = 40+Math.random()*30;
+      const b = 20+Math.random()*20;
+      x.fillStyle = `rgb(${r},${g},${b})`;
+      x.fillRect(bx+1, by+1, bw-2, bh-2);
+    }
+  }
+  // Mortar lines
+  x.strokeStyle = '#666';
+  x.lineWidth = 1;
+  for(let row=0; row<256/bh; row++){
+    x.beginPath(); x.moveTo(0, row*bh); x.lineTo(256, row*bh); x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeBuildingFacadeTexture(baseColor, floors){
+  const c = makeCanvas(256);
+  const x = c.getContext('2d');
+  x.fillStyle = baseColor;
+  x.fillRect(0,0,256,256);
+  // Subtle stucco texture
+  for(let i=0;i<3000;i++){
+    x.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
+    x.fillRect(Math.random()*256, Math.random()*256, 1, 1);
+  }
+  // Window grid
+  const fH = 256/(floors||4);
+  const winsW = 4;
+  for(let f=0; f<(floors||4); f++){
+    for(let w=0; w<winsW; w++){
+      const wx = 20+w*55, wy = f*fH+15;
+      // Window frame
+      x.fillStyle = '#444';
+      x.fillRect(wx-2, wy-2, 36, fH-22);
+      // Window glass
+      const grad = x.createLinearGradient(wx, wy, wx, wy+fH-26);
+      grad.addColorStop(0, '#aaccee');
+      grad.addColorStop(0.5, '#6688aa');
+      grad.addColorStop(1, '#446688');
+      x.fillStyle = grad;
+      x.fillRect(wx, wy, 32, fH-26);
+      // Window cross
+      x.strokeStyle = '#444';
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(wx+16, wy); x.lineTo(wx+16, wy+fH-26);
+      x.moveTo(wx, wy+(fH-26)/2); x.lineTo(wx+32, wy+(fH-26)/2);
+      x.stroke();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  return t;
+}
+
+function makeRoofTexture(){
+  const c = makeCanvas(128);
+  const x = c.getContext('2d');
+  x.fillStyle = '#8b2500';
+  x.fillRect(0,0,128,128);
+  // Tile rows
+  for(let row=0; row<16; row++){
+    for(let col=0; col<8; col++){
+      const offset = (row%2)*8;
+      x.fillStyle = `rgb(${120+Math.random()*40},${40+Math.random()*20},${10+Math.random()*15})`;
+      x.fillRect(col*16+offset, row*8, 14, 7);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Texture cache
+let TEX = null;
+function initTextures(){
+  TEX = {
+    asphalt: makeAsphaltTexture(),
+    grass: makeGrassTexture(),
+    sidewalk: makeSidewalkTexture(),
+    brick: makeBrickTexture(),
+    roof: makeRoofTexture(),
+    facades: [
+      makeBuildingFacadeTexture('#f5f0e8', 3),
+      makeBuildingFacadeTexture('#f5e6c8', 4),
+      makeBuildingFacadeTexture('#e8dcc8', 3),
+      makeBuildingFacadeTexture('#f0e6d0', 4),
+      makeBuildingFacadeTexture('#d8cfc0', 3),
+    ],
+  };
+  TEX.asphalt.repeat.set(20,20);
+  TEX.grass.repeat.set(40,40);
+  TEX.sidewalk.repeat.set(8,8);
+}
+
+// Apply textures to existing scene meshes after initial build
+function applyTextures(){
+  scene.traverse(obj=>{
+    if(!obj.isMesh) return;
+    const mat = obj.material;
+    if(!mat || !mat.color) return;
+    const hex = mat.color.getHex();
+    // Asphalt
+    if(hex === C.asphalt){
+      mat.map = TEX.asphalt;
+      mat.needsUpdate = true;
+    }
+    // Grass / median
+    else if(hex === C.grass || hex === C.median){
+      mat.map = TEX.grass;
+      mat.needsUpdate = true;
+    }
+    // Sidewalk
+    else if(hex === C.sidewalk){
+      mat.map = TEX.sidewalk;
+      mat.needsUpdate = true;
+    }
+    // Station roof / brick
+    else if(hex === C.stationRoof){
+      mat.map = TEX.roof;
+      mat.needsUpdate = true;
+    }
+    else if(hex === C.brick){
+      mat.map = TEX.brick;
+      mat.needsUpdate = true;
+    }
+  });
+}
+
+// --- NPCs / Pedestrians ---
+const NPCS = [];
+const NPC_COLORS = [
+  {top:0x2244aa, bot:0x222233, skin:0xf4c896}, // blue shirt
+  {top:0xaa2244, bot:0x444455, skin:0xe6b48c}, // red shirt
+  {top:0xffffff, bot:0x223344, skin:0xf4c896}, // white shirt (salaryman)
+  {top:0x222222, bot:0x111122, skin:0xddb088}, // black suit
+  {top:0xddaa44, bot:0x664422, skin:0xf4c896}, // yellow
+  {top:0x44aa66, bot:0x553322, skin:0xe6b48c}, // green
+  {top:0xff88aa, bot:0x884466, skin:0xfac8a0}, // pink (student)
+  {top:0x8855aa, bot:0x222244, skin:0xddb088}, // purple
+];
+
+function createNPC(){
+  const colors = NPC_COLORS[Math.floor(Math.random()*NPC_COLORS.length)];
+  const g = new THREE.Group();
+  // Head
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 8, 6),
+    new THREE.MeshLambertMaterial({color: colors.skin})
+  );
+  head.position.y = 1.6;
+  head.castShadow = true;
+  g.add(head);
+  // Hair
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.135, 8, 5, 0, Math.PI*2, 0, Math.PI/2),
+    new THREE.MeshLambertMaterial({color: 0x221a10})
+  );
+  hair.position.y = 1.62;
+  g.add(hair);
+  // Body / shirt
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.4, 0.55, 0.22),
+    new THREE.MeshLambertMaterial({color: colors.top})
+  );
+  body.position.y = 1.15;
+  body.castShadow = true;
+  g.add(body);
+  // Legs / pants
+  const legs = new THREE.Mesh(
+    new THREE.BoxGeometry(0.36, 0.7, 0.22),
+    new THREE.MeshLambertMaterial({color: colors.bot})
+  );
+  legs.position.y = 0.5;
+  legs.castShadow = true;
+  g.add(legs);
+  // Arms
+  const armMat = new THREE.MeshLambertMaterial({color: colors.top});
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.12), armMat);
+  armL.position.set(-0.25, 1.15, 0);
+  g.add(armL);
+  const armR = armL.clone();
+  armR.position.x = 0.25;
+  g.add(armR);
+  // Store for animation
+  g.userData = {
+    armL, armR, body, legs,
+    walkPhase: Math.random()*Math.PI*2,
+    speed: 1 + Math.random()*1.5,
+    target: new THREE.Vector3(),
+    yaw: Math.random()*Math.PI*2,
+  };
+  return g;
+}
+
+function pickWalkTarget(npc){
+  // Pick a target along Daigaku-dori sidewalk or random nearby
+  const onDaigaku = Math.random() < 0.7;
+  if(onDaigaku){
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const sidewalkX = side * (MEDIAN_W/2 + ROAD_W/2 + SIDEWALK_W/2 + ROAD_W/2);
+    npc.userData.target.set(sidewalkX + (Math.random()-0.5)*3, 0, -50 - Math.random()*1100);
+  } else {
+    // Near rotary
+    const a = Math.random()*Math.PI*2;
+    const r = 35 + Math.random()*15;
+    npc.userData.target.set(Math.cos(a)*r, 0, Math.sin(a)*r + 5);
+  }
+}
+
+function spawnNPCs(count){
+  for(let i=0; i<count; i++){
+    const npc = createNPC();
+    // Initial position - distributed along Daigaku-dori sidewalks
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const sidewalkX = side * (MEDIAN_W/2 + ROAD_W/2 + SIDEWALK_W/2 + ROAD_W/2);
+    const z = -20 - Math.random()*1200;
+    npc.position.set(sidewalkX + (Math.random()-0.5)*3, 0, z);
+    pickWalkTarget(npc);
+    scene.add(npc);
+    NPCS.push(npc);
+  }
+  // Some NPCs around rotary
+  for(let i=0; i<15; i++){
+    const npc = createNPC();
+    const a = Math.random()*Math.PI*2;
+    const r = 35 + Math.random()*20;
+    npc.position.set(Math.cos(a)*r, 0, Math.sin(a)*r + 5);
+    pickWalkTarget(npc);
+    scene.add(npc);
+    NPCS.push(npc);
+  }
+}
+
+function updateNPCs(dt){
+  // Only update NPCs near the camera for performance
+  const px = camera.position.x, pz = camera.position.z;
+  for(let i=0; i<NPCS.length; i++){
+    const npc = NPCS[i];
+    const dx = npc.position.x - px, dz = npc.position.z - pz;
+    const distSq = dx*dx + dz*dz;
+    // Skip distant NPCs
+    if(distSq > 250*250){
+      npc.visible = false;
+      continue;
+    }
+    npc.visible = true;
+    const ud = npc.userData;
+    // Move toward target
+    const tx = ud.target.x - npc.position.x;
+    const tz = ud.target.z - npc.position.z;
+    const td = Math.sqrt(tx*tx + tz*tz);
+    if(td < 1.5){
+      pickWalkTarget(npc);
+    } else {
+      const vx = (tx/td) * ud.speed;
+      const vz = (tz/td) * ud.speed;
+      npc.position.x += vx * dt;
+      npc.position.z += vz * dt;
+      // Face direction of movement
+      ud.yaw = Math.atan2(tx, tz);
+      npc.rotation.y = ud.yaw;
+      // Walk animation - swing arms and legs
+      ud.walkPhase += dt * ud.speed * 4;
+      const swing = Math.sin(ud.walkPhase) * 0.5;
+      ud.armL.rotation.x = swing;
+      ud.armR.rotation.x = -swing;
+      // Body bob
+      npc.position.y = Math.abs(Math.sin(ud.walkPhase*2)) * 0.04;
+    }
+  }
+}
