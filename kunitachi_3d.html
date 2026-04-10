@@ -2,24 +2,27 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>国立駅周辺 3Dモデル - Kunitachi 3D Explorer</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{overflow:hidden;background:#000;font-family:'Helvetica Neue',sans-serif}
+html,body{overflow:hidden;background:#000;font-family:'Helvetica Neue',sans-serif;
+  touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
+  position:fixed;width:100%;height:100%}
 canvas{display:block}
 #hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
 #info{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;
-  background:rgba(0,0,0,0.7);padding:12px 24px;border-radius:8px;font-size:14px;
-  text-align:center;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.1)}
-#compass{position:absolute;top:20px;right:20px;width:80px;height:80px;
+  background:rgba(0,0,0,0.7);padding:8px 16px;border-radius:8px;font-size:12px;
+  text-align:center;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.1);
+  max-width:90%;white-space:nowrap}
+#compass{position:absolute;top:10px;right:10px;width:60px;height:60px;
   background:rgba(0,0,0,0.6);border-radius:50%;border:2px solid rgba(255,255,255,0.3)}
-#compass canvas{width:80px;height:80px}
-#minimap{position:absolute;top:20px;left:20px;width:180px;height:180px;
+#compass canvas{width:60px;height:60px}
+#minimap{position:absolute;top:10px;left:10px;width:120px;height:120px;
   background:rgba(0,0,0,0.6);border-radius:8px;border:1px solid rgba(255,255,255,0.2);overflow:hidden}
-#minimap canvas{width:180px;height:180px}
-#location{position:absolute;top:210px;left:20px;color:#fff;font-size:12px;
-  background:rgba(0,0,0,0.6);padding:6px 12px;border-radius:4px}
+#minimap canvas{width:120px;height:120px}
+#location{position:absolute;top:140px;left:10px;color:#fff;font-size:10px;
+  background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px}
 #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:20px;height:20px;opacity:0.4}
 #crosshair::before,#crosshair::after{content:'';position:absolute;background:#fff}
@@ -28,29 +31,69 @@ canvas{display:block}
 #startScreen{position:fixed;top:0;left:0;width:100%;height:100%;
   background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  z-index:100;color:#fff}
-#startScreen h1{font-size:42px;margin-bottom:8px;letter-spacing:2px}
-#startScreen h2{font-size:18px;color:#aaa;margin-bottom:40px;font-weight:normal}
-#startScreen .controls{text-align:left;font-size:14px;color:#ccc;line-height:2}
+  z-index:100;color:#fff;padding:20px;overflow-y:auto}
+#startScreen h1{font-size:32px;margin-bottom:8px;letter-spacing:2px}
+#startScreen h2{font-size:14px;color:#aaa;margin-bottom:20px;font-weight:normal}
+#startScreen .controls{text-align:left;font-size:13px;color:#ccc;line-height:1.8}
 #startScreen .controls span{color:#4fc3f7;font-weight:bold}
-#startBtn{margin-top:30px;padding:14px 48px;font-size:18px;background:#4fc3f7;
+.pc-controls,.mobile-controls{display:none}
+#startBtn{margin-top:20px;padding:14px 48px;font-size:18px;background:#4fc3f7;
   color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:bold;
   pointer-events:all;transition:all 0.3s}
 #startBtn:hover{background:#81d4fa;transform:scale(1.05)}
 #loading{position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;
   display:none;align-items:center;justify-content:center;z-index:99;color:#fff;
   flex-direction:column}
-#loading .bar{width:300px;height:4px;background:#333;border-radius:2px;margin-top:20px}
+#loading .bar{width:80%;max-width:300px;height:4px;background:#333;border-radius:2px;margin-top:20px}
 #loading .fill{height:100%;background:#4fc3f7;border-radius:2px;width:0%;transition:width 0.3s}
-#fps{position:absolute;top:210px;right:20px;color:#0f0;font-size:12px;
-  font-family:monospace;background:rgba(0,0,0,0.5);padding:4px 8px;border-radius:4px}
+#fps{position:absolute;top:140px;right:10px;color:#0f0;font-size:10px;
+  font-family:monospace;background:rgba(0,0,0,0.5);padding:3px 6px;border-radius:4px}
+
+/* === Mobile Touch Controls === */
+#touchControls{display:none;position:fixed;bottom:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:20}
+#joystickArea{position:absolute;bottom:30px;left:30px;width:140px;height:140px;
+  pointer-events:all;touch-action:none}
+#joystickBase{width:140px;height:140px;border-radius:50%;
+  background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.25);
+  position:relative}
+#joystickThumb{width:50px;height:50px;border-radius:50%;
+  background:rgba(255,255,255,0.4);border:2px solid rgba(255,255,255,0.6);
+  position:absolute;top:45px;left:45px;transition:none}
+#lookArea{position:absolute;top:0;right:0;width:55%;height:100%;
+  pointer-events:all;touch-action:none}
+.touchBtn{position:absolute;pointer-events:all;touch-action:none;
+  width:52px;height:52px;border-radius:50%;
+  background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);
+  color:#fff;font-size:11px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent}
+.touchBtn:active,.touchBtn.active{background:rgba(79,195,247,0.4);border-color:#4fc3f7}
+#btnJump{bottom:40px;right:30px}
+#btnRun{bottom:100px;right:30px}
+#btnTeleport{bottom:40px;right:95px}
+#btnTime{bottom:100px;right:95px}
+
+@media(max-width:768px){
+  .mobile-controls{display:block}
+  #minimap{width:90px;height:90px}
+  #minimap canvas{width:90px;height:90px}
+  #compass{width:50px;height:50px}
+  #compass canvas{width:50px;height:50px}
+  #info{bottom:200px;font-size:11px;padding:6px 10px}
+  #location{top:110px;font-size:9px}
+  #fps{top:110px}
+}
+@media(min-width:769px){
+  .pc-controls{display:block}
+}
 </style>
 </head>
 <body>
 <div id="startScreen">
   <h1>国立駅周辺 3D</h1>
   <h2>Kunitachi Station Area - 3D Explorer</h2>
-  <div class="controls">
+  <div class="controls pc-controls">
     <span>W A S D</span> — 移動 / Move<br>
     <span>マウス</span> — 視点操作 / Look around<br>
     <span>Shift</span> — ダッシュ / Run<br>
@@ -58,6 +101,14 @@ canvas{display:block}
     <span>E</span> — テレポート / Teleport to landmarks<br>
     <span>M</span> — ミニマップ切替 / Toggle minimap<br>
     <span>T</span> — 時間帯変更 / Change time of day
+  </div>
+  <div class="controls mobile-controls">
+    <span>左スティック</span> — 移動 / Move<br>
+    <span>右画面スワイプ</span> — 視点操作 / Look<br>
+    <span>RUN</span> — ダッシュ / Run<br>
+    <span>JUMP</span> — ジャンプ / Jump<br>
+    <span>TP</span> — テレポート / Teleport<br>
+    <span>TIME</span> — 時間帯変更 / Change time
   </div>
   <button id="startBtn">探索開始 / Start Exploring</button>
 </div>
@@ -69,6 +120,16 @@ canvas{display:block}
   <div id="crosshair"></div>
   <div id="fps">60 FPS</div>
   <div id="compass"><canvas id="compassCanvas" width="160" height="160"></canvas></div>
+</div>
+<div id="touchControls">
+  <div id="joystickArea">
+    <div id="joystickBase"><div id="joystickThumb"></div></div>
+  </div>
+  <div id="lookArea"></div>
+  <div class="touchBtn" id="btnJump">JUMP</div>
+  <div class="touchBtn" id="btnRun">RUN</div>
+  <div class="touchBtn" id="btnTeleport">TP</div>
+  <div class="touchBtn" id="btnTime">TIME</div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/kunitachi3d.js"></script>

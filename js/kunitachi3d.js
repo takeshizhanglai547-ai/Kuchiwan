@@ -38,6 +38,9 @@ let minimapCtx, compassCtx;
 let buildings = [], landmarks = {};
 let teleportIdx = 0;
 let frameCount = 0, fpsTime = 0;
+let isMobile = false;
+let touchJoystick = {active:false, dx:0, dy:0};
+let touchLook = {active:false, id:-1, lastX:0, lastY:0};
 
 // Landmark data for teleporting & HUD
 const LANDMARKS = [
@@ -719,6 +722,13 @@ function updateMovement(dt){
   if(moveState.b) dir.sub(forward);
   if(moveState.r) dir.add(right);
   if(moveState.l) dir.sub(right);
+
+  // Mobile joystick input
+  if(touchJoystick.active || touchJoystick.dx || touchJoystick.dy){
+    dir.add(forward.clone().multiplyScalar(-touchJoystick.dy));
+    dir.add(right.clone().multiplyScalar(touchJoystick.dx));
+  }
+
   if(dir.length()>0) dir.normalize();
 
   camera.position.x += dir.x * speed * dt;
@@ -737,6 +747,135 @@ function updateMovement(dt){
   camera.rotation.order = 'YXZ';
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
+}
+
+// --- Touch Controls (Mobile) ---
+function setupTouchControls(){
+  isMobile = true;
+  document.getElementById('touchControls').style.display = 'block';
+  document.getElementById('crosshair').style.display = 'none';
+
+  const joystickArea = document.getElementById('joystickArea');
+  const joystickThumb = document.getElementById('joystickThumb');
+  const joystickBase = document.getElementById('joystickBase');
+  const lookArea = document.getElementById('lookArea');
+  const baseR = 70; // half of 140px
+  const thumbR = 25;
+  const maxDist = baseR - thumbR;
+
+  // Joystick
+  let joystickId = -1;
+  joystickArea.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joystickId = t.identifier;
+    touchJoystick.active = true;
+  }, {passive:false});
+
+  joystickArea.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    for(let t of e.changedTouches){
+      if(t.identifier !== joystickId) continue;
+      const rect = joystickBase.getBoundingClientRect();
+      const cx = rect.left + baseR;
+      const cy = rect.top + baseR;
+      let dx = t.clientX - cx;
+      let dy = t.clientY - cy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist > maxDist){ dx = dx/dist*maxDist; dy = dy/dist*maxDist; }
+      joystickThumb.style.left = (baseR - thumbR + dx) + 'px';
+      joystickThumb.style.top = (baseR - thumbR + dy) + 'px';
+      touchJoystick.dx = dx / maxDist; // -1 to 1
+      touchJoystick.dy = dy / maxDist;
+    }
+  }, {passive:false});
+
+  const resetJoystick = (e)=>{
+    for(let t of e.changedTouches){
+      if(t.identifier !== joystickId) continue;
+      joystickId = -1;
+      touchJoystick.active = false;
+      touchJoystick.dx = 0;
+      touchJoystick.dy = 0;
+      joystickThumb.style.left = (baseR - thumbR) + 'px';
+      joystickThumb.style.top = (baseR - thumbR) + 'px';
+    }
+  };
+  joystickArea.addEventListener('touchend', resetJoystick, {passive:false});
+  joystickArea.addEventListener('touchcancel', resetJoystick, {passive:false});
+
+  // Look area (right side of screen)
+  lookArea.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchLook.active = true;
+    touchLook.id = t.identifier;
+    touchLook.lastX = t.clientX;
+    touchLook.lastY = t.clientY;
+  }, {passive:false});
+
+  lookArea.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    for(let t of e.changedTouches){
+      if(t.identifier !== touchLook.id) continue;
+      const dx = t.clientX - touchLook.lastX;
+      const dy = t.clientY - touchLook.lastY;
+      yaw -= dx * 0.004;
+      pitch -= dy * 0.004;
+      pitch = Math.max(-Math.PI/2+0.1, Math.min(Math.PI/2-0.1, pitch));
+      touchLook.lastX = t.clientX;
+      touchLook.lastY = t.clientY;
+    }
+  }, {passive:false});
+
+  const resetLook = (e)=>{
+    for(let t of e.changedTouches){
+      if(t.identifier !== touchLook.id) continue;
+      touchLook.active = false;
+      touchLook.id = -1;
+    }
+  };
+  lookArea.addEventListener('touchend', resetLook, {passive:false});
+  lookArea.addEventListener('touchcancel', resetLook, {passive:false});
+
+  // Buttons
+  const btnJump = document.getElementById('btnJump');
+  const btnRun = document.getElementById('btnRun');
+  const btnTeleport = document.getElementById('btnTeleport');
+  const btnTime = document.getElementById('btnTime');
+
+  btnJump.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    if(onGround){ velocity.y = JUMP_V; onGround = false; }
+    btnJump.classList.add('active');
+  }, {passive:false});
+  btnJump.addEventListener('touchend', ()=>btnJump.classList.remove('active'));
+
+  let runActive = false;
+  btnRun.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    runActive = !runActive;
+    moveState.run = runActive;
+    btnRun.classList.toggle('active', runActive);
+  }, {passive:false});
+
+  btnTeleport.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    teleportIdx = (teleportIdx+1) % LANDMARKS.length;
+    const lm = LANDMARKS[teleportIdx];
+    camera.position.set(...lm.pos);
+    velocity.set(0,0,0);
+    btnTeleport.classList.add('active');
+    setTimeout(()=>btnTeleport.classList.remove('active'), 200);
+  }, {passive:false});
+
+  btnTime.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    timeOfDay = (timeOfDay+1) % 4;
+    updateLighting();
+    btnTime.classList.add('active');
+    setTimeout(()=>btnTime.classList.remove('active'), 200);
+  }, {passive:false});
 }
 
 // --- HUD Updates ---
@@ -925,7 +1064,13 @@ function init(){
     document.getElementById('hud').style.display = 'block';
 
     setupControls();
-    renderer.domElement.click(); // Request pointer lock
+    // Mobile detection
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if(hasTouchScreen && window.innerWidth < 1024){
+      setupTouchControls();
+    } else {
+      renderer.domElement.click(); // Request pointer lock (PC only)
+    }
 
     fpsTime = performance.now();
     animate();
