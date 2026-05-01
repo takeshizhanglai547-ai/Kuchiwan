@@ -2,91 +2,78 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KUCHIWAN - 3D Mech Shooter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1b1033">
+  <title>イッヌ大作戦 - ダークワンワン大帝を倒せ！</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
 
-  <!-- HUD -->
-  <div id="hud" class="hidden">
-    <!-- Player Status -->
-    <div id="player-status">
-      <div class="status-row">
-        <span class="status-label">AP</span>
-        <div class="bar-wrap"><div id="ap-bar" class="bar bar-ap"></div></div>
-        <span id="ap-val" class="status-val">10000</span>
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-box">
+          <span class="hud-label">HP</span>
+          <div class="hp-bar"><div id="hp-fill" class="hp-fill"></div></div>
+        </div>
+        <div class="hud-box">
+          <span class="hud-label">🦴</span>
+          <span id="bomb-count" class="hud-val">3</span>
+        </div>
+        <div class="hud-box">
+          <span class="hud-label">SCORE</span>
+          <span id="score-val" class="hud-val">0</span>
+        </div>
       </div>
-      <div class="status-row">
-        <span class="status-label">EN</span>
-        <div class="bar-wrap"><div id="en-bar" class="bar bar-en"></div></div>
+      <div id="boss-hud" class="hidden">
+        <div class="boss-name">ダークワンワン大帝</div>
+        <div class="boss-bar"><div id="boss-fill" class="boss-fill"></div></div>
+      </div>
+      <div id="announce"></div>
+    </div>
+
+    <!-- Touch controls -->
+    <div id="touch-controls" class="hidden">
+      <div id="pad-left">
+        <button class="tbtn" data-key="left">◀</button>
+        <button class="tbtn" data-key="right">▶</button>
+      </div>
+      <div id="pad-right">
+        <button class="tbtn btn-bomb" data-key="bomb">🦴</button>
+        <button class="tbtn btn-shoot" data-key="shoot">撃</button>
+        <button class="tbtn btn-jump" data-key="jump">跳</button>
       </div>
     </div>
 
-    <!-- Weapon -->
-    <div id="weapon-status">
-      <div class="weapon-row"><span class="w-label">RIFLE</span><span class="w-icon">▣</span><span id="ammo-count" class="w-val">∞</span></div>
-      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">32</span></div>
-    </div>
-
-    <!-- Lock-on -->
-    <div id="lock-overlay">
-      <div id="lock-ring" class="lock-ring"></div>
-    </div>
-
-    <!-- Enemy Status -->
-    <div id="enemy-status" class="hidden">
-      <div id="enemy-name-label">ENEMY</div>
-      <div class="status-row">
-        <span class="status-label">AP</span>
-        <div class="bar-wrap"><div id="enemy-ap-bar" class="bar bar-enemy"></div></div>
-        <span id="enemy-ap-val" class="status-val"></span>
+    <!-- Title screen -->
+    <div id="title-screen">
+      <div class="title-deco">★ ACTION SHOOTING ★</div>
+      <h1 class="title-main">イッヌ大作戦</h1>
+      <div class="title-sub">〜ダークワンワン大帝を倒せ！〜</div>
+      <div class="title-story">
+        ワンワン王国を支配する暗黒の帝王<br>
+        <b>ダークワンワン大帝</b> に立ち向かうのは<br>
+        伝説のイッヌ戦士、ただ一匹！
       </div>
-      <div id="phase-label"></div>
+      <div class="controls-help">
+        <div class="help-row"><b>PC:</b> ← → 移動 / ↑ or Z ジャンプ / X 射撃 / C ボム</div>
+        <div class="help-row"><b>スマホ:</b> 画面下のボタンで操作</div>
+      </div>
+      <button id="start-btn">▶ スタート</button>
     </div>
 
-    <!-- Center info -->
-    <div id="center-info"></div>
-
-    <!-- Crosshair -->
-    <div id="crosshair">
-      <div class="ch-h"></div>
-      <div class="ch-v"></div>
+    <!-- Result screen -->
+    <div id="result-screen" class="hidden">
+      <div id="result-title" class="result-title"></div>
+      <div id="result-score" class="result-score"></div>
+      <button id="retry-btn">もう一度</button>
     </div>
   </div>
 
-  <!-- Start Screen -->
-  <div id="start-screen">
-    <div class="title-block">
-      <div class="title-sub">AC-STYLE 3D MECH DANMAKU SHOOTER</div>
-      <h1 class="title-main">KUCHIWAN</h1>
-      <div class="title-sub">口湾</div>
-    </div>
-    <div class="controls-block">
-      <h3>── CONTROLS ──</h3>
-      <div class="ctrl-grid">
-        <span>WASD</span><span>移動</span>
-        <span>マウス</span><span>照準 / カメラ</span>
-        <span>左クリック</span><span>ライフル射撃</span>
-        <span>右クリック</span><span>ミサイル発射</span>
-        <span>Shift</span><span>ブースト（高速移動）</span>
-        <span>Space</span><span>上昇</span>
-        <span>Ctrl</span><span>下降</span>
-        <span>Q</span><span>ロックオン切替</span>
-      </div>
-    </div>
-    <button id="start-btn">── START MISSION ──</button>
-  </div>
-
-  <!-- Game Over / Clear -->
-  <div id="result-screen" class="hidden">
-    <div id="result-title"></div>
-    <div id="result-sub"></div>
-    <button id="retry-btn">RETRY</button>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>
