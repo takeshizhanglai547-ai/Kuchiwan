@@ -165,29 +165,46 @@ html, body {
   z-index: 20;
 }
 
-#pad-left, #pad-right {
+#pad-left {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
   pointer-events: auto;
 }
 
-.dpad {
+#vstick {
   position: relative;
-  width: 168px;
-  height: 168px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.42);
+  border: 3px solid rgba(255,255,255,0.45);
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.25);
 }
 
-.dpad .tbtn {
+#vstick-knob {
   position: absolute;
-  width: 54px; height: 54px;
-  font-size: 18px;
+  top: 50%; left: 50%;
+  width: 64px; height: 64px;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.55);
+  border: 3px solid rgba(255,255,255,0.85);
+  pointer-events: none;
+  transition: transform 0.06s ease-out;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.2);
 }
 
-.dpad-up    { top: 0;       left: 57px; }
-.dpad-down  { bottom: 0;    left: 57px; }
-.dpad-left  { top: 57px;    left: 0; }
-.dpad-right { top: 57px;    right: 0; }
+#vstick-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255,255,255,0.4);
+  font-size: 8px;
+  pointer-events: none;
+}
 
 .tbtn {
   width: 62px; height: 62px;
@@ -213,18 +230,24 @@ html, body {
   background: rgba(255,255,255,0.25);
 }
 
-.btn-shoot { background: rgba(255,80,80,0.5);  border-color: #ffaaaa; width: 70px; height: 70px; font-size: 24px; }
-.btn-jump  { background: rgba(80,200,255,0.5); border-color: #aaddff; width: 70px; height: 70px; font-size: 24px; }
-.btn-bomb  { background: rgba(255,200,80,0.5); border-color: #ffe8aa; }
-.btn-melee { background: rgba(180,255,120,0.5); border-color: #ddffaa; }
+.btn-shoot { background: rgba(255,80,80,0.55);  border-color: #ffaaaa; }
+.btn-jump  { background: rgba(80,200,255,0.55); border-color: #aaddff; }
+.btn-bomb  { background: rgba(255,200,80,0.55); border-color: #ffe8aa; }
+.btn-melee { background: rgba(120,230,90,0.6);  border-color: #c8ff9a; }
 
 #pad-right {
   display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  gap: 8px;
-  align-items: center;
+  grid-template-columns: 70px 70px;
+  grid-template-rows: 70px 70px;
+  gap: 10px;
   pointer-events: auto;
+  align-items: center;
+  justify-items: center;
+}
+
+#pad-right .tbtn {
+  width: 70px; height: 70px;
+  font-size: 22px;
 }
 
 /* ── Title screen ── */
@@ -394,13 +417,10 @@ html, body {
   .title-story { padding: 8px 14px; font-size: 11px; line-height: 1.5; }
   .controls-help { font-size: 10px; padding: 6px 10px; }
   #title-screen { gap: 10px; }
-  #touch-controls { height: 150px; }
-  .tbtn { width: 48px; height: 48px; font-size: 16px; }
-  .dpad { width: 144px; height: 144px; }
-  .dpad .tbtn { width: 48px; height: 48px; font-size: 16px; }
-  .dpad-up    { left: 48px; }
-  .dpad-down  { left: 48px; }
-  .dpad-left  { top: 48px; }
-  .dpad-right { top: 48px; }
-  .btn-shoot, .btn-jump { width: 58px; height: 58px; font-size: 20px; }
+  #touch-controls { height: 140px; }
+  .tbtn { width: 56px; height: 56px; font-size: 18px; }
+  #vstick { width: 130px; height: 130px; }
+  #vstick-knob { width: 52px; height: 52px; }
+  #pad-right { grid-template-columns: 58px 58px; grid-template-rows: 58px 58px; gap: 8px; }
+  #pad-right .tbtn { width: 58px; height: 58px; font-size: 18px; }
 }

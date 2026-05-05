@@ -99,19 +99,93 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// Touch buttons (multi-touch capable)
+// Touch buttons via pointer events (handles multi-touch and avoids mouseleave bugs)
 const tbtns = document.querySelectorAll('.tbtn');
 tbtns.forEach(btn => {
   const k = btn.dataset.key;
-  const press = (e) => { e.preventDefault(); setKey(k, true); btn.classList.add('active'); ac(); };
-  const rel   = (e) => { e.preventDefault(); setKey(k, false); btn.classList.remove('active'); };
-  btn.addEventListener('touchstart', press, { passive:false });
-  btn.addEventListener('touchend',   rel,   { passive:false });
-  btn.addEventListener('touchcancel',rel,   { passive:false });
-  btn.addEventListener('mousedown',  press);
-  btn.addEventListener('mouseup',    rel);
-  btn.addEventListener('mouseleave', rel);
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    setKey(k, true);
+    btn.classList.add('active');
+    ac();
+  });
+  const release = (e) => {
+    setKey(k, false);
+    btn.classList.remove('active');
+  };
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  btn.addEventListener('lostpointercapture', release);
+  // Block context-menu on long press
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
 });
+
+// Virtual joystick for movement + aim (8-way)
+(function setupJoystick() {
+  const stick = document.getElementById('vstick');
+  const knob  = document.getElementById('vstick-knob');
+  if (!stick || !knob) return;
+  let activeId = null;
+  let center = { x: 0, y: 0 };
+  const RADIUS = 60;
+  const DEADZONE = 16;
+
+  function recalc() {
+    const r = stick.getBoundingClientRect();
+    center = { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+  function reset() {
+    knob.style.transform = 'translate(-50%, -50%)';
+    setKey('left', false);  setKey('right', false);
+    setKey('aimUp', false); setKey('aimDown', false);
+  }
+  function update(x, y) {
+    let dx = x - center.x, dy = y - center.y;
+    const dist = Math.hypot(dx, dy);
+    let kx = dx, ky = dy;
+    if (dist > RADIUS) { kx = dx / dist * RADIUS; ky = dy / dist * RADIUS; }
+    knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+    setKey('left', false);  setKey('right', false);
+    setKey('aimUp', false); setKey('aimDown', false);
+    if (dist < DEADZONE) return;
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang += Math.PI * 2;
+    const oct = Math.floor((ang + Math.PI/8) / (Math.PI/4)) % 8;
+    switch (oct) {
+      case 0: setKey('right', true); break;
+      case 1: setKey('right', true); setKey('aimDown', true); break;
+      case 2: setKey('aimDown', true); break;
+      case 3: setKey('left', true);  setKey('aimDown', true); break;
+      case 4: setKey('left', true); break;
+      case 5: setKey('left', true);  setKey('aimUp', true); break;
+      case 6: setKey('aimUp', true); break;
+      case 7: setKey('right', true); setKey('aimUp', true); break;
+    }
+  }
+  stick.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { stick.setPointerCapture(e.pointerId); } catch (_) {}
+    activeId = e.pointerId;
+    recalc();
+    ac();
+    update(e.clientX, e.clientY);
+  });
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== activeId) return;
+    e.preventDefault();
+    update(e.clientX, e.clientY);
+  });
+  const endStick = (e) => {
+    if (e.pointerId !== activeId) return;
+    activeId = null;
+    reset();
+  };
+  stick.addEventListener('pointerup', endStick);
+  stick.addEventListener('pointercancel', endStick);
+  stick.addEventListener('lostpointercapture', endStick);
+  stick.addEventListener('contextmenu', (e) => e.preventDefault());
+})();
 
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
@@ -284,6 +358,11 @@ function playerUpdate() {
     player.walkAnim = 0;
   }
 
+  // Melee forward lunge: override vx during the start of the bite
+  if (player.meleeTimer > 10) {
+    player.vx = player.dir * 5.2;
+  }
+
   // Gravity
   player.vy += GRAVITY;
   if (player.vy > 14) player.vy = 14;
@@ -358,12 +437,12 @@ function playerUpdate() {
   if (player.meleeCool > 0) player.meleeCool--;
   if (player.meleeTimer > 0) {
     player.meleeTimer--;
-    // Active hitbox during meleeTimer 14..6
-    if (player.meleeTimer >= 6 && player.meleeTimer <= 14) {
+    // Active hitbox during meleeTimer 14..4
+    if (player.meleeTimer >= 4 && player.meleeTimer <= 14) {
       const hb = {
-        x: player.x + (player.dir > 0 ? player.w - 4 : -22),
-        y: player.y + 4,
-        w: 28, h: player.h - 4,
+        x: player.x + (player.dir > 0 ? player.w - 6 : -36),
+        y: player.y + 2,
+        w: 42, h: player.h - 2,
       };
       // Damage enemies
       for (const e of enemies) {
@@ -760,8 +839,8 @@ function updateEnemy(e) {
 }
 
 function handlePlayerEnemyTouch(e) {
-  // Don't insta-die on contact during melee
-  if (player.meleeTimer > 0 && player.meleeTimer >= 6 && player.meleeTimer <= 14) return;
+  // No contact damage during melee active window
+  if (player.meleeTimer >= 4 && player.meleeTimer <= 14) return;
   damagePlayer(15);
   if (e.type !== 'tank') {
     e.hp = 0; e.alive = false;
@@ -1385,31 +1464,46 @@ function drawPlayer() {
   ctx.fillStyle = '#888';
   ctx.fillRect(15, -3, 3, 6);
   ctx.restore();
+
+  // Aim reticle (small dot in aim direction) — visual cue for 8-way aim
+  const rcx = cx + player.aimX * 34;
+  const rcy = cy + player.aimY * 34;
+  ctx.strokeStyle = 'rgba(255,222,89,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(rcx, rcy, 4, 0, Math.PI*2);
+  ctx.moveTo(rcx - 7, rcy); ctx.lineTo(rcx - 3, rcy);
+  ctx.moveTo(rcx + 3, rcy); ctx.lineTo(rcx + 7, rcy);
+  ctx.moveTo(rcx, rcy - 7); ctx.lineTo(rcx, rcy - 3);
+  ctx.moveTo(rcx, rcy + 3); ctx.lineTo(rcx, rcy + 7);
+  ctx.stroke();
+
   // Melee chomp animation
   if (player.meleeTimer > 0) {
-    const active = player.meleeTimer >= 6 && player.meleeTimer <= 14;
-    const chompCx = x + player.w/2 + player.dir * (active ? 16 : 10);
-    const chompCy = y + 12;
+    const active = player.meleeTimer >= 4 && player.meleeTimer <= 14;
+    const chompCx = x + player.w/2 + player.dir * (active ? 22 : 12);
+    const chompCy = y + 14;
     ctx.save();
     ctx.translate(chompCx, chompCy);
     ctx.scale(player.dir, 1);
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(0, -8);
-    ctx.lineTo(14, -2);
-    ctx.lineTo(0, 0);
-    ctx.lineTo(14, 4);
-    ctx.lineTo(0, 8);
+    ctx.moveTo(0, -10);
+    ctx.lineTo(20, -3);
+    ctx.lineTo(2, 0);
+    ctx.lineTo(20, 5);
+    ctx.lineTo(0, 10);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
     if (active) {
       ctx.strokeStyle = '#ffde59';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(8, -12); ctx.lineTo(20, -4);
-      ctx.moveTo(8,  12); ctx.lineTo(20,  4);
+      ctx.moveTo(10, -14); ctx.lineTo(26, -5);
+      ctx.moveTo(10,  14); ctx.lineTo(26,  5);
+      ctx.moveTo(22, 0); ctx.lineTo(32, 0);
       ctx.stroke();
     }
     ctx.restore();

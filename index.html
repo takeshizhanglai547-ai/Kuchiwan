@@ -39,18 +39,16 @@
     <!-- Touch controls -->
     <div id="touch-controls" class="hidden">
       <div id="pad-left">
-        <div class="dpad">
-          <button class="tbtn dpad-up"    data-key="aimUp">▲</button>
-          <button class="tbtn dpad-left"  data-key="left">◀</button>
-          <button class="tbtn dpad-right" data-key="right">▶</button>
-          <button class="tbtn dpad-down"  data-key="aimDown">▼</button>
+        <div id="vstick">
+          <div id="vstick-knob"></div>
+          <div id="vstick-hint">●</div>
         </div>
       </div>
       <div id="pad-right">
         <button class="tbtn btn-melee" data-key="melee">噛</button>
+        <button class="tbtn btn-jump"  data-key="jump">跳</button>
         <button class="tbtn btn-bomb"  data-key="bomb">🦴</button>
         <button class="tbtn btn-shoot" data-key="shoot">撃</button>
-        <button class="tbtn btn-jump"  data-key="jump">跳</button>
       </div>
     </div>
 
@@ -67,8 +65,8 @@
       <div class="controls-help">
         <div class="help-row"><b>PC:</b> ← → 移動 ／ ↑↓ 照準 ／ Z or Space ジャンプ</div>
         <div class="help-row">　　　 X 射撃 ／ V 噛みつき ／ C ボム</div>
-        <div class="help-row"><b>スマホ:</b> 左 十字＝移動・照準 ／ 右ボタン＝噛・撃・跳・ボム</div>
-        <div class="help-row" style="color:#ffde59">移動方向＋↑↓で <b>8方向射撃</b>！</div>
+        <div class="help-row"><b>スマホ:</b> 左スティックで移動＆照準（傾けた向きに撃てる）</div>
+        <div class="help-row" style="color:#ffde59">スティックを <b>斜めに倒すと8方向射撃</b>！噛は緑ボタン</div>
       </div>
       <button id="start-btn">▶ スタート</button>
     </div>
