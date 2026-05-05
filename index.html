@@ -39,9 +39,16 @@
     <!-- Touch controls -->
     <div id="touch-controls" class="hidden">
       <div id="pad-left">
-        <div id="vstick">
-          <div id="vstick-knob"></div>
-          <div id="vstick-hint">●</div>
+        <div class="dpad8">
+          <button class="tbtn dpad-btn" data-dir="upLeft">↖</button>
+          <button class="tbtn dpad-btn" data-dir="up">↑</button>
+          <button class="tbtn dpad-btn" data-dir="upRight">↗</button>
+          <button class="tbtn dpad-btn" data-dir="left">←</button>
+          <div class="dpad-center">8</div>
+          <button class="tbtn dpad-btn" data-dir="right">→</button>
+          <button class="tbtn dpad-btn" data-dir="downLeft">↙</button>
+          <button class="tbtn dpad-btn" data-dir="down">↓</button>
+          <button class="tbtn dpad-btn" data-dir="downRight">↘</button>
         </div>
       </div>
       <div id="pad-right">
@@ -65,8 +72,8 @@
       <div class="controls-help">
         <div class="help-row"><b>PC:</b> ← → 移動 ／ ↑↓ 照準 ／ Z or Space ジャンプ</div>
         <div class="help-row">　　　 X 射撃 ／ V 噛みつき ／ C ボム</div>
-        <div class="help-row"><b>スマホ:</b> 左スティックで移動＆照準（傾けた向きに撃てる）</div>
-        <div class="help-row" style="color:#ffde59">スティックを <b>斜めに倒すと8方向射撃</b>！噛は緑ボタン</div>
+        <div class="help-row"><b>スマホ:</b> 左 8方向ボタン（斜めも押せる）／ 右 噛・跳・🦴・撃</div>
+        <div class="help-row" style="color:#ffde59">↗↘↖↙ で <b>斜め射撃</b> ／ 緑ボタンで噛みつき</div>
       </div>
       <button id="start-btn">▶ スタート</button>
     </div>

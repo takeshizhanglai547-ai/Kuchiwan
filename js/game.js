@@ -99,10 +99,11 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// Touch buttons via pointer events (handles multi-touch and avoids mouseleave bugs)
+// Action buttons (jump, shoot, bomb, melee). Each has data-key.
 const tbtns = document.querySelectorAll('.tbtn');
 tbtns.forEach(btn => {
   const k = btn.dataset.key;
+  if (!k) return; // skip d-pad buttons (they use data-dir)
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     try { btn.setPointerCapture(e.pointerId); } catch (_) {}
@@ -117,75 +118,39 @@ tbtns.forEach(btn => {
   btn.addEventListener('pointerup', release);
   btn.addEventListener('pointercancel', release);
   btn.addEventListener('lostpointercapture', release);
-  // Block context-menu on long press
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
 });
 
-// Virtual joystick for movement + aim (8-way)
-(function setupJoystick() {
-  const stick = document.getElementById('vstick');
-  const knob  = document.getElementById('vstick-knob');
-  if (!stick || !knob) return;
-  let activeId = null;
-  let center = { x: 0, y: 0 };
-  const RADIUS = 60;
-  const DEADZONE = 16;
-
-  function recalc() {
-    const r = stick.getBoundingClientRect();
-    center = { x: r.left + r.width/2, y: r.top + r.height/2 };
-  }
-  function reset() {
-    knob.style.transform = 'translate(-50%, -50%)';
-    setKey('left', false);  setKey('right', false);
-    setKey('aimUp', false); setKey('aimDown', false);
-  }
-  function update(x, y) {
-    let dx = x - center.x, dy = y - center.y;
-    const dist = Math.hypot(dx, dy);
-    let kx = dx, ky = dy;
-    if (dist > RADIUS) { kx = dx / dist * RADIUS; ky = dy / dist * RADIUS; }
-    knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
-    setKey('left', false);  setKey('right', false);
-    setKey('aimUp', false); setKey('aimDown', false);
-    if (dist < DEADZONE) return;
-    let ang = Math.atan2(dy, dx);
-    if (ang < 0) ang += Math.PI * 2;
-    const oct = Math.floor((ang + Math.PI/8) / (Math.PI/4)) % 8;
-    switch (oct) {
-      case 0: setKey('right', true); break;
-      case 1: setKey('right', true); setKey('aimDown', true); break;
-      case 2: setKey('aimDown', true); break;
-      case 3: setKey('left', true);  setKey('aimDown', true); break;
-      case 4: setKey('left', true); break;
-      case 5: setKey('left', true);  setKey('aimUp', true); break;
-      case 6: setKey('aimUp', true); break;
-      case 7: setKey('right', true); setKey('aimUp', true); break;
-    }
-  }
-  stick.addEventListener('pointerdown', (e) => {
+// 8-way directional pad. Each diagonal button sets two keys at once.
+const DPAD_DIR_MAP = {
+  up:        ['aimUp'],
+  down:      ['aimDown'],
+  left:      ['left'],
+  right:     ['right'],
+  upRight:   ['aimUp',   'right'],
+  upLeft:    ['aimUp',   'left'],
+  downRight: ['aimDown', 'right'],
+  downLeft:  ['aimDown', 'left'],
+};
+document.querySelectorAll('.dpad-btn').forEach(btn => {
+  const dir = btn.dataset.dir;
+  const ks = DPAD_DIR_MAP[dir] || [];
+  btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    try { stick.setPointerCapture(e.pointerId); } catch (_) {}
-    activeId = e.pointerId;
-    recalc();
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    ks.forEach(k => setKey(k, true));
+    btn.classList.add('active');
     ac();
-    update(e.clientX, e.clientY);
   });
-  stick.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== activeId) return;
-    e.preventDefault();
-    update(e.clientX, e.clientY);
-  });
-  const endStick = (e) => {
-    if (e.pointerId !== activeId) return;
-    activeId = null;
-    reset();
+  const release = () => {
+    ks.forEach(k => setKey(k, false));
+    btn.classList.remove('active');
   };
-  stick.addEventListener('pointerup', endStick);
-  stick.addEventListener('pointercancel', endStick);
-  stick.addEventListener('lostpointercapture', endStick);
-  stick.addEventListener('contextmenu', (e) => e.preventDefault());
-})();
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  btn.addEventListener('lostpointercapture', release);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+});
 
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
@@ -197,21 +162,32 @@ const BOSS_ARENA_START = 5000;
 // ----- Terrain --------------------------------------------
 // Each segment is a solid block from (x0..x1) at top-y, extending down.
 const terrain = [
-  { x0: -200, x1: 1100, top: 380 },
-  { x0: 1180, x1: 1500, top: 380 },
-  { x0: 1500, x1: 1700, top: 320 }, // plateau
-  { x0: 1700, x1: 1900, top: 380 },
-  { x0: 2000, x1: 2400, top: 380 },
-  { x0: 2400, x1: 2520, top: 348 }, // small hill
-  { x0: 2520, x1: 2700, top: 380 },
-  { x0: 2780, x1: 3100, top: 380 },
-  { x0: 3100, x1: 3340, top: 280 }, // tall mountain
-  { x0: 3340, x1: 3500, top: 380 },
-  { x0: 3600, x1: 4000, top: 380 },
-  { x0: 4000, x1: 4170, top: 320 }, // hill
-  { x0: 4170, x1: 4400, top: 380 },
-  { x0: 4500, x1: 4900, top: 380 },
-  { x0: 4900, x1: 9000, top: 380 }, // boss arena and beyond
+  { x0: -200, x1: 460,  top: 380 }, // start flat
+  { x0: 460,  x1: 600,  top: 340 }, // first hill (visible early!)
+  { x0: 600,  x1: 850,  top: 380 },
+  // gap 850..950
+  { x0: 950,  x1: 1180, top: 380 },
+  { x0: 1180, x1: 1400, top: 320 }, // plateau
+  { x0: 1400, x1: 1650, top: 380 },
+  // gap 1650..1750
+  { x0: 1750, x1: 2000, top: 380 },
+  { x0: 2000, x1: 2200, top: 290 }, // tall plateau
+  { x0: 2200, x1: 2480, top: 380 },
+  // gap 2480..2580
+  { x0: 2580, x1: 2820, top: 380 },
+  { x0: 2820, x1: 2960, top: 340 }, // hill
+  { x0: 2960, x1: 3180, top: 380 },
+  // gap 3180..3280
+  { x0: 3280, x1: 3500, top: 380 },
+  { x0: 3500, x1: 3760, top: 260 }, // tall mountain
+  { x0: 3760, x1: 3980, top: 380 },
+  // gap 3980..4080
+  { x0: 4080, x1: 4280, top: 380 },
+  { x0: 4280, x1: 4420, top: 330 }, // small plateau
+  { x0: 4420, x1: 4640, top: 380 },
+  // gap 4640..4740
+  { x0: 4740, x1: 4900, top: 380 },
+  { x0: 4900, x1: 9000, top: 380 }, // boss arena (flat)
 ];
 
 function groundTopAt(x) {
@@ -368,7 +344,13 @@ function playerUpdate() {
   if (player.vy > 14) player.vy = 14;
 
   // Move with terrain collision
+  const wasOnGround = player.onGround;
+  const fallVel = player.vy;
   moveActor(player);
+  // Landing dust burst
+  if (!wasOnGround && player.onGround && fallVel > 4) {
+    spawnParticles(player.x + player.w/2, player.y + player.h, 8, '#ddd', 2);
+  }
 
   // Don't go past camera left edge
   if (player.x < camX + 6) player.x = camX + 6;
@@ -517,92 +499,131 @@ function damagePlayer(dmg) {
 }
 
 // ----- Drawing helpers (cute dog/cat sprites) -------------
+// opts:
+//   color, color2, dir
+//   walk (rad), wag (rad)         - leg & tail cycle
+//   airborne (bool)                - legs tucked when in the air
+//   aimY (-1..1)                   - head tilt
+//   bounce (px)                    - vertical bob from walk cycle
+//   breath (rad)                   - subtle idle bob
+//   eyesClosed (bool)              - blink
+//   bandana, gun                   - accessories
 function drawDog(x, y, w, h, opts={}) {
   const c = opts.color || '#e8b870';
   const c2 = opts.color2 || '#fff5dd';
   const dir = opts.dir || 1;
   const wag = opts.wag || 0;
   const walk = opts.walk || 0;
+  const airborne = !!opts.airborne;
+  const aimY = opts.aimY || 0;
+  const bounce = opts.bounce || 0;
+  const breath = opts.breath || 0;
+  const breathY = Math.sin(breath) * 0.6;
+
   ctx.save();
-  ctx.translate(x + w/2, y);
+  ctx.translate(x + w/2, y - bounce);
   ctx.scale(dir, 1);
 
   // Tail
+  const tailWag = airborne ? wag * 0.5 : wag;
   ctx.strokeStyle = c;
   ctx.lineWidth = 5;
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(-w*0.45, h*0.55);
-  ctx.quadraticCurveTo(-w*0.62, h*0.30 + Math.sin(wag)*4, -w*0.45, h*0.10);
+  ctx.quadraticCurveTo(-w*0.62, h*0.30 + Math.sin(tailWag)*5, -w*0.45 - (airborne?2:0), h*0.10);
   ctx.stroke();
 
-  // Body
+  // Body (subtle breath squash)
   ctx.fillStyle = c;
   ctx.beginPath();
-  ctx.ellipse(0, h*0.62, w*0.40, h*0.30, 0, 0, Math.PI*2);
+  ctx.ellipse(0, h*0.62 + breathY, w*0.40, h*0.30 - breathY*0.5, 0, 0, Math.PI*2);
   ctx.fill();
   ctx.fillStyle = c2;
   ctx.beginPath();
-  ctx.ellipse(0, h*0.72, w*0.30, h*0.18, 0, 0, Math.PI*2);
+  ctx.ellipse(0, h*0.72 + breathY, w*0.30, h*0.18, 0, 0, Math.PI*2);
   ctx.fill();
 
-  // Legs (animated)
+  // Legs
   ctx.fillStyle = c;
-  const swing = Math.sin(walk) * 4;
-  const swing2 = Math.sin(walk + Math.PI) * 4;
-  ctx.fillRect(-w*0.30, h*0.85 + Math.max(0,swing),  6, h*0.20 - Math.max(0,swing));
-  ctx.fillRect( w*0.10, h*0.85 + Math.max(0,swing2), 6, h*0.20 - Math.max(0,swing2));
-  ctx.fillRect(-w*0.10, h*0.85, 6, h*0.20);
-  ctx.fillRect( w*0.22, h*0.85, 6, h*0.20);
+  if (airborne) {
+    // Tuck legs forward + back
+    ctx.fillRect(-w*0.16, h*0.78, 6, h*0.16);
+    ctx.fillRect( w*0.10, h*0.78, 6, h*0.16);
+    ctx.fillRect( w*0.22, h*0.85, 6, h*0.10);
+    ctx.fillRect(-w*0.30, h*0.82, 6, h*0.13);
+  } else {
+    const swing  = Math.sin(walk) * 4;
+    const swing2 = Math.sin(walk + Math.PI) * 4;
+    ctx.fillRect(-w*0.30, h*0.85 + Math.max(0,swing),  6, h*0.20 - Math.max(0,swing));
+    ctx.fillRect( w*0.10, h*0.85 + Math.max(0,swing2), 6, h*0.20 - Math.max(0,swing2));
+    ctx.fillRect(-w*0.10, h*0.85, 6, h*0.20);
+    ctx.fillRect( w*0.22, h*0.85, 6, h*0.20);
+  }
 
-  // Head
+  // Head (rotates slightly with aimY)
+  const headRot = clamp(aimY * 0.55, -0.65, 0.65);
+  ctx.save();
+  ctx.translate(w*0.28, h*0.32);
+  ctx.rotate(headRot);
+
   ctx.fillStyle = c;
   ctx.beginPath();
-  ctx.ellipse(w*0.28, h*0.32, w*0.34, h*0.28, 0, 0, Math.PI*2);
+  ctx.ellipse(0, 0, w*0.34, h*0.28, 0, 0, Math.PI*2);
   ctx.fill();
+  // Snout
   ctx.fillStyle = c2;
   ctx.beginPath();
-  ctx.ellipse(w*0.50, h*0.40, w*0.16, h*0.12, 0, 0, Math.PI*2);
+  ctx.ellipse(w*0.22, h*0.08, w*0.16, h*0.12, 0, 0, Math.PI*2);
   ctx.fill();
-
   // Nose
   ctx.fillStyle = '#222';
   ctx.beginPath();
-  ctx.ellipse(w*0.62, h*0.36, 3, 2.5, 0, 0, Math.PI*2);
+  ctx.ellipse(w*0.34, h*0.04, 3, 2.5, 0, 0, Math.PI*2);
   ctx.fill();
-
   // Eye
-  ctx.fillStyle = '#222';
-  ctx.beginPath();
-  ctx.arc(w*0.34, h*0.28, 2.4, 0, Math.PI*2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(w*0.34 - 0.5, h*0.27 - 1, 1.2, 1.2);
-
-  // Ear
+  if (opts.eyesClosed) {
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(w*0.06 - 3, h*-0.04);
+    ctx.lineTo(w*0.06 + 3, h*-0.04);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(w*0.06, h*-0.04, 2.4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(w*0.06 - 0.5, h*-0.04 - 1, 1.2, 1.2);
+  }
+  // Ear (Shiba pointy, flaps in air)
   ctx.fillStyle = c;
   ctx.beginPath();
-  ctx.moveTo(w*0.16, h*0.10);
-  ctx.lineTo(w*0.28, h*-0.05);
-  ctx.lineTo(w*0.32, h*0.18);
+  const earBack = airborne ? -0.06 : -0.05;
+  ctx.moveTo(w*-0.12, h*-0.22);
+  ctx.lineTo(0,         h*(-0.37 + earBack));
+  ctx.lineTo(w*0.04,    h*-0.14);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#ff9999';
   ctx.beginPath();
-  ctx.moveTo(w*0.20, h*0.08);
-  ctx.lineTo(w*0.27, h*0.02);
-  ctx.lineTo(w*0.28, h*0.14);
+  ctx.moveTo(w*-0.08, h*-0.24);
+  ctx.lineTo(w*-0.01, h*-0.30);
+  ctx.lineTo(0,        h*-0.18);
   ctx.closePath();
   ctx.fill();
-
   // Cheek blush
   ctx.fillStyle = '#ff9988';
-  ctx.globalAlpha = 0.6;
+  ctx.globalAlpha = 0.55;
   ctx.beginPath();
-  ctx.arc(w*0.40, h*0.40, 2, 0, Math.PI*2);
+  ctx.arc(w*0.12, h*0.08, 2.2, 0, Math.PI*2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
+  ctx.restore();
+
+  // Bandana on the neck (drawn outside head rotation)
   if (opts.bandana) {
     ctx.fillStyle = '#3388ff';
     ctx.beginPath();
@@ -896,33 +917,21 @@ function drawEnemy(e) {
 const spawnPlan = [];
 function buildStage() {
   spawnPlan.length = 0;
-  // Place enemies on flat segments only (avoid walls)
+  // Spawns placed on flat ground segments to avoid getting stuck on walls.
   const list = [
     [380, 'pug'],
-    [520, 'pug'],
-    [700, 'cat'],
-    [860, 'pug'],
-    [990, 'jumper'],
-    [1050, 'birb'],
-    [1300, 'tank'],
-    [1380, 'pug'],
-    [1450, 'cat'],
-    [1620, 'birb'],   // flying over plateau
-    [1800, 'cat'],
-    [1880, 'birb'],
-    [2080, 'pug'],
-    [2150, 'tank'],
-    [2280, 'pug'], [2330, 'jumper'],
-    [2580, 'pug'], [2640, 'pug'],
-    [2820, 'cat'], [2900, 'tank'],
-    [3080, 'birb'],   // over mountain
-    [3380, 'jumper'], [3440, 'pug'],
-    [3650, 'tank'], [3720, 'cat'],
-    [3820, 'jumper'], [3900, 'pug'],
-    [3980, 'birb'], [4050, 'birb'],
-    [4220, 'tank'], [4280, 'cat'],
-    [4520, 'jumper'], [4580, 'pug'], [4640, 'pug'],
-    [4780, 'tank'], [4860, 'cat'],
+    [680, 'cat'], [780, 'pug'],
+    [1000, 'jumper'], [1080, 'pug'], [1140, 'birb'],
+    [1450, 'tank'], [1520, 'pug'], [1600, 'cat'],
+    [1800, 'pug'], [1850, 'birb'], [1920, 'cat'],
+    [2280, 'tank'], [2350, 'jumper'], [2420, 'pug'],
+    [2620, 'cat'], [2700, 'birb'], [2780, 'pug'],
+    [3000, 'tank'], [3070, 'jumper'], [3140, 'pug'],
+    [3320, 'cat'], [3400, 'birb'], [3460, 'pug'],
+    [3800, 'tank'], [3880, 'jumper'], [3940, 'pug'],
+    [4120, 'cat'], [4180, 'birb'], [4240, 'pug'],
+    [4480, 'tank'], [4560, 'cat'], [4620, 'jumper'],
+    [4780, 'pug'], [4840, 'tank'],
   ];
   for (const item of list) {
     spawnPlan.push({ x: item[0], type: item[1], spawned: false });
@@ -1443,26 +1452,47 @@ function drawPlayer() {
   if (player.iframes > 0 && (player.iframes % 6 < 3)) return;
   const x = player.x - camX;
   const y = player.y;
+
+  const moving = (keys.left || keys.right);
+  const bounce = (moving && player.onGround) ? Math.abs(Math.sin(player.walkAnim * 2)) * 2 : 0;
+  const eyesClosed = !moving && player.onGround && (frame % 180 < 8);
+
   drawDog(x, y, player.w, player.h, {
     color: '#f4c98a',
     color2: '#fff5dd',
     dir: player.dir,
     walk: player.walkAnim,
-    wag: frame * 0.2,
+    wag: frame * 0.22,
     bandana: true,
     gun: false,
+    airborne: !player.onGround,
+    aimY: player.aimY,
+    bounce,
+    breath: frame * 0.06,
+    eyesClosed,
   });
-  // Aimed gun
+  // Aimed gun (with recoil + muzzle flash)
   const cx = x + player.w/2;
-  const cy = y + player.h*0.45;
+  const cy = y + player.h*0.45 - bounce;
   const ang = Math.atan2(player.aimY, player.aimX);
+  const recoil = player.cooldown > 4 ? -2 : 0;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(ang);
   ctx.fillStyle = '#3a3a3a';
-  ctx.fillRect(2, -2, 16, 4);
+  ctx.fillRect(2 + recoil, -2, 16, 4);
   ctx.fillStyle = '#888';
-  ctx.fillRect(15, -3, 3, 6);
+  ctx.fillRect(15 + recoil, -3, 3, 6);
+  if (player.cooldown > 5) {
+    ctx.fillStyle = 'rgba(255,222,89,0.95)';
+    ctx.beginPath();
+    ctx.arc(20 + recoil, 0, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(20 + recoil, 0, 2.5, 0, Math.PI*2);
+    ctx.fill();
+  }
   ctx.restore();
 
   // Aim reticle (small dot in aim direction) — visual cue for 8-way aim
