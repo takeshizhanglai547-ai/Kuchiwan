@@ -168,9 +168,26 @@ html, body {
 #pad-left, #pad-right {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 8px;
   pointer-events: auto;
 }
+
+.dpad {
+  position: relative;
+  width: 168px;
+  height: 168px;
+}
+
+.dpad .tbtn {
+  position: absolute;
+  width: 54px; height: 54px;
+  font-size: 18px;
+}
+
+.dpad-up    { top: 0;       left: 57px; }
+.dpad-down  { bottom: 0;    left: 57px; }
+.dpad-left  { top: 57px;    left: 0; }
+.dpad-right { top: 57px;    right: 0; }
 
 .tbtn {
   width: 62px; height: 62px;
@@ -196,9 +213,19 @@ html, body {
   background: rgba(255,255,255,0.25);
 }
 
-.btn-shoot { background: rgba(255,80,80,0.5); border-color: #ffaaaa; width: 74px; height: 74px; }
-.btn-jump  { background: rgba(80,200,255,0.5); border-color: #aaddff; width: 74px; height: 74px; }
+.btn-shoot { background: rgba(255,80,80,0.5);  border-color: #ffaaaa; width: 70px; height: 70px; font-size: 24px; }
+.btn-jump  { background: rgba(80,200,255,0.5); border-color: #aaddff; width: 70px; height: 70px; font-size: 24px; }
 .btn-bomb  { background: rgba(255,200,80,0.5); border-color: #ffe8aa; }
+.btn-melee { background: rgba(180,255,120,0.5); border-color: #ddffaa; }
+
+#pad-right {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
 
 /* ── Title screen ── */
 #title-screen {
@@ -358,12 +385,22 @@ html, body {
   z-index: 50;
 }
 
+#touch-controls {
+  height: 180px;
+}
+
 /* Tall-screen adjustments */
 @media (max-height: 500px) {
   .title-story { padding: 8px 14px; font-size: 11px; line-height: 1.5; }
   .controls-help { font-size: 10px; padding: 6px 10px; }
   #title-screen { gap: 10px; }
-  #touch-controls { height: 110px; }
-  .tbtn { width: 52px; height: 52px; font-size: 18px; }
-  .btn-shoot, .btn-jump { width: 62px; height: 62px; }
+  #touch-controls { height: 150px; }
+  .tbtn { width: 48px; height: 48px; font-size: 16px; }
+  .dpad { width: 144px; height: 144px; }
+  .dpad .tbtn { width: 48px; height: 48px; font-size: 16px; }
+  .dpad-up    { left: 48px; }
+  .dpad-down  { left: 48px; }
+  .dpad-left  { top: 48px; }
+  .dpad-right { top: 48px; }
+  .btn-shoot, .btn-jump { width: 58px; height: 58px; font-size: 20px; }
 }
