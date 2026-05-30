@@ -113,9 +113,10 @@
       <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
       <div class="controls">
         <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> 剣で斬る<br>
+        <span class="k">J を連打</span> 3段コンボ　　<span class="k">J を長押し→はなす</span> ためた一閃（強）<br>
         <span class="k">K / Shift</span> ローリング回避　　<span class="k">M</span> 音ON/OFF<br>
         宝箱は<span class="k">近づくと</span>開く　　草むらは<span class="k">斬ると</span>こわせる<br>
-        <span class="k">スマホ</span>は画面下のボタンで操作
+        <span class="k">スマホ</span>は画面下のボタンで操作（剣ボタン長押しでため攻撃）
       </div>
     </div>
 
@@ -151,14 +152,18 @@ const dist  = (x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
 const sign  = v=>v<0?-1:v>0?1:0;
 const now   = ()=>performance.now()/1000;
 const $ = id => document.getElementById(id);
+const DIRV  = {down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]};
+function angleDir(dx,dy){ return Math.abs(dx)>=Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'); }
 
 /* ─────────────────────────────  AUDIO  ───────────────────────────── */
 const Sound = (()=>{
-  let ctx=null, master=null, muted=false;
+  let ctx=null, master=null, musicGain=null, muted=false;
   function init(){
     if(ctx) return;
     ctx = new (window.AudioContext||window.webkitAudioContext)();
     master = ctx.createGain(); master.gain.value=0.35; master.connect(ctx.destination);
+    musicGain = ctx.createGain(); musicGain.gain.value=0.55; musicGain.connect(master);
+    if(mTrack){ mNext=ctx.currentTime+0.05; if(!mTimer) mTimer=setInterval(mTick,40); }
   }
   function blip(freq=440,dur=0.08,type='square',vol=0.5,slide=0){
     if(!ctx||muted) return;
@@ -194,13 +199,75 @@ const Sound = (()=>{
     enemyDie:()=>{noise(0.2,0.4); blip(400,0.12,'square',0.3,-250);},
     win:  ()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>blip(f,0.18,'triangle',0.5),i*140));},
     lose: ()=>{[440,330,262,196].forEach((f,i)=>setTimeout(()=>blip(f,0.28,'sawtooth',0.4),i*180));},
+    charge:()=>blip(300,0.5,'sine',0.25,500),
+    chargeHit:()=>{noise(0.2,0.6); blip(150,0.25,'sawtooth',0.45,-60); setTimeout(()=>blip(90,0.3,'square',0.4,-30),40);},
+    combo2:()=>blip(720,0.09,'square',0.35,-200),
+    combo3:()=>{blip(880,0.12,'square',0.4,-260); setTimeout(()=>noise(0.12,0.4),20);},
   };
-  return { init, SFX, toggle:()=>muted=!muted, get muted(){return muted;} };
+
+  /* ── procedural BGM: looping chiptune driven by a step sequencer ── */
+  let mTrack=null, mStep=0, mNext=0, mTimer=null, mName='';
+  // note helper: semitone offset from A4(440) -> freq
+  const N=n=>440*Math.pow(2,n/12);
+  // Scales (semitone offsets). Each track: {bpm, bass:[...], lead:[...], drum:[...]} step arrays, looped.
+  const TRACKS={
+    field:{ bpm:108, lead:[7,null,11,12,14,12,11,7, 9,null,12,14,16,14,12,9, 7,null,11,12,14,16,19,16, 14,12,11,9,7,null,null,null],
+            bass:[-17,null,null,null,-10,null,null,null,-15,null,null,null,-8,null,null,null,-17,null,null,null,-10,null,null,null,-13,null,null,null,-6,null,null,null],
+            drum:[1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,2] },
+    dungeon:{ bpm:96, lead:[0,null,null,3,null,null,7,null, 6,null,null,3,null,0,null,null, -2,null,null,3,null,null,5,null, 3,null,1,null,0,null,null,null],
+            bass:[-24,null,null,null,-24,null,-17,null,-22,null,null,null,-22,null,-15,null,-24,null,null,null,-24,null,-17,null,-19,null,null,null,-19,null,-12,null],
+            drum:[1,0,0,0,2,0,0,0,1,0,0,2,2,0,0,0] },
+    boss:{ bpm:140, lead:[0,0,12,0,7,0,12,0, 3,3,15,3,10,3,15,3, 5,5,17,5,12,5,17,5, 0,12,0,7,0,3,0,-5],
+            bass:[-24,-24,-12,-24,-24,-24,-12,-24,-21,-21,-9,-21,-21,-21,-9,-21,-19,-19,-7,-19,-19,-19,-7,-19,-24,-12,-24,-12,-24,-12,-24,-12],
+            drum:[1,2,1,2,1,2,1,2,1,2,1,2,1,2,2,2] } };
+  function mTick(){
+    if(!ctx||!mTrack||muted){ return; }
+    const tr=TRACKS[mTrack]; if(!tr) return;
+    const spb=60/tr.bpm/4; // 16th-note step
+    while(mNext < ctx.currentTime+0.1){
+      const t=mNext;
+      const li=mStep%tr.lead.length, bi=mStep%tr.bass.length, di=mStep%tr.drum.length;
+      const ln=tr.lead[li]; if(ln!==null&&ln!==undefined) mNote(N(ln+12), t, spb*0.9, 'square', 0.16);
+      const bn=tr.bass[bi]; if(bn!==null&&bn!==undefined) mNote(N(bn), t, spb*1.6, 'triangle', 0.28);
+      const dr=tr.drum[di]; if(dr===1) mKick(t); else if(dr===2) mHat(t);
+      mStep++; mNext+=spb;
+    }
+  }
+  function mNote(freq,t,dur,type,vol){
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+dur+0.02);
+  }
+  function mKick(t){
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+    g.gain.setValueAtTime(0.5,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.16);
+  }
+  function mHat(t){
+    const n=ctx.createBufferSource(); const buf=ctx.createBuffer(1,ctx.sampleRate*0.04|0,ctx.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+    n.buffer=buf; const g=ctx.createGain(); g.gain.value=0.12;
+    const f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=6000;
+    n.connect(f); f.connect(g); g.connect(musicGain); n.start(t);
+  }
+  function playMusic(name){
+    if(mName===name) return;
+    mName=name; mTrack=name; mStep=0;
+    if(ctx){ mNext=ctx.currentTime+0.05; if(!mTimer) mTimer=setInterval(mTick,40); }
+  }
+  function stopMusic(){ mName=''; mTrack=null; }
+
+  return { init, SFX, playMusic, stopMusic,
+    toggle:()=>{ muted=!muted; if(musicGain) musicGain.gain.value=muted?0:0.55; return muted; },
+    get muted(){return muted;} };
 })();
 
 /* ─────────────────────────────  INPUT  ───────────────────────────── */
 const Keys = {};
-const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false, _atkEdge:false, _rollEdge:false };
+const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false, _atkEdge:false, _atkRelEdge:false, _rollEdge:false };
 const KEYMAP = {
   'ArrowUp':'up','KeyW':'up','ArrowDown':'down','KeyS':'down',
   'ArrowLeft':'left','KeyA':'left','ArrowRight':'right','KeyD':'right',
@@ -211,7 +278,7 @@ addEventListener('keydown',e=>{
   if(KEYMAP[e.code]){ e.preventDefault(); if(!Keys[e.code]){ Keys[e.code]=true; edge(KEYMAP[e.code]); } }
   if(e.code==='KeyM') Sound.toggle();
 });
-addEventListener('keyup',e=>{ if(KEYMAP[e.code]){ e.preventDefault(); Keys[e.code]=false; } });
+addEventListener('keyup',e=>{ if(KEYMAP[e.code]){ e.preventDefault(); Keys[e.code]=false; if(KEYMAP[e.code]==='attack') Input._atkRelEdge=true; } });
 function edge(act){ if(act==='attack') Input._atkEdge=true; if(act==='roll') Input._rollEdge=true; }
 function refreshInput(){
   const held=a=>Touch[a] || Object.keys(KEYMAP).some(k=>KEYMAP[k]===a && Keys[k]);
@@ -225,7 +292,7 @@ function bindTouch(){
   for(const id in map){
     const el=$(id), act=map[id];
     const on =e=>{e.preventDefault(); Touch[act]=true; Sound.init(); if(act==='attack')Input._atkEdge=true; if(act==='roll')Input._rollEdge=true;};
-    const off=e=>{e.preventDefault(); Touch[act]=false;};
+    const off=e=>{e.preventDefault(); Touch[act]=false; if(act==='attack')Input._atkRelEdge=true;};
     el.addEventListener('touchstart',on,{passive:false});
     el.addEventListener('touchend',off,{passive:false});
     el.addEventListener('touchcancel',off,{passive:false});
@@ -354,13 +421,25 @@ const player = {
   x:0, y:0, w:30, h:30,
   dir:'down', speed:170,
   attacking:false, atkTime:0, atkDur:0.28,
+  combo:0, comboWindow:0,          // combo chain step (0..2) and grace timer
+  charging:false, chargeT:0, chargeReady:false, // hold-to-charge state
   rolling:false, rollTime:0, rollDur:0.34, rollCd:0, rdx:0, rdy:0,
   invuln:0, walkPhase:0, alive:true, flash:0,
   kbT:0, knockx:0, knocky:0,
 };
+const CHARGE_TIME=0.55;            // hold this long for a fully-charged strike
 
 let enemies=[], particles=[], pickups=[], slashFx=null, boss=null;
 let transition=null, shake=0, msg=null;
+
+/* Quest objective shown in the HUD so the player always knows what to do next. */
+function questText(){
+  if(Game.hasOrb) return '王国に へいわが もどった！';
+  if(Game.lockOpened['d,0']) return '目標：奥へ進み 影の魔狼を 倒せ';
+  if(Game.keys>0) return '目標：暗黒城の とびらを カギで開けろ';
+  if(Game.chestOpened['1,2']) return '目標：暗黒城（東の扉）へ カギを持っていけ';
+  return '目標：南の「古き集落の跡」で 城のカギを探せ';
+}
 
 /* ─────────────────────────────  ROOM LOADING  ───────────────────────────── */
 function cloneRoom(id){
@@ -377,10 +456,13 @@ function enterRoom(id, entrySide){
   if(Game.lockOpened[id] && def.locked){ r.map[def.locked.ty][def.locked.tx]='.'; r.map[def.locked.ty][def.locked.tx+1]='.'; }
 
   enemies=[]; boss=null; pickups=[]; particles=[];
+  const bossPending = def.boss && !Game.visited[id];
   if(!Game.visited[id]){
     for(const e of def.enemies||[]) spawnEnemy(e[0], e[1]*TS+TS/2, HUD_H+e[2]*TS+TS/2);
     if(def.boss) spawnBoss();
   }
+  // BGM: boss theme in the throne room, dungeon theme underground, field above.
+  Sound.playMusic(bossPending ? 'boss' : (def.biome==='dungeon' ? 'dungeon' : 'field'));
   placePlayer(entrySide);
 }
 
@@ -448,12 +530,14 @@ function moveEntity(ent,dx,dy,hw,hh){
 /* ─────────────────────────────  EDGE / TRANSITION  ───────────────────────────── */
 function checkRoomEdge(){
   const link=LINKS[Game.roomId]||{};
-  const top=HUD_H, bot=HUD_H+FIELD_H;
+  const top=HUD_H, bot=HUD_H+FIELD_H, m=TS*0.5;
   let dir=null;
-  if(player.y<top+6 && link.up) dir='up';
-  else if(player.y>bot-6 && link.down) dir='down';
-  else if(player.x<6 && link.left) dir='left';
-  else if(player.x>W-6 && link.right) dir='right';
+  // Collision halts the player a few px shy of the true boundary, so use a
+  // generous margin and require the player to actively push toward that edge.
+  if(player.y<top+m && link.up && Input.up) dir='up';
+  else if(player.y>bot-m && link.down && Input.down) dir='down';
+  else if(player.x<m && link.left && Input.left) dir='left';
+  else if(player.x>W-m && link.right && Input.right) dir='right';
   if(dir){ startTransition(dir, link[dir]); return; }
   const t=tileAt(player.x,player.y);
   if(t==='D' && link.door){ Sound.SFX.door(); startTransition('door', link.door); }
@@ -498,19 +582,49 @@ function updatePlayer(dt){
   let ix=(Input.right?1:0)-(Input.left?1:0);
   let iy=(Input.down?1:0)-(Input.up?1:0);
 
-  if(Input._atkEdge && !player.attacking && !player.rolling){
-    player.attacking=true; player.atkTime=0; Sound.SFX.swing();
-    slashFx={dir:player.dir,t:0.22,dur:0.22};
-    doSwordHit();
+  // ── combo grace window: keep the chain alive briefly between swings ──
+  if(player.comboWindow>0){ player.comboWindow-=dt; if(player.comboWindow<=0) player.combo=0; }
+
+  // ── attack press: start a swing (chaining into a combo if timed right) ──
+  if(Input._atkEdge && !player.rolling){
+    if(!player.attacking){
+      // face the way we're holding, if any
+      if(ix||iy) player.dir=angleDir(ix,iy);
+      player.combo = (player.comboWindow>0) ? Math.min(player.combo+1,2) : 0;
+      startSwing(player.combo);
+      // begin charging while the button stays held
+      player.charging=true; player.chargeT=0; player.chargeReady=false;
+    }
   }
+  // ── charge build-up while attack is held (after the swing's active frames) ──
+  if(player.charging && Input.attack && !player.rolling){
+    player.chargeT+=dt;
+    if(player.chargeT>=CHARGE_TIME && !player.chargeReady){
+      player.chargeReady=true; Sound.SFX.charge();
+    }
+    if(player.chargeReady && Math.random()<0.6){
+      const a=rand(0,6.28), r=24;
+      particles.push({x:player.x+Math.cos(a)*r,y:player.y+Math.sin(a)*r,vx:-Math.cos(a)*60,vy:-Math.sin(a)*60,life:0.4,max:0.4,col:'#ffe07a',r:rand(2,3.5)});
+    }
+  }
+  // ── attack release: unleash a charged strike if it's ready ──
+  if(Input._atkRelEdge){
+    if(player.chargeReady && !player.rolling){
+      if(ix||iy) player.dir=angleDir(ix,iy);
+      startSwing('charge');
+    }
+    player.charging=false; player.chargeT=0; player.chargeReady=false;
+  }
+
   if(Input._rollEdge && !player.rolling && player.rollCd<=0 && !player.attacking){
     player.rolling=true; player.rollTime=0; player.rollCd=0.7; player.invuln=Math.max(player.invuln,0.34);
+    player.charging=false; player.chargeReady=false; player.chargeT=0;
     Sound.SFX.roll();
     let dx=ix, dy=iy;
-    if(dx===0&&dy===0){ const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[player.dir]; dx=d[0]; dy=d[1]; }
+    if(dx===0&&dy===0){ const d=DIRV[player.dir]; dx=d[0]; dy=d[1]; }
     const m=Math.hypot(dx,dy)||1; player.rdx=dx/m; player.rdy=dy/m;
   }
-  Input._atkEdge=false; Input._rollEdge=false;
+  Input._atkEdge=false; Input._atkRelEdge=false; Input._rollEdge=false;
 
   const spd=player.speed;
   let mvx=0,mvy=0;
@@ -523,8 +637,15 @@ function updatePlayer(dt){
     if(player.rollTime>=player.rollDur) player.rolling=false;
   } else if(player.attacking){
     player.atkTime+=dt;
-    if(player.atkTime<0.12){ const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[player.dir]; mvx=d[0]*spd*0.35*dt; mvy=d[1]*spd*0.35*dt; }
-    if(player.atkTime>=player.atkDur) player.attacking=false;
+    // a small forward lunge during the swing's opening frames (bigger when charged)
+    const lunge = player.atkKind==='charge'?0.9:0.35;
+    if(player.atkTime<0.12){ const d=DIRV[player.dir]; mvx=d[0]*spd*lunge*dt; mvy=d[1]*spd*lunge*dt; }
+    if(player.atkTime>=player.atkDur){
+      player.attacking=false;
+      // open the combo grace window so the next press chains (basic swings only)
+      if(player.atkKind!=='charge' && player.combo<2) player.comboWindow=0.32;
+      else { player.combo=0; player.comboWindow=0; }
+    }
   } else {
     if(ix||iy){
       const m=Math.hypot(ix,iy)||1;
@@ -541,14 +662,39 @@ function updatePlayer(dt){
   tryInteract();
 }
 
-function doSwordHit(){
-  const reach=42, wide=30;
-  const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[player.dir];
+/* startSwing(kind): kind is 0,1,2 for combo steps, or 'charge' for a charged strike. */
+function startSwing(kind){
+  player.attacking=true; player.atkTime=0; player.atkKind=kind;
+  const charged = kind==='charge';
+  // 3rd combo hit and the charged strike swing a touch slower for weight
+  player.atkDur = charged?0.42 : (kind===2?0.34:0.26);
+  // visuals + audio per kind
+  if(charged){ Sound.SFX.chargeHit(); slashFx={dir:player.dir,t:0.34,dur:0.34,big:true}; shake=Math.max(shake,0.3); }
+  else {
+    if(kind===0) Sound.SFX.swing();
+    else if(kind===1) Sound.SFX.combo2();
+    else Sound.SFX.combo3();
+    slashFx={dir:player.dir,t:0.22,dur:0.22,big:kind===2};
+  }
+  doSwordHit(kind);
+}
+function doSwordHit(kind){
+  const charged = kind==='charge';
+  const reach = charged?52:(kind===2?48:42);
+  const wide  = charged?40:(kind===2?34:30);
+  const dmg   = charged?4:(kind===2?2:1);
+  const kb    = charged?560:(kind===2?420:360);
+  const d=DIRV[player.dir];
   const hx=player.x+d[0]*reach, hy=player.y+d[1]*reach;
-  for(const e of enemies) if(!e.dead && dist(hx,hy,e.x,e.y) < (e.w/2+wide)) damageEnemy(e, player.dir, 1);
-  if(boss && !boss.dead && boss.intro<=0 && dist(hx,hy,boss.x,boss.y) < (boss.w/2+wide)) damageBoss(1, player.dir);
-  const tx=Math.floor(hx/TS), ty=Math.floor((hy-HUD_H)/TS);
-  if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
+  for(const e of enemies) if(!e.dead && dist(hx,hy,e.x,e.y) < (e.w/2+wide)) damageEnemy(e, player.dir, dmg, kb);
+  if(boss && !boss.dead && boss.intro<=0 && dist(hx,hy,boss.x,boss.y) < (boss.w/2+wide)) damageBoss(dmg, player.dir);
+  // charged strike cleaves a small area, hitting/clearing a 3-tile arc of bushes
+  const tiles = charged ? [[d[0],d[1]],[d[0]+ (d[1]?1:0), d[1]+ (d[0]?1:0)],[d[0]-(d[1]?1:0), d[1]-(d[0]?1:0)]] : [[d[0],d[1]]];
+  for(const [ox,oy] of tiles){
+    const bx=player.x+ox*reach, by=player.y+oy*reach;
+    const tx=Math.floor(bx/TS), ty=Math.floor((by-HUD_H)/TS);
+    if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
+  }
 }
 function breakBush(tx,ty){
   Game.room.map[ty][tx]='.';
@@ -625,11 +771,11 @@ function updateEnemy(e,dt){
   }
   if(player.invuln<=0 && !player.rolling && d < (e.w/2+player.w/2-6)) hurtPlayer(1, dx, dy);
 }
-function damageEnemy(e,dir,dmg){
+function damageEnemy(e,dir,dmg,kb){
   if(e.hurt>0) return;
   e.hp-=dmg; e.hurt=0.18; Sound.SFX.hit();
-  const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[dir];
-  e.knock.x=d[0]*360; e.knock.y=d[1]*360;
+  const d=DIRV[dir], force=kb||360;
+  e.knock.x=d[0]*force; e.knock.y=d[1]*force;
   for(let i=0;i<6;i++) particles.push({x:e.x,y:e.y,vx:rand(-120,120),vy:rand(-120,120),life:0.35,max:0.35,col:'#fff',r:rand(2,4)});
   if(e.hp<=0) killEnemy(e);
 }
@@ -765,7 +911,17 @@ function drawRoom(r){
     }
   }
   const def=r.def;
-  if(def.chest) drawChest(def.chest.tx*TS, HUD_H+def.chest.ty*TS, !!Game.chestOpened[r.id]);
+  if(def.chest){
+    const opened=!!Game.chestOpened[r.id];
+    drawChest(def.chest.tx*TS, HUD_H+def.chest.ty*TS, opened);
+    // float a key icon over an unopened key chest so the objective stands out
+    if(!opened && def.chest.item==='key'){
+      const kx=def.chest.tx*TS+TS/2, ky=HUD_H+def.chest.ty*TS-14+Math.sin(now()*4)*3;
+      G.fillStyle='rgba(255,224,110,'+(0.5+0.5*Math.abs(Math.sin(now()*4)))+')';
+      G.beginPath(); G.arc(kx,ky,12,0,7); G.fill();
+      drawKeyIcon(kx,ky);
+    }
+  }
   if(def.locked && !Game.lockOpened[r.id]) drawLock(def.locked.tx*TS, HUD_H+def.locked.ty*TS);
   if(r.biome==='dungeon'){ G.strokeStyle='#1a1626'; G.lineWidth=6; G.strokeRect(3,HUD_H+3,W-6,FIELD_H-6); }
 }
@@ -846,6 +1002,14 @@ function drawPickups(){
     if(p.item==='heart') drawHeartIcon(p.x,p.y+bob,10);
     else drawBone(p.x,p.y+bob);
   }
+}
+function drawKeyIcon(x,y){
+  G.save(); G.translate(x,y);
+  G.strokeStyle='#caa11e'; G.fillStyle='#e9b84a'; G.lineWidth=2;
+  G.beginPath(); G.arc(-3,-3,4,0,7); G.fill(); G.stroke();
+  G.fillRect(-1,-1,2.4,9);
+  G.fillRect(0.5,5,4,2); G.fillRect(0.5,8,3,2);
+  G.restore();
 }
 function drawBone(x,y){
   G.save(); G.translate(x,y); G.rotate(Math.sin(now()*2+x)*0.2);
@@ -942,6 +1106,21 @@ function drawBoss(b){
 function drawPlayer(){
   const x=player.x, y=player.y;
   shadow(x,y,16);
+  // charge aura: grows while holding, pulses gold when fully charged
+  if(player.charging && player.chargeT>0.12){
+    const cr=clamp(player.chargeT/CHARGE_TIME,0,1);
+    G.save();
+    if(player.chargeReady){
+      const pulse=0.5+0.5*Math.sin(now()*18);
+      G.strokeStyle='rgba(255,224,110,'+(0.5+pulse*0.4)+')'; G.lineWidth=3;
+      G.beginPath(); G.arc(x,y,26+pulse*4,0,7); G.stroke();
+      G.fillStyle='rgba(255,236,150,'+(0.12+pulse*0.12)+')'; G.beginPath(); G.arc(x,y,24,0,7); G.fill();
+    } else {
+      G.strokeStyle='rgba(150,200,255,'+(0.3+cr*0.4)+')'; G.lineWidth=2;
+      G.beginPath(); G.arc(x,y,18+cr*8,0,7*cr); G.stroke();
+    }
+    G.restore();
+  }
   const flash = player.flash>0 && Math.floor(player.flash*20)%2===0;
   const dir=player.dir;
   const step=Math.sin(player.walkPhase)*3;
@@ -996,15 +1175,27 @@ function drawPlayer(){
 
 function drawSlash(){
   const p=1-slashFx.t/slashFx.dur;
-  const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[slashFx.dir];
-  const cx=player.x+d[0]*30, cy=player.y+d[1]*30;
+  const d=DIRV[slashFx.dir];
+  const big=slashFx.big;
+  const rad=big?42:30;
+  const cx=player.x+d[0]*rad, cy=player.y+d[1]*rad;
   G.save(); G.translate(cx,cy);
   const base={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[slashFx.dir];
-  const a=lerp(base-1.1,base+1.1,p);
-  G.strokeStyle='rgba(255,255,255,'+(1-p)*0.9+')'; G.lineWidth=6; G.lineCap='round';
-  G.beginPath(); G.arc(0,0,30,a-0.5,a+0.1); G.stroke();
-  G.strokeStyle='rgba(180,220,255,'+(1-p)*0.6+')'; G.lineWidth=3;
-  G.beginPath(); G.arc(0,0,24,a-0.6,a+0.1); G.stroke();
+  const spread=big?1.7:1.1;
+  const a=lerp(base-spread,base+spread,p);
+  const fade=(1-p);
+  if(big){
+    // charged strike: golden wide cleave
+    G.strokeStyle='rgba(255,228,120,'+fade*0.95+')'; G.lineWidth=11; G.lineCap='round';
+    G.beginPath(); G.arc(0,0,rad,a-0.9,a+0.15); G.stroke();
+    G.strokeStyle='rgba(255,255,255,'+fade*0.8+')'; G.lineWidth=5;
+    G.beginPath(); G.arc(0,0,rad-6,a-1.0,a+0.15); G.stroke();
+  } else {
+    G.strokeStyle='rgba(255,255,255,'+fade*0.9+')'; G.lineWidth=6; G.lineCap='round';
+    G.beginPath(); G.arc(0,0,rad,a-0.5,a+0.1); G.stroke();
+    G.strokeStyle='rgba(180,220,255,'+fade*0.6+')'; G.lineWidth=3;
+    G.beginPath(); G.arc(0,0,rad-6,a-0.6,a+0.1); G.stroke();
+  }
   G.restore();
 }
 
@@ -1020,8 +1211,9 @@ function drawHUD(){
   drawBone(W-150,24);
   G.fillStyle='#f5e9c8'; G.font='bold 20px monospace'; G.textAlign='left'; G.fillText('×'+Game.bones, W-132, 31);
   G.fillStyle='#e9b84a'; G.font='18px monospace'; G.fillText('🔑'+Game.keys, W-66, 30);
-  G.fillStyle='#8fa6d8'; G.font='13px monospace'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 56);
-  G.fillStyle='#44507a'; G.font='10px monospace'; G.textAlign='right'; G.fillText('M:音 '+(Sound.muted?'OFF':'ON'), W-12, 56);
+  G.fillStyle='#8fa6d8'; G.font='13px monospace'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 30);
+  G.fillStyle='#ffd76a'; G.font='12px monospace'; G.fillText(questText(), W/2, 52);
+  G.fillStyle='#44507a'; G.font='10px monospace'; G.textAlign='right'; G.fillText('M:音 '+(Sound.muted?'OFF':'ON'), W-12, 70);
   G.textAlign='left';
 }
 function drawHudHeart(x,y,fill){
@@ -1069,6 +1261,7 @@ function drawTransition(){
 /* ─────────────────────────────  RESULT  ───────────────────────────── */
 function gameOver(win){
   State='result';
+  Sound.stopMusic();
   $('result').classList.remove('hidden');
   const t=$('result-title'), s=$('result-sub');
   if(win){
@@ -1084,9 +1277,11 @@ function gameOver(win){
 function resetGame(){
   Object.assign(Game,{ roomId:'1,1', bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
     visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{} });
-  Object.assign(player,{ dir:'down', attacking:false, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0 });
+  Object.assign(player,{ dir:'down', attacking:false, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
+    combo:0, comboWindow:0, charging:false, chargeT:0, chargeReady:false, atkKind:0 });
   boss=null; enemies=[]; pickups=[]; particles=[]; slashFx=null; msg=null; shake=0;
   enterRoom('1,1','start'); State='play';
+  showMsg('南へ向かい 城のカギを 探そう！');
 }
 
 /* ─────────────────────────────  MAIN LOOP  ───────────────────────────── */
