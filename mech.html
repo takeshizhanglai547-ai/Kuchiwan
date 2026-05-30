@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KUCHIWAN - 3D Mech Shooter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <!-- Player Status -->
+    <div id="player-status">
+      <div class="status-row">
+        <span class="status-label">AP</span>
+        <div class="bar-wrap"><div id="ap-bar" class="bar bar-ap"></div></div>
+        <span id="ap-val" class="status-val">10000</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">EN</span>
+        <div class="bar-wrap"><div id="en-bar" class="bar bar-en"></div></div>
+      </div>
+    </div>
+
+    <!-- Weapon -->
+    <div id="weapon-status">
+      <div class="weapon-row"><span class="w-label">RIFLE</span><span class="w-icon">▣</span><span id="ammo-count" class="w-val">∞</span></div>
+      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">32</span></div>
+    </div>
+
+    <!-- Lock-on -->
+    <div id="lock-overlay">
+      <div id="lock-ring" class="lock-ring"></div>
+    </div>
+
+    <!-- Enemy Status -->
+    <div id="enemy-status" class="hidden">
+      <div id="enemy-name-label">ENEMY</div>
+      <div class="status-row">
+        <span class="status-label">AP</span>
+        <div class="bar-wrap"><div id="enemy-ap-bar" class="bar bar-enemy"></div></div>
+        <span id="enemy-ap-val" class="status-val"></span>
+      </div>
+      <div id="phase-label"></div>
+    </div>
+
+    <!-- Center info -->
+    <div id="center-info"></div>
+
+    <!-- Crosshair -->
+    <div id="crosshair">
+      <div class="ch-h"></div>
+      <div class="ch-v"></div>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <div class="title-block">
+      <div class="title-sub">AC-STYLE 3D MECH DANMAKU SHOOTER</div>
+      <h1 class="title-main">KUCHIWAN</h1>
+      <div class="title-sub">口湾</div>
+    </div>
+    <div class="controls-block">
+      <h3>── CONTROLS ──</h3>
+      <div class="ctrl-grid">
+        <span>WASD</span><span>移動</span>
+        <span>マウス</span><span>照準 / カメラ</span>
+        <span>左クリック</span><span>ライフル射撃</span>
+        <span>右クリック</span><span>ミサイル発射</span>
+        <span>Shift</span><span>ブースト（高速移動）</span>
+        <span>Space</span><span>上昇</span>
+        <span>Ctrl</span><span>下降</span>
+        <span>Q</span><span>ロックオン切替</span>
+      </div>
+    </div>
+    <button id="start-btn">── START MISSION ──</button>
+  </div>
+
+  <!-- Game Over / Clear -->
+  <div id="result-screen" class="hidden">
+    <div id="result-title"></div>
+    <div id="result-sub"></div>
+    <button id="retry-btn">RETRY</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
