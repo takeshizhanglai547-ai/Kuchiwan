@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>聖犬士イッヌの伝説</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -22,12 +22,20 @@
   }
   #stage {
     position:relative;
-    width:min(96vw, calc(96vh * 0.84));
+    /* fill the screen while preserving the 768:612 (~1.255) aspect ratio.
+       width is capped by viewport width OR by height*aspect, whichever is smaller. */
+    width:min(100vw, calc(100dvh * 768 / 612));
     aspect-ratio: 768 / 612;
+    max-width:1100px;
     box-shadow:0 0 0 4px #2a3050, 0 0 40px #000a, 0 0 80px #16306055;
     border-radius:6px;
     overflow:hidden;
     background:#000;
+  }
+  /* on real touch screens go edge-to-edge for maximum play area */
+  body.is-touch #stage { border-radius:0; box-shadow:0 0 0 2px #2a3050; }
+  @supports not (height: 100dvh) {
+    #stage { width:min(100vw, calc(100vh * 768 / 612)); }
   }
   canvas { display:block; width:100%; height:100%; image-rendering:pixelated; image-rendering:crisp-edges; }
 
@@ -59,27 +67,71 @@
   .win { color:#7dffb0; text-shadow:0 0 18px #7dffb088; }
   .lose { color:#ff7d7d; text-shadow:0 0 18px #ff7d7d88; }
 
-  /* ---- Touch controls ---- */
-  #touch { position:absolute; inset:0; z-index:15; pointer-events:none; display:none; }
-  .pad { position:absolute; bottom:4%; pointer-events:auto; touch-action:none; }
-  #dpad { left:3%; width:34%; aspect-ratio:1; }
-  #dpad .dbtn {
-    position:absolute; width:33.3%; height:33.3%;
-    background:#ffffff14; border:2px solid #ffffff30; border-radius:10px;
-    display:flex;align-items:center;justify-content:center;color:#ffffff66;font-size:18px;
+  /* ---- Touch controls (virtual joystick + action buttons) ---- */
+  #touch { position:fixed; inset:0; z-index:30; pointer-events:none; display:none; }
+  body.is-touch #touch { display:block; }
+
+  /* left: floating analog joystick */
+  #joy {
+    position:absolute; pointer-events:auto; touch-action:none;
+    left:calc(env(safe-area-inset-left,0px) + 4vmin);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 4vmin);
+    width:34vmin; height:34vmin; max-width:190px; max-height:190px; min-width:120px; min-height:120px;
+    border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, #ffffff10, #ffffff06);
+    border:2px solid #ffffff2a;
+    box-shadow:inset 0 0 24px #0006;
   }
-  #d-up{left:33.3%;top:0} #d-down{left:33.3%;bottom:0} #d-left{left:0;top:33.3%} #d-right{right:0;top:33.3%}
-  #btns { right:3%; bottom:5%; width:34%; aspect-ratio:1.4; }
+  #joy-thumb {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:46%; height:46%; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, #cfe0ff, #5a78c0);
+    border:2px solid #ffffff66; box-shadow:0 3px 10px #0007;
+    transition:transform .04s linear;
+  }
+  /* right: action buttons */
+  #acts {
+    position:absolute; pointer-events:none;
+    right:calc(env(safe-area-inset-right,0px) + 3vmin);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 4vmin);
+    width:42vmin; height:42vmin; max-width:230px; max-height:230px; min-width:150px; min-height:150px;
+  }
   .abtn {
-    position:absolute; width:42%; aspect-ratio:1; border-radius:50%;
-    background:radial-gradient(circle at 40% 35%, #ffe08a, #d09020);
-    border:3px solid #fff5; color:#3a2606; font-weight:bold; font-size:clamp(14px,3.5vw,22px);
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 0 #00000055;
+    position:absolute; pointer-events:auto; touch-action:none;
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-weight:bold; color:#3a2606; user-select:none;
+    border:3px solid #ffffff66; box-shadow:0 4px 0 #00000055;
+    font-size:clamp(15px,4.2vmin,26px);
   }
-  #b-attack { right:0; bottom:0; }
-  #b-roll { left:0; top:5%; background:radial-gradient(circle at 40% 35%,#9fd0ff,#3a78c0); color:#06203a; }
-  .show-touch #touch { display:block; }
+  .abtn.pressed { transform:translateY(3px); box-shadow:0 1px 0 #00000055; filter:brightness(1.15); }
+  #b-attack {
+    right:0; bottom:0; width:55%; height:55%;
+    background:radial-gradient(circle at 40% 35%, #ffe08a, #d09020);
+  }
+  #b-roll {
+    left:0; bottom:14%; width:42%; height:42%;
+    background:radial-gradient(circle at 40% 35%, #9fd0ff, #3a78c0); color:#06203a;
+  }
+  /* top-right mini buttons (mute / fullscreen) */
+  #mini { position:absolute; pointer-events:none; top:calc(env(safe-area-inset-top,0px) + 2vmin); right:calc(env(safe-area-inset-right,0px) + 2vmin); display:flex; gap:8px; }
+  .mini-btn {
+    pointer-events:auto; touch-action:manipulation;
+    width:9vmin; height:9vmin; max-width:48px; max-height:48px; min-width:34px; min-height:34px;
+    border-radius:10px; background:#ffffff18; border:1px solid #ffffff33; color:#cfe0ff;
+    display:flex; align-items:center; justify-content:center; font-size:clamp(14px,3.6vmin,20px);
+  }
+
+  /* rotate-to-landscape hint (touch + portrait only) */
+  #rotate {
+    position:fixed; inset:0; z-index:50; display:none;
+    flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:18px;
+    background:radial-gradient(circle at 50% 40%, rgba(20,28,55,.97), rgba(5,7,16,.99)); padding:8%;
+  }
+  #rotate .rot-ico { font-size:64px; animation:rothint 1.6s ease-in-out infinite; }
+  @keyframes rothint { 0%,100%{transform:rotate(-12deg)} 50%{transform:rotate(78deg)} }
+  #rotate .hintsmall { color:#7d8db8; font-size:13px; margin-top:6px; }
+  body.is-touch.portrait #rotate { display:flex; }
+  body.rot-ok #rotate { display:none !important; }
 </style>
 </head>
 <body>
@@ -87,18 +139,26 @@
   <div id="stage">
     <canvas id="cv" width="768" height="612"></canvas>
 
-    <!-- Touch controls -->
+    <!-- Touch controls: virtual joystick + action buttons -->
     <div id="touch">
-      <div id="dpad" class="pad">
-        <div id="d-up" class="dbtn">▲</div>
-        <div id="d-down" class="dbtn">▼</div>
-        <div id="d-left" class="dbtn">◀</div>
-        <div id="d-right" class="dbtn">▶</div>
-      </div>
-      <div id="btns" class="pad">
+      <div id="joy"><div id="joy-thumb"></div></div>
+      <div id="acts">
         <div id="b-attack" class="abtn">剣</div>
         <div id="b-roll" class="abtn">回避</div>
       </div>
+      <div id="mini">
+        <div id="m-sound" class="mini-btn">🔊</div>
+        <div id="m-full" class="mini-btn">⛶</div>
+      </div>
+    </div>
+
+    <!-- Rotate-to-landscape hint (phones in portrait) -->
+    <div id="rotate">
+      <div class="rot-ico">📱</div>
+      <div class="crest" style="font-size:clamp(20px,6vw,34px)">よこ向きで あそぼう！</div>
+      <div class="tag">スマホを <b>横向き</b> にすると<br>画面が大きくなって 遊びやすいよ 🐾</div>
+      <button class="btn" id="rot-ok">このまま あそぶ</button>
+      <div class="hintsmall">画面の自動回転をONにしてね</div>
     </div>
 
     <!-- Title -->
@@ -116,7 +176,7 @@
         <span class="k">J を連打</span> 3段コンボ　　<span class="k">J を長押し→はなす</span> ためた一閃（強）<br>
         <span class="k">K / Shift</span> ローリング回避　　<span class="k">M</span> 音ON/OFF<br>
         宝箱は<span class="k">近づくと</span>開く　　草むらは<span class="k">斬ると</span>こわせる<br>
-        <span class="k">スマホ</span>は画面下のボタンで操作（剣ボタン長押しでため攻撃）
+        <span class="k">スマホ</span>は左スティックで移動・右の剣/回避ボタンで操作（剣長押しでため攻撃）
       </div>
     </div>
 
@@ -285,19 +345,78 @@ function refreshInput(){
   Input.up=held('up'); Input.down=held('down'); Input.left=held('left'); Input.right=held('right');
   Input.attack=held('attack'); Input.roll=held('roll');
 }
+function isTouchDevice(){
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer:coarse)').matches;
+}
+function updateOrientation(){
+  document.body.classList.toggle('portrait', window.innerHeight > window.innerWidth);
+}
+function toggleFullscreen(){
+  const el=document.documentElement;
+  const req=el.requestFullscreen||el.webkitRequestFullscreen;
+  const exit=document.exitFullscreen||document.webkitExitFullscreen;
+  const fs=document.fullscreenElement||document.webkitFullscreenElement;
+  try{ if(!fs && req) req.call(el); else if(fs && exit) exit.call(document); }catch(e){}
+}
 function bindTouch(){
-  if(matchMedia('(hover:hover) and (pointer:fine)').matches) return;
-  $('stage').classList.add('show-touch');
-  const map={'d-up':'up','d-down':'down','d-left':'left','d-right':'right','b-attack':'attack','b-roll':'roll'};
-  for(const id in map){
-    const el=$(id), act=map[id];
-    const on =e=>{e.preventDefault(); Touch[act]=true; Sound.init(); if(act==='attack')Input._atkEdge=true; if(act==='roll')Input._rollEdge=true;};
-    const off=e=>{e.preventDefault(); Touch[act]=false; if(act==='attack')Input._atkRelEdge=true;};
-    el.addEventListener('touchstart',on,{passive:false});
-    el.addEventListener('touchend',off,{passive:false});
-    el.addEventListener('touchcancel',off,{passive:false});
-    el.addEventListener('mousedown',on); el.addEventListener('mouseup',off); el.addEventListener('mouseleave',off);
+  updateOrientation();
+  addEventListener('resize', updateOrientation);
+  addEventListener('orientationchange', ()=>setTimeout(updateOrientation,200));
+  if(!isTouchDevice()) return;
+  document.body.classList.add('is-touch');
+
+  // ── virtual analog joystick (pointer-based, multi-touch safe) ──
+  const joy=$('joy'), thumb=$('joy-thumb');
+  let joyId=null, jcx=0, jcy=0, jr=1;
+  function setMove(dx,dy,dead){
+    const ax=Math.abs(dx)>dead, ay=Math.abs(dy)>dead;
+    Touch.left = ax&&dx<0; Touch.right = ax&&dx>0;
+    Touch.up   = ay&&dy<0; Touch.down  = ay&&dy>0;
   }
+  function joyStart(e){
+    const r=joy.getBoundingClientRect();
+    jcx=r.left+r.width/2; jcy=r.top+r.height/2; jr=r.width*0.42;
+    joyId=e.pointerId; try{joy.setPointerCapture(e.pointerId);}catch(_){}
+    Sound.init(); joyMove(e); e.preventDefault();
+  }
+  function joyMove(e){
+    if(e.pointerId!==joyId) return;
+    let dx=e.clientX-jcx, dy=e.clientY-jcy;
+    const len=Math.hypot(dx,dy)||1, cl=Math.min(len,jr);
+    const tx=dx/len*cl, ty=dy/len*cl;
+    thumb.style.transform=`translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`;
+    setMove(dx,dy, jr*0.30);          // deadzone, diagonals allowed
+    e.preventDefault();
+  }
+  function joyEnd(e){
+    if(e.pointerId!==joyId) return;
+    joyId=null; thumb.style.transform='translate(-50%,-50%)';
+    Touch.up=Touch.down=Touch.left=Touch.right=false;
+    e.preventDefault();
+  }
+  joy.addEventListener('pointerdown',joyStart);
+  joy.addEventListener('pointermove',joyMove);
+  joy.addEventListener('pointerup',joyEnd);
+  joy.addEventListener('pointercancel',joyEnd);
+
+  // ── action buttons (each tracks its own pointer for true multi-touch) ──
+  function bindBtn(id,act){
+    const el=$(id);
+    el.addEventListener('pointerdown',e=>{
+      e.preventDefault(); el.classList.add('pressed'); Touch[act]=true; Sound.init();
+      if(act==='attack')Input._atkEdge=true; if(act==='roll')Input._rollEdge=true;
+      try{el.setPointerCapture(e.pointerId);}catch(_){}
+    });
+    const up=e=>{ e.preventDefault(); el.classList.remove('pressed'); Touch[act]=false; if(act==='attack')Input._atkRelEdge=true; };
+    el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);
+  }
+  bindBtn('b-attack','attack');
+  bindBtn('b-roll','roll');
+
+  // ── mini buttons: sound + fullscreen ──
+  $('m-sound').addEventListener('click',()=>{ Sound.init(); const m=Sound.toggle(); $('m-sound').textContent=m?'🔇':'🔊'; });
+  $('m-full').addEventListener('click',toggleFullscreen);
 }
 
 /* ─────────────────────────────  WORLD / ROOMS  ─────────────────────────────
@@ -1295,6 +1414,7 @@ function loop(t){
 /* ─────────────────────────────  WIRING  ───────────────────────────── */
 $('start-btn').addEventListener('click',()=>{ Sound.init(); $('title').classList.add('hidden'); resetGame(); });
 $('retry-btn').addEventListener('click',()=>{ $('result').classList.add('hidden'); resetGame(); });
+$('rot-ok').addEventListener('click',()=>{ document.body.classList.add('rot-ok'); Sound.init(); });
 bindTouch();
 enterRoom('1,1','start'); State='title';
 requestAnimationFrame(loop);
