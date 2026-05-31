@@ -557,7 +557,7 @@ const ROOMS = {
 
   // ===== STAGE 3 — しずまる湖畔 (lake) =====
   "s3": { biome:'lake', stage:3, map:[
-    "################",
+    "######....######",
     "#~~~..,....~~~~#",
     "#~~........~~~~#",
     "#~.....bb.....~#",
@@ -567,7 +567,7 @@ const ROOMS = {
     "#....~~~~~~....#",
     "#~~..~~~~~~..~~#",
     "#~~~........~~~#",
-    "################",
+    "######....######",
   ], enemies:[ ['slime',7,4],['mage',3,2],['mage',12,8],['bat',5,6] ], chest:{tx:8,ty:5,item:['bombbag','heartmax']} },
   "s3b": { biome:'lake', stage:3, bossRoom:'waterDragon', map:[
     "################",
@@ -613,7 +613,7 @@ const ROOMS = {
 
   // ===== STAGE 5 — 暗黒城 (dungeon) — final =====
   "s5": { biome:'dungeon', stage:5, map:[
-    "################",
+    "######....######",
     "#............b.#",
     "#..b...........#",
     "#..............#",
@@ -643,12 +643,21 @@ const ROOMS = {
 /* Linear progression: each field's right 'D' edge → its boss room;
    each boss room's right 'E' edge → next stage's field. */
 const LINKS = {
-  "s1": { door:"s1b" },  "s1b": { exit:"s2"  },
-  "s2": { door:"s2b" },  "s2b": { exit:"s3"  },
-  "s3": { door:"s3b" },  "s3b": { exit:"s4"  },
-  "s4": { door:"s4b" },  "s4b": { exit:"s5"  },
-  "s5": { door:"s5b" },  "s5b": {            },
+  // door (D, right edge) → that stage's boss room ; exit (E, right edge of a
+  // boss room) → next stage's field.
+  // The stage fields are also chained vertically so you can walk between
+  // already-reached stages without using the boss doors:
+  //   down = forward to the next stage's field (gated: clear this boss first)
+  //   up   = back to the previous stage's field (always allowed)
+  "s1": { door:"s1b", down:"s2" },                "s1b": { exit:"s2"  },
+  "s2": { door:"s2b", down:"s3", up:"s1" },        "s2b": { exit:"s3"  },
+  "s3": { door:"s3b", down:"s4", up:"s2" },        "s3b": { exit:"s4"  },
+  "s4": { door:"s4b", down:"s5", up:"s3" },        "s4b": { exit:"s5"  },
+  "s5": { door:"s5b", up:"s4" },                   "s5b": {            },
 };
+// fields are reached by clearing the previous stage's boss; this records the
+// boss room whose defeat unlocks forward (down) travel out of a given field.
+const STAGE_BOSS={ s1:'s1b', s2:'s2b', s3:'s3b', s4:'s4b', s5:'s5b' };
 
 function isSolidTile(ch){ return ch==='#'||ch==='T'||ch==='~'||ch==='b'||ch==='k'; }
 
@@ -809,7 +818,15 @@ function checkRoomEdge(){
   else if(player.y>bot-m && link.down && Input.down) dir='down';
   else if(player.x<m && link.left && Input.left) dir='left';
   else if(player.x>W-m && link.right && Input.right) dir='right';
-  if(dir){ startTransition(dir, link[dir]); return; }
+  if(dir){
+    // forward travel between stage fields (down) requires this stage's boss
+    // to have been defeated first; backtracking (up) is always allowed.
+    if(dir==='down'){
+      const bossRoom=STAGE_BOSS[Game.roomId];
+      if(bossRoom && !Game.visited[bossRoom]){ if(!msg) showMsg('このステージの ボスを 倒すまで 先へは 進めない！'); return; }
+    }
+    startTransition(dir, link[dir]); return;
+  }
   const t=tileAt(player.x,player.y);
   // 'D' field-exit door: only opens once the field is cleared of enemies
   if(t==='D' && link.door){
@@ -847,7 +864,7 @@ function update(dt){
   applyPlayerKnockback(dt);
   updatePlayer(dt);
   for(const e of enemies) updateEnemy(e,dt);
-  if(boss) updateBoss(boss,dt);
+  if(boss && !boss.dead) updateBoss(boss,dt);   // a defeated boss no longer acts
   enemies=enemies.filter(e=>!e.dead);
   updateEnemyShots(dt);
   updateArrows(dt);
@@ -1347,7 +1364,7 @@ function draw(){
   drawEnemyShots();
   drawArrows();
   drawBombs();
-  if(boss) drawBoss(boss);
+  if(boss && !boss.dead) drawBoss(boss);   // defeated boss vanishes (death burst plays via particles)
   drawPlayer();
   if(slashFx) drawSlash();
   drawComboCount();
@@ -2022,7 +2039,7 @@ function drawMsg(){
 function showMsg(text){ msg={text,t:2.4}; }
 
 function drawTransition(){
-  drawRoom(Game.room); drawEnemies(); if(boss)drawBoss(boss); drawPlayer(); drawHUD();
+  drawRoom(Game.room); drawEnemies(); if(boss&&!boss.dead)drawBoss(boss); drawPlayer(); drawHUD();
   const t=transition.t, dir=transition.dir;
   G.fillStyle='#060810';
   if(dir==='left'||dir==='right'){ const w=W*t; if(dir==='left') G.fillRect(0,0,w,H); else G.fillRect(W-w,0,w,H); }
