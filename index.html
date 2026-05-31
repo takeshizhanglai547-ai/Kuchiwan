@@ -43,29 +43,48 @@
   .screen {
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; padding:6%;
-    background:radial-gradient(circle at 50% 35%, rgba(20,28,55,.92), rgba(5,7,16,.97));
+    text-align:center; padding:5%;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(40,54,98,.55), transparent 60%),
+      linear-gradient(160deg, rgba(18,26,52,.96), rgba(6,9,20,.98));
     z-index:20;
   }
+  /* subtle vignette + sheen on overlay screens */
+  .screen::after{ content:""; position:absolute; inset:0; pointer-events:none;
+    box-shadow:inset 0 0 120px rgba(0,0,0,.6); }
   .hidden { display:none !important; }
-  .crest { font-size:clamp(24px,6vw,56px); color:#e9b84a; text-shadow:0 0 12px #e9b84a88,0 3px 0 #6b4a12; letter-spacing:2px; }
-  .crest .sub { display:block; font-size:clamp(11px,2.4vw,18px); color:#cfe0ff; letter-spacing:6px; margin-top:8px; text-shadow:none; }
-  .tag { color:#9fb4e0; font-size:clamp(11px,2vw,15px); line-height:1.9; margin:18px 0; }
+  .panel {
+    position:relative; max-width:680px; width:92%;
+    padding:clamp(18px,4vw,34px) clamp(16px,4vw,40px);
+    background:linear-gradient(180deg, rgba(34,46,82,.72), rgba(16,22,44,.78));
+    border:1px solid rgba(150,180,255,.28); border-radius:18px;
+    box-shadow:0 18px 50px #000a, inset 0 1px 0 rgba(255,255,255,.12);
+    backdrop-filter:blur(3px);
+  }
+  .crest { font-size:clamp(26px,6.4vw,58px); font-weight:900;
+    background:linear-gradient(180deg,#ffe9a8,#e9b84a 55%,#b6841f);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 2px 0 #6b4a12) drop-shadow(0 0 16px #e9b84a66);
+    letter-spacing:2px; }
+  .crest .sub { display:block; font-size:clamp(11px,2.4vw,18px); color:#bcd0ff; letter-spacing:7px; margin-top:10px;
+    -webkit-text-fill-color:#bcd0ff; filter:none; font-weight:600; }
+  .tag { color:#aebfe2; font-size:clamp(11px,2vw,15px); line-height:1.95; margin:18px 0; }
   .tag b { color:#ffd76a; }
   button.btn {
-    margin-top:14px;
-    font-family:inherit; font-size:clamp(14px,2.6vw,20px); font-weight:bold;
-    color:#1a1206; background:linear-gradient(#ffe08a,#e0a73a);
-    border:none; border-radius:8px; padding:14px 34px; cursor:pointer;
-    box-shadow:0 4px 0 #8a5e16, 0 6px 14px #0008;
-    letter-spacing:2px; transition:transform .05s;
+    margin-top:16px;
+    font-family:inherit; font-size:clamp(15px,2.8vw,21px); font-weight:800;
+    color:#2a1c06; background:linear-gradient(180deg,#fff0bc,#f0b63a 60%,#d4901e);
+    border:none; border-radius:12px; padding:15px 38px; cursor:pointer;
+    box-shadow:0 5px 0 #9a6a16, 0 10px 22px #0009, inset 0 2px 4px rgba(255,255,255,.5);
+    letter-spacing:2px; transition:transform .05s, filter .1s;
   }
-  button.btn:active { transform:translateY(3px); box-shadow:0 1px 0 #8a5e16; }
-  .controls { color:#8fa6d8; font-size:clamp(10px,1.9vw,14px); line-height:1.8; margin-top:18px; }
-  .controls span.k { color:#ffd76a; }
-  #result-title { font-size:clamp(28px,8vw,68px); }
-  .win { color:#7dffb0; text-shadow:0 0 18px #7dffb088; }
-  .lose { color:#ff7d7d; text-shadow:0 0 18px #ff7d7d88; }
+  button.btn:hover { filter:brightness(1.06); }
+  button.btn:active { transform:translateY(4px); box-shadow:0 1px 0 #9a6a16, inset 0 2px 6px rgba(0,0,0,.2); }
+  .controls { color:#9bb0da; font-size:clamp(10px,1.9vw,14px); line-height:1.9; margin-top:18px; }
+  .controls span.k { color:#ffd76a; font-weight:700; }
+  #result-title { font-size:clamp(30px,8vw,70px); font-weight:900; margin-bottom:6px; }
+  .win { color:#7dffb0; text-shadow:0 0 22px #7dffb0aa, 0 3px 0 #1a6a3e; }
+  .lose { color:#ff7d7d; text-shadow:0 0 22px #ff7d7daa, 0 3px 0 #6a1a1a; }
 
   /* ---- Touch controls (virtual joystick + action buttons) ---- */
   #touch { position:fixed; inset:0; z-index:30; pointer-events:none; display:none; }
@@ -178,29 +197,33 @@
 
     <!-- Title -->
     <div id="title" class="screen">
-      <div class="crest">⚔ 聖犬士イッヌの伝説 ⚔<span class="sub">THE LEGEND OF INU</span></div>
-      <div class="tag">
-        勇気と優しさを胸に、<b>聖犬士イッヌ</b>が王国を救う旅へ。<br>
-        <b>影の魔狼ガルム</b>が王国の宝珠を奪い、各地に5体のぬしを放った。<br>
-        草原・森・湖・遺跡・暗黒城——<b>全5ステージ</b>の<b>ボス</b>を倒し、<br>
-        魔狼ガルムを討って、王国に平和を取り戻せ！
-      </div>
-      <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
-      <div class="controls">
-        <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
-        <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
-        <span class="k">K / Shift</span> ローリング回避　　<span class="k">L / F</span> ジャンプ（飛び道具をかわす！）<br>
-        <span class="k">M</span> 音ON/OFF　宝箱は<span class="k">近づくと</span>開く　草むらは<span class="k">こわせる</span><br>
-        <b>槍</b>＝長いリーチの突き／<b>弓</b>＝遠くの敵を射抜く矢／<b>力のかけら</b>で攻撃力UP<br>
-        <span class="k">スマホ</span>は左スティック移動・右に 武器/回避/跳/💣/持替 ボタン
+      <div class="panel">
+        <div class="crest">⚔ 聖犬士イッヌの伝説 ⚔<span class="sub">THE LEGEND OF INU</span></div>
+        <div class="tag">
+          勇気と優しさを胸に、<b>聖犬士イッヌ</b>が王国を救う旅へ。<br>
+          <b>影の魔狼ガルム</b>が王国の宝珠を奪い、各地に5体のぬしを放った。<br>
+          草原・森・湖・遺跡・暗黒城——<b>全5ステージ</b>の<b>ボス</b>を倒し、<br>
+          魔狼ガルムを討って、王国に平和を取り戻せ！
+        </div>
+        <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
+        <div class="controls">
+          <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
+          <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
+          <span class="k">K / Shift</span> ローリング回避　　<span class="k">L / F</span> ジャンプ（飛び道具をかわす！）<br>
+          <span class="k">M</span> 音ON/OFF　宝箱は<span class="k">近づくと</span>開く　草むらは<span class="k">こわせる</span><br>
+          <b>槍</b>＝長いリーチの突き／<b>弓</b>＝遠くの敵を射抜く矢／<b>力のかけら</b>で攻撃力UP<br>
+          <span class="k">スマホ</span>は左スティック移動・右に 武器/回避/跳/💣/持替 ボタン
+        </div>
       </div>
     </div>
 
     <!-- Result -->
     <div id="result" class="screen hidden">
-      <div id="result-title"></div>
-      <div id="result-sub" class="tag"></div>
-      <button class="btn" id="retry-btn">▶ もういちど</button>
+      <div class="panel">
+        <div id="result-title"></div>
+        <div id="result-sub" class="tag"></div>
+        <button class="btn" id="retry-btn">▶ もういちど</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1313,16 +1336,19 @@ function damageBoss(dmg,dir){
   if(boss.hp<=0) killBoss();
 }
 function killBoss(){
+  if(!boss||boss.dead) return;
   boss.dead=true; Game.visited[Game.roomId]=true; shake=1;
-  const isFinal=boss.final;
-  for(let i=0;i<70;i++) particles.push({x:boss.x,y:boss.y,vx:rand(-280,280),vy:rand(-280,280),life:rand(0.6,1.4),max:1.4,col:['#ffd76a',boss.cfg.col,'#fff'][i%3],r:rand(3,8)});
+  const isFinal=boss.final, bx=boss.x, by=boss.y, bcol=boss.cfg.col, bname=boss.name;
+  for(let i=0;i<70;i++) particles.push({x:bx,y:by,vx:rand(-280,280),vy:rand(-280,280),life:rand(0.6,1.4),max:1.4,col:['#ffd76a',bcol,'#fff'][i%3],r:rand(3,8)});
   if(isFinal){
     Sound.SFX.win(); Game.hasOrb=true;
     setTimeout(()=>{ if(State==='play') gameOver(true); }, 1900);
   } else {
     Sound.SFX.fanfare();
     Game.hp=Math.min(Game.maxHp,Game.hp+2);            // reward: heal a heart
-    showMsg('★ '+boss.name+' を 倒した！東の扉から 次のステージへ！');
+    dropPickup('heart', bx, by);
+    boss=null;                                          // fully remove the defeated boss
+    showMsg('★ '+bname+' を 倒した！東の扉から 次のステージへ！');
   }
 }
 
@@ -1955,29 +1981,44 @@ function drawSlash(){
 
 /* ── HUD ── */
 function drawHUD(){
-  G.fillStyle='#0d1226'; G.fillRect(0,0,W,HUD_H);
-  G.fillStyle='#1a2348'; G.fillRect(0,HUD_H-4,W,4);
+  // glassy gradient bar with a glowing gold divider
+  const bg=G.createLinearGradient(0,0,0,HUD_H);
+  bg.addColorStop(0,'#141d3a'); bg.addColorStop(1,'#0a0f22');
+  G.fillStyle=bg; G.fillRect(0,0,W,HUD_H);
+  G.fillStyle='rgba(255,255,255,.05)'; G.fillRect(0,0,W,1);
+  const dv=G.createLinearGradient(0,0,W,0);
+  dv.addColorStop(0,'#2a356000'); dv.addColorStop(.5,'#e9b84a'); dv.addColorStop(1,'#2a356000');
+  G.fillStyle=dv; G.fillRect(0,HUD_H-3,W,2);
+
+  // hearts (slightly bigger, with spacing)
   const hearts=Game.maxHp/2;
   for(let i=0;i<hearts;i++){
     const filled=Game.hp-i*2;
-    drawHudHeart(24+i*30,26, filled>=2?1:filled===1?0.5:0);
+    drawHudHeart(26+i*30,26, filled>=2?1:filled===1?0.5:0);
   }
-  // equipped weapon chip (left of hearts area, after hearts)
-  const wx=24+(Game.maxHp/2)*30+18;
+  // equipped weapon chip
+  const wx=26+(Game.maxHp/2)*30+20;
   drawWeaponChip(wx, 26);
-  // bombs counter
-  drawBombIcon(wx+92, 26);
-  G.fillStyle='#f5e9c8'; G.font='bold 16px monospace'; G.textAlign='left'; G.fillText('×'+Game.bombs, wx+104, 31);
-  // attack-power pips
-  if(Game.atkBonus>0){ G.fillStyle='#ff9a4a'; G.font='12px monospace'; G.fillText('⚔+'+Game.atkBonus, wx+150, 31); }
-  // bones + keys (top-right)
-  drawBone(W-150,24);
-  G.fillStyle='#f5e9c8'; G.font='bold 20px monospace'; G.textAlign='left'; G.fillText('×'+Game.bones, W-132, 31);
-  G.fillStyle='#e9b84a'; G.font='18px monospace'; G.fillText('🔑'+Game.keys, W-66, 30);
-  G.fillStyle='#8fa6d8'; G.font='13px monospace'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 30);
-  G.fillStyle='#ffd76a'; G.font='12px monospace'; G.fillText(questText(), W/2, 52);
-  G.fillStyle='#44507a'; G.font='10px monospace'; G.textAlign='right'; G.fillText('M:音 '+(Sound.muted?'OFF':'ON'), W-12, 70);
+  // bomb pill
+  drawHudPill(wx+74, 14, 56, ()=>{ drawBombIcon(wx+88, 26); G.fillStyle='#f5e9c8'; G.font='bold 15px "Trebuchet MS",sans-serif'; G.textAlign='left'; G.fillText('×'+Game.bombs, wx+98, 31); });
+  // attack-power badge
+  if(Game.atkBonus>0){ drawHudPill(wx+138, 14, 52, ()=>{ G.fillStyle='#ff9a4a'; G.font='bold 14px "Trebuchet MS",sans-serif'; G.textAlign='left'; G.fillText('⚔ +'+Game.atkBonus, wx+148, 31); }); }
+
+  // bones (top-right)
+  drawBone(W-118,24);
+  G.fillStyle='#f5e9c8'; G.font='bold 19px "Trebuchet MS",sans-serif'; G.textAlign='left'; G.fillText('× '+Game.bones, W-100, 31);
+
+  // stage / area name + objective (centered)
+  G.fillStyle='#cfe0ff'; G.font='bold 14px "Trebuchet MS",sans-serif'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 28);
+  G.fillStyle='#ffd76a'; G.font='12px "Trebuchet MS",sans-serif'; G.fillText(questText(), W/2, 50);
+  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON'), W-12, 70);
   G.textAlign='left';
+}
+function drawHudPill(x,y,w,inner){
+  G.save();
+  G.fillStyle='rgba(255,255,255,.07)'; G.strokeStyle='rgba(160,185,255,.25)'; G.lineWidth=1;
+  roundRect(x,y,w,26,9); G.fill(); G.stroke();
+  G.restore(); inner();
 }
 function drawWeaponChip(x,y){
   G.save(); G.translate(x,y);
