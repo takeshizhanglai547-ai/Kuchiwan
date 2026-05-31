@@ -181,9 +181,9 @@
       <div class="crest">⚔ 聖犬士イッヌの伝説 ⚔<span class="sub">THE LEGEND OF INU</span></div>
       <div class="tag">
         勇気と優しさを胸に、<b>聖犬士イッヌ</b>が王国を救う旅へ。<br>
-        闇に呑まれた古城の奥で、<b>影の魔狼ガルム</b>が王国の宝珠を奪った。<br>
-        剣をとり、森と湖をこえ、城のカギを見つけてダンジョンへ。<br>
-        魔狼を倒し、王国に平和を取り戻せ！
+        <b>影の魔狼ガルム</b>が王国の宝珠を奪い、各地に5体のぬしを放った。<br>
+        草原・森・湖・遺跡・暗黒城——<b>全5ステージ</b>の<b>ボス</b>を倒し、<br>
+        魔狼ガルムを討って、王国に平和を取り戻せ！
       </div>
       <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
       <div class="controls">
@@ -495,79 +495,137 @@ function bindTouch(){
    Vertical edge openings centered on cols 6-9; horizontal on rows 4-6,
    so the fixed-center spawn always lands on open ground.
 */
+/* ── 5 linear stages. Each stage = a field room (with a chest) followed by a
+   boss room. Walking off the right edge of a boss room advances to the next
+   stage's field. Room ids: "s<N>" field, "s<N>b" boss room. ── */
 const ROOMS = {
-  "1,0": { biome:'forest', map:[
-    "TT############TT",
+  // ===== STAGE 1 — 平和の草原 (plains) =====
+  "s1": { biome:'plains', stage:1, start:true, map:[
+    "######....######",
+    "#..............#",
+    "#..,.bb..,.....#",
+    "#.....p........#",
+    "......p.........",
+    ".....pSp.......D",
+    "......p.........",
+    "#..b...,....bb.#",
+    "#......,.......#",
+    "#.,..........,.#",
+    "######....######",
+  ], enemies:[ ['slime',4,3],['slime',11,7],['bat',8,8] ], chest:{tx:12,ty:2,item:['spear','bomb']} },
+  "s1b": { biome:'plains', stage:1, bossRoom:'slimeKing', map:[
+    "######....######",
+    "#..............#",
+    "#..,........,..#",
+    "#..............#",
+    "#..............E",
+    "#..............#",
+    "#..............#",
+    "#..,........,..#",
+    "#..............#",
+    "#..............#",
+    "######....######",
+  ], enemies:[], chest:null },
+
+  // ===== STAGE 2 — ささやきの森 (forest) =====
+  "s2": { biome:'forest', stage:2, map:[
+    "TT####....####TT",
     "#..,...b....,..#",
     "#...TT....TT...#",
     "#.b...,......b.#",
-    "#...TT...,...T.#",
-    "#...,.......,..#",
+    "...,TT...,...T..",
+    ".....,.........D",
     "#.b....TT.....b#",
     "#..,......,....#",
     "#...TT....TT...#",
     "#.b...,.....b..#",
     "TT####....####TT",
-  ], enemies:[ ['bat',6,2],['bat',10,5],['slime',4,7] ], chest:{tx:8,ty:3,item:['spear','heart']} },
-
-  "1,1": { biome:'plains', start:true, map:[
-    "######....######",
+  ], enemies:[ ['bat',6,2],['bat',10,5],['slime',4,7],['mage',12,3] ], chest:{tx:8,ty:5,item:['bow','heart']} },
+  "s2b": { biome:'forest', stage:2, bossRoom:'batLord', map:[
+    "TT####....####TT",
     "#..............#",
-    "#..,.bb..,.....#",
-    "#.....p........#",
-    "......p........#",
-    ".....pSp.......D",
-    "......p........#",
-    "#..b...,....bb.#",
-    "#......,.......#",
-    "#.,..........,.#",
-    "######....######",
-  ], enemies:[ ['slime',4,3],['slime',11,7],['bat',8,8] ], chest:{tx:12,ty:2,item:['bomb','bones']} },
+    "#.T..........T.#",
+    "#..............#",
+    "#..............E",
+    "#..............#",
+    "#..............#",
+    "#.T..........T.#",
+    "#..............#",
+    "#..............#",
+    "TT####....####TT",
+  ], enemies:[], chest:null },
 
-  "0,1": { biome:'lake', map:[
+  // ===== STAGE 3 — しずまる湖畔 (lake) =====
+  "s3": { biome:'lake', stage:3, map:[
     "################",
     "#~~~..,....~~~~#",
     "#~~........~~~~#",
     "#~.....bb.....~#",
-    "#..,.........p..",
-    "#...........ppp.",
+    "...,............",
+    ".....b....b....D",
     "#.b...~~~~....b.",
     "#....~~~~~~....#",
     "#~~..~~~~~~..~~#",
     "#~~~........~~~#",
     "################",
-  ], enemies:[ ['slime',7,4],['mage',3,2],['bat',12,8] ], chest:{tx:8,ty:5,item:['bow','heartmax']} },
+  ], enemies:[ ['slime',7,4],['mage',3,2],['mage',12,8],['bat',5,6] ], chest:{tx:8,ty:5,item:['bombbag','heartmax']} },
+  "s3b": { biome:'lake', stage:3, bossRoom:'waterDragon', map:[
+    "################",
+    "#~~........~~~~#",
+    "#~..........~~~#",
+    "#..............#",
+    "...............E",
+    "#..............#",
+    "#..............#",
+    "#~..........~~~#",
+    "#~~........~~~~#",
+    "#~~~......~~~~~#",
+    "################",
+  ], enemies:[], chest:null },
 
-  "1,2": { biome:'ruins', map:[
+  // ===== STAGE 4 — 古き遺跡 (ruins) =====
+  "s4": { biome:'ruins', stage:4, map:[
     "######....######",
     "#..##....##....#",
     "#.b##.,..##..b.#",
     "#..............#",
-    "#...,......,...#",
+    "...,......,....#",
+    ".....b....b....D",
     "#.##........##.#",
     "#.##..bb....##.#",
     "#.....,........#",
     "#..b........b..#",
-    "#....,....,....#",
-    "################",
-  ], enemies:[ ['skeleton',5,4],['mage',10,6],['slime',8,8] ], chest:{tx:8,ty:4,item:'key'} },
+    "######....######",
+  ], enemies:[ ['skeleton',5,4],['skeleton',10,6],['mage',8,2],['slime',8,8] ], chest:{tx:8,ty:4,item:['atkup','bomb']} },
+  "s4b": { biome:'ruins', stage:4, bossRoom:'boneKing', map:[
+    "######....######",
+    "#..##......##..#",
+    "#..............#",
+    "#..............#",
+    "...............E",
+    "#..............#",
+    "#..............#",
+    "#..............#",
+    "#..##......##..#",
+    "#..............#",
+    "######....######",
+  ], enemies:[], chest:null },
 
-  // ===== DUNGEON =====
-  "d,0": { biome:'dungeon', map:[
+  // ===== STAGE 5 — 暗黒城 (dungeon) — final =====
+  "s5": { biome:'dungeon', stage:5, map:[
     "################",
-    "#............b.E",
+    "#............b.#",
     "#..b...........#",
     "#..............#",
-    "#..............#",
-    "######kk########",
+    "...,...........#",
+    ".....b....b....D",
     "#..............#",
     "#..b........b..#",
+    "#............b.#",
     "#..............#",
-    "######....######",
-    "######....######",
-  ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',12,8] ], chest:{tx:8,ty:2,item:['atkup','bomb']}, locked:{tx:6,ty:5} },
-
-  "d,1": { biome:'dungeon', boss:true, map:[
+    "################",
+  ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',4,3],['skeleton',12,8] ], chest:{tx:8,ty:2,item:['atkup','heartmax']} },
+  "s5b": { biome:'dungeon', stage:5, bossRoom:'shadowWolf', final:true, map:[
     "######....######",
     "#..............#",
     "#..............#",
@@ -582,15 +640,14 @@ const ROOMS = {
   ], enemies:[], chest:null },
 };
 
-/* Room connections. up/down/left/right = walk off that edge.
-   door = step on 'D' tile ; exit = step on 'E' tile. */
+/* Linear progression: each field's right 'D' edge → its boss room;
+   each boss room's right 'E' edge → next stage's field. */
 const LINKS = {
-  "1,0": { down:"1,1" },
-  "1,1": { up:"1,0", down:"1,2", left:"0,1", door:"d,0" },
-  "0,1": { right:"1,1" },
-  "1,2": { up:"1,1" },
-  "d,0": { down:"d,1", exit:"1,1" },
-  "d,1": { up:"d,0" },
+  "s1": { door:"s1b" },  "s1b": { exit:"s2"  },
+  "s2": { door:"s2b" },  "s2b": { exit:"s3"  },
+  "s3": { door:"s3b" },  "s3b": { exit:"s4"  },
+  "s4": { door:"s4b" },  "s4b": { exit:"s5"  },
+  "s5": { door:"s5b" },  "s5b": {            },
 };
 
 function isSolidTile(ch){ return ch==='#'||ch==='T'||ch==='~'||ch==='b'||ch==='k'; }
@@ -598,7 +655,7 @@ function isSolidTile(ch){ return ch==='#'||ch==='T'||ch==='~'||ch==='b'||ch==='k
 /* ─────────────────────────────  GAME STATE  ───────────────────────────── */
 let State = 'title';   // title | play | transition | result
 const Game = {
-  roomId:'1,1', room:null,
+  roomId:'s1', room:null, stage:1,
   visited:{}, bones:0, keys:0,
   hp:6, maxHp:6, hasOrb:false,
   bushBroken:{}, chestOpened:{}, lockOpened:{},
@@ -634,10 +691,10 @@ let transition=null, shake=0, msg=null;
 /* Quest objective shown in the HUD so the player always knows what to do next. */
 function questText(){
   if(Game.hasOrb) return '王国に へいわが もどった！';
-  if(Game.lockOpened['d,0']) return '目標：奥へ進み 影の魔狼を 倒せ';
-  if(Game.keys>0) return '目標：暗黒城の とびらを カギで開けろ';
-  if(Game.chestOpened['1,2']) return '目標：暗黒城（東の扉）へ カギを持っていけ';
-  return '目標：南の「古き集落の跡」で 城のカギを探せ';
+  const r=Game.room&&Game.room.def;
+  if(r&&r.bossRoom){ return (boss&&!boss.dead) ? '目標：ボスを 倒せ！' : '東の扉から 次のステージへ！'; }
+  if(enemies.filter(e=>!e.dead).length>0) return '目標：敵を 倒して 東の扉へ';
+  return '目標：東の扉（D）から ボスへ いどめ';
 }
 
 /* ─────────────────────────────  ROOM LOADING  ───────────────────────────── */
@@ -654,13 +711,14 @@ function enterRoom(id, entrySide){
   if(broken) for(const key of broken){ const [tx,ty]=key.split(',').map(Number); if(r.map[ty]) r.map[ty][tx]='.'; }
   if(Game.lockOpened[id] && def.locked){ r.map[def.locked.ty][def.locked.tx]='.'; r.map[def.locked.ty][def.locked.tx+1]='.'; }
 
+  if(def.stage) Game.stage=def.stage;
   enemies=[]; boss=null; pickups=[]; particles=[]; enemyShots=[]; arrows=[]; liveBombs=[];
-  const bossPending = def.boss && !Game.visited[id];
+  const bossPending = def.bossRoom && !Game.visited[id];
   if(!Game.visited[id]){
     for(const e of def.enemies||[]) spawnEnemy(e[0], e[1]*TS+TS/2, HUD_H+e[2]*TS+TS/2);
-    if(def.boss) spawnBoss();
+    if(def.bossRoom) spawnBoss(def.bossRoom);
   }
-  // BGM: boss theme in the throne room, dungeon theme underground, field above.
+  // BGM: boss theme during a boss fight, else per-biome field/dungeon themes.
   Sound.playMusic(bossPending ? 'boss' : (def.biome==='dungeon' ? 'dungeon' : 'field'));
   placePlayer(entrySide);
 }
@@ -673,8 +731,10 @@ function placePlayer(side){
     case 'down':  player.x=cx;          player.y=topY+FIELD_H-TS*1.2;  break;  // bottom edge
     case 'left':  player.x=TS*1.2;      player.y=midY;                 break;  // left edge
     case 'right': player.x=W-TS*1.2;    player.y=midY;                 break;  // right edge
-    case 'exit':  player.x=cx;          player.y=topY+TS*1.6;          break;  // appear inside dungeon entry (top)
-    case 'door':  player.x=W-TS*2;      player.y=midY;                 break;  // appear in overworld next to 'D'
+    // D (field→boss) and E (boss→next field) are both on the right edge, so you
+    // always travel rightward and appear on the LEFT of the new room.
+    case 'exit':  player.x=TS*1.4;      player.y=midY;                 break;
+    case 'door':  player.x=TS*1.4;      player.y=midY;                 break;
     default: {
       const r=Game.room; let placed=false;
       for(let y=0;y<ROWS&&!placed;y++)for(let x=0;x<COLS;x++) if(r.map[y][x]==='S'){player.x=x*TS+TS/2;player.y=HUD_H+y*TS+TS/2;placed=true;break;}
@@ -692,11 +752,22 @@ function spawnEnemy(type,x,y){
   if(type==='mage'){ Object.assign(e,{hp:2,speed:38,w:30,h:36,castT:rand(1.2,2.2),float:rand(0,6.28)}); }
   enemies.push(e);
 }
-function spawnBoss(){
+/* Per-boss config: hp, size, move speed, palette, name, and which attacks it
+   uses (charge dash and/or radial bullet spray). */
+const BOSSES={
+  slimeKing:   { name:'スライム王 グニョン',   hp:14, w:88, h:78, speed:60,  col:'#5fd06a', dark:'#2f8a3a', shoot:false, charge:true,  shots:3 },
+  batLord:     { name:'大コウモリ ヴェスパ',   hp:18, w:76, h:60, speed:96,  col:'#7a5aa6', dark:'#3a2860', shoot:true,  charge:true,  shots:5 },
+  waterDragon: { name:'水竜 アクオス',          hp:24, w:92, h:80, speed:74,  col:'#3fb0e0', dark:'#1f6aa8', shoot:true,  charge:false, shots:7 },
+  boneKing:    { name:'骸骨王 オステオ',        hp:30, w:84, h:84, speed:80,  col:'#e8e4d8', dark:'#9a9488', shoot:true,  charge:true,  shots:6 },
+  shadowWolf:  { name:'影の魔狼 ガルム',        hp:38, w:90, h:90, speed:84,  col:'#352a48', dark:'#1a1426', shoot:true,  charge:true,  shots:8 },
+};
+function spawnBoss(kind){
   Sound.SFX.boss();
-  boss={ type:'boss', x:W/2, y:HUD_H+FIELD_H*0.42, w:84,h:84, hp:18, maxHp:18,
-         dir:'down', t:0, hurt:0, knock:{x:0,y:0}, dead:false,
-         phase:0, state:'idle', stTime:1.5, chx:0, chy:0, chT:0, windT:0, shots:[], speed:70, intro:1.6 };
+  const c=BOSSES[kind]||BOSSES.shadowWolf;
+  const isFinal=!!(Game.room&&Game.room.def&&Game.room.def.final);
+  boss={ type:'boss', kind, cfg:c, name:c.name, final:isFinal, x:W/2, y:HUD_H+FIELD_H*0.42, w:c.w, h:c.h,
+         hp:c.hp, maxHp:c.hp, dir:'down', t:0, hurt:0, knock:{x:0,y:0}, dead:false,
+         phase:0, state:'idle', stTime:1.5, chx:0, chy:0, chT:0, windT:0, shots:[], speed:c.speed, intro:1.6 };
   shake=0.6;
 }
 
@@ -740,8 +811,16 @@ function checkRoomEdge(){
   else if(player.x>W-m && link.right && Input.right) dir='right';
   if(dir){ startTransition(dir, link[dir]); return; }
   const t=tileAt(player.x,player.y);
-  if(t==='D' && link.door){ Sound.SFX.door(); startTransition('door', link.door); }
-  else if(t==='E' && link.exit){ Sound.SFX.door(); startTransition('exit', link.exit); }
+  // 'D' field-exit door: only opens once the field is cleared of enemies
+  if(t==='D' && link.door){
+    if(enemies.filter(e=>!e.dead).length>0){ if(!msg) showMsg('敵を 全て倒すと 先へ進める！'); return; }
+    Sound.SFX.door(); startTransition('door', link.door);
+  }
+  // 'E' boss-room exit: only opens once the boss is defeated
+  else if(t==='E' && link.exit){
+    if(boss && !boss.dead){ return; }
+    Sound.SFX.door(); startTransition('exit', link.exit);
+  }
 }
 function startTransition(dir,toId){
   saveRoomState();
@@ -957,19 +1036,20 @@ function startSpear(){
 
 /* ── BOW: fires a piercing arrow projectile ── */
 function fireArrow(){
-  player.attacking=true; player.atkTime=0; player.atkDur=0.18; player.atkKind='bow'; player.atkCd=0.34;
+  player.attacking=true; player.atkTime=0; player.atkDur=0.18; player.atkKind='bow'; player.atkCd=0.52;
   Sound.SFX.bow();
   const d=DIRV[player.dir];
-  arrows.push({ x:player.x+d[0]*16, y:player.y+d[1]*16-6, vx:d[0]*420, vy:d[1]*420,
-                dir:player.dir, life:1.1, dmg:2+Game.atkBonus, hits:new Set() });
+  // nerfed: lower damage, slower fire rate, and arrows no longer pierce
+  arrows.push({ x:player.x+d[0]*16, y:player.y+d[1]*16-6, vx:d[0]*380, vy:d[1]*380,
+                dir:player.dir, life:0.85, dmg:1+Game.atkBonus, hits:new Set() });
 }
 function updateArrows(dt){
   for(const a of arrows){
     a.life-=dt; a.x+=a.vx*dt; a.y+=a.vy*dt;
     for(const e of enemies){ if(e.dead||a.hits.has(e)) continue;
-      if(dist(a.x,a.y,e.x,e.y)<(e.w/2+8)){ damageEnemy(e,a.dir,a.dmg,260); a.hits.add(e); }
+      if(dist(a.x,a.y,e.x,e.y)<(e.w/2+8)){ damageEnemy(e,a.dir,a.dmg,220); a.hits.add(e); a.life=0; break; } // stop on first hit
     }
-    if(boss && !boss.dead && boss.intro<=0 && !a.hits.has(boss) && dist(a.x,a.y,boss.x,boss.y)<(boss.w/2+8)){ damageBoss(a.dmg,a.dir); a.hits.add(boss); }
+    if(a.life>0 && boss && !boss.dead && boss.intro<=0 && !a.hits.has(boss) && dist(a.x,a.y,boss.x,boss.y)<(boss.w/2+8)){ damageBoss(a.dmg,a.dir); a.hits.add(boss); a.life=0; }
     // break a bush it flies over
     const tx=Math.floor(a.x/TS), ty=Math.floor((a.y-HUD_H)/TS);
     if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
@@ -1164,15 +1244,16 @@ function killEnemy(e){
 /* ── boss ── */
 function updateBoss(b,dt){
   b.t+=dt;
-  if(b.intro>0){ b.intro-=dt; if(b.intro<=0) showMsg('影の魔狼 ガルム あらわる！'); return; }
+  if(b.intro>0){ b.intro-=dt; if(b.intro<=0) showMsg((b.final?'最終決戦！ ':'')+b.name+' あらわる！'); return; }
   if(b.hurt>0) b.hurt-=dt;
   if(Math.abs(b.knock.x)>1||Math.abs(b.knock.y)>1){
     moveEntity(b,b.knock.x*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,b.knock.y*dt,b.w/2-6,b.h/2-6);
     b.knock.x*=0.88; b.knock.y*=0.88;
   }
-  b.phase = b.hp>12?0 : b.hp>6?1 : 2;
-  const spd=b.speed*(1+b.phase*0.35);
+  b.phase = b.hp>b.maxHp*0.66?0 : b.hp>b.maxHp*0.33?1 : 2;  // enrage as HP drops
+  const spd=b.speed*(1+b.phase*0.3);
   const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
+  const canCharge=b.cfg.charge, canShoot=b.cfg.shoot;
   b.stTime-=dt;
   if(b.state==='idle'){
     moveEntity(b,(dx/d)*spd*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,(dy/d)*spd*dt,b.w/2-6,b.h/2-6);
@@ -1180,8 +1261,11 @@ function updateBoss(b,dt){
   } else if(b.state==='wind'){
     b.windT-=dt;
     if(b.windT<=0){
-      if(b.phase>=1 && Math.random()<0.6){ bossShoot(b); b.state='idle'; b.stTime=rand(0.8,1.4); }
-      else { b.state='charge'; b.chx=dx/d; b.chy=dy/d; b.chT=0.55; }
+      // choose an attack the boss is capable of (prefer shooting in later phases)
+      const wantShoot = canShoot && (!canCharge || (b.phase>=1 && Math.random()<0.6) || (b.phase===0 && Math.random()<0.35));
+      if(wantShoot){ bossShoot(b); b.state='idle'; b.stTime=rand(0.8,1.4); }
+      else if(canCharge){ b.state='charge'; b.chx=dx/d; b.chy=dy/d; b.chT=0.55; }
+      else { b.state='idle'; b.stTime=rand(0.6,1.0); }
     }
   } else if(b.state==='charge'){
     b.chT-=dt;
@@ -1191,16 +1275,17 @@ function updateBoss(b,dt){
   b.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
   for(const s of b.shots){
     s.x+=s.vx*dt; s.y+=s.vy*dt; s.life-=dt;
-    if(player.invuln<=0 && !player.rolling && dist(s.x,s.y,player.x,player.y)<22){ hurtPlayer(1, s.vx,s.vy); s.life=0; }
+    if(player.invuln<=0 && !player.rolling && player.z<14 && dist(s.x,s.y,player.x,player.y)<22){ hurtPlayer(1, s.vx,s.vy); s.life=0; }
     if(s.x<TS*0.3||s.x>W-TS*0.3||s.y<HUD_H+TS*0.3||s.y>HUD_H+FIELD_H-TS*0.3) s.life=0;
   }
   b.shots=b.shots.filter(s=>s.life>0);
-  if(player.invuln<=0 && !player.rolling && dist(b.x,b.y,player.x,player.y)<(b.w/2+player.w/2-10)) hurtPlayer(2, player.x-b.x, player.y-b.y);
+  if(player.invuln<=0 && !player.rolling && player.z<14 && dist(b.x,b.y,player.x,player.y)<(b.w/2+player.w/2-10)) hurtPlayer(2, player.x-b.x, player.y-b.y);
 }
 function bossShoot(b){
   Sound.SFX.boss();
-  const n=b.phase>=2?8:5;
-  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2 + b.t; b.shots.push({x:b.x,y:b.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,life:3.2,r:9}); }
+  const n=(b.cfg.shots||5)+(b.phase>=2?2:0);
+  const off=b.t;
+  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2 + off; b.shots.push({x:b.x,y:b.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,life:3.2,r:9,col:b.cfg.col}); }
 }
 function damageBoss(dmg,dir){
   if(boss.hurt>0||boss.intro>0) return;
@@ -1211,10 +1296,17 @@ function damageBoss(dmg,dir){
   if(boss.hp<=0) killBoss();
 }
 function killBoss(){
-  boss.dead=true; Game.visited[Game.roomId]=true; Sound.SFX.win(); shake=1;
-  for(let i=0;i<60;i++) particles.push({x:boss.x,y:boss.y,vx:rand(-260,260),vy:rand(-260,260),life:rand(0.6,1.3),max:1.3,col:['#ffd76a','#a060ff','#fff'][i%3],r:rand(3,7)});
-  Game.hasOrb=true;
-  setTimeout(()=>{ if(State==='play') gameOver(true); }, 1700);
+  boss.dead=true; Game.visited[Game.roomId]=true; shake=1;
+  const isFinal=boss.final;
+  for(let i=0;i<70;i++) particles.push({x:boss.x,y:boss.y,vx:rand(-280,280),vy:rand(-280,280),life:rand(0.6,1.4),max:1.4,col:['#ffd76a',boss.cfg.col,'#fff'][i%3],r:rand(3,8)});
+  if(isFinal){
+    Sound.SFX.win(); Game.hasOrb=true;
+    setTimeout(()=>{ if(State==='play') gameOver(true); }, 1900);
+  } else {
+    Sound.SFX.fanfare();
+    Game.hp=Math.min(Game.maxHp,Game.hp+2);            // reward: heal a heart
+    showMsg('★ '+boss.name+' を 倒した！東の扉から 次のステージへ！');
+  }
 }
 
 function hurtPlayer(dmg,dx,dy){
@@ -1280,11 +1372,11 @@ function drawComboCount(){
 }
 
 const BIOME={
-  plains:{g1:'#5fae3a',g2:'#52a032',wall:'#8a7a5a',wd:'#6a5a3a'},
-  forest:{g1:'#3f8a32',g2:'#357a2a',wall:'#7a6a4a',wd:'#5a4a30'},
-  lake:  {g1:'#5fae3a',g2:'#52a032',wall:'#8a8a9a',wd:'#6a6a7a'},
-  ruins: {g1:'#7a9a5a',g2:'#6f8f50',wall:'#9a9088',wd:'#6a6258'},
-  dungeon:{g1:'#39324a',g2:'#322c42',wall:'#5a5270',wd:'#3a3450'},
+  plains: {g1:'#5fae3a',g2:'#52a032',wall:'#8a7a5a',wd:'#6a5a3a'},   // S1 bright meadow
+  forest: {g1:'#2f7a28',g2:'#266a22',wall:'#6a5638',wd:'#4a3a24'},   // S2 deep woods
+  lake:   {g1:'#6abf8a',g2:'#5aae7c',wall:'#7e8aa0',wd:'#5e6a82'},   // S3 lush waterside
+  ruins:  {g1:'#9a9470',g2:'#8a8466',wall:'#a59c90',wd:'#6e665a'},   // S4 sandy ruins
+  dungeon:{g1:'#39324a',g2:'#322c42',wall:'#5a5270',wd:'#3a3450'},   // S5 dark castle
 };
 function drawRoom(r){
   const pal=BIOME[r.biome]||BIOME.plains;
@@ -1579,33 +1671,92 @@ function drawSkeleton(e,flash){
 /* ── boss ── */
 function drawBoss(b){
   if(b.intro>0){ G.fillStyle='rgba(0,0,0,'+clamp(b.intro/1.6,0,0.6)+')'; G.fillRect(0,HUD_H,W,FIELD_H); }
+  // bullets tinted to the boss colour
   for(const s of b.shots){
-    G.fillStyle='#b070ff'; G.beginPath(); G.arc(s.x,s.y,s.r,0,7); G.fill();
+    G.fillStyle=s.col||'#b070ff'; G.beginPath(); G.arc(s.x,s.y,s.r,0,7); G.fill();
     G.fillStyle='rgba(255,255,255,.6)'; G.beginPath(); G.arc(s.x-2,s.y-2,s.r*0.4,0,7); G.fill();
   }
   const flash=b.hurt>0&&Math.floor(b.hurt*30)%2===0;
-  shadow(b.x,b.y+20,38);
+  shadow(b.x,b.y+b.h*0.26,b.w*0.45);
   const wob=Math.sin(b.t*5)*3;
   G.save(); G.translate(b.x,b.y+wob);
-  G.fillStyle=flash?'#fff':(b.phase>=2?'#3a1a4a':'#2a2238');
-  G.beginPath(); G.ellipse(0,6,38,34,0,0,7); G.fill();
-  G.fillStyle=flash?'#fff':'#1a1426';
-  for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; G.beginPath(); G.moveTo(Math.cos(a)*30,Math.sin(a)*26-4); G.lineTo(Math.cos(a)*46,Math.sin(a)*40-4); G.lineTo(Math.cos(a+0.3)*30,Math.sin(a+0.3)*26-4); G.closePath(); G.fill(); }
-  G.fillStyle=flash?'#fff':'#352a48'; G.beginPath(); G.arc(0,-18,24,0,7); G.fill();
-  G.beginPath(); G.moveTo(-20,-34); G.lineTo(-10,-50); G.lineTo(-4,-32); G.closePath();
-  G.moveTo(20,-34); G.lineTo(10,-50); G.lineTo(4,-32); G.closePath(); G.fill();
-  G.fillStyle=flash?'#fff':'#2a2038'; G.beginPath(); G.ellipse(0,-10,12,9,0,0,7); G.fill();
-  G.fillStyle='#000'; G.beginPath(); G.arc(0,-8,4,0,7); G.fill();
-  G.fillStyle='#ff3a3a'; G.beginPath(); G.arc(-10,-22,4,0,7); G.arc(10,-22,4,0,7); G.fill();
-  G.fillStyle='rgba(255,120,120,.6)'; G.beginPath(); G.arc(-10,-22,7,0,7); G.arc(10,-22,7,0,7); G.fill();
+  const c=b.cfg, body=flash?'#fff':c.col, dark=flash?'#fff':c.dark;
+  switch(b.kind){
+    case 'slimeKing':  drawBossSlime(b,body,dark); break;
+    case 'batLord':    drawBossBat(b,body,dark); break;
+    case 'waterDragon':drawBossDragon(b,body,dark); break;
+    case 'boneKing':   drawBossBone(b,body,dark); break;
+    default:           drawBossWolf(b,body,dark); break;
+  }
   G.restore();
   if(b.intro<=0){
     const bw=W*0.6, bx=(W-bw)/2, by=HUD_H+8;
     G.fillStyle='rgba(0,0,0,.5)'; G.fillRect(bx-3,by-3,bw+6,16);
     G.fillStyle='#3a1020'; G.fillRect(bx,by,bw,10);
     G.fillStyle='#ff3a5a'; G.fillRect(bx,by,bw*clamp(b.hp/b.maxHp,0,1),10);
-    G.fillStyle='#fff'; G.font='bold 12px monospace'; G.textAlign='center'; G.fillText('影の魔狼 ガルム',W/2,by-6); G.textAlign='left';
+    G.fillStyle='#fff'; G.font='bold 12px monospace'; G.textAlign='center'; G.fillText(b.name,W/2,by-6); G.textAlign='left';
   }
+}
+function drawBossSlime(b,col,dark){
+  const sq=1+Math.sin(b.t*3)*0.06;
+  G.fillStyle=dark; G.beginPath(); G.ellipse(0,8,42/sq,36*sq,0,0,7); G.fill();
+  G.fillStyle=col; G.beginPath(); G.ellipse(0,4,40/sq,34*sq,0,0,7); G.fill();
+  G.fillStyle='rgba(255,255,255,.4)'; G.beginPath(); G.ellipse(-12,-8,10,7,0,0,7); G.fill();
+  // crown
+  G.fillStyle='#ffd23a'; G.beginPath(); G.moveTo(-18,-26); G.lineTo(-12,-38); G.lineTo(-6,-28); G.lineTo(0,-40); G.lineTo(6,-28); G.lineTo(12,-38); G.lineTo(18,-26); G.closePath(); G.fill();
+  G.fillStyle='#143a18'; G.beginPath(); G.arc(-12,0,4,0,7); G.arc(12,0,4,0,7); G.fill();
+  G.fillStyle='#143a18'; G.beginPath(); G.arc(0,14,4,0,Math.PI); G.fill();
+}
+function drawBossBat(b,col,dark){
+  const f=Math.sin(b.t*10)*14;
+  G.fillStyle=dark;
+  G.beginPath(); G.moveTo(0,0); G.lineTo(-48,-10-f); G.lineTo(-40,12); G.lineTo(-14,8); G.closePath(); G.fill();
+  G.beginPath(); G.moveTo(0,0); G.lineTo(48,-10-f); G.lineTo(40,12); G.lineTo(14,8); G.closePath(); G.fill();
+  G.fillStyle=col; G.beginPath(); G.arc(0,0,22,0,7); G.fill();
+  G.fillStyle=dark; G.beginPath(); G.moveTo(-14,-20); G.lineTo(-8,-36); G.lineTo(-2,-20); G.closePath(); G.moveTo(14,-20); G.lineTo(8,-36); G.lineTo(2,-20); G.closePath(); G.fill();
+  G.fillStyle='#ffd24a'; G.beginPath(); G.arc(-8,-2,5,0,7); G.arc(8,-2,5,0,7); G.fill();
+  G.fillStyle='#000'; G.beginPath(); G.arc(-8,-2,2,0,7); G.arc(8,-2,2,0,7); G.fill();
+  G.fillStyle='#fff'; G.beginPath(); G.moveTo(-6,8); G.lineTo(-3,16); G.lineTo(0,8); G.lineTo(3,16); G.lineTo(6,8); G.closePath(); G.fill();
+}
+function drawBossDragon(b,col,dark){
+  const wob=Math.sin(b.t*4)*4;
+  // coiled water-serpent body
+  G.strokeStyle=dark; G.lineWidth=20; G.lineCap='round';
+  G.beginPath(); G.moveTo(-30,24+wob); G.quadraticCurveTo(0,40,30,20-wob); G.stroke();
+  G.fillStyle=col; G.beginPath(); G.ellipse(0,-4,30,26,0,0,7); G.fill();
+  G.fillStyle='rgba(255,255,255,.35)'; G.beginPath(); G.ellipse(-10,-12,9,6,0,0,7); G.fill();
+  // horns + fin
+  G.fillStyle=dark; G.beginPath(); G.moveTo(-16,-22); G.lineTo(-22,-40); G.lineTo(-8,-26); G.closePath(); G.moveTo(16,-22); G.lineTo(22,-40); G.lineTo(8,-26); G.closePath(); G.fill();
+  G.fillStyle='#ffe24a'; G.beginPath(); G.arc(-10,-6,4.5,0,7); G.arc(10,-6,4.5,0,7); G.fill();
+  G.fillStyle='#000'; G.beginPath(); G.arc(-10,-6,2,0,7); G.arc(10,-6,2,0,7); G.fill();
+  // water droplets
+  G.fillStyle='rgba(180,235,255,.7)'; for(let i=0;i<3;i++){ const a=b.t*2+i*2; G.beginPath(); G.arc(Math.cos(a)*34,8+Math.sin(a)*6,3,0,7); G.fill(); }
+}
+function drawBossBone(b,col,dark){
+  // big skull boss
+  G.fillStyle=col; G.beginPath(); G.arc(0,-4,34,0,7); G.fill();
+  G.fillStyle=col; G.fillRect(-22,18,44,14);
+  G.fillStyle=dark; G.fillRect(-18,30,8,8); G.fillRect(-4,30,8,8); G.fillRect(10,30,8,8);
+  // eye sockets glowing
+  G.fillStyle='#1a1410'; G.beginPath(); G.arc(-13,-8,9,0,7); G.arc(13,-8,9,0,7); G.fill();
+  const g=0.6+0.4*Math.sin(b.t*6);
+  G.fillStyle='rgba(120,220,160,'+g+')'; G.beginPath(); G.arc(-13,-6,4,0,7); G.arc(13,-6,4,0,7); G.fill();
+  G.fillStyle=dark; G.beginPath(); G.moveTo(0,2); G.lineTo(-5,12); G.lineTo(5,12); G.closePath(); G.fill();
+  // crown
+  G.fillStyle='#ffd23a'; G.beginPath(); G.moveTo(-24,-30); G.lineTo(-16,-44); G.lineTo(-8,-32); G.lineTo(0,-46); G.lineTo(8,-32); G.lineTo(16,-44); G.lineTo(24,-30); G.closePath(); G.fill();
+  G.fillStyle='#e8444a'; G.beginPath(); G.arc(0,-38,3,0,7); G.fill();
+}
+function drawBossWolf(b,col,dark){
+  G.fillStyle=col; G.beginPath(); G.ellipse(0,6,38,34,0,0,7); G.fill();
+  G.fillStyle=dark;
+  for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; G.beginPath(); G.moveTo(Math.cos(a)*30,Math.sin(a)*26-4); G.lineTo(Math.cos(a)*46,Math.sin(a)*40-4); G.lineTo(Math.cos(a+0.3)*30,Math.sin(a+0.3)*26-4); G.closePath(); G.fill(); }
+  G.fillStyle=col; G.beginPath(); G.arc(0,-18,24,0,7); G.fill();
+  G.beginPath(); G.moveTo(-20,-34); G.lineTo(-10,-50); G.lineTo(-4,-32); G.closePath();
+  G.moveTo(20,-34); G.lineTo(10,-50); G.lineTo(4,-32); G.closePath(); G.fill();
+  G.fillStyle=dark; G.beginPath(); G.ellipse(0,-10,12,9,0,0,7); G.fill();
+  G.fillStyle='#000'; G.beginPath(); G.arc(0,-8,4,0,7); G.fill();
+  G.fillStyle='#ff3a3a'; G.beginPath(); G.arc(-10,-22,4,0,7); G.arc(10,-22,4,0,7); G.fill();
+  G.fillStyle='rgba(255,120,120,.6)'; G.beginPath(); G.arc(-10,-22,7,0,7); G.arc(10,-22,7,0,7); G.fill();
 }
 
 /* ── player (the dog knight!) ── */
@@ -1850,10 +2001,14 @@ function heartPath(s){
   G.bezierCurveTo(-s*0.5,-s*1.05, -s*0.95,-s*0.55, 0,s*0.32);
 }
 function roomName(id){
-  return ({
-    '1,1':'～ 平和の草原 ～','1,0':'～ ささやきの森 ～','0,1':'～ しずまる湖畔 ～',
-    '1,2':'～ 古き集落の跡 ～','d,0':'～ 暗黒城 入口 ～','d,1':'～ 玉座の間 ～',
-  })[id]||'';
+  const names={
+    s1:'平和の草原', s1b:'草原のぬし',
+    s2:'ささやきの森', s2b:'森のぬし',
+    s3:'しずまる湖畔', s3b:'湖のぬし',
+    s4:'古き遺跡', s4b:'遺跡のぬし',
+    s5:'暗黒城', s5b:'玉座の間',
+  };
+  const n=names[id]||''; return n?('STAGE '+(Game.stage||1)+' ～ '+n+' ～'):'';
 }
 function drawMsg(){
   G.globalAlpha=clamp(msg.t*2,0,1);
@@ -1883,7 +2038,7 @@ function gameOver(win){
   const t=$('result-title'), s=$('result-sub');
   if(win){
     t.textContent='✦ クリア！ ✦'; t.className='win';
-    s.innerHTML='聖犬士イッヌは <b>影の魔狼ガルム</b> を倒し、<br>王国の <b>宝珠</b> を取り戻した！<br>平和が戻り、みんなが笑顔に。<br><br>あつめた骨：<b>'+Game.bones+'</b>本　ワン！🐾';
+    s.innerHTML='聖犬士イッヌは <b>5つのステージ</b>を駆けぬけ、<br><b>影の魔狼ガルム</b> を討ち、王国の <b>宝珠</b> を取り戻した！<br>平和が戻り、みんなが笑顔に。<br><br>あつめた骨：<b>'+Game.bones+'</b>本　ワン！🐾';
     Sound.SFX.win();
   } else {
     t.textContent='たおれた…'; t.className='lose';
@@ -1892,15 +2047,15 @@ function gameOver(win){
   }
 }
 function resetGame(){
-  Object.assign(Game,{ roomId:'1,1', bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
+  Object.assign(Game,{ roomId:'s1', stage:1, bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
     visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{},
     weapon:'sword', weapons:{sword:true, spear:false, bow:false}, bombs:3, maxBombs:9, atkBonus:0 });
   Object.assign(player,{ dir:'down', weapon:'sword', attacking:false, spearing:false, atkCd:0, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
     combo:0, comboWindow:0, charging:false, chargeT:0, chargeReady:false, atkKind:0, z:0, zv:0, jumping:false });
   boss=null; enemies=[]; pickups=[]; particles=[]; enemyShots=[]; arrows=[]; liveBombs=[]; slashFx=null; msg=null; shake=0;
   const ab=$('b-attack'); if(ab) ab.textContent='剣';
-  enterRoom('1,1','start'); State='play';
-  showMsg('南へ向かい 城のカギを 探そう！');
+  enterRoom('s1','start'); State='play';
+  showMsg('STAGE 1 開始！敵を倒し 東の扉から ボスへ！');
 }
 
 /* ─────────────────────────────  MAIN LOOP  ───────────────────────────── */
@@ -1916,7 +2071,7 @@ $('start-btn').addEventListener('click',()=>{ Sound.init(); $('title').classList
 $('retry-btn').addEventListener('click',()=>{ $('result').classList.add('hidden'); resetGame(); });
 $('rot-ok').addEventListener('click',()=>{ document.body.classList.add('rot-ok'); Sound.init(); });
 bindTouch();
-enterRoom('1,1','start'); State='title';
+enterRoom('s1','start'); State='title';
 requestAnimationFrame(loop);
 </script>
 </body>
