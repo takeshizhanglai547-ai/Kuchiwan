@@ -206,6 +206,7 @@
           魔狼ガルムを討って、王国に平和を取り戻せ！
         </div>
         <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
+      <div style="margin-top:14px;color:#5a6896;font-size:11px;letter-spacing:1px;">build v8 ・ 2026-05-30</div>
         <div class="controls">
           <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
           <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
@@ -1328,7 +1329,7 @@ function bossShoot(b){
   for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2 + off; b.shots.push({x:b.x,y:b.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,life:3.2,r:9,col:b.cfg.col}); }
 }
 function damageBoss(dmg,dir){
-  if(boss.hurt>0||boss.intro>0) return;
+  if(!boss||boss.dead||boss.hurt>0||boss.intro>0) return;   // null/dead-safe
   boss.hp-=dmg; boss.hurt=0.22; Sound.SFX.hit(); shake=Math.max(shake,0.22);
   const d={down:[0,1],up:[0,-1],left:[-1,0],right:[1,0]}[dir];
   boss.knock.x=d[0]*200; boss.knock.y=d[1]*200;
