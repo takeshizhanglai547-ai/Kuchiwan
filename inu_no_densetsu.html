@@ -113,8 +113,16 @@
     background:radial-gradient(circle at 40% 35%, #9fd0ff, #3a78c0); color:#06203a;
   }
   #b-jump {
-    right:6%; top:0; width:38%; height:38%;
+    right:6%; top:0; width:36%; height:36%;
     background:radial-gradient(circle at 40% 35%, #b6f5a0, #4aa830); color:#0a2a06;
+  }
+  #b-bomb {
+    left:0; bottom:48%; width:30%; height:30%; font-size:clamp(14px,3.6vmin,22px);
+    background:radial-gradient(circle at 40% 35%, #6a6f7e, #2a2c34); color:#fff;
+  }
+  #b-swap {
+    left:2%; top:0; width:30%; height:30%; font-size:clamp(11px,3vmin,16px);
+    background:radial-gradient(circle at 40% 35%, #ffd9a0, #b07a30); color:#3a2606;
   }
   /* top-right mini buttons (mute / fullscreen) */
   #mini { position:absolute; pointer-events:none; top:calc(env(safe-area-inset-top,0px) + 2vmin); right:calc(env(safe-area-inset-right,0px) + 2vmin); display:flex; gap:8px; }
@@ -150,6 +158,8 @@
         <div id="b-attack" class="abtn">剣</div>
         <div id="b-roll" class="abtn">回避</div>
         <div id="b-jump" class="abtn">跳</div>
+        <div id="b-bomb" class="abtn">💣</div>
+        <div id="b-swap" class="abtn">持替</div>
       </div>
       <div id="mini">
         <div id="m-sound" class="mini-btn">🔊</div>
@@ -177,12 +187,12 @@
       </div>
       <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
       <div class="controls">
-        <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> 剣で斬る<br>
-        <span class="k">J を連打</span> 3段コンボ　　<span class="k">J を長押し→はなす</span> ためた一閃（強）<br>
+        <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
+        <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
         <span class="k">K / Shift</span> ローリング回避　　<span class="k">L / F</span> ジャンプ（飛び道具をかわす！）<br>
-        <span class="k">M</span> 音ON/OFF　　宝箱は<span class="k">近づくと</span>開く　　草むらは<span class="k">斬ると</span>こわせる<br>
-        <span class="k">魔導士</span>は<b>火の玉</b>を撃ってくる。ジャンプか回避でかわそう<br>
-        <span class="k">スマホ</span>は左スティック移動・右の剣/回避/跳ボタン（剣長押しでため攻撃）
+        <span class="k">M</span> 音ON/OFF　宝箱は<span class="k">近づくと</span>開く　草むらは<span class="k">こわせる</span><br>
+        <b>槍</b>＝長いリーチの突き／<b>弓</b>＝遠くの敵を射抜く矢／<b>力のかけら</b>で攻撃力UP<br>
+        <span class="k">スマホ</span>は左スティック移動・右に 武器/回避/跳/💣/持替 ボタン
       </div>
     </div>
 
@@ -295,6 +305,12 @@ const Sound = (()=>{
     jump: ()=>blip(420,0.18,'sine',0.3,360),
     land: ()=>{blip(260,0.09,'sine',0.25,-120); noise(0.06,0.2);},
     cast: ()=>{blip(520,0.14,'sawtooth',0.3,260); setTimeout(()=>blip(740,0.1,'square',0.25),60);},
+    spear:()=>{blip(520,0.07,'square',0.3,-140); setTimeout(()=>blip(880,0.06,'square',0.25),40);},
+    bow:  ()=>{blip(900,0.06,'square',0.25,-300); noise(0.05,0.15);},
+    bombThrow:()=>blip(300,0.12,'sine',0.3,200),
+    boom: ()=>{noise(0.4,0.7); blip(80,0.35,'sawtooth',0.5,-40); setTimeout(()=>blip(60,0.3,'square',0.4,-20),30);},
+    swap: ()=>{blip(560,0.07,'square',0.3); setTimeout(()=>blip(840,0.08,'square',0.3),60);},
+    fanfare:()=>{[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'square',0.4),i*90));},
   };
 
   /* ── procedural BGM: looping chiptune driven by a step sequencer ── */
@@ -363,12 +379,13 @@ const Sound = (()=>{
 
 /* ─────────────────────────────  INPUT  ───────────────────────────── */
 const Keys = {};
-const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false,jump:false, _atkEdge:false, _atkRelEdge:false, _rollEdge:false, _jumpEdge:false };
+const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false,jump:false,
+  _atkEdge:false, _atkRelEdge:false, _rollEdge:false, _jumpEdge:false, _swapEdge:false, _bombEdge:false };
 const KEYMAP = {
   'ArrowUp':'up','KeyW':'up','ArrowDown':'down','KeyS':'down',
   'ArrowLeft':'left','KeyA':'left','ArrowRight':'right','KeyD':'right',
   'KeyJ':'attack','Space':'attack','KeyK':'roll','ShiftLeft':'roll','ShiftRight':'roll',
-  'KeyL':'jump','KeyF':'jump',
+  'KeyL':'jump','KeyF':'jump','KeyQ':'swap','KeyE':'bomb','KeyB':'bomb',
 };
 const Touch={up:false,down:false,left:false,right:false,attack:false,roll:false,jump:false};
 addEventListener('keydown',e=>{
@@ -376,7 +393,10 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyM') Sound.toggle();
 });
 addEventListener('keyup',e=>{ if(KEYMAP[e.code]){ e.preventDefault(); Keys[e.code]=false; if(KEYMAP[e.code]==='attack') Input._atkRelEdge=true; } });
-function edge(act){ if(act==='attack') Input._atkEdge=true; if(act==='roll') Input._rollEdge=true; if(act==='jump') Input._jumpEdge=true; }
+function edge(act){
+  if(act==='attack') Input._atkEdge=true; if(act==='roll') Input._rollEdge=true;
+  if(act==='jump') Input._jumpEdge=true; if(act==='swap') Input._swapEdge=true; if(act==='bomb') Input._bombEdge=true;
+}
 function refreshInput(){
   const held=a=>Touch[a] || Object.keys(KEYMAP).some(k=>KEYMAP[k]===a && Keys[k]);
   Input.up=held('up'); Input.down=held('down'); Input.left=held('left'); Input.right=held('right');
@@ -452,6 +472,16 @@ function bindTouch(){
   bindBtn('b-roll','roll');
   bindBtn('b-jump','jump');
 
+  // ── tap buttons: bomb throw + weapon swap (single-shot edges) ──
+  function bindTap(id, fn){
+    const el=$(id);
+    el.addEventListener('pointerdown',e=>{ e.preventDefault(); el.classList.add('pressed'); Sound.init(); fn(); });
+    const up=e=>{ e.preventDefault(); el.classList.remove('pressed'); };
+    el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
+  }
+  bindTap('b-bomb', ()=>{ Input._bombEdge=true; });
+  bindTap('b-swap', ()=>{ Input._swapEdge=true; });
+
   // ── mini buttons: sound + fullscreen ──
   $('m-sound').addEventListener('click',()=>{ Sound.init(); const m=Sound.toggle(); $('m-sound').textContent=m?'🔇':'🔊'; });
   $('m-full').addEventListener('click',toggleFullscreen);
@@ -478,7 +508,7 @@ const ROOMS = {
     "#...TT....TT...#",
     "#.b...,.....b..#",
     "TT####....####TT",
-  ], enemies:[ ['bat',6,2],['bat',10,5],['slime',4,7] ], chest:{tx:8,ty:3,item:'heart'} },
+  ], enemies:[ ['bat',6,2],['bat',10,5],['slime',4,7] ], chest:{tx:8,ty:3,item:['spear','heart']} },
 
   "1,1": { biome:'plains', start:true, map:[
     "######....######",
@@ -492,7 +522,7 @@ const ROOMS = {
     "#......,.......#",
     "#.,..........,.#",
     "######....######",
-  ], enemies:[ ['slime',4,3],['slime',11,7],['bat',8,8] ], chest:{tx:12,ty:2,item:'bones'} },
+  ], enemies:[ ['slime',4,3],['slime',11,7],['bat',8,8] ], chest:{tx:12,ty:2,item:['bomb','bones']} },
 
   "0,1": { biome:'lake', map:[
     "################",
@@ -506,7 +536,7 @@ const ROOMS = {
     "#~~..~~~~~~..~~#",
     "#~~~........~~~#",
     "################",
-  ], enemies:[ ['slime',7,4],['mage',3,2],['bat',12,8] ], chest:{tx:8,ty:5,item:'heartmax'} },
+  ], enemies:[ ['slime',7,4],['mage',3,2],['bat',12,8] ], chest:{tx:8,ty:5,item:['bow','heartmax']} },
 
   "1,2": { biome:'ruins', map:[
     "######....######",
@@ -535,7 +565,7 @@ const ROOMS = {
     "#..............#",
     "######....######",
     "######....######",
-  ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',12,8] ], chest:{tx:8,ty:2,item:'bones'}, locked:{tx:6,ty:5} },
+  ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',12,8] ], chest:{tx:8,ty:2,item:['atkup','bomb']}, locked:{tx:6,ty:5} },
 
   "d,1": { biome:'dungeon', boss:true, map:[
     "######....######",
@@ -572,12 +602,20 @@ const Game = {
   visited:{}, bones:0, keys:0,
   hp:6, maxHp:6, hasOrb:false,
   bushBroken:{}, chestOpened:{}, lockOpened:{},
+  // ── arsenal ──
+  weapon:'sword',                          // currently equipped
+  weapons:{sword:true, spear:false, bow:false}, // which weapons are owned
+  bombs:3, maxBombs:9,                      // limited-use throwable
+  atkBonus:0,                               // permanent +damage from power-ups
 };
+const WEAPON_ORDER=['sword','spear','bow'];
+const WEAPON_NAME={sword:'剣',spear:'槍',bow:'弓'};
 
 const player = {
   x:0, y:0, w:30, h:30,
   dir:'down', speed:170,
-  attacking:false, atkTime:0, atkDur:0.28,
+  weapon:'sword',                   // mirror of Game.weapon for draw convenience
+  attacking:false, atkTime:0, atkDur:0.28, atkCd:0, spearing:false,
   combo:0, comboWindow:0,          // combo chain step (0..2) and grace timer
   charging:false, chargeT:0, chargeReady:false, // hold-to-charge state
   rolling:false, rollTime:0, rollDur:0.34, rollCd:0, rdx:0, rdy:0,
@@ -589,6 +627,7 @@ const CHARGE_TIME=0.55;            // hold this long for a fully-charged strike
 const JUMP_V=320, GRAVITY=900;     // hop launch speed and fall accel (px/s, px/s^2)
 
 let enemies=[], particles=[], pickups=[], slashFx=null, boss=null;
+let arrows=[], liveBombs=[];              // player arrows (bow) & thrown bombs
 let enemyShots=[];                 // projectiles fired by ranged enemies (mages)
 let transition=null, shake=0, msg=null;
 
@@ -615,7 +654,7 @@ function enterRoom(id, entrySide){
   if(broken) for(const key of broken){ const [tx,ty]=key.split(',').map(Number); if(r.map[ty]) r.map[ty][tx]='.'; }
   if(Game.lockOpened[id] && def.locked){ r.map[def.locked.ty][def.locked.tx]='.'; r.map[def.locked.ty][def.locked.tx+1]='.'; }
 
-  enemies=[]; boss=null; pickups=[]; particles=[]; enemyShots=[];
+  enemies=[]; boss=null; pickups=[]; particles=[]; enemyShots=[]; arrows=[]; liveBombs=[];
   const bossPending = def.boss && !Game.visited[id];
   if(!Game.visited[id]){
     for(const e of def.enemies||[]) spawnEnemy(e[0], e[1]*TS+TS/2, HUD_H+e[2]*TS+TS/2);
@@ -732,6 +771,8 @@ function update(dt){
   if(boss) updateBoss(boss,dt);
   enemies=enemies.filter(e=>!e.dead);
   updateEnemyShots(dt);
+  updateArrows(dt);
+  updateBombs(dt);
   updatePickups(dt);
   updateParticles(dt);
   if(slashFx){ slashFx.t-=dt; if(slashFx.t<=0) slashFx=null; }
@@ -744,22 +785,38 @@ function updatePlayer(dt){
   let ix=(Input.right?1:0)-(Input.left?1:0);
   let iy=(Input.down?1:0)-(Input.up?1:0);
 
+  // ── weapon swap (Q / touch) ──
+  if(Input._swapEdge){ Input._swapEdge=false; cycleWeapon(); }
+  // ── throw a bomb (E / B / touch) ──
+  if(Input._bombEdge){ Input._bombEdge=false; throwBomb(); }
+
   // ── combo grace window: keep the chain alive briefly between swings ──
   if(player.comboWindow>0){ player.comboWindow-=dt; if(player.comboWindow<=0) player.combo=0; }
+  if(player.atkCd>0) player.atkCd-=dt;
 
-  // ── attack press: start a swing (chaining into a combo if timed right) ──
+  // ── attack press: behaviour depends on the equipped weapon ──
   if(Input._atkEdge && !player.rolling){
-    if(!player.attacking){
-      // face the way we're holding, if any
-      if(ix||iy) player.dir=angleDir(ix,iy);
-      player.combo = (player.comboWindow>0) ? Math.min(player.combo+1,2) : 0;
-      startSwing(player.combo);
-      // begin charging while the button stays held
-      player.charging=true; player.chargeT=0; player.chargeReady=false;
+    if(player.weapon==='bow'){
+      if(!player.attacking && player.atkCd<=0){
+        if(ix||iy) player.dir=angleDir(ix,iy);
+        fireArrow();
+      }
+    } else if(player.weapon==='spear'){
+      if(!player.attacking && player.atkCd<=0){
+        if(ix||iy) player.dir=angleDir(ix,iy);
+        startSpear();
+      }
+    } else { // sword: combo chain + hold-to-charge
+      if(!player.attacking){
+        if(ix||iy) player.dir=angleDir(ix,iy);
+        player.combo = (player.comboWindow>0) ? Math.min(player.combo+1,2) : 0;
+        startSwing(player.combo);
+        player.charging=true; player.chargeT=0; player.chargeReady=false;
+      }
     }
   }
-  // ── charge build-up while attack is held (after the swing's active frames) ──
-  if(player.charging && Input.attack && !player.rolling){
+  // ── charge build-up while attack is held (sword only) ──
+  if(player.weapon==='sword' && player.charging && Input.attack && !player.rolling){
     player.chargeT+=dt;
     if(player.chargeT>=CHARGE_TIME && !player.chargeReady){
       player.chargeReady=true; Sound.SFX.charge();
@@ -769,9 +826,9 @@ function updatePlayer(dt){
       particles.push({x:player.x+Math.cos(a)*r,y:player.y+Math.sin(a)*r,vx:-Math.cos(a)*60,vy:-Math.sin(a)*60,life:0.4,max:0.4,col:'#ffe07a',r:rand(2,3.5)});
     }
   }
-  // ── attack release: unleash a charged strike if it's ready ──
+  // ── attack release: unleash a charged strike if it's ready (sword) ──
   if(Input._atkRelEdge){
-    if(player.chargeReady && !player.rolling){
+    if(player.weapon==='sword' && player.chargeReady && !player.rolling){
       if(ix||iy) player.dir=angleDir(ix,iy);
       startSwing('charge');
     }
@@ -811,14 +868,14 @@ function updatePlayer(dt){
     if(player.rollTime>=player.rollDur) player.rolling=false;
   } else if(player.attacking){
     player.atkTime+=dt;
-    // a forward lunge during the swing's opening frames; the 3rd-hit finisher
-    // and the charged strike lunge harder for impact.
-    const lunge = player.atkKind==='charge'?0.95 : player.atkKind===2?0.7 : 0.35;
+    // a forward lunge during the swing's opening frames; finisher / charged /
+    // spear thrust lunge harder for impact.
+    const lunge = player.atkKind==='charge'?0.95 : player.atkKind===2?0.7 : player.atkKind==='spear'?0.85 : player.atkKind==='bow'?0 : 0.35;
     if(player.atkTime<0.13){ const d=DIRV[player.dir]; mvx=d[0]*spd*lunge*dt; mvy=d[1]*spd*lunge*dt; }
     if(player.atkTime>=player.atkDur){
-      player.attacking=false;
-      // open the combo grace window so the next press chains (basic swings only)
-      if(player.atkKind!=='charge' && player.combo<2) player.comboWindow=0.32;
+      player.attacking=false; player.spearing=false;
+      // sword only: open the combo grace window so the next press chains
+      if(player.weapon==='sword' && player.atkKind!=='charge' && player.combo<2) player.comboWindow=0.32;
       else { player.combo=0; player.comboWindow=0; }
     }
   } else {
@@ -866,7 +923,7 @@ function doSwordHit(kind){
   const charged = kind==='charge';
   const reach = charged?52:(kind===2?48:42);
   const wide  = charged?40:(kind===2?34:30);
-  const dmg   = charged?4:(kind===2?2:1);
+  const dmg   = (charged?4:(kind===2?2:1)) + Game.atkBonus;
   const kb    = charged?560:(kind===2?420:360);
   const d=DIRV[player.dir];
   const hx=player.x+d[0]*reach, hy=player.y+d[1]*reach;
@@ -880,6 +937,102 @@ function doSwordHit(kind){
     if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
   }
 }
+/* ── SPEAR: a fast straight thrust — long reach, narrow, good poke ── */
+function startSpear(){
+  player.attacking=true; player.spearing=true; player.atkTime=0; player.atkKind='spear';
+  player.atkDur=0.26; player.atkCd=0.30;
+  Sound.SFX.spear();
+  const d=DIRV[player.dir];
+  const reach=64, wide=18, dmg=2+Game.atkBonus, kb=300;
+  // hit along the thrust line (two sample points for the long reach)
+  for(const f of [0.7,1.0]){
+    const hx=player.x+d[0]*reach*f, hy=player.y+d[1]*reach*f;
+    for(const e of enemies) if(!e.dead && dist(hx,hy,e.x,e.y)<(e.w/2+wide)) damageEnemy(e,player.dir,dmg,kb);
+    if(boss && !boss.dead && boss.intro<=0 && dist(hx,hy,boss.x,boss.y)<(boss.w/2+wide)) damageBoss(dmg,player.dir);
+    const tx=Math.floor(hx/TS), ty=Math.floor((hy-HUD_H)/TS);
+    if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
+  }
+  slashFx={dir:player.dir,t:0.18,dur:0.18,kind:'spear',swing:0};
+}
+
+/* ── BOW: fires a piercing arrow projectile ── */
+function fireArrow(){
+  player.attacking=true; player.atkTime=0; player.atkDur=0.18; player.atkKind='bow'; player.atkCd=0.34;
+  Sound.SFX.bow();
+  const d=DIRV[player.dir];
+  arrows.push({ x:player.x+d[0]*16, y:player.y+d[1]*16-6, vx:d[0]*420, vy:d[1]*420,
+                dir:player.dir, life:1.1, dmg:2+Game.atkBonus, hits:new Set() });
+}
+function updateArrows(dt){
+  for(const a of arrows){
+    a.life-=dt; a.x+=a.vx*dt; a.y+=a.vy*dt;
+    for(const e of enemies){ if(e.dead||a.hits.has(e)) continue;
+      if(dist(a.x,a.y,e.x,e.y)<(e.w/2+8)){ damageEnemy(e,a.dir,a.dmg,260); a.hits.add(e); }
+    }
+    if(boss && !boss.dead && boss.intro<=0 && !a.hits.has(boss) && dist(a.x,a.y,boss.x,boss.y)<(boss.w/2+8)){ damageBoss(a.dmg,a.dir); a.hits.add(boss); }
+    // break a bush it flies over
+    const tx=Math.floor(a.x/TS), ty=Math.floor((a.y-HUD_H)/TS);
+    if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
+    if(a.x<TS*0.2||a.x>W-TS*0.2||a.y<HUD_H+TS*0.2||a.y>HUD_H+FIELD_H-TS*0.2||solidAtPoint(a.x,a.y)){
+      a.life=0;
+      for(let i=0;i<4;i++) particles.push({x:a.x,y:a.y,vx:rand(-60,60),vy:rand(-60,60),life:0.2,max:0.2,col:'#caa86a',r:rand(1.5,2.5)});
+    }
+  }
+  arrows=arrows.filter(a=>a.life>0);
+}
+
+/* ── BOMB: limited-use throwable that detonates after a fuse ── */
+function throwBomb(){
+  if(Game.bombs<=0){ if(!msg) showMsg('💣 ばくだんが ない…'); return; }
+  if(player.rolling) return;
+  Game.bombs--; Sound.SFX.bombThrow();
+  const d=DIRV[player.dir];
+  liveBombs.push({ x:player.x, y:player.y, vx:d[0]*150, vy:d[1]*150, z:6, zv:170, fuse:1.4, r:11 });
+}
+function updateBombs(dt){
+  for(const bm of liveBombs){
+    bm.fuse-=dt;
+    // arc through the air then slide to a stop
+    bm.x+=bm.vx*dt; bm.y+=bm.vy*dt; bm.vx*=0.92; bm.vy*=0.92;
+    bm.z+=bm.zv*dt; bm.zv-=520*dt; if(bm.z<0){ bm.z=0; bm.zv*=-0.4; }
+    if(solidAtPoint(bm.x,bm.y)){ bm.vx*=-0.4; bm.vy*=-0.4; bm.x-=bm.vx*dt; bm.y-=bm.vy*dt; }
+    if(bm.fuse<=0){ explodeBomb(bm); bm.dead=true; }
+  }
+  liveBombs=liveBombs.filter(b=>!b.dead);
+}
+function explodeBomb(bm){
+  Sound.SFX.boom(); shake=Math.max(shake,0.5);
+  const R=68, dmg=5+Game.atkBonus;
+  for(const e of enemies) if(!e.dead && dist(bm.x,bm.y,e.x,e.y)<R){
+    const dir=angleDir(e.x-bm.x, e.y-bm.y); damageEnemy(e,dir,dmg,520);
+  }
+  if(boss && !boss.dead && boss.intro<=0 && dist(bm.x,bm.y,boss.x,boss.y)<R+20) damageBoss(dmg, angleDir(boss.x-bm.x,boss.y-bm.y));
+  // hurt the player too if caught in the blast (unless airborne/rolling)
+  if(player.invuln<=0 && !player.rolling && player.z<14 && dist(bm.x,bm.y,player.x,player.y)<R) hurtPlayer(1, player.x-bm.x, player.y-bm.y);
+  // break surrounding bushes
+  for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+    const tx=Math.floor(bm.x/TS)+ox, ty=Math.floor((bm.y-HUD_H)/TS)+oy;
+    if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
+  }
+  // fire + smoke particles
+  for(let i=0;i<34;i++){ const a=rand(0,6.28),sp=rand(40,260);
+    particles.push({x:bm.x,y:bm.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rand(0.3,0.7),max:0.7,col:['#ff8a2a','#ffd24a','#fff','#777'][i%4],r:rand(2,6)});
+  }
+}
+
+/* ── weapon switching ── */
+function cycleWeapon(){
+  const owned=WEAPON_ORDER.filter(w=>Game.weapons[w]);
+  if(owned.length<=1){ if(!msg) showMsg('武器は 剣のみ。槍や弓を 探そう！'); return; }
+  const i=owned.indexOf(Game.weapon);
+  Game.weapon=owned[(i+1)%owned.length];
+  player.weapon=Game.weapon;
+  player.attacking=false; player.charging=false; player.chargeReady=false; player.combo=0; player.comboWindow=0;
+  Sound.SFX.swap();
+  const btn=$('b-attack'); if(btn) btn.textContent=WEAPON_NAME[Game.weapon];
+  showMsg('武器を「'+WEAPON_NAME[Game.weapon]+'」に かえた！');
+}
+
 function breakBush(tx,ty){
   Game.room.map[ty][tx]='.';
   (Game.bushBroken[Game.roomId] ||= new Set()).add(tx+','+ty);
@@ -910,7 +1063,8 @@ function openChest(chest,cx,cy){
   Game.chestOpened[Game.roomId]=true;
   Sound.SFX.chest();
   for(let i=0;i<14;i++) particles.push({x:cx,y:cy-10,vx:rand(-70,70),vy:rand(-160,-40),life:0.7,max:0.7,col:'#ffd76a',r:rand(2,4)});
-  applyItem(chest.item, true);
+  const items = Array.isArray(chest.item)?chest.item:[chest.item];
+  items.forEach((it,i)=> setTimeout(()=>applyItem(it,true), i*900)); // stagger so messages are readable
 }
 function applyItem(item, fromChest){
   switch(item){
@@ -918,6 +1072,13 @@ function applyItem(item, fromChest){
     case 'heartmax': Game.maxHp+=2; Game.hp=Game.maxHp; Sound.SFX.heart(); showMsg('💖 さいだいハートが ふえた！'); break;
     case 'bones': { const n=fromChest?15:(1+(Math.random()*3|0)); Game.bones+=n; Sound.SFX.coin(); if(fromChest)showMsg('🦴 ほねを '+n+'こ みつけた！'); break; }
     case 'key': Game.keys++; Sound.SFX.key(); showMsg('🔑 城のカギを てにいれた！'); break;
+    // ── new weapons ──
+    case 'spear': Game.weapons.spear=true; Game.weapon='spear'; player.weapon='spear'; Sound.SFX.fanfare(); showMsg('🔱 槍を てにいれた！（Qで武器チェンジ）'); break;
+    case 'bow':   Game.weapons.bow=true;   Game.weapon='bow';   player.weapon='bow';   Sound.SFX.fanfare(); showMsg('🏹 弓を てにいれた！（Qで武器チェンジ）'); break;
+    // ── consumables / power-ups ──
+    case 'bomb':  { const n=fromChest?3:1; Game.bombs=Math.min(Game.maxBombs,Game.bombs+n); Sound.SFX.coin(); showMsg('💣 ばくだんを '+n+'こ 補充！（E/Bで投げる）'); break; }
+    case 'bombbag': Game.maxBombs+=3; Game.bombs=Game.maxBombs; Sound.SFX.fanfare(); showMsg('🎒 ばくだん袋！最大数が ふえた！'); break;
+    case 'atkup': Game.atkBonus+=1; Sound.SFX.fanfare(); showMsg('⚔ 力のかけら！こうげき力UP！'); break;
   }
 }
 function dropPickup(item,x,y){ pickups.push({item,x,y, vy:-120, life: item==='heart'?16:14, dead:false }); }
@@ -995,7 +1156,9 @@ function damageEnemy(e,dir,dmg,kb){
 function killEnemy(e){
   e.dead=true; Sound.SFX.enemyDie(); shake=Math.max(shake,0.18);
   for(let i=0;i<12;i++) particles.push({x:e.x,y:e.y,vx:rand(-150,150),vy:rand(-150,150),life:0.5,max:0.5,col:'#b0b8d0',r:rand(2,5)});
-  if(Math.random()<0.5) dropPickup(Math.random()<0.7?'bones':'heart', e.x,e.y);
+  const r=Math.random();
+  if(r<0.12) dropPickup('bomb', e.x,e.y);          // occasional bomb refill
+  else if(r<0.5) dropPickup(Math.random()<0.7?'bones':'heart', e.x,e.y);
 }
 
 /* ── boss ── */
@@ -1090,6 +1253,8 @@ function draw(){
   drawParticles();
   drawEnemies();
   drawEnemyShots();
+  drawArrows();
+  drawBombs();
   if(boss) drawBoss(boss);
   drawPlayer();
   if(slashFx) drawSlash();
@@ -1275,6 +1440,7 @@ function drawPickups(){
   for(const p of pickups){
     const bob=Math.sin(now()*5+p.x)*3;
     if(p.item==='heart') drawHeartIcon(p.x,p.y+bob,10);
+    else if(p.item==='bomb'){ drawBombIcon(p.x,p.y+bob); }
     else drawBone(p.x,p.y+bob);
   }
 }
@@ -1351,6 +1517,37 @@ function drawEnemyShots(){
     G.fillStyle='#ff7a2a'; G.beginPath(); G.arc(s.x,s.y,s.r*pulse,0,7); G.fill();
     G.fillStyle='#ffd66a'; G.beginPath(); G.arc(s.x,s.y,s.r*0.5,0,7); G.fill();
     G.fillStyle='rgba(255,255,255,.8)'; G.beginPath(); G.arc(s.x-2,s.y-2,s.r*0.22,0,7); G.fill();
+  }
+}
+function drawArrows(){
+  for(const a of arrows){
+    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[a.dir];
+    G.save(); G.translate(a.x,a.y); G.rotate(ang);
+    // shaft
+    G.strokeStyle='#8a6a3a'; G.lineWidth=2.5; G.lineCap='round';
+    G.beginPath(); G.moveTo(-12,0); G.lineTo(8,0); G.stroke();
+    // steel head
+    G.fillStyle='#dfe6f0'; G.beginPath(); G.moveTo(8,0); G.lineTo(2,-3); G.lineTo(2,3); G.closePath(); G.fill();
+    // fletching
+    G.fillStyle='#e84a6a'; G.beginPath(); G.moveTo(-12,0); G.lineTo(-16,-3); G.lineTo(-13,0); G.lineTo(-16,3); G.closePath(); G.fill();
+    G.restore();
+  }
+}
+function drawBombs(){
+  for(const bm of liveBombs){
+    // ground shadow
+    G.fillStyle='rgba(0,0,0,.25)'; G.beginPath(); G.ellipse(bm.x,bm.y+8,9,4,0,0,7); G.fill();
+    const by=bm.y-bm.z;
+    // body
+    const rg=G.createRadialGradient(bm.x-3,by-3,1,bm.x,by,bm.r);
+    rg.addColorStop(0,'#4a4a58'); rg.addColorStop(1,'#181820');
+    G.fillStyle=rg; G.beginPath(); G.arc(bm.x,by,bm.r,0,7); G.fill();
+    G.fillStyle='rgba(255,255,255,.3)'; G.beginPath(); G.arc(bm.x-3,by-3,2.5,0,7); G.fill();
+    // fuse + blinking spark (faster as it nears detonation)
+    G.strokeStyle='#9a7a4a'; G.lineWidth=2; G.beginPath(); G.moveTo(bm.x,by-bm.r); G.quadraticCurveTo(bm.x+5,by-bm.r-7,bm.x+8,by-bm.r-4); G.stroke();
+    const blink=Math.sin(now()*(20+ (1.4-bm.fuse)*30))>0;
+    if(blink){ G.fillStyle='#ffd24a'; G.beginPath(); G.arc(bm.x+8,by-bm.r-4,2.6,0,7); G.fill();
+      G.fillStyle='#ff8a2a'; G.beginPath(); G.arc(bm.x+8,by-bm.r-4,1.3,0,7); G.fill(); }
   }
 }
 function drawSlime(e,flash){
@@ -1448,12 +1645,16 @@ function drawPlayer(){
     G.lineTo(10,22); G.quadraticCurveTo(20-capeWag,12,12,-6); G.closePath(); G.fill();
     G.fillStyle=flash?'#fff':'#9a1f2e'; G.beginPath(); G.moveTo(-8,-4); G.quadraticCurveTo(0,14,8,-4); G.closePath(); G.fill();
   }
-  function sword(){
+  function weapon(){
+    if(player.weapon==='sword') return drawHeldSword();
+    if(player.weapon==='spear') return drawHeldSpear();
+    return drawHeldBow();
+  }
+  function drawHeldSword(){
     let ang=0;
-    if(player.attacking){
+    if(player.attacking && player.atkKind!=='spear' && player.atkKind!=='bow'){
       const p=player.atkTime/player.atkDur;
       const sw = slashFx ? (slashFx.swing||1) : 1;
-      // ease-out swing; swing sign flips per combo step, finisher does a wider arc
       const e = 1-Math.pow(1-p,2);
       if(sw===2)      ang = lerp(-1.6, 1.6, e);     // finisher: big sweep
       else if(sw<0)   ang = lerp( 1.25,-1.25, e);   // backhand
@@ -1463,17 +1664,48 @@ function drawPlayer(){
     const rot={down:0.2,up:0.0,left:-0.6,right:0.6}[dir]+ang;
     const len = (slashFx&&slashFx.big)?30:26;
     G.save(); G.translate(off[0],off[1]); G.rotate(rot);
-    // blade with a soft metallic gradient + edge highlight
     const bg=G.createLinearGradient(-3,0,3,0);
     bg.addColorStop(0,'#9aa6b8'); bg.addColorStop(.5,'#f2f6ff'); bg.addColorStop(1,'#aeb8cc');
     G.strokeStyle=bg; G.lineWidth=5; G.lineCap='round';
     G.beginPath(); G.moveTo(0,2); G.lineTo(0,-len); G.stroke();
     G.strokeStyle='rgba(255,255,255,.85)'; G.lineWidth=1.6;
     G.beginPath(); G.moveTo(-1,0); G.lineTo(-1,-len+3); G.stroke();
-    // golden guard + pommel
     G.fillStyle='#f0c75a'; G.fillRect(-7,-4,14,5);
     G.fillStyle='#caa11e'; G.fillRect(-7,0,14,2);
     G.fillStyle='#e9b84a'; G.beginPath(); G.arc(0,4,3.5,0,7); G.fill();
+    G.restore();
+  }
+  function drawHeldSpear(){
+    // a long shaft pointed in the facing direction; thrusts forward on attack
+    const d=DIRV[dir];
+    let push=0;
+    if(player.attacking && player.atkKind==='spear'){
+      const p=player.atkTime/player.atkDur;
+      push = Math.sin(p*Math.PI)*16;   // jab out and back
+    }
+    const bx=d[0]*(10+push), by=d[1]*(10+push)+8;
+    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
+    G.save(); G.translate(bx,by); G.rotate(ang);
+    // wooden shaft
+    G.strokeStyle='#8a6038'; G.lineWidth=4; G.lineCap='round';
+    G.beginPath(); G.moveTo(-22,0); G.lineTo(20,0); G.stroke();
+    // steel head
+    G.fillStyle='#cfd8e6'; G.beginPath(); G.moveTo(30,0); G.lineTo(18,-5); G.lineTo(20,0); G.lineTo(18,5); G.closePath(); G.fill();
+    G.fillStyle='#9aa6b8'; G.fillRect(16,-2,4,4);
+    G.restore();
+  }
+  function drawHeldBow(){
+    const d=DIRV[dir];
+    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
+    let draw=0.4;
+    if(player.attacking && player.atkKind==='bow'){ draw = 0.4 - (player.atkTime/player.atkDur)*0.4; }
+    G.save(); G.translate(d[0]*12, d[1]*12+8); G.rotate(ang);
+    // bow limb (an arc)
+    G.strokeStyle='#7a5a30'; G.lineWidth=3; G.lineCap='round';
+    G.beginPath(); G.arc(-2,0,12,-1.2,1.2); G.stroke();
+    // bowstring (pulls back during the shot)
+    G.strokeStyle='rgba(255,255,255,.7)'; G.lineWidth=1.2;
+    G.beginPath(); G.moveTo(-2+12*Math.cos(-1.2),12*Math.sin(-1.2)); G.lineTo(-2-draw*10,0); G.lineTo(-2+12*Math.cos(1.2),12*Math.sin(1.2)); G.stroke();
     G.restore();
   }
   function body(){
@@ -1497,14 +1729,26 @@ function drawPlayer(){
       G.fillStyle='#ff8aa0'; G.beginPath(); G.ellipse(0,-2,2.5,3,0,0,7); G.fill();
     }
   }
-  if(dir==='up'){ sword(); cape(); body(); head(); }
-  else { cape(); body(); head(); sword(); }
+  if(dir==='up'){ weapon(); cape(); body(); head(); }
+  else { cape(); body(); head(); weapon(); }
   G.restore();
 }
 
 function drawSlash(){
   const p=1-slashFx.t/slashFx.dur;       // 0→1 progress
   const d=DIRV[slashFx.dir];
+  // spear: a straight thrust streak rather than a sweeping arc
+  if(slashFx.kind==='spear'){
+    const fade=1-p;
+    const x0=player.x+d[0]*16, y0=player.y+d[1]*16;
+    const x1=player.x+d[0]*66, y1=player.y+d[1]*66;
+    G.save(); G.strokeStyle='rgba(220,235,255,'+fade*0.8+')'; G.lineWidth=5; G.lineCap='round';
+    G.beginPath(); G.moveTo(x0,y0); G.lineTo(x1,y1); G.stroke();
+    G.strokeStyle='rgba(255,255,255,'+fade*0.9+')'; G.lineWidth=2;
+    G.beginPath(); G.moveTo(x0,y0); G.lineTo(x1,y1); G.stroke();
+    G.restore();
+    return;
+  }
   const charged=slashFx.kind==='charge';
   const finisher=slashFx.kind===2;
   const big=slashFx.big;
@@ -1550,6 +1794,15 @@ function drawHUD(){
     const filled=Game.hp-i*2;
     drawHudHeart(24+i*30,26, filled>=2?1:filled===1?0.5:0);
   }
+  // equipped weapon chip (left of hearts area, after hearts)
+  const wx=24+(Game.maxHp/2)*30+18;
+  drawWeaponChip(wx, 26);
+  // bombs counter
+  drawBombIcon(wx+92, 26);
+  G.fillStyle='#f5e9c8'; G.font='bold 16px monospace'; G.textAlign='left'; G.fillText('×'+Game.bombs, wx+104, 31);
+  // attack-power pips
+  if(Game.atkBonus>0){ G.fillStyle='#ff9a4a'; G.font='12px monospace'; G.fillText('⚔+'+Game.atkBonus, wx+150, 31); }
+  // bones + keys (top-right)
   drawBone(W-150,24);
   G.fillStyle='#f5e9c8'; G.font='bold 20px monospace'; G.textAlign='left'; G.fillText('×'+Game.bones, W-132, 31);
   G.fillStyle='#e9b84a'; G.font='18px monospace'; G.fillText('🔑'+Game.keys, W-66, 30);
@@ -1558,6 +1811,28 @@ function drawHUD(){
   G.fillStyle='#44507a'; G.font='10px monospace'; G.textAlign='right'; G.fillText('M:音 '+(Sound.muted?'OFF':'ON'), W-12, 70);
   G.textAlign='left';
 }
+function drawWeaponChip(x,y){
+  G.save(); G.translate(x,y);
+  G.fillStyle='rgba(255,255,255,.10)'; G.strokeStyle='#e9b84a'; G.lineWidth=1.5;
+  roundRect(-14,-15,72,30,7); G.fill(); G.stroke();
+  // mini weapon glyph
+  G.save(); G.translate(0,0);
+  if(Game.weapon==='sword'){ G.strokeStyle='#dfe6f0'; G.lineWidth=3; G.beginPath(); G.moveTo(0,8); G.lineTo(0,-9); G.stroke(); G.fillStyle='#e9b84a'; G.fillRect(-5,4,10,3); }
+  else if(Game.weapon==='spear'){ G.strokeStyle='#8a6038'; G.lineWidth=3; G.beginPath(); G.moveTo(0,9); G.lineTo(0,-7); G.stroke(); G.fillStyle='#cfd8e6'; G.beginPath(); G.moveTo(0,-12); G.lineTo(-4,-6); G.lineTo(4,-6); G.closePath(); G.fill(); }
+  else { G.strokeStyle='#7a5a30'; G.lineWidth=2.5; G.beginPath(); G.arc(-3,0,9,-1.2,1.2); G.stroke(); G.strokeStyle='#fff'; G.lineWidth=1; G.beginPath(); G.moveTo(-3+9*Math.cos(-1.2),9*Math.sin(-1.2)); G.lineTo(-3+9*Math.cos(1.2),9*Math.sin(1.2)); G.stroke(); }
+  G.restore();
+  G.fillStyle='#fff'; G.font='bold 13px "Trebuchet MS",sans-serif'; G.textAlign='left'; G.fillText(WEAPON_NAME[Game.weapon], 14, 5);
+  G.restore(); G.textAlign='left';
+}
+function drawBombIcon(x,y){
+  G.save(); G.translate(x,y);
+  G.fillStyle='#22242c'; G.beginPath(); G.arc(0,2,8,0,7); G.fill();
+  G.fillStyle='rgba(255,255,255,.25)'; G.beginPath(); G.arc(-2,0,2.4,0,7); G.fill();
+  G.strokeStyle='#9a7a4a'; G.lineWidth=2; G.beginPath(); G.moveTo(0,-6); G.quadraticCurveTo(4,-11,7,-8); G.stroke();
+  G.fillStyle='#ffd24a'; G.beginPath(); G.arc(7,-8,2,0,7); G.fill();
+  G.restore();
+}
+function roundRect(x,y,w,h,r){ G.beginPath(); G.moveTo(x+r,y); G.arcTo(x+w,y,x+w,y+h,r); G.arcTo(x+w,y+h,x,y+h,r); G.arcTo(x,y+h,x,y,r); G.arcTo(x,y,x+w,y,r); G.closePath(); }
 function drawHudHeart(x,y,fill){
   G.save(); G.translate(x,y);
   G.fillStyle='#3a1a26'; heartPath(11); G.fill();
@@ -1618,10 +1893,12 @@ function gameOver(win){
 }
 function resetGame(){
   Object.assign(Game,{ roomId:'1,1', bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
-    visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{} });
-  Object.assign(player,{ dir:'down', attacking:false, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
+    visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{},
+    weapon:'sword', weapons:{sword:true, spear:false, bow:false}, bombs:3, maxBombs:9, atkBonus:0 });
+  Object.assign(player,{ dir:'down', weapon:'sword', attacking:false, spearing:false, atkCd:0, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
     combo:0, comboWindow:0, charging:false, chargeT:0, chargeReady:false, atkKind:0, z:0, zv:0, jumping:false });
-  boss=null; enemies=[]; pickups=[]; particles=[]; enemyShots=[]; slashFx=null; msg=null; shake=0;
+  boss=null; enemies=[]; pickups=[]; particles=[]; enemyShots=[]; arrows=[]; liveBombs=[]; slashFx=null; msg=null; shake=0;
+  const ab=$('b-attack'); if(ab) ab.textContent='剣';
   enterRoom('1,1','start'); State='play';
   showMsg('南へ向かい 城のカギを 探そう！');
 }
