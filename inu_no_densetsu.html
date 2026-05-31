@@ -94,7 +94,7 @@
     position:absolute; pointer-events:none;
     right:calc(env(safe-area-inset-right,0px) + 3vmin);
     bottom:calc(env(safe-area-inset-bottom,0px) + 4vmin);
-    width:42vmin; height:42vmin; max-width:230px; max-height:230px; min-width:150px; min-height:150px;
+    width:48vmin; height:48vmin; max-width:260px; max-height:260px; min-width:168px; min-height:168px;
   }
   .abtn {
     position:absolute; pointer-events:auto; touch-action:none;
@@ -105,12 +105,16 @@
   }
   .abtn.pressed { transform:translateY(3px); box-shadow:0 1px 0 #00000055; filter:brightness(1.15); }
   #b-attack {
-    right:0; bottom:0; width:55%; height:55%;
+    right:0; bottom:0; width:48%; height:48%;
     background:radial-gradient(circle at 40% 35%, #ffe08a, #d09020);
   }
   #b-roll {
-    left:0; bottom:14%; width:42%; height:42%;
+    left:0; bottom:8%; width:38%; height:38%;
     background:radial-gradient(circle at 40% 35%, #9fd0ff, #3a78c0); color:#06203a;
+  }
+  #b-jump {
+    right:6%; top:0; width:38%; height:38%;
+    background:radial-gradient(circle at 40% 35%, #b6f5a0, #4aa830); color:#0a2a06;
   }
   /* top-right mini buttons (mute / fullscreen) */
   #mini { position:absolute; pointer-events:none; top:calc(env(safe-area-inset-top,0px) + 2vmin); right:calc(env(safe-area-inset-right,0px) + 2vmin); display:flex; gap:8px; }
@@ -145,6 +149,7 @@
       <div id="acts">
         <div id="b-attack" class="abtn">剣</div>
         <div id="b-roll" class="abtn">回避</div>
+        <div id="b-jump" class="abtn">跳</div>
       </div>
       <div id="mini">
         <div id="m-sound" class="mini-btn">🔊</div>
@@ -174,9 +179,10 @@
       <div class="controls">
         <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> 剣で斬る<br>
         <span class="k">J を連打</span> 3段コンボ　　<span class="k">J を長押し→はなす</span> ためた一閃（強）<br>
-        <span class="k">K / Shift</span> ローリング回避　　<span class="k">M</span> 音ON/OFF<br>
-        宝箱は<span class="k">近づくと</span>開く　　草むらは<span class="k">斬ると</span>こわせる<br>
-        <span class="k">スマホ</span>は左スティックで移動・右の剣/回避ボタンで操作（剣長押しでため攻撃）
+        <span class="k">K / Shift</span> ローリング回避　　<span class="k">L / F</span> ジャンプ（飛び道具をかわす！）<br>
+        <span class="k">M</span> 音ON/OFF　　宝箱は<span class="k">近づくと</span>開く　　草むらは<span class="k">斬ると</span>こわせる<br>
+        <span class="k">魔導士</span>は<b>火の玉</b>を撃ってくる。ジャンプか回避でかわそう<br>
+        <span class="k">スマホ</span>は左スティック移動・右の剣/回避/跳ボタン（剣長押しでため攻撃）
       </div>
     </div>
 
@@ -219,10 +225,19 @@ function angleDir(dx,dy){ return Math.abs(dx)>=Math.abs(dy)?(dx>0?'right':'left'
 const Sound = (()=>{
   let ctx=null, master=null, musicGain=null, muted=false;
   function init(){
-    if(ctx) return;
+    if(ctx){ if(ctx.state==='suspended') ctx.resume(); return; }
     ctx = new (window.AudioContext||window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value=0.35; master.connect(ctx.destination);
-    musicGain = ctx.createGain(); musicGain.gain.value=0.55; musicGain.connect(master);
+    master = ctx.createGain(); master.gain.value=0.4; master.connect(ctx.destination);
+    musicGain = ctx.createGain(); musicGain.gain.value=0.7; musicGain.connect(master);
+    // iOS/Safari unlock: resume on the first user gesture if it starts suspended.
+    if(ctx.state==='suspended'){
+      const unlock=()=>{ ctx.resume().then(()=>{
+        if(ctx.state==='running'){
+          ['pointerdown','touchstart','keydown','click'].forEach(ev=>removeEventListener(ev,unlock,true));
+        }
+      }); };
+      ['pointerdown','touchstart','keydown','click'].forEach(ev=>addEventListener(ev,unlock,true));
+    }
     if(mTrack){ mNext=ctx.currentTime+0.05; if(!mTimer) mTimer=setInterval(mTick,40); }
   }
   function blip(freq=440,dur=0.08,type='square',vol=0.5,slide=0){
@@ -263,6 +278,9 @@ const Sound = (()=>{
     chargeHit:()=>{noise(0.2,0.6); blip(150,0.25,'sawtooth',0.45,-60); setTimeout(()=>blip(90,0.3,'square',0.4,-30),40);},
     combo2:()=>blip(720,0.09,'square',0.35,-200),
     combo3:()=>{blip(880,0.12,'square',0.4,-260); setTimeout(()=>noise(0.12,0.4),20);},
+    jump: ()=>blip(420,0.18,'sine',0.3,360),
+    land: ()=>{blip(260,0.09,'sine',0.25,-120); noise(0.06,0.2);},
+    cast: ()=>{blip(520,0.14,'sawtooth',0.3,260); setTimeout(()=>blip(740,0.1,'square',0.25),60);},
   };
 
   /* ── procedural BGM: looping chiptune driven by a step sequencer ── */
@@ -287,8 +305,12 @@ const Sound = (()=>{
     while(mNext < ctx.currentTime+0.1){
       const t=mNext;
       const li=mStep%tr.lead.length, bi=mStep%tr.bass.length, di=mStep%tr.drum.length;
-      const ln=tr.lead[li]; if(ln!==null&&ln!==undefined) mNote(N(ln+12), t, spb*0.9, 'square', 0.16);
-      const bn=tr.bass[bi]; if(bn!==null&&bn!==undefined) mNote(N(bn), t, spb*1.6, 'triangle', 0.28);
+      const ln=tr.lead[li];
+      if(ln!==null&&ln!==undefined){
+        mNote(N(ln+12), t, spb*0.9, 'square', 0.20);      // lead
+        mNote(N(ln+19), t, spb*0.9, 'triangle', 0.07);    // soft fifth-up sparkle for body
+      }
+      const bn=tr.bass[bi]; if(bn!==null&&bn!==undefined) mNote(N(bn), t, spb*1.6, 'triangle', 0.34);
       const dr=tr.drum[di]; if(dr===1) mKick(t); else if(dr===2) mHat(t);
       mStep++; mNext+=spb;
     }
@@ -327,23 +349,24 @@ const Sound = (()=>{
 
 /* ─────────────────────────────  INPUT  ───────────────────────────── */
 const Keys = {};
-const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false, _atkEdge:false, _atkRelEdge:false, _rollEdge:false };
+const Input = { up:false,down:false,left:false,right:false,attack:false,roll:false,jump:false, _atkEdge:false, _atkRelEdge:false, _rollEdge:false, _jumpEdge:false };
 const KEYMAP = {
   'ArrowUp':'up','KeyW':'up','ArrowDown':'down','KeyS':'down',
   'ArrowLeft':'left','KeyA':'left','ArrowRight':'right','KeyD':'right',
   'KeyJ':'attack','Space':'attack','KeyK':'roll','ShiftLeft':'roll','ShiftRight':'roll',
+  'KeyL':'jump','KeyF':'jump',
 };
-const Touch={up:false,down:false,left:false,right:false,attack:false,roll:false};
+const Touch={up:false,down:false,left:false,right:false,attack:false,roll:false,jump:false};
 addEventListener('keydown',e=>{
   if(KEYMAP[e.code]){ e.preventDefault(); if(!Keys[e.code]){ Keys[e.code]=true; edge(KEYMAP[e.code]); } }
   if(e.code==='KeyM') Sound.toggle();
 });
 addEventListener('keyup',e=>{ if(KEYMAP[e.code]){ e.preventDefault(); Keys[e.code]=false; if(KEYMAP[e.code]==='attack') Input._atkRelEdge=true; } });
-function edge(act){ if(act==='attack') Input._atkEdge=true; if(act==='roll') Input._rollEdge=true; }
+function edge(act){ if(act==='attack') Input._atkEdge=true; if(act==='roll') Input._rollEdge=true; if(act==='jump') Input._jumpEdge=true; }
 function refreshInput(){
   const held=a=>Touch[a] || Object.keys(KEYMAP).some(k=>KEYMAP[k]===a && Keys[k]);
   Input.up=held('up'); Input.down=held('down'); Input.left=held('left'); Input.right=held('right');
-  Input.attack=held('attack'); Input.roll=held('roll');
+  Input.attack=held('attack'); Input.roll=held('roll'); Input.jump=held('jump');
 }
 function isTouchDevice(){
   return ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer:coarse)').matches;
@@ -404,7 +427,7 @@ function bindTouch(){
     const el=$(id);
     el.addEventListener('pointerdown',e=>{
       e.preventDefault(); el.classList.add('pressed'); Touch[act]=true; Sound.init();
-      if(act==='attack')Input._atkEdge=true; if(act==='roll')Input._rollEdge=true;
+      if(act==='attack')Input._atkEdge=true; if(act==='roll')Input._rollEdge=true; if(act==='jump')Input._jumpEdge=true;
       try{el.setPointerCapture(e.pointerId);}catch(_){}
     });
     const up=e=>{ e.preventDefault(); el.classList.remove('pressed'); Touch[act]=false; if(act==='attack')Input._atkRelEdge=true; };
@@ -413,6 +436,7 @@ function bindTouch(){
   }
   bindBtn('b-attack','attack');
   bindBtn('b-roll','roll');
+  bindBtn('b-jump','jump');
 
   // ── mini buttons: sound + fullscreen ──
   $('m-sound').addEventListener('click',()=>{ Sound.init(); const m=Sound.toggle(); $('m-sound').textContent=m?'🔇':'🔊'; });
@@ -468,7 +492,7 @@ const ROOMS = {
     "#~~..~~~~~~..~~#",
     "#~~~........~~~#",
     "################",
-  ], enemies:[ ['slime',7,4],['bat',3,2],['bat',12,8] ], chest:{tx:8,ty:5,item:'heartmax'} },
+  ], enemies:[ ['slime',7,4],['mage',3,2],['bat',12,8] ], chest:{tx:8,ty:5,item:'heartmax'} },
 
   "1,2": { biome:'ruins', map:[
     "######....######",
@@ -482,7 +506,7 @@ const ROOMS = {
     "#..b........b..#",
     "#....,....,....#",
     "################",
-  ], enemies:[ ['skeleton',5,4],['skeleton',10,6],['slime',8,8] ], chest:{tx:8,ty:4,item:'key'} },
+  ], enemies:[ ['skeleton',5,4],['mage',10,6],['slime',8,8] ], chest:{tx:8,ty:4,item:'key'} },
 
   // ===== DUNGEON =====
   "d,0": { biome:'dungeon', map:[
@@ -497,7 +521,7 @@ const ROOMS = {
     "#..............#",
     "######....######",
     "######....######",
-  ], enemies:[ ['skeleton',4,7],['bat',11,2],['skeleton',12,8] ], chest:{tx:8,ty:2,item:'bones'}, locked:{tx:6,ty:5} },
+  ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',12,8] ], chest:{tx:8,ty:2,item:'bones'}, locked:{tx:6,ty:5} },
 
   "d,1": { biome:'dungeon', boss:true, map:[
     "######....######",
@@ -543,12 +567,15 @@ const player = {
   combo:0, comboWindow:0,          // combo chain step (0..2) and grace timer
   charging:false, chargeT:0, chargeReady:false, // hold-to-charge state
   rolling:false, rollTime:0, rollDur:0.34, rollCd:0, rdx:0, rdy:0,
+  z:0, zv:0, jumping:false,         // vertical hop: z=height, zv=vertical velocity
   invuln:0, walkPhase:0, alive:true, flash:0,
   kbT:0, knockx:0, knocky:0,
 };
 const CHARGE_TIME=0.55;            // hold this long for a fully-charged strike
+const JUMP_V=320, GRAVITY=900;     // hop launch speed and fall accel (px/s, px/s^2)
 
 let enemies=[], particles=[], pickups=[], slashFx=null, boss=null;
+let enemyShots=[];                 // projectiles fired by ranged enemies (mages)
 let transition=null, shake=0, msg=null;
 
 /* Quest objective shown in the HUD so the player always knows what to do next. */
@@ -574,7 +601,7 @@ function enterRoom(id, entrySide){
   if(broken) for(const key of broken){ const [tx,ty]=key.split(',').map(Number); if(r.map[ty]) r.map[ty][tx]='.'; }
   if(Game.lockOpened[id] && def.locked){ r.map[def.locked.ty][def.locked.tx]='.'; r.map[def.locked.ty][def.locked.tx+1]='.'; }
 
-  enemies=[]; boss=null; pickups=[]; particles=[];
+  enemies=[]; boss=null; pickups=[]; particles=[]; enemyShots=[];
   const bossPending = def.boss && !Game.visited[id];
   if(!Game.visited[id]){
     for(const e of def.enemies||[]) spawnEnemy(e[0], e[1]*TS+TS/2, HUD_H+e[2]*TS+TS/2);
@@ -609,6 +636,7 @@ function spawnEnemy(type,x,y){
   if(type==='slime'){ Object.assign(e,{hp:2,speed:42,w:34,h:30,jump:0,jt:rand(0,2),jvx:0,jvy:0}); }
   if(type==='bat'){ Object.assign(e,{hp:1,speed:78,w:30,h:24}); }
   if(type==='skeleton'){ Object.assign(e,{hp:3,speed:55,w:30,h:34}); }
+  if(type==='mage'){ Object.assign(e,{hp:2,speed:38,w:30,h:36,castT:rand(1.2,2.2),float:rand(0,6.28)}); }
   enemies.push(e);
 }
 function spawnBoss(){
@@ -689,6 +717,7 @@ function update(dt){
   for(const e of enemies) updateEnemy(e,dt);
   if(boss) updateBoss(boss,dt);
   enemies=enemies.filter(e=>!e.dead);
+  updateEnemyShots(dt);
   updatePickups(dt);
   updateParticles(dt);
   if(slashFx){ slashFx.t-=dt; if(slashFx.t<=0) slashFx=null; }
@@ -743,7 +772,19 @@ function updatePlayer(dt){
     if(dx===0&&dy===0){ const d=DIRV[player.dir]; dx=d[0]; dy=d[1]; }
     const m=Math.hypot(dx,dy)||1; player.rdx=dx/m; player.rdy=dy/m;
   }
-  Input._atkEdge=false; Input._atkRelEdge=false; Input._rollEdge=false;
+
+  // ── jump: a vertical hop. While airborne you dodge projectiles & contact. ──
+  if(Input._jumpEdge && !player.jumping && !player.rolling){
+    player.jumping=true; player.zv=JUMP_V; Sound.SFX.jump();
+  }
+  if(player.jumping){
+    player.z += player.zv*dt; player.zv -= GRAVITY*dt;
+    if(player.z<=0){ player.z=0; player.zv=0; player.jumping=false; Sound.SFX.land();
+      for(let i=0;i<6;i++) particles.push({x:player.x+rand(-8,8),y:player.y+10,vx:rand(-50,50),vy:rand(-10,10),life:0.25,max:0.25,col:'#d8cba0',r:rand(1.5,3)});
+    }
+  }
+
+  Input._atkEdge=false; Input._atkRelEdge=false; Input._rollEdge=false; Input._jumpEdge=false;
 
   const spd=player.speed;
   let mvx=0,mvy=0;
@@ -887,8 +928,37 @@ function updateEnemy(e,dt){
   } else if(e.type==='skeleton'){
     e.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
     if(d<260){ moveEntity(e,(dx/d)*e.speed*dt,0,e.w/2-2,e.h/2-2); moveEntity(e,0,(dy/d)*e.speed*dt,e.w/2-2,e.h/2-2); }
+  } else if(e.type==='mage'){
+    // ranged caster: keep at a preferred distance and lob fireballs at the player
+    e.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+    const want=180;
+    let mvx=0,mvy=0;
+    if(d<want-30){ mvx=-(dx/d)*e.speed; mvy=-(dy/d)*e.speed; }       // too close → back away
+    else if(d>want+60){ mvx=(dx/d)*e.speed*0.7; mvy=(dy/d)*e.speed*0.7; } // too far → approach
+    else { mvx=(-dy/d)*e.speed*0.5; mvy=(dx/d)*e.speed*0.5; }         // strafe sideways
+    moveEntity(e,mvx*dt,0,e.w/2-2,e.h/2-2); moveEntity(e,0,mvy*dt,e.w/2-2,e.h/2-2);
+    e.castT-=dt;
+    if(e.castT<=0 && d<320){ e.castT=rand(1.6,2.6); castFireball(e); }
   }
-  if(player.invuln<=0 && !player.rolling && d < (e.w/2+player.w/2-6)) hurtPlayer(1, dx, dy);
+  if(player.invuln<=0 && !player.rolling && player.z<14 && d < (e.w/2+player.w/2-6)) hurtPlayer(1, dx, dy);
+}
+function castFireball(e){
+  Sound.SFX.cast();
+  const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1;
+  enemyShots.push({ x:e.x, y:e.y-6, vx:dx/d*200, vy:dy/d*200, life:3.2, r:8, t:0 });
+  for(let i=0;i<6;i++) particles.push({x:e.x,y:e.y-6,vx:rand(-40,40),vy:rand(-40,40),life:0.3,max:0.3,col:'#ff8a3a',r:rand(2,3)});
+}
+function updateEnemyShots(dt){
+  for(const s of enemyShots){
+    s.t+=dt; s.x+=s.vx*dt; s.y+=s.vy*dt; s.life-=dt;
+    // airborne player dodges fireballs; rolling i-frames also dodge
+    if(player.invuln<=0 && !player.rolling && player.z<14 && dist(s.x,s.y,player.x,player.y)<(s.r+10)){
+      hurtPlayer(1, s.vx, s.vy); s.life=0;
+      for(let i=0;i<8;i++) particles.push({x:s.x,y:s.y,vx:rand(-120,120),vy:rand(-120,120),life:0.3,max:0.3,col:'#ff8a3a',r:rand(2,4)});
+    }
+    if(s.x<TS*0.2||s.x>W-TS*0.2||s.y<HUD_H+TS*0.2||s.y>HUD_H+FIELD_H-TS*0.2 || solidAtPoint(s.x,s.y)) s.life=0;
+  }
+  enemyShots=enemyShots.filter(s=>s.life>0);
 }
 function damageEnemy(e,dir,dmg,kb){
   if(e.hurt>0) return;
@@ -961,7 +1031,8 @@ function killBoss(){
 }
 
 function hurtPlayer(dmg,dx,dy){
-  if(player.invuln>0||player.rolling) return;
+  // airborne (mid/high in a hop) dodges ground attacks & projectiles
+  if(player.invuln>0||player.rolling||player.z>14) return;
   Game.hp-=dmg; player.invuln=1.1; player.flash=1.1; Sound.SFX.hurt(); shake=Math.max(shake,0.3);
   const d=Math.hypot(dx,dy)||1; player.knockx=(dx/d)*300; player.knocky=(dy/d)*300; player.kbT=0.18;
 }
@@ -993,6 +1064,7 @@ function draw(){
   drawPickups();
   drawParticles();
   drawEnemies();
+  drawEnemyShots();
   if(boss) drawBoss(boss);
   drawPlayer();
   if(slashFx) drawSlash();
@@ -1161,6 +1233,36 @@ function drawEnemies(){
     if(e.type==='slime') drawSlime(e,flash);
     else if(e.type==='bat') drawBat(e,flash);
     else if(e.type==='skeleton') drawSkeleton(e,flash);
+    else if(e.type==='mage') drawMage(e,flash);
+  }
+}
+function drawMage(e,flash){
+  shadow(e.x,e.y,13);
+  const fl=Math.sin(now()*3+e.float)*3;
+  G.save(); G.translate(e.x,e.y+fl);
+  // dark robe
+  G.fillStyle=flash?'#fff':'#5a3a8a';
+  G.beginPath(); G.moveTo(0,-14); G.lineTo(13,16); G.lineTo(-13,16); G.closePath(); G.fill();
+  G.fillStyle=flash?'#fff':'#6f4aa6'; G.fillRect(-9,2,18,8);
+  // hood + face
+  G.fillStyle=flash?'#fff':'#4a2e74'; G.beginPath(); G.arc(0,-14,10,Math.PI,0); G.fill(); G.fillRect(-10,-14,20,8);
+  G.fillStyle='#1a0f2a'; G.beginPath(); G.arc(0,-10,6,0,7); G.fill();
+  G.fillStyle='#ff7a3a'; G.beginPath(); G.arc(-2.5,-10,1.6,0,7); G.arc(2.5,-10,1.6,0,7); G.fill(); // glowing eyes
+  // staff with ember orb
+  G.strokeStyle='#7a5a32'; G.lineWidth=3; G.beginPath(); G.moveTo(11,-2); G.lineTo(15,18); G.stroke();
+  const g=0.5+0.5*Math.abs(Math.sin(now()*5));
+  G.fillStyle='rgba(255,140,60,'+g+')'; G.beginPath(); G.arc(11,-6,5,0,7); G.fill();
+  G.fillStyle='#ffd56a'; G.beginPath(); G.arc(11,-6,2.4,0,7); G.fill();
+  G.restore();
+}
+function drawEnemyShots(){
+  for(const s of enemyShots){
+    const pulse=0.7+0.3*Math.sin(s.t*20);
+    // fiery trail
+    G.fillStyle='rgba(255,120,40,0.25)'; G.beginPath(); G.arc(s.x,s.y,s.r+4,0,7); G.fill();
+    G.fillStyle='#ff7a2a'; G.beginPath(); G.arc(s.x,s.y,s.r*pulse,0,7); G.fill();
+    G.fillStyle='#ffd66a'; G.beginPath(); G.arc(s.x,s.y,s.r*0.5,0,7); G.fill();
+    G.fillStyle='rgba(255,255,255,.8)'; G.beginPath(); G.arc(s.x-2,s.y-2,s.r*0.22,0,7); G.fill();
   }
 }
 function drawSlime(e,flash){
@@ -1224,7 +1326,11 @@ function drawBoss(b){
 /* ── player (the dog knight!) ── */
 function drawPlayer(){
   const x=player.x, y=player.y;
-  shadow(x,y,16);
+  // ground shadow shrinks as the dog hops higher (sells the vertical jump)
+  const zsh=clamp(1-player.z/120,0.45,1);
+  G.save(); G.globalAlpha=0.25*zsh;
+  G.fillStyle='#000'; G.beginPath(); G.ellipse(x,y+12,16*zsh,16*0.4*zsh,0,0,7); G.fill();
+  G.restore();
   // charge aura: grows while holding, pulses gold when fully charged
   if(player.charging && player.chargeT>0.12){
     const cr=clamp(player.chargeT/CHARGE_TIME,0,1);
@@ -1244,7 +1350,7 @@ function drawPlayer(){
   const dir=player.dir;
   const step=Math.sin(player.walkPhase)*3;
 
-  G.save(); G.translate(x,y);
+  G.save(); G.translate(x,y-player.z);   // lift the whole body by the hop height
   if(player.rolling){ G.rotate(player.rollTime/player.rollDur*Math.PI*2*(dir==='left'?-1:1)); }
 
   const capeWag=Math.sin(now()*8)*4 + step;
@@ -1397,8 +1503,8 @@ function resetGame(){
   Object.assign(Game,{ roomId:'1,1', bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
     visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{} });
   Object.assign(player,{ dir:'down', attacking:false, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
-    combo:0, comboWindow:0, charging:false, chargeT:0, chargeReady:false, atkKind:0 });
-  boss=null; enemies=[]; pickups=[]; particles=[]; slashFx=null; msg=null; shake=0;
+    combo:0, comboWindow:0, charging:false, chargeT:0, chargeReady:false, atkKind:0, z:0, zv:0, jumping:false });
+  boss=null; enemies=[]; pickups=[]; particles=[]; enemyShots=[]; slashFx=null; msg=null; shake=0;
   enterRoom('1,1','start'); State='play';
   showMsg('南へ向かい 城のカギを 探そう！');
 }
