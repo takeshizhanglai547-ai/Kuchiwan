@@ -204,12 +204,12 @@
         <div class="crest">⚔ 聖犬士イッヌの伝説 ⚔<span class="sub">THE LEGEND OF INU</span></div>
         <div class="tag">
           勇気と優しさを胸に、<b>聖犬士イッヌ</b>が王国を救う旅へ。<br>
-          <b>影の魔狼ガルム</b>が王国の宝珠を奪い、各地に5体のぬしを放った。<br>
+          王国の宝珠を奪った 謎の<b>黒騎士イヌ</b>。各地に5体のぬしを放った。<br>
           草原・森・湖・遺跡・暗黒城——<b>全5ステージ</b>の<b>ボス</b>を倒し、<br>
-          魔狼ガルムを討って、王国に平和を取り戻せ！
+          最後は宿命のライバル <b>黒騎士イヌ</b>を討って、平和を取り戻せ！
         </div>
         <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
-      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v10 ・ 残機3制</div>
+      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v11 ・ ライバル戦＆エンディング</div>
         <div class="controls">
           <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
           <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
@@ -653,7 +653,7 @@ const ROOMS = {
     "#..............#",
     "################",
   ], enemies:[ ['skeleton',4,7],['mage',11,2],['mage',4,3],['skeleton',12,8] ], chest:{tx:8,ty:2,item:['atkup','heartmax']} },
-  "s5b": { biome:'dungeon', stage:5, bossRoom:'shadowWolf', final:true, map:[
+  "s5b": { biome:'dungeon', stage:5, bossRoom:'rivalInu', final:true, map:[
     "######....######",
     "#..............#",
     "#..............#",
@@ -792,20 +792,31 @@ function spawnEnemy(type,x,y){
 }
 /* Per-boss config: hp, size, move speed, palette, name, and which attacks it
    uses (charge dash and/or radial bullet spray). */
+// Each boss has an `attacks` list it picks from after a wind-up. Attack kinds:
+//   charge   – dash at the player
+//   spray    – radial ring of bullets
+//   fan      – tight aimed fan at the player
+//   ring     – full ring with one dodgeable gap
+//   cross    – 8-way cross volley, repeated twice
+//   spiral   – sustained rotating stream (handled via a 'cast' state)
+//   rival    – (final only) switch weapon & attack like the player
 const BOSSES={
-  slimeKing:   { name:'スライム王 グニョン',   hp:14, w:88, h:78, speed:60,  col:'#5fd06a', dark:'#2f8a3a', shoot:false, charge:true,  shots:3 },
-  batLord:     { name:'大コウモリ ヴェスパ',   hp:18, w:76, h:60, speed:96,  col:'#7a5aa6', dark:'#3a2860', shoot:true,  charge:true,  shots:5 },
-  waterDragon: { name:'水竜 アクオス',          hp:24, w:92, h:80, speed:74,  col:'#3fb0e0', dark:'#1f6aa8', shoot:true,  charge:false, shots:7 },
-  boneKing:    { name:'骸骨王 オステオ',        hp:30, w:84, h:84, speed:80,  col:'#e8e4d8', dark:'#9a9488', shoot:true,  charge:true,  shots:6 },
-  shadowWolf:  { name:'影の魔狼 ガルム',        hp:38, w:90, h:90, speed:84,  col:'#352a48', dark:'#1a1426', shoot:true,  charge:true,  shots:8 },
+  slimeKing:   { name:'スライム王 グニョン',   hp:14, w:88, h:78, speed:60,  col:'#5fd06a', dark:'#2f8a3a', shots:6,  attacks:['charge','ring','fan'] },
+  batLord:     { name:'大コウモリ ヴェスパ',   hp:18, w:76, h:60, speed:96,  col:'#7a5aa6', dark:'#3a2860', shots:5,  attacks:['spiral','fan','charge'] },
+  waterDragon: { name:'水竜 アクオス',          hp:24, w:92, h:80, speed:74,  col:'#3fb0e0', dark:'#1f6aa8', shots:7,  attacks:['ring','spiral','fan'] },
+  boneKing:    { name:'骸骨王 オステオ',        hp:30, w:84, h:84, speed:80,  col:'#e8e4d8', dark:'#9a9488', shots:6,  attacks:['cross','fan','charge','spray'] },
+  rivalInu:    { name:'黒騎士イヌ',             hp:42, w:34, h:34, speed:150, col:'#2a2436', dark:'#141019', rival:true, attacks:['rival'] },
 };
 function spawnBoss(kind){
   Sound.SFX.boss();
-  const c=BOSSES[kind]||BOSSES.shadowWolf;
+  const c=BOSSES[kind]||BOSSES.rivalInu;
   const isFinal=!!(Game.room&&Game.room.def&&Game.room.def.final);
   boss={ type:'boss', kind, cfg:c, name:c.name, final:isFinal, x:W/2, y:HUD_H+FIELD_H*0.42, w:c.w, h:c.h,
          hp:c.hp, maxHp:c.hp, dir:'down', t:0, hurt:0, knock:{x:0,y:0}, dead:false,
-         phase:0, state:'idle', stTime:1.5, chx:0, chy:0, chT:0, windT:0, shots:[], speed:c.speed, intro:1.6 };
+         phase:0, state:'idle', stTime:1.5, chx:0, chy:0, chT:0, windT:0, atk:null, atkT:0, castT:0, castAng:0, rep:0,
+         shots:[], speed:c.speed, intro:1.6,
+         // rival-only: mirrors the player's arsenal
+         weapon:'sword', wTimer:rand(2.2,3.4), atkCd:0, atkKind:null, atkAnim:0, atkDir:'down', rivalArrows:[], walkPhase:0 };
   shake=0.6;
 }
 
@@ -882,6 +893,7 @@ function saveRoomState(){
 function update(dt){
   refreshInput();
   if(State==='transition'){ updateTransition(dt); return; }
+  if(State==='ending'){ updateEnding(dt); return; }
   if(State!=='play') return;
 
   if(player.invuln>0) player.invuln-=dt;
@@ -1317,41 +1329,141 @@ function updateBoss(b,dt){
     b.knock.x*=0.88; b.knock.y*=0.88;
   }
   b.phase = b.hp>b.maxHp*0.66?0 : b.hp>b.maxHp*0.33?1 : 2;  // enrage as HP drops
-  const spd=b.speed*(1+b.phase*0.3);
-  const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
-  const canCharge=b.cfg.charge, canShoot=b.cfg.shoot;
-  b.stTime-=dt;
-  if(b.state==='idle'){
-    moveEntity(b,(dx/d)*spd*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,(dy/d)*spd*dt,b.w/2-6,b.h/2-6);
-    if(b.stTime<=0){ b.stTime=rand(1.4,2.2)-b.phase*0.3; b.state='wind'; b.windT=0.5; }
-  } else if(b.state==='wind'){
-    b.windT-=dt;
-    if(b.windT<=0){
-      // choose an attack the boss is capable of (prefer shooting in later phases)
-      const wantShoot = canShoot && (!canCharge || (b.phase>=1 && Math.random()<0.6) || (b.phase===0 && Math.random()<0.35));
-      if(wantShoot){ bossShoot(b); b.state='idle'; b.stTime=rand(0.8,1.4); }
-      else if(canCharge){ b.state='charge'; b.chx=dx/d; b.chy=dy/d; b.chT=0.55; }
-      else { b.state='idle'; b.stTime=rand(0.6,1.0); }
-    }
-  } else if(b.state==='charge'){
-    b.chT-=dt;
-    moveEntity(b,b.chx*spd*3.4*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,b.chy*spd*3.4*dt,b.w/2-6,b.h/2-6);
-    if(b.chT<=0){ b.state='idle'; b.stTime=rand(0.6,1.2); }
-  }
-  b.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+
+  if(b.cfg.rival){ updateRivalBoss(b,dt); }
+  else            { updatePatternBoss(b,dt); }
+
+  // shared: bullet motion + contact
   for(const s of b.shots){
     s.x+=s.vx*dt; s.y+=s.vy*dt; s.life-=dt;
-    if(player.invuln<=0 && !player.rolling && player.z<14 && dist(s.x,s.y,player.x,player.y)<22){ hurtPlayer(1, s.vx,s.vy); s.life=0; }
+    if(player.invuln<=0 && !player.rolling && player.z<14 && dist(s.x,s.y,player.x,player.y)<(s.r+10)){ hurtPlayer(1, s.vx,s.vy); s.life=0; }
     if(s.x<TS*0.3||s.x>W-TS*0.3||s.y<HUD_H+TS*0.3||s.y>HUD_H+FIELD_H-TS*0.3) s.life=0;
   }
   b.shots=b.shots.filter(s=>s.life>0);
   if(player.invuln<=0 && !player.rolling && player.z<14 && dist(b.x,b.y,player.x,player.y)<(b.w/2+player.w/2-10)) hurtPlayer(2, player.x-b.x, player.y-b.y);
 }
-function bossShoot(b){
+
+/* pattern bosses (stages 1-4): wander, wind up, then run a chosen attack */
+function updatePatternBoss(b,dt){
+  const spd=b.speed*(1+b.phase*0.3);
+  const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
+  b.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+  b.stTime-=dt;
+  if(b.state==='idle'){
+    moveEntity(b,(dx/d)*spd*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,(dy/d)*spd*dt,b.w/2-6,b.h/2-6);
+    if(b.stTime<=0){ b.state='wind'; b.windT=0.45; b.atk=pickAttack(b); }
+  } else if(b.state==='wind'){
+    b.windT-=dt;
+    if(b.windT<=0) startBossAttack(b,b.atk);
+  } else if(b.state==='charge'){
+    b.chT-=dt;
+    moveEntity(b,b.chx*spd*3.4*dt,0,b.w/2-6,b.h/2-6); moveEntity(b,0,b.chy*spd*3.4*dt,b.w/2-6,b.h/2-6);
+    if(b.chT<=0){ b.state='idle'; b.stTime=rand(0.5,1.0); }
+  } else if(b.state==='cast'){
+    // sustained spiral: emit a steady rotating stream for a while
+    b.castT-=dt; b.atkT-=dt;
+    if(b.atkT<=0){ b.atkT=0.08; b.castAng+=0.42;
+      for(const s of [0,Math.PI]){ const a=b.castAng+s; bossBullet(b, Math.cos(a), Math.sin(a), 150); }
+    }
+    if(b.castT<=0){ b.state='idle'; b.stTime=rand(0.6,1.1); }
+  } else if(b.state==='volley'){
+    // cross: fire a couple of timed 8-way bursts
+    b.atkT-=dt;
+    if(b.atkT<=0){ b.rep--; ringShot(b, 8, b.rep%2? Math.PI/8:0, 170);
+      if(b.rep<=0){ b.state='idle'; b.stTime=rand(0.6,1.1); } else b.atkT=0.28; }
+  }
+}
+function pickAttack(b){
+  let list=b.cfg.attacks;
+  // in phase 0 the slime/early bosses lean on charge; later phases favour bullets
+  if(b.phase===0) list=list.filter((a,i)=> a==='charge'|| Math.random()<0.5).concat('charge');
+  return list[(Math.random()*list.length)|0];
+}
+function startBossAttack(b,kind){
+  const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
+  switch(kind){
+    case 'charge': b.state='charge'; b.chx=dx/d; b.chy=dy/d; b.chT=0.55; Sound.SFX.boss(); break;
+    case 'spray':  ringShot(b, (b.cfg.shots||6)+(b.phase>=2?2:0), b.t, 175); b.state='idle'; b.stTime=rand(0.7,1.2); break;
+    case 'ring':   ringShot(b, 12, b.t, 150, /*gapAtPlayer*/true); b.state='idle'; b.stTime=rand(0.8,1.3); break;
+    case 'fan':    fanShot(b, Math.atan2(dy,dx), b.phase>=1?5:3, 0.32, 220); b.state='idle'; b.stTime=rand(0.5,0.9); break;
+    case 'cross':  b.state='volley'; b.rep=2+(b.phase>=2?1:0); b.atkT=0; break;
+    case 'spiral': b.state='cast'; b.castT=1.1+b.phase*0.3; b.atkT=0; b.castAng=b.t; Sound.SFX.cast(); break;
+    default:       b.state='idle'; b.stTime=rand(0.6,1.0);
+  }
+}
+function bossBullet(b,nx,ny,sp){ b.shots.push({x:b.x,y:b.y,vx:nx*sp,vy:ny*sp,life:3.4,r:9,col:b.cfg.col}); }
+function ringShot(b,n,off,sp,gapAtPlayer){
   Sound.SFX.boss();
-  const n=(b.cfg.shots||5)+(b.phase>=2?2:0);
-  const off=b.t;
-  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2 + off; b.shots.push({x:b.x,y:b.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,life:3.2,r:9,col:b.cfg.col}); }
+  let gap=-99;
+  if(gapAtPlayer){ const pa=Math.atan2(player.y-b.y,player.x-b.x); gap=Math.round((pa-off)/(2*Math.PI/n)); }
+  for(let i=0;i<n;i++){ if(i===((gap%n)+n)%n) continue; const a=off+i*(2*Math.PI/n); bossBullet(b,Math.cos(a),Math.sin(a),sp); }
+}
+function fanShot(b,center,n,spreadEach,sp){
+  Sound.SFX.cast();
+  const start=center-(n-1)/2*spreadEach;
+  for(let i=0;i<n;i++){ const a=start+i*spreadEach; bossBullet(b,Math.cos(a),Math.sin(a),sp); }
+}
+
+/* ── RIVAL BOSS: the black-dog knight, mirrors the player's three weapons ── */
+const RIVAL_WEAPONS=['sword','spear','bow'];
+function updateRivalBoss(b,dt){
+  const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
+  b.dir = Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+  b.atkDir=b.dir;
+  if(b.atkAnim>0) b.atkAnim-=dt;
+  if(b.atkCd>0) b.atkCd-=dt;
+  if(b.wTimer>0) b.wTimer-=dt;
+
+  // periodically switch weapon (and announce it)
+  if(b.wTimer<=0){
+    b.weapon=RIVAL_WEAPONS[(RIVAL_WEAPONS.indexOf(b.weapon)+1)%3];
+    b.wTimer=rand(3.0,4.5)-b.phase*0.4;
+    Sound.SFX.swap();
+    showMsg('黒騎士イヌは「'+WEAPON_NAME[b.weapon]+'」に持ち替えた！');
+  }
+
+  const spd=b.speed*(1+b.phase*0.22);
+  // preferred range depends on the equipped weapon: bow keeps distance, sword closes in
+  const want = b.weapon==='bow'?210 : b.weapon==='spear'?92 : 58;
+  let mvx=0,mvy=0;
+  if(b.atkAnim<=0){
+    if(d>want+24){ mvx=(dx/d); mvy=(dy/d); }                 // approach
+    else if(d<want-24){ mvx=-(dx/d); mvy=-(dy/d); }          // back off
+    else { mvx=(-dy/d)*0.7; mvy=(dx/d)*0.7; }                // strafe
+    moveEntity(b,mvx*spd*dt,0,b.w/2-4,b.h/2-4); moveEntity(b,0,mvy*spd*dt,b.w/2-4,b.h/2-4);
+    if(mvx||mvy) b.walkPhase+=dt*10;
+  }
+
+  // attack when in range / off cooldown
+  if(b.atkCd<=0 && b.atkAnim<=0){
+    if(b.weapon==='bow' && d<340){ rivalFireArrow(b); }
+    else if(b.weapon==='spear' && d<118){ rivalMelee(b,'spear'); }
+    else if(b.weapon==='sword' && d<70){ rivalMelee(b,'sword'); }
+  }
+
+  // rival arrows
+  for(const a of b.rivalArrows){
+    a.x+=a.vx*dt; a.y+=a.vy*dt; a.life-=dt;
+    if(player.invuln<=0 && !player.rolling && player.z<14 && dist(a.x,a.y,player.x,player.y)<14){ hurtPlayer(1,a.vx,a.vy); a.life=0; }
+    if(a.x<TS*0.2||a.x>W-TS*0.2||a.y<HUD_H+TS*0.2||a.y>HUD_H+FIELD_H-TS*0.2||solidAtPoint(a.x,a.y)) a.life=0;
+  }
+  b.rivalArrows=b.rivalArrows.filter(a=>a.life>0);
+}
+function rivalFireArrow(b){
+  b.atkCd=0.7-b.phase*0.1; b.atkAnim=0.22; b.atkKind='bow';
+  Sound.SFX.bow();
+  const dx=player.x-b.x, dy=player.y-b.y, d=Math.hypot(dx,dy)||1;
+  b.rivalArrows.push({x:b.x+dx/d*16,y:b.y+dy/d*16,vx:dx/d*360,vy:dy/d*360,life:1.2});
+}
+function rivalMelee(b,kind){
+  b.atkCd=(kind==='spear'?0.75:0.5)-b.phase*0.08; b.atkAnim=0.26; b.atkKind=kind;
+  const reach=kind==='spear'?60:42, wide=kind==='spear'?20:30, dmg=kind==='spear'?2:1;
+  const dd=DIRV[b.dir];
+  const hx=b.x+dd[0]*reach, hy=b.y+dd[1]*reach;
+  if(player.invuln<=0 && !player.rolling && player.z<14 && dist(hx,hy,player.x,player.y)<(wide+player.w/2)) hurtPlayer(dmg, dd[0],dd[1]);
+  Sound.SFX[kind==='spear'?'spear':'swing']();
+  // a quick slash streak so the swing reads
+  for(let i=0;i<6;i++) particles.push({x:hx,y:hy,vx:rand(-90,90),vy:rand(-90,90),life:0.22,max:0.22,col:'#b06aff',r:rand(2,3)});
 }
 function damageBoss(dmg,dir){
   if(!boss||boss.dead||boss.hurt>0||boss.intro>0) return;   // null/dead-safe
@@ -1368,7 +1480,9 @@ function killBoss(){
   for(let i=0;i<70;i++) particles.push({x:bx,y:by,vx:rand(-280,280),vy:rand(-280,280),life:rand(0.6,1.4),max:1.4,col:['#ffd76a',bcol,'#fff'][i%3],r:rand(3,8)});
   if(isFinal){
     Sound.SFX.win(); Game.hasOrb=true;
-    setTimeout(()=>{ if(State==='play') gameOver(true); }, 1900);
+    const rivalX=boss.x, rivalY=boss.y;
+    boss=null; enemyShots=[];
+    setTimeout(()=>{ if(State==='play') startEnding(rivalX,rivalY); }, 1400);
   } else {
     Sound.SFX.fanfare();
     Game.hp=Math.min(Game.maxHp,Game.hp+2);            // reward: heal a heart
@@ -1406,6 +1520,7 @@ function updateTransition(dt){
 /* ─────────────────────────────  DRAW  ───────────────────────────── */
 function draw(){
   G.fillStyle='#060810'; G.fillRect(-12,-12,W+24,H+24);   // clear (covers screen-shake gap)
+  if(State==='ending'){ drawEnding(); return; }
   G.save();
   if(shake>0){ G.translate(rand(-1,1)*shake*8, rand(-1,1)*shake*8); }
   if(State==='transition'){ drawTransition(); G.restore(); return; }
@@ -1746,18 +1861,21 @@ function drawBoss(b){
     G.fillStyle='rgba(255,255,255,.6)'; G.beginPath(); G.arc(s.x-2,s.y-2,s.r*0.4,0,7); G.fill();
   }
   const flash=b.hurt>0&&Math.floor(b.hurt*30)%2===0;
-  shadow(b.x,b.y+b.h*0.26,b.w*0.45);
-  const wob=Math.sin(b.t*5)*3;
-  G.save(); G.translate(b.x,b.y+wob);
-  const c=b.cfg, body=flash?'#fff':c.col, dark=flash?'#fff':c.dark;
-  switch(b.kind){
-    case 'slimeKing':  drawBossSlime(b,body,dark); break;
-    case 'batLord':    drawBossBat(b,body,dark); break;
-    case 'waterDragon':drawBossDragon(b,body,dark); break;
-    case 'boneKing':   drawBossBone(b,body,dark); break;
-    default:           drawBossWolf(b,body,dark); break;
+  if(b.cfg.rival){ drawBossRival(b,flash); }
+  else {
+    shadow(b.x,b.y+b.h*0.26,b.w*0.45);
+    const wob=Math.sin(b.t*5)*3;
+    G.save(); G.translate(b.x,b.y+wob);
+    const c=b.cfg, body=flash?'#fff':c.col, dark=flash?'#fff':c.dark;
+    switch(b.kind){
+      case 'slimeKing':  drawBossSlime(b,body,dark); break;
+      case 'batLord':    drawBossBat(b,body,dark); break;
+      case 'waterDragon':drawBossDragon(b,body,dark); break;
+      case 'boneKing':   drawBossBone(b,body,dark); break;
+      default:           drawBossWolf(b,body,dark); break;
+    }
+    G.restore();
   }
-  G.restore();
   if(b.intro<=0){
     const bw=W*0.6, bx=(W-bw)/2, by=HUD_H+8;
     G.fillStyle='rgba(0,0,0,.5)'; G.fillRect(bx-3,by-3,bw+6,16);
@@ -1831,127 +1949,195 @@ function drawBossWolf(b,col,dark){
 /* ── player (the dog knight!) ── */
 function drawPlayer(){
   const x=player.x, y=player.y;
-  // ground shadow shrinks as the dog hops higher (sells the vertical jump)
   const zsh=clamp(1-player.z/120,0.45,1);
   G.save(); G.globalAlpha=0.25*zsh;
-  G.fillStyle='#000'; G.beginPath(); G.ellipse(x,y+12,16*zsh,16*0.4*zsh,0,0,7); G.fill();
+  G.fillStyle='#000'; G.beginPath(); G.ellipse(x,y+14,17*zsh,17*0.4*zsh,0,0,7); G.fill();
   G.restore();
-  // charge aura: grows while holding, pulses gold when fully charged
+  // charge aura
   if(player.charging && player.chargeT>0.12){
     const cr=clamp(player.chargeT/CHARGE_TIME,0,1);
     G.save();
     if(player.chargeReady){
       const pulse=0.5+0.5*Math.sin(now()*18);
       G.strokeStyle='rgba(255,224,110,'+(0.5+pulse*0.4)+')'; G.lineWidth=3;
-      G.beginPath(); G.arc(x,y,26+pulse*4,0,7); G.stroke();
-      G.fillStyle='rgba(255,236,150,'+(0.12+pulse*0.12)+')'; G.beginPath(); G.arc(x,y,24,0,7); G.fill();
+      G.beginPath(); G.arc(x,y,28+pulse*4,0,7); G.stroke();
+      G.fillStyle='rgba(255,236,150,'+(0.12+pulse*0.12)+')'; G.beginPath(); G.arc(x,y,26,0,7); G.fill();
     } else {
       G.strokeStyle='rgba(150,200,255,'+(0.3+cr*0.4)+')'; G.lineWidth=2;
-      G.beginPath(); G.arc(x,y,18+cr*8,0,7*cr); G.stroke();
+      G.beginPath(); G.arc(x,y,20+cr*8,0,7*cr); G.stroke();
     }
     G.restore();
   }
   const flash = player.flash>0 && Math.floor(player.flash*20)%2===0;
-  const dir=player.dir;
-  const step=Math.sin(player.walkPhase)*3;
+  // attack progress 0..1 for arm/weapon animation
+  let atkP=0, swing=1;
+  if(player.attacking){ atkP=clamp(player.atkTime/player.atkDur,0,1); swing = slashFx?(slashFx.swing||1):1; }
+  drawDogKnight({
+    x, y, z:player.z, dir:player.dir, flash,
+    walkPhase:player.walkPhase, rolling:player.rolling, rollT:player.rolling?player.rollTime/player.rollDur:0,
+    weapon:player.weapon, attacking:player.attacking, atkKind:player.atkKind, atkP, swing,
+    big:!!(slashFx&&slashFx.big),
+    pal:HERO_PAL,
+  });
+}
 
-  G.save(); G.translate(x,y-player.z);   // lift the whole body by the hop height
-  if(player.rolling){ G.rotate(player.rollTime/player.rollDur*Math.PI*2*(dir==='left'?-1:1)); }
+/* palettes */
+const HERO_PAL ={ fur:'#f3ecd2', furD:'#e6dcc0', furL:'#fffaf0', ear:'#f7f0d8', tunic:'#e6dcc0', belt:'#7a5a32', buckle:'#e9b84a', cape:'#c0273a', capeD:'#9a1f2e', nose:'#3a2a22', eye:'#2a1f18', tongue:'#ff8aa0', paw:'#efe6c8' };
+const RIVAL_PAL={ fur:'#2a2436', furD:'#1c1828', furL:'#3a3450', ear:'#241f33', tunic:'#3a2030', belt:'#552038', buckle:'#b06aff', cape:'#5a2a8a', capeD:'#3a1a5a', nose:'#0a0a10', eye:'#ff5a5a', tongue:'#a04a6a', paw:'#352d44' };
 
-  const capeWag=Math.sin(now()*8)*4 + step;
+/* Shared dog-knight renderer with moving arms/paws and a slightly bigger head.
+   opts: {x,y,z,dir,flash,walkPhase,rolling,rollT,weapon,attacking,atkKind,atkP,swing,big,pal} */
+function drawDogKnight(o){
+  const dir=o.dir, pal=o.pal, flash=o.flash;
+  const F=c=>flash?'#fff':c;
+  const step=Math.sin(o.walkPhase||0)*3;
+  G.save(); G.translate(o.x, o.y-(o.z||0));
+  if(o.rolling){ G.rotate((o.rollT||0)*Math.PI*2*(dir==='left'?-1:1)); }
+
+  // weapon swing angle (front paw follows it)
+  function swingAng(){
+    if(!o.attacking) return 0;
+    const e=1-Math.pow(1-o.atkP,2);
+    if(o.atkKind==='spear'||o.atkKind==='bow') return 0;
+    if(o.swing===2) return lerp(-1.6,1.6,e);
+    if(o.swing<0)   return lerp(1.25,-1.25,e);
+    return lerp(-1.25,1.25,e);
+  }
+  const capeWag=Math.sin(now()*8)*4+step;
   function cape(){
-    G.fillStyle=flash?'#fff':'#c0273a';
-    G.beginPath(); G.moveTo(-12,-6); G.quadraticCurveTo(-20+capeWag,12,-10,22);
-    G.lineTo(10,22); G.quadraticCurveTo(20-capeWag,12,12,-6); G.closePath(); G.fill();
-    G.fillStyle=flash?'#fff':'#9a1f2e'; G.beginPath(); G.moveTo(-8,-4); G.quadraticCurveTo(0,14,8,-4); G.closePath(); G.fill();
+    G.fillStyle=F(pal.cape);
+    G.beginPath(); G.moveTo(-13,-7); G.quadraticCurveTo(-22+capeWag,13,-11,24);
+    G.lineTo(11,24); G.quadraticCurveTo(22-capeWag,13,13,-7); G.closePath(); G.fill();
+    G.fillStyle=F(pal.capeD); G.beginPath(); G.moveTo(-9,-5); G.quadraticCurveTo(0,15,9,-5); G.closePath(); G.fill();
   }
-  function weapon(){
-    if(player.weapon==='sword') return drawHeldSword();
-    if(player.weapon==='spear') return drawHeldSpear();
-    return drawHeldBow();
-  }
-  function drawHeldSword(){
-    let ang=0;
-    if(player.attacking && player.atkKind!=='spear' && player.atkKind!=='bow'){
-      const p=player.atkTime/player.atkDur;
-      const sw = slashFx ? (slashFx.swing||1) : 1;
-      const e = 1-Math.pow(1-p,2);
-      if(sw===2)      ang = lerp(-1.6, 1.6, e);     // finisher: big sweep
-      else if(sw<0)   ang = lerp( 1.25,-1.25, e);   // backhand
-      else            ang = lerp(-1.25, 1.25, e);   // forehand
-    }
-    const off={down:[14,6],up:[-14,2],left:[-2,12],right:[2,12]}[dir];
-    const rot={down:0.2,up:0.0,left:-0.6,right:0.6}[dir]+ang;
-    const len = (slashFx&&slashFx.big)?30:26;
-    G.save(); G.translate(off[0],off[1]); G.rotate(rot);
-    const bg=G.createLinearGradient(-3,0,3,0);
-    bg.addColorStop(0,'#9aa6b8'); bg.addColorStop(.5,'#f2f6ff'); bg.addColorStop(1,'#aeb8cc');
-    G.strokeStyle=bg; G.lineWidth=5; G.lineCap='round';
-    G.beginPath(); G.moveTo(0,2); G.lineTo(0,-len); G.stroke();
-    G.strokeStyle='rgba(255,255,255,.85)'; G.lineWidth=1.6;
-    G.beginPath(); G.moveTo(-1,0); G.lineTo(-1,-len+3); G.stroke();
-    G.fillStyle='#f0c75a'; G.fillRect(-7,-4,14,5);
-    G.fillStyle='#caa11e'; G.fillRect(-7,0,14,2);
-    G.fillStyle='#e9b84a'; G.beginPath(); G.arc(0,4,3.5,0,7); G.fill();
-    G.restore();
-  }
-  function drawHeldSpear(){
-    // a long shaft pointed in the facing direction; thrusts forward on attack
-    const d=DIRV[dir];
-    let push=0;
-    if(player.attacking && player.atkKind==='spear'){
-      const p=player.atkTime/player.atkDur;
-      push = Math.sin(p*Math.PI)*16;   // jab out and back
-    }
-    const bx=d[0]*(10+push), by=d[1]*(10+push)+8;
-    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
-    G.save(); G.translate(bx,by); G.rotate(ang);
-    // wooden shaft
-    G.strokeStyle='#8a6038'; G.lineWidth=4; G.lineCap='round';
-    G.beginPath(); G.moveTo(-22,0); G.lineTo(20,0); G.stroke();
-    // steel head
-    G.fillStyle='#cfd8e6'; G.beginPath(); G.moveTo(30,0); G.lineTo(18,-5); G.lineTo(20,0); G.lineTo(18,5); G.closePath(); G.fill();
-    G.fillStyle='#9aa6b8'; G.fillRect(16,-2,4,4);
-    G.restore();
-  }
-  function drawHeldBow(){
-    const d=DIRV[dir];
-    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
-    let draw=0.4;
-    if(player.attacking && player.atkKind==='bow'){ draw = 0.4 - (player.atkTime/player.atkDur)*0.4; }
-    G.save(); G.translate(d[0]*12, d[1]*12+8); G.rotate(ang);
-    // bow limb (an arc)
-    G.strokeStyle='#7a5a30'; G.lineWidth=3; G.lineCap='round';
-    G.beginPath(); G.arc(-2,0,12,-1.2,1.2); G.stroke();
-    // bowstring (pulls back during the shot)
-    G.strokeStyle='rgba(255,255,255,.7)'; G.lineWidth=1.2;
-    G.beginPath(); G.moveTo(-2+12*Math.cos(-1.2),12*Math.sin(-1.2)); G.lineTo(-2-draw*10,0); G.lineTo(-2+12*Math.cos(1.2),12*Math.sin(1.2)); G.stroke();
-    G.restore();
+  // back paw/leg (simple, with a little walk bob)
+  function legs(){
+    G.fillStyle=F(pal.furD);
+    const lb=Math.sin(o.walkPhase||0)*2;
+    G.beginPath(); G.ellipse(-7,19+lb,5,4,0,0,7); G.fill();
+    G.beginPath(); G.ellipse(7,19-lb,5,4,0,0,7); G.fill();
   }
   function body(){
-    G.fillStyle=flash?'#fff':'#f3ecd2';
-    for(const [dx,dy,r] of [[0,4,16],[-10,2,9],[10,2,9],[-7,12,8],[7,12,8],[0,14,9]]){ G.beginPath(); G.arc(dx,dy+step*0.3,r,0,7); G.fill(); }
-    G.fillStyle=flash?'#fff':'#e6dcc0'; G.fillRect(-11,4,22,12);
-    G.fillStyle='#cfc4a4'; G.fillRect(-11,13,22,4);
-    G.fillStyle='#7a5a32'; G.fillRect(-12,15,24,4);
-    G.fillStyle='#e9b84a'; G.fillRect(-3,14,6,6);
+    G.fillStyle=F(pal.fur);
+    for(const [dx,dy,r] of [[0,5,17],[-11,3,10],[11,3,10],[-8,13,9],[8,13,9],[0,16,10]]){ G.beginPath(); G.arc(dx,dy+step*0.3,r,0,7); G.fill(); }
+    // tunic + belt
+    G.fillStyle=F(pal.tunic); G.fillRect(-12,5,24,13);
+    G.fillStyle=F(pal.furD); G.fillRect(-12,15,24,4);
+    G.fillStyle=pal.belt; G.fillRect(-13,16,26,4);
+    G.fillStyle=pal.buckle; G.fillRect(-3,15,6,6);
+  }
+  // an arm with a paw at the end, angled; used for both hands
+  function arm(baseX,baseY,ang,len){
+    G.save(); G.translate(baseX,baseY); G.rotate(ang);
+    G.strokeStyle=F(pal.furD); G.lineWidth=6; G.lineCap='round';
+    G.beginPath(); G.moveTo(0,0); G.lineTo(0,-len); G.stroke();
+    G.fillStyle=F(pal.paw); G.beginPath(); G.arc(0,-len,4.5,0,7); G.fill();   // paw
+    G.restore();
   }
   function head(){
-    G.fillStyle=flash?'#fff':'#f7f0d8';
-    G.beginPath(); G.arc(-13,-10,8,0,7); G.arc(13,-10,8,0,7); G.fill();
-    for(const [dx,dy,r] of [[0,-12,15],[-10,-10,9],[10,-10,9],[0,-20,11],[-8,-18,8],[8,-18,8]]){ G.beginPath(); G.arc(dx,dy,r,0,7); G.fill(); }
+    // ears
+    G.fillStyle=F(pal.ear);
+    G.beginPath(); G.ellipse(-15,-12,8,11,-0.3,0,7); G.fill();
+    G.beginPath(); G.ellipse(15,-12,8,11,0.3,0,7); G.fill();
+    // fluffy (bigger) head
+    G.fillStyle=F(pal.fur);
+    for(const [dx,dy,r] of [[0,-14,17],[-12,-12,11],[12,-12,11],[0,-24,13],[-10,-21,10],[10,-21,10]]){ G.beginPath(); G.arc(dx,dy,r,0,7); G.fill(); }
     if(dir!=='up'){
-      G.fillStyle=flash?'#fff':'#fffaf0'; G.beginPath(); G.ellipse(0,-6,9,7,0,0,7); G.fill();
-      G.fillStyle='#3a2a22'; G.beginPath(); G.arc(0,-9,2.6,0,7); G.fill();
-      const ex = dir==='left'?-2:dir==='right'?2:0;
-      G.fillStyle='#2a1f18'; G.beginPath(); G.arc(-6+ex,-12,2.6,0,7); G.arc(6+ex,-12,2.6,0,7); G.fill();
-      G.fillStyle='#fff'; G.beginPath(); G.arc(-5+ex,-13,1,0,7); G.arc(7+ex,-13,1,0,7); G.fill();
-      G.fillStyle='#ff8aa0'; G.beginPath(); G.ellipse(0,-2,2.5,3,0,0,7); G.fill();
+      // muzzle
+      G.fillStyle=F(pal.furL); G.beginPath(); G.ellipse(0,-7,10,8,0,0,7); G.fill();
+      G.fillStyle=pal.nose; G.beginPath(); G.arc(0,-10,3,0,7); G.fill();
+      const ex=dir==='left'?-2:dir==='right'?2:0;
+      G.fillStyle=pal.eye; G.beginPath(); G.arc(-7+ex,-14,3,0,7); G.arc(7+ex,-14,3,0,7); G.fill();
+      G.fillStyle='#fff'; G.beginPath(); G.arc(-6+ex,-15,1.1,0,7); G.arc(8+ex,-15,1.1,0,7); G.fill();
+      G.fillStyle=pal.tongue; G.beginPath(); G.ellipse(0,-2,2.6,3.2,0,0,7); G.fill();
+    } else {
+      // back of head: just a hint of ears already drawn
     }
   }
-  if(dir==='up'){ weapon(); cape(); body(); head(); }
-  else { cape(); body(); head(); weapon(); }
+  // weapon graphics (use o.weapon)
+  function heldSword(){
+    const off={down:[15,7],up:[-15,2],left:[-3,13],right:[3,13]}[dir];
+    const rot={down:0.2,up:0,left:-0.6,right:0.6}[dir]+swingAng();
+    const len=o.big?32:27;
+    G.save(); G.translate(off[0],off[1]); G.rotate(rot);
+    const bg=G.createLinearGradient(-3,0,3,0); bg.addColorStop(0,'#9aa6b8'); bg.addColorStop(.5,'#f2f6ff'); bg.addColorStop(1,'#aeb8cc');
+    G.strokeStyle=bg; G.lineWidth=5; G.lineCap='round'; G.beginPath(); G.moveTo(0,2); G.lineTo(0,-len); G.stroke();
+    G.strokeStyle='rgba(255,255,255,.85)'; G.lineWidth=1.6; G.beginPath(); G.moveTo(-1,0); G.lineTo(-1,-len+3); G.stroke();
+    G.fillStyle=pal.buckle; G.fillRect(-7,-4,14,5);
+    G.fillStyle='#caa11e'; G.fillRect(-7,0,14,2);
+    G.restore();
+    return {hand:off, ang:rot};
+  }
+  function heldSpear(){
+    const d=DIRV[dir]; let push=0;
+    if(o.attacking&&o.atkKind==='spear') push=Math.sin(o.atkP*Math.PI)*16;
+    const bx=d[0]*(11+push), by=d[1]*(11+push)+9, ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
+    G.save(); G.translate(bx,by); G.rotate(ang);
+    G.strokeStyle='#8a6038'; G.lineWidth=4; G.lineCap='round'; G.beginPath(); G.moveTo(-22,0); G.lineTo(20,0); G.stroke();
+    G.fillStyle='#cfd8e6'; G.beginPath(); G.moveTo(30,0); G.lineTo(18,-5); G.lineTo(20,0); G.lineTo(18,5); G.closePath(); G.fill();
+    G.restore();
+    return {hand:[bx*0.4,by*0.4+2], ang:0};
+  }
+  function heldBow(){
+    const d=DIRV[dir], ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
+    let draw=0.4; if(o.attacking&&o.atkKind==='bow') draw=0.4-o.atkP*0.4;
+    G.save(); G.translate(d[0]*13,d[1]*13+9); G.rotate(ang);
+    G.strokeStyle='#7a5a30'; G.lineWidth=3; G.lineCap='round'; G.beginPath(); G.arc(-2,0,13,-1.2,1.2); G.stroke();
+    G.strokeStyle='rgba(255,255,255,.7)'; G.lineWidth=1.2; G.beginPath();
+    G.moveTo(-2+13*Math.cos(-1.2),13*Math.sin(-1.2)); G.lineTo(-2-draw*10,0); G.lineTo(-2+13*Math.cos(1.2),13*Math.sin(1.2)); G.stroke();
+    G.restore();
+    return {hand:[d[0]*9,d[1]*9+9], ang:0};
+  }
+  function weaponAndHands(){
+    let info;
+    if(o.weapon==='sword') info=heldSword();
+    else if(o.weapon==='spear') info=heldSpear();
+    else info=heldBow();
+    // front arm reaches toward the weapon hand (animated by the swing/thrust)
+    const hx=info.hand[0], hy=info.hand[1];
+    const a=Math.atan2(hy-2, hx)+Math.PI/2;
+    arm(hx*0.45, 6, a, Math.hypot(hx,hy-6)*0.5+6);
+  }
+  // off-hand arm (gives the body two visible paws)
+  function offArm(){
+    const sw=o.weapon==='bow'? 0 : Math.sin((o.walkPhase||0))*0.4;
+    const base = dir==='left'?[10,7]:dir==='right'?[-10,7]:[ -11,8 ];
+    arm(base[0],base[1], (dir==='left'?-0.5:0.5)+sw, 11);
+  }
+
+  // draw order by facing so the weapon/hands sit correctly
+  if(dir==='up'){
+    weaponAndHands(); cape(); legs(); body(); offArm(); head();
+  } else {
+    cape(); legs(); body(); offArm(); head(); weaponAndHands();
+  }
   G.restore();
+}
+
+/* the rival boss reuses the dog-knight sprite, in black */
+function drawBossRival(b,flash){
+  const x=b.x, y=b.y;
+  // shadow
+  G.save(); G.globalAlpha=0.28; G.fillStyle='#000'; G.beginPath(); G.ellipse(x,y+16,20,8,0,0,7); G.fill(); G.restore();
+  // rival arrows
+  for(const a of b.rivalArrows){
+    const ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[ Math.abs(a.vx)>Math.abs(a.vy)?(a.vx>0?'right':'left'):(a.vy>0?'down':'up') ];
+    G.save(); G.translate(a.x,a.y); G.rotate(ang);
+    G.strokeStyle='#8a6a3a'; G.lineWidth=2.5; G.lineCap='round'; G.beginPath(); G.moveTo(-12,0); G.lineTo(8,0); G.stroke();
+    G.fillStyle='#cdb6ff'; G.beginPath(); G.moveTo(8,0); G.lineTo(2,-3); G.lineTo(2,3); G.closePath(); G.fill();
+    G.restore();
+  }
+  // a faint dark aura to make the rival feel menacing + slightly bigger scale
+  G.save(); G.translate(x,y); G.scale(1.18,1.18); G.translate(-x,-y);
+  drawDogKnight({
+    x, y, z:0, dir:b.dir, flash,
+    walkPhase:b.walkPhase||0, rolling:false, rollT:0,
+    weapon:b.weapon, attacking:b.atkAnim>0, atkKind:b.atkKind, atkP: b.atkAnim>0?(1-b.atkAnim/0.26):0, swing:1,
+    big:false, pal:RIVAL_PAL,
+  });
+  G.restore();
+  // glowing red eyes overlay for extra menace
+  G.fillStyle='rgba(255,60,60,.5)'; G.beginPath(); G.arc(x-7*1.18,y-14*1.18,5,0,7); G.arc(x+7*1.18,y-14*1.18,5,0,7); G.fill();
 }
 
 function drawSlash(){
@@ -2040,7 +2226,7 @@ function drawHUD(){
   // stage / area name + objective (centered)
   G.fillStyle='#cfe0ff'; G.font='bold 14px "Trebuchet MS",sans-serif'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 28);
   G.fillStyle='#ffd76a'; G.font='12px "Trebuchet MS",sans-serif'; G.fillText(questText(), W/2, 50);
-  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v10', W-12, 70);
+  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v11', W-12, 70);
   G.textAlign='left';
 }
 function drawHudPill(x,y,w,inner){
@@ -2128,6 +2314,103 @@ function drawTransition(){
 }
 
 /* ─────────────────────────────  RESULT  ───────────────────────────── */
+/* ─────────────────────────  ENDING SHORT MOVIE  ─────────────────────────
+   A scripted cinematic that plays after the final boss falls: the black
+   rival knight falls and reconciles, the stolen orb is returned, and the
+   two dogs watch the sunrise together. Driven by `ending` with timed scenes. */
+let ending=null;
+function startEnding(rx,ry){
+  State='ending';
+  Sound.stopMusic();
+  ending={ t:0, scene:0, rivalX:rx, rivalY:ry, fade:1, petals:[] };
+  for(let i=0;i<40;i++) ending.petals.push({x:rand(0,W),y:rand(-H,0),v:rand(20,50),s:rand(2,4),sw:rand(0,6.28)});
+  Sound.SFX.fanfare();
+}
+const ENDING_SCENES=[
+  { dur:3.2, text:'影の魔狼…いや、黒騎士イヌは ついに 倒れた。' },
+  { dur:3.6, text:'「強かった…君は本物の 騎士だ」 黒き犬は ほほえんだ。' },
+  { dur:3.4, text:'奪われた 王国の宝珠が、やさしい光を 取り戻す。' },
+  { dur:3.6, text:'ふたりの犬は 並んで、昇る朝日を 見つめた。' },
+  { dur:3.2, text:'王国に 平和が もどった。 ―― おしまい ―― ' },
+];
+function updateEnding(dt){
+  const e=ending; e.t+=dt;
+  if(e.fade>0) e.fade=Math.max(0,e.fade-dt*1.2);
+  for(const p of e.petals){ p.y+=p.v*dt; p.x+=Math.sin(now()+p.sw)*12*dt; if(p.y>H+10){ p.y=-10; p.x=rand(0,W); } }
+  const sc=ENDING_SCENES[e.scene];
+  if(e.t>=sc.dur){
+    e.t=0; e.scene++; e.fade=0.7;
+    if(e.scene>=ENDING_SCENES.length){ ending=null; gameOver(true); }
+  }
+}
+function drawEnding(){
+  const e=ending; const sc=ENDING_SCENES[Math.min(e.scene,ENDING_SCENES.length-1)];
+  // sunrise gradient sky
+  const sky=G.createLinearGradient(0,0,0,H);
+  const k=clamp(e.scene/ (ENDING_SCENES.length-1),0,1);
+  sky.addColorStop(0, lerpCol('#241a3a','#ff9a5a',k));
+  sky.addColorStop(0.5, lerpCol('#3a2a5a','#ffd9a0',k));
+  sky.addColorStop(1, lerpCol('#10131f','#ffeccc',k));
+  G.fillStyle=sky; G.fillRect(0,0,W,H);
+  // sun rising over the scenes
+  const sunY=H*0.72 - k*H*0.32;
+  G.fillStyle='rgba(255,240,200,'+(0.4+k*0.5)+')'; G.beginPath(); G.arc(W/2,sunY,70+k*20,0,7); G.fill();
+  G.fillStyle='rgba(255,250,230,'+(0.6+k*0.3)+')'; G.beginPath(); G.arc(W/2,sunY,46+k*14,0,7); G.fill();
+  // ground silhouette
+  G.fillStyle=lerpCol('#0c1018','#2a5a36',k); G.fillRect(0,H*0.78,W,H*0.22);
+  // floating petals/sparkles
+  for(const p of e.petals){ G.fillStyle='rgba(255,210,160,.7)'; G.beginPath(); G.arc(p.x,p.y,p.s,0,7); G.fill(); }
+
+  const cx=W/2, gy=H*0.74;
+  // the orb glow (appears scene 3+)
+  if(e.scene>=2){
+    const op=clamp((e.scene-2)+ (e.scene===2? e.t/sc.dur:1),0,1);
+    G.save(); G.globalAlpha=clamp(op,0,1);
+    const og=G.createRadialGradient(cx,gy-70,2,cx,gy-70,40);
+    og.addColorStop(0,'#fff'); og.addColorStop(.5,'#9fe0ff'); og.addColorStop(1,'rgba(120,200,255,0)');
+    G.fillStyle=og; G.beginPath(); G.arc(cx,gy-70,40,0,7); G.fill();
+    G.fillStyle='#dff3ff'; G.beginPath(); G.arc(cx,gy-70,12,0,7); G.fill();
+    G.restore();
+  }
+  // hero (left) + rival (right). Rival lies down in scenes 0-1, then sits up.
+  const heroX=cx-46, rivalX=cx+46;
+  const rivalDown = e.scene<2;
+  // hero dog
+  drawDogKnight({ x:heroX, y:gy, z:0, dir:'right', flash:false, walkPhase:0, rolling:false, rollT:0,
+    weapon:'sword', attacking:false, atkKind:null, atkP:0, swing:1, big:false, pal:HERO_PAL });
+  // rival dog
+  G.save();
+  if(rivalDown){ G.translate(rivalX,gy+8); G.rotate(0.9); G.translate(-rivalX,-(gy+8)); }
+  drawDogKnight({ x:rivalX, y:gy, z:0, dir:'left', flash:false, walkPhase:0, rolling:false, rollT:0,
+    weapon:'sword', attacking:false, atkKind:null, atkP:0, swing:1, big:false, pal:RIVAL_PAL });
+  G.restore();
+
+  // letterbox bars + subtitle
+  G.fillStyle='#000'; G.fillRect(0,0,W,44); G.fillRect(0,H-72,W,72);
+  G.fillStyle='#ffe8b0'; G.font='bold 20px "Trebuchet MS",sans-serif'; G.textAlign='center';
+  G.globalAlpha=clamp(1-e.fade,0,1);
+  wrapText(sc.text, W/2, H-44, W-80, 26);
+  G.globalAlpha=1;
+  G.fillStyle='#8fa6d8'; G.font='11px "Trebuchet MS",sans-serif'; G.textAlign='right';
+  G.fillText('スキップ → クリックで進む', W-16, H-14);
+  G.textAlign='left';
+  // scene fade-in overlay
+  if(e.fade>0){ G.fillStyle='rgba(0,0,0,'+e.fade+')'; G.fillRect(0,0,W,H); }
+}
+function wrapText(text,cx,cy,maxW,lh){
+  const chars=[...text]; let line='',lines=[];
+  for(const ch of chars){ if(G.measureText(line+ch).width>maxW && line){ lines.push(line); line=ch; } else line+=ch; }
+  if(line) lines.push(line);
+  const startY=cy-(lines.length-1)*lh/2;
+  lines.forEach((l,i)=>G.fillText(l,cx,startY+i*lh));
+}
+function lerpCol(a,b,t){
+  const pa=parseInt(a.slice(1),16), pb=parseInt(b.slice(1),16);
+  const r=Math.round(lerp((pa>>16)&255,(pb>>16)&255,t)), g=Math.round(lerp((pa>>8)&255,(pb>>8)&255,t)), bl=Math.round(lerp(pa&255,pb&255,t));
+  return 'rgb('+r+','+g+','+bl+')';
+}
+function endingAdvance(){ if(ending){ ending.t=ENDING_SCENES[Math.min(ending.scene,ENDING_SCENES.length-1)].dur; } }
+
 function gameOver(win){
   State='result';
   Sound.stopMusic();
@@ -2135,7 +2418,7 @@ function gameOver(win){
   const t=$('result-title'), s=$('result-sub');
   if(win){
     t.textContent='✦ クリア！ ✦'; t.className='win';
-    s.innerHTML='聖犬士イッヌは <b>5つのステージ</b>を駆けぬけ、<br><b>影の魔狼ガルム</b> を討ち、王国の <b>宝珠</b> を取り戻した！<br>平和が戻り、みんなが笑顔に。<br><br>あつめた骨：<b>'+Game.bones+'</b>本　ワン！🐾';
+    s.innerHTML='聖犬士イッヌは <b>5つのステージ</b>を駆けぬけ、<br>宿命のライバル <b>黒騎士イヌ</b> との死闘を制し、<br>王国の <b>宝珠</b> を取り戻した！<br><br>あつめた骨：<b>'+Game.bones+'</b>本　ワン！🐾';
     Sound.SFX.win();
   } else {
     t.textContent='ゲームオーバー'; t.className='lose';
@@ -2168,6 +2451,8 @@ function loop(t){
 $('start-btn').addEventListener('click',()=>{ Sound.init(); $('title').classList.add('hidden'); resetGame(); });
 $('retry-btn').addEventListener('click',()=>{ $('result').classList.add('hidden'); resetGame(); });
 $('rot-ok').addEventListener('click',()=>{ document.body.classList.add('rot-ok'); Sound.init(); });
+// tap/click during the ending movie skips to the next scene
+CV.addEventListener('pointerdown',()=>{ if(State==='ending') endingAdvance(); });
 bindTouch();
 enterRoom('s1','start'); State='title';
 requestAnimationFrame(loop);
