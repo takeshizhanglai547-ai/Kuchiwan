@@ -209,7 +209,7 @@
           魔狼ガルムを討って、王国に平和を取り戻せ！
         </div>
         <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
-      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v9 ・ ボス消滅修正ずみ</div>
+      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v10 ・ 残機3制</div>
         <div class="controls">
           <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> こうげき（剣＝3段コンボ＋ため斬り）<br>
           <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだんを投げる💣<br>
@@ -338,6 +338,7 @@ const Sound = (()=>{
     boom: ()=>{noise(0.4,0.7); blip(80,0.35,'sawtooth',0.5,-40); setTimeout(()=>blip(60,0.3,'square',0.4,-20),30);},
     swap: ()=>{blip(560,0.07,'square',0.3); setTimeout(()=>blip(840,0.08,'square',0.3),60);},
     fanfare:()=>{[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'square',0.4),i*90));},
+    revive:()=>{blip(196,0.18,'sawtooth',0.4,-80); setTimeout(()=>{[392,523,659,880].forEach((f,i)=>setTimeout(()=>blip(f,0.14,'triangle',0.45),i*80));},120);},
   };
 
   /* ── procedural BGM: looping chiptune driven by a step sequencer ── */
@@ -694,6 +695,7 @@ const Game = {
   roomId:'s1', room:null, stage:1,
   visited:{}, bones:0, keys:0,
   hp:6, maxHp:6, hasOrb:false,
+  lives:3, maxLives:3,                       // remaining extra lives (revive on death)
   bushBroken:{}, chestOpened:{}, lockOpened:{},
   // ── arsenal ──
   weapon:'sword',                          // currently equipped
@@ -900,8 +902,28 @@ function update(dt){
   updateParticles(dt);
   if(slashFx){ slashFx.t-=dt; if(slashFx.t<=0) slashFx=null; }
 
-  if(Game.hp<=0 && player.alive){ player.alive=false; gameOver(false); return; }
+  if(Game.hp<=0 && player.alive){ onPlayerDeath(); return; }
   if(!player.attacking && !player.rolling) checkRoomEdge();
+}
+
+/* Player died. Spend a life and revive on the spot; out of lives → game over. */
+function onPlayerDeath(){
+  player.alive=false;
+  // a small death burst so the loss reads clearly
+  for(let i=0;i<24;i++) particles.push({x:player.x,y:player.y,vx:rand(-200,200),vy:rand(-200,200),life:rand(0.4,0.9),max:0.9,col:['#fff','#ff7d7d','#ffd76a'][i%3],r:rand(2,5)});
+  shake=0.6;
+  if(Game.lives>0){
+    Game.lives--;
+    Sound.SFX.revive();
+    // revive: refill health, brief invulnerability, clear hazards in the room
+    Game.hp=Game.maxHp; player.alive=true; player.invuln=2.0; player.flash=2.0;
+    player.attacking=false; player.charging=false; player.rolling=false; player.jumping=false; player.z=0; player.zv=0;
+    enemyShots=[]; arrows=[]; liveBombs=[];
+    showMsg('🐾 ふっかつ！ のこり '+Game.lives+' 機');
+  } else {
+    Sound.SFX.lose();
+    gameOver(false);
+  }
 }
 
 function updatePlayer(dt){
@@ -1994,12 +2016,15 @@ function drawHUD(){
   dv.addColorStop(0,'#2a356000'); dv.addColorStop(.5,'#e9b84a'); dv.addColorStop(1,'#2a356000');
   G.fillStyle=dv; G.fillRect(0,HUD_H-3,W,2);
 
-  // hearts (slightly bigger, with spacing)
+  // hearts (top row)
   const hearts=Game.maxHp/2;
   for(let i=0;i<hearts;i++){
     const filled=Game.hp-i*2;
-    drawHudHeart(26+i*30,26, filled>=2?1:filled===1?0.5:0);
+    drawHudHeart(26+i*30, 18, filled>=2?1:filled===1?0.5:0);
   }
+  // lives row (paw icons) just below the hearts
+  for(let i=0;i<Game.maxLives;i++) drawPawLife(28+i*22, 50, i<Game.lives);
+  G.fillStyle='#cfe0ff'; G.font='bold 12px "Trebuchet MS",sans-serif'; G.textAlign='left'; G.fillText('×'+Game.lives, 28+Game.maxLives*22+4, 54);
   // equipped weapon chip
   const wx=26+(Game.maxHp/2)*30+20;
   drawWeaponChip(wx, 26);
@@ -2015,7 +2040,7 @@ function drawHUD(){
   // stage / area name + objective (centered)
   G.fillStyle='#cfe0ff'; G.font='bold 14px "Trebuchet MS",sans-serif'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 28);
   G.fillStyle='#ffd76a'; G.font='12px "Trebuchet MS",sans-serif'; G.fillText(questText(), W/2, 50);
-  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v9', W-12, 70);
+  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v10', W-12, 70);
   G.textAlign='left';
 }
 function drawHudPill(x,y,w,inner){
@@ -2046,6 +2071,16 @@ function drawBombIcon(x,y){
   G.restore();
 }
 function roundRect(x,y,w,h,r){ G.beginPath(); G.moveTo(x+r,y); G.arcTo(x+w,y,x+w,y+h,r); G.arcTo(x+w,y+h,x,y+h,r); G.arcTo(x,y+h,x,y,r); G.arcTo(x,y,x+w,y,r); G.closePath(); }
+/* a little paw-print icon used as the remaining-lives indicator */
+function drawPawLife(x,y,filled){
+  G.save(); G.translate(x,y);
+  G.fillStyle=filled?'#ffd76a':'rgba(255,255,255,.16)';
+  G.beginPath(); G.ellipse(0,2,5.5,4.5,0,0,7); G.fill();         // pad
+  for(const [dx,dy] of [[-5,-4],[-1.7,-6],[1.7,-6],[5,-4]]){      // toes
+    G.beginPath(); G.arc(dx,dy,2.1,0,7); G.fill();
+  }
+  G.restore();
+}
 function drawHudHeart(x,y,fill){
   G.save(); G.translate(x,y);
   G.fillStyle='#3a1a26'; heartPath(11); G.fill();
@@ -2103,13 +2138,14 @@ function gameOver(win){
     s.innerHTML='聖犬士イッヌは <b>5つのステージ</b>を駆けぬけ、<br><b>影の魔狼ガルム</b> を討ち、王国の <b>宝珠</b> を取り戻した！<br>平和が戻り、みんなが笑顔に。<br><br>あつめた骨：<b>'+Game.bones+'</b>本　ワン！🐾';
     Sound.SFX.win();
   } else {
-    t.textContent='たおれた…'; t.className='lose';
-    s.innerHTML='聖犬士イッヌは ちからつきた…<br>しかし勇気は消えない。もういちど挑もう！';
+    t.textContent='ゲームオーバー'; t.className='lose';
+    s.innerHTML='聖犬士イッヌは <b>3つの命</b>を 使いはたした…<br>しかし勇気は消えない。もういちど挑もう！';
     Sound.SFX.lose();
   }
 }
 function resetGame(){
   Object.assign(Game,{ roomId:'s1', stage:1, bones:0, keys:0, hp:6, maxHp:6, hasOrb:false,
+    lives:3, maxLives:3,
     visited:{}, bushBroken:{}, chestOpened:{}, lockOpened:{},
     weapon:'sword', weapons:{sword:true, spear:false, bow:false}, bombs:3, maxBombs:9, atkBonus:0 });
   Object.assign(player,{ dir:'down', weapon:'sword', attacking:false, spearing:false, atkCd:0, rolling:false, invuln:0, flash:0, alive:true, rollCd:0, kbT:0, knockx:0, knocky:0, walkPhase:0,
