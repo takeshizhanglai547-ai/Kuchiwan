@@ -214,12 +214,12 @@
           最後は宿命のライバル <b>黒騎士イヌ</b>を討って、平和を取り戻せ！
         </div>
         <button class="btn" id="start-btn">▶ ぼうけんを はじめる</button>
-      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v12 ・ 連続ヒット＆ダッシュ＆新エネミー</div>
+      <div style="margin-top:14px;color:#8fa6d8;font-size:13px;letter-spacing:1px;">build v13 ・ 全武器コンボ＆ジャンプ越え</div>
         <div class="controls">
           <span class="k">WASD / 矢印</span> 移動　　<span class="k">J / Space</span> 連続ヒット攻撃（剣＝3段コンボ＋ため斬り）<br>
           <span class="k">Shift / U</span> ダッシュ　　<span class="k">ダッシュ中にJ</span> <b>ダッシュ攻撃！</b><br>
           <span class="k">Q</span> 武器チェンジ（<b>剣→槍→弓</b>）　　<span class="k">E / B</span> ばくだん💣　　<span class="k">K</span> 回避　　<span class="k">L / F</span> ジャンプ<br>
-          攻撃は当てるほど <b>HITが連鎖</b>！　<b>槍</b>＝突き／<b>弓</b>＝矢／<b>力のかけら</b>で攻撃力UP<br>
+          <b>剣・槍・弓すべて</b>3段コンボ＋長押しタメ攻撃＋ダッシュ攻撃！　<b>ジャンプで障害物越え</b><br>
           <span class="k">スマホ</span>は左スティック移動・右に 武器/回避/跳/💨/💣 ボタン
         </div>
       </div>
@@ -700,6 +700,10 @@ const LINKS = {
 const STAGE_BOSS={ s1:'s1b', s2:'s2b', s3:'s3b', s4:'s4b', s5:'s5b' };
 
 function isSolidTile(ch){ return ch==='#'||ch==='T'||ch==='~'||ch==='b'||ch==='k'; }
+// tiles you can sail over while airborne (bushes, trees, rocks, water) — but
+// never the room border (handled by the out-of-bounds check in solidAtPoint).
+function isFlyOverTile(ch){ return ch==='b'||ch==='T'||ch==='~'||ch==='#'; }
+let airborne=false;   // set true while resolving an airborne player's movement
 
 /* ─────────────────────────────  GAME STATE  ───────────────────────────── */
 let State = 'title';   // title | play | transition | result
@@ -847,8 +851,10 @@ function spawnBoss(kind){
 /* ─────────────────────────────  COLLISION  ───────────────────────────── */
 function solidAtPoint(px,py){
   const tx=Math.floor(px/TS), ty=Math.floor((py-HUD_H)/TS);
-  if(tx<0||tx>=COLS||ty<0||ty>=ROWS) return true;
-  return isSolidTile(Game.room.map[ty][tx]);
+  if(tx<0||tx>=COLS||ty<0||ty>=ROWS) return true;     // room border always blocks
+  const ch=Game.room.map[ty][tx];
+  if(airborne && isFlyOverTile(ch)) return false;     // jump clears low obstacles
+  return isSolidTile(ch);
 }
 function tileAt(px,py){
   const tx=Math.floor(px/TS), ty=Math.floor((py-HUD_H)/TS);
@@ -868,6 +874,19 @@ function moveEntity(ent,dx,dy,hw,hh){
   if(dy!==0){
     if(!boxBlocked(ent.x,ent.y+dy,hw,hh)) ent.y+=dy;
     else { const s=sign(dy); let moved=0; while(Math.abs(moved)<Math.abs(dy) && !boxBlocked(ent.x,ent.y+s,hw,hh)){ ent.y+=s; moved+=s; } }
+  }
+}
+
+/* If the player landed on a solid tile (after flying over it), search outward
+   for the nearest open spot and slide them there so they never get stuck. */
+function ejectFromSolid(){
+  const hw=player.w/2-4, hh=player.h/2-2;
+  if(!boxBlocked(player.x,player.y,hw,hh)) return;
+  for(let r=4;r<=TS*2;r+=4){
+    for(const [ox,oy] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){
+      const nx=player.x+ox*r, ny=player.y+oy*r;
+      if(!boxBlocked(nx,ny,hw,hh)){ player.x=nx; player.y=ny; return; }
+    }
   }
 }
 
@@ -990,14 +1009,20 @@ function updatePlayer(dt){
   }
   if(Input._atkEdge && !player.rolling){
     if(player.weapon==='bow'){
+      // bow: 3-shot combo (rapid taps), then hold to charge a power shot
       if(!player.attacking && player.atkCd<=0){
         if(ix||iy) player.dir=angleDir(ix,iy);
-        fireArrow();
+        player.combo = (player.comboWindow>0) ? Math.min(player.combo+1,2) : 0;
+        fireArrow(player.combo);
+        player.charging=true; player.chargeT=0; player.chargeReady=false;
       }
     } else if(player.weapon==='spear'){
+      // spear: 3-hit thrust combo, then hold to charge a heavy lunge
       if(!player.attacking && player.atkCd<=0){
         if(ix||iy) player.dir=angleDir(ix,iy);
-        startSpear();
+        player.combo = (player.comboWindow>0) ? Math.min(player.combo+1,2) : 0;
+        startSpear(player.combo);
+        player.charging=true; player.chargeT=0; player.chargeReady=false;
       }
     } else { // sword: combo chain + hold-to-charge
       if(!player.attacking){
@@ -1008,22 +1033,25 @@ function updatePlayer(dt){
       }
     }
   }
-  // ── charge build-up while attack is held (sword only) ──
-  if(player.weapon==='sword' && player.charging && Input.attack && !player.rolling){
+  // ── charge build-up while attack is held (all weapons) ──
+  if(player.charging && Input.attack && !player.rolling){
     player.chargeT+=dt;
     if(player.chargeT>=CHARGE_TIME && !player.chargeReady){
       player.chargeReady=true; Sound.SFX.charge();
     }
     if(player.chargeReady && Math.random()<0.6){
       const a=rand(0,6.28), r=24;
-      particles.push({x:player.x+Math.cos(a)*r,y:player.y+Math.sin(a)*r,vx:-Math.cos(a)*60,vy:-Math.sin(a)*60,life:0.4,max:0.4,col:'#ffe07a',r:rand(2,3.5)});
+      const col=player.weapon==='bow'?'#aee0ff':player.weapon==='spear'?'#dfeaff':'#ffe07a';
+      particles.push({x:player.x+Math.cos(a)*r,y:player.y+Math.sin(a)*r,vx:-Math.cos(a)*60,vy:-Math.sin(a)*60,life:0.4,max:0.4,col,r:rand(2,3.5)});
     }
   }
-  // ── attack release: unleash a charged strike if it's ready (sword) ──
+  // ── attack release: unleash a charged strike if it's ready (per weapon) ──
   if(Input._atkRelEdge){
-    if(player.weapon==='sword' && player.chargeReady && !player.rolling){
+    if(player.chargeReady && !player.rolling){
       if(ix||iy) player.dir=angleDir(ix,iy);
-      startSwing('charge');
+      if(player.weapon==='bow') fireArrow('charge');
+      else if(player.weapon==='spear') startSpear('charge');
+      else startSwing('charge');
     }
     player.charging=false; player.chargeT=0; player.chargeReady=false;
   }
@@ -1045,6 +1073,7 @@ function updatePlayer(dt){
     player.z += player.zv*dt; player.zv -= GRAVITY*dt;
     if(player.z<=0){ player.z=0; player.zv=0; player.jumping=false; Sound.SFX.land();
       for(let i=0;i<6;i++) particles.push({x:player.x+rand(-8,8),y:player.y+10,vx:rand(-50,50),vy:rand(-10,10),life:0.25,max:0.25,col:'#d8cba0',r:rand(1.5,3)});
+      ejectFromSolid();   // if we came down on top of an obstacle, slide off it
     }
   }
 
@@ -1085,14 +1114,15 @@ function updatePlayer(dt){
     if(player.rollTime>=player.rollDur) player.rolling=false;
   } else if(player.attacking){
     player.atkTime+=dt;
-    // a forward lunge during the swing's opening frames; finisher / charged /
-    // spear thrust lunge harder for impact.
-    const lunge = player.atkKind==='charge'?0.95 : player.atkKind===2?0.7 : player.atkKind==='spear'?0.85 : player.atkKind==='bow'?0 : 0.35;
+    // forward lunge during the opening frames; varies by attack type
+    const k=player.atkKind;
+    const lunge = k==='charge'?0.95 : k===2?0.7 : (k&&k.indexOf&&k.indexOf('spear')===0)?0.85
+                : k==='spearcharge'?1.1 : (k&&k.indexOf&&k.indexOf('bow')===0)?0 : 0.35;
     if(player.atkTime<0.13){ const d=DIRV[player.dir]; mvx=d[0]*spd*lunge*dt; mvy=d[1]*spd*lunge*dt; }
     if(player.atkTime>=player.atkDur){
       player.attacking=false; player.spearing=false;
-      // sword only: open the combo grace window so the next press chains
-      if(player.weapon==='sword' && player.atkKind!=='charge' && player.combo<2) player.comboWindow=0.32;
+      // open the combo grace window so the next press chains (combo steps only, not charge)
+      if(player.atkKind!=='charge' && player.atkKind!=='spearcharge' && player.atkKind!=='bowcharge' && player.combo<2) player.comboWindow=0.30;
       else { player.combo=0; player.comboWindow=0; }
     }
   } else {
@@ -1106,8 +1136,10 @@ function updatePlayer(dt){
   }
 
   const hw=player.w/2-4, hh=player.h/2-2;
+  airborne = player.z>20;   // high in a hop → sail over bushes/trees/rocks/water
   moveEntity(player, mvx, 0, hw, hh);
   moveEntity(player, 0, mvy, hw, hh);
+  airborne = false;
   tryInteract();
 }
 
@@ -1179,31 +1211,65 @@ function startDashAttack(){
   slashFx={dir:player.dir, t:0.28, dur:0.28, kind:player.weapon==='spear'?'spear':2, swing:2, big:true};
   shake=Math.max(shake,0.3);
 }
-/* ── SPEAR: a fast multi-jab thrust — long reach, narrow ── */
-function startSpear(){
-  player.attacking=true; player.spearing=true; player.atkTime=0; player.atkKind='spear';
-  player.atkDur=0.26; player.atkCd=0.26;
-  Sound.SFX.spear();
-  spawnMelee({kind:'spear', reach:60, wide:18, ticks:4, dmgPerTick:1+Game.atkBonus, totalDur:0.22, col:'#dfeaff', finalKb:340, kb:120});
-  slashFx={dir:player.dir,t:0.18,dur:0.18,kind:'spear',swing:0};
+/* ── SPEAR: 3-hit thrust combo (jab→jab→big lunge) + chargeable heavy thrust ── */
+function startSpear(step){
+  const ab=Game.atkBonus, charged=step==='charge';
+  player.attacking=true; player.spearing=true; player.atkTime=0;
+  if(charged){
+    player.atkKind='spearcharge'; player.atkDur=0.40; player.atkCd=0.36;
+    Sound.SFX.spear(); Sound.SFX.big();
+    // very long piercing lunge that sweeps wider, many ticks
+    spawnMelee({kind:'spearcharge', reach:84, wide:24, ticks:7, dmgPerTick:1+ab, totalDur:0.32, col:'#bfe6ff', finalKb:520, kb:160});
+    slashFx={dir:player.dir,t:0.30,dur:0.30,kind:'spear',swing:0,big:true,len:96};
+    shake=Math.max(shake,0.28);
+  } else {
+    player.atkKind='spear'+step; player.combo=step;
+    if(step<2){ // quick jabs
+      player.atkDur=0.20; player.atkCd=0.20; Sound.SFX.spear();
+      spawnMelee({kind:'spear', reach:60, wide:16, ticks:3, dmgPerTick:1+ab, totalDur:0.16, col:'#dfeaff', finalKb:300, kb:110});
+      slashFx={dir:player.dir,t:0.16,dur:0.16,kind:'spear',swing:0,len:66+step*4};
+    } else { // 3rd: a strong wide lunge thrust
+      player.atkDur=0.30; player.atkCd=0.28; Sound.SFX.spear(); Sound.SFX.combo3();
+      spawnMelee({kind:'spear', reach:74, wide:22, ticks:5, dmgPerTick:1+ab, totalDur:0.24, col:'#cfe8ff', finalKb:460, kb:140, big:true});
+      slashFx={dir:player.dir,t:0.22,dur:0.22,kind:'spear',swing:0,big:true,len:86};
+      shake=Math.max(shake,0.2);
+    }
+  }
 }
 
-/* ── BOW: fires a piercing arrow projectile ── */
-function fireArrow(){
-  player.attacking=true; player.atkTime=0; player.atkDur=0.18; player.atkKind='bow'; player.atkCd=0.52;
-  Sound.SFX.bow();
+/* ── BOW: 3-shot combo (single→single→triple spread) + chargeable power shot ── */
+function fireArrow(step){
+  const ab=Game.atkBonus, charged=step==='charge';
   const d=DIRV[player.dir];
-  // nerfed: lower damage, slower fire rate, and arrows no longer pierce
-  arrows.push({ x:player.x+d[0]*16, y:player.y+d[1]*16-6, vx:d[0]*380, vy:d[1]*380,
-                dir:player.dir, life:0.85, dmg:1+Game.atkBonus, hits:new Set() });
+  player.attacking=true; player.atkTime=0;
+  const mk=(vx,vy,opts)=>arrows.push(Object.assign({x:player.x+d[0]*16,y:player.y+d[1]*16-6,vx,vy,dir:player.dir,hits:new Set()},opts));
+  if(charged){
+    player.atkKind='bowcharge'; player.atkDur=0.20; player.atkCd=0.40;
+    Sound.SFX.bow(); Sound.SFX.big();
+    // fast, long-range PIERCING power arrow (does not stop on first hit)
+    mk(d[0]*620,d[1]*620,{life:1.3,dmg:2+ab,pierce:true,big:true});
+    shake=Math.max(shake,0.18);
+  } else {
+    player.atkKind='bow'+step; player.combo=step;
+    Sound.SFX.bow();
+    if(step<2){
+      player.atkDur=0.16; player.atkCd=0.30;
+      mk(d[0]*400,d[1]*400,{life:0.9,dmg:1+ab});
+    } else {
+      // 3rd shot: a 3-arrow spread
+      player.atkDur=0.20; player.atkCd=0.40;
+      const base=Math.atan2(d[1],d[0]);
+      for(const off of [-0.22,0,0.22]){ const a=base+off; mk(Math.cos(a)*420,Math.sin(a)*420,{life:0.9,dmg:1+ab}); }
+    }
+  }
 }
 function updateArrows(dt){
   for(const a of arrows){
     a.life-=dt; a.x+=a.vx*dt; a.y+=a.vy*dt;
     for(const e of enemies){ if(e.dead||a.hits.has(e)) continue;
-      if(dist(a.x,a.y,e.x,e.y)<(e.w/2+8)){ damageEnemy(e,a.dir,a.dmg,220); a.hits.add(e); a.life=0; break; } // stop on first hit
+      if(dist(a.x,a.y,e.x,e.y)<(e.w/2+8)){ damageEnemy(e,a.dir,a.dmg,a.pierce?160:220); a.hits.add(e); if(!a.pierce){ a.life=0; break; } } // power arrow pierces
     }
-    if(a.life>0 && boss && !boss.dead && boss.intro<=0 && !a.hits.has(boss) && dist(a.x,a.y,boss.x,boss.y)<(boss.w/2+8)){ damageBoss(a.dmg,a.dir); a.hits.add(boss); a.life=0; }
+    if(a.life>0 && boss && !boss.dead && boss.intro<=0 && !a.hits.has(boss) && dist(a.x,a.y,boss.x,boss.y)<(boss.w/2+8)){ damageBoss(a.dmg,a.dir); a.hits.add(boss); if(!a.pierce) a.life=0; }
     // break a bush it flies over
     const tx=Math.floor(a.x/TS), ty=Math.floor((a.y-HUD_H)/TS);
     if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS && Game.room.map[ty][tx]==='b') breakBush(tx,ty);
@@ -2213,7 +2279,7 @@ function drawDogKnight(o){
   function swingAng(){
     if(!o.attacking) return 0;
     const e=1-Math.pow(1-o.atkP,2);
-    if(o.atkKind==='spear'||o.atkKind==='bow') return 0;
+    if(o.weapon!=='sword') return 0;
     if(o.swing===2) return lerp(-1.6,1.6,e);
     if(o.swing<0)   return lerp(1.25,-1.25,e);
     return lerp(-1.25,1.25,e);
@@ -2284,22 +2350,38 @@ function drawDogKnight(o){
     return {hand:off, ang:rot};
   }
   function heldSpear(){
-    const d=DIRV[dir]; let push=0;
-    if(o.attacking&&o.atkKind==='spear') push=Math.sin(o.atkP*Math.PI)*16;
+    const d=DIRV[dir]; const k=o.atkKind||'';
+    const isSpear = o.attacking && k.indexOf&&k.indexOf('spear')===0;
+    const charged = k==='spearcharge';
+    // thrust distance per attack: jabs short, 3rd/charge thrust far; jab pulls back first (windup)
+    let push=0, shaftLen=20;
+    if(isSpear){
+      const amp = charged?34 : (k==='spear2'?26:18);
+      push = Math.sin(o.atkP*Math.PI)*amp;
+      if(o.atkP<0.2) push = -6*(1-o.atkP/0.2);   // a little wind-back before the stab
+      shaftLen = charged?28:22;
+    }
     const bx=d[0]*(11+push), by=d[1]*(11+push)+9, ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
     G.save(); G.translate(bx,by); G.rotate(ang);
-    G.strokeStyle='#8a6038'; G.lineWidth=4; G.lineCap='round'; G.beginPath(); G.moveTo(-22,0); G.lineTo(20,0); G.stroke();
-    G.fillStyle='#cfd8e6'; G.beginPath(); G.moveTo(30,0); G.lineTo(18,-5); G.lineTo(20,0); G.lineTo(18,5); G.closePath(); G.fill();
+    G.strokeStyle='#8a6038'; G.lineWidth=charged?5:4; G.lineCap='round'; G.beginPath(); G.moveTo(-22,0); G.lineTo(shaftLen,0); G.stroke();
+    G.fillStyle=charged?'#bfe6ff':'#cfd8e6'; G.beginPath(); G.moveTo(shaftLen+10,0); G.lineTo(shaftLen-2,-(charged?7:5)); G.lineTo(shaftLen,0); G.lineTo(shaftLen-2,(charged?7:5)); G.closePath(); G.fill();
     G.restore();
     return {hand:[bx*0.4,by*0.4+2], ang:0};
   }
   function heldBow(){
     const d=DIRV[dir], ang={down:Math.PI/2,up:-Math.PI/2,left:Math.PI,right:0}[dir];
-    let draw=0.4; if(o.attacking&&o.atkKind==='bow') draw=0.4-o.atkP*0.4;
+    const k=o.atkKind||'';
+    const isBow = o.attacking && k.indexOf&&k.indexOf('bow')===0;
+    const charged = k==='bowcharge';
+    let draw=0.4; if(isBow) draw=0.4 - (1-o.atkP)*0.4;     // string snaps forward as the shot releases
+    const sz = charged?15:13;
     G.save(); G.translate(d[0]*13,d[1]*13+9); G.rotate(ang);
-    G.strokeStyle='#7a5a30'; G.lineWidth=3; G.lineCap='round'; G.beginPath(); G.arc(-2,0,13,-1.2,1.2); G.stroke();
+    G.strokeStyle=charged?'#caa11e':'#7a5a30'; G.lineWidth=charged?4:3; G.lineCap='round'; G.beginPath(); G.arc(-2,0,sz,-1.2,1.2); G.stroke();
     G.strokeStyle='rgba(255,255,255,.7)'; G.lineWidth=1.2; G.beginPath();
-    G.moveTo(-2+13*Math.cos(-1.2),13*Math.sin(-1.2)); G.lineTo(-2-draw*10,0); G.lineTo(-2+13*Math.cos(1.2),13*Math.sin(1.2)); G.stroke();
+    G.moveTo(-2+sz*Math.cos(-1.2),sz*Math.sin(-1.2)); G.lineTo(-2-(0.4-draw)*16,0); G.lineTo(-2+sz*Math.cos(1.2),sz*Math.sin(1.2)); G.stroke();
+    // nocked arrow while drawing (pre-release) + charge glow
+    if(isBow && o.atkP<0.6){ G.strokeStyle='#cfe0ff'; G.lineWidth=2; G.beginPath(); G.moveTo(-2-(0.4-draw)*16,0); G.lineTo(8,0); G.stroke(); }
+    if(charged){ G.fillStyle='rgba(255,224,110,'+(0.4+0.4*Math.sin(now()*16))+')'; G.beginPath(); G.arc(6,0,4,0,7); G.fill(); }
     G.restore();
     return {hand:[d[0]*9,d[1]*9+9], ang:0};
   }
@@ -2358,15 +2440,19 @@ function drawBossRival(b,flash){
 function drawSlash(){
   const p=1-slashFx.t/slashFx.dur;       // 0→1 progress
   const d=DIRV[slashFx.dir];
-  // spear: a straight thrust streak rather than a sweeping arc
+  // spear: a straight thrust streak (longer + wider when big/charged)
   if(slashFx.kind==='spear'){
-    const fade=1-p;
+    const fade=1-p, len=slashFx.len||66, big=slashFx.big;
     const x0=player.x+d[0]*16, y0=player.y+d[1]*16;
-    const x1=player.x+d[0]*66, y1=player.y+d[1]*66;
-    G.save(); G.strokeStyle='rgba(220,235,255,'+fade*0.8+')'; G.lineWidth=5; G.lineCap='round';
+    const x1=player.x+d[0]*len, y1=player.y+d[1]*len;
+    G.save();
+    if(big){ G.strokeStyle='rgba(180,225,255,'+fade*0.85+')'; G.lineWidth=10; G.lineCap='round'; G.beginPath(); G.moveTo(x0,y0); G.lineTo(x1,y1); G.stroke(); }
+    G.strokeStyle='rgba(220,235,255,'+fade*0.8+')'; G.lineWidth=5; G.lineCap='round';
     G.beginPath(); G.moveTo(x0,y0); G.lineTo(x1,y1); G.stroke();
-    G.strokeStyle='rgba(255,255,255,'+fade*0.9+')'; G.lineWidth=2;
+    G.strokeStyle='rgba(255,255,255,'+fade*0.95+')'; G.lineWidth=2;
     G.beginPath(); G.moveTo(x0,y0); G.lineTo(x1,y1); G.stroke();
+    // arrow-tip flare at the end
+    G.fillStyle='rgba(255,255,255,'+fade+')'; G.beginPath(); G.arc(x1,y1,big?6:4,0,7); G.fill();
     G.restore();
     return;
   }
@@ -2441,7 +2527,7 @@ function drawHUD(){
   // stage / area name + objective (centered)
   G.fillStyle='#cfe0ff'; G.font='bold 14px "Trebuchet MS",sans-serif'; G.textAlign='center'; G.fillText(roomName(Game.roomId), W/2, 28);
   G.fillStyle='#ffd76a'; G.font='12px "Trebuchet MS",sans-serif'; G.fillText(questText(), W/2, 50);
-  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v12', W-12, 70);
+  G.fillStyle='#5a6896'; G.font='10px "Trebuchet MS",sans-serif'; G.textAlign='right'; G.fillText('♪ '+(Sound.muted?'OFF':'ON')+'  v13', W-12, 70);
   G.textAlign='left';
 }
 function drawHudPill(x,y,w,inner){
