@@ -1063,8 +1063,8 @@ function drawPlayer(){
   else if(st==='guard'){ bodyY=3; thF=0.46; thB=-0.46; kF=0.95; kB=0.95; lean=-0.12; swAng=1.05; backArm=-0.1; mode='shield'; }
   else if(st==='jump'){ thF=0.7; thB=0.45; kF=1.3; kB=1.55; bodyY=-2;
     if(p.jAtk>0){ const e=easeOut(1-p.jAtk/16); const big=Math.sin(clamp(1-p.jAtk/16,0,1)*Math.PI);
-      swAng=lerp(-1.6,1.15,e); swExt=18*(1+0.6*big); drawTrail=true; trailCol='#fff'; tA0=-1.6; tA1=swAng; tk=1-p.jAtk/16; trailW=1.4;
-      backArm=-1.2; faL1=9+6*big; faL2=8+7*big; faW=0.95+0.5*big; sqY=1+0.08*big; sqX=1-0.06*big; }
+      swAng=lerp(-1.7,1.2,e); swExt=18*(1+1.1*big); drawTrail=true; trailCol='#fff'; tA0=-1.7; tA1=swAng; tk=1-p.jAtk/16; trailW=1.8;
+      backArm=-1.3; faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
     else { swAng=-1.0; backArm=-1.2; } }
   else if(st==='hurt'){ lean=-0.24; thF=-0.3; thB=0.3; swAng=-0.1; backArm=0.7; }
   else if(st==='slide'){ lean=-1.0; bodyY=8; thF=1.15; thB=0.25; kF=0.2; kB=1.3; swAng=0.7; backArm=0.1; sqX=1.12; sqY=0.82; }
@@ -1076,16 +1076,16 @@ function drawPlayer(){
     const e=easeOut(clamp((t-a0+2)/(a1-a0+4),0,1));
     const e2=Math.sin(clamp((t-(a0-3))/((a1+3)-(a0-3)),0,1)*Math.PI);   // strike bell 0→1→0
     const windup=clamp((a0-t)/Math.max(1,a0),0,1);                       // anticipation amount
-    const heavy=(def.finisher||def.aoe||def.rise)?1.4:1.0, big=e2*heavy;
-    swAng=lerp(def.from,def.to,e); swExt=def.len*0.55*(1+0.65*big);
-    trailCol=def.trail; tA0=def.from; tA1=swAng; tk=clamp(t/def.dur,0,1); drawTrail=t<=a1+3; trailW=1+1.1*heavy; smear=big;
-    lean=lerp(-0.34,0.36,e) - 0.18*windup; backArm=lerp(0.8,-1.15,e)-0.2*big;
-    const fwd=(def.finisher||def.aoe)?0.98:0.66;
-    thF=lerp(0.02,fwd,e)+0.12*big; thB=lerp(-0.02,-0.72,e)-0.28*big; kF=0.45; kB=0.3;
-    bodyY=-2*e-3*windup; bodyX=4*big-2*windup;
-    faL1=9+6*big; faL2=8+8*big; faW=0.95+0.6*big; legF1=10+3*big; legF2=9+3*big;
-    sqX=1-0.10*big+0.07*windup; sqY=1+0.12*big-0.09*windup;
-    if(def.rise){ thF=0.7+0.3*big; thB=0.55; kF=1.05; kB=1.4; bodyY=-3-5*big; legF1=10+5*big; legF2=9+6*big; } }
+    const heavy=(def.finisher||def.aoe||def.rise)?1.5:1.1, big=e2*heavy;
+    swAng=lerp(def.from,def.to,e); swExt=def.len*0.55*(1+1.15*big);
+    trailCol=def.trail; tA0=def.from; tA1=swAng; tk=clamp(t/def.dur,0,1); drawTrail=t<=a1+3; trailW=1.3+1.5*heavy; smear=big;
+    lean=lerp(-0.40,0.42,e) - 0.22*windup; backArm=lerp(0.95,-1.35,e)-0.35*big;
+    const fwd=(def.finisher||def.aoe)?1.05:0.72;
+    thF=lerp(0.02,fwd,e)+0.22*big; thB=lerp(-0.02,-0.8,e)-0.45*big; kF=0.45; kB=0.3;
+    bodyY=-2*e-4*windup; bodyX=7*big-3*windup;
+    faL1=9+12*big; faL2=8+15*big; faW=0.95+1.0*big; legF1=10+6*big; legF2=9+6*big;
+    sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
+    if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; } }
 
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
   // ---------- back-to-front ----------
@@ -1209,10 +1209,11 @@ function drawEnemy(e){
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if((e.state==='walk')&&e.z<=0) ctx.translate(0,-Math.abs(Math.sin(e.bob*1.3))*3);   // lively bob
   if(e.state==='down'||e.dead){ ctx.rotate(0.95); ctx.translate(0,8); }
-  // telegraph = lean back (wind-up); attack/bmove = lunge forward
-  if(e.telegraph>0){ const w=1-e.telegraph/(e.teleMax||26); ctx.rotate(-0.16*(1-w)); ctx.translate(-7*(1-w),2*(1-w)); }
-  else if(e.state==='attack'){ const w=clamp((e.atkMax-e.atkTimer)/6,0,1); ctx.translate(9*w,0); ctx.rotate(0.08*w); }
-  else if(e.state==='bmove'){ ctx.rotate(0.06); ctx.translate(6,0); }
+  // telegraph = crouch+lean back (wind-up); attack/bmove = explosive lunge + stretch
+  if(e.telegraph>0){ const w=1-e.telegraph/(e.teleMax||26); ctx.rotate(-0.18*(1-w)); ctx.translate(-9*(1-w),3*(1-w)); ctx.scale(1+0.10*(1-w),1-0.10*(1-w)); }
+  else if(e.state==='attack'){ const w=clamp((e.atkMax-e.atkTimer)/6,0,1); const big=Math.sin(clamp((e.atkMax-e.atkTimer)/Math.max(1,e.atkMax),0,1)*Math.PI);
+    ctx.translate(9*w+10*big,0); ctx.rotate(0.10*w); ctx.scale(1+0.16*big,1-0.12*big); }
+  else if(e.state==='bmove'){ const big=Math.sin(clamp(e.moveT/Math.max(1,e.moveMax),0,1)*Math.PI); ctx.rotate(0.07); ctx.translate(6+8*big,0); ctx.scale(1+0.10*big,1-0.07*big); }
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.boss){ if(t.bossKind==='emperor') drawBoss(e); else drawBigBoss(e); }
@@ -1272,6 +1273,25 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   ctx.fillStyle='#ffd23a'; ctx.beginPath(); ctx.ellipse(hx+5,hy-3,3.4,2.7,0,0,7); ctx.fill();
   ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(hx+6,hy-3,1.5,2,0,0,7); ctx.fill();
   ctx.strokeStyle='#000'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(hx-2,hy-9); ctx.lineTo(hx+9,hy-4); ctx.stroke();
+  drawBeastClaw(e);                                   // exaggerated swiping claw on tele/attack
+}
+// big, cathartic clawed foreleg that winds up then swings huge during the attack
+function drawBeastClaw(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
+  if(!atk&&!tele) return;
+  let ang=-0.4, big=0;
+  if(tele){ const w=1-e.telegraph/(e.teleMax||26); ang=-1.55+w*0.25; big=0.35+w*0.35; }
+  else { const pr=clamp((e.atkMax-e.atkTimer)/Math.max(1,e.atkMax),0,1); big=Math.sin(pr*Math.PI); ang=lerp(-1.35,1.1,pr); }
+  const acc=t.accent||'#ff6a3c', shX=6, shY=-40, a=PI2-ang, l1=13+big*18, l2=12+big*18;
+  const ex=shX+Math.sin(a)*l1, ey=shY+Math.cos(a)*l1, pwx=ex+Math.sin(a)*l2, pwy=ey+Math.cos(a)*l2;
+  if(atk&&big>0.25){ ctx.save(); ctx.globalAlpha=0.28*big; ctx.fillStyle=acc;
+    ctx.beginPath(); ctx.arc(shX,shY,l1+l2+12,ang-0.6,ang+0.25); ctx.arc(shX,shY,8,ang+0.25,ang-0.6,true); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  ctx.strokeStyle=shade(t.c1,6); ctx.lineWidth=11+big*9; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(shX,shY); ctx.lineTo(ex,ey); ctx.stroke();
+  ctx.strokeStyle=t.c2; ctx.lineWidth=9+big*9; ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(pwx,pwy); ctx.stroke();
+  ctx.save(); ctx.translate(pwx,pwy); ctx.rotate(ang);
+  ctx.fillStyle=shade(t.c1,12); ctx.beginPath(); ctx.arc(0,0,6+big*4,0,7); ctx.fill();
+  ctx.fillStyle='#f2efe6'; const cl=10+big*16;
+  for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(2,i*5); ctx.lineTo(cl,i*6-1); ctx.lineTo(2,i*5+3.5); ctx.fill(); }
+  ctx.restore();
 }
 function drawBitter(e){ const atk=e.state==='attack'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
   ctx.fillStyle='#15151c'; ctx.fillRect(-11,-17+walk,8,18); ctx.fillRect(5,-17-walk,8,18);
@@ -1286,7 +1306,8 @@ function drawBitter(e){ const atk=e.state==='attack'; const walk=e.state==='walk
   for(const ex of [3,9.5]){ ctx.fillStyle='#ff2e2e'; ctx.beginPath(); ctx.ellipse(ex,-59,2.6,3,0,0,7); ctx.fill();
     ctx.fillStyle='#ffd0d0'; ctx.beginPath(); ctx.arc(ex+.6,-60,.8,0,7); ctx.fill(); }
   ctx.strokeStyle='#000'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-1,-64);ctx.lineTo(6,-60); ctx.moveTo(13,-64);ctx.lineTo(8,-60); ctx.stroke();
-  let ang=atk?(-1.0+(1-e.atkTimer/18)*2.1):-0.3; ctx.save(); ctx.translate(10,-40); ctx.rotate(ang);
+  const bprg=atk?clamp((18-e.atkTimer)/18,0,1):0, bbig=atk?Math.sin(bprg*Math.PI):0;
+  let ang=atk?(-1.1+bprg*2.3):-0.3; ctx.save(); ctx.translate(10,-40); ctx.rotate(ang); ctx.scale(1+bbig*0.8,1+bbig*0.8);
   ctx.strokeStyle='#26262e'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,2); ctx.stroke();
   ctx.translate(14,2); const dg=ctx.createLinearGradient(0,0,22,0); dg.addColorStop(0,'#c89cff'); dg.addColorStop(1,'#6a1fb0');
   ctx.fillStyle=dg; ctx.beginPath(); ctx.moveTo(0,-2.5); ctx.lineTo(22,0); ctx.lineTo(0,2.5); ctx.fill(); ctx.restore();
@@ -1316,10 +1337,11 @@ function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.tel
   const cg=ctx.createLinearGradient(-26,-148,26,-130); cg.addColorStop(0,'#ffe98a'); cg.addColorStop(1,'#c8881a');
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-27,-130);ctx.lineTo(-27,-143);ctx.lineTo(-14,-133);ctx.lineTo(0,-150);ctx.lineTo(14,-133);ctx.lineTo(27,-143);ctx.lineTo(27,-130); ctx.fill();
   ctx.fillStyle=radGrad(0,-137,4,'#ff6a6a','#a00'); ctx.beginPath(); ctx.arc(0,-137,3.2,0,7); ctx.fill();
-  let ang=atk?(-0.7+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*1.7):(tele?-0.9:-0.2);
-  ctx.save(); ctx.translate(35,-72); ctx.rotate(ang);
-  ctx.strokeStyle='#caa54a'; ctx.lineWidth=8; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,-62); ctx.stroke();
-  const orbR=10+(atk||tele?3:0); ctx.save(); ctx.globalCompositeOperation='lighter';
+  const ebig=atk?Math.sin(clamp(e.moveT/Math.max(1,e.moveMax),0,1)*Math.PI):0;
+  let ang=atk?(-0.8+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*1.9):(tele?-1.0:-0.2);
+  ctx.save(); ctx.translate(35,-72); ctx.rotate(ang); ctx.scale(1+ebig*0.5,1+ebig*0.5);
+  ctx.strokeStyle='#caa54a'; ctx.lineWidth=8+ebig*7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,-62); ctx.stroke();
+  const orbR=10+(atk||tele?3:0)+ebig*6; ctx.save(); ctx.globalCompositeOperation='lighter';
   ctx.fillStyle=radGrad(9,-68,orbR+8,'#fff',e? '#c46bff':'#c46bff'); ctx.beginPath(); ctx.arc(9,-68,orbR+6,0,7); ctx.fill(); ctx.restore();
   ctx.fillStyle=radGrad(9,-68,orbR,'#c89cff','#5a1ea0'); ctx.beginPath(); ctx.arc(9,-68,orbR,0,7); ctx.fill();
   ctx.fillStyle='#ffe98a'; ctx.beginPath(); ctx.arc(9,-68,4,0,7); ctx.fill(); ctx.restore();
@@ -1328,7 +1350,7 @@ function drawBigBoss(e){ const t=ETYPE[e.type], k=t.h/150;
   const atk=e.state==='bmove', wind=e.state==='bwind';
   const walk=e.state==='walk'?Math.sin(e.anim*1.3)*5:0;
   ctx.save(); ctx.scale(k,k);
-  let arm=-0.25; if(wind)arm=-1.0; else if(atk)arm=-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.1;
+  let arm=-0.25, bigA=0; if(wind)arm=-1.15; else if(atk){ const pr=clamp(e.moveT/Math.max(1,e.moveMax),0,1); arm=-1.15+pr*2.35; bigA=Math.sin(pr*Math.PI); }
   // legs + boots
   ctx.fillStyle=t.c3; ctx.fillRect(-34,-30+walk,20,34); ctx.fillRect(14,-30-walk,20,34);
   ctx.fillStyle=shade(t.c3,16); ctx.fillRect(-36,-8,24,8); ctx.fillRect(12,-8,24,8);
@@ -1359,10 +1381,11 @@ function drawBigBoss(e){ const t=ETYPE[e.type], k=t.h/150;
   for(const ex of [-9,9]){ ctx.fillStyle=radGrad(ex,-122,6,'#fff',t.accent); ctx.beginPath(); ctx.ellipse(ex,-122,5,4,0,0,7); ctx.fill();
     ctx.fillStyle='#1a0a0a'; ctx.beginPath(); ctx.arc(ex+1,-122,1.6,0,7); ctx.fill(); }
   ctx.strokeStyle='#000'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-18,-132);ctx.lineTo(-4,-124); ctx.moveTo(18,-132);ctx.lineTo(4,-124); ctx.stroke();
-  // weapon arm
-  ctx.save(); ctx.translate(34,-96); ctx.rotate(arm);
-  ctx.strokeStyle=t.c2; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(20,6); ctx.stroke();
-  ctx.translate(20,6); drawBossWeapon(t,e,atk);
+  // weapon arm — limbs swell hugely at the strike for a weighty, cathartic swing
+  ctx.save(); ctx.translate(34,-96); ctx.rotate(arm); ctx.scale(1+bigA*0.55,1+bigA*0.55);
+  ctx.strokeStyle=shade(t.c1,4); ctx.lineWidth=14+bigA*10; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,4); ctx.stroke();
+  ctx.strokeStyle=t.c2; ctx.lineWidth=12+bigA*9; ctx.beginPath(); ctx.moveTo(14,4); ctx.lineTo(24,8); ctx.stroke();
+  ctx.translate(24,8); drawBossWeapon(t,e,atk);
   ctx.restore();
   ctx.restore();
 }
