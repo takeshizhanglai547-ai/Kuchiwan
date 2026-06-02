@@ -121,6 +121,7 @@ const LANE = 488, FIXED_SCALE = 1.5;      // single-plane brawler (no depth move
 let state='title', camX=0, score=0, stageTime=99, timeAcc=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0; // gf = global frame
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='';
+let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
 function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 
 //======================================================================
@@ -134,6 +135,7 @@ const cardSeq=[]; // {c, f}  cardinal sequence  c:0=up,1=right,2=down,3=left
 let stickRot=-999;
 
 addEventListener('keydown',e=>{
+  if(state==='cut'){ if(e.code==='Escape'||e.code==='KeyK') cutSkip=true; else cutAdvance=true; e.preventDefault(); return; }
   if(keys[e.code]){ e.preventDefault(); return; }
   keys[e.code]=true; mapKeys();
   if(['KeyJ','KeyZ'].includes(e.code)) pressed.atk=true;
@@ -731,7 +733,7 @@ function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
-  if(T.bossKind==='emperor') winGame(); }
+  if(T.bossKind==='emperor'){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
 function updateEnemies(){
   const p=player;
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type];
@@ -920,7 +922,7 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
     enc.list.forEach(([type,n])=>{ for(let i=0;i<n;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
       spawnEnemy(type,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
-    if(enc.boss){ bossIntro=180; sfx.boss(); Music.setMode('boss'); }
+    if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('boss'); } }
     else if(enc.mini){ bossIntro=130; }
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
@@ -1711,11 +1713,103 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //======================================================================
 //  Flow
 //======================================================================
+//======================================================================
+//  CUTSCENES  (opening / boss intros / ending)
+//======================================================================
+const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
+  moloch:'ワンワン帝国  第四の将', emperor:'ワンワン帝国  覇王' };
+const STORY_OPEN=[
+  {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれる王国は、穏やかな陽だまりに包まれていた。'},
+  {bgTheme:4, art:'invade', name:'', text:'だがある日、闇の軍勢「ダークワンワン帝国」が攻め込んできた！'},
+  {bgTheme:4, art:'player', name:'聖犬士イッヌ', text:'立ち上がったのは、ただ一匹の勇者——聖犬士イッヌ。'},
+  {bgTheme:0, art:'player', name:'聖犬士イッヌ', text:'５人の将軍を討ち、王国に平和を取り戻すのだ！'},
+];
+const STORY_END=[
+  {bgTheme:4, art:'fall',   name:'', text:'ダークワンワン大帝、ついに討たれる——！'},
+  {bgTheme:0, art:'peace',  name:'', text:'帝国の闇は晴れ、肉球の王国に再び陽が差した。'},
+  {bgTheme:0, art:'player', name:'英雄イッヌ', text:'勇者イッヌの名は、肉球の歴史に永遠に刻まれた。'},
+  {bgTheme:0, art:'end',    name:'', text:'― おわり ―     遊んでくれてありがとう！'},
+];
+function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=false; cutSkip=false; state='cut'; }
+function startOpening(){ Music.stop(); startCutscene(STORY_OPEN, ()=>startGame()); }
+function startBossCut(type,stageN){ Music.setMode('boss'); sfx.boss();
+  startCutscene([{boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:BOSSQUOTE[type]}], ()=>{ state='play'; }); }
+function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(STORY_END, ()=>winGame()); }
+function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
+  if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
+function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
+  const sc=cut.scenes[cut.i], len=(sc.text||'').length, full=cut.t>=len*1.3;
+  if(cutSkip){ cutSkip=false; cut.i=cut.scenes.length-1; const cb=cut.onDone; cut=null; if(cb)cb(); return; }
+  if(cutAdvance){ cutAdvance=false; if(!full){ cut.t=Math.ceil(len*1.3); } else nextCutScene(); }
+  else if(full && cut.t>len*1.3+240){ nextCutScene(); } }
+// ---- cutscene rendering ----
+function cutSky(idx,art){ const T=STAGE_THEME[clamp(idx,0,4)], sk=T.sky;
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,sk[0]); g.addColorStop(.5,sk[1]); g.addColorStop(1,(art==='peace'||art==='city')?'#e9f3df':sk[2]);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=T.sun+'.4)'; ctx.beginPath(); ctx.arc(W*0.7,110,82,0,7); ctx.fill(); ctx.restore();
+  const dark=(art==='invade'||art==='fall');
+  ctx.fillStyle='rgba(0,0,0,'+(dark?0.55:0.30)+')';
+  for(let i=0;i<14;i++){ const bw=80, x=i*bw, h=70+((i*53)%80), ty=H*0.62-h;
+    ctx.fillRect(x,ty,bw-6,h+260); ctx.beginPath(); ctx.moveTo(x-6,ty); ctx.lineTo(x+bw/2-3,ty-26); ctx.lineTo(x+bw,ty); ctx.fill(); }
+  ctx.fillStyle='rgba(0,0,0,.42)'; ctx.fillRect(0,H*0.80,W,H*0.2);
+  if(dark){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(200,40,30,.16)'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+  if(art==='peace'||art==='end'){ ctx.fillStyle='rgba(255,210,228,.7)'; for(let i=0;i<26;i++){ const px=(i*97+gf*1.3)%W, py=(i*53+gf*0.8)%H; ctx.beginPath(); ctx.ellipse(px,py,3,1.5,i,0,7); ctx.fill(); } }
+}
+function drawMarch(){ const y=H*0.72; for(let i=0;i<7;i++){ const x=110+i*108+Math.sin(gf*0.12+i)*4;
+  ctx.fillStyle='#0a0a12'; ctx.beginPath(); ctx.ellipse(x,y,26,19,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x+18,y-15,13,12,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+12,y-24);ctx.lineTo(x+9,y-40);ctx.lineTo(x+19,y-27);ctx.fill();
+  ctx.fillStyle='#ff3020'; ctx.beginPath(); ctx.arc(x+24,y-15,2.4,0,7); ctx.fill(); } }
+function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
+  const sv={x:p.x,y:p.y,z:p.z,s:p.state,f:p.facing,iv:p.invuln,an:p.anim,at:p.atk,ch:p.charge}, svc=camX;
+  p.y=0; camX=p.x; p.z=0; p.state=st||'idle'; p.facing=facing||1; p.invuln=0; p.anim=gf*0.06; p.atk=null; p.charge=0;
+  ctx.save(); ctx.translate(px,py); ctx.scale(sc,sc); drawPlayer(); ctx.restore();
+  p.x=sv.x;p.y=sv.y;p.z=sv.z;p.state=sv.s;p.facing=sv.f;p.invuln=sv.iv;p.anim=sv.an;p.atk=sv.at;p.charge=sv.ch; camX=svc; }
+function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
+  const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
+  ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
+  if(t.bossKind==='emperor') drawBoss(e); else drawBigBoss(e); ctx.restore(); }
+function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
+  for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
+  ctx.fillText(line,x,yy); }
+function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
+  const idx = sc.bgTheme!=null?sc.bgTheme : (sc.boss?clamp((sc.stageN||1)-1,0,4):0);
+  cutSky(idx, sc.art||(sc.boss?'boss':''));
+  // portrait / art
+  if(sc.boss){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(W/2,H*0.5,300,'rgba(255,255,255,.14)','rgba(255,255,255,0)'); ctx.beginPath(); ctx.arc(W/2,H*0.5,300,0,7); ctx.fill(); ctx.restore();
+      const intro=Math.min(1,cut.t/24), bx=lerp(W*0.5+60,W*0.5,easeOut(intro));
+      drawBossPortrait(sc.boss, bx, H*0.80, 1.7, -1);
+      // big STAGE label
+      ctx.globalAlpha=intro; ctx.textAlign='center'; ctx.fillStyle='#ffd24d'; ctx.font='bold 22px Trebuchet MS';
+      ctx.fillText('STAGE '+(sc.stageN||1)+'  BOSS',W/2,86); ctx.globalAlpha=1; ctx.textAlign='left';
+  } else if(sc.art==='player'){ drawPlayerPortrait(W*0.5,H*0.80,2.2,1,'idle');
+  } else if(sc.art==='invade'){ drawMarch();
+  } else if(sc.art==='fall'){ ctx.save(); ctx.globalAlpha=clamp(1-cut.t/120,0,1); drawBossPortrait('boss',W*0.5,H*0.82,1.6,-1); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<5;i++){ const a=cut.t*0.1+i; ctx.fillStyle='rgba(198,120,255,.5)'; ctx.beginPath(); ctx.arc(W/2+Math.cos(a)*cut.t*2,H*0.5+Math.sin(a)*cut.t*1.4,4,0,7); ctx.fill(); } ctx.restore();
+  } else if(sc.art==='end'){ ctx.textAlign='center'; ctx.fillStyle='#ffe14d'; ctx.font='900 48px Trebuchet MS';
+      ctx.fillText('聖犬士イッヌ',W/2,H*0.42); ctx.fillStyle='#fff'; ctx.font='bold 18px Trebuchet MS'; ctx.fillText('SCORE  '+String(score).padStart(6,'0'),W/2,H*0.42+34); ctx.textAlign='left'; }
+  // letterbox + text panel
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,40); ctx.fillRect(0,H-128,W,128);
+  const bx=40,by=H-112,bw=W-80,bh=84;
+  ctx.fillStyle='rgba(8,10,20,.85)'; roundRect(bx,by,bw,bh,10); ctx.fill();
+  ctx.strokeStyle='rgba(255,210,80,.55)'; ctx.lineWidth=2; roundRect(bx,by,bw,bh,10); ctx.stroke();
+  if(sc.name){ ctx.font='bold 17px Trebuchet MS'; const nm=sc.name+(sc.role?'  〈'+sc.role+'〉':'');
+    const tw=ctx.measureText(nm).width+24; ctx.fillStyle='rgba(8,10,20,.95)'; roundRect(bx+16,by-22,tw,26,8); ctx.fill();
+    ctx.strokeStyle='rgba(255,210,80,.55)'; roundRect(bx+16,by-22,tw,26,8); ctx.stroke();
+    ctx.fillStyle=sc.boss?ETYPE[sc.boss].accent:'#ffe14d'; ctx.fillText(nm,bx+28,by-3); }
+  const len=(sc.text||'').length, shown=Math.min(len,Math.floor(cut.t/1.3));
+  ctx.fillStyle='#fff'; ctx.font='20px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  cutWrap((sc.text||'').slice(0,shown), bx+24, by+34, bw-48, 28);
+  if(cut.t>=len*1.3 && Math.floor(gf/20)%2===0){ ctx.fillStyle='#ffd24d'; ctx.font='14px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('▶ タップ / J で次へ',bx+bw-16,by+bh-12); ctx.textAlign='left'; }
+  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='12px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('K / ESC: スキップ',W-14,30); ctx.textAlign='left';
+}
+
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 function startGame(){ unlockAudio();
   score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; amb=[]; combo.count=0; gf=0;
-  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; buildEncounters(); resetPlayer(true);
+  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters(); resetPlayer(true);
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
   if(sndOn) Music.start('battle'); }
 function gameOver(){ state='over'; Music.stop(); gameOverSting();
@@ -1724,8 +1818,10 @@ function winGame(){ state='win'; Music.stop(); victoryJingle(); score+=Math.max(
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全5ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
-document.getElementById('startBtn').onclick=startGame;
+document.getElementById('startBtn').onclick=()=>{ unlockAudio(); startOpening(); };
 document.getElementById('retryBtn').onclick=startGame;
+// cutscene advance / skip input
+addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
 // sound toggle
 const sndBtn=document.getElementById('snd');
 sndBtn.onclick=()=>{ initAudio(); sndOn=!sndOn; sndBtn.textContent=sndOn?'♪':'🔇';
@@ -1778,6 +1874,7 @@ function drawTitleScene(){ drawBackground(); drawGround();
 //  Main loop
 //======================================================================
 function loop(){
+  if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); requestAnimationFrame(loop); return; }
   // slow-motion: throttle logic ticks while keeping render smooth
   if(slowmo>0 && state==='play' && hitStop<=0){
     slowmo--; slowAcc+=0.34;
