@@ -183,8 +183,14 @@ function initAudio(){
   if(actx) return;
   actx=new (window.AudioContext||window.webkitAudioContext)();
   masterGain=actx.createGain(); masterGain.gain.value=0.9; masterGain.connect(actx.destination);
-  musicGain=actx.createGain(); musicGain.gain.value=0.55; musicGain.connect(masterGain);
-  sfxGain=actx.createGain(); sfxGain.gain.value=0.9; sfxGain.connect(masterGain);
+  musicGain=actx.createGain(); musicGain.gain.value=0.5; musicGain.connect(masterGain);
+  sfxGain=actx.createGain(); sfxGain.gain.value=1.0; sfxGain.connect(masterGain);
+  // spacious reverb send for the orchestral BGM (feedback-delay "hall")
+  const verb=actx.createGain(); verb.gain.value=0.42;
+  const dl=actx.createDelay(0.6); dl.delayTime.value=0.16;
+  const fb=actx.createGain(); fb.gain.value=0.4;
+  const damp=actx.createBiquadFilter(); damp.type='lowpass'; damp.frequency.value=2600;
+  musicGain.connect(verb); verb.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl); damp.connect(masterGain);
   // noise buffer for drums/impacts
   noiseBuf=actx.createBuffer(1, actx.sampleRate*0.4, actx.sampleRate);
   const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
@@ -235,86 +241,66 @@ function hitSound(dmg){
   if(!actx||!sndOn) return;
   const t=actx.currentTime;
   const tier = dmg>=30?3 : dmg>=18?2 : dmg>=10?1 : 0;
-  // crisp blade/flesh transient (high)
-  noise(0.05+tier*0.01, 0.16+tier*0.05, 3200-tier*400);
-  // body thump (low sine punch) — gives weight
+  // crisp blade/flesh transient (high) — louder
+  noise(0.06+tier*0.012, 0.30+tier*0.08, 3000-tier*380);
+  // heavy body thump (low sine punch) — bigger weight
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; const f0=[180,150,120,90][tier]; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f0*0.45,t+0.14+tier*0.03);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.22+tier*0.06,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18+tier*0.06);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.3); }
-  // metallic ring (square click) — adds 爽快感
-  tone(560-tier*60, 0.045, 'square', 0.10+tier*0.02, -260);
-  if(tier>=2){ // heavy: clang + low boom
-    tone(300, 0.12, 'sawtooth', 0.14, -120);
-    const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(64,t); g.gain.setValueAtTime(0.26,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.3);
-    noise(0.06,0.16,5200); // sizzle
+    o.type='sine'; const f0=[170,140,110,84][tier]; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f0*0.4,t+0.20+tier*0.05);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.42+tier*0.12,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28+tier*0.08);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.45); }
+  // deep SUB boom on every hit — 重々しさ
+  { const o=actx.createOscillator(), g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime([70,60,52,44][tier],t); o.frequency.exponentialRampToValueAtTime([50,42,36,30][tier],t+0.3);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.30+tier*0.12,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34+tier*0.08);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.5); }
+  // metallic ring (square click) — 爽快感
+  tone(540-tier*55, 0.06, 'square', 0.16+tier*0.03, -240);
+  // crunchy mid impact
+  tone(220-tier*20, 0.13+tier*0.03, 'sawtooth', 0.16+tier*0.04, -110);
+  if(tier>=2){ // very heavy: metallic clang + long sizzle
+    tone(330, 0.16, 'square', 0.16, -90);
+    noise(0.10, 0.22, 5000);
   }
 }
 
-// ---- BGM: step-sequenced generative loops ----
+// ---- BGM: generative orchestral / classical (strings + harp + horns + timpani) ----
 const Music=(()=>{
   let playing=false, mode='battle', step=0, nextT=0, timer=null;
-  const BPM=140, spb=60/BPM, stepDur=spb/2;       // 16th? use 8ths -> /2 (8 steps/bar)
-  // progressions (root midi per bar) + scale type
-  const songs={
-    battle:{ roots:[57,53,60,55], lead:'square', bass:'sawtooth', drive:.5 }, // Am F C G
-    boss:{   roots:[50,46,48,45], lead:'sawtooth', bass:'sawtooth', drive:.7 }, // Dm Bb C A(maj-ish tension)
+  const BPM=80, spb=60/BPM, stepDur=spb/2;          // slow, stately; 8 eighth-steps per bar
+  const SONG={
+    // noble minor cadences, voiced as triads [root,3rd,5th]
+    battle:{ chords:[[57,60,64],[53,57,60],[55,59,62],[52,55,59]], mel:[64,67,65,64,67,71,69,67], padType:'sawtooth', leadType:'triangle' }, // Am F G Em
+    boss:{   chords:[[50,53,57],[46,50,53],[43,46,50],[45,49,52]], mel:[57,60,58,57,62,65,64,57], padType:'sawtooth', leadType:'square'   }, // Dm Bb Gm A
   };
-  // chord tones (relative semitones) for arpeggio
-  const chordTones=[0,4,7,12,7,4,12,7];
-  const melOffset=[12,15,19,24,19,15,12,15];
+  function voice(f,t,dur,type,vol,atk,cut){ const o=actx.createOscillator(),g=actx.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+atk);
+    g.gain.setValueAtTime(vol,t+Math.max(atk,dur*0.55)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    let node=o; if(cut){ const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cut; o.connect(lp); node=lp; }
+    node.connect(g); g.connect(musicGain); o.start(t); o.stop(t+dur+0.05); }
+  function strings(n,t,dur,type){ voice(midi(n),t,dur,type,0.05,0.22,1900); voice(midi(n)*1.004,t,dur,type,0.032,0.26,1700); } // detuned ensemble
+  function timp(t,root){ const o=actx.createOscillator(),g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(midi(root-24),t); o.frequency.exponentialRampToValueAtTime(midi(root-24)*0.7,t+0.18);
+    g.gain.setValueAtTime(0.24,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.46);
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+    const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; s.connect(f);f.connect(ng); ng.connect(musicGain); s.start(t); s.stop(t+0.14); }
+  const ARP=[0,1,2,1,0,2,1,2];
   function scheduleStep(s){
     if(!actx||!sndOn) return;
-    const song=songs[mode];
-    const bar=Math.floor(s/8)%4, st=s%8;
-    const root=song.roots[bar];
-    const t=nextT;
-    // --- drums ---
-    if(st%4===0) drumKick(t);
-    if(st===2||st===6) drumSnare(t);
-    drumHat(t, st%2? .05:.08);
-    // --- bass (root, eighth notes, octave bounce) ---
-    const bn=midi(root-12 + (st%2?12:0));
-    bassNote(bn,t,stepDur*0.95,song.bass);
-    // --- arpeggio chord ---
-    const at=midi(root + chordTones[st]);
-    leadNote(at,t,stepDur*0.9,song.lead, .06);
-    // --- melody accents on certain steps ---
-    if(st===0||st===3||st===5){
-      const mn=midi(root + melOffset[(bar*2+st)%melOffset.length]);
-      leadNote(mn,t,stepDur*1.4,'triangle',.08);
-    }
+    const song=SONG[mode], bar=Math.floor(s/8)%4, st=s%8, t=nextT, ch=song.chords[bar], root=ch[0];
+    if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.98,song.padType));       // sustained string pad (whole bar)
+      voice(midi(root-12),t,stepDur*7.4,'sine',0.17,0.02,500); timp(t,root); }    // low bass + timpani
+    if(st===4){ voice(midi(ch[2]-12),t,stepDur*3.4,'sine',0.12,0.02,500); timp(t,root); }
+    if(st===0||st===4){ const m=song.mel[(bar*2+(st>=4?1:0))%song.mel.length];     // stately half-note melody (horns)
+      voice(midi(m),t,stepDur*3.6,song.leadType,0.09,0.05,3200); voice(midi(m-12),t,stepDur*3.6,'triangle',0.04,0.06,2000); }
+    const an=ch[ARP[st]]+(st>=4?12:0); voice(midi(an+12),t,stepDur*1.7,'triangle',0.038,0.005,4200); // harp arpeggio
   }
-  function bassNote(f,t,d,type){ const o=actx.createOscillator(),g=actx.createGain();
-    o.type=type; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(0.0001,t);
-    g.gain.linearRampToValueAtTime(0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=800;
-    o.connect(lp);lp.connect(g); g.connect(musicGain); o.start(t); o.stop(t+d+0.02); }
-  function leadNote(f,t,d,type,vol){ const o=actx.createOscillator(),g=actx.createGain();
-    o.type=type; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(0.0001,t);
-    g.gain.linearRampToValueAtTime(vol,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
-    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+d+0.02); }
-  function drumKick(t){ const o=actx.createOscillator(),g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
-    g.gain.setValueAtTime(0.3,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
-    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.18); }
-  function drumSnare(t){ const s=actx.createBufferSource(); s.buffer=noiseBuf;
-    const g=actx.createGain(); g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
-    const f=actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=1400;
-    s.connect(f);f.connect(g); g.connect(musicGain); s.start(t); s.stop(t+0.14); }
-  function drumHat(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf;
-    const g=actx.createGain(); g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04);
-    const f=actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=7000;
-    s.connect(f);f.connect(g); g.connect(musicGain); s.start(t); s.stop(t+0.05); }
-  function tick(){
-    if(!playing||!actx) return;
-    while(nextT < actx.currentTime+0.18){ scheduleStep(step); step=(step+1)%32; nextT+=stepDur; }
-  }
+  function tick(){ if(!playing||!actx) return;
+    while(nextT < actx.currentTime+0.4){ scheduleStep(step); step=(step+1)%32; nextT+=stepDur; } }
   return {
     start(m){ if(!actx) return; mode=m||'battle'; if(playing){return;} playing=true; step=0;
-      nextT=actx.currentTime+0.06; clearInterval(timer); timer=setInterval(tick,40); },
+      nextT=actx.currentTime+0.1; clearInterval(timer); timer=setInterval(tick,60); },
     setMode(m){ if(mode!==m){ mode=m; } },
     stop(){ playing=false; clearInterval(timer); },
     isPlaying(){ return playing; }
@@ -1388,12 +1374,26 @@ function chibiHead(lean){
   // nose
   ctx.fillStyle=radGrad(9,4,3,'#5a4636','#241a12'); ctx.beginPath(); ctx.ellipse(9,5,3,2.4,0,0,7); ctx.fill();
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(8,4,.9,0,7); ctx.fill();
-  // big cute eyes
-  for(const ex of [0.5,8]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,1,3.3,4,0,0,7); ctx.fill();
-    ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(ex+0.6,1.8,2.4,0,7); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex+1.5,0.4,1,0,7); ctx.fill(); }
-  // smiley mouth
-  ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(6,8,3,0.1,Math.PI-0.1); ctx.stroke();
+  const hurt = player.state==='hurt'||player.state==='down';
+  if(hurt){
+    // ダメージ顔： ＞＜ に食いしばった目＋苦悶の口＋汗
+    ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-2.5,-1.4); ctx.lineTo(1.8,1.2); ctx.lineTo(-2.5,3.6); ctx.stroke();        // left ">"
+    ctx.beginPath(); ctx.moveTo(11.5,-1.4); ctx.lineTo(7.2,1.2); ctx.lineTo(11.5,3.6); ctx.stroke();        // right "<"
+    ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-3.5,-3.6); ctx.lineTo(2,-1.6); ctx.moveTo(12.5,-3.6); ctx.lineTo(7,-1.6); ctx.stroke();  // pained brows
+    ctx.fillStyle='#7a2618'; ctx.beginPath(); ctx.ellipse(5.5,9.6,4.4,3.4,0,0,7); ctx.fill();               // open grimace
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(1.6,8.4); ctx.lineTo(9.4,8.4);
+    ctx.moveTo(3.6,8.4); ctx.lineTo(3.6,11.4); ctx.moveTo(5.5,8.4); ctx.lineTo(5.5,11.6); ctx.moveTo(7.4,8.4); ctx.lineTo(7.4,11.4); ctx.stroke();
+    ctx.fillStyle='rgba(120,200,255,.92)'; ctx.beginPath(); ctx.moveTo(16,-7); ctx.quadraticCurveTo(19,-2.5,16,-0.5); ctx.quadraticCurveTo(13,-2.5,16,-7); ctx.fill();  // sweat
+  } else {
+    // big cute eyes
+    for(const ex of [0.5,8]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,1,3.3,4,0,0,7); ctx.fill();
+      ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(ex+0.6,1.8,2.4,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex+1.5,0.4,1,0,7); ctx.fill(); }
+    // smiley mouth
+    ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(6,8,3,0.1,Math.PI-0.1); ctx.stroke();
+  }
   // holy halo
   ctx.strokeStyle='rgba(255,224,120,.9)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.ellipse(0,-21,11,3.6,0,0,7); ctx.stroke();
   ctx.restore();
@@ -1730,7 +1730,9 @@ const STORY_END=[
   {bgTheme:0, art:'player', name:'英雄イッヌ', text:'勇者イッヌの名は、肉球の歴史に永遠に刻まれた。'},
   {bgTheme:0, art:'end',    name:'', text:'― おわり ―     遊んでくれてありがとう！'},
 ];
-function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=false; cutSkip=false; state='cut'; }
+function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=false; cutSkip=false; state='cut';
+  const es=document.getElementById('start'), er=document.getElementById('result');
+  if(es)es.classList.add('hidden'); if(er)er.classList.add('hidden'); }
 function startOpening(){ Music.stop(); startCutscene(STORY_OPEN, ()=>startGame()); }
 function startBossCut(type,stageN){ Music.setMode('boss'); sfx.boss();
   startCutscene([{boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:BOSSQUOTE[type]}], ()=>{ state='play'; }); }
