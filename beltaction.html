@@ -187,6 +187,16 @@ function initAudio(){
   noiseBuf=actx.createBuffer(1, actx.sampleRate*0.4, actx.sampleRate);
   const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
 }
+// iOS/Safari need the context resumed AND a sound started *synchronously* inside a user gesture.
+function unlockAudio(){
+  try{ initAudio(); }catch(e){ return; }
+  if(!actx) return;
+  if(actx.state!=='running'){ const r=actx.resume&&actx.resume(); if(r&&r.then)r.catch(()=>{}); }
+  try{ const b=actx.createBufferSource(); b.buffer=actx.createBuffer(1,1,22050); b.connect(actx.destination); b.start(0); }catch(e){}
+  if(sndOn && state==='play' && !Music.isPlaying()) Music.start('battle');
+}
+['touchstart','touchend','pointerdown','mousedown','keydown','click'].forEach(ev=>
+  addEventListener(ev, unlockAudio, {passive:true}));
 const midi=n=>440*Math.pow(2,(n-69)/12);
 function tone(freq,dur,type='square',vol=.15,slide=0,dest=null){
   if(!actx||!sndOn) return;
@@ -1703,7 +1713,7 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //======================================================================
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
-function startGame(){ initAudio(); if(actx&&actx.state==='suspended')actx.resume();
+function startGame(){ unlockAudio();
   score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; amb=[]; combo.count=0; gf=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; buildEncounters(); resetPlayer(true);
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
