@@ -71,7 +71,7 @@
       <b>移動</b> 矢印 / WASD　　<b>ジャンプ</b> Space　　<b>ガード</b> K（長押し）　　<b>掴み</b> L / U<br>
       <b>短剣コンボ</b> J 連打 → 横振り → 縦振り → 斜め振り → <span class="cmd">振り下ろし</span>（4段）<br>
       <span class="cmd">スライディング</span>： ↓＋J（攻撃＆無敵回避）　　<span class="cmd">溜め斬り</span>： J長押し→離す<br>
-      <span class="cmd">兜割</span>： ジャンプ中に 横＋J（急降下の唐竹割り＋着地衝撃）<br>
+      <span class="cmd">兜割</span>： ジャンプ中 横＋J（急降下の唐竹割り＋着地衝撃／着地硬直あり）　　<span class="cmd">下突き</span>： ジャンプ中 ↓＋J（突き刺し→跳ね返り）<br>
       <b style="color:#ffe27a">必殺技</b>： <span class="cmd">スティンガー</span> 後ろ→前＋J　／ <span class="cmd">昇竜剣</span> ↑＋J（多段・打上げ）　／ <span class="cmd">ガードカウンター</span> ガード中にJ<br>
       <b style="color:#d6a6ff">奥義・次元斬</b>： レバー一回転＋J（全方位／回数制限＝奥義ストック）<br>
       <b style="color:#ffb3e0">掴み技</b>： <b>掴み</b> → J連打＝腹パンチ→蹴り／ ↑＝投げ上げ／ 後ろ＝<span class="cmd">地獄グルマ</span>（後転投げ）／ ↓＝<span class="cmd">スクリューパイルドライバー</span><br>
@@ -182,7 +182,11 @@ let actx=null, sndOn=true, masterGain=null, musicGain=null, sfxGain=null, noiseB
 function initAudio(){
   if(actx) return;
   actx=new (window.AudioContext||window.webkitAudioContext)();
-  masterGain=actx.createGain(); masterGain.gain.value=0.9; masterGain.connect(actx.destination);
+  masterGain=actx.createGain(); masterGain.gain.value=0.95;
+  // master bus compressor — glue + loudness so impacts punch hard without nasty clipping
+  const comp=actx.createDynamicsCompressor();
+  comp.threshold.value=-16; comp.knee.value=22; comp.ratio.value=4; comp.attack.value=0.002; comp.release.value=0.16;
+  masterGain.connect(comp); comp.connect(actx.destination);
   musicGain=actx.createGain(); musicGain.gain.value=0.5; musicGain.connect(masterGain);
   sfxGain=actx.createGain(); sfxGain.gain.value=1.0; sfxGain.connect(masterGain);
   // spacious reverb send for the orchestral BGM (feedback-delay "hall")
@@ -237,64 +241,72 @@ const sfx={
   boss:()=>tone(70,.6,'sawtooth',.22,40),
 };
 // ---- layered impact: weighty body thump + crisp crunch + metallic transient ----
+// 命中音 = 銃弾が鋼鉄の扉を打つような激烈な金属衝撃（鋭い破裂＋金属の倍音＋重い低音）
 function hitSound(dmg){
   if(!actx||!sndOn) return;
-  const t=actx.currentTime;
-  const tier = dmg>=30?3 : dmg>=18?2 : dmg>=10?1 : 0;
-  // crisp blade/flesh transient (high) — louder
-  noise(0.06+tier*0.012, 0.30+tier*0.08, 3000-tier*380);
-  // heavy body thump (low sine punch) — bigger weight
+  const t=actx.currentTime, tier=dmg>=30?3:dmg>=18?2:dmg>=10?1:0, V=0.55+tier*0.16;
+  // 1) 鋭い破裂トランジェント（弾着のクラック）— bandpass noise
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2700; bp.Q.value=0.9;
+    g.gain.setValueAtTime(V*1.0,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.07+tier*0.015);
+    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.1); }
+  // 2) 鋼鉄のクランクッ（非整数倍音の金属共鳴）
+  const parts=[1650,2480,3650,5100,6700], pv=[1,0.72,0.55,0.4,0.28];
+  parts.forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.93,t+0.16);
+    g.gain.setValueAtTime(V*0.3*pv[i],t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16+tier*0.06);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.28); });
+  // 3) 重い鉄扉のサンク（金属ボディ）
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; const f0=[170,140,110,84][tier]; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f0*0.4,t+0.20+tier*0.05);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.42+tier*0.12,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28+tier*0.08);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.45); }
-  // deep SUB boom on every hit — 重々しさ
+    o.type='square'; o.frequency.setValueAtTime(165-tier*22,t); o.frequency.exponentialRampToValueAtTime(64-tier*10,t+0.11);
+    g.gain.setValueAtTime(V*0.55,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2+tier*0.05);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1300; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.34); }
+  // 4) 深いサブ・ブーム（扉が揺れる重低音）
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime([70,60,52,44][tier],t); o.frequency.exponentialRampToValueAtTime([50,42,36,30][tier],t+0.3);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.30+tier*0.12,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34+tier*0.08);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.5); }
-  // metallic ring (square click) — 爽快感
-  tone(540-tier*55, 0.06, 'square', 0.16+tier*0.03, -240);
-  // crunchy mid impact
-  tone(220-tier*20, 0.13+tier*0.03, 'sawtooth', 0.16+tier*0.04, -110);
-  if(tier>=2){ // very heavy: metallic clang + long sizzle
-    tone(330, 0.16, 'square', 0.16, -90);
-    noise(0.10, 0.22, 5000);
-  }
+    o.type='sine'; o.frequency.setValueAtTime([84,72,60,48][tier],t); o.frequency.exponentialRampToValueAtTime([52,44,36,28][tier],t+0.26);
+    g.gain.setValueAtTime(V*0.6,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4+tier*0.1);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.55); }
+  // 5) 金属の余韻（高域のジャリッ）
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3600;
+    g.gain.setValueAtTime(V*0.24,t+0.008); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14+tier*0.05);
+    s.connect(hp); hp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.2); }
 }
 
 // ---- BGM: generative orchestral / classical (strings + harp + horns + timpani) ----
 const Music=(()=>{
   let playing=false, mode='battle', step=0, nextT=0, timer=null;
-  const BPM=80, spb=60/BPM, stepDur=spb/2;          // slow, stately; 8 eighth-steps per bar
+  const BPM=128, spb=60/BPM, stepDur=spb/2;          // up-tempo heroic; 8 eighth-steps per bar
   const SONG={
-    // noble minor cadences, voiced as triads [root,3rd,5th]
-    battle:{ chords:[[57,60,64],[53,57,60],[55,59,62],[52,55,59]], mel:[64,67,65,64,67,71,69,67], padType:'sawtooth', leadType:'triangle' }, // Am F G Em
-    boss:{   chords:[[50,53,57],[46,50,53],[43,46,50],[45,49,52]], mel:[57,60,58,57,62,65,64,57], padType:'sawtooth', leadType:'square'   }, // Dm Bb Gm A
+    // noble minor cadences [root,3rd,5th] + flowing 16-beat melody (one per beat)
+    battle:{ chords:[[57,60,64],[53,57,60],[55,59,62],[52,55,59]],
+             mel:[64,69,72,71, 69,72,69,65, 71,74,71,67, 64,67,71,76], padType:'sawtooth', leadType:'triangle' }, // Am F G Em
+    boss:{   chords:[[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
+             mel:[69,74,77,76, 74,77,74,70, 70,74,70,67, 69,73,76,81], padType:'sawtooth', leadType:'square'   }, // Dm Bb Gm A
   };
   function voice(f,t,dur,type,vol,atk,cut){ const o=actx.createOscillator(),g=actx.createGain();
     o.type=type; o.frequency.setValueAtTime(f,t);
     g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+atk);
-    g.gain.setValueAtTime(vol,t+Math.max(atk,dur*0.55)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    g.gain.setValueAtTime(vol,t+Math.max(atk,dur*0.5)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     let node=o; if(cut){ const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cut; o.connect(lp); node=lp; }
     node.connect(g); g.connect(musicGain); o.start(t); o.stop(t+dur+0.05); }
-  function strings(n,t,dur,type){ voice(midi(n),t,dur,type,0.05,0.22,1900); voice(midi(n)*1.004,t,dur,type,0.032,0.26,1700); } // detuned ensemble
-  function timp(t,root){ const o=actx.createOscillator(),g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(midi(root-24),t); o.frequency.exponentialRampToValueAtTime(midi(root-24)*0.7,t+0.18);
-    g.gain.setValueAtTime(0.24,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
-    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.46);
-    const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
-    const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; s.connect(f);f.connect(ng); ng.connect(musicGain); s.start(t); s.stop(t+0.14); }
+  function strings(n,t,dur,type){ voice(midi(n),t,dur,type,0.045,0.12,1900); voice(midi(n)*1.004,t,dur,type,0.03,0.14,1700); }
+  function timp(t,root,vel){ vel=vel||1; const o=actx.createOscillator(),g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(midi(root-24),t); o.frequency.exponentialRampToValueAtTime(midi(root-24)*0.7,t+0.14);
+    g.gain.setValueAtTime(0.22*vel,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
+    o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.34);
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05*vel,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+    const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=460; s.connect(f);f.connect(ng); ng.connect(musicGain); s.start(t); s.stop(t+0.1); }
   const ARP=[0,1,2,1,0,2,1,2];
   function scheduleStep(s){
     if(!actx||!sndOn) return;
     const song=SONG[mode], bar=Math.floor(s/8)%4, st=s%8, t=nextT, ch=song.chords[bar], root=ch[0];
-    if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.98,song.padType));       // sustained string pad (whole bar)
-      voice(midi(root-12),t,stepDur*7.4,'sine',0.17,0.02,500); timp(t,root); }    // low bass + timpani
-    if(st===4){ voice(midi(ch[2]-12),t,stepDur*3.4,'sine',0.12,0.02,500); timp(t,root); }
-    if(st===0||st===4){ const m=song.mel[(bar*2+(st>=4?1:0))%song.mel.length];     // stately half-note melody (horns)
-      voice(midi(m),t,stepDur*3.6,song.leadType,0.09,0.05,3200); voice(midi(m-12),t,stepDur*3.6,'triangle',0.04,0.06,2000); }
-    const an=ch[ARP[st]]+(st>=4?12:0); voice(midi(an+12),t,stepDur*1.7,'triangle',0.038,0.005,4200); // harp arpeggio
+    if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.95,song.padType)); }               // sustained string pad
+    if(st%2===0){ const bn=(st===0||st===4)? root-12 : ch[2]-12;                              // driving march bass
+      voice(midi(bn),t,stepDur*1.5,'sawtooth',0.16,0.008,760); timp(t,root, st%4===0?1:0.6); }
+    if(st%2===0){ const m=song.mel[(bar*4+(st>>1))%song.mel.length];                          // flowing quarter-note melody
+      voice(midi(m),t,stepDur*1.9,song.leadType,0.085,0.015,3500); voice(midi(m-12),t,stepDur*1.9,'triangle',0.035,0.02,2200); }
+    const an=ch[ARP[st]]+(st>=4?12:0); voice(midi(an+12),t,stepDur*1.15,'triangle',0.04,0.004,4600); // fast harp arpeggio
   }
   function tick(){ if(!playing||!actx) return;
     while(nextT < actx.currentTime+0.4){ scheduleStep(step); step=(step+1)%32; nextT+=stepDur; } }
@@ -383,13 +395,13 @@ const player={ x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives
   state:'idle', anim:0, atk:null, comboStep:0, comboTimer:0,
   hurtTimer:0, invuln:0, downTimer:0, dashCd:0,
   charge:0, atkHeld:false, atkHoldF:0, riseVel:0, z:0, vz:0,
-  guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false,
+  guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, landT:0,
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, screwT:0, screwRot:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1 };
 function resetPlayer(full){ const p=player; p.x=Math.max(120,camX+120); p.y=LANE; p.vx=p.vy=0; p.facing=1;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=70; p.downTimer=0;
-  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   p.counterPow=false; p.riseG=1.1;
   enemies.forEach(e=>{ e.grabbedBy=0; });
@@ -425,17 +437,20 @@ function updatePlayer(){
   // ---- jump (with air attack) ----
   if(p.state==='jump'){
     p.z+=p.vz; p.vz-=0.72;
-    let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx&&!p.jKabuto)p.facing=mx; p.x+=mx*SPEED*0.9;
-    // air attack: 横入力で「兜割」（急降下の唐竹割り）、それ以外は通常空中斬り
-    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=18; p.jHit=new Set();
-      p.jKabuto=(K.left||K.right);
-      if(p.jKabuto){ p.facing=K.left?-1:1; p.vz=Math.min(p.vz,-3)-7; sfx.heavy(); spark(p.x,p.y-p.z-40,'#fff0c0',10,7); }
+    let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx&&!p.jKabuto&&!p.jDown)p.facing=mx; p.x+=mx*SPEED*(p.jDown?0.3:0.9);
+    // air attack: ↓＝下突き / 横＝兜割 / それ以外＝通常空中斬り
+    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=18; p.jHit=new Set(); p.jKabuto=false; p.jDown=false;
+      if(K.down){ p.jDown=true; p.vz=Math.min(p.vz,-2)-9; sfx.dash(); spark(p.x,p.y-p.z-10,'#aef0ff',8,7); }   // 下突き：急降下
+      else if(K.left||K.right){ p.jKabuto=true; p.facing=K.left?-1:1; p.vz=Math.min(p.vz,-3)-7; sfx.heavy(); spark(p.x,p.y-p.z-40,'#fff0c0',10,7); }
       else sfx.swing(2); }
-    if(p.jAtk>0){ p.jAtk--; if(p.jAtk>=4 && p.jAtk<=14) jumpAttackHit(); }
-    if(p.z<=0){ p.z=0; p.vz=0; p.state='idle'; if(p.jKabuto&&p.jAtk>0){ kabutoLand(); } p.jAtk=0; p.jKabuto=false; dust(p.x,p.y,7); }
+    if(p.jAtk>0){ p.jAtk--; if(p.jAtk>=3 && p.jAtk<=15) jumpAttackHit(); }
+    if(p.z<=0){ p.z=0; p.vz=0;
+      if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
+      p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,7); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
   }
+  if(p.state==='land'){ p.landT--; p.vx*=0.8; p.x+=p.vx; p.x=clamp(p.x,camX+24,camX+W-24); if(p.landT<=0)p.state='idle'; return; }
 
   if(p.state==='attack'){
     const a=p.atk, def=a.def; a.t++;
@@ -542,15 +557,20 @@ function doParry(e){ const p=player;
   popText(e.x,e.y-e.h-12,'PARRY!','#9ff0ff',true);
   hitStop=14; flash=Math.max(flash,3); shake=4; sfx.guard(); sfx.rise();
   p.charge=clamp(p.charge+0.34,0,1); p.parryFx=16; score+=120; }
-function jumpAttackHit(){ const p=player; const kab=p.jKabuto;
+function jumpAttackHit(){ const p=player; const kab=p.jKabuto, dn=p.jDown;
+  let pogo=false;
   enemies.forEach(e=>{ if(e.dead||p.jHit.has(e.id))return;
-    if(Math.abs(e.y-p.y)>56) return; const dx=e.x-p.x;
-    const reach=kab?90:78;
-    if(p.facing>0&&(dx<-22||dx>reach))return; if(p.facing<0&&(dx>22||dx<-reach))return;
+    if(Math.abs(e.y-p.y)> (dn?70:56)) return; const dx=e.x-p.x;
+    const reach=dn?44:(kab?90:78);
+    if(p.facing>0&&(dx<-(dn?28:22)||dx>reach))return; if(p.facing<0&&(dx>(dn?28:22)||dx<-reach))return;
     p.jHit.add(e.id);
-    if(kab){ damageEnemy(e,20,p.facing*4,true); e.vz=0; e.z=0; e.state='down'; e.downTimer=70; // 兜割：地面に叩き伏せる
+    if(dn){ damageEnemy(e,15,p.facing*3,true); e.state='down'; e.downTimer=46;        // 下突き：突き刺して
+      crescent(e.x,e.y-e.h*0.5,40,1.1,2.0,'#aef0ff'); pogo=true; }                     // ヒットで跳ね返る（ポゴ）
+    else if(kab){ damageEnemy(e,20,p.facing*4,true); e.vz=0; e.z=0; e.state='down'; e.downTimer=70; // 兜割：地面に叩き伏せる
       crescent(e.x,e.y-e.h*0.5,52,-1.6,1.5,'#fff0c0'); }
-    else { damageEnemy(e,13,p.facing*6,true); crescent(e.x,e.y-e.h*0.5,46,-0.7,0.9,'#ffffff'); } }); }
+    else { damageEnemy(e,13,p.facing*6,true); crescent(e.x,e.y-e.h*0.5,46,-0.7,0.9,'#ffffff'); } });
+  if(dn&&pogo){ p.vz=9.5; p.jAtk=0; p.jHit=new Set(); }   // 跳ね返って再度突きを狙える
+}
 function kabutoLand(){ const p=player;
   spark(p.x,p.y,'#fff0c0',18,11); ring(p.x,p.y,'#ffd24d'); dust(p.x,p.y,14); shake=9; hitStop=8; sfx.big();
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy||e.z>10)return; if(Math.abs(e.x-p.x)<76 && Math.abs(e.y-p.y)<40){ damageEnemy(e,12,Math.sign(e.x-p.x||p.facing)*9,true); } }); }
@@ -1233,7 +1253,10 @@ function drawPlayer(){
   else if(st==='guard'){ bodyY=3; thF=0.46; thB=-0.46; kF=0.95; kB=0.95; lean=-0.12; swAng=1.05; backArm=-0.1; mode='shield'; }
   else if(st==='jump'){ thF=0.7; thB=0.45; kF=1.3; kB=1.55; bodyY=-2;
     if(p.jAtk>0){ const e=easeOut(1-p.jAtk/18); const big=Math.sin(clamp(1-p.jAtk/18,0,1)*Math.PI);
-      if(p.jKabuto){ // 兜割：頭上から真下への唐竹割り（両手で大上段）
+      if(p.jDown){ // 下突き：剣を真下に突き刺す（両脚を伸ばし直立）
+        swAng=1.55; swExt=24*(1+0.8*big); trailCol='#aef0ff'; tA0=1.3; tA1=1.7; trailW=1.8;
+        backArm=1.4; thF=0.25; thB=-0.05; kF=0.1; kB=0.1; sqY=1+0.12*big; sqX=1-0.08*big; bodyY=0;
+      } else if(p.jKabuto){ // 兜割：頭上から真下への唐竹割り（両手で大上段）
         swAng=lerp(-1.95,1.7,e); swExt=22*(1+1.4*big); trailCol='#fff0c0'; tA0=-1.95; tA1=swAng; trailW=2.2;
         backArm=swAng-0.25; thF=0.5; thB=0.4; kF=0.8; kB=0.9; sqY=1+0.22*big; sqX=1-0.16*big; bodyY=-2-2*big;
       } else {
@@ -1241,6 +1264,7 @@ function drawPlayer(){
         backArm=-1.3; faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
       drawTrail=true; tk=1-p.jAtk/18; }
     else { swAng=-1.0; backArm=-1.2; } }
+  else if(st==='land'){ const k=clamp(p.landT/22,0,1); bodyY=10*(1-k*k)+2; thF=0.7; thB=-0.7; kF=1.5; kB=1.5; lean=0.1; swAng=0.9; backArm=0.5; sqX=1.14; sqY=0.8; }   // 着地硬直（深いしゃがみ）
   else if(st==='hurt'){ lean=-0.24; thF=-0.3; thB=0.3; swAng=-0.1; backArm=0.7; }
   else if(st==='slide'){ lean=-1.0; bodyY=8; thF=1.15; thB=0.25; kF=0.2; kB=1.3; swAng=0.7; backArm=0.1; sqX=1.12; sqY=0.82; }
   else if(st==='grab'){ thF=0.3; thB=-0.3; kF=0.4; kB=0.4; bodyY=1; mode='fist'; backArm=0.55;
