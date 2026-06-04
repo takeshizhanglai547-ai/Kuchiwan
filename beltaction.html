@@ -77,7 +77,8 @@
       <b style="color:#ffe27a">必殺技</b>： <span class="cmd">スティンガー</span> 後ろ→前＋J　／ <span class="cmd">ガードカウンター</span> ガード中にJ<br>
       <b style="color:#d6a6ff">奥義・次元斬</b>： レバー一回転＋J（全方位／回数制限＝奥義ストック）<br>
       <b style="color:#ffb3e0">掴み技</b>： <b>掴み</b> → J連打＝腹パンチ→蹴り／ ↑＝投げ上げ／ 後ろ＝<span class="cmd">地獄グルマ</span>（後転投げ）／ ↓＝<span class="cmd">スクリューパイルドライバー</span><br>
-      <b style="color:#ffd24d">全5ステージ・個性派5大ボス！</b> パリィで敵の<b>飛び道具</b>を反射！
+      <b style="color:#7dff5a">ドロップ</b>：敵を倒すと<b>肉（体力回復）</b>や<b>武器（槍・ハンマー）</b>を落とすことがある。拾うと一定時間その武器に！<br>
+      <b style="color:#ffd24d">全7ステージ・個性派ボス！</b> パリィで敵の<b>飛び道具</b>を反射！
     </div>
   </div>
 
@@ -407,12 +408,18 @@ const player={ x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
+  weapon:'dagger', weaponT:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1 };
+const WEAPONS={
+  dagger:{name:'短剣', reach:1.0, dmg:1.0, kb:1.0, ext:1.0, trail:null, launch:1.0, col:'#d6deec'},
+  spear: {name:'槍',   reach:1.6, dmg:1.15,kb:1.0, ext:1.9, trail:'#aef8ff', launch:1.1, col:'#cfe6ff'},
+  hammer:{name:'ハンマー',reach:1.15,dmg:1.8, kb:1.9, ext:1.25,trail:'#ffb02e', launch:1.7, col:'#ffd24d'},
+};
 function resetPlayer(full){ const p=player; p.x=Math.max(120,camX+120); p.y=LANE; p.vx=p.vy=0; p.facing=1;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=70; p.downTimer=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
-  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0;
+  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.weapon='dagger'; p.weaponT=0;
   p.counterPow=false; p.riseG=1.1;
   enemies.forEach(e=>{ e.grabbedBy=0; });
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; } }
@@ -532,9 +539,10 @@ function updatePlayer(){
 }
 const REACH=1.62, HH=1.42;   // hit ranges scaled up for larger sprites
 function doPlayerHit(a){
-  const p=player, def=a.def, reach=def.reach*REACH, hh=def.hh*HH;
+  const p=player, def=a.def, W=WEAPONS[p.weapon]||WEAPONS.dagger;
+  const reach=def.reach*REACH*W.reach, hh=def.hh*HH;
   const hx=p.x+p.facing*reach*0.45;
-  const dmgMul=(def.counter&&p.counterPow)?1.6:1;
+  const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg, LX=W.launch;
   enemies.forEach(e=>{
     if(e.dead) return;
     if(def.multi){ if(a.lastHit[e.id] && gf-a.lastHit[e.id]<(def.multiGap||8)) return; }
@@ -553,25 +561,26 @@ function doPlayerHit(a){
       if(def.knock||def.aoe||def.finisher||def.special||def.counter){
         e.state='hurt'; e.hurtTimer=20; e.stun=24; e.guardCd=90;
         spark(e.x,e.y-e.h*0.5,'#fff',12,8); popText(e.x,e.y-e.h-8,'GUARD BREAK','#ffd24d',true); sfx.big();
-        damageEnemy(e,def.dmg*dmgMul,def.kb*dir,def.knock,def.launch);
+        damageEnemy(e,def.dmg*dmgMul,def.kb*dir*W.kb,def.knock,def.launch);
       } else {
         sfx.guard(); spark(e.x-dir*12,e.y-e.h*0.5,'#bfe9ff',7); p.vx=-dir*1.4;
         popText(e.x,e.y-e.h-6,'GUARD','#9fd6ff');
       }
       return;
     }
-    damageEnemy(e,def.dmg*dmgMul,def.kb*dir,def.knock,def.launch);
+    damageEnemy(e,def.dmg*dmgMul,def.kb*dir*W.kb,def.knock,def.launch);
     if(def.special) hitStop=Math.max(hitStop,5);
     if(def.counter&&p.counterPow){ popText(e.x,e.y-e.h-12,'COUNTER!','#bfe9ff',true); triggerSlow(18); }
     // ── フィニッシュ/必殺は強ベクトルで画面端・天井まで吹き飛ばし → バウンドでジャグル ──
     if(!e.dead){
-      if(def.shoryu) launchEnemy(e, dir*4, -24, 4);   // 一緒に打ち上げ → 空中コンボへ
-      else if(def.finisher) launchEnemy(e, dir*26, -13, 4);
-      else if(def.aoe) launchEnemy(e, dir*30, -10, 4);
-      else if(def.stinger) launchEnemy(e, dir*28, -7, 4);
-      else if(def.counter) launchEnemy(e, dir*26, -12, 4);
+      if(def.shoryu) launchEnemy(e, dir*4*LX, -24*LX, 4);   // 一緒に打ち上げ → 空中コンボへ
+      else if(def.finisher) launchEnemy(e, dir*26*LX, -13*LX, 4);
+      else if(def.aoe) launchEnemy(e, dir*30*LX, -10*LX, 4);
+      else if(def.stinger) launchEnemy(e, dir*28*LX, -7*LX, 4);
+      else if(def.counter) launchEnemy(e, dir*26*LX, -12*LX, 4);
       else if(def.special) launchEnemy(e, (Math.random()<.5?dir:-dir)*18, -15, 4);
-      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*20, Math.min(e.vz,-8), Math.max(e.bounces||0,3));  // 空中の敵は各ヒットで再び端まで吹き飛ばす
+      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*20*W.kb*0.7, Math.min(e.vz,-8), Math.max(e.bounces||0,3));  // 空中の敵は各ヒットで再び端まで吹き飛ばす
+      else if(W.launch>1.4) launchEnemy(e, dir*10, -7, 3);   // ハンマーは通常ヒットでも軽く浮かせる
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
   });
@@ -818,7 +827,58 @@ function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
+  dropFromEnemy(e,T);
   if(T.bossKind==='emperor'){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
+
+//======================================================================
+//  ドロップアイテム（体力回復 / 武器）
+//======================================================================
+let items=[];
+function makeItem(x,kind){ items.push({x,kind,z:46,vz:-3,vx:rnd(-1,1),life:680,bob:Math.random()*6}); }
+function dropFromEnemy(e,T){
+  if(T.boss){ makeItem(e.x-26,'hp'); makeItem(e.x+26, Math.random()<0.5?'spear':'hammer'); return; }  // ボスは確定ドロップ
+  if(T.mini){ makeItem(e.x, Math.random()<0.5?'hp':(Math.random()<0.5?'spear':'hammer')); return; }
+  const r=Math.random();
+  if(r<0.11) makeItem(e.x,'hp');
+  else if(r<0.17) makeItem(e.x,'spear');
+  else if(r<0.23) makeItem(e.x,'hammer');
+}
+function giveWeapon(kind){ const p=player; p.weapon=kind; p.weaponT=1100;
+  popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.rise(); }
+function updateItems(){ const p=player;
+  for(let i=items.length-1;i>=0;i--){ const it=items[i]; it.life--; it.bob+=0.12;
+    if(it.z>0||it.vz<0){ it.z=Math.max(0,it.z-it.vz); it.vz+=0.7; it.x+=it.vx; it.vx*=0.9; if(it.z<=0){ it.z=0; it.vz=0; } }
+    // 取得判定（地上で接近）
+    if(p.state!=='down' && Math.abs(p.x-it.x)<46 && p.z<70 && it.z<24){
+      if(it.kind==='hp'){ player.hp=Math.min(player.maxHp, player.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.guard(); }
+      else giveWeapon(it.kind);
+      items.splice(i,1); continue;
+    }
+    if(it.life<=0) items.splice(i,1);
+  }
+}
+function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-it.z-(8+Math.sin(it.bob)*4); const blink=it.life<120&&Math.floor(it.life/6)%2===0;
+  if(blink) return;
+  ctx.save(); ctx.translate(sx,sy);
+  // 床の影
+  ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,it.z+ (8+Math.sin(it.bob)*4),12,4,0,0,7); ctx.fill();
+  // 光暈
+  const gc = it.kind==='hp'?'#7dff5a':WEAPONS[it.kind].col;
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.2*Math.sin(it.bob*1.5);
+  ctx.fillStyle=radGrad(0,0,20,gc,'rgba(0,0,0,0)'); ctx.beginPath(); ctx.arc(0,0,20,0,7); ctx.fill(); ctx.restore();
+  if(it.kind==='hp'){ // 肉（回復）
+    ctx.fillStyle='#6a3b1c'; ctx.beginPath(); ctx.ellipse(0,2,12,9,0,0,7); ctx.fill();
+    ctx.fillStyle='#c8814a'; ctx.beginPath(); ctx.ellipse(-1,1,9,6.5,0,0,7); ctx.fill();
+    ctx.fillStyle='#f6e3c0'; ctx.fillRect(8,-1,7,4); ctx.strokeStyle='#a86a36'; ctx.lineWidth=1; ctx.strokeRect(8,-1,7,4);
+    ctx.fillStyle='#7dff5a'; ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('+',0,-10); ctx.textAlign='left';
+  } else if(it.kind==='spear'){ ctx.rotate(-0.5);
+    ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-14,8); ctx.lineTo(12,-10); ctx.stroke();
+    ctx.fillStyle=radGrad(14,-12,6,'#fff',WEAPONS.spear.col); ctx.beginPath(); ctx.moveTo(8,-7);ctx.lineTo(20,-16);ctx.lineTo(11,-13); ctx.fill();
+  } else { // hammer
+    ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(-10,12); ctx.lineTo(4,-6); ctx.stroke();
+    ctx.fillStyle=radGrad(6,-10,9,'#fff7d0',WEAPONS.hammer.col); ctx.fillRect(-2,-16,16,12); ctx.strokeStyle='#a8801a'; ctx.lineWidth=1.4; ctx.strokeRect(-2,-16,16,12);
+  }
+  ctx.restore(); }); }
 function updateEnemies(){
   const p=player;
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type];
@@ -1122,7 +1182,8 @@ function update(){
   if(hitStop>0){ hitStop--; if(state==='play'){updateParticles();updateProjectiles();} return; }
   if(state!=='play') return;
   timeAcc++; if(timeAcc>=60){ timeAcc=0; stageTime--; if(stageTime<=0){ stageTime=0; loseLife(); stageTime=99; } }
-  updatePlayer(); updateEnemies(); updateProjectiles(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
+  updatePlayer(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
+  if(player.weaponT>0){ player.weaponT--; if(player.weaponT<=0 && player.weapon!=='dagger'){ player.weapon='dagger'; popText(player.x,player.y-110,'短剣に戻った','#cfd8e6'); } }
   if(shake>0)shake-=0.7; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
 }
 
@@ -1133,6 +1194,7 @@ function render(){
   ctx.save();
   if(shake>0) ctx.translate(rnd(-shake,shake),rnd(-shake,shake));
   drawBackground(); drawGround();
+  drawItems();
   const order=[...enemies.map(e=>({y:e.y,e})),{y:player.y,p:1}];
   order.sort((a,b)=>a.y-b.y);
   order.forEach(o=>{ if(o.p) drawPlayer(); else drawEnemy(o.e); });
@@ -1465,13 +1527,25 @@ function chibiLeg(hipX,thighAng,knee,col,boot,l1,l2){
 }
 function chibiFist(hx,hy,sc){ sc=sc||1; ctx.fillStyle='#f1e7cc'; ctx.beginPath(); ctx.arc(hx,hy,5*sc,0,7); ctx.fill();
   ctx.strokeStyle='#c9b487'; ctx.lineWidth=1.2; ctx.stroke(); }
-function drawBlade(hx,hy,ang,ext){
+function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
-  ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-4,4,9);                            // crossguard
-  ctx.fillStyle=radGrad(1,0,3,'#ffe98a','#b8860b'); ctx.beginPath(); ctx.arc(1,0,2.4,0,7); ctx.fill();
-  const bl=ctx.createLinearGradient(3,-2,ext+12,2); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.4,'#d6deec'); bl.addColorStop(1,'#9aa6bd');
-  ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-2.6); ctx.lineTo(ext+6,-1.6); ctx.lineTo(ext+13,0); ctx.lineTo(ext+6,1.6); ctx.lineTo(3,2.6); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(4,-1.4); ctx.lineTo(ext+6,-0.8); ctx.stroke();
+  if(wk==='spear'){ const L=ext*1.5+22;
+    ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L-10,0); ctx.stroke();
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L-10,0,3.2,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(L-12,0,L+12,0); bl.addColorStop(0,'#ffffff'); bl.addColorStop(1,'#9fd6e6');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L-12,-3.6); ctx.lineTo(L+13,0); ctx.lineTo(L-12,3.6); ctx.closePath(); ctx.fill();
+  } else if(wk==='hammer'){ const L=ext*0.6+14;
+    ctx.strokeStyle='#6a4a28'; ctx.lineWidth=4.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(L,0); ctx.stroke();
+    ctx.fillStyle=radGrad(L+9,0,16,'#fff7d0','#c8881a'); ctx.fillRect(L,-13,22,26);
+    ctx.strokeStyle='#a8801a'; ctx.lineWidth=1.8; ctx.strokeRect(L,-13,22,26);
+    ctx.fillStyle='rgba(255,255,255,.45)'; ctx.fillRect(L+3,-11,5,22);
+  } else { // dagger
+    ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-4,4,9);
+    ctx.fillStyle=radGrad(1,0,3,'#ffe98a','#b8860b'); ctx.beginPath(); ctx.arc(1,0,2.4,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(3,-2,ext+12,2); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.4,'#d6deec'); bl.addColorStop(1,'#9aa6bd');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-2.6); ctx.lineTo(ext+6,-1.6); ctx.lineTo(ext+13,0); ctx.lineTo(ext+6,1.6); ctx.lineTo(3,2.6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(4,-1.4); ctx.lineTo(ext+6,-0.8); ctx.stroke();
+  }
   ctx.restore();
 }
 function drawShieldAt(hx,hy,p){
@@ -1815,6 +1889,11 @@ function drawHUD(){
     if(on){ ctx.fillStyle=radGrad(0,0,7,'#fff','#a040ff'); ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='#e6c6ff'; }
     else { ctx.fillStyle='rgba(120,90,160,.25)'; ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='rgba(200,160,255,.4)'; }
     ctx.lineWidth=1.4; ctx.strokeRect(-5,-5,10,10); ctx.restore(); }
+  // 現在の武器＋残り時間
+  if(player.weapon!=='dagger'){ const W2=WEAPONS[player.weapon];
+    ctx.fillStyle=W2.col; ctx.font='bold 12px Trebuchet MS'; ctx.fillText('武器: '+W2.name, 296, 80);
+    const bw=70, tx=296, ty=86; ctx.fillStyle='#0a0a12'; ctx.fillRect(tx,ty,bw,5);
+    ctx.fillStyle=W2.col; ctx.fillRect(tx,ty,bw*clamp(player.weaponT/1100,0,1),5); }
 
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 14px Trebuchet MS'; ctx.fillText('TIME',W/2,24);
   ctx.fillStyle=stageTime<=10?'#ff4444':'#fff'; ctx.font='bold 30px monospace'; ctx.fillText(String(stageTime).padStart(2,'0'),W/2,52);
@@ -1968,7 +2047,7 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 function startGame(){ unlockAudio();
-  score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; amb=[]; combo.count=0; gf=0;
+  score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters(); resetPlayer(true);
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
   if(sndOn) Music.start('battle'); }
