@@ -399,7 +399,7 @@ const player={ x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives
   charge:0, atkHeld:false, atkHoldF:0, riseVel:0, z:0, vz:0,
   guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, landT:0,
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
-  slideT:0, slideHit:null, wheelT:0, wheelRot:0, screwT:0, screwRot:0,
+  slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1 };
 function resetPlayer(full){ const p=player; p.x=Math.max(120,camX+120); p.y=LANE; p.vx=p.vy=0; p.facing=1;
@@ -555,14 +555,15 @@ function doPlayerHit(a){
     damageEnemy(e,def.dmg*dmgMul,def.kb*dir,def.knock,def.launch);
     if(def.special) hitStop=Math.max(hitStop,5);
     if(def.counter&&p.counterPow){ popText(e.x,e.y-e.h-12,'COUNTER!','#bfe9ff',true); triggerSlow(18); }
-    // ── フィニッシュ/必殺はベクトル吹き飛ばし（画面端・天井まで）→ジャグル ──
+    // ── フィニッシュ/必殺は強ベクトルで画面端・天井まで吹き飛ばし → バウンドでジャグル ──
     if(!e.dead){
-      if(def.shoryu) launchEnemy(e, dir*4, -23, 4);
-      else if(def.finisher) launchEnemy(e, dir*17, -12, 3);
-      else if(def.aoe) launchEnemy(e, dir*20, -9, 3);
-      else if(def.stinger) launchEnemy(e, dir*17, -6, 3);
-      else if(def.counter) launchEnemy(e, dir*17, -11, 3);
-      else if(def.special) launchEnemy(e, (Math.random()<.5?dir:-dir)*12, -14, 3);
+      if(def.shoryu) launchEnemy(e, dir*6, -25, 4);
+      else if(def.finisher) launchEnemy(e, dir*26, -13, 4);
+      else if(def.aoe) launchEnemy(e, dir*30, -10, 4);
+      else if(def.stinger) launchEnemy(e, dir*28, -7, 4);
+      else if(def.counter) launchEnemy(e, dir*26, -12, 4);
+      else if(def.special) launchEnemy(e, (Math.random()<.5?dir:-dir)*18, -15, 4);
+      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*20, Math.min(e.vz,-8), Math.max(e.bounces||0,3));  // 空中の敵は各ヒットで再び端まで吹き飛ばす
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
   });
@@ -642,24 +643,27 @@ function grabThrowUp(e){ const p=player;
   e.grabbedBy=0; e.x=p.x+p.facing*16; damageEnemy(e,14,0,false,18); e.vx=p.facing*1.0;
   popText(e.x,e.y-e.h-14,'THROW!','#9fe8ff',true); shake=5; sfx.rise(); ring(p.x,p.y-30,'#9fe8ff');
   p.state='idle'; p.grabEnemy=null; }
-// 地獄グルマ：後ろに転がりながら相手を巻き込み、勢いよく投げ飛ばす
+// 地獄グルマ：後ろに転がりながら周囲を巻き込み、まとめて投げ飛ばす
 function beginWheel(e){ const p=player;
   p.state='wheel'; p.wheelT=0; p.wheelRot=0; p.z=0; p.vz=0; p.invuln=Math.max(p.invuln,46);
-  e.state='grabbed'; p.grabEnemy=e; sfx.dash(); popText(p.x,p.y-100,'地獄グルマ!','#ff5a6a',true); }
+  e.state='grabbed'; p.grabEnemy=e; p.wheelHit=new Set(); sfx.dash(); popText(p.x,p.y-100,'地獄グルマ!','#ff5a6a',true); }
 function updateWheel(){ const p=player, e=p.grabEnemy;
   if(!e){ p.state='idle'; return; }
   p.wheelT++; const T=p.wheelT, dir=p.facing;
-  if(T<=22){ // 後方へ転がる（地面を転がるタンブル）
+  if(T<=22){ // 後方へ転がる（地面を転がるタンブル）— 通り道の敵を巻き込む
     p.x=clamp(p.x - dir*7, camX+24, camX+W-24); p.wheelRot += dir*0.62;
-    p.z=Math.abs(Math.sin(T*0.45))*22;                 // 小さく弾みながら
+    p.z=Math.abs(Math.sin(T*0.45))*22;
     e.x=p.x + dir*Math.cos(p.wheelRot)*22; e.y=p.y; e.z=p.z+18;
+    enemies.forEach(o=>{ if(o.dead||o===e||o.grabbedBy||p.wheelHit.has(o.id))return;
+      if(Math.abs(o.x-p.x)<60 && Math.abs(o.y-p.y)<46){ p.wheelHit.add(o.id); damageEnemy(o,12,-dir*6,true); launchEnemy(o,-dir*14,-9,3); spark(o.x,o.y-o.h*0.5,'#ff8a3a',8,8); } });
     if(T%4===0) dust(p.x,p.y,4);
-  } else { // 解放：前方へ大きく投げ飛ばす
+  } else { // 解放：掴んだ相手＋周囲をまとめて前方へ投げ飛ばす
     e.grabbedBy=0; e.x=p.x+dir*14; e.z=0; e.vz=0;
-    damageEnemy(e,34,dir*6,true); e.state='air'; e.vz=-13; e.vx=dir*11;   // 弧を描いて吹っ飛ぶ
+    damageEnemy(e,34,dir*4,true); launchEnemy(e, dir*24, -13, 4);
+    enemies.forEach(o=>{ if(o.dead||o===e||o.grabbedBy)return; const ddx=o.x-p.x; if(Math.abs(ddx)<150){ damageEnemy(o,16,0,true); launchEnemy(o,(ddx>=0?1:-1)*20,-11,4); } });   // 周囲も巻き込み
     popText(e.x,e.y-e.h-12,'投げ飛ばし!','#ff8a3a',true);
-    spark(p.x+dir*30,p.y-20,'#fff',18,10); ring(p.x+dir*20,p.y-20,'#ffd24d');
-    shake=9; flash=Math.max(flash,3); hitStop=12; triggerSlow(26); sfx.big();
+    spark(p.x+dir*30,p.y-20,'#fff',22,11); ring(p.x+dir*20,p.y-20,'#ffd24d'); ring(p.x,p.y,'#fff');
+    shake=11; flash=Math.max(flash,4); hitStop=14; triggerSlow(30); sfx.big();
     p.z=0; p.state='idle'; p.grabEnemy=null; p.invuln=Math.max(p.invuln,16); }
 }
 // スクリューパイルドライバー：回転しながら垂直に舞い上がり、脳天から叩き落とす
@@ -696,34 +700,40 @@ function updateSlide(){ const p=player; p.slideT++; p.x+=p.vx; p.vx*=0.9;
 //======================================================================
 //  素手乱舞コンボ：百裂拳 → 百烈脚 → 砂かけ蹴り（フィニッシュでスロー）
 //======================================================================
-function beginRush(){ const p=player; p.state='rush'; p.rushT=0; p.rushHits=0; p.rushHold=16; p.rushPhase=0; p.rushFinT=0;
-  sfx.swing(0); popText(p.x,p.y-70,'乱舞！','#ffe14d'); }
-function rushHit(){ const p=player; const reach=72;
-  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.y-p.y)>40)return; const dx=e.x-p.x;
-    if(p.facing>0&&(dx<-14||dx>reach))return; if(p.facing<0&&(dx>14||dx<-reach))return;
-    e.hp-=3; e.stun=8; if(!ETYPE[e.type].boss && e.state!=='air'){ e.state='hurt'; e.hurtTimer=6; e.vx=p.facing*0.6; }   // その場で連打
-    spark(e.x-p.facing*4,e.y-e.h*rnd(0.4,0.8), p.rushPhase?'#aef0ff':'#ffe9a0', 4,6); addCombo();
+// 重厚なラッシュ打撃音（中音の鈍器ヒット＋クラック＋サブ）
+function rushSound(){ if(!actx||!sndOn) return; const t=actx.currentTime;
+  const o=actx.createOscillator(),g=actx.createGain(); o.type='square'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(66,t+0.08);
+  g.gain.setValueAtTime(0.46,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
+  const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.17);
+  noise(0.045,0.34,2600);
+  const o2=actx.createOscillator(),g2=actx.createGain(); o2.type='sine'; o2.frequency.setValueAtTime(72,t); o2.frequency.exponentialRampToValueAtTime(44,t+0.1);
+  g2.gain.setValueAtTime(0.4,t); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.17); o2.connect(g2); g2.connect(sfxGain); o2.start(t); o2.stop(t+0.22); }
+function beginRush(){ const p=player; p.state='rush'; p.rushT=0; p.rushHits=0; p.rushHold=18; p.rushPhase=0; p.rushFinT=0;
+  sfx.heavy(); popText(p.x,p.y-70,'乱舞！','#ffe14d'); }
+function rushHit(){ const p=player; const reach=74; const col=p.rushPhase?'#aef0ff':'#ffe9a0';
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.y-p.y)>42)return; const dx=e.x-p.x;
+    if(p.facing>0&&(dx<-16||dx>reach))return; if(p.facing<0&&(dx>16||dx<-reach))return;
+    e.hp-=5; e.stun=10; if(!ETYPE[e.type].boss && e.state!=='air'){ e.state='hurt'; e.hurtTimer=7; e.vx=p.facing*0.8; }   // その場で重連打
+    spark(e.x-p.facing*4,e.y-e.h*rnd(0.4,0.85), col, 9,9); ring(e.x-p.facing*4,e.y-e.h*0.5,col); addCombo();
     if(e.hp<=0){ killEnemy(e); } });
-  hitSound(6); }
+  rushSound(); shake=Math.max(shake,4); flash=Math.max(flash,1); hitStop=Math.max(hitStop,2); }   // 一発ずつ重い手応え
 function updateRush(){ const p=player; p.rushT++; if(p.rushHold>0)p.rushHold--;
   if(p.rushFinT>0){ p.rushFinT--; if(p.rushFinT<=0) p.state='idle'; return; }   // フィニッシュ硬直
-  if(pressed.atk){ pressed.atk=false; p.rushHold=16; }                          // 連打で継続
-  if(p.rushT%3===0){ rushHit(); p.rushHits++; if(p.rushT%6===0) sfx.swing(p.rushPhase?2:0); dust(p.x,p.y,1); }
-  p.rushPhase = p.rushHits<12 ? 0 : 1;                                          // 0=百裂拳 / 1=百烈脚
-  if(p.rushHold<=0 || p.rushHits>=26){ rushFinish(); }                          // 連打が途切れる/上限でフィニッシュ
+  if(pressed.atk){ pressed.atk=false; p.rushHold=18; }                          // 連打で継続
+  if(p.rushT%4===0){ rushHit(); p.rushHits++; dust(p.x,p.y,2); }                // やや遅めの重い連打
+  p.rushPhase = p.rushHits<10 ? 0 : 1;                                          // 0=百裂拳 / 1=百烈脚
+  if(p.rushHold<=0 || p.rushHits>=22){ rushFinish(); }                          // 連打が途切れる/上限でフィニッシュ
 }
 function rushFinish(){ const p=player; const dir=p.facing;
   // 後ろを向いて、犬の砂かけのように後ろ足で蹴り飛ばす
-  p.facing=-dir; p.rushPhase=2; p.rushFinT=18; p.invuln=Math.max(p.invuln,10);
-  let hit=false;
-  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.y-p.y)>44)return; const dx=e.x-p.x;
-    if(dir>0&&(dx<-10||dx>90))return; if(dir<0&&(dx>10||dx<-90))return;
-    damageEnemy(e,20,dir*4,true); launchEnemy(e, dir*19, -10, 3); hit=true; });
-  // 砂けむり
-  for(let i=0;i<10;i++) dust(p.x+dir*rnd(10,50), p.y, 1);
-  spark(p.x+dir*40,p.y-10,'#d8c08a',16,9); ring(p.x+dir*30,p.y-10,'#e8d8a0');
+  p.facing=-dir; p.rushPhase=2; p.rushFinT=20; p.invuln=Math.max(p.invuln,12);
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.y-p.y)>46)return; const dx=e.x-p.x;
+    if(dir>0&&(dx<-12||dx>96))return; if(dir<0&&(dx>12||dx<-96))return;
+    damageEnemy(e,28,dir*4,true); launchEnemy(e, dir*28, -12, 4); });
+  for(let i=0;i<14;i++) dust(p.x+dir*rnd(10,60), p.y, 1);
+  spark(p.x+dir*44,p.y-10,'#d8c08a',22,11); ring(p.x+dir*32,p.y-10,'#e8d8a0'); ring(p.x+dir*32,p.y-10,'#fff');
   popText(p.x,p.y-80,'砂かけ蹴り！','#ffd24d',true);
-  shake=9; flash=Math.max(flash,3); hitStop=12; triggerSlow(30); sfx.big();   // フィニッシュのスロー演出
+  shake=13; flash=Math.max(flash,4); hitStop=16; triggerSlow(38); sfx.big();   // フィニッシュのスロー演出
 }
 
 //======================================================================
@@ -808,15 +818,15 @@ function updateEnemies(){
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
     if(e.stun>0)e.stun--; if(e.guardCd>0)e.guardCd--;
-    if(e.state==='air'){ e.x+=e.vx; e.vx*=0.985;
-      // ── 天井バウンド ──
-      if(e.z>=CEIL_Z && e.vz<0){ e.z=CEIL_Z; e.vz=-e.vz*0.55; e.vx*=0.7; (e.bounces=(e.bounces||0)); spark(e.x,e.y-e.z,'#fff',12,8); ring(e.x,e.y-e.z,'#ffd24d'); shake=Math.max(shake,4); sfx.hit(); popText(e.x,e.y-e.z-10,'天井!','#ffd24d'); }
-      // ── 画面端バウンド ──
+    if(e.state==='air'){ e.x+=e.vx; e.vx*=0.994;                       // 空気抵抗を抑え、飛距離を保つ
+      // ── 天井バウンド（同程度の距離を跳ね返す）──
+      if(e.z>=CEIL_Z && e.vz<0){ e.z=CEIL_Z; e.vz=-e.vz*0.9; e.vx*=0.96; if((e.bounces||0)>0)e.bounces--; spark(e.x,e.y-e.z,'#fff',14,9); ring(e.x,e.y-e.z,'#ffd24d'); shake=Math.max(shake,5); sfx.hit(); popText(e.x,e.y-e.z-10,'天井!','#ffd24d'); }
+      // ── 画面端バウンド（同程度の距離を跳ね返す）──
       const lpad=camX+30, rpad=camX+W-30;
-      if((e.x<lpad&&e.vx<0)||(e.x>rpad&&e.vx>0)){ e.x=clamp(e.x,lpad,rpad); e.vx=-e.vx*0.6; spark(e.x,e.y-e.z,'#fff',10,8); ring(e.x,e.y-e.z,'#9fe8ff'); shake=Math.max(shake,4); sfx.hit(); popText(e.x,e.y-e.z-10,'壁!','#9fe8ff'); }
+      if((e.x<lpad&&e.vx<0)||(e.x>rpad&&e.vx>0)){ e.x=clamp(e.x,lpad,rpad); e.vx=-e.vx*0.92; if((e.bounces||0)>0)e.bounces--; spark(e.x,e.y-e.z,'#fff',12,9); ring(e.x,e.y-e.z,'#9fe8ff'); shake=Math.max(shake,5); sfx.hit(); popText(e.x,e.y-e.z-10,'壁!','#9fe8ff'); }
       // ── 床バウンド ──
       if(e.z<=0){ const impact=e.vz;
-        if(impact>9 && (e.bounces||0)>0){ e.bounces--; e.z=0; e.vz=-impact*0.5; e.vx*=0.6; dust(e.x,e.y,10); ring(e.x,e.y,'#fff'); shake=Math.max(shake,5); sfx.hit(); popText(e.x,e.y-14,'BOUND!','#ffe14d'); }
+        if(impact>5 && (e.bounces||0)>0){ e.bounces--; e.z=0; e.vz=-impact*0.86; e.vx*=0.94; dust(e.x,e.y,12); ring(e.x,e.y,'#fff'); shake=Math.max(shake,5); sfx.hit(); popText(e.x,e.y-14,'BOUND!','#ffe14d'); }
         else { e.z=0; e.vz=0; e.state='down'; e.downTimer=46; e.bounces=0; dust(e.x,e.y,8); } }
       continue; }
     if(e.state==='down'){ e.downTimer--; e.x+=e.vx; e.vx*=0.85; if(e.downTimer<=0)e.state='walk'; continue; }
