@@ -42,18 +42,36 @@
 
   /* touch */
   #touch { position:absolute; inset:0; z-index:15; pointer-events:none; display:none; }
-  #stick { position:absolute; left:22px; bottom:24px; width:130px; height:130px;
-    border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.18); pointer-events:auto; }
-  #stick .nub { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px;
+  .stk { position:absolute; border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.18); pointer-events:auto; }
+  .stk .nub { position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px;
     border-radius:50%; background:rgba(255,255,255,.26); border:2px solid rgba(255,255,255,.85); }
+  #stick  { left:22px;  bottom:24px; width:130px; height:130px; }
+  #stick2 { right:22px; bottom:24px; width:130px; height:130px; display:none; }
   .tbtn { position:absolute; border-radius:50%; pointer-events:auto; display:flex; align-items:center;
-    justify-content:center; font-size:14px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000;
+    justify-content:center; font-size:15px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000;
     border:3px solid rgba(255,255,255,.55); text-align:center; line-height:1.1;
     box-shadow:0 3px 10px rgba(0,0,0,.4); }
-  #bAtk  { right:118px; bottom:34px;  width:92px; height:92px; background:rgba(255,80,40,.62); font-size:16px; }
-  #bGrab { right:34px;  bottom:30px;  width:78px; height:78px; background:rgba(170,90,235,.6); }
-  #bJmp  { right:42px;  bottom:118px; width:74px; height:74px; background:rgba(90,200,120,.6); }
-  #bGrd  { right:142px; bottom:140px; width:72px; height:72px; background:rgba(60,140,255,.62); }
+  .p2 { display:none; }
+  .bA { background:rgba(255,80,40,.62); }  .bGr { background:rgba(170,90,235,.6); }
+  .bJ { background:rgba(90,200,120,.6); }  .bD { background:rgba(60,140,255,.62); }
+  /* 1P spacious layout */
+  #bAtk  { right:118px; bottom:34px;  width:92px; height:92px; font-size:18px; }
+  #bGrab { right:34px;  bottom:30px;  width:78px; height:78px; }
+  #bJmp  { right:42px;  bottom:118px; width:74px; height:74px; }
+  #bGrd  { right:142px; bottom:140px; width:72px; height:72px; }
+  /* 2P split: P1 left cluster, P2 right cluster */
+  #touch.twop #stick  { left:8px;  bottom:8px; width:104px; height:104px; }
+  #touch.twop #stick2 { display:block; right:8px; bottom:8px; width:104px; height:104px; }
+  #touch.twop .p2 { display:flex; }
+  #touch.twop .tbtn { font-size:14px; }
+  #touch.twop #bAtk { left:118px; right:auto; bottom:10px;  width:62px; height:62px; font-size:15px; }
+  #touch.twop #bJmp { left:184px; right:auto; bottom:10px;  width:58px; height:58px; }
+  #touch.twop #bGrd { left:118px; right:auto; bottom:76px;  width:58px; height:58px; }
+  #touch.twop #bGrab{ left:184px; right:auto; bottom:76px;  width:58px; height:58px; }
+  #bAtk2 { right:118px; bottom:10px; width:62px; height:62px; font-size:15px; }
+  #bJmp2 { right:184px; bottom:10px; width:58px; height:58px; }
+  #bGrd2 { right:118px; bottom:76px; width:58px; height:58px; }
+  #bGrab2{ right:184px; bottom:76px; width:58px; height:58px; }
 </style>
 </head>
 <body>
@@ -71,7 +89,7 @@
     </div>
     <div class="moves">
       <h3>── 技 一覧 / MOVE LIST ──</h3>
-      <b style="color:#9fe8ff">2P CO-OP</b>：2人同時プレイ！ 1P＝聖犬士イッヌ（矢印＋J/K/L/Space）／ 2P＝拳法家<b>シマダックス</b>（WASD＋F/G/H/V・素手格闘）<br>
+      <b style="color:#9fe8ff">2P CO-OP</b>：2人同時プレイ！ 1P＝聖犬士イッヌ／ 2P＝拳法家<b>シマダックス</b>（素手格闘）。キーボード=1P:矢印+JKL/Space・2P:WASD+FGHV／<b>スマホは画面の左右に分かれた操作パッド</b>で2人プレイ<br>
       <b>移動</b> 矢印（1P）/ WASD（2P）　　<b>攻撃</b> J/F　<b>ジャンプ</b> Space/V　<b>ガード</b> K/G　<b>掴み</b> L/H<br>
       <b>短剣コンボ</b> J 連打（4段）　　<span class="cmd">素手乱舞</span> 前＋J → 連打で百裂拳→百烈脚→<span class="cmd">砂かけ蹴り</span>（フィニッシュでスロー）<br>
       <b style="color:#ff8aff">フィニッシュ技は敵を画面端・天井まで吹き飛ばし、バウンドを拾って更にコンボ！</b><br>
@@ -93,11 +111,16 @@
   </div>
 
   <div id="touch">
-    <div id="stick"><div class="nub"></div></div>
-    <div id="bAtk"  class="tbtn">短剣</div>
-    <div id="bGrab" class="tbtn">掴み</div>
-    <div id="bJmp"  class="tbtn">ジャンプ</div>
-    <div id="bGrd"  class="tbtn">ガード</div>
+    <div id="stick" class="stk"><div class="nub"></div></div>
+    <div id="bAtk"  class="tbtn bA">攻</div>
+    <div id="bGrab" class="tbtn bGr">掴</div>
+    <div id="bJmp"  class="tbtn bJ">跳</div>
+    <div id="bGrd"  class="tbtn bD">防</div>
+    <div id="stick2" class="stk p2"><div class="nub"></div></div>
+    <div id="bAtk2"  class="tbtn bA p2">攻</div>
+    <div id="bGrab2" class="tbtn bGr p2">掴</div>
+    <div id="bJmp2"  class="tbtn bJ p2">跳</div>
+    <div id="bGrd2"  class="tbtn bD p2">防</div>
   </div>
 </div>
 
@@ -150,13 +173,13 @@ const KEYMAP=[
 ];
 const CODE2PA={}; KEYMAP.forEach((m,pi)=>{ for(const act in m) m[act].forEach(c=>CODE2PA[c]=[pi,act]); });
 function mapKeysFor(pi){ const m=KEYMAP[pi], inp=players[pi].in, k=inp.keys, KK=inp.K;
-  KK.left=m.left.some(c=>k[c])||(pi===0&&k['_l']);
-  KK.right=m.right.some(c=>k[c])||(pi===0&&k['_r']);
-  KK.up=m.up.some(c=>k[c])||(pi===0&&(k['_u']||k['_up']));
-  KK.down=m.down.some(c=>k[c])||(pi===0&&k['_d']);
-  KK.atk=m.atk.some(c=>k[c])||(pi===0&&k['_atk']);
-  KK.grd=m.grd.some(c=>k[c])||(pi===0&&k['_grd']);
-  KK.grab=m.grab.some(c=>k[c])||(pi===0&&k['_grab']);
+  KK.left=m.left.some(c=>k[c])||k['_l'];
+  KK.right=m.right.some(c=>k[c])||k['_r'];
+  KK.up=m.up.some(c=>k[c])||k['_u']||k['_up'];
+  KK.down=m.down.some(c=>k[c])||k['_d'];
+  KK.atk=m.atk.some(c=>k[c])||k['_atk'];
+  KK.grd=m.grd.some(c=>k[c])||k['_grd'];
+  KK.grab=m.grab.some(c=>k[c])||k['_grab'];
 }
 function pushTapFor(inp,d){ inp.dirTaps.push({d,f:gf}); if(inp.dirTaps.length>6) inp.dirTaps.shift(); }
 function pushCardFor(inp,c){ const L=inp.cardSeq[inp.cardSeq.length-1]; if(L&&L.c===c){ L.f=gf; return; } inp.cardSeq.push({c,f:gf}); if(inp.cardSeq.length>8)inp.cardSeq.shift(); }
@@ -1581,11 +1604,13 @@ function shimaBody(lean){ ctx.save(); ctx.rotate(lean*0.22);
   const g=ctx.createLinearGradient(0,-34,0,-12); g.addColorStop(0,'#b07a44'); g.addColorStop(1,'#7a4e26');
   ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,-23,14,15,0,0,7); ctx.fill();
   ctx.strokeStyle='#5a3818'; ctx.lineWidth=1.2; ctx.stroke();
-  // 黒いシマ模様
-  ctx.fillStyle='#241509'; for(const sxp of [-8,-1,6]){ ctx.beginPath(); ctx.moveTo(sxp-2,-33); ctx.quadraticCurveTo(sxp+1,-23,sxp-2,-12); ctx.lineTo(sxp+2.5,-12); ctx.quadraticCurveTo(sxp+5,-23,sxp+2.5,-33); ctx.closePath(); ctx.fill(); }
+  // 黒い横シマ模様（横縞のみ）
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0,-23,14,15,0,0,7); ctx.clip();
+  ctx.fillStyle='#241509'; for(const yy of [-30,-23,-16]){ ctx.fillRect(-15,yy-1.6,30,3.2); }
+  ctx.restore();
   // 空手の黒帯
-  ctx.fillStyle='#15151a'; ctx.fillRect(-13,-18,26,5);
-  ctx.fillRect(-3,-18,4,11); ctx.fillRect(2,-18,4,11);
+  ctx.fillStyle='#15151a'; ctx.fillRect(-13,-12,26,5);
+  ctx.fillRect(-3,-12,4,10); ctx.fillRect(2,-12,4,10);
   ctx.restore();
 }
 function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3);
@@ -1594,8 +1619,9 @@ function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3)
   ctx.beginPath(); ctx.ellipse(16,7,8,16,-0.25,0,7); ctx.fill();
   // 頭
   furBall(0,-1,18,'#b07a44','#7a4e26');
-  // 頭の黒シマ
-  ctx.fillStyle='#241509'; ctx.beginPath(); ctx.ellipse(-6,-10,3,9,0.2,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(6,-10,3,9,-0.2,0,7); ctx.fill();
+  // 頭の黒い横シマ（横縞のみ）
+  ctx.save(); ctx.beginPath(); ctx.arc(0,-1,18,0,7); ctx.clip();
+  ctx.fillStyle='#241509'; for(const yy of [-13,-6]){ ctx.fillRect(-19,yy-1.4,38,2.8); } ctx.restore();
   // 長いマズル
   ctx.fillStyle='#c8966a'; ctx.beginPath(); ctx.ellipse(12,6,12,7,0,0,7); ctx.fill();
   ctx.fillStyle='#2a1810'; ctx.beginPath(); ctx.ellipse(22,5,3.4,2.7,0,0,7); ctx.fill();
@@ -2146,8 +2172,8 @@ function winGame(){ state='win'; Music.stop(); victoryJingle(); score+=Math.max(
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全7ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
-document.getElementById('startBtn').onclick=()=>{ unlockAudio(); TWO_P=false; startOpening(); };
-document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); TWO_P=true; startOpening(); };
+document.getElementById('startBtn').onclick=()=>{ unlockAudio(); TWO_P=false; setTouchMode(false); startOpening(); };
+document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); TWO_P=true; setTouchMode(true); startOpening(); };
 document.getElementById('retryBtn').onclick=startGame;
 // cutscene advance / skip input
 addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
@@ -2162,27 +2188,29 @@ sndBtn.onclick=()=>{ initAudio(); sndOn=!sndOn; sndBtn.textContent=sndOn?'♪':'
 //======================================================================
 const isTouch=('ontouchstart'in window)||navigator.maxTouchPoints>0;
 if(isTouch) document.getElementById('touch').style.display='block';
-const P1IN=()=>players[0].in;   // touch always controls 1P
-function bindBtn(id,key){ const el=document.getElementById(id);
-  el.addEventListener('touchstart',e=>{ e.preventDefault(); const i=P1IN(); i.keys['_'+key]=true; mapKeysFor(0);
+function setTouchMode(twop){ const t=document.getElementById('touch'); if(!t)return; t.classList.toggle('twop', !!twop); }
+function bindBtn(id,key,pi){ const el=document.getElementById(id); if(!el)return; const IN=()=>players[pi].in;
+  el.addEventListener('touchstart',e=>{ e.preventDefault(); const i=IN(); i.keys['_'+key]=true; mapKeysFor(pi);
     if(key==='atk')i.pressed.atk=true; if(key==='grab')i.pressed.grab=true; if(key==='jump')i.pressed.jump=true; },{passive:false});
-  el.addEventListener('touchend',e=>{ e.preventDefault(); P1IN().keys['_'+key]=false; mapKeysFor(0); },{passive:false}); }
-bindBtn('bAtk','atk'); bindBtn('bGrd','grd'); bindBtn('bGrab','grab'); bindBtn('bJmp','jump');
-const stick=document.getElementById('stick'),nub=stick.querySelector('.nub'); let stickId=null,scx=0,scy=0,lastTapDir=0;
-stick.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; stickId=t.identifier;
-  const r=stick.getBoundingClientRect(); scx=r.left+r.width/2; scy=r.top+r.height/2; moveStick(t); },{passive:false});
-stick.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches) if(t.identifier===stickId) moveStick(t); },{passive:false});
-stick.addEventListener('touchend',e=>{ for(const t of e.changedTouches) if(t.identifier===stickId){ stickId=null; nub.style.left='50%'; nub.style.top='50%'; const k=P1IN().keys; k['_l']=k['_r']=k['_u']=k['_d']=false; lastTapDir=0; lastCard=-1; stickAngPrev=null; stickAccum=0; mapKeysFor(0); } },{passive:false});
-let lastCard=-1, stickAngPrev=null, stickAccum=0;
-function moveStick(t){ const i=P1IN(), k=i.keys; let dx=t.clientX-scx,dy=t.clientY-scy; const m=Math.hypot(dx,dy)||1,max=55,cl=Math.min(m,max);
-  dx=dx/m*cl; dy=dy/m*cl; nub.style.left=`calc(50% + ${dx}px)`; nub.style.top=`calc(50% + ${dy}px)`; const th=18;
-  const nl=dx<-th,nr=dx>th; if(nl&&lastTapDir!==-1){pushTapFor(i,-1);lastTapDir=-1;} if(nr&&lastTapDir!==1){pushTapFor(i,1);lastTapDir=1;} if(!nl&&!nr)lastTapDir=0;
-  if(m>max*0.55){ const ang=Math.atan2(dy,dx); let card=(Math.round(ang/(Math.PI/2))+4)%4; card=[1,2,3,0][card];
-    if(card!==lastCard){ pushCardFor(i,card); lastCard=card; }
-    if(stickAngPrev!==null){ let d=ang-stickAngPrev; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; stickAccum+=d; }
-    stickAngPrev=ang; if(Math.abs(stickAccum)>=Math.PI*1.7){ i.stickRot=gf; stickAccum=0; }
-  } else { lastCard=-1; stickAngPrev=null; stickAccum=0; }
-  k['_l']=nl; k['_r']=nr; k['_u']=dy<-th; k['_d']=dy>th; mapKeysFor(0); }
+  el.addEventListener('touchend',e=>{ e.preventDefault(); IN().keys['_'+key]=false; mapKeysFor(pi); },{passive:false}); }
+bindBtn('bAtk','atk',0); bindBtn('bGrd','grd',0); bindBtn('bGrab','grab',0); bindBtn('bJmp','jump',0);
+bindBtn('bAtk2','atk',1); bindBtn('bGrd2','grd',1); bindBtn('bGrab2','grab',1); bindBtn('bJmp2','jump',1);
+function makeStick(stickId,pi){ const stick=document.getElementById(stickId); if(!stick)return; const nub=stick.querySelector('.nub');
+  let id=null,scx=0,scy=0,lastTapDir=0,lastCard=-1,angPrev=null,accum=0; const IN=()=>players[pi].in;
+  stick.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; id=t.identifier; const r=stick.getBoundingClientRect(); scx=r.left+r.width/2; scy=r.top+r.height/2; move(t); },{passive:false});
+  stick.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches) if(t.identifier===id) move(t); },{passive:false});
+  stick.addEventListener('touchend',e=>{ for(const t of e.changedTouches) if(t.identifier===id){ id=null; nub.style.left='50%'; nub.style.top='50%'; const k=IN().keys; k['_l']=k['_r']=k['_u']=k['_d']=false; lastTapDir=0; lastCard=-1; angPrev=null; accum=0; mapKeysFor(pi); } },{passive:false});
+  function move(t){ const i=IN(), k=i.keys; let dx=t.clientX-scx,dy=t.clientY-scy; const m=Math.hypot(dx,dy)||1,max=50,cl=Math.min(m,max);
+    dx=dx/m*cl; dy=dy/m*cl; nub.style.left='calc(50% + '+dx+'px)'; nub.style.top='calc(50% + '+dy+'px)'; const th=16;
+    const nl=dx<-th,nr=dx>th; if(nl&&lastTapDir!==-1){pushTapFor(i,-1);lastTapDir=-1;} if(nr&&lastTapDir!==1){pushTapFor(i,1);lastTapDir=1;} if(!nl&&!nr)lastTapDir=0;
+    if(m>max*0.55){ const ang=Math.atan2(dy,dx); let card=(Math.round(ang/(Math.PI/2))+4)%4; card=[1,2,3,0][card];
+      if(card!==lastCard){ pushCardFor(i,card); lastCard=card; }
+      if(angPrev!==null){ let d=ang-angPrev; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; accum+=d; }
+      angPrev=ang; if(Math.abs(accum)>=Math.PI*1.7){ i.stickRot=gf; accum=0; }
+    } else { lastCard=-1; angPrev=null; accum=0; }
+    k['_l']=nl; k['_r']=nr; k['_u']=dy<-th; k['_d']=dy>th; mapKeysFor(pi); }
+}
+makeStick('stick',0); makeStick('stick2',1);
 
 //======================================================================
 //  Resize
