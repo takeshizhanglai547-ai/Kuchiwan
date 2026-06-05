@@ -100,7 +100,7 @@
       <b style="color:#ffe27a">必殺技</b>： <span class="cmd">スティンガー</span> 後ろ→前＋J　／ <span class="cmd">ガードカウンター</span> ガード中にJ<br>
       <b style="color:#d6a6ff">奥義・次元斬</b>： レバー一回転＋J（全方位／回数制限＝奥義ストック）<br>
       <b style="color:#ffb3e0">掴み技</b>： <b>掴み</b> → J連打＝腹パンチ→蹴り／ ↑＝投げ上げ／ 後ろ＝<span class="cmd">地獄グルマ</span>（後転投げ）／ ↓＝<span class="cmd">スクリューパイルドライバー</span><br>
-      <b style="color:#7dff5a">ドロップ</b>：敵を倒すと<b>肉（体力回復）</b>や<b>武器（槍・ハンマー）</b>を落とすことがある（拾うと一定時間その武器に。シマダックスは素手のみ）<br>
+      <b style="color:#7dff5a">ドロップ</b>：敵を倒すと<b>肉（体力回復）</b>や<b>武器</b>を落とす（拾うと一定時間装備。イッヌ＝<b>槍・ハンマー</b>／シマダックス＝<b>ヌンチャク・トンファー</b>）<br>
       <b style="color:#ffb04a">— シマダックス（2P・拳法）—</b> 5連コンボ／前＝正拳突き／↓＝ドロップキック／後ろ前＝グルグルパンチ突進(多段)／↑＝昇竜旋風脚／タメ＝波動拳(連打で連弾)／回転＝七死ワン生<br>
       <span style="color:#ffb04a">　掴み：頭突き連打→尻尾／↑＝残悔拳(3秒後爆発)／↓＝踵落とし／後ろ＝背負い投げ→チョップ／空中連打＝巨大百裂拳／空中前＝ドロップキック／空中↓＝ダブルハンマー(地面バウンド)</span><br>
       <b style="color:#ffd24d">全7ステージ・個性派ボス！</b> パリィで敵の<b>飛び道具</b>を反射！
@@ -463,6 +463,8 @@ const WEAPONS={
   dagger:{name:'短剣', reach:1.0, dmg:1.0, kb:1.0, ext:1.0, trail:null, launch:1.0, col:'#d6deec'},
   spear: {name:'槍',   reach:1.6, dmg:1.15,kb:1.0, ext:1.9, trail:'#aef8ff', launch:1.1, col:'#cfe6ff'},
   hammer:{name:'ハンマー',reach:1.15,dmg:1.8, kb:1.9, ext:1.25,trail:'#ffb02e', launch:1.7, col:'#ffd24d'},
+  nunchaku:{name:'ヌンチャク', reach:1.28, dmg:1.4, kb:1.05, ext:1.4, trail:'#ffe27a', launch:1.05, col:'#ffcf4d'},   // シマダックス専用：長リーチ・手数で押す
+  tonfa: {name:'トンファー', reach:1.02, dmg:1.5, kb:1.6, ext:1.0, trail:'#bfe9ff', launch:1.4, col:'#cfd8e6'},     // シマダックス専用：短いが強打
   fists: {name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
 };
 function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
@@ -620,9 +622,9 @@ function doPlayerHit(a){
     if(!canHigh && e.z>175) return;                                          // 高く浮いた敵は打上げ/空中技で拾う
     let dir=p.facing;
     if(def.omni){ if(Math.abs(e.x-p.x)>reach) return; dir=e.x<p.x?-1:1; }   // 全方位
-    else { const dx=e.x-hx;
-      if(p.facing>0 && (dx<-16 || dx>reach)) return;
-      if(p.facing<0 && (dx>16 || dx<-reach)) return; }
+    else { const dx=e.x-hx, back=Math.max(16, reach*0.32);   // 近接マージンはリーチに比例（長武器でも至近を打てる）
+      if(p.facing>0 && (dx<-back || dx>reach)) return;
+      if(p.facing<0 && (dx>back || dx<-reach)) return; }
     if(def.multi) a.lastHit[e.id]=gf; else a.hitSet.add(e.id);
     // 盾犬兵: 正面からの通常攻撃はガードで防がれる（重撃・必殺技はガード崩し）
     if(e.state==='guard' && e.facing===-dir){
@@ -960,20 +962,31 @@ function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70
 //======================================================================
 let items=[];
 function makeItem(x,kind){ items.push({x,kind,z:46,vz:-3,vx:rnd(-1,1),life:680,bob:Math.random()*6}); }
+function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー、シマ=ヌンチャク/トンファー）
+  const pool=[];
+  if(players.some(p=>p.active && p.kind!=='shima')) pool.push('spear','hammer');
+  if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa');
+  if(!pool.length) pool.push('spear','hammer');
+  return pool[Math.floor(Math.random()*pool.length)];
+}
 function dropFromEnemy(e,T){
-  if(T.boss){ makeItem(e.x-26,'hp'); makeItem(e.x+26, Math.random()<0.5?'spear':'hammer'); return; }  // ボスは確定ドロップ
-  if(T.mini){ makeItem(e.x, Math.random()<0.5?'hp':(Math.random()<0.5?'spear':'hammer')); return; }
+  if(T.boss){ makeItem(e.x-26,'hp'); makeItem(e.x+26, weaponDropKind()); return; }  // ボスは確定ドロップ
+  if(T.mini){ makeItem(e.x, Math.random()<0.5?'hp':weaponDropKind()); return; }
   const r=Math.random();
   if(r<0.11) makeItem(e.x,'hp');
-  else if(r<0.17) makeItem(e.x,'spear');
-  else if(r<0.23) makeItem(e.x,'hammer');
+  else if(r<0.23) makeItem(e.x,weaponDropKind());
 }
 function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=1100;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.rise(); }
+function canPick(p,kind){ // 拾える武器はキャラごとに異なる
+  if(kind==='hp') return true;
+  if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa';   // シマ＝拳法武器のみ
+  return kind==='spear'||kind==='hammer'||kind==='dagger';          // イッヌ＝剣系のみ
+}
 function pickerFor(it){ // nearest eligible player on the ground
   let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='down'||p.state==='dead')continue;
-    if(Math.abs(p.x-it.x)<46 && p.z<70 && it.z<24){ // シマダックスは武器を拾わない（素手）
-      if(it.kind!=='hp' && p.kind==='shima') continue;
+    if(Math.abs(p.x-it.x)<46 && p.z<70 && it.z<24){
+      if(!canPick(p,it.kind)) continue;
       const d=Math.abs(p.x-it.x); if(d<bd){bd=d;best=p;} } }
   return best;
 }
@@ -1005,9 +1018,19 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-it.z-(8+Ma
   } else if(it.kind==='spear'){ ctx.rotate(-0.5);
     ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-14,8); ctx.lineTo(12,-10); ctx.stroke();
     ctx.fillStyle=radGrad(14,-12,6,'#fff',WEAPONS.spear.col); ctx.beginPath(); ctx.moveTo(8,-7);ctx.lineTo(20,-16);ctx.lineTo(11,-13); ctx.fill();
-  } else { // hammer
+  } else if(it.kind==='hammer'){
     ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(-10,12); ctx.lineTo(4,-6); ctx.stroke();
     ctx.fillStyle=radGrad(6,-10,9,'#fff7d0',WEAPONS.hammer.col); ctx.fillRect(-2,-16,16,12); ctx.strokeStyle='#a8801a'; ctx.lineWidth=1.4; ctx.strokeRect(-2,-16,16,12);
+  } else if(it.kind==='nunchaku'){ ctx.rotate(-0.4); ctx.lineCap='round';   // ヌンチャク
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(-12,6); ctx.lineTo(-1,-4); ctx.stroke();
+    ctx.strokeStyle='#b9bfc9'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-1,-4); ctx.lineTo(5,-2); ctx.stroke();
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(5,-2); ctx.lineTo(15,8); ctx.stroke();
+    ctx.fillStyle='#caa54a'; [[-12,6],[15,8]].forEach(c=>{ctx.beginPath();ctx.arc(c[0],c[1],2,0,7);ctx.fill();});
+  } else { // tonfa（トンファー）
+    ctx.rotate(-0.3); ctx.lineCap='round';
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(14,-4); ctx.stroke();
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(-6,-6); ctx.lineTo(-6,8); ctx.stroke();
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(14,-4,2.2,0,7); ctx.fill();
   }
   ctx.restore(); }); }
 function updateEnemies(){
@@ -1332,7 +1355,7 @@ function stepPlayers(){
     player=pl; useInput(pl.in);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && pl.lives>=0) resetPlayer(pl,false); }
     else { updatePlayer();
-      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0 && pl.weapon!=='dagger' && pl.kind!=='shima'){ pl.weapon='dagger'; popText(pl.x,pl.y-110,'短剣に戻った','#cfd8e6'); } } }
+      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.kind==='shima'?'fists':'dagger'; if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, base==='fists'?'素手に戻った':'短剣に戻った','#cfd8e6'); } } } }
     saveInput(pl.in);
   }
   player=players[0];
@@ -1639,7 +1662,9 @@ function drawPlayer(){
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; } }
 
   const shima = p.kind==='shima';
-  if(shima && (mode==='blade'||mode==='shield')) mode='fist';      // シマダックスは素手のみ
+  const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa');   // 拳法武器を装備中
+  if(shima && !shimaArmed && (mode==='blade'||mode==='shield')) mode='fist'; // 素手時は拳のみ
+  else if(shima && shimaArmed && mode==='shield') mode='fist';               // 武器持ちでもガードは拳で受ける
   const limbA = shima?'#8a5a30':'#e0d2ab', limbB = shima?'#7a4a24':'#ddcca0', bootB=shima?'#3a2410':'#5a4022';
   const limbF = shima?'#9a6a3a':'#efe2bc', bootF=shima?'#4a2e16':'#6b4f28', handCol=shima?'#9a6a3a':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
@@ -1754,6 +1779,21 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.fillStyle=radGrad(L+9,0,16,'#fff7d0','#c8881a'); ctx.fillRect(L,-13,22,26);
     ctx.strokeStyle='#a8801a'; ctx.lineWidth=1.8; ctx.strokeRect(L,-13,22,26);
     ctx.fillStyle='rgba(255,255,255,.45)'; ctx.fillRect(L+3,-11,5,22);
+  } else if(wk==='nunchaku'){ const L=ext*0.42+9; const fa=Math.sin(gf*0.6)*0.85+0.6;   // 振り回す二節棍
+    ctx.lineCap='round';
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(-4,0); ctx.lineTo(L,0); ctx.stroke();          // 第一節
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(-4,0,2,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(L,0,2,0,7); ctx.fill();
+    const ex=L+3+Math.cos(fa)*5, ey=Math.sin(fa)*5;
+    ctx.strokeStyle='#b9bfc9'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(L,0); ctx.lineTo(ex,ey); ctx.stroke();          // 鎖
+    const ex2=ex+Math.cos(fa)*(L*0.95), ey2=ey+Math.sin(fa)*(L*0.95);
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex2,ey2); ctx.stroke();      // 第二節
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(ex2,ey2,2,0,7); ctx.fill();
+  } else if(wk==='tonfa'){ const L=ext*0.55+20;                                            // L字トンファー
+    ctx.lineCap='round';
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(-11,0); ctx.lineTo(L,0); ctx.stroke();           // 本体（前後に伸びる）
+    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-9,-1.2); ctx.lineTo(L-2,-1.2); ctx.stroke();
+    ctx.strokeStyle='#2e2012'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(0,8); ctx.stroke();          // 握り（垂直グリップ）
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L,0,2.4,0,7); ctx.fill();
   } else { // dagger
     ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-4,4,9);
     ctx.fillStyle=radGrad(1,0,3,'#ffe98a','#b8860b'); ctx.beginPath(); ctx.arc(1,0,2.4,0,7); ctx.fill();
