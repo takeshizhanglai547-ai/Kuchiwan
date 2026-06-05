@@ -83,8 +83,9 @@
     <div class="title-sub">ARCADE BELT ACTION</div>
     <div class="title-main">聖犬士イッヌ</div>
     <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
-      <button id="startBtn" class="btn">▶ 1P START</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="startBtn" class="btn">▶ 1P イッヌ</button>
+      <button id="startShimaBtn" class="btn" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
     <div class="moves">
@@ -2061,8 +2062,9 @@ function drawBossWeapon(t,e,atk){
 //  HUD
 //======================================================================
 function drawHUD(){
-  panel(12,12,256,58); faceIcon(38,40,'#f6e8c6');
-  ctx.fillStyle='#ffe14d'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('1P  聖犬士イッヌ',70,28);
+  const p1shima=players[0].kind==='shima';
+  panel(12,12,256,58); if(p1shima) shimaIcon(38,40); else faceIcon(38,40,'#f6e8c6');
+  ctx.fillStyle=p1shima?'#ffb04a':'#ffe14d'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText(p1shima?'1P  シマダックス':'1P  聖犬士イッヌ',70,28);
   barFrame(70,33,176,12); const hpg=ctx.createLinearGradient(70,0,246,0); hpg.addColorStop(0,'#7dff5a'); hpg.addColorStop(.5,'#ffe14d'); hpg.addColorStop(1,'#ff4d2d');
   ctx.fillStyle=hpg; ctx.fillRect(72,35,172*clamp(player.hp/player.maxHp,0,1),8);
   // charge gauge
@@ -2137,6 +2139,14 @@ function faceIcon(x,y,col){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx
   ctx.fillStyle='#fffaf0'; ctx.beginPath(); ctx.ellipse(x+2,y+3,9,8,0,0,7); ctx.fill();
   ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(x-2,y,2,0,7); ctx.arc(x+5,y,2,0,7); ctx.fill();
   ctx.fillStyle='#3a2a1a'; ctx.beginPath(); ctx.arc(x+6,y+4,2,0,7); ctx.fill(); }
+function shimaIcon(x,y){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x,y,22,0,7); ctx.fill();
+  ctx.fillStyle='#5e3c20'; ctx.beginPath(); ctx.ellipse(x-15,y+2,6,12,0.3,0,7); ctx.ellipse(x+15,y+2,6,12,-0.3,0,7); ctx.fill();   // 垂れ耳
+  furBall(x,y-1,16,'#b07a44','#7a4e26');
+  ctx.save(); ctx.beginPath(); ctx.arc(x,y-1,16,0,7); ctx.clip(); ctx.fillStyle='#241509'; ctx.fillRect(x-18,y-9,36,2.6); ctx.fillRect(x-18,y-2,36,2.6); ctx.restore(); // 横シマ
+  ctx.fillStyle='#c8966a'; ctx.beginPath(); ctx.ellipse(x+9,y+5,9,5.5,0,0,7); ctx.fill();   // マズル
+  ctx.fillStyle='#2a1810'; ctx.beginPath(); ctx.ellipse(x+17,y+4,2.6,2,0,0,7); ctx.fill();
+  ctx.fillStyle='#0a0a0e'; ctx.beginPath(); ctx.ellipse(x-3,y,5.5,4,0,0,7); ctx.ellipse(x+6,y,5.5,4,0,0,7); ctx.fill();             // サングラス
+  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(x-4,y-1.4,1.2,0,7); ctx.arc(x+5,y-1.4,1.2,0,7); ctx.fill(); }
 function speech(x,y,txt){ ctx.font='bold 15px Trebuchet MS'; const w=ctx.measureText(txt).width+24;
   ctx.fillStyle='rgba(106,45,176,.95)'; roundRect(x-w/2,y-32,w,28,8); ctx.fill(); ctx.strokeStyle='#c89cff'; ctx.lineWidth=2; roundRect(x-w/2,y-32,w,28,8); ctx.stroke();
   ctx.fillStyle='rgba(106,45,176,.95)'; ctx.beginPath(); ctx.moveTo(x-8,y-6);ctx.lineTo(x+8,y-6);ctx.lineTo(x,y+6); ctx.fill();
@@ -2256,8 +2266,12 @@ function winGame(){ state='win'; Music.stop(); victoryJingle(); score+=Math.max(
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全7ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
-document.getElementById('startBtn').onclick=()=>{ unlockAudio(); TWO_P=false; setTouchMode(false); startOpening(); };
-document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); TWO_P=true; setTouchMode(true); startOpening(); };
+function setupRoster(mode){ TWO_P=(mode==='coop');
+  players[0].kind=(mode==='shima')?'shima':'inu'; players[1].kind='shima';
+  players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
+document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); startOpening(); };
+document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); startOpening(); };
+document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); startOpening(); };
 document.getElementById('retryBtn').onclick=startGame;
 // cutscene advance / skip input
 addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
