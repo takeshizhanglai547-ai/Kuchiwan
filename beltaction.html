@@ -65,10 +65,14 @@
     <div class="title-sub">ARCADE BELT ACTION</div>
     <div class="title-main">聖犬士イッヌ</div>
     <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
-    <button id="startBtn" class="btn">▶ START</button>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+      <button id="startBtn" class="btn">▶ 1P START</button>
+      <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
+    </div>
     <div class="moves">
       <h3>── 技 一覧 / MOVE LIST ──</h3>
-      <b>移動</b> 矢印 / WASD　　<b>ジャンプ</b> Space　　<b>ガード</b> K（長押し）　　<b>掴み</b> L / U<br>
+      <b style="color:#9fe8ff">2P CO-OP</b>：2人同時プレイ！ 1P＝聖犬士イッヌ（矢印＋J/K/L/Space）／ 2P＝拳法家<b>シマダックス</b>（WASD＋F/G/H/V・素手格闘）<br>
+      <b>移動</b> 矢印（1P）/ WASD（2P）　　<b>攻撃</b> J/F　<b>ジャンプ</b> Space/V　<b>ガード</b> K/G　<b>掴み</b> L/H<br>
       <b>短剣コンボ</b> J 連打（4段）　　<span class="cmd">素手乱舞</span> 前＋J → 連打で百裂拳→百烈脚→<span class="cmd">砂かけ蹴り</span>（フィニッシュでスロー）<br>
       <b style="color:#ff8aff">フィニッシュ技は敵を画面端・天井まで吹き飛ばし、バウンドを拾って更にコンボ！</b><br>
       <span class="cmd">スライディング</span>： ↓＋J（攻撃＆無敵回避）　　<span class="cmd">溜め斬り</span>： J長押し→離す<br>
@@ -129,47 +133,50 @@ let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene s
 function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 
 //======================================================================
-//  Input
+//  Input  (per-player; globals point to the player currently being simulated)
 //======================================================================
-const keys={};
-const K={left:false,right:false,up:false,down:false,atk:false,grd:false,grab:false};
-const pressed={atk:false,grab:false,up:false,jump:false};
-const dirTaps=[]; // {d:-1|1, f:frame}  for command detection
-const cardSeq=[]; // {c, f}  cardinal sequence  c:0=up,1=right,2=down,3=left
-let stickRot=-999;
-
+let keys, K, pressed, dirTaps, cardSeq, stickRot;
+function makeInput(){ return { keys:{},
+  K:{left:false,right:false,up:false,down:false,atk:false,grd:false,grab:false},
+  pressed:{atk:false,grab:false,up:false,jump:false}, dirTaps:[], cardSeq:[], stickRot:-999 }; }
+function useInput(inp){ keys=inp.keys; K=inp.K; pressed=inp.pressed; dirTaps=inp.dirTaps; cardSeq=inp.cardSeq; stickRot=inp.stickRot; }
+function saveInput(inp){ inp.stickRot=stickRot; }
+// key bindings per player (1P: arrows + JKL/space, 2P: WASD + F G H V)
+const KEYMAP=[
+  { left:['ArrowLeft'], right:['ArrowRight'], up:['ArrowUp'], down:['ArrowDown'],
+    atk:['KeyJ','KeyZ'], grd:['KeyK','KeyX'], grab:['KeyL','KeyU','ShiftLeft','ShiftRight'], jump:['Space','KeyI'] },
+  { left:['KeyA'], right:['KeyD'], up:['KeyW'], down:['KeyS'],
+    atk:['KeyF'], grd:['KeyG'], grab:['KeyH'], jump:['KeyV','KeyB'] },
+];
+const CODE2PA={}; KEYMAP.forEach((m,pi)=>{ for(const act in m) m[act].forEach(c=>CODE2PA[c]=[pi,act]); });
+function mapKeysFor(pi){ const m=KEYMAP[pi], inp=players[pi].in, k=inp.keys, KK=inp.K;
+  KK.left=m.left.some(c=>k[c])||(pi===0&&k['_l']);
+  KK.right=m.right.some(c=>k[c])||(pi===0&&k['_r']);
+  KK.up=m.up.some(c=>k[c])||(pi===0&&(k['_u']||k['_up']));
+  KK.down=m.down.some(c=>k[c])||(pi===0&&k['_d']);
+  KK.atk=m.atk.some(c=>k[c])||(pi===0&&k['_atk']);
+  KK.grd=m.grd.some(c=>k[c])||(pi===0&&k['_grd']);
+  KK.grab=m.grab.some(c=>k[c])||(pi===0&&k['_grab']);
+}
+function pushTapFor(inp,d){ inp.dirTaps.push({d,f:gf}); if(inp.dirTaps.length>6) inp.dirTaps.shift(); }
+function pushCardFor(inp,c){ const L=inp.cardSeq[inp.cardSeq.length-1]; if(L&&L.c===c){ L.f=gf; return; } inp.cardSeq.push({c,f:gf}); if(inp.cardSeq.length>8)inp.cardSeq.shift(); }
 addEventListener('keydown',e=>{
   if(state==='cut'){ if(e.code==='Escape'||e.code==='KeyK') cutSkip=true; else cutAdvance=true; e.preventDefault(); return; }
-  if(keys[e.code]){ e.preventDefault(); return; }
-  keys[e.code]=true; mapKeys();
-  if(['KeyJ','KeyZ'].includes(e.code)) pressed.atk=true;
-  if(['KeyL','KeyU','ShiftLeft','ShiftRight'].includes(e.code)) pressed.grab=true;
-  if(['Space','KeyI'].includes(e.code)) pressed.jump=true;
-  if(['ArrowUp','KeyW'].includes(e.code)) pushCard(0);
-  if(['ArrowRight','KeyD'].includes(e.code)){ pushTap(1); pushCard(1); }
-  if(['ArrowDown','KeyS'].includes(e.code)) pushCard(2);
-  if(['ArrowLeft','KeyA'].includes(e.code)){ pushTap(-1); pushCard(3); }
-  if(e.code==='KeyP'&&(state==='play'||state==='pause')) togglePause();
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if(e.code==='KeyP'&&(state==='play'||state==='pause')){ togglePause(); return; }
+  const pa=CODE2PA[e.code]; if(!pa) return; const [pi,act]=pa; const inp=players[pi].in;
+  if(!inp.keys[e.code]){ inp.keys[e.code]=true; mapKeysFor(pi);
+    if(act==='atk') inp.pressed.atk=true; if(act==='grab') inp.pressed.grab=true; if(act==='jump') inp.pressed.jump=true;
+    if(act==='up') pushCardFor(inp,0); else if(act==='right'){ pushTapFor(inp,1); pushCardFor(inp,1); }
+    else if(act==='down') pushCardFor(inp,2); else if(act==='left'){ pushTapFor(inp,-1); pushCardFor(inp,3); }
+  }
+  e.preventDefault();
 });
-addEventListener('keyup',e=>{ keys[e.code]=false; mapKeys(); });
-function mapKeys(){
-  K.left=keys['ArrowLeft']||keys['KeyA']||keys['_l'];
-  K.right=keys['ArrowRight']||keys['KeyD']||keys['_r'];
-  K.up=keys['ArrowUp']||keys['KeyW']||keys['_u']||keys['_up'];
-  K.down=keys['ArrowDown']||keys['KeyS']||keys['_d'];
-  K.atk=keys['KeyJ']||keys['KeyZ']||keys['_atk'];
-  K.grd=keys['KeyK']||keys['KeyX']||keys['_grd'];
-  K.grab=keys['KeyL']||keys['KeyU']||keys['ShiftLeft']||keys['ShiftRight']||keys['_grab'];
-}
-function pushTap(d){ dirTaps.push({d,f:gf}); if(dirTaps.length>6) dirTaps.shift(); }
-function pushCard(c){ const L=cardSeq[cardSeq.length-1]; if(L&&L.c===c){ L.f=gf; return; } cardSeq.push({c,f:gf}); if(cardSeq.length>8)cardSeq.shift(); }
-// back→forward + attack (stinger)
+addEventListener('keyup',e=>{ const pa=CODE2PA[e.code]; if(!pa) return; const [pi]=pa; players[pi].in.keys[e.code]=false; mapKeysFor(pi); });
+// command detection (operate on the active player's globals)
 function stingerReady(facing){ const want=facing>0?1:3, back=facing>0?3:1;
   const r=cardSeq.filter(t=>gf-t.f<=18);
   for(let i=r.length-1;i>=1;i--){ if(r[i].c===want && gf-r[i].f<=10){ for(let j=i-1;j>=0;j--){ if(r[j].c===back) return true; } } }
   return false; }
-// full stick rotation (either way) → 次元斬
 function rotationReady(){ if(gf-stickRot<=12) return true;
   const r=cardSeq.filter(t=>gf-t.f<=44); if(r.length<4) return false;
   for(let i=r.length-1;i>=3;i--){ const a=r[i-3].c,b=r[i-2].c,c=r[i-1].c,d=r[i].c;
@@ -400,7 +407,8 @@ const ATK={
 //======================================================================
 //  Player
 //======================================================================
-const player={ x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives:3,
+function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(),
+  x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives:3,
   state:'idle', anim:0, atk:null, comboStep:0, comboTimer:0,
   hurtTimer:0, invuln:0, downTimer:0, dashCd:0,
   charge:0, atkHeld:false, atkHoldF:0, riseVel:0, z:0, vz:0,
@@ -408,22 +416,28 @@ const player={ x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
-  weapon:'dagger', weaponT:0,
-  dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1 };
+  weapon: kind==='shima'?'fists':'dagger', weaponT:0,
+  dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
+let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
+let player=players[0];               // points to the player currently being simulated/drawn
+let TWO_P=false;                     // co-op enabled
+useInput(players[0].in); mapKeysFor(0); mapKeysFor(1);
 const WEAPONS={
   dagger:{name:'短剣', reach:1.0, dmg:1.0, kb:1.0, ext:1.0, trail:null, launch:1.0, col:'#d6deec'},
   spear: {name:'槍',   reach:1.6, dmg:1.15,kb:1.0, ext:1.9, trail:'#aef8ff', launch:1.1, col:'#cfe6ff'},
   hammer:{name:'ハンマー',reach:1.15,dmg:1.8, kb:1.9, ext:1.25,trail:'#ffb02e', launch:1.7, col:'#ffd24d'},
+  fists: {name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
 };
-function resetPlayer(full){ const p=player; p.x=Math.max(120,camX+120); p.y=LANE; p.vx=p.vy=0; p.facing=1;
-  p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=70; p.downTimer=0;
+function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
+  p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
-  p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
-  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.weapon='dagger'; p.weaponT=0;
+  if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
+  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.counterPow=false; p.riseG=1.1;
-  enemies.forEach(e=>{ e.grabbedBy=0; });
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; } }
 const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
+function activePlayers(){ return players.filter(p=>p.active); }
+function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
 
 function beginAttack(type){
   const p=player, def=ATK[type];
@@ -587,7 +601,7 @@ function doPlayerHit(a){
 }
 function nearestEnemy(){ let best=null,bd=1e9; for(const e of enemies){ if(e.dead)continue;
   const d=Math.abs(e.x-player.x)+Math.abs(e.y-player.y)*0.6; if(d<bd){bd=d;best=e;} } return best; }
-function doParry(e){ const p=player;
+function doParry(e,p){ if(!p)p=player;
   e.state='hurt'; e.hurtTimer=84; e.stun=120; e.telegraph=0; e.atkTimer=0; e.vx=p.facing*2.4;
   spark(p.x+p.facing*30,p.y-58,'#ffffff',18,9); ring(p.x+p.facing*26,p.y-58,'#bfe9ff'); ring(p.x+p.facing*26,p.y-58,'#ffffff');
   popText(e.x,e.y-e.h-12,'PARRY!','#9ff0ff',true);
@@ -843,15 +857,21 @@ function dropFromEnemy(e,T){
   else if(r<0.17) makeItem(e.x,'spear');
   else if(r<0.23) makeItem(e.x,'hammer');
 }
-function giveWeapon(kind){ const p=player; p.weapon=kind; p.weaponT=1100;
+function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=1100;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.rise(); }
-function updateItems(){ const p=player;
+function pickerFor(it){ // nearest eligible player on the ground
+  let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='down'||p.state==='dead')continue;
+    if(Math.abs(p.x-it.x)<46 && p.z<70 && it.z<24){ // シマダックスは武器を拾わない（素手）
+      if(it.kind!=='hp' && p.kind==='shima') continue;
+      const d=Math.abs(p.x-it.x); if(d<bd){bd=d;best=p;} } }
+  return best;
+}
+function updateItems(){
   for(let i=items.length-1;i>=0;i--){ const it=items[i]; it.life--; it.bob+=0.12;
     if(it.z>0||it.vz<0){ it.z=Math.max(0,it.z-it.vz); it.vz+=0.7; it.x+=it.vx; it.vx*=0.9; if(it.z<=0){ it.z=0; it.vz=0; } }
-    // 取得判定（地上で接近）
-    if(p.state!=='down' && Math.abs(p.x-it.x)<46 && p.z<70 && it.z<24){
-      if(it.kind==='hp'){ player.hp=Math.min(player.maxHp, player.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.guard(); }
-      else giveWeapon(it.kind);
+    const p=pickerFor(it);
+    if(p){ if(it.kind==='hp'){ p.hp=Math.min(p.maxHp, p.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.guard(); }
+      else giveWeapon(p,it.kind);
       items.splice(i,1); continue;
     }
     if(it.life<=0) items.splice(i,1);
@@ -880,8 +900,7 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-it.z-(8+Ma
   }
   ctx.restore(); }); }
 function updateEnemies(){
-  const p=player;
-  for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type];
+  for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     // air physics (juggle): z=height above ground, vz<0 = rising
     if(e.state==='air'||e.state==='pounce'||e.z>0){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
@@ -922,7 +941,7 @@ function updateEnemies(){
     // 跳躍犬: 中距離から飛びかかる
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(90,150); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
-    if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (player.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(90,150); continue; }
+    if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (p.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(90,150); continue; }
     const spd=t.sp*1.35*(0.8+0.34*Math.sin(e.bob*1.3));        // faster to match player; pulsed
     if(dist>t.atkR-6){ e.x+=Math.sign(dx)*spd; }
     else if(dist<t.atkR-34 && Math.random()<0.03){ e.x-=Math.sign(dx)*spd*0.9; }   // feint back-step
@@ -937,20 +956,25 @@ function updateEnemies(){
     if(Math.abs(e1.y-e2.y)<18&&Math.abs(e1.x-e2.x)<30){ const push=e1.x<e2.x?-0.5:0.5; e1.x+=push*0.6; e2.x-=push*0.6; } }
 }
 // Shared melee resolver: front-arc check + guard/parry + slide/i-frame dodge. reach<0 = AoE (no facing check).
-function tryHitPlayer(e,dmg,knock,reach,hh,unblock){ const p=player;
-  if(p.state==='down'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.z>14) return false;
+function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
+  if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.z>14) return false;
   if(Math.abs(p.y-e.y)>(hh||34)) return false;
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
   else if(Math.abs(dx)>-reach) return false;                   // AoE radius = -reach
   const fromFront = Math.sign(dx)===-p.facing;
   if(p.state==='guard' && fromFront){
-    if(gf-p.guardStart<=9){ doParry(e); return true; }          // just-time guard → PARRY（ガー不もパリィなら防げる）
+    if(gf-p.guardStart<=9){ doParry(e,p); return true; }        // just-time guard → PARRY（ガー不もパリィなら防げる）
     if(!unblock){ sfx.guard(); spark(p.x+p.facing*24,p.y-46,'#9fd6ff',8); p.vx=e.facing*1.8; shake=3; resetCombo(); p.guardFx=8; return true; }
-    // unblockable: ガードを貫通 → ガードクラッシュ
     popText(p.x,p.y-70,'GUARD CRUSH!','#ff4d6a',true); flash=Math.max(flash,4);
   }
-  hurtPlayer(dmg,e.facing,knock); return true;
+  hurtPlayer(p,dmg,e.facing,knock); return true;
+}
+// hit whichever player(s) are in range; returns true if any connected
+function tryHitPlayer(e,dmg,knock,reach,hh,unblock){
+  let hit=false;
+  for(const p of players){ if(!p.active) continue; if(hitOnePlayer(p,e,dmg,knock,reach,hh,unblock)){ hit=true; if(reach>=0) break; } } // AoE(<0) hits both
+  return hit;
 }
 function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg,true,t.atkR*0.5+30,46); }
 function enemyAttackHit(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg,t.boss||t.charge,t.atkR*1.3+18,40); }
@@ -979,18 +1003,18 @@ function pickBossMove(e,dist){ const list=BOSSMOVES[ETYPE[e.type].bossKind]||[];
 }
 function startBossMove(e){ e.slammed=false; e.lastMove=e.moveName;
   if(e.moveName==='groundSlam'||e.moveName==='darkSlam') e.vz=-13;
-  if(e.moveName==='teleSlash'){ e.vanish=12; e.x=player.x - player.facing*72; e.y=clamp(player.y,GROUND_TOP,GROUND_BOT); e.facing=e.x<player.x?1:-1; spark(e.x,e.y-e.h*0.5,'#c46bff',18,9); sfx.boss(); } }
+  if(e.moveName==='teleSlash'){ const tp=nearestPlayerTo(e.x); e.vanish=12; e.x=tp.x - tp.facing*72; e.y=clamp(tp.y,GROUND_TOP,GROUND_BOT); e.facing=e.x<tp.x?1:-1; spark(e.x,e.y-e.h*0.5,'#c46bff',18,9); sfx.boss(); } }
 function bArc(e,reach,hh,dmg,knock,col){ const t=ETYPE[e.type], dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.6, dir>0?-0.85:Math.PI-0.85, dir>0?0.85:Math.PI+0.85, col||t.accent);
   spark(ex,ey,col||t.accent,8,7); tryHitPlayer(e,dmg,knock,reach,hh); }
 function bShock(e,radius,dmg){ const t=ETYPE[e.type]; ring(e.x,e.y,t.accent); ring(e.x,e.y,'#fff'); dust(e.x,e.y,14); spark(e.x,e.y,'#fff',18,10);
   shake=Math.max(shake,8); flash=Math.max(flash,2); tryHitPlayer(e,dmg,true,-radius,radius*0.7); }
-function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing;
-  const ang=Math.atan2(player.y-e.y, player.x-e.x);
+function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, tp=nearestPlayerTo(e.x);
+  const ang=Math.atan2(tp.y-e.y, tp.x-e.x);
   for(let i=0;i<n;i++){ const a=ang+(i-(n-1)/2)*(spreadDeg*Math.PI/180);
     spawnProj(e.x+dir*22, e.y, Math.cos(a)*spd, Math.sin(a)*spd*0.4, {dmg,color:col||t.accent,r:11,life:180,zz:54}); }
   sfx.swing(0); }
-function bMeteor(e,n,dmg,col){ for(let i=0;i<n;i++) spawnProj(player.x+rnd(-180,180), clamp(player.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
+function bMeteor(e,n,dmg,col){ const tp=nearestPlayerTo(e.x); for(let i=0;i<n;i++) spawnProj(tp.x+rnd(-180,180), clamp(tp.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
 function bBeam(e,dmg,col){ const t=ETYPE[e.type], dir=e.facing; spawnProj(e.x+dir*30, e.y, dir*13, 0, {dmg,color:col||t.accent,r:18,life:100,zz:60}); sfx.boss(); shake=Math.max(shake,5); }
 function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(i?'hyena':'wolf', e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
@@ -1002,7 +1026,7 @@ function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=
 function bThrow(e,dmg){ const t=ETYPE[e.type]; spark(e.x+e.facing*28,e.y-e.h*0.5,'#ff8a3a',14,9); ring(e.x+e.facing*24,e.y-e.h*0.5,'#ff8a3a');
   const hit=tryHitPlayer(e,dmg,true,t.atkR*0.8,42,true); if(hit){ shake=Math.max(shake,9); hitStop=Math.max(hitStop,6); } }
 function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
-  if(e.z>0) e.x+=Math.sign(player.x-e.x)*2;                       // air tracking
+  if(e.z>0) e.x+=Math.sign(nearestPlayerTo(e.x).x-e.x)*2;         // air tracking
   switch(n){
     case 'clawCombo': if(f===7)bArc(e,82,42,13,false); if(f===18)bArc(e,92,46,t.dmg,true); break;
     case 'heavySwing': if(f<10)e.x+=e.facing*1.6; if(f===15)bArc(e,t.atkR+12,52,t.dmg,true); break;
@@ -1026,7 +1050,7 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'roar': if(f===6){ spark(e.x,e.y-e.h*0.6,t.accent,18,9); ring(e.x,e.y-e.h*0.5,t.accent); sfx.boss(); e.moveCd=Math.max(0,e.moveCd-30); } break;
   }
 }
-function bossTick(e,t){ const p=player, dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
+function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
   e.anim+=0.16; e.bob+=0.1; if(e.vanish>0)e.vanish--;
   if(e.moveCd>0)e.moveCd--; if(e.stun>0)e.stun--;
   // ── per-boss signature flavor ──
@@ -1049,13 +1073,17 @@ function bossTick(e,t){ const p=player, dx=p.x-e.x, dist=Math.abs(dx), kind=t.bo
     if(mv){ e.moveName=mv; const cfg=MV[mv]; e.danger=!!cfg.danger; e.state='bwind'; e.moveT=cfg.tele; e.teleMax=cfg.tele; e.moveMax=cfg.dur;
       if(mv!=='roar')sfx.heavy(); } }
 }
-function hurtPlayer(dmg,dir,knockdown){ const p=player; if(p.invuln>0)return;
+function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); sfx.hurt(); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
-  if(p.hp<=0){ loseLife(); return; }
+  if(p.hp<=0){ loseLife(p); return; }
   p.state=knockdown?'down':'hurt'; p.hurtTimer=14; p.downTimer=46; }
-function loseLife(){ player.lives--; player.hp=0; if(player.lives<0){ gameOver(); return; }
-  setTimeout(()=>{ if(state==='play') resetPlayer(false); },350); }
+function loseLife(p){ if(!p)p=player; if(p.state==='dead')return; p.lives--; p.hp=0;
+  if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
+  p.state='dead'; p.downTimer=40; p.vz=8; p.riseVel=0;
+  if(p.lives<0){ p.active=false; popText(p.x,p.y-100,(p.kind==='shima'?'シマダックス':'イッヌ')+' DOWN…','#ff5a5a',true);
+    if(activePlayers().length===0) gameOver(); return; }
+  p.respawnT=90; }
 
 //======================================================================
 //  Encounters
@@ -1125,7 +1153,22 @@ let projectiles=[];
 function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
-function updateProjectiles(){ const p=player;
+// returns 'reflect' | 'gone' | null
+function projVsPlayer(pr,p){
+  if(!p.active||p.state==='dead') return null;
+  const near = Math.abs(p.x-pr.x)<pr.r+14 && Math.abs(p.y-pr.y)<30 && pr.zz<64 && pr.zz>-8;
+  const overIt = p.z > pr.zz+18;
+  if(!near||overIt) return null;
+  const dir=pr.vx>0?1:-1, fromFront=Math.sign(pr.x-p.x)===-p.facing;
+  if(p.state==='slide'||p.invuln>0) return null;          // dodged
+  if(p.state==='guard' && fromFront){
+    if(gf-p.guardStart<=9){ pr.owner='player'; pr.vx=-pr.vx*1.5||(-p.facing*9); pr.vy*=-0.5; pr.vzz=0; pr.dmg=Math.max(pr.dmg,18); pr.color='#bfe9ff';
+      spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.guard(); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); return 'reflect'; }
+    sfx.guard(); spark(p.x+p.facing*22,p.y-44,'#9fd6ff',8); p.vx=dir*1.6; shake=3; p.guardFx=8; resetCombo(); return 'gone';
+  }
+  hurtPlayer(p,pr.dmg,dir,true); spark(pr.x,pr.y-pr.zz,pr.color,12,8); return 'gone';
+}
+function updateProjectiles(){
   for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i];
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>7)pr.trail.shift();
@@ -1135,19 +1178,9 @@ function updateProjectiles(){ const p=player;
         if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<30 && pr.zz<e.h){ damageEnemy(e,pr.dmg,pr.vx>0?6:-6,true); hit=true; break; } }
       if(hit){ spark(pr.x,pr.y-pr.zz,pr.color,12,8); projectiles.splice(i,1); continue; }
     } else {
-      const near = Math.abs(p.x-pr.x)<pr.r+14 && Math.abs(p.y-pr.y)<30 && pr.zz<64 && pr.zz>-8;
-      const overIt = p.z > pr.zz+18;                       // jumped above it
-      if(near && !overIt){
-        const dir=pr.vx>0?1:-1, fromFront=Math.sign(pr.x-p.x)===-p.facing;
-        if(p.state==='slide'||p.invuln>0){ /* dodged via i-frame / slide */ }
-        else if(p.state==='guard' && fromFront){
-          if(gf-p.guardStart<=9){            // パリィで反射！
-            pr.owner='player'; pr.vx=-pr.vx*1.5||(-p.facing*9); pr.vy*=-0.5; pr.vzz=0; pr.dmg=Math.max(pr.dmg,18); pr.color='#bfe9ff';
-            spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.guard(); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); continue;
-          }
-          sfx.guard(); spark(p.x+p.facing*22,p.y-44,'#9fd6ff',8); p.vx=dir*1.6; shake=3; p.guardFx=8; resetCombo(); projectiles.splice(i,1); continue;
-        } else { hurtPlayer(pr.dmg,dir,true); spark(pr.x,pr.y-pr.zz,pr.color,12,8); projectiles.splice(i,1); continue; }
-      }
+      let res=null; for(const p of players){ res=projVsPlayer(pr,p); if(res)break; }
+      if(res==='reflect') continue;
+      if(res==='gone'){ projectiles.splice(i,1); continue; }
     }
     if(pr.life<=0 || pr.x<camX-100 || pr.x>camX+W+100 || pr.zz<-30) projectiles.splice(i,1);
   }
@@ -1169,21 +1202,31 @@ function drawProjectiles(){
 //======================================================================
 //  Camera
 //======================================================================
+function camFocusX(){ const ap=activePlayers().filter(p=>p.state!=='dead'); if(!ap.length) return players[0].x;
+  let mn=1e9,mx=-1e9; ap.forEach(p=>{ mn=Math.min(mn,p.x); mx=Math.max(mx,p.x); }); return (mn+mx)/2; }
 function updateCamera(){
-  const target=clamp(player.x-W*0.38,0,WORLD_END-W);
+  const target=clamp(camFocusX()-W*0.5,0,WORLD_END-W);
   const enc=encounters[encIndex];
   const maxC=(enc&&!enc.cleared&&enc.spawned)?clamp(enc.at-W*0.45,0,WORLD_END-W):WORLD_END-W;
   camX+=(Math.min(target,maxC)-camX)*0.12; camX=clamp(camX,0,WORLD_END-W);
-  player.x=clamp(player.x,camX+24,camX+W-24);
+  players.forEach(p=>{ if(p.active) p.x=clamp(p.x,camX+24,camX+W-24); });
 }
-
+function stepPlayers(){
+  for(const pl of players){ if(!pl.active) continue;
+    player=pl; useInput(pl.in);
+    if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && pl.lives>=0) resetPlayer(pl,false); }
+    else { updatePlayer();
+      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0 && pl.weapon!=='dagger' && pl.kind!=='shima'){ pl.weapon='dagger'; popText(pl.x,pl.y-110,'短剣に戻った','#cfd8e6'); } } }
+    saveInput(pl.in);
+  }
+  player=players[0];
+}
 function update(){
   gf++;
   if(hitStop>0){ hitStop--; if(state==='play'){updateParticles();updateProjectiles();} return; }
   if(state!=='play') return;
-  timeAcc++; if(timeAcc>=60){ timeAcc=0; stageTime--; if(stageTime<=0){ stageTime=0; loseLife(); stageTime=99; } }
-  updatePlayer(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
-  if(player.weaponT>0){ player.weaponT--; if(player.weaponT<=0 && player.weapon!=='dagger'){ player.weapon='dagger'; popText(player.x,player.y-110,'短剣に戻った','#cfd8e6'); } }
+  timeAcc++; if(timeAcc>=60){ timeAcc=0; stageTime--; if(stageTime<=0){ stageTime=0; activePlayers().forEach(p=>loseLife(p)); stageTime=99; } }
+  stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
 }
 
@@ -1195,9 +1238,11 @@ function render(){
   if(shake>0) ctx.translate(rnd(-shake,shake),rnd(-shake,shake));
   drawBackground(); drawGround();
   drawItems();
-  const order=[...enemies.map(e=>({y:e.y,e})),{y:player.y,p:1}];
+  const order=[...enemies.map(e=>({y:e.y,e}))];
+  players.forEach(pl=>{ if(pl.active) order.push({y:pl.y+pl.pid*0.5, pl}); });
   order.sort((a,b)=>a.y-b.y);
-  order.forEach(o=>{ if(o.p) drawPlayer(); else drawEnemy(o.e); });
+  order.forEach(o=>{ if(o.pl){ player=o.pl; drawPlayer(); } else drawEnemy(o.e); });
+  player=players[0];
   drawProjectiles();
   drawParticles();
   drawLighting();
@@ -1407,7 +1452,7 @@ function drawPlayer(){
   const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
   softShadow(sx,sy,26*s*(1-Math.min(p.z/130,0.5)));
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
-  if(st==='down'){ ctx.rotate(-0.9*p.facing); ctx.translate(0,9); }
+  if(st==='down'||st==='dead'){ ctx.rotate(-0.9*p.facing); ctx.translate(0,9); }
   if(st==='wheel'){ ctx.rotate(p.wheelRot); }
   if(st==='screw'){ ctx.rotate(p.screwRot); }
   const _spec = st==='attack' && p.atk && p.atk.def.special;
@@ -1461,14 +1506,18 @@ function drawPlayer(){
     sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; } }
 
+  const shima = p.kind==='shima';
+  if(shima && (mode==='blade'||mode==='shield')) mode='fist';      // シマダックスは素手のみ
+  const limbA = shima?'#8a5a30':'#e0d2ab', limbB = shima?'#7a4a24':'#ddcca0', bootB=shima?'#3a2410':'#5a4022';
+  const limbF = shima?'#9a6a3a':'#efe2bc', bootF=shima?'#4a2e16':'#6b4f28', handCol=shima?'#9a6a3a':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
   // ---------- back-to-front ----------
-  drawCape(p,lean);
-  poseArm(-5,-30, backArm, 9,8, '#e0d2ab', 0.85);                  // far arm
-  chibiLeg(-5, thB, kB, '#ddcca0','#5a4022');                      // far leg
-  chibiBody(lean);
-  chibiLeg(6, thF, kF, '#efe2bc','#6b4f28', legF1, legF2);         // near leg
-  chibiHead(lean);
+  if(!shima) drawCape(p,lean);
+  poseArm(-5,-30, backArm, 9,8, limbA, 0.85);                      // far arm
+  chibiLeg(-5, thB, kB, limbB, bootB);                             // far leg
+  (shima?shimaBody:chibiBody)(lean);
+  chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);               // near leg
+  (shima?shimaHead:chibiHead)(lean);
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
     ctx.beginPath(); ctx.arc(0,-40,22+p.charge*22,0,7); ctx.fill(); ctx.restore(); }
@@ -1477,8 +1526,8 @@ function drawPlayer(){
     const gh=poseArm(7,-30,1.05,9,8,'#eaddb6',0.9); drawBlade(gh.hx,gh.hy,1.05,11);
     const sh=poseArm(5,-31,-0.1,9,8,'#f1e7cc',0.95); drawShieldAt(sh.hx,sh.hy-1,p);
   } else {
-    const hand=poseArm(6,-30, swAng, faL1,faL2, '#f1e7cc',faW);
-    if(mode==='fist') chibiFist(hand.hx,hand.hy, faW);
+    const hand=poseArm(6,-30, swAng, faL1,faL2, handCol,faW);
+    if(mode==='fist') chibiFist(hand.hx,hand.hy, faW, handCol);
     else drawBlade(hand.hx,hand.hy,swAng,swExt);
   }
   if(drawTrail){ ctx.save(); ctx.translate(6,-30); const r=swExt+18;
@@ -1525,8 +1574,39 @@ function chibiLeg(hipX,thighAng,knee,col,boot,l1,l2){
   limbSeg(kx,ky,fx,fy,8,col);
   ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+2,fy+1,6,4.5,0,0,7); ctx.fill();
 }
-function chibiFist(hx,hy,sc){ sc=sc||1; ctx.fillStyle='#f1e7cc'; ctx.beginPath(); ctx.arc(hx,hy,5*sc,0,7); ctx.fill();
-  ctx.strokeStyle='#c9b487'; ctx.lineWidth=1.2; ctx.stroke(); }
+function chibiFist(hx,hy,sc,col){ sc=sc||1; ctx.fillStyle=col||'#f1e7cc'; ctx.beginPath(); ctx.arc(hx,hy,5.2*sc,0,7); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1.2; ctx.stroke(); }
+// ---- シマダックス（サングラスのダックスフンド拳法家）の体と頭 ----
+function shimaBody(lean){ ctx.save(); ctx.rotate(lean*0.22);
+  const g=ctx.createLinearGradient(0,-34,0,-12); g.addColorStop(0,'#b07a44'); g.addColorStop(1,'#7a4e26');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,-23,14,15,0,0,7); ctx.fill();
+  ctx.strokeStyle='#5a3818'; ctx.lineWidth=1.2; ctx.stroke();
+  // 黒いシマ模様
+  ctx.fillStyle='#241509'; for(const sxp of [-8,-1,6]){ ctx.beginPath(); ctx.moveTo(sxp-2,-33); ctx.quadraticCurveTo(sxp+1,-23,sxp-2,-12); ctx.lineTo(sxp+2.5,-12); ctx.quadraticCurveTo(sxp+5,-23,sxp+2.5,-33); ctx.closePath(); ctx.fill(); }
+  // 空手の黒帯
+  ctx.fillStyle='#15151a'; ctx.fillRect(-13,-18,26,5);
+  ctx.fillRect(-3,-18,4,11); ctx.fillRect(2,-18,4,11);
+  ctx.restore();
+}
+function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3);
+  // 垂れ耳（ダックス）
+  ctx.fillStyle='#5e3c20'; ctx.beginPath(); ctx.ellipse(-16,7,8,16,0.25,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(16,7,8,16,-0.25,0,7); ctx.fill();
+  // 頭
+  furBall(0,-1,18,'#b07a44','#7a4e26');
+  // 頭の黒シマ
+  ctx.fillStyle='#241509'; ctx.beginPath(); ctx.ellipse(-6,-10,3,9,0.2,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(6,-10,3,9,-0.2,0,7); ctx.fill();
+  // 長いマズル
+  ctx.fillStyle='#c8966a'; ctx.beginPath(); ctx.ellipse(12,6,12,7,0,0,7); ctx.fill();
+  ctx.fillStyle='#2a1810'; ctx.beginPath(); ctx.ellipse(22,5,3.4,2.7,0,0,7); ctx.fill();
+  ctx.strokeStyle='#5a3818'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(12,9); ctx.lineTo(20,9); ctx.stroke();   // mouth line
+  // サングラス
+  ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-9,-2); ctx.lineTo(-16,-4); ctx.stroke();   // テンプル
+  ctx.fillStyle='#0a0a0e'; ctx.beginPath(); ctx.ellipse(-3,-1,6.6,4.6,0,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(8.5,-1,6.6,4.6,0,0,7); ctx.fill();
+  ctx.fillStyle='#15151a'; ctx.fillRect(2.5,-2.5,3.5,2.5);
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(-5,-2.6,1.5,0,7); ctx.arc(6.5,-2.6,1.5,0,7); ctx.fill();
+  ctx.restore();
+}
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
   if(wk==='spear'){ const L=ext*1.5+22;
@@ -1889,11 +1969,17 @@ function drawHUD(){
     if(on){ ctx.fillStyle=radGrad(0,0,7,'#fff','#a040ff'); ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='#e6c6ff'; }
     else { ctx.fillStyle='rgba(120,90,160,.25)'; ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='rgba(200,160,255,.4)'; }
     ctx.lineWidth=1.4; ctx.strokeRect(-5,-5,10,10); ctx.restore(); }
-  // 現在の武器＋残り時間
-  if(player.weapon!=='dagger'){ const W2=WEAPONS[player.weapon];
+  // 現在の武器＋残り時間（イッヌのみ）
+  if(player.weapon!=='dagger' && player.weapon!=='fists'){ const W2=WEAPONS[player.weapon];
     ctx.fillStyle=W2.col; ctx.font='bold 12px Trebuchet MS'; ctx.fillText('武器: '+W2.name, 296, 80);
     const bw=70, tx=296, ty=86; ctx.fillStyle='#0a0a12'; ctx.fillRect(tx,ty,bw,5);
     ctx.fillStyle=W2.col; ctx.fillRect(tx,ty,bw*clamp(player.weaponT/1100,0,1),5); }
+  // 2P パネル（シマダックス）
+  if(players[1].active){ const q=players[1]; panel(12,96,238,38);
+    ctx.fillStyle='#ff9a3a'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='left'; ctx.fillText('2P  シマダックス',22,113);
+    barFrame(22,117,164,11); const g2=ctx.createLinearGradient(22,0,186,0); g2.addColorStop(0,'#7dff5a'); g2.addColorStop(.5,'#ffe14d'); g2.addColorStop(1,'#ff4d2d');
+    ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,119,160*clamp(q.hp/q.maxHp,0,1),7);
+    ctx.fillStyle='#ff5a6a'; ctx.font='13px Trebuchet MS'; ctx.fillText('♥ ×'+Math.max(0,q.lives),196,127); }
 
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 14px Trebuchet MS'; ctx.fillText('TIME',W/2,24);
   ctx.fillStyle=stageTime<=10?'#ff4444':'#fff'; ctx.font='bold 30px monospace'; ctx.fillText(String(stageTime).padStart(2,'0'),W/2,52);
@@ -2048,7 +2134,10 @@ const elStart=document.getElementById('start'),elResult=document.getElementById(
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 function startGame(){ unlockAudio();
   score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
-  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters(); resetPlayer(true);
+  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters();
+  players[0].active=true; players[1].active=TWO_P;
+  players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
+  player=players[0];
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
   if(sndOn) Music.start('battle'); }
 function gameOver(){ state='over'; Music.stop(); gameOverSting();
@@ -2057,7 +2146,8 @@ function winGame(){ state='win'; Music.stop(); victoryJingle(); score+=Math.max(
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全7ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
-document.getElementById('startBtn').onclick=()=>{ unlockAudio(); startOpening(); };
+document.getElementById('startBtn').onclick=()=>{ unlockAudio(); TWO_P=false; startOpening(); };
+document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); TWO_P=true; startOpening(); };
 document.getElementById('retryBtn').onclick=startGame;
 // cutscene advance / skip input
 addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
@@ -2072,28 +2162,27 @@ sndBtn.onclick=()=>{ initAudio(); sndOn=!sndOn; sndBtn.textContent=sndOn?'♪':'
 //======================================================================
 const isTouch=('ontouchstart'in window)||navigator.maxTouchPoints>0;
 if(isTouch) document.getElementById('touch').style.display='block';
+const P1IN=()=>players[0].in;   // touch always controls 1P
 function bindBtn(id,key){ const el=document.getElementById(id);
-  el.addEventListener('touchstart',e=>{ e.preventDefault(); keys['_'+key]=true; mapKeys();
-    if(key==='atk')pressed.atk=true; if(key==='grab')pressed.grab=true; if(key==='jump')pressed.jump=true; },{passive:false});
-  el.addEventListener('touchend',e=>{ e.preventDefault(); keys['_'+key]=false; mapKeys(); },{passive:false}); }
+  el.addEventListener('touchstart',e=>{ e.preventDefault(); const i=P1IN(); i.keys['_'+key]=true; mapKeysFor(0);
+    if(key==='atk')i.pressed.atk=true; if(key==='grab')i.pressed.grab=true; if(key==='jump')i.pressed.jump=true; },{passive:false});
+  el.addEventListener('touchend',e=>{ e.preventDefault(); P1IN().keys['_'+key]=false; mapKeysFor(0); },{passive:false}); }
 bindBtn('bAtk','atk'); bindBtn('bGrd','grd'); bindBtn('bGrab','grab'); bindBtn('bJmp','jump');
 const stick=document.getElementById('stick'),nub=stick.querySelector('.nub'); let stickId=null,scx=0,scy=0,lastTapDir=0;
 stick.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; stickId=t.identifier;
   const r=stick.getBoundingClientRect(); scx=r.left+r.width/2; scy=r.top+r.height/2; moveStick(t); },{passive:false});
 stick.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches) if(t.identifier===stickId) moveStick(t); },{passive:false});
-stick.addEventListener('touchend',e=>{ for(const t of e.changedTouches) if(t.identifier===stickId){ stickId=null; nub.style.left='50%'; nub.style.top='50%'; keys['_l']=keys['_r']=keys['_u']=keys['_d']=false; lastTapDir=0; lastCard=-1; stickAngPrev=null; stickAccum=0; mapKeys(); } },{passive:false});
+stick.addEventListener('touchend',e=>{ for(const t of e.changedTouches) if(t.identifier===stickId){ stickId=null; nub.style.left='50%'; nub.style.top='50%'; const k=P1IN().keys; k['_l']=k['_r']=k['_u']=k['_d']=false; lastTapDir=0; lastCard=-1; stickAngPrev=null; stickAccum=0; mapKeysFor(0); } },{passive:false});
 let lastCard=-1, stickAngPrev=null, stickAccum=0;
-function moveStick(t){ let dx=t.clientX-scx,dy=t.clientY-scy; const m=Math.hypot(dx,dy)||1,max=55,cl=Math.min(m,max);
+function moveStick(t){ const i=P1IN(), k=i.keys; let dx=t.clientX-scx,dy=t.clientY-scy; const m=Math.hypot(dx,dy)||1,max=55,cl=Math.min(m,max);
   dx=dx/m*cl; dy=dy/m*cl; nub.style.left=`calc(50% + ${dx}px)`; nub.style.top=`calc(50% + ${dy}px)`; const th=18;
-  const nl=dx<-th,nr=dx>th; if(nl&&lastTapDir!==-1){pushTap(-1);lastTapDir=-1;} if(nr&&lastTapDir!==1){pushTap(1);lastTapDir=1;} if(!nl&&!nr)lastTapDir=0;
-  // cardinal (for stinger command)
-  if(m>max*0.55){ const ang=Math.atan2(dy,dx); let card=(Math.round(ang/(Math.PI/2))+4)%4; card=[1,2,3,0][card]; // map: 0=up,1=right,2=down,3=left
-    if(card!==lastCard){ pushCard(card); lastCard=card; }
-    // accumulate rotation → 次元斬
+  const nl=dx<-th,nr=dx>th; if(nl&&lastTapDir!==-1){pushTapFor(i,-1);lastTapDir=-1;} if(nr&&lastTapDir!==1){pushTapFor(i,1);lastTapDir=1;} if(!nl&&!nr)lastTapDir=0;
+  if(m>max*0.55){ const ang=Math.atan2(dy,dx); let card=(Math.round(ang/(Math.PI/2))+4)%4; card=[1,2,3,0][card];
+    if(card!==lastCard){ pushCardFor(i,card); lastCard=card; }
     if(stickAngPrev!==null){ let d=ang-stickAngPrev; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; stickAccum+=d; }
-    stickAngPrev=ang; if(Math.abs(stickAccum)>=Math.PI*1.7){ stickRot=gf; stickAccum=0; }
+    stickAngPrev=ang; if(Math.abs(stickAccum)>=Math.PI*1.7){ i.stickRot=gf; stickAccum=0; }
   } else { lastCard=-1; stickAngPrev=null; stickAccum=0; }
-  keys['_l']=nl; keys['_r']=nr; keys['_u']=dy<-th; keys['_d']=dy>th; mapKeys(); }
+  k['_l']=nl; k['_r']=nr; k['_u']=dy<-th; k['_d']=dy>th; mapKeysFor(0); }
 
 //======================================================================
 //  Resize
