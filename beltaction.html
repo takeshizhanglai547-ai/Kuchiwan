@@ -263,42 +263,42 @@ const sfx={
   ko:()=>{tone(120,.3,'sawtooth',.16,-80); noise(.3,.2,1200);},
   boss:()=>tone(70,.6,'sawtooth',.22,40),
 };
-// ---- layered impact: weighty body thump + crisp crunch + metallic transient ----
-// 命中音 = 銃弾が鋼鉄の扉を打つような激烈な金属衝撃（鋭い破裂＋金属の倍音＋重い低音）
+// ---- 命中音 = 派手な「バキーン！」（金属クラング＋鳴り）＋「ドカーン！」（爆発ブーム）----
 function hitSound(dmg){
   if(!actx||!sndOn) return;
-  const t=actx.currentTime, tier=dmg>=30?3:dmg>=18?2:dmg>=10?1:0, V=0.66+tier*0.2;
-  // 1) 鋭い破裂トランジェント（弾着のクラック）
+  const t=actx.currentTime, tier=dmg>=30?3:dmg>=18?2:dmg>=10?1:0, V=0.7+tier*0.22;
+  // ── バ：弾けるアタック・クラック ──
   { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2700; bp.Q.value=0.9;
-    g.gain.setValueAtTime(V*1.15,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.08+tier*0.02);
-    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.12); }
-  // 2) 鋼鉄の非整数倍音（クランッ）— より多く・大きく
-  const parts=[1500,2200,3300,4600,6200,8000], pv=[1,0.78,0.6,0.46,0.34,0.24];
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.7;
+    g.gain.setValueAtTime(V*1.25,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.08); }
+  // ── キーン：明るい金属クラング（倍音を少しデチューンして煌めく鳴り）──
+  const parts=[1320,1980,2640,3560,4900,6600,8800], pv=[1,0.82,0.68,0.55,0.42,0.3,0.2];
   parts.forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
-    o.type='triangle'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.9,t+0.2);
-    g.gain.setValueAtTime(V*0.38*pv[i],t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2+tier*0.07);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.34); });
-  // 3) 重い金属ボディ
+    o.type=i<3?'triangle':'sawtooth'; const det=1+(i%2?0.006:-0.005);
+    o.frequency.setValueAtTime(f*det,t); o.frequency.exponentialRampToValueAtTime(f*0.93,t+0.34+tier*0.05);
+    g.gain.setValueAtTime(V*0.34*pv[i],t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34+tier*0.12);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.5); });
+  // ── ン：きらめく上昇スイープ（シャキーンの閃き）──
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='square'; o.frequency.setValueAtTime(160-tier*22,t); o.frequency.exponentialRampToValueAtTime(58-tier*8,t+0.12);
-    g.gain.setValueAtTime(V*0.62,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24+tier*0.06);
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1300; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.38); }
-  // 4) 深いサブ・ブーム（より重く・長く）
+    o.type='sawtooth'; o.frequency.setValueAtTime(2600+tier*500,t); o.frequency.exponentialRampToValueAtTime(9000+tier*1500,t+0.12);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(V*0.34,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=6000; bp.Q.value=1.1; o.connect(bp); bp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.24); }
+  // ── ド：パンチの効いた中域ボディ ──
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime([80,68,56,44][tier],t); o.frequency.exponentialRampToValueAtTime([46,38,30,24][tier],t+0.34);
-    g.gain.setValueAtTime(V*0.85,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5+tier*0.12);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.7); }
-  // 5) 派手な“シャキィン”上昇スイープ（金属の閃き）
+    o.type='square'; o.frequency.setValueAtTime(180-tier*24,t); o.frequency.exponentialRampToValueAtTime(54-tier*6,t+0.1);
+    g.gain.setValueAtTime(V*0.66,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22+tier*0.05);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.34); }
+  // ── カーン／ドカーン：深く長い爆発サブ・ブーム ──
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sawtooth'; o.frequency.setValueAtTime(2200+tier*400,t); o.frequency.exponentialRampToValueAtTime(7000+tier*1200,t+0.13);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(V*0.3,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=5000; bp.Q.value=1.2; o.connect(bp); bp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.24); }
-  // 6) 高域のキラッ（フラッシュ感）
-  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4200;
-    g.gain.setValueAtTime(V*0.3,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18+tier*0.05);
-    s.connect(hp); hp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.24); }
+    o.type='sine'; o.frequency.setValueAtTime([86,72,58,46][tier],t); o.frequency.exponentialRampToValueAtTime([42,34,27,21][tier],t+0.4);
+    g.gain.setValueAtTime(V*0.95,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55+tier*0.16);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.8); }
+  // ── 強打（tier2以上）には轟くノイズ爆発を追加：ドッカーン！──
+  if(tier>=2){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(1400,t); lp.frequency.exponentialRampToValueAtTime(300,t+0.4);
+    g.gain.setValueAtTime(V*0.7,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.45+tier*0.1);
+    s.connect(lp); lp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.6); }
 }
 
 // ---- BGM: generative orchestral / classical (strings + harp + horns + timpani) ----
@@ -424,6 +424,29 @@ const ATK={
   spunch:{name:'踏み込み正拳突き', dur:22, act:[6,13], reach:96, hh:42, dmg:20,kb:13,from:0,to:0, len:30, trail:'#ffd24d', fist:true, punch:true, lunge:6.5, knock:true, finisher:true},
   spindash:{name:'グルグルパンチ突進', dur:32, act:[3,26], reach:80, hh:54, dmg:6,kb:5,from:-3.0,to:3.0,len:22, trail:'#ffd24d', fist:true, punch:true, move:8.5, multi:true, multiGap:4, stinger:true, spin:true},
   tornado:{name:'昇竜旋風脚', dur:32, act:[2,26], reach:66, hh:520, dmg:6, kb:5, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:4, shoryu:true, tornado:true},
+  // ── 武器別コンボ：槍（イッヌ）＝突き主体 ──
+  sp1:{name:'突き',   dur:11, act:[3,7],  reach:92, hh:36, dmg:7,  kb:3,  from:-0.12,to:-0.12, len:50, trail:'#aef8ff', pivotY:-58, lunge:1.6, combo:1},
+  sp2:{name:'連突き', dur:12, act:[3,8],  reach:96, hh:38, dmg:8,  kb:3,  from:0.05, to:0.05,  len:54, trail:'#cfe6ff', pivotY:-58, lunge:1.6, combo:2},
+  sp3:{name:'薙ぎ払い',dur:17, act:[5,12], reach:96, hh:54, dmg:12, kb:6,  from:-1.25,to:1.25,  len:54, trail:'#aef8ff', pivotY:-60, lunge:1.0, combo:3},
+  sp4:{name:'大突進突き',dur:27,act:[7,18],reach:112,hh:46, dmg:21, kb:13, from:-0.08,to:-0.08, len:64, trail:'#fff', pivotY:-58, move:6.5, knock:true, finisher:true, combo:4},
+  // ── 武器別コンボ：ハンマー（イッヌ）＝重い大振り3段 ──
+  hm1:{name:'横薙ぎ', dur:19, act:[8,13], reach:86, hh:48, dmg:14, kb:9,  from:-0.7, to:0.9,  len:46, trail:'#ffb02e', pivotY:-66, lunge:1.8, knock:true, combo:1},
+  hm2:{name:'振り上げ',dur:21,act:[9,14], reach:82, hh:62, dmg:16, kb:11, from:1.05, to:-1.5, len:48, trail:'#ffd24d', pivotY:-70, lunge:1.0, knock:true, combo:2},
+  hm3:{name:'叩き付け',dur:32,act:[13,21],reach:98, hh:60, dmg:28, kb:17, from:-1.95,to:1.2,  len:58, trail:'#fff', pivotY:-74, lunge:2.6, knock:true, aoe:true, finisher:true, combo:3},
+  // ── 武器別コンボ：ヌンチャク（シマ）＝高速振り回し5段 ──
+  nc1:{name:'振り下ろし',dur:9, act:[2,5],  reach:84, hh:42, dmg:6, kb:2, from:-1.4, to:0.7,  len:30, trail:'#ffe27a', pivotY:-58, lunge:1.2, combo:1},
+  nc2:{name:'振り上げ', dur:9, act:[2,5],  reach:84, hh:48, dmg:6, kb:2, from:0.9,  to:-1.1, len:30, trail:'#ffe27a', pivotY:-58, lunge:1.2, combo:2},
+  nc3:{name:'横回し',  dur:11, act:[3,7],  reach:90, hh:46, dmg:8, kb:3, from:-1.7, to:1.7,  len:32, trail:'#ffcf4d', pivotY:-58, lunge:1.4, combo:3},
+  nc4:{name:'八の字',  dur:12, act:[3,8],  reach:92, hh:50, dmg:9, kb:4, from:1.5,  to:-1.5, len:34, trail:'#ffe27a', pivotY:-58, lunge:1.4, combo:4},
+  nc5:{name:'乱れ打ち',dur:26, act:[3,21], reach:94, hh:52, dmg:5, kb:4, from:-2.7, to:2.7,  len:30, trail:'#fff', pivotY:-58, multi:true, multiGap:4, knock:true, finisher:true, spin:true, combo:5},
+  // ── 武器別コンボ：トンファー（シマ）＝回転打ち4段 ──
+  tf1:{name:'突き',    dur:10, act:[2,6],  reach:74, hh:38, dmg:7,  kb:3,  from:-0.1, to:-0.1, len:28, trail:'#bfe9ff', pivotY:-56, lunge:1.6, combo:1},
+  tf2:{name:'回し打ち',dur:11, act:[3,7],  reach:80, hh:46, dmg:8,  kb:4,  from:-1.3, to:1.1,  len:30, trail:'#cfd8e6', pivotY:-56, lunge:1.3, combo:2},
+  tf3:{name:'肘打ち',  dur:12, act:[4,8],  reach:72, hh:48, dmg:10, kb:5,  from:0.35, to:-0.6, len:26, trail:'#bfe9ff', pivotY:-56, lunge:1.7, combo:3},
+  tf4:{name:'強回転打ち',dur:25,act:[6,16],reach:92, hh:54, dmg:19, kb:15, from:-2.3, to:2.3,  len:34, trail:'#fff', pivotY:-56, knock:true, finisher:true, spin:true, combo:4},
+  // ── 武器別ためうち（イッヌ）──
+  chargeSpear:{name:'渾身の突き', dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true},
+  chargeHammer:{name:'渾身の叩き', dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true},
 };
 
 //======================================================================
@@ -465,12 +488,18 @@ const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
 
+// 装備武器ごとにコンボのモーションを差し替える
+const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'] };
+function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
+function comboMaxFor(p){ const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
+function comboMoveFor(p,step){ const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':'c')+step; }
+function chargeMoveFor(p){ if(p.weapon==='spear')return 'chargeSpear'; if(p.weapon==='hammer')return 'chargeHammer'; return 'charge'; }
 function beginAttack(type){
   const p=player, def=ATK[type];
   p.atk={type, t:0, def, hitSet:new Set(), lastHit:{}};
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
-  else if(type==='charge'){ sfx.heavy(); ring(p.x,p.y-40,'#ffd24d'); }
+  else if(type==='charge'||type==='chargeSpear'||type==='chargeHammer'){ sfx.heavy(); ring(p.x,p.y-40,def.trail||'#ffd24d'); spark(p.x+p.facing*22,p.y-40,def.trail||'#ffd24d',10,8); }
   else if(type==='stinger'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
   else if(type==='gcounter'){ p.counterPow = p.guardFx>0 || (gf-p.guardStart<=14); p.invuln=Math.max(p.invuln,10);
     sfx.guard(); sfx.rise(); ring(p.x,p.y-40,'#bfe9ff'); if(p.counterPow){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); } }
@@ -560,7 +589,7 @@ function updatePlayer(){
   const SH=p.kind==='shima';
   // ---- charge release ----
   if(p.atkHeld && !K.atk){ p.atkHeld=false;
-    if(p.charge>=0.45){ if(SH) beginHadou(); else beginAttack('charge'); p.charge=0; return; }   // 波動拳 / 溜め斬り
+    if(p.charge>=0.45){ if(SH) beginHadou(); else beginAttack(chargeMoveFor(p)); p.charge=0; return; }   // 波動拳 / 溜め斬り（武器別）
     p.charge=0;
   }
   // ---- grab button (掴み) ----
@@ -573,8 +602,9 @@ function updatePlayer(){
     if(K.down && p.z<=0){ if(SH) beginAttack('sdropkick'); else beginSlide(); if(!SH) return; p.atkHeld=true; return; } // ドロップキック / スライディング
     if(K.up){ beginAttack(SH?'tornado':'shoryu'); }                                      // 昇竜旋風脚 / 昇竜拳
     else if(stingerReady(p.facing)){ beginAttack(SH?'spindash':'stinger'); consumeCmd(); } // グルグルパンチ突進 / スティンガー
-    else if(fwd){ if(SH){ beginAttack('spunch'); } else { beginRush(); return; } }       // 正拳突き / 素手乱舞
-    else { const maxc=SH?5:4; const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack((SH?'sc':'c')+next); }
+    else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
+      else if(SH){ beginAttack('spunch'); } else { beginRush(); return; } }                // 正拳突き / 素手乱舞
+    else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
   }
