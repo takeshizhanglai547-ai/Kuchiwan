@@ -262,6 +262,7 @@ const sfx={
   charge:()=>tone(180,.5,'sawtooth',.05,400,sfxGain),
   ko:()=>{tone(120,.3,'sawtooth',.16,-80); noise(.3,.2,1200);},
   boss:()=>tone(70,.6,'sawtooth',.22,40),
+  twinkle:()=>{ tone(1568,.10,'triangle',.12,200); setTimeout(()=>tone(2093,.16,'triangle',.10,300),60); setTimeout(()=>tone(2637,.22,'sine',.08,-200),120); },  // 星になって消える「キラーン☆」
 };
 // ---- 命中音 = 派手な「バキーン！」（金属クラング＋鳴り）＋「ドカーン！」（爆発ブーム）----
 function hitSound(dmg){
@@ -359,6 +360,8 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 const easeOut=t=>1-Math.pow(1-t,3);
 function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprite size on a single lane
+// マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
+function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
 function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
   g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
 
@@ -380,6 +383,7 @@ function updateParticles(){
     else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; }
     else if(p.k==='txt'){ p.y+=p.vy; p.vy*=0.92; }
     else if(p.k==='ring'){ p.r+=2.4; }
+    else if(p.k==='twinkle'){ p.rot=(p.rot||0)+0.18; }
     if(p.life<=0) particles.splice(i,1);
   }
 }
@@ -391,6 +395,12 @@ function drawParticles(){
       ctx.beginPath(); ctx.arc(sx,p.y,p.r,p.a0,p.a1); ctx.stroke(); }
     else if(p.k==='ring'){ ctx.globalAlpha=a*0.6; ctx.strokeStyle=p.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx,p.y,p.r,0,7); ctx.stroke(); }
     else if(p.k==='dust'){ ctx.globalAlpha=a*0.5; ctx.fillStyle='#cabfa6'; ctx.beginPath(); ctx.arc(sx,p.y,3*a+1,0,7); ctx.fill(); }
+    else if(p.k==='twinkle'){ const gr=Math.sin((1-a)*Math.PI); const R=p.r*(0.5+gr); ctx.save(); ctx.translate(sx,p.y); ctx.rotate(p.rot||0);
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=clamp(a*1.3,0,1);
+      ctx.fillStyle=radGrad(0,0,R*1.6,'rgba(255,255,255,.9)','rgba(255,225,90,0)'); ctx.beginPath(); ctx.arc(0,0,R*1.6,0,7); ctx.fill();
+      drawStar(0,0,R*0.4,R,'#fff'); drawStar(0,0,R*0.22,R*0.6,'#ffe14d');
+      ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2; for(let s=0;s<4;s++){ const an=p.rot+s*PI2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(an)*R*1.9,Math.sin(an)*R*1.9); ctx.stroke(); }
+      ctx.restore(); }
     else { ctx.globalAlpha=a; if(p.star){ drawStar(sx,p.y,3,7,p.color); } else { ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(sx,p.y,3*a+1,0,7); ctx.fill(); } }
   });
   ctx.globalAlpha=1;
@@ -966,12 +976,12 @@ const ETYPE={
   akita:{hp:62,sp:1.2,dmg:9,atkR:50,w:62,h:80,c1:'#efe9dd',c2:'#bcb4a4',c3:'#7e766a',score:320,guarder:true,name:'秋田の盾犬',ears:'flop'},
   bomber:{hp:18,sp:2.7,dmg:8,atkR:40,w:44,h:56,c1:'#e4ddc6',c2:'#b0a684',c3:'#6f6850',score:260,charge:true,bomber:true,accent:'#ff4d3a',name:'爆弾チワワ',ears:'flop',collar:'#ff4d3a'},
   // ---- Stage bosses 1–5 ----
-  garm:  {hp:380,sp:1.7,dmg:14,atkR:74,w:118,h:140,c1:'#9aa0ab',c2:'#565b66',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
-  gigas: {hp:560,sp:0.9,dmg:20,atkR:84,w:148,h:162,c1:'#9c7a4e',c2:'#5f4628',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
-  vesper:{hp:440,sp:2.5,dmg:15,atkR:96,w:104,h:150,c1:'#56c8c0',c2:'#268a86',c3:'#114b49',score:4000,boss:true,bossKind:'vesper',weapon:'spear',accent:'#aef8ff', name:'疾風のヴェスペル'},
-  moloch:{hp:520,sp:1.3,dmg:16,atkR:78,w:132,h:156,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:4600,boss:true,bossKind:'moloch',weapon:'fire', accent:'#ffb02e', name:'業火のモロク'},
-  cerbe: {hp:560,sp:2.7,dmg:15,atkR:80,w:120,h:150,c1:'#7a5fa6',c2:'#463066',c3:'#241636',score:5200,boss:true,bossKind:'cerbe', weapon:'claw', accent:'#b06bff', name:'双牙のケルベ'},
-  glaton:{hp:780,sp:0.85,dmg:22,atkR:92,w:158,h:168,c1:'#8f8f98',c2:'#52525c',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
+  garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
+  gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
+  vesper:{hp:440,sp:2.6,dmg:15,atkR:98,w:90, h:182,c1:'#5ad6cc',c2:'#258f8a',c3:'#114b49',score:4000,boss:true,bossKind:'vesper',weapon:'spear',accent:'#aef8ff', name:'疾風のヴェスペル'},
+  moloch:{hp:540,sp:1.2,dmg:16,atkR:80,w:146,h:152,c1:'#e86038',c2:'#9c3016',c3:'#4a1408',score:4600,boss:true,bossKind:'moloch',weapon:'fire', accent:'#ffb02e', name:'業火のモロク'},
+  cerbe: {hp:520,sp:2.8,dmg:15,atkR:80,w:110,h:118,c1:'#8a6fc0',c2:'#4e3676',c3:'#241636',score:5200,boss:true,bossKind:'cerbe', weapon:'claw', accent:'#b06bff', name:'三頭のケルベ'},
+  glaton:{hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
   boss:  {hp:980,sp:1.3,dmg:18,atkR:84,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝'},
 };
 // Boss move-sets
@@ -985,7 +995,7 @@ const BOSSMOVES={
   emperor:['darkSwipe','darkSlam','orbSpread','darkBeam','teleSlash','summon','unblockSmash','bossGrab'],
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
-  cerbe:'二つの牙が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
+  cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
   moloch:'業火に焼かれて消えるがいい！', boss:'ワンワン帝国の力を思い知れ！', bitter:'フッ…相手になるかな？' };
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:t.hp,maxHp:t.hp,w:t.w,h:t.h,
@@ -1021,8 +1031,16 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
 // strong launch into the juggle (to screen edge / ceiling). vz<0 = up. Bosses resist.
 function launchEnemy(e,vx,vz,bounces){ const T=ETYPE[e.type]; if(e.dead) return;
   if(T.boss){ e.vx+=vx*0.12; return; }                     // bosses: only slight push (hyper-armor)
+  if(!T.mini && Math.abs(vz)>=11 && Math.abs(vx)>=12 && Math.random()<0.16){ startBlastoff(e, vx>0?1:-1); return; }  // 一定確率：吹っ飛びが星KOに
   e.state='air'; e.vx=vx; e.vz=vz; e.z=Math.max(e.z,2); e.bounces=(bounces==null?3:bounces);
   e.facing = vx>0?-1:1; }
+// 吹っ飛ばし命中時、一定確率で画面外へ飛び去り星になって消える（スマブラ風スターKO）
+function startBlastoff(e,dir){ const T=ETYPE[e.type];
+  e.state='blastoff'; e.grabbedBy=0; e.bo=0; e.spin=0; e.vx=dir*Math.max(17,Math.abs(e.vx||0)); e.boVz=11.5; e.z=Math.max(e.z,12); e.facing=dir>0?-1:1;
+  score+=T.score; popText(e.x,e.y-e.h-12,'☆ KO!','#ffe14d',true); flash=Math.max(flash,2); hitStop=Math.max(hitStop,6); sfx.dash(); }
+function starTwinkle(e){ const sx=clamp(e.x, camX+24, camX+W-24), sy=clamp(e.y-e.z, 28, GROUND_TOP-10);
+  particles.push({k:'twinkle',x:sx,y:sy,life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
+  ring(sx,sy,'#ffe14d'); spark(sx,sy,'#fff',10,7); popText(sx,sy-12,'キラーン☆','#ffe14d',true); sfx.twinkle(); }
 function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
@@ -1080,7 +1098,7 @@ function updateItems(){
     if(it.life<=0) items.splice(i,1);
   }
 }
-function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-it.z-(8+Math.sin(it.bob)*4); const blink=it.life<120&&Math.floor(it.life/6)%2===0;
+function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift(it.x)-it.z-(8+Math.sin(it.bob)*4); const blink=it.life<120&&Math.floor(it.life/6)%2===0;
   if(blink) return;
   ctx.save(); ctx.translate(sx,sy);
   // 床の影
@@ -1114,6 +1132,11 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-it.z-(8+Ma
   ctx.restore(); }); }
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
+    // ☆ スターKO：画面外へ飛び去り、星になって消える
+    if(e.state==='blastoff'){ e.bo++; e.x+=e.vx; e.z+=e.boVz; e.vx*=0.992; e.boVz*=0.99; e.spin+=0.6;
+      if(gf%2===0) spark(e.x,e.y-e.z,'#ffe14d',2,6);
+      if(e.x<camX-110||e.x>camX+W+110||e.z>420||e.bo>95){ starTwinkle(e); enemies.splice(i,1); }
+      continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising
     if(e.state==='air'||e.state==='pounce'||e.z>0){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
@@ -1662,6 +1685,20 @@ function drawGround(){
   // top edge shadow (wall base)
   const es=ctx.createLinearGradient(0,GROUND_TOP-2,0,GROUND_TOP+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=es; ctx.fillRect(0,GROUND_TOP-2,W,18);
+  // ── マリオ風の起伏した前景の地面（キャラはこの稜線の上に立つ）──
+  const step=10;
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for(let sx=0;sx<=W+step;sx+=step){ const ty=LANE-groundLift(sx+camX); ctx.lineTo(sx,ty); }
+  ctx.lineTo(W,H); ctx.closePath();
+  const hg=ctx.createLinearGradient(0,LANE-70,0,H); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
+  ctx.fillStyle=hg; ctx.fill();
+  // 稜線のハイライト＆縁取り
+  ctx.beginPath(); for(let sx=0;sx<=W+step;sx+=step){ const ty=LANE-groundLift(sx+camX); if(sx===0)ctx.moveTo(sx,ty); else ctx.lineTo(sx,ty); }
+  ctx.strokeStyle=shade(T.g[0],44); ctx.lineWidth=5; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=2; ctx.stroke();
+  // 地面のテクスチャ（稜線に沿った小石）
+  for(let sx=14; sx<W; sx+=46){ const wx=sx+camX, ty=LANE-groundLift(wx);
+    ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(sx,ty+22+((wx*0.7)%24),6,3,0,0,7); ctx.fill(); }
 }
 function drawLighting(){ // theme vignette + bloom
   const T=curTheme();
@@ -1680,7 +1717,7 @@ function furBall(x,y,r,inner,outer){ ctx.fillStyle=radGrad(x,y,r,inner,outer); c
 const PI2=Math.PI/2;
 // ---- Player: cute 2-head-tall chibi (feet at y=0, body grows upward) ----
 function drawPlayer(){
-  const p=player, s=depthScale(p.y)*0.94, sx=p.x-camX, sy=p.y, st=p.state, ph=p.anim;
+  const p=player, s=depthScale(p.y)*0.94, sx=p.x-camX, sy=p.y-groundLift(p.x), st=p.state, ph=p.anim;
   const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
   softShadow(sx,sy,26*s*(1-Math.min(p.z/130,0.5)));
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
@@ -1968,7 +2005,7 @@ function chibiHead(lean){
 
 // ---- Enemies dispatch ----
 function drawEnemy(e){
-  const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y;
+  const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
   let al=1; if(e.dead&&e.deadTimer<22) al=clamp(e.deadTimer/22,0,1); if(e.vanish>0) al=Math.min(al,0.35);
   ctx.globalAlpha=al;
   softShadow(sx,sy,(t.w*0.5)*s*(e.z>0?0.7:1));
@@ -1976,6 +2013,7 @@ function drawEnemy(e){
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
+  if(e.state==='blastoff'){ ctx.rotate(e.spin); const bsc=clamp(1-e.bo/95,0.3,1); ctx.scale(bsc,bsc); }   // 飛び去りながら回転＆縮小
   if((e.state==='walk')&&e.z<=0) ctx.translate(0,-Math.abs(Math.sin(e.bob*1.3))*3);   // lively bob
   if(e.state==='down'||e.dead){ ctx.rotate(0.95); ctx.translate(0,8); }
   // telegraph = crouch+lean back (wind-up); attack/bmove = explosive lunge + stretch
@@ -2142,20 +2180,21 @@ function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.tel
   ctx.fillStyle='#ffe98a'; ctx.beginPath(); ctx.arc(9,-68,4,0,7); ctx.fill(); ctx.restore();
 }
 function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
-  let k=t.h/150; if(kind==='gigas')k*=1.06; if(kind==='vesper')k*=0.98;
+  let k=t.h/150;
   const atk=e.state==='bmove', wind=e.state==='bwind';
   const _hv=(kind==='gigas'||kind==='glaton');
   const walk=e.state==='walk'?Math.sin(e.anim*(_hv?1.0:kind==='vesper'?1.8:1.3))*(_hv?4:6):0;
-  // per-boss proportions
+  // per-boss proportions — シルエットを大きく差別化
   let bRX=40,bRY=46,headR=28,legW=20,legX=14,pald=38;
-  if(kind==='garm'){ bRX=33;bRY=43;legW=16;legX=12;pald=34; }
-  else if(kind==='gigas'){ bRX=52;bRY=52;headR=23;legW=27;legX=16;pald=46; }
-  else if(kind==='vesper'){ bRX=30;bRY=50;headR=25;legW=14;legX=11;pald=30; }
-  else if(kind==='moloch'){ bRX=45;bRY=48;headR=30;legW=22;legX=15;pald=40; }
-  else if(kind==='cerbe'){ bRX=35;bRY=44;headR=26;legW=16;legX=12;pald=36; }
-  else if(kind==='glaton'){ bRX=54;bRY=54;headR=24;legW=28;legX=17;pald=48; k=t.h/150*1.06; }
-  headR+=7;   // 頭を大きく＝ちびっこ可愛い体型
+  if(kind==='garm'){ bRX=32;bRY=42;legW=15;legX=12;pald=34;headR=27; }           // すらりとした狼
+  else if(kind==='gigas'){ bRX=62;bRY=50;legW=24;legX=20;pald=54;headR=28; }      // でっぷり岩塊
+  else if(kind==='vesper'){ bRX=26;bRY=54;legW=12;legX=10;pald=28;headR=24; }     // 細身の忍
+  else if(kind==='moloch'){ bRX=52;bRY=45;legW=20;legX=16;pald=43;headR=30; }     // ぽっこり火炎
+  else if(kind==='cerbe'){ bRX=42;bRY=39;legW=16;legX=14;pald=38;headR=24; }      // 小柄ずんぐり三頭
+  else if(kind==='glaton'){ bRX=66;bRY=58;legW=30;legX=23;pald=58;headR=28; }     // 超巨大鋼鉄
+  headR+=10;   // 頭を大きく＝ちびっこ可愛い体型
   const heavyKind=(kind==='gigas'||kind==='glaton');
+  const round=(kind==='gigas'||kind==='glaton'||kind==='moloch');
   ctx.save(); ctx.scale(k,k);
   let arm=-0.25, bigA=0; if(wind)arm=-1.15; else if(atk){ const pr=clamp(e.moveT/Math.max(1,e.moveMax),0,1); arm=-1.15+pr*2.35; bigA=Math.sin(pr*Math.PI); }
   // legs + boots
@@ -2171,6 +2210,7 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
   const bg=ctx.createLinearGradient(0,-bRY*2-12,0,-16); bg.addColorStop(0,shade(t.c1,26)); bg.addColorStop(1,t.c2);
   ctx.fillStyle=bg; ctx.beginPath(); ctx.ellipse(0,-58,bRX,bRY,0,0,7); ctx.fill();
   ctx.fillStyle=shade(t.c1,8); ctx.beginPath(); ctx.ellipse(0,-54,bRX*0.7,bRY*0.64,0,0,7); ctx.fill();
+  if(round){ ctx.fillStyle=radGrad(0,-42,bRX*0.8,shade(t.c1,22),t.c2); ctx.beginPath(); ctx.ellipse(0,-40,bRX*0.78,bRY*0.62,0,0,7); ctx.fill(); }  // ぽっこりお腹
   if(heavyKind){ ctx.strokeStyle=t.accent; ctx.lineWidth=2.6; ctx.globalAlpha=0.8;
     ctx.beginPath(); ctx.moveTo(-20,-86);ctx.lineTo(-6,-58);ctx.lineTo(-18,-30); ctx.moveTo(18,-82);ctx.lineTo(8,-54);ctx.lineTo(20,-28); ctx.stroke(); ctx.globalAlpha=1;
     ctx.fillStyle=shade(t.c1,18); ctx.fillRect(-pald-18,-106,32,32); ctx.fillRect(pald-14,-106,32,32); }   // rocky/steel shoulder chunks
@@ -2202,6 +2242,15 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
     for(let i=-3;i<=3;i++){ const fx=i*9, h=16+Math.sin(gf*0.3+i)*7;
       ctx.fillStyle=radGrad(fx,-140-h*0.5,10,'#ffe27a',t.accent); ctx.beginPath(); ctx.moveTo(fx-6,-136); ctx.quadraticCurveTo(fx,-140-h,fx+6,-136); ctx.closePath(); ctx.fill(); }
     ctx.restore(); }
+  // ケルベ：三頭（左右に小さな頭）
+  if(kind==='cerbe'){ for(const hs of [-1,1]){ ctx.save(); ctx.translate(hs*(headR+6),-100); ctx.scale(0.62,0.62);
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-9,-12);ctx.lineTo(-15,-34);ctx.lineTo(-1,-16); ctx.fill(); ctx.beginPath(); ctx.moveTo(9,-12);ctx.lineTo(15,-34);ctx.lineTo(1,-16); ctx.fill();
+    ctx.fillStyle=radGrad(0,0,headR,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(0,0,headR*0.92,headR*0.86,0,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c1,8); ctx.beginPath(); ctx.moveTo(hs>0?6:-6,-2);ctx.lineTo(hs>0?24:-24,2);ctx.lineTo(hs>0?24:-24,10);ctx.lineTo(hs>0?6:-6,8); ctx.fill();
+    for(const ex2 of [-8,8]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex2,-3,6,7,0,0,7); ctx.fill();
+      ctx.fillStyle='#241a14'; ctx.beginPath(); ctx.ellipse(ex2,-2,3.6,4.6,0,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex2-1.8,-5,2,0,7); ctx.fill(); }
+    ctx.restore(); } }
   // snout
   ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.moveTo(8,-118); ctx.lineTo(30,-114); ctx.lineTo(30,-103); ctx.lineTo(8,-106); ctx.fill();
   ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(30,-110,3.4,2.6,0,0,7); ctx.fill();
