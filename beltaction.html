@@ -362,6 +362,9 @@ const easeOut=t=>1-Math.pow(1-t,3);
 function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprite size on a single lane
 // マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
 function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
+// 谷（落ちると即死）。各ステージの道中（戦闘ゲートの間）に配置
+const PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610]];
+function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
 function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
   g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
 
@@ -472,7 +475,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
-  gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1,
+  gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
   weapon: kind==='shima'?'fists':'dagger', weaponT:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -488,6 +491,8 @@ const WEAPONS={
   fists: {name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
 };
 function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
+  for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
+  p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
@@ -534,6 +539,7 @@ function updatePlayer(){
   if(p.state==='slide'){ updateSlide(); return; }
   if(p.state==='wheel'){ updateWheel(); return; }
   if(p.state==='screw'){ updateScrew(); return; }
+  if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4; if(p.fallT>=22){ loseLife(p); } return; }   // 谷に落下→ミス
   if(p.state==='rush'){ updateRush(); return; }
   if(p.state==='gswing'){ updateGiantSwing(); return; }
   if(p.state==='tkick'){ updateTriangle(); return; }
@@ -636,7 +642,11 @@ function updatePlayer(){
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
   p.state=mx?'walk':'idle'; p.anim+=mx?0.26:0.07;
   if(mx&&gf%8===0) dust(p.x,p.y, 1);
+  if(p.z<=0 && overPit(p.x)) beginFall(p);   // 足元が谷なら落下（ジャンプで越える）
 }
+function beginFall(p){ if(p.state==='falling'||p.state==='dead') return;
+  if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; } p.atk=null;
+  p.state='falling'; p.fallT=0; p.vz=0; sfx.hurt(); popText(p.x,p.y-60,'落とし穴！','#ff5a5a',true); }
 const REACH=1.62, HH=1.42;   // hit ranges scaled up for larger sprites
 function doPlayerHit(a){
   const p=player, def=a.def, W=WEAPONS[p.weapon]||WEAPONS.dagger;
@@ -983,6 +993,12 @@ const ETYPE={
   cerbe: {hp:520,sp:2.8,dmg:15,atkR:80,w:110,h:118,c1:'#8a6fc0',c2:'#4e3676',c3:'#241636',score:5200,boss:true,bossKind:'cerbe', weapon:'claw', accent:'#b06bff', name:'三頭のケルベ'},
   glaton:{hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
   boss:  {hp:980,sp:1.3,dmg:18,atkR:84,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝'},
+  // ---- 個性派ボス ----
+  dragon:{hp:620,sp:1.6,dmg:17,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
+  ghost: {hp:240,sp:2.1,dmg:13,atkR:84,w:84, h:118,c1:'#cfe6ff',c2:'#8fb6d8',c3:'#5a7ba0',score:2600,boss:true,bossKind:'ghost', weapon:'scythe',accent:'#bfe9ff',name:'お化けのT太郎',flyer:true},
+  slime: {hp:340,sp:1.0,dmg:12,atkR:70,w:140,h:120,c1:'#7dff5a',c2:'#3aa83a',c3:'#1f5e1f',score:4200,boss:true,bossKind:'slime', weapon:'none',accent:'#aaff7d',name:'キングスライム',slimey:true},
+  slimelet:{hp:42,sp:1.7,dmg:8,atkR:44,w:52,h:46,c1:'#8dff6a',c2:'#3aa83a',c3:'#1f5e1f',score:120,name:'スライム',slimey:true},
+  rival: {hp:720,sp:2.3,dmg:16,atkR:76,w:62, h:100,c1:'#2c2c38',c2:'#16161e',c3:'#050507',score:9000,boss:true,bossKind:'rival', weapon:'dark',accent:'#b06bff',name:'黒犬士クロイヌ'},
 };
 // Boss move-sets
 const BOSSMOVES={
@@ -993,10 +1009,15 @@ const BOSSMOVES={
   cerbe:  ['clawCombo','dashThrust','tripleStep','lunge','unblockSmash','summon'],
   glaton: ['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash'],
   emperor:['darkSwipe','darkSlam','orbSpread','darkBeam','teleSlash','summon','unblockSmash','bossGrab'],
+  dragon: ['fireBreath','fireball','divebomb','clawSwoop'],
+  ghost:  ['scytheSlash','phaseDash','vanishMove','scytheSlash'],
+  slime:  ['slimeBounce','slimeSlam','slimeBounce'],
+  rival:  ['rivalCombo','rivalDash','rivalShoryu','rivalCharge'],
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
-  moloch:'業火に焼かれて消えるがいい！', boss:'ワンワン帝国の力を思い知れ！', bitter:'フッ…相手になるかな？' };
+  moloch:'業火に焼かれて消えるがいい！', boss:'ワンワン帝国の力を思い知れ！', bitter:'フッ…相手になるかな？',
+  dragon:'我が業火、ジャンプでかわせるか？', ghost:'ヒヒヒ…３人で斬り刻んでやる〜', slime:'ぷるぷる…叩くほど増えるぞ！', rival:'貴様の技、すべて頂いた！' };
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:t.hp,maxHp:t.hp,w:t.w,h:t.h,
     state:'walk',anim:Math.random()*6,atkTimer:0,atkMax:0,telegraph:0,teleMax:0,hurtTimer:0,downTimer:0,stun:0,
@@ -1010,6 +1031,7 @@ function enemyAtkFx(e){ const t=ETYPE[e.type], dir=e.facing;
   if(t.boss||t.charge){ ring(ex,ey, t.boss?'#d46bff':'#ffd24d'); spark(ex,ey,'#ffce6a',8,7); } }
 function damageEnemy(e,dmg,kbx,knockdown,launch){
   const T=ETYPE[e.type];
+  if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(T.boss){ knockdown=false; launch=0; }                 // bosses have hyper-armor (no juggle/knockdown)
   if(!T.boss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hp-=dmg; if(!T.boss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
@@ -1022,6 +1044,9 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(dmg>=22){ triggerSlow(22); flash=Math.max(flash,3); }   // 大技ヒットでスロー
   else if(dmg>=20){ flash=Math.max(flash,3); }
   popText(e.x,e.y-e.h-6,Math.round(dmg), knockdown?'#ff6a3c':'#ffe14d', dmg>=20);
+  // スライム：攻撃のたびに小スライムへ分裂（合計5体まで）
+  if(T.slimey && e.hp>0){ const n=enemies.filter(x=>!x.dead&&(x.type==='slime'||x.type==='slimelet')).length;
+    if(n<5 && Math.random()<0.6){ spawnEnemy('slimelet', clamp(e.x+rnd(-44,44),camX+30,camX+W-30), LANE); const ne=enemies[enemies.length-1]; ne.vz=-7; ne.state='air'; ne.bounces=1; ne.invuln=0; popText(e.x,e.y-e.h-2,'分裂！','#7dff5a'); sfx.swing(0); } }
   if(e.hp<=0){ killEnemy(e); return; }
   if(launch){ /* stays air */ }
   else if(knockdown){ e.state='down'; e.downTimer=48; }
@@ -1137,8 +1162,8 @@ function updateEnemies(){
       if(gf%2===0) spark(e.x,e.y-e.z,'#ffe14d',2,6);
       if(e.x<camX-110||e.x>camX+W+110||e.z>420||e.bo>95){ starTwinkle(e); enemies.splice(i,1); }
       continue; }
-    // air physics (juggle): z=height above ground, vz<0 = rising
-    if(e.state==='air'||e.state==='pounce'||e.z>0){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
+    // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
+    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer)){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.zankai>0){ e.zankai--; if(gf%6<3)spark(e.x,e.y-e.h*0.95,'#ff4d6a',2,4); if(e.zankai<=0){ zankaiBoom(e); continue; } }   // 残悔拳カウントダウン
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
@@ -1230,6 +1255,14 @@ const MV={
   orbSpread:{tele:20,dur:26,minR:120,maxR:1100}, darkBeam:{tele:26,dur:26,minR:120,maxR:1200},
   teleSlash:{tele:14,dur:28,minR:0,maxR:1300}, summon:{tele:24,dur:28,minR:220,maxR:1300},
   unblockSmash:{tele:32,dur:36,minR:0,maxR:220,danger:1}, bossGrab:{tele:26,dur:30,minR:0,maxR:96,danger:1},
+  // ドラゴン
+  fireBreath:{tele:26,dur:46,minR:0,maxR:1300}, divebomb:{tele:22,dur:34,minR:0,maxR:760}, clawSwoop:{tele:16,dur:24,minR:0,maxR:320},
+  // 幽霊T太郎
+  scytheSlash:{tele:16,dur:24,minR:0,maxR:210}, phaseDash:{tele:12,dur:22,minR:50,maxR:600}, vanishMove:{tele:6,dur:34,minR:0,maxR:1300},
+  // スライム
+  slimeBounce:{tele:18,dur:30,minR:60,maxR:620}, slimeSlam:{tele:22,dur:40,minR:0,maxR:520},
+  // 黒犬士（プレイヤーと同じ攻撃）
+  rivalCombo:{tele:14,dur:30,minR:0,maxR:160}, rivalDash:{tele:14,dur:20,minR:90,maxR:560}, rivalShoryu:{tele:16,dur:30,minR:0,maxR:150}, rivalCharge:{tele:24,dur:30,minR:0,maxR:200,danger:1},
 };
 function pickBossMove(e,dist){ const list=BOSSMOVES[ETYPE[e.type].bossKind]||[];
   const cands=list.filter(m=>MV[m] && dist>=MV[m].minR && dist<=MV[m].maxR);
@@ -1285,6 +1318,23 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'unblockSmash': if(f<14)e.x+=e.facing*3; if(f===18){ bUnblock(e,t.atkR+24,62,t.dmg+8); } break;
     case 'bossGrab': if(f<12)e.x+=e.facing*5; if(f===12){ bThrow(e,t.dmg+12); } break;
     case 'roar': if(f===6){ spark(e.x,e.y-e.h*0.6,t.accent,18,9); ring(e.x,e.y-e.h*0.5,t.accent); sfx.boss(); e.moveCd=Math.max(0,e.moveCd-30); } break;
+    // ── ドラゴン ──
+    case 'fireBreath': if(f>=12 && f<=42 && f%3===0){ const dir=e.facing; spawnProj(e.x+dir*46, e.y, dir*9, 0, {dmg:t.dmg-4,color:'#ff8a3a',r:15,life:95,zz:8});  // 地を這う炎＝ジャンプで回避
+      spark(e.x+dir*46,e.y-8,'#ffb02e',4,6); if(f%9===0)sfx.heavy(); } break;
+    case 'divebomb': if(f<14){ e.z=Math.max(0,e.z-11); } if(e.z<=3 && f>4 && !e.slammed){ e.slammed=true; bShock(e,160,t.dmg); dust(e.x,e.y,16); } break;
+    case 'clawSwoop': if(f<10)e.x+=e.facing*8; if(f===11)bArc(e,t.atkR,52,t.dmg,true,'#ff8a3a'); break;
+    // ── 幽霊T太郎 ──
+    case 'scytheSlash': if(f===6)bArc(e,92,46,t.dmg-4,false,'#bfe9ff'); if(f===16)bArc(e,t.atkR+12,52,t.dmg,true,'#bfe9ff'); break;
+    case 'phaseDash': if(f<10){ e.x+=e.facing*15; e.vanish=Math.max(e.vanish,3); } if(f===12)bArc(e,t.atkR,46,t.dmg,true,'#bfe9ff'); break;
+    case 'vanishMove': if(f===2){ e.vanish=40; } if(f===20){ const tp=nearestPlayerTo(e.x); e.x=tp.x - tp.facing*70; e.facing=e.x<tp.x?1:-1; spark(e.x,e.y-e.h*0.5,'#bfe9ff',16,9); } break;
+    // ── スライム（弾むように突進→着地で衝撃）──
+    case 'slimeBounce': if(f<18){ e.x+=e.facing*6; } if(f===12 && !e.slammed){ e.slammed=true; bShock(e,120,t.dmg); dust(e.x,e.y,8); } break;
+    case 'slimeSlam': if(f===16 && !e.slammed){ e.slammed=true; bShock(e,150,t.dmg+2); dust(e.x,e.y,14); } break;
+    // ── 黒犬士クロイヌ（プレイヤーと同じ攻撃）──
+    case 'rivalCombo': if(f===6)bArc(e,70,40,8,false,'#c46bff'); if(f===14)bArc(e,76,44,10,false,'#c46bff'); if(f===24)bArc(e,86,48,t.dmg,true,'#c46bff'); break;
+    case 'rivalDash': if(f<10)e.x+=e.facing*13; if(f===11)bArc(e,t.atkR,44,t.dmg,true,'#9fe8ff'); break;
+    case 'rivalShoryu': if(f<6)e.x+=e.facing*3; if(f===4)bArc(e,66,520,t.dmg,true,'#ffe27a'); break;
+    case 'rivalCharge': if(f<14)e.x+=e.facing*2; if(f===18){ bUnblock(e,t.atkR+16,56,t.dmg+8); } break;
   }
 }
 function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
@@ -1296,6 +1346,8 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
   else if(kind==='vesper' && e.state==='bmove' && (e.moveName==='dashThrust'||e.moveName==='tripleStep') && gf%2===0) spark(e.x,e.y-e.h*0.45,'#aef8ff',2,3);
   else if(kind==='gigas' && e.state==='walk' && Math.sin(e.anim*1.0)>0.92 && gf%6===0){ shake=Math.max(shake,3); dust(e.x,e.y,4); }
   const rageMul=e.rage?1.4:1;
+  // 飛行ボスのホバリング高度（ドラゴン＝高め、幽霊＝低め）。divebomb中は手動制御
+  if(t.flyer && !(e.state==='bmove'&&e.moveName==='divebomb')){ const hov=(kind==='dragon'?78:34)+Math.sin(e.bob)*6; e.z += (hov-e.z)*0.12; e.vz=0; }
   if(e.state!=='bmove') e.facing=dx<0?-1:1;
   if(e.state==='bwind'){ e.moveT--; e.telegraph=Math.max(e.moveT,0);
     if(e.moveT<=0){ e.state='bmove'; e.moveT=0; e.telegraph=0; startBossMove(e); } return; }
@@ -1334,15 +1386,15 @@ function buildEncounters(){ encounters=[
   // ── STAGE 2 ──
   {st:2,at:2100,list:[['wolf',1],['guard',1],['bomber',1]]},
   {st:2,at:2700,list:[['boar',1],['mastiff',1],['hyena',1]]},
-  {st:2,at:3300,boss:true,list:[['gigas',1]]},
+  {st:2,at:3300,boss:true,list:[['slime',1]]},
   // ── STAGE 3 ──
   {st:3,at:3900,list:[['hyena',1],['dober',1],['guard',1],['corgi',1]]},
   {st:3,at:4500,mini:true,list:[['bitter',1],['bomber',1]]},
-  {st:3,at:5100,boss:true,list:[['vesper',1]]},
+  {st:3,at:5100,boss:true,list:[['ghost',3]]},
   // ── STAGE 4 ──
   {st:4,at:5700,list:[['akita',1],['guard',1],['boar',1]]},
   {st:4,at:6300,list:[['dober',2],['mastiff',1]]},
-  {st:4,at:6900,boss:true,list:[['moloch',1]]},
+  {st:4,at:6900,boss:true,list:[['dragon',1]]},
   // ── STAGE 5 ──
   {st:5,at:7500,list:[['akita',1],['pounce',1],['bomber',1],['hyena',1]]},
   {st:5,at:8100,list:[['dober',1],['mastiff',1],['guard',1]]},
@@ -1350,7 +1402,7 @@ function buildEncounters(){ encounters=[
   // ── STAGE 6 ──
   {st:6,at:9300,list:[['akita',1],['mastiff',1],['corgi',1]]},
   {st:6,at:9900,list:[['dober',2],['bomber',1],['guard',1]]},
-  {st:6,at:10500,boss:true,list:[['glaton',1]]},
+  {st:6,at:10500,boss:true,list:[['rival',1]]},
   // ── STAGE 7 ──
   {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
   {st:7,at:11700,mini:true,list:[['bitter',1],['guard',1]]},
@@ -1685,19 +1737,24 @@ function drawGround(){
   // top edge shadow (wall base)
   const es=ctx.createLinearGradient(0,GROUND_TOP-2,0,GROUND_TOP+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=es; ctx.fillRect(0,GROUND_TOP-2,W,18);
-  // ── マリオ風の起伏した前景の地面（キャラはこの稜線の上に立つ）──
+  // ── 谷（落とし穴）：暗い奈落を描く ──
+  for(const pit of PITS){ const x0=pit[0]-camX, x1=pit[1]-camX; if(x1<-30||x0>W+30)continue;
+    const cg=ctx.createLinearGradient(0,LANE-70,0,H); cg.addColorStop(0,'#0c0c16'); cg.addColorStop(1,'#000');
+    ctx.fillStyle=cg; ctx.fillRect(x0,LANE-70,x1-x0,H-(LANE-70)); }
+  // ── マリオ風の起伏した前景の地面（キャラはこの稜線の上に立つ。谷では地面が無い）──
   const step=10;
   ctx.beginPath(); ctx.moveTo(0,H);
-  for(let sx=0;sx<=W+step;sx+=step){ const ty=LANE-groundLift(sx+camX); ctx.lineTo(sx,ty); }
+  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; const ty=overPit(wx)?H:(LANE-groundLift(wx)); ctx.lineTo(sx,ty); }
   ctx.lineTo(W,H); ctx.closePath();
   const hg=ctx.createLinearGradient(0,LANE-70,0,H); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
   ctx.fillStyle=hg; ctx.fill();
-  // 稜線のハイライト＆縁取り
-  ctx.beginPath(); for(let sx=0;sx<=W+step;sx+=step){ const ty=LANE-groundLift(sx+camX); if(sx===0)ctx.moveTo(sx,ty); else ctx.lineTo(sx,ty); }
-  ctx.strokeStyle=shade(T.g[0],44); ctx.lineWidth=5; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
-  ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=2; ctx.stroke();
+  // 稜線のハイライト＆縁取り（谷では分断）
+  ctx.strokeStyle=shade(T.g[0],44); ctx.lineWidth=5; ctx.lineCap='round'; ctx.lineJoin='round';
+  let pen=false; ctx.beginPath();
+  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; if(overPit(wx)){ pen=false; continue; } const ty=LANE-groundLift(wx); if(!pen){ctx.moveTo(sx,ty);pen=true;} else ctx.lineTo(sx,ty); }
+  ctx.stroke();
   // 地面のテクスチャ（稜線に沿った小石）
-  for(let sx=14; sx<W; sx+=46){ const wx=sx+camX, ty=LANE-groundLift(wx);
+  for(let sx=14; sx<W; sx+=46){ const wx=sx+camX; if(overPit(wx))continue; const ty=LANE-groundLift(wx);
     ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(sx,ty+22+((wx*0.7)%24),6,3,0,0,7); ctx.fill(); }
 }
 function drawLighting(){ // theme vignette + bloom
@@ -2023,7 +2080,8 @@ function drawEnemy(e){
   else if(e.state==='bmove'){ const big=Math.sin(clamp(e.moveT/Math.max(1,e.moveMax),0,1)*Math.PI); ctx.rotate(0.07); ctx.translate(6+8*big,0); ctx.scale(1+0.10*big,1-0.07*big); }
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
-  if(t.boss){ if(t.bossKind==='emperor') drawBoss(e); else drawBigBoss(e); }
+  if(t.slimey) drawSlime(e);
+  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else drawBeast(e);
   if(t.guarder) drawEnemyShield(e);
   ctx.restore();
@@ -2155,17 +2213,11 @@ function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.tel
   ctx.fillStyle='#1c1c24'; ctx.beginPath(); ctx.ellipse(-16,-91,15,17,0,0,7); ctx.ellipse(16,-91,15,17,0,0,7); ctx.fill();
   ctx.fillStyle='#101014'; ctx.beginPath(); ctx.ellipse(0,-95,17,13,0,0,7); ctx.fill();
   ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,-101,7,5,0,0,7); ctx.fill();
-  // ── 大きくて可愛いお目目（大帝もちょっとキュート）──
+  // ── 鋭い赤い眼光（大帝・凛々しく）──
   for(const ex of [-13,13]){
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,-114,7.5,8.5,0,0,7); ctx.fill();
-    ctx.fillStyle='#2a0d0d'; ctx.beginPath(); ctx.ellipse(ex,-113,4.8,6,0,0,7); ctx.fill();
-    ctx.save(); ctx.globalAlpha=0.6; ctx.fillStyle=radGrad(ex,-113,5,'#ff7a7a','#c01010'); ctx.beginPath(); ctx.ellipse(ex,-113,4.2,5.4,0,0,7); ctx.fill(); ctx.restore();
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-2.2,-116,2.2,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(ex+1.8,-111,1,0,7); ctx.fill();
-  }
-  ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle='#ff8aa0'; ctx.beginPath(); ctx.ellipse(-25,-104,6,3.6,0,0,7); ctx.ellipse(25,-104,6,3.6,0,0,7); ctx.fill(); ctx.restore();
-  ctx.strokeStyle='#000'; ctx.lineCap='round';
-  if(atk||tele){ ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(-21,-126);ctx.lineTo(-7,-119); ctx.moveTo(21,-126);ctx.lineTo(7,-119); ctx.stroke(); }
-  else { ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-19,-125);ctx.lineTo(-8,-126); ctx.moveTo(19,-125);ctx.lineTo(8,-126); ctx.stroke(); }
+    ctx.fillStyle=radGrad(ex,-114,6,'#ff5a5a','#b30000'); ctx.beginPath(); ctx.ellipse(ex,-114,5,4,0,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex+1.2,-115,1.3,0,7); ctx.fill(); }
+  ctx.strokeStyle='#000'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-22,-125);ctx.lineTo(-6,-117); ctx.moveTo(22,-125);ctx.lineTo(6,-117); ctx.stroke();
   if(atk||tele){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(-9,-89);ctx.lineTo(-5,-78);ctx.lineTo(-1,-89); ctx.moveTo(9,-89);ctx.lineTo(5,-78);ctx.lineTo(1,-89); ctx.fill(); }
   const cg=ctx.createLinearGradient(-26,-148,26,-130); cg.addColorStop(0,'#ffe98a'); cg.addColorStop(1,'#c8881a');
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-27,-130);ctx.lineTo(-27,-143);ctx.lineTo(-14,-133);ctx.lineTo(0,-150);ctx.lineTo(14,-133);ctx.lineTo(27,-143);ctx.lineTo(27,-130); ctx.fill();
@@ -2256,22 +2308,16 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
   ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(30,-110,3.4,2.6,0,0,7); ctx.fill();
   if(atk||wind){ ctx.fillStyle='#5a0d0d'; ctx.beginPath(); ctx.moveTo(9,-112);ctx.lineTo(28,-110);ctx.lineTo(9,-104);ctx.fill();
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(12,-112);ctx.lineTo(15,-106);ctx.lineTo(18,-112);ctx.moveTo(20,-112);ctx.lineTo(23,-107);ctx.lineTo(26,-112);ctx.fill(); }
-  // ── 大きくてうるうるのお目目（かわいい）──
-  const eyeR=(kind==='moloch'?11:10), eyeY=-120, eyeX=12;
+  // ── 鋭い眼光（小さめ・凛々しい）──
+  const eyeY=-121, eyeX=11;
   for(const sgn of [-1,1]){ const ex=sgn*eyeX;
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,eyeY,eyeR,eyeR+1.5,0,0,7); ctx.fill();
-    ctx.fillStyle='#241a14'; ctx.beginPath(); ctx.ellipse(ex,eyeY+1,eyeR*0.66,eyeR*0.82,0,0,7); ctx.fill();
-    ctx.save(); ctx.globalAlpha=0.5; ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(ex,eyeY+1,eyeR*0.62,eyeR*0.78,0,0,7); ctx.fill(); ctx.restore();
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-eyeR*0.38,eyeY-eyeR*0.42,eyeR*0.34,0,7); ctx.fill();
-    ctx.beginPath(); ctx.arc(ex+eyeR*0.42,eyeY+eyeR*0.42,eyeR*0.16,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,eyeY,5,4,0,0,7); ctx.fill();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(ex+sgn*0.8,eyeY,3.1,3.4,0,0,7); ctx.fill();
+    ctx.fillStyle='#120a06'; ctx.beginPath(); ctx.ellipse(ex+sgn*0.8,eyeY,1.5,2.3,0,0,7); ctx.fill();
   }
-  // ほっぺの赤み
-  ctx.save(); ctx.globalAlpha=0.42; ctx.fillStyle='#ff8aa0';
-  ctx.beginPath(); ctx.ellipse(-headR*0.66,-108,7,4.2,0,0,7); ctx.ellipse(headR*0.66,-108,7,4.2,0,0,7); ctx.fill(); ctx.restore();
-  // 眉（攻撃時だけキリッ、普段はちょこん）
-  ctx.strokeStyle='#000'; ctx.lineCap='round';
-  if(atk||wind){ ctx.lineWidth=2.8; ctx.beginPath(); ctx.moveTo(-18,-134);ctx.lineTo(-6,-130); ctx.moveTo(18,-134);ctx.lineTo(6,-130); ctx.stroke(); }
-  else { ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(-16,-133);ctx.lineTo(-8,-134); ctx.moveTo(16,-133);ctx.lineTo(8,-134); ctx.stroke(); }
+  // 鋭い眉
+  ctx.strokeStyle='#000'; ctx.lineCap='round'; ctx.lineWidth=3.2;
+  ctx.beginPath(); ctx.moveTo(-20,-130);ctx.lineTo(-5,-125); ctx.moveTo(20,-130);ctx.lineTo(5,-125); ctx.stroke();
   // weapon arm — swells at the strike for a weighty swing
   ctx.save(); ctx.translate(pald-2,-96); ctx.rotate(arm); ctx.scale(1+bigA*0.55,1+bigA*0.55);
   ctx.strokeStyle=shade(t.c1,4); ctx.lineWidth=14+bigA*10; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,4); ctx.stroke();
@@ -2279,6 +2325,72 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
   ctx.translate(24,8); drawBossWeapon(t,e,atk);
   ctx.restore();
   ctx.restore();
+}
+// ── 飛竜ヴォルカ（飛行・ファイアブレス）──
+function drawDragon(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; const flap=Math.sin(e.anim*3)*0.5;
+  ctx.strokeStyle=t.c2; ctx.lineWidth=11; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-26,-52); ctx.quadraticCurveTo(-68,-30,-88,-58); ctx.stroke();   // tail
+  ctx.fillStyle='#2a1410'; ctx.beginPath(); ctx.moveTo(-88,-58);ctx.lineTo(-100,-50);ctx.lineTo(-92,-68);ctx.fill();   // tail spike
+  ctx.save(); ctx.fillStyle=shade(t.c2,-8); ctx.translate(-4,-80); ctx.rotate(-0.5+flap);   // wing
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(-52,-34,-84,4); ctx.quadraticCurveTo(-46,2,-34,26); ctx.quadraticCurveTo(-48,20,-22,38); ctx.quadraticCurveTo(-10,18,0,10); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.fillStyle=radGrad(0,-60,42,shade(t.c1,26),t.c2); ctx.beginPath(); ctx.ellipse(0,-56,36,30,0,0,7); ctx.fill();   // body
+  ctx.fillStyle=shade(t.c1,4); ctx.beginPath(); ctx.ellipse(2,-50,24,20,0,0,7); ctx.fill();
+  ctx.fillStyle=t.c3; ctx.fillRect(-18,-30,11,30); ctx.fillRect(8,-30,11,30);   // legs
+  ctx.fillStyle='#f2efe6'; for(const lx of [-13,13]) for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(lx+i*4,-2);ctx.lineTo(lx+i*4-2,8);ctx.lineTo(lx+i*4+2,8);ctx.fill(); }
+  ctx.strokeStyle=t.c2; ctx.lineWidth=20; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(16,-66); ctx.quadraticCurveTo(46,-86,54,-104); ctx.stroke();   // neck
+  ctx.fillStyle=radGrad(56,-110,22,shade(t.c1,24),t.c2); ctx.beginPath(); ctx.ellipse(58,-108,21,17,0,0,7); ctx.fill();   // head
+  ctx.fillStyle=shade(t.c1,8); ctx.beginPath(); ctx.moveTo(68,-114);ctx.lineTo(92,-110);ctx.lineTo(92,-99);ctx.lineTo(68,-102);ctx.fill();   // snout
+  ctx.fillStyle='#2a1410'; ctx.beginPath(); ctx.moveTo(50,-122);ctx.lineTo(44,-144);ctx.lineTo(58,-124);ctx.fill(); ctx.beginPath(); ctx.moveTo(62,-122);ctx.lineTo(64,-142);ctx.lineTo(70,-122);ctx.fill();   // horns
+  ctx.fillStyle=radGrad(58,-112,5,'#fff','#ffd24d'); ctx.beginPath(); ctx.ellipse(60,-112,4.4,3.6,0,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.ellipse(61,-112,1.6,2.6,0,0,7); ctx.fill();
+  ctx.strokeStyle='#000'; ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(50,-119);ctx.lineTo(64,-114); ctx.stroke();   // brow
+  if(atk && e.moveName==='fireBreath'){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(100,-104,26,'#fff6c0','rgba(255,110,40,0)'); ctx.beginPath(); ctx.arc(100,-104,22,0,7); ctx.fill(); ctx.restore(); }
+}
+// ── お化けのT太郎（透明化・鎌）──
+function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4, HW=t.w*0.5, top=-t.h*0.92;
+  ctx.fillStyle=radGrad(0,top*0.5,HW*1.5,'#f2f8ff',t.c2);
+  ctx.beginPath(); ctx.moveTo(-HW,-8); ctx.quadraticCurveTo(-HW,top,sway,top); ctx.quadraticCurveTo(HW,top,HW,-8);
+  for(let i=0;i<4;i++){ const x=HW-i*(HW*2/4), xm=x-(HW/4); ctx.quadraticCurveTo(xm,2,x-(HW*2/4),-8); }
+  ctx.closePath(); ctx.fill();
+  for(const ex of [-12,12]){ ctx.fillStyle='#26384f'; ctx.beginPath(); ctx.ellipse(ex+sway*0.3,top*0.56,6,9,0,0,7); ctx.fill();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(ex+sway*0.3,top*0.56+2,2.4,0,7); ctx.fill(); }
+  ctx.fillStyle='#26384f'; ctx.beginPath(); ctx.ellipse(sway*0.2,top*0.34,5,7,0,0,7); ctx.fill();   // 口
+  // 鎌
+  ctx.save(); const sw=e.state==='bmove'?0.7:0; ctx.translate(e.facing*HW*0.7,top*0.5); ctx.rotate(-0.4+sw);
+  ctx.strokeStyle='#5a4a3a'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,30); ctx.lineTo(0,-36); ctx.stroke();
+  ctx.strokeStyle='#dfe7f0'; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(16,-36,20,Math.PI*0.85,Math.PI*1.72); ctx.stroke(); ctx.restore();
+}
+// ── キングスライム / スライム（攻撃のたび分裂）──
+function drawSlime(e){ const t=ETYPE[e.type]; const HW=t.w*0.46, HH=t.h*0.8, wob=Math.sin(e.anim*2.2)*0.06;
+  const sq=(e.state==='down')?0.7:(e.state==='air'?1.12:1);
+  ctx.fillStyle=radGrad(0,-HH*0.7,HW*1.25,shade(t.c1,30),t.c2);
+  ctx.beginPath(); ctx.moveTo(-HW,0); ctx.bezierCurveTo(-HW*(1.06+wob),-HH*1.55*sq,HW*(1.06+wob),-HH*1.55*sq,HW,0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.28)'; ctx.beginPath(); ctx.ellipse(-HW*0.32,-HH*1.0,HW*0.3,HH*0.34,0,0,7); ctx.fill();
+  ctx.fillStyle=shade(t.c1,-10); ctx.beginPath(); ctx.ellipse(0,-2,HW*0.9,4,0,0,7); ctx.fill();
+  const hurt=e.state==='hurt'||e.state==='down', ey=-HH*0.92, exo=HW*0.26;
+  for(const sgn of [-1,1]){ const ex=sgn*exo; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,ey,HW*0.14,HW*0.17,0,0,7); ctx.fill();
+    ctx.fillStyle='#10331a'; ctx.beginPath(); ctx.arc(ex+e.facing*1.4,ey,HW*0.07,0,7); ctx.fill(); }
+  ctx.strokeStyle='#0a4022'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath();
+  if(hurt) ctx.arc(0,ey+HH*0.34,HW*0.16,Math.PI,0); else ctx.arc(0,ey+HH*0.28,HW*0.2,0.15,Math.PI-0.15); ctx.stroke();
+}
+// ── 黒犬士クロイヌ（イッヌの黒版・同じ技）──
+function drawRival(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  ctx.fillStyle=t.c3; ctx.fillRect(-12,-18+walk,9,18); ctx.fillRect(4,-18-walk,9,18);   // legs
+  const cp=ctx.createLinearGradient(-26,-60,-6,-2); cp.addColorStop(0,'#3a2060'); cp.addColorStop(1,'#160a2a');   // cape
+  ctx.fillStyle=cp; ctx.beginPath(); ctx.moveTo(-4,-58);ctx.quadraticCurveTo(-30,-30,-22,-2);ctx.quadraticCurveTo(-12,-12,-3,-14);ctx.closePath(); ctx.fill();
+  furBall(0,-40,20,shade(t.c1,20),t.c2);   // body
+  ctx.fillStyle=t.accent; ctx.fillRect(-16,-34,32,5);   // belt
+  furBall(2,-66,18,shade(t.c1,16),t.c2);   // head
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-10,-78);ctx.lineTo(-16,-98);ctx.lineTo(-2,-80);ctx.fill(); ctx.beginPath(); ctx.moveTo(12,-78);ctx.lineTo(18,-98);ctx.lineTo(4,-80);ctx.fill();   // ears
+  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.ellipse(14,-62,9,7,0,0,7); ctx.fill();   // snout
+  ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(21,-62,3,2.4,0,0,7); ctx.fill();
+  for(const ex of [4,12]){ ctx.fillStyle=radGrad(ex,-70,4,'#fff',t.accent); ctx.beginPath(); ctx.ellipse(ex,-70,3.4,3,0,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.arc(ex+0.6,-70,1.3,0,7); ctx.fill(); }
+  ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-2,-76);ctx.lineTo(8,-72); ctx.moveTo(16,-76);ctx.lineTo(10,-72); ctx.stroke();
+  let ang=atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.2):(tele?-1.3:-0.3);   // sword arm
+  ctx.save(); ctx.translate(10,-44); ctx.rotate(ang);
+  ctx.strokeStyle=t.c2; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12,2); ctx.stroke(); ctx.translate(12,2);
+  ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-3,4,7);
+  const bl=ctx.createLinearGradient(3,0,46,0); bl.addColorStop(0,'#c89cff'); bl.addColorStop(1,'#3a1060');
+  ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-3);ctx.lineTo(42,-1.5);ctx.lineTo(48,0);ctx.lineTo(42,1.5);ctx.lineTo(3,3);ctx.closePath(); ctx.fill(); ctx.restore();
 }
 function drawBossWeapon(t,e,atk){
   switch(t.weapon){
@@ -2396,7 +2508,8 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //  CUTSCENES  (opening / boss intros / ending)
 //======================================================================
 const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
-  moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王' };
+  moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
+  dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士' };
 const STORY_OPEN=[
   {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれる王国は、穏やかな陽だまりに包まれていた。'},
   {bgTheme:4, art:'invade', name:'', text:'だがある日、闇の軍勢「ダークワンワン帝国」が攻め込んできた！'},
@@ -2449,7 +2562,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  if(t.bossKind==='emperor') drawBoss(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
