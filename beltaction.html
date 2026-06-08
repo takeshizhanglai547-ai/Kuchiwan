@@ -138,7 +138,7 @@ const GROUND_TOP = 372, GROUND_BOT = 516, WORLD_END = 12900;
 const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger sprites
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
-let state='title', camX=0, score=0, stageTime=99, timeAcc=0;
+let state='title', camX=0, score=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0; // gf = global frame
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='';
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
@@ -878,6 +878,12 @@ const ETYPE={
   guard:{hp:64,sp:1.3,dmg:9,atkR:50,w:60,h:80,c1:'#6f9ad0',c2:'#3f5f95',c3:'#26385e',score:300,guarder:true,name:'盾犬兵'},
   pounce:{hp:30,sp:2.6,dmg:11,atkR:200,w:50,h:66,c1:'#cf6a36',c2:'#8f4420',c3:'#572912',score:280,pouncer:true,name:'跳躍犬'},
   bitter:{hp:110,sp:2.6,dmg:12,atkR:52,w:48,h:82,c1:'#2c2c34',c2:'#16161c',c3:'#000',score:1400,name:'ビター・イッヌ',mini:true},
+  // ---- 追加エネミー ----
+  corgi:{hp:26,sp:2.1,dmg:6,atkR:44,w:54,h:60,c1:'#e9a24a',c2:'#b9742a',c3:'#7a4a18',score:180,name:'コーギー兵',ears:'flop',collar:'#c0392b'},
+  mastiff:{hp:90,sp:1.0,dmg:15,atkR:60,w:74,h:90,c1:'#b88a5a',c2:'#7a5630',c3:'#46301a',score:420,charge:true,name:'マスティフ番犬',ears:'flop',collar:'#3a6a9a'},
+  dober:{hp:34,sp:2.5,dmg:11,atkR:46,w:52,h:82,c1:'#3c3c46',c2:'#20202a',c3:'#101015',score:300,pouncer:true,accent:'#d89a4a',name:'ドーベル忍犬'},
+  akita:{hp:62,sp:1.2,dmg:9,atkR:50,w:62,h:80,c1:'#efe9dd',c2:'#bcb4a4',c3:'#7e766a',score:320,guarder:true,name:'秋田の盾犬',ears:'flop'},
+  bomber:{hp:18,sp:2.7,dmg:8,atkR:40,w:44,h:56,c1:'#e4ddc6',c2:'#b0a684',c3:'#6f6850',score:260,charge:true,bomber:true,accent:'#ff4d3a',name:'爆弾チワワ',ears:'flop',collar:'#ff4d3a'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.7,dmg:14,atkR:74,w:118,h:140,c1:'#9aa0ab',c2:'#565b66',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:560,sp:0.9,dmg:20,atkR:84,w:148,h:162,c1:'#9c7a4e',c2:'#5f4628',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -940,8 +946,14 @@ function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
+  if(T.bomber) bomberBoom(e);
   dropFromEnemy(e,T);
   if(T.bossKind==='emperor'){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
+function bomberBoom(e){ ring(e.x,e.y-e.h*0.4,'#ff4d3a'); ring(e.x,e.y-e.h*0.4,'#fff'); spark(e.x,e.y-e.h*0.4,'#ffae42',26,12); dust(e.x,e.y,12);
+  shake=Math.max(shake,11); flash=Math.max(flash,4); hitStop=Math.max(hitStop,8); sfx.big(); popText(e.x,e.y-e.h-10,'ドカン！','#ff7a2a',true);
+  const R=108;
+  players.forEach(p=>{ if(p.active && p.invuln<=0 && Math.abs(p.x-e.x)<R && Math.abs(p.y-e.y)<64) hurtPlayer(p, (ETYPE.bomber.dmg+10), e.x<p.x?1:-1, true); });
+  enemies.forEach(o=>{ if(o.dead||o.grabbedBy||o===e)return; if(Math.abs(o.x-e.x)<R){ damageEnemy(o,30,(o.x<e.x?-1:1)*10,true); if(!o.dead)launchEnemy(o,(o.x<e.x?-1:1)*12,-8,3); } }); }
 
 //======================================================================
 //  ドロップアイテム（体力回復 / 武器）
@@ -1212,31 +1224,31 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return; p.lives--; p.h
 let encounters,curGateX=WORLD_END,encIndex=0;
 function buildEncounters(){ encounters=[
   // ── STAGE 1 ──
-  {st:1,at:320, list:[['wolf',2],['hyena',1]]},
-  {st:1,at:900, list:[['hyena',2],['pounce',1]]},
+  {st:1,at:320, list:[['wolf',2],['corgi',1]]},
+  {st:1,at:900, list:[['hyena',2],['corgi',1],['pounce',1]]},
   {st:1,at:1500,boss:true,list:[['garm',1]]},
   // ── STAGE 2 ──
-  {st:2,at:2100,list:[['wolf',1],['guard',1],['hyena',1]]},
-  {st:2,at:2700,list:[['boar',1],['pounce',1],['hyena',1]]},
+  {st:2,at:2100,list:[['wolf',1],['guard',1],['bomber',1]]},
+  {st:2,at:2700,list:[['boar',1],['mastiff',1],['hyena',1]]},
   {st:2,at:3300,boss:true,list:[['gigas',1]]},
   // ── STAGE 3 ──
-  {st:3,at:3900,list:[['hyena',2],['guard',1],['pounce',1]]},
-  {st:3,at:4500,mini:true,list:[['bitter',1],['hyena',1]]},
+  {st:3,at:3900,list:[['hyena',1],['dober',1],['guard',1],['corgi',1]]},
+  {st:3,at:4500,mini:true,list:[['bitter',1],['bomber',1]]},
   {st:3,at:5100,boss:true,list:[['vesper',1]]},
   // ── STAGE 4 ──
-  {st:4,at:5700,list:[['guard',2],['boar',1]]},
-  {st:4,at:6300,list:[['wolf',2],['pounce',2]]},
+  {st:4,at:5700,list:[['akita',1],['guard',1],['boar',1]]},
+  {st:4,at:6300,list:[['dober',2],['mastiff',1]]},
   {st:4,at:6900,boss:true,list:[['moloch',1]]},
   // ── STAGE 5 ──
-  {st:5,at:7500,list:[['guard',1],['pounce',1],['boar',1],['hyena',1]]},
-  {st:5,at:8100,list:[['wolf',2],['guard',1],['pounce',1]]},
+  {st:5,at:7500,list:[['akita',1],['pounce',1],['bomber',1],['hyena',1]]},
+  {st:5,at:8100,list:[['dober',1],['mastiff',1],['guard',1]]},
   {st:5,at:8700,boss:true,list:[['cerbe',1]]},
   // ── STAGE 6 ──
-  {st:6,at:9300,list:[['guard',2],['boar',1],['hyena',1]]},
-  {st:6,at:9900,list:[['pounce',2],['wolf',2],['guard',1]]},
+  {st:6,at:9300,list:[['akita',1],['mastiff',1],['corgi',1]]},
+  {st:6,at:9900,list:[['dober',2],['bomber',1],['guard',1]]},
   {st:6,at:10500,boss:true,list:[['glaton',1]]},
   // ── STAGE 7 ──
-  {st:7,at:11100,list:[['guard',1],['pounce',1],['boar',1],['wolf',1],['hyena',1]]},
+  {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
   {st:7,at:11700,mini:true,list:[['bitter',1],['guard',1]]},
   {st:7,at:12300,boss:true,list:[['boss',1]]},
 ]; encIndex=0; curGateX=WORLD_END; }
@@ -1350,7 +1362,6 @@ function update(){
   gf++;
   if(hitStop>0){ hitStop--; if(state==='play'){updateParticles();updateProjectiles();} return; }
   if(state!=='play') return;
-  timeAcc++; if(timeAcc>=60){ timeAcc=0; stageTime--; if(stageTime<=0){ stageTime=0; activePlayers().forEach(p=>loseLife(p)); stageTime=99; } }
   stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
 }
@@ -1921,7 +1932,11 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   const hx=23,hy=-46;
   ctx.fillStyle=radGrad(hx,hy,17,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(hx,hy,17,15,0,0,7); ctx.fill();
   ctx.fillStyle=t.c2;
-  if(e.type==='hyena'){ for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(hx-4+i*5,hy-12); ctx.lineTo(hx-2+i*5,hy-26); ctx.lineTo(hx+2+i*5,hy-12); ctx.fill(); } }
+  if(t.ears==='flop'){ // 垂れ耳（かわいい）
+    ctx.beginPath(); ctx.ellipse(hx-11,hy-5,6,12,0.5,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx+9,hy-6,6,12,-0.4,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c1,-10); ctx.beginPath(); ctx.ellipse(hx-11,hy-3,3,7,0.5,0,7); ctx.fill();
+  } else if(e.type==='hyena'){ for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(hx-4+i*5,hy-12); ctx.lineTo(hx-2+i*5,hy-26); ctx.lineTo(hx+2+i*5,hy-12); ctx.fill(); } }
   else { ctx.beginPath(); ctx.moveTo(hx-9,hy-9); ctx.lineTo(hx-15,hy-24); ctx.lineTo(hx-2,hy-13); ctx.fill();
     ctx.beginPath(); ctx.moveTo(hx+6,hy-12); ctx.lineTo(hx+2,hy-26); ctx.lineTo(hx+13,hy-12); ctx.fill(); }
   // snout
@@ -1942,6 +1957,11 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
     ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(hx+6,hy-3,1.5,2,0,0,7); ctx.fill();
     ctx.strokeStyle='#000'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(hx-2,hy-9); ctx.lineTo(hx+9,hy-4); ctx.stroke();
   }
+  if(t.collar){ ctx.strokeStyle=t.collar; ctx.lineWidth=5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(7,-30); ctx.lineTo(20,-38); ctx.stroke();
+    ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.arc(13,-33,2.6,0,7); ctx.fill(); }
+  if(t.bomber){ ctx.strokeStyle='#7a7268'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(hx,hy-13); ctx.lineTo(hx+2,hy-21); ctx.stroke();
+    const fz=Math.sin(gf*0.4)*1.5; ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(hx+2,hy-23+fz,6,'#fff6c0','#ff5a2a'); ctx.beginPath(); ctx.arc(hx+2,hy-23+fz,3.6,0,7); ctx.fill(); ctx.restore(); }
   drawBeastClaw(e);                                   // exaggerated swiping claw on tele/attack
 }
 // big, cathartic clawed foreleg that winds up then swings huge during the attack
@@ -1999,9 +2019,17 @@ function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.tel
   ctx.fillStyle='#1c1c24'; ctx.beginPath(); ctx.ellipse(-16,-91,15,17,0,0,7); ctx.ellipse(16,-91,15,17,0,0,7); ctx.fill();
   ctx.fillStyle='#101014'; ctx.beginPath(); ctx.ellipse(0,-95,17,13,0,0,7); ctx.fill();
   ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,-101,7,5,0,0,7); ctx.fill();
-  for(const ex of [-12,12]){ ctx.fillStyle=radGrad(ex,-114,6,'#ff5a5a','#b30000'); ctx.beginPath(); ctx.ellipse(ex,-114,5.5,4.5,0,0,7); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex+1.2,-115,1.3,0,7); ctx.fill(); }
-  ctx.strokeStyle='#000'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(-21,-125);ctx.lineTo(-6,-116); ctx.moveTo(21,-125);ctx.lineTo(6,-116); ctx.stroke();
+  // ── 大きくて可愛いお目目（大帝もちょっとキュート）──
+  for(const ex of [-13,13]){
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,-114,7.5,8.5,0,0,7); ctx.fill();
+    ctx.fillStyle='#2a0d0d'; ctx.beginPath(); ctx.ellipse(ex,-113,4.8,6,0,0,7); ctx.fill();
+    ctx.save(); ctx.globalAlpha=0.6; ctx.fillStyle=radGrad(ex,-113,5,'#ff7a7a','#c01010'); ctx.beginPath(); ctx.ellipse(ex,-113,4.2,5.4,0,0,7); ctx.fill(); ctx.restore();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-2.2,-116,2.2,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(ex+1.8,-111,1,0,7); ctx.fill();
+  }
+  ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle='#ff8aa0'; ctx.beginPath(); ctx.ellipse(-25,-104,6,3.6,0,0,7); ctx.ellipse(25,-104,6,3.6,0,0,7); ctx.fill(); ctx.restore();
+  ctx.strokeStyle='#000'; ctx.lineCap='round';
+  if(atk||tele){ ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(-21,-126);ctx.lineTo(-7,-119); ctx.moveTo(21,-126);ctx.lineTo(7,-119); ctx.stroke(); }
+  else { ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-19,-125);ctx.lineTo(-8,-126); ctx.moveTo(19,-125);ctx.lineTo(8,-126); ctx.stroke(); }
   if(atk||tele){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(-9,-89);ctx.lineTo(-5,-78);ctx.lineTo(-1,-89); ctx.moveTo(9,-89);ctx.lineTo(5,-78);ctx.lineTo(1,-89); ctx.fill(); }
   const cg=ctx.createLinearGradient(-26,-148,26,-130); cg.addColorStop(0,'#ffe98a'); cg.addColorStop(1,'#c8881a');
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-27,-130);ctx.lineTo(-27,-143);ctx.lineTo(-14,-133);ctx.lineTo(0,-150);ctx.lineTo(14,-133);ctx.lineTo(27,-143);ctx.lineTo(27,-130); ctx.fill();
@@ -2028,6 +2056,7 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
   else if(kind==='moloch'){ bRX=45;bRY=48;headR=30;legW=22;legX=15;pald=40; }
   else if(kind==='cerbe'){ bRX=35;bRY=44;headR=26;legW=16;legX=12;pald=36; }
   else if(kind==='glaton'){ bRX=54;bRY=54;headR=24;legW=28;legX=17;pald=48; k=t.h/150*1.06; }
+  headR+=7;   // 頭を大きく＝ちびっこ可愛い体型
   const heavyKind=(kind==='gigas'||kind==='glaton');
   ctx.save(); ctx.scale(k,k);
   let arm=-0.25, bigA=0; if(wind)arm=-1.15; else if(atk){ const pr=clamp(e.moveT/Math.max(1,e.moveMax),0,1); arm=-1.15+pr*2.35; bigA=Math.sin(pr*Math.PI); }
@@ -2080,10 +2109,22 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind;
   ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(30,-110,3.4,2.6,0,0,7); ctx.fill();
   if(atk||wind){ ctx.fillStyle='#5a0d0d'; ctx.beginPath(); ctx.moveTo(9,-112);ctx.lineTo(28,-110);ctx.lineTo(9,-104);ctx.fill();
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(12,-112);ctx.lineTo(15,-106);ctx.lineTo(18,-112);ctx.moveTo(20,-112);ctx.lineTo(23,-107);ctx.lineTo(26,-112);ctx.fill(); }
-  const eyeR=kind==='moloch'?7:5;
-  for(const ex of [-9,9]){ ctx.fillStyle=radGrad(ex,-122,eyeR+2,'#fff',t.accent); ctx.beginPath(); ctx.ellipse(ex,-122,eyeR,eyeR-1,0,0,7); ctx.fill();
-    ctx.fillStyle='#1a0a0a'; ctx.beginPath(); ctx.arc(ex+1,-122,1.8,0,7); ctx.fill(); }
-  ctx.strokeStyle='#000'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-18,-132);ctx.lineTo(-4,-124); ctx.moveTo(18,-132);ctx.lineTo(4,-124); ctx.stroke();
+  // ── 大きくてうるうるのお目目（かわいい）──
+  const eyeR=(kind==='moloch'?11:10), eyeY=-120, eyeX=12;
+  for(const sgn of [-1,1]){ const ex=sgn*eyeX;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,eyeY,eyeR,eyeR+1.5,0,0,7); ctx.fill();
+    ctx.fillStyle='#241a14'; ctx.beginPath(); ctx.ellipse(ex,eyeY+1,eyeR*0.66,eyeR*0.82,0,0,7); ctx.fill();
+    ctx.save(); ctx.globalAlpha=0.5; ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(ex,eyeY+1,eyeR*0.62,eyeR*0.78,0,0,7); ctx.fill(); ctx.restore();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-eyeR*0.38,eyeY-eyeR*0.42,eyeR*0.34,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(ex+eyeR*0.42,eyeY+eyeR*0.42,eyeR*0.16,0,7); ctx.fill();
+  }
+  // ほっぺの赤み
+  ctx.save(); ctx.globalAlpha=0.42; ctx.fillStyle='#ff8aa0';
+  ctx.beginPath(); ctx.ellipse(-headR*0.66,-108,7,4.2,0,0,7); ctx.ellipse(headR*0.66,-108,7,4.2,0,0,7); ctx.fill(); ctx.restore();
+  // 眉（攻撃時だけキリッ、普段はちょこん）
+  ctx.strokeStyle='#000'; ctx.lineCap='round';
+  if(atk||wind){ ctx.lineWidth=2.8; ctx.beginPath(); ctx.moveTo(-18,-134);ctx.lineTo(-6,-130); ctx.moveTo(18,-134);ctx.lineTo(6,-130); ctx.stroke(); }
+  else { ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(-16,-133);ctx.lineTo(-8,-134); ctx.moveTo(16,-133);ctx.lineTo(8,-134); ctx.stroke(); }
   // weapon arm — swells at the strike for a weighty swing
   ctx.save(); ctx.translate(pald-2,-96); ctx.rotate(arm); ctx.scale(1+bigA*0.55,1+bigA*0.55);
   ctx.strokeStyle=shade(t.c1,4); ctx.lineWidth=14+bigA*10; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,4); ctx.stroke();
@@ -2143,9 +2184,7 @@ function drawHUD(){
     ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,119,160*clamp(q.hp/q.maxHp,0,1),7);
     ctx.fillStyle='#ff5a6a'; ctx.font='13px Trebuchet MS'; ctx.fillText('♥ ×'+Math.max(0,q.lives),196,127); }
 
-  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 14px Trebuchet MS'; ctx.fillText('TIME',W/2,24);
-  ctx.fillStyle=stageTime<=10?'#ff4444':'#fff'; ctx.font='bold 30px monospace'; ctx.fillText(String(stageTime).padStart(2,'0'),W/2,52);
-  ctx.fillStyle='#bfe2ff'; ctx.font='bold 12px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 7',W/2,68);
+  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 7',W/2,30);
   ctx.textAlign='left';
 
   const boss=enemies.find(e=>ETYPE[e.type].boss&&!e.dead);
@@ -2303,7 +2342,7 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 function startGame(){ unlockAudio();
-  score=0; stageTime=99; timeAcc=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
+  score=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
@@ -2312,7 +2351,7 @@ function startGame(){ unlockAudio();
   if(sndOn) Music.start('battle'); }
 function gameOver(){ state='over'; Music.stop(); gameOverSting();
   elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
-function winGame(){ state='win'; Music.stop(); victoryJingle(); score+=Math.max(0,stageTime)*50;
+function winGame(){ state='win'; Music.stop(); victoryJingle();
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全7ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
