@@ -43,10 +43,10 @@
   /* touch */
   #touch { position:absolute; inset:0; z-index:15; pointer-events:none; display:none; }
   .stk { position:absolute; border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.18); pointer-events:auto; }
-  .stk .nub { position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px;
+  .stk .nub { position:absolute; left:50%; top:50%; width:66px; height:66px; margin:-33px;
     border-radius:50%; background:rgba(255,255,255,.26); border:2px solid rgba(255,255,255,.85); }
-  #stick  { left:22px;  bottom:24px; width:130px; height:130px; }
-  #stick2 { right:22px; bottom:24px; width:130px; height:130px; display:none; }
+  #stick  { left:24px;  bottom:28px; width:184px; height:184px; }
+  #stick2 { right:24px; bottom:28px; width:184px; height:184px; display:none; }
   .tbtn { position:absolute; border-radius:50%; pointer-events:auto; display:flex; align-items:center;
     justify-content:center; font-size:15px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000;
     border:3px solid rgba(255,255,255,.55); text-align:center; line-height:1.1;
@@ -60,8 +60,8 @@
   #bJmp  { right:42px;  bottom:118px; width:74px; height:74px; }
   #bGrd  { right:142px; bottom:140px; width:72px; height:72px; }
   /* 2P split: P1 left cluster, P2 right cluster */
-  #touch.twop #stick  { left:8px;  bottom:8px; width:104px; height:104px; }
-  #touch.twop #stick2 { display:block; right:8px; bottom:8px; width:104px; height:104px; }
+  #touch.twop #stick  { left:8px;  bottom:8px; width:128px; height:128px; }
+  #touch.twop #stick2 { display:block; right:8px; bottom:8px; width:128px; height:128px; }
   #touch.twop .p2 { display:flex; }
   #touch.twop .tbtn { font-size:14px; }
   #touch.twop #bAtk { left:118px; right:auto; bottom:10px;  width:62px; height:62px; font-size:15px; }
@@ -408,7 +408,7 @@ const ATK={
   c2:{name:'縦振り',  dur:14, act:[5,9],  reach:60, hh:48, dmg:9,  kb:3,  from:-1.4, to:0.3,  len:36, trail:'#fff0c0', pivotY:-66, lunge:0.8, combo:2},
   c3:{name:'斜め振り',dur:15, act:[5,10], reach:72, hh:42, dmg:11, kb:4,  from:-1.1, to:0.9,  len:38, trail:'#aef0ff', pivotY:-62, lunge:1.3, combo:3},
   c4:{name:'振り下ろし',dur:26,act:[9,15], reach:90, hh:54, dmg:22, kb:12, from:-1.7, to:1.05, len:46, trail:'#fff', pivotY:-72, lunge:2.2, knock:true, finisher:true, combo:4},
-  charge:{name:'溜め斬り',dur:30, act:[12,22], reach:104, hh:58, dmg:34, kb:15, from:-1.8, to:1.1, len:52, trail:'#ffd24d', pivotY:-72, lunge:3.0, knock:true, aoe:true},
+  charge:{name:'溜め斬り',dur:30, act:[12,22], reach:104, hh:58, dmg:34, kb:15, from:-1.8, to:1.1, len:52, trail:'#ffd24d', pivotY:-72, lunge:3.0, knock:true, aoe:true, shock:24},
   // ── 必殺技（イッヌ）──
   shoryu:{name:'昇竜拳', dur:30, act:[2,24], reach:60, hh:520, dmg:8, kb:5, from:1.2, to:-1.9, len:50, trail:'#ffe27a', pivotY:-50, lunge:0, launch:0, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true},
   stinger:{name:'スティンガー', dur:24, act:[3,18], reach:78, hh:42, dmg:14, kb:9, from:-0.12, to:-0.12, len:48, trail:'#9fe8ff', pivotY:-52, move:9.0, multi:true, multiGap:7, stinger:true},
@@ -445,8 +445,8 @@ const ATK={
   tf3:{name:'肘打ち',  dur:12, act:[4,8],  reach:72, hh:48, dmg:10, kb:5,  from:0.35, to:-0.6, len:26, trail:'#bfe9ff', pivotY:-56, lunge:1.7, combo:3},
   tf4:{name:'強回転打ち',dur:25,act:[6,16],reach:92, hh:54, dmg:19, kb:15, from:-2.3, to:2.3,  len:34, trail:'#fff', pivotY:-56, knock:true, finisher:true, spin:true, combo:4},
   // ── 武器別ためうち（イッヌ）──
-  chargeSpear:{name:'渾身の突き', dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true},
-  chargeHammer:{name:'渾身の叩き', dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true},
+  chargeSpear:{name:'渾身の突き', dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true, shock:26},
+  chargeHammer:{name:'渾身の叩き', dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true, shock:30},
 };
 
 //======================================================================
@@ -462,6 +462,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
+  gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1,
   weapon: kind==='shima'?'fists':'dagger', weaponT:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -480,7 +481,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
-  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
+  p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; } }
@@ -524,6 +525,8 @@ function updatePlayer(){
   if(p.state==='wheel'){ updateWheel(); return; }
   if(p.state==='screw'){ updateScrew(); return; }
   if(p.state==='rush'){ updateRush(); return; }
+  if(p.state==='gswing'){ updateGiantSwing(); return; }
+  if(p.state==='tkick'){ updateTriangle(); return; }
   if(p.state==='hadou'){ updateHadou(); return; }
   if(p.state==='seven'){ updateSeven(); return; }
 
@@ -564,6 +567,7 @@ function updatePlayer(){
     else if(def.rise){ p.z=Math.max(0,p.z+p.riseVel); p.riseVel-=(p.riseG||1.1); }
     else if(!def.special){ p.x+=p.facing*(def.lunge||0)*(a.t<def.dur*0.6?1:0); }
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
+    if(def.shock && a.t===def.act[0]){ spawnShockwave(p, def.shock); }       // 溜め斬り＝衝撃波を放つ
     // active hit window
     if(a.t>=def.act[0] && a.t<=def.act[1]) doPlayerHit(a);
     if(a.t>=def.dur){
@@ -734,10 +738,9 @@ function updateGrab(){ const p=player, e=p.grabEnemy;
     const back=(p.facing>0&&K.left)||(p.facing<0&&K.right);
     if(p.kind==='shima'){
       if(K.up){ grabZankai(e); return; }                                      // ↑＝残悔拳
-      if(K.down){ grabHeel(e); return; }                                      // ↓＝踵落とし
-      if(back){ grabShoulder(e); return; }                                    // 後ろ＝背負い投げ→チョップ
-      p.punch++; if(p.punch>=4){ grabTailWhip(e); return; }                   // 頭突き連打→尻尾で吹き飛ばす
-      p.grabSub='punch'; p.grabAnim=0; sfx.swing(0); return;
+      if(K.down){ beginGiantSwing(e); return; }                               // ↓＝ジャイアントスイング
+      if(back){ beginTriangle(e); return; }                                   // 後ろ＝壁に飛び上がって三角蹴り
+      grabStraight(e); return;                                                // 攻撃＝正拳突き吹き飛ばし
     }
     if(K.up){ grabThrowUp(e); return; }                                       // ↑＋攻撃＝投げ上げ
     if(K.down){ beginScrew(e); return; }                                      // ↓＋攻撃＝スクリューパイルドライバー
@@ -765,6 +768,50 @@ function grabShoulder(e){ const p=player, dir=p.facing;
   e.grabbedBy=0; e.x=p.x+dir*20; damageEnemy(e,18,dir*2,true); e.state='down'; e.downTimer=120; e.z=0; e.vz=0;
   popText(e.x,e.y-e.h-10,'背負い投げ！','#ffd24d',true); spark(e.x,e.y,'#fff',16,10); dust(e.x,e.y,10); shake=8; sfx.big();
   beginRush();   // → 連打で瓦割りチョップ連打
+}
+// 掴み攻撃：正拳突きで吹き飛ばす
+function grabStraight(e){ const p=player, dir=p.facing;
+  e.grabbedBy=0; damageEnemy(e,22,dir*5,true); launchEnemy(e, dir*28, -7, 4);
+  popText(e.x,e.y-e.h-10,'正拳突き！','#ffd24d',true); spark(p.x+dir*46,p.y-30,'#fff',18,11); ring(p.x+dir*36,p.y-30,'#ffd24d');
+  shake=9; flash=Math.max(flash,3); hitStop=11; triggerSlow(18); sfx.big(); p.state='idle'; p.grabEnemy=null; }
+// 掴み下：ジャイアントスイング（ぐるぐる回して周囲を巻き込み投げ飛ばす）
+function beginGiantSwing(e){ const p=player; p.state='gswing'; p.gswingT=0; p.gswingRot=0; p.z=0; p.vz=0; p.invuln=Math.max(p.invuln,56);
+  e.state='grabbed'; e.grabbedBy=1; p.grabEnemy=e; p.gswingHit=new Set(); sfx.dash(); popText(p.x,p.y-104,'ジャイアントスイング!','#ffd24d',true); }
+function updateGiantSwing(){ const p=player, e=p.grabEnemy;
+  if(!e || e.dead){ p.state='idle'; p.grabEnemy=null; return; }
+  p.gswingT++; const T=p.gswingT, dur=48;
+  p.gswingRot += 0.52;
+  const ang=p.gswingRot, R=54;
+  e.x=clamp(p.x+Math.cos(ang)*R, camX+18, camX+W-18); e.y=p.y; e.z=Math.max(0,26+Math.sin(ang)*22); e.facing=Math.cos(ang)>0?-1:1; e.vx=0; e.vz=0;
+  if(T%7===0) sfx.swing(0);
+  enemies.forEach(o=>{ if(o.dead||o===e||o.grabbedBy)return;
+    if(Math.abs(o.x-p.x)<74 && Math.abs(o.y-p.y)<42 && !p.gswingHit.has(o.id)){ p.gswingHit.add(o.id);
+      damageEnemy(o,10,(o.x<p.x?-1:1)*9,true); if(!o.dead)launchEnemy(o,(o.x<p.x?-1:1)*15,-8,3); spark(o.x,o.y-o.h*0.5,'#ffe9a0',8,7); } });
+  if(T%16===0) p.gswingHit.clear();
+  if(T>=dur){ const dir = K.left?-1:K.right?1:p.facing; p.facing=dir;
+    e.grabbedBy=0; e.z=0; damageEnemy(e,24,dir*6,true); launchEnemy(e, dir*32, -10, 5);
+    popText(e.x,e.y-e.h-10,'ぶん投げ！','#ffd24d',true); spark(p.x+dir*44,p.y-26,'#fff',20,12); ring(p.x+dir*34,p.y-26,'#ffd24d');
+    shake=12; flash=Math.max(flash,4); hitStop=13; triggerSlow(24); sfx.big();
+    p.state='idle'; p.grabEnemy=null; }
+  p.x=clamp(p.x,camX+24,camX+W-24);
+}
+// 掴み後ろ：壁に飛び上がって三角蹴り
+function beginTriangle(e){ const p=player, dir=p.facing;
+  e.grabbedBy=0; e.state='hurt'; e.hurtTimer=90; e.stun=90; e.vx=0; e.z=0;        // 相手をその場に残して
+  p.tkTarget=e; p.state='tkick'; p.tkPhase=0; p.tkT=0; p.z=0; p.vz=0; p.tkHit=false; p.tkBackDir=-dir; p.invuln=Math.max(p.invuln,44);
+  sfx.dash(); popText(p.x,p.y-104,'三角蹴り!','#9fe8ff',true); }
+function updateTriangle(){ const p=player, e=p.tkTarget; p.tkT++;
+  if(p.tkPhase===0){ // 壁へ飛び上がる
+    const k=Math.min(1,p.tkT/12); p.z=132*k; p.x=clamp(p.x+p.tkBackDir*7, camX+18, camX+W-18);
+    if(p.tkT>=12){ p.tkPhase=1; p.tkT=0; p.facing=-p.tkBackDir; spark(p.x,p.y-p.z,'#9fe8ff',14,9); ring(p.x,p.y-p.z,'#bfe9ff'); sfx.dash(); }
+  } else { // 壁を蹴って斜め下へ突進
+    const k=Math.min(1,p.tkT/16); p.z=132*(1-k); p.x+=p.facing*10;
+    if(!p.tkHit){ for(const o of enemies){ if(o.dead||o.grabbedBy)continue;
+      if(Math.abs(o.x-p.x)<62 && Math.abs(o.y-p.y)<50 && p.z<74){ p.tkHit=true;
+        damageEnemy(o,26,p.facing*6,true); if(!o.dead)launchEnemy(o,p.facing*30,-8,4);
+        spark(o.x,o.y-o.h*0.5,'#fff',20,12); ring(o.x,o.y-o.h*0.5,'#9fe8ff'); shake=11; flash=Math.max(flash,3); hitStop=12; triggerSlow(20); sfx.big(); break; } } }
+    if(p.tkT>=16||p.z<=0){ p.z=0; p.state='idle'; p.tkTarget=null; dust(p.x,p.y,8); } }
+  p.x=clamp(p.x,camX+24,camX+W-24);
 }
 function zankaiBoom(e){ ring(e.x,e.y-e.h*0.5,'#ff4d6a'); ring(e.x,e.y-e.h*0.5,'#fff'); spark(e.x,e.y-e.h*0.5,'#ff4d6a',30,13); dust(e.x,e.y,14);
   shake=15; flash=Math.max(flash,6); hitStop=14; triggerSlow(30); sfx.big(); sfx.ko(); popText(e.x,e.y-e.h-12,'爆殺！','#ff4d6a',true);
@@ -881,6 +928,10 @@ function rushFinish(){ const p=player; const dir=p.facing;
 //  シマダックス 必殺技：波動拳 / 七死ワン生
 //======================================================================
 function fireKi(p,dmg,col){ const dir=p.facing; spawnProj(p.x+dir*30, p.y, dir*11, 0, {owner:'player',dmg:dmg||14,color:col||'#46c8ff',r:13,life:130,zz:46}); sfx.boss(); ring(p.x+dir*26,p.y-40,col||'#46c8ff'); }
+// 溜め斬りの衝撃波：地面を進み、複数の敵を貫いて吹き飛ばす
+function spawnShockwave(p,dmg){ const dir=p.facing;
+  spawnProj(p.x+dir*44, p.y, dir*8.5, 0, {owner:'player',dmg:dmg||22,color:'#bfe9ff',r:24,life:54,zz:30,pierce:true,wave:true});
+  spark(p.x+dir*44,p.y-30,'#fff',16,9); ring(p.x+dir*34,p.y-30,'#bfe9ff'); shake=Math.max(shake,5); sfx.heavy(); }
 function fireKiDown(p){ spawnProj(p.x, p.y, 0, 0, {owner:'player',dmg:16,color:'#46c8ff',r:13,life:110,zz:Math.max(p.z+30,40),vzz:-9,explode:true}); sfx.dash(); spark(p.x,p.y-p.z-10,'#9fe8ff',8,7); }
 function beginHadou(){ const p=player; p.state='hadou'; p.hadouT=0; p.hadouShots=1; p.hadouHold=18; fireKi(p,16,'#46c8ff'); popText(p.x,p.y-100,'波動拳！','#9fe8ff',true); }
 function updateHadou(){ const p=player; p.hadouT++; if(p.hadouHold>0)p.hadouHold--;
@@ -1315,6 +1366,7 @@ function updateCombo(){ if(combo.timer>0){ combo.timer--; if(combo.timer===0)com
 let projectiles=[];
 function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,
+    pierce:!!o.pierce,wave:!!o.wave,hit:o.pierce?new Set():null,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
 // returns 'reflect' | 'gone' | null
 function projVsPlayer(pr,p){
@@ -1342,7 +1394,11 @@ function updateProjectiles(){
         projectiles.splice(i,1); continue; }
       let hit=false;
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
-        if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<30 && pr.zz<e.h){ damageEnemy(e,pr.dmg,pr.vx>0?6:-6,true); hit=true; break; } }
+        if(pr.pierce && pr.hit.has(e.id))continue;
+        if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<(pr.wave?44:30) && pr.zz<e.h){
+          damageEnemy(e,pr.dmg,pr.vx>0?9:-9,true); if(pr.wave&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*16,-8,3);
+          spark(e.x,e.y-e.h*0.5,pr.color,12,8);
+          if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
       if(hit){ spark(pr.x,pr.y-pr.zz,pr.color,12,8); projectiles.splice(i,1); continue; }
     } else {
       let res=null; for(const p of players){ res=projVsPlayer(pr,p); if(res)break; }
@@ -1354,6 +1410,11 @@ function updateProjectiles(){
 }
 function drawProjectiles(){
   projectiles.forEach(pr=>{ const sx=pr.x-camX, sy=pr.y-pr.zz;
+    if(pr.wave){ const dir=pr.vx>0?1:-1; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,pr.y);
+      for(let k=0;k<3;k++){ ctx.globalAlpha=0.5-k*0.13; ctx.strokeStyle=pr.color; ctx.lineWidth=7-k*2;
+        ctx.beginPath(); ctx.ellipse(-dir*k*9, -28, pr.r*0.7, pr.r*1.7, 0, -1.15, 1.15); ctx.stroke(); }
+      ctx.globalAlpha=0.85; ctx.fillStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(dir*4,-28,pr.r*0.4,pr.r*1.5,0,-1.0,1.0); ctx.fill();
+      ctx.restore(); return; }
     ctx.save(); ctx.globalCompositeOperation='lighter';
     for(let i=0;i<pr.trail.length;i++){ const tp=pr.trail[i], a=i/pr.trail.length*0.4;
       ctx.globalAlpha=a; ctx.fillStyle=pr.color; ctx.beginPath(); ctx.arc(tp.x-camX,tp.y,pr.r*(0.5+i/pr.trail.length*0.5),0,7); ctx.fill(); }
@@ -1626,6 +1687,7 @@ function drawPlayer(){
   if(st==='down'||st==='dead'){ ctx.rotate(-0.9*p.facing); ctx.translate(0,9); }
   if(st==='wheel'){ ctx.rotate(p.wheelRot); }
   if(st==='screw'){ ctx.rotate(p.screwRot); }
+  if(st==='gswing'){ ctx.rotate(Math.sin(p.gswingRot)*0.22); }   // 振り回しで体を捻る
   const _spec = st==='attack' && p.atk && p.atk.def.special;
   if(_spec){ ctx.rotate(Math.sin(p.atk.t*0.55)*0.28); }      // 次元斬の身体ブレ
 
@@ -1667,6 +1729,11 @@ function drawPlayer(){
       if(p.grabSub==='punch'){ const k=Math.sin(clamp(p.grabAnim/9,0,1)*Math.PI); swAng=0.05; faL1=9+5*k; faL2=8+7*k; faW=0.95+0.4*k; backArm=-0.1; bodyX=k*3; }
       else { swAng=0.25; } }
   else if(st==='wheel'||st==='screw'){ thF=0.95; thB=0.95; kF=1.4; kB=1.4; swAng=0.2; backArm=0.2; mode='fist'; }
+  else if(st==='gswing'){ thF=0.8; thB=0.8; kF=1.1; kB=1.1; swAng=0.15; backArm=0.15; mode='fist'; lean=Math.cos(p.gswingRot)*0.12; }   // 両腕で振り回す
+  else if(st==='tkick'){ mode='fist';
+    if(p.tkPhase===0){ lean=-0.35; thF=0.45; thB=0.75; kF=1.05; kB=0.5; swAng=-0.55; backArm=-0.35; bodyY=-2; }   // 壁へ跳ぶ
+    else { lean=0.5; thF=1.6; thB=-0.35; kF=0.05; kB=0.6; swAng=0.45; backArm=-0.2; sqX=1.05; }   // 飛び蹴り
+  }
   else if(st==='rush'){ mode='fist';
     if(p.rushPhase===2){ thF=1.5; thB=-0.25; kF=0.1; kB=0.5; lean=0.55; bodyY=-2; backArm=-0.4; swAng=0.3; }       // 砂かけ後ろ蹴り
     else if(p.rushPhase===1){ const w=Math.sin(p.rushT*1.3); lean=0.2; thF=0.55+Math.max(0,w)*1.0; kF=0.1; thB=-0.35; backArm=0.7; swAng=0.2; bodyY=-1; }  // 百烈脚
@@ -1908,6 +1975,7 @@ function drawEnemy(e){
   ctx.save(); ctx.translate(sx,sy-e.z); ctx.scale(e.facing*s,s);
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
+  if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
   if((e.state==='walk')&&e.z<=0) ctx.translate(0,-Math.abs(Math.sin(e.bob*1.3))*3);   // lively bob
   if(e.state==='down'||e.dead){ ctx.rotate(0.95); ctx.translate(0,8); }
   // telegraph = crouch+lean back (wind-up); attack/bmove = explosive lunge + stretch
