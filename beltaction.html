@@ -995,14 +995,14 @@ const ETYPE={
   glaton:{hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
   boss:  {hp:980,sp:1.3,dmg:18,atkR:84,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝'},
   // ---- 個性派ボス ----
-  dragon:{hp:620,sp:1.6,dmg:17,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
+  dragon:{hp:780,sp:1.6,dmg:18,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
   ghost: {hp:240,sp:2.1,dmg:13,atkR:84,w:84, h:118,c1:'#cfe6ff',c2:'#8fb6d8',c3:'#5a7ba0',score:2600,boss:true,bossKind:'ghost', weapon:'scythe',accent:'#bfe9ff',name:'お化けのT太郎',flyer:true},
-  slime: {hp:340,sp:1.0,dmg:12,atkR:70,w:140,h:120,c1:'#7dff5a',c2:'#3aa83a',c3:'#1f5e1f',score:4200,boss:true,bossKind:'slime', weapon:'none',accent:'#aaff7d',name:'キングスライム',slimey:true},
+  slime: {hp:560,sp:1.0,dmg:14,atkR:70,w:140,h:120,c1:'#7dff5a',c2:'#3aa83a',c3:'#1f5e1f',score:4200,boss:true,bossKind:'slime', weapon:'none',accent:'#aaff7d',name:'キングスライム',slimey:true},
   slimelet:{hp:42,sp:1.7,dmg:8,atkR:44,w:52,h:46,c1:'#8dff6a',c2:'#3aa83a',c3:'#1f5e1f',score:120,name:'スライム',slimey:true},
   rival: {hp:720,sp:2.3,dmg:16,atkR:76,w:62, h:100,c1:'#2c2c38',c2:'#16161e',c3:'#050507',score:9000,boss:true,bossKind:'rival', weapon:'dark',accent:'#b06bff',name:'黒犬士クロイヌ'},
-  shark: {hp:640,sp:1.9,dmg:18,atkR:88,w:158,h:128,c1:'#5b86b8',c2:'#2f5687',c3:'#1b3358',score:6000,boss:true,bossKind:'shark', weapon:'none',accent:'#ff8a3c',name:'陸鮫リクザメ'},
+  shark: {hp:460,sp:1.9,dmg:16,atkR:88,w:158,h:128,c1:'#5b86b8',c2:'#2f5687',c3:'#1b3358',score:6000,boss:true,bossKind:'shark', weapon:'none',accent:'#ff8a3c',name:'陸鮫リクザメ'},
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
-  noroinu:{hp:900,sp:1.8,dmg:18,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
+  noroinu:{hp:600,sp:1.8,dmg:16,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
 };
 // Boss move-sets
@@ -1439,7 +1439,7 @@ function buildEncounters(){ encounters=[
   // ── STAGE 2 ──
   {st:2,at:2100,list:[['wolf',1],['guard',1],['bomber',1]]},
   {st:2,at:2700,list:[['boar',1],['mastiff',1],['hyena',1]]},
-  {st:2,at:3300,boss:true,list:[['slime',1]]},
+  {st:2,at:3300,boss:true,list:[['shark',1]]},
   // ── STAGE 3 ──
   {st:3,at:3900,list:[['hyena',1],['dober',1],['guard',1],['corgi',1]]},
   {st:3,at:4500,mini:true,list:[['bitter',1],['bomber',1]]},
@@ -1447,7 +1447,7 @@ function buildEncounters(){ encounters=[
   // ── STAGE 4 ──
   {st:4,at:5700,list:[['akita',1],['guard',1],['boar',1]]},
   {st:4,at:6300,list:[['dober',2],['mastiff',1]]},
-  {st:4,at:6900,boss:true,list:[['dragon',1]]},
+  {st:4,at:6900,boss:true,list:[['noroinu',1]]},
   // ── STAGE 5 ──
   {st:5,at:7500,list:[['akita',1],['pounce',1],['bomber',1],['hyena',1]]},
   {st:5,at:8100,list:[['dober',1],['mastiff',1],['guard',1]]},
@@ -1460,15 +1460,15 @@ function buildEncounters(){ encounters=[
   {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
   {st:7,at:11700,mini:true,list:[['bitter',1],['guard',1]]},
   {st:7,at:12300,boss:true,list:[['glaton',1]]},
-  // ── STAGE 8：陸鮫リクザメ ──
+  // ── STAGE 8：キングスライム ──
   {st:8,at:12900,list:[['wolf',1],['mastiff',1],['hyena',1]]},
-  {st:8,at:13500,boss:true,list:[['shark',1]]},
+  {st:8,at:13500,boss:true,list:[['slime',1]]},
   // ── STAGE 9：海賊王カイゾクカイ ──
   {st:9,at:14100,list:[['boar',1],['warpdog',1],['bomber',1]]},
   {st:9,at:14700,boss:true,list:[['pirate',1]]},
-  // ── STAGE 10：呪い犬ノロ ──
+  // ── STAGE 10：飛竜ヴォルカ ──
   {st:10,at:15300,list:[['dober',1],['akita',1],['warpdog',1]]},
-  {st:10,at:15900,boss:true,list:[['noroinu',1]]},
+  {st:10,at:15900,boss:true,list:[['dragon',1]]},
   // ── STAGE 11：サボテン犬サボロー ──
   {st:11,at:16500,list:[['warpdog',2],['corgi',1]]},
   {st:11,at:17100,boss:true,list:[['cactus',1]]},
@@ -1928,7 +1928,7 @@ function drawPlayer(){
   const limbF = shima?'#9a6a3a':'#efe2bc', bootF=shima?'#4a2e16':'#6b4f28', handCol=shima?'#9a6a3a':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
   // ---------- back-to-front ----------
-  if(!shima) drawCape(p,lean);
+  if(!shima){ drawFluffTail(p); drawCape(p,lean); }
   poseArm(-5,-30, backArm, 9,8, limbA, 0.85);                      // far arm
   chibiLeg(-5, thB, kB, limbB, bootB);                             // far leg
   (shima?shimaBody:chibiBody)(lean);
@@ -2074,18 +2074,28 @@ function drawShieldAt(hx,hy,p){
     ctx.beginPath(); ctx.moveTo(0,-28); ctx.quadraticCurveTo(23,-19,23,4); ctx.quadraticCurveTo(23,28,3,38); ctx.stroke(); ctx.globalAlpha=1; }
   ctx.restore();
 }
+function drawFluffTail(p){ ctx.save(); ctx.translate(-13,-18);
+  const sw=Math.sin(p.anim*1.2)*0.18 + (p.state==='walk'?Math.sin(p.anim*2)*0.12:0);
+  ctx.rotate(-0.5+sw);   // ふさふさの尻尾（モフモフ）
+  furBall(0,2,6,'#fff7e0','#e3d1a6'); furBall(-3,-5,6.5,'#fbeece','#dcc89c'); furBall(-5,-13,6.5,'#fff8e6','#ead8ad'); furBall(-4,-20,5.5,'#fbeece','#dcc89c'); furBall(-1,-26,4.5,'#fffaf0','#ecdcb2');
+  ctx.restore();
+}
 function drawCape(p,lean){ const sw=Math.sin(p.anim)*3 + (p.state==='attack'?5:0) + (p.state==='walk'?Math.sin(p.anim*2)*2:0);
   const g=ctx.createLinearGradient(-24,-34,-6,-2); g.addColorStop(0,'#e0503e'); g.addColorStop(1,'#8e251b');
   ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-4,-33); ctx.quadraticCurveTo(-28,-18,-20-sw,-1); ctx.quadraticCurveTo(-10,-8,-3,-12); ctx.closePath(); ctx.fill();
   ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.moveTo(-4,-33); ctx.quadraticCurveTo(-16,-18,-12-sw*.5,-4); ctx.lineTo(-3,-12); ctx.fill(); }
 function chibiBody(lean){
   ctx.save(); ctx.rotate(lean*0.22);
+  // ふわふわの毛並み（胴まわりのもこもこ外周）
+  ctx.fillStyle='#f2e4bf';
+  for(let i=0;i<12;i++){ const a=i/12*Math.PI*2; const x=Math.cos(a)*14, y=-24+Math.sin(a)*15.5; ctx.beginPath(); ctx.arc(x,y,4.6,0,7); ctx.fill(); }
   // round fluffy tabard body
   const cp=ctx.createLinearGradient(0,-34,0,-12); cp.addColorStop(0,'#fdf6e0'); cp.addColorStop(1,'#cdb888');
   ctx.fillStyle=cp; ctx.beginPath(); ctx.ellipse(0,-24,13,14,0,0,7); ctx.fill();
   ctx.strokeStyle='#a88950'; ctx.lineWidth=1.2; ctx.stroke();
-  // little fluff at shoulders
-  furBall(-10,-31,5,'#fff7e0','#e3d1a6'); furBall(10,-31,5,'#fff7e0','#e3d1a6');
+  // もこもこの胸毛
+  furBall(0,-32,6,'#fffaf0','#ecdcb2'); furBall(-9,-30,6,'#fff7e0','#e3d1a6'); furBall(9,-30,6,'#fff7e0','#e3d1a6');
+  furBall(-11,-22,5,'#fbeece','#dcc89c'); furBall(11,-22,5,'#fbeece','#dcc89c');
   // tabard cross emblem (holy knight)
   ctx.strokeStyle='#c0392b'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(0,-31); ctx.lineTo(0,-19); ctx.moveTo(-5,-26); ctx.lineTo(5,-26); ctx.stroke();
   // belt + buckle
@@ -2095,12 +2105,18 @@ function chibiBody(lean){
 }
 function chibiHead(lean){
   ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3);
-  // floppy poodle ears
-  furBall(-19,3,9,'#efe0b8','#c9b083'); furBall(19,3,9,'#efe0b8','#c9b083');
+  // 顔まわりのもこもこファー（ふわふわのたてがみ）
+  ctx.fillStyle='#eddcb0';
+  for(let i=0;i<15;i++){ const a=i/15*Math.PI*2; const x=Math.cos(a)*20.5, y=Math.sin(a)*19.5; ctx.beginPath(); ctx.arc(x,y,5.4,0,7); ctx.fill(); }
+  // floppy poodle ears（房を増やしてフサフサに）
+  furBall(-20,2,8,'#efe0b8','#c9b083'); furBall(-22,9,6.5,'#efe0b8','#c9b083'); furBall(-17,12,6,'#ecdcb0','#c4ab7c');
+  furBall(20,2,8,'#efe0b8','#c9b083'); furBall(22,9,6.5,'#efe0b8','#c9b083'); furBall(17,12,6,'#ecdcb0','#c4ab7c');
   // big fluffy head
   furBall(0,0,19,'#fff8e6','#ead8ad');
   furBall(-13,-9,11,'#fbeece','#dcc89c'); furBall(13,-9,11,'#fbeece','#dcc89c'); furBall(0,-15,12,'#fff7e0','#e3d1a6');
   furBall(-16,3,9,'#fbeece','#dcc89c'); furBall(16,3,9,'#fbeece','#dcc89c');
+  // ほっぺのもこもこ
+  furBall(-15,9,7,'#fff7e0','#e3d1a6'); furBall(15,9,7,'#fff7e0','#e3d1a6');
   // muzzle
   ctx.fillStyle='#fffaf0'; ctx.beginPath(); ctx.ellipse(3,7,11,9,0,0,7); ctx.fill();
   // nose
