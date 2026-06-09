@@ -83,20 +83,24 @@
     <div class="title-sub">ARCADE BELT ACTION</div>
     <div class="title-main">聖犬士イッヌ</div>
     <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
+    <button id="continueBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="startBtn" class="btn">▶ 1P イッヌ</button>
       <button id="startShimaBtn" class="btn" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
     <div class="moves">
-      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　ガード <b>K/G</b>　掴み <b>L/H</b>　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
+      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
     </div>
   </div>
 
   <div id="result" class="overlay hidden">
     <div id="result-title"></div>
     <div id="result-sub"></div>
-    <button id="retryBtn" class="btn">▶ もう一度</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="resumeBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ ステージ再開</button>
+      <button id="retryBtn" class="btn">▶ 最初から</button>
+    </div>
   </div>
 
   <div id="touch">
@@ -104,12 +108,12 @@
     <div id="bAtk"  class="tbtn bA">攻</div>
     <div id="bGrab" class="tbtn bGr">掴</div>
     <div id="bJmp"  class="tbtn bJ">跳</div>
-    <div id="bGrd"  class="tbtn bD">防</div>
+    <div id="bGrd"  class="tbtn bD">回避</div>
     <div id="stick2" class="stk p2"><div class="nub"></div></div>
     <div id="bAtk2"  class="tbtn bA p2">攻</div>
     <div id="bGrab2" class="tbtn bGr p2">掴</div>
     <div id="bJmp2"  class="tbtn bJ p2">跳</div>
-    <div id="bGrd2"  class="tbtn bD p2">防</div>
+    <div id="bGrd2"  class="tbtn bD p2">回避</div>
   </div>
 </div>
 
@@ -150,7 +154,7 @@ function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 let keys, K, pressed, dirTaps, cardSeq, stickRot;
 function makeInput(){ return { keys:{},
   K:{left:false,right:false,up:false,down:false,atk:false,grd:false,grab:false},
-  pressed:{atk:false,grab:false,up:false,jump:false}, dirTaps:[], cardSeq:[], stickRot:-999 }; }
+  pressed:{atk:false,grab:false,up:false,jump:false,grd:false}, dirTaps:[], cardSeq:[], stickRot:-999 }; }
 function useInput(inp){ keys=inp.keys; K=inp.K; pressed=inp.pressed; dirTaps=inp.dirTaps; cardSeq=inp.cardSeq; stickRot=inp.stickRot; }
 function saveInput(inp){ inp.stickRot=stickRot; }
 // key bindings per player (1P: arrows + JKL/space, 2P: WASD + F G H V)
@@ -177,7 +181,7 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyP'&&(state==='play'||state==='pause')){ togglePause(); return; }
   const pa=CODE2PA[e.code]; if(!pa) return; const [pi,act]=pa; const inp=players[pi].in;
   if(!inp.keys[e.code]){ inp.keys[e.code]=true; mapKeysFor(pi);
-    if(act==='atk') inp.pressed.atk=true; if(act==='grab') inp.pressed.grab=true; if(act==='jump') inp.pressed.jump=true;
+    if(act==='atk') inp.pressed.atk=true; if(act==='grab') inp.pressed.grab=true; if(act==='jump') inp.pressed.jump=true; if(act==='grd') inp.pressed.grd=true;
     if(act==='up') pushCardFor(inp,0); else if(act==='right'){ pushTapFor(inp,1); pushCardFor(inp,1); }
     else if(act==='down') pushCardFor(inp,2); else if(act==='left'){ pushTapFor(inp,-1); pushCardFor(inp,3); }
   }
@@ -475,7 +479,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, jDrop:false, jHammer:false, jHyaku:false, landT:0, aerial:0,
   hadouT:0, hadouShots:0, hadouHold:0, sevenT:0,
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
-  slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
+  slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
   weapon: kind==='shima'?'fists':'dagger', weaponT:0,
@@ -540,6 +544,7 @@ function updatePlayer(){
   if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84; if(p.hurtTimer<=0)p.state='idle'; return; }
   if(p.state==='grab'){ updateGrab(); return; }
   if(p.state==='slide'){ updateSlide(); return; }
+  if(p.state==='roll'){ updateRoll(); return; }
   if(p.state==='wheel'){ updateWheel(); return; }
   if(p.state==='screw'){ updateScrew(); return; }
   if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4; if(p.fallT>=22){ loseLife(p); } return; }   // 谷に落下→ミス
@@ -603,14 +608,8 @@ function updatePlayer(){
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
   }
-  // guard (auto-face nearest threat; raise shield; just-time = parry)
-  if(K.grd && p.z<=0){
-    if(p.state!=='guard') p.guardStart=gf;
-    p.state='guard'; p.vx=0; p.charge=0; p.atkHeld=false;
-    const ne=nearestEnemy(); if(ne) p.facing = ne.x<p.x?-1:1;
-    if(pressed.atk){ pressed.atk=false; beginAttack('gcounter'); return; }   // ガード中に攻撃＝ガードカウンター
-    return;
-  }
+  // ローリング回避（旧ガードボタン）：素早く転がって無敵で避ける
+  if(pressed.grd && p.z<=0){ pressed.grd=false; beginRoll(); return; }
   // jump start
   if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.charge=0; sfx.dash(); return; }
 
@@ -918,6 +917,15 @@ function updateScrew(){ const p=player, e=p.grabEnemy;
 }
 function beginSlide(){ const p=player; p.state='slide'; p.slideT=0; p.vx=p.facing*10.5; p.slideHit=new Set();
   p.invuln=Math.max(p.invuln,24); sfx.dash(); dust(p.x,p.y,7); spark(p.x,p.y-8,'#cfe6ff',6,5); }
+// ローリング回避：入力方向（無ければ向き）へ転がって無敵で避ける
+function beginRoll(){ const p=player; const dir=K.left?-1:K.right?1:p.facing;
+  p.state='roll'; p.rollT=0; p.rollDir=dir; p.rollRot=0; p.facing=dir; p.vx=dir*13; p.charge=0; p.atkHeld=false;
+  p.invuln=Math.max(p.invuln,20); sfx.dash(); dust(p.x,p.y,8); spark(p.x,p.y-12,'#cfe6ff',7,6); }
+function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.86; p.rollRot+=p.rollDir*0.40;
+  if(p.rollT<16) p.invuln=Math.max(p.invuln,3);    // 転がり中は無敵
+  if(gf%2===0)dust(p.x,p.y,2);
+  p.x=clamp(p.x,camX+24,Math.min(WORLD_END,camX+W-24));
+  if(p.rollT>=20){ p.state='idle'; } }
 function updateSlide(){ const p=player; p.slideT++; p.x+=p.vx; p.vx*=0.9;
   // 攻撃判定（低い姿勢で蹴り抜ける）
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy||p.slideHit.has(e.id))return; if(Math.abs(e.y-p.y)>30)return;
@@ -1516,7 +1524,7 @@ function buildEncounters(){ encounters=[
 ]; encIndex=0; curGateX=WORLD_END; }
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
-  if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; let off=0;
+  if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st); let off=0;
     enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n*2;   // ザコは出現数2倍
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
@@ -1892,6 +1900,7 @@ function drawPlayer(){
   if(st==='down'||st==='dead'){ ctx.rotate(-0.9*p.facing); ctx.translate(0,9); }
   if(st==='wheel'){ ctx.rotate(p.wheelRot); }
   if(st==='screw'){ ctx.rotate(p.screwRot); }
+  if(st==='roll'){ ctx.translate(0,-22); ctx.rotate(p.rollRot); ctx.translate(0,22); }   // 前転（回避）
   if(st==='gswing'){ ctx.rotate(Math.sin(p.gswingRot)*0.22); }   // 振り回しで体を捻る
   const _spec = st==='attack' && p.atk && p.atk.def.special;
   if(_spec){ ctx.rotate(Math.sin(p.atk.t*0.55)*0.28); }      // 次元斬の身体ブレ
@@ -1930,6 +1939,7 @@ function drawPlayer(){
   else if(st==='land'){ const k=clamp(p.landT/22,0,1); bodyY=10*(1-k*k)+2; thF=0.7; thB=-0.7; kF=1.5; kB=1.5; lean=0.1; swAng=0.9; backArm=0.5; sqX=1.14; sqY=0.8; }   // 着地硬直（深いしゃがみ）
   else if(st==='hurt'){ lean=-0.24; thF=-0.3; thB=0.3; swAng=-0.1; backArm=0.7; }
   else if(st==='slide'){ lean=-1.0; bodyY=8; thF=1.15; thB=0.25; kF=0.2; kB=1.3; swAng=0.7; backArm=0.1; sqX=1.12; sqY=0.82; }
+  else if(st==='roll'){ mode='fist'; thF=1.4; thB=1.4; kF=1.6; kB=1.6; swAng=0.7; backArm=0.7; bodyY=4; sqX=1.04; sqY=0.96; }   // 丸まって前転
   else if(st==='grab'){ thF=0.3; thB=-0.3; kF=0.4; kB=0.4; bodyY=1; mode='fist'; backArm=0.55;
       if(p.grabSub==='punch'){ const k=Math.sin(clamp(p.grabAnim/9,0,1)*Math.PI); swAng=0.05; faL1=9+5*k; faL2=8+7*k; faW=0.95+0.4*k; backArm=-0.1; bodyX=k*3; }
       else { swAng=0.25; } }
@@ -2841,6 +2851,13 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
 
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
+// ── ステージごとのオートセーブ（localStorage） ──
+let curMode='inu';
+function saveProgress(st){ try{ localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode})); }catch(e){} }
+function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
+function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
+function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
+  if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
   score=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters();
@@ -2849,19 +2866,36 @@ function startGame(){ unlockAudio();
   player=players[0];
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
   if(sndOn) Music.start('battle'); }
+// セーブしたステージから再開
+function startGameAt(stageN){ startGame();
+  if(stageN>1){ const idx=encounters.findIndex(e=>e.st===stageN);
+    if(idx>0){ for(let i=0;i<idx;i++){ encounters[i].cleared=true; encounters[i].spawned=true; }
+      encIndex=idx; stage=stageN; curGateX=WORLD_END;
+      const at=encounters[idx].at, px=clamp(at-360,30,WORLD_END-30);
+      players.forEach(p=>{ if(p.active) p.x=clamp(px+p.pid*60,30,WORLD_END-30); });
+      camX=clamp(px-200,0,WORLD_END-W);
+      stageBanner=140; stageBannerTxt='STAGE '+stageN+' START'; } }
+}
 function gameOver(){ state='over'; Music.stop(); gameOverSting();
-  elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
-function winGame(){ state='win'; Music.stop(); victoryJingle();
-  elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全7ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0'); elResult.classList.remove('hidden'); }
+  elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0');
+  const sv=loadProgress(), rb=document.getElementById('resumeBtn');
+  if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
+  elResult.classList.remove('hidden'); }
+function winGame(){ state='win'; Music.stop(); victoryJingle(); clearProgress();
+  elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全12ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0');
+  const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
-function setupRoster(mode){ TWO_P=(mode==='coop');
+function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
   players[0].kind=(mode==='shima')?'shima':'inu'; players[1].kind='shima';
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
 document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); startOpening(); };
 document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); startOpening(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); startOpening(); };
-document.getElementById('retryBtn').onclick=startGame;
+document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
+document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
+const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };
+refreshContinueBtn();
 // cutscene advance / skip input
 addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
 // sound toggle
@@ -2878,7 +2912,7 @@ if(isTouch) document.getElementById('touch').style.display='block';
 function setTouchMode(twop){ const t=document.getElementById('touch'); if(!t)return; t.classList.toggle('twop', !!twop); }
 function bindBtn(id,key,pi){ const el=document.getElementById(id); if(!el)return; const IN=()=>players[pi].in;
   el.addEventListener('touchstart',e=>{ e.preventDefault(); const i=IN(); i.keys['_'+key]=true; mapKeysFor(pi);
-    if(key==='atk')i.pressed.atk=true; if(key==='grab')i.pressed.grab=true; if(key==='jump')i.pressed.jump=true; },{passive:false});
+    if(key==='atk')i.pressed.atk=true; if(key==='grab')i.pressed.grab=true; if(key==='jump')i.pressed.jump=true; if(key==='grd')i.pressed.grd=true; },{passive:false});
   el.addEventListener('touchend',e=>{ e.preventDefault(); IN().keys['_'+key]=false; mapKeysFor(pi); },{passive:false}); }
 bindBtn('bAtk','atk',0); bindBtn('bGrd','grd',0); bindBtn('bGrab','grab',0); bindBtn('bJmp','jump',0);
 bindBtn('bAtk2','atk',1); bindBtn('bGrd2','grd',1); bindBtn('bGrab2','grab',1); bindBtn('bJmp2','jump',1);
