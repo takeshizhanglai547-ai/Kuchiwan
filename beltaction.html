@@ -427,6 +427,7 @@ const ATK={
   stinger:{name:'スティンガー', dur:24, act:[3,18], reach:78, hh:42, dmg:14, kb:9, from:-0.12, to:-0.12, len:48, trail:'#9fe8ff', pivotY:-52, move:9.0, multi:true, multiGap:7, stinger:true},
   dimension:{name:'次元斬', dur:48, act:[6,42], reach:158, hh:160, dmg:11, kb:7, from:-3.1, to:3.1, len:64, trail:'#c46bff', pivotY:-46, omni:true, multi:true, multiGap:6, special:true},
   gcounter:{name:'ガードカウンター', dur:24, act:[3,9], reach:86, hh:54, dmg:22, kb:15, from:-0.7, to:0.9, len:50, trail:'#bfe9ff', pivotY:-56, lunge:2.6, knock:true, counter:true},
+  iai:{name:'居合斬り', dur:22, act:[8,12], reach:112, hh:52, dmg:26, kb:14, from:-0.18, to:0.18, len:60, trail:'#dff0ff', pivotY:-56, move:9, knock:true, finisher:true, iai:true},
   // ── シマダックス（拳法）──
   sc1:{name:'右ジャブ', dur:9,  act:[2,5],  reach:60, hh:34, dmg:5, kb:2, from:-0.05,to:-0.05, len:14, trail:'#ffe9a0', fist:true, combo:1, lunge:0.6},
   sc2:{name:'左ジャブ', dur:9,  act:[2,5],  reach:60, hh:34, dmg:5, kb:2, from:-0.05,to:-0.05, len:14, trail:'#ffe9a0', fist:true, combo:2, lunge:0.6},
@@ -474,7 +475,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   hadouT:0, hadouShots:0, hadouHold:0, sevenT:0,
   grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
-  rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0,
+  rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
   weapon: kind==='shima'?'fists':'dagger', weaponT:0,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
@@ -521,6 +522,7 @@ function beginAttack(type){
     sfx.guard(); sfx.rise(); ring(p.x,p.y-40,'#bfe9ff'); if(p.counterPow){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); } }
   else if(type==='dimension'){ p.dim--; p.invuln=Math.max(p.invuln,52); sfx.boss(); sfx.rise(); flash=Math.max(flash,5); shake=8; triggerSlow(36);
     ring(p.x,p.y-46,'#c46bff'); ring(p.x,p.y-46,'#fff'); spark(p.x,p.y-46,'#c46bff',24,11); popText(p.x,p.y-110,'次元斬！','#d6a6ff',true); }
+  else if(type==='iai'){ sfx.dash(); spark(p.x+p.facing*16,p.y-40,'#dff0ff',8,6); }
   else if(type==='spunch'){ sfx.heavy(); spark(p.x+p.facing*20,p.y-40,'#ffd24d',8,7); }
   else if(type==='dragonkick'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
   else if(type==='sweep'){ sfx.swing(0); }
@@ -541,6 +543,7 @@ function updatePlayer(){
   if(p.state==='screw'){ updateScrew(); return; }
   if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4; if(p.fallT>=22){ loseLife(p); } return; }   // 谷に落下→ミス
   if(p.state==='rush'){ updateRush(); return; }
+  if(p.state==='iaidash'){ updateIaiDash(); return; }
   if(p.state==='gswing'){ updateGiantSwing(); return; }
   if(p.state==='tkick'){ updateTriangle(); return; }
   if(p.state==='hadou'){ updateHadou(); return; }
@@ -584,6 +587,7 @@ function updatePlayer(){
     else if(!def.special){ p.x+=p.facing*(def.lunge||0)*(a.t<def.dur*0.6?1:0); }
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
     if(def.shock && a.t===def.act[0]){ spawnShockwave(p, def.shock); }       // 溜め斬り＝衝撃波を放つ
+    if(def.iai && a.t===def.act[0]){ const dir=p.facing; crescent(p.x+dir*64,p.y-52,96,dir>0?-0.45:Math.PI-0.45,dir>0?0.45:Math.PI+0.45,'#eaffff'); spark(p.x+dir*78,p.y-52,'#fff',18,11); flash=Math.max(flash,2); hitStop=Math.max(hitStop,4); }   // 居合の閃光
     // active hit window
     if(a.t>=def.act[0] && a.t<=def.act[1]) doPlayerHit(a);
     if(a.t>=def.dur){
@@ -621,9 +625,9 @@ function updatePlayer(){
     if(rotationReady() && p.dim>0){ if(SH) beginSeven(); else beginAttack('dimension'); consumeCmd(); return; } // 七死ワン生 / 次元斬
     if(K.down && p.z<=0){ if(SH) beginAttack('sdropkick'); else beginSlide(); if(!SH) return; p.atkHeld=true; return; } // ドロップキック / スライディング
     if(K.up){ beginAttack(SH?'tornado':'shoryu'); }                                      // 昇竜旋風脚 / 昇竜拳
-    else if(stingerReady(p.facing)){ beginAttack(SH?'spindash':'stinger'); consumeCmd(); } // グルグルパンチ突進 / スティンガー
+    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); } else { beginIaiDash(); } consumeCmd(); } // グルグルパンチ突進 / 疾走連続居合斬り
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
-      else if(SH){ beginAttack('spunch'); } else { beginRush(); return; } }                // 正拳突き / 素手乱舞
+      else if(SH){ beginAttack('spunch'); } else { beginAttack('iai'); } }                  // 正拳突き / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -919,6 +923,21 @@ function rushSound(){ if(!actx||!sndOn) return; const t=actx.currentTime;
   g2.gain.setValueAtTime(0.4,t); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.17); o2.connect(g2); g2.connect(sfxGain); o2.start(t); o2.stop(t+0.22); }
 function beginRush(){ const p=player; p.state='rush'; p.rushT=0; p.rushHits=0; p.rushHold=18; p.rushPhase=0; p.rushFinT=0;
   sfx.heavy(); popText(p.x,p.y-70,'乱舞！','#ffe14d'); }
+// 疾走連続居合斬り：猛スピードで長距離突進。連打で斬撃が増える
+function beginIaiDash(){ const p=player; p.state='iaidash'; p.iaiT=0; p.iaiMax=20; p.iaiCount=1; p.iaiHit=new Set();
+  p.invuln=Math.max(p.invuln,18); sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#dff0ff',14,9); ring(p.x+p.facing*16,p.y-40,'#bfe9ff'); popText(p.x,p.y-104,'疾走居合斬り！','#cfe6ff',true); }
+function updateIaiDash(){ const p=player, dir=p.facing; p.iaiT++;
+  p.x=clamp(p.x+dir*18, camX+24, Math.min(WORLD_END,camX+W-24));   // 猛スピード突進
+  p.invuln=Math.max(p.invuln,2);
+  if(pressed.atk){ pressed.atk=false; if(p.iaiCount<8){ p.iaiCount++; p.iaiMax+=9; p.iaiHit=new Set(); sfx.dash(); spark(p.x+dir*30,p.y-50,'#dff0ff',8,8); } }   // 連打で斬撃追加＆延長
+  if(p.iaiT%5===0) p.iaiHit=new Set();   // 連続斬りで同じ敵にも多段
+  const Wp=WEAPONS[p.weapon]||WEAPONS.dagger;
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy||p.iaiHit.has(e.id))return; const dx=e.x-p.x;
+    if(Math.abs(dx)<72 && Math.abs(e.y-p.y)<48){ p.iaiHit.add(e.id);
+      damageEnemy(e, 11*Wp.dmg, dir*8*Wp.kb, true); crescent(e.x,e.y-e.h*0.5,52,dir>0?-0.6:Math.PI-0.6,dir>0?0.6:Math.PI+0.6,'#eaffff'); spark(e.x,e.y-e.h*0.5,'#fff',8,9); } });
+  if(p.iaiT%3===0) crescent(p.x+dir*44,p.y-50,64,dir>0?-0.7:Math.PI-0.7,dir>0?0.7:Math.PI+0.7,'#bfe9ff');   // 連続斬りの残像
+  if(p.iaiT>=p.iaiMax){ p.state='idle'; }
+}
 function rushHit(){ const p=player; const reach=74; const col=p.rushPhase?'#aef0ff':'#ffe9a0';
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.y-p.y)>42)return; const dx=e.x-p.x;
     if(p.facing>0&&(dx<-16||dx>reach))return; if(p.facing<0&&(dx>16||dx<-reach))return;
@@ -1893,6 +1912,8 @@ function drawPlayer(){
   else if(st==='grab'){ thF=0.3; thB=-0.3; kF=0.4; kB=0.4; bodyY=1; mode='fist'; backArm=0.55;
       if(p.grabSub==='punch'){ const k=Math.sin(clamp(p.grabAnim/9,0,1)*Math.PI); swAng=0.05; faL1=9+5*k; faL2=8+7*k; faW=0.95+0.4*k; backArm=-0.1; bodyX=k*3; }
       else { swAng=0.25; } }
+  else if(st==='iaidash'){ mode='blade'; lean=0.6; bodyY=-2; thF=1.5; thB=-0.45; kF=0.1; kB=0.7; swAng=0.05; swExt=24; backArm=-0.7; sqX=1.14; sqY=0.9;
+    drawTrail=true; trailCol='#cfeeff'; tA0=-0.5; tA1=0.5; tk=0.15; trailW=2.0; smear=0.6; }   // 疾走連続居合斬り
   else if(st==='wheel'||st==='screw'){ thF=0.95; thB=0.95; kF=1.4; kB=1.4; swAng=0.2; backArm=0.2; mode='fist'; }
   else if(st==='gswing'){ thF=0.8; thB=0.8; kF=1.1; kB=1.1; swAng=0.15; backArm=0.15; mode='fist'; lean=Math.cos(p.gswingRot)*0.12; }   // 両腕で振り回す
   else if(st==='tkick'){ mode='fist';
