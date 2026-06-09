@@ -134,7 +134,7 @@ function setupCanvas(){
 }
 setupCanvas();
 
-const GROUND_TOP = 372, GROUND_BOT = 516, WORLD_END = 17200;
+const GROUND_TOP = 372, GROUND_BOT = 516, WORLD_END = 18400;
 const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger sprites
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
@@ -363,7 +363,7 @@ function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprit
 // マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
 function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
 // 谷（落ちると即死）。各ステージの道中（戦闘ゲートの間）に配置
-const PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140]];
+const PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
 function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
 function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
   g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
@@ -985,6 +985,7 @@ const ETYPE={
   dober:{hp:34,sp:2.5,dmg:11,atkR:46,w:52,h:82,c1:'#3c3c46',c2:'#20202a',c3:'#101015',score:300,pouncer:true,accent:'#d89a4a',name:'ドーベル忍犬'},
   akita:{hp:62,sp:1.2,dmg:9,atkR:50,w:62,h:80,c1:'#efe9dd',c2:'#bcb4a4',c3:'#7e766a',score:320,guarder:true,name:'秋田の盾犬',ears:'flop'},
   bomber:{hp:18,sp:2.7,dmg:8,atkR:40,w:44,h:56,c1:'#e4ddc6',c2:'#b0a684',c3:'#6f6850',score:260,charge:true,bomber:true,accent:'#ff4d3a',name:'爆弾チワワ',ears:'flop',collar:'#ff4d3a'},
+  warpdog:{hp:30,sp:2.4,dmg:9,atkR:50,w:54,h:74,c1:'#9a8fce',c2:'#6a5fa0',c3:'#3f3470',score:300,warper:true,accent:'#c89cff',name:'ワープ犬'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -1002,6 +1003,7 @@ const ETYPE={
   shark: {hp:640,sp:1.9,dmg:18,atkR:88,w:158,h:128,c1:'#5b86b8',c2:'#2f5687',c3:'#1b3358',score:6000,boss:true,bossKind:'shark', weapon:'none',accent:'#ff8a3c',name:'陸鮫リクザメ'},
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
   noroinu:{hp:900,sp:1.8,dmg:18,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
+  cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
 };
 // Boss move-sets
 const BOSSMOVES={
@@ -1019,12 +1021,14 @@ const BOSSMOVES={
   shark:  ['burrowBite','finCharge','jumpBite','chomp'],
   pirate: ['summonCrew','cutlassCombo','cannonFire','cutlassCombo','unblockSmash'],
   noroinu:['curseFlame','clawCombo','curseDash','curseFlame'],
+  cactus: ['spikeVolley','growCactus','spikeBurst','spikeVolley','rollTackle'],
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
   moloch:'業火に焼かれて消えるがいい！', boss:'ワンワン帝国の力を思い知れ！', bitter:'フッ…相手になるかな？',
   dragon:'我が業火、ジャンプでかわせるか？', ghost:'ヒヒヒ…３人で斬り刻んでやる〜', slime:'ぷるぷる…叩くほど増えるぞ！', rival:'貴様の技、すべて頂いた！',
-  shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…' };
+  shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
+  cactus:'チクチクの雨を浴びるがいい！' };
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:t.hp,maxHp:t.hp,w:t.w,h:t.h,
     state:'walk',anim:Math.random()*6,atkTimer:0,atkMax:0,telegraph:0,teleMax:0,hurtTimer:0,downTimer:0,stun:0,
@@ -1208,6 +1212,10 @@ function updateEnemies(){
     e.anim+=0.18; e.bob+=0.12; const dx=p.x-e.x; e.facing=dx<0?-1:1;
     const dist=Math.abs(dx), aligned=true;
     e.strafeCd--; if(e.strafeCd<=0){ e.strafeDir=Math.random()<0.5?-1:1; e.strafeCd=rnd(35,85); }
+    // ワープ犬: 一定間隔でプレイヤーの背後へ瞬間移動して不意打ち
+    if(t.warper){ if(e.warpCd==null)e.warpCd=rnd(50,110); e.warpCd--;
+      if(e.warpCd<=0 && e.stun<=0 && dist>90){ e.vanish=12; e.x=clamp(p.x - p.facing*60, camX+24, camX+W-24); e.facing=p.x<e.x?-1:1;
+        spark(e.x,e.y-e.h*0.5,'#c89cff',16,9); ring(e.x,e.y-e.h*0.5,'#b06bff'); sfx.dash(); e.warpCd=rnd(120,190); e.thinkCd=10; continue; } }
     // 跳躍犬: 中距離から飛びかかる
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(90,150); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
@@ -1277,6 +1285,8 @@ const MV={
   summonCrew:{tele:22,dur:30,minR:0,maxR:1300}, cutlassCombo:{tele:16,dur:28,minR:0,maxR:170}, cannonFire:{tele:18,dur:24,minR:120,maxR:1100},
   // 呪い犬
   curseFlame:{tele:16,dur:26,minR:60,maxR:1300}, curseDash:{tele:14,dur:18,minR:80,maxR:560},
+  // サボテン犬
+  spikeVolley:{tele:16,dur:26,minR:0,maxR:1300}, spikeBurst:{tele:20,dur:28,minR:0,maxR:1300}, growCactus:{tele:18,dur:26,minR:0,maxR:1300}, rollTackle:{tele:16,dur:22,minR:0,maxR:300},
 };
 function pickBossMove(e,dist){ const list=BOSSMOVES[ETYPE[e.type].bossKind]||[];
   const cands=list.filter(m=>MV[m] && dist>=MV[m].minR && dist<=MV[m].maxR);
@@ -1365,6 +1375,12 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     // ── 呪い犬ノロ（追尾する呪いの焔）──
     case 'curseFlame': if(f===14){ const dm=t.dmg-2, n=e.cursed?2:1, cap=8; for(let i=0;i<n;i++){ if(projectiles.filter(pr=>pr.homing).length>=cap)break; spawnProj(e.x+e.facing*26, e.y-e.h*0.4, e.facing*(5+i*1.5), rnd(-1,1), {owner:'enemy',dmg:dm,color:'#b06bff',r:13,life:200,zz:50,homing:true}); } sfx.boss(); spark(e.x+e.facing*26,e.y-e.h*0.4,'#b06bff',10,7); } break;
     case 'curseDash': if(f<12){ e.x+=e.facing*10; if(f%3===0)bArc(e,72,46,(e.cursed?t.dmg+4:t.dmg-4),true,'#b06bff'); } break;
+    // ── サボテン犬サボロー（サボテンを増やし棘を飛ばす遠距離型）──
+    case 'spikeVolley': if(f===14 && projectiles.filter(pr=>pr.spike).length<14){ const tp=nearestPlayerTo(e.x), base=Math.atan2((tp.y-26)-(e.y-e.h*0.4),tp.x-e.x), n=3+Math.min(4,e.grow||0);
+      for(let i=0;i<n;i++){ const a=base+(i-(n-1)/2)*0.17; spawnProj(e.x+e.facing*22,e.y-e.h*0.4,Math.cos(a)*8,Math.sin(a)*8,{owner:'enemy',dmg:t.dmg-4,color:'#cfe06a',r:9,life:170,zz:48,spike:true}); } sfx.swing(0); spark(e.x+e.facing*22,e.y-e.h*0.4,'#cfe06a',8,7); } break;
+    case 'spikeBurst': if(f===16 && projectiles.filter(pr=>pr.spike).length<10){ const n=8+(e.grow||0)*2; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2; spawnProj(e.x,e.y-e.h*0.45,Math.cos(a)*7,Math.sin(a)*7,{owner:'enemy',dmg:t.dmg-5,color:'#9fd24a',r:9,life:150,zz:48,spike:true}); } ring(e.x,e.y-e.h*0.45,'#9fd24a'); sfx.boss(); } break;
+    case 'growCactus': if(f===14){ e.grow=Math.min((e.grow||0)+1,4); popText(e.x,e.y-e.h-12,'サボテン増殖！','#7dff5a',true); spark(e.x,e.y-e.h*0.5,'#7dff5a',18,9); ring(e.x,e.y-e.h*0.5,'#7dff5a'); sfx.rise(); } break;
+    case 'rollTackle': if(f<16){ e.x+=e.facing*9; if(f%3===0)bArc(e,72,46,t.dmg,true,'#9fd24a'); } break;
   }
 }
 function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
@@ -1438,7 +1454,7 @@ function buildEncounters(){ encounters=[
   {st:5,at:8700,boss:true,list:[['cerbe',1]]},
   // ── STAGE 6 ──
   {st:6,at:9300,list:[['akita',1],['mastiff',1],['corgi',1]]},
-  {st:6,at:9900,list:[['dober',2],['bomber',1],['guard',1]]},
+  {st:6,at:9900,list:[['dober',2],['warpdog',1],['guard',1]]},
   {st:6,at:10500,boss:true,list:[['rival',1]]},
   // ── STAGE 7 ──
   {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
@@ -1448,13 +1464,16 @@ function buildEncounters(){ encounters=[
   {st:8,at:12900,list:[['wolf',1],['mastiff',1],['hyena',1]]},
   {st:8,at:13500,boss:true,list:[['shark',1]]},
   // ── STAGE 9：海賊王カイゾクカイ ──
-  {st:9,at:14100,list:[['boar',1],['corgi',1],['bomber',1]]},
+  {st:9,at:14100,list:[['boar',1],['warpdog',1],['bomber',1]]},
   {st:9,at:14700,boss:true,list:[['pirate',1]]},
   // ── STAGE 10：呪い犬ノロ ──
-  {st:10,at:15300,list:[['dober',1],['akita',1],['pounce',1]]},
+  {st:10,at:15300,list:[['dober',1],['akita',1],['warpdog',1]]},
   {st:10,at:15900,boss:true,list:[['noroinu',1]]},
-  // ── STAGE 11：ダークワンワン大帝（最終決戦）──
-  {st:11,at:16500,boss:true,list:[['boss',1]]},
+  // ── STAGE 11：サボテン犬サボロー ──
+  {st:11,at:16500,list:[['warpdog',2],['corgi',1]]},
+  {st:11,at:17100,boss:true,list:[['cactus',1]]},
+  // ── STAGE 12：ダークワンワン大帝（最終決戦）──
+  {st:12,at:17700,boss:true,list:[['boss',1]]},
 ]; encIndex=0; curGateX=WORLD_END; }
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
@@ -1467,7 +1486,7 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
-      if(enc.st<11){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
+      if(enc.st<12){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle'); }
     } else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
@@ -1489,7 +1508,7 @@ function updateCombo(){ if(combo.timer>0){ combo.timer--; if(combo.timer===0)com
 let projectiles=[];
 function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,
-    pierce:!!o.pierce,wave:!!o.wave,hit:o.pierce?new Set():null,homing:!!o.homing,
+    pierce:!!o.pierce,wave:!!o.wave,hit:o.pierce?new Set():null,homing:!!o.homing,spike:!!o.spike,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
 // returns 'reflect' | 'gone' | null
 function projVsPlayer(pr,p){
@@ -1539,6 +1558,9 @@ function drawProjectiles(){
         ctx.beginPath(); ctx.ellipse(-dir*k*9, -28, pr.r*0.7, pr.r*1.7, 0, -1.15, 1.15); ctx.stroke(); }
       ctx.globalAlpha=0.85; ctx.fillStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(dir*4,-28,pr.r*0.4,pr.r*1.5,0,-1.0,1.0); ctx.fill();
       ctx.restore(); return; }
+    if(pr.spike){ const ang=Math.atan2(pr.vy,pr.vx); ctx.save(); ctx.translate(sx,sy); ctx.rotate(ang);
+      ctx.fillStyle=pr.color; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(-pr.r*0.5,pr.r*0.7); ctx.lineTo(-pr.r*0.5,-pr.r*0.7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(0,pr.r*0.28); ctx.lineTo(0,-pr.r*0.28); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
     ctx.save(); ctx.globalCompositeOperation='lighter';
     for(let i=0;i<pr.trail.length;i++){ const tp=pr.trail[i], a=i/pr.trail.length*0.4;
       ctx.globalAlpha=a; ctx.fillStyle=pr.color; ctx.beginPath(); ctx.arc(tp.x-camX,tp.y,pr.r*(0.5+i/pr.trail.length*0.5),0,7); ctx.fill(); }
@@ -2130,8 +2152,8 @@ function drawEnemy(e){
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.slimey) drawSlime(e);
-  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else drawBigBoss(e); }
-  else if(e.type==='bitter') drawBitter(e); else drawBeast(e);
+  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else drawBigBoss(e); }
+  else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e); else drawBeast(e);
   if(t.guarder) drawEnemyShield(e);
   ctx.restore();
   // wind-up warning ("!"); ガード不能技は紫＋「パリィ！」で警告
@@ -2503,6 +2525,59 @@ function drawNoroinu(e){ const t=ETYPE[e.type]; const walk=e.state==='walk'?Math
   for(const s of spots){ const h=10+Math.sin(gf*0.3+s[0])*5; ctx.fillStyle=radGrad(s[0],s[1]-h*0.5,13,'#e0c0ff','rgba(150,70,235,0)'); ctx.beginPath(); ctx.moveTo(s[0]-6,s[1]); ctx.quadraticCurveTo(s[0],s[1]-h,s[0]+6,s[1]); ctx.closePath(); ctx.fill(); }
   ctx.restore();
 }
+// ── サボテン犬サボロー（サボテン＋亀甲羅。grow で腕が増える）──
+function drawCactus(e){ const t=ETYPE[e.type]; const grow=e.grow||0, atk=e.state==='bmove', walk=e.state==='walk'?Math.sin(e.anim*1.4)*4:0;
+  function arm(ax,ay,ang,len){ ctx.save(); ctx.translate(ax,ay); ctx.rotate(ang);
+    ctx.fillStyle=radGrad(0,-len*0.5,12,shade(t.c1,16),t.c2); ctx.beginPath(); ctx.moveTo(-7,0); ctx.lineTo(-7,-len); ctx.quadraticCurveTo(0,-len-8,7,-len); ctx.lineTo(7,0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#dff0b0'; for(let s=-1;s<2;s+=2)for(let yy=-len+6;yy<-4;yy+=9){ ctx.beginPath(); ctx.moveTo(s*7,yy); ctx.lineTo(s*12,yy-2); ctx.lineTo(s*7,yy+3); ctx.fill(); }   // 棘
+    ctx.restore(); }
+  // legs (4本の足)
+  ctx.fillStyle=t.c3; ctx.fillRect(-30,-20+walk,12,20); ctx.fillRect(-10,-18,11,18); ctx.fillRect(0,-18,11,18); ctx.fillRect(18,-20-walk,12,20);
+  ctx.fillStyle='#e8e0c8'; ctx.fillRect(-30,-5,12,5); ctx.fillRect(18,-5,12,5);
+  // 亀の甲羅（土台）
+  ctx.fillStyle=radGrad(0,-22,46,'#e8b44a','#9c6a1e'); ctx.beginPath(); ctx.ellipse(0,-22,46,24,0,0,7); ctx.fill();
+  ctx.strokeStyle='#7a4f16'; ctx.lineWidth=2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.moveTo(i*16,-44);ctx.lineTo(i*12,-2); ctx.stroke(); }
+  ctx.fillStyle=t.c2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.arc(i*16,-28,3,0,7); ctx.fill(); }
+  // サボテン本体（縦長）
+  ctx.fillStyle=radGrad(0,-72,30,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(0,-66,24,40,0,0,7); ctx.fill();
+  ctx.fillStyle=t.accent; for(let yy=-92;yy<-44;yy+=16){ ctx.beginPath(); ctx.moveTo(0,yy-7);ctx.lineTo(7,yy+4);ctx.lineTo(-7,yy+4);ctx.closePath(); ctx.fill(); }   // 黄色い三角
+  ctx.fillStyle='#dff0b0'; for(let yy=-96;yy<-40;yy+=10)for(const sx of [-22,22]){ ctx.beginPath(); ctx.moveTo(sx,yy);ctx.lineTo(sx*1.18,yy-2);ctx.lineTo(sx,yy+3);ctx.fill(); }
+  // cactus arms — grow で本数が増える
+  const armAng=atk?-0.5:-1.0; arm(-22,-70,-1.5+armAng*0.2,28); arm(22,-70,1.5-armAng*0.2,28);
+  if(grow>=1){ arm(-24,-54,-2.1,22); } if(grow>=2){ arm(24,-54,2.1,22); }
+  if(grow>=3){ arm(-18,-86,-1.0,20); } if(grow>=4){ arm(18,-86,1.0,20); }
+  // head
+  ctx.fillStyle=radGrad(0,-104,20,shade(t.c1,22),t.c2); ctx.beginPath(); ctx.ellipse(0,-104,19,17,0,0,7); ctx.fill();
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-12,-116);ctx.lineTo(-16,-134);ctx.lineTo(-4,-118); ctx.fill(); ctx.beginPath(); ctx.moveTo(12,-116);ctx.lineTo(16,-134);ctx.lineTo(4,-118); ctx.fill();   // 耳
+  // 頭の赤い花
+  ctx.fillStyle='#e84a3a'; for(let i=0;i<5;i++){ const a=i/5*Math.PI*2-Math.PI/2; ctx.beginPath(); ctx.ellipse(Math.cos(a)*6,-128+Math.sin(a)*5,4,3,a,0,7); ctx.fill(); }
+  ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.arc(0,-128,3,0,7); ctx.fill();
+  // snout + face
+  ctx.fillStyle=shade(t.c1,8); ctx.beginPath(); ctx.ellipse(12,-100,8,6,0,0,7); ctx.fill();
+  ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.arc(18,-101,2.2,0,7); ctx.fill();
+  ctx.fillStyle='#5a0d0d'; ctx.beginPath(); ctx.ellipse(10,-95,5,atk?3:2,0,0,7); ctx.fill();
+  ctx.fillStyle=radGrad(2,-106,4,'#fff','#c8881a'); ctx.beginPath(); ctx.ellipse(3,-106,4,3.4,0,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.arc(3.6,-106,1.3,0,7); ctx.fill();
+  ctx.strokeStyle='#000'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-4,-111);ctx.lineTo(8,-108); ctx.stroke();
+}
+// ── ワープ犬（背後に瞬間移動するザコ）──
+function drawWarpdog(e){ const t=ETYPE[e.type]; const atk=e.state==='attack', walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  ctx.fillStyle=t.c3; ctx.fillRect(-14,-16+walk,8,16); ctx.fillRect(6,-16-walk,8,16);
+  ctx.fillStyle='#cdbff0'; ctx.fillRect(-14,-4,8,4); ctx.fillRect(6,-4,8,4);
+  furBall(0,-32,17,shade(t.c1,14),t.c2);
+  // bone necklace
+  ctx.save(); ctx.translate(0,-24); ctx.rotate(0.08); ctx.fillStyle='#efe6cf'; ctx.fillRect(-8,-1.6,16,3.2); for(const bx of [-8,8]){ctx.beginPath();ctx.arc(bx,-1.6,2.2,0,7);ctx.arc(bx,1.6,2.2,0,7);ctx.fill();} ctx.restore();
+  furBall(2,-50,14,shade(t.c1,12),t.c2);
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(-9,-48,5,11,0.4,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(13,-48,5,11,-0.4,0,7); ctx.fill();   // 垂れ耳
+  // 鉢巻き
+  ctx.fillStyle='#f2efe6'; ctx.fillRect(-11,-56,26,6);
+  ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(2,-53,2.2,0,7); ctx.fill();   // 額の印
+  ctx.fillStyle='#f2efe6'; ctx.beginPath(); ctx.moveTo(-11,-54);ctx.lineTo(-22,-50);ctx.lineTo(-11,-48);ctx.fill();   // 結び目
+  // 光る目
+  for(const ex of [-3,9]){ ctx.fillStyle=radGrad(ex,-50,4,'#fff','#c89cff'); ctx.beginPath(); ctx.arc(ex,-50,3.2,0,7); ctx.fill(); ctx.fillStyle='#401a4a'; ctx.beginPath(); ctx.arc(ex,-50,1.5,0,7); ctx.fill(); }
+  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.ellipse(13,-44,6,5,0,0,7); ctx.fill();
+  ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.arc(17,-45,2,0,7); ctx.fill();
+  ctx.fillStyle='#ff5a6a'; ctx.beginPath(); ctx.ellipse(13,-38,3,5,0,0,7); ctx.fill();   // 赤い舌
+}
 function drawBossWeapon(t,e,atk){
   switch(t.weapon){
     case 'claw': ctx.fillStyle=t.c1; ctx.fillRect(-4,-9,12,18); ctx.fillStyle='#e8e0d0';
@@ -2554,7 +2629,7 @@ function drawHUD(){
     ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,119,160*clamp(q.hp/q.maxHp,0,1),7);
     ctx.fillStyle='#ff5a6a'; ctx.font='13px Trebuchet MS'; ctx.fillText('♥ ×'+Math.max(0,q.lives),196,127); }
 
-  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 11',W/2,30);
+  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 12',W/2,30);
   ctx.textAlign='left';
 
   const boss=enemies.find(e=>ETYPE[e.type].boss&&!e.dead);
@@ -2621,7 +2696,7 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
-  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬' };
+  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針' };
 const STORY_OPEN=[
   {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれる王国は、穏やかな陽だまりに包まれていた。'},
   {bgTheme:4, art:'invade', name:'', text:'だがある日、闇の軍勢「ダークワンワン帝国」が攻め込んできた！'},
@@ -2674,7 +2749,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
