@@ -143,7 +143,7 @@ const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger spr
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
 let state='title', camX=0, score=0;
-let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0; // gf = global frame
+let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='';
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
 function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
@@ -441,28 +441,29 @@ const ATK={
   sdropkick:{name:'ドロップキック', dur:24, act:[5,18], reach:96, hh:50, dmg:17,kb:13,from:0.15,to:0.15, len:26, trail:'#9fe8ff', fist:true, kick:true, move:9.5, knock:true, finisher:true, dropk:true},
   spunch:{name:'踏み込み正拳突き', dur:22, act:[6,13], reach:96, hh:42, dmg:20,kb:13,from:0,to:0, len:30, trail:'#ffd24d', fist:true, punch:true, lunge:6.5, knock:true, finisher:true},
   sflykick:{name:'飛び蹴り', dur:28, act:[5,22], reach:94, hh:520, dmg:19,kb:15,from:0.15,to:0.15, len:24, trail:'#9fe8ff', fist:true, kick:true, move:14, knock:true, finisher:true, fly:true},
+  sroundhouse:{name:'移動回し蹴り乱舞', dur:44, act:[4,40], reach:92, hh:50, dmg:7,kb:5,from:-1.7,to:1.7, len:26, trail:'#9fe8ff', fist:true, kick:true, move:5.5, multi:true, multiGap:6, knock:true, finisher:true, spin:true},
   spindash:{name:'グルグルパンチ突進', dur:32, act:[3,26], reach:80, hh:54, dmg:6,kb:5,from:-3.0,to:3.0,len:22, trail:'#ffd24d', fist:true, punch:true, move:8.5, multi:true, multiGap:4, stinger:true, spin:true, respin:true},
   tornado:{name:'昇竜旋風脚', dur:32, act:[2,26], reach:66, hh:520, dmg:6, kb:5, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:4, shoryu:true, tornado:true},
   // ── 武器別コンボ：槍（イッヌ）＝突き主体 ──
-  sp1:{name:'突き',   dur:11, act:[3,7],  reach:92, hh:36, dmg:7,  kb:3,  from:-0.12,to:-0.12, len:50, trail:'#aef8ff', pivotY:-58, lunge:1.6, combo:1},
-  sp2:{name:'連突き', dur:12, act:[3,8],  reach:96, hh:38, dmg:8,  kb:3,  from:0.05, to:0.05,  len:54, trail:'#cfe6ff', pivotY:-58, lunge:1.6, combo:2},
-  sp3:{name:'薙ぎ払い',dur:17, act:[5,12], reach:96, hh:54, dmg:12, kb:6,  from:-1.25,to:1.25,  len:54, trail:'#aef8ff', pivotY:-60, lunge:1.0, combo:3},
-  sp4:{name:'大突進突き',dur:27,act:[7,18],reach:112,hh:46, dmg:21, kb:13, from:-0.08,to:-0.08, len:64, trail:'#fff', pivotY:-58, move:6.5, knock:true, finisher:true, combo:4},
-  // ── 武器別コンボ：ハンマー（イッヌ）＝重い大振り3段 ──
-  hm1:{name:'横薙ぎ', dur:19, act:[8,13], reach:86, hh:48, dmg:14, kb:9,  from:-0.7, to:0.9,  len:46, trail:'#ffb02e', pivotY:-66, lunge:1.8, knock:true, combo:1},
-  hm2:{name:'振り上げ',dur:21,act:[9,14], reach:82, hh:62, dmg:16, kb:11, from:1.05, to:-1.5, len:48, trail:'#ffd24d', pivotY:-70, lunge:1.0, knock:true, combo:2},
-  hm3:{name:'叩き付け',dur:32,act:[13,21],reach:98, hh:60, dmg:28, kb:17, from:-1.95,to:1.2,  len:58, trail:'#fff', pivotY:-74, lunge:2.6, knock:true, aoe:true, finisher:true, combo:3},
-  // ── 武器別コンボ：ヌンチャク（シマ）＝高速振り回し5段 ──
-  nc1:{name:'振り下ろし',dur:9, act:[2,5],  reach:84, hh:42, dmg:6, kb:2, from:-1.4, to:0.7,  len:30, trail:'#ffe27a', pivotY:-58, lunge:1.2, combo:1},
-  nc2:{name:'振り上げ', dur:9, act:[2,5],  reach:84, hh:48, dmg:6, kb:2, from:0.9,  to:-1.1, len:30, trail:'#ffe27a', pivotY:-58, lunge:1.2, combo:2},
-  nc3:{name:'横回し',  dur:11, act:[3,7],  reach:90, hh:46, dmg:8, kb:3, from:-1.7, to:1.7,  len:32, trail:'#ffcf4d', pivotY:-58, lunge:1.4, combo:3},
-  nc4:{name:'八の字',  dur:12, act:[3,8],  reach:92, hh:50, dmg:9, kb:4, from:1.5,  to:-1.5, len:34, trail:'#ffe27a', pivotY:-58, lunge:1.4, combo:4},
-  nc5:{name:'乱れ打ち',dur:26, act:[3,21], reach:94, hh:52, dmg:5, kb:4, from:-2.7, to:2.7,  len:30, trail:'#fff', pivotY:-58, multi:true, multiGap:4, knock:true, finisher:true, spin:true, combo:5},
-  // ── 武器別コンボ：トンファー（シマ）＝回転打ち4段 ──
-  tf1:{name:'突き',    dur:10, act:[2,6],  reach:74, hh:38, dmg:7,  kb:3,  from:-0.1, to:-0.1, len:28, trail:'#bfe9ff', pivotY:-56, lunge:1.6, combo:1},
-  tf2:{name:'回し打ち',dur:11, act:[3,7],  reach:80, hh:46, dmg:8,  kb:4,  from:-1.3, to:1.1,  len:30, trail:'#cfd8e6', pivotY:-56, lunge:1.3, combo:2},
-  tf3:{name:'肘打ち',  dur:12, act:[4,8],  reach:72, hh:48, dmg:10, kb:5,  from:0.35, to:-0.6, len:26, trail:'#bfe9ff', pivotY:-56, lunge:1.7, combo:3},
-  tf4:{name:'強回転打ち',dur:25,act:[6,16],reach:92, hh:54, dmg:19, kb:15, from:-2.3, to:2.3,  len:34, trail:'#fff', pivotY:-56, knock:true, finisher:true, spin:true, combo:4},
+  sp1:{name:'大薙ぎ',   dur:13, act:[3,9],  reach:104,hh:46, dmg:9,  kb:4,  from:-1.5, to:1.5,  len:72, trail:'#aef8ff', pivotY:-58, lunge:2.2, combo:1},
+  sp2:{name:'連突き乱舞',dur:16, act:[3,13], reach:108,hh:40, dmg:6,  kb:3,  from:-0.2, to:0.2,  len:80, trail:'#cfe6ff', pivotY:-58, lunge:2.4, multi:true, multiGap:4, combo:2},
+  sp3:{name:'回転薙ぎ', dur:18, act:[4,14], reach:112,hh:56, dmg:8,  kb:5,  from:-2.6, to:2.6,  len:78, trail:'#aef8ff', pivotY:-60, lunge:1.4, multi:true, multiGap:5, spin:true, combo:3},
+  sp4:{name:'旋風大突進',dur:30,act:[5,26], reach:124,hh:50, dmg:8,  kb:11, from:-0.1, to:0.1,  len:88, trail:'#fff', pivotY:-58, move:9, multi:true, multiGap:4, knock:true, finisher:true, combo:4},
+  // ── 武器別コンボ：ハンマー（イッヌ）＝豪快な大振り連打 ──
+  hm1:{name:'大横薙ぎ', dur:20, act:[7,14], reach:100,hh:52, dmg:16, kb:10, from:-1.5, to:1.6,  len:66, trail:'#ffb02e', pivotY:-66, lunge:2.2, knock:true, combo:1},
+  hm2:{name:'振り上げ', dur:21,act:[8,14],  reach:94, hh:64, dmg:18, kb:12, from:1.4,  to:-1.8, len:68, trail:'#ffd24d', pivotY:-70, lunge:1.2, knock:true, combo:2},
+  hm3:{name:'大回転叩き付け',dur:34,act:[6,28],reach:112,hh:60,dmg:9, kb:18, from:-3.0, to:3.0,  len:82, trail:'#fff', pivotY:-74, lunge:2.6, multi:true, multiGap:5, knock:true, aoe:true, finisher:true, spin:true, combo:3},
+  // ── 武器別コンボ：ヌンチャク（シマ）＝高速振り回し乱舞5段 ──
+  nc1:{name:'振り下ろし',dur:9, act:[2,6],  reach:92, hh:44, dmg:7, kb:2, from:-1.7, to:0.9,  len:46, trail:'#ffe27a', pivotY:-58, lunge:1.6, combo:1},
+  nc2:{name:'振り上げ', dur:9, act:[2,6],  reach:92, hh:50, dmg:7, kb:2, from:1.1,  to:-1.4, len:46, trail:'#ffe27a', pivotY:-58, lunge:1.6, combo:2},
+  nc3:{name:'大横回し', dur:12, act:[3,9],  reach:98, hh:48, dmg:9, kb:3, from:-2.2, to:2.2,  len:50, trail:'#ffcf4d', pivotY:-58, lunge:1.6, spin:true, combo:3},
+  nc4:{name:'八の字',  dur:12, act:[3,9],  reach:100,hh:52, dmg:10,kb:4, from:1.9,  to:-1.9, len:52, trail:'#ffe27a', pivotY:-58, lunge:1.6, combo:4},
+  nc5:{name:'乱れ打ち乱舞',dur:30,act:[3,26],reach:102,hh:54, dmg:5, kb:4, from:-3.1, to:3.1,  len:48, trail:'#fff', pivotY:-58, multi:true, multiGap:4, knock:true, finisher:true, spin:true, combo:5},
+  // ── 武器別コンボ：トンファー（シマ）＝回転乱打4段 ──
+  tf1:{name:'回し突き',dur:11, act:[2,7],  reach:84, hh:42, dmg:8,  kb:3,  from:-1.2, to:1.0,  len:46, trail:'#bfe9ff', pivotY:-56, lunge:1.8, combo:1},
+  tf2:{name:'回し打ち',dur:12, act:[3,8],  reach:90, hh:48, dmg:9,  kb:4,  from:-1.6, to:1.4,  len:48, trail:'#cfd8e6', pivotY:-56, lunge:1.6, combo:2},
+  tf3:{name:'連肘打ち',dur:14, act:[3,11], reach:86, hh:50, dmg:6,  kb:4,  from:-0.6, to:0.6,  len:44, trail:'#bfe9ff', pivotY:-56, lunge:1.8, multi:true, multiGap:5, combo:3},
+  tf4:{name:'超強回転乱打',dur:28,act:[5,24],reach:104,hh:56,dmg:6, kb:15, from:-3.0, to:3.0,  len:52, trail:'#fff', pivotY:-56, multi:true, multiGap:4, knock:true, finisher:true, spin:true, combo:4},
   // ── 武器別ためうち（イッヌ）──
   chargeSpear:{name:'渾身の突き', dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true, shock:26},
   chargeHammer:{name:'渾身の叩き', dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true, shock:30},
@@ -482,7 +483,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0,
+  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
 let player=players[0];               // points to the player currently being simulated/drawn
@@ -505,7 +506,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
-  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; } }
+  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; } }
 const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
@@ -558,18 +559,19 @@ function updatePlayer(){
 
   // ---- jump (high jump + aerial rave) ----
   if(p.state==='jump'){
-    if(p.jHammer){ p.vz-=0.95; }                                       // ダブルハンマー：急降下
+    if(p.jHammer){ p.vz-=1.15; }                                       // 地球割パンチ：超急降下
+    else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
     else if(p.jHyaku && p.jAtk>0){ p.vz=Math.max(p.vz-0.13,-2.3); }    // 巨大百裂拳：ゆっくり高度落下
     else if(p.jAtk>0 && !p.jKabuto && !p.jDown){ p.vz=0; }   // エリアルレイブ中は高度維持（ホバー）
     else { p.vz-=0.62; }
     p.z+=p.vz;
     let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx&&!p.jKabuto&&!p.jDown)p.facing=mx; p.x+=mx*SPEED*(p.jDown?0.3:1.0);
-    if(p.jDrop){ p.x+=p.facing*SPEED*1.4; }            // ドロップキックの突進
+    if(p.jDrop){ p.x+=p.facing*SPEED*0.7; }            // 回転踵落とし：やや前進
     // air attack
     if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
-      if(SHI && K.down){ p.jHammer=true; p.jAtk=22; p.vz=Math.min(p.vz,-2)-10; sfx.heavy(); spark(p.x,p.y-p.z-20,'#ffd24d',12,7); }   // シマ空中下：ダブルハンマーパンチ（急降下）
+      if(SHI && K.down){ p.jHammer=true; p.jAtk=24; p.vz=Math.min(p.vz,-2)-13; sfx.heavy(); spark(p.x,p.y-p.z-20,'#ffd24d',12,7); }   // シマ空中下：急降下地球割パンチ
       else if(K.down){ p.jDown=true; p.jAtk=18; p.vz=Math.min(p.vz,-2)-9; sfx.dash(); spark(p.x,p.y-p.z-10,'#aef0ff',8,7); }   // イッヌ下突き
-      else if(SHI && (K.left||K.right)){ p.jDrop=true; p.jAtk=18; p.facing=K.left?-1:1; p.vz=Math.max(p.vz,1); sfx.dash(); spark(p.x,p.y-p.z-20,'#9fe8ff',10,7); }   // ドロップキック
+      else if(SHI && (K.left||K.right)){ p.jDrop=true; p.jAtk=20; p.facing=K.left?-1:1; p.vz=Math.min(p.vz,-1)-3; sfx.dash(); spark(p.x,p.y-p.z-20,'#9fe8ff',10,7); }   // 回転踵落とし
       else if(K.left||K.right){ p.jKabuto=true; p.jAtk=18; p.facing=K.left?-1:1; p.vz=Math.min(p.vz,-3)-7; sfx.heavy(); spark(p.x,p.y-p.z-40,'#fff0c0',10,7); }   // イッヌ兜割
       else if(SHI){ p.jHyaku=true; p.jAtk=28; sfx.swing(2); }   // シマ空中連打：巨大百裂拳（ゆっくり落下）
       else { sfx.swing(2); p.aerial=(p.aerial||0)+1; } }   // 通常空中斬り＝レイブ（高度維持）
@@ -579,7 +581,8 @@ function updatePlayer(){
       else if(p.jAtk>=3 && p.jAtk<=11) jumpAttackHit(); }
     if(p.z<=0){ p.z=0; p.vz=0;
       if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
-      if(p.jHammer&&p.jAtk>0){ hammerLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jHammer=false; dust(p.x,p.y,9); return; } // ダブルハンマー着地
+      if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
+      if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
       p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; dust(p.x,p.y,7); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
@@ -630,7 +633,7 @@ function updatePlayer(){
     if(K.up){ beginAttack(SH?'tornado':'shoryu'); }                                      // 昇竜旋風脚 / 昇竜拳
     else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else { beginIaiDash(); } consumeCmd(); } // グルグルパンチ突進 / 疾走連続居合斬り
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
-      else if(SH){ beginAttack('sflykick'); } else { beginAttack('iai'); } }                 // 飛び蹴り / 居合斬り
+      else if(SH){ beginAttack('sroundhouse'); } else { beginAttack('iai'); } }               // 移動回し蹴り乱舞 / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -720,21 +723,31 @@ function jumpAttackHit(){ const p=player; const kab=p.jKabuto, dn=p.jDown, drop=
     p.jHit.add(e.id);
     if(dn){ damageEnemy(e,15,p.facing*3,true); e.state='down'; e.downTimer=46;        // 下突き：突き刺して
       crescent(e.x,e.y-e.h*0.5,40,1.1,2.0,'#aef0ff'); pogo=true; }                     // ヒットで跳ね返る（ポゴ）
-    else if(ham){ damageEnemy(e,24,p.facing*2,true); if(!e.dead) launchEnemy(e, p.facing*4, -12, 3);   // ダブルハンマー：叩いて地面バウンド
-      crescent(e.x,e.y-e.h*0.5,54,-1.4,1.4,'#ffd24d'); hitStop=Math.max(hitStop,6); shake=Math.max(shake,7); }
+    else if(ham){ damageEnemy(e,26,p.facing*2,true); e.vz=0; e.z=0; e.state='down'; e.downTimer=72;   // 地球割パンチ：地面に叩き伏せる
+      crescent(e.x,e.y-e.h*0.5,56,-1.4,1.4,'#ffd24d'); hitStop=Math.max(hitStop,7); shake=Math.max(shake,10); }
     else if(hya){ damageEnemy(e,5,p.facing*1,false); if(!e.dead){ e.vx=p.facing*2.4; if(e.z<2){ e.z=2; e.vz=Math.max(e.vz,1.2); } }   // 巨大百裂拳：連打で押し込む
       crescent(e.x,e.y-e.h*0.5,52,-0.6,0.9,'#ffd24d'); }
-    else if(drop){ damageEnemy(e,18,p.facing*4,true); if(!e.dead) launchEnemy(e, p.facing*24, -7, 3);   // ドロップキック：大きく蹴り飛ばす
-      crescent(e.x,e.y-e.h*0.5,50,-0.3,0.6,'#9fe8ff'); hitStop=Math.max(hitStop,5); }
+    else if(drop){ damageEnemy(e,20,p.facing*3,true); e.vz=0; e.z=0; e.state='down'; e.downTimer=60;   // 回転踵落とし：上から踏み砕く
+      crescent(e.x,e.y-e.h*0.5,52,0.9,2.1,'#9fe8ff'); spark(e.x,e.y,'#fff',12,9); hitStop=Math.max(hitStop,6); shake=Math.max(shake,6); }
     else if(kab){ damageEnemy(e,20,p.facing*4,true); e.vz=0; e.z=0; e.state='down'; e.downTimer=70; // 兜割：地面に叩き伏せる
       crescent(e.x,e.y-e.h*0.5,52,-1.6,1.5,'#fff0c0'); }
     else { damageEnemy(e,12,0,false); if(!e.dead) launchEnemy(e, p.facing*7, -9, Math.max(e.bounces||0,2));   // 空中斬り：浮かせ続けてエリアルレイブ
       crescent(e.x,e.y-e.h*0.5,46,-0.7,0.9,'#ffffff'); } });
   if(dn&&pogo){ p.vz=9.5; p.jAtk=0; p.jHit=new Set(); }   // 跳ね返って再度突きを狙える
 }
-function hammerLand(){ const p=player;
-  spark(p.x,p.y,'#ffd24d',16,10); ring(p.x,p.y,'#ffd24d'); dust(p.x,p.y,12); shake=8; hitStop=7; sfx.big();
-  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<82 && Math.abs(e.y-p.y)<40){ damageEnemy(e,10,Math.sign(e.x-p.x||p.facing)*7,true); if(!e.dead&&e.z<2){ e.z=2; e.vz=Math.max(e.vz,2); } } }); }
+// 地球割パンチ着地：地面が割れて大きく揺れる（広範囲の地震）
+function earthSplit(){ const p=player;
+  shake=18; flash=Math.max(flash,4); hitStop=Math.max(hitStop,12); triggerSlow(22); sfx.big(); sfx.ko();
+  ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#fff'); spark(p.x,p.y,'#ffd24d',26,13); dust(p.x,p.y,20);
+  popText(p.x,p.y-90,'地球割り！','#ffd24d',true);
+  // 地割れの演出（左右に走る亀裂）＝ringとsparkで表現
+  for(let k=1;k<=5;k++){ for(const sgn of [-1,1]){ const cx=p.x+sgn*k*36; spark(cx,p.y,'#7a5a2a',4,4); ring(cx,p.y,'#caa54a'); } }
+  quake=Math.max(quake||0,26);   // 画面の余韻揺れ
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<200 && Math.abs(e.y-p.y)<60){ damageEnemy(e,16,Math.sign(e.x-p.x||p.facing)*10,true); if(!e.dead&&e.z<2){ e.z=2; e.vz=Math.max(e.vz,3); } } }); }
+// 回転踵落とし着地：小さな踏み込み衝撃
+function heelLand(){ const p=player;
+  spark(p.x,p.y,'#9fe8ff',12,9); ring(p.x,p.y,'#9fe8ff'); dust(p.x,p.y,10); shake=Math.max(shake,6); hitStop=Math.max(hitStop,4); sfx.big();
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<70 && Math.abs(e.y-p.y)<38){ damageEnemy(e,12,Math.sign(e.x-p.x||p.facing)*8,true); } }); }
 function kabutoLand(){ const p=player;
   spark(p.x,p.y,'#fff0c0',18,11); ring(p.x,p.y,'#ffd24d'); dust(p.x,p.y,14); shake=9; hitStop=8; sfx.big();
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy||e.z>10)return; if(Math.abs(e.x-p.x)<76 && Math.abs(e.y-p.y)<40){ damageEnemy(e,12,Math.sign(e.x-p.x||p.facing)*9,true); } }); }
@@ -826,16 +839,16 @@ function beginTriangle(e){ const p=player, dir=p.facing;
   p.tkTarget=e; p.state='tkick'; p.tkPhase=0; p.tkT=0; p.z=0; p.vz=0; p.tkHit=false; p.tkBackDir=-dir; p.invuln=Math.max(p.invuln,44);
   sfx.dash(); popText(p.x,p.y-104,'三角蹴り!','#9fe8ff',true); }
 function updateTriangle(){ const p=player, e=p.tkTarget; p.tkT++;
-  if(p.tkPhase===0){ // 壁へ飛び上がる
-    const k=Math.min(1,p.tkT/12); p.z=132*k; p.x=clamp(p.x+p.tkBackDir*7, camX+18, camX+W-18);
-    if(p.tkT>=12){ p.tkPhase=1; p.tkT=0; p.facing=-p.tkBackDir; spark(p.x,p.y-p.z,'#9fe8ff',14,9); ring(p.x,p.y-p.z,'#bfe9ff'); sfx.dash(); }
-  } else { // 壁を蹴って斜め下へ突進
-    const k=Math.min(1,p.tkT/16); p.z=132*(1-k); p.x+=p.facing*10;
+  if(p.tkPhase===0){ // 壁へ高く飛び上がる（約3倍の高さ）
+    const k=Math.min(1,p.tkT/18); p.z=390*Math.sin(k*Math.PI*0.5); p.x=clamp(p.x+p.tkBackDir*7, camX+18, camX+W-18);
+    if(p.tkT>=18){ p.tkPhase=1; p.tkT=0; p.facing=-p.tkBackDir; spark(p.x,p.y-p.z,'#9fe8ff',16,10); ring(p.x,p.y-p.z,'#bfe9ff'); sfx.dash(); }
+  } else { // 壁を蹴って斜め下へ急降下突進
+    const k=Math.min(1,p.tkT/22); p.z=390*(1-k); p.x+=p.facing*11;
     if(!p.tkHit){ for(const o of enemies){ if(o.dead||o.grabbedBy)continue;
       if(Math.abs(o.x-p.x)<62 && Math.abs(o.y-p.y)<50 && p.z<74){ p.tkHit=true;
         damageEnemy(o,26,p.facing*6,true); if(!o.dead)launchEnemy(o,p.facing*30,-8,4);
         spark(o.x,o.y-o.h*0.5,'#fff',20,12); ring(o.x,o.y-o.h*0.5,'#9fe8ff'); shake=11; flash=Math.max(flash,3); hitStop=12; triggerSlow(20); sfx.big(); break; } } }
-    if(p.tkT>=16||p.z<=0){ p.z=0; p.state='idle'; p.tkTarget=null; dust(p.x,p.y,8); } }
+    if(p.tkT>=22||p.z<=0){ p.z=0; p.state='idle'; p.tkTarget=null; dust(p.x,p.y,8); } }
   p.x=clamp(p.x,camX+24,camX+W-24);
 }
 function zankaiBoom(e){ ring(e.x,e.y-e.h*0.5,'#ff4d6a'); ring(e.x,e.y-e.h*0.5,'#fff'); spark(e.x,e.y-e.h*0.5,'#ff4d6a',30,13); dust(e.x,e.y,14);
@@ -919,13 +932,13 @@ function beginSlide(){ const p=player; p.state='slide'; p.slideT=0; p.vx=p.facin
   p.invuln=Math.max(p.invuln,24); sfx.dash(); dust(p.x,p.y,7); spark(p.x,p.y-8,'#cfe6ff',6,5); }
 // ローリング回避：入力方向（無ければ向き）へ転がって無敵で避ける
 function beginRoll(){ const p=player; const dir=K.left?-1:K.right?1:p.facing;
-  p.state='roll'; p.rollT=0; p.rollDir=dir; p.rollRot=0; p.facing=dir; p.vx=dir*13; p.charge=0; p.atkHeld=false;
-  p.invuln=Math.max(p.invuln,20); sfx.dash(); dust(p.x,p.y,8); spark(p.x,p.y-12,'#cfe6ff',7,6); }
-function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.86; p.rollRot+=p.rollDir*0.40;
-  if(p.rollT<16) p.invuln=Math.max(p.invuln,3);    // 転がり中は無敵
+  p.state='roll'; p.rollT=0; p.rollDir=dir; p.rollRot=0; p.facing=dir; p.vx=dir*19; p.charge=0; p.atkHeld=false;
+  p.invuln=Math.max(p.invuln,26); sfx.dash(); dust(p.x,p.y,8); spark(p.x,p.y-12,'#cfe6ff',7,6); }
+function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.92; p.rollRot+=p.rollDir*0.40;
+  if(p.rollT<22) p.invuln=Math.max(p.invuln,3);    // 転がり中は無敵
   if(gf%2===0)dust(p.x,p.y,2);
   p.x=clamp(p.x,camX+24,Math.min(WORLD_END,camX+W-24));
-  if(p.rollT>=20){ p.state='idle'; } }
+  if(p.rollT>=28){ p.state='idle'; } }
 function updateSlide(){ const p=player; p.slideT++; p.x+=p.vx; p.vx*=0.9;
   // 攻撃判定（低い姿勢で蹴り抜ける）
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy||p.slideHit.has(e.id))return; if(Math.abs(e.y-p.y)>30)return;
@@ -1173,11 +1186,12 @@ function dropFromEnemy(e,T){
   const r=Math.random();
   if(r<0.11) makeItem(e.x,'hp');
   else if(r<0.23) makeItem(e.x,weaponDropKind());
+  else if(r<0.27) makeItem(e.x,'costume');   // お着替えアイテム（見た目が豪華に）
 }
 function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=1100;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.rise(); }
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
-  if(kind==='hp') return true;
+  if(kind==='hp'||kind==='costume') return true;
   if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa';   // シマ＝拳法武器のみ
   return kind==='spear'||kind==='hammer'||kind==='dagger';          // イッヌ＝剣系のみ
 }
@@ -1193,6 +1207,7 @@ function updateItems(){
     if(it.z>0||it.vz<0){ it.z=Math.max(0,it.z-it.vz); it.vz+=0.7; it.x+=it.vx; it.vx*=0.9; if(it.z<=0){ it.z=0; it.vz=0; } }
     const p=pickerFor(it);
     if(p){ if(it.kind==='hp'){ p.hp=Math.min(p.maxHp, p.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.guard(); }
+      else if(it.kind==='costume'){ p.costume=true; p.hp=Math.min(p.maxHp,p.hp+20); popText(p.x,p.y-112,(p.kind==='shima'?'豪華武闘服！':'豪華な鎧！'),'#ffe14d',true); ring(p.x,p.y-40,'#ffe14d'); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,'#ffe14d',18,9); sfx.rise(); }
       else giveWeapon(p,it.kind);
       items.splice(i,1); continue;
     }
@@ -1205,7 +1220,7 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
   // 床の影
   ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,it.z+ (8+Math.sin(it.bob)*4),12,4,0,0,7); ctx.fill();
   // 光暈
-  const gc = it.kind==='hp'?'#7dff5a':WEAPONS[it.kind].col;
+  const gc = it.kind==='hp'?'#7dff5a':(it.kind==='costume'?'#ffe14d':WEAPONS[it.kind].col);
   ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.2*Math.sin(it.bob*1.5);
   ctx.fillStyle=radGrad(0,0,20,gc,'rgba(0,0,0,0)'); ctx.beginPath(); ctx.arc(0,0,20,0,7); ctx.fill(); ctx.restore();
   if(it.kind==='hp'){ // 肉（回復）
@@ -1224,6 +1239,13 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.strokeStyle='#b9bfc9'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-1,-4); ctx.lineTo(5,-2); ctx.stroke();
     ctx.strokeStyle='#2e2012'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(5,-2); ctx.lineTo(15,8); ctx.stroke();
     ctx.fillStyle='#caa54a'; [[-12,6],[15,8]].forEach(c=>{ctx.beginPath();ctx.arc(c[0],c[1],2,0,7);ctx.fill();});
+  } else if(it.kind==='costume'){ // お着替え（光る宝箱風の衣装）
+    ctx.fillStyle=radGrad(0,-1,11,'#ffe9a0','#c8881a'); ctx.beginPath(); ctx.moveTo(-10,4);ctx.lineTo(-8,-7);ctx.lineTo(8,-7);ctx.lineTo(10,4);ctx.closePath(); ctx.fill();   // 胴鎧/道着
+    ctx.strokeStyle='#7a5a1a'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.fillRect(-2,-7,4,11);   // 前合わせ
+    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(0,-3,2.4,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.globalAlpha=0.8; ctx.beginPath(); ctx.arc(-5,-9,1.2,0,7); ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle='#ffe14d'; ctx.font='bold 9px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('★',0,-12); ctx.textAlign='left';
   } else { // tonfa（トンファー）
     ctx.rotate(-0.3); ctx.lineCap='round';
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(14,-4); ctx.stroke();
@@ -1669,7 +1691,7 @@ function update(){
   if(hitStop>0){ hitStop--; if(state==='play'){updateParticles();updateProjectiles();} return; }
   if(state!=='play') return;
   stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
-  if(shake>0)shake-=0.7; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
 }
 
 //======================================================================
@@ -1677,7 +1699,8 @@ function update(){
 //======================================================================
 function render(){
   ctx.save();
-  if(shake>0) ctx.translate(rnd(-shake,shake),rnd(-shake,shake));
+  const _q=shake+(quake>0?Math.abs(Math.sin(gf*0.9))*quake*0.5:0);
+  if(_q>0) ctx.translate(rnd(-_q,_q),rnd(-_q*0.6,_q*0.6));
   drawBackground(); drawGround();
   drawItems();
   const order=[...enemies.map(e=>({y:e.y,e}))];
@@ -1925,6 +1948,8 @@ function drawPlayer(){
   if(st==='gswing'){ ctx.rotate(Math.sin(p.gswingRot)*0.22); }   // 振り回しで体を捻る
   const _spec = st==='attack' && p.atk && p.atk.def.special;
   if(_spec){ ctx.rotate(Math.sin(p.atk.t*0.55)*0.28); }      // 次元斬の身体ブレ
+  if(st==='attack' && p.atk && p.atk.def.spin){ ctx.rotate(p.atk.t*0.5); }   // 回し蹴り/グルグルの回転
+  if(st==='jump' && p.jDrop){ ctx.translate(0,-26); ctx.rotate((20-p.jAtk)*0.6); ctx.translate(0,26); }   // 回転踵落としの回転
 
   // ---------- pose params (swAng: 0=forward, +down) ----------
   let bodyY=0, bodyX=0, lean=0, swAng=-0.42, swExt=12, backArm=0.32, thF=0.14, thB=-0.14, kF=0.25, kB=0.25;
@@ -1952,6 +1977,8 @@ function drawPlayer(){
         const w=Math.sin(p.jAtk*1.5); swAng=0.05; trailCol='#ffd24d'; lean=0.16; bodyY=-1;
         thF=0.42; thB=-0.42; kF=0.7; kB=0.7; backArm=(w>0?-0.55:0.15);
         faL1=9+(w>0?15:2); faL2=8+(w>0?18:2); faW=0.95+(w>0?1.1:0.2);
+      } else if(p.jDrop){ // 回転踵落とし：片脚を真下へ伸ばして回転
+        mode='fist'; swAng=0.4; backArm=0.4; thF=1.5; thB=0.2; kF=0.1; kB=0.9; trailCol='#9fe8ff'; tA0=0.6; tA1=2.0; trailW=1.8; bodyY=-1; sqY=1.06;
       } else {
         swAng=lerp(-1.7,1.2,e); swExt=18*(1+1.1*big); trailCol='#fff'; tA0=-1.7; tA1=swAng;
         backArm=-1.3; faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
@@ -2078,6 +2105,13 @@ function shimaBody(lean){ ctx.save(); ctx.rotate(lean*0.22);
   // 空手の黒帯
   ctx.fillStyle='#15151a'; ctx.fillRect(-13,-12,26,5);
   ctx.fillRect(-3,-12,4,10); ctx.fillRect(2,-12,4,10);
+  if(player.costume){ // 豪華な武闘服（金帯＋肩当て）
+    ctx.fillStyle=radGrad(0,-12,10,'#ffe98a','#c8881a'); ctx.fillRect(-13,-13,26,5);
+    ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.moveTo(0,-8);ctx.lineTo(-5,9);ctx.lineTo(0,4);ctx.lineTo(5,9);ctx.closePath(); ctx.fill();   // 帯結び
+    ctx.fillStyle=radGrad(-13,-31,7,'#fff7d0','#c8881a'); ctx.beginPath(); ctx.arc(-12,-30,6,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(13,-31,7,'#fff7d0','#c8881a'); ctx.beginPath(); ctx.arc(12,-30,6,0,7); ctx.fill();
+    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(0,-24,2.4,0,7); ctx.fill();
+  }
   ctx.restore();
 }
 function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3);
@@ -2098,6 +2132,11 @@ function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3)
   ctx.fillStyle='#0a0a0e'; ctx.beginPath(); ctx.ellipse(-3,-1,6.6,4.6,0,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(8.5,-1,6.6,4.6,0,0,7); ctx.fill();
   ctx.fillStyle='#15151a'; ctx.fillRect(2.5,-2.5,3.5,2.5);
   ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(-5,-2.6,1.5,0,7); ctx.arc(6.5,-2.6,1.5,0,7); ctx.fill();
+  if(player.costume){ // 金の鉢巻
+    ctx.fillStyle=radGrad(0,-11,12,'#ffe98a','#c8881a'); ctx.fillRect(-17,-12,34,5);
+    ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.arc(0,-9.5,2,0,7); ctx.fill();
+    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.moveTo(-17,-11);ctx.lineTo(-27,-6);ctx.lineTo(-17,-4);ctx.fill();   // 結び目のたれ
+  }
   ctx.restore();
 }
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
@@ -2169,6 +2208,14 @@ function chibiBody(lean){
   // belt + buckle
   ctx.fillStyle='#7a5a2a'; ctx.fillRect(-12,-17,24,4);
   ctx.fillStyle=radGrad(0,-15,5,'#ffe98a','#c8881a'); ctx.beginPath(); ctx.arc(0,-15,3.6,0,7); ctx.fill();
+  if(player.costume){ // 豪華な黄金の鎧
+    ctx.fillStyle=radGrad(0,-26,16,'#fff7d0','#c8881a'); ctx.beginPath(); ctx.ellipse(0,-24,11,12,0,0,7); ctx.fill();   // 胸当て
+    ctx.strokeStyle='#7a5a1a'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.moveTo(0,-32);ctx.lineTo(0,-19); ctx.moveTo(-5,-27);ctx.lineTo(5,-27); ctx.lineWidth=3; ctx.strokeStyle='#c0392b'; ctx.stroke();
+    ctx.fillStyle=radGrad(-12,-31,8,'#fff7d0','#c8881a'); ctx.beginPath(); ctx.arc(-12,-30,6,0,7); ctx.fill();   // 肩当て
+    ctx.fillStyle=radGrad(12,-31,8,'#fff7d0','#c8881a'); ctx.beginPath(); ctx.arc(12,-30,6,0,7); ctx.fill();
+    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.moveTo(0,-23);ctx.lineTo(3,-17);ctx.lineTo(-3,-17);ctx.closePath(); ctx.fill();   // エンブレム
+  }
   ctx.restore();
 }
 function chibiHead(lean){
@@ -2212,6 +2259,12 @@ function chibiHead(lean){
   }
   // holy halo
   ctx.strokeStyle='rgba(255,224,120,.9)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.ellipse(0,-21,11,3.6,0,0,7); ctx.stroke();
+  if(player.costume){ // 黄金の王冠
+    ctx.fillStyle=radGrad(0,-24,12,'#fff7d0','#c8881a'); ctx.beginPath();
+    ctx.moveTo(-12,-18); ctx.lineTo(-12,-27); ctx.lineTo(-6,-22); ctx.lineTo(0,-31); ctx.lineTo(6,-22); ctx.lineTo(12,-27); ctx.lineTo(12,-18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.arc(0,-23,1.8,0,7); ctx.fill();
+    for(const cx of [-12,0,12]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cx,-27,1.3,0,7); ctx.fill(); }
+  }
   ctx.restore();
 }
 
