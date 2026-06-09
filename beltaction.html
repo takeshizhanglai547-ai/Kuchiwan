@@ -1039,7 +1039,9 @@ const ETYPE={
   moloch:{hp:540,sp:1.2,dmg:16,atkR:80,w:146,h:152,c1:'#e86038',c2:'#9c3016',c3:'#4a1408',score:4600,boss:true,bossKind:'moloch',weapon:'fire', accent:'#ffb02e', name:'業火のモロク'},
   cerbe: {hp:520,sp:2.8,dmg:15,atkR:80,w:110,h:118,c1:'#8a6fc0',c2:'#4e3676',c3:'#241636',score:5200,boss:true,bossKind:'cerbe', weapon:'claw', accent:'#b06bff', name:'三頭のケルベ'},
   glaton:{hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
-  boss:  {hp:980,sp:1.3,dmg:18,atkR:84,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝'},
+  boss:  {hp:900,sp:1.3,dmg:18,atkR:84,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝', evolveTo:'boss2'},
+  boss2: {hp:1150,sp:1.5,dmg:22,atkR:98,w:182,h:200,c1:'#3a2a52',c2:'#22163a',c3:'#0c0814',score:0,boss:true,bossKind:'wolfking',weapon:'none',accent:'#c46bff', name:'異形狼ダークワンワン', evolveTo:'boss3'},
+  boss3: {hp:1050,sp:2.4,dmg:20,atkR:78,w:64, h:106,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ---- 個性派ボス ----
   dragon:{hp:780,sp:1.6,dmg:18,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
   ghost: {hp:240,sp:2.1,dmg:13,atkR:84,w:84, h:118,c1:'#cfe6ff',c2:'#8fb6d8',c3:'#5a7ba0',score:2600,boss:true,bossKind:'ghost', weapon:'scythe',accent:'#bfe9ff',name:'お化けのT太郎',flyer:true},
@@ -1068,13 +1070,16 @@ const BOSSMOVES={
   pirate: ['summonCrew','cutlassCombo','cannonFire','cutlassCombo','unblockSmash'],
   noroinu:['curseFlame','clawCombo','curseDash','curseFlame'],
   cactus: ['spikeVolley','growCactus','spikeBurst','spikeVolley','rollTackle'],
+  wolfking:['lunge','bodyCharge','clawCombo','groundSlam','darkBeam','summon','unblockSmash','orbSpread'],
+  darkknight:['rivalCombo','rivalDash','rivalShoryu','rivalCharge','teleSlash','darkBeam','orbSpread'],
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
   moloch:'業火に焼かれて消えるがいい！', boss:'ワンワン帝国の力を思い知れ！', bitter:'フッ…相手になるかな？',
   dragon:'我が業火、ジャンプでかわせるか？', ghost:'ヒヒヒ…３人で斬り刻んでやる〜', slime:'ぷるぷる…叩くほど増えるぞ！', rival:'貴様の技、すべて頂いた！',
   shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
-  cactus:'チクチクの雨を浴びるがいい！' };
+  cactus:'チクチクの雨を浴びるがいい！',
+  wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！' };
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:t.hp,maxHp:t.hp,w:t.w,h:t.h,
     state:'walk',anim:Math.random()*6,atkTimer:0,atkMax:0,telegraph:0,teleMax:0,hurtTimer:0,downTimer:0,stun:0,
@@ -1090,6 +1095,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   const T=ETYPE[e.type];
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
+  if(e.transform>0){ spark(e.x,e.y-e.h*0.5,'#c46bff',5,6); return; }   // 形態進化中は無敵
   if(T.boss){ knockdown=false; launch=0; }                 // bosses have hyper-armor (no juggle/knockdown)
   if(!T.boss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hp-=dmg; if(!T.boss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
@@ -1124,13 +1130,25 @@ function startBlastoff(e,dir){ const T=ETYPE[e.type];
 function starTwinkle(e){ const sx=clamp(e.x, camX+24, camX+W-24), sy=clamp(e.y-e.z, 28, GROUND_TOP-10);
   particles.push({k:'twinkle',x:sx,y:sy,life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
   ring(sx,sy,'#ffe14d'); spark(sx,sy,'#fff',10,7); popText(sx,sy-12,'キラーン☆','#ffe14d',true); sfx.twinkle(); }
-function killEnemy(e){ const T=ETYPE[e.type]; e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
+function killEnemy(e){ const T=ETYPE[e.type];
+  if(T.evolveTo){ evolveBoss(e,T); return; }               // 多段ボス：倒すと次形態へ進化
+  e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
   if(T.bomber) bomberBoom(e);
   dropFromEnemy(e,T);
-  if(T.bossKind==='emperor'){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
+  if(T.finalBoss){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
+// ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
+function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
+  score+=8000;
+  e.type=nt; e.hp=N.hp; e.maxHp=N.hp; e.w=N.w; e.h=N.h; e.phase=(e.phase||1)+1;
+  e.transform=70; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
+  e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
+  flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(); sfx.ko();
+  for(let k=0;k<8;k++){ ring(e.x+rnd(-40,40),e.y-e.h*0.4,'#c46bff'); spark(e.x+rnd(-40,40),e.y-rnd(0,e.h),'#c46bff',12,10); }
+  popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true); popText(e.x,e.y-e.h-2,N.name,'#c46bff',true);
+  Music.setMode&&Music.setMode('boss'); }
 function bomberBoom(e){ ring(e.x,e.y-e.h*0.4,'#ff4d3a'); ring(e.x,e.y-e.h*0.4,'#fff'); spark(e.x,e.y-e.h*0.4,'#ffae42',26,12); dust(e.x,e.y,12);
   shake=Math.max(shake,11); flash=Math.max(flash,4); hitStop=Math.max(hitStop,8); sfx.big(); popText(e.x,e.y-e.h-10,'ドカン！','#ff7a2a',true);
   const R=108;
@@ -1432,6 +1450,9 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
 }
 function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
   e.anim+=0.16; e.bob+=0.1; if(e.vanish>0)e.vanish--;
+  if(e.transform>0){ e.transform--; e.state='walk'; e.vx=0; e.facing=dx<0?-1:1;   // 進化の演出中は無敵で咆哮
+    if(gf%2===0) spark(e.x+rnd(-e.w*0.4,e.w*0.4), e.y-rnd(0,e.h), '#c46bff', 2, 7);
+    if(e.transform===1) sfx.boss(); return; }
   if(e.moveCd>0)e.moveCd--; if(e.stun>0)e.stun--;
   // ── per-boss signature flavor ──
   if(kind==='moloch' && gf%4===0) spark(e.x+rnd(-26,26), e.y-e.h*rnd(0.3,0.95), '#ff9a3a', 2, 4);
@@ -2215,7 +2236,7 @@ function drawEnemy(e){
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.slimey) drawSlime(e);
-  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else drawBigBoss(e); }
+  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e); else drawBeast(e);
   if(t.guarder) drawEnemyShield(e);
   ctx.restore();
@@ -2641,6 +2662,37 @@ function drawWarpdog(e){ const t=ETYPE[e.type]; const atk=e.state==='attack', wa
   ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.arc(17,-45,2,0,7); ctx.fill();
   ctx.fillStyle='#ff5a6a'; ctx.beginPath(); ctx.ellipse(13,-38,3,5,0,0,7); ctx.fill();   // 赤い舌
 }
+// ── 第二形態：異形の巨大な狼 ──
+function drawWolfKing(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove',wind=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*1.2)*5:0;
+  ctx.save(); ctx.scale(1.28,1.28);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(0,-72,76,'rgba(150,70,240,.26)','rgba(120,40,220,0)'); ctx.beginPath(); ctx.arc(0,-72,76,0,7); ctx.fill(); ctx.restore();   // 暗黒オーラ
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-42,-62); ctx.quadraticCurveTo(-104,-116,-78,-42); ctx.quadraticCurveTo(-58,-70,-34,-54); ctx.fill();   // 尾
+  ctx.fillStyle=t.c3; ctx.fillRect(-46,-34+walk,21,40); ctx.fillRect(26,-34-walk,21,40);   // 後脚
+  ctx.fillStyle='#1a1226'; for(const lx of [-46,26]) for(let i=0;i<3;i++){ ctx.beginPath(); ctx.moveTo(lx+i*7,6);ctx.lineTo(lx+i*7-3,18);ctx.lineTo(lx+i*7+4,18);ctx.fill(); }
+  ctx.fillStyle=radGrad(0,-72,62,shade(t.c1,22),t.c2); ctx.beginPath(); ctx.ellipse(0,-68,54,46,0,0,7); ctx.fill();   // 巨体
+  ctx.fillStyle=t.c3; ctx.beginPath(); ctx.moveTo(-44,-96); for(let i=-3;i<=3;i++){ ctx.lineTo(i*15,-120-((i&1)?0:16)); ctx.lineTo(i*15+8,-96); } ctx.closePath(); ctx.fill();   // 背の棘毛
+  ctx.fillStyle=radGrad(30,-98,36,shade(t.c1,24),t.c2); ctx.beginPath(); ctx.ellipse(32,-96,35,31,0,0,7); ctx.fill();   // 巨頭
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(16,-120);ctx.lineTo(6,-156);ctx.lineTo(30,-124);ctx.fill(); ctx.beginPath(); ctx.moveTo(46,-120);ctx.lineTo(60,-154);ctx.lineTo(52,-122);ctx.fill();   // 耳
+  const open=(atk||wind)?16:8;
+  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.moveTo(42,-98);ctx.lineTo(76,-94);ctx.lineTo(76,-78);ctx.lineTo(42,-82); ctx.fill();   // 鼻面
+  ctx.fillStyle='#3a0a14'; ctx.beginPath(); ctx.ellipse(60,-86,15,open,0,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; for(let i=0;i<6;i++){ const tx=44+i*6; ctx.beginPath(); ctx.moveTo(tx,-95);ctx.lineTo(tx+2,-86);ctx.lineTo(tx+4,-95);ctx.fill(); ctx.beginPath(); ctx.moveTo(tx,-77);ctx.lineTo(tx+2,-86);ctx.lineTo(tx+4,-77);ctx.fill(); }   // 牙
+  for(const ex of [22,42]){ ctx.fillStyle=radGrad(ex,-106,7,'#fff','#c46bff'); ctx.beginPath(); ctx.ellipse(ex,-106,6.5,5.4,0,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.ellipse(ex+1,-106,2.2,3.2,0,0,7); ctx.fill(); }
+  ctx.strokeStyle='#000'; ctx.lineWidth=3.2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(12,-114);ctx.lineTo(30,-107); ctx.moveTo(50,-114);ctx.lineTo(36,-107); ctx.stroke();
+  const arm=wind?-1.3:(atk?(-1.3+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.1):-0.25);   // 前脚（爪）
+  ctx.save(); ctx.translate(10,-58); ctx.rotate(arm); ctx.fillStyle=t.c2; ctx.fillRect(-8,0,16,42);
+  ctx.fillStyle='#e8e0d0'; for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(i*8,42);ctx.lineTo(i*8-4,64);ctx.lineTo(i*8+5,62);ctx.fill(); } ctx.restore();
+  ctx.restore();
+}
+// ── 最終形態：暗黒剣士ダークワンワン（黒いイッヌの剣士＋暗黒オーラ）──
+function drawDarkKnight(e){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<5;i++){ const a=gf*0.12+i*1.26, ax=Math.cos(a)*12, ay=-44+Math.sin(a)*26;
+    ctx.fillStyle=radGrad(ax,ay,20,'rgba(180,100,255,.5)','rgba(120,40,220,0)'); ctx.beginPath(); ctx.arc(ax,ay,20,0,7); ctx.fill(); }
+  ctx.fillStyle=radGrad(0,-46,48,'rgba(150,70,240,.28)','rgba(120,40,220,0)'); ctx.beginPath(); ctx.arc(0,-46,48,0,7); ctx.fill();
+  ctx.restore();
+  drawRival(e);   // 黒い犬の剣士の本体（イッヌに似た小型シルエット）
+}
 function drawBossWeapon(t,e,atk){
   switch(t.weapon){
     case 'claw': ctx.fillStyle=t.c1; ctx.fillRect(-4,-9,12,18); ctx.fillStyle='#e8e0d0';
@@ -2759,7 +2811,8 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
-  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針' };
+  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針',
+  wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
 const STORY_OPEN=[
   {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれる王国は、穏やかな陽だまりに包まれていた。'},
   {bgTheme:4, art:'invade', name:'', text:'だがある日、闇の軍勢「ダークワンワン帝国」が攻め込んできた！'},
@@ -2812,7 +2865,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
