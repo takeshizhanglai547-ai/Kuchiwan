@@ -441,7 +441,7 @@ const ATK={
   sdropkick:{name:'ドロップキック', dur:24, act:[5,18], reach:96, hh:50, dmg:17,kb:13,from:0.15,to:0.15, len:26, trail:'#9fe8ff', fist:true, kick:true, move:9.5, knock:true, finisher:true, dropk:true},
   spunch:{name:'踏み込み正拳突き', dur:22, act:[6,13], reach:96, hh:42, dmg:20,kb:13,from:0,to:0, len:30, trail:'#ffd24d', fist:true, punch:true, lunge:6.5, knock:true, finisher:true},
   sflykick:{name:'飛び蹴り', dur:28, act:[5,22], reach:94, hh:520, dmg:19,kb:15,from:0.15,to:0.15, len:24, trail:'#9fe8ff', fist:true, kick:true, move:14, knock:true, finisher:true, fly:true},
-  sroundhouse:{name:'移動回し蹴り乱舞', dur:44, act:[4,40], reach:92, hh:50, dmg:7,kb:5,from:-1.7,to:1.7, len:26, trail:'#9fe8ff', fist:true, kick:true, move:5.5, multi:true, multiGap:6, knock:true, finisher:true, spin:true},
+  sroundhouse:{name:'移動百烈脚', dur:44, act:[4,40], reach:92, hh:48, dmg:6,kb:4,from:0.2,to:0.2, len:22, trail:'#9fe8ff', fist:true, kick:true, move:5.0, multi:true, multiGap:4, knock:true, finisher:true, hyaku:true},
   spindash:{name:'グルグルパンチ突進', dur:32, act:[3,26], reach:80, hh:54, dmg:6,kb:5,from:-3.0,to:3.0,len:22, trail:'#ffd24d', fist:true, punch:true, move:8.5, multi:true, multiGap:4, stinger:true, spin:true, respin:true},
   tornado:{name:'昇竜旋風脚', dur:32, act:[2,26], reach:66, hh:520, dmg:6, kb:5, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:4, shoryu:true, tornado:true},
   // ── 武器別コンボ：槍（イッヌ）＝突き主体 ──
@@ -1156,12 +1156,13 @@ function killEnemy(e){ const T=ETYPE[e.type];
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   score+=8000;
   e.type=nt; e.hp=N.hp; e.maxHp=N.hp; e.w=N.w; e.h=N.h; e.phase=(e.phase||1)+1;
-  e.transform=70; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
+  e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
   flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(); sfx.ko();
   for(let k=0;k<8;k++){ ring(e.x+rnd(-40,40),e.y-e.h*0.4,'#c46bff'); spark(e.x+rnd(-40,40),e.y-rnd(0,e.h),'#c46bff',12,10); }
-  popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true); popText(e.x,e.y-e.h-2,N.name,'#c46bff',true);
-  Music.setMode&&Music.setMode('boss'); }
+  popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true);
+  startTransformCut(nt);   // 形態変化のデモシーンを再生 → 終了後に戦闘再開
+}
 function bomberBoom(e){ ring(e.x,e.y-e.h*0.4,'#ff4d3a'); ring(e.x,e.y-e.h*0.4,'#fff'); spark(e.x,e.y-e.h*0.4,'#ffae42',26,12); dust(e.x,e.y,12);
   shake=Math.max(shake,11); flash=Math.max(flash,4); hitStop=Math.max(hitStop,8); sfx.big(); popText(e.x,e.y-e.h-10,'ドカン！','#ff7a2a',true);
   const R=108;
@@ -2019,7 +2020,11 @@ function drawPlayer(){
     bodyY=-2*e-4*windup; bodyX=7*big-3*windup;
     faL1=9+12*big; faL2=8+15*big; faW=0.95+1.0*big; legF1=10+6*big; legF2=9+6*big;
     sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
-    if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; } }
+    if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; }
+    if(def.hyaku){ // 移動百烈脚：本体は回らず、前後の脚を高速で繰り出す
+      const w=Math.sin(t*1.5); mode='fist'; lean=0.22; bodyY=-1; swAng=0.15; backArm=0.6;
+      thF=0.45+Math.max(0,w)*1.15; kF=0.1; thB=-0.3-Math.max(0,-w)*0.5; kB=0.4; legF1=10+(w>0?9:0); legF2=9+(w>0?11:0);
+      tA0=-0.2; tA1=0.5; trailW=1.4; } }
 
   const shima = p.kind==='shima';
   const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa');   // 拳法武器を装備中
@@ -2738,13 +2743,50 @@ function drawWolfKing(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove',win
   ctx.restore();
 }
 // ── 最終形態：暗黒剣士ダークワンワン（黒いイッヌの剣士＋暗黒オーラ）──
-function drawDarkKnight(e){
+// 最終形態：暗黒剣士ダークワンワン（ダースベイダー風のオリジナル黒騎士＋赤い光刃）
+function drawDarkKnight(e){ const atk=e.state==='bmove', tele=e.state==='bwind', walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  // 暗黒オーラ
   ctx.save(); ctx.globalCompositeOperation='lighter';
-  for(let i=0;i<5;i++){ const a=gf*0.12+i*1.26, ax=Math.cos(a)*12, ay=-44+Math.sin(a)*26;
-    ctx.fillStyle=radGrad(ax,ay,20,'rgba(180,100,255,.5)','rgba(120,40,220,0)'); ctx.beginPath(); ctx.arc(ax,ay,20,0,7); ctx.fill(); }
-  ctx.fillStyle=radGrad(0,-46,48,'rgba(150,70,240,.28)','rgba(120,40,220,0)'); ctx.beginPath(); ctx.arc(0,-46,48,0,7); ctx.fill();
+  ctx.fillStyle=radGrad(0,-58,56,'rgba(140,40,60,.22)','rgba(120,20,40,0)'); ctx.beginPath(); ctx.arc(0,-58,56,0,7); ctx.fill();
+  for(let i=0;i<4;i++){ const a=gf*0.1+i*1.6, ax=Math.cos(a)*14, ay=-56+Math.sin(a)*30; ctx.fillStyle=radGrad(ax,ay,16,'rgba(180,60,90,.4)','rgba(120,20,40,0)'); ctx.beginPath(); ctx.arc(ax,ay,16,0,7); ctx.fill(); }
   ctx.restore();
-  drawRival(e);   // 黒い犬の剣士の本体（イッヌに似た小型シルエット）
+  // たなびく黒マント
+  const sw=Math.sin(e.anim*1.3)*5+(atk?8:0);
+  const cg=ctx.createLinearGradient(-30,-100,-6,4); cg.addColorStop(0,'#26242c'); cg.addColorStop(1,'#0a090e');
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-8,-92); ctx.quadraticCurveTo(-40,-44,-30-sw,8); ctx.quadraticCurveTo(-44,-6,-34-sw,10); ctx.lineTo(10,8); ctx.quadraticCurveTo(8,-44,-2,-90); ctx.closePath(); ctx.fill();
+  // 脚（黒ブーツ）
+  ctx.fillStyle='#0a090e'; ctx.fillRect(-15,-22+walk,11,24); ctx.fillRect(5,-22-walk,11,24);
+  ctx.fillStyle='#1c1a22'; ctx.fillRect(-15,-4,11,4); ctx.fillRect(5,-4,11,4);
+  // 胴：黒い甲冑
+  ctx.fillStyle=radGrad(0,-46,26,'#2a2832','#100e16'); ctx.beginPath(); ctx.ellipse(0,-44,19,22,0,0,7); ctx.fill();
+  ctx.strokeStyle='#3a3744'; ctx.lineWidth=1.4; ctx.stroke();
+  // 肩アーマー（角張った）
+  ctx.fillStyle='#1a1822'; ctx.beginPath(); ctx.moveTo(-22,-64);ctx.lineTo(-6,-60);ctx.lineTo(-8,-46);ctx.lineTo(-22,-50);ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(22,-64);ctx.lineTo(6,-60);ctx.lineTo(8,-46);ctx.lineTo(22,-50);ctx.closePath(); ctx.fill();
+  // 胸のコントロールパネル（ライト）
+  ctx.fillStyle='#15131b'; ctx.fillRect(-8,-50,16,12); ctx.strokeStyle='#3a3744'; ctx.lineWidth=1; ctx.strokeRect(-8,-50,16,12);
+  for(const c of [['#ff4d4d',-5,-46],['#7dff5a',0,-46],['#46c8ff',5,-46],['#ffd24d',-3,-42],['#ff8a3a',3,-42]]){ ctx.fillStyle=c[0]; ctx.fillRect(c[1]-1,c[2]-1,2.4,2.4); }
+  ctx.fillStyle='#caa54a'; ctx.fillRect(-9,-37,18,3);   // ベルト
+  // 頭：ベイダー風ヘルメット
+  ctx.fillStyle=radGrad(0,-78,20,'#2c2a34','#100e16'); ctx.beginPath(); ctx.arc(0,-74,16,Math.PI,0); ctx.fill();   // ドーム
+  ctx.beginPath(); ctx.moveTo(-16,-74); ctx.lineTo(-18,-58); ctx.lineTo(18,-58); ctx.lineTo(16,-74); ctx.closePath(); ctx.fill();   // 面の下部（広がり）
+  ctx.fillStyle='#1a1822'; ctx.beginPath(); ctx.moveTo(-13,-66); ctx.lineTo(13,-66); ctx.lineTo(10,-56); ctx.lineTo(-10,-56); ctx.closePath(); ctx.fill();   // マスク
+  // 三角の眼（赤く光る）
+  ctx.fillStyle=radGrad(-7,-68,4,'#ff5a5a','#900'); ctx.beginPath(); ctx.moveTo(-12,-70);ctx.lineTo(-3,-68);ctx.lineTo(-11,-64);ctx.closePath(); ctx.fill();
+  ctx.fillStyle=radGrad(7,-68,4,'#ff5a5a','#900'); ctx.beginPath(); ctx.moveTo(12,-70);ctx.lineTo(3,-68);ctx.lineTo(11,-64);ctx.closePath(); ctx.fill();
+  // 口のグリル
+  ctx.strokeStyle='#000'; ctx.lineWidth=1.4; for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(i*4,-60);ctx.lineTo(i*4,-55); ctx.stroke(); }
+  ctx.fillStyle='#3a3744'; ctx.fillRect(-12,-61,24,2);
+  // ライトセーバー（赤い光刃）の腕
+  let ang=atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.3):(tele?-1.4:-0.35);
+  ctx.save(); ctx.translate(10,-48); ctx.rotate(ang);
+  ctx.strokeStyle='#26242c'; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12,2); ctx.stroke(); ctx.translate(12,2);
+  ctx.fillStyle='#888'; ctx.fillRect(-2,-3,7,6);   // 柄
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle='rgba(255,60,60,.5)'; ctx.lineWidth=9; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(54,0); ctx.stroke();
+  ctx.strokeStyle='#ff6a6a'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(54,0); ctx.stroke();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(52,0); ctx.stroke();
+  ctx.restore(); ctx.restore();
 }
 function drawBossWeapon(t,e,atk){
   switch(t.weapon){
@@ -2884,6 +2926,9 @@ function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=f
 function startOpening(){ Music.stop(); startCutscene(STORY_OPEN, ()=>startGame()); }
 function startBossCut(type,stageN){ Music.setMode('boss'); sfx.boss();
   startCutscene([{boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:BOSSQUOTE[type]}], ()=>{ state='play'; }); }
+// ラスボス形態変化のデモシーン
+function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode('boss'); sfx.boss();
+  startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:BOSSQUOTE[bk]||'…', transform:true}], ()=>{ state='play'; }); }
 function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(STORY_END, ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
