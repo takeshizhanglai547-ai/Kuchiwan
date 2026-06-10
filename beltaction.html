@@ -485,7 +485,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   charge:0, atkHeld:false, atkHoldF:0, riseVel:0, z:0, vz:0,
   guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, jDrop:false, jHammer:false, jHyaku:false, landT:0, aerial:0,
   hadouT:0, hadouShots:0, hadouHold:0, sevenT:0,
-  grabEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
+  grabEnemy:null, grabbedByEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
@@ -509,6 +509,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
+  if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
@@ -549,6 +550,7 @@ function updatePlayer(){
   if(p.state==='down'){ p.downTimer--; p.vx*=0.86; p.x+=p.vx; p.z=Math.max(0,p.z+ (p.riseVel||0));
     if(p.downTimer<=0){ p.state='idle'; p.invuln=55; } return; }
   if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84; if(p.hurtTimer<=0)p.state='idle'; return; }
+  if(p.state==='egrab'){ updateEnemyGrab(); return; }
   if(p.state==='grab'){ updateGrab(); return; }
   if(p.state==='slide'){ updateSlide(); return; }
   if(p.state==='roll'){ updateRoll(); return; }
@@ -1051,6 +1053,7 @@ const ETYPE={
   akita:{hp:62,sp:1.2,dmg:9,atkR:50,w:62,h:80,c1:'#efe9dd',c2:'#bcb4a4',c3:'#7e766a',score:320,guarder:true,name:'秋田の盾犬',ears:'flop'},
   bomber:{hp:18,sp:2.7,dmg:8,atkR:40,w:44,h:56,c1:'#e4ddc6',c2:'#b0a684',c3:'#6f6850',score:260,charge:true,bomber:true,accent:'#ff4d3a',name:'爆弾チワワ',ears:'flop',collar:'#ff4d3a'},
   warpdog:{hp:30,sp:2.4,dmg:9,atkR:50,w:54,h:74,c1:'#9a8fce',c2:'#6a5fa0',c3:'#3f3470',score:300,warper:true,accent:'#c89cff',name:'ワープ犬'},
+  gripper:{hp:52,sp:1.9,dmg:6,atkR:48,w:60,h:86,c1:'#7a5a9a',c2:'#4a3268',c3:'#281a3c',score:360,grappler:true,accent:'#ff6ad0',name:'組み付き犬',ears:'flop',collar:'#ff6ad0'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -1118,6 +1121,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.boss){ knockdown=false; launch=0; }                 // bosses have hyper-armor (no juggle/knockdown)
   if(!T.boss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hitFace=12;   // 被弾時のやられ顔タイマー（全エネミー共通）
+  if(e.state==='gripping'){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); }   // 掴み中に攻撃されたら解放（救出）
   e.hp-=dmg; if(!T.boss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
   spark(e.x,e.y-e.h*0.5,'#ffe14d', knockdown?13:7, knockdown?8:6);
   if(launch){ e.vz=-launch; e.state='air'; }
@@ -1151,6 +1155,7 @@ function starTwinkle(e){ const sx=clamp(e.x, camX+24, camX+W-24), sy=clamp(e.y-e
   particles.push({k:'twinkle',x:sx,y:sy,life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
   ring(sx,sy,'#ffe14d'); spark(sx,sy,'#fff',10,7); popText(sx,sy-12,'キラーン☆','#ffe14d',true); sfx.twinkle(); }
 function killEnemy(e){ const T=ETYPE[e.type];
+  if(e.grabTarget) releaseEnemyGrab(e);                     // 掴み中に倒されたらプレイヤーを解放
   if(T.evolveTo){ evolveBoss(e,T); return; }               // 多段ボス：倒すと次形態へ進化
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
   score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
@@ -1307,10 +1312,28 @@ function updateEnemies(){
     if(e.state==='pounce'){ e.x+=e.vx;
       if(!e.pounceHit && Math.abs(p.x-e.x)<42 && Math.abs(p.y-e.y)<46){ e.pounceHit=true; pounceStrike(e); }
       if(e.z<=0 && e.vz>0){ e.z=0; e.vz=0; e.state='walk'; e.thinkCd=rnd(40,80); dust(e.x,e.y,7); } continue; }
+    // 組み付き犬：掴み（溜め→突進→拘束→投げ）
+    if(e.state==='grabtele'){ e.grabTeleT--; const gp=nearestPlayerTo(e.x); e.facing=gp.x<e.x?-1:1;
+      if(gf%3<2)spark(e.x+e.facing*18,e.y-e.h*0.55,'#ff6ad0',4,6);
+      if(e.grabTeleT<=0){ e.state='grablunge'; e.grabLungeT=14; e.vx=e.facing*7.5; } continue; }
+    if(e.state==='grablunge'){ e.grabLungeT--; e.x+=e.vx; e.vx*=0.93;
+      const tgt=grabbablePlayerNear(e); if(tgt){ startEnemyGrab(e,tgt); continue; }
+      if(e.grabLungeT<=0){ e.state='walk'; e.thinkCd=rnd(24,50); e.vx=0; } continue; }
+    if(e.state==='gripping'){ const gp=e.grabTarget;
+      if(!gp||!gp.active||gp.state==='dead'||gp.grabbedByEnemy!==e){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); continue; }
+      gp.x=e.x+e.facing*30; gp.y=e.y; gp.z=0; gp.vx=0; gp.facing=-e.facing;
+      e.holdT--; if(e.biteCd>0)e.biteCd--;
+      if(e.biteCd<=0){ e.biteCd=20; gp.hp-=Math.round(ETYPE.gripper.dmg*ZAKO_DMG); spark(gp.x,gp.y-46,'#ff6ad0',8,6); shake=Math.max(shake,4); sfx.hit(); popText(gp.x,gp.y-72,'ガジガジ！','#ff9ad0');
+        if(gp.hp<=0){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); loseLife(gp); continue; } }
+      if(e.escapeMash>=e.escapeNeed){ releaseEnemyGrab(e); popText(gp.x,gp.y-92,'ふりほどいた！','#7dff5a'); ring(gp.x,gp.y-40,'#7dff5a');
+        e.state='down'; e.downTimer=34; e.stun=44; e.vx=-e.facing*5; gp.invuln=34; gp.state='idle'; continue; }
+      if(e.holdT<=0){ const dir=-e.facing; releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(36,66); e.vx=-e.facing*2;
+        popText(gp.x,gp.y-96,'投げ飛ばされた！','#ff6ad0'); hurtPlayer(gp, Math.round((ETYPE.gripper.dmg+9)*ZAKO_DMG), dir, true); gp.vx=dir*10; continue; }
+      continue; }
     if(e.state==='attack'){ e.atkTimer--;
       if(e.atkTimer===e.atkMax-3){ enemyAtkFx(e); }            // visible swipe at strike
       if(e.atkTimer===e.atkMax-4)enemyAttackHit(e);
-      if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(30,70);} if(t.charge)e.x+=e.facing*6; continue; }
+      if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(14,38);} if(t.charge)e.x+=e.facing*6; continue; }
     if(e.telegraph>0){ e.telegraph--; if(e.telegraph===0){ e.state='attack'; e.atkMax=t.charge?28:20; e.atkTimer=e.atkMax; sfx.heavy();} continue; }
     // AI (livelier: strafe/weave, pulsed speed, hops, feints)
     e.anim+=0.18; e.bob+=0.12; const dx=p.x-e.x; e.facing=dx<0?-1:1;
@@ -1324,22 +1347,24 @@ function updateEnemies(){
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(90,150); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
     if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (p.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(90,150); continue; }
+    // 組み付き犬: 近づいて掴みかかる（ガードを貫通）
+    if(t.grappler && dist<t.atkR+22 && e.thinkCd<=0 && e.stun<=0 && canGrabAnyPlayer()){ e.state='grabtele'; e.grabTeleT=15; e.facing=dx<0?-1:1; e.thinkCd=rnd(70,120); sfx.heavy(); popText(e.x,e.y-e.h-6,'がしっ…！','#ff6ad0'); continue; }
     const spd=t.sp*1.35*(0.8+0.34*Math.sin(e.bob*1.3));        // faster to match player; pulsed
     if(dist>t.atkR-6){ e.x+=Math.sign(dx)*spd; }
     else if(dist<t.atkR-34 && Math.random()<0.03){ e.x-=Math.sign(dx)*spd*0.9; }   // feint back-step
     e.y=LANE;
     if(e.z<=0 && dist>t.atkR && Math.random()<(e.type==='hyena'?0.03:0.008)){ e.vz=-6; }  // chase hop
     e.thinkCd--;
-    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0){ e.teleMax=(t.charge?32:26); e.telegraph=e.teleMax; e.thinkCd=rnd(40,90); }
+    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){ e.teleMax=(t.charge?24:17); e.telegraph=e.teleMax; e.thinkCd=rnd(22,54); }
   }
   // separation
   for(let a=0;a<enemies.length;a++)for(let b=a+1;b<enemies.length;b++){ const e1=enemies[a],e2=enemies[b];
-    if(e1.dead||e2.dead||e1.z>4||e2.z>4||e1.grabbedBy||e2.grabbedBy||e1.state==='pounce'||e2.state==='pounce'||ETYPE[e1.type].boss||ETYPE[e2.type].boss)continue;
+    if(e1.dead||e2.dead||e1.z>4||e2.z>4||e1.grabbedBy||e2.grabbedBy||e1.state==='pounce'||e2.state==='pounce'||e1.state==='gripping'||e2.state==='gripping'||ETYPE[e1.type].boss||ETYPE[e2.type].boss)continue;
     if(Math.abs(e1.y-e2.y)<18&&Math.abs(e1.x-e2.x)<30){ const push=e1.x<e2.x?-0.5:0.5; e1.x+=push*0.6; e2.x-=push*0.6; } }
 }
 // Shared melee resolver: front-arc check + guard/parry + slide/i-frame dodge. reach<0 = AoE (no facing check).
 function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
-  if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.z>14) return false;
+  if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>14) return false;
   if(Math.abs(p.y-e.y)>(hh||34)) return false;
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
@@ -1358,8 +1383,23 @@ function tryHitPlayer(e,dmg,knock,reach,hh,unblock){
   for(const p of players){ if(!p.active) continue; if(hitOnePlayer(p,e,dmg,knock,reach,hh,unblock)){ hit=true; if(reach>=0) break; } } // AoE(<0) hits both
   return hit;
 }
-const ZAKO_DMG=1.4;   // 雑魚の攻撃力アップ
+const ZAKO_DMG=2.0;   // 雑魚の攻撃力アップ（難易度UP）
 function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG,true,t.atkR*0.5+30,46); }
+// ---- 組み付き犬の掴み（プレイヤー拘束）----
+function canGrabPlayer(p){ return p && p.active && p.invuln<=0 && p.z<24 && p.state!=='dead' && p.state!=='down'
+  && p.state!=='roll' && p.state!=='slide' && p.state!=='egrab' && !p.grabbedByEnemy; }
+function canGrabAnyPlayer(){ for(const p of players){ if(canGrabPlayer(p)) return true; } return false; }
+function grabbablePlayerNear(e){ for(const p of players){ if(canGrabPlayer(p) && Math.abs(p.x-e.x)<42 && Math.abs(p.y-e.y)<46) return p; } return null; }
+function startEnemyGrab(e,p){ e.state='gripping'; e.grabTarget=p; e.holdT=80; e.biteCd=22; e.escapeNeed=10; e.escapeMash=0; e.vx=0;
+  p.state='egrab'; p.grabbedByEnemy=e; p.vx=0; p.vz=0; p.z=0; p.invuln=0; p.atkHeld=false; p.charge=0; resetCombo();
+  sfx.heavy(); shake=Math.max(shake,6); popText(p.x,p.y-92,'つかまれた！ 連打で脱出！','#ff6ad0',true); }
+function releaseEnemyGrab(e){ const p=e.grabTarget; if(p&&p.grabbedByEnemy===e){ p.grabbedByEnemy=null; if(p.state==='egrab')p.state='idle'; } e.grabTarget=null; }
+function updateEnemyGrab(){ const p=player, e=p.grabbedByEnemy;
+  if(!e||e.dead||e.state!=='gripping'){ p.grabbedByEnemy=null; p.state='idle'; return; }
+  let m=0; if(pressed.atk){pressed.atk=false;m++;} if(pressed.grab){pressed.grab=false;m++;} if(pressed.jump){pressed.jump=false;m++;}
+  if(K.left&&!p._egL)m++; if(K.right&&!p._egR)m++; p._egL=K.left; p._egR=K.right;
+  if(m>0){ e.escapeMash+=m; spark(p.x,p.y-50,'#fff',5,5); }
+  p.anim+=0.3; }
 function enemyAttackHit(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG,t.boss||t.charge,t.atkR*1.3+18,40); }
 
 //======================================================================
@@ -1559,7 +1599,7 @@ function buildEncounters(){ encounters=[
   {st:1,at:1500,boss:true,list:[['garm',1]]},
   // ── STAGE 2 ──
   {st:2,at:2100,list:[['wolf',1],['guard',1],['bomber',1]]},
-  {st:2,at:2700,list:[['boar',1],['mastiff',1],['hyena',1]]},
+  {st:2,at:2700,list:[['boar',1],['mastiff',1],['gripper',1]]},
   {st:2,at:3300,boss:true,list:[['shark',1]]},
   // ── STAGE 3 ──
   {st:3,at:3900,list:[['hyena',1],['dober',1],['guard',1],['corgi',1]]},
@@ -1567,7 +1607,7 @@ function buildEncounters(){ encounters=[
   {st:3,at:5100,boss:true,list:[['ghost',3]]},
   // ── STAGE 4 ──
   {st:4,at:5700,list:[['akita',1],['guard',1],['boar',1]]},
-  {st:4,at:6300,list:[['dober',2],['mastiff',1]]},
+  {st:4,at:6300,list:[['dober',2],['mastiff',1],['gripper',1]]},
   {st:4,at:6900,boss:true,list:[['noroinu',1]]},
   // ── STAGE 5 ──
   {st:5,at:7500,list:[['akita',1],['pounce',1],['bomber',1],['hyena',1]]},
@@ -1575,14 +1615,14 @@ function buildEncounters(){ encounters=[
   {st:5,at:8700,boss:true,list:[['cerbe',1]]},
   // ── STAGE 6 ──
   {st:6,at:9300,list:[['akita',1],['mastiff',1],['corgi',1]]},
-  {st:6,at:9900,list:[['dober',2],['warpdog',1],['guard',1]]},
+  {st:6,at:9900,list:[['dober',2],['warpdog',1],['gripper',1]]},
   {st:6,at:10500,boss:true,list:[['rival',1]]},
   // ── STAGE 7 ──
   {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
   {st:7,at:11700,mini:true,list:[['bitter',1],['guard',1]]},
   {st:7,at:12300,boss:true,list:[['glaton',1]]},
   // ── STAGE 8：キングスライム ──
-  {st:8,at:12900,list:[['wolf',1],['mastiff',1],['hyena',1]]},
+  {st:8,at:12900,list:[['wolf',1],['mastiff',1],['gripper',2]]},
   {st:8,at:13500,boss:true,list:[['slime',1]]},
   // ── STAGE 9：海賊王カイゾクカイ ──
   {st:9,at:14100,list:[['boar',1],['warpdog',1],['bomber',1]]},
@@ -1591,7 +1631,7 @@ function buildEncounters(){ encounters=[
   {st:10,at:15300,list:[['dober',1],['akita',1],['warpdog',1]]},
   {st:10,at:15900,boss:true,list:[['dragon',1]]},
   // ── STAGE 11：サボテン犬サボロー ──
-  {st:11,at:16500,list:[['warpdog',2],['corgi',1]]},
+  {st:11,at:16500,list:[['warpdog',2],['corgi',1],['gripper',2]]},
   {st:11,at:17100,boss:true,list:[['cactus',1]]},
   // ── STAGE 12：ダークワンワン大帝（最終決戦）──
   {st:12,at:17700,boss:true,list:[['boss',1]]},
@@ -1599,7 +1639,7 @@ function buildEncounters(){ encounters=[
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
   if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st); let off=0;
-    enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n*2;   // ザコは出現数2倍
+    enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n*2+1;   // ザコは出現数増（難易度UP）
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
       spawnEnemy(type,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
