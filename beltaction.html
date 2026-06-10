@@ -146,9 +146,9 @@ const GROUND_TOP = 372, GROUND_BOT = 516, WORLD_END = 18400;
 const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger sprites
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
-let state='title', camX=0, score=0;
+let state='title', camX=0, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
-let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='';
+let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='', shopPending=0;
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
 function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 
@@ -320,6 +320,8 @@ const Music=(()=>{
              mel:[64,69,72,71, 69,72,69,65, 71,74,71,67, 64,67,71,76], padType:'sawtooth', leadType:'triangle' }, // Am F G Em
     boss:{   chords:[[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
              mel:[69,74,77,76, 74,77,74,70, 70,74,70,67, 69,73,76,81], padType:'sawtooth', leadType:'square'   }, // Dm Bb Gm A
+    town:{   chords:[[60,64,67],[57,60,64],[62,65,69],[55,59,62]],
+             mel:[72,76,79,76, 71,74,71,69, 74,77,81,79, 67,71,74,72], padType:'triangle', leadType:'sine'      }, // C Am Dm G — 落ち着いた宿屋/酒場
   };
   function voice(f,t,dur,type,vol,atk,cut){ const o=actx.createOscillator(),g=actx.createGain();
     o.type=type; o.frequency.setValueAtTime(f,t);
@@ -487,7 +489,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false,
+  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
 let player=players[0];               // points to the player currently being simulated/drawn
@@ -510,7 +512,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
-  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; } }
+  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.atkMul=1; } }
 const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
@@ -666,7 +668,7 @@ function doPlayerHit(a){
   const p=player, def=a.def, W=WEAPONS[p.weapon]||WEAPONS.dagger;
   const reach=def.reach*REACH*W.reach, hh=def.hh*HH;
   const hx=p.x+p.facing*reach*0.45;
-  const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg, LX=W.launch;
+  const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg*(p.atkMul||1), LX=W.launch;
   enemies.forEach(e=>{
     if(e.dead) return;
     if(def.multi){ if(a.lastHit[e.id] && gf-a.lastHit[e.id]<(def.multiGap||8)) return; }
@@ -1155,7 +1157,7 @@ function killEnemy(e){ const T=ETYPE[e.type];
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
   if(T.bomber) bomberBoom(e);
-  dropFromEnemy(e,T);
+  dropFromEnemy(e,T); coinDrop(e,T);   // 倒すとコインを落とす
   if(T.finalBoss){ setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100); } }
 // ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
@@ -1179,6 +1181,9 @@ function bomberBoom(e){ ring(e.x,e.y-e.h*0.4,'#ff4d3a'); ring(e.x,e.y-e.h*0.4,'#
 //======================================================================
 let items=[];
 function makeItem(x,kind){ items.push({x,kind,z:46,vz:-3,vx:rnd(-1,1),life:680,bob:Math.random()*6}); }
+function makeCoin(x,val){ items.push({x,kind:'coin',val:val||1,z:rnd(40,70),vz:rnd(-4,-2),vx:rnd(-2.2,2.2),life:900,bob:Math.random()*6,spin:Math.random()*6}); }
+function coinDrop(e,T){ const n=T.boss?(T.finalBoss?30:14):(T.mini?7:(T.charge||T.guarder?3:2)); const v=T.boss?5:1;
+  for(let i=0;i<n;i++) makeCoin(e.x+rnd(-22,22), v); }
 function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー、シマ=ヌンチャク/トンファー）
   const pool=[];
   if(players.some(p=>p.active && p.kind!=='shima')) pool.push('spear','hammer');
@@ -1197,6 +1202,7 @@ function dropFromEnemy(e,T){
 function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=1100;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.rise(); }
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
+  if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
   if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa';   // シマ＝拳法武器のみ
   return kind==='spear'||kind==='hammer'||kind==='dagger';          // イッヌ＝剣系のみ
@@ -1209,8 +1215,10 @@ function pickerFor(it){ // nearest eligible player on the ground
   return best;
 }
 function updateItems(){
-  for(let i=items.length-1;i>=0;i--){ const it=items[i]; it.life--; it.bob+=0.12;
+  for(let i=items.length-1;i>=0;i--){ const it=items[i]; it.life--; it.bob+=0.12; if(it.spin!=null)it.spin+=0.3;
     if(it.z>0||it.vz<0){ it.z=Math.max(0,it.z-it.vz); it.vz+=0.7; it.x+=it.vx; it.vx*=0.9; if(it.z<=0){ it.z=0; it.vz=0; } }
+    if(it.kind==='coin'){ const tp=nearestPlayerTo(it.x); if(tp&&tp.active&&Math.abs(tp.x-it.x)<90 && it.z<24){ it.x+=Math.sign(tp.x-it.x)*4.2; }   // コインは近づくと吸い寄せ
+      if(tp&&tp.active&&Math.abs(tp.x-it.x)<30 && tp.state!=='dead'){ coins+=it.val; popText(it.x,it.y-50,'+'+it.val+'¢','#ffe14d'); sfx.guard(); items.splice(i,1); continue; } }
     const p=pickerFor(it);
     if(p){ if(it.kind==='hp'){ p.hp=Math.min(p.maxHp, p.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.guard(); }
       else if(it.kind==='costume'){ p.costume=true; p.hp=Math.min(p.maxHp,p.hp+20); popText(p.x,p.y-112,(p.kind==='shima'?'豪華武闘服！':'豪華な鎧！'),'#ffe14d',true); ring(p.x,p.y-40,'#ffe14d'); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,'#ffe14d',18,9); sfx.rise(); }
@@ -1226,10 +1234,13 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
   // 床の影
   ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,it.z+ (8+Math.sin(it.bob)*4),12,4,0,0,7); ctx.fill();
   // 光暈
-  const gc = it.kind==='hp'?'#7dff5a':(it.kind==='costume'?'#ffe14d':WEAPONS[it.kind].col);
+  const gc = it.kind==='hp'?'#7dff5a':(it.kind==='costume'||it.kind==='coin'?'#ffe14d':WEAPONS[it.kind].col);
   ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.2*Math.sin(it.bob*1.5);
   ctx.fillStyle=radGrad(0,0,20,gc,'rgba(0,0,0,0)'); ctx.beginPath(); ctx.arc(0,0,20,0,7); ctx.fill(); ctx.restore();
-  if(it.kind==='hp'){ // 肉（回復）
+  if(it.kind==='coin'){ // コイン（回転する金貨）
+    const w=Math.abs(Math.cos(it.spin||0)); ctx.fillStyle=radGrad(-2,-2,7,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.ellipse(0,0,3+6*w,8,0,0,7); ctx.fill();
+    ctx.strokeStyle='#8a5a12'; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle='#a86a18'; ctx.font='bold 8px Trebuchet MS'; ctx.textAlign='center'; if(w>0.4)ctx.fillText('¢',0,3); ctx.textAlign='left';
+  } else if(it.kind==='hp'){ // 肉（回復）
     ctx.fillStyle='#6a3b1c'; ctx.beginPath(); ctx.ellipse(0,2,12,9,0,0,7); ctx.fill();
     ctx.fillStyle='#c8814a'; ctx.beginPath(); ctx.ellipse(-1,1,9,6.5,0,0,7); ctx.fill();
     ctx.fillStyle='#f6e3c0'; ctx.fillRect(8,-1,7,4); ctx.strokeStyle='#a86a36'; ctx.lineWidth=1; ctx.strokeRect(8,-1,7,4);
@@ -1598,7 +1609,8 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
       if(enc.st<12){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
-        player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle'); }
+        player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
+        shopPending=120; }
     } else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
 }
@@ -1712,6 +1724,7 @@ function update(){
   if(state!=='play') return;
   stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(shopPending>0){ shopPending--; if(shopPending===0 && state==='play') enterShop(); }
 }
 
 //======================================================================
@@ -2887,6 +2900,12 @@ function drawHUD(){
     ctx.fillStyle='#ff5a6a'; ctx.font='13px Trebuchet MS'; ctx.fillText('♥ ×'+Math.max(0,q.lives),196,127); }
 
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 12',W/2,30);
+  // コイン所持数
+  { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
+    ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
+    ctx.strokeStyle='#a06a00'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.fillStyle='#a06a00'; ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('¢',0,1); ctx.restore();
+    ctx.textBaseline='alphabetic'; ctx.fillStyle='#ffe14d'; ctx.font='bold 16px monospace'; ctx.textAlign='left'; ctx.fillText('×'+coins, W/2-12, 51); }
   ctx.textAlign='left';
 
   const boss=enemies.find(e=>ETYPE[e.type].boss&&!e.dead);
@@ -2943,6 +2962,83 @@ function speech(x,y,txt){ ctx.font='bold 15px Trebuchet MS'; const w=ctx.measure
   ctx.fillStyle='rgba(106,45,176,.95)'; ctx.beginPath(); ctx.moveTo(x-8,y-6);ctx.lineTo(x+8,y-6);ctx.lineTo(x,y+6); ctx.fill();
   ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(txt,x,y-13); ctx.textAlign='left'; }
 function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+//======================================================================
+//  アイテムショップ「チャム」（ステージ間の宿屋・酒場）
+//======================================================================
+const SHOP_ITEMS=[
+  {name:'全回復ポーション', desc:'体力を全回復', cost:8,  buy(){ players.forEach(p=>{if(p.active)p.hp=p.maxHp;}); }},
+  {name:'タフネスの護符',   desc:'最大HP ＋30',  cost:30, buy(){ players.forEach(p=>{if(p.active){p.maxHp+=30;p.hp+=30;}}); }},
+  {name:'力の指輪',         desc:'攻撃力 ＋20％',cost:40, buy(){ players.forEach(p=>{if(p.active)p.atkMul=(p.atkMul||1)+0.2;}); }},
+  {name:'奥義の巻物',       desc:'奥義ストック上限＋1', cost:35, buy(){ players.forEach(p=>{if(p.active){p.dimMax++;p.dim=Math.min(p.dimMax,p.dim+1);}}); }},
+  {name:'いのちの肉球',     desc:'残機 ＋1',     cost:55, buy(){ players.forEach(p=>{if(p.active)p.lives++;}); }},
+  {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出る', cost:0, leave:true},
+];
+let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0;
+function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT=0; shopT=0;
+  unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); } }
+function exitShop(){ state='play'; if(Music.setMode)Music.setMode('battle'); saveProgress(stage); }
+function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
+  useInput(players[0].in);
+  if(shopNavCd>0)shopNavCd--;
+  if(shopNavCd<=0){ if(K.up){shopSel=(shopSel+SHOP_ITEMS.length-1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);}
+    else if(K.down){shopSel=(shopSel+1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);} }
+  if(pressed.atk){ pressed.atk=false; const it=SHOP_ITEMS[shopSel];
+    if(it.leave){ saveInput(players[0].in); exitShop(); return; }
+    if(coins>=it.cost){ coins-=it.cost; it.buy(); shopMsg=it.name+'を購入！'; shopMsgT=90; sfx.rise(); }
+    else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
+  if(pressed.grab||pressed.jump){ pressed.grab=false; pressed.jump=false; saveInput(players[0].in); exitShop(); return; }
+  saveInput(players[0].in); updateParticles();
+}
+function drawCham(x,y){ // 看板娘「チャム」（猫の商人）
+  ctx.save(); ctx.translate(x,y);
+  ctx.strokeStyle='#9a7a52'; ctx.lineWidth=8; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(26,8); ctx.quadraticCurveTo(56,2,50,-30); ctx.stroke();   // しっぽ
+  ctx.fillStyle=radGrad(0,-20,30,'#caa878','#9a7a52'); ctx.beginPath(); ctx.ellipse(0,-16,24,26,0,0,7); ctx.fill();                                       // 体
+  ctx.fillStyle='#e8e0cf'; ctx.beginPath(); ctx.moveTo(-14,-30);ctx.lineTo(14,-30);ctx.lineTo(10,6);ctx.lineTo(-10,6);ctx.closePath(); ctx.fill();          // エプロン
+  ctx.fillStyle='#c0392b'; ctx.fillRect(-15,-31,30,4);
+  furBall(0,-56,22,'#d8bd92','#9a7a52');                                                                                                                    // 頭
+  ctx.fillStyle='#9a7a52'; ctx.beginPath(); ctx.moveTo(-18,-70);ctx.lineTo(-26,-92);ctx.lineTo(-6,-74);ctx.fill(); ctx.beginPath(); ctx.moveTo(18,-70);ctx.lineTo(26,-92);ctx.lineTo(6,-74);ctx.fill();   // 猫耳
+  ctx.fillStyle='#e9a9c0'; ctx.beginPath(); ctx.moveTo(-17,-72);ctx.lineTo(-22,-86);ctx.lineTo(-9,-74);ctx.fill(); ctx.beginPath(); ctx.moveTo(17,-72);ctx.lineTo(22,-86);ctx.lineTo(9,-74);ctx.fill();
+  for(const ex of [-8,8]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,-56,5,6,0,0,7); ctx.fill(); ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(ex,-55,2.6,0,7); ctx.fill(); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-1,-57,1,0,7); ctx.fill(); }   // 目
+  ctx.fillStyle='rgba(240,140,160,.5)'; ctx.beginPath(); ctx.arc(-13,-50,4,0,7); ctx.arc(13,-50,4,0,7); ctx.fill();
+  ctx.strokeStyle='#5a3a1a'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-3,-48);ctx.quadraticCurveTo(0,-45,3,-48); ctx.stroke();
+  ctx.strokeStyle='rgba(90,60,30,.7)'; ctx.lineWidth=1; for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(s*10,-51);ctx.lineTo(s*26,-53); ctx.moveTo(s*10,-47);ctx.lineTo(s*26,-46); ctx.stroke(); }   // ひげ
+  const wave=Math.sin(shopT*0.15)*0.3; ctx.save(); ctx.translate(-22,-30); ctx.rotate(-0.6+wave); ctx.strokeStyle='#9a7a52'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0);ctx.lineTo(-10,-16); ctx.stroke();
+  ctx.fillStyle=radGrad(-12,-18,6,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(-12,-18,5,0,7); ctx.fill(); ctx.restore();   // 振る手＋コイン
+  ctx.restore();
+}
+function drawShop(){
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3a2a1e'); g.addColorStop(1,'#160f0a'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,220,150,.04)'; for(let x=0;x<W;x+=64) ctx.fillRect(x,0,2,H*0.62);
+  ctx.fillStyle='#2a1c12'; ctx.fillRect(40,120,300,12); ctx.fillRect(40,178,300,12);   // 棚
+  for(let i=0;i<8;i++){ const bx=58+i*36; ctx.fillStyle=['#7a3b2a','#3a6a4a','#4a4a7a','#7a6a2a'][i%4]; ctx.fillRect(bx,86,16,34); ctx.fillStyle='#caa54a'; ctx.fillRect(bx+5,80,6,8); }   // 酒瓶
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(W-120,96,72,'rgba(255,200,90,.5)','rgba(255,200,90,0)'); ctx.beginPath(); ctx.arc(W-120,96,72,0,7); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#caa54a'; ctx.fillRect(W-126,46,12,40); ctx.fillStyle='#ffd870'; ctx.beginPath(); ctx.ellipse(W-120,96,12,16,0,0,7); ctx.fill();   // ランタン
+  ctx.fillStyle='#4a2e18'; ctx.fillRect(0,H*0.62,W,H*0.38); ctx.fillStyle='#5a3a20'; ctx.fillRect(0,H*0.62,W,10);   // カウンター
+  ctx.fillStyle='rgba(0,0,0,.2)'; for(let x=0;x<W;x+=80)ctx.fillRect(x,H*0.62+12,2,H*0.36);
+  drawCham(W*0.80, H*0.62+6);
+  ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
+  ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText('アイテムショップ 「チャム」',W/2,56); ctx.fillText('アイテムショップ 「チャム」',W/2,56);
+  ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff'; ctx.fillText('〜 宿屋・酒場で装備を整えよう 〜',W/2,78);
+  ctx.fillStyle=radGrad(W/2-120,100,8,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(W/2-120,100,8,0,7); ctx.fill();
+  ctx.fillStyle='#ffe14d'; ctx.font='bold 22px Trebuchet MS'; ctx.fillText('所持コイン: '+coins+' ¢',W/2,108);
+  const mx=80,my=146,mw=470,ih=42;
+  ctx.fillStyle='rgba(8,10,20,.8)'; roundRect(mx,my,mw,SHOP_ITEMS.length*ih+44,10); ctx.fill();
+  ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(mx,my,mw,SHOP_ITEMS.length*ih+44,10); ctx.stroke();
+  ctx.textAlign='left';
+  SHOP_ITEMS.forEach((it,i)=>{ const y=my+12+i*ih; const sel=i===shopSel;
+    if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-4,mw-12,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 18px Trebuchet MS'; ctx.fillText('▶',mx+12,y+22); }
+    const afford = it.leave || coins>=it.cost;
+    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 18px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name,mx+34,y+22);
+    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.desc,mx+210,y+22);
+    if(!it.leave){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+22); ctx.textAlign='left'; }
+  });
+  const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText('最大HP '+p.maxHp+'   攻撃 ×'+(p.atkMul||1).toFixed(1)+'   残機 '+Math.max(0,p.lives)+'   奥義 '+p.dimMax, mx+8, my+SHOP_ITEMS.length*ih+34);
+  if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
+  ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+  ctx.fillText('↑↓ 選択　／　J（攻撃）で購入　／　Space（ジャンプ）で出発', W/2, H-26); ctx.textAlign='left';
+}
 
 //======================================================================
 //  Flow
@@ -3051,13 +3147,15 @@ const elStart=document.getElementById('start'),elResult=document.getElementById(
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
-function saveProgress(st){ try{ localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode})); }catch(e){} }
+function saveProgress(st){ try{
+  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,dimMax:p.dimMax,lives:p.lives}));
+  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode,coins:coins,upg:upg})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
   if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
-  score=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0;
+  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
@@ -3066,6 +3164,9 @@ function startGame(){ unlockAudio();
   if(sndOn) Music.start('battle'); }
 // セーブしたステージから再開
 function startGameAt(stageN){ startGame();
+  const sv=loadProgress();
+  if(sv){ coins=sv.coins||0;
+    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives; } }); }
   if(stageN>1){ const idx=encounters.findIndex(e=>e.st===stageN);
     if(idx>0){ for(let i=0;i<idx;i++){ encounters[i].cleared=true; encounters[i].spawned=true; }
       encIndex=idx; stage=stageN; curGateX=WORLD_END;
@@ -3150,6 +3251,7 @@ function drawTitleScene(){ drawBackground(); drawGround();
 //======================================================================
 function loop(){
   if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); requestAnimationFrame(loop); return; }
+  if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); requestAnimationFrame(loop); return; }
   // slow-motion: throttle logic ticks while keeping render smooth
   if(slowmo>0 && state==='play' && hitStop<=0){
     slowmo--; slowAcc+=0.34;
