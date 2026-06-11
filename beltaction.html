@@ -90,7 +90,7 @@
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
     <div class="moves">
-      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
+      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
     </div>
   </div>
 
@@ -142,7 +142,7 @@ function setupCanvas(){
 }
 setupCanvas();
 
-const GROUND_TOP = 372, GROUND_BOT = 516, WORLD_END = 18400;
+const GROUND_TOP = 372, GROUND_BOT = 516; let WORLD_END = 18400;
 const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger sprites
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
@@ -402,11 +402,11 @@ const Music=(()=>{
         voice(midi(m-12),t,stepDur*1.9,'triangle',0.034,0.02,2400); } }
     if(!S.soft && bar>=4 && st%2===1){ voice(midi(ch[(st>>1)%3]+12),t,stepDur*0.85,'triangle',0.028,0.01,3200); } // off-beat counter line (2nd half)
     const an=ch[ARP[st]]+(st>=4?12:0); voice(midi(an+12),t,stepDur*(S.soft?1.6:1.1),'triangle',S.soft?0.05:0.038,0.004,4600); // harp arpeggio
-    if(st===7 && mode==='battle'){ const want=clamp(stage-1,0,4); if(want!==themeIdx) themeIdx=want; } // follow stage theme at bar lines
+    if(st===7 && mode==='battle'){ const want=themeIdxFor(stage); if(want!==themeIdx) themeIdx=want; } // follow stage theme at bar lines
   }
   function tick(){ if(!playing||!actx) return;
     while(nextT < actx.currentTime+0.45){ scheduleStep(step); step=(step+1)&63; nextT+=curStep; } }
-  function applyMode(m){ mode=m; if(m==='battle') themeIdx=clamp(stage-1,0,4); }
+  function applyMode(m){ mode=m; if(m==='battle') themeIdx=themeIdxFor(stage); }
   function fadeTo(m){ if(!actx){ applyMode(m); return; }
     const g=bus().gain, t=actx.currentTime;
     g.cancelScheduledValues(t); g.setValueAtTime(g.value,t); g.linearRampToValueAtTime(0.0001,t+0.32);
@@ -440,9 +440,12 @@ const easeOut=t=>1-Math.pow(1-t,3);
 function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprite size on a single lane
 // マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
 function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
-// 谷（落ちると即死）。各ステージの道中（戦闘ゲートの間）に配置
-const PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
+// 谷（落ちると即死）。ワールド構築時にステージ区画ごとへランダム配置される
+let PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
 function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
+// ステージ番号→ビジュアルテーマ（分岐ルートで動的に決まる）
+let STAGE2THEME={}, STAGE_NAME={};
+function themeIdxFor(st){ return STAGE2THEME[st]!=null ? STAGE2THEME[st] : clamp(st-1,0,4); }
 function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
   g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
 
@@ -704,8 +707,8 @@ function updatePlayer(){
     if(p.charge>=0.45){ if(SH) beginHadou(); else beginAttack(chargeMoveFor(p)); p.charge=0; return; }   // 波動拳 / 溜め斬り（武器別）
     p.charge=0;
   }
-  // ---- grab button (掴み) ----
-  if(pressed.grab){ pressed.grab=false; tryGrab(); return; }
+  // ---- grab button (掴み)：敵がいなければ近くのNPCと会話 ----
+  if(pressed.grab){ pressed.grab=false; if(tryTalk()) return; tryGrab(); return; }
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
     pressed.atk=false;
@@ -1667,53 +1670,180 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return; p.lives--; p.h
 //  Encounters
 //======================================================================
 let encounters,curGateX=WORLD_END,encIndex=0;
-function buildEncounters(){ encounters=[
-  // ── STAGE 1 ──
-  {st:1,at:320, list:[['wolf',1],['corgi',1],['warpdog',1]]},
-  {st:1,at:900, list:[['hyena',1],['dober',1],['warpdog',1],['pounce',1]]},
-  {st:1,at:1500,boss:true,list:[['garm',1]]},
-  // ── STAGE 2 ──
-  {st:2,at:2100,list:[['wolf',1],['guard',1],['bomber',1]]},
-  {st:2,at:2700,list:[['boar',1],['mastiff',1],['gripper',1]]},
-  {st:2,at:3300,boss:true,list:[['shark',1]]},
-  // ── STAGE 3 ──
-  {st:3,at:3900,list:[['hyena',1],['dober',1],['guard',1],['corgi',1]]},
-  {st:3,at:4500,mini:true,list:[['bitter',1],['bomber',1]]},
-  {st:3,at:5100,boss:true,list:[['ghost',3]]},
-  // ── STAGE 4 ──
-  {st:4,at:5700,list:[['akita',1],['guard',1],['boar',1]]},
-  {st:4,at:6300,list:[['dober',2],['mastiff',1],['gripper',1]]},
-  {st:4,at:6900,boss:true,list:[['noroinu',1]]},
-  // ── STAGE 5 ──
-  {st:5,at:7500,list:[['akita',1],['pounce',1],['bomber',1],['hyena',1]]},
-  {st:5,at:8100,list:[['dober',1],['mastiff',1],['guard',1]]},
-  {st:5,at:8700,boss:true,list:[['cerbe',1]]},
-  // ── STAGE 6 ──
-  {st:6,at:9300,list:[['akita',1],['mastiff',1],['corgi',1]]},
-  {st:6,at:9900,list:[['dober',2],['warpdog',1],['gripper',1]]},
-  {st:6,at:10500,boss:true,list:[['rival',1]]},
-  // ── STAGE 7 ──
-  {st:7,at:11100,list:[['akita',1],['dober',1],['mastiff',1],['bomber',1],['wolf',1]]},
-  {st:7,at:11700,mini:true,list:[['bitter',1],['guard',1]]},
-  {st:7,at:12300,boss:true,list:[['glaton',1]]},
-  // ── STAGE 8：キングスライム ──
-  {st:8,at:12900,list:[['wolf',1],['mastiff',1],['gripper',2]]},
-  {st:8,at:13500,boss:true,list:[['slime',1]]},
-  // ── STAGE 9：海賊王カイゾクカイ ──
-  {st:9,at:14100,list:[['boar',1],['warpdog',1],['bomber',1]]},
-  {st:9,at:14700,boss:true,list:[['pirate',1]]},
-  // ── STAGE 10：飛竜ヴォルカ ──
-  {st:10,at:15300,list:[['dober',1],['akita',1],['warpdog',1]]},
-  {st:10,at:15900,boss:true,list:[['dragon',1]]},
-  // ── STAGE 11：サボテン犬サボロー ──
-  {st:11,at:16500,list:[['warpdog',2],['corgi',1],['gripper',2]]},
-  {st:11,at:17100,boss:true,list:[['cactus',1]]},
-  // ── STAGE 12：ダークワンワン大帝（最終決戦）──
-  {st:12,at:17700,boss:true,list:[['boss',1]]},
-]; encIndex=0; curGateX=WORLD_END; }
+let npcs=[], worldCursor=0, nextStage=1, stageStartX={}, shownStBanner={};
+let metNPC=0, chestsOpened=0, routesChosen=[];
+let pendingBranch=null, branchSel=0, branchNav=0, dialog=null;
+
+// ── ルート定義（分岐A: ステージ3-4 ／ 分岐B: ステージ5-6）──
+const ROUTE_DEFS={
+  A:[
+    {label:'業火の渓谷', theme:3, icon:'moloch',
+     desc:'灼熱の近道。業火の将モロクと呪い犬ノロが待ち受ける。腕に自信があるなら…',
+     cut:[{bgTheme:3,art:'invade',text:'灼熱の渓谷へ足を踏み入れた。大地は赤く煮え、空には火の粉が舞い踊る。'},
+          {bgTheme:3,name:'業火の将モロク',text:'「ようこそ業火の谷へ……丸焼きにしてくれるわ！」——谷の奥から哄笑が響いた。'}]},
+    {label:'月詠の森', theme:2, icon:'ghost',
+     desc:'月明かりの静かな森。だが亡霊三兄弟と三頭の獣の噂が絶えないという…',
+     cut:[{bgTheme:2,text:'青い月光が梢から差し込む森。木々の影が、生き物のようにゆらりと揺れた。'},
+          {bgTheme:2,name:'？？？',text:'「クスクス……新しいお友だちが来たよ」——どこからか、嗤い声が聞こえる。'}]},
+  ],
+  B:[
+    {label:'海賊の港町', theme:1, icon:'pirate',
+     desc:'夕陽の港町。海賊王カイゾクカイの根城だが、町の賑わいも残っている。',
+     cut:[{bgTheme:1,text:'潮風の匂い。夕陽に染まる港には、黒い帆の海賊船がずらりと並んでいた。'},
+          {bgTheme:1,name:'海賊王カイゾクカイ',text:'「俺の海に足を踏み入れるたぁ、いい度胸だなワン！」'}]},
+    {label:'灼熱の砂漠', theme:3, icon:'cactus',
+     desc:'果てなき砂の海。棘犬サボローと、遺跡に眠る鋼鉄の巨兵グラトン。',
+     cut:[{bgTheme:3,text:'照りつける太陽。揺らめく砂丘の向こうに、古代遺跡の影が見えた。'},
+          {bgTheme:3,name:'サボテン犬サボロー',text:'「ここから先は通さんサボ！チクチクの刑だサボ！」'}]},
+  ],
+};
+// ── ステージ区画（1区画=1ステージ：ザコゲート＋ボスゲート＋NPC）──
+const CH1=[
+  {theme:0,name:'王都郊外',noPit:true,
+   gates:[{off:600,list:[['wolf',1],['corgi',1],['warpdog',1]]},{off:1300,boss:true,list:[['garm',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['おお、勇者どのか！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で必殺技も出るぞ。ボスを倒せば猫のチャムの店も開く。']}},
+  {theme:1,name:'黄昏の城下町',
+   gates:[{off:600,list:[['hyena',1],['dober',1],['pounce',1]]},{off:1300,boss:true,list:[['shark',1]]}],
+   npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:['ぐすっ…こわかったよぉ…','おにいちゃんつよい！これ、ひろったの。お礼だワン！'],give:{coins:15}}},
+];
+const SEGS={
+  A:[
+    [ {theme:3,name:'業火の渓谷',
+       gates:[{off:600,list:[['boar',1],['mastiff',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
+       npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','わしの自信作を持っていけ！溶岩で鍛えた一級品だぞ。'],give:{weapon:true}}},
+      {theme:3,name:'渓谷の最深部',
+       gates:[{off:600,list:[['akita',1],['dober',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
+       npc:{kind:'villager',name:'逃げ遅れた村犬',lines:['この先の呪い犬は、触れるだけで呪いをうつしてくる…','掴み技で投げ飛ばせば呪いも怖くないワン！']}} ],
+    [ {theme:2,name:'月詠の森',
+       gates:[{off:600,list:[['dober',1],['warpdog',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
+       npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、勇者さま。'],give:{heal:'full'}}},
+      {theme:2,name:'森の奥宮',
+       gates:[{off:600,list:[['wolf',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
+       npc:{kind:'villager',name:'木こり犬ゴン',lines:['三つ首の獣ケルベ…あれにもう犬の心は無い。','上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
+  ],
+  B:[
+    [ {theme:1,name:'海賊の港町',
+       gates:[{off:600,list:[['hyena',1],['boar',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
+       npc:{kind:'sailor',name:'船乗りシオマル',lines:['でけぇスライムが樽の酒を全部飲んじまった！','あいつは斬るたび分裂するぞ。小さいのから素早く片付けるんだワン。']}},
+      {theme:1,name:'海賊王の埠頭',
+       gates:[{off:600,list:[['mastiff',1],['dober',1],['bomber',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
+       npc:{kind:'villager',name:'酒場の看板犬',lines:['海賊王の錨投げは、空に逃げても追いかけてくる…','懐に飛び込んで連打するのが一番だワン！']}} ],
+    [ {theme:3,name:'灼熱の砂漠',
+       gates:[{off:600,list:[['warpdog',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
+       npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
+      {theme:3,name:'砂漠の遺跡',
+       gates:[{off:600,list:[['akita',1],['guard',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
+       npc:{kind:'villager',name:'考古学犬ホリダス',lines:['鋼鉄のグラトンは古代遺跡の守護兵だったのだ…','図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
+  ],
+};
+const FINAL_CH=[
+  {theme:4,name:'魔界への道',
+   gates:[{off:600,list:[['akita',1],['mastiff',1],['warpdog',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。決して油断するでないぞ。','王国みんなの祈りが、そなたと共にある！']}},
+  {theme:4,name:'暗黒の城門',
+   gates:[{off:600,list:[['dober',2],['gripper',2]]},{off:1300,boss:true,list:[['rival',1]]}],
+   npc:{kind:'villager',name:'囚われの近衛犬',once:true,lines:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','大帝に心を奪われてしまったのだ。どうか…奴の剣を、止めてやってくれ…'],give:{heal:'full'}}},
+  {theme:4,name:'魔王の間',len:1400,noPit:true,
+   gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
+];
+// ── ランダムイベント（区画ごとに抽選で配置）──
+function randomEvent(x){ const r=Math.random();
+  if(r<0.32) return {x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}};
+  if(r<0.47) return {x,kind:'spring',name:'いやしの泉',once:true,lines:['ぽかぽかと湯気の立つ、いやしの泉だ。','体の傷がみるみる癒えていく…！'],give:{heal:'full'}};
+  if(r<0.62) return {x,kind:'fortune',name:'占い犬マダム・ワン',once:true,lines:['ふぉっふぉ…珍しい客じゃ。','そなたの運勢、見てしんぜよう…'],give:{fortune:true}};
+  if(r<0.78) return {x,kind:'merchant',name:'行商猫チャミ',lines:['お姉ちゃんの店より品揃えいいよ〜！','見ていってニャ！'],give:{shop:true}};
+  return {x,kind:'ambush',hidden:true};
+}
+function placeNPC(n){ if(!n)return; let g=0; while(overPit(n.x)&&g++<5)n.x+=150; npcs.push(n); }
+// 区画リストをワールド末尾へ追加（ゲート・NPC・落とし穴・イベントを配置）
+function addBlocks(blocks,opts){
+  blocks.forEach((b,bi)=>{
+    const B=worldCursor, st=nextStage++, len=b.len||1900, last=bi===blocks.length-1;
+    STAGE2THEME[st]=b.theme; STAGE_NAME[st]=b.name; stageStartX[st]=B;
+    if(B>0 && !b.noPit && Math.random()<0.5) PITS.push([B+260,B+372]);
+    b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss,
+      final:g.final, branchAfter:(g.boss&&last&&opts&&opts.branchAfter)||undefined }); });
+    if(b.npc) placeNPC(Object.assign({x:B+840+rnd(-60,60)},b.npc));
+    if(!b.noPit && Math.random()<0.85) placeNPC(randomEvent(B+1500+rnd(-90,140)));
+    if(!b.npc && !b.noPit && Math.random()<0.55) placeNPC(randomEvent(B+850+rnd(-60,60)));
+    worldCursor=B+len;
+  });
+  WORLD_END=worldCursor+340; curGateX=WORLD_END;
+}
+function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'B'}:null);
+  if(key==='B') addBlocks(FINAL_CH,null); }
+function buildEncounters(){
+  encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={};
+  worldCursor=0; nextStage=1; encIndex=0; metNPC=0; chestsOpened=0; routesChosen=[];
+  pendingBranch=null; dialog=null;
+  addBlocks(CH1,{branchAfter:'A'});
+}
+
+//======================================================================
+//  NPC：会話・宝箱・泉・占い・行商・待ち伏せ
+//======================================================================
+function tryTalk(){ const p=player;
+  if(aliveCount()>0 || p.z>0) return false;
+  let best=null,bd=70; for(const n of npcs){ if(n.hidden||n.done)continue; const d=Math.abs(p.x-n.x); if(d<bd){bd=d;best=n;} }
+  if(!best) return false; startTalk(best,p); return true;
+}
+function startTalk(n,p){ state='talk'; dialog={n,p,i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0); }
+function updateTalk(){ if(!dialog){ state='play'; return; }
+  useInput(players[0].in); dialog.t++;
+  const line=dialog.n.lines[dialog.i]||'', full=dialog.t>=line.length*2;
+  if(pressed.atk||pressed.jump||pressed.grab){ pressed.atk=pressed.jump=pressed.grab=false;
+    if(!full){ dialog.t=line.length*2; }
+    else { dialog.i++; dialog.t=0; sfx.swing(0);
+      if(dialog.i>=dialog.n.lines.length){ endTalk(); return; } } }
+  saveInput(players[0].in); }
+function endTalk(){ const n=dialog.n, p=dialog.p; dialog=null; state='play';
+  if(!n.met){ n.met=true; metNPC++; }
+  if(n.give && (!n.given || n.give.shop)){ n.given=true; applyGive(n,p); }
+  if(n.once) n.done=true;
+  players.forEach(pp=>{ if(pp.active){ pp.invuln=Math.max(pp.invuln,18); pp.in.pressed.atk=pp.in.pressed.jump=pp.in.pressed.grab=false; } }); }
+function applyGive(n,p){ const g=n.give;
+  if(g.coins){ coins+=g.coins; popText(p.x,p.y-100,'+'+g.coins+'¢','#ffe14d',true); sfx.coin(); }
+  if(g.heal){ players.forEach(pp=>{ if(pp.active) pp.hp=g.heal==='full'?pp.maxHp:Math.min(pp.maxHp,pp.hp+g.heal); });
+    popText(p.x,p.y-124,'体力回復！','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); sfx.heal(); }
+  if(g.weapon){ makeItem(p.x+44,weaponDropKind()); popText(p.x,p.y-148,'武器をもらった！','#aef0ff',true); sfx.coin(); }
+  if(g.shop){ shopPending=1; }
+  if(g.fortune){ const r=Math.random();
+    if(r<0.34){ players.forEach(pp=>{ if(pp.active) pp.atkMul=(pp.atkMul||1)+0.1; }); popText(p.x,p.y-100,'闘気上昇の星回り！ 攻撃+10%','#ff9a3a',true); sfx.rise(); }
+    else if(r<0.67){ coins+=15; popText(p.x,p.y-100,'金運上昇！ +15¢','#ffe14d',true); sfx.coin(); }
+    else { players.forEach(pp=>{ if(pp.active) pp.hp=Math.min(pp.maxHp,pp.hp+50); }); popText(p.x,p.y-100,'癒やしの星回り！','#7dff5a',true); sfx.heal(); } }
+  if(g.chest){ chestsOpened++; const r=Math.random();
+    if(r<0.18){ popText(n.x,LANE-130,'ミミックだ！！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
+      for(let i=0;i<3;i++) spawnEnemy(i?'pounce':'wolf', n.x+(i%2?1:-1)*rnd(60,140), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
+    else if(r<0.5){ makeItem(n.x,weaponDropKind()); popText(n.x,LANE-130,'武器を手に入れた！','#aef0ff',true); sfx.rise(); }
+    else { const c=8+(Math.random()*14|0); for(let i=0;i<c;i++) makeCoin(n.x,1); sfx.coin(); } } }
+function triggerAmbush(n){ popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
+  const picks=['wolf','hyena','dober','pounce'];
+  for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
+function updateNPCs(){
+  for(const n of npcs){
+    if(n.hidden){ if(!n.done){ for(const p of players){ if(p.active&&p.state!=='dead'&&p.x>n.x-30){ n.done=true; triggerAmbush(n); break; } } } continue; }
+    const sx=n.x-camX; if(sx<-100||sx>W+100) continue;
+    n.bob=(n.bob||Math.random()*6)+0.05;
+    const tp=nearestPlayerTo(n.x); if(tp&&Math.abs(tp.x-n.x)<170) n.face=tp.x<n.x?-1:1;
+    if(n.kind==='spring'&&!n.done&&gf%10===0) spark(n.x+rnd(-26,26), LANE-groundLift(n.x)-rnd(4,26), '#9fe8ff',1,2);
+  }
+}
+//  ルート分岐の選択画面
+function updateBranch(){ useInput(players[0].in);
+  if(branchNav>0)branchNav--;
+  if(branchNav<=0){ if(K.left&&branchSel!==0){ branchSel=0; branchNav=10; sfx.swing(0); }
+    else if(K.right&&branchSel!==1){ branchSel=1; branchNav=10; sfx.swing(0); } }
+  if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false; confirmBranch(); }
+  saveInput(players[0].in); updateParticles(); }
+function confirmBranch(){ const key=pendingBranch; pendingBranch=null;
+  const opt=ROUTE_DEFS[key][branchSel]; routesChosen.push(branchSel); sfx.rise();
+  applyRoute(key,branchSel); saveProgress(stage);
+  startCutscene(opt.cut, ()=>{ state='play'; goArrow=160; }); }
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
-  if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st); let off=0;
+  if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st);
+    if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=150; stageBannerTxt='STAGE '+enc.st+'　'+(STAGE_NAME[enc.st]||''); } }
+    let off=0;
     enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n*2+1;   // ザコは出現数増（難易度UP）
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
@@ -1723,8 +1853,9 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
-      if(enc.st<12){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
+      if(!enc.final){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
+        if(enc.branchAfter) pendingBranch=enc.branchAfter;
         shopPending=120; }
     } else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
@@ -1836,8 +1967,10 @@ function stepPlayers(){
 function update(){
   gf++;
   if(hitStop>0){ hitStop--; if(state==='play'){updateParticles();updateProjectiles();} return; }
+  if(state==='talk'){ updateTalk(); updateParticles(); return; }
+  if(state==='branch'){ updateBranch(); return; }
   if(state!=='play') return;
-  stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0){ shopPending--; if(shopPending===0 && state==='play') enterShop(); }
 }
@@ -1853,6 +1986,7 @@ function render(){
   const _q=shake+(quake>0?Math.abs(Math.sin(gf*0.9))*quake*0.5:0);
   if(_q>0) ctx.translate(rnd(-_q,_q),rnd(-_q*0.6,_q*0.6));
   drawBackground(); drawGround();
+  drawNPCs();
   drawItems();
   const order=[...enemies.map(e=>({y:e.y,e}))];
   players.forEach(pl=>{ if(pl.active) order.push({y:pl.y+pl.pid*0.5, pl}); });
@@ -1905,7 +2039,7 @@ const STAGE_THEME=[
     g:['#33264a','#241834','#140c1e'], cob:['#352846','#2a2038'], vig:'rgba(10,2,24,.64)',
     amb:{shape:'spark',color:'rgba(198,120,255,.95)',rate:0.7,max:40,vy:-0.3,wind:0.15,r0:1.2,r1:2.8,glow:true,alpha:.95} },
 ];
-function curTheme(){ return STAGE_THEME[clamp(stage-1,0,4)]; }
+function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
 function updateAmbient(T){
   if(amb.length<T.amb.max && Math.random()<T.amb.rate){
@@ -3020,6 +3154,63 @@ function drawBossWeapon(t,e,atk){
 //======================================================================
 //  HUD
 //======================================================================
+// ---------- NPC art ----------
+function drawNPCs(){
+  npcs.forEach(n=>{ if(n.hidden) return; const sx=n.x-camX; if(sx<-90||sx>W+90) return;
+    const gy=LANE-groundLift(n.x);
+    ctx.save(); ctx.translate(sx,gy);
+    softShadow(0,2,24);
+    if(n.kind==='chest') drawChestNPC(n);
+    else if(n.kind==='spring') drawSpringNPC(n);
+    else if(n.kind==='merchant'){ ctx.scale(0.85,0.85); drawCham(0,0); }
+    else drawVillagerDog(n);
+    ctx.restore();
+  });
+}
+function drawChestNPC(n){
+  ctx.fillStyle='#7a4a22'; ctx.fillRect(-22,-26,44,26);
+  ctx.fillStyle='#9a6232';
+  if(n.given){ ctx.fillRect(-22,-30,44,6); ctx.fillStyle='#3a2410'; ctx.fillRect(-18,-24,36,8); }
+  else { ctx.beginPath(); ctx.moveTo(-22,-26); ctx.quadraticCurveTo(0,-44,22,-26); ctx.closePath(); ctx.fill(); }
+  ctx.strokeStyle='#e8b34a'; ctx.lineWidth=3; ctx.strokeRect(-22,-26,44,26);
+  ctx.beginPath(); ctx.moveTo(0,-26); ctx.lineTo(0,0); ctx.stroke();
+  ctx.fillStyle='#ffe14d'; ctx.fillRect(-4,-22,8,10);
+  if(!n.given && gf%30<15) drawStar(14,-46,2,5,'#ffe9a0');
+}
+function drawSpringNPC(n){
+  ctx.fillStyle='#8a8276'; for(let i=0;i<7;i++){ const a=i/7*Math.PI*2; ctx.beginPath(); ctx.ellipse(Math.cos(a)*40, Math.sin(a)*12, 7,5, a,0,7); ctx.fill(); }
+  ctx.fillStyle=radGrad(0,0,38,'#bfeeff','#3a9ac8'); ctx.beginPath(); ctx.ellipse(0,0,36,12,0,0,7); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=.5;
+  ctx.strokeStyle='#dff6ff'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.ellipse(0,0,26-((gf*0.4)%14),8-((gf*0.13)%4),0,0,7); ctx.stroke(); ctx.restore();
+}
+function drawVillagerDog(n){
+  const pal={elder:['#cfc4ae','#9a8f7a'],pup:['#f0b060','#b97c2e'],miko:['#efe9dd','#bcb4a4'],smith:['#9a7048','#6a4a2c'],
+    sailor:['#dfe6ee','#9aa8bc'],villager:['#d8b483','#a8835a'],fortune:['#b89ad0','#7a5fa0'],merchant2:['#c89a5a','#8a6536']}[n.kind]||['#d8b483','#a8835a'];
+  const sc=n.kind==='pup'?0.62:0.95, b=Math.sin(n.bob||0)*2, f=n.face||1;
+  ctx.save(); ctx.scale(sc,sc);
+  ctx.strokeStyle=pal[1]; ctx.lineWidth=7; ctx.lineCap='round';                                  // しっぽ（ふりふり）
+  ctx.beginPath(); ctx.moveTo(-f*18,-22); ctx.quadraticCurveTo(-f*30,-34+Math.sin((n.bob||0)*2)*5,-f*26,-44); ctx.stroke();
+  furBall(0,-26+b*0.4,20,pal[0],pal[1]);                                                          // 体
+  furBall(0,-54+b,17,pal[0],pal[1]);                                                              // 頭
+  ctx.fillStyle=pal[1];                                                                           // 垂れ耳
+  ctx.beginPath(); ctx.ellipse(-14,-62+b,6,11,-0.5,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14,-62+b,6,11,0.5,0,7); ctx.fill();
+  ctx.fillStyle='#23170d';                                                                        // 目・鼻
+  ctx.beginPath(); ctx.arc(f*2-6,-56+b,2.4,0,7); ctx.arc(f*2+6,-56+b,2.4,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(f*3,-49+b,3,0,7); ctx.fill();
+  if(n.kind==='elder'){ ctx.fillStyle='#f4f4f0'; ctx.beginPath(); ctx.ellipse(f*3,-43+b,8,6,0,0,7); ctx.fill();
+    ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(f*22,-36); ctx.lineTo(f*22,0); ctx.stroke(); }
+  else if(n.kind==='miko'){ ctx.fillStyle='#c0392b'; ctx.fillRect(-16,-18,32,18); ctx.fillStyle='#fff'; ctx.fillRect(-16,-22,32,6); }
+  else if(n.kind==='smith'){ ctx.fillStyle='#4a3424'; ctx.fillRect(-14,-34,28,22);
+    ctx.strokeStyle='#888'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(-f*20,-40); ctx.lineTo(-f*28,-52); ctx.stroke();
+    ctx.fillStyle='#777'; ctx.fillRect(-f*28-5,-58,10,8); }
+  else if(n.kind==='sailor'){ ctx.fillStyle='#2a5a9a'; ctx.beginPath(); ctx.arc(0,-64+b,13,Math.PI,0); ctx.fill(); }
+  else if(n.kind==='fortune'){ ctx.fillStyle='#5a3f80'; ctx.beginPath(); ctx.arc(0,-58+b,19,Math.PI*0.95,Math.PI*2.05); ctx.fill(); }
+  else if(n.kind==='merchant2'){ ctx.fillStyle='#6a4a2c'; ctx.fillRect(-f*26,-44,12,26); }
+  if(n.kind!=='pup'){ ctx.fillStyle='#c0392b'; ctx.fillRect(-12,-40+b*0.4,24,4); }
+  ctx.restore();
+}
 function drawHUD(){
   const p1shima=players[0].kind==='shima';
   panel(12,12,256,58); if(p1shima) shimaIcon(38,40); else faceIcon(38,40,'#f6e8c6');
@@ -3093,6 +3284,58 @@ function drawHUD(){
   if(state==='pause'){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#fff'; ctx.font='bold 40px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('PAUSE',W/2,H/2);
     ctx.font='16px Trebuchet MS'; ctx.fillText('P で再開',W/2,H/2+34); ctx.textAlign='left'; }
+  drawNPCPrompts();
+  if(state==='talk') drawDialog();
+  if(state==='branch') drawBranchUI();
+}
+// ---------- NPC会話・分岐UI（HUDレイヤー＝高解像度で描画） ----------
+function drawNPCPrompts(){ if(state!=='play'||aliveCount()>0) return;
+  for(const n of npcs){ if(n.hidden||n.done) continue;
+    const ap=activePlayers().find(p=>p.state!=='dead'&&Math.abs(p.x-n.x)<64&&p.z<=0); if(!ap) continue;
+    const sx=n.x-camX, gy=LANE-groundLift(n.x)-(n.kind==='chest'?40:(n.kind==='spring'?28:86));
+    speech(sx,gy,n.kind==='chest'?'あける（掴みボタン）':'はなす（掴みボタン）'); }
+}
+function drawDialog(){ if(!dialog) return; const n=dialog.n, line=n.lines[dialog.i]||'';
+  const shown=line.slice(0,Math.floor(dialog.t/2)), full=dialog.t>=line.length*2;
+  ctx.save();
+  ctx.fillStyle='rgba(6,8,22,.88)'; roundRect(60,H-148,W-120,112,12); ctx.fill();
+  ctx.strokeStyle='rgba(255,210,80,.7)'; ctx.lineWidth=2; roundRect(60,H-148,W-120,112,12); ctx.stroke();
+  ctx.font='bold 16px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  const nw=ctx.measureText(n.name).width+26;
+  ctx.fillStyle='#b8862a'; roundRect(76,H-164,nw,28,8); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.fillText(n.name,89,H-144);
+  ctx.font='19px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.fillStyle='#f4f0e2';
+  cutWrap(shown,86,H-108,W-180,28);
+  if(full && gf%40<26){ ctx.fillStyle='#ffe14d'; ctx.font='bold 18px sans-serif'; ctx.fillText('▼',W-92,H-52); }
+  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='12px sans-serif'; ctx.textAlign='right'; ctx.fillText('攻撃／ジャンプ／掴み で進む',W-76,H-26); ctx.textAlign='left';
+  ctx.restore();
+}
+function drawBranchUI(){
+  ctx.save();
+  ctx.fillStyle='rgba(2,2,12,.74)'; ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';
+  ctx.font='900 36px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  ctx.lineWidth=6; ctx.strokeStyle='#3a1d00'; ctx.fillStyle='#ffe14d';
+  ctx.strokeText('— 進む道を選べ —',W/2,76); ctx.fillText('— 進む道を選べ —',W/2,76);
+  const opts=ROUTE_DEFS[pendingBranch]||ROUTE_DEFS.A;
+  opts.forEach((o,i)=>{ const cxq=W/2+(i?1:-1)*200, sel=i===branchSel, cw=330,chh=300, x0=cxq-cw/2, y0=110;
+    const T=STAGE_THEME[o.theme];
+    const g=ctx.createLinearGradient(0,y0,0,y0+chh); g.addColorStop(0,T.sky[0]); g.addColorStop(.6,T.sky[1]); g.addColorStop(1,T.sky[3]);
+    ctx.save(); if(sel){ ctx.translate(cxq,y0+chh/2); ctx.scale(1.05,1.05); ctx.translate(-cxq,-(y0+chh/2)); }
+    ctx.fillStyle=g; roundRect(x0,y0,cw,chh,14); ctx.fill();
+    ctx.lineWidth=sel?5:2; ctx.strokeStyle=sel?('rgba(255,225,77,'+(0.7+0.3*Math.sin(gf*0.15)).toFixed(2)+')'):'rgba(255,255,255,.35)';
+    roundRect(x0,y0,cw,chh,14); ctx.stroke();
+    drawBossPortrait(o.icon, cxq, y0+152, 0.6, -1);
+    ctx.fillStyle='rgba(0,0,0,.45)'; roundRect(x0+10,y0+166,cw-20,122,10); ctx.fill();
+    ctx.textAlign='center'; ctx.fillStyle=sel?'#ffe14d':'#fff'; ctx.font='900 24px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText((sel?'▶ ':'')+o.label,cxq,y0+198);
+    ctx.fillStyle='#dfe8f4'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
+    cutWrap(o.desc,x0+24,y0+224,cw-48,20); ctx.textAlign='center';
+    ctx.restore();
+  });
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText('←→（スティック）で選択　／　攻撃ボタンで決定',W/2,H-36);
+  ctx.textAlign='left'; ctx.restore();
 }
 function panel(x,y,w,h){ ctx.fillStyle='rgba(8,10,20,.64)'; roundRect(x,y,w,h,8); ctx.fill();
   ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(x,y,w,h,8); ctx.stroke(); }
@@ -3130,7 +3373,10 @@ const SHOP_ITEMS=[
 let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0;
 function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT=0; shopT=0;
   unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); } }
-function exitShop(){ state='play'; if(Music.setMode)Music.setMode('battle'); saveProgress(stage); }
+function exitShop(){
+  if(pendingBranch){ state='branch'; branchSel=0; branchNav=12; }
+  else state='play';
+  if(Music.setMode)Music.setMode('battle'); saveProgress(stage); }
 function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
   useInput(players[0].in);
   if(shopNavCd>0)shopNavCd--;
@@ -3205,15 +3451,16 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針',
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
 const STORY_OPEN=[
-  {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれる王国は、穏やかな陽だまりに包まれていた。'},
-  {bgTheme:4, art:'invade', name:'', text:'だがある日、闇の軍勢「ダークワンワン帝国」が攻め込んできた！'},
-  {bgTheme:4, art:'player', name:'聖犬士イッヌ', text:'立ち上がったのは、ただ一匹の勇者——聖犬士イッヌ。'},
-  {bgTheme:0, art:'player', name:'聖犬士イッヌ', text:'６人の将軍と覇王を討ち、王国に平和を取り戻すのだ！'},
+  {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれるワンダフル王国は、穏やかな陽だまりに包まれていた。'},
+  {bgTheme:4, art:'invade', name:'', text:'だがある夜、闇の軍勢「ダークワンワン帝国」が国境を破った！砦は次々と陥落し、王は囚われの身に——'},
+  {bgTheme:4, art:'invade', name:'王女ペロ', text:'「どうか…帝国の将たちを討ち、父と王国をお救いください」'},
+  {bgTheme:0, art:'player', name:'聖犬士イッヌ', text:'王女の手紙は、辺境で修行を積む犬士のもとへ届いた。剣を取らぬ理由は、無かった。'},
+  {bgTheme:0, art:'player', name:'聖犬士イッヌ', text:'道中には分かれ道、人々との出会い、そして思わぬ罠もあるという。すべての選択は、汝に委ねられる——'},
 ];
 const STORY_END=[
-  {bgTheme:4, art:'fall',   name:'', text:'ダークワンワン大帝、ついに討たれる——！'},
-  {bgTheme:0, art:'peace',  name:'', text:'帝国の闇は晴れ、肉球の王国に再び陽が差した。'},
-  {bgTheme:0, art:'player', name:'英雄イッヌ', text:'勇者イッヌの名は、肉球の歴史に永遠に刻まれた。'},
+  {bgTheme:4, art:'fall',   name:'', text:'ダークワンワン大帝、ついに討たれる——！城に巣食う闇が、音を立てて崩れていく。'},
+  {bgTheme:0, art:'peace',  name:'', text:'王は解放され、黒犬士クロイヌも正気を取り戻した。肉球の王国に、再び陽が差した。'},
+  {bgTheme:0, art:'player', name:'英雄イッヌ', text:'旅路で出会った仲間たちの声援が、胸に響く。勇者の名は、肉球の歴史に永遠に刻まれた。'},
   {bgTheme:0, art:'end',    name:'', text:'― おわり ―     遊んでくれてありがとう！'},
 ];
 function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=false; cutSkip=false; state='cut';
@@ -3302,7 +3549,7 @@ const elRTitle=document.getElementById('result-title'),elRSub=document.getElemen
 let curMode='inu';
 function saveProgress(st){ try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,dimMax:p.dimMax,lives:p.lives}));
-  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode,coins:coins,upg:upg})); }catch(e){} }
+  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode,coins:coins,upg:upg,routes:routesChosen})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
@@ -3319,7 +3566,8 @@ function startGame(){ unlockAudio();
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
-    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives; } }); }
+    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives; } });
+    (sv.routes||[]).forEach((sel,i)=>{ routesChosen.push(sel); applyRoute(i===0?'A':'B',sel); }); }
   if(stageN>1){ const idx=encounters.findIndex(e=>e.st===stageN);
     if(idx>0){ for(let i=0;i<idx;i++){ encounters[i].cleared=true; encounters[i].spawned=true; }
       encIndex=idx; stage=stageN; curGateX=WORLD_END;
@@ -3334,7 +3582,9 @@ function gameOver(){ state='over'; Music.stop(); gameOverSting();
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
   elResult.classList.remove('hidden'); }
 function winGame(){ state='win'; Music.stop(); victoryJingle(); clearProgress();
-  elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d'; elRSub.textContent='全12ステージ制覇！ ワンワン帝国を打ち倒した！  SCORE '+String(score).padStart(6,'0');
+  const routeNames=routesChosen.map((sel,i)=>ROUTE_DEFS[i===0?'A':'B'][sel].label).join('→')||'王道';
+  elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d';
+  elRSub.textContent='ワンワン帝国を打ち倒した！  ルート: '+routeNames+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
