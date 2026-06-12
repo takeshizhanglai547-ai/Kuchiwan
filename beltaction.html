@@ -538,6 +538,7 @@ const ATK={
   sc4:{name:'手刀',     dur:14, act:[5,9],  reach:74, hh:48, dmg:11,kb:4, from:-1.3,to:0.9,    len:24, trail:'#aef0ff', fist:true, combo:4, lunge:1.2},
   sc5:{name:'よこげり', dur:22, act:[6,13], reach:86, hh:48, dmg:17,kb:12,from:0.05,to:0.05,   len:22, trail:'#ffffff', fist:true, kick:true, combo:5, knock:true, finisher:true, lunge:2.4},
   sdropkick:{name:'ドロップキック', dur:24, act:[5,18], reach:96, hh:50, dmg:17,kb:13,from:0.15,to:0.15, len:26, trail:'#9fe8ff', fist:true, kick:true, move:9.5, knock:true, finisher:true, dropk:true},
+  tessan:{name:'鉄山靠', dur:24, act:[4,12], reach:78, hh:50, dmg:30, kb:16, from:-0.25,to:-0.2, len:24, trail:'#ffd24d', fist:true, lunge:7.5, knock:true, finisher:true, shoulder:true},
   spunch:{name:'踏み込み正拳突き', dur:22, act:[6,13], reach:96, hh:42, dmg:20,kb:13,from:0,to:0, len:30, trail:'#ffd24d', fist:true, punch:true, lunge:6.5, knock:true, finisher:true},
   sflykick:{name:'飛び蹴り', dur:28, act:[5,22], reach:94, hh:520, dmg:19,kb:15,from:0.15,to:0.15, len:24, trail:'#9fe8ff', fist:true, kick:true, move:14, knock:true, finisher:true, fly:true},
   sroundhouse:{name:'移動百烈脚', dur:44, act:[4,40], reach:92, hh:48, dmg:6,kb:4,from:0.2,to:0.2, len:22, trail:'#9fe8ff', fist:true, kick:true, move:5.0, multi:true, multiGap:4, knock:true, finisher:true, hyaku:true},
@@ -625,7 +626,7 @@ const WEAPONS={
 };
 function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
-  p.fallT=0;
+  p.fallT=0; p.running=false;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
@@ -664,6 +665,7 @@ function beginAttack(type){
   else if(type==='nbeam'){ sfx.heavy(); ring(p.x,p.y-40,'#9fe8ff'); spark(p.x+p.facing*20,p.y-40,'#bfe9ff',10,8); popText(p.x,p.y-104,'サンダービーム！','#9fe8ff',true); }
   else if(type==='nflame'||type==='ngnd'){ sfx.swing(2); }
   else if(type==='spunch'){ sfx.heavy(); spark(p.x+p.facing*20,p.y-40,'#ffd24d',8,7); }
+  else if(type==='tessan'){ sfx.heavy(); sfx.dash(); spark(p.x+p.facing*14,p.y-40,'#ffd24d',9,7); popText(p.x,p.y-104,'鉄山靠！','#ffd24d',true); }
   else if(type==='dragonkick'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
   else if(type==='sweep'){ sfx.swing(0); }
   else if(type==='sc5'||def.kick){ sfx.swing(2); }
@@ -902,7 +904,7 @@ function updatePlayer(){
     if(K.up){ beginAttack(SH?'tornado':NK?'ntornado':'shoryu'); }                          // 昇竜旋風脚 / サイクロンライズ / 昇竜拳
     else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / 居合
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
-      else if(SH){ beginAttack('sroundhouse'); } else if(NK){ beginAttack('nflame'); } else { beginAttack('iai'); } }  // 乱舞 / 炎の柱 / 居合斬り
+      else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -916,11 +918,17 @@ function updatePlayer(){
   if(K.left)mx=-1; if(K.right)mx=1;
   if(mx)p.facing=mx;
   if(mx){ p.charge=0; } // moving cancels charge build (but keep simple)
+  // ── 前前ダッシュ：同方向に素早く2回入力で走る（押しっぱなしの間継続）──
+  if(!p.running && dirTaps.length>=2){ const a=dirTaps[dirTaps.length-1], b=dirTaps[dirTaps.length-2];
+    if(a.d===b.d && a.f-b.f<=14 && gf-a.f<=6 && ((a.d>0&&K.right)||(a.d<0&&K.left))){
+      p.running=true; p.runDir=a.d; sfx.dash(); dust(p.x,p.y,6); spark(p.x-a.d*16,p.y-20,'#fff',5,5); } }
+  if(p.running && ((p.runDir>0&&!K.right)||(p.runDir<0&&!K.left))) p.running=false;
+  const runMul=p.running?1.8:1;
   const slow = p.charge>0.1?0.4:1;
-  p.x+=mx*SPEED*slow; p.y=LANE;
+  p.x+=mx*SPEED*slow*runMul; p.y=LANE;
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
-  p.state=mx?'walk':'idle'; p.anim+=mx?0.26:0.07;
-  if(mx&&gf%8===0) dust(p.x,p.y, 1);
+  p.state=mx?'walk':'idle'; p.anim+=mx?(p.running?0.42:0.26):0.07;
+  if(mx&&gf%(p.running?3:8)===0) dust(p.x-p.facing*8,p.y, p.running?2:1);
   if(p.z<=0 && overPit(p.x)) beginFall(p);   // 足元が谷なら落下（ジャンプで越える）
 }
 function beginFall(p){ if(p.state==='falling'||p.state==='dead') return;
@@ -941,7 +949,7 @@ function doPlayerHit(a){
     if(!canHigh && e.z>175) return;                                          // 高く浮いた敵は打上げ/空中技で拾う
     let dir=p.facing;
     if(def.omni){ if(Math.abs(e.x-p.x)>reach) return; dir=e.x<p.x?-1:1; }   // 全方位
-    else { const dx=e.x-hx, back=Math.max(16, reach*0.32);   // 近接マージンはリーチに比例（長武器でも至近を打てる）
+    else { const dx=e.x-hx, back=Math.max(16, reach*(def.shoulder?0.95:0.32));   // 近接マージン（鉄山靠は体当たりなので通過中も当たる）
       if(p.facing>0 && (dx<-back || dx>reach)) return;
       if(p.facing<0 && (dx>back || dx<-reach)) return; }
     if(def.multi) a.lastHit[e.id]=gf; else a.hitSet.add(e.id);
@@ -968,7 +976,7 @@ function doPlayerHit(a){
       else if(def.stinger) launchEnemy(e, dir*28*LX, -7*LX, 4);
       else if(def.counter) launchEnemy(e, dir*26*LX, -12*LX, 4);
       else if(def.special) launchEnemy(e, (Math.random()<.5?dir:-dir)*18, -15, 4);
-      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*20*W.kb*0.7, Math.min(e.vz,-8), Math.max(e.bounces||0,3));  // 空中の敵は各ヒットで再び端まで吹き飛ばす
+      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*5*W.kb, -10.5, Math.max(e.bounces||0,2));  // 空中の敵はその場で打ち直し＝お手玉コンボ
       else if(W.launch>1.4) launchEnemy(e, dir*10, -7, 3);   // ハンマーは通常ヒットでも軽く浮かせる
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
@@ -1025,10 +1033,10 @@ function kabutoLand(){ const p=player;
 //  Grab / throw system  (掴み → 腹パンチ / 投げ / 地獄グルマ)
 //======================================================================
 function grabbableTarget(){ const p=player; let best=null,bd=1e9;
-  for(const e of enemies){ if(e.dead||e.grabbedBy) continue; const t=ETYPE[e.type]; if(t.boss) continue;
+  for(const e of enemies){ if(e.dead||e.grabbedBy) continue; const t=ETYPE[e.type];
     if(e.z>8||e.state==='air'||e.state==='pounce') continue;
     const dx=e.x-p.x; if(Math.sign(dx)!==p.facing && Math.abs(dx)>8) continue;
-    if(Math.abs(dx)>54 || Math.abs(e.y-p.y)>26) continue;
+    if(Math.abs(dx)>54+(t.boss?t.w*0.25:0) || Math.abs(e.y-p.y)>26) continue;   // ボスも掴める（体格ぶん範囲拡大）
     const d=Math.abs(dx); if(d<bd){ bd=d; best=e; } }
   return best;
 }
@@ -1434,7 +1442,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
   if(e.transform>0){ spark(e.x,e.y-e.h*0.5,'#c46bff',5,6); return; }   // 形態進化中は無敵
-  if(T.boss){ knockdown=false; launch=0; }                 // bosses have hyper-armor (no juggle/knockdown)
+  if(T.boss && e.noJuggleT>gf){ knockdown=false; launch=0; }   // ボスは起き上がり直後のみ耐性（無限お手玉防止）
   if(!T.boss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hitFace=12;   // 被弾時のやられ顔タイマー（全エネミー共通）
   if(e.state==='gripping'){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); }   // 掴み中に攻撃されたら解放（救出）
@@ -1454,13 +1462,15 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
     if(n<5 && Math.random()<0.6){ spawnEnemy('slimelet', clamp(e.x+rnd(-44,44),camX+30,camX+W-30), LANE); const ne=enemies[enemies.length-1]; ne.vz=-7; ne.state='air'; ne.bounces=1; ne.invuln=0; popText(e.x,e.y-e.h-2,'分裂！','#7dff5a'); sfx.swing(0); } }
   if(e.hp<=0){ killEnemy(e); return; }
   if(launch){ /* stays air */ }
-  else if(knockdown){ e.state='down'; e.downTimer=48; }
+  else if(knockdown){ e.state='down'; e.downTimer=T.boss?30:48; }
   else if(T.boss){ if(e.state==='walk'){ e.state='hurt'; e.hurtTimer=7; } e.stun=Math.min((e.stun||0)+3,9); }
   else { e.state='hurt'; e.hurtTimer=16; e.stun=18; }
 }
 // strong launch into the juggle (to screen edge / ceiling). vz<0 = up. Bosses resist.
 function launchEnemy(e,vx,vz,bounces){ const T=ETYPE[e.type]; if(e.dead) return;
-  if(T.boss){ e.vx+=vx*0.12; return; }                     // bosses: only slight push (hyper-armor)
+  if(T.boss){ if(e.noJuggleT>gf && e.state!=='air' && e.z<=6){ e.vx+=vx*0.12; return; }   // 耐性中は押すだけ
+    e.state='air'; e.vx=vx*0.65; e.vz=vz*0.75; e.z=Math.max(e.z,2); e.bounces=Math.min(2,(bounces==null?2:bounces));
+    e.facing=vx>0?-1:1; return; }                           // ボスも吹っ飛ぶ（威力は7割）
   if(!T.mini && Math.abs(vz)>=11 && Math.abs(vx)>=12 && Math.random()<0.16){ startBlastoff(e, vx>0?1:-1); return; }  // 一定確率：吹っ飛びが星KOに
   e.state='air'; e.vx=vx; e.vz=vz; e.z=Math.max(e.z,2); e.bounces=(bounces==null?3:bounces);
   e.facing = vx>0?-1:1; }
@@ -1484,6 +1494,8 @@ function killEnemy(e){ const T=ETYPE[e.type];
 // ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   score+=8000;
+  if(e.grabbedBy){ e.grabbedBy=0; players.forEach(pp=>{ if(pp.grabEnemy===e){ pp.grabEnemy=null;   // 掴み中に進化したら解放
+    if(['grab','gswing','dunk','wheel','screw','tkick'].includes(pp.state)) pp.state='idle'; } }); }
   e.type=nt; e.hp=N.hp; e.maxHp=N.hp; e.w=N.w; e.h=N.h; e.phase=(e.phase||1)+1;
   e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
@@ -1616,7 +1628,7 @@ function updateEnemies(){
       if(e.x<camX-110||e.x>camX+W+110||e.z>420||e.bo>95){ starTwinkle(e); enemies.splice(i,1); }
       continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
-    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer) && !(t.balloon&&e.state==='walk')){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
+    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.zankai>0){ e.zankai--; if(gf%6<3)spark(e.x,e.y-e.h*0.95,'#ff4d6a',2,4); if(e.zankai<=0){ zankaiBoom(e); continue; } }   // 残悔拳カウントダウン
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
@@ -1632,7 +1644,8 @@ function updateEnemies(){
         if(impact>5 && (e.bounces||0)>0){ e.bounces--; e.z=0; e.vz=-impact*0.86; e.vx*=0.94; dust(e.x,e.y,12); ring(e.x,e.y,'#fff'); shake=Math.max(shake,5); sfx.hit(); popText(e.x,e.y-14,'BOUND!','#ffe14d'); }
         else { e.z=0; e.vz=0; e.state='down'; e.downTimer=46; e.bounces=0; dust(e.x,e.y,8); } }
       continue; }
-    if(e.state==='down'){ e.downTimer--; e.x+=e.vx; e.vx*=0.85; if(e.downTimer<=0)e.state='walk'; continue; }
+    if(e.state==='down'){ e.downTimer--; e.x+=e.vx; e.vx*=0.85;
+      if(e.downTimer<=0){ e.state='walk'; if(t.boss) e.noJuggleT=gf+150; } continue; }   // ボスは起き上がり後しばらく打ち上げ耐性
     if(e.state==='hurt'){ e.hurtTimer--; e.x+=e.vx; e.vx*=0.82; if(e.hurtTimer<=0)e.state=t.boss?'walk':'walk'; continue; }
     if(t.boss){ bossTick(e,t); e.x+=e.vx; e.vx*=0.9; continue; }
     // --- 盾犬兵: ガード中は前面の攻撃を防ぐ ---
@@ -1946,6 +1959,7 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
       if(mv!=='roar')sfx.heavy(); } }
 }
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
+  p.running=false;
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); sfx.hurt(); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -2691,6 +2705,8 @@ function drawPlayer(){
     faL1=9+12*big; faL2=8+15*big; faW=0.95+1.0*big; legF1=10+6*big; legF2=9+6*big;
     sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; }
+    if(def.shoulder){ // 鉄山靠：肩から体当たり（腕をたたんで深く踏み込む）
+      mode='fist'; lean=0.85; swAng=1.05; backArm=1.2; thF=1.1; thB=-0.35; kF=0.3; kB=0.6; bodyY=-1; sqX=1.12; sqY=0.94; }
     if(def.hyaku){ // 移動百烈脚：本体は回らず、前後の脚を高速で繰り出す
       const w=Math.sin(t*1.5); mode='fist'; lean=0.22; bodyY=-1; swAng=0.15; backArm=0.6;
       thF=0.45+Math.max(0,w)*1.15; kF=0.1; thB=-0.3-Math.max(0,-w)*0.5; kB=0.4; legF1=10+(w>0?9:0); legF2=9+(w>0?11:0);
