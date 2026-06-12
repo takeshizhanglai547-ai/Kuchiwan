@@ -10,7 +10,7 @@
     font-family:'Trebuchet MS','Hiragino Maru Gothic ProN','Yu Gothic',sans-serif;
     color:#fff; user-select:none; touch-action:none; }
   #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
-  #game { display:block; background:#000; box-shadow:0 0 60px rgba(0,0,0,.8); max-width:100%; max-height:100%; image-rendering:pixelated; image-rendering:crisp-edges; }
+  #game { display:block; background:#000; box-shadow:0 0 60px rgba(0,0,0,.8); max-width:100%; max-height:100%; }
 
   .overlay { position:absolute; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; text-align:center; z-index:20; padding:20px;
@@ -127,11 +127,7 @@
 //======================================================================
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
-const W = 960, H = 540;                    // logical resolution
-// ドット絵化：シーンを低解像度バッファに描いてニアレストネイバーで拡大
-const PIX = 3;                             // ピクセルの粗さ（W/PIX × H/PIX = 320×180）
-const sbuf = document.createElement('canvas'); sbuf.width = Math.ceil(W/PIX); sbuf.height = Math.ceil(H/PIX);
-const sctx = sbuf.getContext('2d');
+const W = 960, H = 540;                    // logical resolution（フル解像度で直接描画）
 
 // hi-dpi crisp backing store
 let DPR = Math.min(window.devicePixelRatio||1, 3);
@@ -566,7 +562,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1,
+  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
 let player=players[0];               // points to the player currently being simulated/drawn
@@ -590,7 +586,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0; p.weapon=p.kind==='shima'?'fists':'dagger'; p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
-  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.atkMul=1; } }
+  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.atkMul=1; p.defMul=1; p.maxHp=120; p.hp=120; p.dimMax=3; } }
 const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
@@ -1131,6 +1127,12 @@ const ETYPE={
   bomber:{hp:18,sp:2.7,dmg:8,atkR:40,w:44,h:56,c1:'#e4ddc6',c2:'#b0a684',c3:'#6f6850',score:260,charge:true,bomber:true,accent:'#ff4d3a',name:'爆弾チワワ',ears:'flop',collar:'#ff4d3a'},
   warpdog:{hp:30,sp:2.4,dmg:9,atkR:50,w:54,h:74,c1:'#9a8fce',c2:'#6a5fa0',c3:'#3f3470',score:300,warper:true,accent:'#c89cff',name:'ワープ犬'},
   gripper:{hp:52,sp:1.9,dmg:6,atkR:48,w:60,h:86,c1:'#7a5a9a',c2:'#4a3268',c3:'#281a3c',score:360,grappler:true,accent:'#ff6ad0',name:'組み付き犬',ears:'flop',collar:'#ff6ad0'},
+  // ---- ボウズ軍団（下っ端モンスター図鑑の4体＋召喚される風船兵）----
+  pierrot:{hp:44,sp:1.6,dmg:8, atkR:48,w:56,h:84,c1:'#f2f4fa',c2:'#4a72c8',c3:'#233c74',score:380,summoner:true,accent:'#ff5a6a',name:'ピエロボウズ'},
+  balloon:{hp:10,sp:2.1,dmg:8, atkR:36,w:40,h:48,c1:'#ff5a5a',c2:'#c03030',c3:'#701818',score:60, balloon:true,name:'風船兵'},
+  kirebouzu:{hp:56,sp:1.9,dmg:10,atkR:50,w:60,h:66,c1:'#e8503a',c2:'#a82818',c3:'#5c130a',score:400,rager:true,accent:'#ffd24d',name:'キレボウズ'},
+  ari:    {hp:38,sp:2.4,dmg:9, atkR:44,w:52,h:56,c1:'#34343e',c2:'#1c1c24',c3:'#0a0a10',score:360,digger:true,accent:'#d04030',name:'兵隊アリ'},
+  onibouzu:{hp:88,sp:1.1,dmg:12,atkR:56,w:74,h:96,c1:'#3a55c8',c2:'#24348c',c3:'#121a4a',score:560,buffer:true,accent:'#c46bff',name:'オニボウズ'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -1180,7 +1182,8 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   cactus:'チクチクの雨を浴びるがいい！',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！' };
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
-  enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:t.hp,maxHp:t.hp,w:t.w,h:t.h,
+  const hpMul=t.boss?1.6:2;   // 難易度UP：体力 雑魚×2／ボス×1.6
+  enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:Math.round(t.hp*hpMul),maxHp:Math.round(t.hp*hpMul),w:t.w,h:t.h,
     state:'walk',anim:Math.random()*6,atkTimer:0,atkMax:0,telegraph:0,teleMax:0,hurtTimer:0,downTimer:0,stun:0,
     grabbedBy:0,guardCd:0,guardT:0,crouchT:0,pounceHit:false,zankai:0,
     bob:Math.random()*6,strafeDir:Math.random()<0.5?-1:1,strafeCd:rnd(30,90),hopT:0,
@@ -1362,7 +1365,7 @@ function updateEnemies(){
       if(e.x<camX-110||e.x>camX+W+110||e.z>420||e.bo>95){ starTwinkle(e); enemies.splice(i,1); }
       continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
-    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer)){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
+    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer) && !(t.balloon&&e.state==='walk')){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.zankai>0){ e.zankai--; if(gf%6<3)spark(e.x,e.y-e.h*0.95,'#ff4d6a',2,4); if(e.zankai<=0){ zankaiBoom(e); continue; } }   // 残悔拳カウントダウン
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
@@ -1408,32 +1411,67 @@ function updateEnemies(){
       if(e.holdT<=0){ const dir=-e.facing; releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(36,66); e.vx=-e.facing*2;
         popText(gp.x,gp.y-96,'投げ飛ばされた！','#ff6ad0'); hurtPlayer(gp, Math.round((ETYPE.gripper.dmg+9)*ZAKO_DMG), dir, true); gp.vx=dir*10; continue; }
       continue; }
+    // ピエロボウズ：バルーン召喚の詠唱
+    if(e.state==='summon'){ e.summonT--; e.facing=p.x<e.x?-1:1;
+      if(gf%4<2) spark(e.x+e.facing*12,e.y-e.h*0.85,'#ff8ab0',3,5);
+      if(e.summonT===8){ const nb=enemies.filter(x=>!x.dead&&x.type==='balloon').length, n=Math.max(0,Math.min(2,4-nb));
+        for(let k=0;k<n;k++){ spawnEnemy('balloon', e.x+e.facing*32+rnd(-12,12), e.y); const b=enemies[enemies.length-1]; b.z=38+k*18; b.red=Math.random()<0.5; }
+        if(n>0){ popText(e.x,e.y-e.h-8,'バルーン召喚！','#ff8ab0'); ring(e.x,e.y-e.h*0.6,'#ff8ab0'); sfx.rise(); } }
+      if(e.summonT<=0){ e.state='walk'; e.thinkCd=rnd(26,52); } continue; }
+    // 兵隊アリ：地中を掘り進んでプレイヤーの足元から飛び出す
+    if(e.state==='tunnel'){ e.tunnelT--; e.sub=true;
+      e.x+=Math.sign(p.x-e.x)*3.6; e.y=LANE;
+      if(gf%3===0) dust(e.x,e.y,2); if(gf%9===0) spark(e.x,e.y-4,'#8a5a2c',2,3);
+      if(e.tunnelT<=0 || Math.abs(p.x-e.x)<26){ e.sub=false; e.state='pounce'; e.z=1; e.vz=-12; e.vx=Math.sign(p.x-e.x)*4;
+        e.pounceHit=false; e.facing=p.x<e.x?-1:1; dust(e.x,e.y,10); spark(e.x,e.y,'#8a5a2c',10,7); sfx.dash(); popText(e.x,e.y-34,'飛び出した！','#ffce7a'); }
+      continue; }
     if(e.state==='attack'){ e.atkTimer--;
       if(e.atkTimer===e.atkMax-3){ enemyAtkFx(e); }            // visible swipe at strike
       if(e.atkTimer===e.atkMax-4)enemyAttackHit(e);
-      if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(14,38);} if(t.charge)e.x+=e.facing*6; continue; }
+      if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(7,19)*(e.rage?0.6:1);} if(t.charge)e.x+=e.facing*6; continue; }
     if(e.telegraph>0){ e.telegraph--; if(e.telegraph===0){ e.state='attack'; e.atkMax=t.charge?28:20; e.atkTimer=e.atkMax; sfx.heavy();} continue; }
     // AI (livelier: strafe/weave, pulsed speed, hops, feints)
     e.anim+=0.18; e.bob+=0.12; const dx=p.x-e.x; e.facing=dx<0?-1:1;
     const dist=Math.abs(dx), aligned=true;
     e.strafeCd--; if(e.strafeCd<=0){ e.strafeDir=Math.random()<0.5?-1:1; e.strafeCd=rnd(35,85); }
+    // 風船兵：ふわふわ漂って体当たりで破裂
+    if(t.balloon){ e.z=Math.max(22, e.z+Math.sin(e.bob*1.6)*0.7+(36-e.z)*0.03);
+      e.x+=Math.sign(dx)*t.sp*(0.85+0.3*Math.sin(e.bob)); e.y=LANE;
+      if(dist<30 && p.z<e.z+34){ tryHitPlayer(e,t.dmg*ZAKO_DMG,false,-48,60);
+        spark(e.x,e.y-e.z,e.red?'#ff5a5a':'#5a8aff',16,8); ring(e.x,e.y-e.z,'#fff'); sfx.hit(); e.hp=0; killEnemy(e); }
+      continue; }
+    // キレボウズ：定期的にブチギレて攻撃力・速度・手数が上昇
+    if(t.rager){ if(e.rageT>0){ e.rageT--; if(gf%4===0)spark(e.x+rnd(-14,14),e.y-e.h*rnd(0.4,1.1),'#ff6a3a',2,5);
+        if(e.rageT<=0){ e.rage=false; popText(e.x,e.y-e.h-6,'ふぅ…','#cfcfcf'); } }
+      else { if(e.rageCd==null)e.rageCd=rnd(90,160); e.rageCd--;
+        if(e.rageCd<=0){ e.rage=true; e.rageT=260; e.rageCd=rnd(200,300);
+          popText(e.x,e.y-e.h-10,'キレた！！','#ff4d3c',true); ring(e.x,e.y-e.h*0.5,'#ff4d3c'); sfx.boss(); } } }
+    // オニボウズ：えんごしきフィールド＝周囲の味方の攻撃力と速度を上げる
+    if(t.buffer){ if(gf%5===0)spark(e.x+rnd(-28,28), e.y-rnd(0,e.h)-e.z, '#b06bff',1,3);
+      if(gf%12===0){ for(const o of enemies){ if(o!==e&&!o.dead&&!ETYPE[o.type].boss&&!ETYPE[o.type].buffer&&Math.abs(o.x-e.x)<240){ o.buffTill=gf+40;
+        if(Math.random()<0.18) spark(o.x,o.y-o.h-4,'#c46bff',2,3); } } } }
+    // ピエロボウズ：距離を取りつつバルーンを召喚
+    if(t.summoner && e.thinkCd<=0 && e.stun<=0 && enemies.filter(x=>!x.dead&&x.type==='balloon').length<4 && Math.random()<0.6){
+      e.state='summon'; e.summonT=26; e.thinkCd=rnd(60,110); continue; }
+    // 兵隊アリ：離れていると地面に潜る
+    if(t.digger && e.thinkCd<=0 && e.stun<=0 && dist>100){ e.state='tunnel'; e.tunnelT=60; e.sub=true; dust(e.x,e.y,8); popText(e.x,e.y-20,'もぐった！','#caa66a'); e.thinkCd=rnd(56,100); continue; }
     // ワープ犬: 一定間隔でプレイヤーの背後へ瞬間移動して不意打ち
     if(t.warper){ if(e.warpCd==null)e.warpCd=rnd(50,110); e.warpCd--;
       if(e.warpCd<=0 && e.stun<=0 && dist>90){ e.vanish=12; e.x=clamp(p.x - p.facing*60, camX+24, camX+W-24); e.facing=p.x<e.x?-1:1;
-        spark(e.x,e.y-e.h*0.5,'#c89cff',16,9); ring(e.x,e.y-e.h*0.5,'#b06bff'); sfx.dash(); e.warpCd=rnd(120,190); e.thinkCd=10; continue; } }
+        spark(e.x,e.y-e.h*0.5,'#c89cff',16,9); ring(e.x,e.y-e.h*0.5,'#b06bff'); sfx.dash(); e.warpCd=rnd(60,100); e.thinkCd=8; continue; } }
     // 跳躍犬: 中距離から飛びかかる
-    if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(90,150); continue; }
+    if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(45,80); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
-    if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (p.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(90,150); continue; }
+    if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (p.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(50,85); continue; }
     // 組み付き犬: 近づいて掴みかかる（ガードを貫通）
-    if(t.grappler && dist<t.atkR+22 && e.thinkCd<=0 && e.stun<=0 && canGrabAnyPlayer()){ e.state='grabtele'; e.grabTeleT=15; e.facing=dx<0?-1:1; e.thinkCd=rnd(70,120); sfx.heavy(); popText(e.x,e.y-e.h-6,'がしっ…！','#ff6ad0'); continue; }
-    const spd=t.sp*1.35*(0.8+0.34*Math.sin(e.bob*1.3));        // faster to match player; pulsed
+    if(t.grappler && dist<t.atkR+22 && e.thinkCd<=0 && e.stun<=0 && canGrabAnyPlayer()){ e.state='grabtele'; e.grabTeleT=15; e.facing=dx<0?-1:1; e.thinkCd=rnd(40,70); sfx.heavy(); popText(e.x,e.y-e.h-6,'がしっ…！','#ff6ad0'); continue; }
+    const spd=t.sp*1.35*(0.8+0.34*Math.sin(e.bob*1.3))*(e.rage?1.6:1)*(e.buffTill>gf?1.35:1);  // 怒り／円陣強化で加速
     if(dist>t.atkR-6){ e.x+=Math.sign(dx)*spd; }
     else if(dist<t.atkR-34 && Math.random()<0.03){ e.x-=Math.sign(dx)*spd*0.9; }   // feint back-step
     e.y=LANE;
     if(e.z<=0 && dist>t.atkR && Math.random()<(e.type==='hyena'?0.03:0.008)){ e.vz=-6; }  // chase hop
     e.thinkCd--;
-    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){ e.teleMax=(t.charge?24:17); e.telegraph=e.teleMax; e.thinkCd=rnd(22,54); }
+    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){ e.teleMax=Math.round((t.charge?24:17)*(e.rage?0.6:1)); e.telegraph=e.teleMax; e.thinkCd=rnd(11,27); }
   }
   // separation
   for(let a=0;a<enemies.length;a++)for(let b=a+1;b<enemies.length;b++){ const e1=enemies[a],e2=enemies[b];
@@ -1447,6 +1485,7 @@ function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
   else if(Math.abs(dx)>-reach) return false;                   // AoE radius = -reach
+  if(ETYPE[e.type].boss) dmg*=2;                               // 難易度UP：ボスの攻撃力2倍
   const fromFront = Math.sign(dx)===-p.facing;
   if(p.state==='guard' && fromFront){
     if(gf-p.guardStart<=9){ doParry(e,p); return true; }        // just-time guard → PARRY（ガー不もパリィなら防げる）
@@ -1461,8 +1500,9 @@ function tryHitPlayer(e,dmg,knock,reach,hh,unblock){
   for(const p of players){ if(!p.active) continue; if(hitOnePlayer(p,e,dmg,knock,reach,hh,unblock)){ hit=true; if(reach>=0) break; } } // AoE(<0) hits both
   return hit;
 }
-const ZAKO_DMG=2.0;   // 雑魚の攻撃力アップ（難易度UP）
-function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG,true,t.atkR*0.5+30,46); }
+const ZAKO_DMG=4.0;   // 雑魚の攻撃力（難易度UP：従来の2倍）
+function zakoBuffMul(e){ return (e.rage?1.6:1)*(e.buffTill>gf?1.3:1); }   // 怒り／円陣強化の攻撃力補正
+function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),true,t.atkR*0.5+30,46); }
 // ---- 組み付き犬の掴み（プレイヤー拘束）----
 function canGrabPlayer(p){ return p && p.active && p.invuln<=0 && p.z<24 && p.state!=='dead' && p.state!=='down'
   && p.state!=='roll' && p.state!=='slide' && p.state!=='egrab' && !p.grabbedByEnemy; }
@@ -1478,7 +1518,7 @@ function updateEnemyGrab(){ const p=player, e=p.grabbedByEnemy;
   if(K.left&&!p._egL)m++; if(K.right&&!p._egR)m++; p._egL=K.left; p._egR=K.right;
   if(m>0){ e.escapeMash+=m; spark(p.x,p.y-50,'#fff',5,5); }
   p.anim+=0.3; }
-function enemyAttackHit(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG,t.boss||t.charge,t.atkR*1.3+18,40); }
+function enemyAttackHit(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),t.boss||t.charge,t.atkR*1.3+18,40); }
 
 //======================================================================
 //  BOSS AI  (multi-move sets, dashes, slams, projectiles)
@@ -1644,7 +1684,7 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
   if(e.state==='bwind'){ e.moveT--; e.telegraph=Math.max(e.moveT,0);
     if(e.moveT<=0){ e.state='bmove'; e.moveT=0; e.telegraph=0; startBossMove(e); } return; }
   if(e.state==='bmove'){ runBossMove(e); e.moveT++;
-    if(e.moveT>=e.moveMax){ e.state='walk'; e.moveCd=rnd(26,62)*(e.rage?0.6:1)*(e.cursed?0.55:1); e.vx=0; e.danger=false; } return; }  // より攻撃的に
+    if(e.moveT>=e.moveMax){ e.state='walk'; e.moveCd=rnd(13,32)*(e.rage?0.6:1)*(e.cursed?0.55:1); e.vx=0; e.danger=false; } return; }  // 難易度UP：技の回転2倍
   // ---- walk: approach + spacing ----
   const wantR=t.atkR*0.85;
   if(dist>wantR+30) e.x+=Math.sign(dx)*t.sp*1.3*rageMul;
@@ -1655,6 +1695,7 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
       if(mv!=='roar')sfx.heavy(); } }
 }
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
+  dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); sfx.hurt(); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
   if(p.hp<=0){ loseLife(p); return; }
@@ -1700,48 +1741,48 @@ const ROUTE_DEFS={
 // ── ステージ区画（1区画=1ステージ：ザコゲート＋ボスゲート＋NPC）──
 const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
-   gates:[{off:600,list:[['wolf',1],['corgi',1],['warpdog',1]]},{off:1300,boss:true,list:[['garm',1]]}],
+   gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['おお、勇者どのか！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で必殺技も出るぞ。ボスを倒せば猫のチャムの店も開く。']}},
   {theme:1,name:'黄昏の城下町',
-   gates:[{off:600,list:[['hyena',1],['dober',1],['pounce',1]]},{off:1300,boss:true,list:[['shark',1]]}],
+   gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1300,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:['ぐすっ…こわかったよぉ…','おにいちゃんつよい！これ、ひろったの。お礼だワン！'],give:{coins:15}}},
 ];
 const SEGS={
   A:[
     [ {theme:3,name:'業火の渓谷',
-       gates:[{off:600,list:[['boar',1],['mastiff',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
+       gates:[{off:600,list:[['boar',1],['kirebouzu',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
        npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','わしの自信作を持っていけ！溶岩で鍛えた一級品だぞ。'],give:{weapon:true}}},
       {theme:3,name:'渓谷の最深部',
-       gates:[{off:600,list:[['akita',1],['dober',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
+       gates:[{off:600,list:[['akita',1],['pierrot',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
        npc:{kind:'villager',name:'逃げ遅れた村犬',lines:['この先の呪い犬は、触れるだけで呪いをうつしてくる…','掴み技で投げ飛ばせば呪いも怖くないワン！']}} ],
     [ {theme:2,name:'月詠の森',
-       gates:[{off:600,list:[['dober',1],['warpdog',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
+       gates:[{off:600,list:[['dober',1],['pierrot',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
        npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、勇者さま。'],give:{heal:'full'}}},
       {theme:2,name:'森の奥宮',
-       gates:[{off:600,list:[['wolf',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
+       gates:[{off:600,list:[['ari',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
        npc:{kind:'villager',name:'木こり犬ゴン',lines:['三つ首の獣ケルベ…あれにもう犬の心は無い。','上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
   B:[
     [ {theme:1,name:'海賊の港町',
-       gates:[{off:600,list:[['hyena',1],['boar',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
+       gates:[{off:600,list:[['hyena',1],['pierrot',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
        npc:{kind:'sailor',name:'船乗りシオマル',lines:['でけぇスライムが樽の酒を全部飲んじまった！','あいつは斬るたび分裂するぞ。小さいのから素早く片付けるんだワン。']}},
       {theme:1,name:'海賊王の埠頭',
-       gates:[{off:600,list:[['mastiff',1],['dober',1],['bomber',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
+       gates:[{off:600,list:[['mastiff',1],['kirebouzu',1],['onibouzu',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
        npc:{kind:'villager',name:'酒場の看板犬',lines:['海賊王の錨投げは、空に逃げても追いかけてくる…','懐に飛び込んで連打するのが一番だワン！']}} ],
     [ {theme:3,name:'灼熱の砂漠',
-       gates:[{off:600,list:[['warpdog',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
+       gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
       {theme:3,name:'砂漠の遺跡',
-       gates:[{off:600,list:[['akita',1],['guard',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
+       gates:[{off:600,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
        npc:{kind:'villager',name:'考古学犬ホリダス',lines:['鋼鉄のグラトンは古代遺跡の守護兵だったのだ…','図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
 };
 const FINAL_CH=[
   {theme:4,name:'魔界への道',
-   gates:[{off:600,list:[['akita',1],['mastiff',1],['warpdog',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
+   gates:[{off:600,list:[['kirebouzu',1],['mastiff',1],['onibouzu',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。決して油断するでないぞ。','王国みんなの祈りが、そなたと共にある！']}},
   {theme:4,name:'暗黒の城門',
-   gates:[{off:600,list:[['dober',2],['gripper',2]]},{off:1300,boss:true,list:[['rival',1]]}],
+   gates:[{off:600,list:[['pierrot',1],['gripper',1],['onibouzu',1],['ari',1]]},{off:1300,boss:true,list:[['rival',1]]}],
    npc:{kind:'villager',name:'囚われの近衛犬',once:true,lines:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','大帝に心を奪われてしまったのだ。どうか…奴の剣を、止めてやってくれ…'],give:{heal:'full'}}},
   {theme:4,name:'魔王の間',len:1400,noPit:true,
    gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
@@ -1808,7 +1849,7 @@ function applyGive(n,p){ const g=n.give;
   if(g.weapon){ makeItem(p.x+44,weaponDropKind()); popText(p.x,p.y-148,'武器をもらった！','#aef0ff',true); sfx.coin(); }
   if(g.shop){ shopPending=1; }
   if(g.fortune){ const r=Math.random();
-    if(r<0.34){ players.forEach(pp=>{ if(pp.active) pp.atkMul=(pp.atkMul||1)+0.1; }); popText(p.x,p.y-100,'闘気上昇の星回り！ 攻撃+10%','#ff9a3a',true); sfx.rise(); }
+    if(r<0.34){ players.forEach(pp=>{ if(pp.active) pp.atkMul=(pp.atkMul||1)+0.05; }); popText(p.x,p.y-100,'闘気上昇の星回り！ 攻撃+5%','#ff9a3a',true); sfx.rise(); }
     else if(r<0.67){ coins+=15; popText(p.x,p.y-100,'金運上昇！ +15¢','#ffe14d',true); sfx.coin(); }
     else { players.forEach(pp=>{ if(pp.active) pp.hp=Math.min(pp.maxHp,pp.hp+50); }); popText(p.x,p.y-100,'癒やしの星回り！','#7dff5a',true); sfx.heal(); } }
   if(g.chest){ chestsOpened++; const r=Math.random();
@@ -1817,7 +1858,7 @@ function applyGive(n,p){ const g=n.give;
     else if(r<0.5){ makeItem(n.x,weaponDropKind()); popText(n.x,LANE-130,'武器を手に入れた！','#aef0ff',true); sfx.rise(); }
     else { const c=8+(Math.random()*14|0); for(let i=0;i<c;i++) makeCoin(n.x,1); sfx.coin(); } } }
 function triggerAmbush(n){ popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
-  const picks=['wolf','hyena','dober','pounce'];
+  const picks=['wolf','hyena','ari','kirebouzu'];
   for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
 function updateNPCs(){
   for(const n of npcs){
@@ -1892,7 +1933,7 @@ function projVsPlayer(pr,p){
       spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.guard(); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); return 'reflect'; }
     sfx.guard(); spark(p.x+p.facing*22,p.y-44,'#9fd6ff',8); p.vx=dir*1.6; shake=3; p.guardFx=8; resetCombo(); return 'gone';
   }
-  hurtPlayer(p,pr.dmg,dir,true); spark(pr.x,pr.y-pr.zz,pr.color,12,8); return 'gone';
+  hurtPlayer(p,pr.dmg*2,dir,true); spark(pr.x,pr.y-pr.zz,pr.color,12,8); return 'gone';   // 難易度UP：敵弾2倍
 }
 function updateProjectiles(){
   for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i];
@@ -1972,16 +2013,15 @@ function update(){
   if(state!=='play') return;
   stepPlayers(); updateEnemies(); updateProjectiles(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
-  if(shopPending>0){ shopPending--; if(shopPending===0 && state==='play') enterShop(); }
+  if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) enterShop(); }   // 会話などで中断されたら次のフレームで再試行
 }
 
 //======================================================================
 //  ============ RENDERING ============
 //======================================================================
 function render(){
-  const mainctx=ctx;
-  // ── シーンを低解像度バッファへ描画（ドット絵化）──
-  ctx=sctx; ctx.setTransform(1/PIX,0,0,1/PIX,0,0); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,W,H);
+  // フル解像度＆DPRスケールで直接描画（なめらかな高精細レンダリング）
+  ctx.clearRect(0,0,W,H);
   ctx.save();
   const _q=shake+(quake>0?Math.abs(Math.sin(gf*0.9))*quake*0.5:0);
   if(_q>0) ctx.translate(rnd(-_q,_q),rnd(-_q*0.6,_q*0.6));
@@ -2004,10 +2044,6 @@ function render(){
   drawLighting();
   ctx.restore();
   if(flash>0){ ctx.fillStyle='rgba(255,90,80,'+(flash/12)+')'; ctx.fillRect(0,0,W,H); }
-  // ── バッファをメインキャンバスへ拡大転写（ニアレストネイバー＝カクカクのドット）＋HUDは鮮明に ──
-  ctx=mainctx; ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,W,H);
-  ctx.drawImage(sbuf,0,0,sbuf.width,sbuf.height,0,0,W,H);
-  ctx.imageSmoothingEnabled=true;
   drawHUD();
 }
 
@@ -2610,6 +2646,11 @@ function chibiHead(lean){
 function drawEnemy(e){
   const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
   let al=1; if(e.dead&&e.deadTimer<22) al=clamp(e.deadTimer/22,0,1); if(e.vanish>0) al=Math.min(al,0.35);
+  // 兵隊アリ：地中移動中は土の盛り上がりだけを描く
+  if(e.sub && t.digger){ ctx.save(); ctx.translate(sx,sy);
+    ctx.fillStyle='#6a4a2c'; ctx.beginPath(); ctx.ellipse(0,-4,22,10,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#8a6a40'; ctx.beginPath(); ctx.ellipse(-6,-8,9,5,0.3,Math.PI,0); ctx.fill();
+    ctx.restore(); return; }
   ctx.globalAlpha=al;
   softShadow(sx,sy,(t.w*0.5)*s*(e.z>0?0.7:1));
   ctx.save(); ctx.translate(sx,sy-e.z); ctx.scale(e.facing*s,s);
@@ -2628,7 +2669,10 @@ function drawEnemy(e){
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.slimey) drawSlime(e);
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
-  else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e); else drawBeast(e);
+  else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
+  else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
+  else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
+  else drawBeast(e);
   if(t.guarder) drawEnemyShield(e);
   ctx.restore();
   // wind-up warning ("!"); ガード不能技は紫＋「パリィ！」で警告
@@ -2653,6 +2697,124 @@ function drawEnemyShield(e){ const guarding=e.state==='guard';
   ctx.fillStyle='#cdd9ec'; ctx.beginPath(); ctx.arc(0,0,4,0,7); ctx.fill();
   if(guarding){ ctx.globalAlpha=0.85; ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(0,0,13,19,0,0,7); ctx.stroke(); ctx.globalAlpha=1; }
   ctx.restore();
+}
+// ---- ボウズ軍団（図鑑イラスト再現の手描きアート）----
+function drawPierrot(e){ const atk=e.state==='attack', cast=e.state==='summon';
+  const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  limbSeg(-8,-10,-12+walk*0.6,0,7,'#c43a3a'); limbSeg(8,-10,12-walk*0.6,0,7,'#c43a3a');           // 赤い脚
+  ctx.fillStyle=radGrad(0,-34,24,'#5a82d8','#2c4a9a'); ctx.beginPath(); ctx.ellipse(0,-32,19,23,0,0,7); ctx.fill();   // 青い胴
+  ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.arc(0,-30,4,0,7); ctx.arc(0,-42,4,0,7); ctx.fill();                   // ボタン
+  for(let i=0;i<7;i++){ const a=Math.PI+i*(Math.PI/6); ctx.fillStyle=i%2?'#fff':'#ffe9a0';                              // フリル襟
+    ctx.beginPath(); ctx.arc(Math.cos(a)*14,-50+Math.sin(a)*5,5.5,0,7); ctx.fill(); }
+  furBall(0,-64,16,'#fdfdff','#cdd4e8');                                                                                // 白い顔
+  ctx.fillStyle='#ff4040'; ctx.beginPath(); ctx.arc(2,-62,4.6,0,7); ctx.fill();                                         // 赤鼻
+  ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(-6,-67,2.2,0,7); ctx.arc(9,-67,2.2,0,7); ctx.fill();                // 目
+  ctx.fillStyle='rgba(240,120,140,.55)'; ctx.beginPath(); ctx.arc(-11,-60,3.4,0,7); ctx.arc(13,-60,3.4,0,7); ctx.fill();
+  ctx.strokeStyle='#a04848'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(-3,-56); ctx.quadraticCurveTo(2,-52,7,-56); ctx.stroke();
+  ctx.fillStyle='#2c4a9a'; ctx.beginPath(); ctx.moveTo(-13,-74); ctx.lineTo(13,-74); ctx.lineTo(2,-98); ctx.closePath(); ctx.fill();   // とんがり帽子
+  ctx.fillStyle='#ff5a6a'; ctx.beginPath(); ctx.arc(2,-99,4.5,0,7); ctx.fill();                                          // ポンポン
+  // 手元の旗（肉球の看板）
+  ctx.save(); ctx.translate(16,-40); ctx.rotate(atk?0.7:-0.15);
+  ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(0,8); ctx.lineTo(0,-26); ctx.stroke();
+  ctx.fillStyle='#e85a6a'; ctx.fillRect(0,-26,16,12); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(8,-20,3.4,0,7); ctx.fill(); ctx.restore();
+  // 持っている風船（紐つき・召喚中は掲げる）
+  const by=cast?-116:-104, sway=Math.sin(e.bob)*3;
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.moveTo(-14,-46); ctx.quadraticCurveTo(-18+sway,-80,(-20+sway),by+12); ctx.stroke();
+  ctx.fillStyle=radGrad(-20+sway,by,10,'#ff8a8a','#d03030'); ctx.beginPath(); ctx.ellipse(-20+sway,by,9,11,0,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-22+sway,by-1,2.6,0,7); ctx.fill();
+}
+function drawBalloonFoe(e){ const sway=Math.sin(e.bob*1.4)*0.16, col=e.red!==false;
+  ctx.save(); ctx.rotate(sway);
+  ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.6;                                          // 垂れた紐
+  ctx.beginPath(); ctx.moveTo(0,16); ctx.quadraticCurveTo(4,26,-2,38); ctx.stroke();
+  ctx.fillStyle=radGrad(0,-2,20,col?'#ff8a8a':'#7aa8ff',col?'#c82828':'#2850b8');                      // 風船本体
+  ctx.beginPath(); ctx.ellipse(0,-2,16,19,0,0,7); ctx.fill();
+  ctx.fillStyle=col?'#a82020':'#1c3c90'; ctx.beginPath(); ctx.moveTo(-4,16); ctx.lineTo(4,16); ctx.lineTo(0,21); ctx.closePath(); ctx.fill();   // 結び目
+  ctx.fillStyle='rgba(255,255,255,.75)'; ctx.beginPath(); ctx.ellipse(-6,-9,4.5,6,0.5,0,7); ctx.fill(); // ハイライト
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-5,-4,4,0,7); ctx.arc(5,-4,4,0,7); ctx.fill();         // 白目
+  ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(-4,-4,2,0,7); ctx.arc(6,-4,2,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(0,5,4.5,5.5,0,0,7); ctx.fill();                    // 「O」の口
+  ctx.fillStyle=col?'#7c1414':'#102868'; ctx.beginPath(); ctx.ellipse(0,5,2.6,3.6,0,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawKirebouzu(e){ const atk=e.state==='attack', rage=e.rage;
+  const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  limbSeg(-9,-8,-13+walk*0.6,0,7,'#5c130a'); limbSeg(9,-8,13-walk*0.6,0,7,'#5c130a');                  // 短い脚
+  ctx.fillStyle=radGrad(0,-34,30,rage?'#ff6a4a':'#e8503a','#8c1c0e');                                   // 丸い体
+  ctx.beginPath(); ctx.arc(0,-34,26,0,7); ctx.fill();
+  ctx.fillStyle='#5c130a'; ctx.fillRect(-26,-52,52,8);                                                  // 鉢巻き
+  ctx.fillStyle='#2c0c06'; ctx.beginPath(); ctx.arc(0,-62,6,0,7); ctx.fill();                           // ちょんまげ
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(-9,-38,6.5,8,0.2,0,7); ctx.ellipse(10,-38,6.5,8,-0.2,0,7); ctx.fill();   // 怒り目
+  ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(-8,-36,2.8,0,7); ctx.arc(9,-36,2.8,0,7); ctx.fill();
+  ctx.strokeStyle='#2c0c06'; ctx.lineWidth=4; ctx.lineCap='round';                                      // つり上がった眉
+  ctx.beginPath(); ctx.moveTo(-16,-48); ctx.lineTo(-4,-43); ctx.moveTo(17,-48); ctx.lineTo(4,-43); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.rect(-8,-28,16,5); ctx.fill();                              // 食いしばった歯
+  ctx.strokeStyle='#2c0c06'; ctx.lineWidth=1.6; ctx.strokeRect(-8,-28,16,5);
+  ctx.save(); ctx.translate(20,-40); ctx.rotate(atk?1.2:-0.5);                                           // トゲ棍棒
+  ctx.fillStyle='#7a4a22'; ctx.fillRect(-3,-34,7,38);
+  ctx.fillStyle='#caa'; for(const ty of [-30,-20,-10]){ ctx.beginPath(); ctx.moveTo(4,ty); ctx.lineTo(11,ty+3); ctx.lineTo(4,ty+6); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-3,ty+2); ctx.lineTo(-10,ty+5); ctx.lineTo(-3,ty+8); ctx.fill(); }
+  ctx.restore();
+  if(rage){ ctx.strokeStyle='#ff3020'; ctx.lineWidth=3; ctx.lineCap='round';                             // 💢マーク
+    for(let q=0;q<4;q++){ const a=q*PI2+0.78; ctx.beginPath(); ctx.moveTo(-20+Math.cos(a)*5,-66+Math.sin(a)*5); ctx.lineTo(-20+Math.cos(a)*11,-66+Math.sin(a)*11); ctx.stroke(); } }
+}
+function drawAri(e){ const atk=e.state==='attack'||e.state==='pounce';
+  const walk=e.state==='walk'?Math.sin(e.anim*2.6)*4:0;
+  ctx.strokeStyle='#1c1c24'; ctx.lineWidth=3; ctx.lineCap='round';                                       // 6本の脚
+  for(let l=0;l<3;l++){ const lx=-8+l*9, ph=Math.sin(e.anim*2.6+l)*4;
+    ctx.beginPath(); ctx.moveTo(lx,-14); ctx.lineTo(lx-5+ph,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx,-14); ctx.lineTo(lx+6-ph,0); ctx.stroke(); }
+  ctx.fillStyle=radGrad(-16,-20,14,'#3c3c48','#14141c'); ctx.beginPath(); ctx.ellipse(-16,-20,14,11,0.15,0,7); ctx.fill();   // 腹部
+  ctx.fillStyle='#2a2a34'; ctx.beginPath(); ctx.ellipse(-1,-20,9,8,0,0,7); ctx.fill();                    // 胸部
+  furBall(13,-28,12,'#3c3c48','#14141c');                                                                 // 頭
+  ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.moveTo(4,-22); ctx.lineTo(16,-18); ctx.lineTo(14,-13); ctx.lineTo(3,-17); ctx.closePath(); ctx.fill();   // 赤いスカーフ
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(10,-31,4.5,5.5,0,0,7); ctx.ellipse(19,-31,4.5,5.5,0,0,7); ctx.fill();   // 大きな白目
+  ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(11,-30,2.2,0,7); ctx.arc(20,-30,2.2,0,7); ctx.fill();
+  ctx.strokeStyle='#1c1c24'; ctx.lineWidth=2.4;                                                            // 触角
+  ctx.beginPath(); ctx.moveTo(8,-38); ctx.quadraticCurveTo(4,-50,-2,-52); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(15,-39); ctx.quadraticCurveTo(15,-52,10,-56); ctx.stroke();
+  ctx.fillStyle='#1c1c24'; ctx.beginPath(); ctx.arc(-2,-52,2.6,0,7); ctx.arc(10,-56,2.6,0,7); ctx.fill();
+  ctx.save(); ctx.translate(20,-18); ctx.rotate(atk?0.9:-0.3);                                             // シャベル
+  ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(0,6); ctx.lineTo(0,-16); ctx.stroke();
+  ctx.fillStyle='#9aa2ae'; ctx.beginPath(); ctx.moveTo(-5,-16); ctx.lineTo(5,-16); ctx.lineTo(4,-27); ctx.lineTo(-4,-27); ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function drawOnibouzu(e){ const atk=e.state==='attack';
+  const walk=e.state==='walk'?Math.sin(e.anim*1.6)*4:0;
+  // えんごしきフィールド（足元の魔法円陣＋紫炎）
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.18*Math.sin(gf*0.12);
+  ctx.strokeStyle='#b06bff'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.ellipse(0,2,46,13,0,0,7); ctx.stroke();
+  ctx.lineWidth=1.4; ctx.beginPath(); ctx.ellipse(0,2,34,9,0,0,7); ctx.stroke();
+  for(let q=0;q<5;q++){ const a=gf*0.04+q*(Math.PI*2/5); ctx.fillStyle='#c46bff';
+    ctx.fillRect(Math.cos(a)*40-2, 2+Math.sin(a)*11-2, 4,4); }
+  ctx.restore();
+  limbSeg(-12,-10,-16+walk*0.6,0,9,'#24348c'); limbSeg(12,-10,16-walk*0.6,0,9,'#24348c');                 // 脚
+  ctx.fillStyle=radGrad(0,-44,36,'#4a66e0','#1c2a70'); ctx.beginPath(); ctx.ellipse(0,-42,30,34,0,0,7); ctx.fill();   // 青い巨体
+  ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.ellipse(0,-26,28,9,0,0,7); ctx.fill();                     // 赤い縄帯
+  ctx.fillStyle='#ffd24d'; for(let s=0;s<4;s++){ ctx.fillRect(-22+s*12,-20,6,12); }                        // 虎柄の腰布
+  ctx.fillStyle='#23170d'; for(let s=0;s<3;s++){ ctx.fillRect(-16+s*12,-20,4,12); }
+  furBall(0,-72,20,'#5a78ec','#2c3c9c');                                                                   // 頭
+  ctx.fillStyle='#1a1424'; ctx.beginPath(); ctx.arc(0,-88,10,Math.PI,0);                                   // 黒い荒髪
+  for(let q=0;q<5;q++){ const a=Math.PI+q*(Math.PI/4); ctx.lineTo(Math.cos(a)*16, -88+Math.sin(a)*16-4); }
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ffd24d';                                                                                  // 金の角
+  ctx.beginPath(); ctx.moveTo(-12,-86); ctx.lineTo(-20,-100); ctx.lineTo(-7,-90); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(12,-86); ctx.lineTo(20,-100); ctx.lineTo(7,-90); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(-7,-74,5,6.5,0.15,0,7); ctx.ellipse(8,-74,5,6.5,-0.15,0,7); ctx.fill();   // 目
+  ctx.fillStyle='#23170d'; ctx.beginPath(); ctx.arc(-6,-73,2.4,0,7); ctx.arc(9,-73,2.4,0,7); ctx.fill();
+  ctx.strokeStyle='#101038'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-13,-81); ctx.lineTo(-3,-79); ctx.moveTo(14,-81); ctx.lineTo(4,-79); ctx.stroke();   // 眉
+  ctx.fillStyle='rgba(240,120,140,.5)'; ctx.beginPath(); ctx.arc(-14,-67,4,0,7); ctx.arc(15,-67,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(-5,-64); ctx.lineTo(-1,-64); ctx.lineTo(-3,-60); ctx.closePath();          // 牙
+  ctx.moveTo(3,-64); ctx.lineTo(7,-64); ctx.lineTo(5,-60); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.translate(26,-52); ctx.rotate(atk?1.1:-0.35);                                             // 金棒
+  ctx.fillStyle='#5a3a1c'; ctx.fillRect(-4,-44,9,50);
+  ctx.fillStyle='#8a8a96'; for(const ty of [-40,-28,-16]){ ctx.beginPath(); ctx.moveTo(5,ty); ctx.lineTo(12,ty+3); ctx.lineTo(5,ty+6); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-4,ty+2); ctx.lineTo(-11,ty+5); ctx.lineTo(-4,ty+8); ctx.fill(); }
+  ctx.restore();
+  // 紫炎のゆらめき
+  if(gf%3===0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5;
+    ctx.fillStyle='#9a5aff'; const fx=Math.sin(gf*0.3)*20;
+    ctx.beginPath(); ctx.ellipse(fx*0.8,-86-Math.abs(fx)*0.3,4,9,0,0,7); ctx.fill(); ctx.restore(); }
 }
 function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
   const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
@@ -3363,11 +3525,12 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //  アイテムショップ「チャム」（ステージ間の宿屋・酒場）
 //======================================================================
 const SHOP_ITEMS=[
-  {name:'全回復ポーション', desc:'体力を全回復', cost:8,  buy(){ players.forEach(p=>{if(p.active)p.hp=p.maxHp;}); }},
-  {name:'タフネスの護符',   desc:'最大HP ＋30',  cost:30, buy(){ players.forEach(p=>{if(p.active){p.maxHp+=30;p.hp+=30;}}); }},
-  {name:'力の指輪',         desc:'攻撃力 ＋20％',cost:40, buy(){ players.forEach(p=>{if(p.active)p.atkMul=(p.atkMul||1)+0.2;}); }},
-  {name:'奥義の巻物',       desc:'奥義ストック上限＋1', cost:35, buy(){ players.forEach(p=>{if(p.active){p.dimMax++;p.dim=Math.min(p.dimMax,p.dim+1);}}); }},
-  {name:'いのちの肉球',     desc:'残機 ＋1',     cost:55, buy(){ players.forEach(p=>{if(p.active)p.lives++;}); }},
+  {name:'回復ポーション',   desc:'体力を60回復', cost:18, buy(){ players.forEach(p=>{if(p.active)p.hp=Math.min(p.maxHp,p.hp+60);}); }},
+  {name:'タフネスの護符',   desc:'最大HP ＋12',  cost:55, buy(){ players.forEach(p=>{if(p.active){p.maxHp+=12;p.hp+=12;}}); }},
+  {name:'力の指輪',         desc:'攻撃力 ＋8％', cost:75, buy(){ players.forEach(p=>{if(p.active)p.atkMul=(p.atkMul||1)+0.08;}); }},
+  {name:'守りのマント',     desc:'受けるダメージ −6％（最大−40％）', cost:75, buy(){ players.forEach(p=>{if(p.active)p.defMul=Math.max(0.6,(p.defMul||1)-0.06);}); }},
+  {name:'奥義の巻物',       desc:'奥義ストック上限＋1', cost:50, buy(){ players.forEach(p=>{if(p.active){p.dimMax++;p.dim=Math.min(p.dimMax,p.dim+1);}}); }},
+  {name:'いのちの肉球',     desc:'残機 ＋1',     cost:90, buy(){ players.forEach(p=>{if(p.active)p.lives++;}); }},
   {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出る', cost:0, leave:true},
 ];
 let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0;
@@ -3433,7 +3596,7 @@ function drawShop(){
     if(!it.leave){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+22); ctx.textAlign='left'; }
   });
   const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('最大HP '+p.maxHp+'   攻撃 ×'+(p.atkMul||1).toFixed(1)+'   残機 '+Math.max(0,p.lives)+'   奥義 '+p.dimMax, mx+8, my+SHOP_ITEMS.length*ih+34);
+  ctx.fillText('最大HP '+p.maxHp+'   攻撃 ×'+(p.atkMul||1).toFixed(2)+'   防御 −'+Math.round((1-(p.defMul||1))*100)+'%   残機 '+Math.max(0,p.lives)+'   奥義 '+p.dimMax, mx+8, my+SHOP_ITEMS.length*ih+34);
   if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
   ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
   ctx.fillText('↑↓ 選択　／　J（攻撃）で購入　／　Space（ジャンプ）で出発', W/2, H-26); ctx.textAlign='left';
@@ -3548,7 +3711,7 @@ const elRTitle=document.getElementById('result-title'),elRSub=document.getElemen
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
 function saveProgress(st){ try{
-  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,dimMax:p.dimMax,lives:p.lives}));
+  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,dimMax:p.dimMax,lives:p.lives}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode,coins:coins,upg:upg,routes:routesChosen})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
@@ -3566,7 +3729,7 @@ function startGame(){ unlockAudio();
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
-    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives; } });
+    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives; } });
     (sv.routes||[]).forEach((sel,i)=>{ routesChosen.push(sel); applyRoute(i===0?'A':'B',sel); }); }
   if(stageN>1){ const idx=encounters.findIndex(e=>e.st===stageN);
     if(idx>0){ for(let i=0;i<idx;i++){ encounters[i].cleared=true; encounters[i].spawned=true; }
