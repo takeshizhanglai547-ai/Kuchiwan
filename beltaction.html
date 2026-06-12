@@ -131,9 +131,9 @@ let ctx = cv.getContext('2d');
 const W = 960, H = 540;                    // logical resolution（フル解像度で直接描画）
 
 // hi-dpi crisp backing store
-let DPR = Math.min(window.devicePixelRatio||1, 3);
+let DPR = Math.min(window.devicePixelRatio||1, 2);   // 負荷対策：内部解像度はDPR2まで（見た目はほぼ同等）
 function setupCanvas(){
-  DPR = Math.min(window.devicePixelRatio||1, 3);
+  DPR = Math.min(window.devicePixelRatio||1, 2);
   cv.width = W*DPR; cv.height = H*DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
 }
@@ -460,6 +460,7 @@ function popText(x,y,txt,color,big){ particles.push({k:'txt',x,y,txt,color,big,l
 function ring(x,y,color){ particles.push({k:'ring',x,y,r:6,life:16,max:16,color}); }
 function impactBurst(x,y,color,big){ particles.push({k:'impact',x,y,color,life:big?13:9,max:big?13:9,R:big?54:34,n:big?10:7,rot:Math.random()*6}); }
 function updateParticles(){
+  if(particles.length>240) particles.splice(0, particles.length-240);   // 負荷対策：パーティクル上限
   for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life--;
     if(p.k==='spark'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.24;p.vx*=0.94; }
     else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; }
@@ -1923,7 +1924,7 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st);
     if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=150; stageBannerTxt='STAGE '+enc.st+'　'+(STAGE_NAME[enc.st]||''); } }
     let off=0;
-    enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n*2+1;   // ザコは出現数増（難易度UP）
+    enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n+1;   // 同時数は控えめ（ステータス2倍で歯ごたえ確保＋負荷対策）
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
       spawnEnemy(type,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
@@ -2129,28 +2130,35 @@ function drawAmbient(T){ ctx.save(); if(T.amb.glow)ctx.globalCompositeOperation=
   ctx.globalAlpha=1; ctx.restore(); }
 
 // ---------- Background ----------
-function drawBackground(){
-  const T=curTheme(); const sk=T.sky;
-  const sky=ctx.createLinearGradient(0,0,0,GROUND_TOP);
+// ── 負荷対策：空（グラデ・太陽・God rays）はテーマ毎に1度だけオフスクリーンへ描いて使い回す ──
+let bgCache=null, bgCacheTheme=-1;
+function buildSkyCache(T,ti){
+  bgCacheTheme=ti;
+  bgCache=document.createElement('canvas'); bgCache.width=W; bgCache.height=GROUND_TOP+30;
+  const c=bgCache.getContext('2d'), sk=T.sky;
+  const sky=c.createLinearGradient(0,0,0,GROUND_TOP);
   sky.addColorStop(0,sk[0]); sky.addColorStop(.45,sk[1]); sky.addColorStop(.8,sk[2]); sky.addColorStop(1,sk[3]);
-  ctx.fillStyle=sky; ctx.fillRect(0,0,W,GROUND_TOP+30);
-  // stars (night / 魔界)
+  c.fillStyle=sky; c.fillRect(0,0,W,GROUND_TOP+30);
+  const cdx=W*T.sunX, cdy=T.sunY;
+  const sun=c.createRadialGradient(cdx,cdy,10,cdx,cdy,300);
+  sun.addColorStop(0,T.sun+'.9)'); sun.addColorStop(1,T.sun+'0)');
+  c.fillStyle=sun; c.fillRect(0,0,W,GROUND_TOP);
+  c.save(); c.globalCompositeOperation='lighter'; c.fillStyle=T.sun+'.45)'; c.beginPath(); c.arc(cdx,cdy,T.stars?44:58,0,7); c.fill(); c.restore();
+  c.fillStyle=T.stars?'#eef3ff':'#fff7dc'; c.beginPath(); c.arc(cdx,cdy,T.stars?34:40,0,7); c.fill();
+  if(T.stars){ c.fillStyle='rgba(150,170,210,.45)'; c.beginPath(); c.arc(cdx-11,cdy-7,7,0,7); c.arc(cdx+12,cdy+9,5,0,7); c.arc(cdx+5,cdy-13,4,0,7); c.fill(); }
+  c.save(); c.globalAlpha=T.rays; c.globalCompositeOperation='lighter';
+  for(let i=0;i<8;i++){ c.fillStyle=T.sun+'1)'; c.beginPath(); c.moveTo(cdx,cdy);
+    const a=-0.5+i*0.26; c.lineTo(cdx+Math.cos(a)*1000,cdy+Math.sin(a)*1000); c.lineTo(cdx+Math.cos(a+0.05)*1000,cdy+Math.sin(a+0.05)*1000); c.fill(); }
+  c.restore();
+}
+function drawBackground(){
+  const T=curTheme(), ti=themeIdxFor(stage);
+  if(ti!==bgCacheTheme||!bgCache) buildSkyCache(T,ti);
+  ctx.drawImage(bgCache,0,0);
+  // stars (night / 魔界) — twinkle so drawn live
   if(T.stars){ ctx.save(); for(let i=0;i<T.stars;i++){ const sxp=(i*137.5)%W, syp=(i*71.3)%(GROUND_TOP-60);
     const tw=0.4+0.6*Math.abs(Math.sin(gf*0.03+i)); ctx.globalAlpha=tw*0.9; ctx.fillStyle=i%7?'#dfe7ff':'#fff6c0';
     ctx.fillRect(sxp,syp,1.6,1.6); } ctx.globalAlpha=1; ctx.restore(); }
-  // sun / moon glow + disc
-  const cdx=W*T.sunX, cdy=T.sunY;
-  const sun=ctx.createRadialGradient(cdx,cdy,10,cdx,cdy,300);
-  sun.addColorStop(0,T.sun+'.9)'); sun.addColorStop(1,T.sun+'0)');
-  ctx.fillStyle=sun; ctx.fillRect(0,0,W,GROUND_TOP);
-  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=T.sun+'.45)'; ctx.beginPath(); ctx.arc(cdx,cdy,T.stars?44:58,0,7); ctx.fill(); ctx.restore();
-  ctx.fillStyle=T.stars?'#eef3ff':'#fff7dc'; ctx.beginPath(); ctx.arc(cdx,cdy,T.stars?34:40,0,7); ctx.fill();
-  if(T.stars){ ctx.fillStyle='rgba(150,170,210,.45)'; ctx.beginPath(); ctx.arc(cdx-11,cdy-7,7,0,7); ctx.arc(cdx+12,cdy+9,5,0,7); ctx.arc(cdx+5,cdy-13,4,0,7); ctx.fill(); }
-  // god rays
-  ctx.save(); ctx.globalAlpha=T.rays; ctx.globalCompositeOperation='lighter';
-  for(let i=0;i<8;i++){ ctx.fillStyle=T.sun+'1)'; ctx.beginPath(); ctx.moveTo(W*T.sunX,T.sunY);
-    const a=-0.5+i*0.26; ctx.lineTo(W*T.sunX+Math.cos(a)*1000,T.sunY+Math.sin(a)*1000); ctx.lineTo(W*T.sunX+Math.cos(a+0.05)*1000,T.sunY+Math.sin(a+0.05)*1000); ctx.fill(); }
-  ctx.restore();
   // shooting stars (night skies)
   if(T.stars){ if(Math.random()<0.006 && shootStars.length<2) shootStars.push({x:rnd(W*0.15,W*0.95),y:rnd(16,130),vx:rnd(-8,-5),vy:rnd(1.6,3),life:24,max:24});
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.lineCap='round';
@@ -2206,8 +2214,14 @@ function drawLamp(x,baseY){
   const lg=radGrad(x+21,baseY-142,11,'rgba(255,228,150,.98)','rgba(255,180,60,.25)'); ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(x+21,baseY-142,8,0,7); ctx.fill();
   ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,210,120,.12)'; ctx.beginPath(); ctx.arc(x+21,baseY-142,46,0,7); ctx.fill(); ctx.restore();
 }
-function cloud(x,y,r){ const g=radGrad(x,y,r,'rgba(255,255,255,.95)','rgba(255,255,255,.5)'); ctx.fillStyle=g;
-  ctx.beginPath(); ctx.arc(x,y,r*.6,0,7); ctx.arc(x+r*.5,y+6,r*.5,0,7); ctx.arc(x-r*.5,y+8,r*.45,0,7); ctx.arc(x+r*.2,y-r*.3,r*.45,0,7); ctx.fill(); }
+let _cloudSpr=null;   // 負荷対策：雲は1枚のスプライトを拡縮して使い回す
+function cloud(x,y,r){
+  if(!_cloudSpr){ _cloudSpr=document.createElement('canvas'); _cloudSpr.width=200; _cloudSpr.height=130;
+    const c=_cloudSpr.getContext('2d'), R=58, cx0=100, cy0=62;
+    const g=c.createRadialGradient(cx0-R*0.35,cy0-R*0.4,R*0.1,cx0,cy0,R);
+    g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,.5)'); c.fillStyle=g;
+    c.beginPath(); c.arc(cx0,cy0,R*.6,0,7); c.arc(cx0+R*.5,cy0+6,R*.5,0,7); c.arc(cx0-R*.5,cy0+8,R*.45,0,7); c.arc(cx0+R*.2,cy0-R*.3,R*.45,0,7); c.fill(); }
+  const sc=r/58; ctx.drawImage(_cloudSpr, x-100*sc, y-62*sc, 200*sc, 130*sc); }
 function drawTower(x,y,w,h,col,haze){ const g=ctx.createLinearGradient(x,0,x+w,0); g.addColorStop(0,col); g.addColorStop(1,shade(col,-20));
   ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
   ctx.fillStyle=shade(col,-30); for(let i=0;i<w;i+=14)ctx.fillRect(x+i,y,8,8);
@@ -2252,7 +2266,6 @@ function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
     let wi=0;
     for(const wx of [gx+20,gx+bw-58]){ const wy=y+22; const on=lit && (((g0*7+wi)%3)===0);
       if(on){ const fl=0.75+0.25*Math.abs(Math.sin(gf*0.05+g0*3+wi)); ctx.fillStyle='#ffcf66'; ctx.globalAlpha=fl; ctx.fillRect(wx,wy,30,34); ctx.globalAlpha=1;
-        ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(wx+15,wy+17,30,'rgba(255,200,90,.7)','rgba(255,200,90,0)'); ctx.fillRect(wx-16,wy-16,62,66); ctx.restore();
       } else { const wg=ctx.createLinearGradient(0,wy,0,wy+34); wg.addColorStop(0,lit?'#26405c':'#bfe4ff'); wg.addColorStop(1,lit?'#16263a':'#3a6a8c'); ctx.fillStyle=wg; ctx.fillRect(wx,wy,30,34); }
       ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=2; ctx.strokeRect(wx,wy,30,34); ctx.beginPath(); ctx.moveTo(wx+15,wy);ctx.lineTo(wx+15,wy+34);ctx.moveTo(wx,wy+17);ctx.lineTo(wx+30,wy+17); ctx.stroke(); wi++; }
     if(g0%3===0){ ctx.fillStyle='#5a3a1c'; ctx.fillRect(gx+34,y+h-42,bw-80,30);
@@ -2269,14 +2282,12 @@ function drawGround(){
   const T=curTheme();
   const g=ctx.createLinearGradient(0,GROUND_TOP,0,H); g.addColorStop(0,T.g[0]); g.addColorStop(.5,T.g[1]); g.addColorStop(1,T.g[2]);
   ctx.fillStyle=g; ctx.fillRect(0,GROUND_TOP,W,H-GROUND_TOP);
-  // individual cobblestones with perspective + shading
-  for(let r=0;r<11;r++){ const y=GROUND_TOP+r*r*1.7+r*6; if(y>H)break;
-    const sz=22+r*6, off=((-(camX)% sz)+sz)%sz + (r%2?sz/2:0);
+  // cobblestones（負荷対策：行数と装飾を間引いた軽量版）
+  for(let r=0;r<6;r++){ const y=GROUND_TOP+r*r*4+r*8; if(y>H)break;
+    const sz=30+r*12, off=((-(camX)% sz)+sz)%sz + (r%2?sz/2:0);
     for(let x=-sz;x<W+sz;x+=sz){ const cxs=x-off+sz/2, cys=y+sz*0.34;
       ctx.fillStyle= (Math.floor((x-off)/sz)+r)%2? T.cob[0]:T.cob[1];
-      ctx.beginPath(); ctx.ellipse(cxs,cys,sz*0.46,sz*0.30,0,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(40,34,28,.35)'; ctx.lineWidth=1.5; ctx.stroke();
-      ctx.fillStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.ellipse(cxs-sz*0.1,cys-sz*0.08,sz*0.28,sz*0.16,0,0,7); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(cxs,cys,sz*0.46,sz*0.30,0,0,7); ctx.fill(); }
   }
   // top edge shadow (wall base)
   const es=ctx.createLinearGradient(0,GROUND_TOP-2,0,GROUND_TOP+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
@@ -2330,9 +2341,19 @@ function drawLighting(){ // theme color grade + sky bloom + vignette
 //======================================================================
 //  Character art (shaded)
 //======================================================================
-function softShadow(x,y,r){ const g=radGrad(x,y,r,'rgba(0,0,0,.34)','rgba(0,0,0,0)');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(x,y+2,r,r*0.34,0,0,7); ctx.fill(); }
-function furBall(x,y,r,inner,outer){ ctx.fillStyle=radGrad(x,y,r,inner,outer); ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); }
+let _shadowSpr=null;   // 負荷対策：影は1枚のスプライトを拡縮（毎フレームのグラデ生成を排除）
+function softShadow(x,y,r){
+  if(!_shadowSpr){ _shadowSpr=document.createElement('canvas'); _shadowSpr.width=128; _shadowSpr.height=48;
+    const c=_shadowSpr.getContext('2d');
+    const g=c.createRadialGradient(64,24,4,64,24,60); g.addColorStop(0,'rgba(0,0,0,.34)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=g; c.save(); c.translate(64,24); c.scale(1,0.36); c.beginPath(); c.arc(0,0,60,0,7); c.fill(); c.restore(); }
+  ctx.drawImage(_shadowSpr, x-r*1.06, y+2-r*0.4, r*2.12, r*0.8); }
+const _fbCache={};   // 負荷対策：毛並みグラデーションを半径×色でキャッシュ
+function furBall(x,y,r,inner,outer){
+  const key=((r*4)|0)+'|'+inner+'|'+outer;
+  let g=_fbCache[key];
+  if(!g){ g=ctx.createRadialGradient(-r*0.35,-r*0.4,r*0.1,0,0,r); g.addColorStop(0,inner); g.addColorStop(1,outer); _fbCache[key]=g; }
+  ctx.save(); ctx.translate(x,y); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill(); ctx.restore(); }
 // 被弾時のやられ目（×印）。col省略時は黒
 function hurtEye(x,y,r,col){ ctx.strokeStyle=col||'#000'; ctx.lineWidth=Math.max(2,r*0.6); ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(x-r,y-r);ctx.lineTo(x+r,y+r); ctx.moveTo(x+r,y-r);ctx.lineTo(x-r,y+r); ctx.stroke(); }
@@ -2774,6 +2795,7 @@ function chibiHead(lean){
 // ---- Enemies dispatch ----
 function drawEnemy(e){
   const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
+  if(sx<-150||sx>W+150) return;   // 負荷対策：画面外の敵は描かない
   let al=1; if(e.dead&&e.deadTimer<22) al=clamp(e.deadTimer/22,0,1); if(e.vanish>0) al=Math.min(al,0.35);
   // 兵隊アリ：地中移動中は土の盛り上がりだけを描く
   if(e.sub && t.digger){ ctx.save(); ctx.translate(sx,sy);
