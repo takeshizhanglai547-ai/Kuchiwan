@@ -550,6 +550,17 @@ const ATK={
   ngnd:{name:'ディレイバースト', dur:24, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:0.9,to:1.3, len:14, trail:'#ffae42', fist:true, cast:8},
   ntornado:{name:'サイクロンライズ', dur:30, act:[2,24], reach:74, hh:520, dmg:7, kb:6, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true, ntor:true},
   nmeteor:{name:'彼方からの呼び声', dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
+  // ── 武器別コンボ：双剣フタバ（イッヌ）＝左右の刃で刻む高速5段 ──
+  tw1:{name:'双牙・右', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:-0.9, to:0.5,  len:30, trail:'#ffd6e8', pivotY:-58, lunge:1.5, combo:1},
+  tw2:{name:'双牙・左', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:0.7,  to:-0.7, len:30, trail:'#d6e8ff', pivotY:-58, lunge:1.5, combo:2},
+  tw3:{name:'交差二連', dur:11, act:[3,8],  reach:80, hh:44, dmg:5, kb:3, from:-1.4, to:1.2,  len:32, trail:'#ffd6e8', pivotY:-58, lunge:1.8, multi:true, multiGap:4, combo:3},
+  tw4:{name:'旋風双刃', dur:13, act:[3,10], reach:86, hh:48, dmg:6, kb:4, from:-2.6, to:2.6,  len:34, trail:'#fff',    pivotY:-58, lunge:1.4, spin:true, multi:true, multiGap:4, combo:4},
+  tw5:{name:'十字烈牙', dur:22, act:[6,16], reach:98, hh:52, dmg:8, kb:13,from:-1.9, to:1.6,  len:40, trail:'#fff',    pivotY:-60, lunge:2.6, multi:true, multiGap:5, knock:true, finisher:true, combo:5},
+  // ── 武器別コンボ：真空の鉄爪（シマ）＝かまいたちを放つ裂き4段 ──
+  cl1:{name:'爪薙ぎ',   dur:10, act:[3,7],  reach:82, hh:42, dmg:8, kb:3, from:-1.0, to:0.8,  len:34, trail:'#aef8d8', pivotY:-56, lunge:1.8, combo:1},
+  cl2:{name:'返し爪',   dur:10, act:[3,7],  reach:82, hh:42, dmg:8, kb:3, from:0.8,  to:-1.0, len:34, trail:'#aef8d8', pivotY:-56, lunge:1.8, combo:2},
+  cl3:{name:'乱れ裂き', dur:14, act:[3,11], reach:88, hh:46, dmg:6, kb:3, from:-0.8, to:0.8,  len:36, trail:'#d8ffe8', pivotY:-56, lunge:1.6, multi:true, multiGap:4, combo:3},
+  cl4:{name:'真空烈爪', dur:24, act:[6,18], reach:106,hh:54, dmg:10,kb:14,from:-1.6, to:1.4,  len:42, trail:'#fff',    pivotY:-58, lunge:2.8, knock:true, finisher:true, shock:14, combo:4},
   // ── 武器別コンボ：槍（イッヌ）＝突き主体 ──
   sp1:{name:'大薙ぎ',   dur:13, act:[3,9],  reach:104,hh:46, dmg:9,  kb:4,  from:-1.5, to:1.5,  len:72, trail:'#aef8ff', pivotY:-58, lunge:2.2, combo:1},
   sp2:{name:'連突き乱舞',dur:16, act:[3,13], reach:108,hh:40, dmg:6,  kb:3,  from:-0.2, to:0.2,  len:80, trail:'#cfe6ff', pivotY:-58, lunge:2.4, multi:true, multiGap:4, combo:2},
@@ -603,6 +614,10 @@ const WEAPONS={
   tonfa: {name:'トンファー', reach:1.02, dmg:1.5, kb:1.6, ext:1.0, trail:'#bfe9ff', launch:1.4, col:'#cfd8e6'},     // シマダックス専用：短いが強打
   fists: {name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
   wand:  {name:'星の杖', reach:0.9, dmg:1.0, kb:1.0, ext:1.0, trail:'#ffb0e8', launch:1.0, col:'#ff8ae0'},   // ヌコ初期装備
+  // ── キャラ固有のドロップ武器（専用モーションつき） ──
+  twin:  {name:'双剣フタバ', reach:1.1, dmg:1.1, kb:0.95, ext:1.05, trail:'#ffd6e8', launch:1.0, col:'#ffb6d0'},   // イッヌ専用：高速5段
+  claw:  {name:'真空の鉄爪', reach:1.18, dmg:1.3, kb:1.25, ext:1.1, trail:'#aef8d8', launch:1.25, col:'#7df0b8'},  // シマ専用：かまいたち4段
+  tome:  {name:'魔導書グリモワン', reach:0.95, dmg:1.2, kb:1.05, ext:1.0, trail:'#d6b0ff', launch:1.05, col:'#c89cff'},   // ヌコ専用：3方向スプレッド弾
   // ── ショップ限定（永続装備） ──
   holy:  {name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
   tigerfist:{name:'虎の篭手', reach:1.05, dmg:1.45, kb:1.25, ext:0, trail:'#ffd24d', launch:1.15, col:'#ffb02e'},
@@ -626,7 +641,8 @@ function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
 
 // 装備武器ごとにコンボのモーションを差し替える
-const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'] };
+const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'],
+  twin:['tw1','tw2','tw3','tw4','tw5'], claw:['cl1','cl2','cl3','cl4'] };
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
 function comboMaxFor(p){ if(p.kind==='nuko') return 1; const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
 function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot'; const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':'c')+step; }
@@ -659,7 +675,11 @@ function nukoMul(p){ return (p.atkMul||1)*((WEAPONS[p.weapon]||WEAPONS.wand).dmg
 function nukoCast(p,tier){
   const dir=p.facing, mul=nukoMul(p);
   const X=p.x+dir*28, zz=46+(p.z||0);
-  if(tier===1){ spawnProj(X,p.y,dir*13,0,{owner:'player',dmg:Math.round(6*mul),color:'#ff8ae0',r:8,life:70,zz,nostop:true}); sfx.swing(1); }
+  if(tier===1){
+    if(p.weapon==='tome'){ for(const sp of [-1,0,1])   // 魔導書グリモワン：ページから3方向スプレッド弾
+        spawnProj(X,p.y,dir*(12+sp),0,{owner:'player',dmg:Math.round(5*mul),color:sp?'#c89cff':'#ff8ae0',r:8,life:70,zz:zz+sp*16,vzz:sp*0.4,nostop:true});
+      sfx.swing(1); }
+    else { spawnProj(X,p.y,dir*13,0,{owner:'player',dmg:Math.round(6*mul),color:'#ff8ae0',r:8,life:70,zz,nostop:true}); sfx.swing(1); } }
   else if(tier===5){ p.callN=0; nukoMeteorWave(p, 6); sfx.boss(); shake=Math.max(shake,5); }
   else if(tier===6){ const reachX=620; let hits=0;   // 貫通電撃ビーム（即着弾）
     for(const e of enemies){ if(e.dead) continue; const dx=(e.x-p.x)*dir;
@@ -1376,6 +1396,26 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
   cactus:'チクチクの雨を浴びるがいい！',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！' };
+// 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
+const BOSSQUOTE_BY={
+  garm:  {shima:'拳で語る犬か…面白い！爪と拳、どちらが上か試そうぞ！', nuko:'魔法使いの子犬とは珍しい。その杖ごと、鉄爪の錆にしてくれる！'},
+  shark: {shima:'陸を泳ぐ俺に素手で挑むとは、豪快なやつだ！', nuko:'ヒラヒラした魔法など、海の藻屑にしてやるぜ！'},
+  moloch:{shima:'その自慢の拳、業火でこんがり焼き上げてくれるわ！', nuko:'炎は我が領分…小娘の火遊びなど通じぬわ！'},
+  noroinu:{shima:'呪いは拳では祓えぬぞ…クックック…', nuko:'白く清い魔力…喰らえば極上の呪いになる…'},
+  ghost: {shima:'パンチがすり抜けたらどうするのかな〜？ヒヒヒ', nuko:'魔法使いさんいらっしゃ〜い！その魔力ちょうだい！'},
+  cerbe: {shima:'三対一でも拳で来るか！いい度胸だ！', nuko:'三つの首は魔法より速い…かわせるかな！'},
+  slime: {shima:'なぐるほど増えるぞ〜？ぷるぷる！', nuko:'燃やしても凍らせてもすぐ戻るぞ〜！'},
+  pirate:{shima:'拳自慢の犬よ、海の男の喧嘩を見せてやらぁ！', nuko:'魔法のお嬢ちゃんかい！宝の匂いがするぜぇ！'},
+  cactus:{shima:'素手でサボテンに触るとどうなるか…教えてやるサボ！', nuko:'砂漠の太陽がおまえの魔力を干上がらせるサボ！'},
+  glaton:{shima:'肉の拳が鋼鉄に勝てるか、試してみるがいい！', nuko:'豆鉄砲のような魔法で、この装甲は抜けんぞ！'},
+  dragon:{shima:'空の上まで、その拳は届くまい！', nuko:'同じ炎を操る者同士…格の違いを見せてやろう！'},
+  rival: {shima:'貴様の拳法、この剣で写し取らせてもらった！', nuko:'その彼方の魔法…闇で塗りつぶしてくれる！'},
+  boss:  {shima:'拳ごときで帝国に楯突くか！身の程を知れ！', nuko:'彼方の力を借りる小娘…その魂、闇に頂こう！'},
+  wolfking:{shima:'グォオオ…拳ごと骨まで噛み砕く！', nuko:'グォオオ…魔力ごと飲み込んでやる！'},
+  darkknight:{shima:'最終形態…貴様の拳より速い剣を見せてやろう！', nuko:'闇の剣と彼方の魔…どちらが深いか、試そうか！'},
+};
+function bossQuoteFor(key){ const o=BOSSQUOTE_BY[key], k=players[0].kind;
+  return (o&&o[k]) || BOSSQUOTE[key]; }
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
   const hpMul=t.boss?1.6:2;   // 難易度UP：体力 雑魚×2／ボス×1.6
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:Math.round(t.hp*hpMul),maxHp:Math.round(t.hp*hpMul),w:t.w,h:t.h,
@@ -1466,11 +1506,12 @@ function makeItem(x,kind){ items.push({x,kind,z:46,vz:-3,vx:rnd(-1,1),life:680,b
 function makeCoin(x,val){ items.push({x,kind:'coin',val:val||1,z:rnd(40,70),vz:rnd(-4,-2),vx:rnd(-2.2,2.2),life:900,bob:Math.random()*6,spin:Math.random()*6}); }
 function coinDrop(e,T){ const n=T.boss?(T.finalBoss?30:14):(T.mini?7:(T.charge||T.guarder?3:2)); const v=T.boss?5:1;
   for(let i=0;i<n;i++) makeCoin(e.x+rnd(-22,22), v); }
-function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー、シマ=ヌンチャク/トンファー、ヌコ=回復）
+function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー/双剣、シマ=ヌンチャク/トンファー/鉄爪、ヌコ=魔導書）
   const pool=[];
-  if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer');
-  if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa');
-  if(!pool.length) return 'hp';   // 魔法使いソロは武器を使わないのでハート
+  if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer','twin');
+  if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa','claw');
+  if(players.some(p=>p.active && p.kind==='nuko')) pool.push('tome');
+  if(!pool.length) return 'hp';
   return pool[Math.floor(Math.random()*pool.length)];
 }
 function dropFromEnemy(e,T){
@@ -1486,9 +1527,9 @@ function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=1100;
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
-  if(p.kind==='nuko') return false;                                 // ヌコ＝魔法のみ（武器は拾わない）
-  if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa';   // シマ＝拳法武器のみ
-  return kind==='spear'||kind==='hammer'||kind==='dagger';          // イッヌ＝剣系のみ
+  if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
+  if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa'||kind==='claw';   // シマ＝拳法武器のみ
+  return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger';          // イッヌ＝剣系のみ
 }
 function pickerFor(it){ // nearest eligible player on the ground
   let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='down'||p.state==='dead')continue;
@@ -1546,6 +1587,18 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(0,-3,2.4,0,7); ctx.fill();
     ctx.fillStyle='#fff'; ctx.globalAlpha=0.8; ctx.beginPath(); ctx.arc(-5,-9,1.2,0,7); ctx.fill(); ctx.globalAlpha=1;
     ctx.fillStyle='#ffe14d'; ctx.font='bold 9px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('★',0,-12); ctx.textAlign='left';
+  } else if(it.kind==='twin'){ ctx.lineCap='round';   // 双剣（交差した2本）
+    for(const rr of [-0.6,0.5]){ ctx.save(); ctx.rotate(rr);
+      ctx.fillStyle='#caa54a'; ctx.fillRect(-9,-2,4,4);
+      ctx.fillStyle=radGrad(4,0,10,'#fff','#d08aae'); ctx.beginPath(); ctx.moveTo(-5,-2); ctx.lineTo(12,0); ctx.lineTo(-5,2); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  } else if(it.kind==='claw'){ ctx.rotate(-0.3);      // 鉄爪（3本爪）
+    ctx.fillStyle='#3a3a44'; ctx.fillRect(-10,-4,7,9);
+    for(const off of [-4,0,4]){ ctx.fillStyle=radGrad(2,off,10,'#eafff2','#5ad890');
+      ctx.beginPath(); ctx.moveTo(-3,off-1.4); ctx.quadraticCurveTo(8,off-2,14,off+off*0.3); ctx.quadraticCurveTo(8,off+1.6,-3,off+1.4); ctx.closePath(); ctx.fill(); }
+  } else if(it.kind==='tome'){                        // 魔導書
+    ctx.fillStyle='#4a2a78'; ctx.beginPath(); ctx.moveTo(-11,1); ctx.quadraticCurveTo(0,6,11,1); ctx.lineTo(11,5); ctx.quadraticCurveTo(0,10,-11,5); ctx.closePath(); ctx.fill();
+    for(const s2 of [-1,1]){ ctx.fillStyle='#f4eeff'; ctx.beginPath(); ctx.moveTo(0,2); ctx.quadraticCurveTo(s2*6,-2,s2*11,0); ctx.lineTo(s2*11,3); ctx.quadraticCurveTo(s2*6,1,0,5); ctx.closePath(); ctx.fill(); }
+    drawStar(0,-6,2,4.4,'#c89cff');
   } else { // tonfa（トンファー）
     ctx.rotate(-0.3); ctx.lineCap='round';
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(14,-4); ctx.stroke();
@@ -1940,22 +1993,34 @@ const ROUTE_DEFS={
 const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
    gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
-   npc:{kind:'elder',name:'長老モフじい',lines:['おお、勇者どのか！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で必殺技も出るぞ。ボスを倒せば猫のチャムの店も開く。']}},
+   npc:{kind:'elder',name:'長老モフじい',lines:{
+     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。'],
+     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！'],
+     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1300,boss:true,list:[['shark',1]]}],
-   npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:['ぐすっ…こわかったよぉ…','おにいちゃんつよい！これ、ひろったの。お礼だワン！'],give:{coins:15}}},
+   npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
+     inu:['ぐすっ…こわかったよぉ…','おにいちゃんの剣、かっこいい！これ、ひろったの。お礼だワン！'],
+     shima:['ぐすっ…こわかったよぉ…','おじちゃんのパンチ、ばちーんってした！これ、お礼だワン！'],
+     nuko:['ぐすっ…こわかったよぉ…','おねえちゃんのまほう、きらきらできれい！これ、お礼だワン！']},give:{coins:15}}},
 ];
 const SEGS={
   A:[
     [ {theme:3,name:'業火の渓谷',
        gates:[{off:600,list:[['boar',1],['kirebouzu',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
-       npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','わしの自信作を持っていけ！溶岩で鍛えた一級品だぞ。'],give:{weapon:true}}},
+       npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:{
+         inu:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','剣士のおぬしには、わしの自信作をくれてやる！溶岩で鍛えた一級品だぞ。'],
+         shima:['その拳ダコ…相当鍛えとるな。気に入った！','拳で戦うおぬしにはコイツだ！持っていけ！'],
+         nuko:['ほう、魔法使いか。武器は使わんのだな…','なら、わしが装丁した魔導の本を持っていけ！火の谷の知恵が詰まっとるぞ。']},give:{weapon:true}}},
       {theme:3,name:'渓谷の最深部',
        gates:[{off:600,list:[['akita',1],['pierrot',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
        npc:{kind:'villager',name:'逃げ遅れた村犬',lines:['この先の呪い犬は、触れるだけで呪いをうつしてくる…','掴み技で投げ飛ばせば呪いも怖くないワン！']}} ],
     [ {theme:2,name:'月詠の森',
        gates:[{off:600,list:[['dober',1],['pierrot',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
-       npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、勇者さま。'],give:{heal:'full'}}},
+       npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:{
+         inu:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、剣士さま。'],
+         shima:['ようこそ、月詠の森へ…','亡霊は透けている間、拳も通りません。実体化の瞬間に叩き込むのです。','月のご加護を、拳士さま。'],
+         nuko:['あら…あなたからは月と同じ魔力の香りがします。','亡霊は実体を現した瞬間しか傷つきません。炎の柱を置いて待つのも良いでしょう。','同じ魔を扱う者として…ご武運を、ヌコさま。']},give:{heal:'full'}}},
       {theme:2,name:'森の奥宮',
        gates:[{off:600,list:[['ari',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
        npc:{kind:'villager',name:'木こり犬ゴン',lines:['三つ首の獣ケルベ…あれにもう犬の心は無い。','上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
@@ -1978,10 +2043,16 @@ const SEGS={
 const FINAL_CH=[
   {theme:4,name:'魔界への道',
    gates:[{off:600,list:[['kirebouzu',1],['mastiff',1],['onibouzu',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
-   npc:{kind:'elder',name:'長老モフじい',lines:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。決して油断するでないぞ。','王国みんなの祈りが、そなたと共にある！']}},
+   npc:{kind:'elder',name:'長老モフじい',lines:{
+     inu:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。聖剣の輝きを信じるのじゃぞ。','王国みんなの祈りが、そなたの剣と共にある！'],
+     shima:['ここまで来たか、拳聖どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。じゃが、おぬしの拳はもっと多くの型を持っておろう。','王国みんなの祈りが、その拳に宿っておる！'],
+     nuko:['ここまで来たか、ヌコどの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。じゃが恐れるな、彼方の友がついておる。','王国みんなの祈りが、そなたの杖に灯っておるぞ！']}}},
   {theme:4,name:'暗黒の城門',
    gates:[{off:600,list:[['pierrot',1],['gripper',1],['onibouzu',1],['ari',1]]},{off:1300,boss:true,list:[['rival',1]]}],
-   npc:{kind:'villager',name:'囚われの近衛犬',once:true,lines:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','大帝に心を奪われてしまったのだ。どうか…奴の剣を、止めてやってくれ…'],give:{heal:'full'}}},
+   npc:{kind:'villager',name:'囚われの近衛犬',once:true,lines:{
+     inu:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','同じ剣士のあんたなら分かるはず。どうか…奴の剣を、止めてやってくれ…'],
+     shima:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','剣には剣…いや、あんたの拳なら、奴の心ごと打ち抜けるかもしれん…！'],
+     nuko:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','闇に呑まれた心は刃では斬れない。だが、あんたの清い魔法なら…どうか、頼む…']},give:{heal:'full'}}},
   {theme:4,name:'魔王の間',len:1400,noPit:true,
    gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
 ];
@@ -2026,14 +2097,16 @@ function tryTalk(){ const p=player;
   let best=null,bd=70; for(const n of npcs){ if(n.hidden||n.done)continue; const d=Math.abs(p.x-n.x); if(d<bd){bd=d;best=n;} }
   if(!best) return false; startTalk(best,p); return true;
 }
-function startTalk(n,p){ state='talk'; dialog={n,p,i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0); }
+function linesFor(n){ if(Array.isArray(n.lines)) return n.lines;
+  return n.lines[players[0].kind]||n.lines.inu||[]; }   // キャラ別セリフ（オブジェクト形式に対応）
+function startTalk(n,p){ state='talk'; dialog={n,p,ls:linesFor(n),i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0); }
 function updateTalk(){ if(!dialog){ state='play'; return; }
   useInput(players[0].in); dialog.t++;
-  const line=dialog.n.lines[dialog.i]||'', full=dialog.t>=line.length*2;
+  const line=dialog.ls[dialog.i]||'', full=dialog.t>=line.length*2;
   if(pressed.atk||pressed.jump||pressed.grab){ pressed.atk=pressed.jump=pressed.grab=false;
     if(!full){ dialog.t=line.length*2; }
     else { dialog.i++; dialog.t=0; sfx.swing(0);
-      if(dialog.i>=dialog.n.lines.length){ endTalk(); return; } } }
+      if(dialog.i>=dialog.ls.length){ endTalk(); return; } } }
   saveInput(players[0].in); }
 function endTalk(){ const n=dialog.n, p=dialog.p; dialog=null; state='play';
   if(!n.met){ n.met=true; metNPC++; }
@@ -2624,7 +2697,7 @@ function drawPlayer(){
       tA0=-0.2; tA1=0.5; trailW=1.4; } }
 
   const shima = p.kind==='shima', nuko = p.kind==='nuko';
-  const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa'||p.weapon==='tigerfist');   // 拳法武器を装備中
+  const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa'||p.weapon==='claw'||p.weapon==='tigerfist');   // 拳法武器を装備中
   if(shima && (p.weapon==='fists'||p.weapon==='tigerfist') && (mode==='blade'||mode==='shield')) mode='fist'; // 素手・篭手は拳のみ
   else if(shima && shimaArmed && mode==='shield') mode='fist';               // 武器持ちでもガードは拳で受ける
   if(nuko && mode==='shield') mode='blade';                                  // ヌコは杖で受ける
@@ -2781,6 +2854,33 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.fillStyle=radGrad(0,0,big?16:11,'rgba(255,180,235,.9)','rgba(255,180,235,0)'); ctx.beginPath(); ctx.arc(0,0,big?16:11,0,7); ctx.fill(); ctx.restore();
     drawStar(0,0,(big?4.5:3.2)*tw,(big?9:6.5)*tw,big?'#ffe14d':'#ffd0f0'); drawStar(0,0,(big?2.4:1.7),(big?5:3.4),'#fff');
     ctx.restore();
+  } else if(wk==='twin'){ const L=ext+12;                                    // 双剣フタバ：交差する2本の短刃
+    for(const off of [0,1]){ ctx.save(); ctx.rotate(off?0.38:-0.1); ctx.translate(0,off?3:-1);
+      ctx.fillStyle='#caa54a'; ctx.fillRect(-2,-3.4,4,7);
+      const bl=ctx.createLinearGradient(3,-2,L+8,2); bl.addColorStop(0,'#fff'); bl.addColorStop(.5,'#ffd6e8'); bl.addColorStop(1,'#d08aae');
+      ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-2.2); ctx.lineTo(L+2,-1.4); ctx.lineTo(L+9,0); ctx.lineTo(L+2,1.4); ctx.lineTo(3,2.2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(4,-1.1); ctx.lineTo(L+2,-0.6); ctx.stroke(); ctx.restore(); }
+  } else if(wk==='claw'){ const L=ext*0.7+10;                                 // 真空の鉄爪：3本の湾曲した爪
+    ctx.fillStyle='#3a3a44'; ctx.fillRect(-4,-5,8,10);                        // 手甲
+    ctx.strokeStyle='#caa54a'; ctx.lineWidth=1.2; ctx.strokeRect(-4,-5,8,10);
+    for(const off of [-4,0,4]){ const bl=ctx.createLinearGradient(4,off,L+14,off);
+      bl.addColorStop(0,'#eafff2'); bl.addColorStop(1,'#5ad890');
+      ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(4,off-1.6);
+      ctx.quadraticCurveTo(L,off-3,L+14,off+(off*0.3)); ctx.quadraticCurveTo(L,off+2,4,off+1.6); ctx.closePath(); ctx.fill(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.3+0.15*Math.sin(gf*0.3);
+    ctx.fillStyle=radGrad(L*0.7,0,12,'rgba(125,240,184,.8)','rgba(125,240,184,0)'); ctx.beginPath(); ctx.arc(L*0.7,0,12,0,7); ctx.fill(); ctx.restore();
+  } else if(wk==='tome'){                                                      // 魔導書グリモワン：宙に開く本
+    ctx.save(); ctx.rotate(-ang*0.9-0.25); ctx.translate(4,-6+Math.sin(gf*0.12)*2);
+    ctx.fillStyle='#4a2a78'; ctx.beginPath(); ctx.moveTo(-13,2); ctx.quadraticCurveTo(0,7,13,2); ctx.lineTo(13,6); ctx.quadraticCurveTo(0,11,-13,6); ctx.closePath(); ctx.fill();   // 表紙
+    for(const s2 of [-1,1]){ ctx.fillStyle='#f4eeff';                          // 開いたページ
+      ctx.beginPath(); ctx.moveTo(0,3); ctx.quadraticCurveTo(s2*7,-2,s2*13,1); ctx.lineTo(s2*13,4); ctx.quadraticCurveTo(s2*7,1,0,6); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='#a07ad0'; ctx.lineWidth=0.8;
+    for(const s2 of [-1,1]){ ctx.beginPath(); ctx.moveTo(s2*3,1.5); ctx.lineTo(s2*10,0.5); ctx.moveTo(s2*3,3.5); ctx.lineTo(s2*10,2.5); ctx.stroke(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter';                        // 浮かぶルーン
+    const ra=gf*0.08; ctx.fillStyle='#c89cff';
+    for(let q=0;q<3;q++){ const aq=ra+q*(Math.PI*2/3); ctx.globalAlpha=0.5+0.3*Math.sin(gf*0.2+q);
+      drawStar(Math.cos(aq)*16, -6+Math.sin(aq)*7, 1.4,3, q?'#c89cff':'#ffd0f0'); }
+    ctx.restore(); ctx.restore();
   } else if(wk==='spear'){ const L=ext*1.5+22;
     ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L-10,0); ctx.stroke();
     ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L-10,0,3.2,0,7); ctx.fill();
@@ -3795,7 +3895,7 @@ function drawHUD(){
     ctx.fillStyle='#ffec5a'; ctx.font='bold 42px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('GO →',W-30+a*10,H/2); ctx.textAlign='left'; ctx.globalAlpha=1; }
   if(bossIntro>0){ const big=enemies.find(e=>(ETYPE[e.type].boss||e.type==='bitter')&&!e.dead);
     if(big){ const sx=clamp(big.x-camX,170,W-170), sy=big.y-big.h*depthScale(big.y)-44;
-      speech(sx,sy,BOSSQUOTE[big.type]||'いざ尋常に勝負！'); } }
+      speech(sx,sy,bossQuoteFor(big.type)||'いざ尋常に勝負！'); } }
   if(stageBanner>0){ const a=clamp(stageBanner/30,0,1)*clamp((160-stageBanner)/20,0,1);
     ctx.save(); ctx.globalAlpha=clamp(a,0,1); ctx.textAlign='center';
     ctx.font='italic 900 52px Trebuchet MS'; ctx.lineWidth=7; ctx.strokeStyle='#3a1d00'; ctx.fillStyle='#ffe14d';
@@ -3816,7 +3916,7 @@ function drawNPCPrompts(){ if(state!=='play'||aliveCount()>0) return;
     const sx=n.x-camX, gy=LANE-groundLift(n.x)-(n.kind==='chest'?40:(n.kind==='spring'?28:86));
     speech(sx,gy,n.kind==='chest'?'あける（掴みボタン）':'はなす（掴みボタン）'); }
 }
-function drawDialog(){ if(!dialog) return; const n=dialog.n, line=n.lines[dialog.i]||'';
+function drawDialog(){ if(!dialog) return; const n=dialog.n, line=dialog.ls[dialog.i]||'';
   const shown=line.slice(0,Math.floor(dialog.t/2)), full=dialog.t>=line.length*2;
   ctx.save();
   ctx.fillStyle='rgba(6,8,22,.88)'; roundRect(60,H-148,W-120,112,12); ctx.fill();
@@ -3991,29 +4091,52 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
   shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針',
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
-const STORY_OPEN=[
+// ── 主人公キャラごとのオープニング／エンディング ──
+const OPEN_COMMON=[
   {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれるワンダフル王国は、穏やかな陽だまりに包まれていた。'},
   {bgTheme:4, art:'invade', name:'', text:'だがある夜、闇の軍勢「ダークワンワン帝国」が国境を破った！砦は次々と陥落し、王は囚われの身に——'},
   {bgTheme:4, art:'invade', name:'王女ペロ', text:'「どうか…帝国の将たちを討ち、父と王国をお救いください」'},
-  {bgTheme:0, art:'player', name:'@hero', text:'王女の手紙は、辺境で修行を積む犬士のもとへ届いた。剣を取らぬ理由は、無かった。'},
-  {bgTheme:0, art:'player', name:'@hero', text:'道中には分かれ道、人々との出会い、そして思わぬ罠もあるという。すべての選択は、汝に委ねられる——'},
 ];
-const STORY_END=[
-  {bgTheme:4, art:'fall',   name:'', text:'ダークワンワン大帝、ついに討たれる——！城に巣食う闇が、音を立てて崩れていく。'},
-  {bgTheme:0, art:'peace',  name:'', text:'王は解放され、黒犬士クロイヌも正気を取り戻した。肉球の王国に、再び陽が差した。'},
-  {bgTheme:0, art:'player', name:'@hero', text:'旅路で出会った仲間たちの声援が、胸に響く。勇者の名は、肉球の歴史に永遠に刻まれた。'},
-  {bgTheme:0, art:'end',    name:'', text:'― おわり ―     遊んでくれてありがとう！'},
-];
+const STORY_OPEN_BY={
+  inu:[...OPEN_COMMON,
+    {bgTheme:0, art:'player', name:'@hero', text:'王女の手紙は、辺境で剣の修行を積む犬士のもとへ届いた。聖なる刃を取らぬ理由は、無かった。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'「王国の犬士として——この剣に懸けて、必ずや大帝を討つ」。すべての選択は、汝に委ねられる——'}],
+  shima:[...OPEN_COMMON,
+    {bgTheme:0, art:'player', name:'@hero', text:'手紙は、滝に打たれ拳を磨く流浪の拳聖のもとへ届いた。サングラスの奥の瞳が、静かに燃えた。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'「武器はいらねえ。この拳と脚が、俺の剣だ」。義によって、シマダックスは立つ——'}],
+  nuko:[...OPEN_COMMON,
+    {bgTheme:0, art:'player', name:'@hero', text:'手紙は、星詠みの塔で魔導を学ぶ少女のもとへ舞い込んだ。リボンを結び直し、ヌコは杖を握る。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'「お師匠さま、行ってきます。彼方の友だちも、力を貸してくれるって」。小さな魔法使いの大冒険が始まる——'}],
+};
+const STORY_END_BY={
+  inu:[
+    {bgTheme:4, art:'fall',   name:'', text:'ダークワンワン大帝、ついに聖剣の前に討たれる——！城に巣食う闇が、音を立てて崩れていく。'},
+    {bgTheme:0, art:'peace',  name:'', text:'王は解放され、黒犬士クロイヌも正気を取り戻した。肉球の王国に、再び陽が差した。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'「剣は守るためにある」——勇者イッヌの名は、王国一の聖犬士として永遠に歴史へ刻まれた。'},
+    {bgTheme:0, art:'end',    name:'', text:'― イッヌ編・完 ―     遊んでくれてありがとう！'}],
+  shima:[
+    {bgTheme:4, art:'fall',   name:'', text:'最後の正拳が大帝を打ち抜く——！城に巣食う闇が、音を立てて崩れていく。'},
+    {bgTheme:0, art:'peace',  name:'', text:'王は解放され、クロイヌも正気を取り戻した。「いい拳だった」と、彼は静かに笑った。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'シマダックスは褒美も受け取らず、再び修行の旅へ。その背中を、王国の子犬たちはいつまでも見送った。'},
+    {bgTheme:0, art:'end',    name:'', text:'― シマダックス編・完 ―     遊んでくれてありがとう！'}],
+  nuko:[
+    {bgTheme:4, art:'fall',   name:'', text:'彼方より来たる光が大帝を貫く——！城に巣食う闇が、音を立てて崩れていく。'},
+    {bgTheme:0, art:'peace',  name:'', text:'王は解放され、クロイヌも正気を取り戻した。王国の空に、お祝いの星々が瞬いた。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'「ただいま、お師匠さま！」——史上最年少の大魔導士ヌコの伝説は、こうして始まったのだった。'},
+    {bgTheme:0, art:'end',    name:'', text:'― ヌコ編・完 ―     遊んでくれてありがとう！'}],
+};
+function storyOpenFor(){ return STORY_OPEN_BY[players[0].kind]||STORY_OPEN_BY.inu; }
+function storyEndFor(){ return STORY_END_BY[players[0].kind]||STORY_END_BY.inu; }
 function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=false; cutSkip=false; state='cut';
   const es=document.getElementById('start'), er=document.getElementById('result');
   if(es)es.classList.add('hidden'); if(er)er.classList.add('hidden'); }
-function startOpening(){ Music.stop(); startCutscene(STORY_OPEN, ()=>startGame()); }
+function startOpening(){ Music.stop(); startCutscene(storyOpenFor(), ()=>startGame()); }
 function startBossCut(type,stageN){ Music.setMode('boss'); sfx.boss();
-  startCutscene([{boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:BOSSQUOTE[type]}], ()=>{ state='play'; }); }
+  startCutscene([{boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:bossQuoteFor(type)}], ()=>{ state='play'; }); }
 // ラスボス形態変化のデモシーン
 function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode('boss'); sfx.boss();
-  startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:BOSSQUOTE[bk]||'…', transform:true}], ()=>{ state='play'; }); }
-function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(STORY_END, ()=>winGame()); }
+  startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
+function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(storyEndFor(), ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
 function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
