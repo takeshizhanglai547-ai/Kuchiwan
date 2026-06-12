@@ -485,13 +485,13 @@ function drawParticles(){
       for(let i=1;i<=7;i++){ ctx.lineTo(sx+p.len*(i/7), p.y+(i<7?rnd(-9,9):0)); }
       ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.4; ctx.stroke(); ctx.restore(); }
     else if(p.k==='hlaser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
-      const hw=8*a+2, lx0=Math.min(sx,sx+p.len), lw=Math.abs(p.len);
+      const hw=(p.w||8)*a+2, lx0=Math.min(sx,sx+p.len), lw=Math.abs(p.len);
       const hg=ctx.createLinearGradient(sx,0,sx+p.len,0); hg.addColorStop(0,'rgba(255,170,235,.95)'); hg.addColorStop(1,'rgba(255,120,220,.1)');
       ctx.fillStyle=hg; ctx.fillRect(lx0,p.y-hw/2,lw,hw);
       ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(lx0,p.y-1,lw,2);
       ctx.restore(); }
     else if(p.k==='laser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
-      const wdt=10*a+3;
+      const wdt=(p.w||10)*a+3;
       const lg=ctx.createLinearGradient(0,0,0,p.gy); lg.addColorStop(0,'rgba(190,235,255,.95)'); lg.addColorStop(1,'rgba(120,200,255,.55)');
       ctx.fillStyle=lg; ctx.fillRect(sx-wdt/2,0,wdt,p.gy);
       ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(sx-1.2,0,2.4,p.gy); ctx.restore(); }
@@ -549,7 +549,6 @@ const ATK={
   nflame:{name:'フレイムピラー', dur:24, act:[9,10], reach:30, hh:30, dmg:0, kb:0, from:-1.0,to:-0.2, len:18, trail:'#ff9a3a', fist:true, cast:7},
   ngnd:{name:'ディレイバースト', dur:24, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:0.9,to:1.3, len:14, trail:'#ffae42', fist:true, cast:8},
   ntornado:{name:'サイクロンライズ', dur:30, act:[2,24], reach:74, hh:520, dmg:7, kb:6, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true, ntor:true},
-  nrail:{name:'フォトンレーザー', dur:16, act:[5,6], reach:30, hh:30, dmg:0, kb:0, from:-0.15,to:-0.1, len:20, trail:'#ff8ae0', fist:true, cast:9, respin:true, respinMax:5},
   nmeteor:{name:'彼方からの呼び声', dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
   // ── 武器別コンボ：槍（イッヌ）＝突き主体 ──
   sp1:{name:'大薙ぎ',   dur:13, act:[3,9],  reach:104,hh:46, dmg:9,  kb:4,  from:-1.5, to:1.5,  len:72, trail:'#aef8ff', pivotY:-58, lunge:2.2, combo:1},
@@ -647,7 +646,6 @@ function beginAttack(type){
   else if(type==='nmeteor'){ p.dim--; p.callN=0; p.invuln=Math.max(p.invuln,52); sfx.boss(); sfx.rise(); flash=Math.max(flash,4); shake=7; triggerSlow(30);
     ring(p.x,p.y-46,'#c46bff'); ring(p.x,p.y-46,'#fff'); spark(p.x,p.y-46,'#d6a6ff',22,11); popText(p.x,p.y-110,'彼方からの呼び声…！','#d6a6ff',true); }
   else if(type==='nbeam'){ sfx.heavy(); ring(p.x,p.y-40,'#9fe8ff'); spark(p.x+p.facing*20,p.y-40,'#bfe9ff',10,8); popText(p.x,p.y-104,'サンダービーム！','#9fe8ff',true); }
-  else if(type==='nrail'){ spark(p.x+p.facing*18,p.y-40,'#ffd0f0',7,6); }
   else if(type==='nflame'||type==='ngnd'){ sfx.swing(2); }
   else if(type==='spunch'){ sfx.heavy(); spark(p.x+p.facing*20,p.y-40,'#ffd24d',8,7); }
   else if(type==='dragonkick'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
@@ -668,18 +666,40 @@ function nukoCast(p,tier){
       if(dx>-12 && dx<reachX && Math.abs(e.y-p.y)<48 && e.z<150){ damageEnemy(e,Math.round(24*mul),dir*6,true); hits++; } }
     particles.push({k:'bolt',x:p.x+dir*14,y:p.y-44,len:dir*reachX,life:12,max:12});
     flash=Math.max(flash,2); shake=Math.max(shake,4); sfx.zap(); if(hits) hitStop=Math.max(hitStop,5); }
-  else if(tier===7){ const fx=p.x+dir*112; hazards.push({kind:'pillar',x:fx,y:p.y,t:0,life:54,dmg:Math.round(5*mul)});
+  else if(tier===7){ const fx=p.x+dir*112; hazards.push({kind:'pillar',x:fx,y:p.y,t:0,life:110,dmg:Math.round(5*mul)});   // 炎の柱：持続ロング
     dust(fx,p.y,6); sfx.heavy(); }
   else if(tier===8){ hazards.push({kind:'bomb',x:p.x+dir*64,y:p.y,t:0,life:38,dmg:Math.round(26*mul)});
     spark(p.x+dir*64,p.y-8,'#ffae42',8,5); sfx.swing(2); }
-  else if(tier===9){ const reachX=560, zb=46+(p.z||0); let hits=0;   // フォトンレーザー（前方一直線・連射可）
-    for(const e of enemies){ if(e.dead) continue; const dx=(e.x-p.x)*dir;
-      if(dx>-12 && dx<reachX && Math.abs(e.y-p.y)<46 && zb<e.z+e.h+10 && zb>e.z-28){
-        noHitStopOnce=true; damageEnemy(e,Math.round(13*mul),dir*4,false); hits++; } }
-    particles.push({k:'hlaser',x:p.x+dir*16,y:p.y-zb,len:dir*reachX,life:10,max:10});
-    flash=Math.max(flash,1); sfx.zap(); if(hits) hitStop=Math.max(hitStop,2); }
   spark(X,p.y-zz,'#ffd0f0',5,5);
 }
+// ── 後ろ前攻撃：タメ押し可能な極太フォトンレーザー ──
+function beginNukoRail(p){ p.state='nrailchg'; p.railT=0; p.charge=0; p.atkHeld=false; sfx.charge(); spark(p.x+p.facing*26,p.y-44,'#ffd0f0',8,6); }
+function updateNukoRail(){ const p=player; p.railT++;
+  const c=clamp(p.railT/45,0,1);
+  if(p.railT%3===0) spark(p.x+p.facing*30,p.y-44, c>=1?'#fff':'#ffd0f0', 2,4);
+  if(p.railT%14===0) sfx.charge();
+  if(!K.atk || p.railT>=100) nukoRailFire(p,c);
+}
+function nukoRailFire(p,c){
+  const mul=nukoMul(p), dir=p.facing, reachX=560+160*c, zb=46;
+  const dmg=Math.round((13+26*c)*mul), thick=8+24*c, tol=28+36*c;
+  for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
+    if(dx>-12 && dx<reachX && Math.abs(e.y-p.y)<46 && zb<e.z+e.h+tol-18 && zb>e.z-tol){
+      if(c<0.4) noHitStopOnce=true; damageEnemy(e,dmg,dir*(4+6*c),c>0.5); } }
+  particles.push({k:'hlaser',x:p.x+dir*16,y:p.y-zb,len:dir*reachX,life:10+Math.round(8*c),max:10+Math.round(8*c),w:thick});
+  if(c>0.6){ flash=Math.max(flash,3); shake=Math.max(shake,6); hitStop=Math.max(hitStop,6); p.vx=-dir*3;
+    popText(p.x,p.y-112,'極太フォトンレーザー！！','#ffd0f0',true); sfx.boss(); sfx.zap(); }
+  else sfx.zap();
+  p.state='idle'; p.charge=0; p.invuln=Math.max(p.invuln,8);
+}
+// ── 空中前攻撃：急降下サンダークラッシュ（着地で巨大落雷＋地面放電）──
+function boltLand(){ const p=player, mul=nukoMul(p), gy=LANE-groundLift(p.x);
+  particles.push({k:'laser',x:p.x,gy,life:13,max:13,w:30});                      // 天からの巨大落雷
+  for(const d2 of [-1,1]) particles.push({k:'bolt',x:p.x,y:gy-10,len:d2*150,life:12,max:12});   // 地面放電
+  for(const e of enemies){ if(e.dead)continue;
+    if(Math.abs(e.x-p.x)<150 && Math.abs(e.y-p.y)<60 && e.z<90){ damageEnemy(e,Math.round(22*mul),(e.x<p.x?-1:1)*6,true); } }
+  ring(p.x,gy-10,'#bfe9ff'); ring(p.x,gy-10,'#fff'); spark(p.x,gy-20,'#9fe8ff',22,11); impactBurst(p.x,gy-40,'#bfe9ff',true); dust(p.x,p.y,12);
+  shake=Math.max(shake,9); flash=Math.max(flash,3); sfx.zap(); sfx.big(); }
 function nukoMeteorWave(p,n){ const mul=nukoMul(p);
   for(let k=0;k<n;k++){ const tx=camX+rnd(W*0.2,W*0.96);
     spawnProj(tx, clamp(p.y+rnd(-14,14),GROUND_TOP,GROUND_BOT), rnd(-2.2,-0.8),0,
@@ -766,10 +786,12 @@ function updatePlayer(){
   if(p.state==='hadou'){ updateHadou(); return; }
   if(p.state==='seven'){ updateSeven(); return; }
   if(p.state==='nlaser'){ updateNukoLaser(); return; }
+  if(p.state==='nrailchg'){ updateNukoRail(); return; }
 
   // ---- jump (high jump + aerial rave) ----
   if(p.state==='jump'){
     if(p.jHammer){ p.vz-=1.15; }                                       // 地球割パンチ：超急降下
+    else if(p.jBolt){ p.vz-=1.0; }                                     // サンダークラッシュ：急降下
     else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
     else if(p.jHyaku && p.jAtk>0){ p.vz=Math.max(p.vz-0.13,-2.3); }    // 巨大百裂拳：ゆっくり高度落下
     else if(p.jAtk>0 && !p.jKabuto && !p.jDown && !p.jFire){ p.vz=0; }   // エリアルレイブ中は高度維持（ホバー。火球発射時は落下）
@@ -777,13 +799,14 @@ function updatePlayer(){
     p.z+=p.vz;
     let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx&&!p.jKabuto&&!p.jDown)p.facing=mx; p.x+=mx*SPEED*(p.jDown?0.3:1.0);
     if(p.jDrop){ p.x+=p.facing*SPEED*0.7; }            // 回転踵落とし：やや前進
+    if(p.jBolt){ p.x+=p.facing*SPEED*1.6; if(gf%2===0) spark(p.x+rnd(-12,12),p.y-p.z-rnd(20,60),'#9fe8ff',1,4); }   // 雷をまとって斜め急降下
     // air attack
-    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBeam=false; p.jFire=false;
+    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false;
       if(NUK && K.down){ p.jFire=true; p.jAtk=10; p.vz=Math.min(p.vz,0);   // ヌコ空中下：下向き爆裂火球（高度は落ちる）
         spawnProj(p.x+p.facing*10,p.y,p.facing*2,0,{owner:'player',dmg:Math.round(16*nukoMul(p)),color:'#ff8a3a',r:13,life:110,zz:Math.max(p.z+20,30),vzz:-8,explode:true});
         sfx.dash(); spark(p.x,p.y-p.z-10,'#ff9a3a',8,7); }
-      else if(NUK && (K.left||K.right)){ p.jBeam=true; p.jAtk=12; p.facing=K.left?-1:1;   // ヌコ空中前：前方フォトンレーザー
-        nukoCast(p,9); }
+      else if(NUK && (K.left||K.right)){ p.jBolt=true; p.jAtk=26; p.facing=K.left?-1:1;   // ヌコ空中前：急降下サンダークラッシュ
+        p.vz=Math.min(p.vz,-2)-7; sfx.zap(); spark(p.x,p.y-p.z-30,'#9fe8ff',10,7); }
       else if(SHI && K.down){ p.jHammer=true; p.jAtk=24; p.vz=Math.min(p.vz,-2)-13; sfx.heavy(); spark(p.x,p.y-p.z-20,'#ffd24d',12,7); }   // シマ空中下：急降下地球割パンチ
       else if(K.down){ p.jDown=true; p.jAtk=18; p.vz=Math.min(p.vz,-2)-9; sfx.dash(); spark(p.x,p.y-p.z-10,'#aef0ff',8,7); }   // イッヌ下突き
       else if(SHI && (K.left||K.right)){ p.jDrop=true; p.jAtk=20; p.facing=K.left?-1:1; p.vz=Math.min(p.vz,-1)-3; sfx.dash(); spark(p.x,p.y-p.z-20,'#9fe8ff',10,7); }   // 回転踵落とし
@@ -791,7 +814,7 @@ function updatePlayer(){
       else if(SHI){ p.jHyaku=true; p.jAtk=28; sfx.swing(2); }   // シマ空中連打：巨大百裂拳（ゆっくり落下）
       else { sfx.swing(2); p.aerial=(p.aerial||0)+1; } }   // 通常空中斬り＝レイブ（高度維持）
     if(p.jAtk>0){ p.jAtk--;
-      if(p.jFire||p.jBeam){ /* 弾・レーザーは発射済み（近接判定なし） */ }
+      if(p.jFire||p.jBolt){ /* 火球発射済み／落雷は着地時に判定 */ }
       else if(p.jHyaku){ if(p.jAtk%4===0){ p.jHit=new Set(); jumpAttackHit(); } }   // 百裂拳は連続ヒット
       else if(p.jHammer){ jumpAttackHit(); }   // ダブルハンマーは落下中ずっと判定
       else if(p.jAtk>=3 && p.jAtk<=11) jumpAttackHit(); }
@@ -799,7 +822,8 @@ function updatePlayer(){
       if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
       if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
-      p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBeam=false; p.jFire=false; dust(p.x,p.y,7); sfx.land(); }
+      if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
+      p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; dust(p.x,p.y,7); sfx.land(); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
   }
@@ -856,7 +880,7 @@ function updatePlayer(){
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       beginSlide(); return; }                                                              // ドロップキック / スライディング
     if(K.up){ beginAttack(SH?'tornado':NK?'ntornado':'shoryu'); }                          // 昇竜旋風脚 / サイクロンライズ / 昇竜拳
-    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginAttack('nrail'); p.spinCount=1; } else { beginIaiDash(); } consumeCmd(); } // グルグル / フォトンレーザー / 居合
+    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / 居合
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
       else if(SH){ beginAttack('sroundhouse'); } else if(NK){ beginAttack('nflame'); } else { beginAttack('iai'); } }  // 乱舞 / 炎の柱 / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
@@ -2541,6 +2565,10 @@ function drawPlayer(){
         swAng=lerp(-1.95,1.65,he); swExt=22*(1+1.3*hb); trailCol='#ffd24d'; tA0=-1.95; tA1=swAng; trailW=2.6;
         backArm=swAng-0.12; thF=0.5; thB=0.4; kF=0.7; kB=0.85; sqY=1+0.2*hb; sqX=1-0.14*hb; bodyY=-2-2*hb;
         faL1=9+12*hb; faL2=8+15*hb; faW=0.95+1.0*hb;
+      } else if(p.jBolt){ // サンダークラッシュ：雷を頭上から振り下ろしながら急降下
+        const hb=Math.sin(clamp(1-p.jAtk/26,0,1)*Math.PI), he=easeOut(clamp(1-p.jAtk/26,0,1));
+        swAng=lerp(-1.85,1.55,he); swExt=20*(1+1.1*hb); trailCol='#9fe8ff'; tA0=-1.85; tA1=swAng; trailW=2.4;
+        backArm=swAng-0.15; thF=0.55; thB=0.4; kF=0.8; kB=0.9; sqY=1+0.16*hb; sqX=1-0.1*hb; bodyY=-2-2*hb;
       } else if(p.jHyaku){ // 巨大百裂拳：両拳を高速で連続突き出す
         const w=Math.sin(p.jAtk*1.5); swAng=0.05; trailCol='#ffd24d'; lean=0.16; bodyY=-1;
         thF=0.42; thB=-0.42; kF=0.7; kB=0.7; backArm=(w>0?-0.55:0.15);
@@ -2575,6 +2603,7 @@ function drawPlayer(){
   else if(st==='hadou'){ mode='fist'; lean=0.18; swAng=0.05; backArm=0.05; thF=0.42; thB=-0.42; kF=0.7; kB=0.7; faL1=9+5; faL2=8+7; }   // 波動拳：両手前
   else if(st==='seven'){ mode='fist'; lean=0.1; thF=0.5; thB=-0.5; swAng=0.1; backArm=0.3; }   // 七死ワン生
   else if(st==='nlaser'){ swAng=-1.65; backArm=-1.65; thF=0.2; thB=-0.2; bodyY=-2+Math.sin(ph*3)*1.5; }   // カラミティレーザー：両腕を天に掲げる
+  else if(st==='nrailchg'){ swAng=-0.06; backArm=0.5; thF=0.42; thB=-0.42; kF=0.5; kB=0.4; lean=0.18; bodyY=-1+Math.sin(ph*4)*0.8; }   // 極太レーザーのチャージ：杖を前方に構える
   else if(st==='attack'){ const def=p.atk.def, t=p.atk.t, a0=def.act[0], a1=def.act[1];
     const e=easeOut(clamp((t-a0+2)/(a1-a0+4),0,1));
     const e2=Math.sin(clamp((t-(a0-3))/((a1+3)-(a0-3)),0,1)*Math.PI);   // strike bell 0→1→0
@@ -2647,6 +2676,13 @@ function drawPlayer(){
   // ── カラミティレーザー: 全身を包む光 ──
   if(st==='nlaser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.25*Math.sin(gf*0.5);
     ctx.fillStyle=radGrad(0,-36,46,'rgba(190,235,255,.8)','rgba(190,235,255,0)'); ctx.beginPath(); ctx.arc(0,-36,46,0,7); ctx.fill(); ctx.restore(); }
+  // ── 極太レーザーのチャージ: 杖先に収束する光球 ──
+  if(st==='nrailchg'){ const c=clamp(p.railT/45,0,1);
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.55+0.3*Math.sin(gf*0.5);
+    ctx.fillStyle=radGrad(27,-36,8+c*18,'rgba(255,210,245,.95)','rgba(255,140,225,0)');
+    ctx.beginPath(); ctx.arc(27,-36,8+c*18,0,7); ctx.fill();
+    if(c>=1){ drawStar(27,-36,4,9+Math.sin(gf*0.4)*2,'#fff'); }
+    ctx.restore(); }
   // ── 乱舞: 百裂拳/百烈脚の残像 ──
   if(st==='rush' && p.rushPhase<2){ ctx.save(); const col=p.rushPhase?'#aef0ff':'#ffe9a0';
     for(let i=0;i<3;i++){ ctx.globalAlpha=0.5-i*0.13; const ex=18+i*9+Math.sin(p.rushT*1.4+i*1.7)*5;
