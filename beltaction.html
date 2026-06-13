@@ -340,6 +340,12 @@ const Music=(()=>{
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
       prog:[[50,53,57],[46,50,53],[43,46,50],[45,49,52],[50,53,57],[51,55,58],[45,49,52],[45,49,52]],
       mel:[74,77,81,79, 74,77,74,70, 70,74,70,67, 69,73,76,81, 74,77,81,86, 82,79,75,79, 81,76,73,69, 69,73,76,73] },
+    boss2:{ bpm:162, lead:'sawtooth', pad:'sawtooth', drive:true,   // 第二形態：獣性の暴走 (Cm)
+      prog:[[48,51,55],[44,48,51],[46,50,53],[43,47,50],[48,51,55],[41,44,48],[43,47,50],[43,47,50]],
+      mel:[72,75,79,78, 75,72,68,72, 70,74,77,74, 67,71,74,79, 72,75,79,84, 80,77,75,72, 74,71,67,71, 67,70,74,79] },
+    boss3:{ bpm:170, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 最終形態：決戦の頂 (Dm 高揚)
+      prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[43,46,50],[45,49,52],[45,49,52]],
+      mel:[74,77,81,79, 77,74,70,74, 76,79,84,81, 79,76,72,76, 74,77,81,86, 82,79,74,79, 81,77,73,77, 76,73,69,73] },
     town:{ bpm:92, lead:'sine', pad:'triangle', soft:true,       // 安らぎの店内 (C)
       prog:[[48,52,55],[45,48,52],[53,57,60],[43,47,50],[48,52,55],[53,57,60],[43,47,50],[48,52,55]],
       mel:[72,76,79,76, 72,69,72,76, 77,81,77,74, 74,71,67,71, 72,76,79,84, 81,77,74,77, 74,71,74,79, 76,72,67,72] },
@@ -383,7 +389,9 @@ const Music=(()=>{
     const S=song(); curStep=60/S.bpm/2;
     const bar=(s>>3)&7, st=s&7, t=nextT, ch=S.prog[bar], root=ch[0], stepDur=curStep;
     if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.96,S.pad,S.soft?0.034:0.05)); }       // sustained string pad
+    if(S.epic && st===0){ ch.forEach(n=>strings(n+24,t,stepDur*8*0.92,'triangle',0.03)); }      // 最終決戦：聖歌隊のような高域レイヤー
     if(!S.soft && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                                 // brass stab on phrase accents
+    if(S.epic && st===4) brass([ch[0]+12,ch[2]+12],t,stepDur*1.2);                              // 最終決戦：裏拍の追いブラス
     if(S.soft){ if(st%4===0) bassN(root,t,stepDur*3.4); }                                       // gentle half-note bass
     else { const bn=[root-12,root-12,ch[2]-12,root-12,root,root-12,ch[2]-12,ch[1]-12][st];      // walking 8th-note bass
       bassN(bn,t,stepDur*0.92); }
@@ -394,6 +402,7 @@ const Music=(()=>{
       if(bar===7&&st===7){ snare(t,0.55); snare(t+stepDur/2,0.85); }                            // phrase-end fill
       hat(t,st%2?0.55:1); hat(t+stepDur/2,0.4);                                                 // 16th hats
       if(st===0&&bar%4===0) timp(t,root,1);
+      if(S.epic&&st===4) timp(t,root,0.7);                                                      // 最終決戦：ティンパニ連打
     } else hat(t,st===0?0.3:0.14);
     if(st%2===0){ const m=S.mel[(bar*4+(st>>1))%32];                                            // quarter-note melody + octave support
       if(m!=null){ voice(midi(m),t,stepDur*1.9,S.lead,S.soft?0.07:0.09,0.014,4200);
@@ -626,7 +635,7 @@ const WEAPONS={
 };
 function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
-  p.fallT=0; p.running=false;
+  p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
@@ -637,7 +646,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.counterPow=false; p.riseG=1.1;
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.atkMul=1; p.defMul=1; p.maxHp=120; p.hp=120; p.dimMax=3;
     p.permWeapon=null; p.weapon=p.kind==='shima'?'fists':p.kind==='nuko'?'wand':'dagger'; } }
-const SPEED=3.7, DEPTH_SPEED=0;   // faster; depth disabled
+const SPEED=7.4, DEPTH_SPEED=0;   // 基本移動速度2倍（旧ダッシュ相当の快速がデフォルト）
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
 
@@ -918,17 +927,11 @@ function updatePlayer(){
   if(K.left)mx=-1; if(K.right)mx=1;
   if(mx)p.facing=mx;
   if(mx){ p.charge=0; } // moving cancels charge build (but keep simple)
-  // ── 前前ダッシュ：同方向に素早く2回入力で走る（押しっぱなしの間継続）──
-  if(!p.running && dirTaps.length>=2){ const a=dirTaps[dirTaps.length-1], b=dirTaps[dirTaps.length-2];
-    if(a.d===b.d && a.f-b.f<=14 && gf-a.f<=6 && ((a.d>0&&K.right)||(a.d<0&&K.left))){
-      p.running=true; p.runDir=a.d; sfx.dash(); dust(p.x,p.y,6); spark(p.x-a.d*16,p.y-20,'#fff',5,5); } }
-  if(p.running && ((p.runDir>0&&!K.right)||(p.runDir<0&&!K.left))) p.running=false;
-  const runMul=p.running?1.8:1;
   const slow = p.charge>0.1?0.4:1;
-  p.x+=mx*SPEED*slow*runMul; p.y=LANE;
+  p.x+=mx*SPEED*slow; p.y=LANE;
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
-  p.state=mx?'walk':'idle'; p.anim+=mx?(p.running?0.42:0.26):0.07;
-  if(mx&&gf%(p.running?3:8)===0) dust(p.x-p.facing*8,p.y, p.running?2:1);
+  p.state=mx?'walk':'idle'; p.anim+=mx?0.36:0.07;
+  if(mx&&gf%4===0) dust(p.x-p.facing*8,p.y, 1);
   if(p.z<=0 && overPit(p.x)) beginFall(p);   // 足元が谷なら落下（ジャンプで越える）
 }
 function beginFall(p){ if(p.state==='falling'||p.state==='dead') return;
@@ -976,7 +979,9 @@ function doPlayerHit(a){
       else if(def.stinger) launchEnemy(e, dir*28*LX, -7*LX, 4);
       else if(def.counter) launchEnemy(e, dir*26*LX, -12*LX, 4);
       else if(def.special) launchEnemy(e, (Math.random()<.5?dir:-dir)*18, -15, 4);
-      else if(e.state==='air'||e.z>6) launchEnemy(e, dir*5*W.kb, -10.5, Math.max(e.bounces||0,2));  // 空中の敵はその場で打ち直し＝お手玉コンボ
+      else if(e.state==='air'||e.z>6){
+        if(def.knock||def.kb>=10){ launchEnemy(e, dir*(16+def.kb*1.3)*W.kb, -9*LX, 4); hitStop=Math.max(hitStop,5); spark(e.x,e.y-e.z-30,'#fff',10,9); }  // 吹き飛ばし属性＝攻撃ベクトルへ豪快にぶっ飛ぶ
+        else launchEnemy(e, dir*5*W.kb, -10.5, Math.max(e.bounces||0,2)); }  // 通常攻撃＝真上に打ち直してお手玉
       else if(W.launch>1.4) launchEnemy(e, dir*10, -7, 3);   // ハンマーは通常ヒットでも軽く浮かせる
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
@@ -1500,6 +1505,7 @@ function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
   flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(); sfx.ko();
+  if(Music.setMode){ if(nt==='boss2') Music.setMode('boss2'); else if(nt==='boss3') Music.setMode('boss3'); }   // 形態ごとにBGMを激化
   for(let k=0;k<8;k++){ ring(e.x+rnd(-40,40),e.y-e.h*0.4,'#c46bff'); spark(e.x+rnd(-40,40),e.y-rnd(0,e.h),'#c46bff',12,10); }
   popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true);
   startTransformCut(nt);   // 形態変化のデモシーンを再生 → 終了後に戦闘再開
@@ -1959,7 +1965,6 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
       if(mv!=='roar')sfx.heavy(); } }
 }
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
-  p.running=false;
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); sfx.hurt(); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
