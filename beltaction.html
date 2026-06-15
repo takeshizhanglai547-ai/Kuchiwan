@@ -530,6 +530,7 @@ function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y
 //======================================================================
 let particles=[];
 let noHitStopOnce=false;   // ヒットストップ抑制フラグ（連射弾・設置魔法用）
+let curHitIsMelee=false;   // ゴルックスのパリィ：近接ヒット中フラグ
 function spark(x,y,color,n=8,spd=6){
   for(let i=0;i<n;i++){ const a=rnd(0,Math.PI*2), s=rnd(2,spd);
     particles.push({k:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:rnd(14,28),max:28,color,star:Math.random()<.5}); }
@@ -1030,6 +1031,7 @@ function doPlayerHit(a){
   const reach=def.reach*REACH*W.reach, hh=def.hh*HH;
   const hx=p.x+p.facing*reach*0.45;
   const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg*(p.atkMul||1), LX=W.launch;
+  curHitIsMelee=true;   // ゴルックスのパリィ判定用：近接ヒット中フラグ
   enemies.forEach(e=>{
     if(e.dead) return;
     if(def.multi){ if(a.lastHit[e.id] && gf-a.lastHit[e.id]<(def.multiGap||8)) return; }
@@ -1073,6 +1075,7 @@ function doPlayerHit(a){
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
   });
+  curHitIsMelee=false;
 }
 function nearestEnemy(){ let best=null,bd=1e9; for(const e of enemies){ if(e.dead)continue;
   const d=Math.abs(e.x-player.x)+Math.abs(e.y-player.y)*0.6; if(d<bd){bd=d;best=e;} } return best; }
@@ -1460,6 +1463,10 @@ const ETYPE={
   boss3: {hp:1750,sp:2.7,dmg:28,atkR:84,w:64, h:106,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ── ヌコ・真エンド限定の真ボス：上位者ワンメンドーズ ──
   wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'ghost',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
+  // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃）──
+  golux: {hp:2100,sp:2.0,dmg:32,atkR:100,w:70,h:122,c1:'#eccb6e',c2:'#b8923a',c3:'#7e601e',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#fff0a0', name:'黄金の剣士ゴルックス',finalBoss:true,trueBoss:true,parryKind:true},
+  // ── シマ・真ボス：兄弟子ビションのパピプー（分裂・百死ワン生・三節棍/鎖鎌）──
+  papipoo:{hp:2050,sp:2.3,dmg:28,atkR:82,w:60,h:106,c1:'#f6f6fc',c2:'#d2d6e4',c3:'#9aa0b6',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#bfe9ff', name:'兄弟子パピプー',finalBoss:true,trueBoss:true,fistKind:true},
   // ---- 個性派ボス ----
   dragon:{hp:780,sp:1.6,dmg:18,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
   ghost: {hp:240,sp:2.1,dmg:13,atkR:84,w:84, h:118,c1:'#cfe6ff',c2:'#8fb6d8',c3:'#5a7ba0',score:2600,boss:true,bossKind:'ghost', weapon:'scythe',accent:'#bfe9ff',name:'お化けのT太郎',flyer:true},
@@ -1498,12 +1505,14 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
   cactus:'チクチクの雨を浴びるがいい！',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
-  wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！' };
+  wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
+  golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
   moloch:'bosseerie', cerbe:'bosseerie', noroinu:'bosseerie', ghost:'bosseerie', bitter:'bosseerie',
-  rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic' };
+  rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic',
+  golux:'bossrival', papipoo:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
 // 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
 const BOSSQUOTE_BY={
@@ -1543,6 +1552,15 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
   if(e.transform>0){ spark(e.x,e.y-e.h*0.5,'#c46bff',5,6); return; }   // 形態進化中は無敵
+  // ── ゴルックス：迂闊な近接攻撃をパリィし、致命の反撃を返す ──
+  if(T.parryKind && curHitIsMelee && (e.parryCd||0)<=0 && e.stun<=0 && e.state!=='down' && e.state!=='air' && Math.random()<0.6){
+    e.parryCd=110; e.parryFx=14; noHitStopOnce=false;
+    const pl=nearestPlayerTo(e.x); e.facing=pl.x<e.x?-1:1;
+    spark(e.x+e.facing*30,e.y-e.h*0.5,'#fff0a0',18,10); ring(e.x+e.facing*24,e.y-e.h*0.5,'#fff0a0'); flash=Math.max(flash,3); hitStop=Math.max(hitStop,10); sfx.guard(); sfx.rise();
+    popText(e.x,e.y-e.h-8,'パリィ！','#fff0a0',true);
+    if(pl && pl.invuln<=0){ hurtPlayer(pl, Math.round(T.dmg*1.6), e.facing, true); pl.vx=e.facing*12; popText(pl.x,pl.y-96,'致命の一撃！','#ff6a3c',true); }
+    return;
+  }
   if(T.boss && e.noJuggleT>gf){ knockdown=false; launch=0; }   // ボスは起き上がり直後のみ耐性（無限お手玉防止）
   if(!T.boss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hitFace=12;   // 被弾時のやられ顔タイマー（全エネミー共通）
@@ -1592,11 +1610,13 @@ function killEnemy(e){ const T=ETYPE[e.type];
   if(T.bomber) bomberBoom(e);
   dropFromEnemy(e,T); coinDrop(e,T);   // 倒すとコインを落とす
   if(T.finalBoss){
-    if(players[0].kind==='nuko' && !T.trueBoss && !trueBossSpawned){   // ヌコ：大帝撃破後に真ボス「ワンメンドーズ」出現
+    if(!T.trueBoss && !trueBossSpawned && trueBossFor(players[0].kind)){   // 大帝撃破後にキャラ別の真ボスが出現
       trueBossSpawned=true; setTimeout(()=>{ if(state==='play'||state==='cut') startTrueBossReveal(); }, 1100);
     } else {
       setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100);
     } } }
+// キャラ別の真の最終ボス（イッヌ=ゴルックス／シマ=パピプー／ヌコ=ワンメンドーズ）
+function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen'}[kind]||null; }
 // ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   score+=8000;
@@ -2031,7 +2051,8 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
   }
 }
 function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(dx), kind=t.bossKind;
-  e.anim+=0.16; e.bob+=0.1; if(e.vanish>0)e.vanish--;
+  e.anim+=0.16; e.bob+=0.1; if(e.vanish>0)e.vanish--; if(e.parryCd>0)e.parryCd--; if(e.parryFx>0)e.parryFx--;
+  if(t.fistKind && !e.cloned && e.hp<e.maxHp*0.5){ e.cloned=true; popText(e.x,e.y-e.h-12,'百死ワン生！','#bfe9ff',true); ring(e.x,e.y-e.h*0.5,'#bfe9ff'); sfx.boss(); }   // パピプー：半減で分裂
   if(e.transform>0){ e.transform--; e.state='walk'; e.vx=0; e.facing=dx<0?-1:1;   // 進化の演出中は無敵で咆哮
     if(gf%2===0) spark(e.x+rnd(-e.w*0.4,e.w*0.4), e.y-rnd(0,e.h), '#c46bff', 2, 7);
     if(e.transform===1) sfx.boss(); return; }
@@ -3299,6 +3320,8 @@ function drawEnemy(e){
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
+  else if(e.type==='golux'){ drawGolux(e); }
+  else if(e.type==='papipoo'){ drawPapipoo(e); }
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
@@ -3780,6 +3803,57 @@ function drawRival(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=
   ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-3,4,7);
   const bl=ctx.createLinearGradient(3,0,46,0); bl.addColorStop(0,'#c89cff'); bl.addColorStop(1,'#3a1060');
   ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-3);ctx.lineTo(42,-1.5);ctx.lineTo(48,0);ctx.lineTo(42,1.5);ctx.lineTo(3,3);ctx.closePath(); ctx.fill(); ctx.restore();
+}
+// ── イッヌ真ボス：黄金の剣士ゴルックス（豪剣・パリィ反撃）──
+function drawGolux(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0; const parry=(e.parryFx||0)>0;
+  ctx.fillStyle=t.c3; ctx.fillRect(-13,-18+walk,10,18); ctx.fillRect(5,-18-walk,10,18);   // 脚（黄金の具足）
+  // マント
+  const cp=ctx.createLinearGradient(-28,-64,-6,-2); cp.addColorStop(0,'#9a7a2a'); cp.addColorStop(1,'#4a3810');
+  ctx.fillStyle=cp; ctx.beginPath(); ctx.moveTo(-4,-62);ctx.quadraticCurveTo(-32,-32,-24,-2);ctx.quadraticCurveTo(-12,-14,-3,-16);ctx.closePath(); ctx.fill();
+  furBall(0,-42,22,shade(t.c1,18),t.c2);   // 胴（黄金の鎧）
+  ctx.fillStyle='#fff0a0'; ctx.fillRect(-18,-36,36,5);   // ベルト
+  furBall(2,-72,20,shade(t.c1,12),t.c2);   // 頭（ゴールデンレトリバー）
+  // 垂れ耳
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(-16,-66,7,15,0.3,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(20,-66,7,15,-0.3,0,7); ctx.fill();
+  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.ellipse(16,-68,10,8,0,0,7); ctx.fill();   // マズル
+  ctx.fillStyle='#1a1208'; ctx.beginPath(); ctx.ellipse(24,-68,3,2.6,0,0,7); ctx.fill();
+  if(enemyHurt(e)){ hurtEye(4,-76,4,'#7e601e'); hurtEye(13,-76,4,'#7e601e'); }
+  else { for(const ex of [4,13]){ ctx.fillStyle=radGrad(ex,-76,4,'#fff','#caa54a'); ctx.beginPath(); ctx.ellipse(ex,-76,3.6,3.2,0,0,7); ctx.fill(); ctx.fillStyle='#201400'; ctx.beginPath(); ctx.arc(ex+0.6,-76,1.4,0,7); ctx.fill(); }
+    ctx.strokeStyle='#3a2a10'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-2,-82);ctx.lineTo(8,-79); ctx.moveTo(18,-82);ctx.lineTo(11,-79); ctx.stroke(); }
+  // 豪剣（長大な両手剣）
+  let ang=atk?(-1.3+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.6):(parry?-1.7:(tele?-1.5:-0.5));
+  ctx.save(); ctx.translate(10,-46); ctx.rotate(ang);
+  ctx.strokeStyle=shade(t.c1,-10); ctx.lineWidth=8; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,2); ctx.stroke(); ctx.translate(14,2);
+  ctx.fillStyle='#caa54a'; ctx.fillRect(-3,-7,6,14);   // 鍔
+  const bl=ctx.createLinearGradient(4,0,84,0); bl.addColorStop(0,'#fffbe0'); bl.addColorStop(.5,'#ffe98a'); bl.addColorStop(1,'#c8961a');
+  ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(4,-5);ctx.lineTo(78,-2.4);ctx.lineTo(88,0);ctx.lineTo(78,2.4);ctx.lineTo(4,5);ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.moveTo(6,-2);ctx.lineTo(78,-1); ctx.stroke();
+  if(parry){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.6; ctx.fillStyle=radGrad(40,0,40,'rgba(255,240,160,.9)','rgba(255,240,160,0)'); ctx.beginPath(); ctx.arc(40,0,40,0,7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+}
+// ── シマ真ボス：兄弟子パピプー（白いビション・分裂・三節棍）──
+function drawPapipoo(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  const drawOne=(ox,alpha)=>{ ctx.save(); ctx.translate(ox,0); ctx.globalAlpha=alpha;
+    ctx.fillStyle=t.c3; ctx.fillRect(-11,-16+walk,8,16); ctx.fillRect(4,-16-walk,8,16);   // 脚
+    // もこもこの胴
+    ctx.fillStyle=t.c2; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; furBall(Math.cos(a)*15,-38+Math.sin(a)*16,7,'#ffffff',t.c2); }
+    furBall(0,-38,18,'#ffffff',t.c2);
+    ctx.fillStyle='#d23'; ctx.fillRect(-15,-34,30,4);   // 帯
+    // もこもこ頭
+    for(let i=0;i<9;i++){ const a=i/9*Math.PI*2; furBall(Math.cos(a)*16,-66+Math.sin(a)*15,6.5,'#ffffff','#e2e6f0'); }
+    furBall(1,-66,17,'#ffffff','#e6eaf4');
+    furBall(-12,-58,7,'#fff','#dfe3ef'); furBall(14,-58,7,'#fff','#dfe3ef');   // 垂れ耳
+    ctx.fillStyle='#fdfdff'; ctx.beginPath(); ctx.ellipse(13,-62,8,6.5,0,0,7); ctx.fill();   // マズル
+    ctx.fillStyle='#2a2a34'; ctx.beginPath(); ctx.ellipse(20,-62,2.6,2.2,0,0,7); ctx.fill();
+    if(enemyHurt(e)){ hurtEye(3,-70,3.4,'#5a607a'); hurtEye(11,-70,3.4,'#5a607a'); }
+    else { for(const ex of [3,11]){ ctx.fillStyle='#2a3050'; ctx.beginPath(); ctx.arc(ex,-70,2.6,0,7); ctx.fill(); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-0.7,-70.7,0.9,0,7); ctx.fill(); } }
+    // 三節棍（前方へ構える）
+    ctx.save(); ctx.translate(10,-44); ctx.rotate(atk?0.5:-0.2); ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(18,0); ctx.stroke(); ctx.strokeStyle='#b9bfc9'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(24,3); ctx.stroke();
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(24,3); ctx.lineTo(42,8); ctx.stroke(); ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(42,8,2.2,0,7); ctx.fill(); ctx.restore();
+    ctx.restore(); };
+  if(e.cloned){ const sw=Math.sin(e.anim*1.5)*22; drawOne(-sw-26,0.4); drawOne(sw+26,0.4); }   // 百死ワン生：分身
+  drawOne(0,1);
 }
 // ── 陸鮫リクザメ（地中潜行→足元噛みつき）──
 function drawShark(e){ const t=ETYPE[e.type];
@@ -4366,20 +4440,20 @@ const STORY_TURN_BY={
 const STORY_END_BY={
   // 結：それぞれの大団円
   inu:[
-    {bgTheme:4, art:'fall',   name:'', text:'月光の光波が闇を裂き、ダークワンワン大帝はついに討たれた——城を覆っていた夜が、晴れていく。'},
+    {bgTheme:4, boss:'golux', name:'ゴルックス', role:'黄金の剣士', text:'月光の光波が黄金の剣士ゴルックスを断つ——「みごとな…剣だ」。彼は満足げに微笑み、光の粒となって静かに退場した。'},
     {bgTheme:0, art:'peace',  name:'', text:'王は解放され、黒犬士クロイヌも正気を取り戻した。「すまなかった」と泣く彼の肩を、イッヌはただ叩いた。'},
     {bgTheme:0, art:'player', name:'聖犬士イッヌ', text:'「今度は、守れた」。幼い日の後悔が、ようやく報われた。王女ペロは、その剣に永遠の感謝を捧げた。'},
     {bgTheme:0, art:'player', name:'@hero', text:'剣は守るためにある——その名は王国一の聖犬士として、肉球の歴史に刻まれた。'},
     {bgTheme:0, art:'end',    name:'', text:'― イッヌ編・完 ―     遊んでくれてありがとう！'}],
   shima:[
-    {bgTheme:4, art:'fall',   name:'', text:'渾身の正拳が大帝を打ち砕く——拳に込めた「護る理由」が、闇に勝った瞬間だった。'},
+    {bgTheme:4, boss:'papipoo', name:'兄弟子パピプー', role:'白き拳影', text:'渾身の正拳が兄弟子パピプーを打ち砕く——「お前の拳には…護る理由があったか」。彼は穏やかな顔で拳を下ろし、舞い散る毛とともに退場した。'},
     {bgTheme:0, art:'peace',  name:'', text:'王は解放され、クロイヌも救われた。「いい拳だった」と、かつての敵は静かに微笑んだ。'},
     {bgTheme:0, art:'player', name:'拳聖シマダックス', text:'「力は、護るためにある」。長年探し続けた答えを、シマダックスはようやく掴んだ。'},
     {bgTheme:0, art:'player', name:'@hero', text:'褒美も受け取らず、彼は再び旅へ。その背中を、王国の子犬たちはいつまでも見送った。'},
     {bgTheme:0, art:'end',    name:'', text:'― シマダックス編・完 ―     遊んでくれてありがとう！'}],
   // ヌコ：真ボス・ワンメンドーズを下した後の真エンディング
   nuko:[
-    {bgTheme:4, art:'fall',   name:'', text:'星々の輝きを束ねた一撃が、上位者ワンメンドーズを彼方へと還した——歪んだ空が、静かに閉じていく。'},
+    {bgTheme:4, boss:'wanmen', name:'ワンメンドーズ', role:'彼方の収穫者', text:'星々の輝きを束ねた一撃が、上位者ワンメンドーズを彼方へと還す——多眼の巨体は無数の光に砕け、歪んだ空の向こうへと静かに退場した。'},
     {bgTheme:0, art:'peace',  name:'', text:'孤独だったあの夜の“友だち”は、最初から居なかった。それでも——王国で得た仲間たちの声援は、本物だった。'},
     {bgTheme:0, art:'player', name:'魔法使いヌコ', text:'「もう、ひとりじゃない」。涙をぬぐい、ヌコは前を向く。今度こそ、本当の友だちと共に。'},
     {bgTheme:0, art:'player', name:'@hero', text:'偽りの呼び声を断ち切った少女は、史上最年少の大魔導士として、新たな伝説の一歩を踏み出した。'},
@@ -4409,14 +4483,32 @@ const WANMEN_REVEAL=[
   {bgTheme:4, art:'invade', name:'ヌコ', text:'「ずっと…ずっと、騙されてた。でも——王国のみんなを、お師匠さまを、駒になんてさせない！」'},
   {boss:'wanmen', name:'ヌコ', role:'星詠みの魔法使い', text:'「彼方の収穫者ワンメンドーズ！　あなたの呼び声は、ここで断ち切る——！」'},
 ];
+// ── イッヌ・真ボス：黄金の剣士ゴルックス登場 ──
+const GOLUX_REVEAL=[
+  {bgTheme:4, art:'fall', name:'', text:'ダークワンワン大帝、崩れ落ちる——その亡骸の奥から、黄金の鎧をまとう一匹の巨犬が静かに歩み出た。'},
+  {boss:'golux', name:'ゴルックス', role:'黄金の剣士', text:'「見事だ、聖犬士よ。だが帝国を真に操っていたのは私——剣にすべてを捧げた者だ」'},
+  {bgTheme:4, art:'player', name:'聖犬士イッヌ', text:'「……お前ほどの剣士が、なぜ闇に与した」'},
+  {boss:'golux', name:'ゴルックス', role:'帝国最強の剣', text:'「真に強き剣を求めただけよ。さあ、その月光の刃で——私の渇きを、満たしてくれ！」'},
+];
+// ── シマ・真ボス：兄弟子パピプー登場 ──
+const PAPIPOO_REVEAL=[
+  {bgTheme:4, art:'fall', name:'', text:'大帝が砕け散る——その影から、白くもこもこした見覚えのある拳士が、ふわりと舞い降りた。'},
+  {boss:'papipoo', name:'？？？', role:'白き拳影', text:'「ひさしぶりだなァ、シマダックス。…おれの顔を、忘れたとは言わせねえぜ」'},
+  {bgTheme:4, art:'player', name:'拳聖シマダックス', text:'「……パピプー！？　同じ師の下で拳を磨いた、兄弟子の——」'},
+  {boss:'papipoo', name:'兄弟子パピプー', role:'百死ワン生の使い手', text:'「力こそ全て。師はそれを解さなかった。今こそ決着をつけよう——分身百体、受けてみろ！」'},
+];
+const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL };
 function startTrueBossReveal(){ Music.stop();
-  startCutscene(WANMEN_REVEAL, ()=>{ spawnTrueBoss(); }); }
-function spawnTrueBoss(){
+  const ty=trueBossFor(players[0].kind)||'wanmen';
+  startCutscene(TRUE_REVEAL[ty]||WANMEN_REVEAL, ()=>{ spawnTrueBoss(ty); }); }
+function spawnTrueBoss(ty){
+  ty=ty||trueBossFor(players[0].kind)||'wanmen';
   // 真ボスを最終アリーナに出現させて戦闘再開
   enemies.length=0; projectiles.length=0; hazards.length=0;
   const p=players[0]; const bx=clamp(p.x+260, camX+200, camX+W-120);
-  spawnEnemy('wanmen', bx, LANE);
-  state='play'; bossIntro=120; if(Music.setMode){ Music.start('bosscosmic'); Music.setMode('bosscosmic'); }
+  spawnEnemy(ty, bx, LANE);
+  const mode=bossMusicFor(ty); state='play'; bossIntro=120;
+  if(Music.setMode){ Music.start(mode); Music.setMode(mode); }
   flash=Math.max(flash,5); shake=12; }
 function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(storyEndFor(), ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
@@ -4452,7 +4544,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
