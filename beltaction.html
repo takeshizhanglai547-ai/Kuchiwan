@@ -994,7 +994,9 @@ function updatePlayer(){
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
     const NK=p.kind==='nuko';
     if(NK && (K.grab||pressed.grab) && p.hp>p.maxHp*0.2+1){ pressed.grab=false; beginNukoLaser(p); return; }   // 攻撃＋掴み＝カラミティレーザー
-    if(rotationReady() && p.dim>0){ if(SH) beginSeven(); else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / 彼方からの呼び声 / 次元斬
+    if(rotationReady() && p.dim>0){
+      if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
+      if(SH) beginSeven(); else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / 彼方からの呼び声 / 次元斬
     if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       beginSlide(); return; }                                                              // ドロップキック / スライディング
@@ -1462,9 +1464,9 @@ const ETYPE={
   boss2: {hp:1850,sp:1.7,dmg:30,atkR:104,w:182,h:200,c1:'#3a2a52',c2:'#22163a',c3:'#0c0814',score:0,boss:true,bossKind:'wolfking',weapon:'none',accent:'#c46bff', name:'異形狼ダークワンワン', evolveTo:'boss3'},
   boss3: {hp:1750,sp:2.7,dmg:28,atkR:84,w:64, h:106,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ── ヌコ・真エンド限定の真ボス：上位者ワンメンドーズ ──
-  wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'ghost',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
-  // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃）──
-  golux: {hp:2100,sp:2.0,dmg:32,atkR:100,w:70,h:122,c1:'#eccb6e',c2:'#b8923a',c3:'#7e601e',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#fff0a0', name:'黄金の剣士ゴルックス',finalBoss:true,trueBoss:true,parryKind:true},
+  wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'wanmen',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
+  // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃・イッヌ風の技）──
+  golux: {hp:2100,sp:2.0,dmg:32,atkR:100,w:78,h:134,c1:'#eccb6e',c2:'#b8923a',c3:'#7e601e',score:42000,boss:true,bossKind:'golux',weapon:'none',accent:'#fff0a0', name:'黄金の剣士ゴルックス',finalBoss:true,trueBoss:true,parryKind:true},
   // ── シマ・真ボス：兄弟子ビションのパピプー（分裂・百死ワン生・三節棍/鎖鎌）──
   papipoo:{hp:2050,sp:2.3,dmg:28,atkR:82,w:60,h:106,c1:'#f6f6fc',c2:'#d2d6e4',c3:'#9aa0b6',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#bfe9ff', name:'兄弟子パピプー',finalBoss:true,trueBoss:true,fistKind:true},
   // ---- 個性派ボス ----
@@ -1497,6 +1499,8 @@ const BOSSMOVES={
   cactus: ['spikeVolley','growCactus','spikeBurst','spikeVolley','rollTackle'],
   wolfking:['lunge','bodyCharge','clawCombo','groundSlam','darkBeam','summon','unblockSmash','orbSpread'],
   darkknight:['rivalCombo','iaiCharge','dimSlash','rivalShoryu','teleSlash','iaiCharge','darkBeam','darkMajin'],
+  golux:  ['rivalCombo','goluxIai','goluxKabuto','rivalShoryu','rivalCharge','goluxIai'],   // イッヌ風：疾走連続居合・兜割
+  wanmen: ['scytheSlash','phaseDash','meteorCall','vanishMove','meteorCall','scytheSlash'],  // 彼方からの呼び声＝隕石
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
@@ -1935,6 +1939,10 @@ const MV={
   rivalCombo:{tele:14,dur:30,minR:0,maxR:160}, rivalDash:{tele:14,dur:20,minR:90,maxR:560}, rivalShoryu:{tele:16,dur:30,minR:0,maxR:150}, rivalCharge:{tele:24,dur:30,minR:0,maxR:200,danger:1},
   // 暗黒剣士（最終形態）専用
   iaiCharge:{tele:16,dur:24,minR:50,maxR:760,danger:1}, dimSlash:{tele:20,dur:42,minR:0,maxR:280}, darkMajin:{tele:30,dur:96,minR:0,maxR:1300,danger:1},
+  // ゴルックス専用：疾走連続居合・ジャンプ兜割
+  goluxIai:{tele:18,dur:30,minR:80,maxR:720,danger:1}, goluxKabuto:{tele:18,dur:40,minR:0,maxR:420},
+  // ワンメンドーズ専用：彼方からの呼び声（隕石）
+  meteorCall:{tele:22,dur:54,minR:0,maxR:1300},
   // 陸鮫
   burrowBite:{tele:14,dur:34,minR:0,maxR:1300,danger:1}, finCharge:{tele:16,dur:18,minR:90,maxR:620}, jumpBite:{tele:14,dur:20,minR:0,maxR:300}, chomp:{tele:14,dur:22,minR:0,maxR:150},
   // 海賊王
@@ -2015,6 +2023,12 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'rivalDash': if(f<10)e.x+=e.facing*13; if(f===11)bArc(e,t.atkR,44,t.dmg,true,'#9fe8ff'); break;
     case 'rivalShoryu': if(f<6)e.x+=e.facing*3; if(f===4)bArc(e,66,520,t.dmg,true,'#ffe27a'); break;
     case 'rivalCharge': if(f<14)e.x+=e.facing*2; if(f===18){ bUnblock(e,t.atkR+16,56,t.dmg+8); } break;
+    // ── ゴルックス専用：疾走連続居合（高速で踏み込みながら連続斬り）──
+    case 'goluxIai': if(f<22){ e.x+=e.facing*15; if(f%6===2){ const dir=e.facing; crescent(e.x+dir*70,e.y-e.h*0.5,90,dir>0?-0.5:Math.PI-0.5,dir>0?0.5:Math.PI+0.5,'#fff0a0'); spark(e.x+dir*80,e.y-e.h*0.5,'#fffbe0',12,10); bArc(e,t.atkR+30,54,t.dmg-6,false,'#fff0a0'); } } if(f===26){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,5); bArc(e,t.atkR+40,56,t.dmg+4,true,'#fffbe0'); } break;
+    // ── ゴルックス専用：ジャンプ兜割（跳び上がって唐竹割り）──
+    case 'goluxKabuto': if(f<10){ e.vz=-12; } if(f>=10&&f<26){ e.z=Math.max(0,e.z+(e.vz||0)); e.vz=(e.vz||0)+1.2; const tp=nearestPlayerTo(e.x); e.x+=Math.sign(tp.x-e.x)*4; } if(f===26){ e.z=0; e.vz=0; bShock(e,120,t.dmg); crescent(e.x,e.y-e.h*0.5,90,-1.5,1.5,'#fffbe0'); spark(e.x,e.y,'#fff',18,11); shake=Math.max(shake,9); flash=Math.max(flash,3); bArc(e,t.atkR+10,60,t.dmg+6,true,'#fffbe0'); } break;
+    // ── ワンメンドーズ専用：彼方からの呼び声（隕石を降らせる）──
+    case 'meteorCall': if(f===2){ popText(e.x,e.y-e.h-10,'彼方からの呼び声…','#c46bff',true); ring(e.x,e.y-e.h*0.5,'#c46bff'); sfx.boss(); } if(f===14)bMeteor(e,7,t.dmg-8,'#c46bff'); if(f===28)bMeteor(e,6,t.dmg-8,'#ffb0e8'); if(f===42)bMeteor(e,7,t.dmg-8,'#c46bff'); break;
     // ── 暗黒剣士（最終形態）専用 ──
     case 'iaiCharge': if(f<13){ e.x+=e.facing*17; } if(f===13){ const dir=e.facing; crescent(e.x+dir*64,e.y-e.h*0.5,96,dir>0?-0.5:Math.PI-0.5,dir>0?0.5:Math.PI+0.5,'#eaffff'); spark(e.x+dir*76,e.y-e.h*0.5,'#fff',18,11); flash=Math.max(flash,3); hitStop=Math.max(hitStop,4); bArc(e,t.atkR+34,54,t.dmg+4,true,'#dff0ff'); } break;   // 突進居合斬り
     case 'dimSlash': if(f%3===0){ const a=f*0.5; ring(e.x,e.y-e.h*0.5,'#c46bff'); for(let k=0;k<3;k++){ crescent(e.x,e.y-e.h*0.5,72,a+k*2.1,a+k*2.1+0.7,'#c46bff'); } } if(f%8===4){ tryHitPlayer(e,t.dmg-3,true,-160,84); spark(e.x,e.y-e.h*0.5,'#c46bff',10,9); } break;   // 次元斬（全方位）
@@ -2107,6 +2121,7 @@ let npcs=[], worldCursor=0, nextStage=1, stageStartX={}, shownStBanner={};
 let metNPC=0, chestsOpened=0, routesChosen=[];
 let pendingBranch=null, branchSel=0, branchNav=0, dialog=null;
 let trueBossSpawned=false;   // ヌコ真エンド：ワンメンドーズ出現フラグ
+let ultLocked=false;         // ワンメンドーズ戦：奥義（彼方からの呼び声）を封印
 
 // ── ルート定義（分岐A: ステージ3-4 ／ 分岐B: ステージ5-6）──
 const ROUTE_DEFS={
@@ -2247,7 +2262,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
 function buildEncounters(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={};
   worldCursor=0; nextStage=1; encIndex=0; metNPC=0; chestsOpened=0; routesChosen=[];
-  pendingBranch=null; dialog=null; trueBossSpawned=false;
+  pendingBranch=null; dialog=null; trueBossSpawned=false; ultLocked=false;
   addBlocks(CH1,{branchAfter:'A'});
 }
 
@@ -3804,32 +3819,51 @@ function drawRival(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=
   const bl=ctx.createLinearGradient(3,0,46,0); bl.addColorStop(0,'#c89cff'); bl.addColorStop(1,'#3a1060');
   ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(3,-3);ctx.lineTo(42,-1.5);ctx.lineTo(48,0);ctx.lineTo(42,1.5);ctx.lineTo(3,3);ctx.closePath(); ctx.fill(); ctx.restore();
 }
-// ── イッヌ真ボス：黄金の剣士ゴルックス（豪剣・パリィ反撃）──
-function drawGolux(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0; const parry=(e.parryFx||0)>0;
-  ctx.fillStyle=t.c3; ctx.fillRect(-13,-18+walk,10,18); ctx.fillRect(5,-18-walk,10,18);   // 脚（黄金の具足）
-  // マント
-  const cp=ctx.createLinearGradient(-28,-64,-6,-2); cp.addColorStop(0,'#9a7a2a'); cp.addColorStop(1,'#4a3810');
-  ctx.fillStyle=cp; ctx.beginPath(); ctx.moveTo(-4,-62);ctx.quadraticCurveTo(-32,-32,-24,-2);ctx.quadraticCurveTo(-12,-14,-3,-16);ctx.closePath(); ctx.fill();
-  furBall(0,-42,22,shade(t.c1,18),t.c2);   // 胴（黄金の鎧）
-  ctx.fillStyle='#fff0a0'; ctx.fillRect(-18,-36,36,5);   // ベルト
-  furBall(2,-72,20,shade(t.c1,12),t.c2);   // 頭（ゴールデンレトリバー）
-  // 垂れ耳
-  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(-16,-66,7,15,0.3,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(20,-66,7,15,-0.3,0,7); ctx.fill();
-  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.ellipse(16,-68,10,8,0,0,7); ctx.fill();   // マズル
-  ctx.fillStyle='#1a1208'; ctx.beginPath(); ctx.ellipse(24,-68,3,2.6,0,0,7); ctx.fill();
-  if(enemyHurt(e)){ hurtEye(4,-76,4,'#7e601e'); hurtEye(13,-76,4,'#7e601e'); }
-  else { for(const ex of [4,13]){ ctx.fillStyle=radGrad(ex,-76,4,'#fff','#caa54a'); ctx.beginPath(); ctx.ellipse(ex,-76,3.6,3.2,0,0,7); ctx.fill(); ctx.fillStyle='#201400'; ctx.beginPath(); ctx.arc(ex+0.6,-76,1.4,0,7); ctx.fill(); }
-    ctx.strokeStyle='#3a2a10'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-2,-82);ctx.lineTo(8,-79); ctx.moveTo(18,-82);ctx.lineTo(11,-79); ctx.stroke(); }
-  // 豪剣（長大な両手剣）
-  let ang=atk?(-1.3+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.6):(parry?-1.7:(tele?-1.5:-0.5));
-  ctx.save(); ctx.translate(10,-46); ctx.rotate(ang);
-  ctx.strokeStyle=shade(t.c1,-10); ctx.lineWidth=8; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,2); ctx.stroke(); ctx.translate(14,2);
-  ctx.fillStyle='#caa54a'; ctx.fillRect(-3,-7,6,14);   // 鍔
-  const bl=ctx.createLinearGradient(4,0,84,0); bl.addColorStop(0,'#fffbe0'); bl.addColorStop(.5,'#ffe98a'); bl.addColorStop(1,'#c8961a');
-  ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(4,-5);ctx.lineTo(78,-2.4);ctx.lineTo(88,0);ctx.lineTo(78,2.4);ctx.lineTo(4,5);ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.moveTo(6,-2);ctx.lineTo(78,-1); ctx.stroke();
-  if(parry){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.6; ctx.fillStyle=radGrad(40,0,40,'rgba(255,240,160,.9)','rgba(255,240,160,0)'); ctx.beginPath(); ctx.arc(40,0,40,0,7); ctx.fill(); ctx.restore(); }
+// ── イッヌ真ボス：黄金の剣士ゴルックス（重厚な大鎧・豪剣・パリィ反撃）──
+function drawGolux(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  const pf=(e.parryFx||0), parry=pf>0, pp=pf/14;   // パリィ進行（1→0）
+  // 背中の大マント
+  const cp=ctx.createLinearGradient(-34,-72,-6,-2); cp.addColorStop(0,'#b8923a'); cp.addColorStop(.5,'#7a5e1c'); cp.addColorStop(1,'#3a2c0a');
+  ctx.fillStyle=cp; ctx.beginPath(); ctx.moveTo(-6,-78);ctx.quadraticCurveTo(-40,-38,-30,-2);ctx.quadraticCurveTo(-14,-16,-4,-18);ctx.closePath(); ctx.fill();
+  // 重厚な脚甲
+  ctx.fillStyle=t.c3; ctx.fillRect(-15,-22+walk,12,22); ctx.fillRect(5,-22-walk,12,22);
+  ctx.fillStyle=shade(t.c1,-8); ctx.fillRect(-15,-4+walk,12,5); ctx.fillRect(5,-4-walk,12,5);
+  // 巨大な胸甲＋肩アーマー
+  ctx.fillStyle=radGrad(0,-50,26,shade(t.c1,22),t.c2); ctx.beginPath(); ctx.ellipse(0,-48,24,28,0,0,7); ctx.fill();
+  ctx.strokeStyle='#fff0a0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-72); ctx.lineTo(0,-30); ctx.stroke();   // 胸の合わせ目
+  ctx.fillStyle=radGrad(-22,-62,12,'#ffe98a','#9a7420'); ctx.beginPath(); ctx.arc(-22,-60,12,0,7); ctx.fill();   // 肩当て（左）
+  ctx.fillStyle=radGrad(22,-62,12,'#ffe98a','#9a7420'); ctx.beginPath(); ctx.arc(22,-60,12,0,7); ctx.fill();      // 肩当て（右）
+  ctx.fillStyle='#fff0a0'; ctx.fillRect(-20,-40,40,6);   // 黄金のベルト
+  ctx.fillStyle=radGrad(0,-37,6,'#fffbe0','#c8961a'); ctx.beginPath(); ctx.arc(0,-37,5,0,7); ctx.fill();
+  // 頭（ゴールデンレトリバー）＋角つき兜
+  furBall(2,-86,21,shade(t.c1,14),t.c2);
+  ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(-17,-80,7,16,0.3,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(21,-80,7,16,-0.3,0,7); ctx.fill();   // 垂れ耳
+  ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.moveTo(-18,-92);ctx.lineTo(-30,-112);ctx.lineTo(-8,-96);ctx.closePath(); ctx.fill();   // 兜の角（左）
+  ctx.beginPath(); ctx.moveTo(20,-92);ctx.lineTo(32,-112);ctx.lineTo(10,-96);ctx.closePath(); ctx.fill();   // 角（右）
+  ctx.fillStyle=radGrad(2,-98,16,'#ffe98a','#9a7420'); ctx.beginPath(); ctx.arc(2,-96,12,Math.PI,0); ctx.fill();   // 兜の額当て
+  ctx.fillStyle=shade(t.c1,6); ctx.beginPath(); ctx.ellipse(16,-82,10,8,0,0,7); ctx.fill();   // マズル
+  ctx.fillStyle='#1a1208'; ctx.beginPath(); ctx.ellipse(24,-82,3,2.6,0,0,7); ctx.fill();
+  if(enemyHurt(e)){ hurtEye(4,-90,4,'#7e601e'); hurtEye(13,-90,4,'#7e601e'); }
+  else { for(const ex of [4,13]){ ctx.fillStyle=radGrad(ex,-90,4,'#fff','#caa54a'); ctx.beginPath(); ctx.ellipse(ex,-90,3.6,3.2,0,0,7); ctx.fill(); ctx.fillStyle='#201400'; ctx.beginPath(); ctx.arc(ex+0.6,-90,1.4,0,7); ctx.fill(); }
+    ctx.strokeStyle='#3a2a10'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-2,-96);ctx.lineTo(8,-93); ctx.moveTo(18,-96);ctx.lineTo(11,-93); ctx.stroke(); }
+  // 豪剣（長大な両手剣）。パリィ時は刃を横に振り抜いて弾く
+  let ang;
+  if(parry){ ang=lerp(0.5,-1.9,easeOut(1-pp)); }   // 弾き：振り上げて受け流す
+  else ang=atk?(-1.4+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.8):(tele?-1.6:-0.55);
+  ctx.save(); ctx.translate(12,-54); ctx.rotate(ang);
+  ctx.strokeStyle=shade(t.c1,-12); ctx.lineWidth=9; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(16,2); ctx.stroke(); ctx.translate(16,2);
+  ctx.fillStyle='#caa54a'; ctx.fillRect(-3,-9,7,18);   // 大きな鍔
+  const bl=ctx.createLinearGradient(4,0,104,0); bl.addColorStop(0,'#fffbe0'); bl.addColorStop(.5,'#ffe98a'); bl.addColorStop(1,'#c8961a');
+  ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(4,-6);ctx.lineTo(96,-3);ctx.lineTo(108,0);ctx.lineTo(96,3);ctx.lineTo(4,6);ctx.closePath(); ctx.fill();   // 長大な刀身
+  ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(6,-2.4);ctx.lineTo(96,-1.2); ctx.stroke();
+  if(parry){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=clamp(pp*1.2,0,1);
+    ctx.fillStyle=radGrad(50,0,52,'rgba(255,248,200,.95)','rgba(255,240,160,0)'); ctx.beginPath(); ctx.arc(50,0,52,0,7); ctx.fill();
+    drawStar(20,0,4,12,'#fff'); ctx.restore(); }
   ctx.restore();
+  // パリィの軌跡（剣で弾いた閃光の弧）＋火花
+  if(parry){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=clamp(pp,0,1);
+    ctx.strokeStyle='#fffbe0'; ctx.lineWidth=5*pp+2; ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(e.facing*20,-58, 56, e.facing>0?-1.2:Math.PI-1.2, e.facing>0?1.2:Math.PI+1.2); ctx.stroke(); ctx.restore(); }
 }
 // ── シマ真ボス：兄弟子パピプー（白いビション・分裂・三節棍）──
 function drawPapipoo(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; const walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
@@ -4507,6 +4541,7 @@ function spawnTrueBoss(ty){
   enemies.length=0; projectiles.length=0; hazards.length=0;
   const p=players[0]; const bx=clamp(p.x+260, camX+200, camX+W-120);
   spawnEnemy(ty, bx, LANE);
+  ultLocked=(ty==='wanmen');   // ワンメンドーズ戦：奥義「彼方からの呼び声」は封印される
   const mode=bossMusicFor(ty); state='play'; bossIntro=120;
   if(Music.setMode){ Music.start(mode); Music.setMode(mode); }
   flash=Math.max(flash,5); shake=12; }
