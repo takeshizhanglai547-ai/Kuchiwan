@@ -312,6 +312,37 @@ function hitSound(dmg){
     s.connect(lp); lp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.6); }
 }
 
+// ---- 被弾音 = 重厚な「ドゴォッ…！」（鈍い衝撃＋胸に響く重低音＋歪んだクラック）----
+function hurtSound(dmg){
+  if(!actx||!sndOn) return;
+  const t=actx.currentTime, tier=dmg>=30?2:dmg>=15?1:0, V=0.8+tier*0.25;
+  // ── ドッ：鈍いボディブロー（沈み込むローパスノイズの塊）──
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(900,t); lp.frequency.exponentialRampToValueAtTime(180,t+0.22);
+    g.gain.setValueAtTime(V*0.9,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26+tier*0.08);
+    s.connect(lp); lp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.4); }
+  // ── ゴ：中域の打撃ボディ ──
+  { const o=actx.createOscillator(), g=actx.createGain();
+    o.type='square'; o.frequency.setValueAtTime(150-tier*20,t); o.frequency.exponentialRampToValueAtTime(48,t+0.16);
+    g.gain.setValueAtTime(V*0.6,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.3); }
+  // ── ォオ…：胸に響く長いサブベース ──
+  { const o=actx.createOscillator(), g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime([70,58,46][tier],t); o.frequency.exponentialRampToValueAtTime([30,26,22][tier],t+0.5);
+    g.gain.setValueAtTime(V*1.0,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55+tier*0.2);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.85); }
+  // ── バリッ：歪んだクラック（重さの中の鋭さ）──
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=0.8;
+    g.gain.setValueAtTime(V*0.5,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.07);
+    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.1); }
+  // ── 大ダメージ：不穏な鐘の余韻 ──
+  if(tier>=1){ [98,147,196].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(f*(1+(i%2?0.005:-0.004)),t);
+    g.gain.setValueAtTime(V*0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5+tier*0.2);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.8); }); }
+}
+
 // ---- BGM: generative orchestral engine v2 ----
 // 5 per-stage battle themes + boss/town/title songs, full drum kit (kick/
 // snare/hats/timpani), brass stabs, counter-lines, walking bass, phrase
@@ -343,9 +374,9 @@ const Music=(()=>{
     boss2:{ bpm:162, lead:'sawtooth', pad:'sawtooth', drive:true,   // 第二形態：獣性の暴走 (Cm)
       prog:[[48,51,55],[44,48,51],[46,50,53],[43,47,50],[48,51,55],[41,44,48],[43,47,50],[43,47,50]],
       mel:[72,75,79,78, 75,72,68,72, 70,74,77,74, 67,71,74,79, 72,75,79,84, 80,77,75,72, 74,71,67,71, 67,70,74,79] },
-    boss3:{ bpm:170, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 最終形態：決戦の頂 (Dm 高揚)
-      prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[43,46,50],[45,49,52],[45,49,52]],
-      mel:[74,77,81,79, 77,74,70,74, 76,79,84,81, 79,76,72,76, 74,77,81,86, 82,79,74,79, 81,77,73,77, 76,73,69,73] },
+    boss3:{ bpm:162, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 最終形態：決戦の頂 (Dm 荘厳・大団円)
+      prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
+      mel:[74,77,81,86, 82,81,77,74, 77,81,84,81, 79,84,79,76, 74,77,81,86, 86,89,86,82, 79,82,86,82, 81,76,73,69] },
     town:{ bpm:92, lead:'sine', pad:'triangle', soft:true,       // 安らぎの店内 (C)
       prog:[[48,52,55],[45,48,52],[53,57,60],[43,47,50],[48,52,55],[53,57,60],[43,47,50],[48,52,55]],
       mel:[72,76,79,76, 72,69,72,76, 77,81,77,74, 74,71,67,71, 72,76,79,84, 81,77,74,77, 74,71,74,79, 76,72,67,72] },
@@ -383,15 +414,32 @@ const Music=(()=>{
     o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.34);
     const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05*vel,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
     const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=460; s.connect(f);f.connect(ng); ng.connect(bus()); s.start(t); s.stop(t+0.1); }
+  // ── 最終決戦用の壮大レイヤー ──
+  function organ(ch,t,dur){ // 荘厳なパイプオルガンの土台（根音＋5度＋オクターブ下）
+    [ch[0]-12, ch[2]-12, ch[0]-24].forEach(n=>{ const o=actx.createOscillator(),g=actx.createGain();
+      o.type='sawtooth'; o.frequency.setValueAtTime(midi(n),t);
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=760;
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.06,t+0.18); g.gain.setValueAtTime(0.06,t+dur*0.6); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      o.connect(lp); lp.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }); }
+  function choir(n,t,dur){ // 聖歌隊（オクターブ＋デチューンを重ね、ゆっくり立ち上がる「アー」）
+    [1,1.005,0.995].forEach(d=>{ voice(midi(n)*d,t,dur,'triangle',0.022,0.22,2300); }); }
+  function crash(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5200;
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.12*v,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.7);
+    s.connect(hp); hp.connect(g); g.connect(bus()); s.start(t); s.stop(t+0.8); }
   const ARP=[0,1,2,1,0,2,1,2];
   function scheduleStep(s){
     if(!actx||!sndOn) return;
     const S=song(); curStep=60/S.bpm/2;
     const bar=(s>>3)&7, st=s&7, t=nextT, ch=S.prog[bar], root=ch[0], stepDur=curStep;
     if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.96,S.pad,S.soft?0.034:0.05)); }       // sustained string pad
-    if(S.epic && st===0){ ch.forEach(n=>strings(n+24,t,stepDur*8*0.92,'triangle',0.03)); }      // 最終決戦：聖歌隊のような高域レイヤー
-    if(!S.soft && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                                 // brass stab on phrase accents
-    if(S.epic && st===4) brass([ch[0]+12,ch[2]+12],t,stepDur*1.2);                              // 最終決戦：裏拍の追いブラス
+    if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
+      if(st===0){ organ(ch,t,stepDur*8); ch.forEach(n=>choir(n+24,t,stepDur*8*0.92)); brass(ch,t,stepDur*2.4); }   // オルガン土台＋聖歌隊＋全小節頭のパワーブラス
+      if(st===0&&bar%4===0) crash(t,0.9);                                                       // フレーズ頭にシンバルの一撃
+      if(st===4) brass([ch[0]+12,ch[2]+12],t,stepDur*1.3);                                       // 裏拍の追いブラス
+      if(st%2===0){ const dm=S.mel[(bar*4+(st>>1))%32]; if(dm!=null) voice(midi(dm+12),t,stepDur*2.6,'sawtooth',0.04,0.2,3400); }  // 高らかに伸びるディセンタント
+      if(bar===7&&st>=4) timp(t,root,0.5);                                                       // ラスト小節のティンパニロール
+    } else if(!S.soft && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                          // brass stab on phrase accents
     if(S.soft){ if(st%4===0) bassN(root,t,stepDur*3.4); }                                       // gentle half-note bass
     else { const bn=[root-12,root-12,ch[2]-12,root-12,root,root-12,ch[2]-12,ch[1]-12][st];      // walking 8th-note bass
       bassN(bn,t,stepDur*0.92); }
@@ -1975,7 +2023,7 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
 }
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
-  p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); sfx.hurt(); resetCombo();
+  p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); hurtSound(dmg); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
   if(p.hp<=0){ loseLife(p); return; }
   p.state=knockdown?'down':'hurt'; p.hurtTimer=14; p.downTimer=46; }
