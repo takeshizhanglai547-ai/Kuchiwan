@@ -383,6 +383,21 @@ const Music=(()=>{
     boss3:{ bpm:162, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 最終形態：決戦の頂 (Dm 荘厳・大団円)
       prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
       mel:[74,77,81,86, 82,81,77,74, 77,81,84,81, 79,84,79,76, 74,77,81,86, 86,89,86,82, 79,82,86,82, 81,76,73,69] },
+    bossfast:{ bpm:168, lead:'square', pad:'sawtooth', drive:true,   // 俊敏なボス：疾走戦 (Em)
+      prog:[[52,55,59],[47,50,54],[54,57,61],[49,52,56],[52,55,59],[45,48,52],[47,50,54],[47,50,54]],
+      mel:[76,79,83,81, 76,79,76,72, 72,76,72,69, 71,75,78,83, 76,79,83,88, 84,81,77,81, 83,78,74,78, 78,74,71,67] },
+    bossheavy:{ bpm:132, lead:'square', pad:'sawtooth', drive:true,  // 巨躯のボス：重圧の戦い (Cm)
+      prog:[[48,51,55],[43,46,50],[44,48,51],[46,50,53],[48,51,55],[41,44,48],[43,46,50],[43,47,50]],
+      mel:[72,75,79,75, 70,72,75,79, 67,70,74,70, 65,68,72,68, 72,75,79,82, 79,75,72,70, 68,72,67,63, 60,63,67,72] },
+    bosseerie:{ bpm:150, lead:'sine', pad:'sawtooth', drive:true,    // 怪異のボス：不協和の宴 (Bbm)
+      prog:[[46,49,53],[42,45,49],[44,47,51],[41,44,48],[46,49,53],[39,42,46],[42,45,49],[44,47,50]],
+      mel:[70,73,77,76, 73,70,66,70, 72,75,80,75, 69,72,77,72, 70,73,77,82, 78,75,70,75, 72,68,65,68, 65,68,72,77] },
+    bossrival:{ bpm:160, lead:'square', pad:'sawtooth', drive:true,  // 宿敵戦：鏡写しの決闘 (Am)
+      prog:[[57,60,64],[55,59,62],[53,57,60],[52,55,59],[57,60,64],[56,59,63],[55,59,62],[52,56,59]],
+      mel:[69,72,76,74, 71,74,71,67, 72,76,79,76, 71,67,64,67, 69,72,76,81, 79,76,72,76, 74,71,67,71, 67,64,60,64] },
+    bosscosmic:{ bpm:150, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 真ボス：彼方の収穫者 (異界・増三和音)
+      prog:[[50,54,56],[49,53,55],[51,55,57],[48,52,54],[50,54,56],[45,49,51],[47,51,53],[47,51,53]],
+      mel:[74,78,80,84, 80,78,74,78, 76,80,82,86, 80,76,74,76, 74,78,80,85, 83,80,76,80, 78,74,72,74, 72,76,78,82] },
     town:{ bpm:92, lead:'sine', pad:'triangle', soft:true,       // 安らぎの店内 (C)
       prog:[[48,52,55],[45,48,52],[53,57,60],[43,47,50],[48,52,55],[53,57,60],[43,47,50],[48,52,55]],
       mel:[72,76,79,76, 72,69,72,76, 77,81,77,74, 74,71,67,71, 72,76,79,84, 81,77,74,77, 74,71,74,79, 76,72,67,72] },
@@ -1484,6 +1499,12 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   cactus:'チクチクの雨を浴びるがいい！',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！' };
+// ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
+const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
+  gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
+  moloch:'bosseerie', cerbe:'bosseerie', noroinu:'bosseerie', ghost:'bosseerie', bitter:'bosseerie',
+  rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic' };
+function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
 // 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
 const BOSSQUOTE_BY={
   garm:  {shima:'拳で語る犬か…面白い！爪と拳、どちらが上か試そうぞ！', nuko:'魔法使いの子犬とは珍しい。その杖ごと、鉄爪の錆にしてくれる！'},
@@ -2297,7 +2318,7 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
       spawnEnemy(type,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
-    if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('boss'); } }
+    if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('bosseerie'); } }
     else if(enc.mini){ bossIntro=130; }
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
@@ -3277,6 +3298,7 @@ function drawEnemy(e){
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   if(t.slimey) drawSlime(e);
+  else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
@@ -3688,6 +3710,41 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
   ctx.save(); const sw=e.state==='bmove'?0.7:0; ctx.translate(e.facing*HW*0.7,top*0.5); ctx.rotate(-0.4+sw);
   ctx.strokeStyle='#5a4a3a'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,30); ctx.lineTo(0,-36); ctx.stroke();
   ctx.strokeStyle='#dfe7f0'; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(16,-36,20,Math.PI*0.85,Math.PI*1.72); ctx.stroke(); ctx.restore();
+}
+// ── 真ボス ワンメンドーズ：複眼を持つ上位者（アメンドーズ風）──
+function drawWanmen(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.2)*3, HW=t.w*0.5, top=-t.h*0.96, hurt=enemyHurt(e);
+  const reach=e.state==='bmove'?1.18:1;
+  // 漂う触手状の下半身
+  ctx.strokeStyle=t.c2; ctx.lineCap='round';
+  for(let i=0;i<6;i++){ const px=(-HW*0.7)+i*(HW*1.4/5), ph=Math.sin(e.anim*1.4+i)*10;
+    ctx.lineWidth=8-(i%2)*3; ctx.beginPath(); ctx.moveTo(px*0.5, top*0.30); ctx.quadraticCurveTo(px*0.8, top*0.12+ph, px, 6+ph*0.4); ctx.stroke(); }
+  // 長く痩せた4本の腕（左右に伸び、戦闘時はさらに広がる）
+  ctx.strokeStyle=shade(t.c1,-6); ctx.lineWidth=9; ctx.lineCap='round';
+  for(const sgn of [-1,1]) for(const up of [0.62,0.34]){ const ex=sgn*HW*1.5*reach, ey=top*up+Math.sin(e.anim+sgn+up)*8;
+    ctx.beginPath(); ctx.moveTo(sgn*HW*0.4, top*0.6); ctx.quadraticCurveTo(sgn*HW*1.15, top*(up+0.05), ex, ey); ctx.stroke();
+    ctx.fillStyle=shade(t.c1,12); for(let f=0;f<3;f++){ const fa=(f-1)*0.5; ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex+sgn*Math.cos(fa)*12, ey+Math.sin(fa)*12+6); ctx.lineTo(ex+sgn*4, ey+4); ctx.closePath(); ctx.fill(); } }
+  // 歪に膨らんだ頭塊
+  ctx.fillStyle=radGrad(sway, top*0.62, HW*1.4, shade(t.c1,18), t.c2);
+  ctx.beginPath(); ctx.moveTo(-HW, top*0.30);
+  ctx.bezierCurveTo(-HW*1.12, top*1.06, HW*1.12, top*1.06, HW, top*0.30);
+  ctx.bezierCurveTo(HW*0.6, top*0.10, -HW*0.6, top*0.10, -HW, top*0.30);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.06)'; ctx.beginPath(); ctx.ellipse(-HW*0.2, top*0.85, HW*0.5, HW*0.3, 0,0,7); ctx.fill();
+  // 無数の複眼（上位者の証）
+  const eyes=[[-0.55,0.80,7],[-0.2,0.94,9],[0.2,0.92,8],[0.55,0.78,7],
+    [-0.4,0.56,6],[0,0.64,8],[0.42,0.57,6],[-0.7,0.5,5],[0.7,0.5,5],
+    [-0.15,0.4,5],[0.18,0.42,5],[0,0.30,4],[-0.34,0.7,4],[0.32,0.72,4]];
+  eyes.forEach((ey,i)=>{ const ex=ey[0]*HW+sway*0.3, eyy=top*ey[1], r=ey[2]; const blink=(Math.sin(gf*0.08+i*1.3)>0.9)&&!hurt;
+    ctx.fillStyle='#160a24'; ctx.beginPath(); ctx.ellipse(ex,eyy,r,r*(blink?0.16:1),0,0,7); ctx.fill();
+    if(!blink){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(ex,eyy,r*1.5,'rgba(220,120,255,.85)','rgba(220,120,255,0)'); ctx.beginPath(); ctx.arc(ex,eyy,r*1.5,0,7); ctx.fill(); ctx.restore();
+      ctx.fillStyle=hurt?'#ff5a6a':'#ffe14d'; ctx.beginPath(); ctx.arc(ex,eyy,r*0.42,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex-r*0.22,eyy-r*0.22,r*0.16,0,7); ctx.fill(); } });
+  // 裂けた口
+  ctx.strokeStyle='#160a24'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-HW*0.4, top*0.96); ctx.quadraticCurveTo(0, top*0.86, HW*0.4, top*0.96); ctx.stroke();
+  // 禍々しいオーラ
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.16+0.08*Math.sin(gf*0.1);
+  ctx.fillStyle=radGrad(sway,top*0.6,HW*1.8,t.accent,'rgba(0,0,0,0)'); ctx.beginPath(); ctx.arc(sway,top*0.6,HW*1.8,0,7); ctx.fill(); ctx.restore();
 }
 // ── キングスライム / スライム（攻撃のたび分裂）──
 function drawSlime(e){ const t=ETYPE[e.type]; const HW=t.w*0.46, HH=t.h*0.8, wob=Math.sin(e.anim*2.2)*0.06;
@@ -4335,13 +4392,13 @@ function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=f
   const es=document.getElementById('start'), er=document.getElementById('result');
   if(es)es.classList.add('hidden'); if(er)er.classList.add('hidden'); }
 function startOpening(){ Music.stop(); startCutscene(storyOpenFor(), ()=>startGame()); }
-function startBossCut(type,stageN){ Music.setMode('boss'); sfx.boss();
+function startBossCut(type,stageN){ Music.setMode(bossMusicFor(type)); sfx.boss();
   const intro={boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:bossQuoteFor(type)};
   // ラスボス（大帝）直前にはキャラ別の「転」シーンを前置きしてクライマックスを盛り上げる
   const turn=(ETYPE[type].bossKind==='emperor')?storyTurnFor():null;
   startCutscene(turn?[...turn,intro]:[intro], ()=>{ state='play'; }); }
 // ラスボス形態変化のデモシーン
-function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode('boss'); sfx.boss();
+function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode(bossMusicFor(nt)); sfx.boss();
   startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
 // ── ヌコ・真ボス「ワンメンドーズ」出現の衝撃の真相 ──
 const WANMEN_REVEAL=[
@@ -4359,7 +4416,7 @@ function spawnTrueBoss(){
   enemies.length=0; projectiles.length=0; hazards.length=0;
   const p=players[0]; const bx=clamp(p.x+260, camX+200, camX+W-120);
   spawnEnemy('wanmen', bx, LANE);
-  state='play'; bossIntro=120; if(Music.setMode){ Music.start('boss3'); Music.setMode('boss3'); }
+  state='play'; bossIntro=120; if(Music.setMode){ Music.start('bosscosmic'); Music.setMode('bosscosmic'); }
   flash=Math.max(flash,5); shake=12; }
 function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(storyEndFor(), ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
@@ -4395,7 +4452,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
