@@ -386,6 +386,12 @@ const Music=(()=>{
     { bpm:130, lead:'sine', pad:'sawtooth',                // 7: 水晶洞 — 幻想的でミステリアス (C#m)
       prog:[[49,52,56],[44,47,51],[47,51,54],[42,45,49],[49,52,56],[45,48,52],[44,47,51],[44,48,51]],
       mel:[73,76,80,78, 76,73,68,73, 75,78,83,78, 71,75,80,75, 73,76,80,85, 81,78,73,78, 75,71,68,71, 68,71,75,80] },
+    { bpm:150, lead:'square', pad:'sawtooth', drive:true,  // 8: 飛行艇 — 疾走する大空冒険 (G)
+      prog:[[55,59,62],[50,53,57],[57,60,64],[52,55,59],[55,59,62],[53,57,60],[50,53,57],[52,56,59]],
+      mel:[79,83,86,91, 86,83,79,83, 81,84,88,84, 79,83,86,83, 79,83,86,91, 88,86,83,79, 81,84,79,76, 74,79,83,86] },
+    { bpm:112, lead:'triangle', pad:'sawtooth',            // 9: 巨大廃墟 — 物悲しく荘厳 (Am)
+      prog:[[57,60,64],[52,55,59],[53,57,60],[55,59,62],[57,60,64],[50,53,57],[52,55,59],[52,56,59]],
+      mel:[69,72,76,74, 72,69,64,69, 68,72,77,72, 71,74,79,74, 69,72,76,81, 79,76,72,69, 71,68,64,68, 64,69,72,76] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -648,6 +654,15 @@ const ATK={
   gh1:{name:'豪快横薙ぎ', dur:22, act:[8,14], reach:104, hh:54, dmg:16, kb:9,  from:-1.4, to:1.3,  len:64, trail:'#ffb85a', pivotY:-64, lunge:1.6, knock:true, combo:1},
   gh2:{name:'返し打ち',   dur:22, act:[8,14], reach:104, hh:56, dmg:16, kb:9,  from:1.2,  to:-1.4, len:64, trail:'#ffb85a', pivotY:-66, lunge:1.4, combo:2},
   gh3:{name:'大地砕き',   dur:30, act:[10,18],reach:112, hh:60, dmg:24, kb:16, from:-1.9, to:1.1,  len:70, trail:'#fff',    pivotY:-70, lunge:2.0, knock:true, finisher:true, aoe:true, shock:20, combo:3},
+  // ── 追加武器：大戦斧（ガードワン）＝重く鋭い縦斬り主体の3段 ──
+  ax1:{name:'兜割り', dur:20, act:[7,12], reach:100, hh:60, dmg:18, kb:8,  from:-1.9, to:0.9, len:60, trail:'#ffd0a0', pivotY:-68, lunge:1.8, knock:true, combo:1},
+  ax2:{name:'返し斬り', dur:20, act:[7,12], reach:100, hh:56, dmg:18, kb:8, from:1.2, to:-1.6, len:60, trail:'#ffd0a0', pivotY:-66, lunge:1.6, combo:2},
+  ax3:{name:'大回転斬', dur:32, act:[6,26], reach:116, hh:58, dmg:10, kb:16, from:-3.1, to:3.1, len:66, trail:'#fff', pivotY:-64, lunge:1.6, multi:true, multiGap:5, spin:true, knock:true, finisher:true, combo:3},
+  // ── 追加武器：鉄球フレイル（ガードワン）＝振り回して広範囲を薙ぐ4段 ──
+  fl1:{name:'横薙ぎ', dur:18, act:[6,12], reach:118, hh:52, dmg:13, kb:9, from:-1.6, to:1.6, len:72, trail:'#c9ccd4', pivotY:-60, lunge:1.4, spin:true, knock:true, combo:1},
+  fl2:{name:'唐竹割り', dur:20, act:[8,14], reach:110, hh:64, dmg:15, kb:10, from:-2.0, to:0.6, len:74, trail:'#c9ccd4', pivotY:-66, lunge:1.2, knock:true, combo:2},
+  fl3:{name:'グルグル振り', dur:22, act:[4,18], reach:120, hh:56, dmg:8, kb:6, from:-3.1, to:3.1, len:74, trail:'#e0e4ec', pivotY:-60, multi:true, multiGap:4, spin:true, combo:3},
+  fl4:{name:'鉄球大車輪', dur:36, act:[4,30], reach:128, hh:60, dmg:8, kb:18, from:-3.1, to:3.1, len:78, trail:'#fff', pivotY:-58, multi:true, multiGap:4, spin:true, knock:true, finisher:true, aoe:true, combo:4},
   gupper:{name:'ハンマー振り上げ', dur:26, act:[8,14], reach:96, hh:200, dmg:18, kb:8, from:1.1, to:-1.9, len:66, trail:'#ffd24d', pivotY:-64, launch:14, derive:'gslamdown'},
   gslamdown:{name:'振り下ろし叩きつけ', dur:26, act:[9,15], reach:106, hh:64, dmg:22, kb:12, from:-1.9, to:1.2, len:70, trail:'#fff', pivotY:-70, lunge:1.2, knock:true, aoe:true, shock:18, finisher:true},
   gspin:{name:'ハンマー旋風突進', dur:30, act:[3,26], reach:104, hh:56, dmg:9, kb:6, from:-3.1, to:3.1, len:66, trail:'#ffb85a', pivotY:-58, move:7.5, multi:true, multiGap:5, spin:true, stinger:true, respin:true, respinMax:4, knock:true},
@@ -724,6 +739,8 @@ const WEAPONS={
   tome:  {name:'魔導書グリモワン', reach:0.95, dmg:1.2, kb:1.05, ext:1.0, trail:'#d6b0ff', launch:1.05, col:'#c89cff'},   // ヌコ専用：3方向スプレッド弾
   // ── ガードワン8号：基本装備の巨大ハンマー ──
   ghammer:{name:'巨大ハンマー', reach:1.2, dmg:1.0, kb:1.6, ext:1.3, trail:'#ffb85a', launch:1.5, col:'#c9ccd4'},
+  gaxe: {name:'大戦斧', reach:1.28, dmg:1.25, kb:1.3, ext:1.35, trail:'#ffd0a0', launch:1.35, col:'#d0a060'},   // ガードワン：鋭い縦斬り
+  gflail:{name:'鉄球フレイル', reach:1.4, dmg:1.05, kb:1.5, ext:1.5, trail:'#c9ccd4', launch:1.4, col:'#9aa0ac'},  // ガードワン：広範囲の振り回し
   // ── ショップ限定（永続装備） ──
   holy:  {name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
   megaton:{name:'メガトンハンマー', reach:1.28, dmg:1.4, kb:1.8, ext:1.4, trail:'#ffd24d', launch:1.65, col:'#ffd24d'},
@@ -757,7 +774,7 @@ function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!
 // 装備武器ごとにコンボのモーションを差し替える
 const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'],
   twin:['tw1','tw2','tw3','tw4','tw5'], claw:['cl1','cl2','cl3','cl4'],
-  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'] };
+  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'] };
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
 function comboMaxFor(p){ if(p.kind==='nuko') return 1; const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
 function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot'; const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':'c')+step; }
@@ -1586,6 +1603,13 @@ const ETYPE={
   golux: {hp:2100,sp:2.0,dmg:32,atkR:100,w:78,h:134,c1:'#eccb6e',c2:'#b8923a',c3:'#7e601e',score:42000,boss:true,bossKind:'golux',weapon:'none',accent:'#fff0a0', name:'黄金の剣士ゴルックス',finalBoss:true,trueBoss:true,parryKind:true},
   // ── シマ・真ボス：兄弟子ビションのパピプー（分裂・百死ワン生・三節棍/鎖鎌）──
   papipoo:{hp:2050,sp:2.3,dmg:28,atkR:82,w:60,h:106,c1:'#f6f6fc',c2:'#d2d6e4',c3:'#9aa0b6',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#bfe9ff', name:'兄弟子パピプー',finalBoss:true,trueBoss:true,fistKind:true},
+  // ── ガードワン8号・真ボス：先代最強の門番「ガードワン零号」（黒鉄の巨躯・大槌）──
+  guard0:{hp:2300,sp:1.1,dmg:34,atkR:104,w:104,h:150,c1:'#5a5560',c2:'#33303a',c3:'#1a1820',score:46000,boss:true,bossKind:'guard0',weapon:'none',accent:'#ff8a3a', name:'ガードワン零号',finalBoss:true,trueBoss:true},
+  // ── 各キャラの道中ライバル（中ボス）──
+  rvSword:{hp:520,sp:2.4,dmg:16,atkR:78,w:60,h:100,c1:'#c0c8d8',c2:'#6a7488',c3:'#38404e',score:5500,boss:true,mini:true,bossKind:'rival',weapon:'dark',accent:'#9fd0ff', name:'放浪剣士シルヴァ'},          // イッヌのライバル
+  rvFist:{hp:500,sp:2.9,dmg:15,atkR:66,w:54,h:96,c1:'#e0a45f',c2:'#a86a30',c3:'#6a3f18',score:5500,boss:true,mini:true,bossKind:'rival',weapon:'none',accent:'#ffd24d', name:'流拳のカラテ丸',fistKind:true},        // シマのライバル
+  rvMage:{hp:460,sp:2.2,dmg:15,atkR:88,w:52,h:92,c1:'#8a6fc8',c2:'#4e3688',c3:'#241650',score:5500,boss:true,mini:true,bossKind:'rival',weapon:'dark',accent:'#c89cff', name:'紅魔女ルージュ',flyer:true},           // ヌコのライバル
+  rvGuard:{hp:640,sp:1.4,dmg:18,atkR:88,w:74,h:116,c1:'#8a7a5a',c2:'#5a4c34',c3:'#33291a',score:5500,boss:true,mini:true,bossKind:'guard0',weapon:'none',accent:'#ffb85a', name:'鉄壁のブルドッガ'},                 // ガードワンのライバル
   // ---- 個性派ボス ----
   dragon:{hp:780,sp:1.6,dmg:18,atkR:92,w:160,h:150,c1:'#d6532e',c2:'#8c2b14',c3:'#4a1408',score:5000,boss:true,bossKind:'dragon',weapon:'none',accent:'#ff8a3a',name:'飛竜ヴォルカ',flyer:true},
   ghost: {hp:240,sp:2.1,dmg:13,atkR:84,w:84, h:118,c1:'#cfe6ff',c2:'#8fb6d8',c3:'#5a7ba0',score:2600,boss:true,bossKind:'ghost', weapon:'scythe',accent:'#bfe9ff',name:'お化けのT太郎',flyer:true},
@@ -1618,6 +1642,7 @@ const BOSSMOVES={
   darkknight:['rivalCombo','iaiCharge','dimSlash','rivalShoryu','teleSlash','iaiCharge','darkBeam','darkMajin'],
   golux:  ['rivalCombo','goluxIai','goluxKabuto','rivalShoryu','rivalCharge','goluxIai'],   // イッヌ風：疾走連続居合・兜割
   wanmen: ['scytheSlash','phaseDash','meteorCall','vanishMove','meteorCall','scytheSlash'],  // 彼方からの呼び声＝隕石
+  guard0: ['heavySwing','groundSlam','hammerQuake','bodyCharge','unblockSmash','groundSlam'],  // 門番零号：大槌の地震
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
@@ -1627,13 +1652,16 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   cactus:'チクチクの雨を浴びるがいい！',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
-  golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！' };
+  golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！',
+  guard0:'八代目よ…門を守る覚悟、この零号が試そう！', rvSword:'いい太刀筋だ。だが俺の方が上だと証明させてもらう！',
+  rvFist:'その拳、俺と競い合おうぜ！本気で来いよ！', rvMage:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', rvGuard:'門番同士…どちらが硬いか、確かめようか！' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
   moloch:'bosseerie', cerbe:'bosseerie', noroinu:'bosseerie', ghost:'bosseerie', bitter:'bosseerie',
   rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic',
-  golux:'bossrival', papipoo:'bossrival' };
+  golux:'bossrival', papipoo:'bossrival', guard0:'bossheavy',
+  rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
 // 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
 const BOSSQUOTE_BY={
@@ -1737,7 +1765,8 @@ function killEnemy(e){ const T=ETYPE[e.type];
       setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100);
     } } }
 // キャラ別の真の最終ボス（イッヌ=ゴルックス／シマ=パピプー／ヌコ=ワンメンドーズ）
-function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen'}[kind]||null; }
+function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen', guard8:'guard0'}[kind]||null; }
+function rivalFor(kind){ return {inu:'rvSword', shima:'rvFist', nuko:'rvMage', guard8:'rvGuard'}[kind]||'rvSword'; }
 // ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   score+=8000;
@@ -1771,6 +1800,7 @@ function weaponDropKind(){ // 出場キャラに合わせて武器ドロップ�
   if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer','twin');
   if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa','claw');
   if(players.some(p=>p.active && p.kind==='nuko')) pool.push('tome');
+  if(players.some(p=>p.active && p.kind==='guard8')) pool.push('gaxe','gflail');
   if(!pool.length) return 'hp';
   return pool[Math.floor(Math.random()*pool.length)];
 }
@@ -1788,7 +1818,7 @@ function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
   if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
-  if(p.kind==='guard8') return false;                                             // ガードワン8号＝愛用の巨大ハンマー一筋
+  if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail';                     // ガードワン8号＝大戦斧・フレイルも扱う
   if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa'||kind==='claw';   // シマ＝拳法武器のみ
   return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger';          // イッヌ＝剣系のみ
 }
@@ -1860,6 +1890,14 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#4a2a78'; ctx.beginPath(); ctx.moveTo(-11,1); ctx.quadraticCurveTo(0,6,11,1); ctx.lineTo(11,5); ctx.quadraticCurveTo(0,10,-11,5); ctx.closePath(); ctx.fill();
     for(const s2 of [-1,1]){ ctx.fillStyle='#f4eeff'; ctx.beginPath(); ctx.moveTo(0,2); ctx.quadraticCurveTo(s2*6,-2,s2*11,0); ctx.lineTo(s2*11,3); ctx.quadraticCurveTo(s2*6,1,0,5); ctx.closePath(); ctx.fill(); }
     drawStar(0,-6,2,4.4,'#c89cff');
+  } else if(it.kind==='gaxe'){ ctx.rotate(-0.4);      // 大戦斧
+    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(-10,10); ctx.lineTo(8,-8); ctx.stroke();
+    ctx.fillStyle=radGrad(9,-9,10,'#f4dca0','#8a6a30'); ctx.beginPath(); ctx.moveTo(6,-6); ctx.quadraticCurveTo(20,-16,16,-4); ctx.quadraticCurveTo(20,6,6,-2); ctx.closePath(); ctx.fill();
+  } else if(it.kind==='gflail'){                      // 鉄球フレイル
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-11,8); ctx.lineTo(0,-2); ctx.stroke();
+    ctx.strokeStyle='#9aa0ac'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(6,-6); ctx.stroke();
+    ctx.fillStyle=radGrad(9,-9,8,'#e0e4ec','#5a5e6a'); ctx.beginPath(); ctx.arc(9,-9,6,0,7); ctx.fill();
+    ctx.fillStyle='#7a7e8a'; for(let s=0;s<6;s++){ const a=s/6*Math.PI*2; ctx.beginPath(); ctx.moveTo(9+Math.cos(a)*5,-9+Math.sin(a)*5); ctx.lineTo(9+Math.cos(a)*10,-9+Math.sin(a)*10); ctx.lineTo(9+Math.cos(a+0.4)*5,-9+Math.sin(a+0.4)*5); ctx.closePath(); ctx.fill(); }
   } else { // tonfa（トンファー）
     ctx.rotate(-0.3); ctx.lineCap='round';
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(14,-4); ctx.stroke();
@@ -2061,6 +2099,7 @@ const MV={
   goluxIai:{tele:18,dur:30,minR:80,maxR:720,danger:1}, goluxKabuto:{tele:18,dur:40,minR:0,maxR:420},
   // ワンメンドーズ専用：彼方からの呼び声（隕石）
   meteorCall:{tele:22,dur:54,minR:0,maxR:1300},
+  hammerQuake:{tele:26,dur:44,minR:0,maxR:640,danger:1},
   // 陸鮫
   burrowBite:{tele:14,dur:34,minR:0,maxR:1300,danger:1}, finCharge:{tele:16,dur:18,minR:90,maxR:620}, jumpBite:{tele:14,dur:20,minR:0,maxR:300}, chomp:{tele:14,dur:22,minR:0,maxR:150},
   // 海賊王
@@ -2113,6 +2152,11 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'tripleStep': if(f===5||f===14||f===23){ e.x+=e.facing*15; bArc(e,t.atkR-10,42,11,false);} break;
     case 'groundSlam': case 'darkSlam':
       if(f>2 && e.z<=0 && !e.slammed){ e.slammed=true; bShock(e,150,t.dmg); } break;
+    // ── 門番零号：大槌を叩きつけ全画面を震わせ、左右に地割れの衝撃波を走らせる ──
+    case 'hammerQuake': if(f===22){ e.slammed=true; quake=Math.max(quake,30); shake=Math.max(shake,15); flash=Math.max(flash,3); hitStop=Math.max(hitStop,10);
+      ring(e.x,e.y,'#ff8a3a'); ring(e.x,e.y,'#fff'); dust(e.x,e.y,20); impactBurst(e.x,e.y-30,'#ffd0a0',true); sfx.big(); sfx.ko();
+      bShock(e,150,t.dmg);
+      for(const d2 of [-1,1]) spawnProj(e.x+d2*40, e.y, d2*9, 0, {dmg:t.dmg-6,color:'#ff8a3a',r:16,life:60,zz:30,wave:true}); } break;
     case 'fireball': if(f===14)bOrbs(e,1,0,8,t.dmg); break;
     case 'flameSpread': if(f===16)bOrbs(e,3,16,7,t.dmg-2); break;
     case 'meteor': if(f===18)bMeteor(e,4,t.dmg-2); break;
@@ -2274,7 +2318,7 @@ const CH1=[
      nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。'],
      guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！']}}},
   {theme:1,name:'黄昏の城下町',
-   gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1300,boss:true,list:[['shark',1]]}],
+   gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
      inu:['ぐすっ…こわかったよぉ…','おにいちゃんの剣、かっこいい！これ、ひろったの。お礼だワン！'],
      shima:['ぐすっ…こわかったよぉ…','おじちゃんのパンチ、ばちーんってした！これ、お礼だワン！'],
@@ -2302,18 +2346,18 @@ const SEGS={
        npc:{kind:'villager',name:'鉱夫犬ホリオ',lines:['この水晶洞、迷い込むと二度と出られんと言われとる…','三つ首の獣ケルベが奥に巣食う。上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
   B:[
-    [ {theme:1,name:'海賊の港町',
+    [ {theme:8,name:'海賊飛行艇の甲板',
        gates:[{off:600,list:[['hyena',1],['pierrot',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
-       npc:{kind:'sailor',name:'船乗りシオマル',lines:['でけぇスライムが樽の酒を全部飲んじまった！','あいつは斬るたび分裂するぞ。小さいのから素早く片付けるんだワン。']}},
+       npc:{kind:'sailor',name:'空賊シオマル',lines:['この飛行艇、風を掴んで大空をゆくのさ！足を滑らせるなよ。','でけぇスライムが甲板を占領してやがる。斬るたび分裂するから、小さいのから片付けな！']}},
       {theme:1,name:'海賊王の埠頭',
        gates:[{off:600,list:[['mastiff',1],['kirebouzu',1],['onibouzu',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
        npc:{kind:'villager',name:'酒場の看板犬',lines:['海賊王の錨投げは、空に逃げても追いかけてくる…','懐に飛び込んで連打するのが一番だワン！']}} ],
     [ {theme:3,name:'灼熱の砂漠',
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
-      {theme:3,name:'砂漠の遺跡',
+      {theme:9,name:'灼熱の巨大廃墟',
        gates:[{off:600,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
-       npc:{kind:'villager',name:'考古学犬ホリダス',lines:['鋼鉄のグラトンは古代遺跡の守護兵だったのだ…','図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
+       npc:{kind:'villager',name:'考古学犬ホリダス',lines:['この巨大廃墟…登るほどに古代文明の深淵へ近づく。','鋼鉄のグラトンは遺跡の守護兵。図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
 };
 const FINAL_CH=[
@@ -2364,7 +2408,7 @@ function addBlocks(blocks,opts){
     const B=worldCursor, st=nextStage++, len=b.len||1900, last=bi===blocks.length-1;
     STAGE2THEME[st]=b.theme; STAGE_NAME[st]=b.name; stageStartX[st]=B;
     if(B>0 && !b.noPit && Math.random()<0.5) PITS.push([B+260,B+372]);
-    b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss,
+    b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss, mini:g.mini, rival:g.rival,
       final:g.final, branchAfter:(g.boss&&last&&opts&&opts.branchAfter)||undefined }); });
     if(b.npc) placeNPC(Object.assign({x:B+840+rnd(-60,60)},b.npc));
     if(b.npc2) placeNPC(Object.assign({x:B+(b.npc2.atX||1640)+rnd(-40,40)},b.npc2));   // 区画固有の2人目NPC（祭壇など）
@@ -2469,11 +2513,12 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st);
     if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=150; stageBannerTxt='STAGE '+enc.st+'　'+(STAGE_NAME[enc.st]||''); } }
     let off=0;
-    enc.list.forEach(([type,n])=>{ const tt=ETYPE[type]; const cnt=(tt.boss||tt.mini)?n:n+1;   // 同時数は控えめ（ステータス2倍で歯ごたえ確保＋負荷対策）
+    enc.list.forEach(([type,n])=>{ const rt=type==='@rival'?rivalFor(players[0].kind):type; const tt=ETYPE[rt]; const cnt=(tt.boss||tt.mini)?n:n+1;
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
       const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
-      spawnEnemy(type,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
+      spawnEnemy(rt,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
     if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('bosseerie'); } }
+    else if(enc.rival){ startRivalCut(rivalFor(players[0].kind)); }
     else if(enc.mini){ bossIntro=130; }
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
@@ -2481,8 +2526,10 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
       if(!enc.final){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
         if(enc.branchAfter) pendingBranch=enc.branchAfter;
-        shopPending=120; }
-    } else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
+        startStageClearDemo(enc.st); }   // ステージクリアの短いデモ→終了後にショップ
+    } else if(enc.rival){ score+=1200; player.hp=Math.min(player.maxHp, player.hp+30); Music.setMode('battle');
+        startRivalClearDemo(); }         // ライバル撃破の短い掛け合い
+    else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
 }
 
@@ -2672,6 +2719,16 @@ const STAGE_THEME=[
     haze:'rgba(40,90,150,.4)', fog:'rgba(60,120,180,.45)', stars:50, tower:'#27506e',
     g:['#234a5e','#16323f','#0a1c26'], cob:['#21465a','#1a3a4c'], vig:'rgba(2,10,24,.6)',
     amb:{shape:'spark',color:'rgba(120,230,255,.95)',rate:0.8,max:46,vy:-0.24,wind:0.12,r0:1.2,r1:3,glow:true,alpha:.95} },
+  // 8: 飛行艇の甲板（茜色の雲海・流れる雲）
+  { sky:['#f28a4a','#f6b264','#f7d488','#fbe9b0'], sun:'rgba(255,236,170,', sunX:0.5,sunY:104, rays:0.2, tint:'rgba(255,170,90,.34)',
+    haze:'rgba(250,190,120,.32)', fog:'rgba(250,210,150,.45)', stars:0, tower:'#b07a52', airship:true,
+    g:['#7a5a44','#5a4030','#3a281c'], cob:['#8a6a4a','#6a4e36'], vig:'rgba(50,20,10,.44)',
+    amb:{shape:'spark',color:'rgba(255,220,150,.85)',rate:0.5,max:30,vy:-0.2,wind:0.5,r0:1.2,r1:2.8,glow:true,alpha:.7} },
+  // 9: 巨大廃墟（夕暮れの崩れた石造遺跡・舞う塵）
+  { sky:['#3a3550','#5a4f6e','#8a6e78','#c08a6a'], sun:'rgba(255,190,140,', sunX:0.78,sunY:120, rays:0.12, tint:'rgba(150,110,120,.36)',
+    haze:'rgba(120,100,120,.34)', fog:'rgba(150,120,120,.45)', stars:20, tower:'#6a5560', ruins:true,
+    g:['#5e5760','#443f4a','#2a2630'], cob:['#5a5460','#4a444e'], vig:'rgba(16,10,24,.56)',
+    amb:{shape:'spark',color:'rgba(200,170,150,.8)',rate:0.6,max:36,vy:0.15,wind:0.2,r0:1.2,r1:2.8,glow:false,alpha:.7} },
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -2738,17 +2795,57 @@ function drawBackground(){
         ctx.beginPath(); ctx.moveTo(bx-5,by-fl*0.7); ctx.quadraticCurveTo(bx,by+2,bx+5,by-fl); ctx.stroke(); }
       if(b.x<-30) birds.splice(i,1); }
     ctx.restore(); }
-  drawMountains();
-  drawCastle((W*0.5)-camX*0.28,60);
-  for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
-  ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
-  drawBuildings(stage>=2);
-  drawLampRow();
-  drawBraziers(T);
+  if(T.airship){ drawAirshipScene(); }
+  else if(T.ruins){ drawRuinsScene(); }
+  else {
+    drawMountains();
+    drawCastle((W*0.5)-camX*0.28,60);
+    for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
+    ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+    drawBuildings(stage>=2);
+    drawLampRow();
+    drawBraziers(T);
+  }
   if(state==='play') updateAmbient(T);
   drawAmbient(T);
   const fog=ctx.createLinearGradient(0,GROUND_TOP-26,0,GROUND_TOP+10); fog.addColorStop(0,'rgba(220,228,235,0)'); fog.addColorStop(1,T.fog);
   ctx.fillStyle=fog; ctx.fillRect(0,GROUND_TOP-26,W,36);
+}
+// 飛行艇の甲板ステージ：茜の雲海に浮かぶ艦隊＋流れる雲
+function drawAirshipScene(){
+  // 遠景の浮遊島
+  ctx.fillStyle='rgba(120,90,110,.5)';
+  for(let i=0;i<5;i++){ const x=((i*380-camX*0.1)%(W+380)+W+380)%(W+380)-190, y=110+(i*47%60);
+    ctx.beginPath(); ctx.ellipse(x,y,60,16,0,0,7); ctx.fill(); ctx.beginPath(); ctx.moveTo(x-40,y); ctx.lineTo(x,y+40); ctx.lineTo(x+40,y); ctx.fill(); }
+  // 分厚い雲海の帯
+  for(let layer=0;layer<2;layer++){ ctx.fillStyle=layer?'rgba(255,220,170,.55)':'rgba(255,190,130,.4)';
+    const step=200+layer*80, off=((-(camX*(0.16+layer*0.06))-gf*(0.4+layer))%step+step)%step, yb=GROUND_TOP-40-layer*24;
+    for(let x=-step;x<W+step;x+=step){ const px=x-off; ctx.beginPath(); ctx.ellipse(px,yb,70,20,0,0,7); ctx.ellipse(px+50,yb+8,52,16,0,0,7); ctx.fill(); } }
+  // 護衛の飛行艇（数隻）
+  for(let i=0;i<3;i++){ const x=((i*520-camX*0.5)%(W+520)+W+520)%(W+520)-260, y=90+(i*53%50)+Math.sin(gf*0.03+i)*6, sc=0.7+i*0.15;
+    ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
+    ctx.fillStyle='#6a4a34'; ctx.beginPath(); ctx.ellipse(0,0,54,15,0,0,7); ctx.fill();
+    ctx.fillStyle='#8a6242'; ctx.fillRect(-40,-4,80,6);
+    ctx.fillStyle=radGrad(6,-34,28,'#c0533a','#7a2c1e'); ctx.beginPath(); ctx.ellipse(6,-34,26,20,0,0,7); ctx.fill();   // 気嚢
+    ctx.strokeStyle='#5a3a28'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(-20,-14); ctx.lineTo(-14,-16); ctx.moveTo(20,-14); ctx.lineTo(28,-16); ctx.stroke();
+    ctx.restore(); }
+}
+// 巨大廃墟ステージ：夕暮れに崩れゆく巨大な石柱・アーチ
+function drawRuinsScene(){
+  drawMountains();
+  // 巨大な崩れた石柱の連なり（登っていく感じ）
+  for(let i=-1;i<10;i++){ const bw=180, gx=i*bw-(camX*0.5)%bw-bw, g0=Math.floor((camX*0.5)/bw)+i;
+    const h=140+Math.abs(g0*61%150), y=GROUND_TOP-h, broken=(g0*7%3);
+    const wall=ctx.createLinearGradient(0,y,0,y+h); wall.addColorStop(0,'#6a6070'); wall.addColorStop(1,'#3a3440');
+    ctx.fillStyle=wall; ctx.fillRect(gx,y,bw-30,h-broken*30);
+    ctx.strokeStyle='rgba(20,14,26,.5)'; ctx.lineWidth=2; ctx.strokeRect(gx,y,bw-30,h-broken*30);
+    // 崩れた頂部のギザギザ
+    ctx.fillStyle='#4a4450'; for(let s=0;s<5;s++){ if((g0*3+s)%2) ctx.fillRect(gx+s*(bw-30)/5, y-8, (bw-30)/5-3, 10); }
+    // 苔むした窓穴
+    ctx.fillStyle='rgba(20,16,28,.65)'; for(let r=0;r<3;r++)for(let c=0;c<2;c++){ if((g0+r+c)%2) ctx.fillRect(gx+22+c*70, y+30+r*46, 26, 34); }
+    // 崩れ落ちた巨大アーチ
+    if(g0%3===0){ ctx.strokeStyle='#54505c'; ctx.lineWidth=14; ctx.beginPath(); ctx.arc(gx+(bw-30)/2, GROUND_TOP, (bw-30)/2, Math.PI, Math.PI*1.5); ctx.stroke(); } }
+  ctx.fillStyle=curTheme().haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
 }
 function drawMountains(){ const yb=GROUND_TOP-24;
   for(let layer=0;layer<2;layer++){ ctx.fillStyle=layer?'rgba(150,170,200,.6)':'rgba(108,132,164,.78)';
@@ -3236,6 +3333,19 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.fillStyle=mega?'#c8961a':'#7a7e8a';                                                                // リベット
     for(const ry of [-hh2+5, 0, hh2-5]){ ctx.beginPath(); ctx.arc(L+27,ry,2,0,7); ctx.fill(); }
     if(big>1) ctx.restore();
+  } else if(wk==='gaxe'){ const L=ext*0.7+20;   // 大戦斧：長い柄＋巨大な斧刃
+    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=5.5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(L,0); ctx.stroke();
+    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L,0,3,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(L,-26,L+30,26); bl.addColorStop(0,'#f4dca0'); bl.addColorStop(.5,'#d0a060'); bl.addColorStop(1,'#8a6a30');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L,-4); ctx.quadraticCurveTo(L+34,-30,L+26,0); ctx.quadraticCurveTo(L+34,30,L,4); ctx.closePath(); ctx.fill();   // 三日月刃
+    ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(L+2,-3); ctx.quadraticCurveTo(L+28,-22,L+22,-1); ctx.stroke();
+    ctx.fillStyle='#8a6a30'; ctx.fillRect(L-3,-8,6,16);   // 刃元の金具
+  } else if(wk==='gflail'){ const L=ext*0.55+16, fa=Math.sin(gf*0.6)*0.9+0.5;   // 鉄球フレイル：柄＋鎖＋トゲ鉄球
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L,0); ctx.stroke();
+    const ex2=L+8+Math.cos(fa)*14, ey2=Math.sin(fa)*14;
+    ctx.strokeStyle='#9aa0ac'; ctx.lineWidth=2.4; for(let k=0;k<4;k++){ const t2=k/4; ctx.beginPath(); ctx.arc(L+t2*(ex2-L)+2, t2*ey2, 2.4, 0, 7); ctx.stroke(); }   // 鎖
+    ctx.fillStyle=radGrad(ex2,ey2,13,'#e0e4ec','#5a5e6a'); ctx.beginPath(); ctx.arc(ex2,ey2,11,0,7); ctx.fill();   // 鉄球
+    ctx.fillStyle='#7a7e8a'; for(let s=0;s<8;s++){ const a=s/8*Math.PI*2; ctx.beginPath(); ctx.moveTo(ex2+Math.cos(a)*9,ey2+Math.sin(a)*9); ctx.lineTo(ex2+Math.cos(a)*16,ey2+Math.sin(a)*16); ctx.lineTo(ex2+Math.cos(a+0.3)*9,ey2+Math.sin(a+0.3)*9); ctx.closePath(); ctx.fill(); }   // トゲ
   } else if(wk==='spear'){ const L=ext*1.5+22;
     ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L-10,0); ctx.stroke();
     ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L-10,0,3.2,0,7); ctx.fill();
@@ -3543,6 +3653,7 @@ function drawEnemy(e){
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
   else if(e.type==='papipoo'){ drawPapipoo(e); }
+  else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
@@ -3956,6 +4067,35 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
   ctx.strokeStyle='#dfe7f0'; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(16,-36,20,Math.PI*0.85,Math.PI*1.72); ctx.stroke(); ctx.restore();
 }
 // ── 真ボス ワンメンドーズ：複眼を持つ上位者（アメンドーズ風）──
+// ── ガードワン真ボス：先代門番ガードワン零号（黒鉄の巨躯・大槌）──
+function drawGuard0(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=e.state==='walk'?Math.sin(e.anim*1.4)*4:0; const big=t.w>90;
+  const sc=big?1:0.72; ctx.save(); ctx.scale(sc,sc);
+  // 重厚な脚甲
+  ctx.fillStyle=t.c3; ctx.fillRect(-20,-26+walk,16,26); ctx.fillRect(6,-26-walk,16,26);
+  // 黒鉄の巨体
+  for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; furBall(Math.cos(a)*22,-40+Math.sin(a)*24,8,shade(t.c1,12),t.c2); }
+  furBall(0,-40,26,shade(t.c1,16),t.c2);
+  ctx.fillStyle=t.accent; ctx.fillRect(-24,-48,48,7);   // 燃える帯
+  // たてがみと大顔
+  for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; furBall(Math.cos(a)*24,-76+Math.sin(a)*22,8,shade(t.c1,8),t.c2); }
+  furBall(2,-76,22,shade(t.c1,14),t.c2);
+  ctx.fillStyle=shade(t.c1,4); ctx.beginPath(); ctx.ellipse(16,-70,11,9,0,0,7); ctx.fill();
+  ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(25,-70,3,2.6,0,0,7); ctx.fill();
+  if(enemyHurt(e)){ hurtEye(4,-80,4,'#ff8a3a'); hurtEye(14,-80,4,'#ff8a3a'); }
+  else { for(const ex of [4,14]){ ctx.fillStyle=radGrad(ex,-80,4,'#fff',t.accent); ctx.beginPath(); ctx.arc(ex,-80,3.4,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.arc(ex+0.6,-80,1.4,0,7); ctx.fill(); } }
+  // トゲトゲの黒兜
+  ctx.fillStyle=radGrad(2,-92,22,'#4a4650','#22202a'); ctx.beginPath(); ctx.arc(2,-88,21,Math.PI*1.02,Math.PI*1.98); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#33303a'; ctx.fillRect(-20,-90,44,5);
+  ctx.fillStyle='#5a5560'; for(const sp of [[-14,-100],[2,-108],[18,-100]]){ ctx.beginPath(); ctx.moveTo(sp[0]-4,-90); ctx.lineTo(sp[0],sp[1]); ctx.lineTo(sp[0]+4,-88); ctx.closePath(); ctx.fill(); }
+  // 巨大な大槌
+  let ang=atk?(-1.5+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.8):(tele?-1.7:-0.6);
+  ctx.save(); ctx.translate(14,-58); ctx.rotate(ang);
+  ctx.strokeStyle='#3a2a18'; ctx.lineWidth=9; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(58,0); ctx.stroke();
+  ctx.fillStyle=radGrad(72,0,34,'#6a6672','#2a2830'); ctx.fillRect(58,-26,40,52);
+  ctx.strokeStyle='#1a181e'; ctx.lineWidth=2.6; ctx.strokeRect(58,-26,40,52);
+  ctx.fillStyle=t.accent; for(const ry of [-16,0,16]){ ctx.beginPath(); ctx.arc(91,ry,2.6,0,7); ctx.fill(); }
+  ctx.restore(); ctx.restore();
+}
 function drawWanmen(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.2)*3, HW=t.w*0.5, top=-t.h*0.96, hurt=enemyHurt(e);
   const reach=e.state==='bmove'?1.18:1;
   // 漂う触手状の下半身
@@ -4711,7 +4851,7 @@ const STORY_END_BY={
     {bgTheme:0, art:'player', name:'@hero', text:'褒美も受け取らず、彼は再び旅へ。その背中を、王国の子犬たちはいつまでも見送った。'},
     {bgTheme:0, art:'end',    name:'', text:'― シマダックス編・完 ―     遊んでくれてありがとう！'}],
   guard8:[
-    {bgTheme:4, art:'fall',   name:'', text:'メガトンクエイクが玉座ごと大帝を打ち砕く——地響きが収まったとき、魔王城の門はゆっくりと崩れ落ちた。'},
+    {bgTheme:4, boss:'guard0', name:'ガードワン零号', role:'先代最強の門番', text:'渾身のメガトンクエイクが零号の大槌を打ち砕く——「見事…だ。門は…お前に、託した」。黒鉄の巨躯は満足げに崩れ、静かに退場した。'},
     {bgTheme:0, art:'peace',  name:'', text:'王は解放され、王都に民が帰ってきた。壊れた大門の前に、ハンマーを杖代わりに立つ大きな影があった。'},
     {bgTheme:0, art:'player', name:'ガードワン8号', text:'「よう。今日から、また俺が門番だ」。つぶらな瞳が、いつもの持ち場で優しく細められた。'},
     {bgTheme:0, art:'player', name:'@hero', text:'王都の大門は八代目の手で建て直され、その傍らには九代目の小さな子犬が座るようになったという。'},
@@ -4736,6 +4876,42 @@ function startBossCut(type,stageN){ Music.setMode(bossMusicFor(type)); sfx.boss(
   // ラスボス（大帝）直前にはキャラ別の「転」シーンを前置きしてクライマックスを盛り上げる
   const turn=(ETYPE[type].bossKind==='emperor')?storyTurnFor():null;
   startCutscene(turn?[...turn,intro]:[intro], ()=>{ state='play'; }); }
+// ── 道中ライバル（中ボス）の登場カット ──
+const RIVAL_LINE={
+  rvSword:{intro:'待っていたぞ、聖犬士イッヌ。その剣、俺と競わせてくれ！', hero:'望むところ。剣士の礼儀、受けて立とう。',
+    win:'見事だ…お前が上だと認めよう。だが、次は負けん！'},
+  rvFist:{intro:'その拳、俺と競い合おうぜ！本気で来いよ！', hero:'いいだろう。拳で語り合おうじゃねえか。',
+    win:'ハハッ、まいった！やっぱお前は強えや。また鍛え直してくるぜ！'},
+  rvMage:{intro:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', hero:'魔法使いなら、正々堂々と魔法で勝負よ！',
+    win:'くっ…この私が負けるなんて。……ふん、覚えておきなさい！'},
+  rvGuard:{intro:'門番同士…どちらが硬いか、確かめようか！', hero:'受けて立つ。門を守る覚悟の差、見せてやる。',
+    win:'ぬぅ…見事な守りだ。お前になら、背中を預けられる！'},
+};
+function startRivalCut(type){ Music.setMode(bossMusicFor(type)); sfx.boss();
+  const L=RIVAL_LINE[type]||{intro:bossQuoteFor(type),hero:'いざ、勝負！'};
+  startCutscene([
+    {boss:type, stageN:stage, name:ETYPE[type].name, role:'好敵手', text:L.intro},
+    {bgTheme:themeIdxFor(stage), art:'player', name:'@hero', text:L.hero},
+  ], ()=>{ state='play'; }); }
+function startRivalClearDemo(){ const type=rivalFor(players[0].kind); const L=RIVAL_LINE[type]||{win:'…見事だ。'};
+  startCutscene([{boss:type, stageN:stage, name:ETYPE[type].name, role:'好敵手', text:L.win}], ()=>{ state='play'; goArrow=160; }); }
+// ── ステージクリアの短いデモ（キャラ×ステージのひとこと）──
+const CLEAR_LINE={
+  '王都郊外':{inu:'まずは一勝。だが帝国の本隊はこれからだ。',shima:'ウォームアップにしちゃ、悪くねえ拳だったぜ。',nuko:'ふぅ…最初の関門、突破！次も頑張るぞ。',guard8:'門の外は、こんなに広かったのか…。行くぞ。'},
+  '黄昏の城下町':{inu:'夕陽が痛いな…先を急ごう。',shima:'この街の連中、意外と骨があったな。',nuko:'夕焼け、きれい…って見とれてる場合じゃない！',guard8:'民の暮らしは、必ず守る。'},
+  '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。'},
+  '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。'},
+  '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。'},
+};
+function stageClearLine(stName, kind){ const o=CLEAR_LINE[stName];
+  if(o&&o[kind]) return o[kind];
+  const gen={inu:'また一つ、王国を取り戻した。次へ進もう。',shima:'いい戦いだった。次はもっと強えのが来るか？',nuko:'ここも切り抜けた！この調子で行こう。',guard8:'一区画、守り抜いた。まだ止まれん。'};
+  return gen[kind]||gen.inu; }
+function startStageClearDemo(stN){ const stName=STAGE_NAME[stN]||('STAGE '+stN);
+  startCutscene([
+    {bgTheme:themeIdxFor(stN), art:'clear', name:'', text:'STAGE '+stN+'　'+stName+'　クリア！'},
+    {bgTheme:themeIdxFor(stN), art:'player', name:'@hero', text:stageClearLine(stName, players[0].kind)},
+  ], ()=>{ state='play'; shopPending=120; }); }
 // ラスボス形態変化のデモシーン
 function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode(bossMusicFor(nt)); sfx.boss();
   startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
@@ -4762,7 +4938,14 @@ const PAPIPOO_REVEAL=[
   {bgTheme:4, art:'player', name:'拳聖シマダックス', text:'「……パピプー！？　同じ師の下で拳を磨いた、兄弟子の——」'},
   {boss:'papipoo', name:'兄弟子パピプー', role:'百死ワン生の使い手', text:'「力こそ全て。師はそれを解さなかった。今こそ決着をつけよう——分身百体、受けてみろ！」'},
 ];
-const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL };
+// ── ガードワン・真ボス：先代門番ガードワン零号 ──
+const GUARD0_REVEAL=[
+  {bgTheme:4, art:'fall', name:'', text:'大帝が崩れ落ちる——玉座の奥から、黒鉄の巨躯が大槌を引きずり、ゆっくりと歩み出た。'},
+  {boss:'guard0', name:'ガードワン零号', role:'先代最強の門番', text:'「よくぞここまで来た、八代目。……儂は初代。王都の門を、千年守り続けた者だ」'},
+  {bgTheme:4, art:'player', name:'ガードワン8号', text:'「零号…！　伝説の初代門番が、なぜ帝国に」'},
+  {boss:'guard0', name:'ガードワン零号', role:'黒鉄の守護者', text:'「守るべき門を失った門番の末路よ。だが——お前の守りが本物か、この大槌で試させてもらう！」'},
+];
+const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL, guard0:GUARD0_REVEAL };
 function startTrueBossReveal(){ Music.stop();
   const ty=trueBossFor(players[0].kind)||'wanmen';
   startCutscene(TRUE_REVEAL[ty]||WANMEN_REVEAL, ()=>{ spawnTrueBoss(ty); }); }
@@ -4810,7 +4993,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
