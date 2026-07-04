@@ -719,7 +719,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1,
+  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
 let player=players[0];               // points to the player currently being simulated/drawn
@@ -765,7 +765,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.weapon=p.permWeapon||(p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'); p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
-  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.atkMul=1; p.defMul=1; p.maxHp=120; p.hp=120; p.dimMax=3;
+  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.atkMul=1; p.defMul=1; p.spdMul=1; p.coinMul=1; p.maxHp=120; p.hp=120; p.dimMax=3;
     p.permWeapon=null; p.weapon=p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'; } }
 const SPEED=7.4, DEPTH_SPEED=0;   // 基本移動速度2倍（旧ダッシュ相当の快速がデフォルト）
 function activePlayers(){ return players.filter(p=>p.active); }
@@ -1146,7 +1146,7 @@ function updatePlayer(){
   if(mx)p.facing=mx;
   if(mx){ p.charge=0; } // moving cancels charge build (but keep simple)
   const slow = p.charge>0.1?0.4:1, gmul = p.kind==='guard8'?0.62:1;   // ガードワン8号は重い巨体でゆっくり
-  p.x+=mx*SPEED*slow*gmul; p.y=LANE;
+  p.x+=mx*SPEED*slow*gmul*(p.spdMul||1); p.y=LANE;
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
   p.state=mx?'walk':'idle'; p.anim+=mx?(0.36*gmul):0.07;
   if(mx&&gf%(p.kind==='guard8'?7:4)===0) dust(p.x-p.facing*8,p.y, p.kind==='guard8'?2:1);   // 重い足音の砂煙
@@ -1833,7 +1833,7 @@ function updateItems(){
   for(let i=items.length-1;i>=0;i--){ const it=items[i]; it.life--; it.bob+=0.12; if(it.spin!=null)it.spin+=0.3;
     if(it.z>0||it.vz<0){ it.z=Math.max(0,it.z-it.vz); it.vz+=0.7; it.x+=it.vx; it.vx*=0.9; if(it.z<=0){ it.z=0; it.vz=0; } }
     if(it.kind==='coin'){ const tp=nearestPlayerTo(it.x); if(tp&&tp.active&&Math.abs(tp.x-it.x)<90 && it.z<24){ it.x+=Math.sign(tp.x-it.x)*4.2; }   // コインは近づくと吸い寄せ
-      if(tp&&tp.active&&Math.abs(tp.x-it.x)<30 && tp.state!=='dead'){ coins+=it.val; popText(it.x,it.y-50,'+'+it.val+'¢','#ffe14d'); sfx.coin(); items.splice(i,1); continue; } }
+      if(tp&&tp.active&&Math.abs(tp.x-it.x)<30 && tp.state!=='dead'){ const cv=Math.round(it.val*(tp.coinMul||1)); coins+=cv; popText(it.x,it.y-50,'+'+cv+'¢','#ffe14d'); sfx.coin(); items.splice(i,1); continue; } }
     const p=pickerFor(it);
     if(p){ if(it.kind==='hp'){ p.hp=Math.min(p.maxHp, p.hp+40); popText(p.x,p.y-110,'+40','#7dff5a',true); ring(p.x,p.y-40,'#7dff5a'); spark(p.x,p.y-40,'#7dff5a',12,7); sfx.heal(); }
       else if(it.kind==='costume'){ p.costume=true; p.hp=Math.min(p.maxHp,p.hp+20); popText(p.x,p.y-112,(p.kind==='shima'?'豪華武闘服！':'豪華な鎧！'),'#ffe14d',true); ring(p.x,p.y-40,'#ffe14d'); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,'#ffe14d',18,9); sfx.rise(); }
@@ -2422,11 +2422,105 @@ function addBlocks(blocks,opts){
 }
 function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'B'}:null);
   if(key==='B') addBlocks(FINAL_CH,null); }
-function buildEncounters(){
+function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={};
-  worldCursor=0; nextStage=1; encIndex=0; metNPC=0; chestsOpened=0; routesChosen=[];
-  pendingBranch=null; dialog=null; trueBossSpawned=false; ultLocked=false;
-  addBlocks(CH1,{branchAfter:'A'});
+  worldCursor=0; nextStage=1; encIndex=0;
+  pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
+}
+function buildEncounters(){ resetWorldState(); metNPC=0; chestsOpened=0; routesChosen=[]; trueBossSpawned=false;
+  addBlocks(CH1.slice(0,1),null);   // 王都郊外だけを最初に読み込む（以降はワールドマップから選択）
+}
+
+//======================================================================
+//  OPEN WORLD  —  ステージ選択マップ
+//======================================================================
+// 選択可能なフィールド（クリア順は自由）。final は規定数クリア後に解禁
+const WORLD_LEVELS=[
+  {id:'yugure', b:CH1[1],       mx:0.20, my:0.34},   // 黄昏の城下町（ライバル中ボス）
+  {id:'gouka',  b:SEGS.A[0][0], mx:0.34, my:0.60},   // 業火の渓谷
+  {id:'kokoku', b:SEGS.A[0][1], mx:0.46, my:0.78},   // 渓谷の最深部
+  {id:'mori',   b:SEGS.A[1][0], mx:0.30, my:0.20},   // 月詠の森
+  {id:'suisho', b:SEGS.A[1][1], mx:0.44, my:0.42},   // 瑠璃の水晶洞
+  {id:'hikoutei',b:SEGS.B[0][0],mx:0.58, my:0.24},   // 海賊飛行艇の甲板
+  {id:'futou',  b:SEGS.B[0][1], mx:0.70, my:0.40},   // 海賊王の埠頭
+  {id:'sabaku', b:SEGS.B[1][0], mx:0.60, my:0.64},   // 灼熱の砂漠
+  {id:'haikyo', b:SEGS.B[1][1], mx:0.72, my:0.78},   // 灼熱の巨大廃墟
+  {id:'reihou', b:FINAL_CH[0],  mx:0.82, my:0.55},   // 氷雪の霊峰
+];
+const WORLD_FINAL=[
+  {id:'joumon', b:FINAL_CH[1],  mx:0.90, my:0.34, locked:true},   // 暗黒の城門（クロイヌ＋月光の祭壇）
+  {id:'maou',   b:FINAL_CH[2],  mx:0.95, my:0.16, locked:true, final:true},   // 魔王の間
+];
+const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒の城門」が解禁
+let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
+function allMapNodes(){ return WORLD_LEVELS.concat(WORLD_FINAL); }
+function doneCount(){ return WORLD_LEVELS.filter(l=>levelsDone[l.id]).length; }
+function nodeUnlocked(node){
+  if(node.final) return !!levelsDone['joumon'];                 // 魔王の間＝城門クリア後
+  if(node.id==='joumon') return doneCount()>=FINAL_UNLOCK;      // 城門＝規定数クリア後
+  return true;                                                  // 通常ステージは最初から自由
+}
+function nodeSelectable(node){ return nodeUnlocked(node) && !levelsDone[node.id]; }
+// 1レベルだけを読み込んで開始（x=0 起点の独立フィールド）
+function loadLevel(node){
+  resetWorldState(); curLevelId=node.id; curLevelFinal=!!node.final;
+  const blocks = node.id==='joumon' ? [node.b] : [node.b];
+  addBlocks(blocks, null);
+  stage=1; for(const k in STAGE2THEME){ stage=k|0; break; }     // 単一区画の st
+  players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
+  camX=0; player=players[0]; goArrow=160; shopPending=0;
+  state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
+  saveProgress(1);
+}
+function enterMap(){ state='map'; mapNavCd=10;
+  // カーソルを最初の選択可能ノードへ
+  const nodes=allMapNodes(); if(!nodeSelectable(nodes[mapSel])){ for(let i=0;i<nodes.length;i++){ if(nodeSelectable(nodes[i])){ mapSel=i; break; } } }
+  unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); }
+  // 全ステージ制覇していれば魔王の間へ促す（自動選択）
+}
+function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
+  const nodes=allMapNodes();
+  if(mapNavCd<=0){ let mv=0; if(K.left)mv=-1; else if(K.right)mv=1; else if(K.up)mv=-1; else if(K.down)mv=1;
+    if(mv){ // 選択可能ノードを順に移動
+      let i=mapSel; for(let k=0;k<nodes.length;k++){ i=(i+mv+nodes.length)%nodes.length; if(nodeSelectable(nodes[i])){ mapSel=i; break; } }
+      mapNavCd=10; sfx.swing(0); } }
+  if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
+    const node=nodes[mapSel];
+    if(nodeSelectable(node)){ sfx.rise(); saveInput(players[0].in); loadLevel(node); return; }
+    else { sfx.guard(); } }
+  saveInput(players[0].in); updateParticles();
+}
+function drawMap(){
+  // 空と大地
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#26406a'); g.addColorStop(.5,'#3a5a7a'); g.addColorStop(1,'#2a3a44'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // 星
+  for(let i=0;i<60;i++){ const x=(i*137.5)%W, y=(i*71.3)%(H*0.5); ctx.globalAlpha=0.3+0.5*Math.abs(Math.sin(gf*0.02+i)); ctx.fillStyle='#dfe7ff'; ctx.fillRect(x,y,1.6,1.6); } ctx.globalAlpha=1;
+  // 大陸っぽい地面
+  ctx.fillStyle='rgba(60,90,60,.5)'; ctx.beginPath(); ctx.moveTo(0,H*0.7);
+  for(let x=0;x<=W;x+=40){ ctx.lineTo(x, H*0.68+Math.sin(x*0.01+2)*30); } ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.fill();
+  ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
+  ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText('ワールドマップ',W/2,52); ctx.fillText('ワールドマップ',W/2,52);
+  ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
+  ctx.fillText('行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　城門解禁まで '+Math.max(0,FINAL_UNLOCK-doneCount())+'）',W/2,74);
+  const nodes=allMapNodes();
+  // ノード間の道（隣接を薄く結ぶ）
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1]; ctx.beginPath(); ctx.moveTo(a.mx*W,a.my*H*0.9+70); ctx.lineTo(b.mx*W,b.my*H*0.9+70); ctx.stroke(); }
+  ctx.setLineDash([]);
+  nodes.forEach((node,i)=>{ const x=node.mx*W, y=node.my*H*0.9+70, done=levelsDone[node.id], unl=nodeUnlocked(node), sel=i===mapSel;
+    // ノード円
+    ctx.fillStyle=done?'rgba(90,180,110,.9)':(unl?'rgba(255,210,80,.92)':'rgba(90,90,110,.8)');
+    if(sel){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(x,y,34,'rgba(255,240,150,.8)','rgba(255,240,150,0)'); ctx.beginPath(); ctx.arc(x,y,34,0,7); ctx.fill(); ctx.restore(); ctx.fillStyle=unl&&!done?'#fff':'rgba(255,210,80,.92)'; }
+    ctx.beginPath(); ctx.arc(x,y,15,0,7); ctx.fill();
+    ctx.strokeStyle='#1a1410'; ctx.lineWidth=2.5; ctx.stroke();
+    if(done){ ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x-6,y); ctx.lineTo(x-1,y+6); ctx.lineTo(x+7,y-6); ctx.stroke(); }   // チェック
+    else if(!unl){ ctx.fillStyle='#2a2a34'; ctx.fillRect(x-4,y-1,8,7); ctx.beginPath(); ctx.arc(x,y-1,4,Math.PI,0); ctx.strokeStyle='#2a2a34'; ctx.lineWidth=2; ctx.stroke(); }   // 鍵
+    // 名前
+    ctx.fillStyle=sel?'#fff':(unl?'#ffe9a0':'#8a8a9a'); ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3; const nm=node.b.name; ctx.strokeText(nm,x,y+30); ctx.fillText(nm,x,y+30);
+  });
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃',W/2,H-22); ctx.textAlign='left';
 }
 
 //======================================================================
@@ -2523,10 +2617,10 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
-      if(!enc.final){ stageBanner=160; stageBannerTxt='STAGE '+enc.st+' CLEAR!';
+      if(!enc.final){ stageBanner=160; stageBannerTxt='STAGE CLEAR!';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
-        if(enc.branchAfter) pendingBranch=enc.branchAfter;
-        startStageClearDemo(enc.st); }   // ステージクリアの短いデモ→終了後にショップ
+        if(curLevelId) levelsDone[curLevelId]=true;   // このフィールドを制覇済みに
+        startStageClearDemo(enc.st); }   // ステージクリアの短いデモ→終了後にショップ→マップ
     } else if(enc.rival){ score+=1200; player.hp=Math.min(player.maxHp, player.hp+30); Music.setMode('battle');
         startRivalClearDemo(); }         // ライバル撃破の短い掛け合い
     else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
@@ -4700,32 +4794,49 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //  アイテムショップ「チャム」（ステージ間の宿屋・酒場）
 //======================================================================
 const SHOP_ITEMS=[
+  // ── 回復・消耗品 ──
   {name:'回復ポーション',   desc:'体力を60回復', cost:18, buy(){ players.forEach(p=>{if(p.active)p.hp=Math.min(p.maxHp,p.hp+60);}); }},
+  {name:'上級ポーション',   desc:'体力を全回復', cost:42, buy(){ players.forEach(p=>{if(p.active)p.hp=p.maxHp;}); }},
+  {name:'エナジードリンク', desc:'奥義ストックを1回復', cost:22, buy(){ players.forEach(p=>{if(p.active)p.dim=Math.min(p.dimMax,p.dim+1);}); }},
+  {name:'肉球まんじゅう',   desc:'体力全回復＋残機を1回だけ即座に補充', cost:60, buy(){ players.forEach(p=>{if(p.active){p.hp=p.maxHp; p.dim=p.dimMax;}}); }},
+  // ── 体力・防御 ──
   {name:'タフネスの護符',   desc:'最大HP ＋12',  cost:55, buy(){ players.forEach(p=>{if(p.active){p.maxHp+=12;p.hp+=12;}}); }},
+  {name:'巨人の護符',       desc:'最大HP ＋25',  cost:110, buy(){ players.forEach(p=>{if(p.active){p.maxHp+=25;p.hp+=25;}}); }},
+  {name:'守りのマント',     desc:'受けるダメージ −6％（累積可）', cost:75, buy(){ players.forEach(p=>{if(p.active)p.defMul=Math.max(0.5,(p.defMul||1)-0.06);}); }},
+  {name:'鋼の胸当て',       desc:'受けるダメージ −10％（累積可）', cost:130, buy(){ players.forEach(p=>{if(p.active)p.defMul=Math.max(0.4,(p.defMul||1)-0.10);}); }},
+  // ── 攻撃・機動 ──
   {name:'力の指輪',         desc:'攻撃力 ＋8％', cost:75, buy(){ players.forEach(p=>{if(p.active)p.atkMul=(p.atkMul||1)+0.08;}); }},
-  {name:'守りのマント',     desc:'受けるダメージ −6％（最大−40％）', cost:75, buy(){ players.forEach(p=>{if(p.active)p.defMul=Math.max(0.6,(p.defMul||1)-0.06);}); }},
+  {name:'竜の爪',           desc:'攻撃力 ＋15％', cost:150, buy(){ players.forEach(p=>{if(p.active)p.atkMul=(p.atkMul||1)+0.15;}); }},
+  {name:'俊足のブーツ',     desc:'移動速度 ＋15％', cost:60, buy(){ players.forEach(p=>{if(p.active)p.spdMul=(p.spdMul||1)+0.15;}); }},
   {name:'奥義の巻物',       desc:'奥義ストック上限＋1', cost:50, buy(){ players.forEach(p=>{if(p.active){p.dimMax++;p.dim=Math.min(p.dimMax,p.dim+1);}}); }},
+  // ── 補助 ──
+  {name:'幸運のお守り',     desc:'コイン獲得 ＋30％', cost:70, buy(){ players.forEach(p=>{if(p.active)p.coinMul=(p.coinMul||1)+0.3;}); }},
   {name:'いのちの肉球',     desc:'残機 ＋1',     cost:90, buy(){ players.forEach(p=>{if(p.active)p.lives++;}); }},
-  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖）', cost:120,
+  {name:'天使の羽',         desc:'残機 ＋2',     cost:170, buy(){ players.forEach(p=>{if(p.active)p.lives+=2;}); }},
+  // ── 装備（買い切り） ──
+  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖／メガトン）', cost:120,
     soldOut(){ return activePlayers().every(p=>p.permWeapon); },
     buy(){ players.forEach(p=>{ if(p.active&&!p.permWeapon){ const k=p.kind==='shima'?'tigerfist':p.kind==='nuko'?'staff2':p.kind==='guard8'?'megaton':'holy'; p.permWeapon=k; giveWeapon(p,k); p.weaponT=0; } }); }},
   {name:'勇者の正装',       desc:'被ダメージ −10％＆豪華な見た目に変化', cost:95,
     soldOut(){ return activePlayers().every(p=>p.armored); },
-    buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.5,(p.defMul||1)-0.10); } }); }},
-  {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出る', cost:0, leave:true},
+    buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.4,(p.defMul||1)-0.10); } }); }},
+  {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
 ];
-let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0;
+let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0, shopScroll=0;
 function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT=0; shopT=0;
   unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); } }
 function exitShop(){
-  if(pendingBranch){ state='branch'; branchSel=0; branchNav=12; }
-  else state='play';
-  if(Music.setMode)Music.setMode('battle'); saveProgress(stage); }
+  saveProgress(1);
+  enterMap();   // ショップを出たらワールドマップへ戻り、次の行き先を選ぶ
+}
+const SHOP_VIS=9;   // 一度に表示する品数（残りはスクロール）
 function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
   useInput(players[0].in);
   if(shopNavCd>0)shopNavCd--;
   if(shopNavCd<=0){ if(K.up){shopSel=(shopSel+SHOP_ITEMS.length-1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);}
     else if(K.down){shopSel=(shopSel+1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);} }
+  if(shopSel<shopScroll) shopScroll=shopSel; else if(shopSel>=shopScroll+SHOP_VIS) shopScroll=shopSel-SHOP_VIS+1;
+  shopScroll=clamp(shopScroll,0,Math.max(0,SHOP_ITEMS.length-SHOP_VIS));
   if(pressed.atk){ pressed.atk=false; const it=SHOP_ITEMS[shopSel];
     if(it.leave){ saveInput(players[0].in); exitShop(); return; }
     if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; sfx.guard(); }
@@ -4766,20 +4877,25 @@ function drawShop(){
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff'; ctx.fillText('〜 宿屋・酒場で装備を整えよう 〜',W/2,78);
   ctx.fillStyle=radGrad(W/2-120,100,8,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(W/2-120,100,8,0,7); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='bold 22px Trebuchet MS'; ctx.fillText('所持コイン: '+coins+' ¢',W/2,108);
-  const mx=80,my=120,mw=470,ih=38;
-  ctx.fillStyle='rgba(8,10,20,.8)'; roundRect(mx,my,mw,SHOP_ITEMS.length*ih+44,10); ctx.fill();
-  ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(mx,my,mw,SHOP_ITEMS.length*ih+44,10); ctx.stroke();
+  const mx=80,my=120,mw=520,ih=34, vis=Math.min(SHOP_VIS,SHOP_ITEMS.length);
+  ctx.fillStyle='rgba(8,10,20,.8)'; roundRect(mx,my,mw,vis*ih+44,10); ctx.fill();
+  ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(mx,my,mw,vis*ih+44,10); ctx.stroke();
   ctx.textAlign='left';
-  SHOP_ITEMS.forEach((it,i)=>{ const y=my+12+i*ih; const sel=i===shopSel;
-    if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-4,mw-12,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 18px Trebuchet MS'; ctx.fillText('▶',mx+12,y+22); }
+  for(let row=0; row<vis; row++){ const i=shopScroll+row; if(i>=SHOP_ITEMS.length)break; const it=SHOP_ITEMS[i]; const y=my+12+row*ih; const sel=i===shopSel;
+    if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-2,mw-12,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 16px Trebuchet MS'; ctx.fillText('▶',mx+12,y+20); }
     const sold = it.soldOut&&it.soldOut();
     const afford = !sold && (it.leave || coins>=it.cost);
-    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 18px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name,mx+34,y+22);
-    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(sold?'― 売り切れ ―':it.desc,mx+210,y+22);
-    if(!it.leave&&!sold){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+22); ctx.textAlign='left'; }
-  });
-  const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('最大HP '+p.maxHp+'   攻撃 ×'+(p.atkMul||1).toFixed(2)+'   防御 −'+Math.round((1-(p.defMul||1))*100)+'%   残機 '+Math.max(0,p.lives)+'   奥義 '+p.dimMax, mx+8, my+SHOP_ITEMS.length*ih+34);
+    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name,mx+34,y+20);
+    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(sold?'― 売り切れ ―':it.desc,mx+186,y+20);
+    if(!it.leave&&!sold){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+20); ctx.textAlign='left'; }
+  }
+  // スクロール位置バー
+  if(SHOP_ITEMS.length>vis){ const bh=(vis/SHOP_ITEMS.length)*(vis*ih), by=my+12+(shopScroll/SHOP_ITEMS.length)*(vis*ih);
+    ctx.fillStyle='rgba(255,210,80,.5)'; roundRect(mx+mw-6,by,3,bh,2); ctx.fill();
+    if(shopScroll>0){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▲',mx+mw/2,my+10); }
+    if(shopScroll+vis<SHOP_ITEMS.length){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▼',mx+mw/2,my+vis*ih+34); ctx.textAlign='left'; } }
+  const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='left';
+  ctx.fillText('HP '+p.maxHp+'  攻×'+(p.atkMul||1).toFixed(2)+'  防−'+Math.round((1-(p.defMul||1))*100)+'%  速×'+(p.spdMul||1).toFixed(2)+'  金×'+(p.coinMul||1).toFixed(1)+'  残'+Math.max(0,p.lives)+'  奥'+p.dimMax, mx+8, my+vis*ih+34);
   if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
   ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
   ctx.fillText('↑↓ 選択　／　J（攻撃）で購入　／　Space（ジャンプ）で出発', W/2, H-26); ctx.textAlign='left';
@@ -5037,34 +5153,29 @@ const elRTitle=document.getElementById('result-title'),elRSub=document.getElemen
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
 function saveProgress(st){ try{
-  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume}));
-  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:st,mode:curMode,coins:coins,upg:upg,routes:routesChosen})); }catch(e){} }
+  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume}));
+  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
   if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
   score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; gf=0; shopPending=0;
-  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false; buildEncounters();
+  slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
+  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
   player=players[0];
   state='play'; elStart.classList.add('hidden'); elResult.classList.add('hidden');
   if(sndOn) Music.start('battle'); }
-// セーブしたステージから再開
+// セーブから再開（強化・制覇状況を復元してワールドマップへ）
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
-    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
+    if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
       if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; } });
-    (sv.routes||[]).forEach((sel,i)=>{ routesChosen.push(sel); applyRoute(i===0?'A':'B',sel); }); }
-  if(stageN>1){ const idx=encounters.findIndex(e=>e.st===stageN);
-    if(idx>0){ for(let i=0;i<idx;i++){ encounters[i].cleared=true; encounters[i].spawned=true; }
-      encIndex=idx; stage=stageN; curGateX=WORLD_END;
-      const at=encounters[idx].at, px=clamp(at-360,30,WORLD_END-30);
-      players.forEach(p=>{ if(p.active) p.x=clamp(px+p.pid*60,30,WORLD_END-30); });
-      camX=clamp(px-200,0,WORLD_END-W);
-      stageBanner=140; stageBannerTxt='STAGE '+stageN+' START'; } }
+    if(sv.done) levelsDone=Object.assign({}, sv.done); }
+  enterMap();   // 王都郊外クリア後の続き＝ワールドマップから再開
 }
 function gameOver(){ state='over'; Music.stop(); gameOverSting();
   elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0');
@@ -5072,9 +5183,8 @@ function gameOver(){ state='over'; Music.stop(); gameOverSting();
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
   elResult.classList.remove('hidden'); }
 function winGame(){ state='win'; Music.stop(); victoryJingle(); clearProgress();
-  const routeNames=routesChosen.map((sel,i)=>ROUTE_DEFS[i===0?'A':'B'][sel].label).join('→')||'王道';
   elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d';
-  elRSub.textContent='ワンワン帝国を打ち倒した！  ルート: '+routeNames+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
+  elRSub.textContent='ワンワン帝国を打ち倒した！  制覇フィールド '+doneCount()+'/'+WORLD_LEVELS.length+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden'); elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
@@ -5147,6 +5257,7 @@ function drawTitleScene(){ drawBackground(); drawGround();
 function loop(){
   if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); requestAnimationFrame(loop); return; }
   if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); requestAnimationFrame(loop); return; }
+  if(state==='map'){ gf++; updateMap(); ctx.clearRect(0,0,W,H); drawMap(); requestAnimationFrame(loop); return; }
   // slow-motion: throttle logic ticks while keeping render smooth
   if(slowmo>0 && state==='play' && hitStop<=0){
     slowmo--; slowAcc+=0.34;
