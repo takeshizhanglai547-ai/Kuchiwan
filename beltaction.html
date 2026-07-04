@@ -153,11 +153,11 @@ function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 //======================================================================
 //  Input  (per-player; globals point to the player currently being simulated)
 //======================================================================
-let keys, K, pressed, dirTaps, cardSeq, stickRot;
+let keys, K, pressed, dirTaps, cardSeq, downTaps, stickRot;
 function makeInput(){ return { keys:{},
   K:{left:false,right:false,up:false,down:false,atk:false,grd:false,grab:false},
-  pressed:{atk:false,grab:false,up:false,jump:false,grd:false}, dirTaps:[], cardSeq:[], stickRot:-999 }; }
-function useInput(inp){ keys=inp.keys; K=inp.K; pressed=inp.pressed; dirTaps=inp.dirTaps; cardSeq=inp.cardSeq; stickRot=inp.stickRot; }
+  pressed:{atk:false,grab:false,up:false,jump:false,grd:false}, dirTaps:[], cardSeq:[], downTaps:[], stickRot:-999 }; }
+function useInput(inp){ keys=inp.keys; K=inp.K; pressed=inp.pressed; dirTaps=inp.dirTaps; cardSeq=inp.cardSeq; downTaps=inp.downTaps; stickRot=inp.stickRot; }
 function saveInput(inp){ inp.stickRot=stickRot; }
 // key bindings per player (1P: arrows + JKL/space, 2P: WASD + F G H V)
 const KEYMAP=[
@@ -185,7 +185,8 @@ addEventListener('keydown',e=>{
   if(!inp.keys[e.code]){ inp.keys[e.code]=true; mapKeysFor(pi);
     if(act==='atk') inp.pressed.atk=true; if(act==='grab') inp.pressed.grab=true; if(act==='jump') inp.pressed.jump=true; if(act==='grd') inp.pressed.grd=true;
     if(act==='up') pushCardFor(inp,0); else if(act==='right'){ pushTapFor(inp,1); pushCardFor(inp,1); }
-    else if(act==='down') pushCardFor(inp,2); else if(act==='left'){ pushTapFor(inp,-1); pushCardFor(inp,3); }
+    else if(act==='down'){ pushCardFor(inp,2); inp.downTaps.push(gf); if(inp.downTaps.length>4)inp.downTaps.shift(); }
+    else if(act==='left'){ pushTapFor(inp,-1); pushCardFor(inp,3); }
   }
   e.preventDefault();
 });
@@ -202,7 +203,11 @@ function rotationReady(){ if(gf-stickRot<=12) return true;
     const ccw=(b===(a+3)%4)&&(c===(b+3)%4)&&(d===(c+3)%4);
     if(cw||ccw) return true; }
   return false; }
-function consumeCmd(){ cardSeq.length=0; dirTaps.length=0; stickRot=-999; }
+function consumeCmd(){ cardSeq.length=0; dirTaps.length=0; downTaps.length=0; stickRot=-999; }
+// ↓↓コマンド（下を素早く2回）：地面技を発動
+function doubleDownReady(){ const r=downTaps.filter(f=>gf-f<=18); if(r.length<2) return false;
+  for(let i=r.length-1;i>=1;i--){ if(r[i]-r[i-1]<=14 && r[i]-r[i-1]>=1 && gf-r[i]<=10) return true; }
+  return false; }
 // 波動拳コマンド（↓→＋攻撃）：下→前 の順入力
 function hadokenReady(facing){ const fwdC=facing>0?1:3;
   const r=cardSeq.filter(t=>gf-t.f<=28);
@@ -669,6 +674,21 @@ const ATK={
   gtackle:{name:'ハンマータックル', dur:26, act:[4,18], reach:96, hh:52, dmg:26, kb:15, from:-0.15, to:-0.1, len:60, trail:'#ffd24d', pivotY:-56, move:10, knock:true, finisher:true, shoulder:true},
   ghead:{name:'ヘッドバット', dur:22, act:[5,11], reach:74, hh:48, dmg:20, kb:12, from:-0.1, to:-0.1, len:14, trail:'#ffe9a0', pivotY:-56, fist:true, lunge:7.0, knock:true, finisher:true, headbutt:true},
   gdp:{name:'超豪快ハンマー叩き', dur:38, act:[16,26], reach:126, hh:70, dmg:46, kb:22, from:-2.1, to:1.2, len:96, trail:'#fff', pivotY:-78, lunge:2.4, knock:true, aoe:true, shock:34, finisher:true, bighammer:true},
+  // ── 新必殺技：波動コマンド(↓→)／昇竜コマンド(→↓→)／↓↓コマンド ──
+  // イッヌ（剣）
+  ihadou:{name:'真空波動剣', dur:30, act:[10,12], reach:44, hh:40, dmg:0, kb:0, from:-0.2,to:0.2, len:44, trail:'#9ff0ff', pivotY:-56, special:true, pshot:{dmg:22,color:'#9ff0ff',speed:9,r:19,life:74,pierce:true,style:'wave'}},
+  ishoryu2:{name:'真・昇竜剣', dur:34, act:[2,28], reach:66, hh:560, dmg:12, kb:6, from:1.3,to:-2.0, len:60, trail:'#ffe27a', pivotY:-50, rise:true, riseV:29, riseG:0.7, multi:true, multiGap:4, shoryu:true},
+  igrndslash:{name:'断地斬', dur:30, act:[10,16], reach:114, hh:60, dmg:28, kb:16, from:-1.9,to:1.2, len:58, trail:'#fff', pivotY:-72, lunge:1.0, knock:true, aoe:true, shock:32, finisher:true},
+  // シマ（拳法）
+  shadou:{name:'覇王丸', dur:28, act:[9,11], reach:44, hh:40, dmg:0, kb:0, from:-0.2,to:0.2, len:22, trail:'#ffd24d', fist:true, punch:true, special:true, pshot:{dmg:24,color:'#ffd24d',speed:8.5,r:17,life:66,style:'orb'}},
+  sdragon:{name:'龍神脚', dur:32, act:[2,26], reach:74, hh:560, dmg:10, kb:6, from:1.2,to:-2.0, len:24, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:28, riseG:0.72, multi:true, multiGap:4, shoryu:true, tornado:true},
+  sstomp:{name:'震脚烈波', dur:28, act:[8,14], reach:104, hh:56, dmg:24, kb:14, from:0.1,to:0.1, len:22, trail:'#fff', fist:true, kick:true, lunge:0.6, knock:true, aoe:true, shock:28, finisher:true},
+  // ヌコ（魔法）
+  nlance:{name:'アイスランス', dur:26, act:[9,11], reach:44, hh:40, dmg:0, kb:0, from:-0.4,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, pshot:{dmg:20,color:'#8fd8ff',speed:11,r:15,life:74,pierce:true,style:'spike'}},
+  nascend:{name:'スターアセンション', dur:32, act:[2,26], reach:74, hh:560, dmg:9, kb:6, from:1.2,to:-2.0, len:24, trail:'#d6a6ff', fist:true, rise:true, riseV:28, riseG:0.72, multi:true, multiGap:5, shoryu:true, ntor:true},
+  nabyss:{name:'アビスパルス', dur:30, act:[10,16], reach:108, hh:56, dmg:24, kb:14, from:-0.2,to:0.2, len:22, trail:'#c46bff', fist:true, lunge:0.2, knock:true, aoe:true, shock:30, finisher:true},
+  // ガードワン（ハンマー）
+  gstamp:{name:'グランドスタンプ', dur:34, act:[12,20], reach:122, hh:64, dmg:34, kb:20, from:-2.0,to:1.2, len:82, trail:'#fff', pivotY:-76, lunge:0.6, knock:true, aoe:true, shock:38, finisher:true, bighammer:true},
   // ── 武器別コンボ：双剣フタバ（イッヌ）＝左右の刃で刻む高速5段 ──
   tw1:{name:'双牙・右', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:-0.9, to:0.5,  len:30, trail:'#ffd6e8', pivotY:-58, lunge:1.5, combo:1},
   tw2:{name:'双牙・左', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:0.7,  to:-0.7, len:30, trail:'#d6e8ff', pivotY:-58, lunge:1.5, combo:2},
@@ -810,6 +830,20 @@ function beginAttack(type){
   if(p.weapon==='moon' && !def.cast && (def.combo||def.finisher||def.iai||type==='charge')) spawnMoonWave(p,def);
 }
 // ── ガードワン8号：昇竜コマンドの斜め上衝撃波 ──
+// ── 波動拳コマンド技：前方へ飛ぶ必殺の飛び道具（キャラごとに見た目・性能が違う）──
+function firePShot(p,o){ o=o||{}; const dir=p.facing, mul=p.kind==='nuko'?nukoMul(p):(p.atkMul||1);
+  const col=o.color||'#9ff0ff';
+  spawnProj(p.x+dir*46, p.y, dir*(o.speed||9), 0, {owner:'player', dmg:Math.round((o.dmg||18)*mul), color:col,
+    r:o.r||16, life:o.life||64, zz:44, vzz:0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike'});
+  spark(p.x+dir*46, p.y-46, col, 14, 8); ring(p.x+dir*40, p.y-42, col); flash=Math.max(flash,2); sfx.dash(); sfx.rise(); }
+// ── 空中↑コマンド技：昇天アッパー。敵を高く打ち上げつつ自分も少し上昇する ──
+function airRiseHit(p){ const col=p.kind==='nuko'?'#d6a6ff':p.kind==='shima'?'#aef8ff':p.kind==='guard8'?'#ffd24d':'#ffe27a';
+  const mul=p.kind==='nuko'?nukoMul(p):(p.atkMul||1);
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy||p.jHit.has(e.id))return; const dx=e.x-p.x;
+    if(Math.abs(e.y-p.y)>64) return; if(p.facing>0&&(dx<-30||dx>96))return; if(p.facing<0&&(dx>30||dx<-96))return;
+    p.jHit.add(e.id); damageEnemy(e, Math.round(16*mul), p.facing*4, true); if(!e.dead) launchEnemy(e, p.facing*4, -17, Math.max(e.bounces||0,3));
+    crescent(e.x,e.y-e.h*0.5,52,-1.7,1.3,col); spark(e.x,e.y-e.h*0.5,'#fff',10,8); });
+  if(gf%2===0) spark(p.x+rnd(-10,10), p.y-p.z-rnd(10,40), col, 3, 6); }
 function guardWave(p){ const dir=p.facing, mul=(p.atkMul||1);
   spawnProj(p.x+dir*44, p.y, dir*7.5, 0, {owner:'player', dmg:Math.round(20*mul), color:'#ffd24d', r:20, life:40, zz:44, vzz:7, pierce:true, wave:true});
   ring(p.x+dir*44,p.y-60,'#ffd24d'); sfx.boss(); }
@@ -1036,15 +1070,19 @@ function updatePlayer(){
     else if(p.jBolt){ p.vz-=1.0; }                                     // サンダークラッシュ：急降下
     else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
     else if(p.jHyaku && p.jAtk>0){ p.vz=Math.max(p.vz-0.13,-2.3); }    // 巨大百裂拳：ゆっくり高度落下
-    else if(p.jAtk>0 && !p.jKabuto && !p.jDown && !p.jFire){ p.vz=0; }   // エリアルレイブ中は高度維持（ホバー。火球発射時は落下）
+    else if(p.jAtk>0 && !p.jKabuto && !p.jDown && !p.jFire && !p.jUp){ p.vz=0; }   // エリアルレイブ中は高度維持（ホバー。火球発射・昇天アッパー時は落下）
+    else if(p.jUp && p.jAtk>0){ p.vz-=0.5; }                             // 昇天アッパー：跳び上がって弧を描いて落ちる
     else { p.vz-=0.62; }
     p.z+=p.vz;
     let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx&&!p.jKabuto&&!p.jDown)p.facing=mx; p.x+=mx*SPEED*(p.jDown?0.3:1.0);
     if(p.jDrop){ p.x+=p.facing*SPEED*0.7; }            // 回転踵落とし：やや前進
     if(p.jBolt){ p.x+=p.facing*SPEED*1.6; if(gf%2===0) spark(p.x+rnd(-12,12),p.y-p.z-rnd(20,60),'#9fe8ff',1,4); }   // 雷をまとって斜め急降下
     // air attack
-    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false;
-      if(NUK && K.down){ p.jFire=true; p.jAtk=10; p.vz=Math.min(p.vz,0);   // ヌコ空中下：下向き爆裂火球（高度は落ちる）
+    if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
+      if(K.up && !p.jUpUsed){ p.jUp=true; p.jUpUsed=true; p.jAtk=22; p.vz=Math.max(p.vz,3)+9;   // 空中↑：昇天アッパー（敵を高く打ち上げつつ自分も上昇）
+        const col=NUK?'#d6a6ff':SHI?'#aef8ff':(p.kind==='guard8'?'#ffd24d':'#ffe27a'); sfx.rise(); sfx.swing(2);
+        spark(p.x,p.y-p.z-16,col,12,8); ring(p.x,p.y-p.z-30,col); popText(p.x,p.y-p.z-72,NUK?'星昇撃':SHI?'昇天脚':(p.kind==='guard8'?'ハンマーアッパー':'天翔斬'),'#fff'); }
+      else if(NUK && K.down){ p.jFire=true; p.jAtk=10; p.vz=Math.min(p.vz,0);   // ヌコ空中下：下向き爆裂火球（高度は落ちる）
         spawnProj(p.x+p.facing*10,p.y,p.facing*2,0,{owner:'player',dmg:Math.round(16*nukoMul(p)),color:'#ff8a3a',r:13,life:110,zz:Math.max(p.z+20,30),vzz:-8,explode:true});
         sfx.dash(); spark(p.x,p.y-p.z-10,'#ff9a3a',8,7); }
       else if(NUK && (K.left||K.right)){ p.jBolt=true; p.jAtk=26; p.facing=K.left?-1:1;   // ヌコ空中前：急降下サンダークラッシュ
@@ -1057,6 +1095,7 @@ function updatePlayer(){
       else { sfx.swing(2); p.aerial=(p.aerial||0)+1; } }   // 通常空中斬り＝レイブ（高度維持）
     if(p.jAtk>0){ p.jAtk--;
       if(p.jFire||p.jBolt){ /* 火球発射済み／落雷は着地時に判定 */ }
+      else if(p.jUp){ if(p.jAtk>=8) airRiseHit(p); }   // 昇天アッパー：上昇中ずっと判定
       else if(p.jHyaku){ if(p.jAtk%4===0){ p.jHit=new Set(); jumpAttackHit(); } }   // 百裂拳は連続ヒット
       else if(p.jHammer){ jumpAttackHit(); }   // ダブルハンマーは落下中ずっと判定
       else if(p.jAtk>=3 && p.jAtk<=11) jumpAttackHit(); }
@@ -1065,7 +1104,7 @@ function updatePlayer(){
       if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
       if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
-      p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; dust(p.x,p.y,7); sfx.land(); }
+      p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false; dust(p.x,p.y,7); sfx.land(); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
   }
@@ -1086,11 +1125,12 @@ function updatePlayer(){
     if(def.cast && a.t===def.act[0]){ nukoCast(p, def.cast); }              // ヌコ＝詠唱して星弾を発射
     if(def.shock && a.t===def.act[0]){ spawnShockwave(p, def.shock); }       // 溜め斬り＝衝撃波を放つ
     if(def.gwave && a.t===def.act[0]){ guardWave(p); }                        // 天衝ハンマー＝斜め上に巨大衝撃波
+    if(def.pshot && a.t===def.act[0]){ firePShot(p, def.pshot); }             // 波動拳コマンド＝前方へ飛ぶ飛び道具
     if(def.iai && a.t===def.act[0]){ const dir=p.facing; crescent(p.x+dir*64,p.y-52,96,dir>0?-0.45:Math.PI-0.45,dir>0?0.45:Math.PI+0.45,'#eaffff'); spark(p.x+dir*78,p.y-52,'#fff',18,11); flash=Math.max(flash,2); hitStop=Math.max(hitStop,4); }   // 居合の閃光
     // active hit window
     if(a.t>=def.act[0] && a.t<=def.act[1] && !def.cast) doPlayerHit(a);
     if(a.t>=def.dur){
-      if(def.shoryu && p.z>6){ p.state='jump'; p.vz=Math.min(p.riseVel,-2); p.jAtk=0; p.aerial=0; p.comboStep=0; return; } // 昇竜後はそのまま空中へ（→エリアルレイブ）
+      if(def.shoryu && p.z>6){ p.state='jump'; p.vz=Math.min(p.riseVel,-2); p.jAtk=0; p.aerial=0; p.comboStep=0; p.jUp=false; p.jUpUsed=false; return; } // 昇竜後はそのまま空中へ（→エリアルレイブ）
       p.state='idle'; p.z=0; p.riseVel=0;
       if(def.combo){ p.comboStep=def.combo; p.comboTimer=28; }
       else { p.comboStep=0; }
@@ -1101,7 +1141,7 @@ function updatePlayer(){
   // ローリング回避（旧ガードボタン）：素早く転がって無敵で避ける
   if(pressed.grd && p.z<=0){ pressed.grd=false; beginRoll(); return; }
   // jump start
-  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.charge=0; sfx.jump(); return; }
+  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(); return; }
 
   const SH=p.kind==='shima';
   // ---- charge release ----
@@ -1122,8 +1162,10 @@ function updatePlayer(){
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / 呼び声 / 次元斬
-    if(GD && p.z<=0 && dpReady(p.facing)){ beginAttack('gdp'); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド＝天衝ハンマー（斜め上に衝撃波）
-    if(GD && p.z<=0 && hadokenReady(p.facing)){ beginAttack('gtackle'); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド＝ハンマータックル
+    // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↓＝地面技 ──
+    if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nascend':SH?'sdragon':'ishoryu2'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
+    if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nlance':SH?'shadou':'ihadou'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
+    if(p.z<=0 && doubleDownReady()){ beginAttack(GD?'gstamp':NK?'nabyss':SH?'sstomp':'igrndslash'); consumeCmd(); p.atkHeld=true; return; }     // ↓↓コマンド＝地面必殺
     if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       if(GD){ beginAttack('ghead'); return; }                                             // ガードワン下：ヘッドバット突進
@@ -2313,10 +2355,10 @@ const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
    gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
-     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。'],
-     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！'],
-     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。'],
-     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！']}}},
+     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新技じゃ！ ↓→＋攻撃で真空波動剣、→↓→＋攻撃で真・昇竜剣。','↓↓＋攻撃で断地斬、空中で↑＋攻撃なら天翔斬が出るぞ！'],
+     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新技じゃ！ ↓→＋攻撃で覇王丸、→↓→＋攻撃で龍神脚。','↓↓＋攻撃で震脚烈波、空中で↑＋攻撃なら昇天脚が出るぞ！'],
+     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃でアイスランス、→↓→＋攻撃でスターアセンション。','↓↓＋攻撃でアビスパルス、空中で↑＋攻撃なら星昇撃が出るぞ！'],
+     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↓＋攻撃でグランドスタンプ、空中で↑＋攻撃ならハンマーアッパーじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
