@@ -204,9 +204,10 @@ function rotationReady(){ if(gf-stickRot<=12) return true;
     if(cw||ccw) return true; }
   return false; }
 function consumeCmd(){ cardSeq.length=0; dirTaps.length=0; downTaps.length=0; stickRot=-999; }
-// ↓↓コマンド（下を素早く2回）：地面技を発動
-function doubleDownReady(){ const r=downTaps.filter(f=>gf-f<=18); if(r.length<2) return false;
-  for(let i=r.length-1;i>=1;i--){ if(r[i]-r[i-1]<=14 && r[i]-r[i-1]>=1 && gf-r[i]<=10) return true; }
+// ↓↑コマンド（下→上＋攻撃）：下から上へ入力して地面必殺を発動
+function downUpReady(){ const r=cardSeq.filter(t=>gf-t.f<=28);
+  for(let i=r.length-1;i>=1;i--){ if(r[i].c===0 && gf-r[i].f<=9){
+    for(let j=i-1;j>=0;j--){ if(r[j].c===2 && r[i].f-r[j].f<=20) return true; } } }
   return false; }
 // 波動拳コマンド（↓→＋攻撃）：下→前 の順入力
 function hadokenReady(facing){ const fwdC=facing>0?1:3;
@@ -674,18 +675,24 @@ const ATK={
   gtackle:{name:'ハンマータックル', dur:26, act:[4,18], reach:96, hh:52, dmg:26, kb:15, from:-0.15, to:-0.1, len:60, trail:'#ffd24d', pivotY:-56, move:10, knock:true, finisher:true, shoulder:true},
   ghead:{name:'ヘッドバット', dur:22, act:[5,11], reach:74, hh:48, dmg:20, kb:12, from:-0.1, to:-0.1, len:14, trail:'#ffe9a0', pivotY:-56, fist:true, lunge:7.0, knock:true, finisher:true, headbutt:true},
   gdp:{name:'超豪快ハンマー叩き', dur:38, act:[16,26], reach:126, hh:70, dmg:46, kb:22, from:-2.1, to:1.2, len:96, trail:'#fff', pivotY:-78, lunge:2.4, knock:true, aoe:true, shock:34, finisher:true, bighammer:true},
-  // ── 新必殺技：波動コマンド(↓→)／昇竜コマンド(→↓→)／↓↓コマンド ──
-  // イッヌ（剣）
-  ihadou:{name:'真空波動剣', dur:30, act:[10,12], reach:44, hh:40, dmg:0, kb:0, from:-0.2,to:0.2, len:44, trail:'#9ff0ff', pivotY:-56, special:true, pshot:{dmg:22,color:'#9ff0ff',speed:9,r:19,life:74,pierce:true,style:'wave'}},
-  ishoryu2:{name:'真・昇竜剣', dur:34, act:[2,28], reach:66, hh:560, dmg:12, kb:6, from:1.3,to:-2.0, len:60, trail:'#ffe27a', pivotY:-50, rise:true, riseV:29, riseG:0.7, multi:true, multiGap:4, shoryu:true},
+  // ── 新必殺技：波動コマンド(↓→)／昇竜コマンド(→↓→)／↓↑コマンド ──
+  // イッヌ（剣）＝間合いを支配する居合ゾーナー
+  // 波動＝居合で放つ極太の真空波。全てを貫き画面端まで届く
+  iwave:{name:'真空・断空烈波', dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:34,color:'#bffcff',speed:13,r:28,life:120,pierce:true,style:'wave'}},
+  // 昇竜＝三段に斬り上げる龍の閃光。超高空へ打ち上げ長い無敵
+  idragon:{name:'天翔龍閃', dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
   igrndslash:{name:'断地斬', dur:30, act:[10,16], reach:114, hh:60, dmg:28, kb:16, from:-1.9,to:1.2, len:58, trail:'#fff', pivotY:-72, lunge:1.0, knock:true, aoe:true, shock:32, finisher:true},
-  // シマ（拳法）
-  shadou:{name:'覇王丸', dur:28, act:[9,11], reach:44, hh:40, dmg:0, kb:0, from:-0.2,to:0.2, len:22, trail:'#ffd24d', fist:true, punch:true, special:true, pshot:{dmg:24,color:'#ffd24d',speed:8.5,r:17,life:66,style:'orb'}},
-  sdragon:{name:'龍神脚', dur:32, act:[2,26], reach:74, hh:560, dmg:10, kb:6, from:1.2,to:-2.0, len:24, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:28, riseG:0.72, multi:true, multiGap:4, shoryu:true, tornado:true},
+  // シマ（拳法）＝一気に距離を詰める接近格闘
+  // 波動＝無敵で突進しながらの連拳乱打→打ち上げ。飛び道具ではなく肉薄する超必
+  srush:{name:'羅刹連拳', dur:40, act:[3,34], reach:96, hh:110, dmg:8, kb:4, from:-0.1,to:0.1, len:28, trail:'#ffd24d', fist:true, punch:true, move:13, multi:true, multiGap:3, knock:true, finisher:true, superRush:true, rushEnd:true},
+  // 昇竜＝炎をまとう回転昇龍脚。多段ヒットで高く打ち上げる
+  sdrago:{name:'烈火昇龍脚', dur:38, act:[2,32], reach:80, hh:640, dmg:13, kb:6, from:1.4,to:-2.2, len:28, trail:'#ff9a3a', fist:true, kick:true, rise:true, riseV:34, riseG:0.58, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, firetrail:true},
   sstomp:{name:'震脚烈波', dur:28, act:[8,14], reach:104, hh:56, dmg:24, kb:14, from:0.1,to:0.1, len:22, trail:'#fff', fist:true, kick:true, lunge:0.6, knock:true, aoe:true, shock:28, finisher:true},
-  // ヌコ（魔法）
-  nlance:{name:'アイスランス', dur:26, act:[9,11], reach:44, hh:40, dmg:0, kb:0, from:-0.4,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, pshot:{dmg:20,color:'#8fd8ff',speed:11,r:15,life:74,pierce:true,style:'spike'}},
-  nascend:{name:'スターアセンション', dur:32, act:[2,26], reach:74, hh:560, dmg:9, kb:6, from:1.2,to:-2.0, len:24, trail:'#d6a6ff', fist:true, rise:true, riseV:28, riseG:0.72, multi:true, multiGap:5, shoryu:true, ntor:true},
+  // ヌコ（魔法）＝多彩な魔法で戦うゾーナー
+  // 波動＝敵を追尾する三連の氷結魔弾。逃げる相手にも当たる
+  nfrost:{name:'氷結魔弾・トリニティ', dur:32, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-0.5,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, superFx:true, pshot:{dmg:16,color:'#8fd8ff',speed:9,r:15,life:170,pierce:true,homing:true,count:3,spread:2.6,style:'spike'}},
+  // 昇竜＝星の柱と共に舞い上がり、天から星屑を降らせる
+  nstar:{name:'星辰昇華', dur:36, act:[2,30], reach:78, hh:640, dmg:12, kb:6, from:1.4,to:-2.2, len:24, trail:'#d6a6ff', fist:true, rise:true, riseV:34, riseG:0.58, multi:true, multiGap:4, shoryu:true, ntor:true, superFx:true, starRain:true},
   nabyss:{name:'アビスパルス', dur:30, act:[10,16], reach:108, hh:56, dmg:24, kb:14, from:-0.2,to:0.2, len:22, trail:'#c46bff', fist:true, lunge:0.2, knock:true, aoe:true, shock:30, finisher:true},
   // ガードワン（ハンマー）
   gstamp:{name:'グランドスタンプ', dur:34, act:[12,20], reach:122, hh:64, dmg:34, kb:20, from:-2.0,to:1.2, len:82, trail:'#fff', pivotY:-76, lunge:0.6, knock:true, aoe:true, shock:38, finisher:true, bighammer:true},
@@ -826,15 +833,21 @@ function beginAttack(type){
   else if(type==='sweep'){ sfx.swing(0); }
   else if(type==='sc5'||def.kick){ sfx.swing(2); }
   else sfx.swing(p.comboStep);
+  // 超必殺技（波動・昇竜の新技）：発生時に無敵とフラッシュ、技名表示
+  if(def.superFx){ p.invuln=Math.max(p.invuln,20); flash=Math.max(flash,3); shake=Math.max(shake,5); triggerSlow(8);
+    ring(p.x,p.y-46,def.trail||'#fff'); popText(p.x,p.y-120,def.name+'！','#fff',true); sfx.boss(); }
+  if(def.superRush){ p.invuln=Math.max(p.invuln,24); flash=Math.max(flash,2); shake=Math.max(shake,4);
+    ring(p.x,p.y-46,'#ffd24d'); spark(p.x+p.facing*22,p.y-40,'#ffd24d',12,8); popText(p.x,p.y-120,def.name+'！','#ffd24d',true); sfx.dash(); sfx.heavy(); }
   // ムーンライトソード：剣の斬撃（コンボ・居合・溜め斬り）ごとに光波を放つ
   if(p.weapon==='moon' && !def.cast && (def.combo||def.finisher||def.iai||type==='charge')) spawnMoonWave(p,def);
 }
 // ── ガードワン8号：昇竜コマンドの斜め上衝撃波 ──
 // ── 波動拳コマンド技：前方へ飛ぶ必殺の飛び道具（キャラごとに見た目・性能が違う）──
 function firePShot(p,o){ o=o||{}; const dir=p.facing, mul=p.kind==='nuko'?nukoMul(p):(p.atkMul||1);
-  const col=o.color||'#9ff0ff';
-  spawnProj(p.x+dir*46, p.y, dir*(o.speed||9), 0, {owner:'player', dmg:Math.round((o.dmg||18)*mul), color:col,
-    r:o.r||16, life:o.life||64, zz:44, vzz:0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike'});
+  const col=o.color||'#9ff0ff', n=o.count||1;
+  for(let k=0;k<n;k++){ const vy=o.spread? (k-(n-1)/2)*o.spread : (o.vy||0);
+    spawnProj(p.x+dir*46, p.y-(o.zoff||0), dir*(o.speed||9), vy, {owner:'player', dmg:Math.round((o.dmg||18)*mul), color:col,
+      r:o.r||16, life:o.life||64, zz:44, vzz:o.vzz||0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike', explode:!!o.explode, homing:!!o.homing}); }
   spark(p.x+dir*46, p.y-46, col, 14, 8); ring(p.x+dir*40, p.y-42, col); flash=Math.max(flash,2); sfx.dash(); sfx.rise(); }
 // ── 空中↑コマンド技：昇天アッパー。敵を高く打ち上げつつ自分も少し上昇する ──
 function airRiseHit(p){ const col=p.kind==='nuko'?'#d6a6ff':p.kind==='shima'?'#aef8ff':p.kind==='guard8'?'#ffd24d':'#ffe27a';
@@ -1126,6 +1139,10 @@ function updatePlayer(){
     if(def.shock && a.t===def.act[0]){ spawnShockwave(p, def.shock); }       // 溜め斬り＝衝撃波を放つ
     if(def.gwave && a.t===def.act[0]){ guardWave(p); }                        // 天衝ハンマー＝斜め上に巨大衝撃波
     if(def.pshot && a.t===def.act[0]){ firePShot(p, def.pshot); }             // 波動拳コマンド＝前方へ飛ぶ飛び道具
+    if(def.pillar && a.t>=def.act[0] && a.t%3===0){ for(let k=0;k<3;k++) spark(p.x, p.y-40-k*46, '#fff6c0',4,7); }   // 天翔龍閃＝光の柱
+    if(def.firetrail && a.t%2===0){ spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,54), (gf%2)?'#ff9a3a':'#ffd24d',3,6); }     // 烈火昇龍脚＝炎の尾
+    if(def.starRain && a.t===def.act[0]){ for(let k=0;k<5;k++) spawnProj(p.x+rnd(-72,72), p.y, rnd(-2,2), 0, {owner:'player',dmg:Math.round(12*nukoMul(p)),color:'#d6a6ff',r:12,life:96,zz:H+rnd(0,70),vzz:-11,explode:true}); ring(p.x,p.y-60,'#d6a6ff'); sfx.boss(); }   // 星辰昇華＝天から星屑を降らせる
+    if(def.rushEnd && a.t===def.dur-6){ enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<120 && (p.facing>0?e.x>p.x-30:e.x<p.x+30)){ damageEnemy(e,Math.round(16*(p.atkMul||1)),p.facing*10,true); if(!e.dead)launchEnemy(e,p.facing*12,-15,3); } }); spark(p.x+p.facing*40,p.y-52,'#fff',16,10); ring(p.x+p.facing*30,p.y-52,'#ffd24d'); shake=Math.max(shake,8); hitStop=Math.max(hitStop,8); }   // 羅刹連拳＝フィニッシュで打ち上げ
     if(def.iai && a.t===def.act[0]){ const dir=p.facing; crescent(p.x+dir*64,p.y-52,96,dir>0?-0.45:Math.PI-0.45,dir>0?0.45:Math.PI+0.45,'#eaffff'); spark(p.x+dir*78,p.y-52,'#fff',18,11); flash=Math.max(flash,2); hitStop=Math.max(hitStop,4); }   // 居合の閃光
     // active hit window
     if(a.t>=def.act[0] && a.t<=def.act[1] && !def.cast) doPlayerHit(a);
@@ -1162,10 +1179,10 @@ function updatePlayer(){
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / 呼び声 / 次元斬
-    // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↓＝地面技 ──
-    if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nascend':SH?'sdragon':'ishoryu2'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
-    if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nlance':SH?'shadou':'ihadou'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
-    if(p.z<=0 && doubleDownReady()){ beginAttack(GD?'gstamp':NK?'nabyss':SH?'sstomp':'igrndslash'); consumeCmd(); p.atkHeld=true; return; }     // ↓↓コマンド＝地面必殺
+    // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
+    if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nstar':SH?'sdrago':'idragon'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
+    if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nfrost':SH?'srush':'iwave'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
+    if(p.z<=0 && downUpReady()){ beginAttack(GD?'gstamp':NK?'nabyss':SH?'sstomp':'igrndslash'); consumeCmd(); p.atkHeld=true; return; }     // ↓↑コマンド＝地面必殺
     if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       if(GD){ beginAttack('ghead'); return; }                                             // ガードワン下：ヘッドバット突進
@@ -2355,10 +2372,10 @@ const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
    gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
-     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新技じゃ！ ↓→＋攻撃で真空波動剣、→↓→＋攻撃で真・昇竜剣。','↓↓＋攻撃で断地斬、空中で↑＋攻撃なら天翔斬が出るぞ！'],
-     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新技じゃ！ ↓→＋攻撃で覇王丸、→↓→＋攻撃で龍神脚。','↓↓＋攻撃で震脚烈波、空中で↑＋攻撃なら昇天脚が出るぞ！'],
-     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃でアイスランス、→↓→＋攻撃でスターアセンション。','↓↓＋攻撃でアビスパルス、空中で↑＋攻撃なら星昇撃が出るぞ！'],
-     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↓＋攻撃でグランドスタンプ、空中で↑＋攻撃ならハンマーアッパーじゃ！']}}},
+     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新奥義じゃ！ ↓→＋攻撃で真空・断空烈波（画面端まで貫く真空波）、→↓→＋攻撃で天翔龍閃（超高空へ斬り上げる）。','↓↑＋攻撃で断地斬、空中で↑＋攻撃なら天翔斬が出るぞ！'],
+     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃で震脚烈波、空中で↑＋攻撃なら昇天脚が出るぞ！'],
+     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でアビスパルス、空中で↑＋攻撃なら星昇撃が出るぞ！'],
+     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でグランドスタンプ、空中で↑＋攻撃ならハンマーアッパーじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
@@ -2704,7 +2721,10 @@ function projVsPlayer(pr,p){
 }
 function updateProjectiles(){
   for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i];
-    if(pr.homing && pr.owner==='enemy'){ const tp=nearestPlayerTo(pr.x); if(tp){ const ang=Math.atan2((tp.y-26)-(pr.y-pr.zz),tp.x-pr.x); const cur=Math.atan2(pr.vy,pr.vx); let d=ang-cur; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; const na=cur+clamp(d,-0.10,0.10), sp=Math.hypot(pr.vx,pr.vy)||6; pr.vx=Math.cos(na)*sp; pr.vy=Math.sin(na)*sp; } }
+    if(pr.homing){ let tx=null,ty=0;
+      if(pr.owner==='enemy'){ const tp=nearestPlayerTo(pr.x); if(tp){ tx=tp.x; ty=tp.y-26; } }
+      else { let best=null,bd=1e9; for(const e of enemies){ if(e.dead||e.grabbedBy)continue; const d=Math.abs(e.x-pr.x)+Math.abs(e.y-pr.y)*0.6; if(d<bd){bd=d;best=e;} } if(best){ tx=best.x; ty=best.y-best.h*0.5; } }
+      if(tx!=null){ const ang=Math.atan2(ty-(pr.y-pr.zz),tx-pr.x); const cur=Math.atan2(pr.vy,pr.vx); let d=ang-cur; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; const na=cur+clamp(d,pr.owner==='enemy'?-0.10:-0.16,pr.owner==='enemy'?0.10:0.16), sp=Math.hypot(pr.vx,pr.vy)||6; pr.vx=Math.cos(na)*sp; pr.vy=Math.sin(na)*sp; } }
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>7)pr.trail.shift();
     if(pr.owner==='player'){
