@@ -142,6 +142,7 @@ setupCanvas();
 
 const GROUND_TOP = 372, GROUND_BOT = 516; let WORLD_END = 18400;
 const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger sprites
+const RISE_CEIL = 320;                     // 上昇技（昇竜など）の最高到達点＝画面天井。これ以上は上がらない
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
 let state='title', camX=0, score=0, coins=0;
@@ -678,7 +679,7 @@ const ATK={
   // ── 新必殺技：波動コマンド(↓→)／昇竜コマンド(→↓→)／↓↑コマンド ──
   // イッヌ（剣）＝間合いを支配する居合ゾーナー
   // 波動＝居合で放つ極太の真空波。全てを貫き画面端まで届く
-  iwave:{name:'真空・断空烈波', dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:34,color:'#bffcff',speed:13,r:28,life:120,pierce:true,style:'wave'}},
+  iwave:{name:'真空・断空烈波', dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:12,color:'#bffcff',speed:9,r:56,life:150,multihit:true,hitGap:7,style:'wave'}},
   // 昇竜＝三段に斬り上げる龍の閃光。超高空へ打ち上げ長い無敵
   idragon:{name:'天翔龍閃', dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
   igrndslash:{name:'断地斬', dur:30, act:[10,16], reach:114, hh:60, dmg:28, kb:16, from:-1.9,to:1.2, len:58, trail:'#fff', pivotY:-72, lunge:1.0, knock:true, aoe:true, shock:32, finisher:true},
@@ -690,7 +691,7 @@ const ATK={
   sstomp:{name:'震脚烈波', dur:28, act:[8,14], reach:104, hh:56, dmg:24, kb:14, from:0.1,to:0.1, len:22, trail:'#fff', fist:true, kick:true, lunge:0.6, knock:true, aoe:true, shock:28, finisher:true},
   // ヌコ（魔法）＝多彩な魔法で戦うゾーナー
   // 波動＝敵を追尾する三連の氷結魔弾。逃げる相手にも当たる
-  nfrost:{name:'氷結魔弾・トリニティ', dur:32, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-0.5,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, superFx:true, pshot:{dmg:16,color:'#8fd8ff',speed:9,r:15,life:170,pierce:true,homing:true,count:3,spread:2.6,style:'spike'}},
+  nfrost:{name:'氷結魔弾・トリニティ', dur:32, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-0.5,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, superFx:true, pshot:{dmg:9,color:'#8fd8ff',speed:8,r:30,life:180,multihit:true,hitGap:9,homing:true,count:3,spread:2.6,style:'spike'}},
   // 昇竜＝星の柱と共に舞い上がり、天から星屑を降らせる
   nstar:{name:'星辰昇華', dur:36, act:[2,30], reach:78, hh:640, dmg:12, kb:6, from:1.4,to:-2.2, len:24, trail:'#d6a6ff', fist:true, rise:true, riseV:34, riseG:0.58, multi:true, multiGap:4, shoryu:true, ntor:true, superFx:true, starRain:true},
   nabyss:{name:'アビスパルス', dur:30, act:[10,16], reach:108, hh:56, dmg:24, kb:14, from:-0.2,to:0.2, len:22, trail:'#c46bff', fist:true, lunge:0.2, knock:true, aoe:true, shock:30, finisher:true},
@@ -847,7 +848,7 @@ function firePShot(p,o){ o=o||{}; const dir=p.facing, mul=p.kind==='nuko'?nukoMu
   const col=o.color||'#9ff0ff', n=o.count||1;
   for(let k=0;k<n;k++){ const vy=o.spread? (k-(n-1)/2)*o.spread : (o.vy||0);
     spawnProj(p.x+dir*46, p.y-(o.zoff||0), dir*(o.speed||9), vy, {owner:'player', dmg:Math.round((o.dmg||18)*mul), color:col,
-      r:o.r||16, life:o.life||64, zz:44, vzz:o.vzz||0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike', explode:!!o.explode, homing:!!o.homing}); }
+      r:o.r||16, life:o.life||64, zz:44, vzz:o.vzz||0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike', explode:!!o.explode, homing:!!o.homing, multihit:!!o.multihit, hitGap:o.hitGap}); }
   spark(p.x+dir*46, p.y-46, col, 14, 8); ring(p.x+dir*40, p.y-42, col); flash=Math.max(flash,2); sfx.dash(); sfx.rise(); }
 // ── 空中↑コマンド技：昇天アッパー。敵を高く打ち上げつつ自分も少し上昇する ──
 function airRiseHit(p){ const col=p.kind==='nuko'?'#d6a6ff':p.kind==='shima'?'#aef8ff':p.kind==='guard8'?'#ffd24d':'#ffe27a';
@@ -1131,7 +1132,7 @@ function updatePlayer(){
     if(def.zapfx && a.t%2===0) spark(p.x+rnd(-18,18), p.y-rnd(8,66), '#9fe8ff',2,5);   // 雷纏いの火花
     // movement during attacks
     if(def.move){ p.x+=p.facing*def.move*(a.t<def.act[1]?1:0.3); }
-    else if(def.rise){ p.z=Math.max(0,p.z+p.riseVel); p.riseVel-=(p.riseG||1.1); }
+    else if(def.rise){ p.z=Math.max(0,p.z+p.riseVel); if(p.z>RISE_CEIL){ p.z=RISE_CEIL; if(p.riseVel>0)p.riseVel=0; } p.riseVel-=(p.riseG||1.1); }   // 天井で頭打ち
     else if(!def.special){ p.x+=p.facing*(def.lunge||0)*(a.t<def.dur*0.6?1:0); }
     if(def.fly){ p.z=Math.sin(clamp(a.t/def.dur,0,1)*Math.PI)*66; }            // 飛び蹴り：跳び上がる弧
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
@@ -2702,7 +2703,8 @@ function updateCombo(){ if(combo.timer>0){ combo.timer--; if(combo.timer===0)com
 let projectiles=[];
 function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,nostop:!!o.nostop,noLaunch:!!o.noLaunch,
-    pierce:!!o.pierce,wave:!!o.wave,hit:o.pierce?new Set():null,homing:!!o.homing,spike:!!o.spike,
+    pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
+    multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
 // returns 'reflect' | 'gone' | null
 function projVsPlayer(pr,p){
@@ -2734,13 +2736,15 @@ function updateProjectiles(){
         projectiles.splice(i,1); continue; }
       let hit=false;
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
-        if(pr.pierce && pr.hit.has(e.id))continue;
-        if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<(pr.wave?44:30) && pr.zz<e.h){
-          if(pr.nostop){ noHitStopOnce=true; damageEnemy(e,pr.dmg,pr.vx>0?2:-2,false); }   // エネルギー弾：低威力・ノックダウンもヒットストップも無し
+        if(pr.multihit){ if(gf-(pr.hitAt[e.id]!=null?pr.hitAt[e.id]:-999) < pr.hitGap) continue; }   // 多段ヒット：一定間隔で再ヒット
+        else if(pr.pierce && pr.hit.has(e.id))continue;
+        if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<(pr.wave?44+pr.r*0.3:30) && pr.zz<e.h){
+          if(pr.multihit){ noHitStopOnce=true; damageEnemy(e,pr.dmg,pr.vx>0?3:-3,false); spark(e.x,e.y-e.h*0.5,'#fff',6,7); }   // 多段ヒット：低威力・浮かせずに刻む
+          else if(pr.nostop){ noHitStopOnce=true; damageEnemy(e,pr.dmg,pr.vx>0?2:-2,false); }   // エネルギー弾：低威力・ノックダウンもヒットストップも無し
           else damageEnemy(e,pr.dmg,pr.vx>0?9:-9,true);
-          if(pr.wave&&!pr.noLaunch&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*16,-8,3);
+          if(pr.wave&&!pr.noLaunch&&!pr.multihit&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*16,-8,3);
           spark(e.x,e.y-e.h*0.5,pr.color,12,8);
-          if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
+          if(pr.multihit){ pr.hitAt[e.id]=gf; } else if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
       if(hit){ spark(pr.x,pr.y-pr.zz,pr.color,12,8); projectiles.splice(i,1); continue; }
     } else {
       let res=null; for(const p of players){ res=projVsPlayer(pr,p); if(res)break; }
