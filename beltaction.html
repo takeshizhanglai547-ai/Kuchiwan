@@ -205,10 +205,13 @@ function rotationReady(){ if(gf-stickRot<=12) return true;
     if(cw||ccw) return true; }
   return false; }
 function consumeCmd(){ cardSeq.length=0; dirTaps.length=0; downTaps.length=0; stickRot=-999; }
-// ↓↑コマンド（下→上＋攻撃）：下から上へ入力して地面必殺を発動
-function downUpReady(){ const r=cardSeq.filter(t=>gf-t.f<=28);
-  for(let i=r.length-1;i>=1;i--){ if(r[i].c===0 && gf-r[i].f<=9){
-    for(let j=i-1;j>=0;j--){ if(r[j].c===2 && r[i].f-r[j].f<=20) return true; } } }
+// ↓↑コマンド（下→上＋攻撃）：下から上へ入力して地面必殺を発動。
+// 上を押した状態で攻撃すればよく、猶予は広め（下→上→少し遅れて攻撃でも出る）
+function downUpReady(){ if(!K.up) return false;                       // 攻撃時に「上」を押していること＝↑パート
+  const r=cardSeq;
+  let upIdx=-1; for(let i=r.length-1;i>=0;i--){ if(r[i].c===0){ upIdx=i; break; } }   // 直近の「上」入力
+  if(upIdx<0 || gf-r[upIdx].f>34) return false;                      // 上入力から約0.57秒以内
+  for(let j=upIdx-1;j>=0;j--){ if(r[j].c===2 && r[upIdx].f-r[j].f<=30) return true; }  // その直前に「下」入力
   return false; }
 // 波動拳コマンド（↓→＋攻撃）：下→前 の順入力
 function hadokenReady(facing){ const fwdC=facing>0?1:3;
