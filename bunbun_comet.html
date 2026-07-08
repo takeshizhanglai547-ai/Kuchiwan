@@ -9,7 +9,10 @@
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05030f;
 touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
-canvas{display:block;position:fixed;inset:0;touch-action:none;}
+/* width/height を明示しないと、高DPR端末で描画バッファのピクセル数が
+   そのまま表示サイズになり画面より大きく描画されてしまう。
+   100% を指定して常にビューポートにフィットさせる。 */
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
 </style>
 </head>
 <body>
