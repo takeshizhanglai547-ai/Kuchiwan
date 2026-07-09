@@ -3,90 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KUCHIWAN - 3D Mech Shooter</title>
+  <title>KUCHIWAN - Quarter-View Mech Shooter</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
 
-  <!-- HUD -->
+  <!-- ══════════════ TITLE ══════════════ -->
+  <div id="title-screen" class="screen">
+    <div class="scanlines"></div>
+    <div class="title-block">
+      <div class="title-sub">QUARTER-VIEW 3D MECH ASSAULT</div>
+      <h1 class="title-main">KUCHIWAN</h1>
+      <div class="title-sub">口 湾 &nbsp;/&nbsp; ARMORED CORE STYLE</div>
+    </div>
+    <button id="to-garage-btn" class="big-btn">▶ ENTER GARAGE</button>
+    <div class="controls-hint">
+      <span><b>WASD</b> 移動</span><span><b>マウス</b> 照準</span><span><b>左クリック</b> 右腕武器</span>
+      <span><b>右クリック</b> 左腕武器</span><span><b>E</b> 肩武器</span><span><b>SHIFT</b> ブースト</span><span><b>SPACE</b> ジャンプ/浮遊</span>
+    </div>
+    <div class="title-foot">Three.js WebGL &nbsp;·&nbsp; QUARTER-VIEW MECH SHOOTER</div>
+  </div>
+
+  <!-- ══════════════ GARAGE / ASSEMBLY ══════════════ -->
+  <div id="garage-screen" class="screen hidden">
+    <div class="garage-grid">
+      <!-- Left: part categories -->
+      <div class="garage-col garage-left">
+        <div class="panel-title">ASSEMBLY</div>
+        <div id="category-list"></div>
+        <div class="panel-title" style="margin-top:14px">PAINT</div>
+        <div id="paint-list"></div>
+      </div>
+
+      <!-- Center: 3D preview -->
+      <div class="garage-col garage-center">
+        <div id="preview-label">AC PREVIEW</div>
+        <canvas id="previewCanvas"></canvas>
+        <div id="loadout-name-row">
+          <span class="tag" id="frame-tag">— FRAME —</span>
+        </div>
+      </div>
+
+      <!-- Right: part options + stats -->
+      <div class="garage-col garage-right">
+        <div class="panel-title" id="options-title">PARTS</div>
+        <div id="options-list"></div>
+        <div class="panel-title" style="margin-top:12px">SPEC</div>
+        <div id="stats-panel"></div>
+        <div id="warn-line"></div>
+      </div>
+    </div>
+    <div class="garage-foot">
+      <button id="back-title-btn" class="small-btn">◀ BACK</button>
+      <button id="sortie-btn" class="big-btn">SORTIE ▶</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ IN-GAME HUD ══════════════ -->
   <div id="hud" class="hidden">
-    <!-- Player Status -->
+    <!-- Player status (bottom-left) -->
     <div id="player-status">
       <div class="status-row">
         <span class="status-label">AP</span>
         <div class="bar-wrap"><div id="ap-bar" class="bar bar-ap"></div></div>
-        <span id="ap-val" class="status-val">10000</span>
+        <span id="ap-val" class="status-val">0</span>
       </div>
       <div class="status-row">
         <span class="status-label">EN</span>
         <div class="bar-wrap"><div id="en-bar" class="bar bar-en"></div></div>
       </div>
+      <div id="boost-flag">READY</div>
     </div>
 
-    <!-- Weapon -->
+    <!-- Weapons (bottom-right) -->
     <div id="weapon-status">
-      <div class="weapon-row"><span class="w-label">RIFLE</span><span class="w-icon">▣</span><span id="ammo-count" class="w-val">∞</span></div>
-      <div class="weapon-row"><span class="w-label">MISSILE</span><span class="w-icon">◈</span><span id="missile-count" class="w-val">32</span></div>
+      <div class="weapon-row" id="wrow-R"><span class="w-key">L-CLICK</span><span class="w-label" id="w-R">—</span><span class="w-val" id="ammo-R">∞</span></div>
+      <div class="weapon-row" id="wrow-L"><span class="w-key">R-CLICK</span><span class="w-label" id="w-L">—</span><span class="w-val" id="ammo-L">∞</span></div>
+      <div class="weapon-row" id="wrow-S"><span class="w-key">E KEY</span><span class="w-label" id="w-S">—</span><span class="w-val" id="ammo-S">∞</span></div>
     </div>
 
-    <!-- Lock-on -->
-    <div id="lock-overlay">
-      <div id="lock-ring" class="lock-ring"></div>
+    <!-- Top status -->
+    <div id="top-status">
+      <div id="wave-label">WAVE 1</div>
+      <div id="score-label">SCORE 0</div>
+      <div id="enemies-left">ENEMIES 0</div>
     </div>
 
-    <!-- Enemy Status -->
-    <div id="enemy-status" class="hidden">
-      <div id="enemy-name-label">ENEMY</div>
-      <div class="status-row">
-        <span class="status-label">AP</span>
-        <div class="bar-wrap"><div id="enemy-ap-bar" class="bar bar-enemy"></div></div>
-        <span id="enemy-ap-val" class="status-val"></span>
-      </div>
-      <div id="phase-label"></div>
-    </div>
-
-    <!-- Center info -->
+    <!-- Center message -->
     <div id="center-info"></div>
 
+    <!-- Boss bar -->
+    <div id="boss-status" class="hidden">
+      <div id="boss-name">ARMS-FORT</div>
+      <div class="bar-wrap boss"><div id="boss-bar" class="bar bar-enemy"></div></div>
+    </div>
+
     <!-- Crosshair -->
-    <div id="crosshair">
-      <div class="ch-h"></div>
-      <div class="ch-v"></div>
-    </div>
+    <div id="crosshair"><div class="ch-dot"></div><div class="ch-ring"></div></div>
   </div>
 
-  <!-- Start Screen -->
-  <div id="start-screen">
-    <div class="title-block">
-      <div class="title-sub">AC-STYLE 3D MECH DANMAKU SHOOTER</div>
-      <h1 class="title-main">KUCHIWAN</h1>
-      <div class="title-sub">口湾</div>
-    </div>
-    <div class="controls-block">
-      <h3>── CONTROLS ──</h3>
-      <div class="ctrl-grid">
-        <span>WASD</span><span>移動</span>
-        <span>マウス</span><span>照準 / カメラ</span>
-        <span>左クリック</span><span>ライフル射撃</span>
-        <span>右クリック</span><span>ミサイル発射</span>
-        <span>Shift</span><span>ブースト（高速移動）</span>
-        <span>Space</span><span>上昇</span>
-        <span>Ctrl</span><span>下降</span>
-        <span>Q</span><span>ロックオン切替</span>
-      </div>
-    </div>
-    <button id="start-btn">── START MISSION ──</button>
-  </div>
-
-  <!-- Game Over / Clear -->
-  <div id="result-screen" class="hidden">
+  <!-- ══════════════ RESULT ══════════════ -->
+  <div id="result-screen" class="screen hidden">
     <div id="result-title"></div>
     <div id="result-sub"></div>
-    <button id="retry-btn">RETRY</button>
+    <div id="result-stats"></div>
+    <div class="result-btns">
+      <button id="regarage-btn" class="small-btn">◀ GARAGE</button>
+      <button id="retry-btn" class="big-btn">RETRY ▶</button>
+    </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script src="js/three.min.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>
