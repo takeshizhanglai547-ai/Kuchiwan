@@ -753,8 +753,18 @@ class Game {
     this._weapTimers = { rArm: 0, lArm: 0, shoulder: 0 };
     this._fireFlags = { rArm: false, lArm: false, shoulder: false };
 
+    // touch input state
+    this.isTouch = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
+    this.moveAxis = new THREE.Vector2(0, 0);   // x=right, y=forward (screen-relative)
+    this.aimAxis  = new THREE.Vector2(0, 0);
+    this.aimStickActive = false;
+    this.touchBoost = false;
+    this.touchJump = false;
+    if (this.isTouch) document.body.classList.add('touch');
+
     this.garage = new Garage((loadout, stats) => this._sortie(loadout, stats));
     this._bindEvents();
+    if (this.isTouch) this._setupTouch();
     this._loop();
   }
 
@@ -841,16 +851,19 @@ class Game {
     });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     addEventListener('mousemove', e => {
+      if (this.isTouch) return;
       this.mouseScreen.x = e.clientX; this.mouseScreen.y = e.clientY;
       this.mouseNDC.x = (e.clientX / innerWidth) * 2 - 1;
       this.mouseNDC.y = -(e.clientY / innerHeight) * 2 + 1;
       if (this.state === 'playing') { $('crosshair').style.left = e.clientX + 'px'; $('crosshair').style.top = e.clientY + 'px'; }
     });
     addEventListener('mousedown', e => {
+      if (this.isTouch) return;
       if (e.button === 0) this._fireFlags.rArm = true;
       if (e.button === 2) this._fireFlags.lArm = true;
     });
     addEventListener('mouseup', e => {
+      if (this.isTouch) return;
       if (e.button === 0) this._fireFlags.rArm = false;
       if (e.button === 2) this._fireFlags.lArm = false;
     });
@@ -862,10 +875,68 @@ class Game {
     $('retry-btn').onclick = () => { $('result-screen').classList.add('hidden'); this._sortie(this.loadout, computeStats(this.loadout)); };
   }
 
+  /* ── touch controls: two virtual sticks + action buttons ── */
+  _setupTouch() {
+    const R = 46; // stick radius (px)
+    const bindStick = (id, onMove, onEnd) => {
+      const el = $(id), knob = el.querySelector('.knob');
+      let id0 = null, cx = 0, cy = 0;
+      el.style.touchAction = 'none';
+      el.addEventListener('pointerdown', e => {
+        id0 = e.pointerId; try { el.setPointerCapture(id0); } catch (_) {}
+        const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+        e.preventDefault();
+      });
+      el.addEventListener('pointermove', e => {
+        if (e.pointerId !== id0) return;
+        let dx = e.clientX - cx, dy = e.clientY - cy;
+        const d = Math.hypot(dx, dy);
+        if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        onMove(dx / R, dy / R);
+      });
+      const end = e => {
+        if (e.pointerId !== id0) return;
+        id0 = null; knob.style.transform = 'translate(0,0)'; onEnd();
+      };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+    };
+
+    bindStick('stick-move',
+      (x, y) => { this.moveAxis.set(x, -y); },       // screen up (−y) = forward
+      () => this.moveAxis.set(0, 0));
+    bindStick('stick-aim',
+      (x, y) => { this.aimAxis.set(x, -y); this.aimStickActive = (Math.hypot(x, y) > 0.25); },
+      () => { this.aimAxis.set(0, 0); this.aimStickActive = false; });
+
+    const bindBtn = (id, on) => {
+      const el = $(id);
+      el.style.touchAction = 'none';
+      const down = e => { on(true); el.classList.add('pressed'); e.preventDefault(); };
+      const up   = e => { on(false); el.classList.remove('pressed'); };
+      el.addEventListener('pointerdown', down);
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('pointerleave', up);
+    };
+    bindBtn('btn-jump',  v => this.touchJump = v);
+    bindBtn('btn-boost', v => this.touchBoost = v);
+    bindBtn('btn-lwpn',  v => this._fireFlags.lArm = v);
+    bindBtn('btn-ewpn',  v => this.keys['KeyE'] = v);
+
+    // relabel weapon HUD keys for touch
+    const q = s => document.querySelector(s);
+    q('#wrow-R .w-key').textContent = 'AIM';
+    q('#wrow-L .w-key').textContent = 'L BTN';
+    q('#wrow-S .w-key').textContent = 'E BTN';
+  }
+
   _enterGarage() {
     $('title-screen').classList.add('hidden');
     $('result-screen').classList.add('hidden');
     $('hud').classList.add('hidden');
+    $('touch-ui').classList.add('hidden');
     $('garage-screen').classList.remove('hidden');
     this.garage.show();
     this.state = 'garage';
@@ -877,6 +948,7 @@ class Game {
     $('garage-screen').classList.add('hidden');
     this.garage.hide();
     $('hud').classList.remove('hidden');
+    if (this.isTouch) $('touch-ui').classList.remove('hidden');
 
     // clean previous
     if (this.playerMesh) this.scene.remove(this.playerMesh);
@@ -969,16 +1041,17 @@ class Game {
     const camFwd = new THREE.Vector3(); this.camera.getWorldDirection(camFwd); camFwd.y = 0; camFwd.normalize();
     const camRight = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0); camRight.y = 0; camRight.normalize();
 
-    const boosting = (k['ShiftLeft'] || k['ShiftRight']) && p.en > 4;
+    const boosting = (k['ShiftLeft'] || k['ShiftRight'] || this.touchBoost) && p.en > 4;
     const spd = boosting ? s.boost : s.speed;
 
+    // unified move axis: keyboard + touch stick
+    let ax = (k['KeyD'] ? 1 : 0) - (k['KeyA'] ? 1 : 0) + this.moveAxis.x;
+    let ay = (k['KeyW'] ? 1 : 0) - (k['KeyS'] ? 1 : 0) + this.moveAxis.y;
+    ax = clamp(ax, -1, 1); ay = clamp(ay, -1, 1);
     const mv = new THREE.Vector3();
-    if (k['KeyW']) mv.add(camFwd);
-    if (k['KeyS']) mv.sub(camFwd);
-    if (k['KeyD']) mv.add(camRight);
-    if (k['KeyA']) mv.sub(camRight);
-    const moving = mv.lengthSq() > 0;
-    if (moving) mv.normalize().multiplyScalar(spd);
+    mv.addScaledVector(camRight, ax).addScaledVector(camFwd, ay);
+    const moving = mv.lengthSq() > 0.0004;
+    if (moving) { if (mv.length() > 1) mv.normalize(); mv.multiplyScalar(spd); }
 
     p.vel.lerp(mv, dt * 8);
     p.pos.addScaledVector(p.vel, dt);
@@ -992,8 +1065,8 @@ class Game {
       this._boostFx(dt, false);
     }
 
-    // jump / hover (Space)
-    if (k['Space'] && p.en > 2) {
+    // jump / hover (Space or touch JUMP)
+    if ((k['Space'] || this.touchJump) && p.en > 2) {
       if (p.grounded) { p.yVel = s.jump; p.grounded = false; }
       else { p.yVel += 34 * dt; p.en -= 30 * dt; }   // hover thrust
       p.yVel = Math.min(p.yVel, s.jump);
@@ -1011,11 +1084,25 @@ class Game {
       if (d < min && d > 0.001) { const push = (min - d); p.pos.x += (dx / d) * push; p.pos.z += (dz / d) * push; }
     }
 
-    // aim: ray from mouse to ground plane
-    this.raycaster.setFromCamera(this.mouseNDC, this.camera);
-    const hit = new THREE.Vector3();
-    this.groundPlane.constant = -(p.pos_y_base + 0.5);
-    if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) this.aimPoint.copy(hit);
+    // aim
+    if (this.isTouch) {
+      // touch: aim stick sets a world-space direction; auto-fire main weapon while aiming
+      if (this.aimStickActive) {
+        const dir = new THREE.Vector3().addScaledVector(camRight, this.aimAxis.x).addScaledVector(camFwd, this.aimAxis.y);
+        if (dir.lengthSq() > 0.0004) { dir.normalize(); this.aimPoint.copy(p.pos).addScaledVector(dir, 40); }
+        this._fireFlags.rArm = true;
+      } else {
+        this._fireFlags.rArm = false;
+        // idle: keep aiming where we last moved (aim ahead of motion if moving)
+        if (moving) { const d = mv.clone().normalize(); this.aimPoint.copy(p.pos).addScaledVector(d, 40); }
+      }
+    } else {
+      // mouse: ray to ground plane
+      this.raycaster.setFromCamera(this.mouseNDC, this.camera);
+      const hit = new THREE.Vector3();
+      this.groundPlane.constant = -(p.pos_y_base + 0.5);
+      if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) this.aimPoint.copy(hit);
+    }
 
     // face aim
     const aimDir = this.aimPoint.clone().sub(p.pos); aimDir.y = 0;
@@ -1246,6 +1333,7 @@ class Game {
   _end(win) {
     this.state = win ? 'clear' : 'dead';
     $('hud').classList.add('hidden');
+    $('touch-ui').classList.add('hidden');
     const rs = $('result-screen'); rs.classList.remove('hidden');
     $('result-title').textContent = win ? 'MISSION COMPLETE' : 'DESTROYED';
     $('result-title').style.color = win ? '#00ffcc' : '#ff3344';
@@ -1289,8 +1377,10 @@ class Game {
 }
 
 /* ─────────── init ─────────── */
-addEventListener('DOMContentLoaded', () => {
+function _boot() {
   $('title-screen').classList.remove('hidden');
   window._game = new Game();
   window._game.state = 'title';
-});
+}
+if (document.readyState === 'loading') addEventListener('DOMContentLoaded', _boot);
+else _boot();

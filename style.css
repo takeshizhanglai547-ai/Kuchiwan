@@ -180,6 +180,71 @@ body {
 #result-stats { margin-top: 20px; font-size: 14px; letter-spacing: 2px; line-height: 1.9; text-align: center; }
 .result-btns { display: flex; gap: 18px; margin-top: 30px; }
 
+/* ═════════════ TOUCH CONTROLS ═════════════ */
+#touch-ui { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+#touch-ui .stick, #touch-ui .tbtn { pointer-events: auto; }
+.stick {
+  position: absolute; bottom: 26px; width: 128px; height: 128px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,255,204,0.06), rgba(0,255,204,0.02));
+  border: 2px solid rgba(0,255,204,0.35);
+  display: flex; align-items: center; justify-content: center;
+}
+#stick-move { left: 26px; }
+#stick-aim  { right: 26px; border-color: rgba(255,170,34,0.5); }
+.stick .knob {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,255,204,0.5), rgba(0,255,204,0.15));
+  border: 2px solid var(--cyan); will-change: transform;
+}
+#stick-aim .knob { background: radial-gradient(circle, rgba(255,170,34,0.5), rgba(255,170,34,0.12)); border-color: var(--amber); }
+.stick-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; letter-spacing: 2px; opacity: 0.7; white-space: nowrap; }
+.tbtn {
+  position: absolute; width: 66px; height: 66px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; letter-spacing: 1px; color: var(--cyan);
+  background: rgba(6,16,22,0.7); border: 2px solid var(--line);
+}
+.tbtn.pressed { background: var(--cyan); color: #002; box-shadow: 0 0 16px var(--cyan); }
+/* left cluster (above move stick) */
+#btn-boost { left: 30px; bottom: 168px; }
+#btn-jump  { left: 108px; bottom: 120px; }
+/* right cluster (above aim stick) */
+#btn-lwpn  { right: 108px; bottom: 168px; border-color: rgba(255,170,34,0.5); color: var(--amber); }
+#btn-ewpn  { right: 30px; bottom: 120px; border-color: rgba(255,170,34,0.5); color: var(--amber); }
+body.touch #crosshair { display: none; }
+/* keep HUD panels clear of the stick corners on touch devices */
+body.touch #player-status { top: 12px; bottom: auto; left: 14px; width: 220px; }
+body.touch #weapon-status { top: 44px; bottom: auto; right: 14px; width: 180px; }
+body.touch #boost-flag { margin-top: 2px; }
+
+/* ═════════════ RESPONSIVE (phones / small screens) ═════════════ */
+@media (max-width: 900px), (max-height: 560px) {
+  .garage-grid {
+    width: 96vw; height: 88vh;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 220px 1fr;
+    gap: 8px;
+  }
+  .garage-center { grid-column: 1 / 3; grid-row: 1; }
+  .garage-left   { grid-column: 1; grid-row: 2; }
+  .garage-right  { grid-column: 2; grid-row: 2; }
+  .garage-col { padding: 10px; }
+  .panel-title { font-size: 11px; letter-spacing: 3px; }
+  .cat-row, .opt-row { padding: 8px 8px; font-size: 12px; }
+  .title-main { letter-spacing: 8px; }
+  .controls-hint { display: none; }
+  .garage-foot { margin-top: 8px; }
+  .big-btn { padding: 12px 26px; font-size: 14px; letter-spacing: 3px; }
+  #top-status { gap: 16px; font-size: 11px; }
+  #weapon-status { width: 190px; }
+  #player-status { width: 210px; }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  .garage-grid { grid-template-columns: 1fr; grid-template-rows: 200px auto auto; height: 90vh; }
+  .garage-center { grid-column: 1; }
+  .garage-left, .garage-right { grid-column: 1; grid-row: auto; }
+}
+
 /* damage flash */
 body.damage-flash::after {
   content: ''; position: fixed; inset: 0; z-index: 15; pointer-events: none;
