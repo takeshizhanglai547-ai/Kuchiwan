@@ -253,6 +253,18 @@ body.touch #boost-flag { margin-top: 2px; }
   .garage-col { max-height: none; overflow: visible; }
 }
 
+/* sound toggle */
+#mute-btn {
+  position: fixed; top: 14px; right: 16px; z-index: 40;
+  font-family: inherit; cursor: pointer;
+  background: rgba(6,16,22,0.8); color: var(--cyan);
+  border: 1px solid var(--line); padding: 7px 12px;
+  font-size: 11px; letter-spacing: 2px;
+}
+#mute-btn:hover { background: var(--cyan); color: #002; }
+#mute-btn.muted { color: var(--red); border-color: rgba(255,51,68,0.5); }
+@media (max-width: 900px) { #mute-btn { top: 10px; right: 10px; padding: 6px 9px; font-size: 10px; } }
+
 /* damage flash */
 body.damage-flash::after {
   content: ''; position: fixed; inset: 0; z-index: 15; pointer-events: none;

@@ -179,70 +179,84 @@ const MechBuilder = {
     const paint = PAINTS[loadout.paint];
     const legs  = partOf('legs', loadout);
     const g = new THREE.Group();
+    const frame = new THREE.Group();   // animated body container (bob / pitch)
+    g.add(frame);
 
     const matPrimary = new THREE.MeshStandardMaterial({ color: paint.primary, metalness: 0.8, roughness: 0.35 });
     const matDark    = new THREE.MeshStandardMaterial({ color: paint.secondary, metalness: 0.9, roughness: 0.25 });
     const matGlow    = new THREE.MeshStandardMaterial({ color: paint.accent, emissive: paint.accent, emissiveIntensity: 1.4, roughness: 1 });
-    const box = (w,h,d,m,x,y,z) => g.add(this._box(w,h,d,m,x,y,z));
+    const box = (w,h,d,m,x,y,z) => { const mm = this._box(w,h,d,m,x,y,z); frame.add(mm); return mm; };
+
+    // leg pivots (rotate about the hip for a walk cycle)
+    const legPivots = [];
+    const makePivot = (hx, hy, hz, phase) => {
+      const p = new THREE.Group(); p.position.set(hx, hy, hz);
+      frame.add(p); const leg = { p, hx, hy, hz, phase }; legPivots.push(leg); return leg;
+    };
+    const legBox = (leg, w,h,d,m, ax,ay,az) => {
+      const mm = this._box(w,h,d,m, ax - leg.hx, ay - leg.hy, az - leg.hz); leg.p.add(mm); return mm;
+    };
 
     // ── LEGS (varies by type) ──
     let hipY = 0;
     const lt = legs.type;
     if (lt === 'tank') {
       hipY = 1.3;
-      // treads
-      const treadMat = matDark;
       for (const s of [-1, 1]) {
-        box(1.0, 1.1, 3.6, treadMat, s * 1.2, 0.55, 0);
+        box(1.0, 1.1, 3.6, matDark, s * 1.2, 0.55, 0);
         for (let i = -1; i <= 1; i++) box(1.1, 0.5, 0.5, matPrimary, s * 1.2, 0.35, i * 1.1);
       }
-      box(2.6, 0.6, 2.2, matPrimary, 0, 1.1, 0);
+      box(2.6, 0.6, 2.2, matPrimary, 0, 1.1, 0);   // treads don't swing (bob only)
     } else if (lt === 'quad') {
       hipY = 2.1;
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const lx = sx * 1.3, lz = sz * 0.9;
-        box(0.5, 1.3, 0.5, matPrimary, lx, 1.4, lz);        // thigh
-        box(0.4, 1.3, 0.4, matDark,    lx * 1.25, 0.65, lz); // shin
-        box(0.7, 0.3, 0.9, matDark,    lx * 1.25, 0.15, lz + 0.1);
+        const leg = makePivot(lx, 2.7, lz, (sx * sz > 0) ? 0 : Math.PI);
+        legBox(leg, 0.5, 1.3, 0.5, matPrimary, lx, 1.4, lz);
+        legBox(leg, 0.4, 1.3, 0.4, matDark,    lx * 1.25, 0.65, lz);
+        legBox(leg, 0.7, 0.3, 0.9, matDark,    lx * 1.25, 0.15, lz + 0.1);
       }
       box(2.4, 0.7, 1.8, matPrimary, 0, 2.0, 0);
     } else if (lt === 'reverse') {
       hipY = 2.4;
       for (const s of [-1, 1]) {
-        box(0.55, 1.2, 0.6, matPrimary, s * 0.7, 1.9, -0.1);   // thigh
-        box(0.5, 1.2, 0.5, matDark,     s * 0.7, 0.95, 0.55);  // reverse shin fwd
-        box(0.75, 0.35, 1.3, matDark,   s * 0.7, 0.2, 0.1);    // foot
+        const leg = makePivot(s * 0.7, 2.5, -0.1, s > 0 ? 0 : Math.PI);
+        legBox(leg, 0.55, 1.2, 0.6, matPrimary, s * 0.7, 1.9, -0.1);
+        legBox(leg, 0.5, 1.2, 0.5, matDark,     s * 0.7, 0.95, 0.55);
+        legBox(leg, 0.75, 0.35, 1.3, matDark,   s * 0.7, 0.2, 0.1);
       }
     } else { // biped
       hipY = 2.4;
       for (const s of [-1, 1]) {
-        box(0.7, 1.4, 0.7, matPrimary, s * 0.7, 1.9, 0);   // thigh
-        box(0.6, 1.4, 0.6, matDark,    s * 0.7, 0.85, 0);  // shin
-        box(0.85, 0.4, 1.1, matDark,   s * 0.7, 0.2, 0.15);// foot
+        const leg = makePivot(s * 0.7, 2.6, 0, s > 0 ? 0 : Math.PI);
+        legBox(leg, 0.7, 1.4, 0.7, matPrimary, s * 0.7, 1.9, 0);
+        legBox(leg, 0.6, 1.4, 0.6, matDark,    s * 0.7, 0.85, 0);
+        legBox(leg, 0.85, 0.4, 1.1, matDark,   s * 0.7, 0.2, 0.15);
       }
     }
 
     // ── CORE / TORSO ──
     const coreY = hipY + 1.2;
     box(2.5, 2.1, 1.5, matPrimary, 0, coreY, 0);
-    box(2.7, 0.5, 1.7, matDark, 0, coreY + 0.9, 0);   // chest plate
-    box(0.9, 0.5, 0.2, matGlow, 0, coreY, 0.75);      // core vent glow
+    box(2.7, 0.5, 1.7, matDark, 0, coreY + 0.9, 0);
+    box(0.9, 0.5, 0.2, matGlow, 0, coreY, 0.75);
 
     // ── HEAD ──
     const headY = coreY + 1.7;
     box(0.95, 0.75, 0.9, matDark, 0, headY, 0);
-    box(0.78, 0.16, 0.06, matGlow, 0, headY + 0.05, 0.48); // visor
-    box(0.2, 0.4, 0.2, matPrimary, 0.45, headY + 0.3, -0.1); // antenna
+    box(0.78, 0.16, 0.06, matGlow, 0, headY + 0.05, 0.48);
+    box(0.2, 0.4, 0.2, matPrimary, 0.45, headY + 0.3, -0.1);
 
     // ── SHOULDERS + ARMS ──
     const armY = coreY + 0.5;
     for (const s of [-1, 1]) {
-      box(1.0, 0.9, 1.0, matDark, s * 1.85, armY, 0);        // shoulder
-      box(0.55, 1.5, 0.55, matPrimary, s * 1.85, armY - 1.2, 0); // upper arm
+      box(1.0, 0.9, 1.0, matDark, s * 1.85, armY, 0);
+      box(0.55, 1.5, 0.55, matPrimary, s * 1.85, armY - 1.2, 0);
     }
 
-    // ── WEAPONS ── attach + record muzzles
+    // ── WEAPONS ── attach + record muzzles + recoil refs
     const muzzles = {};
+    const weap = {};
     const addWeaponMesh = (slot, part, sideX) => {
       if (!part || !part.w) return;
       const w = part.w;
@@ -251,7 +265,6 @@ const MechBuilder = {
                                                     emissive: w.color || paint.accent, emissiveIntensity: 0.25 });
       const barrelMat = matDark;
       if (w.kind === 'blade') {
-        // hilt + energy blade
         grp.add(this._box(0.2, 0.2, 0.7, barrelMat, 0, 0, 0.3));
         const blade = this._box(0.08, 0.5, 2.6, new THREE.MeshBasicMaterial({ color: w.color }), 0, 0, 1.7);
         blade.material.transparent = true; blade.material.opacity = 0.85;
@@ -263,25 +276,22 @@ const MechBuilder = {
         grp.add(this._box(0.5, 0.5, 2.2, barrelMat, 0, 0, 0.7));
         grp.add(this._box(0.62, 0.62, 0.4, wmat, 0, 0, -0.2));
       } else if (w.kind === 'missile') {
-        // pod block with cells
         grp.add(this._box(1.0, 0.8, 1.2, barrelMat, 0, 0, 0));
         for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++)
           grp.add(this._box(0.22, 0.22, 0.2, wmat, -0.28 + i * 0.28, -0.2 + j * 0.4, 0.6));
       } else {
         grp.add(this._box(0.28, 0.3, 1.5, barrelMat, 0, 0, 0.55));
-        grp.add(this._box(0.14, 0.14, 0.3, wmat, 0, 0, 1.35)); // muzzle tip
+        grp.add(this._box(0.14, 0.14, 0.3, wmat, 0, 0, 1.35));
       }
-      // muzzle marker (invisible)
       const muz = new THREE.Object3D();
       muz.position.set(0, 0, w.kind === 'blade' ? 3.0 : (w.big ? 1.9 : 1.5));
       grp.add(muz);
       muzzles[slot] = muz;
 
-      // placement
       if (slot === 'shoulder') { grp.position.set(sideX * 1.0, coreY + 1.0, -0.7); }
       else { grp.position.set(sideX * 1.85, armY - 2.0, 0.3); }
-      g.add(grp);
-      g.userData['weapMesh_' + slot] = grp;
+      frame.add(grp);
+      weap[slot] = { grp, baseZ: grp.position.z };
     };
     addWeaponMesh('rArm', partOf('rArm', loadout), 1);
     addWeaponMesh('lArm', partOf('lArm', loadout), -1);
@@ -290,44 +300,93 @@ const MechBuilder = {
     // ── BACK BOOSTERS ──
     const boosters = [];
     for (const s of [-1, 1]) {
-      const b = this._box(0.5, 1.1, 0.5, matDark, s * 0.8, coreY + 0.2, -0.95);
+      box(0.5, 1.1, 0.5, matDark, s * 0.8, coreY + 0.2, -0.95);
       const flame = this._box(0.34, 0.34, 0.5, new THREE.MeshBasicMaterial({ color: paint.accent, transparent: true, opacity: 0 }), s * 0.8, coreY - 0.4, -1.2);
-      g.add(b); g.add(flame);
+      frame.add(flame);
       boosters.push(flame);
     }
+
+    g.userData.frame   = frame;
+    g.userData.legs    = legPivots;
+    g.userData.weap    = weap;
+    g.userData.recoil  = { rArm: 0, lArm: 0, shoulder: 0 };
+    g.userData.animPhase = 0;
+    g.userData.baseFrameY = 0;
     g.userData.boosters = boosters;
     g.userData.muzzles = muzzles;
-    g.userData.groundY = 0;          // feet at y=0 within group
-    g.userData.centerY = coreY;      // approx body center for aiming/hit
-    g.userData.height = headY + 0.8;
-
+    g.userData.centerY = coreY;
+    g.userData.height  = headY + 0.8;
     return g;
   },
 
-  /* enemy mech — palette by tier, simple angular body */
+  /* enemy mech — palette by tier, walk-animated */
   enemy(tier, scale = 1) {
     const g = new THREE.Group();
+    const frame = new THREE.Group(); g.add(frame);
     const cols = [0x774422, 0x883322, 0x992211, 0xaa1111];
     const c = cols[Math.min(tier, cols.length - 1)];
     const mat  = new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.35 });
     const matD = new THREE.MeshStandardMaterial({ color: 0x221008, metalness: 0.9, roughness: 0.25 });
     const eye  = new THREE.MeshStandardMaterial({ color: 0xff4422, emissive: 0xff3311, emissiveIntensity: 2, roughness: 1 });
-    const box = (w,h,d,m,x,y,z) => g.add(this._box(w*scale,h*scale,d*scale,m,x*scale,y*scale,z*scale));
+    const box = (w,h,d,m,x,y,z) => { const mm = this._box(w*scale,h*scale,d*scale,m,x*scale,y*scale,z*scale); frame.add(mm); return mm; };
 
     box(2.0, 1.8, 1.4, mat, 0, 2.4, 0);
     box(0.9, 0.7, 0.8, matD, 0, 3.6, 0);
     box(0.6, 0.16, 0.06, eye, 0, 3.65, 0.42);
+    const legPivots = [];
     for (const s of [-1, 1]) {
-      box(0.9, 0.8, 0.9, matD, s * 1.5, 2.9, 0);
-      box(0.5, 1.3, 0.5, mat, s * 1.5, 1.7, 0);
-      box(0.6, 1.3, 0.6, mat, s * 0.55, 1.0, 0);
-      box(0.7, 0.35, 1.0, matD, s * 0.55, 0.25, 0.1);
+      box(0.9, 0.8, 0.9, matD, s * 1.5, 2.9, 0);   // shoulder
+      box(0.5, 1.3, 0.5, mat, s * 1.5, 1.7, 0);    // arm
+      // animated leg (thigh + foot) around hip
+      const hx = s * 0.55 * scale, hy = 1.7 * scale, hz = 0;
+      const p = new THREE.Group(); p.position.set(hx, hy, hz); frame.add(p);
+      legPivots.push({ p, hx, hy, hz, phase: s > 0 ? 0 : Math.PI });
+      const lb = (w,h,d,m,ax,ay,az) => { const mm = this._box(w*scale,h*scale,d*scale,m, ax*scale-hx, ay*scale-hy, az*scale-hz); p.add(mm); };
+      lb(0.6, 1.3, 0.6, mat, s * 0.55, 1.0, 0);
+      lb(0.7, 0.35, 1.0, matD, s * 0.55, 0.25, 0.1);
     }
+
+    g.userData.frame = frame;
+    g.userData.legs = legPivots;
+    g.userData.animPhase = 0;
+    g.userData.baseFrameY = 0;
+    g.userData.lunge = 0;
     g.userData.centerY = 2.4 * scale;
     g.userData.height  = 4.0 * scale;
     return g;
   },
 };
+
+/* animate a mech's legs / body bob / boost pitch / weapon recoil */
+function updateMechAnim(mesh, dt, opts) {
+  const u = mesh.userData; if (!u.frame) return;
+  const moving = opts.moving ? 1 : 0;
+  const freq = moving ? (7 + (opts.speedFrac || 0.5) * 6) : 3;
+  u.animPhase = (u.animPhase || 0) + dt * freq;
+  const swing = moving ? 0.5 : 0.05;
+  for (const leg of u.legs) leg.p.rotation.x = Math.sin(u.animPhase + leg.phase) * swing;
+
+  // body bob (feet plant twice per stride) + gentle idle breathing
+  const bob = Math.abs(Math.sin(u.animPhase)) * (moving ? 0.14 : 0) + Math.sin(u.animPhase * 0.5) * 0.03;
+  u.frame.position.y = (u.baseFrameY || 0) + bob;
+
+  // boost forward pitch
+  u.frame.rotation.x = lerp(u.frame.rotation.x, opts.boosting ? -0.18 : 0, 0.12);
+
+  // weapon recoil kick (player)
+  if (u.weap && u.recoil) {
+    for (const slot in u.weap) {
+      const wref = u.weap[slot]; if (!wref) continue;
+      u.recoil[slot] = Math.max(0, (u.recoil[slot] || 0) - dt * 7);
+      wref.grp.position.z = wref.baseZ - u.recoil[slot] * 0.5;
+    }
+  }
+  // attack lunge (enemy)
+  if (u.lunge !== undefined) {
+    u.lunge = Math.max(0, u.lunge - dt * 4);
+    u.frame.position.z = u.lunge * 0.5;
+  }
+}
 
 /* ════════════════════════════════════════════════════════════
    PARTICLES
@@ -487,7 +546,8 @@ class Enemy {
       const want = 24;
       move = dir.clone().multiplyScalar(dist > want ? 0.7 : (dist < want * 0.6 ? -0.6 : 0)).add(side.multiplyScalar(0.9));
     }
-    if (move.lengthSq() > 0) move.normalize().multiplyScalar(cfg.speed * dt);
+    const isMoving = move.lengthSq() > 0;
+    if (isMoving) move.normalize().multiplyScalar(cfg.speed * dt);
     this.pos.add(move);
 
     // hover / bob
@@ -496,10 +556,14 @@ class Enemy {
     const H = 138;
     this.pos.x = clamp(this.pos.x, -H, H); this.pos.z = clamp(this.pos.z, -H, H);
 
+    // limb / body animation
+    updateMechAnim(this.mesh, dt, { moving: isMoving && this.hover === 0, speedFrac: 0.5, boosting: false });
+
     // attacks
     this.fireTimer -= dt;
     if (this.fireTimer <= 0 && dist < cfg.range + 6) {
       this._attack(dir, player);
+      this.mesh.userData.lunge = 1;
       this.fireTimer = cfg.fireRate * rand(0.8, 1.2);
     }
   }
@@ -728,6 +792,210 @@ class Garage {
 }
 
 /* ════════════════════════════════════════════════════════════
+   AUDIO ENGINE — procedural Sawano-style BGM + synth SFX (Web Audio)
+   ════════════════════════════════════════════════════════════ */
+const mid2f = m => 440 * Math.pow(2, (m - 69) / 12);
+
+class AudioEngine {
+  constructor() {
+    this.ready = false; this.muted = false;
+    this.section = 'menu';
+    this.bpm = 140;
+    this.step = 0;
+    this._timer = null;
+    // A-minor anthem: Am – F – C – G  (i – VI – III – VII)
+    this.bars = [
+      { bass: 33, chord: [57, 60, 64], lead: [76, 72, 69, 72] }, // Am
+      { bass: 29, chord: [53, 57, 60], lead: [77, 72, 69, 65] }, // F
+      { bass: 36, chord: [60, 64, 67], lead: [76, 72, 67, 72] }, // C
+      { bass: 31, chord: [55, 59, 62], lead: [74, 71, 67, 62] }, // G
+    ];
+  }
+
+  unlock() {
+    if (this.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.85; this.master.connect(this.ctx.destination);
+    this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.55; this.musicGain.connect(this.master);
+    this.sfxGain   = this.ctx.createGain(); this.sfxGain.gain.value = 0.7;  this.sfxGain.connect(this.master);
+    // distortion curve for gritty lead
+    this.shaper = this.ctx.createWaveShaper();
+    const cur = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; cur[i] = Math.tanh(x * 2.2); }
+    this.shaper.curve = cur;
+    this.ready = true;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    this._start();
+  }
+
+  setSection(s) { this.section = s; }
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.85, this.ctx.currentTime, 0.05);
+    return this.muted;
+  }
+
+  _start() {
+    const stepDur = () => 60 / this.bpm / 4;   // 16th notes
+    let next = this.ctx.currentTime + 0.06;
+    const lookahead = () => {
+      if (!this.ready) return;
+      while (next < this.ctx.currentTime + 0.12) {
+        this._scheduleStep(this.step, next);
+        this.step = (this.step + 1) % 64;       // 4 bars × 16 steps
+        next += stepDur();
+      }
+    };
+    this._timer = setInterval(lookahead, 25);
+  }
+
+  _scheduleStep(step, t) {
+    if (this.muted || this.section === 'off') return;
+    const barIdx = (step >> 4) & 3, s = step & 15;
+    const bar = this.bars[barIdx];
+    const combat = this.section === 'combat' || this.section === 'boss';
+    const boss = this.section === 'boss';
+
+    // pad / choir — new chord at bar start
+    if (s === 0) this._pad(bar.chord, t, 60 / this.bpm * 4 * 0.98, boss);
+    // bass pulse (8ths)
+    if (s % 2 === 0) this._bass(bar.bass, t, 60 / this.bpm / 2 * 0.9, combat);
+    // driving arp (16ths) — louder in combat
+    { const tone = bar.chord[(s + barIdx) % 3] + (s % 8 >= 4 ? 12 : 0);
+      this._pluck(tone, t, combat ? 0.5 : 0.28); }
+    // lead melody on the beat (combat/boss)
+    if (combat && s % 4 === 0) this._lead(bar.lead[s >> 2] + (boss ? 0 : 0), t, 60 / this.bpm * 0.9, boss);
+    // drums
+    if (combat) {
+      if (s % 4 === 0) this._kick(t);
+      if (s === 4 || s === 12) this._snare(t);
+      const hatRate = boss ? 1 : 2;
+      if (s % hatRate === 0) this._hat(t, s % 4 === 2 ? 0.5 : 0.28);
+    } else {
+      if (s === 0) this._kick(t, 0.5);
+    }
+  }
+
+  /* ── instrument voices ── */
+  _env(node, t, a, d, peak, sus, rel, dur) {
+    const g = node.gain; g.cancelScheduledValues(t);
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(peak, t + a);
+    g.linearRampToValueAtTime(sus, t + a + d);
+    g.setValueAtTime(sus, t + dur);
+    g.linearRampToValueAtTime(0, t + dur + rel);
+  }
+  _pad(notes, t, dur, boss) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(500, t); lp.frequency.linearRampToValueAtTime(boss ? 1800 : 1200, t + dur * 0.5);
+    lp.connect(g);
+    this._env(g, t, dur * 0.35, 0.1, 0.22, 0.18, dur * 0.4, dur);
+    for (const n of notes) for (const det of [-6, 6]) {
+      const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.value = mid2f(n); o.detune.value = det;
+      o.connect(lp); o.start(t); o.stop(t + dur + 0.5);
+    }
+  }
+  _bass(n, t, dur, combat) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = combat ? 420 : 300; lp.connect(g);
+    this._env(g, t, 0.006, 0.05, 0.5, 0.32, 0.06, dur);
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mid2f(n); o.connect(lp);
+    const sub = this.ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = mid2f(n - 12); sub.connect(lp);
+    o.start(t); sub.start(t); o.stop(t + dur + 0.1); sub.stop(t + dur + 0.1);
+  }
+  _pluck(n, t, amp) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.connect(g);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp * 0.16, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.18);
+    const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = mid2f(n); o.connect(hp);
+    const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = mid2f(n); o2.detune.value = 8;
+    const g2 = this.ctx.createGain(); g2.gain.value = 0.4; o2.connect(g2); g2.connect(hp);
+    o.start(t); o2.start(t); o.stop(t + 0.2); o2.stop(t + 0.2);
+  }
+  _lead(n, t, dur, boss) {
+    const g = this.ctx.createGain();
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = mid2f(n) * 1.5; bp.Q.value = 1.2;
+    bp.connect(this.shaper); this.shaper.connect(g); g.connect(this.musicGain);
+    this._env(g, t, 0.03, 0.08, boss ? 0.3 : 0.22, boss ? 0.2 : 0.14, 0.14, dur);
+    const lfo = this.ctx.createOscillator(); lfo.frequency.value = 5.5;
+    const lg = this.ctx.createGain(); lg.gain.value = 4; lfo.connect(lg);
+    for (const [type, det] of [['sawtooth', -7], ['square', 7]]) {
+      const o = this.ctx.createOscillator(); o.type = type; o.frequency.value = mid2f(n); o.detune.value = det;
+      lg.connect(o.detune); o.connect(bp); o.start(t); o.stop(t + dur + 0.1);
+    }
+    lfo.start(t); lfo.stop(t + dur + 0.1);
+  }
+  _noise(dur) {
+    const n = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource(); src.buffer = buf; return src;
+  }
+  _kick(t, amp = 1) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    g.gain.setValueAtTime(0.9 * amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    o.connect(g); o.start(t); o.stop(t + 0.3);
+  }
+  _snare(t) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    g.gain.setValueAtTime(0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400; hp.connect(g);
+    const src = this._noise(0.2); src.connect(hp); src.start(t); src.stop(t + 0.2);
+    const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 180;
+    const og = this.ctx.createGain(); og.gain.setValueAtTime(0.2, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(og); og.connect(this.musicGain); o.start(t); o.stop(t + 0.1);
+  }
+  _hat(t, amp) {
+    const g = this.ctx.createGain(); g.connect(this.musicGain);
+    g.gain.setValueAtTime(amp * 0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000; hp.connect(g);
+    const src = this._noise(0.05); src.connect(hp); src.start(t); src.stop(t + 0.05);
+  }
+
+  /* ── SFX ── */
+  sfx(kind) {
+    if (!this.ready || this.muted) return;
+    const t = this.ctx.currentTime;
+    const out = this.sfxGain;
+    const tone = (type, f0, f1, dur, gain, dest) => {
+      const o = this.ctx.createOscillator(); o.type = type;
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g); g.connect(dest || out); o.start(t); o.stop(t + dur + 0.02); return g;
+    };
+    const noiseBurst = (dur, gain, filt, f0, f1) => {
+      const src = this._noise(dur); const g = this.ctx.createGain();
+      g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      const bf = this.ctx.createBiquadFilter(); bf.type = filt; bf.frequency.setValueAtTime(f0, t);
+      bf.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+      src.connect(bf); bf.connect(g); g.connect(out); src.start(t); src.stop(t + dur);
+    };
+    switch (kind) {
+      case 'gun':      tone('square', 760, 380, 0.07, 0.14); noiseBurst(0.05, 0.1, 'highpass', 2000, 1200); break;
+      case 'laser':    tone('sawtooth', 1400, 240, 0.2, 0.16); break;
+      case 'cannon':   tone('sine', 150, 40, 0.32, 0.4); noiseBurst(0.3, 0.22, 'lowpass', 900, 120); break;
+      case 'missile':  noiseBurst(0.35, 0.16, 'bandpass', 500, 2600); break;
+      case 'blade':    tone('sawtooth', 300, 1600, 0.18, 0.14); tone('square', 1600, 400, 0.14, 0.06); break;
+      case 'explosion':noiseBurst(0.5, 0.32, 'lowpass', 1200, 90); tone('sine', 110, 32, 0.45, 0.34); break;
+      case 'hit':      tone('square', 320, 120, 0.12, 0.16); noiseBurst(0.12, 0.14, 'bandpass', 1800, 600); break;
+      case 'jump':     noiseBurst(0.25, 0.14, 'bandpass', 300, 1600); break;
+      case 'wave':     [60, 64, 67].forEach((n,i)=>tone('sawtooth', mid2f(n+12), mid2f(n+12), 0.5, 0.08)); break;
+      case 'boss':     [57, 60, 63].forEach(n=>tone('sawtooth', mid2f(n), mid2f(n), 0.7, 0.1)); tone('sine', 60, 30, 0.8, 0.3); break;
+      case 'lose':     tone('sawtooth', 300, 60, 1.2, 0.2); break;
+      case 'win':      [60,64,67,72].forEach((n,i)=>{ const g=tone('sawtooth', mid2f(n), mid2f(n), 0.6, 0.08); }); break;
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    GAME — quarter-view arena combat
    ════════════════════════════════════════════════════════════ */
 const ARENA = 150;
@@ -761,6 +1029,13 @@ class Game {
     this.touchBoost = false;
     this.touchJump = false;
     if (this.isTouch) document.body.classList.add('touch');
+
+    // audio (unlocked on first user gesture per autoplay policy)
+    this.audio = new AudioEngine();
+    const unlock = () => { this.audio.unlock(); this.audio.setSection(this.state === 'playing' ? 'combat' : 'menu'); };
+    addEventListener('pointerdown', unlock, { once: true });
+    addEventListener('keydown', unlock, { once: true });
+    addEventListener('touchstart', unlock, { once: true });
 
     this.garage = new Garage((loadout, stats) => this._sortie(loadout, stats));
     this._bindEvents();
@@ -850,6 +1125,8 @@ class Game {
       if (['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
+    addEventListener('keydown', e => { if (e.code === 'KeyM') this._toggleMute(); });
+    $('mute-btn').addEventListener('click', () => this._toggleMute());
     addEventListener('mousemove', e => {
       if (this.isTouch) return;
       this.mouseScreen.x = e.clientX; this.mouseScreen.y = e.clientY;
@@ -873,6 +1150,13 @@ class Game {
     $('back-title-btn').onclick = () => { this.garage.hide(); $('garage-screen').classList.add('hidden'); $('title-screen').classList.remove('hidden'); this.state = 'title'; };
     $('regarage-btn').onclick = () => { $('result-screen').classList.add('hidden'); this._enterGarage(); };
     $('retry-btn').onclick = () => { $('result-screen').classList.add('hidden'); this._sortie(this.loadout, computeStats(this.loadout)); };
+  }
+
+  _toggleMute() {
+    this.audio.unlock();
+    const muted = this.audio.toggleMute();
+    $('mute-btn').textContent = muted ? '♪ MUTED' : '♪ SOUND';
+    $('mute-btn').classList.toggle('muted', muted);
   }
 
   /* ── touch controls: two virtual sticks + action buttons ── */
@@ -940,6 +1224,7 @@ class Game {
     $('garage-screen').classList.remove('hidden');
     this.garage.show();
     this.state = 'garage';
+    this.audio.setSection('menu');
   }
 
   /* ── sortie: build player mech from loadout ── */
@@ -985,6 +1270,7 @@ class Game {
     this._setupWeaponHUD();
     this.score = 0; this.wave = 0;
     this.state = 'playing';
+    this.audio.setSection('combat');
     this._nextWave();
     this._msg('MISSION START', 1600);
   }
@@ -1031,6 +1317,8 @@ class Game {
     else this.boss = null;
     $('wave-label').textContent = 'WAVE ' + w;
     this._msg('WAVE ' + w + (boss ? ' — BOSS' : ''), 1600);
+    this.audio.setSection(boss ? 'boss' : 'combat');
+    this.audio.sfx(boss ? 'boss' : 'wave');
   }
 
   /* ── player update ── */
@@ -1067,7 +1355,7 @@ class Game {
 
     // jump / hover (Space or touch JUMP)
     if ((k['Space'] || this.touchJump) && p.en > 2) {
-      if (p.grounded) { p.yVel = s.jump; p.grounded = false; }
+      if (p.grounded) { p.yVel = s.jump; p.grounded = false; this.audio && this.audio.sfx('jump'); }
       else { p.yVel += 34 * dt; p.en -= 30 * dt; }   // hover thrust
       p.yVel = Math.min(p.yVel, s.jump);
     }
@@ -1120,6 +1408,13 @@ class Game {
     // lean
     const leanZ = -p.vel.dot(camRight) * 0.004;
     this.playerMesh.rotation.z = lerp(this.playerMesh.rotation.z, clamp(leanZ, -0.15, 0.15), 0.1);
+
+    // limb / body animation
+    updateMechAnim(this.playerMesh, dt, {
+      moving: moving && p.grounded,
+      speedFrac: boosting ? 1 : 0.6,
+      boosting: boosting && moving,
+    });
 
     if (this._bladeSwing > 0) this._bladeSwing -= dt;
   }
@@ -1177,9 +1472,11 @@ class Game {
   _fireWeapon(slot, w) {
     const origin = this._muzzlePos(slot);
     const dir = this._aimVector(origin);
+    if (this.playerMesh.userData.recoil) this.playerMesh.userData.recoil[slot] = 1;
 
     if (w.kind === 'blade') {
       this._bladeSwing = 0.25;
+      this.audio && this.audio.sfx('blade');
       // damage enemies in arc in front
       const fwd = new THREE.Vector3(Math.sin(this.player.facing), 0, Math.cos(this.player.facing));
       for (const e of this.enemies) {
@@ -1215,6 +1512,12 @@ class Game {
     }
     this.particles.spawn(origin, { count: w.big ? 6 : 3, color: w.color, speed: 5, grav: false, size: 0.2 });
     if (w.big) this.shake = Math.max(this.shake, 0.35);
+    if (this.audio) {
+      if (w.kind === 'missile') this.audio.sfx('missile');
+      else if (w.beam)          this.audio.sfx('laser');
+      else if (w.big)           this.audio.sfx('cannon');
+      else                      this.audio.sfx('gun');
+    }
   }
 
   _flashWeapon(slot) { const r = $('wrow-' + slot[0].toUpperCase()); if (r){ r.classList.add('flash'); setTimeout(()=>r.classList.remove('flash'),60);} }
@@ -1290,6 +1593,7 @@ class Game {
     if (!e.alive) {
       this.score += e.cfg.score;
       $('score-label').textContent = 'SCORE ' + this.score;
+      this.audio && this.audio.sfx('explosion');
     }
   }
 
@@ -1307,6 +1611,7 @@ class Game {
       document.body.classList.remove('damage-flash');
       void document.body.offsetWidth;
       document.body.classList.add('damage-flash');
+      this.audio && this.audio.sfx('hit');
     }
     if (this.player.hp <= 0 && this.player.alive) { this.player.alive = false; this._end(false); }
   }
@@ -1332,6 +1637,8 @@ class Game {
   /* ── end ── */
   _end(win) {
     this.state = win ? 'clear' : 'dead';
+    this.audio.setSection('menu');
+    this.audio.sfx(win ? 'win' : 'lose');
     $('hud').classList.add('hidden');
     $('touch-ui').classList.add('hidden');
     const rs = $('result-screen'); rs.classList.remove('hidden');
