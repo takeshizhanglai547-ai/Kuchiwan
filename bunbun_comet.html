@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05030f">
+<title>ぶんぶんコメット 🌠</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05030f;
+touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+/* width/height を明示しないと、高DPR端末で描画バッファのピクセル数が
+   そのまま表示サイズになり画面より大きく描画されてしまう。
+   100% を指定して常にビューポートにフィットさせる。 */
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+"use strict";
+/* =========================================================
+   ぶんぶんコメット — BUNBUN COMET
+   指1本で彗星をぶん回す、ポイ物理ワンフィンガーアクション。
+   タッチ中: 彗星が指にテザーで繋がる。指を円を描くように
+   回すと遠心力で加速し、尻尾が燃え上がる。離せば発射。
+   ワンコ星に迫る隕石を、スピードでふきとばせ！
+   ========================================================= */
+
+const cv = document.getElementById('c');
+const cx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  planet.x = W / 2; planet.y = H / 2;
+}
+window.addEventListener('resize', resize);
+
+const TAU = Math.PI * 2;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+
+/* ---------- 状態 ---------- */
+let mode = 'title';            // title | play | over
+let elapsed = 0, level = 1;
+let timeScale = 1, slowT = 0, hitstop = 0;
+let shake = 0, flash = 0, flashCol = '255,255,255';
+let overT = 0, newBest = false, titleT = 0;
+
+const planet = { x: 0, y: 0, r: 36, hp: 5, maxHp: 5, hurtT: 0 };
+const comet  = { x: 0, y: 0, px: 0, py: 0, heat: 0, r: 15, spd: 0 };
+const touchP = { on: false, id: null, x: 0, y: 0, len: 115 };
+const TETHER = 115;
+const MAXSPD = 3200;           // px/s
+
+let meteors = [], parts = [], pops = [], trail = [];
+let score = 0, dispScore = 0;
+let best = +(localStorage.getItem('bbc_best') || 0);
+let combo = 0, comboT = 0, comboPulse = 0;
+let fever = 0, feverGauge = 0;   // fever: 残り秒 / gauge: 0-100
+let spawnT = 1.2;
+
+/* ---------- 背景の星 ---------- */
+const stars = [];
+for (let i = 0; i < 90; i++)
+  stars.push({ x: Math.random(), y: Math.random(), z: rnd(0.3, 1), s: rnd(0.6, 2.0), p: rnd(0, TAU) });
+
+/* ---------- サウンド (WebAudio 全部合成) ---------- */
+let AC = null, master = null, whoosh = null;
+let nextBeat = 0, beatIdx = 0;
+const SCALE = [0, 3, 5, 7, 10];                 // マイナーペンタ
+const CHORDS = [[220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66], [164.81, 196, 246.94]];
+
+function initAudio(){
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = 0.5; master.connect(AC.destination);
+    const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 300; bp.Q.value = 1.3;
+    const g = AC.createGain(); g.gain.value = 0;
+    src.connect(bp); bp.connect(g); g.connect(master); src.start();
+    whoosh = { bp, g };
+  } catch (e) { AC = null; }
+}
+function env(gain, t0, a, peak, dec){
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(peak, t0 + a);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + a + dec);
+}
+function tone(freq, type, peak, dec, when, slideTo){
+  if (!AC) return;
+  const t0 = when || AC.currentTime;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dec);
+  env(g, t0, 0.005, peak, dec);
+  o.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0 + dec + 0.1);
+}
+function noiseBurst(peak, dec, hp){
+  if (!AC) return;
+  const t0 = AC.currentTime;
+  const len = Math.max(1, (dec + 0.05) * AC.sampleRate) | 0;
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+  const g = AC.createGain(); env(g, t0, 0.003, peak, dec);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t0);
+}
+function sPop(cmb, big){
+  if (!AC) return;
+  const n = SCALE[cmb % 5] + 12 * (Math.floor(cmb / 5) % 3);
+  const f = 392 * Math.pow(2, n / 12);
+  tone(f, 'triangle', big ? 0.3 : 0.22, 0.22);
+  tone(f * 2, 'sine', 0.08, 0.15);
+  noiseBurst(big ? 0.22 : 0.12, big ? 0.2 : 0.1, 2500);
+  if (big) tone(f / 2, 'square', 0.1, 0.25);
+}
+function sTick(){ tone(660, 'sine', 0.06, 0.06); }
+function sThud(){
+  tone(95, 'sine', 0.5, 0.4, 0, 38);
+  noiseBurst(0.3, 0.25, 120);
+}
+function sFever(){
+  if (!AC) return;
+  const t0 = AC.currentTime;
+  [0, 4, 7, 12, 16].forEach((n, i) => tone(523.25 * Math.pow(2, n / 12), 'triangle', 0.22, 0.3, t0 + i * 0.07));
+}
+function sLaunch(){ noiseBurst(0.15, 0.18, 800); }
+function sOver(){
+  if (!AC) return;
+  const t0 = AC.currentTime;
+  [12, 7, 3, 0].forEach((n, i) => tone(220 * Math.pow(2, n / 12), 'sawtooth', 0.12, 0.5, t0 + i * 0.22));
+}
+function updateWhoosh(){
+  if (!AC || !whoosh) return;
+  const t = mode === 'play' ? clamp(comet.spd / 2200, 0, 1) : 0;
+  whoosh.g.gain.value = lerp(whoosh.g.gain.value, t * t * 0.28, 0.15);
+  whoosh.bp.frequency.value = 150 + t * 1500;
+}
+function updateBGM(){
+  if (!AC || mode !== 'play') return;
+  if (nextBeat < AC.currentTime - 1) nextBeat = AC.currentTime;
+  while (nextBeat < AC.currentTime + 0.12) {
+    const chord = CHORDS[Math.floor(beatIdx / 8) % CHORDS.length];
+    let f = chord[beatIdx % 3] * (beatIdx % 8 >= 4 ? 2 : 1);
+    if (fever > 0) f *= 2;
+    tone(f, 'sine', 0.055, 0.3, nextBeat);
+    if (beatIdx % 4 === 0) tone(chord[0] / 2, 'sine', 0.07, 0.35, nextBeat);
+    nextBeat += fever > 0 ? 0.21 : 0.27;
+    beatIdx++;
+  }
+}
+function vibe(ms){ if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+
+/* ---------- ゲーム進行 ---------- */
+function startGame(){
+  meteors = []; parts = []; pops = []; trail = [];
+  score = 0; dispScore = 0; combo = 0; comboT = 0;
+  fever = 0; feverGauge = 0; level = 1; elapsed = 0; spawnT = 1.0;
+  shake = 0; flash = 0; slowT = 0; hitstop = 0; timeScale = 1; newBest = false;
+  planet.hp = planet.maxHp; planet.hurtT = 0;
+  comet.x = W / 2; comet.y = H / 2 - 150;
+  comet.px = comet.x - 2; comet.py = comet.y; comet.heat = 0;
+  touchP.on = false;
+  if (AC) { nextBeat = AC.currentTime; beatIdx = 0; }
+  mode = 'play';
+}
+function gameOver(){
+  mode = 'over'; overT = 0; touchP.on = false;
+  if (score > best) { best = score; newBest = true; try { localStorage.setItem('bbc_best', best); } catch (e) {} }
+  burst(planet.x, planet.y, 40, '#7de8d8', 3);
+  shake = 26; flash = 0.6; flashCol = '255,80,80';
+  sOver(); vibe(250);
+}
+
+/* ---------- 入力 ---------- */
+function grab(x, y){
+  touchP.on = true; touchP.x = x; touchP.y = y;
+  // 実距離から始めてTETHERへ滑らかに縮める(スナップ防止)
+  touchP.len = clamp(dist(comet.x, comet.y, x, y), 40, 420);
+}
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); initAudio();
+  if (mode === 'title') startGame();
+  else if (mode === 'over') { if (overT > 0.9) startGame(); else return; }
+  if (mode !== 'play' || touchP.on) return;
+  touchP.id = e.pointerId;
+  grab(e.clientX, e.clientY);
+});
+window.addEventListener('pointermove', e => {
+  if (touchP.on && e.pointerId === touchP.id) { touchP.x = e.clientX; touchP.y = e.clientY; }
+});
+function release(e){
+  if (touchP.on && e.pointerId === touchP.id) {
+    touchP.on = false;
+    if (comet.spd > 900) { sLaunch(); ring(comet.x, comet.y, 20, 'rgba(255,220,120,.8)'); }
+  }
+}
+window.addEventListener('pointerup', release);
+window.addEventListener('pointercancel', release);
+document.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove',  e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+/* ---------- 隕石 ---------- */
+function spawnMeteor(){
+  if (meteors.length > 26) return;
+  const side = Math.floor(rnd(0, 4));
+  let x, y;
+  if (side === 0) { x = rnd(0, W); y = -50; }
+  else if (side === 1) { x = W + 50; y = rnd(0, H); }
+  else if (side === 2) { x = rnd(0, W); y = H + 50; }
+  else { x = -50; y = rnd(0, H); }
+  const gold = level >= 2 && Math.random() < 0.09;
+  const big  = !gold && level >= 3 && Math.random() < 0.28;
+  const r = gold ? 13 : big ? rnd(27, 34) : rnd(13, 19);
+  const spd = gold ? rnd(150, 210) : clamp(55 + level * 9 + rnd(0, 25), 0, 230);
+  let vx, vy;
+  if (gold) {
+    const tx = planet.x + rnd(-220, 220), ty = planet.y + rnd(-220, 220);
+    const d = dist(x, y, tx, ty) || 1;
+    vx = (tx - x) / d * spd; vy = (ty - y) / d * spd;
+  } else {
+    const d = dist(x, y, planet.x, planet.y) || 1;
+    vx = (planet.x - x) / d * spd; vy = (planet.y - y) / d * spd;
+  }
+  const verts = [];
+  const n = 7 + Math.floor(rnd(0, 3));
+  for (let i = 0; i < n; i++) verts.push(rnd(0.72, 1.05));
+  meteors.push({
+    x, y, vx, vy, r, spd, gold, big, verts,
+    rot: rnd(0, TAU), rs: rnd(-2, 2), cool: 0,
+    tough: gold ? 0 : big ? 950 : 620,
+    score: gold ? 500 : big ? 300 : 100,
+    hue: gold ? 48 : big ? 268 : rnd(185, 215)
+  });
+}
+function destroyMeteor(m, i, byTail){
+  meteors.splice(i, 1);
+  combo++; comboT = 1.6; comboPulse = 1;
+  const pts = m.score * combo * (fever > 0 ? 2 : 1);
+  score += pts;
+  if (fever <= 0) {
+    feverGauge += m.gold ? 25 : m.big ? 12 : 6;
+    if (feverGauge >= 100) {
+      feverGauge = 100; fever = 7; feverGauge = 0;
+      pop(W / 2, H / 2 - 120, 'FEVER!!', 44, '#ffe066');
+      flash = 0.45; flashCol = '255,220,100'; sFever(); vibe([40, 40, 80]);
+    }
+  }
+  const col = m.gold ? '#ffd94d' : m.big ? '#c79bff' : '#8fd8ff';
+  burst(m.x, m.y, m.big ? 22 : 12, col, m.big ? 2 : 1.3);
+  ring(m.x, m.y, m.r, col);
+  pop(m.x, m.y - 8, '+' + pts, m.big ? 24 : 18, col);
+  shake = Math.min(shake + (m.big ? 10 : 4.5), 26);
+  hitstop = Math.max(hitstop, m.big ? 0.05 : 0.018);
+  if (combo > 0 && combo % 10 === 0) {
+    slowT = 0.5;
+    pop(W / 2, H / 2 - 160, combo + ' COMBO!!', 38, '#7dffb0');
+  }
+  sPop(combo, m.big); vibe(m.big ? 30 : 12);
+}
+function bounceMeteor(m){
+  const d = dist(m.x, m.y, comet.x, comet.y) || 1;
+  const nx = (m.x - comet.x) / d, ny = (m.y - comet.y) / d;
+  m.vx += nx * 260; m.vy += ny * 260;
+  m.cool = 0.35;
+  const kv = 0.6;
+  comet.px = comet.x - (comet.x - comet.px) * kv;
+  comet.py = comet.y - (comet.y - comet.py) * kv;
+  burst(m.x - nx * m.r, m.y - ny * m.r, 4, '#ffffff', 0.8);
+  sTick();
+}
+function planetHit(m, i){
+  meteors.splice(i, 1);
+  planet.hp--; planet.hurtT = 0.9;
+  combo = 0; comboT = 0;
+  burst(m.x, m.y, 18, '#ff8a7a', 1.6);
+  shake = 18; flash = 0.35; flashCol = '255,70,70';
+  sThud(); vibe(120);
+  if (planet.hp <= 0) gameOver();
+}
+
+/* ---------- パーティクル ---------- */
+function burst(x, y, n, col, scale){
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, TAU), sp = rnd(60, 420) * scale;
+    parts.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: rnd(0.35, 0.85), t: 0, col,
+      s: rnd(2, 5.5) * scale, rot: rnd(0, TAU), rs: rnd(-8, 8),
+      tri: Math.random() < 0.5
+    });
+  }
+}
+function ring(x, y, r, col){
+  parts.push({ x, y, vx: 0, vy: 0, life: 0.4, t: 0, col, s: r, ringP: true });
+}
+function pop(x, y, txt, size, col){
+  pops.push({ x, y, txt, size, col, t: 0, life: 0.9 });
+}
+
+/* ---------- 更新 ---------- */
+function stepComet(dt){
+  const sub = 2, h = dt / sub;
+  for (let s = 0; s < sub; s++) {
+    let vx = (comet.x - comet.px), vy = (comet.y - comet.py);
+    const damp = touchP.on ? 0.998 : 0.995;
+    vx *= damp; vy *= damp;
+    // フリー時はワンコ星のまわりの軌道リングへゆるく戻る
+    if (!touchP.on && mode === 'play') {
+      const d = dist(comet.x, comet.y, planet.x, planet.y) || 1;
+      const diff = d - 150;
+      const nx = (comet.x - planet.x) / d, ny = (comet.y - planet.y) / d;
+      vx -= nx * diff * 0.9 * h * h * 60;
+      vy -= ny * diff * 0.9 * h * h * 60;
+    }
+    comet.px = comet.x; comet.py = comet.y;
+    comet.x += vx; comet.y += vy;
+    // テザー拘束(円へソフト射影) — 指を回すとエネルギーが乗る
+    if (touchP.on) {
+      touchP.len = lerp(touchP.len, TETHER, 0.05);
+      const dx = comet.x - touchP.x, dy = comet.y - touchP.y;
+      const d = Math.hypot(dx, dy) || 0.0001;
+      const diff = d - touchP.len;
+      const k = diff > 0 ? 0.42 : 0.1;
+      comet.x -= dx / d * diff * k;
+      comet.y -= dy / d * diff * k;
+    }
+    // 画面端バウンド
+    const r = comet.r;
+    if (comet.x < r)     { comet.x = r;     comet.px = comet.x + (comet.x - comet.px) * 0.8; }
+    if (comet.x > W - r) { comet.x = W - r; comet.px = comet.x + (comet.x - comet.px) * 0.8; }
+    if (comet.y < r)     { comet.y = r;     comet.py = comet.y + (comet.y - comet.py) * 0.8; }
+    if (comet.y > H - r) { comet.y = H - r; comet.py = comet.y + (comet.y - comet.py) * 0.8; }
+  }
+  // 速度計算+クランプ
+  let vx = (comet.x - comet.px) / (dt / sub), vy = (comet.y - comet.py) / (dt / sub);
+  let spd = Math.hypot(vx, vy);
+  if (spd > MAXSPD) {
+    const k = MAXSPD / spd;
+    comet.px = comet.x - (comet.x - comet.px) * k;
+    comet.py = comet.y - (comet.y - comet.py) * k;
+    spd = MAXSPD;
+  }
+  comet.spd = spd;
+  comet.heat += (clamp(spd / 1400, 0, 1) - comet.heat) * 0.09;
+  trail.push({ x: comet.x, y: comet.y });
+  if (trail.length > 34) trail.shift();
+}
+function segDist(px, py, ax, ay, bx, by){
+  const dx = bx - ax, dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
+  t = clamp(t, 0, 1);
+  return dist(px, py, ax + dx * t, ay + dy * t);
+}
+function update(dt){
+  titleT += dt;
+  if (mode === 'title') {
+    // タイトルデモ: 見えない指が円を描いて彗星をぶん回す
+    touchP.on = true;
+    touchP.x = W / 2 + Math.cos(titleT * 3.2) * 70;
+    touchP.y = H / 2 - 40 + Math.sin(titleT * 3.2) * 70;
+    stepComet(dt);
+    touchP.on = false;
+    updateParts(dt);
+    return;
+  }
+  if (mode === 'over') {
+    overT += dt;
+    updateParts(dt);
+    return;
+  }
+  elapsed += dt;
+  const newLevel = 1 + Math.floor(elapsed / 15);
+  if (newLevel !== level) {
+    level = newLevel;
+    pop(W / 2, H / 2 - 140, 'LEVEL ' + level + '!', 32, '#8fd8ff');
+    tone(784, 'triangle', 0.15, 0.3); tone(988, 'triangle', 0.15, 0.4);
+  }
+  spawnT -= dt;
+  if (spawnT <= 0) {
+    spawnMeteor();
+    spawnT = clamp(1.5 * Math.pow(0.9, level - 1), 0.38, 1.5) * rnd(0.75, 1.25) * (fever > 0 ? 0.75 : 1);
+  }
+  stepComet(dt);
+  if (fever > 0) fever -= dt;
+  if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
+  comboPulse *= 0.9;
+
+  // 隕石
+  const lethal = fever > 0;
+  const tailOn = comet.heat > 0.45 || lethal;
+  const tailRad = 7 + comet.heat * 12;
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    const m = meteors[i];
+    if (!m.gold) {
+      const d = dist(m.x, m.y, planet.x, planet.y) || 1;
+      const desx = (planet.x - m.x) / d * m.spd, desy = (planet.y - m.y) / d * m.spd;
+      m.vx += (desx - m.vx) * clamp(0.6 * dt, 0, 1);
+      m.vy += (desy - m.vy) * clamp(0.6 * dt, 0, 1);
+    }
+    m.x += m.vx * dt; m.y += m.vy * dt; m.rot += m.rs * dt;
+    if (m.cool > 0) m.cool -= dt;
+    // 画面外整理(金の星など)
+    if (m.x < -120 || m.x > W + 120 || m.y < -120 || m.y > H + 120) { meteors.splice(i, 1); continue; }
+    // ワンコ星に衝突
+    if (!m.gold && dist(m.x, m.y, planet.x, planet.y) < planet.r + m.r - 6) { planetHit(m, i); continue; }
+    // 彗星本体(カプセル判定でトンネリング防止)
+    if (m.cool <= 0) {
+      const hitR = m.r + comet.r + comet.heat * 6;
+      if (segDist(m.x, m.y, comet.px, comet.py, comet.x, comet.y) < hitR) {
+        if (lethal || m.gold || comet.spd > m.tough) { destroyMeteor(m, i, false); continue; }
+        bounceMeteor(m);
+        continue;
+      }
+      // 燃える尻尾でも斬れる
+      if (tailOn && trail.length > 4) {
+        let cut = false;
+        for (let k = trail.length - 1; k >= Math.max(2, trail.length - 14); k -= 2) {
+          if (segDist(m.x, m.y, trail[k - 2].x, trail[k - 2].y, trail[k].x, trail[k].y) < m.r + tailRad) { cut = true; break; }
+        }
+        if (cut) { destroyMeteor(m, i, true); continue; }
+      }
+    }
+  }
+  updateParts(dt);
+}
+function updateParts(dt){
+  if (planet.hurtT > 0) planet.hurtT -= dt;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.t += dt;
+    if (p.t >= p.life) { parts.splice(i, 1); continue; }
+    if (!p.ringP) {
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 0.97; p.vy *= 0.97;
+      if (p.rot !== undefined) p.rot += p.rs * dt;
+    }
+  }
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const p = pops[i];
+    p.t += dt; p.y -= 40 * dt;
+    if (p.t >= p.life) pops.splice(i, 1);
+  }
+}
+
+/* ---------- 描画 ---------- */
+function feverHue(){ return (titleT * 340) % 360; }
+function drawBG(){
+  const g = cx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#070518'); g.addColorStop(0.6, '#0b0724'); g.addColorStop(1, '#140a2e');
+  cx.fillStyle = g; cx.fillRect(-40, -40, W + 80, H + 80);
+  // 星雲
+  const blobs = [[0.2, 0.25, 0.35, '120,80,220'], [0.85, 0.7, 0.4, '60,140,220'], [0.6, 0.15, 0.28, '220,90,160']];
+  for (const [bx, by, br, col] of blobs) {
+    const rg = cx.createRadialGradient(bx * W, by * H, 0, bx * W, by * H, br * Math.max(W, H));
+    rg.addColorStop(0, 'rgba(' + col + ',0.10)'); rg.addColorStop(1, 'rgba(' + col + ',0)');
+    cx.fillStyle = rg; cx.fillRect(-40, -40, W + 80, H + 80);
+  }
+  for (const s of stars) {
+    const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(titleT * 1.7 + s.p));
+    cx.globalAlpha = tw * s.z;
+    cx.fillStyle = '#cfe4ff';
+    const sx = (s.x * W + titleT * 4 * s.z) % (W + 10);
+    cx.fillRect(sx, s.y * H, s.s, s.s);
+  }
+  cx.globalAlpha = 1;
+}
+function drawPlanet(){
+  if (mode === 'over') return;   // ながれ星になった…
+  const p = planet;
+  const hurt = p.hurtT > 0;
+  cx.save();
+  cx.translate(p.x, p.y);
+  // 土星風リング(奥)
+  cx.save();
+  cx.rotate(-0.35);
+  cx.strokeStyle = 'rgba(255,220,150,0.45)'; cx.lineWidth = 6;
+  cx.beginPath(); cx.ellipse(0, 0, p.r * 1.85, p.r * 0.55, 0, Math.PI * 0.06, Math.PI * 0.94); cx.stroke();
+  cx.restore();
+  // 本体
+  const g = cx.createRadialGradient(-p.r * 0.35, -p.r * 0.4, p.r * 0.2, 0, 0, p.r);
+  if (hurt && (p.hurtT * 12 | 0) % 2 === 0) { g.addColorStop(0, '#ffb3a6'); g.addColorStop(1, '#d64f4f'); }
+  else { g.addColorStop(0, '#b9f4e6'); g.addColorStop(1, '#3fb6a0'); }
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0, 0, p.r, 0, TAU); cx.fill();
+  // 模様
+  cx.fillStyle = 'rgba(30,120,105,0.35)';
+  cx.beginPath(); cx.arc(-p.r * 0.4, p.r * 0.3, p.r * 0.28, 0, TAU); cx.fill();
+  cx.beginPath(); cx.arc(p.r * 0.45, -p.r * 0.15, p.r * 0.2, 0, TAU); cx.fill();
+  // 耳(わんこの垂れ耳)
+  cx.fillStyle = hurt ? '#b04848' : '#2f9c88';
+  for (const s of [-1, 1]) {
+    cx.save();
+    cx.translate(s * p.r * 0.78, -p.r * 0.55);
+    cx.rotate(s * 0.85);
+    cx.beginPath(); cx.ellipse(0, 0, p.r * 0.46, p.r * 0.24, 0, 0, TAU); cx.fill();
+    cx.restore();
+  }
+  // 顔
+  cx.strokeStyle = '#123a33'; cx.fillStyle = '#123a33'; cx.lineWidth = 2.5; cx.lineCap = 'round';
+  if (hurt) {
+    for (const s of [-1, 1]) {
+      cx.beginPath();
+      cx.moveTo(s * 13 - 5, -7); cx.lineTo(s * 13 + 5, 3);
+      cx.moveTo(s * 13 + 5, -7); cx.lineTo(s * 13 - 5, 3);
+      cx.stroke();
+    }
+  } else {
+    for (const s of [-1, 1]) { cx.beginPath(); cx.arc(s * 12, -4, 3.4, 0, TAU); cx.fill(); }
+  }
+  cx.beginPath(); cx.arc(0, 5, 3, 0, TAU); cx.fill();       // 鼻
+  cx.beginPath();                                            // 口(w)
+  cx.arc(-4, 9, 4.5, 0.15 * Math.PI, 0.85 * Math.PI);
+  cx.arc(4, 9, 4.5, 0.15 * Math.PI, 0.85 * Math.PI);
+  cx.stroke();
+  // リング(手前)
+  cx.save();
+  cx.rotate(-0.35);
+  cx.strokeStyle = 'rgba(255,225,160,0.75)'; cx.lineWidth = 6;
+  cx.beginPath(); cx.ellipse(0, 0, p.r * 1.85, p.r * 0.55, 0, Math.PI * 1.06, Math.PI * 1.94); cx.stroke();
+  cx.restore();
+  cx.restore();
+  // HPハート
+  const total = p.maxHp, hw = 20;
+  const x0 = p.x - (total - 1) * hw / 2, y0 = p.y + p.r + 30;
+  for (let i = 0; i < total; i++) drawHeart(x0 + i * hw, y0, 7, i < p.hp);
+}
+function drawHeart(x, y, s, on){
+  cx.save(); cx.translate(x, y);
+  cx.fillStyle = on ? '#ff6b8d' : 'rgba(255,255,255,0.18)';
+  cx.beginPath();
+  cx.moveTo(0, s * 0.4);
+  cx.bezierCurveTo(-s * 1.2, -s * 0.5, -s * 0.5, -s * 1.2, 0, -s * 0.4);
+  cx.bezierCurveTo(s * 0.5, -s * 1.2, s * 1.2, -s * 0.5, 0, s * 0.4);
+  cx.lineTo(0, s);
+  cx.closePath(); cx.fill();
+  cx.restore();
+}
+function drawMeteors(){
+  for (const m of meteors) {
+    cx.save(); cx.translate(m.x, m.y); cx.rotate(m.rot);
+    if (m.gold) {
+      // 金の星
+      cx.shadowColor = '#ffd94d'; cx.shadowBlur = 18;
+      cx.fillStyle = '#ffd94d';
+      cx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = i / 10 * TAU - Math.PI / 2;
+        const rr = i % 2 === 0 ? m.r : m.r * 0.45;
+        cx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      cx.closePath(); cx.fill();
+      cx.shadowBlur = 0;
+    } else {
+      const g = cx.createRadialGradient(-m.r * 0.3, -m.r * 0.3, m.r * 0.1, 0, 0, m.r);
+      g.addColorStop(0, 'hsl(' + m.hue + ',70%,72%)');
+      g.addColorStop(1, 'hsl(' + m.hue + ',55%,34%)');
+      cx.fillStyle = g;
+      cx.strokeStyle = 'hsla(' + m.hue + ',80%,85%,0.7)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      const n = m.verts.length;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * TAU;
+        const rr = m.r * m.verts[i];
+        cx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      cx.closePath(); cx.fill(); cx.stroke();
+    }
+    cx.restore();
+  }
+}
+function drawTail(heat){
+  const n = trail.length;
+  if (n < 3 || heat < 0.03) return;
+  const head = trail[n - 1];
+  cx.save();
+  cx.globalCompositeOperation = 'lighter';
+  // 外側グロー + コアの2パスで炎リボンを作る
+  const passes = [{ w: 2.3, a: 0.16 }, { w: 1, a: 0.55 }];
+  for (const ps of passes) {
+    const L = [], R = [];
+    for (let i = 0; i < n; i++) {
+      const p = trail[i];
+      const q = trail[Math.min(i + 1, n - 1)], o = trail[Math.max(i - 1, 0)];
+      let dx = q.x - o.x, dy = q.y - o.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const t = i / (n - 1);
+      const w = Math.pow(t, 1.3) * (3 + heat * 13) * ps.w + 0.3;
+      L.push([p.x - dy / d * w, p.y + dx / d * w]);
+      R.push([p.x + dy / d * w, p.y - dx / d * w]);
+    }
+    const g = cx.createLinearGradient(trail[0].x, trail[0].y, head.x, head.y);
+    if (fever > 0) {
+      for (let s = 0; s <= 5; s++)
+        g.addColorStop(s / 5, 'hsla(' + ((feverHue() + s * 42) % 360) + ',95%,65%,' + ((s / 5) * ps.a * (0.3 + heat * 0.7)).toFixed(3) + ')');
+    } else {
+      const hue = 205 - heat * 165;
+      g.addColorStop(0, 'hsla(' + hue + ',95%,60%,0)');
+      g.addColorStop(0.55, 'hsla(' + hue + ',95%,62%,' + (0.4 * ps.a * (0.2 + heat * 0.8)).toFixed(3) + ')');
+      g.addColorStop(1, 'hsla(' + Math.max(hue - 25, 20) + ',100%,72%,' + (ps.a * (0.25 + heat * 0.75)).toFixed(3) + ')');
+    }
+    cx.fillStyle = g;
+    cx.beginPath();
+    cx.moveTo(L[0][0], L[0][1]);
+    for (let i = 1; i < n; i++) cx.lineTo(L[i][0], L[i][1]);
+    for (let i = n - 1; i >= 0; i--) cx.lineTo(R[i][0], R[i][1]);
+    cx.closePath(); cx.fill();
+  }
+  cx.restore();
+}
+function drawComet(){
+  const heat = comet.heat;
+  // テザー
+  if (touchP.on && mode === 'play') {
+    cx.strokeStyle = 'rgba(255,255,255,0.28)'; cx.lineWidth = 2;
+    cx.setLineDash([4, 7]);
+    cx.beginPath(); cx.moveTo(touchP.x, touchP.y); cx.lineTo(comet.x, comet.y); cx.stroke();
+    cx.setLineDash([]);
+    cx.strokeStyle = 'rgba(255,255,255,0.4)';
+    cx.beginPath(); cx.arc(touchP.x, touchP.y, 12, 0, TAU); cx.stroke();
+  }
+  // 尻尾(テーパー付きリボン)
+  drawTail(heat);
+  cx.save();
+  cx.globalCompositeOperation = 'lighter';
+  // 本体グロー
+  const r = comet.r + heat * 5;
+  const gl = cx.createRadialGradient(comet.x, comet.y, 0, comet.x, comet.y, r * 3);
+  const coreHue = fever > 0 ? feverHue() : 205 - heat * 165;
+  gl.addColorStop(0, 'hsla(' + coreHue + ',100%,80%,0.9)');
+  gl.addColorStop(1, 'hsla(' + coreHue + ',100%,60%,0)');
+  cx.fillStyle = gl;
+  cx.beginPath(); cx.arc(comet.x, comet.y, r * 3, 0, TAU); cx.fill();
+  cx.restore();
+  // 本体(星のこいぬ)
+  cx.save();
+  cx.translate(comet.x, comet.y);
+  const g = cx.createRadialGradient(-r * 0.3, -r * 0.3, 1, 0, 0, r);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(1, fever > 0 ? 'hsl(' + feverHue() + ',90%,65%)' : (heat > 0.5 ? '#ffd166' : '#9adcff'));
+  // 耳(垂れ耳)
+  cx.fillStyle = g;
+  for (const s of [-1, 1]) {
+    cx.save();
+    cx.translate(s * r * 0.72, -r * 0.5);
+    cx.rotate(s * 0.8);
+    cx.beginPath(); cx.ellipse(0, 0, r * 0.5, r * 0.26, 0, 0, TAU); cx.fill();
+    cx.restore();
+  }
+  cx.beginPath(); cx.arc(0, 0, r, 0, TAU); cx.fill();
+  // 顔
+  cx.strokeStyle = '#284a66'; cx.fillStyle = '#284a66'; cx.lineWidth = 2; cx.lineCap = 'round';
+  if (comet.spd > 800) {
+    // にっこり(> <)
+    for (const s of [-1, 1]) {
+      cx.beginPath();
+      cx.arc(s * r * 0.42, -r * 0.05, r * 0.26, s === -1 ? Math.PI * 1.15 : Math.PI * 1.35, s === -1 ? Math.PI * 1.65 : Math.PI * 1.85);
+      cx.stroke();
+    }
+  } else {
+    for (const s of [-1, 1]) { cx.beginPath(); cx.arc(s * r * 0.4, -r * 0.08, r * 0.14, 0, TAU); cx.fill(); }
+  }
+  cx.beginPath(); cx.arc(0, r * 0.28, r * 0.12, 0, TAU); cx.fill();
+  cx.restore();
+}
+function drawParts(){
+  cx.save();
+  cx.globalCompositeOperation = 'lighter';
+  for (const p of parts) {
+    const k = 1 - p.t / p.life;
+    if (p.ringP) {
+      cx.strokeStyle = p.col.replace(/[\d.]+\)$/, (k * 0.9).toFixed(2) + ')');
+      if (p.col.indexOf('rgba') < 0) { cx.strokeStyle = p.col; cx.globalAlpha = k; }
+      cx.lineWidth = 3 + k * 3;
+      cx.beginPath(); cx.arc(p.x, p.y, p.s + (1 - k) * 90, 0, TAU); cx.stroke();
+      cx.globalAlpha = 1;
+    } else {
+      cx.globalAlpha = k;
+      cx.fillStyle = p.col;
+      if (p.tri) {
+        cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+        cx.beginPath();
+        cx.moveTo(0, -p.s); cx.lineTo(p.s * 0.9, p.s * 0.7); cx.lineTo(-p.s * 0.9, p.s * 0.7);
+        cx.closePath(); cx.fill(); cx.restore();
+      } else {
+        cx.beginPath(); cx.arc(p.x, p.y, p.s * k + 0.5, 0, TAU); cx.fill();
+      }
+      cx.globalAlpha = 1;
+    }
+  }
+  cx.restore();
+}
+function fnt(s, w){ return (w || 'bold') + ' ' + s + "px 'Hiragino Maru Gothic ProN','Rounded Mplus 1c','Yu Gothic',sans-serif"; }
+function drawPops(){
+  for (const p of pops) {
+    const k = 1 - p.t / p.life;
+    cx.globalAlpha = Math.min(1, k * 2);
+    cx.font = fnt(p.size);
+    cx.textAlign = 'center';
+    cx.lineWidth = 4; cx.strokeStyle = 'rgba(10,5,30,0.8)';
+    cx.strokeText(p.txt, p.x, p.y);
+    cx.fillStyle = p.col;
+    cx.fillText(p.txt, p.x, p.y);
+  }
+  cx.globalAlpha = 1;
+}
+function drawUI(){
+  dispScore += (score - dispScore) * 0.15;
+  if (score - dispScore < 1) dispScore = score;
+  cx.textAlign = 'left';
+  cx.font = fnt(15);
+  cx.fillStyle = 'rgba(200,220,255,0.75)';
+  cx.fillText('スコア', 16, 30);
+  cx.font = fnt(26);
+  cx.fillStyle = '#ffffff';
+  cx.fillText(Math.round(dispScore).toLocaleString(), 16, 58);
+  cx.textAlign = 'right';
+  cx.font = fnt(13);
+  cx.fillStyle = 'rgba(200,220,255,0.6)';
+  cx.fillText('ベスト ' + best.toLocaleString(), W - 16, 30);
+  cx.fillText('LV ' + level, W - 16, 50);
+  // コンボ
+  if (combo > 1) {
+    const s = 26 + comboPulse * 14 + Math.min(combo, 30) * 0.5;
+    cx.textAlign = 'center';
+    cx.font = fnt(s);
+    cx.lineWidth = 5; cx.strokeStyle = 'rgba(10,5,30,0.8)';
+    const col = fever > 0 ? 'hsl(' + feverHue() + ',100%,70%)' : (combo >= 10 ? '#7dffb0' : '#ffd166');
+    cx.strokeText('×' + combo, W / 2, 64);
+    cx.fillStyle = col;
+    cx.fillText('×' + combo, W / 2, 64);
+  }
+  // フィーバーゲージ
+  const bw = Math.min(280, W * 0.55), bx = (W - bw) / 2, by = 84;
+  cx.fillStyle = 'rgba(255,255,255,0.12)';
+  roundRect(bx, by, bw, 9, 5); cx.fill();
+  if (fever > 0) {
+    cx.fillStyle = 'hsl(' + feverHue() + ',100%,65%)';
+    roundRect(bx, by, bw * clamp(fever / 7, 0, 1), 9, 5); cx.fill();
+    cx.textAlign = 'center'; cx.font = fnt(12);
+    cx.fillStyle = '#ffe066';
+    cx.fillText('★ FEVER ★', W / 2, by - 5);
+  } else if (feverGauge > 0) {
+    const g = cx.createLinearGradient(bx, 0, bx + bw, 0);
+    g.addColorStop(0, '#ffb347'); g.addColorStop(1, '#ffe066');
+    cx.fillStyle = g;
+    roundRect(bx, by, bw * clamp(feverGauge / 100, 0, 1), 9, 5); cx.fill();
+  }
+}
+function roundRect(x, y, w, h, r){
+  cx.beginPath();
+  cx.moveTo(x + r, y);
+  cx.arcTo(x + w, y, x + w, y + h, r);
+  cx.arcTo(x + w, y + h, x, y + h, r);
+  cx.arcTo(x, y + h, x, y, r);
+  cx.arcTo(x, y, x + w, y, r);
+  cx.closePath();
+}
+function drawTitle(){
+  cx.fillStyle = 'rgba(5,3,15,0.45)';
+  cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center';
+  const cy0 = H * 0.24;
+  cx.font = fnt(15);
+  cx.fillStyle = '#8fd8ff';
+  cx.fillText('── ワンフィンガーぶん回しアクション ──', W / 2, cy0 - 52);
+  cx.font = fnt(Math.min(52, W * 0.115));
+  cx.lineWidth = 8; cx.strokeStyle = 'rgba(10,5,30,0.9)';
+  cx.strokeText('ぶんぶんコメット', W / 2, cy0);
+  const g = cx.createLinearGradient(0, cy0 - 40, 0, cy0 + 10);
+  g.addColorStop(0, '#ffe066'); g.addColorStop(1, '#ff8fb3');
+  cx.fillStyle = g;
+  cx.fillText('ぶんぶんコメット', W / 2, cy0);
+  cx.font = fnt(14);
+  cx.fillStyle = 'rgba(255,255,255,0.85)';
+  const ly = H * 0.68;
+  cx.fillText('ゆびで ぐるぐる まわすと 彗星が加速！', W / 2, ly);
+  cx.fillText('はやく回すほど 尻尾が燃えて 隕石を斬れる', W / 2, ly + 26);
+  cx.fillText('ゆびを離せば スリングショット発射！', W / 2, ly + 52);
+  cx.fillText('ワンコ星を まもりぬけ 🐶', W / 2, ly + 78);
+  if (best > 0) {
+    cx.fillStyle = 'rgba(200,220,255,0.6)';
+    cx.fillText('ベストスコア ' + best.toLocaleString(), W / 2, ly + 112);
+  }
+  cx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 4);
+  cx.font = fnt(22);
+  cx.fillStyle = '#ffffff';
+  cx.fillText('▶ タッチしてスタート ◀', W / 2, H * 0.9);
+  cx.globalAlpha = 1;
+}
+function drawOver(){
+  cx.fillStyle = 'rgba(5,3,15,' + clamp(overT * 1.2, 0, 0.62) + ')';
+  cx.fillRect(0, 0, W, H);
+  if (overT < 0.3) return;
+  cx.textAlign = 'center';
+  cx.font = fnt(40);
+  cx.lineWidth = 7; cx.strokeStyle = 'rgba(10,5,30,0.9)';
+  cx.strokeText('ゲームオーバー', W / 2, H * 0.34);
+  cx.fillStyle = '#ff8fa0';
+  cx.fillText('ゲームオーバー', W / 2, H * 0.34);
+  cx.font = fnt(15);
+  cx.fillStyle = 'rgba(255,255,255,0.8)';
+  cx.fillText('ワンコ星は ながれ星に なってしまった…', W / 2, H * 0.34 + 34);
+  cx.font = fnt(18);
+  cx.fillStyle = '#cfe4ff';
+  cx.fillText('スコア', W / 2, H * 0.48);
+  cx.font = fnt(44);
+  cx.fillStyle = '#ffffff';
+  cx.fillText(score.toLocaleString(), W / 2, H * 0.48 + 46);
+  if (newBest) {
+    cx.globalAlpha = 0.7 + 0.3 * Math.sin(titleT * 6);
+    cx.font = fnt(22);
+    cx.fillStyle = '#ffe066';
+    cx.fillText('✨ ニューレコード!! ✨', W / 2, H * 0.48 + 84);
+    cx.globalAlpha = 1;
+  } else {
+    cx.font = fnt(14);
+    cx.fillStyle = 'rgba(200,220,255,0.6)';
+    cx.fillText('ベスト ' + best.toLocaleString(), W / 2, H * 0.48 + 80);
+  }
+  if (overT > 0.9) {
+    cx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 4);
+    cx.font = fnt(20);
+    cx.fillStyle = '#ffffff';
+    cx.fillText('▶ タップで もういちど ◀', W / 2, H * 0.82);
+    cx.globalAlpha = 1;
+  }
+}
+function render(){
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (shake > 0.2) {
+    cx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);
+  }
+  drawBG();
+  drawPlanet();
+  drawMeteors();
+  drawComet();
+  drawParts();
+  drawPops();
+  if (mode === 'play') drawUI();
+  if (mode === 'title') drawTitle();
+  if (mode === 'over') drawOver();
+  if (flash > 0.01) {
+    cx.fillStyle = 'rgba(' + flashCol + ',' + (flash * 0.5).toFixed(3) + ')';
+    cx.fillRect(-40, -40, W + 80, H + 80);
+  }
+  // ビネット
+  const v = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, fever > 0 ? 'hsla(' + feverHue() + ',80%,30%,0.4)' : 'rgba(0,0,0,0.42)');
+  cx.fillStyle = v;
+  cx.fillRect(-40, -40, W + 80, H + 80);
+}
+
+/* ---------- メインループ ---------- */
+let tPrev = performance.now();
+function loop(tNow){
+  requestAnimationFrame(loop);
+  let dtReal = (tNow - tPrev) / 1000;
+  tPrev = tNow;
+  dtReal = clamp(dtReal, 0.001, 0.04);
+  if (hitstop > 0) {
+    hitstop -= dtReal;
+  } else {
+    if (slowT > 0) { slowT -= dtReal; timeScale = lerp(timeScale, 0.3, 0.3); }
+    else timeScale = lerp(timeScale, 1, 0.08);
+    update(dtReal * timeScale);
+  }
+  shake *= Math.pow(0.001, dtReal);      // 減衰
+  if (shake < 0.2) shake = 0;
+  flash = Math.max(0, flash - dtReal * 2.2);
+  updateWhoosh();
+  updateBGM();
+  render();
+}
+resize();
+comet.x = W / 2; comet.y = H / 2 - 150; comet.px = comet.x - 2; comet.py = comet.y;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
