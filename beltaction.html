@@ -759,7 +759,8 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
   weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
-  dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0 }; }
+  dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0,
+  level:1, xp:0, xpNext:100, vehicle:null, vehHp:0, vehRam:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
 let player=players[0];               // points to the player currently being simulated/drawn
 let TWO_P=false;                     // co-op enabled
@@ -804,7 +805,8 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.weapon=p.permWeapon||(p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'); p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
-  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.atkMul=1; p.defMul=1; p.spdMul=1; p.coinMul=1; p.maxHp=120; p.hp=120; p.dimMax=3;
+  p.vehicle=null; p.vehHp=0; p.vehRam=0;   // 乗り物は各フィールドで乗り直す
+  p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.atkMul=1; p.defMul=1; p.spdMul=1; p.coinMul=1; p.maxHp=120; p.hp=120; p.dimMax=3; p.level=1; p.xp=0; p.xpNext=100;
     p.permWeapon=null; p.weapon=p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'; } }
 const SPEED=7.4, DEPTH_SPEED=0;   // 基本移動速度2倍（旧ダッシュ相当の快速がデフォルト）
 function activePlayers(){ return players.filter(p=>p.active); }
@@ -1071,6 +1073,7 @@ function drawGreatOne(){
 }
 function updatePlayer(){
   const p=player; const SHI=p.kind==='shima', NUK=p.kind==='nuko';
+  if(p.vehicle){ updateMounted(p); return; }   // 乗り物に騎乗中は専用の操作
   if(p.invuln>0)p.invuln--; if(p.dashCd>0)p.dashCd--; if(p.parryFx>0)p.parryFx--; if(p.guardFx>0)p.guardFx--;
   if(p.comboTimer>0)p.comboTimer--; else if(p.state!=='attack') p.comboStep=0;
 
@@ -1194,7 +1197,7 @@ function updatePlayer(){
   // ---- grab button (掴み)：敵がいなければ近くのNPCと会話。ヌコは攻撃同時押しで緊急レーザー ----
   if(pressed.grab){ pressed.grab=false;
     if(NUK && (K.atk||pressed.atk) && p.hp>p.maxHp*0.2+1){ pressed.atk=false; beginNukoLaser(p); return; }
-    if(tryTalk()) return; tryGrab(); return; }
+    if(tryMount()) return; if(tryTalk()) return; tryGrab(); return; }
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
     pressed.atk=false;
@@ -1704,6 +1707,10 @@ const ETYPE={
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
   noroinu:{hp:600,sp:1.8,dmg:16,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
+  // ---- 新エネミー：不死・機械の犬 ----
+  zombiewan:{hp:74,sp:0.72,dmg:11,atkR:48,w:60,h:78,c1:'#6f8a54',c2:'#455a34',c3:'#28361e',score:360,zombie:true,accent:'#a6e070',name:'ゾンビワンコ'},          // 遅いが一度だけ蘇る
+  skeletwan:{hp:40,sp:1.7,dmg:9,atkR:220,w:52,h:80,c1:'#eae7dc',c2:'#b7b3a4',c3:'#7c786a',score:380,boner:true,accent:'#cfe6ff',name:'スケルトンワンコ'},          // 遠距離から骨を投げる
+  mechawan:{hp:132,sp:2.3,dmg:14,atkR:230,w:62,h:86,c1:'#9aa4b0',c2:'#59616d',c3:'#2f343c',score:660,mecha:true,gunner:true,charge:true,accent:'#ff2a2a',name:'メカワンコ T-800'},   // 頑丈・高速・赤い光弾
 };
 // Boss move-sets
 const BOSSMOVES={
@@ -1833,11 +1840,20 @@ function startBlastoff(e,dir){ const T=ETYPE[e.type];
 function starTwinkle(e){ const sx=clamp(e.x, camX+24, camX+W-24), sy=clamp(e.y-e.z, 28, GROUND_TOP-10);
   particles.push({k:'twinkle',x:sx,y:sy,life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
   ring(sx,sy,'#ffe14d'); spark(sx,sy,'#fff',10,7); popText(sx,sy-12,'キラーン☆','#ffe14d',true); sfx.twinkle(); }
+// ── RPG：経験値とレベルアップ（倒すとXP獲得、レベルで最大HP・攻撃力が伸びる）──
+function gainXp(scoreVal){ const g=Math.max(1,Math.round((scoreVal||0)/10));
+  players.forEach(p=>{ if(!p.active||p.state==='dead')return; p.xp=(p.xp||0)+g;
+    while(p.xp>=(p.xpNext||100)){ p.xp-=p.xpNext; p.level=(p.level||1)+1; p.xpNext=Math.round(p.xpNext*1.35);
+      p.maxHp+=14; p.hp=p.maxHp; p.atkMul=(p.atkMul||1)+0.06;
+      popText(p.x,p.y-112,'レベルアップ！ LV'+p.level,'#ffe14d',true); ring(p.x,p.y-44,'#ffe14d'); ring(p.x,p.y-44,'#fff'); spark(p.x,p.y-44,'#fff',18,10); sfx.rise(); flash=Math.max(flash,3); } }); }
 function killEnemy(e){ const T=ETYPE[e.type];
   if(e.grabTarget) releaseEnemyGrab(e);                     // 掴み中に倒されたらプレイヤーを解放
   if(T.evolveTo){ evolveBoss(e,T); return; }               // 多段ボス：倒すと次形態へ進化
+  // ゾンビワンコ：一度だけ蘇る（不死）
+  if(T.zombie && !e.revived){ e.revived=true; e.hp=Math.max(1,Math.round(e.maxHp*0.5)); e.state='down'; e.downTimer=100; e.reviveT=100; e.stun=0; e.vx=0; e.vz=0; e.z=0; e.grabbedBy=0;
+    spark(e.x,e.y-e.h*0.5,'#a6e070',18,9); ring(e.x,e.y-e.h*0.4,'#a6e070'); popText(e.x,e.y-e.h-8,'まだ死なん…！','#a6e070',true); sfx.boss(); return; }
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
-  score+=T.score+combo.count*10; spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
+  score+=T.score+combo.count*10; gainXp(T.score); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
   if(T.bomber) bomberBoom(e);
@@ -2060,6 +2076,14 @@ function updateEnemies(){
       if(e.tunnelT<=0 || Math.abs(p.x-e.x)<26){ e.sub=false; e.state='pounce'; e.z=1; e.vz=-12; e.vx=Math.sign(p.x-e.x)*4;
         e.pounceHit=false; e.facing=p.x<e.x?-1:1; dust(e.x,e.y,10); spark(e.x,e.y,'#8a5a2c',10,7); sfx.dash(); popText(e.x,e.y-34,'飛び出した！','#ffce7a'); }
       continue; }
+    // スケルトンワンコ：骨を投げる（遠距離）
+    if(e.state==='boneThrow'){ e.boneT--; if(e.boneT===8){ const dir=e.facing;
+        spawnProj(e.x+dir*20, e.y-e.h*0.55, dir*7.2, 0, {owner:'enemy',dmg:t.dmg,color:'#e8e6dc',r:9,life:130,zz:e.h*0.55,spike:true}); sfx.swing(1); spark(e.x+dir*18,e.y-e.h*0.55,'#e8e6dc',6,5); }
+      if(e.boneT<=0){ e.state='walk'; e.thinkCd=rnd(20,44); } continue; }
+    // メカワンコ T-800：赤い光弾を発射（追尾）
+    if(e.state==='gunFire'){ e.gunT--; if(e.gunT===15){ spark(e.x+e.facing*20,e.y-e.h*0.62,'#ff2a2a',8,6); ring(e.x+e.facing*20,e.y-e.h*0.62,'#ff2a2a'); }
+      if(e.gunT===7){ const dir=e.facing; spawnProj(e.x+dir*26, e.y-e.h*0.6, dir*8.6, 0, {owner:'enemy',dmg:t.dmg,color:'#ff3a3a',r:10,life:120,zz:e.h*0.6,homing:true}); sfx.zap(); flash=Math.max(flash,2); }
+      if(e.gunT<=0){ e.state='walk'; e.thinkCd=rnd(22,42); } continue; }
     if(e.state==='attack'){ e.atkTimer--;
       if(e.atkTimer===e.atkMax-3){ enemyAtkFx(e); }            // visible swipe at strike
       if(e.atkTimer===e.atkMax-4)enemyAttackHit(e);
@@ -2094,6 +2118,10 @@ function updateEnemies(){
     if(t.warper){ if(e.warpCd==null)e.warpCd=rnd(50,110); e.warpCd--;
       if(e.warpCd<=0 && e.stun<=0 && dist>90){ e.vanish=12; e.x=clamp(p.x - p.facing*60, camX+24, camX+W-24); e.facing=p.x<e.x?-1:1;
         spark(e.x,e.y-e.h*0.5,'#c89cff',16,9); ring(e.x,e.y-e.h*0.5,'#b06bff'); sfx.dash(); e.warpCd=rnd(60,100); e.thinkCd=8; continue; } }
+    // スケルトンワンコ: 距離を取って骨を投げる
+    if(t.boner && dist>110 && dist<440 && e.thinkCd<=0 && e.stun<=0 && Math.random()<0.7){ e.state='boneThrow'; e.boneT=16; e.facing=dx<0?-1:1; e.thinkCd=rnd(48,86); continue; }
+    // メカワンコ T-800: 中〜遠距離から赤い光弾を撃つ
+    if(t.gunner && dist>150 && dist<560 && e.thinkCd<=0 && e.stun<=0 && Math.random()<0.65){ e.state='gunFire'; e.gunT=18; e.facing=dx<0?-1:1; e.thinkCd=rnd(52,92); continue; }
     // 跳躍犬: 中距離から飛びかかる
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(45,80); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
@@ -2140,7 +2168,7 @@ function zakoBuffMul(e){ return (e.rage?1.6:1)*(e.buffTill>gf?1.3:1); }   // 怒
 function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),true,t.atkR*0.5+30,46); }
 // ---- 組み付き犬の掴み（プレイヤー拘束）----
 function canGrabPlayer(p){ return p && p.active && p.invuln<=0 && p.z<24 && p.state!=='dead' && p.state!=='down'
-  && p.state!=='roll' && p.state!=='slide' && p.state!=='egrab' && !p.grabbedByEnemy; }
+  && p.state!=='roll' && p.state!=='slide' && p.state!=='egrab' && !p.grabbedByEnemy && !p.vehicle; }
 function canGrabAnyPlayer(){ for(const p of players){ if(canGrabPlayer(p)) return true; } return false; }
 function grabbablePlayerNear(e){ for(const p of players){ if(canGrabPlayer(p) && Math.abs(p.x-e.x)<42 && Math.abs(p.y-e.y)<46) return p; } return null; }
 function startEnemyGrab(e,p){ e.state='gripping'; e.grabTarget=p; e.holdT=80; e.biteCd=22; e.escapeNeed=10; e.escapeMash=0; e.vx=0;
@@ -2347,6 +2375,9 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
       if(mv!=='roar')sfx.heavy(); } }
 }
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
+  // 乗り物に乗っている間は乗り物が身代わりにダメージを受ける（大破すると強制降車）
+  if(p.vehicle){ p.vehHp-=Math.max(1,Math.round(dmg)); p.invuln=knockdown?40:26; p.vx=dir*2; shake=Math.max(shake,6); spark(p.x,p.y-40,'#ffce6a',9,7); hurtSound(dmg);
+    if(p.vehHp<=0) dismount(p,true); return; }
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); hurtSound(dmg); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -2360,7 +2391,72 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return; p.lives--; p.h
   p.respawnT=90; }
 
 //======================================================================
-//  Encounters
+//  乗り物（馬 / バギーカー）：フィールドで乗って高速移動＆敵を轢く
+//======================================================================
+let vehicles=[];   // フィールド上の乗り物ピックアップ {x,kind,taken}
+const VEHDEF={
+  horse:{name:'馬',        sp:1.75, hp:60, ram:20, col:'#8a5a34', c2:'#5c3a20', mane:'#3a2414'},
+  buggy:{name:'バギーカー', sp:2.15, hp:96, ram:28, col:'#c0392b', c2:'#7a2018', mane:'#2a2a30'},
+};
+function spawnVehicle(x,kind){ vehicles.push({x:clamp(x,80,WORLD_END-80),kind,taken:false,bob:Math.random()*6}); }
+function tryMount(){ const p=player; if(p.vehicle||p.z>0) return false;
+  for(const v of vehicles){ if(v.taken) continue; if(Math.abs(v.x-p.x)<74){ v.taken=true; const V=VEHDEF[v.kind];
+    p.vehicle=v.kind; p.vehHp=V.hp; p.vehRam=0; p.state='idle'; p.charge=0; p.atkHeld=false; p.invuln=Math.max(p.invuln,20);
+    dust(p.x,p.y,10); ring(p.x,p.y-24,V.col); ring(p.x,p.y-24,'#fff'); sfx.rise(); popText(p.x,p.y-108,V.name+'に乗った！','#ffe14d',true); return true; } }
+  return false; }
+function dismount(p,crashed){ const V=VEHDEF[p.vehicle]; p.vehicle=null; p.vehHp=0; p.vehRam=0; p.state='idle'; p.invuln=Math.max(p.invuln,44); dust(p.x,p.y,10);
+  if(crashed){ ring(p.x,p.y,'#ff6a3a'); ring(p.x,p.y,'#fff'); spark(p.x,p.y-22,'#ffae42',22,12); shake=Math.max(shake,10); flash=Math.max(flash,3); hitStop=Math.max(hitStop,8); sfx.big();
+    popText(p.x,p.y-104,(V?V.name:'乗り物')+'　大破！','#ff6a3a',true);
+    enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<126 && Math.abs(e.y-p.y)<60){ damageEnemy(e,28,(e.x<p.x?-1:1)*11,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*13,-9,3); } }); }
+  else { popText(p.x,p.y-100,'降りた','#cfe0ff'); sfx.land(); } }
+function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
+  if(p.invuln>0)p.invuln--;
+  p.anim=(p.anim||0)+0.32; p.z=0; p.vz=0;
+  if(pressed.grab){ pressed.grab=false; dismount(p,false); return; }   // 掴みボタンで降りる
+  let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx) p.facing=mx;
+  const spd=SPEED*V.sp*(p.spdMul||1);
+  if(pressed.atk){ pressed.atk=false; p.vehRam=16; sfx.dash(); spark(p.x+p.facing*32,p.y-30,V.col,12,8); }   // 攻撃で突進（轢殺強化）
+  const ramming=p.vehRam>0; if(ramming)p.vehRam--;
+  p.x+=mx*spd + (ramming?p.facing*spd*0.6:0);
+  // 敵を轢く（接触ダメージ。突進中は大ダメージ＆吹き飛ばし）
+  const box=ramming?100:64, dmg=(ramming?V.ram*1.7:V.ram*0.5)*(p.atkMul||1);
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
+    if(Math.abs(e.x-p.x)<box && Math.abs(e.y-p.y)<42 && e.z<56){ if(!e.vehCd || gf-e.vehCd>=11){ e.vehCd=gf;
+      damageEnemy(e,Math.round(dmg),p.facing*10,true); if(!e.dead)launchEnemy(e,p.facing*(ramming?16:10),-9,3); spark(e.x,e.y-e.h*0.5,V.col,10,8); if(ramming)hitStop=Math.max(hitStop,3); } } });
+  if(ramming && gf%2===0) dust(p.x-p.facing*20,p.y,3);
+  p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
+}
+// 乗り物の描画（未取得のピックアップ＋騎乗中の乗り物）
+function drawVehicles(){
+  vehicles.forEach(v=>{ if(v.taken)return; const sx=v.x-camX; if(sx<-120||sx>W+120)return; v.bob+=0.06;
+    const gy=LANE-groundLift(v.x), by=Math.sin(v.bob)*2;
+    drawVehicleShape(sx, gy+by, 1, VEHDEF[v.kind], v.kind, false);
+    ctx.fillStyle='rgba(255,225,80,'+(0.55+0.35*Math.sin(gf*0.12))+')'; ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    ctx.strokeStyle='rgba(0,0,0,.7)'; ctx.lineWidth=3; ctx.strokeText('▲乗れる', sx, gy-64); ctx.fillText('▲乗れる', sx, gy-64); ctx.textAlign='left'; });
+}
+function drawMountedVehicle(p){ if(!p.vehicle)return; const sx=p.x-camX, gy=p.y-groundLift(p.x)-p.z;
+  drawVehicleShape(sx, gy, p.facing, VEHDEF[p.vehicle], p.vehicle, true, p);
+}
+function drawVehicleShape(sx, gy, face, V, kind, ridden, p){ ctx.save(); ctx.translate(sx,gy); ctx.scale(face,1);
+  const jog = ridden? Math.sin((p.anim||0))*2 : 0;
+  softShadow(0, 0, 46);
+  if(kind==='horse'){
+    ctx.fillStyle=V.col; ctx.beginPath(); ctx.ellipse(0,-42+jog,34,20,0,0,7); ctx.fill();        // 胴
+    ctx.fillStyle=V.c2; for(const lx of [-22,-8,10,24]){ ctx.fillRect(lx-3,-30+ (Math.sin((p?p.anim:0)+lx)*3),6,30); }  // 脚
+    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(26,-52+jog); ctx.lineTo(44,-74+jog); ctx.lineTo(52,-70+jog); ctx.lineTo(38,-46+jog); ctx.closePath(); ctx.fill();  // 首
+    ctx.beginPath(); ctx.ellipse(48,-76+jog,9,7,0.3,0,7); ctx.fill();                              // 頭
+    ctx.fillStyle=V.mane; ctx.beginPath(); ctx.moveTo(30,-56+jog); ctx.lineTo(46,-78+jog); ctx.lineTo(40,-58+jog); ctx.closePath(); ctx.fill();  // たてがみ
+    ctx.strokeStyle=V.mane; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-32,-52+jog); ctx.lineTo(-46,-30+jog); ctx.stroke();  // 尾
+  } else {
+    ctx.fillStyle=V.c2; ctx.beginPath(); ctx.arc(-20,-14,12,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(22,-14,12,0,7); ctx.fill();  // タイヤ
+    ctx.fillStyle='#1a1a20'; ctx.beginPath(); ctx.arc(-20,-14,5,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(22,-14,5,0,7); ctx.fill();
+    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(-34,-24); ctx.lineTo(34,-24); ctx.lineTo(28,-46); ctx.lineTo(-24,-46); ctx.closePath(); ctx.fill();  // 車体
+    ctx.fillStyle=V.c2; ctx.fillRect(-34,-30,68,8);                                                 // バンパー
+    ctx.strokeStyle='#2a2a30'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-10,-46); ctx.lineTo(2,-58); ctx.lineTo(20,-46); ctx.stroke();  // ロールバー
+    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(33,-34,4,0,7); ctx.fill();                    // ヘッドライト
+  }
+  ctx.restore();
+}
 //======================================================================
 let encounters,curGateX=WORLD_END,encIndex=0;
 let npcs=[], worldCursor=0, nextStage=1, stageStartX={}, shownStBanner={};
@@ -2397,10 +2493,10 @@ const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
    gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
-     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新奥義じゃ！ ↓→＋攻撃で真空・断空烈波（画面端まで貫く真空波）、→↓→＋攻撃で天翔龍閃（超高空へ斬り上げる）。','↓↑＋攻撃で円環斬（周囲をぐるりと薙ぐ剣の渦）、空中で↑＋攻撃なら天翔斬が出るぞ！'],
-     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃で崩天脚（敵を真上へ吹き上げる）、空中で↑＋攻撃なら昇天脚が出るぞ！'],
-     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！'],
-     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でグランドスタンプ、空中で↑＋攻撃ならハンマーアッパーじゃ！']}}},
+     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新奥義じゃ！ ↓→＋攻撃で真空・断空烈波（画面端まで貫く真空波）、→↓→＋攻撃で天翔龍閃（超高空へ斬り上げる）。','↓↑＋攻撃で円環斬（周囲をぐるりと薙ぐ剣の渦）、空中で↑＋攻撃なら天翔斬が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！攻撃で突進、掴みで降車。轢き飛ばして進むのじゃ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃で崩天脚（敵を真上へ吹き上げる）、空中で↑＋攻撃なら昇天脚が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！攻撃で突進、掴みで降車。轢き飛ばして進むのじゃ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！攻撃で突進、掴みで降車。轢き飛ばして進むのじゃ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でグランドスタンプ、空中で↑＋攻撃ならハンマーアッパーじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！攻撃で突進、掴みで降車。轢き飛ばして進むのじゃ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
@@ -2417,10 +2513,10 @@ const SEGS={
          shima:['その拳ダコ…相当鍛えとるな。気に入った！','拳で戦うおぬしにはコイツだ！持っていけ！'],
          nuko:['ほう、魔法使いか。武器は使わんのだな…','なら、わしが装丁した魔導の本を持っていけ！火の谷の知恵が詰まっとるぞ。']},give:{weapon:true}}},
       {theme:3,name:'渓谷の最深部',
-       gates:[{off:600,list:[['akita',1],['pierrot',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
+       gates:[{off:520,list:[['zombiewan',1],['skeletwan',1]]},{off:600,list:[['akita',1],['pierrot',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
        npc:{kind:'villager',name:'逃げ遅れた村犬',lines:['この先の呪い犬は、触れるだけで呪いをうつしてくる…','掴み技で投げ飛ばせば呪いも怖くないワン！']}} ],
     [ {theme:2,name:'月詠の森',
-       gates:[{off:600,list:[['dober',1],['pierrot',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
+       gates:[{off:520,list:[['zombiewan',1],['skeletwan',1]]},{off:600,list:[['dober',1],['pierrot',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
        npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:{
          inu:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、剣士さま。'],
          shima:['ようこそ、月詠の森へ…','亡霊は透けている間、拳も通りません。実体化の瞬間に叩き込むのです。','月のご加護を、拳士さま。'],
@@ -2440,13 +2536,13 @@ const SEGS={
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
       {theme:9,name:'灼熱の巨大廃墟',
-       gates:[{off:600,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
+       gates:[{off:520,list:[['mechawan',1],['skeletwan',1]]},{off:600,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
        npc:{kind:'villager',name:'考古学犬ホリダス',lines:['この巨大廃墟…登るほどに古代文明の深淵へ近づく。','鋼鉄のグラトンは遺跡の守護兵。図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
 };
 const FINAL_CH=[
   {theme:5,name:'氷雪の霊峰',
-   gates:[{off:600,list:[['kirebouzu',1],['mastiff',1],['onibouzu',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
+   gates:[{off:520,list:[['mechawan',1],['zombiewan',1]]},{off:600,list:[['kirebouzu',1],['mastiff',1],['onibouzu',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
      inu:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。聖剣の輝きを信じるのじゃぞ。','王国みんなの祈りが、そなたの剣と共にある！'],
      shima:['ここまで来たか、拳聖どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。じゃが、おぬしの拳はもっと多くの型を持っておろう。','王国みんなの祈りが、その拳に宿っておる！'],
@@ -2507,7 +2603,7 @@ function addBlocks(blocks,opts){
 function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'B'}:null);
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
-  encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={};
+  encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -2551,6 +2647,10 @@ function loadLevel(node){
   const blocks = node.id==='joumon' ? [node.b] : [node.b];
   addBlocks(blocks, null);
   stage=1; for(const k in STAGE2THEME){ stage=k|0; break; }     // 単一区画の st
+  // 乗り物を配置（フィールドで見つけて乗れる。荒野・砂漠・廃墟にはバギー）
+  const buggyLv=['haikyo','sabaku','reihou','futou','hikoutei'];
+  spawnVehicle(WORLD_END*0.26, buggyLv.includes(node.id)?'buggy':'horse');
+  if(WORLD_END>1500) spawnVehicle(WORLD_END*0.58, buggyLv.includes(node.id)?'horse':'buggy');
   players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
   camX=0; player=players[0]; goArrow=160; shopPending=0;
   state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
@@ -2845,6 +2945,7 @@ function render(){
   drawBackground(); drawGround();
   drawNPCs();
   drawItems();
+  drawVehicles();
   const order=[...enemies.map(e=>({y:e.y,e}))];
   players.forEach(pl=>{ if(pl.active) order.push({y:pl.y+pl.pid*0.5, pl}); });
   order.sort((a,b)=>a.y-b.y);
@@ -2852,6 +2953,7 @@ function render(){
       if(o.pl.state==='seven'){ const sx0=o.pl.x; ctx.save(); ctx.globalAlpha=0.32;   // 七体の分身残像
         for(let g=0;g<7;g++){ o.pl.x=clamp(camX+ (g+0.5)/7*W + Math.sin(gf*0.5+g)*16, camX+24, camX+W-24); drawPlayer(); }
         ctx.restore(); o.pl.x=sx0; }
+      if(o.pl.vehicle) drawMountedVehicle(o.pl);
       drawPlayer(); }
     else drawEnemy(o.e); });
   player=players[0];
@@ -3843,6 +3945,7 @@ function drawEnemy(e){
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
   else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
   else drawBeast(e);
+  if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
   if(t.guarder) drawEnemyShield(e);
   if(e.frozen>0){ const fa=Math.min(1,e.frozen/30);   // 氷結：青い氷塊に包まれる
     ctx.save(); ctx.globalAlpha=0.45*fa; ctx.fillStyle='#9fd6ff';
@@ -3866,6 +3969,19 @@ function drawEnemy(e){
     ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(hx-1,hy-1,bw+2,5);
     ctx.fillStyle='#ff5a3c'; ctx.fillRect(hx,hy,bw*clamp(e.hp/e.maxHp,0,1),3); }
   ctx.globalAlpha=1;
+}
+// 新エネミーの識別ディテール（メカ＝赤い単眼、スケルトン＝肋骨、ゾンビ＝×目とよだれ）
+function drawFoeOverlay(e,t){ const hy=-t.h*0.74, ex=t.w*0.15;
+  if(t.mecha){ ctx.save(); ctx.globalCompositeOperation='lighter'; const g=0.55+0.45*Math.sin(gf*0.2);
+    ctx.fillStyle='rgba(255,42,42,'+g+')'; ctx.beginPath(); ctx.arc(ex,hy,5.6,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex,hy,2,0,7); ctx.fill(); ctx.restore();
+    ctx.strokeStyle='rgba(200,205,214,.8)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-t.w*0.22,-t.h*0.5); ctx.lineTo(t.w*0.22,-t.h*0.5); ctx.stroke(); }
+  else if(t.boner){ ctx.strokeStyle='rgba(70,70,78,.75)'; ctx.lineWidth=2;
+    for(let i=0;i<3;i++){ const ry=-t.h*(0.4+i*0.13); ctx.beginPath(); ctx.moveTo(-t.w*0.17,ry); ctx.lineTo(t.w*0.17,ry); ctx.stroke(); }
+    ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.arc(ex,hy,2.4,0,7); ctx.fill(); }
+  else if(t.zombie){ ctx.strokeStyle='#243018'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(ex-3,hy-3); ctx.lineTo(ex+3,hy+3); ctx.moveTo(ex+3,hy-3); ctx.lineTo(ex-3,hy+3); ctx.stroke();
+    ctx.fillStyle='rgba(150,220,90,.8)'; ctx.fillRect(ex-1,hy+6,2.4,7+Math.sin(gf*0.1)*2); }
 }
 function drawEnemyShield(e){ const guarding=e.state==='guard';
   ctx.save(); ctx.translate(22,-26);
@@ -4719,7 +4835,16 @@ function drawHUD(){
   const cg=ctx.createLinearGradient(70,0,246,0); cg.addColorStop(0,'#46c8ff'); cg.addColorStop(1,'#ffd24d');
   ctx.fillStyle=player.charge>=0.45?cg:'#3a6a8c'; ctx.fillRect(71,50,174*player.charge,5);
   if(player.charge>=0.45&&gf%10<5){ ctx.fillStyle='#ffe14d'; ctx.font='bold 9px Trebuchet MS'; ctx.fillText('CHARGE MAX!',180,48); }
+  // レベル＆経験値バー（RPG）
+  ctx.fillStyle='#ffe14d'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('Lv.'+(player.level||1),262,29); ctx.textAlign='left';
+  ctx.fillStyle='#0a0a12'; ctx.fillRect(70,59,176,5); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; ctx.strokeRect(70,59,176,5);
+  ctx.fillStyle='#7ad0ff'; ctx.fillRect(71,60,174*clamp((player.xp||0)/(player.xpNext||100),0,1),3);
   ctx.fillStyle='#ff5a6a'; ctx.font='14px Trebuchet MS'; ctx.fillText('♥ ×'+Math.max(0,player.lives),12,84);
+  // 乗り物の耐久ゲージ（騎乗中）
+  if(player.vehicle){ const V=VEHDEF[player.vehicle]; panel(12,92,232,40);
+    ctx.fillStyle=V.col; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='left'; ctx.fillText('乗物: '+V.name,22,109);
+    barFrame(120,100,116,11); ctx.fillStyle=V.col; ctx.fillRect(122,102,112*clamp(player.vehHp/V.hp,0,1),7);
+    ctx.fillStyle='#cfe0ff'; ctx.font='10px Trebuchet MS'; ctx.fillText('攻撃=突進 / 掴み=降車',22,125); }
   ctx.fillStyle='#fff'; ctx.font='bold 18px monospace'; ctx.fillText(String(score).padStart(6,'0'),96,84);
   // 奥義（次元斬）ストック
   ctx.font='bold 11px Trebuchet MS'; ctx.fillStyle='#d6a6ff'; ctx.fillText('奥義',196,80);
@@ -5243,7 +5368,7 @@ const elRTitle=document.getElementById('result-title'),elRSub=document.getElemen
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
 function saveProgress(st){ try{
-  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume}));
+  const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
@@ -5263,7 +5388,7 @@ function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
     if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
-      if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; } });
+      if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; if(u.level)p.level=u.level; if(u.xp!=null)p.xp=u.xp; if(u.xpNext)p.xpNext=u.xpNext; } });
     if(sv.done) levelsDone=Object.assign({}, sv.done); }
   enterMap();   // 王都郊外クリア後の続き＝ワールドマップから再開
 }
