@@ -1257,8 +1257,8 @@ function updatePlayer(){
     if(def.smokeBomb && a.t===def.act[0]){ for(let k=0;k<12;k++) dust(p.x+rnd(-34,34), p.y-rnd(0,56), 3); for(let k=0;k<3;k++) ring(p.x,p.y-30,'#d4d8e0'); spark(p.x,p.y-30,'#e6eaf0',22,11); p.invuln=Math.max(p.invuln,46); sfx.swing(2); popText(p.x,p.y-108,'けむり玉！','#d4d8e0');   // ワッチ上：煙幕で目くらまし＆一瞬無敵
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<108 && Math.abs(e.y-p.y)<66 && e.z<90){ damageEnemy(e,Math.round(6*(p.atkMul||1)),0,false); if(!e.dead){ e.state='hurt'; e.hurtTimer=46; e.stun=68; } } }); }
     if(def.shadowStep){ if(a.t%2===0) spark(p.x-p.facing*12, p.y-rnd(20,50), '#9fb8d8', 2, 5); p.invuln=Math.max(p.invuln,4); }   // 縮地：残像＆すり抜け気味
-    if(def.pistols && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){ const dir=p.facing, sp=rnd(-0.16,0.16);   // 二丁拳銃：弾を連射
-      spawnProj(p.x+dir*30, p.y-46, dir*16, 0, {owner:'player', dmg:Math.round(9*(p.atkMul||1)), color:'#ffe14d', r:7, life:44, zz:46+Math.sin(sp)*20, nostop:true});
+    if(def.pistols && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){ const dir=p.facing, sp=rnd(-0.16,0.16);   // 二丁拳銃：弾を連射（y=p.yでレーン位置、高さはzz）
+      spawnProj(p.x+dir*30, p.y, dir*16, 0, {owner:'player', dmg:Math.round(9*(p.atkMul||1)), color:'#ffe14d', r:8, life:44, zz:42, vzz:Math.sin(sp)*4, nostop:true});
       spark(p.x+dir*38, p.y-46+Math.sin(sp)*10, '#ffd24d', 6, 8); shake=Math.max(shake,3); if(a.t===def.act[0]){ sfx.zap(); flash=Math.max(flash,2); } }
     if(def.heist && a.t===def.dur-6){ const dir=p.facing; crescent(p.x+dir*40,p.y-52,92,dir>0?-1.0:Math.PI-1.0,dir>0?1.0:Math.PI+1.0,'#ffffff'); spark(p.x+dir*30,p.y-50,'#ffe14d',20,11); ring(p.x+dir*24,p.y-50,'#ffe14d'); flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); for(let k=0;k<6;k++) spark(p.x+rnd(-30,30),p.y-rnd(20,60),'#ffd24d',3,7); }   // 神速強奪：締めの一閃＆小判散らし
     if(def.placeMine && a.t===def.act[0]){ placeMine(p); }   // 地雷を仕掛ける
@@ -1774,8 +1774,8 @@ function beginGatling(p){ p.dim--; p.state='gatling'; p.gatT=0; p.gatShots=0; p.
 function updateGatling(){ const p=player; p.gatT++; p.invuln=Math.max(p.invuln,6); p.vx*=0.7;
   const ROUNDS=100;
   if(p.gatShots<ROUNDS){ const dir=p.facing;
-    const ang=Math.sin(p.gatT*0.34)*1.4 + rnd(-0.05,0.05);   // 正面上〜下を往復掃射
-    spawnProj(p.x+dir*40, p.y-52, dir*Math.cos(ang)*17, 0, {owner:'player', dmg:Math.round(7*(p.atkMul||1)), color:(p.gatShots%2)?'#ffe14d':'#ff8a3a', r:7, life:42, zz:52, vzz:Math.sin(ang)*15, nostop:true});
+    const ang=Math.sin(p.gatT*0.34)*1.4 + rnd(-0.05,0.05);   // 正面上〜下を往復掃射（y=p.yでレーン位置、高さはzz）
+    spawnProj(p.x+dir*40, p.y, dir*Math.cos(ang)*17, 0, {owner:'player', dmg:Math.round(8*(p.atkMul||1)), color:(p.gatShots%2)?'#ffe14d':'#ff8a3a', r:8, life:46, zz:48, vzz:Math.sin(ang)*13, nostop:true});
     p.gatShots++;
     if(p.gatShots%2===0){ spark(p.x+dir*48, p.y-52, '#ffd24d', 5, 9); shake=Math.max(shake,4); }
     if(p.gatShots%7===0) sfx.zap();
@@ -3707,6 +3707,7 @@ function drawPlayer(){
   if(shima && (p.weapon==='fists'||p.weapon==='tigerfist') && (mode==='blade'||mode==='shield')) mode='fist'; // 素手・篭手は拳のみ
   else if(shima && shimaArmed && mode==='shield') mode='fist';               // 武器持ちでもガードは拳で受ける
   if(nuko && mode==='shield') mode='blade';                                  // ヌコは杖で受ける
+  if(watch && (p.weapon==='dagger'||p.weapon==='fists')) mode='fist';         // ワッチは剣を持たず素手（拳銃は腰に）。武器を拾えば通常表示
   const limbA = watch?'#e2e8f0':shima?'#8a5a30':nuko?'#f0ecf6':g8?'#a5622e':'#e0d2ab', limbB = watch?'#cdd6e2':shima?'#7a4a24':nuko?'#e6e0f0':g8?'#8a4f22':'#ddcca0', bootB=watch?'#3a2f22':shima?'#3a2410':nuko?'#7a4fb0':g8?'#3a2410':'#5a4022';
   const limbF = watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#fbf8ff':g8?'#b5713a':'#efe2bc', bootF=watch?'#4a3826':shima?'#4a2e16':nuko?'#8a5fc0':g8?'#4a2e14':'#6b4f28', handCol=watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#ffffff':g8?'#8a4f22':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
@@ -4208,46 +4209,58 @@ function watchBody(lean){
   const cp=ctx.createLinearGradient(0,-32,0,-14); cp.addColorStop(0,'#ffffff'); cp.addColorStop(1,'#c8d2de');
   ctx.fillStyle=cp; ctx.beginPath(); ctx.ellipse(0,-23,11,12,0,0,7); ctx.fill();
   ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(0,-20,7,8,0,0,7); ctx.fill();   // 白い胸
-  // 盗賊のマフラー
-  ctx.fillStyle='#7a2018'; ctx.beginPath(); ctx.ellipse(0,-32,9,3.4,0,0,7); ctx.fill();
-  ctx.fillStyle='#a83426'; ctx.beginPath(); ctx.moveTo(6,-32); ctx.lineTo(13,-22); ctx.lineTo(8,-21); ctx.lineTo(4,-31); ctx.closePath(); ctx.fill();   // 垂れたマフラー
-  // 斜めがけの盗品袋
-  ctx.strokeStyle='#5a4630'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(-9,-31); ctx.lineTo(9,-16); ctx.stroke();
-  ctx.fillStyle='#6a5238'; ctx.beginPath(); ctx.ellipse(-11,-15,5,6,0.2,0,7); ctx.fill(); ctx.fillStyle='#4a3826'; ctx.beginPath(); ctx.arc(-11,-18,2.4,0,7); ctx.fill();
-  // ベルト
-  ctx.fillStyle='#3a2f22'; ctx.fillRect(-11,-16,22,3.2); ctx.fillStyle='#c8b060'; ctx.fillRect(-2,-16.4,4,3.6);
+  // 赤い蝶ネクタイ（紳士怪盗風）
+  ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.moveTo(0,-31); ctx.lineTo(-6,-34); ctx.lineTo(-6,-28); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0,-31); ctx.lineTo(6,-34); ctx.lineTo(6,-28); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#8a1f16'; ctx.fillRect(-1.4,-32.4,2.8,2.8);
+  // ガンベルト＋腰にさした拳銃（ホルスター）
+  ctx.fillStyle='#3a2f22'; ctx.fillRect(-12,-16,24,3.6); ctx.fillStyle='#c8b060'; ctx.fillRect(-2,-16.6,4,4);   // ベルト＋バックル
+  ctx.save(); ctx.translate(10,-14); ctx.rotate(0.35);   // 右腰のホルスター
+    ctx.fillStyle='#4a3526'; roundRect(-4,-2,8,13,2); ctx.fill();                       // ホルスター
+    ctx.fillStyle='#2a2d34'; ctx.fillRect(-3,-8,6,8);                                    // 拳銃本体（グリップ）
+    ctx.fillStyle='#4a4f58'; ctx.fillRect(-1,-9,7,3);                                    // 銃身
+    ctx.fillStyle='#6a4a2a'; ctx.fillRect(-4,-6,3,5);                                    // 木製グリップ
+  ctx.restore();
   ctx.restore();
 }
 function watchHead(lean){
   ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3);
   // 大きな立ち耳
-  ctx.fillStyle='#e8eef5'; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(-22,-30); ctx.lineTo(-3,-13); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(13,-4); ctx.lineTo(22,-30); ctx.lineTo(3,-13); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#f4b0c4'; ctx.beginPath(); ctx.moveTo(-12,-6); ctx.lineTo(-18,-25); ctx.lineTo(-5,-13); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(12,-6); ctx.lineTo(18,-25); ctx.lineTo(5,-13); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#e8eef5'; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.lineTo(-22,-28); ctx.lineTo(-3,-13); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(13,-4); ctx.lineTo(22,-28); ctx.lineTo(3,-13); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#f4b0c4'; ctx.beginPath(); ctx.moveTo(-12,-6); ctx.lineTo(-18,-24); ctx.lineTo(-5,-13); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(12,-6); ctx.lineTo(18,-24); ctx.lineTo(5,-13); ctx.closePath(); ctx.fill();
   // 白いアップル頭
   furBall(0,0,17,'#ffffff','#d6dde8');
   furBall(-11,-7,9,'#fbfdff','#dbe3ee'); furBall(11,-7,9,'#fbfdff','#dbe3ee');
+  furBall(-14,5,7,'#fbfdff','#dbe3ee'); furBall(14,5,7,'#fbfdff','#dbe3ee');   // ほっぺ
   // マズル
-  ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(3,7,9,7.5,0,0,7); ctx.fill();
-  ctx.fillStyle=radGrad(8,4,3,'#3a3a44','#1a1a20'); ctx.beginPath(); ctx.ellipse(9,5,2.8,2.2,0,0,7); ctx.fill();
+  ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(3,8,9,7,0,0,7); ctx.fill();
+  ctx.fillStyle=radGrad(8,5,3,'#3a3a44','#1a1a20'); ctx.beginPath(); ctx.ellipse(8,6,2.6,2,0,0,7); ctx.fill();   // 鼻
   const hurt = player.state==='hurt'||player.state==='down';
-  // 盗賊の目隠しマスク
-  ctx.fillStyle='#2a2f38'; ctx.beginPath(); ctx.moveTo(-13,-4); ctx.quadraticCurveTo(4,0,15,-4); ctx.lineTo(15,3); ctx.quadraticCurveTo(4,6,-13,3); ctx.closePath(); ctx.fill();
-  if(hurt){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.7; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-1,-2.4); ctx.lineTo(3,1.6); ctx.moveTo(3,-2.4); ctx.lineTo(-1,1.6); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(9,-2.4); ctx.lineTo(5,1.6); ctx.moveTo(5,-2.4); ctx.lineTo(9,1.6); ctx.stroke();
-    ctx.fillStyle='#7a2618'; ctx.beginPath(); ctx.ellipse(5,9.6,3.6,2.8,0,0,7); ctx.fill();
+  if(hurt){ ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-1,-1.4); ctx.lineTo(3,2.6); ctx.moveTo(3,-1.4); ctx.lineTo(-1,2.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9,-1.4); ctx.lineTo(5,2.6); ctx.moveTo(5,-1.4); ctx.lineTo(9,2.6); ctx.stroke();
+    ctx.fillStyle='#7a2618'; ctx.beginPath(); ctx.ellipse(5,10,3.4,2.6,0,0,7); ctx.fill();
   } else {
-    // 吊り目（つり上がった鋭い目）
-    ctx.strokeStyle='#fff'; ctx.lineWidth=2.6; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-2,1.4); ctx.lineTo(4.2,-1.6); ctx.stroke();     // 左
-    ctx.beginPath(); ctx.moveTo(11,1.4); ctx.lineTo(4.8,-1.6); ctx.stroke();     // 右
-    ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(1.4,-0.2,1.4,0,7); ctx.arc(8,-0.2,1.4,0,7); ctx.fill();   // ずる賢い金色の目
-    ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.arc(5,9,2.6,0.15,Math.PI-0.7); ctx.stroke();   // ニヤリ
+    // 可愛い大きなまん丸の瞳（目隠しなし）
+    for(const ex of [1,8]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,2,3.4,4.2,0,0,7); ctx.fill();
+      ctx.fillStyle=radGrad(ex,3,3,'#5a7abf','#20304e'); ctx.beginPath(); ctx.arc(ex+0.4,2.6,2.5,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex+1.4,1,1.1,0,7); ctx.fill(); ctx.fillStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(ex-0.6,3.4,0.7,0,7); ctx.fill(); }
+    ctx.fillStyle='#f4a6b8'; ctx.beginPath(); ctx.arc(-11,7,2.4,0,7); ctx.arc(16,7,2.4,0,7); ctx.fill();   // ほっぺの赤み
+    ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(5.5,9.5,2.6,0.15,Math.PI-0.15); ctx.stroke();   // にっこり
   }
+  drawTopHat();
   ctx.restore();
 }
+// ルパン風のシルクハット（ワッチの目印）
+function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
+  ctx.fillStyle='#20222a'; ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,7); ctx.fill();          // つば
+  ctx.fillStyle='#2a2d38'; ctx.fillRect(-11,-16,22,18);                                        // クラウン
+  ctx.fillStyle='#1a1c24'; ctx.beginPath(); ctx.ellipse(0,-16,11,4,0,0,7); ctx.fill();          // 天面
+  ctx.fillStyle='#7a1f18'; ctx.fillRect(-11,-3,22,4);                                           // 赤いリボン
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,255,255,.14)'; ctx.fillRect(-9,-14,4,14); ctx.restore();   // ハイライト
+  ctx.restore(); }
 
 // ---- Enemies dispatch ----
 function drawEnemy(e){
@@ -5377,18 +5390,24 @@ function nukoIcon(x,y){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc
   ctx.beginPath(); ctx.moveTo(x+1,y-13); ctx.quadraticCurveTo(x+13,y-22,x+12,y-13); ctx.quadraticCurveTo(x+11,y-8,x+1,y-11); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#d8458c'; ctx.beginPath(); ctx.arc(x+1,y-12,2.6,0,7); ctx.fill(); }
 function watchIcon(x,y){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x,y,22,0,7); ctx.fill();
-  ctx.fillStyle='#eef2f7'; ctx.beginPath(); ctx.moveTo(x-15,y-3); ctx.lineTo(x-22,y-24); ctx.lineTo(x-5,y-12); ctx.closePath(); ctx.fill();   // 立ち耳
-  ctx.beginPath(); ctx.moveTo(x+15,y-3); ctx.lineTo(x+22,y-24); ctx.lineTo(x+5,y-12); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#f4b0c4'; ctx.beginPath(); ctx.moveTo(x-14,y-6); ctx.lineTo(x-18,y-20); ctx.lineTo(x-8,y-12); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(x+14,y-6); ctx.lineTo(x+18,y-20); ctx.lineTo(x+8,y-12); ctx.closePath(); ctx.fill();
-  furBall(x,y+1,15,'#ffffff','#d6dde8');
-  ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(x+2,y+7,7,5.4,0,0,7); ctx.fill();
-  ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.ellipse(x+7,y+5.5,2,1.6,0,0,7); ctx.fill();
-  ctx.fillStyle='#2a2f38'; ctx.beginPath(); ctx.moveTo(x-14,y-3); ctx.quadraticCurveTo(x,y+1,x+14,y-3); ctx.lineTo(x+14,y+3.5); ctx.quadraticCurveTo(x,y+6,x-14,y+3.5); ctx.closePath(); ctx.fill();   // 盗賊マスク
-  ctx.strokeStyle='#fff'; ctx.lineWidth=2.4; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(x-9,y+2); ctx.lineTo(x-2,y-1.5); ctx.stroke();   // 吊り目
-  ctx.beginPath(); ctx.moveTo(x+9,y+2); ctx.lineTo(x+2,y-1.5); ctx.stroke();
-  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x-4.5,y,1.3,0,7); ctx.arc(x+4.5,y,1.3,0,7); ctx.fill(); }
+  ctx.fillStyle='#eef2f7'; ctx.beginPath(); ctx.moveTo(x-14,y-1); ctx.lineTo(x-20,y-20); ctx.lineTo(x-4,y-11); ctx.closePath(); ctx.fill();   // 立ち耳
+  ctx.beginPath(); ctx.moveTo(x+14,y-1); ctx.lineTo(x+20,y-20); ctx.lineTo(x+4,y-11); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#f4b0c4'; ctx.beginPath(); ctx.moveTo(x-13,y-3); ctx.lineTo(x-16,y-16); ctx.lineTo(x-7,y-10); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+13,y-3); ctx.lineTo(x+16,y-16); ctx.lineTo(x+7,y-10); ctx.closePath(); ctx.fill();
+  furBall(x,y+2,15,'#ffffff','#d6dde8');
+  ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(x+2,y+9,7,5.2,0,0,7); ctx.fill();
+  ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.ellipse(x+6,y+7,2,1.6,0,0,7); ctx.fill();   // 鼻
+  // 可愛いまん丸の瞳
+  for(const ex of [-3,5]){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(x+ex,y+2,3,3.6,0,0,7); ctx.fill();
+    ctx.fillStyle='#33507a'; ctx.beginPath(); ctx.arc(x+ex+0.4,y+2.6,2.1,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+ex+1.2,y+1,0.9,0,7); ctx.fill(); }
+  ctx.fillStyle='#f4a6b8'; ctx.beginPath(); ctx.arc(x-9,y+8,2,0,7); ctx.arc(x+12,y+8,2,0,7); ctx.fill();
+  // シルクハット
+  ctx.save(); ctx.translate(x,y-13);
+    ctx.fillStyle='#20222a'; ctx.beginPath(); ctx.ellipse(0,2,17,5,0,0,7); ctx.fill();
+    ctx.fillStyle='#2a2d38'; ctx.fillRect(-9,-13,18,15); ctx.fillStyle='#1a1c24'; ctx.beginPath(); ctx.ellipse(0,-13,9,3.4,0,0,7); ctx.fill();
+    ctx.fillStyle='#7a1f18'; ctx.fillRect(-9,-2,18,3.4);
+  ctx.restore(); }
 function speech(x,y,txt){ ctx.font='bold 15px Trebuchet MS'; const w=ctx.measureText(txt).width+24;
   ctx.fillStyle='rgba(106,45,176,.95)'; roundRect(x-w/2,y-32,w,28,8); ctx.fill(); ctx.strokeStyle='#c89cff'; ctx.lineWidth=2; roundRect(x-w/2,y-32,w,28,8); ctx.stroke();
   ctx.fillStyle='rgba(106,45,176,.95)'; ctx.beginPath(); ctx.moveTo(x-8,y-6);ctx.lineTo(x+8,y-6);ctx.lineTo(x,y+6); ctx.fill();
