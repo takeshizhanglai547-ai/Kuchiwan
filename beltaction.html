@@ -719,6 +719,16 @@ const ATK={
   // ガードワン（ハンマー）
   gimpact:{name:'メテオ・ハンマーインパクト', dur:42, act:[18,26], reach:132, hh:70, dmg:38, kb:24, from:-2.1,to:1.2, len:98, trail:'#fff', pivotY:-80, lunge:1.0, knock:true, aoe:true, bighammer:true, superFx:true, hammerImpact:true},   // 特大の叩きつけ→三重衝撃波
   wtech:{name:'奪いし奥義', dur:30, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:-0.3,to:0.3, len:16, trail:'#bfe9ff', fist:true, special:true, superFx:true, stolenCast:true},   // ワッチ：奪ったボス技を放つ
+  // ── 盗賊ワッチの専用技（小刀・手裏剣・煙玉・縮地の身のこなし）──
+  wc1:{name:'小刀の突き', dur:8,  act:[2,5],  reach:60, hh:34, dmg:5, kb:2, from:-0.7,to:0.5,  len:26, trail:'#cfe0f0', pivotY:-56, lunge:1.4, combo:1},
+  wc2:{name:'返し刃',     dur:8,  act:[2,5],  reach:60, hh:36, dmg:5, kb:2, from:0.7, to:-0.7,  len:26, trail:'#dfe8f2', pivotY:-56, lunge:1.4, combo:2},
+  wc3:{name:'足払い蹴り', dur:12, act:[3,7],  reach:66, hh:28, dmg:7, kb:4, from:-1.5,to:0.3,  len:22, trail:'#bfe9ff', pivotY:-40, fist:true, kick:true, lunge:1.6, combo:3},
+  wc4:{name:'つむじ二刀',dur:20, act:[4,15], reach:82, hh:50, dmg:9, kb:12,from:-3.0,to:3.0,  len:34, trail:'#eaf2fb', pivotY:-56, lunge:2.2, multi:true, multiGap:4, spin:true, knock:true, finisher:true, combo:4},
+  wknife:{name:'クナイ乱舞', dur:24, act:[8,10], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.2, len:20, trail:'#cfe0f0', special:true, superFx:true, pshot:{dmg:11,color:'#cfe0f0',speed:13,r:11,life:64,count:3,spread:2.3,style:'spike',pierce:true}},   // 波動＝三連手裏剣
+  wflip:{name:'螺旋昇り', dur:30, act:[2,24], reach:62, hh:560, dmg:9, kb:6, from:1.2,to:-2.0, len:32, trail:'#bfe9ff', pivotY:-52, rise:true, riseV:29, riseG:0.72, multi:true, multiGap:4, shoryu:true, spin:true},   // 昇竜＝宙返り螺旋斬り
+  wsmoke:{name:'けむり玉', dur:24, act:[6,7], reach:100, hh:90, dmg:0, kb:0, from:-3.1,to:3.1, len:20, trail:'#d4d8e0', special:true, omni:true, superFx:true, smokeBomb:true},   // 上＝煙玉（周囲を目くらまし＆一瞬無敵）
+  wdash:{name:'縮地', dur:26, act:[3,20], reach:78, hh:52, dmg:8, kb:6, from:-0.1,to:0.1, len:30, trail:'#9fb8d8', pivotY:-54, move:11, multi:true, multiGap:5, stinger:true, knock:true, shadowStep:true},   // ←→＝影走りで一気に斬り抜ける
+  wlunge:{name:'強盗突き', dur:22, act:[6,13], reach:104, hh:46, dmg:20, kb:14, from:-0.1,to:0.1, len:40, trail:'#dfe8f2', pivotY:-56, move:8, knock:true, finisher:true},   // 前＝踏み込みの一突き
   // ── 武器別コンボ：双剣フタバ（イッヌ）＝左右の刃で刻む高速5段 ──
   tw1:{name:'双牙・右', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:-0.9, to:0.5,  len:30, trail:'#ffd6e8', pivotY:-58, lunge:1.5, combo:1},
   tw2:{name:'双牙・左', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:0.7,  to:-0.7, len:30, trail:'#d6e8ff', pivotY:-58, lunge:1.5, combo:2},
@@ -841,13 +851,13 @@ const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3']
   ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'] };
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
 function comboMaxFor(p){ if(p.kind==='nuko') return 1; const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
-function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot'; const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':'c')+step; }
+function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot'; const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':p.kind==='watch'?'wc':'c')+step; }
 function chargeMoveFor(p){ if(p.kind==='nuko')return 'nbeam'; if(p.kind==='guard8')return 'chargeHammer'; if(p.weapon==='spear')return 'chargeSpear'; if(p.weapon==='hammer')return 'chargeHammer'; return 'charge'; }
 // コマンド技の選択（地上・波動/昇竜/↓↑）。通常コンボからのキャンセル発動にも共用
-function commandSpecial(p){ if(p.z>0) return null; const NK=p.kind==='nuko', SH=p.kind==='shima', GD=p.kind==='guard8';
-  if(dpReady(p.facing))      return GD?'gdp':NK?'nstar':SH?'sdrago':'idragon';
-  if(hadokenReady(p.facing)) return GD?'gtackle':NK?'nfrost':SH?'srush':'iwave';
-  if(downUpReady())          return GD?'gimpact':NK?'nthunder':SH?'soneinch':p.kind==='watch'?'wtech':'iswords';
+function commandSpecial(p){ if(p.z>0) return null; const NK=p.kind==='nuko', SH=p.kind==='shima', GD=p.kind==='guard8', WA=p.kind==='watch';
+  if(dpReady(p.facing))      return GD?'gdp':NK?'nstar':SH?'sdrago':WA?'wflip':'idragon';
+  if(hadokenReady(p.facing)) return GD?'gtackle':NK?'nfrost':SH?'srush':WA?'wknife':'iwave';
+  if(downUpReady())          return GD?'gimpact':NK?'nthunder':SH?'soneinch':WA?'wtech':'iswords';
   return null; }
 function beginAttack(type){
   const p=player, def=ATK[type];
@@ -1167,7 +1177,7 @@ function updatePlayer(){
     if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
       if(K.up && !p.jUpUsed){ p.jUp=true; p.jUpUsed=true; p.jAtk=22; p.vz=Math.max(p.vz,3)+9;   // 空中↑：昇天アッパー（敵を高く打ち上げつつ自分も上昇）
         const col=NUK?'#d6a6ff':SHI?'#aef8ff':(p.kind==='guard8'?'#ffd24d':'#ffe27a'); sfx.rise(); sfx.swing(2);
-        spark(p.x,p.y-p.z-16,col,12,8); ring(p.x,p.y-p.z-30,col); popText(p.x,p.y-p.z-72,NUK?'星昇撃':SHI?'昇天脚':(p.kind==='guard8'?'ハンマーアッパー':'天翔斬'),'#fff'); }
+        spark(p.x,p.y-p.z-16,col,12,8); ring(p.x,p.y-p.z-30,col); popText(p.x,p.y-p.z-72,NUK?'星昇撃':SHI?'昇天脚':(p.kind==='guard8'?'ハンマーアッパー':p.kind==='watch'?'ツバメ返り':'天翔斬'),'#fff'); }
       else if(NUK && K.down){ p.jFire=true; p.jAtk=10; p.vz=Math.min(p.vz,0);   // ヌコ空中下：下向き爆裂火球（高度は落ちる）
         spawnProj(p.x+p.facing*10,p.y,p.facing*2,0,{owner:'player',dmg:Math.round(16*nukoMul(p)),color:'#ff8a3a',r:13,life:110,zz:Math.max(p.z+20,30),vzz:-8,explode:true});
         sfx.dash(); spark(p.x,p.y-p.z-10,'#ff9a3a',8,7); }
@@ -1225,6 +1235,9 @@ function updatePlayer(){
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<120 && Math.abs(e.y-p.y)<62){ damageEnemy(e,Math.round(18*(p.atkMul||1)),0,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*2,-17,3); } }); }
     if(def.swordRain && a.t>=def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%3===0){ holyBlade(p, (a.t-def.act[0])/3); }   // 聖剣乱舞：前方へ聖剣が突き上がる
     if(def.stolenCast && a.t===def.act[0]){ const s=p.stolen&&p.stolen[p.stolen.length-1]; if(s){ s.cast(p); popText(p.x,p.y-118,'奪いし技「'+s.name+'」！',s.col||'#bfe9ff',true); } else { spark(p.x+p.facing*30,p.y-40,'#bfe9ff',10,7); } }   // ワッチ：奪ったボス技を発動
+    if(def.smokeBomb && a.t===def.act[0]){ for(let k=0;k<12;k++) dust(p.x+rnd(-34,34), p.y-rnd(0,56), 3); for(let k=0;k<3;k++) ring(p.x,p.y-30,'#d4d8e0'); spark(p.x,p.y-30,'#e6eaf0',22,11); p.invuln=Math.max(p.invuln,46); sfx.swing(2); popText(p.x,p.y-108,'けむり玉！','#d4d8e0');   // ワッチ上：煙幕で目くらまし＆一瞬無敵
+      enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<108 && Math.abs(e.y-p.y)<66 && e.z<90){ damageEnemy(e,Math.round(6*(p.atkMul||1)),0,false); if(!e.dead){ e.state='hurt'; e.hurtTimer=46; e.stun=68; } } }); }
+    if(def.shadowStep){ if(a.t%2===0) spark(p.x-p.facing*12, p.y-rnd(20,50), '#9fb8d8', 2, 5); p.invuln=Math.max(p.invuln,4); }   // 縮地：残像＆すり抜け気味
     if(def.kiBurst && a.t===def.act[0]){ shimaKiBurst(p); }                    // 爆裂・羅漢衝波：全方位の気功大爆発
     if(def.hammerImpact && a.t===def.act[0]){ guardHammerImpact(p); }          // メテオ・ハンマーインパクト：三重衝撃波の大叩き
     // active hit window
@@ -1257,23 +1270,23 @@ function updatePlayer(){
   if(pressed.atk){
     pressed.atk=false;
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
-    const NK=p.kind==='nuko', GD=p.kind==='guard8';
+    const NK=p.kind==='nuko', GD=p.kind==='guard8', WA=p.kind==='watch';
     if(NK && (K.grab||pressed.grab) && p.hp>p.maxHp*0.2+1){ pressed.grab=false; beginNukoLaser(p); return; }   // 攻撃＋掴み＝カラミティレーザー
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
-    if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nstar':SH?'sdrago':'idragon'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
-    if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nfrost':SH?'srush':'iwave'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
-    if(p.z<=0 && downUpReady()){ beginAttack(GD?'gimpact':NK?'nthunder':SH?'soneinch':p.kind==='watch'?'wtech':'iswords'); consumeCmd(); p.atkHeld=true; return; }     // ↓↑コマンド＝キャラ別必殺（聖剣乱舞/ワンインチブロー/サンダーストーム/メテオインパクト/奪いし奥義）
+    if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nstar':SH?'sdrago':WA?'wflip':'idragon'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
+    if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nfrost':SH?'srush':WA?'wknife':'iwave'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
+    if(p.z<=0 && downUpReady()){ beginAttack(GD?'gimpact':NK?'nthunder':SH?'soneinch':WA?'wtech':'iswords'); consumeCmd(); p.atkHeld=true; return; }     // ↓↑コマンド＝キャラ別必殺
     if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       if(GD){ beginAttack('ghead'); return; }                                             // ガードワン下：ヘッドバット突進
-      beginSlide(); return; }                                                              // ドロップキック / スライディング
-    if(K.up){ beginAttack(SH?'tornado':NK?'ntornado':GD?'gupper':'shoryu'); }              // 昇竜旋風脚 / サイクロンライズ / ハンマー振り上げ / 昇竜拳
-    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 居合
+      beginSlide(); return; }                                                              // ドロップキック / スライディング（ワッチも軽快なスライディング）
+    if(K.up){ beginAttack(SH?'tornado':NK?'ntornado':GD?'gupper':WA?'wsmoke':'shoryu'); }  // 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳
+    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wdash'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 縮地 / 居合
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
-      else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 居合斬り
+      else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else if(WA){ beginAttack('wlunge'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 強盗突き / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -2704,7 +2717,7 @@ const CH1=[
      shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃でワンインチブロー（リーチは極短だが一撃で画面端まで吹き飛ばす豪打）、空中で↑＋攻撃なら昇天脚が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でメテオ・ハンマーインパクト（特大の叩きつけ→三重衝撃波）、空中で↑＋攻撃ならハンマーアッパーじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れるぞ。','そして真骨頂——各ステージのボスを倒すと、その必殺技を奪って自分のものにできる。奪った技は ↓↑＋攻撃 で放て！','通常コンボの途中でも波動（↓→）や昇竜（→↓→）を入力すればキャンセルで繋がる。素早く立ち回るのじゃ！']}}},
+     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（周囲を目くらまし＆一瞬無敵）、←←や→→＋攻撃で縮地の走り抜け、前＋攻撃で強盗突きじゃ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして真骨頂——各ステージのボスを倒すと、その必殺技を奪える。奪った技は ↓↑＋攻撃 で放て！ コンボからコマンド技へのキャンセルも使いこなすのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
