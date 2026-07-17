@@ -728,7 +728,10 @@ const ATK={
   wflip:{name:'螺旋昇り', dur:30, act:[2,24], reach:62, hh:560, dmg:9, kb:6, from:1.2,to:-2.0, len:32, trail:'#bfe9ff', pivotY:-52, rise:true, riseV:29, riseG:0.72, multi:true, multiGap:4, shoryu:true, spin:true},   // 昇竜＝宙返り螺旋斬り
   wsmoke:{name:'けむり玉', dur:24, act:[6,7], reach:100, hh:90, dmg:0, kb:0, from:-3.1,to:3.1, len:20, trail:'#d4d8e0', special:true, omni:true, superFx:true, smokeBomb:true},   // 上＝煙玉（周囲を目くらまし＆一瞬無敵）
   wdash:{name:'縮地', dur:26, act:[3,20], reach:78, hh:52, dmg:8, kb:6, from:-0.1,to:0.1, len:30, trail:'#9fb8d8', pivotY:-54, move:11, multi:true, multiGap:5, stinger:true, knock:true, shadowStep:true},   // ←→＝影走りで一気に斬り抜ける
-  wlunge:{name:'強盗突き', dur:22, act:[6,13], reach:104, hh:46, dmg:20, kb:14, from:-0.1,to:0.1, len:40, trail:'#dfe8f2', pivotY:-56, move:8, knock:true, finisher:true},   // 前＝踏み込みの一突き
+  wlunge:{name:'強盗突き', dur:22, act:[6,13], reach:104, hh:46, dmg:20, kb:14, from:-0.1,to:0.1, len:40, trail:'#dfe8f2', pivotY:-56, move:8, knock:true, finisher:true},   // （旧・前技）
+  wpistol:{name:'早撃ち・二丁拳銃', dur:26, act:[6,18], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:16, trail:'#ffd24d', special:true, superFx:true, pistols:true},   // 前＝二丁拳銃を早撃ち（弾幕）
+  wheist:{name:'神速の強奪', dur:30, act:[3,24], reach:86, hh:56, dmg:7, kb:6, from:-0.1,to:0.1, len:32, trail:'#bfe9ff', pivotY:-54, move:13, multi:true, multiGap:4, stinger:true, knock:true, shadowStep:true, heist:true, superFx:true},   // ←→＝影分身の疾走強奪
+  wmine:{name:'地雷設置', dur:20, act:[8,9], reach:30, hh:30, dmg:0, kb:0, from:-0.2,to:0.2, len:14, trail:'#9aa0ac', special:true, placeMine:true},   // 下＝地雷を仕掛ける
   // ── 武器別コンボ：双剣フタバ（イッヌ）＝左右の刃で刻む高速5段 ──
   tw1:{name:'双牙・右', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:-0.9, to:0.5,  len:30, trail:'#ffd6e8', pivotY:-58, lunge:1.5, combo:1},
   tw2:{name:'双牙・左', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:0.7,  to:-0.7, len:30, trail:'#d6e8ff', pivotY:-58, lunge:1.5, combo:2},
@@ -1085,7 +1088,17 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
         damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*8,true); if(!e.dead) launchEnemy(e,(e.x<h.x?-1:1)*13,-11,3); } }
       hazards.splice(i,1); }
+  } else if(h.kind==='mine'){   // ワッチの地雷：敵が近づくか時間切れで起爆
+    let trig = h.t>=h.life;
+    if(!trig && h.t>16){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<46 && Math.abs(e.y-h.y)<64 && e.z<74){ trig=true; break; } } }
+    if(trig){ const gy=LANE-groundLift(h.x); ring(h.x,gy-8,'#ff5a3a'); ring(h.x,gy-8,'#fff'); spark(h.x,gy-22,'#ffae42',30,13); dust(h.x,gy,16); impactBurst(h.x,gy-32,'#fff',true);
+      shake=Math.max(shake,12); flash=Math.max(flash,4); hitStop=Math.max(hitStop,6); sfx.big();
+      for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<150 && Math.abs(e.y-h.y)<72){ damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<h.x?-1:1)*14,-11,3); } }
+      hazards.splice(i,1); }
   } } }
+// ── ワッチ：地雷を設置 ──
+function placeMine(p){ hazards.push({kind:'mine', x:p.x, y:LANE, t:0, life:660, dmg:Math.round(42*(p.atkMul||1)+14)});
+  dust(p.x,p.y,7); spark(p.x,p.y-6,'#ffd24d',8,6); popText(p.x,p.y-92,'地雷 設置！','#ff9a3a'); sfx.swing(1); }
 function drawHazards(){ for(const h of hazards){ const sx=h.x-camX; if(sx<-80||sx>W+80) continue; const gy=LANE-groundLift(h.x);
   if(h.kind==='pillar'){ const k=Math.min(1,h.t/6)*(h.t>h.life-8?(h.life-h.t)/8:1);
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=Math.max(0,k);
@@ -1099,6 +1112,11 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX; if(sx<-80||s
     ctx.lineWidth=1.6; ctx.beginPath(); ctx.ellipse(sx,gy,42+8*pul,12+3*pul,0,0,7); ctx.stroke();
     for(let q=0;q<4;q++){ const aq=gf*0.06+q*PI2; ctx.fillStyle=r>0.7?'#ff7a4a':'#ffd24d'; ctx.fillRect(sx+Math.cos(aq)*(52+10*pul)-2, gy+Math.sin(aq)*(15+3*pul)-2, 4,4); }
     drawStar(sx,gy-6,6+4*pul,12+6*pul,r>0.7?'#ff7a4a':'#ffd24d'); ctx.restore(); }
+  if(h.kind==='mine'){ ctx.save(); ctx.translate(sx,gy);
+    ctx.fillStyle='#3a3f48'; ctx.beginPath(); ctx.ellipse(0,-4,13,6,0,0,7); ctx.fill();   // 本体
+    ctx.fillStyle='#22252c'; for(let s=0;s<6;s++){ const a=s/6*PI2; ctx.fillRect(Math.cos(a)*11-1.5,-6+Math.sin(a)*4-1.5,3,3); }   // トゲ
+    const blink=(gf%20<10); ctx.save(); if(blink) ctx.globalCompositeOperation='lighter'; ctx.fillStyle=blink?'#ff3a2a':'#7a1a12'; ctx.beginPath(); ctx.arc(0,-8,2.4,0,7); ctx.fill(); ctx.restore();
+    ctx.restore(); }
 } }
 // 攻撃＋掴み同時押し：体力20%を捧げて天空からレーザー掃射（発動中無敵の緊急回避）
 function beginNukoLaser(p){
@@ -1159,6 +1177,7 @@ function updatePlayer(){
   if(p.state==='gquake'){ updateGuardQuake(); return; }
   if(p.state==='gupper'){ updateGuardUpper(); return; }
   if(p.state==='gpound'){ updateGuardPound(); return; }
+  if(p.state==='gatling'){ updateGatling(); return; }
 
   // ---- jump (high jump + aerial rave) ----
   if(p.state==='jump'){
@@ -1238,6 +1257,11 @@ function updatePlayer(){
     if(def.smokeBomb && a.t===def.act[0]){ for(let k=0;k<12;k++) dust(p.x+rnd(-34,34), p.y-rnd(0,56), 3); for(let k=0;k<3;k++) ring(p.x,p.y-30,'#d4d8e0'); spark(p.x,p.y-30,'#e6eaf0',22,11); p.invuln=Math.max(p.invuln,46); sfx.swing(2); popText(p.x,p.y-108,'けむり玉！','#d4d8e0');   // ワッチ上：煙幕で目くらまし＆一瞬無敵
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<108 && Math.abs(e.y-p.y)<66 && e.z<90){ damageEnemy(e,Math.round(6*(p.atkMul||1)),0,false); if(!e.dead){ e.state='hurt'; e.hurtTimer=46; e.stun=68; } } }); }
     if(def.shadowStep){ if(a.t%2===0) spark(p.x-p.facing*12, p.y-rnd(20,50), '#9fb8d8', 2, 5); p.invuln=Math.max(p.invuln,4); }   // 縮地：残像＆すり抜け気味
+    if(def.pistols && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){ const dir=p.facing, sp=rnd(-0.16,0.16);   // 二丁拳銃：弾を連射
+      spawnProj(p.x+dir*30, p.y-46, dir*16, 0, {owner:'player', dmg:Math.round(9*(p.atkMul||1)), color:'#ffe14d', r:7, life:44, zz:46+Math.sin(sp)*20, nostop:true});
+      spark(p.x+dir*38, p.y-46+Math.sin(sp)*10, '#ffd24d', 6, 8); shake=Math.max(shake,3); if(a.t===def.act[0]){ sfx.zap(); flash=Math.max(flash,2); } }
+    if(def.heist && a.t===def.dur-6){ const dir=p.facing; crescent(p.x+dir*40,p.y-52,92,dir>0?-1.0:Math.PI-1.0,dir>0?1.0:Math.PI+1.0,'#ffffff'); spark(p.x+dir*30,p.y-50,'#ffe14d',20,11); ring(p.x+dir*24,p.y-50,'#ffe14d'); flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); for(let k=0;k<6;k++) spark(p.x+rnd(-30,30),p.y-rnd(20,60),'#ffd24d',3,7); }   // 神速強奪：締めの一閃＆小判散らし
+    if(def.placeMine && a.t===def.act[0]){ placeMine(p); }   // 地雷を仕掛ける
     if(def.kiBurst && a.t===def.act[0]){ shimaKiBurst(p); }                    // 爆裂・羅漢衝波：全方位の気功大爆発
     if(def.hammerImpact && a.t===def.act[0]){ guardHammerImpact(p); }          // メテオ・ハンマーインパクト：三重衝撃波の大叩き
     // active hit window
@@ -1274,7 +1298,7 @@ function updatePlayer(){
     if(NK && (K.grab||pressed.grab) && p.hp>p.maxHp*0.2+1){ pressed.grab=false; beginNukoLaser(p); return; }   // 攻撃＋掴み＝カラミティレーザー
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
-      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / 呼び声 / 次元斬
+      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(GD?'gdp':NK?'nstar':SH?'sdrago':WA?'wflip':'idragon'); consumeCmd(); p.atkHeld=true; return; }       // 昇竜コマンド
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(GD?'gtackle':NK?'nfrost':SH?'srush':WA?'wknife':'iwave'); consumeCmd(); p.atkHeld=true; return; }  // 波動コマンド
@@ -1282,11 +1306,12 @@ function updatePlayer(){
     if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       if(GD){ beginAttack('ghead'); return; }                                             // ガードワン下：ヘッドバット突進
-      beginSlide(); return; }                                                              // ドロップキック / スライディング（ワッチも軽快なスライディング）
+      if(WA){ beginAttack('wmine'); return; }                                             // ワッチ下：地雷設置
+      beginSlide(); return; }                                                              // ドロップキック / スライディング
     if(K.up){ beginAttack(SH?'tornado':NK?'ntornado':GD?'gupper':WA?'wsmoke':'shoryu'); }  // 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳
-    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wdash'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 縮地 / 居合
+    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
     else if(fwd){ const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
-      else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else if(WA){ beginAttack('wlunge'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 強盗突き / 居合斬り
+      else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else if(WA){ beginAttack('wpistol'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 二丁拳銃 / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -1743,6 +1768,34 @@ function updateSeven(){ const p=player; p.sevenT++;
     flash=Math.max(flash,6); shake=13; hitStop=16; triggerSlow(34); for(let i=0;i<10;i++)ring(camX+rnd(0,W),LANE-rnd(0,220),'#ffd24d');
     p.state='idle'; }
 }
+// ── ワッチの奥義「ロックンロール」：巨大ガトリングを構え、正面上〜下へ100連射の掃射 ──
+function beginGatling(p){ p.dim--; p.state='gatling'; p.gatT=0; p.gatShots=0; p.invuln=Math.max(p.invuln,150); p.vx=0; p.charge=0; p.atkHeld=false; p.atk=null;
+  popText(p.x,p.y-126,'ロックンロール！！','#ffe14d',true); ring(p.x,p.y-44,'#ffd24d'); ring(p.x,p.y-44,'#fff'); shake=Math.max(shake,9); flash=Math.max(flash,4); sfx.boss(); sfx.rise(); }
+function updateGatling(){ const p=player; p.gatT++; p.invuln=Math.max(p.invuln,6); p.vx*=0.7;
+  const ROUNDS=100;
+  if(p.gatShots<ROUNDS){ const dir=p.facing;
+    const ang=Math.sin(p.gatT*0.34)*1.4 + rnd(-0.05,0.05);   // 正面上〜下を往復掃射
+    spawnProj(p.x+dir*40, p.y-52, dir*Math.cos(ang)*17, 0, {owner:'player', dmg:Math.round(7*(p.atkMul||1)), color:(p.gatShots%2)?'#ffe14d':'#ff8a3a', r:7, life:42, zz:52, vzz:Math.sin(ang)*15, nostop:true});
+    p.gatShots++;
+    if(p.gatShots%2===0){ spark(p.x+dir*48, p.y-52, '#ffd24d', 5, 9); shake=Math.max(shake,4); }
+    if(p.gatShots%7===0) sfx.zap();
+    if(gf%3===0) dust(p.x-dir*10,p.y,2);   // 反動でわずかに踏ん張る
+  } else if(p.gatT>p.gatEndT||!p.gatEndT){ if(!p.gatEndT) p.gatEndT=p.gatT+18; if(p.gatT>=p.gatEndT){ p.state='idle'; p.gatEndT=0; } }
+  p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); }
+// ガトリングガンの描画（render 側で drawPlayer の後に呼ぶ）
+function drawGatlingGun(p){ const sx=p.x-camX, gy=p.y-groundLift(p.x)-p.z; ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
+  const firing=(p.gatShots||0)<100; const ang=Math.sin((p.gatT||0)*0.34)*1.0;
+  ctx.save(); ctx.translate(12,-48); ctx.rotate(ang);
+  ctx.fillStyle='#6a4a2a'; ctx.fillRect(-22,8,15,20);                                   // マガジン/弾薬箱
+  ctx.fillStyle='#c8a030'; for(let b=0;b<4;b++) ctx.fillRect(-20,10+b*4,11,2);
+  ctx.fillStyle='#3a3f48'; roundRect(-16,-15,32,30,5); ctx.fill();                        // ケーシング
+  ctx.fillStyle='#22252c'; for(let b=0;b<6;b++){ const by=-12+b*4.6; ctx.fillRect(15,by,50,3.4); }   // 6銃身
+  ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,11,0,7); ctx.fill();              // 回転部
+  ctx.fillStyle='#2a2d34'; for(let b=0;b<6;b++){ const a=(p.gatT*0.5)+b*(PI2/6); ctx.beginPath(); ctx.arc(Math.cos(a)*5.5,Math.sin(a)*5.5,2.2,0,7); ctx.fill(); }
+  ctx.strokeStyle='#20242a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(15,-12); ctx.lineTo(15,12); ctx.stroke();
+  if(firing && p.gatT%2===0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(66,0,11+Math.random()*7,0,7); ctx.fill(); ctx.fillStyle='#ff7a2a'; ctx.beginPath(); ctx.arc(66,0,6,0,7); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(200,200,210,.4)'; for(let k=0;k<2;k++){ ctx.beginPath(); ctx.arc(-20-k*8,-2,5+k*3,0,7); ctx.fill(); } ctx.restore(); }
+  ctx.restore(); ctx.restore(); }
 
 //======================================================================
 //  Enemies
@@ -2717,7 +2770,7 @@ const CH1=[
      shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃でワンインチブロー（リーチは極短だが一撃で画面端まで吹き飛ばす豪打）、空中で↑＋攻撃なら昇天脚が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でメテオ・ハンマーインパクト（特大の叩きつけ→三重衝撃波）、空中で↑＋攻撃ならハンマーアッパーじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（周囲を目くらまし＆一瞬無敵）、←←や→→＋攻撃で縮地の走り抜け、前＋攻撃で強盗突きじゃ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして真骨頂——各ステージのボスを倒すと、その必殺技を奪える。奪った技は ↓↑＋攻撃 で放て！ コンボからコマンド技へのキャンセルも使いこなすのじゃ！']}}},
+     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
@@ -3193,7 +3246,7 @@ function render(){
         for(let g=0;g<7;g++){ o.pl.x=clamp(camX+ (g+0.5)/7*W + Math.sin(gf*0.5+g)*16, camX+24, camX+W-24); drawPlayer(); }
         ctx.restore(); o.pl.x=sx0; }
       if(o.pl.vehicle){ drawMountedVehicle(o.pl); const sz=o.pl.z; o.pl.z+=mountLift(o.pl); drawPlayer(); o.pl.z=sz; drawMountWeapon(o.pl); }   // 乗り物→鞍上に騎手→武器
-      else drawPlayer(); }
+      else { drawPlayer(); if(o.pl.state==='gatling') drawGatlingGun(o.pl); } }
     else drawEnemy(o.e); });
   player=players[0];
   drawHazards();
