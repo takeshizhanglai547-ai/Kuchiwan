@@ -16,6 +16,10 @@
     align-items:center; justify-content:center; text-align:center; z-index:20; padding:20px;
     background:radial-gradient(ellipse at center, rgba(20,12,40,.55), rgba(0,0,0,.9)); }
   .hidden { display:none !important; }
+  /* タイトルは背後の豪華な演出を活かすため、オーバーレイを控えめに */
+  #start.overlay { background:radial-gradient(ellipse at center 38%, rgba(10,6,26,.30), rgba(3,2,10,.72) 78%); }
+  #start .title-main { text-shadow:0 4px 0 rgba(120,60,0,.5), 0 0 22px rgba(255,180,40,.6); }
+  #start .title-jp { text-shadow:0 0 10px #ff8a00, 0 2px 6px #000; }
   .title-sub { font-size:14px; letter-spacing:6px; color:#ffd34d; text-shadow:0 0 8px #b8860b; }
   .title-main { font-size:clamp(38px,9vw,84px); font-weight:900; letter-spacing:4px;
     background:linear-gradient(180deg,#fff6d0,#ffcf3a 55%,#c8881a);
@@ -435,9 +439,12 @@ const Music=(()=>{
     town:{ bpm:92, lead:'sine', pad:'triangle', soft:true,       // 安らぎの店内 (C)
       prog:[[48,52,55],[45,48,52],[53,57,60],[43,47,50],[48,52,55],[53,57,60],[43,47,50],[48,52,55]],
       mel:[72,76,79,76, 72,69,72,76, 77,81,77,74, 74,71,67,71, 72,76,79,84, 81,77,74,77, 74,71,74,79, 76,72,67,72] },
-    title:{ bpm:106, lead:'triangle', pad:'sawtooth', soft:true, // タイトル — 静かな決意 (C)
-      prog:[[48,52,55],[55,59,62],[45,48,52],[53,57,60],[48,52,55],[53,57,60],[55,59,62],[48,52,55]],
-      mel:[67,72,76,79, 74,79,74,71, 72,76,81,79, 77,74,69,74, 76,79,84,79, 77,81,77,72, 74,79,74,71, 72,null,72,null] },
+    title:{ bpm:104, lead:'triangle', pad:'sawtooth', soft:true, epic:true, // タイトル — 荘厳なる序曲 (C 壮大・希望)
+      prog:[[48,52,55],[43,47,50],[45,48,52],[50,53,57],[48,52,55],[41,45,48],[43,47,50],[47,50,55]],
+      mel:[72,76,79,84, 79,76,72,74, 76,79,83,79, 74,71,67,74, 72,76,79,84, 86,84,79,76, 74,79,74,71, 72,null,72,null] },
+    ending:{ bpm:88, lead:'triangle', pad:'sawtooth', soft:true, epic:true, // エンディング — 感動の大団円 (F 温かく壮大)
+      prog:[[53,57,60],[48,52,55],[50,53,57],[55,59,62],[53,57,60],[45,48,52],[46,50,53],[48,52,55]],
+      mel:[72,77,81,84, 81,77,72,74, 76,79,81,84, 79,76,72,76, 77,81,84,89, 86,84,81,77, 76,79,74,72, 77,null,77,null] },
   };
   function song(){ return mode==='battle'? BATTLE[themeIdx] : (SONGS[mode]||BATTLE[0]); }
   function bus(){ if(!songGain){ songGain=actx.createGain(); songGain.gain.value=1; songGain.connect(musicGain); } return songGain; }
@@ -1508,7 +1515,7 @@ function bossSteal(bossType){ const T=ETYPE[bossType]; if(!T) return null; const
   if(bk==='moloch'||bk==='dragon'||w==='fire') return {name:'業火弾',cast:stealFireVolley,col:'#ff8a3a'};
   if(bk==='emperor'||bk==='wolfking'||bk==='darkknight'||bk==='rival'||bk==='golux'||w==='dark') return {name:'闇の弾幕',cast:stealDarkOrbs,col:'#c46bff'};
   if(bk==='wanmen'||bk==='ghost'||bk==='noroinu'||bk==='cerbe') return {name:'メテオコール',cast:stealMeteor,col:'#d6a6ff'};
-  if(bk==='gigas'||bk==='glaton'||bk==='guard0'||bk==='cactus'||bk==='slime'||bk==='shark'||bk==='pirate') return {name:'グランドクエイク',cast:stealQuake,col:'#ffb85a'};
+  if(bk==='gigas'||bk==='glaton'||bk==='guard0'||bk==='goldgolem'||bk==='cactus'||bk==='slime'||bk==='shark'||bk==='pirate') return {name:'グランドクエイク',cast:stealQuake,col:'#ffb85a'};
   return {name:'秘技・幻影弾',cast:stealDarkOrbs,col:'#bfe9ff'}; }
 // ── ヌコの掴み技 ──
 function grabZapBlast(e){ const p=player, dir=p.facing;   // 雷を纏って吹き飛ばす
@@ -1840,6 +1847,8 @@ const ETYPE={
   papipoo:{hp:2050,sp:2.3,dmg:28,atkR:82,w:60,h:106,c1:'#f6f6fc',c2:'#d2d6e4',c3:'#9aa0b6',score:42000,boss:true,bossKind:'rival',weapon:'none',accent:'#bfe9ff', name:'兄弟子パピプー',finalBoss:true,trueBoss:true,fistKind:true},
   // ── ガードワン8号・真ボス：先代最強の門番「ガードワン零号」（黒鉄の巨躯・大槌）──
   guard0:{hp:2300,sp:1.1,dmg:34,atkR:104,w:104,h:150,c1:'#5a5560',c2:'#33303a',c3:'#1a1820',score:46000,boss:true,bossKind:'guard0',weapon:'none',accent:'#ff8a3a', name:'ガードワン零号',finalBoss:true,trueBoss:true},
+  // ── ワッチ・真ボス：かつての師にして怪盗王「ファントム」（二丁拳銃・分身・神速の抜き撃ち）──
+  phantom:{hp:2100,sp:2.6,dmg:30,atkR:88,w:60,h:104,c1:'#2a1e46',c2:'#170e2a',c3:'#080410',score:44000,boss:true,bossKind:'rival',weapon:'dark',accent:'#c46bff', name:'怪盗王ファントム',finalBoss:true,trueBoss:true,fistKind:true},
   // ── 各キャラの道中ライバル（中ボス）──
   rvSword:{hp:520,sp:2.4,dmg:16,atkR:78,w:60,h:100,c1:'#c0c8d8',c2:'#6a7488',c3:'#38404e',score:5500,boss:true,mini:true,bossKind:'rival',weapon:'dark',accent:'#9fd0ff', name:'放浪剣士シルヴァ'},          // イッヌのライバル
   rvFist:{hp:500,sp:2.9,dmg:15,atkR:66,w:54,h:96,c1:'#e0a45f',c2:'#a86a30',c3:'#6a3f18',score:5500,boss:true,mini:true,bossKind:'rival',weapon:'none',accent:'#ffd24d', name:'流拳のカラテ丸',fistKind:true},        // シマのライバル
@@ -1855,6 +1864,8 @@ const ETYPE={
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
   noroinu:{hp:600,sp:1.8,dmg:16,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
+  // ── ワッチ登場に合わせた追加ステージ「月夜の宝物庫」の番人 ──
+  goldgolem:{hp:900,sp:0.85,dmg:21,atkR:92,w:172,h:186,c1:'#e8c86a',c2:'#b8922e',c3:'#7a5e18',score:6800,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#fff0a0',name:'黄金傀儡ゴルドー'},
   // ---- 新エネミー：不死・機械の犬 ----
   zombiewan:{hp:74,sp:0.72,dmg:11,atkR:48,w:60,h:78,c1:'#6f8a54',c2:'#455a34',c3:'#28361e',score:360,zombie:true,accent:'#a6e070',name:'ゾンビワンコ'},          // 遅いが一度だけ蘇る
   skeletwan:{hp:40,sp:1.7,dmg:9,atkR:220,w:52,h:80,c1:'#eae7dc',c2:'#b7b3a4',c3:'#7c786a',score:380,boner:true,accent:'#cfe6ff',name:'スケルトンワンコ'},          // 遠距離から骨を投げる
@@ -1885,6 +1896,7 @@ const BOSSMOVES={
   golux:  ['rivalCombo','goluxIai','goluxKabuto','rivalShoryu','rivalCharge','goluxIai'],   // イッヌ風：疾走連続居合・兜割
   wanmen: ['scytheSlash','phaseDash','meteorCall','vanishMove','meteorCall','scytheSlash'],  // 彼方からの呼び声＝隕石
   guard0: ['heavySwing','groundSlam','hammerQuake','bodyCharge','unblockSmash','groundSlam'],  // 門番零号：大槌の地震
+  goldgolem:['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash','heavySwing'],   // 黄金傀儡：重量級の巨躯
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
@@ -1895,6 +1907,7 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
   golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！',
+  phantom:'よく来たな、ワッチ。師を超えられるか——その手で試してみせろ！', goldgolem:'ココヨリ先ハ　通サヌ……宝ハ　渡サヌ……',
   guard0:'八代目よ…門を守る覚悟、この零号が試そう！', rvSword:'いい太刀筋だ。だが俺の方が上だと証明させてもらう！',
   rvFist:'その拳、俺と競い合おうぜ！本気で来いよ！', rvMage:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', rvGuard:'門番同士…どちらが硬いか、確かめようか！' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
@@ -1902,7 +1915,7 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
   moloch:'bosseerie', cerbe:'bosseerie', noroinu:'bosseerie', ghost:'bosseerie', bitter:'bosseerie',
   rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic',
-  golux:'bossrival', papipoo:'bossrival', guard0:'bossheavy',
+  golux:'bossrival', papipoo:'bossrival', guard0:'bossheavy', phantom:'bossrival', goldgolem:'bossheavy',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
 // 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
@@ -2022,7 +2035,7 @@ function killEnemy(e){ const T=ETYPE[e.type];
       setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100);
     } } }
 // キャラ別の真の最終ボス（イッヌ=ゴルックス／シマ=パピプー／ヌコ=ワンメンドーズ）
-function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen', guard8:'guard0'}[kind]||null; }
+function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen', guard8:'guard0', watch:'phantom'}[kind]||null; }
 function rivalFor(kind){ return {inu:'rvSword', shima:'rvFist', nuko:'rvMage', guard8:'rvGuard'}[kind]||'rvSword'; }
 // ラスボスの形態進化（フリーザ風）：第1→第2(異形巨大狼)→第3(暗黒剣士)
 function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
@@ -2835,6 +2848,16 @@ const FINAL_CH=[
   {theme:4,name:'魔王の間',len:1400,noPit:true,
    gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
 ];
+// ── ワッチの登場に合わせた追加ステージ「月夜の宝物庫」＋追加ボス「黄金傀儡ゴルドー」──
+const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',
+  gates:[{off:560,list:[['gripper',1],['pounce',1],['pierrot',1]]},{off:640,list:[['bikewan',1]]},
+         {off:1000,list:[['akita',1],['mastiff',1],['onibouzu',1]]},{off:1400,boss:true,list:[['goldgolem',1]]}],
+  npc:{kind:'merchant',name:'宝物庫の番犬ラテ',once:true,lines:{
+    inu:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…帝国が根こそぎ奪っていったのだ。','奥の黄金傀儡ゴルドーは、盗人を通さぬ番人。だが宝を取り戻すには倒すしかない。剣士どの、頼んだぞ！'],
+    shima:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…帝国に根こそぎ奪われてな。','奥の黄金傀儡ゴルドーは図体こそ大きいが、大振りの後が隙だらけ。拳士どの、頼む！'],
+    nuko:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…帝国に奪われてしまってな。','黄金傀儡ゴルドーは金属の巨躯。魔法で浮かせて隙を突くのじゃ、魔法使いどの！'],
+    guard8:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…守り切れず帝国に奪われた。','黄金傀儡ゴルドーは同じ「守る者」。だがもう役目を違えておる。頼んだぞ、8号どの！'],
+    watch:['よお盗賊ワッチ、噂は聞いてるぜ。ここは王国の宝を眠らせる「月夜の宝物庫」…帝国に根こそぎ盗まれちまってな。','奥の黄金傀儡ゴルドーを出し抜いて、宝を“盗み返して”くれ。お前さんの手口なら朝飯前だろ？']},give:{coins:20}}};
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
@@ -2899,6 +2922,7 @@ const WORLD_LEVELS=[
   {id:'futou',  b:SEGS.B[0][1], mx:0.70, my:0.40},   // 海賊王の埠頭
   {id:'sabaku', b:SEGS.B[1][0], mx:0.60, my:0.64},   // 灼熱の砂漠
   {id:'haikyo', b:SEGS.B[1][1], mx:0.72, my:0.78},   // 灼熱の巨大廃墟
+  {id:'takara', b:TAKARA_STAGE, mx:0.52, my:0.14},   // 月夜の宝物庫（ワッチ登場ステージ・黄金傀儡ゴルドー）
   {id:'reihou', b:FINAL_CH[0],  mx:0.82, my:0.55},   // 氷雪の霊峰
 ];
 const WORLD_FINAL=[
@@ -5444,10 +5468,28 @@ const SHOP_ITEMS=[
   {name:'勇者の正装',       desc:'被ダメージ −10％＆豪華な見た目に変化', cost:95,
     soldOut(){ return activePlayers().every(p=>p.armored); },
     buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.4,(p.defMul||1)-0.10); } }); }},
+  // ── 秘宝ガチャ（ここ限定の専用アイテム）──
+  {name:'🎰 秘宝ガチャを回す', desc:'コイン30でここだけの専用アイテムを1つ入手！', cost:30, gacha:true},
   {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
 ];
+// ── ガチャ専用の景品（ショップでは買えない特別なアイテム。rはレア度／wは排出重み）──
+const GACHA_POOL=[
+  {name:'銀の首輪',       r:2, col:'#cfd6e0', w:26, desc:'最大HP ＋18',        apply(p){ p.maxHp+=18; p.hp+=18; }},
+  {name:'盗賊の手袋',     r:2, col:'#c8a27a', w:26, desc:'コイン獲得 ＋40％',   apply(p){ p.coinMul=(p.coinMul||1)+0.4; }},
+  {name:'俊足のミサンガ', r:3, col:'#7de0a0', w:18, desc:'移動速度 ＋20％',     apply(p){ p.spdMul=(p.spdMul||1)+0.2; }},
+  {name:'猛牛のバンド',   r:3, col:'#ff8a5a', w:18, desc:'攻撃力 ＋12％',       apply(p){ p.atkMul=(p.atkMul||1)+0.12; }},
+  {name:'守護の宝珠',     r:3, col:'#7db8ff', w:16, desc:'被ダメージ −12％',    apply(p){ p.defMul=Math.max(0.4,(p.defMul||1)-0.12); }},
+  {name:'奥義の秘伝書',   r:4, col:'#c89cff', w:11, desc:'奥義ストック上限 ＋2', apply(p){ p.dimMax+=2; p.dim=Math.min(p.dimMax,p.dim+2); }},
+  {name:'黄金の肉球',     r:4, col:'#ffd24d', w:9,  desc:'最大HP ＋40 ＆ 全回復', apply(p){ p.maxHp+=40; p.hp=p.maxHp; }},
+  {name:'不死鳥の羽根',   r:5, col:'#ff5a6a', w:5,  desc:'残機 ＋3（超レア）',   apply(p){}, lives:3},
+  {name:'獣王の紋章',     r:5, col:'#ffe14d', w:4,  desc:'攻・防・速すべて強化＆HP＋20', apply(p){ p.atkMul=(p.atkMul||1)+0.15; p.defMul=Math.max(0.4,(p.defMul||1)-0.1); p.spdMul=(p.spdMul||1)+0.15; p.maxHp+=20; p.hp+=20; }},
+];
+let _gachaW=0; GACHA_POOL.forEach(g=>_gachaW+=g.w);
+function rollGacha(){ let r=Math.random()*_gachaW; for(const g of GACHA_POOL){ if((r-=g.w)<0) return g; } return GACHA_POOL[0]; }
+let gacha=null;   // {phase:'spin'|'reveal', t, item}
+function applyGacha(it){ players.forEach(p=>{ if(p.active) it.apply(p); }); if(it.lives) grantLives(it.lives); }
 let shopSel=0, shopNavCd=0, shopMsg='', shopMsgT=0, shopT=0, shopScroll=0;
-function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT=0; shopT=0;
+function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT=0; shopT=0; gacha=null;
   unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); } }
 function exitShop(){
   saveProgress(1);
@@ -5455,6 +5497,18 @@ function exitShop(){
 }
 const SHOP_VIS=9;   // 一度に表示する品数（残りはスクロール）
 function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
+  // ── ガチャ演出中は専用の処理（回転→開封）──
+  if(gacha){ gacha.t++;
+    if(gacha.phase==='spin'){ if(gacha.t%3===0)sfx.swing(0);
+      if(gacha.t>=48){ gacha.phase='reveal'; gacha.t=0; applyGacha(gacha.item);
+        sfx.boss(); sfx.rise(); flash=Math.max(flash,3); shake=Math.max(shake,gacha.item.r*2);
+        for(let i=0;i<10+gacha.item.r*5;i++) spark(W/2+rnd(-70,70),H*0.42+rnd(-40,40),gacha.item.col,gacha.item.r*3,10); } }
+    else { useInput(players[0].in);
+      if(gacha.t>16 && (pressed.atk||pressed.jump||pressed.grab||pressed.grd)){
+        pressed.atk=pressed.jump=pressed.grab=pressed.grd=false;
+        shopMsg='「'+gacha.item.name+'」を手に入れた！'; shopMsgT=110; gacha=null; }
+      saveInput(players[0].in); }
+    updateParticles(); return; }
   useInput(players[0].in);
   if(shopNavCd>0)shopNavCd--;
   if(shopNavCd<=0){ if(K.up){shopSel=(shopSel+SHOP_ITEMS.length-1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);}
@@ -5463,7 +5517,9 @@ function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
   shopScroll=clamp(shopScroll,0,Math.max(0,SHOP_ITEMS.length-SHOP_VIS));
   if(pressed.atk){ pressed.atk=false; const it=SHOP_ITEMS[shopSel];
     if(it.leave){ saveInput(players[0].in); exitShop(); return; }
-    if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; sfx.guard(); }
+    if(it.gacha){ if(coins>=it.cost){ coins-=it.cost; gacha={phase:'spin', t:0, item:rollGacha()}; sfx.rise(); saveInput(players[0].in); return; }
+      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
+    else if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; sfx.guard(); }
     else if(coins>=it.cost){ coins-=it.cost; it.buy(); shopMsg=it.name+'を購入！'; shopMsgT=90; sfx.rise(); }
     else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
   if(pressed.grab||pressed.jump){ pressed.grab=false; pressed.jump=false; saveInput(players[0].in); exitShop(); return; }
@@ -5523,6 +5579,45 @@ function drawShop(){
   if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
   ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
   ctx.fillText('↑↓ 選択　／　J（攻撃）で購入　／　Space（ジャンプ）で出発', W/2, H-26); ctx.textAlign='left';
+  if(gacha) drawGacha();
+}
+function drawGacha(){
+  ctx.fillStyle='rgba(4,4,10,.74)'; ctx.fillRect(0,0,W,H);
+  const cx=W/2, cy=H*0.44, reveal=gacha.phase==='reveal';
+  const it = reveal ? gacha.item : GACHA_POOL[Math.floor(gacha.t*0.7)%GACHA_POOL.length];   // 回転中は景品を高速で巡る
+  ctx.save(); ctx.translate(cx,cy);
+  // 開封時：後光の光線
+  if(reveal){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(let i=0;i<14;i++){ ctx.save(); ctx.rotate(gf*0.02+i*(Math.PI/7)); ctx.globalAlpha=0.09+0.05*it.r/5; ctx.fillStyle=it.col;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-24,-300); ctx.lineTo(24,-300); ctx.fill(); ctx.restore(); }
+    ctx.restore(); }
+  const pop = reveal ? (0.7+0.3*Math.min(1,gacha.t/9)) : (1+Math.sin(gacha.t*0.5)*0.03);
+  ctx.scale(pop,pop);
+  const cw=320, chh=210;
+  const grd=ctx.createLinearGradient(0,-chh/2,0,chh/2); grd.addColorStop(0,'#232640'); grd.addColorStop(1,'#0c0d18');
+  ctx.fillStyle=grd; roundRect(-cw/2,-chh/2,cw,chh,18); ctx.fill();
+  ctx.lineWidth=5; ctx.strokeStyle=it.col; roundRect(-cw/2,-chh/2,cw,chh,18); ctx.stroke();
+  // 宝石（景品カラーの円）
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=it.col; ctx.globalAlpha=0.35; ctx.beginPath(); ctx.arc(0,-42,44,0,7); ctx.fill(); ctx.restore();
+  ctx.fillStyle=it.col; ctx.beginPath(); ctx.arc(0,-42,22,0,7); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(-7,-49,6,0,7); ctx.fill();
+  // ヘッダー
+  ctx.textAlign='center';
+  ctx.fillStyle='#ffe14d'; ctx.font='900 20px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText(reveal?'★ 専用アイテム GET! ★':'✦ 回転中… ✦', 0, -chh/2+30);
+  if(reveal){
+    // レア度の星
+    ctx.font='18px serif'; let stars=''; for(let i=0;i<it.r;i++)stars+='★';
+    ctx.fillStyle='#ffcf3a'; ctx.fillText(stars, 0, 6);
+    ctx.fillStyle='#fff'; ctx.font='bold 22px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name, 0, 40);
+    ctx.fillStyle='#bfe0ff'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.desc, 0, 66);
+  } else {
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name, 0, 34);
+  }
+  ctx.restore();
+  if(reveal && gacha.t>16){ ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    ctx.fillText('J（攻撃）で受け取る', cx, cy+H*0.20); }
+  ctx.textAlign='left';
 }
 
 //======================================================================
@@ -5534,7 +5629,7 @@ function drawShop(){
 const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
-  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針',
+  shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針', goldgolem:'宝物庫の黄金傀儡',
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
@@ -5560,6 +5655,10 @@ const STORY_OPEN_BY={
     {bgTheme:0, art:'player', name:'@hero', text:'手紙は、星詠みの塔で魔導を学ぶ幼い少女のもとへ舞い込んだ。友のいない、孤独な天才だった。'},
     {bgTheme:0, art:'player', name:'@hero', text:'——眠れぬ夜、彼方から優しい声が応えてくれた。「キミハ一人ジャナイ」。その“友だち”だけが、心の支えだった。'},
     {bgTheme:0, art:'player', name:'魔法使いヌコ', text:'「お師匠さま、行ってきます。彼方の友だちも、力を貸してくれるって」。小さな魔法使いは、杖を握りしめた——'}],
+  watch:[...OPEN_COMMON,
+    {bgTheme:0, art:'player', name:'@hero', text:'王女の手紙は、盗まれた宝の噂を追う一匹の白い子犬——盗賊ワッチのもとへ、風に乗って偶然舞い込んだ。'},
+    {bgTheme:0, art:'player', name:'@hero', text:'——盗みは得意。だが奪うのは、いつも「悪いやつ」からだけ。孤児だった彼に路地裏の生き方を教えた“師匠”の、たった一つの掟だった。'},
+    {bgTheme:0, art:'player', name:'盗賊ワッチ', text:'「王国まるごと盗まれた、ねえ。……上等じゃねえか。そいつは、オレ様が“盗み返して”やるよ」。シルクハットを傾け、ワッチは不敵に笑った——'}],
 };
 // 転：ラスボス直前の心情（クライマックスへの溜め）
 const STORY_TURN_BY={
@@ -5575,6 +5674,9 @@ const STORY_TURN_BY={
   nuko:[
     {bgTheme:4, art:'invade', name:'@hero', text:'城門の前、彼方の声が囁いた。「ヨクヤッタ。アトハ、私ニ任セナサイ」。なぜか、背筋が冷たくなった。'},
     {bgTheme:4, art:'invade', name:'魔法使いヌコ', text:'「…ねえ、どうして今、そんなに嬉しそうなの？」。小さな違和感を胸に、ヌコは扉を押し開けた——'}],
+  watch:[
+    {bgTheme:4, art:'invade', name:'@hero', text:'六つの将から宝も技も鮮やかに“頂き”ながら、ワッチはついに魔王城の門前に立った。だが胸の奥に、消えない引っかかりがあった。'},
+    {bgTheme:4, art:'invade', name:'盗賊ワッチ', text:'「この帝国の手口……宝の隠し方も、罠の張り方も。どこかで見た“クセ”がある。——まさか、なあ」'}],
 };
 const STORY_END_BY={
   // 結：それぞれの大団円
@@ -5603,7 +5705,22 @@ const STORY_END_BY={
     {bgTheme:0, art:'player', name:'魔法使いヌコ', text:'「もう、ひとりじゃない」。涙をぬぐい、ヌコは前を向く。今度こそ、本当の友だちと共に。'},
     {bgTheme:0, art:'player', name:'@hero', text:'偽りの呼び声を断ち切った少女は、史上最年少の大魔導士として、新たな伝説の一歩を踏み出した。'},
     {bgTheme:0, art:'end',    name:'', text:'― ヌコ編・真・完 ―     遊んでくれてありがとう！'}],
+  // ワッチ：真ボス・怪盗王ファントムを下した後の真エンディング
+  watch:[
+    {bgTheme:4, boss:'phantom', name:'怪盗王ファントム', role:'かつての師', text:'神速の抜き撃ちがファントムの仮面を撃ち抜く——「見事だ、ワッチ。……お前は、とうにオレを超えていたんだな」。師は穏やかに笑い、闇へ溶けるように退場した。'},
+    {bgTheme:0, art:'peace',  name:'', text:'王は解放され、奪われた宝は一つ残らず民のもとへ返された。誰よりも鮮やかな手口で、盗賊が“盗み返した”のだ。'},
+    {bgTheme:0, art:'player', name:'盗賊ワッチ', text:'「師匠の最後の教え、しかと頂いたぜ。……本当に大事な物は、盗むもんじゃなく——この手で守るもんだって、な」'},
+    {bgTheme:0, art:'player', name:'@hero', text:'王女は褒美の宝箱を差し出したが、ワッチはひょいと帽子を取って一礼し、代わりに小判を一枚だけ頂いて夜風へ消えた。粋な盗賊の、洒落たエピローグ。'},
+    {bgTheme:0, art:'end',    name:'', text:'― ワッチ編・真・完 ―     遊んでくれてありがとう！'}],
 };
+// 全キャラ共通の感動のフィナーレ（各エンディングの締めに追加される大団円）
+const ENDING_FINALE=[
+  {bgTheme:0, art:'peace', name:'', text:'長い戦いが終わり——空にかかった大きな虹の下、肉球あふれるワンダフル王国に、失われた笑い声が帰ってきた。'},
+  {bgTheme:0, art:'peace', name:'', text:'囚われていた王が民のもとへ還り、焼けた砦には新しい家々が建ちはじめる。子犬たちが駆け、露店に温かな灯がともる。'},
+  {bgTheme:0, art:'peace', name:'王女ペロ', text:'「あなたが命を懸けて灯してくれたこの光を、わたしたちは決して消しません。——どうか、いつまでもお元気で。本当に、ありがとう」'},
+  {bgTheme:0, art:'player', name:'', text:'星の海のような夜空に、王国じゅうの祈りが花火となって咲いた。その光を、旅した仲間たちみんなが見上げていた。'},
+  {bgTheme:0, art:'end', name:'', text:'★  聖  犬  士  伝  説  ★     この冒険を最後まで見届けてくれた、キミへ——心からの、ありがとう。'},
+];
 function storyTurnFor(){ return STORY_TURN_BY[players[0].kind]||null; }
 function storyOpenFor(){ return STORY_OPEN_BY[players[0].kind]||STORY_OPEN_BY.inu; }
 function storyEndFor(){ return STORY_END_BY[players[0].kind]||STORY_END_BY.inu; }
@@ -5642,6 +5759,7 @@ const CLEAR_LINE={
   '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。'},
   '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。'},
   '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。'},
+  '月夜の宝物庫':{inu:'王国の秘宝、確かに取り戻したぞ。',shima:'金ピカの番人、いい打ち応えだったぜ。',nuko:'きらきらのお宝がいっぱい…！ちゃんと返さなきゃ。',guard8:'宝は民のもの。しかと守り抜く。',watch:'ふぅ…お宝は残らず“盗み返し”完了ってな。粋だろ？'},
 };
 function stageClearLine(stName, kind){ const o=CLEAR_LINE[stName];
   if(o&&o[kind]) return o[kind];
@@ -5685,7 +5803,14 @@ const GUARD0_REVEAL=[
   {bgTheme:4, art:'player', name:'ガードワン8号', text:'「零号…！　伝説の初代門番が、なぜ帝国に」'},
   {boss:'guard0', name:'ガードワン零号', role:'黒鉄の守護者', text:'「守るべき門を失った門番の末路よ。だが——お前の守りが本物か、この大槌で試させてもらう！」'},
 ];
-const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL, guard0:GUARD0_REVEAL };
+// ── ワッチ・真ボス：怪盗王ファントム（かつての師）登場 ──
+const PHANTOM_REVEAL=[
+  {bgTheme:4, art:'fall', name:'', text:'ダークワンワン大帝、崩れ落ちる——その玉座の陰から、ゆっくりと拍手の音が響いた。シルクハットの影が、ゆらりと立ち上がる。'},
+  {boss:'phantom', name:'？？？', role:'闇に舞う怪盗', text:'「ブラボー。実に見事な仕事だったよ、ワッチ。……その手際、やはりオレの教えた通りだ」'},
+  {bgTheme:4, art:'player', name:'盗賊ワッチ', text:'「その声……その帽子の傾け方……嘘だろ。あんた、オレに“盗み”の全部を教えてくれた——師匠じゃねえか！」'},
+  {boss:'phantom', name:'怪盗王ファントム', role:'ワッチの師', text:'「帝国の宝も、この国そのものも、最高の“獲物”だったのさ。だが弟子よ——本当に盗む値打ちがあるのは、越えていく者の背中だけだ。来い、全力でな！」'},
+];
+const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL, guard0:GUARD0_REVEAL, phantom:PHANTOM_REVEAL };
 function startTrueBossReveal(){ Music.stop();
   const ty=trueBossFor(players[0].kind)||'wanmen';
   startCutscene(TRUE_REVEAL[ty]||WANMEN_REVEAL, ()=>{ spawnTrueBoss(ty); }); }
@@ -5699,7 +5824,10 @@ function spawnTrueBoss(ty){
   const mode=bossMusicFor(ty); state='play'; bossIntro=120;
   if(Music.setMode){ Music.start(mode); Music.setMode(mode); }
   flash=Math.max(flash,5); shake=12; }
-function startEnding(){ if(endingDone)return; endingDone=true; Music.stop(); startCutscene(storyEndFor(), ()=>winGame()); }
+function startEnding(){ if(endingDone)return; endingDone=true;
+  // 専用エンディングBGMへ切り替え（感動の大団円）
+  if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
+  startCutscene(storyEndFor().concat(ENDING_FINALE), ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
 function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
@@ -5874,9 +6002,50 @@ addEventListener('resize',resize); resize();
 //======================================================================
 //  Title attract render
 //======================================================================
+function drawTitleCastle(){ // 遠景に浮かぶ魔王城／王城のシルエット
+  const baseY=H*0.60; ctx.save(); ctx.fillStyle='rgba(12,10,28,.72)';
+  // 城壁
+  ctx.fillRect(W*0.30, baseY-40, W*0.40, 60);
+  // 主塔
+  for(const tx of [0.34,0.5,0.66]){ const x=W*tx; ctx.fillRect(x-26, baseY-150, 52, 130);
+    ctx.beginPath(); ctx.moveTo(x-36, baseY-150); ctx.lineTo(x, baseY-206); ctx.lineTo(x+36, baseY-150); ctx.fill(); }   // とんがり屋根
+  // 銃眼
+  ctx.fillStyle='rgba(12,10,28,.72)'; for(let i=0;i<10;i++){ ctx.fillRect(W*0.30+i*(W*0.04)+4, baseY-52, 14, 14); }
+  // 窓の灯り
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(const tx of [0.34,0.5,0.66]){ const x=W*tx; ctx.fillStyle='rgba(255,190,90,'+(0.4+0.3*Math.sin(gf*0.05+tx*10))+')';
+    ctx.fillRect(x-6, baseY-110, 12, 18); ctx.fillRect(x-6, baseY-74, 12, 16); }
+  ctx.restore(); ctx.restore(); }
 function drawTitleScene(){ drawBackground(); drawGround();
-  // pose the player on title
-  const sv=player.x; player.x=camX+200; player.y=470; drawPlayer(); player.x=sv; drawForeground(); drawLighting(); }
+  const t=gf;
+  // 中央から立ち上る黄金の後光（ロゴの背後で回転）
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(W/2, H*0.34);
+  for(let i=0;i<18;i++){ ctx.save(); ctx.rotate(t*0.004+i*(Math.PI/9)); ctx.globalAlpha=0.045+0.03*Math.sin(t*0.03+i);
+    ctx.fillStyle='#ffd76a'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-46,-680); ctx.lineTo(46,-680); ctx.fill(); ctx.restore(); }
+  ctx.globalAlpha=0.5+0.12*Math.sin(t*0.05); ctx.fillStyle=radGrad(0,0,240,'rgba(255,224,120,.55)','rgba(255,224,120,0)');
+  ctx.beginPath(); ctx.arc(0,0,240,0,7); ctx.fill(); ctx.restore();
+  // きらめく星空
+  for(let i=0;i<90;i++){ const x=(i*151.7)%W, y=(i*83.3)%(H*0.6); const tw=0.3+0.7*Math.abs(Math.sin(t*0.03+i*1.3));
+    ctx.globalAlpha=tw*0.9; ctx.fillStyle=i%7===0?'#fff2b0':'#dfe9ff'; const s=i%9===0?2.4:1.4; ctx.fillRect(x,y,s,s); } ctx.globalAlpha=1;
+  // 流れ星
+  const sp=(t*7)%(W*1.6)-W*0.3, sy=H*0.10+sp*0.22;
+  ctx.save(); ctx.globalAlpha=0.55; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(sp-70,sy-16); ctx.lineTo(sp,sy); ctx.stroke(); ctx.restore();
+  // 遠景の城
+  drawTitleCastle();
+  // 舞い散る花びらと火の粉
+  for(let i=0;i<20;i++){ const px=((i*151+t*1.1)%(W+40))-20, py=(H*0.14+((i*97+t*0.85)%(H*0.78)));
+    ctx.globalAlpha=0.45; ctx.fillStyle=i%3===0?'#ffd76a':(i%3===1?'#ff9ecb':'#bfe0ff'); ctx.save(); ctx.translate(px,py); ctx.rotate(t*0.05+i);
+    ctx.beginPath(); ctx.ellipse(0,0,4,2,0,0,7); ctx.fill(); ctx.restore(); } ctx.globalAlpha=1;
+  // ヒーロー勢揃い（横一列に整列・ふわふわ上下）
+  const order=[1,2,0,3,4];   // 中央にイッヌが来るよう並べ替え
+  for(let k=0;k<order.length;k++){ const i=order[k]; const hx=W*(0.24+0.13*k), bob=Math.sin(t*0.05+k*0.8)*5, cen=(k===2);
+    ctx.save(); ctx.translate(hx, H*0.83+bob);
+    // 足元スポットライト
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(0,26,44,'rgba(255,230,150,.28)','rgba(255,230,150,0)'); ctx.beginPath(); ctx.ellipse(0,26,44,14,0,0,7); ctx.fill(); ctx.restore();
+    ctx.scale(cen?2.0:1.5, cen?2.0:1.5); CHARS[i].icon(0,0); ctx.restore(); }
+  drawForeground(); drawLighting();
+  // 最前面の金色装飾リボン（上部）
+  ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle='rgba(255,215,110,.14)'; ctx.fillRect(0,H*0.03,W,2); ctx.fillRect(0,H*0.03+5,W,1); ctx.restore(); }
 
 //======================================================================
 //  Main loop
