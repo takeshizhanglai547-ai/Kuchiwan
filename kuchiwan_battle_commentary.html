@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KUCHIWAN 対戦実況 - AUTO BATTLE COMMENTARY</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ── letterbox (video feel) ── */
+  .letterbox { position: fixed; left: 0; width: 100%; height: 7%; background: #000; z-index: 20; pointer-events: none; }
+  .letterbox.top { top: 0; }
+  .letterbox.bottom { bottom: 0; }
+
+  /* ── program header ── */
+  #prog-title { position: fixed; top: 8.2%; left: 2.2%; z-index: 30; color: #cfefff; letter-spacing: .18em; font-size: 15px; font-weight: 700; text-shadow: 0 0 10px #0af; pointer-events: none; }
+  #prog-title small { display:block; font-size: 10px; letter-spacing:.34em; color:#5bb7d8; font-weight:400; margin-top:2px; }
+  #rec { position: fixed; top: 8.2%; right: 2.2%; z-index: 30; color: #ff3b3b; font-size: 13px; font-weight: 700; letter-spacing:.12em; pointer-events:none; }
+  #rec .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff2a2a; margin-right:6px; box-shadow:0 0 8px #ff2a2a; animation: blink 1s steps(1) infinite; vertical-align: baseline;}
+  @keyframes blink { 50% { opacity: 0; } }
+  #timer { position: fixed; top: 11.4%; right: 2.2%; z-index: 30; color:#dfe; font-size:20px; font-weight:700; letter-spacing:.06em; font-variant-numeric: tabular-nums; text-shadow:0 0 6px #000; pointer-events:none;}
+
+  /* ── fighting-game style HP bars ── */
+  #hpbars { position: fixed; top: 8.6%; left: 50%; transform: translateX(-50%); width: 62%; max-width: 900px; z-index: 30; display:flex; gap: 3%; pointer-events:none; }
+  .fighter { flex: 1; }
+  .fighter .nm { font-size: 12px; font-weight:700; letter-spacing:.1em; margin-bottom:4px; text-shadow:0 0 6px #000; }
+  .fighter.p1 .nm { color:#5ff; text-align:left; }
+  .fighter.p2 .nm { color:#ff6a5a; text-align:right; }
+  .bar-frame { height: 15px; background: rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.35); position:relative; overflow:hidden; }
+  .bar-frame .fill { position:absolute; top:0; bottom:0; transition: width .18s linear; }
+  .fighter.p1 .fill { right:0; background: linear-gradient(90deg,#0aa 0%, #0ff 60%, #cffff8 100%); box-shadow:0 0 10px #0ff inset; }
+  .fighter.p2 .fill { left:0; background: linear-gradient(90deg,#ffcf6a 0%, #ff5a3a 55%, #a10000 100%); box-shadow:0 0 10px #f30 inset; }
+  .fighter .ph { font-size:10px; letter-spacing:.14em; margin-top:3px; color:#ffb37a; text-align:right; min-height:12px; }
+  .fighter.p1 .ph { color:#7fe; text-align:left; }
+
+  /* ── center banner ── */
+  #banner { position: fixed; top: 42%; left: 50%; transform: translate(-50%,-50%); z-index: 40; text-align:center; pointer-events:none; opacity:0; }
+  #banner.show { animation: bannerpop .5s cubic-bezier(.2,1.4,.4,1) forwards; }
+  #banner .big { font-size: 74px; font-weight: 900; letter-spacing:.04em; line-height:1; color:#fff; text-shadow: 0 0 24px currentColor, 0 4px 0 rgba(0,0,0,.6); }
+  #banner .sub { font-size: 20px; letter-spacing:.34em; margin-top:10px; color:#bdeaff; font-weight:700; }
+  @keyframes bannerpop { 0%{opacity:0; transform:translate(-50%,-50%) scale(.6) skewX(-8deg);} 60%{opacity:1;} 100%{opacity:1; transform:translate(-50%,-50%) scale(1) skewX(0);} }
+
+  /* ── lower-third commentary telop ── */
+  #telop { position: fixed; bottom: 8.4%; left: 50%; transform: translateX(-50%); z-index: 40; width: 70%; max-width: 940px; pointer-events:none; opacity:0; transition:opacity .18s; }
+  #telop.show { opacity:1; }
+  .telop-row { display:flex; align-items:stretch; box-shadow:0 6px 22px rgba(0,0,0,.6); }
+  .telop-tag { flex:0 0 auto; padding:10px 16px; font-weight:800; font-size:15px; letter-spacing:.12em; color:#001; display:flex; align-items:center; white-space:nowrap; }
+  .telop-tag.jikkyo { background: linear-gradient(180deg,#4be3ff,#12a9d8); }
+  .telop-tag.kaisetsu { background: linear-gradient(180deg,#ffd166,#f0a91e); }
+  .telop-body { flex:1; padding:11px 20px; font-size:20px; font-weight:700; color:#f4fbff; letter-spacing:.02em;
+    background: linear-gradient(180deg, rgba(6,20,32,.94), rgba(4,12,22,.94)); border-left:2px solid rgba(255,255,255,.15);
+    text-shadow:0 1px 3px #000; }
+
+  /* ── damage vignette ── */
+  #flash { position: fixed; inset:0; z-index: 15; pointer-events:none; box-shadow: inset 0 0 200px rgba(255,0,0,0); transition: box-shadow .12s; }
+  #flash.hit { box-shadow: inset 0 0 220px rgba(255,20,20,.55); transition: box-shadow 0s; }
+
+  /* scanline overlay */
+  #scan { position: fixed; inset:0; z-index: 18; pointer-events:none; opacity:.10;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.0) 0px, rgba(255,255,255,.0) 2px, rgba(0,0,0,.5) 3px, rgba(0,0,0,.0) 4px); }
+
+  /* ── start / play overlay ── */
+  #play { position: fixed; inset:0; z-index: 100; background: radial-gradient(circle at 50% 40%, #06131f 0%, #01060c 70%); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  #play h1 { color:#eafcff; font-size: clamp(34px,6vw,68px); font-weight:900; letter-spacing:.06em; text-shadow:0 0 30px #08f; }
+  #play h1 span { color:#5ff; }
+  #play .jp { color:#7fbfd8; letter-spacing:.5em; margin-top:6px; font-size: clamp(13px,2vw,18px); }
+  #play .desc { color:#9fc4d6; margin-top:26px; font-size:14px; line-height:1.9; max-width:520px; }
+  #playbtn { margin-top:34px; padding:16px 46px; font-size:20px; font-weight:800; letter-spacing:.1em; color:#012;
+    background: linear-gradient(180deg,#6ff,#0cd); border:none; border-radius:2px; cursor:pointer; box-shadow:0 0 26px #0cf9, 0 6px 0 #067; transition: transform .08s; }
+  #playbtn:active { transform: translateY(4px); box-shadow:0 0 26px #0cf9, 0 2px 0 #067; }
+  #play .note { color:#4d7385; font-size:11px; margin-top:22px; letter-spacing:.08em; }
+
+  /* replay button after finish */
+  #replay { position: fixed; bottom: 9%; left: 50%; transform: translateX(-50%); z-index: 60; padding:12px 30px; font-weight:800; letter-spacing:.1em; color:#012; background:linear-gradient(180deg,#6ff,#0cd); border:none; cursor:pointer; border-radius:2px; box-shadow:0 0 20px #0cf9; display:none; }
+
+  #sndhint { position: fixed; bottom: 8.4%; left: 2.2%; z-index:30; color:#4d7385; font-size:11px; letter-spacing:.06em; pointer-events:none;}
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="c"></canvas></div>
+
+  <div class="letterbox top"></div>
+  <div class="letterbox bottom"></div>
+  <div id="scan"></div>
+  <div id="flash"></div>
+
+  <div id="prog-title">KUCHIWAN 対戦実況<small>ARMS-FORT DUEL / AUTO BATTLE</small></div>
+  <div id="rec"><span class="dot"></span>REC</div>
+  <div id="timer">00:00</div>
+
+  <div id="hpbars">
+    <div class="fighter p1">
+      <div class="nm">P1 — RAVEN (自機)</div>
+      <div class="bar-frame"><div class="fill" id="p1fill" style="width:100%"></div></div>
+      <div class="ph" id="p1ph">AP 10000</div>
+    </div>
+    <div class="fighter p2">
+      <div class="nm">BOSS — ARMS-FORT KUCHIWAN</div>
+      <div class="bar-frame"><div class="fill" id="p2fill" style="width:100%"></div></div>
+      <div class="ph" id="p2ph">PHASE 1</div>
+    </div>
+  </div>
+
+  <div id="banner"><div class="big" id="banner-big"></div><div class="sub" id="banner-sub"></div></div>
+
+  <div id="telop"><div class="telop-row">
+    <div class="telop-tag jikkyo" id="telop-tag">実況</div>
+    <div class="telop-body" id="telop-body"></div>
+  </div></div>
+
+  <div id="sndhint">♪ BGM: procedural synth (Web Audio)</div>
+  <button id="replay">▶ もう一度再生</button>
+
+  <div id="play">
+    <h1>KUCHIWAN <span>対戦実況</span></h1>
+    <div class="jp">口 湾 実 況 中 継</div>
+    <div class="desc">自機 RAVEN と アームズフォート「口湾」の自動対戦を、実況キャプションと BGM 付きでお届けする対戦実況デモです。すべてブラウザ内で生成（外部素材なし）。</div>
+    <button id="playbtn">▶ 実況を再生</button>
+    <div class="note">※ 音が出ます。クローズドテスト用。</div>
+  </div>
+
+<script src="vendor/three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   KUCHIWAN — 対戦実況（AUTO BATTLE COMMENTARY）
+   自動対戦 + 実況テロップ + 手続き的BGM  ／ 単体HTML
+============================================================ */
+const $ = id => document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const randSign=()=>Math.random()<.5?1:-1;
+
+/* ─────────────────────────────────────────
+   BGM  —  procedural, phase-reactive
+───────────────────────────────────────── */
+class BGM {
+  constructor(){ this.ctx=null; this.playing=false; this.intensity=1; this.step=0; }
+  start(){
+    if(this.ctx) return;
+    this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const c=this.ctx;
+    this.master=c.createGain(); this.master.gain.value=0.0; this.master.connect(c.destination);
+    // gentle fade-in
+    this.master.gain.linearRampToValueAtTime(0.9, c.currentTime+2.0);
+    this.bpm=140; this.spb=60/this.bpm/2; // 8th notes
+    this.nextTime=c.currentTime+0.1;
+    this.playing=true;
+    this._scheduler();
+  }
+  setIntensity(n){ this.intensity=n; }
+  duck(){ if(this.ctx){ const g=this.master.gain, t=this.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value,t); g.linearRampToValueAtTime(0.35,t+0.03); g.linearRampToValueAtTime(0.9,t+0.5);} }
+  stopSoon(){ if(this.ctx){ const t=this.ctx.currentTime; this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this.master.gain.value,t); this.master.gain.linearRampToValueAtTime(0.0001,t+2.5);} }
+  _osc(type,freq,t,dur,vol,dest){
+    const c=this.ctx, o=c.createOscillator(), g=c.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(dest||this.master); o.start(t); o.stop(t+dur+0.02);
+    return o;
+  }
+  _kick(t){ const c=this.ctx,o=c.createOscillator(),g=c.createGain();
+    o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+    g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.2); }
+  _hat(t,v){ const c=this.ctx, b=c.createBuffer(1,1024,c.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<1024;i++) d[i]=Math.random()*2-1;
+    const s=c.createBufferSource(); s.buffer=b; const g=c.createGain(); const hp=c.createBiquadFilter();
+    hp.type='highpass'; hp.frequency.value=7000; g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    s.connect(hp); hp.connect(g); g.connect(this.master); s.start(t); s.stop(t+0.06); }
+  _scheduler(){
+    if(!this.playing) return;
+    const c=this.ctx;
+    while(this.nextTime < c.currentTime + 0.25){
+      const t=this.nextTime, s=this.step%16, I=this.intensity;
+      // Bassline (minor, driving)
+      const root=[55,55,73.42,49][Math.floor(this.step/16)%4] || 55;
+      const bassSeq=[root,0,root,root*1.5,0,root,root*1.335,0, root,0,root,root*2,0,root*1.5,root,root*1.335];
+      const bf=bassSeq[s]; if(bf) this._osc('sawtooth',bf,t,this.spb*1.4,0.28, this.master);
+      // Kick on 0,4,8,12 (+ off-beats at high intensity)
+      if(s%4===0) this._kick(t);
+      if(I>=3 && (s===6||s===14)) this._kick(t);
+      // Hats
+      this._hat(t, s%2? 0.05:0.09);
+      if(I>=2 && s%2===1) this._hat(t+this.spb*0.5,0.04);
+      // Lead arpeggio (appears at intensity>=2)
+      if(I>=2){
+        const lead=[440,523.25,659.25,523.25, 587.33,659.25,783.99,659.25, 440,523.25,659.25,880, 783.99,659.25,587.33,523.25];
+        const lf=lead[s]; if(lf && s%1===0) this._osc('square',lf, t, this.spb*0.9, I>=3?0.10:0.06, this.master);
+      }
+      // Phase-3 tension pad
+      if(I>=3 && s===0){ this._osc('sawtooth',root*2,t,this.spb*8,0.05,this.master); this._osc('sawtooth',root*3,t,this.spb*8,0.035,this.master); }
+      this.nextTime += this.spb; this.step++;
+    }
+    setTimeout(()=>this._scheduler(),50);
+  }
+  // one-shot SFX
+  sfxHit(){ if(!this.ctx)return; const t=this.ctx.currentTime; this._osc('triangle',220,t,0.12,0.25); this._osc('triangle',330,t,0.1,0.18); }
+  sfxBig(){ if(!this.ctx)return; const t=this.ctx.currentTime; const c=this.ctx;
+    const b=c.createBuffer(1,c.sampleRate*0.5,c.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+    const s=c.createBufferSource(); s.buffer=b; const g=c.createGain(); g.gain.value=0.5;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(1200,t); lp.frequency.exponentialRampToValueAtTime(120,t+0.5);
+    s.connect(lp); lp.connect(g); g.connect(this.master); s.start(t); s.stop(t+0.5);
+    this._osc('sine',90,t,0.5,0.5); }
+}
+const bgm = new BGM();
+
+/* ─────────────────────────────────────────
+   MECH BUILDER (from KUCHIWAN, condensed)
+───────────────────────────────────────── */
+function box(w,h,d,m,x,y,z,rx,ry,rz){ const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); me.position.set(x,y,z); if(rx)me.rotation.x=rx; if(ry)me.rotation.y=ry; if(rz)me.rotation.z=rz; me.castShadow=true; return me; }
+const MechBuilder={
+  player(){ const g=new THREE.Group();
+    const mat=new THREE.MeshStandardMaterial({color:0x1a4a6a,metalness:.8,roughness:.3});
+    const ac=new THREE.MeshStandardMaterial({color:0x002244,metalness:.9,roughness:.2});
+    const glow=new THREE.MeshStandardMaterial({color:0x00ffcc,emissive:0x00ffcc,emissiveIntensity:1.2,roughness:1});
+    g.add(box(2.4,2.0,1.4,mat,0,0,0)); g.add(box(1.0,.7,.9,ac,0,1.4,0)); g.add(box(.8,.15,.05,glow,0,1.45,.5));
+    g.add(box(1.0,.7,.9,ac,-1.9,.5,0)); g.add(box(1.0,.7,.9,ac,1.9,.5,0));
+    g.add(box(.5,1.4,.5,mat,-1.6,-.4,0)); g.add(box(.5,1.4,.5,mat,1.6,-.4,0));
+    const cannon=x=>{const cg=new THREE.Group(); cg.add(box(.3,.3,1.6,ac,0,0,.5)); cg.add(box(.12,.12,.4,glow,0,0,1.4)); cg.position.set(x,-.7,.2); return cg;};
+    const L=cannon(-1.6),R=cannon(1.6); g.add(L,R); g.userData.cannonL=L; g.userData.cannonR=R;
+    g.add(box(.7,1.6,.7,mat,-.7,-1.7,0)); g.add(box(.7,1.6,.7,mat,.7,-1.7,0));
+    g.add(box(.8,.4,1.0,ac,-.7,-2.7,.15)); g.add(box(.8,.4,1.0,ac,.7,-2.7,.15));
+    const bm=new THREE.MeshStandardMaterial({color:0x333333,metalness:.9,roughness:.2});
+    g.add(box(.5,1.2,.5,bm,-.8,.3,-.9)); g.add(box(.5,1.2,.5,bm,.8,.3,-.9));
+    g.userData.boosterL=g.children[g.children.length-2]; g.userData.boosterR=g.children[g.children.length-1];
+    return g; },
+  enemy(phase){ const g=new THREE.Group(); const colors=[0x6a1a1a,0x8b0000,0xff2200]; const base=colors[Math.min(phase,2)];
+    const mat=new THREE.MeshStandardMaterial({color:base,metalness:.85,roughness:.25});
+    const mat2=new THREE.MeshStandardMaterial({color:0x220000,metalness:.95,roughness:.15});
+    const eye=new THREE.MeshStandardMaterial({color:0xff3300,emissive:0xff3300,emissiveIntensity:2,roughness:1});
+    const s=1.6;
+    g.add(box(3.2*s,2.8*s,2.0*s,mat,0,0,0)); g.add(box(1.6*s,1.0*s,1.4*s,mat2,0,2.0*s,0));
+    g.add(box(.5*s,.2*s,.05,eye,-.4*s,2.05*s,.72*s)); g.add(box(.5*s,.2*s,.05,eye,.4*s,2.05*s,.72*s));
+    g.add(box(2.0*s,1.0*s,1.6*s,mat2,-2.8*s,.6*s,0)); g.add(box(2.0*s,1.0*s,1.6*s,mat2,2.8*s,.6*s,0));
+    g.add(box(.8*s,1.8*s,.8*s,mat,-2.8*s,-.6*s,0)); g.add(box(.8*s,1.8*s,.8*s,mat,2.8*s,-.6*s,0));
+    const hc=x=>{const cg=new THREE.Group(); cg.add(box(.5*s,.5*s,2.4*s,mat2,0,.3*s,.8*s)); cg.add(box(.5*s,.5*s,2.4*s,mat2,0,-.3*s,.8*s));
+      cg.add(box(.2*s,.2*s,.5*s,eye,0,.3*s,1.95*s)); cg.add(box(.2*s,.2*s,.5*s,eye,0,-.3*s,1.95*s)); cg.position.set(x,-1.2*s,.2*s); return cg;};
+    g.add(hc(-2.8*s),hc(2.8*s));
+    g.add(box(1.0*s,2.0*s,1.0*s,mat,-1.0*s,-2.4*s,0)); g.add(box(1.0*s,2.0*s,1.0*s,mat,1.0*s,-2.4*s,0));
+    g.add(box(1.2*s,.6*s,1.4*s,mat2,-1.0*s,-3.6*s,.2*s)); g.add(box(1.2*s,.6*s,1.4*s,mat2,1.0*s,-3.6*s,.2*s));
+    return g; }
+};
+
+/* ─────────────────────────────────────────
+   PARTICLES + BULLETS (condensed from KUCHIWAN)
+───────────────────────────────────────── */
+class Particles{ constructor(sc){this.sc=sc;this.pool={spark:[],explosion:[],boost:[]};this.active=[];}
+  _mesh(t){ const p=this.pool[t]; if(p.length)return p.pop(); let geo,mat;
+    if(t==='spark'){geo=new THREE.SphereGeometry(.08,4,4);mat=new THREE.MeshBasicMaterial({color:0xffaa00});}
+    else if(t==='explosion'){geo=new THREE.SphereGeometry(.4,6,6);mat=new THREE.MeshBasicMaterial({color:0xff4400});}
+    else {geo=new THREE.SphereGeometry(.1,4,4);mat=new THREE.MeshBasicMaterial({color:0x00aaff});}
+    return new THREE.Mesh(geo,mat); }
+  spawn(t,pos,n=8){ for(let i=0;i<n;i++){ const m=this._mesh(t); m.position.copy(pos);
+    const sp=t==='explosion'?rand(4,16):rand(2,8);
+    m.userData={type:t,vel:new THREE.Vector3(randSign()*rand(.1,1),rand(.1,1),randSign()*rand(.1,1)).normalize().multiplyScalar(sp),life:1,decay:rand(1.5,3.5)};
+    this.sc.add(m); this.active.push(m);} }
+  boost(pos){ if(Math.random()>.4)return; const m=this._mesh('boost'); m.position.copy(pos);
+    m.userData={type:'boost',vel:new THREE.Vector3(rand(-.5,.5),rand(-.5,.5),rand(-.5,.5)),life:1,decay:4}; this.sc.add(m); this.active.push(m);}
+  update(dt){ for(let i=this.active.length-1;i>=0;i--){ const m=this.active[i],d=m.userData; d.life-=d.decay*dt;
+    m.position.addScaledVector(d.vel,dt); d.vel.y-=6*dt; m.material.transparent=true; m.material.opacity=Math.max(0,d.life);
+    const s=Math.max(0,d.life); m.scale.setScalar(s); if(d.life<=0){this.sc.remove(m); this.pool[d.type].push(m); this.active.splice(i,1);} } }
+}
+class Bullets{ constructor(sc){this.sc=sc;this.pool=[];this.active=[];}
+  _create(type){ const p=this.pool.find(b=>!b.active&&b.type===type); if(p)return p; let mesh;
+    if(type==='player'){const g=new THREE.CylinderGeometry(.06,.06,.7,6);g.rotateX(Math.PI/2);mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x00ffff}));}
+    else if(type==='missile'){const g=new THREE.ConeGeometry(.15,.8,6);g.rotateX(Math.PI/2);mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0xff8800}));}
+    else if(type==='enemy'){mesh=new THREE.Mesh(new THREE.SphereGeometry(.18,6,6),new THREE.MeshBasicMaterial({color:0xff2200}));}
+    else if(type==='enemy_big'){mesh=new THREE.Mesh(new THREE.SphereGeometry(.38,8,8),new THREE.MeshBasicMaterial({color:0xff6600}));}
+    else if(type==='enemy_beam'){const g=new THREE.CylinderGeometry(.08,.08,1.4,6);g.rotateX(Math.PI/2);mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0xff00ff}));}
+    else {mesh=new THREE.Mesh(new THREE.SphereGeometry(.12,6,6),new THREE.MeshBasicMaterial({color:0xffff00}));}
+    const b={mesh,type,active:false,vel:new THREE.Vector3(),life:0,dmg:0,homing:null}; this.pool.push(b); return b; }
+  fire({type,pos,vel,dmg,life=4,homing=null}){ const b=this._create(type); b.active=true; b.vel.copy(vel); b.dmg=dmg; b.life=life; b.homing=homing; b.mesh.position.copy(pos); this.sc.add(b.mesh); this.active.push(b); return b; }
+  retire(b){ b.active=false; this.sc.remove(b.mesh); const i=this.active.indexOf(b); if(i>=0)this.active.splice(i,1); }
+  update(dt){ for(let i=this.active.length-1;i>=0;i--){ const b=this.active[i];
+    if(b.homing){ const dir=b.homing.clone().sub(b.mesh.position).normalize(); b.vel.lerp(dir.multiplyScalar(b.vel.length()),0.06); }
+    b.mesh.position.addScaledVector(b.vel,dt); b.life-=dt; if(b.life<=0)this.retire(b); } }
+}
+
+const CFG={ARENA:300,BULLET_SPEED:90};
+
+/* ─────────────────────────────────────────
+   ENEMY BOSS (patterns from KUCHIWAN)
+───────────────────────────────────────── */
+class Boss{
+  constructor(sc,bul,par){ this.sc=sc; this.bullets=bul; this.particles=par;
+    this.totalHp=120000; this.hp=this.totalHp; this.phase=1; this.alive=true; this.dead=false;
+    this.mesh=MechBuilder.enemy(0); this.mesh.position.set(0,9,-55); sc.add(this.mesh);
+    this.target=new THREE.Vector3(); this.moveTarget=new THREE.Vector3(0,9,-45);
+    this.moveTimer=0; this.attackTimer=1.2; this.patternTimer=0; this.phaseChanging=false; this.phaseTimer=0;
+    this.onEvent=()=>{};
+    this._pat=[this._spread,this._spiral,this._ring,this._aimed,this._cross,this._hellfire].map(f=>f.bind(this)); }
+  get pos(){return this.mesh.position;}
+  _move(dt){ this.moveTimer-=dt; if(this.moveTimer<=0){ const r=this.phase===3?55:45; const a=Math.random()*Math.PI*2;
+    this.moveTarget.set(Math.cos(a)*rand(10,r), rand(6,17), Math.sin(a)*rand(10,r)-28); this.moveTimer=rand(1.5,3.2)/(this.phase*0.5+0.5); }
+    this.pos.lerp(this.moveTarget, dt*(10+this.phase*4)*0.05); }
+  _face(){ const d=this.target.clone().sub(this.pos); d.y=0; if(d.length()>.1){ const a=Math.atan2(d.x,d.z); this.mesh.rotation.y=lerp(this.mesh.rotation.y,a,0.06);} }
+  _fb(type,pos,vel,dmg,life){ this.bullets.fire({type,pos,vel,dmg,life}); }
+  _spread(){ const n=5+this.phase*2, sp=.4+this.phase*.1, dir=this.target.clone().sub(this.pos).normalize();
+    for(let i=0;i<n;i++){ const a=(i/n-.5)*sp*2; const v=dir.clone().applyEuler(new THREE.Euler(0,a,0)).multiplyScalar(CFG.BULLET_SPEED*.5); this._fb('enemy',this.pos.clone(),v,280,5);} this.particles.spawn('spark',this.pos,4); this._say('spread'); return 1.2/this.phase; }
+  _spiral(){ const arms=3+this.phase; for(let i=0;i<arms;i++){ const b=this.patternTimer*1.8+(i/arms)*Math.PI*2; const v=new THREE.Vector3(Math.cos(b),0,Math.sin(b)).multiplyScalar(CFG.BULLET_SPEED*.45); this._fb('enemy',this.pos.clone(),v,220,6);} this._say('spiral'); return 0.1; }
+  _ring(){ const n=12+this.phase*4; for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2; const v=new THREE.Vector3(Math.cos(a),0,Math.sin(a)).multiplyScalar(CFG.BULLET_SPEED*.5); this._fb('enemy',this.pos.clone(),v,180,5);} this._say('ring'); return 1.6/this.phase; }
+  _aimed(){ const speed=CFG.BULLET_SPEED*(.55+this.phase*.1); for(let i=0;i<3;i++){ setTimeout(()=>{ if(!this.alive)return; const d=this.target.clone().sub(this.pos).normalize(); this._fb('enemy_big',this.pos.clone(),d.multiplyScalar(speed),400,5); this.particles.spawn('explosion',this.pos,3);}, i*120);} this._say('aimed'); return 1.0/this.phase; }
+  _cross(){ for(let a=0;a<4;a++){ const ang=(a/4)*Math.PI*2+this.patternTimer*.5; for(let j=0;j<2+this.phase;j++){ const off=j*.15; setTimeout(()=>{ if(!this.alive)return; const v=new THREE.Vector3(Math.cos(ang+off),Math.sin(off*2),Math.sin(ang+off)).multiplyScalar(CFG.BULLET_SPEED*.4); this._fb('enemy',this.pos.clone(),v,200,5);}, j*80);} } this._say('cross'); return 0.8/this.phase; }
+  _hellfire(){ const n=8, dir=this.target.clone().sub(this.pos).normalize(); for(let i=0;i<n;i++){ const sp=(Math.random()-.5)*1.2; const v=dir.clone().applyEuler(new THREE.Euler(rand(-.3,.3),sp,0)).multiplyScalar(CFG.BULLET_SPEED*.65); this._fb('enemy_beam',this.pos.clone(),v,500,4);} this._say('hellfire'); return 0.25; }
+  _say(k){ this.lastPattern=k; this.onEvent('pattern',k); }
+  _select(){ const av=this.phase===1?[0,1,2,3]:this.phase===2?[0,1,2,3,4]:[1,2,3,4,5]; this.patternIdx=av[Math.floor(Math.random()*av.length)]; }
+  update(dt,ppos){ if(!this.alive)return;
+    if(this.phaseChanging){ this.phaseTimer-=dt; if(this.phaseTimer<=0)this.phaseChanging=false; return; }
+    this.patternTimer+=dt; this.target.copy(ppos); this._move(dt); this._face();
+    this.mesh.position.y+=Math.sin(performance.now()*0.001)*0.015; this.mesh.rotation.z=Math.sin(performance.now()*0.0008)*0.04;
+    this.attackTimer-=dt; if(this.attackTimer<=0){ this._select(); this.attackTimer=this._pat[this.patternIdx](); }
+    const f=this.hp/this.totalHp; const np=f>.66?1:f>.33?2:3; if(np!==this.phase)this._changePhase(np);
+    if(this.hp<=0&&!this.dead)this._die(); }
+  _changePhase(np){ this.phase=np; this.phaseChanging=true; this.phaseTimer=1.5;
+    this.sc.remove(this.mesh); this.mesh=MechBuilder.enemy(np-1); this.mesh.position.copy(this.pos); this.sc.add(this.mesh);
+    for(let i=0;i<3;i++) setTimeout(()=>this.particles.spawn('explosion',this.pos,20), i*200);
+    this.onEvent('phase',np); }
+  _die(){ this.dead=true; this.alive=false; for(let i=0;i<7;i++) setTimeout(()=>this.particles.spawn('explosion',this.pos,32), i*160); setTimeout(()=>this.sc.remove(this.mesh),200); this.onEvent('die'); }
+  hit(a){ if(!this.alive)return; this.hp=Math.max(0,this.hp-a); }
+}
+
+/* ─────────────────────────────────────────
+   PLAYER AI  —  auto pilot (RAVEN)
+───────────────────────────────────────── */
+class RavenAI{
+  constructor(sc,bul,par){ this.sc=sc; this.bullets=bul; this.particles=par;
+    this.hp=10000; this.maxHp=10000; this.en=100; this.missiles=32;
+    this.pos=new THREE.Vector3(0,6,25); this.vel=new THREE.Vector3();
+    this.mesh=MechBuilder.player(); sc.add(this.mesh); this.light=new THREE.PointLight(0x00ffcc,1.5,15); this.mesh.add(this.light);
+    this.fireTimer=0; this.missileTimer=0; this.fireSide=false; this.orbit=rand(0,Math.PI*2); this.boost=false; this.onEvent=()=>{}; this.floor=900; }
+  _aimDir(enemy){ return enemy.pos.clone().sub(this.pos).normalize(); }
+  update(dt,enemy){
+    // threat detection → dodge
+    let threat=null,td=1e9;
+    for(const b of this.bullets.active){ if(b.type==='enemy'||b.type==='enemy_big'||b.type==='enemy_beam'){ const d=b.mesh.position.distanceTo(this.pos); if(d<14){ const to=this.pos.clone().sub(b.mesh.position); if(to.dot(b.vel)>0 && d<td){td=d;threat=b;} } } }
+    // orbit target around enemy
+    this.orbit += dt*(this.boost?1.5:0.7);
+    const R=26+Math.sin(performance.now()*0.0006)*6;
+    const desired=new THREE.Vector3(enemy.pos.x+Math.cos(this.orbit)*R, clamp(enemy.pos.y+rand(-2,4),4,20), enemy.pos.z+Math.sin(this.orbit)*R + 20);
+    let move=desired.clone().sub(this.pos);
+    this.boost=false;
+    if(threat){ // strafe perpendicular
+      const perp=new THREE.Vector3(-threat.vel.z,0,threat.vel.x).normalize().multiplyScalar(randSignStable(this)*30);
+      const away=this.pos.clone().sub(threat.mesh.position).setY(2).normalize().multiplyScalar(20);
+      move=perp.add(away); this.boost=this.en>10; if(td<5)this.onEvent('dodge');
+    }
+    if(move.length()>0) move.normalize().multiplyScalar(this.boost?46:18);
+    this.vel.lerp(move,dt*6); this.pos.addScaledVector(this.vel,dt);
+    if(this.boost&&this.en>0){ this.particles.boost(this.pos.clone().add(new THREE.Vector3(0,-1,0))); this.en=Math.max(0,this.en-22*dt);} else this.en=Math.min(100,this.en+14*dt);
+    const H=CFG.ARENA/2-10; this.pos.x=clamp(this.pos.x,-H,H); this.pos.z=clamp(this.pos.z,-H,H); this.pos.y=clamp(this.pos.y,2,40);
+    this.mesh.position.copy(this.pos);
+    // face enemy
+    const fd=enemy.pos.clone().sub(this.pos); const yaw=Math.atan2(fd.x,fd.z); this.mesh.rotation.y=lerp(this.mesh.rotation.y,yaw,0.12);
+    // shooting
+    this.fireTimer-=dt; this.missileTimer-=dt;
+    if(enemy.alive && this.fireTimer<=0){ this.fireTimer=0.1; this.fireSide=!this.fireSide;
+      const c=this.fireSide?this.mesh.userData.cannonL:this.mesh.userData.cannonR; const p=new THREE.Vector3(); c.getWorldPosition(p);
+      const dir=enemy.pos.clone().sub(p).normalize();
+      this.bullets.fire({type:'player',pos:p,vel:dir.multiplyScalar(CFG.BULLET_SPEED),dmg:120}); this.particles.spawn('spark',p,2); }
+    if(enemy.alive && this.missileTimer<=0 && this.missiles>0){ this.missileTimer=0.7; this.missiles--; if(this.missiles<=0)this.missiles=32;
+      const base=this.pos.clone().add(new THREE.Vector3(0,.5,0)); const dir=this._aimDir(enemy);
+      for(let s=-1;s<=1;s+=2){ this.bullets.fire({type:'missile',pos:base.clone().add(new THREE.Vector3(s*.6,0,0)),vel:dir.clone().multiplyScalar(55),dmg:380,life:6,homing:enemy.pos}); }
+      this.onEvent('missile'); }
+    // boosters glow
+    const bl=this.mesh.userData.boosterL,br=this.mesh.userData.boosterR;
+    if(bl&&br){ const it=this.boost?(0.8+Math.random()*0.4):0.1; bl.material=bl.material.clone(); bl.material.emissive=new THREE.Color(this.boost?0x00aaff:0x003355); bl.material.emissiveIntensity=it; br.material=bl.material; }
+  }
+  hit(a){ const before=this.hp; this.hp-=a*0.12; /* chip only — dramatic arc drives the rest */ if(this.hp<300)this.hp=300; this.onEvent('hit',before-this.hp); }
+}
+function randSignStable(o){ if(o._ss===undefined||Math.random()<0.02)o._ss=randSign(); return o._ss; }
+
+/* ─────────────────────────────────────────
+   COMMENTARY  —  実況 / 解説 telop engine
+───────────────────────────────────────── */
+const LINES={
+  start:[['実況','試合開始ッ！ RAVENが単機、アームズフォート「口湾」へ挑む！'],
+         ['解説','この巨体相手に近接オービット戦術。まさに死中に活を求める戦い方ですね。']],
+  pattern_spread:[['実況','来た、拡散弾のバラ撒き！ 逃げ場を潰しに来てるぞ！']],
+  pattern_spiral:[['実況','螺旋弾幕ォォ！ 回転しながら埋め尽くしてくる！'],['解説','スパイラルは軸をズラして外周へ抜けるのがセオリーです。']],
+  pattern_ring:[['実況','全方位リングバースト！ 内側に潜り込めるか！？']],
+  pattern_aimed:[['実況','狙い撃ちの大玉！ RAVEN、直撃コースだ！'],['解説','エイムドショットは発射モーションを見てからで間に合います。']],
+  pattern_cross:[['実況','クロス弾！ 十字の隙間を縫って抜けろ！']],
+  pattern_hellfire:[['実況','ヘルファイア解放ォォ！ ビームの雨が降り注ぐッ！'],['解説','これは第3形態の切り札。被弾500ダメージ、掠っただけで致命傷です。']],
+  dodge:[['実況','あぶないッ！ ブーストで紙一重の回避ィ！'],['実況','ギリギリ！ 今の避けたァ！？'],['解説','完璧なタイミングのブーストカット。EN管理が光ります。']],
+  missile:[['実況','ダブルミサイル発射！ ホーミングで巻きついていくぞ！']],
+  bighit:[['実況','クリーンヒィィット！ 装甲がめくれ上がった！'],['実況','入ったァ！ 大ダメージだ！']],
+  low:[['解説','RAVENのAPが危険域…ここが正念場です。'],['実況','自機が真っ赤だ！ 耐えろ、耐えてくれェ！']],
+  phase2:[['実況','装甲パージ！ 口湾、第2形態へ移行ォォ！'],['解説','攻撃密度が跳ね上がります。ここからが本番。']],
+  phase3:[['実況','最終形態ァ！ 全身を赤熱させて咆哮する口湾ッ！'],['解説','出力全開の断末魔。短期決戦に持ち込むしかない。']],
+  filler:[['解説','近接を維持しつつ、常に側面へ回り込んでいますね。'],
+          ['実況','手数が止まらない！ リフレインのようなライフル連射！'],
+          ['解説','ロックオン射撃で弾を吸わせ、ミサイルで火力を通す組み立てです。'],
+          ['実況','会場が湧いてる！ 一進一退の攻防だァ！']],
+  win:[['実況','轟沈ッ！ アームズフォート口湾、大爆発ォォォ！ RAVEN、生還だァァ！'],
+       ['解説','見事な完封に近い立ち回りでした。ミッションコンプリート。']],
+};
+class Commentary{
+  constructor(){ this.q=[]; this.showUntil=0; this.busy=false; this.lastFiller=0; this.fillerGap=6500; }
+  push(key,priority=1){ const arr=LINES[key]; if(!arr)return; for(const [tag,text] of arr) this.q.push({tag,text,priority}); this.q.sort((a,b)=>b.priority-a.priority); }
+  tick(now){
+    if(!this.busy && this.q.length){ const item=this.q.shift(); this._render(item); this.busy=true; this.showUntil=now + Math.min(4200, 1600+item.text.length*70); }
+    if(this.busy && now>this.showUntil){ this.busy=false; $('telop').classList.remove('show'); }
+    if(!this.busy && this.q.length===0 && now-this.lastFiller>this.fillerGap){ this.lastFiller=now; this.push('filler',0); }
+  }
+  _render(it){ const tag=$('telop-tag'); tag.textContent=it.tag; tag.className='telop-tag '+(it.tag==='実況'?'jikkyo':'kaisetsu'); $('telop-body').textContent=it.text; $('telop').classList.add('show'); }
+  clear(){ this.q=[]; this.busy=false; $('telop').classList.remove('show'); }
+}
+
+/* ─────────────────────────────────────────
+   DIRECTOR  —  cinematic auto camera
+───────────────────────────────────────── */
+class Director{
+  constructor(cam){ this.cam=cam; this.mode=0; this.timer=0; this.shake=0; }
+  cut(){ this.mode=Math.floor(rand(0,4)); this.timer=rand(3.5,6); }
+  update(dt,player,enemy){ this.timer-=dt; if(this.timer<=0)this.cut();
+    const p=player.pos, e=enemy.pos, mid=p.clone().add(e).multiplyScalar(.5);
+    let ideal,look;
+    if(this.mode===0){ // over player shoulder toward enemy
+      const dir=e.clone().sub(p).normalize(); ideal=p.clone().add(dir.clone().multiplyScalar(-16)).add(new THREE.Vector3(0,7,0)); look=e; }
+    else if(this.mode===1){ // wide side view
+      const side=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), performance.now()*0.0001); ideal=mid.clone().add(side.multiplyScalar(46)).add(new THREE.Vector3(0,14,0)); look=mid; }
+    else if(this.mode===2){ // low hero angle on enemy
+      ideal=e.clone().add(new THREE.Vector3(Math.sin(performance.now()*0.0004)*26,-2,26)); look=e; }
+    else { // chase behind player
+      const v=player.vel.clone(); if(v.length()<1)v.set(0,0,1); v.normalize(); ideal=p.clone().sub(v.multiplyScalar(18)).add(new THREE.Vector3(0,8,0)); look=e.clone().lerp(p,0.4); }
+    if(this.shake>0){ ideal.x+=(Math.random()-.5)*this.shake; ideal.y+=(Math.random()-.5)*this.shake; this.shake=Math.max(0,this.shake-dt*3); }
+    this.cam.position.lerp(ideal,dt*3.2); this.cam.lookAt(look); }
+  hit(a=0.7){ this.shake=Math.max(this.shake,a); }
+}
+
+/* ─────────────────────────────────────────
+   MAIN SHOW
+───────────────────────────────────────── */
+class Show{
+  constructor(){ this._scene(); this._env(); this.bullets=new Bullets(this.scene); this.particles=new Particles(this.scene);
+    this.commentary=new Commentary(); this.director=new Director(this.camera);
+    this.state='intro'; this.time=0; this.matchTime=0; this.clock=new THREE.Clock();
+    this.player=new RavenAI(this.scene,this.bullets,this.particles);
+    this.enemy=new Boss(this.scene,this.bullets,this.particles);
+    this.player.onEvent=(k,v)=>this._pev(k,v); this.enemy.onEvent=(k,v)=>this._eev(k,v);
+    this.lowFired=false; this.bigHitCd=0;
+    this._loop();
+  }
+  _scene(){ this.renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true}); this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    this.renderer.setSize(innerWidth,innerHeight); this.renderer.shadowMap.enabled=true; this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping=THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure=1.0;
+    this.scene=new THREE.Scene(); this.scene.background=new THREE.Color(0x000008); this.scene.fog=new THREE.FogExp2(0x000010,0.006);
+    this.camera=new THREE.PerspectiveCamera(66,innerWidth/innerHeight,0.1,1000); this.camera.position.set(0,14,40);
+    addEventListener('resize',()=>{ this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); }); }
+  _env(){ this.scene.add(new THREE.AmbientLight(0x112233,1.2)); const sun=new THREE.DirectionalLight(0xaaddff,2); sun.position.set(40,80,20);
+    sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.near=1; sun.shadow.camera.far=400;
+    sun.shadow.camera.left=sun.shadow.camera.bottom=-150; sun.shadow.camera.right=sun.shadow.camera.top=150; this.scene.add(sun);
+    const acc=new THREE.PointLight(0xff2200,3,120); acc.position.set(0,20,-60); this.scene.add(acc);
+    const grid=new THREE.GridHelper(CFG.ARENA,30,0x003333,0x001a1a); grid.position.y=-0.5; this.scene.add(grid);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(CFG.ARENA,CFG.ARENA),new THREE.MeshStandardMaterial({color:0x040810,roughness:1})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; this.scene.add(ground);
+    const sg=new THREE.BufferGeometry(),sp=[]; for(let i=0;i<2000;i++)sp.push(rand(-500,500),rand(20,500),rand(-500,500)); sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3)); this.scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:.4})));
+    const pm=new THREE.MeshStandardMaterial({color:0x001133,metalness:.9,roughness:.3}),pg=new THREE.BoxGeometry(2,40,2),h=CFG.ARENA/2-5;
+    for(const [x,,z] of [[-h,0,-h],[h,0,-h],[-h,0,h],[h,0,h]]){ const p=new THREE.Mesh(pg,pm); p.position.set(x,20,z); p.castShadow=true; this.scene.add(p);}
+    this.rings=[]; const rm=new THREE.MeshBasicMaterial({color:0x003355,wireframe:true});
+    for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.TorusGeometry(30+i*20,.2,6,60),rm); r.rotation.x=Math.PI/2; r.position.y=5+i*8; r.userData.rs=.002*(i%2?1:-1); this.scene.add(r); this.rings.push(r);} }
+
+  _banner(big,sub,color){ const b=$('banner'); $('banner-big').textContent=big; $('banner-big').style.color=color||'#fff'; $('banner-sub').textContent=sub||''; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); clearTimeout(this._bt); this._bt=setTimeout(()=>b.style.opacity=0,2200); }
+
+  _pev(k){ if(k==='dodge') this.commentary.push('dodge',3);
+    else if(k==='missile'){ if(Math.random()<0.35) this.commentary.push('missile',1); } }
+  _eev(k,v){ if(k==='pattern'){ const key='pattern_'+v; if(LINES[key]&&Math.random()<0.7) this.commentary.push(key,2); }
+    else if(k==='phase'){ if(v===2){ this._banner('PHASE 2','装甲パージ','#ff9a3a'); this.commentary.clear(); this.commentary.push('phase2',5); bgm.setIntensity(2); bgm.duck(); this.director.hit(1.2);}
+                          if(v===3){ this._banner('PHASE 3','最 終 形 態','#ff3a2a'); this.commentary.clear(); this.commentary.push('phase3',5); bgm.setIntensity(3); bgm.duck(); this.director.hit(1.5);} }
+    else if(k==='die'){ this._finish(); } }
+
+  _flash(){ const f=$('flash'); f.classList.add('hit'); setTimeout(()=>f.classList.remove('hit'),110); }
+
+  begin(){ // called after user gesture
+    $('play').style.display='none'; bgm.start();
+    this.state='countdown'; this.cdt=0; this.cdn=3;
+    this._banner('READY','ARMS-FORT DUEL','#7fe');
+  }
+
+  _collisions(dt){
+    this.bigHitCd=Math.max(0,this.bigHitCd-dt);
+    for(const b of [...this.bullets.active]){ if(!b.active)continue; const bp=b.mesh.position;
+      if((b.type==='player'||b.type==='missile')&&this.enemy.alive){ if(bp.distanceTo(this.enemy.pos)<5){ this.enemy.hit(b.dmg);
+        this.particles.spawn(b.type==='missile'?'explosion':'spark',bp,b.type==='missile'?12:4);
+        if(b.type==='missile'){ this.director.hit(0.5); bgm.sfxBig(); if(this.bigHitCd<=0&&Math.random()<0.5){ this.commentary.push('bighit',2); this.bigHitCd=3.5; } } else bgm.sfxHit();
+        this.bullets.retire(b); } }
+      if(b.type==='enemy'||b.type==='enemy_big'||b.type==='enemy_beam'){ const rad=b.type==='enemy_big'?1.2:0.8; if(bp.distanceTo(this.player.pos)<rad+1.2){ this.player.hit(b.dmg);
+        this.particles.spawn('spark',this.player.pos,5); this.director.hit(0.7); this._flash(); bgm.sfxHit(); this.bullets.retire(b); } }
+    }
+  }
+
+  _hud(){ $('p1fill').style.width=(this.player.hp/this.player.maxHp*100)+'%'; $('p1ph').textContent='AP '+Math.max(0,Math.ceil(this.player.hp));
+    const f=this.enemy.alive?this.enemy.hp/this.enemy.totalHp:0; $('p2fill').style.width=(f*100)+'%'; $('p2ph').textContent=this.enemy.alive?('PHASE '+this.enemy.phase):'DESTROYED';
+    const p1=$('p1fill'); p1.style.filter=this.player.hp<2600?'brightness(1.4) saturate(1.3)':''; if(this.player.hp<2600){ p1.style.background='linear-gradient(90deg,#f30,#f80,#ff0)'; } }
+
+  _finish(){ if(this.state==='finish')return; this.state='finish'; this.commentary.clear(); this.commentary.push('win',9);
+    this._banner('K.O.','ENEMY DESTROYED','#00ffcc'); this.director.hit(2.0); bgm.setIntensity(3);
+    setTimeout(()=>{ this._banner('WINNER','P1 — RAVEN','#7fe'); }, 2600);
+    setTimeout(()=>{ bgm.stopSoon(); $('replay').style.display='block'; $('rec').style.display='none'; }, 5200); }
+
+  _loop(){ requestAnimationFrame(()=>this._loop());
+    const dt=Math.min(this.clock.getDelta(),0.05); const now=performance.now();
+    if(this.rings)this.rings.forEach(r=>r.rotation.z+=r.userData.rs);
+
+    if(this.state==='intro'){ // slow orbit before play
+      this.camera.position.set(Math.sin(now*0.0003)*34,13,Math.cos(now*0.0003)*34); this.camera.lookAt(0,5,-15);
+    } else if(this.state==='countdown'){ this.cdt+=dt;
+      this.camera.position.lerp(new THREE.Vector3(0,10,34),dt*2); this.camera.lookAt(0,6,-20);
+      if(this.cdt>=1){ this.cdt=0; this.cdn--; if(this.cdn>0){ this._banner(String(this.cdn),'','#fff'); }
+        else if(this.cdn===0){ this._banner('FIGHT!','ROUND 1','#ffdd55'); }
+        else { this.state='battle'; this.matchTime=0; this.commentary.push('start',6); bgm.setIntensity(1); this.director.cut(); } }
+    } else if(this.state==='battle'||this.state==='finish'){
+      if(this.state==='battle'){ this.matchTime+=dt;
+        this.player.update(dt,this.enemy); this.enemy.update(dt,this.player.pos);
+        // cinematic HP arc: gradual dramatic decline tied to boss progress (never heals)
+        const prog=clamp(1-this.enemy.hp/this.enemy.totalHp,0,1);
+        const arc=Math.max(1500, this.player.maxHp*(1-0.82*Math.pow(prog,1.25)));
+        if(this.player.hp>arc) this.player.hp=lerp(this.player.hp,arc,dt*0.7);
+        if(!this.lowFired && this.player.hp<2600){ this.lowFired=true; this.commentary.push('low',4); }
+      } else { // finish: keep animating player + fx, enemy gone
+        this.player.update(dt,{pos:this.player.pos.clone().add(new THREE.Vector3(0,0,-30)),alive:false}); }
+      this.bullets.update(dt); this.particles.update(dt); this._collisions(dt);
+      this.director.update(dt,this.player,this.enemy); this._hud();
+      // timer
+      const s=Math.floor(this.matchTime), mm=String(Math.floor(s/60)).padStart(2,'0'), ss=String(s%60).padStart(2,'0'); $('timer').textContent=mm+':'+ss;
+    }
+    this.commentary.tick(now);
+    this.renderer.render(this.scene,this.camera);
+  }
+}
+
+/* ── boot ── */
+let show;
+addEventListener('DOMContentLoaded',()=>{ show=new Show(); window.show=show;
+  $('playbtn').addEventListener('click',()=>show.begin());
+  $('replay').addEventListener('click',()=>location.reload());
+});
+</script>
+</body>
+</html>
