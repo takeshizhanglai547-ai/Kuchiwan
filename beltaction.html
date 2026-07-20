@@ -96,8 +96,9 @@
       <button id="startWatchBtn" class="btn" style="background:linear-gradient(180deg,#eef2f7,#aab6c4);color:#2a3038">▶ 1P 盗賊ワッチ</button>
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
-    <div style="margin-top:8px">
+    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度モード：OFF</button>
+      <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">🐛 2周目「蟲の世界」：OFF</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
@@ -6308,11 +6309,18 @@ function togglePause(){ state=state==='pause'?'play':'pause';
 function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
   players[0].kind=(mode==='shima')?'shima':(mode==='nuko')?'nuko':(mode==='guard8')?'guard8':(mode==='watch')?'watch':'inu'; players[1].kind='shima';
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
-document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); startOpening(); };
-document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); startOpening(); };
-const _nukoBtn=document.getElementById('startNukoBtn'); if(_nukoBtn) _nukoBtn.onclick=()=>{ unlockAudio(); setupRoster('nuko'); startOpening(); };
-const _g8Btn=document.getElementById('startG8Btn'); if(_g8Btn) _g8Btn.onclick=()=>{ unlockAudio(); setupRoster('guard8'); startOpening(); };
-const _watchBtn=document.getElementById('startWatchBtn'); if(_watchBtn) _watchBtn.onclick=()=>{ unlockAudio(); setupRoster('watch'); startOpening(); };
+// タイトルの「2周目」トグルがONなら、一周目を飛ばして蟲の世界から開始（支度金つき）
+let ng2Sel=false;
+function beginAdventure(){ if(ng2Sel){ startGame(); coins=200; startNG2(); } else startOpening(); }
+document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); beginAdventure(); };
+document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); beginAdventure(); };
+const _nukoBtn=document.getElementById('startNukoBtn'); if(_nukoBtn) _nukoBtn.onclick=()=>{ unlockAudio(); setupRoster('nuko'); beginAdventure(); };
+const _g8Btn=document.getElementById('startG8Btn'); if(_g8Btn) _g8Btn.onclick=()=>{ unlockAudio(); setupRoster('guard8'); beginAdventure(); };
+const _watchBtn=document.getElementById('startWatchBtn'); if(_watchBtn) _watchBtn.onclick=()=>{ unlockAudio(); setupRoster('watch'); beginAdventure(); };
+const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn.onclick=()=>{ ng2Sel=!ng2Sel;
+  _ng2SelBtn.textContent='🐛 2周目「蟲の世界」：'+(ng2Sel?'ON':'OFF');
+  _ng2SelBtn.style.background=ng2Sel?'linear-gradient(180deg,#4a9a34,#2a6a1c)':'linear-gradient(180deg,#3a3f4a,#20242c)';
+  _ng2SelBtn.style.color=ng2Sel?'#fff':'#a0e87a'; sfx.swing(0); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; sfx.swing(0); };
 document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
@@ -6437,7 +6445,7 @@ function updateCharSel(){
       if(pr.atk||pr.jump){ pr.atk=false; pr.jump=false; csLock[pi]=true; sfx.rise(); }
     } else { if(pr.grab||pr.grd){ pr.grab=false; pr.grd=false; csLock[pi]=false; sfx.swing(0); } }   // 決定後キャンセル
   }
-  if(csLock[0]&&csLock[1]){ players[0].kind=CHARS[csSel[0]].k; players[1].kind=CHARS[csSel[1]].k; csLock=[false,false]; startOpening(); }
+  if(csLock[0]&&csLock[1]){ players[0].kind=CHARS[csSel[0]].k; players[1].kind=CHARS[csSel[1]].k; csLock=[false,false]; beginAdventure(); }
 }
 function drawCharSel(){
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#26406a'); g.addColorStop(.6,'#3a5a7a'); g.addColorStop(1,'#2a3a44'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
