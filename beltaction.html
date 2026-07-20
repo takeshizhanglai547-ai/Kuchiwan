@@ -108,6 +108,7 @@
     <div id="result-title"></div>
     <div id="result-sub"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="ng2Btn" class="btn hidden" style="background:linear-gradient(180deg,#a0e87a,#4a9a34);color:#12300a">▶ 2周目「蟲の世界」へ</button>
       <button id="resumeBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ ステージ再開</button>
       <button id="retryBtn" class="btn">▶ 最初から</button>
     </div>
@@ -157,6 +158,8 @@ let state='title', camX=0, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='', shopPending=0;
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
+let lap=1;                       // 周回（1=一周目 2=二周目・蟲の世界）
+let mercRoster=[], mercs=[];     // 傭兵：雇用リスト（周回・ステージをまたいで持続）と場に出ている実体
 function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
 
 //======================================================================
@@ -410,6 +413,19 @@ const Music=(()=>{
     { bpm:112, lead:'triangle', pad:'sawtooth',            // 9: 巨大廃墟 — 物悲しく荘厳 (Am)
       prog:[[57,60,64],[52,55,59],[53,57,60],[55,59,62],[57,60,64],[50,53,57],[52,55,59],[52,56,59]],
       mel:[69,72,76,74, 72,69,64,69, 68,72,77,72, 71,74,79,74, 69,72,76,81, 79,76,72,69, 71,68,64,68, 64,69,72,76] },
+    // ── 二周目・蟲の世界のバトル曲（世界観を一変させる新機軸）──
+    { bpm:128, lead:'sine', pad:'triangle',                // 10: 大輪の花園 — 陽気に跳ねるスタッカート (C lydian)
+      prog:[[48,52,55],[50,54,57],[45,48,52],[47,51,54],[48,52,55],[53,57,60],[50,54,57],[48,52,55]],
+      mel:[72,76,78,79, 76,72,78,76, 74,78,81,78, 71,74,78,74, 72,76,79,84, 81,79,76,78, 74,78,74,71, 72,null,79,null] },
+    { bpm:158, lead:'sawtooth', pad:'sawtooth', drive:true,  // 11: 蜂の巣大空洞 — 羽音の半音階疾走 (Am 熊蜂風)
+      prog:[[57,60,64],[56,59,63],[57,60,64],[55,58,62],[57,60,64],[53,56,60],[55,59,62],[52,56,59]],
+      mel:[69,70,71,72, 71,70,69,68, 69,72,71,74, 72,71,70,69, 69,72,76,81, 80,79,78,76, 74,73,72,71, 69,68,69,71] },
+    { bpm:96, lead:'sine', pad:'sawtooth',                 // 12: 蜘蛛糸の森 — 怪しく揺れる糸 (Ebm)
+      prog:[[51,54,58],[46,49,53],[48,51,55],[44,47,51],[51,54,58],[49,53,56],[46,49,53],[46,50,53]],
+      mel:[75,78,82,80, 78,75,70,75, 77,80,84,80, 73,77,80,77, 75,78,82,87, 84,82,78,80, 77,73,70,73, 70,73,77,82] },
+    { bpm:140, lead:'square', pad:'sawtooth', drive:true,  // 13: 地底の蟻帝国 — 大行進マーチ (Gm)
+      prog:[[55,58,62],[50,53,57],[51,55,58],[53,56,60],[55,58,62],[48,51,55],[50,53,57],[50,54,57]],
+      mel:[67,70,74,72, 70,67,63,67, 69,72,75,72, 65,68,72,68, 67,70,74,79, 77,75,72,74, 70,67,65,67, 62,65,69,74] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -445,6 +461,9 @@ const Music=(()=>{
     ending:{ bpm:88, lead:'triangle', pad:'sawtooth', soft:true, epic:true, // エンディング — 感動の大団円 (F 温かく壮大)
       prog:[[53,57,60],[48,52,55],[50,53,57],[55,59,62],[53,57,60],[45,48,52],[46,50,53],[48,52,55]],
       mel:[72,77,81,84, 81,77,72,74, 76,79,81,84, 79,76,72,76, 77,81,84,89, 86,84,81,77, 76,79,74,72, 77,null,77,null] },
+    bosschamu:{ bpm:156, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 二周目・真ボス：虫王チャムルス (半音のうねり×荘厳)
+      prog:[[52,56,59],[51,55,58],[53,57,60],[50,54,57],[52,56,59],[48,52,55],[49,53,56],[51,55,58]],
+      mel:[76,77,80,83, 80,77,76,75, 77,80,84,80, 74,77,81,77, 76,80,83,88, 86,84,81,83, 79,77,75,77, 73,75,79,83] },
   };
   function song(){ return mode==='battle'? BATTLE[themeIdx] : (SONGS[mode]||BATTLE[0]); }
   function bus(){ if(!songGain){ songGain=actx.createGain(); songGain.gain.value=1; songGain.connect(musicGain); } return songGain; }
@@ -798,8 +817,8 @@ let TWO_P=false;                     // co-op enabled
 let hardMode=false;                  // 高難易度モード
 let coopLives=0;                     // 2P：残機は共有プール
 // ── 難易度による補正 ──
-function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1); }        // 敵HP（2Pは総火力が上がるので増量）
-function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1); }       // 敵の攻撃力
+function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1)*(lap>=2?1.3:1); }        // 敵HP（2Pは総火力が上がるので増量。二周目はさらに増量）
+function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1)*(lap>=2?1.2:1); }       // 敵の攻撃力（二周目は強化）
 function enemyLaunchMul(){ return hardMode?0.5:1; }                    // 高難易度：吹っ飛びにくい
 function enemyThinkMul(){ return hardMode?1.7:1; }                     // 高難易度：思考が速い＝攻撃頻度UP
 function grantLives(n){ if(TWO_P) coopLives+=n; else players.forEach(p=>{ if(p.active) p.lives+=n; }); }
@@ -1870,6 +1889,19 @@ const ETYPE={
   zombiewan:{hp:74,sp:0.72,dmg:11,atkR:48,w:60,h:78,c1:'#6f8a54',c2:'#455a34',c3:'#28361e',score:360,zombie:true,accent:'#a6e070',name:'ゾンビワンコ'},          // 遅いが一度だけ蘇る
   skeletwan:{hp:40,sp:1.7,dmg:9,atkR:220,w:52,h:80,c1:'#eae7dc',c2:'#b7b3a4',c3:'#7c786a',score:380,boner:true,accent:'#cfe6ff',name:'スケルトンワンコ'},          // 遠距離から骨を投げる
   mechawan:{hp:132,sp:2.3,dmg:14,atkR:230,w:62,h:86,c1:'#9aa4b0',c2:'#59616d',c3:'#2f343c',score:660,mecha:true,gunner:true,charge:true,accent:'#ff2a2a',name:'メカワンコ T-800'},   // 頑丈・高速・赤い光弾
+  // ---- 二周目・蟲の世界の雑魚（昆虫系コンセプト）----
+  kamakiri:{hp:56,sp:2.3,dmg:12,atkR:58,w:56,h:80,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:420,bug:true,accent:'#d6ff9f',name:'カマキリ兵'},                 // 鋭い鎌の速攻兵
+  hachibo:{hp:32,sp:2.8,dmg:10,atkR:210,w:48,h:62,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:380,bug:true,pouncer:true,accent:'#ffe9a0',name:'ホーネット突撃兵'}, // 急降下で襲う蜂
+  kabuto:{hp:150,sp:0.9,dmg:15,atkR:60,w:74,h:88,c1:'#5a4a3a',c2:'#38291c',c3:'#1c120a',score:640,bug:true,armor:true,accent:'#c8a06a',name:'カブト重装兵'},      // 装甲角で耐える甲虫
+  kumo:{hp:64,sp:1.8,dmg:11,atkR:240,w:66,h:64,c1:'#8a6fc8',c2:'#4e3688',c3:'#241650',score:520,bug:true,gunner:true,accent:'#d6a6ff',name:'毒グモ射手'},          // 毒糸を吐く蜘蛛
+  // ---- 二周目・蟲の世界のボス ----
+  kamaboss:{hp:760,sp:2.4,dmg:19,atkR:96,w:96,h:156,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:6200,boss:true,bossKind:'kamaboss',weapon:'claw',accent:'#d6ff9f',bug:true,name:'鎌将軍カマキリギス'},
+  queenbee:{hp:700,sp:2.2,dmg:18,atkR:92,w:120,h:130,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:6600,boss:true,bossKind:'queenbee',weapon:'spear',accent:'#ffe9a0',bug:true,flyer:true,name:'女王蜂ビーヴァ'},
+  kuwaboss:{hp:940,sp:0.9,dmg:23,atkR:98,w:180,h:190,c1:'#5a4a3a',c2:'#38291c',c3:'#1c120a',score:7200,boss:true,bossKind:'kuwaboss',weapon:'club',accent:'#c8a06a',bug:true,name:'大顎公クワガタス'},
+  spidboss:{hp:720,sp:1.9,dmg:19,atkR:90,w:130,h:126,c1:'#8a6fc8',c2:'#4e3688',c3:'#241650',score:6800,boss:true,bossKind:'spidboss',weapon:'none',accent:'#d6a6ff',bug:true,name:'糸姫アラクネ'},
+  // ---- 二周目・真ボス：チャム（第一形態）→ 虫王チャムルス（真の姿）----
+  chamboss:{hp:1700,sp:2.5,dmg:28,atkR:84,w:66,h:110,c1:'#caa878',c2:'#9a7a52',c3:'#5a4630',score:20000,boss:true,bossKind:'chamboss',weapon:'none',accent:'#ffd24d',name:'チャム',evolveTo:'chamurus'},
+  chamurus:{hp:2600,sp:1.8,dmg:32,atkR:104,w:176,h:196,c1:'#e8c86a',c2:'#9a7a2e',c3:'#4a3a12',score:50000,boss:true,bossKind:'chamurus',weapon:'none',accent:'#ffe14d',bug:true,flyer:true,finalBoss:true,trueBoss:true,name:'虫王チャムルス'},
   // ---- 敵専用の乗り物 ----
   bikewan:{hp:78,sp:3.0,dmg:13,atkR:70,w:84,h:72,c1:'#c0392b',c2:'#7a2018',c3:'#26262e',score:560,rider:true,riderKind:'bike',accent:'#ffd24d',name:'爆走バイクワンコ'},        // 猛スピードで突進
   trailerwan:{hp:240,sp:1.1,dmg:20,atkR:110,w:158,h:100,c1:'#5a626e',c2:'#33383f',c3:'#20242a',score:1000,rider:true,riderKind:'trailer',armor:true,accent:'#ff6a3a',name:'装甲トレーラーワンコ'},   // 重装甲・轢殺トレーラー
@@ -1897,6 +1929,13 @@ const BOSSMOVES={
   wanmen: ['scytheSlash','phaseDash','meteorCall','vanishMove','meteorCall','scytheSlash'],  // 彼方からの呼び声＝隕石
   guard0: ['heavySwing','groundSlam','hammerQuake','bodyCharge','unblockSmash','groundSlam'],  // 門番零号：大槌の地震
   goldgolem:['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash','heavySwing'],   // 黄金傀儡：重量級の巨躯
+  // ── 二周目・蟲の世界のボス ──
+  kamaboss:['clawCombo','dashThrust','tripleStep','lunge','unblockSmash','clawCombo'],          // 鎌将軍：二刀の鎌の速攻
+  queenbee:['divebomb','clawSwoop','spikeVolley','summon','divebomb','unblockSmash'],           // 女王蜂：急降下＋毒針の雨
+  kuwaboss:['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash','bodyCharge'],     // 大顎公：突進と大顎挟撃
+  spidboss:['spikeVolley','phaseDash','summon','clawCombo','unblockSmash','spikeVolley'],       // 糸姫：毒糸弾幕と瞬間移動
+  chamboss:['clawCombo','tripleStep','vanishMove','orbSpread','bossGrab','unblockSmash'],       // チャム：猫の身軽さと金貨弾幕
+  chamurus:['meteorCall','orbSpread','darkBeam','phaseDash','summon','groundSlam','unblockSmash'], // 虫王：全画面の蟲嵐
 };
 const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰してくれるわ…', vesper:'その速さ、見切れるかな？',
   cerbe:'三つの頭が逃がしはせぬ！', glaton:'鋼鉄の前にひれ伏せ！',
@@ -1908,6 +1947,9 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
   golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！',
   phantom:'よく来たな、ワッチ。師を超えられるか——その手で試してみせろ！', goldgolem:'ココヨリ先ハ　通サヌ……宝ハ　渡サヌ……',
+  kamaboss:'我が双鎌の間合いに入ったが最後…真っ二つよ！', queenbee:'働き蜂たちの怒りを、その身で味わうがいい！',
+  kuwaboss:'この大顎に挟まれて、砕けぬものは無い！', spidboss:'あら、いい獲物。私の糸で、ぐるぐる巻きにしてあげる…',
+  chamboss:'いらっしゃいませ〜…なんて、言うと思ったかニャ？', chamurus:'ズ…ズズ…蟲ノ王が…目覚メタ…ニャァァァ！',
   guard0:'八代目よ…門を守る覚悟、この零号が試そう！', rvSword:'いい太刀筋だ。だが俺の方が上だと証明させてもらう！',
   rvFist:'その拳、俺と競い合おうぜ！本気で来いよ！', rvMage:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', rvGuard:'門番同士…どちらが硬いか、確かめようか！' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
@@ -1916,6 +1958,8 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   moloch:'bosseerie', cerbe:'bosseerie', noroinu:'bosseerie', ghost:'bosseerie', bitter:'bosseerie',
   rival:'bossrival', boss:'boss', boss2:'boss2', boss3:'boss3', wanmen:'bosscosmic',
   golux:'bossrival', papipoo:'bossrival', guard0:'bossheavy', phantom:'bossrival', goldgolem:'bossheavy',
+  kamaboss:'bossfast', queenbee:'bossfast', kuwaboss:'bossheavy', spidboss:'bosseerie',
+  chamboss:'bosseerie', chamurus:'bosschamu',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
 // 主人公キャラごとのボスの口上（無い場合は上の汎用にフォールバック）
@@ -2046,7 +2090,7 @@ function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
   flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(); sfx.ko();
-  if(Music.setMode){ if(nt==='boss2') Music.setMode('boss2'); else if(nt==='boss3') Music.setMode('boss3'); }   // 形態ごとにBGMを激化
+  if(Music.setMode) Music.setMode(bossMusicFor(nt));   // 形態ごとにBGMを激化（boss2/boss3/チャムルス等はBOSS_BGMで解決）
   for(let k=0;k<8;k++){ ring(e.x+rnd(-40,40),e.y-e.h*0.4,'#c46bff'); spark(e.x+rnd(-40,40),e.y-rnd(0,e.h),'#c46bff',12,10); }
   popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true);
   startTransformCut(nt);   // 形態変化のデモシーンを再生 → 終了後に戦闘再開
@@ -2858,6 +2902,32 @@ const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',
     nuko:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…帝国に奪われてしまってな。','黄金傀儡ゴルドーは金属の巨躯。魔法で浮かせて隙を突くのじゃ、魔法使いどの！'],
     guard8:['ここは王国の秘宝を眠らせる「月夜の宝物庫」…守り切れず帝国に奪われた。','黄金傀儡ゴルドーは同じ「守る者」。だがもう役目を違えておる。頼んだぞ、8号どの！'],
     watch:['よお盗賊ワッチ、噂は聞いてるぜ。ここは王国の宝を眠らせる「月夜の宝物庫」…帝国に根こそぎ盗まれちまってな。','奥の黄金傀儡ゴルドーを出し抜いて、宝を“盗み返して”くれ。お前さんの手口なら朝飯前だろ？']},give:{coins:20}}};
+// ══ 二周目「蟲の世界」：昆虫系コンセプトのステージ群 ══
+const BUG_CH=[
+  {theme:9,name:'大輪の花園',
+   gates:[{off:600,list:[['kamakiri',1],['hachibo',1],['ari',1]]},{off:1000,list:[['kamakiri',1],['kumo',1]]},{off:1400,boss:true,list:[['kamaboss',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう…！一夜にして王国が「蟲の世界」に呑まれてしもうた。','花も草も巨大化し、蟲の軍勢「大蟲帝国」が各地を支配しておる。二周目の敵は手強いぞ、心してかかれ！','聞けば宿屋のチャムの様子もおかしいらしい…。何かあったら、店を頼るのじゃぞ…いや、頼って良いのか…？'],give:{heal:'full'}}},
+  {theme:10,name:'蜂の巣大空洞',
+   gates:[{off:600,list:[['hachibo',1],['hachibo',1],['balloon',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
+   npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
+  {theme:11,name:'蜘蛛糸の森',
+   gates:[{off:520,list:[['kumo',1],['zombiewan',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['skeletwan',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
+   npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
+  {theme:12,name:'地底の蟻帝国',
+   gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['kamakiri',1],['mechawan',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
+   npc:{kind:'villager',name:'考古学犬ホリダス',lines:['地下都市がまるごと蟻の帝国に…！光る茸だけが頼りだ。','大顎公クワガタスの突進は壁まで止まらん。ジャンプでかわして背中を叩け！']}},
+];
+const BUG_FINAL={theme:10,name:'蟲の女王の間',len:1500,noPit:true,
+  gates:[{off:560,list:[['kamakiri',1],['hachibo',1],['kumo',1],['kabuto',1]]},{off:1000,boss:true,final:true,list:[['chamboss',1]]}]};
+const WORLD2_LEVELS=[
+  {id:'w2hachi', b:BUG_CH[1], mx:0.30, my:0.30},   // 蜂の巣大空洞（女王蜂ビーヴァ）
+  {id:'w2kumo',  b:BUG_CH[2], mx:0.48, my:0.62},   // 蜘蛛糸の森（糸姫アラクネ）
+  {id:'w2ari',   b:BUG_CH[3], mx:0.64, my:0.36},   // 地底の蟻帝国（大顎公クワガタス）
+];
+const WORLD2_FINAL=[
+  {id:'w2queen', b:BUG_FINAL, mx:0.86, my:0.18, locked:true, final:true},   // 蟲の女王の間（チャム→チャムルス）
+];
+const NG2_UNLOCK=3;   // 蟲の世界のステージをこの数クリアで「蟲の女王の間」が解禁
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
@@ -2900,12 +2970,27 @@ function addBlocks(blocks,opts){
 function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'B'}:null);
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
-  encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[];
+  encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
 function buildEncounters(){ resetWorldState(); metNPC=0; chestsOpened=0; routesChosen=[]; trueBossSpawned=false;
   addBlocks(CH1.slice(0,1),null);   // 王都郊外だけを最初に読み込む（以降はワールドマップから選択）
+}
+function buildEncounters2(){ resetWorldState(); trueBossSpawned=false;
+  addBlocks(BUG_CH.slice(0,1),null);   // 二周目：大輪の花園から開始（以降は蟲の世界マップから選択）
+}
+// ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
+function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
+  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
+  buildEncounters2();
+  players.forEach(p=>{ if(p.active) resetPlayer(p,false); });
+  player=players[0]; goArrow=160; bgCacheTheme=-1;
+  elStart.classList.add('hidden'); elResult.classList.add('hidden');
+  Music.stop(); saveProgress(1);
+  startCutscene(NG2_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
 }
 
 //======================================================================
@@ -2931,9 +3016,11 @@ const WORLD_FINAL=[
 ];
 const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒の城門」が解禁
 let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
-function allMapNodes(){ return WORLD_LEVELS.concat(WORLD_FINAL); }
-function doneCount(){ return WORLD_LEVELS.filter(l=>levelsDone[l.id]).length; }
+function curWorldLevels(){ return lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
+function allMapNodes(){ return lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
+function doneCount(){ return curWorldLevels().filter(l=>levelsDone[l.id]).length; }
 function nodeUnlocked(node){
+  if(lap>=2) return node.final? doneCount()>=NG2_UNLOCK : true;  // 二周目：女王の間＝規定数クリアで解禁
   if(node.final) return !!levelsDone['joumon'];                 // 魔王の間＝城門クリア後
   if(node.id==='joumon') return doneCount()>=FINAL_UNLOCK;      // 城門＝規定数クリア後
   return true;                                                  // 通常ステージは最初から自由
@@ -2950,7 +3037,7 @@ function loadLevel(node){
   spawnVehicle(WORLD_END*0.26, buggyLv.includes(node.id)?'buggy':'horse');
   if(WORLD_END>1500) spawnVehicle(WORLD_END*0.58, buggyLv.includes(node.id)?'horse':'buggy');
   players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
-  camX=0; player=players[0]; goArrow=160; shopPending=0;
+  camX=0; player=players[0]; goArrow=160; shopPending=0; spawnMercs();   // 雇った傭兵も同行
   state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
   saveProgress(1);
 }
@@ -2981,9 +3068,12 @@ function drawMap(){
   ctx.fillStyle='rgba(60,90,60,.5)'; ctx.beginPath(); ctx.moveTo(0,H*0.7);
   for(let x=0;x<=W;x+=40){ ctx.lineTo(x, H*0.68+Math.sin(x*0.01+2)*30); } ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
-  ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText('ワールドマップ',W/2,52); ctx.fillText('ワールドマップ',W/2,52);
+  const mapTitle=lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
+  ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText(mapTitle,W/2,52); ctx.fillText(mapTitle,W/2,52);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
-  ctx.fillText('行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　城門解禁まで '+Math.max(0,FINAL_UNLOCK-doneCount())+'）',W/2,74);
+  ctx.fillText(lap>=2
+    ? '蟲の世界を巡れ　（制覇 '+doneCount()+' / '+WORLD2_LEVELS.length+'　女王の間まで '+Math.max(0,NG2_UNLOCK-doneCount())+'）'
+    : '行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　城門解禁まで '+Math.max(0,FINAL_UNLOCK-doneCount())+'）',W/2,74);
   const nodes=allMapNodes();
   // ノード間の道（隣接を薄く結ぶ）
   ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
@@ -3244,7 +3334,7 @@ function update(){
   if(state==='talk'){ updateTalk(); updateParticles(); return; }
   if(state==='branch'){ updateBranch(); return; }
   if(state!=='play') return;
-  stepPlayers(); updateEnemies(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) enterShop(); }   // 会話などで中断されたら次のフレームで再試行
 }
@@ -3263,9 +3353,11 @@ function render(){
   drawItems();
   drawVehicles();
   const order=[...enemies.map(e=>({y:e.y,e}))];
+  mercs.forEach(m=>order.push({y:m.y-0.3, m}));
   players.forEach(pl=>{ if(pl.active) order.push({y:pl.y+pl.pid*0.5, pl}); });
   order.sort((a,b)=>a.y-b.y);
-  order.forEach(o=>{ if(o.pl){ player=o.pl;
+  order.forEach(o=>{ if(o.m){ drawMercEnt(o.m); return; }
+    if(o.pl){ player=o.pl;
       if(o.pl.state==='seven'){ const sx0=o.pl.x; ctx.save(); ctx.globalAlpha=0.32;   // 七体の分身残像
         for(let g=0;g<7;g++){ o.pl.x=clamp(camX+ (g+0.5)/7*W + Math.sin(gf*0.5+g)*16, camX+24, camX+W-24); drawPlayer(); }
         ctx.restore(); o.pl.x=sx0; }
@@ -3331,6 +3423,27 @@ const STAGE_THEME=[
     haze:'rgba(120,100,120,.34)', fog:'rgba(150,120,120,.45)', stars:20, tower:'#6a5560', ruins:true,
     g:['#5e5760','#443f4a','#2a2630'], cob:['#5a5460','#4a444e'], vig:'rgba(16,10,24,.56)',
     amb:{shape:'spark',color:'rgba(200,170,150,.8)',rate:0.6,max:36,vy:0.15,wind:0.2,r0:1.2,r1:2.8,glow:false,alpha:.7} },
+  // ── 二周目・蟲の世界のテーマ ──
+  // 10: 大輪の花園（見上げるほど巨大な花と草の楽園）
+  { sky:['#7ec8e8','#a8e0c8','#d0f0b0','#f0f8d8'], sun:'rgba(255,250,200,', sunX:0.68,sunY:86, rays:0.14, tint:'rgba(180,255,170,.30)',
+    haze:'rgba(160,220,170,.30)', fog:'rgba(190,235,190,.5)', stars:0, tower:'#5a9a4a', bug:true, flower:true,
+    g:['#5a9a44','#3e7030','#254a1c'], cob:['#4e8a3c','#427a32'], vig:'rgba(8,26,10,.42)',
+    amb:{shape:'petal',color:'rgba(255,190,220,.92)',rate:0.9,max:48,vy:0.45,wind:-0.25,r0:2.5,r1:5.5,glow:false,alpha:.9} },
+  // 11: 蜂の巣大空洞（琥珀色に光る蜜蝋の六角回廊）
+  { sky:['#5c3c0a','#8a5c14','#c8901e','#e8c86a'], sun:'rgba(255,220,120,', sunX:0.5,sunY:100, rays:0.16, tint:'rgba(255,190,80,.36)',
+    haze:'rgba(190,130,40,.32)', fog:'rgba(210,160,70,.5)', stars:0, tower:'#8a5c14', bug:true, comb:true,
+    g:['#a0742a','#7a5518','#4a320c'], cob:['#956c24','#84601e'], vig:'rgba(40,22,4,.5)',
+    amb:{shape:'spark',color:'rgba(255,220,110,.9)',rate:0.7,max:40,vy:-0.3,wind:0.2,r0:1.2,r1:2.8,glow:true,alpha:.85} },
+  // 12: 蜘蛛糸の森（月光に濡れた糸と繭の森）
+  { sky:['#141024','#241c3e','#3a2e5e','#5a4a86'], sun:'rgba(200,180,255,', sunX:0.3,sunY:76, rays:0.06, tint:'rgba(150,110,255,.32)',
+    haze:'rgba(70,50,110,.36)', fog:'rgba(110,90,160,.45)', stars:70, tower:'#3a2e5e', bug:true, web:true,
+    g:['#3a3452','#28223c','#151024'], cob:['#372f4c','#2d2740'], vig:'rgba(8,4,20,.6)',
+    amb:{shape:'spark',color:'rgba(210,190,255,.9)',rate:0.5,max:32,vy:0.2,wind:0.1,r0:1,r1:2.4,glow:true,alpha:.85} },
+  // 13: 地底の蟻帝国（光茸が照らす大地下都市）
+  { sky:['#0a1810','#12301c','#1e4a2c','#2e6a40'], sun:'rgba(120,255,180,', sunX:0.42,sunY:88, rays:0.05, tint:'rgba(90,255,160,.30)',
+    haze:'rgba(30,90,50,.4)', fog:'rgba(50,120,70,.45)', stars:46, tower:'#1e4a2c', bug:true, shroom:true,
+    g:['#2e5a38','#1e4026','#102616'], cob:['#2a5234','#24482c'], vig:'rgba(2,14,6,.6)',
+    amb:{shape:'spark',color:'rgba(140,255,180,.95)',rate:0.8,max:44,vy:-0.22,wind:0.1,r0:1.2,r1:3,glow:true,alpha:.95} },
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -3399,6 +3512,7 @@ function drawBackground(){
     ctx.restore(); }
   if(T.airship){ drawAirshipScene(); }
   else if(T.ruins){ drawRuinsScene(); }
+  else if(T.bug){ drawBugScene(T); }
   else {
     drawMountains();
     drawCastle((W*0.5)-camX*0.28,60);
@@ -3431,6 +3545,69 @@ function drawAirshipScene(){
     ctx.fillStyle=radGrad(6,-34,28,'#c0533a','#7a2c1e'); ctx.beginPath(); ctx.ellipse(6,-34,26,20,0,0,7); ctx.fill();   // 気嚢
     ctx.strokeStyle='#5a3a28'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(-20,-14); ctx.lineTo(-14,-16); ctx.moveTo(20,-14); ctx.lineTo(28,-16); ctx.stroke();
     ctx.restore(); }
+}
+// ── 二周目・蟲の世界の背景（巨大な花・蜂の巣・蜘蛛の糸・光る茸）──
+function drawGiantFlower(x,baseY,h,hue,ph){ // 見上げるほど巨大な花（茎＋花弁）
+  ctx.strokeStyle='rgba(40,90,30,.85)'; ctx.lineWidth=10; ctx.lineCap='round';
+  const sway=Math.sin(gf*0.012+ph)*10, hx=x+sway;
+  ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x-8,baseY-h*0.55,hx,baseY-h); ctx.stroke();
+  ctx.fillStyle='rgba(50,110,40,.8)';   // 葉
+  ctx.beginPath(); ctx.ellipse(x-24,baseY-h*0.4,26,9,-0.5,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x+24,baseY-h*0.62,24,8,0.5,0,7); ctx.fill();
+  ctx.save(); ctx.translate(hx,baseY-h);   // 花弁
+  for(let i=0;i<7;i++){ ctx.save(); ctx.rotate(i*(Math.PI*2/7)+ph);
+    ctx.fillStyle=hue; ctx.beginPath(); ctx.ellipse(0,-26,13,26,0,0,7); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle='#ffdf6a'; ctx.beginPath(); ctx.arc(0,0,15,0,7); ctx.fill();
+  ctx.fillStyle='rgba(160,110,20,.6)'; for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(Math.cos(i*1.3)*7,Math.sin(i*1.7)*7,2,0,7); ctx.fill(); }
+  ctx.restore(); }
+function drawBugScene(T){
+  const yb=GROUND_TOP;
+  // 遠景：そびえる巨大な草の葉のシルエット
+  ctx.fillStyle='rgba(20,50,25,.5)';
+  for(let i=-1;i<10;i++){ const step=170, gx=i*step-(camX*0.16)%step, g0=Math.floor((camX*0.16)/step)+i;
+    const h=170+Math.abs(g0*47%120), lean=((g0%2)?1:-1)*30;
+    ctx.beginPath(); ctx.moveTo(gx,yb); ctx.quadraticCurveTo(gx+lean*0.4,yb-h*0.6,gx+lean,yb-h);
+    ctx.quadraticCurveTo(gx+lean+18,yb-h*0.55,gx+26,yb); ctx.fill(); }
+  if(T.flower){ // 中景：巨大な花の列
+    for(let i=-1;i<7;i++){ const step=300, gx=i*step-(camX*0.35)%step, g0=Math.floor((camX*0.35)/step)+i;
+      const hues=['rgba(255,140,190,.85)','rgba(255,190,90,.85)','rgba(190,140,255,.85)','rgba(255,110,110,.85)'];
+      drawGiantFlower(gx+60, yb, 190+Math.abs(g0*53%90), hues[((g0%4)+4)%4], g0*1.7); } }
+  if(T.comb){ // 蜂の巣：奥一面の六角ハニカム（蜜入りセルが光る）
+    ctx.save(); const hr=44;
+    for(let row=0;row<7;row++){ for(let col=-1;col<W/(hr*1.55)+1;col++){
+      const hx=col*hr*1.55-(camX*0.3)%(hr*1.55), hy=44+row*hr*1.32+(col%2)*hr*0.66, g0=Math.floor((camX*0.3)/(hr*1.55))+col;
+      if(hy>yb-20)continue;
+      ctx.strokeStyle='rgba(120,80,20,.55)'; ctx.lineWidth=5; ctx.beginPath();
+      for(let k=0;k<6;k++){ const a=Math.PI/6+k*Math.PI/3; const px=hx+Math.cos(a)*hr*0.62, py=hy+Math.sin(a)*hr*0.62; k?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+      ctx.closePath(); ctx.stroke();
+      if(((g0*7+row*3)%5)===0){ ctx.fillStyle='rgba(255,200,80,'+(0.28+0.14*Math.sin(gf*0.04+g0+row))+')'; ctx.fill(); } } }
+    ctx.restore(); }
+  if(T.web){ // 蜘蛛の糸：放射状の巨大クモの巣と垂れる繭
+    ctx.save(); ctx.strokeStyle='rgba(220,210,255,.30)'; ctx.lineWidth=1.6;
+    for(let i=0;i<3;i++){ const wx=((i*520-camX*0.3)%(W+520)+W+520)%(W+520)-260, wy=90+i*40, wr=120+i*30;
+      for(let k=0;k<8;k++){ const a=k*Math.PI/4; ctx.beginPath(); ctx.moveTo(wx,wy); ctx.lineTo(wx+Math.cos(a)*wr,wy+Math.sin(a)*wr); ctx.stroke(); }
+      for(let r=wr*0.3;r<=wr;r+=wr*0.23){ ctx.beginPath();
+        for(let k=0;k<=8;k++){ const a=k*Math.PI/4; const px=wx+Math.cos(a)*r, py=wy+Math.sin(a)*r; k?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.stroke(); } }
+    // 垂れ下がる糸と繭
+    for(let i=-1;i<8;i++){ const step=240, gx=i*step-(camX*0.45)%step, g0=Math.floor((camX*0.45)/step)+i;
+      const len=60+Math.abs(g0*37%130), sway=Math.sin(gf*0.02+g0)*6;
+      ctx.strokeStyle='rgba(220,210,255,.35)'; ctx.beginPath(); ctx.moveTo(gx,0); ctx.quadraticCurveTo(gx+sway*0.5,len*0.6,gx+sway,len); ctx.stroke();
+      if(g0%3===0){ ctx.fillStyle='rgba(230,224,250,.55)'; ctx.beginPath(); ctx.ellipse(gx+sway,len+16,10,18,0.2,0,7); ctx.fill(); } }
+    ctx.restore(); }
+  if(T.shroom){ // 光る茸：暗闇にぼんやり灯る巨大キノコ
+    for(let i=-1;i<7;i++){ const step=280, gx=i*step-(camX*0.4)%step, g0=Math.floor((camX*0.4)/step)+i;
+      const h=110+Math.abs(g0*61%110), mx=gx+70, glow=0.5+0.2*Math.sin(gf*0.03+g0);
+      ctx.fillStyle='rgba(200,220,230,.5)'; ctx.fillRect(mx-10,yb-h+20,20,h-20);   // 柄
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle='rgba(110,255,190,'+(glow*0.35)+')'; ctx.beginPath(); ctx.arc(mx,yb-h+8,70,0,7); ctx.fill(); ctx.restore();
+      ctx.fillStyle='rgba(70,190,140,.85)'; ctx.beginPath(); ctx.ellipse(mx,yb-h+14,56,30,0,Math.PI,0); ctx.fill();   // 傘
+      ctx.fillStyle='rgba(180,255,220,.8)'; for(let s=0;s<3;s++){ ctx.beginPath(); ctx.arc(mx-26+s*26,yb-h+2-(s%2)*8,5,0,7); ctx.fill(); } } }
+  // 手前：舞い飛ぶ小さな虫の群れ（ホタル風の光点）
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<12;i++){ const bx=((i*173+gf*(0.6+i%3*0.3))%(W+60))-30, by=80+((i*97)%(yb-140))+Math.sin(gf*0.05+i)*14;
+    ctx.fillStyle='rgba(200,255,150,'+(0.25+0.35*Math.abs(Math.sin(gf*0.07+i*2)))+')'; ctx.beginPath(); ctx.arc(bx,by,2.2,0,7); ctx.fill(); }
+  ctx.restore();
+  ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
 }
 // 巨大廃墟ステージ：夕暮れに崩れゆく巨大な石柱・アーチ
 function drawRuinsScene(){
@@ -4316,6 +4493,8 @@ function drawEnemy(e){
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
   else if(e.type==='papipoo'){ drawPapipoo(e); }
+  else if(e.type==='chamboss'){ drawChamBoss(e); }
+  else if(e.type==='chamurus'){ drawChamurus(e); }
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
@@ -4324,6 +4503,7 @@ function drawEnemy(e){
   else if(t.rider) drawRider(e,t);
   else drawBeast(e);
   if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
+  if(t.bug && e.type!=='chamurus') drawBugOverlay(e,t);   // 昆虫コンセプト：触角・羽・複眼（チャムルスは専用描画に内蔵）
   if(t.guarder) drawEnemyShield(e);
   if(e.frozen>0){ const fa=Math.min(1,e.frozen/30);   // 氷結：青い氷塊に包まれる
     ctx.save(); ctx.globalAlpha=0.45*fa; ctx.fillStyle='#9fd6ff';
@@ -4361,6 +4541,94 @@ function drawFoeOverlay(e,t){ const hy=-t.h*0.74, ex=t.w*0.15;
     ctx.beginPath(); ctx.moveTo(ex-3,hy-3); ctx.lineTo(ex+3,hy+3); ctx.moveTo(ex+3,hy-3); ctx.lineTo(ex-3,hy+3); ctx.stroke();
     ctx.fillStyle='rgba(150,220,90,.8)'; ctx.fillRect(ex-1,hy+6,2.4,7+Math.sin(gf*0.1)*2); }
 }
+// ── 昆虫コンセプトの共通ディテール（触角・羽・複眼の光）──
+function drawBugOverlay(e,t){ const hy=-t.h*0.8, hw=t.w*0.5;
+  // 触角（先端が丸い、ゆらゆら揺れる）
+  ctx.strokeStyle=shade(t.c2,30); ctx.lineWidth=2.4; ctx.lineCap='round';
+  const wig=Math.sin((e.anim||0)*1.4)*3;
+  for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(s*t.w*0.1,hy);
+    ctx.quadraticCurveTo(s*t.w*0.22, hy-t.h*0.22, s*t.w*0.3+wig*s, hy-t.h*0.3); ctx.stroke();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(s*t.w*0.3+wig*s, hy-t.h*0.3, 3, 0, 7); ctx.fill(); }
+  // 半透明の羽（高速で羽ばたく）
+  ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle='#dff2ff';
+  const flap=Math.abs(Math.sin(gf*0.55+(e.x||0)))*0.7+0.25;
+  for(const s of [-1,1]){ ctx.save(); ctx.translate(-t.w*0.18,-t.h*0.62); ctx.rotate(s*flap*0.85-0.2);
+    ctx.beginPath(); ctx.ellipse(-t.w*0.24,0,t.w*0.34,t.h*0.13,0,0,7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  // 複眼の光
+  ctx.save(); ctx.globalCompositeOperation='lighter'; const g=0.5+0.3*Math.sin(gf*0.15);
+  ctx.fillStyle='rgba(160,255,140,'+g+')'; ctx.beginPath(); ctx.arc(t.w*0.16,hy+2,3.2,0,7); ctx.fill(); ctx.restore(); }
+// ── 二周目・真ボス第一形態：チャム（正体を現した看板娘）──
+function drawChamBoss(e){ const t=ETYPE[e.type], atk=e.state==='bmove', walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
+  // 黒いローブ（店の看板娘が漆黒の外套を纏う）
+  ctx.fillStyle='#221a30'; ctx.beginPath(); ctx.moveTo(-26,-96); ctx.quadraticCurveTo(-46,-30,-30,2);
+  ctx.lineTo(30,2); ctx.quadraticCurveTo(44,-34,24,-96); ctx.closePath(); ctx.fill();
+  // しっぽ（先が蟲の鋏になりかけている——チャムルスの前兆）
+  ctx.strokeStyle='#9a7a52'; ctx.lineWidth=8; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-24,-20); ctx.quadraticCurveTo(-56,-30,-50,-66); ctx.stroke();
+  ctx.fillStyle='#4a3a12'; ctx.beginPath(); ctx.moveTo(-56,-66); ctx.lineTo(-44,-76); ctx.lineTo(-42,-60); ctx.closePath(); ctx.fill();
+  // 体（見慣れた猫の商人の姿）
+  ctx.fillStyle=radGrad(0,-46,30,'#caa878','#9a7a52'); ctx.beginPath(); ctx.ellipse(0,-42,24,28,0,0,7); ctx.fill();
+  ctx.fillStyle='#e8e0cf'; ctx.beginPath(); ctx.moveTo(-13,-58);ctx.lineTo(13,-58);ctx.lineTo(9,-22);ctx.lineTo(-9,-22);ctx.closePath(); ctx.fill();   // エプロン
+  ctx.fillStyle='#c0392b'; ctx.fillRect(-14,-59,28,4);
+  furBall(0,-84,21,'#d8bd92','#9a7a52');   // 頭
+  ctx.fillStyle='#9a7a52'; ctx.beginPath(); ctx.moveTo(-17,-98);ctx.lineTo(-25,-118);ctx.lineTo(-5,-102);ctx.fill();
+  ctx.beginPath(); ctx.moveTo(17,-98);ctx.lineTo(25,-118);ctx.lineTo(5,-102);ctx.fill();   // 猫耳
+  // 目：金色に妖しく光る（ボス化の証）
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(const ex of [-8,8]){ ctx.fillStyle='rgba(255,210,60,'+(0.7+0.3*Math.sin(gf*0.12))+')';
+    ctx.beginPath(); ctx.ellipse(ex,-84,5,6.5,0,0,7); ctx.fill(); }
+  ctx.restore();
+  ctx.fillStyle='#23170d'; for(const ex of [-8,8]){ ctx.beginPath(); ctx.ellipse(ex,-83,1.8,4,0,0,7); ctx.fill(); }
+  ctx.strokeStyle='#5a3a1a'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-3,-76);ctx.quadraticCurveTo(0,-73,3,-76); ctx.stroke();
+  ctx.strokeStyle='rgba(90,60,30,.7)'; ctx.lineWidth=1; for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(s*9,-79);ctx.lineTo(s*24,-81); ctx.moveTo(s*9,-75);ctx.lineTo(s*24,-74); ctx.stroke(); }
+  // 攻撃時：金貨を鋭く構える／通常時はお手玉
+  const cy=-56, cs=atk?1.4:1, coinX=atk?30:16+Math.sin(gf*0.1)*4, coinY=atk?-70:cy-Math.abs(Math.sin(gf*0.1))*16;
+  ctx.fillStyle=radGrad(coinX,coinY,7*cs,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(coinX,coinY,6*cs,0,7); ctx.fill();
+  ctx.strokeStyle='#8a5c14'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(coinX,coinY,6*cs,0,7); ctx.stroke(); }
+// ── 二周目・真ボス最終形態：虫王チャムルス（猫と蟲が融合した巨躯）──
+function drawChamurus(e){ const t=ETYPE[e.type], atk=e.state==='bmove';
+  const k=t.h/196; ctx.save(); ctx.scale(k,k);
+  const hov=Math.sin(gf*0.05)*8;   // 羽で浮遊
+  ctx.translate(0,hov);
+  // 四枚の巨大な羽（虹色に光る）
+  ctx.save(); ctx.globalAlpha=0.5;
+  const flap=Math.abs(Math.sin(gf*0.5))*0.6+0.2;
+  for(const s of [-1,1]){ for(let wi=0;wi<2;wi++){ ctx.save(); ctx.translate(s*30,-120-wi*16);
+    ctx.rotate(s*(flap*0.9+wi*0.4)); const wg=ctx.createLinearGradient(0,0,s*110,0);
+    wg.addColorStop(0,'rgba(255,240,180,.9)'); wg.addColorStop(1,'rgba(140,220,255,.2)');
+    ctx.fillStyle=wg; ctx.beginPath(); ctx.ellipse(s*62,0,64,20-wi*5,0,0,7); ctx.fill(); ctx.restore(); } }
+  ctx.restore();
+  // 六本の甲殻の脚
+  ctx.strokeStyle='#4a3a12'; ctx.lineWidth=9; ctx.lineCap='round';
+  for(const s of [-1,1]){ for(let li=0;li<3;li++){ const lx=s*(26+li*16), sway=Math.sin(e.anim*1.2+li)*4;
+    ctx.beginPath(); ctx.moveTo(s*18,-46-li*14); ctx.lineTo(lx+sway*s,-18); ctx.lineTo(lx+8*s+sway*s,4); ctx.stroke(); } }
+  // 黄金の甲殻ボディ（節のある腹部）
+  ctx.fillStyle=radGrad(0,-80,66,'#e8c86a','#9a7a2e'); ctx.beginPath(); ctx.ellipse(0,-72,58,64,0,0,7); ctx.fill();
+  ctx.strokeStyle='#6a5518'; ctx.lineWidth=4; for(let seg=0;seg<3;seg++){ ctx.beginPath(); ctx.arc(0,-72,58-seg*2,Math.PI*0.15+seg*0.06,Math.PI*0.85-seg*0.06); ctx.stroke(); }
+  // 猫の顔（チャムの面影を残す・巨大化）
+  furBall(0,-140,34,'#d8bd92','#9a7a52');
+  ctx.fillStyle='#9a7a52'; ctx.beginPath(); ctx.moveTo(-26,-162);ctx.lineTo(-40,-196);ctx.lineTo(-8,-168);ctx.fill();
+  ctx.beginPath(); ctx.moveTo(26,-162);ctx.lineTo(40,-196);ctx.lineTo(8,-168);ctx.fill();   // 猫耳
+  // 蟲の大顎（あご）
+  ctx.fillStyle='#4a3a12'; for(const s of [-1,1]){ ctx.save(); ctx.translate(s*16,-120); ctx.rotate(s*(atk?0.7:0.25+Math.sin(gf*0.06)*0.1));
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(s*26,6,s*34,-10); ctx.quadraticCurveTo(s*20,-4,0,-8); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  // 複眼（五つの金色の目が怪しく明滅）
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const eyes=[[-14,-146],[14,-146],[-22,-134],[22,-134],[0,-152]];
+  eyes.forEach((ep,i)=>{ const g=0.55+0.4*Math.sin(gf*0.13+i*1.4);
+    ctx.fillStyle='rgba(255,210,60,'+g+')'; ctx.beginPath(); ctx.ellipse(ep[0],ep[1],i<2?7:4.5,i<2?9:5.5,0,0,7); ctx.fill(); });
+  ctx.restore();
+  ctx.fillStyle='#23170d'; for(const ep of [[-14,-145],[14,-145]]){ ctx.beginPath(); ctx.ellipse(ep[0],ep[1],2.4,5,0,0,7); ctx.fill(); }
+  // 触角（王の証・先端に金の玉）
+  ctx.strokeStyle='#6a5518'; ctx.lineWidth=4; const wig=Math.sin(gf*0.05)*6;
+  for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(s*10,-168);
+    ctx.quadraticCurveTo(s*30,-206,s*44+wig*s,-216); ctx.stroke();
+    ctx.fillStyle=radGrad(s*44+wig*s,-216,7,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(s*44+wig*s,-216,6,0,7); ctx.fill(); }
+  // 王冠
+  ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.moveTo(-18,-170); ctx.lineTo(-12,-184); ctx.lineTo(-6,-172);
+  ctx.lineTo(0,-188); ctx.lineTo(6,-172); ctx.lineTo(12,-184); ctx.lineTo(18,-170); ctx.closePath(); ctx.fill();
+  ctx.restore(); }
 // ── 敵の乗り物（バイク／装甲トレーラー）＋ライダー犬 ──
 function drawRiderDog(ox,oy,sc){ ctx.save(); ctx.translate(ox,oy); ctx.scale(sc||1,sc||1);
   ctx.fillStyle='#e9dcc0'; ctx.beginPath(); ctx.arc(0,0,13,0,7); ctx.fill();                                   // 頭
@@ -5279,7 +5547,8 @@ function drawHUD(){
     ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,119,160*clamp(q.hp/q.maxHp,0,1),7);
     ctx.fillStyle='#ff5a6a'; ctx.font='13px Trebuchet MS'; ctx.fillText('共有♥ ×'+Math.max(0,coopLives),196,127); }
 
-  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText('STAGE '+stage+' / 12',W/2,30);
+  ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
+  ctx.fillText(lap>=2?('2周目　STAGE '+stage+' / '+(WORLD2_LEVELS.length+2)):('STAGE '+stage+' / 12'),W/2,30);
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
     ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
@@ -5468,10 +5737,68 @@ const SHOP_ITEMS=[
   {name:'勇者の正装',       desc:'被ダメージ −10％＆豪華な見た目に変化', cost:95,
     soldOut(){ return activePlayers().every(p=>p.armored); },
     buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.4,(p.defMul||1)-0.10); } }); }},
+  // ── 傭兵（敵キャラを雇って道中の仲間に。最大2体まで同行）──
+  {name:'傭兵：ウルフ兵',          desc:'身軽な狼の傭兵が道中を共に戦う', cost:70,  merc:'wolf'},
+  {name:'傭兵：メカワンコ T-800', desc:'光弾で援護射撃する機械の傭兵',   cost:150, merc:'mechawan'},
+  {name:'傭兵：オニボウズ',        desc:'頑丈な重量級の傭兵',           cost:200, merc:'onibouzu'},
   // ── 秘宝ガチャ（ここ限定の専用アイテム）──
-  {name:'🎰 秘宝ガチャを回す', desc:'コイン30でここだけの専用アイテムを1つ入手！', cost:30, gacha:true},
+  {name:'🎰 秘宝ガチャを回す', desc:'コイン90でここだけの専用アイテムを1つ入手！', cost:90, gacha:true},
   {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
 ];
+const MERC_MAX=2;   // 同行できる傭兵の最大数
+function hireMerc(type){ const T=ETYPE[type]; if(!T) return false;
+  mercRoster.push({type, hp:T.hp*6, maxHp:T.hp*6});   // 傭兵は雑魚の6倍のタフさで長旅に耐える
+  return true; }
+// 現在のフィールドに傭兵を実体化（ステージ読み込みごとに呼ぶ）
+function spawnMercs(){ mercs=[];
+  mercRoster.forEach((r,i)=>{ const T=ETYPE[r.type]; if(!T) return;
+    mercs.push({r, type:r.type, x:clamp(players[0].x-50-i*40, camX+20, camX+W-20), y:LANE, z:0, vx:0, vz:0,
+      facing:1, state:'walk', anim:Math.random()*6, bob:Math.random()*6, atkCd:30+i*20, atkT:0, atkTimer:0, atkMax:10,
+      hurtT:0, stun:0, telegraph:0, vanish:0, dead:false, frozen:0, grabbedBy:0, sub:false,
+      hp:r.hp, maxHp:r.maxHp, w:T.w, h:T.h}); }); }
+// ── 傭兵AI：プレイヤーに追従し、近くの敵へ自動で攻撃 ──
+function updateMercs(){
+  for(let i=mercs.length-1;i>=0;i--){ const m=mercs[i], T=ETYPE[m.type];
+    m.anim+=0.12; m.bob+=0.1; if(m.atkCd>0)m.atkCd--; if(m.hurtT>0)m.hurtT--;
+    if(m.atkT>0){ m.atkT--; m.state='attack'; m.atkTimer=m.atkT; if(m.atkT===0)m.state='idle'; }
+    const p=players[0];
+    // 最寄りの敵を探す
+    let tg=null, td=1e9;
+    for(const e of enemies){ if(e.dead||e.state==='blastoff')continue; const d=Math.abs(e.x-m.x); if(d<td){td=d;tg=e;} }
+    if(tg && td<360){
+      m.facing=tg.x>m.x?1:-1;
+      const reach=Math.min(T.atkR,80)*0.9+18;
+      if(td>reach){ if(m.atkT<=0){ m.x+=m.facing*T.sp*1.6; m.state='walk'; } }
+      else if(m.atkCd<=0){ m.atkCd=52; m.atkT=10; m.atkMax=10;
+        spark(tg.x,tg.y-tg.h*0.5,'#9fff9f',9,8); ring(tg.x,tg.y-tg.h*0.4,'#c8ffc8');
+        damageEnemy(tg, Math.round(T.dmg*1.6), m.facing*2, false); sfx.swing(1); }
+    } else {   // 敵がいなければプレイヤーの少し後ろに付き従う
+      const dd=p.x-m.x-((i%2)?-70:70);
+      if(Math.abs(dd)>60){ m.facing=dd>0?1:-1; m.x+=m.facing*Math.min(Math.abs(dd)*0.08, T.sp*2.2); m.state='walk'; }
+      else m.state='idle';
+    }
+    m.x=clamp(m.x, camX+16, camX+W-16);
+    // 敵の攻撃に巻き込まれるとダメージ（被弾後は少し無敵）
+    if(m.hurtT<=0){ for(const e of enemies){ if(e.dead)continue;
+      if((e.state==='attack'||e.state==='bmove') && Math.abs(e.x-m.x)<Math.min((ETYPE[e.type].atkR||50),110)*0.8){
+        m.hurtT=46; m.hp-=Math.round(ETYPE[e.type].dmg*diffDmgMul()); m.r.hp=m.hp;
+        spark(m.x,m.y-m.h*0.5,'#ff8a6a',7,7);
+        if(m.hp<=0){ popText(m.x,m.y-m.h-14,'傭兵 '+T.name+' 退場…','#ff8a6a',true);
+          ring(m.x,m.y-m.h*0.5,'#fff'); dust(m.x,m.y,10); sfx.ko();
+          const ri=mercRoster.indexOf(m.r); if(ri>=0)mercRoster.splice(ri,1);
+          mercs.splice(i,1); }
+        break; } } }
+  }
+}
+function drawMercEnt(m){ const sx=m.x-camX;
+  drawEnemy(m);
+  // 味方マーカー（緑の▼＋「仲間」タグで敵と見分ける）
+  const my=m.y-m.h*FIXED_SCALE-26;
+  ctx.save(); ctx.fillStyle='#7dff7d'; ctx.beginPath();
+  ctx.moveTo(sx,my+8+Math.sin(gf*0.1)*2); ctx.lineTo(sx-7,my-4); ctx.lineTo(sx+7,my-4); ctx.closePath(); ctx.fill();
+  ctx.font='bold 11px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+  ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3; ctx.strokeText('仲間',sx,my-8);
+  ctx.fillStyle='#c8ffc8'; ctx.fillText('仲間',sx,my-8); ctx.textAlign='left'; ctx.restore(); }
 // ── ガチャ専用の景品（ショップでは買えない特別なアイテム。rはレア度／wは排出重み）──
 const GACHA_POOL=[
   {name:'銀の首輪',       r:2, col:'#cfd6e0', w:26, desc:'最大HP ＋18',        apply(p){ p.maxHp+=18; p.hp+=18; }},
@@ -5518,6 +5845,11 @@ function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
   if(pressed.atk){ pressed.atk=false; const it=SHOP_ITEMS[shopSel];
     if(it.leave){ saveInput(players[0].in); exitShop(); return; }
     if(it.gacha){ if(coins>=it.cost){ coins-=it.cost; gacha={phase:'spin', t:0, item:rollGacha()}; sfx.rise(); saveInput(players[0].in); return; }
+      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
+    else if(it.merc){
+      if(mercRoster.length>=MERC_MAX){ shopMsg='傭兵はこれ以上連れて行けないニャ（最大'+MERC_MAX+'体）'; shopMsgT=90; sfx.guard(); }
+      else if(coins>=it.cost){ coins-=it.cost; hireMerc(it.merc);
+        shopMsg=ETYPE[it.merc].name+'を雇った！次の冒険から同行するニャ'; shopMsgT=110; sfx.rise(); sfx.coin(); }
       else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
     else if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; sfx.guard(); }
     else if(coins>=it.cost){ coins-=it.cost; it.buy(); shopMsg=it.name+'を購入！'; shopMsgT=90; sfx.rise(); }
@@ -5630,6 +5962,8 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
   shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針', goldgolem:'宝物庫の黄金傀儡',
+  kamaboss:'大蟲帝国  鎌の将', queenbee:'大蟲帝国  空の女王', kuwaboss:'大蟲帝国  剛の大公', spidboss:'大蟲帝国  糸の姫',
+  chamboss:'？？？', chamurus:'大蟲帝国  真の支配者',
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
@@ -5730,8 +6064,8 @@ function startCutscene(scenes,onDone){ cut={scenes,i:0,t:0,onDone}; cutAdvance=f
 function startOpening(){ Music.stop(); startCutscene(storyOpenFor(), ()=>startGame()); }
 function startBossCut(type,stageN){ Music.setMode(bossMusicFor(type)); sfx.boss();
   const intro={boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:bossQuoteFor(type)};
-  // ラスボス（大帝）直前にはキャラ別の「転」シーンを前置きしてクライマックスを盛り上げる
-  const turn=(ETYPE[type].bossKind==='emperor')?storyTurnFor():null;
+  // ラスボス（大帝）直前にはキャラ別の「転」シーン、チャム戦には正体バレのシーンを前置き
+  const turn=(ETYPE[type].bossKind==='emperor')?storyTurnFor():(type==='chamboss'?CHAM_PRE:null);
   startCutscene(turn?[...turn,intro]:[intro], ()=>{ state='play'; }); }
 // ── 道中ライバル（中ボス）の登場カット ──
 const RIVAL_LINE={
@@ -5811,6 +6145,26 @@ const PHANTOM_REVEAL=[
   {boss:'phantom', name:'怪盗王ファントム', role:'ワッチの師', text:'「帝国の宝も、この国そのものも、最高の“獲物”だったのさ。だが弟子よ——本当に盗む値打ちがあるのは、越えていく者の背中だけだ。来い、全力でな！」'},
 ];
 const TRUE_REVEAL={ golux:GOLUX_REVEAL, papipoo:PAPIPOO_REVEAL, wanmen:WANMEN_REVEAL, guard0:GUARD0_REVEAL, phantom:PHANTOM_REVEAL };
+// ══ 二周目「蟲の世界」のストーリー ══
+const NG2_OPEN=[
+  {bgTheme:0, art:'peace',  name:'', text:'帝国との戦いは終わり、王国に平和が戻った——かに見えた。だが祝宴の夜、地の底から無数の羽音が響きはじめる。'},
+  {bgTheme:9, art:'invade', name:'', text:'一夜にして、大地は見上げるほど巨大な花と草に呑まれた。蟲の軍勢「大蟲帝国」——真の脅威は、地の底で目覚めの時を待っていたのだ。'},
+  {bgTheme:9, art:'invade', name:'王女ペロ', text:'「また、あなたに頼るほかありません…！ 蟲の世界と化した王国を、どうか、もう一度——」'},
+  {bgTheme:9, art:'player', name:'@hero', text:'見慣れた景色は、蜜と糸と羽音の異世界に変わり果てていた。二周目の冒険が、いま始まる——'},
+];
+// 蟲の女王の間：玉座に座っていたのは、まさかの——
+const CHAM_PRE=[
+  {bgTheme:10, art:'invade', name:'', text:'蜜蝋の回廊の最奥、女王の玉座。だがそこに座っていたのは、女王蜂ではなく——見慣れたエプロン姿の、猫の商人だった。'},
+  {bgTheme:10, art:'invade', name:'？？？', text:'「やあ、いらっしゃい。……ふふ、そんなに驚いた顔しなくてもいいニャ」'},
+  {bgTheme:10, art:'player', name:'@hero', text:'（チャム……！？ 宿屋のチャムが、どうしてここに——）'},
+];
+const NG2_END=[
+  {bgTheme:10, boss:'chamurus', name:'虫王チャムルス', role:'蟲の王', text:'渾身の一撃が黄金の甲殻を打ち砕く——虫王チャムルスは光の鱗粉となって砕け、猫の小さな体だけが、ふわりと舞い落ちた。'},
+  {bgTheme:0, art:'peace',  name:'チャム', text:'「……ハッ！？ あたし、いったい何を…。ご、ごめんニャ！ 大昔に封じられた蟲の王に、ずーっと体を借りられてたニャ…！」'},
+  {bgTheme:0, art:'peace',  name:'', text:'蟲たちは元の小さな姿に戻り、巨大な花畑は、ただ美しいだけの花畑になった。チャムの店の看板には「大感謝セール・全品半額」の文字。'},
+  {bgTheme:0, art:'player', name:'@hero', text:'二つの世界を救った英雄の伝説は、蜜のように甘く、永遠に語り継がれる。……もちろん、チャムの店の常連客として。'},
+  {bgTheme:0, art:'end',    name:'', text:'― 二周目・真エンディング ―     すべてを見届けてくれた、キミへ——最大級の、ありがとう！'},
+];
 function startTrueBossReveal(){ Music.stop();
   const ty=trueBossFor(players[0].kind)||'wanmen';
   startCutscene(TRUE_REVEAL[ty]||WANMEN_REVEAL, ()=>{ spawnTrueBoss(ty); }); }
@@ -5827,7 +6181,8 @@ function spawnTrueBoss(ty){
 function startEnding(){ if(endingDone)return; endingDone=true;
   // 専用エンディングBGMへ切り替え（感動の大団円）
   if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
-  startCutscene(storyEndFor().concat(ENDING_FINALE), ()=>winGame()); }
+  const scenes = lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 二周目は蟲の世界の真エンディング
+  startCutscene(scenes, ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
 function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
@@ -5906,7 +6261,8 @@ const elRTitle=document.getElementById('result-title'),elRSub=document.getElemen
 let curMode='inu';
 function saveProgress(st){ try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
-  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone})); }catch(e){} }
+  localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone,
+    lap:lap, mercs:mercRoster.map(r=>({type:r.type,hp:Math.max(1,Math.round(r.hp)),maxHp:r.maxHp}))})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
@@ -5914,6 +6270,7 @@ function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); i
 function startGame(){ unlockAudio();
   score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
+  lap=1; mercRoster=[]; mercs=[];   // 周回と傭兵は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
@@ -5925,6 +6282,8 @@ function startGame(){ unlockAudio();
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
+    if(sv.lap>=2){ lap=2; buildEncounters2(); }   // 二周目の続き＝蟲の世界マップへ
+    if(Array.isArray(sv.mercs)) mercRoster=sv.mercs.filter(m=>m&&ETYPE[m.type]).map(m=>({type:m.type,hp:m.hp||1,maxHp:m.maxHp||m.hp||1}));
     if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
       if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; if(u.level)p.level=u.level; if(u.xp!=null)p.xp=u.xp; if(u.xpNext)p.xpNext=u.xpNext; } });
     if(sv.done) levelsDone=Object.assign({}, sv.done); }
@@ -5934,11 +6293,16 @@ function gameOver(){ state='over'; Music.stop(); gameOverSting();
   elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0');
   const sv=loadProgress(), rb=document.getElementById('resumeBtn');
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
+  const nb=document.getElementById('ng2Btn'); if(nb)nb.classList.add('hidden');
   elResult.classList.remove('hidden'); }
 function winGame(){ state='win'; Music.stop(); victoryJingle(); clearProgress();
-  elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d';
-  elRSub.textContent='ワンワン帝国を打ち倒した！  制覇フィールド '+doneCount()+'/'+WORLD_LEVELS.length+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
-  const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden'); elResult.classList.remove('hidden'); }
+  if(lap>=2){ elRTitle.textContent='TRUE ALL CLEAR!!'; elRTitle.style.color='#aef8ff';
+    elRSub.textContent='蟲の世界をも救い、真の平和を取り戻した！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
+  } else { elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d';
+    elRSub.textContent='ワンワン帝国を打ち倒した！  制覇フィールド '+doneCount()+'/'+WORLD_LEVELS.length+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0'); }
+  const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden');
+  const nb=document.getElementById('ng2Btn'); if(nb)nb.classList.toggle('hidden', lap>=2);   // 一周目クリア→二周目へ誘う
+  elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
 function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
@@ -5952,6 +6316,7 @@ const _watchBtn=document.getElementById('startWatchBtn'); if(_watchBtn) _watchBt
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; sfx.swing(0); };
 document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
+const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ startNG2(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
 const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };
 refreshContinueBtn();
