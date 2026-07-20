@@ -861,6 +861,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0;
@@ -1177,10 +1178,88 @@ function drawGreatOne(){
     ctx.fillStyle='#1a0a2e'; ctx.beginPath(); ctx.ellipse(gx+eye[0],gy+eye[1]+eye[2]*0.3,eye[2]*0.45,eye[2]*0.8,0,0,7); ctx.fill(); }
   ctx.restore();
 }
+//======================================================================
+//  攻撃＋掴み同時押しの必殺技（全キャラ・クールタイム制）
+//======================================================================
+const SG_CD=540;   // 約9秒のクールタイム
+function beginSGMove(p){
+  if(p.sgCd>0){ popText(p.x,p.y-122,'まだ力が溜まらない…（あと'+Math.ceil(p.sgCd/60)+'秒）','#9fb4cf'); return false; }
+  p.sgCd=SG_CD;
+  if(p.kind==='shima') beginTigerRoar(p);
+  else if(p.kind==='nuko') beginElemBurst(p);
+  else if(p.kind==='guard8') beginIronWall(p);
+  else if(p.kind==='watch') beginZeniStorm(p);
+  else beginMugetsu(p);
+  return true;
+}
+// イッヌ「秘剣・無月」：画面内の敵から敵へ神速で斬り抜ける五連閃
+function beginMugetsu(p){
+  const targets=enemies.filter(e=>!e.dead && e.state!=='blastoff' && Math.abs(e.x-(camX+W/2))<W*0.72)
+    .sort((a,b)=>Math.abs(a.x-p.x)-Math.abs(b.x-p.x)).slice(0,5);
+  p.state='mugetsu'; p.mgT=0; p.mgI=0; p.mgList=targets; p.invuln=90; p.vx=0; p.atk=null; p.charge=0; p.atkHeld=false;
+  popText(p.x,p.y-128,'秘剣・無月！','#cfe0ff',true); ring(p.x,p.y-44,'#cfe0ff');
+  flash=Math.max(flash,4); triggerSlow(18); sfx.boss(); sfx.dash(); }
+function updateMugetsu(p){ p.mgT++; p.invuln=Math.max(p.invuln,10);
+  if(p.mgT%6!==0) return;
+  if(!p.mgList.length){   // 敵がいなければ前方への神速一閃
+    const nx=clamp(p.x+p.facing*200, camX+24, camX+W-24);
+    crescent((p.x+nx)/2, p.y-46, 60, p.facing>0?-1.1:Math.PI-1.1, p.facing>0?1.1:Math.PI+1.1, '#dfe9ff');
+    p.x=nx; p.state='idle'; p.invuln=Math.max(p.invuln,24); sfx.swing(1); return; }
+  const e=p.mgList[p.mgI];
+  if(e && !e.dead){
+    p.x=clamp(e.x-(p.mgI%2?-44:44), camX+20, camX+W-20); p.facing=e.x>=p.x?1:-1;
+    crescent(e.x, e.y-e.h*0.5, 48, -1.2, 1.2, '#dfe9ff');
+    spark(e.x, e.y-e.h*0.5, '#fff', 12, 9); ring(e.x, e.y-e.h*0.5, '#cfe0ff');
+    noHitStopOnce=true;
+    damageEnemy(e, Math.round(30*(p.atkMul||1)), p.facing*3, p.mgI>=p.mgList.length-1);
+    shake=Math.max(shake,6); sfx.swing(1); }
+  p.mgI++;
+  if(p.mgI>=p.mgList.length){ p.state='idle'; p.invuln=Math.max(p.invuln,26); triggerSlow(12); sfx.ko(); }
+}
+// シマ「虎魂・大喝」：画面中を震わせる雄叫びで敵を痺れさせる
+function beginTigerRoar(p){ p.vx=0; p.invuln=Math.max(p.invuln,44);
+  popText(p.x,p.y-132,'虎魂・大喝！！','#ffd24d',true);
+  ring(p.x,p.y-46,'#ffd24d'); ring(p.x,p.y-46,'#fff'); ring(p.x,p.y-46,'#ff8a3a');
+  spark(p.x,p.y-52,'#ffd24d',26,12); flash=Math.max(flash,5); shake=13; triggerSlow(22); sfx.boss(); sfx.big();
+  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>W*0.62)continue;
+    noHitStopOnce=true; damageEnemy(e, Math.round(16*(p.atkMul||1)), (e.x<p.x?-1:1)*2, false);
+    if(!e.dead){ e.stun=Math.max(e.stun||0,110);
+      if(!ETYPE[e.type].boss){ e.state='hurt'; e.hurtTimer=Math.max(e.hurtTimer||0,80); e.vx=0; }
+      popText(e.x,e.y-e.h-8,'ビリビリ…','#ffe9a0'); } } }
+// ヌコ「精霊大召喚・エレメンタルバースト」：炎・氷・雷が一度に画面を襲う
+function beginElemBurst(p){ const mul=nukoMul(p); p.vx=0; p.invuln=Math.max(p.invuln,54);
+  popText(p.x,p.y-132,'精霊大召喚・エレメンタルバースト！','#d6a6ff',true);
+  ring(p.x,p.y-46,'#ff8a3a'); ring(p.x,p.y-46,'#9fd6ff'); ring(p.x,p.y-46,'#ffe14d');
+  flash=Math.max(flash,5); shake=11; triggerSlow(22); sfx.boss(); sfx.zap();
+  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>W*0.58)continue;
+    particles.push({k:'laser',x:e.x,gy:LANE-groundLift(e.x),life:9,max:9});   // 雷の柱
+    spark(e.x,e.y-e.h*0.5,'#ff8a3a',12,9); spark(e.x,e.y-e.h*0.5,'#9fd6ff',8,7);   // 炎と氷片
+    noHitStopOnce=true; damageEnemy(e, Math.round(20*mul), (e.x<p.x?-1:1)*3, true);
+    if(!e.dead && !ETYPE[e.type].boss){ e.frozen=90; e.stun=Math.max(e.stun||0,90); e.state='hurt'; e.hurtTimer=90; e.vx=0; } } }
+// ガードワン「不動要塞・アイアンウォール」：大地を打ち据え、しばし鉄壁の要塞と化す
+function beginIronWall(p){ p.fortT=420; p.vx=0; p.invuln=Math.max(p.invuln,30);
+  popText(p.x,p.y-136,'不動要塞・アイアンウォール！','#c8ccd4',true);
+  ring(p.x,p.y-42,'#c8ccd4'); ring(p.x,p.y-42,'#fff'); dust(p.x,p.y,16);
+  shake=11; flash=Math.max(flash,3); quake=Math.max(quake,18); sfx.big(); sfx.guard();
+  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)<180){
+    noHitStopOnce=true; damageEnemy(e, 20, (e.x<p.x?-1:1)*5, true); launchEnemy(e,(e.x<p.x?-1:1)*9,-8,2); } } }
+// ワッチ「大怪盗・銭形乱舞」：小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめる
+function beginZeniStorm(p){ p.vx=0; const dir=p.facing;
+  popText(p.x,p.y-132,'大怪盗・銭形乱舞！','#ffe14d',true);
+  flash=Math.max(flash,3); triggerSlow(14); sfx.boss(); sfx.coin();
+  for(let i=0;i<16;i++){ spark(p.x+dir*(30+i*22)+rnd(-10,10), p.y-36-((i*41)%80), '#ffd24d', 3, 7); }
+  let hits=0;
+  for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
+    if(dx>-24 && dx<380){ noHitStopOnce=true; damageEnemy(e, 26, dir*4, true); hits++;
+      coins+=3; popText(e.x,e.y-e.h-10,'+3¢','#ffe14d'); ring(e.x,e.y-e.h*0.5,'#ffe14d'); } }
+  if(hits){ sfx.coin(); popText(p.x,p.y-108,hits+'体から頂戴！','#ffe9a0'); } shake=8; }
 function updatePlayer(){
   const p=player; const SHI=p.kind==='shima', NUK=p.kind==='nuko';
   if(p.vehicle){ updateMounted(p); return; }   // 乗り物に騎乗中は専用の操作
   if(p.invuln>0)p.invuln--; if(p.dashCd>0)p.dashCd--; if(p.parryFx>0)p.parryFx--; if(p.guardFx>0)p.guardFx--;
+  if(p.sgCd>0)p.sgCd--;   // 攻撃＋掴み必殺技のクールタイム
+  if(p.fortT>0){ p.fortT--; if(gf%7===0) spark(p.x+rnd(-24,24), p.y-rnd(6,92), '#c8ccd4', 2, 3);
+    if(p.fortT===0) popText(p.x,p.y-112,'要塞化 解除','#9fb4cf'); }   // アイアンウォール持続
   if(p.comboTimer>0)p.comboTimer--; else if(p.state!=='attack') p.comboStep=0;
 
   if(p.state==='down'){ p.downTimer--; p.vx*=0.86; p.x+=p.vx; p.z=Math.max(0,p.z+ (p.riseVel||0));
@@ -1200,6 +1279,7 @@ function updatePlayer(){
   if(p.state==='tkick'){ updateTriangle(); return; }
   if(p.state==='hadou'){ updateHadou(); return; }
   if(p.state==='seven'){ updateSeven(); return; }
+  if(p.state==='mugetsu'){ updateMugetsu(p); return; }
   if(p.state==='nlaser'){ updateNukoLaser(); return; }
   if(p.state==='nrailchg'){ updateNukoRail(); return; }
   if(p.state==='nrailfire'){ updateNukoRailFire(); return; }
@@ -1315,16 +1395,16 @@ function updatePlayer(){
     if(p.charge>=0.45){ if(SH) beginHadou(); else beginAttack(chargeMoveFor(p)); p.charge=0; return; }   // 波動拳 / 溜め斬り（武器別）
     p.charge=0;
   }
-  // ---- grab button (掴み)：敵がいなければ近くのNPCと会話。ヌコは攻撃同時押しで緊急レーザー ----
+  // ---- grab button (掴み)：敵がいなければ近くのNPCと会話。攻撃同時押しでキャラ別の必殺技 ----
   if(pressed.grab){ pressed.grab=false;
-    if(NUK && (K.atk||pressed.atk) && p.hp>p.maxHp*0.2+1){ pressed.atk=false; beginNukoLaser(p); return; }
+    if((K.atk||pressed.atk) && p.z<=0){ if(beginSGMove(p)){ pressed.atk=false; return; } }
     if(tryMount()) return; if(tryTalk()) return; tryGrab(); return; }
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
     pressed.atk=false;
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
     const NK=p.kind==='nuko', GD=p.kind==='guard8', WA=p.kind==='watch';
-    if(NK && (K.grab||pressed.grab) && p.hp>p.maxHp*0.2+1){ pressed.grab=false; beginNukoLaser(p); return; }   // 攻撃＋掴み＝カラミティレーザー
+    if((K.grab||pressed.grab) && p.z<=0){ if(beginSGMove(p)){ pressed.grab=false; return; } }   // 攻撃＋掴み＝キャラ別必殺技
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 呼び声 / 次元斬
@@ -1892,11 +1972,14 @@ const ETYPE={
   zombiewan:{hp:74,sp:0.72,dmg:11,atkR:48,w:60,h:78,c1:'#6f8a54',c2:'#455a34',c3:'#28361e',score:360,zombie:true,accent:'#a6e070',name:'ゾンビワンコ'},          // 遅いが一度だけ蘇る
   skeletwan:{hp:40,sp:1.7,dmg:9,atkR:220,w:52,h:80,c1:'#eae7dc',c2:'#b7b3a4',c3:'#7c786a',score:380,boner:true,accent:'#cfe6ff',name:'スケルトンワンコ'},          // 遠距離から骨を投げる
   mechawan:{hp:132,sp:2.3,dmg:14,atkR:230,w:62,h:86,c1:'#9aa4b0',c2:'#59616d',c3:'#2f343c',score:660,mecha:true,gunner:true,charge:true,accent:'#ff2a2a',name:'メカワンコ T-800'},   // 頑丈・高速・赤い光弾
-  // ---- 二周目・蟲の世界の雑魚（昆虫系コンセプト）----
-  kamakiri:{hp:56,sp:2.3,dmg:12,atkR:58,w:56,h:80,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:420,bug:true,accent:'#d6ff9f',name:'カマキリ兵'},                 // 鋭い鎌の速攻兵
-  hachibo:{hp:32,sp:2.8,dmg:10,atkR:210,w:48,h:62,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:380,bug:true,pouncer:true,accent:'#ffe9a0',name:'ホーネット突撃兵'}, // 急降下で襲う蜂
-  kabuto:{hp:150,sp:0.9,dmg:15,atkR:60,w:74,h:88,c1:'#5a4a3a',c2:'#38291c',c3:'#1c120a',score:640,bug:true,armor:true,accent:'#c8a06a',name:'カブト重装兵'},      // 装甲角で耐える甲虫
-  kumo:{hp:64,sp:1.8,dmg:11,atkR:240,w:66,h:64,c1:'#8a6fc8',c2:'#4e3688',c3:'#241650',score:520,bug:true,gunner:true,accent:'#d6a6ff',name:'毒グモ射手'},          // 毒糸を吐く蜘蛛
+  // ---- 二周目・蟲の世界の雑魚（昆虫系コンセプト・専用の蟲ボディで描画）----
+  kamakiri:{hp:56,sp:2.3,dmg:12,atkR:58,w:56,h:80,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:420,bug:true,bugKind:'mantis',accent:'#d6ff9f',name:'カマキリ兵'},                 // 鋭い鎌の速攻兵
+  hachibo:{hp:32,sp:2.8,dmg:10,atkR:210,w:48,h:62,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:380,bug:true,bugKind:'bee',pouncer:true,accent:'#ffe9a0',name:'ホーネット突撃兵'}, // 急降下で襲う蜂
+  kabuto:{hp:150,sp:0.9,dmg:15,atkR:60,w:74,h:88,c1:'#5a4a3a',c2:'#38291c',c3:'#1c120a',score:640,bug:true,bugKind:'beetle',armor:true,accent:'#c8a06a',name:'カブト重装兵'},      // 装甲角で耐える甲虫
+  kumo:{hp:64,sp:1.8,dmg:11,atkR:240,w:66,h:64,c1:'#8a6fc8',c2:'#4e3688',c3:'#241650',score:520,bug:true,bugKind:'spider',gunner:true,accent:'#d6a6ff',name:'毒グモ射手'},          // 毒糸を吐く蜘蛛
+  dangoro:{hp:120,sp:0.8,dmg:13,atkR:52,w:64,h:60,c1:'#8a8494',c2:'#5a5564',c3:'#33303a',score:560,bug:true,bugKind:'roller',armor:true,accent:'#c8ccd4',name:'ダンゴロール'},      // 丸まって耐える装甲虫
+  mukade:{hp:48,sp:2.6,dmg:12,atkR:56,w:88,h:52,c1:'#c0453a',c2:'#7a241c',c3:'#43120c',score:480,bug:true,bugKind:'centipede',rager:true,accent:'#ff8a6a',name:'ムカデ兵'},         // 怒ると加速する百足
+  hotarubi:{hp:40,sp:1.6,dmg:9,atkR:60,w:50,h:58,c1:'#3a4a3a',c2:'#243024',c3:'#121a12',score:440,bug:true,bugKind:'firefly',buffer:true,accent:'#c8ff8a',name:'ホタルビ'},         // 仲間を光で鼓舞する蛍
   // ---- 二周目・蟲の世界のボス ----
   kamaboss:{hp:760,sp:2.4,dmg:19,atkR:96,w:96,h:156,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:6200,boss:true,bossKind:'kamaboss',weapon:'claw',accent:'#d6ff9f',bug:true,name:'鎌将軍カマキリギス'},
   queenbee:{hp:700,sp:2.2,dmg:18,atkR:92,w:120,h:130,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:6600,boss:true,bossKind:'queenbee',weapon:'spear',accent:'#ffe9a0',bug:true,flyer:true,name:'女王蜂ビーヴァ'},
@@ -2495,7 +2578,7 @@ function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, 
   sfx.swing(0); }
 function bMeteor(e,n,dmg,col){ const tp=nearestPlayerTo(e.x); for(let i=0;i<n;i++) spawnProj(tp.x+rnd(-180,180), clamp(tp.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
 function bBeam(e,dmg,col){ const t=ETYPE[e.type], dir=e.facing; spawnProj(e.x+dir*30, e.y, dir*13, 0, {dmg,color:col||t.accent,r:18,life:100,zz:60}); sfx.boss(); shake=Math.max(shake,5); }
-function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(i?'hyena':'wolf', e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
+function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
 function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.7, dir>0?-1.05:Math.PI-1.05, dir>0?1.05:Math.PI+1.05, '#ff4d6a');
@@ -2629,6 +2712,8 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
 function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state==='dead')return;
   // 乗り物に乗っている間に攻撃を受けると落馬（乗り物を失い、軽減ダメージを受けて転倒）
   if(p.vehicle){ throwOffVehicle(p, dmg, dir); return; }
+  if(p.fortT>0){ dmg=Math.ceil(dmg*0.4); knockdown=false;   // アイアンウォール中：被ダメ大幅減＆怯まない
+    spark(p.x,p.y-52,'#c8ccd4',8,6); ring(p.x,p.y-46,'#c8ccd4'); sfx.guard(); }
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); hurtSound(dmg); resetCombo();
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -2826,11 +2911,11 @@ const CH1=[
   {theme:0,name:'王都郊外',noPit:true,
    gates:[{off:600,list:[['wolf',1],['corgi',1],['ari',1]]},{off:1300,boss:true,list:[['garm',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
-     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新奥義じゃ！ ↓→＋攻撃で真空・断空烈波（画面端まで貫く真空波）、→↓→＋攻撃で天翔龍閃（超高空へ斬り上げる）。','↓↑＋攻撃で聖剣乱舞・断罪の光（前方に聖剣が次々と突き上がる）、空中で↑＋攻撃なら天翔斬が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃でワンインチブロー（リーチは極短だが一撃で画面端まで吹き飛ばす豪打）、空中で↑＋攻撃なら昇天脚が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し…体力と引き換えの大魔法もあるそうじゃの。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でメテオ・ハンマーインパクト（特大の叩きつけ→三重衝撃波）、空中で↑＋攻撃ならハンマーアッパーじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！']}}},
+     inu:['おお、聖犬士イッヌどの！よくぞ来てくだされた。','帝国の将は手強い。攻撃の連打で4段コンボじゃ。','←←や→→と攻撃で居合斬りも出るぞ。ボスを倒せば猫のチャムの店も開く。','新奥義じゃ！ ↓→＋攻撃で真空・断空烈波（画面端まで貫く真空波）、→↓→＋攻撃で天翔龍閃（超高空へ斬り上げる）。','↓↑＋攻撃で聖剣乱舞・断罪の光（前方に聖剣が次々と突き上がる）、空中で↑＋攻撃なら天翔斬が出るぞ！','新技じゃ！攻撃と掴みの同時押しで秘剣「無月」——敵から敵へ神速で斬り抜ける五連閃！（使った後はしばらく休むと再び使える）','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃でワンインチブロー（リーチは極短だが一撃で画面端まで吹き飛ばす豪打）、空中で↑＋攻撃なら昇天脚が出るぞ！','新技じゃ！攻撃と掴みの同時押しで「虎魂・大喝」——画面中の敵を痺れさせる雄叫びじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し！新魔法「精霊大召喚・エレメンタルバースト」——炎と氷と雷が一度に敵を襲うぞ。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でメテオ・ハンマーインパクト（特大の叩きつけ→三重衝撃波）、空中で↑＋攻撃ならハンマーアッパーじゃ！','新技じゃ！攻撃と掴みの同時押しで「不動要塞・アイアンウォール」——しばらく怯まず被ダメージ大幅減の要塞と化す！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
+     watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
@@ -2911,13 +2996,13 @@ const BUG_CH=[
    gates:[{off:600,list:[['kamakiri',1],['hachibo',1],['ari',1]]},{off:1000,list:[['kamakiri',1],['kumo',1]]},{off:1400,boss:true,list:[['kamaboss',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう…！一夜にして王国が「蟲の世界」に呑まれてしもうた。','花も草も巨大化し、蟲の軍勢「大蟲帝国」が各地を支配しておる。二周目の敵は手強いぞ、心してかかれ！','聞けば宿屋のチャムの様子もおかしいらしい…。何かあったら、店を頼るのじゃぞ…いや、頼って良いのか…？'],give:{heal:'full'}}},
   {theme:10,name:'蜂の巣大空洞',
-   gates:[{off:600,list:[['hachibo',1],['hachibo',1],['balloon',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
+   gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
    npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
   {theme:11,name:'蜘蛛糸の森',
-   gates:[{off:520,list:[['kumo',1],['zombiewan',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['skeletwan',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
+   gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
    npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
   {theme:12,name:'地底の蟻帝国',
-   gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['kamakiri',1],['mechawan',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
+   gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['mukade',1],['dangoro',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
    npc:{kind:'villager',name:'考古学犬ホリダス',lines:['地下都市がまるごと蟻の帝国に…！光る茸だけが頼りだ。','大顎公クワガタスの突進は壁まで止まらん。ジャンプでかわして背中を叩け！']}},
 ];
 const BUG_FINAL={theme:10,name:'蟲の女王の間',len:1500,noPit:true,
@@ -3155,7 +3240,7 @@ function applyGive(n,p){ const g=n.give;
     else if(r<0.5){ makeItem(n.x,weaponDropKind()); popText(n.x,LANE-130,'武器を手に入れた！','#aef0ff',true); sfx.rise(); }
     else { const c=8+(Math.random()*14|0); for(let i=0;i<c;i++) makeCoin(n.x,1); sfx.coin(); } } }
 function triggerAmbush(n){ popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
-  const picks=['wolf','hyena','ari','kirebouzu'];
+  const picks=lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
   for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
 function updateNPCs(){
   for(const n of npcs){
@@ -3180,7 +3265,9 @@ function confirmBranch(){ const key=pendingBranch; pendingBranch=null;
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 // ── 雑魚のランダム出現：ステージごとに顔ぶれ・数が変わり、周回しても飽きない ──
 const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober','akita','bomber','warpdog','gripper','pierrot','kirebouzu','ari','onibouzu','zombiewan','skeletwan','mechawan','bikewan'];
-function randZako(){ return ZAKO_POOL[(Math.random()*ZAKO_POOL.length)|0]; }
+// 二周目「蟲の世界」の雑魚は犬タイプではなく蟲タイプのみで構成
+const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari'];
+function randZako(){ const P=lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
 function randomizeZako(list){
   // ボス／ライバル／召喚専用（balloon等）は据え置き。雑魚エントリだけ種類と数をランダム化
   const out=list.map(([type,n])=>{ const tt=ETYPE[type];
@@ -4500,13 +4587,14 @@ function drawEnemy(e){
   else if(e.type==='chamurus'){ drawChamurus(e); }
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
+  else if(t.bug) drawBugFoe(e,t);
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
   else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
   else if(t.rider) drawRider(e,t);
   else drawBeast(e);
   if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
-  if(t.bug && e.type!=='chamurus') drawBugOverlay(e,t);   // 昆虫コンセプト：触角・羽・複眼（チャムルスは専用描画に内蔵）
+  if(t.bug && t.boss && e.type!=='chamurus') drawBugOverlay(e,t);   // ボス用の昆虫オーバーレイ（雑魚は専用の蟲ボディで描画。チャムルスは専用描画に内蔵）
   if(t.guarder) drawEnemyShield(e);
   if(e.frozen>0){ const fa=Math.min(1,e.frozen/30);   // 氷結：青い氷塊に包まれる
     ctx.save(); ctx.globalAlpha=0.45*fa; ctx.fillStyle='#9fd6ff';
@@ -4561,6 +4649,77 @@ function drawBugOverlay(e,t){ const hy=-t.h*0.8, hw=t.w*0.5;
   // 複眼の光
   ctx.save(); ctx.globalCompositeOperation='lighter'; const g=0.5+0.3*Math.sin(gf*0.15);
   ctx.fillStyle='rgba(160,255,140,'+g+')'; ctx.beginPath(); ctx.arc(t.w*0.16,hy+2,3.2,0,7); ctx.fill(); ctx.restore(); }
+// ── 蟲の世界の雑魚専用ボディ（犬ではなく本物の蟲として描画。bugKindで種類分け）──
+function drawBugFoe(e,t){ const kind=t.bugKind||'mantis', anim=e.anim||0;
+  const walk=(e.state==='walk')?Math.sin(anim*2.2)*3:0, atk=e.state==='attack';
+  const bw=t.w, bh=t.h, cy=-bh*0.42;   // 体の中心高さ
+  // ── 脚（節のある虫の脚。クモは4対、ムカデは多数）──
+  const legN=kind==='spider'?4:(kind==='centipede'?6:3);
+  ctx.strokeStyle=t.c3; ctx.lineWidth=kind==='centipede'?2.4:3.2; ctx.lineCap='round';
+  for(let i=0;i<legN;i++){ for(const s of [-1,1]){
+    const lx=(i-(legN-1)/2)*(bw*0.72/legN), sw=Math.sin(anim*2.2+i*1.9+(s>0?0:Math.PI))*4;
+    ctx.beginPath(); ctx.moveTo(lx,cy+bh*0.12);
+    ctx.lineTo(lx+s*bw*0.3+sw, cy+bh*0.3); ctx.lineTo(lx+s*bw*0.42+sw*1.4, 0); ctx.stroke(); } }
+  // ── 腹部（後方の大きな節）──
+  const abX=-bw*0.26, abR=bw*0.34;
+  if(kind==='roller'){ // ダンゴムシ：アーチ状の装甲節
+    for(let seg=3;seg>=0;seg--){ const sh=seg*0.16;
+      ctx.fillStyle=seg%2?t.c1:t.c2; ctx.beginPath(); ctx.arc(-bw*0.1+seg*bw*0.09, cy+bh*0.06, bh*0.42-seg*2, Math.PI*(1+sh*0.1), Math.PI*(2-sh*0.1)); ctx.fill(); }
+  } else if(kind==='centipede'){ // ムカデ：長い体節の連なり
+    for(let seg=4;seg>=1;seg--){ ctx.fillStyle=seg%2?t.c1:t.c2;
+      ctx.beginPath(); ctx.ellipse(-seg*bw*0.16+Math.sin(anim*1.8+seg)*2, cy+bh*0.1, bw*0.14, bh*0.2, 0,0,7); ctx.fill(); }
+  } else {
+    ctx.fillStyle=radGrad(abX,cy+4,abR,shade(t.c1,14),t.c2);
+    ctx.beginPath(); ctx.ellipse(abX,cy+4,abR,bh*0.3,0,0,7); ctx.fill();
+    if(kind==='bee'){ ctx.fillStyle=t.c3; for(let st=0;st<3;st++){ ctx.fillRect(abX-abR+6+st*abR*0.6, cy-bh*0.22, abR*0.26, bh*0.5); }   // 縞模様
+      ctx.fillStyle=t.c3; ctx.beginPath(); ctx.moveTo(abX-abR-8,cy+4); ctx.lineTo(abX-abR+4,cy-4); ctx.lineTo(abX-abR+4,cy+12); ctx.closePath(); ctx.fill(); }   // 毒針
+    if(kind==='firefly'){ const g=0.5+0.5*Math.abs(Math.sin(gf*0.09+(e.x||0)));   // 光る尻
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle='rgba(200,255,120,'+(g*0.8)+')'; ctx.beginPath(); ctx.ellipse(abX-4,cy+6,abR*0.7,bh*0.24,0,0,7); ctx.fill();
+      ctx.fillStyle='rgba(230,255,190,'+(g*0.5)+')'; ctx.beginPath(); ctx.arc(abX-4,cy+6,abR*1.1,0,7); ctx.fill(); ctx.restore(); }
+    if(kind==='spider'){ ctx.fillStyle=t.accent; ctx.beginPath(); ctx.moveTo(abX,cy-bh*0.18); ctx.lineTo(abX-8,cy+2); ctx.lineTo(abX,cy+14); ctx.lineTo(abX+8,cy+2); ctx.closePath(); ctx.fill(); } }  // 背の模様
+  // ── 胸部・頭部 ──
+  const hdX=bw*0.22, hdY=cy-bh*0.16, hdR=bw*0.2;
+  if(kind!=='roller'){ ctx.fillStyle=radGrad(bw*0.04,cy,bw*0.22,shade(t.c1,20),t.c2);
+    ctx.beginPath(); ctx.ellipse(bw*0.04,cy,bw*0.2,bh*0.24,0,0,7); ctx.fill(); }
+  ctx.fillStyle=radGrad(hdX,hdY,hdR+2,shade(t.c1,26),t.c2);
+  ctx.beginPath(); ctx.ellipse(hdX,hdY,hdR,hdR*0.92,0,0,7); ctx.fill();
+  // 大顎（カマキリ/ムカデ/クワガタ系は大きめ）
+  const jawB=kind==='centipede'||kind==='mantis';
+  ctx.strokeStyle=t.c3; ctx.lineWidth=jawB?3:2;
+  ctx.beginPath(); ctx.moveTo(hdX+hdR*0.7,hdY+3); ctx.quadraticCurveTo(hdX+hdR*1.4,hdY+6+(atk?4:0),hdX+hdR*1.1,hdY+12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hdX+hdR*0.7,hdY-2); ctx.quadraticCurveTo(hdX+hdR*1.4,hdY-5-(atk?4:0),hdX+hdR*1.1,hdY-11); ctx.stroke();
+  // 複眼（大きな光る目）＋触角
+  const eg=0.6+0.3*Math.sin(gf*0.13+(e.x||0)*0.01);
+  ctx.fillStyle=shade(t.c3,-8); ctx.beginPath(); ctx.ellipse(hdX+hdR*0.3,hdY-hdR*0.25,hdR*0.42,hdR*0.5,0,0,7); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(180,255,140,'+eg+')';
+  ctx.beginPath(); ctx.ellipse(hdX+hdR*0.3,hdY-hdR*0.25,hdR*0.26,hdR*0.32,0,0,7); ctx.fill(); ctx.restore();
+  if(kind!=='spider'){ const wig=Math.sin(anim*1.4)*3;
+    ctx.strokeStyle=shade(t.c2,30); ctx.lineWidth=2;
+    for(const a of [-1,1]){ ctx.beginPath(); ctx.moveTo(hdX,hdY-hdR*0.7);
+      ctx.quadraticCurveTo(hdX+a*6, hdY-hdR*1.6, hdX+a*12+wig, hdY-hdR*2.1); ctx.stroke();
+      ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(hdX+a*12+wig,hdY-hdR*2.1,2.4,0,7); ctx.fill(); } }
+  else { for(const ep of [[-0.1,-0.62],[0.62,-0.5]]){ ctx.fillStyle='#ffd24d';   // クモ：追加の複眼
+    ctx.beginPath(); ctx.arc(hdX+hdR*ep[0],hdY+hdR*ep[1],2.6,0,7); ctx.fill(); } }
+  // ── 種類別の特徴 ──
+  if(kind==='mantis'){ // 折りたたんだ大鎌（攻撃時に振り上げる）
+    for(const s of [[bw*0.16,-bh*0.52],[bw*0.02,-bh*0.5]]){ ctx.save(); ctx.translate(s[0],s[1]+cy+bh*0.42); ctx.rotate(atk?-0.9:-0.3);
+      ctx.strokeStyle=t.c2; ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(bw*0.2,-bh*0.2); ctx.stroke();
+      ctx.fillStyle=shade(t.c1,30); ctx.beginPath(); ctx.moveTo(bw*0.2,-bh*0.2);
+      ctx.quadraticCurveTo(bw*0.5,-bh*0.34,bw*0.56,-bh*0.1); ctx.quadraticCurveTo(bw*0.4,-bh*0.22,bw*0.18,-bh*0.12); ctx.closePath(); ctx.fill(); ctx.restore(); } }
+  if(kind==='beetle'){ // 大きな一本角と光沢シェル
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(hdX+2,hdY-hdR*0.8);
+    ctx.quadraticCurveTo(hdX+bw*0.3,hdY-bh*0.5,hdX+bw*0.42,hdY-bh*0.56);
+    ctx.lineTo(hdX+bw*0.34,hdY-bh*0.42); ctx.quadraticCurveTo(hdX+bw*0.16,hdY-bh*0.3,hdX+6,hdY-hdR*0.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(abX-4,cy-bh*0.12,abR*0.5,bh*0.1,-0.4,0,7); ctx.fill(); }
+  // ── 羽（蜂・蛍は高速羽ばたき）──
+  if(kind==='bee'||kind==='firefly'){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#e8f4ff';
+    const flap=Math.abs(Math.sin(gf*0.6+(e.x||0)))*0.8+0.2;
+    for(const s of [-1,1]){ ctx.save(); ctx.translate(-bw*0.06,cy-bh*0.2); ctx.rotate(s*flap*0.9-0.3);
+      ctx.beginPath(); ctx.ellipse(-bw*0.2,0,bw*0.3,bh*0.12,0,0,7); ctx.fill(); ctx.restore(); }
+    ctx.restore(); }
+}
 // ── 二周目・真ボス第一形態：チャム（正体を現した看板娘）──
 function drawChamBoss(e){ const t=ETYPE[e.type], atk=e.state==='bmove', walk=e.state==='walk'?Math.sin(e.anim*2)*4:0;
   // 黒いローブ（店の看板娘が漆黒の外套を纏う）
