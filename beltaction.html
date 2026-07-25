@@ -835,7 +835,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
+  weapon: defaultWeaponFor(kind), weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0,
   level:1, xp:0, xpNext:100, vehicle:null, vehHp:0, vehRam:0, vehT:0, stolen:[], stealCd:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -874,6 +874,7 @@ const WEAPONS={
   staff2:{name:'星屑の大杖', reach:0.95, dmg:1.4, kb:1.1, ext:1.2, trail:'#ffd0f0', launch:1.1, col:'#ff8ae0'},
   // ── ワンデン専用：長剣「犬干し竿」（極端に長い刀身。リーチと一撃の重さに優れる）──
   inuboshi:{name:'犬干し竿', reach:2.4, dmg:1.3, kb:1.2, ext:3.0, trail:'#e8f4ff', launch:1.15, col:'#dfeaf6'},
+  inuboshi2:{name:'犬干し竿・真打', reach:2.5, dmg:1.6, kb:1.3, ext:3.2, trail:'#ffffff', launch:1.25, col:'#ffffff'},   // ワンデンの永続強化：さらに研ぎ澄まされた長刀
   // ── イベント武器：ムーンライトソード（イッヌ）＝振るたび月光の光波が飛ぶ ──
   moon:  {name:'ムーンライトソード', reach:1.32, dmg:1.5, kb:1.3, ext:1.4, trail:'#bfe9ff', launch:1.2, col:'#bfe9ff', wave:true},
 };
@@ -893,7 +894,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0;
-  p.weapon=p.permWeapon||(p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'); p.weaponT=0;
+  p.weapon=p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
   p.vehicle=null; p.vehHp=0; p.vehRam=0; p.vehT=0; p.mAtk=null; p.mAtkT=0;   // 乗り物は各フィールドで乗り直す
@@ -2463,7 +2464,7 @@ function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
   if(CHARMS[kind]) return p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ拾える
-  if(p.kind==='wanden') return kind==='moon'||kind==='holy';                  // ワンデン＝愛刀「犬干し竿」以外は聖剣系のみ（一刀流の矜持）
+  if(p.kind==='wanden') return kind==='moon'||kind==='holy'||kind==='inuboshi2';   // ワンデン＝愛刀「犬干し竿」系と聖剣のみ（一刀流の矜持）
   if(p.kind==='watch') return kind!=='tome'&&kind!=='wand'&&kind!=='staff2';   // ワッチ＝魔法以外の全武器を扱える（アイテム攻撃が得意）
   if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
   if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail';                     // ガードワン8号＝大戦斧・フレイルも扱う
@@ -3644,7 +3645,7 @@ function stepPlayers(){
     player=pl; useInput(pl.in);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
     else { updatePlayer();
-      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||(pl.kind==='shima'?'fists':pl.kind==='nuko'?'wand':pl.kind==='guard8'?'ghammer':'dagger'); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
+      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
     saveInput(pl.in);
   }
   player=players[0];
@@ -4382,7 +4383,7 @@ function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3)
 }
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
-  if(wk==='inuboshi'){ const L=ext*1.7+96;                                  // 犬干し竿：常識外れに長い野太刀（旧比 約2倍）
+  if(wk==='inuboshi'||wk==='inuboshi2'){ const L=ext*1.7+96;                // 犬干し竿：常識外れに長い野太刀（真打も同じ長さ）
     const sheathed = player.atk && player.atk.def && player.atk.def.sheath;   // 鞘当て等：納刀したまま鞘で打つ
     ctx.fillStyle='#3a3742'; ctx.fillRect(-16,-3,18,6);                      // 長い柄
     ctx.strokeStyle='#8a7a56'; ctx.lineWidth=1.1; for(let i=-15;i<2;i+=3.4){ ctx.beginPath(); ctx.moveTo(i,-3); ctx.lineTo(i+2.4,3); ctx.stroke(); }   // 柄巻き
@@ -6264,9 +6265,9 @@ const SHOP_ITEMS=[
   {name:'いのちの肉球',     desc:'残機 ＋1',     cost:90, buy(){ grantLives(1); }},
   {name:'天使の羽',         desc:'残機 ＋2',     cost:170, buy(){ grantLives(2); }},
   // ── 装備（買い切り） ──
-  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖／メガトン）', cost:120,
+  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖／メガトン／真打）', cost:120,
     soldOut(){ return activePlayers().every(p=>p.permWeapon); },
-    buy(){ players.forEach(p=>{ if(p.active&&!p.permWeapon){ const k=p.kind==='shima'?'tigerfist':p.kind==='nuko'?'staff2':p.kind==='guard8'?'megaton':'holy'; p.permWeapon=k; giveWeapon(p,k); p.weaponT=0; } }); }},
+    buy(){ players.forEach(p=>{ if(p.active&&!p.permWeapon){ const k=p.kind==='shima'?'tigerfist':p.kind==='nuko'?'staff2':p.kind==='guard8'?'megaton':p.kind==='wanden'?'inuboshi2':'holy'; p.permWeapon=k; giveWeapon(p,k); p.weaponT=0; } }); }},
   {name:'勇者の正装',       desc:'被ダメージ −10％＆豪華な見た目に変化', cost:95,
     soldOut(){ return activePlayers().every(p=>p.armored); },
     buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.4,(p.defMul||1)-0.10); } }); }},
