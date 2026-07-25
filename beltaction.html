@@ -767,7 +767,7 @@ const ATK={
   wd1:{name:'鞘当て',   dur:11, act:[3,6],  reach:74, hh:36, dmg:9,  kb:5, from:-0.5,to:0.45, len:40, trail:'#c8b78a', pivotY:-56, lunge:1.5, sheath:true, combo:1},
   wd2:{name:'鞘振り返し',dur:13, act:[3,8],  reach:80, hh:42, dmg:11, kb:6, from:0.85,to:-0.85,len:44, trail:'#d8c79a', pivotY:-58, lunge:1.3, sheath:true, combo:2},
   wd3:{name:'抜刀',     dur:19, act:[6,11], reach:132, hh:52, dmg:24, kb:10,from:-0.28,to:0.32,len:74, trail:'#ffffff', pivotY:-56, lunge:2.0, move:4, iai:true, drawCut:true, combo:3},
-  wd4:{name:'高速乱れ切り',dur:24, act:[3,21], reach:120, hh:56, dmg:9, kb:3, from:-1.6,to:1.6, len:70, trail:'#e8f4ff', pivotY:-56, lunge:1.2, multi:true, multiGap:3, flurry:true, combo:3},
+  wd4:{name:'高速乱れ切り',dur:23, act:[3,22], reach:120, hh:60, dmg:9, kb:3, from:-1.6,to:1.6, len:70, trail:'#e8f4ff', pivotY:-56, lunge:1.2, multi:true, multiGap:4, flurry:true, combo:3},   // 斜め上→袈裟斬り を4振り、連打でループ
   // 上＝地面からのアッパースラッシュ → 攻撃ボタンで振り下ろしへ派生
   dnuki:{name:'アッパースラッシュ', dur:26, act:[5,14], reach:112, hh:220, dmg:20, kb:8, from:1.45,to:-1.75, len:78, trail:'#e8f4ff', pivotY:-52, launch:15, knock:true, derive:'dnukidn', upperSlash:true},
   dnukidn:{name:'兜割り・振り下ろし', dur:30, act:[7,14], reach:126, hh:150, dmg:36, kb:17, from:-2.05,to:1.35, len:80, trail:'#ffffff', pivotY:-66, lunge:1.5, knock:true, finisher:true, cleave:true},
@@ -835,7 +835,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: kind==='shima'?'fists':'dagger', weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
+  weapon: defaultWeaponFor(kind), weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0,
   level:1, xp:0, xpNext:100, vehicle:null, vehHp:0, vehRam:0, vehT:0, stolen:[], stealCd:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -874,6 +874,7 @@ const WEAPONS={
   staff2:{name:'星屑の大杖', reach:0.95, dmg:1.4, kb:1.1, ext:1.2, trail:'#ffd0f0', launch:1.1, col:'#ff8ae0'},
   // ── ワンデン専用：長剣「犬干し竿」（極端に長い刀身。リーチと一撃の重さに優れる）──
   inuboshi:{name:'犬干し竿', reach:2.4, dmg:1.3, kb:1.2, ext:3.0, trail:'#e8f4ff', launch:1.15, col:'#dfeaf6'},
+  inuboshi2:{name:'犬干し竿・真打', reach:2.5, dmg:1.6, kb:1.3, ext:3.2, trail:'#ffffff', launch:1.25, col:'#ffffff'},   // ワンデンの永続強化：さらに研ぎ澄まされた長刀
   // ── イベント武器：ムーンライトソード（イッヌ）＝振るたび月光の光波が飛ぶ ──
   moon:  {name:'ムーンライトソード', reach:1.32, dmg:1.5, kb:1.3, ext:1.4, trail:'#bfe9ff', launch:1.2, col:'#bfe9ff', wave:true},
 };
@@ -893,7 +894,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0;
-  p.weapon=p.permWeapon||(p.kind==='shima'?'fists':p.kind==='nuko'?'wand':p.kind==='guard8'?'ghammer':'dagger'); p.weaponT=0;
+  p.weapon=p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
   p.vehicle=null; p.vehHp=0; p.vehRam=0; p.vehT=0; p.mAtk=null; p.mAtkT=0;   // 乗り物は各フィールドで乗り直す
@@ -1454,8 +1455,11 @@ function updatePlayer(){
       crescent(p.x+dir*66, p.y-52+rnd(-14,14), 68, dir>0?-1.1:Math.PI-1.1, dir>0?1.1:Math.PI+1.1, a.t%10?'#e8f4ff':'#ffffff');
       spark(p.x+dir*50, p.y-52, '#dfeaf6', 4, 8); if(a.t%10===0) sfx.swing(1); }
     // ── ワンデン「高速乱れ切り」：手数で押し切る連撃の残光 ──
-    if(def.flurry && a.t>=def.act[0] && a.t<=def.act[1] && a.t%3===0){ const dir=p.facing;
-      crescent(p.x+dir*(58+rnd(-10,26)), p.y-40-rnd(0,34), 52, dir>0?-1.5:Math.PI-1.5, dir>0?1.5:Math.PI+1.5, '#e8f4ff'); }
+    if(def.flurry && a.t>=def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%5===0){ const dir=p.facing;
+      const up=(Math.floor((a.t-def.act[0])/5)%2===0);          // 振りに合わせて斬撃痕も斜め上／袈裟へ交互に
+      const cy=p.y-(up?32:74), a0=up?1.25:-1.45, a1=up?-1.25:1.10;
+      crescent(p.x+dir*72, cy, 84, dir>0?a0:Math.PI-a0, dir>0?a1:Math.PI-a1, up?'#dff0ff':'#ffffff');
+      spark(p.x+dir*66, cy, '#e8f4ff', 4, 8); if(!up) sfx.swing(1); }
     // ── ワンデン「絶刀」：溜め→解き放つ極大の一閃 ──
     if(def.zetto){ const dir=p.facing;
       if(a.t<def.act[0]){ if(gf%3===0) spark(p.x+dir*20, p.y-rnd(20,80), '#cfeaff', 2, 4);
@@ -2463,7 +2467,7 @@ function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
   if(CHARMS[kind]) return p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ拾える
-  if(p.kind==='wanden') return kind==='moon'||kind==='holy';                  // ワンデン＝愛刀「犬干し竿」以外は聖剣系のみ（一刀流の矜持）
+  if(p.kind==='wanden') return kind==='moon'||kind==='holy'||kind==='inuboshi2';   // ワンデン＝愛刀「犬干し竿」系と聖剣のみ（一刀流の矜持）
   if(p.kind==='watch') return kind!=='tome'&&kind!=='wand'&&kind!=='staff2';   // ワッチ＝魔法以外の全武器を扱える（アイテム攻撃が得意）
   if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
   if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail';                     // ガードワン8号＝大戦斧・フレイルも扱う
@@ -3644,7 +3648,7 @@ function stepPlayers(){
     player=pl; useInput(pl.in);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
     else { updatePlayer();
-      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||(pl.kind==='shima'?'fists':pl.kind==='nuko'?'wand':pl.kind==='guard8'?'ghammer':'dagger'); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
+      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
     saveInput(pl.in);
   }
   player=players[0];
@@ -4231,6 +4235,20 @@ function drawPlayer(){
     faL1=9+12*big; faL2=8+15*big; faW=0.95+1.0*big; legF1=10+6*big; legF2=9+6*big;
     sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; }
+    if(def.flurry){ // 高速乱れ切り：斜め上への斬り上げ → 袈裟斬りの振り下ろし をひたすらループさせる
+      const SEG=5, tt=Math.max(0,t-def.act[0]), idx=Math.floor(tt/SEG), ph=(tt%SEG)/SEG, up=(idx%2===0);
+      const a0 = up? 1.30 : -1.60, a1 = up? -1.30 : 1.20;     // 上=斬り上げ（下段→上段）／下=袈裟斬り（上段→下段）
+      const bell=Math.sin(ph*Math.PI);
+      swAng=lerp(a0,a1,easeOut(ph));
+      trailCol = up? '#dff0ff' : '#ffffff'; tA0=a0; tA1=swAng; tk=0.08; drawTrail=true; trailW=2.3; smear=0.8;
+      swExt=def.len*0.55*(1+0.95*bell);
+      lean = up? lerp(-0.30,0.16,ph) : lerp(-0.10,0.34,ph);
+      backArm = up? lerp(0.85,-1.05,ph) : lerp(-1.15,0.85,ph);
+      thF=0.46+0.34*bell; thB=-0.42-0.20*bell; kF=0.40; kB=0.34;
+      bodyY=-2-3*bell; bodyX=5*bell + (up?-1:1)*2;
+      sqX=1-0.10*bell; sqY=1+0.13*bell;
+      faL1=9+9*bell; faL2=8+11*bell; faW=0.95+0.7*bell;
+      legF1=10+4*bell; legF2=9+4*bell; }
     if(def.shoulder){ // 鉄山靠／ハンマータックル：肩から体当たり（腕をたたんで深く踏み込む）
       mode='fist'; lean=0.85; swAng=1.05; backArm=1.2; thF=1.1; thB=-0.35; kF=0.3; kB=0.6; bodyY=-1; sqX=1.12; sqY=0.94; }
     if(def.headbutt){ // ヘッドバット：頭から前へ突っ込む
@@ -4382,7 +4400,7 @@ function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3)
 }
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
-  if(wk==='inuboshi'){ const L=ext*1.7+96;                                  // 犬干し竿：常識外れに長い野太刀（旧比 約2倍）
+  if(wk==='inuboshi'||wk==='inuboshi2'){ const L=ext*1.7+96;                // 犬干し竿：常識外れに長い野太刀（真打も同じ長さ）
     const sheathed = player.atk && player.atk.def && player.atk.def.sheath;   // 鞘当て等：納刀したまま鞘で打つ
     ctx.fillStyle='#3a3742'; ctx.fillRect(-16,-3,18,6);                      // 長い柄
     ctx.strokeStyle='#8a7a56'; ctx.lineWidth=1.1; for(let i=-15;i<2;i+=3.4){ ctx.beginPath(); ctx.moveTo(i,-3); ctx.lineTo(i+2.4,3); ctx.stroke(); }   // 柄巻き
@@ -6264,9 +6282,9 @@ const SHOP_ITEMS=[
   {name:'いのちの肉球',     desc:'残機 ＋1',     cost:90, buy(){ grantLives(1); }},
   {name:'天使の羽',         desc:'残機 ＋2',     cost:170, buy(){ grantLives(2); }},
   // ── 装備（買い切り） ──
-  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖／メガトン）', cost:120,
+  {name:'英雄の武具',       desc:'専用武器を永続装備（聖剣／虎の篭手／星屑の大杖／メガトン／真打）', cost:120,
     soldOut(){ return activePlayers().every(p=>p.permWeapon); },
-    buy(){ players.forEach(p=>{ if(p.active&&!p.permWeapon){ const k=p.kind==='shima'?'tigerfist':p.kind==='nuko'?'staff2':p.kind==='guard8'?'megaton':'holy'; p.permWeapon=k; giveWeapon(p,k); p.weaponT=0; } }); }},
+    buy(){ players.forEach(p=>{ if(p.active&&!p.permWeapon){ const k=p.kind==='shima'?'tigerfist':p.kind==='nuko'?'staff2':p.kind==='guard8'?'megaton':p.kind==='wanden'?'inuboshi2':'holy'; p.permWeapon=k; giveWeapon(p,k); p.weaponT=0; } }); }},
   {name:'勇者の正装',       desc:'被ダメージ −10％＆豪華な見た目に変化', cost:95,
     soldOut(){ return activePlayers().every(p=>p.armored); },
     buy(){ players.forEach(p=>{ if(p.active&&!p.armored){ p.armored=true; p.costume=true; p.defMul=Math.max(0.4,(p.defMul||1)-0.10); } }); }},
