@@ -622,6 +622,15 @@ function drawParticles(){
     else if(p.k==='arc'){ ctx.globalAlpha=a*0.85; ctx.strokeStyle=p.color; ctx.lineWidth=8*a+3; ctx.lineCap='round';
       ctx.beginPath(); ctx.arc(sx,p.y,p.r,p.a0,p.a1); ctx.stroke(); }
     else if(p.k==='ring'){ ctx.globalAlpha=a*0.6; ctx.strokeStyle=p.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx,p.y,p.r,0,7); ctx.stroke(); }
+    else if(p.k==='wandenAfter'){ // 縮地の残像：通り過ぎたワンデンの影が薄く残る
+      ctx.save(); ctx.globalAlpha=a*0.5; ctx.translate(sx, p.y); ctx.scale(p.face*FIXED_SCALE*0.9, FIXED_SCALE*0.9);
+      ctx.fillStyle='rgba(190,215,240,.85)';
+      ctx.beginPath(); ctx.ellipse(0,-24,12,14,0,0,7); ctx.fill();                          // 胴
+      ctx.beginPath(); ctx.ellipse(0,-46,17,16,0,0,7); ctx.fill();                          // 頭
+      ctx.fillRect(-9,-12,7,13); ctx.fillRect(3,-12,7,13);                                   // 脚
+      ctx.strokeStyle='rgba(220,238,255,.9)'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(4,-30); ctx.lineTo(96,-46); ctx.stroke();                  // 長刀の残影
+      ctx.restore(); }
     else if(p.k==='bolt'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
       ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=3.5*a+1; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(sx,p.y);
@@ -776,7 +785,7 @@ const ATK={
   // 前＝燕返し（上下二段の返し斬り）
   dtsubame:{name:'燕返し', dur:26, act:[5,20], reach:112, hh:54, dmg:14, kb:8, from:-1.35,to:1.35, len:66, trail:'#dff0ff', pivotY:-58, lunge:1.8, multi:true, multiGap:9, knock:true},
   // ←←/→→＝疾走居合連撃（走り抜けながら何度も抜き打つ）
-  dshukuchi:{name:'疾走居合・連撃', dur:40, act:[3,34], reach:118, hh:56, dmg:12, kb:5, from:-0.16,to:0.16, len:74, trail:'#e8f4ff', pivotY:-54, move:15, multi:true, multiGap:5, stinger:true, knock:true, superFx:true, runIai:true},
+  dshukuchi:{name:'縮地・残刃', dur:30, act:[3,4], reach:60, hh:56, dmg:0, kb:0, from:-0.55,to:0.30, len:74, trail:'#e8f4ff', pivotY:-54, special:true, cast:true, superFx:true, zanjin:true},   // ←←/→→＝一瞬で駆け抜け、通った跡に残撃が遅れて走る
   // ↓→＝秘剣・八重霞（前方に斬撃痕を刻み、時間差で炸裂させる遅延技）
   dyae:{name:'秘剣・八重霞', dur:34, act:[10,13], reach:70, hh:46, dmg:0, kb:0, from:-1.5,to:1.5, len:76, trail:'#dff0ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true},
   // →↓→＝無明・斬鉄（大上段からの振り下ろしで地を裂き、地割れが疾走する）
@@ -1152,6 +1161,14 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
         damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*8,true); if(!e.dead) launchEnemy(e,(e.x<h.x?-1:1)*13,-11,3); } }
       hazards.splice(i,1); }
+  } else if(h.kind==='zanjin'){   // ワンデンの残刃：駆け抜けた跡に遅れて走る斬撃
+    if(h.t>=h.life){ const gy=LANE-groundLift(h.x);
+      crescent(h.x, gy-54, 82, -1.35, 1.15, '#ffffff');
+      spark(h.x, gy-54, '#e8f4ff', 12, 10); shake=Math.max(shake,4);
+      if(h.t%2===0) sfx.swing(1);
+      for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<74 && Math.abs(e.y-h.y)<62){
+        noHitStopOnce=true; damageEnemy(e,h.dmg,(h.dir||1)*6,true); } }
+      hazards.splice(i,1); }
   } else if(h.kind==='kasumi'){   // ワンデンの八重霞：刻まれた斬撃痕が時間差で炸裂
     if(h.t>=h.life){ const gy=LANE-groundLift(h.x);
       for(let k=0;k<2;k++) crescent(h.x, gy-56+k*22, 74, -1.5, 1.5, k?'#ffffff':'#dff0ff');
@@ -1177,6 +1194,12 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX; if(sx<-80||s
       const g=ctx.createLinearGradient(0,gy,0,gy-hgt); g.addColorStop(0,'rgba(255,90,30,.8)'); g.addColorStop(.6,'rgba(255,170,60,.85)'); g.addColorStop(1,'rgba(255,240,180,0)');
       ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(sx-w,gy); ctx.quadraticCurveTo(sx-w*0.5+fl,gy-hgt*0.6,sx+fl*0.6,gy-hgt); ctx.quadraticCurveTo(sx+w*0.5+fl,gy-hgt*0.6,sx+w,gy); ctx.closePath(); ctx.fill(); }
     ctx.restore(); }
+  else if(h.kind==='zanjin'){ const gy=LANE-groundLift(h.x), r=clamp(h.t/h.life,0,1);   // 残刃：斬撃が走る直前に光の筋が奔る
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.25+0.6*r;
+    ctx.strokeStyle='#e8f4ff'; ctx.lineWidth=1.5+3.5*r; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(sx-16*r, gy-16); ctx.lineTo(sx+16*r, gy-88); ctx.stroke();
+    ctx.globalAlpha=0.12+0.3*r; ctx.fillStyle=radGrad(sx,gy-52,20+18*r,'rgba(220,240,255,.8)','rgba(220,240,255,0)');
+    ctx.beginPath(); ctx.arc(sx,gy-52,20+18*r,0,7); ctx.fill(); ctx.restore(); }
   else if(h.kind==='kasumi'){ const gy=LANE-groundLift(h.x), r=h.t/h.life;   // 空中に刻まれた斬撃痕（霞）
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.35+0.45*Math.abs(Math.sin(gf*0.3));
     ctx.strokeStyle='#dff0ff'; ctx.lineWidth=2.4+2*r; ctx.lineCap='round';
@@ -1450,10 +1473,17 @@ function updatePlayer(){
     if(def.cleave && a.t===def.act[0]){ const dir=p.facing;
       shake=Math.max(shake,11); flash=Math.max(flash,4); hitStop=Math.max(hitStop,8); dust(p.x+dir*50,p.y,14); sfx.big();
       for(let k=0;k<7;k++) spark(p.x+dir*(40+k*26), p.y-rnd(0,14), '#cfeaff', 3, 8); }
-    // ── ワンデン「疾走居合・連撃」：走り抜けながら何度も抜き打つ ──
-    if(def.runIai && a.t>=def.act[0] && a.t<=def.act[1] && a.t%5===0){ const dir=p.facing;
-      crescent(p.x+dir*66, p.y-52+rnd(-14,14), 68, dir>0?-1.1:Math.PI-1.1, dir>0?1.1:Math.PI+1.1, a.t%10?'#e8f4ff':'#ffffff');
-      spark(p.x+dir*50, p.y-52, '#dfeaf6', 4, 8); if(a.t%10===0) sfx.swing(1); }
+    // ── ワンデン「縮地・残刃」：一瞬で駆け抜け、通った跡に残撃が遅れて生じる ──
+    if(def.zanjin && a.t===def.act[0]){ const dir=p.facing;
+      const x0=p.x, x1=clamp(p.x+dir*300, camX+26, Math.min(WORLD_END, camX+W-26));
+      p.x=x1; p.invuln=Math.max(p.invuln,26);                         // 移動そのものは無敵ですり抜ける
+      flash=Math.max(flash,3); shake=6; sfx.dash();   // 技名は superFx 側で表示されるので二重に出さない
+      const span=x1-x0, n=5;
+      for(let k=0;k<n;k++){ const px=x0+span*(k+0.5)/n;
+        particles.push({k:'wandenAfter', x:px, y:p.y, face:dir, life:16+k*2, max:16+k*2});   // 通り過ぎた軌跡の残像
+        // 残撃：移動が終わってから順に走る（手前から奥へ）
+        hazards.push({kind:'zanjin', x:px, y:LANE, t:0, life:7+k*3, dir, dmg:Math.round(21*(p.atkMul||1))}); }
+      for(let k=0;k<10;k++) spark(x0+span*k/10, p.y-rnd(10,70), '#dfeaf6', 2, 6); }
     // ── ワンデン「高速乱れ切り」：手数で押し切る連撃の残光 ──
     if(def.flurry && a.t>=def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%5===0){ const dir=p.facing;
       const up=(Math.floor((a.t-def.act[0])/5)%2===0);          // 振りに合わせて斬撃痕も斜め上／袈裟へ交互に
@@ -3149,7 +3179,7 @@ const CH1=[
      shima:['おお、拳聖シマダックスどの！噂はかねがね。','連打で5段コンボ、↑＋攻撃で旋風脚じゃ。掴んでからの投げ技も強烈じゃぞ。','ボスを倒せばチャムの店が開く。虎の篭手を狙うのじゃ！','新奥義じゃ！ ↓→＋攻撃で羅刹連拳（無敵で肉薄する連打）、→↓→＋攻撃で烈火昇龍脚（炎の昇龍）。','↓↑＋攻撃でワンインチブロー（リーチは極短だが一撃で画面端まで吹き飛ばす豪打）、空中で↑＋攻撃なら昇天脚が出るぞ！','新技じゃ！攻撃と掴みの同時押しで「虎魂・大喝」——画面中の敵を痺れさせる雄叫びじゃ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      nuko:['おお、魔法使いのヌコどのか！小さいのに大したものじゃ。','攻撃連打でエネルギー弾、前＋攻撃で炎の柱じゃよ。','困ったら攻撃と掴みの同時押し！新魔法「精霊大召喚・エレメンタルバースト」——炎と氷と雷が一度に敵を襲うぞ。','新魔法じゃ！ ↓→＋攻撃で氷結魔弾トリニティ（三連の追尾弾）、→↓→＋攻撃で星辰昇華（星屑が降る）。','↓↑＋攻撃でサンダーストーム（画面全体に落雷！攻撃連打で雷が増える）、空中で↑＋攻撃なら星昇撃が出るぞ！','敵を倒すと経験値が貯まり、レベルアップで最大HPと魔力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
      guard8:['おお、王都の門番ガードワン8号どの！なんと頼もしい。','↑＋攻撃で振り上げ、もう一度押すと叩きつけに派生するそうじゃな。','↓→＋攻撃でタックル、→↓→＋攻撃で天衝ハンマー。ぐるっと一回転＋攻撃の奥義は圧巻じゃぞ！','さらに！ ↓↑＋攻撃でメテオ・ハンマーインパクト（特大の叩きつけ→三重衝撃波）、空中で↑＋攻撃ならハンマーアッパーじゃ！','新技じゃ！攻撃と掴みの同時押しで「不動要塞・アイアンウォール」——しばらく怯まず被ダメージ大幅減の要塞と化す！','敵を倒すと経験値が貯まり、レベルアップで最大HPと攻撃力が伸びる。冒険するほど強くなるのじゃ。','フィールドで馬やバギーカーを見つけたら掴みボタンで乗れる！馬は攻撃で巨大な槍を薙ぎ払い、バギーは攻撃でバズーカを撃つ。ただし乗れる時間は短く、攻撃を受けると落馬してしまうから過信は禁物じゃぞ。','近ごろ不死のゾンビワンコ、骨を投げるスケルトンワンコ、鋼のメカワンコ T-800まで現れておる。心せよ！'],
-     wanden:['おお…隻眼の剣鬼、ワンデンどのか。無名一刀流の噂はこの耳にも届いておる。','おぬしの「犬干し竿」は常識外れに長い刀じゃ。連打の四段は 鞘当て→鞘振り返し→抜刀→高速乱れ切り。最後の乱れ切りは連打で延々と続くぞ。','最大の特徴——回避ボタンは前転ではなく「居合パリィ」じゃ！構えた一瞬だけが受け。成功すれば刀が巨大化し、秘剣「犬返し」が周囲もろとも薙ぎ払う。','ただし受けを外せば構え直す大きな隙ができる。諸刃の剣じゃ。敵の予備動作「！」を見てから合わせよ。飛び道具も弾き返せるぞ。','↑＋攻撃はアッパースラッシュ。もう一度攻撃を押せば兜割りの振り下ろしへ派生する。下＋攻撃は長大なリーチの足元薙ぎ払いじゃ。','←←や→→＋攻撃で疾走居合・連撃——走り抜けながら何度も抜き打つ。前＋攻撃は燕返しじゃ。','必殺技は他の剣士とはまるで違う。↓→＋攻撃で「秘剣・八重霞」——前方に斬撃痕を刻み、時間差で炸裂させる。→↓→＋攻撃は「無明・斬鉄」——振り下ろしで地を裂き、地割れが疾走するぞ。','↓↑＋攻撃で「絶刀」、攻撃と掴みの同時押しで「大居合・一文字」——溜めてから画面を横断する長大な一閃じゃ！','掴んでからも技がある。攻撃で鞘砕き、↑で天流し、↓で据物斬り、後ろで背車・逆袈裟じゃ。','奥義はぐるっと一回転＋攻撃で「無名一刀流・皆伝」！画面中の敵を順に居合で斬り伏せ、最後に納刀の一閃で断つ！'],
+     wanden:['おお…隻眼の剣鬼、ワンデンどのか。無名一刀流の噂はこの耳にも届いておる。','おぬしの「犬干し竿」は常識外れに長い刀じゃ。連打の四段は 鞘当て→鞘振り返し→抜刀→高速乱れ切り。最後の乱れ切りは連打で延々と続くぞ。','最大の特徴——回避ボタンは前転ではなく「居合パリィ」じゃ！構えた一瞬だけが受け。成功すれば刀が巨大化し、秘剣「犬返し」が周囲もろとも薙ぎ払う。','ただし受けを外せば構え直す大きな隙ができる。諸刃の剣じゃ。敵の予備動作「！」を見てから合わせよ。飛び道具も弾き返せるぞ。','↑＋攻撃はアッパースラッシュ。もう一度攻撃を押せば兜割りの振り下ろしへ派生する。下＋攻撃は長大なリーチの足元薙ぎ払いじゃ。','←←や→→＋攻撃で「縮地・残刃」——一瞬で間合いを詰めて駆け抜け、通り過ぎた跡に残撃が遅れて走る小技じゃ。移動中は無敵ですり抜けられるぞ。前＋攻撃は燕返しじゃ。','必殺技は他の剣士とはまるで違う。↓→＋攻撃で「秘剣・八重霞」——前方に斬撃痕を刻み、時間差で炸裂させる。→↓→＋攻撃は「無明・斬鉄」——振り下ろしで地を裂き、地割れが疾走するぞ。','↓↑＋攻撃で「絶刀」、攻撃と掴みの同時押しで「大居合・一文字」——溜めてから画面を横断する長大な一閃じゃ！','掴んでからも技がある。攻撃で鞘砕き、↑で天流し、↓で据物斬り、後ろで背車・逆袈裟じゃ。','奥義はぐるっと一回転＋攻撃で「無名一刀流・皆伝」！画面中の敵を順に居合で斬り伏せ、最後に納刀の一閃で断つ！'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
