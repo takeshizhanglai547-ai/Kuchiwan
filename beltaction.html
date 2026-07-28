@@ -835,6 +835,34 @@ const ATK={
   dyae2:{name:'秘剣・八重霞・千重', dur:40, act:[10,13], reach:78, hh:50, dmg:0, kb:0, from:-1.8,to:1.8, len:82, trail:'#eaf6ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true, yaeMax:true},
   dzantetsu2:{name:'無明・斬鉄・断界', dur:50, act:[15,22], reach:136, hh:82, dmg:48, kb:17, from:-2.3,to:1.55, len:92, trail:'#ffffff', pivotY:-70, lunge:1.4, knock:true, finisher:true, special:true, superFx:true, cleave:true, riftCleave:true,
     pshot:{dmg:28,color:'#e8f4ff',speed:13,r:44,life:150,multihit:true,hitGap:7,style:'wave',pierce:true,low:true}},
+  // ── Lv3：上攻撃の上位技（対空・打ち上げが一気に凶悪になる）──
+  shoryu2:{name:'双牙昇竜', dur:38, act:[2,32], reach:78, hh:620, dmg:13, kb:7, from:1.4,to:-2.2, len:62, trail:'#ffe27a', pivotY:-50, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, superFx:true, twinRise:true},
+  tornado2:{name:'大旋風脚・天龍', dur:40, act:[2,34], reach:86, hh:620, dmg:10, kb:6, from:1.3,to:-2.2, len:28, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, windPull:true},
+  ntornado2:{name:'セイントサイクロン', dur:40, act:[2,34], reach:92, hh:620, dmg:11, kb:6, from:1.3,to:-2.2, len:26, trail:'#dff0ff', fist:true, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, ntor:true, superFx:true, windPull:true, featherFall:true},
+  gupper2:{name:'天衝ハンマー・極', dur:34, act:[9,20], reach:126, hh:280, dmg:34, kb:14, from:1.2,to:-2.1, len:78, trail:'#ffd24d', pivotY:-66, launch:22, knock:true, aoe:true, shock:26, superFx:true, gwave:true, skyBreak:true, derive:'gslamdown'},
+  wsmoke2:{name:'爆煙玉', dur:28, act:[6,8], reach:130, hh:110, dmg:0, kb:0, from:-3.1,to:3.1, len:22, trail:'#ffb85a', special:true, omni:true, superFx:true, smokeBomb:true, smokeBlast:true},   // 目くらましだけだった煙玉が炸裂弾に
+  dnuki2:{name:'昇り竜尾', dur:34, act:[5,20], reach:140, hh:280, dmg:27, kb:11, from:1.55,to:-1.95, len:92, trail:'#eaf6ff', pivotY:-52, launch:21, knock:true, multi:true, multiGap:6, superFx:true, upperSlash:true, derive:'dnukidn'},
+  // ── Lv7：前攻撃の上位技（差し込みが本命の火力技になる）──
+  iai2:{name:'一閃・無双', dur:28, act:[9,15], reach:152, hh:58, dmg:36, kb:17, from:-0.22,to:0.22, len:78, trail:'#eaffff', pivotY:-56, move:12, multi:true, multiGap:7, knock:true, finisher:true, iai:true, superFx:true, iaiWave:true},
+  tessan2:{name:'鉄山靠・崩城', dur:30, act:[4,16], reach:98, hh:56, dmg:42, kb:21, from:-0.28,to:-0.2, len:26, trail:'#ffd24d', fist:true, lunge:10, knock:true, finisher:true, shoulder:true, superFx:true, wallCrush:true},
+  nflame2:{name:'獄炎連柱', dur:30, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:-1.2,to:-0.2, len:20, trail:'#ff6a3c', fist:true, special:true, superFx:true, flameRow:true},
+  gsmash2:{name:'城門砕き', dur:36, act:[11,20], reach:134, hh:66, dmg:34, kb:20, from:-2.0,to:1.2, len:82, trail:'#fff', pivotY:-72, lunge:2.2, knock:true, finisher:true, aoe:true, shock:30, superFx:true, wallCrush:true},
+  wpistol2:{name:'六連掃射・弾雨', dur:34, act:[6,26], reach:44, hh:44, dmg:0, kb:0, from:-0.4,to:0.4, len:16, trail:'#ffe14d', special:true, superFx:true, pistolsX:true},
+  dtsubame2:{name:'燕返し・三段', dur:36, act:[5,28], reach:132, hh:60, dmg:18, kb:10, from:-1.5,to:1.5, len:80, trail:'#eaf6ff', pivotY:-58, lunge:2.2, multi:true, multiGap:6, knock:true, superFx:true, swallow3:true},
+  // ── Lv9：下攻撃の上位技（置き技・仕掛け技が一気に凶悪化）──
+  islide2:{name:'滑刃・地摺り', dur:30, act:[4,24], reach:138, hh:32, dmg:26, kb:14, from:0.22,to:-0.22, len:70, trail:'#cfe6ff', pivotY:-20, move:13, multi:true, multiGap:7, knock:true, finisher:true, superFx:true, lowSweep:true, slideCut:true},
+  sdropkick2:{name:'彗星ドロップキック', dur:32, act:[5,26], reach:120, hh:58, dmg:16, kb:19, from:0.15,to:0.15, len:28, trail:'#ff9a3a', fist:true, kick:true, move:12.5, multi:true, multiGap:5, knock:true, finisher:true, dropk:true, superFx:true, cometKick:true},
+  ngnd2:{name:'三連時限爆破', dur:30, act:[11,12], reach:30, hh:30, dmg:0, kb:0, from:0.9,to:1.3, len:16, trail:'#ffae42', fist:true, special:true, superFx:true, bombRow:true},
+  ghead2:{name:'鋼鉄頭突き・突貫', dur:30, act:[5,22], reach:92, hh:52, dmg:27, kb:16, from:-0.1,to:-0.1, len:16, trail:'#ffe9a0', pivotY:-56, fist:true, lunge:10, multi:true, multiGap:6, knock:true, finisher:true, headbutt:true, superFx:true, wallBreak:true},
+  wmine2:{name:'三連地雷・鉄扇網', dur:26, act:[8,9], reach:30, hh:30, dmg:0, kb:0, from:-0.2,to:0.2, len:14, trail:'#ffd24d', special:true, superFx:true, mineRow:true},
+  dsuriashi2:{name:'地摺り・双薙ぎ', dur:38, act:[6,30], reach:186, hh:30, dmg:26, kb:13, from:0.3,to:-0.3, len:100, trail:'#eaf6ff', pivotY:-22, move:6, multi:true, multiGap:8, knock:true, superFx:true, lowSweep:true, doubleSweep:true},
+  // ── Lv12：ダッシュ攻撃の上位技（移動技が決め技に化ける）──
+  idash2:{name:'疾風居合・双閃', dur:34, act:[3,28], reach:118, hh:56, dmg:13, kb:8, from:-0.12,to:0.12, len:72, trail:'#dff0ff', pivotY:-54, move:16, multi:true, multiGap:4, stinger:true, knock:true, superFx:true, shadowStep:true, twinFlash:true},
+  spindash2:{name:'螺旋鉄拳突進', dur:38, act:[3,32], reach:92, hh:58, dmg:9, kb:6, from:-3.1,to:3.1, len:24, trail:'#ffd24d', fist:true, punch:true, move:11, multi:true, multiGap:3, stinger:true, spin:true, respin:true, respinMax:5, superFx:true, drillFx:true},
+  nrail2:{name:'極大魔導レール砲', dur:38, act:[14,16], reach:44, hh:44, dmg:0, kb:0, from:-0.6,to:-0.1, len:24, trail:'#ffd0f0', fist:true, special:true, superFx:true, railBlast:true},
+  gspin2:{name:'大車輪突撃', dur:36, act:[3,30], reach:128, hh:60, dmg:13, kb:9, from:-3.1,to:3.1, len:72, trail:'#ffb85a', pivotY:-58, move:9.5, multi:true, multiGap:4, spin:true, stinger:true, respin:true, respinMax:5, knock:true, superFx:true, wallBreak:true},
+  wheist2:{name:'影分身・千手強奪', dur:36, act:[3,30], reach:98, hh:60, dmg:10, kb:7, from:-0.1,to:0.1, len:34, trail:'#dff0ff', pivotY:-54, move:15, multi:true, multiGap:3, stinger:true, knock:true, shadowStep:true, heist:true, superFx:true, cloneStrike:true},
+  dshukuchi2:{name:'縮地・残刃・八重', dur:36, act:[3,4], reach:60, hh:56, dmg:0, kb:0, from:-0.55,to:0.30, len:74, trail:'#eaf6ff', pivotY:-54, special:true, superFx:true, zanjin:true, zanjinMax:true},
   // ── 武器別コンボ：双剣フタバ（イッヌ）＝左右の刃で刻む高速5段 ──
   tw1:{name:'双牙・右', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:-0.9, to:0.5,  len:30, trail:'#ffd6e8', pivotY:-58, lunge:1.5, combo:1},
   tw2:{name:'双牙・左', dur:8,  act:[2,5],  reach:72, hh:38, dmg:6, kb:2, from:0.7,  to:-0.7, len:30, trail:'#d6e8ff', pivotY:-58, lunge:1.5, combo:2},
@@ -972,33 +1000,39 @@ function comboMaxFor(p){ if(p.kind==='nuko') return 1; if(p.kind==='wanden') ret
 //  Lv5 で ↓↑必殺技が別技に、Lv10 で 波動／昇竜 が上位技へ変わる（見た目も別物になる）
 // ══════════════════════════════════════════════════════════════
 const SPECIAL_BASE={
-  inu:   {hadou:'iwave',    dp:'idragon',   du:'iswords'},
-  shima: {hadou:'srush',    dp:'sdrago',    du:'soneinch'},
-  nuko:  {hadou:'nfrost',   dp:'nstar',     du:'nthunder'},
-  guard8:{hadou:'gtackle',  dp:'gdp',       du:'gimpact'},
-  watch: {hadou:'wknife',   dp:'wflip',     du:'wtech'},
-  wanden:{hadou:'dyae',     dp:'dzantetsu', du:'dzetto'},
+  inu:   {up:'shoryu',   fwd:'iai',       down:null,          dash:null,        hadou:'iwave',    dp:'idragon',   du:'iswords'},
+  shima: {up:'tornado',  fwd:'tessan',    down:'sdropkick',   dash:'spindash',  hadou:'srush',    dp:'sdrago',    du:'soneinch'},
+  nuko:  {up:'ntornado', fwd:'nflame',    down:'ngnd',        dash:null,        hadou:'nfrost',   dp:'nstar',     du:'nthunder'},
+  guard8:{up:'gupper',   fwd:'gh3',       down:'ghead',       dash:'gspin',     hadou:'gtackle',  dp:'gdp',       du:'gimpact'},
+  watch: {up:'wsmoke',   fwd:'wpistol',   down:'wmine',       dash:'wheist',    hadou:'wknife',   dp:'wflip',     du:'wtech'},
+  wanden:{up:'dnuki',    fwd:'dtsubame',  down:'dsuriashi',   dash:'dshukuchi', hadou:'dyae',     dp:'dzantetsu', du:'dzetto'},
 };
+// ATK に無い（専用ステートで動く）基本技の表示名
+const SPECIAL_BASE_NAME={'inu.down':'スライディング', 'inu.dash':'疾走居合斬り', 'nuko.dash':'マジックレール砲'};
+// [解禁レベル, 技ID]。レベルが上がるほど強力な技に置き換わる
 const SPECIAL_UP={
-  inu:   {du:[[5,'iswords2']],  hadou:[[10,'iwave2']],    dp:[[10,'idragon2']]},
-  shima: {du:[[5,'skuzan']],    hadou:[[10,'srush2']],    dp:[[10,'sdrago2']]},
-  nuko:  {du:[[5,'ntyphoon']],  hadou:[[10,'nfrost2']],   dp:[[10,'nstar2']]},
-  guard8:{du:[[5,'gimpact2']],  hadou:[[10,'gtackle2']],  dp:[[10,'gdp2']]},
-  watch: {du:[[5,'wtech2']],    hadou:[[10,'wknife2']],   dp:[[10,'wflip2']]},
-  wanden:{du:[[5,'dzetto2']],   hadou:[[10,'dyae2']],     dp:[[10,'dzantetsu2']]},
+  inu:   {up:[[3,'shoryu2']],   du:[[5,'iswords2']], fwd:[[7,'iai2']],       down:[[9,'islide2']],     hadou:[[10,'iwave2']],   dp:[[10,'idragon2']],   dash:[[12,'idash2']]},
+  shima: {up:[[3,'tornado2']],  du:[[5,'skuzan']],   fwd:[[7,'tessan2']],    down:[[9,'sdropkick2']],  hadou:[[10,'srush2']],   dp:[[10,'sdrago2']],    dash:[[12,'spindash2']]},
+  nuko:  {up:[[3,'ntornado2']], du:[[5,'ntyphoon']], fwd:[[7,'nflame2']],    down:[[9,'ngnd2']],       hadou:[[10,'nfrost2']],  dp:[[10,'nstar2']],     dash:[[12,'nrail2']]},
+  guard8:{up:[[3,'gupper2']],   du:[[5,'gimpact2']], fwd:[[7,'gsmash2']],    down:[[9,'ghead2']],      hadou:[[10,'gtackle2']], dp:[[10,'gdp2']],       dash:[[12,'gspin2']]},
+  watch: {up:[[3,'wsmoke2']],   du:[[5,'wtech2']],   fwd:[[7,'wpistol2']],   down:[[9,'wmine2']],      hadou:[[10,'wknife2']],  dp:[[10,'wflip2']],     dash:[[12,'wheist2']]},
+  wanden:{up:[[3,'dnuki2']],    du:[[5,'dzetto2']],  fwd:[[7,'dtsubame2']],  down:[[9,'dsuriashi2']],  hadou:[[10,'dyae2']],    dp:[[10,'dzantetsu2']], dash:[[12,'dshukuchi2']]},
 };
-const SPECIAL_SLOT_NAME={hadou:'波動コマンド', dp:'昇竜コマンド', du:'↓↑コマンド'};
-// そのキャラ・そのレベルで実際に出る技IDを返す
-function specialFor(p,slot){ const k=(p&&p.kind)||'inu', lv=(p&&p.level)||1;
-  const base=(SPECIAL_BASE[k]||SPECIAL_BASE.inu)[slot];
-  const ups=(SPECIAL_UP[k]||{})[slot]; if(!ups) return base;
-  let out=base;
-  for(const u of ups){ if(lv>=u[0] && ATK[u[1]]) out=u[1]; }
+const SPECIAL_SLOTS=['up','du','fwd','down','hadou','dp','dash'];
+const SPECIAL_SLOT_NAME={up:'上攻撃', fwd:'前攻撃', down:'下攻撃', dash:'ダッシュ攻撃', hadou:'波動コマンド', dp:'昇竜コマンド', du:'↓↑コマンド'};
+const SPECIAL_SLOT_CMD ={up:'↑ ＋攻撃', fwd:'→ ＋攻撃', down:'↓ ＋攻撃', dash:'→→ ＋攻撃', hadou:'↓→ ＋攻撃', dp:'→↓→ ＋攻撃', du:'↓↑ ＋攻撃'};
+// レベルで解禁された上位技だけを返す（未解禁なら null）。専用ステートの技を置き換える判定にも使う
+function specialUpgraded(p,slot){ const k=(p&&p.kind)||'inu', lv=(p&&p.level)||1;
+  const ups=(SPECIAL_UP[k]||{})[slot]; if(!ups) return null;
+  let out=null; for(const u of ups){ if(lv>=u[0] && ATK[u[1]]) out=u[1]; }
   return out; }
+// そのキャラ・そのレベルで実際に出る技ID（上位技が無ければ基本技）
+function specialFor(p,slot){ const k=(p&&p.kind)||'inu';
+  return specialUpgraded(p,slot) || (SPECIAL_BASE[k]||SPECIAL_BASE.inu)[slot]; }
 // そのレベルで新しく解禁された技（レベルアップ演出用）
 function specialsUnlockedAt(kind,lv){ const out=[];
   const ups=SPECIAL_UP[kind]||{};
-  for(const slot of ['du','hadou','dp']){ for(const u of (ups[slot]||[])){
+  for(const slot of SPECIAL_SLOTS){ for(const u of (ups[slot]||[])){
     if(u[0]===lv && ATK[u[1]]) out.push({slot, id:u[1], name:ATK[u[1]].name}); } }
   return out; }
 function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot';
@@ -1299,6 +1333,12 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
         if(Math.abs(pl.x-h.x)<54 && Math.abs(pl.y-h.y)<52) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()), pl.x<h.x?-1:1, true); } }
     if(h.t>=h.life) hazards.splice(i,1);
+  } else if(h.kind==='pbeam'){   // ヌコの極大魔導レール砲：進路上を薙ぎ払う
+    if(h.t%4===0){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
+      const rel=(e.x-h.x)*h.dir;
+      if(rel>-40 && rel<1400 && Math.abs(e.y-h.y)<46 && e.z<150){ noHitStopOnce=true; damageEnemy(e,h.dmg,h.dir*6,true); } } }
+    if(h.t%6===0){ shake=Math.max(shake,8); spark(h.x+h.dir*rnd(20,700), h.y-(h.hy||52)+rnd(-26,26), '#ffe6f6', 2, 8); }
+    if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='ptwister'){   // ヌコの極大竜巻：敵を吸い寄せて巻き上げる
     h.x+=h.vx; h.vx*=0.997;
     for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
@@ -1322,19 +1362,19 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
 function placeMine(p){ hazards.push({kind:'mine', x:p.x, y:LANE, t:0, life:660, dmg:Math.round(42*(p.atkMul||1)+14)});
   dust(p.x,p.y,7); spark(p.x,p.y-6,'#ffd24d',8,6); popText(p.x,p.y-92,'地雷 設置！','#ff9a3a'); sfx.swing(1); }
 function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
-  const wide=(h.kind==='ebeam'||h.kind==='ebolt');
+  const wide=(h.kind==='ebeam'||h.kind==='ebolt'||h.kind==='pbeam');
   if(!wide && (sx<-80||sx>W+80)) continue;
   if(wide && (sx<-1600||sx>W+1600)) continue;
   const gy=LANE-groundLift(h.x);
-  if(h.kind==='ebeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
+  if(h.kind==='ebeam'||h.kind==='pbeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
     const k=Math.min(1,h.t/4)*(h.t>h.life-10?Math.max(0,(h.life-h.t)/10):1);
-    const by=gy-(h.hy||60), th=(54+Math.sin(gf*0.6)*9)*k, len=1500*h.dir, x0=Math.min(sx,sx+len);
+    const by=gy-(h.hy||60), th=((h.th||54)+Math.sin(gf*0.6)*9)*k, len=1500*h.dir, x0=Math.min(sx,sx+len);
     ctx.save(); ctx.globalCompositeOperation='lighter';
     const g=ctx.createLinearGradient(0,by-th,0,by+th);
     g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.30,h.col||'#d46bff');
     g.addColorStop(.5,'#ffffff'); g.addColorStop(.70,h.col||'#d46bff'); g.addColorStop(1,'rgba(255,255,255,0)');
     ctx.fillStyle=g; ctx.fillRect(x0,by-th,Math.abs(len),th*2);
-    ctx.fillStyle='rgba(255,255,255,'+(0.9*k)+')'; ctx.fillRect(x0,by-th*0.20,Math.abs(len),th*0.40);
+    ctx.fillStyle='rgba(255,255,255,'+(0.9*k)+')'; ctx.fillRect(x0,by-th*0.18,Math.abs(len),th*0.36);
     ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=3;
     for(const sg of [-1,1]){ ctx.beginPath();
       for(let xx=0;xx<=Math.abs(len);xx+=44){ const yy=by+sg*(th+Math.sin(gf*0.4+xx*0.028)*8);
@@ -1713,6 +1753,102 @@ function updatePlayer(){
       for(let k=0;k<3;k++) crescent(p.x+dir*(80+k*60), p.y-52, 118, dir>0?Math.PI-0.3:-0.3, dir>0?Math.PI+0.3:0.3, k?'#dff0ff':'#ffffff');
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if((e.x-p.x)*dir>-30 && Math.abs(e.x-p.x)<240 && Math.abs(e.y-p.y)<70){
         damageEnemy(e,Math.round(34*(p.atkMul||1)),dir*12,true); if(!e.dead)launchEnemy(e,dir*13,-12,3); } }); }
+    // ══ Lv3：上攻撃の上位技 ══
+    if(def.skyBreak && a.t===def.act[0]+3){ const dir=p.facing, mul=(p.atkMul||1);   // 天衝：振り上げた真上へ砕けた大気が奔る
+      for(let k=0;k<3;k++) ring(p.x+dir*40, p.y-90-k*46, k%2?'#ffd24d':'#fff');
+      for(let k=0;k<12;k++) spark(p.x+dir*rnd(10,70), p.y-rnd(40,210), (k%2)?'#ffd24d':'#fff', 4, 9);
+      shake=Math.max(shake,13); flash=Math.max(flash,4); sfx.rise(); sfx.big();
+      enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<140 && Math.abs(e.y-p.y)<70){
+        damageEnemy(e,Math.round(26*mul),dir*8,true); if(!e.dead)launchEnemy(e,dir*7,-18,3); } }); }
+    if(def.twinRise){ if(a.t%2===0) spark(p.x+((a.t%4)?1:-1)*rnd(8,30), p.y-p.z-rnd(0,80), (a.t%4)?'#ffe27a':'#fff6c0',3,7);
+      if(a.t===Math.round(def.dur*0.5)){ const mul=(p.atkMul||1), dir=p.facing;   // 頂点でもう一牙が交差する
+        for(let k=0;k<2;k++) crescent(p.x+dir*20, p.y-p.z-50-k*34, 96, dir>0?-1.5:Math.PI-1.5, dir>0?1.5:Math.PI+1.5, k?'#fff6c0':'#ffffff');
+        spark(p.x,p.y-p.z-60,'#fff6c0',24,12); flash=Math.max(flash,3); shake=Math.max(shake,8); sfx.rise();
+        enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<110 && Math.abs((e.y-e.z)-(p.y-p.z))<130){
+          damageEnemy(e,Math.round(20*mul),dir*7,true); if(!e.dead)launchEnemy(e,dir*6,-16,3); } }); } }
+    if(def.windPull){ if(a.t%3===0){ ring(p.x,p.y-p.z-40,'#dff0ff'); dust(p.x,p.y,2); }   // 巻き上げる風：周囲の敵を引き寄せる
+      if(a.t>=def.act[0] && a.t<=def.act[1]) enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
+        const d=p.x-e.x; if(Math.abs(d)<170 && Math.abs(e.y-p.y)<70){ e.x+=Math.sign(d)*2.6; if(e.z<4 && Math.abs(d)<90){ e.z=6; e.vz=-4; e.state='air'; e.bounces=Math.max(e.bounces||0,2); } } }); }
+    if(def.featherFall && a.t===def.act[1]-6){ const mul=nukoMul(p);   // 聖なる羽根が舞い降りる
+      for(let k=0;k<7;k++) spawnProj(p.x+rnd(-90,90), p.y, rnd(-1.6,1.6), 0, {owner:'player',dmg:Math.round(11*mul),color:k%2?'#dff0ff':'#fff',r:11,life:100,zz:H+rnd(0,70),vzz:-9,explode:true});
+      for(let k=0;k<2;k++) ring(p.x,p.y-p.z-60,'#dff0ff'); sfx.rise(); }
+    if(def.smokeBlast && a.t===def.act[0]+2){ const mul=(p.atkMul||1);   // 爆煙玉：煙幕がそのまま炸裂する
+      for(let k=0;k<4;k++) ring(p.x,p.y-34,k%2?'#ffb85a':'#fff'); impactBurst(p.x,p.y-34,'#ffd0a0',true);
+      for(let k=0;k<16;k++) spark(p.x+rnd(-60,60), p.y-rnd(0,80), k%2?'#ffae42':'#d4d8e0', 4, 9);
+      shake=Math.max(shake,13); flash=Math.max(flash,4); hitStop=Math.max(hitStop,8); sfx.big(); popText(p.x,p.y-128,'爆煙玉！','#ffae42',true);
+      enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<150 && Math.abs(e.y-p.y)<72){
+        damageEnemy(e,Math.round(30*mul),(e.x<p.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*12,-12,3); } }); }
+    // ══ Lv7：前攻撃の上位技 ══
+    if(def.iaiWave && a.t===def.act[0]+1){ const dir=p.facing;   // 一閃がそのまま斬空波となって飛ぶ
+      spawnProj(p.x+dir*40, p.y, dir*13, 0, {owner:'player',dmg:Math.round(20*(p.atkMul||1)),color:'#eaffff',r:40,life:130,zz:40,multihit:true,hitGap:7,wave:true,pierce:true});
+      crescent(p.x+dir*110, p.y-52, 120, dir>0?-0.4:Math.PI-0.4, dir>0?0.4:Math.PI+0.4, '#ffffff');
+      spark(p.x+dir*120,p.y-52,'#eaffff',20,12); flash=Math.max(flash,3); shake=Math.max(shake,8); sfx.dash(); }
+    if(def.wallCrush && a.t===def.act[1]-2){ const dir=p.facing, mul=(p.atkMul||1);   // 城を崩す衝撃：着弾点から瓦礫と衝波
+      for(let k=0;k<3;k++) ring(p.x+dir*50, p.y-40, k%2?'#ffd24d':'#fff'); impactBurst(p.x+dir*50,p.y-40,'#ffd0a0',true);
+      for(let k=0;k<14;k++) spark(p.x+dir*(40+k*12), p.y-rnd(0,70), (k%2)?'#8a6a3a':'#ffd24d', 4, 9);
+      for(let w=0;w<2;w++) spawnProj(p.x+dir*44, p.y, dir*(8+w*2.5), 0, {owner:'player',dmg:Math.round(20*mul),color:w?'#fff':'#ffd24d',r:30-w*6,life:70,zz:32,pierce:true,wave:true});
+      shake=Math.max(shake,15); flash=Math.max(flash,4); quake=Math.max(quake||0,16); hitStop=Math.max(hitStop,8); sfx.big(); }
+    if(def.flameRow && a.t===def.act[0]){ const dir=p.facing, mul=nukoMul(p);   // 獄炎連柱：炎の柱が三本連なって立つ
+      for(let k=0;k<3;k++){ const fx=p.x+dir*(90+k*110);
+        hazards.push({kind:'pillar', x:fx, y:LANE, t:0, life:120, dmg:Math.round(7*mul)});
+        for(let r2=0;r2<2;r2++) ring(fx, LANE-groundLift(fx)-30-r2*40, r2?'#ffd24d':'#ff6a3c'); }
+      shake=Math.max(shake,10); flash=Math.max(flash,4); sfx.big(); popText(p.x,p.y-128,'獄炎連柱！','#ff6a3c',true); }
+    if(def.pistolsX && a.t>=def.act[0] && a.t<=def.act[1]){ const dir=p.facing;   // 六連掃射：上下に散らす弾雨
+      if(a.t%2===0){ for(let k=0;k<2;k++){ const sp=rnd(-0.3,0.3);
+        spawnProj(p.x+dir*30, p.y, dir*17, 0, {owner:'player', dmg:Math.round(11*(p.atkMul||1)), color:k?'#fff6c0':'#ffe14d', r:9, life:52, zz:28+k*34+Math.sin(sp)*10, vzz:Math.sin(sp)*5, nostop:true, pierce:true}); }
+        spark(p.x+dir*38, p.y-46+rnd(-14,14), '#ffd24d', 7, 9); shake=Math.max(shake,4); }
+      if(a.t===def.act[0]){ sfx.zap(); flash=Math.max(flash,3); popText(p.x,p.y-118,'六連掃射！','#ffe14d',true); } }
+    if(def.swallow3 && (a.t===def.act[0]+2||a.t===def.act[0]+10||a.t===def.act[0]+18)){ const dir=p.facing, n=(a.t-def.act[0]-2)/8;
+      crescent(p.x+dir*(70+n*18), p.y-52-n*10, 104, dir>0?(-1.4+n*0.9):(Math.PI-1.4+n*0.9), dir>0?(1.4+n*0.9):(Math.PI+1.4+n*0.9), n===2?'#ffffff':'#eaf6ff');
+      spark(p.x+dir*90, p.y-52-n*10, '#eaf6ff', 12, 10); sfx.swing(1);
+      if(n===2){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); shake=Math.max(shake,9); } }
+    // ══ Lv9：下攻撃の上位技 ══
+    if(def.slideCut){ if(a.t%2===0){ dust(p.x,p.y,3); spark(p.x-p.facing*14, p.y-rnd(2,20), '#cfe6ff', 2, 6); }
+      if(a.t===def.act[1]-2){ const dir=p.facing;   // 滑り終わりに斬り上げて浮かせる
+        crescent(p.x+dir*50, p.y-40, 92, dir>0?1.2:Math.PI+1.2, dir>0?-1.2:Math.PI-1.2, '#ffffff');
+        spark(p.x+dir*54,p.y-40,'#eaffff',18,11); shake=Math.max(shake,8); sfx.rise();
+        enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<130 && Math.abs(e.y-p.y)<64){
+          damageEnemy(e,Math.round(18*(p.atkMul||1)),dir*6,true); if(!e.dead)launchEnemy(e,dir*7,-15,3); } }); } }
+    if(def.cometKick){ if(a.t%2===0) spark(p.x-p.facing*rnd(6,30), p.y-p.z-rnd(10,60), (gf%2)?'#ff6a3c':'#ffd24d',3,7);
+      if(a.t===def.act[1]){ const dir=p.facing, mul=(p.atkMul||1);   // 着弾で炎が爆ぜる
+        for(let k=0;k<3;k++) ring(p.x+dir*30, p.y-30, k%2?'#ff6a3c':'#ffd24d'); impactBurst(p.x+dir*30,p.y-30,'#ffd0a0',true);
+        dust(p.x+dir*30,p.y,18); shake=Math.max(shake,14); flash=Math.max(flash,4); hitStop=Math.max(hitStop,7); sfx.big();
+        for(let w=0;w<2;w++) spawnProj(p.x+dir*36, p.y, dir*(8+w*2.5), 0, {owner:'player',dmg:Math.round(18*mul),color:w?'#ffd24d':'#ff6a3c',r:28-w*6,life:64,zz:30,pierce:true,wave:true});
+        enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<170 && Math.abs(e.y-p.y)<72){
+          damageEnemy(e,Math.round(36*mul),dir*11,true); if(!e.dead)launchEnemy(e,dir*13,-14,3); } }); } }
+    if(def.bombRow && a.t===def.act[0]){ const dir=p.facing, mul=nukoMul(p);   // 三連時限爆破：前方に爆弾を並べる
+      for(let k=0;k<3;k++) hazards.push({kind:'bomb', x:p.x+dir*(60+k*95), y:LANE, t:0, life:34+k*7, dmg:Math.round(30*mul)});
+      for(let k=0;k<3;k++) spark(p.x+dir*(60+k*95), p.y-10, '#ffae42', 8, 7);
+      sfx.swing(1); popText(p.x,p.y-118,'三連時限爆破！','#ffae42',true); }
+    if(def.mineRow && a.t===def.act[0]){ const dir=p.facing;   // 三連地雷：前後に散らして設置する
+      for(const off of [-70, 0, 80]){ const mx=clamp(p.x+dir*off, camX+30, camX+W-30);
+        hazards.push({kind:'mine', x:mx, y:LANE, t:0, life:660, dmg:Math.round(40*(p.atkMul||1)+12)});
+        dust(mx,LANE,5); spark(mx,LANE-6,'#ffd24d',7,6); }
+      sfx.swing(1); popText(p.x,p.y-108,'三連地雷 設置！','#ffd24d',true); }
+    if(def.doubleSweep && a.t===def.act[0]+12){ const dir=p.facing;   // 返しの二薙ぎ目
+      crescent(p.x+dir*90, p.y-24, 150, dir>0?0.9:Math.PI+0.9, dir>0?-0.9:Math.PI-0.9, '#ffffff');
+      spark(p.x+dir*110, p.y-22, '#eaf6ff', 16, 11); dust(p.x+dir*90, p.y, 8); shake=Math.max(shake,9); sfx.swing(1); }
+    // ══ Lv12：ダッシュ攻撃の上位技 ══
+    if(def.twinFlash && (a.t===def.act[1]-6||a.t===def.act[1])){ const dir=p.facing, k=(a.t===def.act[1])?1:0;
+      crescent(p.x+dir*60, p.y-52, 126, dir>0?(k?0.9:-0.9):(Math.PI+(k?0.9:-0.9)), dir>0?(k?-0.9:0.9):(Math.PI+(k?-0.9:0.9)), k?'#ffffff':'#dff0ff');
+      spark(p.x+dir*70,p.y-52,'#eaffff',18,11); shake=Math.max(shake,8); sfx.swing(1);
+      if(k){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6);
+        enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<140 && Math.abs(e.y-p.y)<64){
+          damageEnemy(e,Math.round(24*(p.atkMul||1)),dir*10,true); if(!e.dead)launchEnemy(e,dir*10,-12,3); } }); } }
+    if(def.drillFx && a.t%2===0){ const dir=p.facing;   // 螺旋の穿孔エフェクト
+      spark(p.x+dir*rnd(20,54), p.y-rnd(20,66), (a.t%4)?'#ffd24d':'#fff', 3, 8);
+      if(a.t%8===0) ring(p.x+dir*36, p.y-44, '#ffd24d'); }
+    if(def.railBlast && a.t===def.act[0]){ const dir=p.facing, mul=nukoMul(p);   // 極大魔導レール砲：溜め無しで極太の魔力光線
+      hazards.push({kind:'pbeam', x:p.x+dir*44, y:p.y, dir, t:0, life:38, dmg:Math.round(15*mul), col:'#e05ac8', hy:52, th:30});
+      for(let k=0;k<4;k++) ring(p.x+dir*44, p.y-52, k%2?'#ffd0f0':'#fff');
+      spark(p.x+dir*54,p.y-52,'#ffe6f6',30,14); shake=Math.max(shake,16); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8); triggerSlow(20); sfx.boss(); sfx.big();
+      popText(p.x,p.y-128,'極大魔導レール砲！','#ffd0f0',true); }
+    if(def.cloneStrike && a.t%5===0 && a.t<=def.act[1]){ const dir=p.facing;   // 影分身が経路上を同時に斬る
+      const cx=p.x-dir*rnd(30,110);
+      particles.push({k:'wandenAfter', x:cx, y:p.y, face:dir, life:12, max:12});
+      crescent(cx+dir*30, p.y-50, 74, dir>0?-1.1:Math.PI-1.1, dir>0?1.1:Math.PI+1.1, '#bfe9ff');
+      enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-cx)<80 && Math.abs(e.y-p.y)<62){
+        noHitStopOnce=true; damageEnemy(e,Math.round(11*(p.atkMul||1)),dir*5,false); } }); }
     if(def.riftCleave && a.t===def.act[0]+3){ const dir=p.facing, mul=(p.atkMul||1);   // 断界：走った地の裂け目が敵を断つ
       for(let k=0;k<10;k++) spark(p.x+dir*(50+k*40), p.y-rnd(0,26), '#e8f4ff', 3, 9);
       for(let k=0;k<4;k++) crescent(p.x+dir*(70+k*80), p.y-46, 76, dir>0?-1.4:Math.PI-1.4, dir>0?1.4:Math.PI+1.4, k%2?'#ffffff':'#cfeaff');
@@ -1742,14 +1878,15 @@ function updatePlayer(){
       for(let k=0;k<7;k++) spark(p.x+dir*(40+k*26), p.y-rnd(0,14), '#cfeaff', 3, 8); }
     // ── ワンデン「縮地・残刃」：一瞬で駆け抜け、通った跡に残撃が遅れて生じる ──
     if(def.zanjin && a.t===def.act[0]){ const dir=p.facing;
-      const x0=p.x, x1=clamp(p.x+dir*300, camX+26, Math.min(WORLD_END, camX+W-26));
-      p.x=x1; p.invuln=Math.max(p.invuln,26);                         // 移動そのものは無敵ですり抜ける
-      flash=Math.max(flash,3); shake=6; sfx.dash();   // 技名は superFx 側で表示されるので二重に出さない
-      const span=x1-x0, n=5;
+      const reach2=def.zanjinMax?420:300;
+      const x0=p.x, x1=clamp(p.x+dir*reach2, camX+26, Math.min(WORLD_END, camX+W-26));
+      p.x=x1; p.invuln=Math.max(p.invuln,def.zanjinMax?34:26);         // 移動そのものは無敵ですり抜ける
+      flash=Math.max(flash,def.zanjinMax?5:3); shake=def.zanjinMax?11:6; sfx.dash();   // 技名は superFx 側で表示されるので二重に出さない
+      const span=x1-x0, n=def.zanjinMax?8:5;
       for(let k=0;k<n;k++){ const px=x0+span*(k+0.5)/n;
         particles.push({k:'wandenAfter', x:px, y:p.y, face:dir, life:16+k*2, max:16+k*2});   // 通り過ぎた軌跡の残像
         // 残撃：移動が終わってから順に走る（手前から奥へ）
-        hazards.push({kind:'zanjin', x:px, y:LANE, t:0, life:7+k*3, dir, dmg:Math.round(21*(p.atkMul||1))}); }
+        hazards.push({kind:'zanjin', x:px, y:LANE, t:0, life:7+k*3, dir, dmg:Math.round((def.zanjinMax?27:21)*(p.atkMul||1))}); }
       for(let k=0;k<10;k++) spark(x0+span*k/10, p.y-rnd(10,70), '#dfeaf6', 2, 6); }
     // ── ワンデン「高速乱れ切り」：手数で押し切る連撃の残光 ──
     if(def.flurry && a.t>=def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%5===0){ const dir=p.facing;
@@ -1824,15 +1961,21 @@ function updatePlayer(){
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド（Lv10で上位技へ）
     if(p.z<=0 && downUpReady()){ beginAttack(specialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }             // ↓↑コマンド（Lv5で別技へ）
-    if(K.down && p.z<=0){ if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
+    if(K.down && p.z<=0){ const dw=specialUpgraded(p,'down');
+      if(dw){ beginAttack(dw); p.atkHeld=true; return; }                                   // 下攻撃の上位技
+      if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
       if(GD){ beginAttack('ghead'); return; }                                             // ガードワン下：ヘッドバット突進
       if(WA){ beginAttack('wmine'); return; }                                             // ワッチ下：地雷設置
       if(WD){ beginAttack('dsuriashi'); return; }                                         // ワンデン下：摺り足の胴薙ぎ
       beginSlide(); return; }                                                              // ドロップキック / スライディング
-    if(K.up){ beginAttack(WD?'dnuki':SH?'tornado':NK?'ntornado':GD?'gupper':WA?'wsmoke':'shoryu'); }  // 抜刀切り上げ / 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳
-    else if(stingerReady(p.facing)){ if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
-    else if(fwd){ if(WD){ beginAttack('dtsubame'); p.atkHeld=true; p.atkHoldF=0; return; }   // ワンデン前：燕返し
+    if(K.up){ beginAttack(specialFor(p,'up')); }  // 抜刀切り上げ / 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳（Lv3で上位技へ）
+    else if(stingerReady(p.facing)){ const da=specialUpgraded(p,'dash');
+      if(da){ beginAttack(da); if(ATK[da].respin) p.spinCount=1; consumeCmd(); p.atkHeld=true; return; }   // ダッシュ攻撃の上位技
+      if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
+    else if(fwd){ const fu=specialUpgraded(p,'fwd');
+      if(fu){ beginAttack(fu); p.atkHeld=true; p.atkHoldF=0; return; }                      // 前攻撃の上位技（武器フィニッシュより優先）
+      if(WD){ beginAttack('dtsubame'); p.atkHeld=true; p.atkHoldF=0; return; }   // ワンデン前：燕返し
       const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
       else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else if(WA){ beginAttack('wpistol'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 二丁拳銃 / 居合斬り
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
@@ -6206,9 +6349,9 @@ function heroMovePool(k){
     hadou: specialFor(ref,'hadou'),
     dp:    specialFor(ref,'dp'),
     du:    specialFor(ref,'du'),
-    up:    WD?'dnuki':SH?'tornado':NK?'ntornado':GD?'gupper':WA?'wsmoke':'shoryu',
-    fwd:   WD?'dtsubame':SH?'tessan':NK?'nflame':GD?'ghead':WA?'wpistol':'iai',
-    dash:  WD?'dshukuchi':WA?'wheist':GD?'gspin':SH?'spindash':'stinger',
+    up:    specialFor(ref,'up'),
+    fwd:   specialFor(ref,'fwd'),
+    dash:  specialFor(ref,'dash') || 'stinger',
   };
 }
 // 距離に応じて“プレイヤーがやりそうな”技を選ぶ
@@ -7579,7 +7722,7 @@ function drawHUD(){
   if(state==='pause'){ ctx.fillStyle='rgba(0,0,0,.68)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
     ctx.fillStyle='#fff'; ctx.font='bold 40px Trebuchet MS'; ctx.fillText('PAUSE',W/2,84);
-    drawSpecialList(W/2, 128);
+    drawSpecialList(W/2, 122);
     ctx.fillStyle='#cfd6e0'; ctx.font='16px Trebuchet MS'; ctx.fillText('P で再開',W/2,H-30); ctx.textAlign='left'; }
   drawNPCPrompts();
   if(state==='talk') drawDialog();
@@ -7588,23 +7731,23 @@ function drawHUD(){
 // ---------- 必殺技リスト（ポーズ画面）：レベルで進化する技の現状と次の解禁を見せる ----------
 function drawSpecialList(cx, top){
   const p=activePlayers()[0]||players[0]; if(!p) return;
-  const lv=p.level||1, rows=[['du','↓↑'],['hadou','↓→ ＋攻撃'],['dp','→↓→ ＋攻撃']];
-  ctx.font='bold 19px Trebuchet MS'; ctx.fillStyle='#ffe14d';
+  const lv=p.level||1;
+  ctx.font='bold 20px Trebuchet MS'; ctx.fillStyle='#ffe14d';
   ctx.fillText('必殺技（LV'+lv+'）', cx, top);
-  let y=top+30;
-  for(const [slot,cmd] of rows){
-    const cur=specialFor(p,slot), def=ATK[cur]||{};
-    const ups=(SPECIAL_UP[p.kind]||{})[slot]||[];
-    const next=ups.find(u=>lv<u[0]);
-    const evolved=cur!==(SPECIAL_BASE[p.kind]||SPECIAL_BASE.inu)[slot];
-    ctx.font='14px Trebuchet MS'; ctx.fillStyle='#9fb0c4';
-    ctx.fillText(SPECIAL_SLOT_NAME[slot]+'（'+cmd+'）', cx, y);
-    ctx.font='bold 20px Trebuchet MS'; ctx.fillStyle=evolved?'#ff8aff':'#ffffff';
-    ctx.fillText((evolved?'★ ':'')+(def.name||cur), cx, y+24);
-    ctx.font='13px Trebuchet MS'; ctx.fillStyle='#7f8b9c';
-    ctx.fillText(next? ('LV'+next[0]+'で「'+((ATK[next[1]]||{}).name||'')+'」へ進化') : '最大まで進化済み', cx, y+43);
-    y+=68;
-  }
+  // 2列で並べる（7スロット）
+  const colX=[cx-232, cx+232], rowH=54;
+  SPECIAL_SLOTS.forEach((slot,i)=>{
+    const x=colX[i%2], y=top+28+Math.floor(i/2)*rowH;
+    const evolved=!!specialUpgraded(p,slot), cur=specialFor(p,slot);
+    const nm=(ATK[cur]||{}).name || SPECIAL_BASE_NAME[p.kind+'.'+slot] || cur || '—';
+    const ups=(SPECIAL_UP[p.kind]||{})[slot]||[], next=ups.find(u=>lv<u[0]);
+    ctx.font='12px Trebuchet MS'; ctx.fillStyle='#9fb0c4';
+    ctx.fillText(SPECIAL_SLOT_NAME[slot]+'  '+SPECIAL_SLOT_CMD[slot], x, y);
+    ctx.font='bold 17px Trebuchet MS'; ctx.fillStyle=evolved?'#ff8aff':'#ffffff';
+    ctx.fillText((evolved?'★ ':'')+nm, x, y+19);
+    ctx.font='11px Trebuchet MS'; ctx.fillStyle=next?'#7f8b9c':'#5f6a78';
+    ctx.fillText(next? ('LV'+next[0]+' →「'+((ATK[next[1]]||{}).name||'')+'」') : '進化済み', x, y+34);
+  });
 }
 // ---------- NPC会話・分岐UI（HUDレイヤー＝高解像度で描画） ----------
 function drawNPCPrompts(){ if(state!=='play'||aliveCount()>0) return;
