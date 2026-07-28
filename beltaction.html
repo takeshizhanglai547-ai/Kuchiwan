@@ -924,8 +924,23 @@ let coopLives=0;                     // 2P：残機は共有プール
 // ── 難易度による補正 ──
 function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1)*(lap>=3?1.6:lap>=2?1.3:1); }   // 敵HP（周回ごとに増量）
 function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1)*(lap>=3?1.4:lap>=2?1.2:1); }  // 敵の攻撃力（周回ごとに強化）
+// ══════════════════════════════════════════════════════════════
+//  敵の成長：ステージを進めるほど、そして主役が強くなるほど敵も鍛えられる
+//  「制覇したフィールド数」と「主役の熟練度」の両輪で決まるので、
+//  レベリングだけでも進行だけでも歯応えが保たれる
+// ══════════════════════════════════════════════════════════════
+const FOE_RANK_NAME=[null,'精鋭','古参','猛者','鬼神'];
+const FOE_RANK_COL =[null,'#7ad0ff','#9fe86a','#ffd24d','#ff5a6a'];
+function heroLevel(){ let lv=1; for(const q of players){ if(q&&q.active) lv=Math.max(lv,q.level||1); } return lv; }
+function foeGrowth(){ return clamp(doneCount()*0.9 + (heroLevel()-1)*0.6, 0, 15); }   // 0〜15 の成長度
+function foeHpGrow(){  return 1 + foeGrowth()*0.155; }                 // 最大 約3.3倍のHP
+function foeDmgGrow(){ return 1 + foeGrowth()*0.070; }                 // 最大 約2.05倍の攻撃力
+function foeSpdGrow(){ return 1 + Math.min(0.34, foeGrowth()*0.024); } // 最大 約1.34倍の機動
+function foeTier(){ return clamp(Math.floor(foeGrowth()/3.2), 0, 4); } // 0〜4：この段階で精鋭が湧きはじめる
+// 敵1体の最終攻撃力倍率（難易度・成長・階級をここに集約する）
+function foeAtkMul(e){ return diffDmgMul()*foeDmgGrow()*(1+0.30*((e&&e.rank)||0)); }
 function enemyLaunchMul(){ return hardMode?0.5:1; }                    // 高難易度：吹っ飛びにくい
-function enemyThinkMul(){ return hardMode?1.7:1; }                     // 高難易度：思考が速い＝攻撃頻度UP
+function enemyThinkMul(){ return (hardMode?1.7:1)*foeSpdGrow(); }      // 高難易度・成長：思考が速い＝攻撃頻度UP
 function grantLives(n){ if(TWO_P) coopLives+=n; else players.forEach(p=>{ if(p.active) p.lives+=n; }); }
 function livesLeft(){ return TWO_P?coopLives:(player?player.lives:0); }
 useInput(players[0].in); mapKeysFor(0); mapKeysFor(1);
@@ -1323,7 +1338,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
   } else if(h.kind==='ebeam'){   // ボスの極太ビーム：進路上をなぎ払い続ける
     if(h.t%5===0){ for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
       const rel=(pl.x-h.x)*h.dir;
-      if(rel>-50 && rel<1500 && Math.abs(pl.y-h.y)<46 && pl.z<130) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()), h.dir, true); } }
+      if(rel>-50 && rel<1500 && Math.abs(pl.y-h.y)<46 && pl.z<130) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), h.dir, true); } }
     if(h.t%6===0){ shake=Math.max(shake,9); spark(h.x+h.dir*rnd(20,900), h.y-(h.hy||60)+rnd(-30,30), '#fff', 2, 8); }
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='ebolt'){   // ボスの落雷：予兆の輪 → 直撃
@@ -1331,7 +1346,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       ring(h.x,gy,'#bfe9ff'); ring(h.x,gy,'#fff'); spark(h.x,gy-46,'#dff6ff',26,13); dust(h.x,gy,10);
       shake=Math.max(shake,11); flash=Math.max(flash,3); sfx.zap();
       for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
-        if(Math.abs(pl.x-h.x)<54 && Math.abs(pl.y-h.y)<52) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()), pl.x<h.x?-1:1, true); } }
+        if(Math.abs(pl.x-h.x)<54 && Math.abs(pl.y-h.y)<52) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true); } }
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='pbeam'){   // ヌコの極大魔導レール砲：進路上を薙ぎ払う
     if(h.t%4===0){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
@@ -1353,7 +1368,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     for(const pl of players){ if(!pl.active||pl.state==='dead') continue;
       const d=h.x-pl.x; if(Math.abs(d)<300 && Math.abs(pl.y-h.y)<80) pl.x+=Math.sign(d)*2.6; }   // 吸引
     if(h.t%16===0){ for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
-      if(Math.abs(pl.x-h.x)<112 && Math.abs(pl.y-h.y)<66){ hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()), pl.x<h.x?-1:1, true);
+      if(Math.abs(pl.x-h.x)<112 && Math.abs(pl.y-h.y)<66){ hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true);
         pl.z=Math.max(pl.z,22); pl.vz=Math.max(pl.vz||0,10); } } }
     if(h.t%7===0) dust(h.x,LANE,3);
     if(h.t>=h.life || h.x<camX-260 || h.x>camX+W+260) hazards.splice(i,1);
@@ -2795,14 +2810,21 @@ const BOSSQUOTE_BY={
 function bossQuoteFor(key){ const o=BOSSQUOTE_BY[key], k=players[0].kind;
   return (o&&o[k]) || BOSSQUOTE[key]; }
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
-  const dm=diffHpMul(), hpMul=t.boss? 1.6*(1+(dm-1)*0.5) : 2*dm;   // 体力 雑魚×2／ボス×1.6（難易度で増量、ボスは控えめ）
+  const dm=diffHpMul(), gw=foeHpGrow();
+  // 階級：進行が進むほど「精鋭」以上の個体が混ざる（ボス・乗り物・主役ボスは対象外）
+  let rank=0; const tier=foeTier();
+  if(tier>0 && !t.boss && !t.rider && !t.heroBoss && Math.random()<0.11*tier)
+    rank=1+((Math.random()*Math.random()*tier)|0);   // 上位の称号ほど稀にする
+  const rankHp=1+0.34*rank;
+  // 体力 雑魚×2／ボス×1.6（難易度・進行度で増量。ボスは元HPが大きいので伸びを抑える）
+  const hpMul=(t.boss? 1.6*(1+(dm-1)*0.5)*(1+(gw-1)*0.62) : 2*dm*gw*rankHp);
   enemies.push({id:++enemyId,type,x,y:LANE,z:0,vz:0,vx:0,facing:-1,hp:Math.round(t.hp*hpMul),maxHp:Math.round(t.hp*hpMul),w:t.w,h:t.h,
     state:'walk',anim:Math.random()*6,atkTimer:0,atkMax:0,telegraph:0,teleMax:0,hurtTimer:0,downTimer:0,stun:0,
     grabbedBy:0,guardCd:0,guardT:0,crouchT:0,pounceHit:false,zankai:0,
     bob:Math.random()*6,strafeDir:Math.random()<0.5?-1:1,strafeCd:rnd(30,90),hopT:0,
     moveName:'',moveT:0,moveMax:0,moveCd:Math.round(rnd(40,80)*(t.aggro||1)),vanish:0,rage:false,lastMove:'',slammed:false,bounces:0,danger:false,
     kbHits:0,kbT:0,poiseBreak:0,parryStance:0,
-    dead:false,deadTimer:0,thinkCd:rnd(20,60)}); }
+    rank:rank, dead:false,deadTimer:0,thinkCd:Math.round(rnd(20,60)/foeSpdGrow())}); }
 function enemyAtkFx(e){ const t=ETYPE[e.type], dir=e.facing;
   const ex=e.x+dir*t.atkR*0.55, ey=e.y-e.h*0.5, base=dir>0?0:Math.PI;
   crescent(ex,ey, t.atkR*0.6, base-0.85, base+0.85, t.boss?'#d46bff':(t.charge?'#ffd24d':'#ff6a3c'));
@@ -2913,7 +2935,8 @@ function killEnemy(e){ const T=ETYPE[e.type];
   if(T.zombie && !e.revived){ e.revived=true; e.hp=Math.max(1,Math.round(e.maxHp*0.5)); e.state='down'; e.downTimer=100; e.reviveT=100; e.stun=0; e.vx=0; e.vz=0; e.z=0; e.grabbedBy=0;
     spark(e.x,e.y-e.h*0.5,'#a6e070',18,9); ring(e.x,e.y-e.h*0.4,'#a6e070'); popText(e.x,e.y-e.h-8,'まだ死なん…！','#a6e070',true); sfx.boss(); return; }
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
-  score+=T.score+combo.count*10; gainXp(T.score); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
+  const rb=1+0.5*(e.rank||0);   // 階級ぶんの見返り
+  score+=Math.round((T.score+combo.count*10)*rb); gainXp(Math.round(T.score*rb)); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
   if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
   if(T.bomber) bomberBoom(e);
@@ -3180,7 +3203,7 @@ function updateEnemies(){
       if(e.bcT>e.bcMax-(trailer?20:14)){ if(gf%3===0) spark(e.x-e.facing*30,e.y-12,'#ffd24d',3,5); e.vx*=0.8; }   // 空ぶかし（予備動作）
       else { const sp=t.sp*(trailer?3.0:4.6); e.x+=e.facing*sp; e.y=LANE; if(gf%2===0) dust(e.x-e.facing*34,e.y,trailer?5:3); if(trailer&&gf%4===0)spark(e.x-e.facing*60,e.y-30,'#9a9aa2',2,4);
         players.forEach(pl=>{ if(pl.active&&pl.invuln<=0&&pl.state!=='dead'&&Math.abs(pl.x-e.x)<e.w*0.5+30&&Math.abs(pl.y-e.y)<46&&pl.z<44){ if(!e.bcHitCd||gf-e.bcHitCd>=24){ e.bcHitCd=gf;
-          hurtPlayer(pl, Math.round(t.dmg*ZAKO_DMG*0.55*diffDmgMul()), e.facing, true); pl.vx=e.facing*10; shake=Math.max(shake,8); } } }); }
+          hurtPlayer(pl, Math.round(t.dmg*ZAKO_DMG*0.55*foeAtkMul(e)), e.facing, true); pl.vx=e.facing*10; shake=Math.max(shake,8); } } }); }
       if(e.bcT<=0 || e.x<camX-90 || e.x>camX+W+90){ e.state='walk'; e.thinkCd=rnd(70,120); e.vx=0; } continue; }
     if(e.state==='attack'){ e.atkTimer--;
       if(e.atkTimer===e.atkMax-3){ enemyAtkFx(e); }            // visible swipe at strike
@@ -3248,6 +3271,7 @@ function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
   else if(Math.abs(dx)>-reach) return false;                   // AoE radius = -reach
+  dmg*=foeAtkMul(e);                                           // 難易度＋ステージ進行＋階級による強化
   if(ETYPE[e.type].boss) dmg*=2;                               // 難易度UP：ボスの攻撃力2倍
   const fromFront = Math.sign(dx)===-p.facing;
   // ── ワンデンの居合パリィ：受け成功でガード不能技すら弾き、秘剣・犬返しの自動カウンターへ ──
@@ -3266,7 +3290,7 @@ function tryHitPlayer(e,dmg,knock,reach,hh,unblock){
   return hit;
 }
 const ZAKO_DMG=4.0;   // 雑魚の攻撃力（難易度UP：従来の2倍）
-function zakoBuffMul(e){ return (e.rage?1.6:1)*(e.buffTill>gf?1.3:1)*diffDmgMul(); }   // 怒り／円陣強化＋難易度の攻撃力補正
+function zakoBuffMul(e){ return (e.rage?1.6:1)*(e.buffTill>gf?1.3:1); }   // 怒り／円陣強化（難易度・成長分は hitOnePlayer 側でまとめて掛ける）
 function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),true,t.atkR*0.5+30,46); }
 // ---- 組み付き犬の掴み（プレイヤー拘束）----
 function canGrabPlayer(p){ return p && p.active && p.invuln<=0 && p.z<24 && p.state!=='dead' && p.state!=='down'
@@ -3554,10 +3578,10 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
   if(e.state==='bwind'){ e.moveT--; e.telegraph=Math.max(e.moveT,0);
     if(e.moveT<=0){ e.state='bmove'; e.moveT=0; e.telegraph=0; startBossMove(e); } return; }
   if(e.state==='bmove'){ runBossMove(e); e.moveT++;
-    if(e.moveT>=e.moveMax){ e.state='walk'; e.moveCd=rnd(13,32)*(e.rage?0.6:1)*(e.cursed?0.55:1)*(t.aggro||1); e.vx=0; e.danger=false; e.parryStance=0; } return; }  // 難易度UP：技の回転2倍
+    if(e.moveT>=e.moveMax){ e.state='walk'; e.moveCd=rnd(13,32)*(e.rage?0.6:1)*(e.cursed?0.55:1)*(t.aggro||1)/foeSpdGrow(); e.vx=0; e.danger=false; e.parryStance=0; } return; }  // 難易度UP：技の回転2倍
   // ---- walk: approach + spacing ----
   const wantR=t.atkR*0.85;
-  if(dist>wantR+30) e.x+=Math.sign(dx)*t.sp*(t.aggro?2.0:1.3)*rageMul;
+  if(dist>wantR+30) e.x+=Math.sign(dx)*t.sp*(t.aggro?2.0:1.3)*rageMul*foeSpdGrow();
   else if(dist<wantR-40) e.x-=Math.sign(dx)*t.sp*0.8;
   e.y=LANE;
   if(e.moveCd<=0 && e.stun<=0){ const mv=pickBossMove(e,dist);
@@ -4358,7 +4382,16 @@ function update(){
   stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) enterShop(); }   // 会話などで中断されたら次のフレームで再試行
+  checkFoeTierUp();
 }
+// 敵の階級が上がった瞬間に知らせる（自分が強くなった＝敵も強くなった、を実感させる）
+let lastFoeTier=0;
+function checkFoeTierUp(){ const t=foeTier(); if(t<=lastFoeTier){ lastFoeTier=t; return; }
+  lastFoeTier=t;
+  stageBanner=170; stageBannerTxt='敵が強化された！　'+(FOE_RANK_NAME[t]||'精鋭')+'級の手練れが現れる';
+  const pl=activePlayers()[0]; if(pl){ popText(pl.x, pl.y-140, '敵の強さ ★'+t, FOE_RANK_COL[t]||'#ffd24d', true); }
+  for(const e of enemies){ if(!e.dead) spark(e.x,e.y-e.h*0.5,FOE_RANK_COL[t]||'#ffd24d',10,8); }
+  flash=Math.max(flash,3); shake=Math.max(shake,6); sfx.boss(); }
 
 //======================================================================
 //  ============ RENDERING ============
@@ -6232,6 +6265,20 @@ function drawEnemy(e){
     ctx.fillRect(hx,hy,bw*q,4);
     ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1; ctx.strokeRect(hx-1.5,hy-1.5,bw+3,7); }
   if(e.duelSayT>0 && !e.dead) speech(sx, sy-e.h*s-e.z-30, e.duelSay);   // 腕試しの口上
+  // ── 階級（精鋭以上）：色付きのオーラと星で一目で分かるようにする ──
+  if(e.rank>0 && !e.dead){ const col=FOE_RANK_COL[e.rank]||'#7ad0ff';
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.20+0.10*Math.sin(gf*0.11+e.id);
+    ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(sx, sy-e.h*s*0.5-e.z, t.w*0.55*s, e.h*0.60*s, 0,0,7); ctx.fill(); ctx.restore();
+    const ry=sy-e.h*s-e.z-(e.hp<e.maxHp?18:10);
+    ctx.font='bold '+(11*s)+'px Trebuchet MS'; ctx.textAlign='center';
+    ctx.lineWidth=3; ctx.strokeStyle='#000'; ctx.strokeText(FOE_RANK_NAME[e.rank]||'精鋭', sx, ry);
+    ctx.fillStyle=col; ctx.fillText(FOE_RANK_NAME[e.rank]||'精鋭', sx, ry);
+    for(let k=0;k<e.rank;k++){ const px=sx+(k-(e.rank-1)/2)*9*s, py=ry-11*s;
+      ctx.fillStyle=col; ctx.beginPath();
+      for(let v=0;v<10;v++){ const a=-Math.PI/2+v*Math.PI/5, rr=(v%2?1.6:3.6)*s;
+        v?ctx.lineTo(px+Math.cos(a)*rr,py+Math.sin(a)*rr):ctx.moveTo(px+Math.cos(a)*rr,py+Math.sin(a)*rr); }
+      ctx.closePath(); ctx.fill(); }
+    ctx.textAlign='left'; }
   if(!t.boss&&!e.dead&&e.hp<e.maxHp){ const bw=38*s, hx=sx-bw/2, hy=sy-e.h*s-e.z-8;
     ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(hx-1,hy-1,bw+2,5);
     ctx.fillStyle='#ff5a3c'; ctx.fillRect(hx,hy,bw*clamp(e.hp/e.maxHp,0,1),3); }
@@ -6310,7 +6357,7 @@ function heroBeginAttack(e,type){ const def=ATK[type]; if(!def) return false;
 // doPlayerHit のミラー：同じ def を読み、敵ではなくプレイヤーを殴る
 function heroDoHit(e,a){ const g=e.ghost, def=a.def, WP=WEAPONS[g.weapon]||WEAPONS.dagger;
   const reach=def.reach*REACH*WP.reach, hh=def.hh*HH;
-  const dmgMul=WP.dmg*diffDmgMul();
+  const dmgMul=WP.dmg;   // 難易度・成長の補正は hitOnePlayer 側で掛かる
   for(const p of players){ if(!p.active||p.state==='dead') continue;
     if(def.multi){ if(a.lastHit[p.pid] && gf-a.lastHit[p.pid]<(def.multiGap||8)) continue; }
     else if(a.hitSet.has(p.pid)) continue;
@@ -6331,7 +6378,7 @@ function heroRunAttack(e){ const g=e.ghost; if(!g||!g.atk) return false;
   if(def.rise){ e.z=Math.max(0, e.z+(g.riseVel||0)); g.riseVel-=(def.riseG||1.1); if(e.z<=0){ e.z=0; g.riseVel=0; } }
   if(def.pshot && a.t===def.act[0]){ const o=def.pshot, n=o.count||1;
     for(let i=0;i<n;i++){ const vy=o.spread? (i-(n-1)/2)*o.spread*3 : 0;
-      spawnProj(e.x+dir*40, e.y, dir*(o.speed||9), vy, {dmg:Math.round((o.dmg||16)*diffDmgMul()), color:o.color||'#fff',
+      spawnProj(e.x+dir*40, e.y, dir*(o.speed||9), vy, {dmg:Math.round((o.dmg||16)*foeAtkMul(e)), color:o.color||'#fff',
         r:o.r||16, life:o.life||90, zz:(o.low?16:48), pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike',
         multihit:!!o.multihit, hitGap:o.hitGap}); }
     spark(e.x+dir*44, e.y-46, o.color||'#fff', 12, 8); sfx.dash(); }
@@ -7682,6 +7729,7 @@ function drawHUD(){
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
   ctx.fillText(lap>=3?('3周目　STAGE '+stage+' / '+(WORLD3_LEVELS.length+2))
     :lap>=2?('2周目　STAGE '+stage+' / '+(WORLD2_LEVELS.length+2)):('STAGE '+stage+' / 12'),W/2,30);
+  drawFoePower(18, 96);
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
     ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
@@ -7727,6 +7775,22 @@ function drawHUD(){
   drawNPCPrompts();
   if(state==='talk') drawDialog();
   if(state==='branch') drawBranchUI();
+}
+// ---------- 敵の強化度インジケータ：いまどれだけ敵が鍛えられているかを常時見せる ----------
+function drawFoePower(x, y){
+  const tier=foeTier(), hp=foeHpGrow(), atk=foeDmgGrow();
+  const label='敵の強さ  HP×'+hp.toFixed(1)+'  攻×'+atk.toFixed(1);
+  ctx.textAlign='left'; ctx.font='bold 11px Trebuchet MS';
+  const wBox=ctx.measureText(label).width+62;
+  ctx.fillStyle='rgba(0,0,0,.42)'; roundRect(x-6,y-12,wBox,17,5); ctx.fill();
+  ctx.fillStyle=tier>=3?'#ff8a6a':tier>=1?'#ffd24d':'#9fb0c4'; ctx.fillText(label, x, y);
+  const sx0=x+ctx.measureText(label).width+12;
+  for(let k=0;k<4;k++){ const px=sx0+k*12, on=k<tier;
+    ctx.fillStyle=on?(FOE_RANK_COL[Math.min(4,tier)]||'#ffd24d'):'rgba(255,255,255,.18)';
+    ctx.beginPath();
+    for(let v=0;v<10;v++){ const a=-Math.PI/2+v*Math.PI/5, rr=(v%2?1.9:4.4);
+      v?ctx.lineTo(px+Math.cos(a)*rr,y-4+Math.sin(a)*rr):ctx.moveTo(px+Math.cos(a)*rr,y-4+Math.sin(a)*rr); }
+    ctx.closePath(); ctx.fill(); }
 }
 // ---------- 必殺技リスト（ポーズ画面）：レベルで進化する技の現状と次の解禁を見せる ----------
 function drawSpecialList(cx, top){
@@ -7937,7 +8001,7 @@ function updateMercs(){
     // 敵の攻撃に巻き込まれるとダメージ（被弾後は少し無敵）
     if(m.hurtT<=0){ for(const e of enemies){ if(e.dead)continue;
       if((e.state==='attack'||e.state==='bmove') && Math.abs(e.x-m.x)<Math.min((ETYPE[e.type].atkR||50),110)*0.8){
-        m.hurtT=46; m.hp-=Math.round(ETYPE[e.type].dmg*diffDmgMul()); m.r.hp=m.hp;
+        m.hurtT=46; m.hp-=Math.round(ETYPE[e.type].dmg*foeAtkMul(e)); m.r.hp=m.hp;
         spark(m.x,m.y-m.h*0.5,'#ff8a6a',7,7);
         if(m.hp<=0){ popText(m.x,m.y-m.h-14,'傭兵 '+T.name+' 退場…','#ff8a6a',true);
           ring(m.x,m.y-m.h*0.5,'#fff'); dust(m.x,m.y,10); sfx.ko();
@@ -8474,7 +8538,7 @@ function startGame(){ unlockAudio();
   score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
   lap=1; mercRoster=[]; mercs=[];   // 周回と傭兵は新規開始でリセット
-  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; buildEncounters();
+  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
   if(TWO_P) coopLives = hardMode?3:5;   // 2P：残機は共有プール
