@@ -195,6 +195,8 @@ function mapKeysFor(pi){ const m=KEYMAP[pi], inp=players[pi].in, k=inp.keys, KK=
 function pushTapFor(inp,d){ inp.dirTaps.push({d,f:gf}); if(inp.dirTaps.length>6) inp.dirTaps.shift(); }
 function pushCardFor(inp,c){ const L=inp.cardSeq[inp.cardSeq.length-1]; if(L&&L.c===c){ L.f=gf; return; } inp.cardSeq.push({c,f:gf}); if(inp.cardSeq.length>8)inp.cardSeq.shift(); }
 addEventListener('keydown',e=>{
+  if(attractOn){ endAttract(); e.preventDefault(); return; }   // デモ中はどのキーでもタイトルへ
+  titleIdle=0;
   if(state==='cut'){ if(e.code==='Escape'||e.code==='KeyK') cutSkip=true; else cutAdvance=true; e.preventDefault(); return; }
   if(e.code==='KeyP'&&(state==='play'||state==='pause')){ togglePause(); return; }
   const pa=CODE2PA[e.code]; if(!pa) return; const [pi,act]=pa; const inp=players[pi].in;
@@ -3598,7 +3600,9 @@ function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
   if(p.hp<=0){ loseLife(p); return; }
   p.state=knockdown?'down':'hurt'; p.hurtTimer=14; p.downTimer=46; }
-function loseLife(p){ if(!p)p=player; if(p.state==='dead')return; p.hp=0;
+function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
+  if(attractOn){ p.hp=p.maxHp; p.invuln=80; return; }   // デモは途切れさせない
+  p.hp=0;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
   p.state='dead'; p.downTimer=40; p.vz=8; p.riseVel=0;
   const out = TWO_P ? (--coopLives<0) : (--p.lives<0);   // 2Pは共有残機プールを消費
@@ -4114,7 +4118,74 @@ function tryTalk(){ const p=player;
 }
 function linesFor(n){ if(Array.isArray(n.lines)) return n.lines;
   return n.lines[players[0].kind]||n.lines.inu||[]; }   // キャラ別セリフ（オブジェクト形式に対応）
-function startTalk(n,p){ state='talk'; dialog={n,p,ls:linesFor(n),i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0); }
+// ══════════════════════════════════════════════════════════════
+//  道中イベントの共通提示カード
+//  「何が起きたのか」が一目で伝わるよう、種類ごとの色とアイコンで知らせる
+// ══════════════════════════════════════════════════════════════
+let eventCard=null;
+const EVENT_KIND={
+  duel:   {label:'腕試し',      col:'#ffe14d', icon:'sword'},
+  ambush: {label:'待ち伏せ',    col:'#ff5a5a', icon:'alert'},
+  chest:  {label:'宝箱',        col:'#ffd24d', icon:'chest'},
+  cursed: {label:'呪いの箱',    col:'#c46bff', icon:'chest'},
+  spring: {label:'癒しの泉',    col:'#7dd0ff', icon:'drop'},
+  altar:  {label:'月の祭壇',    col:'#bfe9ff', icon:'star'},
+  shrine: {label:'古の神殿',    col:'#ffd24d', icon:'star'},
+  portal: {label:'異界の門',    col:'#c46bff', icon:'gate'},
+  merchant:{label:'行商人',     col:'#9fe86a', icon:'coin'},
+  branch: {label:'分かれ道',    col:'#9fe86a', icon:'gate'},
+  shop:   {label:'道具屋',      col:'#9fe86a', icon:'coin'},
+  boss:   {label:'ボス出現',    col:'#ff6a3c', icon:'alert'},
+};
+function showEventCard(kind, title, sub){
+  if(attractOn) return;                       // デモ中は邪魔なので出さない
+  const K=EVENT_KIND[kind]||EVENT_KIND.chest;
+  eventCard={kind, label:K.label, col:K.col, icon:K.icon, title:title||'', sub:sub||'', t:0, life:EVENT_CARD_LEN};
+  sfx.rise();
+}
+const EVENT_CARD_LEN=150;
+function updateEventCard(){ if(!eventCard) return; eventCard.t++; if(eventCard.t>=eventCard.life) eventCard=null; }
+function drawEventCard(){
+  if(!eventCard) return;
+  const e=eventCard, t=e.t;
+  const inn=easeOut(clamp(t/14,0,1)), out=clamp((e.life-t)/16,0,1), k=Math.min(inn,out);
+  const bw=Math.min(W*0.62, 470), bh=70, bx=W/2-bw/2, by=lerp(-bh-10, 88, inn) - (1-out)*24;
+  ctx.save(); ctx.globalAlpha=k;
+  ctx.fillStyle='rgba(8,10,20,.88)'; roundRect(bx,by,bw,bh,10); ctx.fill();
+  ctx.strokeStyle=e.col; ctx.lineWidth=2; roundRect(bx,by,bw,bh,10); ctx.stroke();
+  ctx.fillStyle=e.col; roundRect(bx,by,5,bh,2); ctx.fill();                        // 種類色のタブ
+  drawEventIcon(e.icon, bx+38, by+bh*0.46, e.col);
+  ctx.textAlign='left';
+  ctx.font='bold 11px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle=e.col;
+  ctx.fillText('EVENT　'+e.label, bx+66, by+20);
+  ctx.font='bold 19px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#fff';
+  ctx.fillText(e.title, bx+66, by+43);
+  if(e.sub){ ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#9fb0c4';
+    ctx.fillText(e.sub, bx+66, by+61); }
+  ctx.globalAlpha=1; ctx.restore();
+}
+function drawEventIcon(kind,x,y,col){
+  ctx.save(); ctx.translate(x,y); ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=2.4; ctx.lineCap='round';
+  if(kind==='sword'){ ctx.beginPath(); ctx.moveTo(-8,9); ctx.lineTo(8,-9); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9,4); ctx.lineTo(-4,9); ctx.stroke(); }
+  else if(kind==='alert'){ ctx.beginPath(); ctx.moveTo(0,-11); ctx.lineTo(10,8); ctx.lineTo(-10,8); ctx.closePath(); ctx.stroke();
+    ctx.fillRect(-1.4,-5,2.8,8); ctx.fillRect(-1.4,4.6,2.8,2.6); }
+  else if(kind==='chest'){ ctx.strokeRect(-10,-4,20,13); ctx.beginPath(); ctx.moveTo(-10,-4); ctx.quadraticCurveTo(0,-14,10,-4); ctx.stroke();
+    ctx.fillRect(-2,-1,4,6); }
+  else if(kind==='drop'){ ctx.beginPath(); ctx.moveTo(0,-11); ctx.quadraticCurveTo(9,2,0,10); ctx.quadraticCurveTo(-9,2,0,-11); ctx.stroke(); }
+  else if(kind==='star'){ ctx.beginPath();
+    for(let v=0;v<10;v++){ const a=-Math.PI/2+v*Math.PI/5, r=(v%2?4.6:10.5);
+      v?ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r):ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r); }
+    ctx.closePath(); ctx.stroke(); }
+  else if(kind==='gate'){ ctx.beginPath(); ctx.moveTo(-9,10); ctx.lineTo(-9,-4); ctx.quadraticCurveTo(0,-13,9,-4); ctx.lineTo(9,10); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.stroke(); ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('¢',0,4); }
+  ctx.restore(); ctx.textAlign='left';
+}
+const NPC_EVENT_SUB={chest:'中身は開けてのお楽しみ', cursed:'嫌な予感がする…', spring:'湧き水が体力を癒してくれる',
+  altar:'祈れば月が力を貸すという', shrine:'古の神が眠る場所', portal:'くぐれば見知らぬ土地へ', merchant:'旅の道具を商っている'};
+function startTalk(n,p){ state='talk'; dialog={n,p,ls:linesFor(n),i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0);
+  if(EVENT_KIND[n.kind] && !n.carded){ n.carded=true;
+    showEventCard(n.kind, (EVENT_KIND[n.kind]||{}).label+'を見つけた', NPC_EVENT_SUB[n.kind]||''); } }
 function updateTalk(){ if(!dialog){ state='play'; return; }
   useInput(players[0].in); dialog.t++;
   const line=dialog.ls[dialog.i]||'', full=dialog.t>=line.length*2;
@@ -4182,8 +4253,8 @@ function triggerHeroDuel(n){
   const px=nearestPlayerTo(n.x).x;
   spawnEnemy(ty, clamp(px+220, camX+120, camX+W-80), LANE);
   const e=enemies[enemies.length-1]; if(e){ e.facing=-1; e.thinkCd=40; }
+  showEventCard('duel', T.name+' が現れた！', '腕に覚えのある好敵手。技を出し惜しみせず来るぞ');
   popText(px, LANE-150, '腕試しだ！', '#ffe14d', true);
-  popText(px, LANE-118, T.name+' が現れた！', T.accent);
   speechQueue(e, DUEL_LINE[hk]||'いざ、勝負！');
   e.noQuote=true;   // 汎用のボス口上とふきだしが重ならないようにする
   flash=Math.max(flash,4); shake=10; sfx.boss(); bossIntro=110;
@@ -4191,7 +4262,8 @@ function triggerHeroDuel(n){
 }
 // 中ボスの口上を一定時間ふきだしで出す
 function speechQueue(e,txt){ if(!e) return; e.duelSay=txt; e.duelSayT=150; }
-function triggerAmbush(n){ popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
+function triggerAmbush(n){ showEventCard('ambush','囲まれた！','左右から一斉に襲いかかってくる');
+  popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(); shake=Math.max(shake,6);
   const picks=lap>=3?['greywan','raygun','floater','slimealien']:lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
   for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
 function updateNPCs(){
@@ -4212,6 +4284,7 @@ function updateBranch(){ useInput(players[0].in);
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false; confirmBranch(); }
   saveInput(players[0].in); updateParticles(); }
 function confirmBranch(){ const key=pendingBranch; pendingBranch=null;
+  showEventCard('branch','進路を決めた','選んだ道で、この先の顔ぶれが変わる');
   const opt=ROUTE_DEFS[key][branchSel]; routesChosen.push(branchSel); sfx.rise();
   applyRoute(key,branchSel); saveProgress(stage);
   startCutscene(opt.cut, ()=>{ state='play'; goArrow=160; }); }
@@ -4379,14 +4452,16 @@ function update(){
   if(state==='talk'){ updateTalk(); updateParticles(); return; }
   if(state==='branch'){ updateBranch(); return; }
   if(state!=='play') return;
+  if(attractOn){ attractAI(players[0]); updateAttract(); }
   stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) enterShop(); }   // 会話などで中断されたら次のフレームで再試行
+  updateEventCard();
   checkFoeTierUp();
 }
 // 敵の階級が上がった瞬間に知らせる（自分が強くなった＝敵も強くなった、を実感させる）
 let lastFoeTier=0;
-function checkFoeTierUp(){ const t=foeTier(); if(t<=lastFoeTier){ lastFoeTier=t; return; }
+function checkFoeTierUp(){ const t=foeTier(); if(attractOn){ lastFoeTier=t; return; } if(t<=lastFoeTier){ lastFoeTier=t; return; }
   lastFoeTier=t;
   stageBanner=170; stageBannerTxt='敵が強化された！　'+(FOE_RANK_NAME[t]||'精鋭')+'級の手練れが現れる';
   const pl=activePlayers()[0]; if(pl){ popText(pl.x, pl.y-140, '敵の強さ ★'+t, FOE_RANK_COL[t]||'#ffd24d', true); }
@@ -7773,6 +7848,7 @@ function drawHUD(){
     drawSpecialList(W/2, 122);
     ctx.fillStyle='#cfd6e0'; ctx.font='16px Trebuchet MS'; ctx.fillText('P で再開',W/2,H-30); ctx.textAlign='left'; }
   drawNPCPrompts();
+  drawEventCard();
   if(state==='talk') drawDialog();
   if(state==='branch') drawBranchUI();
 }
@@ -8191,9 +8267,11 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
+  {chapter:'序章', chapterSub:'ワンダフル王国', bgTheme:0, art:'city'},
   {bgTheme:0, art:'city',   name:'', text:'むかしむかし——肉球あふれるワンダフル王国は、笑い声と陽だまりに満ちていた。'},
   {bgTheme:4, art:'invade', name:'', text:'だがある月の無い夜、闇の軍勢「ダークワンワン帝国」が国境を破った。砦は炎に呑まれ、王は囚われ、空からは星さえ消えた——'},
   {bgTheme:4, art:'invade', name:'王女ペロ', text:'「もう、誰も残っていないの…どうか。どうか、あなただけが頼りなのです」'},
+  {chapter:'第一章', chapterSub:'立ち上がる者', bgTheme:0, art:'player'},
 ];
 const STORY_OPEN_BY={
   // 起：日常／承：依頼を受け旅立つ
@@ -8450,13 +8528,20 @@ function startEnding(){ if(endingDone)return; endingDone=true;
   if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
   const scenes = lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
   startCutscene(scenes, ()=>winGame()); }
-function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; sfx.swing(0);
+function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; cut.fade=14; sfx.swing(0);
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
 function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
-  const sc=cut.scenes[cut.i], len=(sc.text||'').length, full=cut.t>=len*1.3;
+  if(cut.fade>0) cut.fade--;
+  const sc=cut.scenes[cut.i];
   if(cutSkip){ cutSkip=false; cut.i=cut.scenes.length-1; const cb=cut.onDone; cut=null; if(cb)cb(); return; }
+  // 章タイトルは読み進めるものではなく、一定時間で自動的に流れる
+  if(sc.chapter){ if(cutAdvance){ cutAdvance=false; if(cut.t>26) nextCutScene(); } else if(cut.t>=CHAPTER_LEN) nextCutScene(); return; }
+  const len=(sc.text||'').length, full=cut.t>=len*1.3;
+  // タイプ音（文字が流れている間だけ小さく鳴らす）
+  if(!full && cut.t%4===0) sfx.swing(2);
   if(cutAdvance){ cutAdvance=false; if(!full){ cut.t=Math.ceil(len*1.3); } else nextCutScene(); }
   else if(full && cut.t>len*1.3+240){ nextCutScene(); } }
+const CHAPTER_LEN=132;
 // ---- cutscene rendering ----
 function cutSky(idx,art){ const T=STAGE_THEME[clamp(idx,0,STAGE_THEME.length-1)], sk=T.sky;
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,sk[0]); g.addColorStop(.5,sk[1]); g.addColorStop(1,(art==='peace'||art==='city')?'#e9f3df':sk[2]);
@@ -8489,6 +8574,9 @@ function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   ctx.fillText(line,x,yy); }
 function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
   const idx = sc.bgTheme!=null?sc.bgTheme : (sc.boss?themeIdxFor(sc.stageN||1):0);
+  // ゆっくり寄っていくカメラ（同じ絵でも呼吸を感じさせる）
+  const zoomT=clamp(cut.t/300,0,1), zoom=1+0.055*zoomT, panX=lerp(0,-W*0.012,zoomT);
+  ctx.save(); ctx.translate(W/2+panX,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   cutSky(idx, sc.art||(sc.boss?'boss':''));
   // portrait / art
   if(sc.boss){ ctx.save(); ctx.globalCompositeOperation='lighter';
@@ -8498,14 +8586,23 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
       // big STAGE label
       ctx.globalAlpha=intro; ctx.textAlign='center'; ctx.fillStyle='#ffd24d'; ctx.font='bold 22px Trebuchet MS';
       ctx.fillText('STAGE '+(sc.stageN||1)+'  BOSS',W/2,86); ctx.globalAlpha=1; ctx.textAlign='left';
-  } else if(sc.art==='player'){ drawPlayerPortrait(W*0.5,H*0.80,2.2,1,'idle');
+  } else if(sc.art==='player'){ const q=easeOut(clamp(cut.t/26,0,1));
+      ctx.save(); ctx.globalAlpha=q; drawPlayerPortrait(lerp(W*0.5-40,W*0.5,q),H*0.80,2.2,1,'idle'); ctx.restore();
   } else if(sc.art==='invade'){ drawMarch();
   } else if(sc.art==='fall'){ ctx.save(); ctx.globalAlpha=clamp(1-cut.t/120,0,1); drawBossPortrait('boss',W*0.5,H*0.82,1.6,-1); ctx.restore();
       ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<5;i++){ const a=cut.t*0.1+i; ctx.fillStyle='rgba(198,120,255,.5)'; ctx.beginPath(); ctx.arc(W/2+Math.cos(a)*cut.t*2,H*0.5+Math.sin(a)*cut.t*1.4,4,0,7); ctx.fill(); } ctx.restore();
   } else if(sc.art==='end'){ ctx.textAlign='center'; ctx.fillStyle='#ffe14d'; ctx.font='900 48px Trebuchet MS';
       ctx.fillText('聖犬士イッヌ',W/2,H*0.42); ctx.fillStyle='#fff'; ctx.font='bold 18px Trebuchet MS'; ctx.fillText('SCORE  '+String(score).padStart(6,'0'),W/2,H*0.42+34); ctx.textAlign='left'; }
-  // letterbox + text panel
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,40); ctx.fillRect(0,H-128,W,128);
+  ctx.restore();   // ここまでがカメラ内
+  // 四隅を落とすビネット（画面に締まりを出す）
+  ctx.save(); ctx.fillStyle=radGrad(W/2,H/2,W*0.78,'rgba(0,0,0,0)','rgba(0,0,0,.55)');
+  ctx.fillRect(0,0,W,H); ctx.restore();
+  // ── 章タイトルカード ──
+  if(sc.chapter){ drawChapterCard(sc); return; }
+  // letterbox（シーン頭でスッと閉じる）
+  const lb=easeOut(clamp(cut.t/12,0,1));
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,40*lb); ctx.fillRect(0,H-128*lb,W,128*lb);
+  if(lb<1){ ctx.fillStyle='rgba(0,0,0,'+(1-lb)*0.5+')'; ctx.fillRect(0,0,W,H); }
   const bx=40,by=H-112,bw=W-80,bh=84;
   ctx.fillStyle='rgba(8,10,20,.85)'; roundRect(bx,by,bw,bh,10); ctx.fill();
   ctx.strokeStyle='rgba(255,210,80,.55)'; ctx.lineWidth=2; roundRect(bx,by,bw,bh,10); ctx.stroke();
@@ -8520,13 +8617,41 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
   cutWrap((sc.text||'').slice(0,shown), bx+24, by+34, bw-48, 28);
   if(cut.t>=len*1.3 && Math.floor(gf/20)%2===0){ ctx.fillStyle='#ffd24d'; ctx.font='14px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('▶ タップ / J で次へ',bx+bw-16,by+bh-12); ctx.textAlign='left'; }
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='12px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('K / ESC: スキップ',W-14,30); ctx.textAlign='left';
+  if(cut.fade>0){ ctx.fillStyle='rgba(0,0,0,'+(cut.fade/14)*0.85+')'; ctx.fillRect(0,0,W,H); }   // シーン間の暗転
+}
+// ── 章タイトル：黒帯に大きく章名を出す ──
+function drawChapterCard(sc){
+  const t=cut.t, inn=easeOut(clamp(t/22,0,1)), out=clamp((CHAPTER_LEN-t)/20,0,1), k=Math.min(inn,out);
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,'+(0.62*k+0.18)+')'; ctx.fillRect(0,0,W,H);
+  const by=H*0.34, bh=H*0.30;
+  ctx.globalAlpha=k;
+  const g=ctx.createLinearGradient(0,by,0,by+bh);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(.2,'rgba(0,0,0,.9)'); g.addColorStop(.8,'rgba(0,0,0,.9)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,by,W,bh);
+  // 左右から伸びる金線
+  const ln=easeOut(clamp((t-8)/26,0,1));
+  ctx.strokeStyle='rgba(255,215,110,.85)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(W/2-W*0.40*ln,by+22); ctx.lineTo(W/2+W*0.40*ln,by+22); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W/2-W*0.40*ln,by+bh-22); ctx.lineTo(W/2+W*0.40*ln,by+bh-22); ctx.stroke();
+  ctx.textAlign='center';
+  ctx.font='900 46px "Hiragino Mincho ProN","Yu Mincho",serif';
+  ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,.9)';
+  ctx.strokeText(sc.chapter, W/2, by+bh*0.52); ctx.fillStyle='#ffe14d'; ctx.fillText(sc.chapter, W/2, by+bh*0.52);
+  if(sc.chapterSub){ ctx.globalAlpha=k*clamp((t-24)/22,0,1);
+    ctx.font='20px "Hiragino Mincho ProN","Yu Mincho",serif';
+    ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,.9)';
+    ctx.strokeText(sc.chapterSub, W/2, by+bh*0.52+38); ctx.fillStyle='#fff'; ctx.fillText(sc.chapterSub, W/2, by+bh*0.52+38); }
+  ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore();
+  if(cut.fade>0){ ctx.fillStyle='rgba(0,0,0,'+(cut.fade/14)*0.85+')'; ctx.fillRect(0,0,W,H); }
 }
 
 const elStart=document.getElementById('start'),elResult=document.getElementById('result');
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
-function saveProgress(st){ try{
+function saveProgress(st){ if(attractOn) return;   // デモプレイでプレイヤーのセーブを上書きしない
+  try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone,
     lap:lap, mercs:mercRoster.map(r=>({type:r.type,hp:Math.max(1,Math.round(r.hp)),maxHp:r.maxHp}))})); }catch(e){} }
@@ -8607,7 +8732,8 @@ document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(s
 const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };
 refreshContinueBtn();
 // cutscene advance / skip input
-addEventListener('pointerdown',()=>{ if(state==='cut') cutAdvance=true; },{passive:true});
+addEventListener('pointerdown',()=>{ if(attractOn){ endAttract(); return; } titleIdle=0; if(state==='cut') cutAdvance=true; },{passive:true});
+addEventListener('pointermove',()=>{ if(state==='title') titleIdle=0; },{passive:true});
 // sound toggle
 const sndBtn=document.getElementById('snd');
 sndBtn.onclick=()=>{ initAudio(); sndOn=!sndOn; sndBtn.textContent=sndOn?'♪':'🔇';
@@ -8698,6 +8824,155 @@ function drawTitleScene(){ drawBackground(); drawGround();
   // 最前面の金色装飾リボン（上部）
   ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle='rgba(255,215,110,.14)'; ctx.fillRect(0,H*0.03,W,2); ctx.fillRect(0,H*0.03+5,W,1); ctx.restore(); }
 
+
+//======================================================================
+//  アトラクトモード（デモ画面）
+//  タイトルを放置すると、機能紹介カードと自動デモプレイを交互に見せる。
+//  何かキーを押す／画面に触れると即座にタイトルへ戻る。
+//======================================================================
+let attract=null, attractOn=false, titleIdle=0, attractDemoN=0;
+const ATTRACT_IDLE=780;                       // タイトル放置 13 秒でデモ開始
+const ATTRACT_CARDS=[
+  {title:'６人の主役',            sub:'剣・拳・魔法・大槌・盗術・居合。それぞれ別ゲームのような手触り', col:'#ffe14d', art:'party'},
+  {title:'必殺技がレベルで進化',  sub:'７つのコマンド技すべてが、モーションごと上位技へ化ける',        col:'#ff8aff', art:'evolve'},
+  {title:'３周ぶんの物語',        sub:'王国 → 蟲の世界 → 宇宙人の侵略。周回ごとに敵もボスも総入れ替え', col:'#9fe86a', art:'lap'},
+  {title:'個性を持つボス戦',      sub:'極太ビーム・急降下斬り・見切りカウンター・落雷と巨大竜巻',      col:'#ff6a6a', art:'boss'},
+  {title:'２P CO-OP',             sub:'二人で並んで殴り込め。残機は共有、歯応えは倍',                  col:'#7dd0ff', art:'coop'},
+];
+const ATTRACT_KINDS=['inu','shima','nuko','guard8','watch','wanden'];
+function startAttract(){
+  if(attractOn||state!=='title') return;
+  const c0=(attractDemoN*2)%ATTRACT_CARDS.length;
+  attract={ seq:[ {k:'card',n:c0}, {k:'demo'}, {k:'card',n:(c0+1)%ATTRACT_CARDS.length}, {k:'demo'},
+                  {k:'card',n:(c0+2)%ATTRACT_CARDS.length} ], i:0, t:0 };
+  attractOn=true; titleIdle=0;
+  const es=document.getElementById('start'); if(es) es.classList.add('hidden');
+  attractEnter();
+}
+function attractEnter(){ const st=attract.seq[attract.i]; attract.t=0;
+  if(st.k==='card'){ state='attract'; if(sndOn && !Music.isPlaying()) Music.start('title'); }
+  else attractStartDemo();
+}
+function attractNext(){ attract.i++; if(attract.i>=attract.seq.length){ endAttract(); return; } attractEnter(); }
+function endAttract(){
+  attract=null; attractOn=false; titleIdle=0; state='title';
+  enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
+  cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0;
+  const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  Music.stop(); if(sndOn) Music.start('title');
+}
+// ── 自動デモ：実際のゲームを AI が操作する ──
+function attractStartDemo(){
+  const kind=ATTRACT_KINDS[(attractDemoN++)%ATTRACT_KINDS.length];
+  setupRoster(kind); startGame();
+  attractOn=true; state='play';
+  const p=players[0];
+  p.level=7+((Math.random()*9)|0);            // 進化済みの必殺技を見せたいので中盤の熟練度から
+  p.maxHp=380; p.hp=380; p.atkMul=2.8; p.dim=p.dimMax=3; p.lives=9; p.aiCd=0; p.aiSpCd=40;   // 手応えよく倒れるように攻撃力は高め
+  lastFoeTier=9;
+  encounters.length=0; npcs.length=0; items.length=0; hazards.length=0; vehicles.length=0;
+  encIndex=0; curGateX=WORLD_END; goArrow=0; stageBanner=0;
+  levelsDone={}; levelsDone['__demo0']=true;   // 敵の成長度を序盤〜中盤相当に見せる
+  // 周回を巡回して、王国／蟲の世界／宇宙人のいずれかを見せる
+  lap=[1,2,3][attractDemoN%3];
+  stage=1; for(const k in STAGE2THEME){ stage=k|0; break; }
+  STAGE2THEME[stage]= lap>=3? 13+((Math.random()*3)|0) : lap>=2? 9+((Math.random()*4)|0) : ((Math.random()*8)|0);
+  // 端で戦い続けないよう、ワールドの中ほどから始める
+  camX=clamp(rnd(W*0.5, Math.max(W*0.5, WORLD_END-W*1.5)), 0, Math.max(0, WORLD_END-W));
+  p.x=camX+W*0.46; p.y=LANE;
+  attractSpawnWave();
+  if(sndOn){ Music.stop(); Music.start('battle'); }
+}
+function attractSpawnWave(){
+  const p=players[0], n=4+((Math.random()*3)|0);
+  for(let i=0;i<n;i++){ const side=i%2?1:-1;
+    spawnEnemy(randZako(), clamp(p.x+side*(W*0.36+rnd(0,110)), camX+50, camX+W-50), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
+  if(Math.random()<0.5){   // 見せ場としてボスも混ぜる（周回に合ったボスを選ぶ）
+    const pool=lap>=3?['greyking','ufoboss','bioblob']:lap>=2?['kamaboss','queenbee','kuwaboss','spidboss']:['garm','vesper','cerbe','moloch','guard0'];
+    const mid=pool[(Math.random()*pool.length)|0];
+    if(ETYPE[mid]) spawnEnemy(mid, clamp(p.x+(W*0.40), camX+50, camX+W-50), LANE); }
+}
+// デモ用のかんたんAI：間合いを取り、コンボを刻み、ときどき必殺技を見せる
+function attractAI(p){
+  if(!p.active) return;
+  const inp=p.in, KK=inp.K, pr=inp.pressed;
+  KK.left=KK.right=KK.up=KK.down=false;
+  if(p.hp<p.maxHp*0.35) p.hp=p.maxHp;          // デモが負けて終わらないように
+  if(p.state==='dead'){ p.state='idle'; p.hp=p.maxHp; p.invuln=60; }
+  let tg=null, td=1e9;
+  for(const e of enemies){ if(e.dead||e.state==='blastoff') continue; const d=Math.abs(e.x-p.x); if(d<td){ td=d; tg=e; } }
+  if(!tg){ KK.right=true; if(gf%40===0) attractSpawnWave(); return; }
+  const dx=tg.x-p.x, dy=tg.y-p.y;
+  if(Math.abs(dy)>16){ if(dy<0) KK.up=true; else KK.down=true; }
+  if(td>76){ if(dx>0) KK.right=true; else KK.left=true; }
+  else if(td<34){ if(dx>0) KK.left=true; else KK.right=true; }
+  p.aiCd=(p.aiCd||0)-1; p.aiSpCd=(p.aiSpCd||0)-1;
+  const idle=(p.state==='idle'||p.state==='walk');
+  // 必殺技はゲームの見どころなので、こまめに見せる
+  if(idle && p.aiSpCd<=0 && td<340 && p.z<=0){
+    const slots=['hadou','dp','du','up','fwd','dash'], slot=slots[(Math.random()*slots.length)|0];
+    const ty=specialFor(p,slot);
+    if(ATK[ty]){ const sv=player; player=p; beginAttack(ty); player=sv; p.aiSpCd=70+((Math.random()*70)|0); return; }
+  }
+  if(td<120 && p.aiCd<=0){ pr.atk=true; p.aiCd=5+((Math.random()*9)|0); }
+  if(Math.random()<0.006 && idle) pr.jump=true;
+}
+// ── 描画 ──
+function drawAttractCard(){
+  const st=attract&&attract.seq[attract.i]; if(!st||st.k!=='card') return;
+  const C=ATTRACT_CARDS[st.n%ATTRACT_CARDS.length], t=attract.t;
+  drawTitleScene();
+  ctx.save(); ctx.fillStyle='rgba(4,6,14,.62)'; ctx.fillRect(0,0,W,H);
+  const inn=clamp(t/16,0,1), out=clamp((ATTRACT_CARD_LEN-t)/16,0,1), k=Math.min(inn,out);
+  ctx.globalAlpha=k;
+  // 帯
+  const by=H*0.30, bh=H*0.34;
+  const g=ctx.createLinearGradient(0,by,0,by+bh);
+  g.addColorStop(0,'rgba(10,14,26,.0)'); g.addColorStop(.18,'rgba(10,14,26,.92)');
+  g.addColorStop(.82,'rgba(10,14,26,.92)'); g.addColorStop(1,'rgba(10,14,26,.0)');
+  ctx.fillStyle=g; ctx.fillRect(0,by,W,bh);
+  ctx.strokeStyle=C.col; ctx.globalAlpha=k*0.7; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(W*0.10,by+18); ctx.lineTo(W*0.90,by+18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*0.10,by+bh-18); ctx.lineTo(W*0.90,by+bh-18); ctx.stroke();
+  ctx.globalAlpha=k;
+  // 見出し（少し遅れてせり上がる）
+  const rise=lerp(18,0,easeOut(clamp((t-6)/18,0,1)));
+  ctx.textAlign='center';
+  ctx.font='900 40px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  ctx.lineWidth=7; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(C.title, W/2, by+bh*0.46+rise);
+  ctx.fillStyle=C.col; ctx.fillText(C.title, W/2, by+bh*0.46+rise);
+  ctx.font='16px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  ctx.globalAlpha=k*clamp((t-16)/16,0,1);
+  ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.strokeText(C.sub, W/2, by+bh*0.46+rise+34);
+  ctx.fillStyle='#e8eef8'; ctx.fillText(C.sub, W/2, by+bh*0.46+rise+34);
+  ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore();
+  drawAttractOverlay();
+}
+const ATTRACT_CARD_LEN=210, ATTRACT_DEMO_LEN=680;
+// デモ／カード共通の枠（PRESS ANY KEY と DEMO 表示）
+function drawAttractOverlay(){
+  const blink=Math.floor(gf/26)%2===0;
+  ctx.save(); ctx.textAlign='center';
+  if(attract && attract.seq[attract.i].k==='demo'){
+    ctx.globalAlpha=0.6+0.2*Math.sin(gf*0.06);
+    ctx.font='bold 15px Trebuchet MS'; ctx.fillStyle='#ffd24d';
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.85)';
+    ctx.strokeText('― DEMO PLAY ―', W/2, H-56); ctx.fillText('― DEMO PLAY ―', W/2, H-56);
+  }
+  if(blink){ ctx.globalAlpha=1;
+    ctx.font='bold 19px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,.85)';
+    ctx.strokeText('PRESS ANY KEY', W/2, H-30); ctx.fillStyle='#fff'; ctx.fillText('PRESS ANY KEY', W/2, H-30); }
+  ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore();
+}
+function updateAttract(){
+  if(!attract) return;
+  attract.t++;
+  const st=attract.seq[attract.i];
+  if(st.k==='card'){ if(attract.t>=ATTRACT_CARD_LEN) attractNext(); }
+  else { if(attract.t>=ATTRACT_DEMO_LEN) attractNext(); }
+}
+
 //======================================================================
 //  Main loop
 //======================================================================
@@ -8753,18 +9028,24 @@ function drawCharSel(){
 function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,y+10); ctx.lineTo(x-9,y-4); ctx.lineTo(x+9,y-4); ctx.closePath(); ctx.fill();
   ctx.fillStyle=col; roundRect(x-22,y-24,44,18,5); ctx.fill(); ctx.fillStyle='#1a1a20'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText(label,x,y-11);
   if(locked){ ctx.fillStyle='#7dff7d'; ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText('決定!',x,y-30); } ctx.restore(); ctx.textAlign='center'; }
-function loop(){
+function loop(){ try{ loopBody(); }catch(err){ console.error(err); if(attractOn) endAttract(); requestAnimationFrame(loop); } }
+function loopBody(){
   if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); requestAnimationFrame(loop); return; }
   if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); requestAnimationFrame(loop); return; }
   if(state==='map'){ gf++; updateMap(); ctx.clearRect(0,0,W,H); drawMap(); requestAnimationFrame(loop); return; }
   if(state==='charsel'){ gf++; updateCharSel(); ctx.clearRect(0,0,W,H); drawCharSel(); requestAnimationFrame(loop); return; }
+  if(state==='attract'){ gf++; updateAttract(); updateParticles();
+    if(state==='attract'){ ctx.clearRect(0,0,W,H); drawAttractCard(); }   // 更新中にデモへ切り替わることがある
+    requestAnimationFrame(loop); return; }
   // slow-motion: throttle logic ticks while keeping render smooth
   if(slowmo>0 && state==='play' && hitStop<=0){
     slowmo--; slowAcc+=0.34;
     if(slowAcc>=1){ slowAcc-=1; update(); }
   } else { update(); }
-  if(state==='title'){ ctx.clearRect(0,0,W,H); drawTitleScene(); }
+  if(state==='title'){ ctx.clearRect(0,0,W,H); drawTitleScene();
+    titleIdle++; if(titleIdle>ATTRACT_IDLE) startAttract(); }
   else render();
+  if(attractOn && state==='play') drawAttractOverlay();   // デモ中の表示は render の最前面に重ねる
   requestAnimationFrame(loop);
 }
 buildEncounters(); loop();
