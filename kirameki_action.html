@@ -68,6 +68,7 @@
   <button id="retryBtn" class="btn">▶ もういちど</button>
 </div>
 
+<div id="rotateHint" style="display:none;position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 58px);transform:translateX(-50%);z-index:40;padding:6px 14px;border-radius:999px;background:rgba(10,14,28,.75);border:1px solid rgba(255,220,120,.5);color:#ffe9a8;font-size:12.5px;letter-spacing:1px;">📱 横向きにすると もっと遊びやすいよ！</div>
 <div id="touchUI">
   <div id="btnAtk" class="tbtn">攻撃</div>
   <div id="btnJump" class="tbtn">ジャンプ</div>
@@ -102,22 +103,31 @@ const damp=(rate,dt)=>1-Math.exp(-rate*dt);
 
 const cvs=document.getElementById('cvs'), ctx=cvs.getContext('2d');
 const VH=620;                       // デザイン高さ（この高さ基準でスケール）
-let S=1, viewW=960, cw=0, chh=0;    // S: デバイスピクセル→デザイン座標スケール
+const MIN_VIEW_W=980;               // 最低限確保する横の視界（縦持ちスマホのズームしすぎ防止）
+let S=1, viewW=960, viewH=620, offTop=0, offBot=0, cw=0, chh=0;
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   cw=window.innerWidth; chh=window.innerHeight;
   cvs.width=Math.round(cw*dpr); cvs.height=Math.round(chh*dpr);
-  S=cvs.height/VH; viewW=cvs.width/S;
+  cvs.style.width=cw+'px'; cvs.style.height=chh+'px';   // 高DPI端末で実寸表示にする（これがないと2〜3倍に拡大される）
+  S=Math.min(cvs.height/VH, cvs.width/MIN_VIEW_W);   // 横視界を優先して縮小
+  S=Math.max(S, cvs.height/1200);                     // ただし縦視界は最大1200まで
+  viewW=cvs.width/S; viewH=cvs.height/S;
+  const extra=Math.max(0,viewH-VH); offTop=extra*0.75; offBot=extra-offTop;
+  const hint=document.getElementById('rotateHint');
+  if(hint) hint.style.display=(('ontouchstart' in window)&&chh>cw*1.2)?'block':'none';
   buildVignette();
 }
 window.addEventListener('resize',resize);
 
 let vigCan=null;
 function buildVignette(){
-  vigCan=document.createElement('canvas'); vigCan.width=Math.max(2,Math.round(viewW/4)); vigCan.height=Math.round(VH/4);
+  vigCan=document.createElement('canvas'); vigCan.width=Math.max(2,Math.round(viewW/4)); vigCan.height=Math.max(2,Math.round(viewH/4));
   const c=vigCan.getContext('2d');
-  const g=c.createRadialGradient(vigCan.width/2,vigCan.height*0.42,vigCan.height*0.28,vigCan.width/2,vigCan.height/2,vigCan.width*0.72);
-  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.72,'rgba(10,8,24,0.06)'); g.addColorStop(1,'rgba(8,6,20,0.42)');
+  const cy=((offTop+VH*0.45)/Math.max(viewH,1))*vigCan.height;
+  const rr=Math.max(vigCan.width*0.72,vigCan.height*0.66);
+  const g=c.createRadialGradient(vigCan.width/2,cy,rr*0.4,vigCan.width/2,cy,rr);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.72,'rgba(10,8,24,0.06)'); g.addColorStop(1,'rgba(8,6,20,0.4)');
   c.fillStyle=g; c.fillRect(0,0,vigCan.width,vigCan.height);
 }
 
@@ -338,14 +348,14 @@ const BG={ farHills:[], midTrees:[], nearTrees:[], grass:[], flowers:[], clouds:
 function updBG(dt){
   for(const c of BG.clouds){ c.x+=c.v*dt; if(c.x>STAGE_W+300) c.x=-300; }
   for(const p of BG.petals){ p.w+=p.ws*dt; p.x+=(p.vx+Math.sin(p.w)*12)*dt; p.y+=(34+Math.sin(p.w*0.7)*16)*dt;
-    if(p.y>VH+20||p.x<camX-200){ p.x=camX+rand(0,viewW+300); p.y=-20; } }
+    if(p.y>VH+offBot+20||p.x<camX-200){ p.x=camX+rand(0,viewW+300); p.y=-offTop-20; } }
 }
 function drawBG(){
   // 空（黄金の午後）
   const sky=ctx.createLinearGradient(0,0,0,GY+40);
   sky.addColorStop(0,'#79c4e8'); sky.addColorStop(0.45,'#aadcec');
   sky.addColorStop(0.75,'#ffedbe'); sky.addColorStop(1,'#ffd9a0');
-  ctx.fillStyle=sky; ctx.fillRect(0,0,viewW,VH);
+  ctx.fillStyle=sky; ctx.fillRect(0,-offTop-2,viewW,GY+42+offTop);
   // 太陽のグロー
   const sunX=viewW*0.74-camX*0.015, sunY=100;
   ctx.fillStyle=radGrad(sunX,sunY,190,'rgba(255,246,214,0.9)','rgba(255,246,214,0)');
@@ -409,7 +419,7 @@ function drawBG(){
   // 地面
   const gg=ctx.createLinearGradient(0,GY-14,0,VH);
   gg.addColorStop(0,'#8cc45e'); gg.addColorStop(0.25,'#5f9e48'); gg.addColorStop(1,'#2e5e38');
-  ctx.fillStyle=gg; ctx.fillRect(0,GY-10,viewW,VH-GY+10);
+  ctx.fillStyle=gg; ctx.fillRect(0,GY-10,viewW,VH-GY+12+offBot);
   // 道
   ctx.fillStyle='rgba(226,198,140,0.55)';
   ctx.beginPath(); ctx.ellipse(viewW/2,GY+52,viewW*0.72,34,0,0,TAU); ctx.fill();
@@ -448,7 +458,7 @@ function drawBGFront(){
   }
   ctx.restore(); ctx.globalAlpha=1;
   // ビネット＋色調
-  if(vigCan) ctx.drawImage(vigCan,0,0,viewW,VH);
+  if(vigCan) ctx.drawImage(vigCan,0,-offTop,viewW,viewH);
 }
 </script>
 <script>
@@ -1417,7 +1427,7 @@ function drawHUD(){
   if(mode==='title') return;
   // ハート
   for(let i=0;i<P.maxhp;i++){
-    const hx=34+i*30, hy=34;
+    const hx=34+i*30, hy=-offTop+34;
     const full=i<P.hp;
     const beat=full&&P.hp<=2?1+Math.sin(gTime*8)*0.1:1;
     ctx.save(); ctx.translate(hx,hy); ctx.scale(beat*1.25,beat*1.25);
@@ -1430,7 +1440,7 @@ function drawHUD(){
     ctx.restore();
   }
   // スコア（ほね）
-  ctx.save(); ctx.translate(viewW-150,26);
+  ctx.save(); ctx.translate(viewW-150,-offTop+26);
   ctx.fillStyle='#fdf6e0'; ctx.strokeStyle='#b8a878'; ctx.lineWidth=1;
   roundRect(-8,-2,16,4,2); ctx.fill();
   for(const s of [-1,1]){ ctx.beginPath(); ctx.arc(s*8,-2.4,3,0,TAU); ctx.fill(); ctx.beginPath(); ctx.arc(s*8,2.4,3,0,TAU); ctx.fill(); }
@@ -1440,7 +1450,7 @@ function drawHUD(){
   ctx.restore();
   // ボスHPバー
   if(boss.active&&!boss.dead&&boss.state!=='intro'){
-    const bw=Math.min(520,viewW-120), bx=(viewW-bw)/2, by=VH-46;
+    const bw=Math.min(520,viewW-120), bx=(viewW-bw)/2, by=VH+offBot-46;
     ctx.fillStyle='rgba(10,8,16,0.6)'; roundRect(bx-3,by-3,bw+6,16,8); ctx.fill();
     const r=clamp(boss.hp/boss.maxhp,0,1);
     const bg2=ctx.createLinearGradient(bx,0,bx+bw*r,0);
@@ -1477,10 +1487,10 @@ function drawLetterbox(){
   if(lbox>0.01){
     const h=64*lbox;
     ctx.fillStyle='#05060a';
-    ctx.fillRect(0,0,viewW,h); ctx.fillRect(0,VH-h,viewW,h);
+    ctx.fillRect(0,-offTop,viewW,h+offTop*lbox); ctx.fillRect(0,VH-h+offBot*(1-lbox),viewW,h+offBot);
   }
   if(flashA>0.01){
-    ctx.fillStyle='rgba(255,252,240,'+flashA+')'; ctx.fillRect(0,0,viewW,VH);
+    ctx.fillStyle='rgba(255,252,240,'+flashA+')'; ctx.fillRect(0,-offTop,viewW,viewH);
   }
 }
 let startT=0;
@@ -1555,7 +1565,7 @@ function updPlayer2(dt){
   updPlayer(dt);
 }
 function render(){
-  ctx.setTransform(S,0,0,S,0,0);
+  ctx.setTransform(S,0,0,S,0,offTop*S);
   // 画面シェイク
   if(shakeT>0){ const a=shakeAmp*clamp(shakeT/0.3,0,1);
     ctx.translate(rand(-a,a),rand(-a,a)); }
