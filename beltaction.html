@@ -591,6 +591,14 @@ const rnd=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 const easeOut=t=>1-Math.pow(1-t,3);
+// ══ ディズニー・アニメーション基盤（kirameki_action から移植）══
+// ばね（減衰振動）：着地のスクワッシュ、振り向きのしなり、マントの追従などの
+// 「フォロースルー／オーバーシュート」をすべてこれで作る
+function mkSpring(x){ return {x:x||0, v:0}; }
+function sprUpd(sp, target, w, z){ const dt=1/60; w=w||14; z=(z===undefined)?0.72:z;
+  const a=-w*w*(sp.x-target)-2*z*w*sp.v; sp.v+=a*dt; sp.x+=sp.v*dt; return sp.x; }
+function sprKick(sp, imp){ sp.v+=imp; }
+function mkRig(){ return { sq:mkSpring(0), wob:mkSpring(0), capeM:mkSpring(0), capeT:mkSpring(0) }; }
 function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprite size on a single lane
 // マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
 function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
@@ -904,7 +912,7 @@ const ATK={
 //======================================================================
 //  Player
 //======================================================================
-function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(),
+function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(), rig:mkRig(), poseB:null, prevZ:0, prevFacing:1, prevX:0, spdS:0,
   x:120,y:LANE,vx:0,vy:0,w:40,h:60,facing:1, hp:120,maxHp:120,lives:3,
   state:'idle', anim:0, atk:null, comboStep:0, comboTimer:0,
   hurtTimer:0, invuln:0, downTimer:0, dashCd:0,
@@ -2871,6 +2879,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.boss && e.noJuggleT>gf){ knockdown=false; launch=0; }   // ボスは起き上がり直後のみ耐性（無限お手玉防止）
   if(!heavyBoss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hitFace=12;   // 被弾時のやられ顔タイマー（全エネミー共通）
+  e.sqv=(e.sqv||0)+(knockdown?8:4.5)*(T.boss?0.5:1);   // 被弾のぷにっ（巨体は控えめ）
   // ── ボスの踏ん張り：規定ヒット数を稼ぐまでは のけぞるだけで吹っ飛ばない ──
   if(heavyBoss){ bossPoiseTick(e); if(!bossPoiseBroken(e)){ knockdown=false; launch=0; } }
   if(e.state==='gripping'){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); }   // 掴み中に攻撃されたら解放（救出）
@@ -3124,6 +3133,11 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
+    // ばねのスクワッシュ（減衰振動）：被弾・着地の「ぷにっ」を全エネミー共通で
+    { const w=15, z=0.55, a=-w*w*(e.sq||0)-2*z*w*(e.sqv||0);
+      e.sqv=(e.sqv||0)+a/60; e.sq=(e.sq||0)+e.sqv/60;
+      if((e.pz||0)>5 && e.z<=0) e.sqv+=5.2;   // 着地
+      e.pz=e.z; }
     if(e.frozen>0)e.frozen--;     // 氷結（ヌコの掴み下）
     // ☆ スターKO：画面外へ飛び去り、星になって消える
     if(e.state==='blastoff'){ e.bo++; e.x+=e.vx; e.z+=e.boVz; e.vx*=0.992; e.boVz*=0.99; e.spin+=0.6;
@@ -3597,6 +3611,7 @@ function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state
     spark(p.x,p.y-52,'#c8ccd4',8,6); ring(p.x,p.y-46,'#c8ccd4'); sfx.guard(); }
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flash=Math.max(flash,4); hurtSound(dmg); resetCombo();
+  if(p.rig){ sprKick(p.rig.sq, 5); sprKick(p.rig.wob, dir*p.facing*8); }   // 被弾でぐにゃっと歪む
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
   if(p.hp<=0){ loseLife(p); return; }
   p.state=knockdown?'down':'hurt'; p.hurtTimer=14; p.downTimer=46; }
@@ -4436,9 +4451,21 @@ function updateCamera(){
   camX+=(Math.min(target,maxC)-camX)*0.12; camX=clamp(camX,0,WORLD_END-W);
   players.forEach(p=>{ if(p.active) p.x=clamp(p.x,camX+24,camX+W-24); });
 }
+// ばねの二次動作：着地・踏み切り・振り向きを検出してリグを弾く
+function updateRigP(p){ const r=p.rig; if(!r) return;
+  if(p.prevZ>5 && p.z<=0){ const imp=clamp(p.prevZ/60,0.35,1.4);   // 着地：ぐにゃっと潰れて戻る
+    sprKick(r.sq, 6.2*imp); sprKick(r.capeT, -3*imp); }
+  if(p.prevZ<=0 && p.z>2){ sprKick(r.sq,-4.6); sprKick(r.capeT, 2.5); }   // 踏み切り：縦に伸びる
+  if(p.facing!==p.prevFacing){ sprKick(r.wob, -7.5); sprKick(r.capeM, 5*p.facing); }   // 振り向き：上体がしなって追いつく
+  const dx=p.x-p.prevX;
+  p.spdS=lerp(p.spdS||0, Math.abs(dx), 0.38);                        // スメア用の平滑化速度
+  const sway=clamp(-dx*p.facing*0.55, -7, 7);                        // マントは進行方向と逆へなびく
+  sprUpd(r.sq, 0, 17, 0.5); sprUpd(r.wob, 0, 11, 0.5);
+  sprUpd(r.capeM, sway, 9, 0.8); sprUpd(r.capeT, sway*1.6, 6.2, 0.55);
+  p.prevZ=p.z; p.prevFacing=p.facing; p.prevX=p.x; }
 function stepPlayers(){
   for(const pl of players){ if(!pl.active) continue;
-    player=pl; useInput(pl.in);
+    player=pl; useInput(pl.in); updateRigP(pl);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
     else { updatePlayer();
       if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
@@ -5418,6 +5445,16 @@ function drawPlayer(){
   const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
   softShadow(sx,sy,26*s*(1-Math.min(p.z/130,0.5)));
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
+  // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
+  if(p.rig){
+    const q=clamp(p.rig.sq.x*0.10,-0.16,0.22);           // 着地=横に潰れ、踏切=縦に伸びる（キラメキ準拠の係数）
+    ctx.rotate(clamp(p.rig.wob.x*0.05,-0.22,0.22));      // 振り向き・被弾の上体のしなり
+    if(q) ctx.scale(1+q*0.9, 1-q);
+    if(p.z>0 && Math.abs(p.vz)>3){                       // 空中：落下・上昇の速度で縦に伸びる
+      const st2=clamp(Math.abs(p.vz)*0.012,0,0.14); ctx.scale(1-st2*0.7, 1+st2); }
+    const sm=clamp(((p.spdS||0)-6.5)*0.024, 0, 0.30);   // 高速移動中は進行方向へ引き伸ばす（スメア）
+    if(sm>0) ctx.scale(1+sm, 1-sm*0.5);
+  }
   if(st==='down'||st==='dead'){ ctx.rotate(-0.9*p.facing); ctx.translate(0,9); }
   if(st==='wheel'){ ctx.rotate(p.wheelRot); }
   if(st==='screw'){ ctx.rotate(p.screwRot); }
@@ -5573,6 +5610,20 @@ function drawPlayer(){
       thF=0.45+Math.max(0,w)*1.15; kF=0.1; thB=-0.3-Math.max(0,-w)*0.5; kB=0.4; legF1=10+(w>0?9:0); legF2=9+(w>0?11:0);
       tA0=-0.2; tA1=0.5; trailW=1.4; } }
 
+  // ── スローイン・スローアウト：ポーズは毎フレーム目標へ指数追従する（キラメキ式）──
+  // 攻撃・投げは俊敏に、待機・歩行・ジャンプはぬるっと繋がる。状態が切り替わっても
+  // 姿勢が飛ばず、必ず「間のポーズ」を通るのでアニメが滑らかになる
+  {
+    const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
+    let B=p.poseB;
+    if(!B){ B=p.poseB=Object.assign({},_tgt); }
+    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry');
+    const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.62:0.26;
+    const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
+    for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;
+      B[key]+=(_tgt[key]-B[key])*kk; }
+    ({bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2}=B);
+  }
   const shima = p.kind==='shima', nuko = p.kind==='nuko', g8 = p.kind==='guard8', watch = p.kind==='watch', wanden = p.kind==='wanden';
   const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa'||p.weapon==='claw'||p.weapon==='tigerfist');   // 拳法武器を装備中
   if(shima && (p.weapon==='fists'||p.weapon==='tigerfist') && (mode==='blade'||mode==='shield')) mode='fist'; // 素手・篭手は拳のみ
@@ -5864,15 +5915,29 @@ function drawShieldAt(hx,hy,p){
     ctx.beginPath(); ctx.moveTo(0,-28); ctx.quadraticCurveTo(23,-19,23,4); ctx.quadraticCurveTo(23,28,3,38); ctx.stroke(); ctx.globalAlpha=1; }
   ctx.restore();
 }
-function drawCape(p,lean){ const sw=Math.sin(p.anim)*3 + (p.state==='attack'?5:0) + (p.state==='walk'?Math.sin(p.anim*2)*2:0);
+function drawCape(p,lean){
+  // 二連ばねの擬似布：中間と先端が別の周波数で遅れて追従し、走り・ジャンプ・振り向きで
+  // 本物の布のように「ふわり」と流れる（風の呼吸として小さな sin を足す）
+  const r=p.rig, breeze=Math.sin(p.anim)*1.6;
+  const mid=(r?r.capeM.x:0)+breeze*0.5, tip=(r?r.capeT.x:0)+breeze+(p.state==='attack'?4:0);
+  const lift=r?clamp(-r.capeT.v*0.5,-4,7):0;   // 先端の速度で裾が浮き上がる
   const g=ctx.createLinearGradient(-24,-34,-6,-2); g.addColorStop(0,'#e0503e'); g.addColorStop(1,'#8e251b');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-4,-33); ctx.quadraticCurveTo(-28,-18,-20-sw,-1); ctx.quadraticCurveTo(-10,-8,-3,-12); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.moveTo(-4,-33); ctx.quadraticCurveTo(-16,-18,-12-sw*.5,-4); ctx.lineTo(-3,-12); ctx.fill(); }
+  ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-4,-33);
+  ctx.quadraticCurveTo(-28+mid,-18,-20-tip,-1-lift);
+  ctx.quadraticCurveTo(-10+mid*0.4,-8,-3,-12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.moveTo(-4,-33);
+  ctx.quadraticCurveTo(-16+mid*0.6,-18,-12-tip*.5,-4-lift*0.5); ctx.lineTo(-3,-12); ctx.fill(); }
 // ---------- ヌコ（魔法使いマルチーズの女の子）----------
-function drawNukoRobeBack(p,lean){ const sw=Math.sin(p.anim)*3 + (p.state==='attack'?4:0) + (p.state==='walk'?Math.sin(p.anim*2)*2:0);
+function drawNukoRobeBack(p,lean){
+  const r=p.rig, breeze=Math.sin(p.anim)*1.6;
+  const mid=(r?r.capeM.x:0)+breeze*0.5, tip=(r?r.capeT.x:0)+breeze+(p.state==='attack'?3:0);
+  const lift=r?clamp(-r.capeT.v*0.5,-4,7):0;
   const g=ctx.createLinearGradient(-24,-34,-4,-2); g.addColorStop(0,'#b48ae0'); g.addColorStop(1,'#6a3fa0');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-3,-34); ctx.quadraticCurveTo(-26,-18,-19-sw,-1); ctx.quadraticCurveTo(-9,-7,-2,-12); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(0,0,0,.16)'; ctx.beginPath(); ctx.moveTo(-3,-34); ctx.quadraticCurveTo(-15,-18,-11-sw*.5,-4); ctx.lineTo(-2,-12); ctx.fill(); }
+  ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-3,-34);
+  ctx.quadraticCurveTo(-26+mid,-18,-19-tip,-1-lift);
+  ctx.quadraticCurveTo(-9+mid*0.4,-7,-2,-12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.16)'; ctx.beginPath(); ctx.moveTo(-3,-34);
+  ctx.quadraticCurveTo(-15+mid*0.6,-18,-11-tip*.5,-4-lift*0.5); ctx.lineTo(-2,-12); ctx.fill(); }
 // ---------- ガードワン8号（巨大な茶色いチャウチャウ・トゲ付き丸兜）----------
 function guard8Body(lean){
   ctx.save(); ctx.rotate(lean*0.2);
@@ -6279,6 +6344,7 @@ function drawEnemy(e){
   ctx.globalAlpha=al;
   softShadow(sx,sy,(t.w*0.5)*s*(e.z>0?0.7:1));
   ctx.save(); ctx.translate(sx,sy-e.z); ctx.scale(e.facing*s,s);
+  { const eq=clamp((e.sq||0)*0.085,-0.13,0.19); if(eq) ctx.scale(1+eq,1-eq); }   // ばねスクワッシュ
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
