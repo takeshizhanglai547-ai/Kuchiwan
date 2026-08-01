@@ -160,6 +160,10 @@ const CEIL_Z = 408;                        // ceiling height (juggle bounces off
 
 let state='title', camX=0, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
+// 全画面フラッシュの色。既定は被弾通知の赤。技ごとに色を指定すると加算合成の発光フラッシュになる
+const FLASH_DEF='255,90,80';
+let flashCol=FLASH_DEF;
+function flashAt(n,col){ flash=Math.max(flash,n); if(col) flashCol=col; }
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='', shopPending=0;
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
 let lap=1;                       // 周回（1=一周目 2=二周目・蟲の世界）
@@ -615,92 +619,172 @@ function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } r
 // ステージ番号→ビジュアルテーマ（分岐ルートで動的に決まる）
 let STAGE2THEME={}, STAGE_NAME={};
 function themeIdxFor(st){ return STAGE2THEME[st]!=null ? clamp(STAGE2THEME[st],0,STAGE_THEME.length-1) : clamp(st-1,0,STAGE_THEME.length-1); }
+function hexRGB(h){ if(!h||h[0]!=='#') return '255,255,255'; h=h.slice(1);
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return parseInt(h.slice(0,2),16)+','+parseInt(h.slice(2,4),16)+','+parseInt(h.slice(4,6),16); }
 function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
   g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
 
 //======================================================================
 //  Particles  (sparks, slash crescents, dust, floating text)
 //======================================================================
+// エフェクト寸法の共通倍率。キャラは FIXED_SCALE で拡大されているのに火花や輪だけ等倍のままだと
+// 打撃の見た目が身長の 1/4 程度にしかならないので、寸法（座標ではない）にだけ掛ける
+const FXS=1.55;
+const FX_CAP=260;          // 同時パーティクル上限（ダメージ数字は間引き対象外）
 let particles=[];
 let noHitStopOnce=false;   // ヒットストップ抑制フラグ（連射弾・設置魔法用）
 let curHitIsMelee=false;   // ゴルックスのパリィ：近接ヒット中フラグ
-function spark(x,y,color,n=8,spd=6){
-  for(let i=0;i<n;i++){ const a=rnd(0,Math.PI*2), s=rnd(2,spd);
-    particles.push({k:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:rnd(14,28),max:28,color,star:Math.random()<.5}); }
+// パーティクルの y は「レーン座標」で受け取り、描画時に足元の起伏 groundLift を引く。
+// キャラ（drawEnemy / drawPlayer）と同じ規約に揃えるため、生成時の起伏量を gl に焼き付ける。
+// layer: 0=キャラ背面（土煙）／1=キャラ前面（火花・輪・放射線）／2=UI（ダメージ数字。間引かない）
+function spark(x,y,color,n=8,spd=6,opt){ opt=opt||{};
+  const gl=groundLift(x), dl=opt.delay|0, lay=opt.layer!=null?opt.layer:1, sprd=opt.spread!=null?opt.spread:0.95;
+  for(let i=0;i<n;i++){
+    const a=(opt.aim!=null)? opt.aim+rnd(-sprd,sprd) : rnd(0,Math.PI*2), sp=rnd(2,spd)*1.3, lf=Math.round(rnd(12,30));
+    particles.push({k:'spark',x,y,gl,layer:lay,delay:dl,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,
+      life:lf,max:lf,color,star:Math.random()<.5,                                  // max=life で必ず全輝度から始まる
+      g:rnd(0.14,0.34),d:rnd(0.90,0.965),rot:rnd(0,6.28),rv:rnd(-0.35,0.35),sz:rnd(0.7,1.6)}); }  // 重力・空気抵抗・回転・大きさを一粒ずつ散らす
 }
-function dust(x,y,n=4){ for(let i=0;i<n;i++) particles.push({k:'dust',x,y,vx:rnd(-1.5,1.5),vy:rnd(-.4,-1.6),life:rnd(18,30),max:30}); }
-function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,r,a0,a1,color,life:10,max:10}); }
-function popText(x,y,txt,color,big){ particles.push({k:'txt',x,y,txt,color,big,life:46,max:46,vy:-1.3}); }
-function ring(x,y,color){ particles.push({k:'ring',x,y,r:6,life:16,max:16,color}); }
-function impactBurst(x,y,color,big){ particles.push({k:'impact',x,y,color,life:big?13:9,max:big?13:9,R:big?54:34,n:big?10:7,rot:Math.random()*6}); }
+function dust(x,y,n=4){ const gl=groundLift(x);
+  for(let i=0;i<n;i++){ const lf=Math.round(rnd(18,34));
+    particles.push({k:'dust',x,y,gl,layer:0,delay:0,vx:rnd(-1.5,1.5),vy:rnd(-.4,-1.6),life:lf,max:lf,
+      rot:rnd(0,6.28),rv:rnd(-0.07,0.07),sz:rnd(0.8,1.6)}); } }
+// 土煙：数フレーム遅れて湧き、膨らみながらゆっくり回って薄れる（重い一撃の余韻）
+function smokePuff(x,y,n=3,rgb){ const gl=groundLift(x);
+  for(let i=0;i<n;i++){ const lf=Math.round(rnd(34,50));
+    particles.push({k:'smoke',x:x+rnd(-12,12),y:y+rnd(-9,9),gl,layer:0,delay:Math.round(rnd(4,11)),
+      vx:rnd(-1.2,1.2),vy:rnd(-1.0,-0.2),life:lf,max:lf,r:rnd(9,15)*FXS,
+      rot:rnd(0,6.28),rv:rnd(-0.05,0.05),color:rgb||'216,208,192'}); } }
+// ヒット 0F の白芯：ひと呼吸だけ膨らんで消える閃光。火花より先に立ち上がる最前段
+function flashCore(x,y,r,rgb,delay){ particles.push({k:'flashcore',x,y,gl:groundLift(x),layer:1,
+  delay:delay|0,r:(r||24)*FXS,life:4,max:4,color:rgb||'255,255,255'}); }
+function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:0,r,a0,a1,color,life:10,max:10}); }
+function popText(x,y,txt,color,big){ particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,life:46,max:46,vy:-1.3}); }
+// 衝撃リング：初速が速く一気に減速する（ease-out）楕円。正円の等速膨張をやめ、床に寝た衝撃波に見せる
+function ring(x,y,color,opt){ opt=opt||{};
+  particles.push({k:'ring',x,y,gl:groundLift(x),layer:opt.layer!=null?opt.layer:1,delay:opt.delay|0,
+    r:5*FXS,r0:5*FXS,rMax:(opt.rMax||50)*FXS,ang:opt.ang!=null?opt.ang:rnd(-0.45,0.45),
+    sq:opt.sq!=null?opt.sq:rnd(0.52,0.82),life:16,max:16,color}); }
+// 放射インパクト線：角度・長さ・太さを一本ずつ散らし、等間隔スポークの機械的な見た目を避ける
+function impactBurst(x,y,color,big,opt){ opt=opt||{}; const n=big?11:7, sp=[];
+  for(let i=0;i<n;i++) sp.push({a:i/n*Math.PI*2+rnd(-0.26,0.26), len:rnd(0.66,1.42), w:rnd(0.65,1.5)});
+  particles.push({k:'impact',x,y,gl:groundLift(x),layer:1,delay:opt.delay|0,color,
+    life:big?14:10,max:big?14:10,R:(big?44:29)*FXS,sp,rot:Math.random()*6}); }
+// 打撃1発ぶんの時間差レイヤー：0F 白芯 → 1F 火花 → 3F 衝撃リング → 6F 放射線 → 9F〜 土煙。
+// 全部同時に出して同時に消える従来の作りでは一撃の重みが出ないため、層ごとに立ち上がりをずらす
+function hitFx(x,y,dmg,heavy,col){
+  const big=!!heavy||dmg>=22;
+  flashCore(x,y,big?30:19,'255,255,255');
+  spark(x,y,col||'#ffe14d', big?15:7, big?9:6, {delay:1});
+  ring(x,y,big?'#ffffff':'#ffe9a0',{delay:3,rMax:big?62:38});
+  if(dmg>=10) impactBurst(x,y,big?'#fff':'#ffe9a0',big,{delay:6});
+  if(big) smokePuff(x,y+12,3);          // 大打撃だけ煙を足す（通常打撃で画面を汚さない）
+}
 function updateParticles(){
-  if(particles.length>240) particles.splice(0, particles.length-240);   // 負荷対策：パーティクル上限
-  for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life--;
-    if(p.k==='spark'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.24;p.vx*=0.94; }
-    else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; }
+  trimParticles();
+  const froze=hitStop>0;                     // ヒットストップ中は VFX を 1/3 速で進め「止まった一瞬」を成立させる
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i];
+    if(p.delay>0){ p.delay--; continue; }    // 出番待ちの間は寿命を減らさない（時間差レイヤーの土台。凍結中も等速で消化）
+    if(froze && p.k!=='txt' && gf%3!==0) continue;
+    p.life--;
+    if(p.k==='spark'){ p.x+=p.vx;p.y+=p.vy; p.vy=p.vy*p.d+p.g; p.vx*=p.d; p.rot+=p.rv; }   // 空気抵抗は縦にも効かせる
+    else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; p.vx*=0.97; p.rot+=p.rv; }
+    else if(p.k==='smoke'){ p.x+=p.vx;p.y+=p.vy; p.vy*=0.93; p.vx*=0.95; p.rot+=p.rv; }
     else if(p.k==='txt'){ p.y+=p.vy; p.vy*=0.92; }
-    else if(p.k==='ring'){ p.r+=2.4; }
+    else if(p.k==='ring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.2)); }
     else if(p.k==='twinkle'){ p.rot=(p.rot||0)+0.18; }
     if(p.life<=0) particles.splice(i,1);
   }
 }
-function drawParticles(){
-  particles.forEach(p=>{ const sx=p.x-camX, a=p.life/p.max;
+// 負荷対策：上限超過ぶんを「最も消えかけているもの」から捨てる。
+// 従来の古い順 splice ではいちばん読ませたいダメージ数字（最長寿命）から先に消えていた
+function trimParticles(){
+  if(particles.length<=FX_CAP) return;
+  const over=particles.length-FX_CAP, idx=[];
+  for(let i=0;i<particles.length;i++) if(particles[i].layer!==2) idx.push(i);
+  if(!idx.length) return;
+  idx.sort((a,b)=>(particles[a].life/particles[a].max)-(particles[b].life/particles[b].max));
+  const kill=idx.slice(0,Math.min(over,idx.length));
+  kill.sort((a,b)=>b-a);
+  for(const i of kill) particles.splice(i,1);
+}
+// レイヤー指定で3回に分けて呼ばれる（0=キャラ背面 / 1=キャラ前面 / 2=UI）。
+// 分岐ごとに save/restore で包み、lineCap や lineWidth が後続の描画へ漏れないようにする
+function drawParticles(layer){
+  layer=layer|0;
+  for(let n=0;n<particles.length;n++){ const p=particles[n];
+    if(p.delay>0) continue;                                   // 出番前のものは描かない
+    if((p.layer!=null?p.layer:1)!==layer) continue;
+    const sx=p.x-camX, py=p.y-(p.gl||0), a=p.life/p.max;
+    ctx.save();
     if(p.k==='txt'){ ctx.globalAlpha=clamp(a*1.4,0,1); ctx.font=`bold ${p.big?30:21}px Trebuchet MS`; ctx.textAlign='center';
-      ctx.lineWidth=4; ctx.strokeStyle='#000'; ctx.strokeText(p.txt,sx,p.y); ctx.fillStyle=p.color; ctx.fillText(p.txt,sx,p.y); ctx.textAlign='left'; }
+      ctx.lineWidth=4; ctx.strokeStyle='#000'; ctx.strokeText(p.txt,sx,py); ctx.fillStyle=p.color; ctx.fillText(p.txt,sx,py); ctx.textAlign='left'; }
     else if(p.k==='arc'){ ctx.globalAlpha=a*0.85; ctx.strokeStyle=p.color; ctx.lineWidth=8*a+3; ctx.lineCap='round';
-      ctx.beginPath(); ctx.arc(sx,p.y,p.r,p.a0,p.a1); ctx.stroke(); }
-    else if(p.k==='ring'){ ctx.globalAlpha=a*0.6; ctx.strokeStyle=p.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx,p.y,p.r,0,7); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(sx,py,p.r,p.a0,p.a1); ctx.stroke(); }
+    else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
+    else if(p.k==='flashcore'){ const R=p.r*(1+(1-a)*0.85); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a*a;   // 立ち上がりが鋭い白芯
+      const g=ctx.createRadialGradient(sx,py,R*0.06,sx,py,R);
+      g.addColorStop(0,'rgba('+p.color+',.98)'); g.addColorStop(0.34,'rgba('+p.color+',.5)'); g.addColorStop(1,'rgba('+p.color+',0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,py,R,0,7); ctx.fill(); }
+    else if(p.k==='smoke'){ const R=p.r*(1+(1-a)*1.7); ctx.globalAlpha=a*0.34; ctx.translate(sx,py); ctx.rotate(p.rot||0);   // 縮まず膨らむ
+      const g=ctx.createRadialGradient(0,0,R*0.12,0,0,R);
+      g.addColorStop(0,'rgba('+p.color+',.9)'); g.addColorStop(0.6,'rgba('+p.color+',.45)'); g.addColorStop(1,'rgba('+p.color+',0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,0,R,R*0.82,0,0,7); ctx.fill(); }
     else if(p.k==='wandenAfter'){ // 縮地の残像：通り過ぎたワンデンの影が薄く残る
-      ctx.save(); ctx.globalAlpha=a*0.5; ctx.translate(sx, p.y); ctx.scale(p.face*FIXED_SCALE*0.9, FIXED_SCALE*0.9);
+      ctx.globalAlpha=a*0.5; ctx.translate(sx, py); ctx.scale(p.face*FIXED_SCALE*0.9, FIXED_SCALE*0.9);
       ctx.fillStyle='rgba(190,215,240,.85)';
       ctx.beginPath(); ctx.ellipse(0,-24,12,14,0,0,7); ctx.fill();                          // 胴
       ctx.beginPath(); ctx.ellipse(0,-46,17,16,0,0,7); ctx.fill();                          // 頭
       ctx.fillRect(-9,-12,7,13); ctx.fillRect(3,-12,7,13);                                   // 脚
       ctx.strokeStyle='rgba(220,238,255,.9)'; ctx.lineWidth=3; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(4,-30); ctx.lineTo(96,-46); ctx.stroke();                  // 長刀の残影
-      ctx.restore(); }
-    else if(p.k==='bolt'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+      ctx.beginPath(); ctx.moveTo(4,-30); ctx.lineTo(96,-46); ctx.stroke(); }                // 長刀の残影
+    else if(p.k==='bolt'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
       ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=3.5*a+1; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(sx,p.y);
-      for(let i=1;i<=7;i++){ ctx.lineTo(sx+p.len*(i/7), p.y+(i<7?rnd(-9,9):0)); }
-      ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.4; ctx.stroke(); ctx.restore(); }
-    else if(p.k==='vbolt'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;   // 縦落雷
+      ctx.beginPath(); ctx.moveTo(sx,py);
+      for(let i=1;i<=7;i++){ ctx.lineTo(sx+p.len*(i/7), py+(i<7?rnd(-9,9):0)); }
+      ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.4; ctx.stroke(); }
+    else if(p.k==='vbolt'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;   // 縦落雷
       ctx.strokeStyle='#cdefff'; ctx.lineWidth=5*a+1.5; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(sx, p.y-p.h);
-      for(let i=1;i<=9;i++){ ctx.lineTo(sx+(i<9?rnd(-12,12):0), (p.y-p.h)+p.h*(i/9)); }
-      ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.8; ctx.stroke(); ctx.restore(); }
-    else if(p.k==='hsword'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a; const top=p.y-p.h;   // 聖剣（地面から突き上がる金色の剣）
-      ctx.strokeStyle='#fff0a0'; ctx.lineWidth=7*a+2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(sx,p.y); ctx.lineTo(sx,top+8); ctx.stroke();
-      ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(sx,p.y); ctx.lineTo(sx,top+10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, py-p.h);
+      for(let i=1;i<=9;i++){ ctx.lineTo(sx+(i<9?rnd(-12,12):0), (py-p.h)+p.h*(i/9)); }
+      ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.8; ctx.stroke(); }
+    else if(p.k==='hsword'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a; const top=py-p.h;   // 聖剣（地面から突き上がる金色の剣）
+      ctx.strokeStyle='#fff0a0'; ctx.lineWidth=7*a+2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(sx,top+8); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(sx,top+10); ctx.stroke();
       ctx.fillStyle='#fff6d0'; ctx.beginPath(); ctx.moveTo(sx-5,top+12); ctx.lineTo(sx,top-8); ctx.lineTo(sx+5,top+12); ctx.closePath(); ctx.fill();   // 刃先
-      ctx.strokeStyle='#ffe14d'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(sx-11,p.y-p.h*0.16); ctx.lineTo(sx+11,p.y-p.h*0.16); ctx.stroke();   // 鍔
-      ctx.restore(); }
-    else if(p.k==='hlaser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+      ctx.strokeStyle='#ffe14d'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(sx-11,py-p.h*0.16); ctx.lineTo(sx+11,py-p.h*0.16); ctx.stroke(); }   // 鍔
+    else if(p.k==='hlaser'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
       const hw=(p.w||8)*a+2, lx0=Math.min(sx,sx+p.len), lw=Math.abs(p.len);
       const hg=ctx.createLinearGradient(sx,0,sx+p.len,0); hg.addColorStop(0,'rgba(255,170,235,.95)'); hg.addColorStop(1,'rgba(255,120,220,.1)');
-      ctx.fillStyle=hg; ctx.fillRect(lx0,p.y-hw/2,lw,hw);
-      ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(lx0,p.y-1,lw,2);
-      ctx.restore(); }
-    else if(p.k==='laser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+      ctx.fillStyle=hg; ctx.fillRect(lx0,py-hw/2,lw,hw);
+      ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(lx0,py-1,lw,2); }
+    else if(p.k==='laser'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
       const wdt=(p.w||10)*a+3;
       const lg=ctx.createLinearGradient(0,0,0,p.gy); lg.addColorStop(0,'rgba(190,235,255,.95)'); lg.addColorStop(1,'rgba(120,200,255,.55)');
       ctx.fillStyle=lg; ctx.fillRect(sx-wdt/2,0,wdt,p.gy);
-      ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(sx-1.2,0,2.4,p.gy); ctx.restore(); }
-    else if(p.k==='impact'){ const pr=1-a; ctx.save(); ctx.translate(sx,p.y); ctx.rotate(p.rot);
-      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a; ctx.strokeStyle=p.color; ctx.lineCap='round';
-      for(let i=0;i<p.n;i++){ const an=i/p.n*Math.PI*2, r0=p.R*(0.3+pr*0.7), r1=p.R*(0.55+pr*0.85);
-        ctx.lineWidth=3*a+1; ctx.beginPath(); ctx.moveTo(Math.cos(an)*r0,Math.sin(an)*r0); ctx.lineTo(Math.cos(an)*r1,Math.sin(an)*r1); ctx.stroke(); }
-      ctx.restore(); }
-    else if(p.k==='dust'){ ctx.globalAlpha=a*0.5; ctx.fillStyle='#cabfa6'; ctx.beginPath(); ctx.arc(sx,p.y,3*a+1,0,7); ctx.fill(); }
-    else if(p.k==='twinkle'){ const gr=Math.sin((1-a)*Math.PI); const R=p.r*(0.5+gr); ctx.save(); ctx.translate(sx,p.y); ctx.rotate(p.rot||0);
+      ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(sx-1.2,0,2.4,p.gy); }
+    else if(p.k==='impact'){ const pr=1-a, ez=1-a*a; ctx.translate(sx,py); ctx.rotate(p.rot);
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=Math.pow(a,1.3); ctx.strokeStyle=p.color; ctx.lineCap='round';
+      for(const s of p.sp){ const r0=p.R*(0.26+pr*0.72)*s.len, r1=p.R*(0.50+ez*0.95)*s.len;   // 先端側だけ ease-out で伸びて尖る
+        ctx.lineWidth=(2.1*a+0.5)*s.w; ctx.beginPath(); ctx.moveTo(Math.cos(s.a)*r0,Math.sin(s.a)*r0); ctx.lineTo(Math.cos(s.a)*r1,Math.sin(s.a)*r1); ctx.stroke(); } }
+    else if(p.k==='dust'){ const R=(2.6*a+1.2)*FXS*p.sz*(1+(1-a)*1.0); ctx.globalAlpha=a*0.45;
+      ctx.translate(sx,py); ctx.rotate(p.rot||0); ctx.fillStyle='#cabfa6';
+      ctx.beginPath(); ctx.ellipse(0,0,R,R*0.84,0,0,7); ctx.fill(); }
+    else if(p.k==='twinkle'){ const gr=Math.sin((1-a)*Math.PI); const R=p.r*(0.5+gr); ctx.translate(sx,py); ctx.rotate(p.rot||0);
       ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=clamp(a*1.3,0,1);
       ctx.fillStyle=radGrad(0,0,R*1.6,'rgba(255,255,255,.9)','rgba(255,225,90,0)'); ctx.beginPath(); ctx.arc(0,0,R*1.6,0,7); ctx.fill();
       drawStar(0,0,R*0.4,R,'#fff'); drawStar(0,0,R*0.22,R*0.6,'#ffe14d');
-      ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2; for(let s=0;s<4;s++){ const an=p.rot+s*PI2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(an)*R*1.9,Math.sin(an)*R*1.9); ctx.stroke(); }
-      ctx.restore(); }
-    else { ctx.globalAlpha=a; if(p.star){ drawStar(sx,p.y,3,7,p.color); } else { ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(sx,p.y,3*a+1,0,7); ctx.fill(); } }
-  });
+      ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2; for(let s=0;s<4;s++){ const an=p.rot+s*PI2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(an)*R*1.9,Math.sin(an)*R*1.9); ctx.stroke(); } }
+    else if(p.k==='spark'){ const spd=Math.hypot(p.vx,p.vy); ctx.globalAlpha=Math.min(1,a*1.15);
+      if(p.star){ ctx.translate(sx,py); ctx.rotate(p.rot||0); drawStar(0,0,3*FXS*a*p.sz,7*FXS*a*p.sz,p.color); }
+      else if(spd>3){ ctx.translate(sx,py); ctx.rotate(Math.atan2(p.vy,p.vx)); ctx.fillStyle=p.color;   // 速い粒は進行方向へ伸びた筋になる
+        ctx.beginPath(); ctx.ellipse(0,0,(1.7+spd*0.44)*a*p.sz,1.7*FXS*a*p.sz*0.55,0,0,7); ctx.fill(); }
+      else { ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(sx,py,(2.2*a+0.9)*FXS*p.sz*0.85,0,7); ctx.fill(); } }
+    else { ctx.globalAlpha=a; if(p.star){ drawStar(sx,py,3*FXS,7*FXS,p.color); } else { ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(sx,py,(3*a+1)*FXS,0,7); ctx.fill(); } }
+    ctx.restore();
+  }
   ctx.globalAlpha=1;
 }
 function drawStar(x,y,r1,r2,color){ ctx.fillStyle=color; ctx.beginPath();
@@ -1086,7 +1170,7 @@ function beginAttack(type){
   else if(type==='stinger'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
   else if(type==='gcounter'){ p.counterPow = p.guardFx>0 || (gf-p.guardStart<=14); p.invuln=Math.max(p.invuln,10);
     sfx.guard(); sfx.rise(); ring(p.x,p.y-40,'#bfe9ff'); if(p.counterPow){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); } }
-  else if(type==='dimension'){ p.dim--; p.invuln=Math.max(p.invuln,52); sfx.boss(); sfx.rise(); flash=Math.max(flash,5); shake=8; triggerSlow(36);
+  else if(type==='dimension'){ p.dim--; p.invuln=Math.max(p.invuln,52); sfx.boss(); sfx.rise(); flashAt(5,'198,107,255'); shake=8; triggerSlow(36);
     ring(p.x,p.y-46,'#c46bff'); ring(p.x,p.y-46,'#fff'); spark(p.x,p.y-46,'#c46bff',24,11); popText(p.x,p.y-110,'次元斬！','#d6a6ff',true); }
   else if(type==='iai'){ sfx.dash(); spark(p.x+p.facing*16,p.y-40,'#dff0ff',8,6); }
   else if(type==='nmeteor'){ p.dim--; p.callN=0; p.invuln=Math.max(p.invuln,52); sfx.boss(); sfx.rise(); flash=Math.max(flash,4); shake=7; triggerSlow(30);
@@ -1142,7 +1226,7 @@ function updateGuardQuake(){ const p=player; p.gqT++; p.invuln=Math.max(p.invuln
     if(p.z<=0){ p.z=0; guardQuakeImpact(p); p.state='land'; p.landT=26; return; } }
 }
 function guardQuakeImpact(p){ const mul=(p.atkMul||1);
-  quake=Math.max(quake,50); shake=Math.max(shake,18); hitStop=Math.max(hitStop,16); flash=Math.max(flash,6); triggerSlow(32);
+  quake=Math.max(quake,50); shake=Math.max(shake,18); hitStop=Math.max(hitStop,16); flashAt(6,'255,210,77'); triggerSlow(32);
   hitSound(46); sfx.big(); sfx.ko();                                                        // 破壊音（重層クラッシュ）
   ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,24); impactBurst(p.x,p.y-30,'#fff',true);
   for(let k=0;k<6;k++){ ring(p.x+rnd(-150,150), p.y-rnd(0,20), '#ffb85a'); dust(p.x+rnd(-190,190), p.y, 6); spark(p.x+rnd(-170,170), p.y-rnd(0,30), '#ffd24d', 6,8); }
@@ -1212,7 +1296,7 @@ function nukoCast(p,tier){
   else if(tier===6){ const reachX=620; let hits=0;   // 貫通電撃ビーム（即着弾）
     for(const e of enemies){ if(e.dead) continue; const dx=(e.x-p.x)*dir;
       if(dx>-12 && dx<reachX && Math.abs(e.y-p.y)<48 && e.z<150){ damageEnemy(e,Math.round(24*mul),dir*6,true); hits++; } }
-    particles.push({k:'bolt',x:p.x+dir*14,y:p.y-44,len:dir*reachX,life:12,max:12});
+    particles.push({k:'bolt',x:p.x+dir*14,y:p.y-44,gl:groundLift(p.x),len:dir*reachX,life:12,max:12});
     flash=Math.max(flash,2); shake=Math.max(shake,4); sfx.zap(); if(hits) hitStop=Math.max(hitStop,5); }
   else if(tier===7){ const fx=p.x+dir*112; hazards.push({kind:'pillar',x:fx,y:p.y,t:0,life:110,dmg:Math.round(5*mul)});   // 炎の柱：持続ロング
     dust(fx,p.y,6); sfx.heavy(); }
@@ -1237,7 +1321,7 @@ function beginNukoRailFire(p,c){
 }
 function updateNukoRailFire(){ const p=player, c=p.railC||0, dir=p.facing; p.railT++;
   const mul=nukoMul(p), reachX=560+160*c, zb=46, thick=8+24*c, tol=28+36*c;
-  if(p.railT%2===0) particles.push({k:'hlaser',x:p.x+dir*16,y:p.y-zb,len:dir*reachX,life:6,max:6,w:thick});   // 連続照射の見た目
+  if(p.railT%2===0) particles.push({k:'hlaser',x:p.x+dir*16,y:p.y-zb,gl:groundLift(p.x),len:dir*reachX,life:6,max:6,w:thick});   // 連続照射の見た目
   if(p.railT%4===1){ const last=p.railT>=p.railDur-3;                                                          // 多段ヒット（4Fごと）
     for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
       if(dx>-12 && dx<reachX && Math.abs(e.y-p.y)<46 && zb<e.z+e.h+tol-18 && zb>e.z-tol){
@@ -1254,8 +1338,8 @@ function boltLand(){ const p=player, mul=nukoMul(p), gy=LANE-groundLift(p.x);
   for(const d2 of [-1,1]) particles.push({k:'bolt',x:p.x,y:gy-10,len:d2*150,life:12,max:12});   // 地面放電
   for(const e of enemies){ if(e.dead)continue;
     if(Math.abs(e.x-p.x)<150 && Math.abs(e.y-p.y)<60 && e.z<90){ damageEnemy(e,Math.round(22*mul),(e.x<p.x?-1:1)*6,true); } }
-  ring(p.x,gy-10,'#bfe9ff'); ring(p.x,gy-10,'#fff'); spark(p.x,gy-20,'#9fe8ff',22,11); impactBurst(p.x,gy-40,'#bfe9ff',true); dust(p.x,p.y,12);
-  shake=Math.max(shake,9); flash=Math.max(flash,3); sfx.zap(); sfx.big(); }
+  ring(p.x,LANE-10,'#bfe9ff'); ring(p.x,LANE-10,'#fff'); spark(p.x,LANE-20,'#9fe8ff',22,11); impactBurst(p.x,LANE-40,'#bfe9ff',true); dust(p.x,p.y,12);
+  shake=Math.max(shake,9); flashAt(3,'159,232,255'); sfx.zap(); sfx.big(); }
 function nukoMeteorWave(p,n){ const mul=nukoMul(p);
   for(let k=0;k<n;k++){ const tx=camX+rnd(W*0.2,W*0.96);
     spawnProj(tx, clamp(p.y+rnd(-14,14),GROUND_TOP,GROUND_BOT), rnd(-2.2,-0.8),0,
@@ -1264,16 +1348,16 @@ function nukoMeteorWave(p,n){ const mul=nukoMul(p);
 function nukoThunderWave(p,n){ const mul=nukoMul(p);
   for(let k=0;k<n;k++){ const tx=camX+rnd(W*0.05,W*0.95); const gy=LANE-groundLift(tx);
     particles.push({k:'vbolt',x:tx,y:gy-4,h:gy+24,life:11,max:11});                 // 天から地面まで走る雷
-    ring(tx,gy-6,'#bfe9ff'); spark(tx,gy-12,'#cdefff',12,10); dust(tx,gy,5);
+    ring(tx,LANE-6,'#bfe9ff'); spark(tx,LANE-12,'#cdefff',12,10); dust(tx,LANE,5);
     for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
       if(Math.abs(e.x-tx)<60 && e.z<220){ noHitStopOnce=true; damageEnemy(e,Math.round(15*mul),(e.x<tx?-1:1)*4,true);
         if(!e.dead&&e.z<2){ e.z=2; e.vz=Math.max(e.vz,2); } } } }
-  flash=Math.max(flash,3); shake=Math.max(shake,6); sfx.zap(); sfx.boss(); }
+  flashAt(3,'159,232,255'); shake=Math.max(shake,6); sfx.zap(); sfx.boss(); }
 // ── イッヌ↓↑「聖剣乱舞・断罪の光」：前方に聖剣が次々と突き上がる ──
 function holyBlade(p, idx, o){ o=o||{}; const dir=p.facing, mul=(p.atkMul||1)*(o.mul||1);
   const bx=clamp(p.x+dir*(52+idx*(o.gap||40)), camX+20, camX+W-20); const gy=LANE-groundLift(bx);
   particles.push({k:'hsword', x:bx, y:gy, h:120+rnd(0,34), life:16, max:16});
-  ring(bx,gy-12,'#fff0a0'); spark(bx,gy-46,'#fff6d0',12,10); dust(bx,gy,4);
+  ring(bx,LANE-12,'#fff0a0'); spark(bx,LANE-46,'#fff6d0',12,10); dust(bx,LANE,4);
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-bx)<54 && e.z<160){ if(!e.iswCd||gf-e.iswCd>=8){ e.iswCd=gf;
     damageEnemy(e,Math.round(14*mul),dir*8,true); if(!e.dead)launchEnemy(e,dir*6,-13,3); spark(e.x,e.y-e.h*0.5,'#fff0a0',10,8); } } });
   if(idx===0){ sfx.rise(); flash=Math.max(flash,2); } if(idx%2===0) sfx.swing(2); }
@@ -1283,17 +1367,17 @@ function nukoTyphoon(p){ const dir=p.facing, mul=nukoMul(p);
   hazards.push({kind:'ptwister', x:p.x+dir*90, y:LANE, dir, t:0, life:210, dmg:Math.round(13*mul), vx:dir*3.0});
   for(let k=0;k<3;k++) ring(p.x+dir*80, p.y-20-k*30, k%2?'#cfe8ff':'#ffffff');
   spark(p.x+dir*80,p.y-50,'#e8f6ff',28,13); dust(p.x+dir*80,p.y,16);
-  shake=Math.max(shake,13); flash=Math.max(flash,4); triggerSlow(18); sfx.big(); sfx.boss(); }
+  shake=Math.max(shake,13); flashAt(4,'206,232,255'); triggerSlow(18); sfx.big(); sfx.boss(); }
 // イッヌ Lv5「聖剣乱舞・天光烈斬」：締めに天から光の柱が落ちる
 function holyPillar(p){ const mul=(p.atkMul||1), bx=p.x+p.facing*90, gy=LANE-groundLift(bx);
   particles.push({k:'vbolt',x:bx,y:gy-4,h:gy+24,life:16,max:16});
-  for(let k=0;k<4;k++) ring(bx,gy-20-k*40,k%2?'#fff6d0':'#ffffff');
-  spark(bx,gy-70,'#fff6d0',34,15); dust(bx,gy,14);
-  shake=Math.max(shake,14); flash=Math.max(flash,6); hitStop=Math.max(hitStop,10); triggerSlow(24); sfx.boss(); sfx.ko();
+  for(let k=0;k<4;k++) ring(bx,LANE-20-k*40,k%2?'#fff6d0':'#ffffff');
+  spark(bx,LANE-70,'#fff6d0',34,15); dust(bx,LANE,14);
+  shake=Math.max(shake,14); flashAt(6,'255,240,160'); hitStop=Math.max(hitStop,10); triggerSlow(24); sfx.boss(); sfx.ko();
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-bx)<150){ damageEnemy(e,Math.round(36*mul),(e.x<bx?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<bx?-1:1)*11,-15,3); } }); }
 // ガードワン Lv5「天地崩落・極大メテオ」：天から巨岩が降り、ハンマーで叩き割る
 function guardMeteorFall(p){ const mul=(p.atkMul||1);
-  shake=Math.max(shake,20); flash=Math.max(flash,6); hitStop=Math.max(hitStop,14); triggerSlow(26); quake=Math.max(quake||0,34); sfx.big(); sfx.ko();
+  shake=Math.max(shake,20); flashAt(6,'255,210,77'); hitStop=Math.max(hitStop,14); triggerSlow(26); quake=Math.max(quake||0,34); sfx.big(); sfx.ko();
   for(let k=0;k<4;k++) ring(p.x,p.y,k%2?'#ffd24d':'#ff8a3a'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,30); impactBurst(p.x,p.y-24,'#fff',true);
   for(let k=0;k<18;k++) spark(p.x+rnd(-150,150), p.y-rnd(0,40), (k%2)?'#8a6a3a':'#caa54a', 4, 9);   // 砕けた岩塊
   for(const d of [-1,1]){ for(let w=0;w<5;w++) spawnProj(p.x+d*30,p.y,d*(6.5+w*1.6),0,{owner:'player',dmg:Math.round(22*mul),color:w%2?'#ff8a3a':'#ffd24d',r:30-w*3,life:80,zz:30,pierce:true,wave:true}); }
@@ -1302,16 +1386,16 @@ function guardMeteorFall(p){ const mul=(p.atkMul||1);
 function shimaKuzan(p){ const dir=p.facing, mul=(p.atkMul||1);
   for(let k=0;k<3;k++) crescent(p.x+dir*(70+k*70), p.y-52, 120, dir>0?-1.2:Math.PI-1.2, dir>0?1.2:Math.PI+1.2, k?'#ffae42':'#ffffff');
   for(let w=0;w<3;w++) spawnProj(p.x+dir*36, p.y, dir*(9+w*2), 0, {owner:'player',dmg:Math.round(26*mul),color:w%2?'#ff9a3a':'#ffd24d',r:38-w*6,life:90,zz:36,pierce:true,wave:true});
-  spark(p.x+dir*70,p.y-52,'#ffd24d',30,14); shake=Math.max(shake,16); flash=Math.max(flash,5); sfx.big(); }
+  spark(p.x+dir*70,p.y-52,'#ffd24d',30,14); shake=Math.max(shake,16); flashAt(5,'255,180,80'); sfx.big(); }
 // ── シマ↓↑「爆裂・羅漢衝波」：全方位の気功大爆発＋左右へ衝撃波 ──
 function shimaKiBurst(p){ const mul=(p.atkMul||1);
   for(let r=0;r<4;r++) ring(p.x,p.y-40,r%2?'#ffd24d':'#ff9a3a'); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,'#ffd24d',34,14); dust(p.x,p.y,16);
-  shake=Math.max(shake,12); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8); triggerSlow(16); sfx.big(); sfx.boss();
+  shake=Math.max(shake,12); flashAt(5,'255,154,58'); hitStop=Math.max(hitStop,8); triggerSlow(16); sfx.big(); sfx.boss();
   for(const d of [-1,1]) spawnProj(p.x+d*30,p.y,d*8.5,0,{owner:'player',dmg:Math.round(14*mul),color:'#ffae42',r:24,life:44,zz:34,pierce:true,wave:true});
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<156 && Math.abs(e.y-p.y)<92){ damageEnemy(e,Math.round(30*mul),(e.x<p.x?-1:1)*13,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*15,-11,3); } }); }
 // ── ガードワン↓↑「メテオ・ハンマーインパクト」：特大の叩きつけ→三重衝撃波 ──
 function guardHammerImpact(p){ const mul=(p.atkMul||1);
-  shake=Math.max(shake,16); flash=Math.max(flash,5); hitStop=Math.max(hitStop,12); triggerSlow(20); quake=Math.max(quake||0,24); sfx.big(); sfx.ko();
+  shake=Math.max(shake,16); flashAt(5,'255,210,77'); hitStop=Math.max(hitStop,12); triggerSlow(20); quake=Math.max(quake||0,24); sfx.big(); sfx.ko();
   for(let k=0;k<3;k++) ring(p.x,p.y,k%2?'#ffd24d':'#ffb85a'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,22); impactBurst(p.x,p.y-20,'#fff',true);
   for(let k=1;k<=6;k++){ for(const sgn of [-1,1]){ const cx=p.x+sgn*k*34; spark(cx,p.y,'#7a5a2a',4,4); ring(cx,p.y,'#caa54a'); } }
   for(const d of [-1,1]){ for(let w=0;w<3;w++) spawnProj(p.x+d*30,p.y,d*(7+w*1.5),0,{owner:'player',dmg:Math.round(18*mul),color:w%2?'#ffb85a':'#ffd24d',r:24-w*3,life:66,zz:30,pierce:true,wave:true}); }
@@ -1321,35 +1405,35 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
   if(h.kind==='pillar'){
     if(h.t%5===0){ for(const e of enemies){ if(e.dead)continue;
       if(Math.abs(e.x-h.x)<96 && Math.abs(e.y-h.y)<46 && e.z<260){ noHitStopOnce=true; damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*2,false,1.6); } } }
-    if(h.t%2===0){ const gy=LANE-groundLift(h.x); spark(h.x+rnd(-32,32), gy-rnd(0,200), '#ff9a3a',1,2); }
+    if(h.t%2===0) spark(h.x+rnd(-32,32), LANE-rnd(0,200), '#ff9a3a',1,2);
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='bomb'){
-    if(h.t>=h.life){ const gy=LANE-groundLift(h.x);
-      ring(h.x,gy-10,'#ffae42'); ring(h.x,gy-10,'#fff'); spark(h.x,gy-20,'#ffae42',30,13); dust(h.x,gy,14);
-      impactBurst(h.x,gy-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.big();
+    if(h.t>=h.life){
+      ring(h.x,LANE-10,'#ffae42'); ring(h.x,LANE-10,'#fff'); spark(h.x,LANE-20,'#ffae42',30,13); dust(h.x,LANE,14);
+      impactBurst(h.x,LANE-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.big();
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
         damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*8,true); if(!e.dead) launchEnemy(e,(e.x<h.x?-1:1)*13,-11,3); } }
       hazards.splice(i,1); }
   } else if(h.kind==='zanjin'){   // ワンデンの残刃：駆け抜けた跡に遅れて走る斬撃
-    if(h.t>=h.life){ const gy=LANE-groundLift(h.x);
-      crescent(h.x, gy-54, 82, -1.35, 1.15, '#ffffff');
-      spark(h.x, gy-54, '#e8f4ff', 12, 10); shake=Math.max(shake,4);
+    if(h.t>=h.life){
+      crescent(h.x, LANE-54, 82, -1.35, 1.15, '#ffffff');
+      spark(h.x, LANE-54, '#e8f4ff', 12, 10); shake=Math.max(shake,4);
       if(h.t%2===0) sfx.swing(1);
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<74 && Math.abs(e.y-h.y)<62){
         noHitStopOnce=true; damageEnemy(e,h.dmg,(h.dir||1)*6,true); } }
       hazards.splice(i,1); }
   } else if(h.kind==='kasumi'){   // ワンデンの八重霞：刻まれた斬撃痕が時間差で炸裂
-    if(h.t>=h.life){ const gy=LANE-groundLift(h.x);
-      for(let k=0;k<2;k++) crescent(h.x, gy-56+k*22, 74, -1.5, 1.5, k?'#ffffff':'#dff0ff');
-      ring(h.x,gy-56,'#e8f4ff'); spark(h.x,gy-56,'#ffffff',20,12); shake=Math.max(shake,7); sfx.swing(1);
+    if(h.t>=h.life){
+      for(let k=0;k<2;k++) crescent(h.x, LANE-56+k*22, 74, -1.5, 1.5, k?'#ffffff':'#dff0ff');
+      ring(h.x,LANE-56,'#e8f4ff'); spark(h.x,LANE-56,'#ffffff',20,12); shake=Math.max(shake,7); sfx.swing(1);
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<98 && Math.abs(e.y-h.y)<66){
         noHitStopOnce=true; damageEnemy(e,h.dmg,(h.dir||1)*7,true); } }
       hazards.splice(i,1); }
   } else if(h.kind==='mine'){   // ワッチの地雷：敵が近づくか時間切れで起爆
     let trig = h.t>=h.life;
     if(!trig && h.t>16){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<46 && Math.abs(e.y-h.y)<64 && e.z<74){ trig=true; break; } } }
-    if(trig){ const gy=LANE-groundLift(h.x); ring(h.x,gy-8,'#ff5a3a'); ring(h.x,gy-8,'#fff'); spark(h.x,gy-22,'#ffae42',30,13); dust(h.x,gy,16); impactBurst(h.x,gy-32,'#fff',true);
-      shake=Math.max(shake,12); flash=Math.max(flash,4); hitStop=Math.max(hitStop,6); sfx.big();
+    if(trig){ ring(h.x,LANE-8,'#ff5a3a'); ring(h.x,LANE-8,'#fff'); spark(h.x,LANE-22,'#ffae42',30,13); dust(h.x,LANE,16); impactBurst(h.x,LANE-32,'#fff',true);
+      shake=Math.max(shake,12); flashAt(4,'255,174,66'); hitStop=Math.max(hitStop,6); sfx.big();
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<150 && Math.abs(e.y-h.y)<72){ damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<h.x?-1:1)*14,-11,3); } }
       hazards.splice(i,1); }
   } else if(h.kind==='ebeam'){   // ボスの極太ビーム：進路上をなぎ払い続ける
@@ -1359,9 +1443,9 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(h.t%6===0){ shake=Math.max(shake,9); spark(h.x+h.dir*rnd(20,900), h.y-(h.hy||60)+rnd(-30,30), '#fff', 2, 8); }
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='ebolt'){   // ボスの落雷：予兆の輪 → 直撃
-    if(h.t===26){ const gy=LANE-groundLift(h.x);
-      ring(h.x,gy,'#bfe9ff'); ring(h.x,gy,'#fff'); spark(h.x,gy-46,'#dff6ff',26,13); dust(h.x,gy,10);
-      shake=Math.max(shake,11); flash=Math.max(flash,3); sfx.zap();
+    if(h.t===26){
+      ring(h.x,LANE,'#bfe9ff'); ring(h.x,LANE,'#fff'); spark(h.x,LANE-46,'#dff6ff',26,13); dust(h.x,LANE,10);
+      shake=Math.max(shake,11); flashAt(3,'191,233,255'); sfx.zap();
       for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
         if(Math.abs(pl.x-h.x)<54 && Math.abs(pl.y-h.y)<52) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true); } }
     if(h.t>=h.life) hazards.splice(i,1);
@@ -1491,7 +1575,7 @@ function updateNukoLaser(){ const p=player; p.nlT++; p.invuln=Math.max(p.invuln,
   if(p.nlT%4===0){ const lx=p.x+rnd(-180,180), mul=nukoMul(p), gy=LANE-groundLift(lx);
     particles.push({k:'laser',x:lx,gy,life:9,max:9});
     for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-lx)<32){ noHitStopOnce=true; damageEnemy(e,Math.round(9*mul),(e.x<lx?-1:1)*3,true); } }   // ヒットした敵は強制ダウン
-    spark(lx,gy,'#bfe9ff',5,6); shake=Math.max(shake,3); if(p.nlT%8===0) sfx.zap(); }
+    spark(lx,LANE,'#bfe9ff',5,6); shake=Math.max(shake,3); if(p.nlT%8===0) sfx.zap(); }
   if(p.nlT>=54){ p.state='idle'; p.invuln=Math.max(p.invuln,20); } }
 // 「彼方からの呼び声」：画面右上に浮かぶ上位者（詠唱中のみ顕現）
 function drawGreatOne(){
@@ -1742,9 +1826,9 @@ function updatePlayer(){
     // ── Lv5「奥義・崩山衝」／Lv10「羅刹連拳・修羅道」 ──
     if(def.kuzan && a.t===def.act[0]+2){ shimaKuzan(p); }
     if(def.rushSuper && a.t%3===0){ spark(p.x-p.facing*rnd(6,26), p.y-rnd(10,70), (gf%2)?'#ff6a3c':'#ffd24d',3,7); }
-    if(def.fireCol && a.t===8){ const gy=LANE-groundLift(p.x);   // 紅蓮天焦：足元から炎柱が立つ
+    if(def.fireCol && a.t===8){   // 紅蓮天焦：足元から炎柱が立つ
       hazards.push({kind:'pillar', x:p.x, y:LANE, t:0, life:60, dmg:Math.round(7*(p.atkMul||1))});
-      for(let k=0;k<3;k++) ring(p.x,gy-20-k*36,k%2?'#ff6a3c':'#ffd24d'); sfx.big(); }
+      for(let k=0;k<3;k++) ring(p.x,LANE-20-k*36,k%2?'#ff6a3c':'#ffd24d'); sfx.big(); }
     // ── ヌコ Lv5「大魔導・極大竜巻」／Lv10 の追加演出 ──
     if(def.typhoon && a.t===def.act[0]){ nukoTyphoon(p); }
     if(def.frostNova && a.t===def.act[0]){ const mul=nukoMul(p);   // 詠唱と同時に周囲を凍てつかせる
@@ -1826,7 +1910,7 @@ function updatePlayer(){
     if(def.flameRow && a.t===def.act[0]){ const dir=p.facing, mul=nukoMul(p);   // 獄炎連柱：炎の柱が三本連なって立つ
       for(let k=0;k<3;k++){ const fx=p.x+dir*(90+k*110);
         hazards.push({kind:'pillar', x:fx, y:LANE, t:0, life:120, dmg:Math.round(7*mul)});
-        for(let r2=0;r2<2;r2++) ring(fx, LANE-groundLift(fx)-30-r2*40, r2?'#ffd24d':'#ff6a3c'); }
+        for(let r2=0;r2<2;r2++) ring(fx, LANE-30-r2*40, r2?'#ffd24d':'#ff6a3c'); }
       shake=Math.max(shake,10); flash=Math.max(flash,4); sfx.big(); popText(p.x,p.y-128,'獄炎連柱！','#ff6a3c',true); }
     if(def.pistolsX && a.t>=def.act[0] && a.t<=def.act[1]){ const dir=p.facing;   // 六連掃射：上下に散らす弾雨
       if(a.t%2===0){ for(let k=0;k<2;k++){ const sp=rnd(-0.3,0.3);
@@ -1880,7 +1964,7 @@ function updatePlayer(){
       popText(p.x,p.y-128,'極大魔導レール砲！','#ffd0f0',true); }
     if(def.cloneStrike && a.t%5===0 && a.t<=def.act[1]){ const dir=p.facing;   // 影分身が経路上を同時に斬る
       const cx=p.x-dir*rnd(30,110);
-      particles.push({k:'wandenAfter', x:cx, y:p.y, face:dir, life:12, max:12});
+      particles.push({k:'wandenAfter', x:cx, y:p.y, gl:groundLift(cx), face:dir, life:12, max:12});
       crescent(cx+dir*30, p.y-50, 74, dir>0?-1.1:Math.PI-1.1, dir>0?1.1:Math.PI+1.1, '#bfe9ff');
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-cx)<80 && Math.abs(e.y-p.y)<62){
         noHitStopOnce=true; damageEnemy(e,Math.round(11*(p.atkMul||1)),dir*5,false); } }); }
@@ -1919,7 +2003,7 @@ function updatePlayer(){
       flash=Math.max(flash,def.zanjinMax?5:3); shake=def.zanjinMax?11:6; sfx.dash();   // 技名は superFx 側で表示されるので二重に出さない
       const span=x1-x0, n=def.zanjinMax?8:5;
       for(let k=0;k<n;k++){ const px=x0+span*(k+0.5)/n;
-        particles.push({k:'wandenAfter', x:px, y:p.y, face:dir, life:16+k*2, max:16+k*2});   // 通り過ぎた軌跡の残像
+        particles.push({k:'wandenAfter', x:px, y:p.y, gl:groundLift(px), face:dir, life:16+k*2, max:16+k*2});   // 通り過ぎた軌跡の残像
         // 残撃：移動が終わってから順に走る（手前から奥へ）
         hazards.push({kind:'zanjin', x:px, y:LANE, t:0, life:7+k*3, dir, dmg:Math.round((def.zanjinMax?27:21)*(p.atkMul||1))}); }
       for(let k=0;k<10;k++) spark(x0+span*k/10, p.y-rnd(10,70), '#dfeaf6', 2, 6); }
@@ -2243,10 +2327,10 @@ function updateWandenThrow(){ const p=player, e=p.grabEnemy, mv=p.wtMv, dir=p.fa
     if(f>=40) wtEnd(p,18);
   } else {                               // 背車：残像を残して背後へ回り込み、無防備な背中へ逆袈裟
     if(f<6){ e.facing=-dir; e.y=p.y; e.x=p.x+dir*36; e.z=0;
-      if(f%2===0) particles.push({k:'wandenAfter', x:p.x, y:p.y, face:dir, life:12, max:12}); }
+      if(f%2===0) particles.push({k:'wandenAfter', x:p.x, y:p.y, gl:groundLift(p.x), face:dir, life:12, max:12}); }
     if(f===6){ const nd=-dir; e.grabbedBy=0;
       p.x=clamp(e.x+nd*40, camX+24, camX+W-24); p.facing=nd;
-      for(let k=0;k<3;k++) particles.push({k:'wandenAfter', x:p.x-nd*(26+k*22), y:p.y, face:nd, life:10+k*2, max:10+k*2});
+      for(let k=0;k<3;k++){ const wx=p.x-nd*(26+k*22); particles.push({k:'wandenAfter', x:wx, y:p.y, gl:groundLift(wx), face:nd, life:10+k*2, max:10+k*2}); }
       spark(p.x,p.y-40,'#bfd8ee',10,7); sfx.dash(); }
     if(f===13 && !e.dead){ const nd=p.facing;
       crescent(e.x, e.y-e.h*0.55, 100, nd>0?0.9:Math.PI+0.9, nd>0?-1.5:Math.PI-1.5, '#ffffff');
@@ -2282,7 +2366,7 @@ function bossSteal(bossType){ const T=ETYPE[bossType]; if(!T) return null; const
 function grabZapBlast(e){ const p=player, dir=p.facing;   // 雷を纏って吹き飛ばす
   e.grabbedBy=0; damageEnemy(e,Math.round(20*nukoMul(p)),dir*5,true); launchEnemy(e, dir*30, -8, 4);
   popText(e.x,e.y-e.h-10,'サンダーブラスト！','#9fe8ff',true); spark(p.x+dir*44,p.y-34,'#9fe8ff',18,11); ring(p.x+dir*34,p.y-30,'#bfe9ff');
-  particles.push({k:'bolt',x:p.x+dir*10,y:p.y-40,len:dir*120,life:10,max:10});
+  particles.push({k:'bolt',x:p.x+dir*10,y:p.y-40,gl:groundLift(p.x),len:dir*120,life:10,max:10});
   shake=9; flash=Math.max(flash,3); hitStop=10; triggerSlow(16); sfx.zap(); p.state='idle'; p.grabEnemy=null; }
 function grabFreeze(e){ const p=player;   // 敵を氷漬けにして長時間行動不能
   e.grabbedBy=0; damageEnemy(e,Math.round(10*nukoMul(p)),0,false);
@@ -2895,13 +2979,12 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(heavyBoss){ bossPoiseTick(e); if(!bossPoiseBroken(e)){ knockdown=false; launch=0; } }
   if(e.state==='gripping'){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); }   // 掴み中に攻撃されたら解放（救出）
   e.hp-=dmg; if(!heavyBoss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
-  spark(e.x,e.y-e.h*0.5,'#ffe14d', knockdown?13:7, knockdown?8:6);
+  hitFx(e.x, e.y-e.h*0.5, dmg, knockdown, '#ffe14d');   // 白芯→火花→衝撃リング→放射線→土煙の時間差レイヤー
   if(launch){ e.vz=-launch; e.state='air'; }
   addCombo();
   // hit-stop on every connect — bigger hits freeze longer (punchy, Smash-like)
   hitStop=Math.max(hitStop, noStop?0:(dmg>=22?9:(dmg>=12?4:2)));
   hitSound(dmg);                                           // layered weighty/crisp impact SE
-  if(dmg>=10) impactBurst(e.x,e.y-e.h*0.5, dmg>=22?'#fff':'#ffe9a0', dmg>=22);   // 放射インパクト線
   if(dmg>=22){ triggerSlow(22); flash=Math.max(flash,3); }   // 大技ヒットでスロー
   else if(dmg>=20){ flash=Math.max(flash,3); }
   popText(e.x,e.y-e.h-6,Math.round(dmg), knockdown?'#ff6a3c':'#ffe14d', dmg>=20);
@@ -2936,7 +3019,7 @@ function startBlastoff(e,dir){ const T=ETYPE[e.type];
   e.state='blastoff'; e.grabbedBy=0; e.bo=0; e.spin=0; e.vx=dir*Math.max(17,Math.abs(e.vx||0)); e.boVz=11.5; e.z=Math.max(e.z,12); e.facing=dir>0?-1:1;
   score+=T.score; popText(e.x,e.y-e.h-12,'☆ KO!','#ffe14d',true); flash=Math.max(flash,2); hitStop=Math.max(hitStop,6); sfx.dash(); }
 function starTwinkle(e){ const sx=clamp(e.x, camX+24, camX+W-24), sy=clamp(e.y-e.z, 28, GROUND_TOP-10);
-  particles.push({k:'twinkle',x:sx,y:sy,life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
+  particles.push({k:'twinkle',x:sx,y:sy,gl:groundLift(sx),life:30,max:30,r:rnd(12,18),rot:Math.random()*6});
   ring(sx,sy,'#ffe14d'); spark(sx,sy,'#fff',10,7); popText(sx,sy-12,'キラーン☆','#ffe14d',true); sfx.twinkle(); }
 // ── RPG：経験値とレベルアップ（倒すとXP獲得、レベルで最大HP・攻撃力が伸びる）──
 function gainXp(scoreVal){ const g=Math.max(1,Math.round((scoreVal||0)/10));
@@ -4317,7 +4400,7 @@ function updateNPCs(){
     const sx=n.x-camX; if(sx<-100||sx>W+100) continue;
     n.bob=(n.bob||Math.random()*6)+0.05;
     const tp=nearestPlayerTo(n.x); if(tp&&Math.abs(tp.x-n.x)<170) n.face=tp.x<n.x?-1:1;
-    if(n.kind==='spring'&&!n.done&&gf%10===0) spark(n.x+rnd(-26,26), LANE-groundLift(n.x)-rnd(4,26), '#9fe8ff',1,2);
+    if(n.kind==='spring'&&!n.done&&gf%10===0) spark(n.x+rnd(-26,26), LANE-rnd(4,26), '#9fe8ff',1,2);
   }
 }
 //  ルート分岐の選択画面
@@ -4411,7 +4494,7 @@ function projVsPlayer(pr,p){
       spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.guard(); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); return 'reflect'; }
     sfx.guard(); spark(p.x+p.facing*22,p.y-44,'#9fd6ff',8); p.vx=dir*1.6; shake=3; p.guardFx=8; resetCombo(); return 'gone';
   }
-  hurtPlayer(p,pr.dmg*2,dir,true); spark(pr.x,pr.y-pr.zz,pr.color,12,8); return 'gone';   // 難易度UP：敵弾2倍
+  hurtPlayer(p,pr.dmg*2,dir,true); projHitFx(pr,pr.x,pr.y-pr.zz); return 'gone';   // 難易度UP：敵弾2倍
 }
 function updateProjectiles(){
   for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i];
@@ -4420,7 +4503,7 @@ function updateProjectiles(){
       else { let best=null,bd=1e9; for(const e of enemies){ if(e.dead||e.grabbedBy)continue; const d=Math.abs(e.x-pr.x)+Math.abs(e.y-pr.y)*0.6; if(d<bd){bd=d;best=e;} } if(best){ tx=best.x; ty=best.y-best.h*0.5; } }
       if(tx!=null){ const ang=Math.atan2(ty-(pr.y-pr.zz),tx-pr.x); const cur=Math.atan2(pr.vy,pr.vx); let d=ang-cur; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; const na=cur+clamp(d,pr.owner==='enemy'?-0.10:-0.16,pr.owner==='enemy'?0.10:0.16), sp=Math.hypot(pr.vx,pr.vy)||6; pr.vx=Math.cos(na)*sp; pr.vy=Math.sin(na)*sp; } }
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
-    pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>7)pr.trail.shift();
+    pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>13)pr.trail.shift();   // 尾を長く取ってリボン化する
     if(pr.owner==='player'){
       // 下方向エネルギー弾：地面で爆発（範囲ダメージ）
       if(pr.explode && pr.zz<=2){ ring(pr.x,LANE,pr.color); ring(pr.x,LANE,'#fff'); spark(pr.x,LANE,pr.color,20,11); dust(pr.x,LANE,12); shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.big();
@@ -4435,9 +4518,9 @@ function updateProjectiles(){
           else if(pr.nostop){ noHitStopOnce=true; damageEnemy(e,pr.dmg,pr.vx>0?2:-2,false); }   // エネルギー弾：低威力・ノックダウンもヒットストップも無し
           else damageEnemy(e,pr.dmg,pr.vx>0?9:-9,true);
           if(pr.wave&&!pr.noLaunch&&!pr.multihit&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*16,-8,3);
-          spark(e.x,e.y-e.h*0.5,pr.color,12,8);
+          projHitFx(pr,e.x,e.y-e.h*0.5);
           if(pr.multihit){ pr.hitAt[e.id]=gf; } else if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
-      if(hit){ if(pr.blast) projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); else spark(pr.x,pr.y-pr.zz,pr.color,12,8); projectiles.splice(i,1); continue; }
+      if(hit){ if(pr.blast) projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); else projHitFx(pr,pr.x,pr.y-pr.zz); projectiles.splice(i,1); continue; }
     } else {
       let res=null; for(const p of players){ res=projVsPlayer(pr,p); if(res)break; }
       if(res==='reflect') continue;
@@ -4446,9 +4529,18 @@ function updateProjectiles(){
     if(pr.life<=0 || pr.x<camX-100 || pr.x>camX+W+100 || pr.zz<-30){ if(pr.blast && pr.owner==='player' && pr.life<=0) projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); projectiles.splice(i,1); }
   }
 }
+// 着弾エフェクト：進行方向の逆へ扇状に飛ぶ火花＋進行軸へ潰した楕円リング＋0Fの白芯。
+// 等方に散らすだけの従来版と違い「どっちから飛んできて潰れたか」が読める
+function projHitFx(pr,x,y){
+  const ax=Math.atan2(pr.vy,pr.vx), back=ax+Math.PI;
+  flashCore(x,y,15,'255,255,255');
+  spark(x,y,pr.color,11,9,{aim:back,spread:0.9,delay:1});
+  spark(x,y,'#ffffff',4,6,{aim:back,spread:0.38});
+  ring(x,y,pr.color,{delay:2,rMax:26,ang:ax+Math.PI/2,sq:0.4});
+}
 function drawProjectiles(){
-  projectiles.forEach(pr=>{ const sx=pr.x-camX, sy=pr.y-pr.zz;
-    if(pr.wave){ const dir=pr.vx>0?1:-1; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,pr.y);
+  projectiles.forEach(pr=>{ const gl=groundLift(pr.x), sx=pr.x-camX, sy=pr.y-pr.zz-gl;   // 弾もキャラと同じく地形の起伏に乗せる
+    if(pr.wave){ const dir=pr.vx>0?1:-1; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,pr.y-gl);
       for(let k=0;k<3;k++){ ctx.globalAlpha=0.5-k*0.13; ctx.strokeStyle=pr.color; ctx.lineWidth=7-k*2;
         ctx.beginPath(); ctx.ellipse(-dir*k*9, -28, pr.r*0.7, pr.r*1.7, 0, -1.15, 1.15); ctx.stroke(); }
       ctx.globalAlpha=0.85; ctx.fillStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(dir*4,-28,pr.r*0.4,pr.r*1.5,0,-1.0,1.0); ctx.fill();
@@ -4457,17 +4549,32 @@ function drawProjectiles(){
       ctx.fillStyle=pr.color; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(-pr.r*0.5,pr.r*0.7); ctx.lineTo(-pr.r*0.5,-pr.r*0.7); ctx.closePath(); ctx.fill();
       ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(0,pr.r*0.28); ctx.lineTo(0,-pr.r*0.28); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
     ctx.save(); ctx.globalCompositeOperation='lighter';
-    for(let i=0;i<pr.trail.length;i++){ const tp=pr.trail[i], a=i/pr.trail.length*0.4;
-      ctx.globalAlpha=a; ctx.fillStyle=pr.color; ctx.beginPath(); ctx.arc(tp.x-camX,tp.y,pr.r*(0.5+i/pr.trail.length*0.5),0,7); ctx.fill(); }
+    // ── 尾：円の数珠つなぎをやめ、中点を結ぶ1本の連続リボンにする（速いほど長く引く） ──
+    const tl=pr.trail, n=tl.length;
+    if(n>2){ const spd=Math.hypot(pr.vx,pr.vy), keep=clamp(Math.round(4+spd*0.9),4,n), st=n-keep;
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      for(let pass=0;pass<2;pass++){                                     // 1周目=太い色帯 / 2周目=細い白芯
+        for(let i=st;i<n-1;i++){ const u=(i-st)/Math.max(1,(n-1-st));
+          const ax0=tl[i].x-camX, ay0=tl[i].y-groundLift(tl[i].x), ax1=tl[i+1].x-camX, ay1=tl[i+1].y-groundLift(tl[i+1].x);
+          ctx.globalAlpha=(pass?0.5:0.42)*Math.pow(u,pass?2.2:1.35);
+          ctx.strokeStyle=pass?'#ffffff':pr.color; ctx.lineWidth=Math.max(0.7,pr.r*(pass?0.55:1.85)*u);
+          ctx.beginPath(); ctx.moveTo(ax0,ay0); ctx.lineTo(ax1,ay1); ctx.stroke(); } } }
     ctx.globalAlpha=1;
     ctx.fillStyle=radGrad(sx,sy,pr.r*1.8,'#ffffff',pr.color); ctx.beginPath(); ctx.arc(sx,sy,pr.r*1.8,0,7); ctx.fill();
+    // ── 光芒：進行方向へ伸びる横長の芒と、それに直交する細い芒。明滅させて「光っている」感を出す ──
+    { const ang=Math.atan2(pr.vy,pr.vx), fl=0.34+0.14*Math.sin(gf*0.4+pr.spin), crgb=hexRGB(pr.color);
+      ctx.save(); ctx.translate(sx,sy); ctx.rotate(ang); ctx.globalAlpha=fl;
+      ctx.fillStyle=radGrad(0,0,pr.r*4.4,'rgba('+crgb+',.95)','rgba('+crgb+',0)');   // 進行方向へ伸びる横長の芒（弾の色で出す）
+      ctx.beginPath(); ctx.ellipse(0,0,pr.r*4.4,pr.r*0.40,0,0,7); ctx.fill();
+      ctx.globalAlpha=fl*0.85; ctx.fillStyle=radGrad(0,0,pr.r*2.4,'rgba(255,255,255,.85)','rgba(255,255,255,0)');
+      ctx.beginPath(); ctx.ellipse(0,0,pr.r*0.34,pr.r*2.4,0,0,7); ctx.fill();        // 直交する細い芒
+      ctx.restore(); }
     ctx.fillStyle=pr.color; ctx.beginPath(); ctx.arc(sx,sy,pr.r,0,7); ctx.fill();
     ctx.fillStyle='#fff'; for(let k=0;k<4;k++){ const a=pr.spin+k*PI2; ctx.beginPath();
       ctx.arc(sx+Math.cos(a)*pr.r*0.5, sy+Math.sin(a)*pr.r*0.5, pr.r*0.28,0,7); ctx.fill(); }
     ctx.restore();
   });
 }
-
 //======================================================================
 //  Camera
 //======================================================================
@@ -4552,6 +4659,7 @@ function render(){
   drawNPCs();
   drawItems();
   drawVehicles();
+  drawParticles(0);                     // 土煙はキャラの後ろ（脚を覆わない）
   const order=[...enemies.map(e=>({y:e.y,e}))];
   mercs.forEach(m=>order.push({y:m.y-0.3, m}));
   players.forEach(pl=>{ if(pl.active) order.push({y:pl.y+pl.pid*0.5, pl}); });
@@ -4567,12 +4675,16 @@ function render(){
   player=players[0];
   drawHazards();
   drawProjectiles();
-  drawParticles();
+  drawParticles(1);                     // 火花・衝撃リング・放射線はキャラの前
   drawGreatOne();
   drawForeground();
   drawLighting();
+  drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
-  if(flash>0){ ctx.fillStyle='rgba(255,90,80,'+(flash/12)+')'; ctx.fillRect(0,0,W,H); }
+  if(flash>0){ const fa=flash/12;       // イベント色のフラッシュは加算、被弾の赤だけ従来どおり乗せる
+    if(flashCol!==FLASH_DEF){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba('+flashCol+','+(fa*0.55)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+    else { ctx.fillStyle='rgba('+FLASH_DEF+','+fa+')'; ctx.fillRect(0,0,W,H); } }
+  else if(flashCol!==FLASH_DEF) flashCol=FLASH_DEF;
   drawHUD();
 }
 
@@ -5654,7 +5766,8 @@ function drawPlayer(){
     const windup=clamp((a0-t)/Math.max(1,a0),0,1);                       // anticipation amount
     const heavy=(def.finisher||def.aoe||def.rise)?1.5:1.1, big=e2*heavy;
     swAng=lerp(def.from,def.to,e); swExt=def.len*0.55*(1+1.15*big);
-    trailCol=def.trail; tA0=def.from; tA1=swAng; tk=clamp(t/def.dur,0,1); drawTrail=t<=a1+3; trailW=1.3+1.5*heavy; smear=big;
+    trailCol=((def.finisher||def.aoe)?null:((WEAPONS[p.weapon]||{}).trail))||def.trail;   // 武器ごとの色アイデンティティを軌跡に出す
+    tA0=def.from; tA1=swAng; tk=clamp(t/def.dur,0,1); drawTrail=t<=a1+3; trailW=1.3+1.5*heavy; smear=big;
     lean=lerp(-0.40,0.42,e) - 0.22*windup; backArm=lerp(0.95,-1.35,e)-0.35*big;
     const fwd=(def.finisher||def.aoe)?1.05:0.72;
     thF=lerp(0.02,fwd,e)+0.22*big; thB=lerp(-0.02,-0.8,e)-0.45*big; kF=0.45; kB=0.3;
@@ -5721,6 +5834,45 @@ function drawPlayer(){
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
     ctx.beginPath(); ctx.arc(0,-40,22+p.charge*22,0,7); ctx.fill(); ctx.restore(); }
+  // ── 剣戟トレイル：刃の軌跡に沿った可変幅リボン。刀身の下に敷いて、刃が帯の上に乗るようにする ──
+  if(drawTrail && Math.abs(tA1-tA0)>0.015){
+    const _trH=faL1+faL2+2;                                              // 肩→手のひらまでの距離
+    const _trT=_trH+(mode==='fist'? 12 : bladeTipR(p.weapon||'dagger', swExt));   // 肩→刃先。装備武器の実寸を参照する
+    const _tws=clamp(trailW/5.4,0.26,0.78);                              // 帯が刀身長の何割を覆うか
+    const _tb=clamp(0.28+0.52*(1-tk)+0.18*smear,0,0.95), _tN=20, _d=tA1-tA0;
+    const _rgb=hexRGB(trailCol), _sp=Math.min(0.985,Math.abs(_d)/(Math.PI*2));
+    // 尾へ向かう減衰はコニックグラデーションで作る。帯を区間ごとに塗ると継ぎ目の筋が出るため1枚のパスで塗る
+    const _mkG=(rgb,amp,pw)=>{ if(!ctx.createConicGradient) return null;
+      const g=ctx.createConicGradient(_d>0?tA0:tA1,0,0);
+      for(let k=0;k<=8;k++){ const f=k/8, u=(_d>0)?f:1-f;
+        g.addColorStop(_sp*f,'rgba('+rgb+','+(amp*Math.pow(u,pw)).toFixed(4)+')'); }
+      if(_sp<0.99) g.addColorStop(Math.min(1,_sp+0.004),'rgba('+rgb+',0)');
+      return g; };
+    const _co=[],_ci=[],_ro=[];
+    for(let _i=0;_i<_tN;_i++){ const _u=_i/(_tN-1), _an=tA0+_d*_u;         // 振り始め(0)→現在角(1)を細かく補間して多角形の角を消す
+      const _tw=Math.pow(_u,0.62);                                        // 尾側ほど内周を刃先へ寄せて細く絞る＝先細りのテーパー
+      const _r1=_trT*(0.94+0.06*_u), _r2=_trT+(_trH-_trT)*_tw*_tws;
+      _ro.push([Math.cos(_an),Math.sin(_an),_r1,_u]); _co.push(_r1); _ci.push(_r2); }
+    const _band=(g,flat,wf,off)=>{                                        // 刃先の縁に沿った可変幅の帯を1枚のパスで塗る
+      ctx.beginPath();
+      for(let _i=0;_i<_tN;_i++){ const v=_ro[_i], r=v[2]+off*wf(v[3]);
+        ctx[_i?'lineTo':'moveTo'](v[0]*r, v[1]*r); }
+      for(let _i=_tN-1;_i>=0;_i--){ const v=_ro[_i], r=v[2]-(1-off)*wf(v[3]);
+        ctx.lineTo(v[0]*r, v[1]*r); }
+      ctx.closePath(); if(g){ ctx.fillStyle=g; ctx.globalAlpha=1; } else { ctx.fillStyle=trailCol; ctx.globalAlpha=flat; }
+      ctx.fill(); };
+    ctx.save(); ctx.translate(6,-30); ctx.lineJoin='round';
+    ctx.beginPath();                                                      // 本体の帯（刃先側→手元側の閉パス）
+    for(let _i=0;_i<_tN;_i++){ const v=_ro[_i]; ctx[_i?'lineTo':'moveTo'](v[0]*_co[_i], v[1]*_co[_i]); }
+    for(let _i=_tN-1;_i>=0;_i--){ const v=_ro[_i]; ctx.lineTo(v[0]*_ci[_i], v[1]*_ci[_i]); }
+    ctx.closePath();
+    const _gb=_mkG(_rgb,_tb,1.5);
+    if(_gb){ ctx.fillStyle=_gb; } else { ctx.globalAlpha=_tb*0.55; ctx.fillStyle=trailCol; }
+    ctx.fill(); ctx.globalAlpha=1;
+    ctx.globalCompositeOperation='lighter';                               // 刃先の縁に色の光と白い芯を通す（加算だが色は武器色のまま）
+    _band(_mkG(_rgb,_tb*0.5,1.9), _tb*0.2, u=>(2.5+8*u)*(0.6+_tws), 0.45);
+    _band(_mkG('255,255,255',_tb*0.95,2.6), _tb*0.4, u=>(0.8+2.8*u)*(0.6+_tws), 0.5);
+    ctx.globalAlpha=1; ctx.restore(); }
   // near arm + weapon / shield / fist
   if(mode==='shield'){
     const gh=poseArm(7,-30,1.05,9,8,'#eaddb6',0.9); drawBlade(gh.hx,gh.hy,1.05,11);
@@ -5730,10 +5882,6 @@ function drawPlayer(){
     if(mode==='fist') chibiFist(hand.hx,hand.hy, faW*(p.weapon==='tigerfist'?1.25:1), p.weapon==='tigerfist'?'#ffb02e':handCol);
     else drawBlade(hand.hx,hand.hy,swAng,swExt);
   }
-  if(drawTrail){ ctx.save(); ctx.translate(6,-30); const r=swExt+18;
-    if(smear>0.25){ ctx.globalAlpha=0.22*smear; ctx.fillStyle=trailCol; ctx.beginPath(); ctx.arc(0,0,r+6,Math.min(tA0,tA1),Math.max(tA0,tA1)); ctx.arc(0,0,Math.max(2,r-14),Math.max(tA0,tA1),Math.min(tA0,tA1),true); ctx.closePath(); ctx.fill(); }
-    ctx.strokeStyle=trailCol; ctx.globalAlpha=0.55*(1-tk); ctx.lineWidth=(8*(1-tk)+3)*trailW; ctx.lineCap='round';
-    ctx.beginPath(); ctx.arc(0,0,r, Math.min(tA0,tA1), Math.max(tA0,tA1)); ctx.stroke(); ctx.globalAlpha=1; ctx.restore(); }
   // ── 次元斬: 全方位を切り裂く回転刃 ──
   if(_spec){ const t=p.atk.t; ctx.save(); ctx.globalCompositeOperation='lighter';
     for(let i=0;i<6;i++){ const a=t*0.45 + i*(Math.PI/3); const rr=40+swExt;
@@ -5841,6 +5989,27 @@ function shimaHead(lean){ ctx.save(); ctx.translate(0,-46); ctx.rotate(lean*0.3)
   }
   ctx.restore();
 }
+// 手の位置から刃先までのローカル距離。drawBlade の各分岐で描いている実寸と同じ式を返す。
+// 剣戟トレイルの半径に使うことで、武器を持ち替えると軌跡の大きさもきちんと変わる
+function bladeTipR(wk,ext){ switch(wk){
+  case 'inuboshi': case 'inuboshi2': return ext*1.7+114;                                   // 犬干し竿：L=ext*1.7+96 の切先 +18
+  case 'moon':   return ext+36;
+  case 'holy':   return ext+32;
+  case 'twin':   return ext+21;
+  case 'claw':   return ext*0.7+24;
+  case 'tome':   return 20;
+  case 'wand':   return ext*0.8+25;
+  case 'staff2': return ext*1.1+35;
+  case 'ghammer': case 'megaton':
+    return (ext*0.75+54)*((player.atk&&player.atk.def&&player.atk.def.bighammer)?1.95:1);   // 超豪快叩きは約2倍
+  case 'gaxe':   return ext*0.7+54;
+  case 'gflail': return ext*0.55+54;
+  case 'spear':  return ext*1.5+35;
+  case 'hammer': return ext*0.6+36;
+  case 'nunchaku': return ext*0.82+26;
+  case 'tonfa':  return ext*0.55+22;
+  case 'fists': case 'tigerfist': return 0;
+  default: return ext+13; } }                                                              // dagger
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
   if(wk==='inuboshi'||wk==='inuboshi2'){ const L=ext*1.7+96;                // 犬干し竿：常識外れに長い野太刀（真打も同じ長さ）
