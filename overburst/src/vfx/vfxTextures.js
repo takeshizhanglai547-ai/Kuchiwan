@@ -143,8 +143,10 @@ function cellStar(a) {
       const s4 = Math.pow(Math.abs(Math.cos(2 * th)), 30);
       const s4d = Math.pow(Math.abs(Math.cos(2 * (th + Math.PI / 4))), 60) * 0.34;
       const jag = 0.82 + n[y * CS + x] * 0.36;
-      const spikes = (s4 + s4d) * Math.exp(-r * 3.2) * 1.5 * jag;
-      const core = Math.exp(-r * r * 260) * 1.1 + Math.exp(-r * r * 30) * 0.5;
+      const spikes = (s4 + s4d) * Math.exp(-r * 3.6) * 1.5 * jag;
+      // a tight core: the old broad term turned every star into a soft disc,
+      // and at explosion scale that disc is a screen-wide peach veil
+      const core = Math.exp(-r * r * 260) * 1.1 + Math.exp(-r * r * 78) * 0.26;
       a[y * CS + x] = sat(core + spikes) * (1 - smooth(sat((r - 0.9) / 0.1)));
     }
   }
@@ -161,25 +163,30 @@ function cellRing(a) {
       let th = Math.atan2(dy, dx) / (Math.PI * 2); if (th < 0) th += 1;
       const wi = th * 64, w0 = wi | 0, wt = smooth(wi - w0);
       const wv = wob[w0 % 64] * (1 - wt) + wob[(w0 + 1) % 64] * wt;
-      const rr = 0.80 + (wv - 0.5) * 0.045;
-      const band = Math.exp(-(((r - rr) / 0.042) ** 2));
-      const bandSoft = Math.exp(-(((r - rr) / 0.13) ** 2)) * 0.22;
-      const inner = Math.exp(-(((r - 0.52) / 0.34) ** 2)) * 0.075;
-      const streak = 0.80 + 0.20 * Math.sin(th * Math.PI * 2 * 26 + wv * 6.0);
-      const v = (band * streak + bandSoft + inner);
-      a[y * CS + x] = sat(v) * (1 - smooth(sat((r - 0.94) / 0.06)));
+      // A shock front, not a disc: a hard bright rim with a short inner tail.
+      // Any broad inner fill turns into a translucent peach veil the moment
+      // the ring is scaled up to explosion size.
+      const rr = 0.82 + (wv - 0.5) * 0.040;
+      const band = Math.exp(-(((r - rr) / 0.030) ** 2));
+      const tail = r < rr ? Math.exp(-(((rr - r) / 0.16) ** 2)) * 0.16 : 0;
+      const streak = 0.74 + 0.26 * Math.sin(th * Math.PI * 2 * 26 + wv * 6.0);
+      const v = band * streak + tail * (0.5 + 0.5 * streak);
+      a[y * CS + x] = sat(v) * (1 - smooth(sat((r - 0.95) / 0.05)));
     }
   }
 }
 
+// The visible line must fill a useful fraction of the CELL, otherwise a
+// caller asking for a 0.3 m tracer gets a 0.03 m hairline that vanishes under
+// FXAA. Core ~22 % of the half-height, sheath ~62 %.
 function cellStreak(a) {
   for (let y = 0; y < CS; y++) {
     for (let x = 0; x < CS; x++) {
       const u = (x + 0.5) / CS * 2 - 1, v = (y + 0.5) / CS * 2 - 1;
       const taper = Math.pow(Math.max(0, 1 - u * u), 0.55);
-      const core = Math.exp(-((v / 0.045) ** 2));
-      const sheath = Math.exp(-((v / 0.20) ** 2)) * 0.34;
-      const head = Math.exp(-(((u - 0.72) / 0.30) ** 2 + (v / 0.17) ** 2)) * 0.85;
+      const core = Math.exp(-((v / 0.22) ** 2));
+      const sheath = Math.exp(-((v / 0.62) ** 2)) * 0.30;
+      const head = Math.exp(-(((u - 0.74) / 0.26) ** 2 + (v / 0.46) ** 2)) * 0.9;
       a[y * CS + x] = sat((core + sheath) * taper + head);
     }
   }

@@ -15,7 +15,7 @@ export const CFG = {
   // ---- player mech ----
   PLAYER: {
     AP: 11200,              // armor points
-    EN_CAP: 3400,           // energy capacity
+    EN_CAP: 4000,           // energy capacity (~10 quick boosts, ~6 s of AB)
     EN_RECHARGE: 1450,      // EN/s while grounded & not boosting
     EN_RECHARGE_AIR: 1080,  // EN/s while airborne
     EN_RECOVERY_DELAY: 0.28,// s before recharge resumes after spend
@@ -25,7 +25,7 @@ export const CFG = {
     BOOST_SPEED: 62,        // sustained boost ground speed
     AB_SPEED: 146,          // assault boost top speed
     AB_ACCEL: 190,
-    AB_EN_DRAIN: 620,       // EN/s
+    AB_EN_DRAIN: 560,       // EN/s
     AB_IGNITION: 380,       // one-shot EN cost
 
     QB_IMPULSE: 118,        // quick-boost velocity injection
@@ -60,9 +60,9 @@ export const CFG = {
 
   // ---- camera ----
   CAM: {
-    DIST: 21.5,
-    HEIGHT: 6.4,
-    SHOULDER: 3.1,
+    DIST: 20.6,
+    HEIGHT: 2.2,          // above the chest pivot — lens sits at shoulder height
+    SHOULDER: 3.6,
     FOV: 62,
     FOV_AB: 88,
     PITCH_MIN: -1.15,
@@ -129,16 +129,38 @@ export const CFG = {
     PYLONS: 3,
   },
 
-  // ---- presentation ----
+  // ---- presentation (owned by core/postfx.js) ----
   FX: {
-    BLOOM_STRENGTH: 0.62,
-    BLOOM_RADIUS: 0.55,
-    BLOOM_THRESHOLD: 0.82,
-    EXPOSURE: 1.06,
-    VIGNETTE: 0.42,
-    CA: 0.0016,            // chromatic aberration
-    GRAIN: 0.045,
+    BLOOM_STRENGTH: 0.70,
+    BLOOM_RADIUS: 0.42,    // tighter than default: a halo, not a haze
+    BLOOM_THRESHOLD: 0.82, // DISPLAY-referred; postfx converts to the linear
+                           // scene cutoff so only real emissives bloom
+    EXPOSURE: 1.02,
+    VIGNETTE: 0.30,
+    EDGE_DESAT: 0.12,
+    CA: 0.0013,            // chromatic aberration (~0.2 % at the corners)
+    GRAIN: 0.026,
+    SCAN: 0.020,           // horizontal scan modulation depth
+    SPEED_BLUR: 0.055,     // radial blur reach at setSpeedLines(1)
     SHAKE_SCALE: 1.0,
+    ADAPTIVE: true,        // rolling frame-time fallback (bloom res only)
+
+    // Colour grade — this is what pulls the frame back to ASH-GREY
+    // INDUSTRIAL. Applied in display/gamma space after the filmic tonemap.
+    GRADE: {
+      gain:       [0.985, 0.992, 1.018],   // red down / blue up: kills the sherbet
+      offset:     [0.003, 0.005, 0.012],   // cool lift in the deep shadows
+      power:      [1.000, 1.000, 0.990],
+      contrast:   1.085,
+      saturation: 0.820,
+      shadowTint: [0.910, 0.960, 1.075],   // cool shadows
+      highTint:   [1.078, 1.006, 0.902],   // warm key in the highlights
+      shadowAmt:  0.42,
+      highAmt:    0.52,
+      shoulder:   0.860,                   // highlight rolloff knee
+      white:      1.000,                   // asymptote — nothing ever clips
+      bleach:     0.320,                   // how much the very top goes white
+    },
   },
 
   COLORS: {

@@ -263,7 +263,10 @@ void main() {
   gl_Position = projectionMatrix * mv;
   vUv = uv;
   vT = t;
-  vA = min(1.0, t / 0.14) * pow(1.0 - t, 1.25) * iCol.a;
+  // Hold opacity through the middle of the life and drop it late. The
+  // composite's low end is heavily lifted, so a half-transparent dark puff
+  // barely dents the background — smoke only reads if it OCCLUDES.
+  vA = min(1.0, t / 0.10) * pow(1.0 - t, 0.85) * iCol.a;
   vCol = iCol.rgb;
   vFog = fogAmt(-mv.z);
 }
@@ -284,7 +287,9 @@ void main() {
   vec3 n = vec3(q, sqrt(max(0.0, 1.0 - rr)));
   vec3 sunV = normalize((viewMatrix * vec4(uSunDir, 0.0)).xyz);
   float d = dot(n, sunV);
-  vec3 lit = uAmbCol + uSunCol * (max(0.0, d) * 0.85 + (d * 0.5 + 0.5) * 0.30);
+  // Low ambient + a strong directional term: a smoke column needs a lit rim
+  // and a dark body, otherwise it is a flat grey blob at background value.
+  vec3 lit = uAmbCol * 0.55 + uSunCol * (max(0.0, d) * 0.95 + (d * 0.5 + 0.5) * 0.16);
   vec3 c = vCol * lit * (0.45 + s.r * 0.95);
   c = mix(c, uFogColor, vFog);
   gl_FragColor = vec4(c, a);
@@ -351,21 +356,31 @@ void main() {
 }
 `;
 
+// Cooling ramp. The paper-white band is gated on AGE, not just heat, so the
+// core is white for ~2 frames and everything after that is orange -> red ->
+// soot. Without that gate the whole fireball clips to white and reads as a
+// lightbulb instead of burning fuel.
 const FIRE_F = /* glsl */`
 uniform sampler2D uMap;
 varying vec2 vUv, vQ;
 varying float vT, vHeat, vI, vFog;
 void main() {
   vec4 s = texture2D(uMap, vUv);
-  float thr = vT * 0.72;
-  float a = smoothstep(thr, thr + 0.32, s.a) * (1.0 - smoothstep(0.72, 1.0, vT));
-  a *= vI * (1.0 - vFog) * 0.46;
-  a *= 1.0 - smoothstep(0.70, 1.0, length(vQ));   // never clip at the quad edge
+  float thr = vT * 0.55;
+  float a = smoothstep(thr, thr + 0.28, s.a) * (1.0 - smoothstep(0.62, 1.0, vT));
+  a *= vI * (1.0 - vFog) * 0.42;
+  a *= 1.0 - smoothstep(0.68, 1.0, length(vQ));   // never clip at the quad edge
   if (a < 0.006) discard;
-  float h = clamp(s.r * vHeat * 1.25 - vT * 0.95, 0.0, 1.0);
-  vec3 c = mix(vec3(0.42, 0.055, 0.012), vec3(2.30, 0.60, 0.075), smoothstep(0.06, 0.38, h));
-  c = mix(c, vec3(4.60, 2.05, 0.42), smoothstep(0.40, 0.68, h));
-  c = mix(c, vec3(7.00, 5.60, 4.20), smoothstep(0.74, 0.96, h));
+  float flash = 1.0 - smoothstep(0.10, 0.45, vT);      // white core, then it cools
+  // 1.05, not 1.35: any higher and h saturates over the whole puff, so every
+  // overlapping billow goes white and the detonation reads as a lightbulb.
+  float h = clamp(s.r * vHeat * 1.05 - vT * 0.55, 0.0, 1.0);
+  vec3 c = mix(vec3(0.20, 0.026, 0.006), vec3(1.30, 0.22, 0.026), smoothstep(0.04, 0.30, h));
+  c = mix(c, vec3(2.90, 0.92, 0.100), smoothstep(0.30, 0.60, h));   // body: orange-red
+  c = mix(c, vec3(4.20, 2.20, 0.55),  smoothstep(0.62, 0.90, h));   // hot yellow rim
+  c = mix(c, vec3(4.80, 4.10, 3.00),  smoothstep(0.90, 1.00, h) * flash);
+  // the fuel-rich edge sooties over as it cools: drop chroma AND level
+  c *= mix(1.0, 0.55, smoothstep(0.55, 1.00, vT));
   gl_FragColor = vec4(c * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -493,7 +508,9 @@ export class SpriteField extends QuadField {
     a.iVel[i3] = o.vx || 0; a.iVel[i3 + 1] = o.vy || 0; a.iVel[i3 + 2] = o.vz || 0;
     a.iP0[i4] = o.birth; a.iP0[i4 + 1] = o.life; a.iP0[i4 + 2] = o.size0; a.iP0[i4 + 3] = o.size1;
     a.iP1[i4] = o.cell; a.iP1[i4 + 1] = o.mode || 0; a.iP1[i4 + 2] = o.spin || 0; a.iP1[i4 + 3] = o.spinRate || 0;
-    a.iNrm[i3] = o.nx || 0; a.iNrm[i3 + 1] = o.ny || 1; a.iNrm[i3 + 2] = o.nz || 0;
+    // NOT `o.ny || 1` — a perfectly horizontal tracer has ny === 0 and would
+    // silently get its axis snapped to +Y, i.e. drawn in the wrong direction.
+    a.iNrm[i3] = o.nx; a.iNrm[i3 + 1] = o.ny; a.iNrm[i3 + 2] = o.nz;
     a.iCol[i4] = o.r; a.iCol[i4 + 1] = o.g; a.iCol[i4 + 2] = o.b; a.iCol[i4 + 3] = o.fade || 1.6;
   }
 }
@@ -636,17 +653,19 @@ varying vec2 vUv;
 varying float vV, vI, vSeed, vFog;
 varying vec3 vA, vB;
 void main() {
-  vec2 t1 = vec2(vUv.x * 2.0 + vSeed, vV * 1.1 - uTime * 2.6);
-  vec2 t2 = vec2(vUv.x * 3.3 - vSeed, vV * 2.1 - uTime * 4.7);
+  vec2 t1 = vec2(vUv.x * 2.0 + vSeed, vV * 1.1 - uTime * 3.4);
+  vec2 t2 = vec2(vUv.x * 3.3 - vSeed, vV * 2.1 - uTime * 6.1);
   float n = texture2D(uTurb, t1).r;
   float n2 = texture2D(uTurb, t2).g;
-  float turb = 0.30 + n * 0.62 + n2 * 0.34;
-  float shape = pow(1.0 - vV, 1.45) * smoothstep(0.0, 0.045, vV);
-  float a = shape * turb * vI * (1.0 - vFog) * 0.5;
+  float turb = 0.34 + n * 0.58 + n2 * 0.30;
+  // shock diamonds: standing bright bands in the first third of the throat
+  float dia = 1.0 + 0.34 * sin(vV * 34.0 - vSeed * 2.0) * (1.0 - smoothstep(0.0, 0.42, vV));
+  float shape = pow(1.0 - vV, 2.10) * smoothstep(0.0, 0.05, vV);
+  float a = shape * turb * dia * vI * (1.0 - vFog) * 0.34;
   a = clamp(a, 0.0, 1.0);
   if (a < 0.008) discard;
-  vec3 c = mix(vA, vB, smoothstep(0.015, 0.30, vV));
-  c = mix(c, vB * 0.28, smoothstep(0.34, 1.0, vV));
+  vec3 c = mix(vA, vB, smoothstep(0.010, 0.22, vV));
+  c = mix(c, vB * 0.22, smoothstep(0.26, 0.95, vV));
   gl_FragColor = vec4(c * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

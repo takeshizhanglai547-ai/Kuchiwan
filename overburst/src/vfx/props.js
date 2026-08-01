@@ -215,8 +215,12 @@ export class LightPool {
       e.age += dt;
       const t = e.age / e.life;
       if (t >= 1) { e.life = 0; e.light.intensity = 0; e.light.visible = false; continue; }
+      // Detonation falloff: a hard punch in the first ~80 ms, then a long
+      // low ember glow instead of an instant cut. (A pure exp(-4.6t) died so
+      // fast the world never actually looked lit.)
+      const k = (1 - t) * (1 - t) * (0.28 + 0.72 * Math.exp(-t * 5.2));
       const flick = 0.86 + 0.14 * Math.sin(e.age * 47) * (1 - t);
-      e.light.intensity = e.peak * Math.exp(-t * 4.6) * (1 - t) * flick;
+      e.light.intensity = e.peak * k * flick;
     }
   }
 
@@ -243,7 +247,8 @@ uniform float uOpacity;
 varying vec3 vN, vV;
 void main() {
   float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-  float a = (pow(f, 2.4) * 1.15 + 0.055) * uOpacity;
+  // rim-weighted: an afterimage is a silhouette, not a glowing solid
+  float a = (pow(f, 3.4) * 1.05 + 0.016) * uOpacity;
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor * a, 1.0);
   #include <tonemapping_fragment>
@@ -278,7 +283,7 @@ export class GhostPool {
     const g = this.src.clone(true);
     const mat = new THREE.ShaderMaterial({
       uniforms: {
-        uColor: { value: this.color.clone().multiplyScalar(3.2) },
+        uColor: { value: this.color.clone().multiplyScalar(1.5) },
         uOpacity: { value: 0 },
       },
       vertexShader: GHOST_V, fragmentShader: GHOST_F,
@@ -329,7 +334,7 @@ export class GhostPool {
       const t = (gh.age - gh.delay) / gh.life;
       if (t >= 1) { gh.life = 0; gh.obj.visible = false; gh.mat.uniforms.uOpacity.value = 0; continue; }
       const a = t < 0 ? 0 : Math.pow(1 - t, 1.7);
-      gh.mat.uniforms.uOpacity.value = a * 0.85;
+      gh.mat.uniforms.uOpacity.value = a * 0.42;
       gh.obj.visible = a > 0.002;
     }
   }
