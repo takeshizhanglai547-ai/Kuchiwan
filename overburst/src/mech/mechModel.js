@@ -1,69 +1,1402 @@
 // ============================================================
 //  mechModel — procedural AC-style mech construction.
-//  [STUB — owned by mech-model agent]
+//  [owned by mech-model agent]
 //
 //  CONTRACT
 //    buildPlayerMech(opts) -> { root:Group, parts:{...}, thrusters:[Object3D],
 //                               muzzles:{rifle,blade,missile,cannon}, api:{...} }
 //    buildEnemyMech(kind, opts) -> same shape ('mt'|'drone'|'heli'|'turret'|'boss')
-//    Every returned root must be Y-up, facing -Z, feet at y=0.
-//    api.setLegPose(t, moveSpeed, grounded, dt)  animation entry point
-//    api.setThrust(v)  0..1 booster flame intensity
+//    Every returned root is Y-up, facing -Z, feet at y = 0.
+//
+//    api.setLegPose(t, moveSpeed, grounded, dt)   stride / tuck / IK
+//    api.setAim(yawRel, pitch)                    yawRel is relative to the
+//                                                 mech's own facing; pitch is
+//                                                 absolute (up = +)
+//    api.setThrust(v)        0..1 booster intensity
+//    api.setDamage(v)        0..1 progressive scorch + ember glow
+//    api.setWeaponPose(o)    optional: {rifleRecoil, bladeSwing, bladeCharge,
+//                                       cannonCharge, missileOpen} all 0..1
+//    api.update(dt)          idle tick if you never call setLegPose
+//    api.setEnvironment(tex, intensity)  swap the built-in fallback IBL
+//    api.dispose()           frees THIS unit's materials (geometry is shared)
+//
+//  ORIENTATION CONVENTIONS
+//    * muzzles[*]  : local -Z is the firing direction.
+//    * thrusters[] : local -Z is the exhaust direction (so a VFX plume whose
+//                    own forward is -Z can be parented directly).
+//                    userData = { radius, power, kind }.
+//      kinds: 'main' 'hip' 'shoulder' 'blade' 'calf' 'vernier' 'lift' 'stack'
+//    * api.dirOf(obj3d, outVec3) returns that -Z axis in world space.
+//
+//  PERF
+//    Geometry is built ONCE per kind into a template and cloned per instance,
+//    so spawning enemies costs only Object3D allocation. Each instance still
+//    gets its own material set (setDamage/setThrust are per-unit) but shares
+//    every texture. Call disposeMechTemplates() for a full teardown.
 // ============================================================
 import * as THREE from 'three';
+import { CFG } from '../config.js';
+import { clamp, damp, TAU } from '../util/math.js';
+import { Kit } from './mechKit.js';
+import { makeMaterials, disposeMaterials, mechTextures, DECAL } from './mechTex.js';
 
-function box(w, h, d, color, metal = 0.85, rough = 0.42) {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color, metalness: metal, roughness: rough }),
-  );
+const _q = new THREE.Quaternion();
+const FWD = new THREE.Vector3(0, 0, -1);
+
+// ------------------------------------------------------------------
+//  palettes — desaturated industrial, one saturated accent per unit
+// ------------------------------------------------------------------
+const PAL = {
+  player: {
+    hull: 0xa8b0bb, hull2: 0x757d8a, hull3: 0x4e5560, hull4: 0x736f55,
+    frame: 0x2a2d33, frame2: 0x191b1f, wear: 0xdfe5ec,
+    mech: 0xb9c1ca, trim: 0x8c8a6c, rust: 0x8a5433,
+    accent: CFG.COLORS.PLAYER_ACCENT, flame: 0xa8e6ff, env: 1.0,
+  },
+  mt: {
+    hull: 0xa09a72, hull2: 0x757050, hull3: 0x53503c, hull4: 0x8a5f2c,
+    frame: 0x2b2921, frame2: 0x1a1915, wear: 0xd9d4ba,
+    mech: 0xb1ab92, trim: 0xa46a2c, rust: 0x8a4c26,
+    accent: CFG.COLORS.ENEMY_ACCENT, flame: 0xffb070, env: 0.9,
+  },
+  boss: {
+    hull: 0x6a6680, hull2: 0x49465e, hull3: 0x32303f, hull4: 0x5b4678,
+    frame: 0x201f29, frame2: 0x121118, wear: 0xd8d2e8,
+    mech: 0xafa8c2, trim: 0x6a5490, rust: 0x6e3a60,
+    accent: CFG.COLORS.BOSS_ACCENT, flame: 0xe6a8ff, env: 1.1,
+  },
+};
+PAL.drone = { ...PAL.mt, hull: 0x87897c, hull2: 0x666a5e, hull3: 0x4a4d44, hull4: 0x9a7a3a, mech: 0xacafa4 };
+PAL.heli = { ...PAL.mt, hull: 0x767c60, hull2: 0x585d47, hull3: 0x414534, hull4: 0x8a6a34 };
+PAL.turret = { ...PAL.mt, hull: 0x8d8869, hull2: 0x6a6650, hull3: 0x4c4938, hull4: 0x9a6a2c };
+
+function matsFor(pal) {
+  return makeMaterials({
+    accent: pal.accent,
+    hullTint: 0xffffff,
+    mechTint: pal.mech,
+    darkTint: pal.frame2,
+    flameTint: pal.flame,
+    envIntensity: pal.env,
+  });
 }
 
-function assemble(bodyColor, accent, scale = 1) {
+// ==================================================================
+//  PLAYER  —  "OB-01 REAVER"   11.0 units tall, feet at y = 0
+// ==================================================================
+const HIPS_Y = 6.18;
+const CORE_Y = 0.12;        // relative to hips
+const L_THIGH = 2.45;
+const L_SHIN = 3.05;
+const ANKLE_H = 1.05;
+const HIP_X = 1.42;
+
+function buildPlayer(K, P) {
   const root = new THREE.Group();
-  const parts = {};
+  root.name = 'mech';
+  const N = {};
 
-  parts.core = box(6.4, 6.0, 4.4, bodyColor); parts.core.position.y = 8.2;
-  parts.head = box(2.2, 1.7, 2.4, bodyColor); parts.head.position.y = 11.9;
-  parts.armL = box(2.0, 5.4, 2.0, bodyColor); parts.armL.position.set(-4.5, 8.4, 0);
-  parts.armR = box(2.0, 5.4, 2.0, bodyColor); parts.armR.position.set(4.5, 8.4, 0);
-  parts.legL = box(2.6, 7.2, 3.0, bodyColor); parts.legL.position.set(-2.0, 3.6, 0);
-  parts.legR = box(2.6, 7.2, 3.0, bodyColor); parts.legR.position.set(2.0, 3.6, 0);
+  const hips = N.hips = K.group(root, 'hips', 0, HIPS_Y, 0);
+  const core = N.core = K.group(hips, 'core', 0, CORE_Y, 0);
 
-  const eye = new THREE.Mesh(
-    new THREE.BoxGeometry(1.4, 0.34, 0.14),
-    new THREE.MeshBasicMaterial({ color: accent }),
-  );
-  eye.position.set(0, 12.0, -1.25);
-  parts.eye = eye;
+  const F = { base: P.frame, wear: P.frame, ao: 0.5, c: 0.03 };
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.40 };
+  const A4 = { base: P.hull4, wear: P.wear, ao: 0.38 };   // olive service panels
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
 
-  for (const k in parts) {
-    parts[k].castShadow = true; parts[k].receiveShadow = true;
-    root.add(parts[k]);
+  // ---------------------------------------------------------------
+  //  PELVIS  (narrow waist, armoured skirt, hip verniers)
+  // ---------------------------------------------------------------
+  K.into(hips);
+  K.plate(2.0, 1.0, 1.7, 0, 0.02, 0, F);                                  // waist core
+  K.plate(2.32, 0.36, 1.9, 0, 0.5, -0.02, { ...A3, c: 0.06 });            // belt plate
+  K.plate(1.6, 0.44, 1.5, 0, -0.44, 0, { ...F, c: 0.05 });                // lower yoke
+  K.plate(1.5, 1.0, 0.32, 0, -0.18, -1.0, { ...A, rx: 0.16, c: 0.07 });   // front skirt
+  K.plate(1.05, 0.6, 0.24, 0, -0.62, -1.14, { ...A4, rx: 0.32, c: 0.05 });
+  for (const s of [-1, 1]) {
+    K.taper(0.36, 1.4, 1.75, 0.36, 1.35, s * 1.34, -0.26, 0.06, { ...A, rz: s * 0.11, c: 0.07 });
+    K.plate(0.22, 0.68, 1.05, s * 1.55, -0.4, 0.02, { ...A2, c: 0.045 });
+    K.hatch(0.46, 0.5, s * 1.5, -0.18, -0.5, { dir: s < 0 ? 'left' : 'right', base: P.hull2, wear: P.wear });
+    K.plate(0.7, 0.7, 0.9, s * 1.3, 0.26, 0.88, { ...A3, c: 0.055 });      // vernier pod
+    K.nozzle(s * 1.3, 0.26, 1.34, 0.15, 0.25, 0.4, { dir: 'back', base: P.hull2, seg: 10, power: 0.5, kind: 'hip', name: `thr_hip_${s < 0 ? 'l' : 'r'}` });
+    K.nozzle(s * 1.6, -0.58, 0.06, 0.09, 0.15, 0.24, { dir: s < 0 ? 'left' : 'right', base: P.hull2, seg: 8, power: 0.3, kind: 'vernier', name: `thr_hipv_${s < 0 ? 'l' : 'r'}` });
+    K.rod(0.34, 1.0, 10, s * 1.06, -0.08, 0, { ...M, rz: Math.PI / 2, base: 0x585d64, ao: 0.5 });
+    K.bolt(s * 1.5, -0.08, 0, 0.17, { rz: Math.PI / 2, base: P.mech });
+    K.ring(0.4, 0.07, 10, s * 1.22, -0.08, 0, { ...M, rz: Math.PI / 2, rseg: 4 });
   }
-  root.scale.setScalar(scale);
+  K.plate(1.95, 0.95, 0.3, 0, -0.2, 1.0, { ...A2, rx: -0.14, c: 0.06 });
+  K.vent(1.2, 0.5, 0, 0.1, 1.14, { dir: 'back', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.decal(DECAL.CHEVRON_Y, 1.35, 0.28, 0, -0.68, -1.19, { dir: 'front', off: 0.07 });
+  K.decal(DECAL.NUM_07, 0.4, 0.4, -1.44, 0.24, -0.55, { dir: 'left', off: 0.14 });
+  K.cables([-0.72, 0.42, 0.84], [0.72, 0.42, 0.84], 3, 0.055, { sag: 0.18, spread: 0.2, axis: 'z' });
 
+  // ---------------------------------------------------------------
+  //  CORE / CHEST
+  // ---------------------------------------------------------------
+  K.into(core);
+  K.plate(3.2, 2.9, 2.05, 0, 2.15, 0.05, { ...F, c: 0.05 });               // inner frame
+  K.plate(1.45, 0.85, 1.3, 0, 0.5, 0.0, { ...F, c: 0.05 });                // waist column
+  K.ring(0.84, 0.11, 12, 0, 0.6, 0.0, { ...M, base: 0x5c6167, rseg: 4 });
+  for (const s of [-1, 1]) K.rod(0.075, 1.0, 6, s * 0.6, 0.75, -0.48, { ...M, base: 0xd4d8dd, ao: 0.18 });
+
+  // layered chest plates, floating off the frame with visible gaps
+  K.plate(1.5, 1.55, 0.5, 0, 3.0, -1.08, { ...A, rx: -0.11, c: 0.085 });   // centre core block
+  K.taper(0.95, 1.5, 0.42, 0.8, 0.42, -1.12, 3.0, -0.98, { ...A2, rx: -0.11, ry: 0.3, c: 0.07 });
+  K.taper(0.95, 1.5, 0.42, 0.8, 0.42, 1.12, 3.0, -0.98, { ...A2, rx: -0.11, ry: -0.3, c: 0.07 });
+  K.plate(0.94, 0.54, 0.16, 0, 3.02, -1.3, { key: 'dark', base: 0x06070a, ao: 0.05, rx: -0.11, c: 0.02, jitter: 0 });
+  K.blk(0.7, 0.34, 0.05, 0, 3.03, -1.4, { key: 'glow', base: 0xffffff, jitter: 0 });
+  for (let i = 0; i < 7; i++) K.blk(0.042, 0.46, 0.05, -0.3 + i * 0.1, 3.03, -1.43, { ...M, base: 0x5e636a, rx: -0.11, ao: 0.5 });
+  K.blk(0.78, 0.045, 0.055, 0, 3.24, -1.42, { ...M, base: 0x7d828a, rx: -0.11 });
+  K.blk(0.78, 0.045, 0.055, 0, 2.82, -1.4, { ...M, base: 0x7d828a, rx: -0.11 });
+  K.plate(1.1, 0.14, 0.14, 0, 3.36, -1.3, { ...A3, rx: -0.11, c: 0.03 });
+  K.plate(1.1, 0.14, 0.14, 0, 2.68, -1.28, { ...A3, rx: -0.11, c: 0.03 });
+  K.plate(2.3, 0.44, 0.28, 0, 3.7, -0.84, { ...A3, rx: -0.36, c: 0.05 });  // clavicle deck
+  K.plate(2.4, 1.1, 0.38, 0, 1.72, -1.02, { ...A3, rx: 0.12, c: 0.065 });  // abdomen
+  K.plate(1.4, 0.44, 0.3, 0, 1.0, -0.9, { ...A4, rx: 0.3, c: 0.05 });      // groin guard
+  K.plate(3.7, 0.55, 2.0, 0, 3.26, 0.14, { ...A3, c: 0.085 });             // shoulder yoke
+  K.plate(3.0, 2.3, 0.42, 0, 2.3, 1.14, { ...A3, c: 0.075 });              // back plate
+  for (const s of [-1, 1]) {
+    K.taper(0.44, 2.5, 1.9, 0.44, 1.5, s * 1.68, 2.2, 0.06, { ...A, rz: -s * 0.04, c: 0.065 });
+    K.plate(0.22, 1.05, 0.9, s * 1.9, 2.75, -0.35, { ...A2, c: 0.05 });
+    K.plate(0.26, 0.62, 1.3, s * 1.85, 1.45, 0.2, { ...A4, c: 0.05 });
+  }
+  // intakes / vents / greebles
+  K.vent(0.7, 0.6, -1.2, 2.55, -1.16, { dir: 'front', slats: 5, frame: P.hull2, wear: P.wear, slat: P.mech, tilt: 0.5 });
+  K.vent(0.7, 0.6, 1.2, 2.55, -1.16, { dir: 'front', slats: 5, frame: P.hull2, wear: P.wear, slat: P.mech, tilt: 0.5 });
+  K.vent(0.52, 1.2, -1.93, 2.3, 0.35, { dir: 'left', slats: 6, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.vent(0.52, 1.2, 1.93, 2.3, 0.35, { dir: 'right', slats: 6, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.hatch(0.62, 0.74, 0.74, 1.72, -1.24, { dir: 'front', base: P.hull4, wear: P.wear });
+  K.hatch(0.58, 0.58, -1.08, 2.2, 1.38, { dir: 'back', base: P.hull2, wear: P.wear });
+  K.seam(1.7, 0.06, 0.07, 0, 2.3, -1.24, {});
+  K.seam(0.07, 0.7, 0.07, -1.52, 2.95, -1.02, {});
+  K.seam(0.07, 0.7, 0.07, 1.52, 2.95, -1.02, {});
+  K.decal(DECAL.CODE, 0.86, 0.58, -0.95, 2.5, -1.16, { dir: 'front', off: 0.16, roll: 0 });
+  K.decal(DECAL.WARNTRI, 0.32, 0.32, 1.06, 3.42, -0.98, { dir: 'front', off: 0.14 });
+  K.decal(DECAL.CHEVRON_Y, 1.5, 0.3, 0, 3.58, 0.14, { dir: 'top', off: 0.02 });
+  K.decal(DECAL.DATAPLATE, 0.5, 0.46, 1.86, 1.45, 0.62, { dir: 'right', off: 0.2 });
+  K.decal(DECAL.BARCODE, 0.6, 0.24, -1.86, 1.45, 0.62, { dir: 'left', off: 0.2 });
+  K.decal(DECAL.NUM_24, 0.5, 0.5, 0.88, 2.3, 1.36, { dir: 'back', off: 0.1 });
+  K.cables([-0.5, 0.95, 0.95], [-0.5, 2.05, 1.06], 2, 0.05, { sag: -0.1, spread: 0.14, bulge: 0.18 });
+  K.cables([0.55, 0.95, 0.95], [0.55, 2.05, 1.06], 2, 0.05, { sag: -0.1, spread: 0.14, bulge: 0.18 });
+  K.boltsOn('front', 4, -1.05, 3.32, -0.96, 0.7, 0, 0, 0.055, { base: P.mech });
+
+  // radiator fins + main booster block
+  for (let i = 0; i < 5; i++) {
+    K.plate(2.1, 0.075, 0.46, 0, 3.06 + i * 0.15, 1.44, { ...M, base: 0x5f646b, ao: 0.55, c: 0.012 });
+  }
+  K.plate(2.35, 1.35, 1.0, 0, 1.6, 1.64, { ...A3, c: 0.075 });
+  K.plate(2.7, 0.3, 0.72, 0, 2.38, 1.72, { ...A3, c: 0.05 });
+  for (const s of [-1, 1]) {
+    K.nozzle(s * 0.68, 1.54, 2.06, 0.27, 0.46, 0.92, { dir: 'back', base: P.hull2, seg: 14, power: 1, kind: 'main', name: `thr_main_${s < 0 ? 'l' : 'r'}` });
+    K.plate(0.55, 0.55, 0.55, s * 1.54, 3.06, 1.06, { ...A3, c: 0.05 });
+    K.nozzle(s * 1.54, 3.06, 1.32, 0.13, 0.22, 0.44, { dir: 'backup', base: P.hull2, seg: 10, power: 0.45, kind: 'blade', name: `thr_blade_${s < 0 ? 'l' : 'r'}` });
+  }
+  K.decal(DECAL.GRATE, 0.9, 0.5, 0, 2.38, 2.09, { dir: 'back', off: 0.02 });
+  // neck stack (merged into the core so it costs no extra draw call)
+  K.rod(0.26, 0.52, 8, 0, 3.72, -0.14, { ...D, base: 0x0b0d10 });
+  K.plate(1.25, 0.24, 1.0, 0, 3.6, -0.14, { ...A3, c: 0.03 });
+
+  // ---------------------------------------------------------------
+  //  HEAD  (small — roughly 1/6 of the core width — but clear of the yoke)
+  // ---------------------------------------------------------------
+  const neck = N.neck = K.group(core, 'neck', 0, 3.86, -0.14);
+  const headP = N.head = K.group(neck, 'head', 0, 0.26, 0);
+  K.into(headP);
+  K.plate(1.0, 0.66, 1.02, 0, 0.16, -0.04, { ...A, c: 0.07 });               // skull
+  K.plate(0.88, 0.2, 0.38, 0, 0.53, -0.32, { ...A3, rx: -0.35, c: 0.035 });  // brow
+  K.plate(0.74, 0.24, 0.22, 0, -0.16, -0.36, { ...A3, rx: 0.3, c: 0.03 });   // chin
+  K.plate(0.56, 0.32, 0.44, 0, 0.5, 0.3, { ...A2, c: 0.045 });               // crown box
+  K.plate(1.06, 0.12, 0.42, 0, 0.44, -0.02, { ...A4, c: 0.03 });             // cap trim
+  // visor: dark recess + a hot bar with a wider dim halo
+  K.plate(0.9, 0.34, 0.14, 0, 0.18, -0.48, { key: 'dark', base: 0x030407, ao: 0.03, c: 0.02, jitter: 0 });
+  K.blk(0.74, 0.095, 0.05, 0, 0.185, -0.55, { key: 'glow', base: 0xffffff, jitter: 0 });
+  K.blk(0.19, 0.055, 0.05, 0, 0.185, -0.578, { key: 'glow', base: 0xffffff, jitter: 0 });
+  K.blk(0.05, 0.12, 0.04, -0.2, 0.185, -0.572, { ...M, base: 0x4c5158 });
+  K.blk(0.05, 0.12, 0.04, 0.2, 0.185, -0.572, { ...M, base: 0x4c5158 });
+  K.plate(1.04, 0.1, 0.2, 0, 0.4, -0.44, { ...A3, c: 0.025 });
+  for (const s of [-1, 1]) {
+    K.plate(0.18, 0.34, 0.48, s * 0.56, 0.2, -0.1, { ...A3, c: 0.03 });      // sensor pod
+    K.rod(0.075, 0.11, 6, s * 0.66, 0.2, -0.28, { ...M, rz: Math.PI / 2, base: 0x53575e });
+    K.blk(0.055, 0.075, 0.055, s * 0.72, 0.2, -0.28, { key: 'glow', base: 0xffffff, jitter: 0 });
+  }
+  K.vent(0.38, 0.17, 0, -0.08, -0.46, { dir: 'front', slats: 3, depth: 0.08, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.antenna(0.4, 0.64, 0.24, 0.55, {});
+  K.plate(0.1, 0.36, 0.1, -0.34, 0.68, 0.14, { ...A3, rz: 0.3, c: 0.02 });
+
+  // ---------------------------------------------------------------
+  //  ARMS
+  // ---------------------------------------------------------------
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const sh = N['shoulder' + side] = K.group(core, 'shoulder' + side, s * 2.18, 2.98, 0.02);
+    const up = N['upperArm' + side] = K.group(sh, 'upperArm' + side, s * 0.46, -0.32, 0);
+    const el = N['elbow' + side] = K.group(up, 'elbow' + side, 0, -1.66, 0);
+    const wp = N['weapon' + side] = K.group(el, 'weapon' + side, 0, -1.32, -0.22);
+
+    K.into(sh);
+    K.plate(0.74, 0.9, 1.55, s * 0.1, 0.14, 0.02, { ...F, c: 0.05 });
+    K.taper(1.28, 1.28, 2.15, 0.94, 1.7, s * 0.6, 0.3, 0.02, { ...A, rz: -s * 0.19, c: 0.11 });
+    K.plate(0.32, 0.8, 1.45, s * 1.24, -0.04, 0.05, { ...A3, rz: -s * 0.12, c: 0.05 });
+    K.plate(1.05, 0.24, 0.9, s * 0.6, 0.98, 0.1, { ...A4, rz: -s * 0.19, c: 0.04 });
+    K.taper(0.22, 1.05, 1.15, 0.14, 0.5, s * 1.16, 0.75, -0.15, { ...A3, rz: -s * 0.42, c: 0.045 });
+    K.hatch(0.44, 0.44, s * 1.3, 0.14, -0.32, { dir: s < 0 ? 'left' : 'right', base: P.hull2, wear: P.wear, handle: false });
+    K.decal(DECAL.CHEVRON_Y, 0.9, 0.2, s * 0.6, 1.1, 0.1, { dir: 'top', off: 0.03 });
+    K.decal(s < 0 ? DECAL.NUM_07 : DECAL.NUM_24, 0.38, 0.38, s * 1.36, -0.16, 0.34, { dir: s < 0 ? 'left' : 'right', off: 0.06 });
+    K.nozzle(s * 0.62, 0.04, 1.1, 0.11, 0.19, 0.3, { dir: 'back', base: P.hull2, seg: 8, power: 0.35, kind: 'shoulder', name: `thr_sh_${side}` });
+    K.rod(0.3, 0.52, 10, s * 0.3, -0.32, 0, { ...M, rz: Math.PI / 2, base: 0x555a61, ao: 0.5 });
+    K.cables([s * 0.15, 0.3, 0.58], [s * 0.58, -0.36, 0.5], 2, 0.045, { sag: 0.1, spread: 0.1 });
+
+    K.into(up);
+    K.plate(0.66, 1.5, 0.76, 0, -0.8, 0, { ...F, c: 0.04 });
+    K.taper(1.0, 1.55, 1.1, 0.86, 0.95, 0, -0.8, 0.0, { ...A, c: 0.065 });
+    K.plate(0.28, 1.15, 0.7, s * 0.6, -0.82, 0.02, { ...A2, c: 0.05 });
+    K.plate(0.64, 0.32, 0.24, 0, -0.24, -0.53, { ...A4, rx: -0.2, c: 0.03 });
+    K.rod(0.075, 1.0, 6, s * 0.22, -1.18, 0.44, { ...M, base: 0xd6dade, ao: 0.18 });
+    K.rod(0.125, 0.66, 8, s * 0.22, -0.78, 0.44, { ...D, base: 0x15171b });
+    K.decal(DECAL.STRIPE, 0.52, 0.3, 0, -1.38, -0.56, { dir: 'front', off: 0.03 });
+
+    K.into(el);
+    K.rod(0.3, 0.9, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x555a61, ao: 0.5 });
+    K.bolt(s * 0.48, 0, 0, 0.15, { rz: Math.PI / 2, base: P.mech });
+    K.plate(0.82, 1.45, 1.0, 0, -0.74, 0, { ...F, c: 0.04 });
+    K.taper(1.2, 1.55, 1.38, 1.04, 1.15, 0, -0.74, -0.02, { ...A, c: 0.075 });
+    K.plate(0.32, 1.15, 0.9, s * 0.7, -0.74, 0.0, { ...A3, c: 0.05 });
+    K.plate(0.9, 0.36, 0.32, 0, -0.06, -0.64, { ...A4, rx: -0.25, c: 0.04 });
+    K.rod(0.075, 0.85, 6, s * 0.22, -0.3, 0.52, { ...M, base: 0xd6dade, ao: 0.18 });
+    K.vent(0.44, 0.42, s * 0.76, -0.74, 0.0, { dir: s < 0 ? 'left' : 'right', slats: 4, depth: 0.1, frame: P.hull2, wear: P.wear, slat: P.mech });
+    K.boltsOn('front', 3, -0.34, -1.32, -0.7, 0.34, 0, 0, 0.05, { base: P.mech });
+
+    if (s > 0) buildRifle(K, P, wp, N);
+    else buildBlade(K, P, wp, N);
+  }
+
+  // ---------------------------------------------------------------
+  //  BACK UNITS
+  // ---------------------------------------------------------------
+  N.backR = K.group(core, 'backR', 1.62, 2.66, 1.22);
+  N.backL = K.group(core, 'backL', -1.62, 2.72, 1.22);
+  buildMissileRack(K, P, N.backR, N);
+  buildPlasmaCannon(K, P, N.backL, N);
+
+  // ---------------------------------------------------------------
+  //  LEGS  — the heaviest element
+  // ---------------------------------------------------------------
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const leg = N['leg' + side] = K.group(hips, 'leg' + side, s * HIP_X, -0.06, 0);
+    leg.rotation.z = -s * 0.07;
+    const th = N['thigh' + side] = K.group(leg, 'thigh' + side, 0, 0, 0);
+    const kn = N['knee' + side] = K.group(th, 'knee' + side, 0, -L_THIGH, 0);
+    const an = N['ankle' + side] = K.group(kn, 'ankle' + side, 0, -L_SHIN, 0);
+
+    // thigh (hip cap merged in — one node, one set of draw calls)
+    K.into(th);
+    K.plate(0.78, 0.7, 0.92, s * 0.2, 0.1, 0.02, { ...F, c: 0.05 });
+    K.taper(1.05, 0.84, 1.25, 0.94, 1.1, s * 0.28, 0.16, 0.0, { ...A2, c: 0.06 });
+    K.plate(0.85, L_THIGH * 0.9, 0.98, 0, -L_THIGH * 0.5, 0, { ...F, c: 0.05 });
+    K.taper(1.62, L_THIGH * 0.95, 1.82, 1.36, 1.5, 0, -L_THIGH * 0.48, 0.02, { ...A, c: 0.1 });
+    K.plate(0.34, 1.6, 1.2, s * 0.8, -1.2, 0.05, { ...A3, c: 0.06 });
+    K.plate(1.15, 0.78, 0.32, 0, -1.94, -0.8, { ...A3, rx: 0.16, c: 0.055 });      // knee guard
+    K.plate(1.0, 1.05, 0.36, 0, -0.84, 0.86, { ...A4, rx: -0.1, c: 0.055 });       // rear plate
+    K.vent(0.58, 0.52, s * 0.86, -0.64, 0.1, { dir: s < 0 ? 'left' : 'right', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+    K.decal(DECAL.CHEVRON_Y, 0.95, 0.24, 0, -0.4, -0.92, { dir: 'front', off: 0.06 });
+    K.decal(DECAL.ROUNDEL, 0.44, 0.44, s * 0.99, -1.55, 0.1, { dir: s < 0 ? 'left' : 'right', off: 0.06 });
+    K.rod(0.125, 0.9, 8, s * 0.38, -1.66, 0.68, { ...D, base: 0x15171b });
+    K.rod(0.125, 0.9, 8, -s * 0.38, -1.66, 0.68, { ...D, base: 0x15171b });
+    K.cables([-0.32, -0.24, 0.8], [0.32, -0.24, 0.8], 2, 0.05, { sag: 0.16, axis: 'z', spread: 0.14 });
+
+    // knee + shin
+    K.into(kn);
+    K.rod(0.44, 1.08, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x545962, ao: 0.5 });
+    K.bolt(s * 0.58, 0, 0, 0.21, { rz: Math.PI / 2, base: P.mech });
+    K.bolt(-s * 0.58, 0, 0, 0.21, { rz: Math.PI / 2, base: P.mech });
+    K.plate(0.95, 0.66, 0.36, 0, 0.02, -0.55, { ...A3, c: 0.05 });
+    K.ring(0.52, 0.08, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x6a6f76, rseg: 4 });
+    K.plate(0.8, L_SHIN * 0.88, 0.94, 0, -L_SHIN * 0.5, 0, { ...F, c: 0.05 });
+    K.taper(1.54, L_SHIN * 0.92, 1.76, 1.16, 1.26, 0, -L_SHIN * 0.46, 0.0, { ...A, c: 0.095 });
+    K.plate(0.32, 1.85, 1.15, s * 0.76, -1.32, 0.0, { ...A3, c: 0.06 });
+    K.plate(1.12, 1.4, 0.32, 0, -0.88, -0.86, { ...A3, rx: -0.06, c: 0.06 });
+    K.plate(1.0, 1.2, 0.42, 0, -1.08, 0.8, { ...A4, c: 0.06 });                    // calf
+    K.vent(0.66, 0.62, 0, -0.52, -1.04, { dir: 'front', slats: 5, frame: P.hull2, wear: P.wear, slat: P.mech });
+    K.hatch(0.44, 0.52, s * 0.9, -1.95, 0.1, { dir: s < 0 ? 'left' : 'right', base: P.hull2, wear: P.wear });
+    K.decal(DECAL.WARNTRI, 0.3, 0.3, 0, -1.68, -1.02, { dir: 'front', off: 0.06 });
+    K.decal(DECAL.TREAD, 0.6, 0.6, s * 0.94, -0.6, 0.35, { dir: s < 0 ? 'left' : 'right', off: 0.06 });
+    K.rod(0.075, 1.2, 6, s * 0.38, -0.16, 0.68, { ...M, base: 0xd8dce1, ao: 0.18 });
+    K.rod(0.075, 1.2, 6, -s * 0.38, -0.16, 0.68, { ...M, base: 0xd8dce1, ao: 0.18 });
+    K.plate(0.8, 0.68, 0.52, 0, -2.02, 0.95, { ...A3, c: 0.05 });
+    K.nozzle(0, -2.16, 1.16, 0.12, 0.21, 0.34, { dir: 'backdown', base: P.hull2, seg: 8, power: 0.4, kind: 'calf', name: `thr_calf_${side}` });
+    K.cables([s * 0.1, -0.22, 0.9], [s * 0.1, -1.76, 1.0], 2, 0.045, { sag: -0.05, spread: 0.12, bulge: 0.2 });
+
+    // ankle + splayed foot
+    K.into(an);
+    for (let i = 0; i < 4; i++) K.ring(0.31 - i * 0.012, 0.078, 10, 0, 0.06 - i * 0.14, 0, { ...D, base: 0x0f1114, rseg: 4 });
+    K.rod(0.27, 0.52, 10, 0, -0.02, 0, { ...M, rz: Math.PI / 2, base: 0x545962, ao: 0.5 });
+    K.plate(1.15, 0.44, 1.25, 0, -0.6, -0.08, { ...F, c: 0.05 });
+    K.taper(1.78, 0.36, 2.45, 1.92, 2.68, 0, -0.86, -0.12, { ...A, c: 0.065 });     // sole
+    K.plate(1.55, 0.32, 0.8, 0, -0.66, -1.44, { ...A3, rx: -0.2, c: 0.05 });        // toe
+    K.plate(1.3, 0.26, 0.55, 0, -0.62, 1.02, { ...A3, rx: 0.2, c: 0.05 });          // heel
+    K.plate(1.0, 0.46, 1.0, 0, -0.32, -0.35, { ...A4, c: 0.05 });                   // instep
+    for (const t of [-1, 1]) {
+      K.plate(0.24, 0.32, 1.7, t * 0.76, -0.72, -0.22, { ...A3, c: 0.045 });
+      K.blk(0.34, 0.12, 0.46, t * 0.46, -0.99, -1.0, { ...D, base: 0x121417 });
+      K.blk(0.34, 0.12, 0.46, t * 0.46, -0.99, 0.55, { ...D, base: 0x121417 });
+    }
+    K.decal(DECAL.CHEVRON_Y, 1.25, 0.22, 0, -0.7, 0.62, { dir: 'top', off: 0.03 });
+    K.decal(DECAL.TREAD, 0.7, 0.7, 0, -0.1, -0.4, { dir: 'top', off: 0.03 });
+    K.boltsOn('top', 3, -0.55, -0.7, -1.5, 0.55, 0, 0, 0.055, { base: P.mech });
+  }
+
+  K.flush();
+  return { root, N };
+}
+
+// ---------------- weapon units -------------------------------------
+function buildRifle(K, P, node, N) {
+  K.into(node);
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+  // wrist clamp
+  K.plate(0.86, 0.68, 0.7, 0, 0.18, 0.28, { ...A2, c: 0.05 });
+  K.rod(0.22, 0.9, 10, 0, 0.18, 0.28, { ...M, rz: Math.PI / 2, base: 0x4b4f55 });
+  // receiver
+  K.plate(0.72, 0.66, 2.2, 0, -0.06, -0.85, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.04 });
+  K.plate(0.8, 0.5, 1.85, 0, 0.12, -0.95, { ...A, c: 0.05 });
+  K.plate(0.5, 0.34, 1.5, 0, -0.3, -0.95, { ...A3, c: 0.04 });
+  K.plate(0.86, 0.2, 0.72, 0, 0.42, -0.6, { ...A2, c: 0.035 });                 // optic rail
+  K.blk(0.24, 0.2, 0.5, 0, 0.56, -0.75, { ...D, base: 0x101216 });
+  K.blk(0.16, 0.09, 0.05, 0, 0.56, -1.02, { key: 'glow', base: 0xffffff, jitter: 0 });
+  // ammo drum + feed
+  K.rod(0.36, 0.42, 12, -0.5, -0.08, -0.35, { ...A2, rz: Math.PI / 2, c: 0.03 });
+  K.ring(0.38, 0.06, 12, -0.5, -0.08, -0.35, { ...M, rz: Math.PI / 2, rseg: 4 });
+  K.plate(0.3, 0.3, 0.9, -0.42, -0.08, -0.85, { ...D, base: 0x14161a, c: 0.03 });
+  K.blk(0.16, 0.22, 0.16, 0.42, 0.05, -0.5, { ...M, base: 0x8b9096 });            // charging handle
+  K.blk(0.1, 0.3, 0.34, 0.4, -0.06, -0.9, { ...D, base: 0x0e1013 });              // ejection port
+  // barrel shroud with cooling slots
+  K.rod(0.2, 1.85, 12, 0, -0.02, -2.6, { ...A2, rx: Math.PI / 2, c: 0.02 });
+  for (let i = 0; i < 5; i++) {
+    K.blk(0.44, 0.055, 0.2, 0, -0.02, -2.05 - i * 0.3, { ...D, base: 0x0d0f12 });
+    K.blk(0.055, 0.44, 0.2, 0, -0.02, -2.05 - i * 0.3, { ...D, base: 0x0d0f12 });
+  }
+  K.rod(0.11, 2.4, 8, 0, -0.02, -2.7, { ...M, rx: Math.PI / 2, base: 0x55595f, ao: 0.5 });
+  // muzzle brake
+  K.rod(0.24, 0.34, 10, 0, -0.02, -3.62, { ...M, rx: Math.PI / 2, base: 0x6e7379 });
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4;
+    K.plate(0.09, 0.28, 0.3, Math.cos(a) * 0.22, -0.02 + Math.sin(a) * 0.22, -3.62, { ...A3, rz: a, c: 0.02 });
+  }
+  K.ring(0.2, 0.05, 10, 0, -0.02, -3.78, { ...M, rx: Math.PI / 2, base: 0x84898f, rseg: 4 });
+  K.decal(DECAL.STRIPE, 0.5, 0.3, 0.41, -0.06, -1.4, { dir: 'right', off: 0.03 });
+  K.decal(DECAL.DANGER, 0.55, 0.3, -0.41, 0.12, -1.5, { dir: 'left', off: 0.03, roll: 0 });
+
+  const mz = new THREE.Object3D();
+  mz.name = 'muzzle_rifle';
+  mz.position.set(0, -0.02, -3.95);
+  node.add(mz);
+  N.muzzleRifle = mz;
+}
+
+function buildBlade(K, P, node, N) {
+  K.into(node);
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+  K.plate(0.86, 0.68, 0.7, 0, 0.18, 0.28, { ...A2, c: 0.05 });
+  K.rod(0.22, 0.9, 10, 0, 0.18, 0.28, { ...M, rz: Math.PI / 2, base: 0x4b4f55 });
+  // emitter housing
+  K.plate(0.78, 0.72, 1.5, 0, 0.0, -0.5, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.05 });
+  K.plate(0.86, 0.5, 1.1, 0, 0.14, -0.55, { ...A2, c: 0.06 });
+  K.plate(0.4, 0.42, 0.86, 0, -0.28, -0.6, { ...A3, c: 0.04 });
+  // capacitor coils
+  for (let i = 0; i < 3; i++) {
+    K.ring(0.3, 0.07, 12, 0, 0.02, -0.28 - i * 0.34, { ...M, rx: Math.PI / 2, base: 0x585d63, rseg: 4 });
+    K.blk(0.08, 0.5, 0.08, 0.3, 0.02, -0.28 - i * 0.34, { key: 'glow', base: 0xffffff, jitter: 0 });
+  }
+  // prongs
+  for (const t of [-1, 1]) {
+    K.taper(0.16, 0.24, 1.15, 0.1, 0.7, t * 0.3, 0.02, -1.5, { ...A3, rx: Math.PI / 2, c: 0.03 });
+    K.blk(0.06, 0.06, 0.5, t * 0.3, 0.02, -1.85, { key: 'glow', base: 0xffffff, jitter: 0 });
+  }
+  const blade = K.group(node, 'bladeEdge', 0, 0.02, -1.6);
+  N.bladeEdge = blade;
+  K.into(blade);
+  K.taper(0.5, 2.3, 0.09, 0.12, 0.05, 0, -1.15, 0, { key: 'glow', base: 0xffffff, rx: -Math.PI / 2, jitter: 0, c: 0.02 });
+  K.taper(0.24, 2.5, 0.045, 0.06, 0.03, 0, -1.25, 0, { key: 'glow', base: 0xffffff, rx: -Math.PI / 2, jitter: 0, c: 0.01 });
+  K.into(node);
+  K.decal(DECAL.DANGER, 0.5, 0.28, -0.44, 0.14, -0.6, { dir: 'left', off: 0.03 });
+
+  const mz = new THREE.Object3D();
+  mz.name = 'muzzle_blade';
+  mz.position.set(0, 0.02, -2.6);
+  node.add(mz);
+  N.muzzleBlade = mz;
+}
+
+function buildMissileRack(K, P, node, N) {
+  K.into(node);
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+  // mount arm
+  K.plate(0.66, 0.6, 0.86, -0.28, -0.35, -0.1, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.04 });
+  K.rod(0.24, 0.7, 10, -0.4, -0.35, -0.1, { ...M, rz: Math.PI / 2, base: 0x4b4f55 });
+  K.plate(0.4, 0.9, 0.5, -0.1, 0.05, 0.0, { ...A3, c: 0.04 });
+  // rack body
+  K.plate(1.18, 1.5, 1.35, 0.32, 0.55, 0.02, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.05 });
+  K.plate(1.3, 1.25, 0.28, 0.32, 0.6, -0.72, { ...A, c: 0.06 });
+  K.plate(0.26, 1.3, 1.2, 0.98, 0.58, 0.02, { ...A2, c: 0.05 });
+  K.plate(0.26, 1.3, 1.2, -0.32, 0.58, 0.02, { ...A2, c: 0.05 });
+  K.plate(1.3, 0.24, 1.3, 0.32, 1.4, 0.02, { ...A2, c: 0.05 });
+  // 2x3 launch cells
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 2; c++) {
+      const x = 0.32 + (c - 0.5) * 0.52;
+      const y = 0.05 + r * 0.5;
+      K.plate(0.42, 0.42, 0.2, x, y, -0.62, { key: 'dark', base: 0x07080a, ao: 0.05, c: 0.02, jitter: 0 });
+      K.rod(0.15, 0.22, 8, x, y, -0.56, { key: 'dark', base: 0x050609, rx: Math.PI / 2, jitter: 0 });
+      K.ring(0.11, 0.022, 8, x, y, -0.66, { key: 'glow', base: 0xffffff, rx: Math.PI / 2, jitter: 0, rseg: 4 });
+      K.ring(0.22, 0.035, 8, x, y, -0.7, { ...M, rx: Math.PI / 2, base: 0x6c7177, rseg: 4 });
+    }
+  }
+  // hinged lid
+  const lid = K.group(node, 'missileLid', 0.32, 1.36, -0.62);
+  N.missileLid = lid;
+  K.into(lid);
+  K.plate(1.24, 0.12, 1.35, 0, 0, -0.62, { ...A2, c: 0.04 });
+  K.plate(1.0, 0.08, 0.4, 0, 0.08, -0.95, { ...A3, c: 0.03 });
+  K.into(node);
+  K.vent(0.5, 0.36, 0.32, 1.32, 0.62, { dir: 'back', slats: 3, depth: 0.1, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.decal(DECAL.CHEVRON_O, 1.0, 0.24, 0.32, 1.15, -0.88, { dir: 'front', off: 0.06 });
+  K.decal(DECAL.NUM_24, 0.4, 0.4, 1.12, 0.55, 0.0, { dir: 'right', off: 0.06 });
+  K.decal(DECAL.DATAPLATE, 0.44, 0.4, -0.46, 0.55, 0.2, { dir: 'left', off: 0.06 });
+  K.antenna(0.98, 1.5, 0.5, 0.62, {});
+  K.boltsOn('front', 3, -0.05, 1.16, -0.88, 0.37, 0, 0, 0.05, { base: P.mech });
+
+  const mz = new THREE.Object3D();
+  mz.name = 'muzzle_missile';
+  mz.position.set(0.32, 1.5, -0.5);
+  node.add(mz);
+  N.muzzleMissile = mz;
+}
+
+function buildPlasmaCannon(K, P, node, N) {
+  K.into(node);
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+  K.plate(0.66, 0.6, 0.86, 0.28, -0.35, -0.1, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.04 });
+  K.rod(0.24, 0.7, 10, 0.4, -0.35, -0.1, { ...M, rz: Math.PI / 2, base: 0x4b4f55 });
+  K.plate(0.4, 0.9, 0.5, 0.1, 0.05, 0.0, { ...A3, c: 0.04 });
+
+  const gun = K.group(node, 'cannonGun', -0.32, 0.62, 0.0);
+  N.cannonGun = gun;
+  K.into(gun);
+  // breech
+  K.plate(1.05, 1.05, 1.4, 0, 0, 0.35, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.05 });
+  K.plate(1.15, 0.95, 1.0, 0, 0.05, 0.45, { ...A, c: 0.06 });
+  K.plate(0.9, 0.3, 0.7, 0, 0.6, 0.5, { ...A3, c: 0.04 });
+  K.vent(0.5, 0.5, 0, 0.02, 1.02, { dir: 'back', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  // coolant tanks
+  for (const t of [-1, 1]) {
+    K.rod(0.2, 1.3, 10, t * 0.62, -0.12, 0.15, { ...A2, rx: Math.PI / 2, c: 0.02 });
+    K.ring(0.22, 0.045, 10, t * 0.62, -0.12, -0.4, { ...M, rx: Math.PI / 2, base: 0x6c7177, rseg: 4 });
+  }
+  // barrel assembly
+  K.rod(0.3, 1.5, 12, 0, 0.05, -1.05, { ...A2, rx: Math.PI / 2, c: 0.02 });
+  K.rod(0.24, 1.3, 12, 0, 0.05, -2.2, { ...A3, rx: Math.PI / 2, c: 0.02 });
+  K.rod(0.13, 3.0, 8, 0, 0.05, -1.6, { ...M, rx: Math.PI / 2, base: 0x4f5359, ao: 0.5 });
+  for (let i = 0; i < 4; i++) {
+    K.ring(0.3, 0.075, 12, 0, 0.05, -1.35 - i * 0.44, { ...M, rx: Math.PI / 2, base: 0x5c6167, rseg: 4 });
+    K.blk(0.06, 0.4, 0.06, 0.3, 0.05, -1.35 - i * 0.44, { key: 'glow', base: 0xffffff, jitter: 0 });
+    K.blk(0.06, 0.4, 0.06, -0.3, 0.05, -1.35 - i * 0.44, { key: 'glow', base: 0xffffff, jitter: 0 });
+  }
+  // muzzle shroud
+  for (let i = 0; i < 3; i++) {
+    const a = i * TAU / 3;
+    K.taper(0.14, 0.7, 0.16, 0.1, 0.1, Math.cos(a) * 0.26, 0.05 + Math.sin(a) * 0.26, -2.95, { ...A3, rx: Math.PI / 2, rz: a, c: 0.02 });
+  }
+  K.ring(0.28, 0.06, 12, 0, 0.05, -2.9, { ...M, rx: Math.PI / 2, base: 0x7a7f85, rseg: 4 });
+  K.rod(0.2, 0.34, 12, 0, 0.05, -2.86, { key: 'dark', base: 0x050609, rx: Math.PI / 2, jitter: 0 });
+  K.ring(0.15, 0.028, 12, 0, 0.05, -2.82, { key: 'glow', base: 0xffffff, rx: Math.PI / 2, jitter: 0, rseg: 4 });
+  K.decal(DECAL.CHEVRON_O, 0.8, 0.22, 0, 0.55, 0.98, { dir: 'top', off: 0.02 });
+  K.decal(DECAL.DANGER, 0.6, 0.32, -0.58, 0.1, 0.5, { dir: 'left', off: 0.06 });
+  K.decal(DECAL.BARCODE, 0.5, 0.2, 0.58, 0.3, 0.5, { dir: 'right', off: 0.06 });
+
+  const mz = new THREE.Object3D();
+  mz.name = 'muzzle_cannon';
+  mz.position.set(0, 0.05, -3.2);
+  gun.add(mz);
+  N.muzzleCannon = mz;
+}
+
+// ==================================================================
+//  ENEMY VARIANTS  — distinct silhouettes, not recolours
+// ==================================================================
+
+// --- MT : squat two-legged industrial walker with a cockpit canopy --
+function buildMT(K, P) {
+  const root = new THREE.Group(); root.name = 'mt';
+  const N = {};
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const F = { base: P.frame, wear: P.frame, ao: 0.5, c: 0.04 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+
+  const hips = N.hips = K.group(root, 'hips', 0, 3.05, 0);
+  const core = N.core = K.group(hips, 'core', 0, 0.25, 0);
+
+  K.into(hips);
+  K.plate(1.9, 0.8, 1.5, 0, -0.1, 0, F);
+  K.plate(2.2, 0.3, 1.7, 0, 0.3, 0, { ...A2, c: 0.05 });
+  for (const s of [-1, 1]) {
+    K.rod(0.3, 0.9, 10, s * 1.0, -0.1, 0, { ...M, rz: Math.PI / 2, base: 0x4a4a40 });
+    K.plate(0.5, 0.6, 0.8, s * 1.15, -0.05, 0, { ...A3, c: 0.05 });
+  }
+
+  // squat wide body + cockpit canopy
+  K.into(core);
+  K.plate(2.5, 1.5, 2.0, 0, 0.75, 0, F);
+  K.plate(2.7, 1.15, 0.36, 0, 0.85, -1.05, { ...A, rx: -0.12, c: 0.07 });
+  K.plate(2.6, 0.4, 1.7, 0, 1.55, 0.05, { ...A2, c: 0.06 });
+  K.plate(2.5, 1.1, 0.34, 0, 0.7, 1.05, { ...A2, c: 0.06 });
+  for (const s of [-1, 1]) {
+    K.taper(0.4, 1.5, 1.85, 0.4, 1.4, s * 1.35, 0.8, 0, { ...A, c: 0.07 });
+    K.vent(0.45, 0.7, s * 1.6, 0.7, 0.3, { dir: s < 0 ? 'left' : 'right', slats: 5, frame: P.hull2, wear: P.wear, slat: P.mech });
+  }
+  // canopy: sloped dark glass in a heavy frame
+  K.plate(1.5, 0.95, 0.5, 0, 1.62, -0.9, { ...A2, rx: -0.42, c: 0.05 });
+  K.plate(1.28, 0.78, 0.14, 0, 1.66, -1.12, { key: 'mech', base: 0x18242a, ao: 0.05, rx: -0.42, c: 0.03, jitter: 0 });
+  K.blk(1.1, 0.1, 0.05, 0, 1.55, -1.2, { key: 'glow', base: 0xffffff, rx: -0.42, jitter: 0 });
+  for (let i = 0; i < 3; i++) K.blk(0.05, 0.7, 0.06, -0.4 + i * 0.4, 1.66, -1.16, { ...M, rx: -0.42, base: 0x6a6a5c });
+  // roll cage + exhaust stacks + comms
+  for (const s of [-1, 1]) {
+    K.rod(0.09, 1.2, 6, s * 0.85, 2.05, -0.4, { ...M, rx: -0.2, base: 0x55554a, ao: 0.4 });
+    K.rod(0.17, 1.05, 8, s * 1.0, 2.1, 0.85, { ...D, base: 0x121210 });
+    K.ring(0.19, 0.04, 10, s * 1.0, 2.62, 0.85, { ...M, base: 0x6c6a58, rseg: 4 });
+    K.nozzle(s * 1.0, 2.42, 0.85, 0.08, 0.13, 0.2, { dir: 'up', base: P.hull2, seg: 8, power: 0.2, kind: 'stack', name: `thr_stack_${s < 0 ? 'l' : 'r'}` });
+  }
+  K.plate(1.6, 0.1, 0.9, 0, 2.6, -0.35, { ...A3, c: 0.03 });
+  K.antenna(-1.15, 1.85, 0.6, 0.8, {});
+  K.decal(DECAL.CHEVRON_Y, 1.6, 0.3, 0, 1.78, 0.05, { dir: 'top', off: 0.22 });
+  K.decal(DECAL.NUM_07, 0.55, 0.55, 1.58, 1.0, -0.4, { dir: 'right', off: 0.06 });
+  K.decal(DECAL.DANGER, 0.8, 0.36, 0, 0.4, -1.25, { dir: 'front', off: 0.06 });
+  K.cables([-0.7, 1.4, 1.15], [0.7, 1.4, 1.15], 3, 0.05, { sag: 0.2, axis: 'z', spread: 0.18 });
+
+  // chin autocannon on a small turret
+  const gun = N.gun = K.group(core, 'gun', 0, 0.35, -1.15);
+  K.into(gun);
+  K.plate(0.9, 0.7, 0.8, 0, 0, 0, { ...A2, c: 0.05 });
+  K.rod(0.16, 1.5, 10, -0.2, 0, -0.9, { ...M, rx: Math.PI / 2, base: 0x4c4c42, ao: 0.45 });
+  K.rod(0.16, 1.5, 10, 0.2, 0, -0.9, { ...M, rx: Math.PI / 2, base: 0x4c4c42, ao: 0.45 });
+  K.rod(0.22, 0.3, 10, -0.2, 0, -1.7, { ...A3, rx: Math.PI / 2, c: 0.02 });
+  K.rod(0.22, 0.3, 10, 0.2, 0, -1.7, { ...A3, rx: Math.PI / 2, c: 0.02 });
+  K.plate(0.5, 0.4, 0.5, 0, -0.1, 0.4, { ...D, base: 0x121210, c: 0.03 });
+  const mz = new THREE.Object3D(); mz.name = 'muzzle_rifle'; mz.position.set(0, 0, -1.95); gun.add(mz);
+  N.muzzleRifle = mz;
+
+  // arms: simple hydraulic manipulator + missile pod
+  for (const s of [-1, 1]) {
+    const sh = N['shoulder' + (s < 0 ? 'L' : 'R')] = K.group(core, 'shoulder' + (s < 0 ? 'L' : 'R'), s * 1.6, 1.1, 0);
+    K.into(sh);
+    K.plate(0.6, 0.7, 0.8, s * 0.25, 0, 0, { ...A2, c: 0.05 });
+    if (s > 0) {
+      K.plate(0.7, 0.9, 1.1, s * 0.7, -0.35, 0, { ...A3, c: 0.05 });
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
+        K.plate(0.24, 0.24, 0.12, s * (0.55 + c * 0.3), -0.15 - r * 0.3, -0.6, { key: 'dark', base: 0x07080a, ao: 0.05, c: 0.01, jitter: 0 });
+      }
+    } else {
+      K.rod(0.18, 1.3, 8, s * 0.5, -0.6, 0, { ...M, base: 0x50504a, ao: 0.4 });
+      K.plate(0.5, 0.5, 0.9, s * 0.55, -1.3, -0.15, { ...A3, c: 0.05 });
+      K.rod(0.1, 0.9, 6, s * 0.55, -1.35, -0.75, { ...M, rx: Math.PI / 2, base: 0x9a9a8c });
+    }
+  }
+
+  // legs — short, wide-set, heavy hoof feet
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const leg = N['leg' + side] = K.group(hips, 'leg' + side, s * 1.15, -0.15, 0);
+    leg.rotation.z = -s * 0.1;
+    const th = N['thigh' + side] = K.group(leg, 'thigh' + side, 0, 0, 0);
+    const kn = N['knee' + side] = K.group(th, 'knee' + side, 0, -1.25, 0);
+    const an = N['ankle' + side] = K.group(kn, 'ankle' + side, 0, -1.35, 0);
+    K.into(th);
+    K.plate(0.6, 1.2, 0.7, 0, -0.6, 0, F);
+    K.taper(1.0, 1.15, 1.15, 0.85, 0.95, 0, -0.6, 0, { ...A, c: 0.07 });
+    K.plate(0.24, 0.9, 0.8, s * 0.5, -0.6, 0, { ...A3, c: 0.04 });
+    K.rod(0.1, 0.9, 6, 0, -0.9, 0.5, { ...D, base: 0x131311 });
+    K.into(kn);
+    K.rod(0.3, 0.72, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x494940, ao: 0.5 });
+    K.bolt(s * 0.4, 0, 0, 0.15, { rz: Math.PI / 2, base: P.mech });
+    K.plate(0.55, 1.3, 0.62, 0, -0.7, 0, F);
+    K.taper(0.95, 1.3, 1.05, 0.8, 0.9, 0, -0.68, 0, { ...A, c: 0.07 });
+    K.plate(0.65, 0.7, 0.24, 0, -0.5, -0.6, { ...A3, c: 0.04 });
+    K.rod(0.075, 0.85, 6, 0, -0.2, 0.5, { ...M, base: 0xb0b0a0, ao: 0.25 });
+    K.decal(DECAL.CHEVRON_Y, 0.7, 0.2, 0, -1.05, -0.58, { dir: 'front', off: 0.05 });
+    K.into(an);
+    K.rod(0.22, 0.42, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x494940 });
+    K.plate(0.8, 0.32, 0.9, 0, -0.28, -0.05, { ...F, c: 0.04 });
+    K.taper(1.25, 0.3, 1.75, 1.35, 1.9, 0, -0.5, -0.1, { ...A, c: 0.05 });
+    K.plate(1.1, 0.24, 0.5, 0, -0.38, -0.9, { ...A2, rx: -0.25, c: 0.04 });
+    K.decal(DECAL.TREAD, 0.7, 0.7, 0, -0.32, 0.1, { dir: 'top', off: 0.06 });
+  }
+  K.flush();
+  return { root, N };
+}
+
+// --- DRONE : small hovering quad-rotor sensor unit ------------------
+function buildDrone(K, P) {
+  const root = new THREE.Group(); root.name = 'drone';
+  const N = {};
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+
+  const core = N.core = K.group(root, 'core', 0, 0.86, 0);
+  K.into(core);
+  // faceted sensor body
+  K.plate(0.95, 0.62, 1.15, 0, 0, 0, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.06 });
+  K.taper(1.05, 0.4, 1.25, 0.75, 0.95, 0, 0.24, 0, { ...A, c: 0.08 });
+  K.taper(1.0, 0.36, 1.2, 0.7, 0.85, 0, -0.24, 0, { ...A2, rx: Math.PI, c: 0.08 });
+  // main optic
+  K.plate(0.6, 0.42, 0.2, 0, 0.0, -0.62, { key: 'dark', base: 0x06070a, ao: 0.05, c: 0.03, jitter: 0 });
+  K.rod(0.16, 0.14, 12, 0, 0.0, -0.66, { key: 'dark', base: 0x040507, rx: Math.PI / 2, jitter: 0 });
+  K.rod(0.085, 0.06, 10, 0, 0.0, -0.74, { key: 'glow', base: 0xffffff, rx: Math.PI / 2, jitter: 0 });
+  K.ring(0.24, 0.05, 12, 0, 0.0, -0.66, { ...M, rx: Math.PI / 2, base: 0x6a6d68, rseg: 4 });
+  K.blk(0.34, 0.045, 0.05, 0, 0.24, -0.66, { key: 'glow', base: 0xffffff, jitter: 0 });
+  K.vent(0.4, 0.24, 0, 0.0, 0.62, { dir: 'back', slats: 3, depth: 0.08, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.decal(DECAL.NUM_07, 0.3, 0.3, 0.5, 0.05, 0.15, { dir: 'right', off: 0.03 });
+  K.antenna(0, 0.4, 0.42, 0.42, {});
+
+  // four ducted rotors on outriggers (all core geometry in ONE bucket pass)
+  const RP = [];
+  for (let i = 0; i < 4; i++) {
+    const sx = i < 2 ? -1 : 1, sz = i % 2 ? -1 : 1;
+    const px = sx * 0.95, pz = sz * 0.95;
+    RP.push([i, px, pz]);
+    K.plate(0.9, 0.15, 0.22, px * 0.55, 0.02, pz * 0.55, { ...A3, ry: sx * sz > 0 ? -Math.PI / 4 : Math.PI / 4, c: 0.03 });
+    K.ring(0.42, 0.08, 14, px, 0.06, pz, { ...A2, rseg: 4 });
+    K.ring(0.34, 0.035, 14, px, 0.06, pz, { ...M, base: 0x54574f, rseg: 4 });
+    K.ring(0.4, 0.03, 14, px, -0.06, pz, { ...A3, rseg: 4 });
+    K.nozzle(px, -0.14, pz, 0.08, 0.12, 0.14, { dir: 'down', base: P.hull2, seg: 8, power: 0.4, kind: 'lift', name: `thr_lift_${i}` });
+    K.rod(0.045, 0.5, 5, px * 0.5, -0.5, pz * 0.5, { ...M, base: 0x6e716b, ao: 0.4 });
+  }
+  for (const s of [-1, 1]) K.blk(0.07, 0.06, 0.9, s * 0.42, -0.74, 0.05, { ...D, base: 0x121412 });
+  // rotor hubs (own nodes so they can spin)
+  for (const [i, px, pz] of RP) {
+    const rot = N['rotor' + i] = K.group(core, 'rotor' + i, px, 0.07, pz);
+    K.into(rot);
+    for (let b = 0; b < 3; b++) K.blk(0.34, 0.02, 0.075, 0.09, 0, 0, { ...M, ry: b * TAU / 3, base: 0x3b3d38, ao: 0.4 });
+    K.rod(0.07, 0.14, 6, 0, 0.02, 0, { ...M, base: 0x7d8079 });
+  }
+  // underslung gun
+  const gun = N.gun = K.group(core, 'gun', 0, -0.38, -0.15);
+  K.into(gun);
+  K.plate(0.44, 0.32, 0.58, 0, 0, 0, { ...A2, c: 0.04 });
+  K.rod(0.075, 0.9, 8, -0.1, -0.02, -0.5, { ...M, rx: Math.PI / 2, base: 0x4c4f49 });
+  K.rod(0.075, 0.9, 8, 0.1, -0.02, -0.5, { ...M, rx: Math.PI / 2, base: 0x4c4f49 });
+  const mz = new THREE.Object3D(); mz.name = 'muzzle_rifle'; mz.position.set(0, -0.02, -1.0); gun.add(mz);
+  N.muzzleRifle = mz;
+  K.flush();
+  return { root, N };
+}
+
+// --- HELI : gunship -------------------------------------------------
+function buildHeli(K, P) {
+  const root = new THREE.Group(); root.name = 'heli';
+  const N = {};
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+
+  const core = N.core = K.group(root, 'core', 0, 1.72, 0);
+  K.into(core);
+  // fuselage
+  K.plate(1.7, 1.5, 4.2, 0, 0, 0.3, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.08 });
+  K.taper(1.85, 1.2, 3.4, 1.35, 2.6, 0, 0.2, 0.1, { ...A, c: 0.12 });
+  K.taper(1.5, 1.0, 1.9, 1.0, 1.1, 0, -0.15, -1.95, { ...A2, rx: 0.12, c: 0.1 });   // nose
+  // canopy
+  K.plate(1.15, 0.7, 1.5, 0, 0.5, -1.5, { key: 'mech', base: 0x18242a, ao: 0.05, rx: -0.28, c: 0.06, jitter: 0 });
+  K.blk(0.06, 0.68, 1.5, 0, 0.5, -1.5, { ...M, rx: -0.28, base: 0x53564c });
+  K.plate(1.3, 0.2, 0.5, 0, 0.86, -1.05, { ...A3, c: 0.04 });
+  // tail boom + fin
+  K.taper(0.72, 0.62, 3.6, 0.42, 0.5, 0, 0.15, 3.3, { ...A2, rx: Math.PI / 2, c: 0.05 });
+  K.taper(0.24, 1.5, 1.0, 0.24, 0.6, 0, 0.85, 4.9, { ...A2, c: 0.05 });
+  K.plate(1.5, 0.16, 0.6, 0, 1.05, 4.7, { ...A3, c: 0.04 });
+  // tail rotor
+  const tr = N.tailRotor = K.group(core, 'tailRotor', 0.4, 0.85, 5.05);
+  K.into(tr);
+  for (let b = 0; b < 2; b++) K.blk(0.06, 1.5, 0.14, 0, 0, 0, { ...M, rx: b * Math.PI / 2, base: 0x3e4038, ao: 0.4 });
+  K.into(core);
+  K.rod(0.09, 0.3, 8, 0.4, 0.85, 5.05, { ...M, rz: Math.PI / 2, base: 0x76796f });
+  // rotor mast + main rotor
+  K.plate(0.9, 0.5, 1.1, 0, 0.95, 0.35, { ...A3, c: 0.05 });
+  K.rod(0.14, 0.5, 8, 0, 1.3, 0.35, { ...M, base: 0x60635a, ao: 0.4 });
+  const mr = N.mainRotor = K.group(core, 'mainRotor', 0, 1.55, 0.35);
+  K.into(mr);
+  K.rod(0.22, 0.16, 10, 0, 0, 0, { ...M, base: 0x50534b });
+  for (let b = 0; b < 4; b++) {
+    K.blk(6.4, 0.055, 0.34, 0, 0, 0, { ...M, ry: b * Math.PI / 4, base: 0x35372f, ao: 0.5 });
+  }
+  K.into(core);
+  // stub wings + rocket pods
+  for (const s of [-1, 1]) {
+    K.taper(1.5, 0.24, 0.9, 1.2, 0.7, s * 1.5, -0.1, 0.1, { ...A2, rz: -s * 0.12, c: 0.04 });
+    K.plate(0.72, 0.62, 1.5, s * 2.05, -0.4, 0.1, { ...A3, c: 0.05 });
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+      K.plate(0.18, 0.18, 0.1, s * (2.05 + (c - 1) * 0.22), -0.28 - r * 0.24, -0.65, { key: 'dark', base: 0x07080a, ao: 0.05, c: 0.01, jitter: 0 });
+    }
+    K.decal(DECAL.CHEVRON_O, 0.6, 0.18, s * 2.05, -0.08, 0.1, { dir: 'top', off: 0.34 });
+    // skids
+    K.rod(0.06, 0.9, 6, s * 0.85, -1.15, -0.4, { ...M, rz: -s * 0.35, base: 0x6c6f66 });
+    K.rod(0.06, 0.9, 6, s * 0.85, -1.15, 1.0, { ...M, rz: -s * 0.35, base: 0x6c6f66 });
+    K.blk(0.11, 0.11, 3.4, s * 1.1, -1.6, 0.3, { ...D, base: 0x15170f });
+    K.nozzle(s * 0.75, 0.15, 1.95, 0.2, 0.32, 0.4, { dir: 'back', base: P.hull2, seg: 10, power: 0.8, kind: 'main', name: `thr_${s < 0 ? 'l' : 'r'}` });
+  }
+  K.vent(0.5, 0.6, 0.9, 0.35, 1.2, { dir: 'right', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.vent(0.5, 0.6, -0.9, 0.35, 1.2, { dir: 'left', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.decal(DECAL.NUM_24, 0.5, 0.5, 0.88, 0.15, 0.9, { dir: 'right', off: 0.06 });
+  K.decal(DECAL.DANGER, 0.9, 0.4, 0, -0.55, 3.3, { dir: 'right', off: 0.4, roll: Math.PI / 2 });
+  // chin turret
+  const gun = N.gun = K.group(core, 'gun', 0, -0.72, -2.05);
+  K.into(gun);
+  K.rod(0.3, 0.4, 10, 0, 0.05, 0, { ...A2, c: 0.03 });
+  K.plate(0.55, 0.42, 0.7, 0, -0.15, -0.1, { ...A3, c: 0.04 });
+  K.rod(0.09, 1.2, 8, -0.12, -0.15, -0.65, { ...M, rx: Math.PI / 2, base: 0x4b4e46 });
+  K.rod(0.09, 1.2, 8, 0.12, -0.15, -0.65, { ...M, rx: Math.PI / 2, base: 0x4b4e46 });
+  const mz = new THREE.Object3D(); mz.name = 'muzzle_rifle'; mz.position.set(0, -0.15, -1.3); gun.add(mz);
+  N.muzzleRifle = mz;
+  K.flush();
+  return { root, N };
+}
+
+// --- TURRET : emplaced twin-barrel ----------------------------------
+function buildTurret(K, P) {
+  const root = new THREE.Group(); root.name = 'turret';
+  const N = {};
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+
+  const base = N.base = K.group(root, 'base', 0, 0, 0);
+  K.into(base);
+  // bolted hexagonal plinth
+  K.cone(1.5, 1.9, 0.5, 6, 0, 0.25, 0, { ...A2, c: 0.05 });
+  K.cone(1.28, 1.5, 0.42, 6, 0, 0.7, 0, { ...A3, c: 0.05 });
+  for (let i = 0; i < 6; i++) {
+    const a = i * TAU / 6 + 0.3;
+    K.bolt(Math.cos(a) * 1.55, 0.5, Math.sin(a) * 1.55, 0.12, { base: P.mech });
+    K.plate(0.3, 0.7, 0.5, Math.cos(a) * 1.6, 0.35, Math.sin(a) * 1.6, { ...A3, ry: -a, c: 0.04 });
+  }
+  K.ring(1.15, 0.12, 16, 0, 0.95, 0, { ...M, base: 0x4f4d40, rseg: 5 });
+  K.decal(DECAL.CHEVRON_Y, 1.8, 0.3, 0, 0.5, 0, { dir: 'top', off: 0.04 });
+  K.plate(0.7, 0.9, 0.5, 1.35, 0.5, 0.8, { ...D, base: 0x141410, c: 0.04 });   // ammo box
+  K.cables([1.35, 0.9, 0.8], [0.3, 1.15, 0.5], 3, 0.06, { sag: 0.15, spread: 0.16 });
+
+  const cup = N.cupola = K.group(base, 'cupola', 0, 1.05, 0);
+  K.into(cup);
+  K.plate(1.7, 0.95, 1.6, 0, 0.42, 0.1, { base: P.frame, wear: P.frame, ao: 0.5, c: 0.05 });
+  K.taper(2.0, 0.85, 1.9, 1.5, 1.4, 0, 0.5, 0.1, { ...A, c: 0.1 });
+  K.plate(1.9, 0.4, 0.5, 0, 0.55, -0.85, { ...A2, rx: -0.3, c: 0.06 });
+  K.plate(0.5, 0.4, 0.28, 0, 0.55, -1.12, { key: 'dark', base: 0x06070a, ao: 0.05, c: 0.03, jitter: 0 });
+  K.blk(0.34, 0.1, 0.06, 0, 0.55, -1.24, { key: 'glow', base: 0xffffff, jitter: 0 });
+  K.vent(0.6, 0.4, 0, 0.55, 1.02, { dir: 'back', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  // radar dish
+  K.rod(0.06, 0.6, 6, -0.72, 1.25, 0.5, { ...M, base: 0x6f7263 });
+  K.cone(0.34, 0.05, 0.16, 10, -0.72, 1.6, 0.5, { ...A3, rx: 0.6, c: 0.02 });
+  K.antenna(0.75, 0.95, 0.55, 0.7, {});
+  K.decal(DECAL.NUM_24, 0.45, 0.45, 0.92, 0.5, 0.3, { dir: 'right', off: 0.1 });
+  K.decal(DECAL.CHEVRON_O, 1.3, 0.24, 0, 0.96, 0.1, { dir: 'top', off: 0.1 });
+
+  const gun = N.gun = K.group(cup, 'gun', 0, 0.5, -0.5);
+  K.into(gun);
+  K.plate(1.4, 0.62, 0.8, 0, 0, 0.1, { ...A2, c: 0.05 });
+  K.rod(0.3, 0.9, 10, 0, 0, 0.1, { ...M, rz: Math.PI / 2, base: 0x4a4a3e });
+  for (const s of [-1, 1]) {
+    K.rod(0.17, 2.3, 10, s * 0.42, 0, -1.1, { ...A3, rx: Math.PI / 2, c: 0.02 });
+    K.rod(0.1, 2.7, 8, s * 0.42, 0, -1.2, { ...M, rx: Math.PI / 2, base: 0x494b40, ao: 0.5 });
+    K.rod(0.22, 0.28, 10, s * 0.42, 0, -2.32, { ...M, rx: Math.PI / 2, base: 0x6e7061 });
+    for (let i = 0; i < 4; i++) K.ring(0.2, 0.035, 8, s * 0.42, 0, -0.5 - i * 0.35, { ...M, rx: Math.PI / 2, base: 0x5c5e52, rseg: 4 });
+  }
+  K.plate(0.5, 0.4, 0.6, 0, -0.3, 0.45, { ...D, base: 0x121410, c: 0.03 });
+  const mz = new THREE.Object3D(); mz.name = 'muzzle_rifle'; mz.position.set(0, 0, -2.6); gun.add(mz);
+  N.muzzleRifle = mz;
+  K.flush();
+  return { root, N };
+}
+
+// --- BOSS : full AC, reverse-jointed, four back units ---------------
+const B = { hipY: 8.6, coreY: 0.15, L1: 3.7, L2: 4.7, ankleH: 1.25, hipX: 1.5 };
+
+function buildBoss(K, P) {
+  const root = new THREE.Group(); root.name = 'boss';
+  const N = {};
+  const A = { base: P.hull, wear: P.wear, ao: 0.36 };
+  const A2 = { base: P.hull2, wear: P.wear, ao: 0.38 };
+  const A3 = { base: P.hull3, wear: P.wear, ao: 0.4 };
+  const F = { base: P.frame, wear: P.frame, ao: 0.5, c: 0.04 };
+  const M = { key: 'mech', base: P.mech, ao: 0.35 };
+  const D = { key: 'dark', base: P.frame2, ao: 0.2 };
+
+  const hips = N.hips = K.group(root, 'hips', 0, B.hipY, 0);
+  const core = N.core = K.group(hips, 'core', 0, B.coreY, 0);
+
+  K.into(hips);
+  K.plate(1.85, 1.05, 1.6, 0, 0.05, 0, F);
+  K.plate(2.3, 0.3, 1.9, 0, 0.55, 0, { ...A2, c: 0.06 });
+  K.taper(1.3, 1.0, 0.34, 1.6, 0.34, 0, -0.35, -0.98, { ...A, rx: 0.14, c: 0.06 });
+  for (const s of [-1, 1]) {
+    K.taper(0.3, 1.5, 1.7, 0.3, 1.2, s * 1.35, -0.3, 0.05, { ...A, rz: s * 0.1, c: 0.06 });
+    K.rod(0.32, 0.95, 10, s * 1.0, 0.0, 0, { ...M, rz: Math.PI / 2, base: 0x45414e, ao: 0.5 });
+    K.nozzle(s * 1.42, 0.3, 1.15, 0.16, 0.27, 0.4, { dir: 'back', base: P.hull2, seg: 10, power: 0.6, kind: 'hip', name: `thr_hip_${s < 0 ? 'l' : 'r'}` });
+    K.plate(0.7, 0.7, 0.7, s * 1.42, 0.3, 0.72, { ...A3, c: 0.05 });
+  }
+  K.decal(DECAL.CHEVRON_O, 1.4, 0.26, 0, -0.72, -1.14, { dir: 'front', off: 0.06 });
+
+  // slim, tall, forward-raked core
+  K.into(core);
+  K.plate(2.7, 3.4, 1.9, 0, 2.2, 0.05, F);
+  K.taper(3.1, 1.8, 0.44, 2.6, 0.44, 0, 3.05, -0.95, { ...A, rx: -0.14, c: 0.09 });
+  K.plate(2.3, 1.2, 0.36, 0, 1.55, -0.95, { ...A2, rx: 0.14, c: 0.07 });
+  K.plate(3.9, 0.55, 1.8, 0, 3.95, 0.15, { ...A2, c: 0.08 });
+  K.plate(2.8, 2.7, 0.42, 0, 2.4, 1.05, { ...A2, c: 0.08 });
+  for (const s of [-1, 1]) {
+    K.taper(0.44, 2.9, 1.75, 0.44, 1.2, s * 1.52, 2.35, 0.05, { ...A, rz: -s * 0.05, c: 0.07 });
+    K.plate(0.24, 1.4, 0.9, s * 1.78, 2.9, -0.3, { ...A3, c: 0.05 });
+    K.vent(0.45, 1.2, s * 1.82, 1.9, 0.3, { dir: s < 0 ? 'left' : 'right', slats: 6, frame: P.hull2, wear: P.wear, slat: P.mech });
+    K.seam(0.07, 1.3, 0.08, s * 1.05, 3.1, -1.2, {});
+  }
+  K.seam(1.7, 0.08, 0.08, 0, 2.4, -1.15, {});
+  K.vent(0.8, 0.5, 0, 1.35, -1.14, { dir: 'front', slats: 4, frame: P.hull2, wear: P.wear, slat: P.mech });
+  K.decal(DECAL.WARNTRI, 0.4, 0.4, -1.0, 3.4, -1.1, { dir: 'front', off: 0.12 });
+  K.decal(DECAL.CODE, 0.9, 0.6, 0.95, 2.9, -1.06, { dir: 'front', off: 0.12 });
+  K.cables([-0.6, 0.9, 0.9], [-0.6, 2.1, 1.0], 2, 0.055, { sag: -0.1, spread: 0.16, bulge: 0.2 });
+  K.cables([0.6, 0.9, 0.9], [0.6, 2.1, 1.0], 2, 0.055, { sag: -0.1, spread: 0.16, bulge: 0.2 });
+  // main boosters (4)
+  K.plate(2.5, 1.5, 1.0, 0, 1.6, 1.6, { ...A2, c: 0.08 });
+  for (const s of [-1, 1]) {
+    K.nozzle(s * 0.72, 1.85, 2.05, 0.3, 0.52, 0.78, { dir: 'back', base: P.hull2, seg: 14, power: 1, kind: 'main', name: `thr_main_${s < 0 ? 'l' : 'r'}` });
+    K.nozzle(s * 0.72, 1.0, 2.0, 0.22, 0.38, 0.56, { dir: 'back', base: P.hull2, seg: 12, power: 0.8, kind: 'main', name: `thr_main2_${s < 0 ? 'l' : 'r'}` });
+  }
+  for (let i = 0; i < 6; i++) K.plate(2.1, 0.07, 0.5, 0, 3.2 + i * 0.13, 1.36, { ...M, base: 0x535060, ao: 0.55, c: 0.012 });
+
+  // head: narrow, crested, violet optic
+  const neck = N.neck = K.group(core, 'neck', 0, 4.28, -0.16);
+  const head = N.head = K.group(neck, 'head', 0, 0.18, 0);
+  K.into(neck); K.rod(0.24, 0.32, 8, 0, 0, 0, { ...D, base: 0x0c0d12 });
+  K.into(head);
+  K.plate(0.9, 0.62, 1.05, 0, 0.18, -0.06, { ...A, c: 0.07 });
+  K.taper(0.8, 0.34, 0.5, 0.3, 0.34, 0, 0.55, 0.12, { ...A3, c: 0.04 });
+  K.plate(0.16, 0.9, 0.24, 0, 0.85, 0.2, { ...A3, rx: -0.35, c: 0.03 });     // crest
+  K.plate(0.78, 0.24, 0.1, 0, 0.2, -0.55, { key: 'dark', base: 0x04050a, ao: 0.05, c: 0.02, jitter: 0 });
+  K.blk(0.6, 0.1, 0.07, 0, 0.2, -0.58, { key: 'glow', base: 0xffffff, jitter: 0 });
+  K.blk(0.16, 0.14, 0.05, 0, 0.2, -0.6, { key: 'glow', base: 0xffffff, jitter: 0 });
+  for (const s of [-1, 1]) {
+    K.taper(0.16, 0.42, 0.5, 0.1, 0.2, s * 0.52, 0.28, -0.05, { ...A3, rz: -s * 0.2, c: 0.03 });
+    K.blk(0.05, 0.06, 0.05, s * 0.6, 0.32, -0.24, { key: 'glow', base: 0xffffff, jitter: 0 });
+  }
+  K.vent(0.34, 0.14, 0, -0.06, -0.5, { dir: 'front', slats: 3, depth: 0.08, frame: P.hull2, wear: P.wear, slat: P.mech });
+
+  // arms — long, bladed
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const sh = N['shoulder' + side] = K.group(core, 'shoulder' + side, s * 1.72, 3.3, 0.02);
+    const up = N['upperArm' + side] = K.group(sh, 'upperArm' + side, s * 0.4, -0.3, 0);
+    const el = N['elbow' + side] = K.group(up, 'elbow' + side, 0, -1.85, 0);
+    const wp = N['weapon' + side] = K.group(el, 'weapon' + side, 0, -1.5, -0.25);
+    K.into(sh);
+    K.plate(0.75, 0.9, 1.5, s * 0.12, 0.1, 0.02, F);
+    K.taper(1.05, 1.3, 2.0, 0.6, 1.5, s * 0.55, 0.35, 0.02, { ...A, rz: -s * 0.2, c: 0.1 });
+    K.taper(0.32, 1.9, 1.6, 0.16, 0.55, s * 1.15, 1.15, 0.15, { ...A3, rz: -s * 0.4, c: 0.05 });   // fin
+    K.seam(0.06, 0.7, 0.07, s * 0.95, 0.1, -0.55, {});
+    K.nozzle(s * 0.62, 0.15, 1.05, 0.12, 0.2, 0.28, { dir: 'back', base: P.hull2, seg: 8, power: 0.4, kind: 'shoulder', name: `thr_sh_${side}` });
+    K.into(up);
+    K.plate(0.6, 1.7, 0.72, 0, -0.9, 0, F);
+    K.taper(0.9, 1.75, 1.0, 0.75, 0.85, 0, -0.9, 0, { ...A, c: 0.06 });
+    K.plate(0.24, 1.2, 0.62, s * 0.55, -0.9, 0.02, { ...A3, c: 0.045 });
+    K.rod(0.07, 1.0, 6, s * 0.2, -1.35, 0.42, { ...M, base: 0xb8b2c6, ao: 0.2 });
+    K.into(el);
+    K.rod(0.3, 0.85, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x46424f, ao: 0.5 });
+    K.plate(0.75, 1.6, 0.9, 0, -0.82, 0, F);
+    K.taper(1.05, 1.7, 1.25, 0.9, 1.0, 0, -0.82, -0.02, { ...A, c: 0.07 });
+    K.plate(0.28, 1.2, 0.8, s * 0.62, -0.82, 0.0, { ...A2, c: 0.05 });
+    K.vent(0.4, 0.42, s * 0.68, -0.82, 0.0, { dir: s < 0 ? 'left' : 'right', slats: 4, depth: 0.1, frame: P.hull2, wear: P.wear, slat: P.mech });
+    K.into(wp);
+    if (s > 0) {
+      // heavy rail rifle
+      K.plate(0.8, 0.72, 2.6, 0, -0.05, -1.0, F);
+      K.plate(0.9, 0.55, 2.1, 0, 0.12, -1.05, { ...A, c: 0.06 });
+      K.rod(0.22, 2.4, 12, 0, 0.0, -2.9, { ...A2, rx: Math.PI / 2, c: 0.02 });
+      K.rod(0.12, 3.0, 8, 0, 0.0, -3.0, { ...M, rx: Math.PI / 2, base: 0x4c4856, ao: 0.5 });
+      for (let i = 0; i < 4; i++) {
+        K.ring(0.26, 0.06, 12, 0, 0.0, -2.1 - i * 0.5, { ...M, base: 0x5b5668, rx: Math.PI / 2, rseg: 4 });
+        K.blk(0.05, 0.34, 0.05, 0.26, 0.0, -2.1 - i * 0.5, { key: 'glow', base: 0xffffff, jitter: 0 });
+        K.blk(0.05, 0.34, 0.05, -0.26, 0.0, -2.1 - i * 0.5, { key: 'glow', base: 0xffffff, jitter: 0 });
+      }
+      K.rod(0.26, 0.34, 12, 0, 0.0, -4.15, { ...M, base: 0x6f6a7d });
+      K.rod(0.17, 0.3, 12, 0, 0.0, -4.16, { key: 'dark', base: 0x050609, jitter: 0, rx: Math.PI / 2 });
+      const mz = new THREE.Object3D(); mz.name = 'muzzle_rifle'; mz.position.set(0, 0, -4.5); wp.add(mz);
+      N.muzzleRifle = mz;
+    } else {
+      // laser lance
+      K.plate(0.85, 0.8, 1.7, 0, -0.05, -0.6, F);
+      K.plate(0.95, 0.6, 1.3, 0, 0.1, -0.62, { ...A, c: 0.06 });
+      for (let i = 0; i < 3; i++) {
+        K.ring(0.32, 0.08, 12, 0, 0.0, -0.35 - i * 0.4, { ...M, base: 0x5b5668, rx: Math.PI / 2, rseg: 4 });
+        K.blk(0.07, 0.55, 0.07, 0.32, 0.0, -0.35 - i * 0.4, { key: 'glow', base: 0xffffff, jitter: 0 });
+      }
+      for (const t of [-1, 1]) K.taper(0.16, 0.26, 1.4, 0.08, 0.8, t * 0.34, 0.0, -1.9, { ...A3, rx: Math.PI / 2, c: 0.03 });
+      const blade = N.bladeEdge = K.group(wp, 'bladeEdge', 0, 0, -2.0);
+      K.into(blade);
+      K.taper(0.55, 3.0, 0.1, 0.14, 0.06, 0, -1.5, 0, { key: 'glow', base: 0xffffff, rx: -Math.PI / 2, jitter: 0, c: 0.02 });
+      K.into(wp);
+      const mz = new THREE.Object3D(); mz.name = 'muzzle_blade'; mz.position.set(0, 0, -3.4); wp.add(mz);
+      N.muzzleBlade = mz;
+    }
+  }
+
+  // four back units: 2 missile pods (outer) + 2 rail cannons (inner)
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const pod = N['pod' + side] = K.group(core, 'pod' + side, s * 1.72, 2.96, 1.22);
+    K.into(pod);
+    K.plate(0.7, 0.6, 0.8, -s * 0.2, -0.3, 0, F);
+    K.plate(1.15, 1.5, 1.25, s * 0.25, 0.5, 0, { ...A2, c: 0.07 });
+    K.plate(1.25, 1.3, 0.26, s * 0.25, 0.55, -0.7, { ...A, c: 0.06 });
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
+      K.plate(0.36, 0.36, 0.18, s * 0.25 + (c - 0.5) * 0.46, 0.05 + r * 0.46, -0.62,
+        { key: 'dark', base: 0x06070a, ao: 0.05, c: 0.02, jitter: 0 });
+      K.rod(0.11, 0.05, 8, s * 0.25 + (c - 0.5) * 0.46, 0.05 + r * 0.46, -0.62, { key: 'glow', base: 0xffffff, rx: Math.PI / 2, jitter: 0 });
+    }
+    K.plate(1.2, 0.2, 1.2, s * 0.25, 1.3, 0, { ...A3, c: 0.04 });
+    K.decal(DECAL.CHEVRON_O, 0.9, 0.2, s * 0.25, 1.06, -0.85, { dir: 'front', off: 0.06 });
+    K.antenna(s * 0.8, 1.4, 0.45, 0.7, {});
+    if (s > 0) N.muzzleMissile = addMarker(pod, 'muzzle_missile', s * 0.25, 1.45, -0.5);
+
+    // inner rail cannon on a folding arm
+    const cn = N['cannon' + side] = K.group(core, 'cannon' + side, s * 0.98, 3.34, 1.56);
+    K.into(cn);
+    K.plate(0.5, 0.5, 0.6, 0, -0.25, 0, F);
+    K.plate(0.7, 0.7, 2.6, 0, 0.15, -0.4, { ...A2, c: 0.05 });
+    K.rod(0.2, 2.2, 10, 0, 0.15, -1.9, { ...A3, rx: Math.PI / 2, c: 0.02 });
+    K.rod(0.1, 2.6, 8, 0, 0.15, -2.0, { ...M, rx: Math.PI / 2, base: 0x4b4756, ao: 0.5 });
+    for (let i = 0; i < 3; i++) K.ring(0.24, 0.055, 10, 0, 0.15, -1.3 - i * 0.55, { ...M, base: 0x5a5566, rx: Math.PI / 2, rseg: 4 });
+    K.rod(0.22, 0.28, 10, 0, 0.15, -3.05, { ...M, base: 0x6e6979 });
+    K.blk(0.055, 0.3, 0.055, 0.2, 0.15, -1.0, { key: 'glow', base: 0xffffff, jitter: 0 });
+    if (s < 0) N.muzzleCannon = addMarker(cn, 'muzzle_cannon', 0, 0.15, -3.3);
+  }
+
+  // reverse-jointed legs
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const leg = N['leg' + side] = K.group(hips, 'leg' + side, s * B.hipX, -0.1, 0);
+    leg.rotation.z = -s * 0.05;
+    const th = N['thigh' + side] = K.group(leg, 'thigh' + side, 0, 0, 0);
+    const kn = N['knee' + side] = K.group(th, 'knee' + side, 0, -B.L1, 0);
+    const an = N['ankle' + side] = K.group(kn, 'ankle' + side, 0, -B.L2, 0);
+    K.into(leg);
+    K.plate(0.8, 0.72, 0.95, s * 0.22, 0.06, 0.02, F);
+    K.taper(1.0, 0.9, 1.25, 0.9, 1.1, s * 0.3, 0.15, 0.0, { ...A2, c: 0.06 });
+    K.into(th);
+    K.plate(0.8, B.L1 * 0.9, 0.9, 0, -B.L1 * 0.5, 0, F);
+    K.taper(1.18, B.L1 * 0.95, 1.42, 0.86, 1.05, 0, -B.L1 * 0.48, 0.0, { ...A, c: 0.09 });
+    K.plate(0.28, 1.6, 1.0, s * 0.66, -B.L1 * 0.5, 0.05, { ...A2, c: 0.05 });
+    K.plate(0.95, 1.0, 0.3, 0, -B.L1 * 0.75, -0.75, { ...A3, c: 0.05 });
+    K.rod(0.11, 1.1, 8, s * 0.3, -B.L1 * 0.72, 0.62, { ...D, base: 0x121118 });
+    K.rod(0.11, 1.1, 8, -s * 0.3, -B.L1 * 0.72, 0.62, { ...D, base: 0x121118 });
+    K.seam(0.06, 0.9, 0.07, 0, -B.L1 * 0.45, -0.9, {});
+    K.into(kn);
+    K.rod(0.42, 1.0, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x46424f, ao: 0.5 });
+    K.bolt(s * 0.54, 0, 0, 0.2, { rz: Math.PI / 2, base: P.mech });
+    K.bolt(-s * 0.54, 0, 0, 0.2, { rz: Math.PI / 2, base: P.mech });
+    K.plate(0.85, 0.6, 0.34, 0, 0.02, 0.52, { ...A3, c: 0.05 });          // reverse knee: cap faces BACK
+    K.plate(0.7, B.L2 * 0.88, 0.8, 0, -B.L2 * 0.5, 0, F);
+    K.taper(1.08, B.L2 * 0.9, 1.3, 0.7, 0.82, 0, -B.L2 * 0.46, 0.0, { ...A, c: 0.085 });
+    K.plate(0.28, 1.8, 0.95, s * 0.6, -B.L2 * 0.45, 0.0, { ...A2, c: 0.05 });
+    K.plate(0.9, 1.4, 0.3, 0, -B.L2 * 0.35, -0.72, { ...A3, c: 0.05 });
+    K.rod(0.07, 1.35, 6, s * 0.3, -0.2, 0.62, { ...M, base: 0xbcb6ca, ao: 0.2 });
+    K.rod(0.07, 1.35, 6, -s * 0.3, -0.2, 0.62, { ...M, base: 0xbcb6ca, ao: 0.2 });
+    K.plate(0.75, 0.65, 0.5, 0, -B.L2 * 0.8, 0.8, { ...A3, c: 0.05 });
+    K.nozzle(0, -B.L2 * 0.85, 1.02, 0.14, 0.24, 0.32, { dir: 'backdown', base: P.hull2, seg: 8, power: 0.5, kind: 'calf', name: `thr_calf_${side}` });
+    K.decal(DECAL.CHEVRON_O, 0.8, 0.2, 0, -B.L2 * 0.62, -0.9, { dir: 'front', off: 0.06 });
+    K.into(an);
+    for (let i = 0; i < 4; i++) K.ring(0.31 - i * 0.014, 0.08, 10, 0, 0.06 - i * 0.15, 0, { ...D, base: 0x232230, rseg: 4 });
+    K.rod(0.24, 0.5, 10, 0, -0.02, 0, { ...M, rz: Math.PI / 2, base: 0x46424f, ao: 0.5 });
+    K.plate(0.95, 0.42, 1.0, 0, -0.7, -0.05, F);
+    K.taper(1.35, 0.3, 2.5, 1.5, 2.7, 0, -1.05, -0.2, { ...A, c: 0.06 });    // long splayed claw foot
+    K.plate(1.2, 0.26, 0.9, 0, -0.9, -1.62, { ...A2, rx: -0.22, c: 0.05 });
+    K.plate(0.9, 0.22, 0.62, 0, -0.86, 0.9, { ...A2, rx: 0.28, c: 0.05 });
+    for (const t of [-1, 1]) {
+      K.taper(0.22, 0.26, 1.0, 0.12, 0.5, t * 0.6, -1.02, -1.6, { ...A3, c: 0.04 });
+      K.blk(0.26, 0.1, 0.42, t * 0.4, -1.2, -1.0, { ...D, base: 0x101016 });
+    }
+    K.decal(DECAL.CHEVRON_O, 1.0, 0.22, 0, -0.42, -0.5, { dir: 'top', off: 0.28 });
+  }
+
+  K.flush();
+  return { root, N };
+}
+
+function addMarker(parent, name, x, y, z) {
+  const o = new THREE.Object3D();
+  o.name = name; o.position.set(x, y, z);
+  parent.add(o);
+  return o;
+}
+
+// ==================================================================
+//  RIG — animation + material state for one mech instance
+// ==================================================================
+class Rig {
+  constructor(nodes, mats, cfg) {
+    this.n = nodes;
+    this.m = mats;
+    this.cfg = cfg;
+    this.phase = Math.random();
+    this.air = cfg.flying ? 1 : 0;
+    this.thrust = 0;
+    this.thrustT = 0;
+    this.damage = 0;
+    this.aimYaw = 0; this.aimPitch = 0;
+    this.aimYawS = 0; this.aimPitchS = 0;
+    this.lean = 0; this.sn = 0;
+    this.lastDt = 1 / 60;
+    this.rifleRecoil = 0; this.bladeSwing = 0; this.bladeCharge = 0;
+    this.cannonCharge = 0; this.missileOpen = 0;
+    this.rotorSpin = cfg.rotorSpin || 0;
+    this._t = Math.random() * 40;
+    this._ikA = 0; this._ikB = 0;
+    this._legList = [];
+    this._armList = [];
+    for (const [side, sg] of [['L', -1], ['R', 1]]) {
+      if (nodes['thigh' + side]) {
+        this._legList.push({ s: sg, th: nodes['thigh' + side], kn: nodes['knee' + side], an: nodes['ankle' + side] });
+      }
+      if (nodes['upperArm' + side]) {
+        this._armList.push({ s: sg, up: nodes['upperArm' + side], wp: nodes['weapon' + side] });
+      }
+    }
+    this._rotorList = [];
+    for (let i = 0; i < 4; i++) if (nodes['rotor' + i]) this._rotorList.push(nodes['rotor' + i]);
+    this._hipY0 = nodes.hips ? nodes.hips.position.y : 0;
+    this._coreY0 = nodes.core ? nodes.core.position.y : 0;
+    this._hullBase = mats.hull.color.clone();
+    this._mechBase = mats.mech.color.clone();
+    this._glowBase = mats.glow.emissiveIntensity;
+    this._scorch = new THREE.Color(0x211b16);
+    this._ember = new THREE.Color(0xff5518);
+    this._flameLo = new THREE.Color(cfg.flameLo ?? 0x3f7dff);
+    this._flameHi = new THREE.Color(cfg.flameHi ?? 0xdff2ff);
+    this._tmpC = new THREE.Color();
+    this.setThrust(cfg.idleThrust ?? 0.12);
+    this.setLegPose(0, 0, !cfg.flying, 1 / 60);
+  }
+
+  // ---- two-bone analytic IK in the leg's local YZ plane -----------
+  //  writes into _ikA (thigh pitch) / _ikB (knee pitch, relative) — no alloc
+  _ik(ty, tz, L1, L2, reverse) {
+    let d = Math.sqrt(ty * ty + tz * tz);
+    const dmax = (L1 + L2) * 0.996, dmin = Math.abs(L1 - L2) + 0.02;
+    d = d < dmin ? dmin : d > dmax ? dmax : d;
+    const beta = Math.atan2(-tz, -ty);
+    const a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
+    const b = Math.acos(clamp((L2 * L2 + d * d - L1 * L1) / (2 * L2 * d), -1, 1));
+    const s = reverse ? -1 : 1;
+    this._ikA = beta + s * a;
+    this._ikB = -s * (a + b);
+  }
+
+  setLegPose(t, moveSpeed = 0, grounded = true, dt = 1 / 60) {
+    dt = dt > 0 ? Math.min(dt, 0.1) : 1 / 60;
+    this.lastDt = dt;
+    this._t += dt;
+    const tt = this._t;
+    const C = this.cfg;
+    const n = this.n;
+
+    const sn = clamp(moveSpeed / (C.walkSpeed || 26), 0, 1.6);
+    this.sn = damp(this.sn, sn, 9, dt);
+    const airT = (grounded && !C.flying) ? 0 : 1;
+    this.air = damp(this.air, airT, 7.5, dt);
+    const air = this.air;
+    const gnd = 1 - air;
+
+    const cad = 0.55 + this.sn * 1.5;
+    this.phase = (this.phase + cad * dt) % 1;
+    const ph = this.phase * TAU;
+    const s1 = Math.sin(ph), c1 = Math.cos(ph);
+
+    // --- legs ---
+    if (n.legL && C.legs !== false) {
+      const L1 = C.L1, L2 = C.L2, ah = C.ankleH, rev = !!C.reverse;
+      const stride = (0.3 + this.sn * 1.35) * gnd;
+      const lift = (0.18 + this.sn * 0.62) * gnd;
+      const legY = -(C.hipY - ah);
+      for (let i = 0; i < this._legList.length; i++) {
+        const L = this._legList[i];
+        const p = L.s < 0 ? ph : ph + Math.PI;
+        const sp = Math.sin(p), cp = Math.cos(p);
+        const tz = -stride * cp;
+        const ty = legY + (sp > 0 ? sp : 0) * lift;
+        this._ik(ty, tz, L1, L2, rev);
+        const k1 = rev ? -0.62 : 0.5, k2 = rev ? 1.5 : -1.62;
+        const t1 = this._ikA * gnd + (k1 + Math.sin(ph * 0.5) * 0.05) * air;
+        const t2 = this._ikB * gnd + k2 * air;
+        L.th.rotation.x = t1;
+        if (L.kn) L.kn.rotation.x = t2;
+        if (L.an) {
+          const toe = (sp > 0 ? sp : 0) * 0.35 * gnd;
+          L.an.rotation.x = -(t1 + t2) * gnd + toe + (rev ? -0.65 : 0.62) * air;
+        }
+      }
+      // hip bob + weight-shift roll
+      n.hips.position.y = this._hipY0 - 0.11 * this.sn * gnd * (0.5 - 0.5 * Math.cos(ph * 2)) - 0.14 * air;
+      n.hips.rotation.z = s1 * 0.05 * this.sn * gnd;
+      n.hips.rotation.x = damp(n.hips.rotation.x, -0.05 * this.sn * gnd, 8, dt);
+    }
+
+    // --- torso counter-rotation + lean ---
+    if (n.core) {
+      const leanT = this.sn * 0.09 * gnd + this.thrust * 0.2 + air * 0.1;
+      this.lean = damp(this.lean, leanT, 7, dt);
+      n.core.rotation.x = this.lean;
+      n.core.rotation.y = this.aimYawS * 0.28 - s1 * 0.075 * this.sn * gnd;
+      n.core.rotation.z = -c1 * 0.028 * this.sn * gnd;
+      n.core.position.y = this._coreY0 + Math.sin(ph * 2) * 0.022 * this.sn * gnd;
+    }
+    // --- arm swing ---
+    const aim = this.aimPitchS * 0.55;
+    for (let i = 0; i < this._armList.length; i++) {
+      const Aq = this._armList[i], s = Aq.s;
+      Aq.up.rotation.x = -s * s1 * 0.13 * this.sn * gnd + aim * (s > 0 ? 1 : 0.45) - air * 0.12;
+      Aq.up.rotation.z = (s > 0 ? -1 : 1) * (0.03 + air * 0.06);
+      if (Aq.wp) Aq.wp.rotation.x = aim * (s > 0 ? 0.55 : 0.2) + (s > 0 ? this.rifleRecoil * -0.16 : 0);
+    }
+    // --- head ---
+    if (n.head) {
+      n.head.rotation.y = clamp(this.aimYawS * 0.72, -0.8, 0.8);
+      n.head.rotation.x = clamp(this.aimPitchS * 0.62, -0.5, 0.45);
+    }
+    if (n.neck) n.neck.rotation.y = clamp(this.aimYawS * 0.2, -0.3, 0.3);
+
+    // --- rotors / turret extras ---
+    if (this.rotorSpin) {
+      const a = tt * this.rotorSpin;
+      if (n.mainRotor) n.mainRotor.rotation.y = a;
+      if (n.tailRotor) n.tailRotor.rotation.x = a * 2.2;
+      for (let i = 0; i < this._rotorList.length; i++) this._rotorList[i].rotation.y = a * (i % 2 ? -1 : 1);
+    }
+    if (n.gun) {
+      n.gun.rotation.y = clamp(this.aimYawS, -0.9, 0.9);
+      n.gun.rotation.x = clamp(this.aimPitchS, -0.55, 0.55);
+    }
+    if (n.cupola) n.cupola.rotation.y = this.aimYawS;
+    if (n.missileLid) n.missileLid.rotation.x = -this.missileOpen * 1.15;
+    if (n.cannonGun) n.cannonGun.rotation.x = this.aimPitchS * 0.4;
+    if (n.bladeEdge) {
+      const sw = this.bladeSwing;
+      n.bladeEdge.rotation.x = -sw * 1.9;
+      n.bladeEdge.scale.setScalar(0.22 + 0.78 * Math.max(this.bladeCharge, sw));
+    }
+    // ember flicker while damaged
+    if (this.damage > 0.02) {
+      const f = 0.8 + Math.sin(tt * 21.3 + this.phase * 9) * 0.2;
+      this.m.hull.emissiveIntensity = this.damage * this.damage * 2.6 * f;
+    }
+  }
+
+  setAim(yaw = 0, pitch = 0) {
+    this.aimYaw = yaw; this.aimPitch = pitch;
+    const l = this.lastDt;
+    this.aimYawS = damp(this.aimYawS, yaw, 14, l);
+    this.aimPitchS = damp(this.aimPitchS, pitch, 14, l);
+  }
+
+  setThrust(v = 0) {
+    v = clamp(v, 0, 1);
+    this.thrust = v;
+    const m = this.m;
+    m.flame.opacity = 0.02 + v * 0.62;
+    this._tmpC.copy(this._flameLo).lerp(this._flameHi, v * v);
+    m.flame.color.copy(this._tmpC);
+    m.heat.emissiveIntensity = 0.1 + v * 1.9;
+    m.glow.emissiveIntensity = this._glowBase * (0.85 + v * 0.55) * (1 - this.damage * 0.45);
+  }
+
+  setDamage(v = 0) {
+    v = clamp(v, 0, 1);
+    this.damage = v;
+    const m = this.m;
+    m.hull.color.copy(this._hullBase).lerp(this._scorch, v * 0.8);
+    m.mech.color.copy(this._mechBase).lerp(this._scorch, v * 0.65);
+    m.hull.emissive.copy(this._ember).multiplyScalar(1);
+    m.hull.emissiveIntensity = v * v * 2.6;
+    m.glow.emissiveIntensity = this._glowBase * (1 - v * 0.45) * (0.85 + this.thrust * 0.55);
+  }
+
+  setWeaponPose(o = {}) {
+    if (o.rifleRecoil !== undefined) this.rifleRecoil = clamp(o.rifleRecoil, 0, 1);
+    if (o.bladeSwing !== undefined) this.bladeSwing = clamp(o.bladeSwing, 0, 1);
+    if (o.bladeCharge !== undefined) this.bladeCharge = clamp(o.bladeCharge, 0, 1);
+    if (o.cannonCharge !== undefined) this.cannonCharge = clamp(o.cannonCharge, 0, 1);
+    if (o.missileOpen !== undefined) this.missileOpen = clamp(o.missileOpen, 0, 1);
+  }
+}
+
+// ==================================================================
+//  template cache + instancing
+// ==================================================================
+const TEMPLATES = new Map();
+
+function makeTemplate(kind) {
+  const pal = PAL[kind] || PAL.mt;
+  const mats = matsFor(pal);
+  const seed = kind.split('').reduce((a, c) => a + c.charCodeAt(0), 7) * 977;
+  const K = new Kit(mats, seed);
+  let built;
+  if (kind === 'player') built = buildPlayer(K, pal);
+  else if (kind === 'boss') built = buildBoss(K, pal);
+  else if (kind === 'drone') built = buildDrone(K, pal);
+  else if (kind === 'heli') built = buildHeli(K, pal);
+  else if (kind === 'turret') built = buildTurret(K, pal);
+  else built = buildMT(K, pal);
+  K.flush();
+
+  const thrusterNames = K.thrusters.map((t) => t.name);
+  const nodeNames = {};
+  for (const k of Object.keys(built.N)) {
+    const v = built.N[k];
+    if (v && v.isObject3D) nodeNames[k] = v.name;
+  }
+  const t = { kind, pal, mats, root: built.root, thrusterNames, nodeNames, tris: K.tris };
+  TEMPLATES.set(kind, t);
+  return t;
+}
+
+const RIG_CFG = {
+  player: { hipY: HIPS_Y, coreY: CORE_Y, L1: L_THIGH, L2: L_SHIN, ankleH: ANKLE_H, walkSpeed: CFG.PLAYER.WALK_SPEED, idleThrust: 0.14, flameLo: 0x3f7dff, flameHi: 0xdff2ff },
+  boss: { hipY: B.hipY, coreY: B.coreY, L1: B.L1, L2: B.L2, ankleH: B.ankleH, reverse: true, walkSpeed: 30, idleThrust: 0.18, flameLo: 0x8a3fff, flameHi: 0xf3ddff },
+  mt: { hipY: 3.05, coreY: 0.25, L1: 1.25, L2: 1.35, ankleH: 0.66, walkSpeed: CFG.ENEMY.MT.speed, idleThrust: 0.1, flameLo: 0xff5a2b, flameHi: 0xffd9a0 },
+  drone: { legs: false, flying: true, hipY: 0, idleThrust: 0.4, rotorSpin: 26, flameLo: 0xff7a3a, flameHi: 0xffd9a0 },
+  heli: { legs: false, flying: true, hipY: 0, idleThrust: 0.35, rotorSpin: 34, flameLo: 0xff7a3a, flameHi: 0xffd9a0 },
+  turret: { legs: false, hipY: 0, idleThrust: 0, flameLo: 0xff5a2b, flameHi: 0xffd9a0 },
+};
+
+function instantiate(kind, opts = {}) {
+  let tpl = TEMPLATES.get(kind);
+  if (!tpl) tpl = makeTemplate(kind);
+
+  const mats = matsFor(tpl.pal);
+  if (opts.hullTint) mats.hull.color.set(opts.hullTint);
+  if (opts.accent) { mats.glow.emissive.set(opts.accent); }
+
+  const root = tpl.root.clone(true);
+  root.name = kind;
+
+  // remap the shared template materials onto this instance's own set
+  const remap = new Map();
+  for (const k of ['hull', 'mech', 'dark', 'glow', 'heat', 'decal', 'flame']) remap.set(tpl.mats[k], mats[k]);
+  const byName = new Map();
+  root.traverse((o) => {
+    if (o.name) byName.set(o.name, o);
+    if (o.isMesh) {
+      const m = remap.get(o.material);
+      if (m) o.material = m;
+    }
+  });
+
+  const parts = {};
+  for (const k of Object.keys(tpl.nodeNames)) {
+    const o = byName.get(tpl.nodeNames[k]);
+    if (o) parts[k] = o;
+  }
   const thrusters = [];
+  for (const nm of tpl.thrusterNames) { const o = byName.get(nm); if (o) thrusters.push(o); }
+
+  const mk = (nm, fb) => byName.get(nm) || fb;
+  const dummy = new THREE.Object3D();
+  dummy.position.set(0, (RIG_CFG[kind]?.hipY || 4), -1);
+  root.add(dummy);
   const muzzles = {
-    rifle: new THREE.Object3D(), blade: new THREE.Object3D(),
-    missile: new THREE.Object3D(), cannon: new THREE.Object3D(),
+    rifle: mk('muzzle_rifle', dummy),
+    blade: mk('muzzle_blade', mk('muzzle_rifle', dummy)),
+    missile: mk('muzzle_missile', mk('muzzle_rifle', dummy)),
+    cannon: mk('muzzle_cannon', mk('muzzle_rifle', dummy)),
   };
-  muzzles.rifle.position.set(4.5, 8.4, -3.2);
-  muzzles.blade.position.set(-4.5, 8.4, -3.2);
-  muzzles.missile.position.set(2.6, 11.4, 0);
-  muzzles.cannon.position.set(-2.6, 11.4, 0);
-  for (const k in muzzles) root.add(muzzles[k]);
 
-  return {
-    root, parts, thrusters, muzzles,
-    api: {
-      setLegPose() {}, setThrust() {}, setDamage() {}, dispose() {},
+  const cfg = { ...(RIG_CFG[kind] || RIG_CFG.mt) };
+  if (opts.scale && opts.scale !== 1) root.scale.setScalar(opts.scale);
+  const rig = new Rig(parts, mats, cfg);
+
+  const api = {
+    kind,
+    rig,
+    tris: tpl.tris,
+    setLegPose: (t, sp, gr, dt) => rig.setLegPose(t, sp, gr, dt),
+    setAim: (y, p) => rig.setAim(y, p),
+    setThrust: (v) => rig.setThrust(v),
+    setDamage: (v) => rig.setDamage(v),
+    setWeaponPose: (o) => rig.setWeaponPose(o),
+    update: (dt) => rig.setLegPose(rig._t, 0, !cfg.flying, dt),
+    /** world-space emission direction of any muzzle / thruster (-Z convention) */
+    dirOf: (obj, out = new THREE.Vector3()) => {
+      obj.getWorldQuaternion(_q);
+      return out.copy(FWD).applyQuaternion(_q);
     },
+    /** override the fallback environment reflection with the world's */
+    setEnvironment: (envTex, intensity) => {
+      for (const k of ['hull', 'mech', 'dark', 'heat', 'decal']) {
+        mats[k].envMap = envTex || null;
+        if (intensity !== undefined) mats[k].envMapIntensity = intensity;
+        mats[k].needsUpdate = true;
+      }
+    },
+    setVisible: (v) => { root.visible = v; },
+    dispose: () => { disposeMaterials(mats); },
   };
+
+  return { root, parts, thrusters, muzzles, api };
 }
 
-export function buildPlayerMech() { return assemble(0x8d9098, 0x4fd9ff, 1); }
-export function buildEnemyMech(kind = 'mt') {
-  const s = kind === 'boss' ? 1.15 : kind === 'drone' ? 0.45 : 0.8;
-  return assemble(kind === 'boss' ? 0x4a3f52 : 0x6b5f52, kind === 'boss' ? 0xd93cff : 0xff5a2b, s);
+// ==================================================================
+//  public API
+// ==================================================================
+export function buildPlayerMech(opts = {}) {
+  return instantiate('player', opts);
 }
+
+export function buildEnemyMech(kind = 'mt', opts = {}) {
+  const k = ['mt', 'drone', 'heli', 'turret', 'boss'].includes(kind) ? kind : 'mt';
+  return instantiate(k, opts);
+}
+
+/** shared textures (panel/ORM/decal/env) — exposed so the world can reuse them */
+export function mechSharedTextures() { return mechTextures(); }
+
+/** free every cached template + shared texture (full teardown only) */
+export function disposeMechTemplates() {
+  for (const t of TEMPLATES.values()) {
+    t.root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    disposeMaterials(t.mats);
+  }
+  TEMPLATES.clear();
+}
+
+export default { buildPlayerMech, buildEnemyMech };
