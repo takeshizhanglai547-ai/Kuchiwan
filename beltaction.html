@@ -1615,7 +1615,7 @@ function updatePlayer(){
   if(p.comboTimer>0)p.comboTimer--; else if(p.state!=='attack') p.comboStep=0;
 
   if(p.state==='down'){ p.downTimer--; p.vx*=0.86; p.x+=p.vx; p.z=Math.max(0,p.z+ (p.riseVel||0));
-    if(p.downTimer<=0){ p.state='getup'; p.getT=12; p.invuln=Math.max(p.invuln,67); } return; }   // 起き上がり動作へ（無敵は立ち終えて55F残る）
+    if(p.downTimer<=0){ p.state='getup'; p.getT=p.getMax=12; p.invuln=Math.max(p.invuln,67); } return; }   // 起き上がり動作へ（無敵は立ち終えて55F残る）
   if(p.state==='getup'){ p.getT--; p.vx*=0.78; p.x+=p.vx;                                          // 手をついて跳ね起きる
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     if(p.getT<=0) p.state='idle'; return; }
@@ -5493,8 +5493,10 @@ function drawPlayer(){
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
-    const q=clamp(p.rig.sq.x*0.10,-0.16,0.22);           // 着地=横に潰れ、踏切=縦に伸びる（キラメキ準拠の係数）
-    ctx.rotate(clamp(p.rig.wob.x*0.05,-0.22,0.22));      // 振り向き・被弾の上体のしなり
+    // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
+    // 着地で約9.8%潰れ、振り向きで約5.8°しなる＝画面上ではっきり読み取れる量。
+    const q=clamp(p.rig.sq.x*0.65,-0.17,0.24);           // 着地=横に潰れ、踏切=縦に伸びる
+    ctx.rotate(clamp(p.rig.wob.x*0.32,-0.26,0.26));      // 振り向き・被弾の上体のしなり
     if(q) ctx.scale(1+q*0.9, 1-q);
     if(p.z>0 && Math.abs(p.vz)>3){                       // 空中：落下・上昇の速度で縦に伸びる
       const st2=clamp(Math.abs(p.vz)*0.012,0,0.14); ctx.scale(1-st2*0.7, 1+st2); }
@@ -5503,7 +5505,7 @@ function drawPlayer(){
   }
   if(st==='down'||st==='dead'){ const fall=easeOut(clamp((46-(p.downTimer||0))/8,0,1));   // 倒れ込みに8Fの落下を与える
     ctx.rotate(-p.facing*(0.30+0.66*fall)); ctx.translate(0,9*fall); }
-  else if(st==='getup'){ const g=easeOut(clamp(1-(p.getT||0)/14,0,1));                     // 起き上がり：伏せから立つ
+  else if(st==='getup'){ const g0=clamp(1-(p.getT||0)/Math.max(1,p.getMax||12),0,1), g=g0*g0*(3-2*g0);   // 起き上がり：伏せから立つ（easeInOutで頭と尻に溜め）
     ctx.rotate(-p.facing*0.92*(1-g)); ctx.translate(0,9*(1-g)-2.5*Math.sin(g*Math.PI)); }
   if(st==='wheel'){ ctx.rotate(p.wheelRot); }
   if(st==='screw'){ ctx.rotate(p.screwRot); }
@@ -5573,7 +5575,7 @@ function drawPlayer(){
   else if(st==='down'||st==='dead'){ const d=easeOut(clamp(1-(p.downTimer||0)/46,0,1));   // 大の字に投げ出された四肢
     thF=lerp(0.92,0.34,d); thB=lerp(-0.72,-0.20,d); kF=lerp(1.50,0.50,d); kB=0.40;
     backArm=lerp(1.45,0.60,d); swAng=lerp(1.30,0.60,d); bodyY=6; lean=0.2*(1-d); sqX=1.10; sqY=0.90; }
-  else if(st==='getup'){ const g=clamp(1-(p.getT||0)/14,0,1), ge=easeOut(g);               // 手をついて跳ね起きる
+  else if(st==='getup'){ const g=clamp(1-(p.getT||0)/Math.max(1,p.getMax||12),0,1), ge=g*g*(3-2*g);   // 手をついて跳ね起きる
     bodyY=lerp(9,0,ge); thF=lerp(0.82,0.14,ge); thB=lerp(-0.30,-0.14,ge); kF=lerp(1.45,0.25,ge); kB=lerp(0.70,0.25,ge);
     swAng=lerp(0.95,-0.42,ge); backArm=lerp(1.10,0.32,ge); lean=0.28*(1-ge);
     sqY=1+0.10*Math.sin(g*Math.PI); sqX=1-0.07*Math.sin(g*Math.PI); }
@@ -6048,7 +6050,7 @@ function guard8Head(lean){
   // 鼻
   ctx.fillStyle=radGrad(9,5,3.4,'#5a4636','#241a12'); ctx.beginPath(); ctx.ellipse(9,6,3.4,2.8,0,0,7); ctx.fill();
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(8,5,.9,0,7); ctx.fill();
-  const hurt = player.state==='hurt'||player.state==='down', ko = player.state==='dead';
+  const hurt = player.state==='hurt'||player.state==='down'||(player.state==='getup'&&(player.getT||0)>3), ko = player.state==='dead';
   if(ko||hurt){
     ctx.strokeStyle='#3a2210'; ctx.lineWidth=1.8; ctx.lineCap='round';
     for(const ex of [-3,10]){ ctx.beginPath(); ctx.moveTo(ex-2.6,-3.6); ctx.lineTo(ex+2.6,1.4); ctx.stroke();
@@ -6114,7 +6116,7 @@ function nukoHead(lean){
   ctx.fillStyle='#fffdfb'; ctx.beginPath(); ctx.ellipse(3,7,10,8.4,0,0,7); ctx.fill();              // マズル
   ctx.fillStyle=radGrad(9,4,3,'#5a4636','#241a12'); ctx.beginPath(); ctx.ellipse(8.6,5,2.8,2.2,0,0,7); ctx.fill();
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(7.8,4,.8,0,7); ctx.fill();
-  const ko = player.state==='dead', hurt = player.state==='hurt'||player.state==='down';
+  const ko = player.state==='dead', hurt = player.state==='hurt'||player.state==='down'||(player.state==='getup'&&(player.getT||0)>3);
   if(ko){
     // KO顔：バツ目＋ぐんにゃり口＋とび出た魂
     ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=2; ctx.lineCap='round';
@@ -6209,7 +6211,7 @@ function chibiHead(lean){
   // nose
   ctx.fillStyle=radGrad(9,4,3,'#5a4636','#241a12'); ctx.beginPath(); ctx.ellipse(9,5,3,2.4,0,0,7); ctx.fill();
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(8,4,.9,0,7); ctx.fill();
-  const hurt = player.state==='hurt'||player.state==='down';
+  const hurt = player.state==='hurt'||player.state==='down'||(player.state==='getup'&&(player.getT||0)>3);
   if(hurt){
     // ダメージ顔： ＞＜ に食いしばった目＋苦悶の口＋汗
     ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.7; ctx.lineCap='round';
@@ -6279,7 +6281,7 @@ function watchHead(lean){
   // マズル
   ctx.fillStyle='#fdfeff'; ctx.beginPath(); ctx.ellipse(3,8,9,7,0,0,7); ctx.fill();
   ctx.fillStyle=radGrad(8,5,3,'#3a3a44','#1a1a20'); ctx.beginPath(); ctx.ellipse(8,6,2.6,2,0,0,7); ctx.fill();   // 鼻
-  const hurt = player.state==='hurt'||player.state==='down';
+  const hurt = player.state==='hurt'||player.state==='down'||(player.state==='getup'&&(player.getT||0)>3);
   if(hurt){ ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.7; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-1,-1.4); ctx.lineTo(3,2.6); ctx.moveTo(3,-1.4); ctx.lineTo(-1,2.6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(9,-1.4); ctx.lineTo(5,2.6); ctx.moveTo(5,-1.4); ctx.lineTo(9,2.6); ctx.stroke();
@@ -6362,7 +6364,7 @@ function wandenHead(lean){
   // マズルと鼻
   ctx.fillStyle='#fbf5e4'; ctx.beginPath(); ctx.ellipse(3,8,10,8,0,0,7); ctx.fill();
   ctx.fillStyle=radGrad(9,5,3.4,'#3a3540','#141218'); ctx.beginPath(); ctx.ellipse(9,6,3,2.4,0,0,7); ctx.fill();
-  const hurt = player.state==='hurt'||player.state==='down';
+  const hurt = player.state==='hurt'||player.state==='down'||(player.state==='getup'&&(player.getT||0)>3);
   // 右目（鋭い剣士の眼。パリィ受付中は紅く光る）
   const guardEye = player.kind==='wanden' && player.state==='iparry' && player.ipWin>0;
   if(hurt){ ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.8; ctx.lineCap='round';
@@ -6432,8 +6434,9 @@ function drawEnemy(e){
   ctx.globalAlpha=al;
   softShadow(sx,sy,(t.w*0.5)*s*(e.z>0?0.7:1));
   ctx.save(); ctx.translate(sx,sy-e.z); ctx.scale(e.facing*s,s);
-  { const eq=clamp((e.sq||0)*0.085,-0.13,0.19); if(eq) ctx.scale(1+eq,1-eq);        // ばねスクワッシュ
-    const ew=clamp((e.wob||0)*0.042,-0.30,0.30); if(ew) ctx.rotate(ew); }            // 打たれた向きへのしなり
+  // 敵も同様。被弾ピーク sq=0.211 × 0.55 で約11.6%潰れる（従来は1.8%で見えなかった）
+  { const eq=clamp((e.sq||0)*0.55,-0.15,0.21); if(eq) ctx.scale(1+eq,1-eq);         // ばねスクワッシュ
+    const ew=clamp((e.wob||0)*0.28,-0.30,0.30); if(ew) ctx.rotate(ew); }            // 打たれた向きへのしなり
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
@@ -6953,18 +6956,24 @@ function drawOnibouzu(e){ const atk=e.state==='attack';
     ctx.fillStyle='#9a5aff'; const fx=Math.sin(gf*0.3)*20;
     ctx.beginPath(); ctx.ellipse(fx*0.8,-86-Math.abs(fx)*0.3,4,9,0,0,7); ctx.fill(); ctx.restore(); }
 }
+// 敵のまばたき：0=完全に閉じ 1=開ききり。id で位相をばらし、群れが一斉に瞬かないようにする
+function foeBlink(e){ const per=112+((e.id*37)%70), ph=((e.anim||0)*9+e.id*23)%per;
+  if(ph>7) return 1;
+  return Math.abs(ph-3.5)/3.5; }
 function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
   const walk=foeStep(e,4);
   // legs — 四つ足を対角の歩容（前脚と後脚が逆位相）で振る
-  { const g=e.gait||0, gw=e.gaitW||0, A=0.58*gw, K=0.85*gw;
+  { const g=e.gait||0, gw=e.gaitW||0, ga=t.gaitA||1, A=0.58*gw*ga, K=0.85*gw*ga;   // gaitA＝種族ごとの歩幅
     const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const wf=Math.sin(g+off), wk=Math.sin(g+off-0.55);
       foeLeg(hx,hy,wf*A,Math.max(0,wk)*K*kdir,l1,l2,wd,c,null); };
     L(-13,-18,Math.PI,   9,8,11,   shade(t.c3,-18), -1);   // 後脚（奥）＝膝は後ろへ
     L(-2,-16,Math.PI+0.5,8,7,9.5,  shade(t.c3,-18),  1);   // 前脚（奥）
     L( 13,-18,0,         9,8,11,   t.c3,            -1);   // 後脚（手前）
     L( 4,-16,0.5,        8,7,9.5,  shade(t.c3,10),   1); } // 前脚（手前）
-  // body
-  ctx.fillStyle=radGrad(0,-34,28,shade(t.c1,18),t.c2); ctx.beginPath(); ctx.ellipse(0,-32,27,19,0,0,7); ctx.fill();
+  // body — 呼吸で胴が膨らみ、頭が遅れて上下する（静止中も生命感を絶やさない）
+  const br=Math.sin((e.anim||0)*0.9), brH=Math.sin((e.anim||0)*0.9-0.6);
+  ctx.fillStyle=radGrad(0,-34,28,shade(t.c1,18),t.c2);
+  ctx.beginPath(); ctx.ellipse(0,-32+br*0.9,27+br*0.9,19-br*0.7,0,0,7); ctx.fill();
   // fur ridge
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-23,-40); ctx.lineTo(-12,-54); ctx.lineTo(-3,-43); ctx.lineTo(6,-55); ctx.lineTo(15,-43); ctx.lineTo(23,-49); ctx.lineTo(23,-30); ctx.lineTo(-23,-30); ctx.fill();
   // muscle shading
@@ -6973,8 +6982,8 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-27,2.4,0,7); ctx.fill(); }
   else { ctx.fillStyle='#1a1a1a'; ctx.fillRect(13,-31,14,9); ctx.fillStyle='#cfcfcf';
     for(let sX=15;sX<26;sX+=4){ ctx.beginPath(); ctx.moveTo(sX,-31); ctx.lineTo(sX+2,-38); ctx.lineTo(sX+4,-31); ctx.fill(); } }
-  // head
-  const hx=23,hy=-46;
+  // head — 胴の呼吸に少し遅れて上下する（ドラッグ）
+  const hx=23,hy=-46+brH*1.1;
   ctx.fillStyle=radGrad(hx,hy,17,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(hx,hy,17,15,0,0,7); ctx.fill();
   ctx.fillStyle=t.c2;
   if(t.ears==='flop'){ // 垂れ耳（かわいい）
@@ -6985,7 +6994,7 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   else { ctx.beginPath(); ctx.moveTo(hx-9,hy-9); ctx.lineTo(hx-15,hy-24); ctx.lineTo(hx-2,hy-13); ctx.fill();
     ctx.beginPath(); ctx.moveTo(hx+6,hy-12); ctx.lineTo(hx+2,hy-26); ctx.lineTo(hx+13,hy-12); ctx.fill(); }
   // snout
-  const hurt=e.state==='hurt'||e.state==='down'||e.state==='air'||e.hitFace>0;
+  const hurt=e.state==='hurt'||e.state==='down'||e.state==='air'||e.hitFace>0||(e.state==='getup'&&(e.getT||0)>3);
   const open=atk||tele||hurt;
   ctx.fillStyle=shade(t.c1,8); ctx.beginPath(); ctx.moveTo(hx+8,hy-3); ctx.lineTo(hx+26,hy+(open?-5:-1)); ctx.lineTo(hx+26,hy+9); ctx.lineTo(hx+8,hy+9); ctx.fill();
   ctx.fillStyle='#0a0a0a'; ctx.beginPath(); ctx.ellipse(hx+26,hy+2,3.4,2.6,0,0,7); ctx.fill();
@@ -6997,9 +7006,12 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
     ctx.beginPath(); ctx.moveTo(hx+1,hy-6); ctx.lineTo(hx+9,hy); ctx.moveTo(hx+9,hy-6); ctx.lineTo(hx+1,hy); ctx.stroke();
     ctx.fillStyle='rgba(120,200,255,.92)'; ctx.beginPath(); ctx.moveTo(hx-4,hy-12); ctx.quadraticCurveTo(hx-1,hy-7,hx-4,hy-5); ctx.quadraticCurveTo(hx-7,hy-7,hx-4,hy-12); ctx.fill();
   } else {
-    // eye (angry, glowing)
-    ctx.fillStyle='#ffd23a'; ctx.beginPath(); ctx.ellipse(hx+5,hy-3,3.4,2.7,0,0,7); ctx.fill();
-    ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(hx+6,hy-3,1.5,2,0,0,7); ctx.fill();
+    // eye (angry, glowing) — まばたき込み。個体ごとに周期をずらして群れが揃わないようにする
+    const bo=foeBlink(e);
+    if(bo<0.22){ ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(hx+1.6,hy-3); ctx.lineTo(hx+8.4,hy-3); ctx.stroke(); }
+    else { ctx.fillStyle='#ffd23a'; ctx.beginPath(); ctx.ellipse(hx+5,hy-3,3.4,2.7*bo,0,0,7); ctx.fill();
+      ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(hx+6,hy-3,1.5,2*bo,0,0,7); ctx.fill(); }
     ctx.strokeStyle='#000'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(hx-2,hy-9); ctx.lineTo(hx+9,hy-4); ctx.stroke();
   }
   if(t.collar){ ctx.strokeStyle=t.collar; ctx.lineWidth=5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(7,-30); ctx.lineTo(20,-38); ctx.stroke();
