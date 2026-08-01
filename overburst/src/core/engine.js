@@ -22,7 +22,7 @@ export class Engine {
     this.renderer.toneMappingExposure = CFG.FX.EXPOSURE;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.info.autoReset = true;
+    this.renderer.info.autoReset = false;  // main.js resets once per frame
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(

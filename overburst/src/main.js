@@ -100,6 +100,10 @@ class Game {
     ctx.dt = dt;
     ctx.frame++;
 
+    // Accumulate render stats across every post-processing pass, otherwise
+    // renderer.info only reports the final fullscreen quad.
+    ctx.renderer.info.reset();
+
     const playing = ctx.state === 'playing';
     if (playing) ctx.time += dt;
 
