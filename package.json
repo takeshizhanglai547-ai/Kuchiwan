@@ -1,0 +1,27 @@
+{
+  "name": "kuchiwan",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "serve": "node tools/serve.mjs 8123",
+    "shot": "node tools/shot.mjs",
+    "build": "node tools/build.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:41729/git/takeshizhanglai547-ai/Kuchiwan"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "esbuild": "^0.25.10",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  },
+  "private": true,
+  "type": "module"
+}

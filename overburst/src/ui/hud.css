@@ -1,0 +1,34 @@
+/* ============================================================
+   HUD styles — [STUB — owned by hud agent]
+   Industrial / brutalist military UI. Angular clip-paths, thin
+   strokes, monospace numerics, cyan primary + amber warn.
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body { font-family: 'DIN Alternate', 'Roboto Condensed', 'Arial Narrow', sans-serif; color: #5ff4ff; }
+#gl { display: block; width: 100vw; height: 100vh; }
+#ui-root { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#ui-root button { pointer-events: auto; }
+.hidden { display: none !important; }
+
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px; background: rgba(4, 6, 8, 0.72);
+}
+.title-brand { font-size: 84px; letter-spacing: 0.22em; font-weight: 800; }
+#btn-start {
+  pointer-events: auto; padding: 14px 46px; background: transparent;
+  border: 1px solid #5ff4ff; color: #5ff4ff; font: inherit; letter-spacing: .3em; cursor: pointer;
+}
+
+#combat-hud { position: absolute; inset: 0; }
+#ap-bar, #en-bar { position: absolute; left: 40px; width: 420px; height: 12px; border: 1px solid #2a4a52; }
+#ap-bar { bottom: 74px; }
+#en-bar { bottom: 54px; height: 7px; }
+#ap-bar i, #en-bar i { display: block; height: 100%; background: #5ff4ff; }
+#reticle {
+  position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+  margin: -13px 0 0 -13px; border: 1px solid #5ff4ff; border-radius: 50%;
+}
+#result-text { font-size: 56px; letter-spacing: .2em; }
