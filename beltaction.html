@@ -143,6 +143,13 @@
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
 const W = 960, H = 540;                    // logical resolution（フル解像度で直接描画）
+// ── UIのデザイン言語：フォント／角丸／色をここに集約し、HUD全体で同じ語彙を使う ──
+const UIFONT='"Trebuchet MS","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+const uif=(w,px)=>w+' '+px+'px '+UIFONT;
+const UI={ r:{s:5,m:8,l:12}, gold:'#ffd24d', ink:'rgba(8,10,20,.70)', line:'rgba(255,210,80,.58)', sub:'#9fb0c4' };
+// 表示用HP：実HPへ遅れて追従させ、削られた量を残像チップで見せる
+function tickHpShow(o){ if(o.hpShow==null||o.hpShow<o.hp) o.hpShow=o.hp;
+  else if(o.hpShow>o.hp) o.hpShow=Math.max(o.hp, o.hpShow-Math.max(0.35,(o.hpShow-o.hp)*0.055)); return o.hpShow; }
 
 // hi-dpi crisp backing store
 let DPR = Math.min(window.devicePixelRatio||1, 2);   // 負荷対策：内部解像度はDPR2まで（見た目はほぼ同等）
@@ -163,14 +170,65 @@ let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = 
 // 全画面フラッシュの色。既定は被弾通知の赤。技ごとに色を指定すると加算合成の発光フラッシュになる
 const FLASH_DEF='255,90,80';
 let flashCol=FLASH_DEF;
-function flashAt(n,col){ flash=Math.max(flash,n); if(col) flashCol=col; }
+// 閃光の中心（ワールド座標）。null なら画面中央。打点から広がる光にするための情報
+let flashX=null, flashY=null, flashPeak=1;
+function flashAt(n,col,wx,wy){ if(n>flash){ flash=n; flashPeak=n; flashX=(wx==null?null:wx); flashY=(wy==null?null:wy); } if(col) flashCol=col; }
 // 被弾・警告用。直前の必殺技の色が残っていても必ず赤へ戻す（被弾通知が技色に化けるのを防ぐ）
-function flashRed(n){ flash=Math.max(flash,n); flashCol=FLASH_DEF; }
+function flashRed(n,wx,wy){ if(n>flash){ flash=n; flashPeak=n; flashX=(wx==null?null:wx); flashY=(wy==null?null:wy); } flashCol=FLASH_DEF; }
 let slowmo=0, slowAcc=0, stage=1, stageBanner=0, stageBannerTxt='', shopPending=0;
 let cut=null, cutAdvance=false, cutSkip=false, endingDone=false;   // cutscene state
 let lap=1;                       // 周回（1=一周目 2=二周目・蟲の世界）
 let mercRoster=[], mercs=[];     // 傭兵：雇用リスト（周回・ステージをまたいで持続）と場に出ている実体
-function triggerSlow(n){ slowmo=Math.max(slowmo,n); }
+// ── スロー：強度つき。突入4F・復帰16Fでレートを寝かせて起こすので段差が出ない ──
+let slowStr=0.34, slowMax=0;
+function triggerSlow(n,str){ if(n>slowmo) slowmo=n; if(slowmo>slowMax) slowMax=slowmo;
+  if(str!=null && str<slowStr) slowStr=str; }
+// ヒットストップの共通入口（後から一括で重みを調整できるようにする）
+function freeze(n){ if(n>hitStop) hitStop=n; }
+// ── カメラ：方向つきインパルス＋ばね減衰。乱数シェイクではなく「押し込まれた」揺れにする ──
+let shkX=0, shkY=0, shkVX=0, shkVY=0, shkRot=0, shkVR=0, shkSeen=0;
+function kick(ax,ay,mag){ const l=Math.hypot(ax,ay)||1; shkVX+=(ax/l)*mag; shkVY+=(ay/l)*mag; shkVR+=(ax>=0?1:-1)*mag*0.0016; }
+// ズーム（寄り／引き）とアイドルの呼吸、進行方向の先読み
+let camZoom=1, camZoomT=1, camBreath=0, camLead=0;
+function punchIn(n){ const t=1+n; if(t>camZoomT) camZoomT=t; }
+// ── 画面遷移：帯シャッター／アイリス／フェード。中間フレームで実際の画面切替を行う ──
+let scr={t:0,dur:0,mid:null,kind:'shutter'};
+function goScreen(mid,kind,dur){ if(scr.dur>0){ if(mid) mid(); return; }
+  scr={t:0,dur:dur||34,mid:mid||null,kind:kind||'shutter'}; }
+function tickScreenFx(){ if(scr.dur<=0) return;
+  scr.t++;
+  if(scr.t>=scr.dur*0.5 && scr.mid){ const m=scr.mid; scr.mid=null; m(); }
+  if(scr.t>=scr.dur) scr.dur=0; }
+function drawScreenFx(){ if(scr.dur<=0) return;
+  const h=scr.dur*0.5;
+  const k=scr.t<h ? easeOut(clamp(scr.t/h,0,1)) : 1-easeOut(clamp((scr.t-h)/h,0,1));
+  if(k<=0.001) return;
+  ctx.save();
+  if(scr.kind==='fade'){ ctx.fillStyle='rgba(6,4,12,'+k.toFixed(4)+')'; ctx.fillRect(0,0,W,H); }
+  else if(scr.kind==='iris'){
+    // 中心から閉じる円。外側を黒で塗り潰し、縁に金のリムを残す
+    const r=Math.max(0,(1-k)*Math.hypot(W,H)*0.56);
+    ctx.fillStyle='#07050d';
+    ctx.beginPath(); ctx.rect(0,0,W,H); ctx.arc(W*0.5,H*0.5,r,0,Math.PI*2,true); ctx.fill();
+    if(r>2){ ctx.strokeStyle='rgba(255,214,110,'+(0.55*k).toFixed(3)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(W*0.5,H*0.5,r,0,Math.PI*2); ctx.stroke(); }
+  } else {
+    // 斜めの帯を左右交互から閉じる。帯ごとに遅延をつけてカーテンのようにずらす
+    const N=13, bh=H/N+2, sl=64;
+    ctx.fillStyle='#0a0710';
+    for(let i=0;i<N;i++){
+      const kk=clamp((k-(i%2?0.10:0)-((i*0.021)%0.13))/0.86,0,1);
+      const w=easeOut(kk)*(W*0.5+sl+8);
+      if(w<=0) continue;
+      const y=i*(H/N)-1;
+      if(i%2===0){ ctx.beginPath(); ctx.moveTo(-2,y); ctx.lineTo(-2+w,y); ctx.lineTo(-2+w-sl,y+bh); ctx.lineTo(-2,y+bh); ctx.closePath(); ctx.fill(); }
+      else { ctx.beginPath(); ctx.moveTo(W+2,y); ctx.lineTo(W+2-w,y); ctx.lineTo(W+2-w+sl,y+bh); ctx.lineTo(W+2,y+bh); ctx.closePath(); ctx.fill(); }
+    }
+    if(k>0.985){ ctx.fillStyle='#0a0710'; ctx.fillRect(0,0,W,H); }
+  }
+  ctx.restore();
+}
+function camReset(){ shkX=shkY=shkVX=shkVY=shkRot=shkVR=shkSeen=0; camZoom=camZoomT=1; camLead=0; }
 
 //======================================================================
 //  Input  (per-player; globals point to the player currently being simulated)
@@ -2719,7 +2777,9 @@ function rushHit(){ const p=player; const reach=74; const col=p.rushPhase?'#aef0
     e.hp-=5; e.stun=10; if(!ETYPE[e.type].boss && e.state!=='air'){ e.state='hurt'; e.hurtTimer=7; e.vx=p.facing*0.8; }   // その場で重連打
     spark(e.x-p.facing*4,e.y-e.h*rnd(0.4,0.85), col, 9,9); ring(e.x-p.facing*4,e.y-e.h*0.5,col); addCombo();
     if(e.hp<=0){ killEnemy(e); } });
-  rushSound(); shake=Math.max(shake,4); flash=Math.max(flash,1); hitStop=Math.max(hitStop,2); }   // 一発ずつ重い手応え
+  // 乱舞は滑らかさが命：3ヒットに1回だけ1F止め、全画面フラッシュは出さず打点の火花で見せる
+  rushSound(); kick(p.facing,-0.22,3.2);
+  if(((p.rushHits||0)%3)===2) freeze(1); }
 function updateRush(){ const p=player; p.rushT++; if(p.rushHold>0)p.rushHold--;
   if(p.rushFinT>0){ p.rushFinT--; if(p.rushFinT<=0) p.state='idle'; return; }   // フィニッシュ硬直
   if(pressed.atk){ pressed.atk=false; p.rushHold=18; }                          // 連打で継続
@@ -3053,7 +3113,9 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.boss && e.noJuggleT>gf){ knockdown=false; launch=0; }   // ボスは起き上がり直後のみ耐性（無限お手玉防止）
   if(!heavyBoss && (e.state==='down'||e.z>4)) knockdown=true;
   e.hitFace=12;   // 被弾時のやられ顔タイマー（全エネミー共通）
-  if(gf-(e.hwAt||-99)>=6){ e.hitWhite=3; e.hwAt=gf; }   // 殴られた本人が3F白く光る。多段技で白ベタが続かないよう6F間隔を空ける
+  // 殴られた本人だけが2描画フレーム白く光る。hwRF は「次に描かれるフレーム番号」を入れる
+  // （rframe は描画の直前に進むため、そのまま入れると真っ白の1枚目が描かれずに終わる）
+  if(gf-(e.hwAt||-99)>=6){ e.hwRF=rframe+1; e.hwAt=gf; hwFocus=e.id; }
   e.sqv=(e.sqv||0)+(knockdown?8:4.5)*(T.boss?0.5:1);   // 被弾のぷにっ（巨体は控えめ）
   e.wobv=(e.wobv||0)+(knockdown?12:6.5)*(kbx? -Math.sign(kbx) : e.facing)*(T.boss?0.4:1);   // 殴られた向きへ上体がよじれる
   // ── ボスの踏ん張り：規定ヒット数を稼ぐまでは のけぞるだけで吹っ飛ばない ──
@@ -3063,8 +3125,16 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   hitFx(e.x, e.y-e.h*0.5, dmg, knockdown, curHitCol);   // 白芯→火花→衝撃リング→放射線→土煙の時間差レイヤー（色は技・武器から）
   if(launch){ e.vz=-launch; e.state='air'; }
   addCombo();
-  // hit-stop on every connect — bigger hits freeze longer (punchy, Smash-like)
-  hitStop=Math.max(hitStop, noStop?0:(dmg>=22?9:(dmg>=12?4:2)));
+  // ── ヒットストップ：段関数をやめ dmg^0.62 の連続曲線へ。重い一撃ほど滑らかに長く止まる ──
+  // dmg 5→3F / 12→4F / 22→6F / 40→9F / 60→12F。コンボ中は最大40%短縮して乱舞が引っかからない
+  if(!noStop){ let hs=Math.min(18, Math.round(Math.pow(clamp(dmg,1,90),0.62)*0.95*(knockdown?1.25:1)
+      *(1-Math.min(0.40, (combo.count||0)*0.014))));
+    if(e.hp-dmg<=0) hs+=3;                      // トドメだけ余韻を足す
+    freeze(hs);
+    // 打撃方向のインパルス：殴った向きへカメラを押し込む（乱数シェイクではなく“押された”揺れ）
+    kick(kbx>=0?1:-1, -0.45, Math.min(11, 1.5+dmg*0.16)*(knockdown?1.35:1));
+    if(dmg>=30) punchIn(Math.min(0.055, 0.012+dmg*0.0008));   // 大技は一瞬だけ寄る
+  }
   hitSound(dmg);                                           // layered weighty/crisp impact SE
   if(dmg>=22){ triggerSlow(22); flash=Math.max(flash,3); }   // 大技ヒットでスロー
   else if(dmg>=20){ flash=Math.max(flash,3); }
@@ -3123,7 +3193,8 @@ function killEnemy(e){ const T=ETYPE[e.type];
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
   const rb=1+0.5*(e.rank||0);   // 階級ぶんの見返り
   score+=Math.round((T.score+combo.count*10)*rb); gainXp(Math.round(T.score*rb)); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko();
-  if(T.boss){ flash=Math.max(flash,5); shake=10; triggerSlow(40);
+  flashAt(T.boss?6:3,'255,248,225', e.x, e.y-e.h*0.5); kick(e.vx>=0?1:-1,-0.7, T.boss?13:5.5); punchIn(T.boss?0.075:0.02);
+  if(T.boss){ shake=10; triggerSlow(40,0.24);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
   if(T.bomber) bomberBoom(e);
   // ── ワッチ：ボス／中ボスを倒すとその技を奪う ──
@@ -3308,7 +3379,6 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
-    if(e.hitWhite>0)e.hitWhite--;  // 被弾の白点滅タイマー
     if(e.state!==e._ps){ if(e.state==='down') e.downMax=e.downTimer; e._ps=e.state; }   // 状態遷移の検出（倒れ込みカーブの基準）
     if(!t.boss){ e.anim+=(e.state==='walk'?0.18:0.09); e.bob+=(e.state==='walk'?0.12:0.06); }   // 生命感は行動中も止めない（ガード中・拘束中の凍結を防ぐ）
     // ── 歩行位相：実際に進んだ距離から積分する。体格でテンポが変わる（小柄=速い／巨体=鈍重）──
@@ -3803,7 +3873,8 @@ function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state
   if(p.fortT>0){ dmg=Math.ceil(dmg*0.4); knockdown=false;   // アイアンウォール中：被ダメ大幅減＆怯まない
     spark(p.x,p.y-52,'#c8ccd4',8,6); ring(p.x,p.y-46,'#c8ccd4'); sfx.guard(); }
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
-  p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7; flashRed(4); hurtSound(dmg); resetCombo();
+  p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7;
+  flashRed(knockdown?5:4, p.x, p.y-46); kick(dir,-0.35,knockdown?8:5.5); hurtSound(dmg); resetCombo();
   if(p.rig){ sprKick(p.rig.sq, 5); sprKick(p.rig.wob, dir*p.facing*8);
     if(p.rig.earL){ sprKick(p.rig.earL,-11); sprKick(p.rig.earR,-9.5); sprKick(p.rig.tail,10); } }   // 被弾でぐにゃっと歪み、耳と尻尾が跳ねる
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -4257,7 +4328,7 @@ function loadLevel(node){
   spawnVehicle(WORLD_END*0.26, buggyLv.includes(node.id)?'buggy':'horse');
   if(WORLD_END>1500) spawnVehicle(WORLD_END*0.58, buggyLv.includes(node.id)?'horse':'buggy');
   players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
-  camX=0; player=players[0]; goArrow=160; shopPending=0; spawnMercs();   // 雇った傭兵も同行
+  camX=0; camReset(); player=players[0]; goArrow=160; shopPending=0; spawnMercs();   // 雇った傭兵も同行
   state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
   saveProgress(1);
 }
@@ -4268,6 +4339,7 @@ function enterMap(){ state='map'; mapNavCd=10;
   // 全ステージ制覇していれば魔王の間へ促す（自動選択）
 }
 function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
+  if(scr.dur>0){ pressed.atk=false; pressed.jump=false; saveInput(players[0].in); updateParticles(); return; }   // 遷移中は選択を受け付けない
   const nodes=allMapNodes();
   if(mapNavCd<=0){ let mv=0; if(K.left)mv=-1; else if(K.right)mv=1; else if(K.up)mv=-1; else if(K.down)mv=1;
     if(mv){ // 選択可能ノードを順に移動
@@ -4275,7 +4347,7 @@ function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
       mapNavCd=10; sfx.swing(0); } }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
     const node=nodes[mapSel];
-    if(nodeSelectable(node)){ sfx.rise(); saveInput(players[0].in); loadLevel(node); return; }
+    if(nodeSelectable(node)){ sfx.rise(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
     else { sfx.guard(); } }
   saveInput(players[0].in); updateParticles();
 }
@@ -4670,11 +4742,34 @@ function drawProjectiles(){
 function camFocusX(){ const ap=activePlayers().filter(p=>p.state!=='dead'); if(!ap.length) return players[0].x;
   let mn=1e9,mx=-1e9; ap.forEach(p=>{ mn=Math.min(mn,p.x); mx=Math.max(mx,p.x); }); return (mn+mx)/2; }
 function updateCamera(){
-  const target=clamp(camFocusX()-W*0.5,0,WORLD_END-W);
+  // ── 先読み：走っている方向へ前もって寄せ、これから向かう先を見せる ──
+  const pl=activePlayers().filter(p=>p.state!=='dead')[0];
+  const want=pl? clamp(pl.vx*12 + ((Math.abs(pl.vx)>1.7||pl.state==='dash')? pl.facing*56 : 0), -104, 104) : 0;
+  camLead+=(want-camLead)*0.05;
+  const target=clamp(camFocusX()+camLead-W*0.5,0,WORLD_END-W);
   const enc=encounters[encIndex];
   const maxC=(enc&&!enc.cleared&&enc.spawned)?clamp(enc.at-W*0.45,0,WORLD_END-W):WORLD_END-W;
-  camX+=(Math.min(target,maxC)-camX)*0.12; camX=clamp(camX,0,WORLD_END-W);
-  players.forEach(p=>{ if(p.active) p.x=clamp(p.x,camX+24,camX+W-24); });
+  const goal=Math.min(target,maxC), d=goal-camX;
+  // ── デッドゾーン：14px 以内の微動では世界を動かさない（立ち止まると画面が完全に静まる）──
+  if(Math.abs(d)>14) camX+=(d-Math.sign(d)*14)*0.135;
+  camX=clamp(camX,0,WORLD_END-W);
+  // 寄っている間は可視域が狭まるので、プレイヤーの拘束もその分だけ内側へ寄せる
+  const vm=W*(1-1/Math.max(camZoom,1))*0.5;
+  players.forEach(p=>{ if(p.active) p.x=clamp(p.x,camX+vm+24,camX+W-vm-24); });
+}
+// ── カメラの物理：ばね減衰のシェイク・ズームの追従・アイドルの呼吸を毎フレーム進める ──
+function stepCamFx(){
+  camBreath+=0.0125;
+  if(hitStop<=0){
+    shkVX+=-shkX*0.55-shkVX*0.30; shkX+=shkVX;
+    shkVY+=-shkY*0.74-shkVY*0.32; shkY+=shkVY;          // 縦は少し硬く：叩きつけの戻りを速く
+    shkVR+=-shkRot*0.58-shkVR*0.34; shkRot+=shkVR;
+    if(Math.abs(shkX)<0.02&&Math.abs(shkVX)<0.02){shkX=0;shkVX=0;}
+    if(Math.abs(shkY)<0.02&&Math.abs(shkVY)<0.02){shkY=0;shkVY=0;}
+    if(Math.abs(shkRot)<2e-4&&Math.abs(shkVR)<2e-4){shkRot=0;shkVR=0;}
+  }
+  camZoomT+=(1-camZoomT)*0.05; camZoom+=(camZoomT-camZoom)*0.14;
+  if(Math.abs(camZoom-1)<8e-4&&Math.abs(camZoomT-1)<8e-4){camZoom=1;camZoomT=1;}
 }
 // ばねの二次動作：着地・踏み切り・振り向きを検出してリグを弾く
 function updateRigP(p){ const r=p.rig; if(!r) return;
@@ -4714,17 +4809,22 @@ function stepPlayers(){
   player=players[0];
 }
 function update(){
-  gf++;
+  // ── ヒットストップ：gf ごと止めて世界を凍らせる。背景も弾も止まるので「時間が止まった」に見える ──
   if(hitStop>0){ hitStop--;
-    if(gf%2===0) for(let i=0;i<enemies.length;i++){ const e=enemies[i]; if(e.hitWhite>0) e.hitWhite--; }   // 白点滅だけは凍結中も半速で抜ける
-    if(state==='play'){updateParticles();updateProjectiles();} return; }
+    const half=(hitStop&1)===0;
+    if(state==='play' && half) updateParticles();   // 火花だけ半速で余韻を残す
+    return; }
+  gf++;
   if(state==='talk'){ updateTalk(); updateParticles(); return; }
   if(state==='branch'){ updateBranch(); return; }
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
-  if(shake>0)shake-=0.7; if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
-  if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) enterShop(); }   // 会話などで中断されたら次のフレームで再試行
+  // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
+  if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
+  if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
+  if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   checkFoeTierUp();
 }
@@ -4744,8 +4844,12 @@ function render(){
   // フル解像度＆DPRスケールで直接描画（なめらかな高精細レンダリング）
   ctx.clearRect(0,0,W,H);
   ctx.save();
-  const _q=shake+(quake>0?Math.abs(Math.sin(gf*0.9))*quake*0.5:0);
-  if(_q>0) ctx.translate(rnd(-_q,_q),rnd(-_q*0.6,_q*0.6));
+  stepCamFx();
+  if(camZoom!==1){ ctx.translate(W*0.5,H*0.56); ctx.scale(camZoom,camZoom); ctx.translate(-W*0.5,-H*0.56); }
+  const qy=quake>0? Math.sin(gf*0.85)*quake*0.40 : 0;                     // 地響きは縦揺れとして残す
+  ctx.translate(shkX+Math.sin(camBreath*0.73)*1.1, shkY+qy+Math.sin(camBreath)*1.6);   // 呼吸：静止時も画面が生きている
+  if(shkRot!==0){ ctx.translate(W*0.5,H*0.5); ctx.rotate(shkRot); ctx.translate(-W*0.5,-H*0.5); }
+  if(hitStop>2) ctx.translate(rnd(-1.1,1.1),rnd(-1.1,1.1));               // 凍結中の高周波ラトル（止まっても死なない）
   drawBackground(); drawGround();
   drawNPCs();
   drawItems();
@@ -4772,10 +4876,36 @@ function render(){
   drawLighting();
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
-  if(flash>0){ const fa=flash/12;       // イベント色のフラッシュは加算、被弾の赤だけ従来どおり乗せる
-    if(flashCol!==FLASH_DEF){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba('+flashCol+','+(fa*0.55)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
-    else { ctx.fillStyle='rgba('+FLASH_DEF+','+fa+')'; ctx.fillRect(0,0,W,H); } }
-  else if(flashCol!==FLASH_DEF) flashCol=FLASH_DEF;
+  // ── 閃光：全面ベタ塗りをやめ、打点から広がる放射グラデにする。立ち上がりを鋭く・減衰を速く ──
+  if(flash>0){
+    const fa=Math.pow(clamp(flash/12,0,1),1.55);
+    const fresh=clamp((flash-(flashPeak-1.5))/1.5,0,1);          // 発生1〜2Fだけ芯が白飛びする
+    const cx=(flashX==null? W*0.5 : clamp(flashX-camX,-W*0.35,W*1.35));
+    const cy=(flashY==null? H*0.5 : clamp(flashY,-H*0.35,H*1.35));
+    const rr=W*(flashX==null?0.92:0.76);
+    ctx.save();
+    if(flashCol!==FLASH_DEF){
+      ctx.globalCompositeOperation='lighter';
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rr);
+      g.addColorStop(0,'rgba(255,255,255,'+(fa*(0.34+0.42*fresh)).toFixed(4)+')');
+      g.addColorStop(0.20,'rgba('+flashCol+','+(fa*0.58).toFixed(4)+')');
+      g.addColorStop(0.62,'rgba('+flashCol+','+(fa*0.20).toFixed(4)+')');
+      g.addColorStop(1,'rgba('+flashCol+',0)');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    } else {
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rr);
+      g.addColorStop(0,'rgba(255,150,140,'+(fa*(0.52+0.26*fresh)).toFixed(4)+')');
+      g.addColorStop(0.42,'rgba('+FLASH_DEF+','+(fa*0.40).toFixed(4)+')');
+      g.addColorStop(1,'rgba('+FLASH_DEF+',0)');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      // 赤の被弾は画面フチだけ濃く残し、中央の彩度を殺さない
+      const v=ctx.createRadialGradient(W*0.5,H*0.5,H*0.34,W*0.5,H*0.5,H*0.95);
+      v.addColorStop(0,'rgba('+FLASH_DEF+',0)'); v.addColorStop(1,'rgba(190,20,26,'+(fa*0.55).toFixed(4)+')');
+      ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+    }
+    ctx.restore();
+  }
+  else if(flashCol!==FLASH_DEF){ flashCol=FLASH_DEF; flashX=flashY=null; }
   drawHUD();
 }
 
@@ -6675,9 +6805,22 @@ function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
   ctx.restore(); }
 
 // ---- Enemies dispatch ----
+// ══════════════════════════════════════════════════════════════
+//  被弾の白点滅
+//  ctx.filter を本体描画に直接掛けると、fill/stroke 1回ごとに Chromium が
+//  フィルタレイヤーを確保するため 60fps→2.9fps まで落ちる（実測）。
+//  シルエットを小さなオフスクリーンへ1回だけ描き、drawImage 1回にのみ filter を掛ける。
+//  さらに、同時に何体も真っ白になると誰に当てたのか読めなくなるため、
+//  白飛びさせるのは「直近に殴った1体」だけに限定する。
+// ══════════════════════════════════════════════════════════════
+const HITCAN=640, HITOX=320, HITOY=520;   // オフスクリーンの大きさと原点（足元）
+let _hitCan=null, _hitCtx=null, hwFocus=-1;
+function hitFlashCtx(){ if(!_hitCan){ _hitCan=document.createElement('canvas');
+    _hitCan.width=HITCAN; _hitCan.height=HITCAN; _hitCtx=_hitCan.getContext('2d'); }
+  return _hitCtx; }
 function drawEnemy(e){
   const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
-  if(sx<-150||sx>W+150) return;   // 負荷対策：画面外の敵は描かない
+  if(sx<-230||sx>W+230) return;   // 負荷対策：画面外の敵は描かない（引きのズームぶん余裕を持たせる）
   if(t.heroBoss){   // 腕試しの主役ボスは、プレイヤーとまったく同じ描画で出す
     let ha=1; if(e.dead&&e.deadTimer<22) ha=clamp(e.deadTimer/22,0,1);
     drawHeroBossEnemy(e,t,sx,sy,s,ha);
@@ -6725,8 +6868,14 @@ function drawEnemy(e){
   else if(e.state==='crouch'){ ctx.scale(1,0.84); ctx.translate(0,5); }
   else if(e.state==='pounce'){ ctx.rotate(0.28); }
   // ── 被弾の白点滅：殴られた最初の2Fは本人のシルエットが真っ白に飛ぶ（商業ビートエムアップの必須表現）──
-  const _hw=(e.hitWhite||0)>0 && !e.dead;
-  if(_hw) ctx.filter = e.hitWhite>=3 ? 'brightness(0) invert(1)' : (e.hitWhite===2 ? 'brightness(2.6) saturate(0.3)' : 'brightness(1.7) saturate(0.6)');
+  // 白飛びは実描画フレームで数える（hitStop/slowmo に引き伸ばされて長居しない）
+  const _age=rframe-(e.hwRF||-999);
+  const _hw=_age<2 && !e.dead && e.id===hwFocus && ctx.filter!==undefined;
+  let _mainCtx=null, _M=null;
+  if(_hw){ const oc=hitFlashCtx(); _M=ctx.getTransform();
+    oc.setTransform(1,0,0,1,0,0); oc.clearRect(0,0,HITCAN,HITCAN);
+    oc.setTransform(_M.a,_M.b,_M.c,_M.d,HITOX,HITOY);   // 本体と同じ姿勢でオフスクリーンへ
+    _mainCtx=ctx; ctx=oc; }
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
@@ -6747,7 +6896,12 @@ function drawEnemy(e){
   if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
   const bugOwn = t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss';
   if(t.bug && t.boss && e.type!=='chamurus' && !bugOwn) drawBugOverlay(e,t);   // 専用の蟲ボディを持つボスには重ねない
-  if(_hw) ctx.filter='none';   // 盾・氷結・ゲージは白飛びさせない
+  if(_hw){ ctx=_mainCtx;                                   // 本体キャンバスへ戻す
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+    // 1枚目は真っ白なシルエット、2枚目は明るく飛ばすだけ（輪郭を残して重なりを保つ）
+    ctx.filter = _age<=0 ? 'brightness(0) invert(1)' : 'brightness(2.4) saturate(0.35)';
+    ctx.drawImage(_hitCan, _M.e-HITOX, _M.f-HITOY);
+    ctx.filter='none'; ctx.restore(); }   // 盾・氷結・ゲージは白飛びさせない
   if(t.guarder) drawEnemyShield(e);
   if(e.frozen>0){ const fa=Math.min(1,e.frozen/30);   // 氷結：青い氷塊に包まれる
     ctx.save(); ctx.globalAlpha=0.45*fa; ctx.fillStyle='#9fd6ff';
@@ -8411,9 +8565,13 @@ function drawBranchUI(){
   ctx.fillText('←→（スティック）で選択　／　攻撃ボタンで決定',W/2,H-36);
   ctx.textAlign='left'; ctx.restore();
 }
-function panel(x,y,w,h){ ctx.fillStyle='rgba(8,10,20,.64)'; roundRect(x,y,w,h,8); ctx.fill();
-  ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(x,y,w,h,8); ctx.stroke(); }
-function barFrame(x,y,w,h){ ctx.fillStyle='#000'; ctx.fillRect(x-1,y-1,w+2,h+2); ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1; ctx.strokeRect(x-1,y-1,w+2,h+2); }
+function panel(x,y,w,h){ ctx.fillStyle=UI.ink; roundRect(x,y,w,h,UI.r.m); ctx.fill();
+  ctx.strokeStyle=UI.line; ctx.lineWidth=2; roundRect(x,y,w,h,UI.r.m); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; roundRect(x+2,y+2,w-4,h-4,UI.r.m-2); ctx.stroke(); }
+// バー枠：パネルと同じ「暗い受け皿＋内側ハイライト」の語彙で、全ゲージの見え方を揃える
+function barFrame(x,y,w,h){ ctx.fillStyle='rgba(4,5,11,.94)'; roundRect(x-1,y-1,w+2,h+2,3); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.lineWidth=1; roundRect(x-1.5,y-1.5,w+3,h+3,3); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.26)'; ctx.lineWidth=1; roundRect(x-0.5,y-0.5,w+1,h+1,3); ctx.stroke(); }
 function faceIcon(x,y,col){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x,y,22,0,7); ctx.fill();
   furBall(x,y,18,'#fff7e0','#e0cda0'); furBall(x-12,y-2,9,'#fbeece','#dcc89c'); furBall(x+12,y-2,9,'#fbeece','#dcc89c'); furBall(x,y-12,9,'#fff7e0','#e3d1a6');
   ctx.fillStyle='#fffaf0'; ctx.beginPath(); ctx.ellipse(x+2,y+3,9,8,0,0,7); ctx.fill();
@@ -8588,10 +8746,11 @@ function enterShop(){ state='shop'; shopSel=0; shopNavCd=8; shopMsg=''; shopMsgT
   unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); } }
 function exitShop(){
   saveProgress(1);
-  enterMap();   // ショップを出たらワールドマップへ戻り、次の行き先を選ぶ
+  goScreen(enterMap,'shutter',34);   // ショップを出たらワールドマップへ戻り、次の行き先を選ぶ
 }
 const SHOP_VIS=9;   // 一度に表示する品数（残りはスクロール）
 function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
+  if(scr.dur>0){ useInput(players[0].in); pressed.atk=false; pressed.jump=false; saveInput(players[0].in); return; }   // 遷移中は購入を受け付けない
   // ── ガチャ演出中は専用の処理（回転→開封）──
   if(gacha){ gacha.t++;
     if(gacha.phase==='spin'){ if(gacha.t%3===0)sfx.swing(0);
@@ -9154,13 +9313,15 @@ function startGameAt(stageN){ startGame();
     if(sv.done) levelsDone=Object.assign({}, sv.done); }
   enterMap();   // 王都郊外クリア後の続き＝ワールドマップから再開
 }
-function gameOver(){ state='over'; Music.stop(); gameOverSting();
+function gameOver(){ if(scr.dur<=0 && state!=='over'){ goScreen(gameOver,'fade',52); return; }   // 暗転してからリザルトを出す
+  state='over'; Music.stop(); gameOverSting();
   elRTitle.textContent='GAME OVER'; elRTitle.style.color='#ff5a5a'; elRSub.textContent='SCORE  '+String(score).padStart(6,'0');
   const sv=loadProgress(), rb=document.getElementById('resumeBtn');
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
   const nb=document.getElementById('ng2Btn'); if(nb)nb.classList.add('hidden');
   elResult.classList.remove('hidden'); }
-function winGame(){ state='win'; Music.stop(); victoryJingle(); clearProgress();
+function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52); return; }   // 暗転してからリザルトを出す
+  state='win'; Music.stop(); victoryJingle(); clearProgress();
   if(lap>=3){ elRTitle.textContent='GALAXY CLEAR!!!'; elRTitle.style.color='#c8ffe8';
     elRSub.textContent='銀河侵略軍を退け、星そのものを守り抜いた！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else if(lap>=2){ elRTitle.textContent='TRUE ALL CLEAR!!'; elRTitle.style.color='#aef8ff';
@@ -9501,23 +9662,30 @@ function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.be
   ctx.fillStyle=col; roundRect(x-22,y-24,44,18,5); ctx.fill(); ctx.fillStyle='#1a1a20'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText(label,x,y-11);
   if(locked){ ctx.fillStyle='#7dff7d'; ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText('決定!',x,y-30); } ctx.restore(); ctx.textAlign='center'; }
 function loop(){ try{ loopBody(); }catch(err){ console.error(err); if(attractOn) endAttract(); requestAnimationFrame(loop); } }
+let rframe=0;      // 実際に描画したフレーム数。hitStop でも slowmo でも必ず1ずつ進む
 function loopBody(){
-  if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); requestAnimationFrame(loop); return; }
-  if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); requestAnimationFrame(loop); return; }
-  if(state==='map'){ gf++; updateMap(); ctx.clearRect(0,0,W,H); drawMap(); requestAnimationFrame(loop); return; }
-  if(state==='charsel'){ gf++; updateCharSel(); ctx.clearRect(0,0,W,H); drawCharSel(); requestAnimationFrame(loop); return; }
+  rframe++;
+  tickScreenFx();   // 遷移は状態に関係なく毎フレーム進める（中間フレームで画面が切り替わる）
+  if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); drawScreenFx(); requestAnimationFrame(loop); return; }
+  if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); drawScreenFx(); requestAnimationFrame(loop); return; }
+  if(state==='map'){ gf++; updateMap(); ctx.clearRect(0,0,W,H); drawMap(); drawScreenFx(); requestAnimationFrame(loop); return; }
+  if(state==='charsel'){ gf++; updateCharSel(); ctx.clearRect(0,0,W,H); drawCharSel(); drawScreenFx(); requestAnimationFrame(loop); return; }
   if(state==='attract'){ gf++; updateAttract(); updateParticles();
     if(state==='attract'){ ctx.clearRect(0,0,W,H); drawAttractCard(); }   // 更新中にデモへ切り替わることがある
-    requestAnimationFrame(loop); return; }
-  // slow-motion: throttle logic ticks while keeping render smooth
+    drawScreenFx(); requestAnimationFrame(loop); return; }
+  // ── スロー：突入4F・復帰16Fでレートを寝かせて起こす。段差の「処理落ち感」を消す ──
   if(slowmo>0 && state==='play' && hitStop<=0){
-    slowmo--; slowAcc+=0.34;
+    slowmo--;
+    const inR=clamp((slowMax-slowmo)/4,0,1), outR=clamp(slowmo/16,0,1);
+    slowAcc+=lerp(1, slowStr, easeOut(Math.min(inR,outR)));
     if(slowAcc>=1){ slowAcc-=1; update(); }
-  } else { update(); }
+    if(slowmo<=0){ slowAcc=0; slowStr=0.34; slowMax=0; punchIn(0.016); }   // 時間が戻る瞬間の一押し
+  } else { update(); if(slowmo<=0 && slowMax){ slowStr=0.34; slowMax=0; } }
   if(state==='title'){ ctx.clearRect(0,0,W,H); drawTitleScene();
     titleIdle++; if(titleIdle>ATTRACT_IDLE) startAttract(); }
   else render();
   if(attractOn && state==='play') drawAttractOverlay();   // デモ中の表示は render の最前面に重ねる
+  drawScreenFx();
   requestAnimationFrame(loop);
 }
 buildEncounters(); loop();
