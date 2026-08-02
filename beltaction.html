@@ -5326,6 +5326,7 @@ function render(){
   if(shkRot!==0){ ctx.translate(W*0.5,H*0.5); ctx.rotate(shkRot); ctx.translate(-W*0.5,-H*0.5); }
   if(hitStop>2) ctx.translate(rnd(-1.1,1.1),rnd(-1.1,1.1));               // 凍結中の高周波ラトル（止まっても死なない）
   drawBackground(); drawGround();
+  drawStageBannerScrim();   // ステージバナーの暗幕は背景側へ：敵の予兆マークを暗くしない
   drawNPCs();
   drawItems();
   drawVehicles();
@@ -8906,6 +8907,25 @@ function drawVillagerDog(n){
   if(n.kind!=='pup'){ ctx.fillStyle='#c0392b'; ctx.fillRect(-12,-40+b*0.4,24,4); }
   ctx.restore();
 }
+// ステージバナーの演出値（暗幕・金線・本文で同じ値を使う）
+function stageBannerFx(){ const bMax=stageBannerMax||170, el=bMax-stageBanner;
+  const inK=easeOut(clamp(el/16,0,1));                         // 入り：左からスライド
+  const outK=easeOut(clamp((30-stageBanner)/26,0,1));          // 抜け：右へスライド
+  return { a:clamp(clamp(stageBanner/26,0,1)*clamp(el/14,0,1),0,1),
+           ox:lerp(-52,0,inK)+lerp(0,52,outK), lw:lerp(0,W*0.46,inK)*(1-outK*0.6), cy:H/2-6 }; }
+// 暗幕と金線は敵より「奥」に敷く。演出のためにプレイ情報（敵の予兆マーク「!」）を暗くしてはいけない。
+// 帯の高さも 118→96 に詰め、金線を cy-46/cy+36 へ寄せてプレイ領域を横切る量を減らす。
+function drawStageBannerScrim(){ if(stageBanner<=0) return; const B=stageBannerFx(); if(B.a<=0) return;
+  const cy=B.cy, top=cy-56, hgt=96;
+  ctx.save(); ctx.globalAlpha=B.a;
+  const sg=ctx.createLinearGradient(0,top,0,top+hgt);
+  sg.addColorStop(0,'rgba(0,0,0,0)'); sg.addColorStop(.26,'rgba(6,4,10,.74)');
+  sg.addColorStop(.76,'rgba(6,4,10,.74)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg; ctx.fillRect(-96,top,W+192,hgt);            // 画面揺れで端が割れないよう左右に余白
+  ctx.strokeStyle='rgba(255,210,77,.85)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(W/2-B.lw,cy-46); ctx.lineTo(W/2+B.lw,cy-46);
+  ctx.moveTo(W/2-B.lw,cy+36); ctx.lineTo(W/2+B.lw,cy+36); ctx.stroke();
+  ctx.restore(); }
 function drawHUD(){
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
   let hudY=104;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
@@ -8922,7 +8942,14 @@ function drawHUD(){
   ctx.fillStyle='#0a0a12'; ctx.fillRect(70,49,176,7); ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=1; ctx.strokeRect(70,49,176,7);
   const cg=ctx.createLinearGradient(70,0,246,0); cg.addColorStop(0,'#46c8ff'); cg.addColorStop(1,'#ffd24d');
   ctx.fillStyle=player.charge>=0.45?cg:'#3a6a8c'; ctx.fillRect(71,50,174*player.charge,5);
-  if(player.charge>=0.45&&gf%10<5){ ctx.fillStyle='#ffe14d'; ctx.font='bold 9px Trebuchet MS'; ctx.fillText('CHARGE MAX!',180,48); }
+  // CHARGE MAX! は HPバーの塗りの上に重ねない。チャージゲージの帯へ下ろし、暗いプレート＋縁取りで背景から切り離す
+  // （HPのグラデが同じ黄色を通る帯域では実測 1.03:1 まで落ちて文字が消えていた）
+  if(player.charge>=0.45&&gf%10<5){ ctx.save(); ctx.font=uif('bold',10);
+    const cm='CHARGE MAX!', cw=ctx.measureText(cm).width;
+    const cx0=246-(cw+9);                                                                  // ゲージ右端まで覆う（塗りが端から覗かないように）
+    ctx.fillStyle='rgba(8,6,3,.94)'; roundRect(cx0,46.5,cw+9,11.5,3); ctx.fill();          // 暗い受け皿
+    ctx.lineJoin='round'; ctx.lineWidth=3; ctx.strokeStyle='rgba(8,6,3,.94)'; ctx.strokeText(cm,cx0+4,56);
+    ctx.fillStyle='#ffe14d'; ctx.fillText(cm,cx0+4,56); ctx.restore(); }
   // レベル＆経験値バー（RPG）
   ctx.fillStyle='#ffe14d'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('Lv.'+(player.level||1),262,29); ctx.textAlign='left';
   ctx.fillStyle='#0a0a12'; ctx.fillRect(70,59,176,5); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; ctx.strokeRect(70,59,176,5);
@@ -9008,23 +9035,9 @@ function drawHUD(){
     if(big){ const sx=clamp(big.x-camX,170,W-170), sy=big.y-big.h*depthScale(big.y)-44;
       speech(sx,sy,bossQuoteFor(big.type)||'いざ尋常に勝負！'); } }
   if(stageBanner>0){
-    // 経過は「開始値からの差」で測る。固定値だと初期値ごとに演出の有無が変わってしまう
-    const bMax=stageBannerMax||170, el=bMax-stageBanner;
-    const inK=easeOut(clamp(el/16,0,1));                         // 入り：左からスライド
-    const outK=easeOut(clamp((30-stageBanner)/26,0,1));          // 抜け：右へスライド
-    const a=clamp(stageBanner/26,0,1)*clamp(el/14,0,1);
-    const ox=lerp(-52,0,inK)+lerp(0,52,outK), cy=H/2-6;
-    ctx.save(); ctx.globalAlpha=clamp(a,0,1); ctx.textAlign='center';
-    // 暗いバンド：背景の建物テクスチャに文字が埋もれるのを防ぐ（コントラストの保証）
-    const sg=ctx.createLinearGradient(0,cy-62,0,cy+56);
-    sg.addColorStop(0,'rgba(0,0,0,0)'); sg.addColorStop(.26,'rgba(6,4,10,.74)');
-    sg.addColorStop(.76,'rgba(6,4,10,.74)'); sg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=sg; ctx.fillRect(0,cy-62,W,118);
-    // 上下の金線（章タイトルカードと同じ言語）：中央から左右へ伸びる
-    const lw=lerp(0,W*0.46,inK)*(1-outK*0.6);
-    ctx.strokeStyle='rgba(255,210,77,.85)'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(W/2-lw,cy-50); ctx.lineTo(W/2+lw,cy-50);
-    ctx.moveTo(W/2-lw,cy+40); ctx.lineTo(W/2+lw,cy+40); ctx.stroke();
+    // 暗幕と金線は drawStageBannerScrim() が敵より奥へ描く。ここは本文だけを最前面に置く
+    const B=stageBannerFx(), ox=B.ox, cy=B.cy;
+    ctx.save(); ctx.globalAlpha=B.a; ctx.textAlign='center';
     // 本文：画面幅に収まるまでフォントを落とす（22文字の強化通知がはみ出して切れていた）
     let fs=52; ctx.font='italic '+uif('900',fs);
     while(ctx.measureText(stageBannerTxt).width>W-104 && fs>22){ fs-=2; ctx.font='italic '+uif('900',fs); }
@@ -9033,6 +9046,8 @@ function drawHUD(){
     let sub=stageBannerSub||'体力回復！  次のステージへ →';
     let ss=18; ctx.font=uif('bold',ss);
     while(ctx.measureText(sub).width>W-140 && ss>11){ ss-=1; ctx.font=uif('bold',ss); }
+    // 副題も縁取る：暗幕が敵の後ろへ回ったぶん、キャラの上でも白が飛ばないようにする
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(10,8,4,.92)'; ctx.strokeText(sub,W/2+ox*0.6,cy+30);
     ctx.fillStyle='#fff'; ctx.fillText(sub,W/2+ox*0.6,cy+30);
     ctx.textAlign='left'; ctx.restore(); }
   { // コンボカードはバナーより後に描く（バナーの暗幕と金線に埋もれさせない）
