@@ -313,6 +313,7 @@ function dpReady(facing){ const fwdC=facing>0?1:3;
 //======================================================================
 let actx=null, sndOn=true, masterGain=null, musicGain=null, sfxGain=null, noiseBuf=null;
 let musicDuck=null, sfxComp=null;   // 音楽側ダッキング用ゲイン／SFX専用コンプ（バスを分離する）
+let musicDelay=null;                // BGMの残響ディレイ長を曲テンポ（付点8分）に追従させるため露出する
 function initAudio(){
   if(actx) return;
   actx=new (window.AudioContext||window.webkitAudioContext)();
@@ -336,12 +337,18 @@ function initAudio(){
     ws.curve=cv; try{ ws.oversample='2x'; }catch(e){}
     sfxComp.connect(ws); sfxTail=ws; }
   sfxTail.connect(masterGain);
-  // spacious reverb send for the orchestral BGM (feedback-delay "hall")
-  const verb=actx.createGain(); verb.gain.value=0.42;
-  const dl=actx.createDelay(0.6); dl.delayTime.value=0.16;
-  const fb=actx.createGain(); fb.gain.value=0.4;
+  // ── BGM用のホール残響（フィードバックディレイ）──
+  // 以前は musicGain 直後から送っていたためキック／ベースまで濡れ、bpm132 では 0.16秒後（4分音符の35%
+  // ＝表でも裏でもない位置）に振幅42%の幻キックが常時鳴ってリズムに恒常的なフラムがかかっていた。
+  // (1) 340Hz のハイパスを前段に置いて低域を乾かす (2) ウェット総和を 0.42/(1-0.4)=0.700 から
+  // 0.26/(1-0.27)=0.356（-5.9dB）へ (3) ディレイ長は Music 側から曲テンポの付点8分に追従させる。
+  const vhp=actx.createBiquadFilter(); vhp.type='highpass'; vhp.frequency.value=340; vhp.Q.value=0.7;
+  const verb=actx.createGain(); verb.gain.value=0.26;
+  const dl=actx.createDelay(0.75); dl.delayTime.value=0.34;
+  const fb=actx.createGain(); fb.gain.value=0.27;
   const damp=actx.createBiquadFilter(); damp.type='lowpass'; damp.frequency.value=2600;
-  musicGain.connect(verb); verb.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl); damp.connect(musicDuck);
+  musicGain.connect(vhp); vhp.connect(verb); verb.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl); damp.connect(musicDuck);
+  musicDelay=dl;
   // noise buffer for drums/impacts
   // 1.2秒に延長：発音のたびに再生開始オフセットをランダム化して、同時発音でもノイズ同士が位相一致しない
   noiseBuf=actx.createBuffer(1, Math.floor(actx.sampleRate*1.2), actx.sampleRate);
@@ -597,6 +604,7 @@ function hurtSound(dmg, x){
 // fills, and crossfaded mode switching.
 const Music=(()=>{
   let playing=false, mode='battle', themeIdx=0, step=0, nextT=0, timer=null, songGain=null, curStep=0.234;
+  let loopN=3, pendingMode=null, fadeTok=0;   // loopN=8小節ごとに進むセクション番号（A/A'/B/B'）、fadeTok=多重フェード無効化トークン
   // 8-bar chord progressions (triads, MIDI) + 32 quarter-note melody slots (null = rest)
   const BATTLE=[
     { bpm:132, lead:'triangle', pad:'sawtooth',            // 1: 王都 — 王道ヒロイック (Am)
@@ -610,7 +618,8 @@ const Music=(()=>{
       mel:[64,67,71,69, 67,72,76,72, 71,74,79,74, 69,74,78,74, 76,79,83,79, 72,76,81,76, 71,75,78,75, 71,null,78,null] },
     { bpm:144, lead:'square', pad:'sawtooth', drive:true,  // 4: 業火 — 苛烈 (Fm)
       prog:[[53,56,60],[49,53,56],[51,55,58],[48,52,55],[53,56,60],[46,49,53],[48,52,55],[48,52,55]],
-      mel:[65,68,72,70, 68,65,61,65, 70,67,63,67, 67,64,60,64, 65,68,72,77, 77,75,73,70, 72,71,67,64, 60,64,67,71] },
+      mel:[65,68,72,70, 68,65,61,65, 70,67,63,67, 67,64,60,64, 65,68,72,77, 77,75,73,70, 72,71,67,64, 60,64,67,71],
+      rhy:[3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0] },   // 付点で畳みかける苛烈さ
     { bpm:138, lead:'square', pad:'sawtooth', drive:true,  // 5: 魔界 — 荘厳な決戦 (Bm)
       prog:[[47,50,54],[43,47,50],[45,49,52],[42,46,49],[47,50,54],[40,43,47],[42,46,49],[42,46,49]],
       mel:[71,74,78,76, 74,71,67,71, 73,76,81,76, 70,73,78,73, 71,74,78,83, 79,76,71,76, 73,70,66,70, 66,70,73,78] },
@@ -622,20 +631,27 @@ const Music=(()=>{
       mel:[73,76,80,78, 76,73,68,73, 75,78,83,78, 71,75,80,75, 73,76,80,85, 81,78,73,78, 75,71,68,71, 68,71,75,80] },
     { bpm:150, lead:'square', pad:'sawtooth', drive:true,  // 8: 飛行艇 — 疾走する大空冒険 (G)
       prog:[[55,59,62],[50,53,57],[57,60,64],[52,55,59],[55,59,62],[53,57,60],[50,53,57],[52,56,59]],
-      mel:[79,83,86,91, 86,83,79,83, 81,84,88,84, 79,83,86,83, 79,83,86,91, 88,86,83,79, 81,84,79,76, 74,79,83,86] },
+      mel:[79,83,86,91, 86,83,79,83, 81,84,88,84, 79,83,86,83, 79,83,86,91, 88,86,83,79, 81,84,79,76, 74,79,83,86],
+      rhy:[1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0] },   // 8分で駆け抜ける大空
     { bpm:112, lead:'triangle', pad:'sawtooth',            // 9: 巨大廃墟 — 物悲しく荘厳 (Am)
       prog:[[57,60,64],[52,55,59],[53,57,60],[55,59,62],[57,60,64],[50,53,57],[52,55,59],[52,56,59]],
       mel:[69,72,76,74, 72,69,64,69, 68,72,77,72, 71,74,79,74, 69,72,76,81, 79,76,72,69, 71,68,64,68, 64,69,72,76] },
     // ── 二周目・蟲の世界のバトル曲（世界観を一変させる新機軸）──
     { bpm:128, lead:'sine', pad:'triangle',                // 10: 大輪の花園 — 陽気に跳ねるスタッカート (C lydian)
       prog:[[48,52,55],[50,54,57],[45,48,52],[47,51,54],[48,52,55],[53,57,60],[50,54,57],[48,52,55]],
-      mel:[72,76,78,79, 76,72,78,76, 74,78,81,78, 71,74,78,74, 72,76,79,84, 81,79,76,78, 74,78,74,71, 72,null,79,null] },
+      mel:[72,76,78,79, 76,72,78,76, 74,78,81,78, 71,74,78,74, 72,76,79,84, 81,79,76,78, 74,78,74,71, 72,null,79,null],
+      rhy:[2,1,2,0, 2,1,2,0, 2,1,2,0, 2,1,2,0, 2,1,2,0, 2,1,2,0, 2,1,2,0, 2,1,2,0] },   // 跳ねる8分と休符のスタッカート
     { bpm:158, lead:'sawtooth', pad:'sawtooth', drive:true,  // 11: 蜂の巣大空洞 — 羽音の半音階疾走 (Am 熊蜂風)
       prog:[[57,60,64],[56,59,63],[57,60,64],[55,58,62],[57,60,64],[53,56,60],[55,59,62],[52,56,59]],
-      mel:[69,70,71,72, 71,70,69,68, 69,72,71,74, 72,71,70,69, 69,72,76,81, 80,79,78,76, 74,73,72,71, 69,68,69,71] },
+      mel:[69,70,71,72, 71,70,69,68, 69,72,71,74, 72,71,70,69, 69,72,76,81, 80,79,78,76, 74,73,72,71, 69,68,69,71],
+      rhy:[2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2] },   // 全編8分の羽音（熊蜂）
     { bpm:96, lead:'sine', pad:'sawtooth',                 // 12: 蜘蛛糸の森 — 怪しく揺れる糸 (Ebm)
       prog:[[51,54,58],[46,49,53],[48,51,55],[44,47,51],[51,54,58],[49,53,56],[46,49,53],[46,50,53]],
       mel:[75,78,82,80, 78,75,70,75, 77,80,84,80, 73,77,80,77, 75,78,82,87, 84,82,78,80, 77,73,70,73, 70,73,77,82] },
+    { bpm:140, lead:'square', pad:'sawtooth', drive:true, kit:'march',  // 13: 地底の蟻帝国 — 大行進マーチ (Gm)
+      prog:[[55,58,62],[50,53,57],[51,55,58],[53,56,60],[55,58,62],[48,51,55],[50,53,57],[50,54,57]],
+      mel:[67,70,74,72, 70,67,63,67, 69,72,75,72, 65,68,72,68, 67,70,74,79, 77,75,72,74, 70,67,65,67, 62,65,69,74],
+      rhy:[1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0] },   // 4拍目を空けた行進曲の呼吸
     { bpm:118, lead:'sine', pad:'sawtooth',                // 14: 墜ちた円盤 — 無重力の浮遊感 (C whole-tone風)
       prog:[[48,52,56],[50,54,58],[46,50,54],[48,52,56],[52,56,60],[50,54,58],[44,48,52],[46,50,54]],
       mel:[72,76,80,78, 76,72,68,72, 74,78,82,78, 72,68,64,68, 76,80,84,80, 78,74,70,74, 68,72,76,72, 70,74,78,74] },
@@ -645,14 +661,13 @@ const Music=(()=>{
     { bpm:158, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 16: 母船コア — 侵略者の心臓部 (Dm)
       prog:[[50,53,57],[49,52,56],[51,54,58],[48,51,55],[50,53,57],[45,48,52],[47,50,54],[46,49,53]],
       mel:[74,77,81,86, 84,81,77,79, 76,79,83,79, 74,77,81,77, 74,78,81,86, 88,86,81,78, 77,74,70,74, 69,74,77,81] },
-    { bpm:140, lead:'square', pad:'sawtooth', drive:true,  // 13: 地底の蟻帝国 — 大行進マーチ (Gm)
-      prog:[[55,58,62],[50,53,57],[51,55,58],[53,56,60],[55,58,62],[48,51,55],[50,53,57],[50,54,57]],
-      mel:[67,70,74,72, 70,67,63,67, 69,72,75,72, 65,68,72,68, 67,70,74,79, 77,75,72,74, 70,67,65,67, 62,65,69,74] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
-      prog:[[50,53,57],[46,50,53],[43,46,50],[45,49,52],[50,53,57],[51,55,58],[45,49,52],[45,49,52]],
-      mel:[74,77,81,79, 74,77,74,70, 70,74,70,67, 69,73,76,81, 74,77,81,86, 82,79,75,79, 81,76,73,69, 69,73,76,73] },
+      // Dm7 - Bb7 - Gm7 - A7 …（属7を効かせて解決欲求を作る）
+      prog:[[50,53,57,60],[46,50,53,56],[43,46,50,53],[45,49,52,55],[50,53,57,60],[51,55,58,61],[45,49,52,55],[45,49,52,55]],
+      mel:[74,77,81,79, 74,77,74,70, 70,74,70,67, 69,73,76,81, 74,77,81,86, 82,79,75,79, 81,76,73,69, 69,73,76,73],
+      rhy:[3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0] },   // 付点で食い込み4拍目は休符＝怒涛の推進
     boss2:{ bpm:162, lead:'sawtooth', pad:'sawtooth', drive:true,   // 第二形態：獣性の暴走 (Cm)
       prog:[[48,51,55],[44,48,51],[46,50,53],[43,47,50],[48,51,55],[41,44,48],[43,47,50],[43,47,50]],
       mel:[72,75,79,78, 75,72,68,72, 70,74,77,74, 67,71,74,79, 72,75,79,84, 80,77,75,72, 74,71,67,71, 67,70,74,79] },
@@ -660,28 +675,38 @@ const Music=(()=>{
       prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
       mel:[74,77,81,86, 82,81,77,74, 77,81,84,81, 79,84,79,76, 74,77,81,86, 86,89,86,82, 79,82,86,82, 81,76,73,69] },
     bossfast:{ bpm:168, lead:'square', pad:'sawtooth', drive:true,   // 俊敏なボス：疾走戦 (Em)
-      prog:[[52,55,59],[47,50,54],[54,57,61],[49,52,56],[52,55,59],[45,48,52],[47,50,54],[47,50,54]],
-      mel:[76,79,83,81, 76,79,76,72, 72,76,72,69, 71,75,78,83, 76,79,83,88, 84,81,77,81, 83,78,74,78, 78,74,71,67] },
-    bossheavy:{ bpm:132, lead:'square', pad:'sawtooth', drive:true,  // 巨躯のボス：重圧の戦い (Cm)
-      prog:[[48,51,55],[43,46,50],[44,48,51],[46,50,53],[48,51,55],[41,44,48],[43,46,50],[43,47,50]],
-      mel:[72,75,79,75, 70,72,75,79, 67,70,74,70, 65,68,72,68, 72,75,79,82, 79,75,72,70, 68,72,67,63, 60,63,67,72] },
+      // 全編 m7 のモーダル疾走（三和音より暗く速く聞こえる）
+      prog:[[52,55,59,62],[47,50,54,57],[54,57,61,64],[49,52,56,59],[52,55,59,62],[45,48,52,55],[47,50,54,57],[47,50,54,57]],
+      mel:[76,79,83,81, 76,79,76,72, 72,76,72,69, 71,75,78,83, 76,79,83,88, 84,81,77,81, 83,78,74,78, 78,74,71,67],
+      rhy:[1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0, 1,2,1,0] },   // 8分の刻みを混ぜた疾走
+    bossheavy:{ bpm:132, lead:'square', pad:'sawtooth', drive:true, kit:'heavy',  // 巨躯のボス：重圧の戦い (Cm・ハーフタイムで重さを出す)
+      // Cm7 - Gm7 - Abmaj7 - Bb7 - Cm7 - Fm7 - Gm7 - G7（重い4声で圧を作る）
+      prog:[[48,51,55,58],[43,46,50,53],[44,48,51,55],[46,50,53,56],[48,51,55,58],[41,44,48,51],[43,46,50,53],[43,47,50,53]],
+      mel:[72,75,79,75, 70,72,75,79, 67,70,74,70, 65,68,72,68, 72,75,79,82, 79,75,72,70, 68,72,67,63, 60,63,67,72],
+      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 半拍おきの間＝ハーフタイムの重圧
     bosseerie:{ bpm:150, lead:'sine', pad:'sawtooth', drive:true,    // 怪異のボス：不協和の宴 (Bbm)
-      prog:[[46,49,53],[42,45,49],[44,47,51],[41,44,48],[46,49,53],[39,42,46],[42,45,49],[44,47,50]],
-      mel:[70,73,77,76, 73,70,66,70, 72,75,80,75, 69,72,77,72, 70,73,77,82, 78,75,70,75, 72,68,65,68, 65,68,72,77] },
+      // m7 主体＋最終小節を dim7 に。減七の宙吊りで「不協和の宴」を和声で描く
+      prog:[[46,49,53,56],[42,45,49,52],[44,47,51,54],[41,44,48,51],[46,49,53,56],[39,42,46,49],[42,45,49],[44,47,50,53]],
+      mel:[70,73,77,76, 73,70,66,70, 72,75,80,75, 69,72,77,72, 70,73,77,82, 78,75,70,75, 72,68,65,68, 65,68,72,77],
+      rhy:[1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1] },   // 3拍目が抜ける不安定な足取り
     bossrival:{ bpm:160, lead:'square', pad:'sawtooth', drive:true,  // 宿敵戦：鏡写しの決闘 (Am)
       prog:[[57,60,64],[55,59,62],[53,57,60],[52,55,59],[57,60,64],[56,59,63],[55,59,62],[52,56,59]],
-      mel:[69,72,76,74, 71,74,71,67, 72,76,79,76, 71,67,64,67, 69,72,76,81, 79,76,72,76, 74,71,67,71, 67,64,60,64] },
+      mel:[69,72,76,74, 71,74,71,67, 72,76,79,76, 71,67,64,67, 69,72,76,81, 79,76,72,76, 74,71,67,71, 67,64,60,64],
+      rhy:[3,1,3,0, 3,1,3,0, 3,1,3,0, 3,1,3,0, 3,1,3,0, 3,1,3,0, 3,1,3,0, 3,1,3,0] },   // 付点の応酬＝鏡写しの決闘
     bosscosmic:{ bpm:150, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 真ボス：彼方の収穫者 (異界・増三和音)
       prog:[[50,54,56],[49,53,55],[51,55,57],[48,52,54],[50,54,56],[45,49,51],[47,51,53],[47,51,53]],
       mel:[74,78,80,84, 80,78,74,78, 76,80,82,86, 80,76,74,76, 74,78,80,85, 83,80,76,80, 78,74,72,74, 72,76,78,82] },
     town:{ bpm:92, lead:'sine', pad:'triangle', soft:true,       // 安らぎの店内 (C)
-      prog:[[48,52,55],[45,48,52],[53,57,60],[43,47,50],[48,52,55],[53,57,60],[43,47,50],[48,52,55]],
+      // Cadd9 - Am7 - Fadd9 - Gadd9 …（9thを足して緊張を持たない開放和声にする）
+      prog:[[48,52,55,62],[45,48,52,55],[53,57,60,67],[43,47,50,57],[48,52,55,62],[53,57,60,67],[43,47,50,53],[48,52,55,62]],
       mel:[72,76,79,76, 72,69,72,76, 77,81,77,74, 74,71,67,71, 72,76,79,84, 81,77,74,77, 74,71,74,79, 76,72,67,72] },
     title:{ bpm:104, lead:'triangle', pad:'sawtooth', soft:true, epic:true, // タイトル — 荘厳なる序曲 (C 壮大・希望)
-      prog:[[48,52,55],[43,47,50],[45,48,52],[50,53,57],[48,52,55],[41,45,48],[43,47,50],[47,50,55]],
+      // 2小節目を Am7、6小節目を Fmaj7 にして序曲に陰影を付ける
+      prog:[[48,52,55],[43,47,50],[45,48,52,55],[50,53,57],[48,52,55],[41,45,48,52],[43,47,50],[47,50,55]],
       mel:[72,76,79,84, 79,76,72,74, 76,79,83,79, 74,71,67,74, 72,76,79,84, 86,84,79,76, 74,79,74,71, 72,null,72,null] },
     ending:{ bpm:88, lead:'triangle', pad:'sawtooth', soft:true, epic:true, // エンディング — 感動の大団円 (F 温かく壮大)
-      prog:[[53,57,60],[48,52,55],[50,53,57],[55,59,62],[53,57,60],[45,48,52],[46,50,53],[48,52,55]],
+      // Fmaj7 - Cadd9 - Dm7 - Gadd9 - Fmaj7 - Am7 - Bbmaj7 - C7（4声化して大団円の温度を上げる）
+      prog:[[53,57,60,64],[48,52,55,62],[50,53,57,60],[55,59,62,69],[53,57,60,64],[45,48,52,55],[46,50,53,57],[48,52,55,58]],
       mel:[72,77,81,84, 81,77,72,74, 76,79,81,84, 79,76,72,76, 77,81,84,89, 86,84,81,77, 76,79,74,72, 77,null,77,null] },
     bossalien:{ bpm:164, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 三周目・真ボス：宇宙皇帝（異界の威圧）
       prog:[[46,50,54],[45,49,53],[47,51,55],[44,48,52],[46,50,54],[41,45,49],[43,47,51],[45,49,53]],
@@ -698,87 +723,209 @@ const Music=(()=>{
     g.gain.setValueAtTime(vol,t+Math.max(atk,dur*0.5)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     let node=o; if(cut){ const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cut; o.connect(lp); node=lp; }
     node.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }
-  function strings(n,t,dur,type,v){ v=v||0.045; voice(midi(n),t,dur,type,v,0.12,1900); voice(midi(n)*1.005,t,dur,type,v*0.66,0.16,1600); }
-  function brass(ch,t,dur){ ch.forEach(n=>{ voice(midi(n+12),t,dur,'sawtooth',0.05,0.02,1500); voice(midi(n+12)*1.006,t,dur,'sawtooth',0.034,0.03,1200); }); }
-  function bassN(n,t,dur){ voice(midi(n),t,dur,'sawtooth',0.15,0.008,720); voice(midi(n-12),t,dur,'sine',0.12,0.008,300); }
+  // ── レジスタ設計：bass=39〜220Hz / pad=155〜660Hz / brass・counter・arp=310Hz以上。
+  //    以前は pad・brass・counter・arp が全て ch+12 の同一3音を鳴らして団子になっていた ──
+  function strings(n,t,dur,type,v){ v=v||0.038;
+    const d=1+0.0035+Math.random()*0.0045;                                          // 発音ごとにうねり幅を変え、固定ビートの機械的な唸りを避ける
+    voice(midi(n),t,dur,type,v,0.12,1450); voice(midi(n)*d,t,dur,type,v*0.66,0.16,1150); }
+  function brass(ch,t,dur,vs){ vs=vs||1; [ch[0],ch[2]].forEach(n=>{                 // 根音と5度のみ。3度はパッドに任せて濁りを断つ
+    voice(midi(n+24),t,dur,'sawtooth',0.042*vs,0.02,2600); voice(midi(n+24)*1.006,t,dur,'sawtooth',0.028*vs,0.03,2100); }); }
+  function bassN(n,t,dur){ voice(midi(n),t,dur,'sawtooth',0.115,0.008,720); voice(midi(n-12),t,dur,'sine',0.09,0.008,300); }
+  // ── 周回パレット：1周目=生オーケストラ／2周目(蟲)=木質パーカッション＋マリンバ／3周目(宇宙)=電子ドラム＋FMベル ──
+  function pal(){ const L=lap|0; return L>=3?3:(L>=2?2:1); }
+  function pluck(f,t,dur,vol){                                                       // 蟲の世界：木の実を叩くマリンバ／カリンバ
+    const o=actx.createOscillator(),o2=actx.createOscillator(),g=actx.createGain(),g2=actx.createGain();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(3400,t); lp.frequency.exponentialRampToValueAtTime(820,t+dur);
+    o.type='triangle'; o.frequency.setValueAtTime(f,t);
+    o2.type='sine'; o2.frequency.setValueAtTime(f*4.02,t);                            // 木琴らしい非整数寄りの上部倍音
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    g2.gain.setValueAtTime(0.0001,t); g2.gain.linearRampToValueAtTime(vol*0.3,t+0.003); g2.gain.exponentialRampToValueAtTime(0.0001,t+dur*0.35);
+    o.connect(lp); lp.connect(g); g.connect(bus()); o2.connect(g2); g2.connect(bus());
+    o.start(t); o.stop(t+dur+0.03); o2.start(t); o2.stop(t+dur*0.35+0.03); }
+  function fmBell(f,t,dur,vol){                                                      // 宇宙の世界：金属的なFMベル（比 3.51:1）
+    const o=actx.createOscillator(),g=actx.createGain(),m=actx.createOscillator(),ma=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(f,t);
+    m.type='sine'; m.frequency.setValueAtTime(f*3.51,t);
+    ma.gain.setValueAtTime(f*2.4,t); ma.gain.exponentialRampToValueAtTime(f*0.02,t+dur*0.7);
+    m.connect(ma); ma.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); m.start(t); m.stop(t+dur+0.05); }
+  function tom(t,pitch,vel){                                                         // 木質のタム。蟲世界の打楽器とフィルインに使う
+    vel=vel||1; const o=actx.createOscillator(),g=actx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(pitch,t); o.frequency.exponentialRampToValueAtTime(pitch*0.55,t+0.2);
+    g.gain.setValueAtTime(0.16*vel,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+    o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.26);
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+    ng.gain.setValueAtTime(0.05*vel,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    s.connect(lp); lp.connect(ng); ng.connect(bus()); s.start(t,Math.random()*0.9); s.stop(t+0.07); }
+  function elecKick(t,v){                                                            // 宇宙の世界：長いサブを持つ電子キック
+    const o=actx.createOscillator(),g=actx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(38,t+0.09);
+    g.gain.setValueAtTime(0.3*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
+    o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.28);
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain();
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3400;
+    ng.gain.setValueAtTime(0.045*v,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.02);
+    s.connect(hp); hp.connect(ng); ng.connect(bus()); s.start(t,Math.random()*0.9); s.stop(t+0.04); }
+  function riser(t,dur,v){                                                           // 帯域が駆け上がるライザー（フィルイン／曲転換の橋渡し）
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.4;
+    bp.frequency.setValueAtTime(420,t); bp.frequency.exponentialRampToValueAtTime(7000,t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.07*v,t+dur*0.85); g.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.06);
+    s.connect(bp); bp.connect(g); g.connect(bus()); s.start(t,Math.random()*0.5); s.stop(t+dur+0.08); }
   function kick(t,v){ const o=actx.createOscillator(),g=actx.createGain(); o.type='sine';
     o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(46,t+0.1);
-    g.gain.setValueAtTime(0.5*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+    g.gain.setValueAtTime(0.34*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
     o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.16); }
-  function snare(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2100; bp.Q.value=0.8;
-    g.gain.setValueAtTime(0.2*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
-    s.connect(bp); bp.connect(g); g.connect(bus()); s.start(t); s.stop(t+0.14);
-    voice(196,t,0.07,'triangle',0.07*v,0.002,0); }
-  function hat(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7800;
+  // p=周回パレット。1=生スネア／2=乾いた木質シェル（蟲）／3=長く尾を引くクラップ（宇宙）
+  function snare(t,v,p){ p=p||1; const bf=[0,2100,3100,1650][p], bq=[0,0.8,1.7,0.55][p], dc=[0,0.12,0.085,0.19][p], sh=[0,196,262,147][p];
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=bf; bp.Q.value=bq;
+    g.gain.setValueAtTime(0.2*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dc);
+    s.connect(bp); bp.connect(g); g.connect(bus()); s.start(t,Math.random()*0.9); s.stop(t+dc+0.02);
+    voice(sh,t,0.07,p===3?'sine':'triangle',0.07*v,0.002,0); }
+  function hat(t,v,hz){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=hz||7800;
     g.gain.setValueAtTime(0.07*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.035);
-    s.connect(hp); hp.connect(g); g.connect(bus()); s.start(t); s.stop(t+0.05); }
+    s.connect(hp); hp.connect(g); g.connect(bus()); s.start(t,Math.random()*0.9); s.stop(t+0.05); }
   function timp(t,root,vel){ vel=vel||1; const o=actx.createOscillator(),g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(midi(root-24),t); o.frequency.exponentialRampToValueAtTime(midi(root-24)*0.7,t+0.14);
-    g.gain.setValueAtTime(0.22*vel,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
+    // root-24 はベースの sine と完全ユニゾンで同相加算していたので root-12（実際のティンパニ音域）へ上げる
+    o.type='sine'; o.frequency.setValueAtTime(midi(root-12),t); o.frequency.exponentialRampToValueAtTime(midi(root-12)*0.7,t+0.14);
+    g.gain.setValueAtTime(0.15*vel,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
     o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.34);
     const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05*vel,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
     const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=460; s.connect(f);f.connect(ng); ng.connect(bus()); s.start(t); s.stop(t+0.1); }
   // ── 最終決戦用の壮大レイヤー ──
   function organ(ch,t,dur){ // 荘厳なパイプオルガンの土台（根音＋5度＋オクターブ下）
-    [ch[0]-12, ch[2]-12, ch[0]-24].forEach(n=>{ const o=actx.createOscillator(),g=actx.createGain();
+    // 第3声を ch[0]-24 から ch[1]-12 に変更：オクターブ重複をやめて三和音の厚みに変える。
+    // さらに 52Hz のハイパスでサブ帯域をベースに専任させ、最終決戦の低域飽和を断つ
+    [ch[0]-12, ch[2]-12, ch[1]-12].forEach(n=>{ const o=actx.createOscillator(),g=actx.createGain();
       o.type='sawtooth'; o.frequency.setValueAtTime(midi(n),t);
       const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=760;
-      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.06,t+0.18); g.gain.setValueAtTime(0.06,t+dur*0.6); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-      o.connect(lp); lp.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }); }
+      const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=52;
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.055,t+0.18); g.gain.setValueAtTime(0.055,t+dur*0.6); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      o.connect(lp); lp.connect(hp); hp.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }); }
   function choir(n,t,dur){ // 聖歌隊（オクターブ＋デチューンを重ね、ゆっくり立ち上がる「アー」）
-    [1,1.005,0.995].forEach(d=>{ voice(midi(n)*d,t,dur,'triangle',0.022,0.22,2300); }); }
+    const r=0.004+Math.random()*0.004;
+    [1,1+r,1-r].forEach(d=>{ voice(midi(n)*d,t,dur,'triangle',0.022,0.22,2300); }); }
   function crash(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
     const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5200;
     g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.12*v,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.7);
     s.connect(hp); hp.connect(g); g.connect(bus()); s.start(t); s.stop(t+0.8); }
   const ARP=[0,1,2,1,0,2,1,2];
+  // ── 8小節ごとのフィルイン。セクション番号で4種を回し、ループの継ぎ目を耳に刻む ──
+  function fill(t,sd,sec,P){
+    if(sec===0){ snare(t,0.55,P); snare(t+sd/2,0.85,P); }                                       // A：スネア2打（従来）
+    else if(sec===1){ for(let k=0;k<4;k++) snare(t+sd*k/4,0.4+k*0.16,P); }                      // A'：16分スネア4連
+    else if(sec===2){ [162,132,104].forEach((f,i)=>tom(t+sd*i/3,f,0.8+i*0.12)); snare(t+sd*0.84,0.95,P); }  // B：タム3連下降
+    else { if(P===3) riser(t,sd*0.95,0.9); tom(t,176,0.85); tom(t+sd*0.34,138,0.95); snare(t+sd*0.68,1,P); }// B'：ライザー＋タム＋スネア
+  }
   function scheduleStep(s){
     if(!actx||!sndOn) return;
     const S=song(); curStep=60/S.bpm/2;
     const bar=(s>>3)&7, st=s&7, t=nextT, ch=S.prog[bar], root=ch[0], stepDur=curStep;
-    if(st===0){ ch.forEach(n=>strings(n+12,t,stepDur*8*0.96,S.pad,S.soft?0.034:0.05)); }       // sustained string pad
+    // ── 32小節フォーム：8小節ごとに A(0)/A'(1)/B(2)/B'(3) を進め、層をゲートして展開を作る。
+    //    データを増やさずに実効ループ長を4倍にし、「同じ8小節の永久反復」から脱する ──
+    if(s===0) loopN=(loopN+1)&3;
+    const sec=loopN, P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
+    // pad：第5音を1オクターブ上げた開離配置。4小節目ごとに根音を上げて第1転回に寄せ、声部進行を滑らかにする
+    if(st===0){ const inv=(bar%4===2)?12:0;
+      ch.forEach((n,i)=>strings(n+12+(i===2?12:0)+(i===0?inv:0),t,stepDur*8*0.96,S.pad,S.soft?0.028:0.038)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
       if(st===0){ organ(ch,t,stepDur*8); ch.forEach(n=>choir(n+24,t,stepDur*8*0.92)); brass(ch,t,stepDur*2.4); }   // オルガン土台＋聖歌隊＋全小節頭のパワーブラス
       if(st===0&&bar%4===0) crash(t,0.9);                                                       // フレーズ頭にシンバルの一撃
-      if(st===4) brass([ch[0]+12,ch[2]+12],t,stepDur*1.3);                                       // 裏拍の追いブラス
+      if(st===4) brass([ch[0],ch[2]],t,stepDur*1.3,0.7);                                        // 裏拍の追いブラス
       if(st%2===0){ const dm=S.mel[(bar*4+(st>>1))%32]; if(dm!=null) voice(midi(dm+12),t,stepDur*2.6,'sawtooth',0.04,0.2,3400); }  // 高らかに伸びるディセンタント
       if(bar===7&&st>=4) timp(t,root,0.5);                                                       // ラスト小節のティンパニロール
-    } else if(!S.soft && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                          // brass stab on phrase accents
+    } else if(!S.soft && sec>=2 && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                // ブラススタブはBセクション以降だけ解禁
     if(S.soft){ if(st%4===0) bassN(root,t,stepDur*3.4); }                                       // gentle half-note bass
     else { const bn=[root-12,root-12,ch[2]-12,root-12,root,root-12,ch[2]-12,ch[1]-12][st];      // walking 8th-note bass
       bassN(bn,t,stepDur*0.92); }
-    if(!S.soft){                                                                                // drum kit
-      if(st===0||st===4) kick(t,1);
-      if(S.drive&&(st===3||st===6)) kick(t,0.72);
-      if(st===2||st===6) snare(t,1);
-      if(bar===7&&st===7){ snare(t,0.55); snare(t+stepDur/2,0.85); }                            // phrase-end fill
-      hat(t,st%2?0.55:1); hat(t+stepDur/2,0.4);                                                 // 16th hats
-      if(st===0&&bar%4===0) timp(t,root,1);
+    if(!S.soft){                                                                                // ── ドラムキット（周回パレットで音色が入れ替わる）──
+      const KICK = P===3? elecKick : kick;
+      if(kit==='heavy'){ if(st===0) KICK(t,1); if(st===6) KICK(t,0.8); if(st===4) snare(t,1,P); } // ハーフタイムの重圧
+      else {
+        if(st===0||st===4) KICK(t,1);
+        if(kit==='march'){ if(st===2||st===6) KICK(t,0.55); }                                   // 行進曲：4分の均等踏み
+        else if(S.drive&&(st===3||st===6)) KICK(t,0.72);
+        if(sec===3&&st===7) KICK(t,0.6);                                                        // B'だけ跳ねる押し込み
+        if(st===2||st===6) snare(t,1,P);
+      }
+      if(bar===7&&st===7) fill(t,stepDur,sec,P);                                                // フレーズ末フィル（4種ローテーション）
+      if(st===0&&bar===0) crash(t,sec===0?0.78:0.56);                                           // ループ頭のクラッシュ＝継ぎ目を聞かせる
+      hat(t,st%2?0.55:1,hz);
+      if(sec>=1) hat(t+stepDur/2,sec>=3?0.5:0.4,hz);                                            // 16分裏ハットはA'以降
+      if(st===0&&bar%4===0){ const tt=t+stepDur*0.22;                                           // キックと重心を分けるため半歩後ろへ
+        if(P===2) tom(tt,152,1); else if(P===3) elecKick(tt,0.85); else timp(tt,root,1); }
       if(S.epic&&st===4) timp(t,root,0.7);                                                      // 最終決戦：ティンパニ連打
-    } else hat(t,st===0?0.3:0.14);
-    if(st%2===0){ const m=S.mel[(bar*4+(st>>1))%32];                                            // quarter-note melody + octave support
-      if(m!=null){ voice(midi(m),t,stepDur*1.9,S.lead,S.soft?0.07:0.09,0.014,4200);
-        voice(midi(m-12),t,stepDur*1.9,'triangle',0.034,0.02,2400); } }
-    if(!S.soft && bar>=4 && st%2===1){ voice(midi(ch[(st>>1)%3]+12),t,stepDur*0.85,'triangle',0.028,0.01,3200); } // off-beat counter line (2nd half)
-    const an=ch[ARP[st]]+(st>=4?12:0); voice(midi(an+12),t,stepDur*(S.soft?1.6:1.1),'triangle',S.soft?0.05:0.038,0.004,4600); // harp arpeggio
-    if(st===7 && mode==='battle'){ const want=themeIdxFor(stage); if(want!==themeIdx) themeIdx=want; } // follow stage theme at bar lines
+      if(P===2&&st%2===1) pluck(midi(root+12),t,stepDur*0.7,0.022);                             // 蟲：木質のオフビート
+      if(P===3&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);                  // 宇宙：金属的な余韻
+    } else hat(t,st===0?0.3:0.14,hz);
+    // ── 主旋律：下オクターブ重複をやめ、微デチューンのユニゾンで太さを出す。
+    //    S.rhy（32要素）で 0=休符 / 1=4分 / 2=8分2連（次音を先取り）/ 3=付点8分＋16分の食い込み を指定する。
+    //    未指定の曲は全て4分＝従来どおりの挙動になる ──
+    if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=S.mel[idx], lv=S.soft?0.07:0.085;
+      const r=(S.rhy&&S.rhy[idx]!=null)?S.rhy[idx]:1;
+      const note=(nn,tt,dd,vs)=>{ voice(midi(nn),tt,dd,S.lead,lv*vs,0.014,4200);
+        voice(midi(nn)*1.004,tt,dd,S.lead,lv*0.5*vs,0.02,3600);
+        if(sec>=2&&!S.soft) voice(midi(nn+12),tt,dd*0.74,'triangle',0.026*vs,0.02,6000); };   // Bセクションはオクターブ上を重ねて盛り上げる
+      if(m!=null&&r!==0){
+        if(r===2){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
+        else if(r===3){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
+        else note(m,t,stepDur*1.9,1); } }
+    if(!S.soft && sec>=1 && bar>=4 && st%2===1){ voice(midi(ch[(st>>1)%3]+24),t,stepDur*0.85,'triangle',0.020,0.01,4200); } // 対旋律はA'以降・後半4小節
+    const an=ch[ARP[st]]+24+(st>=4?12:0), av=S.soft?0.045:(sec===0?0.026:0.034);                // アルペジオは +24 以上に退避して中域を空ける
+    if(P===2) pluck(midi(an),t,stepDur*(S.soft?1.4:1.0),av*1.15);
+    else if(P===3) fmBell(midi(an),t,stepDur*(S.soft?1.8:1.3),av*0.85);
+    else voice(midi(an),t,stepDur*(S.soft?1.6:1.1),'triangle',av,0.004,4600);
+    if(st===7 && mode==='battle'){ const want=themeIdxFor(stage); if(want!==themeIdx){ themeIdx=want; syncDelay(); } } // follow stage theme at bar lines
   }
   function tick(){ if(!playing||!actx) return;
+    // 裏タブ復帰などで大きく遅れた場合、過去時刻へ何十ステップも一気に予約すると
+    // 全声部が同時発音して音量が破綻する。追いつかずに現在時刻へ再同期する
+    if(nextT < actx.currentTime-0.06){ const skip=Math.ceil((actx.currentTime-nextT)/curStep);
+      step=(step+skip)&63; nextT=actx.currentTime+0.05; }
     while(nextT < actx.currentTime+0.45){ scheduleStep(step); step=(step+1)&63; nextT+=curStep; } }
-  function applyMode(m){ mode=m; if(m==='battle') themeIdx=themeIdxFor(stage); }
+  // 残響ディレイ長を曲テンポの付点8分に合わせる（132bpm→0.341s / 168bpm→0.268s）
+  function syncDelay(){ if(!actx||!musicDelay) return;
+    const d=Math.min(0.72,Math.max(0.12,60/song().bpm*0.75));
+    if(musicDelay.delayTime.setTargetAtTime) musicDelay.delayTime.setTargetAtTime(d,actx.currentTime,0.08);
+    else musicDelay.delayTime.value=d; }
+  // 曲間の橋渡し。songGain のフェードを迂回して musicGain へ直接出し、無音の谷をライザーで埋める
+  function stinger(t){ if(!actx||!musicGain||!noiseBuf) return;
+    const s1=actx.createBufferSource(); s1.buffer=noiseBuf; const g1=actx.createGain();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.2;
+    bp.frequency.setValueAtTime(380,t); bp.frequency.exponentialRampToValueAtTime(6800,t+0.42);
+    g1.gain.setValueAtTime(0.0001,t); g1.gain.linearRampToValueAtTime(0.15,t+0.40); g1.gain.exponentialRampToValueAtTime(0.0001,t+0.54);
+    s1.connect(bp); bp.connect(g1); g1.connect(musicGain); s1.start(t,Math.random()*0.4); s1.stop(t+0.58);
+    const s2=actx.createBufferSource(); s2.buffer=noiseBuf; const g2=actx.createGain();
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5200;
+    g2.gain.setValueAtTime(0.0001,t+0.42); g2.gain.linearRampToValueAtTime(0.12,t+0.45); g2.gain.exponentialRampToValueAtTime(0.0001,t+1.15);
+    s2.connect(hp); hp.connect(g2); g2.connect(musicGain); s2.start(t+0.42,Math.random()*0.4); s2.stop(t+1.2); }
+  function applyMode(m){ mode=m; if(m==='battle') themeIdx=themeIdxFor(stage); syncDelay(); }
   function fadeTo(m){ if(!actx){ applyMode(m); return; }
+    if(m===(pendingMode||mode)) return;                                  // 同一フレームの二重呼び出しを無効化
+    pendingMode=m; const tok=++fadeTok;
     const g=bus().gain, t=actx.currentTime;
-    g.cancelScheduledValues(t); g.setValueAtTime(g.value,t); g.linearRampToValueAtTime(0.0001,t+0.32);
-    setTimeout(()=>{ if(!actx) return; applyMode(m); step=0; nextT=actx.currentTime+0.06;
-      const t2=actx.currentTime; g.cancelScheduledValues(t2); g.setValueAtTime(0.0001,t2); g.linearRampToValueAtTime(1,t2+0.45); },340); }
+    stinger(t);                                                          // ライザー＋クラッシュが谷を埋め、切れずに繋がる
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value,t);
+    g.linearRampToValueAtTime(0.30,t+0.26); g.linearRampToValueAtTime(0.0001,t+0.44);
+    setTimeout(()=>{ if(!actx||tok!==fadeTok) return; pendingMode=null; applyMode(m); step=0; loopN=3; nextT=actx.currentTime+0.05;
+      const t2=actx.currentTime; g.cancelScheduledValues(t2); g.setValueAtTime(0.0001,t2); g.linearRampToValueAtTime(1,t2+0.30); },450); }
   return {
     start(m){ if(!actx) return; if(playing){ if(m&&m!==mode) fadeTo(m); return; }
-      applyMode(m||'battle'); playing=true; step=0; bus().gain.value=1;
+      applyMode(m||'battle'); playing=true; step=0; loopN=3; pendingMode=null; fadeTok++;
+      const g=bus().gain, t=actx.currentTime;                            // 即時代入はクリックの元。12ms で立ち上げる
+      g.cancelScheduledValues(t); g.setValueAtTime(0.0001,t); g.linearRampToValueAtTime(1,t+0.12);
       nextT=actx.currentTime+0.1; clearInterval(timer); timer=setInterval(tick,60); },
-    setMode(m){ if(!playing){ applyMode(m); return; } if(m!==mode) fadeTo(m); },
-    stop(){ playing=false; clearInterval(timer); },
+    setMode(m){ if(!playing){ applyMode(m); return; } if(m!==(pendingMode||mode)) fadeTo(m); },
+    // 予約済みノートは最大0.45秒先まで生きているので、バスを200msで絞って
+    // ゲームオーバー／勝利スティングにBGMの尻尾が被らないようにする
+    stop(){ playing=false; clearInterval(timer); fadeTok++; pendingMode=null;
+      if(actx&&songGain){ const t=actx.currentTime, g=songGain.gain;
+        g.cancelScheduledValues(t); g.setValueAtTime(g.value,t); g.linearRampToValueAtTime(0.0001,t+0.20); } },
     isPlaying(){ return playing; }
   };
 })();
