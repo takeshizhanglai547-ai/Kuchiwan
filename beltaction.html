@@ -312,25 +312,43 @@ function dpReady(facing){ const fwdC=facing>0?1:3;
 //  AUDIO  -  procedural SFX + BGM engine
 //======================================================================
 let actx=null, sndOn=true, masterGain=null, musicGain=null, sfxGain=null, noiseBuf=null;
+let musicDuck=null, sfxComp=null;   // 音楽側ダッキング用ゲイン／SFX専用コンプ（バスを分離する）
 function initAudio(){
   if(actx) return;
   actx=new (window.AudioContext||window.webkitAudioContext)();
   masterGain=actx.createGain(); masterGain.gain.value=0.95;
-  // master bus compressor — glue + loudness so impacts punch hard without nasty clipping
-  const comp=actx.createDynamicsCompressor();
-  comp.threshold.value=-16; comp.knee.value=22; comp.ratio.value=4; comp.attack.value=0.002; comp.release.value=0.16;
-  masterGain.connect(comp); comp.connect(actx.destination);
-  musicGain=actx.createGain(); musicGain.gain.value=0.55; musicGain.connect(masterGain);
-  sfxGain=actx.createGain(); sfxGain.gain.value=1.0; sfxGain.connect(masterGain);
+  // ── 最終段はブリックウォール・リミッタのみ。打撃のたびにBGM全体が10dB沈むポンピングを断つ ──
+  const lim=actx.createDynamicsCompressor();
+  lim.threshold.value=-1; lim.knee.value=0; lim.ratio.value=20; lim.attack.value=0.0005; lim.release.value=0.05;
+  masterGain.connect(lim); lim.connect(actx.destination);
+  // ── 音楽バス：SFXのコンプを通さずマスターへ直結。ダッキングは musicDuck で意図した量だけ掛ける ──
+  musicGain=actx.createGain(); musicGain.gain.value=0.55;
+  musicDuck=actx.createGain(); musicDuck.gain.value=1.0;
+  musicGain.connect(musicDuck); musicDuck.connect(masterGain);
+  // ── SFXバス：速いコンプ → tanh サチュレーション。ハードクリップの折り返し歪みを自然な飽和に置換 ──
+  sfxGain=actx.createGain(); sfxGain.gain.value=1.0;
+  sfxComp=actx.createDynamicsCompressor();
+  sfxComp.threshold.value=-8; sfxComp.knee.value=10; sfxComp.ratio.value=3.5; sfxComp.attack.value=0.001; sfxComp.release.value=0.09;
+  sfxGain.connect(sfxComp);
+  let sfxTail=sfxComp;
+  if(actx.createWaveShaper){ const ws=actx.createWaveShaper(), NC=2048, cv=new Float32Array(NC), kk=1.6, nk=Math.tanh(kk);
+    for(let i=0;i<NC;i++){ const xx=i/(NC-1)*2-1; cv[i]=Math.tanh(xx*kk)/nk; }
+    ws.curve=cv; try{ ws.oversample='2x'; }catch(e){}
+    sfxComp.connect(ws); sfxTail=ws; }
+  sfxTail.connect(masterGain);
   // spacious reverb send for the orchestral BGM (feedback-delay "hall")
   const verb=actx.createGain(); verb.gain.value=0.42;
   const dl=actx.createDelay(0.6); dl.delayTime.value=0.16;
   const fb=actx.createGain(); fb.gain.value=0.4;
   const damp=actx.createBiquadFilter(); damp.type='lowpass'; damp.frequency.value=2600;
-  musicGain.connect(verb); verb.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl); damp.connect(masterGain);
+  musicGain.connect(verb); verb.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl); damp.connect(musicDuck);
   // noise buffer for drums/impacts
-  noiseBuf=actx.createBuffer(1, actx.sampleRate*0.4, actx.sampleRate);
-  const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  // 1.2秒に延長：発音のたびに再生開始オフセットをランダム化して、同時発音でもノイズ同士が位相一致しない
+  noiseBuf=actx.createBuffer(1, Math.floor(actx.sampleRate*1.2), actx.sampleRate);
+  const d=noiseBuf.getChannelData(0); let lpz=0;
+  for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; lpz=lpz*0.72+w*0.28;
+    // 2.3kHz 以下を約 +6.5dB 持ち上げたピンク寄りノイズ。打撃の低域が自然に増え、高域の明るさは残す
+    const v=w*0.62+lpz*1.05; d[i]=v>1?1:(v<-1?-1:v); }
 }
 // iOS/Safari need the context resumed AND a sound started *synchronously* inside a user gesture.
 function unlockAudio(){
@@ -343,109 +361,234 @@ function unlockAudio(){
 ['touchstart','touchend','pointerdown','mousedown','keydown','click'].forEach(ev=>
   addEventListener(ev, unlockAudio, {passive:true}));
 const midi=n=>440*Math.pow(2,(n-69)/12);
-function tone(freq,dur,type='square',vol=.15,slide=0,dest=null){
+// ── SFXの出力点：画面内X座標に応じたステレオ定位＋画面外の距離減衰を返す ──
+// x を渡さない（=null）呼び出しは従来どおりセンター直結。StereoPanner 非対応環境でも安全に素通しする。
+function sfxOut(x){
+  if(!actx) return null;
+  if(x==null || !actx.createStereoPanner) return sfxGain;
+  const pn=actx.createStereoPanner();
+  pn.pan.value=clamp((x-camX)/W*2-1,-1,1)*0.55;      // ヘッドホンで不自然にならないよう ±0.55 に制限
+  if(x<camX-70 || x>camX+W+70){ const g=actx.createGain(); g.gain.value=0.34; pn.connect(g); g.connect(sfxGain); }
+  else pn.connect(sfxGain);
+  return pn;
+}
+function tone(freq,dur,type='square',vol=.15,slide=0,dest=null,x){
   if(!actx||!sndOn) return;
   const o=actx.createOscillator(), g=actx.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,actx.currentTime);
   if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq+slide),actx.currentTime+dur);
   g.gain.setValueAtTime(vol,actx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
-  o.connect(g); g.connect(dest||sfxGain); o.start(); o.stop(actx.currentTime+dur);
+  o.connect(g); g.connect(dest||sfxOut(x)); o.start(); o.stop(actx.currentTime+dur);
 }
-function noise(dur,vol,hp,dest){
+// sweep を渡すとフィルタが dur かけて hp*sweep へ動く（<1で暗く閉じる／>1で明るく抜ける）
+function noise(dur,vol,hp,dest,sweep,x){
   if(!actx||!sndOn) return;
+  const t=actx.currentTime;
   const s=actx.createBufferSource(); s.buffer=noiseBuf;
-  const g=actx.createGain(); g.gain.setValueAtTime(vol,actx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
-  const f=actx.createBiquadFilter(); f.type=hp?'highpass':'lowpass'; f.frequency.value=hp||1200;
-  s.connect(f); f.connect(g); g.connect(dest||sfxGain); s.start(); s.stop(actx.currentTime+dur);
+  const g=actx.createGain(); g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  const f=actx.createBiquadFilter(); f.type=hp?'highpass':'lowpass'; const f0=hp||1200;
+  if(sweep){ f.frequency.setValueAtTime(f0,t); f.frequency.exponentialRampToValueAtTime(Math.max(60,f0*sweep),t+dur); }
+  else f.frequency.value=f0;
+  s.connect(f); f.connect(g); g.connect(dest||sfxOut(x));
+  s.start(t, Math.random()*0.9); s.stop(t+dur);   // 開始位置をランダム化＝同じ波形の貼り付けを防ぐ
 }
+// ── スウッシュ：バンドパスが高→低へ抜ける「ヒュンッ」。空振りに速度感を与える ──
+function swoosh(dur,vol,f0,f1,Q,x){
+  if(!actx||!sndOn) return;
+  const t=actx.currentTime+Math.random()*0.002, r=1+(Math.random()*0.12-0.06);
+  const s=actx.createBufferSource(); s.buffer=noiseBuf;
+  const bp=actx.createBiquadFilter(); bp.type='bandpass';
+  bp.frequency.setValueAtTime(Math.max(60,f0*r),t);
+  bp.frequency.exponentialRampToValueAtTime(Math.max(60,f1*r),t+dur);
+  bp.Q.setValueAtTime(Q*0.6,t); bp.Q.linearRampToValueAtTime(Q,t+dur*0.4);
+  const g=actx.createGain();
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+dur*0.18);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut(x));
+  s.start(t, Math.random()*0.9); s.stop(t+dur+0.02);
+}
+// ── 武器種ごとの打撃キャラクタ。metal=金属倍音量／atkHz=アタック帯域／tail=余韻倍率／swoosh=空振り設定 ──
+const HITSND={
+  blade:    {metal:1.00, atkHz:3400, atkQ:0.70, parts:[1320,1980,2640,3560,4900,6600,8800], bodyHz:180, sub:[86,72,58,46], tail:1.00, swoosh:[.13,.20,5600,900,1.8]},
+  thrust:   {metal:0.75, atkHz:4600, atkQ:1.60, parts:[1560,2340,3120,4200,5800,7800,9900], bodyHz:150, sub:[80,66,54,42], tail:0.65, swoosh:[.10,.18,7200,1600,2.6]},
+  blunt:    {metal:0.22, atkHz:1600, atkQ:0.50, parts:[520,780,1040,1400,1900,2600,3400],   bodyHz:110, sub:[70,58,46,36], tail:1.70, crunch:1, swoosh:[.26,.24,2400,420,1.2]},
+  flesh:    {metal:0.00, atkHz:900,  atkQ:0.90, parts:[400,600,800,1080,1500,2000,2600],    bodyHz:200, sub:[78,64,52,42], tail:0.45, slap:1,  swoosh:[.09,.16,3200,800,1.4]},
+  magic:    {metal:0.60, atkHz:5200, atkQ:1.10, parts:[1046,1568,2093,2637,3136,4186,5274], bodyHz:150, sub:[82,68,55,44], tail:1.90, shimmer:1, swoosh:[.20,.17,4200,1400,2.2]},
+  chop:     {metal:0.65, atkHz:2400, atkQ:0.80, parts:[980,1470,1960,2640,3630,4900,6500],  bodyHz:140, sub:[76,62,50,40], tail:0.80, crack:1, swoosh:[.15,.21,3600,700,1.5]},
+  longblade:{metal:0.95, atkHz:3000, atkQ:0.60, parts:[1180,1770,2360,3180,4380,5900,7860], bodyHz:170, sub:[84,70,56,44], tail:1.50, swoosh:[.22,.22,6800,760,2.0]},
+};
 const sfx={
-  swing:(p=0)=>tone(560-p*40,.09,'square',.09,-260),
-  heavy:()=>{tone(300,.16,'sawtooth',.12,-180); noise(.12,.18,2000);},
-  hit:()=>{tone(170,.10,'square',.15,-90); noise(.09,.22,1800);},
-  big:()=>{tone(110,.22,'sawtooth',.2,-60); noise(.2,.3,800);},
-  guard:()=>{tone(760,.06,'square',.1); noise(.05,.12,4000);},
+  // 空振り＝武器種ごとにバンドパスが抜けるスウッシュ。コンボ段数で開始帯域が上がり振りの速さが出る
+  swing:(p=0,cls,x)=>{ const c=(HITSND[cls]||HITSND.blade).swoosh;
+    swoosh(c[0], c[1], Math.max(500,c[2]-p*380), c[3], c[4], x);
+    tone(560-p*40,.07,'triangle',.035,-260,null,x); },   // 芯だけ残す（メニューのカーソル音としても読める）
+  heavy:(x)=>{tone(300,.16,'sawtooth',.12,-180,null,x); noise(.12,.18,2000,null,0.35,x);},
+  hit:(x)=>{tone(170,.10,'square',.15,-90,null,x); noise(.09,.22,1800,null,0.45,x);},
+  big:(x)=>{tone(110,.22,'sawtooth',.2,-60,null,x); noise(.2,.3,800,null,0.28,x);},
+  guard:(x)=>{tone(690,.06,'square',.1,0,null,x); noise(.05,.11,3200,null,0.5,x);},
+  // ジャストパリィ：極短クラック＋上に抜ける金属チン＋芯。通常ガードとはっきり差をつける
+  parry:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+      const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=8000; bp.Q.value=2.5;
+      g.gain.setValueAtTime(0.30,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.007);
+      s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.02); }
+    [1976,2960].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain(), a=t+Math.random()*0.002;
+      o.type='triangle'; o.frequency.setValueAtTime(f*(1+(i?0.0081:-0.0081)),a);
+      o.frequency.exponentialRampToValueAtTime(f*1.03,a+0.18);
+      g.gain.setValueAtTime(0.13-i*0.04,a); g.gain.exponentialRampToValueAtTime(0.0001,a+0.22);
+      o.connect(g); g.connect(O); o.start(a); o.stop(a+0.26); });
+    tone(440,.09,'sine',.12,0,O); },
   hurt:()=>tone(200,.18,'sawtooth',.13,-120),
-  dash:()=>{tone(320,.14,'square',.1,300); noise(.14,.14,2600);},
+  dash:(x)=>{tone(320,.14,'square',.1,300,null,x); noise(.14,.14,2600,null,2.2,x);},   // ダッシュだけ高域へ抜ける
   rise:()=>{tone(420,.22,'square',.11,520);},
   charge:()=>tone(180,.5,'sawtooth',.05,400,sfxGain),
-  ko:()=>{tone(120,.3,'sawtooth',.16,-80); noise(.3,.2,1200);},
+  ko:(x)=>{tone(120,.3,'sawtooth',.16,-80,null,x); noise(.3,.2,1200,null,0.3,x);},
   boss:()=>tone(70,.6,'sawtooth',.22,40),
   twinkle:()=>{ tone(1568,.10,'triangle',.12,200); setTimeout(()=>tone(2093,.16,'triangle',.10,300),60); setTimeout(()=>tone(2637,.22,'sine',.08,-200),120); },  // 星になって消える「キラーン☆」
   coin:()=>{ tone(1318,.06,'square',.09); setTimeout(()=>tone(1760,.2,'square',.08),45); },           // コイン「チャリン♪」
   heal:()=>{ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.24,'triangle',.10),i*70)); },    // 回復チャイム
-  jump:()=>{ tone(240,.16,'square',.07,420); noise(.07,.05,2800); },                                   // ジャンプ「ヒュッ」
-  zap:()=>{ tone(2200,.08,'sawtooth',.10,-1400); noise(.09,.12,5200); tone(170,.12,'square',.08,-60); },// 電撃「バチッ」
-  land:()=>{ tone(110,.07,'sine',.10,-40); noise(.05,.07); },                                          // 着地「トッ」
+  jump:(x)=>{ tone(240,.16,'square',.07,420,null,x); noise(.07,.05,2800,null,1.6,x); swoosh(.10,.075,1800,5200,1.2,x); },                                   // ジャンプ「ヒュッ」
+  zap:(x)=>{ tone(2200,.08,'sawtooth',.10,-1400,null,x); noise(.09,.12,5200,null,0.5,x); tone(170,.12,'square',.08,-60,null,x); },// 電撃「バチッ」
+  land:(x)=>{ tone(110,.07,'sine',.10,-40,null,x); noise(.05,.07,null,null,0.4,x); },                                          // 着地「トッ」
 };
-// ---- 命中音 = 派手な「バキーン！」（金属クラング＋鳴り）＋「ドカーン！」（爆発ブーム）----
-function hitSound(dmg){
+// ── UI音の共通コア：triangle の芯＋完全5度上の sine を -12dB。全UI音を C-E-G-C の
+//    ピッチグリッド（523/659/784/1047Hz）に載せ、戦闘SEの帯域（170〜760Hz）と衝突させない ──
+function uiTone(f,dur,vol,dly){
   if(!actx||!sndOn) return;
-  const t=actx.currentTime, tier=dmg>=30?3:dmg>=18?2:dmg>=10?1:0, V=0.7+tier*0.22;
-  // ── バ：弾けるアタック・クラック ──
-  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.7;
-    g.gain.setValueAtTime(V*1.25,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
-    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.08); }
-  // ── キーン：明るい金属クラング（倍音を少しデチューンして煌めく鳴り）──
-  const parts=[1320,1980,2640,3560,4900,6600,8800], pv=[1,0.82,0.68,0.55,0.42,0.3,0.2];
-  parts.forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
-    o.type=i<3?'triangle':'sawtooth'; const det=1+(i%2?0.006:-0.005);
-    o.frequency.setValueAtTime(f*det,t); o.frequency.exponentialRampToValueAtTime(f*0.93,t+0.34+tier*0.05);
-    g.gain.setValueAtTime(V*0.34*pv[i],t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34+tier*0.12);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.5); });
-  // ── ン：きらめく上昇スイープ（シャキーンの閃き）──
-  { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sawtooth'; o.frequency.setValueAtTime(2600+tier*500,t); o.frequency.exponentialRampToValueAtTime(9000+tier*1500,t+0.12);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(V*0.34,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=6000; bp.Q.value=1.1; o.connect(bp); bp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.24); }
+  const t=actx.currentTime+(dly||0);
+  const o=actx.createOscillator(), o2=actx.createOscillator(), g=actx.createGain(), g2=actx.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(f,t);
+  o2.type='sine';    o2.frequency.setValueAtTime(f*1.5,t);
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  g2.gain.setValueAtTime(0.0001,t); g2.gain.linearRampToValueAtTime(vol*0.25,t+0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001,t+dur*0.8);
+  o.connect(g); g.connect(sfxGain); o2.connect(g2); g2.connect(sfxGain);
+  o.start(t); o.stop(t+dur+0.03); o2.start(t); o2.stop(t+dur*0.8+0.03);
+}
+const ui={
+  move:()=>uiTone(784,.045,.075),                                                        // カーソル移動
+  ok:()=>{ uiTone(659,.06,.10); uiTone(988,.10,.09,.055); },                             // 決定＝2音上行
+  ng:()=>{ uiTone(392,.07,.09); uiTone(330,.11,.08,.06); noise(.05,.05,700,null,0.5); }, // 不可・取消＝2音下行
+  buy:()=>{ ui.ok(); uiTone(1568,.16,.07,.12); uiTone(2093,.20,.045,.17); },             // 購入＝決定＋コインのきらめき
+  levelup:()=>{ [523,659,784,1047].forEach((f,i)=>uiTone(f,.26,.10-i*0.008,i*0.065)); uiTone(1568,.5,.05,.26); },
+  open:()=>{ uiTone(523,.05,.07); uiTone(784,.08,.06,.04); },
+  close:()=>{ uiTone(784,.05,.07); uiTone(523,.08,.06,.04); },
+};
+// ---- 命中音 = 武器種で音色が変わる多層インパクト（アタック＋ボディ＋テイル）----
+// hitSound(dmg, cls, hits, x)  cls=HITSND のキー / hits=現在のコンボ数 / x=発音位置のワールドX
+let _hsFrame=-1, _hsN=0;
+function hitSound(dmg, cls, hits, x){
+  if(!actx||!sndOn) return;
+  // ── 同フレームの多重ヒットは3発までに間引く ──
+  // AudioContext.currentTime は同一タスク内で不変なので、範囲技で8体に当たると
+  // ビット同一の波形が完全同位相で8重加算されピークが8倍になりハードクリップする。
+  let dup=1;
+  if(_hsFrame===gf){ if(++_hsN>3) return; dup=(_hsN===2?0.55:0.34); }
+  else { _hsFrame=gf; _hsN=1; }
+  const S=HITSND[cls]||HITSND.blade;
+  const t=actx.currentTime, tier=dmg>=30?3:dmg>=18?2:dmg>=10?1:0, V=(0.50+tier*0.16)*dup;
+  const fat=Math.min(1,(hits||0)/22);   // コンボが伸びるほど高域を退避＝連打の聴感疲労を下げる
+  const OUT=sfxOut(x);
+  const J=()=>t+Math.random()*0.003;    // レイヤ開始の微小ジッタ（位相の一致を崩す）
+  const NO=()=>Math.random()*0.9;       // ノイズ再生位置のランダム化
+  // ── バ：弾けるアタック（武器で帯域とQが変わる）──
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain(), a=J();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=S.atkHz*(1+(Math.random()*0.09-0.045)); bp.Q.value=S.atkQ;
+    const ad=0.05*(S.slap?1.7:1);
+    g.gain.setValueAtTime(V*1.25*(S.slap?1.45:1),a); g.gain.exponentialRampToValueAtTime(0.0001,a+ad);
+    s.connect(bp); bp.connect(g); g.connect(OUT); s.start(a,NO()); s.stop(a+ad+0.03); }
+  // ── キーン：金属クラング（拳系 metal=0 では完全に消える）──
+  if(S.metal>0.02){ const pv=[1,0.82,0.68,0.55,0.42,0.3,0.2], dec=(0.34+tier*0.12)*S.tail*(1-fat*0.5);
+    S.parts.forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain(), a=J();
+      o.type=i<3?'triangle':'sawtooth';
+      const det=(1+(i%2?0.006:-0.005))*Math.pow(2,(Math.random()*2-1)*12/1200);   // ±12cent のランダムデチューン
+      o.frequency.setValueAtTime(f*det,a); o.frequency.exponentialRampToValueAtTime(f*0.93,a+dec*0.95);
+      g.gain.setValueAtTime(V*0.26*pv[i]*S.metal*(1-fat*(i>=3?0.8:0.3)),a+0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001,a+dec);
+      o.connect(g); g.connect(OUT); o.start(a); o.stop(a+dec+0.14); }); }
+  // ── ン：きらめく上昇スイープ（刃物・魔法のみ。連打時はほぼ消して耳への刺さりを断つ）──
+  if(S.metal>0.3){ const o=actx.createOscillator(), g=actx.createGain(), a=J();
+    o.type='sawtooth'; o.frequency.setValueAtTime(2600+tier*500,a);
+    o.frequency.exponentialRampToValueAtTime((9000+tier*1500)*(S.shimmer?1.15:1),a+0.12);
+    g.gain.setValueAtTime(0.0001,a); g.gain.linearRampToValueAtTime(V*0.30*S.metal*(1-fat*0.85),a+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,a+0.2);
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=6000; bp.Q.value=1.1;
+    o.connect(bp); bp.connect(g); g.connect(OUT); o.start(a); o.stop(a+0.24); }
   // ── ド：パンチの効いた中域ボディ ──
+  { const o=actx.createOscillator(), g=actx.createGain(), a=J();
+    o.type=S.slap?'triangle':'square'; o.frequency.setValueAtTime(S.bodyHz-tier*24,a);
+    o.frequency.exponentialRampToValueAtTime(Math.max(30,S.bodyHz*0.30-tier*6),a+0.1);
+    g.gain.setValueAtTime(V*0.66*(S.crunch?1.30:1)*(S.slap?1.25:1),a);
+    g.gain.exponentialRampToValueAtTime(0.0001,a+0.22+tier*0.05);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=S.slap?900:1500;
+    o.connect(lp); lp.connect(g); g.connect(OUT); o.start(a); o.stop(a+0.34); }
+  // ── ドカーン：深いサブブーム。低域だけはジッタを掛けず立ち上がりを揃え、連打時はむしろ厚くする ──
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='square'; o.frequency.setValueAtTime(180-tier*24,t); o.frequency.exponentialRampToValueAtTime(54-tier*6,t+0.1);
-    g.gain.setValueAtTime(V*0.66,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22+tier*0.05);
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.34); }
-  // ── カーン／ドカーン：深く長い爆発サブ・ブーム ──
-  { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='sine'; o.frequency.setValueAtTime([86,72,58,46][tier],t); o.frequency.exponentialRampToValueAtTime([42,34,27,21][tier],t+0.4);
-    g.gain.setValueAtTime(V*0.95,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55+tier*0.16);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.8); }
-  // ── 強打（tier2以上）には轟くノイズ爆発を追加：ドッカーン！──
-  if(tier>=2){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(1400,t); lp.frequency.exponentialRampToValueAtTime(300,t+0.4);
-    g.gain.setValueAtTime(V*0.7,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.45+tier*0.1);
-    s.connect(lp); lp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.6); }
+    o.type='sine'; o.frequency.setValueAtTime(S.sub[tier],t);
+    o.frequency.exponentialRampToValueAtTime(S.sub[tier]*0.49,t+0.4);
+    g.gain.setValueAtTime(V*0.70*(1+fat*0.25),t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+(0.55+tier*0.16)*S.tail);
+    o.connect(g); g.connect(OUT); o.start(t); o.stop(t+0.95); }
+  // ── 強打／鈍器：轟く低域ノイズ爆発 ──
+  if(tier>=2||S.crunch){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain(), a=J();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(1400,a); lp.frequency.exponentialRampToValueAtTime(300,a+0.4);
+    g.gain.setValueAtTime(V*0.55*(S.crunch?1.35:1),a+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,a+(0.45+tier*0.1)*S.tail);
+    s.connect(lp); lp.connect(g); g.connect(OUT); s.start(a,NO()); s.stop(a+0.7); }
+  // ── 斧・爪：骨／木が割れる短いクラックを3連で重ねる ──
+  if(S.crack){ for(let k=0;k<3;k++){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+    const a=t+0.012*k+Math.random()*0.006;
+    const bp=actx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=2200*(1+k*0.35)*(1+(Math.random()*0.2-0.1)); bp.Q.value=3.2;
+    g.gain.setValueAtTime(V*0.42*(1-k*0.22),a); g.gain.exponentialRampToValueAtTime(0.0001,a+0.035);
+    s.connect(bp); bp.connect(g); g.connect(OUT); s.start(a,NO()); s.stop(a+0.06); } }
+  // ── 杖・魔導書：純正律のきらめく残響 ──
+  if(S.shimmer){ [2093,3136,4186].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain(), a=J();
+    o.type='sine'; o.frequency.setValueAtTime(f*Math.pow(2,(Math.random()*2-1)*10/1200),a);
+    g.gain.setValueAtTime(V*0.13*(1-i*0.25)*(1-fat*0.5),a+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,a+0.6+i*0.12);
+    o.connect(g); g.connect(OUT); o.start(a); o.stop(a+0.9); }); }
+  // ── 大ヒットのみ音楽を約190ms／-2.9dB ダック。副作用の10dBポンピングを意図した量に置き換える ──
+  if(musicDuck && dmg>=18 && dup===1){ const mg=musicDuck.gain, cur=mg.value;
+    mg.cancelScheduledValues(t); mg.setValueAtTime(cur,t);
+    mg.linearRampToValueAtTime(0.72,t+0.012); mg.linearRampToValueAtTime(1,t+0.19); }
 }
 
 // ---- 被弾音 = 重厚な「ドゴォッ…！」（鈍い衝撃＋胸に響く重低音＋歪んだクラック）----
-function hurtSound(dmg){
+function hurtSound(dmg, x){
   if(!actx||!sndOn) return;
   const t=actx.currentTime, tier=dmg>=30?2:dmg>=15?1:0, V=0.8+tier*0.25;
+  const OUT=sfxOut(x), J=()=>t+Math.random()*0.003, NO=()=>Math.random()*0.9;
   // ── ドッ：鈍いボディブロー（沈み込むローパスノイズの塊）──
-  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(900,t); lp.frequency.exponentialRampToValueAtTime(180,t+0.22);
-    g.gain.setValueAtTime(V*0.9,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26+tier*0.08);
-    s.connect(lp); lp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.4); }
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain(), a=J();
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(900,a); lp.frequency.exponentialRampToValueAtTime(180,a+0.22);
+    g.gain.setValueAtTime(V*0.9,a); g.gain.exponentialRampToValueAtTime(0.0001,a+0.26+tier*0.08);
+    s.connect(lp); lp.connect(g); g.connect(OUT); s.start(a,NO()); s.stop(a+0.4); }
   // ── ゴ：中域の打撃ボディ ──
   { const o=actx.createOscillator(), g=actx.createGain();
-    o.type='square'; o.frequency.setValueAtTime(150-tier*20,t); o.frequency.exponentialRampToValueAtTime(48,t+0.16);
-    g.gain.setValueAtTime(V*0.6,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
-    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; o.connect(lp); lp.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.3); }
+    const a=J();
+    o.type='square'; o.frequency.setValueAtTime((150-tier*20)*(1+(Math.random()*0.04-0.02)),a); o.frequency.exponentialRampToValueAtTime(48,a+0.16);
+    g.gain.setValueAtTime(V*0.6,a); g.gain.exponentialRampToValueAtTime(0.0001,a+0.24);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; o.connect(lp); lp.connect(g); g.connect(OUT); o.start(a); o.stop(a+0.3); }
   // ── ォオ…：胸に響く長いサブベース ──
   { const o=actx.createOscillator(), g=actx.createGain();
     o.type='sine'; o.frequency.setValueAtTime([70,58,46][tier],t); o.frequency.exponentialRampToValueAtTime([30,26,22][tier],t+0.5);
     g.gain.setValueAtTime(V*1.0,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55+tier*0.2);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.85); }
+    o.connect(g); g.connect(OUT); o.start(t); o.stop(t+0.85); }
   // ── バリッ：歪んだクラック（重さの中の鋭さ）──
-  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
-    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=0.8;
-    g.gain.setValueAtTime(V*0.5,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.07);
-    s.connect(bp); bp.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.1); }
+  { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain(), a=J();
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500*(1+(Math.random()*0.1-0.05)); bp.Q.value=0.8;
+    g.gain.setValueAtTime(V*0.5,a); g.gain.exponentialRampToValueAtTime(0.0001,a+0.07);
+    s.connect(bp); bp.connect(g); g.connect(OUT); s.start(a,NO()); s.stop(a+0.1); }
   // ── 大ダメージ：不穏な鐘の余韻 ──
-  if(tier>=1){ [98,147,196].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
-    o.type='triangle'; o.frequency.setValueAtTime(f*(1+(i%2?0.005:-0.004)),t);
-    g.gain.setValueAtTime(V*0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5+tier*0.2);
-    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.8); }); }
+  if(tier>=1){ [98,147,196].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain(), a=J();
+    o.type='triangle'; o.frequency.setValueAtTime(f*(1+(i%2?0.005:-0.004))*Math.pow(2,(Math.random()*2-1)*10/1200),a);
+    g.gain.setValueAtTime(V*0.16,a+0.01); g.gain.exponentialRampToValueAtTime(0.0001,a+0.5+tier*0.2);
+    o.connect(g); g.connect(OUT); o.start(a); o.stop(a+0.8); }); }
 }
 
 // ---- BGM: generative orchestral engine v2 ----
@@ -704,6 +847,7 @@ const FX_CAP=260;          // 同時パーティクル上限（ダメージ数�
 let particles=[];
 let noHitStopOnce=false;   // ヒットストップ抑制フラグ（連射弾・設置魔法用）
 let curHitIsMelee=false;   // ゴルックスのパリィ：近接ヒット中フラグ
+let curHitSnd=null;        // 近接ヒット中の武器音クラス（hitSound へ渡す）
 let curHitCol='#ffe14d';   // いま当てている攻撃の色（火花・輪の色設計をヒット側へ伝える）
 // パーティクルの y は「レーン座標」で受け取り、描画時に足元の起伏 groundLift を引く。
 // キャラ（drawEnemy / drawPlayer）と同じ規約に揃えるため、生成時の起伏量を gl に焼き付ける。
@@ -1196,32 +1340,34 @@ function grantLives(n){ if(TWO_P) coopLives+=n; else players.forEach(p=>{ if(p.a
 function livesLeft(){ return TWO_P?coopLives:(player?player.lives:0); }
 useInput(players[0].in); mapKeysFor(0); mapKeysFor(1);
 const WEAPONS={
-  dagger:{name:'短剣', reach:1.0, dmg:1.0, kb:1.0, ext:1.0, trail:null, launch:1.0, col:'#d6deec'},
-  spear: {name:'槍',   reach:1.6, dmg:1.15,kb:1.0, ext:1.9, trail:'#aef8ff', launch:1.1, col:'#cfe6ff'},
-  hammer:{name:'ハンマー',reach:1.15,dmg:1.8, kb:1.9, ext:1.25,trail:'#ffb02e', launch:1.7, col:'#ffd24d'},
-  nunchaku:{name:'ヌンチャク', reach:1.28, dmg:1.4, kb:1.05, ext:1.4, trail:'#ffe27a', launch:1.05, col:'#ffcf4d'},   // シマダックス専用：長リーチ・手数で押す
-  tonfa: {name:'トンファー', reach:1.02, dmg:1.5, kb:1.6, ext:1.0, trail:'#bfe9ff', launch:1.4, col:'#cfd8e6'},     // シマダックス専用：短いが強打
-  fists: {name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
-  wand:  {name:'星の杖', reach:0.9, dmg:1.0, kb:1.0, ext:1.0, trail:'#ffb0e8', launch:1.0, col:'#ff8ae0'},   // ヌコ初期装備
+  dagger:{snd:'blade', name:'短剣', reach:1.0, dmg:1.0, kb:1.0, ext:1.0, trail:null, launch:1.0, col:'#d6deec'},
+  spear: {snd:'thrust', name:'槍',   reach:1.6, dmg:1.15,kb:1.0, ext:1.9, trail:'#aef8ff', launch:1.1, col:'#cfe6ff'},
+  hammer:{snd:'blunt', name:'ハンマー',reach:1.15,dmg:1.8, kb:1.9, ext:1.25,trail:'#ffb02e', launch:1.7, col:'#ffd24d'},
+  nunchaku:{snd:'chop', name:'ヌンチャク', reach:1.28, dmg:1.4, kb:1.05, ext:1.4, trail:'#ffe27a', launch:1.05, col:'#ffcf4d'},   // シマダックス専用：長リーチ・手数で押す
+  tonfa: {snd:'blunt', name:'トンファー', reach:1.02, dmg:1.5, kb:1.6, ext:1.0, trail:'#bfe9ff', launch:1.4, col:'#cfd8e6'},     // シマダックス専用：短いが強打
+  fists: {snd:'flesh', name:'拳',   reach:0.95, dmg:1.05,kb:1.0, ext:0,   trail:null, launch:1.0, col:'#f1e7cc'},
+  wand:  {snd:'magic', name:'星の杖', reach:0.9, dmg:1.0, kb:1.0, ext:1.0, trail:'#ffb0e8', launch:1.0, col:'#ff8ae0'},   // ヌコ初期装備
   // ── キャラ固有のドロップ武器（専用モーションつき） ──
-  twin:  {name:'双剣フタバ', reach:1.1, dmg:1.1, kb:0.95, ext:1.05, trail:'#ffd6e8', launch:1.0, col:'#ffb6d0'},   // イッヌ専用：高速5段
-  claw:  {name:'真空の鉄爪', reach:1.18, dmg:1.3, kb:1.25, ext:1.1, trail:'#aef8d8', launch:1.25, col:'#7df0b8'},  // シマ専用：かまいたち4段
-  tome:  {name:'魔導書グリモワン', reach:0.95, dmg:1.2, kb:1.05, ext:1.0, trail:'#d6b0ff', launch:1.05, col:'#c89cff'},   // ヌコ専用：3方向スプレッド弾
+  twin:  {snd:'blade', name:'双剣フタバ', reach:1.1, dmg:1.1, kb:0.95, ext:1.05, trail:'#ffd6e8', launch:1.0, col:'#ffb6d0'},   // イッヌ専用：高速5段
+  claw:  {snd:'chop', name:'真空の鉄爪', reach:1.18, dmg:1.3, kb:1.25, ext:1.1, trail:'#aef8d8', launch:1.25, col:'#7df0b8'},  // シマ専用：かまいたち4段
+  tome:  {snd:'magic', name:'魔導書グリモワン', reach:0.95, dmg:1.2, kb:1.05, ext:1.0, trail:'#d6b0ff', launch:1.05, col:'#c89cff'},   // ヌコ専用：3方向スプレッド弾
   // ── ガードワン8号：基本装備の巨大ハンマー ──
-  ghammer:{name:'巨大ハンマー', reach:1.2, dmg:1.0, kb:1.6, ext:1.3, trail:'#ffb85a', launch:1.5, col:'#c9ccd4'},
-  gaxe: {name:'大戦斧', reach:1.28, dmg:1.25, kb:1.3, ext:1.35, trail:'#ffd0a0', launch:1.35, col:'#d0a060'},   // ガードワン：鋭い縦斬り
-  gflail:{name:'鉄球フレイル', reach:1.4, dmg:1.05, kb:1.5, ext:1.5, trail:'#c9ccd4', launch:1.4, col:'#9aa0ac'},  // ガードワン：広範囲の振り回し
+  ghammer:{snd:'blunt', name:'巨大ハンマー', reach:1.2, dmg:1.0, kb:1.6, ext:1.3, trail:'#ffb85a', launch:1.5, col:'#c9ccd4'},
+  gaxe: {snd:'chop', name:'大戦斧', reach:1.28, dmg:1.25, kb:1.3, ext:1.35, trail:'#ffd0a0', launch:1.35, col:'#d0a060'},   // ガードワン：鋭い縦斬り
+  gflail:{snd:'blunt', name:'鉄球フレイル', reach:1.4, dmg:1.05, kb:1.5, ext:1.5, trail:'#c9ccd4', launch:1.4, col:'#9aa0ac'},  // ガードワン：広範囲の振り回し
   // ── ショップ限定（永続装備） ──
-  holy:  {name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
-  megaton:{name:'メガトンハンマー', reach:1.28, dmg:1.4, kb:1.8, ext:1.4, trail:'#ffd24d', launch:1.65, col:'#ffd24d'},
-  tigerfist:{name:'虎の篭手', reach:1.05, dmg:1.45, kb:1.25, ext:0, trail:'#ffd24d', launch:1.15, col:'#ffb02e'},
-  staff2:{name:'星屑の大杖', reach:0.95, dmg:1.4, kb:1.1, ext:1.2, trail:'#ffd0f0', launch:1.1, col:'#ff8ae0'},
+  holy:  {snd:'blade', name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
+  megaton:{snd:'blunt', name:'メガトンハンマー', reach:1.28, dmg:1.4, kb:1.8, ext:1.4, trail:'#ffd24d', launch:1.65, col:'#ffd24d'},
+  tigerfist:{snd:'flesh', name:'虎の篭手', reach:1.05, dmg:1.45, kb:1.25, ext:0, trail:'#ffd24d', launch:1.15, col:'#ffb02e'},
+  staff2:{snd:'magic', name:'星屑の大杖', reach:0.95, dmg:1.4, kb:1.1, ext:1.2, trail:'#ffd0f0', launch:1.1, col:'#ff8ae0'},
   // ── ワンデン専用：長剣「犬干し竿」（極端に長い刀身。リーチと一撃の重さに優れる）──
-  inuboshi:{name:'犬干し竿', reach:2.4, dmg:1.3, kb:1.2, ext:3.0, trail:'#e8f4ff', launch:1.15, col:'#dfeaf6'},
-  inuboshi2:{name:'犬干し竿・真打', reach:2.5, dmg:1.6, kb:1.3, ext:3.2, trail:'#ffffff', launch:1.25, col:'#ffffff'},   // ワンデンの永続強化：さらに研ぎ澄まされた長刀
+  inuboshi:{snd:'longblade', name:'犬干し竿', reach:2.4, dmg:1.3, kb:1.2, ext:3.0, trail:'#e8f4ff', launch:1.15, col:'#dfeaf6'},
+  inuboshi2:{snd:'longblade', name:'犬干し竿・真打', reach:2.5, dmg:1.6, kb:1.3, ext:3.2, trail:'#ffffff', launch:1.25, col:'#ffffff'},   // ワンデンの永続強化：さらに研ぎ澄まされた長刀
   // ── イベント武器：ムーンライトソード（イッヌ）＝振るたび月光の光波が飛ぶ ──
-  moon:  {name:'ムーンライトソード', reach:1.32, dmg:1.5, kb:1.3, ext:1.4, trail:'#bfe9ff', launch:1.2, col:'#bfe9ff', wave:true},
+  moon:  {snd:'blade', name:'ムーンライトソード', reach:1.32, dmg:1.5, kb:1.3, ext:1.4, trail:'#bfe9ff', launch:1.2, col:'#bfe9ff', wave:true},
 };
+// 武器キーから打撃音クラスを引く（未装備・不明なら刃物系を既定にして後方互換を保つ）
+const wsndOf=w=>((WEAPONS[w]||{}).snd)||'blade';
 // ムーンライトソードの斬撃光波（前方へ飛ぶ三日月の光）
 function spawnMoonWave(p,def){ const dir=p.facing;
   spawnProj(p.x+dir*46, p.y, dir*13, 0, {owner:'player', dmg:Math.round((12+(def.dmg||0)*0.3)*(p.atkMul||1)),
@@ -1335,9 +1481,9 @@ function beginAttack(type){
   else if(type==='gspin'){ sfx.dash(); spark(p.x+p.facing*16,p.y-40,'#ffb85a',9,7); }
   else if(type==='gh3'||type==='gslamdown'){ sfx.heavy(); }
   else if(type==='dragonkick'){ sfx.dash(); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
-  else if(type==='sweep'){ sfx.swing(0); }
-  else if(type==='sc5'||def.kick){ sfx.swing(2); }
-  else sfx.swing(p.comboStep);
+  else if(type==='sweep'){ sfx.swing(0, wsndOf(p.weapon), p.x); }
+  else if(type==='sc5'||def.kick){ sfx.swing(2, 'flesh', p.x); }
+  else sfx.swing(p.comboStep, wsndOf(p.weapon), p.x);
   // 超必殺技（波動・昇竜の新技）：発生時に無敵とフラッシュ、技名表示
   if(def.superFx){ p.invuln=Math.max(p.invuln,20); flash=Math.max(flash,3); shake=Math.max(shake,5); triggerSlow(8);
     ring(p.x,p.y-46,def.trail||'#fff'); popText(p.x,p.y-120,def.name+'！','#fff',true); sfx.boss(); }
@@ -1377,7 +1523,7 @@ function updateGuardQuake(){ const p=player; p.gqT++; p.invuln=Math.max(p.invuln
 }
 function guardQuakeImpact(p){ const mul=(p.atkMul||1);
   quake=Math.max(quake,50); shake=Math.max(shake,18); hitStop=Math.max(hitStop,16); flashAt(6,'255,210,77'); triggerSlow(32);
-  hitSound(46); sfx.big(); sfx.ko();                                                        // 破壊音（重層クラッシュ）
+  hitSound(46,'blunt',0,p.x); sfx.big(p.x); sfx.ko(p.x);                                                        // 破壊音（重層クラッシュ）
   ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,24); impactBurst(p.x,p.y-30,'#fff',true);
   for(let k=0;k<6;k++){ ring(p.x+rnd(-150,150), p.y-rnd(0,20), '#ffb85a'); dust(p.x+rnd(-190,190), p.y, 6); spark(p.x+rnd(-170,170), p.y-rnd(0,30), '#ffd24d', 6,8); }
   for(const e of enemies){ if(e.dead) continue;                                             // 画面全体の敵に大ダメージ
@@ -2278,6 +2424,7 @@ function doPlayerHit(a){
   const watchWpn = p.kind==='watch' && p.weapon!=='dagger' && p.weapon!=='fists';   // ワッチ：拾った武器での攻撃が得意（大幅強化）
   const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg*(p.atkMul||1)*(watchWpn?1.75:1), LX=W.launch;
   curHitIsMelee=true;   // ゴルックスのパリィ判定用：近接ヒット中フラグ
+  curHitSnd=W.snd||null;   // この一撃の打撃音を武器種から決める
   // 火花・輪の色を技／武器から引く。決め技（finisher/aoe）だけは技側の白を優先して決定打の白さを守る
   curHitCol=((def.finisher||def.aoe)?null:((WEAPONS[p.weapon]||{}).trail))||def.trail||'#ffe14d';
   enemies.forEach(e=>{
@@ -2327,7 +2474,7 @@ function doPlayerHit(a){
     }
     crescent(e.x-dir*6, e.y-e.h*0.5, reach*0.5, def.omni?def.from:def.from*dir, def.omni?def.to:def.to*dir, def.trail);
   });
-  curHitIsMelee=false; curHitCol='#ffe14d';
+  curHitIsMelee=false; curHitSnd=null; curHitCol='#ffe14d';
 }
 function nearestEnemy(){ let best=null,bd=1e9; for(const e of enemies){ if(e.dead)continue;
   const d=Math.abs(e.x-player.x)+Math.abs(e.y-player.y)*0.6; if(d<bd){bd=d;best=e;} } return best; }
@@ -2335,7 +2482,7 @@ function doParry(e,p){ if(!p)p=player;
   e.state='hurt'; e.hurtTimer=84; e.stun=120; e.telegraph=0; e.atkTimer=0; e.vx=p.facing*2.4;
   spark(p.x+p.facing*30,p.y-58,'#ffffff',18,9); ring(p.x+p.facing*26,p.y-58,'#bfe9ff'); ring(p.x+p.facing*26,p.y-58,'#ffffff');
   popText(e.x,e.y-e.h-12,'PARRY!','#9ff0ff',true);
-  hitStop=14; flash=Math.max(flash,3); shake=4; sfx.guard(); sfx.rise();
+  hitStop=14; flash=Math.max(flash,3); shake=4; sfx.parry(p.x); sfx.rise();
   p.charge=clamp(p.charge+0.34,0,1); p.parryFx=16; score+=120; }
 function jumpAttackHit(){ const p=player; const kab=p.jKabuto, dn=p.jDown, drop=p.jDrop, ham=p.jHammer, hya=p.jHyaku;
   let pogo=false;
@@ -2388,7 +2535,7 @@ function grabbableTarget(){ const p=player; let best=null,bd=1e9;
   return best;
 }
 function tryGrab(){ const p=player; const e=grabbableTarget();
-  if(!e){ sfx.swing(0); spark(p.x+p.facing*30,p.y-30,'#cfd8e6',5,4); return; }   // whiff
+  if(!e){ sfx.swing(0, wsndOf(p.weapon), p.x); spark(p.x+p.facing*30,p.y-30,'#cfd8e6',5,4); return; }   // whiff
   p.state='grab'; p.grabEnemy=e; p.grabT=180; p.punch=0; p.grabSub='hold'; p.grabAnim=0;
   e.state='grabbed'; e.grabbedBy=1; e.vx=0; e.vz=0; e.z=0; e.stun=40; e.telegraph=0; e.atkTimer=0;
   sfx.dash(); spark(p.x+p.facing*30,p.y-30,'#ffe9a0',8,5); popText(e.x,e.y-e.h-8,'つかんだ！','#ffe14d'); }
@@ -3110,7 +3257,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
     e.parryStance=0; noHitStopOnce=false;
     const pl=nearestPlayerTo(e.x); e.facing=pl.x<e.x?-1:1;
     spark(e.x+e.facing*30,e.y-e.h*0.5,'#e8f4ff',22,11); ring(e.x+e.facing*24,e.y-e.h*0.5,'#e8f4ff'); ring(e.x+e.facing*24,e.y-e.h*0.5,'#fff');
-    flash=Math.max(flash,4); hitStop=Math.max(hitStop,12); sfx.guard(); sfx.rise();
+    flash=Math.max(flash,4); hitStop=Math.max(hitStop,12); sfx.parry(e.x); sfx.rise();
     popText(e.x,e.y-e.h-8,'見切った！','#e8f4ff',true);
     e.state='bmove'; e.lastMove='bladeParry'; e.moveName='bladeCounter'; e.moveT=0; e.moveMax=MV.bladeCounter.dur; e.slammed=false; e.danger=true; e.telegraph=0;
     return; }
@@ -3118,7 +3265,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.parryKind && curHitIsMelee && (e.parryCd||0)<=0 && e.stun<=0 && e.state!=='down' && e.state!=='air' && Math.random()<0.6){
     e.parryCd=110; e.parryFx=14; noHitStopOnce=false;
     const pl=nearestPlayerTo(e.x); e.facing=pl.x<e.x?-1:1;
-    spark(e.x+e.facing*30,e.y-e.h*0.5,'#fff0a0',18,10); ring(e.x+e.facing*24,e.y-e.h*0.5,'#fff0a0'); flash=Math.max(flash,3); hitStop=Math.max(hitStop,10); sfx.guard(); sfx.rise();
+    spark(e.x+e.facing*30,e.y-e.h*0.5,'#fff0a0',18,10); ring(e.x+e.facing*24,e.y-e.h*0.5,'#fff0a0'); flash=Math.max(flash,3); hitStop=Math.max(hitStop,10); sfx.parry(e.x); sfx.rise();
     popText(e.x,e.y-e.h-8,'パリィ！','#fff0a0',true);
     if(pl && pl.invuln<=0){ hurtPlayer(pl, Math.round(T.dmg*1.6), e.facing, true); pl.vx=e.facing*12; popText(pl.x,pl.y-96,'致命の一撃！','#ff6a3c',true); }
     return;
@@ -3149,7 +3296,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
     kick(kbx>=0?1:-1, -0.45, Math.min(11, 1.5+dmg*0.16)*(knockdown?1.35:1));
     if(dmg>=30) punchIn(Math.min(0.055, 0.012+dmg*0.0008));   // 大技は一瞬だけ寄る
   }
-  hitSound(dmg);                                           // layered weighty/crisp impact SE
+  hitSound(dmg, curHitSnd||wsndOf(player&&player.weapon), combo.count, e.x);   // 武器種・コンボ数・定位つきの多層インパクト
   if(dmg>=22){ triggerSlow(22); flash=Math.max(flash,3); }   // 大技ヒットでスロー
   else if(dmg>=20){ flash=Math.max(flash,3); }
   popText(e.x+rnd(-15,15), e.y-e.h-6-rnd(0,13), Math.round(dmg), knockdown?'#ff6a3c':'#ffe14d', dmg>=20, dmg>=22);
@@ -3191,7 +3338,7 @@ function gainXp(scoreVal){ const g=Math.max(1,Math.round((scoreVal||0)/10));
   players.forEach(p=>{ if(!p.active||p.state==='dead')return; p.xp=(p.xp||0)+g;
     while(p.xp>=(p.xpNext||100)){ p.xp-=p.xpNext; p.level=(p.level||1)+1; p.xpNext=Math.round(p.xpNext*1.35);
       p.maxHp+=14; p.hp=p.maxHp; p.atkMul=(p.atkMul||1)+0.06;
-      popText(p.x,p.y-112,'レベルアップ！ LV'+p.level,'#ffe14d',true); ring(p.x,p.y-44,'#ffe14d'); ring(p.x,p.y-44,'#fff'); spark(p.x,p.y-44,'#fff',18,10); sfx.rise(); flash=Math.max(flash,3);
+      popText(p.x,p.y-112,'レベルアップ！ LV'+p.level,'#ffe14d',true); ring(p.x,p.y-44,'#ffe14d'); ring(p.x,p.y-44,'#fff'); spark(p.x,p.y-44,'#fff',18,10); ui.levelup(); flash=Math.max(flash,3);
       // ── 必殺技の進化 ──
       const ev=specialsUnlockedAt(p.kind, p.level);
       if(ev.length){ p.evolveFx=90;
@@ -3888,7 +4035,7 @@ function hurtPlayer(p,dmg,dir,knockdown){ if(!p)p=player; if(p.invuln>0||p.state
     spark(p.x,p.y-52,'#c8ccd4',8,6); ring(p.x,p.y-46,'#c8ccd4'); sfx.guard(); }
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=knockdown?64:38; p.vx=dir*4; shake=7;
-  flashRed(knockdown?5:4, p.x, p.y-46); kick(dir,-0.35,knockdown?8:5.5); hurtSound(dmg); resetCombo();
+  flashRed(knockdown?5:4, p.x, p.y-46); kick(dir,-0.35,knockdown?8:5.5); hurtSound(dmg, p.x); resetCombo();
   if(p.rig){ sprKick(p.rig.sq, 5); sprKick(p.rig.wob, dir*p.facing*8);
     if(p.rig.earL){ sprKick(p.rig.earL,-11); sprKick(p.rig.earR,-9.5); sprKick(p.rig.tail,10); } }   // 被弾でぐにゃっと歪み、耳と尻尾が跳ねる
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -4358,10 +4505,10 @@ function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
   if(mapNavCd<=0){ let mv=0; if(K.left)mv=-1; else if(K.right)mv=1; else if(K.up)mv=-1; else if(K.down)mv=1;
     if(mv){ // 選択可能ノードを順に移動
       let i=mapSel; for(let k=0;k<nodes.length;k++){ i=(i+mv+nodes.length)%nodes.length; if(nodeSelectable(nodes[i])){ mapSel=i; break; } }
-      mapNavCd=10; sfx.swing(0); } }
+      mapNavCd=10; ui.move(); } }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
     const node=nodes[mapSel];
-    if(nodeSelectable(node)){ sfx.rise(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
+    if(nodeSelectable(node)){ ui.ok(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
     else { sfx.guard(); } }
   saveInput(players[0].in); updateParticles();
 }
@@ -4436,7 +4583,7 @@ function showEventCard(kind, title, sub){
   if(attractOn) return;                       // デモ中は邪魔なので出さない
   const K=EVENT_KIND[kind]||EVENT_KIND.chest;
   eventCard={kind, label:K.label, col:K.col, icon:K.icon, title:title||'', sub:sub||'', t:0, life:EVENT_CARD_LEN};
-  sfx.rise();
+  ui.open();
 }
 const EVENT_CARD_LEN=150;
 function updateEventCard(){ if(!eventCard) return; eventCard.t++; if(eventCard.t>=eventCard.life) eventCard=null; }
@@ -4478,7 +4625,7 @@ function drawEventIcon(kind,x,y,col){
 }
 const NPC_EVENT_SUB={chest:'中身は開けてのお楽しみ', cursed:'嫌な予感がする…', spring:'湧き水が体力を癒してくれる',
   altar:'祈れば月が力を貸すという', shrine:'古の神が眠る場所', portal:'くぐれば見知らぬ土地へ', merchant:'旅の道具を商っている'};
-function startTalk(n,p){ state='talk'; dialog={n,p,ls:linesFor(n),i:0,t:0}; n.face=p.x<n.x?-1:1; sfx.swing(0);
+function startTalk(n,p){ state='talk'; dialog={n,p,ls:linesFor(n),i:0,t:0}; n.face=p.x<n.x?-1:1; ui.open();
   if(EVENT_KIND[n.kind] && !n.carded){ n.carded=true;
     showEventCard(n.kind, (EVENT_KIND[n.kind]||{}).label+'を見つけた', NPC_EVENT_SUB[n.kind]||''); } }
 function updateTalk(){ if(!dialog){ state='play'; return; }
@@ -4486,7 +4633,7 @@ function updateTalk(){ if(!dialog){ state='play'; return; }
   const line=dialog.ls[dialog.i]||'', full=dialog.t>=line.length*2;
   if(pressed.atk||pressed.jump||pressed.grab){ pressed.atk=pressed.jump=pressed.grab=false;
     if(!full){ dialog.t=line.length*2; }
-    else { dialog.i++; dialog.t=0; sfx.swing(0);
+    else { dialog.i++; dialog.t=0; ui.move();
       if(dialog.i>=dialog.ls.length){ endTalk(); return; } } }
   saveInput(players[0].in); }
 function endTalk(){ const n=dialog.n, p=dialog.p; dialog=null; state='play';
@@ -4574,13 +4721,13 @@ function updateNPCs(){
 //  ルート分岐の選択画面
 function updateBranch(){ useInput(players[0].in);
   if(branchNav>0)branchNav--;
-  if(branchNav<=0){ if(K.left&&branchSel!==0){ branchSel=0; branchNav=10; sfx.swing(0); }
-    else if(K.right&&branchSel!==1){ branchSel=1; branchNav=10; sfx.swing(0); } }
+  if(branchNav<=0){ if(K.left&&branchSel!==0){ branchSel=0; branchNav=10; ui.move(); }
+    else if(K.right&&branchSel!==1){ branchSel=1; branchNav=10; ui.move(); } }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false; confirmBranch(); }
   saveInput(players[0].in); updateParticles(); }
 function confirmBranch(){ const key=pendingBranch; pendingBranch=null;
   showEventCard('branch','進路を決めた','選んだ道で、この先の顔ぶれが変わる');
-  const opt=ROUTE_DEFS[key][branchSel]; routesChosen.push(branchSel); sfx.rise();
+  const opt=ROUTE_DEFS[key][branchSel]; routesChosen.push(branchSel); ui.ok();
   applyRoute(key,branchSel); saveProgress(stage);
   startCutscene(opt.cut, ()=>{ state='play'; goArrow=160; }); }
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
@@ -4672,7 +4819,7 @@ function projVsPlayer(pr,p){
   if(p.state==='slide'||p.invuln>0) return null;          // dodged
   if(p.state==='guard' && fromFront){
     if(gf-p.guardStart<=9){ pr.owner='player'; pr.vx=-pr.vx*1.5||(-p.facing*9); pr.vy*=-0.5; pr.vzz=0; pr.dmg=Math.max(pr.dmg,18); pr.color='#bfe9ff';
-      spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.guard(); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); return 'reflect'; }
+      spark(p.x+p.facing*22,p.y-40,'#fff',16,9); ring(p.x+p.facing*20,p.y-40,'#bfe9ff'); sfx.parry(p.x); sfx.rise(); hitStop=10; popText(p.x,p.y-70,'REFLECT!','#9ff0ff',true); return 'reflect'; }
     sfx.guard(); spark(p.x+p.facing*22,p.y-44,'#9fd6ff',8); p.vx=dir*1.6; shake=3; p.guardFx=8; resetCombo(); return 'gone';
   }
   hurtPlayer(p,pr.dmg*2,dir,true); projHitFx(pr,pr.x,pr.y-pr.zz); return 'gone';   // 難易度UP：敵弾2倍
@@ -8878,7 +9025,7 @@ function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
   if(scr.dur>0){ useInput(players[0].in); pressed.atk=false; pressed.jump=false; saveInput(players[0].in); return; }   // 遷移中は購入を受け付けない
   // ── ガチャ演出中は専用の処理（回転→開封）──
   if(gacha){ gacha.t++;
-    if(gacha.phase==='spin'){ if(gacha.t%3===0)sfx.swing(0);
+    if(gacha.phase==='spin'){ if(gacha.t%3===0)ui.move();
       if(gacha.t>=48){ gacha.phase='reveal'; gacha.t=0; applyGacha(gacha.item);
         sfx.boss(); sfx.rise(); flash=Math.max(flash,3); shake=Math.max(shake,gacha.item.r*2);
         for(let i=0;i<10+gacha.item.r*5;i++) spark(W/2+rnd(-70,70),H*0.42+rnd(-40,40),gacha.item.col,gacha.item.r*3,10); } }
@@ -8890,22 +9037,22 @@ function updateShop(){ gf++; shopT++; if(shopMsgT>0)shopMsgT--;
     updateParticles(); return; }
   useInput(players[0].in);
   if(shopNavCd>0)shopNavCd--;
-  if(shopNavCd<=0){ if(K.up){shopSel=(shopSel+SHOP_ITEMS.length-1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);}
-    else if(K.down){shopSel=(shopSel+1)%SHOP_ITEMS.length;shopNavCd=9;sfx.swing(0);} }
+  if(shopNavCd<=0){ if(K.up){shopSel=(shopSel+SHOP_ITEMS.length-1)%SHOP_ITEMS.length;shopNavCd=9;ui.move();}
+    else if(K.down){shopSel=(shopSel+1)%SHOP_ITEMS.length;shopNavCd=9;ui.move();} }
   if(shopSel<shopScroll) shopScroll=shopSel; else if(shopSel>=shopScroll+SHOP_VIS) shopScroll=shopSel-SHOP_VIS+1;
   shopScroll=clamp(shopScroll,0,Math.max(0,SHOP_ITEMS.length-SHOP_VIS));
   if(pressed.atk){ pressed.atk=false; const it=SHOP_ITEMS[shopSel];
     if(it.leave){ saveInput(players[0].in); exitShop(); return; }
-    if(it.gacha){ if(coins>=it.cost){ coins-=it.cost; gacha={phase:'spin', t:0, item:rollGacha()}; sfx.rise(); saveInput(players[0].in); return; }
-      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
+    if(it.gacha){ if(coins>=it.cost){ coins-=it.cost; gacha={phase:'spin', t:0, item:rollGacha()}; ui.buy(); saveInput(players[0].in); return; }
+      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; ui.ng(); } }
     else if(it.merc){
-      if(mercRoster.length>=MERC_MAX){ shopMsg='傭兵はこれ以上連れて行けないニャ（最大'+MERC_MAX+'体）'; shopMsgT=90; sfx.guard(); }
+      if(mercRoster.length>=MERC_MAX){ shopMsg='傭兵はこれ以上連れて行けないニャ（最大'+MERC_MAX+'体）'; shopMsgT=90; ui.ng(); }
       else if(coins>=it.cost){ coins-=it.cost; hireMerc(it.merc);
-        shopMsg=ETYPE[it.merc].name+'を雇った！次の冒険から同行するニャ'; shopMsgT=110; sfx.rise(); sfx.coin(); }
-      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
-    else if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; sfx.guard(); }
-    else if(coins>=it.cost){ coins-=it.cost; it.buy(); shopMsg=it.name+'を購入！'; shopMsgT=90; sfx.rise(); }
-    else { shopMsg='コインが足りないニャ…'; shopMsgT=80; sfx.guard(); } }
+        shopMsg=ETYPE[it.merc].name+'を雇った！次の冒険から同行するニャ'; shopMsgT=110; ui.buy(); sfx.coin(); }
+      else { shopMsg='コインが足りないニャ…'; shopMsgT=80; ui.ng(); } }
+    else if(it.soldOut&&it.soldOut()){ shopMsg='それはもう売り切れだニャ'; shopMsgT=80; ui.ng(); }
+    else if(coins>=it.cost){ coins-=it.cost; it.buy(); shopMsg=it.name+'を購入！'; shopMsgT=90; ui.buy(); }
+    else { shopMsg='コインが足りないニャ…'; shopMsgT=80; ui.ng(); } }
   if(pressed.grab||pressed.jump){ pressed.grab=false; pressed.jump=false; saveInput(players[0].in); exitShop(); return; }
   saveInput(players[0].in); updateParticles();
 }
@@ -9284,7 +9431,7 @@ function startEnding(){ if(endingDone)return; endingDone=true;
   if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
   const scenes = lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
   startCutscene(scenes, ()=>winGame()); }
-function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; cut.fade=14; sfx.swing(0);
+function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; cut.fade=14; ui.move();
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
 function updateCut(){ if(!cut){ state='play'; return; } cut.t++;
   if(cut.fade>0) cut.fade--;
@@ -9481,9 +9628,9 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
   const L=[{t:'周回スタート：1周目', bg:'linear-gradient(180deg,#3a3f4a,#20242c)', c:'#a0e87a'},
            {t:'🐛 2周目「蟲の世界」から', bg:'linear-gradient(180deg,#4a9a34,#2a6a1c)', c:'#fff'},
            {t:'🛸 3周目「宇宙人の侵略」から', bg:'linear-gradient(180deg,#5a3aa8,#2a1a60)', c:'#e0d0ff'}][ng2Sel===0?0:ng2Sel===2?1:2];
-  _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; sfx.swing(0); };
+  _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
-const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; sfx.swing(0); };
+const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
 document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
 const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ (lap>=2? startNG3 : startNG2)(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
@@ -9752,10 +9899,10 @@ function start2PSelect(){ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state=
 function updateCharSel(){
   for(let pi=0;pi<2;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
     if(!csLock[pi]){
-      if(csNav[pi]<=0){ if(K.left){ csSel[pi]=(csSel[pi]+CHARS.length-1)%CHARS.length; csNav[pi]=11; sfx.swing(0); }
-        else if(K.right){ csSel[pi]=(csSel[pi]+1)%CHARS.length; csNav[pi]=11; sfx.swing(0); } }
-      if(pr.atk||pr.jump){ pr.atk=false; pr.jump=false; csLock[pi]=true; sfx.rise(); }
-    } else { if(pr.grab||pr.grd){ pr.grab=false; pr.grd=false; csLock[pi]=false; sfx.swing(0); } }   // 決定後キャンセル
+      if(csNav[pi]<=0){ if(K.left){ csSel[pi]=(csSel[pi]+CHARS.length-1)%CHARS.length; csNav[pi]=11; ui.move(); }
+        else if(K.right){ csSel[pi]=(csSel[pi]+1)%CHARS.length; csNav[pi]=11; ui.move(); } }
+      if(pr.atk||pr.jump){ pr.atk=false; pr.jump=false; csLock[pi]=true; ui.ok(); }
+    } else { if(pr.grab||pr.grd){ pr.grab=false; pr.grd=false; csLock[pi]=false; ui.ng(); } }   // 決定後キャンセル
   }
   if(csLock[0]&&csLock[1]){ players[0].kind=CHARS[csSel[0]].k; players[1].kind=CHARS[csSel[1]].k; csLock=[false,false]; beginAdventure(); }
 }
