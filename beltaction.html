@@ -1151,21 +1151,27 @@ function smokePuff(x,y,n=3,rgb){ const gl=groundLift(x);
 function flashCore(x,y,r,rgb,delay){ particles.push({k:'flashcore',x,y,gl:groundLift(x),layer:1,
   delay:delay|0,r:(r||24)*FXS,life:4,max:4,color:rgb||'255,255,255'}); }
 function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:0,r,a0,a1,color,life:10,max:10}); }
-// ダメージ数字：直近8F以内に出た数字が半径 46px 以内にあれば、その上へ 26px 積み上げて x を散らす。
-// 多段ヒットで「57 57 57」が同座標に重なり判読不能になるのを防ぐ
+// ダメージ数字：直近8F以内に出た数字が 46x30px 以内にあれば、x はそのままに真上へ 30px 積み上げる。
+// 以前は同時に x を ±14px 散らしていたが、逃げた先で隣の敵の数字と衝突を作り直していた（4〜5段目で破綻）
 function popText(x,y,txt,color,big,crit){
-  for(let guard=0;guard<4;guard++){ let hit=null;
-    for(let i=0;i<particles.length;i++){ const q=particles[i];
+  const near=(px,py)=>{ for(let i=0;i<particles.length;i++){ const q=particles[i];
       if(q.k!=='txt'||(q.max-q.life)>8) continue;
-      if(Math.abs(q.x-x)<46 && Math.abs(q.y-y)<30){ hit=q; break; } }
-    if(!hit) break;
-    y=hit.y-30; x+=rnd(-14,14); }
-  { let cnt=0, oldest=-1, oa=2;
-    for(let i=0;i<particles.length;i++){ const q=particles[i]; if(q.k!=='txt') continue; cnt++;
-      const ra=q.life/q.max; if(ra<oa){ oa=ra; oldest=i; } }
-    if(cnt>=14 && oldest>=0) particles.splice(oldest,1); }   // 同時表示は14個まで
+      if(Math.abs(q.x-px)<46 && Math.abs(q.y-py)<30) return q; } return null; };
+  let guard=0;
+  while(guard<8){ const h=near(x,y); if(!h) break; y=h.y-30; guard++; }   // x は一切動かさず真上へだけ逃がす
+  // 8段まで埋まってなお重なるときは新規に積まず、ぶつかった数字へ加算してまとめる（57 が 3 発なら 171 の1個に）
+  if(guard>=8){ const ov=near(x,y);
+    if(ov && /^\d+$/.test(''+txt) && /^\d+$/.test(''+ov.txt)){
+      ov.txt=''+((+ov.txt)+(+txt)); ov.pop=1; ov.crit=ov.crit||!!crit;
+      ov.life=Math.min(ov.max,ov.life+10); return; } }
+  { let cnt=0;
+    for(let i=0;i<particles.length;i++){ if(particles[i].k==='txt') cnt++; }
+    while(cnt>=12){ let oldest=-1, oa=2;                                 // 同時表示は12個まで。古いものから消す
+      for(let i=0;i<particles.length;i++){ const q=particles[i]; if(q.k!=='txt') continue;
+        const ra=q.life/q.max; if(ra<oa){ oa=ra; oldest=i; } }
+      if(oldest<0) break; particles.splice(oldest,1); cnt--; } }
   particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,
-    life:big?52:38,max:big?52:38,y0:y,vx:rnd(-1.15,1.15),vy:-3.5,g:0.175,pop:1,rot:rnd(-0.13,0.13),crit:!!crit}); }
+    life:big?52:38,max:big?52:38,y0:y,vx:0,vy:-3.5,g:0.175,pop:1,rot:rnd(-0.13,0.13),crit:!!crit}); }
 // 衝撃リング：初速が速く一気に減速する（ease-out）楕円。正円の等速膨張をやめ、床に寝た衝撃波に見せる
 function ring(x,y,color,opt){ opt=opt||{};
   particles.push({k:'ring',x,y,gl:groundLift(x),layer:opt.layer!=null?opt.layer:1,delay:opt.delay|0,
@@ -1193,7 +1199,9 @@ function hitFx(x,y,dmg,heavy,col){
 }
 // 円弧のリボン：外周＝刃先、内周は u^0.62 で絞って尾側を細く消す。剣戟トレイルと同じ視覚言語を
 // 必殺技のアーク（次元斬・crescent）にも使い、等幅ストロークとの言語の衝突をなくす
-function drawArcRibbon(cx,cy,rOut,rIn,a0,a1,rgb,alpha,fade){
+// ysc を渡すと縦に潰した楕円リボンになる（サイクロンライズの渦）。ジオメトリと円錐グラデを
+// 同じ変換の下に置くため ctx.scale で潰す＝先細りの位置がずれない
+function drawArcRibbon(cx,cy,rOut,rIn,a0,a1,rgb,alpha,fade,ysc){
   const d=a1-a0; if(Math.abs(d)<0.004||rOut<=0) return;
   const N=18, pts=[];
   for(let i=0;i<N;i++){ const u=i/(N-1), an=a0+d*u;
@@ -1204,7 +1212,7 @@ function drawArcRibbon(cx,cy,rOut,rIn,a0,a1,rgb,alpha,fade){
       g.addColorStop(sp*f,'rgba('+col+','+(amp*Math.pow(u,pw)).toFixed(4)+')'); }
     if(sp<0.99) g.addColorStop(Math.min(1,sp+0.004),'rgba('+col+',0)');
     return g; };
-  ctx.save(); ctx.translate(cx,cy); ctx.lineJoin='round';
+  ctx.save(); ctx.translate(cx,cy); if(ysc&&ysc!==1) ctx.scale(1,ysc); ctx.lineJoin='round';
   ctx.beginPath();
   for(let i=0;i<N;i++){ const v=pts[i]; ctx[i?'lineTo':'moveTo'](v[0]*rOut,v[1]*rOut); }
   for(let i=N-1;i>=0;i--){ const v=pts[i]; ctx.lineTo(v[0]*v[2],v[1]*v[2]); }
@@ -5178,7 +5186,7 @@ function drawProjectiles(){
     ctx.globalAlpha=1;
     const crgb=hexRGB(pr.color);
     // 外側のグローは弾色。ここを白から始めるとピンク弾も水色弾も同じ白い玉になってしまう
-    ctx.fillStyle=radGrad(sx,sy,pr.r*2.2,'rgba('+crgb+',.95)','rgba('+crgb+',0)');
+    ctx.fillStyle=radGrad(sx,sy,pr.r*2.2,'rgba('+crgb+',.55)','rgba('+crgb+',0)');
     ctx.beginPath(); ctx.arc(sx,sy,pr.r*2.2,0,7); ctx.fill();
     // ── 光芒：進行方向へ伸びる横長の芒と、それに直交する細い芒。明滅させて「光っている」感を出す ──
     { const ang=Math.atan2(pr.vy,pr.vx), fl=0.55+0.16*Math.sin(gf*0.4+pr.spin);
@@ -5188,11 +5196,14 @@ function drawProjectiles(){
       ctx.globalAlpha=fl*0.85; ctx.fillStyle=radGrad(0,0,pr.r*2.4,'rgba(255,255,255,.85)','rgba(255,255,255,0)');
       ctx.beginPath(); ctx.ellipse(0,0,pr.r*0.34,pr.r*2.4,0,0,7); ctx.fill();        // 直交する細い芒（ここだけ白を残す）
       ctx.restore(); }
+    // ── ここから弾体は source-over。'lighter' はトレイルとハロー・光芒だけに限定する ──
+    // 弾体まで加算で描くとグロー＋色ディスク＋芯が積み上がり、ピンクも水色も紫も同じ白い玉になる
+    ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
     ctx.fillStyle=pr.color; ctx.beginPath(); ctx.arc(sx,sy,pr.r,0,7); ctx.fill();
-    ctx.fillStyle=radGrad(sx,sy,pr.r*0.45,'#ffffff','rgba('+crgb+',.6)');            // 白は中心の芯だけに限定する
-    ctx.beginPath(); ctx.arc(sx,sy,pr.r*0.45,0,7); ctx.fill();
-    { const c=crgb.split(','), cw='rgb('+Math.round(+c[0]*0.8+51)+','+Math.round(+c[1]*0.8+51)+','+Math.round(+c[2]*0.8+51)+')';
-      ctx.fillStyle=cw; for(let k=0;k<4;k++){ const a=pr.spin+k*PI2; ctx.beginPath();   // 衛星ドットも弾色8割で、白い点にしない
+    ctx.fillStyle=radGrad(sx,sy,pr.r*0.28,mixWhite(pr.color,0.22),'rgba('+crgb+',0)');  // 芯は純白をやめ弾色を2割だけ白へ寄せた色。中心まで彩度を残す
+    ctx.beginPath(); ctx.arc(sx,sy,pr.r*0.28,0,7); ctx.fill();
+    { const c=crgb.split(','), cw='rgb('+Math.round(+c[0]*0.9+25)+','+Math.round(+c[1]*0.9+25)+','+Math.round(+c[2]*0.9+25)+')';
+      ctx.fillStyle=cw; for(let k=0;k<4;k++){ const a=pr.spin+k*PI2; ctx.beginPath();   // 衛星ドットも弾色9割で、白い点にしない
         ctx.arc(sx+Math.cos(a)*pr.r*0.5, sy+Math.sin(a)*pr.r*0.5, pr.r*0.28,0,7); ctx.fill(); } }
     ctx.restore();
   });
@@ -6621,12 +6632,11 @@ function drawPlayer(){
     ctx.fillStyle=g; ctx.fillRect(-7,-30-p.z-80,14,p.z+90); ctx.restore(); }
   // ── サイクロンライズ: 自分の周りを渦巻く竜巻 ──
   if(st==='attack' && p.atk && p.atk.def.ntor){ const t=p.atk.t;
-    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(174,248,255,.75)'; ctx.lineCap='round';
-    for(let i=0;i<5;i++){ const a=t*0.55+i*(Math.PI*2/5), rr=24+i*7, yy=-12-i*16, w0=4-i*0.5;
-      for(let q=0;q<6;q++){ const u0=q/6, u1=(q+1)/6;                                   // 6分割して尾を細く薄くする＝渦もテーパー付きの帯になる
-        ctx.globalAlpha=0.78*Math.pow(u1,1.1); ctx.lineWidth=Math.max(0.6,w0*(0.2+0.8*u1));
-        ctx.beginPath(); ctx.ellipse(0,yy,rr,rr*0.32,0,a+2.2*u0,a+2.2*u1+0.03); ctx.stroke(); } }
-    ctx.globalAlpha=1;
+    // 渦は source-over の楕円リボン（塗り）。'lighter' の等幅ストロークを5リング×6分割で
+    // 重ねると水色が白い輪に飽和し風色が読めなくなるため、加算は drawArcRibbon 内の先端の白い芯だけに残す
+    ctx.save(); ctx.globalCompositeOperation='source-over';
+    for(let i=0;i<5;i++){ const a=t*0.55+i*(Math.PI*2/5), rr=24+i*7, yy=-12-i*16, w=Math.max(5,rr*0.26);
+      drawArcRibbon(0,yy, rr, rr-w, a, a+2.2, '174,248,255', 0.85, 1.25, 0.32); }   // 帯幅は半径比。上へ行くほど太く＝逆円錐の竜巻に見せる
     ctx.restore(); }
   // ── カラミティレーザー: 全身を包む光 ──
   if(st==='nlaser'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.25*Math.sin(gf*0.5);
