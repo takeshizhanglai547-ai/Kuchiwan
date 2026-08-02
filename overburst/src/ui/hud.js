@@ -112,7 +112,7 @@ export class HUD {
   //  public API
   // ------------------------------------------------------------------
   radio(speaker, text, dur) { this._radioSeeded = true; this.combat.radio(speaker, text, dur); }
-  warn(text, dur, amber) { this.combat.warn(text, dur, amber); }
+  warn(text, dur, level, id) { this.combat.warn(text, dur, level, id); }
   banner(text, sub, dur) { this.combat.banner(text, sub, dur); }
   damageNumber(pos, amount, direct) { this.overlays.damageNumber(pos, amount, direct); }
   damageFrom(pos) { this.overlays.damageFrom(pos); }

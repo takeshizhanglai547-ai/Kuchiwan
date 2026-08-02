@@ -83,22 +83,23 @@ function drawHull(S, mode) {
   const A = mode === 'albedo';
 
   // ---- base coat -------------------------------------------------
-  //  ALBEDO is a mid-value DETAIL map only. The actual paint colour comes
-  //  from the per-plate vertex colour (see mechKit.paint), which is the
-  //  dark industrial palette. Keeping this map bright-ish would wash the
-  //  frame out to white — it must stay well under 0.5 linear.
+  //  ALBEDO is a LOW-value DETAIL map. The actual paint colour comes from
+  //  the per-plate vertex colour (see mechKit.paint), which is the dark
+  //  industrial palette; the two multiply. In OPEN DAYLIGHT the sky fill
+  //  plus the IBL will happily lift a mid-grey map to white, so this base
+  //  sits around 0.32 linear — dark painted steel, not primer.
   // orm: R = AO, G = roughness, B = metalness
-  g.fillStyle = A ? '#b2b5b9' : 'rgb(250,120,152)';
+  g.fillStyle = A ? '#9c9fa3' : 'rgb(250,120,152)';
   g.fillRect(0, 0, S, S);
 
   // ---- large scale paint mottling --------------------------------
-  g.globalAlpha = A ? 0.30 : 0.16;
+  g.globalAlpha = A ? 0.34 : 0.16;
   for (let i = 0; i < 26; i++) {
     const x = R() * S, y = R() * S, r = S * (0.06 + R() * 0.16);
-    const dark = R() < 0.55;
+    const dark = R() < 0.62;
     wrapped(g, S, () => {
       const grd = g.createRadialGradient(x, y, 0, x, y, r);
-      const c = A ? (dark ? '18,19,23' : '228,232,238') : (dark ? '176,150,116' : '255,102,182');
+      const c = A ? (dark ? '16,17,20' : '176,180,186') : (dark ? '176,150,116' : '255,102,182');
       grd.addColorStop(0, `rgba(${c},1)`);
       grd.addColorStop(1, `rgba(${c},0)`);
       g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
@@ -107,35 +108,43 @@ function drawHull(S, mode) {
   g.globalAlpha = 1;
 
   // ---- panels ----------------------------------------------------
+  //  Plate-to-plate variance is deliberately WIDE, in both value and in
+  //  material: some panels are matte repaint, some are satin factory
+  //  finish. That is what stops the frame reading as one moulded object.
   const panels = panelLayout(S, 7717);
   for (const p of panels) {
-    // plate value variance — a factory repaint is never uniform
-    const j = (p.v - 0.5) * (A ? 34 : 14);
+    const rj = p.v - 0.5;                         // -0.5 .. 0.5
     if (A) {
-      g.fillStyle = `rgb(${(178 + j * 1.5) | 0},${(181 + j * 1.5) | 0},${(185 + j * 1.5) | 0})`;
+      const j = rj * 62;
+      const warm = (p.v * 7919) % 1 - 0.5;        // faint hue drift per plate
+      g.fillStyle = `rgb(${(156 + j + warm * 9) | 0},${(159 + j) | 0},${(164 + j - warm * 11) | 0})`;
     } else {
-      g.fillStyle = `rgb(250,${(120 + j) | 0},${(152 - j * 0.8) | 0})`;
+      // R = AO, G = roughness, B = metalness. Rougher plates are less
+      // metallic (thicker paint), satin ones more — a real correlation.
+      g.fillStyle = `rgb(${(250 - Math.abs(rj) * 34) | 0},${(120 + rj * 100) | 0},${(152 - rj * 126) | 0})`;
     }
-    g.globalAlpha = 0.62;
+    g.globalAlpha = 0.66;
     g.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
     g.globalAlpha = 1;
   }
 
   // panel grooves — WIDE and BLACK. This is the detail that has to carry
-  // at 100 m, so it is authored in value, not in fine noise.
-  const gw = Math.max(4, S / 104);
+  // at 20–40 m (the range the player actually sees the mech from), so it
+  // is authored in value, not in fine noise.
+  const gw = Math.max(5, S / 74);
   for (const p of panels) {
     // soft AO bleed either side of the groove (drawn first, under it)
-    g.lineWidth = gw * 4.0;
-    g.strokeStyle = A ? 'rgba(20,21,25,0.40)' : 'rgba(118,198,108,0.46)';
+    g.lineWidth = gw * 4.6;
+    g.strokeStyle = A ? 'rgba(15,16,19,0.54)' : 'rgba(108,198,108,0.50)';
     g.strokeRect(p.x + gw * 0.5, p.y + gw * 0.5, p.w - gw, p.h - gw);
     // the groove itself
     g.lineWidth = gw;
-    g.strokeStyle = A ? 'rgba(10,11,14,0.97)' : 'rgba(28,226,58,0.95)';
+    g.strokeStyle = A ? 'rgba(4,5,7,0.99)' : 'rgba(20,230,58,0.97)';
     g.strokeRect(p.x + gw * 0.5, p.y + gw * 0.5, p.w - gw, p.h - gw);
-    // bare-metal catch-light on the lower/right lip of the plate above
-    g.lineWidth = Math.max(1.2, gw * 0.34);
-    g.strokeStyle = A ? 'rgba(216,220,226,0.52)' : 'rgba(255,70,238,0.7)';
+    // dull catch-light on the lower/right lip of the plate above. This used
+    // to be near-white and it outlined every panel like a moulding line.
+    g.lineWidth = Math.max(1, gw * 0.26);
+    g.strokeStyle = A ? 'rgba(150,154,160,0.30)' : 'rgba(255,70,238,0.7)';
     g.beginPath();
     g.moveTo(p.x + gw * 1.3, p.y + p.h - gw * 1.3);
     g.lineTo(p.x + p.w - gw * 1.3, p.y + p.h - gw * 1.3);
@@ -153,9 +162,9 @@ function drawHull(S, mode) {
     for (let i = 0; i < n; i++) {
       const xx = p.x + p.w * ((i + 0.5) / n);
       if (A) {
-        g.fillStyle = 'rgba(14,15,18,0.72)';
-        g.beginPath(); g.arc(xx, yy + rr * 0.9, rr * 1.25, 0, TAU); g.fill();
-        g.fillStyle = 'rgba(206,208,206,0.75)';
+        g.fillStyle = 'rgba(10,11,14,0.82)';
+        g.beginPath(); g.arc(xx, yy + rr * 0.9, rr * 1.3, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(150,152,152,0.60)';
         g.beginPath(); g.arc(xx, yy, rr, 0, TAU); g.fill();
       } else {
         g.fillStyle = 'rgba(255,84,250,0.85)';
@@ -165,11 +174,11 @@ function drawHull(S, mode) {
   }
 
   // ---- vertical grime / oil streaks (V axis == world down) --------
-  for (let i = 0; i < 82; i++) {
+  for (let i = 0; i < 96; i++) {
     const x = R() * S, y = R() * S;
-    const w = S * (0.005 + R() * 0.020);
-    const h = S * (0.05 + R() * 0.32);
-    const a = 0.10 + R() * 0.26;
+    const w = S * (0.005 + R() * 0.022);
+    const h = S * (0.05 + R() * 0.34);
+    const a = 0.12 + R() * 0.32;
     wrapped(g, S, () => {
       const grd = g.createLinearGradient(0, y, 0, y + h);
       const c = A ? '17,15,13' : '138,222,58';
@@ -198,7 +207,7 @@ function drawHull(S, mode) {
     const x = R() * S, y = R() * S;
     const w = 1 + R() * (S / 190), h = 1 + R() * (S / 230);
     g.fillStyle = A
-      ? (R() < 0.42 ? 'rgba(206,208,204,0.24)' : 'rgba(14,13,12,0.46)')
+      ? (R() < 0.34 ? 'rgba(164,166,163,0.22)' : 'rgba(12,11,10,0.52)')
       : 'rgba(255,72,250,0.38)';
     g.fillRect(x, y, w, h);
   }
@@ -538,28 +547,31 @@ function drawEnv(W, H) {
   const cv = mkCanvas(W, H);
   const g = cv.getContext('2d');
   const R = mulberry32(777);
+  //  Deliberately DIM. This is what every un-hosted mech (the MTs, the
+  //  drones, the boss) reflects, and a bright smog dome turns every metal
+  //  on the frame into pale grey. Rubicon's sky is thick, not luminous.
   const grd = g.createLinearGradient(0, 0, 0, H);
-  grd.addColorStop(0.00, '#4e5865');   // zenith slate
-  grd.addColorStop(0.34, '#78797c');
-  grd.addColorStop(0.47, '#a08f78');   // amber haze band
-  grd.addColorStop(0.52, '#c2a480');
-  grd.addColorStop(0.58, '#7d6e5c');
-  grd.addColorStop(0.72, '#3c332c');   // ground
-  grd.addColorStop(1.00, '#1d1815');
+  grd.addColorStop(0.00, '#333a45');   // zenith slate
+  grd.addColorStop(0.34, '#4f5053');
+  grd.addColorStop(0.47, '#6b6052');   // amber haze band
+  grd.addColorStop(0.52, '#816e56');
+  grd.addColorStop(0.58, '#53483d');
+  grd.addColorStop(0.72, '#26201b');   // ground
+  grd.addColorStop(1.00, '#120f0d');
   g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  // diffuse sun disc behind haze
+  // diffuse sun disc behind haze — a bright core, but a small one
   const sx = W * 0.30, sy = H * 0.36;
-  const sg = g.createRadialGradient(sx, sy, 0, sx, sy, H * 0.42);
-  sg.addColorStop(0, 'rgba(255,246,225,1)');
-  sg.addColorStop(0.16, 'rgba(255,228,182,0.6)');
-  sg.addColorStop(1, 'rgba(255,200,145,0)');
+  const sg = g.createRadialGradient(sx, sy, 0, sx, sy, H * 0.34);
+  sg.addColorStop(0, 'rgba(255,244,220,0.86)');
+  sg.addColorStop(0.14, 'rgba(226,196,152,0.34)');
+  sg.addColorStop(1, 'rgba(180,138,96,0)');
   g.fillStyle = sg; g.fillRect(0, 0, W, H);
   // smoke columns / broken cloud so reflections aren't flat
   for (let i = 0; i < 26; i++) {
     const x = R() * W, y = H * (0.1 + R() * 0.4), r = H * (0.05 + R() * 0.2);
     const cg = g.createRadialGradient(x, y, 0, x, y, r);
-    const v = R() < 0.5 ? '58,54,52' : '196,188,172';
-    cg.addColorStop(0, `rgba(${v},0.35)`);
+    const v = R() < 0.55 ? '40,38,37' : '138,132,120';
+    cg.addColorStop(0, `rgba(${v},0.38)`);
     cg.addColorStop(1, `rgba(${v},0)`);
     g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
   }
@@ -588,11 +600,23 @@ export function mechTextures() {
  * One material set per mech instance (so damage/thrust are per-unit).
  * Textures are shared; only the small uniform blocks differ.
  */
+//  Relative IBL weight per material. The world hands us ONE intensity for
+//  the whole unit (player.js: setEnvironment(env, 0.85)); without these
+//  ratios that single number flattens rubber, paint and bare steel into the
+//  same mirror and the sky fill lifts the frame to white.
+//  Under the 6.3-intensity key the IBL is ~10 % of a lit face; inside a
+//  cast shadow it is the ONLY fill there is. So it is tuned against the
+//  shadow read, not the lit one — drop it far enough to stop the sky
+//  washing the armour white and the mech becomes a black cut-out the
+//  moment it walks under a gantry.
+export const ENV_REL = { hull: 0.84, mech: 1.00, dark: 0.24, heat: 0.28, decal: 0.36 };
+
 export function makeMaterials(opts = {}) {
   const T = mechTextures();
   const accent = new THREE.Color(opts.accent ?? 0x4fd9ff);
   const hullTint = new THREE.Color(opts.hullTint ?? 0xffffff);
   const uvRepeat = opts.uvRepeat ?? 1;
+  const ei = opts.envIntensity ?? 1.0;
 
   const hull = new THREE.MeshStandardMaterial({
     color: hullTint,
@@ -600,38 +624,44 @@ export function makeMaterials(opts = {}) {
     roughnessMap: T.hullORM,
     metalnessMap: T.hullORM,
     aoMap: T.hullORM,
-    aoMapIntensity: 1.0,
+    // the vertex paint already carries a directional AO term; stacking a
+    // full-strength baked AO on top of it closes the crevices to pure black
+    aoMapIntensity: 0.86,
     emissiveMap: T.emberMap,
     emissive: new THREE.Color(0x000000),
     emissiveIntensity: 1.0,
     roughness: 1.0,
     metalness: 1.0,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 0.8,
+    envMapIntensity: ei * ENV_REL.hull,
     vertexColors: true,
     dithering: true,
   });
 
-  // exposed mechanism: chromed rods, actuators, raw milled steel
+  // exposed mechanism: milled steel rods, actuators, hydraulic chrome.
+  //  Satin, NOT chrome: at roughness 0.30 x the ORM the pistons went to a
+  //  mirror and mirrored the sky, which read as blue-white plastic tube.
   const mech = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(opts.mechTint ?? 0xb6bac0),
+    color: new THREE.Color(opts.mechTint ?? 0x9aa0a6),
     map: T.hullMap,
     roughnessMap: T.hullORM,
-    roughness: 0.30,
+    roughness: 0.66,
     metalness: 1.0,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 1.2,
+    envMapIntensity: ei * ENV_REL.mech,
     vertexColors: true,
     dithering: true,
   });
 
-  // rubber boots, canopy glass, deep-shadow inner frame
+  //  Rubber boots, cable looms, deep throats. The material tint is a
+  //  NEUTRAL: value is carried entirely by the per-primitive vertex paint,
+  //  so a throat can be a true void while a rubber boot still shows form.
   const dark = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(opts.darkTint ?? 0x14161a),
-    roughness: 0.78,
-    metalness: 0.18,
+    color: new THREE.Color(opts.darkTint ?? 0xc6cace),
+    roughness: 0.86,
+    metalness: 0.12,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 0.26,
+    envMapIntensity: ei * ENV_REL.dark,
     vertexColors: true,
     dithering: true,
   });
@@ -656,17 +686,19 @@ export function makeMaterials(opts = {}) {
     metalness: 0.9,
     side: THREE.BackSide,
     envMap: T.envMap,
-    envMapIntensity: 0.3,
+    envMapIntensity: ei * ENV_REL.heat,
     vertexColors: true,
   });
 
+  //  Stencils are WORN paint, not fresh white vinyl — the atlas art is
+  //  near-white so the tint is what keeps them off the top of the range.
   const decal = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
+    color: 0xa8a49c,
     map: T.decalMap,
-    roughness: 0.68,
-    metalness: 0.20,
+    roughness: 0.74,
+    metalness: 0.16,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 0.45,
+    envMapIntensity: ei * ENV_REL.decal,
     transparent: false,
     alphaTest: 0.42,
     vertexColors: true,

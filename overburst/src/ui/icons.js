@@ -78,9 +78,19 @@ export const LOCKBOX_SVG =
   '<g class="bk">' + BOX_PATHS + '</g><g class="fg">' + BOX_PATHS + '</g>' +
   '</svg>';
 
-/** Directional damage arc — a 64 degree cap at the top of a 200-unit circle. */
-export const ARC_SVG =
-  '<svg viewBox="-100 -100 200 200">' +
-  '<path class="g" d="M-46.9 -82.7 A 95 95 0 0 1 46.9 -82.7"/>' +
-  '<path d="M-40.5 -85.9 A 95 95 0 0 1 40.5 -85.9"/>' +
-  '</svg>';
+/**
+ * Directional damage arc — an angular mask for the full-screen edge glow.
+ * `deg` is the incoming bearing, clockwise from straight ahead (screen up),
+ * matching the CSS conic origin exactly. The wedge peaks on the bearing and
+ * is fully gone ±38 degrees off it, so several hits from different quarters
+ * overlap as a smear of edge light instead of crossing crescents.
+ */
+const ARC_STOPS =
+  'rgba(0,0,0,0) 0deg,rgba(0,0,0,.04) 9deg,rgba(0,0,0,.22) 19deg,' +
+  'rgba(0,0,0,.62) 29deg,#000 38deg,rgba(0,0,0,.62) 47deg,' +
+  'rgba(0,0,0,.22) 57deg,rgba(0,0,0,.04) 67deg,rgba(0,0,0,0) 76deg,' +
+  'rgba(0,0,0,0) 360deg)';
+
+export function arcMask(deg) {
+  return 'conic-gradient(from ' + (deg - 38).toFixed(1) + 'deg at 50% 50%,' + ARC_STOPS;
+}

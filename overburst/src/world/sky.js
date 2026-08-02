@@ -8,19 +8,24 @@ import * as THREE from 'three';
 import { fbmField, canvas2d, tex } from './textures.js';
 
 // NOTE: these are authored directly in LINEAR working space (float triples),
-// not sRGB hex — ACES tone mapping compresses them on the way to the screen.
+// not sRGB hex — the filmic tonemap compresses them on the way to the screen.
+//
+// The stack, bottom to top: a DULL AMBER smog band pinned to the horizon
+// (exp falloff, ~5 deg core), a dirty overcast belly above it, cold slate at
+// the zenith.  `fog` is deliberately locked to the value the shader produces
+// at h = 0 away from the sun, so the fog line and the sky meet with no band.
 export const SKY = {
-  zenith: new THREE.Color(0.072, 0.086, 0.108),   // cold slate overhead
-  mid: new THREE.Color(0.215, 0.208, 0.196),      // dirty overcast belly
-  horizon: new THREE.Color(0.520, 0.336, 0.176),  // dull amber smog band
-  hot: new THREE.Color(1.150, 0.760, 0.362),      // sun-side horizon flare
-  ground: new THREE.Color(0.048, 0.034, 0.025),   // below the horizon line
-  sunColor: new THREE.Color(1.250, 0.930, 0.640),
-  // Low raking key from the ENE at ~17 degrees. Chosen so that the two faces
+  zenith: new THREE.Color(0.048, 0.058, 0.078),   // cold slate overhead
+  mid: new THREE.Color(0.140, 0.142, 0.147),      // dirty overcast belly
+  horizon: new THREE.Color(0.290, 0.208, 0.142),  // dull amber smog band
+  hot: new THREE.Color(0.950, 0.530, 0.215),      // sun-side horizon flare
+  ground: new THREE.Color(0.215, 0.168, 0.132),   // below the horizon line
+  sunColor: new THREE.Color(1.620, 1.230, 0.830),
+  // Low raking key from the ENE at ~21 degrees. Chosen so that the two faces
   // a third-person camera usually sees split hard into lit / unlit, and so the
   // shadows rake WSW right across the open basin.
   sunDir: new THREE.Vector3(0.845, 0.358, -0.398).normalize(),
-  fog: new THREE.Color(0.152, 0.126, 0.098),
+  fog: new THREE.Color(0.250, 0.190, 0.148),
 };
 
 const VERT = /* glsl */`
@@ -43,39 +48,60 @@ void main() {
   float h = d.y;
   float up = clamp(h, 0.0, 1.0);
 
-  // --- smog stack: warm band hugging the horizon, slate overhead ---
-  vec3 col = mix(uHorizon, uMid, pow(clamp(up * 3.4, 0.0, 1.0), 0.62));
-  col = mix(col, uZenith, pow(up, 0.72));
+  // --- smog stack -------------------------------------------------------
+  // exp() falloffs, not pow(): the band gets a tight core with a long soft
+  // tail, so there is never a visible edge where it ends. The amber core is
+  // deliberately TIGHT (~3 deg) — a third-person camera sits nearly level, so
+  // anything wider and the player looks at a pink sky all game instead of a
+  // slate one with a warm strip along the bottom.
+  float band = exp(-up * 20.0);       // dull amber, pinned to the horizon
+  float belly = exp(-up * 2.05);      // dirty overcast mid-band
+  vec3 col = mix(uZenith, uMid, belly);
+  col = mix(col, uHorizon, band);
 
-  // sun-side warming of the horizon band
-  float az = clamp(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(uSunDir.x, 0.0, uSunDir.z))), 0.0, 1.0);
-  col = mix(col, uHot, pow(az, 2.6) * (1.0 - smoothstep(0.02, 0.42, up)) * 0.85);
+  // Sun-side azimuth warming. Deliberately broad (a whole quadrant of the
+  // dome) so the frame still reads "the key is over there" when the disc
+  // itself is outside the 62 deg FOV.
+  vec3 sunAz = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
+  float az = dot(normalize(vec3(d.x, 1e-4, d.z)), sunAz) * 0.5 + 0.5;
+  float warm = pow(az, 3.0) * exp(-up * 7.0);
+  col = mix(col, uHot, warm * 0.46);
 
-  // --- broken cloud deck: a flat plane projected overhead ---
-  float pl = 0.42 / (up + 0.075);                    // perspective on the deck
-  vec2 puv = vec2(atan(d.z, d.x) * 0.15915 * 3.0, pl);
-  float n1 = texture2D(uNoise, puv * vec2(1.0, 1.0) + vec2(uTime * 0.0035, uTime * 0.0022)).r;
-  float n2 = texture2D(uNoise, puv * vec2(2.6, 2.3) - vec2(uTime * 0.0072, 0.0)).g;
-  float clouds = clamp((n1 * 0.68 + n2 * 0.42 - 0.30) * 2.1, 0.0, 1.0);
-  float deck = smoothstep(0.0, 0.16, up);
-  // heavy bellies, torn brighter gaps
-  col *= mix(1.0, 0.44 + clouds * 1.20, deck * 0.92);
-  col = mix(col, col * 1.30 + uHot * 0.05, smoothstep(0.5, 0.95, clouds) * deck);
+  // --- broken cloud deck: a flat plane projected overhead ---------------
+  float pl = 0.50 / (up + 0.055);                    // perspective on the deck
+  // integer horizontal repeats — anything else leaves a seam at atan()'s cut
+  vec2 puv = vec2(atan(d.z, d.x) * 0.15915, pl);
+  float n1 = texture2D(uNoise, puv * vec2(3.0, 0.62) + vec2(uTime * 0.0031, uTime * 0.0019)).r;
+  float n2 = texture2D(uNoise, puv * vec2(7.0, 1.45) - vec2(uTime * 0.0067, 0.0)).g;
+  float n3 = texture2D(uNoise, puv * vec2(1.0, 0.24) + vec2(uTime * 0.0013, 0.0)).b;
+  // three scales so the deck has BIG shapes, not just a grey fizz
+  float cl = clamp((n3 * 0.62 + n1 * 0.46 + n2 * 0.30 - 0.44) * 2.35, 0.0, 1.0);
+  float deck = smoothstep(0.004, 0.30, up);
+  vec3 soot = col * 0.40;                        // heavy soot-loaded belly
+  vec3 gap = col * 1.34 + uHot * 0.016;          // torn, lit from behind
+  col = mix(col, mix(gap, soot, smoothstep(0.16, 0.80, cl)), deck * 0.90);
 
-  // --- sun: broad diffuse bloom, weak disc, occluded by cloud ---
+  // --- sun: a diffuse disc buried in haze, plus a wide forward scatter --
   float sd = clamp(dot(d, uSunDir), 0.0, 1.0);
-  float disc = smoothstep(0.9975, 0.9994, sd) * 5.0;
-  float glow = pow(sd, 44.0) * 1.7 + pow(sd, 7.0) * 0.62 + pow(sd, 2.0) * 0.20;
-  float veil = 0.40 + 0.60 * clouds;
-  col += uSun * (glow * veil + disc * veil * veil);
+  float veil = 1.0 - 0.58 * smoothstep(0.22, 0.84, cl);
+  float disc = smoothstep(0.99660, 0.99905, sd);
+  float halo = pow(sd, 110.0) * 0.95 + pow(sd, 17.0) * 0.52
+             + pow(sd, 4.5) * 0.21 + pow(sd, 1.5) * 0.075;
+  col += uSun * (halo * veil + disc * 2.10 * veil * veil);
 
-  // --- below horizon fades into the ground haze ---
-  col = mix(col, uGround, smoothstep(0.0, -0.10, h));
+  // --- below horizon fades into the ground haze -------------------------
+  col = mix(col, uGround, smoothstep(0.004, -0.055, h));
 
-  // faint vertical banding = particulate stratification
-  col *= 1.0 + 0.05 * sin(h * 48.0 + n1 * 6.0);
+  // faint horizontal stratification = particulate layering in the smog
+  col *= 1.0 + 0.032 * sin(h * 40.0 + n3 * 5.0);
 
-  gl_FragColor = vec4(col, 1.0);
+  // ordered-ish dither: an 8-bit target quantises this gradient into
+  // visible steps otherwise, and the grain in the composite is too fine
+  // to break them up on its own.
+  float dth = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (dth - 0.5) * 0.0022;
+
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -134,10 +160,11 @@ export class Sky {
       dome.material.depthTest = true;
       dome.material.depthWrite = true;
       s.add(dome);
-      // a warm bounce card standing in for the slag pit + ground
+      // a warm bounce card standing in for the slag pit + ground. Kept dark:
+      // the arena's contrast comes from the key, not from a bright dome.
       const floor = new THREE.Mesh(
         new THREE.SphereGeometry(19.5, 24, 12, 0, Math.PI * 2, Math.PI * 0.52, Math.PI * 0.48),
-        new THREE.MeshBasicMaterial({ color: 0x3a2a1e, side: THREE.BackSide, toneMapped: false }),
+        new THREE.MeshBasicMaterial({ color: 0x2a1e15, side: THREE.BackSide, toneMapped: false }),
       );
       s.add(floor);
       rt = pmrem.fromScene(s, 0.02, 1, 60);
@@ -151,15 +178,21 @@ export class Sky {
     return rt ? rt.texture : null;
   }
 
+  /** R = mid-scale cloud, G = fine tearing, B = the BIG shapes that stop the
+   *  deck reading as an even fizz. Contrast-stretched so B actually has form. */
   _noiseTexture() {
     const S = 256;
-    const a = fbmField(S, { octaves: 6, base: 3, seed: 4711 });
-    const b = fbmField(S, { octaves: 4, base: 11, seed: 4712 });
+    const a = fbmField(S, { octaves: 5, base: 5, seed: 4711 });
+    const b = fbmField(S, { octaves: 4, base: 13, seed: 4712 });
+    const c0 = fbmField(S, { octaves: 3, base: 2, seed: 4713 });
     const c = canvas2d(S), g = c.getContext('2d');
     const im = g.createImageData(S, S), d = im.data;
     for (let i = 0, p = 0; i < a.length; i++, p += 4) {
-      const v = Math.min(1, Math.max(0, a[i] * 0.78 + b[i] * 0.28));
-      d[p] = v * 255; d[p + 1] = (a[i] * 255) | 0; d[p + 2] = (b[i] * 255) | 0; d[p + 3] = 255;
+      const big = Math.min(1, Math.max(0, (c0[i] - 0.5) * 2.05 + 0.5));
+      d[p] = (a[i] * 255) | 0;
+      d[p + 1] = (b[i] * 255) | 0;
+      d[p + 2] = (big * 255) | 0;
+      d[p + 3] = 255;
     }
     g.putImageData(im, 0, 0);
     const t = tex(c);

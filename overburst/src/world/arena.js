@@ -50,30 +50,36 @@ export class Arena {
     const { scene, renderer } = this.ctx;
 
     // --- atmosphere colour + sky ---
-    scene.background = SKY.fog.clone().multiplyScalar(1.4);
-    scene.fog = new THREE.FogExp2(SKY.fog.clone(), 0.00131);
+    // SKY.fog is locked to the value the sky shader produces at the horizon
+    // away from the sun, so haze and sky meet without a seam.
+    scene.background = SKY.fog.clone();
+    scene.fog = new THREE.FogExp2(SKY.fog.clone(), 0.00124);
 
     this.sky = new Sky(this.ctx);
     scene.add(this.sky.build());
     const env = this.sky.buildEnvironment(renderer);
     if (env) {
       scene.environment = env;
-      scene.environmentIntensity = 0.60;
+      // Low on purpose. The AC6 read is ONE hard key and a thin cool fill;
+      // a fat IBL term is what flattens an industrial exterior into midtone.
+      scene.environmentIntensity = 0.40;
     }
 
     // --- materials ---
     this.materials = buildMaterials();
 
     // --- lighting -------------------------------------------------
+    // High contrast is the whole look: the key does the work, the fill only
+    // keeps the shadow side legible. Anything more and the arena goes flat.
     const hemi = new THREE.HemisphereLight(0x000000, 0x000000, 1.0);
-    hemi.color.setRGB(0.30, 0.37, 0.50);        // cold sky fill
-    hemi.groundColor.setRGB(0.20, 0.12, 0.07);  // warm bounce off the ash
-    hemi.intensity = 0.72;
+    hemi.color.setRGB(0.26, 0.34, 0.50);        // cold sky fill
+    hemi.groundColor.setRGB(0.20, 0.11, 0.06);  // warm bounce off the ash
+    hemi.intensity = 0.40;
     scene.add(hemi);
     this.hemi = hemi;
 
-    const sun = new THREE.DirectionalLight(0xffffff, 6.3);
-    sun.color.setRGB(1.0, 0.800, 0.588);        // ~3400 K raking key
+    const sun = new THREE.DirectionalLight(0xffffff, 8.6);
+    sun.color.setRGB(1.0, 0.786, 0.560);        // ~3400 K raking key
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera;

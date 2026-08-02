@@ -280,19 +280,33 @@ export function groundTextures() {
 
 // ------------------------------------------------------------------
 //  CONCRETE — board-formed brutalist wall, tie holes, streaks.
+//  Deliberately dirty: the previous pass read as chalk because the only
+//  value variation was at the board-band frequency. Everything big here
+//  (blooms, wash-down, soot fields) exists to break a 60 m wall into
+//  patches so it does not read as one flat pour.
 // ------------------------------------------------------------------
 export function concreteTextures() {
   return once('concrete', () => {
     const S = 1024, rnd = mulberry32(4242);
     const c = canvas2d(S), g = c.getContext('2d');
     const macro = fbmField(S >> 1, { octaves: 5, base: 4, seed: 31 });
+    const blot = fbmField(S >> 1, { octaves: 4, base: 2, seed: 33 });
     const grit = fbmField(S >> 1, { octaves: 4, base: 30, seed: 32 });
 
     const base = canvas2d(S >> 1), bg = base.getContext('2d');
     const im = bg.createImageData(S >> 1, S >> 1), d = im.data;
     for (let i = 0, p = 0; i < macro.length; i++, p += 4) {
-      const v = 124 + macro[i] * 60 + (grit[i] - 0.5) * 26;
-      d[p] = v * 1.005; d[p + 1] = v; d[p + 2] = v * 0.975; d[p + 3] = 255;
+      // big blotches carry +-28 % of the value: this is the single biggest
+      // reason the wall stops looking like an untextured box.
+      const bl = (blot[i] - 0.5) * 2.0;
+      let v = 132 + macro[i] * 54 + (grit[i] - 0.5) * 24 + bl * 42;
+      // soot loading in the low areas, bleached calcite in the high ones
+      const soot = clamp(-bl * 1.4, 0, 1);
+      v *= 1 - soot * 0.34;
+      d[p] = v * (1.005 + soot * 0.03);
+      d[p + 1] = v * (1.0 - soot * 0.01);
+      d[p + 2] = v * (0.972 - soot * 0.05);
+      d[p + 3] = 255;
     }
     bg.putImageData(im, 0, 0);
     g.drawImage(base, 0, 0, S, S);
@@ -301,43 +315,75 @@ export function concreteTextures() {
     const bands = 12, bh = S / bands;
     for (let i = 0; i < bands; i++) {
       const y = i * bh;
-      g.fillStyle = `rgba(${rnd() < 0.5 ? '255,252,246' : '20,17,14'},${0.03 + rnd() * 0.05})`;
+      g.fillStyle = `rgba(${rnd() < 0.5 ? '255,252,246' : '20,17,14'},${0.03 + rnd() * 0.06})`;
       g.fillRect(0, y, S, bh);
-      g.strokeStyle = 'rgba(22,19,16,0.5)'; g.lineWidth = 2.4;
+      g.strokeStyle = 'rgba(18,15,13,0.62)'; g.lineWidth = 2.6;
       g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
-      g.strokeStyle = 'rgba(206,199,186,0.16)'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(0, y + 2.6); g.lineTo(S, y + 2.6); g.stroke();
+      g.strokeStyle = 'rgba(198,190,176,0.13)'; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(0, y + 2.8); g.lineTo(S, y + 2.8); g.stroke();
+    }
+
+    // construction-joint / lift lines every fourth board, with a wash-down
+    // stain hanging under each one
+    for (let i = 0; i < bands; i += 4) {
+      const y = i * bh;
+      g.strokeStyle = 'rgba(14,11,9,0.7)'; g.lineWidth = 5.5;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+      const gr = g.createLinearGradient(0, y, 0, y + bh * 1.4);
+      gr.addColorStop(0, 'rgba(26,22,18,0.42)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, y, S, bh * 1.4);
     }
 
     // form-tie holes on a grid
     for (let y = bh * 0.5; y < S; y += bh * 2) {
       for (let x = S / 16; x < S; x += S / 8) {
         const r = 4.5;
-        g.fillStyle = 'rgba(26,22,18,0.8)';
+        g.fillStyle = 'rgba(20,17,14,0.85)';
         g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-        g.fillStyle = 'rgba(200,192,178,0.2)';
+        g.fillStyle = 'rgba(196,188,174,0.18)';
         g.beginPath(); g.arc(x - 1, y - 1.2, r * 0.8, 0, Math.PI * 2); g.fill();
+        // rust weep out of the tie hole
+        const gr = g.createLinearGradient(0, y, 0, y + 34);
+        gr.addColorStop(0, 'rgba(72,42,22,0.4)');
+        gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(x - 2.6, y, 5.2, 34);
       }
     }
 
-    // vertical rust / water streaks
-    for (let k = 0; k < 44; k++) {
-      const x = rnd() * S, w = 2 + rnd() * 16, y0 = rnd() * S * 0.7, h = 80 + rnd() * 420;
+    // vertical rust / water streaks — longer and denser than before
+    for (let k = 0; k < 72; k++) {
+      const x = rnd() * S, w = 2 + rnd() * 20, y0 = rnd() * S * 0.8, h = 120 + rnd() * 620;
       const gr = g.createLinearGradient(0, y0, 0, y0 + h);
-      const warm = rnd() < 0.45;
-      gr.addColorStop(0, warm ? 'rgba(86,52,28,0.42)' : 'rgba(28,25,21,0.38)');
+      const warm = rnd() < 0.42;
+      gr.addColorStop(0, warm ? 'rgba(80,46,24,0.46)' : 'rgba(24,21,18,0.44)');
+      gr.addColorStop(0.35, warm ? 'rgba(80,46,24,0.22)' : 'rgba(24,21,18,0.2)');
       gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr; g.fillRect(x, y0, w, h);
     }
 
-    // chipped corners / impact pocks
-    for (let k = 0; k < 26; k++) {
-      const x = rnd() * S, y = rnd() * S, r = 3 + rnd() * 12;
-      g.fillStyle = `rgba(52,46,39,${0.4 + rnd() * 0.35})`;
-      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(186,178,164,0.3)';
-      g.beginPath(); g.arc(x - r * 0.25, y - r * 0.3, r * 0.55, 0, Math.PI * 2); g.fill();
+    // chipped edges / spall showing dark aggregate
+    for (let k = 0; k < 40; k++) {
+      const x = rnd() * S, y = rnd() * S, r = 4 + rnd() * 16;
+      g.fillStyle = `rgba(44,39,33,${0.45 + rnd() * 0.35})`;
+      g.beginPath();
+      for (let i = 0; i <= 7; i++) {
+        const a = (i / 7) * Math.PI * 2, rr = r * (0.55 + rnd() * 0.8);
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+        i ? g.lineTo(px, py) : g.moveTo(px, py);
+      }
+      g.closePath(); g.fill();
+      g.fillStyle = 'rgba(180,172,158,0.26)';
+      g.beginPath(); g.arc(x - r * 0.3, y - r * 0.36, r * 0.5, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 12; i++) {
+        g.fillStyle = `rgba(${(90 + rnd() * 90) | 0},${(84 + rnd() * 84) | 0},${(76 + rnd() * 76) | 0},0.5)`;
+        g.fillRect(x + (rnd() - 0.5) * r * 1.5, y + (rnd() - 0.5) * r * 1.5, 1.7, 1.7);
+      }
     }
+
+    // a couple of sprayed stencils — unit codes on the pour
+    stencilBlock(g, S * 0.16, S * 0.31, 130, 'B-07', 'rgba(28,24,20,0.5)');
+    stencilBlock(g, S * 0.63, S * 0.74, 112, 'K4', 'rgba(150,116,44,0.34)');
 
     const hc = grayCanvas(S >> 1, grit, 96, 168);
     const hg2 = hc.getContext('2d');
@@ -345,6 +391,35 @@ export function concreteTextures() {
 
     return { map: tex(c, { srgb: true }), normalMap: tex(normalFromHeight(hc, 1.6, 512)) };
   });
+}
+
+/** Sprayed stencil lettering + frame, eroded on an offscreen alpha canvas and
+ *  then composited. (Eroding in place with destination-out would punch holes
+ *  in the albedo underneath and leave black speckles.)
+ *  Deliberately low-contrast: at 17 m per texture repeat these are ~1 m tall
+ *  marks and must not fight the silhouette. */
+function stencilBlock(g, x, y, size, text, color, seed = 991) {
+  const w = Math.ceil(size * 1.5), h = Math.ceil(size * 0.66);
+  const c = canvas2d(w, h), s = c.getContext('2d');
+  s.fillStyle = color;
+  s.strokeStyle = color;
+  s.lineWidth = Math.max(2, size * 0.035);
+  s.strokeRect(size * 0.04, size * 0.04, w - size * 0.08, h - size * 0.08);
+  s.font = `bold ${Math.round(size * 0.4)}px monospace`;
+  s.textBaseline = 'middle';
+  s.textAlign = 'center';
+  s.fillText(text, w / 2, h / 2);
+  // break the paint up so it reads as worn spray, not a decal
+  s.globalCompositeOperation = 'destination-out';
+  let st = seed >>> 0;
+  const r = () => { st = (st * 9301 + 49297) % 233280; return st / 233280; };
+  for (let i = 0; i < 110; i++) {
+    s.fillStyle = `rgba(0,0,0,${0.2 + r() * 0.75})`;
+    s.beginPath();
+    s.arc(r() * w, r() * h, 1 + r() * size * 0.055, 0, Math.PI * 2);
+    s.fill();
+  }
+  g.drawImage(c, x, y);
 }
 
 // ------------------------------------------------------------------
@@ -391,10 +466,11 @@ export function steelTextures() {
     }
 
     // oil drips
-    for (let k = 0; k < 40; k++) {
-      const x = rnd() * S, w = 1.5 + rnd() * 9, y0 = rnd() * S, h = 40 + rnd() * 260;
+    for (let k = 0; k < 56; k++) {
+      const x = rnd() * S, w = 1.5 + rnd() * 11, y0 = rnd() * S, h = 60 + rnd() * 340;
       const gr = g.createLinearGradient(0, y0, 0, y0 + h);
-      gr.addColorStop(0, 'rgba(20,15,11,0.5)');
+      gr.addColorStop(0, 'rgba(18,13,10,0.58)');
+      gr.addColorStop(0.3, 'rgba(18,13,10,0.26)');
       gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr; g.fillRect(x, y0, w, h);
     }
@@ -406,6 +482,10 @@ export function steelTextures() {
       const x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI * 2, l = 12 + rnd() * 90;
       g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
     }
+    // stencilled unit marks + a hazard flash
+    stencilBlock(g, S * 0.07, S * 0.11, 150, 'MK-2', 'rgba(24,20,17,0.55)', 4001);
+    stencilBlock(g, S * 0.55, S * 0.58, 128, '017', 'rgba(168,128,44,0.4)', 4002);
+    stencilBlock(g, S * 0.30, S * 0.80, 110, 'DK', 'rgba(30,26,22,0.45)', 4003);
 
     const hc = grayCanvas(S >> 1, grit, 104, 152);
     const h2 = hc.getContext('2d');
@@ -465,6 +545,174 @@ export function paintTextures() {
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
     }
     return { map: tex(c, { srgb: true }) };
+  });
+}
+
+// ------------------------------------------------------------------
+//  CONTAINER SKIN — weathered painted box steel.
+//  NO corrugation baked in: the container prop carries real corrugated
+//  geometry, and a second set of ribs from a normal map at a different
+//  world phase would beat against it. What this carries is the stuff
+//  geometry cannot: rust bloom, chalked paint, chipping, weld seams,
+//  stencil blocks and the dirt that separates one box from the next.
+//  Kept near-neutral in hue so the per-instance tint reads.
+// ------------------------------------------------------------------
+export function containerTextures() {
+  return once('container', () => {
+    const S = 512, rnd = mulberry32(3113);
+    const c = canvas2d(S), g = c.getContext('2d');
+    const macro = fbmField(S, { octaves: 5, base: 4, seed: 91 });
+    const rust = fbmField(S, { octaves: 5, base: 9, seed: 92 });
+    const grit = fbmField(S, { octaves: 4, base: 28, seed: 93 });
+
+    const im = g.createImageData(S, S), d = im.data;
+    for (let i = 0, p = 0; i < macro.length; i++, p += 4) {
+      // chalked paint: uneven fade, never one flat value
+      let v = 150 + macro[i] * 74 + (grit[i] - 0.5) * 22;
+      let r = v, gg = v * 0.995, b = v * 0.985;
+      // rust bloom — saturated enough that it survives a desaturated tint
+      const rz = clamp((rust[i] - 0.50) * 3.6, 0, 1) * (0.4 + grit[i] * 0.9);
+      r += (196 - r) * rz; gg += (92 - gg) * rz; b += (44 - b) * rz;
+      // soot in the crevices
+      const soot = clamp((0.36 - macro[i]) * 3.0, 0, 1);
+      r *= 1 - soot * 0.4; gg *= 1 - soot * 0.42; b *= 1 - soot * 0.44;
+      d[p] = r; d[p + 1] = gg; d[p + 2] = b; d[p + 3] = 255;
+    }
+    g.putImageData(im, 0, 0);
+
+    // vertical rust runs (the read that says "this has stood outside")
+    for (let k = 0; k < 60; k++) {
+      const x = rnd() * S, w = 1.4 + rnd() * 9, y0 = rnd() * S, h = 50 + rnd() * 300;
+      const gr = g.createLinearGradient(0, y0, 0, y0 + h);
+      const warm = rnd() < 0.62;
+      gr.addColorStop(0, warm ? 'rgba(124,62,26,0.5)' : 'rgba(22,18,15,0.46)');
+      gr.addColorStop(0.4, warm ? 'rgba(124,62,26,0.2)' : 'rgba(22,18,15,0.18)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x, y0, w, h);
+    }
+    // paint chipped off to bare, rusting steel
+    for (let k = 0; k < 54; k++) {
+      const x = rnd() * S, y = rnd() * S, r = 2.5 + rnd() * 12;
+      g.fillStyle = `rgba(${(96 + rnd() * 60) | 0},${(48 + rnd() * 26) | 0},${(24 + rnd() * 16) | 0},${0.4 + rnd() * 0.45})`;
+      g.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const a = (i / 6) * Math.PI * 2, rr = r * (0.5 + rnd() * 0.9);
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+        i ? g.lineTo(px, py) : g.moveTo(px, py);
+      }
+      g.closePath(); g.fill();
+    }
+    // dents / creases
+    for (let k = 0; k < 30; k++) {
+      g.strokeStyle = `rgba(30,26,22,${0.12 + rnd() * 0.24})`;
+      g.lineWidth = 1 + rnd() * 3;
+      const x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI * 2, l = 14 + rnd() * 70;
+      g.beginPath(); g.moveTo(x, y);
+      g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+    // stencils: an owner code and a box number
+    stencilBlock(g, S * 0.05, S * 0.12, 96, 'RBC', 'rgba(232,226,214,0.42)', 7701);
+    stencilBlock(g, S * 0.58, S * 0.63, 84, '4471', 'rgba(228,222,210,0.34)', 7702);
+    stencilBlock(g, S * 0.34, S * 0.40, 70, 'MAX', 'rgba(18,15,12,0.45)', 7703);
+
+    // roughness: rust is rough, surviving paint is satin
+    const rc = canvas2d(S >> 1), rg = rc.getContext('2d');
+    const ri = rg.createImageData(S >> 1, S >> 1), rd = ri.data;
+    const rf = fbmField(S >> 1, { octaves: 4, base: 9, seed: 94 });
+    for (let i = 0, p = 0; i < rf.length; i++, p += 4) {
+      const v = 150 + rf[i] * 92;
+      rd[p] = rd[p + 1] = rd[p + 2] = v; rd[p + 3] = 255;
+    }
+    rg.putImageData(ri, 0, 0);
+
+    const hc = grayCanvas(S, grit, 108, 150);
+    const hg = hc.getContext('2d');
+    hg.globalAlpha = 0.5; hg.drawImage(c, 0, 0, S, S); hg.globalAlpha = 1;
+
+    return {
+      map: tex(c, { srgb: true }),
+      normalMap: tex(normalFromHeight(hc, 1.1, 256)),
+      roughnessMap: tex(rc),
+    };
+  });
+}
+
+// ------------------------------------------------------------------
+//  GROUND STAIN ATLAS — 2x2 quadrants of alpha-masked grime laid over
+//  the tiled apron so a 900 m plain never reads as one repeating slab.
+//    (0,0) soft ash drift    (1,0) slag / oil pool with a crusted rim
+//    (0,1) wind-blown streak (1,1) tyre + track marks
+//  UVs are inset 3 % per quadrant so mip filtering cannot bleed one
+//  quadrant into its neighbour.
+// ------------------------------------------------------------------
+export const STAIN_UV = [
+  [0.015, 0.015], [0.515, 0.015], [0.015, 0.515], [0.515, 0.515],
+];
+export const STAIN_SPAN = 0.47;
+
+export function stainAtlas() {
+  return once('stains', () => {
+    const S = 512, Q = S >> 1, rnd = mulberry32(4649);
+    const c = canvas2d(S), g = c.getContext('2d');
+    g.clearRect(0, 0, S, S);
+
+    const soft = fbmField(Q, { octaves: 5, base: 3, seed: 101 });
+    const pool = ridgeField(Q, { octaves: 4, base: 4, seed: 102 });
+    const fine = fbmField(Q, { octaves: 4, base: 14, seed: 103 });
+
+    const put = (qx, qy, fn) => {
+      const q = canvas2d(Q), qg = q.getContext('2d');
+      const im = qg.createImageData(Q, Q), dd = im.data;
+      for (let y = 0; y < Q; y++) {
+        for (let x = 0; x < Q; x++) {
+          const i = y * Q + x, p = i * 4;
+          // radial falloff so every patch has a soft edge into the ground
+          const dx = (x / Q - 0.5) * 2, dy = (y / Q - 0.5) * 2;
+          const edge = clamp(1 - Math.sqrt(dx * dx + dy * dy), 0, 1);
+          fn(x / Q, y / Q, i, edge, dd, p);
+        }
+      }
+      qg.putImageData(im, 0, 0);
+      g.drawImage(q, qx * Q, qy * Q);
+    };
+
+    // (0,0) soft ash drift — pale, dusty
+    put(0, 0, (u, v, i, edge, dd, p) => {
+      const a = clamp((soft[i] - 0.34) * 2.0, 0, 1) * Math.pow(edge, 1.5);
+      dd[p] = 255; dd[p + 1] = 250; dd[p + 2] = 240; dd[p + 3] = a * 255;
+    });
+    // (1,0) slag / oil pool — hard crusted rim, dark wet centre
+    put(1, 0, (u, v, i, edge, dd, p) => {
+      const core = clamp((soft[i] * 0.6 + edge * 0.9 - 0.52) * 4.2, 0, 1);
+      const rim = clamp(1 - Math.abs(core - 0.42) * 4.0, 0, 1);
+      const a = clamp(core * 0.95 + rim * 0.35, 0, 1) * Math.pow(edge, 0.7);
+      const crust = clamp(pool[i] * 1.3 - 0.2, 0, 1);
+      dd[p] = 255 * (0.5 + crust * 0.5);
+      dd[p + 1] = 255 * (0.42 + crust * 0.5);
+      dd[p + 2] = 255 * (0.38 + crust * 0.5);
+      dd[p + 3] = a * 255;
+    });
+    // (0,1) wind-blown streak — stretched along U
+    put(0, 1, (u, v, i, edge, dd, p) => {
+      const s = soft[(((v * Q) | 0) * Q + (((u * Q * 0.28) | 0) % Q))] || soft[i];
+      const band = clamp((s - 0.36) * 2.4, 0, 1);
+      const a = band * Math.pow(clamp(1 - Math.abs(v - 0.5) * 2.1, 0, 1), 1.2)
+        * clamp(1 - Math.abs(u - 0.5) * 2.0, 0, 1);
+      dd[p] = 255; dd[p + 1] = 246; dd[p + 2] = 232; dd[p + 3] = a * 230;
+    });
+    // (1,1) tyre / track marks — two treaded bands
+    put(1, 1, (u, v, i, edge, dd, p) => {
+      const lane = Math.min(Math.abs(v - 0.31), Math.abs(v - 0.69));
+      const across = clamp(1 - lane * 9.0, 0, 1);
+      const tread = 0.55 + 0.45 * Math.sin(u * Math.PI * 2 * 26 + (v > 0.5 ? 1.3 : 0));
+      const a = across * tread * clamp(1 - Math.abs(u - 0.5) * 2.05, 0, 1)
+        * (0.55 + fine[i] * 0.8);
+      dd[p] = 255; dd[p + 1] = 248; dd[p + 2] = 240; dd[p + 3] = clamp(a, 0, 1) * 255;
+    });
+
+    const t = tex(c);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
   });
 }
 

@@ -543,29 +543,81 @@ export function buildYard(W) {
   const B = new MeshBuilder();
   const rnd = mulberry32(7331);
 
-  // --- the container prop ---
+  // --- the container prop ------------------------------------------
+  // A shipping container IS its corrugation and its door end; without them
+  // it is a painted brick. Both are authored as real geometry here, which
+  // costs nothing per-instance because the whole yard is one InstancedMesh:
+  // ~1 k triangles authored once, drawn ~110 times in a single call.
   const CW = 13.0, CH = 3.05, CD = 3.3;
+  const HP = Math.PI / 2;
   const cGeo = propGeo((b) => {
-    b.add('_', G.box(CW, CH, CD), T(0, 0, 0), 5);
-    for (const sx of [-1, 1]) {
-      for (const sz of [-1, 1]) {
-        b.add('_', G.box(0.34, CH + 0.16, 0.34), T(sx * (CW / 2 - 0.16), 0, sz * (CD / 2 - 0.16)), 5);
+    // inner shell (kept inside the skins so nothing z-fights)
+    b.add('_', G.box(CW - 0.30, CH - 0.34, CD - 0.30), T(0, 0, 0), 5);
+
+    // corrugated long sides
+    const side = G.corr(CW - 0.62, CH - 0.52, 0.62, 0.17);
+    b.add('_', side, T(0, 0, CD / 2 - 0.09), 5);
+    b.add('_', side, T(0, 0, -(CD / 2 - 0.09), 0, Math.PI, 0), 5);
+    // corrugated roof (ribs run across the box, as they do in life)
+    b.add('_', G.corr(CW - 0.62, CD - 0.62, 0.62, 0.12), T(0, CH / 2 - 0.09, 0, -HP, 0, 0), 5);
+    // corrugated blind end
+    b.add('_', G.corr(CD - 0.62, CH - 0.52, 0.58, 0.15), T(-(CW / 2 - 0.09), 0, 0, 0, -HP, 0), 5);
+
+    // ISO corner castings — the chunky blocks every stack lands on.
+    // Plain boxes, not chamfers: a chamfer is 60 tris against a box's 12 and
+    // at 110 instances that bevel costs 40 k triangles you cannot see.
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+      b.add('_', G.box(0.62, 0.40, 0.48),
+        T(sx * (CW / 2 - 0.30), sy * (CH / 2 - 0.19), sz * (CD / 2 - 0.23)), 5);
+    }
+    // corner posts + top/bottom side rails
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      b.add('_', G.box(0.30, CH - 0.42, 0.34), T(sx * (CW / 2 - 0.15), 0, sz * (CD / 2 - 0.17)), 5);
+    }
+    for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+      b.add('_', G.box(CW - 0.62, 0.26, 0.26), T(0, sy * (CH / 2 - 0.12), sz * (CD / 2 - 0.12)), 5);
+    }
+    // underframe cross members + fork pockets
+    for (const fx of [-2.9, 0, 2.9]) {
+      b.add('_', G.box(0.30, 0.20, CD - 0.5), T(fx, -CH / 2 + 0.10, 0), 5);
+    }
+    for (const fx of [-2.1, 2.1]) {
+      b.add('_', G.box(1.4, 0.30, 0.24), T(fx, -CH / 2 + 0.18, CD / 2 - 0.10), 5);
+      b.add('_', G.box(1.4, 0.30, 0.24), T(fx, -CH / 2 + 0.18, -(CD / 2 - 0.10)), 5);
+    }
+
+    // --- door end: header, sill, two leaves, four locking bars ---
+    const DX = CW / 2 - 0.08;
+    b.add('_', G.box(0.26, 0.30, CD - 0.30), T(DX, CH / 2 - 0.28, 0), 5);
+    b.add('_', G.box(0.26, 0.30, CD - 0.30), T(DX, -CH / 2 + 0.28, 0), 5);
+    for (const sz of [-1, 1]) {
+      b.add('_', G.box(0.14, CH - 0.86, CD / 2 - 0.30), T(DX + 0.06, 0, sz * (CD / 4 - 0.06)), 5);
+      // hinges down the outer stile
+      for (const hy of [-0.85, 0.85]) {
+        b.add('_', G.box(0.22, 0.26, 0.22), T(DX + 0.05, hy, sz * (CD / 2 - 0.24)), 5);
       }
     }
-    b.add('_', G.box(CW + 0.1, 0.3, CD + 0.1), T(0, CH / 2, 0), 5);
-    b.add('_', G.box(CW + 0.1, 0.3, CD + 0.1), T(0, -CH / 2, 0), 5);
-    for (const sz of [-1, 1]) {
-      b.add('_', G.box(0.22, CH * 0.86, 0.16), T(CW / 2 - 0.02, 0, sz * 0.8), 5);
+    for (const bz of [-1.05, -0.36, 0.36, 1.05]) {
+      b.add('_', G.cyl(0.055, 0.055, CH - 0.9, 6), T(DX + 0.15, 0, bz), 5);
+      for (const ky of [-1.0, 1.0]) {
+        b.add('_', G.box(0.16, 0.20, 0.18), T(DX + 0.13, ky, bz), 5);
+      }
+      // cam handle, kicked out at an angle
+      b.add('_', G.box(0.10, 0.12, 0.52), T(DX + 0.20, -0.15, bz + 0.2, 0, 0.5, 0), 5);
     }
+    // placard board
+    b.add('_', G.box(0.05, 0.42, 0.60), T(DX + 0.20, -0.35, -1.05), 5);
   }, 5);
 
-  const COLORS = [0x6d4a30, 0x4a5245, 0x6a6258, 0x7a3b28, 0x3f4a52, 0x8a7a5c, 0x53433a];
+  // Real container liveries, dirtied down. The skin carries the rust and the
+  // stencils, so these only need to say "which paint shop".
+  const COLORS = [0x8a4a34, 0x4e5c4a, 0x7d786e, 0x93513a, 0x44505c, 0xa2947a, 0x5c4a3c];
   const mats = [], cols = [];
   const pushStack = (x, z, ry, n, seed) => {
     for (let i = 0; i < n; i++) {
       mats.push(MT(x, CH / 2 + 0.25 + i * (CH + 0.1), z, ry + (rnd() - 0.5) * 0.02));
       const c = new THREE.Color(COLORS[(seed + i) % COLORS.length]);
-      c.multiplyScalar(0.72 + rnd() * 0.5);
+      c.multiplyScalar(0.62 + rnd() * 0.52);
       cols.push(c);
     }
   };
@@ -602,7 +654,7 @@ export function buildYard(W) {
     col.addBox(x, top / 2, z, hx, top / 2, hz);
     col.addPlatform(x, z, hx, hz, top);
   }
-  const contMesh = instanced(cGeo, M.paint, mats, cols);
+  const contMesh = instanced(cGeo, M.container, mats, cols);
   contMesh.name = 'yard:containers';
 
   // --- portal crane straddling the yard ---
@@ -743,22 +795,64 @@ export function buildRail(W) {
     [22, RZ - 30, 0.8, 1.35], [-16, RZ - 16, 0.35, 0.5], [-52, RZ - 8, 0, 0],
     [-84, RZ + 8, 0, 0], [-118, RZ + 8, 0.03, 0],
   ];
+  // Wagons the player walks right past, so they carry real surface: proud
+  // stiffener ribs (the old ones stood 0.05 u off the shell and were
+  // invisible), a sloped discharge bottom, gates, end ladders and grab irons.
   for (let i = 0; i < HOPPERS.length; i++) {
     const [hx, hz, yaw, roll] = HOPPERS[i];
     const hy = terrainY(hx, hz);
     B.push(T(hx, hy, hz, 0, yaw, roll));
-    B.add('rust', G.chamfer(22, 1.6, 8.0, 0.3), T(0, 2.0, 0));
-    B.add('rust', G.chamfer(20, 6.6, 8.6, 0.5), T(0, 6.4, 0));
-    B.add('steelD', G.chamfer(20.6, 0.9, 9.2, 0.3), T(0, 9.9, 0));
+    B.add('steelD', G.chamfer(22, 1.6, 8.0, 0.3), T(0, 2.0, 0));           // underframe
+    B.add('rust', G.chamfer(20, 6.4, 8.5, 0.5), T(0, 6.5, 0));             // shell
+    // Underframe and ends: two of these wagons are tipped on their side, so
+    // the belly and the headstocks end up facing the camera and cannot be
+    // left as blank plate. Centre sill, cross bearers, draft gear, end posts.
+    B.add('steelD', G.box(22.4, 0.9, 1.6), T(0, 1.3, 0));
+    for (let k = -2; k <= 2; k++) B.add('steelD', G.box(0.7, 0.7, 7.8), T(k * 4.6, 1.35, 0));
+    for (const sx of [-1, 1]) {
+      B.add('steelD', G.chamfer(2.2, 1.4, 3.0, 0.2), T(sx * 11.1, 2.0, 0));   // draft gear
+      B.add('dark', G.cyl(0.5, 0.5, 1.6, 6), T(sx * 12.2, 2.0, 0, 0, 0, Math.PI / 2));
+      B.add('steelD', G.box(0.9, 5.4, 8.6), T(sx * 9.8, 6.4, 0));             // end post
+      B.add('rust', G.box(0.5, 5.0, 1.1), T(sx * 10.3, 6.4, 2.6));
+      B.add('rust', G.box(0.5, 5.0, 1.1), T(sx * 10.3, 6.4, -2.6));
+    }
+    B.add('rust', G.box(19.6, 0.6, 8.7), T(0, 3.9, 0));                       // belt rail
+    // sloped hopper bottom, converging on two discharge gates
+    for (const sx of [-1, 1]) {
+      B.add('rust', G.chamfer(9.4, 0.5, 8.4, 0.2), T(sx * 5.0, 3.5, 0, 0, 0, sx * 0.30));
+    }
+    for (const sx of [-1, 1]) {
+      B.add('steelD', G.chamfer(4.6, 1.5, 3.6, 0.25), T(sx * 5.2, 2.5, 0));
+      B.add('dark', G.box(3.8, 0.5, 2.8), T(sx * 5.2, 1.9, 0));
+      B.add('steelD', G.cyl(0.16, 0.16, 3.4, 6), T(sx * 5.2, 3.0, 2.3, 0, 0, 0.32));
+    }
+    // stiffener ribs — stand 0.35 u proud so they actually cast a shadow line
+    for (let k = -3; k <= 3; k++) {
+      B.add('rust', G.chamfer(0.62, 6.3, 9.20, 0.14), T(k * 2.92, 6.5, 0));
+      B.add('rust', G.chamfer(0.62, 0.9, 9.20, 0.14), T(k * 2.92, 3.5, 0));
+    }
+    // top coaming, side chords and the open mouth
+    B.add('steelD', G.chamfer(20.6, 0.9, 9.4, 0.3), T(0, 9.9, 0));
     B.add('dark', G.box(17, 0.6, 6.6), T(0, 9.9, 0));
+    for (const sz of [-1, 1]) {
+      B.add('steelD', G.box(20.2, 0.42, 0.42), T(0, 8.6, sz * 4.30));
+      B.add('steelD', G.box(20.2, 0.34, 0.34), T(0, 4.3, sz * 4.30));
+    }
+    // end ladders + grab irons
+    for (const sx of [-1, 1]) {
+      B.push(T(sx * 10.1, 2.2, 2.6, 0, sx > 0 ? 0 : Math.PI, 0));
+      ladder(B, 'steel', 7.6, { cage: false });
+      B.pop();
+      B.add('steel', G.box(0.14, 0.14, 2.2), T(sx * 10.15, 10.4, 1.4));
+    }
     for (const bx of [-7.5, 7.5]) {
       B.add('steelD', G.chamfer(7, 1.8, 7.0, 0.3), T(bx, 1.0, 0));
       for (const sz of [-3.8, 3.8]) {
         B.add('dark', G.cyl(1.35, 1.35, 0.6, 10), T(bx - 2, 1.0, sz, 0, 0, Math.PI / 2));
         B.add('dark', G.cyl(1.35, 1.35, 0.6, 10), T(bx + 2, 1.0, sz, 0, 0, Math.PI / 2));
+        B.add('steelD', G.box(4.8, 0.5, 0.4), T(bx, 2.0, sz));
       }
     }
-    for (let k = -2; k <= 2; k++) B.add('rust', G.box(0.5, 6.6, 8.7), T(k * 4.4, 6.4, 0));
     B.pop();
     col.addBox(hx, hy + 5, hz, 11, 5.5, 4.6, yaw);
   }
@@ -1035,6 +1129,14 @@ export function buildBlastWalls(W) {
     b.add('_', G.chamfer(13.6, 1.6, 5.4, 0.3), T(0, 0.8, 0), 8);
     b.add('_', G.chamfer(1.6, 9.0, 2.4, 0.2), T(-5.8, 4.6, 0.5), 8);
     b.add('_', G.chamfer(1.6, 9.0, 2.4, 0.2), T(5.8, 4.6, 0.5), 8);
+    // cast-in lifting eyes, a chipped cap and buttress ribs on the blast face
+    b.add('_', G.chamfer(13.4, 0.7, 2.2, 0.22), T(0, 9.7, 0), 8);
+    for (const bx of [-3.6, 0, 3.6]) {
+      b.add('_', G.chamfer(1.1, 8.4, 2.6, 0.2), T(bx, 4.4, 0.3), 8);
+    }
+    for (const ex of [-3.2, 3.2]) {
+      b.add('_', G.torus(0.42, 0.11, 8, 4), T(ex, 10.0, 0, 0, Math.PI / 2, 0), 8);
+    }
   }, 8);
 
   const LINES = [
@@ -1079,6 +1181,20 @@ export function buildPerimeter(W) {
       B.add('conc', G.chamfer(w, h, d, 0.8), T(0, h / 2, 0));
       B.add('concD', G.chamfer(w + 5, 3, d + 5, 0.5), T(0, 1.5, 0));
       for (let k = 0; k < 3; k++) B.add('concD', G.chamfer(w + 1.4, 1.6, d + 1.4, 0.3), T(0, h * (0.3 + k * 0.25), 0));
+      // pilasters + a dark service skirt: a 60 m blank pour has no scale and
+      // no silhouette, and at this distance that reads as a paper cut-out.
+      const np = 3 + ((rnd() * 3) | 0);
+      for (let k = 0; k <= np; k++) {
+        const px = -w / 2 + (w / np) * k;
+        B.add('concD', G.chamfer(2.4, h - 4, 1.8, 0.25), T(px, h / 2, d / 2 + 0.6));
+        B.add('concD', G.chamfer(2.4, h - 4, 1.8, 0.25), T(px, h / 2, -(d / 2 + 0.6)));
+      }
+      B.add('concD', G.chamfer(w + 2.2, h * 0.14, d + 2.2, 0.4), T(0, h * 0.07 + 2.6, 0));
+      if (rnd() < 0.6) {
+        const th = 8 + rnd() * 22;
+        B.add('steelD', G.chamfer(w * 0.34, th, d * 0.42, 0.4), T(w * 0.18, h + th / 2, 0));
+        B.add('steelD', G.cyl(1.8, 2.2, th * 0.9, 10), T(-w * 0.24, h + th * 0.45, 0));
+      }
       col.addSolid(x, gy + h / 2, z, w / 2, h / 2, d / 2, -a);
       if (rnd() < 0.5) W.strobes.push({ x, y: gy + h + 2, z, size: 1.5, hue: 0, rate: 0.5 + rnd() * 0.4, phase: rnd() * 6 });
     } else if (kind === 1) {
@@ -1108,37 +1224,80 @@ export function buildPerimeter(W) {
   }
 
   // --- far silhouettes: cheap, unlit-ish, dissolving into the haze ---
-  for (let i = 0; i < 46; i++) {
+  // Two keys ('far' / 'farD') so the skyline has value steps instead of one
+  // flat band, and a deeper shape vocabulary so it has a profile worth
+  // looking at. Still only two draw calls for the entire horizon.
+  for (let i = 0; i < 58; i++) {
     const a = rnd() * Math.PI * 2;
-    const r = 640 + rnd() * 900;
+    const r = 610 + rnd() * 940;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const t = rnd();
+    const K = rnd() < 0.42 ? 'farD' : 'far';
     F.push(T(x, terrainY(x, z) - 7, z, 0, rnd() * 3, 0));
-    if (t < 0.34) {
+    if (t < 0.24) {
+      // stepped process block with a stack cluster
       const w = 70 + rnd() * 190, h = 50 + rnd() * 150, d = 60 + rnd() * 120;
-      F.add('far', G.box(w, h, d), T(0, h / 2, 0));
-      F.add('far', G.box(w * 0.6, h * 0.45, d * 0.7), T(w * 0.1, h * 1.2, 0));
+      F.add(K, G.box(w, h, d), T(0, h / 2, 0));
+      F.add(K, G.box(w * 0.6, h * 0.45, d * 0.7), T(w * 0.1, h * 1.2, 0));
+      F.add(K, G.box(w * 0.3, h * 0.3, d * 0.42), T(-w * 0.26, h * 1.5, 0));
+      for (let k = 0; k < 3; k++) {
+        F.add(K, G.cyl(3.5, 4.6, h * (0.5 + rnd() * 0.7), 8),
+          T(w * (0.24 + k * 0.09), h * (1.0 + (0.5 + rnd() * 0.7) * 0.5), d * (rnd() - 0.5) * 0.5));
+      }
+    } else if (t < 0.44) {
+      // chimney cluster on a shared plinth
+      const n = 2 + ((rnd() * 3) | 0);
+      F.add(K, G.box(30 + rnd() * 40, 22 + rnd() * 20, 26 + rnd() * 30), T(0, 12, 0));
+      for (let k = 0; k < n; k++) {
+        const h = 130 + rnd() * 220, r2 = 7 + rnd() * 8;
+        F.add(K, G.cyl(r2 * 0.72, r2, h, 10), T((k - (n - 1) / 2) * 30, h / 2 + 16, (rnd() - 0.5) * 20));
+      }
     } else if (t < 0.62) {
-      const h = 120 + rnd() * 210, r2 = 8 + rnd() * 9;
-      F.add('far', G.cyl(r2 * 0.8, r2, h, 10), T(0, h / 2, 0));
-    } else if (t < 0.84) {
+      // hyperbolic cooling tower
       const h = 130 + rnd() * 130, rb = 34 + rnd() * 26, rw = rb * 0.52;
       const pts = [];
       for (let k = 0; k <= 8; k++) {
         const y = (k / 8) * h, tt = (y - h * 0.76) / (h * 0.62);
         pts.push(new THREE.Vector2(Math.min(rw * Math.sqrt(1 + tt * tt * 2.35), rb), y));
       }
-      F.add('far', G.lathe(pts, 18), T(0, 0, 0));
+      F.add(K, G.lathe(pts, 18), T(0, 0, 0));
+      F.add(K, G.cyl(rb * 1.06, rb * 1.12, 12, 18), T(0, 6, 0));
+    } else if (t < 0.76) {
+      // gas holder + spherical storage
+      const rr = 30 + rnd() * 26, h = 40 + rnd() * 50;
+      F.add(K, G.cyl(rr, rr, h, 16), T(0, h / 2, 0));
+      F.add(K, G.dome(rr, 16), T(0, h, 0));
+      F.add(K, G.sphere(rr * 0.44, 12, 8), T(rr * 2.3, rr * 0.62, rr * 0.5));
+      for (let k = 0; k < 4; k++) {
+        F.add(K, G.box(2.0, rr * 0.5, 2.0), T(rr * 2.3 + Math.cos(k * 1.57) * rr * 0.3, rr * 0.24, rr * 0.5 + Math.sin(k * 1.57) * rr * 0.3));
+      }
+    } else if (t < 0.9) {
+      // long shed with a saw-tooth roof and two vent stacks
+      const w = 120 + rnd() * 160, h = 34 + rnd() * 46, d = 30 + rnd() * 40;
+      F.add(K, G.box(w, h, d), T(0, h / 2, 0));
+      const teeth = 4 + ((rnd() * 4) | 0);
+      for (let k = 0; k < teeth; k++) {
+        F.add(K, G.box(w / teeth * 0.92, h * 0.26, d * 1.02),
+          T(-w / 2 + (w / teeth) * (k + 0.5), h + h * 0.11, 0, 0, 0, 0.34));
+      }
+      F.add(K, G.box(w * 0.14, h * 2.4, 14), T(-w * 0.3, h * 1.2, 0));
+      F.add(K, G.box(w * 0.14, h * 1.8, 14), T(w * 0.34, h * 0.9, 0));
     } else {
-      const w = 120 + rnd() * 160, h = 34 + rnd() * 46;
-      F.add('far', G.box(w, h, 30 + rnd() * 40), T(0, h / 2, 0));
-      F.add('far', G.box(w * 0.14, h * 2.4, 14), T(-w * 0.3, h * 1.2, 0));
-      F.add('far', G.box(w * 0.14, h * 1.8, 14), T(w * 0.34, h * 0.9, 0));
+      // lattice transmission mast — a thin spike to break the block rhythm
+      const h = 150 + rnd() * 160, wb = 16 + rnd() * 10;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        F.add(K, G.box(2.0, h, 2.0), T(sx * wb * 0.5, h / 2, sz * wb * 0.5, 0, 0, sx * 0.035));
+      }
+      for (let k = 1; k < 5; k++) {
+        F.add(K, G.box(wb * 1.6, 1.6, wb * 1.6), T(0, (h / 5) * k, 0));
+      }
+      F.add(K, G.box(wb * 2.6, 1.6, 2.0), T(0, h * 0.86, 0));
+      F.add(K, G.box(wb * 2.2, 1.6, 2.0), T(0, h * 0.72, 0));
     }
     F.pop();
   }
 
-  const meshes = B.build(M, { name: 'perimeter' });
+  const meshes = B.build(M.__ring || M, { name: 'perimeter' });
   const far = F.build(M, { name: 'far', cast: false, receive: false });
   for (const m of far) m.castShadow = false;
   return meshes.concat(far);
@@ -1165,15 +1324,29 @@ export function buildScatter(W) {
   const { M, col } = W;
   const rnd = mulberry32(9091);
 
+  // Props the player walks between: rolling hoops, chimes and battens are
+  // what make a barrel a barrel at 8 m instead of a rust-coloured cylinder.
   const barrel = propGeo((b) => {
     b.add('_', G.cyl(1.15, 1.15, 2.6, 10), T(0, 1.3, 0), 3);
-    b.add('_', G.torus(1.2, 0.1, 10, 4), T(0, 0.75, 0, Math.PI / 2, 0, 0), 3);
-    b.add('_', G.torus(1.2, 0.1, 10, 4), T(0, 1.85, 0, Math.PI / 2, 0, 0), 3);
+    b.add('_', G.torus(1.2, 0.11, 10, 4), T(0, 0.75, 0, Math.PI / 2, 0, 0), 3);
+    b.add('_', G.torus(1.2, 0.11, 10, 4), T(0, 1.85, 0, Math.PI / 2, 0, 0), 3);
+    b.add('_', G.torus(1.17, 0.09, 10, 3), T(0, 0.06, 0, Math.PI / 2, 0, 0), 3);
+    b.add('_', G.torus(1.17, 0.09, 10, 3), T(0, 2.54, 0, Math.PI / 2, 0, 0), 3);
+    b.add('_', G.cyl(0.24, 0.24, 0.14, 6), T(0.6, 2.62, 0.25), 3);
   }, 3);
   const crate = propGeo((b) => {
     b.add('_', G.chamfer(4.4, 3.2, 3.4, 0.18), T(0, 1.6, 0), 4);
-    b.add('_', G.box(4.6, 0.24, 0.3), T(0, 2.6, 1.75), 4);
-    b.add('_', G.box(4.6, 0.24, 0.3), T(0, 0.7, 1.75), 4);
+    for (const sz of [1.76, -1.76]) {
+      b.add('_', G.box(4.5, 0.24, 0.22), T(0, 2.62, sz), 4);
+      b.add('_', G.box(4.5, 0.24, 0.22), T(0, 0.62, sz), 4);
+      for (const sx of [-2.02, 2.02]) b.add('_', G.box(0.3, 3.1, 0.2), T(sx, 1.6, sz), 4);
+    }
+    for (const sx of [2.24, -2.24]) {
+      b.add('_', G.box(0.2, 0.24, 3.4), T(sx, 2.62, 0), 4);
+      b.add('_', G.box(0.2, 0.24, 3.4), T(sx, 0.62, 0), 4);
+    }
+    b.add('_', G.chamfer(4.7, 0.3, 3.7, 0.12), T(0, 3.28, 0), 4);
+    b.add('_', G.box(4.6, 0.22, 0.9), T(0, 0.12, 0), 4);   // skid
   }, 4);
   const block = propGeo((b) => {
     b.add('_', G.chamfer(7.5, 4.2, 5.0, 0.35), T(0, 2.1, 0), 8);

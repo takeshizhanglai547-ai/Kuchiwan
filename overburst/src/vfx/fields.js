@@ -189,7 +189,12 @@ void main() {
   vUv = uv;
   float flick = 0.70 + 0.30 * sin(age * 71.0 + iP1.w * 43.0);
   vA = pow(1.0 - t, 1.3) * flick * (1.0 - fogAmt(-mv.z));
-  vCol = mix(iCol, iCol * vec3(0.40, 0.085, 0.02), smoothstep(0.12, 0.95, t));
+  // A spark leaves the event white-hot and cools through orange into dull
+  // red: without the leading white the streak reads as a coloured line, not
+  // as burning metal.
+  vec3 hot = mix(iCol, vec3(max(iCol.r, 2.4)), 0.55) * 1.9;
+  vCol = mix(hot, iCol, smoothstep(0.0, 0.14, t));
+  vCol = mix(vCol, iCol * vec3(0.40, 0.085, 0.02), smoothstep(0.12, 0.95, t));
 }
 `;
 
@@ -321,17 +326,37 @@ export class SmokeField extends QuadField {
 }
 
 // ==================================================================
-//  FIRE — additive, eroding, cooling fireball puffs
+//  FIRE — OPAQUE, eroding, cooling fireball billows.
+//
+//  This field is deliberately NOT additive. Additive fire is the single
+//  biggest reason a detonation reads as pink cotton wool: thirty
+//  overlapping puffs sum their radiance, the red channel saturates first,
+//  then green, and the filmic shoulder lands the whole ball on pale peach
+//  with no internal shape and no darks anywhere.
+//
+//  Instead every billow is drawn PREMULTIPLIED (src = 1, dst = 1-srcA), so
+//  it OCCLUDES what is behind it exactly like real optically-thick soot-
+//  laden flame. Consequences that matter:
+//    * overlapping billows converge on the nearest billow's colour instead
+//      of racing to white — saturated orange-red survives to the screen;
+//    * a cooled billow whose emission has dropped to soot actually DARKENS
+//      the frame, which is what gives fire a leading edge and a trailing
+//      shadow instead of a uniform glow;
+//    * the hot core can be authored far above the bloom cutoff (7-9 linear)
+//      without bleaching its neighbours, because it no longer adds to them.
+//  Unsorted alpha blending is the accepted trade here; the callers spawn
+//  cool billows first and the white-hot core LAST so instance order (which
+//  is draw order) already runs cold-to-hot back-to-front.
 // ==================================================================
 const FIRE_V = /* glsl */`
 attribute vec3 iPos;
 attribute vec3 iVel;
 attribute vec4 iP0;   // birth, life, size0, size1
 attribute vec4 iP1;   // rot0, rotSpd, drag, gravity
-attribute vec4 iCol;  // heat, uOff, vOff, intensity
+attribute vec4 iCol;  // heat, seed, cool, intensity
 uniform float uTime;
 varying vec2 vUv, vQ;
-varying float vT, vHeat, vI, vFog;
+varying float vT, vHeat, vI, vFog, vCool, vSeed;
 ${FOG_HEAD}
 ${MOTION}
 void main() {
@@ -340,7 +365,12 @@ void main() {
   if (age < 0.0 || t >= 1.0) { gl_Position = vec4(2.0, 0.0, 0.0, 1.0); return; }
   vec3 p, v;
   motion(iPos, iVel, age, iP1.z, iP1.w, p, v);
-  float sz = mix(iP0.z, iP0.w, 1.0 - pow(1.0 - t, 1.7));
+  // A billow PUNCHES out and then coasts as it entrains cold air. The curve
+  // matters more than it looks: an ease-out on (1-t)^n is only ~30 % grown a
+  // sixth of the way in, so at the instant a still frame is likely to catch
+  // the blast the ball has no bulk at all and reads as scattered embers.
+  // pow(t, 0.34) is ~50 % grown by t = 0.15 and ~80 % by t = 0.5.
+  float sz = mix(iP0.z, iP0.w, pow(t, 0.34));
   vec3 rgt = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 upv = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
   float rot = iP1.x + iP1.y * age;
@@ -349,39 +379,77 @@ void main() {
   vec3 world = p + (rgt * q.x + upv * q.y) * sz;
   vec4 mv = viewMatrix * vec4(world, 1.0);
   gl_Position = projectionMatrix * mv;
-  vUv = uv * 0.86 + vec2(iCol.y, iCol.z) * 0.14;
-  vQ = uv * 2.0 - 1.0;
-  vT = t; vHeat = iCol.x; vI = iCol.w;
+  // Per-billow UV rotation + mirror + zoom, all about the plate centre. One
+  // 256px flame plate reused at one orientation is what made every puff read
+  // as the same round blob; this makes each instance a different crop of it
+  // for free. Staying inside |u0| <= ~1.15 keeps every tap within the plate's
+  // own radial falloff, so the rotation never smears a clamped border row.
+  float sa = iCol.y * 6.2831853;
+  float c2 = cos(sa), s2 = sin(sa);
+  vec2 u0 = uv * 2.0 - 1.0;
+  u0 = vec2(u0.x * c2 - u0.y * s2, u0.x * s2 + u0.y * c2);
+  u0 *= mix(0.94, 1.14, fract(iCol.y * 7.13));
+  u0.x *= fract(iCol.y * 3.71) > 0.5 ? -1.0 : 1.0;
+  vUv = u0 * 0.5 + 0.5;
+  vQ = u0;
+  vT = t; vHeat = iCol.x; vI = iCol.w; vCool = iCol.z; vSeed = iCol.y;
   vFog = fogAmt(-mv.z);
 }
 `;
 
-// Cooling ramp. The paper-white band is gated on AGE, not just heat, so the
-// core is white for ~2 frames and everything after that is orange -> red ->
-// soot. Without that gate the whole fireball clips to white and reads as a
-// lightbulb instead of burning fuel.
+// Blackbody-ish cooling ramp, authored in LINEAR radiance.
+//   soot 0.03 -> dull red -> saturated red-orange -> orange -> yellow -> white
+// The white band is gated on BOTH per-billow heat and age, so only the few
+// core billows ever reach it and only while they are young. Everything else
+// stays firmly on the saturated orange-red part of the curve — which is the
+// colour that was missing from the frame entirely.
 const FIRE_F = /* glsl */`
 uniform sampler2D uMap;
+uniform vec3 uFogColor;
 varying vec2 vUv, vQ;
-varying float vT, vHeat, vI, vFog;
+varying float vT, vHeat, vI, vFog, vCool, vSeed;
 void main() {
   vec4 s = texture2D(uMap, vUv);
-  float thr = vT * 0.55;
-  float a = smoothstep(thr, thr + 0.28, s.a) * (1.0 - smoothstep(0.62, 1.0, vT));
-  a *= vI * (1.0 - vFog) * 0.42;
-  a *= 1.0 - smoothstep(0.68, 1.0, length(vQ));   // never clip at the quad edge
-  if (a < 0.006) discard;
-  float flash = 1.0 - smoothstep(0.10, 0.45, vT);      // white core, then it cools
-  // 1.05, not 1.35: any higher and h saturates over the whole puff, so every
-  // overlapping billow goes white and the detonation reads as a lightbulb.
-  float h = clamp(s.r * vHeat * 1.05 - vT * 0.55, 0.0, 1.0);
-  vec3 c = mix(vec3(0.20, 0.026, 0.006), vec3(1.30, 0.22, 0.026), smoothstep(0.04, 0.30, h));
-  c = mix(c, vec3(2.90, 0.92, 0.100), smoothstep(0.30, 0.60, h));   // body: orange-red
-  c = mix(c, vec3(4.20, 2.20, 0.55),  smoothstep(0.62, 0.90, h));   // hot yellow rim
-  c = mix(c, vec3(4.80, 4.10, 3.00),  smoothstep(0.90, 1.00, h) * flash);
-  // the fuel-rich edge sooties over as it cools: drop chroma AND level
-  c *= mix(1.0, 0.55, smoothstep(0.55, 1.00, vT));
-  gl_FragColor = vec4(c * a, 1.0);
+  // Erosion: the alpha cut climbs with age so the billow dissolves from its
+  // fringe inward (turbulent break-up) instead of fading as a whole disc.
+  // The 0.12 floor matters — it is what crops the plate's soft outer fringe
+  // so the silhouette comes from the flame noise instead of being a circle.
+  float thr = 0.09 + vT * vCool * 0.80;
+  float soft = mix(0.15, 0.42, vT);          // sharp leading edge, soft once cold
+  float cov = smoothstep(thr, thr + soft, s.a);
+  // Trim only the corners of the quad; the ragged edge is the texture's job.
+  cov *= 1.0 - smoothstep(0.96, 1.14, length(vQ));
+
+  // The plate's heat channel falls off as pow(edge, 2.2), so a purely
+  // multiplicative ramp confines "white-hot" to a couple of texels at the
+  // dead centre of a core billow. The additive bias lifts the WHOLE billow
+  // for high-heat instances, which is what gives the blast a core you can
+  // actually see rather than a glint.
+  float h = clamp(s.r * vHeat * 0.85 + (vHeat - 1.0) * 0.24 - vT * 0.95, 0.0, 1.0);
+
+  // optical density — this is what makes it occlude
+  float dens = cov * vI * (1.0 - smoothstep(0.66, 1.0, vT));
+  dens *= mix(0.72, 1.0, smoothstep(0.0, 0.30, h));  // burnt-out wisps go thin
+  dens = clamp(dens, 0.0, 1.0);
+  if (dens < 0.004) discard;
+
+  // Calibrated against THIS project's composite, not against physics: the
+  // filmic shoulder sits at 0.86 and the bleach term drags the top to white,
+  // so a body authored at 5+ linear comes back salmon. Saturated orange-red
+  // lives at 1.5-3.0 linear here; only the small core is allowed past that.
+  float flash = 1.0 - smoothstep(0.16, 0.70, vT);
+  vec3 c = vec3(0.020, 0.008, 0.005);                                       // soot
+  c = mix(c, vec3(0.42, 0.045, 0.010), smoothstep(0.02, 0.20, h));          // dull red
+  c = mix(c, vec3(1.55, 0.235, 0.020), smoothstep(0.18, 0.42, h));          // red-orange
+  c = mix(c, vec3(3.10, 0.860, 0.070), smoothstep(0.44, 0.70, h));          // orange
+  c = mix(c, vec3(5.20, 2.900, 0.420), smoothstep(0.72, 0.89, h));          // yellow
+  c = mix(c, vec3(8.20, 7.400, 5.400), smoothstep(0.90, 1.00, h) * flash);  // white-hot
+  // internal turbulence: dark fuel-rich veins through the body
+  c *= 0.80 + 0.42 * s.g;
+  // aerial perspective — a distant fireball must sit in the same haze as the
+  // refinery behind it, otherwise it reads as a decal pasted on the lens
+  c = mix(c, uFogColor * 0.6, vFog * 0.85);
+  gl_FragColor = vec4(c * dens, dens);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -394,7 +462,11 @@ export class FireField extends QuadField {
       uniforms: { ...shared, uMap: { value: fireTexture() } },
       vertexShader: FIRE_V, fragmentShader: FIRE_F,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
+      // premultiplied alpha: c already carries the coverage factor
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+      blendEquation: THREE.AddEquation,
     });
     this._mesh(mat, renderOrder);
   }
@@ -406,7 +478,8 @@ export class FireField extends QuadField {
     a.iVel[i3] = vx; a.iVel[i3 + 1] = vy; a.iVel[i3 + 2] = vz;
     a.iP0[i4] = o.birth; a.iP0[i4 + 1] = o.life; a.iP0[i4 + 2] = o.size0; a.iP0[i4 + 3] = o.size1;
     a.iP1[i4] = o.rot; a.iP1[i4 + 1] = o.rotSpd; a.iP1[i4 + 2] = o.drag; a.iP1[i4 + 3] = o.gravity;
-    a.iCol[i4] = o.heat; a.iCol[i4 + 1] = Math.random(); a.iCol[i4 + 2] = Math.random(); a.iCol[i4 + 3] = o.intensity;
+    a.iCol[i4] = o.heat; a.iCol[i4 + 1] = Math.random();
+    a.iCol[i4 + 2] = o.cool ?? 0.55; a.iCol[i4 + 3] = o.intensity;
   }
 }
 
@@ -513,6 +586,206 @@ export class SpriteField extends QuadField {
     a.iNrm[i3] = o.nx; a.iNrm[i3 + 1] = o.ny; a.iNrm[i3 + 2] = o.nz;
     a.iCol[i4] = o.r; a.iCol[i4 + 1] = o.g; a.iCol[i4 + 2] = o.b; a.iCol[i4 + 3] = o.fade || 1.6;
   }
+}
+
+// ==================================================================
+//  SHOCK — the two fronts a detonation throws, as real geometry.
+//
+//    mode 0 : a FLAT GROUND RING, an annulus lying in the blast plane that
+//             races outward. Drawn as a disc whose fragment shader carries
+//             the shock profile (hard bright leading rim, short inner wash,
+//             azimuthal break-up) so the front stays one pixel-crisp line
+//             however far it expands.
+//    mode 1 : the SPHERICAL CONDENSATION SHELL — a fresnel-rimmed expanding
+//             sphere, i.e. the Wilson cloud that flashes off a big charge.
+//
+//  A billboarded ring sprite cannot do either: scaled to explosion size it
+//  becomes a translucent disc facing the lens, which is why the old frames
+//  had no shock front at all. Two extra draw calls, one shared material.
+// ==================================================================
+function shockDiscGeometry(RS = 72, RINGS = 5) {
+  const pos = [], uv = [], idx = [];
+  for (let j = 0; j <= RINGS; j++) {
+    // pack the vertices toward the rim: that is where all the detail is
+    const r = Math.pow(j / RINGS, 0.45);
+    for (let i = 0; i <= RS; i++) {
+      const a = (i / RS) * Math.PI * 2;
+      pos.push(Math.cos(a) * r, Math.sin(a) * r, 0);
+      uv.push(i / RS, r);
+    }
+  }
+  for (let j = 0; j < RINGS; j++) {
+    for (let i = 0; i < RS; i++) {
+      const a = j * (RS + 1) + i, b = a + 1, c = a + RS + 1, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+const SHOCK_V = /* glsl */`
+attribute vec3 iPos;
+attribute vec3 iNrm;
+attribute vec4 iP0;   // birth, life, r0, r1
+attribute vec4 iP1;   // thickness, mode, ease, seed
+attribute vec4 iCol;  // rgb, intensity
+uniform float uTime;
+uniform float uMode;  // which of the two geometries this program draws
+varying vec2 vUv;
+varying vec3 vCol, vN, vV;
+varying float vA, vTh, vSeed, vT, vFog;
+${FOG_HEAD}
+void main() {
+  float age = uTime - iP0.x;
+  float t = age / iP0.y;
+  // one instance buffer feeds both meshes; skip the ones that are not ours
+  if (abs(iP1.y - uMode) > 0.5) { gl_Position = vec4(2.0, 0.0, 0.0, 1.0); return; }
+  if (age < 0.0 || t >= 1.0) { gl_Position = vec4(2.0, 0.0, 0.0, 1.0); return; }
+  // a shock front decelerates hard: most of the distance is covered early
+  float R = mix(iP0.z, iP0.w, 1.0 - pow(1.0 - t, iP1.z));
+  vec3 world;
+  if (iP1.y < 0.5) {
+    vec3 n = normalize(iNrm);
+    vec3 up = abs(n.y) > 0.93 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 tx = normalize(cross(up, n));
+    vec3 ty = cross(n, tx);
+    world = iPos + (tx * position.x + ty * position.y) * R;
+    vN = n;
+  } else {
+    world = iPos + position * R;
+    vN = normalize(mat3(viewMatrix) * normalize(position));
+  }
+  vec4 mv = viewMatrix * vec4(world, 1.0);
+  gl_Position = projectionMatrix * mv;
+  vV = -mv.xyz;
+  vUv = uv;
+  vCol = iCol.rgb;
+  vTh = iP1.x; vSeed = iP1.w; vT = t;
+  // bright for the first third, then it thins out and dies
+  vA = iCol.a * (1.0 - smoothstep(0.06, 1.0, t)) * min(1.0, t * 34.0);
+  // HARD GUARD: a front that grows past its own distance to the lens turns
+  // inside out and paints itself over the whole frame. Fade any front out as
+  // it reaches the camera — that is also what a shockwave washing over you
+  // should look like, so it costs nothing artistically.
+  float camD = distance(cameraPosition, iPos);
+  vA *= 1.0 - smoothstep(camD * 0.70, camD * 1.00, R);
+  vFog = fogAmt(-mv.z);
+}
+`;
+
+const SHOCK_F = /* glsl */`
+varying vec2 vUv;
+varying vec3 vCol, vN, vV;
+varying float vA, vTh, vSeed, vT, vFog;
+void main() {
+  float a;
+  if (vTh > 0.0) {
+    // --- flat ring: uv.y is the normalised radius, 1.0 is the front ---
+    float d = 1.0 - vUv.y;
+    float band = exp(-(d / vTh) * (d / vTh));               // the shock line
+    // The inner wash has to stay TIGHT to the front. A broad additive fill on
+    // a disc that is 100 m across lands as a warm veil over the whole lower
+    // frame — which is exactly the haze this pass exists to remove.
+    float wash = exp(-d / 0.11) * 0.06;                     // hot air behind it
+    // azimuthal break-up so the front is never a perfect circle
+    float br = 0.72 + 0.28 * sin(vUv.x * 44.0 + vSeed * 19.0)
+                    + 0.16 * sin(vUv.x * 13.0 - vSeed * 7.0);
+    a = (band * br + wash) * vA;
+  } else {
+    // --- condensation shell: rim only, never a filled ball ---
+    float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+    a = pow(f, 4.2) * vA * 1.6;
+  }
+  a *= 1.0 - vFog;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vCol * a, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+export class ShockField {
+  constructor(cap, shared, renderOrder = 14) {
+    this.cap = cap;
+    this.cursor = 0;
+    const specs = [['iPos', 3], ['iNrm', 3], ['iP0', 4], ['iP1', 4], ['iCol', 4]];
+    const mat = (mode) => new THREE.ShaderMaterial({
+      uniforms: { ...shared, uMode: { value: mode } },
+      vertexShader: SHOCK_V, fragmentShader: SHOCK_F,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    this.matA = mat(0); this.matB = mat(1);
+    this.arr = {}; this.attrs = [];
+    // Both meshes share ONE instance buffer; the `mode` attribute makes every
+    // instance a no-op in the geometry it does not belong to, so a ring costs
+    // nothing in the shell pass and vice versa.
+    const build = (base) => {
+      const g = new THREE.InstancedBufferGeometry();
+      g.index = base.index;
+      g.setAttribute('position', base.attributes.position);
+      g.setAttribute('uv', base.attributes.uv);
+      g.instanceCount = cap;
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
+      return g;
+    };
+    const disc = shockDiscGeometry();
+    const shell = new THREE.IcosahedronGeometry(1, 2);
+    this.geoA = build(disc);
+    this.geoB = build(shell);
+    disc.dispose(); shell.dispose();
+    for (const [name, size] of specs) {
+      const arr = new Float32Array(cap * size);
+      const a = new THREE.InstancedBufferAttribute(arr, size);
+      a.setUsage(THREE.DynamicDrawUsage);
+      const b = new THREE.InstancedBufferAttribute(arr, size);
+      b.setUsage(THREE.DynamicDrawUsage);
+      this.geoA.setAttribute(name, a);
+      this.geoB.setAttribute(name, b);
+      this.arr[name] = arr;
+      this.attrs.push(a, b);
+    }
+    this.meshA = new THREE.Mesh(this.geoA, this.matA);
+    this.meshB = new THREE.Mesh(this.geoB, this.matB);
+    for (const m of [this.meshA, this.meshB]) {
+      m.frustumCulled = false; m.matrixAutoUpdate = false; m.renderOrder = renderOrder;
+    }
+    this.clear();
+  }
+
+  /** o: {birth, life, r0, r1, thickness, mode, ease, r, g, b, intensity} */
+  spawn(px, py, pz, nx, ny, nz, o) {
+    const i = this.cursor;
+    this.cursor = (this.cursor + 1) % this.cap;
+    const a = this.arr, i3 = i * 3, i4 = i * 4;
+    a.iPos[i3] = px; a.iPos[i3 + 1] = py; a.iPos[i3 + 2] = pz;
+    a.iNrm[i3] = nx; a.iNrm[i3 + 1] = ny; a.iNrm[i3 + 2] = nz;
+    a.iP0[i4] = o.birth; a.iP0[i4 + 1] = o.life; a.iP0[i4 + 2] = o.r0; a.iP0[i4 + 3] = o.r1;
+    a.iP1[i4] = o.mode ? 0 : (o.thickness ?? 0.05);
+    a.iP1[i4 + 1] = o.mode ?? 0; a.iP1[i4 + 2] = o.ease ?? 2.6;
+    a.iP1[i4 + 3] = Math.random() * 6.28;
+    a.iCol[i4] = o.r; a.iCol[i4 + 1] = o.g; a.iCol[i4 + 2] = o.b; a.iCol[i4 + 3] = o.intensity ?? 1;
+    this._dirty = true;
+  }
+
+  flush() {
+    if (!this._dirty) return;
+    for (const a of this.attrs) a.needsUpdate = true;
+    this._dirty = false;
+  }
+
+  clear() {
+    const p = this.arr.iP0;
+    for (let i = 0; i < this.cap; i++) p[i * 4] = DEAD;
+    this.cursor = 0;
+    this._dirty = true;
+  }
+
+  dispose() { this.geoA.dispose(); this.geoB.dispose(); this.matA.dispose(); this.matB.dispose(); }
 }
 
 // ==================================================================

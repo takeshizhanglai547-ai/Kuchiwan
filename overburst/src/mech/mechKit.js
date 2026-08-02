@@ -182,19 +182,37 @@ function boxProject(g, scale, ou, ov) {
 }
 
 //  colour.r arrives as the chamfer mask (1 = flat plate face, 0 = bevel).
-//  Painted armour is DARK; the bevels are where the paint has been rubbed
-//  back to bare steel, so they read as a bright chamfer line that catches
-//  the key light. Wear is biased toward upward-facing edges — a uniform
-//  bevel highlight just outlines every box in white.
-function paint(g, base, wear, ao, jitter, wearAmt = 0.88) {
+//
+//  Painted armour is DARK. The chamfer is treated the way a real bevel on
+//  a painted steel plate behaves, which is NOT "uniformly brighter":
+//    * an UP-facing chamfer is where the paint gets scuffed off and where
+//      the sky lands — bare steel, and it is what draws the silhouette.
+//    * a SIDE-facing chamfer is just more paint — it must vanish.
+//    * a DOWN-facing chamfer sits in the plate's own contact shadow — it
+//      goes darker than the face, and that dark line is what reads as a
+//      plate gap at 20–40 m.
+//  Lighting every bevel equally (the old behaviour) drew a bright outline
+//  around every single box on the frame: the exact signature of a moulded
+//  plastic toy.
+function paint(g, base, wear, ao, jitter, wearAmt = 0.52) {
   const col = g.attributes.color, nrm = g.attributes.normal;
   _c1.set(base); _c2.set(wear);
   const jr = 1 + jitter;
   for (let i = 0; i < col.count; i++) {
     const m = col.getX(i);
     const ny = nrm.getY(i);
-    const f = (1 - ao * (0.5 - 0.5 * ny)) * jr;      // fake vertical AO
-    const w = (1 - m) * wearAmt * (0.5 + 0.5 * (0.5 + 0.5 * ny));
+    const bev = 1 - m;
+    // Fake vertical AO. The curve is deliberately BOTTOM-WEIGHTED: the
+    // vertical faces (which is most of what the camera ever sees on a
+    // walker) keep their paint value, while undersides fall off a cliff so
+    // stacked plates separate by value instead of relying on the shadow map.
+    const dn = 0.5 - 0.5 * ny;                       // 0 = up, 1 = down
+    let f = (1 - ao * (0.50 * dn + 0.98 * dn * dn * dn)) * jr;
+    // bevel contact shadow (down-facing edges only)
+    if (ny < 0) f *= 1 - 0.46 * bev * (-ny);
+    if (f < 0) f = 0;
+    const up = ny > 0 ? ny : 0;
+    const w = bev * wearAmt * up * Math.sqrt(up);    // bare steel, top edges
     col.setXYZ(i,
       (_c1.r + (_c2.r - _c1.r) * w) * f,
       (_c1.g + (_c2.g - _c1.g) * w) * f,
@@ -300,8 +318,11 @@ export class Kit {
     g.applyMatrix4(_m);
     if (!o.keepUV) boxProject(g, o.uvScale ?? this.uvScale, o.uvOff ? o.uvOff[0] : 0, o.uvOff ? o.uvOff[1] : 0);
     if (key !== 'flame' && key !== 'heat') {
-      const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.13;
-      paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.34, jit, o.wearAmt);
+      const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.19;
+      // wear varies PER PLATE — a frame where every chamfer is rubbed back
+      // by the same amount looks machined, not used.
+      const wa = o.wearAmt ?? (0.30 + this.rng() * 0.64);
+      paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.40, jit, wa);
     }
     this._bucket(key).push(g);
     return g;
@@ -370,9 +391,9 @@ export class Kit {
     _q.setFromEuler(_e.set(R[0], R[1], R[2], 'XYZ'));
     const at = (ox, oy, oz) => { _v.set(ox, oy, oz).applyQuaternion(_q); return _v; };
     let p = at(0, 0, 0.01);
-    this.plate(w + 0.1, h + 0.1, 0.04, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: 0x101216, ao: 0.1, c: 0.012, jitter: 0 });
+    this.plate(w + 0.1, h + 0.1, 0.04, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: 0x0a0b0e, ao: 0.1, c: 0.012, jitter: 0 });
     p = at(0, 0, 0.05);
-    this.plate(w, h, 0.05, x + p.x, y + p.y, z + p.z, { ...rot, base: o.base ?? 0x8f949a, wear: o.wear ?? 0xd2d6d9, c: 0.022 });
+    this.plate(w, h, 0.05, x + p.x, y + p.y, z + p.z, { ...rot, base: o.base ?? 0x6b7076, wear: o.wear ?? 0xa4aab1, c: 0.022 });
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
       p = at(Math.cos(a) * w * 0.36, Math.sin(a) * h * 0.36, 0.086);
@@ -399,7 +420,7 @@ export class Kit {
       const q1 = A.clone().lerp(mid, 0.5); q1.y -= sag * 0.3;
       const q2 = mid.clone().lerp(B, 0.5); q2.y -= sag * 0.3;
       this.tube([A, q1, mid, q2, B], r * (0.8 + this.rng() * 0.45),
-        { key: 'dark', base: o.base ?? 0x0e1013, ao: 0.42, seg: 6, rad: 4, jitter: (this.rng() - 0.5) * 0.3 });
+        { key: 'dark', base: o.base ?? 0x24272b, ao: 0.5, seg: 6, rad: 4, jitter: (this.rng() - 0.5) * 0.34 });
     }
   }
 

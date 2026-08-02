@@ -215,10 +215,16 @@ export class LightPool {
       e.age += dt;
       const t = e.age / e.life;
       if (t >= 1) { e.life = 0; e.light.intensity = 0; e.light.visible = false; continue; }
-      // Detonation falloff: a hard punch in the first ~80 ms, then a long
-      // low ember glow instead of an instant cut. (A pure exp(-4.6t) died so
-      // fast the world never actually looked lit.)
-      const k = (1 - t) * (1 - t) * (0.28 + 0.72 * Math.exp(-t * 5.2));
+      // Detonation falloff, in two superimposed terms:
+      //   a HARD PUNCH   0.5*exp(-10t)  — the flash, gone in ~2 frames
+      //   a FIREBALL TAIL 0.5*(1-t)^1.6*exp(-1.2t) — the burning ball, which
+      //                   is still throwing ~27 % of peak a quarter of the way
+      //                   in. This second term is what actually lights the
+      //                   mech and the ground in a still frame; a pure
+      //                   exponential decayed so fast the world never showed
+      //                   any response at all.
+      const k = 0.5 * Math.exp(-t * 10.0)
+        + 0.5 * Math.pow(1 - t, 1.6) * Math.exp(-t * 1.2);
       const flick = 0.86 + 0.14 * Math.sin(e.age * 47) * (1 - t);
       e.light.intensity = e.peak * k * flick;
     }

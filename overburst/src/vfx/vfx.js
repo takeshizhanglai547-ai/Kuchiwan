@@ -59,6 +59,7 @@ import { CFG } from '../config.js';
 import { rand, clamp } from '../util/math.js';
 import {
   makeShared, SparkField, SmokeField, FireField, SpriteField, DecalField, PlumeField,
+  ShockField,
 } from './fields.js';
 import { CELL } from './vfxTextures.js';
 import { RibbonPool } from './ribbons.js';
@@ -68,9 +69,9 @@ import { DebrisPool, LightPool, GhostPool } from './props.js';
 //  budget (VFX-local tuning: config.js is shared, this section is not)
 // ------------------------------------------------------------------
 const CAP = {
-  SPARKS: 2400, SMOKE: 1100, FIRE: 760, SPRITES: 900, BEAMS: 256,
-  DECALS: 96, PLUMES: 96, DEBRIS: 72, CASINGS: 48, LIGHTS: 3,
-  TRAILS: 20, TRAIL_SEGS: 26, ARCS: 5, ARC_SEGS: 20,
+  SPARKS: 2400, SMOKE: 1200, FIRE: 900, SPRITES: 900, BEAMS: 256,
+  DECALS: 96, PLUMES: 96, DEBRIS: 96, CASINGS: 48, LIGHTS: 5,
+  TRAILS: 20, TRAIL_SEGS: 26, ARCS: 5, ARC_SEGS: 20, SHOCK: 48,
 };
 
 // Linear HDR colours. The composite tonemaps with a soft shoulder at 0.86 and
@@ -83,17 +84,24 @@ const CAP = {
 // into the bloom high-pass (cutoff 1.48) and smears a peach veil over the
 // frame. So the ceiling here is ~4.6, not 8.
 const C = {
-  sparkHot: [4.0, 1.70, 0.42],
-  sparkCold: [2.3, 0.95, 0.24],
+  sparkHot: [5.2, 1.85, 0.30],
+  sparkCold: [2.8, 0.82, 0.13],
   sparkCyan: [0.75, 2.40, 3.90],
   sparkViolet: [2.60, 1.00, 4.20],
   flashWhite: [4.6, 4.0, 3.2],
-  flashMuzzle: [4.6, 2.8, 1.0],
+  // The detonation flash is the brightest thing in the game by design: it is
+  // the only value authored above the "nothing beyond 4.6" budget, and it is
+  // on screen for ~2 frames over a small area, which is exactly the window
+  // where the bloom high-pass buys you a blown-out core instead of a veil.
+  flashDeton: [8.6, 7.6, 5.9],
+  coreHot: [7.0, 3.9, 0.85],
+  flashMuzzle: [5.4, 2.9, 0.85],
   flashPlasma: [3.0, 1.9, 5.0],
-  ring: [2.4, 1.05, 0.38],
+  ring: [4.2, 1.35, 0.26],
+  ringHot: [5.0, 2.25, 0.55],
   ringCyan: [0.70, 1.90, 3.00],
-  soot: [0.072, 0.067, 0.064],
-  smokeWarm: [0.18, 0.118, 0.086],
+  soot: [0.042, 0.038, 0.037],
+  smokeWarm: [0.135, 0.075, 0.046],
   dust: [0.27, 0.245, 0.210],
   steam: [0.40, 0.39, 0.385],
   plumeCoreP: [1.55, 2.70, 4.10],
@@ -131,8 +139,9 @@ const _tmpCol = [0, 0, 0];
 const _so = { birth: 0, life: 1, size0: 1, size1: 1, cell: 0, mode: 0, spin: 0, spinRate: 0, nx: 0, ny: 1, nz: 0, r: 1, g: 1, b: 1, fade: 1.6, vx: 0, vy: 0, vz: 0 };
 const _ko = { birth: 0, life: 1, width: 0.1, drag: 0.6, gravity: 40, floorY: -1e5, stretch: 0.02, r: 1, g: 1, b: 1 };
 const _mo = { birth: 0, life: 1, size0: 1, size1: 2, rot: 0, rotSpd: 0, drag: 1, gravity: 0, r: 0.1, g: 0.1, b: 0.1, opacity: 1 };
-const _fo = { birth: 0, life: 1, size0: 1, size1: 2, rot: 0, rotSpd: 0, drag: 2, gravity: -2, heat: 1, intensity: 1 };
+const _fo = { birth: 0, life: 1, size0: 1, size1: 2, rot: 0, rotSpd: 0, drag: 2, gravity: -2, heat: 1, intensity: 1, cool: 0.55 };
 const _do = { birth: 0, life: 12, size: 2, r: 1, g: 1, b: 1, opacity: 0.85 };
+const _wo = { birth: 0, life: 1, r0: 1, r1: 10, thickness: 0.05, mode: 0, ease: 2.6, r: 1, g: 1, b: 1, intensity: 1 };
 
 function toVec(a, out) {
   if (!a) return out.set(0, 0, 0);
@@ -231,6 +240,7 @@ export class VFX {
     this.beams = new SpriteField(CAP.BEAMS, shared, 15);
     this.decals = new DecalField(CAP.DECALS, shared, 3);
     this.plumes = new PlumeField(CAP.PLUMES, shared, 13);
+    this.shock = new ShockField(CAP.SHOCK, shared, 14);
 
     this.smokeRib = new RibbonPool({
       trails: CAP.TRAILS, segments: CAP.TRAIL_SEGS, kind: 'smoke',
@@ -243,6 +253,7 @@ export class VFX {
 
     this.group.add(
       this.smoke_.mesh, this.smokeRib.mesh, this.fire_.mesh, this.plumes.mesh,
+      this.shock.meshA, this.shock.meshB,
       this.sparks_.mesh, this.sprites.mesh, this.beams.mesh, this.decals.mesh,
       this.arcRib.mesh,
     );
@@ -304,6 +315,7 @@ export class VFX {
     this.time = 0;
     for (const f of [this.sparks_, this.smoke_, this.fire_, this.sprites, this.beams, this.decals]) f.clear();
     this.plumes.clear();
+    this.shock.clear();
     this.smokeRib.clear();
     this.arcRib.clear();
     this.debris_.clear();
@@ -349,7 +361,7 @@ export class VFX {
     this.sparks_.flush(); this.smoke_.flush(); this.fire_.flush();
     this.sprites.flush(); this.decals.flush();
     this.beams.endImmediate(); this.beams.flush();
-    this.plumes.flush();
+    this.plumes.flush(); this.shock.flush();
     if (this._qbCooldown > 0) this._qbCooldown -= dt;
   }
 
@@ -376,13 +388,26 @@ export class VFX {
       c = _tmpCol;
     }
 
-    // 4-point star — 2 frames, then the hot core lingers a beat longer
-    this._spr(_v, CELL.STAR, 3.0 * s, 5.2 * s, 0.105, c, 2.4, { spin: rand(0, 6.28) });
-    this._spr(_v, CELL.CORONA, 1.7 * s, 3.1 * s, 0.145, c, 2.6, { mul: 0.85 });
+    // 4-point star — 2 frames of genuinely blown-out white at the throat,
+    // then the muzzle's own colour lingers a beat longer behind it.
+    // (kept modest on purpose: this sprite sits ~10 m from the lens and the
+    //  rifle re-fires every 110 ms, so a genuinely detonation-grade value here
+    //  would smear bloom across the whole gameplay frame.)
+    this._spr(_v, CELL.STAR, 3.0 * s, 5.2 * s, 0.075, C.flashDeton, 1.9, { spin: rand(0, 6.28), mul: 0.42 });
+    this._spr(_v, CELL.CORONA, 0.9 * s, 1.9 * s, 0.065, C.flashDeton, 1.6, { mul: 0.55 });
+    this._spr(_v, CELL.STAR, 2.4 * s, 4.4 * s, 0.115, c, 2.4, { spin: rand(0, 6.28) });
+    this._spr(_v, CELL.CORONA, 1.7 * s, 3.1 * s, 0.150, c, 2.6, { mul: 0.90 });
     this._spr(_v, CELL.GLOW, 1.2 * s, 2.6 * s, 0.20, c, 3.0, { mul: 0.32 });
     if (M.ring) {
+      // a real muzzle blast wave, in the plane normal to the barrel
       _v2.copy(_v).addScaledVector(_dir, 1.2 * s);
-      this._spr(_v2, CELL.RING, 1.2 * s, 11 * s, 0.30, c, 2.0, { mode: 1, n: _dir, mul: 0.50 });
+      this._shockRing(_v2.x, _v2.y, _v2.z, _dir, {
+        life: 0.26, r0: 1.0 * s, r1: 12 * s, thickness: 0.055, ease: 2.6,
+        color: c, intensity: 1.15,
+      });
+      this._shockShell(_v2.x, _v2.y, _v2.z, {
+        life: 0.10, r0: 0.8 * s, r1: 3.0 * s, color: [2.6, 2.5, 3.2], intensity: 0.85,
+      });
     }
 
     // blast cone
@@ -391,7 +416,11 @@ export class VFX {
       _v2.copy(_v).addScaledVector(_dir, k * s);
       this._fire(_v2,
         _dir.x * (13 + i * 7) * s, _dir.y * (13 + i * 7) * s, _dir.z * (13 + i * 7) * s,
-        { life: 0.15 + i * 0.05, size0: 0.42 * s, size1: 1.5 * s, heat: 1.3, intensity: 1.0, drag: 7, gravity: -1.5 });
+        {
+          life: 0.15 + i * 0.05, size0: 0.42 * s, size1: 1.5 * s,
+          heat: 1.55 - i * 0.10, cool: 0.34, intensity: 1.0,
+          drag: 7, gravity: -1.5, rotSpd: rand(-4, 4),
+        });
     }
 
     // sparks spat down the barrel
@@ -442,6 +471,8 @@ export class VFX {
     const floorY = Math.abs(_v.y - gy) < 3 ? gy : -1e5;
     const hot = rgb(o.color, armour ? C.sparkHot : C.sparkCold);
 
+    // a 1-frame blown-out contact point, then the coloured splash under it
+    this._spr(_v, CELL.CORONA, 0.5 * s, 1.1 * s, 0.055, C.flashDeton, 1.6, { mul: armour ? 0.60 : 0.34 });
     this._spr(_v, CELL.CORONA, 1.2 * s, 2.4 * s, 0.115, C.flashWhite, 2.4, { mul: armour ? 0.9 : 0.55 });
     this._spr(_v, CELL.BURST, 2.4 * s, 4.0 * s, 0.175, hot, 2.2, { spin: rand(0, 6.28), mul: armour ? 1.0 : 0.62 });
 
@@ -449,10 +480,10 @@ export class VFX {
     const n = armour ? (12 + (Math.random() * 8) | 0) : (8 + (Math.random() * 7) | 0);
     for (let i = 0; i < n; i++) {
       this._cone(_dir, 1.15, _v2);
-      const sp = rand(9, 44) * s;
+      const sp = rand(9, 52) * s;
       this._spark(_v, _v2.x * sp, _v2.y * sp + rand(2, 9), _v2.z * sp, {
-        life: rand(0.22, 0.66), width: rand(0.06, 0.12) * s, drag: 3.0,
-        gravity: 46, stretch: 0.019, color: hot, floorY,
+        life: rand(0.22, 0.72), width: rand(0.055, 0.13) * s, drag: 3.0,
+        gravity: 46, stretch: 0.026, color: hot, floorY,
       });
     }
 
@@ -475,13 +506,32 @@ export class VFX {
     } else {
       // armour: a tight orange-white splash and a lick of flame
       this._fire(_v, _dir.x * 6 * s, _dir.y * 6 * s + 2, _dir.z * 6 * s,
-        { life: 0.16, size0: 0.5 * s, size1: 1.6 * s, heat: 1.15, intensity: 0.85, drag: 6, gravity: -2 });
-      if (o.direct) this._spr(_v, CELL.RING, 0.6 * s, 5.5 * s, 0.22, hot, 2.2, { mode: 1, n: _dir, mul: 0.7 });
+        {
+          life: 0.16, size0: 0.5 * s, size1: 1.6 * s, heat: 1.45, cool: 0.32,
+          intensity: 0.9, drag: 6, gravity: -2, rotSpd: rand(-4, 4),
+        });
+      if (o.direct) {
+        this._shockRing(_v.x, _v.y, _v.z, _dir, {
+          life: 0.20, r0: 0.5 * s, r1: 6.0 * s, thickness: 0.06, color: hot, intensity: 0.9,
+        });
+      }
     }
   }
 
   // ================================================================
-  //  EXPLOSION — three stages emitted in a single burst
+  //  EXPLOSION — three stages emitted in a single burst.
+  //
+  //  TIMING IS THE WHOLE DESIGN. A big charge does not peak on frame 1 and
+  //  vanish; it opens with a ~2-frame blown-out core, throws two fronts, and
+  //  then the fireball keeps GROWING and stays hot for a third of a second
+  //  before it starts to cool and roll into smoke. Everything below is scaled
+  //  by `s = R/10` so a 30 m boss kill lasts twice as long as a drone pop.
+  //
+  //  Draw order inside the fire field is instance order, and the field is now
+  //  premultiplied (occluding) rather than additive, so the emission sequence
+  //  is deliberate: COOL OUTER BILLOWS FIRST, body second, WHITE-HOT CORE
+  //  LAST. That leaves the hot heart drawn on top of its own cooling shell,
+  //  which is what gives the ball a bright centre and a dark ragged fringe.
   // ================================================================
   explosion(pos, o) {
     o = args(pos, o);
@@ -493,64 +543,136 @@ export class VFX {
     const s = R / 10;
     const now = this.time;
     const gy = this._groundAt(_v.x, _v.z, _v.y);
-    const low = (_v.y - gy) < R * 1.1;
+    const low = (_v.y - gy) < R * 1.4;
     const tint = rgb(o.color, null);
     const boss = kind === 'boss' || /boss/.test(kind);
-
-    // ---- stage 1 : white-hot flash + shock rings ------------------
-    // 2-3 frames of paper-white, then a hot orange core that survives a beat.
-    this._spr(_v, CELL.CORONA, R * 0.34, R * 0.78, 0.105, C.flashWhite, 2.1, { mul: 1.15 * power });
-    this._spr(_v, CELL.STAR, R * 0.9, R * 1.7, 0.100, C.flashWhite, 2.2, { spin: rand(0, 6.28), mul: 0.5 });
-    this._spr(_v, CELL.GLOW, R * 0.40, R * 1.05, 0.19, tint || [4.4, 2.0, 0.55], 2.6, { mul: 0.95 * power });
-
-    // Rings read as a shock front only if they face the viewer — a randomly
-    // oriented disc just looks like a stray decal.
-    const ringCol = tint || (boss ? [2.8, 1.0, 4.6] : C.ring);
-    const cam = this.ctx.camera;
-    if (cam) _dir.subVectors(cam.position, _v);
-    if (!cam || _dir.lengthSq() < 1e-6) _dir.set(0, 0, 1);
-    _dir.normalize();
-    this._spr(_v, CELL.RING, R * 0.30, R * 2.6, 0.34, ringCol, 2.4, { mode: 1, n: _dir, mul: 0.95 });
-    this._spr(_v, CELL.RING, R * 0.26, R * 1.7, 0.17, C.flashWhite, 3.0, { mode: 1, n: _dir, mul: 0.8 });
-    if (low) {
-      _v2.set(_v.x, gy + 0.5, _v.z);
-      this._spr(_v2, CELL.RING, R * 0.45, R * 3.2, 0.44, ringCol, 2.2, { mode: 1, n: UP, mul: 0.85 });
-      this._spr(_v2, CELL.RING, R * 0.35, R * 1.9, 0.22, C.flashWhite, 2.8, { mode: 1, n: UP, mul: 0.5 });
-    }
-
-    // ---- stage 2 : fireball --------------------------------------
-    // The analytic integrator means TOTAL TRAVEL = v0 / drag, so the drag has
-    // to be picked against the distance the puff should cover — otherwise the
-    // ball tears itself apart into transparent scraps within 0.3 s.
-    // Positive gravity == buoyancy: the ball climbs while it cools.
     const q = this.quality;
-    const nf = Math.max(8, Math.min(34, (11 + 8 * s) * q) | 0);
-    for (let i = 0; i < nf; i++) {
-      this._sphere(_v2);
-      const d = rand(0.15, 1.0);
-      _v3.copy(_v).addScaledVector(_v2, R * 0.42 * d);
-      const core = i < 3;              // only a couple of billows run white-hot
-      const k = rand(3.6, 5.6);                       // drag
-      const sp = R * rand(0.8, 2.1) * (1 - d * 0.35); // -> ~0.2-0.5 R of spread
-      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.65 + R * rand(0.25, 0.75), _v2.z * sp, {
-        birth: now + rand(0, 0.07),
-        life: rand(0.62, 1.05) + s * 0.18,
-        size0: R * (core ? rand(0.20, 0.32) : rand(0.12, 0.24)),
-        size1: R * (core ? rand(0.74, 1.10) : rand(0.50, 0.84)),
-        drag: k, gravity: rand(9, 22),
-        heat: (core ? rand(1.02, 1.16) : rand(0.70, 0.95)) * (boss ? 0.9 : 1),
-        intensity: rand(0.78, 1.12),
-        rotSpd: rand(-1.4, 1.4),
+    // every stage runs on this clock, so bigger really does mean slower
+    const T = 0.72 + s * 0.42;
+
+    // ==== STAGE 1 — DETONATION ======================================
+    // (a) the blown-out core. Two frames of paper white at 11.0 linear, well
+    //     over the bloom cutoff, over a SMALL area. This is the single frame
+    //     that has to be brighter than anything else on screen.
+    this._spr(_v, CELL.CORONA, R * 0.26, R * 0.70, 0.075 + s * 0.035, C.flashDeton, 1.35, { mul: 1.3 * power });
+    this._spr(_v, CELL.STAR, R * 1.05, R * 2.40, 0.070 + s * 0.030, C.flashDeton, 1.7, { spin: rand(0, 6.28), mul: 0.75 });
+    // (b) the core AFTERGLOW. Deliberately SMALL and only moderately hot: the
+    //     white heart of the fireball is now the fire field's job (it occludes,
+    //     so it can be hot without bleaching), and a big additive corona at
+    //     explosion scale is just a peach veil dumped into the bloom pass.
+    this._spr(_v, CELL.CORONA, R * 0.22, R * 0.50, 0.24 + s * 0.26, tint || C.coreHot, 2.0, { mul: 0.42 * power });
+
+    // (c) THE TWO FRONTS. Real geometry, not a billboard: a flat ring lying on
+    //     the ground and a spherical condensation shell around the charge.
+    const ringCol = tint || (boss ? [3.6, 1.1, 5.4] : C.ringHot);
+    this._shockRing(_v.x, gy + 0.35, _v.z, UP, {
+      life: 0.36 + s * 0.18, r0: R * 0.30, r1: R * 2.4,
+      thickness: 0.026, ease: 2.9, color: ringCol, intensity: 0.95 * power,
+    });
+    // a second, slower, wider dust-front behind the first
+    this._shockRing(_v.x, gy + 0.20, _v.z, UP, {
+      life: 0.60 + s * 0.35, r0: R * 0.55, r1: R * 2.8,
+      thickness: 0.10, ease: 2.2, color: [0.85, 0.42, 0.16], intensity: 0.12,
+    });
+    // Condensation shell — white, thin, GONE FAST and never wider than about
+    // 1.5 R. A shell that outgrows its own distance to the lens turns inside
+    // out and paints a dome over the entire frame.
+    this._shockShell(_v.x, _v.y, _v.z, {
+      life: 0.11 + s * 0.05, r0: R * 0.45, r1: R * 1.5,
+      ease: 2.4, color: [3.2, 3.4, 3.9], intensity: 0.9,
+    });
+    if (!low) {
+      // airburst: give it a ring in the plane facing the viewer too, so the
+      // front is legible when there is no ground under the charge
+      const cam = this.ctx.camera;
+      if (cam) _dir.subVectors(cam.position, _v); else _dir.set(0, 0, 1);
+      if (_dir.lengthSq() < 1e-6) _dir.set(0, 0, 1);
+      _dir.normalize();
+      this._shockRing(_v.x, _v.y, _v.z, _dir, {
+        life: 0.34 + s * 0.24, r0: R * 0.35, r1: R * 3.0,
+        thickness: 0.040, ease: 2.8, color: ringCol, intensity: 1.1,
       });
     }
-    // the core: hangs a moment, then lifts
-    this._fire(_v, 0, R * 0.30, 0, {
-      life: 0.78 + s * 0.22, size0: R * 0.42, size1: R * 1.20,
-      drag: 4.0, gravity: 14, heat: 1.18, intensity: 1.10,
-    });
-    // dark base: soot rolling out from under the ball while it is still lit.
-    // Additive fire on its own has no darks, so without this the detonation
-    // reads as a lamp instead of burning fuel.
+
+    // ==== STAGE 2 — FIREBALL ========================================
+    // Three tiers, emitted cold-first. The analytic integrator means TOTAL
+    // TRAVEL = v0/drag, so drag is picked against the distance each tier
+    // should cover. Positive gravity == buoyancy: the ball climbs as it cools.
+    const nf = Math.max(14, Math.min(56, (20 + 14 * s) * q) | 0);
+    const nOuter = (nf * 0.40) | 0;
+    const nBody = (nf * 0.42) | 0;
+    const nCore = Math.max(3, nf - nOuter - nBody);
+
+    // (a) outer shell — big, slow, low heat, LONG life. This is the dark
+    //     cooling mass that gives the ball a ragged silhouette. It is also
+    //     the tier that actually occludes the background.
+    for (let i = 0; i < nOuter; i++) {
+      this._sphere(_v2);
+      const d = rand(0.55, 1.15);
+      _v3.copy(_v).addScaledVector(_v2, R * 0.50 * d);
+      const sp = R * rand(1.0, 2.4);
+      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.55 + R * rand(0.30, 0.85), _v2.z * sp, {
+        birth: now + rand(0, 0.10),
+        life: T * rand(1.25, 2.05),
+        size0: R * rand(0.38, 0.66), size1: R * rand(1.10, 1.85),
+        drag: rand(3.0, 4.6), gravity: rand(8, 18),
+        heat: rand(0.34, 0.58) * (boss ? 0.9 : 1),
+        cool: rand(0.55, 0.85),
+        intensity: rand(0.85, 1.0),
+        rotSpd: rand(-1.1, 1.1),
+      });
+    }
+    // (b) body — the saturated orange-red bulk
+    for (let i = 0; i < nBody; i++) {
+      this._sphere(_v2);
+      const d = rand(0.15, 0.85);
+      _v3.copy(_v).addScaledVector(_v2, R * 0.40 * d);
+      const sp = R * rand(0.9, 2.6) * (1 - d * 0.30);
+      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.62 + R * rand(0.25, 0.80), _v2.z * sp, {
+        birth: now + rand(0, 0.07),
+        life: T * rand(0.85, 1.55),
+        size0: R * rand(0.26, 0.50), size1: R * rand(0.75, 1.40),
+        drag: rand(3.4, 5.4), gravity: rand(10, 24),
+        heat: rand(0.72, 0.98) * (boss ? 0.9 : 1),
+        cool: rand(0.45, 0.78),
+        intensity: rand(0.88, 1.0),
+        rotSpd: rand(-2.4, 2.4),
+      });
+    }
+    // (c) FIRE JETS — thin, fast, short-lived tongues punching out of the
+    //     ball. These are what stop it reading as a sphere of blobs: they
+    //     give the silhouette spikes and a sharp bright leading edge.
+    const nj = Math.max(4, Math.min(16, (6 + 4 * s) * q) | 0);
+    for (let i = 0; i < nj; i++) {
+      this._sphere(_v2);
+      const sp = R * rand(3.4, 6.6);
+      this._fire(_v, _v2.x * sp, _v2.y * sp * 0.8 + R * 0.5, _v2.z * sp, {
+        birth: now + rand(0, 0.05),
+        life: T * rand(0.30, 0.55),
+        size0: R * rand(0.12, 0.22), size1: R * rand(0.34, 0.62),
+        drag: rand(7.0, 10.0), gravity: rand(4, 12),
+        heat: rand(1.25, 1.60), cool: rand(0.30, 0.55),
+        intensity: 1.0, rotSpd: rand(-3.4, 3.4),
+      });
+    }
+    // (d) THE CORE — emitted LAST so it is drawn over its own shell. Small,
+    //     very hot, long enough to still be white a third of a second in.
+    for (let i = 0; i < nCore; i++) {
+      this._sphere(_v2);
+      _v3.copy(_v).addScaledVector(_v2, R * rand(0, 0.22));
+      const sp = R * rand(0.3, 1.0);
+      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.4 + R * rand(0.20, 0.45), _v2.z * sp, {
+        birth: now + rand(0, 0.035),
+        life: T * rand(0.95, 1.35),
+        size0: R * rand(0.34, 0.58), size1: R * rand(0.80, 1.30),
+        drag: rand(3.6, 4.8), gravity: rand(11, 19),
+        heat: rand(1.55, 2.05) * (boss ? 0.92 : 1),
+        cool: rand(0.35, 0.60),
+        intensity: 1.0, rotSpd: rand(-1.6, 1.6),
+      });
+    }
+
+    // ==== dark base — soot rolling out from under the ball ==========
     for (let i = 0; i < 8; i++) {
       this._sphere(_v2);
       _v3.copy(_v).addScaledVector(_v2, R * rand(0.2, 0.55));
@@ -560,24 +682,24 @@ export class VFX {
         size0: R * rand(0.30, 0.50), size1: R * rand(0.80, 1.25),
         drag: rand(1.6, 2.6), gravity: rand(1.0, 2.2),
         rot: rand(0, 6.28), rotSpd: rand(-0.5, 0.5),
-        color: C.smokeWarm, opacity: rand(0.75, 0.95),
+        color: C.smokeWarm, opacity: rand(0.80, 0.98),
       });
     }
 
-    // ---- sparks + embers -----------------------------------------
-    const ns = Math.max(10, Math.min(100, (24 + 24 * s) * q) | 0);
+    // ==== sparks + embers ===========================================
+    const ns = Math.max(16, Math.min(130, (40 + 34 * s) * q) | 0);
     for (let i = 0; i < ns; i++) {
       this._sphere(_v2);
-      const sp = R * rand(0.9, 3.0);
-      this._spark(_v, _v2.x * sp, _v2.y * sp + R * rand(0.4, 2.0), _v2.z * sp, {
+      const sp = R * rand(1.4, 5.2);
+      this._spark(_v, _v2.x * sp, _v2.y * sp + R * rand(0.6, 2.6), _v2.z * sp, {
         birth: now + rand(0, 0.05),
-        life: rand(0.45, 1.5), width: rand(0.08, 0.19) * (0.7 + s * 0.4),
-        drag: rand(1.5, 2.6), gravity: 44, stretch: 0.020,
+        life: rand(0.45, 1.8), width: rand(0.07, 0.22) * (0.7 + s * 0.4),
+        drag: rand(1.2, 2.4), gravity: 44, stretch: 0.028,
         color: tint || C.sparkHot, floorY: gy,
       });
     }
     // embers: negative gravity on a spark means the shader lifts it
-    const ne = Math.max(5, Math.min(48, (11 + 11 * s) * q) | 0);
+    const ne = Math.max(6, Math.min(56, (14 + 13 * s) * q) | 0);
     for (let i = 0; i < ne; i++) {
       this._sphere(_v2);
       const sp = R * rand(0.25, 0.9);
@@ -589,9 +711,7 @@ export class VFX {
       });
     }
 
-    // ---- stage 3 : black smoke column ----------------------------
-    // Staggered births + real buoyancy turn a puff cloud into a column that
-    // keeps climbing after the fire is gone.
+    // ==== STAGE 3 — black smoke column ==============================
     const nsm = Math.max(9, Math.min(44, (15 + 12 * s) * q) | 0);
     for (let i = 0; i < nsm; i++) {
       this._sphere(_v2);
@@ -600,13 +720,13 @@ export class VFX {
       this._smoke(_v3,
         _v2.x * R * rand(0.10, 0.30), R * rand(0.10, 0.32) + t * R * 0.16, _v2.z * R * rand(0.10, 0.30),
         {
-          birth: now + 0.04 + t * 0.62 + rand(0, 0.1),
+          birth: now + 0.10 + t * 0.72 + rand(0, 0.1),
           life: rand(2.2, 3.8) + s * 0.6,
           size0: R * rand(0.35, 0.62), size1: R * rand(1.1, 1.9),
           drag: rand(0.9, 1.5), gravity: rand(0.8, 1.9),
           rot: rand(0, 6.28), rotSpd: rand(-0.7, 0.7),
           color: i < nsm * 0.30 ? C.smokeWarm : C.soot,
-          opacity: rand(0.80, 0.99),
+          opacity: rand(0.84, 1.0),
         });
     }
     // the wreck keeps burning: a slow dense pool that stays at the source
@@ -618,22 +738,28 @@ export class VFX {
         size0: R * rand(0.4, 0.7), size1: R * rand(1.0, 1.6),
         drag: rand(1.1, 1.8), gravity: rand(0.4, 1.0),
         rot: rand(0, 6.28), rotSpd: rand(-0.35, 0.35),
-        color: C.soot, opacity: rand(0.7, 0.95),
+        color: C.soot, opacity: rand(0.75, 0.98),
       });
     }
 
-    // ---- ground interaction --------------------------------------
+    // ==== ground interaction ========================================
     if (low) {
-      const nd = Math.max(5, Math.min(26, (8 + 7 * s) * q) | 0);
+      // A dust WALL chasing the shock ring outward, not a puff at the origin.
+      // The analytic integrator makes TOTAL TRAVEL = v0/drag, so these numbers
+      // are picked to land the wall at ~1.1 R and NOT to launch 25 m puffs at
+      // 30 m/s across the arena into the lens.
+      const nd = Math.max(8, Math.min(26, (10 + 7 * s) * q) | 0);
       for (let i = 0; i < nd; i++) {
-        const a = (i / nd) * Math.PI * 2 + rand(-0.2, 0.2);
+        const a = (i / nd) * Math.PI * 2 + rand(-0.25, 0.25);
         const cs = Math.cos(a), sn = Math.sin(a);
-        _v3.set(_v.x + cs * R * 0.5, gy + 0.5, _v.z + sn * R * 0.5);
-        this._smoke(_v3, cs * R * rand(0.7, 1.5), rand(0.5, 2.0), sn * R * rand(0.7, 1.5), {
-          birth: now + rand(0, 0.08),
-          life: rand(1.2, 2.2), size0: R * 0.28, size1: R * rand(0.7, 1.2),
-          drag: rand(2.2, 3.2), gravity: 0.20, rot: rand(0, 6.28), rotSpd: rand(-0.5, 0.5),
-          color: C.dust, opacity: 0.5,
+        const rr = R * rand(0.3, 0.7);
+        const sp = R * rand(2.2, 3.4);
+        _v3.set(_v.x + cs * rr, gy + rand(0.3, 1.2), _v.z + sn * rr);
+        this._smoke(_v3, cs * sp, rand(0.8, 2.6), sn * sp, {
+          birth: now + rand(0, 0.10),
+          life: rand(1.3, 2.4), size0: R * 0.16, size1: R * rand(0.42, 0.72),
+          drag: rand(2.6, 3.4), gravity: 0.25, rot: rand(0, 6.28), rotSpd: rand(-0.6, 0.6),
+          color: C.dust, opacity: 0.58,
         });
       }
       // written straight into the field: this.decal() would clobber the shared scratch
@@ -642,23 +768,24 @@ export class VFX {
       this.decals.spawn(_v.x, gy, _v.z, 0, 1, 0, _do);
     }
 
-    // ---- debris with their own smoke trails ----------------------
-    const nc = Math.max(2, (o.debris ?? Math.min(14, (3 + 4 * s) | 0)) * q) | 0;
+    // ==== debris with their own smoke trails ========================
+    const nc = Math.max(4, (o.debris ?? Math.min(20, (6 + 6 * s) | 0)) * q) | 0;
     for (let i = 0; i < nc; i++) {
       this._sphere(_v2);
-      const sp = R * rand(0.45, 1.25);
+      const sp = R * rand(0.9, 2.4);
       this.debris_.spawn(_v.x, _v.y, _v.z,
-        _v2.x * sp, Math.abs(_v2.y) * sp * 0.9 + R * rand(0.6, 1.8), _v2.z * sp,
-        { size: rand(0.35, 1.0) * (0.6 + s * 0.6), life: rand(2.4, 4.2), smoke: i < nc * 0.7, spin: 12 });
+        _v2.x * sp, Math.abs(_v2.y) * sp * 0.9 + R * rand(0.8, 2.4), _v2.z * sp,
+        { size: rand(0.35, 1.2) * (0.6 + s * 0.6), life: rand(2.4, 4.6), smoke: i < nc * 0.8, spin: 16 });
     }
 
-    // ---- light + shake -------------------------------------------
-    // Calibrated against the arena key light (a 6.3 directional): ~1400 cd is
-    // "as bright as the sun at 15 m". Anything much hotter turns the ground to
-    // white lava, which is exactly what this must not do.
-    this.light(_v.x, _v.y + R * 0.25, _v.z,
-      tint || (boss ? 0xd070ff : 0xff8438),
-      Math.min(4200, (640 + 540 * s) * power * s), 1.00 + s * 0.15, R * 8);
+    // ==== light + shake =============================================
+    // The detonation MUST light the world — it is in the art bible. Calibrated
+    // against the arena key (a 6.3 directional): at the 0.3 s mark the pooled
+    // falloff is at ~22 % of peak, so a 3300 cd peak puts ~7 lux on ground 10 m
+    // under the charge, i.e. slightly hotter than the sun. That is the point.
+    this.light(_v.x, _v.y + R * 0.20, _v.z,
+      tint || (boss ? 0xd070ff : 0xff7a26),
+      Math.min(14000, (1900 + 1500 * s) * power * s), 1.30 + s * 0.35, R * 13);
     this._shake(clamp(0.35 + power * s * 0.55, 0, 1.7), 0.34 + s * 0.06);
   }
 
@@ -759,8 +886,13 @@ export class VFX {
     this._spr(_v2, CELL.STAR, 3.4, 6.2, 0.09, [2.0, 3.8, 5.4], 2.4, { spin: rand(0, 6.28), mul: 0.6 });
 
     // flat ring shockwave oriented against the boost vector
-    this._spr(_v2, CELL.RING, 1.2, 9.0, 0.30, C.ringCyan, 2.4, { mode: 1, n: _dir, mul: 0.8 });
-    this._spr(_v2, CELL.RING, 0.9, 5.4, 0.17, [2.2, 4.0, 5.4], 2.8, { mode: 1, n: _dir, mul: 0.5 });
+    this._shockRing(_v2.x, _v2.y, _v2.z, _dir, {
+      life: 0.28, r0: 1.2, r1: 10.0, thickness: 0.05, ease: 2.7,
+      color: C.ringCyan, intensity: 1.2,
+    });
+    this._shockShell(_v2.x, _v2.y, _v2.z, {
+      life: 0.16, r0: 1.0, r1: 5.4, color: [1.6, 2.8, 3.8], intensity: 0.85,
+    });
 
     // cyan spark spray in the wake
     for (let i = 0; i < 16; i++) {
@@ -903,9 +1035,15 @@ export class VFX {
       }
     }
     if (o.contact !== false) {
+      _dir.subVectors(_v2, _v);
+      if (_dir.lengthSq() < 1e-6) _dir.copy(UP); else _dir.normalize();
+      this._spr(_v2, CELL.CORONA, 0.5, 1.2, 0.06, C.flashDeton, 1.6, { mul: 0.55 });
       this._spr(_v2, CELL.CORONA, 1.2, 2.6, 0.15, col || [3.4, 2.3, 5.6], 2.4, { mul: 1.0 });
       this._spr(_v2, CELL.STAR, 2.6, 4.6, 0.10, col || [3.0, 2.1, 5.2], 2.2, { spin: rand(0, 6.28), mul: 0.8 });
-      this._spr(_v2, CELL.RING, 0.8, 3.6, 0.22, col || [2.2, 0.85, 4.2], 2.4, { mode: 1, n: _dir, mul: 0.8 });
+      this._shockRing(_v2.x, _v2.y, _v2.z, _dir, {
+        life: 0.22, r0: 0.8, r1: 4.4, thickness: 0.06,
+        color: col || [3.0, 1.0, 5.4], intensity: 1.0,
+      });
       const gy = this._groundAt(_v2.x, _v2.z, _v2.y);
       for (let i = 0; i < 20; i++) {
         this._sphere(_v3);
@@ -929,8 +1067,18 @@ export class VFX {
     toVec(o.normal || UP, _dir);
     if (_dir.lengthSq() < 1e-6) _dir.copy(UP); else _dir.normalize();
     const R = o.radius || 12;
-    this._spr(_v, CELL.RING, o.from ?? R * 0.2, R, o.life ?? 0.4,
-      rgb(o.color, C.ring), o.fade ?? 2.1, { mode: 1, n: _dir, mul: o.intensity ?? 1 });
+    if (o.shell) {
+      this._shockShell(_v.x, _v.y, _v.z, {
+        life: o.life ?? 0.28, r0: o.from ?? R * 0.25, r1: R,
+        color: rgb(o.color, [3.4, 3.6, 4.0]), intensity: o.intensity ?? 1,
+      });
+      return;
+    }
+    this._shockRing(_v.x, _v.y, _v.z, _dir, {
+      life: o.life ?? 0.4, r0: o.from ?? R * 0.2, r1: R,
+      thickness: o.thickness ?? 0.045, ease: o.ease ?? 2.6,
+      color: rgb(o.color, C.ring), intensity: o.intensity ?? 1,
+    });
   }
 
   debris(pos, o = EMPTY) {
@@ -1170,7 +1318,28 @@ export class VFX {
     _fo.rot = o.rot ?? Math.random() * 6.28; _fo.rotSpd = o.rotSpd ?? 0;
     _fo.drag = o.drag; _fo.gravity = o.gravity;
     _fo.heat = o.heat; _fo.intensity = o.intensity;
+    _fo.cool = o.cool ?? 0.55;
     this.fire_.spawn(p.x, p.y, p.z, vx, vy, vz, _fo);
+  }
+
+  /** flat expanding annulus lying in the plane whose normal is `n` */
+  _shockRing(x, y, z, n, o) {
+    const c = o.color;
+    _wo.birth = o.birth ?? this.time; _wo.life = o.life;
+    _wo.r0 = o.r0; _wo.r1 = o.r1;
+    _wo.thickness = o.thickness ?? 0.05; _wo.mode = 0; _wo.ease = o.ease ?? 2.6;
+    _wo.r = c[0]; _wo.g = c[1]; _wo.b = c[2]; _wo.intensity = o.intensity ?? 1;
+    this.shock.spawn(x, y, z, n.x, n.y, n.z, _wo);
+  }
+
+  /** expanding fresnel-rimmed sphere — the condensation shell */
+  _shockShell(x, y, z, o) {
+    const c = o.color;
+    _wo.birth = o.birth ?? this.time; _wo.life = o.life;
+    _wo.r0 = o.r0; _wo.r1 = o.r1;
+    _wo.thickness = 0; _wo.mode = 1; _wo.ease = o.ease ?? 2.4;
+    _wo.r = c[0]; _wo.g = c[1]; _wo.b = c[2]; _wo.intensity = o.intensity ?? 1;
+    this.shock.spawn(x, y, z, 0, 1, 0, _wo);
   }
 
   /** uniform direction inside a cone around `axis` (half-angle `spread`) */
@@ -1230,15 +1399,26 @@ export class VFX {
     return false;
   }
 
+  // A tumbling chunk off a detonation is not just sooty — it is still on
+  // fire. Every trail puff gets a lick of flame at its head plus shed embers,
+  // so the debris field reads as burning wreckage rather than grey confetti.
   _debrisSmoke(x, y, z, s) {
-    this._smoke(_v3.set(x, y, z), rand(-0.5, 0.5), rand(0.4, 1.6), rand(-0.5, 0.5), {
+    _v3.set(x, y, z);
+    this._smoke(_v3, rand(-0.5, 0.5), rand(0.4, 1.6), rand(-0.5, 0.5), {
       life: rand(0.8, 1.6), size0: 0.35 * s + 0.2, size1: rand(1.6, 3.0) * (0.6 + s),
       drag: 1.5, gravity: 1.4, rot: rand(0, 6.28), rotSpd: rand(-0.8, 0.8),
-      color: C.soot, opacity: 0.6,
+      color: C.soot, opacity: 0.68,
     });
-    if (Math.random() < 0.4) {
+    if (Math.random() < 0.55) {
+      this._fire(_v3, rand(-1, 1), rand(0.5, 2.5), rand(-1, 1), {
+        life: rand(0.16, 0.32), size0: 0.20 * s + 0.14, size1: rand(0.5, 1.0) * (0.5 + s),
+        drag: 5.0, gravity: 3, heat: rand(0.95, 1.35), cool: 0.42, intensity: 0.9,
+        rotSpd: rand(-3, 3),
+      });
+    }
+    if (Math.random() < 0.5) {
       this._spark(_v3, rand(-2, 2), rand(0, 3), rand(-2, 2), {
-        life: rand(0.3, 0.8), width: 0.06, drag: 2.0, gravity: -0.5, stretch: 0.008,
+        life: rand(0.3, 0.8), width: 0.065, drag: 2.0, gravity: -0.5, stretch: 0.010,
         color: C.sparkCold, floorY: -1e5,
       });
     }
@@ -1322,7 +1502,7 @@ export class VFX {
   }
 
   dispose() {
-    for (const f of [this.sparks_, this.smoke_, this.fire_, this.sprites, this.beams, this.decals, this.plumes]) f.dispose();
+    for (const f of [this.sparks_, this.smoke_, this.fire_, this.sprites, this.beams, this.decals, this.plumes, this.shock]) f.dispose();
     this.smokeRib.dispose(); this.arcRib.dispose();
     this.debris_.dispose(); this.ghosts.dispose();
   }

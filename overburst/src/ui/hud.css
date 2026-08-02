@@ -195,7 +195,11 @@ body {
 /* =========================================================
    COMBAT HUD
    ========================================================= */
-#combat-hud { position: absolute; inset: 0; }
+/* Panels sit above the world-space overlay layer: a damage arc or a lock
+   bracket must never wash over the AP/EN readout or the ammo counts.
+   (Safe: combat + overlay are display:none whenever title/result are up.) */
+#combat-hud { position: absolute; inset: 0; z-index: 2; }
+#overlay-layer { z-index: 1; }
 
 /* ---- bottom-left : AP / EN / QB / kits ---- */
 #vitals { position: absolute; left: 2.1rem; bottom: 3.1rem; width: 27rem; }
@@ -374,6 +378,9 @@ body {
 .lockbox .bk path { stroke: rgba(2, 7, 9, .68); stroke-width: 3.6; }
 .lockbox .fg path { stroke: var(--cy); stroke-width: 1.4; }
 .lockbox.hard .fg path { stroke: var(--am); stroke-width: 2; }
+/* secondary contacts: bracket only, thinner stroke, no backing halo */
+.lockbox.sec .bk path { stroke-width: 2.4; stroke: rgba(2, 7, 9, .5); }
+.lockbox.sec .fg path { stroke-width: 1.1; }
 .lockbox b {
   position: absolute; left: 0; top: -1.05rem; font-size: .56rem; letter-spacing: .22em;
   color: var(--am); font-weight: 400; white-space: nowrap;
@@ -383,26 +390,51 @@ body {
   position: absolute; right: 0; bottom: -1.0rem; font-family: var(--mono); font-size: .54rem;
   color: var(--cy-b); font-style: normal; letter-spacing: 0;
 }
+/* bracket riding high in frame — flip the tags so they clear the readout */
+.lockbox.lo b { top: auto; bottom: -1.05rem; }
+.lockbox.lo i { bottom: auto; top: -1.0rem; }
 
-/* ---- radio chatter ---- */
+/* ---- radio chatter ----
+   The full line is in the DOM from the first frame; the untyped tail is
+   transparent, not absent. Line breaks and box size are therefore fixed
+   before a single glyph appears — the box can never clip its own text. */
 #radio {
-  position: absolute; left: 50%; bottom: 16.4rem; width: 34rem; margin-left: -17rem;
+  position: absolute; left: 50%; bottom: 16.4rem; width: 40rem; margin-left: -20rem;
   display: flex; justify-content: center; opacity: 0; transition: opacity .22s linear;
 }
 #radio.on { opacity: 1; }
-.rd-in { display: flex; align-items: baseline; gap: .7rem; padding: .3rem .9rem .34rem; max-width: 100%; }
+.rd-in { display: flex; align-items: baseline; gap: .75rem; padding: .34rem .95rem .4rem; max-width: 100%; }
 .rd-in u { font-style: normal; text-decoration: none; font-size: .62rem; letter-spacing: .22em; color: var(--cy); white-space: nowrap; }
-.rd-in b { font-size: .72rem; letter-spacing: .1em; color: #fff; font-weight: 400; }
-.rd-in b::after { content: '_'; color: var(--cy); }
-#radio.done .rd-in b::after { content: ''; }
+.rd-in b {
+  min-width: 0; font-size: .72rem; line-height: 1.55; letter-spacing: .1em;
+  color: #fff; font-weight: 400; overflow-wrap: normal; hyphens: none;
+}
+.rd-in b s { text-decoration: none; }
+/* the caret is the tail's own 1px edge — costs no width, so no reflow */
+.rd-in b i {
+  font-style: normal; color: transparent;
+  border-left: 1px solid var(--cy); margin-left: -1px;
+}
+#radio.done .rd-in b i { border-left-color: transparent; }
 
-/* ---- banners / toasts ---- */
+/* ---- banners / toasts ----
+   High and light: a callout, not a title card. It must never compete with
+   what is happening at the reticle. */
 #banner {
-  position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+  position: absolute; left: 50%; top: 14.5%; transform: translateX(-50%);
   text-align: center; opacity: 0;
 }
-#banner b { display: block; font-size: 1.5rem; letter-spacing: .42em; color: #fff; font-weight: 400; }
-#banner span { display: block; margin-top: .3rem; font-size: .62rem; letter-spacing: .3em; color: var(--am); }
+#banner b {
+  display: block; font-size: 1.02rem; letter-spacing: .54em; color: #e6f6fa;
+  font-weight: 400; padding-left: .54em; white-space: nowrap;
+}
+#banner b::before, #banner b::after {
+  content: ''; display: inline-block; vertical-align: middle; position: relative; top: -.08em;
+  width: 1.9rem; height: 1px; background: var(--line);
+}
+#banner b::before { margin: 0 .95rem 0 0; }
+#banner b::after  { margin: 0 0 0 .95rem; }
+#banner span { display: block; margin-top: .34rem; font-size: .59rem; letter-spacing: .28em; color: var(--am); }
 
 /* ---- edge warnings ---- */
 .warnbar {
@@ -433,12 +465,21 @@ body {
 }
 .warnbar.on { opacity: 1; animation: hazard .5s steps(1, end) infinite; }
 
-/* ---- directional damage arcs ---- */
-#arc-layer { position: absolute; left: 50%; top: 50%; width: 34rem; height: 34rem; margin: -17rem 0 0 -17rem; }
-.dmgarc { position: absolute; inset: 0; opacity: 0; }
-.dmgarc svg { display: block; width: 100%; height: 100%; }
-.dmgarc path { fill: none; stroke: var(--rd); stroke-width: 5; vector-effect: non-scaling-stroke; }
-.dmgarc path.g { stroke: rgba(255, 59, 48, .28); stroke-width: 13; }
+/* ---- directional damage arcs ----
+   A thin band of red light along the screen border, angularly masked to a
+   wedge on the incoming bearing (mask set from JS). Brightest hard against
+   the edge, dead by ~10% in from it — never a shape floating in frame. */
+#arc-layer { position: absolute; inset: 0; }
+.dmgarc {
+  position: absolute; inset: 0; opacity: 0;
+  background-image: radial-gradient(closest-side ellipse at 50% 50%,
+    rgba(255, 40, 32, 0)   0 74%,
+    rgba(255, 40, 32, .07) 85%,
+    rgba(255, 46, 36, .38) 93%,
+    rgba(255, 62, 46, .90) 98%,
+    rgba(255, 104, 82, 1)  100%);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
 
 /* ---- world-space damage numbers ---- */
 #dmg-layer { position: absolute; inset: 0; }

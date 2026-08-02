@@ -88,6 +88,57 @@ export const G = {
     });
   },
 
+  /** Corrugated sheet in the XY plane facing +Z: ridges run along Y and
+   *  repeat along X at `pitch`, displaced +-depth/2 in Z.
+   *
+   *  Authored NON-INDEXED with flat per-facet normals on purpose — smooth
+   *  normals average the crest away and the panel goes back to reading as a
+   *  plain box. The whole point is the hard light/dark stripe down each rib.
+   *  ~24 verts per rib, so a 13 m container side is ~520 verts: cheap enough
+   *  to live inside an InstancedMesh prop. */
+  corr(w, h, pitch = 0.6, depth = 0.16) {
+    return keyed(`w${w},${h},${pitch},${depth}`, () => {
+      // u along the period, z sign. Trapezoid: flat crest, ramp, flat trough.
+      const PR = [[0.0, 1], [0.30, 1], [0.50, -1], [0.70, -1], [1.0, 1]];
+      const n = Math.max(1, Math.round(w / pitch));
+      const cols = [];
+      for (let i = 0; i < n; i++) {
+        for (let k = 0; k < PR.length - 1; k++) {
+          cols.push([((i + PR[k][0]) / n) * w - w / 2, PR[k][1] * depth * 0.5]);
+        }
+      }
+      cols.push([w / 2, PR[PR.length - 1][1] * depth * 0.5]);
+      const segs = cols.length - 1;
+      const pos = new Float32Array(segs * 6 * 3);
+      const nor = new Float32Array(segs * 6 * 3);
+      const uvv = new Float32Array(segs * 6 * 2);
+      const y0 = -h / 2, y1 = h / 2;
+      let p = 0, q = 0;
+      for (let i = 0; i < segs; i++) {
+        const [xa, za] = cols[i], [xb, zb] = cols[i + 1];
+        const dx = xb - xa, dz = zb - za;
+        const il = 1 / (Math.hypot(dx, dz) || 1);
+        const nx = dz * il, nz = -dx * il;      // outward (+Z-ish) facet normal
+        const quad = [
+          [xa, y0, za], [xb, y0, zb], [xb, y1, zb],
+          [xa, y0, za], [xb, y1, zb], [xa, y1, za],
+        ];
+        const uvq = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
+        for (let k = 0; k < 6; k++) {
+          pos[p] = quad[k][0]; pos[p + 1] = quad[k][1]; pos[p + 2] = quad[k][2];
+          nor[p] = nx; nor[p + 1] = 0; nor[p + 2] = nz;
+          p += 3;
+          uvv[q] = uvq[k][0]; uvv[q + 1] = uvq[k][1]; q += 2;
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(uvv, 2));
+      return g;
+    });
+  },
+
   lathe(points, seg = 32) {
     const k = 'l' + seg + points.map((p) => p.x.toFixed(2) + ',' + p.y.toFixed(2)).join(';');
     return keyed(k, () => new THREE.LatheGeometry(points, seg));
@@ -115,9 +166,10 @@ export const G = {
 // ------------------------------------------------------------------
 // world units per texture repeat, per material key
 const TEXSCALE = {
-  conc: 17, concD: 17, concW: 17, dark: 14, far: 40,
+  conc: 17, concD: 17, concW: 17, dark: 14, far: 40, farD: 40,
   steel: 7.5, steelD: 7.5, rust: 7,
   paint: 6, paintOlive: 6, tank: 14, clad: 9, grate: 3.4, hazard: 5,
+  container: 5, stencil: 6,
   windows: 22, slag: 24,
   molten: 10, furnace: 10, ember: 10, beacon: 10,
 };

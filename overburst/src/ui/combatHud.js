@@ -120,8 +120,8 @@ export class CombatHud {
         wrows +
       '</div>' +
 
-      /* ---- radio ---- */
-      '<div id="radio"><div class="rd-in fr"><u></u><b></b></div></div>' +
+      /* ---- radio : <s> typed, <i> untyped tail (transparent, holds layout) ---- */
+      '<div id="radio"><div class="rd-in fr"><u></u><b><s></s><i></i></b></div></div>' +
 
       /* ---- banner ---- */
       '<div id="banner"><b></b><span></span></div>' +
@@ -176,7 +176,8 @@ export class CombatHud {
 
     this.rdEl = q(el, '#radio');
     this.rdWho = q(el, '.rd-in u');
-    this.rdTxt = q(el, '.rd-in b');
+    this.rdTxt = q(el, '.rd-in b s');
+    this.rdRest = q(el, '.rd-in b i');
 
     this.bnEl = q(el, '#banner');
     this.bnTxt = q(el, '#banner b');
@@ -214,10 +215,13 @@ export class CombatHud {
   radio(speaker, text, dur) {
     if (!text) return;
     if (this._radioQ.length > 5) this._radioQ.shift();
+    const txt = String(text);
     this._radioQ.push({
       who: String(speaker || 'RADIO'),
-      txt: String(text),
-      hold: dur || (2.4 + String(text).length * 0.026),
+      txt,
+      // long lines type faster, so the reveal never outlasts its own relevance
+      cps: Math.max(54, Math.min(130, 22 + txt.length * 0.95)),
+      hold: dur || (2.4 + txt.length * 0.026),
     });
   }
 
@@ -471,24 +475,34 @@ export class CombatHud {
   }
 
   // ---- radio chatter --------------------------------------------------
+  //  Reveal is snapped to word boundaries: a paused frame shows whole words
+  //  or nothing, never a severed one. The tail stays in the DOM as
+  //  transparent text so the panel is full size from the first frame.
   _radioTick(dt) {
     let r = this._radio;
     if (!r) {
       if (!this._radioQ.length) { tog(this.rdEl, 'on', false); return; }
       r = this._radio = this._radioQ.shift();
-      r.n = 0; r.t = 0;
+      r.n = -1; r.t = 0; r.done = 0;
       setText(this.rdWho, r.who);
       setText(this.rdTxt, '');
+      setText(this.rdRest, r.txt);
       tog(this.rdEl, 'on', true);
       tog(this.rdEl, 'done', false);
     }
     r.t += dt;
     const full = r.txt.length;
     if (r.n < full) {
-      const n = Math.min(full, Math.floor(r.t * 46));
-      if (n !== r.n) { r.n = n; setText(this.rdTxt, r.txt.slice(0, n)); }
+      let n = Math.floor(r.t * r.cps);
+      if (n >= full) n = full;
+      else { while (n > 0 && r.txt.charCodeAt(n) !== 32) n--; }   // back to the last full word
+      if (n !== r.n) {
+        r.n = n;
+        setText(this.rdTxt, n >= full ? r.txt : r.txt.slice(0, n));
+        setText(this.rdRest, n >= full ? '' : r.txt.slice(n));
+      }
       if (r.n >= full) { r.done = r.t; tog(this.rdEl, 'done', true); }
-    } else if (r.t > (r.done || 0) + r.hold) {
+    } else if (r.t > r.done + r.hold) {
       this._radio = null;
       tog(this.rdEl, 'on', false);
     }
