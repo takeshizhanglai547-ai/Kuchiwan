@@ -57,7 +57,10 @@ const SCENARIOS = {
       await h.start(); await h.advance(0.6);
       // Walk out of the drop shadow first — the spawn deck sits in a large
       // cast shadow and a close read there compresses toward black.
-      await h.hold(A.FWD); await h.advance(1.6); await h.release(A.FWD);
+      await h.hold(A.FWD); await h.advance(1.2); await h.releaseAll();
+      // Stand the mech on open ground with sky overhead, otherwise the hero
+      // shot judges whichever gantry it happened to stop under.
+      await h.openSpot({ radius: 110, clear: 34 });
       await h.advance(0.5);
       // Frame relative to where the mech ACTUALLY is. (The old version
       // teleported to the world origin, which is the middle of the slag
@@ -71,9 +74,11 @@ const SCENARIOS = {
     async run(h) {
       await h.start(); await h.advance(0.6);
       await h.hold(A.FWD); await h.advance(1.4);
-      await h.hold(A.QB); await h.advance(0.6);
+      await h.hold(A.QB); await h.advance(0.5); await h.releaseAll();
+      await h.openSpot({ radius: 110, clear: 34 });
+      await h.advance(0.25);
       await h.mechCam({ front: false, off: 0.55, dist: 24, height: 12.0, lookY: 6.4, fov: 44 });
-      await h.advance(0.5);
+      await h.advance(0.6);
     },
   },
   gameplay: {
@@ -88,8 +93,9 @@ const SCENARIOS = {
     desc: 'Assault boost / quick boost at speed — judges motion feel, speed lines, thruster plumes.',
     async run(h) {
       await h.start(); await h.advance(0.6);
-      await h.hold(A.FWD); await h.hold(A.QB); await h.advance(2.2);
-      await h.look(90, -10); await h.advance(0.8);
+      await h.hold(A.FWD); await h.hold(A.QB); await h.advance(1.1);
+      await h.look(150, -8); await h.advance(1.0);
+      await h.look(120, 0); await h.advance(0.7);
     },
   },
   firefight: {
@@ -165,20 +171,132 @@ function harness(page) {
      *   front:true  -> looking back at the chest  (3/4 front)
      *   front:false -> looking at the backpack    (3/4 rear)
      */
+    releaseAll: () => page.evaluate(() => {
+      const g = window.__OB;
+      for (const a of Object.values(g.ACTIONS)) g.release(a);
+    }),
+    /**
+     * Move the mech to nearby OPEN ground — open sky overhead and no wall
+     * within `clear` units. A hero shot taken under a pipe bridge judges the
+     * gantry's shadow, not the mech.
+     */
+    openSpot: (opt = {}) => page.evaluate((o) => {
+      const ctx = window.__OB.ctx;
+      const THREE = ctx.THREE;
+      const p = ctx.player;
+      const up = new THREE.Vector3(0, 1, 0);
+      const d = new THREE.Vector3();
+      const from = new THREE.Vector3();
+      const R = o.radius || 90;
+      const CLEAR = o.clear || 34;
+      const cast = (x, y, z, dx, dy, dz, len) => {
+        from.set(x, y, z); d.set(dx, dy, dz).normalize();
+        return ctx.world.raycastWorld ? ctx.world.raycastWorld(from, d, len) : null;
+      };
+      let best = null, bestScore = -1;
+      for (let ring = 1; ring <= 4; ring++) {
+        for (let a = 0; a < 12; a++) {
+          const ang = (a / 12) * Math.PI * 2 + ring * 0.26;
+          const r = (ring / 4) * R;
+          const x = p.pos.x + Math.cos(ang) * r;
+          const z = p.pos.z + Math.sin(ang) * r;
+          const gy = ctx.world.sampleHeight ? ctx.world.sampleHeight(x, z, p.pos.y + 8) : 0;
+          if (!isFinite(gy)) continue;
+          const eye = gy + 7;
+          if (cast(x, eye, z, 0, 1, 0, 160)) continue;        // needs open sky
+          let clear = 0;
+          for (let k = 0; k < 8; k++) {
+            const t = (k / 8) * Math.PI * 2;
+            if (!cast(x, eye, z, Math.cos(t), 0, Math.sin(t), CLEAR)) clear++;
+          }
+          // prefer wide open ground, then nearness so the mech does not teleport far
+          const score = clear * 100 - r * 0.4;
+          if (score > bestScore) { bestScore = score; best = { x, y: gy, z }; }
+        }
+      }
+      if (best && bestScore > 400) {
+        p.pos.set(best.x, best.y + 0.05, best.z);
+        p.vel.set(0, 0, 0);
+        return { moved: true, ...best, clear: Math.round((bestScore + best ? 0 : 0)) };
+      }
+      return { moved: false };
+    }, opt),
+    /**
+     * Install a per-frame tracking rig that keeps the mech framed for the
+     * whole capture, not just the instant freeCam was called. Also pulls the
+     * lens in until it has clear line of sight, so the shot cannot end up
+     * inside a pipe bridge.
+     */
     mechCam: (o) => page.evaluate((c) => {
       const g = window.__OB;
-      const p = g.ctx.player;
-      const yaw = p.yaw + (c.off || 0);
-      const s = c.front ? 1 : -1;
-      g.freeCam(
-        p.pos.x + Math.sin(yaw) * c.dist * s,
-        p.pos.y + c.height,
-        p.pos.z + Math.cos(yaw) * c.dist * s,
-        p.pos.x, p.pos.y + (c.lookY == null ? 6 : c.lookY), p.pos.z,
-        c.fov,
-      );
+      const ctx = g.ctx;
+      const THREE = ctx.THREE;
+      const from = new THREE.Vector3();
+      const to = new THREE.Vector3();
+      const dir = new THREE.Vector3();
+
+      const place = () => {
+        const p = ctx.player;
+        const yaw = p.yaw + (c.off || 0);
+        const s = c.front ? 1 : -1;
+        const lookY = c.lookY == null ? 6 : c.lookY;
+        to.set(p.pos.x, p.pos.y + lookY, p.pos.z);
+
+        // Walk the lens in from the requested distance looking for a clear
+        // sight line, but never closer than 70% of it — a lens inside the
+        // subject is a worse failure than a partly occluded one. If nothing
+        // is clear, fall back to the requested framing.
+        const at = (d) => from.set(
+          p.pos.x + Math.sin(yaw) * d * s,
+          p.pos.y + c.height,
+          p.pos.z + Math.cos(yaw) * d * s,
+        );
+        const floorAt = (x, z, y) => (ctx.world.sampleHeight ? ctx.world.sampleHeight(x, z, y) : 0);
+        let chosen = c.dist;
+        for (let i = 0; i <= 4; i++) {
+          const d = c.dist * (1 - i * 0.075);
+          at(d);
+          dir.subVectors(to, from);
+          const len = dir.length();
+          dir.divideScalar(len || 1);
+          const hit = ctx.world.raycastWorld ? ctx.world.raycastWorld(from, dir, len - 4) : null;
+          if (!hit && from.y > floorAt(from.x, from.z, from.y) + 1.5) { chosen = d; break; }
+        }
+        at(chosen);
+        const fy = floorAt(from.x, from.z, from.y) + 2;
+        g.freeCam(from.x, Math.max(from.y, fy), from.z, to.x, to.y, to.z, c.fov);
+      };
+
+      place();
+      if (window.__SHOT_RIG) cancelAnimationFrame(window.__SHOT_RIG);
+      const tick = () => { place(); window.__SHOT_RIG = requestAnimationFrame(tick); };
+      window.__SHOT_RIG = requestAnimationFrame(tick);
+      const p = ctx.player;
       return { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw };
     }, o),
+    /** fraction of the frame the player mech's projected bbox covers, 0..1 */
+    subjectCoverage: () => page.evaluate(() => {
+      const ctx = window.__OB.ctx;
+      const THREE = ctx.THREE;
+      const root = ctx.player && ctx.player.root;
+      if (!root) return 0;
+      const box = new THREE.Box3().setFromObject(root);
+      if (!isFinite(box.min.x)) return 0;
+      const v = new THREE.Vector3();
+      let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, anyFront = false;
+      for (let i = 0; i < 8; i++) {
+        v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+        v.project(ctx.camera);
+        if (v.z < 1) anyFront = true;
+        minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
+        minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
+      }
+      if (!anyFront) return 0;
+      const w = Math.min(maxX, 1) - Math.max(minX, -1);
+      const h = Math.min(maxY, 1) - Math.max(minY, -1);
+      if (w <= 0 || h <= 0) return 0;
+      return (w * h) / 4;
+    }),
     // Advance ~seconds of *simulated* time. Software WebGL is slow, so we
     // wait on real rAF frames and let the game clock do the rest.
     advance: async (sec) => {
@@ -226,12 +344,33 @@ async function main() {
       await sc.run(h);
 
       const file = path.join(OUT, `${name}.png`);
+      // Subject-presence gate: a shot framed to show the mech that does not
+      // contain the mech is a broken measurement, not a bad-looking game.
+      // [min, max] fraction of frame area the mech's projected bbox may cover.
+      // Too little means it is not in shot; too much means the lens is inside it.
+      const NEEDS_SUBJECT = {
+        mech_hero: [0.06, 0.34], mech_back: [0.06, 0.34],
+        boost: [0.015, 0.40], gameplay: [0.015, 0.40], hud: [0.008, 0.40],
+      };
+      let coverage = null;
+      const band = NEEDS_SUBJECT[name];
+      if (band) {
+        coverage = await h.subjectCoverage();
+        const pct = (coverage * 100).toFixed(2);
+        if (coverage < band[0]) {
+          report.ok = false;
+          report.errors.push(`${name}: subject coverage ${pct}% below ${(band[0] * 100).toFixed(1)}% — the mech is not in this frame`);
+        } else if (coverage > band[1]) {
+          report.ok = false;
+          report.errors.push(`${name}: subject coverage ${pct}% above ${(band[1] * 100).toFixed(0)}% — the lens is inside the mech`);
+        }
+      }
       await page.screenshot({ path: file });
       const stats = await page.evaluate(() => window.__OB.stats());
       const errs = await page.evaluate(() => window.__OB_ERRORS.slice(0, 10));
       report.shots.push({
         name, file: path.relative(ROOT, file), desc: sc.desc,
-        stats, ms: Date.now() - t0,
+        stats, ms: Date.now() - t0, coverage,
         errors: [...errs, ...consoleErrors].slice(0, 10),
       });
       if (errs.length || consoleErrors.length) report.ok = false;
