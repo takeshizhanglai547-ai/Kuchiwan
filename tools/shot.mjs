@@ -54,9 +54,15 @@ const SCENARIOS = {
   mech_hero: {
     desc: 'Hero close-up of the player mech (3/4 front). Judges silhouette, panel detail, materials.',
     async run(h) {
-      await h.start(); await h.advance(1.0);
-      await h.playerPos(0, 0, 0);
-      await h.freeCam(17, 12, 22, 0, 8, 0, 42);
+      await h.start(); await h.advance(0.6);
+      // Walk out of the drop shadow first — the spawn deck sits in a large
+      // cast shadow and a close read there compresses toward black.
+      await h.hold(A.FWD); await h.advance(1.6); await h.release(A.FWD);
+      await h.advance(0.5);
+      // Frame relative to where the mech ACTUALLY is. (The old version
+      // teleported to the world origin, which is the middle of the slag
+      // basin: the mech ended up out of frustum inside a smoke volume.)
+      await h.mechCam({ front: true, off: 0.62, dist: 27, height: 12.5, lookY: 6.2, fov: 40 });
       await h.advance(0.8);
     },
   },
@@ -64,9 +70,9 @@ const SCENARIOS = {
     desc: 'Rear 3/4 of the player mech with boosters lit — judges thruster VFX and back detail.',
     async run(h) {
       await h.start(); await h.advance(0.6);
-      await h.playerPos(0, 0, 0);
-      await h.hold(A.FWD); await h.hold(A.QB); await h.advance(0.8);
-      await h.freeCam(-14, 11, -20, 0, 8, 0, 45);
+      await h.hold(A.FWD); await h.advance(1.4);
+      await h.hold(A.QB); await h.advance(0.6);
+      await h.mechCam({ front: false, off: 0.55, dist: 24, height: 12.0, lookY: 6.4, fov: 44 });
       await h.advance(0.5);
     },
   },
@@ -100,18 +106,29 @@ const SCENARIOS = {
     desc: 'Detonation frame — judges explosion art, lighting response, debris and smoke.',
     async run(h) {
       await h.start(); await h.advance(0.8);
-      await h.eval(`(() => { const c=window.__OB.ctx; const p=c.player.pos;
-        for (let i=0;i<3;i++) c.vfx.explosion?.({ position:new c.THREE.Vector3(p.x+(i-1)*22, 6, p.z-46), radius: 14+i*3, power: 1, kind:'mech' });
-        c.projectiles.spawnExplosion?.({ position:new c.THREE.Vector3(p.x, 8, p.z-52), radius: 18, damage: 0, owner:'player' }); })()`);
-      await h.advance(0.28);
+      // Place the detonations along the mech's ACTUAL facing. The old version
+      // assumed -Z was forward; the insertion heading is picked at runtime, so
+      // the blasts landed behind a gantry or off the side of the frame.
+      await h.eval(`(() => { const c=window.__OB.ctx; const p=c.player.pos, y=c.player.yaw;
+        const fx=-Math.sin(y), fz=-Math.cos(y), rx=Math.cos(y), rz=-Math.sin(y);
+        const at=(f,s,up)=>new c.THREE.Vector3(p.x+fx*f+rx*s, p.y+up, p.z+fz*f+rz*s);
+        for (let i=0;i<3;i++) c.vfx.explosion?.({ position: at(54+i*11, (i-1)*23, 7+i*2), radius: 14+i*3, power: 1, kind:'mech' });
+        c.projectiles.spawnExplosion?.({ position: at(44, 0, 9), radius: 18, damage: 0, owner:'player' }); })()`);
+      await h.advance(0.24);
     },
   },
   hud: {
     desc: 'HUD legibility pass under combat load — every readout must be present and readable.',
     async run(h) {
+      // Deliberately NOT assault boost: 2 s of AB puts the mech on the arena
+      // boundary looking at empty apron, which judges nothing about the HUD.
+      // Close on the picket instead so every readout is under real load.
       await h.start(); await h.advance(0.8);
-      await h.hold(A.FWD); await h.hold(A.QB); await h.advance(0.8);
-      await h.hold(A.RIFLE); await h.hold(A.LOCK); await h.advance(1.2);
+      await h.hold(A.FWD); await h.advance(1.0);
+      await h.hold(A.LOCK); await h.advance(0.1); await h.release(A.LOCK);
+      await h.hold(A.RIFLE); await h.advance(0.8);
+      await h.hold(A.MISSILE); await h.advance(1.0);
+      await h.release(A.MISSILE); await h.advance(0.4);
     },
   },
   boss: {
@@ -142,6 +159,26 @@ function harness(page) {
     freeCam: (...a) => call('freeCam', ...a),
     playerPos: (...a) => call('playerPos', ...a),
     eval: (src) => page.evaluate(src),
+    /**
+     * Frame the player mech from a bearing RELATIVE TO ITS OWN FACING,
+     * wherever it happens to be standing.
+     *   front:true  -> looking back at the chest  (3/4 front)
+     *   front:false -> looking at the backpack    (3/4 rear)
+     */
+    mechCam: (o) => page.evaluate((c) => {
+      const g = window.__OB;
+      const p = g.ctx.player;
+      const yaw = p.yaw + (c.off || 0);
+      const s = c.front ? 1 : -1;
+      g.freeCam(
+        p.pos.x + Math.sin(yaw) * c.dist * s,
+        p.pos.y + c.height,
+        p.pos.z + Math.cos(yaw) * c.dist * s,
+        p.pos.x, p.pos.y + (c.lookY == null ? 6 : c.lookY), p.pos.z,
+        c.fov,
+      );
+      return { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw };
+    }, o),
     // Advance ~seconds of *simulated* time. Software WebGL is slow, so we
     // wait on real rAF frames and let the game clock do the rest.
     advance: async (sec) => {

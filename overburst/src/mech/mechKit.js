@@ -181,17 +181,24 @@ function boxProject(g, scale, ou, ov) {
   uv.needsUpdate = true;
 }
 
-function paint(g, base, wear, ao, jitter) {
+//  colour.r arrives as the chamfer mask (1 = flat plate face, 0 = bevel).
+//  Painted armour is DARK; the bevels are where the paint has been rubbed
+//  back to bare steel, so they read as a bright chamfer line that catches
+//  the key light. Wear is biased toward upward-facing edges — a uniform
+//  bevel highlight just outlines every box in white.
+function paint(g, base, wear, ao, jitter, wearAmt = 0.88) {
   const col = g.attributes.color, nrm = g.attributes.normal;
   _c1.set(base); _c2.set(wear);
   const jr = 1 + jitter;
   for (let i = 0; i < col.count; i++) {
     const m = col.getX(i);
-    const f = (1 - ao * (0.5 - 0.5 * nrm.getY(i))) * jr;
+    const ny = nrm.getY(i);
+    const f = (1 - ao * (0.5 - 0.5 * ny)) * jr;      // fake vertical AO
+    const w = (1 - m) * wearAmt * (0.5 + 0.5 * (0.5 + 0.5 * ny));
     col.setXYZ(i,
-      (_c2.r + (_c1.r - _c2.r) * m) * f,
-      (_c2.g + (_c1.g - _c2.g) * m) * f,
-      (_c2.b + (_c1.b - _c2.b) * m) * f);
+      (_c1.r + (_c2.r - _c1.r) * w) * f,
+      (_c1.g + (_c2.g - _c1.g) * w) * f,
+      (_c1.b + (_c2.b - _c1.b) * w) * f);
   }
   col.needsUpdate = true;
 }
@@ -293,8 +300,8 @@ export class Kit {
     g.applyMatrix4(_m);
     if (!o.keepUV) boxProject(g, o.uvScale ?? this.uvScale, o.uvOff ? o.uvOff[0] : 0, o.uvOff ? o.uvOff[1] : 0);
     if (key !== 'flame' && key !== 'heat') {
-      const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.11;
-      paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.34, jit);
+      const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.13;
+      paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.34, jit, o.wearAmt);
     }
     this._bucket(key).push(g);
     return g;
@@ -438,6 +445,10 @@ export class Kit {
    * Booster nozzle: housing + bell + heat-stained interior + collar,
    * plus an additive plume cone. Registers a thruster Object3D whose
    * local -Z points along the exhaust direction.
+   *
+   * `vanes` splits the bell mouth with cast splitter blades. A clean
+   * lit disc reads as an EYE from behind; a split one reads as an engine.
+   * Every bell on the frame gets at least one.
    */
   nozzle(x, y, z, rThroat, rExit, len, o = {}) {
     const dir = o.dir || 'back';
@@ -447,28 +458,110 @@ export class Kit {
     const pts = bellProfile(rThroat, rExit, len, o.housing ?? 1.32);
     const inner = pts.slice(2).map((p) => new THREE.Vector2(Math.max(0.012, p.x - 0.032), p.y));
 
-    this.lathe(pts, seg, x, y, z, { ...rot, key: 'hull', base: o.base ?? 0x7b8086, wear: 0xcbcfd3, ao: 0.46 });
+    this.lathe(pts, seg, x, y, z, { ...rot, key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5 });
     this.lathe(inner, seg, x, y, z, { ...rot, key: 'heat', keepUV: true });
     this.ring(rThroat * (o.housing ?? 1.32) * 1.04, rThroat * 0.11, seg, x, y, z,
-      { ...rot, key: 'mech', base: 0x676c72, ao: 0.45, rseg: 4 });
+      { ...rot, key: 'mech', base: 0x5a5f66, ao: 0.5, rseg: 4 });
+
+    // splitter vanes across the bell mouth — this is what kills the "eye".
+    // Authored in lathe-local space (+Y == exhaust) then carried out by rot.
+    const nv = o.vanes ?? 2;
+    for (let i = 0; i < nv; i++) {
+      const vg = new THREE.BoxGeometry(rExit * 1.94, len * 0.30, rExit * 0.16);
+      vg.rotateY((i / nv) * Math.PI + (o.vaneRoll ?? 0));
+      vg.translate(0, len * 0.86, 0);
+      this.put(vg, { ...rot, key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0, x, y, z });
+    }
+    if (nv > 0) {
+      // hub plug so the throat is never an open glowing disc
+      const hub = new THREE.CylinderGeometry(rThroat * 0.5, rThroat * 0.34, len * 0.5, 6);
+      hub.translate(0, len * 0.42, 0);
+      this.put(hub, { ...rot, key: 'mech', base: 0x41464d, ao: 0.55, jitter: 0, x, y, z });
+    }
 
     // plume spike: bright at the throat, transparent at the tip
-    const pl = new THREE.CylinderGeometry(rThroat * 0.14, rThroat * 0.95, len * 2.2, 9, 1, true);
-    pl.translate(0, len * 0.98, 0);
-    gradTint(pl, 'y', len * 1.75, -len * 0.15, 0x000000, 0xffffff);
+    const pl = new THREE.CylinderGeometry(rThroat * 0.12, rThroat * 0.80, len * 2.2, 8, 1, true);
+    pl.translate(0, len * 1.02, 0);
+    gradTint(pl, 'y', len * 1.9, -len * 0.05, 0x000000, 0xffffff);
     this.put(pl, { ...rot, key: 'flame', keepUV: true, x, y, z });
-    const blob = new THREE.SphereGeometry(rThroat * 0.92, 6, 4);
-    blob.scale(1, 1.5, 1);
-    blob.translate(0, len * 0.08, 0);
-    gradTint(blob, 'y', len * 0.9, -len * 0.4, 0x000000, 0xffffff);
+    const blob = new THREE.SphereGeometry(rThroat * 0.66, 6, 4);
+    blob.scale(1, 1.6, 1);
+    blob.translate(0, len * 0.34, 0);
+    gradTint(blob, 'y', len * 1.0, -len * 0.1, 0x000000, 0xffffff);
     this.put(blob, { ...rot, key: 'flame', keepUV: true, x, y, z });
 
+    return this._thruster(x, y, z, R, rExit * 0.78, o);
+  }
+
+  /**
+   * Rectangular exhaust PORT — a recessed slot with splitter vanes instead
+   * of a round bell. Two round bells side by side on a mech's back read as
+   * a pair of eyes no matter how you light them; a slot never does.
+   * Authored with +Y as the exhaust, then carried out by THRUST_ROT[dir].
+   */
+  port(x, y, z, w, h, len, o = {}) {
+    const dir = o.dir || 'back';
+    const R = THRUST_ROT[dir] || THRUST_ROT.back;
+    const rot = { rx: R[0], ry: R[1], rz: R[2] };
+    const mk = (geo, ox, oy, oz, opt) => {
+      geo.translate(ox, oy, oz);
+      this.put(geo, { ...rot, x, y, z, ...opt });
+    };
+
+    // housing collar standing proud of the plate it is sunk into
+    mk(chamferBox(w + 0.22, len * 0.62, h + 0.22, 0.05), 0, len * 0.24, 0,
+      { key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5 });
+    // deep dark throat — floor sunk well below the mouth so the slot has depth
+    mk(chamferBox(w, len * 0.90, h, 0.018), 0, -len * 0.30, 0,
+      { key: 'dark', base: 0x04050a, ao: 0.03, jitter: 0 });
+    // heat-stained liner (the heat material is BackSide, so we see its walls)
+    mk(new THREE.BoxGeometry(w * 0.93, len * 1.2, h * 0.93), 0, -len * 0.02, 0,
+      { key: 'heat', keepUV: true });
+    // splitter vanes across the mouth
+    const nv = o.vanes ?? 2;
+    for (let i = 0; i < nv; i++) {
+      const t = (i + 1) / (nv + 1) - 0.5;
+      mk(new THREE.BoxGeometry(w * 0.085, len * 0.46, h * 1.02), w * t, len * 0.42, 0,
+        { key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0 });
+    }
+    // brow lip so the mouth sits in its own shadow
+    mk(chamferBox(w + 0.22, len * 0.16, h * 0.30, 0.03), 0, len * 0.50, h * 0.62,
+      { key: 'hull', base: o.base ?? 0x4a4f55, wear: o.wear ?? 0x8f959c, ao: 0.5 });
+
+    // additive plume prism
+    const fl = new THREE.BoxGeometry(w * 0.78, len * 2.3, h * 0.78);
+    fl.translate(0, len * 1.35, 0);
+    gradTint(fl, 'y', len * 2.4, len * 0.1, 0x000000, 0xffffff);
+    this.put(fl, { ...rot, key: 'flame', keepUV: true, x, y, z });
+
+    //  `taps` splits the slot into a STACK of plume emitters. The VFX
+    //  system draws one round billboard per registered thruster, so a
+    //  single tap per port puts two big discs on the back — eyes again.
+    //  Three small ones per slot read as an afterburner bank instead.
+    const taps = o.taps ?? 1;
+    const rad = Math.max(w, Math.min(h, w * 1.3)) * 0.40;
+    _q.setFromEuler(_e.set(R[0], R[1], R[2], 'XYZ'));
+    let first = null;
+    for (let i = 0; i < taps; i++) {
+      const t = taps === 1 ? 0 : ((i / (taps - 1)) - 0.5) * h * 0.66;
+      _v.set(0, 0, t).applyQuaternion(_q);
+      const th = this._thruster(x + _v.x, y + _v.y, z + _v.z, R, rad, {
+        ...o,
+        power: (o.power ?? 1) / Math.sqrt(taps),
+        name: taps === 1 ? o.name : `${o.name || 'port'}_${i}`,
+      });
+      if (!first) first = th;
+    }
+    return first;
+  }
+
+  _thruster(x, y, z, R, radius, o) {
     const t = new THREE.Object3D();
     t.name = o.name || `thruster_${this.thrusters.length}`;
     t.position.set(x, y, z);
     t.rotation.set(R[0], R[1], R[2]);
-    t.rotateX(Math.PI / 2);             // lathe +Y -> marker -Z
-    t.userData = { radius: rExit, power: o.power ?? 1, kind: o.kind || 'main' };
+    t.rotateX(Math.PI / 2);             // authoring +Y -> marker -Z
+    t.userData = { radius, power: o.power ?? 1, kind: o.kind || 'main' };
     t.updateMatrix();
     if (this.node) this.node.add(t);
     this.thrusters.push(t);

@@ -54,13 +54,13 @@ function wrapped(g, S, fn) {
 //     the two maps line up exactly.
 //     1 tile == HULL_TILE world units.
 // ==================================================================
-export const HULL_TILE = 4.0;
+export const HULL_TILE = 4.6;
 
 function panelLayout(S, seed) {
   const R = mulberry32(seed);
   const out = [];
   (function split(x, y, w, h, depth) {
-    if (depth <= 0 || (w < S * 0.075 && h < S * 0.075) || (depth < 4 && R() < 0.22)) {
+    if (depth <= 0 || (w < S * 0.125 && h < S * 0.125) || (depth < 4 && R() < 0.30)) {
       out.push({ x, y, w, h, v: R() });
       return;
     }
@@ -71,7 +71,7 @@ function panelLayout(S, seed) {
       const t = h * (0.3 + R() * 0.4);
       split(x, y, w, t, depth - 1); split(x, y + t, w, h - t, depth - 1);
     }
-  })(0, 0, S, S, 6);
+  })(0, 0, S, S, 5);
   return out;
 }
 
@@ -83,18 +83,22 @@ function drawHull(S, mode) {
   const A = mode === 'albedo';
 
   // ---- base coat -------------------------------------------------
+  //  ALBEDO is a mid-value DETAIL map only. The actual paint colour comes
+  //  from the per-plate vertex colour (see mechKit.paint), which is the
+  //  dark industrial palette. Keeping this map bright-ish would wash the
+  //  frame out to white — it must stay well under 0.5 linear.
   // orm: R = AO, G = roughness, B = metalness
-  g.fillStyle = A ? '#d2d5d9' : 'rgb(255,132,112)';
+  g.fillStyle = A ? '#b2b5b9' : 'rgb(250,120,152)';
   g.fillRect(0, 0, S, S);
 
   // ---- large scale paint mottling --------------------------------
-  g.globalAlpha = A ? 0.22 : 0.10;
+  g.globalAlpha = A ? 0.30 : 0.16;
   for (let i = 0; i < 26; i++) {
     const x = R() * S, y = R() * S, r = S * (0.06 + R() * 0.16);
-    const dark = R() < 0.5;
+    const dark = R() < 0.55;
     wrapped(g, S, () => {
       const grd = g.createRadialGradient(x, y, 0, x, y, r);
-      const c = A ? (dark ? '28,30,35' : '250,251,255') : (dark ? '255,176,86' : '255,112,140');
+      const c = A ? (dark ? '18,19,23' : '228,232,238') : (dark ? '176,150,116' : '255,102,182');
       grd.addColorStop(0, `rgba(${c},1)`);
       grd.addColorStop(1, `rgba(${c},0)`);
       g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
@@ -105,69 +109,70 @@ function drawHull(S, mode) {
   // ---- panels ----------------------------------------------------
   const panels = panelLayout(S, 7717);
   for (const p of panels) {
-    // plate value variance
-    const j = (p.v - 0.5) * (A ? 20 : 10);
+    // plate value variance — a factory repaint is never uniform
+    const j = (p.v - 0.5) * (A ? 34 : 14);
     if (A) {
-      g.fillStyle = `rgb(${(208 + j * 1.4) | 0},${(210 + j * 1.4) | 0},${(214 + j * 1.4) | 0})`;
+      g.fillStyle = `rgb(${(178 + j * 1.5) | 0},${(181 + j * 1.5) | 0},${(185 + j * 1.5) | 0})`;
     } else {
-      g.fillStyle = `rgb(255,${(132 + j) | 0},${(112 - j * 0.5) | 0})`;
+      g.fillStyle = `rgb(250,${(120 + j) | 0},${(152 - j * 0.8) | 0})`;
     }
-    g.globalAlpha = 0.55;
+    g.globalAlpha = 0.62;
     g.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
     g.globalAlpha = 1;
   }
 
-  // panel grooves — dark core + a bright catch-light on the lower lip
-  const gw = Math.max(3, S / 190);
+  // panel grooves — WIDE and BLACK. This is the detail that has to carry
+  // at 100 m, so it is authored in value, not in fine noise.
+  const gw = Math.max(4, S / 104);
   for (const p of panels) {
-    // groove (drawn as an inset dark rounded rect stroke)
+    // soft AO bleed either side of the groove (drawn first, under it)
+    g.lineWidth = gw * 4.0;
+    g.strokeStyle = A ? 'rgba(20,21,25,0.40)' : 'rgba(118,198,108,0.46)';
+    g.strokeRect(p.x + gw * 0.5, p.y + gw * 0.5, p.w - gw, p.h - gw);
+    // the groove itself
     g.lineWidth = gw;
-    g.strokeStyle = A ? 'rgba(24,26,30,0.94)' : 'rgba(96,212,74,0.92)';
+    g.strokeStyle = A ? 'rgba(10,11,14,0.97)' : 'rgba(28,226,58,0.95)';
     g.strokeRect(p.x + gw * 0.5, p.y + gw * 0.5, p.w - gw, p.h - gw);
-    // soft AO bleed either side of the groove
-    g.lineWidth = gw * 3.2;
-    g.strokeStyle = A ? 'rgba(36,38,42,0.3)' : 'rgba(140,196,86,0.36)';
-    g.strokeRect(p.x + gw * 0.5, p.y + gw * 0.5, p.w - gw, p.h - gw);
-    // catch-light
-    g.lineWidth = Math.max(1, gw * 0.42);
-    g.strokeStyle = A ? 'rgba(252,252,248,0.3)' : 'rgba(255,92,250,0.6)';
+    // bare-metal catch-light on the lower/right lip of the plate above
+    g.lineWidth = Math.max(1.2, gw * 0.34);
+    g.strokeStyle = A ? 'rgba(216,220,226,0.52)' : 'rgba(255,70,238,0.7)';
     g.beginPath();
-    g.moveTo(p.x + gw * 1.4, p.y + p.h - gw * 1.4);
-    g.lineTo(p.x + p.w - gw * 1.4, p.y + p.h - gw * 1.4);
-    g.moveTo(p.x + p.w - gw * 1.4, p.y + gw * 1.4);
-    g.lineTo(p.x + p.w - gw * 1.4, p.y + p.h - gw * 1.4);
+    g.moveTo(p.x + gw * 1.3, p.y + p.h - gw * 1.3);
+    g.lineTo(p.x + p.w - gw * 1.3, p.y + p.h - gw * 1.3);
+    g.moveTo(p.x + p.w - gw * 1.3, p.y + gw * 1.3);
+    g.lineTo(p.x + p.w - gw * 1.3, p.y + p.h - gw * 1.3);
     g.stroke();
   }
 
   // ---- rivet / bolt rows along some panel edges -------------------
-  const rr = Math.max(2.0, S / 300);
+  const rr = Math.max(2.4, S / 250);
   for (const p of panels) {
-    if (R() > 0.34) continue;
-    const n = Math.max(2, Math.round(p.w / (S * 0.045)));
-    const yy = p.y + (R() < 0.5 ? gw * 3.0 : p.h - gw * 3.0);
+    if (R() > 0.40) continue;
+    const n = Math.max(2, Math.round(p.w / (S * 0.058)));
+    const yy = p.y + (R() < 0.5 ? gw * 2.4 : p.h - gw * 2.4);
     for (let i = 0; i < n; i++) {
       const xx = p.x + p.w * ((i + 0.5) / n);
       if (A) {
-        g.fillStyle = 'rgba(26,27,30,0.55)';
-        g.beginPath(); g.arc(xx, yy + rr * 0.85, rr * 1.15, 0, TAU); g.fill();
-        g.fillStyle = 'rgba(222,222,216,0.7)';
+        g.fillStyle = 'rgba(14,15,18,0.72)';
+        g.beginPath(); g.arc(xx, yy + rr * 0.9, rr * 1.25, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(206,208,206,0.75)';
         g.beginPath(); g.arc(xx, yy, rr, 0, TAU); g.fill();
       } else {
-        g.fillStyle = 'rgba(255,90,250,0.85)';
+        g.fillStyle = 'rgba(255,84,250,0.85)';
         g.beginPath(); g.arc(xx, yy, rr, 0, TAU); g.fill();
       }
     }
   }
 
   // ---- vertical grime / oil streaks (V axis == world down) --------
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 82; i++) {
     const x = R() * S, y = R() * S;
-    const w = S * (0.004 + R() * 0.016);
-    const h = S * (0.05 + R() * 0.30);
-    const a = 0.07 + R() * 0.22;
+    const w = S * (0.005 + R() * 0.020);
+    const h = S * (0.05 + R() * 0.32);
+    const a = 0.10 + R() * 0.26;
     wrapped(g, S, () => {
       const grd = g.createLinearGradient(0, y, 0, y + h);
-      const c = A ? '26,22,18' : '150,216,64';
+      const c = A ? '17,15,13' : '138,222,58';
       grd.addColorStop(0, `rgba(${c},${a})`);
       grd.addColorStop(0.25, `rgba(${c},${a * 0.75})`);
       grd.addColorStop(1, `rgba(${c},0)`);
@@ -177,24 +182,24 @@ function drawHull(S, mode) {
   }
 
   // ---- rust / scorch blooms --------------------------------------
-  for (let i = 0; i < 16; i++) {
-    const x = R() * S, y = R() * S, r = S * (0.012 + R() * 0.04);
+  for (let i = 0; i < 18; i++) {
+    const x = R() * S, y = R() * S, r = S * (0.014 + R() * 0.045);
     wrapped(g, S, () => {
       const grd = g.createRadialGradient(x, y, 0, x, y, r);
-      const c = A ? '104,60,38' : '182,236,40';
-      grd.addColorStop(0, `rgba(${c},0.26)`);
+      const c = A ? '122,74,48' : '180,238,44';
+      grd.addColorStop(0, `rgba(${c},0.34)`);
       grd.addColorStop(1, `rgba(${c},0)`);
       g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
     });
   }
 
   // ---- chipped paint speckle (bare metal) ------------------------
-  for (let i = 0; i < 620; i++) {
+  for (let i = 0; i < 320; i++) {
     const x = R() * S, y = R() * S;
-    const w = 1 + R() * (S / 220), h = 1 + R() * (S / 260);
+    const w = 1 + R() * (S / 190), h = 1 + R() * (S / 230);
     g.fillStyle = A
-      ? (R() < 0.45 ? 'rgba(236,234,228,0.22)' : 'rgba(30,28,26,0.34)')
-      : 'rgba(255,84,252,0.34)';
+      ? (R() < 0.42 ? 'rgba(206,208,204,0.24)' : 'rgba(14,13,12,0.46)')
+      : 'rgba(255,72,250,0.38)';
     g.fillRect(x, y, w, h);
   }
 
@@ -202,7 +207,7 @@ function drawHull(S, mode) {
   const img = g.getImageData(0, 0, S, S);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const n = (R() - 0.5) * (A ? 15 : 8);
+    const n = (R() - 0.5) * (A ? 10 : 6);
     d[i] += n * 1.05; d[i + 1] += n; d[i + 2] += n * 1.1;
   }
   g.putImageData(img, 0, 0);
@@ -463,14 +468,17 @@ function drawThroat(S) {
   const cv = mkCanvas(S, S);
   const g = cv.getContext('2d');
   const R = mulberry32(9091);
+  //  A COLD nozzle is a black carbon hole. The old bright-bronze interior
+  //  turned every bell into a glowing iris — the single worst read on the
+  //  frame. Heat staining is kept, but at a fraction of the value.
   const grd = g.createLinearGradient(0, S, 0, 0);
-  grd.addColorStop(0.00, '#0a0a0b');   // exit lip: carbon
-  grd.addColorStop(0.16, '#14100f');
-  grd.addColorStop(0.34, '#2a2130');   // temper: violet
-  grd.addColorStop(0.50, '#26314a');   // temper: blue
-  grd.addColorStop(0.66, '#5a4234');   // straw / bronze
-  grd.addColorStop(0.82, '#8a4a22');
-  grd.addColorStop(1.00, '#c2622a');   // throat: hot bronze
+  grd.addColorStop(0.00, '#040405');   // exit lip: soot
+  grd.addColorStop(0.18, '#08080a');
+  grd.addColorStop(0.36, '#100d13');   // temper: violet
+  grd.addColorStop(0.52, '#0e1219');   // temper: blue
+  grd.addColorStop(0.68, '#1e1712');   // straw
+  grd.addColorStop(0.84, '#2e1c10');
+  grd.addColorStop(1.00, '#43260f');   // throat: dark bronze
   g.fillStyle = grd; g.fillRect(0, 0, S, S);
   // soot streaks running along the bell
   for (let i = 0; i < 130; i++) {
@@ -592,7 +600,7 @@ export function makeMaterials(opts = {}) {
     roughnessMap: T.hullORM,
     metalnessMap: T.hullORM,
     aoMap: T.hullORM,
-    aoMapIntensity: 0.95,
+    aoMapIntensity: 1.0,
     emissiveMap: T.emberMap,
     emissive: new THREE.Color(0x000000),
     emissiveIntensity: 1.0,
@@ -609,31 +617,31 @@ export function makeMaterials(opts = {}) {
     color: new THREE.Color(opts.mechTint ?? 0xb6bac0),
     map: T.hullMap,
     roughnessMap: T.hullORM,
-    roughness: 0.33,
+    roughness: 0.30,
     metalness: 1.0,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 1.15,
+    envMapIntensity: (opts.envIntensity ?? 1.0) * 1.2,
     vertexColors: true,
     dithering: true,
   });
 
   // rubber boots, canopy glass, deep-shadow inner frame
   const dark = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(opts.darkTint ?? 0x1c1e21),
-    roughness: 0.72,
-    metalness: 0.2,
+    color: new THREE.Color(opts.darkTint ?? 0x14161a),
+    roughness: 0.78,
+    metalness: 0.18,
     envMap: T.envMap,
-    envMapIntensity: (opts.envIntensity ?? 1.0) * 0.34,
+    envMapIntensity: (opts.envIntensity ?? 1.0) * 0.26,
     vertexColors: true,
     dithering: true,
   });
 
   const glow = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0x05070a),
+    color: new THREE.Color(0x04060a),
     emissive: accent.clone(),
-    emissiveIntensity: 1.75,
-    roughness: 0.28,
-    metalness: 0.3,
+    emissiveIntensity: 2.35,
+    roughness: 0.26,
+    metalness: 0.25,
     vertexColors: true,
     toneMapped: true,
   });
@@ -655,8 +663,8 @@ export function makeMaterials(opts = {}) {
   const decal = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: T.decalMap,
-    roughness: 0.62,
-    metalness: 0.35,
+    roughness: 0.68,
+    metalness: 0.20,
     envMap: T.envMap,
     envMapIntensity: (opts.envIntensity ?? 1.0) * 0.45,
     transparent: false,
