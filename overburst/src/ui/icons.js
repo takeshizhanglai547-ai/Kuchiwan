@@ -79,18 +79,19 @@ export const LOCKBOX_SVG =
   '</svg>';
 
 /**
- * Directional damage arc — an angular mask for the full-screen edge glow.
+ * Directional damage arc — an angular mask for the screen-edge glow.
  * `deg` is the incoming bearing, clockwise from straight ahead (screen up),
  * matching the CSS conic origin exactly. The wedge peaks on the bearing and
- * is fully gone ±38 degrees off it, so several hits from different quarters
+ * is fully gone ±35 degrees off it, so several hits from different quarters
  * overlap as a smear of edge light instead of crossing crescents.
  */
+const ARC_HALF = 35;
 const ARC_STOPS =
-  'rgba(0,0,0,0) 0deg,rgba(0,0,0,.04) 9deg,rgba(0,0,0,.22) 19deg,' +
-  'rgba(0,0,0,.62) 29deg,#000 38deg,rgba(0,0,0,.62) 47deg,' +
-  'rgba(0,0,0,.22) 57deg,rgba(0,0,0,.04) 67deg,rgba(0,0,0,0) 76deg,' +
+  'rgba(0,0,0,0) 0deg,rgba(0,0,0,.05) 8deg,rgba(0,0,0,.24) 17deg,' +
+  'rgba(0,0,0,.66) 27deg,#000 35deg,rgba(0,0,0,.66) 43deg,' +
+  'rgba(0,0,0,.24) 53deg,rgba(0,0,0,.05) 62deg,rgba(0,0,0,0) 70deg,' +
   'rgba(0,0,0,0) 360deg)';
 
 export function arcMask(deg) {
-  return 'conic-gradient(from ' + (deg - 38).toFixed(1) + 'deg at 50% 50%,' + ARC_STOPS;
+  return 'conic-gradient(from ' + (deg - ARC_HALF).toFixed(1) + 'deg at 50% 50%,' + ARC_STOPS;
 }

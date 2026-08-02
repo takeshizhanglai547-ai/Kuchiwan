@@ -41,7 +41,11 @@ export const DEF = {
     height: 6.6, chest: 3.7, eye: 4.4, radius: 3.0,
     flying: false, turn: 2.3, accel: 4.6, sight: 330, killRadius: 12,
     fireRange: 168, keepMin: 54, keepMax: 108, tooClose: 44,
-    burst: 4, burstGap: 0.125, windup: 0.50, recover: 1.55,
+    // recover is the reload beat. Measured against a stationary player, the
+    // opening picket put out ~250 dps sustained; four MTs are most of that,
+    // so the beat is long enough to be a real window (and long enough for
+    // the duck-into-cover behaviour to actually read).
+    burst: 4, burstGap: 0.125, windup: 0.50, recover: 1.90,
     shot: { speed: 300, damage: 32, impact: 76, acs: 46, spread: 0.032, width: 0.20 },
   },
   drone: {
@@ -90,8 +94,10 @@ export const DEF = {
     acsMax: 4300, staggerTime: 2.35, acsDecay: 0.20,
     height: 15.2, chest: 8.6, eye: 11.0, radius: 5.0,
     flying: false, turn: 3.1, accel: 5.0, sight: 460, killRadius: 30,
-    // a duel band, not a stand-off: NIGHTJAR stays in your face
-    keepMin: 34, keepMax: 64,
+    // A duel band, not a stand-off. It is also a READABILITY budget: a
+    // 15 m AC is ~135 px tall at 52 m in a 560 px frame and ~110 at 64 m,
+    // and the handler's line is "do not let it close" — so it closes.
+    keepMin: 30, keepMax: 52,
 
     // phase gates (fraction of apMax)
     phase2: 0.66, phase3: 0.33,

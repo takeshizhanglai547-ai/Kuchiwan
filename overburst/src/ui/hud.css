@@ -399,15 +399,21 @@ body {
    transparent, not absent. Line breaks and box size are therefore fixed
    before a single glyph appears — the box can never clip its own text. */
 #radio {
-  position: absolute; left: 50%; bottom: 16.4rem; width: 40rem; margin-left: -20rem;
-  display: flex; justify-content: center; opacity: 0; transition: opacity .22s linear;
+  position: absolute; left: 0; right: 0; bottom: 16.4rem;
+  display: flex; justify-content: center; padding: 0 1.6rem;
+  opacity: 0; transition: opacity .22s linear;
 }
 #radio.on { opacity: 1; }
-.rd-in { display: flex; align-items: baseline; gap: .75rem; padding: .34rem .95rem .4rem; max-width: 100%; }
+/* The box is centred inside the full window width, so a narrow viewport
+   shrinks it instead of pushing half of it off-screen. */
+.rd-in {
+  display: flex; align-items: baseline; gap: .75rem;
+  padding: .34rem .95rem .4rem; min-width: 0; max-width: 40rem;
+}
 .rd-in u { font-style: normal; text-decoration: none; font-size: .62rem; letter-spacing: .22em; color: var(--cy); white-space: nowrap; }
 .rd-in b {
   min-width: 0; font-size: .72rem; line-height: 1.55; letter-spacing: .1em;
-  color: #fff; font-weight: 400; overflow-wrap: normal; hyphens: none;
+  color: #fff; font-weight: 400; overflow-wrap: break-word; hyphens: none;
 }
 .rd-in b s { text-decoration: none; }
 /* the caret is the tail's own 1px edge — costs no width, so no reflow */
@@ -418,23 +424,25 @@ body {
 #radio.done .rd-in b i { border-left-color: transparent; }
 
 /* ---- banners / toasts ----
-   High and light: a callout, not a title card. It must never compete with
-   what is happening at the reticle. */
+   High and light: a callout, not a title card. Parked in rem just under the
+   target readout (which ends at ~6rem) rather than at a % of the viewport,
+   so it clears the readout at every aspect ratio and stays far above the
+   reticle — it must never compete with what is happening at the crosshair. */
 #banner {
-  position: absolute; left: 50%; top: 14.5%; transform: translateX(-50%);
-  text-align: center; opacity: 0;
+  position: absolute; left: 50%; top: 7.6rem; transform: translateX(-50%);
+  text-align: center; opacity: 0; max-width: 86vw;
 }
 #banner b {
-  display: block; font-size: 1.02rem; letter-spacing: .54em; color: #e6f6fa;
-  font-weight: 400; padding-left: .54em; white-space: nowrap;
+  display: block; font-size: .90rem; letter-spacing: .46em; color: #dcf0f5;
+  font-weight: 400; padding-left: .46em; white-space: nowrap;
 }
 #banner b::before, #banner b::after {
   content: ''; display: inline-block; vertical-align: middle; position: relative; top: -.08em;
-  width: 1.9rem; height: 1px; background: var(--line);
+  width: 1.5rem; height: 1px; background: var(--line2);
 }
-#banner b::before { margin: 0 .95rem 0 0; }
-#banner b::after  { margin: 0 0 0 .95rem; }
-#banner span { display: block; margin-top: .34rem; font-size: .59rem; letter-spacing: .28em; color: var(--am); }
+#banner b::before { margin: 0 .85rem 0 0; }
+#banner b::after  { margin: 0 0 0 .85rem; }
+#banner span { display: block; margin-top: .30rem; font-size: .55rem; letter-spacing: .26em; color: var(--am); }
 
 /* ---- edge warnings ---- */
 .warnbar {
@@ -467,17 +475,24 @@ body {
 
 /* ---- directional damage arcs ----
    A thin band of red light along the screen border, angularly masked to a
-   wedge on the incoming bearing (mask set from JS). Brightest hard against
-   the edge, dead by ~10% in from it — never a shape floating in frame. */
+   wedge on the incoming bearing (mask set from JS).
+
+   Four independent edge gradients — NOT one radial ellipse. An inscribed
+   ellipse leaves the four corner lunes past its 100% stop, and a gradient's
+   last stop extends forever, so a diagonal bearing painted a solid red
+   quarter-screen. Per-edge bands keep the glow a constant 3.6rem thick all
+   the way round and dead everywhere else. */
 #arc-layer { position: absolute; inset: 0; }
 .dmgarc {
-  position: absolute; inset: 0; opacity: 0;
-  background-image: radial-gradient(closest-side ellipse at 50% 50%,
-    rgba(255, 40, 32, 0)   0 74%,
-    rgba(255, 40, 32, .07) 85%,
-    rgba(255, 46, 36, .38) 93%,
-    rgba(255, 62, 46, .90) 98%,
-    rgba(255, 104, 82, 1)  100%);
+  position: absolute; inset: 0; opacity: 0; will-change: opacity;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(to bottom, rgba(255, 76, 56, .82) 0, rgba(255, 60, 44, .44) 18%, rgba(255, 54, 40, .17) 42%, rgba(255, 54, 40, .04) 70%, rgba(255, 54, 40, 0) 100%),
+    linear-gradient(to top,    rgba(255, 76, 56, .82) 0, rgba(255, 60, 44, .44) 18%, rgba(255, 54, 40, .17) 42%, rgba(255, 54, 40, .04) 70%, rgba(255, 54, 40, 0) 100%),
+    linear-gradient(to right,  rgba(255, 76, 56, .82) 0, rgba(255, 60, 44, .44) 18%, rgba(255, 54, 40, .17) 42%, rgba(255, 54, 40, .04) 70%, rgba(255, 54, 40, 0) 100%),
+    linear-gradient(to left,   rgba(255, 76, 56, .82) 0, rgba(255, 60, 44, .44) 18%, rgba(255, 54, 40, .17) 42%, rgba(255, 54, 40, .04) 70%, rgba(255, 54, 40, 0) 100%);
+  background-size: 100% 4.6rem, 100% 4.6rem, 4.6rem 100%, 4.6rem 100%;
+  background-position: left top, left bottom, left top, right top;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
 

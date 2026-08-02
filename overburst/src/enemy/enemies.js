@@ -30,33 +30,35 @@
 //    * Nothing in the update path allocates.
 // ============================================================
 import * as THREE from 'three';
-import { CFG } from '../config.js';
 import { buildEnemyMech } from '../mech/mechModel.js';
 import { volumeOf, rayCapsule, closestOnAxis, makeVolume } from '../combat/targets.js';
-import { clamp, rand } from '../util/math.js';
+import { rand } from '../util/math.js';
 import { DEF, HELP_RADIUS } from './enemyDefs.js';
 import { Enemy } from './enemyUnit.js';
 import { BRAINS } from './enemyAI.js';
 import { brainBoss } from './bossAI.js';
+import { pickBossSpot } from './bossStage.js';
 import { buildPylon, disposePylonTemplate } from './pylonModel.js';
 
-// Bearings (rad, off the player's facing) tried when NIGHTJAR walks on.
-// The chase camera sits 20.6 u behind the player, so the player's own mech
-// covers ~0.26 rad of the frame: anything closer to the centreline than
-// ~0.4 rad spawns INSIDE that silhouette and is never seen. Flank arrivals
-// only — the near-axis entries are last-resort fallbacks.
-const BOSS_ARC = [0.46, -0.46, 0.64, -0.64, 0.34, -0.34, 0.9, -0.9];
-// opening picket line: [lateral, forward, kind] along the insertion lane
+// NIGHTJAR drops in from above rather than walking on: from this height,
+// with this much downward speed, gravity gives a ~0.6 s descent — long
+// enough to read as a landing, short enough not to stall the encounter.
+const BOSS_DROP_H = 27;
+const BOSS_DROP_V = 22;
+
+// Opening picket line: [lateral, forward, kind] along the insertion lane.
+// `wake` is the delay before that echelon takes its first shot — the
+// player gets a beat to move before the whole corridor opens up, and the
+// volume of fire ramps instead of arriving as one wall.
 const CONTACT = [
-  [0, 84, 'mt'], [-36, 116, 'drone'], [32, 152, 'mt'],
-  [-28, 198, 'mt'], [26, 244, 'drone'], [-16, 290, 'mt'], [18, 326, 'mt'],
+  [0, 84, 'mt', 1.1], [-36, 116, 'drone', 1.9], [32, 152, 'mt', 2.6],
+  [-28, 198, 'mt', 3.4], [26, 244, 'drone', 4.2], [-16, 290, 'mt', 5.0], [18, 326, 'mt', 5.8],
 ];
 const MAX_UNITS = 22;          // hard cap on concurrent hostiles
 const AI_BUDGET = 10;          // perception raycasts per frame
 const SEPARATION = 1.0;        // ground units shove each other apart
 
 const _v = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
 const _spawn = new THREE.Vector3();
 const _vol = makeVolume();
 const _n = new THREE.Vector3();
@@ -86,7 +88,6 @@ export class EnemyManager {
       enemy: null, entity: null, distance: 0,
       point: new THREE.Vector3(), normal: new THREE.Vector3(0, 0, 1),
     };
-    this._ray = { point: new THREE.Vector3(), normal: new THREE.Vector3(), distance: 0 };
     this.waves = ['contact', 'armour', 'air', 'garrison', 'pylons', 'boss'];
   }
 
@@ -174,6 +175,7 @@ export class EnemyManager {
       const gy = w.sampleHeight(_spawn.x, _spawn.z, _spawn.y + 6);
       if (Number.isFinite(gy)) _spawn.y = gy + (def.flying ? (def.hoverY || 20) : 0.02);
     }
+    if (opts.dropY) _spawn.y += opts.dropY;
 
     const e = new Enemy(this, k, _spawn, opts);
     if (k === 'pylon') {
@@ -188,8 +190,17 @@ export class EnemyManager {
       e.attachMech(mech);
     }
     e.brain = k === 'boss' ? brainBoss : (BRAINS[k] || BRAINS.mt);
-    e.b = { state: k === 'boss' ? 'intro' : 'engage', t: 0, side: Math.random() < 0.5 ? -1 : 1, fireCd: rand(0.2, 1.4) };
+    e.b = {
+      state: k === 'boss' ? 'intro' : 'engage', t: 0,
+      side: Math.random() < 0.5 ? -1 : 1,
+      fireCd: opts.wake !== undefined ? opts.wake : rand(0.2, 1.4),
+    };
     if (opts.lead !== undefined) e.b.lead = opts.lead;
+    if (opts.dropY) {
+      e.b.dropIn = true;
+      e.vel.y = -(opts.dropVel || 0);
+      e.grounded = false;
+    }
 
     this.ctx.scene.add(e.root);
     this.list.push(e);
@@ -216,7 +227,10 @@ export class EnemyManager {
       e.alive = false; e.dying = false; e.dead = true;
       this._release(e);
     }
-    if (!keepPylons) { this.pylons.length = 0; this.boss = null; this.bossSpawned = false; }
+    if (!keepPylons) this.pylons.length = 0;
+    // whatever we just wiped, the boss went with it — leaving a dead one
+    // hanging off .boss makes the mission read it as "NIGHTJAR destroyed"
+    if (this.boss && !this.boss.alive) { this.boss = null; this.bossSpawned = false; }
     this._compact();
   }
 
@@ -264,7 +278,7 @@ export class EnemyManager {
         for (let i = 0; i < CONTACT.length; i++) {
           const side = CONTACT[i][0], fwd = CONTACT[i][1], kind = CONTACT[i][2];
           _v.set(ox + fx * fwd - fz * side, 0, oz + fz * fwd + fx * side);
-          const e = this.spawn(kind, _v, { alert: true, yaw });
+          const e = this.spawn(kind, _v, { alert: true, yaw, wake: CONTACT[i][3] });
           if (e) out.push(e);
         }
         break;
@@ -318,43 +332,24 @@ export class EnemyManager {
     }
   }
 
-  /** drop NIGHTJAR in front of the player and start the duel */
+  /** drop NIGHTJAR into clear line of sight and start the duel */
   forceBoss() {
     this.autoDirector = false;
     if (this.boss && this.boss.alive) return this.boss;
     if (this.bossSpawned && this.boss && !this.boss.alive) return this.boss;
     const p = this.ctx.player;
-    const w = this.ctx.world;
-    let x = 0, z = -70;
-    if (p) {
-      // Off the player's centreline: an AC that walks on dead ahead is hidden
-      // behind your own mech in a third-person frame. It arrives on the flank.
-      const WANT = 38;
-      let bestS = -1, bestD = 24, bestA = p.yaw + BOSS_ARC[0];
-      for (let i = 0; i < BOSS_ARC.length; i++) {
-        const off = BOSS_ARC[i];
-        const a = p.yaw + off;
-        const fx = -Math.sin(a), fz = -Math.cos(a);
-        let dist = WANT;
-        if (w && w.raycastWorld) {
-          _v.set(p.pos.x, p.pos.y + 8, p.pos.z);
-          _v2.set(fx, 0, fz);
-          const h = w.raycastWorld(_v, _v2, WANT + 18, this._ray);
-          if (h) dist = Math.max(18, Math.min(dist, h.distance - 14));
-        }
-        // clearance matters, but staying off the centreline matters more
-        const s = Math.min(dist, WANT) + (Math.abs(off) >= 0.4 ? 34 : 0);
-        if (s > bestS) { bestS = s; bestD = dist; bestA = a; }
-        if (dist >= WANT && Math.abs(off) >= 0.4) break;
-      }
-      x = p.pos.x - Math.sin(bestA) * bestD;
-      z = p.pos.z - Math.cos(bestA) * bestD;
-      const r = Math.hypot(x, z);
-      const lim = CFG.ARENA.RADIUS - 40;
-      if (r > lim) { x = x / r * lim; z = z / r * lim; }
-    }
-    _v.set(x, 0, z);
-    const b = this.spawn('boss', _v, { alert: true, name: DEF.boss.name, lead: 0.9 });
+
+    // Placement is a real search, not a bearing guess — see bossStage.js.
+    // It sweeps bearings AND ranges, raycasts each candidate from the LENS,
+    // and scores open ground, headroom and backdrop. This is the single most
+    // important spawn in the game; it is worth ~100 rays, once.
+    _v.set(0, 0, -70);
+    if (p) pickBossSpot(this.ctx, _v);
+
+    const b = this.spawn('boss', _v, {
+      alert: true, name: DEF.boss.name, lead: 0.9,
+      dropY: BOSS_DROP_H, dropVel: BOSS_DROP_V,
+    });
     if (b && p) b.yaw = Math.atan2(-(p.pos.x - b.pos.x), -(p.pos.z - b.pos.z));
     this.ctx.bus.emit('hud', { type: 'radio', speaker: 'HANDLER', text: 'AC signature on the deck. That is NIGHTJAR — do not let it close.', dur: 4.2 });
     this.ctx.bus.emit('hud', { type: 'warning', text: 'HOSTILE AC', dur: 2.6, level: 'danger', id: 'boss' });
