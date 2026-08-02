@@ -729,7 +729,9 @@ const Music=(()=>{
   const BATTLE=[
     { bpm:132, lead:'triangle', pad:'sawtooth',            // 1: 王都 — 王道ヒロイック (Am)
       prog:[[57,60,64],[53,57,60],[60,64,67],[55,59,62],[57,60,64],[53,57,60],[55,59,62],[52,56,59]],
-      mel:[69,72,76,74, 72,69,65,67, 64,67,72,76, 74,71,67,71, 69,72,76,81, 77,76,72,69, 71,74,79,74, 76,71,68,64] },
+      mel:[69,72,76,74, 72,69,65,67, 64,67,72,76, 74,71,67,71, 69,72,76,81, 77,76,72,69, 71,74,79,74, 76,71,68,64],
+      // 対旋律（8分裏で動く独立線）。各音は和音内音の +12 で、同拍の主旋律とは常に別音高・非オクターブ
+      cmel:[76,69,72,69, 65,72,69,65, 72,76,79,72, 67,74,74,67, 76,69,72,76, 72,69,65,72, 67,71,71,67, 68,64,71,68] },
     { bpm:116, lead:'triangle', pad:'sawtooth',            // 2: 黄昏 — 哀愁と温もり (F)
       prog:[[53,57,60],[48,52,55],[50,53,57],[46,50,53],[53,57,60],[46,50,53],[43,46,50],[48,52,55]],
       mel:[69,72,77,76, 72,67,64,67, 65,69,74,72, 70,74,70,65, 69,72,77,81, 77,74,70,74, 74,70,67,70, 72,76,79,76] },
@@ -843,14 +845,23 @@ const Music=(()=>{
     g.gain.setValueAtTime(vol,t+Math.max(atk,dur*0.5)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     let node=o; if(cut){ const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cut; o.connect(lp); node=lp; }
     node.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }
-  // ── レジスタ設計：bass=39〜220Hz / pad=155〜660Hz / brass・counter・arp=310Hz以上。
-  //    以前は pad・brass・counter・arp が全て ch+12 の同一3音を鳴らして団子になっていた ──
+  // ── レジスタ設計（po=S._po はパッドの基準オクターブ。epic 曲と低い調の曲だけ +12）：
+  //    bass = root-24〜ch[1]-12 ／ organ = ch+po-12（パッドの1オクターブ下）／ pad = ch+po（close voicing）
+  //    choir = 9th の保続 ch[0]+2+po+12（add9 和音では ch[2]+po+12）／ counter・descant = cline()
+  //    lead = mel ／ harm = 主旋律の3度〜6度上の和音内音 ／ brass = ch[0]+24・ch[1]+24
+  //    arp = 低い側 ch[1]+26・ch[2]+26（上部構造）／高い側 ch[n]+36
+  //    以前は pad の第3声・brass・choir・counter・arp が全て ch[n]+24 を踏み、
+  //    録音型 AudioContext での実測で lap1 BATTLE[0] 578件・lap3 boss3 3061件/32小節の
+  //    ユニゾン団子（同時発音で音高差±0.35半音以内の異パート対）を作っていた。
+  //    上の再配置後の実測は 72件 / 262件 ──
   function strings(n,t,dur,type,v){ v=v||0.038;
     const d=1+0.0035+Math.random()*0.0045;                                          // 発音ごとにうねり幅を変え、固定ビートの機械的な唸りを避ける
     voice(midi(n),t,dur,type,v,0.12,1450); voice(midi(n)*d,t,dur,type,v*0.66,0.16,1150); }
-  function brass(ch,t,dur,vs){ vs=vs||1; [ch[0],ch[2]].forEach(n=>{                 // 根音と5度のみ。3度はパッドに任せて濁りを断つ
-    voice(midi(n+24),t,dur,'sawtooth',0.042*vs,0.02,2600); voice(midi(n+24)*1.006,t,dur,'sawtooth',0.028*vs,0.03,2100); }); }
-  function bassN(n,t,dur){ voice(midi(n),t,dur,'sawtooth',0.115,0.008,720); voice(midi(n-12),t,dur,'sine',0.09,0.008,300); }
+  function brass(ch,t,dur,vs){ vs=vs||1; [ch[0]+24,ch[1]+24].forEach(n=>{           // 根音と3度のみ。5度は choir/arp に譲る。bosscosmic の平行トライトーンもこれで消える
+    voice(midi(n),t,dur,'sawtooth',0.042*vs,0.02,2600); voice(midi(n)*1.006,t,dur,'sawtooth',0.028*vs,0.03,2100); }); }
+  function bassN(n,t,dur){ voice(midi(n),t,dur,'sawtooth',0.115,0.008,720);
+    const sub=(midi(n-12)>=30)?n-12:n;                                              // 30Hz未満のサブは可聴下限以下でヘッドルームを食うだけなのでオクターブ下げを諦める
+    voice(midi(sub),t,dur,'sine',0.09,0.008,300); }
   // ── 周回パレット：1周目=生オーケストラ／2周目(蟲)=木質パーカッション＋マリンバ／3周目(宇宙)=電子ドラム＋FMベル ──
   function pal(){ const L=lap|0; return L>=3?3:(L>=2?2:1); }
   function pluck(f,t,dur,vol){                                                       // 蟲の世界：木の実を叩くマリンバ／カリンバ
@@ -918,23 +929,77 @@ const Music=(()=>{
     const s=actx.createBufferSource(); s.buffer=noiseBuf; const ng=actx.createGain(); ng.gain.setValueAtTime(0.05*vel,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
     const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=460; s.connect(f);f.connect(ng); ng.connect(bus()); s.start(t); s.stop(t+0.1); }
   // ── 最終決戦用の壮大レイヤー ──
-  function organ(ch,t,dur){ // 荘厳なパイプオルガンの土台（根音＋5度＋オクターブ下）
-    // 第3声を ch[0]-24 から ch[1]-12 に変更：オクターブ重複をやめて三和音の厚みに変える。
-    // さらに 52Hz のハイパスでサブ帯域をベースに専任させ、最終決戦の低域飽和を断つ
-    [ch[0]-12, ch[2]-12, ch[1]-12].forEach(n=>{ const o=actx.createOscillator(),g=actx.createGain();
+  function organ(ch,t,dur,off){ // 荘厳なパイプオルガンの土台（三和音をパッドの1オクターブ下に敷く）
+    // off はパッドの基準オクターブ。ch-12 固定だとウォーキングベース（ch-12/ch-24）と全音が
+    // 完全ユニゾンで、boss3 だけで bass×organ 272件/32小節の団子を作っていた。
+    // 52Hz のハイパスでサブ帯域をベースに専任させる点は従来どおり
+    [ch[0]+off, ch[2]+off, ch[1]+off].forEach(n=>{ const o=actx.createOscillator(),g=actx.createGain();
       o.type='sawtooth'; o.frequency.setValueAtTime(midi(n),t);
       const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=760;
       const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=52;
       g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.055,t+0.18); g.gain.setValueAtTime(0.055,t+dur*0.6); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
       o.connect(lp); lp.connect(hp); hp.connect(g); g.connect(bus()); o.start(t); o.stop(t+dur+0.05); }); }
-  function choir(n,t,dur){ // 聖歌隊（オクターブ＋デチューンを重ね、ゆっくり立ち上がる「アー」）
+  function choir(n,t,dur){ // 聖歌隊（デチューン3声のユニゾンでゆっくり立ち上がる「アー」）。
+    // 以前は和音の全音を +24 で重ねて brass・arp と完全ユニゾンだった。今は5度1音だけを担当する
     const r=0.004+Math.random()*0.004;
-    [1,1+r,1-r].forEach(d=>{ voice(midi(n)*d,t,dur,'triangle',0.022,0.22,2300); }); }
+    [1,1+r,1-r].forEach(d=>{ voice(midi(n)*d,t,dur,'triangle',0.030,0.22,2300); }); }
   function crash(t,v){ const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
     const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5200;
     g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.12*v,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.7);
     s.connect(hp); hp.connect(g); g.connect(bus()); s.start(t); s.stop(t+0.8); }
-  const ARP=[0,1,2,1,0,2,1,2];
+  // 低い側4ステップは3度・5度を +2 した上部構造（11th/13th）だけを踏む。
+  // これで brass(根音・3度=+24)、choir(9th=+26 か5度=+24) と音高が一切ぶつからない。
+  // 高い側4ステップは +36 の和音内音。以前は arp が brass・choir と同じ ch[n]+24 を踏み、
+  // lap1 BATTLE[0] だけで 32件の団子を作っていた
+  const ARP=[1,2,1,2,0,2,1,2], ARPX=[2,2,2,2,0,0,0,0];
+  // ── 対旋律 cline：主旋律の完全4度下あたりを和音内音でなぞる独立線。
+  //    S.cmel（32要素）があればそれを最優先し、無い曲は主旋律と和音から生成する。
+  //    主旋律と同音・オクターブ重複になる候補は必ず除外するので lead と音高が重ならない。
+  //    音域は ch[i]+12 以上＝パッド（和音そのまま）より必ず1オクターブ上に置く ──
+  // 聖歌隊が保続する 9th。add9 系の和音ではパッドが同じ音を持つのでオクターブ上へ逃がす
+  // arp が踏む音高（低い側＝3度/5度の +26、高い側＝+36 の和音内音）。対旋律はここも避ける
+  function arpHit(ch,n){ return n===ch[1]+26||n===ch[2]+26||n===ch[0]+36||n===ch[1]+36||n===ch[2]+36; }
+  function choirN(ch,po){ const n=ch[0]+2+po+12;
+    for(let i=0;i<ch.length;i++) if(ch[i]+po===n) return ch[2]+po+12;   // add9 和音では素の5度へ退避（arp は +24 の和音内音を踏まない）
+    return n; }
+  function cline(S,idx){
+    if(S.cmel&&S.cmel[idx]!=null) return S.cmel[idx];
+    const ch=S.prog[(idx>>2)&7], po=S._po|0;
+    const m0=S.mel[(idx+31)%32];
+    let m=S.mel[idx]; if(m==null) m=m0;                   // 主旋律が休符のスロットでも前の音を基準に動く
+    if(m==null) return null;
+    // 対旋律は前後の拍の主旋律にも掛かる（voice の停止は dur+0.05 秒＝速い曲では 0.3拍ぶん）ので3音とも避ける
+    const m2=S.mel[(idx+1)%32], cn=choirN(ch,po);
+    for(let pass=0;pass<3;pass++){                        // 0=主旋律の下・占有回避 / 1=上も許す / 2=占有回避を捨てる最終手段
+      let best=null,bd=99;
+      for(let i=0;i<ch.length;i++) for(let x=0;x<=2;x+=2) for(let o=12;o<=36;o+=12){
+        const n=ch[i]+x+po+o, d=m-n;
+        if(Math.abs(d)<2.5||d%12===0) continue;           // 同音・オクターブ重複は禁止＝主旋律の影にならない
+        if(pass===0&&d<0) continue;                       // 1周目は主旋律の下だけ。見つからなければ2周目で上も許す
+        if(m2!=null&&(m2-n)%12===0) continue;
+        if(m0!=null&&(m0-n)%12===0) continue;
+        if(pass<2){
+          if(n===ch[0]+24||n===ch[1]+24||n===cn) continue;  // brass(根音・3度)と choir が押さえている音高は踏まない
+          if(arpHit(ch,n)) continue;                        // アルペジオが踏む音高も避ける
+          let taken=false; for(let k=0;k<ch.length;k++) if(n===ch[k]+po) taken=true;
+          if(taken) continue; }                             // パッドの押さえている音高も踏まない
+        const q=Math.abs(d-5)+(x?0.5:0)+(d<0?4:0);        // 和音内音・主旋律の下を優先し、塞がっていれば上や9th/11th/13thへ逃がす
+        if(q<bd){ bd=q; best=n; } }
+      if(best!=null) return best; }
+    return null; }
+  // ── Bセクションの厚み：主旋律の3度〜6度上に和音内音を重ねる第2声（オクターブ重複ではない）──
+  function harm(ch,m,po,av){ let best=null,bd=99;
+    for(let i=0;i<ch.length;i++) for(let o=0;o<=48;o+=12){ const n=ch[i]+po+o, d=n-m;
+      if(d<3||d>9) continue;
+      if(av&&(av[0]===n||av[1]===n||av[2]===n)) continue;   // 前後拍の主旋律・同拍の対旋律と同音になる候補は捨てる
+      const q=Math.abs(d-5); if(q<bd){ bd=q; best=n; } }
+    return best; }
+  // ── 静曲（town/title/ending）用フィル。ドラムキットを持たない曲でも8小節の継ぎ目を耳に刻む ──
+  function softFill(t,sd,sec,ch){
+    if(sec===0) timp(t+sd*0.5,ch[0],0.30);                                                   // A：ティンパニ1打
+    else if(sec===1){ for(let k=0;k<3;k++) timp(t+sd*k/3,ch[0],0.16+k*0.09); }                // A'：ティンパニ3連ロール
+    else if(sec===2){ for(let k=0;k<5;k++) voice(midi(ch[k%ch.length]+24+(k>2?12:0)),t+sd*k/5,sd*0.9,'triangle',0.030,0.004,5200); }  // B：ハープ風の上行グリッサンド
+    else { for(let k=0;k<4;k++) timp(t+sd*k/4,ch[0],0.18+k*0.11); crash(t+sd*0.72,0.32); } }  // B'：ロール＋小さなクラッシュ
   // ── 8小節ごとのフィルイン。セクション番号で4種を回し、ループの継ぎ目を耳に刻む ──
   function fill(t,sd,sec,P){
     if(sec===0){ snare(t,0.55,P); snare(t+sd/2,0.85,P); }                                       // A：スネア2打（従来）
@@ -950,18 +1015,23 @@ const Music=(()=>{
     //    データを増やさずに実効ループ長を4倍にし、「同じ8小節の永久反復」から脱する ──
     if(s===0) loopN=(loopN+1)&3;
     const sec=loopN, P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
-    // pad：第5音を1オクターブ上げた開離配置。4小節目ごとに根音を上げて第1転回に寄せ、声部進行を滑らかにする
-    if(st===0){ const inv=(bar%4===2)?12:0;
-      ch.forEach((n,i)=>strings(n+12+(i===2?12:0)+(i===0?inv:0),t,stepDur*8*0.96,S.pad,S.soft?0.028:0.038)); }
+    // pad：和音を close voicing のまま root〜root+8 に敷き、bass(〜root) と lead(root+12〜) の谷を埋める。
+    // 以前は +12・第3声だけ +24 で lead の音域に丸ごと重なり、団子の 77% を作っていた。
+    // S._po は曲ごとに一度だけ算出する基準オクターブ（低い調の曲だけ +12 して 80Hz 級の濁りを避ける）
+    if(S._po==null){ let lo=99; for(let i=0;i<S.prog.length;i++) if(S.prog[i][0]<lo) lo=S.prog[i][0];
+      S._po=(S.epic||lo<42)?12:0; }                       // epic 曲はオルガンに ch の高さを譲るため必ず +12
+    if(st===0){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
-      if(st===0){ organ(ch,t,stepDur*8); ch.forEach(n=>choir(n+24,t,stepDur*8*0.92)); brass(ch,t,stepDur*2.4); }   // オルガン土台＋聖歌隊＋全小節頭のパワーブラス
+      if(st===0){ organ(ch,t,stepDur*8,S._po-12); choir(choirN(ch,S._po),t,stepDur*8*0.92);      // オルガン土台(パッドの1オクターブ下)＋聖歌隊(9thの保続＝旋律が踏まない音)
+        if(sec>=2||bar%2===0) brass(ch,t,stepDur*1.8); }                                        // パワーブラス(根音・3度)はA/A'では1小節おき、B以降は毎小節
       if(st===0&&bar%4===0) crash(t,0.9);                                                       // フレーズ頭にシンバルの一撃
-      if(st===4) brass([ch[0],ch[2]],t,stepDur*1.3,0.7);                                        // 裏拍の追いブラス
-      if(st%2===0){ const dm=S.mel[(bar*4+(st>>1))%32]; if(dm!=null) voice(midi(dm+12),t,stepDur*2.6,'sawtooth',0.04,0.2,3400); }  // 高らかに伸びるディセンタント
+      if(st===4) brass(ch,t,stepDur*1.0,0.7);                                                   // 裏拍の追いブラス
+      if(st%2===0){ const dm=cline(S,(bar*4+(st>>1))%32);                                        // 高らかに伸びるディセンタント＝対旋律を朗々と歌わせる
+        if(dm!=null) voice(midi(dm),t,stepDur*2.6,'sawtooth',0.04,0.2,3400); }                    // 以前は主旋律の +12 で、リードのオクターブ重複でしかなかった
       if(bar===7&&st>=4) timp(t,root,0.5);                                                       // ラスト小節のティンパニロール
     } else if(!S.soft && sec>=2 && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                // ブラススタブはBセクション以降だけ解禁
-    if(S.soft){ if(st%4===0) bassN(root,t,stepDur*3.4); }                                       // gentle half-note bass
-    else { const bn=[root-12,root-12,ch[2]-12,root-12,root,root-12,ch[2]-12,ch[1]-12][st];      // walking 8th-note bass
+    if(S.soft){ if(st%4===0) bassN(root-12,t,stepDur*3.4); }                                    // gentle half-note bass（素の root は pad/organ の根音と同音だったので12下げ）
+    else { const bn=[root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12][st];   // walking 8th-note bass（5拍目の素の root は pad の根音と同音だったので3度へ）
       bassN(bn,t,stepDur*0.92); }
     if(!S.soft){                                                                                // ── ドラムキット（周回パレットで音色が入れ替わる）──
       const KICK = P===3? elecKick : kick;
@@ -982,21 +1052,34 @@ const Music=(()=>{
       if(S.epic&&st===4) timp(t,root,0.7);                                                      // 最終決戦：ティンパニ連打
       if(P===2&&st%2===1) pluck(midi(root+12),t,stepDur*0.7,0.022);                             // 蟲：木質のオフビート
       if(P===3&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);                  // 宇宙：金属的な余韻
-    } else hat(t,st===0?0.3:0.14,hz);
+    } else {                                                                                    // ── 静曲（町／タイトル／エンディング）にも32小節フォームを効かせる ──
+      hat(t,st===0?0.3:0.14,hz);
+      if(sec>=1) hat(t+stepDur/2,0.10,hz+2400);                                                 // A'：8分裏のシェイカー
+      if(sec>=2&&st%4===0) choir(choirN(ch,S._po),t,stepDur*4*0.9);                              // B：合唱の9thを重ねて厚みを足す
+      if(sec>=3&&!S.epic&&st%2===1){ const cn=cline(S,(bar*4+(st>>1))%32);                       // B'：対旋律を8分裏に足して最後の高まりを作る
+        if(cn!=null) voice(midi(cn),t,stepDur*0.9,'triangle',0.018,0.02,3800); }
+      if(sec>=3&&S.epic&&(st===0||st===4)) timp(t,ch[0],0.30);                                   // B'（序曲・大団円）：ティンパニの拍打ちで締める
+      if(bar===7&&st===7) softFill(t,stepDur,sec,ch);                                           // 8小節末：静曲用フィル
+    }
     // ── 主旋律：下オクターブ重複をやめ、微デチューンのユニゾンで太さを出す。
     //    S.rhy（32要素）で 0=休符 / 1=4分 / 2=8分2連（次音を先取り）/ 3=付点8分＋16分の食い込み を指定する。
     //    未指定の曲は全て4分＝従来どおりの挙動になる ──
     if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=S.mel[idx], lv=S.soft?0.07:0.085;
       const r=(S.rhy&&S.rhy[idx]!=null)?S.rhy[idx]:1;
+      const av=[S.mel[(idx+31)%32],S.mel[(idx+1)%32],cline(S,idx)];                       // ハモリ層が避ける音高
       const note=(nn,tt,dd,vs)=>{ voice(midi(nn),tt,dd,S.lead,lv*vs,0.014,4200);
         voice(midi(nn)*1.004,tt,dd,S.lead,lv*0.5*vs,0.02,3600);
-        if(sec>=2&&!S.soft) voice(midi(nn+12),tt,dd*0.74,'triangle',0.026*vs,0.02,6000); };   // Bセクションはオクターブ上を重ねて盛り上げる
+        if(sec>=2&&!S.soft){ const h=harm(ch,nn,S._po,av);                                            // Bセクションは3度〜6度上の和音内音を重ねて盛り上げる
+          if(h!=null) voice(midi(h),tt,dd*0.74,'triangle',0.026*vs,0.02,6000); } };            // 以前はオクターブ重複で、層ではなく同じ旋律の厚塗りだった
       if(m!=null&&r!==0){
         if(r===2){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
         else if(r===3){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
         else note(m,t,stepDur*1.9,1); } }
-    if(!S.soft && sec>=1 && bar>=4 && st%2===1){ voice(midi(ch[(st>>1)%3]+24),t,stepDur*0.85,'triangle',0.020,0.01,4200); } // 対旋律はA'以降・後半4小節
-    const an=ch[ARP[st]]+24+(st>=4?12:0), av=S.soft?0.045:(sec===0?0.026:0.034);                // アルペジオは +24 以上に退避して中域を空ける
+    // 対旋律：主旋律が伸びる8分裏で動く補完リズム。A'は後半4小節、Bセクション以降は全小節。
+    // epic 曲は同じ線をディセンタントが歌うので二重に鳴らさない
+    if(!S.soft && !S.epic && sec>=1 && (sec>=2||bar>=4) && st%2===1){ const cn=cline(S,(bar*4+(st>>1))%32);
+      if(cn!=null) voice(midi(cn),t,stepDur*0.85,'triangle',0.020,0.01,4200); }
+    const an=ch[ARP[st]]+ARPX[st]+24+(st>=4?12:0), av=S.soft?0.045:(sec===0?0.026:0.034);        // アルペジオは +24 以上に退避して中域を空ける
     if(P===2) pluck(midi(an),t,stepDur*(S.soft?1.4:1.0),av*1.15);
     else if(P===3) fmBell(midi(an),t,stepDur*(S.soft?1.8:1.3),av*0.85);
     else voice(midi(an),t,stepDur*(S.soft?1.6:1.1),'triangle',av,0.004,4600);
