@@ -1184,8 +1184,19 @@ function themeSmokeRGB(){ let T=null; try{ T=STAGE_THEME[themeIdxFor(stage)]; }c
 // 色を白へ f だけ寄せる（火花＝技の色／輪＝白寄り、という役割分担に使う）
 function mixWhite(col,f){ const c=hexRGB(col).split(',');
   return 'rgb('+Math.round(+c[0]*(1-f)+255*f)+','+Math.round(+c[1]*(1-f)+255*f)+','+Math.round(+c[2]*(1-f)+255*f)+')'; }
-function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
-  g.addColorStop(0,inner); g.addColorStop(1,outer); return g; }
+// グラデーションは「使う瞬間の CTM」で変換されるので、同じ引数なら使い回せる。
+// 実測で毎フレーム35個生成していたのをキャッシュに置き換える（生成コストがそのまま消える）。
+const _rgCache=new Map();
+function radGrad(x,y,r,inner,outer){
+  const k=x+','+y+','+r+','+inner+','+outer;
+  let g=_rgCache.get(k);
+  if(g===undefined){
+    g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
+    g.addColorStop(0,inner); g.addColorStop(1,outer);
+    if(_rgCache.size>600) _rgCache.clear();   // 際限なく溜めない（画面が変われば自然に作り直る）
+    _rgCache.set(k,g);
+  }
+  return g; }
 
 //======================================================================
 //  Particles  (sparks, slash crescents, dust, floating text)
@@ -1193,6 +1204,23 @@ function radGrad(x,y,r,inner,outer){ const g=ctx.createRadialGradient(x-r*0.35,y
 // エフェクト寸法の共通倍率。キャラは FIXED_SCALE で拡大されているのに火花や輪だけ等倍のままだと
 // 打撃の見た目が身長の 1/4 程度にしかならないので、寸法（座標ではない）にだけ掛ける
 const FXS=1.55;
+// ══════════════════════════════════════════════════════════════
+//  適応品質（フレームレート・ガバナー）
+//  端末の性能はまちまちなので、実フレーム間隔を見て重いときだけ演出を自動で落とす。
+//  perfTier 0=フル 1=中 2=軽 。60fps を維持できている間は必ず 0 に戻る。
+// ══════════════════════════════════════════════════════════════
+let perfTier=0, _pfLast=0, _pfAvg=16.7, _pfHold=0;
+function perfTick(now){
+  if(_pfLast){ const dt=now-_pfLast;
+    if(dt<200) _pfAvg += (Math.min(dt,60)-_pfAvg)*0.06;   // タブ復帰などの巨大な間隔は無視
+  }
+  _pfLast=now;
+  if(_pfHold>0){ _pfHold--; return; }
+  if(_pfAvg>21.5 && perfTier<2){ perfTier++; _pfHold=90; }        // 46fps を割ったら一段落とす
+  else if(_pfAvg<17.6 && perfTier>0){ perfTier--; _pfHold=150; }  // 57fps 以上が続けば戻す
+}
+const FX_CAP_BASE=260;
+function fxCap(){ return perfTier>=2?110 : perfTier>=1?180 : FX_CAP_BASE; }
 const FX_CAP=260;          // 同時パーティクル上限（ダメージ数字は間引き対象外）
 let particles=[];
 let noHitStopOnce=false;   // ヒットストップ抑制フラグ（連射弾・設置魔法用）
@@ -1332,8 +1360,9 @@ function updateParticles(){
 // 負荷対策：上限超過ぶんを「最も消えかけているもの」から捨てる。
 // 従来の古い順 splice ではいちばん読ませたいダメージ数字（最長寿命）から先に消えていた
 function trimParticles(){
-  if(particles.length<=FX_CAP) return;
-  const over=particles.length-FX_CAP, idx=[];
+  const cap=fxCap();
+  if(particles.length<=cap) return;
+  const over=particles.length-cap, idx=[];
   for(let i=0;i<particles.length;i++) if(particles[i].layer!==2) idx.push(i);
   if(!idx.length) return;
   idx.sort((a,b)=>(particles[a].life/particles[a].max)-(particles[b].life/particles[b].max));
@@ -2029,6 +2058,7 @@ function holyBlade(p, idx, o){ o=o||{}; const dir=p.facing, mul=(p.atkMul||1)*(o
 // ══ 上位必殺技の専用演出 ══
 // ヌコ Lv5「大魔導・極大竜巻」：巻き上げながら前進する巨大竜巻を呼ぶ
 function nukoTyphoon(p){ const dir=p.facing, mul=nukoMul(p);
+  dropOldTwister();
   hazards.push({kind:'ptwister', x:p.x+dir*90, y:LANE, dir, t:0, life:210, dmg:Math.round(13*mul), vx:dir*3.0});
   for(let k=0;k<3;k++) ring(p.x+dir*80, p.y-20-k*30, k%2?'#cfe8ff':'#ffffff');
   spark(p.x+dir*80,p.y-50,'#e8f6ff',28,13); dust(p.x+dir*80,p.y,16);
@@ -2066,6 +2096,10 @@ function guardHammerImpact(p){ const mul=(p.atkMul||1);
   for(const d of [-1,1]){ for(let w=0;w<3;w++) spawnProj(p.x+d*30,p.y,d*(7+w*1.5),0,{owner:'player',dmg:Math.round(18*mul),color:w%2?'#ffb85a':'#ffd24d',r:24-w*3,life:66,zz:30,pierce:true,wave:true}); }
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<200){ damageEnemy(e,Math.round(30*mul),(e.x<p.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*12,-13,3); } }); }
 // 設置型魔法の更新（炎の柱＝多段ヒットの接近防止、時限爆弾＝大ダメージ）
+// 巨大竜巻は画面を占有するので常に1つだけ。古いものは残り30Fで消えるよう畳む
+function dropOldTwister(){
+  for(const h of hazards){ if((h.kind==='etwister'||h.kind==='ptwister') && h.life-h.t>30) h.t=h.life-30; }
+}
 function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; h.t++;
   if(h.kind==='pillar'){
     if(h.t%5===0){ for(const e of enemies){ if(e.dead)continue;
@@ -2127,7 +2161,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(h.t%9===0){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
       if(Math.abs(e.x-h.x)<118 && Math.abs(e.y-h.y)<70){ noHitStopOnce=true; damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*3,true);
         if(!e.dead){ e.z=Math.max(e.z,26); e.vz=Math.min(e.vz,-6); e.state='air'; e.bounces=Math.max(e.bounces||0,2); } } } }
-    if(h.t%7===0) dust(h.x,LANE,3);
+    if(h.t%14===0) dust(h.x,LANE,2);
     if(h.t>=h.life || h.x<camX-260 || h.x>camX+W+260) hazards.splice(i,1);
   } else if(h.kind==='etwister'){   // ボスの巨大竜巻：吸い寄せながら巻き上げる
     h.x+=h.vx; h.vx*=0.997;
@@ -2136,12 +2170,39 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(h.t%16===0){ for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
       if(Math.abs(pl.x-h.x)<112 && Math.abs(pl.y-h.y)<66){ hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true, 'blunt');
         pl.z=Math.max(pl.z,22); pl.vz=Math.max(pl.vz||0,10); } } }
-    if(h.t%7===0) dust(h.x,LANE,3);
+    if(h.t%14===0) dust(h.x,LANE,2);
     if(h.t>=h.life || h.x<camX-260 || h.x>camX+W+260) hazards.splice(i,1);
   } } }
 // ── ワッチ：地雷を設置 ──
 function placeMine(p){ hazards.push({kind:'mine', x:p.x, y:LANE, t:0, life:660, dmg:Math.round(42*(p.atkMul||1)+14)});
   dust(p.x,p.y,7); spark(p.x,p.y-6,'#ffd24d',8,6); popText(p.x,p.y-92,'地雷 設置！','#ff9a3a'); sfx.swing(1, wsndOf(p.weapon), p.x); }
+// ── 竜巻のスプライト：渦の位相ちがいを8枚だけ焼いておく ──
+const TW_PH=8, TW_W=340, TW_H=470;
+let _twSpr=null;
+function twisterSprites(){
+  if(_twSpr) return _twSpr;
+  _twSpr=[];
+  const cx=TW_W/2, base=TW_H, H0=460, rwAt=(q)=>30+q*140;
+  for(let f=0; f<TW_PH; f++){
+    const ph0=f/TW_PH*Math.PI*2;
+    const c=document.createElement('canvas'); c.width=TW_W; c.height=TW_H;
+    const g=c.getContext('2d');
+    g.fillStyle='rgba(48,62,84,.42)';                       // 渦の芯（背景から浮かせる暗い柱）
+    g.beginPath(); g.moveTo(cx-rwAt(0)*0.55, base);
+    for(let i=0;i<=21;i++){ const q=i/21; g.lineTo(cx-rwAt(q)*0.62+Math.sin(ph0+i*0.55)*13, base-H0*q); }
+    for(let i=21;i>=0;i--){ const q=i/21; g.lineTo(cx+rwAt(q)*0.62+Math.sin(ph0+i*0.55)*13, base-H0*q); }
+    g.closePath(); g.fill();
+    for(let i=0;i<22;i++){ const q=i/21, yy=base-H0*q, rw=rwAt(q), ph=ph0+i*0.55, ox=Math.sin(ph)*13;
+      const g2=g.createLinearGradient(cx-rw,0,cx+rw,0);
+      g2.addColorStop(0,'rgba(190,225,255,.06)'); g2.addColorStop(.28,'rgba(232,246,255,.62)');
+      g2.addColorStop(.5,'rgba(255,255,255,.72)'); g2.addColorStop(.72,'rgba(232,246,255,.62)'); g2.addColorStop(1,'rgba(190,225,255,.06)');
+      g.fillStyle=g2; g.beginPath(); g.ellipse(cx+ox,yy,rw,11+q*16,0,0,7); g.fill();
+      g.strokeStyle='rgba(255,255,255,.42)'; g.lineWidth=2.6;
+      g.beginPath(); g.ellipse(cx+ox,yy,rw*0.86,10+q*14,0,ph,ph+3.4); g.stroke(); }
+    _twSpr.push(c);
+  }
+  return _twSpr;
+}
 function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   const wide=(h.kind==='ebeam'||h.kind==='ebolt'||h.kind==='pbeam');
   if(!wide && (sx<-80||sx>W+80)) continue;
@@ -2149,20 +2210,27 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   const gy=LANE-groundLift(h.x);
   if(h.kind==='ebeam'||h.kind==='pbeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
     const k=Math.min(1,h.t/4)*(h.t>h.life-10?Math.max(0,(h.life-h.t)/10):1);
-    const by=gy-(h.hy||60), th=((h.th||54)+Math.sin(gf*0.6)*9)*k, len=1500*h.dir, x0=Math.min(sx,sx+len);
+    // 進路は 1500px あるが、画面の外まで塗るのは無駄。可視範囲ぶんに切り詰める
+    const by=gy-(h.hy||60), th=((h.th||54)+Math.sin(gf*0.6)*9)*k*(perfTier>=2?0.62:perfTier>=1?0.8:1);
+    const reach=h.dir>0? Math.min(1500, Math.max(0, W+40-sx)) : Math.min(1500, Math.max(0, sx+40));
+    const len=reach*h.dir, x0=Math.min(sx,sx+len);
     ctx.save(); ctx.globalCompositeOperation='lighter';
     const g=ctx.createLinearGradient(0,by-th,0,by+th);
     g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.30,h.col||'#d46bff');
     g.addColorStop(.5,'#ffffff'); g.addColorStop(.70,h.col||'#d46bff'); g.addColorStop(1,'rgba(255,255,255,0)');
     ctx.fillStyle=g; ctx.fillRect(x0,by-th,Math.abs(len),th*2);
     ctx.fillStyle='rgba(255,255,255,'+(0.9*k)+')'; ctx.fillRect(x0,by-th*0.18,Math.abs(len),th*0.36);
-    ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=3;
-    for(const sg of [-1,1]){ ctx.beginPath();
-      for(let xx=0;xx<=Math.abs(len);xx+=44){ const yy=by+sg*(th+Math.sin(gf*0.4+xx*0.028)*8);
-        xx?ctx.lineTo(sx+h.dir*xx,yy):ctx.moveTo(sx+h.dir*xx,yy); }
-      ctx.stroke(); }
-    ctx.fillStyle=radGrad(sx,by,th*2.4,'rgba(255,255,255,.95)','rgba(255,255,255,0)');
-    ctx.beginPath(); ctx.arc(sx,by,th*2.4,0,7); ctx.fill(); ctx.restore(); continue; }
+    if(perfTier<2){   // うねる縁：重いときは省く（芯だけでも極太ビームには見える）
+      ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=3;
+      const stepX=perfTier>=1?96:44;
+      for(const sg of [-1,1]){ ctx.beginPath();
+        for(let xx=0;xx<=Math.abs(len);xx+=stepX){ const yy=by+sg*(th+Math.sin(gf*0.4+xx*0.028)*8);
+          xx?ctx.lineTo(sx+h.dir*xx,yy):ctx.moveTo(sx+h.dir*xx,yy); }
+        ctx.stroke(); } }
+    if(perfTier<2){   // 発射口のフレア：重いときは省く
+      ctx.fillStyle=radGrad(sx,by,th*2.4,'rgba(255,255,255,.95)','rgba(255,255,255,0)');
+      ctx.beginPath(); ctx.arc(sx,by,th*2.4,0,7); ctx.fill(); }
+    ctx.restore(); continue; }
   if(h.kind==='ebolt'){
     if(h.t<26){ const k=1-h.t/26;   // 落ちてくる位置の予兆
       ctx.save(); ctx.globalAlpha=0.30; ctx.fillStyle='#8fd8ff';
@@ -2179,24 +2247,16 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
       ctx.beginPath(); ctx.arc(sx,gy,86,0,7); ctx.fill(); ctx.restore(); }
     continue; }
   if(h.kind==='etwister'||h.kind==='ptwister'){   // 巨大竜巻：渦の輪を積み上げ、瓦礫を巻き上げる
+    // 以前は毎フレーム 22枚の輪をグラデ付きで塗り直しており、竜巻2つで 37.5ms（60fps予算の2倍超）
+    // かかっていた。渦の絵は位相だけで決まるので、位相ちがいを8枚だけ焼いて貼り替える。
     const k=Math.min(1,h.t/14)*(h.t>h.life-18?Math.max(0,(h.life-h.t)/18):1), H0=460*k;
+    const sp=twisterSprites(), fi=((Math.floor(gf*0.22/(Math.PI*2)*TW_PH*4)%TW_PH)+TW_PH)%TW_PH;
     ctx.save(); ctx.globalAlpha=0.85*k;
-    const rwAt=(q)=>30+q*140;
-    ctx.fillStyle='rgba(48,62,84,.42)';   // 渦の芯（背景から浮かせる暗い柱）
-    ctx.beginPath(); ctx.moveTo(sx-rwAt(0)*0.55,gy);
-    for(let i2=0;i2<=21;i2++){ const q=i2/21; ctx.lineTo(sx-rwAt(q)*0.62+Math.sin(gf*0.22+i2*0.55)*13, gy-H0*q); }
-    for(let i2=21;i2>=0;i2--){ const q=i2/21; ctx.lineTo(sx+rwAt(q)*0.62+Math.sin(gf*0.22+i2*0.55)*13, gy-H0*q); }
-    ctx.closePath(); ctx.fill();
-    for(let i2=0;i2<22;i2++){ const q=i2/21, yy=gy-H0*q, rw=rwAt(q), ph=gf*0.22+i2*0.55, ox=Math.sin(ph)*13;
-      const g2=ctx.createLinearGradient(sx-rw,0,sx+rw,0);
-      g2.addColorStop(0,'rgba(190,225,255,.06)'); g2.addColorStop(.28,'rgba(232,246,255,.62)');
-      g2.addColorStop(.5,'rgba(255,255,255,.72)'); g2.addColorStop(.72,'rgba(232,246,255,.62)'); g2.addColorStop(1,'rgba(190,225,255,.06)');
-      ctx.fillStyle=g2; ctx.beginPath(); ctx.ellipse(sx+ox,yy,rw,11+q*16,0,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,.42)'; ctx.lineWidth=2.6;
-      ctx.beginPath(); ctx.ellipse(sx+ox,yy,rw*0.86,10+q*14,0,ph,ph+3.4); ctx.stroke(); }
-    ctx.fillStyle='rgba(110,100,88,.75)';   // 巻き上げられた瓦礫
-    for(let i2=0;i2<22;i2++){ const a=gf*0.30+i2*0.9, q=((i2*7)%11)/11;
-      ctx.beginPath(); ctx.arc(sx+Math.cos(a)*rwAt(q)*0.95, gy-H0*q, 2.6+q*3.2,0,7); ctx.fill(); }
+    ctx.drawImage(sp[fi], sx-TW_W/2, gy-TW_H*k, TW_W, TW_H*k);
+    ctx.fillStyle='rgba(110,100,88,.75)';   // 巻き上げられた瓦礫（動きが読めるようフレームごとに描く）
+    const dbN=perfTier>=2?4:perfTier>=1?8:12;
+    for(let i2=0;i2<dbN;i2++){ const a=gf*0.30+i2*1.6, q=((i2*7)%11)/11;
+      ctx.beginPath(); ctx.arc(sx+Math.cos(a)*(30+q*140)*0.95, gy-H0*q, 2.6+q*3.2,0,7); ctx.fill(); }
     ctx.strokeStyle='rgba(230,245,255,.28)'; ctx.lineWidth=3;   // 根元の砂塵
     ctx.beginPath(); ctx.ellipse(sx,gy,64,15,0,0,7); ctx.stroke();
     ctx.restore(); continue; }
@@ -4297,6 +4357,7 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
       if(f===1){ popText(e.x,e.y-e.h-20,'大旋風！',t.accent,true); sfx.boss(e.x); }
       if(f<20 && f%3===0){ dust(e.x+rnd(-50,50),e.y,3); spark(e.x+rnd(-40,40),e.y-rnd(0,90),'#dff6ff',2,6); }
       if(f===22){ const tp=nearestPlayerTo(e.x), dir=tp.x<e.x?-1:1;
+        dropOldTwister();
         hazards.push({kind:'etwister', x:e.x+dir*76, y:LANE, dir, t:0, life:200, dmg:t.dmg-4, vx:dir*2.6});
         shake=Math.max(shake,13); flash=Math.max(flash,3); sfx.big(e.x); }
       break;
@@ -5557,7 +5618,7 @@ const STAGE_THEME=[
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
 function updateAmbient(T){
-  if(amb.length<T.amb.max && Math.random()<T.amb.rate){
+  if(amb.length<T.amb.max*(perfTier>=2?0.35:perfTier>=1?0.6:1) && Math.random()<T.amb.rate*(perfTier>=2?0.4:perfTier>=1?0.7:1)){
     amb.push({x:rnd(0,W), y:rnd(0,GROUND_TOP-10), vx:T.amb.wind+rnd(-0.3,0.3), vy:T.amb.vy*rnd(0.6,1.4),
       r:rnd(T.amb.r0,T.amb.r1), life:rnd(140,320), max:320, col:T.amb.color, sway:Math.random()*6}); }
   for(let i=amb.length-1;i>=0;i--){ const a=amb[i]; a.sway+=0.045; a.x+=a.vx+Math.sin(a.sway)*0.4; a.y+=a.vy;
@@ -6356,20 +6417,36 @@ function lowRimSprite(){
   g.fillStyle=rv; g.fillRect(-w/2,-w/2,w,w); g.restore();
   _lowRimSpr=c; _lowRimW=W; _lowRimH=H; return c;
 }
+// テーマ色のティントと太陽ブルームは、テーマと画面サイズだけで決まる静的な絵。
+// 毎フレーム「soft-light の全画面」と「lighter の全画面」を重ねると全画面合成が2回増えるので、
+// 半解像度のスプライトへ一度だけ焼き、以降は source-over の drawImage 1回で済ませる。
+let _gradeSpr=null, _gradeKey='', _vigGrad=null, _vigKey='';
+function gradeSprite(T,ti){
+  const key=ti+'|'+W+'x'+H;
+  if(_gradeSpr && _gradeKey===key) return _gradeSpr;
+  const c=document.createElement('canvas');
+  c.width=Math.max(2,Math.round(W/2)); c.height=Math.max(2,Math.round(H/2));
+  const g=c.getContext('2d'), cw=c.width, chh=c.height;
+  if(T.tint){ g.fillStyle=T.tint; g.fillRect(0,0,cw,chh); }        // 焼き込み時は素の塗りでよい
+  const bl=g.createRadialGradient(cw*T.sunX,T.sunY/2,10,cw*T.sunX,T.sunY/2,chh*0.9);
+  bl.addColorStop(0,T.sun+'.13)'); bl.addColorStop(1,T.sun+'0)');
+  g.fillStyle=bl; g.fillRect(0,0,cw,chh);
+  _gradeSpr=c; _gradeKey=key; return c;
+}
 function drawLighting(){ // theme color grade + sky bloom + vignette
   const T=curTheme();
-  if(T.tint){ ctx.save(); ctx.globalCompositeOperation='soft-light'; ctx.fillStyle=T.tint; ctx.fillRect(0,0,W,H); ctx.restore(); }
-  ctx.save(); ctx.globalCompositeOperation='lighter';
-  const bl=ctx.createRadialGradient(W*T.sunX,T.sunY,20,W*T.sunX,T.sunY,H*0.9);
-  bl.addColorStop(0,T.sun+'.13)'); bl.addColorStop(1,T.sun+'0)'); ctx.fillStyle=bl; ctx.fillRect(0,0,W,H);
-  ctx.restore();
+  ctx.save(); ctx.globalAlpha=0.55; ctx.drawImage(gradeSprite(T,themeIdxFor(stage)),0,0,W,H); ctx.restore();
   // 状況で締まり方が変わる：瀕死は強く脈打ち、スローは深く、ボス崩壊中は一段締まる
   const pl=(state==='play')?(activePlayers().filter(q=>q.state!=='dead')[0]||null):null;
   const hpR=pl? clamp(pl.hp/pl.maxHp,0,1) : 1;
   const lowP=(hpR<0.30 && !attractOn)? (0.42+0.20*Math.sin(gf*0.16)) : 0;
   const dv=1+lowP+(slowmo>0?0.26:0);
-  const v=ctx.createRadialGradient(W/2,H*0.46,H*0.28/dv,W/2,H*0.5,H*0.88);
-  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,T.vig); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  // ビネットは dv（瀕死・スロー）が動いたときだけ作り直す。通常は毎フレーム同じ絵になる
+  const vk=dv.toFixed(2)+'|'+T.vig+'|'+W+'x'+H;
+  if(_vigKey!==vk){ _vigKey=vk;
+    _vigGrad=ctx.createRadialGradient(W/2,H*0.46,H*0.28/dv,W/2,H*0.5,H*0.88);
+    _vigGrad.addColorStop(0,'rgba(0,0,0,0)'); _vigGrad.addColorStop(1,T.vig); }
+  ctx.fillStyle=_vigGrad; ctx.fillRect(0,0,W,H);
   // 瀕死の赤リム：心拍のリズムで画面のフチが脈打ち、危機が身体で伝わる。
   // 毎フレームの createRadialGradient＋全画面 fillRect は実測で +1.4ms（16.7ms 予算の 8%）掛かり、
   // しかも HP<30% という最も敵が多い局面でだけ有効になるので、
@@ -10365,6 +10442,7 @@ function loop(){ try{ loopBody(); }catch(err){ console.error(err); if(attractOn)
 let rframe=0;      // 実際に描画したフレーム数。hitStop でも slowmo でも必ず1ずつ進む
 function loopBody(){
   rframe++;
+  perfTick(performance.now());
   tickScreenFx();   // 遷移は状態に関係なく毎フレーム進める（中間フレームで画面が切り替わる）
   if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); drawScreenFx(); requestAnimationFrame(loop); return; }
   if(state==='shop'){ updateShop(); ctx.clearRect(0,0,W,H); drawShop(); drawScreenFx(); requestAnimationFrame(loop); return; }
