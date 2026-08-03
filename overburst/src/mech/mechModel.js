@@ -167,9 +167,13 @@ function buildPlayer(K, P) {
     K.plate(0.72, 0.18, 0.34, s * 1.10, 0.56, 1.02, { ...A2, rx: 0.34, c: 0.03 });  // hood
     K.nozzle(s * 1.10, 0.18, 1.10, 0.10, 0.165, 0.32, { dir: 'back', base: P.hull2, seg: 9, vanes: 2, power: 0.30, kind: 'hip', name: `thr_hip_${s < 0 ? 'l' : 'r'}` });
     K.nozzle(s * 1.42, -0.56, 0.04, 0.07, 0.115, 0.20, { dir: s < 0 ? 'left' : 'right', base: P.hull2, seg: 7, vanes: 2, power: 0.24, kind: 'vernier', name: `thr_hipv_${s < 0 ? 'l' : 'r'}` });
-    K.rod(0.30, 0.92, 10, s * 0.90, -0.08, 0, { ...M, rz: Math.PI / 2, base: 0x4c5158, ao: 0.55 });
-    K.bolt(s * 1.28, -0.08, 0, 0.16, { rz: Math.PI / 2, base: P.mech });
-    K.ring(0.35, 0.06, 10, s * 1.04, -0.08, 0, { ...M, rz: Math.PI / 2, rseg: 4 });
+    K.rod(0.30, 0.92, 10, s * 0.90, -0.08, 0, { ...M, rz: Math.PI / 2, base: 0x4c5158, ao: 0.55, rgh: 0.95 });
+    K.ring(0.35, 0.06, 10, s * 1.04, -0.08, 0, { ...M, rz: Math.PI / 2, rseg: 4, rgh: 0.6 });
+    // hip pivot boss + boot: the leg has to visibly hang off something
+    K.pivot(s * 1.30, -0.08, 0, 0.34, s, { bolts: 6, base: 0x5c626a });
+    K.boot(s * 1.06, -0.10, 0, 0.34, 0.30, 3, { rz: Math.PI / 2 });
+    // pelvis half of the hip loom
+    K.cables([s * 0.92, -0.28, 0.88], [s * 1.22, -0.86, 0.78], 3, 0.078, { sag: 0.18, spread: 0.18 });
   }
   K.plate(1.66, 0.90, 0.28, 0, -0.22, 0.84, { ...A2, rx: -0.14, c: 0.06 });
   K.vent(1.0, 0.44, 0, 0.08, 0.98, { dir: 'back', slats: 4, frame: P.hull2, wear: P.wear, slat: P.hull3 });
@@ -293,21 +297,40 @@ function buildPlayer(K, P) {
     K.decal(DECAL.CHEVRON_Y, 0.84, 0.19, s * 0.66, 1.04, 0.08, { dir: 'top', off: 0.03 });
     K.decal(s < 0 ? DECAL.NUM_07 : DECAL.NUM_24, 0.34, 0.34, s * 1.34, -0.16, 0.32, { dir: s < 0 ? 'left' : 'right', off: 0.06 });
     K.nozzle(s * 0.68, 0.02, 1.02, 0.10, 0.17, 0.28, { dir: 'back', base: P.hull2, seg: 8, vanes: 1, power: 0.28, kind: 'shoulder', name: `thr_sh_${side}` });
-    K.rod(0.28, 0.50, 10, s * 0.34, -0.34, 0, { ...M, rz: Math.PI / 2, base: 0x4d5259, ao: 0.55 });
+    // ---- SHOULDER COLLAR ------------------------------------------
+    //  The pauldron used to end in a hole with the upper arm floating in it.
+    //  A stepped collar + ribbed boot caps that gap on the body side, and
+    //  the pivot boss outboard of it is what makes the arm read as hung on
+    //  an axle rather than glued on.
+    K.rod(0.28, 0.50, 10, s * 0.34, -0.34, 0, { ...M, rz: Math.PI / 2, base: 0x4d5259, ao: 0.55, rgh: 0.95 });
+    K.rod(0.46, 0.22, 14, s * 0.30, -0.34, 0, { ...M, rz: Math.PI / 2, base: 0x54595f, ao: 0.5, rgh: 1.05 });
+    K.ring(0.47, 0.075, 14, s * 0.40, -0.34, 0, { ...M, rz: Math.PI / 2, base: 0x878d94, ao: 0.4, rseg: 4, rgh: 0.46 });
+    K.boot(s * 0.52, -0.34, 0, 0.40, 0.22, 3, { rz: Math.PI / 2 });
+    K.pivot(s * 0.72, -0.34, 0, 0.36, s, { bolts: 6, base: 0x5f656d });
+    // shoulder hose loom, core deck -> pauldron, crossing the joint
     K.cables([s * 0.18, 0.28, 0.54], [s * 0.60, -0.36, 0.48], 2, 0.042, { sag: 0.1, spread: 0.1 });
+    K.cables([s * 0.12, 0.52, 0.72], [s * 0.86, -0.30, 0.60], 3, 0.078, { sag: 0.20, spread: 0.20 });
 
     K.into(up);
+    // arm-side flange that meets the collar
+    K.rod(0.34, 0.26, 12, 0, 0.04, 0, { ...M, rz: Math.PI / 2, base: 0x5a5f66, ao: 0.5, rgh: 0.9 });
     K.plate(0.60, 1.44, 0.70, 0, -0.78, 0, { ...F, c: 0.04 });
     K.taper(0.96, 1.50, 1.06, 0.84, 0.92, 0, -0.78, 0.0, { ...A, c: 0.065 });
     K.plate(0.24, 1.10, 0.66, s * 0.56, -0.80, 0.02, { ...A2, c: 0.05 });
     K.plate(0.58, 0.30, 0.22, 0, -0.22, -0.50, { ...A4, rx: -0.2, c: 0.03 });
-    K.rod(0.065, 0.94, 6, s * 0.20, -1.14, 0.42, { ...M, base: 0xcbd0d5, ao: 0.2 });
+    K.rod(0.065, 0.94, 6, s * 0.20, -1.14, 0.42, { ...M, base: 0xcbd0d5, ao: 0.2, rgh: 0.42 });
     K.rod(0.11, 0.62, 8, s * 0.20, -0.76, 0.42, { ...D, base: 0x282b30 });
     K.decal(DECAL.STRIPE, 0.48, 0.28, 0, -1.32, -0.52, { dir: 'front', off: 0.03 });
+    // elbow-actuator barrel, standing off the back of the upper arm
+    K.ram(-s * 0.30, -1.16, 0.66, 0.115, 0.78, {});
 
     K.into(el);
-    K.rod(0.28, 0.86, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x4d5259, ao: 0.55 });
-    K.bolt(s * 0.45, 0, 0, 0.14, { rz: Math.PI / 2, base: P.mech });
+    K.rod(0.28, 0.86, 10, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x4d5259, ao: 0.55, rgh: 0.95 });
+    // elbow pivot bosses — outboard of the forearm plate at |x| 0.81
+    K.pivot(s * 0.70, 0, 0, 0.29, s, { bolts: 6, base: 0x62686f });
+    K.pivot(-s * 0.62, 0, 0, 0.24, -s, { bolts: 5, base: 0x5a6067 });
+    K.boot(0, 0.02, -0.26, 0.28, 0.30, 3, {});
+    K.piston(-s * 0.30, 0.22, 0.66, 0.058, 0.86, { dir: -1 });
     K.plate(0.80, 1.42, 0.98, 0, -0.74, 0, { ...F, c: 0.04 });
     K.taper(1.16, 1.52, 1.34, 1.00, 1.12, 0, -0.74, -0.02, { ...A2, c: 0.075 });
     K.plate(0.30, 1.12, 0.88, s * 0.66, -0.74, 0.0, { ...A3, c: 0.05 });
@@ -354,14 +377,30 @@ function buildPlayer(K, P) {
     K.rod(0.115, 0.86, 8, s * 0.34, -1.60, 0.62, { ...D, base: 0x282b30 });
     K.rod(0.115, 0.86, 8, -s * 0.34, -1.60, 0.62, { ...D, base: 0x282b30 });
     K.cables([-0.28, -0.24, 0.72], [0.28, -0.24, 0.72], 2, 0.048, { sag: 0.14, axis: 'z', spread: 0.13 });
+    // knee-actuator barrels, mounted behind the thigh and clear of the calf
+    K.ram(0.46, -1.46, 1.06, 0.175, 1.16, {});
+    K.ram(-0.46, -1.46, 1.06, 0.175, 1.16, {});
+    K.plate(1.30, 0.30, 0.34, 0, -0.80, 1.04, { ...A3, c: 0.05 });     // barrel yoke
+    // thigh half of the hip loom — meets the pelvis half across the pivot
+    K.cables([s * 0.30, 0.04, 0.88], [s * 0.60, -1.02, 0.76], 3, 0.082, { sag: 0.22, spread: 0.20 });
+    K.cables([s * 0.24, 0.00, -0.80], [s * 0.48, -0.90, -0.64], 2, 0.070, { sag: 0.18, spread: 0.16 });
 
-    // knee + shin
+    // ---- KNEE ------------------------------------------------------
+    //  The axle used to live entirely inside the leg armour, so at 20-40 m
+    //  the leg was one tapered box hinged on nothing. Both pivot bosses now
+    //  stand OUTBOARD of the shin's side plates (|x| 0.90 vs the plate face
+    //  at 0.83) and the actuator stands proud of the calf at z = 1.06, so
+    //  the joint is on the silhouette from the front AND from the side.
     K.into(kn);
-    K.rod(0.40, 1.00, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x4d525a, ao: 0.55 });
-    K.bolt(s * 0.52, 0, 0, 0.19, { rz: Math.PI / 2, base: P.mech });
-    K.bolt(-s * 0.52, 0, 0, 0.19, { rz: Math.PI / 2, base: P.mech });
+    K.rod(0.40, 1.00, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x4d525a, ao: 0.55, rgh: 0.9 });
     K.plate(0.86, 0.62, 0.34, 0, 0.02, -0.50, { ...A3, c: 0.05 });
-    K.ring(0.47, 0.075, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x5e636a, rseg: 4 });
+    K.ring(0.47, 0.075, 12, 0, 0, 0, { ...M, rz: Math.PI / 2, base: 0x5e636a, rseg: 4, rgh: 0.6 });
+    for (const t of [-1, 1]) K.pivot(t * 0.90, 0, 0, 0.40, t, { bolts: 6, base: 0x646a72 });
+    // knee-actuator ram (the barrel half lives on the thigh, above)
+    K.piston(s * 0.46, 0.30, 1.06, 0.088, 1.30, { dir: -1 });
+    K.piston(-s * 0.46, 0.30, 1.06, 0.088, 1.30, { dir: -1 });
+    // ribbed boot capping the gap between thigh armour and shin
+    K.boot(0, 0.10, 0.30, 0.40, 0.46, 3, { rx: 0.12 });
     K.plate(0.72, L_SHIN * 0.88, 0.90, 0, -L_SHIN * 0.5, 0, { ...F, c: 0.05 });
     K.taper(1.30, L_SHIN * 0.92, 1.62, 1.02, 1.16, 0, -L_SHIN * 0.46, 0.0, { ...A, c: 0.095 });
     K.plate(0.30, 1.72, 1.06, s * 0.68, -1.18, 0.0, { ...A3, c: 0.06 });
@@ -1158,6 +1197,7 @@ class Rig {
     this._ember = new THREE.Color(0xff5518);
     this._flameLo = new THREE.Color(cfg.flameLo ?? 0x3f7dff);
     this._flameHi = new THREE.Color(cfg.flameHi ?? 0xdff2ff);
+    this._flameGain = mats.flame.userData?.hdrGain ?? 1;
     this._tmpC = new THREE.Color();
     this.setThrust(cfg.idleThrust ?? 0.12);
     this.setLegPose(0, 0, !cfg.flying, 1 / 60);
@@ -1293,8 +1333,11 @@ class Rig {
     const q = v * v;
     m.flame.opacity = q * 0.66 + v * 0.16;
     this._tmpC.copy(this._flameLo).lerp(this._flameHi, q);
-    m.flame.color.copy(this._tmpC);
-    m.heat.emissiveIntensity = 0.015 + q * 2.4;
+    //  scale PAST white on purpose: the flame material is Basic + additive +
+    //  untonemapped, so this lands straight in the HDR buffer and the plume
+    //  core clears the bloom high pass instead of sitting just under it.
+    m.flame.color.copy(this._tmpC).multiplyScalar(this._flameGain);
+    m.heat.emissiveIntensity = 0.02 + q * 3.6;
     m.glow.emissiveIntensity = this._glowBase * (0.92 + v * 0.34) * (1 - this.damage * 0.45);
   }
 

@@ -104,6 +104,8 @@ class Game {
     // renderer.info only reports the final fullscreen quad.
     ctx.renderer.info.reset();
 
+    ctx.input.setDelta(dt);
+
     const playing = ctx.state === 'playing';
     if (playing) ctx.time += dt;
 

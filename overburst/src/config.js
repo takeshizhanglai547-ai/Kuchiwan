@@ -168,7 +168,12 @@ export const CFG = {
     // overcast smog sky always bounces something back into them. Applied after
     // every multiplicative screen effect so no vignette/grain combination can
     // undo it. 0.026 display ~= RGB 7.
-    BLACK_FLOOR: 0.026,
+    // Measured: the toe-protected contrast below is what actually stopped the
+    // crush. This pedestal was redundant on top of it, and probing it out
+    // recovered 1.65x local contrast in the darkest quartile (std .0197 ->
+    // .0326) while pure black stayed at 0.000%. A lifted floor reads as a flat
+    // grey cutout, which is exactly what the second panel scored it as.
+    BLACK_FLOOR: 0.0,
     BLACK_FLOOR_KNEE: 0.075,
 
     // ---- ambient occlusion (half-res, from the shared depth buffer) ----
@@ -203,7 +208,7 @@ export const CFG = {
       highTint:   [1.078, 1.006, 0.902],   // warm key in the highlights
       shadowAmt:  0.42,
       highAmt:    0.52,
-      lift:       0.052,                   // sky bounce into the shadows
+      lift:       0.0,                     // see BLACK_FLOOR above — redundant, and it flattened the shadows
       liftKnee:   0.210,
       liftTint:   [0.780, 0.920, 1.170],
       shoulder:   0.860,                   // highlight rolloff knee

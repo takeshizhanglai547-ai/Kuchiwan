@@ -1,10 +1,6 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OVERBURST // ARMORED ASSAULT</title>
 <style>
+:root { color-scheme: dark; }
 /* ============================================================
    OVERBURST — HUD styles.  Owned by the hud agent.
    Industrial / brutalist military UI: thin 1px strokes, clipped
@@ -795,9 +791,13 @@ body {
 .rs-f button.alt::before { background: rgba(9, 16, 19, .9); }
 .rs-f button:hover::before { background: rgba(95, 244, 255, .30); }
 
+/* Embedded contexts sometimes refuse pointer lock; the game falls back to
+   cursor-offset steering, so the cursor must stay visible and the canvas must
+   still fill whatever box it is given. */
+html, body { margin: 0; padding: 0; background: #05080a; }
+#gl { display: block; width: 100vw; height: 100dvh; touch-action: none; }
+#ui-root { position: fixed; inset: 0; }
 </style>
-</head>
-<body>
 <canvas id="gl"></canvas>
 <div id="ui-root"></div>
 <script>
@@ -6430,5 +6430,3 @@ void main() {
 ${s&&s.stack||s}</pre>`),s}})();
 
 </script>
-</body>
-</html>

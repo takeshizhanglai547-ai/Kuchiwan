@@ -58,14 +58,25 @@ export class Input {
       this.down.delete(a);
       this.released.add(a);
     };
+    // Fallback aiming for contexts where pointer lock is refused — an
+    // embedded iframe without allow="pointer-lock", for instance. The cursor
+    // offset from screen centre becomes a turn RATE, which is playable
+    // without the pointer ever needing to be captured.
+    this.freeAim = false;
+    this._cx = 0; this._cy = 0;
     this._onMouseMove = (e) => {
-      if (!this.locked) return;
-      this.mouseDX += e.movementX || 0;
-      this.mouseDY += e.movementY || 0;
+      if (this.locked) {
+        this.mouseDX += e.movementX || 0;
+        this.mouseDY += e.movementY || 0;
+      } else if (this.freeAim) {
+        this._cx = e.clientX - window.innerWidth * 0.5;
+        this._cy = e.clientY - window.innerHeight * 0.5;
+      }
     };
     this._onLockChange = () => {
       this.locked = document.pointerLockElement === this.canvas;
-      if (!this.locked) this.down.clear();
+      if (this.locked) this.freeAim = false;
+      else this.down.clear();
     };
 
     window.addEventListener('keydown', this._onKeyDown, { passive: false });
@@ -79,10 +90,13 @@ export class Input {
   }
 
   requestLock() {
-    if (!this.locked && this.canvas.requestPointerLock) {
-      const p = this.canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});
-    }
+    if (this.locked) return;
+    if (!this.canvas.requestPointerLock) { this.freeAim = true; return; }
+    let p;
+    try { p = this.canvas.requestPointerLock(); } catch { this.freeAim = true; return; }
+    if (p && p.catch) p.catch(() => { this.freeAim = true; });
+    // Some embedders reject silently rather than rejecting the promise.
+    setTimeout(() => { if (!this.locked) this.freeAim = true; }, 700);
   }
   exitLock() { if (document.exitPointerLock) document.exitPointerLock(); }
 
@@ -90,8 +104,30 @@ export class Input {
   wasPressed(a) { return this.scripted ? this.scripted.pressed.has(a) : this.pressed.has(a); }
   wasReleased(a) { return this.scripted ? this.scripted.released.has(a) : this.released.has(a); }
 
-  get dx() { return this.scripted ? this.scripted.dx : this.mouseDX; }
-  get dy() { return this.scripted ? this.scripted.dy : this.mouseDY; }
+  // In free-aim the cursor offset is a rate, so it must be scaled by frame
+  // time. dt is set by the consumer each frame via setDelta().
+  get dx() {
+    if (this.scripted) return this.scripted.dx;
+    if (!this.locked && this.freeAim) return this._rate(this._cx, window.innerWidth);
+    return this.mouseDX;
+  }
+  get dy() {
+    if (this.scripted) return this.scripted.dy;
+    if (!this.locked && this.freeAim) return this._rate(this._cy, window.innerHeight);
+    return this.mouseDY;
+  }
+
+  setDelta(dt) { this._dt = dt; }
+
+  /** dead-zoned, squared response so the centre of the screen is calm */
+  _rate(off, span) {
+    const half = span * 0.5;
+    let t = off / half;                       // -1 .. 1
+    const dead = 0.10;
+    if (Math.abs(t) < dead) return 0;
+    t = (t - Math.sign(t) * dead) / (1 - dead);
+    return Math.sign(t) * t * t * 1250 * (this._dt || 0.016);
+  }
 
   // Normalised movement axes in local space (x = strafe, z = forward).
   axes(out = { x: 0, z: 0 }) {

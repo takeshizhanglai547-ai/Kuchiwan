@@ -93,7 +93,9 @@ function drawHull(S, mode) {
   g.fillRect(0, 0, S, S);
 
   // ---- large scale paint mottling --------------------------------
-  g.globalAlpha = A ? 0.34 : 0.16;
+  //  On the ORM this is the MACRO roughness break-up: without it every plate
+  //  reads at one sheen and the whole machine takes the key identically.
+  g.globalAlpha = A ? 0.34 : 0.26;
   for (let i = 0; i < 26; i++) {
     const x = R() * S, y = R() * S, r = S * (0.06 + R() * 0.16);
     const dark = R() < 0.62;
@@ -121,7 +123,11 @@ function drawHull(S, mode) {
     } else {
       // R = AO, G = roughness, B = metalness. Rougher plates are less
       // metallic (thicker paint), satin ones more — a real correlation.
-      g.fillStyle = `rgb(${(250 - Math.abs(rj) * 34) | 0},${(120 + rj * 100) | 0},${(152 - rj * 126) | 0})`;
+      //  The green spread is DELIBERATELY wide (0.13 .. 0.79): a fleet
+      //  repaint leaves matte panels next to factory satin ones, and that
+      //  plate-to-plate sheen break is most of what stops a hull reading as
+      //  one moulded shell. The old +/-0.20 band was inside the noise.
+      g.fillStyle = `rgb(${(250 - Math.abs(rj) * 34) | 0},${(118 + rj * 168) | 0},${(150 - rj * 152) | 0})`;
     }
     g.globalAlpha = 0.66;
     g.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
@@ -611,6 +617,86 @@ export function mechTextures() {
 //  moment it walks under a gantry.
 export const ENV_REL = { hull: 0.84, mech: 1.00, dark: 0.24, heat: 0.28, decal: 0.36 };
 
+// ==================================================================
+//  asurf shader injection.
+//
+//  mechKit writes a vec2 per vertex:  x = chamfer mask, y = per-primitive
+//  finish scalar.  Two things hang off it.
+//
+//  1. THE ARRIS.  The bevel used to be handled purely in albedo, and the
+//     side-facing case (every silhouette-forming edge on a walker) was
+//     deliberately zeroed to stop the frame outlining itself like a moulded
+//     toy. Correct diagnosis, wrong axis: a milled arris is not a paler
+//     paint stripe, it is a different FINISH. Dropping roughness on the
+//     bevel and lifting metalness gives it a specular lobe of its own, so
+//     the edge flares when the half-vector lines up and is dead otherwise.
+//     Albedo is untouched, so nothing is outlined at rest.
+//  2. THE FAMILIES.  y multiplies roughness on the lit materials (rubber
+//     1.15, cast housings 1.25, honed piston rods 0.34) and multiplies
+//     emissive on glow/heat, so one material can carry a dim seam strip and
+//     a white-hot optic core without a second draw call.
+//
+//  NOTE: no template literals in here on purpose — a stray backtick inside
+//  a GLSL string has broken this build before. Plain arrays, joined.
+// ==================================================================
+const V_HEAD = ['#include <common>', 'attribute vec2 asurf;', 'varying vec2 vSurf;'].join('\n');
+const V_BODY = ['#include <begin_vertex>', 'vSurf = asurf;'].join('\n');
+const F_HEAD = [
+  '#include <common>',
+  'varying vec2 vSurf;',
+  'uniform float uBevOn;',
+  'uniform float uBevRgh;',
+  'uniform float uBevMet;',
+].join('\n');
+const F_ROUGH = [
+  '#include <roughnessmap_fragment>',
+  'float obBev = clamp(vSurf.x, 0.0, 1.0) * uBevOn;',
+  'roughnessFactor *= max(vSurf.y, 0.02);',
+  'roughnessFactor = mix(roughnessFactor, roughnessFactor * uBevRgh, obBev);',
+  'roughnessFactor = clamp(roughnessFactor, 0.055, 1.0);',
+].join('\n');
+const F_METAL = [
+  '#include <metalnessmap_fragment>',
+  'metalnessFactor = mix(metalnessFactor, min(1.0, metalnessFactor + uBevMet), obBev);',
+].join('\n');
+const F_EMIS = [
+  '#include <emissivemap_fragment>',
+  'totalEmissiveRadiance *= max(vSurf.y, 0.0);',
+].join('\n');
+
+/**
+ * @param {THREE.Material} mat
+ * @param {{bevRgh?:number, bevMet?:number, rough?:boolean, emissive?:boolean}} o
+ */
+function applySurf(mat, o = {}) {
+  const u = {
+    uBevOn: { value: o.bevOn ?? 1 },
+    uBevRgh: { value: o.bevRgh ?? 0.40 },
+    uBevMet: { value: o.bevMet ?? 0.18 },
+  };
+  mat.userData.surf = u;
+  const wantRough = o.rough !== false;
+  const wantEmis = !!o.emissive;
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uBevOn = u.uBevOn;
+    shader.uniforms.uBevRgh = u.uBevRgh;
+    shader.uniforms.uBevMet = u.uBevMet;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', V_HEAD)
+      .replace('#include <begin_vertex>', V_BODY);
+    let f = shader.fragmentShader.replace('#include <common>', F_HEAD);
+    if (wantRough) {
+      f = f.replace('#include <roughnessmap_fragment>', F_ROUGH)
+        .replace('#include <metalnessmap_fragment>', F_METAL);
+    }
+    if (wantEmis) f = f.replace('#include <emissivemap_fragment>', F_EMIS);
+    shader.fragmentShader = f;
+  };
+  // keep these off the program cache line of any un-injected material
+  mat.customProgramCacheKey = () => 'obsurf1' + (wantRough ? 'R' : '') + (wantEmis ? 'E' : '');
+  return mat;
+}
+
 export function makeMaterials(opts = {}) {
   const T = mechTextures();
   const accent = new THREE.Color(opts.accent ?? 0x4fd9ff);
@@ -637,10 +723,16 @@ export function makeMaterials(opts = {}) {
     vertexColors: true,
     dithering: true,
   });
+  //  Painted armour spans matte repaint to satin factory finish (the ORM
+  //  green channel is authored 0.13-0.79) and every chamfer on it is milled
+  //  back to ~0.17: that is the arris.
+  applySurf(hull, { bevRgh: 0.38, bevMet: 0.20 });
 
   // exposed mechanism: milled steel rods, actuators, hydraulic chrome.
-  //  Satin, NOT chrome: at roughness 0.30 x the ORM the pistons went to a
-  //  mirror and mirrored the sky, which read as blue-white plastic tube.
+  //  The material stays SATIN — at roughness 0.30 x the ORM every rod on the
+  //  frame went to a mirror and read as blue-white plastic tube. Gloss is now
+  //  spent per-primitive instead: only the honed piston rods and bolt heads
+  //  get pulled down (asurf.y 0.34-0.52), cast vanes and hubs pushed up.
   const mech = new THREE.MeshStandardMaterial({
     color: new THREE.Color(opts.mechTint ?? 0x9aa0a6),
     map: T.hullMap,
@@ -652,6 +744,7 @@ export function makeMaterials(opts = {}) {
     vertexColors: true,
     dithering: true,
   });
+  applySurf(mech, { bevRgh: 0.44, bevMet: 0.10 });
 
   //  Rubber boots, cable looms, deep throats. The material tint is a
   //  NEUTRAL: value is carried entirely by the per-primitive vertex paint,
@@ -665,16 +758,24 @@ export function makeMaterials(opts = {}) {
     vertexColors: true,
     dithering: true,
   });
+  //  Rubber boots ride asurf.y ~1.16 (dead matte); a bevel on a moulding is
+  //  only slightly crisper, never a highlight.
+  applySurf(dark, { bevRgh: 0.66, bevMet: 0.04 });
 
+  //  The ONE genuinely HDR channel on the machine. Base radiance is well over
+  //  the bloom high-pass (linear 1.28 at the shipped grade) and asurf.y then
+  //  ranks the emitters inside the one material: optic core 1.9, blade 1.5,
+  //  seam strips 0.5 — so the visor blooms and the seams do not.
   const glow = new THREE.MeshStandardMaterial({
     color: new THREE.Color(0x04060a),
     emissive: accent.clone(),
-    emissiveIntensity: 2.35,
-    roughness: 0.26,
+    emissiveIntensity: 3.7,
+    roughness: 0.24,
     metalness: 0.25,
     vertexColors: true,
     toneMapped: true,
   });
+  applySurf(glow, { rough: false, emissive: true });
 
   const heat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -689,6 +790,7 @@ export function makeMaterials(opts = {}) {
     envMapIntensity: ei * ENV_REL.heat,
     vertexColors: true,
   });
+  applySurf(heat, { rough: false, emissive: true });
 
   //  Stencils are WORN paint, not fresh white vinyl — the atlas art is
   //  near-white so the tint is what keeps them off the top of the range.
@@ -707,11 +809,19 @@ export function makeMaterials(opts = {}) {
     polygonOffsetUnits: -4,
     side: THREE.DoubleSide,
   });
+  applySurf(decal, { bevRgh: 0.8, bevMet: 0.0 });
 
+  //  Additive, un-tonemapped, and deliberately authored ABOVE 1.0 linear: the
+  //  plume core is the second thing on the machine that is meant to bloom.
+  //  Colour is scaled past white — the material is Basic so the value lands
+  //  in the HDR buffer untouched. Opacity is quadratic in thrust, so a cold
+  //  mech still shows nothing at all.
+  const flameHDR = new THREE.Color(opts.flameTint ?? 0x9fe4ff).multiplyScalar(opts.flameGain ?? 2.1);
   const flame = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(opts.flameTint ?? 0x9fe4ff),
+    color: flameHDR,
     transparent: true,
     opacity: 0.0,
+    userData: { hdrGain: opts.flameGain ?? 2.1 },
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,

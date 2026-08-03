@@ -187,13 +187,16 @@ function boxProject(g, scale, ou, ov) {
 //  a painted steel plate behaves, which is NOT "uniformly brighter":
 //    * an UP-facing chamfer is where the paint gets scuffed off and where
 //      the sky lands — bare steel, and it is what draws the silhouette.
-//    * a SIDE-facing chamfer is just more paint — it must vanish.
+//    * a SIDE-facing chamfer is just more paint in ALBEDO — it must not be
+//      lifted here. It is separated from the face in ROUGHNESS instead (see
+//      the asurf attribute below), so a side chamfer throws a view-dependent
+//      specular streak rather than a painted-on outline.
 //    * a DOWN-facing chamfer sits in the plate's own contact shadow — it
 //      goes darker than the face, and that dark line is what reads as a
 //      plate gap at 20–40 m.
-//  Lighting every bevel equally (the old behaviour) drew a bright outline
-//  around every single box on the frame: the exact signature of a moulded
-//  plastic toy.
+//  Lighting every bevel equally IN ALBEDO (the original behaviour) drew a
+//  bright outline around every single box on the frame: the exact signature
+//  of a moulded plastic toy.
 function paint(g, base, wear, ao, jitter, wearAmt = 0.52) {
   const col = g.attributes.color, nrm = g.attributes.normal;
   _c1.set(base); _c2.set(wear);
@@ -219,6 +222,28 @@ function paint(g, base, wear, ao, jitter, wearAmt = 0.52) {
       (_c1.b + (_c2.b - _c1.b) * w) * f);
   }
   col.needsUpdate = true;
+}
+
+// ------------------------------------------------------------------
+//  asurf — the two per-vertex surface scalars the mech shaders read.
+//
+//    asurf.x  chamfer mask, 1 on a bevel strip / corner, 0 on a flat face.
+//             The hull/mech/dark/decal shaders drop ROUGHNESS and lift
+//             METALNESS here. That is the whole point: a milled arris is
+//             not a brighter painted line, it is a different finish, so it
+//             throws a specular streak that swings in and out as the camera
+//             moves and is dead the rest of the time.
+//    asurf.y  a per-PRIMITIVE scalar. On hull/mech/dark/decal it multiplies
+//             roughness (rubber boot 1.15, cast housing 1.25, hydraulic ram
+//             0.34); on glow/heat it multiplies emissive so one material can
+//             carry a dim seam strip and a white-hot optic core at once.
+// ------------------------------------------------------------------
+function surfAttr(g, scale) {
+  const col = g.attributes.color;
+  const n = col.count;
+  const a = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { a[i * 2] = 1 - col.getX(i); a[i * 2 + 1] = scale; }
+  g.setAttribute('asurf', new THREE.Float32BufferAttribute(a, 2));
 }
 
 // gradient tint along a local axis (used for thruster plumes)
@@ -262,6 +287,9 @@ export class Kit {
   constructor(mats, seed = 1) {
     this.mats = mats;
     this.rng = mulberry32(seed);
+    // separate stream for the surface-finish jitter so adding it does not
+    // shift the paint/wear stream and repaint the whole machine
+    this.rngS = mulberry32((seed ^ 0x9e3779b1) >>> 0);
     this.node = null;
     this.buckets = null;
     this.thrusters = [];
@@ -317,6 +345,12 @@ export class Kit {
     _m.compose(_v, _q, _v2);
     g.applyMatrix4(_m);
     if (!o.keepUV) boxProject(g, o.uvScale ?? this.uvScale, o.uvOff ? o.uvOff[0] : 0, o.uvOff ? o.uvOff[1] : 0);
+    // surface scalar. Painted armour gets a per-plate sheen jitter on top of
+    // the requested finish — a repaint never comes back at the same gloss,
+    // and a frame where every plate has one roughness is a moulding.
+    const lit = key !== 'flame' && key !== 'heat' && key !== 'glow';
+    const rgh = o.rgh ?? o.emis ?? 1;   // `emis` is the readable alias on glow/heat
+    surfAttr(g, lit ? rgh * (1 + (this.rngS() - 0.5) * (o.rghJit ?? 0.42)) : rgh);
     if (key !== 'flame' && key !== 'heat') {
       const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.19;
       // wear varies PER PLATE — a frame where every chamfer is rubbed back
@@ -345,7 +379,7 @@ export class Kit {
     return this.put(g, { ...o, x, y, z });
   }
   bolt(x, y, z, r = 0.055, o = {}) {
-    return this.put(hexGeo(), { key: 'mech', base: 0x9aa0a6, ao: 0.3, ...o, x, y, z, sx: r, sy: r * 0.55, sz: r });
+    return this.put(hexGeo(), { key: 'mech', base: 0x9aa0a6, ao: 0.3, rgh: 0.52, rghJit: 0.22, ...o, x, y, z, sx: r, sy: r * 0.55, sz: r });
   }
   boltsOn(face, n, x, y, z, dx, dy, dz, r, o = {}) {
     const a = FACE_AXIS[face];
@@ -373,13 +407,13 @@ export class Kit {
     const n = o.slats ?? Math.max(3, Math.round(h / 0.15));
 
     let p = at(0, 0, -dep * 0.55);
-    this.plate(w, h, dep, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: o.housing ?? 0x08090b, ao: 0.06, c: 0.012, jitter: 0 });
-    this.plate(w + 0.13, h + 0.13, 0.055, x, y, z, { ...rot, key: o.key || 'hull', base: o.frame ?? 0x8b9096, wear: o.wear ?? 0xcbcfd3, c: 0.02 });
+    this.plate(w, h, dep, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: o.housing ?? 0x08090b, ao: 0.06, c: 0.012, jitter: 0, rgh: 1.3, rghJit: 0 });
+    this.plate(w + 0.13, h + 0.13, 0.055, x, y, z, { ...rot, key: o.key || 'hull', base: o.frame ?? 0x8b9096, wear: o.wear ?? 0xcbcfd3, c: 0.02, rgh: 0.86 });
     for (let i = 0; i < n; i++) {
       const yy = -h * 0.5 + h * ((i + 0.62) / n);
       p = at(0, yy, -0.045);
       this.blk(w * 0.9, h / n * 0.5, 0.06, x + p.x, y + p.y, z + p.z,
-        { ...rot, rx: R[0] + (o.tilt ?? 0.45), key: 'mech', base: o.slat ?? 0x5d6267, ao: 0.55, jitter: 0 });
+        { ...rot, rx: R[0] + (o.tilt ?? 0.45), key: 'mech', base: o.slat ?? 0x5d6267, ao: 0.55, jitter: 0, rgh: 1.22, rghJit: 0.1 });
     }
   }
 
@@ -420,23 +454,111 @@ export class Kit {
       const q1 = A.clone().lerp(mid, 0.5); q1.y -= sag * 0.3;
       const q2 = mid.clone().lerp(B, 0.5); q2.y -= sag * 0.3;
       this.tube([A, q1, mid, q2, B], r * (0.8 + this.rng() * 0.45),
-        { key: 'dark', base: o.base ?? 0x24272b, ao: 0.5, seg: 6, rad: 4, jitter: (this.rng() - 0.5) * 0.34 });
+        { key: 'dark', base: o.base ?? 0x24272b, ao: 0.5, seg: 6, rad: 4, rgh: o.rgh ?? 1.14, rghJit: 0.16, jitter: (this.rng() - 0.5) * 0.34 });
     }
   }
 
   antenna(x, y, z, len, o = {}) {
-    this.rod(0.075, 0.13, 6, x, y + 0.065, z, { key: 'mech', base: 0x54585e, ao: 0.35 });
-    this.cone(0.012, 0.038, len, 5, x, y + 0.13 + len * 0.5, z, { key: 'mech', base: 0x8d9298, ao: 0.15 });
-    if (o.tip !== false) this.blk(0.05, 0.05, 0.05, x, y + 0.12 + len, z, { key: 'glow', base: 0xffffff, jitter: 0 });
+    this.rod(0.075, 0.13, 6, x, y + 0.065, z, { key: 'mech', base: 0x54585e, ao: 0.35, rgh: 0.72 });
+    this.cone(0.012, 0.038, len, 5, x, y + 0.13 + len * 0.5, z, { key: 'mech', base: 0x8d9298, ao: 0.15, rgh: 0.5 });
+    if (o.tip !== false) this.blk(0.05, 0.05, 0.05, x, y + 0.12 + len, z, { key: 'glow', base: 0xffffff, jitter: 0, rgh: o.emis ?? 1 });
   }
 
-  /** emissive seam strip sunk into a dark recess */
+  /** emissive seam strip sunk into a dark recess. `emis` scales the core. */
   seam(w, h, d, x, y, z, o = {}) {
     _q.setFromEuler(_e.set(o.rx || 0, o.ry || 0, o.rz || 0, 'XYZ'));
     _v.set(0, 0, -d * 0.45).applyQuaternion(_q);
     this.plate(w + 0.06, h + 0.06, d * 0.9, x + _v.x, y + _v.y, z + _v.z,
-      { ...o, key: 'dark', base: 0x06070a, ao: 0.05, c: 0.01, jitter: 0 });
-    this.blk(w, h, d, x, y, z, { ...o, key: 'glow', base: 0xffffff, jitter: 0 });
+      { ...o, key: 'dark', base: 0x06070a, ao: 0.05, c: 0.01, jitter: 0, rgh: 1.3, rghJit: 0 });
+    this.blk(w, h, d, x, y, z, { ...o, key: 'glow', base: 0xffffff, jitter: 0, rgh: o.emis ?? 1 });
+  }
+
+  // ---- articulation ----------------------------------------------
+  //  Everything below is authored at SILHOUETTE SCALE. An axle buried
+  //  inside the leg armour is worth nothing at 20–40 m: the pivot boss has
+  //  to stand outboard of the plates and the actuator has to stand proud of
+  //  them, or the joint simply is not in the frame.
+
+  /**
+   * Pivot boss — a machined disc standing OUTBOARD of the limb on the
+   * hinge axis, with a bolt ring and a hex centre cap. `s` is +/-1 for the
+   * side of the machine so the boss always faces away from the body.
+   * axis: 'x' (knee/elbow hinge) or 'z'.
+   */
+  pivot(x, y, z, r, s = 1, o = {}) {
+    const ax = o.axis === 'z' ? { rx: Math.PI / 2 } : { rz: Math.PI / 2 };
+    const th = o.thick ?? r * 0.62;
+    const base = o.base ?? 0x60666e;
+    // disc + rim ring: the rim is what catches the key at a grazing angle
+    this.rod(r, th, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base, ao: 0.5, rgh: 0.72 });
+    this.rod(r * 0.72, th * 1.34, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base: 0x3d4249, ao: 0.6, rgh: 1.18 });
+    this.ring(r * 1.02, r * 0.115, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base: 0x878d94, ao: 0.4, rseg: 4, rgh: 0.44 });
+    // bolt ring on the outboard face
+    const nb = o.bolts ?? 6;
+    const bx = x + (o.axis === 'z' ? 0 : s * th * 0.62);
+    const bz = z + (o.axis === 'z' ? s * th * 0.62 : 0);
+    for (let i = 0; i < nb; i++) {
+      const a = (i / nb) * Math.PI * 2 + (o.roll ?? 0.2);
+      if (o.axis === 'z') this.bolt(bx + Math.cos(a) * r * 0.66, y + Math.sin(a) * r * 0.66, bz, r * 0.20, { rx: Math.PI / 2 });
+      else this.bolt(bx, y + Math.sin(a) * r * 0.66, z + Math.cos(a) * r * 0.66, r * 0.20, { rz: Math.PI / 2 });
+    }
+    // hex centre cap, stood off the disc so it throws its own shadow
+    const cx = x + (o.axis === 'z' ? 0 : s * th * 0.82);
+    const cz = z + (o.axis === 'z' ? s * th * 0.82 : 0);
+    this.put(hexGeo(), {
+      ...ax, key: 'mech', base: 0x9aa1a8, ao: 0.3, rgh: 0.40,
+      x: cx, y, z: cz, sx: r * 0.42, sy: r * 0.30, sz: r * 0.42,
+    });
+  }
+
+  /**
+   * Hydraulic barrel (the fixed half of an actuator). Authored along +Y,
+   * `len` long, centred on (x,y,z). Cast body, dull, with a gland nut.
+   */
+  ram(x, y, z, r, len, o = {}) {
+    const rot = { rx: o.rx || 0, ry: o.ry || 0, rz: o.rz || 0 };
+    this.rod(r, len, o.seg ?? 10, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0x3f444b, ao: 0.55, rgh: 1.24 });
+    _q.setFromEuler(_e.set(rot.rx, rot.ry, rot.rz, 'XYZ'));
+    for (const e of [-1, 1]) {
+      _v.set(0, e * len * 0.5, 0).applyQuaternion(_q);
+      this.ring(r * 1.16, r * 0.24, o.seg ?? 10, x + _v.x, y + _v.y, z + _v.z,
+        { ...rot, key: 'mech', base: 0x8b9198, ao: 0.4, rseg: 4, rgh: 0.42 });
+    }
+    if (o.hose !== false) {
+      _v.set(0, len * 0.34, 0).applyQuaternion(_q);
+      _v2.set(0, -len * 0.30, r * 2.2).applyQuaternion(_q);
+      this.cables([x + _v.x, y + _v.y, z + _v.z], [x + _v2.x, y + _v2.y, z + _v2.z],
+        1, r * 0.42, { sag: len * 0.10, spread: 0 });
+    }
+  }
+
+  /**
+   * Piston rod (the sliding half). Bright honed steel — this is the one
+   * part on the machine that is allowed to be near-chrome, and at
+   * roughness ~0.14 it throws a hard vertical highlight that moves.
+   */
+  piston(x, y, z, r, len, o = {}) {
+    const rot = { rx: o.rx || 0, ry: o.ry || 0, rz: o.rz || 0 };
+    this.rod(r, len, o.seg ?? 10, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0xd9dee4, ao: 0.16, rgh: 0.34, rghJit: 0.08 });
+    _q.setFromEuler(_e.set(rot.rx, rot.ry, rot.rz, 'XYZ'));
+    _v.set(0, (o.dir ?? 1) * len * 0.5, 0).applyQuaternion(_q);
+    // clevis eye at the far end
+    this.plate(r * 3.0, r * 2.6, r * 2.0, x + _v.x, y + _v.y, z + _v.z,
+      { ...rot, key: 'mech', base: 0x4d525a, ao: 0.5, c: r * 0.5, rgh: 1.1 });
+    this.bolt(x + _v.x, y + _v.y, z + _v.z, r * 1.15, { rz: Math.PI / 2 });
+  }
+
+  /** ribbed rubber boot capping a joint gap — n rings along +Y */
+  boot(x, y, z, r, h, n = 4, o = {}) {
+    const rot = { rx: o.rx || 0, ry: o.ry || 0, rz: o.rz || 0 };
+    _q.setFromEuler(_e.set(rot.rx, rot.ry, rot.rz, 'XYZ'));
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * h;
+      const rr = r * (1 - Math.abs(t / (h * 0.5 + 1e-4)) * (o.taper ?? 0.14));
+      _v.set(0, t, 0).applyQuaternion(_q);
+      this.ring(rr, r * (o.rib ?? 0.20), o.seg ?? 10, x + _v.x, y + _v.y, z + _v.z,
+        { ...rot, key: 'dark', base: o.base ?? 0x22252a, ao: 0.5, rseg: 4, rgh: 1.16, rghJit: 0.08 });
+    }
   }
 
   /** stencil / hazard decal from the atlas */
@@ -479,10 +601,10 @@ export class Kit {
     const pts = bellProfile(rThroat, rExit, len, o.housing ?? 1.32);
     const inner = pts.slice(2).map((p) => new THREE.Vector2(Math.max(0.012, p.x - 0.032), p.y));
 
-    this.lathe(pts, seg, x, y, z, { ...rot, key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5 });
-    this.lathe(inner, seg, x, y, z, { ...rot, key: 'heat', keepUV: true });
+    this.lathe(pts, seg, x, y, z, { ...rot, key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5, rgh: 0.88 });
+    this.lathe(inner, seg, x, y, z, { ...rot, key: 'heat', keepUV: true, rgh: o.heat ?? 1 });
     this.ring(rThroat * (o.housing ?? 1.32) * 1.04, rThroat * 0.11, seg, x, y, z,
-      { ...rot, key: 'mech', base: 0x5a5f66, ao: 0.5, rseg: 4 });
+      { ...rot, key: 'mech', base: 0x5a5f66, ao: 0.5, rseg: 4, rgh: 0.62 });
 
     // splitter vanes across the bell mouth — this is what kills the "eye".
     // Authored in lathe-local space (+Y == exhaust) then carried out by rot.
@@ -491,13 +613,13 @@ export class Kit {
       const vg = new THREE.BoxGeometry(rExit * 1.94, len * 0.30, rExit * 0.16);
       vg.rotateY((i / nv) * Math.PI + (o.vaneRoll ?? 0));
       vg.translate(0, len * 0.86, 0);
-      this.put(vg, { ...rot, key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0, x, y, z });
+      this.put(vg, { ...rot, key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0, rgh: 1.2, rghJit: 0, x, y, z });
     }
     if (nv > 0) {
       // hub plug so the throat is never an open glowing disc
       const hub = new THREE.CylinderGeometry(rThroat * 0.5, rThroat * 0.34, len * 0.5, 6);
       hub.translate(0, len * 0.42, 0);
-      this.put(hub, { ...rot, key: 'mech', base: 0x41464d, ao: 0.55, jitter: 0, x, y, z });
+      this.put(hub, { ...rot, key: 'mech', base: 0x41464d, ao: 0.55, jitter: 0, rgh: 1.15, rghJit: 0, x, y, z });
     }
 
     // plume spike: bright at the throat, transparent at the tip
@@ -531,23 +653,23 @@ export class Kit {
 
     // housing collar standing proud of the plate it is sunk into
     mk(chamferBox(w + 0.22, len * 0.62, h + 0.22, 0.05), 0, len * 0.24, 0,
-      { key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5 });
+      { key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5, rgh: 0.82 });
     // deep dark throat — floor sunk well below the mouth so the slot has depth
     mk(chamferBox(w, len * 0.90, h, 0.018), 0, -len * 0.30, 0,
-      { key: 'dark', base: 0x04050a, ao: 0.03, jitter: 0 });
+      { key: 'dark', base: 0x04050a, ao: 0.03, jitter: 0, rgh: 1.3, rghJit: 0 });
     // heat-stained liner (the heat material is BackSide, so we see its walls)
     mk(new THREE.BoxGeometry(w * 0.93, len * 1.2, h * 0.93), 0, -len * 0.02, 0,
-      { key: 'heat', keepUV: true });
+      { key: 'heat', keepUV: true, rgh: o.heat ?? 1 });
     // splitter vanes across the mouth
     const nv = o.vanes ?? 2;
     for (let i = 0; i < nv; i++) {
       const t = (i + 1) / (nv + 1) - 0.5;
       mk(new THREE.BoxGeometry(w * 0.085, len * 0.46, h * 1.02), w * t, len * 0.42, 0,
-        { key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0 });
+        { key: 'mech', base: 0x474c53, ao: 0.55, jitter: 0, rgh: 1.2, rghJit: 0 });
     }
     // brow lip so the mouth sits in its own shadow
     mk(chamferBox(w + 0.22, len * 0.16, h * 0.30, 0.03), 0, len * 0.50, h * 0.62,
-      { key: 'hull', base: o.base ?? 0x4a4f55, wear: o.wear ?? 0x8f959c, ao: 0.5 });
+      { key: 'hull', base: o.base ?? 0x4a4f55, wear: o.wear ?? 0x8f959c, ao: 0.5, rgh: 0.82 });
 
     // additive plume prism
     const fl = new THREE.BoxGeometry(w * 0.78, len * 2.3, h * 0.78);
