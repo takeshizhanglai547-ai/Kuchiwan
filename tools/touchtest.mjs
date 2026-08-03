@@ -88,12 +88,21 @@ report.steps.push({ step: 'look-drag', yawDelta: +(yaw1 - yaw0).toFixed(4) });
 const f = await box('.tc-fire');
 if (f) {
   const fx = f.x + f.width / 2, fy = f.y + f.height / 2;
-  const ammo0 = await page.evaluate(() => window.__OB.ctx.weapons.state.rifle.ammo);
+  // The rifle draws from the MAGAZINE; the 480 reserve only moves on reload,
+  // so watching `ammo` measures nothing over a 30-frame burst.
+  const read = () => page.evaluate(() => {
+    const r = window.__OB.ctx.weapons.state.rifle;
+    return { mag: r.mag, ammo: r.ammo, firing: !!r.firing, held: window.__OB.ctx.input.down.has('rifle') };
+  });
+  const a0 = await read();
   await page.dispatchEvent('.tc-fire', 'pointerdown', { pointerId: 13, clientX: fx, clientY: fy, isPrimary: true, pointerType: 'touch' });
   await frames(30);
-  const ammo1 = await page.evaluate(() => window.__OB.ctx.weapons.state.rifle.ammo);
+  const a1 = await read();
   await page.dispatchEvent('.tc-fire', 'pointerup', { pointerId: 13, clientX: fx, clientY: fy, isPrimary: true, pointerType: 'touch' });
-  report.steps.push({ step: 'fire', ammoBefore: ammo0, ammoAfter: ammo1, fired: ammo0 - ammo1 });
+  report.steps.push({
+    step: 'fire', magBefore: a0.mag, magAfter: a1.mag, roundsFired: a0.mag - a1.mag,
+    heldDuring: a1.held, firing: a1.firing,
+  });
 }
 
 await frames(10);
