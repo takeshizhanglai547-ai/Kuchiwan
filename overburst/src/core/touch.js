@@ -14,9 +14,19 @@ import { ACTIONS } from './input.js';
 
 const STICK_R = 62;        // px — outer ring radius
 const STICK_DEAD = 0.16;   // fraction of the ring that reads as centred
-const LOOK_SCALE = 1.35;   // drag pixels -> look pixels
+const LOOK_SCALE = 0.42;   // drag px -> look px. Measured: at 1.35 a 108 px
+                           // thumb drag swung the heading 100 degrees.
 const TAP_MS = 220;        // press shorter than this is a tap (quick boost)
 const TAP_SLOP = 14;       // px a tap may drift
+
+/**
+ * Pointer capture keeps a drag alive when the thumb leaves the element, but
+ * it throws on a pointer the browser does not consider active. It is an
+ * optimisation — never let it abort the handler that actually reads input.
+ */
+function capture(el, id) {
+  try { el.setPointerCapture(id); } catch { /* drag still works, just uncaptured */ }
+}
 
 export class TouchControls {
   constructor(ctx) {
@@ -30,7 +40,7 @@ export class TouchControls {
     this._lookY = 0;
     this._sx = 0; this._sy = 0;
     this._held = new Map();   // pointerId -> action (weapon buttons)
-    this._qbDown = 0;
+    this._qbDown = Infinity;
     this._qbMoved = false;
   }
 
@@ -77,7 +87,7 @@ export class TouchControls {
     this.stick.addEventListener('pointerdown', (e) => {
       if (this._stickId !== null) return;
       this._stickId = e.pointerId;
-      this.stick.setPointerCapture(e.pointerId);
+      capture(this.stick, e.pointerId);
       const r = this.stick.getBoundingClientRect();
       this._sx = r.left + r.width / 2;
       this._sy = r.top + r.height / 2;
@@ -111,7 +121,7 @@ export class TouchControls {
     this.look.addEventListener('pointerdown', (e) => {
       if (this._lookId !== null) return;
       this._lookId = e.pointerId;
-      this.look.setPointerCapture(e.pointerId);
+      capture(this.look, e.pointerId);
       this._lookX = e.clientX; this._lookY = e.clientY;
       e.preventDefault();
     });
@@ -136,7 +146,7 @@ export class TouchControls {
     for (const b of root.querySelectorAll('.tc-b')) {
       const a = b.dataset.a;
       b.addEventListener('pointerdown', (e) => {
-        b.setPointerCapture(e.pointerId);
+        capture(b, e.pointerId);
         this._held.set(e.pointerId, a);
         b.classList.add('on');
         this._press(a);

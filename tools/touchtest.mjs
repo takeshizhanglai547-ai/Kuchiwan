@@ -62,8 +62,6 @@ const box = async (sel) => page.locator(sel).boundingBox();
 const s = await box('#tc-stick');
 if (s) {
   const cx = s.x + s.width / 2, cy = s.y + s.height / 2;
-  await page.touchscreen.tap(cx, cy);          // wake the element
-  await page.mouse.move(cx, cy);
   await page.dispatchEvent('#tc-stick', 'pointerdown', { pointerId: 11, clientX: cx, clientY: cy, isPrimary: true, pointerType: 'touch' });
   await page.dispatchEvent('#tc-stick', 'pointermove', { pointerId: 11, clientX: cx, clientY: cy - 60, isPrimary: true, pointerType: 'touch' });
   await frames(20);
