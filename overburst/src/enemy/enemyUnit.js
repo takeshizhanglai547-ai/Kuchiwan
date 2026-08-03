@@ -448,7 +448,9 @@ export class Enemy {
     if (this.shield > 0) {
       this.shield = Math.max(0, this.shield - amount * this.def.shieldResist);
       if (this.pylon) {
-        this.pylon.shieldHit(clamp(amount / 900, 0.12, 0.9));
+        // the contact point drives a localised bloom on the barrier — a
+        // shell that lights up uniformly reads as a bulb, not as armour
+        this.pylon.shieldHit(clamp(amount / 900, 0.12, 0.9), info.point);
         this.pylon.setShield(this.shield / this.shieldMax);
       }
       if (this.shield <= 0) this._breakShield();

@@ -55,6 +55,21 @@ const MT = (x, y, z, ry = 0, s = 1) =>
     new THREE.Vector3(s, s, s),
   );
 
+/** Register a local emissive light. Arena keeps eight live PointLight slots and
+ *  re-points them at whichever registered emitters matter to the camera, so
+ *  registering generously here is cheap — an unselected emitter costs one
+ *  distance test every sixth frame.
+ *
+ *  HEIGHT MATTERS. A molten pool lies ON the floor: put the light at deck level
+ *  and it rakes the apron at a grazing angle while hitting the vertical faces of
+ *  everything standing on it nearly head-on. Hang it overhead instead and you
+ *  light the floor and leave the props black — which is exactly how the basin
+ *  read before: the pad out-glowed the crates standing on it. */
+let _emitSeq = 0;
+function emit(W, x, y, z, color, intensity, distance) {
+  W.lights.push({ x, y, z, color, intensity, distance, phase: (_emitSeq++ * 1.87) % 6.283 });
+}
+
 // ==================================================================
 //  1. CENTRAL SLAG BASIN — the boss arena
 // ==================================================================
@@ -123,7 +138,9 @@ export function buildBasin(W) {
     col.addSolid(hx, hy + 15, hz, 26, 15, 17);
     W.smoke.push({ x: hx - 16, y: hy + 56, z: hz - 6, r: 6.0, rate: 0.045, tint: 0.16 });
     W.smoke.push({ x: hx + 16, y: hy + 50, z: hz - 6, r: 4.6, rate: 0.06, tint: 0.28 });
-    W.lights.push({ x: hx, y: hy + 6, z: hz + 20, color: 0xff5a12, intensity: 900, distance: 120 });
+    // tap mouth + the spill runner descending off the rim
+    emit(W, hx, hy + 7.0, hz + 18.5, 0xff5a12, 1400, 140);
+    emit(W, hx, hy + 4.4, hz + 40, 0xff6a20, 900, 100);
   }
 
   // --- stair runs from the basin floor up to the terrace + rim ---
@@ -192,18 +209,25 @@ export function buildBasin(W) {
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       B.add('concD', G.lump(1.8 + rnd() * 3.6, 20 + i, 0), T(x, PIT.floorY + 0.22, z, 0, rnd() * 3, 0));
     }
-    W.lights.push({ x: -4, y: PIT.floorY + 9, z: 6, color: 0xff6a1a, intensity: 2900, distance: 210 });
+    // Deck-level emitters across the whole basin floor. These are what make the
+    // ingot moulds, ladle cars and crust islands read as OBJECTS ON a hot floor
+    // rather than black cut-outs pasted over a glowing plate.
+    emit(W, -7, PIT.floorY + 3.0, 11, 0xff6a1a, 4400, 190);
+    emit(W, 24, PIT.floorY + 2.6, -21, 0xff5a12, 2600, 155);
+    emit(W, 2, PIT.floorY + 2.6, -36, 0xff6a20, 2600, 155);
+    emit(W, -16, PIT.floorY + 2.4, 24, 0xff5a12, 2200, 145);
+    emit(W, 30, PIT.floorY + 2.4, 6, 0xff6a1a, 1700, 125);
   }
 
   // --- wrecked ladle cars on the floor (cover) ---
   for (const [lx, lz, ang, tip] of [[-33, 22, 0.7, 0.9], [39, -19, 2.4, -0.35]]) {
     B.push(T(lx, PIT.floorY, lz, 0, ang, 0));
-    B.add('rust', G.box(15, 2.2, 7), T(0, 1.2, 0));
+    B.add('steel', G.box(15, 2.2, 7), T(0, 1.2, 0));
     for (const bx of [-5, 5]) {
       B.add('steelD', G.cyl(1.1, 1.1, 6.4, 10), T(bx, 1.1, 0, 0, 0, Math.PI / 2));
     }
     B.push(T(0, 3.4, 0, tip, 0, 0));
-    B.add('rust', G.cyl(5.0, 3.6, 9, 14), T(0, 4.6, 0));
+    B.add('steel', G.cyl(5.0, 3.6, 9, 14), T(0, 4.6, 0));
     B.add('rust', G.torus(5.1, 0.55, 16, 5), T(0, 9.1, 0, Math.PI / 2, 0, 0));
     B.add('rust', G.box(2.0, 1.4, 12), T(0, 6.5, 0));
     B.add('ember', G.cyl(3.4, 3.4, 0.4, 14), T(0, 8.9, 0));
@@ -221,7 +245,7 @@ export function buildBasin(W) {
       const x = cx + dx * (i - (n - 1) / 2), z = cz + dz * (i - (n - 1) / 2);
       const h = 5.4 + (i % 2) * 1.4;
       B.push(T(x, PIT.floorY, z, 0, ang + (rnd() - 0.5) * 0.16, 0));
-      B.add('rust', G.chamfer(9.0, h, 7.4, 0.4), T(0, h / 2, 0));
+      B.add('steel', G.chamfer(9.0, h, 7.4, 0.4), T(0, h / 2, 0));
       B.add('steelD', G.chamfer(9.8, 1.0, 8.2, 0.3), T(0, 0.5, 0));
       B.add('steelD', G.chamfer(9.6, 0.8, 8.0, 0.25), T(0, h - 0.3, 0));
       B.add('dark', G.box(6.6, 0.5, 5.2), T(0, h + 0.1, 0));
@@ -294,7 +318,9 @@ export function buildSmelter(W) {
       // tap apron + rubble
       B.add('concD', G.chamfer(22, 1.0, 15, 0.3), T(fx, 0.5, FACE_Z + 9));
       W.vents.push({ x: fx, y: 20, z: FACE_Z + 8, w: 18, h: 16 });
-      W.lights.push({ x: fx, y: 8, z: FACE_Z + 10, color: 0xff6a20, intensity: 420, distance: 78 });
+      // mouth itself, then the tap apron pooling out in front of it
+      emit(W, fx, 6.6, FACE_Z + 3.0, 0xff6a20, 1100, 125);
+      emit(W, fx, 1.6, FACE_Z + 12, 0xff5410, 520, 80);
     }
 
     // --- window strips ---
@@ -302,6 +328,8 @@ export function buildSmelter(W) {
     B.add('windows', G.box(w - 40, 3.0, 1.0), T(0, 49.5, FACE_Z + 1.3));
     B.add('steelD', G.box(w - 26, 0.5, 1.6), T(0, 35.6, FACE_Z + 1.4));
     B.add('steelD', G.box(w - 26, 0.5, 1.6), T(0, 31.4, FACE_Z + 1.4));
+    // window strips are a light SOURCE, not a decal: they wash the catwalks
+    for (const wx of [-64, 0, 64]) emit(W, wx, 33.5, FACE_Z + 5.0, 0xffc47a, 300, 52);
 
     // --- face catwalks (verticality) ---
     for (const [cy, cw] of [[24, 226], [40, 200], [52, 168]]) {
@@ -945,6 +973,7 @@ export function buildSouth(W) {
       B.add('rust', G.chamfer(20, 12, 0.5, 0.2), T(r * 0.5, 7, r * 0.86, 0.5, -0.7, 0.4));
       B.add('rust', G.chamfer(16, 9, 0.5, 0.2), T(r * 0.2, 3.6, r * 1.35, 1.1, 0.4, 0));
       B.add('ember', G.cyl(r * 1.5, r * 1.5, 0.3, 20), T(0, 0.6, 0));
+      emit(W, x, gy + 2.2, z, 0xff4a12, 700, 95);
       col.addCyl(x, gy + h / 2, z, r * 0.9, h);
     }
     // base pipework
@@ -1029,6 +1058,8 @@ export function buildSouth(W) {
       B.add('windows', G.box(84, 3.4, 1.0), T(cx, y, cz + 18.6));
       B.add('concD', G.chamfer(96, 1.4, 38, 0.3), T(cx, y + 2.6, cz));
     }
+    emit(W, cx, 13, cz - 22, 0xffc47a, 340, 58);
+    emit(W, cx, 13, cz + 22, 0xffc47a, 340, 58);
     B.add('conc', G.chamfer(20, 58, 20, 0.6), T(cx + 52, 29, cz));
     col.addSolid(cx + 52, 29, cz, 10, 29, 10);
     B.add('concD', G.chamfer(24, 2.6, 24, 0.4), T(cx + 52, 59, cz));
@@ -1227,6 +1258,38 @@ export function buildPerimeter(W) {
   // Two keys ('far' / 'farD') so the skyline has value steps instead of one
   // flat band, and a deeper shape vocabulary so it has a profile worth
   // looking at. Still only two draw calls for the entire horizon.
+  //
+  // SILHOUETTE BREAKERS. A prismatic mass at 900 u is a rectangle: fog eats the
+  // shading, so the ONLY information left is the outline. Every far structure
+  // therefore gets 3-5 small parasites at 2-5 % of its own height — vent masts,
+  // roof ledges, capped stubs, a guy wire post — hung on its top edge so the
+  // profile has serration instead of one straight line. They merge into the
+  // same two buffers, so the horizon still costs exactly two draw calls.
+  const breakers = (K, w, h, d, n = 4) => {
+    for (let k = 0; k < n; k++) {
+      const s = h * (0.020 + rnd() * 0.030);       // 2-5 % of building height
+      const px = (rnd() - 0.5) * w * 0.94;
+      const pz = (rnd() - 0.5) * d * 0.86;
+      const kind = rnd();
+      if (kind < 0.40) {
+        // vent mast with a cap
+        F.add(K, G.box(Math.max(1.4, s * 0.16), s * 5.2, Math.max(1.4, s * 0.16)), T(px, h + s * 2.6, pz));
+        F.add(K, G.box(s * 0.7, s * 0.4, s * 0.7), T(px, h + s * 5.2, pz));
+      } else if (kind < 0.70) {
+        // roof-edge ledge / crane rail overhanging the face
+        F.add(K, G.box(w * (0.16 + rnd() * 0.2), s * 0.8, d * 0.14 + s),
+          T(px, h - s * 0.4, (rnd() < 0.5 ? 1 : -1) * (d * 0.5 + s * 0.3)));
+      } else if (kind < 0.88) {
+        // capped stack stub
+        F.add(K, G.cyl(s * 0.5, s * 0.62, s * 3.4, 7), T(px, h + s * 1.7, pz));
+        F.add(K, G.cyl(s * 0.78, s * 0.78, s * 0.34, 7), T(px, h + s * 3.4, pz));
+      } else {
+        // stair/lift head box breaking one corner of the parapet
+        F.add(K, G.box(s * 1.7, s * 2.4, s * 1.5), T(w * 0.42 * (rnd() < 0.5 ? 1 : -1), h + s * 1.2, pz));
+      }
+    }
+  };
+
   for (let i = 0; i < 58; i++) {
     const a = rnd() * Math.PI * 2;
     const r = 610 + rnd() * 940;
@@ -1244,14 +1307,24 @@ export function buildPerimeter(W) {
         F.add(K, G.cyl(3.5, 4.6, h * (0.5 + rnd() * 0.7), 8),
           T(w * (0.24 + k * 0.09), h * (1.0 + (0.5 + rnd() * 0.7) * 0.5), d * (rnd() - 0.5) * 0.5));
       }
+      breakers(K, w, h, d, 5);
     } else if (t < 0.44) {
       // chimney cluster on a shared plinth
       const n = 2 + ((rnd() * 3) | 0);
-      F.add(K, G.box(30 + rnd() * 40, 22 + rnd() * 20, 26 + rnd() * 30), T(0, 12, 0));
+      const pw = 30 + rnd() * 40, ph = 22 + rnd() * 20, pd = 26 + rnd() * 30;
+      F.add(K, G.box(pw, ph, pd), T(0, 12, 0));
+      let tallest = ph;
       for (let k = 0; k < n; k++) {
         const h = 130 + rnd() * 220, r2 = 7 + rnd() * 8;
         F.add(K, G.cyl(r2 * 0.72, r2, h, 10), T((k - (n - 1) / 2) * 30, h / 2 + 16, (rnd() - 0.5) * 20));
+        // flare tip + a lateral gantry off the shaft: a bare cylinder at 900 u
+        // is a pencil line, and a pencil line has no scale.
+        F.add(K, G.cyl(r2 * 1.25, r2 * 1.25, h * 0.028, 8), T((k - (n - 1) / 2) * 30, h + 16, (rnd() - 0.5) * 20));
+        F.add(K, G.box(r2 * 4.6, h * 0.016, r2 * 0.7),
+          T((k - (n - 1) / 2) * 30, 16 + h * (0.55 + rnd() * 0.3), (rnd() - 0.5) * 20));
+        tallest = Math.max(tallest, h + 16);
       }
+      breakers(K, pw, tallest * 0.34, pd, 3);
     } else if (t < 0.62) {
       // hyperbolic cooling tower
       const h = 130 + rnd() * 130, rb = 34 + rnd() * 26, rw = rb * 0.52;
@@ -1262,6 +1335,16 @@ export function buildPerimeter(W) {
       }
       F.add(K, G.lathe(pts, 18), T(0, 0, 0));
       F.add(K, G.cyl(rb * 1.06, rb * 1.12, 12, 18), T(0, 6, 0));
+      // rim lip + two service masts on the throat: without them the tower is a
+      // perfect revolve, which is the one shape nothing industrial ever is.
+      F.add(K, G.cyl(rw * 1.10, rw * 1.10, h * 0.022, 18), T(0, h - h * 0.011, 0));
+      for (let k = 0; k < 2; k++) {
+        const s = h * (0.022 + rnd() * 0.026);
+        const aa = rnd() * Math.PI * 2;
+        F.add(K, G.box(Math.max(1.3, s * 0.2), s * 4.2, Math.max(1.3, s * 0.2)),
+          T(Math.cos(aa) * rw * 0.86, h + s * 2.1, Math.sin(aa) * rw * 0.86));
+      }
+      breakers(K, rb * 1.3, h * 0.42, rb * 1.3, 2);
     } else if (t < 0.76) {
       // gas holder + spherical storage
       const rr = 30 + rnd() * 26, h = 40 + rnd() * 50;
@@ -1271,6 +1354,10 @@ export function buildPerimeter(W) {
       for (let k = 0; k < 4; k++) {
         F.add(K, G.box(2.0, rr * 0.5, 2.0), T(rr * 2.3 + Math.cos(k * 1.57) * rr * 0.3, rr * 0.24, rr * 0.5 + Math.sin(k * 1.57) * rr * 0.3));
       }
+      // crown railing + centre mast on the dome
+      F.add(K, G.cyl(rr * 0.98, rr * 0.98, (h + rr) * 0.020, 16), T(0, h + rr * 0.16, 0));
+      F.add(K, G.box(2.2, (h + rr) * 0.10, 2.2), T(0, h + rr * 0.95, 0));
+      breakers(K, rr * 1.6, h, rr * 1.6, 3);
     } else if (t < 0.9) {
       // long shed with a saw-tooth roof and two vent stacks
       const w = 120 + rnd() * 160, h = 34 + rnd() * 46, d = 30 + rnd() * 40;
@@ -1282,6 +1369,7 @@ export function buildPerimeter(W) {
       }
       F.add(K, G.box(w * 0.14, h * 2.4, 14), T(-w * 0.3, h * 1.2, 0));
       F.add(K, G.box(w * 0.14, h * 1.8, 14), T(w * 0.34, h * 0.9, 0));
+      breakers(K, w, h * 1.35, d, 5);
     } else {
       // lattice transmission mast — a thin spike to break the block rhythm
       const h = 150 + rnd() * 160, wb = 16 + rnd() * 10;
@@ -1293,6 +1381,8 @@ export function buildPerimeter(W) {
       }
       F.add(K, G.box(wb * 2.6, 1.6, 2.0), T(0, h * 0.86, 0));
       F.add(K, G.box(wb * 2.2, 1.6, 2.0), T(0, h * 0.72, 0));
+      F.add(K, G.box(wb * 1.7, 1.4, 2.0), T(0, h * 0.94, 0));
+      F.add(K, G.box(1.2, h * 0.09, 1.2), T(0, h * 1.045, 0));
     }
     F.pop();
   }

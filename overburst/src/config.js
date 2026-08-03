@@ -131,35 +131,86 @@ export const CFG = {
 
   // ---- presentation (owned by core/postfx.js) ----
   FX: {
-    BLOOM_STRENGTH: 0.70,
-    BLOOM_RADIUS: 0.42,    // tighter than default: a halo, not a haze
+    BLOOM_STRENGTH: 0.84,
+    BLOOM_RADIUS: 0.20,    // LOW on purpose. UnrealBloom's lerpBloomFactor()
+                           // mirrors the mip weights around 0.6, so a high
+                           // radius gives the 31x17 bottom mip nearly as much
+                           // say as the sharp one — and that mip's blur
+                           // iso-contour is the octagon that showed up around
+                           // bright cores. Low radius + the ramp below keeps
+                           // the core sharp and round.
+    BLOOM_MIPS: [1.00, 0.68, 0.40, 0.20, 0.08],
     BLOOM_THRESHOLD: 0.82, // DISPLAY-referred; postfx converts to the linear
                            // scene cutoff so only real emissives bloom
     EXPOSURE: 1.02,
     VIGNETTE: 0.30,
     EDGE_DESAT: 0.12,
     CA: 0.0013,            // chromatic aberration (~0.2 % at the corners)
+    CA_MIX: 0.40,          // how much of the fringe survives inside a streak
     GRAIN: 0.026,
+    HI_DITHER: 0.007,      // highlight-only dither — dissolves the 8-bit
+                           // contour ring that made bloom cores read as a
+                           // flat-topped polygon
     SCAN: 0.020,           // horizontal scan modulation depth
-    SPEED_BLUR: 0.055,     // radial blur reach at setSpeedLines(1)
+    SPEED_BLUR: 0.240,     // radial blur reach at setSpeedLines(1), BEFORE the
+                           // depth weight below (which averages ~0.3)
+    SPEED_NEAR: 60,        // world units. weight = FLOOR + (1-FLOOR)*(N/(d+N))^2
+                           // -> 0.584 at 20 u (ground at the mech's feet),
+                           //    0.076 at 300 u, 0.050 at the sky: near ground
+                           //    smears 7.6x harder than mid-field and 11.6x
+                           //    harder than the horizon
+    SPEED_FLOOR: 0.05,     // the sky still creeps, it does not freeze
+    SPEED_PEAK: 0.22,      // how much of the streak keeps its brightest tap
     SHAKE_SCALE: 1.0,
-    ADAPTIVE: true,        // rolling frame-time fallback (bloom res only)
+    ADAPTIVE: true,        // rolling frame-time fallback (bloom res + AO only)
+
+    // Nothing in this world resolves to a void. AC6 shadows are deep but the
+    // overcast smog sky always bounces something back into them. Applied after
+    // every multiplicative screen effect so no vignette/grain combination can
+    // undo it. 0.026 display ~= RGB 7.
+    BLACK_FLOOR: 0.026,
+    BLACK_FLOOR_KNEE: 0.075,
+
+    // ---- ambient occlusion (half-res, from the shared depth buffer) ----
+    // The mech is 11 units tall, so RADIUS 2.8 is roughly one shin: the scale
+    // at which foot/ground, knee, backpack and pillar-base contacts read.
+    AO: {
+      ENABLED: true,
+      SCALE: 0.5,          // render resolution fraction
+      SAMPLES: 12,
+      RADIUS: 2.8,
+      BIAS: 0.035,
+      INTENSITY: 1.25,
+      POWER: 1.40,
+      AMOUNT: 0.95,        // final blend weight in the composite
+      FADE_START: 260,     // world units — beyond this AO tapers out so the
+      FADE_END: 620,       // hazed background does not read as grime
+      EMISSIVE_LO: 1.6,    // linear luma above which AO backs off (a furnace
+      EMISSIVE_HI: 6.0,    // mouth is not occluded by its own wall)
+    },
 
     // Colour grade — this is what pulls the frame back to ASH-GREY
     // INDUSTRIAL. Applied in display/gamma space after the filmic tonemap.
     GRADE: {
       gain:       [0.985, 0.992, 1.018],   // red down / blue up: kills the sherbet
-      offset:     [0.003, 0.005, 0.012],   // cool lift in the deep shadows
+      offset:     [0.008, 0.010, 0.020],   // cool lift in the deep shadows
       power:      [1.000, 1.000, 0.990],
       contrast:   1.085,
+      contrastToe: 0.120,                  // below this the contrast fades out
+                                           // instead of driving values negative
       saturation: 0.820,
       shadowTint: [0.910, 0.960, 1.075],   // cool shadows
       highTint:   [1.078, 1.006, 0.902],   // warm key in the highlights
       shadowAmt:  0.42,
       highAmt:    0.52,
+      lift:       0.052,                   // sky bounce into the shadows
+      liftKnee:   0.210,
+      liftTint:   [0.780, 0.920, 1.170],
       shoulder:   0.860,                   // highlight rolloff knee
       white:      1.000,                   // asymptote — nothing ever clips
-      bleach:     0.320,                   // how much the very top goes white
+      bleach:     0.260,                   // how much the very top goes white
+      kneeLin:    3.000,                   // log knee on the LINEAR peak: keeps
+      logK:       0.700,                   // a gradient across a bloom core
     },
   },
 

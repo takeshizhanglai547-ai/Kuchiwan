@@ -27,6 +27,12 @@ const OB_MARK = { active: '▸', done: '✓', failed: '×', pending: '·' };
 const QB_PIPS = 6;
 const RANK = { info: 0, warn: 1, danger: 2 };
 
+/** Printed width of a counter = digit count of its maximum (min 1, max 5). */
+function digits(max) {
+  const n = Math.max(0, Math.floor(max || 0));
+  return Math.min(5, String(n).length);
+}
+
 export class CombatHud {
   constructor(ctx) {
     this.ctx = ctx;
@@ -53,7 +59,7 @@ export class CombatHud {
           '<div class="w-ic">' + (WEAPON_ICONS[S.key] || '') + '<s class="chg"></s></div>' +
           '<div class="w-slot">' + S.tag + '</div>' +
           '<div class="w-name">' + (w.name || '--') + '</div>' +
-          '<div class="w-amt"><b></b><small></small></div>' +
+          '<div class="w-amt"><b></b><small></small><em class="lk"></em></div>' +
           '<div class="w-sweep"><i></i></div>' +
         '</div>';
     }
@@ -90,7 +96,11 @@ export class CombatHud {
         '</div>' +
       '</div>' +
 
-      /* ---- bottom-left vitals ---- */
+      /* ---- bottom-left vitals ----
+         One 3-column grid: [label gutter | gauge | numeric rail].  Every
+         gauge is placed in column 2, so AP / ACS / EN / QB / KIT share one
+         left edge AND one right edge.  KIT gets its own row: it is an AP
+         resource, and it used to collide with the QB pip strip. */
       '<div id="vitals">' +
         '<div class="v-head">' +
           '<span class="tag">AP</span><span class="num">0</span><span class="den">/0</span>' +
@@ -101,17 +111,15 @@ export class CombatHud {
         '</div></div>' +
         '<div id="p-acs" class="bar"><div class="bar-in"><i class="fill"></i></div>' +
           '<div id="p-stag" class="hidden">ACS FAILURE</div></div>' +
-        '<div class="en-row">' +
-          '<span class="tag">EN</span>' +
-          '<div id="en-bar" class="bar"><div class="bar-in"><i class="fill"></i></div>' +
-            '<div id="en-ovl" class="hidden">EN OVERLOAD</div></div>' +
-          '<span class="num mono">0</span>' +
-        '</div>' +
-        '<div class="qb-row">' +
-          '<span class="tag">QB</span>' +
-          '<div id="qb-pips">' + pips + '</div>' +
-          '<div class="kits"><span>KIT</span>' + kits + '</div>' +
-        '</div>' +
+        '<span class="tag r-en">EN</span>' +
+        '<div id="en-bar" class="bar"><div class="bar-in"><i class="fill"></i></div>' +
+          '<div id="en-ovl" class="hidden">EN OVERLOAD</div></div>' +
+        '<span id="en-num" class="vnum mono">0</span>' +
+        '<span class="tag r-qb">QB</span>' +
+        '<div id="qb-pips">' + pips + '</div>' +
+        '<span class="tag r-kit">KIT</span>' +
+        '<div class="kits">' + kits + '</div>' +
+        '<span id="kit-num" class="vnum mono">0</span>' +
       '</div>' +
 
       /* ---- bottom-right weapons ---- */
@@ -145,21 +153,29 @@ export class CombatHud {
     this.acsFill = q(el, '#p-acs .fill');
     this.acsStag = q(el, '#p-stag');
     this.enFill = q(el, '#en-bar .fill');
-    this.enNum = q(el, '.en-row .num');
+    this.enNum = q(el, '#en-num');
     this.enOvl = q(el, '#en-ovl');
     this.qbPips = q(el, '#qb-pips').children;
     this.kitPips = q(el, '#vitals .kits').querySelectorAll('s');
+    this.kitNum = q(el, '#kit-num');
 
     this.wRows = [];
     const rowEls = el.querySelectorAll('.w-row');
     for (let i = 0; i < rowEls.length; i++) {
       const r = rowEls[i];
+      const cfg = CFG.WEAPONS[SLOTS[i].cfg] || {};
+      // Field widths are the digit count of each field's MAXIMUM, resolved
+      // once here. Padding a 3-digit reserve to 2 printed "00/480" and let
+      // the numerals slide sideways every time a count crossed 100.
       this.wRows.push({
-        key: SLOTS[i].key, cfg: CFG.WEAPONS[SLOTS[i].cfg] || {}, el: r,
+        key: SLOTS[i].key, cfg, el: r,
         amt: r.querySelector('.w-amt b'),
         sub: r.querySelector('.w-amt small'),
+        lk: r.querySelector('.w-amt .lk'),
         sweep: r.querySelector('.w-sweep i'),
         chg: r.querySelector('.chg'),
+        wA: digits(SLOTS[i].key === 'missile' ? cfg.count : SLOTS[i].key === 'rifle' ? cfg.magazine : cfg.ammo),
+        wB: digits(cfg.ammo),
       });
     }
 
@@ -324,6 +340,8 @@ export class CombatHud {
     // --- repair kits ---
     const kits = typeof p.repairKits === 'number' ? p.repairKits : (CP.REPAIR_KITS || 0);
     for (let i = 0; i < this.kitPips.length; i++) tog(this.kitPips[i], 'on', i < kits);
+    setText(this.kitNum, String(Math.max(0, kits)));
+    tog(this.vit, 'nokit', kits <= 0);
   }
 
   // ---- weapon panel -------------------------------------------------
@@ -332,15 +350,15 @@ export class CombatHud {
     for (let i = 0; i < this.wRows.length; i++) {
       const r = this.wRows[i];
       const s = (W && W[r.key]) || null;
-      let primary = '--', sub = '', ready = false, empty = false, reloading = false;
+      let primary = '--', sub = '', lk = '', ready = false, empty = false, reloading = false;
       let sweep = 1, charge = 0;
 
       if (r.key === 'rifle') {
         const mag = s && typeof s.mag === 'number' ? s.mag : (r.cfg.magazine || 0);
         const ammo = s && typeof s.ammo === 'number' ? s.ammo : (r.cfg.ammo || 0);
         reloading = !!(s && s.reloading);
-        primary = pad(Math.max(0, mag), 2);
-        sub = '/' + ammo;
+        primary = pad(Math.max(0, mag), r.wA);
+        sub = '/' + pad(Math.max(0, ammo), r.wB);
         empty = ammo <= 0 && mag <= 0;
         ready = !reloading && mag > 0;
         sweep = this._sweep('rifle', s, reloading, r.cfg.reloadTime || 1, dt);
@@ -356,17 +374,20 @@ export class CombatHud {
         const cap = r.cfg.count || 6;
         const racked = s && typeof s.racked === 'number' ? s.racked : Math.min(cap, ammo);
         reloading = !!(s && s.reloading);
-        primary = pad(Math.max(0, racked), 2);
-        sub = '/' + ammo;
+        primary = pad(Math.max(0, racked), r.wA);
+        sub = '/' + pad(Math.max(0, ammo), r.wB);
         empty = ammo <= 0;
         ready = !reloading && ammo > 0;
         sweep = this._sweep('missile', s, reloading, r.cfg.reload || 1, dt);
+        // lock count lives in its own fixed-width cell — appending it to the
+        // ammo string used to widen the whole panel column mid-salvo
         const locks = s && s.locks && s.locks.length ? s.locks.length : 0;
-        if (locks) sub = '/' + ammo + '  x' + locks;
+        if (locks) lk = '×' + locks;
       } else { // cannon
         const ammo = s && typeof s.ammo === 'number' ? s.ammo : (r.cfg.ammo || 0);
         const cd = s && typeof s.cooldown === 'number' ? Math.max(0, s.cooldown) : 0;
-        primary = pad(Math.max(0, ammo), 2);
+        primary = pad(Math.max(0, ammo), r.wA);
+        sub = '/' + pad(r.cfg.ammo || 0, r.wB);
         empty = ammo <= 0;
         ready = cd <= 0.001 && ammo > 0;
         sweep = cd <= 0 ? 1 : clamp01(1 - cd / (r.cfg.cooldown || 1));
@@ -377,6 +398,7 @@ export class CombatHud {
 
       setText(r.amt, primary);
       setText(r.sub, sub);
+      setText(r.lk, lk);
       setSX(r.sweep, sweep);
       setSY(r.chg, charge);
       tog(r.el, 'ready', ready);

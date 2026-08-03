@@ -190,11 +190,17 @@ export function buildGround(materials) {
   meshes.push(apronMesh);
 
   // ---- basin floor: vitrified slag crust --------------------------
+  // Vertex tint is an ALBEDO multiplier, so it must stay under 1: the old
+  // (1 + heat*1.6) pushed the middle of the pad to ~2.9x, i.e. a surface that
+  // reflects three times the light falling on it. That plus an over-driven
+  // emissive is why the pad out-read every prop standing on it. Cooled slag
+  // crust is dark grey-brown; the heat now only *tints* it, the glow comes
+  // from the emissive veins and the molten runners laid on top.
   const floor = discMesh(PIT.floorR + 0.1, 18, 96, 26, (x, z, r, c) => {
     const n = fbm2(x, z, 46, 3, 137);
     const heat = clamp(1 - r / 46, 0, 1);
-    const v = 0.48 + n * 0.66;
-    c.setRGB(v * (1 + heat * 1.6), v * (1 + heat * 0.44), v * (1 - heat * 0.12));
+    const v = 0.42 + n * 0.44;
+    c.setRGB(v * (1 + heat * 0.30), v * (1 - heat * 0.06), v * (1 - heat * 0.26));
   });
   const floorMesh = new THREE.Mesh(floor, materials.slag);
   floorMesh.receiveShadow = true;

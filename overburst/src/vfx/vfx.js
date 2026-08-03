@@ -59,7 +59,7 @@ import { CFG } from '../config.js';
 import { rand, clamp } from '../util/math.js';
 import {
   makeShared, SparkField, SmokeField, FireField, SpriteField, DecalField, PlumeField,
-  ShockField,
+  ShockField, fitGroundProfile,
 } from './fields.js';
 import { CELL } from './vfxTextures.js';
 import { RibbonPool } from './ribbons.js';
@@ -141,7 +141,10 @@ const _ko = { birth: 0, life: 1, width: 0.1, drag: 0.6, gravity: 40, floorY: -1e
 const _mo = { birth: 0, life: 1, size0: 1, size1: 2, rot: 0, rotSpd: 0, drag: 1, gravity: 0, r: 0.1, g: 0.1, b: 0.1, opacity: 1 };
 const _fo = { birth: 0, life: 1, size0: 1, size1: 2, rot: 0, rotSpd: 0, drag: 2, gravity: -2, heat: 1, intensity: 1, cool: 0.55 };
 const _do = { birth: 0, life: 12, size: 2, r: 1, g: 1, b: 1, opacity: 0.85 };
-const _wo = { birth: 0, life: 1, r0: 1, r1: 10, thickness: 0.05, mode: 0, ease: 2.6, r: 1, g: 1, b: 1, intensity: 1 };
+const _wo = { birth: 0, life: 1, r0: 1, r1: 10, thickness: 0.05, mode: 0, ease: 2.6, r: 1, g: 1, b: 1, intensity: 1, grd: null };
+// ground-drape harmonic fit + a per-spark colour scratch: both reused forever
+const _grd = new Float32Array(7);
+const _sc = [0, 0, 0];
 
 function toVec(a, out) {
   if (!a) return out.set(0, 0, 0);
@@ -263,6 +266,9 @@ export class VFX {
     this.lights = new LightPool(scene, CAP.LIGHTS);
     this.ghosts = new GhostPool(scene, 3, CFG.COLORS.PLAYER_ACCENT);
 
+    // bound once so the drape fit never allocates a closure per explosion
+    this._sampleGround = (x, z, y) => this._groundAt(x, z, y);
+
     // debris hooks — bound once, never allocated again
     this._hooks = {
       ground: (x, z, y) => this._groundAt(x, z, y),
@@ -343,6 +349,7 @@ export class VFX {
       if (fog.density !== undefined) this.shared.uFogDensity.value = fog.density;
     }
     if (ctx.world && ctx.world.sunDir) this.shared.uSunDir.value.copy(ctx.world.sunDir);
+    this._syncHot();
 
     if (!this.ghosts.src && ctx.player && ctx.player.root) this.ghosts.register(ctx.player.root);
     this.ghosts.tick();
@@ -476,14 +483,28 @@ export class VFX {
     this._spr(_v, CELL.CORONA, 1.2 * s, 2.4 * s, 0.115, C.flashWhite, 2.4, { mul: armour ? 0.9 : 0.55 });
     this._spr(_v, CELL.BURST, 2.4 * s, 4.0 * s, 0.175, hot, 2.2, { spin: rand(0, 6.28), mul: armour ? 1.0 : 0.62 });
 
-    // 8-20 arcing sparks that bounce off the surface they landed on
+    // 8-20 arcing sparks that bounce off the surface they landed on.
+    // Same spread discipline as the detonation: a fifth of them are heavy
+    // fragments that outlive the rest, and every one gets its own brightness
+    // and colour temperature. A hit that throws twelve identical dashes is
+    // the single most "browser game" thing a frame can contain.
     const n = armour ? (12 + (Math.random() * 8) | 0) : (8 + (Math.random() * 7) | 0);
     for (let i = 0; i < n; i++) {
       this._cone(_dir, 1.15, _v2);
-      const sp = rand(9, 52) * s;
+      const heavy = Math.random() < 0.22;
+      const sp = rand(9, 52) * s * (heavy ? 0.55 : 1);
+      const warm = Math.random();
+      const bright = rand(0.35, 1.30);
+      _sc[0] = (hot[0] * (0.5 + warm * 0.5) + (1 - warm) * 1.2) * bright;
+      _sc[1] = (hot[1] * (0.35 + warm * 0.65) + (1 - warm) * 0.7) * bright;
+      _sc[2] = (hot[2] * (0.25 + warm * 0.75) + (1 - warm) * 0.4) * bright;
       this._spark(_v, _v2.x * sp, _v2.y * sp + rand(2, 9), _v2.z * sp, {
-        life: rand(0.22, 0.72), width: rand(0.055, 0.13) * s, drag: 3.0,
-        gravity: 46, stretch: 0.026, color: hot, floorY,
+        life: heavy ? rand(0.55, 1.35) : rand(0.12, 0.55),
+        width: (heavy ? rand(0.10, 0.20) : rand(0.038, 0.11)) * s,
+        drag: heavy ? rand(0.9, 1.9) : rand(2.4, 4.4),
+        gravity: heavy ? rand(30, 48) : rand(44, 72),
+        stretch: heavy ? rand(0.014, 0.026) : rand(0.024, 0.050),
+        color: _sc, floorY,
       });
     }
 
@@ -562,18 +583,22 @@ export class VFX {
     //     explosion scale is just a peach veil dumped into the bloom pass.
     this._spr(_v, CELL.CORONA, R * 0.22, R * 0.50, 0.24 + s * 0.26, tint || C.coreHot, 2.0, { mul: 0.42 * power });
 
-    // (c) THE TWO FRONTS. Real geometry, not a billboard: a flat ring lying on
-    //     the ground and a spherical condensation shell around the charge.
+    // (c) THE FRONTS. Real geometry, not a billboard.
+    //     ONE ground front, and it is a SOFT DUST WALL, not a shock line. Two
+    //     coplanar hard-edged discs read as concentric circles painted on the
+    //     deck, and a perfect circle is a lie on geometry that has steps,
+    //     ramps and rubble in it — so the survivor is draped over a 3-harmonic
+    //     fit of the actual deck height around the blast.
     const ringCol = tint || (boss ? [3.6, 1.1, 5.4] : C.ringHot);
-    this._shockRing(_v.x, gy + 0.35, _v.z, UP, {
-      life: 0.36 + s * 0.18, r0: R * 0.30, r1: R * 2.4,
-      thickness: 0.026, ease: 2.9, color: ringCol, intensity: 0.95 * power,
-    });
-    // a second, slower, wider dust-front behind the first
-    this._shockRing(_v.x, gy + 0.20, _v.z, UP, {
-      life: 0.60 + s * 0.35, r0: R * 0.55, r1: R * 2.8,
-      thickness: 0.10, ease: 2.2, color: [0.85, 0.42, 0.16], intensity: 0.12,
-    });
+    const rFront = R * 2.5;
+    if (low) {
+      const grd = this._groundProfile(_v.x, _v.z, gy, rFront * 0.72);
+      this._shockRing(_v.x, gy + 0.30 + R * 0.035, _v.z, UP, {
+        life: 0.52 + s * 0.30, r0: R * 0.34, r1: rFront,
+        thickness: 0.30, ease: 2.5, dust: true, grd,
+        color: [1.75, 0.98, 0.50], intensity: 1.05 * power,
+      });
+    }
     // Condensation shell — white, thin, GONE FAST and never wider than about
     // 1.5 R. A shell that outgrows its own distance to the lens turns inside
     // out and paints a dome over the entire frame.
@@ -598,10 +623,21 @@ export class VFX {
     // Three tiers, emitted cold-first. The analytic integrator means TOTAL
     // TRAVEL = v0/drag, so drag is picked against the distance each tier
     // should cover. Positive gravity == buoyancy: the ball climbs as it cools.
-    const nf = Math.max(14, Math.min(56, (20 + 14 * s) * q) | 0);
+    // FEWER, BIGGER, MORE OVERLAPPING. Forty small billows is a bunch of
+    // grapes however good each one looks; the mass has to fuse into one
+    // silhouette with a ragged edge, and that means each billow has to be
+    // wider than the gap to its neighbour.
+    const nf = Math.max(11, Math.min(42, (15 + 10 * s) * q) | 0);
     const nOuter = (nf * 0.40) | 0;
     const nBody = (nf * 0.42) | 0;
     const nCore = Math.max(3, nf - nOuter - nBody);
+
+    // MUSHROOM BIAS. A blast does not expand as a symmetric ball: the front
+    // punches OUTWARD off the deck, the buoyant mass then turns UP and rolls
+    // over itself into a cap sitting on a stem. Every tier below therefore
+    // takes its horizontal speed from the sampled direction but its vertical
+    // speed from a separate, up-biased term, and rides a large positive
+    // gravity (= buoyancy). The result climbs and widens instead of inflating.
 
     // (a) outer shell — big, slow, low heat, LONG life. This is the dark
     //     cooling mass that gives the ball a ragged silhouette. It is also
@@ -609,13 +645,15 @@ export class VFX {
     for (let i = 0; i < nOuter; i++) {
       this._sphere(_v2);
       const d = rand(0.55, 1.15);
+      // bias the spawn shell upward: the cap carries most of the mass
       _v3.copy(_v).addScaledVector(_v2, R * 0.50 * d);
-      const sp = R * rand(1.0, 2.4);
-      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.55 + R * rand(0.30, 0.85), _v2.z * sp, {
+      _v3.y += R * rand(0.05, 0.34);
+      const sp = R * rand(1.1, 2.6);
+      this._fire(_v3, _v2.x * sp, Math.abs(_v2.y) * sp * 0.30 + R * rand(0.55, 1.35), _v2.z * sp, {
         birth: now + rand(0, 0.10),
         life: T * rand(1.25, 2.05),
-        size0: R * rand(0.38, 0.66), size1: R * rand(1.10, 1.85),
-        drag: rand(3.0, 4.6), gravity: rand(8, 18),
+        size0: R * rand(0.46, 0.80), size1: R * rand(1.45, 2.35),
+        drag: rand(3.0, 4.6), gravity: rand(16, 32),
         heat: rand(0.34, 0.58) * (boss ? 0.9 : 1),
         cool: rand(0.55, 0.85),
         intensity: rand(0.85, 1.0),
@@ -627,16 +665,36 @@ export class VFX {
       this._sphere(_v2);
       const d = rand(0.15, 0.85);
       _v3.copy(_v).addScaledVector(_v2, R * 0.40 * d);
+      _v3.y += R * rand(0.0, 0.26);
       const sp = R * rand(0.9, 2.6) * (1 - d * 0.30);
-      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.62 + R * rand(0.25, 0.80), _v2.z * sp, {
+      this._fire(_v3, _v2.x * sp, Math.abs(_v2.y) * sp * 0.34 + R * rand(0.45, 1.20), _v2.z * sp, {
         birth: now + rand(0, 0.07),
         life: T * rand(0.85, 1.55),
-        size0: R * rand(0.26, 0.50), size1: R * rand(0.75, 1.40),
-        drag: rand(3.4, 5.4), gravity: rand(10, 24),
+        size0: R * rand(0.32, 0.62), size1: R * rand(1.00, 1.85),
+        drag: rand(3.4, 5.4), gravity: rand(18, 38),
         heat: rand(0.72, 0.98) * (boss ? 0.9 : 1),
         cool: rand(0.45, 0.78),
         intensity: rand(0.88, 1.0),
         rotSpd: rand(-2.4, 2.4),
+      });
+    }
+    // (b2) THE STEM — a narrow, slow column under the cap. Without it the cap
+    //      is just a ball that drifted upward; the stem is what makes the
+    //      silhouette read as a detonation rooted where the charge went off.
+    const nst = Math.max(3, Math.min(9, (4 + 2.5 * s) * q) | 0);
+    for (let i = 0; i < nst; i++) {
+      const a = rand(0, 6.28), rr = R * rand(0.02, 0.26);
+      const f = i / nst;
+      _v3.set(_v.x + Math.cos(a) * rr, _v.y - R * (0.10 + f * 0.55), _v.z + Math.sin(a) * rr);
+      this._fire(_v3, Math.cos(a) * R * rand(0.15, 0.55), R * rand(0.9, 1.8), Math.sin(a) * R * rand(0.15, 0.55), {
+        birth: now + rand(0.02, 0.16) + f * 0.10,
+        life: T * rand(1.0, 1.7),
+        size0: R * rand(0.20, 0.36), size1: R * rand(0.52, 0.98),
+        drag: rand(2.2, 3.2), gravity: rand(22, 40),
+        heat: rand(0.50, 0.86) * (boss ? 0.9 : 1),
+        cool: rand(0.60, 0.92),
+        intensity: rand(0.80, 0.96),
+        rotSpd: rand(-1.4, 1.4),
       });
     }
     // (c) FIRE JETS — thin, fast, short-lived tongues punching out of the
@@ -655,20 +713,42 @@ export class VFX {
         intensity: 1.0, rotSpd: rand(-3.4, 3.4),
       });
     }
-    // (d) THE CORE — emitted LAST so it is drawn over its own shell. Small,
-    //     very hot, long enough to still be white a third of a second in.
+    // (d) THE HOT CORE — small, very hot, still white a third of a second in.
     for (let i = 0; i < nCore; i++) {
       this._sphere(_v2);
       _v3.copy(_v).addScaledVector(_v2, R * rand(0, 0.22));
       const sp = R * rand(0.3, 1.0);
-      this._fire(_v3, _v2.x * sp, _v2.y * sp * 0.4 + R * rand(0.20, 0.45), _v2.z * sp, {
+      this._fire(_v3, _v2.x * sp, Math.abs(_v2.y) * sp * 0.25 + R * rand(0.35, 0.75), _v2.z * sp, {
         birth: now + rand(0, 0.035),
         life: T * rand(0.95, 1.35),
-        size0: R * rand(0.34, 0.58), size1: R * rand(0.80, 1.30),
-        drag: rand(3.6, 4.8), gravity: rand(11, 19),
+        size0: R * rand(0.42, 0.70), size1: R * rand(1.00, 1.65),
+        drag: rand(3.6, 4.8), gravity: rand(16, 28),
         heat: rand(1.55, 2.05) * (boss ? 0.92 : 1),
         cool: rand(0.35, 0.60),
         intensity: 1.0, rotSpd: rand(-1.6, 1.6),
+      });
+    }
+    // (e) THE SOOT CORE — emitted LAST, so it draws OVER everything above it.
+    //     A real charge is fuel-rich at the heart: the white opens the frame
+    //     and is then choked off by unburnt carbon, leaving the fire on the
+    //     rolling outer surfaces where the oxygen is. That is what separates a
+    //     detonation from an expanding orange sphere, and it is also what
+    //     gives the ball its only genuinely dark values. Birth is delayed a
+    //     tenth of a second so the opening flash survives intact.
+    const nso = Math.max(5, Math.min(14, (6 + 4.0 * s) * q) | 0);
+    for (let i = 0; i < nso; i++) {
+      this._sphere(_v2);
+      _v3.copy(_v).addScaledVector(_v2, R * rand(0, 0.30));
+      _v3.y += R * rand(0.0, 0.20);
+      const sp = R * rand(0.4, 1.3);
+      this._fire(_v3, _v2.x * sp, Math.abs(_v2.y) * sp * 0.3 + R * rand(0.40, 0.95), _v2.z * sp, {
+        birth: now + T * rand(0.03, 0.11),
+        life: T * rand(1.10, 1.75),
+        size0: R * rand(0.34, 0.58), size1: R * rand(0.88, 1.45),
+        drag: rand(3.0, 4.2), gravity: rand(16, 30),
+        heat: rand(0.02, 0.15),
+        cool: rand(0.22, 0.42),
+        intensity: rand(0.88, 1.0), rotSpd: rand(-1.9, 1.9),
       });
     }
 
@@ -687,27 +767,59 @@ export class VFX {
     }
 
     // ==== sparks + embers ===========================================
+    // Two POPULATIONS, not one. A detonation throws fine white spatter that is
+    // gone in a quarter second and heavy burning fragments that arc for two
+    // seconds and skitter off the deck. Drawing both from one colour, one
+    // width band and one lifetime is what made the old burst read as forty
+    // copies of the same dash — width alone spanned 2:1, which at 720p is no
+    // spread at all. Every axis below now spans 4-8x, and the per-spark
+    // colour is scaled as well as retinted, which is the field's only
+    // opacity control (it is additive).
     const ns = Math.max(16, Math.min(130, (40 + 34 * s) * q) | 0);
+    const base = tint || C.sparkHot;
     for (let i = 0; i < ns; i++) {
       this._sphere(_v2);
-      const sp = R * rand(1.4, 5.2);
-      this._spark(_v, _v2.x * sp, _v2.y * sp + R * rand(0.6, 2.6), _v2.z * sp, {
-        birth: now + rand(0, 0.05),
-        life: rand(0.45, 1.8), width: rand(0.07, 0.22) * (0.7 + s * 0.4),
-        drag: rand(1.2, 2.4), gravity: 44, stretch: 0.028,
-        color: tint || C.sparkHot, floorY: gy,
+      // 55 % fine spatter / 45 % heavy fragments
+      const heavy = Math.random() < 0.45;
+      const sp = R * (heavy ? rand(0.8, 2.6) : rand(2.6, 7.0));
+      // colour temperature: white-hot -> the base tint -> cooled dull red
+      const kT = Math.random();
+      const warm = kT * kT;                       // most are hot, a few are cold
+      const bright = rand(0.30, 1.35) * (heavy ? 1.0 : 0.78);
+      _sc[0] = (base[0] * (1 - warm) + base[0] * 0.42 * warm + (1 - warm) * 1.5) * bright;
+      _sc[1] = (base[1] * (1 - warm) + base[1] * 0.20 * warm + (1 - warm) * 0.9) * bright;
+      _sc[2] = (base[2] * (1 - warm) + base[2] * 0.10 * warm + (1 - warm) * 0.5) * bright;
+      this._spark(_v, _v2.x * sp, Math.abs(_v2.y) * sp * 0.8 + R * rand(0.4, 3.0), _v2.z * sp, {
+        birth: now + rand(0, 0.06),
+        // width 0.045 -> 0.30 (6.6x), life 0.18 -> 2.3 (13x)
+        life: heavy ? rand(0.85, 2.30) : rand(0.18, 0.75),
+        width: (heavy ? rand(0.10, 0.30) : rand(0.045, 0.13)) * (0.7 + s * 0.4),
+        // a real ballistic arc: low drag + hard gravity so the streak visibly
+        // turns over and comes down, instead of decaying in place
+        drag: heavy ? rand(0.35, 1.0) : rand(1.8, 4.0),
+        gravity: heavy ? rand(26, 46) : rand(48, 78),
+        stretch: heavy ? rand(0.016, 0.034) : rand(0.030, 0.062),
+        color: _sc, floorY: gy,
       });
     }
-    // embers: negative gravity on a spark means the shader lifts it
+    // embers: negative gravity on a spark means the shader lifts it.
+    // Same treatment — these were the worst offender: ONE colour (sparkCold)
+    // and width rand(0.055, 0.11), a 2:1 spread that is invisible at 720p.
     const ne = Math.max(6, Math.min(56, (14 + 13 * s) * q) | 0);
     for (let i = 0; i < ne; i++) {
       this._sphere(_v2);
-      const sp = R * rand(0.25, 0.9);
-      this._spark(_v, _v2.x * sp, Math.abs(_v2.y) * sp * 0.8 + R * 0.25, _v2.z * sp, {
-        birth: now + rand(0.05, 0.5),
-        life: rand(1.2, 2.6), width: rand(0.055, 0.11),
-        drag: rand(1.6, 3.0), gravity: -rand(0.5, 2.4), stretch: 0.010,
-        color: C.sparkCold, floorY: gy,
+      const sp = R * rand(0.15, 1.5);
+      const k = Math.random();
+      const bright = rand(0.22, 1.15);
+      // cool cinders through to a few still-burning orange ones
+      _sc[0] = (1.05 + k * 2.6) * bright;
+      _sc[1] = (0.20 + k * 0.95) * bright;
+      _sc[2] = (0.04 + k * 0.16) * bright;
+      this._spark(_v, _v2.x * sp, Math.abs(_v2.y) * sp * 0.8 + R * rand(0.10, 0.55), _v2.z * sp, {
+        birth: now + rand(0.05, 0.9),
+        life: rand(0.7, 3.4), width: rand(0.035, 0.17),
+        drag: rand(1.1, 3.6), gravity: -rand(0.3, 3.2), stretch: rand(0.006, 0.030),
+        color: _sc, floorY: gy,
       });
     }
 
@@ -762,9 +874,14 @@ export class VFX {
           color: C.dust, opacity: 0.58,
         });
       }
-      // written straight into the field: this.decal() would clobber the shared scratch
-      _do.birth = now; _do.life = 28; _do.size = R * rand(1.5, 2.0);
-      _do.r = 1; _do.g = 1; _do.b = 1; _do.opacity = 0.9;
+      // Written straight into the field: this.decal() would clobber the shared
+      // scratch. LIFE IS SHORT ON PURPOSE. A flat quad cannot follow the deck,
+      // so a 28 s scorch is 28 s of a perfect disc lying across expansion
+      // joints and rubble it should be conforming to. Six seconds is long
+      // enough to register as a burn and short enough that the arena is not
+      // slowly tiled with circles over a two-minute mission.
+      _do.birth = now; _do.life = 6.0; _do.size = R * rand(1.0, 1.5);
+      _do.r = 1; _do.g = 1; _do.b = 1; _do.opacity = 0.62;
       this.decals.spawn(_v.x, gy, _v.z, 0, 1, 0, _do);
     }
 
@@ -1322,14 +1439,48 @@ export class VFX {
     this.fire_.spawn(p.x, p.y, p.z, vx, vy, vz, _fo);
   }
 
-  /** flat expanding annulus lying in the plane whose normal is `n` */
+  /** flat expanding annulus lying in the plane whose normal is `n`.
+   *  o.dust  -> the soft ground dust front instead of the crisp shock line
+   *  o.grd   -> Float32Array(7) height fit; drapes the front over the deck */
   _shockRing(x, y, z, n, o) {
     const c = o.color;
     _wo.birth = o.birth ?? this.time; _wo.life = o.life;
     _wo.r0 = o.r0; _wo.r1 = o.r1;
-    _wo.thickness = o.thickness ?? 0.05; _wo.mode = 0; _wo.ease = o.ease ?? 2.6;
+    const th = o.thickness ?? 0.05;
+    _wo.thickness = o.dust ? -Math.abs(th) : th;
+    _wo.mode = 0; _wo.ease = o.ease ?? 2.6;
     _wo.r = c[0]; _wo.g = c[1]; _wo.b = c[2]; _wo.intensity = o.intensity ?? 1;
+    _wo.grd = o.grd || null;
     this.shock.spawn(x, y, z, n.x, n.y, n.z, _wo);
+    _wo.grd = null;
+  }
+
+  /** sample the deck around a blast into the shared drape scratch */
+  _groundProfile(cx, cz, baseY, radius) {
+    return fitGroundProfile(_grd, cx, cz, baseY, radius, this._sampleGround);
+  }
+
+  /** publish the brightest live detonation light to the fields as a local
+   *  emissive, so smoke standing over a fireball is lit by it. Allocation-free
+   *  and O(LIGHTS) — the pool is 5 entries. */
+  _syncHot() {
+    const hot = this.shared.uHot.value;
+    const col = this.shared.uHotCol.value;
+    let best = null, bestI = 0;
+    const list = this.lights.lights;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.life <= 0) continue;
+      const I = e.light.intensity;
+      if (I > bestI) { bestI = I; best = e; }
+    }
+    if (!best) { hot.w = 0; col.setRGB(0, 0, 0); return; }
+    const p = best.light.position;
+    hot.set(p.x, p.y, p.z, Math.max(1, best.light.distance * 0.85));
+    // The pool stores candela; smoke wants a radiance tint. 1900-3400 cd at
+    // peak has to land near 1.0 here or a wreck fire bleaches its own column.
+    const k = Math.min(1.35, bestI / 2600);
+    col.copy(best.light.color).multiplyScalar(k);
   }
 
   /** expanding fresnel-rimmed sphere — the condensation shell */
@@ -1429,9 +1580,13 @@ export class VFX {
     for (let i = 0; i < n; i++) {
       this._cone(UP, 1.1, _v2);
       const sp = rand(4, 16);
+      const bright = rand(0.30, 1.15);
+      _sc[0] = C.sparkHot[0] * bright; _sc[1] = C.sparkHot[1] * bright * rand(0.6, 1.15);
+      _sc[2] = C.sparkHot[2] * bright * rand(0.4, 1.6);
       this._spark(_v3, _v2.x * sp, Math.abs(_v2.y) * sp, _v2.z * sp, {
-        life: rand(0.15, 0.45), width: 0.07, drag: 1.2, gravity: 44, stretch: 0.016,
-        color: C.sparkHot, floorY: gy,
+        life: rand(0.12, 0.85), width: rand(0.035, 0.15),
+        drag: rand(0.8, 2.6), gravity: rand(34, 62), stretch: rand(0.010, 0.036),
+        color: _sc, floorY: gy,
       });
     }
   }

@@ -6,7 +6,7 @@
 // ============================================================
 import { CFG } from '../config.js';
 import { h, q, group } from './dom.js';
-import { WEAPON_ICONS } from './icons.js';
+import { WEAPON_ICONS, MAP_SVG, FRAME_SVG, THREAT_SIL } from './icons.js';
 
 const LOADOUT = [
   { slot: 'R-ARM',  key: 'rifle',   cfg: 'RIFLE',   cls: 'BURST RIFLE' },
@@ -27,6 +27,23 @@ const CONTROLS = [
   ['L-BACK CANNON', 'Q'],
   ['HARD LOCK', 'TAB'],
   ['REPAIR KIT', 'V'],
+];
+
+// Hostiles expected on site. `ap` reads straight off CFG so the manifest can
+// never drift from what the mission actually spawns.
+const THREATS = [
+  { k: 'mt',     code: 'MT-A21',  name: 'SLAGHAND', cfg: 'MT',     thr: 2 },
+  { k: 'drone',  code: 'AD-08',   name: 'CINDER',   cfg: 'DRONE',  thr: 1 },
+  { k: 'turret', code: 'AT-44',   name: 'PICKET',   cfg: 'TURRET', thr: 2 },
+  { k: 'heli',   code: 'RH-19',   name: 'KESTREL',  cfg: 'HELI',   thr: 3 },
+  { k: 'pylon',  code: 'IB-C10',  name: 'PYLON',    cfg: 'PYLON',  thr: 0 },
+  { k: 'boss',   code: 'AC 04',   name: 'CROWNBREAKER', cfg: 'BOSS', thr: 5 },
+];
+
+const PAY = [
+  ['BASE', 410000],
+  ['CROWN CLEAR', 90000],
+  ['FRAME WEAR', -32000],
 ];
 
 function ammoOf(k, w) {
@@ -68,6 +85,31 @@ export class TitleScreen {
       ctl += '<dt>' + CONTROLS[i][0] + '</dt><dd><kbd>' + CONTROLS[i][1] + '</kbd></dd>';
     }
 
+    // ---- threat manifest ----
+    let thr = '';
+    for (let i = 0; i < THREATS.length; i++) {
+      const T = THREATS[i];
+      const E = CFG.ENEMY[T.cfg] || {};
+      let pips = '';
+      for (let j = 0; j < 5; j++) pips += '<s' + (j < T.thr ? ' class="on"' : '') + '></s>';
+      thr +=
+        '<div class="thr-r' + (T.k === 'boss' ? ' ac' : '') + '">' +
+        '<s class="sil">' + (THREAT_SIL[T.k] || '') + '</s>' +
+        '<b>' + T.code + '</b><span>' + T.name + '</span>' +
+        '<i class="thr-p">' + pips + '</i>' +
+        '<em>' + group(E.ap || 0) + '</em>' +
+        '</div>';
+    }
+
+    // ---- payment breakdown ----
+    let pay = '', total = 0;
+    for (let i = 0; i < PAY.length; i++) {
+      total += PAY[i][1];
+      pay += '<div class="pay-r"><u>' + PAY[i][0] + '</u><s></s><b>' +
+        (PAY[i][1] < 0 ? '-' : '') + group(Math.abs(PAY[i][1])) + '</b></div>';
+    }
+    pay += '<div class="pay-r tot"><u>ON COMPLETION</u><s></s><b>' + group(total) + ' c</b></div>';
+
     const el = h(
       '<div id="title-screen">' +
       '<div class="scan"></div>' +
@@ -98,14 +140,23 @@ export class TitleScreen {
               '<dt>AREA</dt><dd>BASHO SMELTING BELT, RUBICON 3</dd>' +
               '<dt>CLIENT</dt><dd>BASHO RECLAMATION AUTHORITY</dd>' +
               '<dt>OPPOSING</dt><dd>SLAG CROWN GARRISON</dd>' +
-              '<dt>PAYMENT</dt><dd>410,000 c</dd>' +
-              '<dt>LIMIT</dt><dd>' + Math.floor(M.TIME_LIMIT / 60) + ':00</dd>' +
+              '<dt>LIMIT</dt><dd>' + Math.floor(M.TIME_LIMIT / 60) + ':00 &nbsp;·&nbsp; NO RESUPPLY</dd>' +
             '</dl>' +
             '<p class="br-txt">The refinery never stopped burning. Its crown of slag towers ' +
             'still feeds the furnace under the basin, and the garrison has turned the whole ' +
-            'complex into a firebase — pickets on the gantries, armour in the container yard.<br><br>' +
+            'complex into a firebase — pickets on the gantries, armour in the container yard. ' +
             'Burn the coolant pylons, break what defends them, and hold the crown until ' +
-            'extraction. Expect a hostile AC on site. <em>Do not stall in the open.</em></p>' +
+            'extraction. <em>Do not stall in the open.</em></p>' +
+            '<div class="sub-h"><span>DEPLOYMENT — BASIN GRID 04</span><s></s></div>' +
+            '<div class="figw map">' + MAP_SVG + '</div>' +
+            '<div class="mleg">' +
+              '<span class="l-py">COOLANT PYLON &#215;' + M.PYLONS + '</span>' +
+              '<span class="l-cr">SLAG CROWN</span>' +
+              '<span class="l-in">INSERTION VECTOR</span>' +
+              '<span class="l-wl">KILL WALL ' + CFG.ARENA.WALL + ' M</span>' +
+            '</div>' +
+            '<div class="sub-h"><span>SETTLEMENT</span><s></s></div>' +
+            '<div class="pay">' + pay + '</div>' +
           '</div>' +
           '<div class="pn-f"><span>▸</span>EXTRACTION AUTHORISED ON CROWN CLEAR</div>' +
         '</div>' +
@@ -124,16 +175,42 @@ export class TitleScreen {
               '<th></th><th>SLOT</th><th>UNIT</th><th>CLASS</th>' +
               '<th class="n">ATK</th><th class="n">IMP</th><th class="n">ACS</th><th class="n">AMMO</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table>' +
-            '<div class="eq-note"><s></s><p>LOADOUT FIXED BY CONTRACT — NO FIELD ASSEMBLY</p></div>' +
-            '<div class="eq-note2">This frame ships as issued. There is no garage, no parts shop and ' +
-            'no respec: the sortie is the build. Learn these four units.</div>' +
+            '<div class="eq-split">' +
+              '<div class="figw schem">' + FRAME_SVG + '</div>' +
+              '<div class="eq-side">' +
+                '<div class="sub-h"><span>MOBILITY</span><s></s></div>' +
+                '<dl class="kv kv2">' +
+                  '<dt>BOOST</dt><dd>' + P.BOOST_SPEED + ' M/S</dd>' +
+                  '<dt>ASSAULT</dt><dd>' + P.AB_SPEED + ' M/S</dd>' +
+                  '<dt>QB IMPULSE</dt><dd>' + P.QB_IMPULSE + ' &nbsp;·&nbsp; ' + P.QB_EN_COST + ' EN</dd>' +
+                  '<dt>QB RELOAD</dt><dd>' + P.QB_RELOAD.toFixed(2) + ' S</dd>' +
+                  '<dt>EN REGEN</dt><dd>' + group(P.EN_RECHARGE) + ' /S GROUND</dd>' +
+                  '<dt>CEILING</dt><dd>' + group(CFG.ARENA.CEILING) + ' M</dd>' +
+                '</dl>' +
+                '<div class="eq-note"><s></s><p>LOADOUT FIXED BY CONTRACT</p></div>' +
+                '<div class="eq-note2">This frame ships as issued. No garage, no parts shop, ' +
+                'no respec — the sortie is the build. Learn these four units.</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
           '<div class="pn-f"><span>▸</span>ACS STRAIN STAGGERS TARGETS — IMPACT IS THE OTHER DAMAGE</div>' +
         '</div>' +
 
         '<div class="pn fr">' +
           '<div class="pn-h"><b>CONTROLS</b><i>KB / M</i></div>' +
-          '<div class="pn-b"><dl class="ctl">' + ctl + '</dl></div>' +
+          '<div class="pn-b">' +
+            '<dl class="ctl">' + ctl + '</dl>' +
+            '<div class="sub-h opt"><span>ENGAGEMENT DATA</span><s></s></div>' +
+            '<dl class="kv sortie opt">' +
+              '<dt>LOCK</dt><dd>' + CFG.LOCK.RANGE + ' M</dd>' +
+              '<dt>ACS CAP</dt><dd>' + group(P.ACS_CAP) + ' STRAIN</dd>' +
+              '<dt>STAGGER</dt><dd>' + P.STAGGER_TIME.toFixed(1) + ' S LOCKOUT</dd>' +
+              '<dt>DIRECT</dt><dd>&#215;' + P.DIRECT_HIT_MULT.toFixed(2) + ' STAGGERED</dd>' +
+              '<dt>REPAIR</dt><dd>' + P.REPAIR_KITS + ' &#215; ' + group(P.REPAIR_AMOUNT) + ' AP</dd>' +
+            '</dl>' +
+            '<div class="sub-h"><span>THREAT MANIFEST</span><s></s><i>AP</i></div>' +
+            '<div class="thr">' + thr + '</div>' +
+          '</div>' +
           '<div class="pn-f"><span>▸</span>QUICK BOOST IS THE WHOLE GAME</div>' +
         '</div>' +
 

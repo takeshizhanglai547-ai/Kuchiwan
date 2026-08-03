@@ -330,7 +330,14 @@ async function main() {
     if (!sc) { report.errors.push(`unknown scenario: ${name}`); continue; }
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
     const consoleErrors = [];
-    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 500)); });
+    // Warnings matter too: a WebGL feedback loop reports as a *warning* and
+    // renders a completely black frame, which otherwise passes the gate.
+    const WARN_RE = /GL_INVALID|feedback loop|WebGL|framebuffer|shader|THREE\./i;
+    page.on('console', (m) => {
+      const t = m.type();
+      if (t === 'error') consoleErrors.push(m.text().slice(0, 500));
+      else if (t === 'warning' && WARN_RE.test(m.text())) consoleErrors.push('warn: ' + m.text().slice(0, 500));
+    });
     page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + String(e.message).slice(0, 500)));
 
     const t0 = Date.now();

@@ -378,12 +378,17 @@ class BasinGlow {
     this.group = new THREE.Group();
     this.group.name = 'basin-glow';
     const gt = glowTexture();
-    // flat pool of light on the basin floor
+    // Flat pool of light on the basin floor. Cut hard from 0.55: this additive
+    // wash was doing the LIGHTING's job — it paints the floor plane bright but
+    // it is depth-tested away by anything standing on the floor, so every
+    // ingot mould and ladle car read darker than the pad it sat on. Real
+    // deck-level point lights carry the illumination now; this is only the
+    // scatter haze sitting over the pool.
     const disc = new THREE.Mesh(
       new THREE.PlaneGeometry(180, 180),
       new THREE.MeshBasicMaterial({
         map: gt, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        color: new THREE.Color(1.10, 0.34, 0.08), fog: false, opacity: 0.55,
+        color: new THREE.Color(0.95, 0.30, 0.07), fog: false, opacity: 0.085,
       }),
     );
     disc.rotation.x = -Math.PI / 2;
@@ -395,7 +400,7 @@ class BasinGlow {
       new THREE.PlaneGeometry(170, 110),
       new THREE.MeshBasicMaterial({
         map: gt, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        color: new THREE.Color(0.62, 0.20, 0.06), fog: false, opacity: 0.42,
+        color: new THREE.Color(0.62, 0.20, 0.06), fog: false, opacity: 0.26,
       }),
     );
     this.column.position.set(0, 18, 0);
@@ -410,6 +415,85 @@ class BasinGlow {
     c.scale.set(p, p * 0.98, 1);
     this.disc.scale.setScalar(1 + Math.sin(t * 0.9) * 0.03);
   }
+}
+
+// ------------------------------------------------------------------
+//  EMITTER HAZE — the local fog tint around every registered emitter.
+//  Rubicon's air is thick; a furnace mouth does not just light the wall in
+//  front of it, it lights the DUST between it and the lens. One instanced
+//  additive billboard per emitter, breathing out of phase, one draw call for
+//  the whole set. Depth-tested so it never bleeds through geometry.
+// ------------------------------------------------------------------
+const HAZE_V = /* glsl */`
+attribute vec4 iP;      // x,y,z, radius
+attribute vec4 iC;      // r,g,b, phase
+uniform float uTime;
+varying vec2 vUv;
+varying vec3 vC;
+varying float vF;
+void main() {
+  vec3 rgt = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+  vec3 upv = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+  float br = 0.86 + sin(uTime * 2.1 + iC.w) * 0.07 + sin(uTime * 5.3 + iC.w * 1.9) * 0.05;
+  float sz = iP.w * (0.94 + br * 0.12);
+  vec3 world = iP.xyz + (rgt * position.x + upv * position.y) * sz;
+  vec4 mv = viewMatrix * vec4(world, 1.0);
+  gl_Position = projectionMatrix * mv;
+  vUv = uv;
+  vC = iC.rgb * br;
+  // fade out up close (you are standing inside the volume) and far away
+  // (the exponential fog has already eaten it)
+  float d = -mv.z;
+  vF = smoothstep(0.0, iP.w * 1.1, d) * (1.0 - smoothstep(340.0, 760.0, d));
+}
+`;
+
+const HAZE_F = /* glsl */`
+uniform sampler2D uMap;
+varying vec2 vUv;
+varying vec3 vC;
+varying float vF;
+void main() {
+  float a = texture2D(uMap, vUv).a;
+  a *= a;                       // tighten the falloff: haze, not a lens flare
+  float m = a * vF;
+  if (m < 0.003) discard;
+  gl_FragColor = vec4(vC * m, m);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+class EmitterHaze {
+  constructor(list) {
+    const use = list.filter((l) => (l.intensity || 0) > 250);
+    const n = Math.max(1, use.length);
+    const g = instancedPlane(n, [['iP', 4], ['iC', 4]]);
+    const P = g.attributes.iP.array, C = g.attributes.iC.array;
+    const c = new THREE.Color();
+    for (let i = 0; i < use.length; i++) {
+      const l = use[i];
+      const reach = l.distance || 90;
+      P[i * 4] = l.x; P[i * 4 + 1] = l.y + reach * 0.10; P[i * 4 + 2] = l.z;
+      P[i * 4 + 3] = reach * 0.42;
+      c.set(l.color);
+      // energy scaled off the inverse-square reach, then heavily damped —
+      // this is scatter, it must never outshine the thing that is emitting.
+      const k = Math.min(0.62, Math.sqrt(l.intensity) / 90);
+      C[i * 4] = c.r * k; C[i * 4 + 1] = c.g * k * 0.86; C[i * 4 + 2] = c.b * k * 0.7;
+      C[i * 4 + 3] = (i * 1.31) % 6.283;
+    }
+    this.uniforms = { uTime: { value: 0 }, uMap: { value: glowTexture() } };
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.uniforms, vertexShader: HAZE_V, fragmentShader: HAZE_F,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    this.mesh = new THREE.Mesh(g, mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 10;
+    this.mesh.name = 'emitter-haze';
+  }
+  update(t) { this.uniforms.uTime.value = t; }
 }
 
 // ------------------------------------------------------------------
@@ -428,9 +512,10 @@ export class Atmosphere {
     this.shimmer = new Shimmer(W.vents);
     this.dust = new DustLayers();
     this.glow = new BasinGlow();
+    this.haze = new EmitterHaze(W.lights);
 
     this.group.add(this.smoke.mesh, this.ash.points, this.strobes.mesh,
-      this.shimmer.mesh, this.dust.group, this.glow.group);
+      this.shimmer.mesh, this.dust.group, this.glow.group, this.haze.mesh);
   }
 
   update(dt, camera) {
@@ -442,6 +527,7 @@ export class Atmosphere {
     this.shimmer.update(t);
     this.dust.update(t);
     this.glow.update(t, camera);
+    this.haze.update(t);
   }
 }
 

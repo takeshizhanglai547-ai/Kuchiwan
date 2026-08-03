@@ -40,10 +40,14 @@ const FOOT = 2.2;
 // own mech eats it, wider and it is at the frame edge before the duel starts.
 const BEARINGS = [0.38, -0.38, 0.30, -0.30, 0.46, -0.46, 0.24, -0.24, 0.56, -0.56];
 const WANT_BEAR = 0.38;
-// Ranges. 65–80 m is where a 15 m AC reads as a whole machine: far enough
-// to see the legs, near enough that the panel work is still legible.
-const RANGES = [64, 72, 60, 82, 94];
-const WANT_RANGE = 66;
+// Ranges, metres from the player. This is a READABILITY budget as much as a
+// staging one. The chase lens sits ~20 m further back again, so a landing at
+// 64 m is a 84 m shot: a 15 m AC is then ~85 px tall in a 560 px frame, which
+// is what the review called "a smudge". 46–58 m puts the lens at 64–76 m and
+// the AC at 95–110 px with its legs and shoulders separable, while still
+// leaving the player most of a second to react to a charge.
+const RANGES = [52, 46, 58, 64, 42, 72, 84];
+const WANT_RANGE = 50;
 
 const FRAME_LIMIT = 0.70;               // rad off axis we will never exceed
 const CLEAR_LEN = 22;                   // how far "open ground" has to reach
@@ -137,6 +141,42 @@ function mechCone(ctx, L, out) {
 }
 const _cone = { off: 0, half: 0 };
 
+/**
+ * The angular slot the player's OWN MECH eats out of the frame, widened by
+ * NIGHTJAR's own apparent width so the exclusion covers its whole body and
+ * not just its centre. Everything about the duel staging is downstream of
+ * this: the review's round-2 failure was not "off axis", it was NIGHTJAR
+ * standing 25 m away directly behind the player's back plate, which the
+ * world-geometry LOS test happily calls "visible".
+ *
+ * Derived live from the camera rather than baked as constants — the chase
+ * rig's shoulder offset swings with pitch, and the QA free-cam is somewhere
+ * else entirely.  `dist` is metres from the PLAYER; the lens is further back
+ * again and lens() already knows by how much.
+ *
+ * Returns the shared scratch {off, half, lo, hi}; lo/hi are the bearings
+ * NIGHTJAR must stay outside of. Do not retain it.
+ */
+export function silhouette(ctx, dist) {
+  const L = lens(ctx);
+  mechCone(ctx, L, _sil);
+  const dl = Math.max(10, (dist || 60) + L.dist);
+  // half the AC's own width at that range, plus a margin that keeps a
+  // shoulder or a leg from clipping into the player's outline
+  const own = Math.atan2(B.radius + 1.4, dl) + 0.055;
+  _sil.lo = _sil.off - _sil.half - own;
+  _sil.hi = _sil.off + _sil.half + own;
+  return _sil;
+}
+const _sil = { off: 0, half: 0, lo: 0, hi: 0 };
+
+/** how far inside the player's outline a bearing sits (0 = clear) */
+export function silhouetteDepth(ctx, off, dist) {
+  const s = silhouette(ctx, dist);
+  if (off <= s.lo || off >= s.hi) return 0;
+  return Math.min(off - s.lo, s.hi - off);
+}
+
 /** one raycast: can the frame actually see this unit's chest right now? */
 export function bossVisible(ctx, e) {
   const w = ctx.world;
@@ -157,7 +197,7 @@ export function pickBossSpot(ctx, out) {
   const L0 = lens(ctx);
   mechCone(ctx, L0, _cone);
   // snapshot: frameOff() re-derives the same lens into the same scratch
-  const ex = L0.x, ey = L0.y, ez = L0.z, vax = L0.ax, vaz = L0.az;
+  const ex = L0.x, ey = L0.y, ez = L0.z, vax = L0.ax, vaz = L0.az, trail = L0.dist;
   const py = p.pos.y;
   const lim = CFG.ARENA.RADIUS - 46;
 
@@ -197,7 +237,11 @@ export function pickBossSpot(ctx, out) {
       const fo = frameOff(ctx, x, z);
       const mag = Math.abs(fo);
       if (mag > FRAME_LIMIT) continue;
-      if (Math.abs(fo - _cone.off) < _cone.half + 0.06) continue;   // behind our own mech
+      // behind our own mech — padded by NIGHTJAR's own apparent width at
+      // this range, so a shoulder cannot poke out of the player's outline
+      // and call itself framed
+      const own = Math.atan2(B.radius + 1.4, Math.max(10, r + trail)) + 0.055;
+      if (fo > _cone.off - _cone.half - own && fo < _cone.off + _cone.half + own) continue;
 
       // --- the tests that cost rays ----------------------------
       const chestVis = clearTo(w, ex, ey, ez, x, gy + CHEST, z, 2.6);

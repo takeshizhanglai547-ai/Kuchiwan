@@ -71,11 +71,20 @@ body {
 /* =========================================================
    TITLE
    ========================================================= */
+/* The scrim is banded, not a flat wash: the header strip and the panel band
+   stay dark enough for 1 px type, but the masthead band between them opens up
+   so the rendered world behind actually reads as a backdrop instead of a
+   sliver clipped off at the right edge. */
 #title-screen {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   padding: 1.5rem 2.4rem 1.4rem;
   background:
-    linear-gradient(100deg, rgba(4,7,9,.96) 0%, rgba(4,7,9,.92) 44%, rgba(4,7,9,.72) 74%, rgba(4,7,9,.58) 100%);
+    linear-gradient(180deg,
+      rgba(4,7,9,.94) 0, rgba(4,7,9,.90) 2.7rem,
+      rgba(4,7,9,.30) 4.6rem, rgba(4,7,9,.26) 10.2rem,
+      rgba(4,7,9,.88) 12.4rem, rgba(4,7,9,.93) 100%),
+    linear-gradient(100deg,
+      rgba(4,7,9,.90) 0%, rgba(4,7,9,.84) 30%, rgba(4,7,9,.42) 66%, rgba(4,7,9,.06) 100%);
 }
 .t-mid { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; }
 .t-top { display: flex; align-items: center; gap: .9rem; }
@@ -114,7 +123,14 @@ body {
 }
 .pn-h b { font-size: .74rem; letter-spacing: .3em; color: var(--cy); font-weight: 400; }
 .pn-h i { font-size: .6rem; letter-spacing: .22em; color: var(--dim); font-style: normal; margin-left: auto; }
-.pn-b { padding: .7rem .8rem; min-height: 0; overflow: hidden; }
+/* Panel bodies are flex columns: text blocks are rigid, the figures
+   (deployment map, frame elevation, threat rows) take the slack. That is what
+   keeps ~300 px of dead space from opening under every panel at 900p. */
+.pn-b { padding: .7rem .8rem; min-height: 0; overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; }
+.pn-b > .br-code, .pn-b > .kv, .pn-b > .br-txt, .pn-b > .pay,
+.pn-b > .eq-frame, .pn-b > .eq, .pn-b > .ctl, .pn-b > .sortie, .pn-b > .sub-h,
+.pn-b > .mleg { flex: 0 0 auto; }
+
 
 /* briefing */
 .br-code { display: flex; align-items: flex-end; gap: .7rem; margin-bottom: .55rem; }
@@ -192,6 +208,102 @@ body {
 /* warning bars must stay readable in a still frame — never fully dark */
 @keyframes hazard { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .46; } }
 
+.sub-h { display: flex; align-items: center; gap: .5rem; margin: .62rem 0 .34rem; }
+.sub-h span { font-size: .55rem; letter-spacing: .26em; color: var(--cy); white-space: nowrap; }
+.sub-h i { font-style: normal; font-size: .5rem; letter-spacing: .2em; color: var(--dim); }
+.sub-h s { flex: 1; height: 1px; background: var(--line2); text-decoration: none; }
+
+/* scaling figure box — the svg never contributes intrinsic height */
+.figw { position: relative; flex: 1 1 0; min-height: 2.6rem; }
+.figw svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ---- deployment map ---- */
+.dmap path, .dmap circle { fill: none; vector-effect: non-scaling-stroke; }
+.dmap .g-fine, .dmap .g-fine path, .dmap .g-fine circle { stroke: rgba(95, 244, 255, .17); stroke-width: 1; }
+.dmap .g-wall { stroke: rgba(255, 176, 32, .34); stroke-width: 1; stroke-dasharray: 4 4; }
+.dmap .g-play { stroke: rgba(95, 244, 255, .42); stroke-width: 1; }
+.dmap .g-fill { fill: rgba(255, 116, 40, .09); stroke: none; }
+.dmap .g-hard { stroke: rgba(255, 148, 62, .46); stroke-width: 1; }
+.dmap .g-obj path { stroke: var(--am); stroke-width: 1; fill: rgba(255, 176, 32, .18); }
+.dmap .g-crown path { stroke: #e9a6ff; stroke-width: 1; fill: rgba(217, 60, 255, .22); }
+.dmap .g-crown circle { stroke: rgba(233, 166, 255, .45); stroke-width: 1; stroke-dasharray: 2 3; }
+.dmap .g-ins { color: var(--cy); }
+.dmap .g-ins path { stroke: rgba(95, 244, 255, .8); stroke-width: 1; stroke-dasharray: 5 3; }
+.dmap .g-ins .g-head { stroke: none; fill: currentColor; }
+.dmap .g-scale { stroke: rgba(95, 244, 255, .40); stroke-width: 1; }
+.dmap text { font-family: var(--mono); font-size: 7px; letter-spacing: 0; fill: rgba(182, 251, 255, .74); stroke: none; }
+.dmap .t-n { fill: var(--cy); }
+
+/* ---- frame elevation ---- */
+.fschem path { fill: none; vector-effect: non-scaling-stroke; }
+.fschem .s-hard path { stroke: rgba(158, 232, 242, .60); stroke-width: 1; fill: rgba(95, 244, 255, .05); }
+.fschem .s-fine path { stroke: rgba(95, 244, 255, .24); stroke-width: 1; }
+.fschem .s-lead path { stroke: rgba(255, 176, 32, .55); stroke-width: 1; }
+.fschem text { font-family: var(--mono); font-size: 9px; letter-spacing: 0; fill: rgba(255, 176, 32, .82); stroke: none; }
+
+/* ---- settlement breakdown ---- */
+.pay-r { display: flex; align-items: baseline; gap: .45rem; font-size: .57rem; padding: .09rem 0; }
+.pay-r u { text-decoration: none; color: var(--dim); letter-spacing: .16em; }
+.pay-r s { flex: 1; height: 1px; background: rgba(95, 244, 255, .10); text-decoration: none; }
+.pay-r b { font-family: var(--mono); font-size: .62rem; color: var(--wh); font-weight: 400; letter-spacing: 0; }
+.pay-r.tot { margin-top: .2rem; padding-top: .26rem; border-top: 1px solid var(--line2); }
+.pay-r.tot u { color: var(--cy); }
+.pay-r.tot b { font-size: .8rem; color: var(--cy-b); }
+
+/* ---- threat manifest ---- */
+.thr { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.thr-r {
+  flex: 1 1 0; min-height: 1.5rem; max-height: 3.1rem;
+  display: flex; align-items: center; gap: .4rem; padding: .08rem 0;
+  border-top: 1px solid rgba(95, 244, 255, .07);
+}
+.thr-r:first-child { border-top: 0; }
+.thr-r .sil {
+  flex: 0 0 auto; width: 2.7rem; align-self: stretch; text-decoration: none;
+  display: flex; align-items: center; color: rgba(120, 216, 228, .62);
+}
+.thr-r .sil svg { width: 100%; height: 100%; }
+.thr-r b { font-size: .58rem; letter-spacing: .08em; color: #eef9fb; font-weight: 400; white-space: nowrap; }
+.thr-r > span { font-size: .55rem; letter-spacing: .1em; color: var(--dim); white-space: nowrap; }
+.thr-r em { font-style: normal; margin-left: .35rem; font-family: var(--mono); font-size: .58rem; color: var(--cy-b); letter-spacing: 0; }
+.thr-p { display: flex; gap: .12rem; margin-left: auto; font-style: normal; }
+.thr-p s { width: .24rem; height: .24rem; background: rgba(95, 244, 255, .13); text-decoration: none; }
+.thr-p s.on { background: var(--am); }
+.thr-r.ac .sil { color: #d9a2ee; }
+.thr-r.ac b { color: #f2d6ff; }
+.thr-r.ac .thr-p s.on { background: #d93cff; }
+
+/* ---- equipment: schematic beside the spec column ---- */
+.eq-split { display: flex; gap: .9rem; flex: 1 1 0; min-height: 0; margin-top: .55rem; }
+.eq-split .figw { flex: 1 1 42%; min-width: 0; min-height: 3.4rem; }
+.eq-side { flex: 1 1 58%; min-width: 0; display: flex; flex-direction: column; }
+.eq-side .sub-h { margin-top: 0; }
+.kv2 { grid-template-columns: 6.8rem 1fr; }
+.sortie { grid-template-columns: 4.6rem 1fr; }
+.eq-side .eq-note { margin-top: auto; padding-top: .5rem; }
+
+/* map key */
+.mleg { display: grid; grid-template-columns: 1fr 1fr; gap: .1rem .6rem; margin-top: .35rem; font-size: .52rem; letter-spacing: .1em; color: var(--dim); }
+.mleg span { display: flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.mleg span::before { content: ''; flex: 0 0 auto; width: .42rem; height: .42rem; background: var(--am); }
+.l-cr::before { background: #d93cff; }
+.l-in::before { background: var(--cy); }
+.l-wl::before { background: transparent; outline: 1px solid rgba(255, 176, 32, .55); outline-offset: -1px; }
+
+/* Short viewports: the briefing sheds its optional blocks rather than
+   clipping the prose. The figures shrink on their own (flex-basis 0). */
+@media (max-height: 640px) {
+  .opt { display: none; }
+  .eq-note2 { display: none; }
+  .ctl { gap: .13rem .6rem; }
+  .thr-r { min-height: 1.14rem; }
+  .thr-r .sil { width: 2.2rem; }
+  .sub-h { margin: .44rem 0 .26rem; }
+}
+@media (max-height: 520px) {
+  .pay-r:not(.tot) { display: none; }
+}
+
 /* =========================================================
    COMBAT HUD
    ========================================================= */
@@ -201,10 +313,21 @@ body {
 #combat-hud { position: absolute; inset: 0; z-index: 2; }
 #overlay-layer { z-index: 1; }
 
-/* ---- bottom-left : AP / EN / QB / kits ---- */
-#vitals { position: absolute; left: 2.1rem; bottom: 3.1rem; width: 27rem; }
-.v-head { display: flex; align-items: flex-end; gap: .5rem; margin-bottom: .28rem; }
-.v-head .tag { font-size: .7rem; letter-spacing: .34em; color: var(--cy); }
+/* ---- bottom-left : AP / EN / QB / kits ----
+   ONE grid: [ label gutter | gauge column | numeric rail ].
+   Every gauge is placed in column 2, so the AP, ACS, EN, QB and KIT strips
+   share a single left edge and a single right edge. The label gutter width
+   is repeated on .v-head so the big AP numeral starts on the gauge edge too.
+   Rows are explicit (grid-area) — nothing relies on auto-placement order. */
+#vitals {
+  position: absolute; left: 2.1rem; bottom: 3.1rem; width: 30rem;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.9rem;
+  column-gap: .55rem; row-gap: 0;
+  align-items: center;
+}
+.v-head { grid-area: 1 / 1 / 2 / -1; display: flex; align-items: flex-end; gap: .55rem; margin-bottom: .3rem; }
+.v-head .tag { flex: 0 0 auto; width: 2.5rem; font-size: .7rem; letter-spacing: .34em; color: var(--cy); }
 .v-head .num { font-family: var(--mono); font-size: 1.72rem; line-height: .92; color: #fff; letter-spacing: .01em; }
 .v-head .den { font-family: var(--mono); font-size: .78rem; color: var(--dim); padding-bottom: .12rem; }
 .v-head .st  { margin-left: auto; font-size: .64rem; letter-spacing: .24em; color: var(--dim); padding-bottom: .16rem; }
@@ -221,7 +344,7 @@ body {
   background: repeating-linear-gradient(90deg, transparent 0 .58rem, rgba(3, 7, 9, .78) .58rem .65rem);
 }
 #en-bar .bar-in::after { background: repeating-linear-gradient(90deg, transparent 0 1.2rem, rgba(3, 7, 9, .70) 1.2rem 1.26rem); }
-#ap-bar { height: 1.34rem; }
+#ap-bar { grid-area: 2 / 2; height: 1.34rem; }
 #ap-bar .fill  { background: linear-gradient(180deg, #d8fcff, #59e6f6 62%, #2fa8bd); }
 #ap-bar .ghost { background: rgba(255, 59, 48, .55); }
 #vitals.warn #ap-bar .fill { background: linear-gradient(180deg, #ffe4ae, #ffb020 62%, #b06f0d); }
@@ -232,7 +355,7 @@ body {
 @keyframes apPulse { 0%, 100% { opacity: 1; } 50% { opacity: .42; } }
 
 /* player ACS strain — thin strip hugging the AP bar */
-#p-acs { height: .36rem; margin-top: 2px; }
+#p-acs { grid-area: 3 / 2; height: .36rem; margin-top: 2px; }
 #p-acs .bar-in { background: rgba(95, 244, 255, .10); }
 #p-acs .fill { background: linear-gradient(180deg, #fff, #b9dde3); }
 #p-stag {
@@ -240,9 +363,16 @@ body {
   font-size: .5rem; letter-spacing: .3em; color: var(--ink); background: #fff; z-index: 3;
 }
 
-.en-row { display: flex; align-items: center; gap: .55rem; margin-top: .34rem; }
-.en-row .tag { font-size: .6rem; letter-spacing: .3em; color: var(--dim); width: 2.2rem; }
-#en-bar { flex: 1; height: .62rem; position: relative; }
+/* row labels + numeric rail (rows 4/5/6) */
+#vitals > .tag { font-size: .6rem; letter-spacing: .3em; color: var(--dim); }
+.vnum { font-size: .68rem; color: var(--cy-b); text-align: right; letter-spacing: 0; }
+.r-en   { grid-area: 4 / 1; margin-top: .34rem; }
+#en-num { grid-area: 4 / 3; margin-top: .34rem; }
+.r-qb   { grid-area: 5 / 1; margin-top: .34rem; }
+.r-kit  { grid-area: 6 / 1; margin-top: .32rem; }
+#kit-num { grid-area: 6 / 3; margin-top: .32rem; }
+
+#en-bar { grid-area: 4 / 2; height: .62rem; position: relative; margin-top: .34rem; }
 #en-bar .fill { background: linear-gradient(180deg, #9ef6ff, #3ecfe6 70%, #1d7f92); }
 #en-ovl {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -253,28 +383,32 @@ body {
 #vitals.enovl #en-bar .fill { background: linear-gradient(180deg, #ffc9c5, #ff3b30 70%, #8f1a14); }
 #vitals.enovl #en-ovl { animation: blink .34s steps(1, end) infinite; }
 
-.en-row .num { font-size: .68rem; color: var(--cy-b); width: 3.1rem; text-align: right; }
-#vitals.enovl .en-row .num { color: var(--rd); }
+#vitals.enovl #en-num { color: var(--rd); }
+#vitals.enovl .r-en { color: var(--rd); }
 
-.qb-row { display: flex; align-items: center; gap: .55rem; margin-top: .34rem; }
-.qb-row .tag { font-size: .6rem; letter-spacing: .3em; color: var(--dim); width: 2.2rem; }
-#qb-pips { display: flex; gap: .22rem; flex: 1; }
+#qb-pips { grid-area: 5 / 2; display: flex; gap: .22rem; margin-top: .34rem; }
 #qb-pips s {
   flex: 1; height: .34rem; background: rgba(95, 244, 255, .12);
   outline: 1px solid var(--line2); outline-offset: -1px;
 }
 #qb-pips s.on { background: var(--cy); outline-color: var(--cy); }
-.kits { display: flex; gap: .2rem; align-items: center; }
-.kits span { font-size: .58rem; letter-spacing: .24em; color: var(--dim); margin-right: .25rem; }
-.kits s { width: .74rem; height: .34rem; background: rgba(95, 244, 255, .12); outline: 1px solid var(--line2); outline-offset: -1px; }
+
+/* repair charges — own row, own baseline. Discrete blocks, not a gauge:
+   three chunky segments off the shared left edge read as "3 charges". */
+.kits { grid-area: 6 / 2; display: flex; gap: .24rem; margin-top: .32rem; }
+.kits s { width: 3.1rem; height: .34rem; background: rgba(95, 244, 255, .10); outline: 1px solid var(--line2); outline-offset: -1px; }
 .kits s.on { background: var(--am); outline-color: var(--am); }
+#vitals.nokit .r-kit, #vitals.nokit #kit-num { color: #55666b; }
 
 /* ---- bottom-right : weapon panel ---- */
 #weapons { position: absolute; right: 2.1rem; bottom: 3.1rem; width: 23rem; }
 #weapons .pn-h { padding: .38rem .7rem .32rem; }
+/* The ammo column is a FIXED width, and each field inside it has a fixed
+   width too. An `auto` track plus a variable string meant the whole panel
+   re-laid out whenever a reserve crossed 100 or a missile lock appeared. */
 .w-row {
   position: relative; display: grid;
-  grid-template-columns: 2.05rem 3.9rem 1fr auto;
+  grid-template-columns: 2.05rem 3.9rem minmax(0, 1fr) 5.9rem;
   align-items: center; gap: .55rem;
   padding: .34rem .7rem .38rem; border-top: 1px solid rgba(95, 244, 255, .09);
 }
@@ -297,8 +431,13 @@ body {
 .w-row.charging .w-ic { outline-color: #d93cff; }
 .w-slot { font-size: .6rem; letter-spacing: .16em; color: var(--dim); }
 .w-name { font-size: .7rem; letter-spacing: .1em; color: #eef9fb; white-space: nowrap; overflow: hidden; text-overflow: clip; }
-.w-amt  { font-family: var(--mono); font-size: .96rem; color: var(--cy-b); text-align: right; letter-spacing: 0; }
-.w-amt small { font-size: .62rem; color: var(--dim); }
+.w-amt {
+  display: flex; align-items: baseline; justify-content: flex-end;
+  font-family: var(--mono); font-size: .96rem; color: var(--cy-b); letter-spacing: 0;
+}
+.w-amt b { flex: 1 1 auto; min-width: 0; text-align: right; }
+.w-amt small { flex: 0 0 auto; width: 1.66rem; text-align: left; font-size: .62rem; color: var(--dim); }
+.w-amt .lk { flex: 0 0 auto; width: 1.02rem; text-align: right; font-size: .62rem; font-style: normal; color: var(--am); }
 .w-sweep { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(95, 244, 255, .10); }
 .w-sweep i { display: block; height: 100%; width: 100%; background: var(--am); transform-origin: 0 50%; transform: scaleX(0); }
 .w-row.reloading .w-name { color: var(--am); }

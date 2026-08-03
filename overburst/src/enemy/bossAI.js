@@ -22,11 +22,22 @@
 //  tangential speed is capped to an angular rate, the strafe side flips
 //  whenever it is carrying NIGHTJAR out of shot, and if the frame loses
 //  sight of it for more than 1.5 s it boosts to a spot that can be seen.
+//
+//  ON SCREEN IS NOT THE SAME AS VISIBLE. Round one fixed "swung off the
+//  side of the frame". What was left was the other way to disappear: walk
+//  down the centreline until you are standing behind the player's own back
+//  plate. The world-geometry LOS ray sails straight through the player mech
+//  and reports a clean sight line, so nothing complained. The frame axis is
+//  therefore treated as a HOLE, not a target — the player's outline is
+//  measured from the live camera every frame, padded by NIGHTJAR's own
+//  apparent width, and counts as hard occlusion: it suspends the orbit cap,
+//  vetoes any quick boost that would carry it in there, and feeds the same
+//  blind-watchdog that re-positions it behind a silo.
 // ============================================================
 import * as THREE from 'three';
 import { COL } from './enemyDefs.js';
 import { clamp, rand, damp } from '../util/math.js';
-import { pickBossSpot, bossVisible, frameOff } from './bossStage.js';
+import { pickBossSpot, bossVisible, frameOff, silhouette } from './bossStage.js';
 
 const _aim = new THREE.Vector3();
 const _v = new THREE.Vector3();
@@ -40,14 +51,27 @@ const _up = new THREE.Vector3(0, 1, 0);
 const POISE = 0.92;        // seconds standing after the landing
 const OPTIC = 0.74;        // fraction of that beat the optic takes to light
 const ANG_MAX = 0.68;      // rad/s NIGHTJAR may orbit the player at
+const ANG_ESCAPE = 2.4;    // …suspended to this while it is behind the player
 const FRAME_LOST = 1.30;   // rad past which it counts as out of shot
 const BLIND_MAX = 1.5;     // seconds unseen before it re-positions
 const REPICK = 2.6;        // minimum seconds between two placement solves
 
+// The presentation beat. NIGHTJAR lands, its optic comes up, and then it
+// STANDS THERE — squared up, at readable range, walking a slow arc — for
+// long enough that a human (or the QA harness, which photographs the frame
+// 2.6 s after the spawn call) actually sees the machine before the duel
+// starts. Cutting straight from the landing into the moveset is what let it
+// be halfway across the arena by the time anyone looked.
+const MENACE = 1.70;
+const HOLD_NEAR = 40;      // the arrival band, metres from the player…
+const HOLD_FAR = 90;
+const HOLD_WANT = 44;      // …and where the beat parks it inside that band
+const STANDOFF = 26;       // never closer than this while it is on the centreline
+
 // states a re-position must never cut into: the arrival beats and anything
 // mid-commitment. Interrupting those would break the animation contract.
 const COMMITTED = {
-  drop: 1, poise: 1, reframe: 1, stagger: 1, shift: 1,
+  drop: 1, poise: 1, menace: 1, reframe: 1, stagger: 1, shift: 1,
   charge_up: 1, charge_go: 1, blade_up: 1, blade_go: 1,
   sweep_up: 1, sweep_go: 1, miss_go: 1, rifle_go: 1,
 };
@@ -187,16 +211,22 @@ const _eyeOpt = { size0: 0.7, size1: 1.9, life: 0.05, color: COL.bossCharge, fad
  * full AC speed. `radial` is -1 (back off) / 0 (hold) / +1 (close).
  */
 function strafe(e, nx, nz, radial, mul) {
-  const wr = radial * 1.35;
+  const b = e.b;
+  // The orbit cap is a framing device, so it only applies while there is
+  // framing left to protect. Once NIGHTJAR is inside the player's own
+  // outline it is invisible at any bearing, and the fastest sidestep out
+  // is strictly better than a smooth arc.
+  let wr = radial * 1.35;
+  if (b.hidden && wr > 0 && e.dist < STANDOFF + 14) wr = 0;   // never press into the hole
   const full = Math.max(1e-3, e.def.speed * mul);
-  const latMax = ANG_MAX * Math.max(24, e.dist);
+  const latMax = (b.hidden ? ANG_ESCAPE : ANG_MAX) * Math.max(24, e.dist);
   const r = Math.min(1, latMax / full);
   let wt = 1, m = mul;
   if (r < 0.995) {
     if (wr === 0) m = mul * r;                                   // pure orbit: slow it
     else wt = Math.min(1, (Math.abs(wr) * r) / Math.sqrt(1 - r * r));
   }
-  const s = e.b.side;
+  const s = b.side;
   const tx = -nz * s * wt + nx * wr;
   const tz = nx * s * wt + nz * wr;
   if (Math.abs(tx) + Math.abs(tz) < 1e-4) { e.hold(); return; }
@@ -211,25 +241,46 @@ function strafe(e, nx, nz, radial, mul) {
  * what to aim at. Not zero: the chase camera's shoulder offset parks the
  * player's own mech across roughly [-0.38, +0.03] rad, so the view axis is
  * the one bearing where NIGHTJAR is guaranteed to be invisible. The two
- * clear lobes sit either side of that silhouette, and the wide one is on
- * the right. NIGHTJAR picks a lobe and duels in it until it genuinely ends
- * up on the other side of the frame.
+ * clear lobes sit either side of that hole, and the wide one is on the
+ * right. NIGHTJAR picks a lobe and duels in it until it genuinely ends up
+ * on the other side of the frame.
+ *
+ * The hole is measured, not assumed: silhouette() reads the live camera and
+ * pads by NIGHTJAR's apparent width at its current range, so it stays right
+ * as the duel closes (at 25 m the AC is three times as wide on screen as it
+ * is at 80, and the old fixed band let a whole shoulder sit inside the
+ * player's back plate).
  */
-// The player's mech covers about [-0.38, +0.03] rad from the chase lens
-// (DIST 20.6, SHOULDER 3.6); NIGHTJAR is ~0.08 rad wide at duelling range.
-// These are those numbers plus margin, clamped inside the ~0.82 rad
-// horizontal half-frame.
-const LOBE = { r0: 0.24, r1: 0.56, l0: -0.62, l1: -0.50 };
+// Widest bearing we will drive it to. The horizontal half-frame at FOV 62 /
+// 16:9 is ~0.82 rad; 0.62 keeps the far shoulder inside the picture.
+const EDGE = 0.62;
 
 function frameSide(e) {
   const b = e.b;
   const o = b.off;
-  if (b.lobe === undefined) b.lobe = o < -0.42 ? -1 : 1;
-  else if (b.lobe > 0 && o < -0.62) b.lobe = -1;
-  else if (b.lobe < 0 && o > -0.30) b.lobe = 1;
+  const s = silhouette(e.ctx, e.dist);
+  const lift = Math.max(0.10, s.hi);        // near edge of the right-hand lobe
+  const drop = Math.min(-0.10, s.lo);       // far edge of the left-hand lobe
 
-  const lo = b.lobe > 0 ? LOBE.r0 : LOBE.l0;
-  const hi = b.lobe > 0 ? LOBE.r1 : LOBE.l1;
+  if (b.lobe === undefined) b.lobe = o < drop ? -1 : 1;
+  else if (b.lobe > 0 && o < drop - 0.06) b.lobe = -1;
+  else if (b.lobe < 0 && o > drop + 0.14) b.lobe = 1;
+
+  // Inside the player's outline there is no "band" to hold — the only thing
+  // that matters is which way out is shorter, biased to the right-hand lobe
+  // because it is the one with room in it.
+  b.hidden = o > s.lo && o < s.hi;
+  if (b.hidden) {
+    const want = (o - s.lo) < (s.hi - o) * 0.55 ? 1 : -1;
+    if (b.side !== want) { b.side = want; }
+    b.sideT = Math.max(b.sideT || 0, 0.5);        // do not let the idle flip undo it
+    b.lobe = want > 0 ? -1 : 1;                   // exiting low means we live low
+    b.drift = 1;                                  // reads as a hard framing violation
+    return;
+  }
+
+  const lo = b.lobe > 0 ? lift : -EDGE;
+  const hi = b.lobe > 0 ? EDGE : drop;
   const want = o > hi ? 1 : o < lo ? -1 : 0;
   if (want && b.side !== want) { b.side = want; b.sideT = rand(1.5, 2.8); }
   // how hard the band is being violated — the quick-boost picker reads this
@@ -294,6 +345,7 @@ export function brainBoss(e, dt) {
     b.phase = 0; b.gap = 1.4; b.qbCd = 1.2; b.side = 1; b.plumeT = 0;
     b.hits = new Set();
     b.off = 0; b.drift = 0; b.seen = true; b.seenT = 0; b.blindT = 0; b.repickT = 0;
+    b.hidden = false;
     to(e, b.dropIn ? 'drop' : 'intro', 0);
     e.ctx.bus.emit('phase', { entity: e, phase: 0 });
   }
@@ -310,10 +362,12 @@ export function brainBoss(e, dt) {
   b.off = frameOff(e.ctx, e.pos.x, e.pos.z);
   b.seenT -= dt;
   if (b.seenT <= 0) { b.seenT = 0.22; b.seen = bossVisible(e.ctx, e); }
-  const onScreen = b.seen && Math.abs(b.off) < FRAME_LOST;
+  frameSide(e);                       // sets b.hidden / b.drift / b.side
+  // b.hidden is the third way to be invisible and the one the world ray
+  // cannot see: standing inside the player's own outline. It counts.
+  const onScreen = b.seen && !b.hidden && Math.abs(b.off) < FRAME_LOST;
   if (onScreen || b.state === 'drop' || b.state === 'poise') b.blindT = 0;
-  else b.blindT += dt;
-  frameSide(e);
+  else b.blindT += dt * (b.hidden ? 1.9 : 1);   // behind the player is worse
   if (b.opticOn) opticIdle(e);
 
   // --- phase gates ---------------------------------------------
@@ -385,7 +439,25 @@ export function brainBoss(e, dt) {
       e.plume = 0.10 + 0.70 * (1 - k);
       e.thrust = 0.18 + 0.80 * (1 - k);
       optic(e, k);
-      if (b.t >= POISE) { to(e, 'stalk', 0); b.gap = 0.55; }
+      if (b.t >= POISE) to(e, 'menace', 0);
+      break;
+    }
+    case 'menace': {
+      // The presentation beat: squared up, optic lit, walking a slow arc at
+      // a range where the whole machine reads. It only does three things —
+      // hold the arrival band, get clear of the player's outline, and be
+      // looked at. No boosts, no attacks; that is the point.
+      const far = d > HOLD_WANT + 7, near = d < Math.max(HOLD_NEAR, HOLD_WANT - 7);
+      const radial = far ? 1 : near ? -1 : 0;
+      // 0.28 of 78 m/s is a heavy walk-in, not a lunge: ~22 m/s, so the
+      // 6–14 m of range correction the landing leaves takes most of a beat.
+      strafe(e, nx, nz, radial, b.hidden ? 0.55 : (radial ? 0.28 : 0.16));
+      e.plume = 0.14 + (b.hidden ? 0.5 : 0) + (radial ? 0.20 : 0);
+      e.thrust = 0.30;
+      e.setPose(0, 0, 0, undefined, 0);
+      optic(e, 1);
+      if (b.t >= MENACE && !b.hidden) { to(e, 'stalk', 0); b.gap = 0.40; }
+      else if (b.t >= MENACE + 1.2) { to(e, 'stalk', 0); b.gap = 0.40; }
       break;
     }
     // ------------------------------------------------------------

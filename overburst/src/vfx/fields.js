@@ -32,6 +32,11 @@ export function makeShared() {
     uSunDir: { value: new THREE.Vector3(0.845, 0.358, -0.398).normalize() },
     uSunCol: { value: new THREE.Color(1.00, 0.74, 0.48) },
     uAmbCol: { value: new THREE.Color(0.30, 0.34, 0.42) },
+    // strongest live detonation light, in WORLD space: xyz = position,
+    // w = reach in metres (0 = nothing burning). Smoke reads it as a local
+    // emissive so a column standing over a fireball is lit from underneath.
+    uHot: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uHotCol: { value: new THREE.Color(0, 0, 0) },
   };
 }
 
@@ -187,14 +192,23 @@ void main() {
   mv.xy += dir * (position.x * len) + per * (position.y * w);
   gl_Position = projectionMatrix * mv;
   vUv = uv;
-  float flick = 0.70 + 0.30 * sin(age * 71.0 + iP1.w * 43.0);
-  vA = pow(1.0 - t, 1.3) * flick * (1.0 - fogAmt(-mv.z));
+  // Per-particle flicker RATE and DEPTH. One shared 71 Hz sine made a burst of
+  // forty sparks pulse in lockstep, which is a large part of why they read as
+  // one uniform population.
+  float fr = 26.0 + fract(iP1.w * 1.7) * 74.0;
+  float fd = 0.10 + fract(iP1.w * 0.61) * 0.42;
+  float flick = (1.0 - fd) + fd * sin(age * fr + iP1.w * 43.0);
+  // fade exponent also varies: some sparks die abruptly, some linger
+  float fp = 0.85 + fract(iP1.w * 3.13) * 1.30;
+  vA = pow(1.0 - t, fp) * flick * (1.0 - fogAmt(-mv.z));
   // A spark leaves the event white-hot and cools through orange into dull
   // red: without the leading white the streak reads as a coloured line, not
-  // as burning metal.
+  // as burning metal. The COOLING RATE is per-particle — a fragment of hot
+  // steel stays orange for a second while a fine spatter goes red instantly.
+  float ck = 0.45 + fract(iP1.w * 2.29) * 1.15;
   vec3 hot = mix(iCol, vec3(max(iCol.r, 2.4)), 0.55) * 1.9;
-  vCol = mix(hot, iCol, smoothstep(0.0, 0.14, t));
-  vCol = mix(vCol, iCol * vec3(0.40, 0.085, 0.02), smoothstep(0.12, 0.95, t));
+  vCol = mix(hot, iCol, smoothstep(0.0, 0.14 * ck, t));
+  vCol = mix(vCol, iCol * vec3(0.40, 0.085, 0.02), smoothstep(0.12 * ck, 0.95 * ck, t));
 }
 `;
 
@@ -205,6 +219,11 @@ varying vec3 vCol;
 varying float vA;
 void main() {
   float a = texture2D(uMap, vUv).a * vA;
+  // The streak is drawn head-forward along its own velocity (uv.x = 1 is the
+  // leading end), so the trail has to fade ALONG ITS LENGTH or every spark is
+  // a uniform dash. This is the difference between a tracer of burning metal
+  // and a line segment.
+  a *= mix(0.06, 1.0, pow(vUv.x, 0.75));
   if (a < 0.004) discard;
   gl_FragColor = vec4(vCol * a, 1.0);
   #include <tonemapping_fragment>
@@ -246,9 +265,10 @@ attribute vec4 iP0;   // birth, life, size0, size1
 attribute vec4 iP1;   // rot0, rotSpd, drag, gravity
 attribute vec4 iCol;  // rgb, opacity
 uniform float uTime;
+uniform vec4 uHot;
 varying vec2 vUv;
-varying vec3 vCol;
-varying float vA, vFog, vT;
+varying vec3 vCol, vHotV;
+varying float vA, vFog, vT, vHotK;
 ${FOG_HEAD}
 ${MOTION}
 void main() {
@@ -274,15 +294,25 @@ void main() {
   vA = min(1.0, t / 0.10) * pow(1.0 - t, 0.85) * iCol.a;
   vCol = iCol.rgb;
   vFog = fogAmt(-mv.z);
+  // LOCAL EMISSIVE. A smoke column standing over a burning wreck is lit from
+  // below and from one side by the fire, not only by the sun — without it the
+  // column is the same value top to bottom whatever is happening under it.
+  // Per-billow distance is plenty for a 10 m puff; the direction is what the
+  // fragment needs, so it goes out as a view-space delta.
+  vec3 hw = uHot.xyz - p;
+  float hd = length(hw);
+  vHotV = (viewMatrix * vec4(hw, 0.0)).xyz;
+  float k = uHot.w > 0.0 ? max(0.0, 1.0 - hd / uHot.w) : 0.0;
+  vHotK = k * k;
 }
 `;
 
 const SMOKE_F = /* glsl */`
 uniform sampler2D uMap;
-uniform vec3 uSunDir, uSunCol, uAmbCol, uFogColor;
+uniform vec3 uSunDir, uSunCol, uAmbCol, uFogColor, uHotCol;
 varying vec2 vUv;
-varying vec3 vCol;
-varying float vA, vFog, vT;
+varying vec3 vCol, vHotV;
+varying float vA, vFog, vT, vHotK;
 void main() {
   vec4 s = texture2D(uMap, vUv);
   float a = s.a * vA;
@@ -295,6 +325,13 @@ void main() {
   // Low ambient + a strong directional term: a smoke column needs a lit rim
   // and a dark body, otherwise it is a flat grey blob at background value.
   vec3 lit = uAmbCol * 0.55 + uSunCol * (max(0.0, d) * 0.95 + (d * 0.5 + 0.5) * 0.16);
+  // + the fire underneath it (guarded: a puff spawned exactly on the light
+  // would otherwise normalize a zero vector and paint a NaN pixel)
+  if (vHotK > 0.0) {
+    float hll = length(vHotV);
+    float hl = hll > 1e-4 ? dot(n, vHotV / hll) : 1.0;
+    lit += uHotCol * vHotK * (0.30 + 0.70 * max(0.0, hl));
+  }
   vec3 c = vCol * lit * (0.45 + s.r * 0.95);
   c = mix(c, uFogColor, vFog);
   gl_FragColor = vec4(c, a);
@@ -379,19 +416,26 @@ void main() {
   vec3 world = p + (rgt * q.x + upv * q.y) * sz;
   vec4 mv = viewMatrix * vec4(world, 1.0);
   gl_Position = projectionMatrix * mv;
-  // Per-billow UV rotation + mirror + zoom, all about the plate centre. One
-  // 256px flame plate reused at one orientation is what made every puff read
-  // as the same round blob; this makes each instance a different crop of it
-  // for free. Staying inside |u0| <= ~1.15 keeps every tap within the plate's
-  // own radial falloff, so the rotation never smears a clamped border row.
+  // Per-billow UV rotation + mirror + ANISOTROPIC zoom, all about the plate
+  // centre. One 256px flame plate reused at one orientation is what made every
+  // puff read as the same round blob. Squashing the sample space by a
+  // different amount per axis BEFORE the roll turns each instance into an
+  // ellipse at its own angle, so no two billows share a silhouette.
+  // Every axis scale is >= 1.0 on purpose: scaling below 1 zooms INTO the
+  // plate and the quad's own straight edge starts cutting opaque texels.
   float sa = iCol.y * 6.2831853;
   float c2 = cos(sa), s2 = sin(sa);
-  vec2 u0 = uv * 2.0 - 1.0;
+  vec2 uq = uv * 2.0 - 1.0;
+  vec2 u0 = uq * vec2(mix(1.00, 1.40, fract(iCol.y * 5.77)),
+                      mix(1.00, 1.40, fract(iCol.y * 9.13)));
   u0 = vec2(u0.x * c2 - u0.y * s2, u0.x * s2 + u0.y * c2);
-  u0 *= mix(0.94, 1.14, fract(iCol.y * 7.13));
+  u0 *= mix(1.00, 1.24, fract(iCol.y * 7.13));
   u0.x *= fract(iCol.y * 3.71) > 0.5 ? -1.0 : 1.0;
   vUv = u0 * 0.5 + 0.5;
-  vQ = u0;
+  // vQ is QUAD space, not sample space: the silhouette crop has to be measured
+  // against the billboard it can actually reach, otherwise the crop radius
+  // moves with the anisotropy and becomes the visible circular edge itself.
+  vQ = uq;
   vT = t; vHeat = iCol.x; vI = iCol.w; vCool = iCol.z; vSeed = iCol.y;
   vFog = fogAmt(-mv.z);
 }
@@ -405,32 +449,60 @@ void main() {
 // colour that was missing from the frame entirely.
 const FIRE_F = /* glsl */`
 uniform sampler2D uMap;
+uniform sampler2D uNoise;
 uniform vec3 uFogColor;
 varying vec2 vUv, vQ;
 varying float vT, vHeat, vI, vFog, vCool, vSeed;
 void main() {
   vec4 s = texture2D(uMap, vUv);
+  // SCROLLING NOISE MASK. One tap of the tiling turbulence plate, offset per
+  // billow and drifting with age. This is what breaks the two artefacts the
+  // review named: the circular quad edge (the crop radius below is noise
+  // driven, so the silhouette is ragged) and the lens-shaped intersection
+  // where two billows overlap (both alpha edges are now high-frequency, so
+  // there is no smooth arc left for a lens to form out of).
+  vec2 nuv = vQ * 0.46 + vec2(vSeed * 4.13, vSeed * 2.71 - vT * 0.26);
+  vec2 nz = texture2D(uNoise, nuv).rg;
+
   // Erosion: the alpha cut climbs with age so the billow dissolves from its
   // fringe inward (turbulent break-up) instead of fading as a whole disc.
-  // The 0.12 floor matters — it is what crops the plate's soft outer fringe
-  // so the silhouette comes from the flame noise instead of being a circle.
-  float thr = 0.09 + vT * vCool * 0.80;
-  float soft = mix(0.15, 0.42, vT);          // sharp leading edge, soft once cold
+  float thr = 0.09 + vT * vCool * 0.80 + (nz.g - 0.5) * 0.22;
+  thr = max(thr, 0.015);
+  float soft = mix(0.24, 0.50, vT);          // sharp leading edge, soft once cold
   float cov = smoothstep(thr, thr + soft, s.a);
-  // Trim only the corners of the quad; the ragged edge is the texture's job.
-  cov *= 1.0 - smoothstep(0.96, 1.14, length(vQ));
+  // Silhouette crop at a NOISE-MODULATED radius. A fixed radius here is a
+  // circle by construction; wobbling it by ±0.13 of the quad half-width makes
+  // the outline break up into tongues instead. The falloff is WIDE on purpose:
+  // a tight crop turns every billow back into a discrete cotton ball, and a
+  // ball of cotton balls is no better than a ball of discs.
+  float cropR = 0.80 + nz.r * 0.26;
+  cov *= 1.0 - smoothstep(cropR, cropR + 0.38, length(vQ));
+  // Hard guarantee that nothing reaches the quad's straight border: with the
+  // anisotropic sample transform the plate can be zoomed far enough that its
+  // clamped border row still carries alpha, and a clamped border row is a
+  // visible STRAIGHT edge — worse than the circle it replaced.
+  cov *= 1.0 - smoothstep(0.86, 1.0, max(abs(vQ.x), abs(vQ.y)));
 
   // The plate's heat channel falls off as pow(edge, 2.2), so a purely
   // multiplicative ramp confines "white-hot" to a couple of texels at the
   // dead centre of a core billow. The additive bias lifts the WHOLE billow
   // for high-heat instances, which is what gives the blast a core you can
   // actually see rather than a glint.
-  float h = clamp(s.r * vHeat * 0.85 + (vHeat - 1.0) * 0.24 - vT * 0.95, 0.0, 1.0);
+  // The same noise mask also breaks up the HEAT. The plate's heat channel is
+  // a clean pow(edge, 2.2) radial gradient, which is exactly what made every
+  // billow read as a small LIT SPHERE — thirty lit spheres is a bunch of
+  // grapes, not a fireball. Multiplying by the scrolling noise (mean 1.0, so
+  // it neither heats nor cools the ball overall) turns that gradient into hot
+  // tongues and cold pockets.
+  float hs = s.r * mix(0.62, 1.32, nz.r);
+  float h = clamp(hs * vHeat * 0.85 + (vHeat - 1.0) * 0.24 - vT * 0.95, 0.0, 1.0);
 
   // optical density — this is what makes it occlude
   float dens = cov * vI * (1.0 - smoothstep(0.66, 1.0, vT));
   dens *= mix(0.72, 1.0, smoothstep(0.0, 0.30, h));  // burnt-out wisps go thin
-  dens = clamp(dens, 0.0, 1.0);
+  // Never fully opaque: leaving 6 % of the billow behind showing through is
+  // what stops the boundary where two billows cross from cutting a hard lens.
+  dens = clamp(dens, 0.0, 0.94);
   if (dens < 0.004) discard;
 
   // Calibrated against THIS project's composite, not against physics: the
@@ -459,7 +531,7 @@ export class FireField extends QuadField {
   constructor(cap, shared, renderOrder = 12) {
     super(cap, [['iPos', 3], ['iVel', 3], ['iP0', 4], ['iP1', 4], ['iCol', 4]]);
     const mat = new THREE.ShaderMaterial({
-      uniforms: { ...shared, uMap: { value: fireTexture() } },
+      uniforms: { ...shared, uMap: { value: fireTexture() }, uNoise: { value: turbulenceTexture() } },
       vertexShader: FIRE_V, fragmentShader: FIRE_F,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
       // premultiplied alpha: c already carries the coverage factor
@@ -627,12 +699,54 @@ function shockDiscGeometry(RS = 72, RINGS = 5) {
   return g;
 }
 
+// The shell is drawn 3 % larger than the radius it SHADES with, so the
+// polygon always fully contains the analytic sphere and the rim never gets
+// clipped by a geodesic edge.
+const SHELL_PAD = 1.03;
+
+/**
+ * Fit the deck height around a blast to 3 azimuthal harmonics so a flat ring
+ * can be draped over it in the vertex shader.
+ *
+ * The sample ring MUST match the disc geometry's own parameterisation: with
+ * n = +Y the shader's tangent frame works out to tx = +Z, ty = +X, so vertex
+ * azimuth `a` lands at (sin a, cos a) — sample there or the drape is rotated.
+ *
+ * `out` is a reused Float32Array(7): [dc, c1, s1, c2, s2, c3, s3], metres
+ * relative to `baseY`. Allocation-free.
+ */
+const GRD_N = 16;
+export function fitGroundProfile(out, cx, cz, baseY, radius, sample) {
+  // a front that tried to climb a blast wall would tear; cap the excursion
+  const lim = Math.max(1.5, radius * 0.30);
+  let dc = 0, c1 = 0, s1 = 0, c2 = 0, s2 = 0, c3 = 0, s3 = 0;
+  for (let i = 0; i < GRD_N; i++) {
+    const a = (i / GRD_N) * Math.PI * 2;
+    const sn = Math.sin(a), cs = Math.cos(a);
+    let h = sample(cx + sn * radius, cz + cs * radius, baseY + 2.0) - baseY;
+    if (!Number.isFinite(h)) h = 0;
+    else h = h < -lim ? -lim : h > lim ? lim : h;
+    dc += h;
+    c1 += h * cs; s1 += h * sn;
+    c2 += h * Math.cos(2 * a); s2 += h * Math.sin(2 * a);
+    c3 += h * Math.cos(3 * a); s3 += h * Math.sin(3 * a);
+  }
+  const k = 2 / GRD_N;
+  out[0] = dc / GRD_N;
+  out[1] = c1 * k; out[2] = s1 * k;
+  out[3] = c2 * k; out[4] = s2 * k;
+  out[5] = c3 * k; out[6] = s3 * k;
+  return out;
+}
+
 const SHOCK_V = /* glsl */`
 attribute vec3 iPos;
 attribute vec3 iNrm;
 attribute vec4 iP0;   // birth, life, r0, r1
-attribute vec4 iP1;   // thickness, mode, ease, seed
+attribute vec4 iP1;   // thickness (<0 = soft dust front), mode, ease, seed
 attribute vec4 iCol;  // rgb, intensity
+attribute vec4 iGrd;  // ground drape: h0, cos1, sin1, cos2   (metres)
+attribute vec4 iGrd2; //               sin2, cos3, sin3, unused
 uniform float uTime;
 uniform float uMode;  // which of the two geometries this program draws
 varying vec2 vUv;
@@ -654,14 +768,27 @@ void main() {
     vec3 tx = normalize(cross(up, n));
     vec3 ty = cross(n, tx);
     world = iPos + (tx * position.x + ty * position.y) * R;
+    // GROUND DRAPE. The CPU samples the deck around the blast and hands us a
+    // 3-harmonic fit of its height by azimuth; uv.x IS the azimuth parameter
+    // and uv.y the normalised radius, so this bends the front to follow steps,
+    // ramps and rubble instead of stamping a perfect circle through them.
+    // Amplitude ramps in with R because the profile was measured at r1.
+    float a = uv.x * 6.2831853;
+    float h = iGrd.x
+            + iGrd.y * cos(a) + iGrd.z * sin(a)
+            + iGrd.w * cos(2.0 * a) + iGrd2.x * sin(2.0 * a)
+            + iGrd2.y * cos(3.0 * a) + iGrd2.z * sin(3.0 * a);
+    world.y += h * uv.y * clamp(R / max(iP0.w, 0.001), 0.0, 1.0);
     vN = n;
   } else {
-    world = iPos + position * R;
-    vN = normalize(mat3(viewMatrix) * normalize(position));
+    world = iPos + position * (R * ${SHELL_PAD.toFixed(3)});
+    // Both are carried in units of R so the fragment can intersect a UNIT
+    // sphere: exact fresnel, zero dependence on how the shell is tessellated.
+    vN = (viewMatrix * vec4(iPos, 1.0)).xyz / R;
   }
   vec4 mv = viewMatrix * vec4(world, 1.0);
   gl_Position = projectionMatrix * mv;
-  vV = -mv.xyz;
+  vV = iP1.y < 0.5 ? -mv.xyz : -mv.xyz / R;
   vUv = uv;
   vCol = iCol.rgb;
   vTh = iP1.x; vSeed = iP1.w; vT = t;
@@ -683,22 +810,57 @@ varying vec3 vCol, vN, vV;
 varying float vA, vTh, vSeed, vT, vFog;
 void main() {
   float a;
-  if (vTh > 0.0) {
+  if (vTh != 0.0) {
     // --- flat ring: uv.y is the normalised radius, 1.0 is the front ---
     float d = 1.0 - vUv.y;
-    float band = exp(-(d / vTh) * (d / vTh));               // the shock line
-    // The inner wash has to stay TIGHT to the front. A broad additive fill on
-    // a disc that is 100 m across lands as a warm veil over the whole lower
-    // frame — which is exactly the haze this pass exists to remove.
-    float wash = exp(-d / 0.11) * 0.06;                     // hot air behind it
     // azimuthal break-up so the front is never a perfect circle
     float br = 0.72 + 0.28 * sin(vUv.x * 44.0 + vSeed * 19.0)
                     + 0.16 * sin(vUv.x * 13.0 - vSeed * 7.0);
-    a = (band * br + wash) * vA;
+    if (vTh < 0.0) {
+      // ---- SOFT DUST FRONT ----------------------------------------
+      // Not a shock LINE: a wall of lifted dust with no hard edge anywhere.
+      // The peak sits inside the geometric rim and is feathered to zero at
+      // it, so the disc boundary itself is never visible; the radius of the
+      // peak is wobbled per azimuth so the wall is a ragged front, not a
+      // circle drawn on the deck.
+      // ONE instance, two beats: the band opens TIGHT (so the detonation still
+      // snaps on frame one) and relaxes into a wide dust wall over ~0.2 of its
+      // life. Two separate discs to get that were what read as concentric
+      // circles painted on the deck.
+      float th = -vTh * mix(0.26, 1.0, smoothstep(0.0, 0.22, vT));
+      float wob = 0.055 * sin(vUv.x * 9.0 + vSeed * 5.0)
+                + 0.035 * sin(vUv.x * 23.0 - vSeed * 11.0)
+                + 0.022 * sin(vUv.x * 51.0 + vSeed * 3.0);
+      float x = d - (0.14 + wob);
+      float band = exp(-(x * x) / (th * th));
+      band *= smoothstep(0.0, 0.13, d);          // feather out at the rim
+      // blotchy interior so it reads as billowing dust, not a gradient
+      // (do NOT name this variable "patch" - that is a GLSL ES reserved word
+      //  and it takes the whole shock field's fragment program down with it)
+      float mott = 0.68 + 0.32 * sin(vUv.x * 31.0 + vUv.y * 17.0 + vSeed * 7.0)
+                                * sin(vUv.y * 9.0 - vSeed * 4.0);
+      a = band * mix(0.62, 1.0, br) * mott * vA;
+    } else {
+      float band = exp(-(d / vTh) * (d / vTh));             // the shock line
+      // The inner wash has to stay TIGHT to the front. A broad additive fill on
+      // a disc that is 100 m across lands as a warm veil over the whole lower
+      // frame — which is exactly the haze this pass exists to remove.
+      float wash = exp(-d / 0.11) * 0.06;                   // hot air behind it
+      a = (band * br + wash) * vA;
+    }
   } else {
     // --- condensation shell: rim only, never a filled ball ---
-    float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-    a = pow(f, 4.2) * vA * 1.6;
+    // ANALYTIC fresnel. vN/vV arrive divided by the shell radius, so this is a
+    // ray/UNIT-SPHERE intersection: |dot(n, rd)| works out to sqrt(disc), with
+    // no dependence on the vertex the fragment was interpolated from. The old
+    // version interpolated a normal across a geodesic chord and then raised it
+    // to the 4.2, which is exactly how a critic ended up counting triangles.
+    vec3 rd = normalize(-vV);
+    float bb = dot(vN, rd);
+    float disc = bb * bb - dot(vN, vN) + 1.0;
+    if (disc <= 0.0) discard;
+    float f = 1.0 - sqrt(disc);
+    a = pow(max(f, 0.0), 4.2) * vA * 1.6;
   }
   a *= 1.0 - vFog;
   if (a < 0.004) discard;
@@ -712,7 +874,8 @@ export class ShockField {
   constructor(cap, shared, renderOrder = 14) {
     this.cap = cap;
     this.cursor = 0;
-    const specs = [['iPos', 3], ['iNrm', 3], ['iP0', 4], ['iP1', 4], ['iCol', 4]];
+    const specs = [['iPos', 3], ['iNrm', 3], ['iP0', 4], ['iP1', 4], ['iCol', 4],
+      ['iGrd', 4], ['iGrd2', 4]];
     const mat = (mode) => new THREE.ShaderMaterial({
       uniforms: { ...shared, uMode: { value: mode } },
       vertexShader: SHOCK_V, fragmentShader: SHOCK_F,
@@ -734,7 +897,12 @@ export class ShockField {
       return g;
     };
     const disc = shockDiscGeometry();
-    const shell = new THREE.IcosahedronGeometry(1, 2);
+    // detail 3 = 20*(3+1)^2 = 320 tris (was 180), still ONE draw call. With
+    // the analytic fresnel above, tessellation now only controls the
+    // SILHOUETTE, not the shading — and SHELL_PAD guarantees the hull strictly
+    // contains the sphere it shades (face inradius 0.996 * 1.03 = 1.026 > 1),
+    // so the rim is never clipped along a geodesic edge.
+    const shell = new THREE.IcosahedronGeometry(1, 3);
     this.geoA = build(disc);
     this.geoB = build(shell);
     disc.dispose(); shell.dispose();
@@ -757,7 +925,9 @@ export class ShockField {
     this.clear();
   }
 
-  /** o: {birth, life, r0, r1, thickness, mode, ease, r, g, b, intensity} */
+  /** o: {birth, life, r0, r1, thickness, mode, ease, r, g, b, intensity, grd}
+   *  `grd` (optional Float32Array(7)) is the 3-harmonic ground-height fit that
+   *  drapes a flat front over the deck — see fitGroundProfile(). */
   spawn(px, py, pz, nx, ny, nz, o) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.cap;
@@ -769,6 +939,14 @@ export class ShockField {
     a.iP1[i4 + 1] = o.mode ?? 0; a.iP1[i4 + 2] = o.ease ?? 2.6;
     a.iP1[i4 + 3] = Math.random() * 6.28;
     a.iCol[i4] = o.r; a.iCol[i4 + 1] = o.g; a.iCol[i4 + 2] = o.b; a.iCol[i4 + 3] = o.intensity ?? 1;
+    const g = o.grd;
+    if (g) {
+      a.iGrd[i4] = g[0]; a.iGrd[i4 + 1] = g[1]; a.iGrd[i4 + 2] = g[2]; a.iGrd[i4 + 3] = g[3];
+      a.iGrd2[i4] = g[4]; a.iGrd2[i4 + 1] = g[5]; a.iGrd2[i4 + 2] = g[6]; a.iGrd2[i4 + 3] = 0;
+    } else {
+      a.iGrd[i4] = 0; a.iGrd[i4 + 1] = 0; a.iGrd[i4 + 2] = 0; a.iGrd[i4 + 3] = 0;
+      a.iGrd2[i4] = 0; a.iGrd2[i4 + 1] = 0; a.iGrd2[i4 + 2] = 0; a.iGrd2[i4 + 3] = 0;
+    }
     this._dirty = true;
   }
 

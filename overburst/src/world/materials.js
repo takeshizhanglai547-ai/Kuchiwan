@@ -44,10 +44,15 @@ export function buildMaterials() {
     dithering: true,
   });
 
+  // The crust is a SURFACE. It used to run at emissiveIntensity 1.7-2.4 with a
+  // >1 albedo boost baked into its vertex colours, which turned the whole basin
+  // floor into a light box that out-glowed everything standing on it. Real
+  // deck-level point lights do the illuminating now; this just glows in the
+  // cracks. (arena.update() animates emissiveIntensity around ~1.0.)
   M.slag = new THREE.MeshStandardMaterial({
     map: slg.map, normalMap: slg.normalMap, roughnessMap: slg.roughnessMap,
-    emissiveMap: slg.emissiveMap, emissive: 0xffffff, emissiveIntensity: 1.7,
-    color: 0xffffff, roughness: 0.86, metalness: 0.05,
+    emissiveMap: slg.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0.46,
+    color: 0xd6cec2, roughness: 0.88, metalness: 0.05,
     normalScale: new THREE.Vector2(1.8, 1.8),
     vertexColors: true, envMapIntensity: 0.4,
   });
@@ -73,7 +78,10 @@ export function buildMaterials() {
   };
   M.steel = new THREE.MeshStandardMaterial({ ...steelBase, color: 0x807970 });
   M.steelD = new THREE.MeshStandardMaterial({ ...steelBase, color: 0x544f49, roughness: 0.76, metalness: 0.30 });
-  M.rust = new THREE.MeshStandardMaterial({ ...steelBase, color: 0x55392a, roughness: 0.94, metalness: 0.08 });
+  // Rust is not black. 0x55392a is 0.089 linear in its brightest channel, so a
+  // ladle car or an ingot mould standing in the middle of a lit basin still
+  // resolved as a hole. Real oxide sits around 0.20-0.25 albedo.
+  M.rust = new THREE.MeshStandardMaterial({ ...steelBase, color: 0x7d5a41, roughness: 0.94, metalness: 0.08 });
 
   // ---- painted / clad ----------------------------------------
   M.paint = new THREE.MeshStandardMaterial({
@@ -117,37 +125,49 @@ export function buildMaterials() {
     color: 0x14120f, metalness: 0.2, roughness: 0.5,
   });
 
-  M.molten = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 0.78, 0.15), fog: true });
+  M.molten = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.5, 0.62, 0.13), fog: true });
   M.furnace = new THREE.MeshBasicMaterial({ color: new THREE.Color(5.0, 1.60, 0.38), fog: true });
-  M.ember = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.30, 0.06), fog: true });
+  // 'ember' is the heat BLOOM AROUND a runner or a tap, and it is laid down as
+  // wide unlit plates: the flow network alone carpets most of the basin floor
+  // with them. At 1.5 linear that unlit carpet was the brightest surface in the
+  // frame — brighter than the ingot moulds and ladle cars standing on it, which
+  // is physically backwards and reads instantly as a decal. It is a stain now;
+  // the hot metal itself ('molten') and the deck-level point lights carry the
+  // heat. Do not raise this without re-measuring pad-vs-prop luminance.
+  M.ember = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.30, 0.075, 0.017), fog: true });
   M.beacon = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 0.55, 0.12), fog: true });
 
   // ---- silhouette / distant ----------------------------------
-  // Near-black on purpose. Everything you see out there is the fog colour
-  // bleeding through a dark mass — that is what "half-dissolved in haze"
-  // actually looks like. A mid-grey albedo out here reads as a cardboard cutout.
+  // Still darker than the midground so aerial perspective does not invert, but
+  // no longer near-black: at 700 u the exponential fog is only ~55 % opaque, so
+  // a 0.027-linear albedo out there reads as a hole in the skyline rather than
+  // a building. These sit at ~55-60 % of the perimeter ring's albedo, which is
+  // the ordering that actually produces depth.
   M.far = new THREE.MeshStandardMaterial({
-    color: 0x2b2822, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.10, fog: true,
+    color: 0x3e3931, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.34, fog: true,
   });
   M.farD = new THREE.MeshStandardMaterial({
-    color: 0x1d1b17, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.08, fog: true,
+    color: 0x2a2721, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.26, fog: true,
   });
+  // 'dark' is used for recesses, furnace throats and stack caps. It is meant to
+  // read as DEEP, not as a punched-out hole — 0x141210 with a 0.2 IBL term was
+  // clipping to literal RGB(0,0,0) over ~9 % of a gameplay frame.
   M.dark = new THREE.MeshStandardMaterial({
-    color: 0x141210, roughness: 0.95, metalness: 0.1, envMapIntensity: 0.2,
+    color: 0x2a2620, roughness: 0.95, metalness: 0.1, envMapIntensity: 0.42,
   });
 
   // ---- distance-graded set for the perimeter ring (r 370..470) ----
   // Same keys, ~half the albedo. Substituted wholesale at build time, so it
   // costs no extra draw calls: the ring still merges to one mesh per key.
-  M.rConc = dim(M.conc, 0.42, 0.22);
-  M.rConcD = dim(M.concD, 0.44, 0.22);
-  M.rConcW = dim(M.concW, 0.40, 0.22);
-  M.rSteel = dim(M.steel, 0.48, 0.30);
-  M.rSteelD = dim(M.steelD, 0.50, 0.30);
-  M.rRust = dim(M.rust, 0.52, 0.26);
-  M.rClad = dim(M.clad, 0.48, 0.24);
-  M.rHazard = dim(M.hazard, 0.52, 0.22);
-  M.rGrate = dim(M.grate, 0.50, 0.24);
+  M.rConc = dim(M.conc, 0.54, 0.34);
+  M.rConcD = dim(M.concD, 0.56, 0.34);
+  M.rConcW = dim(M.concW, 0.52, 0.34);
+  M.rSteel = dim(M.steel, 0.60, 0.40);
+  M.rSteelD = dim(M.steelD, 0.62, 0.40);
+  M.rRust = dim(M.rust, 0.64, 0.36);
+  M.rClad = dim(M.clad, 0.60, 0.34);
+  M.rHazard = dim(M.hazard, 0.64, 0.32);
+  M.rGrate = dim(M.grate, 0.62, 0.34);
 
   M.__ring = {
     ...M,

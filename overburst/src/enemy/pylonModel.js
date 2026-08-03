@@ -6,13 +6,33 @@
 //  buildPylon(worldMaterials) -> { root, api }
 //    api.update(dt, t)        spin the shell, flicker the core
 //    api.setShield(0..1)      shell opacity / scale follows the charge
-//    api.shieldHit(k)         one-frame flare where the shell was struck
-//    api.breakShield()        shatter + fade the shell for good
+//    api.shieldHit(k, point)  impact bloom + expanding ring on the shell
+//    api.breakShield()        panels blow out and the shell fails
 //    api.setDamage(0..1)      scorch + ember glow on the mast
 //    api.dispose()            frees this instance's own materials
 //
 //  The structure is authored ONCE into a merged template (5 draw calls)
 //  and cloned per instance; only the shell + core materials are per-unit.
+//
+//  THE SHELL. This used to be a wireframe icosphere sitting inside a
+//  second, fainter icosphere: a debug primitive with a glow on it. You
+//  could count the geodesic triangles, which is the single most
+//  browser-game thing in the build and a direct hit on ART_DIRECTION §6
+//  ("no neon grids"). It is now ONE detail-3 shell (1280 faces, smooth
+//  normals) carrying a hex-panel mask and a fresnel rim:
+//
+//    * the panel lattice is cube-projected hex cells, derivative-antialiased
+//      and faded out as soon as a cell drops under a few pixels, so it never
+//      moires into a grid at range;
+//    * panel brightness is hashed per cell and drifts on its own clock, so
+//      it reads as a field of discrete armour plates rather than a mesh;
+//    * everything is weighted by fresnel — face-on the shell is nearly clear
+//      glass and you see the pylon through it; the plating only crowds up at
+//      the silhouette, which is how a real energy barrier reads;
+//    * a strike blooms at the contact point and throws a ring across the
+//      surface; a failure blows the plates out in hashed order.
+//
+//  One draw call per pylon, down from two, and no wireframe anywhere.
 // ============================================================
 import * as THREE from 'three';
 import { MeshBuilder, G, TRS } from '../world/kit.js';
@@ -20,6 +40,142 @@ import { clamp } from '../util/math.js';
 
 const TAU = Math.PI * 2;
 let TEMPLATE = null;
+
+// ------------------------------------------------------------------
+//  shared geometry — the shell/belt/core meshes are identical across
+//  every pylon, so they are built once and cloned by reference. Only
+//  the materials are per-unit (they animate independently).
+// ------------------------------------------------------------------
+const GEO = new Map();
+function geo(key, make) {
+  let g = GEO.get(key);
+  if (!g) { g = make(); GEO.set(key, g); }
+  return g;
+}
+
+/** three refreshes these every frame for any material with fog:true —
+ *  a custom ShaderMaterial must declare them or the renderer throws. */
+function withFog(u) {
+  u.fogColor = { value: new THREE.Color(0xffffff) };
+  u.fogDensity = { value: 0.00025 };
+  u.fogNear = { value: 1 };
+  u.fogFar = { value: 2000 };
+  return u;
+}
+
+// ------------------------------------------------------------------
+//  the barrier shader
+// ------------------------------------------------------------------
+const SHELL_V = /* glsl */`
+varying vec3 vObj;      // unit object-space direction — drives the panel projection
+varying float vFres;    // 1 at the silhouette, 0 face-on
+#include <fog_pars_vertex>
+void main() {
+  vObj = normalize(position);
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vec3 nv = normalize(normalMatrix * normal);
+  vec3 vv = normalize(-mvPosition.xyz);
+  vFres = 1.0 - abs(dot(nv, vv));
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}
+`;
+
+const SHELL_F = /* glsl */`
+uniform vec3 uPlate;    // plate-fill colour (linear HDR)
+uniform vec3 uEdge;     // seam / rim colour
+uniform float uTime;
+uniform float uCharge;  // 0..1 shield reserve
+uniform float uFlash;   // global hit brightening
+uniform float uBreak;   // 0 = intact, 1 = fully blown out
+uniform float uGain;    // master opacity
+uniform vec4 uHit;      // xyz = object-space strike direction, w = 1..0 life
+varying vec3 vObj;
+varying float vFres;
+#include <fog_pars_fragment>
+
+float hexEdge(vec2 p) {
+  p = abs(p);
+  return max(dot(p, vec2(0.5, 0.8660254)), p.x);
+}
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(127.31, 311.7));
+  p += dot(p, p + 34.19);
+  return fract(p.x * p.y);
+}
+
+void main() {
+  // ---- cube-project the sphere so the hex tiling stays even -------
+  vec3 an = abs(vObj);
+  vec2 uv;
+  float face;
+  if (an.x >= an.y && an.x >= an.z)      { uv = vObj.zy / an.x; face = vObj.x > 0.0 ? 0.0 : 1.0; }
+  else if (an.y >= an.z)                 { uv = vObj.xz / an.y; face = vObj.y > 0.0 ? 2.0 : 3.0; }
+  else                                   { uv = vObj.xy / an.z; face = vObj.z > 0.0 ? 4.0 : 5.0; }
+  uv *= 3.4;
+
+  // ---- hex cell --------------------------------------------------
+  const vec2 R2 = vec2(1.0, 1.7320508);
+  vec2 h = R2 * 0.5;
+  vec2 a = mod(uv, R2) - h;
+  vec2 b = mod(uv - h, R2) - h;
+  vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+  vec2 id = uv - gv + face * 17.0;
+  float e = 0.5 - hexEdge(gv);                 // 0 on the seam, 0.5 mid-plate
+
+  // derivative AA, and a hard fade the moment a cell stops being
+  // resolvable — this is what keeps it from turning into a neon grid
+  float fw = fwidth(e);
+  float seam = 1.0 - smoothstep(0.0, fw * 2.2 + 0.030, e);
+  float detail = 1.0 - smoothstep(0.045, 0.115, fw);
+  seam *= detail;
+
+  // ---- per-plate character ---------------------------------------
+  float rnd = hash21(id);
+  float plate = 0.55 + 0.45 * sin(uTime * (0.55 + rnd * 1.7) + rnd * 41.0);
+  float dead = step(uBreak, rnd * 0.86 + 0.14);   // failure blows plates out in hashed order
+
+  // ---- fresnel weighting -----------------------------------------
+  // The exponent on 'grazing' is the single most important number here:
+  // it decides how much plating you see face-on. Too low and the lattice
+  // wraps the whole dome and you are back to a neon grid; this high, the
+  // front is clear enough to read the armoured mast standing inside it.
+  float f = clamp(vFres, 0.0, 1.0);
+  float rim = pow(f, 3.4);
+  float grazing = pow(f, 2.0);
+
+  // ---- impact: bloom at the contact point + a ring running off it --
+  float hit = 0.0;
+  if (uHit.w > 0.0) {
+    float ang = acos(clamp(dot(vObj, uHit.xyz), -1.0, 1.0));
+    float k = 1.0 - uHit.w;
+    float ring = ang - k * 2.6;
+    hit = exp(-abs(ring) * 7.0) * uHit.w * 0.85;
+    hit += exp(-ang * ang * 7.0) * uHit.w * 1.5;
+  }
+
+  // ---- assemble ---------------------------------------------------
+  float c = uCharge;
+  float body  = (0.007 + 0.020 * c) * (0.30 + 0.70 * grazing);
+  float fill  = (0.10 + 0.75 * rnd) * grazing * (0.020 + 0.055 * c) * plate;
+  float lines = seam * (0.08 + 0.66 * grazing) * (0.09 + 0.33 * c) * (0.45 + 0.55 * plate);
+  float edge  = rim * (0.22 + 0.58 * c);
+
+  body *= dead; fill *= dead; lines *= dead;
+  edge *= mix(1.0, dead, 0.55);
+
+  float glow = (edge + lines + hit) + uFlash * (0.30 + 0.90 * grazing + seam * 0.8);
+  float aa = (body + fill + glow) * uGain;
+  if (aa < 0.002) discard;
+
+  vec3 col = uPlate * (body + fill) + uEdge * glow;
+  gl_FragColor = vec4(col, clamp(aa, 0.0, 1.0));
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
+}
+`;
 
 // ------------------------------------------------------------------
 //  structure — brutalist plinth, armoured mast, emitter crown
@@ -111,7 +267,7 @@ export function buildPylon(materials, opts = {}) {
   const coreMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(4.2, 1.35, 0.34), fog: true, toneMapped: true,
   });
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 0), coreMat);
+  const core = new THREE.Mesh(geo('core', () => new THREE.IcosahedronGeometry(1.15, 2)), coreMat);
   core.position.set(0, 15.0, 0);
   root.add(core);
 
@@ -119,51 +275,62 @@ export function buildPylon(materials, opts = {}) {
     color: new THREE.Color(2.6, 0.85, 0.26), fog: true,
     transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.075, 4, 20), ringMat);
+  const ring = new THREE.Mesh(geo('ring', () => new THREE.TorusGeometry(2.0, 0.075, 4, 20)), ringMat);
   ring.position.set(0, 15.0, 0);
   ring.rotation.x = Math.PI / 2;
   root.add(ring);
 
-  // ---- energy shell: two counter-rotating faceted shells ---------
+  // ---- energy shell: one plated barrier + two structural belts ----
   const shell = new THREE.Group();
   shell.position.y = cy;
   root.add(shell);
 
-  const skinMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(1.25, 0.42, 0.13), fog: true,
-    transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending,
-    depthWrite: false, side: THREE.DoubleSide,
+  const skinU = withFog({
+    uPlate: { value: new THREE.Color(1.55, 0.60, 0.20) },
+    uEdge: { value: new THREE.Color(3.30, 1.25, 0.42) },
+    uTime: { value: 0 },
+    uCharge: { value: 1 },
+    uFlash: { value: 0 },
+    uBreak: { value: 0 },
+    uGain: { value: 1 },
+    uHit: { value: new THREE.Vector4(0, 1, 0, 0) },
   });
-  const skin = new THREE.Mesh(new THREE.IcosahedronGeometry(R, 1), skinMat);
+  const skinMat = new THREE.ShaderMaterial({
+    uniforms: skinU, vertexShader: SHELL_V, fragmentShader: SHELL_F,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, fog: true,
+  });
+  // detail 3 = 1280 faces with smooth normals: enough that the silhouette
+  // is a circle, not a polygon, and enough that the panel mask has surface
+  // to sit on. The geometry is unit-radius and shared; R rides on the scale.
+  const skin = new THREE.Mesh(geo('shell', () => new THREE.IcosahedronGeometry(1, 3)), skinMat);
+  skin.scale.setScalar(R);
   shell.add(skin);
-
-  const gridMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(3.4, 1.15, 0.34), fog: true,
-    transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
-    depthWrite: false, wireframe: true,
-  });
-  const grid = new THREE.Mesh(new THREE.IcosahedronGeometry(R * 1.012, 1), gridMat);
-  shell.add(grid);
 
   const beltMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(3.0, 1.0, 0.30), fog: true,
     transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-  const beltA = new THREE.Mesh(new THREE.TorusGeometry(R * 0.99, 0.11, 4, 28), beltMat);
+  const beltA = new THREE.Mesh(geo('beltA', () => new THREE.TorusGeometry(0.99, 0.0140, 4, 28)), beltMat);
   beltA.rotation.x = Math.PI / 2 + 0.28;
+  beltA.scale.setScalar(R);
   shell.add(beltA);
-  const beltB = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.09, 4, 28), beltMat);
+  const beltB = new THREE.Mesh(geo('beltB', () => new THREE.TorusGeometry(0.93, 0.0115, 4, 28)), beltMat);
   beltB.rotation.x = Math.PI / 2 - 0.5;
   beltB.rotation.z = 0.6;
+  beltB.scale.setScalar(R);
   shell.add(beltB);
 
-  const mats = [coreMat, ringMat, skinMat, gridMat, beltMat];
-  const geos = [core.geometry, ring.geometry, skin.geometry, grid.geometry, beltA.geometry, beltB.geometry];
+  const mats = [coreMat, ringMat, skinMat, beltMat];
+  const _hitDir = skinU.uHit.value;
+  const _inv = new THREE.Matrix4();
+  const _lp = new THREE.Vector3();
 
   let flash = 0;
   let charge = 1;
   let broken = 0;      // 0 = up, >0 = shattering
   let damage = 0;
+  let hitLife = 0;     // seconds left on the impact ripple
 
   const api = {
     core,
@@ -172,24 +339,30 @@ export function buildPylon(materials, opts = {}) {
     shieldY: cy,
 
     update(dt, t) {
-      shell.rotation.y += dt * 0.55;
-      skin.rotation.x += dt * 0.21;
-      grid.rotation.y -= dt * 0.86;
-      grid.rotation.z += dt * 0.13;
+      shell.rotation.y += dt * 0.30;
+      skin.rotation.x += dt * 0.085;      // the plating drifts, it does not spin
+      skin.rotation.z -= dt * 0.055;
       beltA.rotation.z += dt * 1.35;
       beltB.rotation.y -= dt * 1.05;
       ring.rotation.z += dt * 1.9;
 
+      skinU.uTime.value = t;
       if (flash > 0) flash = Math.max(0, flash - dt * 3.4);
+      if (hitLife > 0) {
+        hitLife = Math.max(0, hitLife - dt * 1.9);
+        _hitDir.w = hitLife;
+      } else if (_hitDir.w !== 0) _hitDir.w = 0;
 
       if (broken > 0) {
         broken += dt;
-        const k = Math.min(1, broken / 0.45);
+        const k = Math.min(1, broken / 0.55);
         const s = 1 + k * 0.42;
         shell.scale.set(s, s * STRETCH, s);
         const o = (1 - k) * (1 - k);
-        skinMat.opacity = 0.22 * o;
-        gridMat.opacity = 0.80 * o;
+        skinU.uBreak.value = k;
+        skinU.uGain.value = 0.55 + 1.9 * (1 - k) * k;   // one hot flare as it lets go
+        skinU.uFlash.value = 0.85 * o;
+        skinU.uCharge.value = o;
         beltMat.opacity = 0.90 * o;
         if (k >= 1) shell.visible = false;
         return;
@@ -198,9 +371,10 @@ export function buildPylon(materials, opts = {}) {
       // idle breathing + damage flicker
       const pulse = 0.86 + Math.sin(t * 2.1) * 0.09 + Math.sin(t * 7.7) * 0.03;
       const c = charge * pulse;
-      skinMat.opacity = (0.022 + 0.055 * c) + flash * 0.30;
-      gridMat.opacity = (0.10 + 0.26 * c) + flash * 0.75;
-      beltMat.opacity = (0.15 + 0.38 * c) + flash * 0.6;
+      skinU.uCharge.value = c;
+      skinU.uFlash.value = flash * 0.55;
+      skinU.uGain.value = 1;
+      beltMat.opacity = (0.13 + 0.30 * c) + flash * 0.6;
       const s = 0.97 + 0.03 * c + flash * 0.05;
       shell.scale.set(s, s * STRETCH, s);
 
@@ -211,7 +385,25 @@ export function buildPylon(materials, opts = {}) {
     },
 
     setShield(f) { charge = clamp(f, 0, 1); },
-    shieldHit(k) { flash = Math.min(1.2, flash + (k === undefined ? 0.6 : k)); },
+
+    /**
+     * `point` is the world-space contact. Converting it into the shell's own
+     * frame is what lets the bloom land where the round actually struck
+     * instead of lighting the whole bubble like a bulb.
+     */
+    shieldHit(k, point) {
+      flash = Math.min(1.2, flash + (k === undefined ? 0.6 : k));
+      if (point && shell.visible) {
+        shell.updateWorldMatrix(true, false);
+        _inv.copy(shell.matrixWorld).invert();
+        _lp.copy(point).applyMatrix4(_inv);
+        if (_lp.lengthSq() > 1e-6) {
+          _lp.normalize();
+          _hitDir.set(_lp.x, _lp.y, _lp.z, 1);
+          hitLife = 1;
+        }
+      }
+    },
     breakShield() { if (broken <= 0) broken = 1e-4; },
     shieldBroken() { return broken > 0; },
     setDamage(v) {
@@ -219,14 +411,18 @@ export function buildPylon(materials, opts = {}) {
       ringMat.opacity = 0.9 * (1 - damage * 0.7);
     },
     reset() {
-      broken = 0; flash = 0; charge = 1; damage = 0;
+      broken = 0; flash = 0; charge = 1; damage = 0; hitLife = 0;
       shell.visible = true;
       shell.scale.set(1, STRETCH, 1);
       shell.rotation.set(0, 0, 0);
+      skin.rotation.set(0, 0, 0);
+      skinU.uBreak.value = 0;
+      skinU.uGain.value = 1;
+      skinU.uFlash.value = 0;
+      _hitDir.w = 0;
     },
     dispose() {
       for (const m of mats) m.dispose();
-      for (const g of geos) g.dispose();
     },
   };
 
@@ -234,6 +430,8 @@ export function buildPylon(materials, opts = {}) {
 }
 
 export function disposePylonTemplate() {
+  for (const [, g] of GEO) g.dispose();
+  GEO.clear();
   if (!TEMPLATE) return;
   TEMPLATE.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
   TEMPLATE = null;
