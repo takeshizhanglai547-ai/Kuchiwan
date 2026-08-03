@@ -33,6 +33,20 @@ function digits(max) {
   return Math.min(5, String(n).length);
 }
 
+/** Live count -> decimal, cached on the row. */
+function pcount(r, v) {
+  const n = v > 0 ? v : 0;
+  if (r.pv !== n) { r.pv = n; r.ps = String(n); }
+  return r.ps;
+}
+
+/** Reserve -> "/nnn" zero-padded to the reserve's own width, cached. */
+function pres(r, v) {
+  const n = v > 0 ? v : 0;
+  if (r.sv !== n) { r.sv = n; r.ss = '/' + pad(n, r.wB); }
+  return r.ss;
+}
+
 export class CombatHud {
   constructor(ctx) {
     this.ctx = ctx;
@@ -164,9 +178,12 @@ export class CombatHud {
     for (let i = 0; i < rowEls.length; i++) {
       const r = rowEls[i];
       const cfg = CFG.WEAPONS[SLOTS[i].cfg] || {};
-      // Field widths are the digit count of each field's MAXIMUM, resolved
-      // once here. Padding a 3-digit reserve to 2 printed "00/480" and let
-      // the numerals slide sideways every time a count crossed 100.
+      // The RESERVE is zero-padded to the digit count of its own maximum, so
+      // "/480" and "/096" hold one width for the whole sortie. The LIVE count
+      // is not padded at all: .w-amt b is a right-aligned flex cell butted
+      // against a fixed-width reserve, so the slash never moves anyway, and
+      // padding only bought a fake "00" on an empty magazine next to a bare
+      // "0" on the missile rack — two different conventions in one column.
       this.wRows.push({
         key: SLOTS[i].key, cfg, el: r,
         amt: r.querySelector('.w-amt b'),
@@ -174,8 +191,10 @@ export class CombatHud {
         lk: r.querySelector('.w-amt .lk'),
         sweep: r.querySelector('.w-sweep i'),
         chg: r.querySelector('.chg'),
-        wA: digits(SLOTS[i].key === 'missile' ? cfg.count : SLOTS[i].key === 'rifle' ? cfg.magazine : cfg.ammo),
         wB: digits(cfg.ammo),
+        // memoised decimals: a counter changes a few times a minute, so
+        // rebuilding its string 60 times a second is pure garbage
+        pv: -1, ps: '', sv: -1, ss: '', lv: -1, ls: '',
       });
     }
 
@@ -319,7 +338,9 @@ export class CombatHud {
     en = en < 0 ? 0 : en > enMax ? enMax : en;
     const ef = en / enMax;
     setSX(this.enFill, ef);
-    setText(this.enNum, String(Math.round(en)));
+    // grouped, like AP directly above it — "4000" next to "11,200" was two
+    // different number formats stacked six pixels apart
+    setText(this.enNum, group(en));
 
     const ovl = p.enOverload === true || p.overload === true || p.redline === true ||
       (typeof p.redlineTimer === 'number' && p.redlineTimer > 0) || ef <= 0.004;
@@ -351,14 +372,14 @@ export class CombatHud {
       const r = this.wRows[i];
       const s = (W && W[r.key]) || null;
       let primary = '--', sub = '', lk = '', ready = false, empty = false, reloading = false;
-      let sweep = 1, charge = 0;
+      let sweep = 1, charge = 0, word = false;
 
       if (r.key === 'rifle') {
         const mag = s && typeof s.mag === 'number' ? s.mag : (r.cfg.magazine || 0);
         const ammo = s && typeof s.ammo === 'number' ? s.ammo : (r.cfg.ammo || 0);
         reloading = !!(s && s.reloading);
-        primary = pad(Math.max(0, mag), r.wA);
-        sub = '/' + pad(Math.max(0, ammo), r.wB);
+        primary = pcount(r, mag);
+        sub = pres(r, ammo);
         empty = ammo <= 0 && mag <= 0;
         ready = !reloading && mag > 0;
         sweep = this._sweep('rifle', s, reloading, r.cfg.reloadTime || 1, dt);
@@ -367,6 +388,7 @@ export class CombatHud {
         const cdMax = r.cfg.cooldown || 1;
         ready = cd <= 0.001;
         primary = ready ? 'READY' : cd.toFixed(1);
+        word = ready;
         sweep = ready ? 1 : clamp01(1 - cd / cdMax);
         if (s && typeof s.charge === 'number' && s.charge > 0) charge = clamp01(s.charge);
       } else if (r.key === 'missile') {
@@ -374,20 +396,20 @@ export class CombatHud {
         const cap = r.cfg.count || 6;
         const racked = s && typeof s.racked === 'number' ? s.racked : Math.min(cap, ammo);
         reloading = !!(s && s.reloading);
-        primary = pad(Math.max(0, racked), r.wA);
-        sub = '/' + pad(Math.max(0, ammo), r.wB);
+        primary = pcount(r, racked);
+        sub = pres(r, ammo);
         empty = ammo <= 0;
         ready = !reloading && ammo > 0;
         sweep = this._sweep('missile', s, reloading, r.cfg.reload || 1, dt);
         // lock count lives in its own fixed-width cell — appending it to the
         // ammo string used to widen the whole panel column mid-salvo
         const locks = s && s.locks && s.locks.length ? s.locks.length : 0;
-        if (locks) lk = '×' + locks;
+        if (locks) { if (r.lv !== locks) { r.lv = locks; r.ls = '×' + locks; } lk = r.ls; }
       } else { // cannon
         const ammo = s && typeof s.ammo === 'number' ? s.ammo : (r.cfg.ammo || 0);
         const cd = s && typeof s.cooldown === 'number' ? Math.max(0, s.cooldown) : 0;
-        primary = pad(Math.max(0, ammo), r.wA);
-        sub = '/' + pad(r.cfg.ammo || 0, r.wB);
+        primary = pcount(r, ammo);
+        sub = pres(r, r.cfg.ammo || 0);
         empty = ammo <= 0;
         ready = cd <= 0.001 && ammo > 0;
         sweep = cd <= 0 ? 1 : clamp01(1 - cd / (r.cfg.cooldown || 1));
@@ -401,10 +423,13 @@ export class CombatHud {
       setText(r.lk, lk);
       setSX(r.sweep, sweep);
       setSY(r.chg, charge);
+      tog(r.amt, 'txt', word);
       tog(r.el, 'ready', ready);
       tog(r.el, 'empty', empty);
       tog(r.el, 'reloading', reloading);
       tog(r.el, 'charging', charge > 0.01);
+      // the sweep is progress: it exists only while the row is cycling
+      tog(r.el, 'busy', sweep < 0.999);
     }
   }
 

@@ -94,10 +94,15 @@ export const DEF = {
     acsMax: 4300, staggerTime: 2.35, acsDecay: 0.20,
     height: 15.2, chest: 8.6, eye: 11.0, radius: 5.0,
     flying: false, turn: 3.1, accel: 5.0, sight: 460, killRadius: 30,
-    // A duel band, not a stand-off. It is also a READABILITY budget: a
-    // 15 m AC is ~135 px tall at 52 m in a 560 px frame and ~110 at 64 m,
-    // and the handler's line is "do not let it close" — so it closes.
-    keepMin: 30, keepMax: 52,
+    // A duel band, not a stand-off — and it is an APPARENT-SIZE budget,
+    // which is what round three measured. At a 0.5 rad duelling bearing
+    // these put the lens at 46 m and 60 m; the projected bounding box of
+    // a 15.2 m AC covers ~4.4 % of the frame at the near edge and ~2.6 %
+    // at the far one, against a ~3 % floor for "reads as a machine".
+    // Both ends are enforced by bandRadial() in bossAI — the old
+    // close-only "press" let every recovery walk the range up until
+    // NIGHTJAR sat at 52 m for the whole encounter and never came back.
+    keepMin: 32, keepMax: 44,
 
     // phase gates (fraction of apMax)
     phase2: 0.66, phase3: 0.33,

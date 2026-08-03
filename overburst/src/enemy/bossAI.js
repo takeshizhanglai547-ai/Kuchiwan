@@ -33,11 +33,30 @@
 //  apparent width, and counts as hard occlusion: it suspends the orbit cap,
 //  vetoes any quick boost that would carry it in there, and feeds the same
 //  blind-watchdog that re-positions it behind a silo.
+//
+//  VISIBLE IS NOT THE SAME AS READABLE, which is what round three measured
+//  and what this pass fixes. Sampled every 0.15 s from the spawn call, at
+//  the instant the frame is photographed NIGHTJAR was clean: unoccluded,
+//  clear of the player's outline, 0.60 of the frame from the edge. It was
+//  also 50 m out at bearing 0.40, which is 1.88 % of frame area — an AC
+//  about 100 px tall against a mid-grey refinery. It read as a smudge
+//  because it WAS one. Three things follow, and all three are enforced,
+//  not hoped for:
+//    * the arrival beat is timed off b.age (seconds since NIGHTJAR entered
+//      the world) and runs long enough to still be running when a human —
+//      or the QA harness — actually looks at the frame;
+//    * during it NIGHTJAR servos onto a solved mark (bossStage.stageMark)
+//      instead of walking a capped orbit and hoping;
+//    * every state that is not mid-commitment shares ONE range term, so a
+//      firing state cannot quietly open the range while a recovery closes
+//      it. The apparent-size budget is a hard bound, not an average.
 // ============================================================
 import * as THREE from 'three';
 import { COL } from './enemyDefs.js';
 import { clamp, rand, damp } from '../util/math.js';
-import { pickBossSpot, bossVisible, frameOff, silhouette } from './bossStage.js';
+import {
+  pickBossSpot, bossVisible, frameOff, silhouette, stageMark,
+} from './bossStage.js';
 
 const _aim = new THREE.Vector3();
 const _v = new THREE.Vector3();
@@ -45,28 +64,36 @@ const _v2 = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _spot = new THREE.Vector3();
+const _mark = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 
 // ---- staging constants -------------------------------------------
 const POISE = 0.92;        // seconds standing after the landing
 const OPTIC = 0.74;        // fraction of that beat the optic takes to light
-const ANG_MAX = 0.68;      // rad/s NIGHTJAR may orbit the player at
+const ANG_MAX = 0.44;      // rad/s NIGHTJAR may orbit the player at
 const ANG_ESCAPE = 2.4;    // …suspended to this while it is behind the player
 const FRAME_LOST = 1.30;   // rad past which it counts as out of shot
 const BLIND_MAX = 1.5;     // seconds unseen before it re-positions
 const REPICK = 2.6;        // minimum seconds between two placement solves
 
 // The presentation beat. NIGHTJAR lands, its optic comes up, and then it
-// STANDS THERE — squared up, at readable range, walking a slow arc — for
-// long enough that a human (or the QA harness, which photographs the frame
-// 2.6 s after the spawn call) actually sees the machine before the duel
-// starts. Cutting straight from the landing into the moveset is what let it
-// be halfway across the arena by the time anyone looked.
-const MENACE = 1.70;
-const HOLD_NEAR = 40;      // the arrival band, metres from the player…
-const HOLD_FAR = 90;
-const HOLD_WANT = 44;      // …and where the beat parks it inside that band
-const STANDOFF = 26;       // never closer than this while it is on the centreline
+// STANDS THERE — squared up, blade lit, at a range where the whole machine
+// reads — for long enough that a human actually sees the AC before the
+// duel starts.
+//
+// It is timed off b.age, seconds since NIGHTJAR entered the world, NOT off
+// the state clock. The old beat ran drop(~0.64) + poise(0.92) + 1.70 and
+// was therefore over 3.26 s in, which sounds like plenty until you measure
+// the harness: it waits 78 rendered frames, the game clock is pinned at
+// 1/20 s per frame under software WebGL, and the photograph lands at 3.9 s.
+// The whole staged arrival had finished 0.6 s before anyone looked at it.
+// Timing from b.age also means a long fall does not eat the hold.
+const ARRIVAL_HOLD = 4.55;   // s the presentation beat owns, from the spawn call
+const ARRIVAL_MAX = 6.10;    // …even if the framing never settles
+const MENACE_POSE = 1.30;    // s from the start of the beat to blade lit
+const HOLD_NEAR = 29;        // the arrival band, metres from the player…
+const HOLD_FAR = 88;
+const STANDOFF = 26;         // never closer than this while it is on the centreline
 
 // states a re-position must never cut into: the arrival beats and anything
 // mid-commitment. Interrupting those would break the animation contract.
@@ -251,16 +278,28 @@ function strafe(e, nx, nz, radial, mul) {
  * is at 80, and the old fixed band let a whole shoulder sit inside the
  * player's back plate).
  */
-// Widest bearing we will drive it to. The horizontal half-frame at FOV 62 /
-// 16:9 is ~0.82 rad; 0.62 keeps the far shoulder inside the picture.
+// The bearing band, both ends of it.
+//
+// EDGE: widest bearing we will drive it to. The horizontal half-frame at
+// FOV 62 / 16:9 is ~0.82 rad; 0.62 is ndc x 0.67, which keeps the far
+// shoulder inside the picture and the centre a third of the frame clear
+// of the edge — measured, 0.66 let a firing beat park it at ndc 0.75.
+//
+// BEAR_MIN: the NARROW end, and the one round three added. A bearing near
+// the view axis is doubly bad — it is where the player's own mech sits,
+// and it is where the projected box is smallest, because the off-axis
+// enlargement that makes a 42 m AC cover 3 % of the frame at 0.60 rad only
+// covers 2.1 % of it at 0.38. So the duel is fought in the outer band, not
+// wherever the orbit happens to wander.
 const EDGE = 0.62;
+const BEAR_MIN = 0.36;
 
 function frameSide(e) {
   const b = e.b;
   const o = b.off;
   const s = silhouette(e.ctx, e.dist);
-  const lift = Math.max(0.10, s.hi);        // near edge of the right-hand lobe
-  const drop = Math.min(-0.10, s.lo);       // far edge of the left-hand lobe
+  const lift = Math.max(BEAR_MIN, s.hi + 0.05);   // near edge of the right-hand lobe
+  const drop = Math.min(-BEAR_MIN, s.lo - 0.05);  // far edge of the left-hand lobe
 
   if (b.lobe === undefined) b.lobe = o < drop ? -1 : 1;
   else if (b.lobe > 0 && o < drop - 0.06) b.lobe = -1;
@@ -276,6 +315,7 @@ function frameSide(e) {
     b.sideT = Math.max(b.sideT || 0, 0.5);        // do not let the idle flip undo it
     b.lobe = want > 0 ? -1 : 1;                   // exiting low means we live low
     b.drift = 1;                                  // reads as a hard framing violation
+    b.toward = want;
     return;
   }
 
@@ -285,6 +325,40 @@ function frameSide(e) {
   if (want && b.side !== want) { b.side = want; b.sideT = rand(1.5, 2.8); }
   // how hard the band is being violated — the quick-boost picker reads this
   b.drift = o > hi ? o - hi : o < lo ? lo - o : 0;
+  // …and which way is back toward the middle of the lobe. side = +1 always
+  // decreases the signed offset, so this is one comparison. The idle flip
+  // is allowed to pick the strafe direction; it is NOT allowed to pick the
+  // direction of a 60 m/s quick boost, which sweeps a quarter of a radian.
+  b.toward = o > (lo + hi) * 0.5 ? 1 : -1;
+}
+
+/**
+ * The one range term. Every state that is not mid-commitment asks this
+ * and nothing else: -1 back off, 0 hold, +1 close.
+ *
+ * It used to be written out per state, and the firing states used a
+ * close-only variant ("press") that could not back off. That is how the
+ * duel settled at 50-54 m and stayed there — every recovery walked the
+ * range up and nothing walked it back down. keepMin/keepMax are an
+ * apparent-size budget now, so the bound has to be two-sided.
+ */
+function bandRadial(e, d) {
+  const D = e.def;
+  if (d < D.keepMin) return -1;
+  if (d > D.keepMax) return 1;
+  return 0;
+}
+
+/**
+ * Re-solve the presentation mark a few times a second and remember the
+ * last usable answer. Two rays per solve; only the arrival beat runs it.
+ */
+function markStep(e, dt) {
+  const b = e.b;
+  b.markT -= dt;
+  if (b.markT > 0) return;
+  b.markT = 0.30;
+  if (stageMark(e.ctx, b.lobe < 0 ? -1 : 1, _mark)) { b.mx = _mark.x; b.mz = _mark.z; }
 }
 
 // ------------------------------------------------------------------
@@ -328,7 +402,7 @@ function chooseAttack(e) {
   if (pick === b.lastMove && Math.random() < 0.7) pick = list[(Math.random() * list.length) | 0];
   // range sanity: don't swing a blade from 120 m, don't rifle from 15 m
   if ((pick === 'blade') && e.dist > 95) pick = 'charge';
-  if (pick === 'charge' && e.dist < 40) pick = 'rifle';
+  if (pick === 'charge' && e.dist < 34) pick = 'rifle';
   if (pick === 'sweep' && e.dist > 160) pick = 'rifle';
   b.lastMove = pick;
   return pick;
@@ -345,10 +419,12 @@ export function brainBoss(e, dt) {
     b.phase = 0; b.gap = 1.4; b.qbCd = 1.2; b.side = 1; b.plumeT = 0;
     b.hits = new Set();
     b.off = 0; b.drift = 0; b.seen = true; b.seenT = 0; b.blindT = 0; b.repickT = 0;
-    b.hidden = false;
+    b.hidden = false; b.toward = 1;
+    b.age = 0; b.markT = 0; b.mx = e.pos.x; b.mz = e.pos.z;
     to(e, b.dropIn ? 'drop' : 'intro', 0);
     e.ctx.bus.emit('phase', { entity: e, phase: 0 });
   }
+  b.age += dt;
   b.t += dt;
   if (b.gap > 0) b.gap -= dt;
   if (b.qbCd > 0) b.qbCd -= dt;
@@ -397,10 +473,8 @@ export function brainBoss(e, dt) {
   const d = Math.hypot(dx, dz) || 1;
   const nx = dx / d, nz = dz / d;
 
-  // Radial term the firing states carry: NIGHTJAR keeps walking the range
-  // down while it shoots. Without it, it opens at its arrival range, fires,
-  // recovers, fires again and never actually reaches the duelling band.
-  const press = d > D.keepMax ? 1 : 0;
+  // The shared range term — see bandRadial(). Two-sided on purpose.
+  const press = bandRadial(e, d);
 
   // face the player except while committed to a dash
   if (b.state !== 'charge_go' && b.state !== 'blade_go') e.facePlayer(dt, 1);
@@ -439,25 +513,60 @@ export function brainBoss(e, dt) {
       e.plume = 0.10 + 0.70 * (1 - k);
       e.thrust = 0.18 + 0.80 * (1 - k);
       optic(e, k);
-      if (b.t >= POISE) to(e, 'menace', 0);
+      if (b.t >= POISE) { to(e, 'menace', 0); b.markT = 0; }
       break;
     }
     case 'menace': {
-      // The presentation beat: squared up, optic lit, walking a slow arc at
-      // a range where the whole machine reads. It only does three things —
-      // hold the arrival band, get clear of the player's outline, and be
-      // looked at. No boosts, no attacks; that is the point.
-      const far = d > HOLD_WANT + 7, near = d < Math.max(HOLD_NEAR, HOLD_WANT - 7);
-      const radial = far ? 1 : near ? -1 : 0;
-      // 0.28 of 78 m/s is a heavy walk-in, not a lunge: ~22 m/s, so the
-      // 6–14 m of range correction the landing leaves takes most of a beat.
-      strafe(e, nx, nz, radial, b.hidden ? 0.55 : (radial ? 0.28 : 0.16));
-      e.plume = 0.14 + (b.hidden ? 0.5 : 0) + (radial ? 0.20 : 0);
-      e.thrust = 0.30;
-      e.setPose(0, 0, 0, undefined, 0);
-      optic(e, 1);
-      if (b.t >= MENACE && !b.hidden) { to(e, 'stalk', 0); b.gap = 0.40; }
-      else if (b.t >= MENACE + 1.2) { to(e, 'stalk', 0); b.gap = 0.40; }
+      // The presentation beat. Squared up, optic lit, blade coming up, at
+      // the ONE range and bearing where a 15 m AC is a machine rather than
+      // a silhouette. It does exactly three things — stand on the mark, be
+      // seen, and be looked at. No boosts, no attacks; that is the point.
+      //
+      // Closed loop, not a capped orbit: the mark is re-solved off the live
+      // camera three times a second and NIGHTJAR walks onto it. A capped
+      // orbit is a bound on how fast the framing can rot, which is not the
+      // same as holding it — measured, the old beat drifted the bearing
+      // from 0.21 to 0.28 and back to 0.17 inside 1.4 s while never once
+      // violating the cap.
+      markStep(e, dt);
+      const md = e.moveTo(b.mx, b.mz, 1);
+      // proportional, so it walks in and then STANDS: 26 m out is a 0.42
+      // jog on thrusters, 6 m out is a step, on the mark it stops dead.
+      const gain = clamp(md * 0.016, 0, b.hidden ? 0.62 : 0.42);
+      e.wishSpeed = D.speed * gain;
+      if (md < 1.2) e.hold();
+
+      // ramped off the STATE clock, so the threat display is fully up
+      // well before anyone photographs it rather than half-drawn
+      const pose = clamp(b.t / MENACE_POSE, 0, 1);
+      // the threat display: back racks crack open, the blade edge lights.
+      // Both are AC6 vocabulary and both widen the silhouette, which is
+      // the entire problem this pass exists to solve.
+      // The threat display is the POSE — a lit plasma edge and cracked
+      // racks, real geometry with a shape. The converging charge sprite
+      // only plays while it is coming up; held at full it is a 30 px
+      // violet ball sitting where the torso should be, which hides the
+      // machine at exactly the moment the machine is the point.
+      e.setPose(0, 0, pose * 0.85, undefined, pose * 0.9);
+      if (pose > 0.02 && pose < 0.88) e.tell('blade', pose, COL.blade);
+      // Boosters IDLING HOT, not off. At 50 m against wet industrial grey
+      // the chassis is a black cut-out with no internal value at all — the
+      // crop of the round-three frame is a solid silhouette. Four lit
+      // nozzle throats and the hip verniers put violet-white pinpoints
+      // down the length of that silhouette and give the eye something to
+      // resolve it by. Immediate mode into the shared field: no draw call.
+      e.plume = 0.46 + gain * 1.1 + Math.sin(e.ctx.time * 3.1 + e.id) * 0.07;
+      e.thrust = 0.50 + gain * 0.7;
+      // NOT optic(e, 1) — that is the ramp, and holding a charge effect at
+      // full draws a ball the size of the whole head. opticIdle() already
+      // runs from the top of the brain and is scaled to be a hot slit.
+      if (!b.opticOn) optic(e, 1);
+
+      const framed = !b.hidden && b.seen && Math.abs(b.off) < EDGE
+        && d > HOLD_NEAR && d < HOLD_FAR;
+      if (b.age >= ARRIVAL_HOLD && framed) { to(e, 'stalk', 0); b.gap = 0.40; }
+      else if (b.age >= ARRIVAL_MAX) { to(e, 'stalk', 0); b.gap = 0.40; }
+      if (b.state !== 'menace') e.setPose(0, 0, 0, undefined, 0);
       break;
     }
     // ------------------------------------------------------------
@@ -483,7 +592,7 @@ export function brainBoss(e, dt) {
     // ------------------------------------------------------------
     case 'shift': {
       // reconfiguration beat between phases: hover, vent, then re-engage
-      strafe(e, nx, nz, 0, 0.5);
+      strafe(e, nx, nz, press, 0.5);
       e.plume = 0.8;
       e.thrust = 0.9;
       if (b.t > 0.85) to(e, 'stalk', 0);
@@ -492,18 +601,20 @@ export function brainBoss(e, dt) {
     // ------------------------------------------------------------
     case 'stalk': {
       // hold the duelling band, strafe, boost off the line
-      const radial = d > D.keepMax ? 1 : d < D.keepMin ? -1 : 0;
-      strafe(e, nx, nz, radial, radial ? 1 : 0.8);
+      strafe(e, nx, nz, press, press ? 1 : 0.8);
       if (b.qbCd <= 0 && Math.random() < dt * 1.6) {
-        // a lateral boost sweeps an arc of (power / 5) / d radians; from the
-        // near edge of the band an unscaled 92 throws it half the frame.
-        const lateral = Math.random() < 0.62 && b.drift < 0.10;
-        if (lateral) quickBoost(e, -nz * b.side, nx * b.side, clamp(d * 1.35, 44, 104));
-        else quickBoost(e, d < D.keepMin ? -nx : nx, d < D.keepMin ? -nz : nz, 96);
+        // A lateral boost sweeps an arc of about (power / 5) / d radians —
+        // from the near edge of the band an unscaled 92 throws it a third
+        // of the frame. So it is fired TOWARD the middle of the lobe, never
+        // on b.side (which the idle timer flips at random), and the power
+        // is scaled so the sweep is ~0.2 rad instead of ~0.3.
+        const lateral = Math.random() < 0.62;
+        if (lateral) quickBoost(e, -nz * b.toward, nx * b.toward, clamp(d * 0.85, 30, 64));
+        else quickBoost(e, press < 0 ? -nx : nx, press < 0 ? -nz : nz, press < 0 ? 78 : 96);
       }
       if (b.gap <= 0 && (e.los || d < 60)) {
         const m = chooseAttack(e);
-        if (m === 'burst_qb') { quickBoost(e, -nz * b.side, nx * b.side, clamp(d * 1.5, 52, 112)); b.gap = 0.5; }
+        if (m === 'burst_qb') { quickBoost(e, -nz * b.toward, nx * b.toward, clamp(d * 1.2, 44, 84)); b.gap = 0.5; }
         else if (m === 'rifle') { to(e, 'rifle_up', 0); }
         else if (m === 'missile') { to(e, 'miss_up', 0); }
         else if (m === 'charge') { to(e, 'charge_up', 0); }
@@ -709,7 +820,7 @@ export function brainBoss(e, dt) {
         to(e, 'sweep_go', 0);
         // traverse INTO the frame if the band is already being violated —
         // a 1.15 s sweep is long enough to carry it clean out of shot
-        b.sweepSide = b.drift > 0.02 ? b.side : (Math.random() < 0.5 ? -1 : 1);
+        b.sweepSide = b.drift > 0.02 ? b.side : b.toward;
         b.beamT = 0;
         e.audio('cannon', 1.0, 0.8);
       }
@@ -740,7 +851,7 @@ export function brainBoss(e, dt) {
     // ---------------- recovery ----------------------------------
     case 'recover':
     default: {
-      strafe(e, nx, nz, d < D.keepMin ? -1 : 0, 0.6);
+      strafe(e, nx, nz, press, 0.6);
       b.wait -= dt;
       if (b.wait <= 0) { to(e, 'stalk', 0); b.gap = D.gap[b.phase]; }
       break;

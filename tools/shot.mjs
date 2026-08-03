@@ -65,7 +65,7 @@ const SCENARIOS = {
       // Frame relative to where the mech ACTUALLY is. (The old version
       // teleported to the world origin, which is the middle of the slag
       // basin: the mech ended up out of frustum inside a smoke volume.)
-      await h.mechCam({ front: true, off: 0.62, dist: 27, height: 12.5, lookY: 6.2, fov: 40 });
+      await h.mechCam({ front: true, off: 0.0, crossSun: true, sunSide: 1, dist: 27, height: 11.0, lookY: 6.2, fov: 40 });
       await h.advance(0.8);
     },
   },
@@ -77,7 +77,7 @@ const SCENARIOS = {
       await h.hold(A.QB); await h.advance(0.5); await h.releaseAll();
       await h.openSpot({ radius: 110, clear: 34 });
       await h.advance(0.25);
-      await h.mechCam({ front: false, off: 0.55, dist: 24, height: 12.0, lookY: 6.4, fov: 44 });
+      await h.mechCam({ front: false, off: 0.0, crossSun: true, sunSide: -1, dist: 24, height: 10.5, lookY: 6.4, fov: 44 });
       await h.advance(0.6);
     },
   },
@@ -118,8 +118,8 @@ const SCENARIOS = {
       await h.eval(`(() => { const c=window.__OB.ctx; const p=c.player.pos, y=c.player.yaw;
         const fx=-Math.sin(y), fz=-Math.cos(y), rx=Math.cos(y), rz=-Math.sin(y);
         const at=(f,s,up)=>new c.THREE.Vector3(p.x+fx*f+rx*s, p.y+up, p.z+fz*f+rz*s);
-        for (let i=0;i<3;i++) c.vfx.explosion?.({ position: at(54+i*11, (i-1)*23, 7+i*2), radius: 14+i*3, power: 1, kind:'mech' });
-        c.projectiles.spawnExplosion?.({ position: at(44, 0, 9), radius: 18, damage: 0, owner:'player' }); })()`);
+        for (let i=0;i<3;i++) c.vfx.explosion?.({ position: at(17+i*7, (i-1)*13, 5+i*2), radius: 12+i*3, power: 1, kind:'mech' });
+        c.projectiles.spawnExplosion?.({ position: at(14, 0, 6), radius: 16, damage: 0, owner:'player' }); })()`);
       await h.advance(0.24);
     },
   },
@@ -237,7 +237,15 @@ function harness(page) {
 
       const place = () => {
         const p = ctx.player;
-        const yaw = p.yaw + (c.off || 0);
+        // The key is at 21 degrees elevation, so an 11-unit mech throws a
+        // ~29-unit shadow. Shot down-sun, that shadow hides behind the mech's
+        // own silhouette and the machine reads as floating. Frame across the
+        // sun instead so the cast shadow rakes across the deck.
+        let yaw = p.yaw + (c.off || 0);
+        if (c.crossSun && ctx.world.sunDir) {
+          const sd = ctx.world.sunDir;
+          yaw = Math.atan2(sd.x, sd.z) + (c.sunSide || 1) * (Math.PI * 0.42) + (c.off || 0);
+        }
         const s = c.front ? 1 : -1;
         const lookY = c.lookY == null ? 6 : c.lookY;
         to.set(p.pos.x, p.pos.y + lookY, p.pos.z);

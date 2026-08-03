@@ -393,5 +393,8 @@ const NAMES = {
   heli: 'RH-19 KESTREL',
   turret: 'AT-44 PICKET',
   pylon: 'IB-C10 COOLANT PYLON',
-  boss: 'AC 04 CROWNBREAKER',
+  // enemyDefs.js names the AC NIGHTJAR, the objective line says ELIMINATE AC
+  // NIGHTJAR and the handler calls it NIGHTJAR on the radio. This fallback said
+  // CROWNBREAKER, and so did the briefing's threat manifest.
+  boss: 'AC NIGHTJAR',
 };

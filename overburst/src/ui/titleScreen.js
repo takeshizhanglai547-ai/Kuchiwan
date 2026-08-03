@@ -30,14 +30,16 @@ const CONTROLS = [
 ];
 
 // Hostiles expected on site. `ap` reads straight off CFG so the manifest can
-// never drift from what the mission actually spawns.
+// never drift from what the mission actually spawns, and the names are the
+// ones enemyDefs.js hands the target readout — the manifest, the lock bracket
+// and the objective line all have to say the same word.
 const THREATS = [
   { k: 'mt',     code: 'MT-A21',  name: 'SLAGHAND', cfg: 'MT',     thr: 2 },
   { k: 'drone',  code: 'AD-08',   name: 'CINDER',   cfg: 'DRONE',  thr: 1 },
   { k: 'turret', code: 'AT-44',   name: 'PICKET',   cfg: 'TURRET', thr: 2 },
   { k: 'heli',   code: 'RH-19',   name: 'KESTREL',  cfg: 'HELI',   thr: 3 },
   { k: 'pylon',  code: 'IB-C10',  name: 'PYLON',    cfg: 'PYLON',  thr: 0 },
-  { k: 'boss',   code: 'AC 04',   name: 'CROWNBREAKER', cfg: 'BOSS', thr: 5 },
+  { k: 'boss',   code: 'AC',      name: 'NIGHTJAR', cfg: 'BOSS',   thr: 5 },
 ];
 
 const PAY = [
@@ -46,11 +48,14 @@ const PAY = [
   ['FRAME WEAR', -32000],
 ];
 
+// One column, one meaning: rounds per cycle over total reserve. The cannon
+// used to print a bare "14" here — a reserve where its neighbours printed a
+// ratio, three different readings of the same heading.
 function ammoOf(k, w) {
-  if (k === 'rifle') return w.magazine + '/' + w.ammo;
+  if (k === 'rifle') return w.magazine + '/' + w.ammo;      // magazine
   if (k === 'blade') return 'MELEE';
-  if (k === 'missile') return w.count + ' / ' + w.ammo;
-  return String(w.ammo);
+  if (k === 'missile') return w.count + '/' + w.ammo;       // salvo
+  return '1/' + w.ammo;                                     // one shot per charge
 }
 
 export class TitleScreen {
@@ -105,10 +110,11 @@ export class TitleScreen {
     let pay = '', total = 0;
     for (let i = 0; i < PAY.length; i++) {
       total += PAY[i][1];
-      pay += '<div class="pay-r"><u>' + PAY[i][0] + '</u><s></s><b>' +
-        (PAY[i][1] < 0 ? '-' : '') + group(Math.abs(PAY[i][1])) + '</b></div>';
+      pay += '<div class="pay-r' + (PAY[i][1] < 0 ? ' neg' : '') + '"><u>' + PAY[i][0] +
+        '</u><s></s><b>' + (PAY[i][1] < 0 ? '-' : '') + group(Math.abs(PAY[i][1])) +
+        '</b><i></i></div>';
     }
-    pay += '<div class="pay-r tot"><u>ON COMPLETION</u><s></s><b>' + group(total) + ' c</b></div>';
+    pay += '<div class="pay-r tot"><u>ON COMPLETION</u><s></s><b>' + group(total) + '</b><i>C</i></div>';
 
     const el = h(
       '<div id="title-screen">' +
@@ -148,12 +154,18 @@ export class TitleScreen {
             'Burn the coolant pylons, break what defends them, and hold the crown until ' +
             'extraction. <em>Do not stall in the open.</em></p>' +
             '<div class="sub-h"><span>DEPLOYMENT — BASIN GRID 04</span><s></s></div>' +
-            '<div class="figw map">' + MAP_SVG + '</div>' +
-            '<div class="mleg">' +
-              '<span class="l-py">COOLANT PYLON &#215;' + M.PYLONS + '</span>' +
-              '<span class="l-cr">SLAG CROWN</span>' +
-              '<span class="l-in">INSERTION VECTOR</span>' +
-              '<span class="l-wl">KILL WALL ' + CFG.ARENA.WALL + ' M</span>' +
+            /* map and key sit side by side: the plan is square and the panel
+               is wide, so stacking them left ~200 px of void either side of a
+               33 px thumbnail. The key eats that void and the figure gets the
+               two rows the key used to cost it. */
+            '<div class="figrow">' +
+              '<div class="figw map">' + MAP_SVG + '</div>' +
+              '<div class="mleg">' +
+                '<span class="l-py">COOLANT PYLON &#215;' + M.PYLONS + '</span>' +
+                '<span class="l-cr">SLAG CROWN</span>' +
+                '<span class="l-in">INSERTION VECTOR</span>' +
+                '<span class="l-wl">KILL WALL ' + CFG.ARENA.WALL + ' M</span>' +
+              '</div>' +
             '</div>' +
             '<div class="sub-h"><span>SETTLEMENT</span><s></s></div>' +
             '<div class="pay">' + pay + '</div>' +
@@ -187,6 +199,17 @@ export class TitleScreen {
                   '<dt>EN REGEN</dt><dd>' + group(P.EN_RECHARGE) + ' /S GROUND</dd>' +
                   '<dt>CEILING</dt><dd>' + group(CFG.ARENA.CEILING) + ' M</dd>' +
                 '</dl>' +
+                /* Combat maths belongs next to the frame it describes, not
+                   buried at the bottom of the key-bindings panel — and this
+                   column is where the schematic's slack used to sit empty. */
+                '<div class="sub-h"><span>ENGAGEMENT</span><s></s></div>' +
+                '<dl class="kv kv2">' +
+                  '<dt>LOCK RANGE</dt><dd>' + CFG.LOCK.RANGE + ' M</dd>' +
+                  '<dt>ACS CAP</dt><dd>' + group(P.ACS_CAP) + ' STRAIN</dd>' +
+                  '<dt>STAGGER</dt><dd>' + P.STAGGER_TIME.toFixed(1) + ' S LOCKOUT</dd>' +
+                  '<dt>DIRECT HIT</dt><dd>&#215;' + P.DIRECT_HIT_MULT.toFixed(2) + ' STAGGERED</dd>' +
+                  '<dt>REPAIR</dt><dd>' + P.REPAIR_KITS + ' &#215; ' + group(P.REPAIR_AMOUNT) + ' AP</dd>' +
+                '</dl>' +
                 '<div class="eq-note"><s></s><p>LOADOUT FIXED BY CONTRACT</p></div>' +
                 '<div class="eq-note2">This frame ships as issued. No garage, no parts shop, ' +
                 'no respec — the sortie is the build. Learn these four units.</div>' +
@@ -200,15 +223,7 @@ export class TitleScreen {
           '<div class="pn-h"><b>CONTROLS</b><i>KB / M</i></div>' +
           '<div class="pn-b">' +
             '<dl class="ctl">' + ctl + '</dl>' +
-            '<div class="sub-h opt"><span>ENGAGEMENT DATA</span><s></s></div>' +
-            '<dl class="kv sortie opt">' +
-              '<dt>LOCK</dt><dd>' + CFG.LOCK.RANGE + ' M</dd>' +
-              '<dt>ACS CAP</dt><dd>' + group(P.ACS_CAP) + ' STRAIN</dd>' +
-              '<dt>STAGGER</dt><dd>' + P.STAGGER_TIME.toFixed(1) + ' S LOCKOUT</dd>' +
-              '<dt>DIRECT</dt><dd>&#215;' + P.DIRECT_HIT_MULT.toFixed(2) + ' STAGGERED</dd>' +
-              '<dt>REPAIR</dt><dd>' + P.REPAIR_KITS + ' &#215; ' + group(P.REPAIR_AMOUNT) + ' AP</dd>' +
-            '</dl>' +
-            '<div class="sub-h"><span>THREAT MANIFEST</span><s></s><i>AP</i></div>' +
+            '<div class="sub-h thr-h"><span>THREAT MANIFEST</span><s></s><i class="t-th">THR</i><i class="t-ap">AP</i></div>' +
             '<div class="thr">' + thr + '</div>' +
           '</div>' +
           '<div class="pn-f"><span>▸</span>QUICK BOOST IS THE WHOLE GAME</div>' +

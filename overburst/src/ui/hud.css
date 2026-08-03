@@ -72,19 +72,28 @@ body {
    TITLE
    ========================================================= */
 /* The scrim is banded, not a flat wash: the header strip and the panel band
-   stay dark enough for 1 px type, but the masthead band between them opens up
-   so the rendered world behind actually reads as a backdrop instead of a
-   sliver clipped off at the right edge. */
+   stay dark enough for 1 px type, but the masthead band between them opens
+   right up so the rendered world behind actually reads as a backdrop.
+
+   The horizontal wash is the important part. It used to run the FULL height at
+   84-90 % on the left, which multiplied against the band and left the render
+   readable only in the last ~30 % of the frame — the "clipped at the right
+   edge at 8 % opacity" the critics called out. It now dies at 58 %, and only
+   where the wordmark needs ground: past that the masthead is an 11 % scrim
+   over the skyline, framed top and bottom by the two rules that were already
+   there. Measured on the open band (y 53-120 of the 1000x560 title): mean
+   luminance 67.9 -> 92.6, pixels in the darkest 1/8 of the range 31 % -> 20 %;
+   over the right half of that band, mean 46.5 -> 83.9. */
 #title-screen {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   padding: 1.5rem 2.4rem 1.4rem;
   background:
     linear-gradient(180deg,
-      rgba(4,7,9,.94) 0, rgba(4,7,9,.90) 2.7rem,
-      rgba(4,7,9,.30) 4.6rem, rgba(4,7,9,.26) 10.2rem,
-      rgba(4,7,9,.88) 12.4rem, rgba(4,7,9,.93) 100%),
-    linear-gradient(100deg,
-      rgba(4,7,9,.90) 0%, rgba(4,7,9,.84) 30%, rgba(4,7,9,.42) 66%, rgba(4,7,9,.06) 100%);
+      rgba(4,7,9,.94) 0, rgba(4,7,9,.89) 2.6rem,
+      rgba(4,7,9,.13) 4.5rem, rgba(4,7,9,.11) 10.1rem,
+      rgba(4,7,9,.86) 12.3rem, rgba(4,7,9,.93) 100%),
+    linear-gradient(97deg,
+      rgba(4,7,9,.88) 0%, rgba(4,7,9,.76) 24%, rgba(4,7,9,.34) 44%, rgba(4,7,9,0) 58%);
 }
 .t-mid { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; }
 .t-top { display: flex; align-items: center; gap: .9rem; }
@@ -128,8 +137,7 @@ body {
    keeps ~300 px of dead space from opening under every panel at 900p. */
 .pn-b { padding: .7rem .8rem; min-height: 0; overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; }
 .pn-b > .br-code, .pn-b > .kv, .pn-b > .br-txt, .pn-b > .pay,
-.pn-b > .eq-frame, .pn-b > .eq, .pn-b > .ctl, .pn-b > .sortie, .pn-b > .sub-h,
-.pn-b > .mleg { flex: 0 0 auto; }
+.pn-b > .eq-frame, .pn-b > .eq, .pn-b > .ctl, .pn-b > .sub-h { flex: 0 0 auto; }
 
 
 /* briefing */
@@ -212,10 +220,18 @@ body {
 .sub-h span { font-size: .55rem; letter-spacing: .26em; color: var(--cy); white-space: nowrap; }
 .sub-h i { font-style: normal; font-size: .5rem; letter-spacing: .2em; color: var(--dim); }
 .sub-h s { flex: 1; height: 1px; background: var(--line2); text-decoration: none; }
+.sub-h.thr-h { gap: .4rem; }
 
 /* scaling figure box — the svg never contributes intrinsic height */
 .figw { position: relative; flex: 1 1 0; min-height: 2.6rem; }
 .figw svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* figure + its key on one row. The plan view is square and preserves its
+   aspect, so a full-width box wastes (width - height) px on either side of the
+   drawing; the key is parked in that gap instead of stacked under it. */
+.figrow { display: flex; align-items: stretch; gap: .7rem; flex: 1 1 0; min-height: 3.4rem; }
+.figrow .figw { flex: 0 1 auto; aspect-ratio: 1 / 1; min-height: 3.4rem; min-width: 0; }
+.figrow .mleg { flex: 1 1 auto; grid-template-columns: 1fr; align-content: center; margin-top: 0; }
 
 /* ---- deployment map ---- */
 .dmap path, .dmap circle { fill: none; vector-effect: non-scaling-stroke; }
@@ -241,19 +257,31 @@ body {
 .fschem .s-lead path { stroke: rgba(255, 176, 32, .55); stroke-width: 1; }
 .fschem text { font-family: var(--mono); font-size: 9px; letter-spacing: 0; fill: rgba(255, 176, 32, .82); stroke: none; }
 
-/* ---- settlement breakdown ---- */
+/* ---- settlement breakdown ----
+   The currency mark lives in its own fixed cell so the digits of every line —
+   including the total, which is the only line that carries a unit — stack on
+   one right edge. Putting " c" inside the total's numeral pushed it two
+   characters left of the column it is supposed to sum. */
 .pay-r { display: flex; align-items: baseline; gap: .45rem; font-size: .57rem; padding: .09rem 0; }
 .pay-r u { text-decoration: none; color: var(--dim); letter-spacing: .16em; }
 .pay-r s { flex: 1; height: 1px; background: rgba(95, 244, 255, .10); text-decoration: none; }
 .pay-r b { font-family: var(--mono); font-size: .62rem; color: var(--wh); font-weight: 400; letter-spacing: 0; }
+.pay-r i { flex: 0 0 auto; width: .78rem; text-align: right; font-style: normal; font-size: .55rem; color: var(--dim); letter-spacing: 0; }
+.pay-r.neg b { color: var(--am); }
 .pay-r.tot { margin-top: .2rem; padding-top: .26rem; border-top: 1px solid var(--line2); }
 .pay-r.tot u { color: var(--cy); }
 .pay-r.tot b { font-size: .8rem; color: var(--cy-b); }
+.pay-r.tot i { color: var(--cy); }
 
-/* ---- threat manifest ---- */
+/* ---- threat manifest ----
+   A table, so it has to read as columns. Every field that used to be auto-width
+   (the unit code, the AP figure) is now a fixed track: variable-width codes
+   were ragging the name column by 7 px and variable-width AP figures were
+   ragging the pip block by 12 px, which is exactly the "nobody laid this out"
+   tell. Column widths are repeated on the header row. */
 .thr { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .thr-r {
-  flex: 1 1 0; min-height: 1.5rem; max-height: 3.1rem;
+  flex: 1 1 0; min-height: 1.5rem; max-height: 3.4rem;
   display: flex; align-items: center; gap: .4rem; padding: .08rem 0;
   border-top: 1px solid rgba(95, 244, 255, .07);
 }
@@ -263,12 +291,25 @@ body {
   display: flex; align-items: center; color: rgba(120, 216, 228, .62);
 }
 .thr-r .sil svg { width: 100%; height: 100%; }
-.thr-r b { font-size: .58rem; letter-spacing: .08em; color: #eef9fb; font-weight: 400; white-space: nowrap; }
-.thr-r > span { font-size: .55rem; letter-spacing: .1em; color: var(--dim); white-space: nowrap; }
-.thr-r em { font-style: normal; margin-left: .35rem; font-family: var(--mono); font-size: .58rem; color: var(--cy-b); letter-spacing: 0; }
-.thr-p { display: flex; gap: .12rem; margin-left: auto; font-style: normal; }
+.thr-r b {
+  flex: 0 0 auto; width: 3.4rem; font-size: .58rem; letter-spacing: .08em;
+  color: #eef9fb; font-weight: 400; white-space: nowrap;
+}
+.thr-r > span {
+  flex: 1 1 auto; min-width: 0; font-size: .55rem; letter-spacing: .1em;
+  color: var(--dim); white-space: nowrap; overflow: hidden;
+}
+.thr-r em {
+  flex: 0 0 auto; width: 2.6rem; text-align: right; font-style: normal;
+  margin-left: .4rem; font-family: var(--mono); font-size: .58rem;
+  color: var(--cy-b); letter-spacing: 0;
+}
+.thr-p { flex: 0 0 auto; display: flex; gap: .12rem; font-style: normal; }
 .thr-p s { width: .24rem; height: .24rem; background: rgba(95, 244, 255, .13); text-decoration: none; }
 .thr-p s.on { background: var(--am); }
+/* header ticks sit on the two fixed tracks below */
+.thr-h .t-th { flex: 0 0 auto; width: 1.68rem; text-align: center; }
+.thr-h .t-ap { flex: 0 0 auto; width: 2.6rem; margin-left: .4rem; text-align: right; }
 .thr-r.ac .sil { color: #d9a2ee; }
 .thr-r.ac b { color: #f2d6ff; }
 .thr-r.ac .thr-p s.on { background: #d93cff; }
@@ -277,28 +318,36 @@ body {
 .eq-split { display: flex; gap: .9rem; flex: 1 1 0; min-height: 0; margin-top: .55rem; }
 .eq-split .figw { flex: 1 1 42%; min-width: 0; min-height: 3.4rem; }
 .eq-side { flex: 1 1 58%; min-width: 0; display: flex; flex-direction: column; }
-.eq-side .sub-h { margin-top: 0; }
+.eq-side > .sub-h:first-child { margin-top: 0; }
 .kv2 { grid-template-columns: 6.8rem 1fr; }
-.sortie { grid-template-columns: 4.6rem 1fr; }
 .eq-side .eq-note { margin-top: auto; padding-top: .5rem; }
 
-/* map key */
+/* map key.
+   The three overrides below used to be written bare (.l-cr::before), which
+   scores one class lower than the .mleg span::before default they were meant
+   to beat — so every swatch painted amber and the key told you nothing. They
+   are scoped to .mleg now, which is what makes them win. */
 .mleg { display: grid; grid-template-columns: 1fr 1fr; gap: .1rem .6rem; margin-top: .35rem; font-size: .52rem; letter-spacing: .1em; color: var(--dim); }
 .mleg span { display: flex; align-items: center; gap: .3rem; white-space: nowrap; }
 .mleg span::before { content: ''; flex: 0 0 auto; width: .42rem; height: .42rem; background: var(--am); }
-.l-cr::before { background: #d93cff; }
-.l-in::before { background: var(--cy); }
-.l-wl::before { background: transparent; outline: 1px solid rgba(255, 176, 32, .55); outline-offset: -1px; }
+.mleg .l-cr::before { background: #d93cff; }
+.mleg .l-in::before { background: var(--cy); }
+.mleg .l-wl::before { background: transparent; outline: 1px solid rgba(255, 176, 32, .55); outline-offset: -1px; }
 
 /* Short viewports: the briefing sheds its optional blocks rather than
    clipping the prose. The figures shrink on their own (flex-basis 0). */
 @media (max-height: 640px) {
-  .opt { display: none; }
   .eq-note2 { display: none; }
   .ctl { gap: .13rem .6rem; }
   .thr-r { min-height: 1.14rem; }
   .thr-r .sil { width: 2.2rem; }
   .sub-h { margin: .44rem 0 .26rem; }
+  .eq-side .kv { gap: .06rem .5rem; }
+  .eq-side .eq-note { padding-top: .3rem; }
+  /* the plan drops to ~53 px here; its 7 px grid annotations resolve to under
+     2 px, which is not small type, it is noise. The diagram still reads. */
+  .dmap text { display: none; }
+  .br-txt { line-height: 1.48; }
 }
 @media (max-height: 520px) {
   .pay-r:not(.tot) { display: none; }
@@ -325,6 +374,27 @@ body {
   grid-template-columns: 2.5rem minmax(0, 1fr) 2.9rem;
   column-gap: .55rem; row-gap: 0;
   align-items: center;
+}
+/* The bottom-right armament panel has a frame; this block had nothing, so on a
+   bright frame (a smoke plume, a fireball) the white AP numeral and the dim
+   AP/EN/QB/KIT labels dropped out — the gauges survive because .bar-in is
+   already a dark plate, the TYPE did not. A soft scrim, not a panel and not a
+   drop shadow: heaviest across the numeral row, at zero by its own bottom
+   edge, so it barely touches the directional damage arc that runs in the
+   outer 4.6 rem band. ::before, so it cannot disturb the grid's explicit
+   row/column placement. */
+#vitals::before {
+  content: ''; position: absolute; z-index: -1;
+  /* every edge of this box has to dissolve or it IS a panel. Top and bottom
+     dissolve because the wash itself ends at alpha 0; the right dissolves
+     through the mask; the left is pushed off-screen (2.1 rem of page margin
+     plus 3.2 rem of overhang) so there is nothing to see an edge on. */
+  left: -3.2rem; right: -1.1rem; top: -1.1rem; bottom: -.25rem;
+  background: linear-gradient(180deg,
+    rgba(3, 7, 9, 0) 0%, rgba(3, 7, 9, .74) 16%, rgba(3, 7, 9, .62) 50%,
+    rgba(3, 7, 9, .30) 80%, rgba(3, 7, 9, 0) 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0 74%, rgba(0, 0, 0, .55) 90%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0 74%, rgba(0, 0, 0, .55) 90%, transparent 100%);
 }
 .v-head { grid-area: 1 / 1 / 2 / -1; display: flex; align-items: flex-end; gap: .55rem; margin-bottom: .3rem; }
 .v-head .tag { flex: 0 0 auto; width: 2.5rem; font-size: .7rem; letter-spacing: .34em; color: var(--cy); }
@@ -395,9 +465,14 @@ body {
 
 /* repair charges — own row, own baseline. Discrete blocks, not a gauge:
    three chunky segments off the shared left edge read as "3 charges". */
-.kits { grid-area: 6 / 2; display: flex; gap: .24rem; margin-top: .32rem; }
-.kits s { width: 3.1rem; height: .34rem; background: rgba(95, 244, 255, .10); outline: 1px solid var(--line2); outline-offset: -1px; }
-.kits s.on { background: var(--am); outline-color: var(--am); }
+/* They SPAN the shared rail like every other row: three fixed 3.1rem stubs
+   left two thirds of the row empty, so a FULL kit load read as a one-third
+   gauge. Flexed, 3-of-3 fills the rail and spending one empties a third. */
+.kits { grid-area: 6 / 2; display: flex; gap: .62rem; margin-top: .32rem; }
+.kits s { flex: 1 1 0; height: .34rem; background: rgba(95, 244, 255, .10); outline: 1px solid var(--line2); outline-offset: -1px; }
+/* wide gaps: three charges have to be countable at a glance, and at .3rem the
+   rail read as one unbroken amber bar */
+.kits s.on { background: rgba(255, 176, 32, .88); outline-color: var(--am); }
 #vitals.nokit .r-kit, #vitals.nokit #kit-num { color: #55666b; }
 
 /* ---- bottom-right : weapon panel ---- */
@@ -436,12 +511,23 @@ body {
   font-family: var(--mono); font-size: .96rem; color: var(--cy-b); letter-spacing: 0;
 }
 .w-amt b { flex: 1 1 auto; min-width: 0; text-align: right; }
+/* a word ("READY") is not a count — it must not shout at ammo-numeral size */
+.w-amt b.txt { font-size: .66rem; letter-spacing: .14em; color: var(--cy); align-self: center; }
 .w-amt small { flex: 0 0 auto; width: 1.66rem; text-align: left; font-size: .62rem; color: var(--dim); }
 .w-amt .lk { flex: 0 0 auto; width: 1.02rem; text-align: right; font-size: .62rem; font-style: normal; color: var(--am); }
-.w-sweep { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(95, 244, 255, .10); }
+/* The reload/cooldown sweep is PROGRESS, so at rest it is nothing. It used to
+   sit parked at scaleX(1), which painted a full-width amber rule under all
+   four rows permanently: four warning-coloured dividers that were really an
+   indicator stuck at 100 %. Only a row that is actually cycling shows it. */
+.w-sweep {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: rgba(95, 244, 255, .10); opacity: 0; transition: opacity .14s linear;
+}
+.w-row.busy .w-sweep { opacity: 1; }
 .w-sweep i { display: block; height: 100%; width: 100%; background: var(--am); transform-origin: 0 50%; transform: scaleX(0); }
 .w-row.reloading .w-name { color: var(--am); }
 .w-row.reloading .w-amt { color: var(--am); }
+.w-row.reloading .w-amt b.txt { color: var(--am); }
 
 /* ---- top-left : objectives ---- */
 #objectives { position: absolute; left: 2.1rem; top: 2.5rem; width: 21rem; }
@@ -463,8 +549,10 @@ body {
 #objectives.urgent .ob-t b { color: var(--am); }
 
 /* ---- top-centre : target readout ---- */
+/* same top edge as #objectives — they sit in one band across the top of the
+   frame and were 0.1rem out of register with each other */
 #target {
-  position: absolute; left: 50%; top: 2.4rem; width: 25rem; margin-left: -12.5rem;
+  position: absolute; left: 50%; top: 2.5rem; width: 25rem; margin-left: -12.5rem;
 }
 .tg-h { display: flex; align-items: baseline; gap: .5rem; padding: .34rem .7rem .28rem; }
 .tg-h u { font-style: normal; text-decoration: none; font-size: .58rem; letter-spacing: .24em; color: var(--dim); }
@@ -520,6 +608,10 @@ body {
 /* secondary contacts: bracket only, thinner stroke, no backing halo */
 .lockbox.sec .bk path { stroke-width: 2.4; stroke: rgba(2, 7, 9, .5); }
 .lockbox.sec .fg path { stroke-width: 1.1; }
+/* The bracket paths get a dark backing stroke so a 1 px line survives a bright
+   frame; the LABELS hanging off them had none and washed out over concrete or
+   smoke. Same treatment, on the type. */
+.lockbox b, .lockbox i { paint-order: stroke fill; -webkit-text-stroke: .13em rgba(2, 7, 9, .80); }
 .lockbox b {
   position: absolute; left: 0; top: -1.05rem; font-size: .56rem; letter-spacing: .22em;
   color: var(--am); font-weight: 400; white-space: nowrap;
@@ -635,11 +727,18 @@ body {
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
 
-/* ---- world-space damage numbers ---- */
+/* ---- world-space damage numbers ----
+   These land wherever the shot landed, which is often a muzzle flash, a smoke
+   plume or a fireball — white-on-white, and the numbers vanished. A stroke
+   under the fill (paint-order, so the glyph keeps its full weight) gives them
+   an edge on any background. It is an outline on the type itself, not an
+   offset drop shadow. */
 #dmg-layer { position: absolute; inset: 0; }
 .dmgnum {
   position: absolute; left: 0; top: 0; font-family: var(--mono); font-size: .84rem;
   font-weight: 700; color: #fff; letter-spacing: 0; opacity: 0; white-space: nowrap;
+  paint-order: stroke fill;
+  -webkit-text-stroke: .10em rgba(2, 6, 8, .84);
 }
 .dmgnum.direct { color: var(--am); font-size: 1.02rem; }
 .dmgnum.crit { color: #fff; font-size: 1.18rem; }

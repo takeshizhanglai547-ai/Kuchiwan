@@ -59,6 +59,7 @@ export class Overlays {
     // primary bracket footprint in screen space — secondaries keep off it
     this._pmx = 1e9; this._pmy = 1e9; this._pmr = 0;
     this._dm = -1; this._dmS = '';   // memoised "###M" readout string
+    this._retR = 46;                 // reticle graphic radius in px (from resize)
   }
 
   build() {
@@ -109,7 +110,17 @@ export class Overlays {
     this._hit = 0;
   }
 
-  resize(w, hgt) { this.w = w; this.h = hgt; }
+  resize(w, hgt) {
+    this.w = w; this.h = hgt;
+    // Reticle footprint, so a lock label can be told to keep out of it. The
+    // element is 6.8 rem square and its outermost marks sit at 40 % of that
+    // from centre; the extra 6 % is the label's own line box. Derived from the
+    // root font size (which HUD._resize has just written) rather than from a
+    // getBoundingClientRect — the overlay layer is display:none on the title
+    // screen and would measure zero.
+    const fs = parseFloat(document.documentElement.style.fontSize) || 16;
+    this._retR = 6.8 * fs * 0.46;
+  }
 
   // ------------------------------------------------------------------
   //  world -> screen. Returns false if behind the camera.
@@ -353,6 +364,23 @@ export class Overlays {
     const base = boxSize(d);
     // distance fade: near contacts read, far ones sink into the frame
     const fade = primary ? 1 : (0.54 - clamp01((d - 70) / 400) * 0.38);
+    // A bracket sitting under the crosshair had its TARGET tag and its range
+    // drawn straight through the reticle's arms — two cyan hairline graphics
+    // interleaved into unreadable mush. Nothing is lost by dropping the text
+    // there: the top-centre readout already carries this exact target's name
+    // and range, and hard lock is signalled by the reticle turning amber.
+    // Tested against where the LABEL actually lands (above the bracket, or
+    // below it once the .lo flip kicks in), not against the bracket box — a
+    // close target throws a 230 px frame that surrounds the reticle without
+    // its label going anywhere near it.
+    const cx = this.w * 0.5, cy = this.h * 0.5;
+    const halfW = base * 0.5;
+    const lift = this._retR * 0.34;                       // ~1.05rem label offset
+    const flip = (sy - halfW) < this.h * 0.17;
+    const labelY = flip ? sy + halfW + lift : sy - halfW - lift;
+    const onRet = primary &&
+      x > cx - this._retR && x < cx + this._retR &&
+      labelY > cy - this._retR && labelY < cy + this._retR;
     let used = 0;
     for (let k = 0; k < n && idx + used < MAX_BOX; k++) {
       const b = this.boxes[idx + used];
@@ -364,15 +392,26 @@ export class Overlays {
       tog(b.el, 'hard', hard);
       tog(b.el, 'soft', !hard);
       tog(b.el, 'sec', !primary);
-      const lead = primary && k === 0;
+      const lead = primary && k === 0 && !onRet;
       setText(b.tag, lead ? (hard ? 'LOCK' : 'TARGET') : '');
-      setText(b.sub, lead ? this._distStr(d) : '');
+      // range from the MECH, not from the lens. The camera trails ~20 m behind,
+      // so camera depth put "100M" on the bracket while the target readout —
+      // same entity, same frame — said 76 M.
+      setText(b.sub, lead ? this._distStr(this._range(e, d)) : '');
       // keep the label clear of the target readout when the bracket rides high
-      tog(b.el, 'lo', lead && (sy - sz * 0.5) < this.h * 0.17);
+      tog(b.el, 'lo', lead && flip);
       b.on = true;
       used++;
     }
     return used;
+  }
+
+  /** Player -> entity range in metres; falls back to camera depth. */
+  _range(e, depth) {
+    const p = this.ctx.player;
+    if (!p || !p.pos || !e || !e.pos) return depth;
+    const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
   /** "###M", memoised — the readout is rewritten every frame otherwise. */
