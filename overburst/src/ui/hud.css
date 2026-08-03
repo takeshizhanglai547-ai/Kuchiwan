@@ -887,3 +887,44 @@ body {
 @media (pointer: coarse) {
   #title-screen .pn:last-child { display: none; }
 }
+
+/* =========================================================
+   TOUCH LAYOUT — the bottom corners belong to the thumbs, so the
+   readouts move out of them. Everything here is layout only: no
+   colour, type or structure changes to the HUD itself.
+   ========================================================= */
+@media (pointer: coarse) {
+  /* armament moves out of the right thumb's way, up under the target
+     readout, and loses the panel chrome it no longer needs down there */
+  #weapons {
+    right: max(.9rem, env(safe-area-inset-right));
+    bottom: auto; top: 7.8rem; width: 17.5rem;
+    transform: scale(.88); transform-origin: 100% 0;
+  }
+  /* vitals sit between the two thumbs instead of under the left one */
+  #vitals {
+    left: 50%; transform: translateX(-50%) scale(.9); transform-origin: 50% 100%;
+    bottom: max(.7rem, env(safe-area-inset-bottom));
+  }
+  #objectives { left: max(.9rem, env(safe-area-inset-left)); top: max(.9rem, env(safe-area-inset-top)); width: 17rem; }
+  #radio { bottom: 10.2rem; }
+  #banner { top: 22%; }
+
+  /* controls: stick bottom-left, weapons bottom-right, modifiers inboard */
+  #tc-stick { bottom: max(1rem, env(safe-area-inset-bottom)); width: 8.4rem; height: 8.4rem; }
+  #tc-pad { bottom: max(1rem, env(safe-area-inset-bottom)); }
+  #tc-left { bottom: auto; top: 50%; transform: translateY(-40%); left: max(.9rem, env(safe-area-inset-left)); }
+  #tc-top { top: auto; bottom: 12.4rem; right: max(.9rem, env(safe-area-inset-right)); flex-direction: row; }
+  #tc-hint { bottom: max(.4rem, env(safe-area-inset-bottom)); font-size: .5rem; }
+}
+
+/* Very short landscape (a phone held sideways) — pull everything in tighter
+   still, and let the vitals sit on one line. */
+@media (pointer: coarse) and (max-height: 430px) {
+  #weapons { top: 6.6rem; transform: scale(.78); }
+  #vitals { transform: translateX(-50%) scale(.78); }
+  #tc-stick { width: 7.4rem; height: 7.4rem; }
+  .tc-b { width: 3.9rem; height: 3.9rem; }
+  .tc-b.tc-fire { width: 5.4rem; height: 5.4rem; }
+  #tc-left { transform: translateY(-52%); }
+}

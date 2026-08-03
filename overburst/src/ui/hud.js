@@ -154,8 +154,14 @@ export class HUD {
     const w = window.innerWidth || 1600;
     const h = window.innerHeight || 900;
     this.w = w; this.h = h;
-    let s = Math.min(w / 1600, h / 900);
-    if (s < 0.74) s = 0.74; else if (s > 1.45) s = 1.45;
+    // The HUD is authored at 1600x900. A phone in landscape is ~840x390,
+    // where the desktop floor of 0.74 makes the AP bar half the screen wide
+    // and the panels collide with the touch controls. Small viewports get a
+    // much lower floor and lean on height, which is the scarce axis there.
+    const small = w < 900 || h < 560;
+    let s = small ? Math.min(w / 1500, h / 760) : Math.min(w / 1600, h / 900);
+    const floor = small ? 0.48 : 0.74;
+    if (s < floor) s = floor; else if (s > 1.45) s = 1.45;
     document.documentElement.style.fontSize = (s * 16).toFixed(2) + 'px';
     this.overlays.resize(w, h);
   }

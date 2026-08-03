@@ -21,9 +21,16 @@ const browser = await chromium.launch({
 });
 const ctx = await browser.newContext({
   ...devices['iPhone 13'],
-  isMobile: true, hasTouch: true, viewport: { width: 844, height: 390 }, // landscape
+  isMobile: true, hasTouch: true,
+  viewport: { width: 844, height: 390 },   // landscape
+  // DPR 3 means a 2532x1170 software raster per frame; the screenshot then
+  // outruns Playwright's 30 s cap. The layout is what is under test, not the
+  // pixel density, so capture at 1x.
+  deviceScaleFactor: 1,
 });
+ctx.setDefaultTimeout(120000);
 const page = await ctx.newPage();
+page.setDefaultTimeout(120000);
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e.message)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
