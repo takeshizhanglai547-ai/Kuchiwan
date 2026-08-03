@@ -108,13 +108,15 @@ export class Input {
   // time. dt is set by the consumer each frame via setDelta().
   get dx() {
     if (this.scripted) return this.scripted.dx;
+    if (this.mouseDX) return this.mouseDX;          // pointer lock or touch drag
     if (!this.locked && this.freeAim) return this._rate(this._cx, window.innerWidth);
-    return this.mouseDX;
+    return 0;
   }
   get dy() {
     if (this.scripted) return this.scripted.dy;
+    if (this.mouseDY) return this.mouseDY;
     if (!this.locked && this.freeAim) return this._rate(this._cy, window.innerHeight);
-    return this.mouseDY;
+    return 0;
   }
 
   setDelta(dt) { this._dt = dt; }
@@ -145,6 +147,21 @@ export class Input {
     this.mouseDY = 0;
     if (this.scripted) { this.scripted.pressed.clear(); this.scripted.released.clear(); this.scripted.dx = 0; this.scripted.dy = 0; }
   }
+
+  // --- touch support ---------------------------------------------------
+  // Touch writes into the same down/pressed/released sets the keyboard uses,
+  // so every consumer stays unaware of the input device.
+  touchSet(action, isDown) {
+    if (isDown) {
+      if (!this.down.has(action)) this.pressed.add(action);
+      this.down.add(action);
+    } else if (this.down.has(action)) {
+      this.down.delete(action);
+      this.released.add(action);
+    }
+  }
+  /** drag deltas from the touch look surface, in the same units as mouse look */
+  scriptedTouchLook(dx, dy) { this.mouseDX += dx; this.mouseDY += dy; }
 
   // --- harness support -------------------------------------------------
   useScripted(on) {

@@ -10,6 +10,7 @@ import { CFG } from './config.js';
 import { EventBus } from './core/bus.js';
 import { Engine } from './core/engine.js';
 import { Input, ACTIONS } from './core/input.js';
+import { TouchControls } from './core/touch.js';
 import { PostFX } from './core/postfx.js';
 import { AudioSystem } from './core/audio.js';
 import { Arena } from './world/arena.js';
@@ -48,6 +49,8 @@ class Game {
     ctx.camera = this.engine.camera;
 
     ctx.input = new Input(canvas);
+    ctx.touch = new TouchControls(ctx);
+    if (TouchControls.shouldMount()) ctx.touch.mount();
 
     // --- systems (construction order matters: later systems may read earlier) ---
     ctx.audio = new AudioSystem(ctx);
@@ -70,6 +73,7 @@ class Game {
     for (const s of this.systems) if (s.init) s.init();
 
     ctx.bus.on('state', ({ to }) => { ctx.state = to; });
+    ctx.bus.on('state', ({ to }) => ctx.touch.show(to === 'playing'));
 
     this.engine.resize();
     this._loop = this._loop.bind(this);
