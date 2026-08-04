@@ -25,6 +25,51 @@ import { clamp } from './util/math.js';
 
 const MAX_DT = 1 / 20;
 
+/**
+ * Rolling frame-time accumulator. Records wall time per system so a slow
+ * frame can be attributed instead of guessed at. Off by default — the
+ * shipping loop never calls into it.
+ */
+class PerfProbe {
+  constructor() { this.reset(); }
+  reset() {
+    this.sections = new Map();
+    this.frames = 0;
+    this.total = 0;
+    this.worst = 0;
+    this.times = [];
+    this.dtSum = 0;
+  }
+  add(name, ms) { this.sections.set(name, (this.sections.get(name) || 0) + ms); }
+  frame(ms, dt) {
+    this.frames++; this.total += ms; this.dtSum += dt;
+    if (ms > this.worst) this.worst = ms;
+    this.times.push(ms);
+    if (this.times.length > 600) this.times.shift();
+  }
+  report(ctx) {
+    const n = Math.max(1, this.frames);
+    const sorted = [...this.times].sort((a, b) => a - b);
+    const pct = (p) => sorted.length ? +sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))].toFixed(2) : 0;
+    const sections = {};
+    for (const [k, v] of this.sections) sections[k] = +(v / n).toFixed(3);
+    const info = ctx.renderer.info;
+    return {
+      frames: this.frames,
+      cpuMeanMs: +(this.total / n).toFixed(2),
+      cpuP50Ms: pct(0.5), cpuP95Ms: pct(0.95), cpuP99Ms: pct(0.99),
+      cpuWorstMs: +this.worst.toFixed(2),
+      simulatedFps: +(n / Math.max(1e-6, this.dtSum)).toFixed(1),
+      sections,
+      draws: info.render.calls,
+      triangles: info.render.triangles,
+      programs: (info.programs || []).length,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+    };
+  }
+}
+
 class Game {
   constructor() {
     const canvas = document.getElementById('gl');
@@ -77,6 +122,9 @@ class Game {
 
     this.engine.resize();
     this._loop = this._loop.bind(this);
+    this._loopProfiled = this._loopProfiled.bind(this);
+    this._loopRef = this._loop;
+    this.perf = new PerfProbe();
     requestAnimationFrame(this._loop);
 
     this.setState('title');
@@ -98,7 +146,7 @@ class Game {
   }
 
   _loop() {
-    requestAnimationFrame(this._loop);
+    requestAnimationFrame(this._loopRef);
     const ctx = this.ctx;
     let dt = Math.min(ctx.clock.getDelta(), MAX_DT) * ctx.timeScale;
     ctx.dt = dt;
@@ -136,6 +184,61 @@ class Game {
   }
 
   // ------------------------------------------------------------------
+  //  Profiled variant of the loop body. Swapped in by perf.enable() so
+  //  the shipping path pays nothing for the instrumentation.
+  // ------------------------------------------------------------------
+  _loopProfiled() {
+    requestAnimationFrame(this._loopRef);
+    const ctx = this.ctx;
+    const P = this.perf;
+    const now = () => performance.now();
+    const t0 = now();
+
+    let dt = Math.min(ctx.clock.getDelta(), MAX_DT) * ctx.timeScale;
+    ctx.dt = dt;
+    ctx.frame++;
+    ctx.renderer.info.reset();
+    ctx.input.setDelta(dt);
+
+    const playing = ctx.state === 'playing';
+    if (playing) ctx.time += dt;
+
+    let m = now();
+    if (playing) {
+      ctx.player.update(dt);
+      P.add('player', now() - m); m = now();
+      ctx.weapons.update(dt);
+      P.add('weapons', now() - m); m = now();
+      ctx.enemies.update(dt);
+      P.add('enemies', now() - m); m = now();
+      ctx.projectiles.update(dt);
+      P.add('projectiles', now() - m); m = now();
+      ctx.mission.update(dt);
+      P.add('mission', now() - m); m = now();
+    } else if (ctx.state === 'title') {
+      ctx.world.updateIdle?.(dt);
+      m = now();
+    }
+
+    ctx.world.update?.(dt);
+    P.add('world', now() - m); m = now();
+    ctx.vfx.update(dt);
+    P.add('vfx', now() - m); m = now();
+    ctx.audio.update?.(dt);
+    P.add('audio', now() - m); m = now();
+    ctx.hud.update(dt);
+    P.add('hud', now() - m); m = now();
+    if (!ctx.cameraOverride) ctx.player.updateCamera?.(dt);
+    P.add('camera', now() - m); m = now();
+
+    ctx.postfx.render(dt);
+    P.add('render', now() - m);
+
+    ctx.input.endFrame();
+    P.frame(now() - t0, dt);
+  }
+
+  // ------------------------------------------------------------------
   //  Automation hooks — used by tools/shot.mjs for visual QA.
   // ------------------------------------------------------------------
   _exposeHarness() {
@@ -163,6 +266,10 @@ class Game {
       releaseCam: () => { ctx.cameraOverride = false; },
       playerPos: (x, y, z) => { ctx.player.pos.set(x, y, z); ctx.player.vel?.set(0, 0, 0); },
       errors: () => window.__OB_ERRORS.slice(),
+      // ---- performance probe ----
+      perfOn: () => { this.perf.reset(); this._loopRef = this._loopProfiled; },
+      perfOff: () => { this._loopRef = this._loop; },
+      perf: () => this.perf.report(ctx),
       stats: () => ({
         frame: ctx.frame,
         time: ctx.time,
