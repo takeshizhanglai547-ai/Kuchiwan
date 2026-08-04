@@ -1288,6 +1288,49 @@ function ring(x,y,color,opt){ opt=opt||{};
   particles.push({k:'ring',x,y,gl:groundLift(x),layer:opt.layer!=null?opt.layer:1,delay:opt.delay|0,
     r:5*FXS,r0:5*FXS,rMax:(opt.rMax||50)*FXS,ang:opt.ang!=null?opt.ang:rnd(-0.45,0.45),
     sq:opt.sq!=null?opt.sq:rnd(0.52,0.82),life:16,max:16,color}); }
+// ══════════════════════════════════════════════════════════════
+//  衝撃波（多層）
+//  細いリング1本では地味なので、AAA級のインパクトを支える4要素を重ねる。
+//    1) 白い芯が一瞬で膨らむ（フラッシュコア）
+//    2) 太い衝撃リングが1本、遅れて細い残響リングが2本
+//    3) 地面を這う扁平な砂塵リング（縦に潰して床に貼りつく）
+//    4) 放射状の光条と、外へ吹き飛ぶ塵
+//  重いときは perfTier に応じて層を落とす。
+function shockwave(x,y,opt){ opt=opt||{};
+  const R=opt.r||120, col=opt.color||'#ffe9a0', tier=perfTier;
+  const heavy=opt.big!==false;
+  // 1) 白い芯：立ち上がりが鋭く、すぐ消える
+  particles.push({k:'shockcore',x,y,gl:groundLift(x),layer:1,delay:0,
+    r:R*0.30,rMax:R*0.62,life:8,max:8,color:'#ffffff'});
+  // 2) 主リング＋残響（時間差で外へ抜ける）
+  const rings = tier>=2?1 : tier>=1?2 : 3;
+  for(let i=0;i<rings;i++){
+    particles.push({k:'shockring',x,y,gl:groundLift(x),layer:1,delay:i*4,
+      r:R*0.12,r0:R*0.12,rMax:R*(1.0+i*0.34),sq:0.34,
+      w:(heavy?18:12)*(1-i*0.26), life:18+i*4, max:18+i*4, color:i?col:'#ffffff'}); }
+  // 3) 床を這う砂塵リング（縦に強く潰して接地感を出す）
+  if(tier<2) particles.push({k:'shockring',x,y,gl:groundLift(x),layer:0,delay:2,
+    r:R*0.18,r0:R*0.18,rMax:R*1.5,sq:0.13,w:14,life:22,max:22,color:'rgba(190,175,150,.85)'});
+  // 4) 噴き上がる爆風の柱：接地の衝撃が上へ抜ける（AAAのインパクトは必ず縦の成分を持つ）
+  if(tier<2){
+    particles.push({k:'shockplume',x,y,gl:groundLift(x),layer:1,delay:1,
+      r:R*0.42,h0:R*(heavy?1.15:0.72),life:20,max:20,color:col});
+    // 立ち上がる光条：接地点から上へ扇状に伸びて消える
+    const bl = tier>=1?3:5;
+    for(let i=0;i<bl;i++){
+      particles.push({k:'shockbeam',x,y,gl:groundLift(x),layer:1,delay:0,
+        a:-Math.PI/2+(i-(bl-1)/2)*0.42+rnd(-0.08,0.08),
+        len:R*(0.85+Math.random()*0.6), w:R*0.055*(1-Math.abs(i-(bl-1)/2)*0.18),
+        life:11,max:11,color:'#ffffff'}); }
+  }
+  // 5) 光条＋吹き飛ぶ塵
+  impactBurst(x,y,col,heavy);
+  const dn = tier>=2?4 : tier>=1?8 : 13;
+  for(let i=0;i<dn;i++){ const a=i/dn*Math.PI*2+rnd(-0.2,0.2), sp=R*(0.05+Math.random()*0.06);
+    particles.push({k:'spark',x,y:y-2,gl:groundLift(x),layer:1,delay:0,
+      vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.42-1.2, r:rnd(2,4.4), life:16+((Math.random()*8)|0), max:24,
+      color:i%3?col:'#fff', star:false}); }
+}
 // 放射インパクト線：角度・長さ・太さを一本ずつ散らし、等間隔スポークの機械的な見た目を避ける
 function impactBurst(x,y,color,big,opt){ opt=opt||{};
   let live=0;
@@ -1353,6 +1396,9 @@ function updateParticles(){
     else if(p.k==='txt'){ p.x+=p.vx; p.vy+=p.g; p.y+=p.vy; p.vx*=0.965; p.pop*=0.78;
       if(p.y>p.y0){ p.y=p.y0; p.vy*=-0.34; p.vx*=0.6; } }   // 床（湧いた高さ）で一度だけ弾む
     else if(p.k==='ring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.2)); }
+    else if(p.k==='shockring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
+    else if(p.k==='shockcore'){ const a=p.life/p.max; p.r=p.r+(p.rMax-p.r)*0.34; }
+    else if(p.k==='shockplume'||p.k==='shockbeam'){ /* 形は寿命から直接引くので更新不要 */ }
     else if(p.k==='twinkle'){ p.rot=(p.rot||0)+0.18; }
     if(p.life<=0) particles.splice(i,1);
   }
@@ -1393,6 +1439,38 @@ function drawParticles(layer){
       drawArcRibbon(sx,py,p.r*(1.05+0.13*a),p.r*0.68,p.a0,p.a1,hexRGB(p.color),a*0.9,0.95); }
     else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
       ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
+    else if(p.k==='shockring'){   // 衝撃リング：外へ抜けながら細く薄くなり、内側に薄い膜を伴う
+      const ea=Math.pow(a,1.35);
+      ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=ea*0.30; ctx.fillStyle=p.color;                       // リングの内側にうっすら膜を張る
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),0,0,7); ctx.fill();
+      ctx.globalAlpha=ea*0.95; ctx.strokeStyle=p.color; ctx.lineWidth=Math.max(0.8,p.w*ea);
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),0,0,7); ctx.stroke();
+      ctx.globalCompositeOperation='source-over'; }
+    else if(p.k==='shockplume'){   // 噴き上がる爆風の柱：下は太く、上へ広がりながら薄くなる
+      const u=1-a, hh=p.h0*(0.35+u*0.75), rw=p.r*(0.55+u*0.85);
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=Math.pow(a,1.5)*0.55;
+      const g=ctx.createLinearGradient(0,py-hh,0,py);
+      g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.55,p.color); g.addColorStop(1,'#ffffff');
+      ctx.fillStyle=g; ctx.beginPath();
+      ctx.moveTo(sx-rw*0.5,py); ctx.quadraticCurveTo(sx-rw,py-hh*0.6, sx-rw*0.72,py-hh);
+      ctx.lineTo(sx+rw*0.72,py-hh); ctx.quadraticCurveTo(sx+rw,py-hh*0.6, sx+rw*0.5,py);
+      ctx.closePath(); ctx.fill();
+      ctx.globalCompositeOperation='source-over'; }
+    else if(p.k==='shockbeam'){   // 立ち上がる光条：根元が太く先が尖る紡錘
+      const u=1-a, L=p.len*(0.3+u*0.9), w=p.w*Math.pow(a,0.8);
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=Math.pow(a,1.7)*0.9;
+      ctx.save(); ctx.translate(sx,py); ctx.rotate(p.a);
+      ctx.fillStyle=p.color; ctx.beginPath();
+      ctx.moveTo(0,-w); ctx.quadraticCurveTo(L*0.5,-w*0.5, L,0); ctx.quadraticCurveTo(L*0.5,w*0.5, 0,w);
+      ctx.closePath(); ctx.fill(); ctx.restore();
+      ctx.globalCompositeOperation='source-over'; }
+    else if(p.k==='shockcore'){   // 白い芯：一瞬で膨らんで消える
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a*a;
+      ctx.fillStyle=radGrad(0,0,100,'rgba(255,255,255,.95)','rgba(255,255,255,0)');
+      ctx.save(); ctx.translate(sx,py); ctx.scale(p.r/100,p.r/100*0.5);
+      ctx.beginPath(); ctx.arc(0,0,100,0,7); ctx.fill(); ctx.restore();
+      ctx.globalCompositeOperation='source-over'; }
     else if(p.k==='flashcore'){ const R=p.r*(1+(1-a)*0.85); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a*a;   // 立ち上がりが鋭い白芯
       const g=ctx.createRadialGradient(sx,py,R*0.06,sx,py,R);
       g.addColorStop(0,'rgba('+p.color+',.98)'); g.addColorStop(0.34,'rgba('+p.color+',.5)'); g.addColorStop(1,'rgba('+p.color+',0)');
@@ -2073,7 +2151,9 @@ function holyPillar(p){ const mul=(p.atkMul||1), bx=p.x+p.facing*90, gy=LANE-gro
 // ガードワン Lv5「天地崩落・極大メテオ」：天から巨岩が降り、ハンマーで叩き割る
 function guardMeteorFall(p){ const mul=(p.atkMul||1);
   shake=Math.max(shake,20); flashAt(6,'255,210,77'); hitStop=Math.max(hitStop,14); triggerSlow(26); quake=Math.max(quake||0,34); sfx.big(p.x); sfx.ko(p.x);
-  for(let k=0;k<4;k++) ring(p.x,p.y,k%2?'#ffd24d':'#ff8a3a'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,30); impactBurst(p.x,p.y-24,'#fff',true);
+  shockwave(p.x,p.y,{r:250,color:'#ffd24d',big:true});
+  shockwave(p.x,p.y,{r:180,color:'#ff8a3a',big:true});
+  dust(p.x,p.y,30);
   for(let k=0;k<18;k++) spark(p.x+rnd(-150,150), p.y-rnd(0,40), (k%2)?'#8a6a3a':'#caa54a', 4, 9);   // 砕けた岩塊
   for(const d of [-1,1]){ for(let w=0;w<5;w++) spawnProj(p.x+d*30,p.y,d*(6.5+w*1.6),0,{owner:'player',dmg:Math.round(22*mul),color:w%2?'#ff8a3a':'#ffd24d',r:30-w*3,life:80,zz:30,pierce:true,wave:true}); }
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<260){ damageEnemy(e,Math.round(40*mul),(e.x<p.x?-1:1)*12,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*15,-16,3); } }); }
@@ -2084,14 +2164,18 @@ function shimaKuzan(p){ const dir=p.facing, mul=(p.atkMul||1);
   spark(p.x+dir*70,p.y-52,'#ffd24d',30,14); shake=Math.max(shake,16); flashAt(5,'255,180,80'); sfx.big(p.x); }
 // ── シマ↓↑「爆裂・羅漢衝波」：全方位の気功大爆発＋左右へ衝撃波 ──
 function shimaKiBurst(p){ const mul=(p.atkMul||1);
-  for(let r=0;r<4;r++) ring(p.x,p.y-40,r%2?'#ffd24d':'#ff9a3a'); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,'#ffd24d',34,14); dust(p.x,p.y,16);
+  shockwave(p.x,p.y-40,{r:170,color:'#ffd24d',big:true});
+  shockwave(p.x,p.y,{r:120,color:'#ff9a3a',big:false});
+  spark(p.x,p.y-40,'#ffd24d',26,14); dust(p.x,p.y,16);
   shake=Math.max(shake,12); flashAt(5,'255,154,58'); hitStop=Math.max(hitStop,8); triggerSlow(16); sfx.big(p.x); sfx.boss(p.x);
   for(const d of [-1,1]) spawnProj(p.x+d*30,p.y,d*8.5,0,{owner:'player',dmg:Math.round(14*mul),color:'#ffae42',r:24,life:44,zz:34,pierce:true,wave:true});
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<156 && Math.abs(e.y-p.y)<92){ damageEnemy(e,Math.round(30*mul),(e.x<p.x?-1:1)*13,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*15,-11,3); } }); }
 // ── ガードワン↓↑「メテオ・ハンマーインパクト」：特大の叩きつけ→三重衝撃波 ──
 function guardHammerImpact(p){ const mul=(p.atkMul||1);
   shake=Math.max(shake,16); flashAt(5,'255,210,77'); hitStop=Math.max(hitStop,12); triggerSlow(20); quake=Math.max(quake||0,24); sfx.big(p.x); sfx.ko(p.x);
-  for(let k=0;k<3;k++) ring(p.x,p.y,k%2?'#ffd24d':'#ffb85a'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,22); impactBurst(p.x,p.y-20,'#fff',true);
+  shockwave(p.x,p.y,{r:200,color:'#ffd24d',big:true});
+  shockwave(p.x,p.y,{r:140,color:'#ffb85a',big:false});
+  dust(p.x,p.y,22);
   for(let k=1;k<=6;k++){ for(const sgn of [-1,1]){ const cx=p.x+sgn*k*34; spark(cx,p.y,'#7a5a2a',4,4); ring(cx,p.y,'#caa54a'); } }
   for(const d of [-1,1]){ for(let w=0;w<3;w++) spawnProj(p.x+d*30,p.y,d*(7+w*1.5),0,{owner:'player',dmg:Math.round(18*mul),color:w%2?'#ffb85a':'#ffd24d',r:24-w*3,life:66,zz:30,pierce:true,wave:true}); }
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<200){ damageEnemy(e,Math.round(30*mul),(e.x<p.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*12,-13,3); } }); }
@@ -3397,6 +3481,7 @@ function rushFinish(){ const p=player; const dir=p.facing;
 function fireKi(p,dmg,col){ const dir=p.facing; spawnProj(p.x+dir*30, p.y, dir*11, 0, {owner:'player',dmg:dmg||14,color:col||'#46c8ff',r:13,life:130,zz:46}); sfx.boss(p.x); ring(p.x+dir*26,p.y-40,col||'#46c8ff'); }
 // 溜め斬りの衝撃波：地面を進み、複数の敵を貫いて吹き飛ばす
 function spawnShockwave(p,dmg){ const dir=p.facing;
+  shockwave(p.x+dir*30, p.y, {r:130, color:'#ffd24d', big:true});
   spawnProj(p.x+dir*44, p.y, dir*8.5, 0, {owner:'player',dmg:dmg||22,color:'#bfe9ff',r:24,life:54,zz:30,pierce:true,wave:true});
   spark(p.x+dir*44,p.y-30,'#fff',16,9); ring(p.x+dir*34,p.y-30,'#bfe9ff'); shake=Math.max(shake,5); sfx.heavy(p.x); }
 function fireKiDown(p){ spawnProj(p.x, p.y, 0, 0, {owner:'player',dmg:16,color:'#46c8ff',r:13,life:110,zz:Math.max(p.z+30,40),vzz:-9,explode:true}); sfx.dash(p.x); spark(p.x,p.y-p.z-10,'#9fe8ff',8,7); }
@@ -4249,8 +4334,10 @@ function startBossMove(e){ e.slammed=false; e.lastMove=e.moveName;
 function bArc(e,reach,hh,dmg,knock,col){ const t=ETYPE[e.type], dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.6, dir>0?-0.85:Math.PI-0.85, dir>0?0.85:Math.PI+0.85, col||t.accent);
   spark(ex,ey,col||t.accent,8,7); tryHitPlayer(e,dmg,knock,reach,hh); }
-function bShock(e,radius,dmg){ const t=ETYPE[e.type]; ring(e.x,e.y,t.accent); ring(e.x,e.y,'#fff'); dust(e.x,e.y,14); spark(e.x,e.y,'#fff',18,10);
-  shake=Math.max(shake,8); flash=Math.max(flash,2); tryHitPlayer(e,dmg,true,-radius,radius*0.7); }
+function bShock(e,radius,dmg){ const t=ETYPE[e.type];
+  shockwave(e.x,e.y,{r:radius*1.15, color:t.accent, big:true});
+  dust(e.x,e.y,16); kick(e.facing*0.5, 1.5, 9);   // 縦揺れ主体の方向性シェイク
+  shake=Math.max(shake,9); flash=Math.max(flash,2); tryHitPlayer(e,dmg,true,-radius,radius*0.7); }
 function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, tp=nearestPlayerTo(e.x);
   const ang=Math.atan2(tp.y-e.y, tp.x-e.x);
   for(let i=0;i<n;i++){ const a=ang+(i-(n-1)/2)*(spreadDeg*Math.PI/180);
@@ -9096,12 +9183,16 @@ function drawHUD(){
     // 遅延ダメージチップ：削られた分が黄色の残像として遅れて追いつき、被弾量が読める
     if(sr>hr+0.002){ ctx.fillStyle='rgba(255,238,170,.88)'; ctx.fillRect(72+172*hr,35,172*(sr-hr),8); }
     ctx.fillStyle=hpg; ctx.fillRect(72,35,172*hr,8);
+    barGloss(72,35,172*hr,8);
+    if(hr>0.02){ ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fillRect(72+172*hr-1.5,35,1.5,8); }   // 先端のエッジライト
     if(hr<=0.28){ ctx.save(); ctx.globalAlpha=0.34+0.36*Math.sin(gf*0.22); ctx.strokeStyle='#ff4d5e'; ctx.lineWidth=2.4;
-      roundRect(12,12,256,86,UI.r.m); ctx.stroke(); ctx.restore(); } }   // 瀕死は1Pカードの外枠が心拍で脈打つ
+      bevelPath(12,12,256,86,11); ctx.stroke(); ctx.restore(); } }   // 瀕死は1Pカードの外枠が心拍で脈打つ
   // charge gauge
-  ctx.fillStyle='#0a0a12'; ctx.fillRect(70,49,176,7); ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=1; ctx.strokeRect(70,49,176,7);
+  barFrame(71,50,174,6);
   const cg=ctx.createLinearGradient(70,0,246,0); cg.addColorStop(0,'#46c8ff'); cg.addColorStop(1,'#ffd24d');
-  ctx.fillStyle=player.charge>=0.45?cg:'#3a6a8c'; ctx.fillRect(71,50,174*player.charge,5);
+  ctx.fillStyle=player.charge>=0.45?cg:'#3a6a8c'; ctx.fillRect(71,50,174*player.charge,6);
+  barGloss(71,50,174*player.charge,6);
+  if(player.charge>0.02){ ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(71+174*player.charge-1.5,50,1.5,6); }
   // CHARGE MAX! は HPバーの塗りの上に重ねない。チャージゲージの帯へ下ろし、暗いプレート＋縁取りで背景から切り離す
   // （HPのグラデが同じ黄色を通る帯域では実測 1.03:1 まで落ちて文字が消えていた）
   if(player.charge>=0.45&&gf%10<5){ ctx.save(); ctx.font=uif('bold',10);
@@ -9145,6 +9236,7 @@ function drawHUD(){
   if(players[1].active){ const q=players[1]; panel(12,hudY,238,38);
     ctx.fillStyle='#ff9a3a'; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('2P  シマダックス',22,hudY+17);
     barFrame(22,hudY+21,164,11); const g2=ctx.createLinearGradient(22,0,186,0); g2.addColorStop(0,'#7dff5a'); g2.addColorStop(.5,'#ffe14d'); g2.addColorStop(1,'#ff4d2d');
+    window.__b2=1;
     const q2r=clamp(q.hp/q.maxHp,0,1), q2s=clamp(tickHpShow(q)/q.maxHp,0,1);
     if(q2s>q2r+0.002){ ctx.fillStyle='rgba(255,238,170,.88)'; ctx.fillRect(24+160*q2r,hudY+23,160*(q2s-q2r),7); }
     ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,hudY+23,160*q2r,7);
@@ -9153,6 +9245,8 @@ function drawHUD(){
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
   ctx.fillText(lap>=3?('3周目　STAGE '+stage+' / '+(WORLD3_LEVELS.length+2))
     :lap>=2?('2周目　STAGE '+stage+' / '+(WORLD2_LEVELS.length+2)):('STAGE '+stage+' / 12'),W/2,30);
+  { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
+    ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
   drawFoePower(16, hudY+12); hudY+=26;
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
@@ -9165,7 +9259,10 @@ function drawHUD(){
   const boss=enemies.find(e=>ETYPE[e.type].boss&&!e.dead);
   if(boss){ const bt=ETYPE[boss.type]; const bx=W-306, bw2=226;
     panel(bx,10,bw2,50);
-    ctx.save(); ctx.fillStyle='#ff2d6a'; ctx.font=uif('bold',10); ctx.textAlign='left'; ctx.fillText('BOSS',bx+12,26);
+    ctx.save();
+    // 見出しは字間を開けた小さな大文字。左に短い赤い縦棒を立てて視線の起点にする
+    ctx.fillStyle='#ff2d6a'; ctx.fillRect(bx+12,17,2.5,10);
+    ctx.textAlign='left'; uiLabel('BOSS', bx+19, 26, '#ff2d6a', 10, 2.2);
     ctx.fillStyle=bt.accent; ctx.font=uif('bold',14); ctx.textAlign='right'; ctx.fillText(bt.name,bx+bw2-12,26); ctx.restore();
     ctx.textAlign='left'; barFrame(bx+12,32,bw2-24,15);
     const iw=bw2-28, ix=bx+14;
@@ -9174,7 +9271,10 @@ function drawHUD(){
     const bg=ctx.createLinearGradient(ix,0,ix+iw,0); bg.addColorStop(0,'#ff2d6a'); bg.addColorStop(1,bt.accent);
     ctx.save();
     if(boss.rage||boss.enraged||(boss.poiseBreak||0)>gf) ctx.globalAlpha=0.82+0.18*Math.sin(gf*0.2);   // 激昂・崩壊中は脈動
-    ctx.fillStyle=bg; ctx.fillRect(ix,34,iw*br,11); ctx.restore();
+    ctx.fillStyle=bg; ctx.fillRect(ix,34,iw*br,11);
+    barGloss(ix,34,iw*br,11);
+    if(br>0.01){ ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(ix+iw*br-2,34,2,11); }   // 先端のエッジライト
+    ctx.restore();
     ctx.fillStyle='rgba(0,0,0,.55)';                                     // 相位ティック：残り1/3・2/3が一目で分かる
     for(const q of [0.34,0.67]) ctx.fillRect(ix+iw*q,33,2,13);
     if(br<=0.25){ ctx.save(); ctx.globalAlpha=0.28+0.34*Math.sin(gf*0.22); ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2;
@@ -9342,13 +9442,58 @@ function drawBranchUI(){
   ctx.fillText('←→（スティック）で選択　／　攻撃ボタンで決定',W/2,H-36);
   ctx.textAlign='left'; ctx.restore();
 }
-function panel(x,y,w,h){ ctx.fillStyle=UI.ink; roundRect(x,y,w,h,UI.r.m); ctx.fill();
-  ctx.strokeStyle=UI.line; ctx.lineWidth=2; roundRect(x,y,w,h,UI.r.m); ctx.stroke();
-  ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; roundRect(x+2,y+2,w-4,h-4,UI.r.m-2); ctx.stroke(); }
+// 角を斜めに落とした多角形。丸角より硬質で、据わりのよい輪郭になる
+function bevelPath(x,y,w,h,c){
+  ctx.beginPath();
+  ctx.moveTo(x+c,y); ctx.lineTo(x+w-c,y); ctx.lineTo(x+w,y+c);
+  ctx.lineTo(x+w,y+h-c); ctx.lineTo(x+w-c,y+h); ctx.lineTo(x+c,y+h);
+  ctx.lineTo(x,y+h-c); ctx.lineTo(x,y+c); ctx.closePath(); }
+// パネルの四隅に短い鉤（コーナーブラケット）を置く。枠を閉じきらないことで抜けが出る
+function cornerTicks(x,y,w,h,c,len,col,lw){
+  ctx.strokeStyle=col; ctx.lineWidth=lw||2; ctx.lineCap='butt';
+  const L=len||10;
+  ctx.beginPath();
+  ctx.moveTo(x+c,y); ctx.lineTo(x+c+L,y);            ctx.moveTo(x,y+c); ctx.lineTo(x,y+c+L);
+  ctx.moveTo(x+w-c-L,y); ctx.lineTo(x+w-c,y);        ctx.moveTo(x+w,y+c); ctx.lineTo(x+w,y+c+L);
+  ctx.moveTo(x+c,y+h); ctx.lineTo(x+c+L,y+h);        ctx.moveTo(x,y+h-c); ctx.lineTo(x,y+h-c-L);
+  ctx.moveTo(x+w-c-L,y+h); ctx.lineTo(x+w-c,y+h);    ctx.moveTo(x,y+h-c); ctx.lineTo(x,y+h-c-L);
+  ctx.moveTo(x+w,y+h-c); ctx.lineTo(x+w,y+h-c-L);
+  ctx.stroke(); }
+// パネルの受け皿グラデは y と h だけで決まるのでキャッシュする（毎フレーム生成すると実測 +1〜2ms）
+const _panelG=new Map();
+function panelGrad(y,h){
+  const k=y+'|'+h; let g=_panelG.get(k);
+  if(!g){ g=ctx.createLinearGradient(0,y,0,y+h);
+    g.addColorStop(0,'rgba(14,17,28,.80)'); g.addColorStop(1,'rgba(6,8,15,.72)');
+    if(_panelG.size>40) _panelG.clear(); _panelG.set(k,g); }
+  return g; }
+function panel(x,y,w,h){
+  const c=Math.min(11, h*0.34);
+  ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
+  // 外周は細く暗く、内側に薄いハイライトを1本
+  ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.lineWidth=2; bevelPath(x,y,w,h,c); ctx.stroke();
+  // 上辺にだけ金の細線を通し、視線の起点をつくる
+  ctx.strokeStyle=UI.line; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.moveTo(x+c+2,y+0.7); ctx.lineTo(x+w-c-2,y+0.7); ctx.stroke();
+  cornerTicks(x,y,w,h,c,9,'rgba(255,210,80,.5)',1.6); }
 // バー枠：パネルと同じ「暗い受け皿＋内側ハイライト」の語彙で、全ゲージの見え方を揃える
-function barFrame(x,y,w,h){ ctx.fillStyle='rgba(4,5,11,.94)'; roundRect(x-1,y-1,w+2,h+2,3); ctx.fill();
-  ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.lineWidth=1; roundRect(x-1.5,y-1.5,w+3,h+3,3); ctx.stroke();
-  ctx.strokeStyle='rgba(255,255,255,.26)'; ctx.lineWidth=1; roundRect(x-0.5,y-0.5,w+1,h+1,3); ctx.stroke(); }
+function barFrame(x,y,w,h){
+  ctx.fillStyle='rgba(3,4,9,.95)'; ctx.fillRect(x-1,y-1,w+2,h+2);
+  ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=1; ctx.strokeRect(x-1.5,y-1.5,w+3,h+3);
+  ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=1; ctx.strokeRect(x-0.5,y-0.5,w+1,h+1);
+  // 目盛り：一定間隔の刻みを入れて「計器」に見せる（残量が量として読める）
+  if(w>60&&h>=6){ ctx.fillStyle='rgba(0,0,0,.45)';
+    const step=Math.max(14, w/12);
+    for(let tx=x+step; tx<x+w-2; tx+=step) ctx.fillRect(Math.round(tx),y,1,h); } }
+// ゲージの上に走らせる光沢。塗りの上半分だけをうっすら明るくして「板」に見せない
+function barGloss(x,y,w,h){ if(w<=0) return;
+  ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(x,y,w,Math.max(1,h*0.42)); }
+// 見出し用：字間を開けた小さな大文字。AAAのHUDはラベルを細く広く置く
+function uiLabel(txt,x,y,col,size,track){
+  ctx.save(); ctx.fillStyle=col||UI.sub; ctx.font=uif('bold',size||10);
+  const t=track==null?1.6:track; let cx=x;
+  for(const ch of txt){ ctx.fillText(ch,cx,y); cx+=ctx.measureText(ch).width+t; }
+  ctx.restore(); return cx-x; }
 function faceIcon(x,y,col){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x,y,22,0,7); ctx.fill();
   furBall(x,y,18,'#fff7e0','#e0cda0'); furBall(x-12,y-2,9,'#fbeece','#dcc89c'); furBall(x+12,y-2,9,'#fbeece','#dcc89c'); furBall(x,y-12,9,'#fff7e0','#e3d1a6');
   ctx.fillStyle='#fffaf0'; ctx.beginPath(); ctx.ellipse(x+2,y+3,9,8,0,0,7); ctx.fill();
