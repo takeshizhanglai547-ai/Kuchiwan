@@ -952,6 +952,9 @@ const Music=(()=>{
   // 高い側4ステップは +36 の和音内音。以前は arp が brass・choir と同じ ch[n]+24 を踏み、
   // lap1 BATTLE[0] だけで 32件の団子を作っていた
   const ARP=[1,2,1,2,0,2,1,2], ARPX=[2,2,2,2,0,0,0,0];
+  // 蟲パレットのオフビート木琴が踏む度数（奇数ステップのみ使用）。
+  // 5度→3度→5度→根音。ブラス(根音・3度=+24)が伸びている st1・st5 には 5度を当てて衝突を避ける
+  const MAR=[2,2,2,1,2,2,2,0];
   // ── 対旋律 cline：主旋律の完全4度下あたりを和音内音でなぞる独立線。
   //    S.cmel（32要素）があればそれを最優先し、無い曲は主旋律と和音から生成する。
   //    主旋律と同音・オクターブ重複になる候補は必ず除外するので lead と音高が重ならない。
@@ -962,14 +965,36 @@ const Music=(()=>{
   function choirN(ch,po){ const n=ch[0]+2+po+12;
     for(let i=0;i<ch.length;i++) if(ch[i]+po===n) return ch[2]+po+12;   // add9 和音では素の5度へ退避（arp は +24 の和音内音を踏まない）
     return n; }
+  // ── Bセクションの対照主題：主題を平均音高で反行（コンター反転）させ、曲自身が使う音階
+  //    （mel に現れる音名の集合）へ吸着させる。読み出しを16音ずらすので和音進行に対する
+  //    出だしの度数も変わり、データを増やさずに「Aメロ／Bメロ」の主題対比が生まれる ──
+  function melB(S,idx){
+    if(S._mB==null){
+      const M=S.mel, n=M.length, pcs=[]; let sum=0,cnt=0;
+      for(const v of M) if(v!=null){ sum+=v; cnt++; const p=((v%12)+12)%12; if(pcs.indexOf(p)<0) pcs.push(p); }
+      const ax=cnt?Math.round(sum/cnt):60, out=new Array(n);
+      for(let i=0;i<n;i++){ const v=M[(i+16)%n];
+        if(v==null){ out[i]=null; continue; }
+        const inv=2*ax-v; let best=inv, bd=99;
+        for(let d=-6;d<=6;d++){ const q=inv+d;                       // 反行後にいちばん近い音階音へ吸着＝必ず調内に収まる
+          if(pcs.indexOf(((q%12)+12)%12)>=0 && Math.abs(d)<bd){ bd=Math.abs(d); best=q; } }
+        out[i]=best; }
+      S._mB=out; }
+    return S._mB[idx]; }
+  // 32小節フォームの現在地に応じた主旋律。A/A'＝主題、B＝対照主題、
+  // B'＝対照主題の前半から主題の後半へ戻る「回帰」で、4セクションが全て違う旋律になる
+  function leadAt(S,idx){ const sec=S._sec|0;
+    if(sec===2) return melB(S,idx);
+    if(sec===3) return idx<16 ? melB(S,idx) : S.mel[idx];
+    return S.mel[idx]; }
   function cline(S,idx){
     if(S.cmel&&S.cmel[idx]!=null) return S.cmel[idx];
     const ch=S.prog[(idx>>2)&7], po=S._po|0;
-    const m0=S.mel[(idx+31)%32];
-    let m=S.mel[idx]; if(m==null) m=m0;                   // 主旋律が休符のスロットでも前の音を基準に動く
+    const m0=leadAt(S,(idx+31)%32);
+    let m=leadAt(S,idx); if(m==null) m=m0;                   // 主旋律が休符のスロットでも前の音を基準に動く
     if(m==null) return null;
     // 対旋律は前後の拍の主旋律にも掛かる（voice の停止は dur+0.05 秒＝速い曲では 0.3拍ぶん）ので3音とも避ける
-    const m2=S.mel[(idx+1)%32], cn=choirN(ch,po);
+    const m2=leadAt(S,(idx+1)%32), cn=choirN(ch,po);
     for(let pass=0;pass<3;pass++){                        // 0=主旋律の下・占有回避 / 1=上も許す / 2=占有回避を捨てる最終手段
       let best=null,bd=99;
       for(let i=0;i<ch.length;i++) for(let x=0;x<=2;x+=2) for(let o=12;o<=36;o+=12){
@@ -981,6 +1006,7 @@ const Music=(()=>{
         if(pass<2){
           if(n===ch[0]+24||n===ch[1]+24||n===cn) continue;  // brass(根音・3度)と choir が押さえている音高は踏まない
           if(arpHit(ch,n)) continue;                        // アルペジオが踏む音高も避ける
+          if(S._mar!=null&&n===S._mar) continue;            // 蟲パレットの木琴オスティナートも避ける
           let taken=false; for(let k=0;k<ch.length;k++) if(n===ch[k]+po) taken=true;
           if(taken) continue; }                             // パッドの押さえている音高も踏まない
         const q=Math.abs(d-5)+(x?0.5:0)+(d<0?4:0);        // 和音内音・主旋律の下を優先し、塞がっていれば上や9th/11th/13thへ逃がす
@@ -1014,12 +1040,21 @@ const Music=(()=>{
     // ── 32小節フォーム：8小節ごとに A(0)/A'(1)/B(2)/B'(3) を進め、層をゲートして展開を作る。
     //    データを増やさずに実効ループ長を4倍にし、「同じ8小節の永久反復」から脱する ──
     if(s===0) loopN=(loopN+1)&3;
-    const sec=loopN, P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
+    const sec=loopN; S._sec=sec; const P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
     // pad：和音を close voicing のまま root〜root+8 に敷き、bass(〜root) と lead(root+12〜) の谷を埋める。
     // 以前は +12・第3声だけ +24 で lead の音域に丸ごと重なり、団子の 77% を作っていた。
     // S._po は曲ごとに一度だけ算出する基準オクターブ（低い調の曲だけ +12 して 80Hz 級の濁りを避ける）
     if(S._po==null){ let lo=99; for(let i=0;i<S.prog.length;i++) if(S.prog[i][0]<lo) lo=S.prog[i][0];
       S._po=(S.epic||lo<42)?12:0; }                       // epic 曲はオルガンに ch の高さを譲るため必ず +12
+    // この拍に鳴っている主旋律（現在音と次音）。ブラス・聖歌隊・木琴がこれを避ける
+    const li=(bar*4+(st>>1))%32, lav=[leadAt(S,li),leadAt(S,(li+1)%32)];
+    // 蟲パレットのオフビート木琴。主旋律と同音になる度数は選ばない
+    S._mar=null;
+    if(P===2&&!S.soft&&st%2===1){ const bad=n=>lav[0]===n||lav[1]===n||(S._po===12&&(n===ch[0]+24||n===ch[1]+24));
+      let mn=ch[MAR[st]]+S._po+12;                                      // 主旋律とブラス（根音・3度=+24）を避けて度数を選ぶ
+      if(bad(mn)) for(const k of [2,0,1]){ const a=ch[k]+S._po+12; if(!bad(a)){ mn=a; break; } }
+      if(bad(mn)) mn=ch[2]+S._po+24;
+      S._mar=mn; }
     if(st===0){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
       if(st===0){ organ(ch,t,stepDur*8,S._po-12); choir(choirN(ch,S._po),t,stepDur*8*0.92);      // オルガン土台(パッドの1オクターブ下)＋聖歌隊(9thの保続＝旋律が踏まない音)
@@ -1049,8 +1084,8 @@ const Music=(()=>{
       if(sec>=1) hat(t+stepDur/2,sec>=3?0.5:0.4,hz);                                            // 16分裏ハットはA'以降
       if(st===0&&bar%4===0){ const tt=t+stepDur*0.22;                                           // キックと重心を分けるため半歩後ろへ
         if(P===2) tom(tt,152,1); else if(P===3) elecKick(tt,0.85); else timp(tt,root,1); }
-      if(S.epic&&st===4) timp(t,root,0.7);                                                      // 最終決戦：ティンパニ連打
-      if(P===2&&st%2===1) pluck(midi(root+12),t,stepDur*0.7,0.022);                             // 蟲：木質のオフビート
+      if(S.epic&&st===4&&sec>=2&&bar%2===1) timp(t,root,0.7);                                   // 最終決戦：ティンパニの追い打ち（ベースの根音と重なるのでB以降・1小節おきに絞る）
+      if(S._mar!=null) pluck(midi(S._mar),t,stepDur*0.7,0.022);                                 // 蟲：木質のオフビート（パッドの1オクターブ上を巡るオスティナート）
       if(P===3&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);                  // 宇宙：金属的な余韻
     } else {                                                                                    // ── 静曲（町／タイトル／エンディング）にも32小節フォームを効かせる ──
       hat(t,st===0?0.3:0.14,hz);
@@ -1064,16 +1099,16 @@ const Music=(()=>{
     // ── 主旋律：下オクターブ重複をやめ、微デチューンのユニゾンで太さを出す。
     //    S.rhy（32要素）で 0=休符 / 1=4分 / 2=8分2連（次音を先取り）/ 3=付点8分＋16分の食い込み を指定する。
     //    未指定の曲は全て4分＝従来どおりの挙動になる ──
-    if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=S.mel[idx], lv=S.soft?0.07:0.085;
+    if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=leadAt(S,idx), lv=S.soft?0.07:0.085;
       const r=(S.rhy&&S.rhy[idx]!=null)?S.rhy[idx]:1;
-      const av=[S.mel[(idx+31)%32],S.mel[(idx+1)%32],cline(S,idx)];                       // ハモリ層が避ける音高
+      const av=[leadAt(S,(idx+31)%32),leadAt(S,(idx+1)%32),cline(S,idx)];                 // ハモリ層が避ける音高
       const note=(nn,tt,dd,vs)=>{ voice(midi(nn),tt,dd,S.lead,lv*vs,0.014,4200);
         voice(midi(nn)*1.004,tt,dd,S.lead,lv*0.5*vs,0.02,3600);
         if(sec>=2&&!S.soft){ const h=harm(ch,nn,S._po,av);                                            // Bセクションは3度〜6度上の和音内音を重ねて盛り上げる
           if(h!=null) voice(midi(h),tt,dd*0.74,'triangle',0.026*vs,0.02,6000); } };            // 以前はオクターブ重複で、層ではなく同じ旋律の厚塗りだった
       if(m!=null&&r!==0){
-        if(r===2){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
-        else if(r===3){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
+        if(r===2){ const m2=leadAt(S,(idx+1)%32); note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
+        else if(r===3){ const m2=leadAt(S,(idx+1)%32); note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
         else note(m,t,stepDur*1.9,1); } }
     // 対旋律：主旋律が伸びる8分裏で動く補完リズム。A'は後半4小節、Bセクション以降は全小節。
     // epic 曲は同じ線をディセンタントが歌うので二重に鳴らさない
