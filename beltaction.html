@@ -8223,11 +8223,17 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   // 0.25周期=4ビートの側対歩 ↔ 0.42周期=ほぼ斜対歩（トロット）。0.5 ちょうどにすると
   // 対角対が完全同期して1周期に2回「全脚が垂直」の死に姿勢に入るので、わずかにずらす
   const PH=lerp(0.25,0.42,clamp(((t.sp||1.5)-1.4)/0.8,0,1));
-  const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const fy=_gy-wd*0.42, h=fy-hy, F=legFit(h,l1,l2); legReach(e,F.R);
-    const reach=Math.sqrt(Math.max(1,F.R*F.R*0.97-h*h))*2;
-    const S=Math.min((e._stride||F.R*0.78)*_ga, reach*0.95)*_gw, LF=F.R*0.24*_gw;
+  // 前脚と後脚で到達範囲が違うので、歩幅は全脚のうち最も狭いものに合わせる。
+  // 脚ごとに歩幅が違うと、短い方の足が地面を滑る（体速の15%ほど）
+  let _lim=1e9;
+  const fit=(hy,wd,l1,l2)=>{ const fy=_gy-wd*0.42, h=fy-hy, F=legFit(h,l1,l2);
+    return {fy, h, F, reach:Math.sqrt(Math.max(1,F.R*F.R*0.97-h*h))*2}; };
+  for(const q of [[-19,10.5,9,8],[-17,9,8,7],[-21,11,9,8],[-19,9.5,8,7]]){
+    const r=fit(q[0],q[1],q[2],q[3]); legReach(e,r.F.R); _lim=Math.min(_lim, r.reach*0.95); }
+  const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const r=fit(hy,wd,l1,l2);
+    const S=Math.min((e._stride||r.F.R*0.78)*_ga, _lim)*_gw, LF=r.F.R*0.24*_gw;
     const f=gaitStep(gaitPh(e.gait||0)+off,S,LF);
-    foeLegTo(hx,hy,hx+f.x,fy+f.y,F.l1,F.l2,wd,c,null,kdir,f.st?0:f.x*0.020); };
+    foeLegTo(hx,hy,hx+f.x,r.fy+f.y,r.F.l1,r.F.l2,wd,c,null,kdir,f.st?0:f.x*0.020); };
   L(-17,-19,0,          9,8,10.5, shade(t.c3,-46),  1);   // 後脚（奥）＝膝（飛節）は前へ
   L( 12,-17,PH,         8,7,9,    shade(t.c3,-46), -1);   // 前脚（奥）＝肘は後ろへ
   // body — 呼吸で胴が膨らみ、頭が遅れて上下する（静止中も生命感を絶やさない）
