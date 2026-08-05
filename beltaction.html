@@ -1061,6 +1061,8 @@ const Music=(()=>{
       if(bad(mn)) for(const k of [2,0,1]){ const a=ch[k]+S._po+12; if(!bad(a)){ mn=a; break; } }
       if(bad(mn)) mn=ch[2]+S._po+24;
       S._mar=mn; }
+    // 周回ごとの色づけは「持続音を足す」ではなくリズム層で行う（下のベースのパターン参照）。
+    // 編曲が密なのでパッドに声部を足すと、木琴・アルペジオ・対旋律のどれかと必ずぶつかる
     if(st===0){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
       if(st===0){ organ(ch,t,stepDur*8,S._po-12); choir(choirN(ch,S._po),t,stepDur*8*0.92);      // オルガン土台(パッドの1オクターブ下)＋聖歌隊(9thの保続＝旋律が踏まない音)
@@ -1072,7 +1074,11 @@ const Music=(()=>{
       if(bar===7&&st>=4) timp(t,root,0.5);                                                       // ラスト小節のティンパニロール
     } else if(!S.soft && sec>=2 && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                // ブラススタブはBセクション以降だけ解禁
     if(S.soft){ if(st%4===0) bassN(root-12,t,stepDur*3.4); }                                    // gentle half-note bass（素の root は pad/organ の根音と同音だったので12下げ）
-    else { const bn=[root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12][st];   // walking 8th-note bass（5拍目の素の root は pad の根音と同音だったので3度へ）
+    else { // ベースの歩き方も周回で変える（1周目=ウォーキング／2周目=跳ねる／3周目=8分の推進）
+      const BN = P===2 ? [root-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12]
+               : P===3 ? [root-12,root-12,root-12,ch[2]-12,root-12,root-12,ch[1]-12,ch[2]-12]
+               :         [root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12];
+      const bn=BN[st];   // 5拍目の素の root は pad の根音と同音だったので3度へ
       bassN(bn,t,stepDur*0.92); }
     if(!S.soft){                                                                                // ── ドラムキット（周回パレットで音色が入れ替わる）──
       const KICK = P===3? elecKick : kick;
