@@ -18,6 +18,9 @@
     align-items:center; justify-content:center; text-align:center; z-index:20; padding:20px;
     background:radial-gradient(ellipse at center, rgba(20,12,40,.55), rgba(0,0,0,.9)); }
   .hidden { display:none !important; }
+  /* タイトル→本編の遷移だけがジャンプカットだったので、DOM側にもフェードを持たせる */
+  #start, #result { transition:opacity .26s ease; }
+  .fading { opacity:0 !important; pointer-events:none !important; }
   /* タイトルは背後の豪華な演出を活かすため、オーバーレイを控えめに */
   #start.overlay { background:radial-gradient(ellipse at center 38%, rgba(10,6,26,.30), rgba(3,2,10,.72) 78%); }
   #start .title-main { text-shadow:0 4px 0 rgba(120,60,0,.5), 0 0 22px rgba(255,180,40,.6); }
@@ -1300,9 +1303,13 @@ function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,gl:groundLift(
 // ダメージ数字：直近8F以内に出た数字が 46x30px 以内にあれば、x はそのままに真上へ 30px 積み上げる。
 // 以前は同時に x を ±14px 散らしていたが、逃げた先で隣の敵の数字と衝突を作り直していた（4〜5段目で破綻）
 function popText(x,y,txt,color,big,crit){
+  // 実測幅で重なりを見る。固定46px幅だと「最大HPアップ！」級の長い文言同士が
+  // すり抜けて丸ごと重なり、拾得フィードバックが読めなくなっていた
+  ctx.font=uif('bold',big?30:21);
+  const tw=ctx.measureText(''+txt).width;
   const near=(px,py)=>{ for(let i=0;i<particles.length;i++){ const q=particles[i];
       if(q.k!=='txt'||(q.max-q.life)>8) continue;
-      if(Math.abs(q.x-px)<46 && Math.abs(q.y-py)<30) return q; } return null; };
+      if(Math.abs(q.x-px)<((q.w||46)+tw)/2+10 && Math.abs(q.y-py)<30) return q; } return null; };
   let guard=0;
   while(guard<8){ const h=near(x,y); if(!h) break; y=h.y-30; guard++; }   // x は一切動かさず真上へだけ逃がす
   // 8段まで埋まってなお重なるときは新規に積まず、ぶつかった数字へ加算してまとめる（57 が 3 発なら 171 の1個に）
@@ -1316,7 +1323,7 @@ function popText(x,y,txt,color,big,crit){
       for(let i=0;i<particles.length;i++){ const q=particles[i]; if(q.k!=='txt') continue;
         const ra=q.life/q.max; if(ra<oa){ oa=ra; oldest=i; } }
       if(oldest<0) break; particles.splice(oldest,1); cnt--; } }
-  particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,
+  particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,w:tw,
     life:big?52:38,max:big?52:38,y0:y,vx:0,vy:-3.5,g:0.175,pop:1,rot:rnd(-0.13,0.13),crit:!!crit}); }
 // 衝撃リング：初速が速く一気に減速する（ease-out）楕円。正円の等速膨張をやめ、床に寝た衝撃波に見せる
 function ring(x,y,color,opt){ opt=opt||{};
@@ -1465,8 +1472,13 @@ function drawParticles(layer){
       if(p.crit && !_critGrad[fs]){ const cg=ctx.createLinearGradient(0,-fs*0.86,0,fs*0.18);
         cg.addColorStop(0,'#fff8d2'); cg.addColorStop(0.5,'#ffd24d'); cg.addColorStop(1,'#ff7a2a'); _critGrad[fs]=cg; }
       ctx.globalAlpha=clamp(a*1.6,0,1); ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.translate(sx,py); ctx.rotate((p.rot||0)*(1-a)*2.2); ctx.scale(sc,sc);
+      // 画面端で半分に切れないよう、実測幅ぶんだけ内側へ寄せる（壁際のヒットが最も多い）
+      const hw=(p.w||24)*0.5*sc+10;
+      ctx.translate(clamp(sx,hw,W-hw),py); ctx.rotate((p.rot||0)*(1-a)*2.2); ctx.scale(sc,sc);
       ctx.font=uif('bold',fs);
+      if(p.big){ ctx.globalAlpha=clamp(a*1.6,0,1)*0.62;                    // 文言ポップは背景の看板と混ざるので受け皿を敷く
+        ctx.fillStyle='rgba(6,4,12,.92)'; roundRect(-(p.w||24)/2-9,-fs*0.92,(p.w||24)+18,fs*1.28,5); ctx.fill();
+        ctx.globalAlpha=clamp(a*1.6,0,1); }
       ctx.lineJoin='round'; ctx.lineWidth=4.2; ctx.strokeStyle='rgba(0,0,0,.92)'; ctx.strokeText(p.txt,0,0);
       ctx.fillStyle = p.crit ? _critGrad[fs] : p.color;   // 会心は白→金→橙の縦グラデで別格に見せる
       ctx.fillText(p.txt,0,0); ctx.textAlign='left'; }
@@ -9286,7 +9298,7 @@ function drawHUD(){
     :lap>=2?('2周目　STAGE '+stage+' / '+(WORLD2_LEVELS.length+2)):('STAGE '+stage+' / 12'),W/2,30);
   { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
     ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
-  drawFoePower(16, hudY+12); hudY+=26;
+  drawFoePower(20, hudY+12); hudY+=26;
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
     ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
@@ -9398,7 +9410,7 @@ function drawFoePower(x, y){
   const tier=foeTier(), hp=foeHpGrow(), atk=foeDmgGrow();
   const label='敵の強さ  HP×'+hp.toFixed(1)+'  攻×'+atk.toFixed(1);
   ctx.textAlign='left'; ctx.font=uif('bold',11);
-  const wBox=ctx.measureText(label).width+62;
+  const wBox=ctx.measureText(label).width+72;   // ★4個ぶん＋角丸に食われない余白
   ctx.fillStyle=UI.ink; roundRect(x-8,y-13,wBox,19,UI.r.s); ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1; roundRect(x-7.5,y-12.5,wBox-1,18,UI.r.s); ctx.stroke();
   ctx.fillStyle=tier>=3?'#ff8a6a':tier>=1?'#ffd24d':'#9fb0c4'; ctx.fillText(label, x, y);
@@ -9630,7 +9642,7 @@ const SHOP_ITEMS=[
   {name:'傭兵：オニボウズ',        desc:'頑丈な重量級の傭兵',           cost:200, merc:'onibouzu'},
   // ── 秘宝ガチャ（ここ限定の専用アイテム）──
   {name:'🎰 秘宝ガチャを回す', desc:'コイン90でここだけの専用アイテムを1つ入手！', cost:90, gacha:true},
-  {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
+  {name:'出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
 ];
 const MERC_MAX=2;   // 同行できる傭兵の最大数
 function hireMerc(type){ const T=ETYPE[type]; if(!T) return false;
@@ -9762,6 +9774,15 @@ function drawCham(x,y){ // 看板娘「チャム」（猫の商人）
   ctx.fillStyle=radGrad(-12,-18,6,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(-12,-18,5,0,7); ctx.fill(); ctx.restore();   // 振る手＋コイン
   ctx.restore();
 }
+// 与えられた幅に収まるまで末尾を削って「…」を付ける。ショップの3カラムが
+// 隣のカラムへ食い込んで価格が読めなくなるのを防ぐ
+function fitText(txt,maxW){
+  if(ctx.measureText(txt).width<=maxW) return txt;
+  let lo=0, hi=txt.length;
+  while(lo<hi){ const mid=(lo+hi+1)>>1;
+    if(ctx.measureText(txt.slice(0,mid)+'…').width<=maxW) lo=mid; else hi=mid-1; }
+  return txt.slice(0,lo)+'…';
+}
 function drawShop(){
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3a2a1e'); g.addColorStop(1,'#160f0a'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   ctx.fillStyle='rgba(255,220,150,.04)'; for(let x=0;x<W;x+=64) ctx.fillRect(x,0,2,H*0.62);
@@ -9785,15 +9806,23 @@ function drawShop(){
     if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-2,mw-12,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 16px Trebuchet MS'; ctx.fillText('▶',mx+12,y+20); }
     const sold = it.soldOut&&it.soldOut();
     const afford = !sold && (it.leave || coins>=it.cost);
-    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name,mx+34,y+20);
-    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(sold?'― 売り切れ ―':it.desc,mx+186,y+20);
+    // 3カラム（品名／説明／価格）。それぞれの持ち幅で切り詰め、価格欄には必ず余白を残す
+    const nameX=mx+34, nameW=144, descX=mx+186, priceW=(it.leave||sold)?0:74, descW=mw-186-16-priceW;
+    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText(fitText(it.name,nameW),nameX,y+20);
+    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText(fitText(sold?'― 売り切れ ―':it.desc,descW),descX,y+20);
     if(!it.leave&&!sold){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+20); ctx.textAlign='left'; }
   }
   // スクロール位置バー
   if(SHOP_ITEMS.length>vis){ const bh=(vis/SHOP_ITEMS.length)*(vis*ih), by=my+12+(shopScroll/SHOP_ITEMS.length)*(vis*ih);
-    ctx.fillStyle='rgba(255,210,80,.5)'; roundRect(mx+mw-6,by,3,bh,2); ctx.fill();
-    if(shopScroll>0){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▲',mx+mw/2,my+10); }
-    if(shopScroll+vis<SHOP_ITEMS.length){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▼',mx+mw/2,my+vis*ih+34); ctx.textAlign='left'; } }
+    ctx.fillStyle='rgba(255,210,80,.5)'; roundRect(mx+mw-14,by,3,bh,2); ctx.fill();
+    // スクロール矢印はリスト右端のバーの上下に置く。以前は▼がステータス行と同じ
+    // ベースラインで「残3▼奥3」と読めていた
+    ctx.save(); ctx.fillStyle='#ffe14d'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+    if(shopScroll>0) ctx.fillText('▲',mx+mw-12.5,my+9);
+    if(shopScroll+vis<SHOP_ITEMS.length) ctx.fillText('▼',mx+mw-12.5,my+vis*ih+22);
+    ctx.restore(); ctx.textAlign='left'; }
   const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='left';
   ctx.fillText('HP '+p.maxHp+'  攻×'+(p.atkMul||1).toFixed(2)+'  防−'+Math.round((1-(p.defMul||1))*100)+'%  速×'+(p.spdMul||1).toFixed(2)+'  金×'+(p.coinMul||1).toFixed(1)+'  残'+Math.max(0,p.lives)+'  奥'+p.dimMax, mx+8, my+vis*ih+34);
   if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
@@ -10302,10 +10331,19 @@ function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
 // タイトルの「2周目」トグルがONなら、一周目を飛ばして蟲の世界から開始（支度金つき）
 let ng2Sel=0;   // 0=1周目 / 2=蟲の世界から / 3=宇宙人の侵略から
+// オーバーレイをふわりと消してから本編へ。display:none への即時切り替えだと
+// CSS transition が効かないので、.fading で不透明度を落としてから隠す
+function fadeOverlay(el,cb){
+  if(!el || el.classList.contains('hidden')){ cb&&cb(); return; }
+  el.classList.add('fading');
+  setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fading'); cb&&cb(); }, 260); }
 function beginAdventure(){
-  if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
-  if(ng2Sel>=2){ startGame(); coins=200; startNG2(); return; }
-  startOpening(); }
+  const go=()=>{
+    if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
+    if(ng2Sel>=2){ startGame(); coins=200; startNG2(); return; }
+    startOpening(); };
+  // マップ→ステージ等と同じ画面遷移エフェクトを、最も目にするタイトル遷移にも通す
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(go,'fade',40)); }
 document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); beginAdventure(); };
 document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); beginAdventure(); };
 const _nukoBtn=document.getElementById('startNukoBtn'); if(_nukoBtn) _nukoBtn.onclick=()=>{ unlockAudio(); setupRoster('nuko'); beginAdventure(); };
@@ -10580,11 +10618,14 @@ const CHARS=[
   {k:'wanden',name:'剣鬼ワンデン',  col:'#e8dcb4', icon:(x,y)=>wandenIcon(x,y)},
 ];
 let csSel=[0,1], csLock=[false,false], csNav=[0,0];
-function start2PSelect(){ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
-  players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
-  const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
-  const er=document.getElementById('result'); if(er) er.classList.add('hidden');
-  unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } }
+function start2PSelect(){
+  const enter=()=>{ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
+    const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
+    const er=document.getElementById('result'); if(er) er.classList.add('hidden');
+    unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } };
+  unlockAudio();
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function updateCharSel(){
   for(let pi=0;pi<2;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
     if(!csLock[pi]){
