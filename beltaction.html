@@ -4109,7 +4109,10 @@ function updateEnemies(){
     if(!t.boss){ e.anim+=(e.state==='walk'?0.18:0.09); e.bob+=(e.state==='walk'?0.12:0.06); }   // 生命感は行動中も止めない（ガード中・拘束中の凍結を防ぐ）
     // ── 歩行位相：実際に進んだ距離から積分する。体格でテンポが変わる（小柄=速い／巨体=鈍重）──
     { const _dx=clamp(e.x-(e.px2==null?e.x:e.px2),-16,16), mv=_dx*(e.dir||1); e.px2=e.x;   // 進行方向つきの歩幅。後退時は位相が逆回りして足が滑らない
-      const gk=(t.gaitK!=null)?t.gaitK:(0.078-clamp(((t.h||70)-56)/170,0,1)*0.048);
+      // 位相の進み方は脚の長さから決まる。歩幅 = 接地相で体が進む距離 になるので、
+      // 接地中の足はワールド座標で静止する（従来の固定 gaitK では体速の6〜10割で滑走していた）
+      const _S=e._stride=foeStride(e,t);
+      const gk=(Math.PI*2*GAIT_D)/Math.max(6,_S);
       const stepping=e.z<=0 && Math.abs(mv)>0.12 && e.state!=='down' && e.state!=='getup' && e.state!=='hurt'
         && e.state!=='attack' && e.state!=='crouch' && e.state!=='bmove' && e.state!=='bwind' && e.state!=='brec' && !e.dead;
       const _g0=e.gait||0; e.gait=_g0+mv*gk;
@@ -4118,7 +4121,14 @@ function updateEnemies(){
       if(stepping && Math.floor(e.gait/Math.PI)!==Math.floor(_g0/Math.PI)
          && e.x>camX-80 && e.x<camX+W+80 && _stepN<2){ _stepN++;
         sfx.step(e.x, groundSnd(), t.boss?1.5:(t.h>84?0.85:0.5)); }
-      e.gaitW=(e.gaitW||0)+((stepping?1:0)-(e.gaitW||0))*0.20; }
+      e.gaitW=(e.gaitW||0)+((stepping?1:0)-(e.gaitW||0))*0.20;
+      // 重心の上下：支持脚が斜めになるほど腰が沈む（sqrt(L²-dx²)）。
+      // パッシング（脚が真下）で最高、開脚で最低。|sin| の従来式はこれと位相が逆だった
+      { const R=e._lr||14, u=gaitPh(e.gait);
+        const a=gaitStep(u,_S,0), b=gaitStep(u+0.5,_S,0);
+        let d=1e9; if(a.st) d=Math.min(d,Math.abs(a.x)); if(b.st) d=Math.min(d,Math.abs(b.x));
+        if(d>1e8) d=_S*0.5;
+        e.bobY=(Math.sqrt(Math.max(1,R*R-d*d))-R)*(e.gaitW||0)*2.2; } }   // 幾何そのままでは1px弱なので、体重移動が読める幅まで誇張する
     // ばねのスクワッシュ（減衰振動）：被弾・着地の「ぷにっ」を全エネミー共通で
     { const w=15, z=0.55, a=-w*w*(e.sq||0)-2*z*w*(e.sqv||0);
       e.sqv=(e.sqv||0)+a/60; e.sq=(e.sq||0)+e.sqv/60;
@@ -6480,9 +6490,14 @@ function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
       ctx.fillText(g0%2?'肉球亭':'イッヌ商店',gx+(bw-8)/2,y+h-21); ctx.textAlign='left'; }
   }
 }
-function shade(hex,amt){ const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
-  let r=parseInt(n.substr(0,2),16)+amt,g=parseInt(n.substr(2,2),16)+amt,b=parseInt(n.substr(4,2),16)+amt;
-  r=clamp(r,0,255);g=clamp(g,0,255);b=clamp(b,0,255); return `rgb(${r|0},${g|0},${b|0})`; }
+// 自分の出力（rgb(...)）も食えるようにしてある。shade(shade(c,-46),14) のような
+// 入れ子で NaN を返すと、canvas が前の fillStyle を使い回して色が化ける
+function shade(hex,amt){ let r,g,b;
+  if(hex.charCodeAt(0)===114){ const m=hex.match(/-?\d+/g); r=+m[0]; g=+m[1]; b=+m[2]; }   // 'rgb(r,g,b)'
+  else { const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
+    r=parseInt(n.substr(0,2),16); g=parseInt(n.substr(2,2),16); b=parseInt(n.substr(4,2),16); }
+  r=clamp(r+amt,0,255); g=clamp(g+amt,0,255); b=clamp(b+amt,0,255);
+  return `rgb(${r|0},${g|0},${b|0})`; }
 
 function drawGround(){
   const T=curTheme();
@@ -7655,7 +7670,7 @@ function drawEnemy(e){
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
   if(e.state==='blastoff'){ ctx.rotate(e.spin); const bsc=clamp(1-e.bo/95,0.3,1); ctx.scale(bsc,bsc); }   // 飛び去りながら回転＆縮小
-  if(e.z<=0) ctx.translate(0,-Math.abs(Math.sin(e.gait||0))*3*(e.gaitW||0));   // 接地バウンド：脚と同じ位相ソース（|sin|で自動的に2倍周波数）
+  if(e.z<=0) ctx.translate(0,-(e.bobY||0));   // 接地バウンド：支持脚の傾きから出した重心の上下（脚のIKと同じ基準面を共有する）
   if(e.state==='down'||e.dead){ const fall=e.dead?1:easeOut(clamp(((e.downMax||46)-e.downTimer)/7,0,1));   // 倒れ込みに7Fの落下を与える
     ctx.rotate(0.30+0.68*fall); ctx.translate(0,8*fall); }
   else if(e.state==='getup'){ const g=easeOut(clamp(1-e.getT/Math.max(1,e.getMax||16),0,1));                // 起き上がり：伏せから立ち上がる
@@ -8201,13 +8216,20 @@ function foeBlink(e){ const per=112+((e.id*37)%70), ph=((e.anim||0)*9+e.id*23)%p
   if(ph>7) return 1;
   return Math.abs(ph-3.5)/3.5; }
 function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
-  // legs — 四つ足の対角トロット。前脚と対角の後脚が同位相で接地する（LF+RH ↔ RF+LH）
+  // legs — 歩速で歩容が変わる四つ足。遅い獣は4ビートの側対歩、速い獣は2ビートの斜対歩（トロット）。
+  //   位相差を 0/PH/2PH/3PH と回すので、全脚が同時に垂直になる「テーブル脚」の死に姿勢が消える。
   //   股関節は側面視らしく胴の前後に配し、奥の一対を先に、手前の一対は胴を描いた後に重ねる
-  const _g=e.gait||0, _gw=e.gaitW||0, _ga=t.gaitA||1, _A=0.58*_gw*_ga, _K=0.85*_gw*_ga;   // gaitA＝種族ごとの歩幅
-  const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const wf=Math.sin(_g+off), wk=Math.sin(_g+off-0.55);
-    foeLeg(hx,hy,wf*_A,Math.max(0,wk)*_K*kdir,l1,l2,wd,c,null); };
-  L(-17,-19,0,          9,8,10.5, shade(t.c3,-22),  1);   // 後脚（奥）＝膝（飛節）は前へ／手前の前脚と対角同位相
-  L( 12,-17,Math.PI,    8,7,9,    shade(t.c3,-22), -1);   // 前脚（奥）＝肘は後ろへ
+  const _gw=e.gaitW||0, _ga=t.gaitA||1, _gy=e.bobY||0;
+  // 0.25周期=4ビートの側対歩 ↔ 0.42周期=ほぼ斜対歩（トロット）。0.5 ちょうどにすると
+  // 対角対が完全同期して1周期に2回「全脚が垂直」の死に姿勢に入るので、わずかにずらす
+  const PH=lerp(0.25,0.42,clamp(((t.sp||1.5)-1.4)/0.8,0,1));
+  const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const fy=_gy-wd*0.42, h=fy-hy, F=legFit(h,l1,l2); legReach(e,F.R);
+    const reach=Math.sqrt(Math.max(1,F.R*F.R*0.97-h*h))*2;
+    const S=Math.min((e._stride||F.R*0.78)*_ga, reach*0.95)*_gw, LF=F.R*0.24*_gw;
+    const f=gaitStep(gaitPh(e.gait||0)+off,S,LF);
+    foeLegTo(hx,hy,hx+f.x,fy+f.y,F.l1,F.l2,wd,c,null,kdir,f.st?0:f.x*0.020); };
+  L(-17,-19,0,          9,8,10.5, shade(t.c3,-46),  1);   // 後脚（奥）＝膝（飛節）は前へ
+  L( 12,-17,PH,         8,7,9,    shade(t.c3,-46), -1);   // 前脚（奥）＝肘は後ろへ
   // body — 呼吸で胴が膨らみ、頭が遅れて上下する（静止中も生命感を絶やさない）
   const br=Math.sin((e.anim||0)*0.9), brH=Math.sin((e.anim||0)*0.9-0.6);
   ctx.fillStyle=radGrad(0,-34,28,shade(t.c1,18),t.c2);
@@ -8216,8 +8238,8 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-23,-40); ctx.lineTo(-12,-54); ctx.lineTo(-3,-43); ctx.lineTo(6,-55); ctx.lineTo(15,-43); ctx.lineTo(23,-49); ctx.lineTo(23,-30); ctx.lineTo(-23,-30); ctx.fill();
   // muscle shading
   ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(-6,-28,16,9,0,0,7); ctx.fill();
-  L(-14,-21,Math.PI,   9,8,11,   t.c3,           1);   // 後脚（手前）
-  L( 15,-19,0,         8,7,9.5,  shade(t.c3,10),-1);   // 前脚（手前）＝奥の後脚と対角同位相
+  L(-14,-21,PH*2,      9,8,11,   shade(t.c3,6),  1);   // 後脚（手前）
+  L( 15,-19,PH*3,      8,7,9.5,  shade(t.c3,14),-1);   // 前脚（手前）
   if(e.type==='boar'){ ctx.fillStyle='#3a7d3a'; ctx.fillRect(-25,-31,50,8); ctx.strokeStyle='#1f4d1f'; ctx.lineWidth=1; ctx.strokeRect(-25,-31,50,8);
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-27,2.4,0,7); ctx.fill(); }
   else { ctx.fillStyle='#1a1a1a'; ctx.fillRect(13,-31,14,9); ctx.fillStyle='#cfcfcf';
@@ -8264,6 +8286,66 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
 // big, cathartic clawed foreleg that winds up then swings huge during the attack
 // 歩幅（実移動から積分した位相）。旧来の e.anim 固定周期に代わる歩行の駆動源
 function foeStep(e,amp){ return Math.sin(e.gait||0)*(amp||4)*(e.gaitW||0); }
+// ── 歩行サイクル ──────────────────────────────────────────────
+// 1周期を「接地相（デューティ GAIT_D）」と「遊脚相」に分ける。
+// 接地相は足先を地面に固定したまま等速で真後ろへ流し、遊脚相で山なりに持ち上げて前へ運ぶ。
+// 従来の純正弦は接地中も足が前へ戻っていたため、接地足が体速の 6〜10割で滑走していた。
+const GAIT_D=0.62;
+function gaitPh(g){ const T=Math.PI*2; let u=g%T; if(u<0)u+=T; return u/T; }
+function gaitStep(u,stride,lift){
+  u=u-Math.floor(u);
+  if(u<GAIT_D){ const k=u/GAIT_D; return {x:stride*(0.5-k), y:0, st:1, k}; }   // 接地：体が足を追い越す
+  const k=(u-GAIT_D)/(1-GAIT_D), e=k*k*(3-2*k);                                 // 遊脚：滑らかに前へ運ぶ
+  return {x:stride*(-0.5+e), y:-lift*Math.sin(Math.PI*k), st:0, k}; }
+// 歩幅は脚の長さで決まる。描画側が教えた最長の脚を歩行位相の進み方へ反映する
+function legReach(e,r){ if(!(e._lr>=r)) e._lr=r; }
+function foeStride(e,t){ return (e._lr||14)*0.78*((t&&t.gaitA)||1); }
+// 立ち姿で膝が少し曲がるだけの脚長を確保する。股の高さ h に対し脚長が足りないと
+// 足がどう頑張っても地面に届かず、歩幅も取れない（h/R≒0.90 が自然な立ち姿）
+function legFit(h,l1,l2){ const R=l1+l2, need=h/0.90;
+  if(need<=R) return {l1,l2,R};
+  const sc=need/R; return {l1:l1*sc, l2:l2*sc, R:need}; }
+// 二関節脚の描画本体（角度は真下=0、+が前）。腿と脛で明度を割り、膝に節を打って関節を読ませる
+function foeLegDraw(hipX,hipY,th,sa,l1,l2,w,col,boot,bootA){
+  const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
+  const fx=kx+Math.sin(sa)*l2, fy=ky+Math.cos(sa)*l2;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle=shade(col,-10); ctx.lineWidth=w;
+  ctx.beginPath(); ctx.moveTo(hipX,hipY); ctx.lineTo(kx,ky); ctx.stroke();                    // 腿
+  ctx.strokeStyle=shade(col,14); ctx.lineWidth=w*0.86;
+  ctx.beginPath(); ctx.moveTo(kx,ky); ctx.lineTo(fx,fy); ctx.stroke();                        // 脛
+  ctx.fillStyle=shade(col,30); ctx.beginPath(); ctx.arc(kx,ky,w*0.30,0,7); ctx.fill();        // 膝
+  if(boot){ ctx.save(); ctx.translate(fx,fy); ctx.rotate(bootA||0);
+    ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(w*0.16,w*0.10,w*0.66,w*0.42,0,0,7); ctx.fill(); ctx.restore(); }
+  return {kx,ky,fx,fy};
+}
+// 足先の目標位置へ二関節で解く（逆運動学）。kdir>0 で膝が前（人型・後脚）、<0 で後ろ（獣の前脚）
+function foeLegTo(hipX,hipY,tx,ty,l1,l2,w,col,boot,kdir,bootA){
+  let dx=tx-hipX, dy=ty-hipY, D=Math.hypot(dx,dy);
+  const Dmax=(l1+l2)*0.994, Dmin=Math.abs(l1-l2)+Math.min(l1,l2)*0.34;
+  if(D>Dmax||D<Dmin){ const nd=D>Dmax?Dmax:Dmin, sc=nd/(D||1e-6); dx*=sc; dy*=sc; D=nd; }
+  const base=Math.atan2(dx,dy);
+  const a=Math.acos(clamp((l1*l1+D*D-l2*l2)/(2*l1*D),-1,1));
+  const th=base+(kdir<0?-a:a);
+  const kx=Math.sin(th)*l1, ky=Math.cos(th)*l1;
+  const sa=Math.atan2(dx-kx, dy-ky);
+  return foeLegDraw(hipX,hipY,th,sa,l1,l2,w,col,boot,bootA);
+}
+// 一対の脚を歩行サイクルで駆動する。接地相の足先はワールド座標で静止する
+//   amp＝歩幅倍率（従来の振れ角 0.58 を等倍とする） kn＝符号で膝の向き ph＝位相ずらし
+function foeLegsGait(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph){
+  const gw=e.gaitW||0, gy=e.bobY||0, kdir=(kn!=null&&kn<0)?-1:1;
+  const fy=gy-w*0.42;                                  // 足先「関節」の目標。丸い足先の下端が地面に乗る高さ
+  const h=(fy)-(hipY), Fit=legFit(h,l1,l2), R=Fit.R;
+  legReach(e,R);
+  const reach=Math.sqrt(Math.max(1,R*R*0.97-h*h))*2;   // 到達できる最大歩幅
+  const S=Math.min((e._stride||R*0.78)*((amp==null?0.58:amp)/0.58), reach*0.95)*gw, LF=R*0.24*gw;
+  const g=(e.gait||0)+(ph||0);
+  const fN=gaitStep(gaitPh(g),S,LF), fF=gaitStep(gaitPh(g)+0.5,S,LF);
+  // 奥脚は大きく暗く落とし、距離を作る（8%差では胴と融けて本数が読めなかった）
+  foeLegTo(-hipX,hipY,-hipX+fF.x,fy+fF.y,Fit.l1,Fit.l2,w,shade(col,-46),boot?shade(boot,-40):null,kdir,fF.st?0:fF.x*0.020);
+  foeLegTo( hipX,hipY, hipX+fN.x,fy+fN.y,Fit.l1,Fit.l2,w,shade(col,10),boot,kdir,fN.st?0:fN.x*0.020);
+}
 // 敵用の二関節脚：股→膝→足。knee>0 で膝が前に曲がり、負で後ろへ曲がる（獣の後脚）
 function foeLeg(hipX,hipY,th,knee,l1,l2,w,col,boot){
   const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
@@ -8273,16 +8355,13 @@ function foeLeg(hipX,hipY,th,knee,l1,l2,w,col,boot){
   if(boot){ ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+w*0.16,fy+w*0.10,w*0.66,w*0.42,0,0,7); ctx.fill(); }
   return {kx,ky,fx,fy};
 }
-// 二足歩行の敵の脚一対。奥脚は暗く落として奥行きを出す。ph で位相をずらせる（四つ足の対角トロット用）
+// 二足歩行の敵の脚一対。ph で位相をずらせる（四つ足の内外一対など）
 function foeLegs(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph){
-  const g=(e.gait||0)+(ph||0), gw=e.gaitW||0, A=(amp==null?0.58:amp)*gw, K=(kn==null?0.80:kn)*gw;
-  const wf=Math.sin(g), wk=Math.sin(g-0.55);
-  foeLeg(-hipX,hipY,-wf*A,Math.max(0,-wk)*K,l1,l2,w,shade(col,-20),boot?shade(boot,-16):null);
-  foeLeg( hipX,hipY, wf*A,Math.max(0, wk)*K,l1,l2,w,col,boot);
-}
+  foeLegsGait(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph); }
 // 敵の腕（武器）角の一次遅れ補間。状態遷移で目標角が飛んでも腕は繋がって追従する。
 //   1フレームにつき1回だけ進める（被弾フラッシュ等で二度描画されても二重に進まない）
 function foeArm(e,target,k){
+  target += -Math.sin(e.gait||0)*0.32*(e.gaitW||0);   // 歩行中は手前脚と反対位相に腕を振る（脚だけ動くマネキンを避ける）
   if(e.armA==null || rframe-(e.armAF||-99)>3){ e.armA=target; e.armAF=rframe; return target; }   // 初出・画面外復帰は瞬時に合わせる
   if(e.armAF!==rframe){ e.armA += (target-e.armA)*(k==null?0.30:k); e.armAF=rframe; }
   return e.armA;
@@ -8307,7 +8386,7 @@ function drawBeastClaw(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e
   ctx.restore();
 }
 function drawBitter(e){ const atk=e.state==='attack';
-  foeLegs(e,9,-17,8,7,8,'#15151c','#0a0a10');
+  foeLegs(e,9,-17,8,7,8,'#33333f','#4a3a6a');   // ほぼ黒だと胴に融けて関節が読めないので、マントの紫を足して起こす
   const cape=ctx.createLinearGradient(-28,-56,-10,-2); cape.addColorStop(0,'#5a2a8c'); cape.addColorStop(1,'#2a0f44');
   ctx.fillStyle=cape; ctx.beginPath(); ctx.moveTo(-5,-58); ctx.quadraticCurveTo(-32,-26,-24,-2); ctx.quadraticCurveTo(-14,-12,-5,-12); ctx.fill();
   furBall(0,-42,13,'#34343e','#15151b'); furBall(-8,-38,11,'#2c2c34','#101016'); furBall(8,-38,11,'#2c2c34','#101016');
@@ -8328,7 +8407,7 @@ function drawBitter(e){ const atk=e.state==='attack';
   if(atk){ ctx.strokeStyle='rgba(160,90,240,.6)'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(18,-42,32,-1,0.7); ctx.stroke(); }
 }
 function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.telegraph>0; const walk=foeStep(e,5);
-  foeLegs(e,22,-30,13,11,17,'#14141c','#08080c',0.46,0.62);   // 帝国皇帝の重い脚
+  foeLegs(e,22,-30,13,11,17,'#32323e','#6a5a2e',0.46,0.62);   // 帝国皇帝の重い脚（黒潰れを避け、金の具足で足元を締める）
   const cl=ctx.createLinearGradient(-70,-120,-20,6); cl.addColorStop(0,'#5a2a8c'); cl.addColorStop(1,'#241046');
   ctx.fillStyle=cl; ctx.beginPath(); ctx.moveTo(-30,-120); ctx.quadraticCurveTo(-84,-50,-58,8); ctx.lineTo(-18,-20); ctx.fill();
   const cr=ctx.createLinearGradient(20,-120,70,6); cr.addColorStop(0,'#4a2070'); cr.addColorStop(1,'#1d0d38');
@@ -8723,7 +8802,7 @@ function drawDragon(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; cons
   ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(-52,-34,-84,4); ctx.quadraticCurveTo(-46,2,-34,26); ctx.quadraticCurveTo(-48,20,-22,38); ctx.quadraticCurveTo(-10,18,0,10); ctx.closePath(); ctx.fill(); ctx.restore();
   ctx.fillStyle=radGrad(0,-60,42,shade(t.c1,26),t.c2); ctx.beginPath(); ctx.ellipse(0,-56,36,30,0,0,7); ctx.fill();   // body
   ctx.fillStyle=shade(t.c1,4); ctx.beginPath(); ctx.ellipse(2,-50,24,20,0,0,7); ctx.fill();
-  ctx.fillStyle=t.c3; ctx.fillRect(-18,-30,11,30); ctx.fillRect(8,-30,11,30);   // legs
+  foeLegs(e,14,-30,11,10,13,t.c3,shade(t.c3,-26),0.46,0.62);   // legs（二関節・接地ロック）
   ctx.fillStyle='#f2efe6'; for(const lx of [-13,13]) for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(lx+i*4,-2);ctx.lineTo(lx+i*4-2,8);ctx.lineTo(lx+i*4+2,8);ctx.fill(); }
   ctx.strokeStyle=t.c2; ctx.lineWidth=20; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(16,-66); ctx.quadraticCurveTo(46,-86,54,-104); ctx.stroke();   // neck
   ctx.fillStyle=radGrad(56,-110,22,shade(t.c1,24),t.c2); ctx.beginPath(); ctx.ellipse(58,-108,21,17,0,0,7); ctx.fill();   // head
@@ -9072,7 +9151,7 @@ function drawDarkKnight(e){ const atk=e.state==='bmove', tele=e.state==='bwind',
   const cg=ctx.createLinearGradient(-30,-100,-6,4); cg.addColorStop(0,'#26242c'); cg.addColorStop(1,'#0a090e');
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-8,-92); ctx.quadraticCurveTo(-40,-44,-30-sw,8); ctx.quadraticCurveTo(-44,-6,-34-sw,10); ctx.lineTo(10,8); ctx.quadraticCurveTo(8,-44,-2,-90); ctx.closePath(); ctx.fill();
   // 脚（黒ブーツ）
-  foeLegs(e,10,-22,10,9,11,'#16151c','#0a090e',0.58,0.82);   // 闇騎士の脚
+  foeLegs(e,10,-22,10,9,11,'#34333e','#4a2a3a',0.58,0.82);   // 闇騎士の脚（黒潰れを避ける）
   ctx.fillStyle='#1c1a22'; ctx.fillRect(-15,-4,11,4); ctx.fillRect(5,-4,11,4);
   // 胴：黒い甲冑
   ctx.fillStyle=radGrad(0,-46,26,'#2a2832','#100e16'); ctx.beginPath(); ctx.ellipse(0,-44,19,22,0,0,7); ctx.fill();
