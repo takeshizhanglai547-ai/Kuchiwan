@@ -5138,11 +5138,29 @@ function drawMap(){
     ? '蟲の世界を巡れ　（制覇 '+doneCount()+' / '+WORLD2_LEVELS.length+'　女王の間まで '+Math.max(0,NG2_UNLOCK-doneCount())+'）'
     : '行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　城門解禁まで '+Math.max(0,FINAL_UNLOCK-doneCount())+'）',W/2,74);
   const nodes=allMapNodes();
-  // ノード間の道（隣接を薄く結ぶ）
-  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
-  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1]; ctx.beginPath(); ctx.moveTo(a.mx*W,a.my*H*0.9+70); ctx.lineTo(b.mx*W,b.my*H*0.9+70); ctx.stroke(); }
+  const NX=n=>n.mx*W, NY=n=>n.my*H*0.72+64;
+  // 推奨難度★：出現順が難度順なので、その並びを4段階に割る
+  const world=curWorldLevels();
+  const tierOf=n=>{ const i=world.indexOf(n); if(i<0) return 4; return clamp(Math.floor(i*4/Math.max(1,world.length)),0,3)+1; };
+  const bossOf=n=>{ const gs=(n.b&&n.b.gates)||[]; for(const g of gs) if(g.boss) return g.list&&g.list[0]&&g.list[0][0]; return null; };
+  // 次の推奨先＝未クリアで解禁済みのうち最も手前のもの
+  let nextId=null;
+  for(const n of world){ if(!levelsDone[n.id] && nodeUnlocked(n)){ nextId=n.id; break; } }
+  // ノード間の道。進行順に結んだ一本道として読ませるため、線は控えめに落とす
+  ctx.strokeStyle='rgba(255,255,255,.13)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1];
+    ctx.beginPath(); ctx.moveTo(NX(a),NY(a)); ctx.lineTo(NX(b),NY(b)); ctx.stroke(); }
+  // クリア済み→次の推奨先だけは明るく描いて、進むべき向きを示す
+  ctx.strokeStyle='rgba(255,225,120,.5)'; ctx.lineWidth=2.6;
+  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1];
+    if(!(levelsDone[a.id] && b.id===nextId)) continue;
+    ctx.beginPath(); ctx.moveTo(NX(a),NY(a)); ctx.lineTo(NX(b),NY(b)); ctx.stroke(); }
   ctx.setLineDash([]);
-  nodes.forEach((node,i)=>{ const x=node.mx*W, y=node.my*H*0.9+70, done=levelsDone[node.id], unl=nodeUnlocked(node), sel=i===mapSel;
+  nodes.forEach((node,i)=>{ const x=NX(node), y=NY(node), done=levelsDone[node.id], unl=nodeUnlocked(node), sel=i===mapSel;
+    // 次の推奨先は外周が脈打つ（11個の等価な選択肢から「次はここ」を1つ示す）
+    if(node.id===nextId && !sel){ const pu=0.5+0.5*Math.sin(gf*0.09);
+      ctx.save(); ctx.globalAlpha=0.30+pu*0.45; ctx.strokeStyle='#ffe14d'; ctx.lineWidth=1.6+pu*2.2;
+      ctx.beginPath(); ctx.arc(x,y,20+pu*5,0,7); ctx.stroke(); ctx.restore(); }
     // ノード円
     ctx.fillStyle=done?'rgba(90,180,110,.9)':(unl?'rgba(255,210,80,.92)':'rgba(90,90,110,.8)');
     if(sel){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(x,y,34,'rgba(255,240,150,.8)','rgba(255,240,150,0)'); ctx.beginPath(); ctx.arc(x,y,34,0,7); ctx.fill(); ctx.restore(); ctx.fillStyle=unl&&!done?'#fff':'rgba(255,210,80,.92)'; }
@@ -5150,10 +5168,39 @@ function drawMap(){
     ctx.strokeStyle='#1a1410'; ctx.lineWidth=2.5; ctx.stroke();
     if(done){ ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x-6,y); ctx.lineTo(x-1,y+6); ctx.lineTo(x+7,y-6); ctx.stroke(); }   // チェック
     else if(!unl){ ctx.fillStyle='#2a2a34'; ctx.fillRect(x-4,y-1,8,7); ctx.beginPath(); ctx.arc(x,y-1,4,Math.PI,0); ctx.strokeStyle='#2a2a34'; ctx.lineWidth=2; ctx.stroke(); }   // 鍵
-    // 名前
-    ctx.fillStyle=sel?'#fff':(unl?'#ffe9a0':'#8a8a9a'); ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
-    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3; const nm=node.b.name; ctx.strokeText(nm,x,y+30); ctx.fillText(nm,x,y+30);
+    else if(node.final){ ctx.fillStyle='#7a1020'; drawStar(x,y,3.4,8,'#ff5a6a'); }                                      // 最終ステージは赤い星
+    // 推奨難度★（未クリアのみ。クリア済みはチェックだけで足りる）
+    if(!done && unl){ const tr=tierOf(node), col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
+      for(let k=0;k<tr;k++) drawStar(x-(tr-1)*4+k*8, y+19, 1.5, 3.4, col); }
+    // 名前。施錠ノードも読める明度＋暗いプレートを敷く
+    ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    const nm=node.b.name, lw=ctx.measureText(nm).width;
+    ctx.fillStyle='rgba(8,10,20,.55)'; roundRect(x-lw/2-6, y+(done||!unl?21:28), lw+12, 17, 4); ctx.fill();
+    ctx.fillStyle=sel?'#fff':(unl?'#ffe9a0':'#b6c2d6');
+    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3;
+    const ny=y+(done||!unl?34:41); ctx.strokeText(nm,x,ny); ctx.fillText(nm,x,ny);
   });
+  // 選択中ノードの情報カード：難度・ボスの有無・想定報酬を出して「選ぶ材料」を与える
+  { const node=nodes[mapSel];
+    if(node){ const done=levelsDone[node.id], unl=nodeUnlocked(node), tr=tierOf(node), bk=bossOf(node);
+      const cw=282, chh=76, cx=W/2-cw/2, cy=H-116;
+      ctx.fillStyle='rgba(8,10,20,.82)'; roundRect(cx,cy,cw,chh,8); ctx.fill();
+      ctx.strokeStyle='rgba(255,210,80,.55)'; ctx.lineWidth=1.6; roundRect(cx+0.5,cy+0.5,cw-1,chh-1,8); ctx.stroke();
+      ctx.textAlign='left';
+      ctx.fillStyle='#ffe14d'; ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
+      ctx.fillText(node.b.name, cx+14, cy+22);
+      ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+      if(!unl){ ctx.fillStyle='#9fb0c4';
+        ctx.fillText(lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cx+14, cy+44); }
+      else { ctx.fillStyle='#9fb0c4'; ctx.fillText('推奨難度', cx+14, cy+44);
+        const col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
+        for(let k=0;k<4;k++) drawStar(cx+78+k*15, cy+40, 2.2, 5.2, k<tr?col:'rgba(255,255,255,.16)');
+        ctx.fillStyle='#9fb0c4'; ctx.fillText('ボス', cx+150, cy+44);
+        ctx.fillStyle=bk?'#ff8a6a':'#6a7a8a';
+        ctx.fillText(bk?((ETYPE[bk]&&ETYPE[bk].name)||'あり'):'なし', cx+182, cy+44);
+        ctx.fillStyle=done?'#7dff7d':'#cfe0ff';
+        ctx.fillText(done?'制覇済み（再挑戦できる）':'未制覇　報酬コイン 目安 '+(60+tr*45), cx+14, cy+64); }
+      ctx.textAlign='center'; } }
   ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
   ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃',W/2,H-22); ctx.textAlign='left';
 }
