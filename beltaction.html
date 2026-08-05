@@ -4315,10 +4315,12 @@ function updateGait(){
       const a=gaitStep(u,_S,0,D), b=gaitStep(u+0.5,_S,0,D);
       let d=1e9; if(a.st) d=Math.min(d,Math.abs(a.x)); if(b.st) d=Math.min(d,Math.abs(b.x));
       if(d>1e8) d=_S*0.5;
-      // 幾何そのままだと個体差が大きく1px弱に埋もれるので、振れ幅を体高の4.5%へ正規化する
+      // 振れ幅を体高の4.5%へ正規化する。分母は「支持脚が半歩幅まで開く」前提ではなく、
+      // 実際に取り得る最大の開きを使う（もう一方の脚が先に接地するので S/2 には届かない）
       const raw=Math.sqrt(Math.max(1,R*R-d*d))-R;
-      const full=Math.max(0.5, R-Math.sqrt(Math.max(1,R*R-_S*_S*0.25)));
-      e.bobY=raw*((t.h||70)*0.045/full)*(e.gaitW||0); } }   // 幾何そのままでは1px弱なので、体重移動が読める幅まで誇張する
+      const dm=bobPeak(D)*_S;
+      const full=Math.max(0.5, R-Math.sqrt(Math.max(1,R*R-dm*dm)));
+      e.bobY=raw*((t.h||70)*0.045/full)*(e.gaitW||0); } }
   }
 }
 
@@ -5079,7 +5081,7 @@ const WORLD_LEVELS=[
   {id:'kokoku', b:SEGS.A[0][1], mx:0.46, my:0.78},   // 渓谷の最深部
   {id:'mori',   b:SEGS.A[1][0], mx:0.30, my:0.20},   // 月詠の森
   {id:'suisho', b:SEGS.A[1][1], mx:0.44, my:0.42},   // 瑠璃の水晶洞
-  {id:'hikoutei',b:SEGS.B[0][0],mx:0.58, my:0.24},   // 海賊飛行艇の甲板
+  {id:'hikoutei',b:SEGS.B[0][0],mx:0.615,my:0.285},  // 海賊飛行艇の甲板（隣のラベルとノード円が触れないよう離す）
   {id:'futou',  b:SEGS.B[0][1], mx:0.70, my:0.40},   // 海賊王の埠頭
   {id:'sabaku', b:SEGS.B[1][0], mx:0.60, my:0.64},   // 灼熱の砂漠
   {id:'haikyo', b:SEGS.B[1][1], mx:0.72, my:0.78},   // 灼熱の巨大廃墟
@@ -5172,7 +5174,10 @@ function drawMap(){
   const NX=n=>n.mx*W, NY=n=>n.my*H*0.72+64;
   // 推奨難度★：出現順が難度順なので、その並びを4段階に割る
   const world=curWorldLevels();
-  const tierOf=n=>{ const i=world.indexOf(n); if(i<0) return 4; return clamp(Math.floor(i*4/Math.max(1,world.length)),0,3)+1; };
+  // 出現順を4段階へ割る。ステージ数が少ない周回（3周目は2件）でも両端が★1と★4になるよう、
+  // 件数ではなく「最初と最後」を基準に配分する
+  const tierOf=n=>{ const i=world.indexOf(n); if(i<0) return 4;
+    const L=Math.max(1,world.length-1); return clamp(Math.round(i*3/L),0,3)+1; };
   const bossOf=n=>{ const gs=(n.b&&n.b.gates)||[]; for(const g of gs) if(g.boss) return g.list&&g.list[0]&&g.list[0][0]; return null; };
   // 次の推奨先＝未クリアで解禁済みのうち最も手前のもの
   let nextId=null;
@@ -8443,6 +8448,18 @@ function gaitStep(u,stride,lift,D){
   const k=(u-D)/(1-D), v=-(1-D)/D;
   const e=v*(2*k*k*k-3*k*k+k)+(-2*k*k*k+3*k*k);
   return {x:stride*(-0.5+e), y:-lift*Math.sin(Math.PI*Math.pow(k,0.82)), st:0, k}; }   // 対称サインは機械的なので山を前寄せする
+// 前後一対の脚で、支持脚が取り得る最大の開き（歩幅に対する比）。重心の上下を
+// 正規化する分母に使う。デューティごとに一度だけ求めてキャッシュする
+const _bobPk=new Map();
+function bobPeak(D){
+  const k=Math.round(D*200); let v=_bobPk.get(k);
+  if(v==null){ v=0;
+    for(let i=0;i<128;i++){ const u=i/128;
+      const a=gaitStep(u,1,0,D), b=gaitStep(u+0.5,1,0,D);
+      let d=1e9; if(a.st) d=Math.min(d,Math.abs(a.x)); if(b.st) d=Math.min(d,Math.abs(b.x));
+      if(d<1e8 && d>v) v=d; }
+    if(!(v>0.02)) v=0.30; _bobPk.set(k,v); }
+  return v; }
 // 歩幅は脚の長さで決まる。描画側が教えた最長の脚と歩幅倍率を歩行位相の進み方へ反映する
 function legReach(e,r){ if(!(e._lr>=r)) e._lr=r; }
 function legAmp(e,a){ e._amp=(a==null?0.58:a); }
@@ -10081,7 +10098,7 @@ function drawShop(){
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff'; ctx.fillText('〜 宿屋・酒場で装備を整えよう 〜',W/2,78);
   ctx.fillStyle=radGrad(W/2-120,100,8,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(W/2-120,100,8,0,7); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='bold 22px Trebuchet MS'; ctx.fillText('所持コイン: '+coins+' ¢',W/2,108);
-  const mx=80,my=120,mw=520,ih=34, vis=Math.min(SHOP_VIS,SHOP_ITEMS.length);
+  const mw=560, mx=Math.round(W*0.46-mw/2), my=120, ih=34, vis=Math.min(SHOP_VIS,SHOP_ITEMS.length);   // 見出しの中心軸に寄せる
   ctx.fillStyle='rgba(8,10,20,.8)'; roundRect(mx,my,mw,vis*ih+44,10); ctx.fill();
   ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(mx,my,mw,vis*ih+44,10); ctx.stroke();
   ctx.textAlign='left';
