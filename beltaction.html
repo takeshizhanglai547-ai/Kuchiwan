@@ -18,6 +18,12 @@
     align-items:center; justify-content:center; text-align:center; z-index:20; padding:20px;
     background:radial-gradient(ellipse at center, rgba(20,12,40,.55), rgba(0,0,0,.9)); }
   .hidden { display:none !important; }
+  /* タイトル→本編の遷移だけがジャンプカットだったので、DOM側にもフェードを持たせる */
+  #start, #result { transition:opacity .26s ease; }
+  .fading { opacity:0 !important; pointer-events:none !important; }
+  /* 遷移中は UI クローム（音符ボタン）も一緒に沈め、暗転の一体感を保つ */
+  #snd { transition:opacity .26s ease; }
+  body.transitioning #snd { opacity:.15; }
   /* タイトルは背後の豪華な演出を活かすため、オーバーレイを控えめに */
   #start.overlay { background:radial-gradient(ellipse at center 38%, rgba(10,6,26,.30), rgba(3,2,10,.72) 78%); }
   #start .title-main { text-shadow:0 4px 0 rgba(120,60,0,.5), 0 0 22px rgba(255,180,40,.6); }
@@ -104,7 +110,7 @@
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
     </div>
     <div class="moves">
-      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7">スマホは画面の操作パッドで</span>
+      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
     </div>
   </div>
 
@@ -193,12 +199,13 @@ let camZoom=1, camZoomT=1, camBreath=0, camLead=0;
 function punchIn(n){ const t=1+n; if(t>camZoomT) camZoomT=t; }
 // ── 画面遷移：帯シャッター／アイリス／フェード。中間フレームで実際の画面切替を行う ──
 let scr={t:0,dur:0,mid:null,kind:'shutter'};
+let HUD_BOTTOM=156;   // 左上HUDブロックの下端（popText が参照する）
 function goScreen(mid,kind,dur){ if(scr.dur>0){ if(mid) mid(); return; }
   scr={t:0,dur:dur||34,mid:mid||null,kind:kind||'shutter'}; }
 function tickScreenFx(){ if(scr.dur<=0) return;
   scr.t++;
   if(scr.t>=scr.dur*0.5 && scr.mid){ const m=scr.mid; scr.mid=null; m(); }
-  if(scr.t>=scr.dur) scr.dur=0; }
+  if(scr.t>=scr.dur){ scr.dur=0; if(document.body&&document.body.classList) document.body.classList.remove('transitioning'); } }
 function drawScreenFx(){ if(scr.dur<=0) return;
   const h=scr.dur*0.5;
   const k=scr.t<h ? easeOut(clamp(scr.t/h,0,1)) : 1-easeOut(clamp((scr.t-h)/h,0,1));
@@ -952,6 +959,9 @@ const Music=(()=>{
   // 高い側4ステップは +36 の和音内音。以前は arp が brass・choir と同じ ch[n]+24 を踏み、
   // lap1 BATTLE[0] だけで 32件の団子を作っていた
   const ARP=[1,2,1,2,0,2,1,2], ARPX=[2,2,2,2,0,0,0,0];
+  // 蟲パレットのオフビート木琴が踏む度数（奇数ステップのみ使用）。
+  // 5度→3度→5度→根音。ブラス(根音・3度=+24)が伸びている st1・st5 には 5度を当てて衝突を避ける
+  const MAR=[2,2,2,1,2,2,2,0];
   // ── 対旋律 cline：主旋律の完全4度下あたりを和音内音でなぞる独立線。
   //    S.cmel（32要素）があればそれを最優先し、無い曲は主旋律と和音から生成する。
   //    主旋律と同音・オクターブ重複になる候補は必ず除外するので lead と音高が重ならない。
@@ -962,14 +972,36 @@ const Music=(()=>{
   function choirN(ch,po){ const n=ch[0]+2+po+12;
     for(let i=0;i<ch.length;i++) if(ch[i]+po===n) return ch[2]+po+12;   // add9 和音では素の5度へ退避（arp は +24 の和音内音を踏まない）
     return n; }
+  // ── Bセクションの対照主題：主題を平均音高で反行（コンター反転）させ、曲自身が使う音階
+  //    （mel に現れる音名の集合）へ吸着させる。読み出しを16音ずらすので和音進行に対する
+  //    出だしの度数も変わり、データを増やさずに「Aメロ／Bメロ」の主題対比が生まれる ──
+  function melB(S,idx){
+    if(S._mB==null){
+      const M=S.mel, n=M.length, pcs=[]; let sum=0,cnt=0;
+      for(const v of M) if(v!=null){ sum+=v; cnt++; const p=((v%12)+12)%12; if(pcs.indexOf(p)<0) pcs.push(p); }
+      const ax=cnt?Math.round(sum/cnt):60, out=new Array(n);
+      for(let i=0;i<n;i++){ const v=M[(i+16)%n];
+        if(v==null){ out[i]=null; continue; }
+        const inv=2*ax-v; let best=inv, bd=99;
+        for(let d=-6;d<=6;d++){ const q=inv+d;                       // 反行後にいちばん近い音階音へ吸着＝必ず調内に収まる
+          if(pcs.indexOf(((q%12)+12)%12)>=0 && Math.abs(d)<bd){ bd=Math.abs(d); best=q; } }
+        out[i]=best; }
+      S._mB=out; }
+    return S._mB[idx]; }
+  // 32小節フォームの現在地に応じた主旋律。A/A'＝主題、B＝対照主題、
+  // B'＝対照主題の前半から主題の後半へ戻る「回帰」で、4セクションが全て違う旋律になる
+  function leadAt(S,idx){ const sec=S._sec|0;
+    if(sec===2) return melB(S,idx);
+    if(sec===3) return idx<16 ? melB(S,idx) : S.mel[idx];
+    return S.mel[idx]; }
   function cline(S,idx){
     if(S.cmel&&S.cmel[idx]!=null) return S.cmel[idx];
     const ch=S.prog[(idx>>2)&7], po=S._po|0;
-    const m0=S.mel[(idx+31)%32];
-    let m=S.mel[idx]; if(m==null) m=m0;                   // 主旋律が休符のスロットでも前の音を基準に動く
+    const m0=leadAt(S,(idx+31)%32);
+    let m=leadAt(S,idx); if(m==null) m=m0;                   // 主旋律が休符のスロットでも前の音を基準に動く
     if(m==null) return null;
     // 対旋律は前後の拍の主旋律にも掛かる（voice の停止は dur+0.05 秒＝速い曲では 0.3拍ぶん）ので3音とも避ける
-    const m2=S.mel[(idx+1)%32], cn=choirN(ch,po);
+    const m2=leadAt(S,(idx+1)%32), cn=choirN(ch,po);
     for(let pass=0;pass<3;pass++){                        // 0=主旋律の下・占有回避 / 1=上も許す / 2=占有回避を捨てる最終手段
       let best=null,bd=99;
       for(let i=0;i<ch.length;i++) for(let x=0;x<=2;x+=2) for(let o=12;o<=36;o+=12){
@@ -981,6 +1013,7 @@ const Music=(()=>{
         if(pass<2){
           if(n===ch[0]+24||n===ch[1]+24||n===cn) continue;  // brass(根音・3度)と choir が押さえている音高は踏まない
           if(arpHit(ch,n)) continue;                        // アルペジオが踏む音高も避ける
+          if(S._mar!=null&&n===S._mar) continue;            // 蟲パレットの木琴オスティナートも避ける
           let taken=false; for(let k=0;k<ch.length;k++) if(n===ch[k]+po) taken=true;
           if(taken) continue; }                             // パッドの押さえている音高も踏まない
         const q=Math.abs(d-5)+(x?0.5:0)+(d<0?4:0);        // 和音内音・主旋律の下を優先し、塞がっていれば上や9th/11th/13thへ逃がす
@@ -1014,12 +1047,23 @@ const Music=(()=>{
     // ── 32小節フォーム：8小節ごとに A(0)/A'(1)/B(2)/B'(3) を進め、層をゲートして展開を作る。
     //    データを増やさずに実効ループ長を4倍にし、「同じ8小節の永久反復」から脱する ──
     if(s===0) loopN=(loopN+1)&3;
-    const sec=loopN, P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
+    const sec=loopN; S._sec=sec; const P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
     // pad：和音を close voicing のまま root〜root+8 に敷き、bass(〜root) と lead(root+12〜) の谷を埋める。
     // 以前は +12・第3声だけ +24 で lead の音域に丸ごと重なり、団子の 77% を作っていた。
     // S._po は曲ごとに一度だけ算出する基準オクターブ（低い調の曲だけ +12 して 80Hz 級の濁りを避ける）
     if(S._po==null){ let lo=99; for(let i=0;i<S.prog.length;i++) if(S.prog[i][0]<lo) lo=S.prog[i][0];
       S._po=(S.epic||lo<42)?12:0; }                       // epic 曲はオルガンに ch の高さを譲るため必ず +12
+    // この拍に鳴っている主旋律（現在音と次音）。ブラス・聖歌隊・木琴がこれを避ける
+    const li=(bar*4+(st>>1))%32, lav=[leadAt(S,li),leadAt(S,(li+1)%32)];
+    // 蟲パレットのオフビート木琴。主旋律と同音になる度数は選ばない
+    S._mar=null;
+    if(P===2&&!S.soft&&st%2===1){ const bad=n=>lav[0]===n||lav[1]===n||(S._po===12&&(n===ch[0]+24||n===ch[1]+24));
+      let mn=ch[MAR[st]]+S._po+12;                                      // 主旋律とブラス（根音・3度=+24）を避けて度数を選ぶ
+      if(bad(mn)) for(const k of [2,0,1]){ const a=ch[k]+S._po+12; if(!bad(a)){ mn=a; break; } }
+      if(bad(mn)) mn=ch[2]+S._po+24;
+      S._mar=mn; }
+    // 周回ごとの色づけは「持続音を足す」ではなくリズム層で行う（下のベースのパターン参照）。
+    // 編曲が密なのでパッドに声部を足すと、木琴・アルペジオ・対旋律のどれかと必ずぶつかる
     if(st===0){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
       if(st===0){ organ(ch,t,stepDur*8,S._po-12); choir(choirN(ch,S._po),t,stepDur*8*0.92);      // オルガン土台(パッドの1オクターブ下)＋聖歌隊(9thの保続＝旋律が踏まない音)
@@ -1031,7 +1075,11 @@ const Music=(()=>{
       if(bar===7&&st>=4) timp(t,root,0.5);                                                       // ラスト小節のティンパニロール
     } else if(!S.soft && sec>=2 && st===0 && bar%2===0) brass(ch,t,stepDur*1.7);                // ブラススタブはBセクション以降だけ解禁
     if(S.soft){ if(st%4===0) bassN(root-12,t,stepDur*3.4); }                                    // gentle half-note bass（素の root は pad/organ の根音と同音だったので12下げ）
-    else { const bn=[root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12][st];   // walking 8th-note bass（5拍目の素の root は pad の根音と同音だったので3度へ）
+    else { // ベースの歩き方も周回で変える（1周目=ウォーキング／2周目=跳ねる／3周目=8分の推進）
+      const BN = P===2 ? [root-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12]
+               : P===3 ? [root-12,root-12,root-12,ch[2]-12,root-12,root-12,ch[1]-12,ch[2]-12]
+               :         [root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12];
+      const bn=BN[st];   // 5拍目の素の root は pad の根音と同音だったので3度へ
       bassN(bn,t,stepDur*0.92); }
     if(!S.soft){                                                                                // ── ドラムキット（周回パレットで音色が入れ替わる）──
       const KICK = P===3? elecKick : kick;
@@ -1049,8 +1097,8 @@ const Music=(()=>{
       if(sec>=1) hat(t+stepDur/2,sec>=3?0.5:0.4,hz);                                            // 16分裏ハットはA'以降
       if(st===0&&bar%4===0){ const tt=t+stepDur*0.22;                                           // キックと重心を分けるため半歩後ろへ
         if(P===2) tom(tt,152,1); else if(P===3) elecKick(tt,0.85); else timp(tt,root,1); }
-      if(S.epic&&st===4) timp(t,root,0.7);                                                      // 最終決戦：ティンパニ連打
-      if(P===2&&st%2===1) pluck(midi(root+12),t,stepDur*0.7,0.022);                             // 蟲：木質のオフビート
+      if(S.epic&&st===4&&sec>=2&&bar%2===1) timp(t,root,0.7);                                   // 最終決戦：ティンパニの追い打ち（ベースの根音と重なるのでB以降・1小節おきに絞る）
+      if(S._mar!=null) pluck(midi(S._mar),t,stepDur*0.7,0.022);                                 // 蟲：木質のオフビート（パッドの1オクターブ上を巡るオスティナート）
       if(P===3&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);                  // 宇宙：金属的な余韻
     } else {                                                                                    // ── 静曲（町／タイトル／エンディング）にも32小節フォームを効かせる ──
       hat(t,st===0?0.3:0.14,hz);
@@ -1064,16 +1112,16 @@ const Music=(()=>{
     // ── 主旋律：下オクターブ重複をやめ、微デチューンのユニゾンで太さを出す。
     //    S.rhy（32要素）で 0=休符 / 1=4分 / 2=8分2連（次音を先取り）/ 3=付点8分＋16分の食い込み を指定する。
     //    未指定の曲は全て4分＝従来どおりの挙動になる ──
-    if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=S.mel[idx], lv=S.soft?0.07:0.085;
+    if(st%2===0){ const idx=(bar*4+(st>>1))%32, m=leadAt(S,idx), lv=S.soft?0.07:0.085;
       const r=(S.rhy&&S.rhy[idx]!=null)?S.rhy[idx]:1;
-      const av=[S.mel[(idx+31)%32],S.mel[(idx+1)%32],cline(S,idx)];                       // ハモリ層が避ける音高
+      const av=[leadAt(S,(idx+31)%32),leadAt(S,(idx+1)%32),cline(S,idx)];                 // ハモリ層が避ける音高
       const note=(nn,tt,dd,vs)=>{ voice(midi(nn),tt,dd,S.lead,lv*vs,0.014,4200);
         voice(midi(nn)*1.004,tt,dd,S.lead,lv*0.5*vs,0.02,3600);
         if(sec>=2&&!S.soft){ const h=harm(ch,nn,S._po,av);                                            // Bセクションは3度〜6度上の和音内音を重ねて盛り上げる
           if(h!=null) voice(midi(h),tt,dd*0.74,'triangle',0.026*vs,0.02,6000); } };            // 以前はオクターブ重複で、層ではなく同じ旋律の厚塗りだった
       if(m!=null&&r!==0){
-        if(r===2){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
-        else if(r===3){ const m2=S.mel[(idx+1)%32]; note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
+        if(r===2){ const m2=leadAt(S,(idx+1)%32); note(m,t,stepDur*0.95,1); if(m2!=null) note(m2,t+stepDur,stepDur*0.95,0.85); }
+        else if(r===3){ const m2=leadAt(S,(idx+1)%32); note(m,t,stepDur*1.45,1); if(m2!=null) note(m2,t+stepDur*1.5,stepDur*0.5,0.8); }
         else note(m,t,stepDur*1.9,1); } }
     // 対旋律：主旋律が伸びる8分裏で動く補完リズム。A'は後半4小節、Bセクション以降は全小節。
     // epic 曲は同じ線をディセンタントが歌うので二重に鳴らさない
@@ -1265,11 +1313,20 @@ function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,gl:groundLift(
 // ダメージ数字：直近8F以内に出た数字が 46x30px 以内にあれば、x はそのままに真上へ 30px 積み上げる。
 // 以前は同時に x を ±14px 散らしていたが、逃げた先で隣の敵の数字と衝突を作り直していた（4〜5段目で破綻）
 function popText(x,y,txt,color,big,crit){
+  // 実測幅で重なりを見る。固定46px幅だと「最大HPアップ！」級の長い文言同士が
+  // すり抜けて丸ごと重なり、拾得フィードバックが読めなくなっていた
+  ctx.font=uif('bold',big?30:21);
+  const tw=ctx.measureText(''+txt).width;
   const near=(px,py)=>{ for(let i=0;i<particles.length;i++){ const q=particles[i];
       if(q.k!=='txt'||(q.max-q.life)>8) continue;
-      if(Math.abs(q.x-px)<46 && Math.abs(q.y-py)<30) return q; } return null; };
+      if(Math.abs(q.x-px)<((q.w||46)+tw)/2+10 && Math.abs(q.y-py)<30) return q; } return null; };
   let guard=0;
-  while(guard<8){ const h=near(x,y); if(!h) break; y=h.y-30; guard++; }   // x は一切動かさず真上へだけ逃がす
+  // HUD の下端。ここより上へは行かせない。ダメージ表示のために HP と残機を隠すのは
+  // 本末転倒なので、詰まったら数字を合流させる。上昇分も毎フレーム床で押さえる
+  const hudFloor=HUD_BOTTOM+(big?16:11);
+  while(guard<8){ const h=near(x,y); if(!h) break;
+    const ny=h.y-(h.big?42:30); if(ny<hudFloor) break;
+    y=ny; guard++; }   // x は一切動かさず真上へだけ逃がす（相手が文言ポップなら受け皿の高さぶん）
   // 8段まで埋まってなお重なるときは新規に積まず、ぶつかった数字へ加算してまとめる（57 が 3 発なら 171 の1個に）
   if(guard>=8){ const ov=near(x,y);
     if(ov && /^\d+$/.test(''+txt) && /^\d+$/.test(''+ov.txt)){
@@ -1281,7 +1338,8 @@ function popText(x,y,txt,color,big,crit){
       for(let i=0;i<particles.length;i++){ const q=particles[i]; if(q.k!=='txt') continue;
         const ra=q.life/q.max; if(ra<oa){ oa=ra; oldest=i; } }
       if(oldest<0) break; particles.splice(oldest,1); cnt--; } }
-  particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,
+  y=Math.max(y,hudFloor);
+  particles.push({k:'txt',x,y,gl:groundLift(x),layer:2,delay:0,txt,color,big,w:tw,floor:hudFloor,
     life:big?52:38,max:big?52:38,y0:y,vx:0,vy:-3.5,g:0.175,pop:1,rot:rnd(-0.13,0.13),crit:!!crit}); }
 // 衝撃リング：初速が速く一気に減速する（ease-out）楕円。正円の等速膨張をやめ、床に寝た衝撃波に見せる
 function ring(x,y,color,opt){ opt=opt||{};
@@ -1394,6 +1452,7 @@ function updateParticles(){
     else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; p.vx*=0.97; p.rot+=p.rv; }
     else if(p.k==='smoke'){ p.x+=p.vx;p.y+=p.vy; p.vy*=0.93; p.vx*=0.95; p.rot+=p.rv; }
     else if(p.k==='txt'){ p.x+=p.vx; p.vy+=p.g; p.y+=p.vy; p.vx*=0.965; p.pop*=0.78;
+      if(p.floor!=null && p.y<p.floor){ p.y=p.floor; p.vy=Math.max(0,p.vy); }   // HUD を突き抜けない
       if(p.y>p.y0){ p.y=p.y0; p.vy*=-0.34; p.vx*=0.6; } }   // 床（湧いた高さ）で一度だけ弾む
     else if(p.k==='ring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.2)); }
     else if(p.k==='shockring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
@@ -1430,8 +1489,17 @@ function drawParticles(layer){
       if(p.crit && !_critGrad[fs]){ const cg=ctx.createLinearGradient(0,-fs*0.86,0,fs*0.18);
         cg.addColorStop(0,'#fff8d2'); cg.addColorStop(0.5,'#ffd24d'); cg.addColorStop(1,'#ff7a2a'); _critGrad[fs]=cg; }
       ctx.globalAlpha=clamp(a*1.6,0,1); ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.translate(sx,py); ctx.rotate((p.rot||0)*(1-a)*2.2); ctx.scale(sc,sc);
+      // 画面端で半分に切れないよう、実測幅ぶんだけ内側へ寄せる（壁際のヒットが最も多い）。
+      // スケールを掛けると pop の減衰に同期して横滑りするので、幅は等倍で見る
+      // 文言ポップは情報表示なので傾けない（傾けると受け皿から文字がはみ出す）
+      const rot=p.big?0:(p.rot||0)*(1-a)*2.2;
+      const hw=((p.w||24)*0.5+12)*sc;                    // クランプは拡大後の実効幅で見る
+      ctx.translate(clamp(sx,hw,W-hw),py); ctx.rotate(rot); ctx.scale(sc,sc);
       ctx.font=uif('bold',fs);
+      if(p.big){ ctx.save();
+        ctx.globalAlpha=clamp(a*1.6,0,1)*0.62;
+        ctx.fillStyle='rgba(6,4,12,.92)'; roundRect(-(p.w||24)/2-9,-fs*0.92,(p.w||24)+18,fs*1.28,5); ctx.fill();
+        ctx.restore(); ctx.globalAlpha=clamp(a*1.6,0,1); }
       ctx.lineJoin='round'; ctx.lineWidth=4.2; ctx.strokeStyle='rgba(0,0,0,.92)'; ctx.strokeText(p.txt,0,0);
       ctx.fillStyle = p.crit ? _critGrad[fs] : p.color;   // 会心は白→金→橙の縦グラデで別格に見せる
       ctx.fillText(p.txt,0,0); ctx.textAlign='left'; }
@@ -4055,23 +4123,10 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
   }
   ctx.restore(); }); }
 function updateEnemies(){
-  let _stepN=0;   // このフレームで鳴らした敵の足音の数（同時発音を絞る）
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
     if(e.state!==e._ps){ if(e.state==='down') e.downMax=e.downTimer; e._ps=e.state; }   // 状態遷移の検出（倒れ込みカーブの基準）
     if(!t.boss){ e.anim+=(e.state==='walk'?0.18:0.09); e.bob+=(e.state==='walk'?0.12:0.06); }   // 生命感は行動中も止めない（ガード中・拘束中の凍結を防ぐ）
-    // ── 歩行位相：実際に進んだ距離から積分する。体格でテンポが変わる（小柄=速い／巨体=鈍重）──
-    { const mv=Math.min(Math.abs(e.x-(e.px2==null?e.x:e.px2)),16); e.px2=e.x;
-      const gk=(t.gaitK!=null)?t.gaitK:(0.078-clamp(((t.h||70)-56)/170,0,1)*0.048);
-      const stepping=e.z<=0 && mv>0.12 && e.state!=='down' && e.state!=='getup' && e.state!=='hurt'
-        && e.state!=='attack' && e.state!=='crouch' && e.state!=='bmove' && e.state!=='bwind' && e.state!=='brec' && !e.dead;
-      const _g0=e.gait||0; e.gait=_g0+mv*gk;
-      // ── 敵の足音：脚の描画と同じ位相ソース（|sin(gait)| の周期＝π）で接地のたびに鳴らす。
-      //    画面内の敵だけ・1フレーム2体までに絞り、群れても足音で埋もれないようにする ──
-      if(stepping && Math.floor(e.gait/Math.PI)!==Math.floor(_g0/Math.PI)
-         && e.x>camX-80 && e.x<camX+W+80 && _stepN<2){ _stepN++;
-        sfx.step(e.x, groundSnd(), t.boss?1.5:(t.h>84?0.85:0.5)); }
-      e.gaitW=(e.gaitW||0)+((stepping?1:0)-(e.gaitW||0))*0.20; }
     // ばねのスクワッシュ（減衰振動）：被弾・着地の「ぷにっ」を全エネミー共通で
     { const w=15, z=0.55, a=-w*w*(e.sq||0)-2*z*w*(e.sqv||0);
       e.sqv=(e.sqv||0)+a/60; e.sq=(e.sq||0)+e.sqv/60;
@@ -4222,7 +4277,71 @@ function updateEnemies(){
   for(let a=0;a<enemies.length;a++)for(let b=a+1;b<enemies.length;b++){ const e1=enemies[a],e2=enemies[b];
     if(e1.dead||e2.dead||e1.z>4||e2.z>4||e1.grabbedBy||e2.grabbedBy||e1.state==='pounce'||e2.state==='pounce'||e1.state==='gripping'||e2.state==='gripping'||ETYPE[e1.type].boss||ETYPE[e2.type].boss)continue;
     if(Math.abs(e1.y-e2.y)<18&&Math.abs(e1.x-e2.x)<30){ const push=e1.x<e2.x?-0.5:0.5; e1.x+=push*0.6; e2.x-=push*0.6; } }
+  updateGait();   // 全ての移動が確定してから歩行位相を進める
 }
+// ── 歩行位相：実際に進んだ距離から積分する。敵の移動・押し合いが全て終わった後に
+//    走らせないと、1フレーム前の移動量で位相を進めることになり、加減速時に足が滑る ──
+let _stepN=0;   // このフレームで鳴らした敵の足音の数（同時発音を絞る）
+function updateGait(){
+  _stepN=0; let _dustN=0;
+  for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type];
+    // ── 歩行位相：実際に進んだ距離から積分する。体格でテンポが変わる（小柄=速い／巨体=鈍重）──
+  { const _dx=clamp(e.x-(e.px2==null?e.x:e.px2),-16,16), mv=_dx*(e.facing||1); e.px2=e.x;   // 向き付きの歩幅。スプライトの反転は facing なので、これと揃えないと左向き時に足が滑る
+    // 位相の進み方は脚の長さから決まる。歩幅 = 接地相で体が進む距離 なので、接地中の足は
+    // ワールド座標で静止する。スプライトは FIXED_SCALE 倍で描かれるため、ローカルの歩幅 S を
+    // そのままクロックに使うと 1/FIXED_SCALE ぶんずれて滑走する（これが元の滑走の正体）
+    const _R=e._lr||14, _AM=(e._amp==null?0.58:e._amp)/0.58, _sp=Math.max(0.35,t.sp||1.5);
+    const _spN=_sp/Math.max(4,_R*FIXED_SCALE);                // 脚長に対する移動の速さ
+    const _RUN=clamp((_spN-0.045)/0.055,0,1);                 // 0=歩き 1=走り
+    e._gd=lerp(0.62,0.50,_RUN);                               // 走るほど接地デューティが下がる（四つ足で支持脚が常に2本残る下限）
+    // 歩幅＝1サイクルで進む距離。目標ケイデンスから逆算するので、速い個体は
+    // 脚を速く回すのではなく大股になる（従来は歩幅が固定で13.6歩/秒のミシン脚だった）
+    const _cps=clamp((0.55+_spN*8)/((t.gaitA)||1), 0.85, 2.15);   // サイクル/秒
+    const _S=e._stride=clamp(_sp*60/_cps/FIXED_SCALE*_AM, _R*0.60, _R*1.60);   // 歩幅の上限は脚長の1.6倍。これ以上は脚が伸びすぎる
+    const stepping=e.z<=0 && Math.abs(mv)>0.12 && e.state!=='down' && e.state!=='getup' && e.state!=='hurt'
+      && e.state!=='attack' && e.state!=='crouch' && e.state!=='bmove' && e.state!=='bwind' && e.state!=='brec' && !e.dead;
+    e.gaitW=(e.gaitW||0)+((stepping?1:0)-(e.gaitW||0))*0.30;
+    // 止まったら位相を中立（両足が真下に揃う u=D/2）へゆっくり寄せる。
+    // 歩幅を縮めるのではなく位相を動かすので、歩き出しに歩幅の段差が生まれない
+    // ＝接地滑走が再発しない。歩幅から gaitW を外した副作用で、止まった敵が
+    // 歩幅の途中で永久に固まっていたのを解消する
+    if(Math.abs(mv)<0.04 && e.z<=0 && !e.dead){
+      const tgt=(e._gd||GAIT_D)*0.5, u=gaitPh(e.gait);
+      let d=tgt-u; if(d>0.5)d-=1; if(d<-0.5)d+=1;
+      e.gait += d*Math.PI*2*0.07; }
+    // 歩幅は gaitW で伸縮させない。伸縮させると歩き出し／止まりの数フレームで
+    // 接地中の足が歩幅の変化ぶん動いてしまう。止まった敵は位相が進まなくなるだけで、
+    // 足はその場に残る（gaitW は遊脚の持ち上げと重心の上下にだけ効かせる）
+    const gk=(Math.PI*2*e._gd)/Math.max(6,_S*FIXED_SCALE);
+    const _air=e._air=clamp((e.z||0)/24,0,1);   // 滞空中は歩容を回さない（見えない床を歩いてしまう）
+    const _g0=e.gait||0; e.gait=_g0+mv*gk*(1-_air);
+    // ── 敵の足音：脚の描画と同じ位相ソース（|sin(gait)| の周期＝π）で接地のたびに鳴らす。
+    //    画面内の敵だけ・1フレーム2体までに絞り、群れても足音で埋もれないようにする ──
+    if(stepping && e.x>camX-80 && e.x<camX+W+80 && _stepN<4){
+      // 四つ足は e._off の4本ぶん、二足は前後1組ぶんの接地で鳴らす（従来は周期πの2回だけで
+      // 実際の着地と本数もタイミングも合っていなかった）
+      const offs=e._off||[0,0.5];
+      for(let oi=0;oi<offs.length && _stepN<4;oi++){
+        if(Math.floor(gaitPh(e.gait)+offs[oi]+1)===Math.floor(gaitPh(_g0)+offs[oi]+1)) continue;
+        _stepN++;
+        const fore=(oi===1||oi===3);
+        sfx.step(e.x, groundSnd(), (t.boss?1.5:(t.h>84?0.85:0.5))*(fore?0.7:1));
+        if(t.h>92 && oi===0 && _dustN<1){ _dustN++; dust(e.x-(e.facing||1)*6, e.y, t.boss?3:2); } } }
+    // 重心の上下：支持脚が斜めになるほど腰が沈む（sqrt(L²-dx²)）。
+    // パッシング（脚が真下）で最高、開脚で最低。|sin| の従来式はこれと位相が逆だった
+    { const R=e._lr||14, u=gaitPh(e.gait), D=e._gd;
+      const a=gaitStep(u,_S,0,D), b=gaitStep(u+0.5,_S,0,D);
+      let d=1e9; if(a.st) d=Math.min(d,Math.abs(a.x)); if(b.st) d=Math.min(d,Math.abs(b.x));
+      if(d>1e8) d=_S*0.5;
+      // 振れ幅を体高の4.5%へ正規化する。分母は「支持脚が半歩幅まで開く」前提ではなく、
+      // 実際に取り得る最大の開きを使う（もう一方の脚が先に接地するので S/2 には届かない）
+      const raw=Math.sqrt(Math.max(1,R*R-d*d))-R;
+      const dm=bobPeak(D)*_S;
+      const full=Math.max(0.5, R-Math.sqrt(Math.max(1,R*R-dm*dm)));
+      e.bobY=raw*((t.h||70)*0.045/full)*(e.gaitW||0); } }
+  }
+}
+
 // Shared melee resolver: front-arc check + guard/parry + slide/i-frame dodge. reach<0 = AoE (no facing check).
 function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
   if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>14) return false;
@@ -4980,7 +5099,7 @@ const WORLD_LEVELS=[
   {id:'kokoku', b:SEGS.A[0][1], mx:0.46, my:0.78},   // 渓谷の最深部
   {id:'mori',   b:SEGS.A[1][0], mx:0.30, my:0.20},   // 月詠の森
   {id:'suisho', b:SEGS.A[1][1], mx:0.44, my:0.42},   // 瑠璃の水晶洞
-  {id:'hikoutei',b:SEGS.B[0][0],mx:0.58, my:0.24},   // 海賊飛行艇の甲板
+  {id:'hikoutei',b:SEGS.B[0][0],mx:0.615,my:0.285},  // 海賊飛行艇の甲板（隣のラベルとノード円が触れないよう離す）
   {id:'futou',  b:SEGS.B[0][1], mx:0.70, my:0.40},   // 海賊王の埠頭
   {id:'sabaku', b:SEGS.B[1][0], mx:0.60, my:0.64},   // 灼熱の砂漠
   {id:'haikyo', b:SEGS.B[1][1], mx:0.72, my:0.78},   // 灼熱の巨大廃墟
@@ -5003,7 +5122,8 @@ function nodeUnlocked(node){
   if(node.id==='joumon') return doneCount()>=FINAL_UNLOCK;      // 城門＝規定数クリア後
   return true;                                                  // 通常ステージは最初から自由
 }
-function nodeSelectable(node){ return nodeUnlocked(node) && !levelsDone[node.id]; }
+function nodeSelectable(node){ return nodeUnlocked(node) && !levelsDone[node.id]; }   // 「次に進むべき場所」の判定
+function nodeEnterable(node){ return nodeUnlocked(node); }                            // 制覇済みでも再挑戦できる（コイン稼ぎの導線）
 // 1レベルだけを読み込んで開始（x=0 起点の独立フィールド）
 function loadLevel(node){
   resetWorldState(); curLevelId=node.id; curLevelFinal=!!node.final;
@@ -5020,7 +5140,8 @@ function loadLevel(node){
   saveProgress(1);
 }
 function enterMap(){ state='map'; mapNavCd=10;
-  // カーソルを最初の選択可能ノードへ
+  // カーソルは「未制覇で解禁済み」の先頭へ寄せる。制覇済みも選べるが（再挑戦の導線）、
+  // 地図に入った直後は次に進むべき場所を指しているのが自然
   const nodes=allMapNodes(); if(!nodeSelectable(nodes[mapSel])){ for(let i=0;i<nodes.length;i++){ if(nodeSelectable(nodes[i])){ mapSel=i; break; } } }
   unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('town'); else Music.setMode('town'); }
   // 全ステージ制覇していれば魔王の間へ促す（自動選択）
@@ -5028,13 +5149,27 @@ function enterMap(){ state='map'; mapNavCd=10;
 function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
   if(scr.dur>0){ pressed.atk=false; pressed.jump=false; saveInput(players[0].in); updateParticles(); return; }   // 遷移中は選択を受け付けない
   const nodes=allMapNodes();
-  if(mapNavCd<=0){ let mv=0; if(K.left)mv=-1; else if(K.right)mv=1; else if(K.up)mv=-1; else if(K.down)mv=1;
-    if(mv){ // 選択可能ノードを順に移動
-      let i=mapSel; for(let k=0;k<nodes.length;k++){ i=(i+mv+nodes.length)%nodes.length; if(nodeSelectable(nodes[i])){ mapSel=i; break; } }
-      mapNavCd=10; ui.move(); } }
+  if(mapNavCd<=0){ let dx=0,dy=0;
+    if(K.left)dx=-1; else if(K.right)dx=1;
+    if(K.up)dy=-1; else if(K.down)dy=1;
+    if(dx||dy){ // 押した方向の空間に実際にあるノードへ移る（インデックス順の巡回では
+      //           左端から↑を押すと右端へ飛ぶなど、配置と操作が対応しなかった）
+      const NX=n=>n.mx*W, NY=n=>n.my*H*0.72+64;
+      const cur=nodes[mapSel], cx=NX(cur), cy=NY(cur);
+      const dl=Math.hypot(dx,dy), ux=dx/dl, uy=dy/dl;
+      let best=-1, bs=Infinity;
+      for(let i=0;i<nodes.length;i++){ if(i===mapSel||!nodeEnterable(nodes[i])) continue;
+        const vx=NX(nodes[i])-cx, vy=NY(nodes[i])-cy, d=Math.hypot(vx,vy);
+        if(d<1) continue;
+        const dot=(vx*ux+vy*uy)/d;                       // 方向の一致度
+        if(dot<0.35) continue;                           // 押した向きにない候補は捨てる
+        const sc=d*(1+(1-dot)*2.2);                      // 近く・方向が揃うほど優先
+        if(sc<bs){ bs=sc; best=i; } }
+      if(best>=0){ mapSel=best; ui.move(); } else if(ui.ng) ui.ng();
+      mapNavCd=10; } }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
     const node=nodes[mapSel];
-    if(nodeSelectable(node)){ ui.ok(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
+    if(nodeEnterable(node)){ ui.ok(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
     else { sfx.guard(); } }
   saveInput(players[0].in); updateParticles();
 }
@@ -5051,16 +5186,46 @@ function drawMap(){
   ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText(mapTitle,W/2,52); ctx.fillText(mapTitle,W/2,52);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
   ctx.fillText(lap>=3
-    ? '侵略者の艦隊へ　（制覇 '+doneCount()+' / '+WORLD3_LEVELS.length+'　玉座まで '+Math.max(0,NG3_UNLOCK-doneCount())+'）'
+    ? '侵略者の艦隊へ　（制覇 '+doneCount()+' / '+WORLD3_LEVELS.length+'　'+(doneCount()>=NG3_UNLOCK?'玉座が解禁された（挑戦は任意）':'玉座まで '+(NG3_UNLOCK-doneCount()))+'）'
     : lap>=2
-    ? '蟲の世界を巡れ　（制覇 '+doneCount()+' / '+WORLD2_LEVELS.length+'　女王の間まで '+Math.max(0,NG2_UNLOCK-doneCount())+'）'
-    : '行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　城門解禁まで '+Math.max(0,FINAL_UNLOCK-doneCount())+'）',W/2,74);
+    ? '蟲の世界を巡れ　（制覇 '+doneCount()+' / '+WORLD2_LEVELS.length+'　'+(doneCount()>=NG2_UNLOCK?'女王の間が解禁された（挑戦は任意）':'女王の間まで '+(NG2_UNLOCK-doneCount()))+'）'
+    : '行き先を選べ　（制覇 '+doneCount()+' / '+WORLD_LEVELS.length+'　'+(doneCount()>=FINAL_UNLOCK?'城門が解禁された（挑戦は任意）':'城門解禁まで '+(FINAL_UNLOCK-doneCount()))+'）',W/2,74);
   const nodes=allMapNodes();
-  // ノード間の道（隣接を薄く結ぶ）
-  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
-  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1]; ctx.beginPath(); ctx.moveTo(a.mx*W,a.my*H*0.9+70); ctx.lineTo(b.mx*W,b.my*H*0.9+70); ctx.stroke(); }
+  const NX=n=>n.mx*W, NY=n=>n.my*H*0.72+64;
+  // 推奨難度★：出現順が難度順なので、その並びを4段階に割る
+  const world=curWorldLevels();
+  // 出現順を4段階へ割る。ステージ数が少ない周回（3周目は2件）でも両端が★1と★4になるよう、
+  // 件数ではなく「最初と最後」を基準に配分する
+  const tierOf=n=>{ const i=world.indexOf(n); if(i<0) return 4;
+    const L=Math.max(1,world.length-1); return clamp(Math.round(i*3/L),0,3)+1; };
+  const bossOf=n=>{ const gs=(n.b&&n.b.gates)||[]; for(const g of gs) if(g.boss) return g.list&&g.list[0]&&g.list[0][0]; return null; };
+  // 次の推奨先＝未クリアで解禁済みのうち最も手前のもの
+  // 通常面を優先し、全て終えていれば最終ノード（城門・魔王の間・玉座）を指す。
+  // 従来は通常面しか走査せず、「残るはボス部屋だけ」という案内が最も要る局面で消えていた
+  let nextId=null;
+  for(const n of world){ if(!levelsDone[n.id] && nodeUnlocked(n)){ nextId=n.id; break; } }
+  if(nextId==null) for(const n of nodes){ if(!levelsDone[n.id] && nodeUnlocked(n)){ nextId=n.id; break; } }
+  // ノード間の道。進行順に結んだ一本道として読ませるため、線は控えめに落とす
+  ctx.strokeStyle='rgba(255,255,255,.13)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i],b=nodes[i+1];
+    ctx.beginPath(); ctx.moveTo(NX(a),NY(a)); ctx.lineTo(NX(b),NY(b)); ctx.stroke(); }
+  // 直前にクリアした地点（無ければ現在のカーソル）から次の推奨先へ、隣接インデックスに
+  // 依存せず必ず1本だけ金の道を引く。通常ステージは順不同で選べる設計なので、
+  // 「クリア済みの隣が推奨先のときだけ光る」条件では道案内が最も要る場面で死んでいた
+  { const nx=nodes.find(n=>n.id===nextId);
+    let from=null;
+    for(const n of world) if(levelsDone[n.id]) from=n;               // 最後にクリアした地点
+    if(!from && nodes[mapSel] && nodes[mapSel].id!==nextId) from=nodes[mapSel];
+    if(nx && from && from!==nx){ ctx.strokeStyle='rgba(255,225,120,.55)'; ctx.lineWidth=2.8;
+      ctx.beginPath(); ctx.moveTo(NX(from),NY(from)); ctx.lineTo(NX(nx),NY(nx)); ctx.stroke(); } }
   ctx.setLineDash([]);
-  nodes.forEach((node,i)=>{ const x=node.mx*W, y=node.my*H*0.9+70, done=levelsDone[node.id], unl=nodeUnlocked(node), sel=i===mapSel;
+  nodes.forEach((node,i)=>{ const x=NX(node), y=NY(node), done=levelsDone[node.id], unl=nodeUnlocked(node), sel=i===mapSel;
+    // 次の推奨先は外周が脈打つ（11個の等価な選択肢から「次はここ」を1つ示す）
+    if(node.id===nextId){ const pu=0.5+0.5*Math.sin(gf*0.09);   // 選択中でも描く（入った瞬間はカーソルが推奨先に乗っているため）
+      ctx.save(); ctx.globalAlpha=0.34+pu*0.46; ctx.strokeStyle='#ffe14d'; ctx.lineWidth=1.8+pu*2.4;
+      ctx.beginPath(); ctx.arc(x,y,21+pu*5,0,7); ctx.stroke();
+      ctx.globalAlpha=0.9; ctx.fillStyle='#ffe14d'; ctx.font='bold 10px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+      ctx.fillText('▼ 次はここ', x, y-27); ctx.restore(); }
     // ノード円
     ctx.fillStyle=done?'rgba(90,180,110,.9)':(unl?'rgba(255,210,80,.92)':'rgba(90,90,110,.8)');
     if(sel){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(x,y,34,'rgba(255,240,150,.8)','rgba(255,240,150,0)'); ctx.beginPath(); ctx.arc(x,y,34,0,7); ctx.fill(); ctx.restore(); ctx.fillStyle=unl&&!done?'#fff':'rgba(255,210,80,.92)'; }
@@ -5068,10 +5233,40 @@ function drawMap(){
     ctx.strokeStyle='#1a1410'; ctx.lineWidth=2.5; ctx.stroke();
     if(done){ ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x-6,y); ctx.lineTo(x-1,y+6); ctx.lineTo(x+7,y-6); ctx.stroke(); }   // チェック
     else if(!unl){ ctx.fillStyle='#2a2a34'; ctx.fillRect(x-4,y-1,8,7); ctx.beginPath(); ctx.arc(x,y-1,4,Math.PI,0); ctx.strokeStyle='#2a2a34'; ctx.lineWidth=2; ctx.stroke(); }   // 鍵
-    // 名前
-    ctx.fillStyle=sel?'#fff':(unl?'#ffe9a0':'#8a8a9a'); ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
-    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3; const nm=node.b.name; ctx.strokeText(nm,x,y+30); ctx.fillText(nm,x,y+30);
+    else if(node.final){ ctx.fillStyle='#7a1020'; drawStar(x,y,3.4,8,'#ff5a6a'); }                                      // 最終ステージは赤い星
+    // 推奨難度★（未クリアのみ。クリア済みはチェックだけで足りる）
+    if(!done && unl){ const tr=tierOf(node), col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
+      // 情報カードと同じ4枠固定。点灯だけ描くと★1のノードが「星なし」と見分けられない
+      for(let k=0;k<4;k++) drawStar(x-18+k*12, y+20, 1.7, 4.2, k<tr?col:'rgba(255,255,255,.22)'); }
+    // 名前。施錠ノードも読める明度＋暗いプレートを敷く
+    ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    const nm=node.b.name, lw=ctx.measureText(nm).width;
+    ctx.fillStyle='rgba(8,10,20,.55)'; roundRect(x-lw/2-6, y+(done||!unl?21:32), lw+12, 17, 4); ctx.fill();
+    ctx.fillStyle=sel?'#fff':(unl?'#ffe9a0':'#b6c2d6');
+    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3;
+    const ny=y+(done||!unl?34:45); ctx.strokeText(nm,x,ny); ctx.fillText(nm,x,ny);
   });
+  // 選択中ノードの情報カード：難度・ボスの有無・想定報酬を出して「選ぶ材料」を与える
+  { const node=nodes[mapSel];
+    if(node){ const done=levelsDone[node.id], unl=nodeUnlocked(node), tr=tierOf(node), bk=bossOf(node);
+      const cw=344, chh=76, cx=W/2-cw/2, cy=H-116;   // 最長のボス名（海賊王カイゾクカイ級）が切れずに入る幅
+      ctx.fillStyle='rgba(8,10,20,.82)'; roundRect(cx,cy,cw,chh,8); ctx.fill();
+      ctx.strokeStyle='rgba(255,210,80,.55)'; ctx.lineWidth=1.6; roundRect(cx+0.5,cy+0.5,cw-1,chh-1,8); ctx.stroke();
+      ctx.textAlign='left';
+      ctx.fillStyle='#ffe14d'; ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
+      ctx.fillText(fitText(node.b.name, cw-28), cx+14, cy+22);
+      ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+      if(!unl){ ctx.fillStyle='#9fb0c4';
+        ctx.fillText(fitText(lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cw-28), cx+14, cy+44); }
+      else { ctx.fillStyle='#9fb0c4'; ctx.fillText('推奨難度', cx+14, cy+44);
+        const col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
+        for(let k=0;k<4;k++) drawStar(cx+78+k*15, cy+40, 2.2, 5.2, k<tr?col:'rgba(255,255,255,.16)');
+        ctx.fillStyle='#9fb0c4'; ctx.fillText('ボス', cx+150, cy+44);
+        ctx.fillStyle=bk?'#ff8a6a':'#6a7a8a';
+        ctx.fillText(fitText(bk?((ETYPE[bk]&&ETYPE[bk].name)||'あり'):'なし', cx+cw-10-(cx+182)), cx+182, cy+44);
+        ctx.fillStyle=done?'#7dff7d':'#cfe0ff';
+        ctx.fillText(fitText(done?'制覇済み（再挑戦できる）':'未制覇　報酬コイン 目安 '+(60+tr*45), cw-28), cx+14, cy+64); }
+      ctx.textAlign='center'; } }
   ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
   ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃',W/2,H-22); ctx.textAlign='left';
 }
@@ -5619,12 +5814,12 @@ function render(){
 // ---------- Per-stage theme (hi-res, distinct mood for each stage) ----------
 const STAGE_THEME=[
   // 1: 晴れた王都
-  { gsnd:'stone', asnd:'wind', sky:['#3f8fd6','#7cc0ee','#bfe2ee','#eaf4e0'], sun:'rgba(255,250,220,', sunX:0.72,sunY:90, rays:0.10, tint:'rgba(255,236,190,.32)',
+  { town:1, gsnd:'stone', asnd:'wind', sky:['#3f8fd6','#7cc0ee','#bfe2ee','#eaf4e0'], sun:'rgba(255,250,220,', sunX:0.72,sunY:90, rays:0.10, tint:'rgba(255,236,190,.32)',
     haze:'rgba(190,214,230,.28)', fog:'rgba(214,224,234,.5)', stars:0, tower:'#8693ab',
     g:['#9a8f7e','#7a7062','#544b40'], cob:['#857a6a','#776d5e'], vig:'rgba(10,6,20,.42)',
     amb:{shape:'petal',color:'rgba(255,210,228,.9)',rate:0.5,max:34,vy:0.5,wind:-0.2,r0:2.5,r1:5,glow:false,alpha:.85} },
   // 2: 黄昏の街
-  { gsnd:'stone', asnd:'wind', sky:['#f6a24a','#f6c074','#f3d9a0','#f0e7c8'], sun:'rgba(255,220,150,', sunX:0.5,sunY:120, rays:0.16, tint:'rgba(255,150,70,.38)',
+  { town:1, gsnd:'stone', asnd:'wind', sky:['#f6a24a','#f6c074','#f3d9a0','#f0e7c8'], sun:'rgba(255,220,150,', sunX:0.5,sunY:120, rays:0.16, tint:'rgba(255,150,70,.38)',
     haze:'rgba(240,180,120,.30)', fog:'rgba(238,200,150,.5)', stars:0, tower:'#9a7a72',
     g:['#8a6f54','#6a5240','#3f3024'], cob:['#7d6450','#6a5142'], vig:'rgba(40,12,30,.46)',
     amb:{shape:'spark',color:'rgba(255,200,120,.8)',rate:0.4,max:26,vy:-0.25,wind:0.15,r0:1.2,r1:2.6,glow:true,alpha:.7} },
@@ -5773,11 +5968,14 @@ function drawBackground(){
   else if(T.bug){ drawBugScene(T); }
   else {
     drawMountains();
-    drawCastle((W*0.5)-camX*0.28,60);
-    for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
-    ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
-    drawBuildings(stage>=2);
-    drawLampRow();
+    if(T.town){   // 王都・城下町：城と塔と町並み
+      drawCastle((W*0.5)-camX*0.28,60);
+      for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
+      ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+      drawBuildings(!!T.stars); drawLampRow(); }
+    else {        // 森・雪山・渓谷など：城と商店の看板を出さず、地形のシルエットだけにする
+      ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+      drawRidgeRow(T); }
     drawBraziers(T);
   }
   if(state==='play') updateAmbient(T);
@@ -6409,6 +6607,20 @@ function drawBraziers(T){ const par=0.92, step=440, off=((-(camX*par))%step+step
     ctx.restore();
   }
 }
+// 町以外のステージの遠景。建物の代わりに岩稜のシルエットを敷く。
+// 従来は全ステージが城下町の色替えで、森にも雪山にも商店の看板が立っていた
+function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
+  const c1=shade(T.tower,-16), c2=shade(T.tower,-30);
+  for(let i=-1;i<16;i++){ const bw=124, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
+    const h=64+Math.abs(g0*47%78), x=gx+bw/2, wob=(g0*29%17)-8;
+    ctx.fillStyle=(g0%2)?c1:c2;
+    ctx.beginPath(); ctx.moveTo(x-58,baseY);
+    ctx.lineTo(x-26+wob*0.3,baseY-h*0.62);
+    ctx.lineTo(x+wob*0.5,baseY-h);
+    ctx.lineTo(x+30+wob*0.2,baseY-h*0.52);
+    ctx.lineTo(x+60,baseY); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle=T.haze; ctx.fillRect(0,GROUND_TOP-70,W,70);
+}
 function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
   const cols=['#caa15a','#b9854a','#d8b56b','#a8753c','#c69a55'], roofs=['#9c3b2e','#7a3528','#b5503a'];
   for(let i=-1;i<14;i++){ const bw=146, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
@@ -6433,9 +6645,14 @@ function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
       ctx.fillText(g0%2?'肉球亭':'イッヌ商店',gx+(bw-8)/2,y+h-21); ctx.textAlign='left'; }
   }
 }
-function shade(hex,amt){ const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
-  let r=parseInt(n.substr(0,2),16)+amt,g=parseInt(n.substr(2,2),16)+amt,b=parseInt(n.substr(4,2),16)+amt;
-  r=clamp(r,0,255);g=clamp(g,0,255);b=clamp(b,0,255); return `rgb(${r|0},${g|0},${b|0})`; }
+// 自分の出力（rgb(...)）も食えるようにしてある。shade(shade(c,-46),14) のような
+// 入れ子で NaN を返すと、canvas が前の fillStyle を使い回して色が化ける
+function shade(hex,amt){ let r,g,b;
+  if(hex.charCodeAt(0)===114){ const m=hex.match(/-?\d+/g); r=+m[0]; g=+m[1]; b=+m[2]; }   // 'rgb(r,g,b)'
+  else { const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
+    r=parseInt(n.substr(0,2),16); g=parseInt(n.substr(2,2),16); b=parseInt(n.substr(4,2),16); }
+  r=clamp(r+amt,0,255); g=clamp(g+amt,0,255); b=clamp(b+amt,0,255);
+  return `rgb(${r|0},${g|0},${b|0})`; }
 
 function drawGround(){
   const T=curTheme();
@@ -6586,6 +6803,20 @@ function drawPlayer(){
   EYE_O=eyeBlink(p); EYE_GZ=p.gaze||0;                   // まばたきと視線（値の前進は updateRigP）
   const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
   softShadow(sx,sy,26*s*(1-Math.min(p.z/130,0.5)));
+  // 自機の常時識別リング。乱戦で敵に前後を挟まれても自分を見失わないための最小限の目印。
+  // 地面に描くだけなのでスプライト・当たり判定・演出のどれとも干渉しない
+  if(st!=='dead'){ ctx.save();
+    // 近くの敵が増えるほど明るくする（乱戦でこそ要る目印）
+    let near3=0; for(const en of enemies) if(!en.dead && Math.abs(en.x-p.x)<130 && Math.abs(en.y-p.y)<50) near3++;
+    const pul=0.62+0.16*Math.sin(gf*0.11)+Math.min(0.22,near3*0.07);
+    const rx=25*s*0.92, ry=8.4*s*0.92;                   // 体のシルエットより外に出す大きさ
+    ctx.globalAlpha=(p.z>0?0.5:1)*0.9;
+    ctx.strokeStyle='rgba(0,0,0,.62)'; ctx.lineWidth=4.6;    // 暗い縁取りで明るい床でも沈まない
+    ctx.beginPath(); ctx.ellipse(sx,sy+2,rx,ry,0,0,7); ctx.stroke();
+    ctx.globalAlpha=clamp(pul,0,1)*(p.z>0?0.55:1);
+    ctx.strokeStyle=p.pid?'#ff9a3a':'#ffe14d'; ctx.lineWidth=3.0;
+    ctx.beginPath(); ctx.ellipse(sx,sy+2,rx,ry,0,0,7); ctx.stroke();
+    ctx.restore(); }
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
@@ -7608,7 +7839,11 @@ function drawEnemy(e){
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
   if(e.state==='blastoff'){ ctx.rotate(e.spin); const bsc=clamp(1-e.bo/95,0.3,1); ctx.scale(bsc,bsc); }   // 飛び去りながら回転＆縮小
-  if(e.z<=0) ctx.translate(0,-Math.abs(Math.sin(e.gait||0))*3*(e.gaitW||0));   // 接地バウンド：脚と同じ位相ソース（|sin|で自動的に2倍周波数）
+  if(e.z<=0){ ctx.translate(0,-(e.bobY||0));   // 接地バウンド：支持脚の傾きから出した重心の上下（脚のIKと同じ基準面を共有する）
+    // 上体の揺れ：接地点まわりに微小回転させる。足は原点近傍なので0.3px以下しか動かず
+    // 接地ロックを壊さないまま、胴と頭が腕振りの反対位相で振れる
+    if(e.gaitW>0.02){ const _f=gaitStep(gaitPh(e.gait||0),1,0,e._gd);
+      ctx.rotate(-_f.x*0.055*e.gaitW); } }
   if(e.state==='down'||e.dead){ const fall=e.dead?1:easeOut(clamp(((e.downMax||46)-e.downTimer)/7,0,1));   // 倒れ込みに7Fの落下を与える
     ctx.rotate(0.30+0.68*fall); ctx.translate(0,8*fall); }
   else if(e.state==='getup'){ const g=easeOut(clamp(1-e.getT/Math.max(1,e.getMax||16),0,1));                // 起き上がり：伏せから立ち上がる
@@ -8154,15 +8389,38 @@ function foeBlink(e){ const per=112+((e.id*37)%70), ph=((e.anim||0)*9+e.id*23)%p
   if(ph>7) return 1;
   return Math.abs(ph-3.5)/3.5; }
 function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
-  const walk=foeStep(e,4);
-  // legs — 四つ足を対角の歩容（前脚と後脚が逆位相）で振る
-  { const g=e.gait||0, gw=e.gaitW||0, ga=t.gaitA||1, A=0.58*gw*ga, K=0.85*gw*ga;   // gaitA＝種族ごとの歩幅
-    const L=(hx,hy,off,l1,l2,wd,c,kdir)=>{ const wf=Math.sin(g+off), wk=Math.sin(g+off-0.55);
-      foeLeg(hx,hy,wf*A,Math.max(0,wk)*K*kdir,l1,l2,wd,c,null); };
-    L(-13,-18,Math.PI,   9,8,11,   shade(t.c3,-18), -1);   // 後脚（奥）＝膝は後ろへ
-    L(-2,-16,Math.PI+0.5,8,7,9.5,  shade(t.c3,-18),  1);   // 前脚（奥）
-    L( 13,-18,0,         9,8,11,   t.c3,            -1);   // 後脚（手前）
-    L( 4,-16,0.5,        8,7,9.5,  shade(t.c3,10),   1); } // 前脚（手前）
+  // legs — 歩速で歩容が変わる四つ足。遅い獣は4ビートの側対歩、速い獣は2ビートの斜対歩（トロット）。
+  //   位相差を 0/PH/2PH/3PH と回すので、全脚が同時に垂直になる「テーブル脚」の死に姿勢が消える。
+  //   股関節は側面視らしく胴の前後に配し、奥の一対を先に、手前の一対は胴を描いた後に重ねる
+  const _gw=e.gaitW||0, _gy=e.bobY||0;   // gaitA は歩幅の算出（updateGait）で既に効いている
+  // 歩容テーブル。0/PH/2PH/3PH の等間隔では、どんな PH を選んでも対角対を同位相に
+  // できない（3PH≡0 かつ 2PH≡PH に解が無い）。遅い獣は4ビートの側対歩、速い獣は
+  // 対角対が揃う真のトロットへ補間する。トロット時は僅かなジッタで死に姿勢を避ける
+  const _RN=clamp(((t.sp||1.5)-1.4)/0.8,0,1);
+  // 対角差が速度によらず左右で揃う形。_RN=0 で4ビートの常歩（側対歩序列）、
+  // _RN=1 で対角対が同位相のトロット（完全同期は死に姿勢を生むので 0.035 だけずらす）
+  const _a=lerp(0.25,-0.035,_RN);
+  const OFF=[0, (0.5-_a+1)%1, 0.5, (1-_a)%1];
+  e._off=OFF;   // 足音を実際の4本の着地に合わせるため共有する
+  // 歩幅は個体で1つ。届かない脚は歩幅を削るのではなく脚を伸ばして解決する
+  // （脚ごとに歩幅が違うと、前半身と後半身が違う速度で進むことになる）
+  const _D=e._gd||GAIT_D;
+  // 四つ足は同じ色の脚をまとめて1本のパスで描く。1脚ずつ stroke/arc/ellipse を出すと
+  // 1体あたり12回のパス提出になり、群れると描画コストが跳ねる（2色×3種＝6回に畳む）
+  const _batch=[];
+  const L=(hx,hy,off,l1,l2,wd,c,kdir,pad)=>{
+    const S0=(e._stride||(-hy)*0.9), F=legFit(e,0,-hy-wd*0.42,l1,l2,S0);
+    legReach(e,l1+l2);
+    const fy=_gy-wd*0.42, S=S0, LF=F.R*0.40*_gw;
+    const f=gaitStep(gaitPh(e.gait||0)+off,S,LF,_D);
+    if(e._legF!==rframe){ e._legF=rframe; e._legSt=[]; }
+    e._legSt.push(f.st);
+    const air=e._air||0;
+    _batch.push(foeLegSolve(hx,hy,lerp(hx+f.x,hx*0.55,air),lerp(fy+f.y,hy+F.R*0.55,air),F.l1,F.l2,kdir,wd,c,pad)); };
+  const _flush=()=>{ foeLegsFlush(_batch); _batch.length=0; };
+  L(-23,-27,OFF[0],    12,11,6.6, shade(t.c3,-46),  1, shade(t.c3,-52));   // 後脚（奥）＝膝（飛節）は前へ
+  L( 18,-30,OFF[1],    11,10,5.7, shade(t.c3,-46), -1, shade(t.c3,-52));   // 前脚（奥）＝肘は後ろへ・肩は腰より高い
+  _flush();
   // body — 呼吸で胴が膨らみ、頭が遅れて上下する（静止中も生命感を絶やさない）
   const br=Math.sin((e.anim||0)*0.9), brH=Math.sin((e.anim||0)*0.9-0.6);
   ctx.fillStyle=radGrad(0,-34,28,shade(t.c1,18),t.c2);
@@ -8171,6 +8429,9 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-23,-40); ctx.lineTo(-12,-54); ctx.lineTo(-3,-43); ctx.lineTo(6,-55); ctx.lineTo(15,-43); ctx.lineTo(23,-49); ctx.lineTo(23,-30); ctx.lineTo(-23,-30); ctx.fill();
   // muscle shading
   ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(-6,-28,16,9,0,0,7); ctx.fill();
+  L(-16,-29,OFF[2],    12,11,6.9, shade(t.c3,6),  1, shade(t.c3,-16));   // 後脚（手前）
+  L( 25,-31,OFF[3],    11,10,6.0, shade(t.c3,14),-1, shade(t.c3,-10));   // 前脚（手前）
+  _flush();
   if(e.type==='boar'){ ctx.fillStyle='#3a7d3a'; ctx.fillRect(-25,-31,50,8); ctx.strokeStyle='#1f4d1f'; ctx.lineWidth=1; ctx.strokeRect(-25,-31,50,8);
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-27,2.4,0,7); ctx.fill(); }
   else { ctx.fillStyle='#1a1a1a'; ctx.fillRect(13,-31,14,9); ctx.fillStyle='#cfcfcf';
@@ -8217,6 +8478,139 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
 // big, cathartic clawed foreleg that winds up then swings huge during the attack
 // 歩幅（実移動から積分した位相）。旧来の e.anim 固定周期に代わる歩行の駆動源
 function foeStep(e,amp){ return Math.sin(e.gait||0)*(amp||4)*(e.gaitW||0); }
+// ── 歩行サイクル ──────────────────────────────────────────────
+// 1周期を「接地相（デューティ GAIT_D）」と「遊脚相」に分ける。
+// 接地相は足先を地面に固定したまま等速で真後ろへ流し、遊脚相で山なりに持ち上げて前へ運ぶ。
+// 従来の純正弦は接地中も足が前へ戻っていたため、接地足が体速の 6〜10割で滑走していた。
+const GAIT_D=0.62;
+function gaitPh(g){ const T=Math.PI*2; let u=g%T; if(u<0)u+=T; return u/T; }
+// D＝接地相のデューティ（走るほど小さく＝滞空が入る）。
+// 遊脚は両端の水平速度が接地相の -1/D と一致するエルミート曲線。
+// smoothstep だと離地・接地の瞬間に足が一度止まって「しゃくり」が出る
+function gaitStep(u,stride,lift,D){
+  D=D||GAIT_D; u=u-Math.floor(u);
+  if(u<D){ const k=u/D; return {x:stride*(0.5-k), y:0, st:1, k}; }              // 接地：体が足を追い越す
+  const k=(u-D)/(1-D), v=-(1-D)/D;
+  const e=v*(2*k*k*k-3*k*k+k)+(-2*k*k*k+3*k*k);
+  return {x:stride*(-0.5+e), y:-lift*Math.sin(Math.PI*Math.pow(k,0.82)), st:0, k}; }   // 対称サインは機械的なので山を前寄せする
+// 前後一対の脚で、支持脚が取り得る最大の開き（歩幅に対する比）。重心の上下を
+// 正規化する分母に使う。デューティごとに一度だけ求めてキャッシュする
+const _bobPk=new Map();
+function bobPeak(D){
+  const k=Math.round(D*200); let v=_bobPk.get(k);
+  if(v==null){ v=0;
+    for(let i=0;i<128;i++){ const u=i/128;
+      const a=gaitStep(u,1,0,D), b=gaitStep(u+0.5,1,0,D);
+      let d=1e9; if(a.st) d=Math.min(d,Math.abs(a.x)); if(b.st) d=Math.min(d,Math.abs(b.x));
+      if(d<1e8 && d>v) v=d; }
+    if(!(v>0.02)) v=0.30; _bobPk.set(k,v); }
+  return v; }
+// 歩幅は脚の長さで決まる。描画側が教えた最長の脚と歩幅倍率を歩行位相の進み方へ反映する
+function legReach(e,r){ if(!(e._lr>=r)) e._lr=r; }
+function legAmp(e,a){ e._amp=(a==null?0.58:a); }
+// 立ち姿で膝が少し曲がり、かつ歩幅 S の両端にも届く脚長を確保する。
+// h（股から接地面までの高さ）に bobY を混ぜると骨が毎フレーム伸縮する「ゴム脚」になるので、
+// 必ず bobY=0 の立ち姿を基準に一度だけ解いてキャッシュする
+function legFit(e,key,h,l1,l2,S){
+  // キーは数値のハッシュ。毎フレーム脚の本数ぶん文字列を組み立てるのは無駄
+  const c=e._fit||(e._fit=new Map());
+  const k=((h*8|0)*73856093 ^ (l1*8|0)*19349663 ^ (l2*8|0)*83492791 ^ (Math.round(S)*2654435761)) >>> 0;
+  let v=c.get(k);
+  if(!v){ const R=l1+l2, need=Math.max(h/0.90, Math.hypot(h,S*0.5)/0.97);
+    v=(need<=R)?{l1,l2,R}:{l1:l1*(need/R), l2:l2*(need/R), R:need}; c.set(k,v); }
+  return v; }
+// 二関節脚の描画本体（角度は真下=0、+が前）。腿と脛で明度を割り、膝に節を打って関節を読ませる
+function foeLegDraw(hipX,hipY,th,sa,l1,l2,w,col,boot,bootA){
+  const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
+  const fx=kx+Math.sin(sa)*l2, fy=ky+Math.cos(sa)*l2;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle=col; ctx.lineWidth=w;                                                       // 腿
+  ctx.beginPath(); ctx.moveTo(hipX,hipY); ctx.lineTo(kx,ky); ctx.stroke();
+  ctx.strokeStyle=shade(col,8); ctx.lineWidth=w*0.80;                                         // 脛：末端へ細める
+  ctx.beginPath(); ctx.moveTo(kx,ky); ctx.lineTo(fx,fy); ctx.stroke();
+  if(perfTier<1){ ctx.fillStyle=shade(col,14); ctx.beginPath(); ctx.arc(kx,ky,w*0.26,0,7); ctx.fill(); }   // 膝（明るすぎるとリベットに見える）
+  if(boot && perfTier<1){ if(bootA){ ctx.save(); ctx.translate(fx,fy); ctx.rotate(bootA);
+      ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(w*0.20,w*0.06,w*0.52,w*0.34,0,0,7); ctx.fill(); ctx.restore(); }
+    else { ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+w*0.20,fy+w*0.06,w*0.52,w*0.34,0,0,7); ctx.fill(); } }   // 接地脚は回転が0なので save/restore を省く
+  return {kx,ky,fx,fy};
+}
+// 逆運動学を解いて関節位置だけを返す（描画はまとめて行う）
+function foeLegSolve(hipX,hipY,tx,ty,l1,l2,kdir,w,col,boot){
+  let dx=tx-hipX, dy=ty-hipY, D=Math.hypot(dx,dy);
+  const Dmax=(l1+l2)*0.994, Dmin=Math.abs(l1-l2)+Math.min(l1,l2)*0.34;
+  if(D>Dmax||D<Dmin){ const nd=D>Dmax?Dmax:Dmin, sc=nd/(D||1e-6); dx*=sc; dy*=sc; D=nd; }
+  const base=Math.atan2(dx,dy);
+  const a=Math.acos(clamp((l1*l1+D*D-l2*l2)/(2*l1*D),-1,1));
+  const th=base+(kdir<0?-a:a);
+  const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
+  return {hipX,hipY,kx,ky,fx:hipX+dx,fy:hipY+dy,w,col,boot};
+}
+// 同じ色の脚をまとめて描く。stroke/arc/ellipse をそれぞれ1回に畳む
+// 同じ (色, 太さ) の脚だけを1パスに畳む。list[0] を全脚へ当てると
+// 「前脚は細く明るく／後脚は太く暗く」という前後の描き分けが丸ごと消える
+function foeLegsFlush(list){
+  if(!list.length) return;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(let i=0;i<list.length;i++){ const a=list[i]; if(a._d) continue;
+    // 腿：指定の太さ
+    ctx.strokeStyle=a.col; ctx.lineWidth=a.w; ctx.beginPath();
+    for(let j=i;j<list.length;j++){ const g=list[j];
+      if(g._d||g.col!==a.col||g.w!==a.w) continue;
+      ctx.moveTo(g.hipX,g.hipY); ctx.lineTo(g.kx,g.ky); }
+    ctx.stroke();
+    // 脛：末端へ細める（等幅の棒だと関節が読めない）
+    ctx.strokeStyle=shade(a.col,8); ctx.lineWidth=a.w*0.80; ctx.beginPath();
+    for(let j=i;j<list.length;j++){ const g=list[j];
+      if(g._d||g.col!==a.col||g.w!==a.w) continue;
+      ctx.moveTo(g.kx,g.ky); ctx.lineTo(g.fx,g.fy); }
+    ctx.stroke();
+    if(perfTier<1){
+      ctx.fillStyle=shade(a.col,14); ctx.beginPath();
+      for(let j=i;j<list.length;j++){ const g=list[j];
+        if(g._d||g.col!==a.col||g.w!==a.w) continue;
+        ctx.moveTo(g.kx+g.w*0.26,g.ky); ctx.arc(g.kx,g.ky,g.w*0.26,0,7); }
+      ctx.fill();
+      if(a.boot){ ctx.fillStyle=a.boot; ctx.beginPath();
+        for(let j=i;j<list.length;j++){ const g=list[j];
+          if(g._d||g.col!==a.col||g.w!==a.w) continue;
+          ctx.ellipse(g.fx+g.w*0.20,g.fy+g.w*0.06,g.w*0.52,g.w*0.34,0,0,7); }
+        ctx.fill(); } }
+    for(let j=i;j<list.length;j++){ const g=list[j]; if(!g._d&&g.col===a.col&&g.w===a.w) g._d=1; } }
+  for(const g of list) g._d=0;
+}
+// 足先の目標位置へ二関節で解く（逆運動学）。kdir>0 で膝が前（人型・後脚）、<0 で後ろ（獣の前脚）
+function foeLegTo(hipX,hipY,tx,ty,l1,l2,w,col,boot,kdir,bootA){
+  let dx=tx-hipX, dy=ty-hipY, D=Math.hypot(dx,dy);
+  const Dmax=(l1+l2)*0.994, Dmin=Math.abs(l1-l2)+Math.min(l1,l2)*0.34;
+  if(D>Dmax||D<Dmin){ const nd=D>Dmax?Dmax:Dmin, sc=nd/(D||1e-6); dx*=sc; dy*=sc; D=nd; }
+  const base=Math.atan2(dx,dy);
+  const a=Math.acos(clamp((l1*l1+D*D-l2*l2)/(2*l1*D),-1,1));
+  const th=base+(kdir<0?-a:a);
+  const kx=Math.sin(th)*l1, ky=Math.cos(th)*l1;
+  const sa=Math.atan2(dx-kx, dy-ky);
+  return foeLegDraw(hipX,hipY,th,sa,l1,l2,w,col,boot,bootA);
+}
+// 一対の脚を歩行サイクルで駆動する。接地相の足先はワールド座標で静止する
+//   amp＝歩幅倍率（従来の振れ角 0.58 を等倍とする） kn＝符号で膝の向き ph＝位相ずらし
+function foeLegsGait(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph){
+  const gw=e.gaitW||0, gy=e.bobY||0, kdir=(kn!=null&&kn<0)?-1:1, D=e._gd||GAIT_D;
+  const h0=-hipY-w*0.42;                               // 立ち姿での股→接地面の高さ（bobY を混ぜない＝骨長が一定）
+  legAmp(e,amp);
+  const S0=(e._stride||(-hipY)*0.9);   // amp は updateGait の _AM で既に歩幅へ入っている（ここで再乗算すると滑る）
+  const Fit=legFit(e,'a'+hipY+'_'+l1+'_'+l2+'_'+w,h0,l1,l2,S0);
+  legReach(e,l1+l2);   // 報告するのは絵の脚長。伸ばした後の値を返すと歩幅と相互に膨らむ
+  const fy=gy-w*0.42, S=S0, LF=Fit.R*0.40*gw;          // 接地面だけが bobY で上下する。遊脚は脚長の40%持ち上げる
+  const g=(e.gait||0)+(ph||0);
+  const fN=gaitStep(gaitPh(g),S,LF,D), fF=gaitStep(gaitPh(g)+0.5,S,LF,D);
+  // 描いた脚の接地フラグを残す（足音と回帰テストが「実際に接地している脚」を知るため）
+  if(e._legF!==rframe){ e._legF=rframe; e._legSt=[]; }
+  e._legSt.push(fF.st, fN.st);
+  // 滞空中は脚をたたむ（見えない床を歩いてしまうのを防ぐ）
+  const air=e._air||0, foldY=hipY+Fit.R*0.55;
+  // 奥脚は大きく暗く落とし、距離を作る（8%差では胴と融けて本数が読めなかった）
+  foeLegTo(-hipX,hipY,lerp(-hipX+fF.x,-hipX*0.55,air),lerp(fy+fF.y,foldY,air),Fit.l1,Fit.l2,w,shade(col,-46),boot?shade(boot,-40):null,kdir,fF.st?0:fF.x*0.020);
+  foeLegTo( hipX,hipY,lerp( hipX+fN.x, hipX*0.55,air),lerp(fy+fN.y,foldY,air),Fit.l1,Fit.l2,w,shade(col,10),boot,kdir,fN.st?0:fN.x*0.020);
+}
 // 敵用の二関節脚：股→膝→足。knee>0 で膝が前に曲がり、負で後ろへ曲がる（獣の後脚）
 function foeLeg(hipX,hipY,th,knee,l1,l2,w,col,boot){
   const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
@@ -8226,12 +8620,20 @@ function foeLeg(hipX,hipY,th,knee,l1,l2,w,col,boot){
   if(boot){ ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+w*0.16,fy+w*0.10,w*0.66,w*0.42,0,0,7); ctx.fill(); }
   return {kx,ky,fx,fy};
 }
-// 二足歩行の敵の脚一対。奥脚は暗く落として奥行きを出す
-function foeLegs(e,hipX,hipY,l1,l2,w,col,boot,amp,kn){
-  const g=e.gait||0, gw=e.gaitW||0, A=(amp==null?0.58:amp)*gw, K=(kn==null?0.80:kn)*gw;
-  const wf=Math.sin(g), wk=Math.sin(g-0.55);
-  foeLeg(-hipX,hipY,-wf*A,Math.max(0,-wk)*K,l1,l2,w,shade(col,-20),boot?shade(boot,-16):null);
-  foeLeg( hipX,hipY, wf*A,Math.max(0, wk)*K,l1,l2,w,col,boot);
+// 二足歩行の敵の脚一対。ph で位相をずらせる（四つ足の内外一対など）
+function foeLegs(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph){
+  foeLegsGait(e,hipX,hipY,l1,l2,w,col,boot,amp,kn,ph); }
+// 肩そのものの前後動。腕の付け根を回すだけでは手の水平成分がほとんど出ず（±1〜3px）、
+// 腕振りが実質見えなかった。手前脚と反対位相に肩を送る
+function armSwingX(e){ return -gaitStep(gaitPh(e.gait||0),1,0,e._gd).x*(e._lr||14)*0.78*(e.gaitW||0); }   // 定数だと大型ボスで体幅の1割にも届かない
+// 敵の腕（武器）角の一次遅れ補間。状態遷移で目標角が飛んでも腕は繋がって追従する。
+//   1フレームにつき1回だけ進める（被弾フラッシュ等で二度描画されても二重に進まない）
+function foeArm(e,target,k){
+  { const f=gaitStep(gaitPh(e.gait||0),1,0,e._gd);     // 脚と同じノコギリ波から振る。正弦だと位相が1/4周期ずれる
+    target -= f.x*0.55*(e.gaitW||0); }                  // 手前脚が前へ出るとき腕は後ろへ＝対側
+  if(e.armA==null || rframe-(e.armAF||-99)>3){ e.armA=target; e.armAF=rframe; return target; }   // 初出・画面外復帰は瞬時に合わせる
+  if(e.armAF!==rframe){ e.armA += (target-e.armA)*(k==null?0.30:k); e.armAF=rframe; }
+  return e.armA;
 }
 function drawBeastClaw(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
   if(!atk&&!tele) return;
@@ -8252,8 +8654,8 @@ function drawBeastClaw(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e
   for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(2,i*5); ctx.lineTo(cl,i*6-1); ctx.lineTo(2,i*5+3.5); ctx.fill(); }
   ctx.restore();
 }
-function drawBitter(e){ const atk=e.state==='attack'; const walk=foeStep(e,4);
-  ctx.fillStyle='#15151c'; ctx.fillRect(-11,-17+walk,8,18); ctx.fillRect(5,-17-walk,8,18);
+function drawBitter(e){ const atk=e.state==='attack';
+  foeLegs(e,9,-17,8,7,8,'#33333f','#4a3a6a');   // ほぼ黒だと胴に融けて関節が読めないので、マントの紫を足して起こす
   const cape=ctx.createLinearGradient(-28,-56,-10,-2); cape.addColorStop(0,'#5a2a8c'); cape.addColorStop(1,'#2a0f44');
   ctx.fillStyle=cape; ctx.beginPath(); ctx.moveTo(-5,-58); ctx.quadraticCurveTo(-32,-26,-24,-2); ctx.quadraticCurveTo(-14,-12,-5,-12); ctx.fill();
   furBall(0,-42,13,'#34343e','#15151b'); furBall(-8,-38,11,'#2c2c34','#101016'); furBall(8,-38,11,'#2c2c34','#101016');
@@ -8267,14 +8669,14 @@ function drawBitter(e){ const atk=e.state==='attack'; const walk=foeStep(e,4);
       ctx.fillStyle='#ffd0d0'; ctx.beginPath(); ctx.arc(ex+.6,-60,.8,0,7); ctx.fill(); }
     ctx.strokeStyle='#000'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-1,-64);ctx.lineTo(6,-60); ctx.moveTo(13,-64);ctx.lineTo(8,-60); ctx.stroke(); }
   const bprg=atk?clamp((18-e.atkTimer)/18,0,1):0, bbig=atk?Math.sin(bprg*Math.PI):0;
-  let ang=atk?(-1.1+bprg*2.3):-0.3; ctx.save(); ctx.translate(10,-40); ctx.rotate(ang); ctx.scale(1+bbig*0.8,1+bbig*0.8);
+  let ang=foeArm(e,atk?(-1.1+bprg*2.3):-0.3,atk?0.62:0.26); ctx.save(); ctx.translate(10+armSwingX(e),-40); ctx.rotate(ang); ctx.scale(1+bbig*0.8,1+bbig*0.8);
   ctx.strokeStyle='#26262e'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14,2); ctx.stroke();
   ctx.translate(14,2); const dg=ctx.createLinearGradient(0,0,22,0); dg.addColorStop(0,'#c89cff'); dg.addColorStop(1,'#6a1fb0');
   ctx.fillStyle=dg; ctx.beginPath(); ctx.moveTo(0,-2.5); ctx.lineTo(22,0); ctx.lineTo(0,2.5); ctx.fill(); ctx.restore();
   if(atk){ ctx.strokeStyle='rgba(160,90,240,.6)'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(18,-42,32,-1,0.7); ctx.stroke(); }
 }
 function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.telegraph>0; const walk=foeStep(e,5);
-  foeLegs(e,22,-30,13,11,17,'#14141c','#08080c',0.46,0.62);   // 帝国皇帝の重い脚
+  foeLegs(e,22,-30,13,11,17,'#32323e','#6a5a2e',0.46,0.62);   // 帝国皇帝の重い脚（黒潰れを避け、金の具足で足元を締める）
   const cl=ctx.createLinearGradient(-70,-120,-20,6); cl.addColorStop(0,'#5a2a8c'); cl.addColorStop(1,'#241046');
   ctx.fillStyle=cl; ctx.beginPath(); ctx.moveTo(-30,-120); ctx.quadraticCurveTo(-84,-50,-58,8); ctx.lineTo(-18,-20); ctx.fill();
   const cr=ctx.createLinearGradient(20,-120,70,6); cr.addColorStop(0,'#4a2070'); cr.addColorStop(1,'#1d0d38');
@@ -8301,8 +8703,8 @@ function drawBoss(e){ const atk=e.state==='bmove', tele=e.state==='bwind'||e.tel
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-27,-130);ctx.lineTo(-27,-143);ctx.lineTo(-14,-133);ctx.lineTo(0,-150);ctx.lineTo(14,-133);ctx.lineTo(27,-143);ctx.lineTo(27,-130); ctx.fill();
   ctx.fillStyle=radGrad(0,-137,4,'#ff6a6a','#a00'); ctx.beginPath(); ctx.arc(0,-137,3.2,0,7); ctx.fill();
   const ebig=atk?Math.sin(clamp(e.moveT/Math.max(1,e.moveMax),0,1)*Math.PI):0;
-  let ang=atk?(-0.8+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*1.9):(tele?-1.0:-0.2);
-  ctx.save(); ctx.translate(35,-72); ctx.rotate(ang); ctx.scale(1+ebig*0.5,1+ebig*0.5);
+  let ang=foeArm(e,atk?(-0.8+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*1.9):(tele?-1.0:-0.2),atk?0.62:0.26);
+  ctx.save(); ctx.translate(35+armSwingX(e),-72); ctx.rotate(ang); ctx.scale(1+ebig*0.5,1+ebig*0.5);
   ctx.strokeStyle='#caa54a'; ctx.lineWidth=8+ebig*7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,-62); ctx.stroke();
   const orbR=10+(atk||tele?3:0)+ebig*6; ctx.save(); ctx.globalCompositeOperation='lighter';
   ctx.fillStyle=radGrad(9,-68,orbR+8,'#fff',e? '#c46bff':'#c46bff'); ctx.beginPath(); ctx.arc(9,-68,orbR+6,0,7); ctx.fill(); ctx.restore();
@@ -8669,7 +9071,7 @@ function drawDragon(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; cons
   ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(-52,-34,-84,4); ctx.quadraticCurveTo(-46,2,-34,26); ctx.quadraticCurveTo(-48,20,-22,38); ctx.quadraticCurveTo(-10,18,0,10); ctx.closePath(); ctx.fill(); ctx.restore();
   ctx.fillStyle=radGrad(0,-60,42,shade(t.c1,26),t.c2); ctx.beginPath(); ctx.ellipse(0,-56,36,30,0,0,7); ctx.fill();   // body
   ctx.fillStyle=shade(t.c1,4); ctx.beginPath(); ctx.ellipse(2,-50,24,20,0,0,7); ctx.fill();
-  ctx.fillStyle=t.c3; ctx.fillRect(-18,-30,11,30); ctx.fillRect(8,-30,11,30);   // legs
+  foeLegs(e,14,-30,11,10,13,t.c3,shade(t.c3,-26),0.46,0.62);   // legs（二関節・接地ロック）
   ctx.fillStyle='#f2efe6'; for(const lx of [-13,13]) for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(lx+i*4,-2);ctx.lineTo(lx+i*4-2,8);ctx.lineTo(lx+i*4+2,8);ctx.fill(); }
   ctx.strokeStyle=t.c2; ctx.lineWidth=20; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(16,-66); ctx.quadraticCurveTo(46,-86,54,-104); ctx.stroke();   // neck
   ctx.fillStyle=radGrad(56,-110,22,shade(t.c1,24),t.c2); ctx.beginPath(); ctx.ellipse(58,-108,21,17,0,0,7); ctx.fill();   // head
@@ -8719,8 +9121,8 @@ function drawGuard0(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele
   ctx.fillStyle='#33303a'; ctx.fillRect(-20,-90,44,5);
   ctx.fillStyle='#5a5560'; for(const sp of [[-14,-100],[2,-108],[18,-100]]){ ctx.beginPath(); ctx.moveTo(sp[0]-4,-90); ctx.lineTo(sp[0],sp[1]); ctx.lineTo(sp[0]+4,-88); ctx.closePath(); ctx.fill(); }
   // 巨大な大槌
-  let ang=atk?(-1.5+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.8):(tele?-1.7:-0.6);
-  ctx.save(); ctx.translate(14,-58); ctx.rotate(ang);
+  let ang=foeArm(e,atk?(-1.5+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.8):(tele?-1.7:-0.6),atk?0.66:0.24);
+  ctx.save(); ctx.translate(14+armSwingX(e),-58); ctx.rotate(ang);
   ctx.strokeStyle='#3a2a18'; ctx.lineWidth=9; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(58,0); ctx.stroke();
   ctx.fillStyle=radGrad(72,0,34,'#6a6672','#2a2830'); ctx.fillRect(58,-26,40,52);
   ctx.strokeStyle='#1a181e'; ctx.lineWidth=2.6; ctx.strokeRect(58,-26,40,52);
@@ -8789,8 +9191,8 @@ function drawRival(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=
   if(enemyHurt(e)){ hurtEye(4,-70,3.6,'#d8a3ff'); hurtEye(12,-70,3.6,'#d8a3ff'); }
   else { for(const ex of [4,12]){ ctx.fillStyle=radGrad(ex,-70,4,'#fff',t.accent); ctx.beginPath(); ctx.ellipse(ex,-70,3.4,3,0,0,7); ctx.fill(); ctx.fillStyle='#200'; ctx.beginPath(); ctx.arc(ex+0.6,-70,1.3,0,7); ctx.fill(); }
     ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-2,-76);ctx.lineTo(8,-72); ctx.moveTo(16,-76);ctx.lineTo(10,-72); ctx.stroke(); }
-  let ang=atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.2):(tele?-1.3:-0.3);   // sword arm
-  ctx.save(); ctx.translate(10,-44); ctx.rotate(ang);
+  let ang=foeArm(e,atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.2):(tele?-1.3:-0.3),atk?0.62:0.26);   // sword arm — 状態遷移で角度が飛ばないよう一次遅れで追従
+  ctx.save(); ctx.translate(10+armSwingX(e),-44); ctx.rotate(ang);
   ctx.strokeStyle=t.c2; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12,2); ctx.stroke(); ctx.translate(12,2);
   ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-3,4,7);
   const bl=ctx.createLinearGradient(3,0,46,0); bl.addColorStop(0,'#c89cff'); bl.addColorStop(1,'#3a1060');
@@ -8842,9 +9244,9 @@ function drawGolux(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=
     ctx.beginPath(); ctx.arc(e.facing*20,-58, 56, e.facing>0?-1.2:Math.PI-1.2, e.facing>0?1.2:Math.PI+1.2); ctx.stroke(); ctx.restore(); }
 }
 // ── シマ真ボス：兄弟子パピプー（白いビション・分裂・三節棍）──
-function drawPapipoo(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; const walk=foeStep(e,4);
+function drawPapipoo(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove';
   const drawOne=(ox,alpha)=>{ ctx.save(); ctx.translate(ox,0); ctx.globalAlpha=alpha;
-    ctx.fillStyle=t.c3; ctx.fillRect(-11,-16+walk,8,16); ctx.fillRect(4,-16-walk,8,16);   // 脚
+    foeLegs(e,8,-16,7,6,8,t.c3,shade(t.c3,-24));   // 脚
     // もこもこの胴
     ctx.fillStyle=t.c2; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; furBall(Math.cos(a)*15,-38+Math.sin(a)*16,7,'#ffffff',t.c2); }
     furBall(0,-38,18,'#ffffff',t.c2);
@@ -8869,10 +9271,9 @@ function drawPapipoo(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; con
 function drawShark(e){ const t=ETYPE[e.type];
   if(e.sub){ ctx.fillStyle=t.c1; ctx.beginPath(); ctx.moveTo(-15,-4); ctx.lineTo(2,-38); ctx.lineTo(16,-4); ctx.closePath(); ctx.fill();   // 背びれだけ
     ctx.strokeStyle='rgba(180,210,235,.55)'; ctx.lineWidth=2; for(let r=12;r<46;r+=14){ ctx.beginPath(); ctx.ellipse(0,-2,r,r*0.3,0,0,7); ctx.stroke(); } return; }
-  const atk=e.state==='bmove', walk=foeStep(e,5);
+  const atk=e.state==='bmove';
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-34,-46); ctx.lineTo(-74,-80); ctx.lineTo(-66,-42); ctx.lineTo(-80,-30); ctx.lineTo(-40,-30); ctx.closePath(); ctx.fill();   // 尾びれ
-  ctx.fillStyle=t.c3; ctx.fillRect(-22,-22+walk,11,22); ctx.fillRect(12,-22-walk,11,22);
-  ctx.fillStyle='#eef2f6'; ctx.fillRect(-22,-6,11,6); ctx.fillRect(12,-6,11,6);
+  foeLegs(e,17,-22,9,9,11,t.c3,'#eef2f6');
   ctx.fillStyle=radGrad(0,-46,42,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(0,-44,38,28,0,0,7); ctx.fill();
   ctx.fillStyle='#eef2f6'; ctx.beginPath(); ctx.ellipse(4,-34,26,16,0,0,7); ctx.fill();   // 白い腹
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-8,-68); ctx.lineTo(6,-102); ctx.lineTo(20,-66); ctx.closePath(); ctx.fill();   // 背びれ
@@ -8888,11 +9289,11 @@ function drawShark(e){ const t=ETYPE[e.type];
   ctx.fillStyle='#c0392b'; ctx.fillRect(14,-34,20,5); ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.arc(24,-29,2.4,0,7); ctx.fill();   // 首輪
 }
 // ── 海賊王カイゾクカイ（高火力・部下召喚）──
-function drawPirate(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', walk=foeStep(e,5); const body='#d8b483', bodyD='#a8835a';
+function drawPirate(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove'; const body='#d8b483', bodyD='#a8835a';
   ctx.strokeStyle=bodyD; ctx.lineWidth=10; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-30,-44); ctx.quadraticCurveTo(-58,-58,-58,-86); ctx.stroke();   // 尾
   ctx.save(); ctx.translate(-58,-86); ctx.rotate(-0.3); ctx.fillStyle='#cfd8e6'; ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(12,-26,2,-46); ctx.lineTo(-7,-44); ctx.quadraticCurveTo(2,-24,-7,0); ctx.fill();
   ctx.fillStyle='#fff'; ctx.fillRect(-3,-30,2,8); ctx.fillRect(-7,-26,10,2); ctx.restore();   // 刀の十字
-  ctx.fillStyle=bodyD; ctx.fillRect(-20,-22+walk,11,22); ctx.fillRect(10,-22-walk,11,22);
+  foeLegs(e,15,-22,9,9,11,bodyD,'#3a2c24');
   ctx.fillStyle=radGrad(0,-44,36,body,bodyD); ctx.beginPath(); ctx.ellipse(0,-42,34,26,0,0,7); ctx.fill();
   ctx.fillStyle=t.c1; ctx.beginPath(); ctx.ellipse(-2,-34,28,18,0,0,7); ctx.fill();   // 紫の鎧
   ctx.fillStyle=t.c2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.arc(i*12,-30,3,0,7); ctx.fill(); }
@@ -8909,11 +9310,10 @@ function drawPirate(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', walk
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(26,-88,5,0,7); ctx.fill(); ctx.fillStyle=t.c2; ctx.beginPath(); ctx.arc(24,-88,1.2,0,7); ctx.arc(28,-88,1.2,0,7); ctx.fill();   // ドクロ
 }
 // ── 呪い犬ノロ（呪化で焔を纏う）──
-function drawNoroinu(e){ const t=ETYPE[e.type]; const walk=foeStep(e,5), cur=e.cursed;
+function drawNoroinu(e){ const t=ETYPE[e.type]; const cur=e.cursed;
   ctx.fillStyle=t.c2; ctx.beginPath(); ctx.moveTo(-26,-46); ctx.quadraticCurveTo(-72,-72,-56,-28); ctx.quadraticCurveTo(-44,-44,-24,-38); ctx.fill();
   furBall(-56,-44,12,'#bcb4a4',t.c2);   // 尾の白いふさ
-  ctx.fillStyle=t.c3; ctx.fillRect(-20,-22+walk,11,22); ctx.fillRect(10,-22-walk,11,22);
-  ctx.fillStyle=t.accent; ctx.fillRect(-20,-8,11,4); ctx.fillRect(10,-8,11,4);   // 紫の足環
+  foeLegs(e,15,-22,9,9,11,t.c3,t.accent);   // 紫の足環つきの脚
   furBall(0,-44,26,shade(t.c1,12),t.c2);
   ctx.fillStyle='#efe6cf'; ctx.fillRect(-6,-34,12,16); ctx.strokeStyle=t.accent; ctx.lineWidth=1.4; ctx.strokeRect(-6,-34,12,16); ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(0,-26,3,0,7); ctx.fill();   // 胸の御札
   furBall(22,-58,19,shade(t.c1,10),t.c2);
@@ -8931,18 +9331,18 @@ function drawNoroinu(e){ const t=ETYPE[e.type]; const walk=foeStep(e,5), cur=e.c
   ctx.restore();
 }
 // ── サボテン犬サボロー（サボテン＋亀甲羅。grow で腕が増える）──
-function drawCactus(e){ const t=ETYPE[e.type]; const grow=e.grow||0, atk=e.state==='bmove', walk=foeStep(e,4);
+function drawCactus(e){ const t=ETYPE[e.type]; const grow=e.grow||0, atk=e.state==='bmove';
   function arm(ax,ay,ang,len){ ctx.save(); ctx.translate(ax,ay); ctx.rotate(ang);
     ctx.fillStyle=radGrad(0,-len*0.5,12,shade(t.c1,16),t.c2); ctx.beginPath(); ctx.moveTo(-7,0); ctx.lineTo(-7,-len); ctx.quadraticCurveTo(0,-len-8,7,-len); ctx.lineTo(7,0); ctx.closePath(); ctx.fill();
     ctx.fillStyle='#dff0b0'; for(let s=-1;s<2;s+=2)for(let yy=-len+6;yy<-4;yy+=9){ ctx.beginPath(); ctx.moveTo(s*7,yy); ctx.lineTo(s*12,yy-2); ctx.lineTo(s*7,yy+3); ctx.fill(); }   // 棘
     ctx.restore(); }
   // legs (4本の足)
-  ctx.fillStyle=t.c3; ctx.fillRect(-30,-20+walk,12,20); ctx.fillRect(-10,-18,11,18); ctx.fillRect(0,-18,11,18); ctx.fillRect(18,-20-walk,12,20);
-  ctx.fillStyle='#e8e0c8'; ctx.fillRect(-30,-5,12,5); ctx.fillRect(18,-5,12,5);
-  // 亀の甲羅（土台）
-  ctx.fillStyle=radGrad(0,-22,46,'#e8b44a','#9c6a1e'); ctx.beginPath(); ctx.ellipse(0,-22,46,24,0,0,7); ctx.fill();
-  ctx.strokeStyle='#7a4f16'; ctx.lineWidth=2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.moveTo(i*16,-44);ctx.lineTo(i*12,-2); ctx.stroke(); }
-  ctx.fillStyle=t.c2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.arc(i*16,-28,3,0,7); ctx.fill(); }
+  foeLegs(e,9,-28,11,11,10,shade(t.c3,-8),null,0.46,0.7,Math.PI);   // 内側の一対（対角トロットの逆位相）
+  foeLegs(e,26,-30,12,12,12,t.c3,'#e8e0c8',0.46,0.7);               // 外側の一対
+  // 亀の甲羅（土台）— 脚が甲羅の下から覗くよう持ち上げてある
+  ctx.fillStyle=radGrad(0,-38,46,'#e8b44a','#9c6a1e'); ctx.beginPath(); ctx.ellipse(0,-38,46,22,0,0,7); ctx.fill();
+  ctx.strokeStyle='#7a4f16'; ctx.lineWidth=2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.moveTo(i*16,-58);ctx.lineTo(i*12,-18); ctx.stroke(); }
+  ctx.fillStyle=t.c2; for(let i=-2;i<3;i++){ ctx.beginPath(); ctx.arc(i*16,-44,3,0,7); ctx.fill(); }
   // サボテン本体（縦長）
   ctx.fillStyle=radGrad(0,-72,30,shade(t.c1,20),t.c2); ctx.beginPath(); ctx.ellipse(0,-66,24,40,0,0,7); ctx.fill();
   ctx.fillStyle=t.accent; for(let yy=-92;yy<-44;yy+=16){ ctx.beginPath(); ctx.moveTo(0,yy-7);ctx.lineTo(7,yy+4);ctx.lineTo(-7,yy+4);ctx.closePath(); ctx.fill(); }   // 黄色い三角
@@ -8966,9 +9366,8 @@ function drawCactus(e){ const t=ETYPE[e.type]; const grow=e.grow||0, atk=e.state
     ctx.strokeStyle='#000'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-4,-111);ctx.lineTo(8,-108); ctx.stroke(); }
 }
 // ── ワープ犬（背後に瞬間移動するザコ）──
-function drawWarpdog(e){ const t=ETYPE[e.type]; const atk=e.state==='attack', walk=foeStep(e,4);
-  ctx.fillStyle=t.c3; ctx.fillRect(-14,-16+walk,8,16); ctx.fillRect(6,-16-walk,8,16);
-  ctx.fillStyle='#cdbff0'; ctx.fillRect(-14,-4,8,4); ctx.fillRect(6,-4,8,4);
+function drawWarpdog(e){ const t=ETYPE[e.type]; const atk=e.state==='attack';
+  foeLegs(e,10,-16,7,6,8,t.c3,'#cdbff0');
   furBall(0,-32,17,shade(t.c1,14),t.c2);
   // bone necklace
   ctx.save(); ctx.translate(0,-24); ctx.rotate(0.08); ctx.fillStyle='#efe6cf'; ctx.fillRect(-8,-1.6,16,3.2); for(const bx of [-8,8]){ctx.beginPath();ctx.arc(bx,-1.6,2.2,0,7);ctx.arc(bx,1.6,2.2,0,7);ctx.fill();} ctx.restore();
@@ -9021,7 +9420,7 @@ function drawDarkKnight(e){ const atk=e.state==='bmove', tele=e.state==='bwind',
   const cg=ctx.createLinearGradient(-30,-100,-6,4); cg.addColorStop(0,'#26242c'); cg.addColorStop(1,'#0a090e');
   ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(-8,-92); ctx.quadraticCurveTo(-40,-44,-30-sw,8); ctx.quadraticCurveTo(-44,-6,-34-sw,10); ctx.lineTo(10,8); ctx.quadraticCurveTo(8,-44,-2,-90); ctx.closePath(); ctx.fill();
   // 脚（黒ブーツ）
-  foeLegs(e,10,-22,10,9,11,'#16151c','#0a090e',0.58,0.82);   // 闇騎士の脚
+  foeLegs(e,10,-22,10,9,11,'#34333e','#4a2a3a',0.58,0.82);   // 闇騎士の脚（黒潰れを避ける）
   ctx.fillStyle='#1c1a22'; ctx.fillRect(-15,-4,11,4); ctx.fillRect(5,-4,11,4);
   // 胴：黒い甲冑
   ctx.fillStyle=radGrad(0,-46,26,'#2a2832','#100e16'); ctx.beginPath(); ctx.ellipse(0,-44,19,22,0,0,7); ctx.fill();
@@ -9045,8 +9444,8 @@ function drawDarkKnight(e){ const atk=e.state==='bmove', tele=e.state==='bwind',
   ctx.strokeStyle='#000'; ctx.lineWidth=1.4; for(let i=-1;i<2;i++){ ctx.beginPath(); ctx.moveTo(i*4,-60);ctx.lineTo(i*4,-55); ctx.stroke(); }
   ctx.fillStyle='#3a3744'; ctx.fillRect(-12,-61,24,2);
   // ライトセーバー（赤い光刃）の腕
-  let ang=atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.3):(tele?-1.4:-0.35);
-  ctx.save(); ctx.translate(10,-48); ctx.rotate(ang);
+  let ang=foeArm(e,atk?(-1.0+clamp(e.moveT/Math.max(1,e.moveMax),0,1)*2.3):(tele?-1.4:-0.35),atk?0.62:0.26);
+  ctx.save(); ctx.translate(10+armSwingX(e),-48); ctx.rotate(ang);
   ctx.strokeStyle='#26242c'; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12,2); ctx.stroke(); ctx.translate(12,2);
   ctx.fillStyle='#888'; ctx.fillRect(-2,-3,7,6);   // 柄
   ctx.save(); ctx.globalCompositeOperation='lighter';
@@ -9175,8 +9574,9 @@ function drawStageBannerScrim(){ if(stageBanner<=0) return; const B=stageBannerF
   ctx.restore(); }
 function drawHUD(){
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
-  let hudY=104;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
-  panel(12,12,256,86); if(p1shima) shimaIcon(38,40); else if(p1nuko) nukoIcon(38,40); else if(p1g8) guard8Icon(38,40); else if(p1watch) watchIcon(38,40); else if(p1wd) wandenIcon(38,40); else faceIcon(38,40,'#f6e8c6');
+  let hudY=120;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
+  HUD_BOTTOM=hudY;   // ポップの侵入を止める下限（この後パネルを積むたびに更新する）
+  panel(12,12,256,102); if(p1shima) shimaIcon(38,40); else if(p1nuko) nukoIcon(38,40); else if(p1g8) guard8Icon(38,40); else if(p1watch) watchIcon(38,40); else if(p1wd) wandenIcon(38,40); else faceIcon(38,40,'#f6e8c6');
   ctx.fillStyle=p1wd?'#e8dcb4':p1watch?'#cfe0f0':p1shima?'#ffb04a':p1nuko?'#ff9ad0':p1g8?'#e0a45f':'#ffe14d'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText(p1wd?'1P  剣鬼ワンデン':p1watch?'1P  盗賊ワッチ':p1shima?'1P  シマダックス':p1nuko?'1P  魔法使いヌコ':p1g8?'1P  ガードワン8号':'1P  聖犬士イッヌ',70,28);
   barFrame(70,33,176,12); const hpg=ctx.createLinearGradient(70,0,246,0); hpg.addColorStop(0,'#7dff5a'); hpg.addColorStop(.5,'#ffe14d'); hpg.addColorStop(1,'#ff4d2d');
   { const hr=clamp(player.hp/player.maxHp,0,1), sr=clamp(tickHpShow(player)/player.maxHp,0,1);
@@ -9205,7 +9605,7 @@ function drawHUD(){
   ctx.fillStyle='#ffe14d'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText('Lv.'+(player.level||1),262,29); ctx.textAlign='left';
   ctx.fillStyle='#0a0a12'; ctx.fillRect(70,59,176,5); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; ctx.strokeRect(70,59,176,5);
   ctx.fillStyle='#7ad0ff'; ctx.fillRect(71,60,174*clamp((player.xp||0)/(player.xpNext||100),0,1),3);
-  ctx.fillStyle='#ff5a6a'; ctx.font=uif('bold',14); ctx.fillText((TWO_P?'共有♥ ×':'♥ ×')+Math.max(0,livesLeft()),22,79);
+  ctx.fillStyle='#ff5a6a'; ctx.font=uif('bold',14); if(!TWO_P) ctx.fillText('♥ ×'+Math.max(0,livesLeft()),22,79);   // 2Pでは共有残機を2Pパネル側へ一本化する
   ctx.save(); ctx.textAlign='right'; ctx.fillStyle='#fff'; ctx.font='bold 17px monospace';
   ctx.fillText(String(score).padStart(6,'0'),258,79);
   if(hardMode){ ctx.fillStyle='#ff4d3c'; ctx.font=uif('bold',11); ctx.fillText('高難易度',258,95); }
@@ -9233,21 +9633,32 @@ function drawHUD(){
     const bw=76, tx=284, ty=46; ctx.fillStyle='rgba(4,5,11,.9)'; roundRect(tx,ty,bw,6,3); ctx.fill();
     ctx.fillStyle=W2.col; roundRect(tx,ty,Math.max(2,bw*clamp(player.weaponT/1100,0,1)),6,3); ctx.fill(); }
   // 2P パネル（シマダックス）
-  if(players[1].active){ const q=players[1]; panel(12,hudY,238,38);
+  if(players[1].active){ const q=players[1]; hudY+=6; panel(12,hudY,238,56);
     ctx.fillStyle='#ff9a3a'; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('2P  シマダックス',22,hudY+17);
     barFrame(22,hudY+21,164,11); const g2=ctx.createLinearGradient(22,0,186,0); g2.addColorStop(0,'#7dff5a'); g2.addColorStop(.5,'#ffe14d'); g2.addColorStop(1,'#ff4d2d');
-    window.__b2=1;
     const q2r=clamp(q.hp/q.maxHp,0,1), q2s=clamp(tickHpShow(q)/q.maxHp,0,1);
     if(q2s>q2r+0.002){ ctx.fillStyle='rgba(255,238,170,.88)'; ctx.fillRect(24+160*q2r,hudY+23,160*(q2s-q2r),7); }
     ctx.fillStyle=q.state==='dead'?'#5a4a2a':g2; ctx.fillRect(24,hudY+23,160*q2r,7);
-    ctx.fillStyle='#ff5a6a'; ctx.font=uif('normal',13); ctx.fillText('共有♥ ×'+Math.max(0,coopLives),196,hudY+31); hudY+=42; }
+    ctx.fillStyle='#ff5a6a'; ctx.font=uif('normal',13); ctx.textAlign='right';
+    ctx.fillText('共有♥ ×'+Math.max(0,coopLives),12+238-10,hudY+31); ctx.textAlign='left';   // 右端から10pxの溝（2桁でも溢れない）
+    // 2Pにも奥義ストックを出す（残数が見えないと撃ち時が分からない）
+    ctx.fillStyle='#d6a6ff'; ctx.font=uif('bold',10); ctx.fillText('奥義',22,hudY+50);
+    for(let i=0;i<q.dimMax;i++){ const dx=52+i*13, on=i<q.dim;
+      ctx.save(); ctx.translate(dx,hudY+46); ctx.rotate(Math.PI/4);
+      ctx.fillStyle=on?'#c98cff':'rgba(120,90,160,.25)'; ctx.fillRect(-4,-4,8,8);
+      ctx.strokeStyle=on?'#e6c6ff':'rgba(200,160,255,.4)'; ctx.lineWidth=1.2; ctx.strokeRect(-4,-4,8,8); ctx.restore(); }
+    ctx.fillStyle='#ff9a3a'; ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='right';
+    ctx.fillText('Lv.'+(q.level||1),12+238-10,hudY+50); ctx.textAlign='left';
+    hudY+=60; }
 
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
-  ctx.fillText(lap>=3?('3周目　STAGE '+stage+' / '+(WORLD3_LEVELS.length+2))
-    :lap>=2?('2周目　STAGE '+stage+' / '+(WORLD2_LEVELS.length+2)):('STAGE '+stage+' / 12'),W/2,30);
+  // stage は地図制では常に1に固定されるので、進捗は制覇数で出す（従来は全13面で STAGE 1/12 だった）
+  { const tot=curWorldLevels().length+2, cur=Math.min(tot, doneCount()+1);
+    ctx.fillText((lap>=3?'3周目　':lap>=2?'2周目　':'')+'STAGE '+cur+' / '+tot, W/2, 30); }
   { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
     ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
-  drawFoePower(16, hudY+12); hudY+=26;
+  if(drawFoePower(20, hudY+12)!==false) hudY+=26;
+  HUD_BOTTOM=hudY+8;   // ここまでが左上ブロック。ダメージ／文言ポップはこれより上へ行かない
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
     ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
@@ -9357,15 +9768,16 @@ function drawHUD(){
 // ---------- 敵の強化度インジケータ：いまどれだけ敵が鍛えられているかを常時見せる ----------
 function drawFoePower(x, y){
   const tier=foeTier(), hp=foeHpGrow(), atk=foeDmgGrow();
+  if(tier===0 && hp<1.05 && atk<1.05) return false;   // 等倍・★0 の序盤は情報量ゼロなので出さない
   const label='敵の強さ  HP×'+hp.toFixed(1)+'  攻×'+atk.toFixed(1);
   ctx.textAlign='left'; ctx.font=uif('bold',11);
-  const wBox=ctx.measureText(label).width+62;
+  const wBox=ctx.measureText(label).width+72;   // ★4個ぶん＋角丸に食われない余白
   ctx.fillStyle=UI.ink; roundRect(x-8,y-13,wBox,19,UI.r.s); ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1; roundRect(x-7.5,y-12.5,wBox-1,18,UI.r.s); ctx.stroke();
   ctx.fillStyle=tier>=3?'#ff8a6a':tier>=1?'#ffd24d':'#9fb0c4'; ctx.fillText(label, x, y);
   const sx0=x+ctx.measureText(label).width+12;
   for(let k=0;k<4;k++){ const px=sx0+k*12, on=k<tier;
-    ctx.fillStyle=on?(FOE_RANK_COL[Math.min(4,tier)]||'#ffd24d'):'rgba(255,255,255,.18)';
+    ctx.fillStyle=on?(FOE_RANK_COL[Math.min(4,tier)]||'#ffd24d'):'rgba(255,255,255,.34)';   // 消灯星が18%白では背景と混ざって壊れて見えた
     ctx.beginPath();
     for(let v=0;v<10;v++){ const a=-Math.PI/2+v*Math.PI/5, rr=(v%2?1.9:4.4);
       v?ctx.lineTo(px+Math.cos(a)*rr,y-4+Math.sin(a)*rr):ctx.moveTo(px+Math.cos(a)*rr,y-4+Math.sin(a)*rr); }
@@ -9591,7 +10003,7 @@ const SHOP_ITEMS=[
   {name:'傭兵：オニボウズ',        desc:'頑丈な重量級の傭兵',           cost:200, merc:'onibouzu'},
   // ── 秘宝ガチャ（ここ限定の専用アイテム）──
   {name:'🎰 秘宝ガチャを回す', desc:'コイン90でここだけの専用アイテムを1つ入手！', cost:90, gacha:true},
-  {name:'▶ 出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
+  {name:'出発（次の冒険へ）', desc:'宿屋を出てワールドマップへ', cost:0, leave:true},
 ];
 const MERC_MAX=2;   // 同行できる傭兵の最大数
 function hireMerc(type){ const T=ETYPE[type]; if(!T) return false;
@@ -9723,6 +10135,31 @@ function drawCham(x,y){ // 看板娘「チャム」（猫の商人）
   ctx.fillStyle=radGrad(-12,-18,6,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(-12,-18,5,0,7); ctx.fill(); ctx.restore();   // 振る手＋コイン
   ctx.restore();
 }
+// 品名カラムの幅は品揃えの実測最大に合わせる（固定144pxだと『傭兵：メカワンコ T-800』
+// のような一次識別子を、行に余白があるのに刈ってしまう）。品揃えが変わるまで再計算しない
+let _shopNW=0, _shopNWn=-1, _shopPW=0, _shopPWn=-1;
+// 価格カラムも実測に揃える。78px 決め打ちだと説明が理由なく3〜4文字早く切られていた
+function shopPriceW(){
+  if(_shopPWn===SHOP_ITEMS.length) return _shopPW;
+  ctx.save(); ctx.font='bold 15px Trebuchet MS';
+  let m=0; for(const it of SHOP_ITEMS){ if(it.leave) continue; m=Math.max(m, ctx.measureText(it.cost+' ¢').width); }
+  ctx.restore(); _shopPWn=SHOP_ITEMS.length; _shopPW=Math.ceil(m)+10;
+  return _shopPW; }
+function shopNameW(){
+  if(_shopNWn===SHOP_ITEMS.length) return _shopNW;
+  ctx.save(); ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif';
+  let m=0; for(const it of SHOP_ITEMS) m=Math.max(m, ctx.measureText(it.name).width);
+  ctx.restore(); _shopNWn=SHOP_ITEMS.length; _shopNW=Math.min(236, Math.ceil(m)+8);
+  return _shopNW; }
+// 与えられた幅に収まるまで末尾を削って「…」を付ける。ショップの3カラムが
+// 隣のカラムへ食い込んで価格が読めなくなるのを防ぐ
+function fitText(txt,maxW){
+  if(ctx.measureText(txt).width<=maxW) return txt;
+  let lo=0, hi=txt.length;
+  while(lo<hi){ const mid=(lo+hi+1)>>1;
+    if(ctx.measureText(txt.slice(0,mid)+'…').width<=maxW) lo=mid; else hi=mid-1; }
+  return txt.slice(0,lo)+'…';
+}
 function drawShop(){
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3a2a1e'); g.addColorStop(1,'#160f0a'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   ctx.fillStyle='rgba(255,220,150,.04)'; for(let x=0;x<W;x+=64) ctx.fillRect(x,0,2,H*0.62);
@@ -9732,32 +10169,50 @@ function drawShop(){
   ctx.fillStyle='#caa54a'; ctx.fillRect(W-126,46,12,40); ctx.fillStyle='#ffd870'; ctx.beginPath(); ctx.ellipse(W-120,96,12,16,0,0,7); ctx.fill();   // ランタン
   ctx.fillStyle='#4a2e18'; ctx.fillRect(0,H*0.62,W,H*0.38); ctx.fillStyle='#5a3a20'; ctx.fillRect(0,H*0.62,W,10);   // カウンター
   ctx.fillStyle='rgba(0,0,0,.2)'; for(let x=0;x<W;x+=80)ctx.fillRect(x,H*0.62+12,2,H*0.36);
-  drawCham(W*0.80, H*0.62+6);
   ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
   ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText('アイテムショップ 「チャム」',W/2,56); ctx.fillText('アイテムショップ 「チャム」',W/2,56);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff'; ctx.fillText('〜 宿屋・酒場で装備を整えよう 〜',W/2,78);
   ctx.fillStyle=radGrad(W/2-120,100,8,'#fff7c0','#c8881a'); ctx.beginPath(); ctx.arc(W/2-120,100,8,0,7); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='bold 22px Trebuchet MS'; ctx.fillText('所持コイン: '+coins+' ¢',W/2,108);
-  const mx=80,my=120,mw=520,ih=34, vis=Math.min(SHOP_VIS,SHOP_ITEMS.length);
+  const mw=560, mx=Math.round(W/2-mw/2), my=120, ih=34, vis=Math.min(SHOP_VIS,SHOP_ITEMS.length);   // 見出しと同じ中心軸に揃える
   ctx.fillStyle='rgba(8,10,20,.8)'; roundRect(mx,my,mw,vis*ih+44,10); ctx.fill();
   ctx.strokeStyle='rgba(255,210,80,.6)'; ctx.lineWidth=2; roundRect(mx,my,mw,vis*ih+44,10); ctx.stroke();
   ctx.textAlign='left';
   for(let row=0; row<vis; row++){ const i=shopScroll+row; if(i>=SHOP_ITEMS.length)break; const it=SHOP_ITEMS[i]; const y=my+12+row*ih; const sel=i===shopSel;
-    if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-2,mw-12,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 16px Trebuchet MS'; ctx.fillText('▶',mx+12,y+20); }
+    if(sel){ ctx.fillStyle='rgba(255,210,80,.22)'; roundRect(mx+6,y-2,mw-24,ih-4,6); ctx.fill(); ctx.fillStyle='#ffe14d'; ctx.font='bold 16px Trebuchet MS'; ctx.fillText('▶',mx+12,y+20); }
     const sold = it.soldOut&&it.soldOut();
     const afford = !sold && (it.leave || coins>=it.cost);
-    ctx.fillStyle=afford?'#fff':'#7a7a7a'; ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(it.name,mx+34,y+20);
-    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillText(sold?'― 売り切れ ―':it.desc,mx+186,y+20);
-    if(!it.leave&&!sold){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-16,y+20); ctx.textAlign='left'; }
+    if(it.leave){ ctx.save(); ctx.strokeStyle='rgba(255,210,80,.28)'; ctx.lineWidth=1;   // 購入行との区切り
+      ctx.beginPath(); ctx.moveTo(mx+10,y-4); ctx.lineTo(mx+mw-24,y-4); ctx.stroke();
+      ctx.fillStyle='rgba(80,150,200,.10)'; roundRect(mx+6,y-2,mw-24,ih-4,6); ctx.fill(); ctx.restore(); }
+    // 3カラム（品名／説明／価格）。品名幅は品揃えの実測最大、説明はその残り。
+    // 価格が要らない行（売切／出発）では余りがそのまま説明へ回る
+    const nameX=mx+34, nameW=shopNameW(), descX=nameX+nameW+12,
+          priceW=(it.leave||sold)?0:shopPriceW(), descW=mx+mw-24-priceW-descX-6;
+    ctx.fillStyle=it.leave?'#7fd0ff':(afford?'#fff':'#7a7a7a'); ctx.font='bold 16px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText(fitText(it.name,nameW),nameX,y+20);
+    ctx.fillStyle=afford?'#9fb4cf':'#5a5a5a'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText(fitText(sold?'― 売り切れ ―':it.desc,descW),descX,y+20);
+    if(!it.leave&&!sold){ ctx.fillStyle=afford?'#ffe14d':'#8a6a3a'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='right'; ctx.fillText(it.cost+' ¢',mx+mw-24,y+20); ctx.textAlign='left'; }   // バー(mx+mw-14)の左に10pxの溝を残す
   }
   // スクロール位置バー
   if(SHOP_ITEMS.length>vis){ const bh=(vis/SHOP_ITEMS.length)*(vis*ih), by=my+12+(shopScroll/SHOP_ITEMS.length)*(vis*ih);
-    ctx.fillStyle='rgba(255,210,80,.5)'; roundRect(mx+mw-6,by,3,bh,2); ctx.fill();
-    if(shopScroll>0){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▲',mx+mw/2,my+10); }
-    if(shopScroll+vis<SHOP_ITEMS.length){ ctx.fillStyle='#ffe14d'; ctx.textAlign='center'; ctx.fillText('▼',mx+mw/2,my+vis*ih+34); ctx.textAlign='left'; } }
+    ctx.fillStyle='rgba(255,210,80,.5)'; roundRect(mx+mw-14,by,3,bh,2); ctx.fill();
+    // スクロール矢印はリスト右端のバーの上下に置く。以前は▼がステータス行と同じ
+    // ベースラインで「残3▼奥3」と読めていた
+    ctx.save(); ctx.fillStyle='#ffe14d'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+    if(shopScroll>0) ctx.fillText('▲',mx+mw-12.5,my+9);
+    if(shopScroll+vis<SHOP_ITEMS.length) ctx.fillText('▼',mx+mw-12.5,my+vis*ih+22);
+    ctx.restore(); ctx.textAlign='left'; }
   const p=players[0]; ctx.fillStyle='#bfe2ff'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='left';
   ctx.fillText('HP '+p.maxHp+'  攻×'+(p.atkMul||1).toFixed(2)+'  防−'+Math.round((1-(p.defMul||1))*100)+'%  速×'+(p.spdMul||1).toFixed(2)+'  金×'+(p.coinMul||1).toFixed(1)+'  残'+Math.max(0,p.lives)+'  奥'+p.dimMax, mx+8, my+vis*ih+34);
-  if(shopMsgT>0){ ctx.fillStyle='#ffe14d'; ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center'; ctx.fillText(shopMsg, W*0.78, H*0.62-40); }
+  drawCham(W*0.86, H*0.62+6);   // パネルより手前に立たせる（切断の解消）
+  if(shopMsgT>0){ // パネルの下端の下に、暗い受け皿を敷いて出す（従来は価格欄を横切っていた）
+    ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    const tw=ctx.measureText(shopMsg).width, mcx=mx+mw/2, mcy=my+vis*ih+66;
+    ctx.fillStyle='rgba(6,4,12,.9)'; roundRect(mcx-tw/2-14,mcy-20,tw+28,28,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,210,80,.5)'; ctx.lineWidth=1.4; roundRect(mcx-tw/2-14,mcy-20,tw+28,28,7); ctx.stroke();
+    ctx.fillStyle='#ffe14d'; ctx.fillText(shopMsg, mcx, mcy); }
   ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
   ctx.fillText('↑↓ 選択　／　J（攻撃）で購入　／　Space（ジャンプ）で出発', W/2, H-26); ctx.textAlign='left';
   if(gacha) drawGacha();
@@ -10263,10 +10718,20 @@ function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
 // タイトルの「2周目」トグルがONなら、一周目を飛ばして蟲の世界から開始（支度金つき）
 let ng2Sel=0;   // 0=1周目 / 2=蟲の世界から / 3=宇宙人の侵略から
+// オーバーレイをふわりと消してから本編へ。display:none への即時切り替えだと
+// CSS transition が効かないので、.fading で不透明度を落としてから隠す
+function fadeOverlay(el,cb){
+  if(document.body&&document.body.classList) document.body.classList.add('transitioning');
+  if(!el || el.classList.contains('hidden')){ cb&&cb(); return; }
+  el.classList.add('fading');
+  setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fading'); cb&&cb(); }, 260); }
 function beginAdventure(){
-  if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
-  if(ng2Sel>=2){ startGame(); coins=200; startNG2(); return; }
-  startOpening(); }
+  const go=()=>{
+    if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
+    if(ng2Sel>=2){ startGame(); coins=200; startNG2(); return; }
+    startOpening(); };
+  // マップ→ステージ等と同じ画面遷移エフェクトを、最も目にするタイトル遷移にも通す
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(go,'fade',40)); }
 document.getElementById('startBtn').onclick=()=>{ unlockAudio(); setupRoster('inu'); beginAdventure(); };
 document.getElementById('startShimaBtn').onclick=()=>{ unlockAudio(); setupRoster('shima'); beginAdventure(); };
 const _nukoBtn=document.getElementById('startNukoBtn'); if(_nukoBtn) _nukoBtn.onclick=()=>{ unlockAudio(); setupRoster('nuko'); beginAdventure(); };
@@ -10541,11 +11006,14 @@ const CHARS=[
   {k:'wanden',name:'剣鬼ワンデン',  col:'#e8dcb4', icon:(x,y)=>wandenIcon(x,y)},
 ];
 let csSel=[0,1], csLock=[false,false], csNav=[0,0];
-function start2PSelect(){ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
-  players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
-  const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
-  const er=document.getElementById('result'); if(er) er.classList.add('hidden');
-  unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } }
+function start2PSelect(){
+  const enter=()=>{ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
+    const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
+    const er=document.getElementById('result'); if(er) er.classList.add('hidden');
+    unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } };
+  unlockAudio();
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function updateCharSel(){
   for(let pi=0;pi<2;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
     if(!csLock[pi]){
