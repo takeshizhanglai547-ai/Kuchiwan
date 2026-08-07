@@ -19,9 +19,13 @@
     font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",-apple-system,"Segoe UI",system-ui,sans-serif;
   }
   /* ---------- Layout (§38 UI Philosophy: avatar center / conversation / input) ---------- */
-  #app{position:fixed; inset:0; display:flex; flex-direction:column; align-items:center}
-  #stageWrap{position:relative; flex:1 1 auto; width:100%; min-height:0; display:flex; justify-content:center}
-  #stage{display:block; height:100%; width:auto; max-width:100%}
+  /* dvh + a JS-set --vh fallback: iOS Safari's URL bar otherwise hides the input row */
+  #app{position:fixed; top:0; left:0; width:100%; height:100vh; height:calc(var(--vh,1vh)*100);
+       display:flex; flex-direction:column; align-items:center}
+  @supports (height:100dvh){ #app{height:100dvh} }
+  #stageWrap{position:relative; flex:1 1 auto; width:100%; min-height:0; overflow:hidden;
+    display:flex; justify-content:center; align-items:flex-end}
+  #stage{display:block; max-width:100%; max-height:100%}
   #brand{position:absolute; top:14px; left:16px; font-size:12px; letter-spacing:.28em; color:var(--ink-dim)}
   #brand b{color:var(--accent); letter-spacing:.28em}
   #modeTag{position:absolute; top:14px; right:56px; font-size:11px; letter-spacing:.1em;
@@ -232,7 +236,8 @@ const Config = {
   data:{},
   load(){ try{ this.data = Object.assign({}, this.d, JSON.parse(localStorage.getItem('lexlive.cfg')||'{}')); }
           catch(e){ this.data = {...this.d}; } return this.data; },
-  save(){ localStorage.setItem('lexlive.cfg', JSON.stringify(this.data)); },
+  // Safari private mode and sandboxed iframes throw on setItem — never let that kill the app
+  save(){ try{ localStorage.setItem('lexlive.cfg', JSON.stringify(this.data)); }catch(e){} },
   get(k){ return this.data[k]; },
   set(k,v){ this.data[k]=v; this.save(); }
 };
@@ -382,6 +387,7 @@ const Avatar = (()=>{
     cv = $('#stage'); ctx = cv.getContext('2d');
     dpr = Math.min(window.devicePixelRatio||1, 2);
     const h = $('#stageWrap').clientHeight, w = $('#stageWrap').clientWidth;
+    if(h<2 || w<2) return;
     const scale = Math.min(h/H, w/W);
     cv.style.height = (H*scale)+'px'; cv.style.width = (W*scale)+'px';
     cv.width = Math.round(W*scale*dpr); cv.height = Math.round(H*scale*dpr);
@@ -390,7 +396,14 @@ const Avatar = (()=>{
 
   /* ---- public interface ---- */
   const api = {
-    init(){ fit(); window.addEventListener('resize', fit); requestAnimationFrame(loop); },
+    init(){
+      fit();
+      window.addEventListener('resize', fit);
+      // the stage shrinks as the conversation grows — a plain resize listener never
+      // sees that, so the canvas would keep its launch size and overlap the log
+      if(window.ResizeObserver) new ResizeObserver(fit).observe($('#stageWrap'));
+      requestAnimationFrame(loop);
+    },
     setSpeaking(v){ s.speaking=v; },
     setListening(v){ s.listening=v; },
     setThinking(v){ s.thinking=v; },
@@ -780,11 +793,11 @@ const Avatar = (()=>{
     ctx.setLineDash([6,20]);
     ctx.beginPath(); ctx.ellipse(0,0,244,244,0,0,Math.PI*2); ctx.stroke();
     ctx.setLineDash([]); ctx.restore();
-    // floor light
-    ctx.save(); ctx.globalAlpha=.30;
-    const fg = ctx.createLinearGradient(0,700,0,H);
-    fg.addColorStop(0,'rgba(160,120,240,.22)'); fg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=fg; ctx.fillRect(0,700,W,H-700); ctx.restore();
+    // floor light — radial, so it never shows a hard edge at the canvas boundary
+    ctx.save(); ctx.translate(CX, 742); ctx.scale(1, 0.22);
+    const fg = ctx.createRadialGradient(0,0,10, 0,0,300);
+    fg.addColorStop(0,'rgba(170,130,250,.20)'); fg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=fg; ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fill(); ctx.restore();
   }
 
   function draw(){
@@ -812,7 +825,20 @@ const Avatar = (()=>{
    Realtime streaming voice API slots in here without touching the core.
    ========================================================================= */
 const Voice = {
-  rec:null, recording:false, voices:[], ready:false,
+  rec:null, recording:false, voices:[], ready:false, unlocked:false, pending:null,
+  /* iOS Safari refuses speechSynthesis until it has seen a user gesture, and never
+     fires voiceschanged before then. Unlock on the first touch, then flush anything
+     that was queued (typically the opening greeting). */
+  unlock(){
+    if(this.unlocked || !('speechSynthesis' in window)) return;
+    this.unlocked = true;
+    try{
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0; speechSynthesis.speak(u);
+      this.voices = speechSynthesis.getVoices(); UI.fillVoices();
+    }catch(e){}
+    if(this.pending){ const t=this.pending; this.pending=null; this.speak(t); }
+  },
   init(){
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if(SR){
@@ -838,7 +864,14 @@ const Voice = {
     this.ready = true;
   },
   toggle(){
-    if(!this.rec){ UI.sys('このブラウザは音声認識に未対応です。テキストでどうぞ。'); return; }
+    this.unlock();
+    if(!this.rec){
+      const ios = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                  (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+      UI.sys(ios ? 'iOS の Safari / Chrome は音声認識（Web Speech API）に未対応です。読み上げは動くので、入力はテキストでどうぞ。'
+                 : 'このブラウザは音声認識に未対応です。テキストでどうぞ。');
+      return;
+    }
     if(this.recording){ try{this.rec.stop();}catch(e){} return; }
     this.rec.lang = Config.get('lang');
     try{ this.rec.start(); }catch(e){ UI.sys('マイクを起動できませんでした。'); }
@@ -852,6 +885,13 @@ const Voice = {
   speak(text){
     return new Promise(resolve=>{
       const on = Config.get('tts')==='1' && 'speechSynthesis' in window;
+      if(on && text && !this.unlocked){
+        // hold it until the first tap rather than losing it to iOS's gesture rule
+        this.pending = text;
+        Avatar.setSpeaking(true);
+        setTimeout(()=>{ Avatar.setSpeaking(false); resolve(); }, clamp(text.length*38, 500, 6000));
+        return;
+      }
       if(!on || !text){ // still animate the mouth so presence never drops
         Avatar.setSpeaking(true); setTimeout(()=>{Avatar.setSpeaking(false); resolve();},
           clamp(text.length*38, 500, 6000)); return;
@@ -1207,10 +1247,25 @@ const UI = {
     $('#gear').onclick = ()=>$('#dev').classList.toggle('on');
     $('#devClose').onclick = ()=>$('#dev').classList.remove('on');
 
-    // gaze follows the pointer — presence, not decoration (§39)
-    window.addEventListener('pointermove', e=>{
-      Avatar.lookAt((e.clientX/innerWidth-.5)*2, (e.clientY/innerHeight-.5)*1.6);
-    });
+    // gaze follows the pointer / touch — presence, not decoration (§39)
+    const gaze = e=>Avatar.lookAt((e.clientX/innerWidth-.5)*2, (e.clientY/innerHeight-.5)*1.6);
+    window.addEventListener('pointermove', gaze);
+    window.addEventListener('touchmove', e=>{ if(e.touches[0]) gaze(e.touches[0]); }, {passive:true});
+
+    // first gesture unlocks audio on iOS
+    ['pointerdown','touchend','keydown'].forEach(ev=>
+      window.addEventListener(ev, ()=>Voice.unlock(), {once:true, passive:true}));
+
+    // mobile viewport: track the *visible* height so the input row is never
+    // buried under Safari's URL bar or the on-screen keyboard
+    const vh = ()=>{
+      const h = (window.visualViewport ? window.visualViewport.height : innerHeight);
+      document.documentElement.style.setProperty('--vh', (h/100)+'px');
+    };
+    vh();
+    window.addEventListener('resize', vh);
+    window.addEventListener('orientationchange', ()=>setTimeout(vh,150));
+    if(window.visualViewport){ window.visualViewport.addEventListener('resize', vh); }
 
     // config bindings
     const bind = (sel,key)=>{ const el=$(sel); el.value = Config.get(key); el.onchange = ()=>Config.set(key, el.value); };
@@ -1220,7 +1275,10 @@ const UI = {
         const el = document.querySelector('#cfg'+k[0].toUpperCase()+k.slice(1)); if(el) Config.set(k, el.value); });
       this.sys('設定を保存しました（Model Router: '+ModelRouter.label()+'）。'); this.renderTools(); };
     $('#cfgWipeKey').onclick = ()=>{ Config.set('key',''); $('#cfgKey').value=''; this.sys('APIキーを消去しました。'); };
-    $('#memWipe').onclick = ()=>{ if(confirm('全記憶を消去します。よろしいですか？')){ Memory.wipe(); this.renderMem(); this.sys('記憶を消去しました。'); } };
+    // in-app dialog rather than window.confirm — the latter is blocked in sandboxed iframes
+    $('#memWipe').onclick = async ()=>{
+      if(await this.confirm('全記憶を消去します。よろしいですか？')){
+        Memory.wipe(); this.renderMem(); this.sys('記憶を消去しました。'); } };
     $('#memExport').onclick = ()=>{
       const blob = new Blob([JSON.stringify(Memory.store,null,2)],{type:'application/json'});
       const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
