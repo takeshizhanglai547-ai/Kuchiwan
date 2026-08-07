@@ -1,0 +1,323 @@
+{
+ "pass": 63,
+ "fail": 0,
+ "rows": [
+  {
+   "name": "起動時にJSエラーが無い",
+   "ok": true,
+   "detail": "なし"
+  },
+  {
+   "name": "WebGLが描画している(draw call > 0)",
+   "ok": true,
+   "detail": "draw=49 tri=566"
+  },
+  {
+   "name": "初期状態がFREE",
+   "ok": true,
+   "detail": "FREE"
+  },
+  {
+   "name": "844x390: 射撃/アクションが規定領域内",
+   "ok": true,
+   "detail": "fire top=321(>=254) left=760(>=464) / act top=335 left=707"
+  },
+  {
+   "name": "740x360: 射撃/アクションが規定領域内",
+   "ok": true,
+   "detail": "fire top=292(>=234) left=660(>=407) / act top=306 left=608"
+  },
+  {
+   "name": "956x440: 射撃/アクションが規定領域内",
+   "ok": true,
+   "detail": "fire top=362(>=286) left=862(>=526) / act top=378 left=801"
+  },
+  {
+   "name": "左半分タッチ＋上スワイプでスティックが前方入力",
+   "ok": true,
+   "detail": "x=0.00 y=0.99 mag=0.99"
+  },
+  {
+   "name": "スティックの描画も規定領域内に収まる",
+   "ok": true,
+   "detail": "top=260(>=254) right=210(<=380)"
+  },
+  {
+   "name": "射撃トリガーのタッチで発砲状態になる",
+   "ok": true,
+   "detail": "fire=true"
+  },
+  {
+   "name": "射撃トリガーから指を滑らせるとカメラが回る（左スワイプ=左旋回）",
+   "ok": true,
+   "detail": "Δyaw=0.599 rad"
+  },
+  {
+   "name": "入力遅延（この環境はソフトウェア描画＝実機の値ではない）",
+   "ok": true,
+   "detail": "avg=1.9ms max=2.4ms  ※参考値"
+  },
+  {
+   "name": "R1 遮蔽への吸着：押した次のフレームで遷移が始まる",
+   "ok": true,
+   "detail": "TOCOVER"
+  },
+  {
+   "name": "R1 遮蔽への吸着：完了まで150〜200ms（§7）",
+   "ok": true,
+   "detail": "167ms"
+  },
+  {
+   "name": "R1 遮蔽への吸着：面から standOff(0.44m) の位置に着く",
+   "ok": true,
+   "detail": "z=2.790 期待=2.790"
+  },
+  {
+   "name": "R1 遮蔽への吸着：体が壁を向く",
+   "ok": true,
+   "detail": "yaw=0.00"
+  },
+  {
+   "name": "R1 吸着可能距離：1.05m先の遮蔽には吸着する",
+   "ok": true,
+   "detail": "COVER"
+  },
+  {
+   "name": "R1 吸着可能距離：1.60m先の遮蔽には吸着しない",
+   "ok": true,
+   "detail": "FREE"
+  },
+  {
+   "name": "R2 遮蔽からの離脱：スティック中立＋ボタンでFREEに戻る",
+   "ok": true,
+   "detail": "COVER -> FREE"
+  },
+  {
+   "name": "R2 誤爆防止：壁の中央で横入力しても乗り出さない（横移動のみ）",
+   "ok": true,
+   "detail": "peek=0.000 Δt=0.178"
+  },
+  {
+   "name": "R2 誤爆防止：スティックを手前に倒しても遮蔽から離れない",
+   "ok": true,
+   "detail": "COVER"
+  },
+  {
+   "name": "R2 誤爆防止：弱い入力(0.40)では乗り出さない（閾値0.55）",
+   "ok": true,
+   "detail": "peek=0.000"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：押した次のフレームで開始",
+   "ok": true,
+   "detail": "sprint=true"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：FOV 65→78 を0.3秒で（§7、0.3s時点で90%以上）",
+   "ok": true,
+   "detail": "0.30s時点 fov=76.6 (65→78)"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：最高速に達する",
+   "ok": true,
+   "detail": "6.30 m/s"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：ダッシュ中は射撃不可（柱1を守る）",
+   "ok": true,
+   "detail": "canFire=false"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：ダッシュ中はエイムアシスト0",
+   "ok": true,
+   "detail": "assist=0"
+  },
+  {
+   "name": "R3 低姿勢ダッシュ：ボタンを離すと解除",
+   "ok": true,
+   "detail": "sprint=false"
+  },
+  {
+   "name": "R4 ロール：遮蔽中にスティック＋ボタンでロール/乗り換えが始まる",
+   "ok": true,
+   "detail": "SWAP"
+  },
+  {
+   "name": "R4 乗り換え：横方向に隣の遮蔽があれば遮蔽へ着地する",
+   "ok": true,
+   "detail": "SWAP -> COVER, 移動3.85m / 37F"
+  },
+  {
+   "name": "R4 ロール：遮蔽の無い方向へは離脱ロールになり、FREEで終わる",
+   "ok": true,
+   "detail": "COVER / ROLL -> FREE, 3.10m"
+  },
+  {
+   "name": "R5 端からの射撃：高い遮蔽に隠れている間は撃てない",
+   "ok": true,
+   "detail": "state=COVER canFire=false"
+  },
+  {
+   "name": "R5 端まで滑る間は乗り出さない（弱い入力では暴発しない）",
+   "ok": true,
+   "detail": "t=0.884 / 端=0.884 peek=0.000"
+  },
+  {
+   "name": "R5 端からの射撃：端でスティックを倒すとボタン無しで乗り出す",
+   "ok": true,
+   "detail": "mode=1 peek=0.91 side=1"
+  },
+  {
+   "name": "R5 端からの射撃：90%まで約0.18秒（§7）",
+   "ok": true,
+   "detail": "200ms (期待 133〜233ms)"
+  },
+  {
+   "name": "R5 端からの射撃：乗り出すと撃てるようになる",
+   "ok": true,
+   "detail": "canFire=true"
+  },
+  {
+   "name": "R5 端からの射撃：戻すと10%まで約0.14秒（§7）",
+   "ok": true,
+   "detail": "150ms (期待 100〜200ms)"
+  },
+  {
+   "name": "R5 低い遮蔽：前に倒すと立ち上がって撃てる（mode=2）",
+   "ok": true,
+   "detail": "mode=2 peek=0.99 canFire=true"
+  },
+  {
+   "name": "R6 エイムアシスト：静止時は0.90、歩行中は大きく減衰する（柱1）",
+   "ok": true,
+   "detail": "静止=0.90 / 歩行=0.37"
+  },
+  {
+   "name": "R6 エイムアシスト：視線が通る敵を捕捉する",
+   "ok": true,
+   "detail": "target=1"
+  },
+  {
+   "name": "R6 エイムアシスト：背後の（視線が通らない）敵は捕捉しない",
+   "ok": true,
+   "detail": "target=-1"
+  },
+  {
+   "name": "R6 拡散：移動中はレティクルが開く（当たらない理由を画面で示す）",
+   "ok": true,
+   "detail": "静止=0.30° 移動=1.93°"
+  },
+  {
+   "name": "R6 射撃：狙った敵にダメージが入る",
+   "ok": true,
+   "detail": "敵1 HP 100 -> 34 / 最終弾:{\"hit\":1,\"head\":false,\"camBlk\":false,\"muzBlk\":false}"
+  },
+  {
+   "name": "R6 射撃：弾数が減る",
+   "ok": true,
+   "detail": "ammo=24"
+  },
+  {
+   "name": "R6 エイムアシスト：3段階が補正上限角に効いている（弱<標準<強）",
+   "ok": true,
+   "detail": "弱=1.22° 標準=2.70° 強=3.92°（静止時）"
+  },
+  {
+   "name": "R6 エイムアシスト：遮蔽中・標準での補正上限が §6 の 3.0°",
+   "ok": true,
+   "detail": "3.00°"
+  },
+  {
+   "name": "R6 遮蔽が弾を止める（壁越しの敵に当たらない）",
+   "ok": true,
+   "detail": "発砲10発 / HP 100,100 -> 100,100"
+  },
+  {
+   "name": "R7 リロード：弾切れで自動リロードし、1.60秒で満タンに戻る（§7の基本値）",
+   "ok": true,
+   "detail": "1.63s -> ammo=30"
+  },
+  {
+   "name": "R7 リロード：タイミング入力は未実装（ラウンド2）",
+   "ok": true,
+   "detail": "§7の成功窓0.12sはラウンド2で実装"
+  },
+  {
+   "name": "R8 被弾のノックバック：ラウンド1では未実装（敵が撃ってこないため）",
+   "ok": true,
+   "detail": "未実装＝ラウンド2で実装"
+  },
+  {
+   "name": "§7 カメラキック：1発で縦1.2°",
+   "ok": true,
+   "detail": "1.20°"
+  },
+  {
+   "name": "§7 カメラキック：0.25秒でほぼ復帰",
+   "ok": true,
+   "detail": "残り 0.060°"
+  },
+  {
+   "name": "§7 ヒットストップ：胴命中は16ms（連射武器向けに§7の40msから減じた。要判断）",
+   "ok": true,
+   "detail": "16ms"
+  },
+  {
+   "name": "§7 ヒットストップ：頭部命中は120ms（仕様どおり）",
+   "ok": true,
+   "detail": "120ms / 命中内容:{\"hit\":1,\"head\":true}"
+  },
+  {
+   "name": "重量：静止→歩行最高速に0.30秒前後かかる",
+   "ok": true,
+   "detail": "0.32s"
+  },
+  {
+   "name": "重量：入力を離してから停止までに余韻がある",
+   "ok": true,
+   "detail": "0.23s"
+  },
+  {
+   "name": "§12 ドローコール ≤ 150",
+   "ok": true,
+   "detail": "draw=59"
+  },
+  {
+   "name": "§12 三角形 ≤ 250,000",
+   "ok": true,
+   "detail": "tri=866"
+  },
+  {
+   "name": "撮影：02は高い遮蔽に隠れた状態",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":0,\"mode\":0}"
+  },
+  {
+   "name": "撮影：03は端から乗り出した状態",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":1}"
+  },
+  {
+   "name": "撮影：04は低い遮蔽から立ち撃ちの状態",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2}"
+  },
+  {
+   "name": "撮影：05は低姿勢ダッシュ中",
+   "ok": true,
+   "detail": "{\"state\":\"FREE\",\"sprint\":true,\"peek\":0,\"mode\":0}"
+  },
+  {
+   "name": "撮影：06は低い遮蔽から立って交戦中",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2}"
+  },
+  {
+   "name": "全工程を通してJSエラーが出ていない",
+   "ok": true,
+   "detail": "なし"
+  }
+ ],
+ "latAvg": 1.8833333334575098,
+ "latMax": 2.400000000372529
+}

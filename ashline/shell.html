@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#22262a">
+<title>ASHLINE — Round 1 greybox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
+  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Hiragino Sans","Noto Sans JP",sans-serif;
+  overscroll-behavior:none;position:fixed}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+/* すべてのポインタは #input で受け、当たり判定はJSで確定させる */
+#input{position:fixed;inset:0;z-index:20;touch-action:none}
+
+#ui{position:fixed;inset:0;z-index:10;pointer-events:none;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---- ボタン寸法：画面下35% / 左右各45%幅 の内側に収まる値 ---- */
+:root{ --btn: clamp(56px, 14.5vh, 104px); --pad-x: 3.2vw; }
+
+#btnFire{position:absolute;right:var(--pad-x);bottom:3.2vh;
+  width:var(--btn);height:var(--btn);border-radius:50%;
+  background:rgba(230,120,80,.13);border:2px solid rgba(255,170,130,.55);
+  display:flex;align-items:center;justify-content:center;
+  color:rgba(255,205,180,.85);font-size:calc(var(--btn)*.20);letter-spacing:.06em;
+  transition:background .06s linear,border-color .06s linear}
+#btnFire.down{background:rgba(255,150,100,.34);border-color:rgba(255,205,170,.95)}
+#btnFire.locked{opacity:.34}
+
+#btnAct{position:absolute;right:calc(var(--pad-x) + var(--btn) + 2.2vh);bottom:2.6vh;
+  width:calc(var(--btn)*.80);height:calc(var(--btn)*.80);border-radius:50%;
+  background:rgba(150,175,200,.12);border:2px solid rgba(180,205,230,.5);
+  display:flex;align-items:center;justify-content:center;
+  color:rgba(210,230,250,.9);font-size:calc(var(--btn)*.155);
+  transition:background .06s linear,border-color .06s linear}
+#btnAct.down{background:rgba(170,200,235,.34);border-color:rgba(215,235,255,.95)}
+
+#stickBase{position:absolute;left:0;top:0;border-radius:50%;display:none;
+  border:2px solid rgba(200,215,230,.28);background:rgba(140,160,180,.07)}
+#stickKnob{position:absolute;left:0;top:0;border-radius:50%;display:none;
+  background:rgba(210,225,240,.30);border:2px solid rgba(230,240,250,.6)}
+
+/* ---- レティクル：拡散が目に見えること ---- */
+#reticle{position:absolute;left:50%;top:calc(50% - 2.5vh);width:0;height:0;
+  transition:opacity .09s linear;--s:8px}
+#reticle.hide{opacity:0}
+#reticle i{position:absolute;background:rgba(240,245,250,.85);display:block;
+  box-shadow:0 0 2px rgba(0,0,0,.9)}
+#reticle i:nth-child(1){width:2px;height:9px;left:-1px;transform:translateY(calc(-1 * var(--s) - 9px))}
+#reticle i:nth-child(2){width:2px;height:9px;left:-1px;transform:translateY(var(--s))}
+#reticle i:nth-child(3){height:2px;width:9px;top:-1px;transform:translateX(calc(-1 * var(--s) - 9px))}
+#reticle i:nth-child(4){height:2px;width:9px;top:-1px;transform:translateX(var(--s))}
+#reticle.lock i{background:rgba(255,190,150,.95)}
+#reticle b{position:absolute;width:2px;height:2px;left:-1px;top:-1px;border-radius:50%;
+  background:rgba(255,255,255,.55)}
+
+/* ---- ヒットマーカー ---- */
+#hitmark{position:absolute;left:50%;top:calc(50% - 2.5vh);width:0;height:0;opacity:0}
+#hitmark.body{animation:hm .18s ease-out}
+#hitmark.head{animation:hmh .26s ease-out}
+#hitmark::before,#hitmark::after{content:'';position:absolute;width:15px;height:2px;
+  left:-7.5px;top:-1px;background:#fff}
+#hitmark::before{transform:rotate(45deg)}#hitmark::after{transform:rotate(-45deg)}
+@keyframes hm{0%{opacity:1;transform:scale(.7)}100%{opacity:0;transform:scale(1.35)}}
+@keyframes hmh{0%{opacity:1;transform:scale(.7)}100%{opacity:0;transform:scale(1.9)}}
+#hitmark.head::before,#hitmark.head::after{background:#ffb070;height:3px}
+
+/* ---- 画面外周のHUD（視線を中央から離さない） ---- */
+#ammo{position:absolute;right:calc(var(--pad-x) + 2px);bottom:calc(3.2vh + var(--btn) + 8px);
+  color:rgba(225,235,245,.72);font-size:13px;letter-spacing:.10em;font-variant-numeric:tabular-nums}
+#sprintTag{position:absolute;left:50%;transform:translateX(-50%);bottom:2.2vh;
+  color:rgba(255,200,160,.9);font-size:11px;letter-spacing:.28em;opacity:0;transition:opacity .12s}
+
+/* ---- デバッグ / 設定（親指の届かない上部に置く） ---- */
+#dbg{position:absolute;left:8px;top:8px;color:rgba(190,210,230,.78);font-size:10.5px;
+  line-height:1.5;font-family:ui-monospace,Menlo,monospace;background:rgba(0,0,0,.34);
+  padding:5px 7px;border-radius:4px;font-variant-numeric:tabular-nums}
+#dbgBtn,#btnSet{position:absolute;top:8px;pointer-events:auto;z-index:30;
+  background:rgba(0,0,0,.4);border:1px solid rgba(180,200,220,.35);border-radius:5px;
+  color:rgba(210,225,240,.85);font-size:11px;padding:6px 9px}
+#btnSet{right:8px}#dbgBtn{right:64px}
+#setPanel{position:absolute;right:8px;top:40px;z-index:30;display:none;
+  background:rgba(12,15,18,.92);border:1px solid rgba(170,195,220,.3);border-radius:7px;padding:7px}
+#setPanel.open{display:block}
+#setPanel button{display:block;width:100%;margin:3px 0;pointer-events:auto;
+  background:rgba(150,180,210,.14);border:1px solid rgba(180,205,230,.32);border-radius:5px;
+  color:rgba(220,235,250,.92);font-size:12px;padding:8px 12px;text-align:left;white-space:nowrap}
+
+/* ---- §6準拠の可視化（デバッグ時のみ） ---- */
+#zoneL,#zoneR{position:absolute;bottom:0;height:35%;border:1px dashed rgba(120,220,160,.30)}
+#zoneL{left:0;width:45%}#zoneR{right:0;width:45%}
+
+#rotate{position:fixed;inset:0;z-index:100;background:#15181b;display:none;
+  align-items:center;justify-content:center;color:#9fb4c8;font-size:15px;letter-spacing:.1em}
+#boot{position:fixed;inset:0;z-index:200;background:#15181b;display:flex;
+  align-items:center;justify-content:center;color:#7d8f9f;font-size:13px;letter-spacing:.2em}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="ui">
+  <div id="zoneL"></div><div id="zoneR"></div>
+  <div id="reticle"><i></i><i></i><i></i><i></i><b></b></div>
+  <div id="hitmark"></div>
+  <div id="stickBase"></div><div id="stickKnob"></div>
+  <div id="btnAct"><span id="actLabel">遮蔽</span></div>
+  <div id="btnFire">FIRE</div>
+  <div id="ammo">30 / 30</div>
+  <div id="sprintTag">D A S H</div>
+  <div id="dbg"></div>
+</div>
+
+<button id="dbgBtn">DBG</button>
+<button id="btnSet">設定</button>
+<div id="setPanel">
+  <button id="assistBtn">エイムアシスト：標準</button>
+  <button id="autoBtn">オートファイア：OFF</button>
+</div>
+
+<div id="input"></div>
+<div id="rotate">端末を横向きにしてください</div>
+<div id="boot">L O A D I N G</div>
+
+<script>/*__THREE__*/</script>
+<script>/*__GAME__*/</script>
+</body>
+</html>
