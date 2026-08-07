@@ -1,5 +1,5 @@
 {
- "pass": 63,
+ "pass": 86,
  "fail": 0,
  "rows": [
   {
@@ -55,7 +55,7 @@
   {
    "name": "入力遅延（この環境はソフトウェア描画＝実機の値ではない）",
    "ok": true,
-   "detail": "avg=1.9ms max=2.4ms  ※参考値"
+   "detail": "avg=2.3ms max=4.2ms  ※参考値"
   },
   {
    "name": "R1 遮蔽への吸着：押した次のフレームで遷移が始まる",
@@ -243,6 +243,106 @@
    "detail": "§7の成功窓0.12sはラウンド2で実装"
   },
   {
+   "name": "乗り越え：低い遮蔽の手前で前入力＋ボタン → その場でVAULT開始",
+   "ok": true,
+   "detail": "VAULT"
+  },
+  {
+   "name": "乗り越え：遮蔽の反対側に着地する",
+   "ok": true,
+   "detail": "z 3.08 -> 1.21 (期待 1.21) / FREE"
+  },
+  {
+   "name": "乗り越え：遮蔽の天端(1.05m)を越える高さまで上がる",
+   "ok": true,
+   "detail": "最高 1.15m / 着地時 y=0.00"
+  },
+  {
+   "name": "乗り越え：所要0.58秒（§7の重量に合わせた設計値）",
+   "ok": true,
+   "detail": "583ms"
+  },
+  {
+   "name": "乗り越え：着地に沈み込みが出る",
+   "ok": true,
+   "detail": "landDip=0.85"
+  },
+  {
+   "name": "乗り越え：高い遮蔽(2.05m)は越えられない（ダッシュに落ちる）",
+   "ok": true,
+   "detail": "FREE"
+  },
+  {
+   "name": "乗り越え：遮蔽中に前へ倒してボタンでも越えられる",
+   "ok": true,
+   "detail": "COVER -> VAULT -> FREE"
+  },
+  {
+   "name": "乗り越え：跳んでいる間は射撃不可・補正0・完全に無防備",
+   "ok": true,
+   "detail": "canFire=false assist=0 露出=1"
+  },
+  {
+   "name": "ダッシュ吸着：遮蔽に突っ込むと自動でカバーに入る",
+   "ok": true,
+   "detail": "TOCOVER -> COVER / 突入速度 5.63m/s"
+  },
+  {
+   "name": "ダッシュ吸着：面から standOff の位置に着く",
+   "ok": true,
+   "detail": "x=6.240 期待=6.240"
+  },
+  {
+   "name": "ダッシュ吸着：ダッシュは解除され、激突の沈み込みが出る",
+   "ok": true,
+   "detail": "sprint=false 激突時 dip=0.85"
+  },
+  {
+   "name": "ダッシュ吸着：壁沿いに走り抜けるときは捕まらない（誤爆しない）",
+   "ok": true,
+   "detail": "state=FREE sprint=true / 柱(z:0.55〜-1.35)を通過して z=-3.86"
+  },
+  {
+   "name": "ブラインドファイア：隠れたままトリガーを引くと銃を上げて撃てるようになる",
+   "ok": true,
+   "detail": "隠れた直後 canFire=false → ブラインド成立 canFire=true"
+  },
+  {
+   "name": "ブラインドファイア：撃てるまでに銃を上げる間(約0.10秒)がある",
+   "ok": true,
+   "detail": "117ms"
+  },
+  {
+   "name": "ブラインドファイア：頭は出さない（露出は乗り出しより遥かに小さい）",
+   "ok": true,
+   "detail": "露出=0.19（乗り出しは1.00）"
+  },
+  {
+   "name": "ブラインドファイア：エイムアシストは効かない",
+   "ok": true,
+   "detail": "assist=0"
+  },
+  {
+   "name": "ブラインドファイア：拡散が7.0°まで開く（当てる手段ではない）",
+   "ok": true,
+   "detail": "7.00°"
+  },
+  {
+   "name": "ブラインドファイア：自分の遮蔽を撃たず、壁の向こうへ弾が飛ぶ",
+   "ok": true,
+   "detail": "16発 / 最終着弾 z=-13.00（自分の遮蔽は z=-9.0）"
+  },
+  {
+   "name": "ブラインドファイア：トリガーを離すと銃を下ろす（約0.10秒）",
+   "ok": true,
+   "detail": "150ms"
+  },
+  {
+   "name": "ブラインドファイア：身を乗り出している間はブラインドにならない（狙撃が潰れない）",
+   "ok": true,
+   "detail": "isBlind=false"
+  },
+  {
    "name": "R8 被弾のノックバック：ラウンド1では未実装（敵が撃ってこないため）",
    "ok": true,
    "detail": "未実装＝ラウンド2で実装"
@@ -280,37 +380,52 @@
   {
    "name": "§12 ドローコール ≤ 150",
    "ok": true,
-   "detail": "draw=59"
+   "detail": "draw=49"
   },
   {
    "name": "§12 三角形 ≤ 250,000",
    "ok": true,
-   "detail": "tri=866"
+   "detail": "tri=566"
   },
   {
    "name": "撮影：02は高い遮蔽に隠れた状態",
    "ok": true,
-   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":0,\"mode\":0}"
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":0,\"mode\":0,\"y\":0,\"blind\":0}"
   },
   {
    "name": "撮影：03は端から乗り出した状態",
    "ok": true,
-   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":1}"
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":1,\"y\":0,\"blind\":0}"
   },
   {
    "name": "撮影：04は低い遮蔽から立ち撃ちの状態",
    "ok": true,
-   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2}"
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2,\"y\":0,\"blind\":0}"
   },
   {
    "name": "撮影：05は低姿勢ダッシュ中",
    "ok": true,
-   "detail": "{\"state\":\"FREE\",\"sprint\":true,\"peek\":0,\"mode\":0}"
+   "detail": "{\"state\":\"FREE\",\"sprint\":true,\"peek\":0,\"mode\":0,\"y\":0,\"blind\":0}"
   },
   {
    "name": "撮影：06は低い遮蔽から立って交戦中",
    "ok": true,
-   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2}"
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":1,\"mode\":2,\"y\":0,\"blind\":0}"
+  },
+  {
+   "name": "撮影：07は乗り越えの滞空中",
+   "ok": true,
+   "detail": "{\"state\":\"VAULT\",\"sprint\":false,\"peek\":0,\"mode\":0,\"y\":1.13,\"blind\":0}"
+  },
+  {
+   "name": "撮影：08はブラインドファイア中",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":0,\"mode\":0,\"y\":0,\"blind\":0.99}"
+  },
+  {
+   "name": "撮影：09はダッシュ吸着でカバーに入った直後",
+   "ok": true,
+   "detail": "{\"state\":\"COVER\",\"sprint\":false,\"peek\":0,\"mode\":0,\"y\":0,\"blind\":0}"
   },
   {
    "name": "全工程を通してJSエラーが出ていない",
@@ -318,6 +433,6 @@
    "detail": "なし"
   }
  ],
- "latAvg": 1.8833333334575098,
- "latMax": 2.400000000372529
+ "latAvg": 2.2833333333061696,
+ "latMax": 4.199999999953434
 }

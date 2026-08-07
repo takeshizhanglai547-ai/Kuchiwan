@@ -376,6 +376,157 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     `${(rel.reloadFrames / 60).toFixed(2)}s -> ammo=${rel.ammo}`);
   check('R7 リロード：タイミング入力は未実装（ラウンド2）', true, '§7の成功窓0.12sはラウンド2で実装');
 
+  /* ---------------------------------------------------------------------- */
+  console.log('\n=== 追加機能：乗り越え / ダッシュ吸着 / ブラインドファイア ===');
+
+  // --- 乗り越え ----------------------------------------------------------
+  const vault = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    // 中央の低い遮蔽(z=2.0, hz=0.35, h=1.05) の +Z 側から乗り越える
+    A.teleport(0, 3.1, 0); A.setStick(0, 1); A.tick(dt, 3);
+    const z0 = A.state().z;
+    A.pressAct(); A.tick(dt, 1); A.releaseAct();
+    r.first = A.state().state;
+    let maxY = 0, n = 1;
+    while (n < 120 && A.state().state === 'VAULT') { A.tick(dt, 1); maxY = Math.max(maxY, A.state().y); n++; }
+    const s = A.state();
+    r.frames = n; r.end = s.state; r.maxY = maxY; r.z0 = z0; r.z1 = s.z; r.y = s.y;
+    r.landDip = s.landDip;
+    // 着地点が遮蔽の反対側であること（-Z面 z=1.65 から standOff 0.44 → z=1.21）
+    r.expected = 2.35 - (0.70 + 0.44);
+
+    // 高い遮蔽は越えられない
+    A.setStick(0, 0); A.tick(dt, 5);
+    A.teleport(6.3, -0.4, -Math.PI / 2); A.tick(dt, 3);
+    A.setStick(0, 1); A.tick(dt, 2);
+    A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 10);
+    r.highWall = A.state().state;
+
+    // 遮蔽中に前へ倒してボタン → 乗り越え
+    A.setStick(0, 0); A.tick(dt, 5);
+    A.teleport(0, 3.2, 0); A.tick(dt, 4);
+    A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 20);
+    r.preCover = A.state().state;
+    A.setStick(0, 1); A.tick(dt, 2);
+    A.pressAct(); A.tick(dt, 1); A.releaseAct();
+    r.fromCover = A.state().state;
+    let m = 0; while (m < 120 && A.state().state === 'VAULT') { A.tick(dt, 1); m++; }
+    r.fromCoverEnd = A.state().state; r.fromCoverZ = A.state().z;
+
+    // 跳んでいる間は撃てない・補正もない
+    A.setStick(0, 0); A.tick(dt, 10);
+    A.teleport(0, 3.1, 0); A.setStick(0, 1); A.tick(dt, 3);
+    A.pressAct(); A.tick(dt, 6); A.releaseAct();
+    r.midCanFire = A.state().canFire; r.midAssist = A.state().assist; r.midExposure = A.state().exposure;
+    while (A.state().state === 'VAULT') A.tick(dt, 1);
+    A.setStick(0, 0); A.tick(dt, 10);
+    return r;
+  });
+  check('乗り越え：低い遮蔽の手前で前入力＋ボタン → その場でVAULT開始',
+    vault.first === 'VAULT', vault.first);
+  check('乗り越え：遮蔽の反対側に着地する',
+    near(vault.z1, vault.expected, 0.05) && vault.end === 'FREE',
+    `z ${vault.z0.toFixed(2)} -> ${vault.z1.toFixed(2)} (期待 ${vault.expected.toFixed(2)}) / ${vault.end}`);
+  check('乗り越え：遮蔽の天端(1.05m)を越える高さまで上がる',
+    vault.maxY > 1.05 && vault.y === 0, `最高 ${vault.maxY.toFixed(2)}m / 着地時 y=${vault.y.toFixed(2)}`);
+  check('乗り越え：所要0.58秒（§7の重量に合わせた設計値）',
+    vault.frames >= 32 && vault.frames <= 38, `${(vault.frames / 60 * 1000).toFixed(0)}ms`);
+  check('乗り越え：着地に沈み込みが出る', vault.landDip > 0.5, 'landDip=' + vault.landDip.toFixed(2));
+  check('乗り越え：高い遮蔽(2.05m)は越えられない（ダッシュに落ちる）',
+    vault.highWall !== 'VAULT', vault.highWall);
+  check('乗り越え：遮蔽中に前へ倒してボタンでも越えられる',
+    vault.preCover === 'COVER' && vault.fromCover === 'VAULT' && vault.fromCoverEnd === 'FREE',
+    `${vault.preCover} -> ${vault.fromCover} -> ${vault.fromCoverEnd}`);
+  check('乗り越え：跳んでいる間は射撃不可・補正0・完全に無防備',
+    vault.midCanFire === false && vault.midAssist === 0 && vault.midExposure === 1,
+    `canFire=${vault.midCanFire} assist=${vault.midAssist} 露出=${vault.midExposure}`);
+
+  // --- ダッシュで遮蔽に突っ込む -----------------------------------------
+  const slam = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    // 高い柱(x=5.4)へ真横から突っ込む（yaw=+π/2 の前方が -X）
+    A.teleport(9.0, -0.4, Math.PI / 2); A.setStick(0, 0); A.tick(dt, 5);
+    A.setStick(0, 1); A.pressAct(); A.tick(dt, 6);
+    r.sprinting = A.state().sprint;
+    let prevSpeed = 0, n = 0;
+    while (n < 200 && A.state().state === 'FREE') { prevSpeed = A.state().speed; A.tick(dt, 1); n++; }
+    // 沈み込みは激突した瞬間の値で見る（時定数0.10秒で減衰するため）
+    r.hitState = A.state().state; r.frames = n; r.speedAtHit = prevSpeed;
+    r.dip = A.state().landDip; r.sprintAfter = A.state().sprint;
+    while (A.state().state === 'TOCOVER') A.tick(dt, 1);
+    r.end = A.state().state; r.x = A.state().x;
+    A.releaseAct(); A.setStick(0, 0); A.tick(dt, 10);
+
+    // 壁沿いに走り抜けるときは捕まらない（誤爆しないこと）
+    // 柱の+X面(x=5.8, z=0.55〜-1.35)から0.8mの位置を、面に平行に-Zへ走り抜ける
+    A.teleport(6.6, 3.0, 0); A.tick(dt, 5);
+    A.setStick(0, 1); A.pressAct(); A.tick(dt, 90);
+    r.parallel = A.state().state; r.parallelSprint = A.state().sprint;
+    r.parallelZ = A.state().z;
+    A.releaseAct(); A.setStick(0, 0); A.tick(dt, 10);
+    return r;
+  });
+  check('ダッシュ吸着：遮蔽に突っ込むと自動でカバーに入る',
+    slam.hitState === 'TOCOVER' && slam.end === 'COVER',
+    `${slam.hitState} -> ${slam.end} / 突入速度 ${slam.speedAtHit.toFixed(2)}m/s`);
+  check('ダッシュ吸着：面から standOff の位置に着く',
+    near(slam.x, 5.8 + 0.44, 0.05), `x=${slam.x.toFixed(3)} 期待=${(5.8 + 0.44).toFixed(3)}`);
+  check('ダッシュ吸着：ダッシュは解除され、激突の沈み込みが出る',
+    slam.sprintAfter === false && slam.dip > 0.8, `sprint=${slam.sprintAfter} 激突時 dip=${slam.dip.toFixed(2)}`);
+  check('ダッシュ吸着：壁沿いに走り抜けるときは捕まらない（誤爆しない）',
+    slam.parallel === 'FREE' && slam.parallelSprint === true && slam.parallelZ < -1.35,
+    `state=${slam.parallel} sprint=${slam.parallelSprint} / 柱(z:0.55〜-1.35)を通過して z=${slam.parallelZ.toFixed(2)}`);
+
+  // --- ブラインドファイア ------------------------------------------------
+  const bf = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    A.healEnemies(); A.reload();
+    // 高い遮蔽(0,-9.4,h=2.05)の +Z 面。敵は壁の向こう(z=-11)。
+    A.teleport(0, -8.5, 0); A.setStick(0, 0); A.tick(dt, 5);
+    A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 20);
+    r.cover = A.state().state;
+    r.hiddenCanFire = A.state().canFire;          // 銃を上げる前は撃てない
+    A.setFire(true);
+    let n = 0; while (n < 30 && !A.state().isBlind) { A.tick(dt, 1); n++; }
+    r.raiseFrames = n;
+    const s = A.state();
+    r.isBlind = s.isBlind; r.canFire = s.canFire; r.assist = s.assist;
+    r.spread = s.spread; r.exposure = s.exposure; r.peek = s.peek;
+    const hp0 = A.state().enemyHp.slice();
+    A.tick(dt, 90);
+    r.shot = A.state().lastShot; r.ammo = A.state().ammo;
+    r.hp0 = hp0; r.hp1 = A.state().enemyHp.slice();
+    A.setFire(false);
+    let m = 0; while (m < 40 && A.state().blind > 0.05) { A.tick(dt, 1); m++; }
+    r.lowerFrames = m;
+    // 乗り出している間はブラインドにならない
+    A.healEnemies(); A.reload(); A.setStick(0, 0); A.tick(dt, 10);
+    A.teleport(0, 3.2, 0); A.tick(dt, 4); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 20);
+    A.setStick(0, 1); A.tick(dt, 25);
+    A.setFire(true); A.tick(dt, 20);
+    r.peekNotBlind = A.state().isBlind; r.peekSpread = A.state().spread;
+    A.setFire(false); A.setStick(0, 0); A.tick(dt, 10);
+    return r;
+  });
+  check('ブラインドファイア：隠れたままトリガーを引くと銃を上げて撃てるようになる',
+    bf.cover === 'COVER' && bf.hiddenCanFire === false && bf.isBlind === true && bf.canFire === true,
+    `隠れた直後 canFire=${bf.hiddenCanFire} → ブラインド成立 canFire=${bf.canFire}`);
+  check('ブラインドファイア：撃てるまでに銃を上げる間(約0.10秒)がある',
+    bf.raiseFrames >= 4 && bf.raiseFrames <= 12, `${(bf.raiseFrames / 60 * 1000).toFixed(0)}ms`);
+  check('ブラインドファイア：頭は出さない（露出は乗り出しより遥かに小さい）',
+    bf.peek === 0 && bf.exposure > 0 && bf.exposure < 0.30, `露出=${bf.exposure.toFixed(2)}（乗り出しは1.00）`);
+  check('ブラインドファイア：エイムアシストは効かない',
+    bf.assist === 0, 'assist=' + bf.assist);
+  check('ブラインドファイア：拡散が7.0°まで開く（当てる手段ではない）',
+    near(bf.spread * 180 / Math.PI, 7.0, 0.05), (bf.spread * 180 / Math.PI).toFixed(2) + '°');
+  check('ブラインドファイア：自分の遮蔽を撃たず、壁の向こうへ弾が飛ぶ',
+    bf.ammo < 30 && bf.shot && bf.shot.blind === true && bf.shot.end.z < -9.4,
+    `${30 - bf.ammo}発 / 最終着弾 z=${bf.shot ? bf.shot.end.z.toFixed(2) : '?'}（自分の遮蔽は z=-9.0）`);
+  check('ブラインドファイア：トリガーを離すと銃を下ろす（約0.10秒）',
+    bf.lowerFrames >= 3 && bf.lowerFrames <= 12, `${(bf.lowerFrames / 60 * 1000).toFixed(0)}ms`);
+  check('ブラインドファイア：身を乗り出している間はブラインドにならない（狙撃が潰れない）',
+    bf.peekNotBlind === false && bf.peekSpread < 0.01, `isBlind=${bf.peekNotBlind}`);
+
   // --- 8. 被弾のノックバック ---------------------------------------------
   check('R8 被弾のノックバック：ラウンド1では未実装（敵が撃ってこないため）', true, '未実装＝ラウンド2で実装');
 
@@ -442,13 +593,18 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     ['03_peek_edge', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(6.3, -0.4, -Math.PI / 2); A.tick(dt, 4); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 30); A.setStick(-1, 0); A.tick(dt, 120); } ],
     ['04_lowcover_pop', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(0, 3.2, 0); A.tick(dt, 4); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 30); A.setStick(0, 1); A.tick(dt, 30); A.setFire(true); A.tick(dt, 2); } ],
     ['05_sprint', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(0, 9, 0); A.tick(dt, 4); A.setStick(0, 1); A.pressAct(); A.tick(dt, 40); } ],
-    ['06_engage', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(-3.2, -3.9, 0); A.tick(dt, 6); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 30); A.setStick(0, 1); A.tick(dt, 30); A.setFire(true); A.tick(dt, 3); } ]
+    ['06_engage', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(-3.2, -3.9, 0); A.tick(dt, 6); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 30); A.setStick(0, 1); A.tick(dt, 30); A.setFire(true); A.tick(dt, 3); } ],
+    ['07_vault', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(0, 3.1, 0); A.setStick(0, 1); A.tick(dt, 3); A.pressAct(); A.tick(dt, 1); A.releaseAct(); A.tick(dt, 15); } ],
+    ['08_blindfire', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(0, -8.5, 0); A.tick(dt, 5); A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 25); A.setFire(true); A.tick(dt, 14); } ],
+    ['09_slam', () => { const A = __ASHLINE, dt = 1 / 60; A.teleport(9.0, -0.4, Math.PI / 2); A.tick(dt, 4); A.setStick(0, 1); A.pressAct(); A.tick(dt, 60); } ]
   ];
   const shotStates = {};
+  // ループを止めて撮る。止めないと、撮影までの間にゲームが進み一瞬の状態が写らない。
+  await page.evaluate(() => __ASHLINE.pause(true));
   for (const [name, fn] of shots) {
     await page.evaluate(() => { const A = __ASHLINE; A.setStick(0, 0); A.setFire(false); A.releaseAct(); A.healEnemies(); A.reload(); A.tick(1 / 60, 20); });
     await page.evaluate(fn);
-    shotStates[name] = await page.evaluate(() => { const s = __ASHLINE.state(); return { state: s.state, sprint: s.sprint, peek: +s.peek.toFixed(2), mode: s.peekMode }; });
+    shotStates[name] = await page.evaluate(() => { const s = __ASHLINE.state(); return { state: s.state, sprint: s.sprint, peek: +s.peek.toFixed(2), mode: s.peekMode, y: +s.y.toFixed(2), blind: +s.blind.toFixed(2) }; });
     await page.evaluate(() => { __ASHLINE.render(); });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(SHOT, name + '.png') });
@@ -460,7 +616,10 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
   check('撮影：04は低い遮蔽から立ち撃ちの状態', shotStates['04_lowcover_pop'].mode === 2 && shotStates['04_lowcover_pop'].peek > 0.9, JSON.stringify(shotStates['04_lowcover_pop']));
   check('撮影：05は低姿勢ダッシュ中', shotStates['05_sprint'].sprint === true, JSON.stringify(shotStates['05_sprint']));
   check('撮影：06は低い遮蔽から立って交戦中', shotStates['06_engage'].mode === 2 && shotStates['06_engage'].peek > 0.9, JSON.stringify(shotStates['06_engage']));
-  await page.evaluate(() => { __ASHLINE.setFire(false); __ASHLINE.setStick(0, 0); __ASHLINE.releaseAct(); });
+  check('撮影：07は乗り越えの滞空中', shotStates['07_vault'].state === 'VAULT' && shotStates['07_vault'].y > 0.5, JSON.stringify(shotStates['07_vault']));
+  check('撮影：08はブラインドファイア中', shotStates['08_blindfire'].state === 'COVER' && shotStates['08_blindfire'].blind > 0.85 && shotStates['08_blindfire'].peek === 0, JSON.stringify(shotStates['08_blindfire']));
+  check('撮影：09はダッシュ吸着でカバーに入った直後', shotStates['09_slam'].state === 'COVER' && shotStates['09_slam'].sprint === false, JSON.stringify(shotStates['09_slam']));
+  await page.evaluate(() => { __ASHLINE.setFire(false); __ASHLINE.setStick(0, 0); __ASHLINE.releaseAct(); __ASHLINE.pause(false); });
 
   /* ---------------------------------------------------------------------- */
   await page.waitForTimeout(500);

@@ -56,6 +56,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 #reticle i:nth-child(3){height:2px;width:9px;top:-1px;transform:translateX(calc(-1 * var(--s) - 9px))}
 #reticle i:nth-child(4){height:2px;width:9px;top:-1px;transform:translateX(var(--s))}
 #reticle.lock i{background:rgba(255,190,150,.95)}
+/* ブラインドファイア：狙えていないことを形で見せる（細く・薄く・大きく開く） */
+#reticle.blind i{background:rgba(190,205,220,.42);width:1px;height:6px}
+#reticle.blind i:nth-child(3),#reticle.blind i:nth-child(4){height:1px;width:6px}
+#reticle.blind b{opacity:0}
 #reticle b{position:absolute;width:2px;height:2px;left:-1px;top:-1px;border-radius:50%;
   background:rgba(255,255,255,.55)}
 
@@ -212,7 +216,17 @@ var CFG = {
     reticleNdcY: 0.05
   },
 
-  roll: { dist: 3.10, time: 0.55, swapMax: 4.0, swapTime: 0.52 }
+  roll: { dist: 3.10, time: 0.55, swapMax: 4.0, swapTime: 0.52 },
+
+  // 障害物の乗り越え。低い遮蔽のみ。跳んでいる間は完全に無防備。
+  vault: { range: 1.15, time: 0.58, rise: 0.34, clearance: 0.12 },
+
+  // ダッシュで遮蔽に突っ込んだときの自動吸着
+  slam: { dist: 0.95, cone: 0.62 },
+
+  // ブラインドファイア。当てる手段ではなく、頭を出さずに圧をかける手段。
+  // ready=0.85 で「銃を上げ切るまで約0.10秒撃てない」＝ブラインドファイアの対価
+  blind: { raise: 0.12, lower: 0.10, ready: 0.85, spread: 7.0 * DEG, muzzleUp: 0.25 }
 };
 
 /* エイムアシスト強度3段階。静止時の補正量のみ可変。
@@ -408,10 +422,10 @@ function bindInput(el) {
 /* =============================================================================
    PLAYER
    ========================================================================== */
-var ST = { FREE: 'FREE', TOCOVER: 'TOCOVER', COVER: 'COVER', ROLL: 'ROLL', SWAP: 'SWAP' };
+var ST = { FREE: 'FREE', TOCOVER: 'TOCOVER', COVER: 'COVER', ROLL: 'ROLL', SWAP: 'SWAP', VAULT: 'VAULT' };
 
 var P = {
-  x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 0,
+  x: SPAWN.x, y: 0, z: SPAWN.z, vx: 0, vz: 0,
   yaw: SPAWN.yaw,            // 体の向き（three-style）
   state: ST.FREE,
   sprint: false, sprintArmed: false,
@@ -424,8 +438,12 @@ var P = {
   coverAlignT: 0,
   // combat
   hp: 100, ammo: CFG.fire.mag, reloadT: 0, fireCd: 0, flash: 0,
+  // blind fire
+  blindT: 0,
+  // vault
+  vaultTop: 0,
   // anim
-  lean: 0, leanV: 0, roll: 0, rollV: 0, stride: 0, crouch: 0
+  lean: 0, leanV: 0, roll: 0, rollV: 0, stride: 0, crouch: 0, landDip: 0
 };
 
 var CAM = {
@@ -473,6 +491,81 @@ function coverAnchor(f, t, out) {
 }
 var _anc = { x: 0, z: 0, t: 0, minT: 0 };
 
+/* ---- 乗り越え：低い遮蔽だけ。跳んでいる間は完全に無防備 ---------------- */
+function findVault(sx, sy) {
+  var fx = yawDirX(CAM.yaw), fz = yawDirZ(CAM.yaw), rx = -fz, rz = fx;
+  var wx = rx * sx + fx * sy, wz = rz * sx + fz * sy;
+  var wl = Math.hypot(wx, wz);
+  if (wl < 1e-5) return null;
+  return vaultTargetFor(wx / wl, wz / wl);
+}
+function vaultTargetFor(wx, wz) {
+  var best = null, bestD = Infinity, bt = 0;
+  for (var i = 0; i < faces.length; i++) {
+    var f = faces[i];
+    if (!f.low) continue;                                  // 高い遮蔽は越えられない
+    if (wx * f.nx + wz * f.nz > -0.55) continue;           // その面に向かっていること
+    var rx = P.x - f.ax, rz = P.z - f.az;
+    var side = rx * f.nx + rz * f.nz;
+    if (side < 0.02 || side > CFG.vault.range) continue;
+    var t = (rx * f.tx + rz * f.tz) / f.len;
+    if (t < 0.03 || t > 0.97) continue;                    // 角では跳ばない
+    if (side < bestD) { bestD = side; best = f; bt = t; }
+  }
+  if (!best) return null;
+  var c = best.cover;
+  var depth = Math.abs(best.nx) > 0.5 ? c.hx * 2 : c.hz * 2;
+  var span = depth + CFG.cover.standOff;
+  var px = best.ax + best.tx * best.len * bt, pz = best.az + best.tz * best.len * bt;
+  var lxp = px - best.nx * span, lzp = pz - best.nz * span;
+  // 着地点が塞がっていたら跳ばせない（壁の向こうが埋まっているのに跳ぶのは理不尽）
+  var o = { x: 0, z: 0 };
+  resolveCircle(lxp, lzp, CFG.player.radius, o);
+  if (Math.hypot(o.x - lxp, o.z - lzp) > 0.06) return null;
+  return { face: best, lx: lxp, lz: lzp, top: c.h };
+}
+function startVault(v) {
+  P.state = ST.VAULT; P.face = null; P.sprint = false; P.sprintArmed = false;
+  P.ax0 = P.x; P.az0 = P.z; P.ax1 = v.lx; P.az1 = v.lz;
+  P.actT = 0; P.actDur = CFG.vault.time; P.vaultTop = v.top;
+  P.vx = 0; P.vz = 0; P.peek = 0; P.peekMode = 0; P.blindT = 0;
+}
+function vaultUpdate(dt) {
+  P.actT += dt;
+  var s = clamp(P.actT / P.actDur, 0, 1);
+  // 予備動作(踏み切りで少し溜める) → 主要動作(跳ぶ) → 余韻(着地の沈み込み)
+  var k = s < 0.14 ? (s / 0.14) * 0.10
+    : 0.10 + 0.90 * (1 - Math.pow(1 - (s - 0.14) / 0.86, 1.8));
+  P.x = lerp(P.ax0, P.ax1, k); P.z = lerp(P.az0, P.az1, k);
+  P.y = Math.sin(clamp((s - 0.10) / 0.82, 0, 1) * Math.PI) * (P.vaultTop + 0.10);
+  P.yaw = approachAngle(P.yaw, dirToYaw(P.ax1 - P.ax0, P.az1 - P.az0), 16, dt);
+  P.roll = Math.sin(s * Math.PI) * 0.42;
+  if (s >= 1) {
+    P.state = ST.FREE; P.y = 0; P.roll = 0; P.landDip = 1;
+    P.x = P.ax1; P.z = P.az1; P.vx = 0; P.vz = 0;
+  }
+}
+
+/* ---- ダッシュで遮蔽に突っ込んだときの自動吸着 -------------------------- */
+function findSlamCover() {
+  var sp = Math.hypot(P.vx, P.vz);
+  if (sp < 2.5) return null;
+  var dx = P.vx / sp, dz = P.vz / sp;
+  var best = null, bestD = Infinity, bt = 0;
+  for (var i = 0; i < faces.length; i++) {
+    var f = faces[i];
+    // 面に正面から突っ込んでいる時だけ。壁沿いに走り抜ける時に捕まらないように。
+    if (dx * f.nx + dz * f.nz > -CFG.slam.cone) continue;
+    var rx = P.x - f.ax, rz = P.z - f.az;
+    var side = rx * f.nx + rz * f.nz;
+    if (side < 0.02 || side > CFG.slam.dist) continue;
+    var t = (rx * f.tx + rz * f.tz) / f.len;
+    if (t < 0 || t > 1) continue;
+    if (side < bestD) { bestD = side; best = f; bt = t; }
+  }
+  return best ? { face: best, t: bt } : null;
+}
+
 /* 吸着カーブ：予備動作(わずかに引く) → 主要動作 → 余韻(小さくオーバーシュート) */
 function coverCurve(s) {
   var a = 0.16;
@@ -497,7 +590,9 @@ function update(dt) {
     case ST.COVER: coverUpdate(dt, act); break;
     case ST.ROLL: rollUpdate(dt); break;
     case ST.SWAP: swapUpdate(dt); break;
+    case ST.VAULT: vaultUpdate(dt); break;
   }
+  P.landDip = smooth(P.landDip, 0, 0.10, dt);
   // カメラを先に確定させる。照準はカメラから引くので、1フレーム遅れると
   // 「見ている所と当たる所がずれる」＝エイムアシストが嘘をつく。
   updateAnim(dt);
@@ -526,6 +621,10 @@ function freeUpdate(dt, act) {
   var sx = IN.stick.x, sy = IN.stick.y, mag = IN.stick.mag;
 
   if (act) {
+    // 1) 低い障害物が正面にあれば乗り越え（壁に向かってダッシュしても意味がないため優先）
+    var v = (mag > 0.35) ? findVault(sx, sy) : null;
+    if (v) { startVault(v); vaultUpdate(dt); return; }
+    // 2) 移動中ならダッシュ
     if (mag > 0.25) { P.sprint = true; P.sprintArmed = false; }
     else {
       var q = findCover(P.x, P.z, CFG.cover.snapDist);
@@ -562,6 +661,17 @@ function freeUpdate(dt, act) {
   else { P.vx += mx / ml * step; P.vz += mz / ml * step; }
 
   moveAndCollide(dt);
+
+  // ダッシュで遮蔽に突っ込んだら、そのまま貼り付く
+  if (P.sprint) {
+    var s = findSlamCover();
+    if (s) {
+      enterCover(s.face, s.t);
+      P.landDip = 1;                                 // ぶつかった衝撃を体に出す
+      toCoverUpdate(dt);
+      return;
+    }
+  }
 
   // 体の向き：ダッシュ中は進行方向、通常は照準方向
   if (P.sprint && (Math.abs(P.vx) + Math.abs(P.vz)) > 0.4) {
@@ -616,8 +726,12 @@ function coverUpdate(dt, act) {
   var atR = (1 - _anc.minT - P.t) * f.len <= eps;
 
   if (act) {
-    if (mag > 0.35) startRollOrSwap(lx, ly);
-    else leaveCover();
+    if (mag > 0.35) {
+      // 低い遮蔽で前に倒していれば、ロールではなく乗り越え
+      var vv = (f.low && ly > 0.50 && Math.abs(lx) < 0.60) ? vaultTargetFor(-f.nx, -f.nz) : null;
+      if (vv) { startVault(vv); vaultUpdate(dt); return; }
+      startRollOrSwap(lx, ly);
+    } else leaveCover();
     if (P.state !== ST.COVER) return;
   }
 
@@ -636,6 +750,13 @@ function coverUpdate(dt, act) {
   P.peek = smooth(P.peek, target, target > P.peek ? CFG.cover.peekIn / 2.2 : CFG.cover.peekOut / 2.2, dt);
   if (P.peek < 0.02 && !wantMode) { P.peek = 0; P.peekMode = 0; }
 
+  /* --- ブラインドファイア：隠れたまま銃だけ上げて撃つ ------------------ */
+  // 頭を出さないので当たらない。撃たれ続けている時に「何もできない」を無くすための手段。
+  var wantBlind = (wantMode === 0 && P.peek < 0.15 && IN.fire.on);
+  P.blindT = smooth(P.blindT, wantBlind ? 1 : 0,
+    (wantBlind ? CFG.blind.raise : CFG.blind.lower) / 2.2, dt);
+  if (!wantBlind && P.blindT < 0.02) P.blindT = 0;
+
   /* --- 遮蔽に沿った横移動 -------------------------------------------- */
   if (!wantMode && Math.abs(lx) > 0.12) {
     var dtt = (lx * CFG.move.coverSlide * dt) / f.len;
@@ -652,7 +773,7 @@ function coverUpdate(dt, act) {
 }
 
 function leaveCover() {
-  P.state = ST.FREE; P.face = null; P.peek = 0; P.peekMode = 0;
+  P.state = ST.FREE; P.face = null; P.peek = 0; P.peekMode = 0; P.blindT = 0;
   P.vx = 0; P.vz = 0;
 }
 
@@ -730,9 +851,26 @@ function snapMaxRad() {
 }
 
 /* 状態によるエイムアシスト倍率。ここが柱1(止まって撃つ)を守る要。*/
+/* どれだけ身を晒しているか。0=完全に隠れている 1=遮蔽なし。
+   ラウンド2で敵の命中判定に使う。今はデバッグ表示のみ。 */
+function exposure() {
+  if (P.state === ST.COVER) {
+    if (P.peekMode) return P.peek;
+    return P.blindT * 0.22;                 // 腕だけ出している
+  }
+  if (P.state === ST.TOCOVER) return 1 - P.snapT / CFG.cover.snapTime * 0.85;
+  return 1;
+}
+
+/* 隠れたまま銃だけ上げている状態か */
+function isBlind() {
+  return P.state === ST.COVER && P.peekMode === 0 && P.blindT >= CFG.blind.ready;
+}
+
 function assistScale() {
   if (P.sprint) return 0;                                   // ダッシュ中は補正ゼロ（かつ射撃不可）
-  if (P.state === ST.ROLL || P.state === ST.SWAP) return 0;
+  if (isBlind()) return 0;                                  // 見ていないのだから補正しない
+  if (P.state === ST.ROLL || P.state === ST.SWAP || P.state === ST.VAULT) return 0;
   if (P.state === ST.COVER) return 1.0;                     // 遮蔽中・乗り出し中は最大
   var sp = Math.hypot(P.vx, P.vz);
   // 静止0.90 → 全速歩行0.15。走りながらの乱射を最適解にしないための減衰。
@@ -740,12 +878,14 @@ function assistScale() {
 }
 function canFire() {
   if (P.sprint) return false;
-  if (P.state === ST.ROLL || P.state === ST.SWAP || P.state === ST.TOCOVER) return false;
-  if (P.state === ST.COVER && P.peek < 0.5) return false;   // 隠れたままでは撃てない
+  if (P.state === ST.ROLL || P.state === ST.SWAP || P.state === ST.TOCOVER || P.state === ST.VAULT) return false;
   if (P.reloadT > 0 || P.ammo <= 0) return false;
+  // 隠れたままなら、銃を上げ切った後だけ撃てる（ブラインドファイア）
+  if (P.state === ST.COVER && P.peek < 0.5) return isBlind();
   return true;
 }
 function currentSpread() {
+  if (isBlind()) return CFG.blind.spread;                   // 当てる手段ではない
   var sp = Math.hypot(P.vx, P.vz) / CFG.move.walk;
   var base = lerp(CFG.fire.spreadStill, CFG.fire.spreadMove, clamp(sp, 0, 1));
   if (P.state === ST.COVER) base = CFG.fire.spreadStill * 0.75;
@@ -794,86 +934,112 @@ function updateWeapon(dt) {
   if (want && canFire() && P.fireCd <= 0) shoot();
 }
 
+var FAR = 90;
+var _mz = new T.Vector3(), _dir = new T.Vector3(), _rt = new T.Vector3(), _uu = new T.Vector3();
+
 function shoot() {
   P.fireCd = 60 / CFG.fire.rpm;
   P.ammo--; P.flash = CFG.fire.flashFrames;
 
-  var d = aimRay().clone();
-  var snapApplied = 0;
-  // スナップ補正（最大3°）
-  if (aimTarget) {
-    var tx = aimTarget.x - camera.position.x, ty = CFG.player.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
-    var tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
-    var dot = clamp(d.x * tx + d.y * ty + d.z * tz, -1, 1);
-    var ang = Math.acos(dot);
-    var maxA = snapMaxRad();
-    if (ang <= maxA && ang > 1e-5) { d.set(tx, ty, tz); snapApplied = ang / DEG; }
+  var blind = isBlind(), snapApplied = 0, head = false;
+  var m, d = _dir, camBlocked = false;
+
+  if (blind) {
+    /* 隠れたまま：カメラの射線は使わない。銃だけを遮蔽の上へ出して、
+       おおよその方向へばらまく。狙っていないのだから当たらないのが正しい。 */
+    m = blindMuzzle(_mz);
+    blindDir(d);
+  } else {
+    /* 1) カメラから着弾点を求める（プレイヤーが見ている先） */
+    var a = aimRay();
+    d.copy(a);
+    if (aimTarget) {   // スナップ補正（最大3°）
+      var tx = aimTarget.x - camera.position.x, ty = CFG.player.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
+      var tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
+      var ang = Math.acos(clamp(d.x * tx + d.y * ty + d.z * tz, -1, 1));
+      if (ang <= snapMaxRad() && ang > 1e-5) { d.set(tx, ty, tz); snapApplied = ang / DEG; }
+    }
+    var tW = rayWorld(camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z, FAR);
+    var tE = Infinity;
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i]; if (e.dead) continue;
+      var r = enemyRay(e, camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z);
+      if (r.t < tE) tE = r.t;
+    }
+    camBlocked = tW < tE;
+    var camT = Math.min(tW, tE);
+    var ix = camera.position.x + d.x * camT, iy = camera.position.y + d.y * camT, iz = camera.position.z + d.z * camT;
+
+    /* 2) 銃口から着弾点へ向け直す。カメラの射線が通っていても、
+          銃が遮蔽の裏にあれば壁に当たる ＝ 遮蔽を撃ち抜かない。 */
+    m = muzzlePos(_mz);
+    d.set(ix - m.x, iy - m.y, iz - m.z).normalize();
   }
-  // 拡散
+
+  /* 拡散は最後に、銃口から出る向きに対してかける */
   var sp = currentSpread();
   if (sp > 1e-6) {
-    var a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * sp;
-    var up = Math.abs(d.y) < 0.9 ? _tmpV.set(0, 1, 0) : _tmpV.set(1, 0, 0);
-    var rt = new T.Vector3().crossVectors(d, up).normalize();
-    var uu = new T.Vector3().crossVectors(rt, d).normalize();
-    d.addScaledVector(rt, Math.cos(a) * r).addScaledVector(uu, Math.sin(a) * r).normalize();
+    var ra = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * sp;
+    _tmpV.set(Math.abs(d.y) < 0.9 ? 0 : 1, Math.abs(d.y) < 0.9 ? 1 : 0, 0);
+    _rt.crossVectors(d, _tmpV).normalize();
+    _uu.crossVectors(_rt, d).normalize();
+    d.addScaledVector(_rt, Math.cos(ra) * rr).addScaledVector(_uu, Math.sin(ra) * rr).normalize();
   }
 
-  // 1) カメラから着弾点を求める
-  var far = 90;
-  var tW = rayWorld(camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z, far);
-  var tE = Infinity, hitE = null, head = false;
-  for (var i = 0; i < enemies.length; i++) {
-    var e = enemies[i]; if (e.dead) continue;
-    var r = enemyRay(e, camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z);
-    if (r.t < tE) { tE = r.t; hitE = e; head = r.head; }
-  }
-  var camT = Math.min(tW, tE);
-  var ix = camera.position.x + d.x * camT, iy = camera.position.y + d.y * camT, iz = camera.position.z + d.z * camT;
-
-  // 2) 銃口から「その方向へ」改めてトレースし直す。
-  //    カメラの射線が通っていても、銃が遮蔽の裏にあれば壁に当たる ＝ 遮蔽を撃ち抜かない。
-  //    距離を着弾点までに切ってはいけない（敵の表面＝ちょうど上限距離になり、判定が消える）。
-  var m = muzzlePos(_tmpV);
-  var mx = ix - m.x, my = iy - m.y, mz = iz - m.z;
-  var mL = Math.hypot(mx, my, mz) || 1e-5; mx /= mL; my /= mL; mz /= mL;
-  var blocked = rayWorld(m.x, m.y, m.z, mx, my, mz, far);
+  /* 3) 銃口から実際に飛ばす */
+  var blocked = rayWorld(m.x, m.y, m.z, d.x, d.y, d.z, FAR);
   var mE = Infinity, mHitE = null, mHead = false;
   for (var j = 0; j < enemies.length; j++) {
     var e2 = enemies[j]; if (e2.dead) continue;
-    var r2 = enemyRay(e2, m.x, m.y, m.z, mx, my, mz);
+    var r2 = enemyRay(e2, m.x, m.y, m.z, d.x, d.y, d.z);
     if (r2.t < mE) { mE = r2.t; mHitE = e2; mHead = r2.head; }
   }
   var endT, hitEnemy = null;
   if (mE <= blocked) { endT = mE; hitEnemy = mHitE; head = mHead; }
-  else { endT = blocked; }
+  else endT = blocked;
 
-  var ex = m.x + mx * endT, ey = m.y + my * endT, ez = m.z + mz * endT;
+  var ex = m.x + d.x * endT, ey = m.y + d.y * endT, ez = m.z + d.z * endT;
   FX.tracer(m.x, m.y, m.z, ex, ey, ez);
   FX.impact(ex, ey, ez, !!hitEnemy);
   // 診断用：この1発が何に当たったのか（当たらない不具合の原因を推測しないため）
   lastShot = {
     hit: hitEnemy ? enemies.indexOf(hitEnemy) : -1, head: !!hitEnemy && head,
-    camBlockedByWorld: tW < tE, muzzleBlocked: blocked < mE,
+    blind: blind, camBlockedByWorld: camBlocked, muzzleBlocked: blocked < mE,
     end: { x: ex, y: ey, z: ez }, snapApplied: snapApplied
   };
 
   if (hitEnemy) {
-    damageEnemy(hitEnemy, head ? CFG.fire.dmgHead : CFG.fire.dmg, mx, mz, head);
+    damageEnemy(hitEnemy, head ? CFG.fire.dmgHead : CFG.fire.dmg, d.x, d.z, head);
     hitstop = head ? CFG.hitstop.heavy : CFG.hitstop.light;
   }
-  // カメラキック
-  CAM.kickP += CFG.fire.kickPitch;
-  CAM.kickY += (Math.random() * 2 - 1) * CFG.fire.kickYaw;
+  // カメラキック（ブラインドファイアは狙っていないので反動の見え方も鈍い）
+  CAM.kickP += CFG.fire.kickPitch * (blind ? 0.55 : 1);
+  CAM.kickY += (Math.random() * 2 - 1) * CFG.fire.kickYaw * (blind ? 1.6 : 1);
 }
 
 function muzzlePos(out) {
   var f = new T.Vector3(yawDirX(P.yaw), 0, yawDirZ(P.yaw));
   var r = new T.Vector3(-f.z, 0, f.x);
-  var y = CFG.player.chest + 0.10 - P.crouch * 0.35 + (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0);
+  var y = P.y + CFG.player.chest + 0.10 - P.crouch * 0.35 + (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0);
   var lat = (P.peekMode === 1 ? P.peekSide * P.peek * CFG.cover.peekLateral : 0);
   out.set(P.x + f.x * 0.42 + r.x * (0.24 + lat), y, P.z + f.z * 0.42 + r.z * (0.24 + lat));
   return out;
+}
+
+/* ブラインドファイアの銃口：遮蔽の天端より上へ出す（自分の壁を撃たないため） */
+function blindMuzzle(out) {
+  var f = P.face;
+  out.set(P.x - f.nx * 0.30, f.cover.h + CFG.blind.muzzleUp, P.z - f.nz * 0.30);
+  return out;
+}
+/* ブラインドファイアの向き：遮蔽の正面から±75°まで。俯角仰角はほぼ水平に潰す */
+function blindDir(out) {
+  var f = P.face;
+  var base = dirToYaw(-f.nx, -f.nz);
+  var yaw = base + clamp(shortAngle(CAM.yaw - base), -75 * DEG, 75 * DEG);
+  var pitch = clamp(CAM.pitch, -5 * DEG, 8 * DEG);
+  var cp = Math.cos(pitch);
+  return out.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
 }
 function enemyRay(e, ox, oy, oz, dx, dy, dz) {
   var body = { minx: e.x - 0.34, maxx: e.x + 0.34, minz: e.z - 0.26, maxz: e.z + 0.26, top: 1.52 };
@@ -935,7 +1101,10 @@ function updateAnim(dt) {
   P.leanV += (-(P.lean - tgtLean) * k - P.leanV * c) * dt;
   P.lean += P.leanV * dt;
 
-  var crouchT = (P.state === ST.COVER) ? (P.face && P.face.low ? 1 - P.peek : 0.15) : (P.sprint ? 0.55 : 0);
+  var crouchT;
+  if (P.state === ST.COVER) crouchT = (P.face && P.face.low) ? (1 - Math.max(P.peek, P.blindT * 0.35)) : 0.15;
+  else if (P.state === ST.VAULT) crouchT = 0.35;
+  else crouchT = P.sprint ? 0.55 : 0;
   P.crouch = smooth(P.crouch, crouchT, 0.09, dt);
 }
 
@@ -993,7 +1162,9 @@ function updateCamera(dt) {
   var tau = (P.state === ST.TOCOVER || P.state === ST.SWAP) ? 0.055 : 0.035;
   CAM.px = smooth(CAM.px, tx, tau, dt);
   CAM.pz = smooth(CAM.pz, tz, tau, dt);
-  CAM.py = smooth(CAM.py, CFG.player.chest + (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0), 0.05, dt);
+  // 乗り越え中はカメラを体ほど上げない（画面が泳ぐのを避ける）
+  CAM.py = smooth(CAM.py, CFG.player.chest + P.y * 0.35
+    + (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0), 0.05, dt);
 
   var pitch = clamp(CAM.pitch + CAM.kickP + bob, CFG.cam.pitchMin - 0.2, CFG.cam.pitchMax + 0.2);
   var yaw = CAM.yaw + CAM.kickY;
@@ -1177,14 +1348,15 @@ function buildFX() {
 /* ---------- rig を状態に合わせて動かす ----------------------------------- */
 function syncRig() {
   var r = playerRig;
-  r.root.position.set(P.x, 0, P.z);
+  r.root.position.set(P.x, P.y, P.z);
   r.root.rotation.y = P.yaw + Math.PI;      // three-style yaw -> メッシュの向き
 
   var lateral = (P.peekMode === 1 ? P.peekSide * P.peek * CFG.cover.peekLateral : 0);
   var rise = (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0);
-  r.body.position.set(lateral, -P.crouch * 0.32 + rise, 0);
+  // landDip = 着地／遮蔽への激突の沈み込み（重量の余韻を画面に出す）
+  r.body.position.set(lateral, -P.crouch * 0.32 + rise - P.landDip * 0.16, 0);
   r.body.rotation.z = -P.lean * 0.25 - P.roll * 0.55 + (P.peekMode === 1 ? P.peekSide * P.peek * 0.24 : 0);
-  r.body.rotation.x = P.lean + P.roll * 0.9 + P.crouch * 0.18;
+  r.body.rotation.x = P.lean + P.roll * 0.9 + P.crouch * 0.18 + P.landDip * 0.30;
 
   var sp = Math.hypot(P.vx, P.vz);
   var amp = clamp(sp / CFG.move.walk, 0, 1.4) * 0.62;
@@ -1195,10 +1367,22 @@ function syncRig() {
   // 構え：撃てる状態なら腕を前に上げ、そうでなければ下ろす
   // （銃は胴に付いているので、腕の角度が銃口の向きを壊すことはない）
   var ready = canFire() || (P.state === ST.FREE && !P.sprint);
-  r.armR.rotation.x = ready ? -1.25 : -0.15;
-  r.armR.rotation.z = ready ? 0.25 : 0;
-  r.gun.rotation.x = ready ? 0 : 0.60;
-  r.gun.position.y = ready ? -0.06 : -0.20;
+  var b = P.blindT;
+  if (b > 0.01) {
+    // ブラインドファイア：頭は下げたまま、腕と銃だけを遮蔽の上へ突き出す
+    var upY = (P.face ? P.face.cover.h + CFG.blind.muzzleUp : 1.3) - 0.98 + P.crouch * 0.32;
+    r.armR.rotation.x = lerp(-0.15, -2.35, b);
+    r.armR.rotation.z = lerp(0, -0.30, b);
+    r.gun.rotation.x = lerp(0.60, 0.05, b);
+    r.gun.position.y = lerp(-0.20, upY, b);
+    r.gun.position.z = lerp(0, 0.18, b);
+  } else {
+    r.armR.rotation.x = ready ? -1.25 : -0.15;
+    r.armR.rotation.z = ready ? 0.25 : 0;
+    r.gun.rotation.x = ready ? 0 : 0.60;
+    r.gun.position.y = ready ? -0.06 : -0.20;
+    r.gun.position.z = 0;
+  }
   if (r.flash) r.flash.visible = P.flash > 0;
 
   for (var i = 0; i < enemies.length; i++) {
@@ -1279,10 +1463,18 @@ var UI = {
       e.stickKnob.style.width = e.stickKnob.style.height = (R * 0.68) + 'px';
     } else { e.stickBase.style.display = 'none'; e.stickKnob.style.display = 'none'; }
 
-    // アクションボタンの文脈ラベル
+    // アクションボタンの文脈ラベル（今押したら何が起きるかを常に表示する）
     var lab = '遮蔽';
-    if (P.state === ST.COVER) lab = IN.stick.mag > 0.35 ? 'ロール' : '離脱';
-    else if (P.sprint || (P.state === ST.FREE && IN.stick.mag > 0.25)) lab = 'ダッシュ';
+    if (P.state === ST.COVER) {
+      if (IN.stick.mag > 0.35) {
+        lab = (P.face.low && IN.stick.y > 0.50 && Math.abs(IN.stick.x) < 0.60 &&
+          vaultTargetFor(-P.face.nx, -P.face.nz)) ? '乗り越え' : 'ロール';
+      } else lab = '離脱';
+    } else if (P.state === ST.VAULT) lab = '乗り越え';
+    else if (P.state === ST.FREE) {
+      if (IN.stick.mag > 0.35 && findVault(IN.stick.x, IN.stick.y)) lab = '乗り越え';
+      else if (P.sprint || IN.stick.mag > 0.25) lab = 'ダッシュ';
+    }
     e.actLabel.textContent = lab;
     e.btnAct.classList.toggle('down', IN.act.on);
     e.btnFire.classList.toggle('down', IN.fire.on);
@@ -1293,10 +1485,13 @@ var UI = {
     var px = Math.tan(sp) / Math.tan(camera.fov * DEG / 2) * (window.innerHeight * 0.5);
     e.reticle.style.setProperty('--s', (6 + px) + 'px');
     // レティクルは「撃てない状態」を伝えるために消す。リロード中は消さない。
-    var hideRet = P.sprint || P.state === ST.ROLL || P.state === ST.SWAP ||
-      (P.state === ST.COVER && P.peek < 0.5) || P.state === ST.TOCOVER;
+    // ブラインドファイア中は消さず、大きく開いた形で「狙えていない」ことを見せる。
+    var bl = isBlind();
+    var hideRet = P.sprint || P.state === ST.ROLL || P.state === ST.SWAP || P.state === ST.VAULT ||
+      (P.state === ST.COVER && P.peek < 0.5 && !bl) || P.state === ST.TOCOVER;
     e.reticle.classList.toggle('hide', hideRet);
-    e.reticle.classList.toggle('lock', !!aimTarget);
+    e.reticle.classList.toggle('lock', !!aimTarget && !bl);
+    e.reticle.classList.toggle('blind', bl);
 
     e.sprintTag.style.opacity = P.sprint ? '1' : '0';
     e.ammo.textContent = P.reloadT > 0 ? 'RELOAD' : (P.ammo + ' / ' + CFG.fire.mag);
@@ -1306,8 +1501,10 @@ var UI = {
         METRICS.fps.toFixed(0) + ' fps &nbsp; ' + METRICS.ms.toFixed(1) + ' ms<br>' +
         'draw ' + METRICS.calls + ' &nbsp; tri ' + (METRICS.tris / 1000).toFixed(1) + 'k<br>' +
         '入力遅延 ' + METRICS.latency.toFixed(1) + ' ms<br>' +
-        'state ' + P.state + (P.sprint ? '+SPRINT' : '') + ' peek ' + P.peek.toFixed(2) + '<br>' +
-        'assist ' + assistScale().toFixed(2) + (aimTarget ? ' [LOCK]' : '') + '<br>' +
+        'state ' + P.state + (P.sprint ? '+SPRINT' : '') + ' peek ' + P.peek.toFixed(2) +
+        (P.blindT > 0.01 ? ' blind ' + P.blindT.toFixed(2) : '') + '<br>' +
+        'assist ' + assistScale().toFixed(2) + (aimTarget ? ' [LOCK]' : '') +
+        ' 露出 ' + exposure().toFixed(2) + '<br>' +
         'UI領域 ' + (METRICS.uiOk ? 'OK' : 'NG');
     }
   }
@@ -1316,7 +1513,7 @@ var UI = {
 /* =============================================================================
    MAIN LOOP
    ========================================================================== */
-var lastT = 0, fpsAcc = 0, fpsN = 0;
+var lastT = 0, fpsAcc = 0, fpsN = 0, paused = false;
 
 function resize() {
   var W = window.innerWidth, H = window.innerHeight;
@@ -1332,8 +1529,8 @@ function frame(now) {
   lastT = now;
   dt = Math.min(dt, 0.1);
 
-  update(dt);
-  FX.step(dt);
+  // paused は検証専用。一瞬の状態（乗り越えの滞空など）を正確に撮るために止める。
+  if (!paused) { update(dt); FX.step(dt); }
   syncRig();
   UI.frame();
   renderer.render(scene, camera);
@@ -1362,7 +1559,8 @@ function boot() {
     P: P, CAM: CAM, IN: IN, CFG: CFG, SET: SET, METRICS: METRICS,
     enemies: enemies, covers: COVERS, faces: faces,
     ST: ST,
-    tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) update(dt); },
+    tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
+    pause: function (v) { paused = !!v; },
     render: function () { syncRig(); UI.frame(); renderer.render(scene, camera); },
     setStick: function (x, y) {
       var m = Math.min(1, Math.hypot(x, y));
@@ -1387,15 +1585,17 @@ function boot() {
     },
     reload: function () { P.ammo = CFG.fire.mag; P.reloadT = 0; P.fireCd = 0; },
     teleport: function (x, z, yaw) {
-      P.x = x; P.z = z; P.vx = 0; P.vz = 0; P.state = ST.FREE; P.face = null;
-      P.peek = 0; P.peekMode = 0; P.sprint = false;
+      P.x = x; P.y = 0; P.z = z; P.vx = 0; P.vz = 0; P.state = ST.FREE; P.face = null;
+      P.peek = 0; P.peekMode = 0; P.sprint = false; P.blindT = 0; P.landDip = 0;
       if (yaw !== undefined) { P.yaw = yaw; CAM.yaw = yaw; }
       CAM.px = x; CAM.pz = z;
     },
     state: function () {
       return {
-        state: P.state, sprint: P.sprint, x: P.x, z: P.z, yaw: P.yaw,
+        state: P.state, sprint: P.sprint, x: P.x, y: P.y, z: P.z, yaw: P.yaw,
         peek: P.peek, peekMode: P.peekMode, peekSide: P.peekSide,
+        blind: P.blindT, isBlind: isBlind(), exposure: exposure(),
+        vaultTop: P.vaultTop, landDip: P.landDip,
         t: P.t, coverLow: P.face ? P.face.low : null,
         tMax: P.face ? (coverAnchor(P.face, P.t, _anc), 1 - _anc.minT) : null,
         speed: Math.hypot(P.vx, P.vz), ammo: P.ammo, reload: P.reloadT,

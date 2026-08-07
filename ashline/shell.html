@@ -57,6 +57,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 #reticle i:nth-child(3){height:2px;width:9px;top:-1px;transform:translateX(calc(-1 * var(--s) - 9px))}
 #reticle i:nth-child(4){height:2px;width:9px;top:-1px;transform:translateX(var(--s))}
 #reticle.lock i{background:rgba(255,190,150,.95)}
+/* ブラインドファイア：狙えていないことを形で見せる（細く・薄く・大きく開く） */
+#reticle.blind i{background:rgba(190,205,220,.42);width:1px;height:6px}
+#reticle.blind i:nth-child(3),#reticle.blind i:nth-child(4){height:1px;width:6px}
+#reticle.blind b{opacity:0}
 #reticle b{position:absolute;width:2px;height:2px;left:-1px;top:-1px;border-radius:50%;
   background:rgba(255,255,255,.55)}
 
