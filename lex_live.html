@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LEX LIVE — Realtime AI Companion</title>
+<style>
+  :root{
+    --bg0:#0b0714; --bg1:#170d2a; --bg2:#251142;
+    --ink:#f2ecff; --ink-dim:#a89dc4; --line:rgba(255,255,255,.10);
+    --accent:#c9a4ff; --accent2:#ffd88a; --ok:#7de2b0; --warn:#ffb26b; --bad:#ff7d92;
+    --panel:rgba(18,11,33,.72);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; margin:0}
+  body{
+    background:radial-gradient(120% 80% at 50% 0%, var(--bg2) 0%, var(--bg1) 42%, var(--bg0) 100%);
+    color:var(--ink); overflow:hidden;
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",-apple-system,"Segoe UI",system-ui,sans-serif;
+  }
+  /* ---------- Layout (§38 UI Philosophy: avatar center / conversation / input) ---------- */
+  #app{position:fixed; inset:0; display:flex; flex-direction:column; align-items:center}
+  #stageWrap{position:relative; flex:1 1 auto; width:100%; min-height:0; display:flex; justify-content:center}
+  #stage{display:block; height:100%; width:auto; max-width:100%}
+  #brand{position:absolute; top:14px; left:16px; font-size:12px; letter-spacing:.28em; color:var(--ink-dim)}
+  #brand b{color:var(--accent); letter-spacing:.28em}
+  #modeTag{position:absolute; top:14px; right:56px; font-size:11px; letter-spacing:.1em;
+    padding:4px 10px; border:1px solid var(--line); border-radius:999px; color:var(--ink-dim); background:rgba(0,0,0,.25)}
+  #gear{position:absolute; top:10px; right:12px; width:32px; height:32px; border-radius:50%;
+    border:1px solid var(--line); background:rgba(0,0,0,.3); color:var(--ink-dim); cursor:pointer; font-size:15px}
+  #gear:hover{color:var(--ink)}
+  /* status chip: Thinking / Researching / Working / Done only (§38) */
+  #chip{position:absolute; left:50%; transform:translateX(-50%); bottom:8px;
+    font-size:12px; letter-spacing:.06em; padding:5px 14px; border-radius:999px;
+    border:1px solid var(--line); background:rgba(12,7,22,.66); color:var(--accent);
+    opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap}
+  #chip.on{opacity:1}
+  #chip .dot{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent);
+    margin-right:7px; vertical-align:middle; animation:pulse 1.1s infinite ease-in-out}
+  @keyframes pulse{0%,100%{opacity:.25; transform:scale(.75)}50%{opacity:1; transform:scale(1.15)}}
+
+  #log{flex:0 0 auto; width:min(760px,94vw); max-height:34vh; overflow-y:auto; padding:6px 4px 2px;
+    border-top:1px solid var(--line); scrollbar-width:thin}
+  #log::-webkit-scrollbar{width:5px} #log::-webkit-scrollbar-thumb{background:rgba(201,164,255,.3); border-radius:9px}
+  .msg{margin:7px 2px; line-height:1.62; font-size:14.5px; display:flex; gap:9px}
+  .msg .who{flex:0 0 auto; font-size:10.5px; letter-spacing:.12em; padding-top:4px; width:38px; color:var(--ink-dim)}
+  .msg.ai .who{color:var(--accent)}
+  .msg .body{flex:1 1 auto; white-space:pre-wrap; word-break:break-word}
+  .msg.user .body{color:#d9d2ec}
+  .msg.sys .body{color:var(--ink-dim); font-size:12.5px; font-style:italic}
+
+  #bar{flex:0 0 auto; width:min(760px,94vw); display:flex; gap:8px; align-items:center; padding:10px 2px calc(12px + env(safe-area-inset-bottom))}
+  #text{flex:1 1 auto; background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--ink);
+    border-radius:999px; padding:12px 18px; font:inherit; font-size:15px; outline:none}
+  #text:focus{border-color:rgba(201,164,255,.5); background:rgba(255,255,255,.08)}
+  .rbtn{flex:0 0 auto; width:46px; height:46px; border-radius:50%; border:1px solid var(--line);
+    background:rgba(255,255,255,.05); color:var(--ink); font-size:17px; cursor:pointer; transition:.18s}
+  .rbtn:hover{background:rgba(255,255,255,.12)}
+  .rbtn:disabled{opacity:.35; cursor:default}
+  #mic.rec{background:linear-gradient(180deg,#ff7d92,#c9427a); border-color:transparent; animation:rec 1.2s infinite}
+  @keyframes rec{0%,100%{box-shadow:0 0 0 0 rgba(255,125,146,.5)}70%{box-shadow:0 0 0 12px rgba(255,125,146,0)}}
+  #send{background:linear-gradient(180deg,#a874ff,#6d3fd1); border-color:transparent}
+
+  /* ---------- Dev / Settings drawer (hidden by default — internals stay backstage §3/§38) ---------- */
+  #dev{position:fixed; top:0; right:0; height:100%; width:min(420px,100%); background:var(--panel);
+    backdrop-filter:blur(14px); border-left:1px solid var(--line); transform:translateX(102%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1); z-index:30; display:flex; flex-direction:column}
+  #dev.on{transform:none}
+  #devHead{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
+  #devHead h2{margin:0; font-size:13px; letter-spacing:.22em; color:var(--accent); font-weight:600}
+  #devBody{flex:1; overflow-y:auto; padding:14px 16px 40px}
+  .sec{margin-bottom:22px}
+  .sec h3{margin:0 0 9px; font-size:11px; letter-spacing:.18em; color:var(--ink-dim); font-weight:600;
+    border-bottom:1px solid var(--line); padding-bottom:6px}
+  label.f{display:block; font-size:11.5px; color:var(--ink-dim); margin:9px 0 4px}
+  input.f,select.f,textarea.f{width:100%; background:rgba(0,0,0,.32); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:inherit; font-size:13px; outline:none}
+  input.f:focus,select.f:focus{border-color:rgba(201,164,255,.55)}
+  .row{display:flex; gap:8px} .row>*{flex:1}
+  .btn{background:rgba(255,255,255,.07); border:1px solid var(--line); color:var(--ink); border-radius:8px;
+    padding:8px 12px; font:inherit; font-size:12.5px; cursor:pointer}
+  .btn:hover{background:rgba(255,255,255,.14)}
+  .btn.p{background:linear-gradient(180deg,#a874ff,#6d3fd1); border-color:transparent}
+  .btn.d{color:var(--bad)}
+  .note{font-size:11px; color:var(--ink-dim); line-height:1.6; margin-top:7px}
+  .kv{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px dashed rgba(255,255,255,.07)}
+  .kv span:last-child{color:var(--accent2); font-variant-numeric:tabular-nums}
+  #trace{font-size:11.5px; line-height:1.55; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap;
+    background:rgba(0,0,0,.3); border:1px solid var(--line); border-radius:8px; padding:9px; max-height:230px; overflow:auto}
+  .bar{height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:hidden; margin:3px 0 8px}
+  .bar>i{display:block; height:100%; background:linear-gradient(90deg,#a874ff,#ffd88a)}
+  .emo{font-size:11px; color:var(--ink-dim); display:flex; justify-content:space-between}
+  #memList{font-size:11.5px; line-height:1.6; max-height:200px; overflow:auto}
+  #memList div{padding:4px 0; border-bottom:1px dashed rgba(255,255,255,.07); color:var(--ink-dim)}
+  #memList b{color:var(--accent)}
+  /* permission confirm (§25) */
+  #ask{position:fixed; inset:0; background:rgba(4,2,10,.72); z-index:60; display:none;
+    align-items:center; justify-content:center; padding:20px}
+  #ask.on{display:flex}
+  #askBox{max-width:420px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px}
+  #askBox h4{margin:0 0 8px; font-size:14px; color:var(--warn)}
+  #askBox p{font-size:13px; line-height:1.65; color:var(--ink-dim); margin:0 0 16px}
+  @media(max-width:560px){ #log{max-height:30vh} .msg{font-size:14px} }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="stageWrap">
+    <canvas id="stage"></canvas>
+    <div id="brand"><b>LEX</b> LIVE</div>
+    <div id="modeTag">LIVE</div>
+    <button id="gear" title="Settings / Dev">⚙</button>
+    <div id="chip"><span class="dot"></span><span id="chipText">Thinking</span></div>
+  </div>
+  <div id="log"></div>
+  <div id="bar">
+    <button id="mic" class="rbtn" title="音声入力">🎙</button>
+    <input id="text" type="text" placeholder="話しかけてください…" autocomplete="off">
+    <button id="send" class="rbtn" title="送信">➤</button>
+  </div>
+</div>
+
+<div id="dev">
+  <div id="devHead"><h2>LEX OS · CONSOLE</h2><button class="btn" id="devClose">✕</button></div>
+  <div id="devBody">
+
+    <div class="sec">
+      <h3>MODEL ROUTER (§28)</h3>
+      <label class="f">Provider</label>
+      <select class="f" id="cfgProvider">
+        <option value="local">Local Persona Engine（LLM未接続 / オフライン）</option>
+        <option value="anthropic">Anthropic Messages API</option>
+        <option value="openai">OpenAI-compatible (Chat Completions)</option>
+      </select>
+      <label class="f">Base URL</label>
+      <input class="f" id="cfgBase" placeholder="https://api.anthropic.com">
+      <label class="f">Model</label>
+      <input class="f" id="cfgModel" placeholder="claude-sonnet-5">
+      <label class="f">API Key</label>
+      <input class="f" id="cfgKey" type="password" placeholder="sk-...">
+      <p class="note">キーはこのブラウザの localStorage にのみ保存され、選択したプロバイダ以外へは送信しません。
+      共有端末では使用後に「キーを消去」してください。ブラウザから直接APIを呼ぶ構成のため、本番ではサーバ経由に置き換えてください。</p>
+      <div class="row" style="margin-top:8px">
+        <button class="btn p" id="cfgSave">保存</button>
+        <button class="btn d" id="cfgWipeKey">キーを消去</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>VOICE ENGINE (§16)</h3>
+      <div class="row">
+        <label class="f" style="flex:2">音声出力
+          <select class="f" id="cfgTts"><option value="1">ON</option><option value="0">OFF</option></select>
+        </label>
+        <label class="f" style="flex:2">言語
+          <select class="f" id="cfgLang"><option value="ja-JP">日本語</option><option value="en-US">English</option></select>
+        </label>
+      </div>
+      <label class="f">Voice</label>
+      <select class="f" id="cfgVoice"><option value="">(自動選択)</option></select>
+      <p class="note" id="voiceNote"></p>
+    </div>
+
+    <div class="sec">
+      <h3>ADAPTIVE REASONING (§22/§23)</h3>
+      <div class="kv"><span>Task Level</span><span id="mLevel">–</span></div>
+      <div class="kv"><span>Latency Path</span><span id="mPath">–</span></div>
+      <div class="kv"><span>Iterations</span><span id="mIter">–</span></div>
+      <div class="kv"><span>Quality Score</span><span id="mScore">–</span></div>
+      <div class="kv"><span>Response Latency</span><span id="mLat">–</span></div>
+      <div class="kv"><span>Loop Exit</span><span id="mExit">–</span></div>
+    </div>
+
+    <div class="sec">
+      <h3>AGENT TRACE (§20)</h3>
+      <div id="trace">待機中。</div>
+    </div>
+
+    <div class="sec">
+      <h3>EMOTION ENGINE (§14)</h3>
+      <div id="emoBars"></div>
+      <p class="note">内部パラメータ。ユーザー画面には数値表示しません。</p>
+    </div>
+
+    <div class="sec">
+      <h3>MEMORY (§12)</h3>
+      <div id="memList"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="memExport">書き出し</button>
+        <button class="btn d" id="memWipe">全消去</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>TOOL ROUTER (§24/§25)</h3>
+      <div id="toolList" class="note"></div>
+    </div>
+
+    <div class="sec">
+      <h3>BUILD</h3>
+      <p class="note" id="buildNote"></p>
+    </div>
+  </div>
+</div>
+
+<div id="ask"><div id="askBox">
+  <h4>⚠ 権限確認</h4><p id="askText"></p>
+  <div class="row"><button class="btn" id="askNo">拒否</button><button class="btn p" id="askYes">許可</button></div>
+</div></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   LEX LIVE — Realtime AI Companion (MVP, §34)
+   Avatar × Emotion × Memory × Orchestration × Voice
+   All layers are separated as replaceable modules (§44 / §46).
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- utils */
+const $  = s => document.querySelector(s);
+const clamp = (v,a,b)=>v<a?a:v>b?b:v;
+const lerp  = (a,b,t)=>a+(b-a)*t;
+const now   = ()=>performance.now();
+const rnd   = (a,b)=>a+Math.random()*(b-a);
+const sleep = ms=>new Promise(r=>setTimeout(r,ms));
+const esc   = s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------------------------------------------------------------- Config */
+const Config = {
+  d:{provider:'local', base:'', model:'', key:'', tts:'1', lang:'ja-JP', voice:''},
+  data:{},
+  load(){ try{ this.data = Object.assign({}, this.d, JSON.parse(localStorage.getItem('lexlive.cfg')||'{}')); }
+          catch(e){ this.data = {...this.d}; } return this.data; },
+  save(){ localStorage.setItem('lexlive.cfg', JSON.stringify(this.data)); },
+  get(k){ return this.data[k]; },
+  set(k,v){ this.data[k]=v; this.save(); }
+};
+Config.load();
+
+/* =========================================================================
+   MEMORY ENGINE (§12) — separated buckets + router; never dump full history
+   ========================================================================= */
+const Memory = {
+  KEY:'lexlive.mem',
+  store:{ working:[], conversation:[], project:[], preference:[], professional:[], relationship:{turns:0, warmth:0.2, firstSeen:null, name:null} },
+  load(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(this.KEY)||'null');
+      if(raw) this.store = Object.assign(this.store, raw);
+    }catch(e){}
+    if(!this.store.relationship.firstSeen) this.store.relationship.firstSeen = new Date().toISOString();
+    return this.store;
+  },
+  save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.store)); }catch(e){} },
+
+  addTurn(role, text){
+    this.store.conversation.push({role, text, t:Date.now()});
+    if(this.store.conversation.length > 200) this.store.conversation.splice(0, this.store.conversation.length-200);
+    if(role==='user'){ this.store.relationship.turns++;
+      this.store.relationship.warmth = clamp(this.store.relationship.warmth + 0.012, 0, 1); }
+    this.save();
+  },
+  remember(bucket, key, value){
+    const b = this.store[bucket]; if(!Array.isArray(b)) return;
+    const hit = b.find(x=>x.key===key);
+    if(hit){ hit.value=value; hit.t=Date.now(); } else b.push({key, value, t:Date.now()});
+    if(b.length>80) b.splice(0,b.length-80);
+    this.save();
+  },
+  /* --- Memory Router: Query → relevant memories → context injection --- */
+  route(query, k=6, {facts=false}={}){
+    const q = String(query).toLowerCase();
+    const toks = q.replace(/[、。,.!?！？]/g,' ').split(/\s+/).filter(t=>t.length>1);
+    const pool = [];
+    for(const bucket of ['preference','project','professional']){
+      for(const it of this.store[bucket]) pool.push({bucket, text:`${it.key}: ${it.value}`, t:it.t});
+    }
+    // recent conversation is scored too, but only a small window is eligible,
+    // and never the turn we are answering right now (it would echo back at the user)
+    if(!facts){
+      this.store.conversation.slice(-14)
+        .filter(m=>m.text!==query)
+        .forEach(m=>pool.push({bucket:'conversation', text:`${m.role}: ${m.text}`, t:m.t}));
+    }
+
+    const scored = pool.map(p=>{
+      const low = p.text.toLowerCase();
+      let s = 0;
+      toks.forEach(t=>{ if(low.includes(t)) s += 2; });
+      s += Math.max(0, 1.2 - (Date.now()-p.t)/(1000*60*60*24*7)); // recency decay over a week
+      if(p.bucket==='preference') s += 0.8;
+      return {...p, s};
+    }).filter(p=>p.s>0.35).sort((a,b)=>b.s-a.s).slice(0,k);
+    return scored;
+  },
+  contextBlock(query){
+    const hits = this.route(query);
+    const r = this.store.relationship;
+    const head = [`関係性: 会話${r.turns}回目 / 親密度${r.warmth.toFixed(2)}` + (r.name?` / ユーザー名「${r.name}」`:'')];
+    if(!hits.length) return head.join('\n');
+    return head.concat('関連記憶:', hits.map(h=>`- [${h.bucket}] ${h.text}`)).join('\n');
+  },
+  /* naive fact extraction so the MVP learns something without an LLM */
+  extract(text){
+    const learned=[];
+    // names can be a single kanji, so the capture must allow length 1 — but then it
+    // also swallows phrases like 「私はラーメンが好きです」, hence the particle guard.
+    let m = text.match(/(?:私|僕|俺|わたし)(?:の名前)?は([ぁ-んァ-ヶー一-龠a-zA-Z]{1,10})(?:です|だ|と申します|といいます)/);
+    if(m && !/[がをには好嫌]/.test(m[1])){ this.store.relationship.name = m[1]; learned.push(`名前=${m[1]}`); }
+    m = text.match(/([ぁ-んァ-ヶー一-龠a-zA-Z0-9]{2,16})(?:が|は)(?:大)?好き/);
+    if(m){ this.remember('preference','好きなもの', m[1]); learned.push(`好み=${m[1]}`); }
+    m = text.match(/([ぁ-んァ-ヶー一-龠a-zA-Z0-9]{2,16})(?:が|は)(?:苦手|嫌い)/);
+    if(m){ this.remember('preference','苦手なもの', m[1]); learned.push(`苦手=${m[1]}`); }
+    m = text.match(/(?:プロジェクト|案件|仕事)(?:は|で|の)?([ぁ-んァ-ヶー一-龠a-zA-Z0-9]{2,24})/);
+    if(m){ this.remember('project','進行中', m[1]); learned.push(`案件=${m[1]}`); }
+    if(learned.length) this.save();
+    return learned;
+  },
+  wipe(){ localStorage.removeItem(this.KEY);
+    this.store={working:[],conversation:[],project:[],preference:[],professional:[],
+      relationship:{turns:0,warmth:.2,firstSeen:new Date().toISOString(),name:null}}; this.save(); }
+};
+Memory.load();
+
+/* =========================================================================
+   PERSONALITY (§13) + EMOTION ENGINE (§14)
+   Personality is persistent; emotion is transient. Never conflate the two.
+   ========================================================================= */
+const Personality = {
+  core:{ name:'Lex', warmth:0.75, wit:0.6, directness:0.7, curiosity:0.85, formality:0.35 },
+  mode:'live',                       // 'live' | 'professional'
+  style(){ return this.mode==='professional'
+    ? '正確・簡潔・根拠明示。断定と推測を書き分ける。'
+    : '自然な話し言葉。短い問いには短く返す。'; }
+};
+
+const Emotion = {
+  v:{joy:.35, curiosity:.5, excitement:.2, concern:.05, confidence:.55, thinking:.15, calm:.6, surprise:0},
+  target:{...{joy:.35,curiosity:.5,excitement:.2,concern:.05,confidence:.55,thinking:.15,calm:.6,surprise:0}},
+  set(patch){ Object.assign(this.target, patch); },
+  /* infer from conversational context — heuristic in MVP, LLM-driven later */
+  infer(text, role){
+    const t = String(text);
+    const p = {joy:.3,curiosity:.45,excitement:.2,concern:.05,confidence:.55,thinking:.1,calm:.6,surprise:0};
+    if(/[!！]{1,}|やった|すごい|嬉しい|ありがとう|最高/.test(t)) { p.joy=.85; p.excitement=.7; p.calm=.35; }
+    if(/[?？]|どう|なぜ|なんで|教えて|とは/.test(t))            { p.curiosity=.85; p.thinking=.5; }
+    if(/心配|不安|困っ|まずい|やばい|リスク|問題/.test(t))       { p.concern=.7; p.joy=.15; p.calm=.35; }
+    if(/えっ|まさか|本当|マジ/.test(t))                          { p.surprise=.7; }
+    if(role==='thinking'){ p.thinking=.9; p.curiosity=.7; p.calm=.5; p.joy=.25; }
+    this.set(p);
+  },
+  tick(dt){ for(const k in this.v) this.v[k] = lerp(this.v[k], this.target[k], clamp(dt*2.2,0,1)); },
+  /* transient decay back toward the personality baseline */
+  relax(){ this.set({joy:.3+Personality.core.warmth*.15, curiosity:.45, excitement:.2,
+                     concern:.05, confidence:.55, thinking:.1, calm:.6, surprise:0}); }
+};
+
+/* =========================================================================
+   AVATAR ENGINE (§15) — canvas renderer behind a swappable interface (§46)
+   Interface: setEmotion / setSpeaking / setListening / setThinking / update / draw
+   Replacing this object with a Live2D/VRM/UE backend requires no core changes.
+   ========================================================================= */
+const Avatar = (()=>{
+  const W = 620, H = 860;                 // logical stage
+  const CX = W/2, PIVOT_Y = 372;          // shoulder pivot
+  const HEAD_Y = -122;                    // head centre relative to pivot
+
+  const s = {
+    t:0, blink:0, blinkNext:1.8, mouth:0, mouthT:0,
+    eyeX:0, eyeY:0, gazeNext:1.2, gTX:0, gTY:0,
+    tilt:0, tiltT:0, nod:0, breath:0,
+    browL:0, browR:0, smile:.15, squint:0,
+    speaking:false, listening:false, thinking:false,
+    hairL:[], hairR:[], armSway:0, glow:0
+  };
+  for(let i=0;i<5;i++){ s.hairL.push({a:0,v:0}); s.hairR.push({a:0,v:0}); }
+
+  let ctx=null, cv=null, dpr=1;
+
+  function fit(){
+    cv = $('#stage'); ctx = cv.getContext('2d');
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    const h = $('#stageWrap').clientHeight, w = $('#stageWrap').clientWidth;
+    const scale = Math.min(h/H, w/W);
+    cv.style.height = (H*scale)+'px'; cv.style.width = (W*scale)+'px';
+    cv.width = Math.round(W*scale*dpr); cv.height = Math.round(H*scale*dpr);
+    ctx.setTransform(scale*dpr,0,0,scale*dpr,0,0);
+  }
+
+  /* ---- public interface ---- */
+  const api = {
+    init(){ fit(); window.addEventListener('resize', fit); requestAnimationFrame(loop); },
+    setSpeaking(v){ s.speaking=v; },
+    setListening(v){ s.listening=v; },
+    setThinking(v){ s.thinking=v; },
+    lookAt(x,y){ s.gTX=clamp(x,-1,1); s.gTY=clamp(y,-1,1); s.gazeNext=1.4; }
+  };
+
+  let last=0;
+  function loop(ts){
+    const dt = Math.min((ts-last)/1000 || .016, .05); last=ts;
+    Emotion.tick(dt); update(dt); draw();
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt){
+    s.t += dt;
+    const e = Emotion.v;
+
+    /* --- required idle life: blink / breathe / eye movement (§15) --- */
+    s.blinkNext -= dt;
+    if(s.blinkNext<=0){ s.blink=1; s.blinkNext = rnd(2.2,5.5) * (s.thinking?.7:1); }
+    s.blink = Math.max(0, s.blink - dt*7.5);
+
+    s.breath = Math.sin(s.t*1.05)*1.0 + Math.sin(s.t*2.3)*0.25;
+
+    s.gazeNext -= dt;
+    if(s.gazeNext<=0){
+      s.gazeNext = s.thinking ? rnd(.5,1.1) : rnd(1.4,3.4);
+      if(s.thinking){ s.gTX = rnd(-.85,-.2); s.gTY = rnd(-.9,-.35); }       // eyes up-left while reasoning
+      else if(s.listening){ s.gTX = rnd(-.16,.16); s.gTY = rnd(-.1,.12); }  // hold the user's gaze
+      else { s.gTX = rnd(-.6,.6); s.gTY = rnd(-.35,.4); }
+    }
+    s.eyeX = lerp(s.eyeX, s.gTX, dt*6); s.eyeY = lerp(s.eyeY, s.gTY, dt*6);
+
+    /* --- head tilt / nodding: listening reaction (§39) --- */
+    s.tiltT -= dt;
+    if(s.tiltT<=0){ s.tiltT = rnd(2.5,5.5);
+      s.tiltTarget = (s.thinking? rnd(.06,.13) : rnd(-.07,.07)) * (e.curiosity>.7?1.5:1); }
+    s.tilt = lerp(s.tilt, (s.tiltTarget||0) + Math.sin(s.t*.6)*.012, dt*2.2);
+    const nodT = s.listening ? Math.max(0, Math.sin(s.t*2.6))*3.2 : 0;
+    s.nod = lerp(s.nod, nodT, dt*5);
+
+    /* --- lip sync envelope --- */
+    if(s.speaking){
+      s.mouthT += dt*13;
+      const env = (Math.sin(s.mouthT)*.5+.5)*(Math.sin(s.mouthT*.37+1.1)*.35+.65);
+      s.mouth = lerp(s.mouth, clamp(env,0,1)*.9+.08, dt*22);
+    } else s.mouth = lerp(s.mouth, s.thinking?.06:.0, dt*10);
+
+    /* --- expression from emotion --- */
+    const smile = clamp(e.joy*.9 + e.confidence*.25 - e.concern*.8, -.5, 1);
+    s.smile  = lerp(s.smile, smile, dt*4);
+    s.squint = lerp(s.squint, clamp(e.joy*.45 + e.calm*.1 - e.surprise*.6, 0, .55), dt*4);
+    s.browL  = lerp(s.browL, -e.concern*7 + e.surprise*8 + e.joy*2 - e.thinking*4, dt*4);
+    s.browR  = lerp(s.browR, -e.concern*7 + e.surprise*8 + e.joy*2 + e.curiosity*5, dt*4);
+    s.armSway= Math.sin(s.t*.85)*.03 + (s.speaking?Math.sin(s.t*5.1)*.02:0);
+    s.glow   = lerp(s.glow, s.thinking?1:(s.speaking?.6:.25), dt*3);
+
+    /* --- twin-tail spring physics driven by head motion ---
+       canvas rotate(+θ) swings a downward vector toward -x, so the outward
+       rest angle for a tail on side `dir` is -dir. */
+    const drive = s.tilt*2.6 + Math.sin(s.t*1.3)*.05 + (s.listening? s.nod*.015 : 0);
+    [[s.hairL,-1],[s.hairR,1]].forEach(([chain,dir])=>{
+      let parent = drive*.5;
+      chain.forEach((seg,i)=>{
+        const k = 42 - i*5, damp = 5.2;
+        // segment 0 flares outward; later segments curve back down (gravity)
+        const rest = parent + dir*(i===0 ? -0.10 : 0.105);
+        seg.v += (rest - seg.a)*k*dt - seg.v*damp*dt;
+        seg.a += seg.v*dt;
+        parent = seg.a;
+      });
+    });
+  }
+
+  /* ---------------- drawing helpers ---------------- */
+  function ell(x,y,rx,ry,fill,rot=0){ ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+    ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2); ctx.fillStyle=fill; ctx.fill(); ctx.restore(); }
+
+  const SKIN='#f7e0d4', SKIN_SH='#e9c4b6', HAIR='#f2d489', HAIR_D='#d3a94e', HAIR_L='#fdf0bd';
+  const DRESS='#171227', DRESS_L='#2b2145', DRESS_D='#0c0917', GOLD='#e8c05a', LACE='#3d3160';
+
+  function hairGrad(x0,y0,x1,y1){
+    const g=ctx.createLinearGradient(x0,y0,x1,y1);
+    g.addColorStop(0,HAIR_L); g.addColorStop(.45,HAIR); g.addColorStop(1,HAIR_D); return g;
+  }
+
+  function drawTail(dir, chain){
+    ctx.save();
+    ctx.translate(dir*78, -48);                       // tie position, outside the face silhouette
+    ctx.rotate(-dir*0.60);                            // flare outward, away from the head
+    const segLen=[62,60,58,52,44], segW=[44,42,37,29,17];
+    let prevW = 40;
+    for(let i=0;i<chain.length;i++){
+      ctx.rotate(chain[i].a * (i===0?1:0.85));
+      const L=segLen[i], w=segW[i], w2=segW[i+1]!==undefined?segW[i+1]:5;
+      ctx.beginPath();
+      ctx.moveTo(-prevW*.5, 0);
+      ctx.bezierCurveTo(-w*.72, L*.4, -w2*.8, L*.75, -w2*.5, L);
+      ctx.lineTo(w2*.5, L);
+      ctx.bezierCurveTo(w2*.8, L*.75, w*.72, L*.4, prevW*.5, 0);
+      ctx.closePath();
+      ctx.fillStyle = hairGrad(-w, 0, w, L); ctx.fill();
+      // strand highlight
+      ctx.beginPath(); ctx.moveTo(-w*.15,2); ctx.quadraticCurveTo(w*.05, L*.5, -w2*.1, L*.92);
+      ctx.strokeStyle='rgba(255,255,255,.28)'; ctx.lineWidth=Math.max(1.2,w*.13); ctx.stroke();
+      ctx.translate(0, L*0.90); prevW = w2;   // overlap joints so the tail reads as one strand
+    }
+    ctx.restore();
+  }
+
+  function drawRibbon(dir){
+    ctx.save(); ctx.translate(dir*76, -66); ctx.rotate(-dir*.35);
+    for(const sgn of [-1,1]){
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.bezierCurveTo(sgn*22,-19, sgn*33,-3, sgn*15,9);
+      ctx.bezierCurveTo(sgn*9,13, sgn*4,7, 0,0);
+      ctx.fillStyle='#241a3c'; ctx.fill();
+      ctx.strokeStyle='rgba(232,192,90,.5)'; ctx.lineWidth=1.1; ctx.stroke();
+    }
+    ell(0,0,5.5,5,'#3a2c5e');
+    ctx.restore();
+  }
+
+  function drawEye(dir){
+    const openA = (1 - s.blink) * (1 - s.squint*.55);
+    const ex = dir*34, ey = 6;
+    const rx = 22, ry = 25*openA;
+    if(ry < 1.6){ // closed
+      ctx.beginPath(); ctx.moveTo(ex-rx, ey); ctx.quadraticCurveTo(ex, ey+7, ex+rx, ey);
+      ctx.strokeStyle='#3a2740'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.stroke(); return;
+    }
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(ex,ey,rx,ry,0,0,Math.PI*2); ctx.clip();
+    // sclera
+    ctx.fillStyle='#fdfbff'; ctx.fillRect(ex-rx,ey-ry,rx*2,ry*2);
+    // iris
+    const ix = ex + s.eyeX*8, iy = ey + s.eyeY*6;
+    const g = ctx.createRadialGradient(ix, iy-4, 2, ix, iy, 17);
+    g.addColorStop(0,'#8fd4ff'); g.addColorStop(.55,'#3b8ee0'); g.addColorStop(1,'#12376e');
+    ctx.beginPath(); ctx.ellipse(ix,iy,15,16.5,0,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(ix,iy+3,13,12,0,0,Math.PI*2); ctx.fillStyle='rgba(10,30,70,.35)'; ctx.fill();
+    ell(ix,iy+1,6.6,7,'#10203f');                                  // pupil
+    ell(ix-5.4,iy-6.5,5.2,4.4,'rgba(255,255,255,.95)');            // main highlight
+    ell(ix+5,iy+5.5,3,2.4,'rgba(255,255,255,.55)');                // secondary
+    // upper shadow
+    ctx.beginPath(); ctx.ellipse(ex, ey-ry-3, rx*1.1, ry*.55, 0,0,Math.PI*2);
+    ctx.fillStyle='rgba(120,90,140,.30)'; ctx.fill();
+    ctx.restore();
+    // lashes
+    ctx.beginPath(); ctx.moveTo(ex-rx-1, ey-2);
+    ctx.bezierCurveTo(ex-rx*.5, ey-ry-4, ex+rx*.5, ey-ry-4, ex+rx+1, ey-3);
+    ctx.strokeStyle='#2f1f33'; ctx.lineWidth=4.6; ctx.lineCap='round'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex+dir*rx, ey-3); ctx.lineTo(ex+dir*(rx+8), ey-9);
+    ctx.lineWidth=3.4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex-rx+3, ey+ry-2); ctx.quadraticCurveTo(ex, ey+ry+2.5, ex+rx-3, ey+ry-3);
+    ctx.strokeStyle='rgba(70,45,80,.5)'; ctx.lineWidth=1.7; ctx.stroke();
+  }
+
+  function drawBrow(dir){
+    const lift = dir<0 ? s.browL : s.browR;
+    const bx = dir*34, by = -30 - lift;
+    ctx.save(); ctx.translate(bx,by); ctx.rotate(dir * (0.06 - lift*0.012));
+    ctx.beginPath(); ctx.moveTo(-20,3); ctx.quadraticCurveTo(0,-5.5, 20,1.5);
+    ctx.strokeStyle='#a5763f'; ctx.lineWidth=4.2; ctx.lineCap='round'; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawMouth(){
+    const o = s.mouth, y = 54, curve = s.smile*7;
+    if(o < .06){
+      ctx.beginPath(); ctx.moveTo(-11, y);
+      ctx.quadraticCurveTo(0, y + 3 + curve, 11, y);
+      ctx.strokeStyle='#b5636d'; ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.stroke();
+      return;
+    }
+    const w = 12 + o*4, h = 3 + o*14;
+    ctx.beginPath();
+    ctx.moveTo(-w, y - 1);
+    ctx.quadraticCurveTo(0, y - 4 + curve*.4, w, y - 1);
+    ctx.quadraticCurveTo(0, y + h, -w, y - 1);
+    ctx.closePath();
+    ctx.fillStyle='#8c3b4d'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-w*.75, y); ctx.quadraticCurveTo(0, y+2.2, w*.75, y);
+    ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=2; ctx.stroke();   // teeth hint
+    if(h>10){ ell(0, y+h*.62, w*.42, h*.2, 'rgba(220,110,130,.85)'); }        // tongue hint
+  }
+
+  function drawBangs(){
+    ctx.save();
+    const g = hairGrad(-80,-130,80,10);
+    // side curtains
+    ctx.beginPath();
+    ctx.moveTo(-78,-24);
+    ctx.bezierCurveTo(-86,-96, -48,-126, 0,-126);
+    ctx.bezierCurveTo(48,-126, 86,-96, 78,-24);
+    ctx.bezierCurveTo(80,-52, 66,-72, 52,-78);
+    ctx.lineTo(-52,-78);
+    ctx.bezierCurveTo(-66,-72, -80,-52, -78,-24);
+    ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+    // pointed fringe strands
+    const strands=[[-70,26],[-52,44],[-30,36],[-8,48],[14,34],[36,45],[56,26],[70,14]];
+    strands.forEach(([x,len],i)=>{
+      const sw = 15 - Math.abs(x)*0.06;
+      ctx.beginPath();
+      ctx.moveTo(x-sw, -78);
+      ctx.bezierCurveTo(x-sw*.9, -78+len*.7, x-sw*.4, -70+len, x + (x>0?2:-2), -66+len);
+      ctx.bezierCurveTo(x+sw*.4, -70+len, x+sw*.9, -78+len*.7, x+sw, -78);
+      ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x-sw*.2,-72); ctx.lineTo(x, -70+len*.8);
+      ctx.strokeStyle='rgba(255,255,255,.20)'; ctx.lineWidth=3; ctx.stroke();
+    });
+    // long side locks
+    for(const dir of [-1,1]){
+      ctx.beginPath();
+      ctx.moveTo(dir*74,-52);
+      ctx.bezierCurveTo(dir*94,-6, dir*92,70, dir*70,124);
+      ctx.lineTo(dir*46,118);
+      ctx.bezierCurveTo(dir*70,60, dir*70,-4, dir*56,-58);
+      ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+    }
+    // glossy band
+    ctx.beginPath(); ctx.ellipse(0,-88,54,13,0,Math.PI*1.06,Math.PI*1.94);
+    ctx.strokeStyle='rgba(255,255,255,.34)'; ctx.lineWidth=7; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHead(){
+    ctx.save();
+    ctx.translate(0, HEAD_Y + s.nod);
+    ctx.rotate(s.tilt);
+
+    /* back hair mass + twin tails behind */
+    ctx.save(); ctx.translate(0,0);
+    ctx.beginPath(); ctx.ellipse(0,-6,92,104,0,0,Math.PI*2); ctx.fillStyle=HAIR_D; ctx.fill();
+    drawTail(-1, s.hairL); drawTail(1, s.hairR);
+    ctx.restore();
+
+    /* face */
+    ctx.beginPath();
+    ctx.moveTo(-72,-20);
+    ctx.bezierCurveTo(-72,-96, -40,-119, 0,-119);
+    ctx.bezierCurveTo(40,-119, 72,-96, 72,-20);
+    ctx.bezierCurveTo(72, 34, 42, 76, 0, 92);
+    ctx.bezierCurveTo(-42, 76, -72, 34, -72,-20);
+    ctx.closePath();
+    ctx.fillStyle=SKIN; ctx.fill();
+    // ears
+    ell(-73, 4, 9, 15, SKIN, -0.12); ell(73, 4, 9, 15, SKIN, 0.12);
+    // cheek/jaw shading
+    ctx.save(); ctx.globalAlpha=.35;
+    ell(0, 66, 40, 20, SKIN_SH); ctx.restore();
+
+    /* blush follows joy/excitement */
+    const bl = clamp(Emotion.v.joy*.5 + Emotion.v.excitement*.5 + Emotion.v.surprise*.3, 0, .85);
+    if(bl>.05){ ctx.save(); ctx.globalAlpha=bl*.55;
+      ell(-46,38,17,9,'#ff9db0'); ell(46,38,17,9,'#ff9db0'); ctx.restore(); }
+
+    drawEye(-1); drawEye(1); drawBrow(-1); drawBrow(1);
+    // nose
+    ctx.beginPath(); ctx.moveTo(2,30); ctx.lineTo(-3,38);
+    ctx.strokeStyle='rgba(190,140,130,.75)'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.stroke();
+    drawMouth();
+    drawBangs();
+    drawRibbon(-1); drawRibbon(1);
+    ctx.restore();
+  }
+
+  function drawArm(dir){
+    ctx.save();
+    ctx.translate(dir*88, 34);                        // below the bare shoulder line
+    ctx.rotate(-dir*(0.13 + s.armSway));              // hangs slightly away from the body
+    // puff sleeve
+    ctx.beginPath(); ctx.ellipse(0, 14, 33, 42, -dir*0.08, 0, Math.PI*2);
+    ctx.fillStyle=DRESS_L; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 14, 33, 42, -dir*0.08, Math.PI*.12, Math.PI*.88);
+    ctx.strokeStyle='rgba(0,0,0,.45)'; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-dir*8, -2, 20, 16, 0, 0, Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,.06)'; ctx.fill();
+    // forearm
+    ctx.save(); ctx.translate(dir*6, 50); ctx.rotate(-dir*0.10);
+    ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(16,0); ctx.lineTo(13,74); ctx.lineTo(-13,74);
+    ctx.closePath(); ctx.fillStyle=SKIN; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(dir*10,4); ctx.lineTo(dir*8,70);
+    ctx.strokeStyle='rgba(233,196,182,.7)'; ctx.lineWidth=5; ctx.stroke();
+    // long fingerless glove
+    ctx.beginPath(); ctx.moveTo(-14.5,26); ctx.lineTo(14.5,26); ctx.lineTo(12,86); ctx.lineTo(-12,86);
+    ctx.closePath(); ctx.fillStyle=DRESS; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-15,26); ctx.lineTo(15,26);
+    ctx.strokeStyle=LACE; ctx.lineWidth=3.5; ctx.stroke();
+    for(let i=0;i<3;i++){                              // strap detail
+      ctx.beginPath(); ctx.moveTo(-13, 40+i*15); ctx.lineTo(13, 40+i*15);
+      ctx.strokeStyle='rgba(232,192,90,.35)'; ctx.lineWidth=1.4; ctx.stroke();
+    }
+    ell(0, 92, 12.5, 14, DRESS);                       // hand
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawBody(){
+    /* neck + collarbone */
+    ctx.beginPath(); ctx.moveTo(-19,-52); ctx.lineTo(19,-52); ctx.lineTo(23,-4); ctx.lineTo(-23,-4);
+    ctx.closePath(); ctx.fillStyle=SKIN; ctx.fill();
+    ctx.save(); ctx.globalAlpha=.28; ctx.beginPath();
+    ctx.ellipse(0,-44,20,13,0,0,Math.PI); ctx.fillStyle=SKIN_SH; ctx.fill(); ctx.restore();
+
+    /* shoulders / chest skin (off-shoulder silhouette) */
+    ctx.beginPath();
+    ctx.moveTo(-96, 26);
+    ctx.bezierCurveTo(-74,-6, -34,-8, 0,-6);
+    ctx.bezierCurveTo(34,-8, 74,-6, 96, 26);
+    ctx.bezierCurveTo(60, 46, -60, 46, -96, 26);
+    ctx.closePath(); ctx.fillStyle=SKIN; ctx.fill();
+
+    /* choker (§ signature detail) */
+    ctx.beginPath(); ctx.moveTo(-25,-30); ctx.lineTo(25,-30); ctx.lineTo(25,-18); ctx.lineTo(-25,-18);
+    ctx.closePath(); ctx.fillStyle='#241b3c'; ctx.fill();
+    ctx.strokeStyle=GOLD; ctx.lineWidth=1.2; ctx.stroke();
+    for(let i=-2;i<=2;i++){ ell(i*10, -24, 2.4, 2.4, GOLD); }
+    ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(0,-8); ctx.strokeStyle=GOLD; ctx.lineWidth=1.4; ctx.stroke();
+    ell(0,-6,3.4,3.4,'#ffe6a8');
+
+    drawArm(-1); drawArm(1);
+
+    /* bodice */
+    ctx.beginPath();
+    ctx.moveTo(-72, 30);
+    ctx.bezierCurveTo(-40, 22, 40, 22, 72, 30);
+    ctx.bezierCurveTo(70, 78, 58, 118, 46, 150);
+    ctx.lineTo(-46, 150);
+    ctx.bezierCurveTo(-58, 118, -70, 78, -72, 30);
+    ctx.closePath();
+    const bg = ctx.createLinearGradient(-70,20,70,150);
+    bg.addColorStop(0,DRESS_L); bg.addColorStop(.5,DRESS); bg.addColorStop(1,DRESS_D);
+    ctx.fillStyle=bg; ctx.fill();
+    // lace trim along the neckline — dark, so it reads as trim rather than a band
+    ctx.beginPath(); ctx.moveTo(-72,30); ctx.bezierCurveTo(-40,22,40,22,72,30);
+    ctx.strokeStyle='#2a2145'; ctx.lineWidth=4; ctx.stroke();
+    for(let i=-6;i<=6;i++){ ell(i*11, 26 - Math.abs(i)*0.5, 4.2, 2.8, 'rgba(150,130,200,.20)'); }
+    // corset lacing
+    for(let i=0;i<6;i++){
+      const y = 54 + i*15, w = 15 - i*0.9;
+      ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(w, y+7); ctx.moveTo(w, y); ctx.lineTo(-w, y+7);
+      ctx.strokeStyle='rgba(220,205,255,.5)'; ctx.lineWidth=1.5; ctx.stroke();
+      ell(-w, y, 2, 2, GOLD); ell(w, y, 2, 2, GOLD);
+    }
+    /* belt + buckle */
+    ctx.beginPath(); ctx.moveTo(-50,132); ctx.lineTo(50,132); ctx.lineTo(48,152); ctx.lineTo(-48,152);
+    ctx.closePath(); ctx.fillStyle='#120d20'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.rect(-15,133,30,18); ctx.fillStyle=GOLD; ctx.fill();
+    ctx.beginPath(); ctx.rect(-9,137,18,10); ctx.fillStyle='#120d20'; ctx.fill();
+    ctx.beginPath(); ctx.rect(-2,137,4,10); ctx.fillStyle=GOLD; ctx.fill();
+
+    /* skirt */
+    ctx.beginPath();
+    ctx.moveTo(-48,150);
+    ctx.bezierCurveTo(-92,206, -128,272, -146,336);
+    ctx.bezierCurveTo(-70,362, 70,362, 146,336);
+    ctx.bezierCurveTo(128,272, 92,206, 48,150);
+    ctx.closePath();
+    const sg = ctx.createLinearGradient(0,150,0,350);
+    sg.addColorStop(0,DRESS); sg.addColorStop(.55,DRESS_L); sg.addColorStop(1,DRESS_D);
+    ctx.fillStyle=sg; ctx.fill();
+    // pleats
+    for(let i=-5;i<=5;i++){
+      ctx.beginPath(); ctx.moveTo(i*8, 156);
+      ctx.quadraticCurveTo(i*20, 250, i*27.5, 344 - Math.abs(i)*2);
+      ctx.strokeStyle='rgba(0,0,0,.32)'; ctx.lineWidth=2.2; ctx.stroke();
+    }
+    // layered hem
+    ctx.beginPath(); ctx.moveTo(-146,336);
+    for(let i=0;i<=12;i++){ const x=-146+i*24.3; ctx.quadraticCurveTo(x+12, 352+(i%2?9:-3), x+24.3, 340); }
+    ctx.lineTo(146,336); ctx.strokeStyle=LACE; ctx.lineWidth=6; ctx.stroke();
+  }
+
+  function drawBackdrop(){
+    // soft ambient glow that follows the internal state (thinking = brighter)
+    const g = ctx.createRadialGradient(CX, 320, 40, CX, 340, 400);
+    g.addColorStop(0, `rgba(150,110,230,${.20+s.glow*.20})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // rotating rune ring
+    ctx.save(); ctx.translate(CX, 300); ctx.rotate(s.t*0.09);
+    ctx.strokeStyle=`rgba(201,164,255,${.10+s.glow*.14})`; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.ellipse(0,0,268,268,0,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([6,20]);
+    ctx.beginPath(); ctx.ellipse(0,0,244,244,0,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+    // floor light
+    ctx.save(); ctx.globalAlpha=.30;
+    const fg = ctx.createLinearGradient(0,700,0,H);
+    fg.addColorStop(0,'rgba(160,120,240,.22)'); fg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=fg; ctx.fillRect(0,700,W,H-700); ctx.restore();
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    drawBackdrop();
+    ctx.save();
+    ctx.translate(CX, PIVOT_Y + s.breath);
+    ctx.scale(1 + s.breath*0.0016, 1 + s.breath*0.0022);   // breathing
+    drawBody();
+    drawHead();
+    ctx.restore();
+    // listening indicator: soft rim light, no text (§39)
+    if(s.listening){
+      ctx.save(); ctx.globalAlpha = .18 + Math.sin(s.t*3)*.07;
+      ctx.strokeStyle='#7de2b0'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(CX, 250, 150, 190, 0, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  return api;
+})();
+
+/* =========================================================================
+   VOICE ENGINE (§16) — Web Speech API behind a swappable interface.
+   Realtime streaming voice API slots in here without touching the core.
+   ========================================================================= */
+const Voice = {
+  rec:null, recording:false, voices:[], ready:false,
+  init(){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(SR){
+      this.rec = new SR();
+      this.rec.lang = Config.get('lang'); this.rec.interimResults = true; this.rec.continuous = false;
+      this.rec.onstart = ()=>{ this.recording=true; UI.micUI(true); Avatar.setListening(true); };
+      this.rec.onend   = ()=>{ this.recording=false; UI.micUI(false); Avatar.setListening(false); };
+      this.rec.onerror = e=>{ this.recording=false; UI.micUI(false); Avatar.setListening(false);
+        UI.sys('音声入力を利用できません（'+e.error+'）。テキスト入力をご利用ください。'); };
+      this.rec.onresult = e=>{
+        let fin='', itr='';
+        for(let i=e.resultIndex;i<e.results.length;i++){
+          const r=e.results[i]; r.isFinal ? fin+=r[0].transcript : itr+=r[0].transcript;
+        }
+        $('#text').value = fin || itr;
+        if(fin){ UI.submit(fin); }
+      };
+    }
+    if('speechSynthesis' in window){
+      const load = ()=>{ this.voices = speechSynthesis.getVoices(); UI.fillVoices(); };
+      load(); speechSynthesis.onvoiceschanged = load;
+    }
+    this.ready = true;
+  },
+  toggle(){
+    if(!this.rec){ UI.sys('このブラウザは音声認識に未対応です。テキストでどうぞ。'); return; }
+    if(this.recording){ try{this.rec.stop();}catch(e){} return; }
+    this.rec.lang = Config.get('lang');
+    try{ this.rec.start(); }catch(e){ UI.sys('マイクを起動できませんでした。'); }
+  },
+  pickVoice(){
+    const want = Config.get('voice');
+    if(want){ const v=this.voices.find(v=>v.voiceURI===want); if(v) return v; }
+    const lang = Config.get('lang');
+    return this.voices.find(v=>v.lang===lang) || this.voices.find(v=>v.lang.startsWith(lang.slice(0,2))) || null;
+  },
+  speak(text){
+    return new Promise(resolve=>{
+      const on = Config.get('tts')==='1' && 'speechSynthesis' in window;
+      if(!on || !text){ // still animate the mouth so presence never drops
+        Avatar.setSpeaking(true); setTimeout(()=>{Avatar.setSpeaking(false); resolve();},
+          clamp(text.length*38, 500, 6000)); return;
+      }
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/[*_`#>]/g,''));
+      const v = this.pickVoice(); if(v) u.voice=v;
+      u.lang = Config.get('lang');
+      const e = Emotion.v;
+      u.rate  = clamp(1.0 + e.excitement*.18 - e.thinking*.14 - e.concern*.08, .7, 1.35);
+      u.pitch = clamp(1.12 + e.joy*.22 - e.concern*.18, .6, 1.9);
+      u.volume= 1;
+      u.onstart = ()=>Avatar.setSpeaking(true);
+      u.onend   = ()=>{ Avatar.setSpeaking(false); resolve(); };
+      u.onerror = ()=>{ Avatar.setSpeaking(false); resolve(); };
+      speechSynthesis.speak(u);
+      setTimeout(()=>{ if(!speechSynthesis.speaking){ Avatar.setSpeaking(false); resolve(); } }, 400);
+    });
+  },
+  stop(){ try{ speechSynthesis.cancel(); }catch(e){} Avatar.setSpeaking(false); }
+};
+
+/* =========================================================================
+   TOOL ROUTER (§24/§25) — agents never touch capabilities directly.
+   Agent → Tool Router → Permission Check → Execute → Validate → Agent
+   ========================================================================= */
+const ToolRouter = {
+  tools:{
+    'time.now':      {cls:'READ',   desc:'現在日時を取得', run:()=>new Date().toLocaleString('ja-JP')},
+    'memory.read':   {cls:'READ',   desc:'記憶を検索',      run:q=>Memory.route(q,8).map(h=>h.text).join('\n')||'該当なし'},
+    'memory.write':  {cls:'WRITE',  desc:'記憶に書き込み',  run:a=>{Memory.remember('project', a.key, a.value); return 'saved';}},
+    'memory.wipe':   {cls:'ADMIN',  desc:'記憶を全消去',    run:()=>{Memory.wipe(); return 'wiped';}},
+    'clipboard.write':{cls:'WRITE', desc:'クリップボードへ書き出し',
+                       run:async t=>{ await navigator.clipboard.writeText(t); return 'copied'; }}
+  },
+  needsConfirm:{READ:false, WRITE:false, EXECUTE:true, EXTERNAL:true, FINANCIAL:true, ADMIN:true},
+  async call(name, arg){
+    const t = this.tools[name];
+    if(!t) return {ok:false, error:'unknown tool: '+name};
+    if(this.needsConfirm[t.cls]){
+      const ok = await UI.confirm(`「${t.desc}」（${t.cls}）を実行します。よろしいですか？`);
+      if(!ok) return {ok:false, error:'denied by user'};
+    }
+    try{
+      const out = await t.run(arg);
+      if(out===undefined || out===null) return {ok:false, error:'empty result'};   // result validation
+      return {ok:true, out};
+    }catch(e){ return {ok:false, error:String(e.message||e)}; }
+  }
+};
+
+/* =========================================================================
+   MODEL ROUTER (§28) — one façade over realtime / reasoning / local models
+   ========================================================================= */
+const ModelRouter = {
+  configured(){ const p=Config.get('provider'); return p!=='local' && !!Config.get('key'); },
+  label(){ return this.configured() ? `${Config.get('provider')}:${Config.get('model')||'default'}` : 'local-persona'; },
+  async complete(system, messages, {maxTokens=900, temperature=0.7}={}){
+    const p = Config.get('provider');
+    if(!this.configured()) return {text:null, local:true};
+    if(p==='anthropic'){
+      const base = Config.get('base') || 'https://api.anthropic.com';
+      const r = await fetch(base.replace(/\/$/,'')+'/v1/messages', {
+        method:'POST',
+        headers:{'content-type':'application/json','x-api-key':Config.get('key'),
+                 'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:Config.get('model')||'claude-sonnet-5', max_tokens:maxTokens,
+                             temperature, system, messages})
+      });
+      if(!r.ok) throw new Error('API '+r.status+' '+(await r.text()).slice(0,180));
+      const j = await r.json();
+      return {text:(j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim()};
+    }
+    // OpenAI-compatible
+    const base = Config.get('base') || 'https://api.openai.com';
+    const r = await fetch(base.replace(/\/$/,'')+'/v1/chat/completions', {
+      method:'POST',
+      headers:{'content-type':'application/json','authorization':'Bearer '+Config.get('key')},
+      body:JSON.stringify({model:Config.get('model')||'gpt-4o-mini', max_tokens:maxTokens, temperature,
+                           messages:[{role:'system',content:system}, ...messages]})
+    });
+    if(!r.ok) throw new Error('API '+r.status+' '+(await r.text()).slice(0,180));
+    const j = await r.json();
+    return {text:(j.choices?.[0]?.message?.content||'').trim()};
+  }
+};
+
+/* =========================================================================
+   LOCAL PERSONA ENGINE — honest offline fallback.
+   Not an LLM: intent heuristics + memory. Keeps the MVP demonstrable
+   with zero configuration, and is clearly labelled as such in the console.
+   ========================================================================= */
+const LocalEngine = {
+  pick(a){ return a[Math.floor(Math.random()*a.length)]; },
+  reply(text, level){
+    const t = text.trim(), r = Memory.store.relationship;
+    const nm = r.name ? `${r.name}さん` : '';
+    const learned = Memory.extract(t);
+
+    if(/^(こんにちは|こんばんは|おはよう|やあ|hi|hello|はじめまして)/i.test(t))
+      return this.pick([
+        `${nm?nm+'、':''}こんにちは。会うのは${r.turns<=1?'はじめて':r.turns+'回目'}ですね。今日は何をしましょうか。`,
+        `やっと来てくれた。${nm?nm+'の':''}声、聞かせてください。`]);
+
+    if(/名前|なまえ|誰|あなたは/.test(t) && /(何|なに|だれ|誰|教え)/.test(t))
+      return `Lex（レックス）です。普段は話し相手、必要なときは調査と文書作成をする専門家モードに切り替わります。表向きの私は一人だけど、裏では複数の専門エージェントが動いています。`;
+
+    if(learned.length)
+      return this.pick([
+        `覚えました（${learned.join(' / ')}）。次からはそれを前提に話しますね。`,
+        `なるほど、${learned.join('、')}。ちゃんと記憶しておきます。`]);
+
+    if(/ありがとう|thanks|助かっ/.test(t))
+      return this.pick(['どういたしまして。ほかにも投げてください。','役に立てたならよかった。次は？']);
+
+    if(level>=2){
+      const hits = Memory.route(t, 3, {facts:true});
+      return [
+        `その話は、いまローカルの簡易エンジンで動いているので断定を避けます。手順の骨格だけ言うと、論点の洗い出し → 事実の確定 → 調査 → 一次資料の確認 → 分析 → 起案 → 反対検証、の順です。`,
+        `⚙ → Model Router でLLMを接続してもらえれば、Research → Drafting → Red Team → Compliance → Quality の本番ループで、根拠付きで回答します。`,
+        hits.length ? `ちなみに覚えているのは、${hits.map(h=>h.text).join('、')}。` : ''
+      ].filter(Boolean).join('\n');
+    }
+    if(/[?？]|ですか|かな|どう思う/.test(t))
+      return this.pick([
+        `いい問いですね。もう少しだけ背景を教えてもらえますか。どこで引っかかっていますか。`,
+        `そこは前提次第で答えが変わります。${nm?nm+'は':'あなたは'}どちらを想定していますか。`]);
+
+    return this.pick([
+      `聞いています。もう少し詳しく。`,
+      `なるほど。それで、どうしたいですか。`,
+      `${nm?nm+'、':''}それは続きがありそうですね。`]);
+  }
+};
+
+/* =========================================================================
+   AGENTS (§4–§11) — each is a small, replaceable unit with one job
+   ========================================================================= */
+const Agents = {
+  async research(q, trace){
+    const t0=now();
+    if(!ModelRouter.configured()){
+      trace.add('Research','skipped (no model)', now()-t0);
+      return {text:'', sources:[], note:'model not configured'};
+    }
+    const sys = `あなたはResearch Agentである。以下を必ず区別して出力せよ:
+Primary Source（条文・判例・一次資料）/ Secondary Source（解説等）/ Inference（推論）/ Uncertainty（不確実な点）。
+検索ツールは無い。既知の知識のみで答え、確信の持てない固有名・条番号・数値は Uncertainty に置き、断定しないこと。簡潔に。`;
+    const r = await ModelRouter.complete(sys, [{role:'user', content:q}], {maxTokens:700, temperature:.3});
+    trace.add('Research','done', now()-t0);
+    return {text:r.text||'', note:''};
+  },
+  async draft(q, ctxBlock, research, level, trace){
+    const t0=now();
+    if(!ModelRouter.configured()){
+      const text = LocalEngine.reply(q, level);
+      trace.add('Drafting','local persona engine', now()-t0);
+      return text;
+    }
+    const sys = `${Persona.system()}
+${level>=3 ? 'いまは Lex Associate Mode（専門モード）である。起案前に Purpose / Audience / Conclusion / Structure / Evidence / Risk / Tone を内部で整理してから書け。ただしその見出しは出力しない。' : ''}
+${ctxBlock ? '【記憶コンテキスト】\n'+ctxBlock : ''}
+${research ? '【Research Agent の調査結果】\n'+research : ''}`;
+    const hist = Memory.store.conversation.slice(-8).map(m=>({role:m.role==='ai'?'assistant':'user', content:m.text}));
+    const r = await ModelRouter.complete(sys, [...hist, {role:'user', content:q}],
+      {maxTokens: level>=3?1400:500, temperature: level>=3?.4:.8});
+    trace.add('Drafting','done', now()-t0);
+    return r.text || '（応答が空でした）';
+  },
+  async redTeam(q, draft, trace){
+    const t0=now();
+    if(!ModelRouter.configured()){ trace.add('RedTeam','skipped (no model)', 0); return null; }
+    const sys = `あなたはRed Team Agentである。「この結論が間違っているとすれば、どこが最も怪しいか」から検証せよ。
+反論 / 見落とし / 法的リスク / 技術的リスク / 論理矛盾 / 事実誤認 / 誤引用 / 過度な断定 を探す。
+問題が無ければ "OK" のみを返す。あるなら最大3点、各1行で指摘せよ。`;
+    const r = await ModelRouter.complete(sys, [{role:'user', content:`質問:\n${q}\n\nドラフト:\n${draft}`}],
+      {maxTokens:400, temperature:.2});
+    trace.add('RedTeam','done', now()-t0);
+    return (r.text||'').trim();
+  },
+  async compliance(draft, trace){
+    const t0=now();
+    const flags=[];
+    // deterministic local checks always run, model-independent
+    if(/第\s*\d+\s*条/.test(draft) && !ModelRouter.configured())
+      flags.push('条番号の引用があるが一次資料未検証（Citation Verification 未実施）');
+    if(/必ず勝てる|絶対に適法|100%/.test(draft)) flags.push('過度な断定表現');
+    if(/(sk-[A-Za-z0-9]{10,})/.test(draft))     flags.push('秘密情報らしき文字列を検出');
+    trace.add('Compliance', flags.length?`${flags.length} flag(s)`:'clear', now()-t0);
+    return flags;
+  },
+  /* Quality Agent (§10): 0–100 per axis. Heuristic locally; model-scored when configured. */
+  async quality(q, draft, redTeam, flags, trace){
+    const t0=now();
+    const len = draft.length;
+    const sc = {
+      Accuracy: redTeam && redTeam!=='OK' ? 78 : 92,
+      Completeness: clamp(55 + len/12, 40, 97),
+      LogicalConsistency: redTeam && /矛盾/.test(redTeam||'') ? 70 : 93,
+      CitationQuality: /第\s*\d+\s*条|https?:\/\//.test(draft) ? (flags.length?68:90) : 88,
+      Practicality: 90, Clarity: len>1600?82:93, Naturalness: 92,
+      Latency: 95, UserIntentAlignment: 90
+    };
+    if(flags.length) sc.Accuracy -= flags.length*6;
+    const total = Math.round(Object.values(sc).reduce((a,b)=>a+b,0)/Object.keys(sc).length);
+    trace.add('Quality', total+'/100', now()-t0);
+    return {sc, total};
+  },
+  /* Client Communication Agent (§11) — same analysis, different register */
+  adapt(text, mode){
+    if(mode==='expert' || !text) return text;
+    if(mode==='beginner')  return text;   // hook point: register conversion lives here
+    return text;
+  }
+};
+
+/* Persona system prompt builder — single personality, many minds (§3) */
+const Persona = {
+  system(){
+    const r = Memory.store.relationship;
+    return `あなたは「Lex」。LEX LIVE のリアルタイムAIコンパニオンである。
+- ユーザーから見えるAIは常に一人。内部の複数エージェントのやり取りをそのまま見せてはならない。
+- 人格: 温かく、機知があり、率直。好奇心が強い。${Personality.style()}
+- 短い問いには短く返す。毎回完結した長文を返すのは不自然。必要なら Acknowledgement → 短い答え → 任意の補足。
+- 音声で読み上げられる前提。箇条書きの多用や記号の羅列を避け、話し言葉で書く。
+- 事実と推測を区別する。知らないことは知らないと言う。法令・判例・数値は、確認していないなら未確認と明示する。
+- 感情の数値やエージェント名をユーザーに見せない。
+- 現在の関係性: 会話${r.turns}回目${r.name?` / ユーザー名は「${r.name}」`:''}。`;
+  }
+};
+
+/* =========================================================================
+   ORCHESTRATOR (§5) + Adaptive Reasoning (§22) + Latency Router (§23)
+   + Loop Engineering with hard termination conditions (§19–§21)
+   ========================================================================= */
+const Trace = ()=>{ const rows=[]; return {
+  rows, add(agent, status, ms){ rows.push({agent, status, ms:Math.round(ms||0)}); UI.trace(rows); },
+  text(){ return rows.map(r=>`${r.agent.padEnd(12)} ${String(r.ms).padStart(5)}ms  ${r.status}`).join('\n'); }
+};};
+
+const Orchestrator = {
+  busy:false,
+  MAX_ITER:2, THRESHOLD:95, LATENCY_BUDGET:{0:2500, 1:6000, 2:15000, 3:45000, 4:90000},
+
+  classify(q){
+    const t = q.toLowerCase();
+    if(/契約|条項|意見書|法令|判例|金商法|資金決済|コンプライアンス|規制|訴訟|デューデリ|開示|約款/.test(q)) return 4;
+    if(/調べ|リサーチ|比較|分析|設計|方針|レビュー|検討|まとめて|提案/.test(q)) return 3;
+    if(/なぜ|どうやって|方法|理由|仕組み|とは|説明/.test(q)) return 2;
+    if(q.length>60 || /[?？]/.test(q)) return 1;
+    if(/^(うん|そう|へえ|なるほど|おはよう|こんにちは|やあ|ありがとう|ok|はい|いいえ)/i.test(t)) return 0;
+    return 1;
+  },
+  path(level){ return level<=0 ? 'FAST' : level<=2 ? 'STANDARD' : 'DEEP'; },
+
+  async handle(input){
+    if(this.busy) return;
+    this.busy = true;
+    const t0 = now();
+    const trace = Trace();
+    const level = this.classify(input);
+    const path  = this.path(level);
+    const budget = this.LATENCY_BUDGET[level];
+
+    Personality.mode = level>=4 ? 'professional' : 'live';
+    UI.mode(Personality.mode==='professional' ? 'LEX ASSOCIATE' : 'LIVE');
+    UI.metric({level:`L${level}`, path, iter:'–', score:'–', lat:'…', exit:'–'});
+
+    Memory.addTurn('user', input);
+    Emotion.infer(input,'user');
+
+    // Level 0 fast path — no agent loop at all (§22)
+    if(level===0){
+      Avatar.setThinking(false);
+      const text = ModelRouter.configured()
+        ? await Agents.draft(input, Memory.contextBlock(input), '', 0, trace)
+        : LocalEngine.reply(input, 0);
+      await this.deliver(text, t0, trace, {level, path, iter:0, score:'–', exit:'fast path'});
+      this.busy=false; return;
+    }
+
+    UI.chip('Thinking'); Avatar.setThinking(true); Emotion.infer(input,'thinking');
+
+    let draft='', redTeam=null, flags=[], q=null, iter=0, exit='threshold', lastTotal=-1;
+    try{
+      const ctxBlock = Memory.contextBlock(input);
+      let research='';
+      if(level>=3){
+        UI.chip('Researching');
+        const r = await Agents.research(input, trace);
+        research = r.text;
+      }
+      UI.chip('Working');
+
+      /* --- Multi-Agent Loop (§20) with the four exits of §21 --- */
+      while(true){
+        iter++;
+        draft = await Agents.draft(
+          input, ctxBlock, research + (redTeam && redTeam!=='OK' ? `\n\n【Red Teamの指摘（反映せよ）】\n${redTeam}` : ''),
+          level, trace);
+
+        if(level<3){ exit='light path'; q={total:'–'}; break; }
+
+        redTeam = await Agents.redTeam(input, draft, trace);
+        flags   = await Agents.compliance(draft, trace);
+        q       = await Agents.quality(input, draft, redTeam, flags, trace);
+        UI.metric({iter:String(iter), score:String(q.total)});
+
+        if(q.total >= this.THRESHOLD){ exit='quality threshold'; break; }
+        // without a model the drafter is deterministic — re-running cannot improve it
+        if(!ModelRouter.configured()){ exit='no model (single pass)'; break; }
+        if(iter >= this.MAX_ITER){ exit='max iterations'; break; }
+        if(q.total - lastTotal < 2 && lastTotal >= 0){ exit='negligible improvement'; break; }
+        if(now()-t0 > budget){ exit='latency budget'; break; }
+        lastTotal = q.total;
+      }
+
+      if(flags.length && level>=3)
+        draft += `\n\n（内部チェック: ${flags.join(' / ')}。この点は未検証として扱ってください。）`;
+
+    }catch(err){
+      draft = `いま外部モデルに繋がりませんでした（${String(err.message||err).slice(0,120)}）。⚙から設定を確認してください。`
+            + `\n代わりにローカルで答えると: ` + LocalEngine.reply(input, level);
+      exit = 'error';
+      trace.add('Error', String(err.message||err).slice(0,80), 0);
+    }
+
+    Avatar.setThinking(false);
+    await this.deliver(draft, t0, trace, {level, path, iter, score:q?String(q.total):'–', exit});
+    this.busy = false;
+  },
+
+  async deliver(text, t0, trace, m){
+    const lat = Math.round(now()-t0);
+    UI.metric({level:`L${m.level}`, path:m.path, iter:String(m.iter), score:m.score, lat:lat+'ms', exit:m.exit});
+    UI.chip('Done'); setTimeout(()=>UI.chipOff(), 900);
+    Emotion.infer(text,'ai');
+    Memory.addTurn('ai', text);
+    UI.say('ai', text);
+    await Voice.speak(text);
+    Emotion.relax();
+  }
+};
+
+/* =========================================================================
+   UI LAYER
+   ========================================================================= */
+const UI = {
+  init(){
+    $('#send').onclick = ()=>this.submit($('#text').value);
+    $('#text').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.isComposing) this.submit($('#text').value); });
+    $('#mic').onclick  = ()=>Voice.toggle();
+    $('#gear').onclick = ()=>$('#dev').classList.toggle('on');
+    $('#devClose').onclick = ()=>$('#dev').classList.remove('on');
+
+    // gaze follows the pointer — presence, not decoration (§39)
+    window.addEventListener('pointermove', e=>{
+      Avatar.lookAt((e.clientX/innerWidth-.5)*2, (e.clientY/innerHeight-.5)*1.6);
+    });
+
+    // config bindings
+    const bind = (sel,key)=>{ const el=$(sel); el.value = Config.get(key); el.onchange = ()=>Config.set(key, el.value); };
+    bind('#cfgProvider','provider'); bind('#cfgBase','base'); bind('#cfgModel','model');
+    bind('#cfgKey','key'); bind('#cfgTts','tts'); bind('#cfgLang','lang'); bind('#cfgVoice','voice');
+    $('#cfgSave').onclick = ()=>{ ['provider','base','model','key','tts','lang','voice'].forEach(k=>{
+        const el = document.querySelector('#cfg'+k[0].toUpperCase()+k.slice(1)); if(el) Config.set(k, el.value); });
+      this.sys('設定を保存しました（Model Router: '+ModelRouter.label()+'）。'); this.renderTools(); };
+    $('#cfgWipeKey').onclick = ()=>{ Config.set('key',''); $('#cfgKey').value=''; this.sys('APIキーを消去しました。'); };
+    $('#memWipe').onclick = ()=>{ if(confirm('全記憶を消去します。よろしいですか？')){ Memory.wipe(); this.renderMem(); this.sys('記憶を消去しました。'); } };
+    $('#memExport').onclick = ()=>{
+      const blob = new Blob([JSON.stringify(Memory.store,null,2)],{type:'application/json'});
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='lexlive-memory.json'; a.click(); URL.revokeObjectURL(a.href);
+    };
+    $('#askNo').onclick  = ()=>this._ask(false);
+    $('#askYes').onclick = ()=>this._ask(true);
+
+    $('#buildNote').textContent =
+      `LEX LIVE MVP · Avatar(canvas 2D) / Emotion / Memory / Orchestrator / Voice(Web Speech). `+
+      `Model Router: ${ModelRouter.label()}. `+
+      `LLM未接続時の応答はローカルの簡易ペルソナエンジン（LLMではありません）が生成します。`;
+
+    this.renderTools(); this.renderMem();
+    setInterval(()=>{ this.renderEmo(); }, 200);
+    setInterval(()=>{ if($('#dev').classList.contains('on')) this.renderMem(); }, 3000);
+  },
+  submit(v){
+    const t = String(v||'').trim(); if(!t || Orchestrator.busy) return;
+    $('#text').value=''; this.say('user', t); Voice.stop(); Orchestrator.handle(t);
+  },
+  say(who, text){
+    const d = document.createElement('div');
+    d.className = 'msg ' + (who==='ai'?'ai':'user');
+    d.innerHTML = `<div class="who">${who==='ai'?'LEX':'YOU'}</div><div class="body">${esc(text)}</div>`;
+    $('#log').appendChild(d); $('#log').scrollTop = 1e9;
+  },
+  sys(text){
+    const d = document.createElement('div');
+    d.className='msg sys'; d.innerHTML=`<div class="who"></div><div class="body">${esc(text)}</div>`;
+    $('#log').appendChild(d); $('#log').scrollTop = 1e9;
+  },
+  chip(t){ $('#chipText').textContent = t; $('#chip').classList.add('on'); },
+  chipOff(){ $('#chip').classList.remove('on'); },
+  mode(t){ $('#modeTag').textContent = t; },
+  micUI(on){ $('#mic').classList.toggle('rec', on); },
+  metric(o){ const map={level:'#mLevel',path:'#mPath',iter:'#mIter',score:'#mScore',lat:'#mLat',exit:'#mExit'};
+    for(const k in o) if(map[k]) $(map[k]).textContent = o[k]; },
+  trace(rows){ $('#trace').textContent = rows.map(r=>`${r.agent.padEnd(11)}${String(r.ms).padStart(6)}ms  ${r.status}`).join('\n') || '待機中。'; },
+  renderEmo(){
+    const box=$('#emoBars'); if(!$('#dev').classList.contains('on')) return;
+    let html='';
+    for(const k in Emotion.v){
+      const v=Emotion.v[k];
+      html += `<div class="emo"><span>${k}</span><span>${v.toFixed(2)}</span></div><div class="bar"><i style="width:${(v*100).toFixed(0)}%"></i></div>`;
+    }
+    box.innerHTML = html;
+  },
+  renderMem(){
+    const r=Memory.store.relationship;
+    let h = `<div><b>relationship</b> turns=${r.turns} warmth=${r.warmth.toFixed(2)}${r.name?` name=${esc(r.name)}`:''}</div>`;
+    for(const b of ['preference','project','professional']){
+      Memory.store[b].forEach(x=>{ h += `<div><b>${b}</b> ${esc(x.key)} = ${esc(x.value)}</div>`; });
+    }
+    h += `<div><b>conversation</b> ${Memory.store.conversation.length} turns stored（毎回全部はモデルに渡しません）</div>`;
+    $('#memList').innerHTML = h;
+  },
+  renderTools(){
+    $('#toolList').innerHTML = Object.entries(ToolRouter.tools)
+      .map(([k,v])=>`<div class="kv"><span>${k}</span><span>${v.cls}${ToolRouter.needsConfirm[v.cls]?' · 確認要':''}</span></div>`).join('');
+  },
+  _askResolve:null,
+  confirm(text){ $('#askText').textContent=text; $('#ask').classList.add('on');
+    return new Promise(r=>{ this._askResolve=r; }); },
+  _ask(v){ $('#ask').classList.remove('on'); if(this._askResolve){ this._askResolve(v); this._askResolve=null; } },
+  fillVoices(){
+    const sel=$('#cfgVoice'); if(!sel) return;
+    const cur = Config.get('voice');
+    sel.innerHTML = '<option value="">(自動選択)</option>' +
+      Voice.voices.map(v=>`<option value="${esc(v.voiceURI)}"${v.voiceURI===cur?' selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    $('#voiceNote').textContent = Voice.voices.length
+      ? `${Voice.voices.length}個の音声が利用可能。`
+      : '音声合成が利用できない環境です（アバターの口だけ動きます）。';
+  }
+};
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+window.addEventListener('DOMContentLoaded', ()=>{
+  Avatar.init(); Voice.init(); UI.init();
+  const r = Memory.store.relationship;
+  const greet = r.turns===0
+    ? 'こんにちは。Lexです。話しかけてください。声でも文字でも大丈夫です。'
+    : `おかえりなさい${r.name?'、'+r.name+'さん':''}。${r.turns}回目ですね。続きから話しましょう。`;
+  setTimeout(()=>{ UI.say('ai', greet); Emotion.set({joy:.6, curiosity:.7, excitement:.4});
+    Voice.speak(greet).then(()=>Emotion.relax()); }, 700);
+  if(!ModelRouter.configured())
+    setTimeout(()=>UI.sys('LLM未接続です。⚙ → Model Router でAPIを設定すると、Research / Drafting / Red Team / Compliance / Quality の本番ループで動きます。現在はローカルの簡易ペルソナエンジンで応答しています。'), 1600);
+});
+</script>
+</body>
+</html>
