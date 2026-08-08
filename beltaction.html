@@ -3438,7 +3438,15 @@ function tryGrab(){ const p=player; const e=grabbableTarget();
   p.state='grab'; p.grabEnemy=e; p.grabT=180; p.punch=0; p.grabSub='hold'; p.grabAnim=0;
   e.state='grabbed'; e.grabbedBy=1; e.vx=0; e.vz=0; e.z=0; e.stun=40; e.telegraph=0; e.atkTimer=0;
   sfx.dash(p.x); spark(p.x+p.facing*30,p.y-30,'#ffe9a0',8,5); popText(e.x,e.y-e.h-8,'つかんだ！','#ffe14d'); }
-function holdEnemy(e){ const p=player; e.facing=-p.facing; e.y=p.y; e.x=p.x+p.facing*36; e.z=0; }
+// 掴まれた側は暴れる。座標を完全に固定すると「置物を持ち上げている」絵になり、
+// 掴みの緊張感が消える。抵抗は時間とともに弱まる
+function holdEnemy(e){ const p=player, t=p.grabAnim||0;
+  const st=Math.max(0.18,1-t/150);
+  e.facing=-p.facing; e.y=p.y;
+  e.x=p.x+p.facing*(36+Math.sin(t*0.30)*3.4*st);
+  e.z=0;                                        // z を上げると敵側の重力（updateEnemies）が働き、
+  e.strugY=Math.sin(t*0.44+1.1)*4.0*st;         // 影の縮尺も明滅するので、上下は描画専用の値で暴れさせる
+  e.strugR=Math.sin(t*0.23+0.4)*0.11*st; }
 function updateGrab(){ const p=player, e=p.grabEnemy;
   if(!e || e.dead){ p.state='idle'; p.grabEnemy=null; return; }
   p.grabT--; p.grabAnim++;
@@ -7302,7 +7310,19 @@ function drawPlayer(){
     bodyY=br*1.3; swAng=-0.44+br*0.06; thF=0.16; thB=-0.16;
     bodyX=Math.sin(ph*0.53)*0.9; lean=Math.sin(ph*0.53+0.6)*0.035; backArm=0.30+br*0.05; }
   else if(st==='guard'){ bodyY=3; thF=0.46; thB=-0.46; kF=0.95; kB=0.95; lean=-0.12; swAng=1.05; backArm=-0.1; mode='shield'; }
-  else if(st==='jump'){ thF=0.7; thB=0.45; kF=1.3; kB=1.55; bodyY=-2;
+  else if(st==='jump'){
+    // 跳躍は「上昇＝畳む／頂点＝開く／落下＝脚を伸ばして着地に備える」の3相。
+    // 従来は滞空中ずっと同じ姿勢だったので、跳んでいる間だけ絵が止まって見えていた
+    const jv=clamp((p.vz||0)/9,-1,1), up=Math.max(0,jv), dn=Math.max(0,-jv);
+    const ap=1-Math.abs(jv);                                   // 頂点でだけ1
+    const near=(p.vz<0)? clamp(1-(p.z||0)/56,0,1) : 0;         // 着地が近いほど1（脚を下ろす）
+    thF=0.62+0.52*up-0.40*dn-0.28*near; thB=0.42+0.40*up-0.30*dn-0.22*near;
+    kF =1.15+0.75*up-0.55*dn-0.45*near; kB =1.35+0.70*up-0.60*dn-0.50*near;
+    lean=0.14*up-0.14*dn; bodyY=-2+2.4*up-1.8*dn;
+    swAng=0.30-0.80*up+0.50*dn; backArm=0.25-0.66*up+0.58*dn;  // 上昇で腕が上がり、落下で下りる
+    sqX=1+0.05*ap; sqY=1-0.05*ap;                              // 頂点でだけわずかに開く
+    // 速度による伸縮とばねの着地潰れは描画側（updateRigP と空中スケール）が既に掛けているので、
+    // ここで重ねると二重に伸びる
     if(p.jAtk>0){ const e=easeOut(1-p.jAtk/18); const big=Math.sin(clamp(1-p.jAtk/18,0,1)*Math.PI);
       if(p.jDown){ // 下突き：剣を真下に突き刺す（両脚を伸ばし直立）
         swAng=1.55; swExt=24*(1+0.8*big); trailCol='#aef0ff'; tA0=1.3; tA1=1.7; trailW=1.8;
@@ -7390,9 +7410,18 @@ function drawPlayer(){
     if(p.ipWin>0){ swAng=-0.62; backArm=-0.34; thF=0.5; thB=-0.52; kF=0.9; kB=0.95; bodyY=1; sqX=0.96; sqY=1.03; swExt=8; }
     else { const w=clamp(p.ipStance/PARRY_WHIFF,0,1);   // 空振り後：刀を落として構え直す大きな隙
       swAng=1.25-0.5*(1-w); backArm=0.9; thF=0.9*w+0.2; thB=0.2; kF=1.2*w+0.2; kB=0.5; lean=0.4*w; bodyY=4*w; sqX=1+0.06*w; sqY=1-0.08*w; } }
-  else if(st==='grab'){ thF=0.3; thB=-0.3; kF=0.4; kB=0.4; bodyY=1; mode='fist'; backArm=0.55;
+  else if(st==='grab'){ mode='fist';
+      // 掴みは押さえ込み。暴れる敵に引かれて上体と腰が絶えず揺れる
+      // （固定姿勢だと敵だけが暴れて、掴んでいる側が力んでいないように見える）
+      const gt=p.grabAnim||0, sg=Math.max(0.18,1-gt/150);
+      // ポーズは毎フレーム指数追従（k=0.26）で均されるので、揺れが速すぎると振幅が消える。
+      // 周期20F前後まで落とし、そのぶん振幅を持たせる
+      const w=Math.sin(gt*0.30)*sg, w2=Math.sin(gt*0.44+1.1)*sg;
+      thF=0.30+0.26*w; thB=-0.30-0.22*w; kF=0.40+0.34*Math.abs(w2); kB=0.40+0.40*Math.abs(w);
+      bodyY=1+2.8*w2; bodyX=-3.6*w; lean=-0.06-0.17*w;
+      backArm=0.55-0.30*w2; sqX=1+0.07*Math.abs(w); sqY=1-0.075*Math.abs(w);
       if(p.grabSub==='punch'){ const k=Math.sin(clamp(p.grabAnim/9,0,1)*Math.PI); swAng=0.05; faL1=9+5*k; faL2=8+7*k; faW=0.95+0.4*k; backArm=-0.1; bodyX=k*3; }
-      else { swAng=0.25; } }
+      else { swAng=0.25-0.20*w2; faW=1.05; } }
   else if(st==='iaidash'){ mode='blade'; lean=0.6; bodyY=-2; thF=1.5; thB=-0.45; kF=0.1; kB=0.7; swAng=0.05; swExt=24; backArm=-0.7; sqX=1.14; sqY=0.9;
     drawTrail=true; trailCol='#cfeeff'; tA0=-0.5; tA1=0.5; tk=0.15; trailW=2.0; smear=0.6; }   // 疾走連続居合斬り
   else if(st==='dunk'){ mode='fist'; if(p.dunkT<=16){ swAng=-1.5; backArm=-1.5; thF=0.6; thB=0.5; kF=1.0; kB=1.0; bodyY=-2; } else { swAng=1.5; backArm=1.5; lean=0.35; thF=0.7; thB=0.4; bodyY=-1; } }   // パワーダンク
@@ -8322,10 +8351,12 @@ function drawEnemy(e){
     ctx.restore(); return; }
   ctx.globalAlpha=al;
   softShadow(sx,sy,(t.w*0.5)*s*(e.z>0?0.7:1));
-  ctx.save(); ctx.translate(sx,sy-e.z); ctx.scale(e.facing*s,s);
+  // 掴まれている間の暴れは影を動かしたくないので、影を描いた後の本体変換だけに乗せる
+  const _gz=(e.state==='grabbed')?(e.strugY||0):0, _gr=(e.state==='grabbed')?(e.strugR||0):0;
+  ctx.save(); ctx.translate(sx,sy-e.z-_gz); ctx.scale(e.facing*s,s);
   // 敵も同様。被弾ピーク sq=0.211 × 0.55 で約11.6%潰れる（従来は1.8%で見えなかった）
   { const eq=clamp((e.sq||0)*0.55,-0.15,0.21); if(eq) ctx.scale(1+eq,1-eq);         // ばねスクワッシュ
-    const ew=clamp((e.wob||0)*0.28,-0.30,0.30); if(ew) ctx.rotate(ew); }            // 打たれた向きへのしなり
+    const ew=clamp((e.wob||0)*0.28,-0.30,0.30)+_gr; if(ew) ctx.rotate(ew); }        // 打たれた向きへのしなり
   if(e.grabbedBy && player.state==='wheel'){ ctx.rotate(player.wheelRot+Math.PI); }   // 地獄グルマで一緒に回転
   if(e.grabbedBy && player.state==='screw'){ ctx.rotate(player.screwRot+Math.PI); }   // スクリューで一緒に回転
   if(e.grabbedBy && player.state==='gswing'){ ctx.rotate(player.gswingRot+Math.PI*0.5); }   // ジャイアントスイングで振り回される
