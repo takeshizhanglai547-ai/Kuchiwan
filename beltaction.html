@@ -1420,6 +1420,19 @@ function crescent(x,y,r,a0,a1,color,opt){ opt=opt||{};
       const out=an+ (d>0?0.5:-0.5)*Math.PI*0.10;
       ember(ex,ey, Math.cos(out)*rnd(1.4,4.2), Math.sin(out)*rnd(1.4,4.2)-0.6, i%3?color:'#ffffff'); } }
 }
+// ── 必殺技の発動演出：格闘ゲームのスーパーフラッシュ ──
+//   集中線が技の発生点へ収束し、カメラが一瞬寄り、白く抜ける。
+//   単なる画面フラッシュだけでは「必殺技が出た」という宣言にならない
+function superFlash(x,y,color){
+  const col=color||'#ffe9a0';
+  camZoomT=Math.max(camZoomT,1.085);                 // ぐっと寄る（既存のばねで自然に戻る）
+  flashAt(5,hexRGB(mixWhite(col,0.5)),x,y);
+  particles.push({k:'speedline',x,y,gl:groundLift(x),layer:2,delay:0,life:16,max:16,color:col,
+    seed:Math.random()*6.28});
+  particles.push({k:'flare',x,y,gl:groundLift(x),layer:2,delay:0,life:9,max:9,R:150*FXS,rot:rnd(-0.4,0.4)});
+  for(let i=0;i<14;i++){ const an=i/14*Math.PI*2+rnd(-0.2,0.2);
+    ember(x+Math.cos(an)*36, y+Math.sin(an)*36, Math.cos(an)*rnd(4,9), Math.sin(an)*rnd(4,9)-1.5, i%2?col:'#ffffff'); }
+}
 // 火の粉：加算合成の小さな点が尾を引いて落ちる。斬撃・爆発・ビームの縁に散らす
 function ember(x,y,vx,vy,color){
   const lf=Math.round(rnd(16,30));
@@ -1638,6 +1651,30 @@ function drawParticles(layer){
     else if(p.k==='arc'){                                              // 等幅ストロークをやめ、半径に比例した先細りのリボンにする
       const wj=(p.w==null?1:p.w);
       drawArcRibbon(sx,py,p.r*(1.05+0.13*a),p.r*(1-0.32*wj),p.a0,p.a1,hexRGB(p.color),a*0.9*(wj<0.6?1.15:1),0.95); }
+    else if(p.k==='speedline'){                                        // 集中線：画面外から発生点へ収束する
+      const la=Math.sin(Math.PI*Math.min(1,(1-a)*2.2))*0.95;
+      if(la>0.01){ ctx.save(); ctx.translate(sx,py);
+        // 暗いスクリムを敷いて周囲を沈める。これが無いと線が明るい空に溶けて読めない
+        const vg=ctx.createRadialGradient(0,0,60,0,0,Math.max(W,H)*0.85);
+        vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,'+(la*0.42).toFixed(3)+')');
+        ctx.fillStyle=vg; ctx.fillRect(-W*1.2-sx,-H*1.2-py,W*3,H*3);
+        // 画面の隅より外から始めて、時間とともに発生点へ向かって伸びる。
+        // far を対角より大きく取ると線が全部画面外に落ちて何も見えない
+        ctx.globalCompositeOperation='lighter'; ctx.lineCap='round';
+        const far=Math.max(W,H)*0.92, near=90+a*(far*0.58);
+        for(let i=0;i<24;i++){ const an=p.seed+i/24*Math.PI*2+Math.sin(i*2.7)*0.05;
+          const c=Math.cos(an), sn=Math.sin(an), fat=!(i%3);
+          // 中心へ向かって細くなる楔形。等幅の線では「収束している」ように見えない
+          const wOut=(fat?9.5:4.2)*(0.35+la);
+          ctx.globalAlpha=la*(fat?0.95:0.62);
+          ctx.fillStyle=fat?'#ffffff':p.color;
+          const px2=-sn, py2=c;
+          ctx.beginPath();
+          ctx.moveTo(c*far+px2*wOut, sn*far+py2*wOut);
+          ctx.lineTo(c*near, sn*near);
+          ctx.lineTo(c*far-px2*wOut, sn*far-py2*wOut);
+          ctx.closePath(); ctx.fill(); }
+        ctx.restore(); ctx.globalCompositeOperation='source-over'; } }
     else if(p.k==='flare'){                                            // 白い十字の閃光（加算）
       const fa=Math.pow(a,1.5);
       ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,py); ctx.rotate(p.rot);
@@ -2180,7 +2217,8 @@ function beginAttack(type){
   else if(type==='sc5'||def.kick){ sfx.swing(2, 'flesh', p.x); }
   else sfx.swing(p.comboStep, wsndOf(p.weapon), p.x);
   // 超必殺技（波動・昇竜の新技）：発生時に無敵とフラッシュ、技名表示
-  if(def.superFx){ p.invuln=Math.max(p.invuln,20); flash=Math.max(flash,3); shake=Math.max(shake,5); triggerSlow(8);
+  if(def.superFx){ p.invuln=Math.max(p.invuln,20); shake=Math.max(shake,9); triggerSlow(12);
+    superFlash(p.x,p.y-46,def.trail||'#ffe9a0');
     ring(p.x,p.y-46,def.trail||'#fff'); popText(p.x,p.y-120,def.name+'！','#fff',true); sfx.boss(p.x); }
   if(def.superRush){ p.invuln=Math.max(p.invuln,24); flash=Math.max(flash,2); shake=Math.max(shake,4);
     ring(p.x,p.y-46,'#ffd24d'); spark(p.x+p.facing*22,p.y-40,'#ffd24d',12,8); popText(p.x,p.y-120,def.name+'！','#ffd24d',true); sfx.dash(p.x); sfx.heavy(p.x); }
