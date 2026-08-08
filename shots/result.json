@@ -10,7 +10,7 @@
   {
    "name": "WebGLが描画している(draw call > 0)",
    "ok": true,
-   "detail": "draw=49 tri=566"
+   "detail": "draw=1 tri=1"
   },
   {
    "name": "初期状態がFREE",
@@ -55,7 +55,7 @@
   {
    "name": "入力遅延（この環境はソフトウェア描画＝実機の値ではない）",
    "ok": true,
-   "detail": "avg=2.3ms max=4.2ms  ※参考値"
+   "detail": "avg=3.2ms max=4.9ms  ※参考値"
   },
   {
    "name": "R1 遮蔽への吸着：押した次のフレームで遷移が始まる",
@@ -380,12 +380,12 @@
   {
    "name": "§12 ドローコール ≤ 150",
    "ok": true,
-   "detail": "draw=49"
+   "detail": "draw=1"
   },
   {
    "name": "§12 三角形 ≤ 250,000",
    "ok": true,
-   "detail": "tri=566"
+   "detail": "tri=1"
   },
   {
    "name": "撮影：02は高い遮蔽に隠れた状態",
@@ -433,6 +433,6 @@
    "detail": "なし"
   }
  ],
- "latAvg": 2.2833333333061696,
- "latMax": 4.199999999953434
+ "latAvg": 3.2000000000310442,
+ "latMax": 4.900000000139698
 }

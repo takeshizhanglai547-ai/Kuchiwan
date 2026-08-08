@@ -8,9 +8,23 @@ const three = fs.readFileSync(path.join(dir, 'vendor', 'three.min.js'), 'utf8');
 const game = fs.readFileSync(path.join(dir, 'game.js'), 'utf8');
 let html = fs.readFileSync(path.join(dir, 'shell.html'), 'utf8');
 
+/* アートモジュールを読み込む。palette が全ての土台なので必ず先頭。
+   まだ書かれていないモジュールは黙って飛ばす（game.js 側が有無を見て分岐する）。*/
+const ART_ORDER = ['palette', 'world', 'tex', 'sky', 'light', 'post',
+  'env', 'debris', 'player', 'enemy', 'vfx', 'hud', 'audio'];
+const artParts = [];
+const artFound = [];
+ART_ORDER.forEach(function (n) {
+  const p = path.join(dir, 'art', n + '.js');
+  if (fs.existsSync(p)) { artParts.push('/* ---- art/' + n + '.js ---- */\n' + fs.readFileSync(p, 'utf8')); artFound.push(n); }
+});
+const art = artParts.join('\n');
+
 // 関数形式で置換する（$& などの置換パターンが誤爆しないように）
 html = html.replace('/*__THREE__*/', () => three);
+html = html.replace('/*__ART__*/', () => art);
 html = html.replace('/*__GAME__*/', () => game);
+console.log('art modules: ' + (artFound.join(', ') || '(なし)'));
 
 const out = path.join(dir, '..', 'ashline.html');
 fs.writeFileSync(out, html);

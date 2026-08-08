@@ -228,6 +228,8 @@ function bindInput(el) {
 
   function onDown(e) {
     e.preventDefault();
+    // iOS Safari は「ユーザー操作の中」でしか音を出せない。最初のタップで必ず解錠する。
+    if (SFX && !SFX.__unlocked) { SFX.__unlocked = true; try { SFX.unlock(); SFX.ambience(true); } catch (_) { } }
     if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (_) { } }
     var x = e.clientX, y = e.clientY, W = window.innerWidth;
     latencyMark = performance.now();
@@ -388,6 +390,7 @@ function startVault(v) {
   P.ax0 = P.x; P.az0 = P.z; P.ax1 = v.lx; P.az1 = v.lz;
   P.actT = 0; P.actDur = CFG.vault.time; P.vaultTop = v.top;
   P.vx = 0; P.vz = 0; P.peek = 0; P.peekMode = 0; P.blindT = 0;
+  if (SFX) SFX.vault();
 }
 function vaultUpdate(dt) {
   P.actT += dt;
@@ -527,6 +530,7 @@ function freeUpdate(dt, act) {
     if (s) {
       enterCover(s.face, s.t);
       P.landDip = 1;                                 // ぶつかった衝撃を体に出す
+      if (SFX) SFX.slam();
       toCoverUpdate(dt);
       return;
     }
@@ -560,6 +564,7 @@ function enterCover(f, t) {
   P.sprint = false; P.vx = 0; P.vz = 0;
   P.peek = 0; P.peekMode = 0;
   P.coverAlignT = CFG.cover.camBlend;   // 壁越しを向くまでカメラを寄せ続ける
+  if (SFX) SFX.coverIn();
 }
 function toCoverUpdate(dt) {
   P.snapT += dt;
@@ -785,8 +790,10 @@ function magnetSlowdown() {
 function updateWeapon(dt) {
   if (P.fireCd > 0) P.fireCd -= dt;
   if (P.flash > 0) P.flash -= 1;
-  if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) P.ammo = CFG.fire.mag; }
-  else if (P.ammo <= 0) P.reloadT = CFG.fire.reload;
+  if (P.reloadT > 0) {
+    P.reloadT -= dt;
+    if (P.reloadT <= 0) { P.ammo = CFG.fire.mag; if (SFX) SFX.reload('in'); }
+  } else if (P.ammo <= 0) { P.reloadT = CFG.fire.reload; if (SFX) SFX.reload('out'); }
 
   acquireTarget();
   var want = IN.fire.on || (SET.autoFire && aimTarget && canFire());
@@ -858,8 +865,11 @@ function shoot() {
   else endT = blocked;
 
   var ex = m.x + d.x * endT, ey = m.y + d.y * endT, ez = m.z + d.z * endT;
+  var kind = hitEnemy ? (head ? 'head' : 'enemy') : 'world';
   FX.tracer(m.x, m.y, m.z, ex, ey, ez);
-  FX.impact(ex, ey, ez, !!hitEnemy);
+  FX.impact(ex, ey, ez, !!hitEnemy, -d.x, -d.y, -d.z, kind);
+  if (FX.muzzle) FX.muzzle(m.x, m.y, m.z, d.x, d.y, d.z);
+  if (SFX) { SFX.shot(blind ? 'blind' : 'rifle'); SFX.impact(kind); }
   // 診断用：この1発が何に当たったのか（当たらない不具合の原因を推測しないため）
   lastShot = {
     hit: hitEnemy ? enemies.indexOf(hitEnemy) : -1, head: !!hitEnemy && head,
@@ -950,7 +960,10 @@ function updateEnemies(dt) {
    ========================================================================== */
 function updateAnim(dt) {
   var sp = Math.hypot(P.vx, P.vz);
+  var st0 = Math.floor(P.stride / Math.PI);
   P.stride += sp * dt * (P.sprint ? 1.55 : 2.05);
+  // 足音は歩幅の位相が半周するたび。速度を渡して踏み込みの重さを変えられるようにする
+  if (SFX && sp > 0.6 && Math.floor(P.stride / Math.PI) !== st0) SFX.step(sp);
 
   // 加速度から前傾を作り、バネで戻すことで停止時に余韻(オーバーシュート)が出る
   var f = new T.Vector3(yawDirX(P.yaw), 0, yawDirZ(P.yaw));
@@ -1048,7 +1061,12 @@ var _camOff = new T.Vector3(), _camDir = new T.Vector3();
    RENDER SETUP
    ========================================================================== */
 var renderer, scene, camera, playerRig, enemyMeshes = [];
-var FX;
+var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null;
+
+/* アートモジュールは「あれば使う」。無ければ従来のグレーボックスで動く。
+   こうしておかないと、1つでも欠けた瞬間にゲーム全体が起動しなくなる。 */
+var ART = (typeof window !== 'undefined' && window.ASH) ? window.ASH : {};
+function hasArt(k) { return typeof ART[k] === 'function' || (k === 'world' && ART.world); }
 
 function initRender() {
   var canvas = document.getElementById('gl');
@@ -1056,67 +1074,131 @@ function initRender() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFShadowMap;
-  renderer.toneMapping = T.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  // トーンマッピングは post があればそちらが最終シェーダで行う（二重適用を避ける）
 
   scene = new T.Scene();
-  scene.background = new T.Color(0x2b2f33);
-  scene.fog = new T.Fog(0x2b2f33, 26, 62);
-
   camera = new T.PerspectiveCamera(CFG.sprintCam.fovBase, 1, 0.1, 200);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
 
-  // グレーボックス段階では形が読めることを優先する（絵作りはラウンド3以降）
-  var hemi = new T.HemisphereLight(0x9db2c4, 0x3a342e, 0.95);
-  scene.add(hemi);
-  var sun = new T.DirectionalLight(0xffe9d0, 1.55);
-  sun.position.set(-14, 20, 10);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  var sc = sun.shadow.camera;
-  sc.left = -18; sc.right = 18; sc.top = 18; sc.bottom = -18; sc.near = 1; sc.far = 60;
-  sun.shadow.bias = -0.0012; sun.shadow.normalBias = 0.03;
-  scene.add(sun); scene.add(sun.target);
+  var PL = ART.palette;
 
-  var matFloor = new T.MeshLambertMaterial({ color: 0x4a4f54 });
-  var matCover = new T.MeshLambertMaterial({ color: 0x8a9096 });
-  var matLow = new T.MeshLambertMaterial({ color: 0xa6a094 });
-  var matWall = new T.MeshLambertMaterial({ color: 0x3c4145 });
+  /* ---- 空と霧 -------------------------------------------------------- */
+  if (hasArt('sky')) {
+    SKY = ART.sky(T, scene);
+    scene.background = new T.Color(PL.skyZenith);
+  } else {
+    scene.background = new T.Color(0x2b2f33);
+    scene.fog = new T.Fog(0x2b2f33, 26, 62);
+  }
+
+  /* ---- 光。applyRim があれば全マテリアルに擬似リム/AOを焼き込む ------- */
+  var applyRim = null;
+  if (hasArt('light')) {
+    LIGHTS = ART.light(T, scene);
+    if (LIGHTS && typeof LIGHTS.applyRim === 'function') applyRim = LIGHTS.applyRim;
+  } else {
+    // グレーボックス段階の暫定ライト（形が読めることを優先）
+    scene.add(new T.HemisphereLight(0x9db2c4, 0x3a342e, 0.95));
+    var sun = new T.DirectionalLight(0xffe9d0, 1.55);
+    sun.position.set(-14, 20, 10);
+    sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+    var sc = sun.shadow.camera;
+    sc.left = -18; sc.right = 18; sc.top = 18; sc.bottom = -18; sc.near = 1; sc.far = 60;
+    sun.shadow.bias = -0.0012; sun.shadow.normalBias = 0.03;
+    scene.add(sun); scene.add(sun.target);
+  }
+  function mat(o) { var m = new T.MeshLambertMaterial(o); if (applyRim) applyRim(m); return m; }
+
+  /* ---- テクスチャ ---------------------------------------------------- */
+  if (hasArt('tex')) TEX = ART.tex(T);
+  var MATS = { tex: TEX };
+  function mapOf(k, rx, ry) {
+    if (!TEX || !TEX[k]) return null;
+    var t = TEX[k].clone(); t.needsUpdate = true;
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rx || 1, ry || 1);
+    return t;
+  }
+
+  var matFloor = mat({ color: TEX ? 0xffffff : 0x4a4f54, map: mapOf('ground', 14, 14) });
+  var matCover = mat({ color: TEX ? 0xffffff : 0x8a9096, map: mapOf('concrete', 2, 2) });
+  var matLow = mat({ color: TEX ? 0xffffff : 0xa6a094, map: mapOf('stone', 2, 2) });
+  var matWall = mat({ color: TEX ? 0xffffff : 0x3c4145, map: mapOf('concrete', 6, 2) });
+  if (TEX) {
+    matFloor.color.setHex(PL ? PL.ground : 0xffffff);
+    matCover.color.setHex(PL ? PL.concrete : 0xffffff);
+    matLow.color.setHex(PL ? PL.stone : 0xffffff);
+    matWall.color.setHex(PL ? PL.concreteDark : 0xffffff);
+  }
 
   var floor = new T.Mesh(new T.PlaneGeometry(ARENA.hx * 2 + 1.2, ARENA.hz * 2 + 1.2), matFloor);
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
-  // グリッド（距離感の手がかり。グレーボックス段階では必要）
-  var grid = new T.GridHelper(26, 26, 0x5d6367, 0x565b60);
-  grid.position.y = 0.01; grid.material.opacity = 0.5; grid.material.transparent = true;
-  scene.add(grid);
-
-  var box1 = new T.BoxGeometry(1, 1, 1);
-  for (var i = 0; i < COVERS.length; i++) {
-    var c = COVERS[i], low = c.h <= CFG.cover.lowMaxH;
-    var m = new T.Mesh(box1, low ? matLow : matCover);
-    m.scale.set(c.hx * 2, c.h, c.hz * 2);
-    m.position.set(c.x, c.h / 2, c.z);
-    m.castShadow = true; m.receiveShadow = true;
-    scene.add(m);
+  /* ---- 遮蔽と壁。env があれば見た目を差し替える（当たり判定は不変） -- */
+  if (hasArt('env')) {
+    scene.add(ART.env(T, MATS, COVERS, ARENA));
+  } else {
+    // グリッド（距離感の手がかり。グレーボックス段階でのみ必要）
+    var grid = new T.GridHelper(26, 26, 0x5d6367, 0x565b60);
+    grid.position.y = 0.01; grid.material.opacity = 0.5; grid.material.transparent = true;
+    scene.add(grid);
+    var box1 = new T.BoxGeometry(1, 1, 1);
+    for (var i = 0; i < COVERS.length; i++) {
+      var c = COVERS[i], low = c.h <= CFG.cover.lowMaxH;
+      var m = new T.Mesh(box1, low ? matLow : matCover);
+      m.scale.set(c.hx * 2, c.h, c.hz * 2);
+      m.position.set(c.x, c.h / 2, c.z);
+      m.castShadow = true; m.receiveShadow = true;
+      scene.add(m);
+    }
+    for (var b = 0; b < 4; b++) {
+      var bx = boxes[boxes.length - 4 + b];
+      var w = new T.Mesh(box1, matWall);
+      w.scale.set(bx.maxx - bx.minx, bx.top, bx.maxz - bx.minz);
+      w.position.set((bx.minx + bx.maxx) / 2, bx.top / 2, (bx.minz + bx.maxz) / 2);
+      w.receiveShadow = true; scene.add(w);
+    }
   }
-  // 壁
-  for (var b = 0; b < 4; b++) {
-    var bx = boxes[boxes.length - 4 + b];
-    var w = new T.Mesh(box1, matWall);
-    w.scale.set(bx.maxx - bx.minx, bx.top, bx.maxz - bx.minz);
-    w.position.set((bx.minx + bx.maxx) / 2, bx.top / 2, (bx.minz + bx.maxz) / 2);
-    w.receiveShadow = true; scene.add(w);
-  }
+  if (hasArt('debris')) scene.add(ART.debris(T, MATS, ARENA, COVERS));
 
-  playerRig = buildFigure(0x39424b, 0x27303a, false);
+  /* ---- キャラクター --------------------------------------------------- */
+  playerRig = hasArt('player') ? ART.player(T, MATS) : buildFigure(0x39424b, 0x27303a, false);
   scene.add(playerRig.root);
   for (var e = 0; e < enemies.length; e++) {
-    var fg = buildFigure(0x6b3a34, 0x4a2622, true);
+    // ラウンド1は的のみ。2種の作り分けはラウンド2の遭遇設計で使う。
+    var type = (e % 2 === 0) ? 'rusher' : 'marksman';
+    var fg = hasArt('enemy') ? ART.enemy(T, MATS, type) : buildFigure(0x6b3a34, 0x4a2622, true);
     scene.add(fg.root); enemyMeshes.push(fg);
   }
-  FX = buildFX();
+
+  /* ---- リムを全 Lambert マテリアルに行き渡らせる ----------------------
+     影の可否は各モジュールの判断に任せる（空や瓦礫に影を落とさせない）。*/
+  if (applyRim) {
+    scene.traverse(function (o) {
+      if (o.isMesh && o.material && o.material.isMeshLambertMaterial && !o.material.__rim) applyRim(o.material);
+    });
+  }
+
+  FX = makeFX();
+
+  /* ---- ポストプロセス ------------------------------------------------- */
+  if (hasArt('post')) {
+    renderer.toneMapping = T.NoToneMapping;      // post 側の最終シェーダで行う
+    POST = ART.post(T, renderer, scene, camera);
+  } else {
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = ART.palette ? ART.palette.exposure : 1.0;
+  }
+
+  /* ---- HUDの見た目 ---------------------------------------------------- */
+  if (hasArt('hud')) {
+    var st = document.createElement('style');
+    st.textContent = ART.hud();
+    document.head.appendChild(st);
+  }
+
+  /* ---- 音（実際に鳴らせるのは初回タップ後） --------------------------- */
+  if (hasArt('audio')) SFX = ART.audio();
 }
 
 /* シルエットが別物として読めることを最優先にした簡易フィギュア */
@@ -1163,6 +1245,22 @@ function buildFigure(colA, colB, enemy) {
   return { root: root, body: body, torso: torso, armR: armR, armL: armL, legR: legR, legL: legL, gun: gun, flash: flash, mA: mA, mB: mB };
 }
 
+/* VFX担当のモジュールがあればそれを使い、無ければ従来の簡易FXに落ちる。
+   game.js 側の呼び出し形（tracer / impact / step）は変えず、引数を足すだけにしてある。*/
+function makeFX() {
+  if (hasArt('vfx')) {
+    var v = ART.vfx(T, scene);
+    return {
+      tracer: v.tracer,
+      muzzle: v.muzzle,
+      impact: function (x, y, z, isEnemy, nx, ny, nz, kind) { v.impact(x, y, z, nx, ny, nz, kind); },
+      hitMark: function (head) { UI.hitMark(head); },
+      step: v.step
+    };
+  }
+  return buildFX();
+}
+
 function buildFX() {
   var tracerMat = new T.LineBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0.9 });
   var tracers = [];
@@ -1188,6 +1286,7 @@ function buildFX() {
       a.array[3] = x1; a.array[4] = y1; a.array[5] = z1;
       a.needsUpdate = true; t.ln.visible = true; t.life = 0.055;
     },
+    muzzle: null,
     impact: function (x, y, z, isEnemy) {
       var p = imps[ii = (ii + 1) % imps.length];
       p.m.position.set(x, y, z); p.m.visible = true; p.life = 0.16;
@@ -1354,6 +1453,9 @@ var UI = {
 
     e.sprintTag.style.opacity = P.sprint ? '1' : '0';
     e.ammo.textContent = P.reloadT > 0 ? 'RELOAD' : (P.ammo + ' / ' + CFG.fire.mag);
+    // 残弾僅少はCSSからは判定できない（textContentを読めない）ので状態をクラスで渡す
+    e.ammo.classList.toggle('low', P.reloadT <= 0 && P.ammo <= 8);
+    e.ammo.classList.toggle('reloading', P.reloadT > 0);
 
     if (SET.debug) {
       e.dbg.innerHTML =
@@ -1377,6 +1479,7 @@ var lastT = 0, fpsAcc = 0, fpsN = 0, paused = false;
 function resize() {
   var W = window.innerWidth, H = window.innerHeight;
   renderer.setSize(W, H, false);
+  if (POST && POST.setSize) POST.setSize(W, H);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   UI.resize();
   document.getElementById('rotate').style.display = (W < H) ? 'flex' : 'none';
@@ -1389,10 +1492,19 @@ function frame(now) {
   dt = Math.min(dt, 0.1);
 
   // paused は検証専用。一瞬の状態（乗り越えの滞空など）を正確に撮るために止める。
-  if (!paused) { update(dt); FX.step(dt); }
+  if (!paused) {
+    update(dt); FX.step(dt);
+    if (SKY && SKY.update) SKY.update(dt, camera);
+    if (LIGHTS && LIGHTS.update) LIGHTS.update(dt);
+    if (SFX) SFX.setListener(camera.position.x, camera.position.y, camera.position.z, CAM.yaw);
+  }
   syncRig();
   UI.frame();
-  renderer.render(scene, camera);
+  // ポストは複数回 render するので、自動リセットのままだと最後のパスの値しか残らない。
+  // フレーム頭で自分でリセットし、全パスの合計を数える（§12の予算はこれで見る）。
+  renderer.info.autoReset = false;
+  renderer.info.reset();
+  if (POST && POST.render) POST.render(); else renderer.render(scene, camera);
 
   METRICS.calls = renderer.info.render.calls;
   METRICS.tris = renderer.info.render.triangles;
@@ -1420,7 +1532,12 @@ function boot() {
     ST: ST,
     tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
     pause: function (v) { paused = !!v; },
-    render: function () { syncRig(); UI.frame(); renderer.render(scene, camera); },
+    render: function () {
+      syncRig(); UI.frame();
+      renderer.info.autoReset = false; renderer.info.reset();
+      if (POST && POST.render) POST.render(); else renderer.render(scene, camera);
+      METRICS.calls = renderer.info.render.calls; METRICS.tris = renderer.info.render.triangles;
+    },
     setStick: function (x, y) {
       var m = Math.min(1, Math.hypot(x, y));
       IN.stick.on = m > 0; IN.stick.x = x; IN.stick.y = y; IN.stick.mag = m;
