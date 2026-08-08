@@ -920,6 +920,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var big = fbm(S, 4, 5, 101);                // 打設ロットのむら
       var agg = fbm(S, 64, 3, 233);               // 骨材の粒
       var fine = fbm(S, 160, 2, 977);             // 目の細かいざらつき
+      /* 反復対策のマクロむら。周期をタイル1枚（＝壁1ブロック）より大きくは
+         できないので、せめて型枠の割付より低い周波数で強く振り、
+         目が「割付の格子」ではなく「大きな汚れ」で面をまとめるようにする。 */
+      var macro = fbm2(S, 2, 3, 4, 5050);
       var cDark = toRGB(P.concreteDark, [0, 0, 0]);
       var cPale = toRGB(sh(P.concrete, 1.34), [0, 0, 0]);
       var cWet = toRGB(P.concreteWet, [0, 0, 0]);
@@ -935,10 +939,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           var i = py * S + px;
           var t = big[i] * 0.55 + agg[i] * 0.30 + fine[i] * 0.15;
           lerp3(cDark, cPale, (t - 0.24) / 0.44, out);
-          /* 下へ行くほど跳ね返りの泥で暗い。垂直面の上下が一目で読めるようにする。 */
-          scl(out, 1 - 0.34 * Math.pow(v, 2.4));
+          /* 下へ行くほど跳ね返りの泥で暗い。垂直面の上下が一目で読めるようにする。
+             実機で壁が黒く潰れたので効きを 0.34 -> 0.22 に落としてある。 */
+          scl(out, 1 - 0.22 * Math.pow(v, 2.4));
           /* 濡れ残りの染み：低周波の谷にだけ溜める */
-          lerp3(out, cWet, smoothstep(0.40, 0.14, big[i]) * 0.48 * (0.30 + 0.70 * v), out);
+          lerp3(out, cWet, smoothstep(0.40, 0.14, big[i]) * 0.42 * (0.30 + 0.70 * v), out);
+          scl(out, 0.74 + 0.56 * macro[i]);       // マクロむら（明暗の両方向）
         });
       }
 
@@ -1108,7 +1114,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         for (i = 0; i < spalls.length; i++)
           crack(o, spalls[i][0], spalls[i][1], rr(0, 6.28), rr(60, 150), 2.2, P.grime, sh(P.concrete, 1.30), 2, 0.22);
 
-        blend(o, greyCanvas(S, ctr(fbm(S, 6, 4, 4404), 1.6, 0.5), 0.50, 1.02), 'multiply', 0.58);
+        blend(o, greyCanvas(S, ctr(fbm(S, 6, 4, 4404), 1.4, 0.5), 0.66, 1.04), 'multiply', 0.44);
         blend(o, greyCanvas(S, fbm(S, 200, 2, 6602), 0.0, 1.0), 'overlay', 0.11);
       } else {
         blend(o, greyCanvas(S, fbm(S, 220, 2, 6602), 0.26, 0.74), 'overlay', 0.45);
@@ -1232,6 +1238,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var det = fbm(S, 70, 4, 424);
       var big = fbm(S, 8, 4, 616);
       var tool = fbm2(S, 128, 16, 3, 858);        // 縦に伸びた微細な鑿跡
+      /* 反復対策のマクロむら。石の割付より低い周波数で明暗を振る。 */
+      var macro = fbm2(S, 2, 3, 4, 5252);
       var RY = [0, 0.30, 0.52, 0.79, 1.0];        // 段の境（不等分）
       var RC = [3, 2, 4, 3];                      // 段ごとの石の丁数
       var RO = [0.00, 0.31, 0.13, 0.62];          // 段ごとの目地の通りずらし
@@ -1275,7 +1283,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           scl(out, 0.94 + 0.13 * tool[i]);
         }
         /* 全体の縦方向グラデは弱め。強いと石ごとの差が消えて段々に見える。 */
-        scl(out, 1 - 0.16 * Math.pow(v, 2.3));
+        scl(out, 1 - 0.14 * Math.pow(v, 2.3));
+        scl(out, 0.76 + 0.52 * macro[i]);         // マクロむら（明暗の両方向）
       });
 
       seed(9091);
@@ -1345,14 +1354,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var det = fbm(S, 80, 4, 515);
       var big = fbm(S, 12, 3, 727);
       var face = fbm(S, 26, 4, 949);
-      var ROWS = 8, COLS = 4, JP = 8;
-      var BR = mix(P.brick, P.ash, 0.34);         // 濁らせた煉瓦の基準色
+      /* 反復対策のマクロむら（§後述）。周期をタイル1枚まで落として
+         目が「格子」ではなく「大きなしみ」で面をまとめるようにする。 */
+      var macro = fbm2(S, 2, 3, 4, 5959);
+      var ROWS = 8, COLS = 4, JP = 7;
+      /* 実機の中景で赤みが浮いた。ash へ半分寄せてようやく画面に馴染む。 */
+      var BR = mix(P.brick, P.ash, 0.52);         // 濁らせた煉瓦の基準色
       var cB = toRGB(BR, [0, 0, 0]);
-      var cBD = toRGB(sh(mix(P.brick, P.grime, 0.35), 0.62), [0, 0, 0]);
-      var cBL = toRGB(sh(BR, 1.24), [0, 0, 0]);
-      var cScor = toRGB(mix(BR, P.grime, 0.80), [0, 0, 0]);
-      var cCore = toRGB(mix(BR, P.plaster, 0.55), [0, 0, 0]);
-      var cJ = toRGB(mix(P.plaster, P.concreteDark, 0.52), [0, 0, 0]);
+      var cBD = toRGB(sh(mix(P.brick, P.grime, 0.45), 0.72), [0, 0, 0]);
+      var cBL = toRGB(sh(BR, 1.26), [0, 0, 0]);
+      var cScor = toRGB(mix(BR, P.grime, 0.72), [0, 0, 0]);
+      var cCore = toRGB(mix(BR, P.plaster, 0.42), [0, 0, 0]);
+      var cJ = toRGB(mix(P.plaster, P.concreteDark, 0.46), [0, 0, 0]);
       var cSh = toRGB(P.grime, [0, 0, 0]);
       var cVoid = toRGB(sh(P.grime, 0.55), [0, 0, 0]);
       var cAsh = toRGB(sh(P.ash, 1.45), [0, 0, 0]);
@@ -1378,27 +1391,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return;
         }
         if (bx < jw || bx > 1 - jw || by < jh || by > 1 - jh) {
-          /* 目地：奥に引っ込むので暗い。下側の唇にだけ光が当たる。 */
+          /* 目地。実機では目地が濃すぎて「黒い格子」に見え、それが反復の正体に
+             なっていた。落とす明度は控えめにし、下唇の白も弱める。 */
           lerp3(cJ, cBD, 0.35 + 0.45 * det[i], out);
-          scl(out, 0.68);
-          if (by < jh * 0.55) lerp3(out, cSh, 0.60, out);
-          if (by > 1 - jh * 0.30) lerp3(out, cAsh, 0.34, out);
+          scl(out, 0.82);
+          if (by < jh * 0.55) lerp3(out, cSh, 0.42, out);
+          if (by > 1 - jh * 0.30) lerp3(out, cAsh, 0.16, out);
         } else {
           lerp3(cBD, cBL, sat((det[i] * 0.42 + big[i] * 0.58 - 0.18) / 0.62), out);
-          scl(out, 0.62 + 0.72 * hv);
-          if (scorch) lerp3(out, cScor, 0.50 + 0.40 * big[i], out);
+          scl(out, 0.70 + 0.62 * hv);
+          if (scorch) lerp3(out, cScor, 0.45 + 0.35 * big[i], out);
           if (spall) {
-            /* 表面が飛んだ面：焼成前の芯が出るので白っぽく粗い。縁は硬く切れる。 */
-            var sm = smoothstep(0.46, 0.53, face[i]);
-            lerp3(out, cCore, sm * 0.85, out);
-            lerp3(out, cSh, smoothstep(0.53, 0.46, face[i]) * smoothstep(0.40, 0.46, face[i]) * 1.6, out);
+            /* 表面が飛んだ面：焼成前の芯が出て粗い。
+               前回は硬い縁取りを入れたら「カビの斑」に見えたので、境界を緩めて
+               明度差も詰めた。遠景で低周波の斑が残ると迷彩柄になる。 */
+            lerp3(out, cCore, smoothstep(0.42, 0.60, face[i]) * 0.55, out);
           }
-          lerp3(out, cAsh, smoothstep(jh + 0.10, jh, by) * 0.34, out);
-          lerp3(out, cSh, smoothstep(1 - jh - 0.08, 1 - jh, by) * 0.40, out);
+          lerp3(out, cAsh, smoothstep(jh + 0.10, jh, by) * 0.22, out);
+          lerp3(out, cSh, smoothstep(1 - jh - 0.08, 1 - jh, by) * 0.28, out);
           lerp3(out, cSh, sat(smoothstep(jw + 0.024, jw, bx) +
             smoothstep(1 - jw - 0.024, 1 - jw, bx)) * 0.20, out);
         }
-        scl(out, 1 - 0.24 * Math.pow(v, 2.3));
+        /* マクロむら：目地の格子より低い周波数で、明暗の両方向に振る。
+           乗算だけだと平均が落ちて実機で真っ黒になる（一度そうなった）。 */
+        scl(out, 0.72 + 0.60 * macro[i]);
+        scl(out, 1 - 0.18 * Math.pow(v, 2.3));
       });
 
       /* 抜けた煉瓦の座標を拾い直す（上に煤を出すため） */
@@ -1439,10 +1456,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         })(voids[i]);
       }
 
-      /* --- 白華（エフロレッセンス）と雨だれ：目地から出る ------------------ */
+      /* --- 白華（エフロレッセンス）と雨だれ：目地から出る ------------------
+         太い筋を目地の格子の上に重ねると「半透明の板」に見えたので細く少なく。 */
       seed(6464);
       for (r = 0; r < ROWS; r++)
-        dripRow(o, r * bh + JP + 1, bh * 2.4, 10, P.grime, sh(P.plaster, 1.5), 0.32);
+        dripRow(o, r * bh + JP + 1, bh * 2.6, 6, P.grime, sh(P.plaster, 1.42), 0.24, 4.0);
 
       /* --- 弾痕と亀裂 ------------------------------------------------------ */
       seed(1212);
@@ -1456,9 +1474,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for (i = 0; i < 3; i++)
         crack(o, rnd() * S, rnd() * S, rr(1.2, 1.9), rr(140, 280), 2.8, P.grime, sh(BR, 1.38), 2, 0.28);
 
-      blend(o, greyCanvas(S, ctr(fbm(S, 5, 4, 5959), 1.55, 0.5), 0.48, 1.02), 'multiply', 0.56);
+      blend(o, greyCanvas(S, ctr(fbm(S, 5, 4, 5959), 1.35, 0.5), 0.66, 1.04), 'multiply', 0.42);
       blend(o, greyCanvas(S, fbm(S, 210, 2, 4141), 0.0, 1.0), 'overlay', 0.10);
-      dull(o, P.ash, 0.08);
+      dull(o, P.ash, 0.14);
       return o;
     }
 
@@ -1598,71 +1616,88 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
 
     /* =======================================================================
-       10. 全面の錆
-       初回は「オレンジのノイズ」になり不合格だった。錆は模様ではなく
-       「鱗（スケール）が層状に浮いて剥がれ落ちる」構造物なので、
-       ボロノイで鱗を割り、鱗ごとに（密着 / 浮き / 脱落）の状態を持たせる。
-       鱗の上縁が明るく下縁が暗い＝上から光が来ている、で厚みが出る。
+       10. 錆（腐食した鉄面）
+       ここは2回作り直した。1回目は「オレンジのノイズ」、2回目はボロノイで
+       鱗を割ったら等間隔すぎて「ワニ革」になった。どちらも失敗の原因は同じで、
+       錆を「模様」として作ったこと。錆は模様ではなく現象で、正しい骨格は
+
+           腐食の起点（傷・縁・ボルト）→ 水が下へ流れる → 流路に沿って進行
+
+       なので、支配的な構造は【縦の流れ】でなければならない。
+       そこで
+         (1) 地は暗いミルスケールの鋼。ほぼ平坦で情報量を持たせない。
+         (2) 腐食は縦に強く引き伸ばした fBm（fw:fh = 12:2）で「流れ」として置く。
+             等方ノイズを使うとその瞬間に模様に戻る。
+         (3) 厚い鱗はしきい値で切った不規則な島。等分割の格子は絶対に使わない。
+             島の陰影は fBm の縦勾配から作る（上縁が明・下縁が暗）。
+         (4) 縁に乾いた明るい粉（酸化物）を出す。ここだけ明度を上げる。
+       彩度は palette の ash 側へ強く寄せる。生の rust は画面で発光して見える。
        ==================================================================== */
     function buildRust() {
-      var S = 512, o = mk(S), x = o.x;
-      var id = new Int32Array(S * S), edge = new Float32Array(S * S);
-      voronoi(S, 22, 606, id, edge);              // 鱗（約23px）
-      var id2 = new Int32Array(S * S), edge2 = new Float32Array(S * S);
-      voronoi(S, 8, 313, id2, edge2);             // 大きな腐食の版図
-      var flow = fbm2(S, 14, 4, 4, 3737);         // 縦に伸びた水の流れ
-      var pit = fbm(S, 140, 2, 4949);
-      var grain = fbm(S, 60, 3, 5151);
+      var S = 512, o = mk(S);
+      /* 縦に強く伸ばした場＝水の流路。錆の版図はすべてこれに従わせる。 */
+      var flow = fbm2(S, 12, 2, 5, 3737);
+      var flow2 = fbm2(S, 26, 5, 4, 3738);
+      var scaleF = fbm2(S, 30, 12, 4, 8080);      // 厚い鱗の島（やや縦長）
+      var pit = fbm(S, 150, 2, 4949);
+      var grain = fbm(S, 46, 4, 5151);
+      var mill = fbm2(S, 90, 20, 3, 6060);        // 圧延のミルスケール
 
-      var cSteel = toRGB(sh(P.rebar, 0.72), [0, 0, 0]);
-      var cD = toRGB(RUST_D, [0, 0, 0]);
-      var cM = toRGB(RUST_M, [0, 0, 0]);
-      var cL = toRGB(RUST_L, [0, 0, 0]);
+      /* 錆の色は3段。いずれも ash / rebar 側へ寄せて濁らせてある。 */
+      var STEEL = toRGB(sh(mix(P.rebar, P.metal, 0.35), 0.72), [0, 0, 0]);
+      var OX_D = toRGB(mix(P.rust, P.rebar, 0.62), [0, 0, 0]);
+      var OX_M = toRGB(mix(P.rust, P.ash, 0.46), [0, 0, 0]);
+      var OX_L = toRGB(mix(sh(P.rust, 1.22), P.ash, 0.62), [0, 0, 0]);
 
       fill(o, function (px, py, u, v, out) {
         var i = py * S + px;
-        var cid = id[i], st = h2(cid, 0, 77), reg = h2(id2[i], 0, 91);
-        var e = edge[i];
+        /* 腐食の進行度。縦の流れが主、粒が従。 */
+        var corr = sat(flow[i] * 0.62 + flow2[i] * 0.26 + grain[i] * 0.12);
 
-        /* 大きな版図：腐食が進んだ領域と、まだ塗膜が残る領域 */
-        var heavy = sat(reg * 0.6 + flow[i] * 0.4 + edge2[i] * 0.25);
+        /* 地：ミルスケールの鋼。まだ腐食が来ていない所。 */
+        lerp3(STEEL, OX_D, smoothstep(0.30, 0.52, corr), out);
+        scl(out, 0.92 + 0.16 * mill[i]);
+        /* 進行部：中間の酸化鉄 */
+        lerp3(out, OX_M, smoothstep(0.46, 0.66, corr), out);
+        /* 流路の芯：乾いた明るい粉が吹く。ここだけ明度を上げて筋を見せる。 */
+        lerp3(out, OX_L, smoothstep(0.70, 0.88, corr) * (0.55 + 0.45 * grain[i]), out);
 
-        if (st < 0.26) {
-          /* 脱落した鱗：下地の鋼が出る。周りより暗く、青灰に寄る。 */
-          lerp3(cSteel, cD, 0.25 + 0.5 * grain[i], out);
-        } else if (st < 0.68) {
-          /* 密着した鱗：中間の酸化鉄 */
-          lerp3(cD, cM, sat(grain[i] * 0.7 + heavy * 0.5), out);
-        } else {
-          /* 浮いた厚い鱗：乾いた粉状で一番明るい */
-          lerp3(cM, cL, sat(grain[i] * 0.6 + heavy * 0.6), out);
+        /* 厚い鱗：しきい値で切った不規則な島。境界は硬い。 */
+        var isl = smoothstep(0.545, 0.575, scaleF[i]);
+        if (isl > 0.001) {
+          lerp3(out, OX_L, isl * 0.34, out);
+          /* 島の擬似陰影：4px 上との差。上縁は持ち上がって明、下縁は影。 */
+          var d = (scaleF[i] - scaleF[((py - 4 + S) % S) * S + px]) * 22;
+          scl(out, 1 + sat(d) * 0.52 * isl - sat(-d) * 0.46 * isl);
         }
-        /* 鱗の縁：溝。境界にほこりと水が入って暗い。 */
-        scl(out, 0.55 + 0.45 * smoothstep(0.0, 0.13, e));
-        /* 鱗の擬似陰影：3px 上との縁距離の差。上縁なら明るく、下縁なら暗い。 */
-        var d = (e - edge[((py - 3 + S) % S) * S + px]) * 3.2;
-        scl(out, 1 + sat(d) * 0.50 - sat(-d) * 0.42);
-        /* 孔食：深い点。数は多く、径は小さく。 */
-        lerp3(out, cD, smoothstep(0.74, 0.92, pit[i]) * 0.7, out);
-        scl(out, 0.85 + 0.30 * (1 - v * 0.5));    // 上のほうが乾いて明るい
+        /* 鱗が落ちた跡：島のすぐ外側は一段掘れて暗い */
+        scl(out, 1 - smoothstep(0.545, 0.510, scaleF[i]) * smoothstep(0.470, 0.510, scaleF[i]) * 1.4 * 0.30);
+        /* 孔食：小さく深い点 */
+        lerp3(out, OX_D, smoothstep(0.76, 0.93, pit[i]) * 0.65, out);
+        scl(out, 0.88 + 0.22 * (1 - v * 0.45));   // 上のほうが乾いて明るい
       });
 
-      /* --- 流れ落ちた錆の筋。上から下へ、必ず縦。 ------------------------- */
+      /* --- 流れ落ちた錆の筋。錆の主役はこれ。必ず縦、必ず上が濃い。 ------- */
       seed(7171);
       var i;
-      for (i = 0; i < 30; i++) {
-        (function (cx, cy, L, w, a) {
-          tiled(o, function () { drip(o, cx, cy, L, w, RUST_L, a, 0.22, true); });
-        })(rnd() * S, rnd() * S * 0.6, rr(60, 320), rr(3, 12), rr(0.10, 0.32));
+      for (i = 0; i < 40; i++) {
+        (function (cx, cy, L, w, a, pale) {
+          tiled(o, function () {
+            drip(o, cx, cy, L, w, pale ? mix(sh(P.rust, 1.22), P.ash, 0.62)
+              : mix(P.rust, P.rebar, 0.62), a, 0.20, true);
+          });
+        })(rnd() * S, rr(-40, S * 0.55), rr(70, 340), rr(2.5, 14), rr(0.10, 0.30), rnd() < 0.42);
       }
-      /* --- 剥がれかけの鱗の縁：明るい輪郭を少し足すと厚みが出る ----------- */
+      /* --- 剥がれかけの鱗の縁：明るい輪郭を少しだけ。入れ過ぎると粒に戻る。 */
       seed(3535);
-      for (i = 0; i < 60; i++) {
-        chip(o, rnd() * S, rnd() * S, rr(4, 14), RUST_L, sh(RUST_D, 0.6), 0.35);
+      for (i = 0; i < 34; i++) {
+        chip(o, rnd() * S, rnd() * S, rr(5, 17),
+          mix(sh(P.rust, 1.22), P.ash, 0.62), mix(P.rust, P.rebar, 0.75), 0.28);
       }
-      blend(o, greyCanvas(S, ctr(fbm(S, 5, 4, 6969), 1.5, 0.5), 0.55, 1.05), 'multiply', 0.45);
-      blend(o, greyCanvas(S, fbm(S, 200, 2, 1414), 0.0, 1.0), 'overlay', 0.12);
-      dull(o, P.ash, 0.09);                       // 最後に必ず濁らせる
+      /* 低周波の濃淡。タイル1枚ぶんの周期でむらを作り、粒の周期を目立たなくする。 */
+      blend(o, greyCanvas(S, ctr(fbm2(S, 3, 2, 4, 6969), 1.5, 0.5), 0.62, 1.10), 'multiply', 0.55);
+      blend(o, greyCanvas(S, fbm(S, 200, 2, 1414), 0.0, 1.0), 'overlay', 0.10);
+      dull(o, P.ash, 0.16);                       // 最後に必ず濁らせる
       return o;
     }
 
@@ -6954,6 +6989,24 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     var stepSide = 1;         /* 足音の左右交互。走りが「ループ」に聞こえないため */
 
+    /* --- 音量の序列 --------------------------------------------------------
+       最初はレイヤごとの値だけで組んで実測したところ、弾倉の操作音や
+       遮蔽への吸着音が自分のライフルより大きくなっていた。
+       この game は発砲が情報の中心なので、序列は必ず
+
+         発砲 ＞ 致命打 ＞ 遮蔽への衝突 ＞ 着弾 ＞ リロード ＞ 足音
+
+       でなければならない。各音の中の作り込みを壊さずに全体を上下させるため、
+       声の出口に一段トリムを噛ませる。値は A特性の実測から逆算したもの。 */
+    var TRIM = {
+      shot: 1.00,
+      blind: 0.72,   /* 遮蔽越し。muffle と合わせて通常射撃より約 -8dB */
+      slam: 0.72,
+      vault: 0.70,
+      cover: 0.85,
+      reload: 0.55
+    };
+
     /* =======================================================================
        1. 乱数
        ===================================================================== */
@@ -7428,6 +7481,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (tEnd + 0.05 > v.end) v.end = tEnd + 0.05;
     }
 
+    /* 声全体のトリム。音の中身ではなく序列だけを動かす。 */
+    function trim(v, k) {
+      v.out.gain.setValueAtTime(k, ctx.currentTime);
+    }
+
     /* 送り量の設定。近い音は乾き、遠い音は濡れる＝距離の情報になる。 */
     function send(v, wet, slap, cov) {
       var t = ctx.currentTime;
@@ -7550,9 +7608,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
            経路が回折になるので高域が丸ごと落ちる。1.5kHz で切る。 */
         v.tone.frequency.setValueAtTime(1500, ctx.currentTime);
         v.tone.Q.setValueAtTime(0.7, ctx.currentTime);
-        /* 0.58：測ったらブラインドのほうが通常射撃より大きくなっていた。
-           遮蔽越しの音が正面の音より大きいのは嘘なので、明確に下へ振る。 */
-        v.out.gain.setValueAtTime(0.58, ctx.currentTime);
+        /* 実測ではブラインドのほうが通常射撃より A特性で 6dB 大きかった。
+           銃口が耳から遠く、間に石塊がある音が、正面で構えて撃つ音より
+           大きいのは物理的に嘘なので、muffle と合わせて確実に下へ振る。 */
+        trim(v, TRIM.blind);
       }
 
       /* [1] トランジェント */
@@ -7573,11 +7632,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       o.pk = 0.50;
       lay(v, 1, o);
 
-      /* [2b] ボディ：低域サイン。ブラインドは低域だけが回り込むので相対的に増やす */
+      /* [2b] ボディ：低域サイン。
+         ブラインドは「低域だけが回り込む」ので通常射撃に対する“比率”は上がるが、
+         絶対値まで上げてはいけない。最初 0.70 で書いて実測したところ
+         ブラインドのほうが A特性で 6dB 大きくなっていた。銃口が耳から遠く、
+         間に石塊がある音が、正面で撃つ音より大きいのは物理的に嘘なので
+         0.46 まで下げた（v.out の 0.58 と合わせて通常射撃より確実に小さい）。 */
       o = L();
       o.hz = 82 * r; o.hz2 = 54 * r;
       o.atk = 0.002; o.dec = 0.145;
-      o.pk = blind ? 0.70 : 0.55;
+      o.pk = blind ? 0.46 : 0.55;
       lay(v, 2, o);
 
       /* [残弾] 薬室の鳴り。高Qの狭帯域＝金属的な「ちん」。
@@ -7646,7 +7710,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         o = L(); o.buf = NZW; o.ft = 'highpass';
         o.fa = (head ? 5200 : 900) * r; o.fb = (head ? 3000 : 520) * r;
         o.q = 0.8; o.atk = 0.0005; o.dec = head ? 0.0060 : 0.030;
-        o.pk = head ? 0.55 : 0.30;
+        o.pk = head ? 0.72 : 0.66;
         lay(v, 0, o);
 
         /* 湿った塊。ピンクノイズを低めに絞る＝「石」ではなく「詰まった物」。 */
@@ -7654,14 +7718,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         o.fa = (head ? 780 : 250) * r; o.fb = (head ? 340 : 170) * r;
         o.q = head ? 0.9 : 1.2;
         o.atk = 0.002; o.dec = head ? 0.20 : 0.10;
-        o.pk = head ? 0.50 : 0.50;
+        o.pk = head ? 0.65 : 1.10;
         lay(v, 1, o);
 
         /* 質量。当たった側の体が持っていかれる分の低域。 */
         o = L();
         o.hz = (head ? 96 : 118) * r; o.hz2 = (head ? 48 : 74) * r;
         o.atk = 0.003; o.dec = head ? 0.30 : 0.13;
-        o.pk = head ? 0.62 : 0.42;
+        o.pk = head ? 0.80 : 0.92;
         lay(v, 2, o);
 
         if (head) {
@@ -7669,14 +7733,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
              他のどの音にも無いので、混戦の中でも一つだけ抜けて聞こえる。 */
           o = L(); o.buf = NZP; o.ft = 'bandpass';
           o.fa = 360 * r; o.q = 9.0;
-          o.atk = 0.003; o.dec = 0.34; o.pk = 0.30;
+          o.atk = 0.003; o.dec = 0.34; o.pk = 0.39;
           lay(v, 3, o);
 
           /* 85ms 遅れて来る第2の低域。「大きい着弾」ではなく
              「2つの出来事」になるので、格が違うと聞こえる。 */
           o = L();
           o.hz = 62 * r; o.hz2 = 40 * r;
-          o.del = 0.085; o.atk = 0.006; o.dec = 0.35; o.pk = 0.34;
+          o.del = 0.085; o.atk = 0.006; o.dec = 0.35; o.pk = 0.44;
           /* 声を1本余計に取らず、空きブランチが無ければ諦める設計にはせず、
              ここは別の声に載せる（4ブランチを使い切っているため）。 */
           var v2 = alloc(0.55);
@@ -7688,7 +7752,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         } else {
           o = L(); o.buf = NZP; o.ft = 'lowpass';
           o.fa = 1800 * r; o.q = 0.8;
-          o.atk = 0.001; o.dec = 0.055; o.pk = 0.22;
+          o.atk = 0.001; o.dec = 0.055; o.pk = 0.48;
           lay(v, 3, o);
         }
 
@@ -7701,21 +7765,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       v = alloc(0.30);
       if (world) placeWorld(v, x, y, z); else place(v, 0, 0, 7.0);
 
+      /* レベルについて：最初 0.42/0.34/0.16 で書いて実測したところ、
+         'world' が 'enemy' より A特性で 20dB 小さかった。原因は2つある。
+           ・高域だけの音は同じピーク値でも音響エネルギーが桁違いに小さい
+           ・Q の高いバンドパスは広帯域ノイズをほとんど通さない
+         「外した」は最も頻度が高く、かつ最も早く伝わらなければならない情報
+         （撃ち続けるか位置を変えるかの判断がこれ1つで決まる）なので、
+         下の値まで持ち上げ、'chip' の Q も 1.6 → 0.9 に開いて通りを良くした。 */
       o = L(); o.buf = NZW; o.ft = 'highpass';
       o.fa = 3800 * r; o.fb = 2600 * r;
-      o.q = 0.8; o.atk = 0.0004; o.dec = 0.0045; o.pk = 0.42;
+      o.q = 0.8; o.atk = 0.0004; o.dec = 0.0045; o.pk = 0.78;
       lay(v, 0, o);
 
       /* 欠けた破片。1.9k→1.2kHz へ落ちる短い帯域＝「かつん」。 */
       o = L(); o.buf = NZW; o.ft = 'bandpass';
-      o.fa = 1900 * r; o.fb = 1200 * r; o.q = 1.6;
-      o.atk = 0.0010; o.dec = 0.042; o.pk = 0.34;
+      o.fa = 1900 * r; o.fb = 1200 * r; o.q = 0.9;
+      o.atk = 0.0010; o.dec = 0.042; o.pk = 0.72;
       lay(v, 1, o);
 
       /* 砕けた粉が落ちる余韻。これがあると「石」になる。 */
       o = L(); o.buf = NZP; o.ft = 'bandpass';
       o.fa = 620 * r; o.q = 0.9;
-      o.atk = 0.002; o.dec = 0.075; o.pk = 0.16;
+      o.atk = 0.002; o.dec = 0.075; o.pk = 0.34;
       lay(v, 2, o);
 
       /* 3番目のブランチは意図的に空。低域を足さないことが「外れ」の定義。 */
@@ -7739,6 +7810,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         /* 1) 弾倉を差し込んで座らせる */
         var v = alloc(0.40);
         place(v, 0.22, -0.28, 0.34);
+        trim(v, TRIM.reload);
 
         o = L(); o.buf = NZP; o.ft = 'bandpass';
         o.fa = 950 * r; o.fb = 620 * r; o.q = 1.2;
@@ -7768,6 +7840,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
            プレイヤーは2つ目を数えて指を戻す。 */
         var v2 = alloc(0.35);
         place(v2, 0.24, -0.20, 0.40);
+        trim(v2, TRIM.reload);
 
         o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 5200 * r; o.q = 0.8;
         o.del = 0.195; o.atk = 0.0003; o.dec = 0.0035; o.pk = 0.30;
@@ -7794,6 +7867,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          この軽さが「まだ撃てない」の合図で、'in' の重さと対になる。 */
       var vo = alloc(0.34);
       place(vo, 0.20, -0.30, 0.32);
+      trim(vo, TRIM.reload);
 
       o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 3600 * r; o.q = 0.8;
       o.atk = 0.0003; o.dec = 0.0040; o.pk = 0.30;
@@ -7826,6 +7900,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       var v = alloc(0.40);
       place(v, 0, -0.35, 0.40);
+      trim(v, TRIM.vault);
 
       /* 装備と衣の擦れ。立ち上がりを 20ms と鈍くするのが要点で、
          ここが速いと布ではなく紙になる。 */
@@ -7852,6 +7927,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* 着地。ここだけ低域を持たせて「体重が落ちた」ことを伝える。 */
       var v2 = alloc(0.62);
       place(v2, 0, -1.35, 0.20);
+      trim(v2, TRIM.vault);
 
       o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 2200 * r; o.q = 0.8;
       o.del = 0.440; o.atk = 0.0005; o.dec = 0.0050; o.pk = 0.22;
@@ -7883,6 +7959,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var o, r = jit(0.05);
       var v = alloc(0.55);
       place(v, 0, -0.55, 0.42);
+      trim(v, TRIM.slam);
 
       o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 1800 * r; o.fb = 1100 * r; o.q = 0.8;
       o.atk = 0.0008; o.dec = 0.0070; o.pk = 0.30;
@@ -7915,6 +7992,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var o, r = jit(0.05);
       var v = alloc(0.30);
       place(v, 0, -0.45, 0.40);
+      trim(v, TRIM.cover);
 
       o = L(); o.buf = NZP; o.ft = 'bandpass'; o.fa = 1200 * r; o.fb = 700 * r; o.q = 0.8;
       o.atk = 0.012; o.dec = 0.100; o.pk = 0.13;
@@ -7945,7 +8023,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     function step(speed) {
       if (!ensure()) return;
       var sp = clamp((speed || 0) / SPRINT, 0, 1);
-      var lvl = 0.10 + 0.30 * sp;
+      var lvl = 0.11 + 0.26 * sp;
       var r = jit(0.08);
       var o;
 
@@ -7954,19 +8032,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       place(v, 0.16 * stepSide, -1.45, 0.10);
 
       /* 踵。速いほど短く硬く。 */
-      o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 2500 * r; o.q = 0.8;
-      o.atk = 0.0004; o.dec = 0.0035 + 0.0025 * (1 - sp); o.pk = 1.00 * lvl;
+      o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 1900 * r; o.q = 0.8;
+      o.atk = 0.0004; o.dec = 0.0035 + 0.0025 * (1 - sp); o.pk = 0.62 * lvl;
       lay(v, 0, o);
 
-      /* 靴底が石を押す本体。430Hz は石畳を靴で叩いたときの主要な帯域。 */
+      /* 靴底が石を押す本体。430Hz は石畳を靴で叩いたときの主要な帯域。
+         Q を 1.3 → 0.8 に開き、量を倍にした。実測でスペクトル重心が
+         6.5kHz まで上がっており、これは「足音」ではなく「シャッ」という
+         別の音になっていた。足音は本体が主役で、砂利は装飾でなければならない。 */
       o = L(); o.buf = NZP; o.ft = 'bandpass';
-      o.fa = 430 * r; o.fb = 300 * r; o.q = 1.3;
-      o.atk = 0.001; o.dec = 0.045 + 0.020 * (1 - sp); o.pk = 0.85 * lvl;
+      o.fa = 380 * r; o.fb = 270 * r; o.q = 0.8;
+      o.atk = 0.001; o.dec = 0.045 + 0.020 * (1 - sp); o.pk = 2.30 * lvl;
       lay(v, 1, o);
 
-      /* 砂と欠片の擦れ。走るほど増える。砲撃の翌日の広場なので必ず在る。 */
+      /* 砂と欠片の擦れ。走るほど増える。砲撃の翌日の広場なので必ず在る。
+         ただし装飾。0.25+0.55sp では砂利のほうが主役になっていた。 */
       o = L(); o.buf = NZW; o.ft = 'highpass'; o.fa = 3600 * r; o.q = 0.7;
-      o.atk = 0.003; o.dec = 0.055; o.pk = (0.25 + 0.55 * sp) * lvl;
+      o.atk = 0.003; o.dec = 0.055; o.pk = (0.07 + 0.20 * sp) * lvl;
       lay(v, 2, o);
 
       /* 体重。走っているときだけ乗せる。 */
@@ -8912,14 +8994,14 @@ function acquireTarget() {
   var best = Infinity;
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i]; if (e.dead) continue;
-    _tmpV.set(e.x, CFG.player.chest, e.z).project(camera);
+    _tmpV.set(e.x, (e.hb || HB_DEFAULT).chest, e.z).project(camera);
     if (_tmpV.z > 1) continue;
     var sxp = (_tmpV.x * 0.5 + 0.5) * window.innerWidth;
     var syp = (-(_tmpV.y - CFG.cam.reticleNdcY) * 0.5 + 0.5) * window.innerHeight;
     var d = Math.hypot(sxp - window.innerWidth * 0.5, syp - window.innerHeight * 0.5);
     if (d > R) continue;
     // 遮蔽越しの敵は吸着対象にしない
-    var dx = e.x - camera.position.x, dy = CFG.player.chest - camera.position.y, dz = e.z - camera.position.z;
+    var dx = e.x - camera.position.x, dy = (e.hb || HB_DEFAULT).chest - camera.position.y, dz = e.z - camera.position.z;
     var dd = Math.hypot(dx, dy, dz);
     if (rayWorld(camera.position.x, camera.position.y, camera.position.z, dx / dd, dy / dd, dz / dd, dd) < dd - 0.2) continue;
     if (d < best) { best = d; aimTarget = e; aimTargetDist = d / R; }
@@ -8964,7 +9046,8 @@ function shoot() {
     var a = aimRay();
     d.copy(a);
     if (aimTarget) {   // スナップ補正（最大3°）
-      var tx = aimTarget.x - camera.position.x, ty = CFG.player.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
+      var ahb = aimTarget.hb || HB_DEFAULT;
+      var tx = aimTarget.x - camera.position.x, ty = ahb.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
       var tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
       var ang = Math.acos(clamp(d.x * tx + d.y * ty + d.z * tz, -1, 1));
       if (ang <= snapMaxRad() && ang > 1e-5) { d.set(tx, ty, tz); snapApplied = ang / DEG; }
@@ -9054,12 +9137,62 @@ function blindDir(out) {
   var cp = Math.cos(pitch);
   return out.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
 }
+/* 当たり判定はモデルの実寸から導く。
+   ハードコードすると「見えているのに当たらない／見えないのに当たる」が起きる。
+   実際、突撃型は実幅1.38mなのに判定は0.68mで、肩を撃っても当たらなかった。
+   銃身は判定に含めない（長い銃を持つ狙撃型の銃口を撃っても当たらないのが正しい）。 */
+var HB_DEFAULT = { halfX: 0.34, halfZ: 0.26, bodyTop: 1.52, headTop: 1.86, headHalf: 0.16, chest: 1.15 };
+
+function isUnder(o, root) { while (o) { if (o === root) return true; o = o.parent; } return false; }
+
+function hitboxFromRig(rig) {
+  if (!rig || !rig.root) return HB_DEFAULT;
+  rig.root.updateMatrixWorld(true);
+
+  /* 胴と脚だけから寸法を取る。腕と銃は含めない。
+     全身のバウンディングボックスを使うと、狙撃型の長い銃身が判定に入り、
+     体から1.2m外を撃っても当たるようになる（実測で確認した）。
+     契約で gun の命名は任意なので、gun を除外するだけでは足りない。 */
+  var parts = [];
+  if (rig.torso) parts.push({ o: rig.torso, skip: [rig.armR, rig.armL, rig.gun] });
+  if (rig.legR) parts.push({ o: rig.legR, skip: [] });
+  if (rig.legL) parts.push({ o: rig.legL, skip: [] });
+  if (!parts.length) parts.push({ o: rig.root, skip: [rig.gun] });
+
+  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  for (var i = 0; i < parts.length; i++) {
+    (function (p) {
+      p.o.traverse(function (o) {
+        if (!o.isMesh) return;
+        for (var k = 0; k < p.skip.length; k++) if (p.skip[k] && isUnder(o, p.skip[k])) return;
+        tmp.setFromObject(o);
+        if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+      });
+    })(parts[i]);
+  }
+  if (!any) return HB_DEFAULT;
+
+  // 見えている輪郭の端を撃って外れるのが最悪なので、実寸に少し余裕を足す
+  var PAD = 0.06;
+  var h = clamp(bb.max.y + PAD, 1.2, 2.3);
+  var halfX = clamp(Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) + PAD, 0.22, 0.80);
+  var halfZ = clamp(Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) + PAD, 0.18, 0.55);
+  return {
+    halfX: halfX, halfZ: halfZ,
+    bodyTop: h * 0.80,                                // 上2割を頭部として扱う
+    headTop: h,
+    headHalf: clamp(halfX * 0.42, 0.11, 0.22),
+    chest: h * 0.62
+  };
+}
+
 function enemyRay(e, ox, oy, oz, dx, dy, dz) {
-  var body = { minx: e.x - 0.34, maxx: e.x + 0.34, minz: e.z - 0.26, maxz: e.z + 0.26, top: 1.52 };
-  var headB = { minx: e.x - 0.16, maxx: e.x + 0.16, minz: e.z - 0.16, maxz: e.z + 0.16, top: 1.86 };
+  var hb = e.hb || HB_DEFAULT;
+  var body = { minx: e.x - hb.halfX, maxx: e.x + hb.halfX, minz: e.z - hb.halfZ, maxz: e.z + hb.halfZ, top: hb.bodyTop };
+  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf, minz: e.z - hb.headHalf, maxz: e.z + hb.headHalf, top: hb.headTop };
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
-  var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, 1.52, 1.86);
+  var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);
   if (th < tb) return { t: th, head: true };
   return { t: tb, head: false };
 }
@@ -9313,6 +9446,8 @@ function initRender() {
     var type = (e % 2 === 0) ? 'rusher' : 'marksman';
     var fg = hasArt('enemy') ? ART.enemy(T, MATS, type) : buildFigure(0x6b3a34, 0x4a2622, true);
     scene.add(fg.root); enemyMeshes.push(fg);
+    enemies[e].hb = hitboxFromRig(fg);      // 見た目と当たり判定を一致させる
+    enemies[e].type = type;
   }
 
   /* ---- リムを全 Lambert マテリアルに行き渡らせる ----------------------
@@ -9485,7 +9620,9 @@ function syncRig() {
     r.gun.position.y = ready ? -0.06 : -0.20;
     r.gun.position.z = 0;
   }
-  if (r.flash) r.flash.visible = P.flash > 0;
+  // VFXモジュールが銃口炎を出す場合、モデル側の発光は消す。
+  // 出す位置が違う（モデルは前方0.78m、弾の発射点は0.42m）ので、二重に出ると嘘になる。
+  if (r.flash) r.flash.visible = (P.flash > 0) && !(FX && FX.muzzle);
 
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i], m = enemyMeshes[i];

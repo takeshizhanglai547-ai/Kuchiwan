@@ -768,14 +768,14 @@ function acquireTarget() {
   var best = Infinity;
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i]; if (e.dead) continue;
-    _tmpV.set(e.x, CFG.player.chest, e.z).project(camera);
+    _tmpV.set(e.x, (e.hb || HB_DEFAULT).chest, e.z).project(camera);
     if (_tmpV.z > 1) continue;
     var sxp = (_tmpV.x * 0.5 + 0.5) * window.innerWidth;
     var syp = (-(_tmpV.y - CFG.cam.reticleNdcY) * 0.5 + 0.5) * window.innerHeight;
     var d = Math.hypot(sxp - window.innerWidth * 0.5, syp - window.innerHeight * 0.5);
     if (d > R) continue;
     // 遮蔽越しの敵は吸着対象にしない
-    var dx = e.x - camera.position.x, dy = CFG.player.chest - camera.position.y, dz = e.z - camera.position.z;
+    var dx = e.x - camera.position.x, dy = (e.hb || HB_DEFAULT).chest - camera.position.y, dz = e.z - camera.position.z;
     var dd = Math.hypot(dx, dy, dz);
     if (rayWorld(camera.position.x, camera.position.y, camera.position.z, dx / dd, dy / dd, dz / dd, dd) < dd - 0.2) continue;
     if (d < best) { best = d; aimTarget = e; aimTargetDist = d / R; }
@@ -820,7 +820,8 @@ function shoot() {
     var a = aimRay();
     d.copy(a);
     if (aimTarget) {   // スナップ補正（最大3°）
-      var tx = aimTarget.x - camera.position.x, ty = CFG.player.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
+      var ahb = aimTarget.hb || HB_DEFAULT;
+      var tx = aimTarget.x - camera.position.x, ty = ahb.chest - camera.position.y, tz = aimTarget.z - camera.position.z;
       var tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
       var ang = Math.acos(clamp(d.x * tx + d.y * ty + d.z * tz, -1, 1));
       if (ang <= snapMaxRad() && ang > 1e-5) { d.set(tx, ty, tz); snapApplied = ang / DEG; }
@@ -910,12 +911,62 @@ function blindDir(out) {
   var cp = Math.cos(pitch);
   return out.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
 }
+/* 当たり判定はモデルの実寸から導く。
+   ハードコードすると「見えているのに当たらない／見えないのに当たる」が起きる。
+   実際、突撃型は実幅1.38mなのに判定は0.68mで、肩を撃っても当たらなかった。
+   銃身は判定に含めない（長い銃を持つ狙撃型の銃口を撃っても当たらないのが正しい）。 */
+var HB_DEFAULT = { halfX: 0.34, halfZ: 0.26, bodyTop: 1.52, headTop: 1.86, headHalf: 0.16, chest: 1.15 };
+
+function isUnder(o, root) { while (o) { if (o === root) return true; o = o.parent; } return false; }
+
+function hitboxFromRig(rig) {
+  if (!rig || !rig.root) return HB_DEFAULT;
+  rig.root.updateMatrixWorld(true);
+
+  /* 胴と脚だけから寸法を取る。腕と銃は含めない。
+     全身のバウンディングボックスを使うと、狙撃型の長い銃身が判定に入り、
+     体から1.2m外を撃っても当たるようになる（実測で確認した）。
+     契約で gun の命名は任意なので、gun を除外するだけでは足りない。 */
+  var parts = [];
+  if (rig.torso) parts.push({ o: rig.torso, skip: [rig.armR, rig.armL, rig.gun] });
+  if (rig.legR) parts.push({ o: rig.legR, skip: [] });
+  if (rig.legL) parts.push({ o: rig.legL, skip: [] });
+  if (!parts.length) parts.push({ o: rig.root, skip: [rig.gun] });
+
+  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  for (var i = 0; i < parts.length; i++) {
+    (function (p) {
+      p.o.traverse(function (o) {
+        if (!o.isMesh) return;
+        for (var k = 0; k < p.skip.length; k++) if (p.skip[k] && isUnder(o, p.skip[k])) return;
+        tmp.setFromObject(o);
+        if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+      });
+    })(parts[i]);
+  }
+  if (!any) return HB_DEFAULT;
+
+  // 見えている輪郭の端を撃って外れるのが最悪なので、実寸に少し余裕を足す
+  var PAD = 0.06;
+  var h = clamp(bb.max.y + PAD, 1.2, 2.3);
+  var halfX = clamp(Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) + PAD, 0.22, 0.80);
+  var halfZ = clamp(Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) + PAD, 0.18, 0.55);
+  return {
+    halfX: halfX, halfZ: halfZ,
+    bodyTop: h * 0.80,                                // 上2割を頭部として扱う
+    headTop: h,
+    headHalf: clamp(halfX * 0.42, 0.11, 0.22),
+    chest: h * 0.62
+  };
+}
+
 function enemyRay(e, ox, oy, oz, dx, dy, dz) {
-  var body = { minx: e.x - 0.34, maxx: e.x + 0.34, minz: e.z - 0.26, maxz: e.z + 0.26, top: 1.52 };
-  var headB = { minx: e.x - 0.16, maxx: e.x + 0.16, minz: e.z - 0.16, maxz: e.z + 0.16, top: 1.86 };
+  var hb = e.hb || HB_DEFAULT;
+  var body = { minx: e.x - hb.halfX, maxx: e.x + hb.halfX, minz: e.z - hb.halfZ, maxz: e.z + hb.halfZ, top: hb.bodyTop };
+  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf, minz: e.z - hb.headHalf, maxz: e.z + hb.headHalf, top: hb.headTop };
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
-  var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, 1.52, 1.86);
+  var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);
   if (th < tb) return { t: th, head: true };
   return { t: tb, head: false };
 }
@@ -1169,6 +1220,8 @@ function initRender() {
     var type = (e % 2 === 0) ? 'rusher' : 'marksman';
     var fg = hasArt('enemy') ? ART.enemy(T, MATS, type) : buildFigure(0x6b3a34, 0x4a2622, true);
     scene.add(fg.root); enemyMeshes.push(fg);
+    enemies[e].hb = hitboxFromRig(fg);      // 見た目と当たり判定を一致させる
+    enemies[e].type = type;
   }
 
   /* ---- リムを全 Lambert マテリアルに行き渡らせる ----------------------
@@ -1341,7 +1394,9 @@ function syncRig() {
     r.gun.position.y = ready ? -0.06 : -0.20;
     r.gun.position.z = 0;
   }
-  if (r.flash) r.flash.visible = P.flash > 0;
+  // VFXモジュールが銃口炎を出す場合、モデル側の発光は消す。
+  // 出す位置が違う（モデルは前方0.78m、弾の発射点は0.42m）ので、二重に出ると嘘になる。
+  if (r.flash) r.flash.visible = (P.flash > 0) && !(FX && FX.muzzle);
 
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i], m = enemyMeshes[i];
