@@ -1,10 +1,14 @@
 name: Deploy to GitHub Pages
 
+# 公開サイトは main だけが更新する。
+# 開発ブランチをここに足すと、そのブランチの内容でサイト全体（path: ".") が
+# 置き換わり、main にある他のゲームが 404 になる。実際に 2026-08-08 に
+# beltaction.html が消える事故が起きた。プレビューが要る場合は
+# 別リポジトリか、artifact のダウンロードで確認すること。
 on:
   push:
     branches:
       - main
-      - claude/kunitachi-3d-model-edHpl
   workflow_dispatch:
 
 permissions:
