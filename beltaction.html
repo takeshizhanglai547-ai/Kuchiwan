@@ -6194,10 +6194,10 @@ function drawBackground(){
     if(T.town){   // 王都・城下町：城と塔と町並み
       drawCastle((W*0.5)-camX*0.28,60);
       for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
-      ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+      ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
       drawBuildings(!!T.stars); drawLampRow(); }
     else {        // 森・雪山・渓谷など：城と商店の看板を出さず、地形のシルエットだけにする
-      ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+      ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
       drawRidgeRow(T); }
     drawBraziers(T);
   }
@@ -6689,7 +6689,7 @@ function drawSpaceScene(T){
   for(let i=0;i<14;i++){ const bx=((i*151+gf*(0.3+i%3*0.2))%(W+60))-30, by=70+((i*89)%(yb-120))+Math.sin(gf*0.03+i)*20;
     ctx.fillStyle='rgba(200,230,255,'+(0.2+0.3*Math.abs(Math.sin(gf*0.05+i*2)))+')'; ctx.beginPath(); ctx.arc(bx,by,2,0,7); ctx.fill(); }
   ctx.restore();
-  ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+  ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
 }
 // ── 二周目・蟲の世界の背景（巨大な花・蜂の巣・蜘蛛の糸・光る茸）──
 function drawGiantFlower(x,baseY,h,hue,ph){ // 見上げるほど巨大な花（茎＋花弁）
@@ -6752,7 +6752,7 @@ function drawBugScene(T){
   for(let i=0;i<12;i++){ const bx=((i*173+gf*(0.6+i%3*0.3))%(W+60))-30, by=80+((i*97)%(yb-140))+Math.sin(gf*0.05+i)*14;
     ctx.fillStyle='rgba(200,255,150,'+(0.25+0.35*Math.abs(Math.sin(gf*0.07+i*2)))+')'; ctx.beginPath(); ctx.arc(bx,by,2.2,0,7); ctx.fill(); }
   ctx.restore();
-  ctx.fillStyle=T.haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+  ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
 }
 // 巨大廃墟ステージ：夕暮れに崩れゆく巨大な石柱・アーチ
 function drawRuinsScene(){
@@ -6769,18 +6769,40 @@ function drawRuinsScene(){
     ctx.fillStyle='rgba(20,16,28,.65)'; for(let r=0;r<3;r++)for(let c=0;c<2;c++){ if((g0+r+c)%2) ctx.fillRect(gx+22+c*70, y+30+r*46, 26, 34); }
     // 崩れ落ちた巨大アーチ
     if(g0%3===0){ ctx.strokeStyle='#54505c'; ctx.lineWidth=14; ctx.beginPath(); ctx.arc(gx+(bw-30)/2, GROUND_TOP, (bw-30)/2, Math.PI, Math.PI*1.5); ctx.stroke(); } }
-  ctx.fillStyle=curTheme().haze; ctx.fillRect(0,150,W,GROUND_TOP-150);
+  ctx.fillStyle=hazeGrad(curTheme(),themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
 }
-function drawMountains(){ const yb=GROUND_TOP-24;
-  for(let layer=0;layer<2;layer++){ ctx.fillStyle=layer?'rgba(150,170,200,.6)':'rgba(108,132,164,.78)';
-    const step=150+layer*60, off=((-(camX*(0.14+layer*0.05)))%step+step)%step;
+// 色文字列を [r,g,b,a] へ。'#rgb' / '#rrggbb' / 'rgba(...)' のどれでも受ける
+function _rgba(str){ if(str[0]==='#'){ const c=hexRGB(str).split(','); return [+c[0],+c[1],+c[2],1]; }
+  const m=str.match(/[\d.]+/g); return [+m[0],+m[1],+m[2], m[3]!==undefined?+m[3]:1]; }
+// 霞：単一アルファのベタでは大気遠近が出ない。地平線に近いほど濃くする縦グラデにする。
+// テーマごとに一度だけ作ってキャッシュする（毎フレーム生成は過去に性能事故を起こしている）
+const _hzC={};
+function hazeGrad(T,ti){
+  if(perfTier>=2) return T.haze;        // 重いときは単色のベタへ退避（グラデ塗りは単色塗りより高い）
+  let g=_hzC[ti]; if(g) return g;
+  const c=_rgba(T.haze), rgb=c[0]+','+c[1]+','+c[2], a=c[3];
+  g=ctx.createLinearGradient(0,150,0,GROUND_TOP);
+  // 濃度は控えめに。1.35a まで上げると地平線付近が単色に潰れ、逆に奥行きが消える
+  g.addColorStop(0.00,'rgba('+rgb+','+(a*0.12).toFixed(3)+')');
+  g.addColorStop(0.55,'rgba('+rgb+','+(a*0.58).toFixed(3)+')');
+  g.addColorStop(0.88,'rgba('+rgb+','+Math.min(1,a*1.02).toFixed(3)+')');
+  g.addColorStop(1.00,'rgba('+rgb+','+(a*0.72).toFixed(3)+')');
+  _hzC[ti]=g; return g; }
+// 遠景の山。色を青灰でハードコードすると業火の渓谷でも蜂の巣でも山だけ浮くので、
+// テーマの塔色から引いて霞の色へ層ごとに寄せる（遠いほど霞に溶ける＝大気遠近）
+function drawMountains(){ const T=curTheme(), yb=GROUND_TOP-24, hz=_rgba(T.haze);
+  const nL=perfTier>=2?2:3;
+  for(let layer=0;layer<nL;layer++){
+    const b=_rgba(shade(T.tower,-4-layer*16)), t=0.66-layer*0.26;
+    ctx.fillStyle='rgb('+Math.round(b[0]*(1-t)+hz[0]*t)+','+Math.round(b[1]*(1-t)+hz[1]*t)+','+Math.round(b[2]*(1-t)+hz[2]*t)+')';
+    const step=210-layer*40, off=((-(camX*(0.09+layer*0.05)))%step+step)%step;
+    const HH=x=>(96+((Math.floor(x/step)*37+layer*53)%70))*(1.32-layer*0.22);
     ctx.beginPath(); ctx.moveTo(-step,yb+40);
-    for(let x=-step;x<W+step;x+=step){ const px=x-off, h=80+((Math.floor(x/step)*37+layer*53)%70)+layer*26;
-      ctx.lineTo(px+step/2, yb-h); ctx.lineTo(px+step, yb); }
+    for(let x=-step;x<W+step;x+=step){ const px=x-off;
+      ctx.lineTo(px+step/2, yb-HH(x)); ctx.lineTo(px+step, yb); }
     ctx.lineTo(W+step,yb+40); ctx.closePath(); ctx.fill();
-    // snow caps on near layer
-    if(!layer){ ctx.fillStyle='rgba(255,255,255,.5)'; const off2=off;
-      for(let x=-step;x<W+step;x+=step){ const px=x-off2, h=80+((Math.floor(x/step)*37)%70);
+    if(layer===nL-1){ ctx.fillStyle='rgba(255,255,255,.28)';   // 雪冠は最前列だけ・薄く（白すぎると赤いテーマで異物になる）
+      for(let x=-step;x<W+step;x+=step){ const px=x-off, h=HH(x);
         ctx.beginPath(); ctx.moveTo(px+step/2,yb-h); ctx.lineTo(px+step/2-12,yb-h+18); ctx.lineTo(px+step/2+12,yb-h+18); ctx.fill(); } }
   }
 }
@@ -6842,7 +6864,7 @@ function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
     ctx.lineTo(x+wob*0.5,baseY-h);
     ctx.lineTo(x+30+wob*0.2,baseY-h*0.52);
     ctx.lineTo(x+60,baseY); ctx.closePath(); ctx.fill(); }
-  ctx.fillStyle=T.haze; ctx.fillRect(0,GROUND_TOP-70,W,70);
+  ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);   // 上のベタと同じグラデなので継ぎ目が出ない
 }
 function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
   const cols=['#caa15a','#b9854a','#d8b56b','#a8753c','#c69a55'], roofs=['#9c3b2e','#7a3528','#b5503a'];
@@ -6910,7 +6932,41 @@ function drawGround(){
   // 地面のテクスチャ（稜線に沿った小石）
   for(let sx=14; sx<W; sx+=46){ const wx=sx+camX; if(overPit(wx))continue; const ty=LANE-groundLift(wx);
     ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(sx,ty+22+((wx*0.7)%24),6,3,0,0,7); ctx.fill(); }
+  drawFloorLights(T);
 }
+// 床の映り込みと光溜まり。石床が光源を映し返すと、床の材質と光源の高さが同時に伝わる。
+// スプライトへ焼いてから drawImage する（radGrad は座標がキャッシュキーなので、
+// スクロールのたびにキャッシュが捨てられて毎フレーム生成になってしまう）
+const _litS={};
+function litSprite(rgb,kind){ const k=kind+rgb; let c=_litS[k]; if(c) return c;
+  c=document.createElement('canvas'); const g=c.getContext('2d');
+  if(kind==='r'){ c.width=32; c.height=128;                       // 縦に伸びる映り込み
+    const lg=g.createLinearGradient(0,0,0,128);
+    lg.addColorStop(0,'rgba('+rgb+',.50)'); lg.addColorStop(.34,'rgba('+rgb+',.20)'); lg.addColorStop(1,'rgba('+rgb+',0)');
+    g.fillStyle=lg; g.fillRect(0,0,32,128);
+    const hg=g.createLinearGradient(0,0,32,0);
+    hg.addColorStop(0,'rgba(0,0,0,0)'); hg.addColorStop(.5,'rgba(0,0,0,1)'); hg.addColorStop(1,'rgba(0,0,0,0)');
+    g.globalCompositeOperation='destination-in'; g.fillStyle=hg; g.fillRect(0,0,32,128);
+  } else { c.width=128; c.height=48;                              // 床の光溜まり
+    const rg=g.createRadialGradient(64,24,3,64,24,62);
+    rg.addColorStop(0,'rgba('+rgb+',.34)'); rg.addColorStop(1,'rgba('+rgb+',0)');
+    g.save(); g.translate(64,24); g.scale(1,0.38); g.translate(-64,-24);
+    g.fillStyle=rg; g.fillRect(0,0,128,48); g.restore(); }
+  _litS[k]=c; return c; }
+function drawFloorLights(T){ if(perfTier>=2) return;
+  const al=perfTier>=1?0.7:1;
+  // 既存の光源列と同じ視差・間隔・バイアスを使い、灯りの真下に必ず落ちるようにする
+  const rows=[{par:0.84,step:520,bias:90,rgb:'255,214,130'},{par:0.92,step:440,bias:210,rgb:'255,150,60'}];
+  ctx.save();
+  for(const r of rows){ const off=((camX*r.par)%r.step+r.step)%r.step;
+    for(let i=-1;i<Math.ceil(W/r.step)+1;i++){ const sx=i*r.step-off+r.bias;
+      if(sx<-90||sx>W+90) continue;
+      const wx=sx+camX; if(overPit(wx)) continue;
+      const gy=LANE-groundLift(wx);
+      ctx.globalAlpha=al*(0.86+0.14*Math.sin(gf*0.09+sx));       // 炎の揺れと同期して明滅
+      ctx.drawImage(litSprite(r.rgb,'p'), sx-72, gy-6, 144, 40);
+      ctx.drawImage(litSprite(r.rgb,'r'), sx-16, gy-6, 32, 132); } }
+  ctx.restore(); }
 function drawForeground(){ // near-camera silhouette strip (depth via fast parallax)
   const T=curTheme(), par=1.4, step=12;
   ctx.save();
@@ -6924,6 +6980,40 @@ function drawForeground(){ // near-camera silhouette strip (depth via fast paral
   for(let sx=4;sx<W;sx+=26){ const wx=sx+camX*par;
     const h=14+Math.sin(wx*0.02)*5+Math.sin(wx*0.053+1.7)*4, sw=Math.sin(gf*0.05+wx*0.3)*2;
     ctx.beginPath(); ctx.moveTo(sx,H-h+2); ctx.quadraticCurveTo(sx+sw,H-h-7,sx+sw*1.6,H-h-13); ctx.stroke(); }
+  ctx.restore();
+  drawFgSilhouettes(T);
+}
+// 手前の巨大な暗いシルエット。この暗さがあるからこそ中景の照明が主役として輝く。
+// 戦闘の中央（画面幅の22%〜78%）には絶対に立てない
+function drawFgSilhouettes(T){ if(perfTier>=2) return;
+  const step=perfTier>=1?1140:760, par=1.26, off=((camX*par)%step+step)%step;
+  const col=shade(T.g[2],-34), sgn=(T.sunX<0.5)?-1:1;
+  const kind=T.space?'pipe':(T.bug||T.flower||T.web)?'stem':T.stars?'branch':'pillar';
+  ctx.save();
+  for(let i=-1;i<3;i++){ const sx=i*step-off+120;
+    if(sx>W*0.22&&sx<W*0.78) continue;
+    if(sx<-240||sx>W+240) continue;
+    ctx.globalAlpha=0.90; ctx.fillStyle=col;
+    if(kind==='branch'){                                   // 上から垂れる枝
+      ctx.beginPath(); ctx.moveTo(sx-190,-46); ctx.quadraticCurveTo(sx-20,30,sx+90,14);
+      ctx.lineTo(sx+90,44); ctx.quadraticCurveTo(sx-20,64,sx-190,4); ctx.fill();
+      ctx.lineWidth=8; ctx.strokeStyle=col;
+      for(let b2=0;b2<3;b2++){ ctx.beginPath(); ctx.moveTo(sx-120+b2*62,26+b2*6);
+        ctx.quadraticCurveTo(sx-98+b2*62,88,sx-134+b2*62,132); ctx.stroke(); }
+    } else {
+      const w=(kind==='stem')?26:(kind==='pipe')?30:64;
+      const top=(kind==='pillar')?H*0.38:0;
+      ctx.beginPath();
+      if(kind==='stem'){ ctx.moveTo(sx-w/2,H); ctx.quadraticCurveTo(sx-w/2+14,H*0.5,sx-w/2+4,top);
+        ctx.lineTo(sx+w/2+4,top); ctx.quadraticCurveTo(sx+w/2+14,H*0.5,sx+w/2,H); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(sx+w*0.9,H*0.52,44,15,-0.5,0,7); ctx.fill();      // 葉
+      } else { ctx.fillRect(sx-w/2,top,w,H-top);
+        if(kind==='pillar'){ ctx.fillRect(sx-w/2-10,top,w+20,16); } }                  // 柱頭
+      // 太陽側の縁だけ暖色のリムライト
+      ctx.globalAlpha=0.55; ctx.strokeStyle=T.sun+'.5)'; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.moveTo(sx+sgn*w/2,top); ctx.lineTo(sx+sgn*w/2,H); ctx.stroke();
+    }
+  }
   ctx.restore();
 }
 // 瀕死の赤リムのスプライト（画面サイズが変わったときだけ焼き直す）
