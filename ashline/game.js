@@ -971,6 +971,9 @@ function hitboxFromRig(rig) {
   var ext = new Array(nSlice);
   for (var q = 0; q < nSlice; q++) ext[q] = -1;
   var v = new T.Vector3();
+  // 頭部は前へ突き出していることが多い。X と Z を1つの値にまとめると、
+  // 前方への突き出しが左右幅として誤計上され、頭の横を撃っても頭部命中になる。
+  var bodyTopGuess = h * 0.78, hHX = 0, hZ0 = 1e9, hZ1 = -1e9;
   for (var mi = 0; mi < meshes.length; mi++) {
     var o = meshes[mi], g = o.geometry;
     if (!g || !g.attributes || !g.attributes.position) continue;
@@ -982,6 +985,11 @@ function hitboxFromRig(rig) {
       if (si < 0 || si >= nSlice) continue;
       var e = Math.max(Math.abs(v.x), Math.abs(v.z));
       if (e > ext[si]) ext[si] = e;
+      if (v.y > bodyTopGuess) {
+        if (Math.abs(v.x) > hHX) hHX = Math.abs(v.x);
+        if (v.z < hZ0) hZ0 = v.z;
+        if (v.z > hZ1) hZ1 = v.z;
+      }
     }
   }
   // 上から下へ。肩幅の55%を超えたスライスが首。そこより上を頭部とする。
@@ -1000,11 +1008,14 @@ function hitboxFromRig(rig) {
     headBottom = h * 0.85; headExt = halfX * 0.42;
   }
 
+  var headHX = (hHX > 0) ? clamp(hHX + PAD * 0.5, 0.09, 0.26) : clamp(headExt + PAD * 0.5, 0.10, 0.26);
+  var headHZ = (hZ1 > hZ0) ? clamp((hZ1 - hZ0) / 2 + PAD * 0.5, 0.09, 0.26) : headHX;
+  var headCZ = (hZ1 > hZ0) ? (hZ0 + hZ1) / 2 : 0;
   return {
     halfX: halfX, halfZ: halfZ,
     bodyTop: headBottom,
     headTop: h,
-    headHalf: clamp(headExt + PAD * 0.5, 0.10, 0.26),
+    headHalf: headHX, headHalfZ: headHZ, headCZ: headCZ,
     chest: (headBottom) * 0.72
   };
 }
@@ -1012,7 +1023,9 @@ function hitboxFromRig(rig) {
 function enemyRay(e, ox, oy, oz, dx, dy, dz) {
   var hb = e.hb || HB_DEFAULT;
   var body = { minx: e.x - hb.halfX, maxx: e.x + hb.halfX, minz: e.z - hb.halfZ, maxz: e.z + hb.halfZ, top: hb.bodyTop };
-  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf, minz: e.z - hb.headHalf, maxz: e.z + hb.headHalf, top: hb.headTop };
+  var hz = hb.headHalfZ || hb.headHalf, cz = hb.headCZ || 0;
+  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf,
+                minz: e.z + cz - hz, maxz: e.z + cz + hz, top: hb.headTop };
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
   var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);

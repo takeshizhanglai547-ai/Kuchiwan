@@ -1,0 +1,63 @@
+# ASHLINE 参照境界の禁止語一覧
+#   ashline/art/check.js がこのファイルを読んで全モジュールを照合する。
+#   英語だけでは意味がない。カタカナ・複数形・ハイフン・中黒の表記ゆれを必ず含めること。
+#   '#' 以降は注釈。空行は無視。正規表現の断片として連結される。
+#   ※このファイル自体は build.js の ART_ORDER に含まれないため配布物には入らない。
+
+# --- 参照作品の固有名詞（英） ---
+lancer
+locust
+marcus
+fenix
+\bcogs?\b
+gears[\s_.-]*of[\s_.-]*war
+delta[\s_.-]*squad
+gnasher
+hammerburst
+boomshot
+torque[\s_.-]*bow
+longshot
+retro[\s_.-]*lancer
+\bsera\b
+jacinto
+imulsion
+theron
+berserker
+brumak
+reaver
+corpser
+kryll
+curb[\s_.-]*stomp
+horde[\s_.-]*mode
+roadie[\s_.-]*run
+
+# --- 同（カタカナ・表記ゆれ） ---
+ランサー
+ローカスト
+コグ
+マーカス
+フェニックス
+ギアーズ
+ガナー
+ハンマーバースト
+ブームショット
+トルクボウ
+ロングショット
+ブーマー
+セロン
+バーサーカー
+ブルマク
+リーヴァー
+コープサー
+クリル
+ジャシント
+イミュルジョン
+
+# --- 歯車系（意匠。言い換え・訓読み・旧字も塞ぐ） ---
+歯車
+歯輪
+齒輪
+ギヤ
+sprocket
+cog[\s_.-]*wheel
+cogwheel

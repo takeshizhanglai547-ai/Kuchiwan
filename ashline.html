@@ -5821,7 +5821,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          前後の厚みも同様に効くので、頭を前へ突き出しすぎない。 */
       /* 前傾は torso.rotation ではなく頂点に焼き込む（Bld の第4引数）。
          腕は当たり判定から除外されるので、腕と銃だけは Group の回転で傾けてよい。 */
-      var LEAN = 0.30, LC = Math.cos(LEAN), LS = Math.sin(LEAN);
+      /* 前傾0.30(約17度)＋無首＋腰より低い拳の組み合わせが、
+         「猫背・無首・長腕の獣」という参照作品の種族シルエットに寄る、と
+         参照境界監査に指摘された。世界観は「両陣営とも人間」と宣言しているので、
+         姿勢の側でそれを裏切ってはいけない。前傾を緩め、首を見せ、拳を腰より上へ。
+         幅は読解性（突撃型＝横に広い）のために据え置く。獣性の署名は幅ではなく姿勢。*/
+      var LEAN = 0.20, LC = Math.cos(LEAN), LS = Math.sin(LEAN);
       /* 肩ピボットを外へ逃がして、胸の側面と上腕の間に切れ込みを作る。
          ここが繋がると輪郭が1枚の塊になり人型に見えなくなる。 */
       armR.position.set(0.38, 0.14 * LC, 0.14 * LS);
@@ -5859,7 +5864,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          肩の谷に落としただけでは上から見て肩に溶けて輪郭から消える。
          肩甲板より 0.17m 高く、かつ前へ出して「前上がりの前輪郭」を破らせる。
          頭の下半分は肩に埋まったままなので首は依然として見えない。 */
-      tB.add(BOX, 0.28, 0.34, 0.30, 0, 0.55, 0.10, 0, 0, 0, DK);
+      /* 頸部。無首は獣性の最大の署名なので、肩の谷から首を1段出す。 */
+      tB.add(BOX, 0.15, 0.14, 0.15, 0, 0.42, 0.06, 0, 0, 0, DK);
+      tB.add(BOX, 0.28, 0.34, 0.30, 0, 0.58, 0.10, 0, 0, 0, DK);
       /* 面の横一文字だけを明色にする。塊が黒く沈む逆光でもここが残るので、
          どちらを向いているか（＝自分に向かって来ているか）が距離を置いても読める。 */
       tB.add(BOX, 0.26, 0.07, 0.13, 0, 0.585, 0.225, 0, 0, 0, TR);
@@ -5877,9 +5884,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       aB.add(BOX, 0.21, 0.34, 0.26, 0.00, -0.14, 0.04, 0, 0, 0, DK);
       aB.add(BOX, 0.23, 0.16, 0.26, 0.01, -0.33, 0.08, 0, 0, 0, AR);
       aB.add(BOX, 0.19, 0.32, 0.22, 0.01, -0.49, 0.18, -0.40, 0, 0, DK);
-      aB.add(BOX, 0.21, 0.20, 0.24, 0.01, -0.63, 0.30, 0, 0, 0, AR);
-      aB.add(BOX, 0.15, 0.16, 0.30, 0.01, -0.59, 0.46, 0, 0, 0, DK);
-      aB.add(CYL, 0.11, 0.14, 0.11, 0.01, -0.59, 0.66, Math.PI / 2, 0, 0, TR);
+      /* 拳が腰より低いのも獣性の署名。前腕から先を持ち上げる。 */
+      aB.add(BOX, 0.21, 0.20, 0.24, 0.01, -0.48, 0.30, 0, 0, 0, AR);
+      aB.add(BOX, 0.15, 0.16, 0.30, 0.01, -0.44, 0.46, 0, 0, 0, DK);
+      aB.add(CYL, 0.11, 0.14, 0.11, 0.01, -0.44, 0.66, Math.PI / 2, 0, 0, TR);
       armR.add(aB.mesh(T, mat));
 
       /* --- 脚。太く短く、わずかに外へ開く。膝から下に前板 --- */
@@ -9764,6 +9772,9 @@ function hitboxFromRig(rig) {
   var ext = new Array(nSlice);
   for (var q = 0; q < nSlice; q++) ext[q] = -1;
   var v = new T.Vector3();
+  // 頭部は前へ突き出していることが多い。X と Z を1つの値にまとめると、
+  // 前方への突き出しが左右幅として誤計上され、頭の横を撃っても頭部命中になる。
+  var bodyTopGuess = h * 0.78, hHX = 0, hZ0 = 1e9, hZ1 = -1e9;
   for (var mi = 0; mi < meshes.length; mi++) {
     var o = meshes[mi], g = o.geometry;
     if (!g || !g.attributes || !g.attributes.position) continue;
@@ -9775,6 +9786,11 @@ function hitboxFromRig(rig) {
       if (si < 0 || si >= nSlice) continue;
       var e = Math.max(Math.abs(v.x), Math.abs(v.z));
       if (e > ext[si]) ext[si] = e;
+      if (v.y > bodyTopGuess) {
+        if (Math.abs(v.x) > hHX) hHX = Math.abs(v.x);
+        if (v.z < hZ0) hZ0 = v.z;
+        if (v.z > hZ1) hZ1 = v.z;
+      }
     }
   }
   // 上から下へ。肩幅の55%を超えたスライスが首。そこより上を頭部とする。
@@ -9793,11 +9809,14 @@ function hitboxFromRig(rig) {
     headBottom = h * 0.85; headExt = halfX * 0.42;
   }
 
+  var headHX = (hHX > 0) ? clamp(hHX + PAD * 0.5, 0.09, 0.26) : clamp(headExt + PAD * 0.5, 0.10, 0.26);
+  var headHZ = (hZ1 > hZ0) ? clamp((hZ1 - hZ0) / 2 + PAD * 0.5, 0.09, 0.26) : headHX;
+  var headCZ = (hZ1 > hZ0) ? (hZ0 + hZ1) / 2 : 0;
   return {
     halfX: halfX, halfZ: halfZ,
     bodyTop: headBottom,
     headTop: h,
-    headHalf: clamp(headExt + PAD * 0.5, 0.10, 0.26),
+    headHalf: headHX, headHalfZ: headHZ, headCZ: headCZ,
     chest: (headBottom) * 0.72
   };
 }
@@ -9805,7 +9824,9 @@ function hitboxFromRig(rig) {
 function enemyRay(e, ox, oy, oz, dx, dy, dz) {
   var hb = e.hb || HB_DEFAULT;
   var body = { minx: e.x - hb.halfX, maxx: e.x + hb.halfX, minz: e.z - hb.halfZ, maxz: e.z + hb.halfZ, top: hb.bodyTop };
-  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf, minz: e.z - hb.headHalf, maxz: e.z + hb.headHalf, top: hb.headTop };
+  var hz = hb.headHalfZ || hb.headHalf, cz = hb.headCZ || 0;
+  var headB = { minx: e.x - hb.headHalf, maxx: e.x + hb.headHalf,
+                minz: e.z + cz - hz, maxz: e.z + cz + hz, top: hb.headTop };
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
   var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);

@@ -612,7 +612,9 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     shotStates[name] = await page.evaluate(() => { const s = __ASHLINE.state(); return { state: s.state, sprint: s.sprint, peek: +s.peek.toFixed(2), mode: s.peekMode, y: +s.y.toFixed(2), blind: +s.blind.toFixed(2) }; });
     await page.evaluate(() => { __ASHLINE.render(); });
     await page.waitForTimeout(120);
-    await page.screenshot({ path: path.join(SHOT, name + '.png') });
+    // 影と全アートを載せた後はソフトウェア描画が遅く、既定の30秒では足りない。
+    // これは実機の話ではなく、この検証環境（GPU非搭載）の都合。
+    await page.screenshot({ path: path.join(SHOT, name + '.png'), timeout: 180000 });
     console.log('  shot ' + name + '.png  ' + JSON.stringify(shotStates[name]));
   }
   // 撮影した画面が意図した状態だったことを確かめる（見た目だけで判断しない）

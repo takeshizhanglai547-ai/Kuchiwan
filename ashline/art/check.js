@@ -38,8 +38,25 @@ const NET = [/\bfetch\s*\(/, /XMLHttpRequest/, /\bimport\s*\(/, /^\s*import\s/m,
 const netHit = NET.filter(re => re.test(stripped));
 check('外部リソースを読み込んでいない', netHit.length === 0, netHit.map(String).join(' ') || 'なし');
 
-const BANNED = /(lancer|locust|marcus|fenix|\bcog\b|gears of war|delta squad|gnasher|hammerburst|boomshot|retro lancer|sera\b)/i;
-check('参照の境界：既存作品の固有名詞を含まない', !BANNED.test(src), (src.match(BANNED) || ['なし'])[0]);
+/* 禁止語の検査。当初は英語11語だけを見ており、カタカナ・複数形・ハイフン表記を
+   一つも検出できなかった（監査で「ランサー」「ローカスト」「コグ」「COGS」
+   「Gears-of-War」がすべて素通りすることを実測で示された）。
+   CONTRACT.md 自身が「『ランサー』『COG』『ローカスト』は書いた時点で不合格」と
+   定めているのに、その3語のカタカナ表記を検出しない検査器は無意味である。
+   語の一覧は BANNED_TERMS.txt に外出しし、この検査器はそれを読む。 */
+var BANNED_SRC = '';
+try { BANNED_SRC = fs.readFileSync(path.join(ART, 'BANNED_TERMS.txt'), 'utf8'); } catch (e) { }
+var BANNED_LIST = BANNED_SRC.split('\n')
+  .map(function (l) { return l.replace(/#.*$/, '').trim(); })
+  .filter(function (l) { return l.length > 0; });
+if (!BANNED_LIST.length) {
+  check('参照の境界：禁止語一覧が読み込めている', false, 'BANNED_TERMS.txt が無い/空');
+} else {
+  var BANNED = new RegExp('(' + BANNED_LIST.join('|') + ')', 'i');
+  var hit = src.match(BANNED);
+  check('参照の境界：既存作品の固有名詞を含まない（' + BANNED_LIST.length + '語で照合）',
+    !hit, hit ? hit[0] : 'なし');
+}
 
 const hexes = (stripped.match(/0x[0-9a-fA-F]{6}\b/g) || []);
 check('生の16進カラーを直書きしていない（色はASH.paletteから）',
