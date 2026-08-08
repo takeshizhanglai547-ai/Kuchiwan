@@ -65,6 +65,22 @@
   @keyframes rec{0%,100%{box-shadow:0 0 0 0 rgba(255,125,146,.5)}70%{box-shadow:0 0 0 12px rgba(255,125,146,0)}}
   #send{background:linear-gradient(180deg,#a874ff,#6d3fd1); border-color:transparent}
 
+  #to3d{position:absolute; top:10px; right:50px; width:32px; height:32px; border-radius:50%;
+    border:1px solid var(--line); background:rgba(0,0,0,.3); color:var(--ink-dim); cursor:pointer; font-size:14px}
+  #to3d:hover{color:var(--ink)}
+  #stage3dWrap{position:fixed; inset:0; z-index:20; display:none; background:#05040a}
+  body.in3d #stage3dWrap{display:block}
+  body.in3d #app{visibility:hidden}
+  #stage3d{width:100%; height:100%; display:block; touch-action:none}
+  #vrBar{position:absolute; left:50%; transform:translateX(-50%); bottom:calc(18px + env(safe-area-inset-bottom));
+    display:flex; gap:10px}
+  #vrBar .btn{padding:12px 20px; font-size:14px; background:rgba(12,7,22,.8); backdrop-filter:blur(6px)}
+  #vrEnter{background:linear-gradient(180deg,#a874ff,#6d3fd1)!important; border-color:transparent!important}
+  #vrNote{position:absolute; left:50%; transform:translateX(-50%); top:14px;
+    margin:0; max-width:min(560px,88vw); text-align:center; font-size:12px; line-height:1.6;
+    color:var(--ink-dim); background:rgba(6,4,12,.72); padding:8px 14px; border-radius:10px}
+  #vrNote:empty{display:none}
+
   /* ---------- Dev / Settings drawer (hidden by default — internals stay backstage §3/§38) ---------- */
   #dev{position:fixed; top:0; right:0; height:100%; width:min(420px,100%); background:var(--panel);
     backdrop-filter:blur(14px); border-left:1px solid var(--line); transform:translateX(102%);
@@ -115,6 +131,7 @@
     <div id="brand"><b>LEX</b> LIVE</div>
     <div id="modeTag">LIVE</div>
     <button id="gear" title="Settings / Dev">⚙</button>
+    <button id="to3d" title="3D / VR">⛶</button>
     <div id="chip"><span class="dot"></span><span id="chipText">Thinking</span></div>
   </div>
   <div id="log"></div>
@@ -123,6 +140,15 @@
     <input id="text" type="text" placeholder="話しかけてください…" autocomplete="off">
     <button id="send" class="rbtn" title="送信">➤</button>
   </div>
+</div>
+
+<div id="stage3dWrap">
+  <canvas id="stage3d"></canvas>
+  <div id="vrBar">
+    <button class="btn" id="vrEnter">VRで入る</button>
+    <button class="btn" id="vrExit">2Dに戻る</button>
+  </div>
+  <p id="vrNote"></p>
 </div>
 
 <div id="dev">
@@ -383,7 +409,7 @@ const Avatar = (()=>{
     eyeX:0, eyeY:0, gazeNext:1.2, gTX:0, gTY:0,
     tilt:0, tiltT:0, nod:0, breath:0,
     browL:0, browR:0, smile:.15, squint:0,
-    speaking:false, listening:false, thinking:false,
+    speaking:false, listening:false, thinking:false, backdrop:true,
     hairL:[], hairR:[], armSway:0, glow:0
   };
   for(let i=0;i<5;i++){ s.hairL.push({a:0,v:0}); s.hairR.push({a:0,v:0}); }
@@ -412,6 +438,8 @@ const Avatar = (()=>{
       requestAnimationFrame(loop);
     },
     setSpeaking(v){ s.speaking=v; },
+    setBackdrop(v){ s.backdrop=v; },        // off = transparent, for compositing into 3D
+    canvas(){ return cv; },
     setListening(v){ s.listening=v; },
     setThinking(v){ s.thinking=v; },
     lookAt(x,y){ s.gTX=clamp(x,-1,1); s.gTY=clamp(y,-1,1); s.gazeNext=1.4; }
@@ -888,14 +916,14 @@ const Avatar = (()=>{
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    drawBackdrop();
+    if(s.backdrop) drawBackdrop();
     ctx.save();
     ctx.translate(CX, PIVOT_Y + s.breath);
     ctx.scale(1 + s.breath*0.0016, 1 + s.breath*0.0022);
     drawBody();
     drawHead();
     ctx.restore();
-    if(s.listening){
+    if(s.listening && s.backdrop){
       ctx.save(); ctx.globalAlpha = .16 + Math.sin(s.t*3)*.06;
       ctx.strokeStyle='#7de2b0'; ctx.lineWidth=3;
       ctx.beginPath(); ctx.ellipse(CX, 268, 158, 200, 0, 0, Math.PI*2); ctx.stroke(); ctx.restore();
@@ -1372,6 +1400,17 @@ const UI = {
     $('#text').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.isComposing) this.submit($('#text').value); });
     $('#mic').onclick  = ()=>Voice.toggle();
     $('#gear').onclick = ()=>$('#dev').classList.toggle('on');
+    $('#to3d').onclick = ()=>{
+      if(!Stage3D.supported()){ this.sys('この端末は WebGL に対応していないため 3D 表示を利用できません。'); return; }
+      if(!Stage3D.enter()){ this.sys('3Dを開始できませんでした: ' + Stage3D.lastError); return; }
+      this.vrUI();
+    };
+    $('#vrExit').onclick = ()=>Stage3D.exit();
+    $('#vrEnter').onclick = async ()=>{
+      try{ await Stage3D.enterXR(); }
+      catch(e){ $('#vrNote').textContent = e.message || String(e); }
+    };
+    Stage3D.bind($('#stage3d'));
     $('#devClose').onclick = ()=>$('#dev').classList.remove('on');
 
     // gaze follows the pointer / touch — presence, not decoration (§39)
@@ -1472,6 +1511,14 @@ const UI = {
     $('#providerHint').textContent = spec.hint || '';
     if(spec.keyHint) $('#cfgKey').placeholder = spec.keyHint;
   },
+  async vrUI(){
+    const note = $('#vrNote'), btn = $('#vrEnter');
+    const xr = await Stage3D.xrSupported();
+    btn.style.display = xr ? '' : 'none';
+    note.textContent = xr
+      ? 'ヘッドセットで「VRで入る」を押すと、この部屋に立てます。コントローラーの手を近づけると彼女が気づきます。'
+      : 'この端末は WebXR 非対応のため、ドラッグで見回す3Dビューで表示しています。Meta Quest などのヘッドセット内蔵ブラウザで開くと、VRで中に入れます。';
+  },
   chip(t){ $('#chipText').textContent = t; $('#chip').classList.add('on'); },
   chipOff(){ $('#chip').classList.remove('on'); },
   mode(t){ $('#modeTag').textContent = t; },
@@ -1515,6 +1562,565 @@ const UI = {
       : '音声合成が利用できない環境です（アバターの口だけ動きます）。';
   }
 };
+
+/* =========================================================================
+   STAGE 3D / WEBXR (§37 AR-VR, §46 Avatar Renderer Principle)
+
+   A second implementation of the Avatar presentation layer. The brain —
+   Orchestrator, Memory, Emotion, Voice — is untouched; only the surface the
+   character is drawn onto changes. That is exactly the decoupling §46 asks
+   for, so this file proves the interface rather than describing it.
+
+   Raw WebGL, no libraries: the page stays a single self-contained file that
+   works offline and under the artifact CSP, which no CDN build would.
+   ========================================================================= */
+
+/* ---- minimal mat4 (column-major, same convention as WebXR) ---- */
+const M4 = {
+  ident: ()=>new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  mul(a,b){
+    const o=new Float32Array(16);
+    for(let c=0;c<4;c++) for(let r=0;r<4;r++){
+      o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
+    }
+    return o;
+  },
+  trans(x,y,z){ const m=M4.ident(); m[12]=x; m[13]=y; m[14]=z; return m; },
+  scale(x,y,z){ const m=M4.ident(); m[0]=x; m[5]=y; m[10]=z; return m; },
+  rotY(a){ const m=M4.ident(), c=Math.cos(a), s=Math.sin(a);
+    m[0]=c; m[2]=-s; m[8]=s; m[10]=c; return m; },
+  rotX(a){ const m=M4.ident(), c=Math.cos(a), s=Math.sin(a);
+    m[5]=c; m[6]=s; m[9]=-s; m[10]=c; return m; },
+  persp(fovy, aspect, near, far){
+    const f=1/Math.tan(fovy/2), nf=1/(near-far), m=new Float32Array(16);
+    m[0]=f/aspect; m[5]=f; m[10]=(far+near)*nf; m[11]=-1; m[14]=2*far*near*nf; return m;
+  },
+  /* general inverse — needed for the non-VR view matrix */
+  inv(a){
+    const o=new Float32Array(16);
+    const b00=a[0]*a[5]-a[1]*a[4], b01=a[0]*a[6]-a[2]*a[4], b02=a[0]*a[7]-a[3]*a[4],
+          b03=a[1]*a[6]-a[2]*a[5], b04=a[1]*a[7]-a[3]*a[5], b05=a[2]*a[7]-a[3]*a[6],
+          b06=a[8]*a[13]-a[9]*a[12], b07=a[8]*a[14]-a[10]*a[12], b08=a[8]*a[15]-a[11]*a[12],
+          b09=a[9]*a[14]-a[10]*a[13], b10=a[9]*a[15]-a[11]*a[13], b11=a[10]*a[15]-a[11]*a[14];
+    let det=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+    if(!det) return M4.ident();
+    det=1/det;
+    o[0]=(a[5]*b11-a[6]*b10+a[7]*b09)*det;  o[1]=(a[2]*b10-a[1]*b11-a[3]*b09)*det;
+    o[2]=(a[13]*b05-a[14]*b04+a[15]*b03)*det; o[3]=(a[10]*b04-a[9]*b05-a[11]*b03)*det;
+    o[4]=(a[6]*b08-a[4]*b11-a[7]*b07)*det;  o[5]=(a[0]*b11-a[2]*b08+a[3]*b07)*det;
+    o[6]=(a[14]*b02-a[12]*b05-a[15]*b01)*det; o[7]=(a[8]*b05-a[10]*b02+a[11]*b01)*det;
+    o[8]=(a[4]*b10-a[5]*b08+a[7]*b06)*det;  o[9]=(a[1]*b08-a[0]*b10-a[3]*b06)*det;
+    o[10]=(a[12]*b04-a[13]*b02+a[15]*b00)*det; o[11]=(a[9]*b02-a[8]*b04-a[11]*b00)*det;
+    o[12]=(a[5]*b07-a[4]*b09-a[6]*b06)*det; o[13]=(a[0]*b09-a[1]*b07+a[2]*b06)*det;
+    o[14]=(a[13]*b01-a[12]*b03-a[14]*b00)*det; o[15]=(a[8]*b03-a[9]*b01+a[10]*b00)*det;
+    return o;
+  }
+};
+
+const Stage3D = (()=>{
+  const VS = `
+    attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
+    uniform mat4 uProj, uView, uModel;
+    varying vec2 vUV; varying vec3 vWorld, vNrm;
+    void main(){
+      vec4 w = uModel * vec4(aPos, 1.0);
+      vWorld = w.xyz;
+      vNrm = mat3(uModel) * aNrm;
+      vUV = aUV;
+      gl_Position = uProj * uView * w;
+    }`;
+  const FS = `
+    precision mediump float;
+    varying vec2 vUV; varying vec3 vWorld; varying vec3 vNrm;
+    uniform sampler2D uTex;
+    uniform vec3 uTint, uFirePos, uFireCol, uAmbient;
+    uniform float uFire, uEmissive, uAlphaCut, uAlpha;
+    void main(){
+      vec4 t = texture2D(uTex, vUV);
+      if(t.a < uAlphaCut) discard;
+      vec3 base = t.rgb * uTint;
+      if(uEmissive > 0.5){ gl_FragColor = vec4(base, t.a * uAlpha); return; }
+      vec3 L = uFirePos - vWorld;
+      float d = length(L);
+      float lam = max(dot(normalize(vNrm), normalize(L)), 0.0);
+      // inverse-square falloff, softened so the room doesn't go pitch black
+      float att = uFire / (1.0 + 0.28 * d * d);
+      vec3 lit = base * (uAmbient + uFireCol * (0.25 + 0.75 * lam) * att);
+      gl_FragColor = vec4(lit, t.a * uAlpha);
+    }`;
+
+  let gl=null, cv=null, prog=null, loc={}, xrSession=null, xrRefSpace=null;
+  let raf=null, meshes={}, tex={}, running=false, t0=0;
+  const api = {active:false, inXR:false, lastError:''};
+
+  /* --- camera for the non-VR fallback view --- */
+  const cam = {x:0, y:1.52, z:2.05, yaw:0, pitch:-0.16, drag:null};
+  /* --- where the character stands, in metres --- */
+  const CHAR = {
+    x:-0.62, z:-0.55,
+    planeH:2.20,        // full canvas height in metres
+    cy:0.82,            // plane centre, chosen so her feet land on the floor
+    body:1.61,          // how tall she actually reads
+    chest:1.16          // aim point for "is a hand near her"
+  };
+  const FOV = 1.05;              // radians, vertical
+  const HANDS = [];              // {x,y,z} per active controller
+  let proximity = 0, lastTouch = -999;
+
+  /* ---------------- GL plumbing ---------------- */
+  function sh(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+      throw new Error('shader: ' + gl.getShaderInfoLog(s));
+    return s;
+  }
+  function mesh(pos, uv, nrm, idx){
+    const m = {n: idx.length};
+    m.p = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, m.p);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STATIC_DRAW);
+    m.u = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, m.u);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uv), gl.STATIC_DRAW);
+    m.nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, m.nb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nrm), gl.STATIC_DRAW);
+    m.i = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+    return m;
+  }
+  function quad(w, h, nrm){
+    return mesh([-w/2,-h/2,0,  w/2,-h/2,0,  w/2,h/2,0,  -w/2,h/2,0],
+                [0,1, 1,1, 1,0, 0,0],
+                [].concat(nrm,nrm,nrm,nrm), [0,1,2, 0,2,3]);
+  }
+  function draw(m, model, texture, opts){
+    const o = opts || {};
+    gl.uniformMatrix4fv(loc.uModel, false, model);
+    gl.uniform3fv(loc.uTint, o.tint || [1,1,1]);
+    gl.uniform1f(loc.uEmissive, o.emissive ? 1 : 0);
+    gl.uniform1f(loc.uAlphaCut, o.alphaCut !== undefined ? o.alphaCut : 0.02);
+    gl.uniform1f(loc.uAlpha, o.alpha !== undefined ? o.alpha : 1);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(loc.uTex, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.p); gl.vertexAttribPointer(loc.aPos,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.u); gl.vertexAttribPointer(loc.aUV, 2,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.nb); gl.vertexAttribPointer(loc.aNrm,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+    gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_SHORT, 0);
+  }
+
+  /* ---------------- procedural textures (no asset files) ---------------- */
+  function texFromCanvas(c){
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+    // NPOT-safe: no mipmaps, clamp to edge
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  function paint(w, h, fn){
+    const c = document.createElement('canvas'); c.width=w; c.height=h;
+    fn(c.getContext('2d'), w, h); return c;
+  }
+  function noise(ctx, w, h, amt, alpha){
+    const d = ctx.getImageData(0,0,w,h);
+    for(let i=0;i<d.data.length;i+=4){
+      const n = (Math.random()-0.5)*amt;
+      d.data[i]+=n; d.data[i+1]+=n; d.data[i+2]+=n;
+      if(alpha!==undefined) d.data[i+3]=alpha;
+    }
+    ctx.putImageData(d,0,0);
+  }
+  function buildTextures(){
+    tex.wood = texFromCanvas(paint(256,256,(g,w,h)=>{
+      g.fillStyle='#4a3career'.slice(0,7); g.fillStyle='#4a3222'; g.fillRect(0,0,w,h);
+      for(let y=0;y<h;y+=32){
+        g.fillStyle = y%64===0 ? '#553a26' : '#43301f';
+        g.fillRect(0,y,w,30);
+        g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=2;
+        g.beginPath(); g.moveTo(0,y+31); g.lineTo(w,y+31); g.stroke();
+        for(let i=0;i<5;i++){                        // grain
+          g.strokeStyle='rgba(0,0,0,.10)'; g.lineWidth=1;
+          const yy=y+4+Math.random()*22;
+          g.beginPath(); g.moveTo(0,yy);
+          g.bezierCurveTo(w*.3,yy+3, w*.6,yy-3, w,yy); g.stroke();
+        }
+      }
+      noise(g,w,h,14);
+    }));
+    tex.stone = texFromCanvas(paint(256,256,(g,w,h)=>{
+      g.fillStyle='#3a3330'; g.fillRect(0,0,w,h);
+      for(let y=0;y<h;y+=42){
+        const off = (y/42)%2 ? 32 : 0;
+        for(let x=-32;x<w;x+=64){
+          g.fillStyle=`hsl(24,8%,${20+Math.random()*10}%)`;
+          g.fillRect(x+off+2, y+2, 60, 38);
+        }
+      }
+      noise(g,w,h,20);
+    }));
+    tex.rug = texFromCanvas(paint(256,256,(g,w,h)=>{
+      g.fillStyle='#5e2530'; g.fillRect(0,0,w,h);
+      g.strokeStyle='#8d5a37'; g.lineWidth=10;
+      g.strokeRect(18,18,w-36,h-36);
+      g.strokeStyle='#3d5560'; g.lineWidth=5; g.strokeRect(38,38,w-76,h-76);
+      g.save(); g.translate(w/2, h/2);
+      g.strokeStyle='rgba(206,166,96,.42)'; g.lineWidth=4;
+      g.beginPath();                                  // centre medallion
+      for(let i=0;i<4;i++){ const a=i*Math.PI/2;
+        g.moveTo(Math.cos(a)*46, Math.sin(a)*46);
+        g.quadraticCurveTo(Math.cos(a+.79)*66, Math.sin(a+.79)*66,
+                           Math.cos(a+1.57)*46, Math.sin(a+1.57)*46); }
+      g.stroke();
+      g.beginPath(); g.arc(0,0,20,0,Math.PI*2); g.stroke();
+      g.restore();
+      for(const c of [[64,64],[192,64],[64,192],[192,192]]){    // corner motifs
+        g.strokeStyle='rgba(160,120,80,.30)'; g.lineWidth=3;
+        g.beginPath(); g.arc(c[0],c[1],13,0,Math.PI*2); g.stroke();
+      }
+      noise(g,w,h,16);
+    }));
+    tex.fire = texFromCanvas(paint(128,128,(g,w,h)=>{
+      // ambient heat glow
+      const gr=g.createRadialGradient(w/2,h*0.80,2, w/2,h*0.72,w*0.5);
+      gr.addColorStop(0,'rgba(255,190,90,.85)'); gr.addColorStop(.55,'rgba(226,90,26,.42)');
+      gr.addColorStop(1,'rgba(90,20,0,0)');
+      g.fillStyle=gr; g.fillRect(0,0,w,h);
+      // tongues: a wide base tapering to a point, brightest at the core
+      const tongue=(cx, base, top, wid, col)=>{
+        g.beginPath();
+        g.moveTo(cx-wid, base);
+        g.bezierCurveTo(cx-wid*0.9, base-(base-top)*0.55, cx-wid*0.30, base-(base-top)*0.8, cx, top);
+        g.bezierCurveTo(cx+wid*0.30, base-(base-top)*0.8, cx+wid*0.9, base-(base-top)*0.55, cx+wid, base);
+        g.closePath(); g.fillStyle=col; g.fill();
+      };
+      tongue(w*0.50, h*0.95, h*0.16, w*0.26, 'rgba(232,96,24,.80)');
+      tongue(w*0.38, h*0.95, h*0.40, w*0.15, 'rgba(255,150,40,.75)');
+      tongue(w*0.63, h*0.95, h*0.34, w*0.14, 'rgba(255,150,40,.70)');
+      tongue(w*0.50, h*0.95, h*0.50, w*0.12, 'rgba(255,232,150,.95)');
+      // embers
+      for(let i=0;i<10;i++){
+        g.fillStyle='rgba(255,200,120,'+(0.25+Math.random()*0.4)+')';
+        g.beginPath(); g.arc(w*(0.3+Math.random()*0.4), h*(0.15+Math.random()*0.5),
+                             0.8+Math.random()*1.6, 0, Math.PI*2); g.fill();
+      }
+    }));
+    tex.glow = texFromCanvas(paint(64,64,(g,w,h)=>{
+      const gr=g.createRadialGradient(w/2,h/2,1, w/2,h/2,w/2);
+      gr.addColorStop(0,'rgba(190,225,255,.95)'); gr.addColorStop(.45,'rgba(150,190,255,.35)');
+      gr.addColorStop(1,'rgba(120,170,255,0)');
+      g.fillStyle=gr; g.fillRect(0,0,w,h);
+    }));
+    tex.white = texFromCanvas(paint(4,4,(g,w,h)=>{ g.fillStyle='#fff'; g.fillRect(0,0,w,h); }));
+    // the character's texture is the 2D avatar canvas, re-uploaded each frame
+    tex.char = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex.char);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  function buildMeshes(){
+    meshes.wall  = quad(1,1,[0,0,1]);
+    meshes.char  = quad(1,1,[0,0,1]);
+    meshes.orb   = quad(1,1,[0,0,1]);
+  }
+
+  /* ---------------- room ---------------- */
+  const ROOM = {w:5.2, d:5.2, h:2.7};
+  function drawRoom(){
+    const {w,d,h} = ROOM;
+    // floor
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(0,0,0), M4.rotX(-Math.PI/2)), M4.scale(w,d,1)),
+         tex.wood, {tint:[.85,.78,.7]});
+    // rug in front of the hearth
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(0,0.02,-0.6), M4.rotX(-Math.PI/2)), M4.scale(2.6,2.2,1)),
+         tex.rug, {tint:[.95,.85,.8]});
+    // ceiling
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(0,h,0), M4.rotX(Math.PI/2)), M4.scale(w,d,1)),
+         tex.wood, {tint:[.4,.36,.33]});
+    // four walls, normals pointing inward
+    draw(meshes.wall, M4.mul(M4.trans(0,h/2,-d/2), M4.scale(w,h,1)), tex.stone, {tint:[.9,.82,.75]});
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(0,h/2,d/2), M4.rotY(Math.PI)), M4.scale(w,h,1)),
+         tex.wood, {tint:[.75,.68,.6]});
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(-w/2,h/2,0), M4.rotY(Math.PI/2)), M4.scale(d,h,1)),
+         tex.wood, {tint:[.7,.63,.56]});
+    draw(meshes.wall, M4.mul(M4.mul(M4.trans(w/2,h/2,0), M4.rotY(-Math.PI/2)), M4.scale(d,h,1)),
+         tex.wood, {tint:[.7,.63,.56]});
+  }
+
+  function drawHearth(flick){
+    const z = -ROOM.d/2 + 0.06;
+    // stone surround
+    draw(meshes.wall, M4.mul(M4.trans(0.55,0.68,z+0.01), M4.scale(1.9,1.36,1)),
+         tex.stone, {tint:[1.05,.95,.85]});
+    // fire opening
+    draw(meshes.wall, M4.mul(M4.trans(0.55,0.46,z+0.02), M4.scale(1.18,0.88,1)),
+         tex.white, {tint:[.05,.03,.02], emissive:true});
+    // flames — two offset quads flickering out of phase
+    for(let i=0;i<2;i++){
+      const s = 0.62 + flick*0.16 + i*0.16;
+      draw(meshes.wall, M4.mul(M4.trans(0.55+(i?0.10:-0.08), 0.26+s*0.26, z+0.06+i*0.02),
+           M4.scale(s*0.82, s, 1)), tex.fire,
+           {emissive:true, alpha:i?0.55:0.95, alphaCut:0.01});
+    }
+  }
+
+  /* ---------------- character billboard ---------------- */
+  function drawCharacter(camPos){
+    // upload the 2D avatar canvas as this frame's texture
+    gl.bindTexture(gl.TEXTURE_2D, tex.char);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    try{ gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, Avatar.canvas()); }
+    catch(e){ /* canvas not ready on the very first frame */ }
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+
+    const dx = camPos[0]-CHAR.x, dz = camPos[2]-CHAR.z;
+    const yaw = Math.atan2(dx, dz);                 // face the viewer
+    const w = CHAR.planeH * (620/860);
+    const model = M4.mul(M4.mul(M4.trans(CHAR.x, CHAR.cy, CHAR.z), M4.rotY(yaw)),
+                         M4.scale(w, CHAR.planeH, 1));
+    // firelight warms her from the front; keep her readable in the dark room
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);          // premultiplied
+    draw(meshes.char, model, tex.char, {tint:[1,1,1], emissive:true, alphaCut:0.01});
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);    // back to straight alpha
+
+    // contact shadow so she is planted on the floor rather than floating
+    draw(meshes.wall,
+         M4.mul(M4.mul(M4.trans(CHAR.x, 0.035, CHAR.z), M4.rotX(-Math.PI/2)), M4.scale(1.15,0.85,1)),
+         tex.glow, {tint:[0,0,0], emissive:true, alpha:0.62});
+  }
+
+  function drawHands(){
+    for(const h of HANDS){
+      const near = Math.max(0, 1 - dist(h)/0.55);
+      draw(meshes.orb, M4.mul(M4.trans(h.x,h.y,h.z), M4.scale(0.10+near*0.05, 0.10+near*0.05, 1)),
+           tex.glow, {emissive:true, tint:[1, 1-near*0.35, 1-near*0.6], alphaCut:0.01});
+    }
+  }
+  function dist(a){
+    const dx=a.x-CHAR.x, dy=a.y-CHAR.chest, dz=a.z-CHAR.z;
+    return Math.sqrt(dx*dx+dy*dy+dz*dz);
+  }
+
+  /* ---------------- proximity: the "reach out and she notices" beat ------ */
+  function updateProximity(now){
+    let closest = Infinity, hand = null;
+    for(const h of HANDS){ const d = dist(h); if(d<closest){ closest=d; hand=h; } }
+    proximity = closest===Infinity ? 0 : Math.max(0, 1 - closest/0.6);
+
+    if(hand && proximity>0.05){
+      // she tracks the hand with her eyes rather than staring through it
+      Avatar.lookAt((hand.x-CHAR.x)*2.4, -(hand.y-CHAR.chest-0.28)*2.4);
+    }
+    if(proximity>0.55 && now-lastTouch > 6000){
+      lastTouch = now;
+      Emotion.set({surprise:.55, joy:.7, excitement:.6, calm:.3});
+      Avatar.setListening(true);
+      setTimeout(()=>Avatar.setListening(false), 1400);
+      const line = ['……近い。',
+                    'ん、手。あたたかい。',
+                    'そこにいるんだね。',
+                    'くすぐったい。'][Math.floor(Math.random()*4)];
+      UI.say('ai', line);
+      Memory.addTurn('ai', line);
+      Voice.speak(line).then(()=>Emotion.relax());
+    }
+  }
+
+  /* ---------------- frame ---------------- */
+  function renderEye(proj, view, camPos, now){
+    const flick = 0.5 + Math.sin(now*0.011)*0.28 + Math.sin(now*0.037)*0.16 + Math.random()*0.10;
+    gl.uniformMatrix4fv(loc.uProj, false, proj);
+    gl.uniformMatrix4fv(loc.uView, false, view);
+    gl.uniform3fv(loc.uFirePos, [0.55, 0.55, -ROOM.d/2 + 0.3]);
+    gl.uniform3fv(loc.uFireCol, [1.5, 0.72, 0.30]);
+    gl.uniform3fv(loc.uAmbient, [0.17, 0.15, 0.21]);
+    gl.uniform1f(loc.uFire, 2.1 + flick*0.7);
+    drawRoom();
+    drawHearth(flick);
+    drawCharacter(camPos);
+    drawHands();
+  }
+
+  function frame(now, xrFrame){
+    if(!running) return;
+    const t = now - t0;
+
+    if(xrSession && xrFrame){
+      const pose = xrFrame.getViewerPose(xrRefSpace);
+      HANDS.length = 0;
+      for(const src of xrSession.inputSources){
+        const space = src.gripSpace || src.targetRaySpace;
+        if(!space) continue;
+        const p = xrFrame.getPose(space, xrRefSpace);
+        if(p) HANDS.push({x:p.transform.position.x, y:p.transform.position.y, z:p.transform.position.z});
+      }
+      updateProximity(now);
+      if(pose){
+        const layer = xrSession.renderState.baseLayer;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+        gl.clearColor(0.02,0.015,0.03,1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        for(const view of pose.views){
+          const vp = layer.getViewport(view);
+          gl.viewport(vp.x, vp.y, vp.width, vp.height);
+          const m = view.transform.matrix;
+          renderEye(view.projectionMatrix, view.transform.inverse.matrix,
+                    [m[12], m[13], m[14]], t);
+        }
+      }
+      raf = xrSession.requestAnimationFrame(frame);
+      return;
+    }
+
+    /* non-VR fallback: look around with drag, so it works without a headset */
+    resize();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0,0,cv.width,cv.height);
+    gl.clearColor(0.02,0.015,0.03,1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    HANDS.length = 0;
+    updateProximity(now);
+    const world = M4.mul(M4.mul(M4.trans(cam.x,cam.y,cam.z), M4.rotY(cam.yaw)), M4.rotX(cam.pitch));
+    renderEye(M4.persp(FOV, cv.width/cv.height, 0.05, 60), M4.inv(world), [cam.x,cam.y,cam.z], t);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function resize(){
+    const dpr = Math.min(devicePixelRatio||1, 2);
+    const w = Math.round(cv.clientWidth*dpr), h = Math.round(cv.clientHeight*dpr);
+    if(cv.width!==w || cv.height!==h){ cv.width=w; cv.height=h; }
+  }
+
+  /* ---------------- lifecycle ---------------- */
+  function init(){
+    cv = $('#stage3d');
+    gl = cv.getContext('webgl', {alpha:false, antialias:true, xrCompatible:true})
+      || cv.getContext('experimental-webgl');
+    if(!gl) throw new Error('WebGL を初期化できませんでした。この端末/ブラウザでは3D表示に対応していません。');
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog, gl.LINK_STATUS))
+      throw new Error('program: ' + gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    ['uProj','uView','uModel','uTex','uTint','uFirePos','uFireCol','uAmbient',
+     'uFire','uEmissive','uAlphaCut','uAlpha'].forEach(n=>loc[n]=gl.getUniformLocation(prog,n));
+    ['aPos','aUV','aNrm'].forEach(n=>{ loc[n]=gl.getAttribLocation(prog,n); gl.enableVertexAttribArray(loc[n]); });
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    buildTextures(); buildMeshes();
+    t0 = performance.now();
+  }
+
+  api.supported = ()=>!!(window.WebGLRenderingContext);
+  api.xrSupported = async ()=>{
+    if(!navigator.xr || !navigator.xr.isSessionSupported) return false;
+    try{ return await navigator.xr.isSessionSupported('immersive-vr'); }catch(e){ return false; }
+  };
+
+  api.enter = function(){
+    if(api.active) return true;
+    try{
+      if(!gl) init();
+    }catch(e){ api.lastError = e.message || String(e); return false; }
+    api.active = true; running = true;
+    Avatar.setBackdrop(false);            // transparent so she composites into the room
+    document.body.classList.add('in3d');
+    raf = requestAnimationFrame(frame);
+    return true;
+  };
+
+  api.exit = function(){
+    api.active = false; running = false;
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    Avatar.setBackdrop(true);
+    document.body.classList.remove('in3d');
+    if(xrSession){ try{ xrSession.end(); }catch(e){} }
+  };
+
+  api.enterXR = async function(){
+    if(!await api.xrSupported()) throw new Error(
+      'この端末は WebXR の immersive-vr に対応していません。Meta Quest などのヘッドセット内蔵ブラウザで開いてください。');
+    if(!api.active && !api.enter()) throw new Error(api.lastError || '3Dを開始できませんでした。');
+    const session = await navigator.xr.requestSession('immersive-vr',
+      {optionalFeatures:['local-floor','bounded-floor','hand-tracking']});
+    await gl.makeXRCompatible();
+    session.updateRenderState({baseLayer: new XRWebGLLayer(session, gl)});
+    xrRefSpace = await session.requestReferenceSpace('local-floor')
+      .catch(()=>session.requestReferenceSpace('local'));
+    xrSession = session; api.inXR = true;
+    session.addEventListener('end', ()=>{
+      xrSession=null; api.inXR=false;
+      if(running) raf = requestAnimationFrame(frame);
+      UI.vrUI();
+    });
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    raf = session.requestAnimationFrame(frame);
+  };
+
+  /* Project her chest to screen space and see whether the tap landed on her. */
+  function tappedCharacter(px, py){
+    const W = cv.clientWidth, H = cv.clientHeight;
+    const world = M4.mul(M4.mul(M4.trans(cam.x,cam.y,cam.z), M4.rotY(cam.yaw)), M4.rotX(cam.pitch));
+    const mvp = M4.mul(M4.persp(FOV, W/H, 0.05, 60), M4.inv(world));
+    const p = [CHAR.x, CHAR.chest, CHAR.z, 1];
+    const cx = mvp[0]*p[0]+mvp[4]*p[1]+mvp[8]*p[2]+mvp[12];
+    const cy = mvp[1]*p[0]+mvp[5]*p[1]+mvp[9]*p[2]+mvp[13];
+    const cw = mvp[3]*p[0]+mvp[7]*p[1]+mvp[11]*p[2]+mvp[15];
+    if(cw <= 0.05) return false;                      // behind or on top of the camera
+    const sx = (cx/cw*0.5+0.5)*W;
+    const sy = (1-(cy/cw*0.5+0.5))*H;
+    // f is the projection's vertical term; cw is depth. Using mvp[5] here would
+    // fold in the view rotation and skew the box as you look around.
+    const fy = 1/Math.tan(FOV/2);
+    const pxPerMetreY = (fy/cw)*(H/2);
+    const halfW = 0.34*pxPerMetreY;                   // shoulders + tails ≈ 0.68 m
+    const halfH = 0.80*pxPerMetreY;                   // chest ± 0.8 m covers her
+    return Math.abs(px-sx) < halfW && Math.abs(py-sy) < halfH;
+  }
+  api.touchAt = function(px, py){
+    if(!tappedCharacter(px, py)) return false;
+    HANDS.length = 0;
+    HANDS.push({x:CHAR.x, y:CHAR.chest, z:CHAR.z + 0.22});   // a hand at arm's length
+    updateProximity(performance.now());
+    setTimeout(()=>{ HANDS.length = 0; }, 900);
+    return true;
+  };
+
+  /* drag-to-look for the non-VR view */
+  api.bind = function(el){
+    let downAt = null;
+    const down = e=>{ cam.drag = {x:e.clientX, y:e.clientY, yaw:cam.yaw, pitch:cam.pitch};
+                      downAt = {x:e.clientX, y:e.clientY, t:performance.now()}; };
+    const move = e=>{
+      if(!cam.drag) return;
+      cam.yaw   = cam.drag.yaw   - (e.clientX-cam.drag.x)*0.005;
+      cam.pitch = Math.max(-0.9, Math.min(0.6, cam.drag.pitch - (e.clientY-cam.drag.y)*0.004));
+    };
+    const up = e=>{
+      // a tap (not a drag) that lands on her counts as reaching out
+      if(downAt && e && performance.now()-downAt.t < 500 &&
+         Math.hypot(e.clientX-downAt.x, e.clientY-downAt.y) < 12){
+        const r = el.getBoundingClientRect();
+        api.touchAt(e.clientX-r.left, e.clientY-r.top);
+      }
+      downAt = null; cam.drag = null;
+    };
+    el.addEventListener('pointerdown', down);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  return api;
+})();
 
 /* =========================================================================
    BOOT
