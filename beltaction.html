@@ -159,6 +159,12 @@ const W = 960, H = 540;                    // logical resolution（フル解像�
 const UIFONT='"Trebuchet MS","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
 const uif=(w,px)=>w+' '+px+'px '+UIFONT;
 const UI={ r:{s:5,m:8,l:12}, gold:'#ffd24d', ink:'rgba(8,10,20,.70)', line:'rgba(255,210,80,.58)', sub:'#9fb0c4' };
+// 中世の写本・彫った石・古い金という意匠のための色。既存の UI とは別に持ち、
+// 額縁だけがこれを使う（本文の色は一切変えないので可読性は不変）
+const ORN={parch:'#e6d4a8', parchHi:'#f6ead0', parchLo:'#c2a878',
+  ink:'#2b1b0c', ink2:'#5c4326',
+  gold:'#d9a83c', goldHi:'#ffe9a8', goldLo:'#7a5410',
+  stone:'#4a4238', stoneHi:'#8a7d68', stoneLo:'#1d1913'};
 // 表示用HP：実HPへ遅れて追従させ、削られた量を残像チップで見せる
 function tickHpShow(o){ if(o.hpShow==null||o.hpShow<o.hp) o.hpShow=o.hp;
   else if(o.hpShow>o.hp && hitStop<=0) o.hpShow=Math.max(o.hp, o.hpShow-Math.max(0.35,(o.hpShow-o.hp)*0.055)); return o.hpShow; }
@@ -9895,7 +9901,7 @@ function drawHUD(){
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
   let hudY=120;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
   HUD_BOTTOM=hudY;   // ポップの侵入を止める下限（この後パネルを積むたびに更新する）
-  panel(12,12,256,102); if(p1shima) shimaIcon(38,40); else if(p1nuko) nukoIcon(38,40); else if(p1g8) guard8Icon(38,40); else if(p1watch) watchIcon(38,40); else if(p1wd) wandenIcon(38,40); else faceIcon(38,40,'#f6e8c6');
+  panelOrn(12,12,256,102,'gold'); if(p1shima) shimaIcon(38,40); else if(p1nuko) nukoIcon(38,40); else if(p1g8) guard8Icon(38,40); else if(p1watch) watchIcon(38,40); else if(p1wd) wandenIcon(38,40); else faceIcon(38,40,'#f6e8c6');
   ctx.fillStyle=p1wd?'#e8dcb4':p1watch?'#cfe0f0':p1shima?'#ffb04a':p1nuko?'#ff9ad0':p1g8?'#e0a45f':'#ffe14d'; ctx.font='bold 15px Trebuchet MS'; ctx.fillText(p1wd?'1P  剣鬼ワンデン':p1watch?'1P  盗賊ワッチ':p1shima?'1P  シマダックス':p1nuko?'1P  魔法使いヌコ':p1g8?'1P  ガードワン8号':'1P  聖犬士イッヌ',70,28);
   barFrame(70,33,176,12); const hpg=ctx.createLinearGradient(70,0,246,0); hpg.addColorStop(0,'#7dff5a'); hpg.addColorStop(.5,'#ffe14d'); hpg.addColorStop(1,'#ff4d2d');
   { const hr=clamp(player.hp/player.maxHp,0,1), sr=clamp(tickHpShow(player)/player.maxHp,0,1);
@@ -9934,7 +9940,7 @@ function drawHUD(){
     ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1; roundRect(12.5,hudY+0.5,215,21,UI.r.s); ctx.stroke();
     ctx.fillStyle=s.col||'#bfe9ff'; ctx.font=uif('bold',12); ctx.textAlign='left'; ctx.fillText('奪いし技: '+s.name+' （↓↑で発動）',20,hudY+15); hudY+=26; }
   // 乗り物の耐久ゲージ（騎乗中）
-  if(player.vehicle){ const V=VEHDEF[player.vehicle]; panel(12,hudY,232,40);
+  if(player.vehicle){ const V=VEHDEF[player.vehicle]; panelOrn(12,hudY,232,40,'stone');
     ctx.fillStyle=V.col; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('乗物: '+V.name,22,hudY+17);
     const tr=clamp(player.vehT/(V.dur||420),0,1); barFrame(120,hudY+8,116,11);
     ctx.fillStyle=tr<0.25?(gf%8<4?'#ff4d2d':'#a83a20'):V.col; ctx.fillRect(122,hudY+10,112*tr,7);   // 残り時間（残りわずかで赤点滅）
@@ -9952,7 +9958,7 @@ function drawHUD(){
     const bw=76, tx=284, ty=46; ctx.fillStyle='rgba(4,5,11,.9)'; roundRect(tx,ty,bw,6,3); ctx.fill();
     ctx.fillStyle=W2.col; roundRect(tx,ty,Math.max(2,bw*clamp(player.weaponT/1100,0,1)),6,3); ctx.fill(); }
   // 2P パネル（シマダックス）
-  if(players[1].active){ const q=players[1]; hudY+=6; panel(12,hudY,238,56);
+  if(players[1].active){ const q=players[1]; hudY+=6; panelOrn(12,hudY,238,56,'stone');
     ctx.fillStyle='#ff9a3a'; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('2P  シマダックス',22,hudY+17);
     barFrame(22,hudY+21,164,11); const g2=ctx.createLinearGradient(22,0,186,0); g2.addColorStop(0,'#7dff5a'); g2.addColorStop(.5,'#ffe14d'); g2.addColorStop(1,'#ff4d2d');
     const q2r=clamp(q.hp/q.maxHp,0,1), q2s=clamp(tickHpShow(q)/q.maxHp,0,1);
@@ -9977,7 +9983,7 @@ function drawHUD(){
   { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
     ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
   if(drawFoePower(20, hudY+12)!==false) hudY+=26;
-  HUD_BOTTOM=hudY+8;   // ここまでが左上ブロック。ダメージ／文言ポップはこれより上へ行かない
+  HUD_BOTTOM=hudY+16;   // ここまでが左上ブロック（額縁の張り出し10pxを含む）。ポップはこれより上へ行かない
   // コイン所持数
   { const cx=W/2-26, cy=46; ctx.save(); ctx.translate(cx,cy);
     ctx.fillStyle=radGrad(0,0,9,'#fff7c2','#e0a512'); ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill();
@@ -9988,7 +9994,7 @@ function drawHUD(){
 
   const boss=enemies.find(e=>ETYPE[e.type].boss&&!e.dead);
   if(boss){ const bt=ETYPE[boss.type]; const bx=W-306, bw2=226;
-    panel(bx,10,bw2,50);
+    panelOrn(bx,10,bw2,50,'gold');
     ctx.save();
     // 見出しは字間を開けた小さな大文字。左に短い赤い縦棒を立てて視線の起点にする
     ctx.fillStyle='#ff2d6a'; ctx.fillRect(bx+12,17,2.5,10);
@@ -10010,7 +10016,7 @@ function drawHUD(){
     if(br<=0.25){ ctx.save(); ctx.globalAlpha=0.28+0.34*Math.sin(gf*0.22); ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2;
       roundRect(bx+11,31,bw2-22,17,3); ctx.stroke(); ctx.restore(); } }
   const mini=enemies.find(e=>e.type==='bitter'&&!e.dead);
-  if(mini&&!boss){ const bx=W-296, bw2=216; panel(bx,10,bw2,44); ctx.fillStyle='#b388ff'; ctx.font=uif('bold',13); ctx.textAlign='right';
+  if(mini&&!boss){ const bx=W-296, bw2=216; panelOrn(bx,10,bw2,44,'stone'); ctx.fillStyle='#b388ff'; ctx.font=uif('bold',13); ctx.textAlign='right';
     ctx.fillText('ビター・イッヌ',bx+bw2-12,27); ctx.textAlign='left'; barFrame(bx+12,32,bw2-24,12);
     const mr=clamp(mini.hp/mini.maxHp,0,1), ms=clamp(tickHpShow(mini)/mini.maxHp,0,1), iw=bw2-28, ix=bx+14;
     if(ms>mr+0.002){ ctx.fillStyle='rgba(255,200,255,.85)'; ctx.fillRect(ix+iw*mr,34,iw*(ms-mr),8); }
@@ -10041,7 +10047,7 @@ function drawHUD(){
     ctx.fillStyle='#fff'; ctx.fillText(sub,W/2+ox*0.6,cy+30);
     ctx.textAlign='left'; ctx.restore(); }
   { // コンボカードはバナーより後に描く（バナーの暗幕と金線に埋もれさせない）
-    const cTop=Math.max(hudY+18, 176);
+    const cTop=Math.max(hudY+26, 176);   // 額縁の張り出しぶん下げる
     if(combo.count>=2){ const a=clamp(combo.timer/26,0,1), R=comboRank(combo.count), pp=combo.pop;
       ctx.save(); ctx.globalAlpha=clamp(a*0.7+0.30,0,1);
       ctx.translate(30,cTop); ctx.rotate(-0.052);
@@ -10198,6 +10204,74 @@ function panelGrad(y,h){
     g.addColorStop(0,'rgba(14,17,28,.80)'); g.addColorStop(1,'rgba(6,8,15,.72)');
     if(_panelG.size>40) _panelG.clear(); _panelG.set(k,g); }
   return g; }
+// ── 装飾額縁 ────────────────────────────────────────────────
+// パネルの「外側」だけに額縁を重ねる。内側の矩形は一切動かさないので、
+// 本文・ゲージの座標も背景とのコントラストも変わらない＝可読性を落とさない。
+// 毎フレーム描くと重いのでサイズごとにスプライトへ焼く。
+const ORN_PAD=10;
+const _ornCache=new Map();
+let _ornBakes=0;                                  // 1フレームに焼く枚数を制限する
+function ornScroll(g,x,y,sx,sy){                  // 角の唐草：外へ向かう渦を1本
+  g.save(); g.translate(x,y); g.scale(sx,sy);
+  g.strokeStyle=ORN.gold; g.lineWidth=2.2; g.lineCap='round'; g.lineJoin='round';
+  g.beginPath(); g.moveTo(0,20); g.bezierCurveTo(0,6,6,0,20,0);
+  g.bezierCurveTo(11,1,7,5,7,12); g.bezierCurveTo(7,17,2,18,1,14); g.stroke();
+  g.strokeStyle=ORN.goldHi; g.lineWidth=0.9;
+  g.beginPath(); g.moveTo(1,19); g.bezierCurveTo(1,7,7,1,19,1); g.stroke();
+  g.restore(); }
+function ornPaint(g,px,py,w,h,style){
+  const gold=(style!=='stone');
+  const c1=gold?ORN.goldLo:ORN.stoneLo, c2=gold?ORN.gold:ORN.stone, c3=gold?ORN.goldHi:ORN.stoneHi;
+  const P=ORN_PAD, x0=px-P, y0=py-P, ww=w+P*2, hh=h+P*2, r=Math.min(14,h*0.36);
+  // 1) 外形：彫った石の縁
+  g.fillStyle=ORN.stoneLo; roundRectOn(g,x0,y0,ww,hh,r); g.fill();
+  // 2) 金のバンド（縦グラデ）
+  const lg=g.createLinearGradient(0,y0,0,y0+hh);
+  lg.addColorStop(0,c1); lg.addColorStop(.28,c2); lg.addColorStop(.5,c3);
+  lg.addColorStop(.72,c2); lg.addColorStop(1,c1);
+  g.strokeStyle=lg; g.lineWidth=5; roundRectOn(g,x0+3,y0+3,ww-6,hh-6,r-2); g.stroke();
+  // 3) 内側を刳り抜く（本体パネルがここから見える）
+  g.save(); g.globalCompositeOperation='destination-out';
+  g.fillStyle='#000'; roundRectOn(g,px+1,py+1,w-2,h-2,Math.max(2,r-8)); g.fill(); g.restore();
+  // 4) 四隅の唐草
+  ornScroll(g,x0+5,y0+5,1,1);      ornScroll(g,x0+ww-5,y0+5,-1,1);
+  ornScroll(g,x0+5,y0+hh-5,1,-1);  ornScroll(g,x0+ww-5,y0+hh-5,-1,-1);
+  // 5) 上辺中央の菱形の銘
+  const cw=Math.min(72,ww*0.28), cx=x0+ww/2;
+  g.fillStyle=c2; g.beginPath();
+  g.moveTo(cx-cw/2,y0+5); g.lineTo(cx,y0+0.5); g.lineTo(cx+cw/2,y0+5); g.lineTo(cx,y0+9.5); g.closePath(); g.fill();
+  g.fillStyle=c3; g.beginPath();
+  g.moveTo(cx-cw*0.3,y0+5); g.lineTo(cx,y0+2.6); g.lineTo(cx+cw*0.3,y0+5); g.lineTo(cx,y0+7.4); g.closePath(); g.fill();
+  // 6) バンド上の鋲
+  const st=Math.max(28,ww/9);
+  for(let bx2=x0+st*0.7; bx2<x0+ww-8; bx2+=st){
+    for(const by2 of [y0+5.5, y0+hh-5.5]){
+      g.fillStyle=c3; g.beginPath(); g.arc(bx2,by2,1.7,0,7); g.fill();
+      g.fillStyle=c1; g.beginPath(); g.arc(bx2+0.5,by2+0.5,1.0,0,7); g.fill(); } } }
+function roundRectOn(g,x,y,w,h,r){ r=Math.max(0,Math.min(r,w/2,h/2));
+  g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function ornSprite(w,h,style){
+  w=Math.round(w); h=Math.round(h);
+  if(w<24||h<16) return null;
+  const key=w+'|'+h+'|'+style; let c=_ornCache.get(key); if(c) return c;
+  if(_ornBakes>=1) return null;                   // 焼き込みが1フレームに集中しないよう1枚まで
+  _ornBakes++;
+  c=document.createElement('canvas'); c.width=w+ORN_PAD*2; c.height=h+ORN_PAD*2;
+  ornPaint(c.getContext('2d'),ORN_PAD,ORN_PAD,w,h,style);
+  if(_ornCache.size>24) _ornCache.clear();
+  _ornCache.set(key,c); return c; }
+// 既存の panel はそのまま描き、その外側に額縁だけを重ねる
+function panelOrn(x,y,w,h,style){
+  panel(x,y,w,h);
+  if(perfTier>=2) return;                          // 重いときは素のパネルへ静かに落ちる
+  const s=ornSprite(w,h,style||'gold'); if(!s) return;
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+// 羊皮紙や石板の上に額縁だけを重ねる版（受け皿は呼び出し側が用意する）
+function ornRect(x,y,w,h,style){
+  if(perfTier>=2) return;
+  const s=ornSprite(w,h,style||'gold'); if(!s) return;
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
@@ -11373,7 +11447,7 @@ function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.be
 function loop(){ try{ loopBody(); }catch(err){ console.error(err); if(attractOn) endAttract(); requestAnimationFrame(loop); } }
 let rframe=0;      // 実際に描画したフレーム数。hitStop でも slowmo でも必ず1ずつ進む
 function loopBody(){
-  rframe++;
+  rframe++; _ornBakes=0;
   perfTick(performance.now());
   tickScreenFx();   // 遷移は状態に関係なく毎フレーム進める（中間フレームで画面が切り替わる）
   if(state==='cut'){ gf++; updateCut(); ctx.clearRect(0,0,W,H); drawCut(); drawScreenFx(); requestAnimationFrame(loop); return; }
