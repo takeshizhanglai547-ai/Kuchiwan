@@ -504,6 +504,94 @@ const sfx={
       o.connect(lp); lp.connect(g); g.connect(O); o.start(a); o.stop(a+0.8); });
     noise(.55,.075,null,sfxOut(x),2.6); },
   charge:(x)=>tone(180,.5,'sawtooth',.05,400,sfxOut(x)),
+  // ── 技ごとの専用SE ──────────────────────────────────────
+  // 竜巻：風の轟音。帯域の違う3層のノイズを唸らせ、低い唸りを足して質量を出す
+  tornado:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=v==null?1:v;
+    // 主層：バンドパスが上下に揺れる＝渦の唸り
+    for(let i=0;i<3;i++){ const s=actx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+      const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.1+i*0.9;
+      const f0=260+i*430, dur=0.90+i*0.16;
+      bp.frequency.setValueAtTime(f0,t);
+      bp.frequency.linearRampToValueAtTime(f0*(i%2?0.62:1.55),t+dur*0.45);
+      bp.frequency.linearRampToValueAtTime(f0*(i%2?1.30:0.70),t+dur);
+      const g=actx.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.16*V/(1+i*0.5),t+0.10);
+      g.gain.setValueAtTime(0.16*V/(1+i*0.5),t+dur*0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.7); s.stop(t+dur+0.05); }
+    // 低い唸り：渦の質量
+    const o=actx.createOscillator(), og=actx.createGain();
+    o.type='sawtooth'; o.frequency.setValueAtTime(62,t); o.frequency.linearRampToValueAtTime(48,t+0.9);
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=220;
+    og.gain.setValueAtTime(0.0001,t); og.gain.linearRampToValueAtTime(0.075*V,t+0.14);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+1.0);
+    o.connect(lp); lp.connect(og); og.connect(O); o.start(t); o.stop(t+1.05); },
+  // ビームの溜め：エネルギーが一点へ収束していく上昇。倍音が寄り集まる
+  beamCharge:(x,dur)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), D=dur||0.55;
+    [1,1.5,2.01,3.02].forEach((m,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
+      o.type=i?'sine':'sawtooth';
+      o.frequency.setValueAtTime(90*m,t); o.frequency.exponentialRampToValueAtTime(560*m,t+D);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.055/(1+i*0.8),t+D*0.92);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+D+0.05);
+      o.connect(g); g.connect(O); o.start(t); o.stop(t+D+0.08); });
+    // 吸い込まれる空気
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; const bp=actx.createBiquadFilter();
+    bp.type='bandpass'; bp.Q.value=3.2;
+    bp.frequency.setValueAtTime(400,t); bp.frequency.exponentialRampToValueAtTime(5200,t+D);
+    const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(0.10,t+D*0.9); g.gain.exponentialRampToValueAtTime(0.0001,t+D+0.06);
+    s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.6); s.stop(t+D+0.1); },
+  // ビームの放出：低域の押し出し＋太い持続＋高域の白い噴出
+  beamFire:(x,dur)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), D=dur||0.62;
+    tone(150,.30,'sawtooth',.20,-90,null,x);                          // 押し出しの一撃
+    [58,116,233].forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
+      o.type=i?'sawtooth':'square'; o.frequency.setValueAtTime(f,t);
+      o.frequency.linearRampToValueAtTime(f*0.86,t+D);
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1400-i*300;
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.11/(1+i*0.6),t+0.03);
+      g.gain.setValueAtTime(0.11/(1+i*0.6),t+D*0.7); g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+      o.connect(lp); lp.connect(g); g.connect(O); o.start(t); o.stop(t+D+0.05); });
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2600;
+    const g2=actx.createGain(); g2.gain.setValueAtTime(0.0001,t);
+    g2.gain.linearRampToValueAtTime(0.16,t+0.02); g2.gain.setValueAtTime(0.13,t+D*0.72);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    s.connect(hp); hp.connect(g2); g2.connect(O); s.start(t,Math.random()*0.5); s.stop(t+D+0.05); },
+  // 落雷：空気を裂く一撃＋転がる残響
+  thunder:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
+      const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.setValueAtTime(6000,t);
+      hp.frequency.exponentialRampToValueAtTime(900,t+0.10);
+      g.gain.setValueAtTime(0.42,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
+      s.connect(hp); hp.connect(g); g.connect(O); s.start(t,Math.random()*0.8); s.stop(t+0.16); }
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();   // 転がる雷鳴
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(420,t);
+      lp.frequency.exponentialRampToValueAtTime(120,t+0.8);
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.22,t+0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.85);
+      s.connect(lp); lp.connect(g); g.connect(O); s.start(t,Math.random()*0.8); s.stop(t+0.9); }
+    tone(3200,.05,'sawtooth',.12,-2600,null,x); },
+  // 斬撃：刃が空気を裂く高い擦過＋金属の芯
+  blade:(x,v)=>{ const V=v==null?1:v;
+    swoosh(.13,.15*V,2600,7400,2.2,x);
+    tone(2637,.07,'triangle',.07*V,-900,null,x);
+    tone(1319,.05,'square',.05*V,-400,null,x,.012); },
+  // 炎柱：轟と立ち上がる火柱
+  flame:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
+    const s=actx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.8;
+    bp.frequency.setValueAtTime(300,t); bp.frequency.linearRampToValueAtTime(1900,t+0.18);
+    bp.frequency.linearRampToValueAtTime(520,t+0.75);
+    const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(0.24,t+0.05); g.gain.exponentialRampToValueAtTime(0.0001,t+0.78);
+    s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.6); s.stop(t+0.82);
+    tone(96,.28,'sawtooth',.13,-40,null,x); },
+  // 爆発：低い押し＋破裂＋余韻
+  blast:(x)=>{ tone(78,.36,'sawtooth',.22,-34,null,x);
+    noise(.30,.34,220,null,0.22,x); noise(.10,.26,2400,null,0.9,x);
+    tone(220,.10,'square',.10,-160,null,x); },
   ko:(x)=>{tone(120,.3,'sawtooth',.16,-80,null,x); noise(.3,.2,1200,null,0.3,x);},
   // ボスの咆哮／大技：サブのうねり＋中域のうなり＋ノイズテイルの3層（HITSND と同じ設計思想）
   boss:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
@@ -1309,7 +1397,47 @@ function smokePuff(x,y,n=3,rgb){ const gl=groundLift(x);
 // ヒット 0F の白芯：ひと呼吸だけ膨らんで消える閃光。火花より先に立ち上がる最前段
 function flashCore(x,y,r,rgb,delay){ particles.push({k:'flashcore',x,y,gl:groundLift(x),layer:1,
   delay:delay|0,r:(r||24)*FXS,life:4,max:4,color:rgb||'255,255,255'}); }
-function crescent(x,y,r,a0,a1,color){ particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:0,r,a0,a1,color,life:10,max:10}); }
+// ── 斬撃の軌跡：格闘ゲームの必殺技のように、白熱した芯・色の減衰・細い鞭状の尾・
+//    軌道に散る火の粉を重ねた多層のリボンにする。単層の三日月では一撃の質量が出ない ──
+function crescent(x,y,r,a0,a1,color,opt){ opt=opt||{};
+  const big=opt.big!==false, tier=perfTier;
+  const R=r*(big?1.34:1.12);                                   // 一回り大きく振り抜く
+  // 1) 外側の色つきリボン（本体）
+  particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:0,r:R,a0,a1,color,w:1.0,life:12,max:12});
+  // 2) 内側の白熱した芯：一瞬だけ強く光る
+  particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:0,r:R*0.80,
+    a0:a0+(a1-a0)*0.06, a1:a0+(a1-a0)*0.94, color:'#ffffff', w:0.58, life:7, max:7});
+  // 3) 鞭のように遅れて追う細い尾（外へ広がりながら消える）
+  if(tier<2){ const tails=tier>=1?1:2;
+    for(let i=0;i<tails;i++)
+      particles.push({k:'arc',x,y,gl:groundLift(x),layer:1,delay:1+i,r:R*(1.10+i*0.14),
+        a0:a0+(a1-a0)*(0.16+i*0.10), a1:a1+(a1-a0)*(0.10+i*0.08),
+        color:mixWhite(color,0.35), w:0.30-i*0.09, life:9+i*3, max:9+i*3}); }
+  // 4) 軌道に沿って散る火の粉
+  if(tier<2){ const n=tier>=1?5:9, d=a1-a0;
+    for(let i=0;i<n;i++){ const u=(i+0.5)/n, an=a0+d*u, rr=R*(0.86+Math.random()*0.30);
+      const ex=x+Math.cos(an)*rr, ey=y+Math.sin(an)*rr;
+      const out=an+ (d>0?0.5:-0.5)*Math.PI*0.10;
+      ember(ex,ey, Math.cos(out)*rnd(1.4,4.2), Math.sin(out)*rnd(1.4,4.2)-0.6, i%3?color:'#ffffff'); } }
+}
+// ── 必殺技の発動演出：格闘ゲームのスーパーフラッシュ ──
+//   集中線が技の発生点へ収束し、カメラが一瞬寄り、白く抜ける。
+//   単なる画面フラッシュだけでは「必殺技が出た」という宣言にならない
+function superFlash(x,y,color){
+  const col=color||'#ffe9a0';
+  camZoomT=Math.max(camZoomT,1.085);                 // ぐっと寄る（既存のばねで自然に戻る）
+  flashAt(5,hexRGB(mixWhite(col,0.5)),x,y);
+  particles.push({k:'speedline',x,y,gl:groundLift(x),layer:2,delay:0,life:16,max:16,color:col,
+    seed:Math.random()*6.28});
+  particles.push({k:'flare',x,y,gl:groundLift(x),layer:2,delay:0,life:9,max:9,R:150*FXS,rot:rnd(-0.4,0.4)});
+  for(let i=0;i<14;i++){ const an=i/14*Math.PI*2+rnd(-0.2,0.2);
+    ember(x+Math.cos(an)*36, y+Math.sin(an)*36, Math.cos(an)*rnd(4,9), Math.sin(an)*rnd(4,9)-1.5, i%2?col:'#ffffff'); }
+}
+// 火の粉：加算合成の小さな点が尾を引いて落ちる。斬撃・爆発・ビームの縁に散らす
+function ember(x,y,vx,vy,color){
+  const lf=Math.round(rnd(16,30));
+  particles.push({k:'ember',x,y,gl:groundLift(x),layer:1,delay:0,vx,vy,px:x,py:y,
+    life:lf,max:lf,color,sz:rnd(1.1,2.6)}); }
 // ダメージ数字：直近8F以内に出た数字が 46x30px 以内にあれば、x はそのままに真上へ 30px 積み上げる。
 // 以前は同時に x を ±14px 散らしていたが、逃げた先で隣の敵の数字と衝突を作り直していた（4〜5段目で破綻）
 function popText(x,y,txt,color,big,crit){
@@ -1398,7 +1526,10 @@ function impactBurst(x,y,color,big,opt){ opt=opt||{};
   for(let i=0;i<n;i++) sp.push({a:i/n*Math.PI*2+rnd(-0.30,0.30), len:rnd(0.62,1.45), w:rnd(0.6,1.5)});
   const lf=big?9:7;                                                        // 寿命も短縮して残留を減らす
   particles.push({k:'impact',x,y,gl:groundLift(x),layer:1,delay:opt.delay|0,color,
-    life:lf,max:lf,R:(big?44:29)*FXS*(live>=2?0.75:1),sp,rot:Math.random()*6}); }
+    life:lf,max:lf,R:(big?44:29)*FXS*(live>=2?0.75:1),sp,rot:Math.random()*6});
+  // 白い十字のフレア：格闘ゲームのヒットに必ずある「一瞬の閃光の筋」
+  if(big && perfTier<2) particles.push({k:'flare',x,y,gl:groundLift(x),layer:1,delay:opt.delay|0,
+    life:6,max:6,R:(live>=2?54:82)*FXS,rot:rnd(-0.35,0.35)}); }
 // 打撃1発ぶんの時間差レイヤー：0F 白芯 → 1F 火花 → 3F 衝撃リング → 6F 放射線 → 9F〜 土煙。
 // 全部同時に出して同時に消える従来の作りでは一撃の重みが出ないため、層ごとに立ち上がりをずらす
 function hitFx(x,y,dmg,heavy,col){
@@ -1425,6 +1556,19 @@ function drawArcRibbon(cx,cy,rOut,rIn,a0,a1,rgb,alpha,fade,ysc){
     if(sp<0.99) g.addColorStop(Math.min(1,sp+0.004),'rgba('+col+',0)');
     return g; };
   ctx.save(); ctx.translate(cx,cy); if(ysc&&ysc!==1) ctx.scale(1,ysc); ctx.lineJoin='round';
+  // ブルーム：本体より一回り外へ薄く滲ませる。これが無いと軌跡が「塗った図形」に見え、
+  // 格闘ゲームの発光する軌跡にならない
+  if(perfTier<1){
+    ctx.globalCompositeOperation='lighter';
+    const gh=mk(rgb,alpha*0.30,1.1);
+    ctx.beginPath();
+    for(let i=0;i<N;i++){ const v=pts[i]; ctx[i?'lineTo':'moveTo'](v[0]*rOut*1.075,v[1]*rOut*1.075); }
+    for(let i=N-1;i>=0;i--){ const v=pts[i], r=v[2]-(rOut-v[2])*0.55; ctx.lineTo(v[0]*r,v[1]*r); }
+    ctx.closePath();
+    if(gh){ ctx.fillStyle=gh; ctx.globalAlpha=1; } else { ctx.fillStyle='rgb('+rgb+')'; ctx.globalAlpha=alpha*0.18; }
+    ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+  }
   ctx.beginPath();
   for(let i=0;i<N;i++){ const v=pts[i]; ctx[i?'lineTo':'moveTo'](v[0]*rOut,v[1]*rOut); }
   for(let i=N-1;i>=0;i--){ const v=pts[i]; ctx.lineTo(v[0]*v[2],v[1]*v[2]); }
@@ -1451,6 +1595,7 @@ function updateParticles(){
     if(p.k==='spark'){ p.x+=p.vx;p.y+=p.vy; p.vy=p.vy*p.d+p.g; p.vx*=p.d; p.rot+=p.rv; }   // 空気抵抗は縦にも効かせる
     else if(p.k==='dust'){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.04; p.vx*=0.97; p.rot+=p.rv; }
     else if(p.k==='smoke'){ p.x+=p.vx;p.y+=p.vy; p.vy*=0.93; p.vx*=0.95; p.rot+=p.rv; }
+    else if(p.k==='ember'){ p.px=p.x; p.py=p.y; p.x+=p.vx; p.y+=p.vy; p.vy+=(p.vy<-2?0.10:0.28); p.vx*=0.94; p.vy*=0.97; }   // 巻き上げられた粒はすぐ落ちない
     else if(p.k==='txt'){ p.x+=p.vx; p.vy+=p.g; p.y+=p.vy; p.vx*=0.965; p.pop*=0.78;
       if(p.floor!=null && p.y<p.floor){ p.y=p.floor; p.vy=Math.max(0,p.vy); }   // HUD を突き抜けない
       if(p.y>p.y0){ p.y=p.y0; p.vy*=-0.34; p.vx*=0.6; } }   // 床（湧いた高さ）で一度だけ弾む
@@ -1504,7 +1649,50 @@ function drawParticles(layer){
       ctx.fillStyle = p.crit ? _critGrad[fs] : p.color;   // 会心は白→金→橙の縦グラデで別格に見せる
       ctx.fillText(p.txt,0,0); ctx.textAlign='left'; }
     else if(p.k==='arc'){                                              // 等幅ストロークをやめ、半径に比例した先細りのリボンにする
-      drawArcRibbon(sx,py,p.r*(1.05+0.13*a),p.r*0.68,p.a0,p.a1,hexRGB(p.color),a*0.9,0.95); }
+      const wj=(p.w==null?1:p.w);
+      drawArcRibbon(sx,py,p.r*(1.05+0.13*a),p.r*(1-0.32*wj),p.a0,p.a1,hexRGB(p.color),a*0.9*(wj<0.6?1.15:1),0.95); }
+    else if(p.k==='speedline'){                                        // 集中線：画面外から発生点へ収束する
+      const la=Math.sin(Math.PI*Math.min(1,(1-a)*2.2))*0.95;
+      if(la>0.01){ ctx.save(); ctx.translate(sx,py);
+        // 暗いスクリムを敷いて周囲を沈める。これが無いと線が明るい空に溶けて読めない
+        const vg=ctx.createRadialGradient(0,0,60,0,0,Math.max(W,H)*0.85);
+        vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,'+(la*0.42).toFixed(3)+')');
+        ctx.fillStyle=vg; ctx.fillRect(-W*1.2-sx,-H*1.2-py,W*3,H*3);
+        // 画面の隅より外から始めて、時間とともに発生点へ向かって伸びる。
+        // far を対角より大きく取ると線が全部画面外に落ちて何も見えない
+        ctx.globalCompositeOperation='lighter'; ctx.lineCap='round';
+        const far=Math.max(W,H)*0.92, near=90+a*(far*0.58);
+        for(let i=0;i<24;i++){ const an=p.seed+i/24*Math.PI*2+Math.sin(i*2.7)*0.05;
+          const c=Math.cos(an), sn=Math.sin(an), fat=!(i%3);
+          // 中心へ向かって細くなる楔形。等幅の線では「収束している」ように見えない
+          const wOut=(fat?9.5:4.2)*(0.35+la);
+          ctx.globalAlpha=la*(fat?0.95:0.62);
+          ctx.fillStyle=fat?'#ffffff':p.color;
+          const px2=-sn, py2=c;
+          ctx.beginPath();
+          ctx.moveTo(c*far+px2*wOut, sn*far+py2*wOut);
+          ctx.lineTo(c*near, sn*near);
+          ctx.lineTo(c*far-px2*wOut, sn*far-py2*wOut);
+          ctx.closePath(); ctx.fill(); }
+        ctx.restore(); ctx.globalCompositeOperation='source-over'; } }
+    else if(p.k==='flare'){                                            // 白い十字の閃光（加算）
+      const fa=Math.pow(a,1.5);
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,py); ctx.rotate(p.rot);
+      ctx.globalAlpha=fa*0.95; ctx.fillStyle='#fff';
+      for(let q=0;q<2;q++){ const L=p.R*(q?0.46:1)*(0.55+a*0.45), Wd=p.R*(q?0.10:0.055)*fa;
+        ctx.save(); ctx.rotate(q*Math.PI/2);
+        ctx.beginPath(); ctx.moveTo(-L,0); ctx.lineTo(0,-Wd); ctx.lineTo(L,0); ctx.lineTo(0,Wd); ctx.closePath(); ctx.fill();
+        ctx.restore(); }
+      ctx.globalAlpha=fa*0.8; ctx.beginPath(); ctx.arc(0,0,p.R*0.13*fa+1,0,7); ctx.fill();
+      ctx.restore(); ctx.globalCompositeOperation='source-over'; }
+    else if(p.k==='ember'){                                            // 火の粉：短い尾を引く加算の点
+      const ea=Math.pow(a,0.7);
+      ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=ea*0.9; ctx.strokeStyle=p.color; ctx.lineWidth=p.sz*ea+0.4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(p.px-camX,p.py-(p.gl||0)); ctx.lineTo(sx,py); ctx.stroke();
+      ctx.globalAlpha=ea; ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(sx,py,p.sz*0.55*ea+0.3,0,7); ctx.fill();
+      ctx.globalCompositeOperation='source-over'; }
     else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
       ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
     else if(p.k==='shockring'){   // 衝撃リング：外へ抜けながら細く薄くなり、内側に薄い膜を伴う
@@ -2029,7 +2217,8 @@ function beginAttack(type){
   else if(type==='sc5'||def.kick){ sfx.swing(2, 'flesh', p.x); }
   else sfx.swing(p.comboStep, wsndOf(p.weapon), p.x);
   // 超必殺技（波動・昇竜の新技）：発生時に無敵とフラッシュ、技名表示
-  if(def.superFx){ p.invuln=Math.max(p.invuln,20); flash=Math.max(flash,3); shake=Math.max(shake,5); triggerSlow(8);
+  if(def.superFx){ p.invuln=Math.max(p.invuln,20); shake=Math.max(shake,9); triggerSlow(12);
+    superFlash(p.x,p.y-46,def.trail||'#ffe9a0');
     ring(p.x,p.y-46,def.trail||'#fff'); popText(p.x,p.y-120,def.name+'！','#fff',true); sfx.boss(p.x); }
   if(def.superRush){ p.invuln=Math.max(p.invuln,24); flash=Math.max(flash,2); shake=Math.max(shake,4);
     ring(p.x,p.y-46,'#ffd24d'); spark(p.x+p.facing*22,p.y-40,'#ffd24d',12,8); popText(p.x,p.y-120,def.name+'！','#ffd24d',true); sfx.dash(p.x); sfx.heavy(p.x); }
@@ -2208,7 +2397,7 @@ function nukoTyphoon(p){ const dir=p.facing, mul=nukoMul(p);
   hazards.push({kind:'ptwister', x:p.x+dir*90, y:LANE, dir, t:0, life:210, dmg:Math.round(13*mul), vx:dir*3.0});
   for(let k=0;k<3;k++) ring(p.x+dir*80, p.y-20-k*30, k%2?'#cfe8ff':'#ffffff');
   spark(p.x+dir*80,p.y-50,'#e8f6ff',28,13); dust(p.x+dir*80,p.y,16);
-  shake=Math.max(shake,13); flashAt(4,'206,232,255'); triggerSlow(18); sfx.big(p.x); sfx.boss(p.x); }
+  shake=Math.max(shake,13); flashAt(4,'206,232,255'); triggerSlow(18); sfx.big(p.x); sfx.tornado(p.x,1.15); }
 // イッヌ Lv5「聖剣乱舞・天光烈斬」：締めに天から光の柱が落ちる
 function holyPillar(p){ const mul=(p.atkMul||1), bx=p.x+p.facing*90, gy=LANE-groundLift(bx);
   particles.push({k:'vbolt',x:bx,y:gy-4,h:gy+24,life:16,max:16});
@@ -2253,6 +2442,22 @@ function dropOldTwister(){
   for(const h of hazards){ if((h.kind==='etwister'||h.kind==='ptwister') && h.life-h.t>30) h.t=h.life-30; }
 }
 function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; h.t++;
+  // 持続する技の音を鳴らし続ける（一発鳴らして終わりだと、画面に居座る渦やビームが無音になる）
+  if((h.kind==='ptwister'||h.kind==='etwister') && h.t%26===0 && h.t<h.life-20) sfx.tornado(h.x,0.55);
+  // 竜巻：渦の外周に沿って火の粉を巻き上げる。積み上げた輪だけでは回転の速度が読めない
+  if((h.kind==='ptwister'||h.kind==='etwister') && perfTier<2 && h.t%2===0 && h.t<h.life-10){
+    const gy0=h.y-groundLift(h.x);
+    for(let q=0;q<2;q++){
+      const hh=Math.random(), rr=(38+hh*112)*(0.7+Math.random()*0.5);
+      const an=gf*0.34+q*3.1+hh*6.0;
+      ember(h.x+Math.cos(an)*rr, gy0-hh*430,
+            -Math.sin(an)*rnd(3,7)+(h.vx||0), -rnd(2.5,7.0), q?'#dff6ff':'#ffffff'); } }
+  if((h.kind==='pbeam'||h.kind==='ebeam') && h.t%14===0 && h.t>6 && h.t<h.life-6) sfx.beamFire(h.x,0.34);
+  // ビームの縁から火の粉を撒く（塗った矩形ではなく「噴き出す光」に見せる）
+  if((h.kind==='pbeam'||h.kind==='ebeam') && h.t<h.life-4 && perfTier<2 && h.t%2===0){
+    const byy=h.y-groundLift(h.x)-(h.hy||60);
+    for(let q=0;q<2;q++){ const dx=rnd(30,560)*h.dir;
+      ember(h.x+dx, byy+rnd(-26,26), -h.dir*rnd(2,7), rnd(-2.6,-0.4), q?(h.col||'#d46bff'):'#ffffff'); } }
   if(h.kind==='pillar'){
     if(h.t%5===0){ for(const e of enemies){ if(e.dead)continue;
       if(Math.abs(e.x-h.x)<96 && Math.abs(e.y-h.y)<46 && e.z<260){ noHitStopOnce=true; damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*2,false,1.6); } } }
@@ -2261,7 +2466,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
   } else if(h.kind==='bomb'){
     if(h.t>=h.life){
       ring(h.x,LANE-10,'#ffae42'); ring(h.x,LANE-10,'#fff'); spark(h.x,LANE-20,'#ffae42',30,13); dust(h.x,LANE,14);
-      impactBurst(h.x,LANE-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.big(h.x);
+      impactBurst(h.x,LANE-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.blast(h.x);
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
         damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*8,true); if(!e.dead) launchEnemy(e,(e.x<h.x?-1:1)*13,-11,3); } }
       hazards.splice(i,1); }
@@ -2284,7 +2489,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     let trig = h.t>=h.life;
     if(!trig && h.t>16){ for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<46 && Math.abs(e.y-h.y)<64 && e.z<74){ trig=true; break; } } }
     if(trig){ ring(h.x,LANE-8,'#ff5a3a'); ring(h.x,LANE-8,'#fff'); spark(h.x,LANE-22,'#ffae42',30,13); dust(h.x,LANE,16); impactBurst(h.x,LANE-32,'#fff',true);
-      shake=Math.max(shake,12); flashAt(4,'255,174,66'); hitStop=Math.max(hitStop,6); sfx.big(h.x);
+      shake=Math.max(shake,12); flashAt(4,'255,174,66'); hitStop=Math.max(hitStop,6); sfx.blast(h.x);
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue; if(Math.abs(e.x-h.x)<150 && Math.abs(e.y-h.y)<72){ damageEnemy(e,h.dmg,(e.x<h.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<h.x?-1:1)*14,-11,3); } }
       hazards.splice(i,1); }
   } else if(h.kind==='ebeam'){   // ボスの極太ビーム：進路上をなぎ払い続ける
@@ -2363,15 +2568,23 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   if(h.kind==='ebeam'||h.kind==='pbeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
     const k=Math.min(1,h.t/4)*(h.t>h.life-10?Math.max(0,(h.life-h.t)/10):1);
     // 進路は 1500px あるが、画面の外まで塗るのは無駄。可視範囲ぶんに切り詰める
-    const by=gy-(h.hy||60), th=((h.th||54)+Math.sin(gf*0.6)*9)*k*(perfTier>=2?0.62:perfTier>=1?0.8:1);
+    // 太さは上限を設ける。ボスの既定値(54)に1.45を掛けると画面の半分を覆ってしまう
+    const by=gy-(h.hy||60), th=Math.min(64,(h.th||54)*1.30+Math.sin(gf*0.6)*10)*k*(perfTier>=2?0.62:perfTier>=1?0.8:1);
     const reach=h.dir>0? Math.min(1500, Math.max(0, W+40-sx)) : Math.min(1500, Math.max(0, sx+40));
     const len=reach*h.dir, x0=Math.min(sx,sx+len);
     ctx.save(); ctx.globalCompositeOperation='lighter';
+    if(perfTier<1){   // 外側の広い発光膜：本体より2.2倍太く薄く。これで初めて「焼けている」ように見える
+      const go=ctx.createLinearGradient(0,by-th*2.2,0,by+th*2.2);
+      go.addColorStop(0,'rgba(255,255,255,0)'); go.addColorStop(.5,'rgba('+hexRGB(h.col||'#d46bff')+',.42)');
+      go.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=go; ctx.fillRect(x0,by-th*2.2,Math.abs(len),th*4.4); }
     const g=ctx.createLinearGradient(0,by-th,0,by+th);
-    g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.30,h.col||'#d46bff');
-    g.addColorStop(.5,'#ffffff'); g.addColorStop(.70,h.col||'#d46bff'); g.addColorStop(1,'rgba(255,255,255,0)');
+    const bc=h.col||'#d46bff';
+    g.addColorStop(0,'rgba('+hexRGB(bc)+',0)'); g.addColorStop(.14,'rgba('+hexRGB(bc)+',.75)');
+    g.addColorStop(.34,bc); g.addColorStop(.5,'#ffffff'); g.addColorStop(.66,bc);
+    g.addColorStop(.86,'rgba('+hexRGB(bc)+',.75)'); g.addColorStop(1,'rgba('+hexRGB(bc)+',0)');
     ctx.fillStyle=g; ctx.fillRect(x0,by-th,Math.abs(len),th*2);
-    ctx.fillStyle='rgba(255,255,255,'+(0.9*k)+')'; ctx.fillRect(x0,by-th*0.18,Math.abs(len),th*0.36);
+    ctx.fillStyle='rgba(255,255,255,'+(0.95*k)+')'; ctx.fillRect(x0,by-th*0.30,Math.abs(len),th*0.60);   // 白熱した芯を太く
     if(perfTier<2){   // うねる縁：重いときは省く（芯だけでも極太ビームには見える）
       ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=3;
       const stepX=perfTier>=1?96:44;
@@ -2380,8 +2593,14 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
           xx?ctx.lineTo(sx+h.dir*xx,yy):ctx.moveTo(sx+h.dir*xx,yy); }
         ctx.stroke(); } }
     if(perfTier<2){   // 発射口のフレア：重いときは省く
-      ctx.fillStyle=radGrad(sx,by,th*2.4,'rgba(255,255,255,.95)','rgba(255,255,255,0)');
-      ctx.beginPath(); ctx.arc(sx,by,th*2.4,0,7); ctx.fill(); }
+      ctx.fillStyle=radGrad(sx,by,th*3.2,'rgba(255,255,255,.95)','rgba(255,255,255,0)');
+      ctx.beginPath(); ctx.arc(sx,by,th*3.2,0,7); ctx.fill();
+      // 発射口の十字フレア：エネルギーが噴き出している一点を作る
+      ctx.save(); ctx.translate(sx,by); ctx.globalAlpha=0.85; ctx.fillStyle='#fff';
+      for(let q=0;q<2;q++){ const L=th*(q?1.7:5.2), Wd=th*(q?0.22:0.10);
+        ctx.save(); ctx.rotate(q*Math.PI/2);
+        ctx.beginPath(); ctx.moveTo(-L,0); ctx.lineTo(0,-Wd); ctx.lineTo(L,0); ctx.lineTo(0,Wd); ctx.closePath(); ctx.fill(); ctx.restore(); }
+      ctx.restore(); }
     ctx.restore(); continue; }
   if(h.kind==='ebolt'){
     if(h.t<26){ const k=1-h.t/26;   // 落ちてくる位置の予兆
@@ -2705,7 +2924,7 @@ function updatePlayer(){
     if(def.rushSuper && a.t%3===0){ spark(p.x-p.facing*rnd(6,26), p.y-rnd(10,70), (gf%2)?'#ff6a3c':'#ffd24d',3,7); }
     if(def.fireCol && a.t===8){   // 紅蓮天焦：足元から炎柱が立つ
       hazards.push({kind:'pillar', x:p.x, y:LANE, t:0, life:60, dmg:Math.round(7*(p.atkMul||1))});
-      for(let k=0;k<3;k++) ring(p.x,LANE-20-k*36,k%2?'#ff6a3c':'#ffd24d'); sfx.big(p.x); }
+      for(let k=0;k<3;k++) ring(p.x,LANE-20-k*36,k%2?'#ff6a3c':'#ffd24d'); sfx.flame(p.x); }
     // ── ヌコ Lv5「大魔導・極大竜巻」／Lv10 の追加演出 ──
     if(def.typhoon && a.t===def.act[0]){ nukoTyphoon(p); }
     if(def.frostNova && a.t===def.act[0]){ const mul=nukoMul(p);   // 詠唱と同時に周囲を凍てつかせる
@@ -2834,10 +3053,11 @@ function updatePlayer(){
     if(def.drillFx && a.t%2===0){ const dir=p.facing;   // 螺旋の穿孔エフェクト
       spark(p.x+dir*rnd(20,54), p.y-rnd(20,66), (a.t%4)?'#ffd24d':'#fff', 3, 8);
       if(a.t%8===0) ring(p.x+dir*36, p.y-44, '#ffd24d'); }
+    if(def.railBlast && a.t===def.act[0]-5){ sfx.beamCharge(p.x,0.14); }   // 撃つ直前の収束
     if(def.railBlast && a.t===def.act[0]){ const dir=p.facing, mul=nukoMul(p);   // 極大魔導レール砲：溜め無しで極太の魔力光線
       hazards.push({kind:'pbeam', x:p.x+dir*44, y:p.y, dir, t:0, life:38, dmg:Math.round(15*mul), col:'#e05ac8', hy:52, th:30});
       for(let k=0;k<4;k++) ring(p.x+dir*44, p.y-52, k%2?'#ffd0f0':'#fff');
-      spark(p.x+dir*54,p.y-52,'#ffe6f6',30,14); shake=Math.max(shake,16); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8); triggerSlow(20); sfx.boss(p.x); sfx.big(p.x);
+      spark(p.x+dir*54,p.y-52,'#ffe6f6',30,14); shake=Math.max(shake,16); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8); triggerSlow(20); sfx.beamFire(p.x,0.72); sfx.big(p.x);
       popText(p.x,p.y-128,'極大魔導レール砲！','#ffd0f0',true); }
     if(def.cloneStrike && a.t%5===0 && a.t<=def.act[1]){ const dir=p.facing;   // 影分身が経路上を同時に斬る
       const cx=p.x-dir*rnd(30,110);
@@ -2866,6 +3086,7 @@ function updatePlayer(){
       const nMark=def.yaeMax?6:3, gap=def.yaeMax?90:100, dm=def.yaeMax?32:26;
       for(let k=0;k<nMark;k++){ const mx=p.x+dir*(110+k*gap);
         hazards.push({kind:'kasumi', x:mx, y:LANE, t:0, life:16+k*7, dir, dmg:Math.round(dm*(p.atkMul||1))});
+        if(k===0) sfx.blade(p.x, 1.1);
         crescent(mx, p.y-54, def.yaeMax?66:54, dir>0?-1.2:Math.PI-1.2, dir>0?1.2:Math.PI+1.2, def.yaeMax?'#eaf6ff':'#dff0ff'); }
       if(def.yaeMax){ flash=Math.max(flash,4); shake=Math.max(shake,10); sfx.boss(p.x); } }
     // ── ワンデン「無明・斬鉄」：振り下ろしで地を裂く ──
@@ -2883,6 +3104,7 @@ function updatePlayer(){
         particles.push({k:'wandenAfter', x:px, y:p.y, gl:groundLift(px), face:dir, life:16+k*2, max:16+k*2});   // 通り過ぎた軌跡の残像
         // 残撃：移動が終わってから順に走る（手前から奥へ）
         hazards.push({kind:'zanjin', x:px, y:LANE, t:0, life:7+k*3, dir, dmg:Math.round((def.zanjinMax?27:21)*(p.atkMul||1))}); }
+      sfx.blade(p.x, def.zanjinMax?1.25:1);
       for(let k=0;k<10;k++) spark(x0+span*k/10, p.y-rnd(10,70), '#dfeaf6', 2, 6); }
     // ── ワンデン「高速乱れ切り」：手数で押し切る連撃の残光 ──
     if(def.flurry && a.t>=def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%5===0){ const dir=p.facing;
@@ -4502,13 +4724,13 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'heroArt': heroRunAttack(e); break;
     // ── ラスボス：収束させた光を極太のビームとして撃ち抜く ──
     case 'megaBeam':
-      if(f===1){ popText(e.x,e.y-e.h-20,'極大消滅光線！','#ff4dff',true); sfx.charge(e.x); }
+      if(f===1){ popText(e.x,e.y-e.h-20,'極大消滅光線！','#ff4dff',true); sfx.beamCharge(e.x,28/60); }
       if(f<28){ const cx=e.x+e.facing*38, cy=e.y-e.h*0.55, r=6+f*1.5;
         if(f%3===0){ spark(cx+rnd(-r,r),cy+rnd(-r,r),'#fff',2,7); }
         if(f%6===0) ring(cx,cy,t.accent); }
       if(f===28){ const dir=e.facing;
         hazards.push({kind:'ebeam', x:e.x+dir*42, y:e.y, dir, t:0, life:50, dmg:t.dmg+10, col:t.accent, hy:e.h*0.55});
-        flash=Math.max(flash,5); shake=Math.max(shake,18); hitStop=Math.max(hitStop,8); quake=Math.max(quake,20); sfx.big(e.x); sfx.boss(e.x); }
+        flash=Math.max(flash,5); shake=Math.max(shake,18); hitStop=Math.max(hitStop,8); quake=Math.max(quake,20); sfx.beamFire(e.x,0.9); }
       break;
     // ── 剣士：天高く舞い上がってからの急降下突進 ──
     case 'skyDive':
@@ -4552,11 +4774,12 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
       break; }
     // ── 魔法使い：狙いを定めて雷を落とす ──
     case 'boltStrike':
-      if(f===1){ popText(e.x,e.y-e.h-18,'雷撃招来！','#bfe9ff',true); sfx.charge(e.x); }
+      if(f===1){ popText(e.x,e.y-e.h-18,'雷撃招来！','#bfe9ff',true); sfx.beamCharge(e.x,0.30); }
       if(f===4||f===16||f===28||f===40){ const k=((f-4)/12)|0;
         for(const pl of players){ if(!pl.active||pl.state==='dead') continue;
           hazards.push({kind:'ebolt', x:pl.x+rnd(-40,40)+(k?rnd(-130,130):0), y:LANE, t:0, life:46, dmg:t.dmg+2}); }
-        hazards.push({kind:'ebolt', x:clamp(e.x+rnd(-280,280),camX+40,camX+W-40), y:LANE, t:0, life:46, dmg:t.dmg+2}); }
+        hazards.push({kind:'ebolt', x:clamp(e.x+rnd(-280,280),camX+40,camX+W-40), y:LANE, t:0, life:46, dmg:t.dmg+2});
+        sfx.thunder(players[0]?players[0].x:e.x); }
       break;
     // ── 魔法使い：吸い込みながら進む巨大竜巻を起こす ──
     case 'megaTornado':
@@ -4565,7 +4788,7 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
       if(f===22){ const tp=nearestPlayerTo(e.x), dir=tp.x<e.x?-1:1;
         dropOldTwister();
         hazards.push({kind:'etwister', x:e.x+dir*76, y:LANE, dir, t:0, life:200, dmg:t.dmg-4, vx:dir*2.6});
-        shake=Math.max(shake,13); flash=Math.max(flash,3); sfx.big(e.x); }
+        shake=Math.max(shake,13); flash=Math.max(flash,3); sfx.big(e.x); sfx.tornado(e.x,1.0); }
       break;
     case 'unblockSmash': if(f<14)e.x+=e.facing*3; if(f===18){ bUnblock(e,t.atkR+24,62,t.dmg+8); } break;
     case 'bossGrab': if(f<12)e.x+=e.facing*5; if(f===12){ bThrow(e,t.dmg+12); } break;
