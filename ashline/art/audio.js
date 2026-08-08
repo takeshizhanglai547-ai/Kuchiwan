@@ -233,15 +233,21 @@
         }
       }
 
-      /* ピーク正規化。convolver.normalize = false で使うので、
-         ここで揃えておかないとサンプリングレート次第で残響量が変わる。 */
-      var pk = 0;
+      /* エネルギー正規化。convolver.normalize = false で使うので、
+         ここで揃えないとサンプリングレート次第で残響量が変わる。
+         ピークで正規化してはいけない（最初はそれで作って測って外した）。
+         このIRは頭の1タップが尖っていて後は薄いので、ピークを 0.85 に
+         合わせると全体が 30 倍近くに持ち上がり、畳み込みの出力が
+         直接音より大きくなる＝「残響しか聞こえない銃声」になる。
+         畳み込みの利得は総エネルギーの平方根で決まるので、そこを1に揃える。 */
+      var e2 = 0;
       for (ch = 0; ch < 2; ch++) {
         d = buf.getChannelData(ch);
-        for (i = 0; i < n; i++) { x = d[i] < 0 ? -d[i] : d[i]; if (x > pk) pk = x; }
+        for (i = 0; i < n; i++) e2 += d[i] * d[i];
       }
-      if (pk > 1e-6) {
-        var s = 0.85 / pk;
+      e2 = e2 / 2;
+      if (e2 > 1e-12) {
+        var s = 1.0 / Math.sqrt(e2);
         for (ch = 0; ch < 2; ch++) {
           d = buf.getChannelData(ch);
           for (i = 0; i < n; i++) d[i] *= s;
@@ -312,7 +318,7 @@
       convolver = ctx.createConvolver();
       convolver.normalize = false;          /* 量は自分で決める */
       convolver.buffer = makePlazaIR(sr);
-      wetOut = gain(0.62);
+      wetOut = gain(0.42);
       wetIn.connect(wetHP); wetHP.connect(wetLP);
       wetLP.connect(convolver); convolver.connect(wetOut); wetOut.connect(duckG);
 
@@ -327,7 +333,7 @@
       slapLP = biq('lowpass', 2000, 0.7);
       slapHP = biq('highpass', 190, 0.7);
       slapFb = gain(0.30);
-      slapOut = gain(0.55);
+      slapOut = gain(0.34);
       slapIn.connect(slapDelay);
       slapDelay.connect(slapLP); slapLP.connect(slapHP);
       slapHP.connect(slapFb); slapFb.connect(slapDelay);   /* 帰還（Delay を含む合法な閉路） */
@@ -682,7 +688,9 @@
            経路が回折になるので高域が丸ごと落ちる。1.5kHz で切る。 */
         v.tone.frequency.setValueAtTime(1500, ctx.currentTime);
         v.tone.Q.setValueAtTime(0.7, ctx.currentTime);
-        v.out.gain.setValueAtTime(0.82, ctx.currentTime);
+        /* 0.58：測ったらブラインドのほうが通常射撃より大きくなっていた。
+           遮蔽越しの音が正面の音より大きいのは嘘なので、明確に下へ振る。 */
+        v.out.gain.setValueAtTime(0.58, ctx.currentTime);
       }
 
       /* [1] トランジェント */
@@ -1187,7 +1195,7 @@
       dmgLP.frequency.cancelScheduledValues(t);
       dmgLP.frequency.setTargetAtTime(f, t, 0.08);
       dmgLP.Q.setTargetAtTime(0.7 + 2.2 * a, t, 0.08);
-      tinG.gain.setTargetAtTime(0.055 * a * a, t, 0.12);
+      tinG.gain.setTargetAtTime(0.020 * a * a, t, 0.12);
       master.gain.cancelScheduledValues(t);
       master.gain.setTargetAtTime(MASTER * (1 - 0.25 * a), t, 0.10);
     }

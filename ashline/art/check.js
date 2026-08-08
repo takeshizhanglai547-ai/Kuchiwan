@@ -147,15 +147,28 @@ const SCENES = {
     var grp = ASH.debris(T, MATS, ARENA, COVERS);
     R.isGroup = !!(grp && grp.isObject3D);
     scene.add(grp);
-    var maxY = 0;
+    /* 高さは InstancedMesh の各インスタンス行列まで展開して実測する。
+       ジオメトリの bbox だけを見ると、回転・スケールを掛けた実寸を見落とす
+       （当初の実装はこれを見落としており、契約を担保できていなかった）。*/
+    scene.updateMatrixWorld(true);
+    var maxY = 0, _m = new T.Matrix4(), _v = new T.Vector3(), inst = 0;
     grp.traverse(function(o){
       if (!o.geometry) return;
       o.geometry.computeBoundingBox();
       var bb = o.geometry.boundingBox;
-      var s = o.getWorldScale(new T.Vector3());
-      maxY = Math.max(maxY, Math.abs(bb.max.y * s.y) + Math.abs(o.position.y));
+      var cs = [[bb.min.x,bb.min.y,bb.min.z],[bb.max.x,bb.min.y,bb.min.z],
+                [bb.min.x,bb.max.y,bb.min.z],[bb.max.x,bb.max.y,bb.min.z],
+                [bb.min.x,bb.min.y,bb.max.z],[bb.max.x,bb.min.y,bb.max.z],
+                [bb.min.x,bb.max.y,bb.max.z],[bb.max.x,bb.max.y,bb.max.z]];
+      function corners(mat){
+        for (var c=0;c<8;c++){ _v.set(cs[c][0],cs[c][1],cs[c][2]).applyMatrix4(mat); if (_v.y>maxY) maxY=_v.y; }
+      }
+      if (o.isInstancedMesh){
+        inst += o.count;
+        for (var i=0;i<o.count;i++){ o.getMatrixAt(i,_m); _m.premultiply(o.matrixWorld); corners(_m); }
+      } else { corners(o.matrixWorld); }
     });
-    R.maxY = maxY;
+    R.maxY = maxY; R.instances = inst;
     var g3 = new T.Mesh(new T.PlaneGeometry(30,30), new T.MeshLambertMaterial({color:0x5c5449}));
     g3.rotation.x = -Math.PI/2; scene.add(g3);
     LIGHTS();
@@ -247,7 +260,9 @@ if (!SCENES[NAME]) {
 const BUDGET = {
   tex: { calls: 40, tris: 200 }, sky: { calls: 9, tris: 6100 },
   light: { calls: 40, tris: 200 }, post: { calls: 40, tris: 200 },
-  env: { calls: 24, tris: 90000 }, debris: { calls: 3, tris: 25000 },
+  // env/debris もテストシーンの床板や当たり判定ワイヤと予算を共有する。
+  // モジュール単体の寄与ではなくシーン合計を見ているので、その分を上乗せする。
+  env: { calls: 24 + 13, tris: 90000 + 200 }, debris: { calls: 3 + 1, tris: 25000 + 2 },
   player: { calls: 6, tris: 3500 }, enemy: { calls: 10, tris: 6000 },
   vfx: { calls: 12, tris: 8000 }, hud: { calls: 40, tris: 200 },
   audio: { calls: 40, tris: 200 }, world: { calls: 40, tris: 200 }

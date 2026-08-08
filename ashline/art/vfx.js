@@ -244,9 +244,9 @@
          明・中・暗の3段に割って初めて「赤い塊が飛んだ」に見える。
          倍率は描画を見ながら上げた値。 */
       blood: C3(P.bloodMist, 8.0),
-      bloodDim: C3(P.bloodMist, 4.4),
-      bloodDark: C3(P.bloodMist, 2.4),
-      bloodHot: C3(P.enemyTrim, 2.0),     // 飛沫の光っている縁
+      bloodDim: C3(P.bloodMist, 5.4),
+      bloodDark: C3(P.bloodMist, 3.2),
+      bloodHot: C3(P.enemyTrim, 1.25),    // 飛沫の光っている縁（上げすぎるとクリーム色＝粉塵に見える）
       smoke: C3(P.ash, 0.85)
     };
 
@@ -820,7 +820,7 @@
       /* 着弾間際で急に消えると「線が引っ込んだ」ように見える。後半だけ落とす。 */
       var al = (p < 0.62) ? 1.0 : (1 - p) / 0.38;
       writeTracer(t, ax, ay, az, bx, by, bz,
-        0.011, 0.042, 0.105 * (0.85 + 0.3 * (1 - p)), al);
+        0.014, 0.055, 0.145 * (0.85 + 0.3 * (1 - p)), al);
     }
 
     /* --- 着弾 ----------------------------------------------------------------
@@ -866,7 +866,9 @@
         E.vx = dX * sv; E.vy = dY * sv + 0.7; E.vz = dZ * sv;
         E.tile = (i % 2) ? TILE_PUFF : TILE_PUFF2;
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 2.2;
-        tint(i % 3 === 0 ? COL.dustCool : COL.dust, rr(0.85, 1.15));
+        /* 半分を青灰に寄せる。命中側（赤）との対比は明度ではなく色相で付ける。
+           純白のままだと、暗い画面では致命打の白熱コアと同じ「白」に見える。 */
+        tint((i % 2) ? COL.dustCool : COL.dust, rr(0.85, 1.15));
         sizeU(rr(0.30, 0.48), rr(0.80, 1.20));
         E.ttl = rr(0.45, 0.80); E.grow = 0.42; E.drag = 4.6; E.grav = 0.9;
         E.a0 = rr(0.46, 0.74); E.fade = 1.5;
@@ -913,7 +915,7 @@
     function impactFlesh(x, y, z, head) {
       /* 胴命中は「外れの粉塵」に負けてはいけない。負けると当てた実感が消える。
          そのうえで致命打が胴命中を明確に上回るよう、倍率は 1.25 : 2.0 に取る。 */
-      var S = head ? 2.0 : 1.25;      // 大きさ
+      var S = head ? 1.85 : 1.25;     // 大きさ
       var L = head ? 1.7 : 1.0;       // 寿命
       var i, sv, o;
 
@@ -944,10 +946,13 @@
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
         /* 真円は「UIのレティクル」に見える。縦横を崩して回すと同じ輪でも
            「押し広げられた空気」に見える。 */
-        var e1 = rr(0.70, 0.92);
+        var e1 = rr(0.62, 0.90);
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.spark, 1.1);
+        /* 加算シェーダは濃い所を白熱させる。リングの帯は密度が最大なので、
+           色を強く入れると必ず純白の輪になり「火」ではなく「図形」になる。
+           ここだけ倍率を大きく下げて、橙のまま残す。 */
+        E.tile = TILE_RING; tint(COL.spark, 0.5);
         size(0.80 * e1, 2.60 * e1, 0.80, 2.60);
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 2.2;
         E.ttl = 0.26; E.grow = 0.34; E.a0 = 0.95; E.fade = 1.5;
@@ -956,9 +961,9 @@
            半径が近いと UI のレティクルに見えてしまう。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.glow, 1.0); sizeU(1.45, 3.40);
+        E.tile = TILE_RING; tint(COL.glow, 0.55); sizeU(1.25, 2.90);
         E.rot = rnd() * 6.283;
-        E.ttl = 0.30; E.grow = 0.42; E.a0 = 0.38; E.fade = 1.4;
+        E.ttl = 0.30; E.grow = 0.42; E.a0 = 0.36; E.fade = 1.4;
         emit(ADD);
         /* その2：花弁のスターバースト。マズルと同じ語彙を使い、
            「銃口と同じ格の出来事が敵の頭で起きた」と読ませる。 */
@@ -970,14 +975,36 @@
         emit(ADD);
       }
 
+      /* --- 下地：飛沫をひとつの塊にまとめる薄い暖色の霧 ----------------------
+         粒だけを撒くと「赤い点の集まり」に見え、命中の重さが出ない。
+         広く薄い霧を先に敷いてから粒を載せると、ひと塊の事象として読める。 */
+      for (i = 0; i < 3; i++) {
+        cone(1.0, 0.8);
+        reset();
+        E.x = x + dX * rr(0.02, 0.16) * S;
+        E.y = y + dY * rr(0.02, 0.16) * S;
+        E.z = z + dZ * rr(0.02, 0.16) * S;
+        E.vx = dX * 1.4; E.vy = dY * 1.4 + 0.4; E.vz = dZ * 1.4;
+        E.tile = (i % 2) ? TILE_PUFF : TILE_PUFF2;
+        E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 1.4;
+        tint(COL.bloodDim, 1.0);
+        sizeU(0.55 * S, 1.00 * S);
+        E.ttl = 0.28 * L; E.grow = 0.42; E.drag = 8.0; E.grav = 1.2;
+        E.a0 = 0.30; E.fade = 1.6;
+        emit(ALP);
+      }
+
       /* --- 1層目：暖色の飛沫（bloodMist） -----------------------------------
          円錐を広く取り（±75°／致命打は±95°）、丸く広がる塊にする。
          world の「縦に立つ狭いプルーム」と形で対比させるのが狙い。 */
       var nMist = head ? 26 : 19;
       for (i = 0; i < nMist; i++) {
-        cone(head ? 1.66 : 1.30, 0.5);
-        o = rr(0.04, 0.40) * S;
-        sv = rr(2.0, 5.4) * (head ? 1.5 : 1.0);
+        cone(head ? 1.45 : 1.25, 0.5);
+        o = rr(0.04, 0.38) * S;
+        /* 飛沫は「遠くまで飛ぶ」ものではない。初速を上げすぎると 0.2 秒後には
+           巨大な赤い雲になり、隣の着弾と混ざって読み分けが壊れる。
+           抵抗を強くして、広がりを 0.5m 前後で頭打ちにする。 */
+        sv = rr(1.6, 4.0) * (head ? 1.3 : 1.0);
         reset();
         E.x = x + dX * o; E.y = y + dY * o; E.z = z + dZ * o;
         E.vx = dX * sv; E.vy = dY * sv + 0.5; E.vz = dZ * sv;
@@ -987,25 +1014,25 @@
         if (i % 4 === 0) tint(COL.bloodHot, 1.0);
         else if (i % 2 === 0) tint(COL.blood, rr(0.85, 1.15));
         else tint(i % 3 === 0 ? COL.bloodDark : COL.bloodDim, 1.0);
-        sizeU(rr(0.22, 0.36) * S, rr(0.52, 0.86) * S);
-        E.ttl = rr(0.34, 0.62) * L; E.grow = 0.45; E.drag = 4.0; E.grav = 3.4;
-        E.a0 = rr(0.70, 1.0); E.fade = 1.4;
+        sizeU(rr(0.22, 0.36) * S, rr(0.40, 0.64) * S);
+        E.ttl = rr(0.30, 0.52) * L; E.grow = 0.45; E.drag = 8.5; E.grav = 3.4;
+        E.a0 = rr(0.70, 1.0); E.fade = 1.9;
         emit(ALP);
       }
       /* 伸びた飛沫。粒だけだと「霧」で止まる。速度方向へ伸ばして初めて
          「飛び散った」に見える。 */
       var nSpray = head ? 12 : 9;
       for (i = 0; i < nSpray; i++) {
-        cone(head ? 1.45 : 1.15, 0.6);
-        sv = rr(4.5, 10.0) * (head ? 1.5 : 1.0);
+        cone(head ? 1.40 : 1.15, 0.6);
+        sv = rr(4.0, 8.5) * (head ? 1.3 : 1.0);
         reset();
         E.x = x + dX * 0.05; E.y = y + dY * 0.05; E.z = z + dZ * 0.05;
         E.vx = dX * sv; E.vy = dY * sv + 0.6; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
         tint(i % 3 === 0 ? COL.bloodHot : COL.blood, 1.0);
         size(0.060 * S, 0.040 * S, rr(0.30, 0.62) * S, rr(0.14, 0.28) * S);
-        E.ttl = rr(0.16, 0.30) * L; E.drag = 3.0; E.grav = 6.0;
-        E.a0 = 0.9; E.fade = 1.2;
+        E.ttl = rr(0.14, 0.26) * L; E.drag = 5.5; E.grav = 6.0;
+        E.a0 = 0.9; E.fade = 1.4;
         emit(ALP);
       }
 

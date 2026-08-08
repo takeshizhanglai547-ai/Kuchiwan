@@ -10,7 +10,7 @@
   {
    "name": "WebGLが描画している(draw call > 0)",
    "ok": true,
-   "detail": "draw=1 tri=1"
+   "detail": "draw=49 tri=68066"
   },
   {
    "name": "初期状態がFREE",
@@ -50,12 +50,12 @@
   {
    "name": "射撃トリガーから指を滑らせるとカメラが回る（左スワイプ=左旋回）",
    "ok": true,
-   "detail": "Δyaw=0.599 rad"
+   "detail": "Δyaw=0.598 rad"
   },
   {
    "name": "入力遅延（この環境はソフトウェア描画＝実機の値ではない）",
    "ok": true,
-   "detail": "avg=3.2ms max=4.9ms  ※参考値"
+   "detail": "avg=3.0ms max=4.2ms  ※参考値"
   },
   {
    "name": "R1 遮蔽への吸着：押した次のフレームで遷移が始まる",
@@ -380,12 +380,12 @@
   {
    "name": "§12 ドローコール ≤ 150",
    "ok": true,
-   "detail": "draw=1"
+   "detail": "draw=49"
   },
   {
    "name": "§12 三角形 ≤ 250,000",
    "ok": true,
-   "detail": "tri=1"
+   "detail": "tri=68066"
   },
   {
    "name": "撮影：02は高い遮蔽に隠れた状態",
@@ -433,6 +433,6 @@
    "detail": "なし"
   }
  ],
- "latAvg": 3.2000000000310442,
- "latMax": 4.900000000139698
+ "latAvg": 3,
+ "latMax": 4.2000000000116415
 }

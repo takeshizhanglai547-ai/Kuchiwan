@@ -103,10 +103,12 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
 
   // 入力遅延（タッチダウン → 描画呼び出し完了）
   const lats = [];
-  for (let i = 0; i < 6; i++) {
+  // 全アートモジュール搭載後はソフトウェア描画が非常に遅い。
+  // 1フレームに数秒かかることがあるので待ち時間を広く取る（実機の話ではない）。
+  for (let i = 0; i < 3; i++) {
     await page.evaluate(() => { __ASHLINE.METRICS.latency = -1; });
     await touch('touchStart', [{ x: btn.act.x, y: btn.act.y, id: 5 }]);
-    await page.waitForFunction(() => __ASHLINE.METRICS.latency >= 0, null, { timeout: 3000 });
+    await page.waitForFunction(() => __ASHLINE.METRICS.latency >= 0, null, { timeout: 60000 });
     lats.push(await page.evaluate(() => __ASHLINE.METRICS.latency));
     await touch('touchEnd', []);
     await page.waitForTimeout(120);

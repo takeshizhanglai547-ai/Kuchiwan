@@ -54,11 +54,14 @@
     function rr(a, b) { return a + (b - a) * rnd(); }
     function hash2(x, z) { var v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); }
 
-    /* ---- 因果ベクトル（この2本から破壊の向きを全部導く） ---------------- */
-    var DX = 0.66, DZ = 0.75;     // 砲弾の進行方向（南東へ）
-    var WX = -DX, WZ = -DZ;       // 被弾面が向いている方向（北西）
-    var FIRE_X = -10.2, FIRE_Z = -10.2;   // 火元＝北西の角
-    var WIND_X = 0.95, WIND_Z = 0.31;     // 風下＝東やや南。火はこちらへ流れた
+    /* ---- 因果ベクトル（この2本から破壊の向きを全部導く） ----------------
+       進行方向は「ほぼ真南（+Z）へ、わずかに東」。太陽の影は南東へ伸びるので、
+       わざと 25 度ずらしてある。同じ向きにすると倒壊も煤も影に飲まれて読めない。
+       そして被弾面（北向き）は、プレイヤーが北へ攻め上がるとき常に正面に来る。 */
+    var DX = 0.16, DZ = 0.987;    // 砲弾の進行方向（北から南へ）
+    var WX = -DX, WZ = -DZ;       // 被弾面が向いている方向（北）
+    var FIRE_X = -9.5, FIRE_Z = -10.5;    // 火元＝北西の角
+    var WIND_X = 0.93, WIND_Z = 0.37;     // 風下＝東やや南。火はこちらへ流れた
 
     /* 煤の濃さ。火元から風下へ伸びる細長い楕円。手続きノイズは撒かない
        （§3「ランダムに散らすのは不合格」）。形そのものが原因を語るようにする。 */
@@ -97,11 +100,13 @@
       return hit / 3;
     }
 
-    /* 弾着痕。北西→南東へ3発。同一直線上に並べることで「砲撃が歩いた」と読ませる */
+    /* 弾着痕。進行方向 D の直線上に3発、北から南へ等間隔で並べる。
+       「一発ずつ歩かせた（walking fire）」と読めることが目的なので位置は乱数にしない。
+       遮蔽の footprint を避けて西寄りの線に置いてある。 */
     var CRATERS = [
-      { x: -9.1, z: -9.3, r: 2.30, d: 0.100 },
-      { x: -3.5, z: -3.1, r: 1.75, d: 0.078 },
-      { x: 3.5, z: 3.4, r: 1.35, d: 0.055 }
+      { x: -7.4, z: -11.2, r: 2.20, d: 0.100 },
+      { x: -6.28, z: -4.29, r: 1.70, d: 0.078 },
+      { x: -5.16, z: 2.62, r: 1.35, d: 0.055 }
     ];
 
     /* ---------------------------------------------------------------------
@@ -153,7 +158,7 @@
       // 逆光側のアルベドを持ち上げる。太陽1灯では影側が一様な黒に潰れ、
       // 石積みの目地も欠けも読めなくなる。ライトを増やせない以上ここで補う。
       var back = Math.max(0, -(nx * SUN.x + ny * SUN.y + nz * SUN.z));
-      out.multiplyScalar(ao * fb * k * (1 + 0.62 * back));
+      out.multiplyScalar(ao * fb * k * (0.94 + 1.30 * back));
       if (fogK) out.lerp(C.fog, fogK);
       if (TEX) out.lerp(WHITE, 0.45);
       return out;
@@ -166,10 +171,10 @@
       out.copy(base);
       var burn = scorchAt(x, z) * (0.30 + 0.70 * Math.max(0, nx * WX + nz * WZ));
       if (burn > 0) out.lerp(C.grime, burn * 0.34);
-      var lam = 0.20 + 0.80 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
-      out.multiplyScalar(lam * k * 0.80);
+      var lam = 0.17 + 0.83 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
+      out.multiplyScalar(lam * k * 0.66);
       // 近い廃墟は暗いシルエット、遠い廃墟ほど粉塵に溶ける＝逆光の層になる
-      out.lerp(HAZE, clamp(fogK, 0, 0.88));
+      out.lerp(HAZE, clamp(fogK, 0, 0.72));
       if (TEX) out.lerp(WHITE, 0.35);
       return out;
     }
@@ -522,38 +527,47 @@
         x: cx - inx * SKIN * 0.5, y: (body - 0.2) * 0.5 - 0.1, z: cz - inz * SKIN * 0.5,
         hx: hx - Math.abs(inx) * SKIN * 0.5, hy: (body + 0.2) * 0.5,
         hz: hz - Math.abs(inz) * SKIN * 0.5,
-        col: C.concreteDark, k: 0.72, noBottom: true
+        col: C.concreteDark, k: 1.02, noBottom: true
       });
       // 剥離の奥に見える煉瓦の層
       box(bBrick, {
         x: cx + inx * (hx - SKIN * 0.72), y: (body - 0.2) * 0.5 - 0.1, z: cz + inz * (hz - SKIN * 0.72),
         hx: (inx !== 0) ? SKIN * 0.28 : hx - 0.02, hy: (body + 0.2) * 0.5,
         hz: (inz !== 0) ? SKIN * 0.28 : hz - 0.02,
-        col: C.brick, k: 0.5, noBottom: true
+        col: C.brick, k: 0.72, noBottom: true
       });
 
-      // 内面の表皮パネル
+      // 内面の表皮パネル。遮蔽と同じ馬目地にして「同じ都市の同じ石」に見せる
       var alongX = (inx === 0);
       var L = alongX ? (maxx - minx) : (maxz - minz);
+      var s0 = alongX ? minx : minz, s1 = alongX ? maxx : maxz;
       var nC = Math.max(1, Math.round(L / 0.88));
       var cw = L / nC;
       var rows = [0.0, 0.88, 1.76, 2.64, 3.40, body];
       var i, j;
-      for (i = 0; i < nC; i++) {
-        for (j = 0; j < rows.length - 1; j++) {
+      for (j = 0; j < rows.length - 1; j++) {
+        var off = (j % 2) ? 0.5 : 0.0;
+        for (i = -1; i <= nC; i++) {
+          var a0 = s0 + (i + off) * cw, a1 = a0 + cw;
+          if (a1 <= s0 + 0.01 || a0 >= s1 - 0.01) continue;
+          if (a0 < s0) a0 = s0;
+          if (a1 > s1) a1 = s1;
+          var half = (a1 - a0) * 0.5 - 0.012;
+          if (half <= 0.02) continue;
+          var mid = (a0 + a1) * 0.5;
           var y0 = rows[j], y1 = rows[j + 1];
           var hf = y0 / body;
           var pMiss = blow ? (0.06 + 0.44 * hf) : (0.02 + 0.11 * hf);
-          var px = alongX ? (minx + (i + 0.5) * cw) : (cx + inx * (hx - SKIN * 0.5));
-          var pz = alongX ? (cz + inz * (hz - SKIN * 0.5)) : (minz + (i + 0.5) * cw);
+          var px = alongX ? mid : (cx + inx * (hx - SKIN * 0.5));
+          var pz = alongX ? (cz + inz * (hz - SKIN * 0.5)) : mid;
           if (hash2(px * 5.7 + j * 3.3, pz * 5.7 - i * 2.9) < pMiss) continue;
           box(bPlaster, {
             x: px, y: (y0 + y1) * 0.5, z: pz,
-            hx: alongX ? cw * 0.5 - 0.012 : SKIN * 0.5,
+            hx: alongX ? half : SKIN * 0.5,
             hy: (y1 - y0) * 0.5 - 0.012,
-            hz: alongX ? SKIN * 0.5 : cw * 0.5 - 0.012,
+            hz: alongX ? SKIN * 0.5 : half,
             col: (hash2(px * 2.2, pz * 2.2) < 0.3) ? C.concrete : C.plaster,
-            k: 0.80 + 0.28 * hash2(px * 9.1, pz * 9.1), noBottom: true
+            k: 0.92 + 0.30 * hash2(px * 9.1, pz * 9.1), noBottom: true
           });
         }
       }
@@ -624,24 +638,28 @@
 
     /* =====================================================================
        4. アリーナ外の廃墟スカイライン（当たり判定なし）
-       全部が北西の上部を失い、南東へ倒れかけている＝地平線が原因を語る。
-       空気遠近を頂点色に焼き込み、霧が無い状態でも奥行きが出るようにする。
+       すべて北側の上部を失い、南へ倒れかけている＝地平線が原因を語る。
+       旧市街なので基本は「低く横に長い塊」。高いのは鐘楼・煙突など数本だけにして、
+       水平の連なりを一度だけ縦線が破る、という秩序の壊れ方にする。
        ================================================================== */
     (function buildSkyline() {
       // 遠景は実ライティングに載せない（bakeFar で焼き込む）
       function fbox(o) { o.far = true; box(bFar, o); }
       // 地平の板。壁の外に虚空が見えると廃墟が浮くので必ず敷く
-      fbox({ x: 0, y: -0.14, z: 0, hx: 95, hy: 0.06, hz: 95, col: C.ground, k: 0.70, fogK: 0.80, noBottom: true });
+      fbox({ x: 0, y: -0.14, z: 0, hx: 95, hy: 0.06, hz: 95, col: C.ground, k: 0.62, fogK: 0.66, noBottom: true });
 
-      /* リングごとに「疎らで低い手前」→「密で高い奥」。手前を詰め込むと
+      var KEEP = AX + WT + 1.2;   // これより内側には遠景の破片も一切入れない
+      function inside(x, z, m) { return (Math.abs(x) < KEEP + m) && (Math.abs(z) < KEEP + m); }
+
+      /* リングごとに「疎らで低い手前」→「密でやや高い奥」。手前を詰め込むと
          空が消えて地平線が読めなくなり、逆光の層が成立しない。 */
       var rings = [
-        { r0: 15.4, r1: 22.0, n: 16, h0: 4.0, h1: 8.5, p: 0.62 },
-        { r0: 22.0, r1: 33.0, n: 26, h0: 6.0, h1: 15.0, p: 0.78 },
-        { r0: 33.0, r1: 47.0, n: 26, h0: 8.0, h1: 22.0, p: 0.9 },
-        { r0: 47.0, r1: 68.0, n: 24, h0: 10.0, h1: 30.0, p: 1.0 }
+        { r0: 15.6, r1: 22.0, n: 18, h0: 3.6, h1: 7.5, p: 0.58 },
+        { r0: 22.0, r1: 33.0, n: 26, h0: 4.5, h1: 10.5, p: 0.74 },
+        { r0: 33.0, r1: 47.0, n: 28, h0: 5.5, h1: 13.0, p: 0.86 },
+        { r0: 47.0, r1: 70.0, n: 26, h0: 6.5, h1: 15.0, p: 0.95 }
       ];
-      var ri, k, i;
+      var ri, k;
       for (ri = 0; ri < rings.length; ri++) {
         var R = rings[ri];
         for (k = 0; k < R.n; k++) {
@@ -649,51 +667,64 @@
           var ang = (k / R.n) * TAU + rr(-0.4, 0.4) * (TAU / R.n);
           var rad = rr(R.r0, R.r1);
           var bx = Math.cos(ang) * rad, bz = Math.sin(ang) * rad;
-          var hw = rr(1.6, 3.6), hd = rr(1.6, 3.6);
-          // アリーナと外壁には絶対に食い込ませない
-          if (Math.abs(bx) - hw < AX + WT + 0.6 && Math.abs(bz) - hd < AZ + WT + 0.6) continue;
+          // 旧市街の街区：奥行きより間口が広い横長の塊
+          var hw = rr(2.2, 5.0), hd = rr(2.0, 4.2);
+          if (inside(bx, bz, hw + hd)) continue;
           var H = rr(R.h0, R.h1);
-          var fogK = Math.pow(clamp((rad - 13.5) / 50, 0, 1), 0.72) * 0.86;
+          var fogK = Math.pow(clamp((rad - 13.5) / 52, 0, 1), 0.70) * 0.72;
           var yaw = rr(-0.35, 0.35);
           var baseCol = (rnd() < 0.4) ? C.plaster : (rnd() < 0.5 ? C.concrete : C.stone);
 
           // 下半分：ほぼ健在
           fbox({ x: bx, y: H * 0.30, z: bz, hx: hw, hy: H * 0.30, hz: hd, ry: yaw, col: baseCol, k: rr(0.85, 1.05), fogK: fogK, noBottom: true });
-          // 中段：北西側が削られて一回り小さく、南東へ寄る
-          var sh2 = rr(0.62, 0.86);
+          // 中段：北側が削られて一回り小さく、南へ寄る
+          var sh2 = rr(0.58, 0.84);
           fbox({
-            x: bx + DX * hw * (1 - sh2) * 0.9, y: H * 0.72, z: bz + DZ * hd * (1 - sh2) * 0.9,
+            x: bx + DX * hw * (1 - sh2) * 1.0, y: H * 0.72, z: bz + DZ * hd * (1 - sh2) * 1.0,
             hx: hw * sh2, hy: H * 0.14, hz: hd * sh2, ry: yaw,
             col: baseCol, k: rr(0.78, 0.98), fogK: fogK, noBottom: true
           });
-          // 上段：さらに削られた残骸。北西の角が無い
-          var sh3 = sh2 * rr(0.40, 0.72);
-          var topH = rr(0.10, 0.34) * H;
+          // 上段：さらに削られた残骸。北側の角が無い
+          var sh3 = sh2 * rr(0.35, 0.68);
+          var topH = rr(0.08, 0.26) * H;
           fbox({
-            x: bx + DX * hw * (1 - sh3) * 1.05, y: H * 0.86 + topH * 0.5, z: bz + DZ * hd * (1 - sh3) * 1.05,
+            x: bx + DX * hw * (1 - sh3) * 1.1, y: H * 0.86 + topH * 0.5, z: bz + DZ * hd * (1 - sh3) * 1.1,
             hx: hw * sh3, hy: topH * 0.5, hz: hd * sh3, ry: yaw + rr(-0.1, 0.1),
             col: baseCol, k: rr(0.72, 0.92), fogK: fogK, noBottom: true
           });
-          // 南東へ倒れかけた床スラブ
-          if (rnd() < 0.62) {
-            var lean3 = rr(0.35, 0.95);
-            fbox({
-              x: bx + DX * (hw + rr(0.3, 1.2)), y: H * rr(0.45, 0.80), z: bz + DZ * (hd + rr(0.3, 1.2)),
-              hx: rr(0.9, 2.2), hy: 0.12, hz: rr(0.7, 1.8),
-              ry: rr(0, TAU), rx: lean3 * DZ, rz: -lean3 * DX,
-              col: C.concreteDark, k: rr(0.8, 1.0), fogK: fogK, noBottom: true
-            });
-          }
-          // 生き残った煙突・塔。地平のリズムを作る垂直線
-          if (rnd() < 0.20) {
-            var th = rr(4.0, 13.0);
-            fbox({
-              x: bx + rr(-hw * 0.6, hw * 0.6), y: H * 0.86 + th * 0.5, z: bz + rr(-hd * 0.6, hd * 0.6),
-              hx: rr(0.28, 0.62), hy: th * 0.5, hz: rr(0.28, 0.62), ry: yaw,
-              col: (rnd() < 0.5) ? C.brick : baseCol, k: rr(0.7, 0.95), fogK: fogK * 1.05, noBottom: true
-            });
+          // 南へ倒れかけた床スラブ。輪郭に斜めの線を1本だけ入れて倒壊方向を出す
+          if (rnd() < 0.55) {
+            var lean3 = rr(0.45, 1.05);
+            var sx2 = bx + DX * (hw + rr(0.4, 1.4)), sz2 = bz + DZ * (hd + rr(0.4, 1.4));
+            if (!inside(sx2, sz2, 2.4)) {
+              fbox({
+                x: sx2, y: H * rr(0.42, 0.74), z: sz2,
+                hx: rr(0.8, 2.0), hy: 0.12, hz: rr(0.7, 1.6),
+                ry: rr(0, TAU), rx: lean3 * DZ, rz: -lean3 * DX,
+                col: C.concreteDark, k: rr(0.8, 1.0), fogK: fogK, noBottom: true
+              });
+            }
           }
         }
+      }
+
+      /* 生き残った鐘楼・煙突。数を絞ることで「1本だけ立っている」強さが出る。
+         これも全部が北側を削られ、南へ折れかけている。 */
+      var LAND = 11;
+      for (k = 0; k < LAND; k++) {
+        var a2 = (k / LAND) * TAU + rr(-0.3, 0.3);
+        var r2 = rr(20, 62);
+        var lx = Math.cos(a2) * r2, lz = Math.sin(a2) * r2;
+        if (inside(lx, lz, 3)) continue;
+        var fk2 = Math.pow(clamp((r2 - 13.5) / 52, 0, 1), 0.70) * 0.72;
+        var th2 = rr(11, 21), tw = rr(0.75, 1.5);
+        fbox({ x: lx, y: th2 * 0.42, z: lz, hx: tw, hy: th2 * 0.42, hz: tw * rr(0.85, 1.15), ry: rr(0, TAU), col: C.stone, k: rr(0.8, 1.0), fogK: fk2, noBottom: true });
+        // 折れた頂部が南へずれて残る
+        fbox({
+          x: lx + DX * tw * 0.9, y: th2 * 0.9, z: lz + DZ * tw * 0.9,
+          hx: tw * 0.62, hy: th2 * 0.10, hz: tw * 0.62, ry: rr(0, TAU),
+          col: C.stone, k: rr(0.7, 0.9), fogK: fk2, noBottom: true
+        });
       }
     })();
 

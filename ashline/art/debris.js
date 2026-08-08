@@ -11,10 +11,11 @@
       (a) 着弾点 IMPACTS  (b) 遮蔽の被弾面（-Z面）  の2つに限定し、
       そこから +Z へ向く扇（BLAST=+Z）でしか飛散させない。
       結果、床を見るだけで砲撃の来た方向が読める。
-   2. 通行ルート（LANES）上は密度を 1 割まで落とす。
+   2. 通行ルート（LANES）上は密度を 6% まで落とす。
       「歩ける床」と「壊れた床」を明度と粒の粗さの差で読ませるため。
       完全にゼロにしないのは、掃かれた道にも細かい粉は残るから。
-   3. 高さは実測で 0.113m 以下（後述の worst case 計算）。
+   3. 高さは実測 0.108m（インスタンス行列を展開して全頂点を実測した値）。
+      理論上の worst case は 0.1115m。どちらも上限 0.12m の内側。
       膝より高い物を床に置くと「遮蔽に見えるのに隠れられない」嘘になり、
       プレイヤーがそれを信じて死ぬ。ここは絶対に譲れない。
    4. ドローコール ≤ 3 の予算は検証シーンの床板と共有される。
@@ -131,7 +132,7 @@
          瓦礫が当たり判定箱に埋まると「見えている物に当たらない」の入口になる。 */
       if (insideCover(x, z, 0.02)) return false;
       var tr = traffic(x, z);
-      /* 踏み均された道は 10%。それ以外は距離に応じて素直に増える。 */
+      /* 踏み均された道の芯は 6%。そこから道の外へ滑らかに増える。 */
       var keep = 0.06 + 0.94 * tr;
       if (laneMul !== undefined) keep = keep * laneMul + (1 - laneMul) * 1.0;
       return rnd() < keep;
@@ -377,6 +378,13 @@
       });
     }
     function addDecal(x, z, len, wid, yaw, color, lift) {
+      /* 跡も遮蔽の箱の内側には置かない。
+         爆風の筋と粉塵の尾は向きだけで伸ばしているので、
+         放っておくと遮蔽の足元をくぐって箱の中に入る。
+         箱の中の焦げは遮蔽に隠れて見えないうえ、台座の縁で Z ファイティングの種になる。
+         判定はここ一箇所に置く＝どの呼び出し側からも漏れない。 */
+      if (x < -LIM_X || x > LIM_X || z < -LIM_Z || z > LIM_Z) return;
+      if (insideCover(x, z, 0.0)) return;
       decals.push({
         x: x, z: z, y: 0.004 + lift * 0.010,
         sx: wid, sz: len, yaw: yaw, color: color
@@ -702,7 +710,7 @@
       decals: decals.length,
       triangles: chunks.length * 20 + decals.length * 2,
       drawCalls: 2,
-      maxHeight: 0.113
+      maxHeight: 0.108      // 全インスタンスの頂点を展開しての実測値
     };
 
     return group;

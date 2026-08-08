@@ -27,11 +27,6 @@
     var P = ASH.palette;
 
     /* -----------------------------------------------------------------------
-       アリーナの実体積。COVERS は最大 h=2.0 程度、外周壁が 3m 前後なので
-       y は -0.4〜7.2 で足りる（背景の廃墟スカイラインは影を落とさせない）。
-       ここを大きく取りすぎると 1024px の影が粗くなるので、必要最小限にする。
-       -------------------------------------------------------------------- */
-    /* -----------------------------------------------------------------------
        照度の単位あわせ
        three r155 以降 WebGLRenderer._useLegacyLights の既定が false になり、
        ライトの色に π が掛からなくなった（vendor/three.min.js r160 で実測確認済み：
@@ -44,6 +39,11 @@
        -------------------------------------------------------------------- */
     var LIGHT_UNIT = Math.PI;
 
+    /* -----------------------------------------------------------------------
+       アリーナの実体積。COVERS は最大 h=2.0 程度、外周壁が 3m 前後なので
+       y は -0.4〜7.2 で足りる（背景の廃墟スカイラインは影を落とさせない）。
+       ここを大きく取りすぎると 1024px の影が粗くなるので、必要最小限にする。
+       -------------------------------------------------------------------- */
     var ARENA_HX = 13.5, ARENA_HZ = 13.5;
     var ARENA_Y0 = -0.4, ARENA_Y1 = 7.2;
     var cx = 0.0, cy = (ARENA_Y0 + ARENA_Y1) * 0.5, cz = 0.0;
@@ -205,7 +205,9 @@
       '#include <opaque_fragment>'
     ].join('\n');
 
-    var rimUniformSets = [];   // update() から一括で触れるように保持
+    /* ユニフォームはマテリアルごとに持たせる（同じプログラムを共有していても
+       値はマテリアル単位で効くことを実測で確認済み）。
+       太陽は回転しないので update() から書き換える必要がなく、参照は保持しない。 */
     var stats = { applied: 0, compiled: 0, failed: 0, lastFrag: '' };
 
     function applyRim(material, opts) {
@@ -233,8 +235,13 @@
       };
 
       var prev = material.onBeforeCompile;
-      var hasPrev = typeof prev === 'function' && prev.toString().indexOf('ASHRIM') < 0
-        && prev !== T.Material.prototype.onBeforeCompile;
+      var baseOBC = (T.Material && T.Material.prototype) ? T.Material.prototype.onBeforeCompile : null;
+      var hasPrev = typeof prev === 'function' && prev !== baseOBC
+        && prev.toString().indexOf('ASHRIM') < 0;
+      /* 連鎖する前段があるならソースが変わる。キャッシュキーに混ぜないと、
+         先に焼かれた別マテリアルのプログラムを使い回されて前段が黙って消える
+         （実測で踏んだ。プログラムは1本しか作られず PRIOR が消えていた）。 */
+      var priorKey = hasPrev ? prev.toString() : '';
 
       material.onBeforeCompile = function ashRimCompile(shader, renderer) {
         /* ASHRIM: この文字列はプログラムキャッシュキーの目印も兼ねる */
@@ -261,16 +268,15 @@
         stats.lastVert = vs;
       };
 
-      /* 焼き込みの有無でプログラムを分ける。既定の customProgramCacheKey は
-         onBeforeCompile.toString() を返すので実は分かれるが、
-         将来 opts でソースを変えたときに事故らないよう明示しておく。 */
-      material.customProgramCacheKey = function () { return 'ASHRIM.v1'; };
+      /* 焼き込みの有無でプログラムを分ける。
+         opts はユニフォームの値しか変えないのでキーには入れない
+         ＝リムありのマテリアルは何個作っても GLSL プログラムは1本で済む。 */
+      material.customProgramCacheKey = function () { return 'ASHRIM.v1|' + priorKey; };
 
       material.userData = material.userData || {};
       material.userData.ashRim = true;
       material.needsUpdate = true;
 
-      rimUniformSets.push(u);
       stats.applied++;
       return material;
     }
