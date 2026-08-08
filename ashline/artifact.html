@@ -10332,6 +10332,10 @@ var UI = {
     }, { passive: false });
     this.els.assistBtn.textContent = 'エイムアシスト：' + ASSIST_LEVELS[SET.assist].name;
     this.els.autoBtn.textContent = 'オートファイア：' + (SET.autoFire ? 'ON' : 'OFF');
+    // デバッグ表示の初期状態をDOMに反映する。CSSは既定で表示なので、
+    // ここで揃えないと debug=false でも §6 の検証用の緑破線が画面に残る。
+    this.els.dbg.style.display = SET.debug ? 'block' : 'none';
+    this.els.zoneL.style.display = this.els.zoneR.style.display = SET.debug ? 'block' : 'none';
     this.resize();
   },
   resize: function () {
