@@ -132,7 +132,9 @@
     };
 
     var _col = new T.Color();
-    var HAZE = new T.Color(P.skyHorizon);           // 空気遠近の到達色＝地平の粉塵
+    // 空気遠近の到達色。skyHorizon そのままだと明る過ぎて背景が前に出るので
+    // fog 側へ寄せて一段沈める（§「遠景を必ず一段濁らせる」）
+    var HAZE = new T.Color(P.skyHorizon).lerp(new T.Color(P.fog), 0.55);
     var SUN = { x: P.sunDir.x, y: P.sunDir.y, z: P.sunDir.z };
     (function () {
       var l = Math.sqrt(SUN.x * SUN.x + SUN.y * SUN.y + SUN.z * SUN.z);
@@ -148,7 +150,10 @@
       if (burn > 0) out.lerp(C.grime, burn * 0.46);
       var ao = 1 - 0.28 * (1 - clamp(y / 2.0, 0, 1));
       var fb = ny > 0.5 ? 1.16 : (ny < -0.5 ? 0.60 : 1.0);
-      out.multiplyScalar(ao * fb * k);
+      // 逆光側のアルベドを持ち上げる。太陽1灯では影側が一様な黒に潰れ、
+      // 石積みの目地も欠けも読めなくなる。ライトを増やせない以上ここで補う。
+      var back = Math.max(0, -(nx * SUN.x + ny * SUN.y + nz * SUN.z));
+      out.multiplyScalar(ao * fb * k * (1 + 0.62 * back));
       if (fogK) out.lerp(C.fog, fogK);
       if (TEX) out.lerp(WHITE, 0.45);
       return out;
@@ -161,9 +166,10 @@
       out.copy(base);
       var burn = scorchAt(x, z) * (0.30 + 0.70 * Math.max(0, nx * WX + nz * WZ));
       if (burn > 0) out.lerp(C.grime, burn * 0.34);
-      var lam = 0.30 + 0.70 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
-      out.multiplyScalar(lam * k * 0.92);
-      out.lerp(HAZE, clamp(fogK, 0, 0.92));
+      var lam = 0.20 + 0.80 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
+      out.multiplyScalar(lam * k * 0.80);
+      // 近い廃墟は暗いシルエット、遠い廃墟ほど粉塵に溶ける＝逆光の層になる
+      out.lerp(HAZE, clamp(fogK, 0, 0.88));
       if (TEX) out.lerp(WHITE, 0.35);
       return out;
     }

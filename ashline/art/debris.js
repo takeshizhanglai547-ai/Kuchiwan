@@ -381,10 +381,19 @@
     for (i = 0; i < IMPACTS.length; i++) {
       var IM = IMPACTS[i];
 
-      /* 8a. 着弾の芯。小さく、床の色より明確に暗く。
-             ここを大きく薄く広げると、ただ床が汚れているようにしか見えない。 */
+      /* 8a. 着弾の芯。順序が命：
+             (1) 破断面の淡い粉の輪 → (2) 焦げた暗い芯 の順に重ねる。
+             暗い床に暗い跡だけを置いても穴には見えない。
+             明→暗の明度差が同心に並んで初めて「掘れた」と読める。 */
+      for (j = 0; j < 6; j++) {
+        var cph = j * 1.0472 + rr(-0.34, 0.34);
+        var cd = IM.r * rr(0.48, 0.80);
+        addDecal(IM.x + Math.sin(cph) * cd, IM.z + Math.cos(cph) * cd,
+          IM.r * rr(0.45, 0.78), IM.r * rr(0.34, 0.56), cph,
+          ASH.shade(T, P.plaster, rr(0.60, 0.86)), 0.0);
+      }
       addDecal(IM.x, IM.z, IM.r * 0.95, IM.r * 0.80,
-        rnd() * 6.2832, ASH.shade(T, P.grime, rr(0.45, 0.70)), 0.0);
+        rnd() * 6.2832, ASH.shade(T, P.grime, rr(0.45, 0.70)), 0.20);
 
       /* 8b. 爆風の尾。+Z の扇の中に細長い筋を並べる。
              床に矢印を描いているのはここ。全着弾で向きが揃うので、
@@ -471,7 +480,7 @@
         x = IM.x + Math.sin(ph2) * rad2;
         z = IM.z + Math.cos(ph2) * rad2;
         if (!accept(x, z, 1.0)) continue;
-        addChunk(x, z, rr(0.22, 0.44), 'flat', pick(K_PAPER), 0.17);
+        addChunk(x, z, rr(0.15, 0.32), 'flat', pick(K_PAPER), 0.17);
       }
     }
 
@@ -556,10 +565,15 @@
           z = oz + bdirz * step * j + gauss() * 0.035;
           if (x < -LIM_X || x > LIM_X || z < -LIM_Z || z > LIM_Z) continue;
           if (insideCover(x, z, 0.02)) continue;
-          var pr = rr(0.085, 0.155);
+          var pr = rr(0.10, 0.18);
+          var pyaw = Math.atan2(bdirx, bdirz);
+          /* まず着弾で舞い上がった淡い粉。これが無いと暗い床の上で
+             暗い弾痕が完全に消え、連射の列が読めない。 */
+          addDecal(x, z, pr * rr(3.0, 4.2), pr * rr(2.4, 3.4), pyaw,
+            ASH.shade(T, P.plaster, rr(0.66, 0.90)), 0.45 + rnd() * 0.1);
           /* 弾痕は「入射角がついた楕円」。真円だと真上から撃たれたことになる */
-          addDecal(x, z, pr * rr(1.5, 2.4), pr, Math.atan2(bdirx, bdirz),
-            ASH.shade(T, P.grime, rr(0.50, 0.85)), 0.75 + rnd() * 0.2);
+          addDecal(x, z, pr * rr(1.5, 2.4), pr, pyaw,
+            ASH.shade(T, P.grime, rr(0.45, 0.78)), 0.78 + rnd() * 0.18);
           /* 弾痕の脇に必ず1粒、白い剥離片を置く。
              これがあるとコンクリが「割れて飛んだ」ことが読める */
           if (rnd() < 0.75) {

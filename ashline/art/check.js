@@ -240,8 +240,12 @@ if (!SCENES[NAME]) {
 }
 
 /* --- 予算 ------------------------------------------------------------------ */
+/* 注意：ここの calls はテストシーン全体の合計。
+   sky のテストシーンは地面1枚＋箱5個＝ハーネス自身で6コールを先に消費するため、
+   契約本文の「モジュール寄与 ≤ 3」を判定するには 6+3=9 を上限にする必要がある。
+   （当初 3 にしていたのは誤りで、空実装でも落ちる不可能な条件だった） */
 const BUDGET = {
-  tex: { calls: 40, tris: 200 }, sky: { calls: 3, tris: 6000 },
+  tex: { calls: 40, tris: 200 }, sky: { calls: 9, tris: 6100 },
   light: { calls: 40, tris: 200 }, post: { calls: 40, tris: 200 },
   env: { calls: 24, tris: 90000 }, debris: { calls: 3, tris: 25000 },
   player: { calls: 6, tris: 3500 }, enemy: { calls: 10, tris: 6000 },
@@ -308,6 +312,9 @@ const BUDGET = {
         MATS = {};
         ${SCENES[NAME]}
         if (POST && POST.setSize) POST.setSize(1000,620);
+        // three は render() の冒頭で info を自動リセットするため、複数パスを描く
+        // ポストでは最後の1パスしか残らない。自動リセットを切って全パスを合算する。
+        renderer.info.autoReset = false;
         renderer.info.reset();
         if (POST && POST.render) POST.render(); else renderer.render(scene, camera);
         R.calls = renderer.info.render.calls;

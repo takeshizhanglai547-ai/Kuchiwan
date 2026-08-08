@@ -890,17 +890,19 @@
         emit(ALP);
       }
 
-      /* 3層目：短い火花。石を削った破片なので白〜青白。暖色にしない。 */
-      for (i = 0; i < 10; i++) {
-        cone(1.15, 0.6);
-        sv = rr(6.0, 13.0);
+      /* 3層目：短い火花。石を削った破片なので白〜青白。暖色にしない。
+         白い粉塵の中に白い火花を置くと同化して消える。初期位置を雲の外へ出し、
+         長さも雲の半径を超えるところまで伸ばして、輪郭から突き出させる。 */
+      for (i = 0; i < 11; i++) {
+        cone(1.15, 0.55);
+        sv = rr(9.0, 19.0);
         reset();
-        E.x = x + dX * 0.06; E.y = y + dY * 0.06; E.z = z + dZ * 0.06;
+        E.x = x + dX * 0.22; E.y = y + dY * 0.22; E.z = z + dZ * 0.22;
         E.vx = dX * sv; E.vy = dY * sv + 0.8; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
-        tint(COL.coldSpark, rr(0.75, 1.1));
-        size(0.034, 0.020, rr(0.26, 0.50), rr(0.10, 0.18));
-        E.ttl = rr(0.09, 0.17); E.drag = 3.6; E.grav = 8.0;
+        tint(COL.coldSpark, rr(1.0, 1.5));
+        size(0.036, 0.022, rr(0.38, 0.72), rr(0.14, 0.24));
+        E.ttl = rr(0.10, 0.19); E.drag = 3.6; E.grav = 8.0;
         E.a0 = 1.0; E.fade = 1.1;
         emit(ADD);
       }
@@ -909,47 +911,52 @@
     /* 命中＝暖色の飛沫（bloodMist）＋装甲片の火花（impactSpark）の2層。
        head は同じ骨格を拡大したうえで、enemy が持たない形（リング・花弁）を足す。 */
     function impactFlesh(x, y, z, head) {
-      var S = head ? 1.85 : 1.0;      // 大きさ
+      /* 胴命中は「外れの粉塵」に負けてはいけない。負けると当てた実感が消える。
+         そのうえで致命打が胴命中を明確に上回るよう、倍率は 1.25 : 2.0 に取る。 */
+      var S = head ? 2.0 : 1.25;      // 大きさ
       var L = head ? 1.7 : 1.0;       // 寿命
       var i, sv, o;
 
-      /* --- 芯の閃光 --------------------------------------------------------- */
+      /* --- 芯の閃光 ---------------------------------------------------------
+         白い芯は小さく留める。ここを大きくすると致命打が「白い電球」になり、
+         暖色の飛沫が全部その中に飲まれて命中の色が消える。 */
       reset();
       E.x = x + nX * 0.03; E.y = y + nY * 0.03; E.z = z + nZ * 0.03;
       E.tile = TILE_HOT;
-      tint(head ? COL.core : COL.ember, head ? 1.0 : 0.9);
-      sizeU(0.13 * S, 0.34 * S);
+      tint(head ? COL.core : COL.ember, head ? 0.9 : 0.9);
+      sizeU(0.16 * S, 0.40 * S);
       E.ttl = 0.08 * L; E.grow = 0.45; E.a0 = 1.0; E.fade = 1.0;
       emit(ADD);
       reset();
       E.x = x + nX * 0.04; E.y = y + nY * 0.04; E.z = z + nZ * 0.04;
       E.tile = TILE_GLOW;
-      tint(head ? COL.spark : COL.glow, head ? 0.9 : 0.5);
-      sizeU(0.26 * S, 0.62 * S);
-      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.85 : 0.45; E.fade = 1.2;
+      tint(head ? COL.spark : COL.glow, head ? 0.85 : 0.55);
+      sizeU(0.34 * S, 0.80 * S);
+      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.8 : 0.5; E.fade = 1.2;
       emit(ADD);
 
       if (head) {
         /* --- 致命打だけが持つ形 その1：衝撃リング ---------------------------
            拡大する細い輪は、胴命中には無い「別の事象が起きた」記号になる。
-           2枚を速度差で重ね、単発の輪よりエネルギーを持たせる。 */
+           2枚を速度差で重ねてエネルギーを出す。色は白ではなく火花の橙：
+           白いリングは「UIのエフェクト」に見えるが、橙なら「火」に見える。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.core, 1.0); sizeU(0.42, 1.85);
+        E.tile = TILE_RING; tint(COL.spark, 1.1); sizeU(0.80, 2.60);
         E.rot = rnd() * 6.283;
         E.ttl = 0.26; E.grow = 0.34; E.a0 = 0.95; E.fade = 1.5;
         emit(ADD);
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.spark, 0.9); sizeU(0.28, 1.15);
+        E.tile = TILE_RING; tint(COL.glow, 1.0); sizeU(0.50, 1.60);
         E.rot = rnd() * 6.283;
-        E.ttl = 0.34; E.grow = 0.4; E.a0 = 0.7; E.fade = 1.3;
+        E.ttl = 0.34; E.grow = 0.4; E.a0 = 0.75; E.fade = 1.3;
         emit(ADD);
         /* その2：花弁のスターバースト。マズルと同じ語彙を使い、
            「銃口と同じ格の出来事が敵の頭で起きた」と読ませる。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_PETAL; tint(COL.core, 1.0); sizeU(0.45, 1.05);
+        E.tile = TILE_PETAL; tint(COL.glow, 1.25); sizeU(0.85, 1.70);
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 5.0;
         E.ttl = 0.13; E.grow = 0.4; E.a0 = 1.0; E.fade = 1.1;
         emit(ADD);
@@ -958,10 +965,10 @@
       /* --- 1層目：暖色の飛沫（bloodMist） -----------------------------------
          円錐を広く取り（±75°／致命打は±95°）、丸く広がる塊にする。
          world の「縦に立つ狭いプルーム」と形で対比させるのが狙い。 */
-      var nMist = head ? 26 : 15;
+      var nMist = head ? 26 : 19;
       for (i = 0; i < nMist; i++) {
         cone(head ? 1.66 : 1.30, 0.5);
-        o = rr(0.02, 0.26) * S;
+        o = rr(0.04, 0.40) * S;
         sv = rr(2.0, 5.4) * (head ? 1.5 : 1.0);
         reset();
         E.x = x + dX * o; E.y = y + dY * o; E.z = z + dZ * o;
@@ -972,14 +979,14 @@
         if (i % 4 === 0) tint(COL.bloodHot, 1.0);
         else if (i % 2 === 0) tint(COL.blood, rr(0.85, 1.15));
         else tint(i % 3 === 0 ? COL.bloodDark : COL.bloodDim, 1.0);
-        sizeU(rr(0.09, 0.17) * S, rr(0.24, 0.44) * S);
+        sizeU(rr(0.22, 0.36) * S, rr(0.52, 0.86) * S);
         E.ttl = rr(0.34, 0.62) * L; E.grow = 0.45; E.drag = 4.0; E.grav = 3.4;
-        E.a0 = rr(0.62, 0.95); E.fade = 1.4;
+        E.a0 = rr(0.70, 1.0); E.fade = 1.4;
         emit(ALP);
       }
       /* 伸びた飛沫。粒だけだと「霧」で止まる。速度方向へ伸ばして初めて
          「飛び散った」に見える。 */
-      var nSpray = head ? 12 : 7;
+      var nSpray = head ? 12 : 9;
       for (i = 0; i < nSpray; i++) {
         cone(head ? 1.45 : 1.15, 0.6);
         sv = rr(4.5, 10.0) * (head ? 1.5 : 1.0);
@@ -988,24 +995,26 @@
         E.vx = dX * sv; E.vy = dY * sv + 0.6; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
         tint(i % 3 === 0 ? COL.bloodHot : COL.blood, 1.0);
-        size(0.042 * S, 0.030 * S, rr(0.20, 0.46) * S, rr(0.10, 0.22) * S);
+        size(0.060 * S, 0.040 * S, rr(0.30, 0.62) * S, rr(0.14, 0.28) * S);
         E.ttl = rr(0.16, 0.30) * L; E.drag = 3.0; E.grav = 6.0;
         E.a0 = 0.9; E.fade = 1.2;
         emit(ALP);
       }
 
       /* --- 2層目：装甲片の火花（impactSpark） -------------------------------- */
-      var nSpark = head ? 16 : 10;
+      var nSpark = head ? 17 : 12;
       for (i = 0; i < nSpark; i++) {
-        cone(1.25, 0.6);
-        sv = rr(6.0, 13.0) * (head ? 1.6 : 1.0);
+        cone(1.25, 0.55);
+        sv = rr(8.0, 17.0) * (head ? 1.6 : 1.0);
         reset();
-        E.x = x + dX * 0.04; E.y = y + dY * 0.04; E.z = z + dZ * 0.04;
+        /* 飛沫の塊の外側から出す。中に埋めると火花の層が見えなくなり、
+           「2層以上返っている」ことが伝わらない。 */
+        E.x = x + dX * 0.20 * S; E.y = y + dY * 0.20 * S; E.z = z + dZ * 0.20 * S;
         E.vx = dX * sv; E.vy = dY * sv + 0.9; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
         tint(head && i % 4 === 0 ? COL.core : (i % 3 === 0 ? COL.sparkHot : COL.spark), 1.0);
-        size(0.030 * S, 0.018 * S,
-          rr(0.20, 0.42) * (head ? 1.7 : 1.0), rr(0.09, 0.18) * (head ? 1.5 : 1.0));
+        size(0.036 * S, 0.020 * S,
+          rr(0.28, 0.54) * (head ? 1.7 : 1.0), rr(0.12, 0.22) * (head ? 1.5 : 1.0));
         E.ttl = rr(0.10, 0.20) * (head ? 1.9 : 1.0); E.drag = 3.2; E.grav = 9.0;
         E.a0 = 1.0; E.fade = 1.1;
         emit(ADD);

@@ -86,13 +86,25 @@
     sc.far = dist + ez + 1.0;
     sc.updateProjectionMatrix();
 
-    /* bias は「深度そのもの」をずらすので大きくすると peter-panning（浮き）になる。
-       normalBias は法線方向に押し出すので、傾いた面のアクネによく効き、浮きは出にくい。
-       テクセルのワールドサイズは 2*ex/1024 ≈ 0.037m なので、
-       normalBias はその 1.5 倍前後を上限に据え、bias はごく浅く当てる。 */
-    sun.shadow.bias = -0.00035;
-    sun.shadow.normalBias = 0.042;
-    sun.shadow.radius = 1.0;    // PCFShadowMap のタップ幅。広げるとアクネも広がるので1に据える
+    /* bias / normalBias は実測で詰めた値。理屈だけで置いていない。
+       テクセルのワールドサイズは 2*ex/1024 ≈ 0.037m。
+
+       アクネ側：横倒しの円柱・大球・浅く傾いた広い板（＝dotNL≒0 のグレージングを
+       必ず含む形）を並べて normalBias 0 / bias 0 まで落として撮ったが、
+       この錐台（near 0.5 / far 41）の深度精度では縞が出なかった。
+       つまりアクネ対策としては 0 でも足りている。
+
+       peter-panning 側：床に密着した箱と厚さ 5cm の薄板を接地カットで撮ると、
+       normalBias 0.042 では箱の足元に明るい帯が出て影が剥がれた。0.012 では出ない。
+       よってアクネ余裕ぶんだけ残した 0.012 を採る。env.js の別形状で
+       万一アクネが出ても耐えられ、かつ影は接地したままでいられる値。 */
+    sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.012;
+    /* PCFShadowMap は shadowRadius をタップ幅に使う（r160 の
+       shadowmap_pars_fragment を実際に読んで確認済み）。
+       1024px を 38m に伸ばすとテクセルが 37mm あり、影の縁が階段状に見える。
+       2.4 まで広げると階段が溶け、接地部の漏れも出なかった。 */
+    sun.shadow.radius = 2.4;
 
     scene.add(sun);
     scene.add(sun.target);
