@@ -422,10 +422,15 @@
       var big = fbm(S, 4, 5, 101);                // 打設ロットのむら
       var agg = fbm(S, 64, 3, 233);               // 骨材の粒
       var fine = fbm(S, 160, 2, 977);             // 目の細かいざらつき
-      /* 反復対策のマクロむら。周期をタイル1枚（＝壁1ブロック）より大きくは
-         できないので、せめて型枠の割付より低い周波数で強く振り、
-         目が「割付の格子」ではなく「大きな汚れ」で面をまとめるようにする。 */
-      var macro = fbm2(S, 2, 3, 4, 5050);
+      /* 反復対策のマクロむら。
+         注意：ここは一度「低周波で大きく振る」方向に振り切って失敗している。
+         タイルに1つしかない大きな特徴は、敷き詰めた瞬間に最も目立つ目印になる。
+         正しい方針は逆で、
+             ・タイル内に1〜2個しかない大きな特徴を作らない
+             ・中〜高周波の情報量を増やして「面」として見せる
+             ・低周波は"わずかに"だけ入れて平坦さを避ける
+         なので振幅は控えめ（±12%程度）に留める。 */
+      var macro = fbm2(S, 3, 4, 4, 5050);
       var cDark = toRGB(P.concreteDark, [0, 0, 0]);
       var cPale = toRGB(sh(P.concrete, 1.34), [0, 0, 0]);
       var cWet = toRGB(P.concreteWet, [0, 0, 0]);
@@ -446,7 +451,7 @@
           scl(out, 1 - 0.22 * Math.pow(v, 2.4));
           /* 濡れ残りの染み：低周波の谷にだけ溜める */
           lerp3(out, cWet, smoothstep(0.40, 0.14, big[i]) * 0.42 * (0.30 + 0.70 * v), out);
-          scl(out, 0.74 + 0.56 * macro[i]);       // マクロむら（明暗の両方向）
+          scl(out, 0.88 + 0.24 * macro[i]);       // マクロむら（弱く。強いと反復の目印になる）
         });
       }
 
@@ -633,11 +638,14 @@
     function buildPlaster() {
       var S = 512, o = mk(S), x = o.x;
       var wx = fbm(S, 5, 3, 71), wy = fbm(S, 5, 3, 137);
-      var m = warp(S, fbm(S, 4, 5, 909), wx, wy, 62);   // 縁をちぎれさせる
+      /* 剥離の周波数。3〜4 だとタイルに島が2〜3個しかできず、敷き詰めたとき
+         その島の形がそのまま迷彩柄として反復した（実機の中景で発生）。
+         周波数を上げて島を小さく多くし、「模様」ではなく「肌」に変える。 */
+      var m = warp(S, fbm(S, 8, 5, 909), wx, wy, 40);
       var det = fbm(S, 90, 3, 1201);
       var mott = fbm(S, 10, 4, 331);
       var mid = fbm(S, 24, 4, 332);               // 中周波。遠景で消えないための情報
-      var macro = fbm2(S, 2, 3, 4, 5353);
+      var macro = fbm2(S, 3, 4, 4, 5353);
 
       var T2 = 0.545, T1 = 0.470;                 // 仕上げ / 下塗り / 下地 の境
       var cTop = toRGB(P.plaster, [0, 0, 0]);
@@ -671,14 +679,17 @@
         /* 剥離部の「上側かどうか」。上に漆喰が残っていれば影が濃い。 */
         var above = m[((py - 6 + S) % S) * S + px];
         if (mv > T2 + 0.014) {                    // 仕上げ塗り（生きている面）
-          /* 実測で明度の標準偏差が 32 と一式で最大＝遠景で迷彩柄になる原因。
-             生きた面を少し落とし、下地を持ち上げて振れ幅を詰める。 */
+          /* 迷彩柄対策の本丸。生きた漆喰(L≈146)と露出下地(L≈82)の明度比が
+             1.8倍もあると、敷き詰めた瞬間に「明るい島／暗い地」の2値模様として
+             読まれる。比を 1.3 倍程度まで詰め、剥離の読み取りは
+             ①小口の影 ②欠けた縁の光 ③下地の煉瓦目地 の3つに任せる。
+             明度差に頼るのをやめる、というのがここでの判断。 */
           lerp3(cTopD, cTop, 0.22 + 0.98 * mott[i], out);
-          scl(out, 0.74 + 0.26 * det[i]);
+          scl(out, 0.62 + 0.22 * det[i]);
         } else if (mv > T2 - 0.003) {             // 剥がれ際の割れ肌（明）
           /* ここを太く明るくすると島の全周に白い縁取りが付き、輪郭線に見える。
              帯を細くし、det で途切れさせて「欠けた所だけ光る」ようにする。 */
-          lerp3(cTop, cLip, 0.35 + 0.55 * det[i], out);
+          lerp3(cTop, cLip, 0.12 + 0.42 * det[i], out);
         } else if (mv > T1 + 0.012) {             // 下塗り（砂の粗い層。ざらつく）
           lerp3(cBase, cTopD, 0.22 + 0.55 * det[i], out);
           scl(out, 0.90 + 0.22 * det[i]);
@@ -688,25 +699,25 @@
           lerp3(cBase, cLip, 0.30 + 0.45 * det[i], out);
         } else {
           substrate(u, v, i, out);
-          scl(out, 1.02);                         // 下地は一段奥＝暗い（色自体が既に暗い）
+          scl(out, 1.24);                         // 下地を持ち上げて漆喰との差を詰める
           lerp3(out, cSh, smoothstep(T1 - 0.055, T1 - 0.005, mv) * 0.50 *
             (above > T1 ? 1 : 0.3), out);
         }
-        /* 中周波を全面に薄く重ねる。これが無いと遠景で MIP が効いたとき
+        /* 中周波を全面に強めに重ねる。これが無いと遠景で MIP が効いたとき
            「大きな明暗の斑」だけが残り、迷彩柄に見える（実機で発生した）。 */
-        scl(out, 0.90 + 0.20 * mid[i]);
-        scl(out, 0.78 + 0.48 * macro[i]);
+        scl(out, 0.82 + 0.34 * mid[i]);
+        scl(out, 0.90 + 0.20 * macro[i]);
         scl(out, 1 - 0.20 * Math.pow(v, 2.2));
       });
 
       seed(2299);
       var i, px2, py2;
       /* --- 剥離の縁に沿った微細な欠け ------------------------------------- */
-      for (i = 0; i < 240; i++) {
+      for (i = 0; i < 150; i++) {
         px2 = Math.floor(rnd() * S); py2 = Math.floor(rnd() * S);
         var mv = m[py2 * S + px2];
         if (mv > T2 - 0.02 && mv < T2 + 0.03)
-          chip(o, px2, py2, rr(2, 7), sh(P.plaster, 1.36), P.grime, 0.75);
+          chip(o, px2, py2, rr(2, 6), sh(P.plaster, 1.16), P.grime, 0.5);
       }
       /* --- ヘアクラック：生きている面に走る。剥離はここから始まる -------- */
       seed(1777);
@@ -735,7 +746,7 @@
       });
       blend(o, ashCv.cv, 'lighter', 0.20);
 
-      blend(o, greyCanvas(S, ctr(fbm(S, 7, 4, 8181), 1.35, 0.5), 0.68, 1.04), 'multiply', 0.42);
+      blend(o, greyCanvas(S, ctr(fbm(S, 11, 4, 8181), 1.30, 0.5), 0.70, 1.06), 'multiply', 0.46);
       blend(o, greyCanvas(S, fbm(S, 190, 2, 3311), 0.0, 1.0), 'overlay', 0.10);
       dull(o, P.ash, 0.10);
       return o;
@@ -751,8 +762,9 @@
       var det = fbm(S, 70, 4, 424);
       var big = fbm(S, 8, 4, 616);
       var tool = fbm2(S, 128, 16, 3, 858);        // 縦に伸びた微細な鑿跡
-      /* 反復対策のマクロむら。石の割付より低い周波数で明暗を振る。 */
-      var macro = fbm2(S, 2, 3, 4, 5252);
+      /* 反復対策：低周波は弱く。石ごとの明度差も、敷き詰めると市松模様に
+         見えるところまで振ってしまっていたので幅を詰める。 */
+      var macro = fbm2(S, 3, 4, 4, 5252);
       /* 目地の通りのゆらぎ。切石でも風化した目地は真っ直ぐには残らない。 */
       var wobA = fbm(S, 20, 3, 7171), wobB = fbm(S, 20, 3, 7272);
       var RY = [0, 0.30, 0.52, 0.79, 1.0];        // 段の境（不等分）
@@ -784,9 +796,10 @@
           if (by < jh * 0.6) lerp3(out, cSh, 0.65, out);       // 上の石の小口の影
           if (by > 1 - jh * 0.35) lerp3(out, cAsh, 0.30, out); // 下の石の天端が拾う光
         } else {
-          /* 石身：ロットの明度差を 0.55〜1.35 倍と大きく取る */
+          /* 石身：ロットの明度差。0.55〜1.35 まで振ったら中景で市松に見えたので
+             0.80〜1.18 に詰めた。近景の情報は目地・欠け・雨だれ側で持たせる。 */
           lerp3(cSD, cSL, sat((det[i] * 0.42 + big[i] * 0.58 - 0.16) / 0.66), out);
-          scl(out, 0.55 + 0.80 * hv);
+          scl(out, 0.80 + 0.38 * hv);
           /* 石の天端＝上向きの面。灰が薄く乗って一段明るい。 */
           lerp3(out, cAsh, smoothstep(jh + 0.10, jh, by) * 0.40, out);
           /* 石の下端＝庇の影。上下の対でブロックが立体に見える。 */
@@ -794,12 +807,14 @@
           /* 縦の目地際も締める */
           lerp3(out, cSh, sat(smoothstep(jw + 0.022, jw, bx) +
             smoothstep(1 - jw - 0.022, 1 - jw, bx)) * 0.18, out);
-          /* びしゃん叩き（石工の道具跡）。異方性ノイズで木目にならないよう弱く。 */
-          scl(out, 0.94 + 0.13 * tool[i]);
+          /* びしゃん叩き（石工の道具跡）と風化のあばた。
+             石の個体差は明度ではなく肌で出す。明度で出すと中景で市松になる。 */
+          scl(out, 0.90 + 0.22 * tool[i] * (0.5 + hv));
+          scl(out, 0.93 + 0.16 * h2(px >> 1, py >> 1, 9));
         }
         /* 全体の縦方向グラデは弱め。強いと石ごとの差が消えて段々に見える。 */
         scl(out, 1 - 0.14 * Math.pow(v, 2.3));
-        scl(out, 0.76 + 0.52 * macro[i]);         // マクロむら（明暗の両方向）
+        scl(out, 0.90 + 0.20 * macro[i]);         // マクロむら（弱く）
       });
 
       seed(9091);
@@ -871,7 +886,7 @@
       var face = fbm(S, 26, 4, 949);
       /* 反復対策のマクロむら（§後述）。周期をタイル1枚まで落として
          目が「格子」ではなく「大きなしみ」で面をまとめるようにする。 */
-      var macro = fbm2(S, 2, 3, 4, 5959);
+      var macro = fbm2(S, 3, 4, 4, 5959);
       /* 目地の通りをわずかに崩すためのゆらぎ。直線の格子は必ず「タイル」に見え、
          実機の中景ではそれが反復の正体になっていた。数 px 崩すだけで石積みに戻る。 */
       var wobA = fbm(S, 22, 3, 6161), wobB = fbm(S, 22, 3, 6262);
@@ -898,18 +913,16 @@
         var by = v * ROWS - row + (wobB[i] - 0.5) * 0.10;
         var jw = JP / (S / COLS), jh = JP / (S / ROWS);
         var hv = h2(col, row, 17), hv2 = h2(col, row, 83);
-        var missing = hv2 > 0.955;
+        /* 「抜け落ちた煉瓦」は当初 真っ黒な矩形として描いていたが、
+           タイルに2個しかない高コントラストの図形なので、敷き詰めると
+           水玉模様になって反復が丸見えになった（中景テストで確認）。
+           抜けは env.js のジオメトリ側の仕事と割り切り、ここでは
+           「深く後退して影に沈んだ煉瓦」までに留める。 */
+        var missing = false;
+        var sunken = hv2 > 0.93;
         var scorch = hv2 > 0.80 && !missing;
         var spall = hv2 < 0.16;
 
-        if (missing) {
-          /* 抜けた煉瓦：奥に空洞。上ほど暗く（庇の影）、下に瓦礫の反射。 */
-          lerp3(cVoid, cSh, 0.30 + 0.35 * det[i], out);
-          scl(out, 0.55 + 0.75 * smoothstep(0.0, 0.85, by) * (0.4 + 0.6 * big[i]));
-          if (by > 0.88) lerp3(out, cAsh, 0.30, out);
-          scl(out, 1 - 0.20 * Math.pow(v, 2.3));
-          return;
-        }
         if (bx < jw || bx > 1 - jw || by < jh || by > 1 - jh) {
           /* 目地。実機では目地が濃すぎて「黒い格子」に見え、それが反復の正体に
              なっていた。落とす明度は控えめにし、下唇の白も弱める。 */
@@ -919,13 +932,15 @@
           if (by > 1 - jh * 0.30) lerp3(out, cAsh, 0.16, out);
         } else {
           lerp3(cBD, cBL, sat((det[i] * 0.42 + big[i] * 0.58 - 0.18) / 0.62), out);
-          scl(out, 0.70 + 0.62 * hv);
+          scl(out, 0.80 + 0.40 * hv);
           /* 煉瓦1個ごとの色温度差。焼きムラで灰寄りのものと赤寄りのものが混じる。
              これが無いと面が平坦になり「陶タイル」に見える。 */
           lerp3(out, toRGB(mix(BR, P.ash, 0.55), [0, 0, 0]), h2(col, row, 41) * 0.55, out);
           /* 煉瓦の肌：砂目とピット。中〜高周波を必ず残す。 */
           scl(out, 0.86 + 0.30 * (det[i] * 0.6 + h2(px >> 1, py >> 1, 5) * 0.4));
           if (scorch) lerp3(out, cScor, 0.45 + 0.35 * big[i], out);
+          /* 奥に後退した煉瓦：影に沈むが、穴にはしない */
+          if (sunken) { lerp3(out, cSh, 0.42 + 0.22 * big[i], out); }
           if (spall) {
             /* 表面が飛んだ面：焼成前の芯が出て粗い。
                前回は硬い縁取りを入れたら「カビの斑」に見えたので、境界を緩めて
@@ -941,14 +956,14 @@
         lerp3(out, cSh, sat(soot[i] * 1.5 - 0.62) * 0.55, out);
         /* マクロむら：目地の格子より低い周波数で、明暗の両方向に振る。
            乗算だけだと平均が落ちて実機で真っ黒になる（一度そうなった）。 */
-        scl(out, 0.72 + 0.60 * macro[i]);
+        scl(out, 0.88 + 0.24 * macro[i]);
         scl(out, 1 - 0.18 * Math.pow(v, 2.3));
       });
 
-      /* 抜けた煉瓦の座標を拾い直す（上に煤を出すため） */
+      /* 後退した煉瓦の座標を拾い直す（上に煤を出すため） */
       var r, c, i, bw = S / COLS, bh = S / ROWS;
       for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++)
-        if (h2(c, r, 83) > 0.955) {
+        if (h2(c, r, 83) > 0.93) {
           var off2 = -(r % 2) * (bw / 2);
           voids.push([off2 + c * bw + bw / 2, r * bh]);
         }
@@ -970,7 +985,7 @@
         (function (vd) {
           tiled(o, function () {
             var gr = x.createLinearGradient(0, vd[1], 0, vd[1] - bh * 2.4);
-            gr.addColorStop(0, CA(P.grime, 0.55));
+            gr.addColorStop(0, CA(P.grime, 0.26));
             gr.addColorStop(1, CA(P.grime, 0));
             x.fillStyle = gr;
             x.beginPath();
@@ -1163,8 +1178,9 @@
     function buildRust() {
       var S = 512, o = mk(S);
       /* 縦に強く伸ばした場＝水の流路。錆の版図はすべてこれに従わせる。 */
-      var flow = fbm2(S, 12, 2, 5, 3737);
-      var flow2 = fbm2(S, 26, 5, 4, 3738);
+      /* 流路の周波数。12 だと縞が太すぎて敷き詰めたとき木の板目に見えた。 */
+      var flow = fbm2(S, 22, 4, 5, 3737);
+      var flow2 = fbm2(S, 44, 9, 4, 3738);
       var scaleF = fbm2(S, 30, 12, 4, 8080);      // 厚い鱗の島（やや縦長）
       var pit = fbm(S, 150, 2, 4949);
       var grain = fbm(S, 46, 4, 5151);
@@ -1207,7 +1223,7 @@
         lerp3(out, OX_D, smoothstep(0.76, 0.93, pit[i]) * 0.65, out);
         /* 流路そのものを明度でも出す。錆面は色より明暗で読ませたほうが
            逆光で沈んだときに残る（実測 sd=13 は平坦すぎた）。 */
-        scl(out, 0.58 + 0.84 * sat(flow[i] * 0.7 + flow2[i] * 0.3));
+        scl(out, 0.64 + 0.72 * sat(flow[i] * 0.7 + flow2[i] * 0.3));
         scl(out, 0.88 + 0.22 * (1 - v * 0.45));   // 上のほうが乾いて明るい
       });
 
@@ -1229,7 +1245,7 @@
           mix(sh(P.rust, 1.22), P.ash, 0.62), mix(P.rust, P.rebar, 0.75), 0.28);
       }
       /* 低周波の濃淡。タイル1枚ぶんの周期でむらを作り、粒の周期を目立たなくする。 */
-      blend(o, greyCanvas(S, ctr(fbm2(S, 3, 2, 4, 6969), 1.8, 0.5), 0.56, 1.12), 'multiply', 0.55);
+      blend(o, greyCanvas(S, ctr(fbm2(S, 6, 4, 4, 6969), 1.4, 0.5), 0.70, 1.08), 'multiply', 0.45);
       blend(o, greyCanvas(S, fbm(S, 200, 2, 1414), 0.0, 1.0), 'overlay', 0.10);
       dull(o, P.ash, 0.28);                       // 最後に必ず濁らせる
       return o;
@@ -1271,7 +1287,7 @@
           lerp3(cGD, cGL, sat((det[i] * 0.45 + grit[i] * 0.55 - 0.20) / 0.58), out);
           if (hv > 0.84) lerp3(out, cStone, 0.40, out);     // 一部は切石の破片
           /* 敷石ごとの明度差。振り過ぎると遠景で迷彩柄になるので 0.74〜1.22 に抑える。 */
-          scl(out, 0.74 + 0.48 * hv);
+          scl(out, 0.82 + 0.32 * hv);
           /* 石ごとに、中心は踏まれて磨かれ明るく、縁は土が溜まって暗い */
           scl(out, 0.82 + 0.26 * smoothstep(0.02, 0.35, e));
           /* 敷石の面取り：3px 上との縁距離の差。奥（上）の縁が明、手前が影。
@@ -1303,13 +1319,15 @@
         x.fillStyle = gh; x.beginPath(); x.arc(kx, ky, 78, 0, Math.PI * 2); x.fill();
       } else {
         x.save();
-        var ge = x.createRadialGradient(kx, ky, 40, kx, ky, 110);   // 投げ出された灰
-        ge.addColorStop(0, CA(sh(P.ash, 1.5), 0.42));
+        /* 投げ出された灰の環。床は反復回数が最も多いので、丸い明るい環は
+           そのまま水玉模様になる。存在は残しつつ濃度を大きく落とす。 */
+        var ge = x.createRadialGradient(kx, ky, 40, kx, ky, 110);
+        ge.addColorStop(0, CA(sh(P.ash, 1.5), 0.16));
         ge.addColorStop(1, CA(sh(P.ash, 1.5), 0));
         x.fillStyle = ge; x.beginPath(); x.arc(kx, ky, 110, 0, Math.PI * 2); x.fill();
         var gc = x.createRadialGradient(kx, ky, 0, kx, ky, 56);     // 椀
-        gc.addColorStop(0, CA(sh(P.grime, 0.7), 0.85));
-        gc.addColorStop(0.45, CA(P.groundDark, 0.65));
+        gc.addColorStop(0, CA(sh(P.grime, 0.7), 0.42));
+        gc.addColorStop(0.45, CA(P.groundDark, 0.30));
         gc.addColorStop(1, CA(P.groundDark, 0));
         x.fillStyle = gc; x.beginPath(); x.arc(kx, ky, 56, 0, Math.PI * 2); x.fill();
         x.restore();
@@ -1381,7 +1399,7 @@
         }
         x.restore();
         /* 敷石の割付より低い周波数の濃淡。タイルの反復を目立たなくする。 */
-        blend(o, greyCanvas(S, ctr(fbm2(S, 2, 3, 4, 2323), 1.5, 0.5), 0.62, 1.06), 'multiply', 0.50);
+        blend(o, greyCanvas(S, ctr(fbm2(S, 4, 5, 4, 2323), 1.2, 0.5), 0.78, 1.04), 'multiply', 0.45);
         blend(o, greyCanvas(S, fbm(S, 210, 2, 5757), 0.0, 1.0), 'overlay', 0.11);
       } else {
         blend(o, greyCanvas(S, fbm(S, 220, 2, 5757), 0.28, 0.72), 'overlay', 0.45);

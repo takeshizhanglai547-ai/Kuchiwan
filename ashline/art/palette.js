@@ -30,11 +30,11 @@
     sunIntensity: 2.35,
     sunDir: { x: -0.62, y: 0.38, z: -0.68 },   // 低く、奥から手前へ＝逆光
     ambientSky: 0x7f95ad,    // 上からの冷たい回り込み
-    ambientGround: 0x40372c, // 地面からの暖かい照り返し
-    ambientIntensity: 0.62,
+    ambientGround: 0x4b453c, // 地面からの照り返し。暖色に寄せすぎると画面全体の彩度が上がる
+    ambientIntensity: 0.95,  // 0.62では画面の41.9%が輝度0.04未満に潰れていた（実測）
     rimColor: 0xffc386,      // 擬似リムライト（シェーダで焼き込む）
     rimStrength: 0.55,
-    aoStrength: 0.45,        // 擬似AO（頂点/高さベース）の効き
+    aoStrength: 0.28,        // 擬似AO。0.45では暗部が形状情報を失っていた（実測）
 
     /* ---- 素材：環境 ---------------------------------------------------- */
     concrete: 0x9a9184,
@@ -52,9 +52,10 @@
     grime: 0x2a2521,         // 汚れの乗算色
 
     /* ---- 素材：陣営 ---------------------------------------------------- */
-    // 自機：冷たい青灰。逆光で黒く落ちても輪郭が読めるよう明度差を大きく取る
-    playerArmor: 0x49535e,
-    playerArmorDark: 0x2b323a,
+    // 自機：冷たい灰。彩度は環境（S≈0.14）に合わせ、識別は色相ではなく明度と形で行う。
+    // 0x49535e は彩度0.223で環境より高く、暖色の画面から青く浮いていた（実測）。
+    playerArmor: 0x55595e,
+    playerArmorDark: 0x33363b,
     playerCloth: 0x6d6353,
     playerTrim: 0x9aa6b2,
 
@@ -82,7 +83,7 @@
     bloomThreshold: 0.78,
     bloomIntensity: 0.62,
     bloomRadius: 0.85,
-    exposure: 1.05,
+    exposure: 1.12,
     vignette: 0.32
   };
 

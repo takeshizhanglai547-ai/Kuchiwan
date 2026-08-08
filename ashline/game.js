@@ -870,7 +870,9 @@ function shoot() {
   FX.tracer(m.x, m.y, m.z, ex, ey, ez);
   FX.impact(ex, ey, ez, !!hitEnemy, -d.x, -d.y, -d.z, kind);
   if (FX.muzzle) FX.muzzle(m.x, m.y, m.z, d.x, d.y, d.z);
-  if (SFX) { SFX.shot(blind ? 'blind' : 'rifle'); SFX.impact(kind); }
+  // 命中音には着弾座標を渡す。渡さないと音が常に正面で鳴り、
+  // 「敵の位置が画面を見なくても音で分かる」（柱5）が成立しない。
+  if (SFX) { SFX.shot(blind ? 'blind' : 'rifle'); SFX.impact(kind, ex, ey, ez); }
   // 診断用：この1発が何に当たったのか（当たらない不具合の原因を推測しないため）
   lastShot = {
     hit: hitEnemy ? enemies.indexOf(hitEnemy) : -1, head: !!hitEnemy && head,
