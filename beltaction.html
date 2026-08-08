@@ -1895,7 +1895,7 @@ const ATK={
   // ── 新必殺技：波動コマンド(↓→)／昇竜コマンド(→↓→)／↓↑コマンド ──
   // イッヌ（剣）＝間合いを支配する居合ゾーナー
   // 波動＝居合で放つ極太の真空波。全てを貫き画面端まで届く
-  iwave:{name:'真空・断空烈波', dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:12,color:'#bffcff',speed:9,r:56,life:150,multihit:true,hitGap:7,style:'wave'}},
+  iwave:{name:'真空・断空烈波', hold:4, dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:12,color:'#bffcff',speed:9,r:56,life:150,multihit:true,hitGap:7,style:'wave'}},
   // 昇竜＝三段に斬り上げる龍の閃光。超高空へ打ち上げ長い無敵
   idragon:{name:'天翔龍閃', hold:10, dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
   // ↓↑＝円環斬：剣を三百六十度に振り回し周囲すべてを多段で斬る渦（衝撃波ではない）
@@ -1946,12 +1946,12 @@ const ATK={
   // ←←/→→＝疾走居合連撃（走り抜けながら何度も抜き打つ）
   dshukuchi:{name:'縮地・残刃', dur:30, act:[3,4], reach:60, hh:56, dmg:0, kb:0, from:-0.55,to:0.30, len:74, trail:'#e8f4ff', pivotY:-54, special:true, cast:true, superFx:true, zanjin:true},   // ←←/→→＝一瞬で駆け抜け、通った跡に残撃が遅れて走る
   // ↓→＝秘剣・八重霞（前方に斬撃痕を刻み、時間差で炸裂させる遅延技）
-  dyae:{name:'秘剣・八重霞', dur:34, act:[10,13], reach:70, hh:46, dmg:0, kb:0, from:-1.5,to:1.5, len:76, trail:'#dff0ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true},
+  dyae:{name:'秘剣・八重霞', hold:4, dur:34, act:[10,13], reach:70, hh:46, dmg:0, kb:0, from:-1.5,to:1.5, len:76, trail:'#dff0ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true},
   // →↓→＝無明・斬鉄（大上段からの振り下ろしで地を裂き、地割れが疾走する）
   dzantetsu:{name:'無明・斬鉄', dur:42, act:[13,19], reach:124, hh:76, dmg:40, kb:15, from:-2.15,to:1.45, len:84, trail:'#ffffff', pivotY:-68, lunge:1.6, knock:true, finisher:true, special:true, superFx:true, cleave:true,
     pshot:{dmg:24,color:'#cfeaff',speed:12,r:36,life:120,multihit:true,hitGap:8,style:'wave',pierce:true,low:true}},
   // ↓↑＝絶刀（溜めて放つ画面貫通の一閃）
-  dzetto:{name:'絶刀',    dur:46, act:[16,22], reach:190, hh:70, dmg:56, kb:22, from:-0.14,to:0.14, len:96, trail:'#ffffff', pivotY:-56, special:true, iai:true, superFx:true, zetto:true, knock:true},
+  dzetto:{name:'絶刀',    hold:12, dur:46, act:[16,22], reach:190, hh:70, dmg:56, kb:22, from:-0.14,to:0.14, len:96, trail:'#ffffff', pivotY:-56, special:true, iai:true, superFx:true, zetto:true, knock:true},
   dkaiden:{name:'無名一刀流・皆伝', dur:60, act:[10,50], reach:150, hh:64, dmg:0, kb:0, from:-0.3,to:0.3, len:70, trail:'#ffffff', pivotY:-56, special:true, superFx:true, kaiden:true},   // 奥義＝画面全体への連続居合
   // ══════════════════════════════════════════════════════════════
   //  レベルで解禁される上位必殺技（Lv5＝↓↑／Lv10＝波動・昇竜）
@@ -1959,7 +1959,7 @@ const ATK={
   // ══════════════════════════════════════════════════════════════
   // ── イッヌ ──
   iswords2:{name:'聖剣乱舞・天光烈斬', hold:14, dur:56, act:[8,48], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff6d0', pivotY:-56, special:true, superFx:true, swordStorm:true},   // 前後へ聖剣が乱立し、最後に天光の柱が落ちる
-  iwave2:{name:'真空・双烈斬空波', dur:38, act:[12,16], reach:56, hh:44, dmg:0, kb:0, from:-1.9,to:1.9, len:66, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, twinWave:true},   // 上下二段の巨大真空波
+  iwave2:{name:'真空・双烈斬空波', hold:5, dur:38, act:[12,16], reach:56, hh:44, dmg:0, kb:0, from:-1.9,to:1.9, len:66, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, twinWave:true},   // 上下二段の巨大真空波
   idragon2:{name:'天翔龍閃・双龍昇天', hold:12, dur:48, act:[2,42], reach:84, hh:700, dmg:19, kb:7, from:1.6,to:-2.4, len:78, trail:'#ffe27a', pivotY:-46, rise:true, riseV:42, riseG:0.48, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true, twinDragon:true},
   // ── シマダックス ──
   skuzan:{name:'奥義・崩山衝', hold:10, dur:38, act:[12,16], reach:44, hh:70, dmg:78, kb:64, from:-0.05,to:0.05, len:14, trail:'#ff9a3a', fist:true, punch:true, special:true, oneInch:true, knock:true, finisher:true, kuzan:true},   // 零距離の掌打から山を崩す衝波
@@ -1978,8 +1978,8 @@ const ATK={
   wknife2:{name:'千本クナイ・影縫い', dur:30, act:[8,11], reach:44, hh:44, dmg:0, kb:0, from:-0.6,to:0.3, len:22, trail:'#eaf2fb', special:true, superFx:true, kunaiStorm:true, pshot:{dmg:13,color:'#eaf2fb',speed:14,r:12,life:80,count:7,spread:3.4,style:'spike',pierce:true}},
   wflip2:{name:'螺旋昇り・双牙墜し', dur:40, act:[2,32], reach:70, hh:640, dmg:12, kb:7, from:1.4,to:-2.2, len:36, trail:'#dff0ff', pivotY:-52, rise:true, riseV:35, riseG:0.60, multi:true, multiGap:3, shoryu:true, spin:true, superFx:true, caltrop:true},
   // ── ワンデン ──
-  dzetto2:{name:'絶刀・虚空断ち', dur:56, act:[18,26], reach:220, hh:78, dmg:64, kb:24, from:-0.16,to:0.16, len:104, trail:'#ffffff', pivotY:-56, special:true, iai:true, superFx:true, zetto:true, zettoTwin:true, knock:true},   // 往路と復路、二度の一閃で虚空ごと断つ
-  dyae2:{name:'秘剣・八重霞・千重', dur:40, act:[10,13], reach:78, hh:50, dmg:0, kb:0, from:-1.8,to:1.8, len:82, trail:'#eaf6ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true, yaeMax:true},
+  dzetto2:{name:'絶刀・虚空断ち', hold:16, dur:56, act:[18,26], reach:220, hh:78, dmg:64, kb:24, from:-0.16,to:0.16, len:104, trail:'#ffffff', pivotY:-56, special:true, iai:true, superFx:true, zetto:true, zettoTwin:true, knock:true},   // 往路と復路、二度の一閃で虚空ごと断つ
+  dyae2:{name:'秘剣・八重霞・千重', hold:5, dur:40, act:[10,13], reach:78, hh:50, dmg:0, kb:0, from:-1.8,to:1.8, len:82, trail:'#eaf6ff', pivotY:-56, special:true, iai:true, superFx:true, cast:true, yaegasumi:true, yaeMax:true},
   dzantetsu2:{name:'無明・斬鉄・断界', dur:50, act:[15,22], reach:136, hh:82, dmg:48, kb:17, from:-2.3,to:1.55, len:92, trail:'#ffffff', pivotY:-70, lunge:1.4, knock:true, finisher:true, special:true, superFx:true, cleave:true, riftCleave:true,
     pshot:{dmg:28,color:'#e8f4ff',speed:13,r:44,life:150,multihit:true,hitGap:7,style:'wave',pierce:true,low:true}},
   // ── Lv3：上攻撃の上位技（対空・打ち上げが一気に凶悪になる）──
@@ -1990,7 +1990,7 @@ const ATK={
   wsmoke2:{name:'爆煙玉', dur:28, act:[6,8], reach:130, hh:110, dmg:0, kb:0, from:-3.1,to:3.1, len:22, trail:'#ffb85a', special:true, omni:true, superFx:true, smokeBomb:true, smokeBlast:true},   // 目くらましだけだった煙玉が炸裂弾に
   dnuki2:{name:'昇り竜尾', dur:34, act:[5,20], reach:140, hh:280, dmg:27, kb:11, from:1.55,to:-1.95, len:92, trail:'#eaf6ff', pivotY:-52, launch:21, knock:true, multi:true, multiGap:6, superFx:true, upperSlash:true, derive:'dnukidn'},
   // ── Lv7：前攻撃の上位技（差し込みが本命の火力技になる）──
-  iai2:{name:'一閃・無双', dur:28, act:[9,15], reach:152, hh:58, dmg:36, kb:17, from:-0.22,to:0.22, len:78, trail:'#eaffff', pivotY:-56, move:12, multi:true, multiGap:7, knock:true, finisher:true, iai:true, superFx:true, iaiWave:true},
+  iai2:{name:'一閃・無双', hold:6, dur:28, act:[9,15], reach:152, hh:58, dmg:36, kb:17, from:-0.22,to:0.22, len:78, trail:'#eaffff', pivotY:-56, move:12, multi:true, multiGap:7, knock:true, finisher:true, iai:true, superFx:true, iaiWave:true},
   tessan2:{name:'鉄山靠・崩城', dur:30, act:[4,16], reach:98, hh:56, dmg:42, kb:21, from:-0.28,to:-0.2, len:26, trail:'#ffd24d', fist:true, lunge:10, knock:true, finisher:true, shoulder:true, superFx:true, wallCrush:true},
   nflame2:{name:'獄炎連柱', dur:30, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:-1.2,to:-0.2, len:20, trail:'#ff6a3c', fist:true, special:true, superFx:true, flameRow:true},
   gsmash2:{name:'城門砕き', dur:36, act:[11,20], reach:134, hh:66, dmg:34, kb:20, from:-2.0,to:1.2, len:82, trail:'#fff', pivotY:-72, lunge:2.2, knock:true, finisher:true, aoe:true, shock:30, superFx:true, wallCrush:true},
@@ -2944,6 +2944,12 @@ function updatePlayer(){
       p.invuln=Math.max(p.invuln,4);
       if(a.chg===1 && p.rig){ sprKick(p.rig.sq,-5.2); sprKick(p.rig.wob,-p.facing*4.0); sprKick(p.rig.capeT,-6); }
       if(a.chg%2===0 && perfTier<2) ember(p.x+rnd(-16,16), p.y-rnd(6,70), rnd(-0.5,0.5), -rnd(1.2,3.0), def.trail||'#ffe27a');
+      // 居合は「気を溜める」ではなく「動かない」ことで溜める。火の粉ではなく
+      // 鞘の中の刀身が一点だけ光る＝抜く前の張り詰めた静けさを見せる
+      if(def.iai){ const hx=p.x-p.facing*14, hy=p.y-44;
+        if(a.chg%3===0) flashCore(hx,hy, 5+a.chg*0.7, '225,245,255');
+        if(a.chg===2){ sfx.charge(p.x); camZoomT=Math.max(camZoomT,1.06); }
+        if(a.chg%4===0 && perfTier<2) spark(hx,hy,'#eaffff',2,3,{aim:-1.57,spread:0.3,layer:1}); }
       if(a.hold===0){ camZoomT=Math.max(camZoomT,1.13); shake=Math.max(shake,6);
         if(p.rig){ sprKick(p.rig.sq,7.5); sprKick(p.rig.wob,p.facing*9); sprKick(p.rig.capeT,8); }
         p.invuln=Math.max(p.invuln, def.act[1]-def.act[0]+10); }
@@ -3877,32 +3883,60 @@ function updateSeven(){ const p=player; p.sevenT++;
     p.state='idle'; }
 }
 // ── ワッチの奥義「ロックンロール」：巨大ガトリングを構え、正面上〜下へ100連射の掃射 ──
-function beginGatling(p){ p.dim--; p.state='gatling'; p.gatT=0; p.gatShots=0; p.invuln=Math.max(p.invuln,150); p.vx=0; p.charge=0; p.atkHeld=false; p.atk=null;
+function beginGatling(p){ p.dim--; p.state='gatling'; p.gatT=0; p.gatShots=0; p.gatSpin=0; p.invuln=Math.max(p.invuln,150); p.vx=0; p.charge=0; p.atkHeld=false; p.atk=null;
   popText(p.x,p.y-126,'ロックンロール！！','#ffe14d',true); ring(p.x,p.y-44,'#ffd24d'); ring(p.x,p.y-44,'#fff'); shake=Math.max(shake,9); flash=Math.max(flash,4); sfx.boss(p.x); sfx.rise(p.x); }
+const GAT_SPIN=12;   // 撃ち始めるまでの銃身回転の立ち上がり
 function updateGatling(){ const p=player; p.gatT++; p.invuln=Math.max(p.invuln,6); p.vx*=0.7;
-  const ROUNDS=100;
-  if(p.gatShots<ROUNDS){ const dir=p.facing;
+  const ROUNDS=100, dir=p.facing;
+  if(p.gatT<=GAT_SPIN){                                    // ── スピンアップ：まだ弾は出ない ──
+    if(p.gatT===1){ sfx.beamCharge(p.x,0.30); camZoomT=Math.max(camZoomT,1.08); }
+    if(p.gatT%3===0) sfx.beamCharge(p.x,0.12+p.gatT*0.014);
+    if(p.gatT%2===0) dust(p.x-dir*12,p.y,2);
+    if(p.gatT===GAT_SPIN){ shake=Math.max(shake,7); flash=Math.max(flash,3); }
+    p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); return; }
+  if(p.gatShots<ROUNDS){
     const ang=Math.sin(p.gatT*0.34)*1.4 + rnd(-0.05,0.05);   // 正面上〜下を往復掃射（y=p.yでレーン位置、高さはzz）
     spawnProj(p.x+dir*40, p.y, dir*Math.cos(ang)*17, 0, {owner:'player', dmg:Math.round(8*(p.atkMul||1)), color:(p.gatShots%2)?'#ffe14d':'#ff8a3a', r:8, life:46, zz:48, vzz:Math.sin(ang)*13, nostop:true});
     p.gatShots++;
     if(p.gatShots%2===0){ spark(p.x+dir*48, p.y-52, '#ffd24d', 5, 9); shake=Math.max(shake,4); }
     if(p.gatShots%7===0) sfx.zap(p.x);
+    p.x-=dir*0.24;                                          // 反動でじりじり後ろへ押される（100発で約24px）
+    if(perfTier<2 && p.gatShots%2===0)                      // 排莢：薬莢が後方へ弾き出されて床で跳ねる
+      particles.push({k:'spark',x:p.x-dir*18,y:p.y-46,gl:groundLift(p.x),layer:1,delay:0,
+        vx:-dir*rnd(1.6,3.4),vy:-rnd(1.8,3.6),life:26,max:26,color:'#e0b04a',star:false,
+        g:0.30,d:0.985,rot:rnd(0,6.28),rv:rnd(-0.5,0.5),sz:1.1});
     if(gf%3===0) dust(p.x-dir*10,p.y,2);   // 反動でわずかに踏ん張る
   } else if(p.gatT>p.gatEndT||!p.gatEndT){ if(!p.gatEndT) p.gatEndT=p.gatT+18; if(p.gatT>=p.gatEndT){ p.state='idle'; p.gatEndT=0; } }
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); }
 // ガトリングガンの描画（render 側で drawPlayer の後に呼ぶ）
 function drawGatlingGun(p){ const sx=p.x-camX, gy=p.y-groundLift(p.x)-p.z; ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
-  const firing=(p.gatShots||0)<100; const ang=Math.sin((p.gatT||0)*0.34)*1.0;
+  const T=p.gatT||0, spun=clamp(T/GAT_SPIN,0,1);
+  const firing=T>GAT_SPIN && (p.gatShots||0)<100;
+  const ang=Math.sin(T*0.34)*1.0*spun - (1-spun)*0.30;   // 回りきるまでは銃口を伏せている
   ctx.save(); ctx.translate(12,-48); ctx.rotate(ang);
   ctx.fillStyle='#6a4a2a'; ctx.fillRect(-22,8,15,20);                                   // マガジン/弾薬箱
   ctx.fillStyle='#c8a030'; for(let b=0;b<4;b++) ctx.fillRect(-20,10+b*4,11,2);
   ctx.fillStyle='#3a3f48'; roundRect(-16,-15,32,30,5); ctx.fill();                        // ケーシング
   ctx.fillStyle='#22252c'; for(let b=0;b<6;b++){ const by=-12+b*4.6; ctx.fillRect(15,by,50,3.4); }   // 6銃身
   ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,11,0,7); ctx.fill();              // 回転部
-  ctx.fillStyle='#2a2d34'; for(let b=0;b<6;b++){ const a=(p.gatT*0.5)+b*(PI2/6); ctx.beginPath(); ctx.arc(Math.cos(a)*5.5,Math.sin(a)*5.5,2.2,0,7); ctx.fill(); }
+  // 回転速度は立ち上がりに応じて上がる。等速だと「もう回りきっている」に見えて溜めが死ぬ
+  const spinPh=(p.gatSpin=(p.gatSpin||0)+0.10+0.55*spun*spun);
+  ctx.fillStyle='#2a2d34'; for(let b=0;b<6;b++){ const a=spinPh+b*(PI2/6); ctx.beginPath(); ctx.arc(Math.cos(a)*5.5,Math.sin(a)*5.5,2.2,0,7); ctx.fill(); }
   ctx.strokeStyle='#20242a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(15,-12); ctx.lineTo(15,12); ctx.stroke();
-  if(firing && p.gatT%2===0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='#ffe14d'; ctx.beginPath(); ctx.arc(66,0,11+Math.random()*7,0,7); ctx.fill(); ctx.fillStyle='#ff7a2a'; ctx.beginPath(); ctx.arc(66,0,6,0,7); ctx.fill(); ctx.restore();
+  if(firing && T%2===0){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    const fs=0.85+Math.random()*0.5;
+    ctx.translate(66,0); ctx.rotate(Math.random()*0.5-0.25);
+    ctx.fillStyle='#ffe14d'; ctx.beginPath();                        // 銃口炎：円ではなく前へ伸びる星形
+    for(let k=0;k<10;k++){ const a=k/10*PI2, R=(k%2?7:26)*fs*(k%2?1:(Math.cos(a)>0?1.5:0.6));
+      const X=Math.cos(a)*R, Y=Math.sin(a)*R*0.72; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff8d0'; ctx.beginPath(); ctx.arc(4,0,7*fs,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,122,42,.75)'; ctx.beginPath(); ctx.arc(20*fs,0,9*fs,0,7); ctx.fill();
+    ctx.restore();
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(200,200,210,.4)'; for(let k=0;k<2;k++){ ctx.beginPath(); ctx.arc(-20-k*8,-2,5+k*3,0,7); ctx.fill(); } ctx.restore(); }
+  else if(!firing && T<=GAT_SPIN && T%2===0){                        // 回転中は銃身の隙間から火花が漏れる
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.25+0.5*spun;
+    ctx.fillStyle='#ffd24d'; ctx.beginPath(); ctx.arc(60,0,3+5*spun,0,7); ctx.fill(); ctx.restore(); }
   ctx.restore(); ctx.restore(); }
 
 //======================================================================
@@ -7382,6 +7416,14 @@ function drawPlayer(){
       kF=0.4+1.75*u; kB=0.35+1.80*u; bodyY=8*u; lean=-0.10-0.16*u; sqX=1+0.22*u; sqY=1-0.26*u; }
     else if(T<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; sqY=1.10; sqX=0.94; }           // 踏み切って天へ
     else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                         // 急降下：振り下ろし体勢
+  else if(st==='gatling'){ mode='fist'; const T=p.gatT||0;
+    if(T<12){ const u=T/12;                                                    // 銃身の回転が上がりきるまで踏ん張る
+      lean=-0.30*u; thF=0.20+0.30*u; thB=-0.20-0.34*u; kF=0.40+0.45*u; kB=0.30+0.55*u;
+      swAng=0.55-0.45*u; backArm=0.75-0.30*u; bodyY=1+3*u; bodyX=-4*u; sqX=1+0.08*u; sqY=1-0.09*u; }
+    else { const rc=Math.abs(Math.sin(T*1.9))*(p.gatShots<100?1:0);            // 連射の反動で全身が細かく跳ねる
+      lean=-0.22-0.05*rc; thF=0.52; thB=-0.56; kF=0.80; kB=0.88;
+      swAng=0.06+0.10*rc; backArm=0.42+0.12*rc; bodyY=4-1.5*rc; bodyX=-4-3*rc;
+      sqX=1+0.05*rc; sqY=1-0.06*rc; faL1=9+3; faL2=8+4; faW=1.25; } }
   else if(st==='gupper'){ swAng=-1.5; backArm=0.4; thF=0.32; thB=-0.32; kF=0.5; kB=0.4; bodyY=-1; }                     // アッパー後の構え
   else if(st==='gpound'){ const ph2=(p.gpT||0)%10; swAng=ph2<5?-1.6:1.0; backArm=swAng; thF=0.6; thB=0.4; kF=0.8; kB=0.9; lean=ph2<5?-0.15:0.2; bodyY=-1; }   // 連続叩きつけ
   else if(st==='attack'){ const def=p.atk.def, t=p.atk.t, a0=def.act[0], a1=def.act[1];
@@ -7414,6 +7456,16 @@ function drawPlayer(){
     sqX=1-0.16*big+(hv?0.20:0.10)*wq; sqY=1+0.20*big-(hv?0.24:0.12)*wq;
     if(hv){ kF=0.45+1.10*wq; kB=0.30+1.20*wq; }   // 重い技は膝も折る
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; }
+    if(def.iai && t<a0){ // 抜刀術の「静」：腰を落とし、刀は鞘に納めたまま柄に手をかけて止まる
+      const w=Math.pow(clamp((a0-t)/Math.max(1,a0),0,1),0.55);   // 溜めが深いほど1
+      // 腕の付け根と刀身の向きが同じ swAng で決まる装備なので、鞘を真後ろへは向けられない。
+      // 実測で swAng=1.04 は切先が画面下へ抜けたため、下段に寝かせる程度に留める
+      swAng=0.40+0.32*w; swExt=14;                               // 鞘は腰にあるので長さは変えない（縮むと刀が短くなって見える）
+      backArm=0.30+0.52*w;                                       // 添え手は鞘口を握る
+      lean=-0.16-0.34*w; bodyY=2+5*w; bodyX=-3-7*w;              // 沈んで後ろへ体重を乗せる
+      thF=0.10+0.30*w; thB=-0.10-0.46*w; kF=0.45+0.75*w; kB=0.30+0.95*w;
+      sqX=1+0.10*w; sqY=1-0.12*w;
+      drawTrail=false; }                                          // 抜く前に軌跡が出ると「もう斬った」に見える
     if(def.flurry){ // 高速乱れ切り：斜め上への斬り上げ → 袈裟斬りの振り下ろし をひたすらループさせる
       const SEG=5, tt=Math.max(0,t-def.act[0]), idx=Math.floor(tt/SEG), ph=(tt%SEG)/SEG, up=(idx%2===0);
       const a0 = up? 1.30 : -1.60, a1 = up? -1.30 : 1.20;     // 上=斬り上げ（下段→上段）／下=袈裟斬り（上段→下段）
@@ -7444,7 +7496,7 @@ function drawPlayer(){
     const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
     let B=p.poseB;
     if(!B){ B=p.poseB=Object.assign({},_tgt); }
-    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake');
+    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling');
     const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.80:(st==='land'||st==='getup')?0.55:0.26;
     const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
     for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;
@@ -7650,10 +7702,18 @@ function bladeTipR(wk,ext){ switch(wk){
   case 'tonfa':  return ext*0.55+22;
   case 'fists': case 'tigerfist': return 0;
   default: return ext+13; } }                                                              // dagger
+// 居合の溜め中か（＝まだ抜刀していない）。刀身の描画と帯鞘の発光の両方がこれを見る
+function wandenIaiHold(){ const a=player.atk, d=a&&a.def;
+  return !!d && !!d.iai && (a.hold>0 || a.t<d.act[0]); }
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
   if(wk==='inuboshi'||wk==='inuboshi2'){ const L=ext*1.7+96;                // 犬干し竿：常識外れに長い野太刀（真打も同じ長さ）
-    const sheathed = player.atk && player.atk.def && player.atk.def.sheath;   // 鞘当て等：納刀したまま鞘で打つ
+    // 鞘当て等は納刀したまま鞘で打つ。
+    // 居合の溜め中は手に何も描かない：刀は帯の黒鞘（wandenBody で描いている）の中にある。
+    // ここで納刀した刀をもう一本持たせると、鞘が腰と手に二本並んでしまう
+    const _pd=player.atk&&player.atk.def;
+    if(wandenIaiHold()){ ctx.restore(); return; }
+    const sheathed = !!_pd && _pd.sheath;
     ctx.fillStyle='#3a3742'; ctx.fillRect(-16,-3,18,6);                      // 長い柄
     ctx.strokeStyle='#8a7a56'; ctx.lineWidth=1.1; for(let i=-15;i<2;i+=3.4){ ctx.beginPath(); ctx.moveTo(i,-3); ctx.lineTo(i+2.4,3); ctx.stroke(); }   // 柄巻き
     ctx.fillStyle=radGrad(3,0,6,'#e6c56a','#8a6a1e'); ctx.beginPath(); ctx.ellipse(3,0,3.6,6.2,0,0,7); ctx.fill();   // 鍔
@@ -8155,6 +8215,13 @@ function wandenBody(lean){
     ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-54,-1.4); ctx.lineTo(0,-1.4); ctx.stroke();
     ctx.fillStyle='#3a3742'; ctx.fillRect(0,-3.2,7,6.4);   // 鯉口
     ctx.strokeStyle='#8a7a56'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-30,3); ctx.quadraticCurveTo(-24,9,-16,6); ctx.stroke();   // 下げ緒
+    if(wandenIaiHold()){ // 溜めの間、鞘の中の刀身が切先から鯉口へ向かって光り抜ける
+      const u=((gf*0.085)%1), gx=-56+u*58;
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.30+0.55*Math.sin(u*Math.PI);
+      ctx.fillStyle=radGrad(gx,0,15,'rgba(215,242,255,.95)','rgba(215,242,255,0)');
+      ctx.beginPath(); ctx.ellipse(gx,0,16,4.2,0,0,7); ctx.fill();
+      ctx.fillStyle='rgba(230,248,255,.9)'; ctx.beginPath(); ctx.arc(2,0,3.2,0,7); ctx.fill();   // 鯉口が張り詰める
+      ctx.restore(); }
   ctx.restore();
   ctx.restore();
 }
