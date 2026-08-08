@@ -944,11 +944,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           var i = py * S + px;
           var t = big[i] * 0.55 + agg[i] * 0.30 + fine[i] * 0.15;
           lerp3(cDark, cPale, (t - 0.24) / 0.44, out);
-          /* 下へ行くほど跳ね返りの泥で暗い。垂直面の上下が一目で読めるようにする。
-             実機で壁が黒く潰れたので効きを 0.34 -> 0.22 に落としてある。 */
-          scl(out, 1 - 0.22 * Math.pow(v, 2.4));
-          /* 濡れ残りの染み：低周波の谷にだけ溜める */
-          lerp3(out, cWet, smoothstep(0.40, 0.14, big[i]) * 0.42 * (0.30 + 0.70 * v), out);
+          /* 濡れ残りの染み：低周波の谷にだけ溜める。
+             ここに v の単調関数を掛けるとタイルの上下端で段差になるので使わない
+             （継ぎ目テストで検出。面の上下は雨だれと段差の明暗で読ませる）。 */
+          lerp3(out, cWet, smoothstep(0.40, 0.14, big[i]) * 0.46, out);
           scl(out, 0.88 + 0.24 * macro[i]);       // マクロむら（弱く。強いと反復の目印になる）
         });
       }
@@ -959,6 +958,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* --- せき板の合わせ目：128px ごと。1枚の板の幅にあたる ------------- */
       for (j = 0; j < 4; j++) {
         var by = j * 128 + rr(-3, 3);
+        if (by < 4) by += S;                      // 上端に張り付くと巻き戻し側が欠ける
         x.save();
         if (isH) {
           x.fillStyle = GYA(100, 0.5); x.fillRect(0, by, S, 1.6);
@@ -978,10 +978,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           x.fillStyle = GY(184); x.fillRect(0, py0 + 1.5, S, 3);
           x.fillStyle = GY(92); x.fillRect(pxv - 1.5, 0, 3, S);
           x.fillStyle = GY(172); x.fillRect(pxv + 1.5, 0, 2, S);
+          if (j === 0) {                          // 巻き戻し側にも同じものを置く
+            x.fillStyle = GY(84); x.fillRect(0, S - 2.5, S, 4);
+            x.fillStyle = GY(92); x.fillRect(S - 1.5, 0, 3, S);
+          }
         } else {
           ledge(o, py0 - 3, sh(P.ash, 1.55), P.grime, 0.46, 0.55, 4);
+          if (j === 0) ledge(o, S - 3, sh(P.ash, 1.55), P.grime, 0.46, 0.55, 4);
           x.fillStyle = CA(P.grime, 0.34); x.fillRect(pxv - 1.5, 0, 3, S);
           x.fillStyle = CA(sh(P.concrete, 1.28), 0.22); x.fillRect(pxv + 1.5, 0, 2, S);
+          if (j === 0) {                          // 左端に置いた縦目地の残り半分を右端にも
+            x.fillStyle = CA(P.grime, 0.34); x.fillRect(S - 1.5, 0, 3, S);
+            x.fillStyle = CA(sh(P.concrete, 1.28), 0.22); x.fillRect(S + 1.5, 0, 2, S);
+          }
         }
       }
 
@@ -1117,7 +1126,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         /* --- 亀裂：剥落から伸びる（衝撃亀裂なので直線寄り）--------------- */
         seed(5501);
         for (i = 0; i < spalls.length; i++)
-          crack(o, spalls[i][0], spalls[i][1], rr(0, 6.28), rr(60, 150), 2.2, P.grime, sh(P.concrete, 1.30), 2, 0.22);
+          (function (sp) {
+            tiled(o, function () {
+              crack(o, sp[0], sp[1], rr(0, 6.28), rr(60, 150), 2.2, P.grime, sh(P.concrete, 1.30), 2, 0.22);
+            });
+          })(spalls[i]);
 
         blend(o, greyCanvas(S, ctr(fbm(S, 6, 4, 4404), 1.4, 0.5), 0.66, 1.04), 'multiply', 0.44);
         blend(o, greyCanvas(S, fbm(S, 200, 2, 6602), 0.0, 1.0), 'overlay', 0.11);
@@ -1168,7 +1181,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         scl(out, 0.74 + 0.50 * det[i]);
         if (bx < 0.045 || bx > 0.955 || by < 0.10 || by > 0.90) {
           lerp3(out, cJnt, 0.85, out);            // 目地
-          if (by < 0.10) lerp3(out, cSh, 0.45, out);
+          /* 石・煉瓦と同じく、溝の上下を通しの g で定義して段の境で連続にする。
+             上端だけに影を入れると煉瓦の境ごとに段差ができ、それがタイルの
+             上下端に露出して継ぎ目になる（継ぎ目テストで検出）。 */
+          if (by < 0.10 || by > 0.90) {
+            var gj = sat((by > 0.5) ? (by - 0.90) / 0.20 : 0.5 + by / 0.20);
+            lerp3(out, cSh, 0.50 * (1 - gj), out);
+          }
         }
       }
 
@@ -1205,7 +1224,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
            「大きな明暗の斑」だけが残り、迷彩柄に見える（実機で発生した）。 */
         scl(out, 0.82 + 0.34 * mid[i]);
         scl(out, 0.90 + 0.20 * macro[i]);
-        scl(out, 1 - 0.20 * Math.pow(v, 2.2));
       });
 
       seed(2299);
@@ -1215,18 +1233,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         px2 = Math.floor(rnd() * S); py2 = Math.floor(rnd() * S);
         var mv = m[py2 * S + px2];
         if (mv > T2 - 0.02 && mv < T2 + 0.03)
-          chip(o, px2, py2, rr(2, 6), sh(P.plaster, 1.16), P.grime, 0.5);
+          (function (a2, b2) {
+            tiled(o, function () { chip(o, a2, b2, rr(2, 6), sh(P.plaster, 1.16), P.grime, 0.5); });
+          })(px2, py2);
       }
       /* --- ヘアクラック：生きている面に走る。剥離はここから始まる -------- */
       seed(1777);
       for (i = 0; i < 16; i++) {
         px2 = rnd() * S; py2 = rnd() * S;
         if (m[(Math.floor(py2) * S + Math.floor(px2))] < T2) continue;
-        crack(o, px2, py2, rr(0, 6.28), rr(40, 160), 1.6, P.grime, sh(P.plaster, 1.32), 2, 0.45);
+        (function (a2, b2) {
+          tiled(o, function () {
+            crack(o, a2, b2, rr(0, 6.28), rr(40, 160), 1.6, P.grime, sh(P.plaster, 1.32), 2, 0.45);
+          });
+        })(px2, py2);
       }
-      /* --- 雨だれ：天端から。剥離の縁も水を溜めるので、そこからも垂らす -- */
+      /* --- 雨だれ：起点は面内に散らす。タイルの上端に一斉に並べると、
+         下端に対応するものが無く継ぎ目になる（継ぎ目テストで検出）。 --- */
       seed(6161);
-      dripRow(o, 0, 230, 34, P.grime, sh(P.plaster, 1.45), 0.36);
+      for (i = 0; i < 40; i++) {
+        (function (cx, cy, L, w, a, pale) {
+          tiled(o, function () {
+            drip(o, cx, cy, L, w, pale ? sh(P.plaster, 1.45) : P.grime, a, 0.28, true);
+          });
+        })(rnd() * S, rnd() * S, rr(50, 300), rr(1.6, 8), rr(0.14, 0.36), rnd() < 0.2);
+      }
       for (i = 0; i < 34; i++) {
         px2 = rnd() * S; py2 = rnd() * S;
         if (m[(Math.floor(py2) * S + Math.floor(px2))] > T1) continue;
@@ -1291,8 +1322,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (bx < jw || bx > 1 - jw || by < jh || by > 1 - jh) {
           /* 目地：奥まっているので暗い。粗い骨材が見える。 */
           lerp3(cJ, cSD, 0.30 + 0.55 * det[i], out);
-          if (by < jh * 0.6) lerp3(out, cSh, 0.65, out);       // 上の石の小口の影
-          if (by > 1 - jh * 0.35) lerp3(out, cAsh, 0.30, out); // 下の石の天端が拾う光
+          /* 溝の中の上下位置 g（0=溝の天井, 1=溝の底）。
+             by>1-jh はこの石の下端＝溝の"上半分"、by<jh は次の石の上端＝溝の"下半分"。
+             g を通しで定義することで、石と石の境（＝タイルの上下端でもある）で
+             連続になる。以前はここが不連続で継ぎ目として見えていた。 */
+          var g = (by > 0.5) ? (by - (1 - jh)) / (2 * jh) : 0.5 + by / (2 * jh);
+          g = sat(g);
+          lerp3(out, cSh, 0.62 * (1 - g), out);   // 溝の天井＝上の石の小口の裏
+          lerp3(out, cAsh, 0.34 * g * g, out);    // 溝の底＝下の石の天端が拾う光
         } else {
           /* 石身：ロットの明度差。0.55〜1.35 まで振ったら中景で市松に見えたので
              0.80〜1.18 に詰めた。近景の情報は目地・欠け・雨だれ側で持たせる。 */
@@ -1311,7 +1348,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           scl(out, 0.93 + 0.16 * h2(px >> 1, py >> 1, 9));
         }
         /* 全体の縦方向グラデは弱め。強いと石ごとの差が消えて段々に見える。 */
-        scl(out, 1 - 0.14 * Math.pow(v, 2.3));
         scl(out, 0.90 + 0.20 * macro[i]);         // マクロむら（弱く）
       });
 
@@ -1425,12 +1461,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           /* 目地。実機では目地が濃すぎて「黒い格子」に見え、それが反復の正体に
              なっていた。落とす明度は控えめにし、下唇の白も弱める。 */
           lerp3(cJ, cBD, 0.35 + 0.45 * det[i], out);
-          scl(out, 0.82);
-          if (by < jh * 0.55) lerp3(out, cSh, 0.42, out);
-          if (by > 1 - jh * 0.30) lerp3(out, cAsh, 0.16, out);
+          scl(out, 0.74);
+          /* 石と同じく溝の上下を通しで定義する（連続にするため）。 */
+          var g = (by > 0.5) ? (by - (1 - jh)) / (2 * jh) : 0.5 + by / (2 * jh);
+          g = sat(g);
+          lerp3(out, cSh, 0.44 * (1 - g), out);
+          lerp3(out, cAsh, 0.20 * g * g, out);
         } else {
           lerp3(cBD, cBL, sat((det[i] * 0.42 + big[i] * 0.58 - 0.18) / 0.62), out);
-          scl(out, 0.80 + 0.40 * hv);
+          scl(out, 0.76 + 0.50 * hv);
           /* 煉瓦1個ごとの色温度差。焼きムラで灰寄りのものと赤寄りのものが混じる。
              これが無いと面が平坦になり「陶タイル」に見える。 */
           lerp3(out, toRGB(mix(BR, P.ash, 0.55), [0, 0, 0]), h2(col, row, 41) * 0.55, out);
@@ -1451,11 +1490,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             smoothstep(1 - jw - 0.024, 1 - jw, bx)) * 0.20, out);
         }
         /* 煤：煉瓦の割付を無視して縦に走る。格子の反復を断ち切る役目も持つ。 */
-        lerp3(out, cSh, sat(soot[i] * 1.5 - 0.62) * 0.55, out);
+        lerp3(out, cSh, sat(soot[i] * 1.6 - 0.58) * 0.70, out);
         /* マクロむら：目地の格子より低い周波数で、明暗の両方向に振る。
            乗算だけだと平均が落ちて実機で真っ黒になる（一度そうなった）。 */
         scl(out, 0.88 + 0.24 * macro[i]);
-        scl(out, 1 - 0.18 * Math.pow(v, 2.3));
       });
 
       /* 後退した煉瓦の座標を拾い直す（上に煤を出すため） */
@@ -1512,7 +1550,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       seed(2727);
       for (i = 0; i < 3; i++)
-        crack(o, rnd() * S, rnd() * S, rr(1.2, 1.9), rr(140, 280), 2.8, P.grime, sh(BR, 1.38), 2, 0.28);
+        (function (a2, b2) {
+          tiled(o, function () {
+            crack(o, a2, b2, rr(1.2, 1.9), rr(140, 280), 2.8, P.grime, sh(BR, 1.38), 2, 0.28);
+          });
+        })(rnd() * S, rnd() * S);
 
       blend(o, greyCanvas(S, ctr(fbm(S, 5, 4, 5959), 1.35, 0.5), 0.66, 1.04), 'multiply', 0.42);
       blend(o, greyCanvas(S, fbm(S, 210, 2, 4141), 0.0, 1.0), 'overlay', 0.10);
@@ -1540,7 +1582,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         /* 圧延の筋は弱く。強いと木目に見える（初回の出力でそうなった）。 */
         lerp3(cMD, cML, sat((roll[i] * 0.30 + det[i] * 0.28 + patch[i] * 0.42 - 0.24) / 0.50), out);
         lerp3(out, cRD, smoothstep(0.60, 0.80, patch[i]) * 0.45 * (0.4 + 0.6 * det[i]), out);
-        scl(out, 1 - 0.24 * Math.pow(v, 2.0));
       });
 
       seed(1357);
@@ -1626,10 +1667,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       seed(9753);
       x.save(); x.lineCap = 'round';
       for (i = 0; i < 40; i++) {
-        var sx = rnd() * S, sy = rnd() * S, an = rr(-0.30, 0.30), ln = rr(30, 190);
-        x.strokeStyle = CA(sh(P.metal, 1.80), rr(0.10, 0.45));
-        x.lineWidth = rr(0.7, 2.2);
-        x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + Math.cos(an) * ln, sy + Math.sin(an) * ln); x.stroke();
+        (function (sx, sy) {
+          tiled(o, function () {
+            var an = rr(-0.30, 0.30), ln = rr(30, 190);
+            x.strokeStyle = CA(sh(P.metal, 1.80), rr(0.10, 0.45));
+            x.lineWidth = rr(0.7, 2.2); x.lineCap = 'round';
+            x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + Math.cos(an) * ln, sy + Math.sin(an) * ln); x.stroke();
+          });
+        })(rnd() * S, rnd() * S);
       }
       x.restore();
 
@@ -1722,7 +1767,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         /* 流路そのものを明度でも出す。錆面は色より明暗で読ませたほうが
            逆光で沈んだときに残る（実測 sd=13 は平坦すぎた）。 */
         scl(out, 0.64 + 0.72 * sat(flow[i] * 0.7 + flow2[i] * 0.3));
-        scl(out, 0.88 + 0.22 * (1 - v * 0.45));   // 上のほうが乾いて明るい
+        scl(out, 0.86 + 0.28 * grain[i]);         // 乾き具合のむら（v は使わない）
       });
 
       /* --- 流れ落ちた錆の筋。錆の主役はこれ。必ず縦、必ず上が濃い。 ------- */
@@ -1739,13 +1784,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* --- 剥がれかけの鱗の縁：明るい輪郭を少しだけ。入れ過ぎると粒に戻る。 */
       seed(3535);
       for (i = 0; i < 34; i++) {
-        chip(o, rnd() * S, rnd() * S, rr(5, 17),
-          mix(sh(P.rust, 1.22), P.ash, 0.62), mix(P.rust, P.rebar, 0.75), 0.28);
+        (function (a2, b2, r2) {
+          tiled(o, function () {
+            chip(o, a2, b2, r2, mix(sh(P.rust, 1.22), P.ash, 0.62), mix(P.rust, P.rebar, 0.75), 0.28);
+          });
+        })(rnd() * S, rnd() * S, rr(5, 17));
       }
       /* 低周波の濃淡。タイル1枚ぶんの周期でむらを作り、粒の周期を目立たなくする。 */
       blend(o, greyCanvas(S, ctr(fbm2(S, 6, 4, 4, 6969), 1.4, 0.5), 0.70, 1.08), 'multiply', 0.45);
       blend(o, greyCanvas(S, fbm(S, 200, 2, 1414), 0.0, 1.0), 'overlay', 0.10);
-      dull(o, P.ash, 0.28);                       // 最後に必ず濁らせる
+      dull(o, P.ash, 0.34);                       // 最後に必ず濁らせる
       return o;
     }
 
@@ -1810,6 +1858,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var i;
       /* --- 着弾クレータ：椀・放射亀裂・投げ出された灰の環 ----------------- */
       var kx = rr(0.2, 0.8) * S, ky = rr(0.2, 0.8) * S;
+      tiled(o, function () {
       if (isH) {
         var gh = x.createRadialGradient(kx, ky, 0, kx, ky, 78);
         gh.addColorStop(0, GY(38)); gh.addColorStop(0.55, GY(92));
@@ -1830,11 +1879,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         x.fillStyle = gc; x.beginPath(); x.arc(kx, ky, 56, 0, Math.PI * 2); x.fill();
         x.restore();
       }
-      for (i = 0; i < 11; i++) {
-        var ang = i / 11 * Math.PI * 2 + rr(-0.25, 0.25);
+      var ci;
+      for (ci = 0; ci < 11; ci++) {
+        var ang = ci / 11 * Math.PI * 2 + rr(-0.25, 0.25);
         if (isH) crack(o, kx + Math.cos(ang) * 40, ky + Math.sin(ang) * 40, ang, rr(50, 190), 4.5, GY(64), GY(186), 1, 0.18);
         else crack(o, kx + Math.cos(ang) * 40, ky + Math.sin(ang) * 40, ang, rr(50, 190), 4.5, P.groundDark, sh(P.ash, 1.5), 1, 0.18);
       }
+      });
 
       /* --- 瓦礫片：大中小の3階級。上から見るので影は必ず下（手前）に落ちる。
          初回は同じ大きさの白い粒を撒いて「はしか」に見えた。 */
@@ -1887,13 +1938,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         seed(9494);
         x.save(); x.lineCap = 'round';
         for (i = 0; i < 20; i++) {
-          var sx = rnd() * S, sy = rnd() * S, an3 = rr(0, 6.28), ln = rr(40, 170);
-          x.strokeStyle = CA(P.groundDark, rr(0.08, 0.24));
-          x.lineWidth = rr(4, 14);
-          x.beginPath(); x.moveTo(sx, sy);
-          x.quadraticCurveTo(sx + Math.cos(an3) * ln * 0.5 + rr(-25, 25), sy + Math.sin(an3) * ln * 0.5 + rr(-25, 25),
-            sx + Math.cos(an3) * ln, sy + Math.sin(an3) * ln);
-          x.stroke();
+          (function (sx, sy) {
+            tiled(o, function () {
+              var an3 = rr(0, 6.28), ln = rr(40, 170);
+              x.strokeStyle = CA(P.groundDark, rr(0.08, 0.24));
+              x.lineWidth = rr(4, 14); x.lineCap = 'round';
+              x.beginPath(); x.moveTo(sx, sy);
+              x.quadraticCurveTo(sx + Math.cos(an3) * ln * 0.5 + rr(-25, 25), sy + Math.sin(an3) * ln * 0.5 + rr(-25, 25),
+                sx + Math.cos(an3) * ln, sy + Math.sin(an3) * ln);
+              x.stroke();
+            });
+          })(rnd() * S, rnd() * S);
         }
         x.restore();
         /* 敷石の割付より低い周波数の濃淡。タイルの反復を目立たなくする。 */
@@ -1912,7 +1967,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var S = 512, o = mk(S), x = o.x;
       var det = fbm(S, 120, 3, 1818);
       var dirt = fbm(S, 7, 4, 2828);
-      var TH = 7;                                  // 糸のピッチ（px）
+      var TH = 8;                                  // 糸のピッチ。S(512)を割り切る値でないと織りがタイルしない
       var CL = sh(P.playerCloth, 1.18);
       var cCD = toRGB(sh(CL, 0.50), [0, 0, 0]);
       var cCL = toRGB(sh(CL, 1.34), [0, 0, 0]);
@@ -1931,8 +1986,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         lerp3(cCD, cCL, sat((det[i] - 0.24) / 0.52), out);
         scl(out, (0.68 + 0.46 * round - 0.14 * (1 - depth)) * (0.88 + 0.24 * h2(wi, wj, 44)));
         /* 汚れ：裾（下）ほど濃い。上面には灰が乗る。 */
-        lerp3(out, cGr, sat(dirt[i] * 1.1 - 0.28) * (0.18 + 0.60 * v) * 0.9, out);
-        lerp3(out, cAsh, sat(0.50 - dirt[i]) * 0.30 * (1 - v * 0.6), out);
+        lerp3(out, cGr, sat(dirt[i] * 1.1 - 0.28) * 0.62, out);
+        lerp3(out, cAsh, sat(0.50 - dirt[i]) * 0.24, out);
       });
 
       seed(3939);
@@ -2034,13 +2089,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       fill(o, function (px, py, u, v, out) {
         var i = py * S + px;
-        /* 面の周縁ほど汚れる（隅に埃と水が溜まる）。 */
-        var eg = 1 - smoothstep(0.0, 0.20, Math.min(Math.min(u, 1 - u), Math.min(v, 1 - v)));
+        /* 汚れの溜まり。当初はタイルの周縁を暗くしていたが、それは
+           「タイルの境界＝面の境界」という誤った前提で、敷き詰めると
+           格子が出るうえ継ぎ目にもなった。低周波ノイズの谷に置き換える。 */
+        var eg = sat(1.25 - soft[i] * 1.9);
         var m = 1
-          - eg * 0.34
+          - eg * 0.30
           - sat(soft[i] * 1.2 - 0.35) * 0.26
           - sat(fineF[i] - 0.55) * 0.14
-          - Math.pow(v, 3.0) * 0.28;              // 裾の跳ね
+          - sat(soft[i] * 1.4 - 0.75) * 0.30;     // 溜まりの濃い所（v は使わない）
         m = sat(m * 0.74 + 0.26);                 // 下限を作り、乗算で潰しすぎない
         out[0] = R8(White) * m; out[1] = G8(White) * m; out[2] = B8(White) * m;
       });
@@ -2056,11 +2113,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       /* 煤の広がり：一点から放射状に薄く */
       for (i = 0; i < 4; i++) {
-        var sx = rnd() * S, sy = rnd() * S, rd = rr(30, 90);
-        var gr = x.createRadialGradient(sx, sy, 0, sx, sy, rd);
-        gr.addColorStop(0, CA(P.grime, 0.22));
-        gr.addColorStop(1, CA(P.grime, 0));
-        x.fillStyle = gr; x.beginPath(); x.arc(sx, sy, rd, 0, Math.PI * 2); x.fill();
+        (function (sx, sy, rd) {
+          tiled(o, function () {
+            var gr = x.createRadialGradient(sx, sy, 0, sx, sy, rd);
+            gr.addColorStop(0, CA(P.grime, 0.22));
+            gr.addColorStop(1, CA(P.grime, 0));
+            x.fillStyle = gr; x.beginPath(); x.arc(sx, sy, rd, 0, Math.PI * 2); x.fill();
+          });
+        })(rnd() * S, rnd() * S, rr(30, 90));
       }
       x.restore();
       return o;
@@ -6533,44 +6593,74 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     function impactWorld(x, y, z) {
       var i, sv, o;
 
-      /* 1層目：白い閃光。着弾の「点」を1フレームで示す。寒色。
-         -----------------------------------------------------------------
-         ここは「塗り潰した円」にしてはならない。外れ弾の着弾点は
-         レティクルの真下に必ず来るので、不透明な白い玉を置くと
-         撃っている間ずっと狙点が見えなくなる（＝狙って撃つゲームが壊れる）。
-         中心が空いた輪にすれば、着弾の位置と勢いは伝わったまま狙点が透ける。 */
-      reset();
-      E.x = x + nX * 0.03; E.y = y + nY * 0.03; E.z = z + nZ * 0.03;
-      E.tile = TILE_RING; tint(COL.coldSpark, 0.45);
-      size(0.46, 1.00, 0.36, 0.80);        // 気持ち横長。縦にレティクルへ伸ばさない
-      E.rot = rnd() * 6.283;
-      E.ttl = 0.085; E.grow = 0.36; E.a0 = 0.8; E.fade = 1.2;
-      emit(ADD);
+      /* 外れ弾には「閃光の芯」を置かない。理由は2つあり、どちらも重い。
+         (1) 操作：外れ弾の着弾点はレティクルの真下に必ず来る。そこに不透明で
+             明るい玉を置くと、撃っている間ずっと狙点が見えない
+             ＝狙って撃つゲームが成立しなくなる。
+         (2) 読み分け：芯の閃光を「命中側だけが持つもの」にすると、
+             白い粉塵（外れ）と暖色の閃光＋飛沫（命中）が、
+             色だけでなく「光ったかどうか」でも分かれる。
+         外れの契約は「白い粉塵の噴出＋短い火花」であって、閃光ではない。
 
-      /* 2層目：粉塵の噴出。法線まわり ±40° の狭い円錐＝縦に立つプルーム。
-         ここでいちばん重要なのは「初期サイズ」。1フレーム目に見えるのは
-         ほぼ s0 なので、s0 が小さいと着弾の瞬間が点にしかならない。
-         発生位置も法線方向にばらけさせて、最初の1枚から塊にする。 */
-      for (i = 0; i < 18; i++) {
-        /* 芯を 0.34rad 抜く＝狙点の真上に粉塵を置かない。
-           噴出は「面から円錐状に舞い上がる」ものなので、
-           芯を抜いても現象としては嘘にならない。 */
-        cone(0.92, 0.55, 0.34);
-        o = rr(0.10, 0.50);
-        sv = rr(2.4, 6.4);
+         1層目：粉塵の噴出。
+         -----------------------------------------------------------------
+         円錐の芯を角度で抜くだけでは穴が開かない。粒の半径（0.13〜0.22m）が
+         穴の半径より大きいと、粒自身が中心を塗り潰してしまうため。
+         そこで接平面上の「半径 R の輪」から発生させ、外向き＋法線方向へ飛ばす。
+         これは実際の着弾でできる王冠状の噴出そのものなので、
+         狙点を空けるための都合が、そのまま正しい現象の形になっている。 */
+      var rc, rs, tx, ty, tz;
+      for (i = 0; i < 20; i++) {
+        rc = rnd() * 6.283;
+        tx = uX * Math.cos(rc) + wX * Math.sin(rc);
+        ty = uY * Math.cos(rc) + wY * Math.sin(rc);
+        tz = uZ * Math.cos(rc) + wZ * Math.sin(rc);
+        /* 輪の半径は粒の半径より必ず大きく取る。ただし揃えると
+           「白い数珠」に見えるので、半径も粒径もよくばらす。 */
+        rs = rr(0.28, 0.60);
+        o = rr(0.04, 0.30);             // 面から浮かす量
+        sv = rr(2.0, 4.6);              // 法線方向（立ち上がり）
+        var so = rr(1.2, 3.2);          // 外向き（広がり）
         reset();
-        E.x = x + dX * o; E.y = y + dY * o; E.z = z + dZ * o;
-        E.vx = dX * sv; E.vy = dY * sv + 0.7; E.vz = dZ * sv;
+        E.x = x + tx * rs + nX * o; E.y = y + ty * rs + nY * o; E.z = z + tz * rs + nZ * o;
+        E.vx = nX * sv + tx * so; E.vy = nY * sv + ty * so + 0.7; E.vz = nZ * sv + tz * so;
         E.tile = (i % 2) ? TILE_PUFF : TILE_PUFF2;
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 2.2;
         /* 半分を青灰に寄せる。命中側（赤）との対比は明度ではなく色相で付ける。
            純白のままだと、暗い画面では致命打の白熱コアと同じ「白」に見える。 */
         tint((i % 2) ? COL.dustCool : COL.dust, rr(0.85, 1.15));
-        sizeU(rr(0.26, 0.44), rr(0.74, 1.12));
+        /* 粒を大きくして、密度ではなく「裾の重なり」で雲にする。
+           TILE_PUFF は中心に濃度が寄っているので、大きくしても
+           濃い部分は輪の上に留まり、薄い裾だけが隙間を埋める。
+           ＝つながって見えるのに、中心は透けたまま。 */
+        sizeU(rr(0.30, 0.52), rr(0.58, 1.00));
         E.ttl = rr(0.45, 0.80); E.grow = 0.42; E.drag = 4.6; E.grav = 0.9;
         /* 不透明度も抑える。粉塵は「厚み」で見せるもので、
            1粒で壁を作るものではない。重なって初めて雲になればよい。 */
-        E.a0 = rr(0.30, 0.52); E.fade = 1.6;
+        E.a0 = rr(0.32, 0.55); E.fade = 1.6;
+        emit(ALP);
+      }
+      /* 王冠の粒どうしの隙間を埋める薄い粉。
+         輪だけだと「白い数珠」に見えて、ひと塊の噴出に見えない。
+         内側にも置くが、不透明度を 0.16 まで落としてあるので
+         狙点はここを透かして読める（＝密度は稼げるが視界は塞がない）。 */
+      for (i = 0; i < 8; i++) {
+        rc = rnd() * 6.283;
+        tx = uX * Math.cos(rc) + wX * Math.sin(rc);
+        ty = uY * Math.cos(rc) + wY * Math.sin(rc);
+        tz = uZ * Math.cos(rc) + wZ * Math.sin(rc);
+        rs = rr(0.10, 0.36);
+        o = rr(0.03, 0.22);
+        sv = rr(1.8, 4.0);
+        reset();
+        E.x = x + tx * rs + nX * o; E.y = y + ty * rs + nY * o; E.z = z + tz * rs + nZ * o;
+        E.vx = nX * sv + tx * 1.8; E.vy = nY * sv + ty * 1.8 + 0.6; E.vz = nZ * sv + tz * 1.8;
+        E.tile = (i % 2) ? TILE_PUFF2 : TILE_PUFF;
+        E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 2.0;
+        tint((i % 2) ? COL.dust : COL.dustCool, 1.0);
+        sizeU(rr(0.26, 0.44), rr(0.60, 0.92));
+        E.ttl = rr(0.40, 0.68); E.grow = 0.42; E.drag = 4.8; E.grav = 0.9;
+        E.a0 = 0.16; E.fade = 1.7;
         emit(ALP);
       }
       /* 壁面を這う粉。プルームの根元を面に接地させる。 */
@@ -6597,10 +6687,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          白い粉塵の中に白い火花を置くと同化して消える。初期位置を雲の外へ出し、
          長さも雲の半径を超えるところまで伸ばして、輪郭から突き出させる。 */
       for (i = 0; i < 11; i++) {
-        cone(1.28, 0.55, 0.40);
+        cone(1.28, 0.55, 0.52);
         sv = rr(9.0, 19.0);
         reset();
-        E.x = x + dX * 0.26; E.y = y + dY * 0.26; E.z = z + dZ * 0.26;
+        /* 火花も狙点の真上から出さない。0.30m 外へずらす。 */
+        E.x = x + dX * 0.30; E.y = y + dY * 0.30; E.z = z + dZ * 0.30;
         E.vx = dX * sv; E.vy = dY * sv + 0.8; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
         tint(COL.coldSpark, rr(1.0, 1.5));
@@ -6637,9 +6728,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       reset();
       E.x = x + nX * 0.04; E.y = y + nY * 0.04; E.z = z + nZ * 0.04;
       E.tile = TILE_GLOW;
-      tint(head ? COL.spark : COL.glow, head ? 0.85 : 0.55);
-      sizeU(0.34 * S, 0.80 * S);
-      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.8 : 0.5; E.fade = 1.2;
+      /* 胴命中の「熱」はここが担当する。芯（TILE_HOT）は狙点を守るため
+         小さく抑えたので、そのぶん外周の滲みで暖かさと面積を稼ぐ。
+         滲みは中心が濃すぎないので、狙点を潰さずに命中感だけ上げられる。 */
+      tint(head ? COL.spark : COL.glow, head ? 0.85 : 0.70);
+      sizeU(0.40 * S, 0.90 * S);
+      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.8 : 0.62; E.fade = 1.2;
       emit(ADD);
 
       if (head) {
@@ -9967,6 +10061,8 @@ function boot() {
   window.__ASHLINE = {
     P: P, CAM: CAM, IN: IN, CFG: CFG, SET: SET, METRICS: METRICS,
     enemies: enemies, covers: COVERS, faces: faces,
+    scene: scene, camera: camera, renderer: renderer, three: T,   // 監査・検証用
+    playerRig: playerRig, enemyMeshes: enemyMeshes,
     ST: ST,
     tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
     pause: function (v) { paused = !!v; },

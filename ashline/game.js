@@ -1586,6 +1586,8 @@ function boot() {
   window.__ASHLINE = {
     P: P, CAM: CAM, IN: IN, CFG: CFG, SET: SET, METRICS: METRICS,
     enemies: enemies, covers: COVERS, faces: faces,
+    scene: scene, camera: camera, renderer: renderer, three: T,   // 監査・検証用
+    playerRig: playerRig, enemyMeshes: enemyMeshes,
     ST: ST,
     tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
     pause: function (v) { paused = !!v; },
