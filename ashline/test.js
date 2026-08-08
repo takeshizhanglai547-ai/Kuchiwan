@@ -573,8 +573,8 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     (misc.kickPeak * 180 / Math.PI).toFixed(2) + '°');
   check('§7 カメラキック：0.25秒でほぼ復帰', Math.abs(misc.kickAfter * 180 / Math.PI) < 0.07,
     '残り ' + (misc.kickAfter * 180 / Math.PI).toFixed(3) + '°');
-  check('§7 ヒットストップ：胴命中は16ms（連射武器向けに§7の40msから減じた。要判断）',
-    near(misc.hitstopSeen, 0.016, 0.002), (misc.hitstopSeen * 1000).toFixed(0) + 'ms');
+  check('§7 ヒットストップ：胴命中は35ms（16msは1フレームで知覚不能との批評を受け引き上げ）',
+    near(misc.hitstopSeen, 0.035, 0.002), (misc.hitstopSeen * 1000).toFixed(0) + 'ms');
   check('§7 ヒットストップ：頭部命中は120ms（仕様どおり）',
     near(misc.headStop, 0.120, 0.003),
     (misc.headStop * 1000).toFixed(0) + 'ms / 命中内容:' + JSON.stringify(misc.headShot && { hit: misc.headShot.hit, head: misc.headShot.head }));

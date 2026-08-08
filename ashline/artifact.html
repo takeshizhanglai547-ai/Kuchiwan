@@ -8850,7 +8850,8 @@ var CFG = {
   // §7 ヒットストップ：通常40ms / 致命打120ms
   // 連射武器(640rpm=94ms間隔)に40msを毎発かけると体感が4割停止する。
   // 連射武器のみ 16ms に減じ、致命打(頭部)は仕様どおり120msを維持。＝要判断事項として報告。
-  hitstop: { light: 0.016, heavy: 0.120, spec: 0.040 },
+  // 0.016s は60fpsで1フレームしかなく、層として知覚できないと批評で指摘された
+  hitstop: { light: 0.035, heavy: 0.120, spec: 0.040 },
 
   // §6 エイムアシスト：作用範囲=画面幅8% / 着弾補正 最大3°
   aim: { magnetFrac: 0.08, snapDeg: 3.0, magnetSlow: 0.55 },
@@ -8885,7 +8886,7 @@ var ASSIST_LEVELS = [
   { name: '強', snap: 1.45, magnet: 1.45 }
 ];
 
-var SET = { assist: 1, autoFire: false, debug: true };
+var SET = { assist: 1, autoFire: false, debug: false };
 
 /* =============================================================================
    ARENA — グレーボックス。多層の遮蔽 + 左右の回り込みルート。
@@ -9090,6 +9091,8 @@ var P = {
   hp: 100, ammo: CFG.fire.mag, reloadT: 0, fireCd: 0, flash: 0,
   // blind fire
   blindT: 0,
+  // 反動（発砲の余韻を体に出す）
+  recoil: 0,
   // vault
   vaultTop: 0,
   // anim
@@ -9595,6 +9598,7 @@ var _mz = new T.Vector3(), _dir = new T.Vector3(), _rt = new T.Vector3(), _uu = 
 function shoot() {
   P.fireCd = 60 / CFG.fire.rpm;
   P.ammo--; P.flash = CFG.fire.flashFrames;
+  P.recoil = 1;
 
   var blind = isBlind(), snapApplied = 0, head = false;
   var m, d = _dir, camBlocked = false;
@@ -9830,6 +9834,9 @@ function makeEnemy(x, z) {
 function damageEnemy(e, dmg, dx, dz, head) {
   e.hp -= dmg; e.flash = 1; e.knock = 1; e.knockX = dx; e.knockZ = dz;
   FX.hitMark(head);
+  // 発砲のキックは縦。命中は軸を変えて横に打つことで、命中と非命中を体で区別させる。
+  CAM.kickY += (Math.random() < 0.5 ? -1 : 1) * (head ? 0.62 : 0.34) * DEG;
+  CAM.kickP += (head ? 0.55 : 0.22) * DEG;
   if (e.hp <= 0 && !e.dead) { e.dead = true; e.respawn = 2.4; e.fall = 0; }
 }
 function updateEnemies(dt) {
@@ -9868,6 +9875,7 @@ function updateAnim(dt) {
   else if (P.state === ST.VAULT) crouchT = 0.35;
   else crouchT = P.sprint ? 0.55 : 0;
   P.crouch = smooth(P.crouch, crouchT, 0.09, dt);
+  P.recoil = smooth(P.recoil, 0, 0.055, dt);   // 0.16秒で収まる余韻
 }
 
 /* =============================================================================
@@ -10217,8 +10225,16 @@ function syncRig() {
 
   var sp = Math.hypot(P.vx, P.vz);
   var amp = clamp(sp / CFG.move.walk, 0, 1.4) * 0.62;
-  r.legR.rotation.x = Math.sin(P.stride) * amp;
-  r.legL.rotation.x = -Math.sin(P.stride) * amp;
+  if (P.state === ST.VAULT) {
+    // 跳び越える間は膝を抱える。予備動作(踏み切り)→主要(抱え込み)→余韻(着地で伸ばす)
+    var vs = clamp(P.actT / P.actDur, 0, 1);
+    var tuck = Math.sin(Math.PI * vs);
+    r.legR.rotation.x = -1.15 * tuck;
+    r.legL.rotation.x = -0.85 * tuck;
+  } else {
+    r.legR.rotation.x = Math.sin(P.stride) * amp;
+    r.legL.rotation.x = -Math.sin(P.stride) * amp;
+  }
   r.armL.rotation.x = -Math.sin(P.stride) * amp * 0.5;
 
   // 構え：撃てる状態なら腕を前に上げ、そうでなければ下ろす
@@ -10234,11 +10250,11 @@ function syncRig() {
     r.gun.position.y = lerp(-0.20, upY, b);
     r.gun.position.z = lerp(0, 0.18, b);
   } else {
-    r.armR.rotation.x = ready ? -1.25 : -0.15;
-    r.armR.rotation.z = ready ? 0.25 : 0;
-    r.gun.rotation.x = ready ? 0 : 0.60;
+    r.armR.rotation.x = (ready ? -1.25 : -0.15) - P.recoil * 0.10;
+    r.armR.rotation.z = (ready ? 0.25 : 0) + P.recoil * 0.05;
+    r.gun.rotation.x = (ready ? 0 : 0.60) - P.recoil * 0.14;
     r.gun.position.y = ready ? -0.06 : -0.20;
-    r.gun.position.z = 0;
+    r.gun.position.z = -P.recoil * 0.075;      // 銃が後ろへ退く
   }
   // VFXモジュールが銃口炎を出す場合、モデル側の発光は消す。
   // 出す位置が違う（モデルは前方0.78m、弾の発射点は0.42m）ので、二重に出ると嘘になる。
@@ -10251,9 +10267,13 @@ function syncRig() {
     m.root.rotation.y = Math.PI;
     m.body.rotation.x = e.fall > 0 ? e.fall * 1.5 : -e.knock * 0.22;
     m.body.position.y = e.fall > 0 ? -e.fall * 0.55 : 0;
-    var f = e.flash;
-    m.mA.color.setHex(f > 0.02 ? 0xffb0a0 : 0x6b3a34);
-    m.mB.color.setHex(f > 0.02 ? 0xff9080 : 0x4a2622);
+    // enemy.js は mA と mB に同一のマテリアル参照を返すことがある。
+    // 順に書くと後の値が勝ち、パレットの enemyArmor が一度も画面に出ない。
+    var f = e.flash, PL = ART.palette;
+    var cA = f > 0.02 ? 0xffb0a0 : (PL ? PL.enemyArmor : 0x6b3a34);
+    var cB = f > 0.02 ? 0xff9080 : (PL ? PL.enemyArmorDark : 0x4a2622);
+    m.mA.color.setHex(cA);
+    if (m.mB && m.mB !== m.mA) m.mB.color.setHex(cB);
     if (e.dead && e.fall >= 1) m.root.visible = e.respawn > 0.3;
   }
 }
