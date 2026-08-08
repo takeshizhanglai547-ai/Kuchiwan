@@ -194,16 +194,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     grime: 0x2a2521,         // 汚れの乗算色
 
     /* ---- 素材：陣営 ---------------------------------------------------- */
-    // 自機：冷たい灰。彩度は環境（S≈0.14）に合わせ、識別は色相ではなく明度と形で行う。
-    // 0x49535e は彩度0.223で環境より高く、暖色の画面から青く浮いていた（実測）。
-    playerArmor: 0x55595e,
-    playerArmorDark: 0x33363b,
+    // 自機：冷たい灰。彩度は環境（S≈0.14）に合わせ、識別は色相ではなく明度で行う。
+    // 0x49535e は彩度0.223で環境より高く暖色の画面から青く浮いていた。
+    // その後 0x55595e に落としたが、今度は暗色コンクリート(0x5f584e)と
+    // 相対輝度がほぼ同一（コントラスト比1.005:1）で明度でも分離できていなかった（実測）。
+    // 彩度は据え置いたまま明度だけを上げ、環境から抜く。
+    playerArmor: 0x7c8288,
+    playerArmorDark: 0x4d5257,
     playerCloth: 0x6d6353,
     playerTrim: 0x9aa6b2,
 
-    // 敵：鈍い酸化鉄。自機と色相を180度離す
-    enemyArmor: 0x6b3f33,
-    enemyArmorDark: 0x3a221c,
+    // 敵：鈍い酸化鉄。自機とは色相ではなく明度で離す（自機を上へ、敵を下へ）
+    enemyArmor: 0x4a2a22,
+    enemyArmorDark: 0x2a1712,
     enemyCloth: 0x554438,
     enemyTrim: 0xa86b4b,
 
