@@ -1687,6 +1687,25 @@ function drawParticles(layer){
           ctx.lineTo(c*far-px2*wOut, sn*far-py2*wOut);
           ctx.closePath(); ctx.fill(); }
         ctx.restore(); ctx.globalCompositeOperation='source-over'; } }
+    else if(p.k==='sigil'){                                            // 魔法陣：一瞬で開いて回りながら消える
+      const sa=Math.sin(Math.PI*Math.min(1,(1-a)*1.35)), rr=p.r*(0.30+0.70*Math.min(1,(1-a)*2.6));
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,py);
+      ctx.rotate(p.rot+(1-a)*1.2); ctx.scale(1,0.46);
+      ctx.strokeStyle=p.color; ctx.lineCap='butt';
+      ctx.globalAlpha=sa*0.95; ctx.lineWidth=3.6;                       // 外環
+      ctx.beginPath(); ctx.arc(0,0,rr,0,7); ctx.stroke();
+      ctx.globalAlpha=sa*0.62; ctx.lineWidth=2.0;                       // 内環（帯を作る）
+      ctx.beginPath(); ctx.arc(0,0,rr*0.84,0,7); ctx.stroke();
+      ctx.globalAlpha=sa*0.80; ctx.lineWidth=3.0;                       // 帯の中のルーン目盛り
+      ctx.beginPath();
+      for(let i=0;i<12;i++){ const an=i/12*6.283;
+        ctx.moveTo(Math.cos(an)*rr*0.85,Math.sin(an)*rr*0.85); ctx.lineTo(Math.cos(an)*rr*0.99,Math.sin(an)*rr*0.99); }
+      ctx.stroke();
+      ctx.globalAlpha=sa*0.85; ctx.strokeStyle='#fff'; ctx.lineWidth=1.8;
+      ctx.beginPath();                                                  // 帯の内側に接する六芒星
+      for(let i=0;i<6;i++){ const an=i/6*6.283, an2=((i+2)%6)/6*6.283, R=rr*0.84;
+        ctx.moveTo(Math.cos(an)*R,Math.sin(an)*R); ctx.lineTo(Math.cos(an2)*R,Math.sin(an2)*R); }
+      ctx.stroke(); ctx.restore(); ctx.globalCompositeOperation='source-over'; }
     else if(p.k==='flare'){                                            // 白い十字の閃光（加算）
       const fa=Math.pow(a,1.5);
       ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.translate(sx,py); ctx.rotate(p.rot);
@@ -2257,20 +2276,37 @@ function guardWave(p){ const dir=p.facing, mul=(p.atkMul||1);
   spawnProj(p.x+dir*44, p.y, dir*7.5, 0, {owner:'player', dmg:Math.round(20*mul), color:'#ffd24d', r:20, life:40, zz:44, vzz:7, pierce:true, wave:true});
   ring(p.x+dir*44,p.y-60,'#ffd24d'); sfx.boss(p.x); }
 // ── ガードワン8号・奥義「メガトンクエイク」：画面外へ跳躍→急降下ハンマーで画面全体を粉砕 ──
-function beginGuardQuake(){ const p=player; p.dim--; p.state='gquake'; p.gqT=0; p.invuln=Math.max(p.invuln,110); p.vx=0; p.charge=0; p.atkHeld=false;
-  popText(p.x,p.y-124,'メガトンクエイク！！','#ffd24d',true); ring(p.x,p.y-40,'#ffd24d'); ring(p.x,p.y-40,'#fff');
-  dust(p.x,p.y,12); sfx.boss(p.x); sfx.dash(p.x); flash=Math.max(flash,3); }
+function beginGuardQuake(){ const p=player; p.dim--; p.state='gquake'; p.gqT=-14; p.invuln=Math.max(p.invuln,124); p.vx=0; p.charge=0; p.atkHeld=false;
+  popText(p.x,p.y-124,'メガトンクエイク！！','#ffd24d',true);
+  superFlash(p.x,p.y-56,'#ffd24d'); sfx.charge(p.x); sfx.heavy(p.x); }
 function updateGuardQuake(){ const p=player; p.gqT++; p.invuln=Math.max(p.invuln,6);
+  // 沈み込み：跳ぶ前に14フレーム、膝を折って地面へ力を溜める。
+  // 巨躯のパワー型は「沈む→踏み切る→地面が割れる」の最初の段が要る
+  if(p.gqT<0){
+    if(p.gqT===-10||p.gqT===-5){ dust(p.x,p.y,6); ring(p.x,p.y,'#8a6a3a',{sq:0.13,rMax:48}); }
+    if(p.gqT%2===0 && perfTier<2) ember(p.x+rnd(-26,26), p.y-2, rnd(-1,1), -rnd(1.2,3.4), '#caa54a');
+    if(p.gqT===-3){ quake=Math.max(quake,10); shake=Math.max(shake,6); sfx.heavy(p.x); }
+    return; }
+  if(p.gqT===0){ dust(p.x,p.y,14); shockwave(p.x,p.y,{r:110,color:'#caa54a',big:false}); sfx.dash(p.x); }
   if(p.gqT<24){ p.z+=18; if(gf%3===0) dust(p.x,p.y,2); }                                   // 画面外へ大跳躍
   else if(p.gqT===24){ const t=nearestEnemy(); if(t) p.x=clamp(t.x, camX+60, camX+W-60); p.z=Math.max(p.z, H+100); }   // 上空で狙いを定める
   else if(p.gqT>30){ p.z-=36; if(gf%2===0) spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,40), '#ffb85a', 2,5);   // 急降下
     if(p.z<=0){ p.z=0; guardQuakeImpact(p); p.state='land'; p.landT=26; return; } }
 }
 function guardQuakeImpact(p){ const mul=(p.atkMul||1);
-  quake=Math.max(quake,50); shake=Math.max(shake,18); hitStop=Math.max(hitStop,16); flashAt(6,'255,210,77'); triggerSlow(32);
+  quake=Math.max(quake,64); shake=Math.max(shake,24); hitStop=Math.max(hitStop,22); flashAt(7,'255,210,77'); triggerSlow(38);
+  camZoomT=Math.max(camZoomT,1.11);
   hitSound(46,'blunt',0,p.x); sfx.big(p.x); sfx.ko(p.x);                                                        // 破壊音（重層クラッシュ）
-  ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#fff'); dust(p.x,p.y,24); impactBurst(p.x,p.y-30,'#fff',true);
-  for(let k=0;k<6;k++){ ring(p.x+rnd(-150,150), p.y-rnd(0,20), '#ffb85a'); dust(p.x+rnd(-190,190), p.y, 6); spark(p.x+rnd(-170,170), p.y-rnd(0,30), '#ffd24d', 6,8); }
+  // 同じキャラの下位技より地味だったので、多層の衝撃波に置き換える
+  shockwave(p.x,p.y,{r:330,color:'#ffd24d',big:true});
+  shockwave(p.x,p.y,{r:230,color:'#ff8a3a',big:true});
+  shockwave(p.x,p.y,{r:150,color:'#ffffff',big:false});
+  dust(p.x,p.y,24); impactBurst(p.x,p.y-30,'#fff',true);
+  // 亀裂：ランダムな輪ではなく、左右へ順に伝播させる
+  for(const d of [-1,1]) for(let k=1;k<=9;k++){ const cx=p.x+d*k*38;
+    spark(cx,p.y,k%2?'#8a6a3a':'#caa54a',perfTier>=1?2:4,5+k*0.5,{delay:k});
+    if(k%2===0 && perfTier<2) ring(cx,p.y,'#caa54a',{sq:0.12,rMax:40,delay:k}); }
+  if(perfTier<1) for(let k=0;k<14;k++) ember(p.x+rnd(-170,170), p.y-4, rnd(-5,5), -rnd(5,13), k%2?'#caa54a':'#fff');
   for(const e of enemies){ if(e.dead) continue;                                             // 画面全体の敵に大ダメージ
     if(e.x>camX-60 && e.x<camX+W+60){ damageEnemy(e, Math.round(30*mul), (e.x<p.x?-1:1)*8, true);
       if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*14, -12, 3); } }
@@ -2325,6 +2361,20 @@ function updateGuardUpper(){ const p=player, e=p.grabEnemy;
 // ヌコの魔法：1=エネルギー弾(低威力・ヒットストップ無し) 5=彼方からの呼び声 6=貫通サンダービーム 7=炎の柱 8=時間差爆発
 let hazards=[];   // 設置型魔法（炎の柱・時限爆弾）
 function nukoMul(p){ return (p.atkMul||1)*((WEAPONS[p.weapon]||WEAPONS.wand).dmg); }
+// 詠唱：外周の光が杖先へ吸い込まれる
+function nukoGather(p,col){ const cx=p.x+p.facing*26, cy=p.y-46;
+  const n=perfTier>=2?0:perfTier>=1?7:14;
+  for(let i=0;i<n;i++){ const an=i/n*6.283+rnd(-0.2,0.2), R=rnd(70,130);
+    ember(cx+Math.cos(an)*R, cy+Math.sin(an)*R*0.6,
+          -Math.cos(an)*R*0.075, -Math.sin(an)*R*0.045-0.4, i%3?col:'#fff'); }
+  sfx.beamCharge(p.x,0.24); }
+// 術式：魔法陣が一瞬で展開する
+function nukoSigil(p,col,r){ particles.push({k:'sigil',x:p.x+p.facing*26,y:p.y-46,
+  gl:groundLift(p.x),layer:1,delay:0,life:30,max:30,r:r,rot:rnd(0,6.28),color:col});
+  // 陣が開いた瞬間に外へ抜ける波（外陣を二重に描くと線が飽和して白い落書きになる）
+  ring(p.x+p.facing*26, p.y-46, mixWhite(col,0.45), {sq:0.46, rMax:r*1.5, ang:0, delay:1, layer:1});
+  flashCore(p.x+p.facing*26, p.y-46, r*0.42, '255,235,255', 1);
+  sfx.rise(p.x); }
 function nukoCast(p,tier){
   const dir=p.facing, mul=nukoMul(p);
   const X=p.x+dir*28, zz=46+(p.z||0);
@@ -2921,7 +2971,12 @@ function updatePlayer(){
     else if(!def.special){ p.x+=p.facing*(def.lunge||0)*(a.t<def.dur*0.6?1:0); }
     if(def.fly){ p.z=Math.sin(clamp(a.t/def.dur,0,1)*Math.PI)*66; }            // 飛び蹴り：跳び上がる弧
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
-    if(def.cast && a.t===def.act[0]){ nukoCast(p, def.cast); }              // ヌコ＝詠唱して星弾を発射
+    // ヌコの魔法は〈詠唱＝光が集まる／術式＝魔法陣が展開する／放出〉の3段に割る。
+    // 1フレームで撃つだけでは「魔法を使った」感じが出ない
+    if(def.cast){
+      if(a.t===def.act[0]-10) nukoGather(p, def.trail||'#ffd0f0');
+      if(a.t===def.act[0]-4)  nukoSigil(p, def.trail||'#c46bff', 76);
+      if(a.t===def.act[0]){ nukoCast(p, def.cast); flashCore(p.x+p.facing*28,p.y-46,34,'255,210,245'); } }
     if(def.shock && a.t===def.act[0]){ spawnShockwave(p, def.shock); }       // 溜め斬り＝衝撃波を放つ
     if(def.gwave && a.t===def.act[0]){ guardWave(p); }                        // 天衝ハンマー＝斜め上に巨大衝撃波
     if(def.pshot && a.t===def.act[0]){ firePShot(p, def.pshot); }             // 波動拳コマンド＝前方へ飛ぶ飛び道具
@@ -7321,14 +7376,22 @@ function drawPlayer(){
   else if(st==='seven'){ mode='fist'; lean=0.1; thF=0.5; thB=-0.5; swAng=0.1; backArm=0.3; }   // 七死ワン生
   else if(st==='nlaser'){ swAng=-1.65; backArm=-1.65; thF=0.2; thB=-0.2; bodyY=-2+Math.sin(gph*3)*1.5; }   // カラミティレーザー：両腕を天に掲げる
   else if(st==='nrailchg'||st==='nrailfire'){ swAng=-0.06; backArm=0.5; thF=0.42; thB=-0.42; kF=0.5; kB=0.4; lean=st==='nrailfire'?0.3:0.18; bodyY=-1+Math.sin(gph*4)*0.8; }   // 極太レーザー：杖を前方に構える（照射中は踏ん張る）
-  else if(st==='gquake'){ if((p.gqT||0)<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; }   // メガトンクエイク：ハンマーを天に掲げて跳躍
-    else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                        // 急降下：振り下ろし体勢
+  else if(st==='gquake'){ const T=p.gqT||0;
+    if(T<0){ const u=(T+14)/14;                                                                                          // 沈み込み：膝を折って地面へ力を溜める
+      swAng=-0.6-1.75*u; backArm=-0.5-1.2*u; thF=0.2+0.5*u; thB=0.15+0.4*u;
+      kF=0.4+1.75*u; kB=0.35+1.80*u; bodyY=8*u; lean=-0.10-0.16*u; sqX=1+0.22*u; sqY=1-0.26*u; }
+    else if(T<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; sqY=1.10; sqX=0.94; }           // 踏み切って天へ
+    else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                         // 急降下：振り下ろし体勢
   else if(st==='gupper'){ swAng=-1.5; backArm=0.4; thF=0.32; thB=-0.32; kF=0.5; kB=0.4; bodyY=-1; }                     // アッパー後の構え
   else if(st==='gpound'){ const ph2=(p.gpT||0)%10; swAng=ph2<5?-1.6:1.0; backArm=swAng; thF=0.6; thB=0.4; kF=0.8; kB=0.9; lean=ph2<5?-0.15:0.2; bodyY=-1; }   // 連続叩きつけ
   else if(st==='attack'){ const def=p.atk.def, t=p.atk.t, a0=def.act[0], a1=def.act[1];
     const e=easeOut(clamp((t-a0+2)/(a1-a0+4),0,1));
     const e2=Math.sin(clamp((t-(a0-3))/((a1+3)-(a0-3)),0,1)*Math.PI);   // strike bell 0→1→0
     const windup=clamp((a0-t)/Math.max(1,a0),0,1);                       // anticipation amount
+    // 重い技は溜めの終盤ほど急に沈む。従来は bodyY が負＝「上へ」動いていて、
+    // 大槌を振りかぶるほど体が浮くという逆の絵になっていた
+    const hv=(def.bighammer||def.cleave||(def.aoe&&def.finisher))?1:0;
+    const wq=hv? Math.pow(clamp((a0-t)/Math.min(a0,12),0,1),0.45) : windup;
     const heavy=(def.finisher||def.aoe||def.rise)?1.5:1.1, big=e2*heavy;
     swAng=lerp(def.from,def.to,e); swExt=def.len*0.55*(1+1.15*big);
     // 奥義・止め技・昇竜は単一の easeOut ではなく3キーで振る。
@@ -7346,9 +7409,10 @@ function drawPlayer(){
     lean=lerp(-0.40,0.42,e) - 0.22*windup; backArm=lerp(0.95,-1.35,e)-0.35*big;
     const fwd=(def.finisher||def.aoe)?1.05:0.72;
     thF=lerp(0.02,fwd,e)+0.22*big; thB=lerp(-0.02,-0.8,e)-0.45*big; kF=0.45; kB=0.3;
-    bodyY=-2*e-4*windup; bodyX=7*big-3*windup;
+    bodyY=-2*e+(hv? 7*wq : -4*windup); bodyX=7*big-(hv?7:3)*wq;   // 重い技は沈み、後ろへ引く
     faL1=9+12*big; faL2=8+15*big; faW=0.95+1.0*big; legF1=10+6*big; legF2=9+6*big;
-    sqX=1-0.16*big+0.10*windup; sqY=1+0.20*big-0.12*windup;
+    sqX=1-0.16*big+(hv?0.20:0.10)*wq; sqY=1+0.20*big-(hv?0.24:0.12)*wq;
+    if(hv){ kF=0.45+1.10*wq; kB=0.30+1.20*wq; }   // 重い技は膝も折る
     if(def.rise){ thF=0.7+0.5*big; thB=0.6; kF=1.05; kB=1.4; bodyY=-3-7*big; legF1=10+9*big; legF2=9+10*big; }
     if(def.flurry){ // 高速乱れ切り：斜め上への斬り上げ → 袈裟斬りの振り下ろし をひたすらループさせる
       const SEG=5, tt=Math.max(0,t-def.act[0]), idx=Math.floor(tt/SEG), ph=(tt%SEG)/SEG, up=(idx%2===0);
@@ -7380,7 +7444,7 @@ function drawPlayer(){
     const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
     let B=p.poseB;
     if(!B){ B=p.poseB=Object.assign({},_tgt); }
-    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry');
+    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake');
     const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.80:(st==='land'||st==='getup')?0.55:0.26;
     const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
     for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;
