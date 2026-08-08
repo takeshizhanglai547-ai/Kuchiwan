@@ -134,19 +134,26 @@
       <label class="f">Provider</label>
       <select class="f" id="cfgProvider">
         <option value="local">Local Persona Engine（LLM未接続 / オフライン）</option>
+        <option value="groq">Groq（OpenAI互換・無料枠あり）</option>
         <option value="anthropic">Anthropic Messages API</option>
-        <option value="openai">OpenAI-compatible (Chat Completions)</option>
+        <option value="openai">OpenAI互換（汎用 / 自分でURLを指定）</option>
       </select>
+      <p class="note" id="providerHint"></p>
       <label class="f">Base URL</label>
-      <input class="f" id="cfgBase" placeholder="https://api.anthropic.com">
-      <label class="f">Model</label>
-      <input class="f" id="cfgModel" placeholder="claude-sonnet-5">
+      <input class="f" id="cfgBase" placeholder="https://api.groq.com/openai">
       <label class="f">API Key</label>
-      <input class="f" id="cfgKey" type="password" placeholder="sk-...">
+      <input class="f" id="cfgKey" type="password" placeholder="gsk_...">
+      <label class="f">Model</label>
+      <input class="f" id="cfgModel" list="modelList" placeholder="下の「接続テスト」で一覧を取得">
+      <datalist id="modelList"></datalist>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="cfgProbe">接続テスト / モデル一覧</button>
+        <button class="btn p" id="cfgSave">保存</button>
+      </div>
+      <p class="note" id="probeResult"></p>
       <p class="note">キーはこのブラウザの localStorage にのみ保存され、選択したプロバイダ以外へは送信しません。
       共有端末では使用後に「キーを消去」してください。ブラウザから直接APIを呼ぶ構成のため、本番ではサーバ経由に置き換えてください。</p>
       <div class="row" style="margin-top:8px">
-        <button class="btn p" id="cfgSave">保存</button>
         <button class="btn d" id="cfgWipeKey">キーを消去</button>
       </div>
     </div>
@@ -1024,36 +1031,78 @@ const ToolRouter = {
 /* =========================================================================
    MODEL ROUTER (§28) — one façade over realtime / reasoning / local models
    ========================================================================= */
+/* One row per provider: request shape, default endpoint, key format.
+   Model IDs are deliberately NOT hardcoded — providers rotate them, so the
+   console fetches the live list from /v1/models instead of trusting a guess. */
+const PROVIDERS = {
+  local:     {kind:'local', base:'', keyHint:'',
+              hint:'LLMを使いません。ローカルの簡易ペルソナエンジンで応答します。'},
+  groq:      {kind:'openai', base:'https://api.groq.com/openai', keyHint:'gsk_...',
+              hint:'console.groq.com で無料のAPIキーを発行できます（gsk_ で始まる文字列）。キーを貼って「接続テスト」を押すと、いま使えるモデルの一覧が入ります。'},
+  anthropic: {kind:'anthropic', base:'https://api.anthropic.com', keyHint:'sk-ant-...',
+              hint:'従量課金のみで無料枠はありません。Claude Pro / Max の契約ではAPIは使えず、別途クレジットが必要です。'},
+  openai:    {kind:'openai', base:'https://api.openai.com', keyHint:'sk-...',
+              hint:'OpenAI互換のエンドポイントなら何でも。Base URL は /v1 の手前まで入れてください。'}
+};
+
+/* A fetch that fails before reaching the server throws a bare TypeError with no
+   status — almost always CORS. Say so, rather than showing "Failed to fetch". */
+function describeNetError(e, base){
+  if(e instanceof TypeError)
+    return `${base} に到達できませんでした。ブラウザからの直接アクセスがCORSで拒否されたか、URLが違う可能性があります。`;
+  return String(e && e.message || e);
+}
+
 const ModelRouter = {
-  configured(){ const p=Config.get('provider'); return p!=='local' && !!Config.get('key'); },
+  spec(){ return PROVIDERS[Config.get('provider')] || PROVIDERS.local; },
+  base(){ return (Config.get('base') || this.spec().base || '').replace(/\/$/,''); },
+  configured(){ return this.spec().kind!=='local' && !!Config.get('key'); },
   label(){ return this.configured() ? `${Config.get('provider')}:${Config.get('model')||'default'}` : 'local-persona'; },
+
+  /* GET /v1/models — doubles as the connection test: it exercises the URL,
+     the key, and the browser's ability to reach the host, in one call. */
+  async listModels(){
+    const spec = this.spec(), base = this.base(), key = Config.get('key');
+    if(spec.kind==='local') throw new Error('Provider がローカルのままです。');
+    if(!base) throw new Error('Base URL が空です。');
+    if(!key)  throw new Error('APIキーが空です。');
+    const headers = spec.kind==='anthropic'
+      ? {'x-api-key':key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true'}
+      : {'authorization':'Bearer '+key};
+    let r;
+    try{ r = await fetch(base+'/v1/models', {headers}); }
+    catch(e){ throw new Error(describeNetError(e, base)); }
+    if(r.status===401 || r.status===403) throw new Error(`認証に失敗しました（${r.status}）。APIキーを確認してください。`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0,160)}`);
+    const j = await r.json();
+    const ids = (j.data || j.models || []).map(m=>m.id).filter(Boolean).sort();
+    if(!ids.length) throw new Error('モデル一覧が空で返ってきました。');
+    return ids;
+  },
+
   async complete(system, messages, {maxTokens=900, temperature=0.7}={}){
-    const p = Config.get('provider');
     if(!this.configured()) return {text:null, local:true};
-    if(p==='anthropic'){
-      const base = Config.get('base') || 'https://api.anthropic.com';
-      const r = await fetch(base.replace(/\/$/,'')+'/v1/messages', {
-        method:'POST',
-        headers:{'content-type':'application/json','x-api-key':Config.get('key'),
-                 'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:Config.get('model')||'claude-sonnet-5', max_tokens:maxTokens,
-                             temperature, system, messages})
-      });
-      if(!r.ok) throw new Error('API '+r.status+' '+(await r.text()).slice(0,180));
-      const j = await r.json();
-      return {text:(j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim()};
-    }
-    // OpenAI-compatible
-    const base = Config.get('base') || 'https://api.openai.com';
-    const r = await fetch(base.replace(/\/$/,'')+'/v1/chat/completions', {
-      method:'POST',
-      headers:{'content-type':'application/json','authorization':'Bearer '+Config.get('key')},
-      body:JSON.stringify({model:Config.get('model')||'gpt-4o-mini', max_tokens:maxTokens, temperature,
-                           messages:[{role:'system',content:system}, ...messages]})
-    });
+    const spec = this.spec(), base = this.base(), model = Config.get('model');
+    if(!model) throw new Error('モデルが未選択です。⚙の「接続テスト」で一覧を取得して選んでください。');
+    let r;
+    try{
+      r = spec.kind==='anthropic'
+        ? await fetch(base+'/v1/messages', {
+            method:'POST',
+            headers:{'content-type':'application/json','x-api-key':Config.get('key'),
+                     'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+            body:JSON.stringify({model, max_tokens:maxTokens, temperature, system, messages})})
+        : await fetch(base+'/v1/chat/completions', {
+            method:'POST',
+            headers:{'content-type':'application/json','authorization':'Bearer '+Config.get('key')},
+            body:JSON.stringify({model, max_tokens:maxTokens, temperature,
+                                 messages:[{role:'system',content:system}, ...messages]})});
+    }catch(e){ throw new Error(describeNetError(e, base)); }
     if(!r.ok) throw new Error('API '+r.status+' '+(await r.text()).slice(0,180));
     const j = await r.json();
-    return {text:(j.choices?.[0]?.message?.content||'').trim()};
+    return spec.kind==='anthropic'
+      ? {text:(j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim()}
+      : {text:(j.choices?.[0]?.message?.content||'').trim()};
   }
 };
 
@@ -1349,6 +1398,34 @@ const UI = {
     const bind = (sel,key)=>{ const el=$(sel); el.value = Config.get(key); el.onchange = ()=>Config.set(key, el.value); };
     bind('#cfgProvider','provider'); bind('#cfgBase','base'); bind('#cfgModel','model');
     bind('#cfgKey','key'); bind('#cfgTts','tts'); bind('#cfgLang','lang'); bind('#cfgVoice','voice');
+    // switching provider fills in that provider's endpoint and clears a model
+    // that belongs to the previous one
+    $('#cfgProvider').onchange = ()=>{
+      const p = $('#cfgProvider').value, spec = PROVIDERS[p] || PROVIDERS.local;
+      Config.set('provider', p);
+      $('#cfgBase').value = spec.base; Config.set('base', spec.base);
+      $('#cfgKey').placeholder = spec.keyHint || 'API key';
+      $('#cfgModel').value = ''; Config.set('model','');
+      $('#modelList').innerHTML = '';
+      $('#probeResult').textContent = '';
+      this.providerHint();
+    };
+    $('#cfgProbe').onclick = async ()=>{
+      ['provider','base','key'].forEach(k=>Config.set(k,
+        document.querySelector('#cfg'+k[0].toUpperCase()+k.slice(1)).value));
+      const out = $('#probeResult');
+      out.textContent = '接続中…'; out.style.color = '';
+      try{
+        const ids = await ModelRouter.listModels();
+        $('#modelList').innerHTML = ids.map(id=>`<option value="${esc(id)}">`).join('');
+        if(!$('#cfgModel').value){ $('#cfgModel').value = ids[0]; Config.set('model', ids[0]); }
+        out.style.color = 'var(--ok)';
+        out.textContent = `接続成功。${ids.length}個のモデルが使えます。Model欄をタップすると一覧から選べます（既定: ${ids[0]}）。`;
+      }catch(e){
+        out.style.color = 'var(--bad)';
+        out.textContent = '失敗: ' + (e.message || e);
+      }
+    };
     $('#cfgSave').onclick = ()=>{ ['provider','base','model','key','tts','lang','voice'].forEach(k=>{
         const el = document.querySelector('#cfg'+k[0].toUpperCase()+k.slice(1)); if(el) Config.set(k, el.value); });
       this.sys('設定を保存しました（Model Router: '+ModelRouter.label()+'）。'); this.renderTools(); };
@@ -1370,6 +1447,7 @@ const UI = {
       `Model Router: ${ModelRouter.label()}. `+
       `LLM未接続時の応答はローカルの簡易ペルソナエンジン（LLMではありません）が生成します。`;
 
+    this.providerHint();
     this.renderTools(); this.renderMem();
     setInterval(()=>{ this.renderEmo(); }, 200);
     setInterval(()=>{ if($('#dev').classList.contains('on')) this.renderMem(); }, 3000);
@@ -1388,6 +1466,11 @@ const UI = {
     const d = document.createElement('div');
     d.className='msg sys'; d.innerHTML=`<div class="who"></div><div class="body">${esc(text)}</div>`;
     $('#log').appendChild(d); $('#log').scrollTop = 1e9;
+  },
+  providerHint(){
+    const spec = PROVIDERS[Config.get('provider')] || PROVIDERS.local;
+    $('#providerHint').textContent = spec.hint || '';
+    if(spec.keyHint) $('#cfgKey').placeholder = spec.keyHint;
   },
   chip(t){ $('#chipText').textContent = t; $('#chip').classList.add('on'); },
   chipOff(){ $('#chip').classList.remove('on'); },
