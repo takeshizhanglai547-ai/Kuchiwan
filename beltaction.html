@@ -1829,9 +1829,9 @@ const ATK={
   c4:{name:'振り下ろし',dur:26,act:[9,15], reach:90, hh:54, dmg:22, kb:12, from:-1.7, to:1.05, len:46, trail:'#fff', pivotY:-72, lunge:2.2, knock:true, finisher:true, combo:4},
   charge:{name:'溜め斬り',dur:30, act:[12,22], reach:104, hh:58, dmg:34, kb:15, from:-1.8, to:1.1, len:52, trail:'#ffd24d', pivotY:-72, lunge:3.0, knock:true, aoe:true},
   // ── 必殺技（イッヌ）──
-  shoryu:{name:'昇竜拳', dur:30, act:[2,24], reach:60, hh:520, dmg:8, kb:5, from:1.2, to:-1.9, len:50, trail:'#ffe27a', pivotY:-50, lunge:0, launch:0, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true},
+  shoryu:{name:'昇竜拳', hold:6, dur:30, act:[2,24], reach:60, hh:520, dmg:8, kb:5, from:1.2, to:-1.9, len:50, trail:'#ffe27a', pivotY:-50, lunge:0, launch:0, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true},
   stinger:{name:'スティンガー', dur:24, act:[3,18], reach:78, hh:42, dmg:14, kb:9, from:-0.12, to:-0.12, len:48, trail:'#9fe8ff', pivotY:-52, move:9.0, multi:true, multiGap:7, stinger:true},
-  dimension:{name:'次元斬', dur:48, act:[6,42], reach:158, hh:160, dmg:11, kb:7, from:-3.1, to:3.1, len:64, trail:'#c46bff', pivotY:-46, omni:true, multi:true, multiGap:6, special:true},
+  dimension:{name:'次元斬', dimBlade:true, dur:48, act:[6,42], reach:158, hh:160, dmg:11, kb:7, from:-3.1, to:3.1, len:64, trail:'#c46bff', pivotY:-46, omni:true, multi:true, multiGap:6, special:true},
   gcounter:{name:'ガードカウンター', dur:24, act:[3,9], reach:86, hh:54, dmg:22, kb:15, from:-0.7, to:0.9, len:50, trail:'#bfe9ff', pivotY:-56, lunge:2.6, knock:true, counter:true},
   iai:{name:'居合斬り', dur:22, act:[8,12], reach:112, hh:52, dmg:26, kb:14, from:-0.18, to:0.18, len:60, trail:'#dff0ff', pivotY:-56, move:9, knock:true, finisher:true, iai:true},
   // ── シマダックス（拳法）──
@@ -1878,16 +1878,16 @@ const ATK={
   // 波動＝居合で放つ極太の真空波。全てを貫き画面端まで届く
   iwave:{name:'真空・断空烈波', dur:34, act:[11,15], reach:52, hh:40, dmg:0, kb:0, from:-1.6,to:1.6, len:60, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, pshot:{dmg:12,color:'#bffcff',speed:9,r:56,life:150,multihit:true,hitGap:7,style:'wave'}},
   // 昇竜＝三段に斬り上げる龍の閃光。超高空へ打ち上げ長い無敵
-  idragon:{name:'天翔龍閃', dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
+  idragon:{name:'天翔龍閃', hold:10, dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
   // ↓↑＝円環斬：剣を三百六十度に振り回し周囲すべてを多段で斬る渦（衝撃波ではない）
-  iswords:{name:'聖剣乱舞・断罪の光', dur:44, act:[8,36], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff0b0', pivotY:-56, special:true, superFx:true, swordRain:true},   // 前方に聖剣が次々突き上がる
+  iswords:{name:'聖剣乱舞・断罪の光', hold:12, dur:44, act:[8,36], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff0b0', pivotY:-56, special:true, superFx:true, swordRain:true},   // 前方に聖剣が次々突き上がる
   // シマ（拳法）＝一気に距離を詰める接近格闘
   // 波動＝無敵で突進しながらの連拳乱打→打ち上げ。飛び道具ではなく肉薄する超必
   srush:{name:'羅刹連拳', dur:40, act:[3,34], reach:96, hh:110, dmg:8, kb:4, from:-0.1,to:0.1, len:28, trail:'#ffd24d', fist:true, punch:true, move:13, multi:true, multiGap:3, knock:true, finisher:true, superRush:true, rushEnd:true},
   // 昇竜＝炎をまとう回転昇龍脚。多段ヒットで高く打ち上げる
-  sdrago:{name:'烈火昇龍脚', dur:38, act:[2,32], reach:80, hh:640, dmg:13, kb:6, from:1.4,to:-2.2, len:28, trail:'#ff9a3a', fist:true, kick:true, rise:true, riseV:34, riseG:0.58, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, firetrail:true},
+  sdrago:{name:'烈火昇龍脚', hold:10, dur:38, act:[2,32], reach:80, hh:640, dmg:13, kb:6, from:1.4,to:-2.2, len:28, trail:'#ff9a3a', fist:true, kick:true, rise:true, riseV:34, riseG:0.58, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, firetrail:true},
   // ↓↑＝崩天脚：踏み込みから周囲の敵を真上へ高く打ち上げる（横衝撃波ではなく縦の吹き上げ→空中連携へ）
-  soneinch:{name:'ワンインチブロー', dur:30, act:[10,13], reach:40, hh:66, dmg:70, kb:60, from:-0.05,to:0.05, len:12, trail:'#ffd24d', fist:true, punch:true, special:true, oneInch:true, knock:true, finisher:true},   // 極短リーチ・一撃で画面端まで吹き飛ばす豪打
+  soneinch:{name:'ワンインチブロー', hold:8, dur:30, act:[10,13], reach:40, hh:66, dmg:70, kb:60, from:-0.05,to:0.05, len:12, trail:'#ffd24d', fist:true, punch:true, special:true, oneInch:true, knock:true, finisher:true},   // 極短リーチ・一撃で画面端まで吹き飛ばす豪打
   // ヌコ（魔法）＝多彩な魔法で戦うゾーナー
   // 波動＝敵を追尾する三連の氷結魔弾。逃げる相手にも当たる
   nfrost:{name:'氷結魔弾・トリニティ', dur:32, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-0.5,to:-0.1, len:22, trail:'#8fd8ff', fist:true, special:true, superFx:true, pshot:{dmg:9,color:'#8fd8ff',speed:8,r:30,life:180,multihit:true,hitGap:9,homing:true,count:3,spread:2.6,style:'spike'}},
@@ -1939,11 +1939,11 @@ const ATK={
   //  いずれも元の技とは別モーション・別演出になる
   // ══════════════════════════════════════════════════════════════
   // ── イッヌ ──
-  iswords2:{name:'聖剣乱舞・天光烈斬', dur:56, act:[8,48], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff6d0', pivotY:-56, special:true, superFx:true, swordStorm:true},   // 前後へ聖剣が乱立し、最後に天光の柱が落ちる
+  iswords2:{name:'聖剣乱舞・天光烈斬', hold:14, dur:56, act:[8,48], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff6d0', pivotY:-56, special:true, superFx:true, swordStorm:true},   // 前後へ聖剣が乱立し、最後に天光の柱が落ちる
   iwave2:{name:'真空・双烈斬空波', dur:38, act:[12,16], reach:56, hh:44, dmg:0, kb:0, from:-1.9,to:1.9, len:66, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, twinWave:true},   // 上下二段の巨大真空波
-  idragon2:{name:'天翔龍閃・双龍昇天', dur:48, act:[2,42], reach:84, hh:700, dmg:19, kb:7, from:1.6,to:-2.4, len:78, trail:'#ffe27a', pivotY:-46, rise:true, riseV:42, riseG:0.48, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true, twinDragon:true},
+  idragon2:{name:'天翔龍閃・双龍昇天', hold:12, dur:48, act:[2,42], reach:84, hh:700, dmg:19, kb:7, from:1.6,to:-2.4, len:78, trail:'#ffe27a', pivotY:-46, rise:true, riseV:42, riseG:0.48, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true, twinDragon:true},
   // ── シマダックス ──
-  skuzan:{name:'奥義・崩山衝', dur:38, act:[12,16], reach:44, hh:70, dmg:78, kb:64, from:-0.05,to:0.05, len:14, trail:'#ff9a3a', fist:true, punch:true, special:true, oneInch:true, knock:true, finisher:true, kuzan:true},   // 零距離の掌打から山を崩す衝波
+  skuzan:{name:'奥義・崩山衝', hold:10, dur:38, act:[12,16], reach:44, hh:70, dmg:78, kb:64, from:-0.05,to:0.05, len:14, trail:'#ff9a3a', fist:true, punch:true, special:true, oneInch:true, knock:true, finisher:true, kuzan:true},   // 零距離の掌打から山を崩す衝波
   srush2:{name:'羅刹連拳・修羅道', dur:54, act:[3,46], reach:104, hh:120, dmg:9, kb:4, from:-0.1,to:0.1, len:28, trail:'#ff6a3c', fist:true, punch:true, move:15, multi:true, multiGap:2, knock:true, finisher:true, superRush:true, rushEnd:true, rushSuper:true},
   sdrago2:{name:'烈火昇龍脚・紅蓮天焦', dur:46, act:[2,40], reach:88, hh:700, dmg:16, kb:7, from:1.5,to:-2.4, len:30, trail:'#ff6a3c', fist:true, kick:true, rise:true, riseV:40, riseG:0.50, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, firetrail:true, fireCol:true},
   // ── ヌコ ──
@@ -1964,7 +1964,7 @@ const ATK={
   dzantetsu2:{name:'無明・斬鉄・断界', dur:50, act:[15,22], reach:136, hh:82, dmg:48, kb:17, from:-2.3,to:1.55, len:92, trail:'#ffffff', pivotY:-70, lunge:1.4, knock:true, finisher:true, special:true, superFx:true, cleave:true, riftCleave:true,
     pshot:{dmg:28,color:'#e8f4ff',speed:13,r:44,life:150,multihit:true,hitGap:7,style:'wave',pierce:true,low:true}},
   // ── Lv3：上攻撃の上位技（対空・打ち上げが一気に凶悪になる）──
-  shoryu2:{name:'双牙昇竜', dur:38, act:[2,32], reach:78, hh:620, dmg:13, kb:7, from:1.4,to:-2.2, len:62, trail:'#ffe27a', pivotY:-50, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, superFx:true, twinRise:true},
+  shoryu2:{name:'双牙昇竜', hold:8, dur:38, act:[2,32], reach:78, hh:620, dmg:13, kb:7, from:1.4,to:-2.2, len:62, trail:'#ffe27a', pivotY:-50, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, superFx:true, twinRise:true},
   tornado2:{name:'大旋風脚・天龍', dur:40, act:[2,34], reach:86, hh:620, dmg:10, kb:6, from:1.3,to:-2.2, len:28, trail:'#aef8ff', fist:true, kick:true, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, tornado:true, superFx:true, windPull:true},
   ntornado2:{name:'セイントサイクロン', dur:40, act:[2,34], reach:92, hh:620, dmg:11, kb:6, from:1.3,to:-2.2, len:26, trail:'#dff0ff', fist:true, rise:true, riseV:33, riseG:0.60, multi:true, multiGap:3, shoryu:true, ntor:true, superFx:true, windPull:true, featherFall:true},
   gupper2:{name:'天衝ハンマー・極', dur:34, act:[9,20], reach:126, hh:280, dmg:34, kb:14, from:1.2,to:-2.1, len:78, trail:'#ffd24d', pivotY:-66, launch:22, knock:true, aoe:true, shock:26, superFx:true, gwave:true, skyBreak:true, derive:'gslamdown'},
@@ -2203,7 +2203,7 @@ function commandSpecial(p){ if(p.z>0) return null;
   return null; }
 function beginAttack(type){
   const p=player, def=ATK[type];
-  p.atk={type, t:0, def, hitSet:new Set(), lastHit:{}};
+  p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{}};
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
   else if(type==='charge'||type==='chargeSpear'||type==='chargeHammer'){ sfx.heavy(p.x); ring(p.x,p.y-40,def.trail||'#ffd24d'); spark(p.x+p.facing*22,p.y-40,def.trail||'#ffd24d',10,8); }
@@ -2886,7 +2886,27 @@ function updatePlayer(){
   if(p.state==='land'){ p.landT--; p.vx*=0.8; p.x+=p.vx; p.x=clamp(p.x,camX+24,camX+W-24); if(p.landT<=0)p.state='idle'; return; }
 
   if(p.state==='attack'){
-    const a=p.atk, def=a.def; a.t++;
+    const a=p.atk, def=a.def;
+    // ── 深い溜め：a.t を止めて構えのまま数フレーム保持する。
+    //    ドラゴンズクラウンの必殺技は「沈み込む → 一気に振り抜く → 長い余韻」で、
+    //    この最初の溜めが無いと、どれだけ派手な軌跡を足しても軽く見える ──
+    if(a.hold>0){ a.hold--; a.chg++;
+      p.invuln=Math.max(p.invuln,4);
+      if(a.chg===1 && p.rig){ sprKick(p.rig.sq,-5.2); sprKick(p.rig.wob,-p.facing*4.0); sprKick(p.rig.capeT,-6); }
+      if(a.chg%2===0 && perfTier<2) ember(p.x+rnd(-16,16), p.y-rnd(6,70), rnd(-0.5,0.5), -rnd(1.2,3.0), def.trail||'#ffe27a');
+      if(a.hold===0){ camZoomT=Math.max(camZoomT,1.13); shake=Math.max(shake,6);
+        if(p.rig){ sprKick(p.rig.sq,7.5); sprKick(p.rig.wob,p.facing*9); sprKick(p.rig.capeT,8); }
+        p.invuln=Math.max(p.invuln, def.act[1]-def.act[0]+10); }
+      saveInput(p.in); return; }
+    a.t++;
+    // ── ばねのキック：発生で振り抜きの初動、振り切りで反動が戻る ──
+    if(p.rig && (def.superFx||def.finisher||def.rise)){
+      if(a.t===def.act[0]){
+        sprKick(p.rig.sq, def.rise? -6.5 : 5.5);
+        sprKick(p.rig.wob, p.facing*(def.rise? 6 : 9.5));
+        sprKick(p.rig.capeT, def.rise? -9 : 7.5); sprKick(p.rig.capeM, -p.facing*6); }
+      if(a.t===def.act[1]+2){
+        sprKick(p.rig.wob, -p.facing*7.0); sprKick(p.rig.sq, -3.4); sprKick(p.rig.capeT, 5.5); } }
     if(def.derive && pressed.atk && a.t>=def.act[0]){ pressed.atk=false; beginAttack(def.derive); return; }   // 派生技（振り上げ→叩きつけ）
     if(def.respin && pressed.atk && a.t>=def.act[0] && (p.spinCount||0)>0 && p.spinCount<(def.respinMax||3)){ pressed.atk=false; const c=p.spinCount+1, ty=a.type; beginAttack(ty); p.spinCount=c; popText(p.x,p.y-100,'×'+c,'#ffd24d'); return; }   // 連打で連射（技ごとに上限）
     // 通常コンボ → 各種コマンド技へキャンセル発動（波動/昇竜/↓↑を先行入力しておけば繋がる）
@@ -7163,8 +7183,13 @@ function drawPlayer(){
   if(st==='screw'){ ctx.rotate(p.screwRot); }
   if(st==='roll'){ ctx.translate(0,-22); ctx.rotate(p.rollRot); ctx.translate(0,22); }   // 前転（回避）
   if(st==='gswing'){ ctx.rotate(Math.sin(p.gswingRot)*0.22); }   // 振り回しで体を捻る
-  const _spec = st==='attack' && p.atk && p.atk.def.special;
-  if(_spec){ ctx.rotate(Math.sin(p.atk.t*0.55)*0.28); }      // 次元斬の身体ブレ
+  // 次元斬の紫の回転刃と激しい体ブレは、この技だけのもの。special:true は33技に付いているので、
+  // それで判定すると聖剣乱舞もワンインチブローも同じようにブルブル揺れて紫の刃が出てしまう
+  const _spec = st==='attack' && p.atk && p.atk.def.dimBlade;
+  if(st==='attack' && p.atk){ const _d=p.atk.def;
+    if(_d.dimBlade)                        ctx.rotate(Math.sin(p.atk.t*0.55)*0.28);   // 次元斬：従来どおり
+    else if(_d.swordRain||_d.swordStorm)   ctx.rotate(Math.sin(p.atk.t*0.22)*0.07);   // 聖剣乱舞：ゆっくり大きく
+    else if(_d.stormCall||_d.caller)       ctx.rotate(Math.sin(p.atk.t*0.38)*0.05); } // 詠唱：微振動
   if(st==='attack' && p.atk && p.atk.def.spin){ ctx.rotate(p.atk.t*0.5); }   // 回し蹴り/グルグルの回転
   if(st==='jump' && p.jDrop){ ctx.translate(0,-26); ctx.rotate((20-p.jAtk)*0.6); ctx.translate(0,26); }   // 回転踵落としの回転
 
@@ -7306,6 +7331,16 @@ function drawPlayer(){
     const windup=clamp((a0-t)/Math.max(1,a0),0,1);                       // anticipation amount
     const heavy=(def.finisher||def.aoe||def.rise)?1.5:1.1, big=e2*heavy;
     swAng=lerp(def.from,def.to,e); swExt=def.len*0.55*(1+1.15*big);
+    // 奥義・止め技・昇竜は単一の easeOut ではなく3キーで振る。
+    // 「さらに引く → 一気に抜く → 12%行き過ぎて止まる → 押し戻される」
+    if(def.superFx||def.finisher||def.rise){
+      const u=clamp((t-(a0-2))/Math.max(1,(a1+2)-(a0-2)),0,1);
+      const eo = u<0.18 ? -0.11*(u/0.18)
+               : u<0.60 ? -0.11+1.23*Math.pow((u-0.18)/0.42,2.3)
+               : u<0.80 ? 1.12
+               :          1.12-0.12*((u-0.80)/0.20);
+      swAng=lerp(def.from,def.to,eo);
+      swExt=def.len*0.55*(1+1.15*big)*(u<0.18?0.86:(u<0.60?1.0+0.34*Math.sin((u-0.18)/0.42*Math.PI):1.06)); }
     trailCol=((def.finisher||def.aoe)?null:((WEAPONS[p.weapon]||{}).trail))||def.trail;   // 武器ごとの色アイデンティティを軌跡に出す
     tA0=def.from; tA1=swAng; tk=clamp(t/def.dur,0,1); drawTrail=t<=a1+3; trailW=1.3+1.5*heavy; smear=big;
     lean=lerp(-0.40,0.42,e) - 0.22*windup; backArm=lerp(0.95,-1.35,e)-0.35*big;
