@@ -322,7 +322,7 @@
         var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
         out[0] = nx / len; out[1] = ny / len; out[2] = nz / len;
       }
-      var nA = [0, 0, 0];
+      var nA = [0, 0, 0], tone = 1;
       function vert(i2, j2) {
         var x3 = -FH + i2 * FS, z3 = -FH + j2 * FS;
         bGround.p.push(x3, Y[i2][j2], z3);
@@ -330,10 +330,22 @@
         bGround.n.push(nA[0], nA[1], nA[2]);
         bGround.u.push(x3 * 0.34, z3 * 0.34);
         var c2 = CC[i2][j2];
-        bGround.c.push(c2.r, c2.g, c2.b);
+        bGround.c.push(c2.r * tone, c2.g * tone, c2.b * tone);
       }
+      /* 敷石。頂点は非共有なのでセル単位でトーンを変えられる＝約1mの石畳になる。
+         テクスチャに頼らずに「舗装された旧市街の広場」であることを地面に持たせる。
+         （tex がある本番では map の目地がこの上に乗る） */
       for (i = 0; i < FN; i++) {
         for (j = 0; j < FN; j++) {
+          var si = Math.floor(i / 2), sj = Math.floor(j / 2);
+          tone = 0.84 + 0.30 * hash2(si * 3.71, sj * 2.93);
+          // 弾着痕のまわりは石が跳ね上げられてバラバラ＝トーンが暴れる
+          var mx = -FH + (i + 0.5) * FS, mz = -FH + (j + 0.5) * FS, ci;
+          for (ci = 0; ci < CRATERS.length; ci++) {
+            var cr2 = CRATERS[ci];
+            var dd = Math.sqrt((mx - cr2.x) * (mx - cr2.x) + (mz - cr2.z) * (mz - cr2.z)) / cr2.r;
+            if (dd < 1.8) tone *= 1 - 0.34 * smooth(1.8 - dd) * (hash2(i * 1.3, j * 1.9) - 0.35);
+          }
           vert(i, j); vert(i, j + 1); vert(i + 1, j + 1);
           vert(i, j); vert(i + 1, j + 1); vert(i + 1, j);
         }
@@ -621,16 +633,19 @@
       // 地平の板。壁の外に虚空が見えると廃墟が浮くので必ず敷く
       fbox({ x: 0, y: -0.14, z: 0, hx: 95, hy: 0.06, hz: 95, col: C.ground, k: 0.70, fogK: 0.80, noBottom: true });
 
+      /* リングごとに「疎らで低い手前」→「密で高い奥」。手前を詰め込むと
+         空が消えて地平線が読めなくなり、逆光の層が成立しない。 */
       var rings = [
-        { r0: 15.2, r1: 23.0, n: 30, h0: 4.5, h1: 11.0 },
-        { r0: 23.0, r1: 34.0, n: 30, h0: 7.0, h1: 18.0 },
-        { r0: 34.0, r1: 47.0, n: 26, h0: 9.0, h1: 24.0 },
-        { r0: 47.0, r1: 66.0, n: 22, h0: 11.0, h1: 28.0 }
+        { r0: 15.4, r1: 22.0, n: 16, h0: 4.0, h1: 8.5, p: 0.62 },
+        { r0: 22.0, r1: 33.0, n: 26, h0: 6.0, h1: 15.0, p: 0.78 },
+        { r0: 33.0, r1: 47.0, n: 26, h0: 8.0, h1: 22.0, p: 0.9 },
+        { r0: 47.0, r1: 68.0, n: 24, h0: 10.0, h1: 30.0, p: 1.0 }
       ];
       var ri, k, i;
       for (ri = 0; ri < rings.length; ri++) {
         var R = rings[ri];
         for (k = 0; k < R.n; k++) {
+          if (rnd() > R.p) continue;                 // 隙間＝空。地平線を読ませる
           var ang = (k / R.n) * TAU + rr(-0.4, 0.4) * (TAU / R.n);
           var rad = rr(R.r0, R.r1);
           var bx = Math.cos(ang) * rad, bz = Math.sin(ang) * rad;

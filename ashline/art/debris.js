@@ -127,7 +127,9 @@
     /* 配置の最終関門。ここを通らないものは1つも床に乗らない。 */
     function accept(x, z, laneMul) {
       if (x < -LIM_X || x > LIM_X || z < -LIM_Z || z > LIM_Z) return false;
-      if (insideCover(x, z, -0.015)) return false;          // 箱の内側は不可
+      /* 正のマージン。箱の内側は 1 個も許さない。
+         瓦礫が当たり判定箱に埋まると「見えている物に当たらない」の入口になる。 */
+      if (insideCover(x, z, 0.02)) return false;
       var tr = traffic(x, z);
       /* 踏み均された道は 10%。それ以外は距離に応じて素直に増える。 */
       var keep = 0.06 + 0.94 * tr;
@@ -152,14 +154,23 @@
       var ang = [0.00, 0.76, 1.63, 2.52, 3.58, 4.78];
       var topY = [1.00, 0.58, 0.92, 0.50, 0.95, 0.70];   // 欠けた天面
       var tx = [], tz = [], ty = [], bx = [], bz = [];
-      var i;
+      var i, gcx = 0, gcz = 0;
       for (i = 0; i < n; i++) {
         tx[i] = Math.cos(ang[i]) * rad[i];
         tz[i] = Math.sin(ang[i]) * rad[i];
+        gcx += tx[i]; gcz += tz[i];
+      }
+      /* 半径をばらした結果、形の重心は原点からずれる。
+         そのままだとインスタンスの座標＝見た目の中心にならず、
+         遮蔽の箱ぎりぎりに置いた破片が数cm箱の内側へ食い込む。
+         配置判定を信用できるように、ここで重心を原点へ寄せておく。 */
+      gcx /= n; gcz /= n;
+      for (i = 0; i < n; i++) {
+        tx[i] -= gcx; tz[i] -= gcz;
         ty[i] = CH_H * topY[i];
         /* 底面はわずかに広い＝下すぼまりでなく安定して座って見える */
-        bx[i] = Math.cos(ang[i]) * rad[i] * 1.06;
-        bz[i] = Math.sin(ang[i]) * rad[i] * 1.06;
+        bx[i] = tx[i] * 1.06;
+        bz[i] = tz[i] * 1.06;
       }
 
       var pos = [], nor = [], col = [], uv = [];
@@ -569,8 +580,8 @@
           var pyaw = Math.atan2(bdirx, bdirz);
           /* まず着弾で舞い上がった淡い粉。これが無いと暗い床の上で
              暗い弾痕が完全に消え、連射の列が読めない。 */
-          addDecal(x, z, pr * rr(3.0, 4.2), pr * rr(2.4, 3.4), pyaw,
-            ASH.shade(T, P.plaster, rr(0.66, 0.90)), 0.45 + rnd() * 0.1);
+          addDecal(x, z, pr * rr(2.5, 3.5), pr * rr(2.0, 2.8), pyaw,
+            ASH.shade(T, P.plaster, rr(0.56, 0.78)), 0.45 + rnd() * 0.1);
           /* 弾痕は「入射角がついた楕円」。真円だと真上から撃たれたことになる */
           addDecal(x, z, pr * rr(1.5, 2.4), pr, pyaw,
             ASH.shade(T, P.grime, rr(0.45, 0.78)), 0.78 + rnd() * 0.18);

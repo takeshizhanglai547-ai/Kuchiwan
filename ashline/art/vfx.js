@@ -923,8 +923,8 @@
       reset();
       E.x = x + nX * 0.03; E.y = y + nY * 0.03; E.z = z + nZ * 0.03;
       E.tile = TILE_HOT;
-      tint(head ? COL.core : COL.ember, head ? 0.9 : 0.9);
-      sizeU(0.16 * S, 0.40 * S);
+      tint(head ? COL.core : COL.ember, head ? 0.75 : 0.9);
+      sizeU(head ? 0.20 : 0.16 * S, head ? 0.46 : 0.40 * S);
       E.ttl = 0.08 * L; E.grow = 0.45; E.a0 = 1.0; E.fade = 1.0;
       emit(ADD);
       reset();
@@ -942,15 +942,23 @@
            白いリングは「UIのエフェクト」に見えるが、橙なら「火」に見える。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.spark, 1.1); sizeU(0.80, 2.60);
-        E.rot = rnd() * 6.283;
-        E.ttl = 0.26; E.grow = 0.34; E.a0 = 0.95; E.fade = 1.5;
-        emit(ADD);
+        /* 真円は「UIのレティクル」に見える。縦横を崩して回すと同じ輪でも
+           「押し広げられた空気」に見える。 */
+        var e1 = rr(0.70, 0.92);
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_RING; tint(COL.glow, 1.0); sizeU(0.50, 1.60);
+        E.tile = TILE_RING; tint(COL.spark, 1.1);
+        size(0.80 * e1, 2.60 * e1, 0.80, 2.60);
+        E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 2.2;
+        E.ttl = 0.26; E.grow = 0.34; E.a0 = 0.95; E.fade = 1.5;
+        emit(ADD);
+        /* 2枚目は「同心円」に見せないため、大きく先行させて薄くする。
+           半径が近いと UI のレティクルに見えてしまう。 */
+        reset();
+        E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
+        E.tile = TILE_RING; tint(COL.glow, 1.0); sizeU(1.45, 3.40);
         E.rot = rnd() * 6.283;
-        E.ttl = 0.34; E.grow = 0.4; E.a0 = 0.75; E.fade = 1.3;
+        E.ttl = 0.30; E.grow = 0.42; E.a0 = 0.38; E.fade = 1.4;
         emit(ADD);
         /* その2：花弁のスターバースト。マズルと同じ語彙を使い、
            「銃口と同じ格の出来事が敵の頭で起きた」と読ませる。 */
