@@ -1,10 +1,20 @@
 name: Deploy to GitHub Pages
 
+# 公開サイトの組み立て方
+#   /                      … main の内容（安定版。ここが 404 になってはいけない）
+#   /preview/<branch>/     … 直近に更新された開発ブランチの内容
+#
+# 以前はトリガーされたブランチの内容で path: "." をそのまま配信していたため、
+# GitHub Pages が「リポジトリにつき1サイト」であることと相まって、開発ブランチが
+# push されるたびにサイト全体がそのブランチで置き換わっていた。
+# 2026-08-08 にこれで main の beltaction.html が公開URLから消えて 404 になった。
+# 常に main を土台に組み立て、開発ブランチは preview 配下へ並べることで共存させる。
+
 on:
   push:
     branches:
       - main
-      - claude/kunitachi-3d-model-edHpl
+      - 'claude/**'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +24,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false   # 取り消し合うと両方が公開されないので待たせる
 
 jobs:
   deploy:
@@ -24,9 +34,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 全ブランチを見るため
+
+      - name: サイトを組み立てる（main を土台に、開発ブランチを preview へ）
+        run: |
+          set -eu
+          mkdir -p _site
+          # 土台は必ず main
+          git worktree add /tmp/wt-main origin/main
+          copytree() { (cd "$1" && tar --exclude=.git --exclude=.github -cf - .) | (cd "$2" && tar -xf -); }
+          copytree /tmp/wt-main _site
+
+          # 直近に更新された開発ブランチを最大6本まで preview 配下へ
+          BR=$(git for-each-ref --sort=-committerdate \
+                 --format='%(refname:short)' refs/remotes/origin/claude | head -6)
+          echo '<!doctype html><meta charset="utf-8"><title>開発中のプレビュー</title>' > _site/preview_index.html
+          echo '<style>body{font-family:sans-serif;background:#12101a;color:#e8e2d4;padding:32px;line-height:1.9}a{color:#ffd24d}</style>' >> _site/preview_index.html
+          echo '<h1>開発中のプレビュー</h1><p>安定版は <a href="./">こちら</a>。</p><ul>' >> _site/preview_index.html
+          for B in $BR; do
+            SHORT=${B#origin/}
+            SLUG=$(echo "$SHORT" | tr '/' '-')
+            git worktree add "/tmp/wt-$SLUG" "$B" || continue
+            mkdir -p "_site/preview/$SLUG"
+            copytree "/tmp/wt-$SLUG" "_site/preview/$SLUG"
+            echo "<li><a href=\"./preview/$SLUG/\">$SHORT</a></li>" >> _site/preview_index.html
+          done
+          echo '</ul>' >> _site/preview_index.html
+
+          echo '--- 組み立て結果 ---'
+          ls _site | head -20
+          test -f _site/beltaction.html || { echo '致命的: main の beltaction.html が入っていない'; exit 1; }
+          du -sh _site
+
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: "."
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
