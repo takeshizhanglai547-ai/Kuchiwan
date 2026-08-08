@@ -895,9 +895,11 @@
       for (i = 0; i < 5; i++) {
         var ph = rnd() * 6.283, sr = rr(1.8, 3.8);
         reset();
-        E.x = x + (uX * Math.cos(ph) + wX * Math.sin(ph)) * 0.16;
-        E.y = y + (uY * Math.cos(ph) + wY * Math.sin(ph)) * 0.16;
-        E.z = z + (uZ * Math.cos(ph) + wZ * Math.sin(ph)) * 0.16;
+        /* 0.32m 外へ出す。面を這う粉が狙点の真上に乗ると、
+           いちばん長生きする層がいちばん長く狙点を隠すことになる。 */
+        E.x = x + (uX * Math.cos(ph) + wX * Math.sin(ph)) * 0.32;
+        E.y = y + (uY * Math.cos(ph) + wY * Math.sin(ph)) * 0.32;
+        E.z = z + (uZ * Math.cos(ph) + wZ * Math.sin(ph)) * 0.32;
         E.vx = (uX * Math.cos(ph) + wX * Math.sin(ph)) * sr + nX * 0.6;
         E.vy = (uY * Math.cos(ph) + wY * Math.sin(ph)) * sr + nY * 0.6;
         E.vz = (uZ * Math.cos(ph) + wZ * Math.sin(ph)) * sr + nZ * 0.6;
@@ -905,7 +907,7 @@
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 1.2;
         tint(COL.dustDim, 1.0); sizeU(0.40, 1.05);
         E.ttl = rr(0.60, 0.95); E.grow = 0.4; E.drag = 3.4; E.grav = 0.5;
-        E.a0 = 0.34; E.fade = 1.6;
+        E.a0 = 0.24; E.fade = 1.7;
         emit(ALP);
       }
 
@@ -913,10 +915,10 @@
          白い粉塵の中に白い火花を置くと同化して消える。初期位置を雲の外へ出し、
          長さも雲の半径を超えるところまで伸ばして、輪郭から突き出させる。 */
       for (i = 0; i < 11; i++) {
-        cone(1.15, 0.55);
+        cone(1.28, 0.55, 0.40);
         sv = rr(9.0, 19.0);
         reset();
-        E.x = x + dX * 0.22; E.y = y + dY * 0.22; E.z = z + dZ * 0.22;
+        E.x = x + dX * 0.26; E.y = y + dY * 0.26; E.z = z + dZ * 0.26;
         E.vx = dX * sv; E.vy = dY * sv + 0.8; E.vz = dZ * sv;
         E.tile = TILE_STREAK; E.align = 1.0;
         tint(COL.coldSpark, rr(1.0, 1.5));
@@ -937,14 +939,18 @@
       var i, sv, o;
 
       /* --- 芯の閃光 ---------------------------------------------------------
-         白い芯は小さく留める。ここを大きくすると致命打が「白い電球」になり、
-         暖色の飛沫が全部その中に飲まれて命中の色が消える。 */
+         白い芯は小さく留める。理由は2つ。
+         (1) 大きくすると致命打が「白い電球」になり、暖色の飛沫が飲まれて
+             命中の色が消える。
+         (2) 敵に当てた瞬間も着弾点はレティクルの真下にある。狙点を潰すと
+             次弾の照準ができない。命中は「明るさ」ではなく
+             「色と層の数」で伝えるほうが、結果として強く伝わる。 */
       reset();
       E.x = x + nX * 0.03; E.y = y + nY * 0.03; E.z = z + nZ * 0.03;
       E.tile = TILE_HOT;
-      tint(head ? COL.core : COL.ember, head ? 0.75 : 0.9);
-      sizeU(head ? 0.20 : 0.16 * S, head ? 0.46 : 0.40 * S);
-      E.ttl = 0.08 * L; E.grow = 0.45; E.a0 = 1.0; E.fade = 1.0;
+      tint(head ? COL.core : COL.ember, head ? 0.6 : 0.75);
+      sizeU(head ? 0.16 : 0.13 * S, head ? 0.36 : 0.32 * S);
+      E.ttl = 0.07 * L; E.grow = 0.45; E.a0 = 0.95; E.fade = 1.1;
       emit(ADD);
       reset();
       E.x = x + nX * 0.04; E.y = y + nY * 0.04; E.z = z + nZ * 0.04;
