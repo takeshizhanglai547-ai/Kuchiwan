@@ -1,6 +1,6 @@
 {
- "pass": 85,
- "fail": 1,
+ "pass": 86,
+ "fail": 0,
  "rows": [
   {
    "name": "起動時にJSエラーが無い",
@@ -10,7 +10,7 @@
   {
    "name": "WebGLが描画している(draw call > 0)",
    "ok": true,
-   "detail": "draw=44 tri=83772"
+   "detail": "draw=49 tri=85164"
   },
   {
    "name": "初期状態がFREE",
@@ -50,12 +50,12 @@
   {
    "name": "射撃トリガーから指を滑らせるとカメラが回る（左スワイプ=左旋回）",
    "ok": true,
-   "detail": "Δyaw=0.597 rad"
+   "detail": "Δyaw=0.598 rad"
   },
   {
    "name": "入力遅延（この環境はソフトウェア描画＝実機の値ではない）",
    "ok": true,
-   "detail": "avg=5.1ms max=8.5ms  ※参考値"
+   "detail": "avg=6.3ms max=9.4ms  ※参考値"
   },
   {
    "name": "R1 遮蔽への吸着：押した次のフレームで遷移が始まる",
@@ -364,8 +364,8 @@
   },
   {
    "name": "§7 ヒットストップ：頭部命中は120ms（仕様どおり）",
-   "ok": false,
-   "detail": "16ms / 命中内容:{\"hit\":1,\"head\":false}"
+   "ok": true,
+   "detail": "120ms / 命中内容:{\"hit\":1,\"head\":true}"
   },
   {
    "name": "重量：静止→歩行最高速に0.30秒前後かかる",
@@ -380,12 +380,12 @@
   {
    "name": "§12 ドローコール ≤ 150",
    "ok": true,
-   "detail": "draw=44"
+   "detail": "draw=49"
   },
   {
    "name": "§12 三角形 ≤ 250,000",
    "ok": true,
-   "detail": "tri=83772"
+   "detail": "tri=85164"
   },
   {
    "name": "撮影：02は高い遮蔽に隠れた状態",
@@ -433,6 +433,6 @@
    "detail": "なし"
   }
  ],
- "latAvg": 5.1333333331470685,
- "latMax": 8.5
+ "latAvg": 6.2666666666045785,
+ "latMax": 9.399999999906868
 }
