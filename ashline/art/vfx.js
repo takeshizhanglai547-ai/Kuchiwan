@@ -232,7 +232,7 @@
       spark: C3(P.impactSpark, 2.6),      // 装甲片の火花（暖色）
       sparkHot: C3(P.impactSpark, 4.2),
       tracer: C3(P.tracer, 2.3),
-      tracerHot: C3(P.muzzleCore, 3.0),
+      tracerHot: C3(P.muzzleCore, 1.9),
       /* 外れ＝寒色だけ。uiInk / uiDim / playerTrim は palette の中で
          唯一「暖色でない明るい灰」なので、白い粉塵と白い火花はここから取る。 */
       coldSpark: C3(P.uiInk, 3.2),
@@ -522,16 +522,25 @@
       'varying vec2 vUv;',
       'varying vec4 vCol;',
       'varying float vKind;',
+      'varying float vNear;',
+      /* カメラに近い区間の曳光を消す。
+         弾は自分の銃口から出るので、飛び始めの曳光は必ずカメラのすぐ前を通る。
+         ワールド寸法が一定である以上、近いほど画面上で巨大になり、
+         まっすぐ前を撃つと先頭の光球がレティクルの真上を横切ってしまう。
+         銃口すぐの光はマズルフラッシュの担当なので、ここは消してよい。 */
+      'float nearFade(vec3 p) { return smoothstep(1.1, 4.2, distance(cameraPosition, p)); }',
       'void main() {',
       '  vUv = uv; vCol = aCol; vKind = aPar.x;',
       '  if (aPar.x > 0.5) {',
       /* 光球：頭の位置にビュー平面のまま四角形を張る。 */
+      '    vNear = nearFade(aB);',
       '    vec4 mv = modelViewMatrix * vec4(aB, 1.0);',
-      '    mv.xy += (uv - 0.5) * 2.0 * aPar.y;',
+      '    mv.xy += (uv - 0.5) * 2.0 * aPar.y * mix(0.45, 1.0, vNear);',
       '    gl_Position = projectionMatrix * mv;',
       '  } else {',
       /* 尾：線分に沿って、視線と直交する向きへ太さを振る。 */
       '    vec3 p = mix(aA, aB, uv.y);',
+      '    vNear = nearFade(p);',
       '    vec3 dir = aB - aA;',
       '    float dl = length(dir);',
       '    dir = (dl > 1e-5) ? dir / dl : vec3(0.0, 1.0, 0.0);',
@@ -550,6 +559,7 @@
       'varying vec2 vUv;',
       'varying vec4 vCol;',
       'varying float vKind;',
+      'varying float vNear;',
       'void main() {',
       '  float a; vec3 c = vCol.rgb;',
       '  if (vKind > 0.5) {',
@@ -566,7 +576,7 @@
       '    a = w * lg;',
       '    c = mix(c, uHot, pow(max(0.0, 1.0 - s), 5.0) * lg);',
       '  }',
-      '  a *= vCol.a;',
+      '  a *= vCol.a * vNear;',
       '  if (a < 0.004) discard;',
       '  gl_FragColor = vec4(c, a);',
       '  #include <tonemapping_fragment>',
@@ -837,8 +847,12 @@
       var ax = tOx[t] + tDx[t] * tail, ay = tOy[t] + tDy[t] * tail, az = tOz[t] + tDz[t] * tail;
       /* 着弾間際で急に消えると「線が引っ込んだ」ように見える。後半だけ落とす。 */
       var al = (p < 0.62) ? 1.0 : (1 - p) / 0.38;
+      /* 先頭の光球は小さく保つ。自分が撃った弾は必ず視線に沿って飛ぶので、
+         球を大きくすると、そのままレティクルの上に光る円盤を置くことになる。
+         横から見たときの「速度のある光」は、球の大きさではなく
+         尾のテーパーと先頭の輝度差で出す。 */
       writeTracer(t, ax, ay, az, bx, by, bz,
-        0.014, 0.055, 0.145 * (0.85 + 0.3 * (1 - p)), al);
+        0.014, 0.052, 0.072 * (0.85 + 0.3 * (1 - p)), al);
     }
 
     /* --- 着弾 ----------------------------------------------------------------
@@ -847,11 +861,29 @@
          enemy … 広い円錐の丸い飛沫（横に広がる）＋暖色の長い火花
          head  … enemy を拡大し、リングと花弁という別の形を追加
        ===================================================================== */
-    function impact(x, y, z, nx, ny, nz, kind) {
-      /* 旧シグネチャ impact(x,y,z,isEnemy) でも壊れないようにする。
-         統合は発注元が行うので、こちらが受け側で吸収しておく。 */
-      if (typeof nx !== 'number') {
-        kind = (nx === true) ? 'enemy' : (typeof nx === 'string' ? nx : 'world');
+    /* 引数の形をここで吸収する。呼び出し側（game.js）は編集できないので、
+       受け側が実際の呼ばれ方に合わせる。現に3つの形が存在する：
+
+         A 契約どおり      impact(x,y,z, nx,ny,nz, kind)
+         B 統合後の game.js impact(x,y,z, isEnemy, nx,ny,nz, kind)   ← 第4引数が余分
+         C 統合前の game.js impact(x,y,z, isEnemy)
+
+       B を A として読むと引数が1つずつずれ、kind に数値が入るため
+       致命打が必ず胴命中として描かれ、法線も常に真上になる。
+       「例外は出ないが絵だけ静かに間違う」種類の不具合なので、
+       第4引数の型で明示的に分岐して潰しておく。 */
+    function impact(x, y, z, a4, a5, a6, a7, a8) {
+      var nx, ny, nz, kind;
+      if (typeof a4 === 'number') {            // A
+        nx = a4; ny = a5; nz = a6; kind = a7;
+      } else if (typeof a4 === 'boolean' && typeof a5 === 'number') {   // B
+        nx = a5; ny = a6; nz = a7; kind = a8;
+        if (typeof kind !== 'string') kind = a4 ? 'enemy' : 'world';
+      } else {                                  // C
+        nx = 0; ny = 1; nz = 0;
+        kind = (a4 === true) ? 'enemy' : (typeof a4 === 'string' ? a4 : 'world');
+      }
+      if (typeof nx !== 'number' || typeof ny !== 'number' || typeof nz !== 'number') {
         nx = 0; ny = 1; nz = 0;
       }
       if (kind !== 'enemy' && kind !== 'head') kind = 'world';
@@ -1002,9 +1034,12 @@
       /* 胴命中の「熱」はここが担当する。芯（TILE_HOT）は狙点を守るため
          小さく抑えたので、そのぶん外周の滲みで暖かさと面積を稼ぐ。
          滲みは中心が濃すぎないので、狙点を潰さずに命中感だけ上げられる。 */
-      tint(head ? COL.spark : COL.glow, head ? 0.85 : 0.70);
+      tint(head ? COL.spark : COL.glow, head ? 0.42 : 0.70);
       sizeU(0.40 * S, 0.90 * S);
-      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.8 : 0.62; E.fade = 1.2;
+      /* 致命打はここを強くしたくなるが、TILE_GLOW は中心が最も濃い＝
+         狙点の真上が最も明るくなる。致命打の「格」はリングと花弁（＝中が空く形）
+         が担当しているので、面で塗る層はむしろ弱めてよい。 */
+      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.42 : 0.62; E.fade = 1.3;
       emit(ADD);
 
       if (head) {
@@ -1039,7 +1074,7 @@
            「銃口と同じ格の出来事が敵の頭で起きた」と読ませる。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_PETAL; tint(COL.glow, 1.25); sizeU(0.85, 1.70);
+        E.tile = TILE_PETAL; tint(COL.glow, 0.85); sizeU(0.95, 1.85);
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 5.0;
         E.ttl = 0.13; E.grow = 0.4; E.a0 = 1.0; E.fade = 1.1;
         emit(ADD);

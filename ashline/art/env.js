@@ -2,23 +2,26 @@
    ASHLINE / env.js — 中央広場の環境（背景・破壊表現）
 
    ■ この背景から読み取れる1文（oneLineStory）
-     「北西の丘から撃ち下ろされた砲撃が広場を斜めに薙ぎ、石積みはどれも北西の面を
-       削られて芯の煉瓦を晒し、崩れた塊と鉄筋はすべて南東へ倒れ、
-       火は北西の角から風下（東）へ舐めていった。」
+     「北の丘から広場へ砲撃が一列に撃ち下ろされ、石も外壁も廃墟も北向きの面だけを
+       削られて芯の煉瓦と鉄筋を晒し、崩れたものはすべて南へ倒れ、
+       火は北西の角から風下の東へ舐めていった。」
 
    ■ 一貫した因果（ランダムに散らさないための単一の原因）
-     原因は1つだけ。「北西の高台からの砲撃」。ここから全部を導出する。
-       進行ベクトル D = (+0.66, +0.75)  … 砲弾が飛んでいった向き（南東）
-       被弾ベクトル W = -D              … 削られる面が向いている向き（北西）
-     - 弾着痕は北西→南東へ3発、直線上に「歩いて」いる（floorCraters）。
-     - 遮蔽・外壁の表皮は W を向いた面ほど剥がれ、芯（煉瓦・瓦礫）が露出する。
-     - 高い遮蔽の冠部の残骸と鉄筋は D 方向へ倒れる。外壁の倒壊も D 方向。
-     - 北壁・西壁は「外から撃たれて内側へ吹き抜けた」＝大きく面が欠ける。
-       南壁・東壁は「破片が飛んできた下流側」＝面は残るが煤と細かい弾痕で汚れる。
-     - 床の煤は火元（北西の角）から風下へ伸びる楕円。ただし遮蔽の北西側に立つと
-       その背後は爆風・熱が届かず粉塵が残る＝「爆風の影」が明るく残る。
-       この影が向いている方向が、そのまま砲撃の方向を語る。
-     - 外周の廃墟スカイラインも全部が北西の上部を削られ、南東へ倒れかけている。
+     原因は1つだけ。「北からの砲撃」。ここから全部を導出する。
+       進行ベクトル D = (+0.16, +0.987)  … 砲弾が飛んでいった向き（北→南）
+       被弾ベクトル W = -D               … 削られる面が向いている向き（北）
+     太陽の影は南東へ伸びる。D をわざと 25 度ずらしてあるのは、
+     影と倒壊方向が重なると床の物語が影に飲まれて読めなくなるため。
+     - 弾着痕は北から南へ3発、D の直線上を等間隔で「歩いて」いる（CRATERS）。
+     - 遮蔽・外壁の表皮は W を向いた面ほど塊で剥がれ、煉瓦の下地、さらに
+       抜けた所は暗い躯体（穴）が露出する。プレイヤーが北へ攻め上がるとき、
+       この削られた面が常に正面に来る。
+     - 高い遮蔽の冠部の残骸と鉄筋は D 方向（南）へ倒れる。外壁の崩れも同じ。
+     - 北壁・西壁は「外から撃たれて内側へ吹き抜けた」＝内面が大きく欠ける。
+       南壁・東壁は「破片が飛んできた下流側」＝面は残るが煤と小さい欠けで汚れる。
+     - 床の煤は火元（北西の角）から風下（東）へ伸びる楕円。
+       遮蔽の北側に立つとその背後には熱も破片も届かず粉塵が残る＝「爆風の影」。
+     - 外周の廃墟スカイラインも全部が北側の上部を削られ、南へ倒れかけている。
 
    ■ シルエット読解性（色ではなく形で高低を分ける）
      低い遮蔽 (h=1.05) … 天端は「途切れない水平の一本線」。冠部の装飾を一切載せない。
@@ -32,8 +35,19 @@
        として表現し、箱の外へは一切出さない。
      - 箱の外へ出るのは h を超えた高さの冠部装飾だけ。低い遮蔽 (h=1.05 < 1.2) には
        冠部を一切作らないので、0〜1.2m に箱外の張り出しは原理的に発生しない。
-     - 外壁も同じ規則。壁は「穴」を開けない（弾が止まるのに見た目が抜けていたら嘘）。
-       損傷は表皮の剥離と天端（4.2m）より上の崩れで表現する。
+     - 外壁も同じ規則。壁は貫通させない（弾が止まるのに見た目が抜けていたら嘘）。
+       「抜け落ちた煉瓦」は貫通ではなく、表皮→煉瓦→躯体の3層のうち手前2層が
+       無くなった凹み（深さ 0.11m）として作る。輪郭は変わらないので当たり判定と矛盾しない。
+
+   ■ タイリング反復の抑制（面が「同じブロックの繰り返し」に読めないようにする）
+     テクスチャ側をどれだけ詰めても、同じ寸法のブロックが同じ UV 窓で並ぶ限り
+     ブロック1個ごとに1周期が出る。ジオメトリ側で次の4つを行う：
+       ① indiv()   … ブロックごとに UV を90度単位で回し、オフセットとスケールをずらす
+       ② indiv()   … ブロックごとに頂点カラーの明度を ±12% ずらす
+       ③ runCourse() … 石の幅を 0.3〜1.35m の不揃いで刻む（等分割をやめる）
+                        段の高さも段ごとに変え、壁は 3.4m の区画ごとに段位置をずらす
+       ④ bake()    … 数メートル周期の大きな濃淡と、ブロックをまたぐ縦の雨だれ
+     ①〜④はいずれもマテリアルを分けないので、ドローコールは増えない。
    ========================================================================== */
 (function (g) {
   var ASH = g.ASH = g.ASH || {};
@@ -136,7 +150,7 @@
       rust: new T.Color(P.rust), fog: new T.Color(P.fog)
     };
 
-    var _col = new T.Color();
+    var _col = new T.Color(), _mix = new T.Color();
     // 空気遠近の到達色。skyHorizon そのままだと明る過ぎて背景が前に出るので
     // fog 側へ寄せて一段沈める（§「遠景を必ず一段濁らせる」）
     var HAZE = new T.Color(P.skyHorizon).lerp(new T.Color(P.fog), 0.55);
@@ -158,7 +172,15 @@
       // 逆光側のアルベドを持ち上げる。太陽1灯では影側が一様な黒に潰れ、
       // 石積みの目地も欠けも読めなくなる。ライトを増やせない以上ここで補う。
       var back = Math.max(0, -(nx * SUN.x + ny * SUN.y + nz * SUN.z));
-      out.multiplyScalar(ao * fb * k * (0.94 + 1.30 * back));
+      /* 数メートル周期のゆるい濃淡。ブロック単位の乱数だけだと「粒の揃った砂目」に
+         なって、面全体としては均一な繰り返しに見える。面の側に大きな斑を持たせると
+         視線が「壁」ではなく「傷んだ一枚の面」として読む。 */
+      var wv = 0.5 + 0.25 * (Math.sin(x * 0.43 + z * 0.26 + 0.7) + Math.sin(x * 0.17 - z * 0.55 + 2.1));
+      out.multiplyScalar(ao * fb * k * (0.88 + 0.24 * wv) * (0.94 + 1.30 * back));
+      // 垂直面の雨だれ・煤の筋。ブロックをまたいで縦に走るので目地の格子を壊す
+      if (ny < 0.5 && ny > -0.5) {
+        out.lerp(C.grime, 0.11 * (0.5 + 0.5 * Math.sin(x * 2.87 + z * 3.71)));
+      }
       if (fogK) out.lerp(C.fog, fogK);
       if (TEX) out.lerp(WHITE, 0.45);
       return out;
@@ -172,10 +194,10 @@
       var burn = scorchAt(x, z) * (0.30 + 0.70 * Math.max(0, nx * WX + nz * WZ));
       if (burn > 0) out.lerp(C.grime, burn * 0.34);
       var lam = 0.17 + 0.83 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
-      out.multiplyScalar(lam * k * 0.66);
+      out.multiplyScalar(lam * k * 0.56);   // 遠景は必ず前景より沈める
       // 近い廃墟は暗いシルエット、遠い廃墟ほど粉塵に溶ける＝逆光の層になる
+      // 遠景メッシュには map を貼らないので、白へ寄せる補正はここでは行わない
       out.lerp(HAZE, clamp(fogK, 0, 0.72));
-      if (TEX) out.lerp(WHITE, 0.35);
       return out;
     }
 
@@ -196,7 +218,16 @@
     }
 
     var _vp = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    /* o: {x,y,z,hx,hy,hz,col,k,ry,rx,rz,fogK,noBottom} */
+    /* o: {x,y,z,hx,hy,hz,col,k,ry,rx,rz,fogK,noBottom,uvq,uvou,uvov,uvs}
+
+       uv はワールド座標から取る（結合しても目地が繋がる）が、それだけだと
+       同じ寸法のブロックが同じ UV 窓を共有し、テクスチャの1周期がブロック単位で
+       見えてしまう＝壁が「同じ暗いブロックの繰り返し」に読める。
+       そこでブロックごとに
+         uvq  : UV空間の90度単位の回転（0〜3）
+         uvou/uvov : UVオフセット（テクスチャ内の切り出し位置をずらす）
+         uvs  : わずかなスケール差
+       を与えて、同一マテリアル・同一ドローコールのまま切り出しを全部変える。 */
     function box(buf, o) {
       var ry = o.ry || 0, rx = o.rx || 0, rz = o.rz || 0;
       var cy = Math.cos(ry), sy = Math.sin(ry);
@@ -204,6 +235,8 @@
       var cz = Math.cos(rz), sz = Math.sin(rz);
       var k = (o.k === undefined) ? 1 : o.k;
       var fogK = o.fogK || 0;
+      var uq = o.uvq || 0, uou = o.uvou || 0, uov = o.uvov || 0;
+      var us = (o.uvs === undefined) ? 0.9 : o.uvs;
       var base = o.col, i, j;
       for (i = 0; i < 6; i++) {
         var f = FACE[i];
@@ -219,11 +252,17 @@
           var v = _vp[order[j]];
           buf.p.push(v[0], v[1], v[2]);
           buf.n.push(nx, ny, nz);
-          // uv はワールド座標から取る＝結合しても目地が繋がる
           var an = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
-          if (ay >= an && ay >= az) buf.u.push(v[0] * 0.5, v[2] * 0.5);
-          else if (an >= az) buf.u.push(v[2] * 0.5, v[1] * 0.5);
-          else buf.u.push(v[0] * 0.5, v[1] * 0.5);
+          var uu, vv;
+          if (ay >= an && ay >= az) { uu = v[0]; vv = v[2]; }
+          else if (an >= az) { uu = v[2]; vv = v[1]; }
+          else { uu = v[0]; vv = v[1]; }
+          uu *= us; vv *= us;
+          // 90度単位で UV 空間ごと回す。ブロック内では一様なので歪まない
+          if (uq === 1) { var t1 = uu; uu = vv; vv = -t1; }
+          else if (uq === 2) { uu = -uu; vv = -vv; }
+          else if (uq === 3) { var t2 = uu; uu = -vv; vv = t2; }
+          buf.u.push(uu + uou, vv + uov);
           if (o.far) bakeFar(_col, base, v[0], v[1], v[2], nx, ny, nz, k, fogK);
           else bake(_col, base, v[0], v[1], v[2], nx, ny, nz, k, fogK);
           buf.c.push(_col.r, _col.g, _col.b);
@@ -333,23 +372,29 @@
         bGround.p.push(x3, Y[i2][j2], z3);
         nrm(i2, j2, nA);
         bGround.n.push(nA[0], nA[1], nA[2]);
-        bGround.u.push(x3 * 0.34, z3 * 0.34);
+        // 地面の uv は 1.25m 周期。3m 周期にすると tex 側の模様が
+        // 大きな斑（迷彩柄）として読めてしまう
+        bGround.u.push(x3 * 0.8, z3 * 0.8);
         var c2 = CC[i2][j2];
         bGround.c.push(c2.r * tone, c2.g * tone, c2.b * tone);
       }
-      /* 敷石。頂点は非共有なのでセル単位でトーンを変えられる＝約1mの石畳になる。
-         テクスチャに頼らずに「舗装された旧市街の広場」であることを地面に持たせる。
-         （tex がある本番では map の目地がこの上に乗る） */
+      /* 敷石。頂点は非共有なのでセル単位でトーンを変えられる＝石畳になる。
+         2x2 の等分割にすると市松模様に見えてしまったので、行と列を
+         1〜3セルの不規則な run で切って矩形の大きさ自体をばらけさせる。
+         明度差も ±6% までに抑える（±15% では床が chessboard に読める）。 */
+      var runI = [], runJ = [], rp = 0, rq = 0;
+      for (i = 0; i <= FN; i++) { runI.push(rp); if (hash2(i * 4.7, 1.3) < 0.45) rp++; }
+      for (j = 0; j <= FN; j++) { runJ.push(rq); if (hash2(2.9, j * 6.1) < 0.45) rq++; }
       for (i = 0; i < FN; i++) {
         for (j = 0; j < FN; j++) {
-          var si = Math.floor(i / 2), sj = Math.floor(j / 2);
-          tone = 0.84 + 0.30 * hash2(si * 3.71, sj * 2.93);
+          var si = runI[i], sj = runJ[j];
+          tone = 0.94 + 0.12 * hash2(si * 3.71 + sj * 0.7, sj * 2.93 - si * 0.4);
           // 弾着痕のまわりは石が跳ね上げられてバラバラ＝トーンが暴れる
           var mx = -FH + (i + 0.5) * FS, mz = -FH + (j + 0.5) * FS, ci;
           for (ci = 0; ci < CRATERS.length; ci++) {
             var cr2 = CRATERS[ci];
             var dd = Math.sqrt((mx - cr2.x) * (mx - cr2.x) + (mz - cr2.z) * (mz - cr2.z)) / cr2.r;
-            if (dd < 1.8) tone *= 1 - 0.34 * smooth(1.8 - dd) * (hash2(i * 1.3, j * 1.9) - 0.35);
+            if (dd < 1.8) tone *= 1 - 0.20 * smooth(1.8 - dd) * (hash2(i * 1.3, j * 1.9) - 0.35);
           }
           vert(i, j); vert(i, j + 1); vert(i + 1, j + 1);
           vert(i, j); vert(i + 1, j + 1); vert(i + 1, j);
@@ -364,52 +409,108 @@
        ================================================================== */
     var SKIN = 0.055;   // 表皮の厚み。剥がれた所はこの分だけ内側に凹む
 
-    function coverPanels(c, side, x0, x1, z0, z1, yBot, yTop, blow) {
-      // side: 0=+Z 1=-Z 2=+X 3=-X
+    /* ---------------------------------------------------------------------
+       ブロック1個ごとの個体差。
+       同じ寸法のブロックが同じ UV 窓で並ぶと、テクスチャがどれだけ良くても
+       「同じ暗いブロックの繰り返し」に読める。対処は3点セットで、
+         ① UV の切り出しを 90 度単位の回転＋オフセットでずらす
+         ② 頂点カラーの明度を ±12% ずらす
+         ③ 寸法自体を不揃いにする（幅・段高を乱数で刻む＝呼び出し側）
+       ①②はここで、③は runCourse() が行う。マテリアルは共有のまま。
+       ------------------------------------------------------------------ */
+    function indiv(o, sx, sz) {
+      var a = hash2(sx * 17.13 + 0.7, sz * 9.41 - 2.3);
+      var b = hash2(sx * 5.77 + 3.1, sz * 23.91 - 1.7);
+      var c2 = hash2(sx * 31.77 - 4.4, sz * 11.33 + 6.1);
+      o.uvq = Math.floor(a * 4) & 3;
+      o.uvou = b * 7.0;          // タイル境界をまたいで切り出しを移す
+      o.uvov = c2 * 7.0;
+      o.uvs = 0.84 + 0.14 * c2;  // 目の細かさもわずかに変える
+      o.k = (o.k === undefined ? 1 : o.k) * (0.88 + 0.24 * b);
+      return o;
+    }
+
+    /* 1段の石を「不揃いな幅で敷き詰める」。等分割をやめるのが要点。
+       cb(a0, a1, index) に各石の区間を渡す。 */
+    function runCourse(s0, s1, wMin, wMax, seed, cb) {
+      var p = s0, idx = 0, guard = 0;
+      // 段の切り出し位置自体もずらす（半個ずらしの馬目地では規則が残る）
+      var lead = wMin * (0.25 + 0.75 * hash2(seed * 3.3, seed * 7.1));
+      var first = true;
+      while (p < s1 - 0.02 && guard++ < 200) {
+        var w = wMin + (wMax - wMin) * hash2(p * 13.1 + seed * 2.7, seed * 5.3 - p * 3.9);
+        if (first) { w = lead; first = false; }
+        var a1 = Math.min(p + w, s1);
+        if (a1 - p > 0.045) cb(p, a1, idx++);
+        p = a1;
+      }
+    }
+
+    /* 表皮の状態を3段階で持つ。深さが3層あると「剥がれ」が立体に読める。
+        skin  : 切石が残っている（面 = AABB）
+        brick : 表皮が飛んで煉瓦の下地が出た（0.5*SKIN 奥）
+        void  : 煉瓦ごと抜けた穴（SKIN 奥の躯体が見える＝何も置かない）
+       void は「抜け落ちた煉瓦」。テクスチャに置くと水玉模様になるので
+       ジオメトリで、しかも塊（傷）として置く。 */
+    function coverPanels(c, side, x0, x1, z0, z1, yBot, yTop, blow, wounds) {
       var nx = (side === 2) ? 1 : (side === 3 ? -1 : 0);
       var nz = (side === 0) ? 1 : (side === 1 ? -1 : 0);
       var lenAxisX = (nx === 0);
-      var L = lenAxisX ? (x1 - x0) : (z1 - z0);
-      var nC = Math.max(1, Math.round(L / 0.46));
-      var cw = L / nC;
-      var nR = Math.max(2, Math.round((yTop - yBot) / 0.34));
-      var rh = (yTop - yBot) / nR;
       var s0 = lenAxisX ? x0 : z0, s1 = lenAxisX ? x1 : z1;
-      var i, j;
-      for (j = 0; j < nR; j++) {
-        // 芋目地は「タイル」に見える。半個ずらした馬目地にすると石積みに読める
-        var off = (j % 2) ? 0.5 : 0.0;
-        for (i = -1; i <= nC; i++) {
-          var a0 = s0 + (i + off) * cw, a1 = a0 + cw;
-          if (a1 <= s0 + 0.004 || a0 >= s1 - 0.004) continue;
-          if (a0 < s0) a0 = s0;
-          if (a1 > s1) a1 = s1;
-          var half = (a1 - a0) * 0.5 - 0.008;
-          if (half <= 0.01) continue;
+      var face = Math.max(0, nx * WX + nz * WZ);
+      // 長い面は区画に割って段をずらす（横一直線の目地を通さない）
+      var segN = Math.max(1, Math.round((s1 - s0) / 1.9)), sgi;
+      for (sgi = 0; sgi < segN; sgi++) {
+      var g0 = s0 + (s1 - s0) * (sgi / segN), g1 = s0 + (s1 - s0) * ((sgi + 1) / segN);
+      var sd = side * 9.7 + sgi * 6.1 + c.x * 1.3 + c.z * 2.7;
+      var yy = yBot - 0.14 * hash2(sd * 2.1, sd * 3.9), ci = 0;
+      while (yy < yTop - 0.02 && ci < 40) {
+        // 段の高さも不揃いにする（0.20〜0.40m の乱積み）
+        var rh = 0.20 + 0.20 * hash2(sd + ci * 2.9, c.x * 1.7 + c.z * 3.3 + ci);
+        var y1 = Math.min(yy + rh, yTop);
+        var yb = Math.max(yy, yBot);
+        if (y1 - yb < 0.05) { yy = y1; ci++; continue; }
+        var cyy = (yb + y1) * 0.5, hyy = (y1 - yb) * 0.5 - 0.007;
+        var hf = clamp((cyy - yBot) / (yTop - yBot), 0, 1);
+        runCourse(g0, g1, 0.30, 0.72, sd + ci * 4.3, function (a0, a1) {
+          var half = (a1 - a0) * 0.5 - 0.007;
+          if (half <= 0.012) return;
           var mid = (a0 + a1) * 0.5;
-          var cx = lenAxisX ? mid : ((x0 + x1) * 0.5 + nx * ((x1 - x0) * 0.5 - SKIN * 0.5));
-          var cz = lenAxisX ? ((z0 + z1) * 0.5 + nz * ((z1 - z0) * 0.5 - SKIN * 0.5)) : mid;
-          var cyy = yBot + (j + 0.5) * rh;
+          var px = lenAxisX ? mid : ((x0 + x1) * 0.5 + nx * ((x1 - x0) * 0.5 - SKIN * 0.5));
+          var pz = lenAxisX ? ((z0 + z1) * 0.5 + nz * ((z1 - z0) * 0.5 - SKIN * 0.5)) : mid;
           var hxx = lenAxisX ? half : SKIN * 0.5;
           var hzz = lenAxisX ? SKIN * 0.5 : half;
-          var hyy = rh * 0.5 - 0.008;
-          // 損傷率：北西を向いた面ほど、そして高い所ほど剥がれている
-          var face = Math.max(0, nx * WX + nz * WZ);
-          var hf = clamp((cyy - yBot) / (yTop - yBot), 0, 1);
-          var pMiss = 0.03 + face * (blow ? 0.46 : 0.30) * (0.35 + 0.65 * hf) + hf * 0.10;
-          if (hash2(cx * 7.3 + j * 2.1, cz * 7.3 - i * 1.7) < pMiss) {
-            // 剥がれた：表皮の代わりに一段奥へ凹んだ煉瓦の芯を見せる
-            box(bBrick, {
-              x: cx - nx * SKIN * 0.75, y: cyy, z: cz - nz * SKIN * 0.75,
-              hx: hxx * (lenAxisX ? 0.94 : 0.35), hy: hyy * 0.94, hz: hzz * (lenAxisX ? 0.35 : 0.94),
-              col: C.brick, k: 0.62 + 0.25 * hash2(cx, cz), noBottom: true
-            });
-          } else {
-            var kk = 0.86 + 0.26 * hash2(cx * 3.1, cz * 3.1);
-            var cc = (hash2(cx * 11.0, cz * 9.0) < 0.24) ? C.concrete : C.stone;
-            box(bStone, { x: cx, y: cyy, z: cz, hx: hxx, hy: hyy, hz: hzz, col: cc, k: kk, noBottom: true });
+
+          // 傷（塊で剥がれた領域）に入っているか。散らさずに塊にするのが要点
+          var w = 0, wi;
+          for (wi = 0; wi < wounds.length; wi++) {
+            var wd = wounds[wi];
+            var du = (mid - wd.s) / wd.r, dv = (cyy - wd.y) / wd.h;
+            w = Math.max(w, 1 - Math.sqrt(du * du + dv * dv));
           }
-        }
+          var damage = clamp(w, 0, 1) * (0.55 + 0.45 * face) + face * (blow ? 0.30 : 0.16) * hf;
+          var r1 = hash2(px * 7.31 + ci * 2.13, pz * 7.31 - a0 * 1.77);
+          if (r1 < damage - 0.42) return;                       // 抜けた（穴）
+          if (r1 < damage + 0.06) {
+            // 表皮だけ飛んで煉瓦が出た
+            box(bBrick, indiv({
+              x: px - nx * SKIN * 0.5, y: cyy, z: pz - nz * SKIN * 0.5,
+              hx: lenAxisX ? half : SKIN * 0.25, hy: hyy,
+              hz: lenAxisX ? SKIN * 0.25 : half,
+              col: C.brick, k: 0.74, noBottom: true
+            }, px * 3.3 + a0, pz * 3.3 + cyy));
+            return;
+          }
+          var t = hash2(px * 11.03, pz * 9.07 + cyy);
+          var cc = _mix.copy(C.stone).lerp(C.concrete, t * 0.8);
+          box(bStone, indiv({
+            x: px, y: cyy, z: pz, hx: hxx, hy: hyy, hz: hzz,
+            col: cc.clone(), k: 1.0, noBottom: true
+          }, px * 2.7 + a0 * 1.3, pz * 2.7 + cyy * 1.3));
+        });
+        yy = y1;
+        ci++;
+      }
       }
     }
 
@@ -423,39 +524,48 @@
         var yTop = c.h - capH;
         var yBot = -0.16;               // 地面の起伏に潜らせる。負の高さは当たり判定に無関係
 
-        // 芯：表皮の厚みだけ内側。剥がれた所からこれが見える
+        /* 芯：表皮の厚みだけ内側。抜けた所からこの暗い躯体が見える。
+           煉瓦色ではなく濡れた暗色にしておくと「穴」として読める。 */
         box(bBrick, {
           x: c.x, y: (yBot + yTop) * 0.5, z: c.z,
           hx: c.hx - SKIN, hy: (yTop - yBot) * 0.5, hz: c.hz - SKIN,
-          col: C.brick, k: 0.55, noBottom: true
+          col: C.concreteWet, k: 0.9, noBottom: true, uvs: 1.4
         });
 
         var blow = !low;   // 高い遮蔽ほど大きく持って行かれている
-        coverPanels(c, 0, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 1, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 2, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 3, x0, x1, z0, z1, yBot, yTop, blow);
+        /* 傷（剥離の塊）。北面が正面から食らっているので北面に大きく、
+           側面には浅く。1個ずつ乱数で散らすと「虫食い」になるため塊で置く。 */
+        var wnN = [
+          { s: c.x + rr(-0.6, 0.6) * c.hx, y: yTop * rr(0.45, 0.9), r: c.hx * rr(0.45, 0.8) + 0.25, h: (yTop - yBot) * rr(0.35, 0.6) },
+          { s: c.x + rr(-0.9, 0.9) * c.hx, y: yTop * rr(0.55, 1.0), r: c.hx * rr(0.25, 0.5) + 0.2, h: (yTop - yBot) * rr(0.25, 0.45) }
+        ];
+        var wnS = [{ s: c.x + rr(-0.8, 0.8) * c.hx, y: yTop * rr(0.6, 1.0), r: c.hx * rr(0.2, 0.4) + 0.15, h: (yTop - yBot) * 0.3 }];
+        var wnE = [{ s: c.z + rr(-0.7, 0.7) * c.hz, y: yTop * rr(0.5, 1.0), r: c.hz * rr(0.35, 0.7) + 0.18, h: (yTop - yBot) * 0.35 }];
+        var wnW = [{ s: c.z + rr(-0.7, 0.7) * c.hz, y: yTop * rr(0.5, 1.0), r: c.hz * rr(0.35, 0.7) + 0.18, h: (yTop - yBot) * 0.35 }];
+        coverPanels(c, 0, x0, x1, z0, z1, yBot, yTop, blow, wnS);   // +Z（南＝風下）
+        coverPanels(c, 1, x0, x1, z0, z1, yBot, yTop, blow, wnN);   // -Z（北＝被弾面）
+        coverPanels(c, 2, x0, x1, z0, z1, yBot, yTop, blow, wnE);
+        coverPanels(c, 3, x0, x1, z0, z1, yBot, yTop, blow, wnW);
 
         /* 天端キャップ：footprint 全面を h ちょうどまで覆う。
            これが「当たり判定の天面＝見た目の天面」を保証する唯一の板。
            長手方向に目地で割るが、隙間は 0.012 の溝なので水平線は途切れない。 */
         var alongX = (c.hx >= c.hz);
-        var Ln = alongX ? (x1 - x0) : (z1 - z0);
-        var nSeg = Math.max(1, Math.round(Ln / 0.95));
-        var sw = Ln / nSeg;
-        for (j = 0; j < nSeg; j++) {
-          var sx = alongX ? (x0 + (j + 0.5) * sw) : c.x;
-          var sz = alongX ? c.z : (z0 + (j + 0.5) * sw);
-          var shx = alongX ? (sw * 0.5 - (j === 0 || j === nSeg - 1 ? 0.006 : 0.012)) : c.hx;
-          var shz = alongX ? c.hz : (sw * 0.5 - (j === 0 || j === nSeg - 1 ? 0.006 : 0.012));
-          // 端の板だけは footprint の端に必ず届かせる（外周を欠けさせない）
-          if (alongX && nSeg > 1) { if (j === 0) { sx -= 0.006; } if (j === nSeg - 1) { sx += 0.006; } }
-          if (!alongX && nSeg > 1) { if (j === 0) { sz -= 0.006; } if (j === nSeg - 1) { sz += 0.006; } }
-          box(bStone, {
-            x: sx, y: c.h - capH * 0.5, z: sz, hx: shx, hy: capH * 0.5, hz: shz,
-            col: C.concrete, k: 0.94 + 0.12 * hash2(sx * 4.4, sz * 4.4), noBottom: true
-          });
-        }
+        var q0 = alongX ? x0 : z0, q1 = alongX ? x1 : z1;
+        var capY = c.h - capH * 0.5, ccc = c;
+        runCourse(q0, q1, 0.55, 1.25, c.x * 3.1 + c.z * 5.9, function (a0, a1) {
+          var mid = (a0 + a1) * 0.5, half = (a1 - a0) * 0.5;
+          // 端は footprint の端にきっちり届かせる（天面の外周を欠けさせない）
+          var e0 = (a0 - q0 < 0.02), e1 = (q1 - a1 < 0.02);
+          var pad = 0.006;
+          var lo = e0 ? a0 : a0 + pad, hi = e1 ? a1 : a1 - pad;
+          box(bStone, indiv({
+            x: alongX ? (lo + hi) * 0.5 : ccc.x, y: capY, z: alongX ? ccc.z : (lo + hi) * 0.5,
+            hx: alongX ? (hi - lo) * 0.5 : ccc.hx, hy: capH * 0.5,
+            hz: alongX ? ccc.hz : (hi - lo) * 0.5,
+            col: C.concrete, k: 1.0, noBottom: true
+          }, mid * 6.1 + ccc.z, ccc.x * 4.7 + half));
+        });
 
         if (low) continue;   // ★ 低い遮蔽には h より上に何も置かない（水平線を守る）
 
@@ -522,64 +632,101 @@
       var cx = (minx + maxx) * 0.5, cz = (minz + maxz) * 0.5;
       var hx = (maxx - minx) * 0.5, hz = (maxz - minz) * 0.5;
 
-      // 躯体。内面側だけ SKIN 分痩せさせ、そこに表皮を貼る
+      /* 躯体。内面側だけ WSKIN 分痩せさせ、そこに2層（表皮／煉瓦）を貼る。
+         表皮も煉瓦も無い所は、この暗い躯体が奥に見える＝「抜けた穴」になる。
+         穴は貫通させない（弾が止まるのに抜けて見えたら嘘）。 */
+      var WSKIN = 0.11;
       box(bConc, {
-        x: cx - inx * SKIN * 0.5, y: (body - 0.2) * 0.5 - 0.1, z: cz - inz * SKIN * 0.5,
-        hx: hx - Math.abs(inx) * SKIN * 0.5, hy: (body + 0.2) * 0.5,
-        hz: hz - Math.abs(inz) * SKIN * 0.5,
-        col: C.concreteDark, k: 1.02, noBottom: true
-      });
-      // 剥離の奥に見える煉瓦の層
-      box(bBrick, {
-        x: cx + inx * (hx - SKIN * 0.72), y: (body - 0.2) * 0.5 - 0.1, z: cz + inz * (hz - SKIN * 0.72),
-        hx: (inx !== 0) ? SKIN * 0.28 : hx - 0.02, hy: (body + 0.2) * 0.5,
-        hz: (inz !== 0) ? SKIN * 0.28 : hz - 0.02,
-        col: C.brick, k: 0.72, noBottom: true
+        x: cx - inx * WSKIN * 0.5, y: (body - 0.2) * 0.5 - 0.1, z: cz - inz * WSKIN * 0.5,
+        hx: hx - Math.abs(inx) * WSKIN * 0.5, hy: (body + 0.2) * 0.5,
+        hz: hz - Math.abs(inz) * WSKIN * 0.5,
+        col: C.concreteWet, k: 1.15, noBottom: true, uvs: 1.5
       });
 
-      // 内面の表皮パネル。遮蔽と同じ馬目地にして「同じ都市の同じ石」に見せる
       var alongX = (inx === 0);
       var L = alongX ? (maxx - minx) : (maxz - minz);
       var s0 = alongX ? minx : minz, s1 = alongX ? maxx : maxz;
-      var nC = Math.max(1, Math.round(L / 0.88));
-      var cw = L / nC;
-      var rows = [0.0, 0.88, 1.76, 2.64, 3.40, body];
-      var i, j;
-      for (j = 0; j < rows.length - 1; j++) {
-        var off = (j % 2) ? 0.5 : 0.0;
-        for (i = -1; i <= nC; i++) {
-          var a0 = s0 + (i + off) * cw, a1 = a0 + cw;
-          if (a1 <= s0 + 0.01 || a0 >= s1 - 0.01) continue;
-          if (a0 < s0) a0 = s0;
-          if (a1 > s1) a1 = s1;
-          var half = (a1 - a0) * 0.5 - 0.012;
-          if (half <= 0.02) continue;
-          var mid = (a0 + a1) * 0.5;
-          var y0 = rows[j], y1 = rows[j + 1];
-          var hf = y0 / body;
-          var pMiss = blow ? (0.06 + 0.44 * hf) : (0.02 + 0.11 * hf);
-          var px = alongX ? mid : (cx + inx * (hx - SKIN * 0.5));
-          var pz = alongX ? (cz + inz * (hz - SKIN * 0.5)) : mid;
-          if (hash2(px * 5.7 + j * 3.3, pz * 5.7 - i * 2.9) < pMiss) continue;
-          box(bPlaster, {
-            x: px, y: (y0 + y1) * 0.5, z: pz,
-            hx: alongX ? half : SKIN * 0.5,
-            hy: (y1 - y0) * 0.5 - 0.012,
-            hz: alongX ? SKIN * 0.5 : half,
-            col: (hash2(px * 2.2, pz * 2.2) < 0.3) ? C.concrete : C.plaster,
-            k: 0.92 + 0.30 * hash2(px * 9.1, pz * 9.1), noBottom: true
-          });
-        }
+
+      /* 砲撃の傷。壁の全長に等間隔で開けると「装飾」になるので、
+         被弾側（北・西）に大きな傷を数個、下流側（南・東）は小さく浅く。
+         これが「抜け落ちた煉瓦」の正体で、塊で開くから物語になる。 */
+      var wounds = [], wn = blow ? 7 : 3, wi;
+      for (wi = 0; wi < wn; wi++) {
+        wounds.push({
+          s: s0 + L * ((wi + 0.5) / wn + rr(-0.30, 0.30) / wn),
+          y: body * (blow ? rr(0.35, 0.98) : rr(0.55, 1.0)),
+          r: blow ? rr(0.7, 2.4) : rr(0.4, 1.0),
+          h: blow ? rr(0.7, 1.9) : rr(0.35, 0.8)
+        });
       }
 
+      /* 内面の石積み。段高も石幅も不揃いにする（＝同じ矩形の敷き詰めをやめる）。
+         これが無いと、テクスチャを何枚差し替えても格子の反復が残る。 */
+      var yy = 0, ci = 0;
+      /* 壁を長手方向に「区画」で割り、区画ごとに段の高さと切り出しを変える。
+         全長 27m で段を通すと、横一直線の目地が5本走って壁が縞に読める。
+         区画で段をずらすと目地が段違いになり、同時に「別々に建てた街区の壁」に見える。 */
+      var segN = Math.max(1, Math.round(L / 3.4)), sgi;
+      for (sgi = 0; sgi < segN; sgi++) {
+      var g0 = s0 + L * (sgi / segN), g1 = s0 + L * ((sgi + 1) / segN);
+      var seed0 = inx * 11.3 + inz * 4.9 + sgi * 8.9;
+      yy = -0.05 - 0.28 * hash2(seed0 * 1.7, seed0 * 3.1);   // 段の開始位置を区画ごとにずらす
+      ci = 0;
+      while (yy < body - 0.03 && ci < 24) {
+        var rh = 0.30 + 0.38 * hash2(seed0 + ci * 2.3, ci * 5.7 + sgi * 9.1);
+        var y1 = Math.min(yy + rh, body);
+        var yb = Math.max(yy, -0.05);
+        if (y1 - yb < 0.06) { yy = y1; ci++; continue; }
+        var mY = (yb + y1) * 0.5, hY = (y1 - yb) * 0.5 - 0.011;
+        var hf = mY / body;
+        runCourse(g0, g1, 0.42, 1.35, seed0 + ci * 3.7, function (a0, a1) {
+          var half = (a1 - a0) * 0.5 - 0.011;
+          if (half <= 0.02) return;
+          var mid = (a0 + a1) * 0.5;
+          var px = alongX ? mid : (cx + inx * (hx - WSKIN * 0.25));
+          var pz = alongX ? (cz + inz * (hz - WSKIN * 0.25)) : mid;
+          var w = 0, k2;
+          for (k2 = 0; k2 < wounds.length; k2++) {
+            var wd = wounds[k2];
+            var du = (mid - wd.s) / wd.r, dv = (mY - wd.y) / wd.h;
+            w = Math.max(w, 1 - Math.sqrt(du * du + dv * dv));
+          }
+          var damage = clamp(w, 0, 1) * 1.25 + (blow ? 0.10 : 0.03) * hf;
+          var r1 = hash2(px * 6.13 + ci * 3.7, pz * 6.13 - a0 * 2.9);
+          if (r1 < damage - 0.55) return;                    // 煉瓦ごと抜けた穴
+          if (r1 < damage + 0.05) {
+            // 漆喰が飛んで煉瓦の下地が出た（半分の深さ）
+            box(bBrick, indiv({
+              x: px - inx * WSKIN * 0.28, y: mY, z: pz - inz * WSKIN * 0.28,
+              hx: alongX ? half : WSKIN * 0.25, hy: hY, hz: alongX ? WSKIN * 0.25 : half,
+              col: C.brick, k: 0.9, noBottom: true
+            }, px * 4.1 + a0, pz * 4.1 + mY));
+            return;
+          }
+          var t = hash2(px * 2.23, pz * 2.23 + mY * 1.7);
+          var cc = _mix.copy(C.plaster).lerp(C.concrete, t);
+          box(bPlaster, indiv({
+            x: px, y: mY, z: pz,
+            hx: alongX ? half : WSKIN * 0.25, hy: hY, hz: alongX ? WSKIN * 0.25 : half,
+            col: cc.clone(), k: 1.0, noBottom: true
+          }, px * 3.7 + a0 * 1.9, pz * 3.7 + mY * 1.1));
+        });
+        yy = y1;
+        ci++;
+      }
+      }
+      var i;
+
       // 天端。4.2m ちょうどに面を作る（壁の当たり判定の天面と一致）
-      box(bConc, { x: cx, y: WH - capH * 0.5, z: cz, hx: hx, hy: capH * 0.5, hz: hz, col: C.concrete, k: 0.9, noBottom: true });
+      // 天端は全長 27m の直線になるので明るくしすぎない（白い一本線に見える）。
+      box(bConc, { x: cx, y: WH - capH * 0.5, z: cz, hx: hx, hy: capH * 0.5, hz: hz, col: C.concreteDark, k: 0.78, noBottom: true });
 
       /* 天端より上の崩れ。ここだけは自由に壊せる（当たり判定の外＝空） */
-      var step = 1.35;
+      var step = 1.05;   // 冠の刻みを細かくして天端の直線を輪郭で壊す
       var n2 = Math.floor(L / step);
       for (i = 0; i < n2; i++) {
-        var t = (i + 0.5) / n2;
+        // 等間隔に置くと城の狭間（クレネル）に見える。間隔自体をばらす
+        var t = (i + 0.5 + rr(-0.34, 0.34)) / n2;
         var qx = alongX ? (minx + t * L) : cx;
         var qz = alongX ? cz : (minz + t * L);
         // 北西寄りほど低く（削り取られ）、南東寄りほど高く残る
@@ -646,10 +793,17 @@
       // 遠景は実ライティングに載せない（bakeFar で焼き込む）
       function fbox(o) { o.far = true; box(bFar, o); }
       // 地平の板。壁の外に虚空が見えると廃墟が浮くので必ず敷く
-      fbox({ x: 0, y: -0.14, z: 0, hx: 95, hy: 0.06, hz: 95, col: C.ground, k: 0.62, fogK: 0.66, noBottom: true });
+      /* 天面を y=-0.30 に置く。-0.08 にしていたら弾着痕の底（-0.115）より上に来て、
+         クレーターの中から明るい地平板が顔を出していた（実際に白い斑として見えた）。 */
+      fbox({ x: 0, y: -0.40, z: 0, hx: 95, hy: 0.10, hz: 95, col: C.ground, k: 0.62, fogK: 0.66, noBottom: true });
 
-      var KEEP = AX + WT + 1.2;   // これより内側には遠景の破片も一切入れない
-      function inside(x, z, m) { return (Math.abs(x) < KEEP + m) && (Math.abs(z) < KEEP + m); }
+      /* アリーナ（外壁の外面 ±13.6）に遠景の箱を1つも重ねない。
+         中心座標ではなく AABB の重なりで判定すること。中心だけを見ると
+         「片軸だけ遠い横長の建物」がアリーナ内へ張り出す（実際に起きた）。 */
+      var KEEP = AX + WT + 1.2;
+      function overlaps(x, z, ex, ez) {
+        return (Math.abs(x) - ex < KEEP) && (Math.abs(z) - ez < KEEP);
+      }
 
       /* リングごとに「疎らで低い手前」→「密でやや高い奥」。手前を詰め込むと
          空が消えて地平線が読めなくなり、逆光の層が成立しない。 */
@@ -669,7 +823,7 @@
           var bx = Math.cos(ang) * rad, bz = Math.sin(ang) * rad;
           // 旧市街の街区：奥行きより間口が広い横長の塊
           var hw = rr(2.2, 5.0), hd = rr(2.0, 4.2);
-          if (inside(bx, bz, hw + hd)) continue;
+          if (overlaps(bx, bz, hw, hd)) continue;
           var H = rr(R.h0, R.h1);
           var fogK = Math.pow(clamp((rad - 13.5) / 52, 0, 1), 0.70) * 0.72;
           var yaw = rr(-0.35, 0.35);
@@ -696,7 +850,7 @@
           if (rnd() < 0.55) {
             var lean3 = rr(0.45, 1.05);
             var sx2 = bx + DX * (hw + rr(0.4, 1.4)), sz2 = bz + DZ * (hd + rr(0.4, 1.4));
-            if (!inside(sx2, sz2, 2.4)) {
+            if (!overlaps(sx2, sz2, 2.4, 2.4)) {
               fbox({
                 x: sx2, y: H * rr(0.42, 0.74), z: sz2,
                 hx: rr(0.8, 2.0), hy: 0.12, hz: rr(0.7, 1.6),
@@ -714,10 +868,10 @@
       for (k = 0; k < LAND; k++) {
         var a2 = (k / LAND) * TAU + rr(-0.3, 0.3);
         var r2 = rr(20, 62);
-        var lx = Math.cos(a2) * r2, lz = Math.sin(a2) * r2;
-        if (inside(lx, lz, 3)) continue;
+        var lx = Math.cos(a2) * r2, lz = Math.sin(a2) * r2, tw0 = rr(0.75, 1.5);
+        if (overlaps(lx, lz, tw0, tw0)) continue;
         var fk2 = Math.pow(clamp((r2 - 13.5) / 52, 0, 1), 0.70) * 0.72;
-        var th2 = rr(11, 21), tw = rr(0.75, 1.5);
+        var th2 = rr(11, 21), tw = tw0;
         fbox({ x: lx, y: th2 * 0.42, z: lz, hx: tw, hy: th2 * 0.42, hz: tw * rr(0.85, 1.15), ry: rr(0, TAU), col: C.stone, k: rr(0.8, 1.0), fogK: fk2, noBottom: true });
         // 折れた頂部が南へずれて残る
         fbox({
@@ -762,7 +916,9 @@
       [bPlaster, 'plaster', false, true, 'envWallSkin'],
       [bRust, 'rust', false, false, 'envRebar'],
       [bMetal, 'metal', false, false, 'envSteel'],
-      [bFar, 'plaster', false, false, 'envSkyline', true]
+      /* 遠景に map を貼らない。数十メートル先では1タイルが数ピクセルに落ち、
+         模様が迷彩柄として読めてしまう。空気遠近を焼いた頂点色だけで持たせる。 */
+      [bFar, null, false, false, 'envSkyline', true]
     ];
     for (var q = 0; q < LIST.length; q++) {
       var mm = toMesh(LIST[q][0], LIST[q][1], LIST[q][2], LIST[q][3], LIST[q][4], LIST[q][5]);

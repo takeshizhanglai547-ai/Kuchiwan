@@ -935,30 +935,73 @@ function hitboxFromRig(rig) {
   if (rig.legL) parts.push({ o: rig.legL, skip: [] });
   if (!parts.length) parts.push({ o: rig.root, skip: [rig.gun] });
 
-  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  var meshes = [];
   for (var i = 0; i < parts.length; i++) {
     (function (p) {
       p.o.traverse(function (o) {
         if (!o.isMesh) return;
         for (var k = 0; k < p.skip.length; k++) if (p.skip[k] && isUnder(o, p.skip[k])) return;
-        tmp.setFromObject(o);
-        if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+        meshes.push(o);
       });
     })(parts[i]);
   }
-  if (!any) return HB_DEFAULT;
+  if (!meshes.length) return HB_DEFAULT;
+
+  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  for (var m = 0; m < meshes.length; m++) {
+    tmp.setFromObject(meshes[m]);
+    if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+  }
 
   // 見えている輪郭の端を撃って外れるのが最悪なので、実寸に少し余裕を足す
   var PAD = 0.06;
   var h = clamp(bb.max.y + PAD, 1.2, 2.3);
   var halfX = clamp(Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) + PAD, 0.22, 0.80);
   var halfZ = clamp(Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) + PAD, 0.18, 0.55);
+  /* 頭部の範囲は高さの割合では決められない。
+     「上2割が頭」と決め打つと、幅広の突撃型ではそこに肩の装甲板が入り、
+     頭半幅が実物0.14mに対し0.26mになる（頭を外しても2.5倍ダメージ）。
+     水平スライスで輪郭を上から下へ走査し、幅が急に太る位置＝首を探す。 */
+  var SLICE = 0.035;
+  var nSlice = Math.max(4, Math.ceil(h / SLICE));
+  var ext = new Array(nSlice);
+  for (var q = 0; q < nSlice; q++) ext[q] = -1;
+  var v = new T.Vector3();
+  for (var mi = 0; mi < meshes.length; mi++) {
+    var o = meshes[mi], g = o.geometry;
+    if (!g || !g.attributes || !g.attributes.position) continue;
+    var pos = g.attributes.position;
+    o.updateMatrixWorld(true);
+    for (var vi = 0; vi < pos.count; vi++) {
+      v.fromBufferAttribute(pos, vi).applyMatrix4(o.matrixWorld);
+      var si = Math.floor(v.y / SLICE);
+      if (si < 0 || si >= nSlice) continue;
+      var e = Math.max(Math.abs(v.x), Math.abs(v.z));
+      if (e > ext[si]) ext[si] = e;
+    }
+  }
+  // 上から下へ。肩幅の55%を超えたスライスが首。そこより上を頭部とする。
+  var neckLimit = Math.max(0.26, halfX * 0.55);
+  var topSlice = nSlice - 1;
+  while (topSlice > 0 && ext[topSlice] < 0) topSlice--;
+  var neck = topSlice, headExt = 0;
+  while (neck > 0) {
+    if (ext[neck] >= 0 && ext[neck] > neckLimit) break;
+    if (ext[neck] > headExt) headExt = ext[neck];
+    neck--;
+  }
+  var headBottom = (neck + 1) * SLICE;
+  // 頭部が薄すぎ／厚すぎる場合は上15%に落とす（走査が破綻したときの保険）
+  if (h - headBottom < 0.12 || h - headBottom > h * 0.42) {
+    headBottom = h * 0.85; headExt = halfX * 0.42;
+  }
+
   return {
     halfX: halfX, halfZ: halfZ,
-    bodyTop: h * 0.80,                                // 上2割を頭部として扱う
+    bodyTop: headBottom,
     headTop: h,
-    headHalf: clamp(halfX * 0.42, 0.11, 0.22),
-    chest: h * 0.62
+    headHalf: clamp(headExt + PAD * 0.5, 0.10, 0.26),
+    chest: (headBottom) * 0.72
   };
 }
 
@@ -969,6 +1012,11 @@ function enemyRay(e, ox, oy, oz, dx, dy, dz) {
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
   var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);
+  /* 頭部を優先する。弾は銃口（頭より0.6m低い）から出るので、
+     頭を狙った射線は必ず胴の箱の肩口を先に掠る。素直に近い方を採ると、
+     頭に照準を合わせても胴命中になり、プレイヤーの狙いが報われない。
+     頭に当たっているなら、多少胴が手前でも頭部命中として扱う。 */
+  if (th < Infinity && th <= tb + 0.35) return { t: th, head: true };
   if (th < tb) return { t: th, head: true };
   return { t: tb, head: false };
 }
@@ -1114,7 +1162,7 @@ var _camOff = new T.Vector3(), _camDir = new T.Vector3();
    RENDER SETUP
    ========================================================================== */
 var renderer, scene, camera, playerRig, enemyMeshes = [];
-var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null;
+var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null, GUN_BARREL_Y = 0;
 
 /* アートモジュールは「あれば使う」。無ければ従来のグレーボックスで動く。
    こうしておかないと、1つでも欠けた瞬間にゲーム全体が起動しなくなる。 */
@@ -1165,7 +1213,9 @@ function initRender() {
 
   /* ---- テクスチャ ---------------------------------------------------- */
   if (hasArt('tex')) TEX = ART.tex(T);
-  var MATS = { tex: TEX };
+  // shadows: 敵担当がハーネスのコール上限のため落ち影を既定で切っていた。
+  // 実ゲームは draw 36/150 と余裕があるので、こちらで有効化する（+8コール）。
+  var MATS = { tex: TEX, shadows: true };
   function mapOf(k, rx, ry) {
     if (!TEX || !TEX[k]) return null;
     var t = TEX[k].clone(); t.needsUpdate = true;
@@ -1216,7 +1266,12 @@ function initRender() {
 
   /* ---- キャラクター --------------------------------------------------- */
   playerRig = hasArt('player') ? ART.player(T, MATS) : buildFigure(0x39424b, 0x27303a, false);
+  // 自機担当はハーネスのコール上限のため落ち影を既定で切っている。実ゲームは余裕があるので有効化。
+  if (typeof playerRig.setCastShadow === 'function') playerRig.setCastShadow(true);
   scene.add(playerRig.root);
+  // 銃身の実体が gun ピボットからどれだけ上にあるか。
+  // これを差し引かないと、ブラインドファイア時に銃口が意図より高く出る。
+  GUN_BARREL_Y = (playerRig.flash && playerRig.flash.position) ? playerRig.flash.position.y : 0;
   for (var e = 0; e < enemies.length; e++) {
     // ラウンド1は的のみ。2種の作り分けはラウンド2の遭遇設計で使う。
     var type = (e % 2 === 0) ? 'rusher' : 'marksman';
@@ -1383,7 +1438,7 @@ function syncRig() {
   var b = P.blindT;
   if (b > 0.01) {
     // ブラインドファイア：頭は下げたまま、腕と銃だけを遮蔽の上へ突き出す
-    var upY = (P.face ? P.face.cover.h + CFG.blind.muzzleUp : 1.3) - 0.98 + P.crouch * 0.32;
+    var upY = (P.face ? P.face.cover.h + CFG.blind.muzzleUp : 1.3) - 0.98 + P.crouch * 0.32 - GUN_BARREL_Y;
     r.armR.rotation.x = lerp(-0.15, -2.35, b);
     r.armR.rotation.z = lerp(0, -0.30, b);
     r.gun.rotation.x = lerp(0.60, 0.05, b);

@@ -3476,23 +3476,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
    ASHLINE / env.js — 中央広場の環境（背景・破壊表現）
 
    ■ この背景から読み取れる1文（oneLineStory）
-     「北西の丘から撃ち下ろされた砲撃が広場を斜めに薙ぎ、石積みはどれも北西の面を
-       削られて芯の煉瓦を晒し、崩れた塊と鉄筋はすべて南東へ倒れ、
-       火は北西の角から風下（東）へ舐めていった。」
+     「北の丘から広場へ砲撃が一列に撃ち下ろされ、石も外壁も廃墟も北向きの面だけを
+       削られて芯の煉瓦と鉄筋を晒し、崩れたものはすべて南へ倒れ、
+       火は北西の角から風下の東へ舐めていった。」
 
    ■ 一貫した因果（ランダムに散らさないための単一の原因）
-     原因は1つだけ。「北西の高台からの砲撃」。ここから全部を導出する。
-       進行ベクトル D = (+0.66, +0.75)  … 砲弾が飛んでいった向き（南東）
-       被弾ベクトル W = -D              … 削られる面が向いている向き（北西）
-     - 弾着痕は北西→南東へ3発、直線上に「歩いて」いる（floorCraters）。
-     - 遮蔽・外壁の表皮は W を向いた面ほど剥がれ、芯（煉瓦・瓦礫）が露出する。
-     - 高い遮蔽の冠部の残骸と鉄筋は D 方向へ倒れる。外壁の倒壊も D 方向。
-     - 北壁・西壁は「外から撃たれて内側へ吹き抜けた」＝大きく面が欠ける。
-       南壁・東壁は「破片が飛んできた下流側」＝面は残るが煤と細かい弾痕で汚れる。
-     - 床の煤は火元（北西の角）から風下へ伸びる楕円。ただし遮蔽の北西側に立つと
-       その背後は爆風・熱が届かず粉塵が残る＝「爆風の影」が明るく残る。
-       この影が向いている方向が、そのまま砲撃の方向を語る。
-     - 外周の廃墟スカイラインも全部が北西の上部を削られ、南東へ倒れかけている。
+     原因は1つだけ。「北からの砲撃」。ここから全部を導出する。
+       進行ベクトル D = (+0.16, +0.987)  … 砲弾が飛んでいった向き（北→南）
+       被弾ベクトル W = -D               … 削られる面が向いている向き（北）
+     太陽の影は南東へ伸びる。D をわざと 25 度ずらしてあるのは、
+     影と倒壊方向が重なると床の物語が影に飲まれて読めなくなるため。
+     - 弾着痕は北から南へ3発、D の直線上を等間隔で「歩いて」いる（CRATERS）。
+     - 遮蔽・外壁の表皮は W を向いた面ほど塊で剥がれ、煉瓦の下地、さらに
+       抜けた所は暗い躯体（穴）が露出する。プレイヤーが北へ攻め上がるとき、
+       この削られた面が常に正面に来る。
+     - 高い遮蔽の冠部の残骸と鉄筋は D 方向（南）へ倒れる。外壁の崩れも同じ。
+     - 北壁・西壁は「外から撃たれて内側へ吹き抜けた」＝内面が大きく欠ける。
+       南壁・東壁は「破片が飛んできた下流側」＝面は残るが煤と小さい欠けで汚れる。
+     - 床の煤は火元（北西の角）から風下（東）へ伸びる楕円。
+       遮蔽の北側に立つとその背後には熱も破片も届かず粉塵が残る＝「爆風の影」。
+     - 外周の廃墟スカイラインも全部が北側の上部を削られ、南へ倒れかけている。
 
    ■ シルエット読解性（色ではなく形で高低を分ける）
      低い遮蔽 (h=1.05) … 天端は「途切れない水平の一本線」。冠部の装飾を一切載せない。
@@ -3506,8 +3509,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
        として表現し、箱の外へは一切出さない。
      - 箱の外へ出るのは h を超えた高さの冠部装飾だけ。低い遮蔽 (h=1.05 < 1.2) には
        冠部を一切作らないので、0〜1.2m に箱外の張り出しは原理的に発生しない。
-     - 外壁も同じ規則。壁は「穴」を開けない（弾が止まるのに見た目が抜けていたら嘘）。
-       損傷は表皮の剥離と天端（4.2m）より上の崩れで表現する。
+     - 外壁も同じ規則。壁は貫通させない（弾が止まるのに見た目が抜けていたら嘘）。
+       「抜け落ちた煉瓦」は貫通ではなく、表皮→煉瓦→躯体の3層のうち手前2層が
+       無くなった凹み（深さ 0.11m）として作る。輪郭は変わらないので当たり判定と矛盾しない。
+
+   ■ タイリング反復の抑制（面が「同じブロックの繰り返し」に読めないようにする）
+     テクスチャ側をどれだけ詰めても、同じ寸法のブロックが同じ UV 窓で並ぶ限り
+     ブロック1個ごとに1周期が出る。ジオメトリ側で次の4つを行う：
+       ① indiv()   … ブロックごとに UV を90度単位で回し、オフセットとスケールをずらす
+       ② indiv()   … ブロックごとに頂点カラーの明度を ±12% ずらす
+       ③ runCourse() … 石の幅を 0.3〜1.35m の不揃いで刻む（等分割をやめる）
+                        段の高さも段ごとに変え、壁は 3.4m の区画ごとに段位置をずらす
+       ④ bake()    … 数メートル周期の大きな濃淡と、ブロックをまたぐ縦の雨だれ
+     ①〜④はいずれもマテリアルを分けないので、ドローコールは増えない。
    ========================================================================== */
 (function (g) {
   var ASH = g.ASH = g.ASH || {};
@@ -3610,7 +3624,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       rust: new T.Color(P.rust), fog: new T.Color(P.fog)
     };
 
-    var _col = new T.Color();
+    var _col = new T.Color(), _mix = new T.Color();
     // 空気遠近の到達色。skyHorizon そのままだと明る過ぎて背景が前に出るので
     // fog 側へ寄せて一段沈める（§「遠景を必ず一段濁らせる」）
     var HAZE = new T.Color(P.skyHorizon).lerp(new T.Color(P.fog), 0.55);
@@ -3632,7 +3646,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 逆光側のアルベドを持ち上げる。太陽1灯では影側が一様な黒に潰れ、
       // 石積みの目地も欠けも読めなくなる。ライトを増やせない以上ここで補う。
       var back = Math.max(0, -(nx * SUN.x + ny * SUN.y + nz * SUN.z));
-      out.multiplyScalar(ao * fb * k * (0.94 + 1.30 * back));
+      /* 数メートル周期のゆるい濃淡。ブロック単位の乱数だけだと「粒の揃った砂目」に
+         なって、面全体としては均一な繰り返しに見える。面の側に大きな斑を持たせると
+         視線が「壁」ではなく「傷んだ一枚の面」として読む。 */
+      var wv = 0.5 + 0.25 * (Math.sin(x * 0.43 + z * 0.26 + 0.7) + Math.sin(x * 0.17 - z * 0.55 + 2.1));
+      out.multiplyScalar(ao * fb * k * (0.88 + 0.24 * wv) * (0.94 + 1.30 * back));
+      // 垂直面の雨だれ・煤の筋。ブロックをまたいで縦に走るので目地の格子を壊す
+      if (ny < 0.5 && ny > -0.5) {
+        out.lerp(C.grime, 0.11 * (0.5 + 0.5 * Math.sin(x * 2.87 + z * 3.71)));
+      }
       if (fogK) out.lerp(C.fog, fogK);
       if (TEX) out.lerp(WHITE, 0.45);
       return out;
@@ -3646,10 +3668,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var burn = scorchAt(x, z) * (0.30 + 0.70 * Math.max(0, nx * WX + nz * WZ));
       if (burn > 0) out.lerp(C.grime, burn * 0.34);
       var lam = 0.17 + 0.83 * Math.max(0, nx * SUN.x + ny * SUN.y + nz * SUN.z);
-      out.multiplyScalar(lam * k * 0.66);
+      out.multiplyScalar(lam * k * 0.56);   // 遠景は必ず前景より沈める
       // 近い廃墟は暗いシルエット、遠い廃墟ほど粉塵に溶ける＝逆光の層になる
+      // 遠景メッシュには map を貼らないので、白へ寄せる補正はここでは行わない
       out.lerp(HAZE, clamp(fogK, 0, 0.72));
-      if (TEX) out.lerp(WHITE, 0.35);
       return out;
     }
 
@@ -3670,7 +3692,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
 
     var _vp = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    /* o: {x,y,z,hx,hy,hz,col,k,ry,rx,rz,fogK,noBottom} */
+    /* o: {x,y,z,hx,hy,hz,col,k,ry,rx,rz,fogK,noBottom,uvq,uvou,uvov,uvs}
+
+       uv はワールド座標から取る（結合しても目地が繋がる）が、それだけだと
+       同じ寸法のブロックが同じ UV 窓を共有し、テクスチャの1周期がブロック単位で
+       見えてしまう＝壁が「同じ暗いブロックの繰り返し」に読める。
+       そこでブロックごとに
+         uvq  : UV空間の90度単位の回転（0〜3）
+         uvou/uvov : UVオフセット（テクスチャ内の切り出し位置をずらす）
+         uvs  : わずかなスケール差
+       を与えて、同一マテリアル・同一ドローコールのまま切り出しを全部変える。 */
     function box(buf, o) {
       var ry = o.ry || 0, rx = o.rx || 0, rz = o.rz || 0;
       var cy = Math.cos(ry), sy = Math.sin(ry);
@@ -3678,6 +3709,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var cz = Math.cos(rz), sz = Math.sin(rz);
       var k = (o.k === undefined) ? 1 : o.k;
       var fogK = o.fogK || 0;
+      var uq = o.uvq || 0, uou = o.uvou || 0, uov = o.uvov || 0;
+      var us = (o.uvs === undefined) ? 0.9 : o.uvs;
       var base = o.col, i, j;
       for (i = 0; i < 6; i++) {
         var f = FACE[i];
@@ -3693,11 +3726,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           var v = _vp[order[j]];
           buf.p.push(v[0], v[1], v[2]);
           buf.n.push(nx, ny, nz);
-          // uv はワールド座標から取る＝結合しても目地が繋がる
           var an = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
-          if (ay >= an && ay >= az) buf.u.push(v[0] * 0.5, v[2] * 0.5);
-          else if (an >= az) buf.u.push(v[2] * 0.5, v[1] * 0.5);
-          else buf.u.push(v[0] * 0.5, v[1] * 0.5);
+          var uu, vv;
+          if (ay >= an && ay >= az) { uu = v[0]; vv = v[2]; }
+          else if (an >= az) { uu = v[2]; vv = v[1]; }
+          else { uu = v[0]; vv = v[1]; }
+          uu *= us; vv *= us;
+          // 90度単位で UV 空間ごと回す。ブロック内では一様なので歪まない
+          if (uq === 1) { var t1 = uu; uu = vv; vv = -t1; }
+          else if (uq === 2) { uu = -uu; vv = -vv; }
+          else if (uq === 3) { var t2 = uu; uu = -vv; vv = t2; }
+          buf.u.push(uu + uou, vv + uov);
           if (o.far) bakeFar(_col, base, v[0], v[1], v[2], nx, ny, nz, k, fogK);
           else bake(_col, base, v[0], v[1], v[2], nx, ny, nz, k, fogK);
           buf.c.push(_col.r, _col.g, _col.b);
@@ -3807,23 +3846,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         bGround.p.push(x3, Y[i2][j2], z3);
         nrm(i2, j2, nA);
         bGround.n.push(nA[0], nA[1], nA[2]);
-        bGround.u.push(x3 * 0.34, z3 * 0.34);
+        // 地面の uv は 1.25m 周期。3m 周期にすると tex 側の模様が
+        // 大きな斑（迷彩柄）として読めてしまう
+        bGround.u.push(x3 * 0.8, z3 * 0.8);
         var c2 = CC[i2][j2];
         bGround.c.push(c2.r * tone, c2.g * tone, c2.b * tone);
       }
-      /* 敷石。頂点は非共有なのでセル単位でトーンを変えられる＝約1mの石畳になる。
-         テクスチャに頼らずに「舗装された旧市街の広場」であることを地面に持たせる。
-         （tex がある本番では map の目地がこの上に乗る） */
+      /* 敷石。頂点は非共有なのでセル単位でトーンを変えられる＝石畳になる。
+         2x2 の等分割にすると市松模様に見えてしまったので、行と列を
+         1〜3セルの不規則な run で切って矩形の大きさ自体をばらけさせる。
+         明度差も ±6% までに抑える（±15% では床が chessboard に読める）。 */
+      var runI = [], runJ = [], rp = 0, rq = 0;
+      for (i = 0; i <= FN; i++) { runI.push(rp); if (hash2(i * 4.7, 1.3) < 0.45) rp++; }
+      for (j = 0; j <= FN; j++) { runJ.push(rq); if (hash2(2.9, j * 6.1) < 0.45) rq++; }
       for (i = 0; i < FN; i++) {
         for (j = 0; j < FN; j++) {
-          var si = Math.floor(i / 2), sj = Math.floor(j / 2);
-          tone = 0.84 + 0.30 * hash2(si * 3.71, sj * 2.93);
+          var si = runI[i], sj = runJ[j];
+          tone = 0.94 + 0.12 * hash2(si * 3.71 + sj * 0.7, sj * 2.93 - si * 0.4);
           // 弾着痕のまわりは石が跳ね上げられてバラバラ＝トーンが暴れる
           var mx = -FH + (i + 0.5) * FS, mz = -FH + (j + 0.5) * FS, ci;
           for (ci = 0; ci < CRATERS.length; ci++) {
             var cr2 = CRATERS[ci];
             var dd = Math.sqrt((mx - cr2.x) * (mx - cr2.x) + (mz - cr2.z) * (mz - cr2.z)) / cr2.r;
-            if (dd < 1.8) tone *= 1 - 0.34 * smooth(1.8 - dd) * (hash2(i * 1.3, j * 1.9) - 0.35);
+            if (dd < 1.8) tone *= 1 - 0.20 * smooth(1.8 - dd) * (hash2(i * 1.3, j * 1.9) - 0.35);
           }
           vert(i, j); vert(i, j + 1); vert(i + 1, j + 1);
           vert(i, j); vert(i + 1, j + 1); vert(i + 1, j);
@@ -3838,52 +3883,108 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
        ================================================================== */
     var SKIN = 0.055;   // 表皮の厚み。剥がれた所はこの分だけ内側に凹む
 
-    function coverPanels(c, side, x0, x1, z0, z1, yBot, yTop, blow) {
-      // side: 0=+Z 1=-Z 2=+X 3=-X
+    /* ---------------------------------------------------------------------
+       ブロック1個ごとの個体差。
+       同じ寸法のブロックが同じ UV 窓で並ぶと、テクスチャがどれだけ良くても
+       「同じ暗いブロックの繰り返し」に読める。対処は3点セットで、
+         ① UV の切り出しを 90 度単位の回転＋オフセットでずらす
+         ② 頂点カラーの明度を ±12% ずらす
+         ③ 寸法自体を不揃いにする（幅・段高を乱数で刻む＝呼び出し側）
+       ①②はここで、③は runCourse() が行う。マテリアルは共有のまま。
+       ------------------------------------------------------------------ */
+    function indiv(o, sx, sz) {
+      var a = hash2(sx * 17.13 + 0.7, sz * 9.41 - 2.3);
+      var b = hash2(sx * 5.77 + 3.1, sz * 23.91 - 1.7);
+      var c2 = hash2(sx * 31.77 - 4.4, sz * 11.33 + 6.1);
+      o.uvq = Math.floor(a * 4) & 3;
+      o.uvou = b * 7.0;          // タイル境界をまたいで切り出しを移す
+      o.uvov = c2 * 7.0;
+      o.uvs = 0.84 + 0.14 * c2;  // 目の細かさもわずかに変える
+      o.k = (o.k === undefined ? 1 : o.k) * (0.88 + 0.24 * b);
+      return o;
+    }
+
+    /* 1段の石を「不揃いな幅で敷き詰める」。等分割をやめるのが要点。
+       cb(a0, a1, index) に各石の区間を渡す。 */
+    function runCourse(s0, s1, wMin, wMax, seed, cb) {
+      var p = s0, idx = 0, guard = 0;
+      // 段の切り出し位置自体もずらす（半個ずらしの馬目地では規則が残る）
+      var lead = wMin * (0.25 + 0.75 * hash2(seed * 3.3, seed * 7.1));
+      var first = true;
+      while (p < s1 - 0.02 && guard++ < 200) {
+        var w = wMin + (wMax - wMin) * hash2(p * 13.1 + seed * 2.7, seed * 5.3 - p * 3.9);
+        if (first) { w = lead; first = false; }
+        var a1 = Math.min(p + w, s1);
+        if (a1 - p > 0.045) cb(p, a1, idx++);
+        p = a1;
+      }
+    }
+
+    /* 表皮の状態を3段階で持つ。深さが3層あると「剥がれ」が立体に読める。
+        skin  : 切石が残っている（面 = AABB）
+        brick : 表皮が飛んで煉瓦の下地が出た（0.5*SKIN 奥）
+        void  : 煉瓦ごと抜けた穴（SKIN 奥の躯体が見える＝何も置かない）
+       void は「抜け落ちた煉瓦」。テクスチャに置くと水玉模様になるので
+       ジオメトリで、しかも塊（傷）として置く。 */
+    function coverPanels(c, side, x0, x1, z0, z1, yBot, yTop, blow, wounds) {
       var nx = (side === 2) ? 1 : (side === 3 ? -1 : 0);
       var nz = (side === 0) ? 1 : (side === 1 ? -1 : 0);
       var lenAxisX = (nx === 0);
-      var L = lenAxisX ? (x1 - x0) : (z1 - z0);
-      var nC = Math.max(1, Math.round(L / 0.46));
-      var cw = L / nC;
-      var nR = Math.max(2, Math.round((yTop - yBot) / 0.34));
-      var rh = (yTop - yBot) / nR;
       var s0 = lenAxisX ? x0 : z0, s1 = lenAxisX ? x1 : z1;
-      var i, j;
-      for (j = 0; j < nR; j++) {
-        // 芋目地は「タイル」に見える。半個ずらした馬目地にすると石積みに読める
-        var off = (j % 2) ? 0.5 : 0.0;
-        for (i = -1; i <= nC; i++) {
-          var a0 = s0 + (i + off) * cw, a1 = a0 + cw;
-          if (a1 <= s0 + 0.004 || a0 >= s1 - 0.004) continue;
-          if (a0 < s0) a0 = s0;
-          if (a1 > s1) a1 = s1;
-          var half = (a1 - a0) * 0.5 - 0.008;
-          if (half <= 0.01) continue;
+      var face = Math.max(0, nx * WX + nz * WZ);
+      // 長い面は区画に割って段をずらす（横一直線の目地を通さない）
+      var segN = Math.max(1, Math.round((s1 - s0) / 1.9)), sgi;
+      for (sgi = 0; sgi < segN; sgi++) {
+      var g0 = s0 + (s1 - s0) * (sgi / segN), g1 = s0 + (s1 - s0) * ((sgi + 1) / segN);
+      var sd = side * 9.7 + sgi * 6.1 + c.x * 1.3 + c.z * 2.7;
+      var yy = yBot - 0.14 * hash2(sd * 2.1, sd * 3.9), ci = 0;
+      while (yy < yTop - 0.02 && ci < 40) {
+        // 段の高さも不揃いにする（0.20〜0.40m の乱積み）
+        var rh = 0.20 + 0.20 * hash2(sd + ci * 2.9, c.x * 1.7 + c.z * 3.3 + ci);
+        var y1 = Math.min(yy + rh, yTop);
+        var yb = Math.max(yy, yBot);
+        if (y1 - yb < 0.05) { yy = y1; ci++; continue; }
+        var cyy = (yb + y1) * 0.5, hyy = (y1 - yb) * 0.5 - 0.007;
+        var hf = clamp((cyy - yBot) / (yTop - yBot), 0, 1);
+        runCourse(g0, g1, 0.30, 0.72, sd + ci * 4.3, function (a0, a1) {
+          var half = (a1 - a0) * 0.5 - 0.007;
+          if (half <= 0.012) return;
           var mid = (a0 + a1) * 0.5;
-          var cx = lenAxisX ? mid : ((x0 + x1) * 0.5 + nx * ((x1 - x0) * 0.5 - SKIN * 0.5));
-          var cz = lenAxisX ? ((z0 + z1) * 0.5 + nz * ((z1 - z0) * 0.5 - SKIN * 0.5)) : mid;
-          var cyy = yBot + (j + 0.5) * rh;
+          var px = lenAxisX ? mid : ((x0 + x1) * 0.5 + nx * ((x1 - x0) * 0.5 - SKIN * 0.5));
+          var pz = lenAxisX ? ((z0 + z1) * 0.5 + nz * ((z1 - z0) * 0.5 - SKIN * 0.5)) : mid;
           var hxx = lenAxisX ? half : SKIN * 0.5;
           var hzz = lenAxisX ? SKIN * 0.5 : half;
-          var hyy = rh * 0.5 - 0.008;
-          // 損傷率：北西を向いた面ほど、そして高い所ほど剥がれている
-          var face = Math.max(0, nx * WX + nz * WZ);
-          var hf = clamp((cyy - yBot) / (yTop - yBot), 0, 1);
-          var pMiss = 0.03 + face * (blow ? 0.46 : 0.30) * (0.35 + 0.65 * hf) + hf * 0.10;
-          if (hash2(cx * 7.3 + j * 2.1, cz * 7.3 - i * 1.7) < pMiss) {
-            // 剥がれた：表皮の代わりに一段奥へ凹んだ煉瓦の芯を見せる
-            box(bBrick, {
-              x: cx - nx * SKIN * 0.75, y: cyy, z: cz - nz * SKIN * 0.75,
-              hx: hxx * (lenAxisX ? 0.94 : 0.35), hy: hyy * 0.94, hz: hzz * (lenAxisX ? 0.35 : 0.94),
-              col: C.brick, k: 0.62 + 0.25 * hash2(cx, cz), noBottom: true
-            });
-          } else {
-            var kk = 0.86 + 0.26 * hash2(cx * 3.1, cz * 3.1);
-            var cc = (hash2(cx * 11.0, cz * 9.0) < 0.24) ? C.concrete : C.stone;
-            box(bStone, { x: cx, y: cyy, z: cz, hx: hxx, hy: hyy, hz: hzz, col: cc, k: kk, noBottom: true });
+
+          // 傷（塊で剥がれた領域）に入っているか。散らさずに塊にするのが要点
+          var w = 0, wi;
+          for (wi = 0; wi < wounds.length; wi++) {
+            var wd = wounds[wi];
+            var du = (mid - wd.s) / wd.r, dv = (cyy - wd.y) / wd.h;
+            w = Math.max(w, 1 - Math.sqrt(du * du + dv * dv));
           }
-        }
+          var damage = clamp(w, 0, 1) * (0.55 + 0.45 * face) + face * (blow ? 0.30 : 0.16) * hf;
+          var r1 = hash2(px * 7.31 + ci * 2.13, pz * 7.31 - a0 * 1.77);
+          if (r1 < damage - 0.42) return;                       // 抜けた（穴）
+          if (r1 < damage + 0.06) {
+            // 表皮だけ飛んで煉瓦が出た
+            box(bBrick, indiv({
+              x: px - nx * SKIN * 0.5, y: cyy, z: pz - nz * SKIN * 0.5,
+              hx: lenAxisX ? half : SKIN * 0.25, hy: hyy,
+              hz: lenAxisX ? SKIN * 0.25 : half,
+              col: C.brick, k: 0.74, noBottom: true
+            }, px * 3.3 + a0, pz * 3.3 + cyy));
+            return;
+          }
+          var t = hash2(px * 11.03, pz * 9.07 + cyy);
+          var cc = _mix.copy(C.stone).lerp(C.concrete, t * 0.8);
+          box(bStone, indiv({
+            x: px, y: cyy, z: pz, hx: hxx, hy: hyy, hz: hzz,
+            col: cc.clone(), k: 1.0, noBottom: true
+          }, px * 2.7 + a0 * 1.3, pz * 2.7 + cyy * 1.3));
+        });
+        yy = y1;
+        ci++;
+      }
       }
     }
 
@@ -3897,39 +3998,48 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         var yTop = c.h - capH;
         var yBot = -0.16;               // 地面の起伏に潜らせる。負の高さは当たり判定に無関係
 
-        // 芯：表皮の厚みだけ内側。剥がれた所からこれが見える
+        /* 芯：表皮の厚みだけ内側。抜けた所からこの暗い躯体が見える。
+           煉瓦色ではなく濡れた暗色にしておくと「穴」として読める。 */
         box(bBrick, {
           x: c.x, y: (yBot + yTop) * 0.5, z: c.z,
           hx: c.hx - SKIN, hy: (yTop - yBot) * 0.5, hz: c.hz - SKIN,
-          col: C.brick, k: 0.55, noBottom: true
+          col: C.concreteWet, k: 0.9, noBottom: true, uvs: 1.4
         });
 
         var blow = !low;   // 高い遮蔽ほど大きく持って行かれている
-        coverPanels(c, 0, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 1, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 2, x0, x1, z0, z1, yBot, yTop, blow);
-        coverPanels(c, 3, x0, x1, z0, z1, yBot, yTop, blow);
+        /* 傷（剥離の塊）。北面が正面から食らっているので北面に大きく、
+           側面には浅く。1個ずつ乱数で散らすと「虫食い」になるため塊で置く。 */
+        var wnN = [
+          { s: c.x + rr(-0.6, 0.6) * c.hx, y: yTop * rr(0.45, 0.9), r: c.hx * rr(0.45, 0.8) + 0.25, h: (yTop - yBot) * rr(0.35, 0.6) },
+          { s: c.x + rr(-0.9, 0.9) * c.hx, y: yTop * rr(0.55, 1.0), r: c.hx * rr(0.25, 0.5) + 0.2, h: (yTop - yBot) * rr(0.25, 0.45) }
+        ];
+        var wnS = [{ s: c.x + rr(-0.8, 0.8) * c.hx, y: yTop * rr(0.6, 1.0), r: c.hx * rr(0.2, 0.4) + 0.15, h: (yTop - yBot) * 0.3 }];
+        var wnE = [{ s: c.z + rr(-0.7, 0.7) * c.hz, y: yTop * rr(0.5, 1.0), r: c.hz * rr(0.35, 0.7) + 0.18, h: (yTop - yBot) * 0.35 }];
+        var wnW = [{ s: c.z + rr(-0.7, 0.7) * c.hz, y: yTop * rr(0.5, 1.0), r: c.hz * rr(0.35, 0.7) + 0.18, h: (yTop - yBot) * 0.35 }];
+        coverPanels(c, 0, x0, x1, z0, z1, yBot, yTop, blow, wnS);   // +Z（南＝風下）
+        coverPanels(c, 1, x0, x1, z0, z1, yBot, yTop, blow, wnN);   // -Z（北＝被弾面）
+        coverPanels(c, 2, x0, x1, z0, z1, yBot, yTop, blow, wnE);
+        coverPanels(c, 3, x0, x1, z0, z1, yBot, yTop, blow, wnW);
 
         /* 天端キャップ：footprint 全面を h ちょうどまで覆う。
            これが「当たり判定の天面＝見た目の天面」を保証する唯一の板。
            長手方向に目地で割るが、隙間は 0.012 の溝なので水平線は途切れない。 */
         var alongX = (c.hx >= c.hz);
-        var Ln = alongX ? (x1 - x0) : (z1 - z0);
-        var nSeg = Math.max(1, Math.round(Ln / 0.95));
-        var sw = Ln / nSeg;
-        for (j = 0; j < nSeg; j++) {
-          var sx = alongX ? (x0 + (j + 0.5) * sw) : c.x;
-          var sz = alongX ? c.z : (z0 + (j + 0.5) * sw);
-          var shx = alongX ? (sw * 0.5 - (j === 0 || j === nSeg - 1 ? 0.006 : 0.012)) : c.hx;
-          var shz = alongX ? c.hz : (sw * 0.5 - (j === 0 || j === nSeg - 1 ? 0.006 : 0.012));
-          // 端の板だけは footprint の端に必ず届かせる（外周を欠けさせない）
-          if (alongX && nSeg > 1) { if (j === 0) { sx -= 0.006; } if (j === nSeg - 1) { sx += 0.006; } }
-          if (!alongX && nSeg > 1) { if (j === 0) { sz -= 0.006; } if (j === nSeg - 1) { sz += 0.006; } }
-          box(bStone, {
-            x: sx, y: c.h - capH * 0.5, z: sz, hx: shx, hy: capH * 0.5, hz: shz,
-            col: C.concrete, k: 0.94 + 0.12 * hash2(sx * 4.4, sz * 4.4), noBottom: true
-          });
-        }
+        var q0 = alongX ? x0 : z0, q1 = alongX ? x1 : z1;
+        var capY = c.h - capH * 0.5, ccc = c;
+        runCourse(q0, q1, 0.55, 1.25, c.x * 3.1 + c.z * 5.9, function (a0, a1) {
+          var mid = (a0 + a1) * 0.5, half = (a1 - a0) * 0.5;
+          // 端は footprint の端にきっちり届かせる（天面の外周を欠けさせない）
+          var e0 = (a0 - q0 < 0.02), e1 = (q1 - a1 < 0.02);
+          var pad = 0.006;
+          var lo = e0 ? a0 : a0 + pad, hi = e1 ? a1 : a1 - pad;
+          box(bStone, indiv({
+            x: alongX ? (lo + hi) * 0.5 : ccc.x, y: capY, z: alongX ? ccc.z : (lo + hi) * 0.5,
+            hx: alongX ? (hi - lo) * 0.5 : ccc.hx, hy: capH * 0.5,
+            hz: alongX ? ccc.hz : (hi - lo) * 0.5,
+            col: C.concrete, k: 1.0, noBottom: true
+          }, mid * 6.1 + ccc.z, ccc.x * 4.7 + half));
+        });
 
         if (low) continue;   // ★ 低い遮蔽には h より上に何も置かない（水平線を守る）
 
@@ -3996,64 +4106,101 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var cx = (minx + maxx) * 0.5, cz = (minz + maxz) * 0.5;
       var hx = (maxx - minx) * 0.5, hz = (maxz - minz) * 0.5;
 
-      // 躯体。内面側だけ SKIN 分痩せさせ、そこに表皮を貼る
+      /* 躯体。内面側だけ WSKIN 分痩せさせ、そこに2層（表皮／煉瓦）を貼る。
+         表皮も煉瓦も無い所は、この暗い躯体が奥に見える＝「抜けた穴」になる。
+         穴は貫通させない（弾が止まるのに抜けて見えたら嘘）。 */
+      var WSKIN = 0.11;
       box(bConc, {
-        x: cx - inx * SKIN * 0.5, y: (body - 0.2) * 0.5 - 0.1, z: cz - inz * SKIN * 0.5,
-        hx: hx - Math.abs(inx) * SKIN * 0.5, hy: (body + 0.2) * 0.5,
-        hz: hz - Math.abs(inz) * SKIN * 0.5,
-        col: C.concreteDark, k: 1.02, noBottom: true
-      });
-      // 剥離の奥に見える煉瓦の層
-      box(bBrick, {
-        x: cx + inx * (hx - SKIN * 0.72), y: (body - 0.2) * 0.5 - 0.1, z: cz + inz * (hz - SKIN * 0.72),
-        hx: (inx !== 0) ? SKIN * 0.28 : hx - 0.02, hy: (body + 0.2) * 0.5,
-        hz: (inz !== 0) ? SKIN * 0.28 : hz - 0.02,
-        col: C.brick, k: 0.72, noBottom: true
+        x: cx - inx * WSKIN * 0.5, y: (body - 0.2) * 0.5 - 0.1, z: cz - inz * WSKIN * 0.5,
+        hx: hx - Math.abs(inx) * WSKIN * 0.5, hy: (body + 0.2) * 0.5,
+        hz: hz - Math.abs(inz) * WSKIN * 0.5,
+        col: C.concreteWet, k: 1.15, noBottom: true, uvs: 1.5
       });
 
-      // 内面の表皮パネル。遮蔽と同じ馬目地にして「同じ都市の同じ石」に見せる
       var alongX = (inx === 0);
       var L = alongX ? (maxx - minx) : (maxz - minz);
       var s0 = alongX ? minx : minz, s1 = alongX ? maxx : maxz;
-      var nC = Math.max(1, Math.round(L / 0.88));
-      var cw = L / nC;
-      var rows = [0.0, 0.88, 1.76, 2.64, 3.40, body];
-      var i, j;
-      for (j = 0; j < rows.length - 1; j++) {
-        var off = (j % 2) ? 0.5 : 0.0;
-        for (i = -1; i <= nC; i++) {
-          var a0 = s0 + (i + off) * cw, a1 = a0 + cw;
-          if (a1 <= s0 + 0.01 || a0 >= s1 - 0.01) continue;
-          if (a0 < s0) a0 = s0;
-          if (a1 > s1) a1 = s1;
-          var half = (a1 - a0) * 0.5 - 0.012;
-          if (half <= 0.02) continue;
-          var mid = (a0 + a1) * 0.5;
-          var y0 = rows[j], y1 = rows[j + 1];
-          var hf = y0 / body;
-          var pMiss = blow ? (0.06 + 0.44 * hf) : (0.02 + 0.11 * hf);
-          var px = alongX ? mid : (cx + inx * (hx - SKIN * 0.5));
-          var pz = alongX ? (cz + inz * (hz - SKIN * 0.5)) : mid;
-          if (hash2(px * 5.7 + j * 3.3, pz * 5.7 - i * 2.9) < pMiss) continue;
-          box(bPlaster, {
-            x: px, y: (y0 + y1) * 0.5, z: pz,
-            hx: alongX ? half : SKIN * 0.5,
-            hy: (y1 - y0) * 0.5 - 0.012,
-            hz: alongX ? SKIN * 0.5 : half,
-            col: (hash2(px * 2.2, pz * 2.2) < 0.3) ? C.concrete : C.plaster,
-            k: 0.92 + 0.30 * hash2(px * 9.1, pz * 9.1), noBottom: true
-          });
-        }
+
+      /* 砲撃の傷。壁の全長に等間隔で開けると「装飾」になるので、
+         被弾側（北・西）に大きな傷を数個、下流側（南・東）は小さく浅く。
+         これが「抜け落ちた煉瓦」の正体で、塊で開くから物語になる。 */
+      var wounds = [], wn = blow ? 7 : 3, wi;
+      for (wi = 0; wi < wn; wi++) {
+        wounds.push({
+          s: s0 + L * ((wi + 0.5) / wn + rr(-0.30, 0.30) / wn),
+          y: body * (blow ? rr(0.35, 0.98) : rr(0.55, 1.0)),
+          r: blow ? rr(0.7, 2.4) : rr(0.4, 1.0),
+          h: blow ? rr(0.7, 1.9) : rr(0.35, 0.8)
+        });
       }
 
+      /* 内面の石積み。段高も石幅も不揃いにする（＝同じ矩形の敷き詰めをやめる）。
+         これが無いと、テクスチャを何枚差し替えても格子の反復が残る。 */
+      var yy = 0, ci = 0;
+      /* 壁を長手方向に「区画」で割り、区画ごとに段の高さと切り出しを変える。
+         全長 27m で段を通すと、横一直線の目地が5本走って壁が縞に読める。
+         区画で段をずらすと目地が段違いになり、同時に「別々に建てた街区の壁」に見える。 */
+      var segN = Math.max(1, Math.round(L / 3.4)), sgi;
+      for (sgi = 0; sgi < segN; sgi++) {
+      var g0 = s0 + L * (sgi / segN), g1 = s0 + L * ((sgi + 1) / segN);
+      var seed0 = inx * 11.3 + inz * 4.9 + sgi * 8.9;
+      yy = -0.05 - 0.28 * hash2(seed0 * 1.7, seed0 * 3.1);   // 段の開始位置を区画ごとにずらす
+      ci = 0;
+      while (yy < body - 0.03 && ci < 24) {
+        var rh = 0.30 + 0.38 * hash2(seed0 + ci * 2.3, ci * 5.7 + sgi * 9.1);
+        var y1 = Math.min(yy + rh, body);
+        var yb = Math.max(yy, -0.05);
+        if (y1 - yb < 0.06) { yy = y1; ci++; continue; }
+        var mY = (yb + y1) * 0.5, hY = (y1 - yb) * 0.5 - 0.011;
+        var hf = mY / body;
+        runCourse(g0, g1, 0.42, 1.35, seed0 + ci * 3.7, function (a0, a1) {
+          var half = (a1 - a0) * 0.5 - 0.011;
+          if (half <= 0.02) return;
+          var mid = (a0 + a1) * 0.5;
+          var px = alongX ? mid : (cx + inx * (hx - WSKIN * 0.25));
+          var pz = alongX ? (cz + inz * (hz - WSKIN * 0.25)) : mid;
+          var w = 0, k2;
+          for (k2 = 0; k2 < wounds.length; k2++) {
+            var wd = wounds[k2];
+            var du = (mid - wd.s) / wd.r, dv = (mY - wd.y) / wd.h;
+            w = Math.max(w, 1 - Math.sqrt(du * du + dv * dv));
+          }
+          var damage = clamp(w, 0, 1) * 1.25 + (blow ? 0.10 : 0.03) * hf;
+          var r1 = hash2(px * 6.13 + ci * 3.7, pz * 6.13 - a0 * 2.9);
+          if (r1 < damage - 0.55) return;                    // 煉瓦ごと抜けた穴
+          if (r1 < damage + 0.05) {
+            // 漆喰が飛んで煉瓦の下地が出た（半分の深さ）
+            box(bBrick, indiv({
+              x: px - inx * WSKIN * 0.28, y: mY, z: pz - inz * WSKIN * 0.28,
+              hx: alongX ? half : WSKIN * 0.25, hy: hY, hz: alongX ? WSKIN * 0.25 : half,
+              col: C.brick, k: 0.9, noBottom: true
+            }, px * 4.1 + a0, pz * 4.1 + mY));
+            return;
+          }
+          var t = hash2(px * 2.23, pz * 2.23 + mY * 1.7);
+          var cc = _mix.copy(C.plaster).lerp(C.concrete, t);
+          box(bPlaster, indiv({
+            x: px, y: mY, z: pz,
+            hx: alongX ? half : WSKIN * 0.25, hy: hY, hz: alongX ? WSKIN * 0.25 : half,
+            col: cc.clone(), k: 1.0, noBottom: true
+          }, px * 3.7 + a0 * 1.9, pz * 3.7 + mY * 1.1));
+        });
+        yy = y1;
+        ci++;
+      }
+      }
+      var i;
+
       // 天端。4.2m ちょうどに面を作る（壁の当たり判定の天面と一致）
-      box(bConc, { x: cx, y: WH - capH * 0.5, z: cz, hx: hx, hy: capH * 0.5, hz: hz, col: C.concrete, k: 0.9, noBottom: true });
+      // 天端は全長 27m の直線になるので明るくしすぎない（白い一本線に見える）。
+      box(bConc, { x: cx, y: WH - capH * 0.5, z: cz, hx: hx, hy: capH * 0.5, hz: hz, col: C.concreteDark, k: 0.78, noBottom: true });
 
       /* 天端より上の崩れ。ここだけは自由に壊せる（当たり判定の外＝空） */
-      var step = 1.35;
+      var step = 1.05;   // 冠の刻みを細かくして天端の直線を輪郭で壊す
       var n2 = Math.floor(L / step);
       for (i = 0; i < n2; i++) {
-        var t = (i + 0.5) / n2;
+        // 等間隔に置くと城の狭間（クレネル）に見える。間隔自体をばらす
+        var t = (i + 0.5 + rr(-0.34, 0.34)) / n2;
         var qx = alongX ? (minx + t * L) : cx;
         var qz = alongX ? cz : (minz + t * L);
         // 北西寄りほど低く（削り取られ）、南東寄りほど高く残る
@@ -4120,10 +4267,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 遠景は実ライティングに載せない（bakeFar で焼き込む）
       function fbox(o) { o.far = true; box(bFar, o); }
       // 地平の板。壁の外に虚空が見えると廃墟が浮くので必ず敷く
-      fbox({ x: 0, y: -0.14, z: 0, hx: 95, hy: 0.06, hz: 95, col: C.ground, k: 0.62, fogK: 0.66, noBottom: true });
+      /* 天面を y=-0.30 に置く。-0.08 にしていたら弾着痕の底（-0.115）より上に来て、
+         クレーターの中から明るい地平板が顔を出していた（実際に白い斑として見えた）。 */
+      fbox({ x: 0, y: -0.40, z: 0, hx: 95, hy: 0.10, hz: 95, col: C.ground, k: 0.62, fogK: 0.66, noBottom: true });
 
-      var KEEP = AX + WT + 1.2;   // これより内側には遠景の破片も一切入れない
-      function inside(x, z, m) { return (Math.abs(x) < KEEP + m) && (Math.abs(z) < KEEP + m); }
+      /* アリーナ（外壁の外面 ±13.6）に遠景の箱を1つも重ねない。
+         中心座標ではなく AABB の重なりで判定すること。中心だけを見ると
+         「片軸だけ遠い横長の建物」がアリーナ内へ張り出す（実際に起きた）。 */
+      var KEEP = AX + WT + 1.2;
+      function overlaps(x, z, ex, ez) {
+        return (Math.abs(x) - ex < KEEP) && (Math.abs(z) - ez < KEEP);
+      }
 
       /* リングごとに「疎らで低い手前」→「密でやや高い奥」。手前を詰め込むと
          空が消えて地平線が読めなくなり、逆光の層が成立しない。 */
@@ -4143,7 +4297,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           var bx = Math.cos(ang) * rad, bz = Math.sin(ang) * rad;
           // 旧市街の街区：奥行きより間口が広い横長の塊
           var hw = rr(2.2, 5.0), hd = rr(2.0, 4.2);
-          if (inside(bx, bz, hw + hd)) continue;
+          if (overlaps(bx, bz, hw, hd)) continue;
           var H = rr(R.h0, R.h1);
           var fogK = Math.pow(clamp((rad - 13.5) / 52, 0, 1), 0.70) * 0.72;
           var yaw = rr(-0.35, 0.35);
@@ -4170,7 +4324,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (rnd() < 0.55) {
             var lean3 = rr(0.45, 1.05);
             var sx2 = bx + DX * (hw + rr(0.4, 1.4)), sz2 = bz + DZ * (hd + rr(0.4, 1.4));
-            if (!inside(sx2, sz2, 2.4)) {
+            if (!overlaps(sx2, sz2, 2.4, 2.4)) {
               fbox({
                 x: sx2, y: H * rr(0.42, 0.74), z: sz2,
                 hx: rr(0.8, 2.0), hy: 0.12, hz: rr(0.7, 1.6),
@@ -4188,10 +4342,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for (k = 0; k < LAND; k++) {
         var a2 = (k / LAND) * TAU + rr(-0.3, 0.3);
         var r2 = rr(20, 62);
-        var lx = Math.cos(a2) * r2, lz = Math.sin(a2) * r2;
-        if (inside(lx, lz, 3)) continue;
+        var lx = Math.cos(a2) * r2, lz = Math.sin(a2) * r2, tw0 = rr(0.75, 1.5);
+        if (overlaps(lx, lz, tw0, tw0)) continue;
         var fk2 = Math.pow(clamp((r2 - 13.5) / 52, 0, 1), 0.70) * 0.72;
-        var th2 = rr(11, 21), tw = rr(0.75, 1.5);
+        var th2 = rr(11, 21), tw = tw0;
         fbox({ x: lx, y: th2 * 0.42, z: lz, hx: tw, hy: th2 * 0.42, hz: tw * rr(0.85, 1.15), ry: rr(0, TAU), col: C.stone, k: rr(0.8, 1.0), fogK: fk2, noBottom: true });
         // 折れた頂部が南へずれて残る
         fbox({
@@ -4236,7 +4390,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       [bPlaster, 'plaster', false, true, 'envWallSkin'],
       [bRust, 'rust', false, false, 'envRebar'],
       [bMetal, 'metal', false, false, 'envSteel'],
-      [bFar, 'plaster', false, false, 'envSkyline', true]
+      /* 遠景に map を貼らない。数十メートル先では1タイルが数ピクセルに落ち、
+         模様が迷彩柄として読めてしまう。空気遠近を焼いた頂点色だけで持たせる。 */
+      [bFar, null, false, false, 'envSkyline', true]
     ];
     for (var q = 0; q < LIST.length; q++) {
       var mm = toMesh(LIST[q][0], LIST[q][1], LIST[q][2], LIST[q][3], LIST[q][4], LIST[q][5]);
@@ -4984,13 +5140,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
    遮蔽物は「面と直角の塊」、敵は別担当。こちらは「上が重く、腰でくびれ、
    脚の間が抜けている、非対称に銃を持つ塊」として読ませる。
 
-   実装上の制約から来た判断：
-     ・ドローコール上限が実質 5 メッシュ（検証シーンの地面で 1 使う）なので、
+   実装上の制約から来た判断（詳しくは各所のコメント）：
+     ・ドローコール上限 6。検証シーンの床で 1 使うので実質 5 メッシュ。
        ジオメトリを手でマージし、色は全部「頂点カラー」で持たせて
-       マテリアルは 1 個だけにしている。
-     ・影を落とすライトが 1 つだけの契約なので、陰影の情報量が足りない。
-       そこで「空からの回り込み（上向き面ほど明るい）」と
-       「足元ほど暗い擬似AO」を頂点カラーに焼き込んでいる（P.aoStrength を使用）。
+       マテリアルは 1 個に抑えている。可動部は
+       胴 / 右腕 / 右脚 / 左脚 / 銃 の 5 枚。左腕は胴へ焼き込んだ。
+     ・影パスもドローコールに計上されるので、既定では影を落とさない。
+       統合側で戻せるよう返り値に setCastShadow() を置いてある。
+     ・影を落とすライトが 1 つだけの契約なので陰影の情報量が足りない。
+       「空からの回り込み」「足元ほど暗い擬似AO」「上面ほど積もる粉塵」を
+       頂点カラーに焼き込んで補っている（P.aoStrength / P.dust を使用）。
+     ・胴と脚の実寸がそのまま被弾判定になる（game.js の hitboxFromRig）。
+       背嚢の奥行き・肩の張り出し・脚の開き方は、見た目と判定の両方を
+       実測しながら決めている。
+     ・mats（テクスチャ集）は受け取るが使っていない。マテリアル1個・
+       頂点カラーだけで色を作る構成を崩さないため。mats が undefined でも動く。
      ・ボーンなし。箱と角錐台と円筒の階層のみ。
    ========================================================================== */
 (function (g) {
@@ -5016,8 +5180,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     /* ---- 色（すべて ASH.palette 由来。生の16進は書かない） --------------- */
     var CA = ASH.col(T, P.playerArmor);        // 装甲板
     var CA2 = ASH.shade(T, P.playerArmor, 1.12); // 光を受ける上面の装甲
-    var CAD = ASH.col(T, P.playerArmorDark);    // 下地スーツ・ブーツ・銃
-    var CAD2 = ASH.shade(T, P.playerArmorDark, 0.62); // 面頬の奥＝ほぼ黒
+    /* 暗色は「面積の大きい所は持ち上げ、狭い所だけ本当に暗く」する。
+       暗い遮蔽に重なったとき、面積の大きい暗色は輪郭ごと消える（実測）。
+       本当の黒は、目の奥・靴底・銃身の影といった数センチの隙間だけに使う。 */
+    var CAD = ASH.shade(T, P.playerArmorDark, 1.42); // 下地スーツ・ブーツ・銃（持ち上げ済み）
+    var CAD2 = ASH.shade(T, P.playerArmorDark, 0.70); // 面頬の奥＝ほぼ黒
     var CC = ASH.col(T, P.playerCloth);        // 布・ポーチ・背嚢
     var CC2 = ASH.shade(T, P.playerCloth, 0.82);
     var CT = ASH.col(T, P.playerTrim);         // 明るい縁。稜線と肩の上端だけに使う
@@ -5042,15 +5209,36 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return [x, y, z];
     }
 
-    /* 面の向きと高さから陰影を焼き込む。
-       上向き面 = 空の回り込みを受ける / 足元 = 地面に噛まれて暗い。
-       ライトを増やせない契約のぶんを、ここで補う。 */
+    /* 面の向きと高さから陰影と堆積を焼き込む。
+
+       (1) 上向き面ほど明るい＝空からの回り込み。
+       (2) 足元ほど暗い＝地面に噛まれた擬似AO（P.aoStrength に追従）。
+       (3) 上向き面ほど P.dust（環境の粉塵色）へ寄せる。
+           これが自機の色設計の要になっている。理由は2つある：
+           ・自機だけが冷たい灰のままだと、暖色のオーカーで統一された広場から
+             色が浮く。上面に環境の灰を積もらせると、同じ空気の中の物になる。
+           ・上面だけが明るい暖色になるので、暗い遮蔽の前に自機が重なっても
+             「頭頂・肩・背嚢の蓋・膝」が水平の明線として並び、
+             輪郭が消えても人の形として読める（§3 の到達条件）。
+           物理的にも正しい。砲撃の翌日の広場で、上を向いた面には灰が積もる。
+
+       灰の量は実測で決めた。全面に 0.18、真上を向いた面に追加で 0.34。
+       全面に一定量を乗せているのは、逆光下の自機を照らす主光源が
+       HemisphereLight（palette.ambientSky ＝青）になるためで、
+       中性グレーの装甲のままだと暖色の広場の中で青一色に見えた（実測）。
+       上向き面だけを暖色にしても、三人称視点で一番見えている
+       「垂直な背中と脚」が青いままになる。 */
+    var CDUST = ASH.col(T, P.dust);
     function bakeCol(B, col, ny, cy) {
       if (B.flat) return [col.r, col.g, col.b];
-      var up = 0.70 + 0.34 * (ny * 0.5 + 0.5);
-      var ao = 1.0 - P.aoStrength * 0.42 * (1.0 - cl((cy + B.yb) / 1.78, 0, 1));
+      var upn = cl(ny, 0, 1);
+      var up = 0.80 + 0.28 * (ny * 0.5 + 0.5);
+      var ao = 1.0 - P.aoStrength * 0.55 * (1.0 - cl((cy + B.yb) / 1.78, 0, 1));
       var f = up * ao;
-      return [col.r * f, col.g * f, col.b * f];
+      var d = 0.18 + 0.34 * upn * upn;
+      return [(col.r * (1 - d) + CDUST.r * d) * f,
+      (col.g * (1 - d) + CDUST.g * d) * f,
+      (col.b * (1 - d) + CDUST.b * d) * f];
     }
 
     function tri(B, a, b, c, col) {
@@ -5119,6 +5307,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
     }
 
+    /* ビルダの中身をその場で回す。
+       Group の rotation に固定値を入れる代わりにジオメトリへ焼き込むために使う。
+       理由は当たり判定：game.js は Box3.setFromObject で寸法を測るが、
+       three はジオメトリの bounding box を行列で変換した AABB を返すので、
+       回転した Group は実体より一回り大きい箱として測られる。
+       脚の開き（±0.14rad）を Group 側でやると被弾半径が 6cm 太った（実測）。 */
+    function bakeXform(B, rx, ry, rz) {
+      var i, p, n;
+      for (i = 0; i < B.p.length; i += 3) {
+        p = rot([B.p[i], B.p[i + 1], B.p[i + 2]], rx, ry, rz);
+        B.p[i] = p[0]; B.p[i + 1] = p[1]; B.p[i + 2] = p[2];
+        n = rot([B.n[i], B.n[i + 1], B.n[i + 2]], rx, ry, rz);
+        B.n[i] = n[0]; B.n[i + 1] = n[1]; B.n[i + 2] = n[2];
+      }
+    }
+
     /* 別ビルダの中身を平行移動＋Z回転して取り込む（左腕を胴へ焼き込む用） */
     function mergeInto(dst, src, x, y, z, rz) {
       var i, p, n;
@@ -5180,14 +5384,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     /* 背嚢一式：背面シルエットの主役。
        背嚢の天面を頭より十分下げ、後頭部の防護板との間に空きを作る。
        ここが詰まっていると横から見たとき頭と荷物が一塊に潰れる。
-       寝具は背嚢の下に回して、腰まわりを重くする（重心を低く見せる）。 */
-    box(bT, CC, 0, tw(1.28), -0.315, 0.38, 0.34, 0.21, { tx: 0.90, tz: 0.85, ct: CC2 });
-    box(bT, CC2, 0, tw(1.465), -0.310, 0.35, 0.05, 0.19);
-    tube(bT, CC2, 0, tw(1.095), -0.30, 0.075, 0.075, 0.42, 8, 'x');       // 巻いた寝具
-    box(bT, CRU, 0.175, tw(1.33), -0.31, 0.09, 0.19, 0.11, { rz: 0.10 }); // 予備の筒
-    box(bT, CAD, -0.175, tw(1.44), -0.315, 0.07, 0.07, 0.07);
-    box(bT, CAD, -0.180, tw(1.62), -0.355, 0.034, 0.36, 0.034, { rx: -0.22 }); // アンテナ
-    box(bT, CT2, -0.185, tw(1.805), -0.394, 0.05, 0.06, 0.05);                 // 先端の受信子
+       寝具は背嚢の下に回して、腰まわりを重くする（重心を低く見せる）。
+       背嚢は「浅く・広く・高く」作る。奥行きを詰めているのは当たり判定の都合で、
+       game.js は torso と脚の外接箱から判定を起こすため、背中の出っ張りが
+       そのまま前後の被弾半径になる。三人称視点で背面の情報量を担うのは
+       幅と高さであって奥行きではないので、削るなら奥行きが正しい。 */
+    box(bT, CC, 0, tw(1.28), -0.26, 0.40, 0.36, 0.17, { tx: 0.90, tz: 0.85, ct: CC2 });
+    box(bT, CC2, 0, tw(1.478), -0.255, 0.37, 0.05, 0.155, { ct: CC });
+    tube(bT, CC2, 0, tw(1.085), -0.255, 0.070, 0.070, 0.44, 8, 'x');      // 巻いた寝具
+    box(bT, CRU, 0.185, tw(1.33), -0.255, 0.09, 0.20, 0.10, { rz: 0.10 });// 予備の筒
+    box(bT, CAD, -0.185, tw(1.45), -0.262, 0.07, 0.07, 0.07);
+    box(bT, CAD, -0.188, tw(1.63), -0.285, 0.034, 0.36, 0.034, { rx: -0.12 }); // アンテナ
+    box(bT, CT2, -0.190, tw(1.818), -0.307, 0.05, 0.06, 0.05);                 // 先端の受信子
 
     /* 首と頭。
        頭は実寸よりひと回り大きい（全高の約 1/6）。小さい頭は遠景で消え、
@@ -5213,12 +5421,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(bT, CAD, 0, tw(1.588), 0.09, 0.20, 0.09, 0.19, { tz: 0.9 });
     box(bT, CM, 0, tw(1.578), 0.185, 0.11, 0.075, 0.07);   // 呼吸器の缶
 
-    /* 肩当て：外へ張り出し、下へ向かって広がる。首との間に切れ込みが残る */
+    /* 肩当て：外へ張り出し、下へ向かって広がる。首との間に切れ込みが残る。
+       張り出し量は「見た目の広さ」と「当たり判定の幅」の綱引きになる。
+       game.js は torso の外接箱から被弾半径を作るので、肩を広げるほど
+       体の横 25cm を撃っても当たる理不尽が増える。実測しながら
+       全高の約 0.45 倍（＝肩幅 0.86m）で止めた。 */
     function pauldron(s) {
-      box(bT, CA, 0.335 * s, tw(1.435), 0, 0.21, 0.27, 0.37,
-        { rz: -0.22 * s, bx: 1.22, tz: 0.86, ct: CA2 });
-      box(bT, CAD, 0.375 * s, tw(1.265), 0, 0.18, 0.11, 0.33, { rz: -0.32 * s, bz: 0.9 });
-      box(bT, CT2, 0.332 * s, tw(1.567), 0, 0.22, 0.045, 0.35, { rz: -0.21 * s, ct: CT });
+      box(bT, CA, 0.305 * s, tw(1.435), 0, 0.20, 0.27, 0.37,
+        { rz: -0.22 * s, bx: 1.20, tz: 0.86, ct: CA2 });
+      box(bT, CAD, 0.340 * s, tw(1.265), 0, 0.17, 0.11, 0.33, { rz: -0.32 * s, bz: 0.9 });
+      box(bT, CT2, 0.302 * s, tw(1.567), 0, 0.21, 0.045, 0.35, { rz: -0.21 * s, ct: CT });
+      /* 肩当ての外側面に明色の縁。輪郭そのものに明るい画素を置いておくと、
+         暗い遮蔽に体が重なっても肩の位置だけは残る */
+      box(bT, CT2, 0.358 * s, tw(1.395), 0, 0.035, 0.20, 0.34, { rz: -0.22 * s });
     }
     pauldron(1); pauldron(-1);
 
@@ -5240,7 +5455,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
        真横から見たとき脚が「ただの柱」になると、遮蔽の箱と同じ形になる。 */
     function leg(B, s) {
       box(B, CAD, 0, -0.045, 0, 0.25, 0.16, 0.29, { ct: CAD });
-      box(B, CC, 0.005 * s, -0.225, 0, 0.25, 0.34, 0.27, { bx: 0.88, bz: 0.92 });
+      box(B, CC, 0.005 * s, -0.225, 0, 0.235, 0.34, 0.27, { bx: 0.88, bz: 0.92 });
       box(B, CA, 0.005 * s, -0.205, 0.14, 0.20, 0.26, 0.06, { ct: CA2 });
       /* 右は雑嚢、左は拳銃嚢。左右で違う出っ張り＝向きが分かる非対称 */
       if (s > 0) box(B, CC2, 0.145, -0.24, 0.005, 0.09, 0.21, 0.18, { rz: -0.06 });
@@ -5250,14 +5465,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       box(B, CC, 0.005 * s, -0.60, 0, 0.20, 0.28, 0.22);
       box(B, CC2, 0.005 * s, -0.615, -0.12, 0.17, 0.22, 0.10, { tz: 0.8 });   // ふくらはぎ
       box(B, CA, 0.005 * s, -0.60, 0.12, 0.18, 0.30, 0.06, { ct: CA2 });
-      box(B, CAD, 0.005 * s, -0.78, 0, 0.185, 0.10, 0.20);
-      box(B, CAD, 0.005 * s, -0.865, 0.025, 0.25, 0.15, 0.33, { ct: CAD });
-      box(B, CAD, 0.005 * s, -0.8955, 0.225, 0.22, 0.085, 0.13, { tz: 0.85 });
-      box(B, CAD, 0.005 * s, -0.895, -0.155, 0.20, 0.09, 0.09);
-      box(B, CAD2, 0.005 * s, -0.925, 0.035, 0.26, 0.03, 0.37);
+      box(B, CAD, 0.005 * s, -0.775, 0, 0.185, 0.10, 0.20);
+      box(B, CT2, 0.005 * s, -0.727, 0, 0.20, 0.042, 0.215);   // 長靴の履き口＝足元の明線
+      /* 靴底は公称 -0.9325（＝接地面より 7mm 上）。脚を左右に開いて置いているので
+         そのぶん外側の角が沈む。実測で足が地面を突き抜けないところまで上げてある。 */
+      box(B, CAD, 0.005 * s, -0.858, 0.025, 0.25, 0.15, 0.33, { ct: CAD });
+      box(B, CAD, 0.005 * s, -0.888, 0.225, 0.22, 0.085, 0.13, { tz: 0.85 });
+      box(B, CAD, 0.005 * s, -0.8875, -0.155, 0.20, 0.09, 0.09);
+      box(B, CAD2, 0.005 * s, -0.9125, 0.035, 0.26, 0.03, 0.37);
     }
-    leg(bLR, 1);
-    leg(bLL, -1);
+    /* 立ち幅を作る開きは、Group ではなくジオメトリに焼く（bakeXform のコメント参照）。
+       股の間に抜けがあることが、遮蔽の箱と自機を分ける一番強い手掛かりになる。 */
+    leg(bLR, 1); bakeXform(bLR, 0, 0.14, 0.05);
+    leg(bLL, -1); bakeXform(bLL, 0, -0.14, -0.05);
 
     /* ---- 小銃（ローカル原点＝銃ピボット。+Z が銃口方向） -----------------
        銃口は必ず z = 0.78 に来るよう全体を配置する（flash の契約位置）。 */
@@ -5297,10 +5517,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
        影響が一番小さい左腕を胴へ焼き込み、armL は空の Group として残す。
        （armL は契約どおり存在し torso の子で、回転を書かれても破綻しない）
        ====================================================================== */
-    if (!ARML_OWN_MESH) mergeInto(bT, bAL, -0.295, tw(Y_SHLD), 0, -0.24);
+    /* 左腕を胴へ焼き込む。開き角は控えめにしてある：胴メッシュの中に入る＝
+       game.js の被弾判定に左腕が算入されるので、外へ振るほど横幅が水増しされる。
+       （右腕は armR 配下なので判定から除外される。左右で扱いが変わってしまう） */
+    if (!ARML_OWN_MESH) mergeInto(bT, bAL, -0.295, tw(Y_SHLD), 0, -0.15);
 
     /* 頂点カラー1本槍。マテリアルを1個に抑えるため色は全部ジオメトリに載せる */
     var mat = new T.MeshLambertMaterial({ vertexColors: true });
+
+    /* 影を落とすかどうか。
+       検証ハーネスが renderer.info.autoReset を切ったため、影パスの描画も
+       ドローコールに合算されるようになった。可動部が5枚あるので影を出すと
+       5(影)+5(本体)+1(床) = 11 で、契約の 6 を超える。
+       契約は「超えたら機能を削ってでも収める」なので、既定では影を切る。
+       実ゲーム側の総予算は 150 で余裕があるため、統合時に戻せるよう
+       返り値に setCastShadow() を付けてある。 */
+    var CAST_SHADOW = false;
+    var allMeshes = [];
 
     function meshOf(B, m) {
       var geo = new T.BufferGeometry();
@@ -5309,7 +5542,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       geo.setAttribute('color', new T.Float32BufferAttribute(B.c, 3));
       geo.computeBoundingSphere();
       var ms = new T.Mesh(geo, m || mat);
-      ms.castShadow = true; ms.receiveShadow = true;
+      ms.castShadow = CAST_SHADOW; ms.receiveShadow = true;
+      allMeshes.push(ms);
       return ms;
     }
 
@@ -5332,17 +5566,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     /* 脚は左右に開いて置き、つま先を外へ向ける。
        syncRig が書くのは rotation.x だけなので y/z は据え置きにできる。
        股の間に抜けを作ることが、遮蔽の箱と混ざらないための最重要条件。 */
-    var legR = new T.Group(); legR.position.set(0.175, Y_HIP, 0); body.add(legR);
-    legR.rotation.set(0, 0.13, 0.05); legR.add(meshOf(bLR));
-    var legL = new T.Group(); legL.position.set(-0.175, Y_HIP, 0); body.add(legL);
-    legL.rotation.set(0, -0.13, -0.05); legL.add(meshOf(bLL));
+    var legR = new T.Group(); legR.position.set(0.195, Y_HIP, 0); body.add(legR);
+    legR.add(meshOf(bLR));
+    var legL = new T.Group(); legL.position.set(-0.195, Y_HIP, 0); body.add(legL);
+    legL.add(meshOf(bLL));
 
     /* 銃は Group。スケールは持たせない。+Z が銃口方向。
        x は胴の側面より外に出す＝真後ろから見ても銃身が輪郭に出る */
     var gun = new T.Group(); gun.position.set(0.29, Y_GUN - Y_TORSO, 0); torso.add(gun);
+    /* 銃身まわりのごく浅いロール。syncRig は rotation.x しか書かないので残る。
+       Z 軸まわりの回転＝銃口方向（+Z）は動かないので契約に触れない。
+       軸に揃った銃は「置いてある」ように見えるが、少し傾けると「持っている」に見える */
+    gun.rotation.z = -0.09;
     gun.add(meshOf(bG));
 
     var flash = meshOf(bF, new T.MeshBasicMaterial({ vertexColors: true, fog: false }));
+    allMeshes.pop();
     flash.castShadow = false; flash.receiveShadow = false;
     flash.position.set(0, GUP, 0.78);
     flash.visible = false;
@@ -5351,7 +5590,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return {
       root: root, body: body, torso: torso,
       armR: armR, armL: armL, legR: legR, legL: legL,
-      gun: gun, flash: flash
+      gun: gun, flash: flash,
+      /* 契約外の追加。統合側が全体予算を見て影を戻せるようにするためのつまみ。
+         呼ばなければ何も変わらない。 */
+      setCastShadow: function (on) {
+        for (var i = 0; i < allMeshes.length; i++) allMeshes[i].castShadow = !!on;
+      }
     };
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -5417,10 +5661,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
      擬似AO＝下ほど暗く／下向き面ほど暗く。light.js のリムAOが乗る前の
      最低限の立体感で、真横からの逆光でも面の切り替わりが読めるようにする。
      ------------------------------------------------------------------ */
-  function Bld(T, base, yBase) {
+  /* leanX: この空間全体に先掛けする前傾角。
+     Group の rotation で傾けると、game.js の hitboxFromRig が
+     「回したAABBを包む軸平行AABB」を取るため当たり判定が実物より膨らむ
+     （前傾0.38radで奥行きが実測 0.45m→0.58m に膨張し、
+      体から外れた空間を撃っても当たる状態になった）。
+     頂点に焼き込めばAABBは実物に密着する。見た目は同一。 */
+  function Bld(T, base, yBase, leanX) {
     this.T = T;
     this.base = base;        // material.color と同じ色（＝比の分母）
     this.yBase = yBase;      // この空間の原点が床から何mか（擬似AO用）
+    this.pre = leanX ? new T.Matrix4().makeRotationX(leanX) : null;
     this.p = []; this.n = []; this.c = []; this.uv = [];
     this.ratio = {};         // hex -> [r,g,b] の比。同じ色を何度も変換しない
     this._m4 = new T.Matrix4();
@@ -5447,6 +5698,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     this._e.set(rx || 0, ry || 0, rz || 0);
     this._q.setFromEuler(this._e);
     this._m4.compose(this._v.set(x, y, z), this._q, this._n.set(sx, sy, sz));
+    if (this.pre) this._m4.premultiply(this.pre);
     this._m3.getNormalMatrix(this._m4);
     var pos = geo.attributes.position.array;
     var nor = geo.attributes.normal.array;
@@ -5501,7 +5753,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     geo.setAttribute('uv', new T.Float32BufferAttribute(this.uv, 2));
     geo.computeBoundingSphere();
     var m = new T.Mesh(geo, mat);
-    m.castShadow = true; m.receiveShadow = true;
+    /* 落ち影は既定で切る（上の CAST の注記を参照）。
+       遮蔽や建物の影を敵の上で受けることは無料なので receiveShadow は常に真。 */
+    m.castShadow = CAST; m.receiveShadow = true;
     return m;
   };
 
@@ -5519,6 +5773,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     var base = new T.Color(P.enemyArmor);
     var mat = new T.MeshLambertMaterial({ color: base.clone(), vertexColors: true });
     var tex = (mats && mats.tex) || null;
+    /* 統合側が予算に余裕を確認したうえで mats.shadows = true を渡せば落ち影が付く */
+    CAST = !!(mats && mats.shadows);
     /* テクスチャはアルベドに掛けない（色は palette が唯一の正）。
        手続きノイズを微小なバンプにだけ使い、平坦な装甲面に鋳肌を与える。 */
     if (tex && tex.noise) { mat.bumpMap = tex.noise; mat.bumpScale = 0.006; }
@@ -5550,59 +5806,75 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (!isMark) {
       /* -----------------------------------------------------------------
          RUSHER
-         前傾19.5°。胴だけを倒し、脚は床に垂直のまま残すことで
+         前傾 21.8°。胴だけを倒し、脚は床に垂直のまま残すことで
          「上半身が先に突っ込んでいる」姿勢を作る（脚は body の子で傾かない）。
-         ---------------------------------------------------------------- */
-      /* 前傾 28.6°。胴を倒すほど全高が下がり、同時に頭と肩が腰より前に出る。
-         「低い」と「重心が前」を1つのパラメータで同時に作れるので角度は強めに取る。 */
-      torso.rotation.x = 0.50;
+
+         寸法の根拠：game.js は torso / legR / legL の実寸から当たり判定を導く。
+         肩甲板は torso 配下なので、張り出しがそのまま「撃たれる幅」になる。
+         全幅は 1.05m 前後に抑える。これは自機(約0.78)の1.35倍、marksman(0.70)の1.5倍で、
+         逆光の輪郭でも「明らかに横に広い個体」と読める最小限の差。
+         これ以上広げると（実測で 1.38m まで行った）人型を外れ、
+         かつ的として不当に大きくなる。
+         前後の厚みも同様に効くので、頭を前へ突き出しすぎない。 */
+      /* 前傾は torso.rotation ではなく頂点に焼き込む（Bld の第4引数）。
+         腕は当たり判定から除外されるので、腕と銃だけは Group の回転で傾けてよい。 */
+      var LEAN = 0.30, LC = Math.cos(LEAN), LS = Math.sin(LEAN);
       /* 肩ピボットを外へ逃がして、胸の側面と上腕の間に切れ込みを作る。
          ここが繋がると輪郭が1枚の塊になり人型に見えなくなる。 */
-      armR.position.set(0.50, 0.14, 0);
-      armL.position.set(-0.50, 0.14, 0);
-      legR.position.set(0.23, 0.86, 0);
-      legL.position.set(-0.23, 0.86, 0);
+      armR.position.set(0.38, 0.14 * LC, 0.14 * LS);
+      armL.position.set(-0.38, 0.14 * LC, 0.14 * LS);
+      armR.rotation.x = LEAN; armL.rotation.x = LEAN;
+      /* 脚は床に垂直のまま、接地点を胴より後ろに置く。
+         胴の質量が足の前に出るので、傾き角を大きくしなくても
+         「つんのめって進んでくる」重心が読める。 */
+      legR.position.set(0.19, 0.86, 0);
+      legL.position.set(-0.19, 0.86, 0);
 
       /* --- 胴（腰・胸・肩・頭・左腕一体の衝角板） --- */
-      tB = new Bld(T, base, 0.98);
+      tB = new Bld(T, base, 0.98, LEAN);
       /* 腰。前面だけに板を重ね、背は落とす */
-      tB.add(BOX, 0.60, 0.36, 0.46, 0, -0.14, 0.01, 0, 0, 0, DK);
-      tB.add(BOX, 0.64, 0.24, 0.13, 0, -0.24, 0.24, -0.30, 0, 0, AR);
-      tB.add(BOX, 0.66, 0.04, 0.10, 0, -0.10, 0.26, 0, 0, 0, TR);
+      tB.add(BOX, 0.54, 0.36, 0.42, 0, -0.14, 0.01, 0, 0, 0, DK);
+      tB.add(BOX, 0.58, 0.24, 0.12, 0, -0.24, 0.21, -0.30, 0, 0, AR);
+      tB.add(BOX, 0.60, 0.04, 0.10, 0, -0.10, 0.23, 0, 0, 0, TR);
       /* 胸。前面2枚の傾斜板＋その境目の明るいシーム＝正面から見た時だけ層が見える */
-      tB.add(BOX, 0.62, 0.44, 0.44, 0, 0.16, 0.00, 0, 0, 0, DK);
-      tB.add(BOX, 0.70, 0.40, 0.15, 0, 0.22, 0.25, -0.20, 0, 0, AR);
-      tB.add(BOX, 0.66, 0.24, 0.13, 0, -0.02, 0.27, 0.26, 0, 0, AR);
-      tB.add(BOX, 0.72, 0.05, 0.11, 0, 0.09, 0.30, 0, 0, 0, TR);
-      tB.mirror(BOX, 0.09, 0.36, 0.38, 0.32, 0.14, 0.02, 0, 0, 0, AR);
+      tB.add(BOX, 0.56, 0.44, 0.40, 0, 0.16, 0.00, 0, 0, 0, DK);
+      tB.add(BOX, 0.64, 0.40, 0.14, 0, 0.22, 0.22, -0.20, 0, 0, AR);
+      tB.add(BOX, 0.60, 0.24, 0.12, 0, -0.02, 0.24, 0.26, 0, 0, AR);
+      tB.add(BOX, 0.66, 0.05, 0.10, 0, 0.09, 0.27, 0, 0, 0, TR);
+      tB.mirror(BOX, 0.09, 0.36, 0.36, 0.29, 0.14, 0.02, 0, 0, 0, AR);
       /* 背は布と小さな荷。前後で厚みが違う＝横から見ても前が重い */
-      tB.add(BOX, 0.52, 0.48, 0.10, 0, 0.12, -0.21, 0, 0, 0, CL);
-      tB.add(BOX, 0.42, 0.26, 0.17, 0, 0.32, -0.23, 0, 0, 0, DK);
+      tB.add(BOX, 0.48, 0.48, 0.10, 0, 0.12, -0.19, 0, 0, 0, CL);
+      tB.add(BOX, 0.38, 0.26, 0.15, 0, 0.32, -0.21, 0, 0, 0, DK);
       /* 肩。甲板を外へ向かって下げる（rz）と上辺が「谷」になり、
          そこに落とした頭が小さな突起として輪郭に出る。
          平らに並べると肩と頭が1枚の板に融合して頭が消えるため。 */
-      tB.add(BOX, 0.74, 0.18, 0.40, 0, 0.38, 0.00, 0, 0, 0, DK);
-      tB.mirror(BOX, 0.30, 0.36, 0.44, 0.48, 0.32, 0.02, 0, 0, -0.42, AR);
-      tB.mirror(BOX, 0.32, 0.05, 0.42, 0.49, 0.47, 0.02, 0, 0, -0.42, TR);
-      tB.mirror(BOX, 0.20, 0.18, 0.22, 0.47, 0.30, 0.28, -0.20, 0, -0.42, AR);
-      /* 頭。肩甲板の谷から 0.12m だけ出る細い塊。首は作らない。
-         幅を肩の切れ込みより狭くしないと輪郭で頭が消え、人型に見えなくなる。 */
-      tB.add(BOX, 0.23, 0.30, 0.32, 0, 0.58, 0.15, 0, 0, 0, DK);
-      tB.add(BOX, 0.19, 0.09, 0.11, 0, 0.60, 0.31, 0, 0, 0, TR);
-      tB.add(BOX, 0.19, 0.11, 0.17, 0, 0.47, 0.27, 0, 0, 0, AR);
-      /* 左前腕＝衝角板（胴と一体成型。armL は肩ピボットとして空で残す） */
-      tB.add(BOX, 0.22, 0.34, 0.26, -0.50, 0.00, 0.04, 0, 0, 0, DK);
-      tB.add(BOX, 0.19, 0.46, 0.34, -0.55, -0.16, 0.16, -0.12, 0, 0, AR);
-      tB.add(BOX, 0.06, 0.44, 0.32, -0.65, -0.16, 0.16, -0.12, 0, 0, TR);
-      tB.add(BOX, 0.21, 0.18, 0.24, -0.50, -0.42, 0.28, 0, 0, 0, DK);
+      tB.add(BOX, 0.58, 0.18, 0.38, 0, 0.34, 0.00, 0, 0, 0, DK);
+      tB.mirror(BOX, 0.28, 0.34, 0.42, 0.335, 0.28, 0.02, 0, 0, -0.38, AR);
+      tB.mirror(BOX, 0.30, 0.05, 0.40, 0.345, 0.42, 0.02, 0, 0, -0.38, TR);
+      tB.mirror(BOX, 0.19, 0.17, 0.20, 0.335, 0.26, 0.20, -0.20, 0, -0.38, AR);
+      /* 頭。プレイヤーの目線(約1.6m)はこの個体を見下ろすので、
+         肩の谷に落としただけでは上から見て肩に溶けて輪郭から消える。
+         肩甲板より 0.17m 高く、かつ前へ出して「前上がりの前輪郭」を破らせる。
+         頭の下半分は肩に埋まったままなので首は依然として見えない。 */
+      tB.add(BOX, 0.28, 0.34, 0.30, 0, 0.55, 0.10, 0, 0, 0, DK);
+      /* 面の横一文字だけを明色にする。塊が黒く沈む逆光でもここが残るので、
+         どちらを向いているか（＝自分に向かって来ているか）が距離を置いても読める。 */
+      tB.add(BOX, 0.26, 0.07, 0.13, 0, 0.585, 0.225, 0, 0, 0, TR);
+      tB.add(BOX, 0.22, 0.13, 0.16, 0, 0.45, 0.205, -0.10, 0, 0, AR);
+      /* 左前腕＝衝角板（胴と一体成型。armL は肩ピボットとして空で残す）。
+         肩甲板の外縁より内側に収め、当たり判定を左右非対称にしない。 */
+      tB.add(BOX, 0.21, 0.34, 0.26, -0.38, 0.00, 0.04, 0, 0, 0, DK);
+      tB.add(BOX, 0.17, 0.44, 0.32, -0.42, -0.16, 0.14, -0.12, 0, 0, AR);
+      tB.add(BOX, 0.05, 0.42, 0.30, -0.505, -0.16, 0.14, -0.12, 0, 0, TR);
+      tB.add(BOX, 0.20, 0.18, 0.22, -0.38, -0.42, 0.24, 0, 0, 0, DK);
 
       /* --- 右腕。拳を腰より低く前に置き、短い筒だけを持たせる。
          長い銃身を持たせないことが marksman との一目での差になる。 --- */
       aB = new Bld(T, base, 0.98 + 0.14);
-      aB.add(BOX, 0.22, 0.34, 0.26, 0.00, -0.14, 0.04, 0, 0, 0, DK);
-      aB.add(BOX, 0.24, 0.16, 0.26, 0.01, -0.33, 0.08, 0, 0, 0, AR);
-      aB.add(BOX, 0.20, 0.32, 0.22, 0.01, -0.49, 0.18, -0.40, 0, 0, DK);
-      aB.add(BOX, 0.22, 0.20, 0.24, 0.01, -0.63, 0.30, 0, 0, 0, AR);
+      aB.add(BOX, 0.21, 0.34, 0.26, 0.00, -0.14, 0.04, 0, 0, 0, DK);
+      aB.add(BOX, 0.23, 0.16, 0.26, 0.01, -0.33, 0.08, 0, 0, 0, AR);
+      aB.add(BOX, 0.19, 0.32, 0.22, 0.01, -0.49, 0.18, -0.40, 0, 0, DK);
+      aB.add(BOX, 0.21, 0.20, 0.24, 0.01, -0.63, 0.30, 0, 0, 0, AR);
       aB.add(BOX, 0.15, 0.16, 0.30, 0.01, -0.59, 0.46, 0, 0, 0, DK);
       aB.add(CYL, 0.11, 0.14, 0.11, 0.01, -0.59, 0.66, Math.PI / 2, 0, 0, TR);
       armR.add(aB.mesh(T, mat));
@@ -5611,17 +5883,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for (var rs = 0; rs < 2; rs++) {
         var s = rs ? -1 : 1;
         lB = new Bld(T, base, 0.86);
-        lB.add(BOX, 0.25, 0.44, 0.32, 0.02 * s, -0.20, 0.01, 0, 0, 0, DK);
-        lB.add(BOX, 0.22, 0.24, 0.10, 0.03 * s, -0.16, 0.17, 0, 0, 0, AR);
-        lB.add(BOX, 0.24, 0.14, 0.28, 0.04 * s, -0.44, 0.03, 0, 0, 0, AR);
-        lB.add(BOX, 0.21, 0.32, 0.25, 0.05 * s, -0.62, -0.02, 0, 0, 0, DK);
-        lB.add(BOX, 0.18, 0.28, 0.09, 0.05 * s, -0.62, 0.12, 0, 0, 0, AR);
-        lB.add(BOX, 0.25, 0.14, 0.40, 0.05 * s, -0.79, 0.08, 0, 0, 0, DK);
+        lB.add(BOX, 0.25, 0.44, 0.32, 0.02 * s, -0.20, -0.05, 0, 0, 0, DK);
+        lB.add(BOX, 0.22, 0.24, 0.10, 0.03 * s, -0.16, 0.11, 0, 0, 0, AR);
+        lB.add(BOX, 0.24, 0.14, 0.28, 0.04 * s, -0.44, -0.03, 0, 0, 0, AR);
+        lB.add(BOX, 0.21, 0.32, 0.25, 0.05 * s, -0.62, -0.08, 0, 0, 0, DK);
+        lB.add(BOX, 0.18, 0.28, 0.09, 0.05 * s, -0.62, 0.06, 0, 0, 0, AR);
+        lB.add(BOX, 0.25, 0.14, 0.40, 0.05 * s, -0.79, 0.00, 0, 0, 0, DK);
         (rs ? legL : legR).add(lB.mesh(T, mat));
       }
 
-      /* 銃口ピボット。右腕に焼き込んだ筒の先端に一致させる */
-      gun.position.set(0.51, -0.45, 0.46);
+      /* 銃口ピボット。右腕に焼き込んだ筒の先端に一致させる（腕と同じ前傾で回す） */
+      /* armR.position + R_x(LEAN)・(腕ローカルの筒の位置) を展開したもの */
+      gun.position.set(0.39,
+        0.14 * LC - 0.59 * LC - 0.46 * LS,
+        0.14 * LS - 0.59 * LS + 0.46 * LC);
+      gun.rotation.x = LEAN;
       flash.position.set(0, 0, 0.27);
 
     } else {
@@ -5630,7 +5906,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          直立。腰を絞り胸から上に質量を寄せ、脚を長くして重心を上げる。
          左に照準筒、右に長い銃身。左右非対称をシルエットの署名にする。
          ---------------------------------------------------------------- */
-      torso.rotation.x = -0.05;
+      /* 直立。torso は一切回さない＝当たり判定が実物に密着する（rusher の注記参照）。
+         胸を反らせる表情は胸甲の板の角度だけで作る。 */
       armR.position.set(0.27, 0.34, 0);
       armL.position.set(-0.27, 0.34, 0);
       /* 銃を持つ腕だけを外へ振る。真正面から見たとき銃身が奥行き方向に
@@ -5658,17 +5935,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       tB.add(BOX, 0.11, 0.16, 0.13, 0, 0.60, 0.00, 0, 0, 0, CL);
       /* 頭。前後に長い箱＋前へ突き出す面。左だけに照準筒＝非対称の突起。
          この非対称が、正面から見ても rusher の左右対称な塊と即座に分かれる。 */
-      tB.add(BOX, 0.18, 0.21, 0.40, 0, 0.74, 0.05, 0, 0, 0, DK);
-      tB.add(BOX, 0.14, 0.14, 0.22, 0.02, 0.70, 0.31, 0, 0, 0, AR);
-      tB.add(CYL, 0.12, 0.44, 0.12, -0.10, 0.81, 0.20, Math.PI / 2, 0, 0, TR);
-      tB.add(BOX, 0.09, 0.09, 0.09, -0.10, 0.81, 0.43, 0, 0, 0, DK);
+      /* 前後の長さは当たり判定の奥行きに直結するので、
+         「長い頭」は前へ伸ばすのではなく後頭部側にも伸ばして稼ぐ。 */
+      tB.add(BOX, 0.18, 0.21, 0.36, 0, 0.74, 0.02, 0, 0, 0, DK);
+      tB.add(BOX, 0.14, 0.14, 0.20, 0.02, 0.70, 0.25, 0, 0, 0, AR);
+      tB.add(CYL, 0.12, 0.40, 0.12, -0.10, 0.81, 0.15, Math.PI / 2, 0, 0, TR);
+      tB.add(BOX, 0.09, 0.09, 0.09, -0.10, 0.81, 0.36, 0, 0, 0, DK);
       tB.add(BOX, 0.05, 0.22, 0.30, -0.055, 0.79, -0.06, 0.28, 0, 0, TR);
-      tB.add(BOX, 0.10, 0.10, 0.14, 0.02, 0.70, -0.19, 0, 0, 0, DK);
+      tB.add(BOX, 0.10, 0.10, 0.14, 0.02, 0.70, -0.17, 0, 0, 0, DK);
       /* 左腕＝胸甲に依託した固定の支持腕（胴と一体。armL は肩ピボット） */
       tB.add(BOX, 0.14, 0.32, 0.16, -0.27, 0.18, 0.02, 0, 0, 0, DK);
-      tB.add(BOX, 0.13, 0.30, 0.14, -0.20, 0.02, 0.16, -0.75, 0, 0.28, DK);
-      tB.add(BOX, 0.12, 0.11, 0.13, -0.09, -0.08, 0.32, 0, 0, 0, AR);
-      tB.add(BOX, 0.09, 0.16, 0.09, -0.06, -0.14, 0.40, 0.20, 0, 0, DK);
+      tB.add(BOX, 0.13, 0.30, 0.14, -0.20, 0.02, 0.13, -0.75, 0, 0.28, DK);
+      tB.add(BOX, 0.12, 0.11, 0.13, -0.09, -0.08, 0.27, 0, 0, 0, AR);
+      tB.add(BOX, 0.09, 0.16, 0.09, -0.06, -0.14, 0.33, 0.20, 0, 0, DK);
 
       /* --- 右腕＋長銃身。銃はこの腕に焼き込む（描画コール節約） --- */
       aB = new Bld(T, base, 0.98 + 0.34);
@@ -5962,7 +6241,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       spark: C3(P.impactSpark, 2.6),      // 装甲片の火花（暖色）
       sparkHot: C3(P.impactSpark, 4.2),
       tracer: C3(P.tracer, 2.3),
-      tracerHot: C3(P.muzzleCore, 3.0),
+      tracerHot: C3(P.muzzleCore, 1.9),
       /* 外れ＝寒色だけ。uiInk / uiDim / playerTrim は palette の中で
          唯一「暖色でない明るい灰」なので、白い粉塵と白い火花はここから取る。 */
       coldSpark: C3(P.uiInk, 3.2),
@@ -6252,16 +6531,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       'varying vec2 vUv;',
       'varying vec4 vCol;',
       'varying float vKind;',
+      'varying float vNear;',
+      /* カメラに近い区間の曳光を消す。
+         弾は自分の銃口から出るので、飛び始めの曳光は必ずカメラのすぐ前を通る。
+         ワールド寸法が一定である以上、近いほど画面上で巨大になり、
+         まっすぐ前を撃つと先頭の光球がレティクルの真上を横切ってしまう。
+         銃口すぐの光はマズルフラッシュの担当なので、ここは消してよい。 */
+      'float nearFade(vec3 p) { return smoothstep(1.1, 4.2, distance(cameraPosition, p)); }',
       'void main() {',
       '  vUv = uv; vCol = aCol; vKind = aPar.x;',
       '  if (aPar.x > 0.5) {',
       /* 光球：頭の位置にビュー平面のまま四角形を張る。 */
+      '    vNear = nearFade(aB);',
       '    vec4 mv = modelViewMatrix * vec4(aB, 1.0);',
-      '    mv.xy += (uv - 0.5) * 2.0 * aPar.y;',
+      '    mv.xy += (uv - 0.5) * 2.0 * aPar.y * mix(0.45, 1.0, vNear);',
       '    gl_Position = projectionMatrix * mv;',
       '  } else {',
       /* 尾：線分に沿って、視線と直交する向きへ太さを振る。 */
       '    vec3 p = mix(aA, aB, uv.y);',
+      '    vNear = nearFade(p);',
       '    vec3 dir = aB - aA;',
       '    float dl = length(dir);',
       '    dir = (dl > 1e-5) ? dir / dl : vec3(0.0, 1.0, 0.0);',
@@ -6280,6 +6568,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       'varying vec2 vUv;',
       'varying vec4 vCol;',
       'varying float vKind;',
+      'varying float vNear;',
       'void main() {',
       '  float a; vec3 c = vCol.rgb;',
       '  if (vKind > 0.5) {',
@@ -6296,7 +6585,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       '    a = w * lg;',
       '    c = mix(c, uHot, pow(max(0.0, 1.0 - s), 5.0) * lg);',
       '  }',
-      '  a *= vCol.a;',
+      '  a *= vCol.a * vNear;',
       '  if (a < 0.004) discard;',
       '  gl_FragColor = vec4(c, a);',
       '  #include <tonemapping_fragment>',
@@ -6567,8 +6856,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       var ax = tOx[t] + tDx[t] * tail, ay = tOy[t] + tDy[t] * tail, az = tOz[t] + tDz[t] * tail;
       /* 着弾間際で急に消えると「線が引っ込んだ」ように見える。後半だけ落とす。 */
       var al = (p < 0.62) ? 1.0 : (1 - p) / 0.38;
+      /* 先頭の光球は小さく保つ。自分が撃った弾は必ず視線に沿って飛ぶので、
+         球を大きくすると、そのままレティクルの上に光る円盤を置くことになる。
+         横から見たときの「速度のある光」は、球の大きさではなく
+         尾のテーパーと先頭の輝度差で出す。 */
       writeTracer(t, ax, ay, az, bx, by, bz,
-        0.014, 0.055, 0.145 * (0.85 + 0.3 * (1 - p)), al);
+        0.014, 0.052, 0.072 * (0.85 + 0.3 * (1 - p)), al);
     }
 
     /* --- 着弾 ----------------------------------------------------------------
@@ -6577,11 +6870,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
          enemy … 広い円錐の丸い飛沫（横に広がる）＋暖色の長い火花
          head  … enemy を拡大し、リングと花弁という別の形を追加
        ===================================================================== */
-    function impact(x, y, z, nx, ny, nz, kind) {
-      /* 旧シグネチャ impact(x,y,z,isEnemy) でも壊れないようにする。
-         統合は発注元が行うので、こちらが受け側で吸収しておく。 */
-      if (typeof nx !== 'number') {
-        kind = (nx === true) ? 'enemy' : (typeof nx === 'string' ? nx : 'world');
+    /* 引数の形をここで吸収する。呼び出し側（game.js）は編集できないので、
+       受け側が実際の呼ばれ方に合わせる。現に3つの形が存在する：
+
+         A 契約どおり      impact(x,y,z, nx,ny,nz, kind)
+         B 統合後の game.js impact(x,y,z, isEnemy, nx,ny,nz, kind)   ← 第4引数が余分
+         C 統合前の game.js impact(x,y,z, isEnemy)
+
+       B を A として読むと引数が1つずつずれ、kind に数値が入るため
+       致命打が必ず胴命中として描かれ、法線も常に真上になる。
+       「例外は出ないが絵だけ静かに間違う」種類の不具合なので、
+       第4引数の型で明示的に分岐して潰しておく。 */
+    function impact(x, y, z, a4, a5, a6, a7, a8) {
+      var nx, ny, nz, kind;
+      if (typeof a4 === 'number') {            // A
+        nx = a4; ny = a5; nz = a6; kind = a7;
+      } else if (typeof a4 === 'boolean' && typeof a5 === 'number') {   // B
+        nx = a5; ny = a6; nz = a7; kind = a8;
+        if (typeof kind !== 'string') kind = a4 ? 'enemy' : 'world';
+      } else {                                  // C
+        nx = 0; ny = 1; nz = 0;
+        kind = (a4 === true) ? 'enemy' : (typeof a4 === 'string' ? a4 : 'world');
+      }
+      if (typeof nx !== 'number' || typeof ny !== 'number' || typeof nz !== 'number') {
         nx = 0; ny = 1; nz = 0;
       }
       if (kind !== 'enemy' && kind !== 'head') kind = 'world';
@@ -6732,9 +7043,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* 胴命中の「熱」はここが担当する。芯（TILE_HOT）は狙点を守るため
          小さく抑えたので、そのぶん外周の滲みで暖かさと面積を稼ぐ。
          滲みは中心が濃すぎないので、狙点を潰さずに命中感だけ上げられる。 */
-      tint(head ? COL.spark : COL.glow, head ? 0.85 : 0.70);
+      tint(head ? COL.spark : COL.glow, head ? 0.42 : 0.70);
       sizeU(0.40 * S, 0.90 * S);
-      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.8 : 0.62; E.fade = 1.2;
+      /* 致命打はここを強くしたくなるが、TILE_GLOW は中心が最も濃い＝
+         狙点の真上が最も明るくなる。致命打の「格」はリングと花弁（＝中が空く形）
+         が担当しているので、面で塗る層はむしろ弱めてよい。 */
+      E.ttl = 0.11 * L; E.grow = 0.4; E.a0 = head ? 0.42 : 0.62; E.fade = 1.3;
       emit(ADD);
 
       if (head) {
@@ -6769,7 +7083,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
            「銃口と同じ格の出来事が敵の頭で起きた」と読ませる。 */
         reset();
         E.x = x + nX * 0.05; E.y = y + nY * 0.05; E.z = z + nZ * 0.05;
-        E.tile = TILE_PETAL; tint(COL.glow, 1.25); sizeU(0.85, 1.70);
+        E.tile = TILE_PETAL; tint(COL.glow, 0.85); sizeU(0.95, 1.85);
         E.rot = rnd() * 6.283; E.rotv = (rnd() - 0.5) * 5.0;
         E.ttl = 0.13; E.grow = 0.4; E.a0 = 1.0; E.fade = 1.1;
         emit(ADD);
@@ -9411,30 +9725,73 @@ function hitboxFromRig(rig) {
   if (rig.legL) parts.push({ o: rig.legL, skip: [] });
   if (!parts.length) parts.push({ o: rig.root, skip: [rig.gun] });
 
-  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  var meshes = [];
   for (var i = 0; i < parts.length; i++) {
     (function (p) {
       p.o.traverse(function (o) {
         if (!o.isMesh) return;
         for (var k = 0; k < p.skip.length; k++) if (p.skip[k] && isUnder(o, p.skip[k])) return;
-        tmp.setFromObject(o);
-        if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+        meshes.push(o);
       });
     })(parts[i]);
   }
-  if (!any) return HB_DEFAULT;
+  if (!meshes.length) return HB_DEFAULT;
+
+  var bb = new T.Box3(), any = false, tmp = new T.Box3();
+  for (var m = 0; m < meshes.length; m++) {
+    tmp.setFromObject(meshes[m]);
+    if (!any) { bb.copy(tmp); any = true; } else bb.union(tmp);
+  }
 
   // 見えている輪郭の端を撃って外れるのが最悪なので、実寸に少し余裕を足す
   var PAD = 0.06;
   var h = clamp(bb.max.y + PAD, 1.2, 2.3);
   var halfX = clamp(Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) + PAD, 0.22, 0.80);
   var halfZ = clamp(Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) + PAD, 0.18, 0.55);
+  /* 頭部の範囲は高さの割合では決められない。
+     「上2割が頭」と決め打つと、幅広の突撃型ではそこに肩の装甲板が入り、
+     頭半幅が実物0.14mに対し0.26mになる（頭を外しても2.5倍ダメージ）。
+     水平スライスで輪郭を上から下へ走査し、幅が急に太る位置＝首を探す。 */
+  var SLICE = 0.035;
+  var nSlice = Math.max(4, Math.ceil(h / SLICE));
+  var ext = new Array(nSlice);
+  for (var q = 0; q < nSlice; q++) ext[q] = -1;
+  var v = new T.Vector3();
+  for (var mi = 0; mi < meshes.length; mi++) {
+    var o = meshes[mi], g = o.geometry;
+    if (!g || !g.attributes || !g.attributes.position) continue;
+    var pos = g.attributes.position;
+    o.updateMatrixWorld(true);
+    for (var vi = 0; vi < pos.count; vi++) {
+      v.fromBufferAttribute(pos, vi).applyMatrix4(o.matrixWorld);
+      var si = Math.floor(v.y / SLICE);
+      if (si < 0 || si >= nSlice) continue;
+      var e = Math.max(Math.abs(v.x), Math.abs(v.z));
+      if (e > ext[si]) ext[si] = e;
+    }
+  }
+  // 上から下へ。肩幅の55%を超えたスライスが首。そこより上を頭部とする。
+  var neckLimit = Math.max(0.26, halfX * 0.55);
+  var topSlice = nSlice - 1;
+  while (topSlice > 0 && ext[topSlice] < 0) topSlice--;
+  var neck = topSlice, headExt = 0;
+  while (neck > 0) {
+    if (ext[neck] >= 0 && ext[neck] > neckLimit) break;
+    if (ext[neck] > headExt) headExt = ext[neck];
+    neck--;
+  }
+  var headBottom = (neck + 1) * SLICE;
+  // 頭部が薄すぎ／厚すぎる場合は上15%に落とす（走査が破綻したときの保険）
+  if (h - headBottom < 0.12 || h - headBottom > h * 0.42) {
+    headBottom = h * 0.85; headExt = halfX * 0.42;
+  }
+
   return {
     halfX: halfX, halfZ: halfZ,
-    bodyTop: h * 0.80,                                // 上2割を頭部として扱う
+    bodyTop: headBottom,
     headTop: h,
-    headHalf: clamp(halfX * 0.42, 0.11, 0.22),
-    chest: h * 0.62
+    headHalf: clamp(headExt + PAD * 0.5, 0.10, 0.26),
+    chest: (headBottom) * 0.72
   };
 }
 
@@ -9445,6 +9802,11 @@ function enemyRay(e, ox, oy, oz, dx, dy, dz) {
   // rayBox は y=0..top を仮定するので、頭は下限を持つ専用判定にする
   var tb = rayBox(ox, oy, oz, dx, dy, dz, body);
   var th = rayBoxY(ox, oy, oz, dx, dy, dz, headB, hb.bodyTop, hb.headTop);
+  /* 頭部を優先する。弾は銃口（頭より0.6m低い）から出るので、
+     頭を狙った射線は必ず胴の箱の肩口を先に掠る。素直に近い方を採ると、
+     頭に照準を合わせても胴命中になり、プレイヤーの狙いが報われない。
+     頭に当たっているなら、多少胴が手前でも頭部命中として扱う。 */
+  if (th < Infinity && th <= tb + 0.35) return { t: th, head: true };
   if (th < tb) return { t: th, head: true };
   return { t: tb, head: false };
 }
@@ -9590,7 +9952,7 @@ var _camOff = new T.Vector3(), _camDir = new T.Vector3();
    RENDER SETUP
    ========================================================================== */
 var renderer, scene, camera, playerRig, enemyMeshes = [];
-var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null;
+var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null, GUN_BARREL_Y = 0;
 
 /* アートモジュールは「あれば使う」。無ければ従来のグレーボックスで動く。
    こうしておかないと、1つでも欠けた瞬間にゲーム全体が起動しなくなる。 */
@@ -9641,7 +10003,9 @@ function initRender() {
 
   /* ---- テクスチャ ---------------------------------------------------- */
   if (hasArt('tex')) TEX = ART.tex(T);
-  var MATS = { tex: TEX };
+  // shadows: 敵担当がハーネスのコール上限のため落ち影を既定で切っていた。
+  // 実ゲームは draw 36/150 と余裕があるので、こちらで有効化する（+8コール）。
+  var MATS = { tex: TEX, shadows: true };
   function mapOf(k, rx, ry) {
     if (!TEX || !TEX[k]) return null;
     var t = TEX[k].clone(); t.needsUpdate = true;
@@ -9692,7 +10056,12 @@ function initRender() {
 
   /* ---- キャラクター --------------------------------------------------- */
   playerRig = hasArt('player') ? ART.player(T, MATS) : buildFigure(0x39424b, 0x27303a, false);
+  // 自機担当はハーネスのコール上限のため落ち影を既定で切っている。実ゲームは余裕があるので有効化。
+  if (typeof playerRig.setCastShadow === 'function') playerRig.setCastShadow(true);
   scene.add(playerRig.root);
+  // 銃身の実体が gun ピボットからどれだけ上にあるか。
+  // これを差し引かないと、ブラインドファイア時に銃口が意図より高く出る。
+  GUN_BARREL_Y = (playerRig.flash && playerRig.flash.position) ? playerRig.flash.position.y : 0;
   for (var e = 0; e < enemies.length; e++) {
     // ラウンド1は的のみ。2種の作り分けはラウンド2の遭遇設計で使う。
     var type = (e % 2 === 0) ? 'rusher' : 'marksman';
@@ -9859,7 +10228,7 @@ function syncRig() {
   var b = P.blindT;
   if (b > 0.01) {
     // ブラインドファイア：頭は下げたまま、腕と銃だけを遮蔽の上へ突き出す
-    var upY = (P.face ? P.face.cover.h + CFG.blind.muzzleUp : 1.3) - 0.98 + P.crouch * 0.32;
+    var upY = (P.face ? P.face.cover.h + CFG.blind.muzzleUp : 1.3) - 0.98 + P.crouch * 0.32 - GUN_BARREL_Y;
     r.armR.rotation.x = lerp(-0.15, -2.35, b);
     r.armR.rotation.z = lerp(0, -0.30, b);
     r.gun.rotation.x = lerp(0.60, 0.05, b);

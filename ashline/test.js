@@ -552,7 +552,10 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     for (let i = 0; i < 40; i++) { A.tick(dt, 1); const s = A.state(); if (s.hitstop > r.hitstopSeen) { r.hitstopSeen = s.hitstop; r.bodyShot = s.lastShot; } }
     A.setFire(false); A.tick(dt, 30);
     // 頭部命中は重いヒットストップ（§7の120ms）
-    A.reload(); A.healEnemies(); A.tick(dt, 5); A.aimAt(3.4, 1.70, -11.0);
+    // 頭の高さはモデルから導出される。決め打ちするとモデル変更で偽の失敗が出る。
+    var ehb = A.enemies[1].hb;
+    A.reload(); A.healEnemies(); A.tick(dt, 5);
+    A.aimAt(3.4, (ehb.bodyTop + ehb.headTop) / 2, -11.0);
     r.headStop = 0; r.headShot = null;
     A.setFire(true);
     for (let i = 0; i < 40; i++) { A.tick(dt, 1); const s = A.state(); if (s.hitstop > r.headStop) { r.headStop = s.hitstop; r.headShot = s.lastShot; } }
