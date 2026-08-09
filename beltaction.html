@@ -4198,10 +4198,47 @@ function spawnEnemy(type,x,y){ const t=ETYPE[type];
     moveName:'',moveT:0,moveMax:0,moveCd:Math.round(rnd(40,80)*(t.aggro||1)),vanish:0,rage:false,lastMove:'',slammed:false,bounces:0,danger:false,
     kbHits:0,kbT:0,poiseBreak:0,parryStance:0,
     rank:rank, dead:false,deadTimer:0,thinkCd:Math.round(rnd(20,60)/foeSpdGrow())}); }
-function enemyAtkFx(e){ const t=ETYPE[e.type], dir=e.facing;
-  const ex=e.x+dir*t.atkR*0.55, ey=e.y-e.h*0.5, base=dir>0?0:Math.PI;
-  crescent(ex,ey, t.atkR*0.6, base-0.85, base+0.85, t.boss?'#d46bff':(t.charge?'#ffd24d':'#ff6a3c'));
-  if(t.boss||t.charge){ ring(ex,ey, t.boss?'#d46bff':'#ffd24d'); spark(ex,ey,'#ffce6a',8,7); } }
+// ── 雑魚の近接攻撃の型 ──
+// 以前は全ての近接敵が同じタイミングの単発を振るだけで、間合いに入ったら
+// 何が来るか常に同じだった。構え（telegraph）の長さ・段数・当たる高さを変え、
+// 「何が来るか」を構えで読ませる
+//   t = 攻撃開始からの経過フレーム／dmg・reach・lane = 基準値への倍率
+//   z = 当たる高さの上限（既定14＝跳べばかわせる。対空だけこれを上げる）
+const ATK_VAR=[
+  {id:'swipe', tele:1.00, dur:1.00, col:'#ff6a3c', arc:0.85, hits:[{t:4,dmg:1.00,reach:1.00,lane:1.00,kn:0}]},
+  {id:'double',tele:0.80, dur:1.55, col:'#ff9a3c', arc:1.05, roar:'二段だ！',
+   hits:[{t:4,dmg:0.62,reach:0.94,lane:1.00,kn:0},{t:15,dmg:0.78,reach:1.06,lane:1.00,kn:0}]},
+  {id:'thrust',tele:1.45, dur:1.20, col:'#ffd24d', arc:0.42, step:2.1, roar:'踏み込む！', noFeint:true,
+   hits:[{t:6,dmg:1.45,reach:1.55,lane:1.00,kn:1}]},
+  // 対空：跳んで逃げるのを咎める。ここだけ高さの上限を外す
+  {id:'anti',  tele:0.90, dur:1.10, col:'#9fe8ff', arc:1.25, up:1, roar:'落ちてこい！',
+   hits:[{t:5,dmg:1.15,reach:0.86,lane:1.00,kn:1,z:132}]},
+  // 足払い：リーチが長く必ず転ばせる。高さの上限は既定のままなので跳べばかわせる
+  {id:'sweep', tele:1.15, dur:1.15, col:'#b06bff', arc:0.55, low:1, roar:'足元！',
+   hits:[{t:6,dmg:0.95,reach:1.30,lane:1.00,kn:1}]},
+];
+// どの型で来るか。相手の高さと間合いを見て選ぶので、跳べば対空、離れれば踏み込みが増える
+function pickAtkVar(e,p,dist){
+  const t=ETYPE[e.type];
+  if(t.boss) return 0;                                   // ボスは専用の技表があるので触らない
+  const air=p && (p.z>34);
+  if(air) return Math.random()<0.72 ? 3 : 0;             // 相手が空中＝対空を主軸に
+  const r=Math.random();
+  if(dist>t.atkR*0.72 && r<0.30) return 2;               // 間合いの外寄り＝踏み込み突き
+  if(r<0.22) return 1;                                   // 二段薙ぎ
+  if(r<0.34) return 4;                                   // 足払い
+  return 0; }
+function enemyAtkFx(e,V,seg){ const t=ETYPE[e.type], dir=e.facing;
+  V=V||ATK_VAR[0];
+  const h=V.hits[seg||0]||V.hits[0];
+  const ex=e.x+dir*t.atkR*0.55*(h.reach||1), base=dir>0?0:Math.PI;
+  // 当たる高さを斬撃痕の位置に出す：対空は頭上、足払いは足元
+  const ey=e.y-e.h*0.5*(V.low?0.34:(V.up?1.55:1));
+  const col=t.boss?'#d46bff':(t.charge?'#ffd24d':V.col);
+  crescent(ex,ey, t.atkR*0.6*(h.reach||1), base-V.arc, base+V.arc, col);
+  if(V.up)  crescent(ex,ey-14, t.atkR*0.42, base-1.4, base+1.4, '#eaffff');
+  if(V.low) ring(ex,e.y,col,{sq:0.20,rMax:t.atkR*0.7});
+  if(t.boss||t.charge||V.id==='thrust'){ ring(ex,ey, t.boss?'#d46bff':col); spark(ex,ey,'#ffce6a',8,7); } }
 const BOSS_POISE=20;   // ボスが体勢を崩す（吹っ飛ぶ）までに必要なヒット数
 // 1ヒット分の踏ん張りを削る。規定数に達したら短い「崩壊」ウィンドウを開く
 function bossPoiseTick(e){ const T=ETYPE[e.type];
@@ -4612,10 +4649,21 @@ function updateEnemies(){
           hurtPlayer(pl, Math.round(t.dmg*ZAKO_DMG*0.55*foeAtkMul(e)), e.facing, true, esndOf(e)); pl.vx=e.facing*10; shake=Math.max(shake,8); } } }); }
       if(e.bcT<=0 || e.x<camX-90 || e.x>camX+W+90){ e.state='walk'; e.thinkCd=rnd(70,120); e.vx=0; } continue; }
     if(e.state==='attack'){ e.atkTimer--;
-      if(e.atkTimer===e.atkMax-3){ enemyAtkFx(e); }            // visible swipe at strike
-      if(e.atkTimer===e.atkMax-4)enemyAttackHit(e);
+      const V=ATK_VAR[e.atkVar||0];
+      const el=e.atkMax-e.atkTimer;                            // 攻撃開始からの経過
+      for(let s=0;s<V.hits.length;s++){ const h=V.hits[s];
+        if(el===h.t-1) enemyAtkFx(e,V,s);                      // 斬撃痕は1フレーム先に出す
+        if(el===h.t)   enemyAttackHit(e,V,h); }
+      if(V.step) e.x+=e.facing*V.step;                         // 踏み込みながら振る型
       if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(7,19)*(e.rage?0.6:1);} if(t.charge)e.x+=e.facing*6; continue; }
-    if(e.telegraph>0){ e.telegraph--; if(e.telegraph===0){ e.state='attack'; e.atkMax=t.charge?28:20; e.atkTimer=e.atkMax; sfx.heavy(e.x);} continue; }
+    if(e.telegraph>0){ e.telegraph--;
+      if(e.telegraph===0){
+        if(e.feint){ e.feint=false; e.state='walk'; e.vx=0;    // 誘い：構えを解いて後ろへ跳ぶ
+          e.x-=e.facing*16; dust(e.x,e.y,4); e.thinkCd=rnd(10,22); continue; }
+        const V=ATK_VAR[e.atkVar||0];
+        e.state='attack'; e.atkMax=Math.round((t.charge?28:20)*V.dur); e.atkTimer=e.atkMax; sfx.heavy(e.x);
+        if(V.roar){ popText(e.x,e.y-e.h-8,V.roar,'#ff9a6a'); } }
+      continue; }
     // AI (livelier: strafe/weave, pulsed speed, hops, feints)
     const dx=p.x-e.x; e.facing=dx<0?-1:1;   // ※ anim/bob はループ先頭で常時進める
     const dist=Math.abs(dx), aligned=true;
@@ -4663,7 +4711,13 @@ function updateEnemies(){
     e.y=LANE;
     if(e.z<=0 && dist>t.atkR && Math.random()<(e.type==='hyena'?0.03:0.008)){ e.vz=-6; }  // chase hop
     e.thinkCd-=enemyThinkMul();   // 高難易度：思考が速い＝仕掛けが早い
-    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){ e.teleMax=Math.round((t.charge?24:17)*(e.rage?0.6:1)*(hardMode?0.72:1)); e.telegraph=e.teleMax; e.thinkCd=rnd(11,27)*(hardMode?0.6:1); }
+    if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){
+      e.atkVar=pickAtkVar(e,p,dist);
+      const V=ATK_VAR[e.atkVar];
+      // 誘い：構えだけ見せて引く。押しっぱなしで潰せる相手ばかりだと読み合いが生まれない
+      e.feint = !V.noFeint && Math.random() < (hardMode?0.14:0.08);
+      e.teleMax=Math.round((t.charge?24:17)*V.tele*(e.rage?0.6:1)*(hardMode?0.72:1));
+      e.telegraph=e.teleMax; e.thinkCd=rnd(11,27)*(hardMode?0.6:1); }
   }
   // separation
   for(let a=0;a<enemies.length;a++)for(let b=a+1;b<enemies.length;b++){ const e1=enemies[a],e2=enemies[b];
@@ -4735,8 +4789,10 @@ function updateGait(){
 }
 
 // Shared melee resolver: front-arc check + guard/parry + slide/i-frame dodge. reach<0 = AoE (no facing check).
-function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
-  if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>14) return false;
+// hh はレーン（奥行き）方向の許容で、高さではない。高さは zmax（既定14）で切る。
+// 既定のままだと跳ぶだけで全ての近接をかわせてしまうので、対空の型だけ zmax を上げる
+function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock,zmax){
+  if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>(zmax==null?14:zmax)) return false;
   if(Math.abs(p.y-e.y)>(hh||34)) return false;
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
@@ -4754,9 +4810,9 @@ function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock){
   hurtPlayer(p,dmg,e.facing,knock,esndOf(e)); return true;
 }
 // hit whichever player(s) are in range; returns true if any connected
-function tryHitPlayer(e,dmg,knock,reach,hh,unblock){
+function tryHitPlayer(e,dmg,knock,reach,hh,unblock,zmax){
   let hit=false;
-  for(const p of players){ if(!p.active) continue; if(hitOnePlayer(p,e,dmg,knock,reach,hh,unblock)){ hit=true; if(reach>=0) break; } } // AoE(<0) hits both
+  for(const p of players){ if(!p.active) continue; if(hitOnePlayer(p,e,dmg,knock,reach,hh,unblock,zmax)){ hit=true; if(reach>=0) break; } } // AoE(<0) hits both
   return hit;
 }
 const ZAKO_DMG=4.0;   // 雑魚の攻撃力（難易度UP：従来の2倍）
@@ -4777,7 +4833,10 @@ function updateEnemyGrab(){ const p=player, e=p.grabbedByEnemy;
   if(K.left&&!p._egL)m++; if(K.right&&!p._egR)m++; p._egL=K.left; p._egR=K.right;
   if(m>0){ e.escapeMash+=m; spark(p.x,p.y-50,'#fff',5,5); }
   p.anim+=0.3; }
-function enemyAttackHit(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),t.boss||t.charge,t.atkR*1.3+18,40); }
+function enemyAttackHit(e,V,h){ const t=ETYPE[e.type];
+  V=V||ATK_VAR[0]; h=h||V.hits[0];
+  const kn=(t.boss||t.charge||h.kn)?true:false;
+  tryHitPlayer(e, t.dmg*ZAKO_DMG*zakoBuffMul(e)*h.dmg, kn, (t.atkR*1.3+18)*h.reach, 40*h.lane, false, h.z); }
 
 //======================================================================
 //  BOSS AI  (multi-move sets, dashes, slams, projectiles)
@@ -8478,7 +8537,12 @@ function drawEnemy(e){
       ctx.beginPath(); ctx.ellipse(sx,sy-e.h*s*0.5-e.z, t.w*0.5*s, e.h*0.5*s, 0,0,7); ctx.fill(); ctx.restore(); }
     const bob=Math.sin(gf*0.5)*3; ctx.font='bold '+(26*s)+'px Trebuchet MS'; ctx.textAlign='center';
     ctx.lineWidth=4; ctx.strokeStyle='#000'; ctx.strokeText('!',sx,sy-e.h*s-e.z-12+bob);
-    ctx.fillStyle=dg?'#ff4dff':'#ffe23a'; ctx.fillText('!',sx,sy-e.h*s-e.z-12+bob);
+    // 構えの色で「何が来るか」を読ませる。型が増えても色が同じでは読み合いにならない
+    const _V=(e.telegraph>0 && !t.boss) ? ATK_VAR[e.atkVar||0] : null;
+    ctx.fillStyle=dg?'#ff4dff':(_V?_V.col:'#ffe23a'); ctx.fillText('!',sx,sy-e.h*s-e.z-12+bob);
+    if(_V && _V.up){   // 対空だけは記号を変える。跳んで逃げる判断に直結するので色だけでは足りない
+      ctx.font='bold '+(15*s)+'px Trebuchet MS'; ctx.lineWidth=3; ctx.strokeStyle='#000';
+      ctx.strokeText('対空',sx,sy-e.h*s-e.z-12+bob-21*s); ctx.fillStyle='#9fe8ff'; ctx.fillText('対空',sx,sy-e.h*s-e.z-12+bob-21*s); }
     if(dg){ ctx.font='bold '+(13*s)+'px Trebuchet MS'; ctx.lineWidth=3; ctx.strokeStyle='#000'; ctx.strokeText('ガード不能！パリィ！',sx,sy-e.h*s-e.z-12+bob-22*s); ctx.fillStyle='#ff8aff'; ctx.fillText('ガード不能！パリィ！',sx,sy-e.h*s-e.z-12+bob-22*s); }
     ctx.textAlign='left'; }
   // ── ボスの踏ん張りゲージ（満タンで体勢崩壊＝吹っ飛ぶ）──
