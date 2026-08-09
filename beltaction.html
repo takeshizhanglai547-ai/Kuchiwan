@@ -2746,7 +2746,7 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
     drawStar(sx,gy-6,6+4*pul,12+6*pul,r>0.7?'#ff7a4a':'#ffd24d'); ctx.restore(); }
   if(h.kind==='mine'){ ctx.save(); ctx.translate(sx,gy);
     ctx.fillStyle='#3a3f48'; ctx.beginPath(); ctx.ellipse(0,-4,13,6,0,0,7); ctx.fill();   // 本体
-    ctx.fillStyle='#22252c'; for(let s=0;s<6;s++){ const a=s/6*PI2; ctx.fillRect(Math.cos(a)*11-1.5,-6+Math.sin(a)*4-1.5,3,3); }   // トゲ
+    ctx.fillStyle='#22252c'; for(let s=0;s<6;s++){ const a=s/6*TAU; ctx.fillRect(Math.cos(a)*11-1.5,-6+Math.sin(a)*4-1.5,3,3); }   // トゲ
     const blink=(gf%20<10); ctx.save(); if(blink) ctx.globalCompositeOperation='lighter'; ctx.fillStyle=blink?'#ff3a2a':'#7a1a12'; ctx.beginPath(); ctx.arc(0,-8,2.4,0,7); ctx.fill(); ctx.restore();
     ctx.restore(); }
 } }
@@ -3961,13 +3961,13 @@ function drawGatlingGun(p){ const sx=p.x-camX, gy=p.y-groundLift(p.x)-p.z; ctx.s
   ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,11,0,7); ctx.fill();              // 回転部
   // 回転速度は立ち上がりに応じて上がる。等速だと「もう回りきっている」に見えて溜めが死ぬ
   const spinPh=(p.gatSpin=(p.gatSpin||0)+0.10+0.55*spun*spun);
-  ctx.fillStyle='#2a2d34'; for(let b=0;b<6;b++){ const a=spinPh+b*(PI2/6); ctx.beginPath(); ctx.arc(Math.cos(a)*5.5,Math.sin(a)*5.5,2.2,0,7); ctx.fill(); }
+  ctx.fillStyle='#2a2d34'; for(let b=0;b<6;b++){ const a=spinPh+b*(TAU/6); ctx.beginPath(); ctx.arc(Math.cos(a)*5.5,Math.sin(a)*5.5,2.2,0,7); ctx.fill(); }
   ctx.strokeStyle='#20242a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(15,-12); ctx.lineTo(15,12); ctx.stroke();
   if(firing && T%2===0){ ctx.save(); ctx.globalCompositeOperation='lighter';
     const fs=0.85+Math.random()*0.5;
     ctx.translate(66,0); ctx.rotate(Math.random()*0.5-0.25);
     ctx.fillStyle='#ffe14d'; ctx.beginPath();                        // 銃口炎：円ではなく前へ伸びる星形
-    for(let k=0;k<10;k++){ const a=k/10*PI2, R=(k%2?7:26)*fs*(k%2?1:(Math.cos(a)>0?1.5:0.6));
+    for(let k=0;k<10;k++){ const a=k/10*TAU, R=(k%2?7:26)*fs*(k%2?1:(Math.cos(a)>0?1.5:0.6));
       const X=Math.cos(a)*R, Y=Math.sin(a)*R*0.72; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
     ctx.closePath(); ctx.fill();
     ctx.fillStyle='#fff8d0'; ctx.beginPath(); ctx.arc(4,0,7*fs,0,7); ctx.fill();
@@ -7337,7 +7337,8 @@ function sweatDrop(x,y){ ctx.fillStyle='rgba(120,200,255,.92)'; ctx.beginPath();
 function enemyHurt(e){ return e.hitFace>0 || e.state==='hurt' || e.state==='down' || e.state==='air'; }
 
 // ---- Player ----
-const PI2=Math.PI/2;
+const PI2=Math.PI/2;   // ※四分の一回転。全周は TAU を使うこと（名前に釣られて2πのつもりで使う事故が4件あった）
+const TAU=Math.PI*2;
 // ---- Player: cute 2-head-tall chibi (feet at y=0, body grows upward) ----
 function drawPlayer(){
   const p=player, s=depthScale(p.y)*0.94*(p.kind==='guard8'?1.28:1), sx=p.x-camX, sy=p.y-groundLift(p.x), st=p.state, ph=p.anim;   // ガードワン8号は巨体
@@ -11071,7 +11072,12 @@ const ENDING_FINALE=[
   {bgTheme:0, art:'peace', name:'', text:'長い戦いが終わり——空にかかった大きな虹の下、肉球あふれるワンダフル王国に、失われた笑い声が帰ってきた。'},
   {bgTheme:0, art:'peace', name:'', text:'囚われていた王が民のもとへ還り、焼けた砦には新しい家々が建ちはじめる。子犬たちが駆け、露店に温かな灯がともる。'},
   {bgTheme:0, art:'peace', name:'王女ペロ', text:'「あなたが命を懸けて灯してくれたこの光を、わたしたちは決して消しません。——どうか、いつまでもお元気で。本当に、ありがとう」'},
-  {bgTheme:0, art:'player', name:'', text:'星の海のような夜空に、王国じゅうの祈りが花火となって咲いた。その光を、旅した仲間たちみんなが見上げていた。'},
+  {bgTheme:0, art:'fireworks', name:'', text:'夜。城壁の上に王国じゅうの民が集まり、失われた三年ぶんの祈りが、いっせいに花火となって夜空へ打ち上がった。'},
+  {bgTheme:0, art:'fireworks', name:'王女ペロ', text:'「ひとつ目は、帰ってこられなかった人たちに。ふたつ目は、帰ってきてくれた人たちに。……そして最後のひとつは」'},
+  {bgTheme:0, art:'gather',    name:'', text:'——剣士も、拳士も、魔法使いも、門番も、盗賊も、剣鬼も。歩いた道は違えど、いま同じ夜空を見上げていた。'},
+  {bgTheme:0, art:'gather',    name:'王女ペロ', text:'「最後のひとつは、あなたに。肉球の名にかけて——この光は、あなたのものです」'},
+  {bgTheme:0, art:'fireworks', name:'', text:'尺玉が割れ、王国のすみずみまでが昼のように照らされる。焼け跡だった広場は、いま笑い声でいっぱいだった。'},
+  {bgTheme:0, art:'gather',    name:'', text:'物語は終わる。けれど肉球あふれるこの国の朝は、これから何度でも明ける。——また、どこかの戦いで。'},
   {bgTheme:0, art:'end', name:'', text:'★  聖  犬  士  伝  説  ★     この冒険を最後まで見届けてくれた、キミへ——心からの、ありがとう。'},
 ];
 function storyTurnFor(){ return STORY_TURN_BY[players[0].kind]||null; }
@@ -11275,6 +11281,81 @@ function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }
+// ── 大団円の花火 ──
+// 決定的な擬似乱数（打ち上げ番号から座標と色を作る）なので、毎フレーム
+// 配列を作り直さずに済み、パーティクルを1つも消費しない
+function _fwRnd(n){ const s=Math.sin(n*127.1+n*n*0.017)*43758.5453; return s-Math.floor(s); }
+// 夜空を敷いてから打ち上げる。加算合成の花火は明るい空の上ではまったく読めない
+function cutNightWash(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(6,8,26,.94)'); g.addColorStop(0.55,'rgba(12,16,44,.90)'); g.addColorStop(1,'rgba(20,18,40,.86)');
+  ctx.save(); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='lighter';                              // 星
+  for(let i=0;i<110;i++){ const x=(i*151.7)%W, y=(i*83.3)%(H*0.72);
+    ctx.globalAlpha=(0.25+0.6*Math.abs(Math.sin(gf*0.03+i*1.3)))*0.8;
+    ctx.fillStyle=i%7===0?'#fff2b0':'#dfe9ff'; ctx.fillRect(x,y,i%9===0?2.2:1.3,i%9===0?2.2:1.3); }
+  ctx.restore(); }
+function cutFireworks(){ cutNightWash(); cutFireworksBursts(cut.t); cutFireworksTown(); }
+function cutFireworksBursts(t){
+  const PER=58, LIVE=48;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let n=0;n<44;n++){
+    const born=n*9, age=t-born; if(age<0) continue;
+    const k=Math.floor(age/PER), ph=age%PER, id=n*31+k*7;
+    if(ph>LIVE) continue;
+    const cx=W*(0.08+0.84*_fwRnd(id)), cy=H*(0.10+0.42*_fwRnd(id+1));
+    const hue=['255,214,90','255,150,190','160,220,255','180,255,180','255,190,120'][id%5];
+    if(ph<9){ // 打ち上がる光条
+      const u=ph/9; ctx.globalAlpha=0.7*(1-u*0.4); ctx.strokeStyle='rgba('+hue+',.9)'; ctx.lineWidth=2.2;
+      ctx.beginPath(); ctx.moveTo(cx,H*0.92); ctx.lineTo(cx,lerp(H*0.92,cy,u)); ctx.stroke(); continue; }
+    const u=(ph-9)/(LIVE-9), R=(58+82*_fwRnd(id+2))*(1-Math.pow(1-u,2.4));
+    const al=Math.pow(1-u,1.5), sag=u*u*30;                            // 尾は重力で下へ垂れる
+    const arms=26+((id%4)*6), rot=_fwRnd(id+3)*6.28;
+    ctx.strokeStyle='rgba('+hue+',1)'; ctx.lineWidth=1.7;              // 中心から伸びる尾
+    ctx.globalAlpha=al*0.34; ctx.beginPath();
+    for(let a=0;a<arms;a++){ const an=a/arms*TAU+rot;
+      ctx.moveTo(cx+Math.cos(an)*R*0.22, cy+Math.sin(an)*R*0.20);
+      ctx.lineTo(cx+Math.cos(an)*R,      cy+Math.sin(an)*R*0.9+sag); }
+    ctx.stroke();
+    ctx.globalAlpha=al; ctx.fillStyle='rgba('+hue+',1)'; ctx.beginPath();   // 先端の火の玉
+    for(let a=0;a<arms;a++){ const an=a/arms*TAU+rot;
+      const px=cx+Math.cos(an)*R, py=cy+Math.sin(an)*R*0.9+sag;
+      ctx.moveTo(px+2.0+2.4*al,py); ctx.arc(px,py,2.0+2.4*al,0,7); }
+    ctx.fill();
+    ctx.globalAlpha=al*0.75;                                           // 芯の閃光
+    ctx.fillStyle=radGrad(cx,cy,R*0.8,'rgba('+hue+',.55)','rgba('+hue+',0)');
+    ctx.beginPath(); ctx.arc(cx,cy,R*0.8,0,7); ctx.fill(); }
+  ctx.restore(); ctx.globalAlpha=1; }
+// 花火を見上げる街のシルエット（窓に灯りが点る）
+function cutFireworksTown(){
+  ctx.save(); ctx.fillStyle='rgba(6,5,14,.95)';
+  ctx.fillRect(0,H*0.80,W,H*0.20);
+  for(let i=0;i<11;i++){ const bx=i*(W/11), bw=W/11*0.82, bh=H*(0.06+0.09*_fwRnd(i*13)), lx=bx+(W/11-bw)/2;
+    ctx.fillStyle='rgba(6,5,14,.95)';
+    ctx.fillRect(lx, H*0.80-bh, bw, bh);
+    ctx.beginPath(); ctx.moveTo(lx-5,H*0.80-bh); ctx.lineTo(bx+W/11/2,H*0.80-bh-16); ctx.lineTo(lx+bw+5,H*0.80-bh); ctx.fill();
+    for(let r=0;r<3;r++)for(let c=0;c<2;c++){ const wy=H*0.80-bh+14+r*22, wx=lx+bw*(0.26+0.42*c);
+      if(wy>H*0.80-8) continue;
+      ctx.fillStyle='rgba(255,196,96,'+(0.30+0.45*_fwRnd(i*31+r*5+c))+')'; ctx.fillRect(wx,wy,8,10); } }
+  ctx.restore(); }
+// ── 6人が並んで見上げる大団円の絵 ──
+function cutGather(){
+  const t=cut.t, inn=easeOut(clamp(t/30,0,1));
+  cutNightWash();
+  cutFireworksBursts(t+90);          // 見上げている先の花火も残す
+  const order=[1,2,0,3,4,5], span=0.76, x0=0.5-span/2, gap=span/(order.length-1);
+  for(let k=0;k<order.length;k++){ const i=order[k], cen=(k===2);
+    const q=easeOut(clamp((t-k*5)/26,0,1));                            // 端から順に立ち上がる
+    // 台詞欄（H-128 から下）に顔が潜らない高さに置く
+    const hx=W*(x0+gap*k), hy=H*0.58+ Math.sin(t*0.05+k*0.8)*4 + (1-q)*40;
+    ctx.save(); ctx.globalAlpha=q*inn; ctx.translate(hx,hy);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(0,30,52,'rgba(255,230,150,.30)','rgba(255,230,150,0)');
+    ctx.beginPath(); ctx.ellipse(0,30,52,16,0,0,7); ctx.fill();
+    ctx.globalAlpha=q*0.34; ctx.fillStyle=radGrad(0,-18,cen?74:56,'rgba(255,196,110,.8)','rgba(255,196,110,0)');
+    ctx.beginPath(); ctx.arc(0,-18,cen?74:56,0,7); ctx.fill(); ctx.restore();
+    ctx.scale(cen?2.3:1.8, cen?2.3:1.8); CHARS[i].icon(0,0); ctx.restore(); }
+  ctx.globalAlpha=1; }
 function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
   const idx = sc.bgTheme!=null?sc.bgTheme : (sc.boss?themeIdxFor(sc.stageN||1):0);
   // ゆっくり寄っていくカメラ（同じ絵でも呼吸を感じさせる）
@@ -11294,6 +11375,8 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
   } else if(sc.art==='invade'){ drawMarch();
   } else if(sc.art==='fall'){ ctx.save(); ctx.globalAlpha=clamp(1-cut.t/120,0,1); drawBossPortrait('boss',W*0.5,H*0.82,1.6,-1); ctx.restore();
       ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<5;i++){ const a=cut.t*0.1+i; ctx.fillStyle='rgba(198,120,255,.5)'; ctx.beginPath(); ctx.arc(W/2+Math.cos(a)*cut.t*2,H*0.5+Math.sin(a)*cut.t*1.4,4,0,7); ctx.fill(); } ctx.restore();
+  } else if(sc.art==='fireworks'){ cutFireworks();
+  } else if(sc.art==='gather'){ cutGather();
   } else if(sc.art==='end'){ ctx.textAlign='center'; ctx.fillStyle='#ffe14d'; ctx.font='900 48px Trebuchet MS';
       ctx.fillText('聖犬士イッヌ',W/2,H*0.42); ctx.fillStyle='#fff'; ctx.font='bold 18px Trebuchet MS'; ctx.fillText('SCORE  '+String(score).padStart(6,'0'),W/2,H*0.42+34); ctx.textAlign='left'; }
   ctx.restore();   // ここまでがカメラ内
@@ -11494,6 +11577,61 @@ addEventListener('resize',resize); resize();
 //======================================================================
 //  Title attract render
 //======================================================================
+// ── タイトル背後にそびえる魔王のシルエット ──
+// 城より大きく、ゆっくり呼吸する。小さな主役たちとの対比が画の芯になる
+function drawTitleOverlord(){
+  const t=gf, br=Math.sin(t*0.018)*6, cx=W*0.5, by=H*0.70+br*0.3;
+  ctx.save(); ctx.globalAlpha=0.46;
+  ctx.fillStyle='rgba(8,6,20,1)';
+  const S=H*0.70;                                        // 城の倍以上の背丈
+  ctx.translate(cx,by); ctx.scale(S/100,S/100);
+  ctx.beginPath();                                       // 肩からマントへ広がる巨躯
+  ctx.moveTo(-58,0); ctx.quadraticCurveTo(-46,-38,-30,-52);
+  ctx.quadraticCurveTo(-22,-64,-13,-66);
+  ctx.lineTo(-11,-78); ctx.quadraticCurveTo(0,-88,11,-78); ctx.lineTo(13,-66);
+  ctx.quadraticCurveTo(22,-64,30,-52); ctx.quadraticCurveTo(46,-38,58,0);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();                                       // 巻き角
+  ctx.moveTo(-12,-80); ctx.quadraticCurveTo(-30,-96,-20,-112); ctx.quadraticCurveTo(-16,-100,-6,-84); ctx.closePath();
+  ctx.moveTo( 12,-80); ctx.quadraticCurveTo( 30,-96, 20,-112); ctx.quadraticCurveTo( 16,-100,  6,-84); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // 双眸だけが闇の中で灯る
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const ey=by-S*0.755, ea=0.34+0.26*Math.sin(t*0.045);
+  for(const s of [-1,1]){ ctx.globalAlpha=ea;
+    ctx.fillStyle=radGrad(cx+s*S*0.052, ey, S*0.05,'rgba(255,90,60,.95)','rgba(255,90,60,0)');
+    ctx.beginPath(); ctx.arc(cx+s*S*0.052, ey, S*0.05,0,7); ctx.fill(); }
+  ctx.restore(); ctx.globalAlpha=1; }
+// ── 空にかかるオーロラの帯（多層・ゆっくり流れる）──
+function drawTitleAurora(){
+  const t=gf; ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let b=0;b<3;b++){
+    const y0=H*(0.10+b*0.055), amp=H*(0.035+b*0.012), sp=t*(0.0032+b*0.0011);
+    const g=ctx.createLinearGradient(0,y0-amp*2,0,y0+amp*2);
+    const col=b===0?'126,240,200':(b===1?'150,190,255':'220,160,255');
+    g.addColorStop(0,'rgba('+col+',0)'); g.addColorStop(0.5,'rgba('+col+',0.16)'); g.addColorStop(1,'rgba('+col+',0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(0,y0);
+    for(let x=0;x<=W;x+=24) ctx.lineTo(x, y0+Math.sin(x*0.006+sp*3+b)*amp);
+    for(let x=W;x>=0;x-=24) ctx.lineTo(x, y0+Math.sin(x*0.006+sp*3+b)*amp+amp*1.5);
+    ctx.closePath(); ctx.fill(); }
+  ctx.restore(); }
+// ── 左右を締める紋章旗 ──
+function drawTitleBanners(){
+  const t=gf;
+  for(const s of [-1,1]){ const bx=W*0.5+s*W*0.455, bw=W*0.075, by=H*0.02, bh=H*0.46;
+    ctx.save(); ctx.translate(bx,by);
+    const sway=Math.sin(t*0.02+ (s>0?1.4:0))*0.022; ctx.rotate(sway);
+    ctx.fillStyle='rgba(96,20,32,.80)';
+    ctx.beginPath(); ctx.moveTo(-bw/2,0); ctx.lineTo(bw/2,0); ctx.lineTo(bw/2,bh);
+    ctx.lineTo(0,bh-bw*0.42); ctx.lineTo(-bw/2,bh); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,215,110,.55)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='rgba(255,215,110,.75)';                    // 肉球の紋章
+    ctx.beginPath(); ctx.ellipse(0,bh*0.42,bw*0.19,bw*0.16,0,0,7); ctx.fill();
+    for(let i=0;i<4;i++){ const a=-2.5+i*0.62;
+      ctx.beginPath(); ctx.ellipse(Math.cos(a)*bw*0.24, bh*0.42+Math.sin(a)*bw*0.24-bw*0.06, bw*0.075,bw*0.09,0,0,7); ctx.fill(); }
+    ctx.fillStyle='rgba(255,215,110,.9)'; ctx.fillRect(-bw*0.62,-4,bw*1.24,7);   // 横木
+    ctx.restore(); } }
 function drawTitleCastle(){ // 遠景に浮かぶ魔王城／王城のシルエット
   const baseY=H*0.60; ctx.save(); ctx.fillStyle='rgba(12,10,28,.72)';
   // 城壁
@@ -11519,23 +11657,45 @@ function drawTitleScene(){ drawBackground(); drawGround();
   // きらめく星空
   for(let i=0;i<90;i++){ const x=(i*151.7)%W, y=(i*83.3)%(H*0.6); const tw=0.3+0.7*Math.abs(Math.sin(t*0.03+i*1.3));
     ctx.globalAlpha=tw*0.9; ctx.fillStyle=i%7===0?'#fff2b0':'#dfe9ff'; const s=i%9===0?2.4:1.4; ctx.fillRect(x,y,s,s); } ctx.globalAlpha=1;
-  // 流れ星
-  const sp=(t*7)%(W*1.6)-W*0.3, sy=H*0.10+sp*0.22;
-  ctx.save(); ctx.globalAlpha=0.55; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(sp-70,sy-16); ctx.lineTo(sp,sy); ctx.stroke(); ctx.restore();
+  // 流れ星（速さと高さの違う3本。1本だけだと空が寂しい）
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.lineCap='round';
+  for(let s=0;s<3;s++){ const per=W*1.6+s*W*0.5, sp=((t*(7-s*1.6)+s*640)%per)-W*0.3, sy=H*(0.06+s*0.05)+sp*0.22;
+    const g=ctx.createLinearGradient(sp-90,sy-20,sp,sy);
+    g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(1,'rgba(255,246,214,.85)');
+    ctx.strokeStyle=g; ctx.lineWidth=2.4-s*0.5; ctx.beginPath(); ctx.moveTo(sp-90,sy-20); ctx.lineTo(sp,sy); ctx.stroke(); }
+  ctx.restore();
+  drawTitleAurora();
+  // 奥から手前へ流れる雲の層（視差で空に厚みを出す）
+  for(let L=0;L<3;L++){ const cy=H*(0.16+L*0.075), sc=0.55+L*0.35, al=0.05+L*0.035, dr=(t*(0.10+L*0.09))%(W+520);
+    ctx.save(); ctx.globalAlpha=al; ctx.fillStyle='#dfe9ff';
+    for(let i=0;i<4;i++){ const cx2=((i*(W*0.34)+dr)%(W+520))-260;
+      ctx.beginPath(); ctx.ellipse(cx2,cy,120*sc,26*sc,0,0,7);
+      ctx.ellipse(cx2+70*sc,cy-12*sc,80*sc,20*sc,0,0,7);
+      ctx.ellipse(cx2-72*sc,cy-6*sc,66*sc,17*sc,0,0,7); ctx.fill(); }
+    ctx.restore(); }
+  drawTitleOverlord();   // 城の後ろにそびえる魔王
   // 遠景の城
   drawTitleCastle();
   // 舞い散る花びらと火の粉
   for(let i=0;i<20;i++){ const px=((i*151+t*1.1)%(W+40))-20, py=(H*0.14+((i*97+t*0.85)%(H*0.78)));
     ctx.globalAlpha=0.45; ctx.fillStyle=i%3===0?'#ffd76a':(i%3===1?'#ff9ecb':'#bfe0ff'); ctx.save(); ctx.translate(px,py); ctx.rotate(t*0.05+i);
     ctx.beginPath(); ctx.ellipse(0,0,4,2,0,0,7); ctx.fill(); ctx.restore(); } ctx.globalAlpha=1;
+  drawForeground(); drawLighting();
   // ヒーロー勢揃い（横一列に整列・ふわふわ上下）
-  const order=[1,2,0,3,4];   // 中央にイッヌが来るよう並べ替え
-  for(let k=0;k<order.length;k++){ const i=order[k]; const hx=W*(0.24+0.13*k), bob=Math.sin(t*0.05+k*0.8)*5, cen=(k===2);
-    ctx.save(); ctx.translate(hx, H*0.83+bob);
+  // 主役は6人。並びは中央にイッヌが来るよう組み替える（ワンデンが抜けていた）。
+  // 前景と照明の「後」に描く：前に描くと霞とビネットに沈んで顔が読めない
+  const order=[1,2,0,3,4,5];
+  const span=0.74, x0=0.5-span/2, gap=span/(order.length-1);
+  for(let k=0;k<order.length;k++){ const i=order[k]; const hx=W*(x0+gap*k), bob=Math.sin(t*0.05+k*0.8)*5, cen=(k===2);
+    ctx.save(); ctx.translate(hx, H*0.80+bob);
     // 足元スポットライト
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(0,26,44,'rgba(255,230,150,.28)','rgba(255,230,150,0)'); ctx.beginPath(); ctx.ellipse(0,26,44,14,0,0,7); ctx.fill(); ctx.restore();
+    // 背後から差す暖色のリムライト（人物を背景から切り離す）
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=cen?0.42:0.26;
+    ctx.fillStyle=radGrad(0,-16,cen?66:50,'rgba(255,196,110,.75)','rgba(255,196,110,0)');
+    ctx.beginPath(); ctx.arc(0,-16,cen?66:50,0,7); ctx.fill(); ctx.restore();
     ctx.scale(cen?2.0:1.5, cen?2.0:1.5); CHARS[i].icon(0,0); ctx.restore(); }
-  drawForeground(); drawLighting();
+  drawTitleBanners();
   // 最前面の金色装飾リボン（上部）
   ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle='rgba(255,215,110,.14)'; ctx.fillRect(0,H*0.03,W,2); ctx.fillRect(0,H*0.03+5,W,1); ctx.restore(); }
 
