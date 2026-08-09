@@ -38,7 +38,7 @@ const shim = `<script>
   var m=document.querySelector('meta[name=viewport]');
   if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}
   m.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');
-  document.title='ASHLINE — Round 1 greybox';
+  document.title='ASHLINE';
 })();
 </script>
 `;

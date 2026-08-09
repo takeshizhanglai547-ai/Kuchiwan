@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#22262a">
-<title>ASHLINE — Round 1 greybox</title>
+<title>ASHLINE</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -78,7 +78,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 /* ---- 画面外周のHUD（視線を中央から離さない） ---- */
 #ammo{position:absolute;right:calc(var(--pad-x) + 2px);bottom:calc(3.2vh + var(--btn) + 8px);
   color:rgba(225,235,245,.72);font-size:13px;letter-spacing:.10em;font-variant-numeric:tabular-nums}
-#sprintTag{position:absolute;left:50%;transform:translateX(-50%);bottom:2.2vh;
+/* リロードバー(bottom 1.6vh / 7px)の上に逃がす。ダッシュ中にリロードは走るため重なる */
+#sprintTag{position:absolute;left:50%;transform:translateX(-50%);bottom:4.2vh;
   color:rgba(255,200,160,.9);font-size:11px;letter-spacing:.28em;opacity:0;transition:opacity .12s}
 
 /* ---- デバッグ / 設定（親指の届かない上部に置く） ---- */
@@ -100,6 +101,34 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 #zoneL,#zoneR{position:absolute;bottom:0;height:35%;border:1px dashed rgba(120,220,160,.30)}
 #zoneL{left:0;width:45%}#zoneR{right:0;width:45%}
 
+/* ---- 体力：画面外周（左下、スティックの上）。数字ではなく帯で持たせる ---- */
+#hpwrap{position:absolute;left:var(--pad-x);bottom:calc(3.2vh + var(--btn) + 10px);
+  width:min(30vw,190px);height:5px;background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden}
+#hpbar{height:100%;width:100%;background:rgba(216,221,226,.82);
+  transition:width .12s linear,background-color .2s linear}
+#hpwrap.low #hpbar{background:rgba(255,138,76,.95)}
+
+/* ---- アクティブリロード：下端中央。成功窓を白い帯で見せる ---- */
+#rlwrap{position:absolute;left:50%;transform:translateX(-50%);bottom:1.6vh;
+  width:min(46vw,280px);height:7px;background:rgba(0,0,0,.5);border-radius:4px;
+  overflow:hidden;opacity:0;transition:opacity .1s linear}
+#rlwrap.on{opacity:1}
+#rlfill{position:absolute;left:0;top:0;height:100%;width:0;background:rgba(139,148,157,.55)}
+#rlwin{position:absolute;top:0;height:100%;background:rgba(216,221,226,.85)}
+#rlmark{position:absolute;top:-2px;width:2px;height:11px;background:rgba(255,255,255,.95)}
+#rlwrap.ok{box-shadow:0 0 0 1px rgba(255,138,76,.9)}
+#rlwrap.ng #rlfill{background:rgba(216,90,58,.7)}
+
+/* ---- 波・勝敗の告知。中央だが一瞬だけ ---- */
+#banner{position:absolute;left:0;right:0;top:26%;text-align:center;
+  color:rgba(230,236,242,.94);font-size:clamp(15px,3.4vh,26px);letter-spacing:.22em;
+  text-shadow:0 2px 8px rgba(0,0,0,.9);opacity:0;transition:opacity .25s linear;pointer-events:none}
+#banner.on{opacity:1}
+
+/* ---- 被弾：画面周辺に血糊。視界の中央は塞がない ---- */
+#dmg{position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,0) 42%,rgba(120,20,12,.55) 100%)}
+
 #rotate{position:fixed;inset:0;z-index:100;background:#15181b;display:none;
   align-items:center;justify-content:center;color:#9fb4c8;font-size:15px;letter-spacing:.1em}
 #boot{position:fixed;inset:0;z-index:200;background:#15181b;display:flex;
@@ -117,6 +146,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
   <div id="btnAct"><span id="actLabel">遮蔽</span></div>
   <div id="btnFire">FIRE</div>
   <div id="ammo">30 / 30</div>
+  <div id="hpwrap"><div id="hpbar"></div></div>
+  <div id="rlwrap"><div id="rlfill"></div><div id="rlwin"></div><div id="rlmark"></div></div>
+  <div id="banner"></div>
+  <div id="dmg"></div>
   <div id="sprintTag">D A S H</div>
   <div id="dbg"></div>
 </div>
@@ -8883,7 +8916,22 @@ var CFG = {
     rpm: 640, flashFrames: 2,
     kickPitch: 1.2 * DEG, kickYaw: 0.4 * DEG, kickTau: 0.25 / 3.0,
     spreadStill: 0.30 * DEG, spreadMove: 2.60 * DEG, spreadTau: 0.10,
-    mag: 30, reload: 1.60, dmg: 11, dmgHead: 28
+    mag: 30, dmg: 11, dmgHead: 28,
+    /* §7 アクティブリロード：バー全長1.1秒、成功窓0.12秒。
+       成功＝火力+20%かつ所要-0.35秒／失敗＝1.6秒の停止ペナルティ。
+       入力は画面下部を「どこでもいい1タップ」（§6。親指位置に依存させない）。*/
+    reload: 1.10, arAt: 0.58, arWin: 0.12, arBonus: 1.20, arGain: 0.35, arFail: 1.60
+  },
+
+  /* 被弾。§7：3段階で悪化し、回復すると解除。 */
+  hurt: { hp: 100, regenDelay: 4.0, regenRate: 26, knock: 2.4, camKick: 1.6 * DEG },
+
+  /* 敵の共通挙動 */
+  ai: {
+    sight: 34.0,            // これより遠いと交戦しない
+    thinkMin: 0.35, thinkMax: 0.9,
+    aimTell: 0.55,          // 撃つ前の予備動作（見てから隠れられる猶予）
+    coverHold: 1.4          // 遮蔽に隠れて撃たない時間
   },
 
   // §7 ヒットストップ：通常40ms / 致命打120ms
@@ -8932,24 +8980,49 @@ var SET = { assist: 1, autoFire: false, debug: false };
    ========================================================================== */
 var COVERS = [
   // x, z, hx, hz, h        （h<=1.25 は低い遮蔽）
+  /* 40m四方の広場。奥（-Z）から手前（+Z）へ攻め上がる構造。
+     左右（x=±11〜±16）に2本の側面回り込みルートを通し、
+     中央は高い遮蔽で射線を切って、正面突破を割に合わなくする。 */
+
+  // --- 手前：初期配置まわり（1波目。操作を覚える場所） ---
+  { x: 0, z: 12.0, hx: 2.60, hz: 0.35, h: 1.05 },
+  { x: -4.6, z: 13.6, hx: 0.75, hz: 0.75, h: 1.05 },
+  { x: 4.6, z: 13.6, hx: 0.75, hz: 0.75, h: 2.05 },
+  { x: -9.0, z: 10.4, hx: 0.40, hz: 2.20, h: 1.05 },
+  { x: 9.0, z: 10.4, hx: 0.40, hz: 2.20, h: 1.05 },
+
+  // --- 中景：主戦場 ---
   { x: 0, z: 2.0, hx: 2.60, hz: 0.35, h: 1.05 },
-  // 高い遮蔽は幅を詰める。長すぎると壁の真ん中で完全に視界を失い、
-  // 「隠れる」ではなく「何も見えない」になるため。
   { x: -5.4, z: -0.4, hx: 0.40, hz: 0.95, h: 2.05 },
   { x: 5.4, z: -0.4, hx: 0.40, hz: 0.95, h: 2.05 },
+  { x: -3.2, z: 5.2, hx: 1.90, hz: 0.35, h: 1.05 },
+  { x: 3.2, z: 5.2, hx: 1.90, hz: 0.35, h: 1.05 },
   { x: -3.2, z: -5.2, hx: 1.90, hz: 0.35, h: 1.05 },
   { x: 3.2, z: -5.2, hx: 1.90, hz: 0.35, h: 1.05 },
   { x: 0.0, z: -9.4, hx: 2.30, hz: 0.40, h: 2.05 },
-  { x: -8.6, z: 3.4, hx: 0.38, hz: 2.20, h: 1.05 },
-  { x: 8.6, z: 3.4, hx: 0.38, hz: 2.20, h: 1.05 },
-  { x: -2.3, z: 6.6, hx: 0.75, hz: 0.75, h: 1.05 },
-  { x: 2.3, z: 6.6, hx: 0.75, hz: 0.75, h: 2.05 },
-  { x: -9.4, z: -6.0, hx: 0.40, hz: 1.60, h: 2.05 },
-  { x: 9.4, z: -6.0, hx: 0.40, hz: 1.60, h: 2.05 }
+
+  // --- 側面回り込みルート（左） ---
+  { x: -12.6, z: 4.0, hx: 0.40, hz: 2.60, h: 2.05 },
+  { x: -12.6, z: -3.0, hx: 0.40, hz: 2.20, h: 1.05 },
+  { x: -15.4, z: 8.0, hx: 0.75, hz: 0.75, h: 1.05 },
+  { x: -14.0, z: -9.6, hx: 2.20, hz: 0.40, h: 1.05 },
+
+  // --- 側面回り込みルート（右） ---
+  { x: 12.6, z: 4.0, hx: 0.40, hz: 2.60, h: 2.05 },
+  { x: 12.6, z: -3.0, hx: 0.40, hz: 2.20, h: 1.05 },
+  { x: 15.4, z: 8.0, hx: 0.75, hz: 0.75, h: 1.05 },
+  { x: 14.0, z: -9.6, hx: 2.20, hz: 0.40, h: 1.05 },
+
+  // --- 奥：敵の湧き出し側 ---
+  { x: -7.0, z: -14.0, hx: 2.20, hz: 0.40, h: 2.05 },
+  { x: 7.0, z: -14.0, hx: 2.20, hz: 0.40, h: 2.05 },
+  { x: 0.0, z: -16.6, hx: 1.60, hz: 0.40, h: 1.05 }
 ];
-var ARENA = { hx: 13.0, hz: 13.0, wallH: 4.2 };
-var SPAWN = { x: 0, z: 9.4, yaw: 0 };            // yaw 0 => 向き -Z
+var ARENA = { hx: 20.0, hz: 20.0, wallH: 4.6 };
+var SPAWN = { x: 0, z: 16.0, yaw: 0 };           // yaw 0 => 向き -Z
+// 検証用の的の位置。戦闘を止めている間はここに立っているだけ（既存テストの前提）。
 var DUMMIES = [{ x: -2.6, z: -11.0 }, { x: 3.4, z: -11.0 }];
+var MAX_ENEMIES = 6;                              // ドローコール上限から逆算（1体8）
 
 /* =============================================================================
    COLLIDERS / COVER FACES
@@ -9059,6 +9132,13 @@ function bindInput(el) {
     e.preventDefault();
     // iOS Safari は「ユーザー操作の中」でしか音を出せない。最初のタップで必ず解錠する。
     if (SFX && !SFX.__unlocked) { SFX.__unlocked = true; try { SFX.unlock(); SFX.ambience(true); } catch (_) { } }
+    // 最初のタップで戦闘を開始。倒れた後／制圧後のタップは再挑戦。
+    if (COMBAT.enabled) {
+      if (!COMBAT.on) { startCombat(); }
+      else if (COMBAT.state === 'dead' && P.deadT > 0.8) { startCombat(); }
+      else if (COMBAT.state === 'clear') { startCombat(); }
+      else activeReloadTap();
+    }
     if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (_) { } }
     var x = e.clientX, y = e.clientY, W = window.innerWidth;
     latencyMark = performance.now();
@@ -9128,6 +9208,8 @@ var P = {
   coverAlignT: 0,
   // combat
   hp: 100, ammo: CFG.fire.mag, reloadT: 0, fireCd: 0, flash: 0,
+  hurtT: 0, dmgFlash: 0, dead: false, deadT: 0,
+  arDone: false, arOk: false, arFail: 0, dmgMul: 1,
   // blind fire
   blindT: 0,
   // 反動（発砲の余韻を体に出す）
@@ -9557,6 +9639,25 @@ function exposure() {
   return 1;
 }
 
+/* アクティブリロードの入力。§6「画面下部のバーをどこでもいい1タップ」。
+   親指位置に依存させないため、リロード中の最初のタップは場所を問わず受け付ける。 */
+function activeReloadTap() {
+  if (P.reloadT <= 0 || P.arDone) return false;
+  P.arDone = true;
+  var prog = 1 - P.reloadT / CFG.fire.reload;   // 0..1
+  var w0 = CFG.fire.arAt, w1 = w0 + CFG.fire.arWin / CFG.fire.reload;
+  if (prog >= w0 && prog <= w1) {
+    P.arOk = true;
+    P.reloadT = Math.max(0.02, P.reloadT - CFG.fire.arGain);
+    if (SFX) SFX.reload('in');
+  } else {
+    P.arFail = 1;
+    P.reloadT = CFG.fire.arFail;                // 失敗＝停止ペナルティ
+    if (SFX) SFX.impact('world');
+  }
+  return true;
+}
+
 /* 隠れたまま銃だけ上げている状態か */
 function isBlind() {
   return P.state === ST.COVER && P.peekMode === 0 && P.blindT >= CFG.blind.ready;
@@ -9598,7 +9699,7 @@ function acquireTarget() {
   var R = window.innerWidth * CFG.aim.magnetFrac;
   var best = Infinity;
   for (var i = 0; i < enemies.length; i++) {
-    var e = enemies[i]; if (e.dead) continue;
+    var e = enemies[i]; if (e.dead || !e.active) continue;
     _tmpV.set(e.x, (e.hb || HB_DEFAULT).chest, e.z).project(camera);
     if (_tmpV.z > 1) continue;
     var sxp = (_tmpV.x * 0.5 + 0.5) * window.innerWidth;
@@ -9623,8 +9724,16 @@ function updateWeapon(dt) {
   if (P.flash > 0) P.flash -= 1;
   if (P.reloadT > 0) {
     P.reloadT -= dt;
-    if (P.reloadT <= 0) { P.ammo = CFG.fire.mag; if (SFX) SFX.reload('in'); }
-  } else if (P.ammo <= 0) { P.reloadT = CFG.fire.reload; if (SFX) SFX.reload('out'); }
+    if (P.reloadT <= 0) {
+      P.ammo = CFG.fire.mag;
+      P.dmgMul = P.arOk ? CFG.fire.arBonus : 1;   // 成功なら次の弾倉が+20%
+      if (SFX) SFX.reload('in');
+    }
+  } else if (P.ammo <= 0) {
+    P.reloadT = CFG.fire.reload; P.arDone = false; P.arOk = false; P.arFail = 0;
+    P.dmgMul = 1;
+    if (SFX) SFX.reload('out');
+  }
 
   acquireTarget();
   var want = IN.fire.on || (SET.autoFire && aimTarget && canFire());
@@ -9661,7 +9770,7 @@ function shoot() {
     var tW = rayWorld(camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z, FAR);
     var tE = Infinity;
     for (var i = 0; i < enemies.length; i++) {
-      var e = enemies[i]; if (e.dead) continue;
+      var e = enemies[i]; if (e.dead || !e.active) continue;
       var r = enemyRay(e, camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z);
       if (r.t < tE) tE = r.t;
     }
@@ -9689,7 +9798,7 @@ function shoot() {
   var blocked = rayWorld(m.x, m.y, m.z, d.x, d.y, d.z, FAR);
   var mE = Infinity, mHitE = null, mHead = false;
   for (var j = 0; j < enemies.length; j++) {
-    var e2 = enemies[j]; if (e2.dead) continue;
+    var e2 = enemies[j]; if (e2.dead || !e2.active) continue;
     var r2 = enemyRay(e2, m.x, m.y, m.z, d.x, d.y, d.z);
     if (r2.t < mE) { mE = r2.t; mHitE = e2; mHead = r2.head; }
   }
@@ -9713,7 +9822,7 @@ function shoot() {
   };
 
   if (hitEnemy) {
-    damageEnemy(hitEnemy, head ? CFG.fire.dmgHead : CFG.fire.dmg, d.x, d.z, head);
+    damageEnemy(hitEnemy, (head ? CFG.fire.dmgHead : CFG.fire.dmg) * P.dmgMul, d.x, d.z, head);
     hitstop = head ? CFG.hitstop.heavy : CFG.hitstop.light;
   }
   // カメラキック（ブラインドファイアは狙っていないので反動の見え方も鈍い）
@@ -9880,8 +9989,23 @@ function rayBoxY(ox, oy, oz, dx, dy, dz, b, y0, y1) {
 /* =============================================================================
    ENEMY (Round1: 的として立っているだけ)
    ========================================================================== */
-function makeEnemy(x, z) {
-  return { x: x, z: z, hp: 100, dead: false, respawn: 0, flash: 0, knock: 0, knockX: 0, knockZ: 0, fall: 0, mesh: null };
+/* 敵の型。§4は突撃型と狙撃型の2種だが、重装型を足して3種にする。
+   重装型は正面から削り切れない体力を持ち、側面へ回る動機を作る（柱1と柱3）。*/
+var ETYPE = {
+  rusher:   { hp: 90,  rig: 'rusher',   speed: 3.7, keep: 3.2,  fireRange: 14, dmg: 7,  rpm: 420, burst: 5, spread: 3.4, tell: 0.40, tint: 0 },
+  marksman: { hp: 70,  rig: 'marksman', speed: 2.4, keep: 15.0, fireRange: 30, dmg: 15, rpm: 70,  burst: 1, spread: 1.1, tell: 0.85, tint: 1 },
+  heavy:    { hp: 220, rig: 'rusher',   speed: 1.9, keep: 6.0,  fireRange: 18, dmg: 10, rpm: 260, burst: 8, spread: 4.6, tell: 0.55, tint: 2, scale: 1.18 }
+};
+
+function makeEnemy(x, z, type) {
+  return {
+    x: x, z: z, type: type || 'rusher', spawnX: x, spawnZ: z,
+    hp: 100, maxHp: 100, dead: false, respawn: 0, flash: 0,
+    knock: 0, knockX: 0, knockZ: 0, fall: 0, mesh: null,
+    yaw: Math.PI, vx: 0, vz: 0, stride: 0,
+    st: 'idle', stT: 0, aimT: 0, fireCd: 0, burst: 0, think: 0,
+    tgtX: x, tgtZ: z, active: false
+  };
 }
 function damageEnemy(e, dmg, dx, dz, head) {
   e.hp -= dmg; e.flash = 1; e.knock = 1; e.knockX = dx; e.knockZ = dz;
@@ -9891,16 +10015,232 @@ function damageEnemy(e, dmg, dx, dz, head) {
   CAM.kickP += (head ? 0.55 : 0.22) * DEG;
   if (e.hp <= 0 && !e.dead) { e.dead = true; e.respawn = 2.4; e.fall = 0; }
 }
+/* ============================================================================
+   COMBAT（ラウンド2）：敵AI・波・被弾
+   ========================================================================= */
+var COMBAT = { on: false, enabled: true, wave: 0, state: 'idle', t: 0, banner: '', bannerT: 0 };
+
+/* 波の構成（§4）。1波＝操作の理解／2波＝側面を突かれる／3波＝両方同時。 */
+var WAVES = [
+  [ { t: 'rusher', x: -3.0, z: -12.0 }, { t: 'rusher', x: 3.0, z: -12.0 } ],
+  [ { t: 'marksman', x: -14.0, z: -8.0 }, { t: 'marksman', x: 14.0, z: -8.0 },
+    { t: 'rusher', x: 0.0, z: -15.0 } ],
+  [ { t: 'rusher', x: -5.0, z: -14.0 }, { t: 'rusher', x: 5.0, z: -14.0 },
+    { t: 'marksman', x: -15.0, z: -2.0 }, { t: 'marksman', x: 15.0, z: -2.0 },
+    { t: 'heavy', x: 0.0, z: -16.0 } ]
+];
+
+function playerTopY() {
+  return P.y + CFG.player.height - P.crouch * 0.55 +
+    (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0);
+}
+function playerAimY() { return P.y + CFG.player.chest - P.crouch * 0.30 +
+    (P.peekMode === 2 ? P.peek * CFG.cover.peekRise : 0); }
+function playerLatOff(out) {
+  var lat = (P.peekMode === 1 ? P.peekSide * P.peek * CFG.cover.peekLateral : 0);
+  var fx = yawDirX(P.yaw), fz = yawDirZ(P.yaw);
+  out.x = P.x + (-fz) * lat; out.z = P.z + fx * lat; return out;
+}
+var _pv = { x: 0, z: 0 };
+
+/* 敵の射線が通るか。通らない＝遮蔽が効いている、という一点で柱1を支える。 */
+function enemySeesPlayer(e) {
+  playerLatOff(_pv);
+  var ey = (e.hb ? e.hb.chest : 1.2);
+  var dx = _pv.x - e.x, dy = playerAimY() - ey, dz = _pv.z - e.z;
+  var d = Math.hypot(dx, dy, dz);
+  if (d > CFG.ai.sight) return 0;
+  if (rayWorld(e.x, ey, e.z, dx / d, dy / d, dz / d, d) < d - 0.25) return 0;
+  return d;
+}
+
+function enemyShoot(e) {
+  var T2 = ETYPE[e.type];
+  e.fireCd = 60 / T2.rpm;
+  e.burst--;
+  playerLatOff(_pv);
+  var ey = (e.hb ? e.hb.chest : 1.2);
+  var mx = e.x + yawDirX(e.yaw) * 0.45, mz = e.z + yawDirZ(e.yaw) * 0.45;
+  var dx = _pv.x - mx, dy = playerAimY() - ey, dz = _pv.z - mz;
+  var d = Math.hypot(dx, dy, dz) || 1e-5; dx /= d; dy /= d; dz /= d;
+  // 拡散
+  var sp = T2.spread * DEG;
+  var a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * sp;
+  var rt = new T.Vector3(-dz, 0, dx).normalize();
+  var uu = new T.Vector3().crossVectors(rt, new T.Vector3(dx, dy, dz)).normalize();
+  var v = new T.Vector3(dx, dy, dz)
+    .addScaledVector(rt, Math.cos(a) * r).addScaledVector(uu, Math.sin(a) * r).normalize();
+
+  var wallT = rayWorld(mx, ey, mz, v.x, v.y, v.z, 60);
+  // プレイヤーの当たり判定（乗り出し分の横ずれを含む）
+  var pb = { minx: _pv.x - 0.34, maxx: _pv.x + 0.34, minz: _pv.z - 0.30, maxz: _pv.z + 0.30, top: playerTopY() };
+  var pt = rayBox(mx, ey, mz, v.x, v.y, v.z, pb);
+  var endT = Math.min(wallT, pt);
+  var ex = mx + v.x * endT, ey2 = ey + v.y * endT, ez = mz + v.z * endT;
+  FX.tracer(mx, ey, mz, ex, ey2, ez);
+  if (FX.muzzle) FX.muzzle(mx, ey, mz, v.x, v.y, v.z);
+  if (SFX && SFX.enemyShot) SFX.enemyShot(e.x, ey, e.z);
+  else if (SFX) SFX.shot('rifle');
+  if (pt <= wallT) damagePlayer(T2.dmg, v.x, v.z);
+  else FX.impact(ex, ey2, ez, false, -v.x, -v.y, -v.z, 'world');
+}
+
+function damagePlayer(dmg, dx, dz) {
+  if (!COMBAT.on || P.dead) return;
+  P.hp -= dmg; P.hurtT = 0; P.dmgFlash = 1;
+  // ノックバック（§11の8項目目）。押し戻しは小さく、カメラで痛みを出す。
+  P.vx -= dx * CFG.hurt.knock * 0.25; P.vz -= dz * CFG.hurt.knock * 0.25;
+  CAM.kickP += CFG.hurt.camKick * (0.6 + Math.random() * 0.8);
+  CAM.kickY += (Math.random() < 0.5 ? -1 : 1) * CFG.hurt.camKick;
+  hitstop = Math.max(hitstop, 0.045);
+  if (P.hp <= 0) { P.hp = 0; P.dead = true; P.deadT = 0; COMBAT.state = 'dead'; banner('倒れた ── 画面をタップで再挑戦'); }
+}
+function banner(txt) { COMBAT.banner = txt; COMBAT.bannerT = 3.2; }
+
+/* 遮蔽の陰になる立ち位置を探す。見つからなければプレイヤーから離れる方向。 */
+function findEnemyCover(e) {
+  var best = null, bestScore = 1e9;
+  for (var i = 0; i < faces.length; i++) {
+    var f = faces[i];
+    var px = f.ax + f.tx * f.len * 0.5 + f.nx * 0.5;
+    var pz = f.az + f.tz * f.len * 0.5 + f.nz * 0.5;
+    var dp = Math.hypot(px - P.x, pz - P.z);
+    if (dp < 4.0) continue;
+    var de = Math.hypot(px - e.x, pz - e.z);
+    if (de > 14) continue;
+    // プレイヤー側から見て面の裏にあること
+    var toP = (P.x - px) * f.nx + (P.z - pz) * f.nz;
+    if (toP > 0) continue;
+    var score = de + Math.abs(dp - ETYPE[e.type].keep) * 0.6;
+    if (score < bestScore) { bestScore = score; best = { x: px, z: pz }; }
+  }
+  return best;
+}
+
+function updateEnemyAI(e, dt) {
+  var T2 = ETYPE[e.type];
+  var los = enemySeesPlayer(e);
+  e.stT += dt; e.think -= dt;
+  if (e.fireCd > 0) e.fireCd -= dt;
+
+  var dpx = P.x - e.x, dpz = P.z - e.z, dp = Math.hypot(dpx, dpz) || 1e-5;
+
+  switch (e.st) {
+    case 'idle':
+      if (dp < CFG.ai.sight) { e.st = 'advance'; e.stT = 0; }
+      break;
+    case 'advance':
+      e.tgtX = P.x - dpx / dp * T2.keep;
+      e.tgtZ = P.z - dpz / dp * T2.keep;
+      if (los && dp <= T2.fireRange && e.fireCd <= 0) { e.st = 'aim'; e.stT = 0; e.aimT = 0; }
+      else if (!los && e.stT > 3.0) { e.stT = 0; }   // 見えないなら詰め続ける
+      break;
+    case 'aim':
+      e.tgtX = e.x; e.tgtZ = e.z;                    // 撃つ前は止まる（柱1）
+      e.aimT += dt;
+      if (!los) { e.st = 'advance'; e.stT = 0; }
+      else if (e.aimT >= T2.tell) { e.st = 'fire'; e.stT = 0; e.burst = T2.burst; }
+      break;
+    case 'fire':
+      e.tgtX = e.x; e.tgtZ = e.z;
+      if (!los || e.burst <= 0) {
+        e.st = (e.type === 'marksman') ? 'cover' : 'advance'; e.stT = 0;
+        var c = (e.type === 'marksman') ? findEnemyCover(e) : null;
+        if (c) { e.tgtX = c.x; e.tgtZ = c.z; }
+      } else if (e.fireCd <= 0) enemyShoot(e);
+      break;
+    case 'cover':
+      if (e.stT > CFG.ai.coverHold) { e.st = 'advance'; e.stT = 0; }
+      break;
+  }
+
+  // 移動
+  var mx = e.tgtX - e.x, mz = e.tgtZ - e.z, ml = Math.hypot(mx, mz);
+  var want = (ml > 0.35) ? T2.speed : 0;
+  var tvx = ml > 1e-4 ? mx / ml * want : 0, tvz = ml > 1e-4 ? mz / ml * want : 0;
+  // 狙い・射撃中は強く踏みとどまる。柱1（止まって撃つ）は敵にも同じ条件で課す。
+  // 7.0では最高速3.7m/sから止まるのに0.53秒かかり、突撃兵の予備動作0.40秒に間に合わない。
+  var acc = ((e.st === 'aim' || e.st === 'fire') ? 18.0 : 7.0) * dt;
+  var ddx = tvx - e.vx, ddz = tvz - e.vz, dl = Math.hypot(ddx, ddz);
+  if (dl <= acc || dl < 1e-6) { e.vx = tvx; e.vz = tvz; }
+  else { e.vx += ddx / dl * acc; e.vz += ddz / dl * acc; }
+  var o = { x: 0, z: 0 };
+  resolveCircle(e.x + e.vx * dt, e.z + e.vz * dt, 0.42, o);
+  e.x = o.x; e.z = o.z;
+  e.stride += Math.hypot(e.vx, e.vz) * dt * 2.2;
+
+  // 向き：交戦中はプレイヤー、それ以外は進行方向
+  var wy = (e.st === 'aim' || e.st === 'fire' || los) ? dirToYaw(dpx, dpz)
+    : ((Math.abs(e.vx) + Math.abs(e.vz) > 0.3) ? dirToYaw(e.vx, e.vz) : e.yaw);
+  e.yaw = approachAngle(e.yaw, wy, 4.5, dt);
+}
+
+/* ---- 波の進行 ---------------------------------------------------------- */
+function spawnWave(n) {
+  var w = WAVES[n];
+  for (var i = 0; i < enemies.length; i++) {
+    var e = enemies[i];
+    if (i < w.length) {
+      var d = w[i];
+      e.type = d.t; e.x = d.x; e.z = d.z; e.spawnX = d.x; e.spawnZ = d.z;
+      e.maxHp = ETYPE[d.t].hp; e.hp = e.maxHp;
+      // 当たり判定は型ごとに違う。描画側(syncRig)の差し替えを待つと
+      // 湧いた最初の1フレームだけ前の型の判定が残る。
+      if (ENEMY_HB[d.t]) { e.hb = ENEMY_HB[d.t]; e.rigType = d.t; }
+      e.dead = false; e.fall = 0; e.respawn = 0; e.active = true;
+      e.st = 'idle'; e.stT = 0; e.vx = 0; e.vz = 0; e.yaw = 0; e.fireCd = 0;
+    } else { e.active = false; e.dead = true; e.fall = 1; e.respawn = 999; }
+  }
+  banner((n + 1) + ' 波');
+}
+function updateCombat(dt) {
+  if (COMBAT.bannerT > 0) COMBAT.bannerT -= dt;
+  if (!COMBAT.on) return;
+  if (COMBAT.state === 'dead') { P.deadT += dt; return; }
+  if (COMBAT.state === 'clear') return;
+
+  // 体力の自然回復（§7の3段階は被弾の演出側で表現する）
+  if (!P.dead) {
+    P.hurtT += dt;
+    if (P.hurtT > CFG.hurt.regenDelay && P.hp < CFG.hurt.hp)
+      P.hp = Math.min(CFG.hurt.hp, P.hp + CFG.hurt.regenRate * dt);
+  }
+  P.dmgFlash = smooth(P.dmgFlash, 0, 0.35, dt);
+
+  var alive = 0;
+  for (var i = 0; i < enemies.length; i++) if (enemies[i].active && !enemies[i].dead) alive++;
+  if (alive === 0) {
+    COMBAT.t += dt;
+    if (COMBAT.t > 1.6) {
+      COMBAT.t = 0;
+      if (COMBAT.wave + 1 < WAVES.length) { COMBAT.wave++; spawnWave(COMBAT.wave); }
+      else { COMBAT.state = 'clear'; banner('制圧 ── 画面をタップでもう一度'); }
+    }
+  } else COMBAT.t = 0;
+}
+function startCombat() {
+  COMBAT.on = true; COMBAT.wave = 0; COMBAT.state = 'fight'; COMBAT.t = 0;
+  P.hp = CFG.hurt.hp; P.dead = false; P.hurtT = 0; P.dmgFlash = 0;
+  P.ammo = CFG.fire.mag; P.reloadT = 0; P.dmgMul = 1;
+  P.x = SPAWN.x; P.z = SPAWN.z; P.yaw = SPAWN.yaw; CAM.yaw = SPAWN.yaw;
+  P.state = ST.FREE; P.face = null; P.peek = 0; P.peekMode = 0;
+  CAM.px = P.x; CAM.pz = P.z;
+  spawnWave(0);
+}
+
 function updateEnemies(dt) {
+  updateCombat(dt);
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i];
     e.flash = Math.max(0, e.flash - dt * 6);
     e.knock = smooth(e.knock, 0, 0.09, dt);
     if (e.dead) {
       e.fall = Math.min(1, e.fall + dt * 3.2);
-      e.respawn -= dt;
-      if (e.respawn <= 0) { e.dead = false; e.hp = 100; e.fall = 0; }
+      // 戦闘中は復活しない。検証用の的モードのときだけ復活する。
+      if (!COMBAT.on) { e.respawn -= dt; if (e.respawn <= 0) { e.dead = false; e.hp = 100; e.fall = 0; } }
+      continue;
     }
+    if (COMBAT.on && COMBAT.state === 'fight' && e.active && !P.dead) updateEnemyAI(e, dt);
   }
 }
 
@@ -10012,6 +10352,7 @@ var _camOff = new T.Vector3(), _camDir = new T.Vector3();
    ========================================================================== */
 var renderer, scene, camera, playerRig, enemyMeshes = [];
 var FX, POST = null, SKY = null, LIGHTS = null, SFX = null, TEX = null, GUN_BARREL_Y = 0;
+var ENEMY_RIGS = {}, ENEMY_HB = {};
 
 /* アートモジュールは「あれば使う」。無ければ従来のグレーボックスで動く。
    こうしておかないと、1つでも欠けた瞬間にゲーム全体が起動しなくなる。 */
@@ -10130,13 +10471,27 @@ function initRender() {
   // 銃身の実体が gun ピボットからどれだけ上にあるか。
   // これを差し引かないと、ブラインドファイア時に銃口が意図より高く出る。
   GUN_BARREL_Y = (playerRig.flash && playerRig.flash.position) ? playerRig.flash.position.y : 0;
+  /* 敵は3種。重装型は突撃型のリグを拡大して作る（enemy.js を書き換えずに型を足すため）。
+     当たり判定はモデルの実寸から導くので、拡大分は自動で判定にも反映される。 */
+  ENEMY_RIGS = {};
+  ['rusher', 'marksman', 'heavy'].forEach(function (k) {
+    var spec = ETYPE[k];
+    var fg = hasArt('enemy') ? ART.enemy(T, MATS, spec.rig) : buildFigure(0x6b3a34, 0x4a2622, true);
+    if (spec.scale) fg.root.scale.setScalar(spec.scale);
+    fg.root.updateMatrixWorld(true);
+    ENEMY_HB[k] = hitboxFromRig(fg);
+    fg.root.visible = false; scene.add(fg.root);
+    ENEMY_RIGS[k] = fg;
+  });
   for (var e = 0; e < enemies.length; e++) {
-    // ラウンド1は的のみ。2種の作り分けはラウンド2の遭遇設計で使う。
-    var type = (e % 2 === 0) ? 'rusher' : 'marksman';
-    var fg = hasArt('enemy') ? ART.enemy(T, MATS, type) : buildFigure(0x6b3a34, 0x4a2622, true);
-    scene.add(fg.root); enemyMeshes.push(fg);
-    enemies[e].hb = hitboxFromRig(fg);      // 見た目と当たり判定を一致させる
-    enemies[e].type = type;
+    var type = enemies[e].type;
+    var spec2 = ETYPE[type];
+    var fg2 = hasArt('enemy') ? ART.enemy(T, MATS, spec2.rig) : buildFigure(0x6b3a34, 0x4a2622, true);
+    if (spec2.scale) fg2.root.scale.setScalar(spec2.scale);
+    fg2.root.updateMatrixWorld(true);
+    scene.add(fg2.root); enemyMeshes.push(fg2);
+    enemies[e].hb = ENEMY_HB[type];
+    enemies[e].rigType = type;
   }
 
   /* ---- リムを全 Lambert マテリアルに行き渡らせる ----------------------
@@ -10323,9 +10678,22 @@ function syncRig() {
 
   for (var i = 0; i < enemies.length; i++) {
     var e = enemies[i], m = enemyMeshes[i];
-    m.root.visible = true;
+    // 型が変わったらリグを差し替える（波ごとに構成が変わるため）
+    if (e.rigType !== e.type && ENEMY_RIGS[e.type]) {
+      var src = ENEMY_RIGS[e.type];
+      m.root.scale.copy(src.root.scale);
+      e.rigType = e.type; e.hb = ENEMY_HB[e.type];
+    }
+    m.root.visible = e.active !== false;
+    if (!m.root.visible) continue;
     m.root.position.set(e.x - e.knockX * e.knock * 0.10, 0, e.z - e.knockZ * e.knock * 0.10);
-    m.root.rotation.y = Math.PI;
+    m.root.rotation.y = e.yaw + Math.PI;
+    // 歩行と、撃つ前の予備動作（狙いを付けている間は前傾する）
+    var eamp = clamp(Math.hypot(e.vx, e.vz) / 3.0, 0, 1.2) * 0.55;
+    if (m.legR) m.legR.rotation.x = Math.sin(e.stride) * eamp;
+    if (m.legL) m.legL.rotation.x = -Math.sin(e.stride) * eamp;
+    var tell = (e.st === 'aim') ? clamp(e.aimT / Math.max(ETYPE[e.type].tell, 0.01), 0, 1) : 0;
+    if (m.armR) m.armR.rotation.x = -0.15 - tell * 1.05;
     m.body.rotation.x = e.fall > 0 ? e.fall * 1.5 : -e.knock * 0.22;
     m.body.position.y = e.fall > 0 ? -e.fall * 0.55 : 0;
     // enemy.js は mA と mB に同一のマテリアル参照を返すことがある。
@@ -10346,7 +10714,8 @@ var UI = {
   stickR: 62,
   els: {},
   init: function () {
-    var ids = ['stickBase', 'stickKnob', 'btnFire', 'btnAct', 'actLabel', 'reticle', 'ammo', 'dbg', 'hitmark', 'zoneL', 'zoneR', 'setPanel', 'assistBtn', 'autoBtn', 'sprintTag'];
+    var ids = ['stickBase', 'stickKnob', 'btnFire', 'btnAct', 'actLabel', 'reticle', 'ammo', 'dbg', 'hitmark', 'zoneL', 'zoneR', 'setPanel', 'assistBtn', 'autoBtn', 'sprintTag',
+      'hpwrap', 'hpbar', 'rlwrap', 'rlfill', 'rlwin', 'rlmark', 'banner', 'dmg'];
     for (var i = 0; i < ids.length; i++) this.els[ids[i]] = document.getElementById(ids[i]);
     var self = this;
     document.getElementById('btnSet').addEventListener('pointerdown', function (e) {
@@ -10437,6 +10806,30 @@ var UI = {
     e.reticle.classList.toggle('lock', !!aimTarget && !bl);
     e.reticle.classList.toggle('blind', bl);
 
+    /* 体力・アクティブリロード・被弾・告知 */
+    var hpf = clamp(P.hp / CFG.hurt.hp, 0, 1);
+    e.hpbar.style.width = (hpf * 100).toFixed(1) + '%';
+    e.hpwrap.classList.toggle('low', hpf < 0.35);
+    e.hpwrap.style.opacity = COMBAT.on ? '1' : '0.35';
+    e.dmg.style.opacity = (0.75 * P.dmgFlash + 0.55 * (1 - hpf) * (1 - hpf)).toFixed(3);
+
+    var rl = P.reloadT > 0;
+    e.rlwrap.classList.toggle('on', rl);
+    e.rlwrap.classList.toggle('ok', P.arOk);
+    e.rlwrap.classList.toggle('ng', P.arFail > 0);
+    if (rl) {
+      var total = P.arFail > 0 ? CFG.fire.arFail : CFG.fire.reload;
+      var prog = clamp(1 - P.reloadT / total, 0, 1);
+      e.rlfill.style.width = (prog * 100).toFixed(1) + '%';
+      var w0 = CFG.fire.arAt * 100, ww = CFG.fire.arWin / CFG.fire.reload * 100;
+      e.rlwin.style.left = w0 + '%'; e.rlwin.style.width = ww + '%';
+      e.rlwin.style.display = P.arFail > 0 ? 'none' : 'block';
+      e.rlmark.style.left = (prog * 100).toFixed(1) + '%';
+    }
+
+    e.banner.textContent = COMBAT.banner;
+    e.banner.classList.toggle('on', COMBAT.bannerT > 0);
+
     e.sprintTag.style.opacity = P.sprint ? '1' : '0';
     e.ammo.textContent = P.reloadT > 0 ? 'RELOAD' : (P.ammo + ' / ' + CFG.fire.mag);
     // 残弾僅少はCSSからは判定できない（textContentを読めない）ので状態をクラスで渡す
@@ -10448,6 +10841,7 @@ var UI = {
         METRICS.fps.toFixed(0) + ' fps &nbsp; ' + METRICS.ms.toFixed(1) + ' ms<br>' +
         'draw ' + METRICS.calls + ' &nbsp; tri ' + (METRICS.tris / 1000).toFixed(1) + 'k &nbsp; res ' + RES.ratio.toFixed(2) + '<br>' +
         '入力遅延 ' + METRICS.latency.toFixed(1) + ' ms<br>' +
+        'HP ' + P.hp.toFixed(0) + ' 波' + (COMBAT.wave + 1) + ' ' + COMBAT.state + '<br>' +
         'state ' + P.state + (P.sprint ? '+SPRINT' : '') + ' peek ' + P.peek.toFixed(2) +
         (P.blindT > 0.01 ? ' blind ' + P.blindT.toFixed(2) : '') + '<br>' +
         'assist ' + assistScale().toFixed(2) + (aimTarget ? ' [LOCK]' : '') +
@@ -10529,7 +10923,16 @@ function frame(now) {
 
 function boot() {
   buildWorldData();
-  for (var i = 0; i < DUMMIES.length; i++) enemies.push(makeEnemy(DUMMIES[i].x, DUMMIES[i].z));
+  /* 敵の実体は最初から MAX_ENEMIES 体作る。3波目は5体出るので、
+     配列を2体のままにすると波の構成が黙って切り詰められる（実測で発覚）。
+     出番のない個体は active=false で完全に伏せる（描画も当たり判定も対象外）。*/
+  for (var i = 0; i < MAX_ENEMIES; i++) {
+    var d = DUMMIES[i];
+    var en = makeEnemy(d ? d.x : 0, d ? d.z : -18.0);
+    if (d) en.active = true;                 // 検証用の的モードで立っている個体
+    else { en.dead = true; en.fall = 1; en.respawn = 999; }
+    enemies.push(en);
+  }
   initRender();
   UI.init();
   bindInput(document.getElementById('input'));
@@ -10549,6 +10952,41 @@ function boot() {
     tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
     pause: function (v) { paused = !!v; },
     setAutoRes: function (v) { RES.auto = !!v; },
+    /* 戦闘の有効化。既存の86項目は「敵が動かない的」を前提にしているので、
+       検証時は false にして従来どおりの的モードで走らせる。 */
+    setCombat: function (v) { COMBAT.enabled = !!v; if (!v) { COMBAT.on = false; COMBAT.state = 'idle'; } },
+    startCombat: function () { COMBAT.enabled = true; startCombat(); },
+    combat: function () { return { on: COMBAT.on, wave: COMBAT.wave, state: COMBAT.state, hp: P.hp, dead: P.dead,
+      kickP: CAM.kickP, kickY: CAM.kickY, vx: P.vx, vz: P.vz, dmgFlash: P.dmgFlash,
+      alive: enemies.filter(function (e) { return e.active && !e.dead; }).length }; },
+    reloadState: function () { return { t: P.reloadT, done: P.arDone, ok: P.arOk, fail: P.arFail, mul: P.dmgMul, ammo: P.ammo }; },
+    tapReload: function () { return activeReloadTap(); },
+    emptyMag: function () { P.ammo = 0; P.fireCd = 0; },
+    /* 敵を任意の位置・種類で置く。波の乱数や進行に依存しない検証をするため。 */
+    placeEnemy: function (i, x, z, type, st) {
+      while (enemies.length <= i) enemies.push(makeEnemy(0, 0));
+      var e = enemies[i];
+      e.type = type || e.type; e.x = x; e.z = z; e.vx = 0; e.vz = 0;
+      e.maxHp = ETYPE[e.type].hp; e.hp = e.maxHp;
+      if (ENEMY_HB[e.type]) { e.hb = ENEMY_HB[e.type]; e.rigType = e.type; }
+      e.active = true; e.dead = false; e.fall = 0; e.respawn = 0;
+      e.st = st || 'idle'; e.stT = 0; e.aimT = 0; e.fireCd = 0; e.burst = 0;
+      e.yaw = dirToYaw(P.x - x, P.z - z);
+      return e;
+    },
+    clearEnemies: function () {
+      for (var i = 0; i < enemies.length; i++) {
+        enemies[i].active = false; enemies[i].dead = true; enemies[i].fall = 1; enemies[i].respawn = 999;
+      }
+    },
+    enemyInfo: function () {
+      return enemies.map(function (e) {
+        return { type: e.type, x: e.x, z: e.z, yaw: e.yaw, hp: e.hp, st: e.st,
+          active: e.active, dead: e.dead, los: enemySeesPlayer(e) };
+      });
+    },
+    etype: function () { return ETYPE; },
+    setHp: function (v) { P.hp = v; P.hurtT = 0; },
     res: function () { return { ratio: RES.ratio, max: RES.max, step: RES.steps, auto: RES.auto }; },
     render: function () {
       syncRig(); UI.frame();
@@ -10575,7 +11013,10 @@ function boot() {
       }
     },
     healEnemies: function () {
-      for (var i = 0; i < enemies.length; i++) { enemies[i].hp = 100; enemies[i].dead = false; enemies[i].fall = 0; }
+      for (var i = 0; i < enemies.length; i++) {
+        if (!enemies[i].active) continue;    // 出番のない個体は蘇生しない
+        enemies[i].hp = enemies[i].maxHp || 100; enemies[i].dead = false; enemies[i].fall = 0;
+      }
     },
     reload: function () { P.ammo = CFG.fire.mag; P.reloadT = 0; P.fireCd = 0; },
     teleport: function (x, z, yaw) {

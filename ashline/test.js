@@ -37,7 +37,7 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
   await page.waitForFunction(() => !!window.__ASHLINE, null, { timeout: 20000 });
   // 動的解像度を止める。この環境はソフトウェア描画で常に遅く、
   // 放置すると検証中に解像度が落ちて測定条件が揺れる（実機の話ではない）。
-  await page.evaluate(() => __ASHLINE.setAutoRes(false));
+  await page.evaluate(() => { __ASHLINE.setAutoRes(false); __ASHLINE.setCombat(false); });
   await page.waitForTimeout(900);
 
   console.log('\n=== 起動 ===');
@@ -231,8 +231,8 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     const s = A.state();
     r.kind = kind; r.end = s.state; r.dist = Math.hypot(s.x - from.x, s.z - from.z); r.frames = n;
     A.setStick(0, 0); A.tick(dt, 5);
-    // 遮蔽が無い方向：純粋なロール（左端の低壁 x=-8.6 の -X面から、更に左＝壁際へ）
-    A.teleport(-9.7, 3.4, 0); A.setStick(0, 0); A.tick(dt, 4);
+    // 遮蔽が無い方向：純粋なロール（左ルートの低壁 x=-12.6,z=-3.0 の -X面から、更に左＝壁際へ）
+    A.teleport(-13.7, -3.0, 0); A.setStick(0, 0); A.tick(dt, 4);
     A.pressAct(); A.tick(dt, 2); A.releaseAct(); A.tick(dt, 20);
     const f2 = { x: A.state().x, z: A.state().z };
     r.pre2 = A.state().state;
@@ -376,10 +376,9 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     let m = 1; while (m < 300 && A.state().reload > 0) { A.tick(dt, 1); m++; }
     return { emptied: n, started, reloadFrames: m, ammo: A.state().ammo };
   });
-  check('R7 リロード：弾切れで自動リロードし、1.60秒で満タンに戻る（§7の基本値）',
-    rel.ammo === 30 && Math.abs(rel.reloadFrames / 60 - 1.60) < 0.06,
+  check('R7 リロード：弾切れで自動リロードし、1.10秒で満タンに戻る（§7のバー全長）',
+    rel.ammo === 30 && Math.abs(rel.reloadFrames / 60 - 1.10) < 0.06,
     `${(rel.reloadFrames / 60).toFixed(2)}s -> ammo=${rel.ammo}`);
-  check('R7 リロード：タイミング入力は未実装（ラウンド2）', true, '§7の成功窓0.12sはラウンド2で実装');
 
   /* ---------------------------------------------------------------------- */
   console.log('\n=== 追加機能：乗り越え / ダッシュ吸着 / ブラインドファイア ===');
@@ -533,7 +532,7 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
     bf.peekNotBlind === false && bf.peekSpread < 0.01, `isBlind=${bf.peekNotBlind}`);
 
   // --- 8. 被弾のノックバック ---------------------------------------------
-  check('R8 被弾のノックバック：ラウンド1では未実装（敵が撃ってこないため）', true, '未実装＝ラウンド2で実装');
+  // ラウンド2で実装。実際の検証は下の「=== ラウンド2 ===」で行う。
 
   /* ---------------------------------------------------------------------- */
   console.log('\n=== §7 その他の設計値 ===');
@@ -586,11 +585,280 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
   check('重量：入力を離してから停止までに余韻がある', misc.decelFrames >= 10,
     (misc.decelFrames / 60).toFixed(2) + 's');
 
+  /* ======================================================================
+     ラウンド2：敵の攻撃 / アクティブリロード / 広いステージと敵の種類
+     ここから先は戦闘を有効にする。以降のセクションは的モードに依存しない。
+     ====================================================================== */
+  console.log('\n=== ラウンド2：ステージと敵の種類 ===');
+
+  const stage = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    r.covers = A.covers.length;
+    // 外周：四隅の手前から外へ走り続けても場外へ出られないこと
+    A.setCombat(false);
+    const outs = [];
+    [[18.5, 0, -Math.PI / 2], [-18.5, 0, Math.PI / 2],
+     [0, 18.5, Math.PI], [0, -18.5, 0]].forEach(function (p) {
+      A.teleport(p[0], p[1], p[2]); A.tick(dt, 2);
+      A.setStick(0, 1); A.tick(dt, 60 * 4); A.setStick(0, 0); A.tick(dt, 10);
+      const s = A.state(); outs.push({ x: +s.x.toFixed(2), z: +s.z.toFixed(2) });
+    });
+    r.outs = outs;
+    r.maxAbs = Math.max.apply(null, outs.map(function (o) { return Math.max(Math.abs(o.x), Math.abs(o.z)); }));
+    r.minAbs = Math.min.apply(null, outs.map(function (o) { return Math.max(Math.abs(o.x), Math.abs(o.z)); }));
+    // 敵の種類
+    const E = A.etype();
+    r.types = Object.keys(E);
+    r.hp = r.types.map(function (k) { return E[k].hp; });
+    r.range = r.types.map(function (k) { return E[k].fireRange; });
+    r.keep = r.types.map(function (k) { return E[k].keep; });
+    return r;
+  });
+  check('ステージ：遮蔽が24個ある（ラウンド1は19個）', stage.covers === 24, stage.covers + '個');
+  check('ステージ：40m四方に拡張され、四方向どこへ走っても場外へ出られない',
+    stage.maxAbs < 20 && stage.minAbs > 18.5,
+    '到達端 ' + stage.minAbs.toFixed(2) + '〜' + stage.maxAbs.toFixed(2) + 'm / ' + JSON.stringify(stage.outs));
+  check('敵：3種類いる（rusher / marksman / heavy）',
+    stage.types.length === 3 && stage.types.indexOf('rusher') >= 0 &&
+    stage.types.indexOf('marksman') >= 0 && stage.types.indexOf('heavy') >= 0,
+    stage.types.join(', '));
+  check('敵：3種で耐久・射程・間合いが全て異なる（役割が被っていない）',
+    new Set(stage.hp).size === 3 && new Set(stage.range).size === 3 && new Set(stage.keep).size === 3,
+    'HP ' + stage.hp.join('/') + '  射程 ' + stage.range.join('/') + '  間合い ' + stage.keep.join('/'));
+
+  console.log('\n=== ラウンド2：敵が攻撃してくる ===');
+
+  // 開けた場所（x=9.5のレーンは z=-12..-6 に遮蔽が無い）で撃たれる
+  const open = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    A.startCombat(); A.clearEnemies();
+    A.placeEnemy(0, 9.5, -12.0, 'rusher');
+    A.teleport(9.5, -6.0, Math.PI); A.setStick(0, 0); A.tick(dt, 3);
+    r.los0 = A.enemyInfo()[0].los > 0;
+    r.minHp = 100; r.sawAim = false; r.fireSpeed = 0; r.faceErr = 0; r.states = {};
+    r.walk = A.etype().rusher.speed;
+    for (let i = 0; i < 60 * 8; i++) {
+      A.tick(dt, 1);
+      const c = A.combat(), e = A.enemyInfo()[0];
+      if (c.hp < r.minHp) r.minHp = c.hp;
+      r.states[e.st] = (r.states[e.st] || 0) + 1;
+      if (e.st === 'aim') r.sawAim = true;
+      // 「撃っている瞬間」の速度と向きだけを見る。最悪値で採る。
+      if (e.st === 'fire' && r.lx !== undefined) {
+        const sp = Math.hypot(e.x - r.lx, e.z - r.lz) / dt;
+        if (sp > r.fireSpeed) r.fireSpeed = sp;
+        const want = Math.atan2(-(A.state().x - e.x), -(A.state().z - e.z));
+        let d = e.yaw - want; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+        if (Math.abs(d) > r.faceErr) r.faceErr = Math.abs(d);
+      }
+      r.lx = e.x; r.lz = e.z;
+      if (c.dead) break;
+    }
+    const c = A.combat();
+    r.kick = Math.abs(c.kickP) + Math.abs(c.kickY);
+    r.knock = Math.hypot(c.vx, c.vz);
+    return r;
+  });
+  check('敵AI：遮蔽の無いレーンではプレイヤーを視認する', open.los0, 'los=' + open.los0);
+  check('敵AI：狙い（aim）を経てから撃つ ── 予備動作がある',
+    open.sawAim && open.states.fire > 0,
+    JSON.stringify(open.states));
+  check('敵AI：撃っている間は止まっている（柱1「止まって撃つ」を敵にも課す）',
+    open.fireSpeed < 0.05, '発砲中の最大速度 ' + open.fireSpeed.toFixed(3) +
+    ' m/s（移動速度 ' + open.walk + ' m/s）');
+  check('敵AI：撃つときはプレイヤーを向いている（最大誤差5°未満）',
+    open.faceErr < 5 * Math.PI / 180, (open.faceErr * 180 / Math.PI).toFixed(2) + '°');
+  check('R8 被弾：開けた場所に立っているとHPが減る',
+    open.minHp < 100, 'HP最低 ' + open.minHp.toFixed(1) + ' / 100');
+  check('R8 被弾：カメラキックが入る（痛みが画面に出る）',
+    open.kick > 0, (open.kick * 180 / Math.PI).toFixed(2) + '°');
+
+  // 同じ敵・同じ時間、ただし高い遮蔽(z=-9.4,h=2.05)の裏
+  const behind = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    A.startCombat(); A.clearEnemies();
+    A.placeEnemy(0, 0.0, -16.0, 'marksman');     // 間合い15mで下がるので回り込まない
+    A.teleport(0.0, -8.4, Math.PI); A.setStick(0, 0); A.tick(dt, 3);
+    r.los0 = A.enemyInfo()[0].los;
+    r.minHp = 100;
+    for (let i = 0; i < 60 * 8; i++) {
+      A.tick(dt, 1);
+      const c = A.combat(); if (c.hp < r.minHp) r.minHp = c.hp;
+    }
+    r.los1 = A.enemyInfo()[0].los;
+    r.ex = A.enemyInfo()[0].x; r.ez = A.enemyInfo()[0].z;
+    return r;
+  });
+  check('R6/柱1 遮蔽が敵の射線を切る（高壁の裏では視認されない）',
+    behind.los0 === 0 && behind.los1 === 0, 'los ' + behind.los0 + ' -> ' + behind.los1);
+  check('R8 被弾：高い遮蔽の裏に居れば8秒間まったく減らない',
+    behind.minHp === 100, 'HP ' + behind.minHp.toFixed(1) +
+    ' / 敵位置 (' + behind.ex.toFixed(1) + ', ' + behind.ez.toFixed(1) + ')');
+
+  console.log('\n=== ラウンド2：アクティブリロード（§7 バー1.10s / 成功窓0.12s） ===');
+
+  const ar = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    const C = A.CFG.fire;
+    r.cfg = { reload: C.reload, at: C.arAt, win: C.arWin, bonus: C.arBonus, gain: C.arGain, fail: C.arFail };
+    A.setCombat(false); A.teleport(0, 9, 0); A.setStick(0, 0); A.tick(dt, 5);
+
+    // (1) リロード中でないときのタップは何も起こさない
+    A.reload(); A.tick(dt, 2);
+    r.tapIdle = A.tapReload();
+
+    // 共通：弾倉を空にしてリロードを立ち上げる。以降の経過フレームを frames で数える。
+    let frames = 0;
+    function startReload() {
+      A.reload(); A.emptyMag(); A.tick(dt, 1);   // 次フレームで reloadT が立つ
+      frames = 0;
+      return A.reloadState().t;
+    }
+    // 進捗 prog に達するまで進める
+    function tickTo(prog) {
+      let n = 0;
+      while (n < 400 && (1 - A.reloadState().t / C.reload) < prog) { A.tick(dt, 1); n++; frames++; }
+      return 1 - A.reloadState().t / C.reload;
+    }
+    function finish() {
+      let n = 0;
+      while (n < 400 && A.reloadState().t > 0) { A.tick(dt, 1); n++; frames++; }
+      return frames;   // リロード開始からの総フレーム数
+    }
+
+    // (2) 成功窓のど真ん中でタップ
+    r.t0 = startReload();
+    r.progOk = tickTo(C.arAt + 0.5 * C.arWin / C.reload);
+    const before = A.reloadState().t;
+    r.tapOk = A.tapReload();
+    const after = A.reloadState().t;
+    r.gain = before - after;
+    r.okFlag = A.reloadState().ok;
+    // (3) 二度目のタップは受け付けない
+    r.tapTwice = A.tapReload();
+    r.okFrames = finish();
+    r.mulAfterOk = A.reloadState().mul;
+    r.ammoAfterOk = A.reloadState().ammo;
+
+    // (4) 窓の手前でタップ＝失敗
+    startReload();
+    r.progNg = tickTo(C.arAt * 0.35);
+    r.tapNg = A.tapReload();
+    r.ngRemain = A.reloadState().t;
+    r.ngFrames = finish();
+    r.mulAfterNg = A.reloadState().mul;
+
+    // (5) 何もしなければ基本の1.10秒
+    startReload();
+    r.plainFrames = finish();
+    r.mulPlain = A.reloadState().mul;
+    return r;
+  });
+  check('AR 設定値が§7どおり（全長1.10s / 成功窓0.12s / 成功-0.35s / 失敗1.60s / +20%）',
+    ar.cfg.reload === 1.10 && ar.cfg.win === 0.12 && ar.cfg.gain === 0.35 &&
+    ar.cfg.fail === 1.60 && ar.cfg.bonus === 1.20, JSON.stringify(ar.cfg));
+  check('AR リロード中でないタップは無視される（誤爆しない）', ar.tapIdle === false, String(ar.tapIdle));
+  check('AR 成功：所要が0.35秒短縮される',
+    ar.tapOk === true && Math.abs(ar.gain - 0.35) < 0.02, '短縮 ' + ar.gain.toFixed(3) + 's');
+  check('AR 成功：次の弾倉の火力が+20%になる',
+    ar.okFlag === true && Math.abs(ar.mulAfterOk - 1.20) < 1e-6 && ar.ammoAfterOk === 30,
+    '倍率 ' + ar.mulAfterOk + ' / 装弾 ' + ar.ammoAfterOk);
+  check('AR タップは1回だけ有効（連打で稼げない）', ar.tapTwice === false, String(ar.tapTwice));
+  check('AR 失敗：タップした時点から残り1.60秒の停止ペナルティになる',
+    ar.tapNg === true && Math.abs(ar.ngRemain - 1.60) < 0.02 &&
+    ar.ngFrames / 60 > 1.60,
+    '残り' + ar.ngRemain.toFixed(2) + 's / 開始からの総所要' + (ar.ngFrames / 60).toFixed(2) + 's');
+  check('AR 失敗した弾倉には火力ボーナスが付かない',
+    Math.abs(ar.mulAfterNg - 1.0) < 1e-6, '倍率 ' + ar.mulAfterNg);
+  check('AR 無操作は1.10秒。成功すると0.75秒前後で終わる（3割速い）',
+    Math.abs(ar.plainFrames / 60 - 1.10) < 0.06 &&
+    Math.abs(ar.okFrames / 60 - (1.10 - 0.35)) < 0.06 &&
+    Math.abs(ar.mulPlain - 1.0) < 1e-6,
+    '無操作' + (ar.plainFrames / 60).toFixed(2) + 's / 成功' + (ar.okFrames / 60).toFixed(2) + 's');
+
+  console.log('\n=== ラウンド2：波の進行 ===');
+
+  const wave = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    A.startCombat();
+    r.w0 = A.combat().wave; r.alive0 = A.combat().alive;
+    r.spawn = { x: +A.state().x.toFixed(1), z: +A.state().z.toFixed(1) };
+    r.types0 = A.enemyInfo().filter(function (e) { return e.active && !e.dead; }).map(function (e) { return e.type; });
+    // 波ごとに全滅させ、次の波が湧くことを見る
+    r.seen = [];
+    for (let w = 0; w < 6; w++) {
+      const c0 = A.combat();
+      if (c0.state === 'clear') break;
+      r.seen.push({ wave: c0.wave, alive: c0.alive,
+        types: A.enemyInfo().filter(function (e) { return e.active && !e.dead; }).map(function (e) { return e.type; }) });
+      // 全滅させる（検証対象は進行なので、撃ち合いの結果ではなく直接消す）
+      A.clearEnemies();
+      let n = 0;
+      while (n < 60 * 6 && A.combat().wave === c0.wave && A.combat().state !== 'clear') {
+        A.setHp(100); A.tick(dt, 1); n++;
+      }
+    }
+    r.state = A.combat().state; r.wave = A.combat().wave;
+    return r;
+  });
+  check('波：開始時は1波目で、湧きの型どおり rusher×2',
+    wave.w0 === 0 && wave.alive0 === 2 && wave.types0.join(',') === 'rusher,rusher',
+    '波' + (wave.w0 + 1) + ' / ' + wave.types0.join(','));
+  check('波：初期配置は手前(z≈16)の遮蔽の近く',
+    wave.spawn.z > 14 && Math.abs(wave.spawn.x) < 1, JSON.stringify(wave.spawn));
+  check('波：全滅させると次の波が湧き、3波で「制圧」になる',
+    wave.seen.length === 3 && wave.state === 'clear' && wave.wave === 2,
+    wave.seen.map(function (s) { return (s.wave + 1) + '波:' + s.types.join('+'); }).join(' / ') + ' -> ' + wave.state);
+  check('波：後の波ほど敵が増え、種類も混ざる',
+    wave.seen.length === 3 && wave.seen[2].alive > wave.seen[0].alive &&
+    new Set(wave.seen[2].types).size >= 3,
+    wave.seen.map(function (s) { return s.alive + '体(' + new Set(s.types).size + '種)'; }).join(' -> '));
+
+  const die = await sim(() => {
+    const A = __ASHLINE, dt = 1 / 60, r = {};
+    A.startCombat(); A.clearEnemies();
+    A.placeEnemy(0, 9.5, -12.0, 'heavy');
+    A.teleport(9.5, -6.0, Math.PI); A.setStick(0, 0); A.tick(dt, 3);
+    r.n = 0;
+    while (r.n < 60 * 40 && !A.combat().dead) { A.tick(dt, 1); r.n++; }
+    r.dead = A.combat().dead; r.hp = A.combat().hp; r.st = A.combat().state;
+    // 再挑戦
+    A.startCombat(); A.tick(dt, 3);
+    r.retryHp = A.combat().hp; r.retryState = A.combat().state; r.retryWave = A.combat().wave;
+    A.setCombat(false);
+    return r;
+  });
+  check('R8 被弾：撃たれ続ければ倒れる（HP0で dead）',
+    die.dead === true && die.hp === 0 && die.st === 'dead',
+    (die.n / 60).toFixed(1) + '秒で戦闘不能');
+  check('再挑戦：もう一度1波目から始まり、HPが満タンに戻る',
+    die.retryHp === 100 && die.retryState === 'fight' && die.retryWave === 0,
+    'HP' + die.retryHp + ' / ' + die.retryState + ' / 波' + (die.retryWave + 1));
+
   /* ---------------------------------------------------------------------- */
   console.log('\n=== 描画予算（§12。ソフトウェア描画のためfpsは測れない） ===');
   const budget = await page.evaluate(() => { __ASHLINE.render(); return __ASHLINE.state(); });
   check('§12 ドローコール ≤ 150', budget.calls <= 150, 'draw=' + budget.calls);
   check('§12 三角形 ≤ 250,000', budget.tris <= 250000, 'tri=' + budget.tris);
+
+  // 最悪条件（3波目＝敵5体が全員画面内）で測り直す。2体の状態だけで合格を主張しない。
+  const budget3 = await page.evaluate(() => {
+    const A = __ASHLINE, dt = 1 / 60;
+    A.startCombat();
+    A.clearEnemies();
+    const w = [['rusher', -5, -14], ['rusher', 5, -14], ['marksman', -15, -2],
+               ['marksman', 15, -2], ['heavy', 0, -16]];
+    w.forEach(function (d, i) { A.placeEnemy(i, d[1], d[2], d[0]); });
+    A.teleport(0, 8.0, 0); A.setStick(0, 0); A.tick(dt, 2);
+    A.render();
+    const s = A.state();
+    const vis = A.enemyMeshes.filter(function (m) { return m.root.visible; }).length;
+    A.setCombat(false);
+    return { calls: s.calls, tris: s.tris, vis: vis };
+  });
+  check('§12 最悪条件（敵5体が同時に画面内）でもドローコール ≤ 150',
+    budget3.calls <= 150 && budget3.vis === 5, 'draw=' + budget3.calls + ' / 表示中の敵 ' + budget3.vis + '体');
+  check('§12 最悪条件でも三角形 ≤ 250,000', budget3.tris <= 250000, 'tri=' + budget3.tris);
 
   /* ---------------------------------------------------------------------- */
   console.log('\n=== スクリーンショット ===');

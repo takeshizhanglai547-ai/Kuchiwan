@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#22262a">
-<title>ASHLINE — Round 1 greybox</title>
+<title>ASHLINE</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -78,7 +78,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 /* ---- 画面外周のHUD（視線を中央から離さない） ---- */
 #ammo{position:absolute;right:calc(var(--pad-x) + 2px);bottom:calc(3.2vh + var(--btn) + 8px);
   color:rgba(225,235,245,.72);font-size:13px;letter-spacing:.10em;font-variant-numeric:tabular-nums}
-#sprintTag{position:absolute;left:50%;transform:translateX(-50%);bottom:2.2vh;
+/* リロードバー(bottom 1.6vh / 7px)の上に逃がす。ダッシュ中にリロードは走るため重なる */
+#sprintTag{position:absolute;left:50%;transform:translateX(-50%);bottom:4.2vh;
   color:rgba(255,200,160,.9);font-size:11px;letter-spacing:.28em;opacity:0;transition:opacity .12s}
 
 /* ---- デバッグ / 設定（親指の届かない上部に置く） ---- */
@@ -100,6 +101,34 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
 #zoneL,#zoneR{position:absolute;bottom:0;height:35%;border:1px dashed rgba(120,220,160,.30)}
 #zoneL{left:0;width:45%}#zoneR{right:0;width:45%}
 
+/* ---- 体力：画面外周（左下、スティックの上）。数字ではなく帯で持たせる ---- */
+#hpwrap{position:absolute;left:var(--pad-x);bottom:calc(3.2vh + var(--btn) + 10px);
+  width:min(30vw,190px);height:5px;background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden}
+#hpbar{height:100%;width:100%;background:rgba(216,221,226,.82);
+  transition:width .12s linear,background-color .2s linear}
+#hpwrap.low #hpbar{background:rgba(255,138,76,.95)}
+
+/* ---- アクティブリロード：下端中央。成功窓を白い帯で見せる ---- */
+#rlwrap{position:absolute;left:50%;transform:translateX(-50%);bottom:1.6vh;
+  width:min(46vw,280px);height:7px;background:rgba(0,0,0,.5);border-radius:4px;
+  overflow:hidden;opacity:0;transition:opacity .1s linear}
+#rlwrap.on{opacity:1}
+#rlfill{position:absolute;left:0;top:0;height:100%;width:0;background:rgba(139,148,157,.55)}
+#rlwin{position:absolute;top:0;height:100%;background:rgba(216,221,226,.85)}
+#rlmark{position:absolute;top:-2px;width:2px;height:11px;background:rgba(255,255,255,.95)}
+#rlwrap.ok{box-shadow:0 0 0 1px rgba(255,138,76,.9)}
+#rlwrap.ng #rlfill{background:rgba(216,90,58,.7)}
+
+/* ---- 波・勝敗の告知。中央だが一瞬だけ ---- */
+#banner{position:absolute;left:0;right:0;top:26%;text-align:center;
+  color:rgba(230,236,242,.94);font-size:clamp(15px,3.4vh,26px);letter-spacing:.22em;
+  text-shadow:0 2px 8px rgba(0,0,0,.9);opacity:0;transition:opacity .25s linear;pointer-events:none}
+#banner.on{opacity:1}
+
+/* ---- 被弾：画面周辺に血糊。視界の中央は塞がない ---- */
+#dmg{position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,0) 42%,rgba(120,20,12,.55) 100%)}
+
 #rotate{position:fixed;inset:0;z-index:100;background:#15181b;display:none;
   align-items:center;justify-content:center;color:#9fb4c8;font-size:15px;letter-spacing:.1em}
 #boot{position:fixed;inset:0;z-index:200;background:#15181b;display:flex;
@@ -117,6 +146,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#15181b;
   <div id="btnAct"><span id="actLabel">遮蔽</span></div>
   <div id="btnFire">FIRE</div>
   <div id="ammo">30 / 30</div>
+  <div id="hpwrap"><div id="hpbar"></div></div>
+  <div id="rlwrap"><div id="rlfill"></div><div id="rlwin"></div><div id="rlmark"></div></div>
+  <div id="banner"></div>
+  <div id="dmg"></div>
   <div id="sprintTag">D A S H</div>
   <div id="dbg"></div>
 </div>
