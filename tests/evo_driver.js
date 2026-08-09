@@ -336,6 +336,33 @@ const DRIVER = `
       +'rad、伸び '+m.map(function(r){return Math.round(r.ext);}).join('→')+')');
   }
 
+  // ===== 12) 空中攻撃も段位でモーションが変わる =====
+  // 以前は段位で伸びるのがダメージと間合いだけで、振りは全レベル共通だった
+  {
+    function airMotion(lv){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+      p.hp=p.maxHp=99999; p.poseB=null;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      p.state='jump'; p.z=140; p.vz=0; p.jAtk=13; p.jHit=new Set();
+      p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+      const sw=[]; let n=0;
+      while(p.jAtk>0 && n<60){ n++; hitStop=0; slowmo=0; p.vz=0; p.z=140; step(1);
+        if(p.poseB) sw.push(p.poseB.swAng); }
+      let mn=1e9, mx=-1e9; sw.forEach(function(v){ mn=Math.min(mn,v); mx=Math.max(mx,v); });
+      // 切り返しがあるか：最大値に達したあとで戻るか
+      let peak=0; sw.forEach(function(v,i){ if(v===mx) peak=i; });
+      const back = (peak < sw.length-2) && (sw[sw.length-1] < mx-0.10);
+      return {range:mx-mn, back:back, n:sw.length}; }
+    const A=[1,8,16].map(airMotion);
+    if(!(A[0].range<A[1].range && A[1].range<A[2].range))
+      throw new Error('空中斬りの振り幅が段位で増えない: '+A.map(function(r){return r.range.toFixed(2);}).join('/'));
+    if(A[0].back) throw new Error('Lv1の空中斬りに切り返しがある（単純な一振りのはず）');
+    if(!A[2].back) throw new Error('極の空中斬りに返す刃の切り返しが無い');
+    console.log('空中技のモーション OK (振り幅 '+A.map(function(r){return r.range.toFixed(2);}).join('→')
+      +'rad、極だけ返す刃で切り返す)');
+  }
+
   console.log('EVOLUTION TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

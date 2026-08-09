@@ -7571,7 +7571,10 @@ function drawPlayer(){
     sqX=1+0.05*ap; sqY=1-0.05*ap;                              // 頂点でだけわずかに開く
     // 速度による伸縮とばねの着地潰れは描画側（updateRigP と空中スケール）が既に掛けているので、
     // ここで重ねると二重に伸びる
-    if(p.jAtk>0){ const e=easeOut(1-p.jAtk/18); const big=Math.sin(clamp(1-p.jAtk/18,0,1)*Math.PI);
+    // 空中技も段位で振りを変える。段位で伸びていたのはダメージと間合いだけで、
+    // モーションは全レベル共通だった
+    const _at=evoTier(p), _ax=[0,1,2][_at];
+    if(p.jAtk>0){ const e=easeOut(1-p.jAtk/18); const big=Math.sin(clamp(1-p.jAtk/18,0,1)*Math.PI)*(1+0.22*_ax);
       if(p.jDown){ // 下突き：剣を真下に突き刺す（両脚を伸ばし直立）
         swAng=1.55; swExt=24*(1+0.8*big); trailCol='#aef0ff'; tA0=1.3; tA1=1.7; trailW=1.8;
         backArm=1.4; thF=0.25; thB=-0.05; kF=0.1; kB=0.1; sqY=1+0.12*big; sqX=1-0.08*big; bodyY=0;
@@ -7594,8 +7597,16 @@ function drawPlayer(){
       } else if(p.jDrop){ // 回転踵落とし：片脚を真下へ伸ばして回転
         mode='fist'; swAng=0.4; backArm=0.4; thF=1.5; thB=0.2; kF=0.1; kB=0.9; trailCol='#9fe8ff'; tA0=0.6; tA1=2.0; trailW=1.8; bodyY=-1; sqY=1.06;
       } else {
-        swAng=lerp(-1.7,1.2,e); swExt=18*(1+1.1*big); trailCol='#fff'; tA0=-1.7; tA1=swAng;
-        backArm=-1.3; faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
+        // 極は「返す刃」で二段斬るので、振りも往路→復路の二度に分ける
+        const u=clamp(1-p.jAtk/18,0,1);
+        const a0=-1.7-0.35*_ax, a1=1.2+0.35*_ax;
+        if(_ax>=2 && u>0.55){ const v=(u-0.55)/0.45;                    // 復路：切り返して逆へ薙ぐ
+          swAng=lerp(a1,a0*0.72,easeOut(v)); tA0=a1; tA1=swAng; trailCol='#eaffff'; }
+        else { const v=_ax>=2? clamp(u/0.55,0,1) : u;
+          swAng=lerp(a0,a1,easeOut(v)); tA0=a0; tA1=swAng; trailCol='#fff'; }
+        swExt=18*(1+1.1*big)*(1+0.16*_ax);
+        backArm=-1.3-0.20*_ax; lean=0.10*_ax*Math.sin(u*Math.PI);
+        faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
       drawTrail=true; tk=1-p.jAtk/18; }
     // 攻撃していない滞空では3相で決めた腕の角度をそのまま使う。
     // ここで定数に上書きしていたため、上昇で腕が上がり落下で下りる動きが1フレームも起きていなかった
