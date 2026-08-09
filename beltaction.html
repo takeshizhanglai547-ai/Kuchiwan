@@ -2788,17 +2788,52 @@ function drawGreatOne(){
 //  攻撃＋掴み同時押しの必殺技（全キャラ・クールタイム制）
 //======================================================================
 const SG_CD=540;   // 約9秒のクールタイム
+
+// ── 攻撃＋掴み同時押しの奥義 ──
+// シマ／ヌコ／ガードワン／ワッチの4つは p.state すら設定しておらず、効果だけが出て
+// モーションが一切無かった。専用ステートを与え、段位で振りと段数を変える。
+//   dur  = 技の総フレーム／burst = 効果が出るフレーム（段位ごとに段数が増える）
+const SG_ACT={
+  shima:{ col:'#ffd24d',
+    name:['虎魂・大喝！！','虎魂・双喝！！','虎魂・獅子吼！！！'],
+    dur:[38,48,60], burst:[[16],[14,30],[12,26,42]] },
+  nuko:{ col:'#d6a6ff',
+    name:['精霊大召喚・エレメンタルバースト！','四大召喚・エレメンタルストーム！','万象召喚・エレメンタルカタストロフ！'],
+    dur:[42,54,68], burst:[[18],[16,34],[14,30,48]] },
+  guard8:{ col:'#c8ccd4',
+    name:['不動要塞・アイアンウォール！','鋼鉄要塞・アイアンウォール改！','絶対要塞・アダマントウォール！！'],
+    dur:[40,50,62], burst:[[18],[16,32],[14,28,44]] },
+  watch:{ col:'#ffe14d',
+    name:['大怪盗・銭形乱舞！','大怪盗・小判時雨！','大怪盗・黄金大盤振舞！！'],
+    dur:[38,50,64], burst:[[14],[12,28],[10,24,40]] },
+};
+function sgTierOf(p){ return evoTier(p); }
 function beginSGMove(p){
   if(p.sgCd>0){ popText(p.x,p.y-122,'まだ力が溜まらない…（あと'+Math.ceil(p.sgCd/60)+'秒）','#9fb4cf'); return false; }
   p.sgCd=SG_CD;
-  if(p.kind==='shima') beginTigerRoar(p);
-  else if(p.kind==='nuko') beginElemBurst(p);
-  else if(p.kind==='guard8') beginIronWall(p);
-  else if(p.kind==='watch') beginZeniStorm(p);
-  else if(p.kind==='wanden') beginMuchiRen(p);
-  else beginMugetsu(p);
+  if(p.kind==='wanden') beginMuchiRen(p);
+  else if(p.kind==='inu') beginMugetsu(p);
+  else beginSGAct(p, p.kind);
   return true;
 }
+// 4キャラ共通の奥義ステート。段位で構えの長さ・段数・振りが変わる
+function beginSGAct(p,kind){ const A=SG_ACT[kind], ti=sgTierOf(p);
+  p.state='sgact'; p.sgKind=kind; p.sgTier=ti; p.sgT=0; p.sgSeg=0;
+  p.vx=0; p.atk=null; p.charge=0; p.atkHeld=false;
+  p.invuln=Math.max(p.invuln, A.dur[ti]+14);
+  popText(p.x,p.y-136, A.name[ti], A.col, true);
+  triggerSlow(16+8*ti); sfx.charge(p.x);
+  if(p.rig){ sprKick(p.rig.sq,-5.5-1.5*ti); sprKick(p.rig.capeT,-7); } }
+function updateSGAct(){ const p=player, A=SG_ACT[p.sgKind], ti=p.sgTier|0;
+  p.sgT++; p.invuln=Math.max(p.invuln,8); p.vx*=0.82; p.x+=p.vx;
+  const B=A.burst[ti];
+  // 溜めの間は気配だけ。段位が上がるほど濃く
+  if(p.sgT<B[0] && gf%2===0 && perfTier<2)
+    ember(p.x+rnd(-20,20), p.y-rnd(8,74), rnd(-0.5,0.5), -rnd(1.2,3.2), A.col);
+  for(let i=0;i<B.length;i++) if(p.sgT===B[i]){ p.sgSeg=i+1;
+    sgBurst(p, p.sgKind, ti, i, B.length);
+    if(p.rig){ sprKick(p.rig.sq, 7+2*i); sprKick(p.rig.wob, p.facing*(8+2*i)); } }
+  if(p.sgT>=A.dur[ti]){ p.state='idle'; p.invuln=Math.max(p.invuln,18); } }
 // ワンデン「大居合・一文字」：前方へ長大な横薙ぎの一閃を放つ（画面を横断する斬撃）
 function beginMuchiRen(p){ const dir=p.facing;
   p.state='ichimonji'; p.imT=0; p.imHit=false; p.vx=0; p.invuln=Math.max(p.invuln,52); p.atk=null; p.charge=0; p.atkHeld=false;
@@ -2841,43 +2876,62 @@ function updateMugetsu(p){ p.mgT++; p.invuln=Math.max(p.invuln,10);
   p.mgI++;
   if(p.mgI>=p.mgList.length){ p.state='idle'; p.invuln=Math.max(p.invuln,26); triggerSlow(12); sfx.ko(p.x); }
 }
-// シマ「虎魂・大喝」：画面中を震わせる雄叫びで敵を痺れさせる
-function beginTigerRoar(p){ p.vx=0; p.invuln=Math.max(p.invuln,44);
-  popText(p.x,p.y-132,'虎魂・大喝！！','#ffd24d',true);
-  ring(p.x,p.y-46,'#ffd24d'); ring(p.x,p.y-46,'#fff'); ring(p.x,p.y-46,'#ff8a3a');
-  spark(p.x,p.y-52,'#ffd24d',26,12); flash=Math.max(flash,5); shake=13; triggerSlow(22); sfx.boss(p.x); sfx.big(p.x);
-  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>W*0.62)continue;
-    noHitStopOnce=true; damageEnemy(e,TD( Math.round(16*(p.atkMul||1))), (e.x<p.x?-1:1)*2, false);
-    if(!e.dead){ e.stun=Math.max(e.stun||0,110);
-      if(!ETYPE[e.type].boss){ e.state='hurt'; e.hurtTimer=Math.max(e.hurtTimer||0,80); e.vx=0; }
-      popText(e.x,e.y-e.h-8,'ビリビリ…','#ffe9a0'); } } }
-// ヌコ「精霊大召喚・エレメンタルバースト」：炎・氷・雷が一度に画面を襲う
-function beginElemBurst(p){ const mul=nukoMul(p); p.vx=0; p.invuln=Math.max(p.invuln,54);
-  popText(p.x,p.y-132,'精霊大召喚・エレメンタルバースト！','#d6a6ff',true);
-  ring(p.x,p.y-46,'#ff8a3a'); ring(p.x,p.y-46,'#9fd6ff'); ring(p.x,p.y-46,'#ffe14d');
-  flash=Math.max(flash,5); shake=11; triggerSlow(22); sfx.boss(p.x); sfx.zap(p.x);
-  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>W*0.58)continue;
-    particles.push({k:'laser',x:e.x,gy:LANE-groundLift(e.x),life:9,max:9});   // 雷の柱
-    spark(e.x,e.y-e.h*0.5,'#ff8a3a',12,9); spark(e.x,e.y-e.h*0.5,'#9fd6ff',8,7);   // 炎と氷片
-    noHitStopOnce=true; damageEnemy(e,TD( Math.round(20*mul)), (e.x<p.x?-1:1)*3, true);
-    if(!e.dead && !ETYPE[e.type].boss){ e.frozen=90; e.stun=Math.max(e.stun||0,90); e.state='hurt'; e.hurtTimer=90; e.vx=0; } } }
-// ガードワン「不動要塞・アイアンウォール」：大地を打ち据え、しばし鉄壁の要塞と化す
-function beginIronWall(p){ p.fortT=420; p.vx=0; p.invuln=Math.max(p.invuln,30);
-  popText(p.x,p.y-136,'不動要塞・アイアンウォール！','#c8ccd4',true);
-  ring(p.x,p.y-42,'#c8ccd4'); ring(p.x,p.y-42,'#fff'); dust(p.x,p.y,16);
-  shake=11; flash=Math.max(flash,3); quake=Math.max(quake,18); sfx.big(p.x); sfx.guard(p.x);
-  for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)<180){
-    noHitStopOnce=true; damageEnemy(e,TD( 20), (e.x<p.x?-1:1)*5, true); launchEnemy(e,(e.x<p.x?-1:1)*9,-8,2); } } }
-// ワッチ「大怪盗・銭形乱舞」：小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめる
-function beginZeniStorm(p){ p.vx=0; const dir=p.facing;
-  popText(p.x,p.y-132,'大怪盗・銭形乱舞！','#ffe14d',true);
-  flash=Math.max(flash,3); triggerSlow(14); sfx.boss(p.x); sfx.coin(p.x);
-  for(let i=0;i<16;i++){ spark(p.x+dir*(30+i*22)+rnd(-10,10), p.y-36-((i*41)%80), '#ffd24d', 3, 7); }
-  let hits=0;
-  for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
-    if(dx>-24 && dx<380){ noHitStopOnce=true; damageEnemy(e,TD( 26), dir*4, true); hits++;
-      coins+=3; popText(e.x,e.y-e.h-10,'+3¢','#ffe14d'); ring(e.x,e.y-e.h*0.5,'#ffe14d'); } }
-  if(hits){ sfx.coin(p.x); popText(p.x,p.y-108,hits+'体から頂戴！','#ffe9a0'); } shake=8; }
+// ── 奥義の効果本体。seg = 何段目か／n = 全段数。段位で段数そのものが増える ──
+function sgBurst(p,kind,ti,seg,n){
+  const last=(seg===n-1), mul=(p.atkMul||1), dir=p.facing;
+  const F=[1,1.18,1.40][ti];                          // 段位ごとの威力係数
+  if(kind==='shima'){                                  // 虎魂：咆哮が段ごとに前へ広がる
+    const R=W*(0.42+0.20*seg+0.10*ti);
+    ring(p.x,p.y-46,'#ffd24d'); ring(p.x,p.y-46,'#fff');
+    if(ti>=1) ring(p.x,p.y-46,'#ff8a3a');
+    shockwave(p.x,p.y-30,{r:120+70*seg+40*ti,color:'#ffd24d',big:last&&ti>=1});
+    spark(p.x,p.y-52,'#ffd24d',18+8*seg,11+seg); flash=Math.max(flash,4+seg);
+    shake=Math.max(shake,11+3*seg); sfx.boss(p.x); sfx.big(p.x);
+    if(last) triggerSlow(20+6*ti);
+    for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>R)continue;
+      noHitStopOnce=true; damageEnemy(e,TD(Math.round(16*mul*F)),(e.x<p.x?-1:1)*(2+2*seg), last&&ti>=2);
+      if(!e.dead){ e.stun=Math.max(e.stun||0,110+30*ti);
+        if(!ETYPE[e.type].boss){ e.state='hurt'; e.hurtTimer=Math.max(e.hurtTimer||0,80); e.vx=0; }
+        if(last&&ti>=2) launchEnemy(e,(e.x<p.x?-1:1)*10,-11,2);      // 極は最後に打ち上げる
+        if(seg===0) popText(e.x,e.y-e.h-8,'ビリビリ…','#ffe9a0'); } } }
+  else if(kind==='nuko'){                              // 精霊：段ごとに属性が変わる
+    const m2=nukoMul(p), R=W*(0.40+0.18*seg+0.10*ti);
+    const EL=[{c:'#ff8a3a',n:'炎'},{c:'#9fd6ff',n:'氷'},{c:'#ffe14d',n:'雷'}][seg%3];
+    if(seg===0) nukoSigil(p, EL.c, 76+18*ti);
+    ring(p.x,p.y-46,EL.c); flash=Math.max(flash,4+seg); shake=Math.max(shake,9+3*seg);
+    sfx.boss(p.x); if(seg%3===2) sfx.zap(p.x); else if(seg%3===0) sfx.flame(p.x);
+    for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>R)continue;
+      particles.push({k:'laser',x:e.x,gy:LANE-groundLift(e.x),life:9,max:9});
+      spark(e.x,e.y-e.h*0.5,EL.c,12+4*seg,9); if(ti>=1) crescent(e.x,e.y-e.h*0.5,52,-1.2,1.2,EL.c);
+      noHitStopOnce=true; damageEnemy(e,TD(Math.round(20*m2*F)),(e.x<p.x?-1:1)*3,true);
+      if(!e.dead && !ETYPE[e.type].boss){ e.frozen=90+30*ti; e.stun=Math.max(e.stun||0,90); e.state='hurt'; e.hurtTimer=90; e.vx=0; } }
+    if(last&&ti>=2){ superFlash(p.x,p.y-56,'#d6a6ff'); triggerSlow(26); } }
+  else if(kind==='guard8'){                            // 要塞：段ごとに地割れが遠くへ走る
+    p.fortT=Math.max(p.fortT||0, 420+140*ti);
+    ring(p.x,p.y-42,'#c8ccd4'); ring(p.x,p.y-42,'#fff'); dust(p.x,p.y,14+6*seg);
+    shockwave(p.x,p.y,{r:150+80*seg+50*ti,color:'#c8ccd4',big:last&&ti>=1});
+    shake=Math.max(shake,11+3*seg); quake=Math.max(quake,18+8*seg+6*ti);
+    flash=Math.max(flash,3+seg); sfx.big(p.x); sfx.guard(p.x);
+    const R=180+90*seg+60*ti;
+    for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-p.x)>R)continue;
+      noHitStopOnce=true; damageEnemy(e,TD(Math.round(20*F)),(e.x<p.x?-1:1)*5,true);
+      launchEnemy(e,(e.x<p.x?-1:1)*(9+2*seg),-8-2*seg,2); }
+    if(seg===0) popText(p.x,p.y-108,'要塞化 '+Math.round((420+140*ti)/60)+'秒','#c8ccd4'); }
+  else if(kind==='watch'){                             // 銭形：段ごとに小判が実弾になって降る
+    const reach=380+90*seg+60*ti;
+    for(let i=0;i<14+6*seg;i++) spark(p.x+dir*(30+i*22)+rnd(-10,10), p.y-36-((i*41)%80), '#ffd24d', 3, 7);
+    if(ti>=1){ for(let k=0;k<5+3*seg;k++){ const a2=(k-(4+3*seg)/2)*0.13;   // 熟練から小判が飛ぶ
+      spawnProj(p.x+dir*26,p.y, dir*Math.cos(a2)*(13+seg), 0,
+        {owner:'player',dmg:TD(Math.round(11*mul*F)),color:k%2?'#ffe14d':'#fff0b0',r:9,life:56,
+         zz:44+Math.sin(a2)*12,vzz:Math.sin(a2)*10,nostop:true}); } }
+    flash=Math.max(flash,3+seg); shake=Math.max(shake,8+2*seg); sfx.boss(p.x); sfx.coin(p.x);
+    let hits=0;
+    for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
+      if(dx>-24 && dx<reach){ noHitStopOnce=true; damageEnemy(e,TD(Math.round(26*F)),dir*4,true); hits++;
+        coins+=3+ti; popText(e.x,e.y-e.h-10,'+'+(3+ti)+'¢','#ffe14d'); ring(e.x,e.y-e.h*0.5,'#ffe14d'); } }
+    if(hits&&seg===0) popText(p.x,p.y-108,hits+'体から頂戴！','#ffe9a0');
+    if(last&&ti>=2){ superFlash(p.x+dir*60,p.y-50,'#ffe14d'); triggerSlow(22); } }
+}
 function updatePlayer(){
   const p=player; const SHI=p.kind==='shima', NUK=p.kind==='nuko';
   if(p.vehicle){ updateMounted(p); return; }   // 乗り物に騎乗中は専用の操作
@@ -2905,6 +2959,7 @@ function updatePlayer(){
   if(p.state==='iparry'){ updateIaiParry(); return; }
   if(p.state==='dogret'){ updateWandenCounter(); return; }
   if(p.state==='wthrow'){ updateWandenThrow(); return; }
+  if(p.state==='sgact'){ updateSGAct(); return; }
   if(p.state==='ichimonji'){ updateIchimonji(); return; }
   if(p.state==='roll'){ updateRoll(); return; }
   if(p.state==='wheel'){ updateWheel(); return; }
@@ -7598,6 +7653,35 @@ function drawPlayer(){
       kF=0.4+1.75*u; kB=0.35+1.80*u; bodyY=8*u; lean=-0.10-0.16*u; sqX=1+0.22*u; sqY=1-0.26*u; }
     else if(T<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; sqY=1.10; sqX=0.94; }           // 踏み切って天へ
     else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                         // 急降下：振り下ろし体勢
+  else if(st==='sgact'){   // 同時押しの奥義。キャラごとに構えが違い、段位で振りが増える
+    const A=SG_ACT[p.sgKind], ti=p.sgTier|0, B=A.burst[ti], T=p.sgT||0;
+    const b0=B[0], w=clamp(T/Math.max(1,b0),0,1);          // 溜めの進み具合
+    // 何段目の振りの最中か。段の頭から6フレームが振り抜き
+    let sw=0; for(let i=0;i<B.length;i++){ const d=T-B[i]; if(d>=0&&d<10) sw=Math.max(sw, Math.sin(clamp(d/9,0,1)*Math.PI)); }
+    if(p.sgKind==='shima'){        // 咆哮：腰を落として溜め、胸を張って吠える
+      mode='fist';
+      lean=-0.30*w+0.34*sw; bodyY=6*w-5*sw; bodyX=-6*w+8*sw;
+      thF=0.20+0.42*w+0.30*sw; thB=-0.18-0.40*w; kF=0.50+0.85*w-0.30*sw; kB=0.40+0.95*w-0.35*sw;
+      swAng=0.55-1.35*w+0.30*sw; backArm=0.50-1.25*w+0.28*sw;
+      faL1=9+10*sw; faL2=8+12*sw; faW=0.95+0.9*sw;
+      sqX=1+0.16*w-0.18*sw; sqY=1-0.18*w+0.22*sw; }
+    else if(p.sgKind==='nuko'){    // 召喚：杖を天へ掲げ、段ごとに振り下ろす
+      lean=-0.20*w+0.22*sw; bodyY=-3*w-2*sw;
+      swAng=0.3-2.05*w+1.35*sw; backArm=0.2-1.75*w+1.10*sw; swExt=16+16*w;
+      thF=0.20+0.28*w; thB=-0.18-0.26*w; kF=0.45+0.40*w; kB=0.35+0.45*w;
+      sqX=1-0.10*w; sqY=1+0.12*w+0.06*sw; }
+    else if(p.sgKind==='guard8'){  // 要塞：大槌を担ぎ上げ、段ごとに大地へ打ち下ろす
+      lean=-0.16*w+0.40*sw; bodyY=7*w-4*sw; bodyX=-8*w+9*sw;
+      swAng=0.4-2.15*w+3.10*sw; backArm=swAng-0.18; swExt=20+22*w+16*sw;
+      thF=0.22+0.52*w+0.26*sw; thB=0.16+0.44*w; kF=0.50+1.05*w; kB=0.40+1.15*w;
+      sqX=1+0.20*w-0.16*sw; sqY=1-0.22*w+0.20*sw; }
+    else {                          // ワッチ：帽子から小判を掴み出し、段ごとにばら撒く
+      mode='fist';
+      lean=-0.24*w+0.30*sw; bodyY=2*w-4*sw; bodyX=-5*w+9*sw;
+      swAng=-0.30-1.05*w+2.05*sw; backArm=0.45-0.55*w+0.30*sw;
+      thF=0.18+0.34*w+0.26*sw; thB=-0.16-0.32*w; kF=0.45+0.55*w; kB=0.35+0.60*w;
+      faL1=9+8*sw; faL2=8+10*sw; faW=0.95+0.7*sw;
+      sqX=1+0.10*w-0.12*sw; sqY=1-0.12*w+0.16*sw; } }
   else if(st==='gatling'){ mode='fist'; const T=p.gatT||0;
     if(T<GAT_SPIN){ const u=T/GAT_SPIN;                                                    // 銃身の回転が上がりきるまで踏ん張る
       lean=-0.30*u; thF=0.20+0.30*u; thB=-0.20-0.34*u; kF=0.40+0.45*u; kB=0.30+0.55*u;
@@ -7678,7 +7762,7 @@ function drawPlayer(){
     const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
     let B=p.poseB;
     if(!B){ B=p.poseB=Object.assign({},_tgt); }
-    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling');
+    const snappy=(st==='attack'||st==='wthrow'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling'||st==='sgact');
     const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.80:(st==='land'||st==='getup')?0.55:0.26;
     const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
     for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;

@@ -94,20 +94,36 @@ const DRIVER = `
     console.log('空中技の間合い OK (届いた最遠距離 '+r0+'px → '+r2+'px)');
   }
 
-  // ===== 5) 奥義（同時押し）：実際に与えたダメージを測る =====
-  function sgDamageAt(lv){
-    setupRoster('shima'); startGame(); state='play';
-    const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1; p.hp=p.maxHp=99999;
-    enemies.length=0; encounters.length=0; particles.length=0;
+  // ===== 5) 奥義（同時押し）：本編と同じ経路で最後まで走らせて実測する =====
+  //  技を丸ごと回すので、段数が増えたぶんも合計に乗る
+  function sgRunAt(kind,lv){
+    setupRoster(kind); startGame(); state='play';
+    const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+    p.hp=p.maxHp=99999; p.sgCd=0;
+    enemies.length=0; encounters.length=0; particles.length=0; projectiles.length=0;
     spawnEnemy('wolf', p.x+60, LANE); const e=enemies[0];
     e.hp=e.maxHp=999999; e.thinkCd=999999; e.poise=999999;
     const before=e.hp;
-    beginTigerRoar(p);                     // シマの同時押し奥義（直値16ダメージ）
-    return before-e.hp; }
-  const s0=sgDamageAt(1), s1=sgDamageAt(8), s2=sgDamageAt(16);
-  if(!(s1>s0)) throw new Error('SG did not grow at Lv8: '+s0+' -> '+s1);
-  if(!(s2>s1)) throw new Error('SG did not grow at Lv16: '+s1+' -> '+s2);
-  console.log('奥義の進化 OK (虎咆の実ダメージ '+s0+' → '+s1+' → '+s2+')');
+    let segs=0; const ob=sgBurst; sgBurst=function(){ segs++; return ob.apply(null,arguments); };
+    try {
+      if(!beginSGMove(p)) throw new Error(kind+' の奥義が発動しなかった');
+      for(let i=0;i<200 && (p.state==='sgact'||p.state==='ichimonji'||p.state==='mugetsu'||projectiles.length);i++){
+        hitStop=0; slowmo=0; step(1); }
+    } finally { sgBurst=ob; }
+    return {dmg:before-e.hp, segs:segs}; }
+  { const r0=sgRunAt('shima',1), r1=sgRunAt('shima',8), r2=sgRunAt('shima',16);
+    if(!(r1.dmg>r0.dmg)) throw new Error('SG did not grow at Lv8: '+r0.dmg+' -> '+r1.dmg);
+    if(!(r2.dmg>r1.dmg)) throw new Error('SG did not grow at Lv16: '+r1.dmg+' -> '+r2.dmg);
+    // 段数そのものが増えること（威力倍率だけ上げても通らないようにする）
+    if(!(r0.segs===1&&r1.segs===2&&r2.segs===3))
+      throw new Error('奥義の段数が 1/2/3 になっていない: '+r0.segs+'/'+r1.segs+'/'+r2.segs);
+    console.log('奥義の進化 OK (虎魂の実ダメージ '+r0.dmg+' → '+r1.dmg+' → '+r2.dmg+'、段数 '+r0.segs+'→'+r1.segs+'→'+r2.segs+')');
+    // 4キャラすべてが専用ステートに入り、段位で段数が増えること
+    ['nuko','guard8','watch'].forEach(function(k){
+      const a=sgRunAt(k,1), b=sgRunAt(k,16);
+      if(a.segs!==1||b.segs!==3) throw new Error(k+' の奥義の段数が 1/3 になっていない: '+a.segs+'/'+b.segs);
+      if(!(b.dmg>a.dmg)) throw new Error(k+' の奥義が段位で強くなっていない: '+a.dmg+' -> '+b.dmg); });
+    console.log('奥義の段数 OK (ヌコ・ガードワン・ワッチも Lv1で1段 → Lv16で3段)'); }
 
   // ===== 6) ヌコのビームは本数が増える =====
   function beamLanesAt(lv){

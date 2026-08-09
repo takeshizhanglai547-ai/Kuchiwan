@@ -46,23 +46,36 @@ const DRIVER = `
   setupRoster('shima'); startGame(); state='play'; p=players[0]; player=p; p.x=camX+300; p.hp=p.maxHp=9999;
   enemies.length=0; spawnEnemy('wolf', p.x+200, LANE); const rE=enemies[0]; rE.thinkCd=9999; rE.hp=rE.maxHp=9999; rE.stun=0;
   if(!beginSGMove(p)) throw new Error('roar did not start');
+  if(p.state!=='sgact') throw new Error('roar did not enter its own state: '+p.state);
+  // 奥義は溜めてから吠える。発動直後は当たらないので、技が終わるまで回す。
+  // スタンは毎フレーム減るので、掛かった瞬間の最大値を見る
+  let rStun=0;
+  for(let i=0;i<90 && p.state==='sgact';i++){ hitStop=0; slowmo=0; step(1); rStun=Math.max(rStun,rE.stun||0); }
   if(rE.hp>=9999&&!rE.dead) throw new Error('roar dealt no damage');
-  if(!(rE.stun>=100)&&!rE.dead) throw new Error('roar did not stun (stun='+rE.stun+')');
-  console.log('シマ 虎魂・大喝 OK (dmg='+(9999-rE.hp)+', stun='+rE.stun+')');
+  if(!(rStun>=100)&&!rE.dead) throw new Error('roar did not stun (peak stun='+rStun+')');
+  console.log('シマ 虎魂・大喝 OK (dmg='+(9999-rE.hp)+', 最大スタン='+rStun+')');
 
   // ヌコ「エレメンタルバースト」：ダメージ＋氷結＋雷の柱
   setupRoster('nuko'); startGame(); state='play'; p=players[0]; player=p; p.x=camX+300; p.hp=p.maxHp=9999;
   enemies.length=0; particles.length=0; spawnEnemy('wolf', p.x+180, LANE); const nE=enemies[0]; nE.thinkCd=9999; nE.hp=nE.maxHp=9999;
   if(!beginSGMove(p)) throw new Error('burst did not start');
+  if(p.state!=='sgact') throw new Error('burst did not enter its own state: '+p.state);
+  // 雷の柱は寿命9フレームなので、技を最後まで回してから探すと消えている
+  let sawLaser=false, nFroz=0;
+  for(let i=0;i<90 && p.state==='sgact';i++){ hitStop=0; slowmo=0; step(1);
+    if(particles.some(function(pp){ return pp.k==='laser'; })) sawLaser=true;
+    nFroz=Math.max(nFroz, nE.frozen||0); }
   if(nE.hp>=9999&&!nE.dead) throw new Error('burst dealt no damage');
-  if(!nE.dead && !(nE.frozen>0)) throw new Error('burst did not freeze');
-  if(!particles.some(pp=>pp.k==='laser')) throw new Error('burst spawned no thunder pillars');
-  console.log('ヌコ エレメンタルバースト OK (dmg='+(9999-nE.hp)+', frozen='+nE.frozen+', thunder ok)');
+  if(!nE.dead && !(nFroz>0)) throw new Error('burst did not freeze');
+  if(!sawLaser) throw new Error('burst spawned no thunder pillars');
+  console.log('ヌコ エレメンタルバースト OK (dmg='+(9999-nE.hp)+', 最大frozen='+nFroz+', 雷の柱 ok)');
 
   // ガードワン「アイアンウォール」：要塞化で被ダメ軽減＆怯まない
   setupRoster('guard8'); startGame(); state='play'; p=players[0]; player=p; p.x=camX+300; p.hp=p.maxHp=9999; p.defMul=1;
   enemies.length=0; spawnEnemy('wolf', p.x+120, LANE); enemies[0].thinkCd=9999; enemies[0].hp=enemies[0].maxHp=9999;
   if(!beginSGMove(p)) throw new Error('ironwall did not start');
+  if(p.state!=='sgact') throw new Error('ironwall did not enter its own state: '+p.state);
+  for(let i=0;i<90 && p.state==='sgact';i++){ hitStop=0; slowmo=0; step(1); }
   if(!(p.fortT>0)) throw new Error('fortT not set');
   if(enemies[0].hp>=9999&&!enemies[0].dead) throw new Error('ironwall slam dealt no damage');
   p.invuln=0; const hp0=p.hp; hurtPlayer(p, 50, 1, true); const dmgFort=hp0-p.hp;
@@ -76,6 +89,8 @@ const DRIVER = `
   enemies.forEach(e=>{e.thinkCd=9999;e.hp=e.maxHp=9999;});
   const c0=coins;
   if(!beginSGMove(p)) throw new Error('zeni did not start');
+  if(p.state!=='sgact') throw new Error('zeni did not enter its own state: '+p.state);
+  for(let i=0;i<90 && p.state==='sgact';i++){ hitStop=0; slowmo=0; step(1); }
   const zHit=enemies.filter(e=>e.hp<9999||e.dead).length;
   if(zHit<2) throw new Error('zeni hit only '+zHit+'/2');
   if(!(coins>c0)) throw new Error('zeni gave no coins ('+c0+'->'+coins+')');
