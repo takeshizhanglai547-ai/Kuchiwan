@@ -197,7 +197,12 @@
       'float ashFres = 1.0 - saturate( dot( ashNv, ashVv ) );',
       'ashFres = pow( ashFres, uAshRimPow );',
       'float ashSD = dot( ashNw, uAshSunDirW );',
-      'float ashBack = smoothstep( -0.28, 0.30, ashSD )',
+      /* 適用範囲を -0.28 -> -0.85 に広げる。ライティング批評の実測で、
+         逆光時にカメラ正面を向く面（ashSD が -0.9 付近）ではリムが完全に0になり、
+         自機の胴が「無指向の環境光一色の板」（60x60パッチで輝度SD 0.0019、
+         周囲の壁は149段の階調があるのに自機だけ2段）になっていた。
+         総量は palette の rimStrength を 0.55 -> 0.42 に下げて相殺する。 */
+      'float ashBack = smoothstep( -0.85, 0.30, ashSD )',
       '  * ( 1.0 - 0.55 * smoothstep( 0.30, 0.85, ashSD ) );',
       'float ashUp = 1.0 - smoothstep( 0.86, 0.995, ashNw.y );',
       'vec3 ashTint = mix( vec3( 1.0 ), diffuseColor.rgb, 0.55 );',

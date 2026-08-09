@@ -168,14 +168,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     dust: 0xbfae94,          // 空中の粉塵粒
 
     /* ---- 光 ------------------------------------------------------------ */
-    sunColor: 0xffdcb0,      // 低い西日。唯一の影を落とす光
+    /* 太陽。ライティング批評の実測に従って3点を変更した。
+       (1) 色 0xffdcb0 は B/R=0.69 で暖色に寄りすぎ、順光では自機の装甲が
+           RGB(200,169,123)＝暖色84.7%／寒色0.0% と陣営色が完全に反転していた。
+           B/R=0.80 に上げる。失う暖色は skyHorizon と fog 側で作る。
+       (2) 方向 (-0.62,0.38,-0.68) では、逆光構図でジオメトリの輝度0.75超が
+           0.000%（明部を担っていたのは空と遠景の板だけ）。sun/hemi/exposure を
+           8通り振っても 0.000% のままで、スカラー調整では原理的に直らなかった。
+           斜めから舐める角度に変えると 0.002%→0.104% と50倍になり、
+           暗部は1ポイントしか増えず彩度はむしろ下がる（批評の実測）。
+       (3) 強度 2.35 では順光が median 0.3685 / 暗部13.7% で
+           §3の不合格条件「全面均一な明るさ」に該当していた。 */
+    sunColor: 0xffe8cc,
+    /* 1.90 まで落としたら4方位のうち3方位で暗部が60%超になり暗くしすぎた。
+       批評が実測で検証したのは「方向の変更のみ（強度2.35のまま）」だったので戻す。
+       方向の変更だけで、最も明るい方位のジオメトリ最大輝度は 0.745 -> 0.811 に上がる。*/
     sunIntensity: 2.35,
-    sunDir: { x: -0.62, y: 0.38, z: -0.68 },   // 低く、奥から手前へ＝逆光
+    sunDir: { x: -0.90, y: 0.26, z: -0.35 },   // 低く、斜めから舐める
     ambientSky: 0x7f95ad,    // 上からの冷たい回り込み
     ambientGround: 0x4b453c, // 地面からの照り返し。暖色に寄せすぎると画面全体の彩度が上がる
     ambientIntensity: 0.95,  // 0.62では画面の41.9%が輝度0.04未満に潰れていた（実測）
     rimColor: 0xffc386,      // 擬似リムライト（シェーダで焼き込む）
-    rimStrength: 0.55,
+    rimStrength: 0.42,       // light.js 側の適用範囲を広げる前提で総量を下げる
     aoStrength: 0.28,        // 擬似AO。0.45では暗部が形状情報を失っていた（実測）
 
     /* ---- 素材：環境 ---------------------------------------------------- */
@@ -184,10 +198,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     concreteWet: 0x474441,   // 濡れ／油染みの濃い部分
     plaster: 0xb5a894,       // 剥がれた漆喰
     stone: 0x8d8375,         // 切石
-    brick: 0x8a6450,         // 露出した煉瓦
+    brick: 0x7d6357,         // 露出した煉瓦。0x8a6450(sat 0.42)は日向で画面彩度0.51に達し、
+                             // 火(フラッシュ芯 sat 0.09)より高かった
     rebar: 0x4a423a,         // 鉄筋
     metal: 0x6e6862,
-    rust: 0x8f5730,
+    rust: 0x7a5940,          // 0x8f5730(sat 0.66)から落とす。理由は brick と同じ
     ground: 0x5c5449,
     groundDark: 0x3d372f,
     ash: 0x6a6259,           // 灰の堆積
@@ -204,9 +219,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     playerCloth: 0x6d6353,
     playerTrim: 0x9aa6b2,
 
-    // 敵：鈍い酸化鉄。自機とは色相ではなく明度で離す（自機を上へ、敵を下へ）
-    enemyArmor: 0x4a2a22,
-    enemyArmorDark: 0x2a1712,
+    /* 敵：鈍い酸化鉄。
+       0x4a2a22 まで暗くしたのは誤りだった。背後の壁は hemi だけで相対輝度0.0067まで
+       沈むため、敵をそこより暗くすると壁の「下」に潜り、画面実測のコントラスト比は
+       1.03〜1.08:1 しかなかった（私はパレットの16進どうしの比1.713を見ていた）。
+       自機との分離は明度ではなく彩度で取る（画面実測で自機 sat 0.089 / 敵 sat 0.42）。*/
+    enemyArmor: 0x7a4638,
+    enemyArmorDark: 0x452720,
     enemyCloth: 0x554438,
     enemyTrim: 0xa86b4b,
 
@@ -225,8 +244,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     uiEnemy: 0xd85a3a,
 
     /* ---- ポスト --------------------------------------------------------- */
-    bloomThreshold: 0.78,
-    bloomIntensity: 0.62,
+    /* ブルームは「画面を白く濁らせている」のではなく、逆に何もしていなかった。
+       強度0.62→0のA/Bで画面平均の変化は逆光 -0.00025、暗部では ±0.00000。
+       しきい値を0.50まで下げても地の明るさは0.0004しか動かない（＝濁る余地がない）。*/
+    bloomThreshold: 0.55,
+    bloomIntensity: 0.95,
     bloomRadius: 0.85,
     exposure: 1.12,
     vignette: 0.32
@@ -2953,7 +2975,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       'float ashFres = 1.0 - saturate( dot( ashNv, ashVv ) );',
       'ashFres = pow( ashFres, uAshRimPow );',
       'float ashSD = dot( ashNw, uAshSunDirW );',
-      'float ashBack = smoothstep( -0.28, 0.30, ashSD )',
+      /* 適用範囲を -0.28 -> -0.85 に広げる。ライティング批評の実測で、
+         逆光時にカメラ正面を向く面（ashSD が -0.9 付近）ではリムが完全に0になり、
+         自機の胴が「無指向の環境光一色の板」（60x60パッチで輝度SD 0.0019、
+         周囲の壁は149段の階調があるのに自機だけ2段）になっていた。
+         総量は palette の rimStrength を 0.55 -> 0.42 に下げて相殺する。 */
+      'float ashBack = smoothstep( -0.85, 0.30, ashSD )',
       '  * ( 1.0 - 0.55 * smoothstep( 0.30, 0.85, ashSD ) );',
       'float ashUp = 1.0 - smoothstep( 0.86, 0.995, ashNw.y );',
       'vec3 ashTint = mix( vec3( 1.0 ), diffuseColor.rgb, 0.55 );',
