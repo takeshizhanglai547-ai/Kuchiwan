@@ -7508,6 +7508,7 @@ function drawPlayer(){
     ctx.beginPath(); ctx.ellipse(sx,sy+2,rx,ry,0,0,7); ctx.stroke();
     ctx.restore(); }
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
+  const _rim=(p.__portrait||blink)?null:rimBegin(46*s, 132*s);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -7948,6 +7949,7 @@ function drawPlayer(){
         ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(ex+12,-8-i*3,5,4,0,0,7); ctx.fill(); }
       else { ctx.fillStyle=col; ctx.beginPath(); ctx.arc(ex+8,-28+i*3,5.5,0,7); ctx.fill(); } }
     ctx.globalAlpha=1; ctx.restore(); }
+  rimEnd(_rim, 1);
   ctx.restore(); ctx.globalAlpha=1;
 }
 function limbSeg(ax,ay,bx,by,w,col){ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); }
@@ -8636,6 +8638,67 @@ function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
 //  さらに、同時に何体も真っ白になると誰に当てたのか読めなくなるため、
 //  白飛びさせるのは「直近に殴った1体」だけに限定する。
 // ══════════════════════════════════════════════════════════════
+
+// ── アクターのリムライト ──
+// 背景の柱にはリムが入っているのに、キャラとボスには照明パスが無く、
+// 同系色の背景に置くとシルエットごと溶けていた。
+// オフスクリーンへ描いてから source-atop で片側だけ光を焼く。
+//
+// 最初の版は 640×640 全面にグラデを2枚生成して転送し、render() が
+// 3.07ms → 16.23ms（+13.16ms）になった。予算16.7msを単独で食い潰す。
+// 直した点は3つ：
+//   1. グラデを毎フレーム作らず、焼いたスプライトを使い回す
+//   2. 光と陰を1枚にまとめて drawImage 1回にする
+//   3. クリアも転送もアクターの外接矩形だけに絞る
+const RIM_CAN=384, RIM_OX=192, RIM_OY=300;
+let _rimCan=null, _rimCtx=null;
+const _rimS={};
+function rimCtx(){ if(!_rimCan){ _rimCan=document.createElement('canvas');
+    _rimCan.width=RIM_CAN; _rimCan.height=RIM_CAN; _rimCtx=_rimCan.getContext('2d'); }
+  return _rimCtx; }
+// 光源側の暖色と反対側の陰を1枚に焼いたスプライト。向きと色ごとに1回だけ作る
+function rimSprite(dir,rgb){ const k=dir+'|'+rgb; let c=_rimS[k]; if(c) return c;
+  c=document.createElement('canvas'); c.width=64; c.height=1;
+  const g=c.getContext('2d');
+  const lg=g.createLinearGradient(dir>0?64:0,0,dir>0?0:64,0);
+  lg.addColorStop(0,   'rgba('+rgb+',.62)');
+  lg.addColorStop(0.14,'rgba('+rgb+',.20)');
+  lg.addColorStop(0.40,'rgba('+rgb+',0)');
+  lg.addColorStop(0.66,'rgba(10,10,26,0)');
+  lg.addColorStop(0.86,'rgba(10,10,26,.16)');
+  lg.addColorStop(1,   'rgba(10,10,26,.40)');
+  g.fillStyle=lg; g.fillRect(0,0,64,1);
+  _rimS[k]=c; return c; }
+function rimKey(){ const T=STAGE_THEME[themeIdxFor(stage)]||STAGE_THEME[0];
+  const sx=(T&&T.sunX!=null)?T.sunX:0.72;
+  return { dir:(sx>=0.5?1:-1), rgb:(T&&T.rimRGB)||'255,206,140' }; }
+// hw/hh = アクターの見かけの半幅・高さ（画面px）。この矩形しか触らない
+function rimBegin(hw,hh){
+  // 最上位の品質でだけ効かせる。この環境（GPU無しのソフトウェアラスタ）では
+  // プレイヤー＋ボスの2体で render() が 2.98ms → 8.03ms（+5.06ms）になる。
+  // 予算16.7msの3割を照明だけで使う量なので、フレームが重くなったら
+  // ガバナーが真っ先に落とせる位置に置く
+  if(perfTier>=1) return null;
+  const oc=rimCtx(); if(!oc) return null;
+  const M=ctx.getTransform();
+  const w=Math.min(RIM_CAN, Math.ceil(Math.max(24,hw)*2)+8);
+  const h=Math.min(RIM_CAN, Math.ceil(Math.max(24,hh))+12);
+  const bx=Math.max(0, RIM_OX-w/2), by=Math.max(0, RIM_OY-h);
+  oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
+  oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
+  const st={main:ctx, M:M, bx:bx, by:by, w:w, h:h}; ctx=oc; return st; }
+function rimEnd(st,strength){
+  if(!st) return;
+  const oc=ctx; ctx=st.main;
+  const K=rimKey(), a=clamp(strength==null?1:strength,0,2);
+  oc.save(); oc.setTransform(1,0,0,1,0,0);
+  oc.globalCompositeOperation='source-atop'; oc.globalAlpha=a;
+  oc.drawImage(rimSprite(K.dir,K.rgb), st.bx, st.by, st.w, st.h);   // 焼いた1枚を伸ばして乗せる
+  oc.restore();
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  ctx.drawImage(_rimCan, st.bx, st.by, st.w, st.h,
+                st.M.e-RIM_OX+st.bx, st.M.f-RIM_OY+st.by, st.w, st.h);
+  ctx.restore(); }
 const HITCAN=640, HITOX=320, HITOY=520;   // オフスクリーンの大きさと原点（足元）
 let _hitCan=null, _hitCtx=null, hwFocus=-1;
 function hitFlashCtx(){ if(!_hitCan){ _hitCan=document.createElement('canvas');
@@ -8705,6 +8768,9 @@ function drawEnemy(e){
     oc.setTransform(1,0,0,1,0,0); oc.clearRect(0,0,HITCAN,HITCAN);
     oc.setTransform(_M.a,_M.b,_M.c,_M.d,HITOX,HITOY);   // 本体と同じ姿勢でオフスクリーンへ
     _mainCtx=ctx; ctx=oc; }
+  // リムライトはボスだけに掛ける（巨体ほど背景に溶けるのが目立つ）。
+  // 被弾の白飛び中は既にオフスクリーンを使っているので重ねない
+  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62*s, (t.h+30)*s) : null;
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
@@ -8725,6 +8791,7 @@ function drawEnemy(e){
   if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
   const bugOwn = t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss';
   if(t.bug && t.boss && e.type!=='chamurus' && !bugOwn) drawBugOverlay(e,t);   // 専用の蟲ボディを持つボスには重ねない
+  rimEnd(_erim, 1.15);
   if(_hw){ ctx=_mainCtx;                                   // 本体キャンバスへ戻す
     ctx.save(); ctx.setTransform(1,0,0,1,0,0);
     // 1枚目は真っ白なシルエット、2枚目は明るく飛ばすだけ（輪郭を残して重なりを保つ）
