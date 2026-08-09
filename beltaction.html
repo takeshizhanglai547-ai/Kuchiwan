@@ -9266,10 +9266,29 @@ function foeArm(e,target,k){
 function drawBeastClaw(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.telegraph>0;
   if(!atk&&!tele) return;
   let ang=-0.4, big=0;
+  // 攻撃の型ごとに振りを変える。構えの色だけ変えても、体が同じ動きでは
+  // 「何が来るか」は読めない。振りかぶる向きそのものを型の予告にする
+  const V=ATK_VAR[e.atkVar||0];
   if(tele){ const w=1-e.telegraph/(e.teleMax||26), coil=w<0.34?easeOut(w/0.34):1;   // 胴の沈み込みと同位相で腕を振りかぶる
-    ang=lerp(-0.45,-1.72,coil); big=0.28+coil*0.48; }
-  else { const pr=clamp((e.atkMax-e.atkTimer)/Math.max(1,e.atkMax),0,1), sw=pr<0.26?easeOut(pr/0.26):1;
-    big=pr<0.26? easeOut(pr/0.26) : 1-easeOut(clamp((pr-0.26)/0.74,0,1))*0.78; ang=lerp(-1.72,1.15,sw); }   // 4〜5Fで振り抜き、残りは余韻
+    const tgt = V.id==='anti'? 1.05 : V.id==='sweep'? 0.42 : V.id==='thrust'? -0.50 : -1.72;
+    ang=lerp(-0.45,tgt,coil); big=0.28+coil*(V.id==='thrust'?0.30:0.48); }
+  else { const pr=clamp((e.atkMax-e.atkTimer)/Math.max(1,e.atkMax),0,1);
+    const bell=(a,b)=>pr<a? easeOut(pr/a) : 1-easeOut(clamp((pr-a)/(1-a),0,1))*b;
+    if(V.id==='double'){                                   // 二段：往路と復路で振り直す
+      const half=pr<0.5, seg=half?pr/0.5:(pr-0.5)/0.5, sw=seg<0.30?easeOut(seg/0.30):1;
+      big=(seg<0.30?easeOut(seg/0.30):1-easeOut((seg-0.30)/0.70)*0.72)*0.88;
+      ang = half? lerp(-1.55,0.95,sw) : lerp(1.05,-1.15,sw); }
+    else if(V.id==='thrust'){                              // 突き：角度は寝かせたまま腕を伸ばし切る
+      const sw=pr<0.30?easeOut(pr/0.30):1;
+      big=bell(0.30,0.80)*1.40; ang=lerp(-0.52,-0.10,sw); }
+    else if(V.id==='anti'){                                // 対空：下段から頭上へ振り上げる
+      const sw=pr<0.26?easeOut(pr/0.26):1;
+      big=bell(0.26,0.72); ang=lerp(1.05,-2.35,sw); }
+    else if(V.id==='sweep'){                               // 足払い：地を這わせて薙ぐ
+      const sw=pr<0.28?easeOut(pr/0.28):1;
+      big=bell(0.28,0.70)*1.12; ang=lerp(0.35,1.50,sw); }
+    else { const sw=pr<0.26?easeOut(pr/0.26):1;
+      big=bell(0.26,0.78); ang=lerp(-1.72,1.15,sw); } }   // 4〜5Fで振り抜き、残りは余韻
   const acc=t.accent||'#ff6a3c', shX=6, shY=-40, a=PI2-ang, l1=13+big*18, l2=12+big*18;
   const ex=shX+Math.sin(a)*l1, ey=shY+Math.cos(a)*l1, pwx=ex+Math.sin(a)*l2, pwy=ey+Math.cos(a)*l2;
   if(atk&&big>0.25){ ctx.save(); ctx.globalAlpha=0.28*big; ctx.fillStyle=acc;
