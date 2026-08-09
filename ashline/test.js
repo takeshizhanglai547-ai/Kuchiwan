@@ -35,6 +35,9 @@ const shortA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI)
 
   await page.goto(FILE, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__ASHLINE, null, { timeout: 20000 });
+  // 動的解像度を止める。この環境はソフトウェア描画で常に遅く、
+  // 放置すると検証中に解像度が落ちて測定条件が揺れる（実機の話ではない）。
+  await page.evaluate(() => __ASHLINE.setAutoRes(false));
   await page.waitForTimeout(900);
 
   console.log('\n=== 起動 ===');

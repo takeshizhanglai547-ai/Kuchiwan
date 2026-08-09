@@ -9993,8 +9993,17 @@ function hasArt(k) { return typeof ART[k] === 'function' || (k === 'world' && AR
 
 function initRender() {
   var canvas = document.getElementById('gl');
-  renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /* antialias:false にしている理由（性能監査の実測による）：
+     ポストプロセスが常時有効で、既定フレームバッファへ描かれるのは
+     全画面を覆う三角形1枚だけ（実測6ドローコール/6三角形）。
+     三角形1枚に内部エッジは無いので4x MSAAは絵を1ピクセルも変えない。
+     それでいて iPhone 12 実解像度で約40MiBのアタッチメントを確保し、
+     毎フレーム全画面の4→1リゾルブを走らせていた。失うものゼロ。
+     ※ POST を無効化する構成に戻すなら、最終シェーダにFXAAを足すこと。*/
+  renderer = new T.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+  RES.max = Math.min(window.devicePixelRatio || 1, 2);
+  RES.ratio = RES.max;
+  renderer.setPixelRatio(RES.ratio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFShadowMap;
   // トーンマッピングは post があればそちらが最終シェーダで行う（二重適用を避ける）
@@ -10410,7 +10419,7 @@ var UI = {
     if (SET.debug) {
       e.dbg.innerHTML =
         METRICS.fps.toFixed(0) + ' fps &nbsp; ' + METRICS.ms.toFixed(1) + ' ms<br>' +
-        'draw ' + METRICS.calls + ' &nbsp; tri ' + (METRICS.tris / 1000).toFixed(1) + 'k<br>' +
+        'draw ' + METRICS.calls + ' &nbsp; tri ' + (METRICS.tris / 1000).toFixed(1) + 'k &nbsp; res ' + RES.ratio.toFixed(2) + '<br>' +
         '入力遅延 ' + METRICS.latency.toFixed(1) + ' ms<br>' +
         'state ' + P.state + (P.sprint ? '+SPRINT' : '') + ' peek ' + P.peek.toFixed(2) +
         (P.blindT > 0.01 ? ' blind ' + P.blindT.toFixed(2) : '') + '<br>' +
@@ -10425,6 +10434,32 @@ var UI = {
    MAIN LOOP
    ========================================================================== */
 var lastT = 0, fpsAcc = 0, fpsN = 0, paused = false;
+
+/* 動的解像度。§12は「10分プレイ後の発熱状態でも50fpsを下回らない」を要求するが、
+   これまでコードには発熱に対して譲る手段が一つも無かった（setPixelRatio は起動時1回のみ）。
+   フレーム時間を1.5秒ずつ平均し、遅ければ解像度を1段落とす。速ければ1段戻す。
+   ※この環境はソフトウェア描画で常に遅いため、検証時は setAutoRes(false) で止める。 */
+var RES = { max: 2, ratio: 2, min: 1.0, acc: 0, n: 0, cool: 0, auto: true, steps: 0 };
+function resStep(dir) {
+  var order = [RES.max, RES.max * 0.85, RES.max * 0.72, RES.max * 0.6];
+  var i = clamp(RES.steps + dir, 0, order.length - 1);
+  if (i === RES.steps) return;
+  RES.steps = i;
+  RES.ratio = Math.max(RES.min, order[i]);
+  renderer.setPixelRatio(RES.ratio);
+  resize();
+  RES.cool = 3.0;
+}
+function updateRes(dt) {
+  if (!RES.auto) return;
+  if (RES.cool > 0) { RES.cool -= dt; return; }
+  RES.acc += dt; RES.n++;
+  if (RES.acc < 1.5) return;
+  var ms = RES.acc / RES.n * 1000;
+  RES.acc = 0; RES.n = 0;
+  if (ms > 19.0) resStep(1);        // 53fps を割ったら1段下げる
+  else if (ms < 12.0) resStep(-1);  // 83fps 出ているなら1段戻す
+}
 
 function resize() {
   var W = window.innerWidth, H = window.innerHeight;
@@ -10458,6 +10493,8 @@ function frame(now) {
 
   METRICS.calls = renderer.info.render.calls;
   METRICS.tris = renderer.info.render.triangles;
+  METRICS.res = RES.ratio;
+  if (!paused) updateRes(dt);
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.35) { METRICS.fps = fpsN / fpsAcc; METRICS.ms = fpsAcc / fpsN * 1000; fpsAcc = 0; fpsN = 0; }
   if (latencyMark > 0) { METRICS.latency = performance.now() - latencyMark; latencyMark = -1; }
@@ -10484,6 +10521,8 @@ function boot() {
     ST: ST,
     tick: function (dt, n) { n = n || 1; for (var k = 0; k < n; k++) { update(dt); FX.step(dt); } },
     pause: function (v) { paused = !!v; },
+    setAutoRes: function (v) { RES.auto = !!v; },
+    res: function () { return { ratio: RES.ratio, max: RES.max, step: RES.steps, auto: RES.auto }; },
     render: function () {
       syncRig(); UI.frame();
       renderer.info.autoReset = false; renderer.info.reset();
