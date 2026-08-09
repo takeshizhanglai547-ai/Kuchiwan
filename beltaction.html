@@ -3207,7 +3207,19 @@ function updatePlayer(){
       quake=Math.max(quake||0,20); shake=Math.max(shake,13); flash=Math.max(flash,4); sfx.big(p.x);
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; const rel=(e.x-p.x)*dir;
         if(rel>-40 && rel<400 && Math.abs(e.y-p.y)<76){ noHitStopOnce=true; damageEnemy(e,Math.round(30*mul),dir*9,true); } }); }
-    if(def.stolenCast && a.t===def.act[0]){ const s=p.stolen&&p.stolen[p.stolen.length-1]; if(s){ s.cast(p); popText(p.x,p.y-118,'奪いし技「'+s.name+'」！',s.col||'#bfe9ff',true); } else { spark(p.x+p.facing*30,p.y-40,'#bfe9ff',10,7); } }   // ワッチ：奪ったボス技を発動
+    if(def.stolenCast && a.t===def.act[0]){ const s=p.stolen&&p.stolen[p.stolen.length-1];   // ワッチ：奪ったボス技を発動
+      if(s){ s.cast(p); popText(p.x,p.y-118,'奪いし技「'+s.name+'」！',s.col||'#bfe9ff',true); }
+      else {
+        // 何も奪っていないときは火花10粒で終わっていた。ゲージを使う奥義が不発になるので、
+        // 上位技（wtech2）と同じく必ず出る「小判乱れ撃ち」を締めに置く
+        const dir=p.facing, mul=(p.atkMul||1);
+        popText(p.x,p.y-118,'持ち合わせが無い…！ 小判乱れ撃ち！','#ffe14d',true);
+        for(let k=0;k<7;k++){ const a2=(k-3)*0.17;
+          spawnProj(p.x+dir*26, p.y, dir*Math.cos(a2)*15, 0,
+            {owner:'player', dmg:TD(Math.round(13*mul)), color:k%2?'#ffe14d':'#fff0b0', r:9, life:52,
+             zz:44+Math.sin(a2)*10, vzz:Math.sin(a2)*11, nostop:true}); }
+        superFlash(p.x+dir*40,p.y-44,'#ffe14d'); spark(p.x+dir*30,p.y-40,'#ffe14d',16,9);
+        ring(p.x+dir*26,p.y-40,'#ffe14d'); shake=Math.max(shake,7); sfx.zap(p.x); } }
     if(def.smokeBomb && a.t===def.act[0]){ for(let k=0;k<12;k++) dust(p.x+rnd(-34,34), p.y-rnd(0,56), 3); for(let k=0;k<3;k++) ring(p.x,p.y-30,'#d4d8e0'); spark(p.x,p.y-30,'#e6eaf0',22,11); p.invuln=Math.max(p.invuln,46); sfx.swing(2, wsndOf(p.weapon), p.x); popText(p.x,p.y-108,'けむり玉！','#d4d8e0');   // ワッチ上：煙幕で目くらまし＆一瞬無敵
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<108 && Math.abs(e.y-p.y)<66 && e.z<90){ damageEnemy(e,Math.round(6*(p.atkMul||1)),0,false); if(!e.dead){ e.state='hurt'; e.hurtTimer=46; e.stun=68; } } }); }
     if(def.shadowStep){ if(a.t%2===0) spark(p.x-p.facing*12, p.y-rnd(20,50), '#9fb8d8', 2, 5); p.invuln=Math.max(p.invuln,4); }   // 縮地：残像＆すり抜け気味

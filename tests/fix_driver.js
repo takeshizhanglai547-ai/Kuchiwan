@@ -167,6 +167,26 @@ const DRIVER = `
     console.log('PI2/TAU OK (全周を扱う描画は TAU を使っている)');
   }
 
+  // ===== 11) ワッチの奥義は、何も奪っていなくても不発にならない =====
+  {
+    function stealSuper(mv, withStolen){
+      setupRoster('watch'); startGame(); state='play';
+      const p=players[0]; player=p; p.x=camX+360; p.facing=1; p.hp=p.maxHp=99999; p.dim=3; p.atkMul=1; p.level=1;
+      p.stolen = withStolen ? [{name:'テスト技', col:'#fff', cast:function(){}}] : [];
+      enemies.length=0; encounters.length=0; particles.length=0; projectiles.length=0;
+      spawnEnemy('wolf', p.x+110, LANE); const e=enemies[0];
+      e.hp=e.maxHp=999999; e.thinkCd=999999; e.poise=999999;
+      const before=e.hp;
+      beginAttack(mv);
+      for(let i=0;i<160 && (p.state==='attack'||projectiles.length);i++){ hitStop=0; slowmo=0; step(1); }
+      return before-e.hp; }
+    const base0=stealSuper('wtech', false);
+    const up0  =stealSuper('wtech2', false);
+    if(!(base0>0)) throw new Error('奪いし奥義が、何も奪っていないと1ダメージも出ない（ゲージを使う技が不発）');
+    if(!(up0>0))   throw new Error('二重奪取が、何も奪っていないと1ダメージも出ない');
+    console.log('ワッチの奥義 OK (何も奪っていなくても 基本'+base0+' / 上位'+up0+'ダメージ)');
+  }
+
   console.log('CRITIC FIX TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
