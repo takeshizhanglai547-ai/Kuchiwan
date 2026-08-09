@@ -1698,7 +1698,7 @@ function drawParticles(layer){
       ctx.beginPath(); ctx.arc(0,0,rr*0.84,0,7); ctx.stroke();
       ctx.globalAlpha=sa*0.80; ctx.lineWidth=3.0;                       // 帯の中のルーン目盛り
       ctx.beginPath();
-      for(let i=0;i<12;i++){ const an=i/12*6.283;
+      for(let i=0;i<(perfTier>=2?0:12);i++){ const an=i/12*6.283;
         ctx.moveTo(Math.cos(an)*rr*0.85,Math.sin(an)*rr*0.85); ctx.lineTo(Math.cos(an)*rr*0.99,Math.sin(an)*rr*0.99); }
       ctx.stroke();
       ctx.globalAlpha=sa*0.85; ctx.strokeStyle='#fff'; ctx.lineWidth=1.8;
@@ -1846,7 +1846,7 @@ const ATK={
   c2:{name:'縦振り',  dur:14, act:[5,9],  reach:60, hh:48, dmg:9,  kb:3,  from:-1.4, to:0.3,  len:36, trail:'#fff0c0', pivotY:-66, lunge:0.8, combo:2},
   c3:{name:'斜め振り',dur:15, act:[5,10], reach:72, hh:42, dmg:11, kb:4,  from:-1.1, to:0.9,  len:38, trail:'#aef0ff', pivotY:-62, lunge:1.3, combo:3},
   c4:{name:'振り下ろし',dur:26,act:[9,15], reach:90, hh:54, dmg:22, kb:12, from:-1.7, to:1.05, len:46, trail:'#fff', pivotY:-72, lunge:2.2, knock:true, finisher:true, combo:4},
-  charge:{name:'溜め斬り',dur:30, act:[12,22], reach:104, hh:58, dmg:34, kb:15, from:-1.8, to:1.1, len:52, trail:'#ffd24d', pivotY:-72, lunge:3.0, knock:true, aoe:true},
+  charge:{name:'溜め斬り',charged:true, dur:30, act:[12,22], reach:104, hh:58, dmg:34, kb:15, from:-1.8, to:1.1, len:52, trail:'#ffd24d', pivotY:-72, lunge:3.0, knock:true, aoe:true},
   // ── 必殺技（イッヌ）──
   shoryu:{name:'昇竜拳', hold:6, dur:30, act:[2,24], reach:60, hh:520, dmg:8, kb:5, from:1.2, to:-1.9, len:50, trail:'#ffe27a', pivotY:-50, lunge:0, launch:0, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true},
   stinger:{name:'スティンガー', dur:24, act:[3,18], reach:78, hh:42, dmg:14, kb:9, from:-0.12, to:-0.12, len:48, trail:'#9fe8ff', pivotY:-52, move:9.0, multi:true, multiGap:7, stinger:true},
@@ -2042,15 +2042,15 @@ const ATK={
   tf3:{name:'連肘打ち',dur:14, act:[3,11], reach:86, hh:50, dmg:6,  kb:4,  from:-0.6, to:0.6,  len:44, trail:'#bfe9ff', pivotY:-56, lunge:1.8, multi:true, multiGap:5, combo:3},
   tf4:{name:'超強回転乱打',dur:28,act:[5,24],reach:104,hh:56,dmg:6, kb:15, from:-3.0, to:3.0,  len:52, trail:'#fff', pivotY:-56, multi:true, multiGap:4, knock:true, finisher:true, spin:true, combo:4},
   // ── 武器別ためうち（イッヌ）──
-  chargeSpear:{name:'渾身の突き', dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true},
-  chargeHammer:{name:'渾身の叩き', dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true, shock:30},
+  chargeSpear:{name:'渾身の突き', charged:true, dur:30, act:[10,22], reach:124, hh:50, dmg:34, kb:14, from:-0.06,to:-0.06, len:70, trail:'#fff', pivotY:-58, move:6, knock:true, aoe:true},
+  chargeHammer:{name:'渾身の叩き', charged:true, dur:34, act:[14,24], reach:108, hh:60, dmg:42, kb:20, from:-1.95,to:1.15, len:62, trail:'#ffd24d', pivotY:-74, lunge:2.0, knock:true, aoe:true, shock:30},
   // ── タメ攻撃の熟達（Lv8＝熟練／Lv16＝極）──
-  charge2:{name:'剛・溜め斬り', hold:5, dur:34, act:[13,25], reach:124, hh:64, dmg:46, kb:18, from:-2.0, to:1.2, len:60, trail:'#ffd24d', pivotY:-72, lunge:3.4, knock:true, aoe:true, shock:26},
-  charge3:{name:'極・断ち割り', hold:9, dur:42, act:[16,30], reach:148, hh:74, dmg:64, kb:23, from:-2.2, to:1.35, len:70, trail:'#fff0b0', pivotY:-74, lunge:3.8, knock:true, aoe:true, shock:48, superFx:true, multi:true, multiGap:9},
-  chargeSpear2:{name:'剛・渾身の突き', hold:5, dur:32, act:[11,24], reach:148, hh:56, dmg:46, kb:17, from:-0.06,to:-0.06, len:80, trail:'#fff', pivotY:-58, move:8, knock:true, aoe:true, shock:22},
-  chargeSpear3:{name:'極・穿ち通し', hold:9, dur:40, act:[14,30], reach:176, hh:64, dmg:64, kb:22, from:-0.06,to:-0.06, len:92, trail:'#eaffff', pivotY:-58, move:11, knock:true, aoe:true, shock:38, superFx:true, multi:true, multiGap:8},
-  chargeHammer2:{name:'剛・渾身の叩き', hold:6, dur:38, act:[15,26], reach:126, hh:66, dmg:56, kb:24, from:-2.05,to:1.2, len:70, trail:'#ffd24d', pivotY:-74, lunge:2.2, knock:true, aoe:true, shock:46, bighammer:true},
-  chargeHammer3:{name:'極・megaton割り', hold:11, dur:48, act:[19,32], reach:150, hh:76, dmg:78, kb:31, from:-2.25,to:1.35, len:80, trail:'#ffe27a', pivotY:-76, lunge:2.4, knock:true, aoe:true, shock:66, bighammer:true, superFx:true, multi:true, multiGap:10},
+  charge2:{name:'剛・溜め斬り', hold:5, charged:true, dur:34, act:[13,25], reach:124, hh:64, dmg:46, kb:18, from:-2.0, to:1.2, len:60, trail:'#ffd24d', pivotY:-72, lunge:3.4, knock:true, aoe:true, shock:26},
+  charge3:{name:'極・断ち割り', hold:9, charged:true, dur:42, act:[16,30], reach:148, hh:74, dmg:64, kb:23, from:-2.2, to:1.35, len:70, trail:'#fff0b0', pivotY:-74, lunge:3.8, knock:true, aoe:true, shock:48, superFx:true, multi:true, multiGap:9},
+  chargeSpear2:{name:'剛・渾身の突き', hold:5, charged:true, dur:32, act:[11,24], reach:148, hh:56, dmg:46, kb:17, from:-0.06,to:-0.06, len:80, trail:'#fff', pivotY:-58, move:8, knock:true, aoe:true, shock:22},
+  chargeSpear3:{name:'極・穿ち通し', hold:9, charged:true, dur:40, act:[14,30], reach:176, hh:64, dmg:64, kb:22, from:-0.06,to:-0.06, len:92, trail:'#eaffff', pivotY:-58, move:11, knock:true, aoe:true, shock:38, superFx:true, multi:true, multiGap:8},
+  chargeHammer2:{name:'剛・渾身の叩き', hold:6, charged:true, dur:38, act:[15,26], reach:126, hh:66, dmg:56, kb:24, from:-2.05,to:1.2, len:70, trail:'#ffd24d', pivotY:-74, lunge:2.2, knock:true, aoe:true, shock:46, bighammer:true},
+  chargeHammer3:{name:'極・megaton割り', hold:11, charged:true, dur:48, act:[19,32], reach:150, hh:76, dmg:78, kb:31, from:-2.25,to:1.35, len:80, trail:'#ffe27a', pivotY:-76, lunge:2.4, knock:true, aoe:true, shock:66, bighammer:true, superFx:true, multi:true, multiGap:10},
 };
 
 //======================================================================
@@ -2247,7 +2247,7 @@ function beginAttack(type){
   p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{}};
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
-  else if(type==='charge'||type==='chargeSpear'||type==='chargeHammer'){ sfx.heavy(p.x); ring(p.x,p.y-40,def.trail||'#ffd24d'); spark(p.x+p.facing*22,p.y-40,def.trail||'#ffd24d',10,8); }
+  else if(def.charged){ sfx.heavy(p.x); ring(p.x,p.y-40,def.trail||'#ffd24d'); spark(p.x+p.facing*22,p.y-40,def.trail||'#ffd24d',10,8); }
   else if(type==='stinger'){ sfx.dash(p.x); spark(p.x+p.facing*20,p.y-40,'#9fe8ff',10,7); }
   else if(type==='gcounter'){ p.counterPow = p.guardFx>0 || (gf-p.guardStart<=14); p.invuln=Math.max(p.invuln,10);
     sfx.guard(p.x); sfx.rise(p.x); ring(p.x,p.y-40,'#bfe9ff'); if(p.counterPow){ flash=Math.max(flash,3); hitStop=Math.max(hitStop,6); } }
@@ -2270,13 +2270,13 @@ function beginAttack(type){
   else if(type==='sc5'||def.kick){ sfx.swing(2, 'flesh', p.x); }
   else sfx.swing(p.comboStep, wsndOf(p.weapon), p.x);
   // 超必殺技（波動・昇竜の新技）：発生時に無敵とフラッシュ、技名表示
-  if(def.superFx){ p.invuln=Math.max(p.invuln,20); shake=Math.max(shake,9); triggerSlow(12);
+  if(def.superFx){ if(!def.charged) p.invuln=Math.max(p.invuln,20); shake=Math.max(shake,9); triggerSlow(12);
     superFlash(p.x,p.y-46,def.trail||'#ffe9a0');
     ring(p.x,p.y-46,def.trail||'#fff'); popText(p.x,p.y-120,def.name+'！','#fff',true); sfx.boss(p.x); }
   if(def.superRush){ p.invuln=Math.max(p.invuln,24); flash=Math.max(flash,2); shake=Math.max(shake,4);
     ring(p.x,p.y-46,'#ffd24d'); spark(p.x+p.facing*22,p.y-40,'#ffd24d',12,8); popText(p.x,p.y-120,def.name+'！','#ffd24d',true); sfx.dash(p.x); sfx.heavy(p.x); }
   // ムーンライトソード：剣の斬撃（コンボ・居合・溜め斬り）ごとに光波を放つ
-  if(p.weapon==='moon' && !def.cast && (def.combo||def.finisher||def.iai||type==='charge')) spawnMoonWave(p,def);
+  if(p.weapon==='moon' && !def.cast && (def.combo||def.finisher||def.iai||def.charged)) spawnMoonWave(p,def);
 }
 // ── ガードワン8号：昇竜コマンドの斜め上衝撃波 ──
 // ── 波動拳コマンド技：前方へ飛ぶ必殺の飛び道具（キャラごとに見た目・性能が違う）──
@@ -2968,7 +2968,11 @@ function updatePlayer(){
     //    ドラゴンズクラウンの必殺技は「沈み込む → 一気に振り抜く → 長い余韻」で、
     //    この最初の溜めが無いと、どれだけ派手な軌跡を足しても軽く見える ──
     if(a.hold>0){ a.hold--; a.chg++;
-      p.invuln=Math.max(p.invuln,4);
+      // 無敵を配るのは必殺技の溜めだけ。
+      //   タメ攻撃（charged）はクールタイムが無く、無敵を付けると無制限の切り返しになる。
+      //   零距離の一撃（oneInch）は無敵が無いことがリスクの本体なので触らない
+      const _inv=!def.charged && !def.oneInch;
+      if(_inv) p.invuln=Math.max(p.invuln,4);
       if(a.chg===1 && p.rig){ sprKick(p.rig.sq,-5.2); sprKick(p.rig.wob,-p.facing*4.0); sprKick(p.rig.capeT,-6); }
       if(a.chg%2===0 && perfTier<2) ember(p.x+rnd(-16,16), p.y-rnd(6,70), rnd(-0.5,0.5), -rnd(1.2,3.0), def.trail||'#ffe27a');
       // 居合は「気を溜める」ではなく「動かない」ことで溜める。火の粉ではなく
@@ -2979,7 +2983,9 @@ function updatePlayer(){
         if(a.chg%4===0 && perfTier<2) spark(hx,hy,'#eaffff',2,3,{aim:-1.57,spread:0.3,layer:1}); }
       if(a.hold===0){ camZoomT=Math.max(camZoomT,1.13); shake=Math.max(shake,6);
         if(p.rig){ sprKick(p.rig.sq,7.5); sprKick(p.rig.wob,p.facing*9); sprKick(p.rig.capeT,8); }
-        p.invuln=Math.max(p.invuln, def.act[1]-def.act[0]+10); }
+        // 持続に比例させると昇竜系（act幅22〜40）が始動から終了まで完全無敵になる。
+        // 上限を設けて、振り抜きの前半だけ無敵に留める
+        if(_inv) p.invuln=Math.max(p.invuln, Math.min(10+(def.act[1]-def.act[0])*0.35, 18)); }
       saveInput(p.in); return; }
     a.t++;
     // ── ばねのキック：発生で振り抜きの初動、振り切りで反動が戻る ──
@@ -7450,7 +7456,9 @@ function drawPlayer(){
         swAng=lerp(-1.7,1.2,e); swExt=18*(1+1.1*big); trailCol='#fff'; tA0=-1.7; tA1=swAng;
         backArm=-1.3; faL1=9+11*big; faL2=8+14*big; faW=0.95+0.9*big; sqY=1+0.16*big; sqX=1-0.12*big; }
       drawTrail=true; tk=1-p.jAtk/18; }
-    else { swAng=-1.0; backArm=-1.2; } }
+    // 攻撃していない滞空では3相で決めた腕の角度をそのまま使う。
+    // ここで定数に上書きしていたため、上昇で腕が上がり落下で下りる動きが1フレームも起きていなかった
+    }
   else if(st==='land'){ const k=clamp(1-p.landT/22,0,1), r=easeOut(k);   // 着地硬直：接地の瞬間が最も深く、そこから伸び上がる
     bodyY=12*(1-r)+2; thF=0.70-0.44*r; thB=-0.70+0.44*r; kF=1.60*(1-r)+0.28; kB=1.60*(1-r)+0.28;
     lean=0.16*(1-r); swAng=0.90-0.72*r; backArm=0.50-0.22*r;
@@ -7547,7 +7555,7 @@ function drawPlayer(){
     else if(T<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; sqY=1.10; sqX=0.94; }           // 踏み切って天へ
     else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                         // 急降下：振り下ろし体勢
   else if(st==='gatling'){ mode='fist'; const T=p.gatT||0;
-    if(T<12){ const u=T/12;                                                    // 銃身の回転が上がりきるまで踏ん張る
+    if(T<GAT_SPIN){ const u=T/GAT_SPIN;                                                    // 銃身の回転が上がりきるまで踏ん張る
       lean=-0.30*u; thF=0.20+0.30*u; thB=-0.20-0.34*u; kF=0.40+0.45*u; kB=0.30+0.55*u;
       swAng=0.55-0.45*u; backArm=0.75-0.30*u; bodyY=1+3*u; bodyX=-4*u; sqX=1+0.08*u; sqY=1-0.09*u; }
     else { const rc=Math.abs(Math.sin(T*1.9))*(p.gatShots<100?1:0);            // 連射の反動で全身が細かく跳ねる
@@ -7833,8 +7841,10 @@ function bladeTipR(wk,ext){ switch(wk){
   case 'fists': case 'tigerfist': return 0;
   default: return ext+13; } }                                                              // dagger
 // 居合の溜め中か（＝まだ抜刀していない）。刀身の描画と帯鞘の発光の両方がこれを見る
-function wandenIaiHold(){ const a=player.atk, d=a&&a.def;
-  return !!d && !!d.iai && (a.hold>0 || a.t<d.act[0]); }
+// 被弾などで技が中断されても p.atk は残るので、state を見ないと
+// 「抜刀前」と判定され続けて刀が永久に消える
+function wandenIaiHold(){ const p=player, a=p.atk, d=a&&a.def;
+  return p.state==='attack' && !!d && !!d.iai && (a.hold>0 || a.t<d.act[0]); }
 function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
   ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
   if(wk==='inuboshi'||wk==='inuboshi2'){ const L=ext*1.7+96;                // 犬干し竿：常識外れに長い野太刀（真打も同じ長さ）
@@ -11310,15 +11320,19 @@ function cutNightWash(){
   g.addColorStop(0,'rgba(6,8,26,.94)'); g.addColorStop(0.55,'rgba(12,16,44,.90)'); g.addColorStop(1,'rgba(20,18,40,.86)');
   ctx.save(); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   ctx.globalCompositeOperation='lighter';                              // 星
-  for(let i=0;i<110;i++){ const x=(i*151.7)%W, y=(i*83.3)%(H*0.72);
+  const NST=[110,70,40][perfTier]||110;
+  for(let i=0;i<NST;i++){ const x=(i*151.7)%W, y=(i*83.3)%(H*0.72);
     ctx.globalAlpha=(0.25+0.6*Math.abs(Math.sin(gf*0.03+i*1.3)))*0.8;
     ctx.fillStyle=i%7===0?'#fff2b0':'#dfe9ff'; ctx.fillRect(x,y,i%9===0?2.2:1.3,i%9===0?2.2:1.3); }
   ctx.restore(); }
 function cutFireworks(){ cutNightWash(); cutFireworksBursts(cut.t); cutFireworksTown(); }
 function cutFireworksBursts(t){
   const PER=58, LIVE=48;
+  // 適応品質：毎フレーム約1900本のストロークを無条件に出していた。
+  // 敵がいない画面とはいえ、ガバナーが tier2 に落ちた端末を救えない
+  const SHOTS=[44,26,15][perfTier]||44, ARMS=[0,-10,-16][perfTier]||0;
   ctx.save(); ctx.globalCompositeOperation='lighter';
-  for(let n=0;n<44;n++){
+  for(let n=0;n<SHOTS;n++){
     const born=n*9, age=t-born; if(age<0) continue;
     const k=Math.floor(age/PER), ph=age%PER, id=n*31+k*7;
     if(ph>LIVE) continue;
@@ -11329,7 +11343,7 @@ function cutFireworksBursts(t){
       ctx.beginPath(); ctx.moveTo(cx,H*0.92); ctx.lineTo(cx,lerp(H*0.92,cy,u)); ctx.stroke(); continue; }
     const u=(ph-9)/(LIVE-9), R=(58+82*_fwRnd(id+2))*(1-Math.pow(1-u,2.4));
     const al=Math.pow(1-u,1.5), sag=u*u*30;                            // 尾は重力で下へ垂れる
-    const arms=26+((id%4)*6), rot=_fwRnd(id+3)*6.28;
+    const arms=Math.max(10, 26+((id%4)*6)+ARMS), rot=_fwRnd(id+3)*6.28;
     ctx.strokeStyle='rgba('+hue+',1)'; ctx.lineWidth=1.7;              // 中心から伸びる尾
     ctx.globalAlpha=al*0.34; ctx.beginPath();
     for(let a=0;a<arms;a++){ const an=a/arms*TAU+rot;
@@ -11625,7 +11639,8 @@ function drawTitleOverlord(){
 // ── 空にかかるオーロラの帯（多層・ゆっくり流れる）──
 function drawTitleAurora(){
   const t=gf; ctx.save(); ctx.globalCompositeOperation='lighter';
-  for(let b=0;b<3;b++){
+  const NB=[3,2,1][perfTier]||3;
+  for(let b=0;b<NB;b++){
     const y0=H*(0.10+b*0.055), amp=H*(0.035+b*0.012), sp=t*(0.0032+b*0.0011);
     const g=ctx.createLinearGradient(0,y0-amp*2,0,y0+amp*2);
     const col=b===0?'126,240,200':(b===1?'150,190,255':'220,160,255');
@@ -11685,7 +11700,7 @@ function drawTitleScene(){ drawBackground(); drawGround();
   ctx.restore();
   drawTitleAurora();
   // 奥から手前へ流れる雲の層（視差で空に厚みを出す）
-  for(let L=0;L<3;L++){ const cy=H*(0.16+L*0.075), sc=0.55+L*0.35, al=0.05+L*0.035, dr=(t*(0.10+L*0.09))%(W+520);
+  for(let L=0;L<([3,2,1][perfTier]||3);L++){ const cy=H*(0.16+L*0.075), sc=0.55+L*0.35, al=0.05+L*0.035, dr=(t*(0.10+L*0.09))%(W+520);
     ctx.save(); ctx.globalAlpha=al; ctx.fillStyle='#dfe9ff';
     for(let i=0;i<4;i++){ const cx2=((i*(W*0.34)+dr)%(W+520))-260;
       ctx.beginPath(); ctx.ellipse(cx2,cy,120*sc,26*sc,0,0,7);
