@@ -7775,7 +7775,9 @@ function drawPlayer(){
     ctx.beginPath(); ctx.ellipse(sx,sy+2,rx,ry,0,0,7); ctx.stroke();
     ctx.restore(); }
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
-  const _rim=(p.__portrait||blink)?null:rimBegin(46*s, 132*s);   // 立ち絵と点滅中は素通し
+  // hw/hh はアクターのローカル単位で渡す。変換行列（kx/ky）に既に s と DPR が
+  // 入っているので、ここで s を掛けると二乗になって矩形が入らなくなる
+  const _rim=(p.__portrait||blink)?null:rimBegin(46, 132);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -8917,7 +8919,9 @@ function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
 //   1. グラデを毎フレーム作らず、焼いたスプライトを使い回す
 //   2. 光と陰を1枚にまとめて drawImage 1回にする
 //   3. クリアも転送もアクターの外接矩形だけに絞る
-const RIM_CAN=384, RIM_OX=192, RIM_OY=300;
+// 被弾白飛びのオフスクリーンと同じ寸法。ボスでも収まることが実績で分かっている。
+// 転送コストは下の外接矩形で絞るので、キャンバスが大きいこと自体は負担にならない
+const RIM_CAN=640, RIM_OX=320, RIM_OY=520;
 let _rimCan=null, _rimCtx=null;
 const _rimS={};
 function rimCtx(){ if(!_rimCan){ _rimCan=document.createElement('canvas');
@@ -8940,6 +8944,18 @@ function rimKey(){ const T=STAGE_THEME[themeIdxFor(stage)]||STAGE_THEME[0];
   const sx=(T&&T.sunX!=null)?T.sunX:0.72;
   return { dir:(sx>=0.5?1:-1), rgb:(T&&T.rimRGB)||'255,206,140' }; }
 // hw/hh = アクターの見かけの半幅・高さ（画面px）。この矩形しか触らない
+// hw/hh はアクターのローカル単位。オフスクリーンの座標はデバイスpxで、
+// 変換行列 M には「キャラの拡大 s」と「DPR」の両方が入っている。
+// これを掛けて実寸を出す（呼び出し側でも s を掛けると二乗になる）。
+// 論理pxのまま矩形を切ると、DPR2の端末でキャラの大半が転送範囲から外れて消える
+// 外接矩形をデバイスpxで求める。入らなければ null（＝リムを諦める）。
+// 判定を関数に出してあるのは、実機DPRの取り違えが「キャラが消える」という
+// 最悪の形で出るため、ここだけは直接テストできるようにしておきたいから
+function rimRect(kx,ky,hw,hh){
+  const w=Math.ceil(Math.max(24,hw)*2*kx)+12;
+  const h=Math.ceil(Math.max(24,hh)*ky)+16;
+  if(w>RIM_CAN || h>RIM_OY || w/2>RIM_OX) return null;
+  return {w:w,h:h}; }
 function rimBegin(hw,hh){
   // 最上位の品質でだけ効かせる。この環境（GPU無しのソフトウェアラスタ）では
   // プレイヤー＋ボスの2体で render() が 2.98ms → 8.03ms（+5.06ms）になる。
@@ -8948,8 +8964,12 @@ function rimBegin(hw,hh){
   if(perfTier>=1) return null;
   const oc=rimCtx(); if(!oc) return null;
   const M=ctx.getTransform();
-  const w=Math.min(RIM_CAN, Math.ceil(Math.max(24,hw)*2)+8);
-  const h=Math.min(RIM_CAN, Math.ceil(Math.max(24,hh))+12);
+  const kx=Math.abs(M.a)||1, ky=Math.abs(M.d)||1;          // デバイスpxへの倍率
+  const R=rimRect(kx,ky,hw,hh);
+  // 入りきらないときはリムを諦めて素通しにする。欠けたまま転送すると
+  // キャラが半分消える（実機DPR2で発生した）
+  if(!R) return null;
+  const w=R.w, h=R.h;
   const bx=Math.max(0, RIM_OX-w/2), by=Math.max(0, RIM_OY-h);
   oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
   oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
@@ -9037,7 +9057,7 @@ function drawEnemy(e){
     _mainCtx=ctx; ctx=oc; }
   // リムライトはボスだけに掛ける（巨体ほど背景に溶けるのが目立つ）。
   // 被弾の白飛び中は既にオフスクリーンを使っているので重ねない
-  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62*s, (t.h+30)*s) : null;
+  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62, t.h+30) : null;
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
