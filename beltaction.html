@@ -2964,7 +2964,13 @@ function updatePlayer(){
   if(p.state==='getup'){ p.getT--; p.vx*=0.78; p.x+=p.vx;                                          // 手をついて跳ね起きる
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     if(p.getT<=0) p.state='idle'; return; }
-  if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84; if(p.hurtTimer<=0)p.state='idle'; return; }
+  // のけぞりにも重力を入れる。ここに無かったため、跳んでいる最中に「倒れない打撃」を
+  // 受けると z が凍り、のけぞりが明けた瞬間に idle のまま宙へ貼りついていた
+  // （down 側は修正済みだったが hurt 側が同じ穴を残していた）
+  if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84;
+    if(p.z>0){ p.vz=(p.vz||0)-0.62; p.z=Math.max(0, p.z+p.vz);
+      if(p.z<=0){ p.vz=0; dust(p.x,p.y,5); sfx.land(p.x); } }
+    if(p.hurtTimer<=0 && p.z<=0) p.state='idle'; return; }
   if(p.state==='egrab'){ updateEnemyGrab(); return; }
   if(p.state==='grab'){ updateGrab(); return; }
   if(p.state==='slide'){ updateSlide(); return; }
@@ -9057,7 +9063,10 @@ function drawEnemy(e){
     _mainCtx=ctx; ctx=oc; }
   // リムライトはボスだけに掛ける（巨体ほど背景に溶けるのが目立つ）。
   // 被弾の白飛び中は既にオフスクリーンを使っているので重ねない
-  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62, t.h+30) : null;
+  // 神は光輪と神器が体の外へ大きくはみ出す。既定の枠のままだと
+  // オフスクリーンの縁で光輪と三叉槍の穂先が四角く切り取られる
+  const _rimH=GOD_ART[t.bossKind]? t.h+120 : t.h+30, _rimW=GOD_ART[t.bossKind]? t.w*0.92 : t.w*0.62;
+  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(_rimW, _rimH) : null;
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
@@ -9067,7 +9076,7 @@ function drawEnemy(e){
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
-  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
+  else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.myth && !t.boss) drawMythFoe(e,t);
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
   else if(t.bug) drawBugFoe(e,t);
@@ -10091,6 +10100,266 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind, hurt=enemyHurt(
   ctx.strokeStyle=t.c2; ctx.lineWidth=12+bigA*9; ctx.beginPath(); ctx.moveTo(14,4); ctx.lineTo(24,8); ctx.stroke();
   ctx.translate(24,8); drawBossWeapon(t,e,atk);
   ctx.restore();
+  ctx.restore();
+}
+// ══ 四周目「神話」：三柱の神 ═══════════════════════════════════════════════
+// drawBigBoss は頭の大きなちび犬体型なので、そのまま流用すると神が小物に見える。
+// 小さな頭・広い肩・長い衣という別プロポーションで描き、
+// 持ち物（三叉槍／二叉槍／雷霆）と冠を神格の識別子にする。
+const GOD_ART={
+  // prong＝穂先の本数。ポセイドンは三叉、ハデスは二叉、ゼウスは雷霆なので穂先を持たない
+  // 肌・髪・衣は明度をはっきり離す。近い値で並べると（特にゼウス）全部が
+  // クリーム色の塊になって、顔も衣も読めなくなる
+  poseidon:{prong:3, plen:32, spread:0.34, crown:'wave',   beard:'wave',
+            hair:'#eafcff', skin:'#c8ab7c', robe1:'#2f8fb0', robe2:'#0a3446',
+            metal:'#c9a44e', halo:'#9ff0ff', aura:'120,232,255'},
+  hades:   {prong:2, plen:28, spread:0.26, crown:'flame',  beard:'point',
+            hair:'#140e22', skin:'#9e8fb4', robe1:'#4a3a86', robe2:'#0f0a1e',
+            metal:'#5c5170', halo:'#c8b8ff', aura:'168,120,255'},
+  zeus:    {prong:0, plen:0,  spread:0,    crown:'laurel', beard:'square',
+            hair:'#fbf7ea', skin:'#c69a5c', robe1:'#d8c47e', robe2:'#6a4c12',
+            metal:'#ffd24d', halo:'#fff6c0', aura:'255,236,150'}
+};
+// 穂先を1本描く。武器の描画は必ずここを通るので、
+// テストはこの関数を差し替えるだけで「何本・どの角度で生えているか」を実測できる
+function godProng(x,y,ang,len,w,col){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  ctx.strokeStyle=shade(col,-34); ctx.lineWidth=w; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-len*0.70); ctx.stroke();
+  ctx.fillStyle=col; ctx.beginPath();                       // 切っ先＝細い菱形
+  ctx.moveTo(0,-len); ctx.lineTo(w*0.78,-len*0.64); ctx.lineTo(0,-len*0.48); ctx.lineTo(-w*0.78,-len*0.64); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=shade(col,28); ctx.beginPath();             // 稜線のハイライト
+  ctx.moveTo(0,-len); ctx.lineTo(w*0.30,-len*0.64); ctx.lineTo(0,-len*0.54); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  return {x:x+Math.sin(ang)*len, y:y-Math.cos(ang)*len};
+}
+// ゼウスの雷霆（ケラウノス）：紡錘の握りから上下へ稲妻が束になって張り出す
+function godKeraunos(A,wind,swing){
+  const flick=0.68+0.32*Math.sin(gf*0.66);
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=(wind?0.50:0.28)*flick;
+    ctx.fillStyle=radGrad(0,0,74,'rgba(255,246,190,.9)','rgba(255,246,190,0)');
+    ctx.beginPath(); ctx.arc(0,0,74,0,7); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle=shade(A.metal,-38); roundRect(-6.5,-17,13,34,5); ctx.fill();
+  ctx.fillStyle=A.metal; roundRect(-3.6,-13,7.2,26,3); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(const dir of [-1,1]) for(let i=-1;i<=1;i++){
+    const len=(i?50:78)*(1+swing*0.34);
+    ctx.save(); ctx.translate(0,dir*15); if(dir>0) ctx.rotate(Math.PI); ctx.rotate(i*0.40);
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(6,-len*0.28); ctx.lineTo(-5,-len*0.52); ctx.lineTo(7,-len*0.76); ctx.lineTo(-2,-len);
+    ctx.strokeStyle='rgba(255,214,90,'+(0.80*flick).toFixed(3)+')'; ctx.lineWidth=i?4.2:6.4; ctx.stroke();
+    ctx.strokeStyle='rgba(255,252,224,'+(0.92*flick).toFixed(3)+')'; ctx.lineWidth=i?1.4:2.2; ctx.stroke();
+    ctx.restore(); }
+  ctx.restore();
+}
+// 神器一式。手の座標系で、柄が上へ伸びるように描く
+function godWeapon(kind,A,wind,swing){
+  if(kind==='zeus'){ godKeraunos(A,wind,swing); return; }
+  // 手より下に長く、上には頭の高さまで。柄の中ほどを握らせないと、
+  // 穂先が画面の外（HUDの裏）へ飛び出して神器が見えない
+  const L=84, BUTT=62;
+  ctx.strokeStyle=shade(A.metal,-30); ctx.lineWidth=7.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,BUTT); ctx.lineTo(0,-L); ctx.stroke();
+  ctx.strokeStyle=shade(A.metal,14); ctx.lineWidth=3.2;
+  ctx.beginPath(); ctx.moveTo(-1.4,BUTT-2); ctx.lineTo(-1.4,-L+2); ctx.stroke(); // 柄の照り返し
+  ctx.fillStyle=shade(A.metal,-42); roundRect(-5.6,-12,11.2,18,3); ctx.fill();   // 握り
+  ctx.fillStyle=shade(A.metal,-42); roundRect(-5,BUTT-13,10,13,3); ctx.fill();   // 石突
+  ctx.fillStyle=A.metal; ctx.beginPath(); ctx.ellipse(0,-L,8.5,5,0,0,7); ctx.fill();   // 穂先の台座
+  const n=A.prong, sp=A.spread;
+  for(let i=0;i<n;i++){ const a=(n<2?0:(i/(n-1)-0.5)*2)*sp;
+    godProng(Math.sin(a)*7.5, -L-2, a, A.plen, 5.4, A.halo); }
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(wind?0.46:0.24)+0.08*Math.sin(gf*0.11);
+    ctx.fillStyle=radGrad(0,-L-A.plen*0.6,32,'rgba('+A.aura+',.9)','rgba('+A.aura+',0)');
+    ctx.beginPath(); ctx.arc(0,-L-A.plen*0.6,32,0,7); ctx.fill(); ctx.restore(); }
+}
+// 冠。神格ごとに輪郭が違うので、シルエットだけで誰か分かる
+function godCrown(kind,A,hy,hr,wind){
+  if(kind==='poseidon'){                                   // 波冠：三つの砕ける波
+    ctx.fillStyle=A.metal;
+    for(let i=-1;i<=1;i++){ const cx=i*13, h=14+(i?0:8);
+      ctx.beginPath(); ctx.moveTo(cx-8,hy-hr+3);
+      ctx.quadraticCurveTo(cx-10,hy-hr-h, cx+4,hy-hr-h);
+      ctx.quadraticCurveTo(cx-2,hy-hr-h*0.45, cx+8,hy-hr+3); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle=A.halo;
+    for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*13+2,hy-hr-(i?10:17),3,0,7); ctx.fill(); }
+  } else if(kind==='hades'){                               // 冥府の炎：黒い炎に菫の芯
+    for(let i=-2;i<=2;i++){ const fx=i*8, h=13+Math.sin(gf*0.24+i*1.3)*6+(wind?6:0);
+      ctx.fillStyle='#0d0716'; ctx.beginPath(); ctx.moveTo(fx-6,hy-hr+4);
+      ctx.quadraticCurveTo(fx-2,hy-hr-h, fx+5,hy-hr+4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(150,96,240,.55)'; ctx.beginPath(); ctx.moveTo(fx-3,hy-hr+3);
+      ctx.quadraticCurveTo(fx-1,hy-hr-h*0.62, fx+2.5,hy-hr+3); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='#231832'; ctx.lineWidth=4.4;           // 黒鉄の輪
+    ctx.beginPath(); ctx.arc(0,hy-2,hr+1.5,Math.PI*1.10,Math.PI*1.90); ctx.stroke();
+  } else {                                                 // 月桂冠
+    ctx.strokeStyle=shade(A.metal,-26); ctx.lineWidth=3.4;
+    ctx.beginPath(); ctx.arc(0,hy-1,hr+2,Math.PI*1.06,Math.PI*1.94); ctx.stroke();
+    for(let i=0;i<7;i++){ const a=Math.PI*1.10+i/6*Math.PI*0.80;
+      const lx=Math.cos(a)*(hr+3), ly=hy-1+Math.sin(a)*(hr+3);
+      ctx.save(); ctx.translate(lx,ly); ctx.rotate(a+Math.PI/2);
+      ctx.fillStyle=i%2?A.metal:shade(A.metal,-16);
+      ctx.beginPath(); ctx.ellipse(0,-4.5,3,6.5,0.35,0,7); ctx.fill(); ctx.restore(); }
+  }
+}
+// 神ごとの周囲の気配。重いので perfTier で段階的に落とす
+function godAmbient(kind,A,wind){
+  if(perfTier>=2) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  if(kind==='poseidon'){                                   // 足元を巡る水の環と、立ちのぼる飛沫
+    ctx.globalAlpha=wind?0.42:0.26; ctx.strokeStyle='rgba('+A.aura+',.9)'; ctx.lineWidth=3;
+    for(let i=0;i<3;i++){ const ph=gf*0.03+i*2.1, ry=7+i*2;
+      ctx.beginPath(); ctx.ellipse(Math.sin(ph)*6,-6-i*4,40-i*7,ry,0,0,7); ctx.stroke(); }
+    if(perfTier<1){ ctx.globalAlpha=0.5; ctx.fillStyle='rgba('+A.aura+',.9)';
+      for(let i=0;i<7;i++){ const t2=(gf*0.9+i*37)%110;
+        ctx.beginPath(); ctx.arc(-34+i*11+Math.sin(i*2.3+gf*0.05)*5, -t2, 2.4-t2*0.012, 0,7); ctx.fill(); } }
+  } else if(kind==='hades'){                               // 黒炎の舌と、漂う魂
+    // 胴の上を通すと明るい斑点が体に貼りついて見えるので、体の外側だけを昇らせる
+    ctx.globalAlpha=wind?0.30:0.17; ctx.fillStyle='rgba('+A.aura+',.8)';
+    for(let i=0;i<5;i++){ const ph=gf*0.05+i*1.25, y=-14-((gf*0.6+i*29)%96);
+      const x=(i%2?-1:1)*(40+Math.sin(ph)*8);
+      ctx.beginPath(); ctx.ellipse(x, y, 3.4, 8+Math.sin(ph*2)*2.5, 0,0,7); ctx.fill(); }
+    if(perfTier<1){ ctx.globalAlpha=0.34; ctx.fillStyle='rgba(220,200,255,.9)';
+      for(let i=0;i<3;i++){ const a=gf*0.014+i*2.1;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*46,-70+Math.sin(a)*16,3.4,0,7); ctx.fill(); } }
+  } else {                                                 // ゼウス：体を巡る火花
+    // 長い折れ線で放電を描くと、体の外まで伸びた直線が「引っかき傷」に見えた。
+    // 短い火花を軌道上に散らして、体の輪郭に沿わせる
+    ctx.globalAlpha=(wind?0.75:0.42)*(0.55+0.45*Math.sin(gf*0.9));
+    ctx.strokeStyle='rgba('+A.aura+',.95)'; ctx.lineWidth=2.4;
+    for(let i=0;i<6;i++){ const a=gf*0.06+i*(TAU/6), r=34+Math.sin(a*3)*5;
+      const x=Math.cos(a)*r, y=-88+Math.sin(a)*30;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*7,y+Math.sin(a)*6); ctx.stroke(); }
+    if(perfTier<1){ ctx.fillStyle='rgba(255,252,224,.9)';
+      for(let i=0;i<4;i++){ const a=-gf*0.09+i*(TAU/4), r=40;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*r,-88+Math.sin(a)*26,2.2,0,7); ctx.fill(); } }
+  }
+  ctx.restore();
+}
+function drawGod(e){
+  const t=ETYPE[e.type], kind=t.bossKind, A=GOD_ART[kind]||GOD_ART.zeus;
+  const hurt=enemyHurt(e), k=t.h/150;
+  const atk=e.state==='bmove', wind=e.state==='bwind'||e.telegraph>0;
+  const pr=atk? clamp(e.moveT/Math.max(1,e.moveMax),0,1) : 0;
+  const swing=atk? Math.sin(pr*Math.PI) : 0;
+  const br=Math.sin((e.anim||0)*0.6)*2.0;                  // 呼吸
+  const HIP=-76, SH=-132, HEAD=-158, HR=15;                // 股／肩／頭の中心。頭を小さく取ると背が高く見える
+  ctx.save(); ctx.scale(k,k); ctx.lineJoin='round'; ctx.lineCap='round';
+  // ── 頭の後ろの光輪。大きく取ると画面が白く洗われて背景も本体も飛ぶので、
+  //    頭のまわりだけに絞る。放射の筋は「直線」で描くと硬い罫線に見えたので、
+  //    細く短い光条を頭の周りにだけ回す ──
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(wind?0.30:0.16)+0.04*Math.sin(gf*0.05);
+    ctx.fillStyle=radGrad(0,HEAD-2,54,'rgba('+A.aura+',.95)','rgba('+A.aura+',0)');
+    ctx.beginPath(); ctx.arc(0,HEAD-2,54,0,7); ctx.fill(); ctx.restore(); }
+  if(perfTier<1){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=wind?0.22:0.10;
+    ctx.strokeStyle='rgba('+A.aura+',.9)'; ctx.lineWidth=2;
+    for(let i=0;i<16;i++){ const a=i/16*TAU+gf*0.004, r0=28, r1=r0+(i%2?9:16);
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*r0,HEAD-2+Math.sin(a)*r0);
+      ctx.lineTo(Math.cos(a)*r1,HEAD-2+Math.sin(a)*r1); ctx.stroke(); }
+    ctx.restore(); }
+  // ── 背後にたなびく衣 ──
+  { const w=Math.sin(gf*0.033)*10+swing*24;
+    const g=ctx.createLinearGradient(-44,SH,-12,-6); g.addColorStop(0,shade(A.robe1,12)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-22,SH+2);
+    ctx.quadraticCurveTo(-72-w,SH+58,-54-w*1.3,-4);
+    ctx.quadraticCurveTo(-34,-30,-10,HIP+12); ctx.closePath(); ctx.fill(); }
+  // ── 奥の腕：掌を開いて力を溜める ──
+  { ctx.save(); ctx.translate(-25,SH+8); ctx.rotate(-0.42-swing*0.5);
+    ctx.strokeStyle=shade(A.skin,-30); ctx.lineWidth=11.5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-7,28); ctx.stroke();
+    ctx.strokeStyle=shade(A.skin,-38); ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(-7,28); ctx.lineTo(-4,50); ctx.stroke();
+    ctx.fillStyle=shade(A.skin,-34); ctx.beginPath(); ctx.arc(-4,55,7.5,0,7); ctx.fill(); ctx.restore(); }
+  // ── 脚：素足にサンダル。神は甲冑を着けない ──
+  foeLegs(e,13,HIP,36,34,14,shade(A.skin,-16),shade(A.metal,-22),0.44,1);
+  // ── キトンの裾。膝上で切って脛とサンダルを見せる（床まで垂らすと
+  //    足が完全に隠れ、歩いているのか浮いているのか読めなくなる）──
+  { const sw=Math.sin((e.anim||0)*0.5)*3, HEM=-34;
+    const g=ctx.createLinearGradient(0,HIP-8,0,HEM); g.addColorStop(0,shade(A.robe1,28)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-24,HIP-6); ctx.lineTo(24,HIP-6);
+    ctx.quadraticCurveTo(34,HIP+20, 29+sw,HEM);
+    for(let i=0;i<4;i++){ const x=29-i*14.5; ctx.quadraticCurveTo(x-7,HEM+7,x-14.5,HEM); }
+    ctx.quadraticCurveTo(-34,HIP+20,-24,HIP-6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.22)'; ctx.lineWidth=2;
+    for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*11,HIP); ctx.lineTo(i*13,HEM+2); ctx.stroke(); } }
+  // ── 胴：広い肩から腰へ絞る。外周に濃いリムを敷いてから肌 ──
+  { ctx.fillStyle=shade(A.robe2,-14); ctx.beginPath();
+    ctx.moveTo(-31,SH+3); ctx.quadraticCurveTo(-37,SH+34,-23,HIP+2);
+    ctx.lineTo(23,HIP+2); ctx.quadraticCurveTo(37,SH+34,31,SH+3); ctx.closePath(); ctx.fill();
+    const g=ctx.createLinearGradient(-18,SH,16,HIP); g.addColorStop(0,shade(A.skin,24)); g.addColorStop(1,shade(A.skin,-28));
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-27,SH+5+br); ctx.quadraticCurveTo(-33,SH+34,-19,HIP);
+    ctx.lineTo(19,HIP); ctx.quadraticCurveTo(33,SH+34,27,SH+5+br); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.10)';                 // 大胸筋
+    ctx.beginPath(); ctx.ellipse(-12,SH+18+br,12,9,0,0,7); ctx.ellipse(12,SH+18+br,12,9,0,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.20)'; ctx.lineWidth=2;    // 腹の割れ
+    ctx.beginPath(); ctx.moveTo(0,SH+26); ctx.lineTo(0,HIP-4); ctx.stroke();
+    for(let i=0;i<3;i++){ const y=SH+32+i*10; ctx.beginPath(); ctx.moveTo(-11,y); ctx.lineTo(11,y); ctx.stroke(); } }
+  // ── ヒマティオン（肩掛け）と留め金 ──
+  { const g=ctx.createLinearGradient(-30,SH,20,HIP+18); g.addColorStop(0,shade(A.robe1,32)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-33,SH-3); ctx.quadraticCurveTo(-5,SH+30, 21,HIP+6);
+    ctx.lineTo(31,HIP+1); ctx.quadraticCurveTo(3,SH+18,-23,SH-9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=A.metal; ctx.beginPath(); ctx.arc(-28,SH-5,5.6,0,7); ctx.fill();
+    ctx.fillStyle=shade(A.metal,32); ctx.beginPath(); ctx.arc(-29.4,-6.4+SH,2.2,0,7); ctx.fill(); }
+  // ── 肩当てはつけず、素の肩の丸みで力を見せる。
+  //    大きく張り出すと球が2つ浮いて見えるので、胴の輪郭に収める ──
+  for(const sgn of [-1,1]){ ctx.fillStyle=shade(A.skin,-34);
+    ctx.beginPath(); ctx.arc(sgn*24,SH+6,11.5,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(sgn*24-3,SH+2,13,shade(A.skin,26),shade(A.skin,-24));
+    ctx.beginPath(); ctx.arc(sgn*24,SH+5,10,0,7); ctx.fill(); }
+  // ── 首と頭 ──
+  ctx.strokeStyle=shade(A.skin,-22); ctx.lineWidth=13; ctx.beginPath(); ctx.moveTo(0,SH+1); ctx.lineTo(0,SH-11); ctx.stroke();
+  ctx.fillStyle=shade(A.skin,-26); ctx.beginPath(); ctx.ellipse(0,HEAD+3,HR+2,HR+1,0,0,7); ctx.fill();
+  ctx.fillStyle=radGrad(-HR*0.35,HEAD-HR*0.4,HR*1.6,shade(A.skin,26),shade(A.skin,-18));
+  ctx.beginPath(); ctx.ellipse(0,HEAD,HR,HR*1.08,0,0,7); ctx.fill();
+  // ── 髪と髭：神格ごとに形を変える ──
+  ctx.fillStyle=A.hair;
+  ctx.beginPath(); ctx.arc(0,HEAD-2,HR+3,Math.PI*1.00,Math.PI*2.00); ctx.fill();
+  for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.arc(i*8.5, HEAD-HR+1+i*i*1.4, 6.4,0,7); ctx.fill(); }
+  // 髭は輪郭を1本入れてから塗る。肌と明度が近いと（特にゼウス）
+  // 顔と髭が融けて、頭が長い四角に見えてしまう
+  ctx.strokeStyle='rgba(0,0,0,.32)'; ctx.lineWidth=2.4;
+  // 髭の付け根は顎の線。ここを目のすぐ下から始めると頬が全部隠れ、
+  // 「兜＋白い前掛け」に見えて顔が読めなくなる
+  { const chin=HEAD+HR*1.02;
+    if(A.beard==='wave'){                                  // 波打つ長い髭が胸まで垂れる
+      ctx.beginPath(); ctx.moveTo(-12,chin-1);
+      ctx.quadraticCurveTo(-23,chin+16,-11,SH+22);
+      ctx.quadraticCurveTo(0,SH+30,11,SH+22);
+      ctx.quadraticCurveTo(23,chin+16,12,chin-1); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=shade(A.hair,-16);
+      for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.ellipse(i*7,SH+16,3.4,9,i*0.3,0,7); ctx.fill(); }
+    } else if(A.beard==='square'){                         // 角ばった重い髭。顎から下だけを覆う
+      ctx.beginPath(); ctx.moveTo(-13,chin); ctx.lineTo(-14,SH+12);
+      ctx.quadraticCurveTo(0,SH+21,14,SH+12); ctx.lineTo(13,chin); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=shade(A.hair,-16);                     // 口髭と房の分け目
+      ctx.beginPath(); ctx.ellipse(0,chin+2,12,4.2,0,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1.6;
+      for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*6,chin+6); ctx.lineTo(i*7,SH+14); ctx.stroke(); }
+    } else {                                               // 細く尖った髭
+      ctx.beginPath(); ctx.moveTo(-10,chin-1); ctx.lineTo(-4,SH+20); ctx.lineTo(4,SH+20);
+      ctx.lineTo(10,chin-1); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+  godCrown(kind,A,HEAD,HR,wind);
+  // ── 眼：白目を持たず、神威そのものが光る ──
+  if(hurt){ hurtEye(-6,HEAD+1,5,'#3a2a44'); hurtEye(6,HEAD+1,5,'#3a2a44'); sweatDrop(18,HEAD-6); }
+  else { if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.75;
+      for(const sgn of [-1,1]){ ctx.fillStyle=radGrad(sgn*6,HEAD+1,9,A.halo,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(sgn*6,HEAD+1,9,0,7); ctx.fill(); } ctx.restore(); }
+    ctx.fillStyle=A.halo;
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*6,HEAD+1,3.4,3.0,0,0,7); ctx.fill(); }
+    ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.lineWidth=2.8;
+    ctx.beginPath(); ctx.moveTo(-13,HEAD-5); ctx.lineTo(-2,HEAD-1); ctx.moveTo(13,HEAD-5); ctx.lineTo(2,HEAD-1); ctx.stroke(); }
+  // ── 神器を持つ腕 ──
+  // ゼウスだけ構えが違う。雷霆は突く得物ではないので、腕を挙げて掲げさせる
+  { const rest=(kind==='zeus')? -1.42 : -0.30;
+    let ang=rest; if(wind) ang=rest-0.80; else if(atk) ang=rest-0.80+pr*2.15;
+    ang=foeArm(e,ang,0.32);
+    ctx.save(); ctx.translate(26+armSwingX(e),SH+6); ctx.rotate(ang); ctx.scale(1+swing*0.30,1+swing*0.30);
+    ctx.strokeStyle=shade(A.skin,6); ctx.lineWidth=12.5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,26); ctx.stroke();
+    ctx.strokeStyle=A.skin; ctx.lineWidth=11; ctx.beginPath(); ctx.moveTo(9,26); ctx.lineTo(13,48); ctx.stroke();
+    ctx.translate(13,50); godWeapon(kind,A,wind,swing);
+    ctx.restore(); }
+  godAmbient(kind,A,wind);
   ctx.restore();
 }
 // ══ 二周目・蟲の世界のボス：頭・胸部・腹部の三節を持つ“本物の虫”として描く ══
@@ -11888,7 +12157,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }

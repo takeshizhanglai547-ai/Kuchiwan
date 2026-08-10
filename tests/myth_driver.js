@@ -123,6 +123,99 @@ const DRIVER = `
     console.log('神託の間合い取り OK (距離 '+Math.round(d0)+'px → '+Math.round(dMax)+'px、後退'+backF+'F)');
   }
 
+  // ===== 6) 三柱の神が専用の絵で描かれる =====
+  // 汎用の drawBigBoss（ちび犬体型）に落ちていないこと、
+  // 神器の穂先が実際に 3本／2本／0本 生えていることを、描画側を差し替えて実測する
+  {
+    // ── 6-1 振り分け：神は drawGod へ、他のボスは従来どおり ──
+    const realGod=drawGod, realBig=drawBigBoss;
+    let log=[];
+    drawGod=function(e){ log.push('god:'+e.type); };
+    drawBigBoss=function(e){ log.push('big:'+e.type); };
+    try {
+      setupRoster('inu'); startGame(); state='play';
+      enemies.length=0; encounters.length=0; particles.length=0;
+      ['poseidon','hades','zeus','garm'].forEach(function(k){
+        spawnEnemy(k, camX+300, LANE); const e=enemies[enemies.length-1];
+        e.state='idle'; e.anim=0; drawEnemy(e); });
+    } finally { drawGod=realGod; drawBigBoss=realBig; }
+    ['poseidon','hades','zeus'].forEach(function(k){
+      if(log.indexOf('god:'+k)<0) throw new Error(k+' が専用描画へ回っていない: '+log.join(' ')); });
+    if(log.indexOf('big:garm')<0) throw new Error('神以外のボスまで専用描画へ流れている: '+log.join(' '));
+    console.log('神の描画の振り分け OK ('+log.join(' / ')+')');
+
+    // ── 6-2 神器の穂先：本数と開きを、描画が実際に通る godProng で数える ──
+    const realProng=godProng;
+    function prongsOf(kind){
+      const got=[]; const real=ctx;
+      godProng=function(x,y,ang,len,w,col){ got.push({x:x,ang:ang,len:len}); };
+      try { ctx=new Proxy(real,{ get:function(t,key){
+              if(key==='getTransform') return function(){ return {a:1,b:0,c:0,d:1,e:0,f:0}; };
+              const v=t[key]; return (typeof v==='function')? v.bind(t) : v; } });
+            enemies.length=0; spawnEnemy(kind, camX+300, LANE);
+            const e=enemies[0]; e.state='idle'; e.anim=0; drawGod(e); }
+      finally { ctx=real; godProng=realProng; }
+      return got; }
+    const P=prongsOf('poseidon'), H=prongsOf('hades'), Z=prongsOf('zeus');
+    if(P.length!==3) throw new Error('ポセイドンの穂先が3本でない: '+P.length+'本');
+    if(H.length!==2) throw new Error('ハデスの穂先が2本でない: '+H.length+'本');
+    if(Z.length!==0) throw new Error('ゼウスは雷霆なので穂先を持たないはず: '+Z.length+'本');
+    { const a=P.map(function(p){ return p.ang; });
+      if(!(Math.min.apply(null,a)<-0.1 && Math.max.apply(null,a)>0.1))
+        throw new Error('三叉が開いていない（全部同じ向き）: '+a.map(function(v){return v.toFixed(2);}).join(', '));
+      if(!(P[0].len>20)) throw new Error('穂先が短すぎる: '+P[0].len); }
+    { const a=H.map(function(p){ return p.ang; });
+      if(!(a[0]<0 && a[1]>0)) throw new Error('二叉が左右に開いていない: '+a.map(function(v){return v.toFixed(2);}).join(', ')); }
+    console.log('神器 OK (三叉3本 開き±'+Math.max.apply(null,P.map(function(p){return p.ang;})).toFixed(2)
+      +'rad / 二叉2本 / 雷霆は穂先なし)');
+
+    // ── 6-3 冠は三者三様。「同じ形を色替えしただけ」を弾くため、色の代入は捨てて
+    //         座標と呼び出し列＝形だけを突き合わせる ──
+    function crownShape(kind){
+      const real=ctx, ops=[];
+      try { ctx=new Proxy(real,{ get:function(t,key){
+              const v=t[key];
+              if(typeof v==='function') return function(){ ops.push(key+'('+Array.prototype.slice.call(arguments)
+                .map(function(a){ return typeof a==='number'? a.toFixed(1):''; }).join(',')+')'); return v.apply(t,arguments); };
+              return v; },
+            set:function(t,key,v){ t[key]=v; return true; } });     // fillStyle 等は記録しない
+            godCrown(kind, GOD_ART[kind], -158, 15, false); }
+      finally { ctx=real; }
+      return ops.join('|'); }
+    const cw=crownShape('poseidon'), cf=crownShape('hades'), cl=crownShape('zeus');
+    if(cw===cl) throw new Error('波冠と月桂冠が同じ形（色替えだけになっている）');
+    if(cw===cf) throw new Error('波冠と冥府の炎が同じ形（色替えだけになっている）');
+    if(cf===cl) throw new Error('冥府の炎と月桂冠が同じ形（色替えだけになっている）');
+    [['波冠',cw],['冥府の炎',cf],['月桂冠',cl]].forEach(function(c){
+      if(c[1].length<200) throw new Error(c[0]+' がほとんど描かれていない: '+c[1].length+'文字'); });
+    console.log('冠 OK (波冠/冥府の炎/月桂冠 が別々の形、'
+      +[cw,cf,cl].map(function(s){return s.length;}).join('/')+'文字)');
+
+    // ── 6-4 重い装飾は perfTier で落ちる ──
+    // 呼び出し数の単調減少だけでは、ゲートを1つ外しても他が残るので素通りする。
+    // 「tier2 では加算合成を一切使わない」まで要求すると、どのゲートを外しても赤くなる
+    function godOps(kind,tier){
+      const real=ctx, old=perfTier, ops=[]; let lighter=0; perfTier=tier;
+      try { ctx=new Proxy(real,{ get:function(t,key){
+              if(key==='getTransform') return function(){ return {a:1,b:0,c:0,d:1,e:0,f:0}; };
+              const v=t[key];
+              if(typeof v==='function') return function(){ ops.push(key); return v.apply(t,arguments); };
+              return v; },
+            set:function(t,key,v){ if(key==='globalCompositeOperation'&&v==='lighter') lighter++; t[key]=v; return true; } });
+            enemies.length=0; spawnEnemy(kind, camX+300, LANE);
+            const e=enemies[0]; e.state='idle'; e.anim=0; drawGod(e); }
+      finally { ctx=real; perfTier=old; }
+      return {n:ops.length, lighter:lighter}; }
+    const t0=godOps('poseidon',0), t1=godOps('poseidon',1), t2=godOps('poseidon',2);
+    if(!(t0.n>t1.n && t1.n>t2.n)) throw new Error('perfTier で装飾が落ちていない: '+t0.n+' / '+t1.n+' / '+t2.n);
+    if(!(t2.n>60)) throw new Error('tier2 で神の本体まで消えている: '+t2.n+'コール');
+    if(t2.lighter!==0) throw new Error('tier2 なのに加算合成が '+t2.lighter+'回 残っている');
+    if(!(t0.lighter>=4)) throw new Error('tier0 の加算演出が少なすぎる: '+t0.lighter+'回');
+    if(!(t1.lighter<t0.lighter)) throw new Error('tier1 で加算演出が減っていない: '+t0.lighter+' → '+t1.lighter);
+    console.log('神の適応品質 OK (描画コール '+t0.n+'→'+t1.n+'→'+t2.n
+      +' / 加算合成 '+t0.lighter+'→'+t1.lighter+'→'+t2.lighter+')');
+  }
+
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
