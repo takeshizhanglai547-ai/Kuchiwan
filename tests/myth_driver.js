@@ -216,6 +216,20 @@ const DRIVER = `
       +' / 加算合成 '+t0.lighter+'→'+t1.lighter+'→'+t2.lighter+')');
   }
 
+  // ===== 7) 神話の章の音まわり =====
+  {
+    // 三柱の神は汎用ボス曲ではなく専用曲を引くこと
+    ['poseidon','hades','zeus'].forEach(function(k){
+      const m=bossMusicFor(k);
+      if(m==='boss') throw new Error(k+' が汎用ボス曲のまま: '+m);
+      if(m!=='bossmyth') throw new Error(k+' のボス曲が神話用でない: '+m); });
+    // 章のテーマ番号が背景テーマ表に収まり、かつ三章で別々であること
+    const th=MYTH_CH.map(function(c){ return c.theme; });
+    th.forEach(function(t){ if(!(t>=0 && t<STAGE_THEME.length)) throw new Error('テーマ '+t+' が範囲外'); });
+    if(new Set(th).size!==3) throw new Error('三章のテーマが重複している: '+th.join(','));
+    console.log('神話の音と背景 OK (専用ボス曲 bossmyth／章ごとに別テーマ '+th.join('/')+')');
+  }
+
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
