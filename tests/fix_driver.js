@@ -197,11 +197,39 @@ const DRIVER = `
     rimEnd(a,1);
     [1,2].forEach(function(ti){ perfTier=ti;
       if(rimBegin(40,120)) throw new Error('perfTier='+ti+' でリムライトが素通しになっていない'); });
-    perfTier=old;
     // 焼いたスプライトを使い回していること（毎フレームのグラデ生成は過去の事故要因）
     const s1=rimSprite(1,'255,206,140'), s2=rimSprite(1,'255,206,140');
     if(s1!==s2) throw new Error('リムのスプライトが毎回作り直されている');
-    console.log('リムライトの適応品質 OK (tier0のみ有効、スプライトは使い回し)');
+    perfTier=0;   // 直前のループが2のままなので戻す
+    // ── 実機（DPR2）でキャラが消えた事故の再発防止 ──
+    // 矩形を論理pxで切ると、DPR2の端末では転送範囲からキャラの大半が外れて消える。
+    // 変換行列に入っている拡大（キャラの s × DPR）を掛けて実寸で切ること。
+    // 入りきらない場合はリムを諦めて素通しにする＝欠けたまま転送しない
+    { const r1=rimRect(1,1,46,132);            // DPR1・等倍
+      const r2=rimRect(3.4,3.4,46,132);        // DPR2 × キャラ拡大1.7 相当
+      if(!r1) throw new Error('等倍でも矩形が作れない');
+      if(!r2) throw new Error('DPR2相当の拡大でリムが素通しになる（実機で効かない）');
+      if(!(r2.h>r1.h*3)) throw new Error('矩形が拡大を反映していない: h '+r1.h+' → '+r2.h);
+      if(!(r2.w>r1.w*3)) throw new Error('矩形の幅が拡大を反映していない: w '+r1.w+' → '+r2.w);
+      if(rimRect(20,20,46,132)) throw new Error('収まらない大きさでも素通しにしていない（キャラが欠ける）');
+      // 呼び出し側がローカル単位で渡していること（s を掛けると二乗になって入らなくなる）
+      if(rimRect(3.4,3.4,46*1.7,132*1.7)) throw new Error('呼び出し側で s を掛けると入らなくなる＝二重掛けの兆候');
+      // rimBegin が変換行列から実寸を取っていること。
+      // ヘッドレスの ctx は変換を保持しないので、束縛ごと入れ替えて拡大を注入する
+      const real=ctx;
+      function withScale(k,fn){
+        try { ctx = new Proxy(real, { get:function(t,key){
+                if(key==='getTransform') return function(){ return {a:k,b:0,c:0,d:k,e:300,f:500}; };
+                const v=t[key]; return (typeof v==='function')? v.bind(t) : v; } });
+              return fn(); }
+        finally { ctx = real; } }
+      const gotSmall=withScale(1, function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return !!r; });
+      const gotBig  =withScale(20,function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return !!r; });
+      if(!gotSmall) throw new Error('等倍で rimBegin が素通しになる');
+      if(gotBig) throw new Error('拡大20倍でも rimBegin が素通しにならない＝変換行列を見ていない');
+    }
+    perfTier=old;
+    console.log('リムライトの適応品質 OK (tier0のみ有効／スプライト使い回し／DPR2で有効・入らなければ素通し)');
   }
 
   console.log('CRITIC FIX TEST PASSED'); process.exit(0);

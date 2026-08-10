@@ -2080,8 +2080,8 @@ let TWO_P=false;                     // co-op enabled
 let hardMode=false;                  // 高難易度モード
 let coopLives=0;                     // 2P：残機は共有プール
 // ── 難易度による補正 ──
-function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1)*(lap>=3?1.6:lap>=2?1.3:1); }   // 敵HP（周回ごとに増量）
-function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1)*(lap>=3?1.4:lap>=2?1.2:1); }  // 敵の攻撃力（周回ごとに強化）
+function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1)*(lap>=4?2.0:lap>=3?1.6:lap>=2?1.3:1); }   // 敵HP（周回ごとに増量）
+function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1)*(lap>=4?1.7:lap>=3?1.4:lap>=2?1.2:1); }  // 敵の攻撃力（周回ごとに強化）
 // ══════════════════════════════════════════════════════════════
 //  敵の成長：ステージを進めるほど、そして主役が強くなるほど敵も鍛えられる
 //  「制覇したフィールド数」と「主役の熟練度」の両輪で決まるので、
@@ -4193,11 +4193,37 @@ const ETYPE={
   floater:{hp:48,sp:2.4,dmg:11,atkR:58,w:56,h:56,c1:'#7dd8ff',c2:'#3a92c8',c3:'#1a4a72',score:540,alien:true,alienKind:'floater',flyer:true,pouncer:true,accent:'#bfeaff',name:'浮遊脳ブレイン'},
   probe:{hp:140,sp:1.0,dmg:15,atkR:64,w:66,h:66,c1:'#b8c4d8',c2:'#6a7a96',c3:'#2a3448',score:640,alien:true,alienKind:'probe',armor:true,accent:'#9fd6ff',name:'探査機プローブ'},
   slimealien:{hp:80,sp:1.3,dmg:13,atkR:60,w:64,h:62,c1:'#a0ff9f',c2:'#4ac04a',c3:'#1f6a24',score:580,alien:true,alienKind:'ooze',rager:true,accent:'#d0ffc8',name:'寄生スライムX'},
+  // ── 四周目「神話」の雑魚 ──
+  // 攻撃力とHPを盛るのではなく、行動で難しくする。
+  //   leaper  : 遠くから高く跳び上がって急降下突進（着地に隙）
+  //   riposte : 構えて待ち、攻撃を受けた瞬間に斬り返す（正面から殴ると罰される）
+  //   phalanx : 盾を構えて前進。正面は通らないので回り込む必要がある
+  //   flanker : 攻撃の順番待ちの間に背後へ回り込む
+  //   seer    : 遠距離から狙い撃ち、間合いを詰められると跳んで離れる
+  mythhop:{hp:150,sp:2.2,dmg:16,atkR:70,w:56,h:84,c1:'#e8dfc4',c2:'#b9ac86',c3:'#6e6446',score:900,
+    myth:true,mythKind:'hop',leaper:true,squad:true,accent:'#ffe9a0',name:'有翼のハルピュイア'},
+  mythguard:{hp:260,sp:1.15,dmg:18,atkR:60,w:64,h:88,c1:'#cfd6e0',c2:'#8d97a8',c3:'#48505e',score:1100,
+    myth:true,mythKind:'phalanx',phalanx:true,guarder:true,squad:true,armor:true,accent:'#eaf2ff',name:'青銅のホプリタイ'},
+  mythblade:{hp:190,sp:1.8,dmg:20,atkR:64,w:56,h:86,c1:'#f0e6cc',c2:'#c0ae84',c3:'#6a5c3c',score:1200,
+    myth:true,mythKind:'riposte',riposte:true,squad:true,accent:'#fff3c8',name:'不死隊エリュシオン'},
+  mythflank:{hp:140,sp:2.6,dmg:15,atkR:58,w:52,h:80,c1:'#c6b6e8',c2:'#8b76c0',c3:'#463a68',score:950,
+    myth:true,mythKind:'flank',flanker:true,squad:true,accent:'#e2d4ff',name:'影渡りのラミアー'},
+  mythseer:{hp:120,sp:1.6,dmg:16,atkR:300,w:54,h:82,c1:'#a8e8e0',c2:'#5aa8a0',c3:'#265450',score:1000,
+    myth:true,mythKind:'seer',seer:true,gunner:true,squad:true,accent:'#d6fffa',name:'神託のオラクル'},
+  mythbull:{hp:340,sp:1.35,dmg:24,atkR:72,w:76,h:96,c1:'#c08a5a',c2:'#8a5c34',c3:'#4a2e18',score:1500,
+    myth:true,mythKind:'bull',charge:true,squad:true,armor:true,accent:'#ffc890',name:'迷宮のミノタウロス'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:100,w:104,h:150,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:110,w:170,h:120,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
   bioblob:{hp:1000,sp:1.1,dmg:23,atkR:96,w:176,h:170,c1:'#8fffb0',c2:'#3aa860',c3:'#134a2a',score:8000,boss:true,bossKind:'bioblob',weapon:'none',accent:'#c8ffd8',alien:true,name:'増殖体バイオブロブ'},
   // ---- 三周目・真ボス：宇宙皇帝ワンダルク（第一形態→真の姿）----
+  // ---- 四周目・神話のボス ----
+  poseidon:{hp:3200,sp:1.9,dmg:32,atkR:110,w:96,h:168,c1:'#7fd8e6',c2:'#2f88a8',c3:'#0e4258',score:40000,
+    boss:true,bossKind:'poseidon',weapon:'spear',accent:'#d6ffff',myth:true,name:'海神ポセイドン'},
+  hades:{hp:3600,sp:2.0,dmg:34,atkR:104,w:92,h:172,c1:'#8f7fc8',c2:'#4a3a80',c3:'#1a1230',score:46000,
+    boss:true,bossKind:'hades',weapon:'dark',accent:'#c8b8ff',myth:true,name:'冥王ハデス'},
+  zeus:{hp:4600,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:80000,
+    boss:true,bossKind:'zeus',weapon:'holy',accent:'#fff6c0',myth:true,finalBoss:true,trueBoss:true,name:'雷神ゼウス'},
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
   // ---- 二周目・蟲の世界のボス ----
@@ -4222,6 +4248,13 @@ const BOSSMOVES={
   cerbe:  ['clawCombo','dashThrust','tripleStep','lunge','unblockSmash','summon'],
   glaton: ['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash'],
   emperor:['darkSwipe','darkSlam','orbSpread','darkBeam','teleSlash','boltStrike','megaTornado','summon','bossGrab'],  // 魔法使い型
+  // ── 神話のボス ──
+  //   ポセイドン＝三叉槍の間合いと大波（跳んで避ける）
+  //   ハデス    ＝亡霊を呼び、瞬間移動で背後を取る
+  //   ゼウス    ＝落雷と神速。ガード不能を多く持つ
+  poseidon:['dashThrust','tripleStep','spearThrow','groundSlam','bulletHell','unblockSmash','bossGrab'],
+  hades:   ['teleSlash','summon','darkBeam','orbSpread','darkSlam','unblockSmash','bossGrab'],
+  zeus:    ['boltStrike','teleSlash','skyDive','megaTornado','darkBeam','unblockSmash','groundSlam','summon'],
   dragon: ['fireBreath','fireball','divebomb','clawSwoop','bulletHell'],
   ghost:  ['scytheSlash','phaseDash','vanishMove','skyDive','bladeParry'],                      // 大鎌の剣士型
   slime:  ['slimeBounce','slimeSlam','slimeBounce'],
@@ -4360,6 +4393,29 @@ function pickAtkVar(e,p,dist){
   let r=Math.random()*W.reduce(function(a,b){return a+b;},0);
   for(let i=0;i<W.length;i++){ r-=W[i]; if(r<=0) return i; }
   return 0; }
+
+// ── 分隊の攻撃権 ──
+// 全員が同時に突っ込むと、数が増えるほど「押し合いの壁」になって却って弱い。
+// 同時に仕掛けられる数を絞り、待っている個体は回り込みに使う。
+// これがニンジャガイデン的な「囲まれている緊張」の正体で、攻撃力やHPでは作れない
+let _sqLast=0;
+function squadCap(){ return hardMode?3:2; }
+function squadWants(e,dist){
+  if(e.sqHold>gf){ _sqLast=gf; return true; }      // 既に権利を持っている
+  let n=0;
+  for(const o of enemies){ if(o.dead||o===e) continue;
+    if(o.sqHold>gf){ n++; _sqLast=gf; } }
+  if(n>=squadCap()) return false;
+  // 誰も仕掛けないまま時間が過ぎたら、順番待ちをやめて必ず一体を出す。
+  // 「近い者が優先」だけだと、全員が同じ距離に並んだときに互いを譲り合って
+  // 永久に誰も攻撃しない膠着が起きる（実測で3回に1回、600フレーム無攻撃）
+  if(gf-_sqLast>70){ _sqLast=gf; return true; }
+  // 近い個体から順に権利を得る（遠くの1体だけが延々仕掛ける絵にしない）
+  for(const o of enemies){ if(o.dead||o===e||!ETYPE[o.type].squad) continue;
+    if(o.sqHold>gf || o.stun>0 || o.state==='hurt' || o.state==='down') continue;
+    if(Math.abs(o.x-nearestPlayerTo(o.x).x) < dist-14) return false; }
+  return true; }
+function squadTake(e){ e.sqHold=gf+rnd(50,90); _sqLast=gf; }
 function enemyAtkFx(e,V,seg){ const t=ETYPE[e.type], dir=e.facing;
   V=V||ATK_VAR[0];
   const h=V.hits[seg||0]||V.hits[0];
@@ -4399,6 +4455,14 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
   if(e.transform>0){ spark(e.x,e.y-e.h*0.5,'#c46bff',5,6); return; }   // 形態進化中は無敵
+  // ── 不死隊エリュシオンの「斬り返し」：構え中に当てると受け流して反撃に転じる ──
+  // ダメージは半分だけ通り、次のフレームで踏み込み突きが返ってくる。
+  // 正面から殴り続けるだけでは通らない相手を混ぜて、間合いを見る動機を作る
+  if(e.state==='mythward' && !e.mwHit){
+    e.mwHit=true; dmg=Math.max(1,Math.round(dmg*0.5)); kbx=0; knockdown=false;
+    spark(e.x+e.facing*20, e.y-e.h*0.55, '#fff3c8', 12, 8);
+    ring(e.x+e.facing*16, e.y-e.h*0.5, '#ffd24d');
+    hitStop=Math.max(hitStop,6); sfx.guard(e.x); }
   // ── 剣士ボスの「見切り」：構え中に近接攻撃を受けると、巨大化した刃の一閃で反撃する ──
   if((e.parryStance||0)>gf && curHitIsMelee && e.stun<=0 && e.state!=='down' && e.state!=='air'){
     e.parryStance=0; noHitStopOnce=false;
@@ -4454,6 +4518,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(launch){ /* stays air */ }
   else if(knockdown){ e.state='down'; e.downTimer=T.boss?14:48; }   // ボスは素早く立て直す
   else if(T.boss){ if(e.state==='walk'){ e.state='hurt'; e.hurtTimer=7; } e.stun=Math.min((e.stun||0)+3,9); }
+  else if(e.state==='mythward'){ e.stun=0; }   // 斬り返しの構えは崩れない（この一撃を受け流して反撃に転じる）
   else { e.state='hurt'; e.hurtTimer=16; e.stun=18; }
 }
 // strong launch into the juggle (to screen edge / ceiling). vz<0 = up. Bosses resist.
@@ -4790,6 +4855,40 @@ function updateEnemies(){
         players.forEach(pl=>{ if(pl.active&&pl.invuln<=0&&pl.state!=='dead'&&Math.abs(pl.x-e.x)<e.w*0.5+30&&Math.abs(pl.y-e.y)<46&&pl.z<44){ if(!e.bcHitCd||gf-e.bcHitCd>=24){ e.bcHitCd=gf;
           hurtPlayer(pl, Math.round(t.dmg*ZAKO_DMG*0.55*foeAtkMul(e)), e.facing, true, esndOf(e)); pl.vx=e.facing*10; shake=Math.max(shake,8); } } }); }
       if(e.bcT<=0 || e.x<camX-90 || e.x>camX+W+90){ e.state='walk'; e.thinkCd=rnd(70,120); e.vx=0; } continue; }
+    // ── 有翼のハルピュイア：遠くから高く跳び上がり、真上から急降下して突っ込む ──
+    if(e.state==='mythleap'){ e.mlT++;
+      const T=e.mlT, UP=16, DOWN=20;
+      if(T<=UP){ const k=T/UP; e.z=300*Math.sin(k*Math.PI*0.5);        // 舞い上がる
+        e.x=lerp(e.mlX0, e.mlX1, k*0.35);
+        if(T%3===0 && perfTier<2) spark(e.x,e.y-e.z,'#ffe9a0',2,4); }
+      else if(T<=UP+DOWN){ const k=(T-UP)/DOWN; e.z=300*(1-k*k);        // 真上から急降下
+        e.x=lerp(e.mlX0, e.mlX1, 0.35+0.65*k);
+        if(T%2===0) spark(e.x,e.y-e.z,'#fff3c8',3,6);
+        if(e.z<40 && !e.mlHit){ e.mlHit=true;
+          if(tryHitPlayer(e, t.dmg*ZAKO_DMG*zakoBuffMul(e)*1.35, true, t.atkR*1.5, 46))
+            { shake=Math.max(shake,10); hitStop=Math.max(hitStop,8); } } }
+      else { e.z=0;
+        if(T===UP+DOWN+1){ dust(e.x,e.y,10); shockwave(e.x,e.y,{r:90,color:'#ffe9a0'}); shake=Math.max(shake,7); sfx.heavy(e.x); }
+        // 着地の硬直。ここが唯一の反撃の窓
+        if(T>UP+DOWN+26){ e.state='walk'; e.mlHit=false; e.thinkCd=rnd(30,60); } }
+      e.x=clamp(e.x, camX+20, camX+W-20); continue; }
+    // ── 不死隊エリュシオン：構えて待ち、当てられた瞬間に斬り返す ──
+    if(e.state==='mythward'){ e.mwT--;
+      e.vx=0;
+      if(gf%6===0 && perfTier<2) spark(e.x+e.facing*18, e.y-e.h*0.55, '#fff3c8', 1, 3);
+      if(e.mwHit){                                   // 受けた ＝ 反撃へ
+        e.mwHit=false; e.state='attack'; e.atkVar=2; e.atkLanded=false;
+        e.atkMax=Math.round(20*ATK_VAR[2].dur); e.atkTimer=e.atkMax;
+        popText(e.x,e.y-e.h-10,'斬り返す！','#ffd24d'); sfx.guard(e.x); sfx.heavy(e.x);
+        flash=Math.max(flash,3); continue; }
+      if(e.mwT<=0){ e.state='walk'; e.thinkCd=rnd(20,40); }
+      continue; }
+    // ── 神託のオラクル：詰められたら跳んで距離を取り直す ──
+    if(e.state==='mythback'){ e.mbT--;
+      e.x=clamp(e.x + e.mbDir*6.5, camX+20, camX+W-20);
+      e.z=Math.max(0, Math.sin((1-e.mbT/20)*Math.PI)*46);
+      if(e.mbT<=0){ e.z=0; e.state='walk'; e.thinkCd=rnd(10,24); dust(e.x,e.y,4); }
+      continue; }
     if(e.state==='attack'){ e.atkTimer--;
       const V=ATK_VAR[e.atkVar||0];
       const el=e.atkMax-e.atkTimer;                            // 攻撃開始からの経過
@@ -4843,6 +4942,36 @@ function updateEnemies(){
     if(t.gunner && dist>150 && dist<560 && e.thinkCd<=0 && e.stun<=0 && Math.random()<0.65){ e.state='gunFire'; e.gunT=18; e.facing=dx<0?-1:1; e.thinkCd=rnd(52,92); continue; }
     // バイク／トレーラー：中〜遠距離から突進を仕掛ける
     if(t.rider && dist>120 && dist<620 && e.thinkCd<=0 && e.stun<=0){ e.state='bikecharge'; e.bcMax=e.bcT=(t.riderKind==='trailer'?78:58); e.facing=dx<0?-1:1; e.bcHitCd=0; e.thinkCd=rnd(80,130); sfx.heavy(e.x); popText(e.x,e.y-e.h-6,t.riderKind==='trailer'?'ゴゴゴ…！':'ブロロロ！','#ffd24d'); continue; }
+    // ── 神話の敵：分隊で連携する ──
+    // 同時に仕掛けられるのは squadToken() が許した数だけ。順番待ちの個体は
+    // 突っ立たず、背後や側面へ回り込む。全員が正面から突っ込むのをやめさせる
+    if(t.squad){
+      const tok=squadWants(e,dist);
+      if(!tok){
+        // 攻撃権が無い間の動き。詰めすぎず、離れすぎず、回り込む
+        const want=t.flanker? 1 : 0;                       // 回り込み役は背後を狙う
+        const side=(e.sqSide||(e.sqSide=(Math.random()<0.5?-1:1)));
+        const goal = want? p.x - side*82 : p.x - Math.sign(dx)*(t.atkR+52+((e.id*13)%40));
+        const gd=goal-e.x;
+        if(Math.abs(gd)>8) e.x+=Math.sign(gd)*t.sp*(want?1.35:0.85);
+        e.y=LANE;
+        if(gf%40===((e.id*7)%40)) e.sqSide=-side;          // ときどき逆へ回る
+        e.thinkCd-=enemyThinkMul();
+        continue; }
+      // 神話の敵の固有行動
+      if(t.leaper && dist>150 && dist<520 && e.thinkCd<=0 && e.stun<=0){
+        e.state='mythleap'; e.mlT=0; e.mlX0=e.x; e.mlX1=clamp(p.x, camX+30, camX+W-30);
+        e.facing=dx<0?-1:1; e.thinkCd=rnd(70,120); squadTake(e);
+        popText(e.x,e.y-e.h-8,'舞い降りる！','#ffe9a0'); sfx.dash(e.x); continue; }
+      if(t.riposte && dist<t.atkR+56 && e.thinkCd<=0 && e.stun<=0 && Math.random()<0.55){
+        e.state='mythward'; e.mwT=46; e.mwHit=false; e.thinkCd=rnd(60,100); squadTake(e);
+        popText(e.x,e.y-e.h-8,'来い…','#fff3c8'); continue; }
+      if(t.seer && e.thinkCd<=0 && e.stun<=0){
+        if(dist<150){ e.state='mythback'; e.mbT=20; e.mbDir=-Math.sign(dx)||1; e.thinkCd=rnd(40,70); continue; }
+        if(dist<560 && Math.random()<0.8){ e.state='gunFire'; e.gunT=18; e.facing=dx<0?-1:1; e.thinkCd=rnd(46,80); squadTake(e); continue; } }
+      if(t.phalanx && dist<t.atkR+90 && e.guardCd<=0 && e.stun<=0 && Math.random()<0.05){
+        e.state='guard'; e.guardT=rnd(50,90); e.guardCd=rnd(40,70); continue; }
+    }
     // 跳躍犬: 中距離から飛びかかる
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(45,80); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
@@ -4856,6 +4985,9 @@ function updateEnemies(){
     if(e.z<=0 && dist>t.atkR && Math.random()<(e.type==='hyena'?0.03:0.008)){ e.vz=-6; }  // chase hop
     e.thinkCd-=enemyThinkMul();   // 高難易度：思考が速い＝仕掛けが早い
     if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){
+      // 通常攻撃も攻撃権を1つ使う。ここで取らないと、固有行動だけが上限に
+      // 数えられて、普通の殴りは何体でも同時に通ってしまう
+      if(t.squad) squadTake(e);
       e.atkVar=pickAtkVar(e,p,dist);
       const V=ATK_VAR[e.atkVar];
       // 誘い：構えだけ見せて引く。押しっぱなしで潰せる相手ばかりだと読み合いが生まれない
@@ -5060,7 +5192,7 @@ function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, 
   sfx.swing(0, esndOf(e), e.x); }
 function bMeteor(e,n,dmg,col){ const tp=nearestPlayerTo(e.x); for(let i=0;i<n;i++) spawnProj(tp.x+rnd(-180,180), clamp(tp.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
 function bBeam(e,dmg,col){ const t=ETYPE[e.type], dir=e.facing; spawnProj(e.x+dir*30, e.y, dir*13, 0, {dmg,color:col||t.accent,r:18,life:100,zz:60}); sfx.boss(e.x); shake=Math.max(shake,5); }
-function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
+function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
 function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.7, dir>0?-1.05:Math.PI-1.05, dir>0?1.05:Math.PI+1.05, '#ff4d6a');
@@ -5599,6 +5731,17 @@ const SPACE_CH=[
 ];
 const SPACE_FINAL={theme:15,name:'皇帝の玉座',len:1500,noPit:true,
   gates:[{off:560,list:[['greywan',1],['raygun',1],['floater',1],['probe',1]]},{off:1000,boss:true,final:true,list:[['emperorX',1]]}]};
+const MYTH_CH=[
+  {theme:16,name:'オリュンポスの神域',
+   gates:[{off:600,list:[['mythguard',1],['mythhop',1]]},{off:1000,list:[['mythblade',1],['mythflank',1],['mythseer',1]]},{off:1400,boss:true,list:[['zeus',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['お、おい…！雲の上に、白い柱の国が現れたぞい…！','あれは神々の座「オリュンポス」じゃ。人の世の外にある。','ここの兵は今までとまるで違う。数で押してはこん——順番に、間合いを計って来おる。','正面から殴り合うな。回り込め、引け、着地を狙え。','雷を司る主神ゼウスが、頂で待っておる。']}},
+  {theme:18,name:'海神の神殿',
+   gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
+   npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['また会ったな…！今度は海の底だぜ。','この神殿の主は三叉の槍を持ってる。大波が来るから、来ると分かったら跳べ。','青銅の盾持ちは正面が通らねえ。背中を取れ。']}},
+  {theme:17,name:'冥府ステュクスの河',
+   gates:[{off:560,list:[['mythflank',2],['mythblade',1]]},{off:960,list:[['mythbull',1],['mythguard',1],['mythseer',1]]},{off:1400,boss:true,list:[['hades',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['ここから先は死者の国じゃ。生きたまま渡った者はおらん。','影が背に回るぞ。一体を追うな、囲まれる。','冥王ハデスは死者を呼ぶ。倒しても、倒しても——']}},
+];
 const WORLD3_LEVELS=[
   {id:'w3kairou', b:SPACE_CH[1], mx:0.32, my:0.32},   // 星間回廊（円盤母艦ディスコ）
   {id:'w3core',   b:SPACE_CH[2], mx:0.56, my:0.60},   // 母船コア（増殖体バイオブロブ）
@@ -5607,6 +5750,14 @@ const WORLD3_FINAL=[
   {id:'w3throne', b:SPACE_FINAL, mx:0.86, my:0.22, locked:true, final:true},   // 皇帝の玉座
 ];
 const NG3_UNLOCK=2;   // 宇宙のステージをこの数クリアで「皇帝の玉座」が解禁
+const WORLD4_LEVELS=[
+  {id:'w4umi',  b:MYTH_CH[1], mx:0.30, my:0.62},   // 海神の神殿（ポセイドン）
+  {id:'w4mei',  b:MYTH_CH[2], mx:0.58, my:0.34},   // 冥府ステュクスの河（ハデス）
+];
+const WORLD4_FINAL=[
+  {id:'w4olymp', b:MYTH_CH[0], mx:0.86, my:0.20, locked:true, final:true},   // オリュンポスの頂（ゼウス）
+];
+const NG4_UNLOCK=2;   // 神話のステージをこの数クリアで「オリュンポスの頂」が解禁
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
@@ -5663,6 +5814,21 @@ function buildEncounters2(){ resetWorldState(); trueBossSpawned=false;
 function buildEncounters3(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(SPACE_CH.slice(0,1),null);   // 三周目：墜ちた円盤から開始（以降は侵略軍マップから選択）
 }
+function buildEncounters4(){ resetWorldState(); trueBossSpawned=false;
+  addBlocks(MYTH_CH.slice(1,2),null);   // 四周目：海神の神殿から開始（頂は規定数クリアで解禁）
+}
+// ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
+function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
+  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
+  buildEncounters4();
+  players.forEach(p=>{ if(p.active) resetPlayer(p,false); });
+  player=players[0]; goArrow=160; bgCacheTheme=-1;
+  elStart.classList.add('hidden'); elResult.classList.add('hidden');
+  Music.stop(); saveProgress(1);
+  startCutscene(NG4_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+}
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
 function startNG3(){ unlockAudio(); lap=3; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
@@ -5711,10 +5877,11 @@ const WORLD_FINAL=[
 ];
 const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒の城門」が解禁
 let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
-function curWorldLevels(){ return lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
-function allMapNodes(){ return lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
+function curWorldLevels(){ return lap>=4? WORLD4_LEVELS : lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
+function allMapNodes(){ return lap>=4? WORLD4_LEVELS.concat(WORLD4_FINAL) : lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
 function doneCount(){ return curWorldLevels().filter(l=>levelsDone[l.id]).length; }
 function nodeUnlocked(node){
+  if(lap>=4) return node.final? doneCount()>=NG4_UNLOCK : true;  // 四周目：頂＝規定数クリアで解禁
   if(lap>=3) return node.final? doneCount()>=NG3_UNLOCK : true;  // 三周目：玉座＝規定数クリアで解禁
   if(lap>=2) return node.final? doneCount()>=NG2_UNLOCK : true;  // 二周目：女王の間＝規定数クリアで解禁
   if(node.final) return !!levelsDone['joumon'];                 // 魔王の間＝城門クリア後
@@ -5781,10 +5948,11 @@ function drawMap(){
   ctx.fillStyle='rgba(60,90,60,.5)'; ctx.beginPath(); ctx.moveTo(0,H*0.7);
   for(let x=0;x<=W;x+=40){ ctx.lineTo(x, H*0.68+Math.sin(x*0.01+2)*30); } ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
-  const mapTitle=lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
+  const mapTitle=lap>=4?'神話の世界マップ　〜四周目〜':lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
   ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText(mapTitle,W/2,52); ctx.fillText(mapTitle,W/2,52);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
-  ctx.fillText(lap>=3
+  if(lap>=4){ ctx.fillText('神々の座へ　（制覇 '+doneCount()+' / '+WORLD4_LEVELS.length+'　'+(doneCount()>=NG4_UNLOCK?'オリュンポスの頂が解禁された':'頂まで '+(NG4_UNLOCK-doneCount()))+'）', W/2, 96); }
+  else ctx.fillText(lap>=3
     ? '侵略者の艦隊へ　（制覇 '+doneCount()+' / '+WORLD3_LEVELS.length+'　'+(doneCount()>=NG3_UNLOCK?'玉座が解禁された（挑戦は任意）':'玉座まで '+(NG3_UNLOCK-doneCount()))+'）'
     : lap>=2
     ? '蟲の世界を巡れ　（制覇 '+doneCount()+' / '+WORLD2_LEVELS.length+'　'+(doneCount()>=NG2_UNLOCK?'女王の間が解禁された（挑戦は任意）':'女王の間まで '+(NG2_UNLOCK-doneCount()))+'）'
@@ -5856,7 +6024,7 @@ function drawMap(){
       ctx.fillText(fitText(node.b.name, cw-28), cx+14, cy+22);
       ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
       if(!unl){ ctx.fillStyle='#9fb0c4';
-        ctx.fillText(fitText(lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cw-28), cx+14, cy+44); }
+        ctx.fillText(fitText(lap>=4?'頂は規定数の制覇で解禁':lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cw-28), cx+14, cy+44); }
       else { ctx.fillStyle='#9fb0c4'; ctx.fillText('推奨難度', cx+14, cy+44);
         const col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
         for(let k=0;k<4;k++) drawStar(cx+78+k*15, cy+40, 2.2, 5.2, k<tr?col:'rgba(255,255,255,.16)');
@@ -6026,7 +6194,7 @@ function triggerHeroDuel(n){
 function speechQueue(e,txt){ if(!e) return; e.duelSay=txt; e.duelSayT=150; }
 function triggerAmbush(n){ showEventCard('ambush','囲まれた！','左右から一斉に襲いかかってくる');
   popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(n.x); shake=Math.max(shake,6);
-  const picks=lap>=3?['greywan','raygun','floater','slimealien']:lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
+  const picks=lap>=4?['mythguard','mythblade','mythflank','mythseer']:lap>=3?['greywan','raygun','floater','slimealien']:lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
   for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
 function updateNPCs(){
   for(const n of npcs){
@@ -6057,7 +6225,8 @@ const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober
 const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari'];
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
-function randZako(){ const P=lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
+const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
+function randZako(){ const P=lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
 function randomizeZako(list){
   // ボス／ライバル／召喚専用（balloon等）は据え置き。雑魚エントリだけ種類と数をランダム化
   const out=list.map(([type,n])=>{ const tt=ETYPE[type];
@@ -6495,6 +6664,24 @@ const STAGE_THEME=[
     haze:'rgba(10,80,60,.4)', fog:'rgba(30,120,90,.45)', stars:70, tower:'#0a3a2a', space:true, core:true,
     g:['#1e4a3a','#123026','#081a14'], cob:['#1c4436','#183c2e'], vig:'rgba(0,10,6,.62)',
     amb:{shape:'spark',color:'rgba(150,255,210,.95)',rate:0.9,max:48,vy:-0.3,wind:0.1,r0:1.2,r1:3,glow:true,alpha:.95} },
+  // 16: オリュンポスの神域（白亜の列柱・黄金の陽・雲海）
+  { gsnd:'stone', asnd:'wind', sky:['#2f6fc8','#79b6ee','#cfe6f5','#f6f0d8'], sun:'rgba(255,250,214,', sunX:0.70,sunY:76, rays:0.20, tint:'rgba(255,240,190,.30)',
+    haze:'rgba(220,235,255,.42)', fog:'rgba(240,246,255,.40)', stars:0, tower:'#dcd6c2', myth:true, olympus:true,
+    g:['#e6dfc8','#cfc6ab','#a89e84'], cob:['#ded6bd','#d2c9ae'], vig:'rgba(20,18,10,.42)',
+    rimRGB:'255,236,180',
+    amb:{shape:'petal',color:'rgba(255,246,210,.92)',rate:0.5,max:30,vy:0.32,wind:-0.18,r0:2.2,r1:4.6,glow:true,alpha:.82} },
+  // 17: 冥府ステュクスの河（灰の空・青白い鬼火・黒い水）
+  { gsnd:'stone', asnd:'wind', sky:['#050408','#100a18','#1b1226','#2a1c34'], sun:'rgba(150,180,255,', sunX:0.32,sunY:96, rays:0.06, tint:'rgba(90,70,140,.40)',
+    haze:'rgba(20,16,34,.55)', fog:'rgba(40,30,60,.52)', stars:40, tower:'#140f1e', myth:true, hades:true,
+    g:['#241c30','#170f22','#0b0714'], cob:['#221a2e','#1c1526'], vig:'rgba(0,0,4,.70)',
+    rimRGB:'150,190,255',
+    amb:{shape:'spark',color:'rgba(140,200,255,.95)',rate:0.9,max:44,vy:-0.30,wind:0.08,r0:1.2,r1:3.0,glow:true,alpha:.95} },
+  // 18: 海神の神殿（深海の青・沈んだ列柱・光の柱）
+  { gsnd:'stone', asnd:'wind', sky:['#02243c','#054a6a','#0a7a96','#16a6b4'], sun:'rgba(190,255,255,', sunX:0.56,sunY:64, rays:0.24, tint:'rgba(90,220,240,.34)',
+    haze:'rgba(10,70,100,.50)', fog:'rgba(20,110,140,.46)', stars:0, tower:'#0a3c52', myth:true, poseidon:true,
+    g:['#12566a','#0c3a4c','#062430'], cob:['#14566a','#104656'], vig:'rgba(0,10,20,.60)',
+    rimRGB:'170,240,255',
+    amb:{shape:'spark',color:'rgba(200,245,255,.9)',rate:1.1,max:52,vy:-0.62,wind:0.05,r0:1.4,r1:3.4,glow:true,alpha:.9} },
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -6602,6 +6789,86 @@ function drawAirshipScene(){
     ctx.restore(); }
 }
 // ── 三周目・宇宙人の雑魚（グレイ型・機械型・浮遊体を描き分け）──
+
+// ── 神話の敵の描画 ──
+// 既存の獣ボディの色替えでは「別の世界の兵」に見えないので、
+// ギリシャの人型（兜・胸当て・脛当て・武器）として描き分ける
+function drawMythFoe(e,t){
+  const kind=t.mythKind||'phalanx', anim=e.anim||0, atk=e.state==='attack', tele=e.telegraph>0;
+  const bw=t.w, bh=t.h, walk=foeStep(e,5);
+  const ward=(e.state==='mythward'), leap=(e.state==='mythleap');
+  ctx.save();
+  // 脚（二本。歩行位相で前後に開く）
+  ctx.strokeStyle=t.c3; ctx.lineWidth=9; ctx.lineCap='round';
+  for(const sgn of [-1,1]){ const sw=walk*sgn;
+    ctx.beginPath(); ctx.moveTo(sgn*5,-bh*0.42); ctx.lineTo(sgn*5+sw*0.7,-bh*0.20); ctx.lineTo(sgn*5+sw,0); ctx.stroke(); }
+  ctx.fillStyle=t.c2;                                   // 脛当て
+  for(const sgn of [-1,1]) ctx.fillRect(sgn*5-4+walk*sgn*0.8,-bh*0.18,8,bh*0.14);
+  // 胴（チュニック＋胸当て）
+  ctx.fillStyle=t.c1; roundRect(-bw*0.26,-bh*0.80,bw*0.52,bh*0.42,7); ctx.fill();
+  ctx.fillStyle=t.c2; roundRect(-bw*0.24,-bh*0.78,bw*0.48,bh*0.22,6); ctx.fill();
+  ctx.strokeStyle=t.accent||'#fff'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(-bw*0.20,-bh*0.66); ctx.lineTo(bw*0.20,-bh*0.66); ctx.stroke();
+  // 頭＋兜（コリント式：鼻当てと横のスリット）
+  const hx=0, hy=-bh*0.90;
+  ctx.fillStyle='#efe6cf'; ctx.beginPath(); ctx.arc(hx,hy,bh*0.10,0,7); ctx.fill();
+  ctx.fillStyle=t.c2; ctx.beginPath();
+  ctx.arc(hx,hy,bh*0.113,Math.PI*0.98,Math.PI*2.02); ctx.lineTo(hx+bh*0.10,hy+bh*0.06);
+  ctx.lineTo(hx-bh*0.10,hy+bh*0.06); ctx.closePath(); ctx.fill();
+  ctx.fillRect(hx-1.6,hy-bh*0.02,3.2,bh*0.09);          // 鼻当て
+  ctx.fillStyle='#1a1a1a'; ctx.fillRect(hx+2.6,hy-bh*0.01,bh*0.055,3);   // 目のスリット
+  if(kind!=='bull'){                                    // 兜飾り（たてがみ）
+    ctx.fillStyle=t.accent||'#ffd24d';
+    ctx.beginPath(); ctx.moveTo(hx-bh*0.02,hy-bh*0.11);
+    ctx.quadraticCurveTo(hx+bh*0.02,hy-bh*0.20, hx-bh*0.10,hy-bh*0.17);
+    ctx.quadraticCurveTo(hx-bh*0.04,hy-bh*0.13, hx-bh*0.02,hy-bh*0.11); ctx.fill(); }
+  // 種族ごとの装備
+  if(kind==='phalanx'){                                  // 大盾＋短槍
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(bw*0.30,-bh*0.52,bw*0.20,bh*0.30,0,0,7); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(bw*0.30,-bh*0.52,bw*0.13,bh*0.20,0,0,7); ctx.stroke();
+    ctx.strokeStyle='#8a7a56'; ctx.lineWidth=5; ctx.beginPath();
+    ctx.moveTo(-bw*0.10,-bh*0.62); ctx.lineTo(bw*0.46,-bh*0.72); ctx.stroke(); }
+  else if(kind==='hop'){                                 // 翼
+    ctx.fillStyle='rgba(255,246,214,.92)';
+    const fl=leap? 1 : (0.55+0.45*Math.abs(Math.sin(anim*1.6)));
+    for(const sgn of [-1,1]){ ctx.save(); ctx.translate(sgn*bw*0.16,-bh*0.70); ctx.rotate(sgn*(0.5-fl*0.9));
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(sgn*bw*0.34,-bh*0.26, sgn*bw*0.52,bh*0.02);
+      ctx.quadraticCurveTo(sgn*bw*0.26,-bh*0.04, 0,0); ctx.fill(); ctx.restore(); } }
+  else if(kind==='riposte'){                             // 曲刀。構え中は光る
+    ctx.strokeStyle=ward? '#fff3c8' : t.accent; ctx.lineWidth=ward?6:4.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.60);
+    ctx.quadraticCurveTo(bw*0.44,-bh*0.70, bw*0.50,-bh*0.34); ctx.stroke();
+    if(ward){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.30+0.24*Math.sin(gf*0.28);
+      ctx.fillStyle=radGrad(bw*0.34,-bh*0.54,bh*0.24,'rgba(255,243,200,.9)','rgba(255,243,200,0)');
+      ctx.beginPath(); ctx.arc(bw*0.34,-bh*0.54,bh*0.24,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='flank'){                               // 双短剣＋長い影の裾
+    ctx.fillStyle='rgba(60,40,100,.55)';
+    ctx.beginPath(); ctx.moveTo(-bw*0.24,-bh*0.40); ctx.quadraticCurveTo(-bw*0.52,-bh*0.10,-bw*0.30,0);
+    ctx.lineTo(bw*0.10,0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=3.4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.58); ctx.lineTo(bw*0.34,-bh*0.46); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-bw*0.10,-bh*0.58); ctx.lineTo(-bw*0.32,-bh*0.46); ctx.stroke(); }
+  else if(kind==='seer'){                                // 長杖＋目玉の意匠
+    ctx.strokeStyle='#8a7a56'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.20,-bh*0.10); ctx.lineTo(bw*0.24,-bh*0.98); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(bw*0.24,-bh*1.00,bh*0.13,'rgba(214,255,250,.95)','rgba(214,255,250,0)');
+    ctx.beginPath(); ctx.arc(bw*0.24,-bh*1.00,bh*0.13,0,7); ctx.fill(); ctx.restore();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.24,-bh*1.00,bh*0.05,0,7); ctx.fill(); }
+  else if(kind==='bull'){                                // 牛頭＋双斧
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(hx+bw*0.06,hy+bh*0.03,bh*0.10,bh*0.075,0,0,7); ctx.fill();
+    ctx.strokeStyle='#efe6cf'; ctx.lineWidth=5; ctx.lineCap='round';
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.moveTo(hx+sgn*bh*0.08,hy-bh*0.03);
+      ctx.quadraticCurveTo(hx+sgn*bh*0.19,hy-bh*0.10, hx+sgn*bh*0.15,hy-bh*0.19); ctx.stroke(); }
+    ctx.strokeStyle='#8a7a56'; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.moveTo(bw*0.04,-bh*0.56); ctx.lineTo(bw*0.40,-bh*0.86); ctx.stroke();
+    ctx.fillStyle=t.accent;
+    ctx.beginPath(); ctx.moveTo(bw*0.32,-bh*0.94); ctx.lineTo(bw*0.52,-bh*0.82); ctx.lineTo(bw*0.32,-bh*0.70); ctx.fill(); }
+  // 構え中／攻撃中は前へ踏み出す
+  if(tele||atk){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.16;
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(0,-bh*0.5,bw*0.5,bh*0.5,0,0,7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+}
 function drawAlienFoe(e,t){ const kind=t.alienKind||'grey', anim=e.anim||0, atk=e.state==='attack';
   const bw=t.w, bh=t.h, cy=-bh*0.45, hover=(kind==='floater'||kind==='probe')?Math.sin(anim*1.2)*5:0;
   ctx.save(); ctx.translate(0,hover);
@@ -7508,7 +7775,9 @@ function drawPlayer(){
     ctx.beginPath(); ctx.ellipse(sx,sy+2,rx,ry,0,0,7); ctx.stroke();
     ctx.restore(); }
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
-  const _rim=(p.__portrait||blink)?null:rimBegin(46*s, 132*s);   // 立ち絵と点滅中は素通し
+  // hw/hh はアクターのローカル単位で渡す。変換行列（kx/ky）に既に s と DPR が
+  // 入っているので、ここで s を掛けると二乗になって矩形が入らなくなる
+  const _rim=(p.__portrait||blink)?null:rimBegin(46, 132);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -8650,7 +8919,9 @@ function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
 //   1. グラデを毎フレーム作らず、焼いたスプライトを使い回す
 //   2. 光と陰を1枚にまとめて drawImage 1回にする
 //   3. クリアも転送もアクターの外接矩形だけに絞る
-const RIM_CAN=384, RIM_OX=192, RIM_OY=300;
+// 被弾白飛びのオフスクリーンと同じ寸法。ボスでも収まることが実績で分かっている。
+// 転送コストは下の外接矩形で絞るので、キャンバスが大きいこと自体は負担にならない
+const RIM_CAN=640, RIM_OX=320, RIM_OY=520;
 let _rimCan=null, _rimCtx=null;
 const _rimS={};
 function rimCtx(){ if(!_rimCan){ _rimCan=document.createElement('canvas');
@@ -8673,6 +8944,18 @@ function rimKey(){ const T=STAGE_THEME[themeIdxFor(stage)]||STAGE_THEME[0];
   const sx=(T&&T.sunX!=null)?T.sunX:0.72;
   return { dir:(sx>=0.5?1:-1), rgb:(T&&T.rimRGB)||'255,206,140' }; }
 // hw/hh = アクターの見かけの半幅・高さ（画面px）。この矩形しか触らない
+// hw/hh はアクターのローカル単位。オフスクリーンの座標はデバイスpxで、
+// 変換行列 M には「キャラの拡大 s」と「DPR」の両方が入っている。
+// これを掛けて実寸を出す（呼び出し側でも s を掛けると二乗になる）。
+// 論理pxのまま矩形を切ると、DPR2の端末でキャラの大半が転送範囲から外れて消える
+// 外接矩形をデバイスpxで求める。入らなければ null（＝リムを諦める）。
+// 判定を関数に出してあるのは、実機DPRの取り違えが「キャラが消える」という
+// 最悪の形で出るため、ここだけは直接テストできるようにしておきたいから
+function rimRect(kx,ky,hw,hh){
+  const w=Math.ceil(Math.max(24,hw)*2*kx)+12;
+  const h=Math.ceil(Math.max(24,hh)*ky)+16;
+  if(w>RIM_CAN || h>RIM_OY || w/2>RIM_OX) return null;
+  return {w:w,h:h}; }
 function rimBegin(hw,hh){
   // 最上位の品質でだけ効かせる。この環境（GPU無しのソフトウェアラスタ）では
   // プレイヤー＋ボスの2体で render() が 2.98ms → 8.03ms（+5.06ms）になる。
@@ -8681,8 +8964,12 @@ function rimBegin(hw,hh){
   if(perfTier>=1) return null;
   const oc=rimCtx(); if(!oc) return null;
   const M=ctx.getTransform();
-  const w=Math.min(RIM_CAN, Math.ceil(Math.max(24,hw)*2)+8);
-  const h=Math.min(RIM_CAN, Math.ceil(Math.max(24,hh))+12);
+  const kx=Math.abs(M.a)||1, ky=Math.abs(M.d)||1;          // デバイスpxへの倍率
+  const R=rimRect(kx,ky,hw,hh);
+  // 入りきらないときはリムを諦めて素通しにする。欠けたまま転送すると
+  // キャラが半分消える（実機DPR2で発生した）
+  if(!R) return null;
+  const w=R.w, h=R.h;
   const bx=Math.max(0, RIM_OX-w/2), by=Math.max(0, RIM_OY-h);
   oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
   oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
@@ -8770,7 +9057,7 @@ function drawEnemy(e){
     _mainCtx=ctx; ctx=oc; }
   // リムライトはボスだけに掛ける（巨体ほど背景に溶けるのが目立つ）。
   // 被弾の白飛び中は既にオフスクリーンを使っているので重ねない
-  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62*s, (t.h+30)*s) : null;
+  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62, t.h+30) : null;
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
@@ -8781,6 +9068,7 @@ function drawEnemy(e){
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
   else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
+  else if(t.myth && !t.boss) drawMythFoe(e,t);
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
   else if(t.bug) drawBugFoe(e,t);
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
@@ -10583,7 +10871,7 @@ function drawHUD(){
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
   // stage は地図制では常に1に固定されるので、進捗は制覇数で出す（従来は全13面で STAGE 1/12 だった）
   { const tot=curWorldLevels().length+2, cur=Math.min(tot, doneCount()+1);
-    ctx.fillText((lap>=3?'3周目　':lap>=2?'2周目　':'')+'STAGE '+cur+' / '+tot, W/2, 30); }
+    ctx.fillText((lap>=2?lap+'周目　':'')+'STAGE '+cur+' / '+tot, W/2, 30); }
   { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
     ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
   if(drawFoePower(20, hudY+12)!==false) hudY+=26;
@@ -11499,6 +11787,21 @@ const CHAM_PRE=[
   {bgTheme:10, art:'invade', name:'？？？', text:'「やあ、いらっしゃい。……ふふ、そんなに驚いた顔しなくてもいいニャ」'},
   {bgTheme:10, art:'player', name:'@hero', text:'（チャム……！？ 宿屋のチャムが、どうしてここに——）'},
 ];
+const NG4_OPEN=[
+  {chapter:true, title:'第四章', sub:'神々の座'},
+  {bgTheme:16, art:'invade', name:'', text:'銀河の侵略者を退けた朝、空が裂けた。雲より高いところに——白い柱の国が、静かに浮かんでいた。'},
+  {bgTheme:16, art:'invade', name:'長老モフじい', text:'「あれは神々の座、オリュンポスじゃ。人の世の外にある国……なぜ今、こちらへ降りてきたのじゃ」'},
+  {bgTheme:18, art:'invade', name:'', text:'海が退き、沈んでいた神殿がせり上がる。冥府の河が地を裂いて流れ出す。三柱の神が、地上を計りに来たのだ。'},
+  {bgTheme:17, art:'player', name:'@hero', text:'「相手が神だろうと、やることは同じだ。——肉球にかけて、この国は渡さない」'},
+];
+const NG4_END=[
+  {bgTheme:16, boss:'zeus', name:'雷神ゼウス', role:'神々の王', text:'雷が絶えた。「……人の子よ。我らは地上を裁きに来たのではない。試しに来たのだ」——神は静かに雷霆を下ろした。'},
+  {bgTheme:16, art:'peace', name:'', text:'「守るに足る国かどうか、我らは幾度も見てきた。そのたびに滅ぼしてきた。だが此度は——」ゼウスは、はじめて笑った。'},
+  {bgTheme:16, art:'player', name:'雷神ゼウス', text:'「其方の拳には、護る理由があった。オリュンポスは地上を認めよう。二度と、我らは降りぬ」'},
+  {bgTheme:0,  art:'gather', name:'', text:'白い柱の国は雲へ還り、海は神殿を再び沈め、冥府の河は地の底へ戻っていった。空には、ただ朝が残った。'},
+  {bgTheme:0,  art:'fireworks', name:'王女ペロ', text:'「神さまにまで認めさせてしまうなんて。……本当に、とんでもない犬ですね」'},
+  {bgTheme:0,  art:'end', name:'', text:'★  聖  犬  士  神  話  篇  ★     ここまで付き合ってくれて、ありがとう。'},
+];
 const NG3_OPEN=[
   {bgTheme:0, art:'peace',  name:'', text:'蟲の王も鎮まり、王国にはふたたび穏やかな日々が戻った。畑は実り、子犬たちの笑い声が野を渡る——'},
   {bgTheme:13, art:'invade', name:'', text:'その夜。空を裂いて無数の光が降りてきた。円盤である。地平の果てまで、銀色の影が音もなく並んだ。'},
@@ -11541,7 +11844,7 @@ function spawnTrueBoss(ty){
 function startEnding(){ if(endingDone)return; endingDone=true;
   // 専用エンディングBGMへ切り替え（感動の大団円）
   if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
-  const scenes = lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
+  const scenes = lap>=4 ? NG4_END : lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
   startCutscene(scenes, ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; cut.fade=14; ui.move();
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
@@ -11807,7 +12110,7 @@ function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
   players[0].kind=(mode==='shima')?'shima':(mode==='nuko')?'nuko':(mode==='guard8')?'guard8':(mode==='watch')?'watch':(mode==='wanden')?'wanden':'inu'; players[1].kind='shima';
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
 // タイトルの「2周目」トグルがONなら、一周目を飛ばして蟲の世界から開始（支度金つき）
-let ng2Sel=0;   // 0=1周目 / 2=蟲の世界から / 3=宇宙人の侵略から
+let ng2Sel=0;   // 0=1周目 / 2=蟲の世界から / 3=宇宙人の侵略から / 4=神話から
 // オーバーレイをふわりと消してから本編へ。display:none への即時切り替えだと
 // CSS transition が効かないので、.fading で不透明度を落としてから隠す
 function fadeOverlay(el,cb){
@@ -11817,6 +12120,7 @@ function fadeOverlay(el,cb){
   setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fading'); cb&&cb(); }, 260); }
 function beginAdventure(){
   const go=()=>{
+    if(ng2Sel>=4){ startGame(); coins=700; startNG4(); return; }
     if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
     if(ng2Sel>=2){ startGame(); coins=200; startNG2(); return; }
     startOpening(); };
@@ -11829,10 +12133,11 @@ const _g8Btn=document.getElementById('startG8Btn'); if(_g8Btn) _g8Btn.onclick=()
 const _watchBtn=document.getElementById('startWatchBtn'); if(_watchBtn) _watchBtn.onclick=()=>{ unlockAudio(); setupRoster('watch'); beginAdventure(); };
 const _wandenBtn=document.getElementById('startWandenBtn'); if(_wandenBtn) _wandenBtn.onclick=()=>{ unlockAudio(); setupRoster('wanden'); beginAdventure(); };
 const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn.onclick=()=>{
-  ng2Sel = ng2Sel===0?2 : ng2Sel===2?3 : 0;   // 1周目 → 2周目 → 3周目 → 1周目
+  ng2Sel = ng2Sel===0?2 : ng2Sel===2?3 : ng2Sel===3?4 : 0;   // 1周目 → 2周目 → 3周目 → 4周目 → 1周目
   const L=[{t:'周回スタート：1周目', bg:'linear-gradient(180deg,#3a3f4a,#20242c)', c:'#a0e87a'},
            {t:'🐛 2周目「蟲の世界」から', bg:'linear-gradient(180deg,#4a9a34,#2a6a1c)', c:'#fff'},
-           {t:'🛸 3周目「宇宙人の侵略」から', bg:'linear-gradient(180deg,#5a3aa8,#2a1a60)', c:'#e0d0ff'}][ng2Sel===0?0:ng2Sel===2?1:2];
+           {t:'🛸 3周目「宇宙人の侵略」から', bg:'linear-gradient(180deg,#5a3aa8,#2a1a60)', c:'#e0d0ff'},
+           {t:'⚡ 4周目「神話」から（超高難度）', bg:'linear-gradient(180deg,#c8a850,#6a5220)', c:'#fff6c0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:3];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
