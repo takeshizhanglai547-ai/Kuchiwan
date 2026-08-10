@@ -187,6 +187,23 @@ const DRIVER = `
     console.log('ワッチの奥義 OK (何も奪っていなくても 基本'+base0+' / 上位'+up0+'ダメージ)');
   }
 
+  // ===== 12) リムライトは適応品質で必ず落ちる =====
+  // この環境の実測で render() が 2.98ms → 8.03ms（+5.06ms）になる重い処理なので、
+  // フレームが重くなったら最初に切れる位置にあることを保証する
+  {
+    const old=perfTier;
+    perfTier=0; const a=rimBegin(40,120);
+    if(!a) throw new Error('perfTier=0 でリムライトが効いていない');
+    rimEnd(a,1);
+    [1,2].forEach(function(ti){ perfTier=ti;
+      if(rimBegin(40,120)) throw new Error('perfTier='+ti+' でリムライトが素通しになっていない'); });
+    perfTier=old;
+    // 焼いたスプライトを使い回していること（毎フレームのグラデ生成は過去の事故要因）
+    const s1=rimSprite(1,'255,206,140'), s2=rimSprite(1,'255,206,140');
+    if(s1!==s2) throw new Error('リムのスプライトが毎回作り直されている');
+    console.log('リムライトの適応品質 OK (tier0のみ有効、スプライトは使い回し)');
+  }
+
   console.log('CRITIC FIX TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

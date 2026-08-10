@@ -94,20 +94,57 @@ const DRIVER = `
     console.log('空中技の間合い OK (届いた最遠距離 '+r0+'px → '+r2+'px)');
   }
 
-  // ===== 5) 奥義（同時押し）：実際に与えたダメージを測る =====
-  function sgDamageAt(lv){
-    setupRoster('shima'); startGame(); state='play';
-    const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1; p.hp=p.maxHp=99999;
-    enemies.length=0; encounters.length=0; particles.length=0;
+  // ===== 5) 奥義（同時押し）：本編と同じ経路で最後まで走らせて実測する =====
+  //  技を丸ごと回すので、段数が増えたぶんも合計に乗る
+  function sgRunAt(kind,lv){
+    setupRoster(kind); startGame(); state='play';
+    const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+    p.hp=p.maxHp=99999; p.sgCd=0;
+    enemies.length=0; encounters.length=0; particles.length=0; projectiles.length=0;
     spawnEnemy('wolf', p.x+60, LANE); const e=enemies[0];
     e.hp=e.maxHp=999999; e.thinkCd=999999; e.poise=999999;
     const before=e.hp;
-    beginTigerRoar(p);                     // シマの同時押し奥義（直値16ダメージ）
-    return before-e.hp; }
-  const s0=sgDamageAt(1), s1=sgDamageAt(8), s2=sgDamageAt(16);
-  if(!(s1>s0)) throw new Error('SG did not grow at Lv8: '+s0+' -> '+s1);
-  if(!(s2>s1)) throw new Error('SG did not grow at Lv16: '+s1+' -> '+s2);
-  console.log('奥義の進化 OK (虎咆の実ダメージ '+s0+' → '+s1+' → '+s2+')');
+    let segs=0; const ob=sgBurst; sgBurst=function(){ segs++; return ob.apply(null,arguments); };
+    try {
+      if(!beginSGMove(p)) throw new Error(kind+' の奥義が発動しなかった');
+      for(let i=0;i<200 && (p.state==='sgact'||p.state==='ichimonji'||p.state==='mugetsu'||projectiles.length);i++){
+        hitStop=0; slowmo=0; step(1); }
+    } finally { sgBurst=ob; }
+    return {dmg:before-e.hp, segs:segs}; }
+  { const r0=sgRunAt('shima',1), r1=sgRunAt('shima',8), r2=sgRunAt('shima',16);
+    if(!(r1.dmg>r0.dmg)) throw new Error('SG did not grow at Lv8: '+r0.dmg+' -> '+r1.dmg);
+    if(!(r2.dmg>r1.dmg)) throw new Error('SG did not grow at Lv16: '+r1.dmg+' -> '+r2.dmg);
+    // 段数そのものが増えること（威力倍率だけ上げても通らないようにする）
+    if(!(r0.segs===1&&r1.segs===2&&r2.segs===3))
+      throw new Error('奥義の段数が 1/2/3 になっていない: '+r0.segs+'/'+r1.segs+'/'+r2.segs);
+    console.log('奥義の進化 OK (虎魂の実ダメージ '+r0.dmg+' → '+r1.dmg+' → '+r2.dmg+'、段数 '+r0.segs+'→'+r1.segs+'→'+r2.segs+')');
+    // 4キャラすべてが専用ステートに入り、段位で段数が増えること
+    ['nuko','guard8','watch'].forEach(function(k){
+      const a=sgRunAt(k,1), b=sgRunAt(k,16);
+      if(a.segs!==1||b.segs!==3) throw new Error(k+' の奥義の段数が 1/3 になっていない: '+a.segs+'/'+b.segs);
+      if(!(b.dmg>a.dmg)) throw new Error(k+' の奥義が段位で強くなっていない: '+a.dmg+' -> '+b.dmg); });
+    console.log('奥義の段数 OK (ヌコ・ガードワン・ワッチも Lv1で1段 → Lv16で3段)');
+    // ワンデンは一閃の本数、イッヌは斬る相手の数が段位で増える
+    const w0=sgRunAt('wanden',1), w2=sgRunAt('wanden',16);
+    if(!(w2.dmg>w0.dmg)) throw new Error('ワンデンの奥義が段位で強くなっていない: '+w0.dmg+' -> '+w2.dmg);
+    function cutsOf(lv){ setupRoster('wanden'); startGame(); state='play';
+      const q=players[0]; player=q; q.level=lv; q.atkMul=1; q.x=camX+400; q.facing=1; q.sgCd=0; q.hp=q.maxHp=99999;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      spawnEnemy('wolf', q.x+120, LANE); enemies[0].hp=enemies[0].maxHp=999999; enemies[0].thinkCd=999999;
+      beginSGMove(q);
+      let mx=0; for(let i=0;i<160 && q.state==='ichimonji';i++){ hitStop=0; slowmo=0; step(1); mx=Math.max(mx,q.imN||0); }
+      return mx; }
+    const c1=cutsOf(1), c8=cutsOf(8), c16=cutsOf(16);
+    if(!(c1===1&&c8===2&&c16===3)) throw new Error('大居合の一閃が 1/2/3 本になっていない: '+c1+'/'+c8+'/'+c16);
+    function mgTargetsOf(lv){ setupRoster('inu'); startGame(); state='play';
+      const q=players[0]; player=q; q.level=lv; q.atkMul=1; q.x=camX+300; q.sgCd=0; q.hp=q.maxHp=99999;
+      enemies.length=0; encounters.length=0;
+      for(let i=0;i<12;i++){ spawnEnemy('wolf', q.x+60+i*30, LANE); }
+      enemies.forEach(function(e){ e.hp=e.maxHp=999999; e.thinkCd=999999; });
+      beginSGMove(q); return q.mgList.length; }
+    const m1=mgTargetsOf(1), m8=mgTargetsOf(8), m16=mgTargetsOf(16);
+    if(!(m1===5&&m8===7&&m16===9)) throw new Error('無月の対象が 5/7/9 体になっていない: '+m1+'/'+m8+'/'+m16);
+    console.log('ワンデン・イッヌの奥義 OK (一閃 '+c1+'→'+c8+'→'+c16+'本 / 無月 '+m1+'→'+m8+'→'+m16+'体)'); }
 
   // ===== 6) ヌコのビームは本数が増える =====
   function beamLanesAt(lv){
@@ -203,6 +240,127 @@ const DRIVER = `
     const s1=invulnDuring('inu','iswords2',16);
     if(!(s1.inv>0)) throw new Error('必殺技の溜めから無敵が消えている: '+s1.inv+'/'+s1.n+'F');
     console.log('溜めの無敵 OK (タメ攻撃 0F / 奥義 '+s1.inv+'F of '+s1.n+'F)');
+  }
+
+  // ===== 10) 掴み技のモーションと決まり手が段位で変わる =====
+  // ダメージ倍率だけでなく、実際の回転量・跳躍の高さ・技の長さを測る
+  {
+    function throwRun(kind, key, lv){
+      setupRoster(kind); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+      p.hp=p.maxHp=99999; p.defMul=1;
+      enemies.length=0; encounters.length=0; particles.length=0; projectiles.length=0;
+      spawnEnemy('wolf', p.x+36, LANE); const e=enemies[0];
+      e.hp=e.maxHp=999999; e.thinkCd=999999; e.poise=999999; e.stun=999;
+      p.state='grab'; p.grabEnemy=e; p.grabT=180; p.grabSub='hold'; p.grabAnim=0;
+      e.state='grabbed'; e.grabbedBy=1; e.vx=0; e.vz=0; e.z=0;
+      const before=e.hp;
+      if(key==='gswing') beginGiantSwing(e);
+      else if(key==='screw') beginScrew(e);
+      else if(key==='dunk') beginDunk(e);
+      else if(key==='wheel') beginWheel(e);
+      else if(key==='tkick') beginTriangle(e);
+      let n=0, zMax=0, rot=0;
+      const st=p.state;
+      while(n<300 && p.state===st){ n++; hitStop=0; slowmo=0; step(1);
+        zMax=Math.max(zMax, p.z||0);
+        rot=Math.max(rot, Math.abs(p.gswingRot||0), Math.abs(p.screwRot||0), Math.abs(p.wheelRot||0)); }
+      return {frames:n, zMax:zMax, rot:rot, dmg:before-e.hp}; }
+
+    const gs=[1,8,16].map(function(lv){ return throwRun('inu','gswing',lv); });
+    if(!(gs[0].rot<gs[1].rot && gs[1].rot<gs[2].rot))
+      throw new Error('ジャイアントスイングの回転量が段位で増えない: '+gs.map(function(r){return r.rot.toFixed(1);}).join('/'));
+    if(!(gs[0].frames<gs[2].frames))
+      throw new Error('ジャイアントスイングの長さが段位で伸びない: '+gs.map(function(r){return r.frames;}).join('/'));
+
+    const sc=[1,8,16].map(function(lv){ return throwRun('inu','screw',lv); });
+    if(!(sc[0].zMax<sc[1].zMax && sc[1].zMax<sc[2].zMax))
+      throw new Error('スクリューの舞い上がりが段位で高くならない: '+sc.map(function(r){return Math.round(r.zMax);}).join('/'));
+
+    const dk=[1,8,16].map(function(lv){ return throwRun('inu','dunk',lv); });
+    if(!(dk[0].zMax<dk[1].zMax && dk[1].zMax<dk[2].zMax))
+      throw new Error('ダンクの跳躍が段位で高くならない: '+dk.map(function(r){return Math.round(r.zMax);}).join('/'));
+    if(!(dk[2].dmg>dk[0].dmg))
+      throw new Error('ダンクの実ダメージが段位で伸びない: '+dk[0].dmg+' -> '+dk[2].dmg);
+
+    console.log('掴み技のモーション OK (回転 '+gs.map(function(r){return r.rot.toFixed(1);}).join('→')
+      +' / スクリューの高さ '+sc.map(function(r){return Math.round(r.zMax);}).join('→')
+      +'px / ダンクの高さ '+dk.map(function(r){return Math.round(r.zMax);}).join('→')+'px)');
+
+    // 決まり手：熟練から追い打ちが入り、極では周囲も巻き込む
+    function finisherHits(lv){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1; p.hp=p.maxHp=99999;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      spawnEnemy('wolf', p.x+36, LANE); const e=enemies[0];
+      spawnEnemy('wolf', p.x-90, LANE); const o=enemies[1];   // 巻き込まれる側
+      enemies.forEach(function(q){ q.hp=q.maxHp=999999; q.thinkCd=999999; q.poise=999999; q.stun=999; });
+      p.state='grab'; p.grabEnemy=e; p.grabT=180; p.grabSub='hold'; p.grabAnim=0;
+      e.state='grabbed'; e.grabbedBy=1; e.z=0;
+      const b1=e.hp, b2=o.hp;
+      grabStraight(e);
+      return {main:b1-e.hp, side:b2-o.hp}; }
+    const f0=finisherHits(1), f1=finisherHits(8), f2=finisherHits(16);
+    if(!(f1.main>f0.main)) throw new Error('熟練で決まり手の追い打ちが入っていない: '+f0.main+' -> '+f1.main);
+    if(!(f0.side===0)) throw new Error('Lv1で周囲を巻き込んでいる: '+f0.side);
+    if(!(f2.side>0))   throw new Error('極で周囲を巻き込んでいない: '+f2.side);
+    console.log('投げの決まり手 OK (本命 '+f0.main+'→'+f1.main+'→'+f2.main+' / 巻き込み '+f0.side+'→'+f1.side+'→'+f2.side+')');
+  }
+
+  // ===== 11) タメ攻撃は段位でモーションそのものが変わる =====
+  // 技IDが差し替わるだけでは「進化した」と分からない。描画が使う姿勢を実測する
+  {
+    function chargeMotion(lv){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+      p.hp=p.maxHp=99999; p.poseB=null;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      const mv=chargeMoveFor(p);
+      beginAttack(mv);
+      let leanMin=1e9, leanMax=-1e9, extMax=0, sqMin=1e9, n=0;
+      while(p.state==='attack' && n<200){ n++; hitStop=0; slowmo=0; step(1);
+        if(!p.poseB) continue;
+        leanMin=Math.min(leanMin,p.poseB.lean); leanMax=Math.max(leanMax,p.poseB.lean);
+        extMax=Math.max(extMax,p.poseB.swExt); sqMin=Math.min(sqMin,p.poseB.sqX); }
+      return {id:mv, lean:leanMax-leanMin, ext:extMax, sq:1-sqMin}; }
+    const m=[1,8,16].map(chargeMotion);
+    if(m[0].id===m[1].id||m[1].id===m[2].id) throw new Error('タメ攻撃の技IDが段位で変わっていない');
+    if(!(m[0].lean<m[1].lean && m[1].lean<m[2].lean))
+      throw new Error('タメ攻撃の上体の振れ幅が段位で増えない: '+m.map(function(r){return r.lean.toFixed(2);}).join('/'));
+    if(!(m[0].ext<m[1].ext && m[1].ext<m[2].ext))
+      throw new Error('タメ攻撃の振り抜きの伸びが段位で増えない: '+m.map(function(r){return r.ext.toFixed(1);}).join('/'));
+    if(!(m[0].sq<m[2].sq))
+      throw new Error('タメ攻撃の踏ん張り（潰れ）が極で増えない: '+m[0].sq.toFixed(3)+' -> '+m[2].sq.toFixed(3));
+    console.log('タメ攻撃のモーション OK ('+m.map(function(r){return r.id;}).join('→')
+      +'、上体の振れ '+m.map(function(r){return r.lean.toFixed(2);}).join('→')
+      +'rad、伸び '+m.map(function(r){return Math.round(r.ext);}).join('→')+')');
+  }
+
+  // ===== 12) 空中攻撃も段位でモーションが変わる =====
+  // 以前は段位で伸びるのがダメージと間合いだけで、振りは全レベル共通だった
+  {
+    function airMotion(lv){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+400; p.facing=1;
+      p.hp=p.maxHp=99999; p.poseB=null;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      p.state='jump'; p.z=140; p.vz=0; p.jAtk=13; p.jHit=new Set();
+      p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+      const sw=[]; let n=0;
+      while(p.jAtk>0 && n<60){ n++; hitStop=0; slowmo=0; p.vz=0; p.z=140; step(1);
+        if(p.poseB) sw.push(p.poseB.swAng); }
+      let mn=1e9, mx=-1e9; sw.forEach(function(v){ mn=Math.min(mn,v); mx=Math.max(mx,v); });
+      // 切り返しがあるか：最大値に達したあとで戻るか
+      let peak=0; sw.forEach(function(v,i){ if(v===mx) peak=i; });
+      const back = (peak < sw.length-2) && (sw[sw.length-1] < mx-0.10);
+      return {range:mx-mn, back:back, n:sw.length}; }
+    const A=[1,8,16].map(airMotion);
+    if(!(A[0].range<A[1].range && A[1].range<A[2].range))
+      throw new Error('空中斬りの振り幅が段位で増えない: '+A.map(function(r){return r.range.toFixed(2);}).join('/'));
+    if(A[0].back) throw new Error('Lv1の空中斬りに切り返しがある（単純な一振りのはず）');
+    if(!A[2].back) throw new Error('極の空中斬りに返す刃の切り返しが無い');
+    console.log('空中技のモーション OK (振り幅 '+A.map(function(r){return r.range.toFixed(2);}).join('→')
+      +'rad、極だけ返す刃で切り返す)');
   }
 
   console.log('EVOLUTION TEST PASSED'); process.exit(0);
