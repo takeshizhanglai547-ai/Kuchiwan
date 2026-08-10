@@ -6622,27 +6622,27 @@ const STAGE_THEME=[
     amb:{shape:'spark',color:'rgba(255,200,120,.8)',rate:0.4,max:26,vy:-0.25,wind:0.15,r0:1.2,r1:2.6,glow:true,alpha:.7} },
   // 3: 月夜
   { gsnd:'stone', asnd:'wind', sky:['#0e1538','#1d2a5e','#33457e','#5a6fa0'], sun:'rgba(220,230,255,', sunX:0.28,sunY:80, rays:0.06, tint:'rgba(90,120,255,.34)',
-    haze:'rgba(60,80,140,.34)', fog:'rgba(120,140,190,.4)', stars:90, tower:'#3a4560',
+    haze:'rgba(60,80,140,.34)', fog:'rgba(120,140,190,.4)', stars:90, tower:'#3a4560', land:'forest', fg:'branch',
     g:['#46506a','#333b54','#1d2335'], cob:['#444c63','#3a4156'], vig:'rgba(4,6,24,.6)',
     amb:{shape:'spark',color:'rgba(180,230,255,.9)',rate:0.5,max:30,vy:-0.18,wind:0.1,r0:1,r1:2.4,glow:true,alpha:.9} },
   // 4: 業火の渓谷
   { gsnd:'sand', asnd:'fire', sky:['#2a0606','#6a160c','#b8381a','#e07a2a'], sun:'rgba(255,170,80,', sunX:0.6,sunY:120, rays:0.18, tint:'rgba(255,90,30,.4)',
-    haze:'rgba(180,60,30,.34)', fog:'rgba(200,90,40,.5)', stars:0, tower:'#5a2a26',
+    haze:'rgba(180,60,30,.34)', fog:'rgba(200,90,40,.5)', stars:0, tower:'#5a2a26', land:'gorge', fg:'rock',
     g:['#5a2a1e','#3e1c12','#220c08'], cob:['#5a2c20','#48221a'], vig:'rgba(50,4,4,.56)',
     amb:{shape:'spark',color:'rgba(255,150,60,.95)',rate:0.9,max:48,vy:-0.55,wind:0.2,r0:1.4,r1:3.2,glow:true,alpha:.95} },
   // 5: 魔界の城
   { gsnd:'stone', asnd:'cave', sky:['#0a0618','#1a0e36','#341a5e','#5a2a8c'], sun:'rgba(200,120,255,', sunX:0.5,sunY:90, rays:0.12, tint:'rgba(170,90,255,.38)',
-    haze:'rgba(90,40,140,.36)', fog:'rgba(140,90,200,.42)', stars:70, tower:'#2e2342',
+    haze:'rgba(90,40,140,.36)', fog:'rgba(140,90,200,.42)', stars:70, tower:'#2e2342', land:'castle', fg:'spire',
     g:['#33264a','#241834','#140c1e'], cob:['#352846','#2a2038'], vig:'rgba(10,2,24,.64)',
     amb:{shape:'spark',color:'rgba(198,120,255,.95)',rate:0.7,max:40,vy:-0.3,wind:0.15,r0:1.2,r1:2.8,glow:true,alpha:.95} },
   // 6: 氷雪の霊峰（白銀の雪山・舞う雪）
   { gsnd:'snow', asnd:'wind', sky:['#9fc4e8','#cfe2f2','#e6eef6','#f4f8fc'], sun:'rgba(255,252,240,', sunX:0.66,sunY:96, rays:0.12, tint:'rgba(200,225,255,.34)',
-    haze:'rgba(220,234,246,.4)', fog:'rgba(232,242,250,.55)', stars:0, tower:'#aebccd',
+    haze:'rgba(220,234,246,.4)', fog:'rgba(232,242,250,.55)', stars:0, tower:'#aebccd', land:'glacier', fg:'icicle',
     g:['#cdd9e6','#a9b8c8','#7d8ca0'], cob:['#c2cedd','#b2bfce'], vig:'rgba(20,30,56,.4)',
     amb:{shape:'petal',color:'rgba(255,255,255,.95)',rate:0.95,max:54,vy:0.55,wind:-0.3,r0:1.6,r1:3.4,glow:false,alpha:.92} },
   // 7: 瑠璃の水晶洞（地底の青紫クリスタル・舞う光粒）
   { gsnd:'stone', asnd:'cave', sky:['#0a1424','#122846','#1f3a64','#2a5286'], sun:'rgba(120,230,255,', sunX:0.4,sunY:84, rays:0.05, tint:'rgba(90,200,255,.34)',
-    haze:'rgba(40,90,150,.4)', fog:'rgba(60,120,180,.45)', stars:50, tower:'#27506e',
+    haze:'rgba(40,90,150,.4)', fog:'rgba(60,120,180,.45)', stars:50, tower:'#27506e', land:'cavern', fg:'stalac',
     g:['#234a5e','#16323f','#0a1c26'], cob:['#21465a','#1a3a4c'], vig:'rgba(2,10,24,.6)',
     amb:{shape:'spark',color:'rgba(120,230,255,.95)',rate:0.8,max:46,vy:-0.24,wind:0.12,r0:1.2,r1:3,glow:true,alpha:.95} },
   // 8: 飛行艇の甲板（茜色の雲海・流れる雲）
@@ -6695,19 +6695,19 @@ const STAGE_THEME=[
     amb:{shape:'spark',color:'rgba(150,255,210,.95)',rate:0.9,max:48,vy:-0.3,wind:0.1,r0:1.2,r1:3,glow:true,alpha:.95} },
   // 16: オリュンポスの神域（白亜の列柱・黄金の陽・雲海）
   { gsnd:'stone', asnd:'wind', sky:['#2f6fc8','#79b6ee','#cfe6f5','#f6f0d8'], sun:'rgba(255,250,214,', sunX:0.70,sunY:76, rays:0.20, tint:'rgba(255,240,190,.30)',
-    haze:'rgba(220,235,255,.42)', fog:'rgba(240,246,255,.40)', stars:0, tower:'#dcd6c2', myth:true, olympus:true,
+    haze:'rgba(220,235,255,.42)', fog:'rgba(240,246,255,.40)', stars:0, tower:'#dcd6c2', myth:true, olympus:true, land:'colonnade', fg:'colon',
     g:['#e6dfc8','#cfc6ab','#a89e84'], cob:['#ded6bd','#d2c9ae'], vig:'rgba(20,18,10,.42)',
     rimRGB:'255,236,180',
     amb:{shape:'petal',color:'rgba(255,246,210,.92)',rate:0.5,max:30,vy:0.32,wind:-0.18,r0:2.2,r1:4.6,glow:true,alpha:.82} },
   // 17: 冥府ステュクスの河（灰の空・青白い鬼火・黒い水）
   { gsnd:'stone', asnd:'wind', sky:['#050408','#100a18','#1b1226','#2a1c34'], sun:'rgba(150,180,255,', sunX:0.32,sunY:96, rays:0.06, tint:'rgba(90,70,140,.40)',
-    haze:'rgba(20,16,34,.55)', fog:'rgba(40,30,60,.52)', stars:40, tower:'#140f1e', myth:true, hades:true,
+    haze:'rgba(20,16,34,.55)', fog:'rgba(40,30,60,.52)', stars:40, tower:'#140f1e', myth:true, hades:true, land:'styx', fg:'dead',
     g:['#241c30','#170f22','#0b0714'], cob:['#221a2e','#1c1526'], vig:'rgba(0,0,4,.70)',
     rimRGB:'150,190,255',
     amb:{shape:'spark',color:'rgba(140,200,255,.95)',rate:0.9,max:44,vy:-0.30,wind:0.08,r0:1.2,r1:3.0,glow:true,alpha:.95} },
   // 18: 海神の神殿（深海の青・沈んだ列柱・光の柱）
   { gsnd:'stone', asnd:'wind', sky:['#02243c','#054a6a','#0a7a96','#16a6b4'], sun:'rgba(190,255,255,', sunX:0.56,sunY:64, rays:0.24, tint:'rgba(90,220,240,.34)',
-    haze:'rgba(10,70,100,.50)', fog:'rgba(20,110,140,.46)', stars:0, tower:'#0a3c52', myth:true, poseidon:true,
+    haze:'rgba(10,70,100,.50)', fog:'rgba(20,110,140,.46)', stars:0, tower:'#0a3c52', myth:true, poseidon:true, land:'sunken', fg:'kelp',
     g:['#12566a','#0c3a4c','#062430'], cob:['#14566a','#104656'], vig:'rgba(0,10,20,.60)',
     rimRGB:'170,240,255',
     amb:{shape:'spark',color:'rgba(200,245,255,.9)',rate:1.1,max:52,vy:-0.62,wind:0.05,r0:1.4,r1:3.4,glow:true,alpha:.9} },
@@ -6766,11 +6766,13 @@ function drawBackground(){
       ctx.strokeStyle=g2; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(st.x,st.y); ctx.lineTo(st.x-st.vx*6,st.y-st.vy*6); ctx.stroke();
       if(st.life<=0||st.x<-40) shootStars.splice(i,1); }
     ctx.restore(); }
+  // 洞窟と海中は「空」が無い。雲と鳥をそのまま出すと水の中に雲が浮かぶ
+  const encl=(T.land==='cavern'||T.land==='sunken');
   // clouds drift slowly even when standing still (skip for night/魔界)
-  if(!T.stars){ const cl=-camX*0.12-gf*0.18;
+  if(!T.stars && !encl){ const cl=-camX*0.12-gf*0.18;
     for(let i=0;i<10;i++){ const x=((i*360+cl)%(W+460)+W+460)%(W+460)-230; cloud(x,56+(i*53%70),58+(i%2)*24); } }
   // distant birds gliding across day skies
-  if(!T.stars){ if(Math.random()<0.004 && birds.length<4) birds.push({x:W+24,y:rnd(36,150),v:rnd(0.7,1.3),f:Math.random()*6});
+  if(!T.stars && !encl){ if(Math.random()<0.004 && birds.length<4) birds.push({x:W+24,y:rnd(36,150),v:rnd(0.7,1.3),f:Math.random()*6});
     ctx.save(); ctx.strokeStyle='rgba(30,30,55,.65)'; ctx.lineWidth=2; ctx.lineCap='round';
     for(let i=birds.length-1;i>=0;i--){ const b=birds[i]; b.x-=b.v; b.f+=0.18; const fl=Math.sin(b.f)*4;
       for(let w=0;w<2;w++){ const bx=b.x+w*11, by=b.y+w*5;
@@ -6790,7 +6792,7 @@ function drawBackground(){
       drawBuildings(!!T.stars); drawLampRow(); }
     else {        // 森・雪山・渓谷など：城と商店の看板を出さず、地形のシルエットだけにする
       ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
-      drawRidgeRow(T); }
+      drawLand(T); }
     drawBraziers(T);
   }
   if(state==='play') updateAmbient(T);
@@ -7526,6 +7528,175 @@ function drawBraziers(T){ const par=0.92, step=440, off=((-(camX*par))%step+step
 }
 // 町以外のステージの遠景。建物の代わりに岩稜のシルエットを敷く。
 // 従来は全ステージが城下町の色替えで、森にも雪山にも商店の看板が立っていた
+// ══ 中景の地形。以前は8テーマが同じギザギザの尾根の色替えで、
+//    「魔界の城」に城が無く、「業火の渓谷」に谷が無かった ═════════════════
+// 連続したシルエットを1本のパスで引く。高さは世界座標の関数なので、
+// 視差でずれても形が繋がったまま流れる
+function landRidge(col,par,yb,fn,stepPx){
+  const st=stepPx||22;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(-st,GROUND_TOP+10);
+  for(let sx=-st;sx<=W+st;sx+=st){ ctx.lineTo(sx, yb-fn(sx+camX*par)); }
+  ctx.lineTo(W+st,GROUND_TOP+10); ctx.closePath(); ctx.fill();
+}
+// 一定間隔で物を並べる。g0 は通し番号＝決定的な擬似乱数の種（毎フレーム変わらない）
+function landRow(par,step,fn){
+  const base=((camX*par)%step+step)%step, n=Math.ceil(W/step)+3;
+  for(let i=-1;i<n;i++) fn(i*step-base, Math.floor((camX*par)/step)+i);
+}
+const tri=x=>Math.abs(((x%1)+1)%1*2-1);                  // 0→1→0 の三角波（角ばった稜線用）
+const LAND={
+  forest:function(T){                                    // 月夜：針葉樹の森が三層で退いていく
+    // 1本が11頂点あるので、間隔を詰めると描画コールが一気に倍になる。
+    // 層数を perfTier で落とし、間隔も広めに取る
+    const baseY=GROUND_TOP-2, LN=perfTier>=2?1:(perfTier>=1?2:3);
+    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=shade(T.tower,-30+L*13), step=[112,86,66][L];
+      landRow(par,step,function(gx,g0){ const h=(58+L*26)+Math.abs(g0*47%(40+L*22)), x=gx+step/2;
+        const w=step*0.52;
+        ctx.fillStyle=col; ctx.beginPath();
+        ctx.moveTo(x,baseY-h);                            // 三段に張り出す枝＝針葉樹の輪郭
+        ctx.lineTo(x+w*0.42,baseY-h*0.60); ctx.lineTo(x+w*0.26,baseY-h*0.60);
+        ctx.lineTo(x+w*0.72,baseY-h*0.28); ctx.lineTo(x+w*0.44,baseY-h*0.28);
+        ctx.lineTo(x+w,baseY); ctx.lineTo(x-w,baseY);
+        ctx.lineTo(x-w*0.44,baseY-h*0.28); ctx.lineTo(x-w*0.72,baseY-h*0.28);
+        ctx.lineTo(x-w*0.26,baseY-h*0.60); ctx.lineTo(x-w*0.42,baseY-h*0.60);
+        ctx.closePath(); ctx.fill(); }); }
+  },
+  gorge:function(T){                                     // 業火の渓谷：切り立つ両岸と、奥に落ちる溶岩滝
+    const baseY=GROUND_TOP-2;
+    // 平らな頂とV字の切れ込みを持つ壁（sin を鈍らせると台地、鋭くすると谷）
+    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=shade(T.tower,-34+L*15), A=104+L*44, k=0.0021+L*0.0013;
+      landRidge(col,par,baseY,function(wx){
+        const v=Math.abs(Math.sin(wx*k)); return A*(0.16+0.84*Math.pow(v,0.22)); }); }
+    // 溶岩滝：谷底へ落ちる帯。乱数ではなく世界座標で位置を決める（毎フレーム動かない）
+    if(perfTier<2) landRow(0.40,520,function(gx,g0){ if((g0*7%3)!==0) return;
+      const x=gx+90, top=baseY-190;
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5;
+      ctx.fillStyle='rgba(255,120,40,.85)'; ctx.fillRect(x-7,top,14,190);
+      ctx.fillStyle='rgba(255,220,140,.9)'; ctx.fillRect(x-2.5,top,5,190);
+      ctx.globalAlpha=0.34+0.16*Math.sin(gf*0.07+g0);
+      ctx.beginPath(); ctx.ellipse(x,baseY-6,26,10,0,0,7); ctx.fill(); ctx.restore(); });
+  },
+  castle:function(T){                                    // 魔界の城：尖塔の群れと、灯りの脈打つ主塔
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle=shade(T.tower,-34);                     // 奥の岩壁
+    landRidge(shade(T.tower,-34),0.18,baseY,function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    landRow(0.40,132,function(gx,g0){                     // 尖塔列
+      const h=126+Math.abs(g0*61%118), x=gx+66;
+      ctx.fillStyle=(g0%2)?shade(T.tower,-16):shade(T.tower,-26);
+      ctx.beginPath(); ctx.moveTo(x-19,baseY); ctx.lineTo(x-13,baseY-h*0.70);
+      ctx.lineTo(x,baseY-h); ctx.lineTo(x+13,baseY-h*0.70); ctx.lineTo(x+19,baseY); ctx.closePath(); ctx.fill(); });
+    const cx=W*0.54-camX*0.46, top=baseY-262;             // 主塔（天守＋副塔＋城壁＋狭間）
+    if(cx>-280&&cx<W+280){
+      ctx.fillStyle=shade(T.tower,-4); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
+      ctx.beginPath(); ctx.moveTo(cx-70,top+76); ctx.lineTo(cx,top); ctx.lineTo(cx+70,top+76); ctx.closePath(); ctx.fill();
+      for(const s of [-1,1]){ ctx.fillRect(cx+s*98-15,top+146,30,baseY-top-146);
+        ctx.beginPath(); ctx.moveTo(cx+s*98-21,top+150); ctx.lineTo(cx+s*98,top+98); ctx.lineTo(cx+s*98+21,top+150); ctx.closePath(); ctx.fill(); }
+      ctx.fillStyle=shade(T.tower,-24); ctx.fillRect(cx-152,baseY-86,304,86);
+      for(let k=-7;k<=7;k++) ctx.fillRect(cx+k*21-6,baseY-98,12,14);
+      const fl=(0.55+0.35*Math.sin(gf*0.05)).toFixed(2);   // 窓の灯りが脈打つ
+      ctx.fillStyle='rgba(255,120,60,'+fl+')';
+      for(let k=-1;k<=1;k++) ctx.fillRect(cx+k*34-7,top+118,14,20);
+      for(const s of [-1,1]) ctx.fillRect(cx+s*98-6,top+186,12,18); }
+  },
+  glacier:function(T){                                   // 氷雪：角ばったセラック（氷塔）。三角波で稜線を折る
+    const baseY=GROUND_TOP-2;
+    for(let L=0;L<3;L++){ const par=0.20+L*0.18, A=110+L*46, k=0.0016+L*0.0011;
+      landRidge(shade(T.tower,-26+L*16),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
+    if(perfTier<1) landRow(0.56,190,function(gx,g0){      // 陽の当たる面だけ白く光らせる
+      const h=120+Math.abs(g0*43%70), x=gx+95;
+      ctx.fillStyle='rgba(255,255,255,.34)';
+      ctx.beginPath(); ctx.moveTo(x,baseY-h); ctx.lineTo(x+20,baseY-h*0.35); ctx.lineTo(x+4,baseY-h*0.35); ctx.closePath(); ctx.fill(); });
+  },
+  cavern:function(T){                                    // 水晶洞：頭上の岩天井と、足元から伸びる結晶柱
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle=shade(T.tower,-30);                     // 天井（上から垂れる岩）
+    ctx.beginPath(); ctx.moveTo(-20,0);
+    for(let sx=-20;sx<=W+20;sx+=20){ const wx=sx+camX*0.26;
+      ctx.lineTo(sx, 74+Math.abs(Math.sin(wx*0.0042))*104+Math.sin(wx*0.011)*18); }
+    ctx.lineTo(W+20,0); ctx.closePath(); ctx.fill();
+    if(perfTier<2) landRow(0.30,perfTier?200:150,function(gx,g0){       // 鍾乳石
+      const h=44+Math.abs(g0*53%86), x=gx+75, y0=92+Math.abs(g0*31%54);
+      ctx.fillStyle=shade(T.tower,-22);
+      ctx.beginPath(); ctx.moveTo(x-13,y0); ctx.lineTo(x,y0+h); ctx.lineTo(x+13,y0); ctx.closePath(); ctx.fill(); });
+    // 結晶柱。手前の層ほど数が多いので、低品質では奥の1層だけにする
+    for(let L=0;L<(perfTier>=2?1:2);L++) landRow(0.34+L*0.22,(120-L*30)+(perfTier?46:0),function(gx,g0){
+      const h=(90+L*54)+Math.abs(g0*67%(70+L*40)), x=gx+40, w=13+L*7;
+      ctx.fillStyle=shade(T.tower,-8+L*18);
+      ctx.beginPath(); ctx.moveTo(x-w,baseY); ctx.lineTo(x-w*0.6,baseY-h*0.82);
+      ctx.lineTo(x,baseY-h); ctx.lineTo(x+w*0.6,baseY-h*0.82); ctx.lineTo(x+w,baseY); ctx.closePath(); ctx.fill();
+      if(perfTier<1){ ctx.fillStyle='rgba(150,235,255,.30)';
+        ctx.beginPath(); ctx.moveTo(x-w*0.3,baseY); ctx.lineTo(x-w*0.15,baseY-h*0.84); ctx.lineTo(x+w*0.2,baseY-h*0.80); ctx.lineTo(x+w*0.3,baseY); ctx.closePath(); ctx.fill(); } });
+  },
+  colonnade:function(T){                                 // オリュンポス：雲海に浮かぶ白亜の列柱と神殿の破風
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle='rgba(255,252,240,.34)';                // 雲海の帯
+    for(let L=0;L<2;L++){ const step=240+L*90, off=((camX*(0.12+L*0.07))%step+step)%step, yb=baseY-150+L*40;
+      for(let x=-step;x<W+step;x+=step){ const px=x-off;
+        ctx.beginPath(); ctx.ellipse(px,yb,80,20,0,0,7); ctx.ellipse(px+56,yb+9,58,15,0,0,7); ctx.fill(); } }
+    const cx=W*0.52-camX*0.34, top=baseY-232;             // 神殿：破風＋エンタブラチュア
+    if(cx>-300&&cx<W+300){
+      ctx.fillStyle=shade(T.tower,-14);
+      ctx.beginPath(); ctx.moveTo(cx-158,top+58); ctx.lineTo(cx,top); ctx.lineTo(cx+158,top+58); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=shade(T.tower,4); ctx.fillRect(cx-166,top+58,332,22);
+      for(let k=-4;k<=4;k++){ ctx.fillStyle=shade(T.tower,-6); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
+        ctx.fillStyle='rgba(255,255,255,.20)'; ctx.fillRect(cx+k*36-11,top+80,6,baseY-top-80); } }
+    landRow(0.58,116,function(gx,g0){                     // 手前に並ぶ独立柱（溝彫り入り）
+      const h=132+Math.abs(g0*37%54), x=gx+58;
+      ctx.fillStyle=shade(T.tower,-10); ctx.fillRect(x-16,baseY-h,32,h);
+      ctx.fillStyle=shade(T.tower,10); ctx.fillRect(x-21,baseY-h-11,42,13);
+      ctx.fillStyle='rgba(0,0,0,.14)'; for(let k=-1;k<=1;k++) ctx.fillRect(x+k*8-1.4,baseY-h+6,2.8,h-8); });
+  },
+  styx:function(T){                                      // 冥府：黒い河・枯木・折れた列柱
+    const baseY=GROUND_TOP-2;
+    landRidge(shade(T.tower,10),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
+    ctx.fillStyle='rgba(4,2,10,.85)'; ctx.fillRect(0,baseY-52,W,52);            // 河面
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 鬼火の映り込み
+      for(let i=0;i<7;i++){ const x=((i*173-camX*0.5)%(W+180)+W+180)%(W+180)-90;
+        ctx.globalAlpha=0.20+0.14*Math.sin(gf*0.06+i*1.7);
+        ctx.fillStyle='rgba(140,200,255,.9)';
+        ctx.beginPath(); ctx.ellipse(x,baseY-26,26,5,0,0,7); ctx.fill(); }
+      ctx.restore(); }
+    landRow(0.44,180,function(gx,g0){                     // 枯木と折れ柱を交互に
+      const x=gx+90;
+      if(g0%2){ const h=96+Math.abs(g0*41%56);
+        ctx.strokeStyle=shade(T.tower,26); ctx.lineWidth=7; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(x,baseY-52); ctx.lineTo(x-4,baseY-52-h); ctx.stroke();
+        ctx.lineWidth=4;
+        for(let b=0;b<3;b++){ const s=b%2?1:-1, y=baseY-52-h*(0.45+b*0.2);
+          ctx.beginPath(); ctx.moveTo(x-2,y); ctx.lineTo(x+s*(22+b*6),y-16-b*5); ctx.stroke(); }
+      } else { const h=70+Math.abs(g0*53%64);
+        ctx.fillStyle=shade(T.tower,20); ctx.fillRect(x-13,baseY-52-h,26,h);
+        ctx.beginPath(); ctx.moveTo(x-13,baseY-52-h); ctx.lineTo(x+13,baseY-52-h+12); ctx.lineTo(x+13,baseY-52-h); ctx.closePath(); ctx.fill(); } });
+  },
+  sunken:function(T){                                    // 海神：沈んだ列柱のアーチと、差し込む光の柱
+    const baseY=GROUND_TOP-2;
+    landRidge(shade(T.tower,-8),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 海面から差す光の柱
+      for(let i=0;i<5;i++){ const x=((i*286-camX*0.22)%(W+300)+W+300)%(W+300)-150;
+        ctx.globalAlpha=0.12+0.05*Math.sin(gf*0.02+i);
+        ctx.fillStyle='rgba(190,255,255,.8)';
+        ctx.beginPath(); ctx.moveTo(x-16,0); ctx.lineTo(x+16,0); ctx.lineTo(x+58,baseY); ctx.lineTo(x-40,baseY); ctx.closePath(); ctx.fill(); }
+      ctx.restore(); }
+    landRow(0.42,208,function(gx,g0){                     // 傾いて沈んだアーチ
+      const x=gx+104, h=118+Math.abs(g0*47%52), tilt=((g0*29%14)-7)*0.012;
+      ctx.save(); ctx.translate(x,baseY); ctx.rotate(tilt);
+      ctx.fillStyle=shade(T.tower,16);
+      ctx.fillRect(-58,-h,20,h); ctx.fillRect(38,-h,20,h);
+      ctx.beginPath(); ctx.moveTo(-58,-h); ctx.quadraticCurveTo(0,-h-46,58,-h);
+      ctx.lineTo(58,-h+18); ctx.quadraticCurveTo(0,-h-24,-58,-h+18); ctx.closePath(); ctx.fill();
+      ctx.restore(); });
+    if(perfTier<1) landRow(0.66,74,function(gx,g0){       // 揺れる海藻
+      const x=gx+37, h=52+Math.abs(g0*31%44), sw=Math.sin(gf*0.035+g0)*9;
+      ctx.strokeStyle=shade(T.tower,30); ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6,x+sw,baseY-h); ctx.stroke(); });
+  },
+};
+function drawLand(T){
+  const f=LAND[T.land];
+  if(!f){ drawRidgeRow(T); return; }                     // land 未指定のテーマは従来の尾根のまま
+  f(T);
+  ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);
+}
 function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
   const c1=shade(T.tower,-16), c2=shade(T.tower,-30);
   for(let i=-1;i<16;i++){ const bw=124, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
@@ -7660,7 +7831,8 @@ function drawForeground(){ // near-camera silhouette strip (depth via fast paral
 function drawFgSilhouettes(T){ if(perfTier>=2) return;
   const step=perfTier>=1?1140:760, par=1.26, off=((camX*par)%step+step)%step;
   const col=shade(T.g[2],-34), sgn=(T.sunX<0.5)?-1:1;
-  const kind=T.space?'pipe':(T.bug||T.flower||T.web)?'stem':T.stars?'branch':'pillar';
+  // テーマが前景の種類を指定していればそれを使う。指定が無いテーマだけ従来の推定
+  const kind=T.fg || (T.space?'pipe':(T.bug||T.flower||T.web)?'stem':T.stars?'branch':'pillar');
   ctx.save();
   for(let i=-1;i<3;i++){ const sx=i*step-off+120;
     if(sx>W*0.22&&sx<W*0.78) continue;
@@ -7672,15 +7844,54 @@ function drawFgSilhouettes(T){ if(perfTier>=2) return;
       ctx.lineWidth=8; ctx.strokeStyle=col;
       for(let b2=0;b2<3;b2++){ ctx.beginPath(); ctx.moveTo(sx-120+b2*62,26+b2*6);
         ctx.quadraticCurveTo(sx-98+b2*62,88,sx-134+b2*62,132); ctx.stroke(); }
+    } else if(kind==='stalac'){                            // 天井から降りる鍾乳石（水晶洞）
+      for(let k=0;k<3;k++){ const x=sx-70+k*70, h=140+((sx*7+k*53)%110);
+        ctx.beginPath(); ctx.moveTo(x-26,-10); ctx.lineTo(x,h); ctx.lineTo(x+26,-10); ctx.closePath(); ctx.fill(); }
+    } else if(kind==='icicle'){                            // 上下から突き出す氷柱（氷雪）
+      for(let k=0;k<4;k++){ const x=sx-84+k*56, h=110+((sx*11+k*37)%90);
+        ctx.beginPath(); ctx.moveTo(x-18,-10); ctx.lineTo(x,h); ctx.lineTo(x+18,-10); ctx.closePath(); ctx.fill(); }
+      for(let k=0;k<3;k++){ const x=sx-56+k*56, h=70+((sx*5+k*61)%70);
+        ctx.beginPath(); ctx.moveTo(x-15,H+10); ctx.lineTo(x,H-h); ctx.lineTo(x+15,H+10); ctx.closePath(); ctx.fill(); }
+    } else if(kind==='dead'){                              // 手前の枯木（冥府）
+      ctx.lineCap='round'; ctx.strokeStyle=col; ctx.lineWidth=26;
+      ctx.beginPath(); ctx.moveTo(sx,H+10); ctx.lineTo(sx-14,H*0.18); ctx.stroke();
+      ctx.lineWidth=13;
+      for(let b2=0;b2<4;b2++){ const s=b2%2?1:-1, y=H*(0.62-b2*0.13);
+        ctx.beginPath(); ctx.moveTo(sx-6,y); ctx.lineTo(sx+s*(62+b2*14),y-52-b2*14); ctx.stroke(); }
+    } else if(kind==='kelp'){                              // 揺れる海藻の帯（海神）
+      // 直線を1本の二次曲線で引くと棒に見えたので、S字にうねらせて先を細める
+      ctx.lineCap='round'; ctx.strokeStyle=col;
+      for(let k=0;k<5;k++){ const x=sx-96+k*48, h=H*(0.34+((sx*3+k*29)%40)/150);
+        const ph=gf*0.028+k*1.3+sx*0.01;
+        for(let seg=0;seg<3;seg++){ const y0=H+10-h*seg/3, y1=H+10-h*(seg+1)/3;
+          const a0=Math.sin(ph+seg*1.1)*(9+seg*7), a1=Math.sin(ph+(seg+1)*1.1)*(9+(seg+1)*7);
+          ctx.lineWidth=(12-k%3*2)*(1-seg*0.24);
+          ctx.beginPath(); ctx.moveTo(x+a0,y0);
+          ctx.quadraticCurveTo(x+(a0+a1)*0.5+(seg%2?7:-7),(y0+y1)/2, x+a1,y1); ctx.stroke(); } }
+    } else if(kind==='rock'){                              // せり出す岩棚（渓谷）
+      ctx.beginPath(); ctx.moveTo(sx-150,H+10); ctx.lineTo(sx-118,H*0.30);
+      ctx.lineTo(sx-40,H*0.44); ctx.lineTo(sx+26,H*0.24); ctx.lineTo(sx+72,H*0.52);
+      ctx.lineTo(sx+120,H+10); ctx.closePath(); ctx.fill();
+    } else if(kind==='spire'){                             // 城の尖塔が手前に立つ（魔界）
+      const w=72, top=H*0.10;
+      ctx.beginPath(); ctx.moveTo(sx-w/2,H+10); ctx.lineTo(sx-w/2,top+56);
+      ctx.lineTo(sx,top); ctx.lineTo(sx+w/2,top+56); ctx.lineTo(sx+w/2,H+10); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,120,60,.9)';                 // 窓の灯り
+      for(let k=0;k<3;k++) ctx.fillRect(sx-9,top+120+k*120,18,26);
+      ctx.globalAlpha=0.90; ctx.fillStyle=col;
     } else {
       const w=(kind==='stem')?26:(kind==='pipe')?30:64;
-      const top=(kind==='pillar')?H*0.38:0;
+      const pil=(kind==='pillar'||kind==='colon'), top=pil?H*0.38:0;
       ctx.beginPath();
       if(kind==='stem'){ ctx.moveTo(sx-w/2,H); ctx.quadraticCurveTo(sx-w/2+14,H*0.5,sx-w/2+4,top);
         ctx.lineTo(sx+w/2+4,top); ctx.quadraticCurveTo(sx+w/2+14,H*0.5,sx+w/2,H); ctx.closePath(); ctx.fill();
         ctx.beginPath(); ctx.ellipse(sx+w*0.9,H*0.52,44,15,-0.5,0,7); ctx.fill();      // 葉
       } else { ctx.fillRect(sx-w/2,top,w,H-top);
-        if(kind==='pillar'){ ctx.fillRect(sx-w/2-10,top,w+20,16); } }                  // 柱頭
+        if(pil){ ctx.fillRect(sx-w/2-10,top,w+20,16); }                                // 柱頭
+        if(kind==='colon'){ ctx.fillRect(sx-w/2-13,H-22,w+26,22);                      // 柱礎
+          ctx.globalAlpha=0.35; ctx.fillStyle=shade(col,26);                           // ドリア式の溝彫り
+          for(let k=-2;k<=2;k++) ctx.fillRect(sx+k*12-2,top+18,4,H-top-40);
+          ctx.globalAlpha=0.90; ctx.fillStyle=col; } }
       // 太陽側の縁だけ暖色のリムライト
       ctx.globalAlpha=0.55; ctx.strokeStyle=T.sun+'.5)'; ctx.lineWidth=2.6;
       ctx.beginPath(); ctx.moveTo(sx+sgn*w/2,top); ctx.lineTo(sx+sgn*w/2,H); ctx.stroke();
