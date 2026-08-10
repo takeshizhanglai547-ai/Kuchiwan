@@ -1,5 +1,7 @@
-const { analyze, unisonCount } = require('/tmp/claude-0/-home-user-Kuchiwan/f8f3a27e-ff59-5922-82ea-2e456e98850d/scratchpad/crit2/analyze.js');
-const HTML='/home/user/Kuchiwan/beltaction.html';
+// 解析ハーネスは tests/bgmlib/ に置く。以前は /tmp のセッション用スクラッチを
+// 直接 require していたので、コンテナが作り直されるとこのスイートだけ起動しなかった
+const { analyze, unisonCount } = require(require('path').join(__dirname,'bgmlib','analyze.js'));
+const HTML=process.env.NM_TARGET || require('path').resolve(__dirname,'..','beltaction.html');
 const key=a=>a.join(',');
 function leadSecs(mode,idx,lap){
   const r=analyze(HTML,mode,idx,lap,256);
@@ -17,7 +19,8 @@ function leadSecs(mode,idx,lap){
 }
 try{
   // ===== 1) 32小節フォームの4セクションが「別の旋律」になっていること =====
-  for(const [mode,idx,lap] of [['battle',0,1],['battle',4,1],['battle',9,1],['boss',0,1],['boss3',0,1],['title',0,1],['bosschamu',0,2]]){
+  for(const [mode,idx,lap] of [['battle',0,1],['battle',4,1],['battle',9,1],['boss',0,1],['boss3',0,1],['title',0,1],['bosschamu',0,2],
+                               ['battle',16,4],['battle',17,4],['battle',18,4],['bossmyth',0,4]]){
     const {secs, firstHalf, lastHalf}=leadSecs(mode,idx,lap);
     const tag=mode+'['+idx+'] lap'+lap;
     if(key(secs[0])===key(secs[2])) throw new Error(tag+': Bセクションの旋律がAと同一（AメロBメロの対比が無い）');
@@ -49,10 +52,10 @@ try{
 
   // ===== 3) 全曲・全周でユニゾンが上限を超えないこと（回帰の網）=====
   let worst=0, worstN='';
-  for(let lap=1; lap<=3; lap++){
-    for(let i=0;i<16;i++){ const u=unisonCount(analyze(HTML,'battle',i,lap,256).notes,0.35,false,true);
+  for(let lap=1; lap<=4; lap++){
+    for(let i=0;i<19;i++){ const u=unisonCount(analyze(HTML,'battle',i,lap,256).notes,0.35,false,true);
       if(u.count>worst){ worst=u.count; worstN='BATTLE['+i+'] lap'+lap; } }
-    for(const m of ['boss','boss2','boss3','bossfast','bossheavy','bosseerie','bossrival','bosscosmic','bossalien','bosschamu','town','title','ending']){
+    for(const m of ['boss','boss2','boss3','bossfast','bossheavy','bosseerie','bossrival','bosscosmic','bossalien','bosschamu','bossmyth','town','title','ending']){
       const u=unisonCount(analyze(HTML,m,0,lap,256).notes,0.35,false,true);
       if(u.count>worst){ worst=u.count; worstN=m+' lap'+lap; } }
   }
@@ -77,6 +80,33 @@ try{
         const set=new Set(seq[0].split(',').map(Number));
         for(const n of ns) if(!set.has(n)) throw new Error(tag+': 周回で和音外の低音が出ている '+n); } }
     console.log('周回別の編成 OK (ベースの歩き方が1/2/3周目で別々／和音内音のまま)'); }
+
+  // ===== 5) 背景テーマの数だけ戦闘曲があること =====
+  // themeIdxFor は STAGE_THEME.length-1 までを返すので、BATTLE がそれより短いと
+  // song() が undefined を返し、scheduleStep が毎フレーム例外を投げてBGMが丸ごと消える。
+  // 神話の3ステージ（テーマ16〜18）が実際にこれで無音だった（曲が16曲しかなかった）。
+  { const fs=require('fs'), html=fs.readFileSync(HTML,'utf8');
+    const head=html.indexOf('const STAGE_THEME=[');
+    if(head<0) throw new Error('STAGE_THEME が見つからない');
+    const blk=html.slice(head), nTheme=(blk.slice(0,blk.indexOf('\n];')).match(/^ {2}\{ /gm)||[]).length;
+    if(nTheme<19) throw new Error('STAGE_THEME の数え上げに失敗した: '+nTheme);
+    for(let i=0;i<nTheme;i++){
+      let n=0;
+      try { n=analyze(HTML,'battle',i,4,64).notes.length; }
+      catch(e){ throw new Error('テーマ'+i+' の戦闘曲が無い（BGMが例外で止まる）: '+e.message); }
+      if(!n) throw new Error('テーマ'+i+' の戦闘曲が1音も鳴らない'); }
+    console.log('テーマと曲の対応 OK (背景テーマ'+nTheme+'種すべてに戦闘曲がある)'); }
+
+  // ===== 6) 神には専用のボス曲があること =====
+  // SONGS[mode] は無ければ BATTLE[0] へ黙って落ちるので、曲名を消しても音は鳴る。
+  // 「汎用ボス曲と違う旋律であること」まで要求しないと、専用曲の削除を検出できない
+  { const lead=m=>analyze(HTML,m,0,4,128).notes.filter(n=>n.part==='lead')
+      .sort((a,b)=>a.t0-b.t0).map(n=>Math.round(n.pitch)).join(',');
+    const my=lead('bossmyth'), gen=lead('boss'), b0=lead('battle');
+    if(!my) throw new Error('bossmyth が1音も鳴らない');
+    if(my===gen) throw new Error('神のボス曲が汎用ボス曲と同じ旋律');
+    if(my===b0) throw new Error('bossmyth が定義されておらず BATTLE[0] へ落ちている');
+    console.log('神のボス曲 OK (汎用ボス曲とも BATTLE[0] とも別の旋律、'+my.split(',').length+'音)'); }
 
   console.log('BGM FORM/VOICING TEST PASSED');
 }catch(e){ console.error('FAIL:', e.message); process.exit(1); }

@@ -98,6 +98,32 @@ const DRIVER = `
     console.log('浮遊の再発なし OK (1200F 中 0 フレーム)');
   }
 
+  // ===== 6b) 空中で「倒れない打撃」を受けても必ず落ちる =====
+  // 6) は敵の攻撃が z<=14 の一瞬に当たったときだけ踏む条件で、40試行中7回しか出なかった。
+  // down 側には重力があったが hurt 側に無く、のけぞりが明けると宙で idle に戻って固まる。
+  // ここでは hurtPlayer を直接呼んで、その状況を毎回作る
+  {
+    setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.x=camX+430; p.hp=p.maxHp=999999; p.defMul=1; p.invuln=0;
+    enemies.length=0; encounters.length=0; particles.length=0;
+    p.state='jump'; p.z=13.8; p.vz=-15.9; p.jAtk=0;
+    hurtPlayer(p, 1, 1, false);                       // knockdown=false ＝ down ではなく hurt
+    if(p.state!=='hurt') throw new Error('のけぞりになっていない: state='+p.state);
+    let land=-1;
+    for(let n=1;n<=240;n++){ hitStop=0; slowmo=0; step(1); if(land<0 && p.z<=0) land=n; }
+    if(land<0) throw new Error('空中でのけぞった後、240F 経っても着地しない（z='+p.z.toFixed(1)+' state='+p.state+'）');
+    if(p.z>0.01) throw new Error('のけぞりの後も浮いたまま: z='+p.z.toFixed(2)+' state='+p.state);
+    if(p.state==='hurt') throw new Error('240F 経っても のけぞりから戻らない');
+    // 「のけぞりが明けた瞬間に宙で idle」を直接禁じる：接地するまで地上状態にならないこと
+    { const q=players[0]; q.state='jump'; q.z=13.8; q.vz=-15.9; q.invuln=0; q.hp=q.maxHp=999999;
+      hurtPlayer(q, 1, 1, false);
+      let air=0;
+      for(let n=0;n<60;n++){ hitStop=0; slowmo=0; step(1);
+        if((q.state==='idle'||q.state==='walk') && q.z>1) air++; }
+      if(air>0) throw new Error('接地前に地上状態へ戻ったフレームが '+air+'/60'); }
+    console.log('空中のけぞり OK ('+land+'F で着地、地上状態に戻るのは接地後のみ)');
+  }
+
   // ===== 7) 跳躍3相の「脚」も実際に動く（腕だけ見ていて、脚を定数に戻しても緑だった）=====
   {
     setupRoster('inu'); startGame(); state='play';

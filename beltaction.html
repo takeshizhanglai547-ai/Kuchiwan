@@ -606,6 +606,20 @@ const sfx={
     tone(220,.10,'square',.10,-160,null,x); },
   ko:(x)=>{tone(120,.3,'sawtooth',.16,-80,null,x); noise(.3,.2,1200,null,0.3,x);},
   // ボスの咆哮／大技：サブのうねり＋中域のうなり＋ノイズテイルの3層（HITSND と同じ設計思想）
+  // 奥義の残響：炸裂の「あと」に残る地鳴り。立ち上がりを遅くし、1.6秒かけて沈む。
+  // 打撃音と同じ帯域で立ち上げると炸裂に埋もれるので、40Hz台の下だけを使う
+  rumble:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
+    [[38,1.0],[38*1.012,0.7],[57,0.34]].forEach(v=>{ const o=actx.createOscillator(), g=actx.createGain(), a=t+0.06;
+      o.type='sine'; o.frequency.setValueAtTime(v[0],a); o.frequency.exponentialRampToValueAtTime(v[0]*0.72,a+1.5);
+      g.gain.setValueAtTime(0.0001,a); g.gain.linearRampToValueAtTime(0.13*v[1],a+0.22);
+      g.gain.exponentialRampToValueAtTime(0.0001,a+1.6);
+      o.connect(g); g.connect(O); o.start(a); o.stop(a+1.7); });
+    if(noiseBuf){ const s2=actx.createBufferSource(); s2.buffer=noiseBuf; const g2=actx.createGain();
+      const lp=actx.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.setValueAtTime(900,t+0.06); lp.frequency.exponentialRampToValueAtTime(120,t+1.4);
+      g2.gain.setValueAtTime(0.0001,t+0.06); g2.gain.linearRampToValueAtTime(0.055,t+0.30);
+      g2.gain.exponentialRampToValueAtTime(0.0001,t+1.5);
+      s2.connect(lp); lp.connect(g2); g2.connect(O); s2.start(t+0.06,Math.random()*0.4); s2.stop(t+1.6); } },
   boss:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
     // 1) サブ帯域：1.5%離した2声を重ねて 0.7Hz でうならせる地鳴り
     [[46,1.0],[46*1.015,0.78]].forEach(v=>{ const o=actx.createOscillator(), g=actx.createGain(), a=t+Math.random()*0.004;
@@ -890,6 +904,24 @@ const Music=(()=>{
     { bpm:158, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 16: 母船コア — 侵略者の心臓部 (Dm)
       prog:[[50,53,57],[49,52,56],[51,54,58],[48,51,55],[50,53,57],[45,48,52],[47,50,54],[46,49,53]],
       mel:[74,77,81,86, 84,81,77,79, 76,79,83,79, 74,77,81,77, 74,78,81,86, 88,86,81,78, 77,74,70,74, 69,74,77,81] },
+    // ── 四周目・神話の三章。ここが無いと themeIdx 16〜18 で BATTLE[i] が undefined になり、
+    //    scheduleStep が毎フレーム例外を投げて神話ステージのBGMが丸ごと鳴らなかった ──
+    { bpm:134, lead:'triangle', pad:'sawtooth', epic:true,   // 17: オリュンポスの神域 — 天上の荘厳 (D リディア)
+      // #4（G#）を旋律に置いて、長調の明るさに「人の世の外」の浮遊感を足す
+      prog:[[50,54,57],[45,49,52],[47,50,54],[43,47,50],[50,54,57],[42,45,49],[43,47,50],[45,49,52]],
+      mel:[74,78,81,86, 85,81,78,74, 76,81,85,81, 78,74,71,74, 74,78,81,86, 88,86,81,78, 80,76,73,76, 74,78,81,85] },
+    { bpm:92, lead:'sine', pad:'sawtooth', kit:'heavy',      // 18: 冥府ステュクスの河 — 沈む足取り (C フリギア)
+      // b2（Db）で下降する。ハーフタイムのキットと合わせて「渡れない河」の重さを出す
+      prog:[[48,51,55],[49,53,56],[44,48,51],[43,46,50],[48,51,55],[41,44,48],[49,53,56],[48,51,55]],
+      // ハーフタイムで奇数スロットが休符になるので、鳴る偶数スロット側だけで
+      // 音階を出し切る（F を 24 に置かないと、B セクションの反行で調外音として現れる）
+      mel:[72,73,75,72, 70,68,67,63, 68,72,73,68, 67,63,60,63, 72,73,75,80, 79,77,75,72, 77,70,68,65, 63,67,70,72],
+      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 半拍おきの間＝重い足取り
+    { bpm:108, lead:'triangle', pad:'sawtooth',              // 19: 海神の神殿 — うねる大波 (E ドリア)
+      // 8分2連と4分を交互に踏んで、寄せては返す波の長さを作る
+      prog:[[52,55,59],[45,49,52],[47,50,54],[50,54,57],[52,55,59],[43,47,50],[45,49,52],[47,50,54]],
+      mel:[76,79,83,86, 83,79,76,74, 78,81,85,81, 78,74,71,74, 76,79,83,88, 86,83,79,76, 74,78,81,78, 76,71,74,76],
+      rhy:[2,1,2,1, 2,1,2,1, 2,1,2,1, 2,1,2,1, 2,1,2,1, 2,1,2,1, 2,1,2,1, 2,1,2,1] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -940,6 +972,10 @@ const Music=(()=>{
     bossalien:{ bpm:164, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 三周目・真ボス：宇宙皇帝（異界の威圧）
       prog:[[46,50,54],[45,49,53],[47,51,55],[44,48,52],[46,50,54],[41,45,49],[43,47,51],[45,49,53]],
       mel:[70,74,78,82, 80,78,74,76, 72,76,80,76, 70,74,78,74, 70,74,78,85, 83,80,76,78, 74,70,67,70, 66,70,74,78] },
+    bossmyth:{ bpm:160, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 四周目・神：裁きの座 (Dm 和声的短音階＋ナポリのEb)
+      // 2小節目と7小節目のナポリ（Eb）が短調の外へ半音ずり落ちる＝人智の外から裁かれる和声
+      prog:[[50,53,57],[51,55,58],[46,50,53],[45,49,52],[50,53,57],[43,46,50],[51,55,58],[45,49,52]],
+      mel:[74,77,81,86, 85,81,77,74, 75,79,82,79, 76,73,70,73, 74,77,81,86, 87,86,82,77, 79,75,73,75, 74,77,81,85] },
     bosschamu:{ bpm:156, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 二周目・真ボス：虫王チャムルス (半音のうねり×荘厳)
       prog:[[52,56,59],[51,55,58],[53,57,60],[50,54,57],[52,56,59],[48,52,55],[49,53,56],[51,55,58]],
       mel:[76,77,80,83, 80,77,76,75, 77,80,84,80, 74,77,81,77, 76,80,83,88, 86,84,81,83, 79,77,75,77, 73,75,79,83] },
@@ -1444,6 +1480,41 @@ function superFlash(x,y,color){
   particles.push({k:'flare',x,y,gl:groundLift(x),layer:2,delay:0,life:9,max:9,R:150*FXS,rot:rnd(-0.4,0.4)});
   for(let i=0;i<14;i++){ const an=i/14*Math.PI*2+rnd(-0.2,0.2);
     ember(x+Math.cos(an)*36, y+Math.sin(an)*36, Math.cos(an)*rnd(4,9), Math.sin(an)*rnd(4,9)-1.5, i%2?col:'#ffffff'); }
+  superEcho(x,y,col);   // 炸裂のあとに残る余韻（残響）
+}
+// ── 奥義の残響 ──────────────────────────────────────────────
+// 炸裂そのものは superFlash が受け持つ。こちらは「そのあと」を埋める。
+// 従来は閃光が消えた次のフレームには何も残らず、大技なのに余韻が無かった。
+// 遅延を付けた薄い輪・ゆっくり昇る火の粉・沈んでいく地鳴りで、
+// 画面が元へ戻るまでの 60 フレームを繋ぐ
+let echoT=0, echoMax=1, echoX=0, echoY=0, echoRGB='255,233,160';
+function superEcho(x,y,color){
+  const col=color||'#ffe9a0';
+  echoT=echoMax=60; echoX=x; echoY=y; echoRGB=hexRGB(mixWhite(col,0.35));
+  const rings=perfTier>=2?1:(perfTier>=1?2:3);
+  for(let i=0;i<rings;i++)                                   // 外へ抜けていく薄い輪
+    ring(x,y,col,{delay:12+i*16, rMax:120+i*90, sq:0.30+i*0.06, layer:0, ang:0});
+  if(perfTier<2){                                            // 名残の火の粉がゆっくり昇る
+    const waves=perfTier?1:3;
+    for(let w=0;w<waves;w++) for(let i=0;i<5;i++){
+      const lf=Math.round(rnd(46,74));
+      particles.push({k:'ember',x:x+rnd(-58,58),y:y+rnd(-14,26),gl:groundLift(x),layer:0,
+        delay:10+w*16+i*3, vx:rnd(-0.5,0.5), vy:-rnd(0.5,1.4), px:x, py:y,
+        life:lf, max:lf, color:i%2?col:'#ffffff', sz:rnd(0.9,2.0)}); } }
+  if(perfTier<1) smokePuff(x,y,3);                           // 足元に土煙が残って沈む
+  sfx.rumble(x);
+}
+// 残響の減衰。flash と同じ場所で1フレームに1回だけ進める
+function updateEcho(){ if(echoT>0) echoT--; }
+// 画面に残る余韻。技を撃った場所を中心に、暖色がゆっくり引いていく
+function drawEcho(){
+  if(echoT<=0 || perfTier>=2) return;
+  const u=echoT/echoMax, a=u*u*0.30;                          // 二乗で落として「引いていく」感じにする
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+  const sx=echoX-camX, sy=echoY-40, R=200+ (1-u)*260;
+  ctx.fillStyle=radGrad(sx,sy,R,'rgba('+echoRGB+',.85)','rgba('+echoRGB+',0)');
+  ctx.beginPath(); ctx.arc(sx,sy,R,0,7); ctx.fill();
+  ctx.restore();
 }
 // 火の粉：加算合成の小さな点が尾を引いて落ちる。斬撃・爆発・ビームの縁に散らす
 function ember(x,y,vx,vy,color){
@@ -2964,7 +3035,13 @@ function updatePlayer(){
   if(p.state==='getup'){ p.getT--; p.vx*=0.78; p.x+=p.vx;                                          // 手をついて跳ね起きる
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     if(p.getT<=0) p.state='idle'; return; }
-  if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84; if(p.hurtTimer<=0)p.state='idle'; return; }
+  // のけぞりにも重力を入れる。ここに無かったため、跳んでいる最中に「倒れない打撃」を
+  // 受けると z が凍り、のけぞりが明けた瞬間に idle のまま宙へ貼りついていた
+  // （down 側は修正済みだったが hurt 側が同じ穴を残していた）
+  if(p.state==='hurt'){ p.hurtTimer--; p.x+=p.vx; p.vx*=0.84;
+    if(p.z>0){ p.vz=(p.vz||0)-0.62; p.z=Math.max(0, p.z+p.vz);
+      if(p.z<=0){ p.vz=0; dust(p.x,p.y,5); sfx.land(p.x); } }
+    if(p.hurtTimer<=0 && p.z<=0) p.state='idle'; return; }
   if(p.state==='egrab'){ updateEnemyGrab(); return; }
   if(p.state==='grab'){ updateGrab(); return; }
   if(p.state==='slide'){ updateSlide(); return; }
@@ -4138,7 +4215,10 @@ const ETYPE={
   glaton:{gaitK:0.030,gaitA:0.60,hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
   boss:  {hp:1500,sp:1.5,dmg:26,atkR:88,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝', evolveTo:'boss2'},
   boss2: {hp:1850,sp:1.7,dmg:30,atkR:104,w:182,h:200,c1:'#3a2a52',c2:'#22163a',c3:'#0c0814',score:0,boss:true,bossKind:'wolfking',weapon:'none',accent:'#c46bff', name:'異形狼ダークワンワン', evolveTo:'boss3'},
-  boss3: {hp:1750,sp:2.7,dmg:28,atkR:84,w:64, h:106,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
+  // 一周目の最終形態。実測で 1.86倍しかなく、1面ボスのガルム（2.15倍）より小さかった。
+  // gsc で 1.85倍に引き伸ばし、掴み間合い(w)・空中判定(h)・間合い(atkR)も同じ倍率で上げる
+  // （リーチが伸びるぶん明確に強くなる。一周目の締めなので意図的にそうしている）
+  boss3: {hp:1750,sp:2.7,dmg:28,atkR:155,w:118,h:196,gsc:1.85,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ── ヌコ・真エンド限定の真ボス：上位者ワンメンドーズ ──
   wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'wanmen',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
   // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃・イッヌ風の技）──
@@ -4317,6 +4397,7 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   greyking:'bosseerie', ufoboss:'bossfast', bioblob:'bossheavy', emperorX:'bosscosmic', emperorX2:'bossalien',
   mumei:'bossrival', kamaboss:'bossfast', queenbee:'bossfast', kuwaboss:'bossheavy', spidboss:'bosseerie',
   chamboss:'bosseerie', chamurus:'bosschamu',
+  poseidon:'bossmyth', hades:'bossmyth', zeus:'bossmyth',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
@@ -5734,7 +5815,7 @@ const SPACE_FINAL={theme:15,name:'皇帝の玉座',len:1500,noPit:true,
 const MYTH_CH=[
   {theme:16,name:'オリュンポスの神域',
    gates:[{off:600,list:[['mythguard',1],['mythhop',1]]},{off:1000,list:[['mythblade',1],['mythflank',1],['mythseer',1]]},{off:1400,boss:true,list:[['zeus',1]]}],
-   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['お、おい…！雲の上に、白い柱の国が現れたぞい…！','あれは神々の座「オリュンポス」じゃ。人の世の外にある。','ここの兵は今までとまるで違う。数で押してはこん——順番に、間合いを計って来おる。','正面から殴り合うな。回り込め、引け、着地を狙え。','雷を司る主神ゼウスが、頂で待っておる。']}},
+   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['お、おい…！雲の上に、白い柱の国が現れたぞい…！','あれは神々の座「オリュンポス」じゃ。人の世の外にある。','ここの兵は今までとまるで違う。数で押してはこん——順番に、間合いを計って来おる。','正面から殴り合うな。回り込め、引け、着地を狙え。','雷を司る主神ゼウスが、頂で待っておる。'],give:{heal:'full'}}},
   {theme:18,name:'海神の神殿',
    gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['また会ったな…！今度は海の底だぜ。','この神殿の主は三叉の槍を持ってる。大波が来るから、来ると分かったら跳べ。','青銅の盾持ちは正面が通らねえ。背中を取れ。']}},
@@ -6489,7 +6570,7 @@ function update(){
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -6544,6 +6625,7 @@ function render(){
   drawGreatOne();
   drawForeground();
   drawLighting();
+  drawEcho();                           // 奥義の残響。照明のあと・数字の前に敷く（数字を沈ませない）
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
   // ── 閃光：全面ベタ塗りをやめ、打点から広がる放射グラデにする。立ち上がりを鋭く・減衰を速く ──
@@ -6593,27 +6675,27 @@ const STAGE_THEME=[
     amb:{shape:'spark',color:'rgba(255,200,120,.8)',rate:0.4,max:26,vy:-0.25,wind:0.15,r0:1.2,r1:2.6,glow:true,alpha:.7} },
   // 3: 月夜
   { gsnd:'stone', asnd:'wind', sky:['#0e1538','#1d2a5e','#33457e','#5a6fa0'], sun:'rgba(220,230,255,', sunX:0.28,sunY:80, rays:0.06, tint:'rgba(90,120,255,.34)',
-    haze:'rgba(60,80,140,.34)', fog:'rgba(120,140,190,.4)', stars:90, tower:'#3a4560',
+    haze:'rgba(60,80,140,.34)', fog:'rgba(120,140,190,.4)', stars:90, tower:'#3a4560', land:'forest', fg:'branch',
     g:['#46506a','#333b54','#1d2335'], cob:['#444c63','#3a4156'], vig:'rgba(4,6,24,.6)',
     amb:{shape:'spark',color:'rgba(180,230,255,.9)',rate:0.5,max:30,vy:-0.18,wind:0.1,r0:1,r1:2.4,glow:true,alpha:.9} },
   // 4: 業火の渓谷
   { gsnd:'sand', asnd:'fire', sky:['#2a0606','#6a160c','#b8381a','#e07a2a'], sun:'rgba(255,170,80,', sunX:0.6,sunY:120, rays:0.18, tint:'rgba(255,90,30,.4)',
-    haze:'rgba(180,60,30,.34)', fog:'rgba(200,90,40,.5)', stars:0, tower:'#5a2a26',
+    haze:'rgba(180,60,30,.34)', fog:'rgba(200,90,40,.5)', stars:0, tower:'#5a2a26', land:'gorge', fg:'rock',
     g:['#5a2a1e','#3e1c12','#220c08'], cob:['#5a2c20','#48221a'], vig:'rgba(50,4,4,.56)',
     amb:{shape:'spark',color:'rgba(255,150,60,.95)',rate:0.9,max:48,vy:-0.55,wind:0.2,r0:1.4,r1:3.2,glow:true,alpha:.95} },
   // 5: 魔界の城
   { gsnd:'stone', asnd:'cave', sky:['#0a0618','#1a0e36','#341a5e','#5a2a8c'], sun:'rgba(200,120,255,', sunX:0.5,sunY:90, rays:0.12, tint:'rgba(170,90,255,.38)',
-    haze:'rgba(90,40,140,.36)', fog:'rgba(140,90,200,.42)', stars:70, tower:'#2e2342',
+    haze:'rgba(90,40,140,.36)', fog:'rgba(140,90,200,.42)', stars:70, tower:'#2e2342', land:'castle', fg:'spire',
     g:['#33264a','#241834','#140c1e'], cob:['#352846','#2a2038'], vig:'rgba(10,2,24,.64)',
     amb:{shape:'spark',color:'rgba(198,120,255,.95)',rate:0.7,max:40,vy:-0.3,wind:0.15,r0:1.2,r1:2.8,glow:true,alpha:.95} },
   // 6: 氷雪の霊峰（白銀の雪山・舞う雪）
   { gsnd:'snow', asnd:'wind', sky:['#9fc4e8','#cfe2f2','#e6eef6','#f4f8fc'], sun:'rgba(255,252,240,', sunX:0.66,sunY:96, rays:0.12, tint:'rgba(200,225,255,.34)',
-    haze:'rgba(220,234,246,.4)', fog:'rgba(232,242,250,.55)', stars:0, tower:'#aebccd',
+    haze:'rgba(220,234,246,.4)', fog:'rgba(232,242,250,.55)', stars:0, tower:'#aebccd', land:'glacier', fg:'icicle',
     g:['#cdd9e6','#a9b8c8','#7d8ca0'], cob:['#c2cedd','#b2bfce'], vig:'rgba(20,30,56,.4)',
     amb:{shape:'petal',color:'rgba(255,255,255,.95)',rate:0.95,max:54,vy:0.55,wind:-0.3,r0:1.6,r1:3.4,glow:false,alpha:.92} },
   // 7: 瑠璃の水晶洞（地底の青紫クリスタル・舞う光粒）
   { gsnd:'stone', asnd:'cave', sky:['#0a1424','#122846','#1f3a64','#2a5286'], sun:'rgba(120,230,255,', sunX:0.4,sunY:84, rays:0.05, tint:'rgba(90,200,255,.34)',
-    haze:'rgba(40,90,150,.4)', fog:'rgba(60,120,180,.45)', stars:50, tower:'#27506e',
+    haze:'rgba(40,90,150,.4)', fog:'rgba(60,120,180,.45)', stars:50, tower:'#27506e', land:'cavern', fg:'stalac',
     g:['#234a5e','#16323f','#0a1c26'], cob:['#21465a','#1a3a4c'], vig:'rgba(2,10,24,.6)',
     amb:{shape:'spark',color:'rgba(120,230,255,.95)',rate:0.8,max:46,vy:-0.24,wind:0.12,r0:1.2,r1:3,glow:true,alpha:.95} },
   // 8: 飛行艇の甲板（茜色の雲海・流れる雲）
@@ -6666,19 +6748,19 @@ const STAGE_THEME=[
     amb:{shape:'spark',color:'rgba(150,255,210,.95)',rate:0.9,max:48,vy:-0.3,wind:0.1,r0:1.2,r1:3,glow:true,alpha:.95} },
   // 16: オリュンポスの神域（白亜の列柱・黄金の陽・雲海）
   { gsnd:'stone', asnd:'wind', sky:['#2f6fc8','#79b6ee','#cfe6f5','#f6f0d8'], sun:'rgba(255,250,214,', sunX:0.70,sunY:76, rays:0.20, tint:'rgba(255,240,190,.30)',
-    haze:'rgba(220,235,255,.42)', fog:'rgba(240,246,255,.40)', stars:0, tower:'#dcd6c2', myth:true, olympus:true,
+    haze:'rgba(220,235,255,.42)', fog:'rgba(240,246,255,.40)', stars:0, tower:'#dcd6c2', myth:true, olympus:true, land:'colonnade', fg:'colon',
     g:['#e6dfc8','#cfc6ab','#a89e84'], cob:['#ded6bd','#d2c9ae'], vig:'rgba(20,18,10,.42)',
     rimRGB:'255,236,180',
     amb:{shape:'petal',color:'rgba(255,246,210,.92)',rate:0.5,max:30,vy:0.32,wind:-0.18,r0:2.2,r1:4.6,glow:true,alpha:.82} },
   // 17: 冥府ステュクスの河（灰の空・青白い鬼火・黒い水）
   { gsnd:'stone', asnd:'wind', sky:['#050408','#100a18','#1b1226','#2a1c34'], sun:'rgba(150,180,255,', sunX:0.32,sunY:96, rays:0.06, tint:'rgba(90,70,140,.40)',
-    haze:'rgba(20,16,34,.55)', fog:'rgba(40,30,60,.52)', stars:40, tower:'#140f1e', myth:true, hades:true,
+    haze:'rgba(20,16,34,.55)', fog:'rgba(40,30,60,.52)', stars:40, tower:'#140f1e', myth:true, hades:true, land:'styx', fg:'dead',
     g:['#241c30','#170f22','#0b0714'], cob:['#221a2e','#1c1526'], vig:'rgba(0,0,4,.70)',
     rimRGB:'150,190,255',
     amb:{shape:'spark',color:'rgba(140,200,255,.95)',rate:0.9,max:44,vy:-0.30,wind:0.08,r0:1.2,r1:3.0,glow:true,alpha:.95} },
   // 18: 海神の神殿（深海の青・沈んだ列柱・光の柱）
   { gsnd:'stone', asnd:'wind', sky:['#02243c','#054a6a','#0a7a96','#16a6b4'], sun:'rgba(190,255,255,', sunX:0.56,sunY:64, rays:0.24, tint:'rgba(90,220,240,.34)',
-    haze:'rgba(10,70,100,.50)', fog:'rgba(20,110,140,.46)', stars:0, tower:'#0a3c52', myth:true, poseidon:true,
+    haze:'rgba(10,70,100,.50)', fog:'rgba(20,110,140,.46)', stars:0, tower:'#0a3c52', myth:true, poseidon:true, land:'sunken', fg:'kelp',
     g:['#12566a','#0c3a4c','#062430'], cob:['#14566a','#104656'], vig:'rgba(0,10,20,.60)',
     rimRGB:'170,240,255',
     amb:{shape:'spark',color:'rgba(200,245,255,.9)',rate:1.1,max:52,vy:-0.62,wind:0.05,r0:1.4,r1:3.4,glow:true,alpha:.9} },
@@ -6737,11 +6819,13 @@ function drawBackground(){
       ctx.strokeStyle=g2; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(st.x,st.y); ctx.lineTo(st.x-st.vx*6,st.y-st.vy*6); ctx.stroke();
       if(st.life<=0||st.x<-40) shootStars.splice(i,1); }
     ctx.restore(); }
+  // 洞窟と海中は「空」が無い。雲と鳥をそのまま出すと水の中に雲が浮かぶ
+  const encl=(T.land==='cavern'||T.land==='sunken');
   // clouds drift slowly even when standing still (skip for night/魔界)
-  if(!T.stars){ const cl=-camX*0.12-gf*0.18;
+  if(!T.stars && !encl){ const cl=-camX*0.12-gf*0.18;
     for(let i=0;i<10;i++){ const x=((i*360+cl)%(W+460)+W+460)%(W+460)-230; cloud(x,56+(i*53%70),58+(i%2)*24); } }
   // distant birds gliding across day skies
-  if(!T.stars){ if(Math.random()<0.004 && birds.length<4) birds.push({x:W+24,y:rnd(36,150),v:rnd(0.7,1.3),f:Math.random()*6});
+  if(!T.stars && !encl){ if(Math.random()<0.004 && birds.length<4) birds.push({x:W+24,y:rnd(36,150),v:rnd(0.7,1.3),f:Math.random()*6});
     ctx.save(); ctx.strokeStyle='rgba(30,30,55,.65)'; ctx.lineWidth=2; ctx.lineCap='round';
     for(let i=birds.length-1;i>=0;i--){ const b=birds[i]; b.x-=b.v; b.f+=0.18; const fl=Math.sin(b.f)*4;
       for(let w=0;w<2;w++){ const bx=b.x+w*11, by=b.y+w*5;
@@ -6761,7 +6845,7 @@ function drawBackground(){
       drawBuildings(!!T.stars); drawLampRow(); }
     else {        // 森・雪山・渓谷など：城と商店の看板を出さず、地形のシルエットだけにする
       ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
-      drawRidgeRow(T); }
+      drawLand(T); }
     drawBraziers(T);
   }
   if(state==='play') updateAmbient(T);
@@ -7497,6 +7581,175 @@ function drawBraziers(T){ const par=0.92, step=440, off=((-(camX*par))%step+step
 }
 // 町以外のステージの遠景。建物の代わりに岩稜のシルエットを敷く。
 // 従来は全ステージが城下町の色替えで、森にも雪山にも商店の看板が立っていた
+// ══ 中景の地形。以前は8テーマが同じギザギザの尾根の色替えで、
+//    「魔界の城」に城が無く、「業火の渓谷」に谷が無かった ═════════════════
+// 連続したシルエットを1本のパスで引く。高さは世界座標の関数なので、
+// 視差でずれても形が繋がったまま流れる
+function landRidge(col,par,yb,fn,stepPx){
+  const st=stepPx||22;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(-st,GROUND_TOP+10);
+  for(let sx=-st;sx<=W+st;sx+=st){ ctx.lineTo(sx, yb-fn(sx+camX*par)); }
+  ctx.lineTo(W+st,GROUND_TOP+10); ctx.closePath(); ctx.fill();
+}
+// 一定間隔で物を並べる。g0 は通し番号＝決定的な擬似乱数の種（毎フレーム変わらない）
+function landRow(par,step,fn){
+  const base=((camX*par)%step+step)%step, n=Math.ceil(W/step)+3;
+  for(let i=-1;i<n;i++) fn(i*step-base, Math.floor((camX*par)/step)+i);
+}
+const tri=x=>Math.abs(((x%1)+1)%1*2-1);                  // 0→1→0 の三角波（角ばった稜線用）
+const LAND={
+  forest:function(T){                                    // 月夜：針葉樹の森が三層で退いていく
+    // 1本が11頂点あるので、間隔を詰めると描画コールが一気に倍になる。
+    // 層数を perfTier で落とし、間隔も広めに取る
+    const baseY=GROUND_TOP-2, LN=perfTier>=2?1:(perfTier>=1?2:3);
+    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=shade(T.tower,-30+L*13), step=[112,86,66][L];
+      landRow(par,step,function(gx,g0){ const h=(58+L*26)+Math.abs(g0*47%(40+L*22)), x=gx+step/2;
+        const w=step*0.52;
+        ctx.fillStyle=col; ctx.beginPath();
+        ctx.moveTo(x,baseY-h);                            // 三段に張り出す枝＝針葉樹の輪郭
+        ctx.lineTo(x+w*0.42,baseY-h*0.60); ctx.lineTo(x+w*0.26,baseY-h*0.60);
+        ctx.lineTo(x+w*0.72,baseY-h*0.28); ctx.lineTo(x+w*0.44,baseY-h*0.28);
+        ctx.lineTo(x+w,baseY); ctx.lineTo(x-w,baseY);
+        ctx.lineTo(x-w*0.44,baseY-h*0.28); ctx.lineTo(x-w*0.72,baseY-h*0.28);
+        ctx.lineTo(x-w*0.26,baseY-h*0.60); ctx.lineTo(x-w*0.42,baseY-h*0.60);
+        ctx.closePath(); ctx.fill(); }); }
+  },
+  gorge:function(T){                                     // 業火の渓谷：切り立つ両岸と、奥に落ちる溶岩滝
+    const baseY=GROUND_TOP-2;
+    // 平らな頂とV字の切れ込みを持つ壁（sin を鈍らせると台地、鋭くすると谷）
+    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=shade(T.tower,-34+L*15), A=104+L*44, k=0.0021+L*0.0013;
+      landRidge(col,par,baseY,function(wx){
+        const v=Math.abs(Math.sin(wx*k)); return A*(0.16+0.84*Math.pow(v,0.22)); }); }
+    // 溶岩滝：谷底へ落ちる帯。乱数ではなく世界座標で位置を決める（毎フレーム動かない）
+    if(perfTier<2) landRow(0.40,520,function(gx,g0){ if((g0*7%3)!==0) return;
+      const x=gx+90, top=baseY-190;
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5;
+      ctx.fillStyle='rgba(255,120,40,.85)'; ctx.fillRect(x-7,top,14,190);
+      ctx.fillStyle='rgba(255,220,140,.9)'; ctx.fillRect(x-2.5,top,5,190);
+      ctx.globalAlpha=0.34+0.16*Math.sin(gf*0.07+g0);
+      ctx.beginPath(); ctx.ellipse(x,baseY-6,26,10,0,0,7); ctx.fill(); ctx.restore(); });
+  },
+  castle:function(T){                                    // 魔界の城：尖塔の群れと、灯りの脈打つ主塔
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle=shade(T.tower,-34);                     // 奥の岩壁
+    landRidge(shade(T.tower,-34),0.18,baseY,function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    landRow(0.40,132,function(gx,g0){                     // 尖塔列
+      const h=126+Math.abs(g0*61%118), x=gx+66;
+      ctx.fillStyle=(g0%2)?shade(T.tower,-16):shade(T.tower,-26);
+      ctx.beginPath(); ctx.moveTo(x-19,baseY); ctx.lineTo(x-13,baseY-h*0.70);
+      ctx.lineTo(x,baseY-h); ctx.lineTo(x+13,baseY-h*0.70); ctx.lineTo(x+19,baseY); ctx.closePath(); ctx.fill(); });
+    const cx=W*0.54-camX*0.46, top=baseY-262;             // 主塔（天守＋副塔＋城壁＋狭間）
+    if(cx>-280&&cx<W+280){
+      ctx.fillStyle=shade(T.tower,-4); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
+      ctx.beginPath(); ctx.moveTo(cx-70,top+76); ctx.lineTo(cx,top); ctx.lineTo(cx+70,top+76); ctx.closePath(); ctx.fill();
+      for(const s of [-1,1]){ ctx.fillRect(cx+s*98-15,top+146,30,baseY-top-146);
+        ctx.beginPath(); ctx.moveTo(cx+s*98-21,top+150); ctx.lineTo(cx+s*98,top+98); ctx.lineTo(cx+s*98+21,top+150); ctx.closePath(); ctx.fill(); }
+      ctx.fillStyle=shade(T.tower,-24); ctx.fillRect(cx-152,baseY-86,304,86);
+      for(let k=-7;k<=7;k++) ctx.fillRect(cx+k*21-6,baseY-98,12,14);
+      const fl=(0.55+0.35*Math.sin(gf*0.05)).toFixed(2);   // 窓の灯りが脈打つ
+      ctx.fillStyle='rgba(255,120,60,'+fl+')';
+      for(let k=-1;k<=1;k++) ctx.fillRect(cx+k*34-7,top+118,14,20);
+      for(const s of [-1,1]) ctx.fillRect(cx+s*98-6,top+186,12,18); }
+  },
+  glacier:function(T){                                   // 氷雪：角ばったセラック（氷塔）。三角波で稜線を折る
+    const baseY=GROUND_TOP-2;
+    for(let L=0;L<3;L++){ const par=0.20+L*0.18, A=110+L*46, k=0.0016+L*0.0011;
+      landRidge(shade(T.tower,-26+L*16),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
+    if(perfTier<1) landRow(0.56,190,function(gx,g0){      // 陽の当たる面だけ白く光らせる
+      const h=120+Math.abs(g0*43%70), x=gx+95;
+      ctx.fillStyle='rgba(255,255,255,.34)';
+      ctx.beginPath(); ctx.moveTo(x,baseY-h); ctx.lineTo(x+20,baseY-h*0.35); ctx.lineTo(x+4,baseY-h*0.35); ctx.closePath(); ctx.fill(); });
+  },
+  cavern:function(T){                                    // 水晶洞：頭上の岩天井と、足元から伸びる結晶柱
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle=shade(T.tower,-30);                     // 天井（上から垂れる岩）
+    ctx.beginPath(); ctx.moveTo(-20,0);
+    for(let sx=-20;sx<=W+20;sx+=20){ const wx=sx+camX*0.26;
+      ctx.lineTo(sx, 74+Math.abs(Math.sin(wx*0.0042))*104+Math.sin(wx*0.011)*18); }
+    ctx.lineTo(W+20,0); ctx.closePath(); ctx.fill();
+    if(perfTier<2) landRow(0.30,perfTier?200:150,function(gx,g0){       // 鍾乳石
+      const h=44+Math.abs(g0*53%86), x=gx+75, y0=92+Math.abs(g0*31%54);
+      ctx.fillStyle=shade(T.tower,-22);
+      ctx.beginPath(); ctx.moveTo(x-13,y0); ctx.lineTo(x,y0+h); ctx.lineTo(x+13,y0); ctx.closePath(); ctx.fill(); });
+    // 結晶柱。手前の層ほど数が多いので、低品質では奥の1層だけにする
+    for(let L=0;L<(perfTier>=2?1:2);L++) landRow(0.34+L*0.22,(120-L*30)+(perfTier?46:0),function(gx,g0){
+      const h=(90+L*54)+Math.abs(g0*67%(70+L*40)), x=gx+40, w=13+L*7;
+      ctx.fillStyle=shade(T.tower,-8+L*18);
+      ctx.beginPath(); ctx.moveTo(x-w,baseY); ctx.lineTo(x-w*0.6,baseY-h*0.82);
+      ctx.lineTo(x,baseY-h); ctx.lineTo(x+w*0.6,baseY-h*0.82); ctx.lineTo(x+w,baseY); ctx.closePath(); ctx.fill();
+      if(perfTier<1){ ctx.fillStyle='rgba(150,235,255,.30)';
+        ctx.beginPath(); ctx.moveTo(x-w*0.3,baseY); ctx.lineTo(x-w*0.15,baseY-h*0.84); ctx.lineTo(x+w*0.2,baseY-h*0.80); ctx.lineTo(x+w*0.3,baseY); ctx.closePath(); ctx.fill(); } });
+  },
+  colonnade:function(T){                                 // オリュンポス：雲海に浮かぶ白亜の列柱と神殿の破風
+    const baseY=GROUND_TOP-2;
+    ctx.fillStyle='rgba(255,252,240,.34)';                // 雲海の帯
+    for(let L=0;L<2;L++){ const step=240+L*90, off=((camX*(0.12+L*0.07))%step+step)%step, yb=baseY-150+L*40;
+      for(let x=-step;x<W+step;x+=step){ const px=x-off;
+        ctx.beginPath(); ctx.ellipse(px,yb,80,20,0,0,7); ctx.ellipse(px+56,yb+9,58,15,0,0,7); ctx.fill(); } }
+    const cx=W*0.52-camX*0.34, top=baseY-232;             // 神殿：破風＋エンタブラチュア
+    if(cx>-300&&cx<W+300){
+      ctx.fillStyle=shade(T.tower,-14);
+      ctx.beginPath(); ctx.moveTo(cx-158,top+58); ctx.lineTo(cx,top); ctx.lineTo(cx+158,top+58); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=shade(T.tower,4); ctx.fillRect(cx-166,top+58,332,22);
+      for(let k=-4;k<=4;k++){ ctx.fillStyle=shade(T.tower,-6); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
+        ctx.fillStyle='rgba(255,255,255,.20)'; ctx.fillRect(cx+k*36-11,top+80,6,baseY-top-80); } }
+    landRow(0.58,116,function(gx,g0){                     // 手前に並ぶ独立柱（溝彫り入り）
+      const h=132+Math.abs(g0*37%54), x=gx+58;
+      ctx.fillStyle=shade(T.tower,-10); ctx.fillRect(x-16,baseY-h,32,h);
+      ctx.fillStyle=shade(T.tower,10); ctx.fillRect(x-21,baseY-h-11,42,13);
+      ctx.fillStyle='rgba(0,0,0,.14)'; for(let k=-1;k<=1;k++) ctx.fillRect(x+k*8-1.4,baseY-h+6,2.8,h-8); });
+  },
+  styx:function(T){                                      // 冥府：黒い河・枯木・折れた列柱
+    const baseY=GROUND_TOP-2;
+    landRidge(shade(T.tower,10),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
+    ctx.fillStyle='rgba(4,2,10,.85)'; ctx.fillRect(0,baseY-52,W,52);            // 河面
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 鬼火の映り込み
+      for(let i=0;i<7;i++){ const x=((i*173-camX*0.5)%(W+180)+W+180)%(W+180)-90;
+        ctx.globalAlpha=0.20+0.14*Math.sin(gf*0.06+i*1.7);
+        ctx.fillStyle='rgba(140,200,255,.9)';
+        ctx.beginPath(); ctx.ellipse(x,baseY-26,26,5,0,0,7); ctx.fill(); }
+      ctx.restore(); }
+    landRow(0.44,180,function(gx,g0){                     // 枯木と折れ柱を交互に
+      const x=gx+90;
+      if(g0%2){ const h=96+Math.abs(g0*41%56);
+        ctx.strokeStyle=shade(T.tower,26); ctx.lineWidth=7; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(x,baseY-52); ctx.lineTo(x-4,baseY-52-h); ctx.stroke();
+        ctx.lineWidth=4;
+        for(let b=0;b<3;b++){ const s=b%2?1:-1, y=baseY-52-h*(0.45+b*0.2);
+          ctx.beginPath(); ctx.moveTo(x-2,y); ctx.lineTo(x+s*(22+b*6),y-16-b*5); ctx.stroke(); }
+      } else { const h=70+Math.abs(g0*53%64);
+        ctx.fillStyle=shade(T.tower,20); ctx.fillRect(x-13,baseY-52-h,26,h);
+        ctx.beginPath(); ctx.moveTo(x-13,baseY-52-h); ctx.lineTo(x+13,baseY-52-h+12); ctx.lineTo(x+13,baseY-52-h); ctx.closePath(); ctx.fill(); } });
+  },
+  sunken:function(T){                                    // 海神：沈んだ列柱のアーチと、差し込む光の柱
+    const baseY=GROUND_TOP-2;
+    landRidge(shade(T.tower,-8),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 海面から差す光の柱
+      for(let i=0;i<5;i++){ const x=((i*286-camX*0.22)%(W+300)+W+300)%(W+300)-150;
+        ctx.globalAlpha=0.12+0.05*Math.sin(gf*0.02+i);
+        ctx.fillStyle='rgba(190,255,255,.8)';
+        ctx.beginPath(); ctx.moveTo(x-16,0); ctx.lineTo(x+16,0); ctx.lineTo(x+58,baseY); ctx.lineTo(x-40,baseY); ctx.closePath(); ctx.fill(); }
+      ctx.restore(); }
+    landRow(0.42,208,function(gx,g0){                     // 傾いて沈んだアーチ
+      const x=gx+104, h=118+Math.abs(g0*47%52), tilt=((g0*29%14)-7)*0.012;
+      ctx.save(); ctx.translate(x,baseY); ctx.rotate(tilt);
+      ctx.fillStyle=shade(T.tower,16);
+      ctx.fillRect(-58,-h,20,h); ctx.fillRect(38,-h,20,h);
+      ctx.beginPath(); ctx.moveTo(-58,-h); ctx.quadraticCurveTo(0,-h-46,58,-h);
+      ctx.lineTo(58,-h+18); ctx.quadraticCurveTo(0,-h-24,-58,-h+18); ctx.closePath(); ctx.fill();
+      ctx.restore(); });
+    if(perfTier<1) landRow(0.66,74,function(gx,g0){       // 揺れる海藻
+      const x=gx+37, h=52+Math.abs(g0*31%44), sw=Math.sin(gf*0.035+g0)*9;
+      ctx.strokeStyle=shade(T.tower,30); ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6,x+sw,baseY-h); ctx.stroke(); });
+  },
+};
+function drawLand(T){
+  const f=LAND[T.land];
+  if(!f){ drawRidgeRow(T); return; }                     // land 未指定のテーマは従来の尾根のまま
+  f(T);
+  ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);
+}
 function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
   const c1=shade(T.tower,-16), c2=shade(T.tower,-30);
   for(let i=-1;i<16;i++){ const bw=124, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
@@ -7631,7 +7884,8 @@ function drawForeground(){ // near-camera silhouette strip (depth via fast paral
 function drawFgSilhouettes(T){ if(perfTier>=2) return;
   const step=perfTier>=1?1140:760, par=1.26, off=((camX*par)%step+step)%step;
   const col=shade(T.g[2],-34), sgn=(T.sunX<0.5)?-1:1;
-  const kind=T.space?'pipe':(T.bug||T.flower||T.web)?'stem':T.stars?'branch':'pillar';
+  // テーマが前景の種類を指定していればそれを使う。指定が無いテーマだけ従来の推定
+  const kind=T.fg || (T.space?'pipe':(T.bug||T.flower||T.web)?'stem':T.stars?'branch':'pillar');
   ctx.save();
   for(let i=-1;i<3;i++){ const sx=i*step-off+120;
     if(sx>W*0.22&&sx<W*0.78) continue;
@@ -7643,15 +7897,54 @@ function drawFgSilhouettes(T){ if(perfTier>=2) return;
       ctx.lineWidth=8; ctx.strokeStyle=col;
       for(let b2=0;b2<3;b2++){ ctx.beginPath(); ctx.moveTo(sx-120+b2*62,26+b2*6);
         ctx.quadraticCurveTo(sx-98+b2*62,88,sx-134+b2*62,132); ctx.stroke(); }
+    } else if(kind==='stalac'){                            // 天井から降りる鍾乳石（水晶洞）
+      for(let k=0;k<3;k++){ const x=sx-70+k*70, h=140+((sx*7+k*53)%110);
+        ctx.beginPath(); ctx.moveTo(x-26,-10); ctx.lineTo(x,h); ctx.lineTo(x+26,-10); ctx.closePath(); ctx.fill(); }
+    } else if(kind==='icicle'){                            // 上下から突き出す氷柱（氷雪）
+      for(let k=0;k<4;k++){ const x=sx-84+k*56, h=110+((sx*11+k*37)%90);
+        ctx.beginPath(); ctx.moveTo(x-18,-10); ctx.lineTo(x,h); ctx.lineTo(x+18,-10); ctx.closePath(); ctx.fill(); }
+      for(let k=0;k<3;k++){ const x=sx-56+k*56, h=70+((sx*5+k*61)%70);
+        ctx.beginPath(); ctx.moveTo(x-15,H+10); ctx.lineTo(x,H-h); ctx.lineTo(x+15,H+10); ctx.closePath(); ctx.fill(); }
+    } else if(kind==='dead'){                              // 手前の枯木（冥府）
+      ctx.lineCap='round'; ctx.strokeStyle=col; ctx.lineWidth=26;
+      ctx.beginPath(); ctx.moveTo(sx,H+10); ctx.lineTo(sx-14,H*0.18); ctx.stroke();
+      ctx.lineWidth=13;
+      for(let b2=0;b2<4;b2++){ const s=b2%2?1:-1, y=H*(0.62-b2*0.13);
+        ctx.beginPath(); ctx.moveTo(sx-6,y); ctx.lineTo(sx+s*(62+b2*14),y-52-b2*14); ctx.stroke(); }
+    } else if(kind==='kelp'){                              // 揺れる海藻の帯（海神）
+      // 直線を1本の二次曲線で引くと棒に見えたので、S字にうねらせて先を細める
+      ctx.lineCap='round'; ctx.strokeStyle=col;
+      for(let k=0;k<5;k++){ const x=sx-96+k*48, h=H*(0.34+((sx*3+k*29)%40)/150);
+        const ph=gf*0.028+k*1.3+sx*0.01;
+        for(let seg=0;seg<3;seg++){ const y0=H+10-h*seg/3, y1=H+10-h*(seg+1)/3;
+          const a0=Math.sin(ph+seg*1.1)*(9+seg*7), a1=Math.sin(ph+(seg+1)*1.1)*(9+(seg+1)*7);
+          ctx.lineWidth=(12-k%3*2)*(1-seg*0.24);
+          ctx.beginPath(); ctx.moveTo(x+a0,y0);
+          ctx.quadraticCurveTo(x+(a0+a1)*0.5+(seg%2?7:-7),(y0+y1)/2, x+a1,y1); ctx.stroke(); } }
+    } else if(kind==='rock'){                              // せり出す岩棚（渓谷）
+      ctx.beginPath(); ctx.moveTo(sx-150,H+10); ctx.lineTo(sx-118,H*0.30);
+      ctx.lineTo(sx-40,H*0.44); ctx.lineTo(sx+26,H*0.24); ctx.lineTo(sx+72,H*0.52);
+      ctx.lineTo(sx+120,H+10); ctx.closePath(); ctx.fill();
+    } else if(kind==='spire'){                             // 城の尖塔が手前に立つ（魔界）
+      const w=72, top=H*0.10;
+      ctx.beginPath(); ctx.moveTo(sx-w/2,H+10); ctx.lineTo(sx-w/2,top+56);
+      ctx.lineTo(sx,top); ctx.lineTo(sx+w/2,top+56); ctx.lineTo(sx+w/2,H+10); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,120,60,.9)';                 // 窓の灯り
+      for(let k=0;k<3;k++) ctx.fillRect(sx-9,top+120+k*120,18,26);
+      ctx.globalAlpha=0.90; ctx.fillStyle=col;
     } else {
       const w=(kind==='stem')?26:(kind==='pipe')?30:64;
-      const top=(kind==='pillar')?H*0.38:0;
+      const pil=(kind==='pillar'||kind==='colon'), top=pil?H*0.38:0;
       ctx.beginPath();
       if(kind==='stem'){ ctx.moveTo(sx-w/2,H); ctx.quadraticCurveTo(sx-w/2+14,H*0.5,sx-w/2+4,top);
         ctx.lineTo(sx+w/2+4,top); ctx.quadraticCurveTo(sx+w/2+14,H*0.5,sx+w/2,H); ctx.closePath(); ctx.fill();
         ctx.beginPath(); ctx.ellipse(sx+w*0.9,H*0.52,44,15,-0.5,0,7); ctx.fill();      // 葉
       } else { ctx.fillRect(sx-w/2,top,w,H-top);
-        if(kind==='pillar'){ ctx.fillRect(sx-w/2-10,top,w+20,16); } }                  // 柱頭
+        if(pil){ ctx.fillRect(sx-w/2-10,top,w+20,16); }                                // 柱頭
+        if(kind==='colon'){ ctx.fillRect(sx-w/2-13,H-22,w+26,22);                      // 柱礎
+          ctx.globalAlpha=0.35; ctx.fillStyle=shade(col,26);                           // ドリア式の溝彫り
+          for(let k=-2;k<=2;k++) ctx.fillRect(sx+k*12-2,top+18,4,H-top-40);
+          ctx.globalAlpha=0.90; ctx.fillStyle=col; } }
       // 太陽側の縁だけ暖色のリムライト
       ctx.globalAlpha=0.55; ctx.strokeStyle=T.sun+'.5)'; ctx.lineWidth=2.6;
       ctx.beginPath(); ctx.moveTo(sx+sgn*w/2,top); ctx.lineTo(sx+sgn*w/2,H); ctx.stroke();
@@ -8992,7 +9285,10 @@ function hitFlashCtx(){ if(!_hitCan){ _hitCan=document.createElement('canvas');
     _hitCan.width=HITCAN; _hitCan.height=HITCAN; _hitCtx=_hitCan.getContext('2d'); }
   return _hitCtx; }
 function drawEnemy(e){
-  const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
+  // gsc＝描画倍率。各ボスの描画関数は座標を直書きしているので、
+  // 体格を変えるにはここで掛けるしかない。t.w/t.h（掴み間合いと空中判定）も
+  // 同じ倍率で上げておかないと、見た目と当たりがずれる
+  const t=ETYPE[e.type], s=depthScale(e.y)*(t.gsc||1), sx=e.x-camX, sy=e.y-groundLift(e.x);
   if(sx<-230||sx>W+230) return;   // 負荷対策：画面外の敵は描かない（引きのズームぶん余裕を持たせる）
   if(t.heroBoss){   // 腕試しの主役ボスは、プレイヤーとまったく同じ描画で出す
     let ha=1; if(e.dead&&e.deadTimer<22) ha=clamp(e.deadTimer/22,0,1);
@@ -9057,7 +9353,10 @@ function drawEnemy(e){
     _mainCtx=ctx; ctx=oc; }
   // リムライトはボスだけに掛ける（巨体ほど背景に溶けるのが目立つ）。
   // 被弾の白飛び中は既にオフスクリーンを使っているので重ねない
-  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(t.w*0.62, t.h+30) : null;
+  // 神は光輪と神器が体の外へ大きくはみ出す。既定の枠のままだと
+  // オフスクリーンの縁で光輪と三叉槍の穂先が四角く切り取られる
+  const _rimH=GOD_ART[t.bossKind]? t.h+120 : t.h+30, _rimW=GOD_ART[t.bossKind]? t.w*0.92 : t.w*0.62;
+  const _erim=(!_hw && t.boss && !e.dead) ? rimBegin(_rimW, _rimH) : null;
   if(t.slimey) drawSlime(e);
   else if(e.type==='wanmen'){ drawWanmen(e); }
   else if(e.type==='golux'){ drawGolux(e); }
@@ -9067,7 +9366,7 @@ function drawEnemy(e){
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
-  else if(t.boss){ const bk=t.bossKind; if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
+  else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.myth && !t.boss) drawMythFoe(e,t);
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
   else if(t.bug) drawBugFoe(e,t);
@@ -10091,6 +10390,266 @@ function drawBigBoss(e){ const t=ETYPE[e.type], kind=t.bossKind, hurt=enemyHurt(
   ctx.strokeStyle=t.c2; ctx.lineWidth=12+bigA*9; ctx.beginPath(); ctx.moveTo(14,4); ctx.lineTo(24,8); ctx.stroke();
   ctx.translate(24,8); drawBossWeapon(t,e,atk);
   ctx.restore();
+  ctx.restore();
+}
+// ══ 四周目「神話」：三柱の神 ═══════════════════════════════════════════════
+// drawBigBoss は頭の大きなちび犬体型なので、そのまま流用すると神が小物に見える。
+// 小さな頭・広い肩・長い衣という別プロポーションで描き、
+// 持ち物（三叉槍／二叉槍／雷霆）と冠を神格の識別子にする。
+const GOD_ART={
+  // prong＝穂先の本数。ポセイドンは三叉、ハデスは二叉、ゼウスは雷霆なので穂先を持たない
+  // 肌・髪・衣は明度をはっきり離す。近い値で並べると（特にゼウス）全部が
+  // クリーム色の塊になって、顔も衣も読めなくなる
+  poseidon:{prong:3, plen:32, spread:0.34, crown:'wave',   beard:'wave',
+            hair:'#eafcff', skin:'#c8ab7c', robe1:'#2f8fb0', robe2:'#0a3446',
+            metal:'#c9a44e', halo:'#9ff0ff', aura:'120,232,255'},
+  hades:   {prong:2, plen:28, spread:0.26, crown:'flame',  beard:'point',
+            hair:'#140e22', skin:'#9e8fb4', robe1:'#4a3a86', robe2:'#0f0a1e',
+            metal:'#5c5170', halo:'#c8b8ff', aura:'168,120,255'},
+  zeus:    {prong:0, plen:0,  spread:0,    crown:'laurel', beard:'square',
+            hair:'#fbf7ea', skin:'#c69a5c', robe1:'#d8c47e', robe2:'#6a4c12',
+            metal:'#ffd24d', halo:'#fff6c0', aura:'255,236,150'}
+};
+// 穂先を1本描く。武器の描画は必ずここを通るので、
+// テストはこの関数を差し替えるだけで「何本・どの角度で生えているか」を実測できる
+function godProng(x,y,ang,len,w,col){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  ctx.strokeStyle=shade(col,-34); ctx.lineWidth=w; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-len*0.70); ctx.stroke();
+  ctx.fillStyle=col; ctx.beginPath();                       // 切っ先＝細い菱形
+  ctx.moveTo(0,-len); ctx.lineTo(w*0.78,-len*0.64); ctx.lineTo(0,-len*0.48); ctx.lineTo(-w*0.78,-len*0.64); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=shade(col,28); ctx.beginPath();             // 稜線のハイライト
+  ctx.moveTo(0,-len); ctx.lineTo(w*0.30,-len*0.64); ctx.lineTo(0,-len*0.54); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  return {x:x+Math.sin(ang)*len, y:y-Math.cos(ang)*len};
+}
+// ゼウスの雷霆（ケラウノス）：紡錘の握りから上下へ稲妻が束になって張り出す
+function godKeraunos(A,wind,swing){
+  const flick=0.68+0.32*Math.sin(gf*0.66);
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=(wind?0.50:0.28)*flick;
+    ctx.fillStyle=radGrad(0,0,74,'rgba(255,246,190,.9)','rgba(255,246,190,0)');
+    ctx.beginPath(); ctx.arc(0,0,74,0,7); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle=shade(A.metal,-38); roundRect(-6.5,-17,13,34,5); ctx.fill();
+  ctx.fillStyle=A.metal; roundRect(-3.6,-13,7.2,26,3); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(const dir of [-1,1]) for(let i=-1;i<=1;i++){
+    const len=(i?50:78)*(1+swing*0.34);
+    ctx.save(); ctx.translate(0,dir*15); if(dir>0) ctx.rotate(Math.PI); ctx.rotate(i*0.40);
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(6,-len*0.28); ctx.lineTo(-5,-len*0.52); ctx.lineTo(7,-len*0.76); ctx.lineTo(-2,-len);
+    ctx.strokeStyle='rgba(255,214,90,'+(0.80*flick).toFixed(3)+')'; ctx.lineWidth=i?4.2:6.4; ctx.stroke();
+    ctx.strokeStyle='rgba(255,252,224,'+(0.92*flick).toFixed(3)+')'; ctx.lineWidth=i?1.4:2.2; ctx.stroke();
+    ctx.restore(); }
+  ctx.restore();
+}
+// 神器一式。手の座標系で、柄が上へ伸びるように描く
+function godWeapon(kind,A,wind,swing){
+  if(kind==='zeus'){ godKeraunos(A,wind,swing); return; }
+  // 手より下に長く、上には頭の高さまで。柄の中ほどを握らせないと、
+  // 穂先が画面の外（HUDの裏）へ飛び出して神器が見えない
+  const L=84, BUTT=62;
+  ctx.strokeStyle=shade(A.metal,-30); ctx.lineWidth=7.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,BUTT); ctx.lineTo(0,-L); ctx.stroke();
+  ctx.strokeStyle=shade(A.metal,14); ctx.lineWidth=3.2;
+  ctx.beginPath(); ctx.moveTo(-1.4,BUTT-2); ctx.lineTo(-1.4,-L+2); ctx.stroke(); // 柄の照り返し
+  ctx.fillStyle=shade(A.metal,-42); roundRect(-5.6,-12,11.2,18,3); ctx.fill();   // 握り
+  ctx.fillStyle=shade(A.metal,-42); roundRect(-5,BUTT-13,10,13,3); ctx.fill();   // 石突
+  ctx.fillStyle=A.metal; ctx.beginPath(); ctx.ellipse(0,-L,8.5,5,0,0,7); ctx.fill();   // 穂先の台座
+  const n=A.prong, sp=A.spread;
+  for(let i=0;i<n;i++){ const a=(n<2?0:(i/(n-1)-0.5)*2)*sp;
+    godProng(Math.sin(a)*7.5, -L-2, a, A.plen, 5.4, A.halo); }
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(wind?0.46:0.24)+0.08*Math.sin(gf*0.11);
+    ctx.fillStyle=radGrad(0,-L-A.plen*0.6,32,'rgba('+A.aura+',.9)','rgba('+A.aura+',0)');
+    ctx.beginPath(); ctx.arc(0,-L-A.plen*0.6,32,0,7); ctx.fill(); ctx.restore(); }
+}
+// 冠。神格ごとに輪郭が違うので、シルエットだけで誰か分かる
+function godCrown(kind,A,hy,hr,wind){
+  if(kind==='poseidon'){                                   // 波冠：三つの砕ける波
+    ctx.fillStyle=A.metal;
+    for(let i=-1;i<=1;i++){ const cx=i*13, h=14+(i?0:8);
+      ctx.beginPath(); ctx.moveTo(cx-8,hy-hr+3);
+      ctx.quadraticCurveTo(cx-10,hy-hr-h, cx+4,hy-hr-h);
+      ctx.quadraticCurveTo(cx-2,hy-hr-h*0.45, cx+8,hy-hr+3); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle=A.halo;
+    for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*13+2,hy-hr-(i?10:17),3,0,7); ctx.fill(); }
+  } else if(kind==='hades'){                               // 冥府の炎：黒い炎に菫の芯
+    for(let i=-2;i<=2;i++){ const fx=i*8, h=13+Math.sin(gf*0.24+i*1.3)*6+(wind?6:0);
+      ctx.fillStyle='#0d0716'; ctx.beginPath(); ctx.moveTo(fx-6,hy-hr+4);
+      ctx.quadraticCurveTo(fx-2,hy-hr-h, fx+5,hy-hr+4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(150,96,240,.55)'; ctx.beginPath(); ctx.moveTo(fx-3,hy-hr+3);
+      ctx.quadraticCurveTo(fx-1,hy-hr-h*0.62, fx+2.5,hy-hr+3); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='#231832'; ctx.lineWidth=4.4;           // 黒鉄の輪
+    ctx.beginPath(); ctx.arc(0,hy-2,hr+1.5,Math.PI*1.10,Math.PI*1.90); ctx.stroke();
+  } else {                                                 // 月桂冠
+    ctx.strokeStyle=shade(A.metal,-26); ctx.lineWidth=3.4;
+    ctx.beginPath(); ctx.arc(0,hy-1,hr+2,Math.PI*1.06,Math.PI*1.94); ctx.stroke();
+    for(let i=0;i<7;i++){ const a=Math.PI*1.10+i/6*Math.PI*0.80;
+      const lx=Math.cos(a)*(hr+3), ly=hy-1+Math.sin(a)*(hr+3);
+      ctx.save(); ctx.translate(lx,ly); ctx.rotate(a+Math.PI/2);
+      ctx.fillStyle=i%2?A.metal:shade(A.metal,-16);
+      ctx.beginPath(); ctx.ellipse(0,-4.5,3,6.5,0.35,0,7); ctx.fill(); ctx.restore(); }
+  }
+}
+// 神ごとの周囲の気配。重いので perfTier で段階的に落とす
+function godAmbient(kind,A,wind){
+  if(perfTier>=2) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  if(kind==='poseidon'){                                   // 足元を巡る水の環と、立ちのぼる飛沫
+    ctx.globalAlpha=wind?0.42:0.26; ctx.strokeStyle='rgba('+A.aura+',.9)'; ctx.lineWidth=3;
+    for(let i=0;i<3;i++){ const ph=gf*0.03+i*2.1, ry=7+i*2;
+      ctx.beginPath(); ctx.ellipse(Math.sin(ph)*6,-6-i*4,40-i*7,ry,0,0,7); ctx.stroke(); }
+    if(perfTier<1){ ctx.globalAlpha=0.5; ctx.fillStyle='rgba('+A.aura+',.9)';
+      for(let i=0;i<7;i++){ const t2=(gf*0.9+i*37)%110;
+        ctx.beginPath(); ctx.arc(-34+i*11+Math.sin(i*2.3+gf*0.05)*5, -t2, 2.4-t2*0.012, 0,7); ctx.fill(); } }
+  } else if(kind==='hades'){                               // 黒炎の舌と、漂う魂
+    // 胴の上を通すと明るい斑点が体に貼りついて見えるので、体の外側だけを昇らせる
+    ctx.globalAlpha=wind?0.30:0.17; ctx.fillStyle='rgba('+A.aura+',.8)';
+    for(let i=0;i<5;i++){ const ph=gf*0.05+i*1.25, y=-14-((gf*0.6+i*29)%96);
+      const x=(i%2?-1:1)*(40+Math.sin(ph)*8);
+      ctx.beginPath(); ctx.ellipse(x, y, 3.4, 8+Math.sin(ph*2)*2.5, 0,0,7); ctx.fill(); }
+    if(perfTier<1){ ctx.globalAlpha=0.34; ctx.fillStyle='rgba(220,200,255,.9)';
+      for(let i=0;i<3;i++){ const a=gf*0.014+i*2.1;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*46,-70+Math.sin(a)*16,3.4,0,7); ctx.fill(); } }
+  } else {                                                 // ゼウス：体を巡る火花
+    // 長い折れ線で放電を描くと、体の外まで伸びた直線が「引っかき傷」に見えた。
+    // 短い火花を軌道上に散らして、体の輪郭に沿わせる
+    ctx.globalAlpha=(wind?0.75:0.42)*(0.55+0.45*Math.sin(gf*0.9));
+    ctx.strokeStyle='rgba('+A.aura+',.95)'; ctx.lineWidth=2.4;
+    for(let i=0;i<6;i++){ const a=gf*0.06+i*(TAU/6), r=34+Math.sin(a*3)*5;
+      const x=Math.cos(a)*r, y=-88+Math.sin(a)*30;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*7,y+Math.sin(a)*6); ctx.stroke(); }
+    if(perfTier<1){ ctx.fillStyle='rgba(255,252,224,.9)';
+      for(let i=0;i<4;i++){ const a=-gf*0.09+i*(TAU/4), r=40;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*r,-88+Math.sin(a)*26,2.2,0,7); ctx.fill(); } }
+  }
+  ctx.restore();
+}
+function drawGod(e){
+  const t=ETYPE[e.type], kind=t.bossKind, A=GOD_ART[kind]||GOD_ART.zeus;
+  const hurt=enemyHurt(e), k=t.h/150;
+  const atk=e.state==='bmove', wind=e.state==='bwind'||e.telegraph>0;
+  const pr=atk? clamp(e.moveT/Math.max(1,e.moveMax),0,1) : 0;
+  const swing=atk? Math.sin(pr*Math.PI) : 0;
+  const br=Math.sin((e.anim||0)*0.6)*2.0;                  // 呼吸
+  const HIP=-76, SH=-132, HEAD=-158, HR=15;                // 股／肩／頭の中心。頭を小さく取ると背が高く見える
+  ctx.save(); ctx.scale(k,k); ctx.lineJoin='round'; ctx.lineCap='round';
+  // ── 頭の後ろの光輪。大きく取ると画面が白く洗われて背景も本体も飛ぶので、
+  //    頭のまわりだけに絞る。放射の筋は「直線」で描くと硬い罫線に見えたので、
+  //    細く短い光条を頭の周りにだけ回す ──
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(wind?0.30:0.16)+0.04*Math.sin(gf*0.05);
+    ctx.fillStyle=radGrad(0,HEAD-2,54,'rgba('+A.aura+',.95)','rgba('+A.aura+',0)');
+    ctx.beginPath(); ctx.arc(0,HEAD-2,54,0,7); ctx.fill(); ctx.restore(); }
+  if(perfTier<1){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=wind?0.22:0.10;
+    ctx.strokeStyle='rgba('+A.aura+',.9)'; ctx.lineWidth=2;
+    for(let i=0;i<16;i++){ const a=i/16*TAU+gf*0.004, r0=28, r1=r0+(i%2?9:16);
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*r0,HEAD-2+Math.sin(a)*r0);
+      ctx.lineTo(Math.cos(a)*r1,HEAD-2+Math.sin(a)*r1); ctx.stroke(); }
+    ctx.restore(); }
+  // ── 背後にたなびく衣 ──
+  { const w=Math.sin(gf*0.033)*10+swing*24;
+    const g=ctx.createLinearGradient(-44,SH,-12,-6); g.addColorStop(0,shade(A.robe1,12)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-22,SH+2);
+    ctx.quadraticCurveTo(-72-w,SH+58,-54-w*1.3,-4);
+    ctx.quadraticCurveTo(-34,-30,-10,HIP+12); ctx.closePath(); ctx.fill(); }
+  // ── 奥の腕：掌を開いて力を溜める ──
+  { ctx.save(); ctx.translate(-25,SH+8); ctx.rotate(-0.42-swing*0.5);
+    ctx.strokeStyle=shade(A.skin,-30); ctx.lineWidth=11.5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-7,28); ctx.stroke();
+    ctx.strokeStyle=shade(A.skin,-38); ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(-7,28); ctx.lineTo(-4,50); ctx.stroke();
+    ctx.fillStyle=shade(A.skin,-34); ctx.beginPath(); ctx.arc(-4,55,7.5,0,7); ctx.fill(); ctx.restore(); }
+  // ── 脚：素足にサンダル。神は甲冑を着けない ──
+  foeLegs(e,13,HIP,36,34,14,shade(A.skin,-16),shade(A.metal,-22),0.44,1);
+  // ── キトンの裾。膝上で切って脛とサンダルを見せる（床まで垂らすと
+  //    足が完全に隠れ、歩いているのか浮いているのか読めなくなる）──
+  { const sw=Math.sin((e.anim||0)*0.5)*3, HEM=-34;
+    const g=ctx.createLinearGradient(0,HIP-8,0,HEM); g.addColorStop(0,shade(A.robe1,28)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-24,HIP-6); ctx.lineTo(24,HIP-6);
+    ctx.quadraticCurveTo(34,HIP+20, 29+sw,HEM);
+    for(let i=0;i<4;i++){ const x=29-i*14.5; ctx.quadraticCurveTo(x-7,HEM+7,x-14.5,HEM); }
+    ctx.quadraticCurveTo(-34,HIP+20,-24,HIP-6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.22)'; ctx.lineWidth=2;
+    for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*11,HIP); ctx.lineTo(i*13,HEM+2); ctx.stroke(); } }
+  // ── 胴：広い肩から腰へ絞る。外周に濃いリムを敷いてから肌 ──
+  { ctx.fillStyle=shade(A.robe2,-14); ctx.beginPath();
+    ctx.moveTo(-31,SH+3); ctx.quadraticCurveTo(-37,SH+34,-23,HIP+2);
+    ctx.lineTo(23,HIP+2); ctx.quadraticCurveTo(37,SH+34,31,SH+3); ctx.closePath(); ctx.fill();
+    const g=ctx.createLinearGradient(-18,SH,16,HIP); g.addColorStop(0,shade(A.skin,24)); g.addColorStop(1,shade(A.skin,-28));
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-27,SH+5+br); ctx.quadraticCurveTo(-33,SH+34,-19,HIP);
+    ctx.lineTo(19,HIP); ctx.quadraticCurveTo(33,SH+34,27,SH+5+br); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.10)';                 // 大胸筋
+    ctx.beginPath(); ctx.ellipse(-12,SH+18+br,12,9,0,0,7); ctx.ellipse(12,SH+18+br,12,9,0,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.20)'; ctx.lineWidth=2;    // 腹の割れ
+    ctx.beginPath(); ctx.moveTo(0,SH+26); ctx.lineTo(0,HIP-4); ctx.stroke();
+    for(let i=0;i<3;i++){ const y=SH+32+i*10; ctx.beginPath(); ctx.moveTo(-11,y); ctx.lineTo(11,y); ctx.stroke(); } }
+  // ── ヒマティオン（肩掛け）と留め金 ──
+  { const g=ctx.createLinearGradient(-30,SH,20,HIP+18); g.addColorStop(0,shade(A.robe1,32)); g.addColorStop(1,A.robe2);
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-33,SH-3); ctx.quadraticCurveTo(-5,SH+30, 21,HIP+6);
+    ctx.lineTo(31,HIP+1); ctx.quadraticCurveTo(3,SH+18,-23,SH-9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=A.metal; ctx.beginPath(); ctx.arc(-28,SH-5,5.6,0,7); ctx.fill();
+    ctx.fillStyle=shade(A.metal,32); ctx.beginPath(); ctx.arc(-29.4,-6.4+SH,2.2,0,7); ctx.fill(); }
+  // ── 肩当てはつけず、素の肩の丸みで力を見せる。
+  //    大きく張り出すと球が2つ浮いて見えるので、胴の輪郭に収める ──
+  for(const sgn of [-1,1]){ ctx.fillStyle=shade(A.skin,-34);
+    ctx.beginPath(); ctx.arc(sgn*24,SH+6,11.5,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(sgn*24-3,SH+2,13,shade(A.skin,26),shade(A.skin,-24));
+    ctx.beginPath(); ctx.arc(sgn*24,SH+5,10,0,7); ctx.fill(); }
+  // ── 首と頭 ──
+  ctx.strokeStyle=shade(A.skin,-22); ctx.lineWidth=13; ctx.beginPath(); ctx.moveTo(0,SH+1); ctx.lineTo(0,SH-11); ctx.stroke();
+  ctx.fillStyle=shade(A.skin,-26); ctx.beginPath(); ctx.ellipse(0,HEAD+3,HR+2,HR+1,0,0,7); ctx.fill();
+  ctx.fillStyle=radGrad(-HR*0.35,HEAD-HR*0.4,HR*1.6,shade(A.skin,26),shade(A.skin,-18));
+  ctx.beginPath(); ctx.ellipse(0,HEAD,HR,HR*1.08,0,0,7); ctx.fill();
+  // ── 髪と髭：神格ごとに形を変える ──
+  ctx.fillStyle=A.hair;
+  ctx.beginPath(); ctx.arc(0,HEAD-2,HR+3,Math.PI*1.00,Math.PI*2.00); ctx.fill();
+  for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.arc(i*8.5, HEAD-HR+1+i*i*1.4, 6.4,0,7); ctx.fill(); }
+  // 髭は輪郭を1本入れてから塗る。肌と明度が近いと（特にゼウス）
+  // 顔と髭が融けて、頭が長い四角に見えてしまう
+  ctx.strokeStyle='rgba(0,0,0,.32)'; ctx.lineWidth=2.4;
+  // 髭の付け根は顎の線。ここを目のすぐ下から始めると頬が全部隠れ、
+  // 「兜＋白い前掛け」に見えて顔が読めなくなる
+  { const chin=HEAD+HR*1.02;
+    if(A.beard==='wave'){                                  // 波打つ長い髭が胸まで垂れる
+      ctx.beginPath(); ctx.moveTo(-12,chin-1);
+      ctx.quadraticCurveTo(-23,chin+16,-11,SH+22);
+      ctx.quadraticCurveTo(0,SH+30,11,SH+22);
+      ctx.quadraticCurveTo(23,chin+16,12,chin-1); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=shade(A.hair,-16);
+      for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.ellipse(i*7,SH+16,3.4,9,i*0.3,0,7); ctx.fill(); }
+    } else if(A.beard==='square'){                         // 角ばった重い髭。顎から下だけを覆う
+      ctx.beginPath(); ctx.moveTo(-13,chin); ctx.lineTo(-14,SH+12);
+      ctx.quadraticCurveTo(0,SH+21,14,SH+12); ctx.lineTo(13,chin); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=shade(A.hair,-16);                     // 口髭と房の分け目
+      ctx.beginPath(); ctx.ellipse(0,chin+2,12,4.2,0,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1.6;
+      for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*6,chin+6); ctx.lineTo(i*7,SH+14); ctx.stroke(); }
+    } else {                                               // 細く尖った髭
+      ctx.beginPath(); ctx.moveTo(-10,chin-1); ctx.lineTo(-4,SH+20); ctx.lineTo(4,SH+20);
+      ctx.lineTo(10,chin-1); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+  godCrown(kind,A,HEAD,HR,wind);
+  // ── 眼：白目を持たず、神威そのものが光る ──
+  if(hurt){ hurtEye(-6,HEAD+1,5,'#3a2a44'); hurtEye(6,HEAD+1,5,'#3a2a44'); sweatDrop(18,HEAD-6); }
+  else { if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.75;
+      for(const sgn of [-1,1]){ ctx.fillStyle=radGrad(sgn*6,HEAD+1,9,A.halo,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(sgn*6,HEAD+1,9,0,7); ctx.fill(); } ctx.restore(); }
+    ctx.fillStyle=A.halo;
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*6,HEAD+1,3.4,3.0,0,0,7); ctx.fill(); }
+    ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.lineWidth=2.8;
+    ctx.beginPath(); ctx.moveTo(-13,HEAD-5); ctx.lineTo(-2,HEAD-1); ctx.moveTo(13,HEAD-5); ctx.lineTo(2,HEAD-1); ctx.stroke(); }
+  // ── 神器を持つ腕 ──
+  // ゼウスだけ構えが違う。雷霆は突く得物ではないので、腕を挙げて掲げさせる
+  { const rest=(kind==='zeus')? -1.42 : -0.30;
+    let ang=rest; if(wind) ang=rest-0.80; else if(atk) ang=rest-0.80+pr*2.15;
+    ang=foeArm(e,ang,0.32);
+    ctx.save(); ctx.translate(26+armSwingX(e),SH+6); ctx.rotate(ang); ctx.scale(1+swing*0.30,1+swing*0.30);
+    ctx.strokeStyle=shade(A.skin,6); ctx.lineWidth=12.5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,26); ctx.stroke();
+    ctx.strokeStyle=A.skin; ctx.lineWidth=11; ctx.beginPath(); ctx.moveTo(9,26); ctx.lineTo(13,48); ctx.stroke();
+    ctx.translate(13,50); godWeapon(kind,A,wind,swing);
+    ctx.restore(); }
+  godAmbient(kind,A,wind);
   ctx.restore();
 }
 // ══ 二周目・蟲の世界のボス：頭・胸部・腹部の三節を持つ“本物の虫”として描く ══
@@ -11888,7 +12447,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }

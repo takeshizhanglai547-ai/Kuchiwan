@@ -256,6 +256,124 @@ const DRIVER = `
     p.atk=null; p.state='idle';
     console.log('奥義のモーション OK (溜め'+nHold+'技／溜め中は構えを保持／発生は溜め込みで14〜34F／3キーの振り抜き／紫刃は次元斬のみ)'); }
 
+  // ═══ DC-9 ボスの巨大感 ═══════════════════════════════════════
+  // 一周目ラスボスの最終形態は、実測でゲーム中いちばん小さいボスだった
+  // （1面ボスのガルムより小さい）。体そのものの高さを測って順序を要求する
+  {
+    const real=ctx;
+    function bodyTop(fn){
+      let miny=1e9; const st=[]; let m={a:1,b:0,c:0,d:1,e:0,f:0};
+      const mul=function(A,B){ return {a:A.a*B.a+A.c*B.b,b:A.b*B.a+A.d*B.b,c:A.a*B.c+A.c*B.d,
+        d:A.b*B.c+A.d*B.d,e:A.a*B.e+A.c*B.f+A.e,f:A.b*B.e+A.d*B.f+A.f}; };
+      const put=function(x,y){ if(typeof x!=='number'||typeof y!=='number')return;
+        const Y=m.b*x+m.d*y+m.f; if(Y<miny)miny=Y; };
+      try { ctx=new Proxy(real,{ get:function(t,k){
+          if(k==='getTransform') return function(){ return {a:m.a,b:m.b,c:m.c,d:m.d,e:m.e,f:m.f}; };
+          const v=t[k]; if(typeof v!=='function') return v;
+          return function(){ const a=Array.prototype.slice.call(arguments);
+            if(k==='save') st.push(Object.assign({},m));
+            else if(k==='restore'){ if(st.length) m=st.pop(); }
+            else if(k==='translate') m=mul(m,{a:1,b:0,c:0,d:1,e:a[0],f:a[1]});
+            else if(k==='scale') m=mul(m,{a:a[0],b:0,c:0,d:a[1],e:0,f:0});
+            else if(k==='rotate'){ const c=Math.cos(a[0]),s2=Math.sin(a[0]); m=mul(m,{a:c,b:s2,c:-s2,d:c,e:0,f:0}); }
+            else if(k==='moveTo'||k==='lineTo') put(a[0],a[1]);
+            else if(k==='quadraticCurveTo'){ put(a[0],a[1]); put(a[2],a[3]); }
+            else if(k==='arc'){ put(a[0]-a[2],a[1]-a[2]); }
+            else if(k==='ellipse'){ put(a[0]-a[2],a[1]-a[3]); }
+            else if(k==='fillRect'||k==='strokeRect'||k==='rect'){ put(a[0],a[1]); put(a[0]+a[2],a[1]+a[3]); }
+            return v.apply(t,a); }; },
+        set:function(t,k,v){ t[k]=v; return true; } });
+        fn(); } finally { ctx=real; }
+      return miny;
+    }
+    setupRoster('inu'); startGame(); state='play'; perfTier=1;   // リムのオフスクリーンを外す
+    enemies.length=0; encounters.length=0; particles.length=0;
+    // プレイヤーを基準にすると、直前のテストで残った姿勢や強化演出で高さが動く。
+    // 独立した基準として「1面ボスのガルム」と比べる（そもそもの不具合が
+    // 「ラスボスがガルムより小さい」だった）
+    const DRAW={garm:drawBigBoss, boss:drawBoss, boss2:drawWolfKing, boss3:drawDarkKnight};
+    const HB={};
+    Object.keys(DRAW).forEach(function(k){
+      enemies.length=0; spawnEnemy(k, camX+400, LANE);
+      const e=enemies[0]; e.state='idle'; e.anim=0; e.hp=e.maxHp=99999;
+      HB[k]=(-bodyTop(function(){ DRAW[k](e); }))*(ETYPE[k].gsc||1); });
+    perfTier=0;
+    Object.keys(HB).forEach(function(k){ if(!(HB[k]>40)) throw new Error(k+' の高さが測れていない: '+HB[k].toFixed(1)); });
+    if(!(HB.boss3>HB.garm)) throw new Error('一周目ラスボスが1面ボスより小さい: '
+      +HB.boss3.toFixed(0)+' vs ガルム '+HB.garm.toFixed(0));
+    if(!(HB.boss3>HB.boss2)) throw new Error('最終形態が第二形態より小さい: '
+      +HB.boss3.toFixed(0)+' vs 異形狼 '+HB.boss2.toFixed(0));
+    if(!(HB.boss3>=HB.garm*1.35)) throw new Error('ラスボスの巨大感が足りない: ガルムの '
+      +(HB.boss3/HB.garm).toFixed(2)+'倍しかない');
+    // 見た目だけ大きくして当たりが元のままだと、剣が素通りする
+    if(!(ETYPE.boss3.w>=100 && ETYPE.boss3.h>=180 && ETYPE.boss3.atkR>=140))
+      throw new Error('体格に対して当たり判定が小さいまま: w'+ETYPE.boss3.w+' h'+ETYPE.boss3.h+' atkR'+ETYPE.boss3.atkR);
+    // 描画の入口（drawEnemy）が gsc を本当に掛けていること。
+    // 体の描画関数を直接呼ぶだけでは「実装はあるが反映されていない」を見逃す。
+    // 同じ LANE に置けば depthScale は共通なので、倍率の比がそのまま gsc の比になる
+    { const real=ctx;
+      const scaleOf=function(k){ let first=null;
+        enemies.length=0; spawnEnemy(k, camX+400, LANE);
+        const e=enemies[0]; e.state='idle'; e.anim=0; e.hp=e.maxHp=99999;
+        try { ctx=new Proxy(real,{ get:function(t,key){
+                if(key==='getTransform') return function(){ return {a:1,b:0,c:0,d:1,e:0,f:0}; };
+                const v=t[key]; if(typeof v!=='function') return v;
+                return function(){ if(key==='scale'&&first===null) first=Math.abs(arguments[1]);
+                  return v.apply(t,arguments); }; },
+              set:function(t,key,v){ t[key]=v; return true; } });
+              drawEnemy(e); } finally { ctx=real; }
+        return first; };
+      const sB=scaleOf('boss3'), sG=scaleOf('garm');
+      if(!sB||!sG) throw new Error('描画の倍率を取れなかった');
+      if(!(sB/sG>=1.5)) throw new Error('drawEnemy が体格の倍率を掛けていない: '
+        +sB.toFixed(2)+' vs ガルム '+sG.toFixed(2)); }
+    console.log('ラスボスの巨大感 OK (体の高さ ガルム'+HB.garm.toFixed(0)+' / 大帝'+HB.boss.toFixed(0)
+      +' / 異形狼'+HB.boss2.toFixed(0)+' / 暗黒剣士'+HB.boss3.toFixed(0)+' ＝ガルムの'
+      +(HB.boss3/HB.garm).toFixed(2)+'倍)');
+  }
+
+  // ═══ DC-9 奥義の残響 ═══════════════════════════════════════
+  // 炸裂の次のフレームには何も残らず、大技なのに余韻が無かった
+  {
+    setupRoster('inu'); startGame(); state='play'; perfTier=0;
+    const p=players[0]; player=p; p.x=camX+400;
+    particles.length=0; echoT=0;
+    const before=particles.length;
+    superFlash(p.x,p.y-46,'#ffe9a0');
+    if(!(echoT>=40)) throw new Error('残響が始まっていない: echoT='+echoT);
+    // 遅れて出る層があること（同時に全部出すと「炸裂」で終わって余韻にならない）
+    const late=particles.slice(before).filter(function(q){ return (q.delay|0)>=30; });
+    if(late.length<3) throw new Error('遅延して立ち上がる層が足りない: '+late.length+'個');
+    // 輪が遅延なしで出ると「炸裂と同時」になり、余韻として働かない
+    const rings=particles.slice(before).filter(function(q){ return q.k==='ring'; });
+    if(rings.length<2) throw new Error('残響の輪が足りない: '+rings.length+'本');
+    rings.forEach(function(q){ if((q.delay|0)<10) throw new Error('残響の輪が遅延していない: delay='+(q.delay|0)); });
+    const maxDelay=Math.max.apply(null, particles.slice(before).map(function(q){ return q.delay|0; }));
+    if(!(maxDelay>=40)) throw new Error('残響が短すぎる: 最大遅延 '+maxDelay+'F');
+    // 長寿命の火の粉が残ること
+    const slow=particles.slice(before).filter(function(q){ return q.k==='ember' && q.max>=40; });
+    if(slow.length<5) throw new Error('ゆっくり消える火の粉が足りない: '+slow.length+'個');
+    // 画面の余韻が減衰して消えること
+    const e0=echoT; for(let i=0;i<30;i++) updateEcho();
+    if(!(echoT<e0 && echoT>0)) throw new Error('残響の減衰がおかしい: '+e0+' → '+echoT);
+    for(let i=0;i<40;i++) updateEcho();
+    if(echoT!==0) throw new Error('残響が消えない: '+echoT);
+    // 低品質では残響の後処理を出さない
+    { const real=ctx; let n=0;
+      const cnt=function(){ n=0;
+        try { ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
+                if(typeof v==='function') return function(){ n++; return v.apply(t,arguments); };
+                return v; }, set:function(t,k,v){ t[k]=v; return true; } });
+              drawEcho(); } finally { ctx=real; }
+        return n; };
+      echoT=echoMax=60; perfTier=0; const a=cnt();
+      echoT=echoMax=60; perfTier=2; const b=cnt();
+      perfTier=0; echoT=0;
+      if(!(a>0)) throw new Error('tier0 で残響が描かれない');
+      if(b!==0) throw new Error('tier2 でも残響を描いている: '+b+'コール'); }
+    console.log('奥義の残響 OK (echoT '+e0+'F / 遅延層'+late.length+'個・最大'+maxDelay+'F / 長寿命の火の粉'+slow.length+'個)');
+  }
+
   console.log('STEAM POLISH TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
