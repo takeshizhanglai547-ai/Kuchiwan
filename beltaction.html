@@ -4398,21 +4398,24 @@ function pickAtkVar(e,p,dist){
 // 全員が同時に突っ込むと、数が増えるほど「押し合いの壁」になって却って弱い。
 // 同時に仕掛けられる数を絞り、待っている個体は回り込みに使う。
 // これがニンジャガイデン的な「囲まれている緊張」の正体で、攻撃力やHPでは作れない
-let _sqTok={}, _sqRF=-1;
+let _sqLast=0;
 function squadCap(){ return hardMode?3:2; }
 function squadWants(e,dist){
-  if(_sqRF!==rframe){ _sqRF=rframe; _sqTok={}; }   // 権利は毎フレーム数え直す
-  if(e.sqHold>gf) return true;                     // 既に権利を持っている
+  if(e.sqHold>gf){ _sqLast=gf; return true; }      // 既に権利を持っている
   let n=0;
   for(const o of enemies){ if(o.dead||o===e) continue;
-    if(o.sqHold>gf) n++; }
+    if(o.sqHold>gf){ n++; _sqLast=gf; } }
   if(n>=squadCap()) return false;
+  // 誰も仕掛けないまま時間が過ぎたら、順番待ちをやめて必ず一体を出す。
+  // 「近い者が優先」だけだと、全員が同じ距離に並んだときに互いを譲り合って
+  // 永久に誰も攻撃しない膠着が起きる（実測で3回に1回、600フレーム無攻撃）
+  if(gf-_sqLast>70){ _sqLast=gf; return true; }
   // 近い個体から順に権利を得る（遠くの1体だけが延々仕掛ける絵にしない）
   for(const o of enemies){ if(o.dead||o===e||!ETYPE[o.type].squad) continue;
-    if(o.sqHold>gf) continue;
+    if(o.sqHold>gf || o.stun>0 || o.state==='hurt' || o.state==='down') continue;
     if(Math.abs(o.x-nearestPlayerTo(o.x).x) < dist-14) return false; }
   return true; }
-function squadTake(e){ e.sqHold=gf+rnd(50,90); }
+function squadTake(e){ e.sqHold=gf+rnd(50,90); _sqLast=gf; }
 function enemyAtkFx(e,V,seg){ const t=ETYPE[e.type], dir=e.facing;
   V=V||ATK_VAR[0];
   const h=V.hits[seg||0]||V.hits[0];
@@ -4515,6 +4518,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   if(launch){ /* stays air */ }
   else if(knockdown){ e.state='down'; e.downTimer=T.boss?14:48; }   // ボスは素早く立て直す
   else if(T.boss){ if(e.state==='walk'){ e.state='hurt'; e.hurtTimer=7; } e.stun=Math.min((e.stun||0)+3,9); }
+  else if(e.state==='mythward'){ e.stun=0; }   // 斬り返しの構えは崩れない（この一撃を受け流して反撃に転じる）
   else { e.state='hurt'; e.hurtTimer=16; e.stun=18; }
 }
 // strong launch into the juggle (to screen edge / ceiling). vz<0 = up. Bosses resist.
@@ -4981,6 +4985,9 @@ function updateEnemies(){
     if(e.z<=0 && dist>t.atkR && Math.random()<(e.type==='hyena'?0.03:0.008)){ e.vz=-6; }  // chase hop
     e.thinkCd-=enemyThinkMul();   // 高難易度：思考が速い＝仕掛けが早い
     if(dist<t.atkR&&aligned&&e.thinkCd<=0&&e.stun<=0&&!t.grappler){
+      // 通常攻撃も攻撃権を1つ使う。ここで取らないと、固有行動だけが上限に
+      // 数えられて、普通の殴りは何体でも同時に通ってしまう
+      if(t.squad) squadTake(e);
       e.atkVar=pickAtkVar(e,p,dist);
       const V=ATK_VAR[e.atkVar];
       // 誘い：構えだけ見せて引く。押しっぱなしで潰せる相手ばかりだと読み合いが生まれない
