@@ -606,6 +606,20 @@ const sfx={
     tone(220,.10,'square',.10,-160,null,x); },
   ko:(x)=>{tone(120,.3,'sawtooth',.16,-80,null,x); noise(.3,.2,1200,null,0.3,x);},
   // ボスの咆哮／大技：サブのうねり＋中域のうなり＋ノイズテイルの3層（HITSND と同じ設計思想）
+  // 奥義の残響：炸裂の「あと」に残る地鳴り。立ち上がりを遅くし、1.6秒かけて沈む。
+  // 打撃音と同じ帯域で立ち上げると炸裂に埋もれるので、40Hz台の下だけを使う
+  rumble:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
+    [[38,1.0],[38*1.012,0.7],[57,0.34]].forEach(v=>{ const o=actx.createOscillator(), g=actx.createGain(), a=t+0.06;
+      o.type='sine'; o.frequency.setValueAtTime(v[0],a); o.frequency.exponentialRampToValueAtTime(v[0]*0.72,a+1.5);
+      g.gain.setValueAtTime(0.0001,a); g.gain.linearRampToValueAtTime(0.13*v[1],a+0.22);
+      g.gain.exponentialRampToValueAtTime(0.0001,a+1.6);
+      o.connect(g); g.connect(O); o.start(a); o.stop(a+1.7); });
+    if(noiseBuf){ const s2=actx.createBufferSource(); s2.buffer=noiseBuf; const g2=actx.createGain();
+      const lp=actx.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.setValueAtTime(900,t+0.06); lp.frequency.exponentialRampToValueAtTime(120,t+1.4);
+      g2.gain.setValueAtTime(0.0001,t+0.06); g2.gain.linearRampToValueAtTime(0.055,t+0.30);
+      g2.gain.exponentialRampToValueAtTime(0.0001,t+1.5);
+      s2.connect(lp); lp.connect(g2); g2.connect(O); s2.start(t+0.06,Math.random()*0.4); s2.stop(t+1.6); } },
   boss:(x)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x);
     // 1) サブ帯域：1.5%離した2声を重ねて 0.7Hz でうならせる地鳴り
     [[46,1.0],[46*1.015,0.78]].forEach(v=>{ const o=actx.createOscillator(), g=actx.createGain(), a=t+Math.random()*0.004;
@@ -1466,6 +1480,41 @@ function superFlash(x,y,color){
   particles.push({k:'flare',x,y,gl:groundLift(x),layer:2,delay:0,life:9,max:9,R:150*FXS,rot:rnd(-0.4,0.4)});
   for(let i=0;i<14;i++){ const an=i/14*Math.PI*2+rnd(-0.2,0.2);
     ember(x+Math.cos(an)*36, y+Math.sin(an)*36, Math.cos(an)*rnd(4,9), Math.sin(an)*rnd(4,9)-1.5, i%2?col:'#ffffff'); }
+  superEcho(x,y,col);   // 炸裂のあとに残る余韻（残響）
+}
+// ── 奥義の残響 ──────────────────────────────────────────────
+// 炸裂そのものは superFlash が受け持つ。こちらは「そのあと」を埋める。
+// 従来は閃光が消えた次のフレームには何も残らず、大技なのに余韻が無かった。
+// 遅延を付けた薄い輪・ゆっくり昇る火の粉・沈んでいく地鳴りで、
+// 画面が元へ戻るまでの 60 フレームを繋ぐ
+let echoT=0, echoMax=1, echoX=0, echoY=0, echoRGB='255,233,160';
+function superEcho(x,y,color){
+  const col=color||'#ffe9a0';
+  echoT=echoMax=60; echoX=x; echoY=y; echoRGB=hexRGB(mixWhite(col,0.35));
+  const rings=perfTier>=2?1:(perfTier>=1?2:3);
+  for(let i=0;i<rings;i++)                                   // 外へ抜けていく薄い輪
+    ring(x,y,col,{delay:12+i*16, rMax:120+i*90, sq:0.30+i*0.06, layer:0, ang:0});
+  if(perfTier<2){                                            // 名残の火の粉がゆっくり昇る
+    const waves=perfTier?1:3;
+    for(let w=0;w<waves;w++) for(let i=0;i<5;i++){
+      const lf=Math.round(rnd(46,74));
+      particles.push({k:'ember',x:x+rnd(-58,58),y:y+rnd(-14,26),gl:groundLift(x),layer:0,
+        delay:10+w*16+i*3, vx:rnd(-0.5,0.5), vy:-rnd(0.5,1.4), px:x, py:y,
+        life:lf, max:lf, color:i%2?col:'#ffffff', sz:rnd(0.9,2.0)}); } }
+  if(perfTier<1) smokePuff(x,y,3);                           // 足元に土煙が残って沈む
+  sfx.rumble(x);
+}
+// 残響の減衰。flash と同じ場所で1フレームに1回だけ進める
+function updateEcho(){ if(echoT>0) echoT--; }
+// 画面に残る余韻。技を撃った場所を中心に、暖色がゆっくり引いていく
+function drawEcho(){
+  if(echoT<=0 || perfTier>=2) return;
+  const u=echoT/echoMax, a=u*u*0.30;                          // 二乗で落として「引いていく」感じにする
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+  const sx=echoX-camX, sy=echoY-40, R=200+ (1-u)*260;
+  ctx.fillStyle=radGrad(sx,sy,R,'rgba('+echoRGB+',.85)','rgba('+echoRGB+',0)');
+  ctx.beginPath(); ctx.arc(sx,sy,R,0,7); ctx.fill();
+  ctx.restore();
 }
 // 火の粉：加算合成の小さな点が尾を引いて落ちる。斬撃・爆発・ビームの縁に散らす
 function ember(x,y,vx,vy,color){
@@ -4166,7 +4215,10 @@ const ETYPE={
   glaton:{gaitK:0.030,gaitA:0.60,hp:860,sp:0.75,dmg:23,atkR:96,w:196,h:206,c1:'#9aa0aa',c2:'#565c66',c3:'#2a2a32',score:5800,boss:true,bossKind:'glaton',weapon:'club', accent:'#ff8a3a', name:'鋼鉄のグラトン'},
   boss:  {hp:1500,sp:1.5,dmg:26,atkR:88,w:130,h:150,c1:'#2a2930',c2:'#121216',c3:'#000',  score:12000,boss:true,bossKind:'emperor',weapon:'dark',accent:'#c46bff', name:'ダークワンワン大帝', evolveTo:'boss2'},
   boss2: {hp:1850,sp:1.7,dmg:30,atkR:104,w:182,h:200,c1:'#3a2a52',c2:'#22163a',c3:'#0c0814',score:0,boss:true,bossKind:'wolfking',weapon:'none',accent:'#c46bff', name:'異形狼ダークワンワン', evolveTo:'boss3'},
-  boss3: {hp:1750,sp:2.7,dmg:28,atkR:84,w:64, h:106,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
+  // 一周目の最終形態。実測で 1.86倍しかなく、1面ボスのガルム（2.15倍）より小さかった。
+  // gsc で 1.85倍に引き伸ばし、掴み間合い(w)・空中判定(h)・間合い(atkR)も同じ倍率で上げる
+  // （リーチが伸びるぶん明確に強くなる。一周目の締めなので意図的にそうしている）
+  boss3: {hp:1750,sp:2.7,dmg:28,atkR:155,w:118,h:196,gsc:1.85,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ── ヌコ・真エンド限定の真ボス：上位者ワンメンドーズ ──
   wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'wanmen',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
   // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃・イッヌ風の技）──
@@ -6518,7 +6570,7 @@ function update(){
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -6573,6 +6625,7 @@ function render(){
   drawGreatOne();
   drawForeground();
   drawLighting();
+  drawEcho();                           // 奥義の残響。照明のあと・数字の前に敷く（数字を沈ませない）
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
   // ── 閃光：全面ベタ塗りをやめ、打点から広がる放射グラデにする。立ち上がりを鋭く・減衰を速く ──
@@ -9232,7 +9285,10 @@ function hitFlashCtx(){ if(!_hitCan){ _hitCan=document.createElement('canvas');
     _hitCan.width=HITCAN; _hitCan.height=HITCAN; _hitCtx=_hitCan.getContext('2d'); }
   return _hitCtx; }
 function drawEnemy(e){
-  const t=ETYPE[e.type], s=depthScale(e.y), sx=e.x-camX, sy=e.y-groundLift(e.x);
+  // gsc＝描画倍率。各ボスの描画関数は座標を直書きしているので、
+  // 体格を変えるにはここで掛けるしかない。t.w/t.h（掴み間合いと空中判定）も
+  // 同じ倍率で上げておかないと、見た目と当たりがずれる
+  const t=ETYPE[e.type], s=depthScale(e.y)*(t.gsc||1), sx=e.x-camX, sy=e.y-groundLift(e.x);
   if(sx<-230||sx>W+230) return;   // 負荷対策：画面外の敵は描かない（引きのズームぶん余裕を持たせる）
   if(t.heroBoss){   // 腕試しの主役ボスは、プレイヤーとまったく同じ描画で出す
     let ha=1; if(e.dead&&e.deadTimer<22) ha=clamp(e.deadTimer/22,0,1);
