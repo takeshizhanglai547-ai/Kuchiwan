@@ -2663,6 +2663,33 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       if(rel>-50 && rel<1500 && Math.abs(pl.y-h.y)<46 && pl.z<130) hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), h.dir, true, 'blunt'); } }
     if(h.t%6===0){ shake=Math.max(shake,9); spark(h.x+h.dir*rnd(20,900), h.y-(h.hy||60)+rnd(-30,30), '#fff', 2, 8); }
     if(h.t>=h.life) hazards.splice(i,1);
+  } else if(h.kind==='ewave'){   // 海神の津波：画面を横切る水の壁。跳べば越えられる
+    h.x+=h.vx;
+    if(h.t%5===0 && perfTier<2) spark(h.x+rnd(-30,30), LANE-rnd(0,h.hgt), '#cfefff', 2, 5);
+    if(h.t%9===0) sfx.dash(h.x);
+    for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
+      if(Math.abs(pl.x-h.x)<44 && pl.z < h.hgt*0.62)          // 波の高さより上へ跳べば当たらない
+        hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), h.vx>0?1:-1, true, 'blunt'); }
+    if(h.t>=h.life || h.x<camX-320 || h.x>camX+W+320) hazards.splice(i,1);
+  } else if(h.kind==='ebeast'){   // 召喚された海獣／魂の鎖／投げられた雷霆：横に走り抜ける
+    if(h.turn && h.t===h.turn) h.vx*=-1;                       // 雷霆は折り返して戻る
+    h.x+=h.vx;
+    if(h.art==='chain'){ const tp=nearestPlayerTo(h.x);        // 鎖だけは獲物を追う
+      h.y+=clamp(tp.y-h.y,-1.4,1.4); }
+    if(h.t%6===0 && perfTier<2) spark(h.x-Math.sign(h.vx)*18, h.y-14, h.col, 2, 5);
+    for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
+      if(Math.abs(pl.x-h.x)<42 && Math.abs(pl.y-h.y)<40 && pl.z<62){
+        hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), h.vx>0?1:-1, !!h.kn, h.art==='chain'?'magic':'flesh');
+        if(h.art==='chain'){ pl.vx=0; pl.hurtTimer=Math.max(pl.hurtTimer||0,26); }   // 鎖は絡んで動きを止める
+        if(h.once){ hazards.splice(i,1); continue; } } }
+    if(h.t>=h.life || h.x<camX-320 || h.x>camX+W+320) hazards.splice(i,1);
+  } else if(h.kind==='egrave'){   // 冥府の裁き：地面の印 → 遅れて噴き上がる
+    if(h.t===h.warn){ ring(h.x,h.y,h.col); shake=Math.max(shake,7); sfx.zap(h.x);
+      for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
+        if(Math.abs(pl.x-h.x)<52 && Math.abs(pl.y-h.y)<46)
+          hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true, 'magic'); }
+      spark(h.x,h.y-40,h.col,18,10); dust(h.x,h.y,8); }
+    if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='ebolt'){   // ボスの落雷：予兆の輪 → 直撃
     if(h.t===26){
       ring(h.x,LANE,'#bfe9ff'); ring(h.x,LANE,'#fff'); spark(h.x,LANE-46,'#dff6ff',26,13); dust(h.x,LANE,10);
@@ -2730,7 +2757,94 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   if(!wide && (sx<-80||sx>W+80)) continue;
   if(wide && (sx<-1600||sx>W+1600)) continue;
   const gy=LANE-groundLift(h.x);
-  if(h.kind==='ebeam'||h.kind==='pbeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
+  if(h.kind==='ewave'){                     // 津波：迫り上がる水の壁。稜線が崩れながら進む
+    const dir=Math.sign(h.vx)||1, hh=h.hgt;
+    ctx.save();
+    const g=ctx.createLinearGradient(0,gy-hh,0,gy+8);
+    g.addColorStop(0,'rgba(200,244,255,.92)'); g.addColorStop(.35,'rgba(70,178,214,.90)');
+    g.addColorStop(1,'rgba(16,74,104,.94)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(sx-dir*84,gy+8);
+    for(let k=0;k<=8;k++){ const u=k/8, xx=sx-dir*84+dir*84*u;
+      ctx.lineTo(xx, gy - hh*Math.pow(u,0.34) + Math.sin(gf*0.22+k)*4); }
+    ctx.quadraticCurveTo(sx+dir*22, gy-hh-16, sx+dir*36, gy-hh*0.72);   // 巻き込む波頭
+    ctx.lineTo(sx+dir*30,gy+8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.85)';                              // 白い泡の縁
+    for(let k=0;k<7;k++){ const u=k/6;
+      ctx.beginPath(); ctx.arc(sx+dir*(30-u*66), gy-hh*(0.66+u*0.30)+Math.sin(gf*0.3+k*1.4)*5, 7-u*3, 0,7); ctx.fill(); }
+    ctx.restore();
+  } else if(h.kind==='ebeast'){             // 海獣／魂の鎖／投げられた雷霆
+    const dir=Math.sign(h.vx)||1, by=gy-(h.y-LANE)*0+0;
+    ctx.save(); ctx.translate(sx, gy-(h.hy||18)); ctx.scale(dir,1);
+    if(h.art==='chain'){                    // 魂の鎖：輪が連なって尾を引く
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      for(let k=0;k<7;k++){ const a=0.75-k*0.09;
+        ctx.strokeStyle='rgba('+hexRGB(h.col)+','+a.toFixed(2)+')'; ctx.lineWidth=4-k*0.35;
+        ctx.beginPath(); ctx.ellipse(-k*15, Math.sin(gf*0.24+k)*4, 8, 5.5, 0,0,7); ctx.stroke(); }
+      ctx.restore();
+      ctx.fillStyle=h.col; ctx.beginPath();                            // 先端の亡霊の手
+      ctx.moveTo(12,-8); ctx.quadraticCurveTo(24,-2,12,10); ctx.quadraticCurveTo(2,2,12,-8); ctx.fill();
+    } else if(h.art==='bolt'){              // 投げられた雷霆：回転する束
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.rotate(gf*0.5);
+      for(let k=0;k<4;k++){ ctx.rotate(PI2);
+        ctx.strokeStyle='rgba(255,246,190,.9)'; ctx.lineWidth=5;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(7,-12); ctx.lineTo(-4,-20); ctx.lineTo(6,-32); ctx.stroke(); }
+      ctx.fillStyle='rgba(255,252,224,.95)'; ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill();
+      ctx.restore();
+    } else {                                // サメ／シャチ：背びれと胴が水面を裂く
+      const orca=(h.art==='orca');
+      ctx.strokeStyle='rgba(200,240,255,.9)'; ctx.lineWidth=3; ctx.lineJoin='round';  // 暗い水中でも輪郭が読めるように
+      ctx.fillStyle=orca?'#1b2836':'#547a98';
+      ctx.beginPath(); ctx.ellipse(0,8,54,20,0,0,7); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-4,-6); ctx.lineTo(9,-48); ctx.lineTo(25,-2); ctx.closePath(); ctx.fill(); ctx.stroke();   // 背びれ
+      ctx.beginPath(); ctx.moveTo(-46,2); ctx.lineTo(-72,-20); ctx.lineTo(-69,16); ctx.closePath(); ctx.fill(); ctx.stroke();// 尾
+      if(orca){ ctx.fillStyle='#f2f6fa';                                 // シャチの白い斑
+        ctx.beginPath(); ctx.ellipse(-10,17,26,8,0,0,7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(24,3,9,5,0.4,0,7); ctx.fill(); }
+      ctx.fillStyle='#fff'; ctx.beginPath();                             // 牙の並ぶ口
+      for(let k=0;k<5;k++){ ctx.moveTo(30+k*6,4); ctx.lineTo(33+k*6,14); ctx.lineTo(36+k*6,4); }
+      ctx.fill();
+      ctx.fillStyle='#241018'; ctx.beginPath(); ctx.arc(34,-6,4,0,7); ctx.fill();   // 眼
+      ctx.fillStyle='rgba(255,255,255,.75)';                             // 割れる水しぶき
+      for(let k=0;k<5;k++){ ctx.beginPath(); ctx.arc(-52-k*13, 14+Math.sin(gf*0.4+k)*5, 8-k, 0,7); ctx.fill(); }
+      ctx.strokeStyle='rgba(190,238,255,.55)'; ctx.lineWidth=3;           // 水面を裂く線
+      ctx.beginPath(); ctx.moveTo(-96,26); ctx.lineTo(44,26); ctx.stroke();
+    }
+    ctx.restore();
+  } else if(h.kind==='egrave'){             // 冥府の裁き：地面の印 → 噴き上がる黒炎と骸の腕
+    const u=clamp(h.t/h.warn,0,1);
+    ctx.save();
+    if(h.t<h.warn){                         // 予兆：足元に紋章が閉じていく
+      ctx.globalAlpha=0.35+0.45*u;
+      ctx.strokeStyle=h.col; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(sx,gy,52*(1.25-u*0.25),16*(1.25-u*0.25),0,0,7); ctx.stroke();
+      ctx.lineWidth=2; ctx.globalAlpha=0.30+0.35*u;
+      for(let k=0;k<6;k++){ const a=k/6*TAU+gf*0.03;
+        ctx.beginPath(); ctx.moveTo(sx+Math.cos(a)*20,gy+Math.sin(a)*7);
+        ctx.lineTo(sx+Math.cos(a)*44,gy+Math.sin(a)*14); ctx.stroke(); }
+    } else {                                // 発動：黒炎の柱と、掴みかかる腕
+      const v=clamp((h.t-h.warn)/16,0,1), hh=190*Math.sin(v*Math.PI*0.9);
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.9*(1-v*0.45);
+      const g=ctx.createLinearGradient(0,gy,0,gy-hh);
+      g.addColorStop(0,'rgba('+hexRGB(h.col)+',.95)'); g.addColorStop(1,'rgba('+hexRGB(h.col)+',0)');
+      ctx.fillStyle=g; ctx.beginPath();
+      ctx.moveTo(sx-38,gy); ctx.quadraticCurveTo(sx-16,gy-hh*0.7,sx,gy-hh);
+      ctx.quadraticCurveTo(sx+16,gy-hh*0.7,sx+38,gy); ctx.closePath(); ctx.fill();
+      const gw=ctx.createLinearGradient(0,gy,0,gy-hh*0.8);   // 白い芯を通さないと紫の背景に沈む
+      gw.addColorStop(0,'rgba(255,250,255,.95)'); gw.addColorStop(1,'rgba(255,250,255,0)');
+      ctx.fillStyle=gw; ctx.beginPath();
+      ctx.moveTo(sx-13,gy); ctx.quadraticCurveTo(sx-5,gy-hh*0.6,sx,gy-hh*0.82);
+      ctx.quadraticCurveTo(sx+5,gy-hh*0.6,sx+13,gy); ctx.closePath(); ctx.fill();
+      ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1-v*0.7;
+      ctx.strokeStyle='#cfc4dc'; ctx.lineWidth=5; ctx.lineCap='round';
+      for(const sg of [-1,1]){ const ax=sx+sg*15, ay=gy-hh*0.34;         // 地から伸びる腕
+        ctx.beginPath(); ctx.moveTo(ax,gy); ctx.lineTo(ax+sg*7,ay); ctx.stroke();
+        ctx.lineWidth=3;
+        for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(ax+sg*7,ay);
+          ctx.lineTo(ax+sg*7+k*7, ay-12); ctx.stroke(); }
+        ctx.lineWidth=5; }
+    }
+    ctx.restore();
+  } else if(h.kind==='ebeam'||h.kind==='pbeam'){   // 極太ビーム：白い芯＋うねる縁＋発射口のフレア
     const k=Math.min(1,h.t/4)*(h.t>h.life-10?Math.max(0,(h.life-h.t)/10):1);
     // 進路は 1500px あるが、画面の外まで塗るのは無駄。可視範囲ぶんに切り詰める
     // 太さは上限を設ける。ボスの既定値(54)に1.45を掛けると画面の半分を覆ってしまう
@@ -4332,9 +4446,11 @@ const BOSSMOVES={
   //   ポセイドン＝三叉槍の間合いと大波（跳んで避ける）
   //   ハデス    ＝亡霊を呼び、瞬間移動で背後を取る
   //   ゼウス    ＝落雷と神速。ガード不能を多く持つ
-  poseidon:['dashThrust','tripleStep','spearThrow','groundSlam','bulletHell','unblockSmash','bossGrab'],
-  hades:   ['teleSlash','summon','darkBeam','orbSpread','darkSlam','unblockSmash','bossGrab'],
-  zeus:    ['boltStrike','teleSlash','skyDive','megaTornado','darkBeam','unblockSmash','groundSlam','summon'],
+  // 汎用技の流用だけでは「三叉槍を持った紫のボス」で終わるので、
+  // 神格ごとの大技を主軸に据え、汎用技は繋ぎとして残す
+  poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
+  hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
+  zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
   dragon: ['fireBreath','fireball','divebomb','clawSwoop','bulletHell'],
   ghost:  ['scytheSlash','phaseDash','vanishMove','skyDive','bladeParry'],                      // 大鎌の剣士型
   slime:  ['slimeBounce','slimeSlam','slimeBounce'],
@@ -5252,6 +5368,19 @@ const MV={
   curseFlame:{tele:16,dur:26,minR:60,maxR:1300}, curseDash:{tele:14,dur:18,minR:80,maxR:560},
   // 腕試しの主役ボス：本人の ATK をそのまま撃つ（実尺は startBossMove で ATK.dur に合わせる）
   heroArt:{tele:9,dur:20,minR:0,maxR:1400},
+  // ── 神話の三柱：神格ごとの大技 ──────────────────────────────
+  //   ポセイドン＝水そのものを動かす（跳んで越える／横に避ける）
+  tsunami:{tele:36,dur:96,minR:0,maxR:1400,danger:1},        // 津波：跳べば越えられる水の壁
+  seaBeasts:{tele:30,dur:86,minR:60,maxR:1400},              // 海獣召喚：サメとシャチが突進
+  whaleRide:{tele:28,dur:104,minR:0,maxR:1200,danger:1},     // 鯨駕：空から鯨ごと突っ込む
+  //   ハデス＝死者を使う（足元を見る／囲みを解く）
+  deadRise:{tele:32,dur:104,minR:0,maxR:1400},               // 死者の群れ：地面から次々に噴き上がる
+  soulChain:{tele:28,dur:76,minR:60,maxR:1200},              // 魂の鎖：絡みついて足を止める
+  underworld:{tele:34,dur:112,minR:0,maxR:1400,danger:1},    // 冥府開門：亡者を呼び出し、裁きの柱を落とす
+  //   ゼウス＝雷そのもの（位置を読ませない）
+  keraunos:{tele:26,dur:88,minR:120,maxR:1300},              // 雷霆投擲：投げて戻る
+  judgeBolts:{tele:30,dur:104,minR:0,maxR:1400,danger:1},    // 神罰の雷列：端から順に落ちてくる
+  stormFall:{tele:32,dur:96,minR:0,maxR:1000,danger:1},      // 雷神降臨：跳び上がって落雷ごと落ちる
   // ── ボスの個性を出す大技 ──
   megaBeam:{tele:44,dur:86,minR:0,maxR:1400,danger:1},        // ラスボス：極太ビーム
   skyDive:{tele:22,dur:66,minR:0,maxR:840,danger:1},          // 剣士：跳び上がってからの急降下突進
@@ -5326,6 +5455,101 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'darkBeam': if(f===16)bBeam(e,t.dmg+4); break;
     case 'teleSlash': if(f===10)bArc(e,98,48,t.dmg,true,'#c46bff'); break;
     case 'summon': if(f===14)bSummon(e); break;
+    // ══ 神話の三柱：専用の大技 ═══════════════════════════════════
+    // ── ポセイドン：三叉槍を掲げて海を起こす。水の壁は跳べば越えられる ──
+    case 'tsunami':
+      if(f===1){ popText(e.x,e.y-e.h-24,'大海嘯！','#9ff0ff',true); sfx.boss(e.x); }
+      if(f<26 && f%3===0) spark(e.x+rnd(-40,40), e.y-rnd(20,120), '#9ff0ff', 2, 6);
+      if(f===26){ const dir=nearestPlayerTo(e.x).x<e.x?-1:1;
+        shake=Math.max(shake,14); quake=Math.max(quake,18); flashAt(3,'159,240,255',e.x,e.y-60);
+        hazards.push({kind:'ewave', x:e.x+dir*70, y:LANE, vx:dir*7.2, hgt:172, t:0, life:110, dmg:t.dmg+4});
+        // 二の波は少し遅れて、低く速く来る（一度跳んだだけでは抜けられない）
+        hazards.push({kind:'ewave', x:e.x+dir*70-dir*300, y:LANE, vx:dir*9.0, hgt:112, t:0, life:120, dmg:t.dmg}); }
+      if(f>26 && f%8===0) dust(e.x+rnd(-60,60), e.y, 3);
+      break;
+    // ── ポセイドン：海獣を呼び、サメとシャチを左右から突撃させる ──
+    case 'seaBeasts':
+      if(f===1){ popText(e.x,e.y-e.h-24,'海の眷属よ！','#9ff0ff',true); sfx.boss(e.x); ring(e.x,e.y,'#9ff0ff'); }
+      if(f===14||f===30||f===46){ const k=(f-14)/16, tp=nearestPlayerTo(e.x);
+        const dir=(k%2)? 1 : -1, x0=dir>0? camX-60 : camX+W+60;
+        hazards.push({kind:'ebeast', art:(k===1?'orca':'shark'), x:x0, y:clamp(tp.y+rnd(-22,22),GROUND_TOP,GROUND_BOT),
+          vx:dir*(9.5+k*1.2), hy:34, t:0, life:150, dmg:t.dmg-2, kn:true, col:'#cfefff'});
+        ring(x0,LANE,'#9ff0ff'); sfx.dash(x0); }
+      break;
+    // ── ポセイドン：鯨に乗って画面外へ上がり、斜めに突っ込んでくる ──
+    case 'whaleRide':
+      if(f===1){ popText(e.x,e.y-e.h-24,'鯨駕・怒濤突進！','#9ff0ff',true); sfx.rise(e.x); }
+      if(f<20){ e.z+=16; e.vz=0; if(f%3===0) spark(e.x+rnd(-30,30), e.y-e.z, '#cfefff', 3, 7); }
+      else if(f<32){ e.vz=0;                                        // 上空で狙いを定める（高度は上昇で得たぶんだけ）
+        const tp=nearestPlayerTo(e.x); e.facing=tp.x<e.x?-1:1;
+        e.rideX=tp.x; e.rideY=tp.y; }
+      else if(f<52){ const dx=(e.rideX-e.x); e.x+=clamp(dx*0.18,-26,26);
+        e.y+=clamp((e.rideY-e.y)*0.18,-6,6); e.z=Math.max(0,e.z-17);
+        if(f%2===0) spark(e.x+rnd(-24,24), e.y-e.z, '#9ff0ff', 3, 8);
+        if(e.z<=0 && !e.slammed){ e.slammed=true;                    // 着水：しぶきが左右へ走る
+          shake=Math.max(shake,17); quake=Math.max(quake,22); flashAt(4,'159,240,255',e.x,e.y-40);
+          hitStop=Math.max(hitStop,7); sfx.big(e.x); dust(e.x,e.y,24);
+          bShock(e,180,t.dmg+8);
+          for(const d2 of [-1,1]) hazards.push({kind:'ewave', x:e.x+d2*50, y:LANE, vx:d2*8.4, hgt:104, t:0, life:70, dmg:t.dmg-4}); } }
+      break;
+    // ── ハデス：地面から死者が次々に噴き上がる。足元の紋章が予兆 ──
+    case 'deadRise':
+      if(f===1){ popText(e.x,e.y-e.h-24,'死者の群れよ、起きよ','#c8b8ff',true); sfx.boss(e.x); }
+      if(f===8||f===22||f===36||f===50){ const k=(f-8)/14, tp=nearestPlayerTo(e.x);
+        // 獲物の足元と、その左右へ順に。逃げ道を1つだけ残す並びにする
+        const xs=[tp.x, tp.x+(k%2?150:-150), tp.x+(k%2?-260:260)];
+        xs.forEach(function(xx,idx){
+          hazards.push({kind:'egrave', x:clamp(xx+rnd(-20,20),camX+30,camX+W-30), y:tp.y,
+            warn:26+idx*4, t:0, life:60, dmg:t.dmg, col:'#a878ff'}); }); }
+      break;
+    // ── ハデス：魂の鎖が這って追い、絡んで足を止める ──
+    case 'soulChain':
+      if(f===1){ popText(e.x,e.y-e.h-24,'魂の鎖','#c8b8ff',true); sfx.zap(e.x); }
+      if(f===16||f===28){ const tp=nearestPlayerTo(e.x), dir=tp.x<e.x?-1:1;
+        hazards.push({kind:'ebeast', art:'chain', x:e.x+dir*40, y:e.y, vx:dir*6.4, hy:16,
+          t:0, life:120, dmg:t.dmg-6, once:true, col:'#c8b8ff'});
+        spark(e.x+dir*40,e.y-30,'#c8b8ff',10,8); }
+      break;
+    // ── ハデス：冥府の門を開く。亡者が湧き、裁きの柱が降る ──
+    case 'underworld':
+      if(f===1){ popText(e.x,e.y-e.h-28,'冥府開門','#a878ff',true); sfx.boss(e.x); flashAt(3,'168,120,255',e.x,e.y-60); }
+      if(f<24 && f%3===0){ spark(e.x+rnd(-70,70), e.y-rnd(0,40), '#a878ff', 3, 7); dust(e.x+rnd(-60,60), e.y, 2); }
+      if(f===26){ bSummon(e); bSummon(e); shake=Math.max(shake,12); }   // 亡者を4体呼ぶ
+      if(f===44||f===62||f===80){ const tp=nearestPlayerTo(e.x);
+        for(let k=0;k<3;k++) hazards.push({kind:'egrave', x:clamp(tp.x+(k-1)*130+rnd(-24,24),camX+30,camX+W-30),
+          y:tp.y, warn:24, t:0, life:56, dmg:t.dmg+2, col:'#8a5aff'}); }
+      break;
+    // ── ゼウス：雷霆を投げ、折り返して戻ってくる ──
+    case 'keraunos':
+      if(f===1){ popText(e.x,e.y-e.h-24,'雷霆一擲！','#fff6c0',true); sfx.charge(e.x); }
+      if(f===18){ const dir=nearestPlayerTo(e.x).x<e.x?-1:1;
+        hazards.push({kind:'ebeast', art:'bolt', x:e.x+dir*40, y:e.y, vx:dir*13, hy:52,
+          t:0, life:70, turn:32, dmg:t.dmg+2, kn:true, col:'#fff6c0'});
+        flashAt(3,'255,246,192',e.x,e.y-60); sfx.thunder(e.x); shake=Math.max(shake,9); }
+      break;
+    // ── ゼウス：端から順に落ちる雷の列。走って抜けるしかない ──
+    case 'judgeBolts':
+      if(f===1){ popText(e.x,e.y-e.h-28,'神罰の雷列！','#fff6c0',true); sfx.beamCharge(e.x,0.5); }
+      if(f>=10 && f<=76 && (f-10)%6===0){ const k=(f-10)/6;          // 端から等間隔に、順番に落とす
+        const dir=(e.facing>0)?1:-1;
+        const x0=(dir>0)? camX+40 : camX+W-40;
+        hazards.push({kind:'ebolt', x:clamp(x0+dir*k*74, camX+30, camX+W-30), y:LANE, t:0, life:46, dmg:t.dmg}); }
+      break;
+    // ── ゼウス：天へ上がり、落雷をまとって落ちてくる ──
+    case 'stormFall':
+      if(f===1){ popText(e.x,e.y-e.h-28,'雷神降臨！','#fff6c0',true); sfx.rise(e.x); triggerSlow(16); }
+      if(f<18){ e.z+=17; e.vz=0; if(f%2===0) spark(e.x+rnd(-26,26), e.y-e.z, '#fff6c0', 3, 8); }
+      else if(f<30){ e.vz=0; const tp=nearestPlayerTo(e.x);          // 高度は上昇で得たぶんだけ
+        e.x+=clamp(tp.x-e.x,-13,13); e.facing=tp.x<e.x?-1:1;
+        if(f%3===0){ ring(e.x,LANE,'#fff6c0'); spark(e.x,e.y-e.z,'#fff',4,9); } }
+      else if(f<48){ e.z=Math.max(0,e.z-20);
+        if(e.z<=0 && !e.slammed){ e.slammed=true;
+          shake=Math.max(shake,20); quake=Math.max(quake,26); flashAt(5,'255,246,192',e.x,e.y-40);
+          hitStop=Math.max(hitStop,9); sfx.thunder(e.x); sfx.big(e.x);
+          bShock(e,190,t.dmg+8);
+          for(let k=-2;k<=2;k++) if(k) hazards.push({kind:'ebolt', x:clamp(e.x+k*96,camX+30,camX+W-30),
+            y:LANE, t:0, life:44, dmg:t.dmg}); } }
+      break;
     // ── 腕試しボス：本人の ATK 定義をそのまま実行する ──
     case 'heroArt': heroRunAttack(e); break;
     // ── ラスボス：収束させた光を極太のビームとして撃ち抜く ──
