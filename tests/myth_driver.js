@@ -367,6 +367,52 @@ const DRIVER = `
       +'体召喚／雷霆は折り返す／津波は跳べば回避)');
   }
 
+  // ===== 11) 神のボス戦が「重いが長すぎない」こと =====
+  // 実測で、神は三周目のボスの 4〜5倍の体力を持ち、AI では 4〜6分かけても倒せなかった。
+  // 一方 危険度は 2.6倍。固さで水増しせず、危険さで難しくする形に収める
+  {
+    const sv=lap;
+    const eff=function(L,k){ lap=L; enemies.length=0; spawnEnemy(k,camX+400,LANE);
+      const e=enemies[0]; const v=e.maxHp; enemies.length=0; return v; };
+    const A3=['greyking','ufoboss','bioblob'].map(function(k){ return eff(3,k); });
+    const G4=['poseidon','hades','zeus'].map(function(k){ return eff(4,k); });
+    lap=sv; enemies.length=0;
+    const avg=function(a){ return a.reduce(function(x,y){return x+y;},0)/a.length; };
+    const a3=avg(A3), g4=avg(G4);
+    // 三周目のボスより固いこと（最終周のボスが軽いのはおかしい）
+    if(!(g4>a3*1.05)) throw new Error('神が三周目のボスより固くない: '+Math.round(g4)+' vs '+Math.round(a3));
+    // ただし固さで水増ししないこと。2倍を超えると AI で4分を超える戦いになる
+    if(!(g4<=a3*2.0)) throw new Error('神が固すぎる（長いだけの戦いになる）: '
+      +Math.round(g4)+' vs '+Math.round(a3)+'（'+(g4/a3).toFixed(2)+'倍）');
+    console.log('神の体力 OK (三周目のボスの '+(g4/a3).toFixed(2)+'倍＝上限2.0倍、'
+      +G4.map(function(v){return Math.round(v);}).join('/')+')');
+
+    // 大技には反撃の窓（技後の隙）が要る。既定は moveMax*0.35 を 8〜15F に丸めるので、
+    // 100F級の大技でも 15F しか隙が無く、与ダメが三周目の6割まで落ちていた
+    const BIG=['tsunami','seaBeasts','whaleRide','deadRise','soulChain','underworld',
+               'keraunos','judgeBolts','stormFall'];
+    BIG.forEach(function(mv){
+      const rec=MV[mv].rec;
+      if(!rec) throw new Error(mv+' に技後の隙(rec)が無い（既定の15Fでは反撃できない）');
+      if(!(rec>=25)) throw new Error(mv+' の隙が短すぎる: '+rec+'F'); });
+    console.log('大技の隙 OK (9技すべてに '+Math.min.apply(null,BIG.map(function(m){return MV[m].rec;}))
+      +'F 以上の反撃の窓)');
+
+    // 亡者を呼び続けると本体へ攻撃が届かない。実測でハデスの与ダメが他の1/3まで落ちていた
+    {
+      setupRoster('inu'); startGame(); state='play'; lap=4;
+      const p=players[0]; player=p; p.x=camX+300;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      spawnEnemy('hades', p.x+240, LANE); const boss=enemies[0];
+      for(let k=0;k<8;k++) bSummon(boss);                 // 何度呼んでも増え続けないこと
+      const minions=enemies.filter(function(e){ return !e.dead && !ETYPE[e.type].boss; }).length;
+      if(!(minions<=5)) throw new Error('召喚に上限が無い: '+minions+'体');
+      if(!(minions>=2)) throw new Error('そもそも召喚できていない: '+minions+'体');
+      lap=sv; enemies.length=0;
+      console.log('召喚の上限 OK (8回呼んでも '+minions+'体まで)');
+    }
+  }
+
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

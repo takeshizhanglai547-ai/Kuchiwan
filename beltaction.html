@@ -4412,11 +4412,11 @@ const ETYPE={
   bioblob:{hp:1000,sp:1.1,dmg:23,atkR:96,w:176,h:170,c1:'#8fffb0',c2:'#3aa860',c3:'#134a2a',score:8000,boss:true,bossKind:'bioblob',weapon:'none',accent:'#c8ffd8',alien:true,name:'増殖体バイオブロブ'},
   // ---- 三周目・真ボス：宇宙皇帝ワンダルク（第一形態→真の姿）----
   // ---- 四周目・神話のボス ----
-  poseidon:{hp:3200,sp:1.9,dmg:32,atkR:110,w:96,h:168,c1:'#7fd8e6',c2:'#2f88a8',c3:'#0e4258',score:40000,
+  poseidon:{hp:1150,sp:1.9,dmg:32,atkR:110,w:96,h:168,c1:'#7fd8e6',c2:'#2f88a8',c3:'#0e4258',score:40000,
     boss:true,bossKind:'poseidon',weapon:'spear',accent:'#d6ffff',myth:true,name:'海神ポセイドン'},
-  hades:{hp:3600,sp:2.0,dmg:34,atkR:104,w:92,h:172,c1:'#8f7fc8',c2:'#4a3a80',c3:'#1a1230',score:46000,
+  hades:{hp:950,sp:2.0,dmg:34,atkR:104,w:92,h:172,c1:'#8f7fc8',c2:'#4a3a80',c3:'#1a1230',score:46000,
     boss:true,bossKind:'hades',weapon:'dark',accent:'#c8b8ff',myth:true,name:'冥王ハデス'},
-  zeus:{hp:4600,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:80000,
+  zeus:{hp:1250,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:80000,
     boss:true,bossKind:'zeus',weapon:'holy',accent:'#fff6c0',myth:true,finalBoss:true,trueBoss:true,name:'雷神ゼウス'},
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
@@ -5370,17 +5370,17 @@ const MV={
   heroArt:{tele:9,dur:20,minR:0,maxR:1400},
   // ── 神話の三柱：神格ごとの大技 ──────────────────────────────
   //   ポセイドン＝水そのものを動かす（跳んで越える／横に避ける）
-  tsunami:{tele:36,dur:96,minR:0,maxR:1400,danger:1},        // 津波：跳べば越えられる水の壁
-  seaBeasts:{tele:30,dur:86,minR:60,maxR:1400},              // 海獣召喚：サメとシャチが突進
-  whaleRide:{tele:28,dur:104,minR:0,maxR:1200,danger:1},     // 鯨駕：空から鯨ごと突っ込む
+  tsunami:{tele:36,dur:96,rec:40,minR:0,maxR:1400,danger:1},        // 津波：跳べば越えられる水の壁
+  seaBeasts:{tele:30,dur:86,rec:32,minR:60,maxR:1400},              // 海獣召喚：サメとシャチが突進
+  whaleRide:{tele:28,dur:104,rec:50,minR:0,maxR:1200,danger:1},     // 鯨駕：空から鯨ごと突っ込む
   //   ハデス＝死者を使う（足元を見る／囲みを解く）
-  deadRise:{tele:32,dur:104,minR:0,maxR:1400},               // 死者の群れ：地面から次々に噴き上がる
-  soulChain:{tele:28,dur:76,minR:60,maxR:1200},              // 魂の鎖：絡みついて足を止める
-  underworld:{tele:34,dur:112,minR:0,maxR:1400,danger:1},    // 冥府開門：亡者を呼び出し、裁きの柱を落とす
+  deadRise:{tele:32,dur:104,rec:36,minR:0,maxR:1400},               // 死者の群れ：地面から次々に噴き上がる
+  soulChain:{tele:28,dur:76,rec:26,minR:60,maxR:1200},              // 魂の鎖：絡みついて足を止める
+  underworld:{tele:34,dur:112,rec:46,minR:0,maxR:1400,danger:1},    // 冥府開門：亡者を呼び出し、裁きの柱を落とす
   //   ゼウス＝雷そのもの（位置を読ませない）
-  keraunos:{tele:26,dur:88,minR:120,maxR:1300},              // 雷霆投擲：投げて戻る
-  judgeBolts:{tele:30,dur:104,minR:0,maxR:1400,danger:1},    // 神罰の雷列：端から順に落ちてくる
-  stormFall:{tele:32,dur:96,minR:0,maxR:1000,danger:1},      // 雷神降臨：跳び上がって落雷ごと落ちる
+  keraunos:{tele:26,dur:88,rec:30,minR:120,maxR:1300},              // 雷霆投擲：投げて戻る
+  judgeBolts:{tele:30,dur:104,rec:40,minR:0,maxR:1400,danger:1},    // 神罰の雷列：端から順に落ちてくる
+  stormFall:{tele:32,dur:96,rec:50,minR:0,maxR:1000,danger:1},      // 雷神降臨：跳び上がって落雷ごと落ちる
   // ── ボスの個性を出す大技 ──
   megaBeam:{tele:44,dur:86,minR:0,maxR:1400,danger:1},        // ラスボス：極太ビーム
   skyDive:{tele:22,dur:66,minR:0,maxR:840,danger:1},          // 剣士：跳び上がってからの急降下突進
@@ -5421,7 +5421,12 @@ function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, 
   sfx.swing(0, esndOf(e), e.x); }
 function bMeteor(e,n,dmg,col){ const tp=nearestPlayerTo(e.x); for(let i=0;i<n;i++) spawnProj(tp.x+rnd(-180,180), clamp(tp.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
 function bBeam(e,dmg,col){ const t=ETYPE[e.type], dir=e.facing; spawnProj(e.x+dir*30, e.y, dir*13, 0, {dmg,color:col||t.accent,r:18,life:100,zz:60}); sfx.boss(e.x); shake=Math.max(shake,5); }
-function bSummon(e){ for(let i=0;i<2;i++) spawnEnemy(lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
+function bSummon(e){
+  // 呼びすぎると本体が壁の向こうになり、ボス戦が「取り巻きを延々倒す作業」になる。
+  // 実測でハデスの与ダメが他のボスの 1/3 まで落ちていた
+  let live=0; for(const o of enemies) if(!o.dead && !ETYPE[o.type].boss) live++;
+  if(live>=4) return;
+  for(let i=0;i<2;i++) spawnEnemy(lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
 function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.7, dir>0?-1.05:Math.PI-1.05, dir>0?1.05:Math.PI+1.05, '#ff4d6a');
