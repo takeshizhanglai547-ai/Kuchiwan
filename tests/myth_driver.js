@@ -294,6 +294,79 @@ const DRIVER = `
     console.log('連携の追撃 OK (通ると次の一体へ繋がる／三周目では繋がらない／同時上限 神話3・従来2)');
   }
 
+  // ===== 10) 三柱の神の専用技 =====
+  // 汎用のボス技を並べ替えただけでは「三叉槍を持った紫のボス」で終わる。
+  // 神格ごとの大技が本編と同じ入口で走り、専用の危険物を出すことを実測する
+  {
+    const SIG={poseidon:['tsunami','seaBeasts','whaleRide'],
+               hades:['deadRise','soulChain','underworld'],
+               zeus:['keraunos','judgeBolts','stormFall']};
+    // 技表に入っていること／他の神と被っていないこと
+    const all=[];
+    Object.keys(SIG).forEach(function(g){
+      SIG[g].forEach(function(mv){
+        if(!MV[mv]) throw new Error(mv+' が MV に無い');
+        if((BOSSMOVES[g]||[]).indexOf(mv)<0) throw new Error(g+' の技表に '+mv+' が入っていない');
+        all.push(mv); }); });
+    if(new Set(all).size!==9) throw new Error('専用技が神どうしで重複している');
+    Object.keys(SIG).forEach(function(g){
+      Object.keys(SIG).forEach(function(o){ if(g===o) return;
+        SIG[o].forEach(function(mv){ if((BOSSMOVES[g]||[]).indexOf(mv)>=0)
+          throw new Error(g+' が '+o+' の専用技 '+mv+' を持っている'); }); }); });
+
+    // 本編と同じ入口で走らせ、専用の危険物とダメージが出ることを確かめる
+    const EXPECT={tsunami:'ewave', seaBeasts:'ebeast', whaleRide:'ewave',
+                  deadRise:'egrave', soulChain:'ebeast', underworld:'egrave',
+                  keraunos:'ebeast', judgeBolts:'ebolt', stormFall:'ebolt'};
+    const runMove=function(god,mv,opt){
+      opt=opt||{};
+      setupRoster('inu'); startGame(); state='play'; lap=4;
+      const p=players[0]; player=p; p.x=camX+300; p.facing=1;
+      p.hp=p.maxHp=999999; p.invuln=0; p.defMul=1;
+      enemies.length=0; encounters.length=0; particles.length=0; hazards.length=0;
+      spawnEnemy(god, p.x+240, LANE); const e=enemies[0];
+      e.hp=e.maxHp=999999; e.stun=0; e.thinkCd=999999; e.facing=-1;
+      const cfg=MV[mv];
+      e.moveName=mv; e.danger=!!cfg.danger; e.state='bwind';
+      e.moveT=cfg.tele; e.teleMax=cfg.tele; e.moveMax=cfg.dur; e.slammed=false; e.telegraph=cfg.tele;
+      const hp0=p.hp, kinds={}, seen={}; let maxZ=0, foes0=enemies.length, foesMax=foes0, vxSeen={};
+      for(let f=0; f<cfg.tele+cfg.dur+40; f++){
+        if(opt.hover){ p.z=opt.hover; p.state='jump'; p.vz=0; }   // 跳んだままにする
+        hitStop=0; slowmo=0; step(1);
+        hazards.forEach(function(h){                     // 同じ危険物を二重に数えない
+          if(!seen[h.kind]) seen[h.kind]=new Set();
+          seen[h.kind].add(h); kinds[h.kind]=seen[h.kind].size;
+          if(h.art) vxSeen[h.art]=(vxSeen[h.art]||[]).concat([Math.sign(h.vx)]); });
+        maxZ=Math.max(maxZ,e.z||0); foesMax=Math.max(foesMax,enemies.length); }
+      return {dmg:hp0-p.hp, kinds:kinds, maxZ:maxZ, foes:foesMax-foes0, vx:vxSeen}; };
+
+    const got={};
+    Object.keys(SIG).forEach(function(g){ SIG[g].forEach(function(mv){
+      const r=runMove(g,mv); got[mv]=r;
+      if(!(r.dmg>0)) throw new Error(g+' の '+mv+' が一度も当たらない');
+      if(!r.kinds[EXPECT[mv]]) throw new Error(mv+' が '+EXPECT[mv]+' を出していない: '
+        +(Object.keys(r.kinds).join(',')||'なし')); }); });
+
+    // 津波は二の波まで出ること（1本を別の危険物に差し替えても素通りしないよう本数で見る）
+    { const waves=got.tsunami.kinds.ewave||0;
+      if(!(waves>=2)) throw new Error('津波が二の波まで出ていない: '+waves+'本'); }
+    // 空から突っ込む技は実際に飛び上がること（その場で殴るのと区別する）
+    if(!(got.whaleRide.maxZ>200)) throw new Error('鯨駕が飛び上がっていない: '+Math.round(got.whaleRide.maxZ));
+    if(!(got.stormFall.maxZ>200)) throw new Error('雷神降臨が飛び上がっていない: '+Math.round(got.stormFall.maxZ));
+    // 冥府開門は亡者を呼ぶ
+    if(!(got.underworld.foes>=2)) throw new Error('冥府開門で亡者が湧かない: '+got.underworld.foes+'体');
+    // 雷霆は投げて戻る（進行方向の符号が途中で反転する）
+    { const sgn=got.keraunos.vx.bolt||[];
+      if(new Set(sgn).size<2) throw new Error('雷霆が折り返して戻ってこない'); }
+    // 津波は跳べば越えられる（避け方が用意されていない大技にしない）
+    { const air=runMove('poseidon','tsunami',{hover:150});
+      if(air.dmg>0) throw new Error('津波が跳んでも当たる（避けようが無い）: '+air.dmg);
+      if(!air.kinds.ewave) throw new Error('津波そのものが出ていない'); }
+    console.log('神の専用技 OK (9技すべて命中／鯨駕'+Math.round(got.whaleRide.maxZ)
+      +'px・降臨'+Math.round(got.stormFall.maxZ)+'px 上昇／冥府開門で'+got.underworld.foes
+      +'体召喚／雷霆は折り返す／津波は跳べば回避)');
+  }
+
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
