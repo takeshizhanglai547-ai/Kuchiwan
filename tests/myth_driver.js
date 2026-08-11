@@ -230,6 +230,70 @@ const DRIVER = `
     console.log('神話の音と背景 OK (専用ボス曲 bossmyth／章ごとに別テーマ '+th.join('/')+')');
   }
 
+  // ===== 8) 神話の雑魚が実際に三周目より脅威であること =====
+  // 通しプレイの実測で、当初の四周目は三周目と同じ被ダメージ量（1.01倍）しかなく、
+  // 違いは「1発が重く、敵が3.6倍固い」だけ＝難しいのではなく長いだけだった。
+  // 実際にダメージを決める経路（ZAKO_DMG×階級×難易度）を通して突き合わせる
+  {
+    const sv=lap;
+    const eff=function(L,pool){ lap=L; let d=0,h=0;
+      pool.forEach(function(k){ enemies.length=0; spawnEnemy(k,camX+400,LANE);
+        const e=enemies[0];
+        d+=ETYPE[k].dmg*ZAKO_DMG*zakoBuffMul(e)*foeAtkMul(e);
+        h+=ETYPE[k].hp*diffHpMul(); });
+      return {d:d/pool.length, h:h/pool.length}; };
+    const A=eff(3,ALIEN_ZAKO_POOL), M=eff(4,MYTH_ZAKO_POOL);
+    lap=sv; enemies.length=0;
+    if(!(M.d>=A.d*1.35)) throw new Error('神話の雑魚が三周目より重くない: 一撃 '
+      +M.d.toFixed(1)+' vs '+A.d.toFixed(1)+'（'+(M.d/A.d).toFixed(2)+'倍）');
+    // 平均だけを見ると、1体を骨抜きにされても他が埋めて素通りする。
+    // 全個体が三周目の平均を上回っていることまで要求する
+    { lap=4; let worst=1e9, wk='';
+      MYTH_ZAKO_POOL.forEach(function(k){ enemies.length=0; spawnEnemy(k,camX+400,LANE);
+        const e=enemies[0], d=ETYPE[k].dmg*ZAKO_DMG*zakoBuffMul(e)*foeAtkMul(e);
+        if(d<worst){ worst=d; wk=k; } });
+      lap=sv; enemies.length=0;
+      // 「平均より上」だけだと、1体を半分にされても 1.1倍 で残って素通りする。
+      // 全個体にプール同様の 1.35倍 を要求する
+      if(!(worst>=A.d*1.35)) throw new Error(wk+' が三周目の平均の1.35倍に届かない: '
+        +worst.toFixed(1)+' vs '+A.d.toFixed(1)+'（'+(worst/A.d).toFixed(2)+'倍）'); }
+    // 固さで水増ししていないこと。HPだけ上げると「難しい」ではなく「長い」になる
+    if(!(M.h<=A.h*2.2)) throw new Error('神話の雑魚が固すぎる（長いだけになる）: HP '
+      +M.h.toFixed(0)+' vs '+A.h.toFixed(0)+'（'+(M.h/A.h).toFixed(2)+'倍）');
+    console.log('神話の脅威 OK (一撃 '+(M.d/A.d).toFixed(2)+'倍 / HP '+(M.h/A.h).toFixed(2)+'倍＝上限2.2倍)');
+  }
+
+  // ===== 9) 連携の追撃：一発通ったら次の一体へ攻撃権が渡ること =====
+  // 単に同時攻撃数を絞るだけだと手数が減って間延びする。
+  // 「硬直に重なる2発目」を作るのがこの章の連携の核
+  {
+    setupRoster('inu'); startGame(); state='play'; lap=4;
+    const p=players[0]; player=p; p.x=camX+420; p.hp=p.maxHp=999999; p.invuln=0; p.defMul=1;
+    enemies.length=0; encounters.length=0; particles.length=0;
+    for(let i=0;i<4;i++) spawnEnemy('mythblade', p.x+60+i*36, LANE);
+    enemies.forEach(function(e){ e.hp=e.maxHp=999999; e.facing=-1; e.sqHold=0; e.stun=0; });
+    const a=enemies[0];
+    const held0=enemies.filter(function(e){ return e.sqHold>gf; }).length;
+    const ok=enemyAttackHit(a, ATK_VAR[0], ATK_VAR[0].hits[0]);
+    if(!ok) throw new Error('前提が崩れている: 先頭の攻撃が当たっていない');
+    const relayed=enemies.filter(function(e){ return e!==a && e.sqHold>gf; }).length;
+    if(!(relayed>held0)) throw new Error('攻撃が通っても次の一体へ繋がらない（追撃が無い）');
+    // 三周目では起きないこと（神話の章だけの挙動）。
+    // 直前の一撃で無敵が残っていると2発目が当たらず、ゲートの有無に関わらず
+    // 「繋がらなかった」ことになってしまうので、無敵を解いてから確かめる
+    lap=3; enemies.forEach(function(e){ e.sqHold=0; }); p.invuln=0;
+    const ok3=enemyAttackHit(a, ATK_VAR[0], ATK_VAR[0].hits[0]);
+    if(!ok3) throw new Error('三周目の検査で攻撃が当たっていない（無敵が残っている）');
+    const r3=enemies.filter(function(e){ return e!==a && e.sqHold>gf; }).length;
+    lap=4;
+    if(r3>0) throw new Error('三周目でも追撃が繋がっている（神話専用のはず）');
+    // 同時に仕掛ける上限は 3（従来は2で、賢いつもりが手数を削っていた）
+    if(squadCap()!==3) throw new Error('神話の同時攻撃の上限が3でない: '+squadCap());
+    lap=3; if(squadCap()!==2) throw new Error('三周目の上限まで変わっている: '+squadCap());
+    lap=4;
+    console.log('連携の追撃 OK (通ると次の一体へ繋がる／三周目では繋がらない／同時上限 神話3・従来2)');
+  }
+
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
