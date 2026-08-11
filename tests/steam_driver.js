@@ -327,6 +327,46 @@ const DRIVER = `
       if(!sB||!sG) throw new Error('描画の倍率を取れなかった');
       if(!(sB/sG>=1.5)) throw new Error('drawEnemy が体格の倍率を掛けていない: '
         +sB.toFixed(2)+' vs ガルム '+sG.toFixed(2)); }
+    // ── 周回が進むほどボスが大きく見えること ──
+    // 実測で 一周目2.68倍 → 二周目2.25倍 → 三周目2.06倍 と、途中で縮んでいた。
+    // 円盤母艦が1.68倍、糸姫が1.35倍で、1面ボスのガルム(2.04倍)より小さかった
+    {
+      const dispatch=function(k){ const t=ETYPE[k], bk=t.bossKind;
+        return GOD_ART[bk] ? drawGod
+          : (k==='chamurus') ? drawChamurus : (k==='chamboss') ? drawChamBoss
+          : (bk==='kamaboss'||bk==='queenbee'||bk==='kuwaboss'||bk==='spidboss') ? drawBugBoss
+          : (t.alien) ? drawAlienBoss
+          : (bk==='emperor') ? drawBoss : (bk==='wolfking') ? drawWolfKing
+          : (bk==='darkknight') ? drawDarkKnight : drawBigBoss; };
+      const sizeOf=function(k){
+        enemies.length=0; spawnEnemy(k, camX+400, LANE);
+        const e=enemies[0]; e.state='idle'; e.anim=0; e.hp=e.maxHp=99999;
+        const v=(-bodyTop(function(){ dispatch(k)(e); }))*(ETYPE[k].gsc||1);
+        enemies.length=0; return v; };
+      // プレイヤーは直前のテストで姿勢が残ると高さが動くので、基準は1面ボスのガルムに取る
+      // （そもそもの不具合が「二周目以降のボスがガルムより小さい」だった）
+      perfTier=1; const garmH=sizeOf('garm'); perfTier=0;
+      const LAPS=[
+        ['一周目',['garm','gigas','vesper','moloch','cerbe','glaton','boss','boss2','boss3']],
+        ['二周目',['kamaboss','queenbee','kuwaboss','spidboss','chamboss','chamurus']],
+        ['三周目',['greyking','ufoboss','bioblob']],
+        ['四周目',['poseidon','hades','zeus']]];
+      perfTier=1;
+      const avgs=LAPS.map(function(g){
+        const rs=g[1].map(sizeOf);
+        const lo=Math.min.apply(null,rs), name=g[1][rs.indexOf(lo)];
+        // 1面ボスのガルム(2.04倍)より小さいボスを二周目以降に置かない
+        if(g[0]!=='一周目' && lo < garmH*1.05)
+          throw new Error(g[0]+' の '+name+' が1面ボスのガルムより小さい: '
+            +(lo/garmH).toFixed(2)+'倍');
+        return {n:g[0], a:rs.reduce(function(x,y){return x+y;},0)/rs.length}; });
+      perfTier=0;
+      for(let i=1;i<avgs.length;i++)
+        if(!(avgs[i].a>avgs[i-1].a)) throw new Error(avgs[i].n+'のボスが'+avgs[i-1].n+'より大きくない: '
+          +avgs[i].a.toFixed(2)+' vs '+avgs[i-1].a.toFixed(2));
+      console.log('周回ごとの体格 OK (ガルムを1.00として '
+        +avgs.map(function(x){return x.n+' '+(x.a/garmH).toFixed(2);}).join(' → ')+')');
+    }
     console.log('ラスボスの巨大感 OK (体の高さ ガルム'+HB.garm.toFixed(0)+' / 大帝'+HB.boss.toFixed(0)
       +' / 異形狼'+HB.boss2.toFixed(0)+' / 暗黒剣士'+HB.boss3.toFixed(0)+' ＝ガルムの'
       +(HB.boss3/HB.garm).toFixed(2)+'倍)');
