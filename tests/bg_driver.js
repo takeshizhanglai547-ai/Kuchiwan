@@ -133,6 +133,42 @@ const DRIVER = `
     if(birds.length>before) throw new Error('海中に鳥が飛んでいる');
     console.log('海中の空 OK (雲0個・鳥0羽)'); }
 
+  // ===== 8) 二つの町テーマが同じ絵になっていないこと =====
+  // 残る11テーマを点検した結果、蟲4種は flower/comb/web/shroom、宇宙3種は
+  // saucer/corridor/core で分岐していて描き分けられていた。
+  // 唯一「王都」と「黄昏の街」だけが城まで含めて同じ絵で、しかも夕暮れなのに
+  // 窓が真昼のままだった（灯りの条件が stars だけで、stars:0 の街は点かない）
+  {
+    const idx=function(f){ for(let i=0;i<STAGE_THEME.length;i++) if(f(STAGE_THEME[i])) return i; return -1; };
+    const townIdx=[]; STAGE_THEME.forEach(function(T,i){ if(T.town) townIdx.push(i); });
+    if(townIdx.length!==2) throw new Error('町テーマが2つでない: '+townIdx.length);
+    const realCastle=drawCastle, realGate=drawMarketGate, realBuild=drawBuildings;
+    const seen={};
+    const probe=function(i){
+      const log={castle:0,gate:0,lit:null};
+      drawCastle=function(){ log.castle++; };
+      drawMarketGate=function(){ log.gate++; };
+      drawBuildings=function(l){ log.lit=!!l; };
+      try { const sv=STAGE2THEME[stage];
+        STAGE2THEME[stage]=i; bgCacheTheme=-1;
+        shape(function(){ drawBackground(); });
+        STAGE2THEME[stage]=sv; bgCacheTheme=-1; }
+      finally { drawCastle=realCastle; drawMarketGate=realGate; drawBuildings=realBuild; }
+      return log; };
+    const a=probe(townIdx[0]), b=probe(townIdx[1]);
+    // 片方が城、もう片方が市場の門であること（同じ建物を色替えしただけにしない）
+    if(!((a.castle&&b.gate)||(a.gate&&b.castle)))
+      throw new Error('二つの町が同じ建物を出している: 城'+a.castle+'/'+a.gate+' と 城'+b.castle+'/'+b.gate);
+    // 夕暮れの街は窓に灯りが入ること
+    const duskI=STAGE_THEME[townIdx[0]].lit? townIdx[0] : (STAGE_THEME[townIdx[1]].lit? townIdx[1] : -1);
+    if(duskI<0) throw new Error('灯りの点く町テーマが無い（夕暮れでも真昼の窓のまま）');
+    const dusk=probe(duskI);
+    if(dusk.lit!==true) throw new Error('灯りを指定した町で窓が点いていない');
+    const dayI=(duskI===townIdx[0])?townIdx[1]:townIdx[0];
+    if(probe(dayI).lit!==false) throw new Error('昼の町まで窓が点いている');
+    console.log('二つの町 OK (片方は城・片方は市場の門／夕暮れだけ窓に灯りが入る)');
+  }
+
   console.log('BACKGROUND LAYOUT TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

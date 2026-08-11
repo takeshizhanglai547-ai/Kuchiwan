@@ -6917,7 +6917,7 @@ const STAGE_THEME=[
     g:['#9a8f7e','#7a7062','#544b40'], cob:['#857a6a','#776d5e'], vig:'rgba(10,6,20,.42)',
     amb:{shape:'petal',color:'rgba(255,210,228,.9)',rate:0.5,max:34,vy:0.5,wind:-0.2,r0:2.5,r1:5,glow:false,alpha:.85} },
   // 2: 黄昏の街
-  { town:1, gsnd:'stone', asnd:'wind', sky:['#f6a24a','#f6c074','#f3d9a0','#f0e7c8'], sun:'rgba(255,220,150,', sunX:0.5,sunY:120, rays:0.16, tint:'rgba(255,150,70,.38)',
+  { town:1, market:1, lit:1, gsnd:'stone', asnd:'wind', sky:['#f6a24a','#f6c074','#f3d9a0','#f0e7c8'], sun:'rgba(255,220,150,', sunX:0.5,sunY:120, rays:0.16, tint:'rgba(255,150,70,.38)',
     haze:'rgba(240,180,120,.30)', fog:'rgba(238,200,150,.5)', stars:0, tower:'#9a7a72',
     g:['#8a6f54','#6a5240','#3f3024'], cob:['#7d6450','#6a5142'], vig:'rgba(40,12,30,.46)',
     amb:{shape:'spark',color:'rgba(255,200,120,.8)',rate:0.4,max:26,vy:-0.25,wind:0.15,r0:1.2,r1:2.6,glow:true,alpha:.7} },
@@ -7087,10 +7087,13 @@ function drawBackground(){
   else {
     drawMountains();
     if(T.town){   // 王都・城下町：城と塔と町並み
-      drawCastle((W*0.5)-camX*0.28,60);
+      // 二つの町テーマが城まで含めて同じ絵だったので、黄昏の街は市場の門と天幕にする
+      if(T.market) drawMarketGate((W*0.5)-camX*0.28,120);
+      else drawCastle((W*0.5)-camX*0.28,60);
       for(let i=0;i<12;i++){ const x=((i*250-camX*0.42)%(W+250)+W+250)%(W+250)-125; drawTower(x,158,46,150,T.tower,true); }
       ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
-      drawBuildings(!!T.stars); drawLampRow(); }
+      // 窓と街灯の灯り。stars だけを条件にしていたので、夕暮れの街が真昼の窓のままだった
+      drawBuildings(!!(T.stars||T.lit)); drawLampRow(); }
     else {        // 森・雪山・渓谷など：城と商店の看板を出さず、地形のシルエットだけにする
       ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,150,W,GROUND_TOP-150);
       drawLand(T); }
@@ -7806,6 +7809,30 @@ function drawTower(x,y,w,h,col,haze){ const g=ctx.createLinearGradient(x,0,x+w,0
   ctx.fillStyle=shade('#3b6fb5',-25); ctx.beginPath(); ctx.moveTo(x+w/2,y-46); ctx.lineTo(x+w+6,y); ctx.lineTo(x+w/2,y); ctx.fill();
   ctx.strokeStyle='#c0392b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x+w/2,y-46); ctx.lineTo(x+w/2,y-62); ctx.stroke();
   ctx.fillStyle='#d23'; ctx.beginPath(); ctx.moveTo(x+w/2,y-62); ctx.lineTo(x+w/2+15,y-57); ctx.lineTo(x+w/2,y-52); ctx.fill(); }
+// 城下町の市場門。王都と同じ城を出すと、二つの町テーマが時間帯の違いだけになる
+function drawMarketGate(cx,top){ ctx.save();
+  const H0=GROUND_TOP-top;
+  ctx.fillStyle='#6f5a48';                                   // 石造りの門柱とアーチ
+  ctx.fillRect(cx-136,top+38,40,H0-38); ctx.fillRect(cx+96,top+38,40,H0-38);
+  ctx.beginPath(); ctx.moveTo(cx-136,top+38);
+  ctx.quadraticCurveTo(cx,top-46,cx+136,top+38);
+  ctx.lineTo(cx+136,top+74); ctx.quadraticCurveTo(cx,top-4,cx-136,top+74); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#8a7159'; ctx.fillRect(cx-150,top+18,300,22);   // 冠木
+  ctx.fillStyle='#5a4838';
+  for(let k=-4;k<=4;k++) ctx.fillRect(cx+k*32-7,top+2,14,18);    // 胸壁
+  // 吊り下がる商家の旗。風で揺れる
+  const cols=['#b5503a','#3f7a5a','#2f5d8a','#a8823a'];
+  for(let k=-3;k<=3;k++){ const bx=cx+k*38, sw=Math.sin(gf*0.04+k)*4;
+    ctx.fillStyle=cols[((k%4)+4)%4];
+    ctx.beginPath(); ctx.moveTo(bx-11,top+74); ctx.lineTo(bx+11,top+74);
+    ctx.lineTo(bx+11+sw,top+128); ctx.lineTo(bx,top+116); ctx.lineTo(bx-11+sw,top+128); ctx.closePath(); ctx.fill(); }
+  // 門の内側に並ぶ市の天幕
+  for(let k=-2;k<=2;k++){ const sx2=cx+k*54;
+    ctx.fillStyle=(k%2)?'#c8563e':'#d9b45a';
+    ctx.beginPath(); ctx.moveTo(sx2-26,GROUND_TOP-56); ctx.lineTo(sx2,GROUND_TOP-84); ctx.lineTo(sx2+26,GROUND_TOP-56); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(sx2-24,GROUND_TOP-56,48,6); }
+  ctx.restore();
+}
 function drawCastle(cx,top){ ctx.save();
   drawTower(cx-150,top+30,60,210,'#9aa6bd'); drawTower(cx+90,top+30,60,210,'#9aa6bd');
   const g=ctx.createLinearGradient(cx-70,0,cx+70,0); g.addColorStop(0,'#bcc6da'); g.addColorStop(1,'#94a0b8');
