@@ -185,6 +185,7 @@ const CEIL_Z = 408;                        // ceiling height (juggle bounces off
 
 let state='title', camX=0, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
+let critCam=0;   // 致命の一撃の演出フレーム（画面を暗く締めて主役だけを立たせる）
 // 全画面フラッシュの色。既定は被弾通知の赤。技ごとに色を指定すると加算合成の発光フラッシュになる
 const FLASH_DEF='255,90,80';
 let flashCol=FLASH_DEF;
@@ -1507,6 +1508,21 @@ function superEcho(x,y,color){
 // 残響の減衰。flash と同じ場所で1フレームに1回だけ進める
 function updateEcho(){ if(echoT>0) echoT--; }
 // 画面に残る余韻。技を撃った場所を中心に、暖色がゆっくり引いていく
+// 致命の一撃の締め。画面のフチを落として、主役と崩れた相手だけを残す
+function drawCritVignette(){
+  if(critCam<=0) return;
+  const p=player, u=clamp(critCam/40,0,1), a=0.62*Math.min(1,u*1.6);
+  const cx=(p.x-camX)+p.facing*24, cy=p.y-70;
+  ctx.save();
+  const g=ctx.createRadialGradient(cx,cy,H*0.16,cx,cy,H*0.92);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(.55,'rgba(0,0,0,'+(a*0.55).toFixed(3)+')');
+  g.addColorStop(1,'rgba(0,0,0,'+a.toFixed(3)+')');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  if(perfTier<2){                                  // 上下に細い帯を入れて「決めの絵」にする
+    const bh=Math.round(H*0.055*Math.min(1,u*2));
+    ctx.fillStyle='rgba(0,0,0,.82)'; ctx.fillRect(0,0,W,bh); ctx.fillRect(0,H-bh,W,bh); }
+  ctx.restore();
+}
 function drawEcho(){
   if(echoT<=0 || perfTier>=2) return;
   const u=echoT/echoMax, a=u*u*0.30;                          // 二乗で落として「引いていく」感じにする
@@ -3162,6 +3178,7 @@ function updatePlayer(){
   if(p.state==='iparry'){ updateIaiParry(); return; }
   if(p.state==='dogret'){ updateWandenCounter(); return; }
   if(p.state==='wthrow'){ updateWandenThrow(); return; }
+  if(p.state==='crit'){ updateCrit(); return; }
   if(p.state==='sgact'){ updateSGAct(); return; }
   if(p.state==='ichimonji'){ updateIchimonji(); return; }
   if(p.state==='roll'){ updateRoll(); return; }
@@ -3575,6 +3592,8 @@ function updatePlayer(){
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
     pressed.atk=false;
+    // 崩れているボスが間合いにいれば、他のどの技よりも先に致命の一撃
+    if(p.z<=0){ const ct=critTarget(p); if(ct){ beginCrit(p,ct); return; } }
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
     const NK=p.kind==='nuko', GD=p.kind==='guard8', WA=p.kind==='watch', WD=p.kind==='wanden';
     if((K.grab||pressed.grab) && p.z<=0){ if(beginSGMove(p)){ pressed.grab=false; return; } }   // 攻撃＋掴み＝キャラ別必殺技
@@ -4652,15 +4671,81 @@ function enemyAtkFx(e,V,seg){ const t=ETYPE[e.type], dir=e.facing;
   if(V.low) ring(ex,e.y,col,{sq:0.20,rMax:t.atkR*0.7});
   if(t.boss||t.charge||V.id==='thrust'){ ring(ex,ey, t.boss?'#d46bff':col); spark(ex,ey,'#ffce6a',8,7); } }
 const BOSS_POISE=20;   // ボスが体勢を崩す（吹っ飛ぶ）までに必要なヒット数
-// 1ヒット分の踏ん張りを削る。規定数に達したら短い「崩壊」ウィンドウを開く
+const CRIT_WINDOW=150; // 崩れてから致命の一撃を入れられる猶予（フレーム）
+const CRIT_REACH=96;   // 致命が届く間合い
+const CRIT_RATE=0.20;  // 与える割合＝最大HPの1/5
+// 1ヒット分の踏ん張りを削る。規定数に達したら「崩れ」を開く。
+// 崩れている間は追撃がそのまま入り、近づいて攻撃すれば致命の一撃になる
 function bossPoiseTick(e){ const T=ETYPE[e.type];
   if(!T.boss || T.tumbles) return;                       // 腕試しの主役ボスは従来どおり素直に吹っ飛ぶ
   if((e.poiseBreak||0)>gf) return;                        // 崩壊中は追撃がそのまま入る
   e.kbHits=(e.kbHits||0)+1; e.kbT=gf;
-  if(e.kbHits>=BOSS_POISE){ e.kbHits=0; e.poiseBreak=gf+40;
+  if(e.kbHits>=BOSS_POISE){ e.kbHits=0; e.poiseBreak=gf+CRIT_WINDOW; e.critReady=gf+CRIT_WINDOW;
+    e.vx=0; e.state='bstagger'; e.stagT=CRIT_WINDOW;      // 膝をつく。技は中断される
+    e.moveT=0; e.moveMax=0; e.telegraph=0;
     popText(e.x,e.y-e.h-24,'体勢崩壊！','#ff6a3c',true);
     ring(e.x,e.y-e.h*0.5,'#ff6a3c'); ring(e.x,e.y-e.h*0.5,'#fff'); spark(e.x,e.y-e.h*0.5,'#ffd24d',24,12);
-    flashAt(4,'255,154,58',e.x,e.y-e.h*0.5); shake=Math.max(shake,8); kick(0,-1,9); punchIn(0.05); sfx.ko(e.x); } }
+    flashAt(4,'255,154,58',e.x,e.y-e.h*0.5); shake=Math.max(shake,8); kick(0,-1,9); punchIn(0.05);
+    triggerSlow(22); sfx.ko(e.x); sfx.rumble(e.x); } }
+// 崩れているボスのうち、いま致命が届く相手を返す
+function critTarget(p){
+  let best=null, bd=1e9;
+  for(const e of enemies){ if(e.dead||e.grabbedBy) continue;
+    if(!((e.critReady||0)>gf) || e.state!=='bstagger') continue;
+    if(Math.abs(e.y-p.y)>46 || e.z>30) continue;
+    const d=Math.abs(e.x-p.x); if(d>CRIT_REACH) continue;
+    if(d<bd){ bd=d; best=e; } }
+  return best;
+}
+// キャラごとの致命の一撃。どれも「掴む → 決める → 突き放す」の三拍子で組む
+const CRIT_ART={
+  inu:   {name:'心の一閃',      col:'#ffe27a', dur:74, hitAt:44},
+  shima: {name:'貫牙・崩拳',    col:'#ffb04a', dur:70, hitAt:42},
+  nuko:  {name:'星霜爆縮',      col:'#d6a6ff', dur:78, hitAt:48},
+  guard8:{name:'零距離メテオ',  col:'#ffd24d', dur:76, hitAt:46},
+  watch: {name:'心臓抜き',      col:'#cfe0f0', dur:70, hitAt:40},
+  wanden:{name:'秘剣・首落とし',dur:80, col:'#e8f4ff', hitAt:50},
+};
+function beginCrit(p,e){
+  const A=CRIT_ART[p.kind]||CRIT_ART.inu;
+  p.state='crit'; p.critT=0; p.critE=e; p.critHit=false;
+  p.invuln=Math.max(p.invuln, A.dur+16);
+  p.facing = (e.x<p.x)? -1 : 1;
+  p.x = e.x - p.facing*Math.min(52, Math.abs(e.x-p.x)+18);   // 相手の正面へ吸い付く
+  p.z=0; p.vz=0; p.vx=0; p.charge=0; p.atkHeld=false;
+  e.critReady=0; e.stagT=Math.max(e.stagT||0, A.dur+10);
+  critCam=A.dur+14;                                          // 画面を締める（暗転＋寄り）
+  triggerSlow(26); punchIn(0.10);
+  popText(p.x, p.y-132, A.name+'！', A.col, true);
+  sfx.charge(p.x);
+}
+function updateCrit(){
+  const p=player, A=CRIT_ART[p.kind]||CRIT_ART.inu, e=p.critE;
+  p.critT++; const T=p.critT;
+  p.invuln=Math.max(p.invuln,4);
+  if(e && !e.dead){ e.x = p.x + p.facing*46; e.vx=0; e.z=0; e.state='bstagger'; }
+  // 溜め：足元から光が集まる
+  if(T<A.hitAt && T%3===0 && perfTier<2)
+    ember(p.x+rnd(-30,30), p.y-rnd(0,18), rnd(-0.6,0.6), -rnd(1.2,2.6), A.col);
+  if(T===A.hitAt-8){ flashCore(p.x+p.facing*40, p.y-52, 34, hexRGB(A.col)); sfx.rise(p.x); }
+  if(T===A.hitAt && !p.critHit){ p.critHit=true;
+    if(e && !e.dead){
+      const dmg=Math.max(1, Math.round(e.maxHp*CRIT_RATE));
+      // 崩れの追撃なので怯みも吹っ飛びも入れず、確実に叩き込む
+      damageEnemy(e, dmg, p.facing*3, false);
+      popText(e.x, e.y-e.h-34, '致命の一撃！', '#ff4d6a', true, true);
+      e.hitFace=Math.max(e.hitFace||0, 60);
+    }
+    superFlash(p.x+p.facing*46, p.y-56, A.col);
+    shockwave(p.x+p.facing*46, p.y-40, {r:170, color:A.col});
+    shake=Math.max(shake,20); hitStop=Math.max(hitStop,14); flashAt(6,hexRGB(A.col),p.x,p.y-56);
+    sfx.ko(p.x); sfx.big(p.x); }
+  if(T>=A.dur){
+    // 連発の抑止は kbHits のリセットで足りる（もう一度 BOSS_POISE 発当てないと崩れない）。
+    // damageEnemy は e.invuln を見ないので、そこへ書いても効かない
+    if(e && !e.dead){ e.stagT=Math.min(e.stagT||0, 26); e.poiseBreak=gf+26; }
+    p.state='idle'; p.critE=null; }
+}
 // 吹っ飛ばしてよい状態か（ボス以外・主役ボス・崩壊中は常に true）
 function bossPoiseBroken(e){ const T=ETYPE[e.type]; return !T.boss || T.tumbles || (e.poiseBreak||0)>gf; }
 function damageEnemy(e,dmg,kbx,knockdown,launch){
@@ -5011,6 +5096,10 @@ function updateEnemies(){
       if(e.downTimer<=0){ e.state='getup'; e.getT=e.getMax=t.boss?10:16; } continue; }
     if(e.state==='getup'){ e.getT--; e.x+=e.vx; e.vx*=0.7;   // 起き上がり：伏せた体勢から立ち上がる
       if(e.getT<=0){ e.state='walk'; e.moveCd=Math.min(e.moveCd,10); if(t.boss) e.noJuggleT=gf+50; } continue; }   // ボスは起き上がり後しばらく打ち上げ耐性
+    // 体勢が崩れている間は膝をついたまま動けない（致命の一撃を入れる窓）
+    if(e.state==='bstagger'){ e.stagT=(e.stagT||0)-1; e.vx*=0.80; e.x+=e.vx;
+      if(e.stagT<=0){ e.state='walk'; e.critReady=0; e.poiseBreak=0;
+        popText(e.x,e.y-e.h-20,'立ち直った','#cfd6e0'); } continue; }
     if(e.state==='hurt'){ e.hurtTimer--; e.x+=e.vx; e.vx*=0.82; if(e.hurtTimer<=0)e.state=t.boss?'walk':'walk'; continue; }
     if(t.boss){ bossTick(e,t); e.x+=e.vx; e.vx*=0.9; continue; }
     // --- 盾犬兵: ガード中は前面の攻撃を防ぐ ---
@@ -6818,7 +6907,7 @@ function update(){
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -6874,6 +6963,7 @@ function render(){
   drawForeground();
   drawLighting();
   drawEcho();                           // 奥義の残響。照明のあと・数字の前に敷く（数字を沈ませない）
+  drawCritVignette();                   // 致命の一撃：画面のフチを落として主役と相手だけを残す
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
   // ── 閃光：全面ベタ塗りをやめ、打点から広がる放射グラデにする。立ち上がりを鋭く・減衰を速く ──
@@ -8374,10 +8464,20 @@ function drawPlayer(){
     else if(_d.swordRain||_d.swordStorm)   ctx.rotate(Math.sin(p.atk.t*0.22)*0.07);   // 聖剣乱舞：ゆっくり大きく
     else if(_d.stormCall||_d.caller)       ctx.rotate(Math.sin(p.atk.t*0.38)*0.05); } // 詠唱：微振動
   if(st==='attack' && p.atk && p.atk.def.spin){ ctx.rotate(p.atk.t*0.5); }   // 回し蹴り/グルグルの回転
+  // タメ攻撃の段位：極（ctier2）は振り抜きに合わせて体ごと一回転する。
+  // 振りの角度と刃渡りだけを伸ばしても「同じ振り」にしか見えなかった
+  if(st==='attack' && p.atk && p.atk.def.charged && (p.atk.def.ctier|0)>=2){
+    const _d=p.atk.def, _t0=_d.act[0];
+    if(p.atk.t>=_t0){ const _u=clamp((p.atk.t-_t0)/Math.max(1,_d.dur-_t0),0,1);
+      ctx.translate(0,-34); ctx.rotate(easeOut(_u)*TAU); ctx.translate(0,34); } }
   if(st==='jump' && p.jDrop){ ctx.translate(0,-26); ctx.rotate((20-p.jAtk)*0.6); ctx.translate(0,26); }   // 回転踵落としの回転
 
   // ---------- pose params (swAng: 0=forward, +down) ----------
   let bodyY=0, bodyX=0, lean=0, swAng=-0.42, swExt=12, backArm=0.32, thF=0.14, thB=-0.14, kF=0.25, kB=0.25;
+  // タメ攻撃の段位で体の運びを変えるための係数（0=基本 / 1=熟練 / 2=極）。
+  // 姿勢の計算がすべて終わったあとに掛ける
+  const _cti = (st==='attack' && p.atk && p.atk.def.charged) ? (p.atk.def.ctier|0) : -1;
+  let _sgTi=-1, _sgW=0, _sgSw=0, _sgUp=0;   // 奥義の段位と進み具合（姿勢の追従後に使う）
   let drawTrail=false, trailCol='#ffe9a0', tA0=0,tA1=0,tk=0, trailW=1, smear=0;
   let mode='blade';   // blade | shield | fist
   let faL1=9, faL2=8, faW=0.95, legF1=10, legF2=9, sqX=1, sqY=1;     // limb stretch & squash/stretch
@@ -8544,6 +8644,21 @@ function drawPlayer(){
       kF=0.4+1.75*u; kB=0.35+1.80*u; bodyY=8*u; lean=-0.10-0.16*u; sqX=1+0.22*u; sqY=1-0.26*u; }
     else if(T<26){ swAng=-1.9; backArm=-1.7; thF=0.9; thB=0.6; kF=1.2; kB=1.3; bodyY=-3; sqY=1.10; sqX=0.94; }           // 踏み切って天へ
     else { swAng=-1.5; backArm=-1.4; thF=0.45; thB=0.3; lean=0.22; bodyY=-1; } }                                         // 急降下：振り下ろし体勢
+  else if(st==='crit'){   // 致命の一撃：沈み込んで溜め → 全身で突き込み → 残心
+    const A=CRIT_ART[p.kind]||CRIT_ART.inu, T=p.critT||0;
+    const w=clamp(T/Math.max(1,A.hitAt-6),0,1);              // 溜めの進み
+    const hit=clamp((T-A.hitAt)/12,0,1);                     // 決めてからの伸び
+    const rec=clamp((T-A.hitAt-14)/Math.max(1,A.dur-A.hitAt-14),0,1);   // 残心へ戻る
+    const ex=Math.sin(clamp((T-A.hitAt)/10,0,1)*Math.PI);    // 振り抜きの山
+    lean=-0.34*w+0.52*ex-0.30*rec;
+    bodyY=9*w-9*ex+2*rec; bodyX=-9*w+15*ex-6*rec;
+    thF=0.24+0.50*w+0.34*ex; thB=-0.20-0.46*w; kF=0.55+0.95*w-0.40*ex; kB=0.45+1.00*w-0.42*ex;
+    swAng=0.62-1.85*w+2.85*ex; backArm=0.50-1.55*w+1.10*ex;
+    swExt=14+20*w+26*ex;
+    sqX=1+0.18*w-0.20*ex; sqY=1-0.20*w+0.24*ex;
+    if(p.kind==='shima'||p.kind==='watch') mode='fist';
+    faL1=9+12*ex; faL2=8+14*ex; faW=0.95+1.0*ex;
+  }
   else if(st==='sgact'){   // 同時押しの奥義。キャラごとに構えが違い、段位で振りが増える
     const A=SG_ACT[p.sgKind], ti=p.sgTier|0, B=A.burst[ti], T=p.sgT||0;
     const b0=B[0], w=clamp(T/Math.max(1,b0),0,1);          // 溜めの進み具合
@@ -8572,7 +8687,10 @@ function drawPlayer(){
       swAng=-0.30-1.05*w+2.05*sw; backArm=0.45-0.55*w+0.30*sw;
       thF=0.18+0.34*w+0.26*sw; thB=-0.16-0.32*w; kF=0.45+0.55*w; kB=0.35+0.60*w;
       faL1=9+8*sw; faL2=8+10*sw; faW=0.95+0.7*sw;
-      sqX=1+0.10*w-0.12*sw; sqY=1-0.12*w+0.16*sw; } }
+      sqX=1+0.10*w-0.12*sw; sqY=1-0.12*w+0.16*sw; }
+    // 段位ごとの構えの差は、姿勢の追従（poseB）の「あと」で掛ける。
+    // 前で掛けるとローパスで半分以下に潰れ、実測で 2.0px しか動かなかった
+    _sgTi=ti; _sgW=w; _sgSw=sw; _sgUp=(ti>=2)? clamp((T-B[B.length-1])/12,0,1) : 0; }
   else if(st==='gatling'){ mode='fist'; const T=p.gatT||0;
     if(T<GAT_SPIN){ const u=T/GAT_SPIN;                                                    // 銃身の回転が上がりきるまで踏ん張る
       lean=-0.30*u; thF=0.20+0.30*u; thB=-0.20-0.34*u; kF=0.40+0.45*u; kB=0.30+0.55*u;
@@ -8679,6 +8797,45 @@ function drawPlayer(){
     ({bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2}=B);
     if(_cyc){ bodyY+=_cyc.bodyY; bodyX+=_cyc.bodyX; lean+=_cyc.lean; swAng+=_cyc.swAng;
       backArm+=_cyc.backArm; thF+=_cyc.thF; thB+=_cyc.thB; kF+=_cyc.kF; kB+=_cyc.kB; }
+    // ── タメ攻撃の段位で体の運びを変える ──
+    // 熟練＝溜めで深く沈み、振り抜きで大きく踏み込む／極＝さらに深く、跳ね上がる。
+    // ポーズ追従（poseB）を通したあとに掛けないと、ローパスで差が半分以下に潰れる
+    if(_cti>=1 && p.atk){ const _d=p.atk.def, _t=p.atk.t, _a0=_d.act[0];
+      const _w=clamp(_t/Math.max(1,_a0),0,1);                       // 溜めの進み
+      const _sw=Math.sin(clamp((_t-_a0)/Math.max(1,_d.dur-_a0),0,1)*Math.PI);   // 振り抜きの山
+      const _g=(_cti>=2)?1.6:1;
+      lean += (-0.30*_w + 0.34*_sw)*_g;
+      bodyY += ( 8*_w - 7*_sw)*_g;  bodyX += (-7*_w + 12*_sw)*_g;
+      thF += ( 0.26*_w + 0.22*_sw)*_g;  thB += (-0.24*_w)*_g;
+      kF  += ( 0.60*_w - 0.28*_sw)*_g;  kB  += ( 0.55*_w - 0.26*_sw)*_g;
+      sqX += ( 0.12*_w - 0.14*_sw)*_g;  sqY += (-0.14*_w + 0.18*_sw)*_g; }
+    // ── 奥義の段位で構えそのものを変える ──
+    // 従来は burst の本数が増えるだけで、同じ構えを繰り返すようにしか見えなかった。
+    //   熟練 = 腰を落として半身に構え、振り抜きで大きく踏み込む
+    //   極   = さらに深く沈み、最後の振りで跳ね上がって打ち下ろす
+    // 同じ形を倍率で強めるだけでは、進行度を揃えて測ると 2px しか動かない＝別の技に見えない。
+    // 段位ごとに「違う動き」を割り当てる
+    // 熟練＝半身に深く構え、腰を切って踏み込む（水平方向の運び）。
+    // 極＝その運びをさらに強めたうえで宙へ浮き、脚を畳んだまま打ち続けて最後に落とす。
+    // 極を「別の動き」にすると、測ってみたら基本形に近づいてしまう組があった
+    // （ヌコ：基本↔熟練 11.6px に対して 基本↔極 6.8px）。
+    // 段位が上がるほど基本形から離れるよう、極は熟練を含む形にする
+    if(_sgTi>=1){ const g=(_sgTi>=2)?1.30:1;
+      lean += (-0.42*_sgW + 0.46*_sgSw)*g;
+      bodyX += (-16*_sgW + 26*_sgSw)*g;  bodyY += (10*_sgW - 4*_sgSw)*g;
+      thF += (0.34*_sgW + 0.30*_sgSw)*g; thB += (-0.40*_sgW)*g;
+      kF += (0.85*_sgW - 0.35*_sgSw)*g;  kB += (0.30*_sgW)*g;
+      backArm += (-0.55*_sgW + 0.40*_sgSw)*g;
+      swExt += (8*_sgW + 12*_sgSw)*g;
+      sqX += (0.16*_sgW - 0.16*_sgSw)*g; sqY += (-0.18*_sgW + 0.20*_sgSw)*g; }
+    if(_sgTi>=2){         // 極だけの上乗せ：宙へ浮き、脚を畳み、最後に落とす
+      const air=clamp((_sgW-0.55)/0.45,0,1)*(1-_sgUp*0.85);
+      lean += 0.30*air;
+      bodyY += -34*air + 12*_sgUp;
+      thF += 1.05*air;  thB += 0.85*air;
+      kF += 1.35*air;   kB += 1.25*air;
+      swExt += 8*air;
+      sqX += -0.10*air + 0.14*_sgUp; sqY += 0.16*air - 0.16*_sgUp; }
   }
   const shima = p.kind==='shima', nuko = p.kind==='nuko', g8 = p.kind==='guard8', watch = p.kind==='watch', wanden = p.kind==='wanden';
   const shimaArmed = shima && (p.weapon==='nunchaku'||p.weapon==='tonfa'||p.weapon==='claw'||p.weapon==='tigerfist');   // 拳法武器を装備中
@@ -9601,6 +9758,9 @@ function drawEnemy(e){
     ctx.rotate(0.30+0.68*fall); ctx.translate(0,8*fall); }
   else if(e.state==='getup'){ const g=easeOut(clamp(1-e.getT/Math.max(1,e.getMax||16),0,1));                // 起き上がり：伏せから立ち上がる
     ctx.rotate(0.98*(1-g)); ctx.translate(0,8*(1-g)-3*Math.sin(g*Math.PI)); }
+  else if(e.state==='bstagger'){                                                                            // 体勢崩壊：膝をつき、前のめりに沈む
+    const u=clamp(1-(e.stagT||0)/CRIT_WINDOW,0,1), s2=Math.min(1,u*5);
+    ctx.rotate(0.20*s2*e.facing*-1); ctx.translate(-6*s2*e.facing, 14*s2); ctx.scale(1+0.10*s2, 1-0.16*s2); }
   else if(e.state==='hurt'){ const h=clamp(e.hurtTimer/16,0,1);                                             // のけぞってから戻る
     ctx.translate(-7*h,0); ctx.rotate(-0.15*h); }
   // telegraph = crouch+lean back (wind-up); attack/bmove = explosive lunge + stretch
@@ -9695,6 +9855,20 @@ function drawEnemy(e){
     const near=Math.abs(nearestPlayerTo(e.x).x-e.x)<270;
     const want=(near || (e.kbHits||0)>0 || (e.poiseBreak||0)>gf) ? 1 : 0;
     e.poiseFade=lerp(e.poiseFade||0, want, 0.10);        // 交戦距離に入ったら空ゲージがフェードインし、仕組みを学習できる
+    // 致命が届く間合いに入ったら、頭上に指示を出す（仕組みが伝わらないと使われない）
+    if(e.state==='bstagger' && (e.critReady||0)>gf && !e.dead){
+      const pl=nearestPlayerTo(e.x), inR=Math.abs(pl.x-e.x)<CRIT_REACH && Math.abs(pl.y-e.y)<46;
+      // 巨大なボスだと頭上がHUDの裏へ突き抜けるので、HUDの下で押さえる
+      const py2=Math.max(HUD_BOTTOM+34, sy-e.h*s*1.16-e.z-52), pulse=0.72+0.28*Math.sin(gf*0.30);
+      ctx.save(); ctx.textAlign='center';
+      ctx.font=uif('bold', inR?26:20);
+      ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,.85)';
+      const msg=inR? '攻撃で致命！' : '崩れている！';
+      ctx.globalAlpha=inR?pulse:0.72;
+      ctx.strokeText(msg,sx,py2); ctx.fillStyle=inR?'#ff4d6a':'#ffd24d'; ctx.fillText(msg,sx,py2);
+      if(inR){ ctx.globalAlpha=0.35*pulse; ctx.strokeStyle='#ff4d6a'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.ellipse(sx,sy,CRIT_REACH*0.5*s,16*s,0,0,7); ctx.stroke(); }
+      ctx.restore(); ctx.textAlign='left'; }
     if(e.poiseFade>0.02){
       const bw=58*s, hx=sx-bw/2, hy=sy-e.h*s*1.16-e.z-16, brk=(e.poiseBreak||0)>gf;
       const q=brk?1:clamp((e.kbHits||0)/BOSS_POISE,0,1);
