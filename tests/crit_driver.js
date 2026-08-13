@@ -66,17 +66,38 @@ const DRIVER = `
       if(acted>0) throw new Error('崩れている間もボスが技を出す: '+acted+'フレーム');
       if(Math.abs(e.x-x0)>40) throw new Error('崩れている間もボスが動く: '+Math.round(Math.abs(e.x-x0))+'px');
       console.log('崩れの窓 OK (80F 動かず・技も出さない)'); }
+
+    // 崩れている間は殴っても浮かない・押されない。
+    // 「崩れた＝吹き飛ばせる」は致命の一撃を入れる前の設計で、崩した直後に
+    // もう1発入ると air へ移って 308px まで浮き、猶予がまるごと潰れていた
+    { setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.x=camX+300; p.facing=1; p.hp=p.maxHp=999999; p.invuln=999999;
+      enemies.length=0; spawnEnemy('garm', p.x+70, LANE); const e=enemies[0];
+      e.hp=e.maxHp=999999; e.thinkCd=999999;
+      for(let i=0;i<BOSS_POISE;i++) bossPoiseTick(e);
+      const x0=e.x; let zMax=0, critF=0;
+      for(let i=0;i<10;i++){                       // 崩れたあとも殴り続ける
+        damageEnemy(e, 30, 8, true, 12);
+        // フレームを進めないと押されようがない（vx が e.x に反映されない）
+        for(let f=0;f<4;f++){ hitStop=0; slowmo=0; step(1); }
+        zMax=Math.max(zMax, e.z||0);
+        if(critTarget(p)) critF++; }
+      if(!(zMax<=1)) throw new Error('崩れているのに浮く: '+zMax.toFixed(0)+'px');
+      if(Math.abs(e.x-x0)>4) throw new Error('崩れているのに押される: '+Math.abs(e.x-x0).toFixed(0)+'px');
+      if(critF!==10) throw new Error('殴っている途中で致命が狙えなくなる: '+critF+'/10');
+      console.log('崩れ中の追撃 OK (10発当てても浮かず '+zMax.toFixed(0)+'px・移動 '
+        +Math.abs(e.x-x0).toFixed(0)+'px・常に致命が狙える)'); }
   }
 
   // ═══ 2) 奥義とタメ攻撃の構えが段位で変わること ═══════════════
   // 従来は威力と振りの回数が増えるだけで、進行度を揃えて測ると 2px しか動かなかった
   {
-    const PH=[0.25,0.50,0.75];
-    // 実フレームで刻むと、溜め(hold)の間 p.atk.t が進まないタメ攻撃では
-    // 「25/50/75%」がまだ技の始まる前になり、段位の差が測れない。
-    // 技自身の時計（tick が返す値）で刻む
-    const poseAt=function(setup, dur, tick){
-      const want=PH.map(function(u){ return Math.max(1,Math.round(dur*u)); });
+    // 「進行度の25/50/75%」で比べると、段ごとに振りの回数が違う技では意味が揃わない
+    // （1振りの技と3振りの技の50%は別物）。実測でも、そのせいで
+    // 「基本↔極 の方が 基本↔熟練 より小さい」という逆転が出ていた。
+    // 振り抜きの瞬間という、段が違っても意味の揃う一点で比べる
+    const poseAt=function(setup, tWant, tick){
+      const want=[tWant];
       const out=[]; const rl=limbSeg, real=ctx; let cur=null;
       // 体の傾き・上下動・伸縮は ctx の変換で掛かるので、limbSeg の引数だけを見ても差が出ない。
       // 変換を積んで、画面上のどこに手足が来るかで比べる
@@ -89,7 +110,7 @@ const DRIVER = `
         return rl.apply(null,arguments); };
       try { setup();
         let got=0, guard=0;
-        while(got<want.length && guard++<dur*12){ hitStop=0; slowmo=0; step(1);
+        while(got<want.length && guard++<600){ hitStop=0; slowmo=0; step(1);
           const now=tick();
           if(now>=want[got]){ got++; cur=[]; M={a:1,b:0,c:0,d:1,e:0,f:0}; st2.length=0;
             try { ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
@@ -116,11 +137,11 @@ const DRIVER = `
     const res=[];
     ['shima','nuko','guard8','watch'].forEach(function(k){
       const r=LV.map(function(lv){
-        const dur=SG_ACT[k].dur[ lv>=16?2 : lv>=8?1 : 0 ];
+        const ti=lv>=16?2 : lv>=8?1 : 0, t0=SG_ACT[k].burst[ti][0]+3;   // 1発目の振り抜き
         return poseAt(function(){ setupRoster(k); startGame(); state='play';
           const p=players[0]; player=p; p.x=camX+300; p.facing=1; p.level=lv;
           p.hp=p.maxHp=999999; p.invuln=999999; enemies.length=0; particles.length=0;
-          beginSGAct(p,k); }, dur, function(){ return player.sgT||0; }); });
+          beginSGAct(p,k); }, t0, function(){ return player.sgT||0; }); });
       res.push({n:'奥義:'+k, a:gap(r[0],r[1]), b:gap(r[1],r[2]), c:gap(r[0],r[2])}); });
     [['inu',['charge','charge2','charge3']],
      ['guard8',['chargeHammer','chargeHammer2','chargeHammer3']]].forEach(function(e){
@@ -129,24 +150,19 @@ const DRIVER = `
         return poseAt(function(){ setupRoster(e[0]); startGame(); state='play';
           const p=players[0]; player=p; p.x=camX+300; p.facing=1; p.level=lv;
           p.hp=p.maxHp=999999; p.invuln=999999; enemies.length=0; particles.length=0;
-          beginAttack(id); }, ATK[id].dur, function(){ return (player.atk&&player.atk.t)||0; }); });
+          beginAttack(id); }, ATK[id].act[0]+3, function(){ return (player.atk&&player.atk.t)||0; }); });
       res.push({n:'タメ:'+e[0], a:gap(r[0],r[1]), b:gap(r[1],r[2]), c:gap(r[0],r[2])}); });
-    // 直値で要求する。同じ物差しでの実測（改修前 → 改修後）：
-    //   奥義:shima  9.2/8.2  → 17.4/56.8      奥義:nuko  6.5/5.4  → 11.6/12.7
-    //   奥義:guard8 20.5/14.2 → 32.0/48.3     奥義:watch 5.2/6.0  → 15.7/19.5
-    //   タメ:inu    8.4/12.9 → 12.3/15.7      タメ:guard8 4.7/18.1 → 4.8/23.6
-    // 奥義は全キャラで2〜4倍に開いた。タメは伸びが小さく、
-    // ガードワンの 基本↔熟練 だけはほぼ変わっていない（既知の積み残し）
+    // 振り抜きの瞬間で揃えたときの実測（改修後）：
+    //   奥義:shima 4.2/12.0/15.0   奥義:nuko 6.4/5.3/8.9
+    //   奥義:guard8 11.5/7.2/16.9  奥義:watch 14.1/27.5/19.2
+    //   タメ:inu 13.2/42.1/35.3    タメ:guard8 5.1/23.0/27.5
     res.forEach(function(r){
-      const isSG=r.n.indexOf('奥義')===0;
-      const lo=isSG? 10.0 : 4.5;               // 改修前の最大値（奥義5.2〜20.5 / タメ4.7）より上に取る
-      if(!(r.a>=lo)) throw new Error(r.n+' の 基本↔熟練 で構えがほぼ同じ: '+r.a.toFixed(1)+'px');
-      if(!(r.b>=lo)) throw new Error(r.n+' の 熟練↔極 で構えがほぼ同じ: '+r.b.toFixed(1)+'px');
-      // 本当は「段位が上がるほど基本形から離れる」ことまで要求したいが、
-      // 現状ヌコとワッチが満たしていない（基本↔熟練 より 基本↔極 の方が小さい）。
-      // 段ごとの振り(burst)の間隔が違うため、進行度を揃えると極の方が基本形に
-      // 近い瞬間を通るのが原因。積み残しなので、いまは数値を出すだけにする
-      });
+      if(!(r.a>=4.0)) throw new Error(r.n+' の 基本↔熟練 で構えがほぼ同じ: '+r.a.toFixed(1)+'px');
+      if(!(r.b>=5.0)) throw new Error(r.n+' の 熟練↔極 で構えがほぼ同じ: '+r.b.toFixed(1)+'px');
+      // 段位が上がるほど基本形から離れること。
+      // これを見ないと「熟練だけ別の構え／極は基本のまま」でも上の2つは通る
+      if(!(r.c>r.a)) throw new Error(r.n+' の 極 が 熟練 より基本形から離れていない: '
+        +'基本↔熟練 '+r.a.toFixed(1)+'px vs 基本↔極 '+r.c.toFixed(1)+'px'); });
     console.log('段位ごとの構え OK ('+res.map(function(r){
       return r.n+' '+r.a.toFixed(1)+'/'+r.b.toFixed(1)+'/'+r.c.toFixed(1); }).join('  ')+' px 基本↔熟練/熟練↔極/基本↔極)');
   }

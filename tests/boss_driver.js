@@ -29,26 +29,32 @@ const DRIVER = `
   if(!hb.rage) throw new Error('hero boss does not enrage at half health');
   console.log('主役ボス 本気モード OK (HP55%割れで手数と機動が上がる)');
 
-  // ===== 2) ボスの吹っ飛び耐性（20ヒットの踏ん張り）＋速い復帰 =====
+  // ===== 2) ボスの踏ん張り（20ヒット）→ 体勢崩壊 =====
+  // 以前は「20発目で吹っ飛ぶ」のが崩壊の中身だったが、致命の一撃を入れたので
+  // 崩壊＝膝をついて隙をさらす時間に変えた。吹き飛ばすと致命が狙えなくなる
   if(BOSS_POISE<20) throw new Error('BOSS_POISE too low: '+BOSS_POISE);
   enemies.length=0; spawnEnemy('garm', p.x+200, LANE);
   const bs=enemies[0]; bs.hp=bs.maxHp=999999;
   let brokeAt=0;
   for(let i=1;i<=BOSS_POISE;i++){
-    bs.state='walk'; bs.z=0; bs.vz=0; bs.noJuggleT=0;
+    if(bs.state!=='bstagger'){ bs.state='walk'; bs.z=0; bs.vz=0; bs.noJuggleT=0; }
     damageEnemy(bs, 5, 6, true, 0);
-    if(!brokeAt && bs.state==='down') brokeAt=i;
+    if(!brokeAt && bs.state==='bstagger') brokeAt=i;
   }
-  if(brokeAt!==BOSS_POISE) throw new Error('boss knocked down at hit '+brokeAt+' (expected '+BOSS_POISE+')');
-  if(bs.downTimer>20) throw new Error('boss recovery too slow: downTimer='+bs.downTimer);
-  console.log('ボス 踏ん張り OK ('+(BOSS_POISE-1)+'発は耐え、'+brokeAt+'発目で体勢崩壊／ダウン '+bs.downTimer+'F と短い)');
-  // 打ち上げも同じ踏ん張りに従う
+  if(brokeAt!==BOSS_POISE) throw new Error('体勢崩壊が '+brokeAt+'発目（'+BOSS_POISE+'発目のはず）');
+  console.log('ボス 踏ん張り OK ('+(BOSS_POISE-1)+'発は耐え、'+brokeAt+'発目で膝をつく)');
+  // 踏ん張り中は打ち上がらない。崩れている間も打ち上がらない（致命の窓を潰さない）
   bs.state='walk'; bs.z=0; bs.vz=0; bs.kbHits=0; bs.poiseBreak=0; bs.noJuggleT=0;
   launchEnemy(bs, 14, -12, 3);
-  if(bs.state==='air') throw new Error('boss launched while poise was intact');
-  bs.poiseBreak=gf+40; launchEnemy(bs, 14, -12, 3);
-  if(bs.state!=='air') throw new Error('boss did not launch after the poise broke');
-  console.log('ボス 打ち上げ耐性 OK (踏ん張り中は押されるだけ／崩壊後は打ち上がる)');
+  if(bs.state==='air') throw new Error('踏ん張っているのに打ち上がる');
+  bs.state='bstagger'; bs.stagT=CRIT_WINDOW; bs.z=0; bs.vz=0;
+  launchEnemy(bs, 14, -12, 3);
+  if(bs.state==='air'||bs.z>1) throw new Error('崩れているのに打ち上がる（致命が狙えなくなる）');
+  // 崩れが明けたあとは従来どおり打ち上がる
+  bs.state='walk'; bs.z=0; bs.vz=0; bs.noJuggleT=0; bs.poiseBreak=gf+40;
+  launchEnemy(bs, 14, -12, 3);
+  if(bs.state!=='air') throw new Error('崩れが明けたあとも打ち上がらない');
+  console.log('ボス 打ち上げ耐性 OK (踏ん張り中は押されるだけ／崩れ中は浮かない／明けたら打ち上がる)');
   // 腕試しの主役ボスは従来どおり素直に吹っ飛ぶ
   enemies.length=0; spawnEnemy('hbWanden', p.x+200, LANE);
   const hb2=enemies[0]; hb2.hp=hb2.maxHp=999999; hb2.noJuggleT=0;
