@@ -4746,8 +4746,14 @@ function updateCrit(){
     if(e && !e.dead){ e.stagT=Math.min(e.stagT||0, 26); e.poiseBreak=gf+26; }
     p.state='idle'; p.critE=null; }
 }
-// 吹っ飛ばしてよい状態か（ボス以外・主役ボス・崩壊中は常に true）
-function bossPoiseBroken(e){ const T=ETYPE[e.type]; return !T.boss || T.tumbles || (e.poiseBreak||0)>gf; }
+// 吹っ飛ばしてよい状態か（ボス以外・主役ボスは常に true）。
+// 「崩れている間は吹き飛ばせる」は致命の一撃を入れる前の設計。いまは崩れ＝地に伏せて
+// 隙をさらす時間なので、膝をついている間は吹き飛ばさない。
+// （実測：崩した直後にもう1発入ると air へ移って 308px まで浮き、
+//   150フレームの猶予がまるごと潰れて致命が一度も狙えなかった）
+function bossPoiseBroken(e){ const T=ETYPE[e.type];
+  if(e.state==='bstagger') return false;
+  return !T.boss || T.tumbles || (e.poiseBreak||0)>gf; }
 function damageEnemy(e,dmg,kbx,knockdown,launch){
   const T=ETYPE[e.type];
   const noStop=noHitStopOnce; noHitStopOnce=false;   // 連射弾などはヒットストップ無し
@@ -4792,7 +4798,11 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   // ── ボスの踏ん張り：規定ヒット数を稼ぐまでは のけぞるだけで吹っ飛ばない ──
   if(heavyBoss){ bossPoiseTick(e); if(!bossPoiseBroken(e)){ knockdown=false; launch=0; } }
   if(e.state==='gripping'){ releaseEnemyGrab(e); e.state='walk'; e.thinkCd=rnd(30,60); }   // 掴み中に攻撃されたら解放（救出）
-  e.hp-=dmg; if(!heavyBoss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
+  // 膝をついている間は、押し込みも入れない。わずかな押しでも積み重なると
+  // 致命の間合い（96px）から外れ、崩したのに狙えなくなる（実測で10発 54px）
+  e.hp-=dmg;
+  if(e.state==='bstagger'){ /* 位置は動かさない */ }
+  else if(!heavyBoss){ e.facing=kbx>0?-1:1; e.vx=kbx*1.3; } else { e.vx+=kbx*0.18; }
   hitFx(e.x, e.y-e.h*0.5, dmg, knockdown, curHitCol);   // 白芯→火花→衝撃リング→放射線→土煙の時間差レイヤー（色は技・武器から）
   if(launch){ e.vz=-launch; e.state='air'; }
   addCombo(dmg);
@@ -8808,7 +8818,14 @@ function drawPlayer(){
       bodyY += ( 8*_w - 7*_sw)*_g;  bodyX += (-7*_w + 12*_sw)*_g;
       thF += ( 0.26*_w + 0.22*_sw)*_g;  thB += (-0.24*_w)*_g;
       kF  += ( 0.60*_w - 0.28*_sw)*_g;  kB  += ( 0.55*_w - 0.26*_sw)*_g;
-      sqX += ( 0.12*_w - 0.14*_sw)*_g;  sqY += (-0.14*_w + 0.18*_sw)*_g; }
+      sqX += ( 0.12*_w - 0.14*_sw)*_g;  sqY += (-0.14*_w + 0.18*_sw)*_g;
+      // 進行度に依らない段位ぶんの差。これが無いと、溜めの長さが技ごとに違うぶんで
+      // 打ち消され、ガードワンの 基本↔熟練 が 4.7→4.8px しか動かなかった
+      const c=_cti;
+      lean += -0.11*c; bodyY += 5*c; bodyX += -4.5*c;
+      thF += 0.15*c; thB += -0.14*c; kF += 0.32*c; kB += 0.28*c;
+      backArm += -0.20*c; swExt += 5*c;
+      sqX += 0.05*c; sqY += -0.06*c; }
     // ── 奥義の段位で構えそのものを変える ──
     // 従来は burst の本数が増えるだけで、同じ構えを繰り返すようにしか見えなかった。
     //   熟練 = 腰を落として半身に構え、振り抜きで大きく踏み込む
@@ -8828,6 +8845,13 @@ function drawPlayer(){
       backArm += (-0.55*_sgW + 0.40*_sgSw)*g;
       swExt += (8*_sgW + 12*_sgSw)*g;
       sqX += (0.16*_sgW - 0.16*_sgSw)*g; sqY += (-0.18*_sgW + 0.20*_sgSw)*g; }
+    if(_sgTi>=1){         // 進行度に依らない段位ぶんの腰の落とし。
+      // これが無いと、振りの間隔の違いで「極の方が基本形に近い瞬間」が生まれる
+      const c=_sgTi;
+      lean += -0.13*c; bodyY += 5.5*c; bodyX += -5*c;
+      thF += 0.16*c; thB += -0.15*c; kF += 0.34*c; kB += 0.30*c;
+      backArm += -0.22*c; swExt += 5*c;
+      sqX += 0.05*c; sqY += -0.06*c; }
     if(_sgTi>=2){         // 極だけの上乗せ：宙へ浮き、脚を畳み、最後に落とす
       const air=clamp((_sgW-0.55)/0.45,0,1)*(1-_sgUp*0.85);
       lean += 0.30*air;
