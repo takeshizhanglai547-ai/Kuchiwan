@@ -90,6 +90,7 @@ async function boot() {
   hud.init(document.getElementById('ui'));
   hud.showFps(game.showFps);
   hud.setControlsVisible(true);
+  let _controlsTimer = 0;   // counts up until the cheatsheet retires; -1 = retired
   progress(0.78);
 
   const playerChar = buildPlayer(mats);
@@ -253,6 +254,18 @@ async function boot() {
 
     updateShadowFollow(sky.key, player);
     updateHud(dt);
+
+    // The controls cheatsheet is onboarding, not HUD. Left permanently on it
+    // reads as a debug keybind dump — and it sat over the lower-right quadrant of
+    // the arena for the entire boss fight, with world geometry showing through
+    // the text. It now retires once the player has had time to read it.
+    if (_controlsTimer >= 0) {
+      _controlsTimer += dt;
+      if (_controlsTimer > 26 || director.state === 'boss') {
+        _controlsTimer = -1;
+        hud.setControlsVisible(false);
+      }
+    }
 
     // Tell the architecture's dissolve what this shot is about, so anything
     // standing between the camera and the subject opens up. Locked on, the

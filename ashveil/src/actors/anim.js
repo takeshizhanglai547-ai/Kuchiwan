@@ -151,17 +151,23 @@ export const CLIP_HEAVY = new Clip({
       upperArmL: [-1.66, 0.32, 0.58], forearmL: [-1.60, 0, 0],
       thighR: [0.26, 0, 0], shinR: [0.38, 0, 0], thighL: [-0.12, 0, 0],
     } },
+    // TORSO PITCH COMPOUNDS DOWN THE CHAIN. hips, spine and chest are separate
+    // joints in a hierarchy, so their X rotations ADD: 0.44 + 0.38 + 0.48 read as
+    // a modest lean per joint but summed to 1.30 rad — 74 degrees — and with the
+    // hips dropping as well the character went horizontal and sank through the
+    // floor for the whole damage window. Retuned so the three joints sum to a
+    // deliberate ~45 degree fold instead of a faceplant.
     { t: 0.60, ease: 'inQuart', pose: {   // contact — arm driven forward and down
-      hips: [0.28, -0.08, 0], spine: [0.24, -0.06, 0], chest: [0.32, -0.08, 0], head: [0.20, 0.05, 0],
+      hips: [0.13, -0.08, 0], spine: [0.11, -0.06, 0], chest: [0.15, -0.08, 0], head: [0.10, 0.05, 0],
       upperArmR: [-1.62, -0.10, -0.16], forearmR: [-0.12, 0, 0],
       upperArmL: [-1.30, 0.06, 0.16], forearmL: [-0.30, 0, 0],
-      thighL: [-0.55, 0, 0], shinL: [0.50, 0, 0], thighR: [0.30, 0, 0], shinR: [0.42, 0, 0],
+      thighL: [-0.40, 0, 0], shinL: [0.36, 0, 0], thighR: [0.22, 0, 0], shinR: [0.30, 0, 0],
     } },
-    { t: 0.74, ease: 'outQuart', pose: {   // blade buried, body folded over it
-      hips: [0.44, -0.18, 0], spine: [0.38, -0.14, 0], chest: [0.48, -0.20, 0], head: [0.28, 0.10, 0],
+    { t: 0.74, ease: 'outQuart', pose: {   // blade low, body folded over it
+      hips: [0.22, -0.18, 0], spine: [0.19, -0.14, 0], chest: [0.24, -0.20, 0], head: [0.14, 0.10, 0],
       upperArmR: [-1.16, -0.22, -0.12], forearmR: [-0.22, 0, 0],
       upperArmL: [-0.95, 0.04, 0.12], forearmL: [-0.26, 0, 0],
-      thighL: [-0.60, 0, 0], shinL: [0.55, 0, 0], thighR: [0.34, 0, 0], shinR: [0.48, 0, 0],
+      thighL: [-0.44, 0, 0], shinL: [0.40, 0, 0], thighR: [0.25, 0, 0], shinR: [0.34, 0, 0],
     } },
     { t: 1.12, ease: 'inOutCubic', pose: NEUTRAL },
   ],
@@ -185,17 +191,20 @@ export const CLIP_HEAVY_CHARGED = new Clip({
       upperArmL: [-2.28, 0.38, 0.64], forearmL: [-1.34, 0, 0],
       thighR: [0.32, 0, 0], shinR: [0.46, 0, 0], thighL: [-0.18, 0, 0],
     } },
+    // Same compounding fault as CLIP_HEAVY, one step worse: 0.52 + 0.44 + 0.56
+    // summed to 1.52 rad, 87 degrees, i.e. flat. Retuned to a ~50 degree fold —
+    // still visibly heavier than the uncharged swing, still upright.
     { t: 0.74, ease: 'inQuart', pose: {
-      hips: [0.34, -0.12, 0], spine: [0.30, -0.10, 0], chest: [0.38, -0.12, 0], head: [0.24, 0.06, 0],
+      hips: [0.16, -0.12, 0], spine: [0.14, -0.10, 0], chest: [0.18, -0.12, 0], head: [0.12, 0.06, 0],
       upperArmR: [-1.70, -0.14, -0.16], forearmR: [-0.08, 0, 0],
       upperArmL: [-1.42, 0.08, 0.16], forearmL: [-0.25, 0, 0],
-      thighL: [-0.72, 0, 0], shinL: [0.62, 0, 0], thighR: [0.38, 0, 0], shinR: [0.52, 0, 0],
+      thighL: [-0.50, 0, 0], shinL: [0.44, 0, 0], thighR: [0.27, 0, 0], shinR: [0.37, 0, 0],
     } },
     { t: 0.90, ease: 'outQuart', pose: {
-      hips: [0.52, -0.24, 0], spine: [0.44, -0.20, 0], chest: [0.56, -0.26, 0], head: [0.32, 0.12, 0],
+      hips: [0.25, -0.24, 0], spine: [0.21, -0.20, 0], chest: [0.27, -0.26, 0], head: [0.16, 0.12, 0],
       upperArmR: [-1.10, -0.30, -0.10], forearmR: [-0.20, 0, 0],
       upperArmL: [-0.90, 0.06, 0.10], forearmL: [-0.20, 0, 0],
-      thighL: [-0.76, 0, 0], shinL: [0.66, 0, 0], thighR: [0.42, 0, 0], shinR: [0.56, 0, 0],
+      thighL: [-0.54, 0, 0], shinL: [0.47, 0, 0], thighR: [0.30, 0, 0], shinR: [0.40, 0, 0],
     } },
     { t: 1.30, ease: 'inOutCubic', pose: NEUTRAL },
   ],
