@@ -155,6 +155,14 @@ const PARTICLE_VERT = /* glsl */`
     float fog = 1.0 - clamp((depth - uFogNear) / max(uFogFar - uFogNear, 0.001), 0.0, 1.0);
     a *= mix(0.15, 1.0, fog);
 
+    // Fade ash out as it approaches the lens. A 0.2m mote subtends about 58px at
+    // 4m, so a speck of drifting ash becomes a soft white disc floating over the
+    // HUD — read by a tester as a particle system with the wrong scale, which is
+    // exactly what it looks like. Culling the SPAWN radius is not enough on its
+    // own: ambient motes drift, so one that spawned legally still wanders into
+    // the camera. Fading on live depth covers both cases.
+    a *= smoothstep(1.6, 5.5, depth);
+
     vColor = c;
     vAlpha = a;
 
