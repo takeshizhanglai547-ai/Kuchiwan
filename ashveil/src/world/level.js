@@ -313,7 +313,16 @@ export function buildLevel(scene, mats) {
   b.corbelArch({ x: 0, y: 0, z: 48.5, span: 5.0, h: 5.5, depth: 2.4, mat: 'stone', steps: 5, pierThick: 2.0 });
   b.cinderEye({ x: 0, y: 8.4, z: 47.2, s: 2.2, lit: true });
 
-  level.triggers.push({ id: 'fog_gate', type: 'boss', x: 0, y: 0, z: 48.5, r: 3.0,
+  // The fog gate is the visual threshold and stays at the arch. Volga does NOT
+  // wake here, though. Waking him on the arch meant he walked 18m south to meet
+  // the player, who was still standing in the entrance gap — so the whole fight
+  // was fought in a 5m slot between two ring-wall segments, with those segments
+  // flanking the camera on both sides for its entire duration. The arena was
+  // built for this fight and the fight was never in it.
+  //
+  // The wake trigger is pushed to the arena floor proper. The player crosses the
+  // arch, walks in, and is standing in open ground when the encounter starts.
+  level.triggers.push({ id: 'fog_gate', type: 'boss', x: 0, y: 0, z: 57.0, r: 5.5,
                         prompt: 'Enter the Kiln Court', once: true });
   level.fogGate = { x: 0, y: 0.1, z: 48.5, w: 5.0, h: 5.5 };
 

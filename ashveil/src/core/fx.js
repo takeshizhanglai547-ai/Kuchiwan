@@ -217,16 +217,33 @@ const TRAIL_FRAG = /* glsl */`
   uniform float uOpacity;
   varying float vU;
   varying float vW;
-  const vec3 HOT   = vec3(1.000, 0.949, 0.847);
+  // The hot edge was cream — the same value and hue as the sunlit ground strips
+  // this world is full of — so the trail did not separate from the environment.
+  // Cooled toward white-blue: it is the only cool highlight in an ember palette.
+  const vec3 HOT   = vec3(0.878, 0.941, 1.000);
   const vec3 EMBER = vec3(1.000, 0.416, 0.118);
   void main() {
     // Fade hard along the length: the ribbon should suggest the arc that just happened,
     // not draw a permanent glowing rope behind the sword.
-    float age = pow(1.0 - vU, 2.2);
-    // Hot at the tip edge, cooling toward the base edge.
-    float w = smoothstep(0.0, 0.85, vW);
-    vec3 c = mix(EMBER * 0.65, HOT, w * (0.35 + 0.65 * age));
-    float a = age * mix(0.25, 1.0, w) * uOpacity;
+    float age = pow(1.0 - vU, 3.4);
+
+    // A SWEPT EDGE, NOT A FILLED SHEET.
+    //
+    // The base edge used to keep 25% alpha, which made the ribbon a filled quad
+    // spanning the blade's whole length. On a wide swing that quad folds back
+    // over itself, and with DoubleSide every fold stacks another 20% — three or
+    // four overlapping layers reach effective opacity and bloom takes it the rest
+    // of the way. The result was a hard-edged cream slab larger than the
+    // character, occluding the wall behind it: read by a reviewer, correctly, as
+    // a solid polygon rather than a motion trail.
+    //
+    // Driving the base edge to zero means there is no filled interior left to
+    // stack, so the ribbon reads as a bright edge chasing the blade tip however
+    // far it folds.
+    float w = smoothstep(0.18, 1.0, vW);
+    float band = w * w;
+    vec3 c = mix(EMBER, HOT, band);
+    float a = age * band * uOpacity;
     gl_FragColor = vec4(c * a, a);
   }
 `;

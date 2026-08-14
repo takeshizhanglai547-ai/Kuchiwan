@@ -193,19 +193,24 @@ const SCENARIOS = {
     await at(1.5, 0.3, -31, 0);
     await shot('01_stance');
 
-    // swing at nothing: anticipation / contact / follow-through
+    // Swings into empty air — POSE REFERENCE ONLY. These were previously named
+    // `light_contact` and `heavy_impact`, which promised evidence they cannot
+    // contain: there is nothing in front of the player to contact. A reviewer
+    // reasonably read the absence of an impact effect as the impact effect being
+    // broken. Named for what they actually are; the landed-hit frames that DO
+    // show impact are captured further down against a placed target.
     await page.mouse.down({ button: 'left' }); await advance(0.02); await page.mouse.up({ button: 'left' });
-    await advance(0.16); await shot('02_light_windup');
-    await advance(0.13); await shot('03_light_contact');
-    await advance(0.12); await shot('04_light_followthrough');
+    await advance(0.16); await shot('02_light_windup_noTarget');
+    await advance(0.13); await shot('03_light_swing_noTarget');
+    await advance(0.12); await shot('04_light_followthrough_noTarget');
     await advance(0.6);
 
     // charged heavy
     await page.keyboard.down('KeyK'); await advance(0.75);
     await shot('05_heavy_charge');
     await page.keyboard.up('KeyK');
-    await advance(0.72); await shot('06_heavy_windup');
-    await advance(0.16); await shot('07_heavy_impact');
+    await advance(0.72); await shot('06_heavy_windup_noTarget');
+    await advance(0.16); await shot('07_heavy_swing_noTarget');
     await advance(0.9);
 
     // guard + roll
@@ -224,6 +229,39 @@ const SCENARIOS = {
     await shot('12_combo_landed');
     await advance(1.2);
     await shot('13_after');
+
+    // LANDED HIT, densely sampled. The frames above swing at empty air, so none
+    // of them can show whether the impact effect fires in the right place or at
+    // the right time. Here the target is placed at a known range and frozen, the
+    // swing is guaranteed to connect, and the frames around contact are captured
+    // one simulation step apart with the target's HP stamped into the filename —
+    // so "did this swing deal damage on this frame" is readable off the strip
+    // rather than inferred from the picture.
+    await page.evaluate(() => {
+      const g = window.ASHVEIL, p = g.player;
+      const e = g.director.enemies.find(e => e.alive) || g.director.enemies[0];
+      if (!e) return;
+      p.respawn(1.5, 0.3, -27.6, 0);
+      e.place(1.5, 0.2, -25.5, Math.PI);
+      e.reset();
+      e.update = function (dt) {
+        this.pos.set(1.5, 0, -25.5); this.vel.set(0, 0, 0);
+        this.yaw = Math.PI; this.awake = false; this.hasToken = false;
+        this.updatePose(dt, {});
+      };
+      g.gameCam.target = e; p.lockTarget = e; g.gameCam.snap(p);
+    });
+    await advance(0.4);
+    await page.mouse.down({ button: 'left' }); await page.mouse.up({ button: 'left' });
+    for (let f = 0; f < 12; f++) {
+      const s = await page.evaluate(() => {
+        const g = window.ASHVEIL, p = g.player;
+        const e = g.director.enemies.find(e => e.hp !== undefined);
+        return { t: +(p.clipTime || 0).toFixed(3), st: p.state, hp: Math.round(e ? e.hp : -1) };
+      });
+      await shot(`14_hit_${String(f).padStart(2, '0')}_t${s.t}_${s.st}_targetHp${s.hp}`);
+      await advance(1 / 60);
+    }
     result.notes.push(await page.evaluate(() => {
       const e = window.ASHVEIL.director.enemies[0];
       return `first thrall hp ${Math.round(e.hp)}/${e.hpMax}, state=${e.state}, awake=${e.awake}`;
@@ -485,7 +523,11 @@ const SCENARIOS = {
   async boss({ shot, tap, hold, click, at, advance, page, result }) {
     await at(0, 0.3, 44, 0);
     await shot('01_forecourt');
-    await hold('KeyW', 2.0); await advance(1.0);
+    // Walk all the way ONTO the arena floor. Two seconds only reached the arch,
+    // so every frame after this was shot in the 5m entrance gap with ring wall on
+    // both sides — which is also where the fight itself used to start, because
+    // the wake trigger sat on the arch.
+    await hold('KeyW', 4.6); await advance(1.0);
     await shot('02_entered');
     await tap('KeyQ'); await advance(0.4);
     await shot('03_lockon');
