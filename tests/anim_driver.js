@@ -270,6 +270,44 @@ const DRIVER = `
     console.log('主役の接地ロック OK (接地足の移動は体の '+(ratio*100).toFixed(0)+'%／改修前は40%)');
   }
 
+  // ── 腕に肘があること ──────────────────────────────────────
+  // 従来 poseArm は上腕と前腕を同じ向きへ継いでいたので腕は常に一直線で、
+  // 振り抜きは骨（faL1/faL2）を伸ばして偽装していた
+  { const realSeg=limbSeg; let segs=[];
+    limbSeg=function(ax,ay,bx,by,w,c){ segs.push([ax,ay,bx,by,w]); };
+    const measure=function(l1,l2){ segs=[]; poseArm(0,0,-0.42,l1,l2,'#fff',1);
+      if(segs.length<2) throw new Error('poseArm が2本の骨を描いていない');
+      const a=segs[0], b=segs[1];
+      if(!(Math.abs(a[2]-b[0])<1e-6 && Math.abs(a[3]-b[1])<1e-6))
+        throw new Error('上腕の先と前腕の根本がつながっていない');
+      const hx=b[2], hy=b[3], D=Math.hypot(hx,hy);
+      const off=Math.abs(a[2]*(hy/D)-a[3]*(hx/D));      // 肩→手の直線から肘までの距離
+      return {D:D, off:off}; };
+    let rest, ext;
+    try { rest=measure(9,8); ext=measure(23,22); } finally { limbSeg=realSeg; }
+    // 肩→手の距離は今まで通り l1+l2。ここが縮むと間合いも剣戟トレイルも短くなる
+    if(Math.abs(rest.D-17)>0.02) throw new Error('構えの肩→手が 17 でない: '+rest.D.toFixed(2));
+    if(Math.abs(ext.D-45)>0.02) throw new Error('伸ばしきりの肩→手が 45 でない: '+ext.D.toFixed(2));
+    // 構えでは肘が張り、伸ばしきると真っ直ぐになる（直値。骨長の定数とは比べない）
+    if(!(rest.off>=3.0)) throw new Error('構えで肘が張っていない（腕が一直線）: '+rest.off.toFixed(2)+'px');
+    if(!(ext.off<=0.6)) throw new Error('伸ばしきっても肘が残る: '+ext.off.toFixed(2)+'px');
+    console.log('腕の肘 OK (構えで '+rest.off.toFixed(1)+'px 張り出し／伸ばしきりで '+ext.off.toFixed(2)+'px／肩→手は 17 と 45 のまま)'); }
+
+  // ── 手足に輪郭線が入っていること ──────────────────────────
+  // イッヌは肌も体毛もクリームで、輪郭が無いと腕が胴に溶けて肘が見えない
+  { const real2=ctx; const rec=[]; let lw=0, ss='';
+    ctx=new Proxy(real2,{
+      get:function(t,k){ if(k==='stroke') return function(){ rec.push({w:lw, c:ss}); };
+        if(k==='lineWidth') return lw; if(k==='strokeStyle') return ss;
+        return t[k]; },
+      set:function(t,k,v){ if(k==='lineWidth') lw=v; else if(k==='strokeStyle') ss=v; else t[k]=v; return true; } });
+    try { limbSeg(0,0,10,10,7,'#f1e7cc'); } finally { ctx=real2; }
+    if(rec.length<2) throw new Error('limbSeg が1本しか引いていない＝輪郭線が無い');
+    if(!(rec[0].w>=rec[1].w+1.5)) throw new Error('下敷きが太くない（縁が残らない）: '+rec[0].w+' → '+rec[1].w);
+    if(String(rec[0].c).indexOf('rgba')<0) throw new Error('下敷きが半透明の暗色でない: '+rec[0].c);
+    if(rec[1].c!=='#f1e7cc') throw new Error('本色が最後に来ていない: '+rec[1].c);
+    console.log('手足の輪郭線 OK (下敷き '+rec[0].w+'px → 本色 '+rec[1].w+'px)'); }
+
   console.log('DISNEY ANIMATION TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

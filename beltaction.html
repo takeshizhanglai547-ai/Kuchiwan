@@ -9057,12 +9057,30 @@ function drawPlayer(){
   rimEnd(_rim, 1);
   ctx.restore(); ctx.globalAlpha=1;
 }
-function limbSeg(ax,ay,bx,by,w,col){ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); }
-function poseArm(shX,shY,swordAng,l1,l2,col,wm){          // swordAng: 0=forward,+down
-  const a=PI2-swordAng;                                   // convert to down-angle
-  const ex=shX+Math.sin(a)*l1, ey=shY+Math.cos(a)*l1;     // elbow
-  const bx=ex+Math.cos(a)*2, by=ey+Math.sin(a)*2+1;       // slight bend
-  const hx=bx+Math.sin(a)*l2, hy=by+Math.cos(a)*l2;       // hand
+// 手足は胴と同系色（イッヌは肌も体毛もクリーム）なので、輪郭線を1本入れないと
+// 胴に溶けて腕がどこにあるか読めない。肘を入れても見えないのはこれが理由だった。
+// 暗い下敷きを一度太く引いてから本色を重ねる＝縁だけが残る
+function limbSeg(ax,ay,bx,by,w,col){
+  ctx.lineCap='round';
+  ctx.strokeStyle='rgba(52,34,18,.46)'; ctx.lineWidth=w+2.2;
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  ctx.strokeStyle=col; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); }
+// 腕の骨長（肘を曲げた状態の上腕・前腕）。肩から手までの距離より長く取ってあるので、
+// 手が近いあいだは必ず肘が外へ張る
+const PARM_L1=11, PARM_L2=10;
+// swordAng: 0=前, +で下。
+// 以前は上腕と前腕を同じ向きへ継いでいたので腕は常に一直線で、振り抜きは
+// l1/l2 を伸ばして偽装していた（構えでも真っ直ぐ、振り切りでも真っ直ぐ）。
+// 肩→手の距離 D=l1+l2 はそのまま使うので、間合いも刃の軌跡も変わらない。
+// 変わるのは肘の位置だけ：D が骨より短いあいだは肘が張り、伸ばしきると真っ直ぐになる
+function poseArm(shX,shY,swordAng,l1,l2,col,wm,bend){
+  const a=PI2-swordAng;
+  const D=l1+l2;
+  const b1=Math.max(PARM_L1, D*0.53), b2=Math.max(PARM_L2, D*0.47);
+  const c=clamp((b1*b1+D*D-b2*b2)/(2*b1*(D||1e-6)),-1,1);
+  const th=a+Math.acos(c)*(bend===undefined?-1:bend);     // 既定は肘を下へ落とす
+  const ex=shX+Math.sin(th)*b1, ey=shY+Math.cos(th)*b1;   // elbow
+  const hx=shX+Math.sin(a)*D, hy=shY+Math.cos(a)*D;       // hand
   limbSeg(shX,shY,ex,ey,7*(wm||1),col); limbSeg(ex,ey,hx,hy,5.5*(wm||1),col);
   ctx.fillStyle=col; ctx.beginPath(); ctx.arc(hx,hy,3.4*(wm||1),0,7); ctx.fill();
   return {hx,hy};
