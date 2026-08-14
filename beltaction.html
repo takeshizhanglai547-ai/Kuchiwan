@@ -1436,7 +1436,7 @@ function dust(x,y,n=4){ const gl=groundLift(x);
 function smokePuff(x,y,n=3,rgb){ const gl=groundLift(x);
   let live=0;                                    // 煙は重なると一気に不透明になるので総数を頭打ちにする
   for(let i=0;i<particles.length;i++) if(particles[i].k==='smoke') live++;
-  n=Math.min(n,10-live); if(n<=0) return;
+  n=Math.min(n,14-live); if(n<=0) return;   // 爆発が必ず煙を残すようになったぶん、上限を14へ
   for(let i=0;i<n;i++){ const lf=Math.round(rnd(34,50));
     const lb=[[0,0,1]]; const nl=2+(Math.random()<0.5?1:0);                       // 単一の楕円だとエアブラシの丸い滲みにしか見えない
     for(let k=0;k<nl;k++) lb.push([rnd(-0.62,0.62),rnd(-0.5,0.46),rnd(0.44,0.82)]);  // 3〜4個の瘤を重ねてもくもくしたシルエットを作る
@@ -1588,6 +1588,13 @@ function ring(x,y,color,opt){ opt=opt||{};
 function shockwave(x,y,opt){ opt=opt||{};
   const R=opt.r||120, col=opt.color||'#ffe9a0', tier=perfTier;
   const heavy=opt.big!==false;
+  // 0) 炎の塊。これが無いと爆発が「光の輪」だけになり、質量が出ない。
+  //    layer:1 は push 順に描かれるので、加算の光より先に敷く
+  if(tier<2){ const lb=[[0,0,1]], nl=3+(heavy?1:0);
+    for(let k2=0;k2<nl;k2++) lb.push([rnd(-0.66,0.66),rnd(-0.60,0.34),rnd(0.46,0.86)]);
+    particles.push({k:'fireball',x,y:y-R*0.16,gl:groundLift(x),layer:1,delay:2,
+      r:R*(heavy?0.62:0.46), lobes:lb, rot:rnd(0,6.28), rv:rnd(-0.03,0.03),
+      life:heavy?34:26, max:heavy?34:26, color:col}); }
   // 1) 白い芯：立ち上がりが鋭く、すぐ消える
   particles.push({k:'shockcore',x,y,gl:groundLift(x),layer:1,delay:0,
     r:R*0.30,rMax:R*0.62,life:8,max:8,color:'#ffffff'});
@@ -1597,9 +1604,10 @@ function shockwave(x,y,opt){ opt=opt||{};
     particles.push({k:'shockring',x,y,gl:groundLift(x),layer:1,delay:i*4,
       r:R*0.12,r0:R*0.12,rMax:R*(1.0+i*0.34),sq:0.34,
       w:(heavy?18:12)*(1-i*0.26), life:18+i*4, max:18+i*4, color:i?col:'#ffffff'}); }
-  // 3) 床を這う砂塵リング（縦に強く潰して接地感を出す）
-  if(tier<2) particles.push({k:'shockring',x,y,gl:groundLift(x),layer:0,delay:2,
-    r:R*0.18,r0:R*0.18,rMax:R*1.5,sq:0.13,w:14,life:22,max:22,color:'rgba(190,175,150,.85)'});
+  // 3) 床を這う砂塵リング（縦に強く潰して接地感を出す）。
+  //    加算合成の shockring を流用していたので土埃まで光っていた。通常合成の別種にする
+  if(tier<2) particles.push({k:'dustring',x,y,gl:groundLift(x),layer:0,delay:2,
+    r:R*0.18,r0:R*0.18,rMax:R*1.5,sq:0.13,w:14,life:22,max:22,color:'58,46,36'});
   // 4) 噴き上がる爆風の柱：接地の衝撃が上へ抜ける（AAAのインパクトは必ず縦の成分を持つ）
   if(tier<2){
     particles.push({k:'shockplume',x,y,gl:groundLift(x),layer:1,delay:1,
@@ -1619,6 +1627,8 @@ function shockwave(x,y,opt){ opt=opt||{};
     particles.push({k:'spark',x,y:y-2,gl:groundLift(x),layer:1,delay:0,
       vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.42-1.2, r:rnd(2,4.4), life:16+((Math.random()*8)|0), max:24,
       color:i%3?col:'#fff', star:false}); }
+  // 6) 燃え残りの煙。光が消えたあとに何も残らないと「爆発した跡」にならない
+  if(tier<2) smokePuff(x, y+8, heavy?5:3, '40,32,26');
 }
 // 放射インパクト線：角度・長さ・太さを一本ずつ散らし、等間隔スポークの機械的な見た目を避ける
 function impactBurst(x,y,color,big,opt){ opt=opt||{};
@@ -1703,7 +1713,8 @@ function updateParticles(){
       if(p.floor!=null && p.y<p.floor){ p.y=p.floor; p.vy=Math.max(0,p.vy); }   // HUD を突き抜けない
       if(p.y>p.y0){ p.y=p.y0; p.vy*=-0.34; p.vx*=0.6; } }   // 床（湧いた高さ）で一度だけ弾む
     else if(p.k==='ring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.2)); }
-    else if(p.k==='shockring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
+    else if(p.k==='shockring'||p.k==='dustring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
+    else if(p.k==='fireball'){ /* 形は寿命から引くので更新不要 */ }
     else if(p.k==='shockcore'){ const a=p.life/p.max; p.r=p.r+(p.rMax-p.r)*0.34; }
     else if(p.k==='shockplume'||p.k==='shockbeam'){ /* 形は寿命から直接引くので更新不要 */ }
     else if(p.k==='twinkle'){ p.rot=(p.rot||0)+0.18; }
@@ -1817,6 +1828,28 @@ function drawParticles(layer){
       ctx.globalCompositeOperation='source-over'; }
     else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
       ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
+    else if(p.k==='fireball'){    // 爆発の芯にある炎の塊。寿命後半で炎→煤へ移り、煙へ橋渡しする
+      const u=1-a, gr=p.r*(0.55+u*0.85);
+      p.rot+=p.rv;
+      ctx.save(); ctx.translate(sx,py); ctx.rotate(p.rot);
+      const g=ctx.createRadialGradient(0,0,gr*0.10,0,0,gr);
+      const soot=Math.pow(u,0.7);                                  // 炎から煤へ寄る度合い
+      // 寿命に比例して薄めると、周りの加算合成の光に飲まれて塊が消える。
+      // 塊として読ませたいので、寿命の後半まで不透明を保ってから抜く
+      const op=Math.pow(a,0.5);
+      g.addColorStop(0.00,'rgba(255,246,216,'+(op*(1-soot*0.90)).toFixed(3)+')');
+      g.addColorStop(0.35,'rgba('+hexRGB(p.color)+','+(op*0.95).toFixed(3)+')');
+      g.addColorStop(0.72,'rgba(138,42,16,'+(op*0.85).toFixed(3)+')');
+      g.addColorStop(1.00,'rgba(22,16,12,'+(op*0.55).toFixed(3)+')');
+      ctx.fillStyle=g; ctx.beginPath();
+      for(const L of p.lobes){ const lr=gr*L[2];
+        ctx.moveTo(gr*L[0]+lr, gr*L[1]); ctx.arc(gr*L[0], gr*L[1], lr, 0, 7); }
+      ctx.fill(); ctx.restore(); }
+    else if(p.k==='dustring'){    // 床を這う土埃の輪。加算にすると土が光るので通常合成で
+      const ea=Math.pow(a,1.35);
+      ctx.globalAlpha=ea*0.55; ctx.strokeStyle='rgba('+p.color+','+ea.toFixed(3)+')';
+      ctx.lineWidth=Math.max(0.8,p.w*ea);
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),0,0,7); ctx.stroke(); }
     else if(p.k==='shockring'){   // 衝撃リング：外へ抜けながら細く薄くなり、内側に薄い膜を伴う
       const ea=Math.pow(a,1.35);
       ctx.globalCompositeOperation='lighter';
@@ -7866,6 +7899,19 @@ function hazeGrad(T,ti){
   g.addColorStop(0.88,'rgba('+rgb+','+Math.min(1,a*1.02).toFixed(3)+')');
   g.addColorStop(1.00,'rgba('+rgb+','+(a*0.72).toFixed(3)+')');
   _hzC[ti]=g; return g; }
+// 中景の層の色。大気遠近は山にしか掛かっておらず、中景（LAND）の3層は
+// shade() で明度を13〜18ずつ動かすだけだった。彩度もコントラストも3層で同じなので、
+// 画面の面積をいちばん食う中景が「型紙を3枚重ねた紙芝居」に潰れ、
+// しかも背後の山より鮮やかで遠近の順序が逆転していた。
+// 層が持っている視差をそのまま奥行きとして使い、遠い層ほど霞の色へ寄せる。
+// 色を混ぜると明暗差も自動的に縮むので、奥の稜線が暴れなくなる
+function landCol(T, base, par){
+  const t=clamp((0.72-par)*0.42, 0, 0.30);
+  const b=_rgba(base), h=_rgba(T.haze);
+  return 'rgb('+Math.round(b[0]*(1-t)+h[0]*t)+','
+               +Math.round(b[1]*(1-t)+h[1]*t)+','
+               +Math.round(b[2]*(1-t)+h[2]*t)+')';
+}
 // 遠景の山。色を青灰でハードコードすると業火の渓谷でも蜂の巣でも山だけ浮くので、
 // テーマの塔色から引いて霞の色へ層ごとに寄せる（遠いほど霞に溶ける＝大気遠近）
 function drawMountains(){ const T=curTheme(), yb=GROUND_TOP-24, hz=_rgba(T.haze);
@@ -7977,7 +8023,7 @@ const LAND={
     // 1本が11頂点あるので、間隔を詰めると描画コールが一気に倍になる。
     // 層数を perfTier で落とし、間隔も広めに取る
     const baseY=GROUND_TOP-2, LN=perfTier>=2?1:(perfTier>=1?2:3);
-    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=shade(T.tower,-30+L*13), step=[112,86,66][L];
+    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=landCol(T,shade(T.tower,-30+L*13),par), step=[112,86,66][L];
       landRow(par,step,function(gx,g0){ const h=(58+L*26)+Math.abs(g0*47%(40+L*22)), x=gx+step/2;
         const w=step*0.52;
         ctx.fillStyle=col; ctx.beginPath();
@@ -7992,7 +8038,7 @@ const LAND={
   gorge:function(T){                                     // 業火の渓谷：切り立つ両岸と、奥に落ちる溶岩滝
     const baseY=GROUND_TOP-2;
     // 平らな頂とV字の切れ込みを持つ壁（sin を鈍らせると台地、鋭くすると谷）
-    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=shade(T.tower,-34+L*15), A=104+L*44, k=0.0021+L*0.0013;
+    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=landCol(T,shade(T.tower,-34+L*15),par), A=104+L*44, k=0.0021+L*0.0013;
       landRidge(col,par,baseY,function(wx){
         const v=Math.abs(Math.sin(wx*k)); return A*(0.16+0.84*Math.pow(v,0.22)); }); }
     // 溶岩滝：谷底へ落ちる帯。乱数ではなく世界座標で位置を決める（毎フレーム動かない）
@@ -8006,20 +8052,21 @@ const LAND={
   },
   castle:function(T){                                    // 魔界の城：尖塔の群れと、灯りの脈打つ主塔
     const baseY=GROUND_TOP-2;
-    ctx.fillStyle=shade(T.tower,-34);                     // 奥の岩壁
-    landRidge(shade(T.tower,-34),0.18,baseY,function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    landRidge(landCol(T,shade(T.tower,-34),0.18),0.18,baseY,   // 奥の岩壁
+      function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    const spA=landCol(T,shade(T.tower,-16),0.40), spB=landCol(T,shade(T.tower,-26),0.40);
     landRow(0.40,132,function(gx,g0){                     // 尖塔列
       const h=126+Math.abs(g0*61%118), x=gx+66;
-      ctx.fillStyle=(g0%2)?shade(T.tower,-16):shade(T.tower,-26);
+      ctx.fillStyle=(g0%2)?spA:spB;
       ctx.beginPath(); ctx.moveTo(x-19,baseY); ctx.lineTo(x-13,baseY-h*0.70);
       ctx.lineTo(x,baseY-h); ctx.lineTo(x+13,baseY-h*0.70); ctx.lineTo(x+19,baseY); ctx.closePath(); ctx.fill(); });
     const cx=W*0.54-camX*0.46, top=baseY-262;             // 主塔（天守＋副塔＋城壁＋狭間）
     if(cx>-280&&cx<W+280){
-      ctx.fillStyle=shade(T.tower,-4); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
+      ctx.fillStyle=landCol(T,shade(T.tower,-4),0.46); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
       ctx.beginPath(); ctx.moveTo(cx-70,top+76); ctx.lineTo(cx,top); ctx.lineTo(cx+70,top+76); ctx.closePath(); ctx.fill();
       for(const s of [-1,1]){ ctx.fillRect(cx+s*98-15,top+146,30,baseY-top-146);
         ctx.beginPath(); ctx.moveTo(cx+s*98-21,top+150); ctx.lineTo(cx+s*98,top+98); ctx.lineTo(cx+s*98+21,top+150); ctx.closePath(); ctx.fill(); }
-      ctx.fillStyle=shade(T.tower,-24); ctx.fillRect(cx-152,baseY-86,304,86);
+      ctx.fillStyle=landCol(T,shade(T.tower,-24),0.46); ctx.fillRect(cx-152,baseY-86,304,86);
       for(let k=-7;k<=7;k++) ctx.fillRect(cx+k*21-6,baseY-98,12,14);
       const fl=(0.55+0.35*Math.sin(gf*0.05)).toFixed(2);   // 窓の灯りが脈打つ
       ctx.fillStyle='rgba(255,120,60,'+fl+')';
@@ -8029,7 +8076,7 @@ const LAND={
   glacier:function(T){                                   // 氷雪：角ばったセラック（氷塔）。三角波で稜線を折る
     const baseY=GROUND_TOP-2;
     for(let L=0;L<3;L++){ const par=0.20+L*0.18, A=110+L*46, k=0.0016+L*0.0011;
-      landRidge(shade(T.tower,-26+L*16),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
+      landRidge(landCol(T,shade(T.tower,-26+L*16),par),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
     if(perfTier<1) landRow(0.56,190,function(gx,g0){      // 陽の当たる面だけ白く光らせる
       const h=120+Math.abs(g0*43%70), x=gx+95;
       ctx.fillStyle='rgba(255,255,255,.34)';
@@ -8037,19 +8084,20 @@ const LAND={
   },
   cavern:function(T){                                    // 水晶洞：頭上の岩天井と、足元から伸びる結晶柱
     const baseY=GROUND_TOP-2;
-    ctx.fillStyle=shade(T.tower,-30);                     // 天井（上から垂れる岩）
+    ctx.fillStyle=landCol(T,shade(T.tower,-30),0.26);     // 天井（上から垂れる岩）
     ctx.beginPath(); ctx.moveTo(-20,0);
     for(let sx=-20;sx<=W+20;sx+=20){ const wx=sx+camX*0.26;
       ctx.lineTo(sx, 74+Math.abs(Math.sin(wx*0.0042))*104+Math.sin(wx*0.011)*18); }
     ctx.lineTo(W+20,0); ctx.closePath(); ctx.fill();
+    const stalC=landCol(T,shade(T.tower,-22),0.30);
     if(perfTier<2) landRow(0.30,perfTier?200:150,function(gx,g0){       // 鍾乳石
       const h=44+Math.abs(g0*53%86), x=gx+75, y0=92+Math.abs(g0*31%54);
-      ctx.fillStyle=shade(T.tower,-22);
+      ctx.fillStyle=stalC;
       ctx.beginPath(); ctx.moveTo(x-13,y0); ctx.lineTo(x,y0+h); ctx.lineTo(x+13,y0); ctx.closePath(); ctx.fill(); });
     // 結晶柱。手前の層ほど数が多いので、低品質では奥の1層だけにする
     for(let L=0;L<(perfTier>=2?1:2);L++) landRow(0.34+L*0.22,(120-L*30)+(perfTier?46:0),function(gx,g0){
       const h=(90+L*54)+Math.abs(g0*67%(70+L*40)), x=gx+40, w=13+L*7;
-      ctx.fillStyle=shade(T.tower,-8+L*18);
+      ctx.fillStyle=landCol(T,shade(T.tower,-8+L*18),0.34+L*0.22);
       ctx.beginPath(); ctx.moveTo(x-w,baseY); ctx.lineTo(x-w*0.6,baseY-h*0.82);
       ctx.lineTo(x,baseY-h); ctx.lineTo(x+w*0.6,baseY-h*0.82); ctx.lineTo(x+w,baseY); ctx.closePath(); ctx.fill();
       if(perfTier<1){ ctx.fillStyle='rgba(150,235,255,.30)';
@@ -8063,20 +8111,21 @@ const LAND={
         ctx.beginPath(); ctx.ellipse(px,yb,80,20,0,0,7); ctx.ellipse(px+56,yb+9,58,15,0,0,7); ctx.fill(); } }
     const cx=W*0.52-camX*0.34, top=baseY-232;             // 神殿：破風＋エンタブラチュア
     if(cx>-300&&cx<W+300){
-      ctx.fillStyle=shade(T.tower,-14);
+      ctx.fillStyle=landCol(T,shade(T.tower,-14),0.34);
       ctx.beginPath(); ctx.moveTo(cx-158,top+58); ctx.lineTo(cx,top); ctx.lineTo(cx+158,top+58); ctx.closePath(); ctx.fill();
-      ctx.fillStyle=shade(T.tower,4); ctx.fillRect(cx-166,top+58,332,22);
-      for(let k=-4;k<=4;k++){ ctx.fillStyle=shade(T.tower,-6); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
+      ctx.fillStyle=landCol(T,shade(T.tower,4),0.34); ctx.fillRect(cx-166,top+58,332,22);
+      for(let k=-4;k<=4;k++){ ctx.fillStyle=landCol(T,shade(T.tower,-6),0.34); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
         ctx.fillStyle='rgba(255,255,255,.20)'; ctx.fillRect(cx+k*36-11,top+80,6,baseY-top-80); } }
+    const colShaft=landCol(T,shade(T.tower,-10),0.58), colCap=landCol(T,shade(T.tower,10),0.58);
     landRow(0.58,116,function(gx,g0){                     // 手前に並ぶ独立柱（溝彫り入り）
       const h=132+Math.abs(g0*37%54), x=gx+58;
-      ctx.fillStyle=shade(T.tower,-10); ctx.fillRect(x-16,baseY-h,32,h);
-      ctx.fillStyle=shade(T.tower,10); ctx.fillRect(x-21,baseY-h-11,42,13);
+      ctx.fillStyle=colShaft; ctx.fillRect(x-16,baseY-h,32,h);
+      ctx.fillStyle=colCap;   ctx.fillRect(x-21,baseY-h-11,42,13);
       ctx.fillStyle='rgba(0,0,0,.14)'; for(let k=-1;k<=1;k++) ctx.fillRect(x+k*8-1.4,baseY-h+6,2.8,h-8); });
   },
   styx:function(T){                                      // 冥府：黒い河・枯木・折れた列柱
     const baseY=GROUND_TOP-2;
-    landRidge(shade(T.tower,10),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
+    landRidge(landCol(T,shade(T.tower,10),0.16),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
     ctx.fillStyle='rgba(4,2,10,.85)'; ctx.fillRect(0,baseY-52,W,52);            // 河面
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 鬼火の映り込み
       for(let i=0;i<7;i++){ const x=((i*173-camX*0.5)%(W+180)+W+180)%(W+180)-90;
@@ -8084,38 +8133,41 @@ const LAND={
         ctx.fillStyle='rgba(140,200,255,.9)';
         ctx.beginPath(); ctx.ellipse(x,baseY-26,26,5,0,0,7); ctx.fill(); }
       ctx.restore(); }
+    const deadC=landCol(T,shade(T.tower,26),0.44), pillC=landCol(T,shade(T.tower,20),0.44);
     landRow(0.44,180,function(gx,g0){                     // 枯木と折れ柱を交互に
       const x=gx+90;
       if(g0%2){ const h=96+Math.abs(g0*41%56);
-        ctx.strokeStyle=shade(T.tower,26); ctx.lineWidth=7; ctx.lineCap='round';
+        ctx.strokeStyle=deadC; ctx.lineWidth=7; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(x,baseY-52); ctx.lineTo(x-4,baseY-52-h); ctx.stroke();
         ctx.lineWidth=4;
         for(let b=0;b<3;b++){ const s=b%2?1:-1, y=baseY-52-h*(0.45+b*0.2);
           ctx.beginPath(); ctx.moveTo(x-2,y); ctx.lineTo(x+s*(22+b*6),y-16-b*5); ctx.stroke(); }
       } else { const h=70+Math.abs(g0*53%64);
-        ctx.fillStyle=shade(T.tower,20); ctx.fillRect(x-13,baseY-52-h,26,h);
+        ctx.fillStyle=pillC; ctx.fillRect(x-13,baseY-52-h,26,h);
         ctx.beginPath(); ctx.moveTo(x-13,baseY-52-h); ctx.lineTo(x+13,baseY-52-h+12); ctx.lineTo(x+13,baseY-52-h); ctx.closePath(); ctx.fill(); } });
   },
   sunken:function(T){                                    // 海神：沈んだ列柱のアーチと、差し込む光の柱
     const baseY=GROUND_TOP-2;
-    landRidge(shade(T.tower,-8),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
+    landRidge(landCol(T,shade(T.tower,-8),0.18),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 海面から差す光の柱
       for(let i=0;i<5;i++){ const x=((i*286-camX*0.22)%(W+300)+W+300)%(W+300)-150;
         ctx.globalAlpha=0.12+0.05*Math.sin(gf*0.02+i);
         ctx.fillStyle='rgba(190,255,255,.8)';
         ctx.beginPath(); ctx.moveTo(x-16,0); ctx.lineTo(x+16,0); ctx.lineTo(x+58,baseY); ctx.lineTo(x-40,baseY); ctx.closePath(); ctx.fill(); }
       ctx.restore(); }
+    const archC=landCol(T,shade(T.tower,16),0.42);
     landRow(0.42,208,function(gx,g0){                     // 傾いて沈んだアーチ
       const x=gx+104, h=118+Math.abs(g0*47%52), tilt=((g0*29%14)-7)*0.012;
       ctx.save(); ctx.translate(x,baseY); ctx.rotate(tilt);
-      ctx.fillStyle=shade(T.tower,16);
+      ctx.fillStyle=archC;
       ctx.fillRect(-58,-h,20,h); ctx.fillRect(38,-h,20,h);
       ctx.beginPath(); ctx.moveTo(-58,-h); ctx.quadraticCurveTo(0,-h-46,58,-h);
       ctx.lineTo(58,-h+18); ctx.quadraticCurveTo(0,-h-24,-58,-h+18); ctx.closePath(); ctx.fill();
       ctx.restore(); });
+    const kelpC=landCol(T,shade(T.tower,30),0.66);
     if(perfTier<1) landRow(0.66,74,function(gx,g0){       // 揺れる海藻
       const x=gx+37, h=52+Math.abs(g0*31%44), sw=Math.sin(gf*0.035+g0)*9;
-      ctx.strokeStyle=shade(T.tower,30); ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.strokeStyle=kelpC; ctx.lineWidth=5; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6,x+sw,baseY-h); ctx.stroke(); });
   },
 };
@@ -8126,7 +8178,7 @@ function drawLand(T){
   ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);
 }
 function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
-  const c1=shade(T.tower,-16), c2=shade(T.tower,-30);
+  const c1=landCol(T,shade(T.tower,-16),par), c2=landCol(T,shade(T.tower,-30),par);
   for(let i=-1;i<16;i++){ const bw=124, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
     const h=64+Math.abs(g0*47%78), x=gx+bw/2, wob=(g0*29%17)-8;
     ctx.fillStyle=(g0%2)?c1:c2;
