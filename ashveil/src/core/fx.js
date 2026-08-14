@@ -976,8 +976,20 @@ class FX {
       slot.primed = false;
       this._deriveTrailAxis(slot, object3D);
     }
+    // Re-prime on EVERY enable, not only when a slot is freshly allocated.
+    //
+    // The priming branch in _updateTrails exists precisely to stop the ribbon
+    // streaking from wherever the buffer was last used — but it was only being
+    // armed when a new slot was taken. Swinging twice with the same weapon finds
+    // the existing slot on the second swing, keeps `primed` true, and draws a
+    // ribbon connecting the previous swing's blade positions to this one's. Over
+    // a teleport or a big pose change that is a metres-wide sheet across the
+    // screen, which is what it looked like: a giant pale wedge, unrelated to the
+    // sword. Lowering the trail's opacity made it a fainter giant sheet; this
+    // makes it a trail.
     slot.on = true;
     slot.fade = 1;
+    slot.primed = false;
     slot.mesh.visible = true;
     return slot;
   }

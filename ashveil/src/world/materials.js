@@ -389,7 +389,7 @@ export function applyNearFade(materials, near = 0.42, full = 1.65) {
   // instead of opening a hole, so the boss read through a slot and the half-lit
   // dither band itself became the artefact. A 4.6m boss needs the cutout to cover
   // its whole silhouette, not a column of it.
-  const uCut = { value: new THREE.Vector2(0.58, 1.777) };  // radius, aspect
+  const uCut = { value: new THREE.Vector2(0.44, 1.777) };  // radius, aspect
 
   const shared = { uNear, uFull, uFocusDist, uFocusNDC, uCut };
   for (const m of materials) {
@@ -436,11 +436,14 @@ export function applyNearFade(materials, near = 0.42, full = 1.65) {
           // Inner plateau at 0.30 of the radius rather than 0.55: the centre of
           // the hole must be FULLY clear, so the dither is confined to a soft rim
           // instead of covering the subject in half-lit speckle.
-          '\tfloat ashRadial = 1.0 - smoothstep(uCut.x * 0.30, uCut.x, ashR);\n' +
-          // A wall can stand almost as far away as a 4.6m boss and still hide it,
-          // so the depth window is generous on the far side.
-          '\tfloat ashDepth = 1.0 - smoothstep(uFocusDist - 2.20, uFocusDist - 0.40, vNearFade);\n' +
-          '\tashFade = min(ashFade, 1.0 - ashRadial * ashDepth);\n' +
+          '\tfloat ashRadial = 1.0 - smoothstep(uCut.x * 0.35, uCut.x, ashR);\n' +
+          '\tfloat ashDepth = 1.0 - smoothstep(uFocusDist - 1.60, uFocusDist - 0.50, vNearFade);\n' +
+          // When the camera is right on top of the subject there is no room for
+          // an occluder between them, and applying the cutout anyway just eats
+          // whatever the camera happens to be inside. Ramp the whole effect in
+          // only once the shot is long enough for an occluder to exist.
+          '\tfloat ashRoom = smoothstep(2.60, 4.60, uFocusDist);\n' +
+          '\tashFade = min(ashFade, 1.0 - ashRadial * ashDepth * ashRoom);\n' +
           '\tif (ashFade < ashBayer(gl_FragCoord.xy)) discard;');
     };
     // Without a distinct cache key three would hand these the program compiled
@@ -547,9 +550,15 @@ export class Materials {
     this.list = [this.stone, this.stoneDark, this.vault, this.column, this.ground, this.iron, this.ironLight,
                  this.cloth, this.clothPlayer, this.bone, this.ember, this.emberDim, this.ashFlesh];
 
-    /** Occluders that must dissolve rather than block the shot. Ground excluded. */
-    this.faded = [this.stone, this.stoneDark, this.vault, this.column,
-                  this.iron, this.ironLight];
+    // Occluders that may dissolve rather than block the shot.
+    //
+    // ARCHITECTURE ONLY. `iron` and `ironLight` were in this list and should
+    // never have been: they are the player's cuirass and Volga's plating, not
+    // just gratings and winches. With the cutout centred on the subject, the
+    // subject is by definition inside the cutout — so the fix was dissolving the
+    // very characters it exists to reveal. The ground is excluded for the
+    // separate reason that a dither hole in the floor is worse than an occluder.
+    this.faded = [this.stone, this.stoneDark, this.vault, this.column];
     applyNearFade(this.faded);
     this._focus = new THREE.Vector3();
   }
