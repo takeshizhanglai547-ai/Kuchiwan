@@ -191,3 +191,41 @@ Round 5's headline change is the near-camera fragment dissolve (see
   the cost side of that ratio cannot be measured without a GPU. Nothing here
   should be read as a claim that it is free.
 - **Whether round 5 moved any critic off REDO.** No critic has seen it.
+
+### Updated after the r5–r8 capture rounds
+
+Some of the above was resolved by actually re-shooting and looking. Corrected
+status:
+
+**EXECUTED — observed in a capture**
+- The dissolve clears three of the four frames critics named
+  (`loc_cistern_plaza`, `loc_forecourt`, the arena approach).
+- The blade trail coincides with the active window. The swing strip stamps each
+  frame with clip time, state and the active window: no trail at t=0.067/0.15,
+  trail across t=0.25–0.417 against an active window of 0.25–0.435. The heavy
+  attack matches — no trail 0.067–0.667, live at 0.75–0.833.
+- Definition of Done re-verified on the final build after every change:
+  `victory`, `bossHp 0`, empty error list.
+
+**STILL THEORETICAL**
+- **The impact-point correction.** The maths is right and the solver already
+  carried the data, but the combat scenario does not reliably land its hits —
+  `07_heavy_impact` shows the swing connecting with nothing. No capture
+  demonstrates the spark landing on the contact surface, so this stays
+  theoretical rather than being promoted.
+- Phase 2's sheared chimney stack. The code path runs; no reviewed capture of the
+  sheared silhouette in a clean shot.
+
+**KNOWN STILL BROKEN**
+- The boss camera in a tight corner. `r8/boss/09_p2_2` still has the camera
+  behind geometry with Volga hidden. The cutout is deliberately disabled at very
+  short focus distances, because applying it there eats whatever the camera is
+  inside, so this case is untouched. Reduced, not resolved.
+
+**A CLAIM WITHDRAWN**
+- The large cream wedge in the swing frames was identified as the weapon trail
+  rendering with wrong geometry. That was wrong: the idle frame, with no attack
+  and no trail in existence, carries the same band and the same slab, which are
+  level lighting and a distant building. The trail re-priming bug found while
+  chasing it is real and fixed, but it fixed a latent bug, not an observed
+  artefact.

@@ -7,10 +7,17 @@ are sixty-odd of them, which is a 25 MB repository cost for images whose whole
 job is to be looked at once. Quality 88 is visually indistinguishable here (the
 palette is dark and low-frequency) at about a tenth the size.
 
-Nothing is filtered on the way through. If a frame in the source round shows a
+No frame is filtered for looking bad. If a frame in the source round shows a
 defect, it appears in the delivered set showing that defect; curating the set to
 look better than the build would make the screenshots a nicer advertisement and
 a worse report.
+
+One mechanical exclusion, applied by a stated rule rather than by eye: swing
+frames whose stamped state is `idle` are dropped. The swing scenario captures a
+fixed frame count around each attack, so most of what it returns is the player
+standing still after recovery — ninety identical frames of nothing, which bury
+the twenty that show the attack. The rule is the state stamp, not judgement about
+which frames flatter the build.
 
 Usage:  python3 tools/curate.py captures/r5 captures/final
 """
@@ -46,6 +53,8 @@ def main() -> int:
             continue
         for png in sorted(d.glob('*.png')):
             if png.name == '00_title.png' and sub != 'world':
+                continue
+            if sub == 'swing' and '_idle_' in png.name:
                 continue
             total += convert(png, out / sub / (png.stem + '.jpg'))
             count += 1

@@ -330,38 +330,98 @@ occluders out, horizontal cover in.
 
 ---
 
+## Round 5 — what the re-captures actually showed
+
+Round 5's diffs were verified by re-shooting the frames the critics named and
+looking at them, which is the only way any of this gets checked. Four rounds of
+capture were needed (r5–r8) because the first three each revealed something the
+previous fix had missed or broken.
+
+### Confirmed fixed
+
+| Finding | Evidence |
+|---|---|
+| B/E: `loc_cistern_plaza` camera inside the floor, player absent | player in frame, brazier reads, near wall dissolving |
+| E: `loc_forecourt` near top-down with a clipped band | normal third-person framing, enemy legible ahead |
+| D: arena pillars park against the lens | arena is open; buttresses replace them |
+| A: trail brightest during the wind-up, gone by contact | stamped strip: **no** trail at t=0.067/0.15, trail across t=0.25–0.417, active window 0.25–0.435. Heavy the same: no trail 0.067–0.667, live 0.75–0.833 |
+| A/D/E: boss is a flat dark mass | chimney vents burn against the sky; the crown reads |
+| D: overhead wind-up hides inside the torso outline | rake crosses open sky diagonally |
+| A: nameplate prints across the player's head | plate at the bottom edge; epithet legible |
+| Definition of Done still holds after every change | `fullrun` → `state: victory`, `bossHp: 0`, empty error list, on the final build |
+
+### Fixed, but only after the first attempt made it worse
+
+- **The dissolve, twice.** The near fade cleared occluders against the lens but
+  not a wall standing several metres out, which is the case D actually described.
+  Extending it to a subject cutout worked, but the first radius cut a narrow
+  dithered slot rather than a hole. Widening that exposed a worse bug: `iron` and
+  `ironLight` were in the dissolve list, and those are the player's cuirass and
+  Volga's plating — with the cutout centred on the subject, the fix was eating
+  the characters it exists to reveal. The r7 boss capture is unreadable because
+  of it. Architecture only now, with the effect ramping in only once the shot is
+  long enough for an occluder to fit between camera and subject.
+- **The ash motes.** A 0.2 m sprite subtends ~58 px at 4 m, so E was looking at
+  something genuinely mis-scaled on screen. Rejecting spawns near the lens was
+  the wrong fix on its own — ambient motes drift, so one that spawned legally
+  wanders in anyway. Fading on live view depth in the shader covers both cases.
+
+### Claimed and then withdrawn
+
+The large cream wedge in the swing frames was called out as the weapon trail
+rendering with wrong geometry. **That was wrong.** The idle frame — no attack, no
+trail in existence — carries the same tan band along the base of the right-hand
+wall and the same pale slab at top centre. Both are level lighting and a distant
+building. The actual trail is the modest white-and-orange streak along the
+blade's sweep, correctly sized and correctly timed.
+
+The trail's re-priming bug found while chasing it is real and is fixed
+(re-priming happened only when a slot was freshly allocated, so a second swing
+with the same weapon could streak from the previous swing's blade positions), but
+**it fixed a latent bug, not an observed artefact**, and is recorded as such.
+
+### Still broken
+
+- **The boss camera in a corner.** `r8/boss/09_p2_2` still has the camera behind
+  geometry with Volga hidden. The cutout is deliberately disabled at very short
+  focus distances — applying it there just eats whatever the camera is inside —
+  so the corner case is untouched. D's headline complaint is **reduced, not
+  resolved**.
+- **The combat scenario does not reliably land its hits.** `07_heavy_impact`
+  shows the swing connecting with nothing, the enemy across the plaza. A's
+  biggest problem — impact VFX firing while the weapon is at rest — is therefore
+  still **unevidenced either way**. The impact-point fix is in the code and is
+  correct on inspection; no capture demonstrates it.
+
+---
+
 ## Circuit breaker status (§21)
 
-Five rounds are complete: one developer pass and four review rounds. The brief's
-circuit breaker has therefore been reached. ADMIRE was never reached and is not
-claimed; every critic seat that has ever run has returned REDO.
+**The five-round limit is reached and passed.** One developer pass, four blind
+review rounds, and four verification capture rounds. ADMIRE was never reached and
+is not claimed. Every critic seat that has ever run has returned REDO, and **no
+critic has seen anything built after round 4** — every round-5 change listed above
+is verified by capture, not by review.
 
-**達成 / Achieved — verified by running the build**
+**達成 / Achieved — executed, not inferred**
 - The vertical slice is completable start to finish with no developer
-  intervention. `fullrun` machine-checks it and reaches the victory state; the
-  most recent run before round 5 produced all eleven checkpoint shots with an
-  empty error list.
-- Hit detection is correct and measured — HIT at 1.0–2.6 m, clean miss at 3.0 m,
-  from an instrumented test rather than from reading the code.
-- The boss has a full moveset with documented telegraph/active/punish windows and
-  a phase transition that changes the rules, not the numbers.
+  intervention. Machine-checked on the final build: `victory`, `bossHp 0`, zero
+  console errors.
+- Hit detection measured: HIT at 1.0–2.6 m, clean miss at 3.0 m.
+- Boss moveset with documented telegraph/active/punish windows, and a phase
+  transition that changes the rules — now also the silhouette and the arena light.
+- Attack timing is now *reviewable*: the swing strip proves the blade trail
+  coincides with the active window rather than the wind-up.
 
 **部分達成 / Partially achieved**
-- Camera occlusion. The method changed this round and the fix is a real one, but
-  it has been verified only on re-captured frames — no critic has reviewed the
-  result. It is not yet known to satisfy the four critics who raised it.
-- Boss readability and phase-2 identity. Changed this round on D's specific
-  diagnosis, likewise unreviewed.
-- Image readability and material coherence. Improved across rounds 3 and 4 (the
-  masonry method change), still the standing art debt.
-- Player silhouette. Changed four times; still not a designed character.
+- Camera occlusion. Three of the four named frames are clean; the boss-in-corner
+  case is not. Reduced, not resolved.
+- Boss readability. The crown and the telegraph read; the fight still ends up
+  behind geometry in tight positions.
+- Material coherence and player silhouette. Improved every round, never passed.
 
 **未達 / Not achieved**
-- **Combat feel has never been successfully blind-reviewed.** Critic A ran but
-  declined to judge the swing, because the evidence did not show one.
-- Landmark persistence along the route — Critic C's headline in both rounds it ran.
+- **Combat feel has still never been successfully blind-reviewed.** The evidence
+  needed for it now exists for the first time; nobody has looked at it.
 - Level design has had no blind review since round 2.
 - No round has returned PASS, from any seat.
-
-**The three choices §21 requires be offered — continue, accept, or pivot — are
-set out in the session summary rather than pre-empted here.**
