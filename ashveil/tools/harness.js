@@ -361,6 +361,25 @@ const SCENARIOS = {
    */
   async swing({ page, shotRaw, tap, at, advance, result }) {
     await at(1.5, 0.3, -27.5, 0);
+
+    // Freeze the sparring partner. The first cut of this scenario let the thrall
+    // fight back, and the resulting strip was mostly `hurt` and `stagger` frames:
+    // the player was being interrupted mid-swing, so the very motion the strip
+    // exists to show never played through. A reviewer cannot grade a swing that
+    // keeps getting cancelled.
+    await page.evaluate(() => {
+      const g = window.ASHVEIL;
+      const e = g.director.enemies.find(e => e.kind === 'thrall');
+      if (!e) return;
+      e.place(1.5, 0.2, -25.4, Math.PI);
+      e.reset();
+      e.update = function (dt) {
+        this.pos.set(1.5, 0, -25.4); this.vel.set(0, 0, 0);
+        this.yaw = Math.PI; this.awake = false; this.hasToken = false;
+        this.updatePose(dt, {});
+      };
+    });
+
     await tap('KeyQ');
     await advance(0.3);
 
@@ -379,16 +398,14 @@ const SCENARIOS = {
       }
     };
 
-    // Walk into range first, so the swing has something to connect with.
-    await page.keyboard.down('KeyW'); await advance(0.7); await page.keyboard.up('KeyW');
-    await advance(0.1);
-
+    // Run this with `--simlock 1`, or each captured frame covers 3 simulation
+    // steps (0.05s) and a 0.185s active window collapses to a single sample.
     await page.mouse.down({ button: 'left' }); await page.mouse.up({ button: 'left' });
-    await stamp('light', 26);
+    await stamp('light', 46);
 
-    await advance(0.5);
+    await advance(0.6);
     await page.keyboard.down('KeyK'); await advance(0.55); await page.keyboard.up('KeyK');
-    await stamp('heavy', 30);
+    await stamp('heavy', 64);
 
     await result;
   },
