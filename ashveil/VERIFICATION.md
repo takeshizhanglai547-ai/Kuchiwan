@@ -147,5 +147,13 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
    a reviewer) made them occlude the boss camera more often. The two goals are in
    genuine tension and the current balance has not been play-tested.
 8. **The architecture still uses one stone texture** at inconsistent texel
-   density. Raised by the same reviewer in two consecutive rounds and not fixed;
-   it is the largest outstanding art debt.
+   density, and its noise is high-frequency enough to read as mottled camouflage
+   on large walls. Raised by the same reviewer in two consecutive rounds and not
+   fixed; it is the largest outstanding art debt.
+9. **Ember lanterns read as flat bright rectangles** at mid distance — the lamp
+   housing is too small to shape the glow. The checkpoint brazier was rebuilt
+   with a proper cradle; the smaller wayfinding lanterns were not.
+10. **`captures/final/world/loc_arena_far.jpg` is deliberately left in the
+    delivered set** even though it shows the camera clipping into the arena's
+    raised platform. Removing it would have made the screenshot set prettier and
+    the report less true.

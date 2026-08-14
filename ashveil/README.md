@@ -112,3 +112,26 @@ not reach the victory state.
 
 See `VERIFICATION.md` for what has actually been executed versus what has only
 been reasoned about.
+
+---
+
+## Deliverables in this folder
+
+| What | Where |
+|---|---|
+| Playable build | this folder — serve it and open `index.html` |
+| Source | `src/` (engine, actors, world, game, UI) |
+| Controls | above, and in-game bottom-right |
+| Design document | `DESIGN.md` |
+| Boss design + fairness sheet | `BOSS_MOVESET.md` |
+| Screenshots | `captures/final/` — `world/`, `combat/`, `boss/` |
+| Gameplay video | `captures/final/gameplay_combat_60fps.webm` |
+| Verification status | `VERIFICATION.md` |
+| Blind-review log + regression checklist | `REVIEW_LOG.md` |
+
+**About the video**: 170 frames captured one-per-simulation-step and encoded at
+60fps, so it is 2.8 seconds of genuine real-time gameplay — lock-on, a light
+combo, a roll and a charged heavy. It took several minutes of wall-clock to
+record because the capture machine has no GPU. The on-screen FPS counter in
+every capture reflects that software renderer and is **not** a performance
+result; see `VERIFICATION.md`.
