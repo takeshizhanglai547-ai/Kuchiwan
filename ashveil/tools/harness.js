@@ -345,6 +345,54 @@ const SCENARIOS = {
    * one rendered frame == one 1/60s simulation step; the resulting PNG sequence
    * stitches to a genuine 60fps clip of the game running, not a slideshow.
    */
+  /**
+   * A swing, densely sampled.
+   *
+   * `clip` captures 260 evenly spaced frames covering a whole engagement, most of
+   * which are the idle gaps between attacks. Sampling that uniformly for a review
+   * strip produced a sheet with no swing in it — a reviewer looking at it can see
+   * the player standing still in four different places and cannot judge
+   * anticipation, contact, follow-through or recovery at all.
+   *
+   * This captures ONE light attack and ONE heavy at every simulation step, from
+   * before the wind-up to after recovery, and stamps each shot with the elapsed
+   * time and the attack's active window so the contact frames are identifiable
+   * rather than guessed at.
+   */
+  async swing({ page, shotRaw, tap, at, advance, result }) {
+    await at(1.5, 0.3, -27.5, 0);
+    await tap('KeyQ');
+    await advance(0.3);
+
+    const stamp = async (label, n) => {
+      for (let f = 0; f < n; f++) {
+        const info = await page.evaluate(() => {
+          const p = window.ASHVEIL.player;
+          return { st: p.state, ct: +(p.clipTime || 0).toFixed(3),
+                   act: p.attackDef ? p.attackDef.active : null, trail: !!p.trailOn };
+        });
+        const act = info.act ? `${info.act[0]}-${info.act[1]}` : '-';
+        const live = info.act && info.ct >= info.act[0] && info.ct <= info.act[1];
+        await shotRaw(`${label}_${String(f).padStart(2, '0')}_t${info.ct}` +
+                      `_${info.st}_active${act}${live ? '_LIVE' : ''}${info.trail ? '_trail' : ''}`);
+        await advance(1 / 60);
+      }
+    };
+
+    // Walk into range first, so the swing has something to connect with.
+    await page.keyboard.down('KeyW'); await advance(0.7); await page.keyboard.up('KeyW');
+    await advance(0.1);
+
+    await page.mouse.down({ button: 'left' }); await page.mouse.up({ button: 'left' });
+    await stamp('light', 26);
+
+    await advance(0.5);
+    await page.keyboard.down('KeyK'); await advance(0.55); await page.keyboard.up('KeyK');
+    await stamp('heavy', 30);
+
+    await result;
+  },
+
   async clip({ page, shotRaw, tap, at, advance }) {
     const FRAMES = parseInt(process.env.CLIP_FRAMES || '260', 10);
     await at(1.5, 0.3, -27.5, 0);
