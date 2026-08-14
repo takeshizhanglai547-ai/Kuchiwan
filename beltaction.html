@@ -11964,6 +11964,7 @@ function drawStageBannerScrim(){ if(stageBanner<=0) return; const B=stageBannerF
   ctx.moveTo(W/2-B.lw,cy+36); ctx.lineTo(W/2+B.lw,cy+36); ctx.stroke();
   ctx.restore(); }
 function drawHUD(){
+  drawScreenFrame();                              // 額縁はHUDより先＝パネルが額の上に載る
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
   let hudY=120;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
   HUD_BOTTOM=hudY;   // ポップの侵入を止める下限（この後パネルを積むたびに更新する）
@@ -12343,6 +12344,65 @@ function ornRect(x,y,w,h,style){
   if(perfTier>=2) return;
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
   ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+// ── 画面そのものの額縁 ──────────────────────────────────────
+// 「絵が額に入っている」ことが、この画の様式をいちばん強く決める。パネル用の
+// 額縁部品は既にあったのに戦闘画面には一度も掛かっていなかった。
+// 帯は22pxに抑え、内側は完全に刳り抜くので、遊びの見え方は画面端しか変わらない。
+// 毎フレーム描くと重いので1枚のスプライトへ焼いて使い回す。
+const SFRM_B=22;                                  // 帯の太さ
+let _scrFrm=null, _scrFrmKey='';
+function screenFrame(){
+  const key=W+'x'+H;
+  if(_scrFrm && _scrFrmKey===key) return _scrFrm;
+  const c=document.createElement('canvas'); if(!c) return null;
+  c.width=W; c.height=H;
+  const g=c.getContext('2d'); if(!g) return null;
+  const B=SFRM_B;
+  // 1) 彫った石の外形
+  g.fillStyle=ORN.stoneLo; roundRectOn(g,0,0,W,H,12); g.fill();
+  // 2) 金のバンド。上下で明暗を反転させて、上から光が当たった立体に見せる
+  const lg=g.createLinearGradient(0,0,0,H);
+  lg.addColorStop(0,ORN.goldHi); lg.addColorStop(.20,ORN.gold);
+  lg.addColorStop(.52,ORN.goldLo); lg.addColorStop(.84,ORN.gold); lg.addColorStop(1,ORN.goldHi);
+  g.strokeStyle=lg; g.lineWidth=7; roundRectOn(g,4.5,4.5,W-9,H-9,9); g.stroke();
+  g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=2.4;
+  roundRectOn(g,B-2,B-2,W-(B-2)*2,H-(B-2)*2,7); g.stroke();
+  // 3) 内側を刳り抜く（ここから戦闘画面が見える）
+  g.save(); g.globalCompositeOperation='destination-out';
+  g.fillStyle='#000'; roundRectOn(g,B,B,W-B*2,H-B*2,7); g.fill(); g.restore();
+  // 4) 刳り抜きの縁に細い明暗を1本ずつ。これが無いと帯が板のままで厚みが出ない
+  g.strokeStyle='rgba(255,233,168,.30)'; g.lineWidth=1.2;
+  roundRectOn(g,B+0.6,B+0.6,W-(B+0.6)*2,H-(B+0.6)*2,6); g.stroke();
+  // 5) 四隅の唐草。刳り抜いた後に描くので、渦だけが内側へ張り出す
+  const K=1.9;
+  ornScroll(g,8,8,K,K);        ornScroll(g,W-8,8,-K,K);
+  ornScroll(g,8,H-8,K,-K);     ornScroll(g,W-8,H-8,-K,-K);
+  // 6) 上辺中央の銘（菱形）。中身は暗く塗る。ここにはステージ表示が重なるので、
+  //    明るい金で塗り潰すと文字が読めなくなる
+  const cw=168, cx=W/2;
+  g.fillStyle=ORN.gold; g.beginPath();
+  g.moveTo(cx-cw/2,B-3); g.lineTo(cx,1); g.lineTo(cx+cw/2,B-3); g.lineTo(cx,B+9); g.closePath(); g.fill();
+  g.fillStyle='rgba(24,20,14,.92)'; g.beginPath();
+  g.moveTo(cx-cw/2+9,B-3); g.lineTo(cx,5.6); g.lineTo(cx+cw/2-9,B-3); g.lineTo(cx,B+4.4); g.closePath(); g.fill();
+  // 下辺中央の受け
+  g.fillStyle=ORN.gold; g.beginPath();
+  g.moveTo(cx-58,H-B+2); g.lineTo(cx,H-2); g.lineTo(cx+58,H-B+2); g.closePath(); g.fill();
+  g.fillStyle='rgba(24,20,14,.9)'; g.beginPath();
+  g.moveTo(cx-44,H-B+4.6); g.lineTo(cx,H-6.2); g.lineTo(cx+44,H-B+4.6); g.closePath(); g.fill();
+  // 7) バンド上の鋲。等間隔の点が続くと「打ち込まれた金具」に見える
+  for(let bx2=64; bx2<W-56; bx2+=52){
+    for(const by2 of [11, H-11]){
+      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
+      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
+  for(let by2=76; by2<H-64; by2+=52){
+    for(const bx2 of [11, W-11]){
+      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
+      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
+  _scrFrm=c; _scrFrmKey=key; return c; }
+function drawScreenFrame(){
+  if(perfTier>=2) return;                          // 重いときは静かに外れる
+  const s=screenFrame(); if(!s) return;
+  ctx.drawImage(s,0,0,W,H); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();

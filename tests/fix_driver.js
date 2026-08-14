@@ -286,6 +286,57 @@ const DRIVER = `
       if(sin<2) throw new Error('輪郭に色を乗せていない: source-in '+sin+'回');
       if(lit<2) throw new Error('輪郭を本体へ戻していない: lighter '+lit+'回');
       console.log('輪郭リム OK (暖色と寒色の2本／枠の縁は落とす／destination-out '+dout+'回)'); }
+
+    // ── 戦闘画面の額縁 ──────────────────────────────────────
+    // 額縁の部品（ornPaint/ornScroll/ornRect）は揃っていたのに、戦闘画面には
+    // 一度も掛かっていなかった（ornRect は呼び出し元ゼロの死蔵コードだった）
+    { perfTier=0;
+      // 焼き込み先のキャンバスを記録用の作り物に差し替える。
+      // ヘッドレスの既定キャンバスは何でも吸い込むので、刳り抜きが見えない
+      const realCE=document.createElement;
+      let canvases=0, ops=[], pts=[], gco='source-over';
+      const stubCtx={ set globalCompositeOperation(v){ gco=v; ops.push('gco='+v); },
+        get globalCompositeOperation(){ return gco; },
+        fillStyle:'', strokeStyle:'', lineWidth:0, lineCap:'', lineJoin:'',
+        save(){ ops.push('save'); }, restore(){ gco='source-over'; ops.push('restore'); },
+        translate(){}, scale(){}, beginPath(){}, closePath(){},
+        moveTo(x,y){ if(gco==='destination-out') pts.push([x,y]); },
+        lineTo(x,y){ if(gco==='destination-out') pts.push([x,y]); },
+        arcTo(x,y,x2,y2){ if(gco==='destination-out'){ pts.push([x,y]); pts.push([x2,y2]); } },
+        bezierCurveTo(){}, quadraticCurveTo(){}, arc(){},
+        fill(){ ops.push('fill:'+gco); }, stroke(){ ops.push('stroke:'+gco); },
+        fillRect(){}, clearRect(){},
+        createLinearGradient(){ return {addColorStop:function(){}}; } };
+      _scrFrm=null; _scrFrmKey='';
+      document.createElement=function(t){ if(t==='canvas'){ canvases++;
+        return {width:0,height:0,getContext:function(){ return stubCtx; }}; } return realCE(t); };
+      let s1, s2;
+      try { s1=screenFrame(); s2=screenFrame(); }
+      finally { document.createElement=realCE; }
+      if(!s1) throw new Error('額縁のスプライトが焼けない');
+      if(canvases!==1) throw new Error('額縁を毎回焼き直している: キャンバス '+canvases+'枚');
+      if(s2!==s1) throw new Error('額縁のスプライトを使い回していない');
+      if(ops.join(' ').indexOf('fill:destination-out')<0)
+        throw new Error('内側を刳り抜いていない＝額縁が戦闘画面を覆う');
+      // 刳り抜きの矩形が画面のほぼ全域であること（帯が太いと遊びが見えなくなる）
+      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+      for(const q of pts){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
+      if(!(x1-x0>=900 && y1-y0>=480))
+        throw new Error('額縁の帯が太すぎる: 内側 '+(x1-x0).toFixed(0)+'x'+(y1-y0).toFixed(0)+' (960x540 中)');
+      // 実際に戦闘画面へ掛かっていること
+      _scrFrm=null; _scrFrmKey='';
+      let drawn=0; const realDraw=drawScreenFrame;
+      drawScreenFrame=function(){ drawn++; return realDraw.apply(null,arguments); };
+      try { setupRoster('inu'); startGame(); state='play'; player=players[0]; drawHUD(); }
+      finally { drawScreenFrame=realDraw; }
+      if(drawn!==1) throw new Error('戦闘画面のHUDが額縁を描いていない ('+drawn+'回)');
+      // 重いときは静かに外れる
+      { const real2=ctx; let blits=0;
+        ctx=new Proxy(real2,{ get:function(t,k){ if(k==='drawImage') return function(){ blits++; }; return t[k]; } });
+        try { perfTier=2; drawScreenFrame(); } finally { ctx=real2; }
+        if(blits!==0) throw new Error('perfTier2 でも額縁を描いている'); }
+      perfTier=0;
+      console.log('戦闘画面の額縁 OK (焼き込み1枚を使い回し／内側 '+(x1-x0).toFixed(0)+'x'+(y1-y0).toFixed(0)+' を刳り抜き／tier2で外れる)'); }
   }
 
   console.log('CRITIC FIX TEST PASSED'); process.exit(0);
