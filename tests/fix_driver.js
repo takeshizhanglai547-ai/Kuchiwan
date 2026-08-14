@@ -256,6 +256,36 @@ const DRIVER = `
     }
     perfTier=old;
     console.log('リムライトの適応品質 OK (tier0のみ有効／スプライト使い回し／DPR2で有効・入らなければ素通し)');
+
+    // ── 輪郭に沿ったリムが出ていること ──
+    // 従来は 64×1 の横グラデを外接矩形へ引き伸ばして source-atop で乗せるだけで、
+    // 輪郭（αの縁）を一切見ていなかった。効き量が「体が矩形のどこにいるか」で
+    // 決まるため、実測でプレイヤーは頭の縁で暖色α0.16・胴の縁で0.08 しか乗らず、
+    // いちばん濃い帯は枠の外の透明画素に落ちて捨てられていた
+    { perfTier=0;
+      setupRoster('inu'); startGame(); state='play';
+      const p2=players[0]; player=p2; p2.x=camX+300; p2.facing=1;
+      enemies.length=0; particles.length=0;
+      const st=rimBegin(68,156);
+      if(!st) throw new Error('リムの枠が作れない');
+      drawPlayer();
+      const rt=rimTmpCtx(), rc=rimCtx(), ops=[];
+      const wrap=function(t){ return new Proxy(t,{
+        get:function(o,k){ const v=o[k];
+          if(typeof v==='function') return function(){ ops.push(k); return v.apply(o,arguments); };
+          return v; },
+        set:function(o,k,v){ if(k==='globalCompositeOperation') ops.push('gco='+v); o[k]=v; return true; } }); };
+      _rimTmpC=wrap(rt); _rimCtx=wrap(rc);
+      try { rimEnd(st,1); } finally { _rimTmpC=rt; _rimCtx=rc; }
+      const j=ops.join(' ');
+      const dout=(j.match(/gco=destination-out/g)||[]).length;
+      const sin=(j.match(/gco=source-in/g)||[]).length;
+      const lit=(j.match(/gco=lighter/g)||[]).length;
+      // 暖色と寒色で2本。1本につき「複製 → ずらして削る → 色を乗せる → 枠の縁を落とす」
+      if(dout<4) throw new Error('αの縁から輪郭を作っていない: destination-out '+dout+'回');
+      if(sin<2) throw new Error('輪郭に色を乗せていない: source-in '+sin+'回');
+      if(lit<2) throw new Error('輪郭を本体へ戻していない: lighter '+lit+'回');
+      console.log('輪郭リム OK (暖色と寒色の2本／枠の縁は落とす／destination-out '+dout+'回)'); }
   }
 
   console.log('CRITIC FIX TEST PASSED'); process.exit(0);

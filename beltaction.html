@@ -8497,7 +8497,9 @@ function drawPlayer(){
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
   // hw/hh はアクターのローカル単位で渡す。変換行列（kx/ky）に既に s と DPR が
   // 入っているので、ここで s を掛けると二乗になって矩形が入らなくなる
-  const _rim=(p.__portrait||blink)?null:rimBegin(46, 132);   // 立ち絵と点滅中は素通し
+  // 枠は実描画より広く取る。狭いと本体の縁が枠で切られ、輪郭リムを入れたときに
+  // その人工的な断面がいちばん明るい線として出る（実測: 待機で幅123 に対し枠104だった）
+  const _rim=(p.__portrait||blink)?null:rimBegin(68, 156);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -9728,6 +9730,11 @@ const _rimS={};
 function rimCtx(){ if(!_rimCan){ _rimCan=document.createElement('canvas');
     _rimCan.width=RIM_CAN; _rimCan.height=RIM_CAN; _rimCtx=_rimCan.getContext('2d'); }
   return _rimCtx; }
+// 輪郭帯を作る作業用の2枚目。1枚だけ確保して使い回す
+let _rimTmp=null, _rimTmpC=null;
+function rimTmpCtx(){ if(!_rimTmp){ _rimTmp=document.createElement('canvas');
+    _rimTmp.width=RIM_CAN; _rimTmp.height=RIM_CAN; _rimTmpC=_rimTmp.getContext('2d'); }
+  return _rimTmpC; }
 // 光源側の暖色と反対側の陰を1枚に焼いたスプライト。向きと色ごとに1回だけ作る
 function rimSprite(dir,rgb){ const k=dir+'|'+rgb; let c=_rimS[k]; if(c) return c;
   c=document.createElement('canvas'); c.width=64; c.height=1;
@@ -9775,14 +9782,44 @@ function rimBegin(hw,hh){
   oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
   oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
   const st={main:ctx, M:M, bx:bx, by:by, w:w, h:h}; ctx=oc; return st; }
+// シルエットのαから輪郭帯を1本作り、色を付けて本体へ戻す。
+// ずらして destination-out すると「ずらした側の縁」だけが残る＝それが輪郭
+function rimEdge(st, dx, dy, rgb, alpha){
+  const tc=rimTmpCtx(); if(!tc) return;
+  const B=st.bx, Y=st.by, W2=st.w, H2=st.h;
+  tc.setTransform(1,0,0,1,0,0);
+  tc.globalCompositeOperation='source-over'; tc.globalAlpha=1;
+  tc.clearRect(B,Y,W2,H2);
+  tc.drawImage(_rimCan, B,Y,W2,H2, B,Y,W2,H2);                    // シルエットを複製
+  tc.globalCompositeOperation='destination-out';
+  tc.drawImage(_rimCan, B,Y,W2,H2, B+dx,Y+dy,W2,H2);              // ずらして削る＝縁が残る
+  tc.globalCompositeOperation='source-in';                        // 残った縁を単色で塗る
+  tc.fillStyle='rgb('+rgb+')'; tc.fillRect(B,Y,W2,H2);
+  // 枠の縁に触れている画素は、体の輪郭ではなく「枠で切られた断面」。
+  // ここを光らせると四角い線が出るので、内側3pxを残して落とす
+  tc.globalCompositeOperation='destination-out';
+  tc.fillStyle='#000';
+  tc.fillRect(B,Y,W2,3); tc.fillRect(B,Y+H2-3,W2,3);
+  tc.fillRect(B,Y,3,H2); tc.fillRect(B+W2-3,Y,3,H2);
+  const oc=_rimCtx;
+  oc.setTransform(1,0,0,1,0,0);
+  oc.globalCompositeOperation='lighter'; oc.globalAlpha=alpha;
+  oc.drawImage(_rimTmp, B,Y,W2,H2, B,Y,W2,H2);
+  oc.globalCompositeOperation='source-over'; oc.globalAlpha=1;
+}
 function rimEnd(st,strength){
   if(!st) return;
   const oc=ctx; ctx=st.main;
   const K=rimKey(), a=clamp(strength==null?1:strength,0,2);
   oc.save(); oc.setTransform(1,0,0,1,0,0);
-  oc.globalCompositeOperation='source-atop'; oc.globalAlpha=a;
-  oc.drawImage(rimSprite(K.dir,K.rgb), st.bx, st.by, st.w, st.h);   // 焼いた1枚を伸ばして乗せる
+  oc.globalCompositeOperation='source-atop'; oc.globalAlpha=a*0.52;
+  oc.drawImage(rimSprite(K.dir,K.rgb), st.bx, st.by, st.w, st.h);   // 面の陰影（横グラデ）は弱めて残す
   oc.restore();
+  // 輪郭に沿った線。従来はこの横グラデ1枚だけで、輪郭線は1本も出ていなかった。
+  // 効き量が「体が矩形のどこにいるか」で決まるため、実測でプレイヤーは
+  // 頭の縁で暖色α0.16・胴の縁で0.08 しか乗っていなかった
+  rimEdge(st, -K.dir*3, -2, K.rgb, a*0.95);                        // 光源側＝暖色の輪郭
+  rimEdge(st,  K.dir*3,  1, '120,170,255', a*0.45);                // 逆側＝寒色の照り返し
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
   ctx.drawImage(_rimCan, st.bx, st.by, st.w, st.h,
                 st.M.e-RIM_OX+st.bx, st.M.f-RIM_OY+st.by, st.w, st.h);
