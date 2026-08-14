@@ -208,6 +208,68 @@ const DRIVER = `
     if(!(ages[0]<2 && ages[1]<2 && !(ages[2]<2))) throw new Error('白飛びの尺が2描画フレームになっていない: '+ages.join(','));
     console.log('白点滅の尺 OK (描画フレーム基準で2枚ちょうど／hitStop・slowmo に伸びない)'); }
 
+  // ── 主役の接地ロック：歩行中、接地している足はワールド座標で止まっていること ──
+  // 従来はプレイヤーだけ固定周期で腿を振っており、接地している足が体の移動の
+  // 40%ぶん動いていた（敵側には接地ロックの完成品があった）。
+  // 40% は「接地ロックを無効化した版」を下の物差しで測り直した実測値
+  {
+    setupRoster('inu'); startGame(); state='play'; perfTier=1;
+    const p=players[0]; player=p; p.x=camX+300; p.facing=1; p.hp=p.maxHp=999999; p.invuln=0;
+    enemies.length=0; particles.length=0; encounters.length=0;
+    // 湧きが乱数なので、固定しないと同じ設定で 12〜15% と振れる（敵に当たると歩幅が変わる）
+    const realRnd=Math.random; let seed=12345;
+    Math.random=function(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; };
+    // 足先は translate(bodyX,0)→scale(sqX,sqY)→translate(0,bodyY) の内側で描かれる。
+    // chibiLegTo の戻り値（局所座標）をそのまま足の位置と見なすと、この3段を
+    // 素通しして「描かれていない点」を測ることになる。ctx の束縛を差し替えて
+    // 変換行列を自前で追い、実際に描かれる画面座標へ写す
+    const realCtx=ctx; let M=[1,0,0,1,0,0]; const mstk=[];
+    const mmul=function(a,b){ return [a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
+                                      a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3],
+                                      a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5]]; };
+    const mapx=function(x,y){ return M[0]*x+M[2]*y+M[4]; };
+    ctx=new Proxy(realCtx,{ get:function(t,k){
+      if(k==='save') return function(){ mstk.push(M.slice()); };
+      if(k==='restore') return function(){ if(mstk.length) M=mstk.pop(); };
+      if(k==='translate') return function(x,y){ M=mmul(M,[1,0,0,1,x,y]); };
+      if(k==='scale') return function(x,y){ M=mmul(M,[x,0,0,y,0,0]); };
+      if(k==='rotate') return function(a){ const c=Math.cos(a), s2=Math.sin(a); M=mmul(M,[c,s2,-s2,c,0,0]); };
+      if(k==='setTransform') return function(a,b,c,d,e,f){ M=[a,b,c,d,e,f]; };
+      if(k==='resetTransform') return function(){ M=[1,0,0,1,0,0]; };
+      if(k==='getTransform') return function(){ return {a:M[0],b:M[1],c:M[2],d:M[3],e:M[4],f:M[5]}; };
+      // 靴は chibiLeg / chibiLegTo のどちらも ellipse(fx+2,fy+1,6,4.5) で描く。
+      // ここを捕まえれば、接地ロックの有無にかかわらず同じ物差しで測れる
+      if(k==='ellipse') return function(x,y,rx,ry){ if(feet && rx===6 && ry===4.5) feet.push(mapx(x-2,y-1)); };
+      return t[k]; } });
+    let feet=null;
+    const rec=[];
+    try {
+      // 等速でしか歩かせないと、位相を「移動距離から積分」しなくても
+      // 定数を足すだけで同じ結果になり、壊れているのに素通りする。
+      // 歩く→止まる→歩く で速度を変える
+      for(let f=0;f<90;f++){ p.in.K.right=(f<30)||(f>=50); hitStop=0; slowmo=0; step(1);
+        // perfTier を毎フレーム固定する。0 に戻ると rimBegin が ctx の束縛を
+        // オフスクリーンへ差し替えるので、追跡プロキシごと外れて足が拾えなくなる
+        feet=[]; M=[1,0,0,1,0,0]; mstk.length=0; perfTier=1; drawPlayer();
+        // camX が動くと画面座標も動くので、カメラぶんを戻してワールドで見る
+        if(feet.length>=2) rec.push({px:p.x, w0:feet[0]+camX, w1:feet[1]+camX});
+        feet=null; }
+    } finally { ctx=realCtx; Math.random=realRnd; }
+    if(rec.length<40) throw new Error('足先が取れていない（'+rec.length+'フレームしか取れない）');
+    // 前後2本のうち「動かなかった方」が接地足。yで選ぶと入れ替わりの瞬間に別の足を見てしまう
+    let slide=0, walked=0;
+    for(let i2=1;i2<rec.length;i2++){
+      const d0=Math.abs(rec[i2].w0-rec[i2-1].w0), d1=Math.abs(rec[i2].w1-rec[i2-1].w1);
+      const mv=Math.abs(rec[i2].px-rec[i2-1].px);
+      if(mv>0.1){ slide+=Math.min(d0,d1); walked+=mv; } }
+    const ratio=slide/Math.max(1,walked);
+    // 改修前は 40%。直値で 13% 未満を要求する。改変で赤くなることを確認済み：
+    //   接地ロックを外す 40% ／ 描画倍率の補正を外す 15% ／
+    //   位相を移動距離から積分しない 53% ／ 接地相で足を後ろへ送らない 100%
+    if(!(ratio<0.13)) throw new Error('接地している足が滑る: 体の移動の '+(ratio*100).toFixed(0)+'%');
+    console.log('主役の接地ロック OK (接地足の移動は体の '+(ratio*100).toFixed(0)+'%／改修前は40%)');
+  }
+
   console.log('DISNEY ANIMATION TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

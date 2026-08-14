@@ -6906,6 +6906,25 @@ function updateRigP(p){ const r=p.rig; if(!r) return;
   if(p.facing!==p.prevFacing){ sprKick(r.wob, -7.5); sprKick(r.capeM, 5*p.facing); }   // 振り向き：上体がしなって追いつく
   const dx=p.x-p.prevX;
   p.spdS=lerp(p.spdS||0, Math.abs(dx), 0.38);                        // スメア用の平滑化速度
+  // ── 歩行位相：実際に進んだ距離から積分する（敵側と同じ仕組み）。
+  //    従来プレイヤーだけは固定周期で腿を振っていたので、接地している足が
+  //    体の移動の40%ぶん動いていた（tests/anim_driver.js の実測）。
+  //    歩幅＝接地相で体が進む距離 にすると、接地中の足はワールド座標で静止する ──
+  { const mv=clamp(dx,-16,16)*(p.facing||1);                          // 向き付き。スプライトの反転と揃えないと左向きで滑る
+    const R=PLEG_L1+PLEG_L2;                                          // 脚の骨長（描画と同じ値）
+    const S=p._pstride=clamp(SPEED*60/PGAIT_CPS/(FIXED_SCALE*0.94), R*0.60, R*1.60);
+    const stepping=p.z<=0 && Math.abs(mv)>0.12 && (p.state==='walk'||p.state==='idle');
+    p.gaitW=(p.gaitW||0)+((stepping?1:0)-(p.gaitW||0))*0.30;
+    if(Math.abs(mv)<0.04 && p.z<=0){                                  // 止まったら位相を中立へ寄せる
+      const tgt=GAIT_D*0.5, u=gaitPh(p.gait||0);
+      let d=tgt-u; if(d>0.5)d-=1; if(d<-0.5)d+=1;
+      p.gait=(p.gait||0)+d*Math.PI*2*0.07; }
+    // 位相のクロックには「実際に描かれる倍率」を使う。FIXED_SCALE(1.82) をそのまま
+    // 使うと、主役は 0.94 倍（ガードワンはさらに1.28倍）で描かれるぶんだけずれて滑る
+    const psc=FIXED_SCALE*0.94*(p.kind==='guard8'?1.28:1);
+    const gk=(Math.PI*2*GAIT_D)/Math.max(6,S*psc);
+    const air=clamp((p.z||0)/24,0,1);                                 // 滞空中は歩容を回さない
+    p.gait=(p.gait||0)+mv*gk*(1-air); }
   const sway=clamp(-dx*p.facing*0.55, -7, 7);                        // マントは進行方向と逆へなびく
   sprUpd(r.sq, 0, 17, 0.5); sprUpd(r.wob, 0, 11, 0.5);
   sprUpd(r.capeM, sway, 9, 0.8); sprUpd(r.capeT, sway*1.6, 6.2, 0.55);
@@ -8925,12 +8944,26 @@ function drawPlayer(){
   const limbA = wanden?'#e6d9b8':watch?'#e2e8f0':shima?'#8a5a30':nuko?'#f0ecf6':g8?'#a5622e':'#e0d2ab', limbB = wanden?'#d5c49c':watch?'#cdd6e2':shima?'#7a4a24':nuko?'#e6e0f0':g8?'#8a4f22':'#ddcca0', bootB=wanden?'#241f1a':watch?'#3a2f22':shima?'#3a2410':nuko?'#7a4fb0':g8?'#3a2410':'#5a4022';
   const limbF = wanden?'#f2e6c8':watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#fbf8ff':g8?'#b5713a':'#efe2bc', bootF=wanden?'#32291f':watch?'#4a3826':shima?'#4a2e16':nuko?'#8a5fc0':g8?'#4a2e14':'#6b4f28', handCol=wanden?'#f2e6c8':watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#ffffff':g8?'#8a4f22':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
+  // ── 歩行中は足先の目標をワールドに固定して解く（接地ロック）。
+  //    アクターは translate(bodyX,0)→scale(sqX,sqY)→translate(0,bodyY) を通っているので、
+  //    床 y=0 に足を置くには目標を逆補正する。忘れると sqY と bodyY のぶん足が浮く ──
+  let _ftF=null, _ftB=null;
+  if(p.gaitW>0.02 && p.z<=0){
+    const S=p._pstride||14, LF=(PLEG_L1+PLEG_L2)*0.40*p.gaitW;
+    const fN=gaitStep(gaitPh(p.gait||0), S, LF, GAIT_D);
+    const fF=gaitStep(gaitPh(p.gait||0)+0.5, S, LF, GAIT_D);
+    // 局所点(tx,ty) → 親空間は (bodyX+tx*sqX, (ty+bodyY)*sqY)。その逆を解く
+    const inv=function(fx,fy,hipX){ return {tx:(hipX+fx-bodyX)/(sqX||1), ty:fy/(sqY||1)-bodyY}; };
+    _ftF=inv(fN.x, fN.y, 6); _ftB=inv(fF.x, fF.y, -5);
+  }
   // ---------- back-to-front ----------
   if(p.kind==='inu') drawCape(p,lean); else if(nuko) drawNukoRobeBack(p,lean);
   poseArm(-5,-30, backArm, 9,8, limbA, 0.85);                      // far arm
-  chibiLeg(-5, thB, kB, limbB, bootB);                             // far leg
+  if(_ftB) chibiLegTo(-5, _ftB.tx, _ftB.ty, limbB, bootB);
+  else     chibiLeg(-5, thB, kB, limbB, bootB);                    // far leg
   (wanden?wandenBody:watch?watchBody:shima?shimaBody:nuko?nukoBody:g8?guard8Body:chibiBody)(lean);
-  chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);               // near leg
+  if(_ftF) chibiLegTo(6, _ftF.tx, _ftF.ty, limbF, bootF, legF1, legF2);
+  else     chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);       // near leg
   (wanden?wandenHead:watch?watchHead:shima?shimaHead:nuko?nukoHead:g8?guard8Head:chibiHead)(lean);
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
@@ -9033,6 +9066,26 @@ function poseArm(shX,shY,swordAng,l1,l2,col,wm){          // swordAng: 0=forward
   limbSeg(shX,shY,ex,ey,7*(wm||1),col); limbSeg(ex,ey,hx,hy,5.5*(wm||1),col);
   ctx.fillStyle=col; ctx.beginPath(); ctx.arc(hx,hy,3.4*(wm||1),0,7); ctx.fill();
   return {hx,hy};
+}
+const PLEG_L1=10, PLEG_L2=9;      // 主役の脚の骨長。位相の積分と描画で同じ値を使う
+const PGAIT_CPS=1.55;             // 1秒あたりの歩数（サイクル/秒）
+// 足先の目標へ二関節で解く版。接地している足をワールド座標に固定するために使う。
+// 中身は敵側の foeLegSolve と同じ
+function chibiLegTo(hipX,tx,ty,col,boot,l1,l2){
+  l1=l1||PLEG_L1; l2=l2||PLEG_L2; const hipY=-16;
+  let dx=tx-hipX, dy=ty-hipY, D=Math.hypot(dx,dy);
+  const Dmax=(l1+l2)*0.994, Dmin=Math.abs(l1-l2)+Math.min(l1,l2)*0.34;
+  if(D>Dmax||D<Dmin){ const nd=D>Dmax?Dmax:Dmin, sc=nd/(D||1e-6); dx*=sc; dy*=sc; D=nd; }
+  const base=Math.atan2(dx,dy);
+  const a=Math.acos(clamp((l1*l1+D*D-l2*l2)/(2*l1*D),-1,1));
+  const th=base+a;                                                   // 膝は前へ
+  const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
+  const fx=hipX+dx, fy=hipY+dy;
+  limbSeg(hipX,hipY,kx,ky,10,col);
+  ctx.fillStyle='#cdbf95'; ctx.beginPath(); ctx.arc(kx,ky,3.6,0,7); ctx.fill();
+  limbSeg(kx,ky,fx,fy,8,col);
+  ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+2,fy+1,6,4.5,0,0,7); ctx.fill();
+  return {fx:fx, fy:fy};
 }
 function chibiLeg(hipX,thighAng,knee,col,boot,l1,l2){
   l1=l1||10; l2=l2||9; const hipY=-16;
