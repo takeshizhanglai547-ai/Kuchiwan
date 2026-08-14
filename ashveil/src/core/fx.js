@@ -372,7 +372,14 @@ const VEIN_POOL     = 8;
 const GATE_POOL     = 3;
 const TRAIL_POOL    = 3;
 const LIGHT_POOL    = 2;   // hard cap from the brief: VFX never adds a 3rd dynamic light
-const TRAIL_SEG     = 22;  // ribbon samples; 22 @60Hz ≈ 0.36s of swing history
+// Ribbon samples. 22 held ~0.36s of history, which is LONGER THAN THE SWING: the
+// light attack's damage window is 0.185s and the heavy's 0.225s, so the ribbon
+// was still carrying blade positions from the wind-up, when the blade pointed
+// somewhere else entirely. Connecting those to the follow-through is what folded
+// the ribbon back over itself into a sheet. 12 samples ≈ 0.20s covers the active
+// window and little else, so the ribbon traces the swing instead of the pose
+// change that preceded it.
+const TRAIL_SEG     = 12;
 
 // Shake `amount` is a 0..1 trauma value, not metres. These convert it to world units so
 // that call sites can reason in "how big a hit was this" and the camera never has to
