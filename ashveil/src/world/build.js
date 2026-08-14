@@ -134,7 +134,13 @@ export class WorldBuilder {
     const tint = o.tint ?? (0.86 + this.rand() * 0.28);
 
     const g = GEO.box.clone();
-    this._scaleUV(g, Math.max(w, d) / uv, h / uv);
+    // Texel density. The V axis used the box's HEIGHT, which is correct for a
+    // wall and badly wrong for a floor slab: a 20x0.3x14 pad got 3.3 repeats
+    // across and 0.05 down, smearing the texture into bands on its top face.
+    // Use the larger of height and the smaller footprint axis so slabs, walls and
+    // pillars all land near the same world-space texel size.
+    const vExtent = Math.max(h, Math.min(w, d));
+    this._scaleUV(g, Math.max(w, d) / uv, vExtent / uv);
     g.scale(w, h, d);
     g.translate(0, h / 2, 0);
     this._paint(g, tint, 0, h, detail ? 0.2 : ao);

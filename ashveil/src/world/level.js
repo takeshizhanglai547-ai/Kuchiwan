@@ -43,8 +43,10 @@ export function buildLevel(scene, mats) {
   // Composition: a broken corbel arch frames the foreground, the ledge drops
   // away to the plaza in the mid-ground, and the Kilnspire closes the vista.
 
-  b.box({ x: 0, y: 6, z: -60, w: 22, h: 6, d: 16, mat: 'stoneDark', uv: 2.6 });   // the ledge mass
-  b.box({ x: 0, y: 11.7, z: -60, w: 20, h: 0.3, d: 14, mat: 'ground', uv: 6 });  // its floor
+  // The mass stops at 11.7 so the terrace slab sits ON it. Previously both tops
+  // landed on y=12 exactly, which is coplanar z-fighting waiting to shimmer.
+  b.box({ x: 0, y: 6, z: -60, w: 22, h: 5.7, d: 16, mat: 'stoneDark', uv: 2.6 });  // the ledge mass
+  b.box({ x: 0, y: 11.7, z: -60, w: 20, h: 0.3, d: 14, mat: 'stone', uv: 2.2 });   // paved shrine terrace
 
   // a ruined shrine at the player's back, so the first thing behind you is a story
   b.corbelArch({ x: 0, y: 12, z: -64.5, span: 3.4, h: 3.2, depth: 1.4, mat: 'stone', steps: 3 });
