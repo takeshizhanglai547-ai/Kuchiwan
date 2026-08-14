@@ -43,7 +43,7 @@ export function buildLevel(scene, mats) {
   // Composition: a broken corbel arch frames the foreground, the ledge drops
   // away to the plaza in the mid-ground, and the Kilnspire closes the vista.
 
-  b.box({ x: 0, y: 6, z: -60, w: 22, h: 6, d: 16, mat: 'stoneDark', uv: 3 });   // the ledge mass
+  b.box({ x: 0, y: 6, z: -60, w: 22, h: 6, d: 16, mat: 'stoneDark', uv: 2.6 });   // the ledge mass
   b.box({ x: 0, y: 11.7, z: -60, w: 20, h: 0.3, d: 14, mat: 'ground', uv: 6 });  // its floor
 
   // a ruined shrine at the player's back, so the first thing behind you is a story
@@ -81,8 +81,8 @@ export function buildLevel(scene, mats) {
   stairRun(b, 0, 12.0, -53.0, 30, -0.40, 0.44, 7.0, 'stone');
 
   // side walls of the stair cut, so you cannot walk off it into the void
-  b.box({ x: -4.4, y: 0, z: -46, w: 1.6, h: 13, d: 16, mat: 'stoneDark', uv: 3 });
-  b.box({ x: 4.4, y: 0, z: -46, w: 1.6, h: 13, d: 16, mat: 'stoneDark', uv: 3 });
+  b.box({ x: -4.4, y: 0, z: -46, w: 1.6, h: 13, d: 16, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 4.4, y: 0, z: -46, w: 1.6, h: 13, d: 16, mat: 'stoneDark', uv: 2.6 });
 
   // ==========================================================================
   // 3. THE PLAZA
@@ -95,7 +95,7 @@ export function buildLevel(scene, mats) {
     for (const sx of [-1, 1]) {
       const broken = R.chance(0.30);
       const h = broken ? 2.0 + R.next() * 2.0 : 5.4;
-      b.cylinder({ x: sx * 12.5, y: 0, z, r: 0.62, h, mat: 'stone', uv: 2.2 });
+      b.cylinder({ x: sx * 12.5, y: 0, z, r: 0.62, h, mat: 'column', uv: 2.4 });
       // Blackened-iron banding at base and cap. A second material at the ends is
       // what stops an extruded cylinder reading as an untextured primitive.
       b.box({ x: sx * 12.5, y: 0.02, z, w: 1.42, h: 0.30, d: 1.42, mat: 'ironLight', uv: 1, collide: false });
@@ -110,18 +110,18 @@ export function buildLevel(scene, mats) {
     }
   }
   // outer walls behind the colonnade
-  b.box({ x: -16.5, y: 0, z: -23, w: 2, h: 9, d: 32, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 16.5, y: 0, z: -23, w: 2, h: 9, d: 32, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 0, y: 0, z: -39.5, w: 34, h: 9, d: 2, mat: 'stoneDark', uv: 4 });   // south wall (behind the stair base)
+  b.box({ x: -16.5, y: 0, z: -23, w: 2, h: 9, d: 32, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 16.5, y: 0, z: -23, w: 2, h: 9, d: 32, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 0, y: 0, z: -39.5, w: 34, h: 9, d: 2, mat: 'stoneDark', uv: 2.6 });   // south wall (behind the stair base)
 
   // CHECKPOINT I
   emberPillar(b, level, 0, 0, -34.0, 'checkpoint_1', 'Ember Pillar — the Approach');
 
   // a toppled colossus across the plaza: the single biggest storytelling prop
-  b.box({ x: -3.0, y: 0, z: -22, w: 3.2, h: 2.6, d: 11.0, ry: 0.22, mat: 'stone', uv: 3 });
+  b.box({ x: -3.0, y: 0, z: -22, w: 3.2, h: 2.6, d: 11.0, ry: 0.22, mat: 'stone', uv: 2.6 });
   b.box({ x: -4.6, y: 2.6, z: -26.4, w: 2.6, h: 2.2, d: 2.6, ry: 0.22, mat: 'stone', uv: 2, collide: false });
   b.cinderEye({ x: -4.6, y: 3.5, z: -25.1, s: 1.6, ry: 0.22, lit: false });
-  b.cylinder({ x: -1.6, y: 0, z: -16.5, r: 0.5, h: 3.4, mat: 'stone', uv: 2 });   // its severed arm
+  b.cylinder({ x: -1.6, y: 0, z: -16.5, r: 0.5, h: 3.4, mat: 'column', uv: 2.4 });   // its severed arm
   b.rock({ x: 0.4, y: 0, z: -18.2, s: 1.4 });
   b.rock({ x: -6.0, y: 0, z: -19.0, s: 1.1 });
 
@@ -138,16 +138,16 @@ export function buildLevel(scene, mats) {
   // ==========================================================================
   // A wall with two openings. The high road is visibly harder to reach, and the
   // Ember Shard is VISIBLE from below: the reward is advertised before it is earned.
-  b.box({ x: 0, y: 0, z: -8, w: 8.0, h: 2.6, d: 2.0, mat: 'stoneDark', uv: 3 });   // centre block, low enough to see the Kilnspire over
+  b.box({ x: 0, y: 0, z: -8, w: 8.0, h: 2.6, d: 2.0, mat: 'stoneDark', uv: 2.6 });   // centre block, low enough to see the Kilnspire over
   b.corbelArch({ x: -9.5, y: 0, z: -8, span: 3.0, h: 4.0, depth: 2.0, mat: 'stone' });  // left opening
   b.corbelArch({ x: 9.5, y: 0, z: -8, span: 3.0, h: 4.0, depth: 2.0, mat: 'stone' });   // right opening
-  b.box({ x: -15.5, y: 0, z: -8, w: 4, h: 9, d: 2.0, mat: 'stoneDark', uv: 3 });
-  b.box({ x: 15.5, y: 0, z: -8, w: 4, h: 9, d: 2.0, mat: 'stoneDark', uv: 3 });
+  b.box({ x: -15.5, y: 0, z: -8, w: 4, h: 9, d: 2.0, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 15.5, y: 0, z: -8, w: 4, h: 9, d: 2.0, mat: 'stoneDark', uv: 2.6 });
 
   // ---- HIGH ROAD: ramparts (risk → Ember Shard) ----
   // stair up, on the left, climbing north
   stairRun(b, -9.5, 0, -6.5, 18, 0.34, 0.62, 3.2, 'stone');
-  b.box({ x: -9.5, y: 6.1, z: 6.5, w: 5.0, h: 0.5, d: 12.0, mat: 'stone', uv: 3 });  // rampart walk
+  b.box({ x: -9.5, y: 6.1, z: 6.5, w: 5.0, h: 0.5, d: 12.0, mat: 'stone', uv: 2.6 });  // rampart walk
   b.box({ x: -12.4, y: 6.6, z: 6.5, w: 0.8, h: 1.5, d: 12.0, mat: 'stone', uv: 2 }); // outer parapet
   for (let z = 1.5; z <= 11.5; z += 2.0) {                                            // merlons
     b.box({ x: -12.4, y: 8.1, z, w: 0.8, h: 0.9, d: 1.0, mat: 'stone', uv: 1.2, collide: false });
@@ -162,12 +162,12 @@ export function buildLevel(scene, mats) {
   stairRun(b, -9.5, 6.6, 13.5, 12, -0.55, 0.62, 3.2, 'stone');
 
   // ---- LOW ROAD: the colonnade of vigils (Iron Vigil → Ashplate) ----
-  b.box({ x: 9.5, y: -0.4, z: 3, w: 12, h: 0.4, d: 22, mat: 'ground', uv: 4, ao: 0 });
-  b.box({ x: 16.0, y: 0, z: 3, w: 2, h: 7, d: 22, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 3.6, y: 0, z: 3, w: 2, h: 7, d: 22, mat: 'stoneDark', uv: 4 });
+  b.box({ x: 9.5, y: -0.4, z: 3, w: 12, h: 0.4, d: 22, mat: 'ground', uv: 7, ao: 0 });
+  b.box({ x: 16.0, y: 0, z: 3, w: 2, h: 7, d: 22, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 3.6, y: 0, z: 3, w: 2, h: 7, d: 22, mat: 'stoneDark', uv: 2.6 });
   for (let z = -4; z <= 10; z += 3.5) {
-    b.cylinder({ x: 6.2, y: 0, z, r: 0.5, h: 4.6, mat: 'stone', uv: 2 });
-    b.cylinder({ x: 12.8, y: 0, z, r: 0.5, h: 4.6, mat: 'stone', uv: 2 });
+    b.cylinder({ x: 6.2, y: 0, z, r: 0.5, h: 4.6, mat: 'column', uv: 2.4 });
+    b.cylinder({ x: 12.8, y: 0, z, r: 0.5, h: 4.6, mat: 'column', uv: 2.4 });
     b.box({ x: 6.2, y: 0.02, z, w: 1.16, h: 0.26, d: 1.16, mat: 'ironLight', uv: 1, collide: false });
     b.box({ x: 12.8, y: 0.02, z, w: 1.16, h: 0.26, d: 1.16, mat: 'ironLight', uv: 1, collide: false });
   }
@@ -194,10 +194,10 @@ export function buildLevel(scene, mats) {
   // ==========================================================================
   // 5. CISTERN PLAZA — checkpoint II, and the mouth of the dungeon
   // ==========================================================================
-  b.box({ x: 0, y: -0.4, z: 15, w: 40, h: 0.4, d: 14, mat: 'ground', uv: 4, ao: 0 });
-  b.box({ x: -20.5, y: 0, z: 15, w: 2, h: 8, d: 14, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 20.5, y: 0, z: 15, w: 2, h: 8, d: 14, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 0, y: 0, z: 8.4, w: 26, h: 8, d: 2, mat: 'stoneDark', uv: 4 });     // south wall w/ gaps below
+  b.box({ x: 0, y: -0.4, z: 15, w: 40, h: 0.4, d: 14, mat: 'ground', uv: 7, ao: 0 });
+  b.box({ x: -20.5, y: 0, z: 15, w: 2, h: 8, d: 14, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 20.5, y: 0, z: 15, w: 2, h: 8, d: 14, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 0, y: 0, z: 8.4, w: 26, h: 8, d: 2, mat: 'stoneDark', uv: 2.6 });     // south wall w/ gaps below
   // openings from the two routes
   b.box({ x: -9.5, y: 0, z: 8.4, w: 5.5, h: 8, d: 2.2, mat: 'stone', collide: false, detail: true });
   b.box({ x: 9.5, y: 0, z: 8.4, w: 5.5, h: 8, d: 2.2, mat: 'stone', collide: false, detail: true });
@@ -209,29 +209,29 @@ export function buildLevel(scene, mats) {
   // ==========================================================================
   const CY = -7;
   // descent
-  stairRun(b, 0, 0, 18.0, 20, -0.37, 0.55, 5.0, 'stoneDark');
-  b.box({ x: 0, y: CY - 0.4, z: 30, w: 32, h: 0.4, d: 22, mat: 'ground', uv: 4, ao: 0 });
+  stairRun(b, 0, 0, 18.0, 20, -0.37, 0.55, 5.0, 'vault');
+  b.box({ x: 0, y: CY - 0.4, z: 30, w: 32, h: 0.4, d: 22, mat: 'ground', uv: 7, ao: 0 });
   // chamber walls
-  b.box({ x: -16.5, y: CY, z: 30, w: 2, h: 12, d: 24, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 16.5, y: CY, z: 30, w: 2, h: 12, d: 24, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 0, y: CY, z: 41.5, w: 34, h: 12, d: 2, mat: 'stoneDark', uv: 4 });
-  b.box({ x: -10, y: CY, z: 19.0, w: 14, h: 12, d: 2, mat: 'stoneDark', uv: 4 });
-  b.box({ x: 10, y: CY, z: 19.0, w: 14, h: 12, d: 2, mat: 'stoneDark', uv: 4 });
+  b.box({ x: -16.5, y: CY, z: 30, w: 2, h: 12, d: 24, mat: 'vault', uv: 4 });
+  b.box({ x: 16.5, y: CY, z: 30, w: 2, h: 12, d: 24, mat: 'vault', uv: 4 });
+  b.box({ x: 0, y: CY, z: 41.5, w: 34, h: 12, d: 2, mat: 'vault', uv: 4 });
+  b.box({ x: -10, y: CY, z: 19.0, w: 14, h: 12, d: 2, mat: 'vault', uv: 4 });
+  b.box({ x: 10, y: CY, z: 19.0, w: 14, h: 12, d: 2, mat: 'vault', uv: 4 });
   // ceiling (so it reads as interior and the fog goes dark)
-  b.box({ x: 0, y: 4.6, z: 30, w: 34, h: 1.2, d: 24, mat: 'stoneDark', uv: 5, collide: false });
+  b.box({ x: 0, y: 4.6, z: 30, w: 34, h: 1.2, d: 24, mat: 'vault', uv: 5, collide: false });
 
   // forest of piers holding the ceiling — cover, sightline breaks, and ambush geometry
   for (let x = -10; x <= 10; x += 6.6) {
     for (let z = 23; z <= 38; z += 6.0) {
-      b.box({ x, y: CY, z, w: 1.5, h: 11.6, d: 1.5, mat: 'stone', uv: 2.4 });
+      b.box({ x, y: CY, z, w: 1.5, h: 11.6, d: 1.5, mat: 'vault', uv: 2.6 });
       b.box({ x, y: CY + 8.2, z, w: 2.4, h: 0.6, d: 2.4, mat: 'stone', uv: 2, collide: false });
     }
   }
 
   // raised ledges around the rim — where the Casters stand, forcing you to
   // choose between the archer above and the thralls below
-  b.box({ x: -13.0, y: CY, z: 30, w: 5.0, h: 3.2, d: 20, mat: 'stone', uv: 3 });
-  b.box({ x: 13.0, y: CY, z: 30, w: 5.0, h: 3.2, d: 20, mat: 'stone', uv: 3 });
+  b.box({ x: -13.0, y: CY, z: 30, w: 5.0, h: 3.2, d: 20, mat: 'vault', uv: 2.6 });
+  b.box({ x: 13.0, y: CY, z: 30, w: 5.0, h: 3.2, d: 20, mat: 'vault', uv: 2.6 });
   stairRun(b, -12.0, CY, 21.5, 9, 0.36, 0.5, 3.0, 'stone');
 
   // Lantern chain through the cistern. Without these the dungeon is not "dark
@@ -274,14 +274,14 @@ export function buildLevel(scene, mats) {
   emberPost(b, level, 14.6, CY + 3.2, 24.0, 14, 18);
 
   // cistern exit, north, up to the boss forecourt
-  stairRun(b, 0, CY, 40.0, 20, 0.37, 0.55, 5.0, 'stoneDark');
+  stairRun(b, 0, CY, 40.0, 20, 0.37, 0.55, 5.0, 'vault');
 
   // ==========================================================================
   // 7. THE SHORTCUT — east bridge, sealed by a portcullis until the winch turns
   // ==========================================================================
-  b.box({ x: 18.0, y: -0.4, z: 30, w: 6, h: 0.4, d: 32, mat: 'ground', uv: 4, ao: 0 });
-  b.box({ x: 21.5, y: 0, z: 30, w: 1.2, h: 4.0, d: 32, mat: 'stone', uv: 3 });
-  b.box({ x: 14.6, y: 0, z: 30, w: 1.2, h: 4.0, d: 32, mat: 'stone', uv: 3 });
+  b.box({ x: 18.0, y: -0.4, z: 30, w: 6, h: 0.4, d: 32, mat: 'ground', uv: 7, ao: 0 });
+  b.box({ x: 21.5, y: 0, z: 30, w: 1.2, h: 4.0, d: 32, mat: 'stone', uv: 2.6 });
+  b.box({ x: 14.6, y: 0, z: 30, w: 1.2, h: 4.0, d: 32, mat: 'stone', uv: 2.6 });
   b.corbelArch({ x: 18.0, y: 0, z: 17.0, span: 3.2, h: 3.6, depth: 1.4, mat: 'stone' });
 
   // The portcullis is a real, movable object with its own collision.
@@ -305,9 +305,9 @@ export function buildLevel(scene, mats) {
   // ==========================================================================
   // 8. BOSS FORECOURT + FOG GATE
   // ==========================================================================
-  b.box({ x: 0, y: -0.4, z: 44, w: 22, h: 0.4, d: 10, mat: 'ground', uv: 4, ao: 0 });
-  b.box({ x: -11.5, y: 0, z: 44, w: 2, h: 8, d: 10, mat: 'stoneDark', uv: 3 });
-  b.box({ x: 11.5, y: 0, z: 44, w: 2, h: 8, d: 10, mat: 'stoneDark', uv: 3 });
+  b.box({ x: 0, y: -0.4, z: 44, w: 22, h: 0.4, d: 10, mat: 'ground', uv: 7, ao: 0 });
+  b.box({ x: -11.5, y: 0, z: 44, w: 2, h: 8, d: 10, mat: 'stoneDark', uv: 2.6 });
+  b.box({ x: 11.5, y: 0, z: 44, w: 2, h: 8, d: 10, mat: 'stoneDark', uv: 2.6 });
   b.corbelArch({ x: 0, y: 0, z: 48.5, span: 5.0, h: 5.5, depth: 2.4, mat: 'stone', steps: 5, pierThick: 2.0 });
   b.cinderEye({ x: 0, y: 8.4, z: 47.2, s: 2.2, lit: true });
 
@@ -322,7 +322,7 @@ export function buildLevel(scene, mats) {
   // gate: the player walks through the gate and is already inside the ring.
   const AR = { x: 0, z: 66, r: 17.5 };
   level.arena = AR;
-  b.box({ x: 0, y: -0.4, z: 66, w: 38, h: 0.4, d: 34, mat: 'ground', uv: 5, ao: 0 });
+  b.box({ x: 0, y: -0.4, z: 66, w: 38, h: 0.4, d: 34, mat: 'ground', uv: 7, ao: 0 });
 
   // Ring wall with TWO breaks: the southern one is the way in (without it the
   // arena seals its own entrance), the northern one opens onto the caldera so the
@@ -332,7 +332,7 @@ export function buildLevel(scene, mats) {
     if (nz > 0.74) continue;                                   // vista, facing north
     if (nz < -0.55) continue;                                  // entrance, facing south
     const h = 6 + Math.sin(a * 3) * 1.6;
-    b.box({ x: AR.x + nx * 17.5, y: 0, z: AR.z + nz * 17.5, w: 3.0, h, d: 2.0, ry: -a, mat: 'stoneDark', uv: 3 });
+    b.box({ x: AR.x + nx * 17.5, y: 0, z: AR.z + nz * 17.5, w: 3.0, h, d: 2.0, ry: -a, mat: 'stoneDark', uv: 2.6 });
   }
   // kiln mouths around the wall — this is a working furnace hall
   for (const a of [-2.4, -1.6, 1.6, 2.4]) {
@@ -350,13 +350,13 @@ export function buildLevel(scene, mats) {
   // Four great pillars, pulled IN to ~6-7m from centre so they are dodge and
   // line-of-sight geometry during the fight rather than perimeter decoration.
   for (const [px, pz] of [[-6.5, 60.5], [6.5, 60.5], [-6.5, 71.5], [6.5, 71.5]]) {
-    b.cylinder({ x: px, y: 0, z: pz, r: 1.05, h: 9.0, mat: 'stone', uv: 3 });
+    b.cylinder({ x: px, y: 0, z: pz, r: 1.05, h: 9.0, mat: 'column', uv: 2.4 });
     b.box({ x: px, y: 0.02, z: pz, w: 2.5, h: 0.34, d: 2.5, mat: 'ironLight', uv: 1, collide: false });
     b.box({ x: px, y: 9.0, z: pz, w: 3.0, h: 0.8, d: 3.0, mat: 'stone', uv: 2, collide: false });
   }
   // A broken ring platform across the caldera-facing third: an elevation option
   // for the player, and a break in Volga's ground sweeps.
-  b.box({ x: 0, y: 0, z: 76.5, w: 22, h: 1.5, d: 7.0, mat: 'stone', uv: 3 });
+  b.box({ x: 0, y: 0, z: 76.5, w: 22, h: 1.5, d: 7.0, mat: 'stone', uv: 2.6 });
   b.ramp({ x: -9.5, y: 0, z: 74.0, w: 3.4, len: 5.0, rise: 1.5, ry: Math.PI / 2, mat: 'stone' });
   b.ramp({ x: 9.5, y: 0, z: 74.0, w: 3.4, len: 5.0, rise: 1.5, ry: -Math.PI / 2, mat: 'stone' });
   // A toppled column the player can roll over but a 4.6m boss must path around.
@@ -373,11 +373,11 @@ export function buildLevel(scene, mats) {
   // ==========================================================================
   // Deliberately built from the same corbelled vocabulary, just enormous.
   const SP = { x: 0, z: 92 };
-  b.box({ x: SP.x, y: 0, z: SP.z, w: 22, h: 8, d: 22, mat: 'stoneDark', uv: 6, collide: false });
-  b.box({ x: SP.x, y: 8, z: SP.z, w: 17, h: 14, d: 17, mat: 'stoneDark', uv: 6, collide: false });
-  b.box({ x: SP.x, y: 22, z: SP.z, w: 13, h: 16, d: 13, mat: 'stone', uv: 6, collide: false });
-  b.box({ x: SP.x, y: 38, z: SP.z, w: 9.5, h: 14, d: 9.5, mat: 'stone', uv: 5, collide: false });
-  b.box({ x: SP.x, y: 52, z: SP.z, w: 7, h: 10, d: 7, mat: 'stone', uv: 4, collide: false });
+  b.box({ x: SP.x, y: 0, z: SP.z, w: 22, h: 8, d: 22, mat: 'stoneDark', uv: 2.6, collide: false });
+  b.box({ x: SP.x, y: 8, z: SP.z, w: 17, h: 14, d: 17, mat: 'stoneDark', uv: 2.6, collide: false });
+  b.box({ x: SP.x, y: 22, z: SP.z, w: 13, h: 16, d: 13, mat: 'stone', uv: 2.6, collide: false });
+  b.box({ x: SP.x, y: 38, z: SP.z, w: 9.5, h: 14, d: 9.5, mat: 'stone', uv: 2.6, collide: false });
+  b.box({ x: SP.x, y: 52, z: SP.z, w: 7, h: 10, d: 7, mat: 'stone', uv: 2.6, collide: false });
   // the crown: four chimneys, still burning
   for (const [ox, oz] of [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]]) {
     b.cylinder({ x: SP.x + ox, y: 62, z: SP.z + oz, r: 0.85, h: 7, mat: 'stoneDark', collide: false, uv: 3 });
@@ -403,7 +403,7 @@ export function buildLevel(scene, mats) {
     // Heavily darkened via vertex tint so the far ridgeline sits UNDER the fog
     // value instead of floating in front of it as pale cardboard cut-outs.
     b.box({ x: Math.sin(a) * d, y: -6, z: 92 + Math.cos(a) * d * 0.6, w: R.range(14, 42), h: hgt,
-            d: R.range(14, 42), ry: R.range(0, 3), mat: 'stoneDark', uv: 10, collide: false,
+            d: R.range(14, 42), ry: R.range(0, 3), mat: 'stoneDark', uv: 2.6, collide: false,
             tint: 0.22, ao: 0 });
   }
 

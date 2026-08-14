@@ -136,7 +136,7 @@ export class GameCamera {
       // Never closer than 2.0m: below that the character fills the frame and the
       // player loses all peripheral awareness, which matters most in exactly the
       // tight interiors that trigger the pull-in.
-      if (hit < 1) dist = Math.max(2.0, dist * hit - 0.35);
+      if (hit < 1) dist = Math.max(2.6, dist * hit - 0.35);
 
       // Also keep the camera above the floor it would otherwise clip through.
       const camY = f.y + dirY * dist;
