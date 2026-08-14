@@ -1,0 +1,8 @@
+# Automated capture output. Only the curated review set in captures/final/ is
+# committed; everything else is regenerable with tools/harness.js.
+captures/*
+!captures/final/
+!captures/final/**
+
+node_modules/
+*.log

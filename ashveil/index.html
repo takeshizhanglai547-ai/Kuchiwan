@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ASHVEIL / 灰帷</title>
+<link rel="stylesheet" href="src/ui/hud.css">
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#07080a; }
+  body { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+  #view { display:block; width:100vw; height:100vh; }
+  #ui { position:fixed; inset:0; pointer-events:none; }
+  /* Boot overlay — shown until the first frame is rendered. */
+  #boot {
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:1.2rem;
+    background:#07080a; color:#c9bda6; z-index:9999; transition:opacity .8s ease;
+  }
+  #boot.gone { opacity:0; pointer-events:none; }
+  #boot h1 { font-size:clamp(2rem,6vmin,4rem); font-weight:400; letter-spacing:.5em;
+             text-indent:.5em; color:#c9bda6; }
+  #boot .sub { font-size:.8rem; letter-spacing:.35em; color:#6a6472; text-transform:uppercase; }
+  #boot .bar { width:min(320px,50vw); height:2px; background:#22242a; overflow:hidden; }
+  #boot .bar i { display:block; height:100%; width:0%; background:#ff6a1e; transition:width .3s ease; }
+  #boot .err { color:#ff6a1e; font-size:.8rem; max-width:60ch; text-align:center;
+               font-family:ui-monospace,monospace; letter-spacing:0; white-space:pre-wrap; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/jsm/"
+} }
+</script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="ui"></div>
+
+  <div id="boot">
+    <h1>ASHVEIL</h1>
+    <div class="sub">灰帷</div>
+    <div class="bar"><i id="bootbar"></i></div>
+    <div class="err" id="booterr"></div>
+  </div>
+
+  <script type="module">
+    // Surface boot failures to the screen — a black canvas tells the player nothing.
+    const errEl = document.getElementById('booterr');
+    const show = (msg) => { errEl.textContent = String(msg); };
+    window.addEventListener('error', e => show(e.message + '\n' + (e.filename||'')));
+    window.addEventListener('unhandledrejection', e => show(e.reason?.stack || e.reason));
+    import('./src/main.js').catch(show);
+  </script>
+</body>
+</html>
