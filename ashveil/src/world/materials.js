@@ -372,19 +372,44 @@ export function makeGlowTexture(size = 64, power = 2.2) {
 export function applyNearFade(materials, near = 0.42, full = 1.65) {
   const uNear = { value: near };
   const uFull = { value: full };
+  // The subject cutout. A pure near fade only clears geometry pressed against
+  // the lens; a wall standing halfway between the camera and the boss is nowhere
+  // near the lens and still hides the entire fight. Widening the near fade until
+  // it caught those would dissolve the level during ordinary exploration, which
+  // is a worse bug than the one being fixed.
+  //
+  // So the second test is conditional rather than distance-only: a fragment
+  // dissolves when it is BOTH nearer than the subject AND within a screen-space
+  // radius of it. That punches a soft hole around whatever the player is looking
+  // at and leaves the rest of the world solid.
+  const uFocusDist = { value: 1e9 };   // view-space distance to the subject
+  const uFocusNDC = { value: new THREE.Vector2(0, 0) };
+  const uCut = { value: new THREE.Vector2(0.34, 1.777) };  // radius, aspect
+
+  const shared = { uNear, uFull, uFocusDist, uFocusNDC, uCut };
   for (const m of materials) {
+    m.userData.nearFade = shared;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uFadeNear = uNear;
       shader.uniforms.uFadeFull = uFull;
+      shader.uniforms.uFocusDist = uFocusDist;
+      shader.uniforms.uFocusNDC = uFocusNDC;
+      shader.uniforms.uCut = uCut;
 
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', 'varying float vNearFade;\nvoid main() {')
+        .replace('void main() {',
+                 'varying float vNearFade;\nvarying vec4 vNearClip;\nvoid main() {')
+        // gl_Position is carried through as a varying rather than reconstructing
+        // NDC from gl_FragCoord, which would need a resolution uniform kept in
+        // sync with every resize.
         .replace('#include <project_vertex>',
-                 '#include <project_vertex>\n\tvNearFade = -mvPosition.z;');
+                 '#include <project_vertex>\n\tvNearFade = -mvPosition.z;\n\tvNearClip = gl_Position;');
 
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {',
-          'varying float vNearFade;\nuniform float uFadeNear;\nuniform float uFadeFull;\n' +
+          'varying float vNearFade;\nvarying vec4 vNearClip;\n' +
+          'uniform float uFadeNear;\nuniform float uFadeFull;\n' +
+          'uniform float uFocusDist;\nuniform vec2 uFocusNDC;\nuniform vec2 uCut;\n' +
           // 4x4 ordered Bayer, built by the recursive doubling identity rather
           // than a lookup table. Ordered rather than hashed so the pattern is
           // stable frame to frame — a hashed dither crawls and reads as noise.
@@ -400,6 +425,12 @@ export function applyNearFade(materials, near = 0.42, full = 1.65) {
         .replace('#include <clipping_planes_fragment>',
           '#include <clipping_planes_fragment>\n' +
           '\tfloat ashFade = smoothstep(uFadeNear, uFadeFull, vNearFade);\n' +
+          // Subject cutout: nearer than the subject AND close to it on screen.
+          '\tvec2 ashNdc = vNearClip.xy / max(vNearClip.w, 1e-4);\n' +
+          '\tfloat ashR = length((ashNdc - uFocusNDC) * vec2(uCut.y, 1.0));\n' +
+          '\tfloat ashRadial = 1.0 - smoothstep(uCut.x * 0.55, uCut.x, ashR);\n' +
+          '\tfloat ashDepth = 1.0 - smoothstep(uFocusDist - 1.30, uFocusDist - 0.30, vNearFade);\n' +
+          '\tashFade = min(ashFade, 1.0 - ashRadial * ashDepth);\n' +
           '\tif (ashFade < ashBayer(gl_FragCoord.xy)) discard;');
     };
     // Without a distinct cache key three would hand these the program compiled
@@ -507,8 +538,33 @@ export class Materials {
                  this.cloth, this.clothPlayer, this.bone, this.ember, this.emberDim, this.ashFlesh];
 
     /** Occluders that must dissolve rather than block the shot. Ground excluded. */
-    applyNearFade([this.stone, this.stoneDark, this.vault, this.column,
-                   this.iron, this.ironLight]);
+    this.faded = [this.stone, this.stoneDark, this.vault, this.column,
+                  this.iron, this.ironLight];
+    applyNearFade(this.faded);
+    this._focus = new THREE.Vector3();
+  }
+
+  /**
+   * Tell the dissolve where the subject is. Called once per rendered frame with
+   * the world point the shot is actually about — the lock-on target if there is
+   * one, otherwise the player.
+   *
+   * Everything the shader needs is derived here rather than in the vertex stage:
+   * one project() and one distance per frame, shared by every faded material.
+   */
+  setFocus(camera, worldPoint) {
+    const u = this.faded[0]?.userData.nearFade;
+    if (!u) return;
+    this._focus.copy(worldPoint).project(camera);
+    // Behind the camera, project() mirrors the point; park the cutout off-screen
+    // rather than punching a hole in the wrong half of the frame.
+    if (this._focus.z > 1) {
+      u.uFocusDist.value = -1e9;
+      return;
+    }
+    u.uFocusNDC.value.set(this._focus.x, this._focus.y);
+    u.uFocusDist.value = camera.position.distanceTo(worldPoint);
+    u.uCut.value.y = camera.aspect;
   }
 
   /**
