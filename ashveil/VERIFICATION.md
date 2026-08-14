@@ -143,13 +143,15 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
    observed only incidentally.
 6. **The 1% low framerate figure reported by the HUD is meaningless in this
    container** and should be ignored until run on a GPU.
-7. **Pulling the arena pillars inward** (a level-design improvement requested by
-   a reviewer) made them occlude the boss camera more often. The two goals are in
-   genuine tension and the current balance has not been play-tested.
-8. **The architecture still uses one stone texture** at inconsistent texel
-   density, and its noise is high-frequency enough to read as mottled camouflage
-   on large walls. Raised by the same reviewer in two consecutive rounds and not
-   fixed; it is the largest outstanding art debt.
+7. ~~**Pulling the arena pillars inward** made them occlude the boss camera.~~
+   **Fixed in round 5** — pillars pushed past 12.5 m, outside every reachable boom
+   position, with 1.6 m slag buttresses taking over as interior geometry. The
+   tension was resolved by changing what kind of obstacle the fight uses, not by
+   picking a side.
+8. ~~**The architecture still uses one stone texture** at inconsistent texel
+   density.~~ **Fixed in round 4** — three distinct material sets (exterior
+   ashlar, interior vault with a damp gradient, fluted column) with texel density
+   snapped to a common UV scale.
 9. **Ember lanterns read as flat bright rectangles** at mid distance — the lamp
    housing is too small to shape the glow. The checkpoint brazier was rebuilt
    with a proper cradle; the smaller wayfinding lanterns were not.
@@ -157,3 +159,35 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
     delivered set** even though it shows the camera clipping into the arena's
     raised platform. Removing it would have made the screenshot set prettier and
     the report less true.
+
+---
+
+## Round 5 — what is and is not verified about this round's changes
+
+Round 5's headline change is the near-camera fragment dissolve (see
+`REVIEW_LOG.md`). Its status must not be overstated:
+
+**EXECUTED**
+- The patched shaders compile and link. `smoke` runs with an empty error list and
+  the level renders with masonry intact and no dither holes in the ground.
+- The Bayer function was rewritten from a `float m[16]` lookup to closed-form
+  arithmetic, and the arithmetic form was checked offline to produce all 16
+  distinct threshold levels — not merely assumed to be equivalent.
+- The location tour re-ran against the round-5 build.
+
+**THEORETICAL — implemented, not observed**
+- That the dissolve actually clears the specific occluders the critics named. The
+  re-captured frames exist but have not been through a blind review, so the fix
+  is *believed* to work, not *known* to satisfy the people who raised it.
+- Phase 2's sheared chimney stack and the caldera light ramp. The code path runs
+  on the phase transition; no capture of the sheared silhouette has been reviewed.
+- The impact-point correction. The maths is right and the solver already carried
+  the data; no test has confirmed the spark now lands on the contact surface.
+
+**UNVERIFIED**
+- **The GPU cost of the dissolve.** It adds one varying and a few ALU ops per
+  architectural fragment, and the array indexing that would have made it
+  genuinely expensive was removed — but §6 asks for visual gain ÷ GPU cost, and
+  the cost side of that ratio cannot be measured without a GPU. Nothing here
+  should be read as a claim that it is free.
+- **Whether round 5 moved any critic off REDO.** No critic has seen it.

@@ -385,17 +385,16 @@ export function applyNearFade(materials, near = 0.42, full = 1.65) {
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {',
           'varying float vNearFade;\nuniform float uFadeNear;\nuniform float uFadeFull;\n' +
-          // 4x4 ordered Bayer. Ordered rather than random so the pattern is
-          // stable frame to frame; a hashed dither crawls and reads as noise.
+          // 4x4 ordered Bayer, built by the recursive doubling identity rather
+          // than a lookup table. Ordered rather than hashed so the pattern is
+          // stable frame to frame — a hashed dither crawls and reads as noise.
+          // Closed-form arithmetic rather than `float m[16]` with a computed
+          // index: dynamic array indexing in GLSL ES compiles to a comparison
+          // chain, and this runs for every fragment of every wall in frame.
+          'float ashB2(vec2 v) { return mod(2.0 * v.y + 3.0 * v.x, 4.0); }\n' +
           'float ashBayer(vec2 p) {\n' +
-          '  int x = int(mod(p.x, 4.0));\n' +
-          '  int y = int(mod(p.y, 4.0));\n' +
-          '  float m[16];\n' +
-          '  m[0]=0.0; m[1]=8.0; m[2]=2.0; m[3]=10.0;\n' +
-          '  m[4]=12.0; m[5]=4.0; m[6]=14.0; m[7]=6.0;\n' +
-          '  m[8]=3.0; m[9]=11.0; m[10]=1.0; m[11]=9.0;\n' +
-          '  m[12]=15.0; m[13]=7.0; m[14]=13.0; m[15]=5.0;\n' +
-          '  return (m[y * 4 + x] + 0.5) / 16.0;\n' +
+          '  vec2 v = floor(mod(p, 4.0));\n' +
+          '  return (ashB2(floor(v * 0.5)) * 4.0 + ashB2(v) + 0.5) / 16.0;\n' +
           '}\n' +
           'void main() {')
         .replace('#include <clipping_planes_fragment>',
