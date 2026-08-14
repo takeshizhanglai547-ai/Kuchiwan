@@ -89,9 +89,20 @@ export function buildPlayer(mats) {
   // fauld / skirt plates
   attach(rig, 'hips', taperBox(0.30, 0.38, 0.26, 0.24), cloth, 0, -0.10, 0);
 
-  // head: closed helm with a vertical slit — the cinder-eye worn as a face
-  attach(rig, 'head', box(0.20, 0.24, 0.22), iron, 0, 0.09, 0);
+  // Head: closed helm with a vertical slit — the cinder-eye worn as a face.
+  // The skull used to be one bare cube, which at close camera range read as an
+  // untextured placeholder: a flat pale panel with no feature to catch light.
+  // Broken into a bevelled skull, a brow ridge and a tapered jaw, so the helm
+  // has facets that shade differently and it never presents one flat face.
+  attach(rig, 'head', taperBox(0.20, 0.185, 0.235, 0.215, 0.20), iron, 0, 0.095, 0);
   attach(rig, 'head', taperBox(0.20, 0.14, 0.10, 0.24, 0.16), iron, 0, -0.02, 0.03);
+  // brow ridge: the shadow it casts is what stops the face reading as a panel
+  attach(rig, 'head', taperBox(0.215, 0.175, 0.045, 0.075), dark, 0, 0.155, 0.055, -0.22, 0, 0);
+  // cheek plates flanking the slit
+  for (const s of [-1, 1]) {
+    attach(rig, 'head', taperBox(0.055, 0.040, 0.155, 0.075), dark,
+           s * 0.078, 0.075, 0.072, 0, s * 0.16, 0);
+  }
   const eye = new THREE.Mesh(box(0.030, 0.13, 0.02), mats.ember);
   eye.position.set(0, 0.09, 0.112);
   rig.joints.head.add(eye);
@@ -127,14 +138,17 @@ export function buildPlayer(mats) {
   // driven procedurally (see updateCloak) rather than modelled in detail.
   // Cloak: hem flared to ~1.7x the shoulder width so the body reads as a wedge,
   // with two torn panels breaking the bottom edge instead of a clean rectangle.
-  const cloak = new THREE.Mesh(taperBox(0.42, 0.76, 0.95, 0.06), cloth);
+  const cloak = new THREE.Mesh(taperBox(0.42, 0.76, 0.95, 0.17), cloth);
   cloak.position.set(0, -0.42, -0.14);
   cloak.castShadow = true;
   rig.joints.chest.add(cloak);
-  const tatterA = new THREE.Mesh(taperBox(0.20, 0.11, 0.26, 0.05), cloth);
-  tatterA.position.set(-0.16, -0.99, -0.15); cloak.parent.add(tatterA);
-  const tatterB = new THREE.Mesh(taperBox(0.15, 0.07, 0.17, 0.05), cloth);
-  tatterB.position.set(0.19, -0.94, -0.15); cloak.parent.add(tatterB);
+  // Children of the cloak so they swing WITH it, and three of them so the hem is
+  // never a straight line.
+  for (const [tx, tw, th] of [[-0.22, 0.19, 0.27], [0.02, 0.13, 0.17], [0.24, 0.17, 0.23]]) {
+    const t = new THREE.Mesh(taperBox(tw, tw * 0.55, th, 0.15), cloth);
+    t.position.set(tx, -0.475 - th * 0.5, 0);
+    cloak.add(t);
+  }
 
   // --- longsword (right hand) ---
   const sword = new THREE.Group();
@@ -390,13 +404,29 @@ export function buildVolga(mats) {
   const kilnDoorR = new THREE.Mesh(taperBox(0.24, 0.22, 0.50, 0.07), iron);
   kilnDoorR.position.set(0.12, 0.18, 0.33);
   rig.joints.chest.add(kilnDoorR);
-  // chimney stacks over the shoulders
+  // Chimney stacks over the shoulders. These are the top of the silhouette, and
+  // the top of the silhouette is what a player identifies a boss by at distance.
+  // Bare dark iron against a dark sky gave them nothing to read against, so each
+  // stack carries three emissive vent slots on its OUTER face: the crown burns,
+  // the torso stays dark. Held as `stacks` so phase 2 can shear one off.
+  const stacks = [];
   for (const sx of [-1, 1]) {
-    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.10, 0.52, 8), dark);
+    const st = new THREE.Group();
     st.position.set(sx * 0.30, 0.46, -0.16);
     st.rotation.z = sx * -0.18;
-    st.castShadow = true;
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.10, 0.52, 8), dark);
+    shell.castShadow = true;
+    st.add(shell);
+    for (let v = 0; v < 3; v++) {
+      const slot = new THREE.Mesh(box(0.035, 0.085, 0.055), mats.ember);
+      slot.position.set(sx * 0.085, -0.13 + v * 0.14, 0);
+      st.add(slot);
+    }
+    // A lip at the mouth so the stack terminates in a shape, not a flat cut.
+    const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.085, 0.07, 8), dark);
+    lip.position.y = 0.28; st.add(lip);
     rig.joints.chest.add(st);
+    stacks.push(st);
   }
 
   // --- head: a hood of iron, sunk low between the shoulders, no face ---
@@ -452,7 +482,7 @@ export function buildVolga(mats) {
 
   return {
     rig, group: rig.root, weaponTip: tip, weaponBase: base,
-    kilnCore, kilnDoorL, kilnDoorR, rakeGlow, gaze, chestMat: mats.ember,
+    kilnCore, kilnDoorL, kilnDoorR, rakeGlow, gaze, stacks, chestMat: mats.ember,
     height: 4.6,
   };
 }

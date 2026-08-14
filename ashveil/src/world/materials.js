@@ -348,6 +348,68 @@ export function makeGlowTexture(size = 64, power = 2.2) {
   return t;
 }
 
+// --- near-camera dissolve ----------------------------------------------------
+
+/**
+ * Architecture that comes between the camera and the player must stop being
+ * opaque. A spring arm alone cannot solve this: it only pulls the boom in along
+ * the boom line, so a column standing *beside* the line still fills half the
+ * frame. Fading the occluder is the standard answer, but the usual form of it —
+ * per-mesh alpha on whatever the occlusion probe hits — is unavailable here,
+ * because the whole level is merged into ~10 draw calls to hold the frame
+ * budget. There is no per-column mesh left to fade.
+ *
+ * So the fade moves into the fragment stage, where merging does not matter: any
+ * fragment nearer than `full` metres dissolves out with an ordered dither, and
+ * anything nearer than `near` is gone entirely. Cost is one varying and a few
+ * ALU ops; no sorting, no transparency pass, no extra draw calls.
+ *
+ * Applied to walls, vaults, columns and ironwork only. The ground is excluded on
+ * purpose — punching a dither hole in the floor under the camera would be a
+ * worse artefact than the one being fixed, and a camera that low is the spring
+ * arm's problem, not the shader's.
+ */
+export function applyNearFade(materials, near = 0.42, full = 1.65) {
+  const uNear = { value: near };
+  const uFull = { value: full };
+  for (const m of materials) {
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uFadeNear = uNear;
+      shader.uniforms.uFadeFull = uFull;
+
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying float vNearFade;\nvoid main() {')
+        .replace('#include <project_vertex>',
+                 '#include <project_vertex>\n\tvNearFade = -mvPosition.z;');
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {',
+          'varying float vNearFade;\nuniform float uFadeNear;\nuniform float uFadeFull;\n' +
+          // 4x4 ordered Bayer. Ordered rather than random so the pattern is
+          // stable frame to frame; a hashed dither crawls and reads as noise.
+          'float ashBayer(vec2 p) {\n' +
+          '  int x = int(mod(p.x, 4.0));\n' +
+          '  int y = int(mod(p.y, 4.0));\n' +
+          '  float m[16];\n' +
+          '  m[0]=0.0; m[1]=8.0; m[2]=2.0; m[3]=10.0;\n' +
+          '  m[4]=12.0; m[5]=4.0; m[6]=14.0; m[7]=6.0;\n' +
+          '  m[8]=3.0; m[9]=11.0; m[10]=1.0; m[11]=9.0;\n' +
+          '  m[12]=15.0; m[13]=7.0; m[14]=13.0; m[15]=5.0;\n' +
+          '  return (m[y * 4 + x] + 0.5) / 16.0;\n' +
+          '}\n' +
+          'void main() {')
+        .replace('#include <clipping_planes_fragment>',
+          '#include <clipping_planes_fragment>\n' +
+          '\tfloat ashFade = smoothstep(uFadeNear, uFadeFull, vNearFade);\n' +
+          '\tif (ashFade < ashBayer(gl_FragCoord.xy)) discard;');
+    };
+    // Without a distinct cache key three would hand these the program compiled
+    // for an unpatched MeshStandardMaterial with the same feature set.
+    m.customProgramCacheKey = () => 'ashveil-nearfade';
+    m.needsUpdate = true;
+  }
+}
+
 // --- material library --------------------------------------------------------
 
 export class Materials {
@@ -444,6 +506,10 @@ export class Materials {
 
     this.list = [this.stone, this.stoneDark, this.vault, this.column, this.ground, this.iron, this.ironLight,
                  this.cloth, this.clothPlayer, this.bone, this.ember, this.emberDim, this.ashFlesh];
+
+    /** Occluders that must dissolve rather than block the shot. Ground excluded. */
+    applyNearFade([this.stone, this.stoneDark, this.vault, this.column,
+                   this.iron, this.ironLight]);
   }
 
   /**

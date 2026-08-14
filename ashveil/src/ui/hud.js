@@ -258,6 +258,9 @@ class HUD {
 			const meta = el('div', 'av-bar__meta', root);
 			label = el('span', 'av-bar__label', meta);
 			num = el('span', 'av-bar__num', meta);
+			/* Above the bar, not below it: a caption sitting between two bars
+			   attaches itself to the wrong one in the reader's eye. */
+			root.insertBefore(meta, root.firstChild);
 		}
 		/* _f/_g are the cached scale values — the whole point of this object. */
 		return { root, frame, fill, ghost, label, num, _f: -1, _g: -1 };
@@ -280,7 +283,8 @@ class HUD {
 		const w = el('div', 'av-vitals', this.root);
 		this.hpBar = this._bar(w, 'hp', { ghost: true, meta: true });
 		txt(this.hpBar.label, 'VIGOUR');
-		this.stBar = this._bar(w, 'stam', {});
+		this.stBar = this._bar(w, 'stam', { meta: true });
+		txt(this.stBar.label, 'STAMINA');
 		this.flaskRow = el('div', 'av-flasks', w);
 		this.flaskNodes = [];
 

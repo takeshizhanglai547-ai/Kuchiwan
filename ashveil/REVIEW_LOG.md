@@ -200,33 +200,168 @@ Other round-3 diffs, each traceable to a specific critic note:
 
 ---
 
-## Circuit breaker status
+## Round 4 — blind review, all five critics
 
-The brief allows five rounds. **Three were completed** (one developer pass, two
-blind rounds) before the session's practical limit was reached. ADMIRE was not
-reached and is not claimed.
+Round 4 is the first round in which **every** critic seat ran. A, D and E had
+never reviewed this build before; each was given only frames and the FPS figure,
+with no development history, no changelog, and no indication of what had already
+been fixed or how hard anything was to build.
 
-**達成 / Achieved**
+| Critic | R1 | R2 | R4 |
+|---|---|---|---|
+| A — Soulslike Veteran | not run | not run | **REDO** |
+| B — AAA Reviewer | REDO | REDO | **REDO** |
+| C — Level Designer | REDO | REDO | not re-run |
+| D — Boss Designer | not run | not run | **REDO** |
+| E — QA Tester | not run | not run | **REDO** |
+
+### The one thing four critics said independently
+
+Four of the four critics who ran in round 4 named camera occlusion, without
+knowing the others had:
+
+- **B:** "Three of sixteen frames are broken shots. In `loc_cistern_plaza`,
+  `loc_forecourt` and `loc_arena_far` the camera is inside or below level
+  geometry." Its ranked fix #1 was "fix camera collision before anything else."
+- **D** made it the single biggest problem: "the lock-on camera is trapped behind
+  an arena column: a near-black slab fills the screen from roughly the horizontal
+  midpoint rightward in 7 of the 11 combat frames … The fight is unwatchable for
+  most of its running time."
+- **E** listed it as defects 1, 2, 3, 4, 5 and 8 — six of its eight defects.
+- **A** raised it as fix #4 on the boss frames.
+
+That is the same defect class flagged in two consecutive rounds. **§20 applies:
+stop tuning parameters, change the underlying method.**
+
+### Other round-4 findings, by critic
+
+**A — combat feel.** Biggest problem: "the weapon and the hit are two unrelated
+events." Impact VFX and the enemy's reaction fire while the sword is at rest; the
+blade trail is at full brightness during the wind-up and gone by contact —
+"exactly inverted"; distinct actions do not produce distinct silhouettes. A also
+declined to judge the swing as motion at all, on the grounds that the animation
+strip it was given did not contain a legible swing or roll. That refusal is
+recorded as-is: it is a gap in the evidence, not a pass.
+
+**D — boss design.** Phase 2 "is phase 1 with debris": same silhouette, same
+stance, same palette, with the only new element a dark cloud that is itself
+dark-on-dark and half-occluded. Boss and player sit in the same narrow value band
+as the architecture, so "the only thing that locates the boss is the orange
+reticle." The overhead wind-up raises the rake along the boss's own centreline,
+so the pole stays inside the torso outline and the frame reads as "boss standing
+still."
+
+**E — QA.** Eight defects, of which six are the camera. Also: the `THE
+KILNWARDEN` subtitle is rendered close enough to the background value to be
+unreadable; oversized white spheres float unattached to any impact, one of them
+in the sky and one over the health bar; the player's helm reads as an untextured
+placeholder at close range. E also listed two **false alarms it considered and
+rejected** — the pauldron it first read as a stray quad, and hard-edged light
+bands it first read as a shadow-map bug — which is a useful signal that the
+report is discriminating rather than pattern-matching.
+
+---
+
+## Round 5 — response
+
+### The method change (§20)
+
+The camera fix in round 4 was a better spring arm: 7 samples along the boom, a
+ground-penetration test, a lateral test for the shoulder offset. Round 4 proved
+that is the wrong axis of attack. **A spring arm can only pull the boom in along
+the boom line.** Every frame the critics named has the same shape: a column or
+wall standing *beside* that line, filling the frame, which no amount of boom
+sampling will ever touch.
+
+The standard answer is to fade the occluder. The standard *implementation* of
+that answer — per-mesh alpha on whatever an occlusion probe hits — is unavailable
+here, because the level is merged into ~10 draw calls to hold the frame budget.
+There is no per-column mesh left to fade.
+
+So the fade moved into the fragment stage, where merging does not matter:
+
+- `applyNearFade()` in `src/world/materials.js` patches the architectural
+  materials via `onBeforeCompile`. A varying carries view-space depth; any
+  fragment nearer than 1.65 m dissolves out under a 4×4 ordered Bayer dither and
+  anything nearer than 0.42 m is gone. Ordered rather than hashed, so the pattern
+  is stable frame to frame instead of crawling.
+- Applied to `stone`, `stoneDark`, `vault`, `column`, `iron`, `ironLight`.
+  **Deliberately not applied to the ground** — dithering a hole in the floor under
+  the camera is a worse artefact than the one being fixed, and a camera that low
+  is the spring arm's problem.
+- Cost: one varying and a few ALU ops. No sorting, no transparency pass, no extra
+  draw calls.
+
+Paired with a level change aimed at D's specific diagnosis: the four arena
+pillars stood ~8.5 m from centre, which is exactly where a locked-on camera
+orbits (player circles at ~3.5 m, boom 5.4 m behind). They are pushed out past
+12.5 m, outside every reachable boom position. The fight still needs interior
+geometry, so four 1.6 m slag buttresses replace them — high enough to eat Volga's
+ground sweep, low enough that the boom never has one filling the frame. Vertical
+occluders out, horizontal cover in.
+
+### The rest of the round-5 diffs
+
+| Critic finding | Change |
+|---|---|
+| A: impact fires while the weapon is at rest | `sweepWeapon` used the blade's **midpoint** as the contact point, so a tip hit sparked halfway up the sword. `segSegDist2` now also returns `t`; the spark spawns on the surface between the blade's closest point and the target's axis |
+| A: trail brightest on the wind-up, gone by contact | trail window narrowed from `active[0] − 0.09` to `active[0] − 0.02`, and extended to `active[1] + 0.16`, so peak brightness lands on the frames that actually deal damage |
+| A: lock-on lets the target crop off the frame edge | the over-the-shoulder offset now scales away under lock-on, to zero once the boom is short — it worked hardest against target containment exactly when the frame was narrowest |
+| A + D + E: boss is a flat dark mass; only the reticle locates it | three emissive vent slots per chimney stack, on the outer faces, plus a mouth lip. The crown burns, the torso stays dark |
+| D: phase 2 is phase 1 with debris | phase 2 now **shears the left chimney stack** to a canted stump and grows the right one. The kiln doors are a chest detail invisible at lock-on range; the crown of the silhouette is what reads across an arena |
+| D: the transition is not staged as an event | a caldera backlight sits north of the arena and ramps 3.6× over 1.4 s at the phase change, so the floor throws orange and Volga is briefly backlit. Reset on boss reset, so the encounter restarts clean |
+| D: overhead wind-up hides inside the boss's own outline | the rake is abducted ~35° out over the right shoulder across the two wind-up keys, so the 3.2 m pole crosses open sky before it comes down |
+| E: oversized white spheres unattached to impacts | ambient ash spawns in a box that straddles the camera; a 0.2 m mote at 0.5 m covers a tenth of the screen. Spawns within 3.5 m of the lens are now rejected |
+| E: `THE KILNWARDEN` unreadable | subtitle 0.45 → 0.74 alpha. The hierarchy against the name is carried by size and tracking; it does not also need near-invisibility |
+| A: nameplate prints across the player's head | boss plate re-anchored from `clamp(28px, 6.5vh, 78px)` to `clamp(14px, 3.2vh, 34px)` — the player sits low-centre by design, so the old offset landed on him |
+| E: player helm reads as an untextured placeholder | the helm was one bare cube. Broken into a bevelled skull, a brow ridge and cheek plates flanking the slit, so it has facets that shade differently |
+
+### What round 5 did NOT do
+
+- **Critic A could not judge the swing as motion**, because the animation strip it
+  was given did not contain a legible swing. Round 5 did not fix that: it is a
+  capture problem, and the strip needs re-shooting on the simulation clock before
+  anyone can review attack timing. Combat feel therefore remains **un-reviewed**,
+  not reviewed-and-passed.
+- **Critic C was not re-run in round 4**, so the level-design verdict is still the
+  round-2 REDO.
+- D's fix #5 asked phase 2 to collapse columns and change the floor plan. Only the
+  silhouette and lighting halves were implemented. The floor plan does not change.
+
+---
+
+## Circuit breaker status (§21)
+
+Five rounds are complete: one developer pass and four review rounds. The brief's
+circuit breaker has therefore been reached. ADMIRE was never reached and is not
+claimed; every critic seat that has ever run has returned REDO.
+
+**達成 / Achieved — verified by running the build**
 - The vertical slice is completable start to finish with no developer
-  intervention (`fullrun` reaches the victory state).
-- Hit detection is correct and measured (2.6 m reach, clean falloff).
-- Boss has a full moveset, a documented fairness sheet, and a phase transition
-  that changes the rules rather than the numbers.
-- Readability of the cistern and the ground plane — the round-1 headline
-  complaint — is materially fixed.
+  intervention. `fullrun` machine-checks it and reaches the victory state; the
+  most recent run before round 5 produced all eleven checkpoint shots with an
+  empty error list.
+- Hit detection is correct and measured — HIT at 1.0–2.6 m, clean miss at 3.0 m,
+  from an instrumented test rather than from reading the code.
+- The boss has a full moveset with documented telegraph/active/punish windows and
+  a phase transition that changes the rules, not the numbers.
 
 **部分達成 / Partially achieved**
-- Overall image readability. Much better than round 1, still flagged in round 2.
-- Player silhouette. Improved twice, still not a designed character.
-- Level shape. The arena and low road gained real geometry; the split and the
-  cistern are still weaker than the critics want.
+- Camera occlusion. The method changed this round and the fix is a real one, but
+  it has been verified only on re-captured frames — no critic has reviewed the
+  result. It is not yet known to satisfy the four critics who raised it.
+- Boss readability and phase-2 identity. Changed this round on D's specific
+  diagnosis, likewise unreviewed.
+- Image readability and material coherence. Improved across rounds 3 and 4 (the
+  masonry method change), still the standing art debt.
+- Player silhouette. Changed four times; still not a designed character.
 
 **未達 / Not achieved**
-- One coherent material set. Still one stone texture at inconsistent UV density —
-  Critic B has now raised this twice and it is the largest outstanding art debt.
-- Landmark persistence along the route (Critic C's headline in both rounds).
-- Critics A, D and E never ran; combat feel, boss design and QA have had **no
-  blind review at all**.
+- **Combat feel has never been successfully blind-reviewed.** Critic A ran but
+  declined to judge the swing, because the evidence did not show one.
+- Landmark persistence along the route — Critic C's headline in both rounds it ran.
+- Level design has had no blind review since round 2.
+- No round has returned PASS, from any seat.
 
-**The three options the brief asks to put to the user: continue the loop,
-accept as-is, or change direction — are set out in the final summary.**
+**The three choices §21 requires be offered — continue, accept, or pivot — are
+set out in the session summary rather than pre-empted here.**

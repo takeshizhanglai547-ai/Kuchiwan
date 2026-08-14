@@ -470,10 +470,16 @@ export class Boss extends Actor {
     }
   }
 
-  /** The visual half of the rules change: the doors swing wide and stay open. */
+  /**
+   * The visual half of the rules change. The doors swinging open is a chest
+   * detail — legible up close, invisible at lock-on distance, and identical in
+   * silhouette. So phase 2 also SHEARS THE LEFT CHIMNEY STACK OFF. The crown of
+   * the silhouette goes from symmetric to lopsided, which is the one part of the
+   * outline a player can read across the arena and in one glance.
+   */
   _applyPhaseVisuals() {
     const open = this.phase === 2;
-    const { kilnDoorL, kilnDoorR, rakeGlow } = this.char;
+    const { kilnDoorL, kilnDoorR, rakeGlow, stacks } = this.char;
     if (kilnDoorL) {
       kilnDoorL.rotation.y = open ? 1.25 : 0;
       kilnDoorL.position.x = open ? -0.26 : -0.12;
@@ -481,6 +487,16 @@ export class Boss extends Actor {
       kilnDoorR.position.x = open ? 0.26 : 0.12;
     }
     if (rakeGlow) rakeGlow.material = open ? this.mats.ember : this.mats.emberDim;
+    if (stacks && stacks[0]) {
+      // Left stack: sheared to a stump and canted, so it reads as broken off
+      // rather than simply missing. Right stack grows, so the asymmetry is a
+      // silhouette change and not just a subtraction.
+      stacks[0].scale.set(1, open ? 0.34 : 1, 1);
+      stacks[0].rotation.z = open ? 0.62 : 0.18;
+      stacks[0].position.y = open ? 0.33 : 0.46;
+      stacks[1].scale.set(1, open ? 1.30 : 1, 1);
+      stacks[1].position.y = open ? 0.58 : 0.46;
+    }
   }
 
   // --- damage ---------------------------------------------------------------

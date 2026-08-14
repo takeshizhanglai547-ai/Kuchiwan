@@ -1746,6 +1746,12 @@ class FX {
       const px = camera.position.x + _v0.x * 6 + (Math.random() - 0.5) * 16;
       const pz = camera.position.z + _v0.z * 6 + (Math.random() - 0.5) * 16;
       const py = camera.position.y + (Math.random() - 0.35) * 8;
+      // A 0.2m mote is a speck at 8m and a soft white blob covering a tenth of
+      // the screen at 0.5m. The spawn box straddles the camera, so without this
+      // guard a few motes per second land in the lens and read as a rendering
+      // fault rather than as drifting ash.
+      const dx = px - camera.position.x, dy = py - camera.position.y, dz = pz - camera.position.z;
+      if (dx * dx + dy * dy + dz * dz < 12.25) continue;   // < 3.5m from the lens
       this._alloc(
         K_ASH, px, py, pz,
         (Math.random() - 0.5) * 0.4, -0.12 - Math.random() * 0.25, (Math.random() - 0.5) * 0.4,

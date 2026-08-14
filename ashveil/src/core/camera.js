@@ -15,6 +15,8 @@ const _v2 = new THREE.Vector3();
 const _look = { x: 0, y: 0 };
 
 const PITCH_MIN = -0.62, PITCH_MAX = 1.15;
+/** Clearance kept between the camera and any surface. */
+const CAM_RADIUS = 0.38;
 
 export class GameCamera {
   constructor(camera) {
@@ -128,39 +130,55 @@ export class GameCamera {
 
     let dist = this.distTarget;
 
-    // --- collision: pull in so the camera never ends up inside masonry --------
+    // --- boom collision -------------------------------------------------------
+    // A single XZ ray at focus height is not enough: it cannot see a floor slab
+    // the boom passes UNDER or a ceiling it passes THROUGH, which is exactly how
+    // the camera ended up buried in a stair block and beneath the plaza floor.
+    // Sample the whole boom in 3D and stop at the first sample that is blocked.
     if (this.collision) {
       const f = this.smoothFocus;
-      const wantX = f.x + dirX * dist, wantZ = f.z + dirZ * dist;
-      const hit = this.collision.rayXZ(f.x, f.z, wantX, wantZ, f.y);
-      // Never closer than 2.0m: below that the character fills the frame and the
-      // player loses all peripheral awareness, which matters most in exactly the
-      // tight interiors that trigger the pull-in.
-      if (hit < 1) dist = Math.max(2.6, dist * hit - 0.35);
+      const SAMPLES = 7;
+      let allowed = dist;
+      for (let i = 1; i <= SAMPLES; i++) {
+        const t = (i / SAMPLES) * dist;
+        const sx = f.x + dirX * t, sy = f.y + dirY * t, sz = f.z + dirZ * t;
 
-      // Also keep the camera above the floor it would otherwise clip through.
-      const camY = f.y + dirY * dist;
-      const g = this.collision.groundHeight(f.x + dirX * dist, f.z + dirZ * dist, camY + 4, 8);
-      if (g > -Infinity && camY < g + 0.5) {
-        // Raise pitch rather than teleport: a sudden jump reads as a bug.
-        const need = g + 0.5 - camY;
-        this.pos.set(f.x + dirX * dist, camY + need, f.z + dirZ * dist);
-      } else {
-        this.pos.set(f.x + dirX * dist, camY, f.z + dirZ * dist);
+        // (a) horizontal blocker between the focus and this sample
+        if (this.collision.rayXZ(f.x, f.z, sx, sz, sy) < 1) { allowed = t; break; }
+
+        // (b) the sample is inside/below a floor. groundHeight() reports the
+        //     highest walkable surface at or below the probe height, so probing
+        //     from well above the sample finds a slab the boom would tunnel into.
+        const g = this.collision.groundHeight(sx, sz, sy + 6, 12);
+        if (g > -Infinity && sy < g + CAM_RADIUS) { allowed = t; break; }
       }
-    } else {
-      this.pos.set(
-        this.smoothFocus.x + dirX * dist,
-        this.smoothFocus.y + dirY * dist,
-        this.smoothFocus.z + dirZ * dist,
-      );
+      dist = Math.max(2.6, allowed - CAM_RADIUS);
     }
+    this.pos.set(
+      this.smoothFocus.x + dirX * dist,
+      this.smoothFocus.y + dirY * dist,
+      this.smoothFocus.z + dirZ * dist,
+    );
     this.dist = dist;
 
     // Over-the-shoulder lateral offset, applied to BOTH eye and focus so the
     // camera does not toe in and the world stays level.
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
-    const off = this.shoulder * clamp(dist / 5.4, 0.35, 1);
+    let off = this.shoulder * clamp(dist / 5.4, 0.35, 1);
+    // Lock-on has exactly one job: keep the target on screen. A shoulder offset
+    // works against that job, and works hardest against it precisely when the
+    // spring arm has already collapsed the boom against a wall — the frame is
+    // narrowest and the offset shoves the target out of it. So the offset scales
+    // away under lock-on, to nothing once the boom is short.
+    if (this.target && this.target.alive) off *= clamp((dist - 2.8) / 3.0, 0, 0.45);
+    // The lateral offset needs its own collision test. Without one it happily
+    // shoves the camera sideways into a wall in any corridor narrower than about
+    // 6m — which is most of this level's interiors.
+    if (this.collision && off > 0.01) {
+      const h = this.collision.rayXZ(this.pos.x, this.pos.z,
+                                     this.pos.x + rx * off, this.pos.z + rz * off, this.pos.y);
+      if (h < 1) off *= Math.max(0, h - 0.2);
+    }
     this.cam.position.set(this.pos.x + rx * off, this.pos.y, this.pos.z + rz * off);
     _v.set(this.smoothFocus.x + rx * off, this.smoothFocus.y, this.smoothFocus.z + rz * off);
     this.cam.lookAt(_v);

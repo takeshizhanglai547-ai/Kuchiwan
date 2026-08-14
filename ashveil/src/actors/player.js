@@ -157,9 +157,15 @@ export class Player extends Actor {
     updateCloak(this.char.cloak, this.vel, dt, this.grounded, this.animTime);
 
     // --- weapon trail: only while the blade is actually swinging -------------
+    // The trail means "the blade is live". A 0.09s pre-roll was long enough that
+    // the ribbon was at full brightness during the wind-up — while the blade was
+    // still travelling backward and could not hurt anything — and had already
+    // faded by contact. That teaches the player exactly the wrong thing. The
+    // ribbon now starts within a frame of the active window and lingers past it,
+    // so peak brightness lands on the frames that actually deal damage.
     const wantTrail = this.state === 'attack' &&
-      this.clipTime > this.attackDef.active[0] - 0.09 &&
-      this.clipTime < this.attackDef.active[1] + 0.13;
+      this.clipTime > this.attackDef.active[0] - 0.02 &&
+      this.clipTime < this.attackDef.active[1] + 0.16;
     if (wantTrail !== this.trailOn) {
       this.trailOn = wantTrail;
       fx.trail(this.char.sword, wantTrail);

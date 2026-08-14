@@ -514,9 +514,12 @@
  * BOSS BAR — bottom centre, wide and thin
  * ==========================================================================*/
 
+/* Anchored hard to the bottom edge. At the old offset the name and subtitle
+   printed across the player character's head and shoulders in every locked-on
+   boss shot, because the player sits low-centre by design. */
 .av-boss {
 	position: absolute;
-	bottom: clamp(28px, 6.5vh, 78px);
+	bottom: clamp(14px, 3.2vh, 34px);
 	left: 50%;
 	transform: translateX(-50%);
 	display: flex;
@@ -548,7 +551,10 @@
 	letter-spacing: 0.3em;
 	text-indent: 0.3em;
 	text-transform: uppercase;
-	color: rgba(201, 189, 166, 0.45);
+	/* Was 0.45, which pushed the epithet below legibility against the arena's
+	   mid-grey. The hierarchy against the name is carried by size and tracking;
+	   it does not also need to be carried by near-invisibility. */
+	color: rgba(206, 195, 173, 0.74);
 	text-shadow: var(--shadow-text);
 	margin-bottom: 6px;
 	white-space: nowrap;
@@ -736,7 +742,8 @@
 	left: 50%;
 	/* Raised clear of the character, who stands at roughly screen centre and was
 	   being overlapped by the interact prompt. */
-	bottom: clamp(120px, 24vh, 260px);
+	/* Low enough to clear the character, who occupies the middle of the frame. */
+	bottom: clamp(78px, 13vh, 148px);
 	transform: translateX(-50%) translateY(6px);
 	display: flex;
 	align-items: center;

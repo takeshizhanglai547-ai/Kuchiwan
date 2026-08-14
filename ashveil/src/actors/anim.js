@@ -668,15 +668,20 @@ export const CLIP_VOLGA_SLAM = new Clip({
   name: 'volgaSlam', duration: 2.40,
   keys: [
     { t: 0.00, pose: NEUTRAL },
+    // The rake is raised OUT over the right shoulder, not straight up the
+    // centreline. Raised on the centreline the 3.2m pole sits entirely inside the
+    // torso outline from the player's camera, so the tallest, most dangerous
+    // wind-up in the fight read as "boss standing still". Abducted ~35 degrees it
+    // crosses open sky and breaks the silhouette before it comes down.
     { t: 0.55, ease: 'outCubic', pose: {   // rears up — the tallest silhouette in the fight
-      hips: [-0.30, 0.10, 0], spine: [-0.34, 0.08, 0], chest: [-0.50, 0.10, 0], head: [-0.40, 0, 0],
-      upperArmR: [-2.80, 0.20, -0.30], forearmR: [-0.45, 0, 0],
+      hips: [-0.30, 0.10, 0], spine: [-0.34, 0.08, 0], chest: [-0.50, 0.10, -0.14], head: [-0.40, 0, 0],
+      upperArmR: [-2.80, 0.46, -0.66], forearmR: [-0.45, 0, 0],
       upperArmL: [-1.60, 0, 0.55], forearmL: [-1.20, 0, 0],
       thighR: [0.20, 0, 0], shinR: [0.34, 0, 0], thighL: [0.16, 0, 0], shinL: [0.30, 0, 0],
     } },
     { t: 1.00, ease: 'linear', pose: {
-      hips: [-0.34, 0.10, 0], spine: [-0.38, 0.08, 0], chest: [-0.56, 0.10, 0], head: [-0.44, 0, 0],
-      upperArmR: [-2.95, 0.20, -0.30], forearmR: [-0.42, 0, 0],
+      hips: [-0.34, 0.10, 0], spine: [-0.38, 0.08, 0], chest: [-0.56, 0.10, -0.16], head: [-0.44, 0, 0],
+      upperArmR: [-2.95, 0.48, -0.70], forearmR: [-0.42, 0, 0],
       upperArmL: [-1.66, 0, 0.55], forearmL: [-1.22, 0, 0],
       thighR: [0.24, 0, 0], shinR: [0.38, 0, 0], thighL: [0.18, 0, 0], shinL: [0.32, 0, 0],
     } },

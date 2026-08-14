@@ -27,7 +27,7 @@ const game = {
   started: false,
   quality: 'high',
   stats: new FrameStats(180),
-  showFps: true,
+  showFps: false,          // debug readout; enable with ?fps=1
 };
 window.ASHVEIL = game;        // debug + automated capture hook
 
@@ -56,6 +56,9 @@ async function boot() {
   const override = params.get('quality');
   if (override) game.quality = override;
   game.simLock = Math.max(0, parseInt(params.get('simlock') || '0', 10)) || 0;
+  // The frame counter is a development readout and does not belong on screen in
+  // anything shown to anyone else.
+  game.showFps = params.get('fps') === '1' || !!game.simLock;
 
   renderer.setPixelRatio(game.quality === 'low' ? 1 : Math.min(devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;

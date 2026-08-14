@@ -349,12 +349,25 @@ export function buildLevel(scene, mats) {
             ry: -a, mat: 'ember', collide: false });
   }
 
-  // Four great pillars, pulled IN to ~6-7m from centre so they are dodge and
-  // line-of-sight geometry during the fight rather than perimeter decoration.
-  for (const [px, pz] of [[-6.5, 60.5], [6.5, 60.5], [-6.5, 71.5], [6.5, 71.5]]) {
+  // Four great pillars. They used to stand ~8.5m from centre, which is exactly
+  // where a locked-on camera orbits (player circles the boss at ~3.5m, boom sits
+  // 5.4m behind), so for most of the fight one of them was parked against the
+  // lens. Pushed out past 12.5m they are outside every reachable boom position:
+  // they frame the arena and silhouette against the caldera instead of blocking
+  // the shot.
+  for (const [px, pz] of [[-9.5, 57.5], [9.5, 57.5], [-9.5, 74.5], [9.5, 74.5]]) {
     b.cylinder({ x: px, y: 0, z: pz, r: 1.05, h: 9.0, mat: 'column', uv: 2.4 });
     b.box({ x: px, y: 0.02, z: pz, w: 2.5, h: 0.34, d: 2.5, mat: 'ironLight', uv: 1, collide: false });
     b.box({ x: px, y: 9.0, z: pz, w: 3.0, h: 0.8, d: 3.0, mat: 'stone', uv: 2, collide: false });
+  }
+  // The fight still needs interior geometry, but it must be geometry the camera
+  // can see over. These slag buttresses are 1.6m — high enough to eat Volga's
+  // ground sweep and to break a straight charge, low enough that the boom (eye
+  // height ~2.2m, looking slightly down) never has one filling the frame.
+  for (const [bx, bz, br] of [[-6.4, 61.0, 0.5], [6.4, 61.0, -0.5],
+                              [-6.4, 71.2, -0.4], [6.4, 71.2, 0.4]]) {
+    b.box({ x: bx, y: 0, z: bz, w: 3.6, h: 1.6, d: 1.5, ry: br, mat: 'stoneDark', uv: 2.6 });
+    b.box({ x: bx, y: 1.6, z: bz, w: 3.9, h: 0.22, d: 1.8, ry: br, mat: 'stone', uv: 2.6, collide: false });
   }
   // A broken ring platform across the caldera-facing third: an elevation option
   // for the player, and a break in Volga's ground sweeps.
@@ -363,6 +376,17 @@ export function buildLevel(scene, mats) {
   b.ramp({ x: 9.5, y: 0, z: 74.0, w: 3.4, len: 5.0, rise: 1.5, ry: -Math.PI / 2, mat: 'stone' });
   // A toppled column the player can roll over but a 4.6m boss must path around.
   b.box({ x: -2.0, y: 0, z: 66.0, w: 2.1, h: 1.1, d: 9.0, ry: 0.30, mat: 'stone', uv: 2.6 });
+
+  // Caldera backlight. Sits low and north of the fight, aimed south across the
+  // floor, so Volga is rim-lit from behind and his crown separates from the sky.
+  // Dim in phase 1; the director ramps it hard at the phase change so the
+  // transition is a lighting event and not just a particle puff.
+  const arenaGlow = new THREE.PointLight(PALETTE.caldera, 8, 46, 2);
+  arenaGlow.position.set(AR.x, 3.4, AR.z + 16.0);
+  scene.add(arenaGlow);
+  level.lights.push(arenaGlow);
+  level.arenaGlow = arenaGlow;
+  level.arenaGlowBase = 8;
 
   // ash and slag banked against the arena's edges
   for (let i = 0; i < 30; i++) {

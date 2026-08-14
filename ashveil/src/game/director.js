@@ -111,6 +111,7 @@ export class Director {
 
   update(dt, ctx) {
     this.runTime += dt;
+    this._updateArenaGlow(dt);
 
     this._updateDynamics(dt);
     this._updateItems(dt);
@@ -302,7 +303,23 @@ export class Director {
     if (phase === 2) {
       this.hud.toast('THE KILN OPENS');
       this.musicState = 'boss2';
+      // The transition has to be visible from across the arena, not just on the
+      // boss's chest. Ramping the caldera light throws the floor orange and
+      // backlights him, so the phase change reads at a glance even when the
+      // burst VFX is behind him.
+      this._glowRamp = 0;
     }
+  }
+
+  /** Eases the arena backlight to its phase-2 level over ~1.4s. */
+  _updateArenaGlow(dt) {
+    if (this._glowRamp === undefined || this._glowRamp >= 1) return;
+    const g = this.level.arenaGlow;
+    if (!g) { this._glowRamp = 1; return; }
+    this._glowRamp = Math.min(1, this._glowRamp + dt / 1.4);
+    const t = this._glowRamp * this._glowRamp * (3 - 2 * this._glowRamp);
+    g.intensity = this.level.arenaGlowBase * (1 + t * 2.6);
+    g.distance = 46 + t * 22;
   }
 
   onBossDefeated(boss) {
@@ -334,6 +351,12 @@ export class Director {
     this.projectiles.clear();
     this.audio.music('ambient');
     this.musicState = 'ambient';
+    // The boss goes back to phase 1, so the arena lighting must go back with it.
+    if (this.level.arenaGlow) {
+      this.level.arenaGlow.intensity = this.level.arenaGlowBase;
+      this.level.arenaGlow.distance = 46;
+    }
+    this._glowRamp = undefined;
     if (!this.fogGateHandle) this._buildFogGate();
   }
 

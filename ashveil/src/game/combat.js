@@ -38,7 +38,9 @@ function segSegDist2(ax, ay, az, bx, by, bz, cx, cy0, cz, cy1) {
   const dx = wx + s * ux - t * vx;
   const dy = wy + s * uy - t * vy;
   const dz = wz + s * uz - t * vz;
-  return { d2: dx * dx + dy * dy + dz * dz, s };
+  // `t` comes back as well as `s`: the caller needs the height along the target's
+  // axis to place the impact where the blade actually met the body.
+  return { d2: dx * dx + dy * dy + dz * dz, s, t };
 }
 
 /** Was the hit landed inside `cone` radians of the defender's BACK? */
@@ -85,16 +87,28 @@ export function sweepWeapon(attacker, targets, opts, onHit) {
     // current blade segment
     let res = segSegDist2(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, t.pos.x, cy0, t.pos.z, cy1);
     let hit = res.d2 <= r2;
+    // Which segment produced the hit decides where the spark goes.
+    let sax = _a.x, say = _a.y, saz = _a.z, sbx = _b.x, sby = _b.y, sbz = _b.z;
     if (!hit) {
       // swept: previous tip -> current tip
       res = segSegDist2(prev.ax, prev.ay, prev.az, _a.x, _a.y, _a.z, t.pos.x, cy0, t.pos.z, cy1);
       hit = res.d2 <= r2;
+      sax = prev.ax; say = prev.ay; saz = prev.az;
+      sbx = _a.x; sby = _a.y; sbz = _a.z;
     }
     if (!hit) continue;
 
     attacker.hitSet.add(t.id);
+    // The contact point was the blade's MIDPOINT, so a tip hit sparked halfway up
+    // the sword and a hit on a target's leg sparked at its chest. The solver
+    // already knows where the two segments came closest: `s` along the blade and
+    // `t` up the target's axis. Spark on the surface between them.
+    const s = res.s, ty = cy0 + res.t * (cy1 - cy0);
+    const bpx = sax + (sbx - sax) * s;
+    const bpy = say + (sby - say) * s;
+    const bpz = saz + (sbz - saz) * s;
     onHit(t, { damage, poise, kind, type, knockback,
-               point: { x: (_a.x + _b.x) / 2, y: (_a.y + _b.y) / 2, z: (_a.z + _b.z) / 2 } });
+               point: { x: (bpx + t.pos.x) / 2, y: (bpy + ty) / 2, z: (bpz + t.pos.z) / 2 } });
   }
 
   prev.ax = _a.x; prev.ay = _a.y; prev.az = _a.z;
