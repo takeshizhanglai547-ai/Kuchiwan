@@ -42,18 +42,22 @@ Consequences:
 Ash Thrall → take the Ember Shard → take the Vessel Fragment → turn the winch →
 cross the opened shortcut → enter the fog gate → fight → victory.
 
-**Result: reached `director.state === "victory"`, zero console errors.**
-Observed along the way: flasks 3 → 4 after the Vessel Fragment, `gate: true`
-after the winch, `bossPhase: 2` reached, boss HP 0, and the victory reward
-applied (`shards: 2`). The scenario fails its own process exit code if the run
-does not reach victory.
+**Result: reached `director.state === "victory"`, zero console errors** — boss HP 0,
+phase 2 reached, reward applied (shards 1 → 3), shortcut open, 4 flasks.
+
+This test also *caught a regression*: an intermediate build reset the boss fight
+mid-encounter (the arena leash fired with no grace period), leaving the boss
+unwinnable. Fixed, and the run above is the re-verification after that fix.
+
+The scenario fails its own process exit code if the run does not reach victory,
+so it cannot silently pass.
 
 *Honest caveat:* this scenario keeps the scripted test-driver alive and gives it
 a damage assist, because it is testing **the loop**, not combat skill. The assist
 is applied through the real `applyDamage()` funnel — not a raw HP write —
 specifically so the phase-transition and death code paths actually execute. An
-earlier version of this test wrote HP directly and produced a false pass; that is
-recorded in `REVIEW_LOG.md` as defect 0.2's discovery path.
+earlier version of this test wrote HP directly and produced a false pass — the
+boss "died" without its death or phase code ever executing.
 
 ### Hit detection — measured, not assumed
 `node tools/harness.js reach` freezes an enemy, places the player at exact
@@ -88,6 +92,8 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
 | Phase 2 transition fires | `fullrun` | `bossPhase: 2`, `chipThroughGuard` armed |
 | Boss killable → victory | `fullrun` | `state: "victory"`, reward granted |
 | Light / heavy / charge / guard / roll / lock-on all fire | `combat` | captured mid-action |
+| Death → death screen → respawn | `death` | state `dead` → `explore`, HP restored to 100, respawn at checkpoint I, all 9 enemies reset |
+| Player damage lands on the boss | `boss` | 900 → 818 from one scripted combo, while taking damage in return |
 
 ---
 
@@ -106,8 +112,6 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
 - **Volga's ember-vein floor eruption damaging the player.** Phase 2 was reached
   and the veins spawn; a vein connecting has not been separately confirmed.
 - **Gamepad and touch input.** Written, never exercised.
-- **Death → death screen → respawn.** The `death` scenario exists in the harness
-  but had not completed a clean run at the time of writing.
 
 ---
 
@@ -139,3 +143,9 @@ This test found two real bugs and one false result — see `REVIEW_LOG.md` 0.9�
    observed only incidentally.
 6. **The 1% low framerate figure reported by the HUD is meaningless in this
    container** and should be ignored until run on a GPU.
+7. **Pulling the arena pillars inward** (a level-design improvement requested by
+   a reviewer) made them occlude the boss camera more often. The two goals are in
+   genuine tension and the current balance has not been play-tested.
+8. **The architecture still uses one stone texture** at inconsistent texel
+   density. Raised by the same reviewer in two consecutive rounds and not fixed;
+   it is the largest outstanding art debt.
