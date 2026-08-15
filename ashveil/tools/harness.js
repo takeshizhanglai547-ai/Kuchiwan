@@ -682,6 +682,22 @@ const SCENARIOS = {
    * fullrun scenario; this exercises the other two, which are otherwise only
    * verified by reading the code.
    */
+  /** Walk north from the forecourt, reporting position, to find what blocks entry. */
+  async probe({ at, advance, page, result }) {
+    await at(0, 0.3, 45, 0);
+    await advance(0.4);
+    await page.keyboard.down('KeyW');
+    for (let i = 0; i < 14; i++) {
+      await advance(0.6);
+      const p = await page.evaluate(() => {
+        const g = window.ASHVEIL;
+        return { z: +g.player.pos.z.toFixed(2), x: +g.player.pos.x.toFixed(2), st: g.director.state };
+      });
+      result.notes.push(`t=${(i * 0.6).toFixed(1)}s  x=${p.x}  z=${p.z}  state=${p.st}`);
+    }
+    await page.keyboard.up('KeyW');
+  },
+
   async seal({ at, advance, page, result }) {
     const sealState = () => page.evaluate(() => {
       const g = window.ASHVEIL;
