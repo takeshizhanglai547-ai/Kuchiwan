@@ -527,7 +527,7 @@ const SCENARIOS = {
     // so every frame after this was shot in the 5m entrance gap with ring wall on
     // both sides — which is also where the fight itself used to start, because
     // the wake trigger sat on the arch.
-    await hold('KeyW', 4.6); await advance(1.0);
+    await hold('KeyW', 6.4); await advance(1.0);
     await shot('02_entered');
     await tap('KeyQ'); await advance(0.4);
     await shot('03_lockon');
@@ -672,6 +672,63 @@ const SCENARIOS = {
   },
 
   /** Death and respawn: the loop must survive dying. */
+  /**
+   * The arena seal's three exit paths.
+   *
+   * The seal closes the Kiln Court's only doorway for the duration of the boss
+   * fight. It must reopen on victory, on death AND on leash reset — if any one of
+   * those is missed the player is walled into the arena with no way out, which is
+   * worse than the drift the seal exists to prevent. Victory is covered by the
+   * fullrun scenario; this exercises the other two, which are otherwise only
+   * verified by reading the code.
+   */
+  async seal({ at, advance, page, result }) {
+    const sealState = () => page.evaluate(() => {
+      const g = window.ASHVEIL;
+      const w = g.level.arenaSeal;
+      return { closed: !!(w && w.length && !w[0].off), state: g.director.state };
+    });
+
+    // walk in and start the fight
+    await at(0, 0.3, 52, 0);
+    await advance(0.4);
+    await page.keyboard.down('KeyW'); await advance(3.0); await page.keyboard.up('KeyW');
+    await advance(0.8);
+    let s = await sealState();
+    result.notes.push(`after entering: state=${s.state} sealClosed=${s.closed}`);
+    if (!s.closed) result.errors.push('SEAL FAIL: not closed once the fight began');
+
+    // --- path 1: death ---
+    await page.evaluate(() => {
+      const g = window.ASHVEIL;
+      g.player.hp = 0; g.player._die(g.ctx);
+    });
+    await advance(4.0);
+    await page.evaluate(() => document.querySelector('[data-action="retry"]')?.click());
+    await advance(2.0);
+    s = await sealState();
+    result.notes.push(`after death+respawn: state=${s.state} sealClosed=${s.closed}`);
+    if (s.closed) result.errors.push('SEAL FAIL: still closed after death — player is walled in');
+
+    // --- path 2: leash reset ---
+    await page.evaluate(() => {
+      const g = window.ASHVEIL;
+      g.director.firedTriggers.delete('fog_gate');
+    });
+    await at(0, 0.3, 56, 0);
+    await advance(0.4);
+    await page.keyboard.down('KeyW'); await advance(2.4); await page.keyboard.up('KeyW');
+    await advance(0.8);
+    s = await sealState();
+    result.notes.push(`re-entered: state=${s.state} sealClosed=${s.closed}`);
+    // walk far away so the leash fires
+    await at(0, 0.3, 20, 0);
+    await advance(4.0);
+    s = await sealState();
+    result.notes.push(`after leash reset: state=${s.state} sealClosed=${s.closed}`);
+    if (s.closed) result.errors.push('SEAL FAIL: still closed after leash reset');
+  },
+
   async death({ shot, tap, at, advance, page, result }) {
     await at(0, 0.3, -32.5, 0);
     await tap('KeyE'); await advance(0.5);      // set checkpoint

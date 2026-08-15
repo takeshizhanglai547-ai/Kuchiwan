@@ -322,11 +322,13 @@ export function buildLevel(scene, mats) {
   //
   // The wake trigger is pushed to the arena floor proper. The player crosses the
   // arch, walks in, and is standing in open ground when the encounter starts.
-  // Radius 9.0, not 5.5. This trigger is now the only thing that starts the
-  // encounter, so it must be impossible to walk past: 9m spans the arena's full
-  // usable width at this depth, and the south break is the only way in. A player
-  // hugging a wall on the way north must still cross it.
-  level.triggers.push({ id: 'fog_gate', type: 'boss', x: 0, y: 0, z: 57.0, r: 9.0,
+  // Centre and radius both matter, and getting the radius wrong silently undoes
+  // the centre. A trigger at z=57 with r=9 fires the moment the player reaches
+  // z=48 — the arch itself — which is exactly the placement this was moved away
+  // from. Pushed to z=60 with r=8: it cannot fire before z=52, which is properly
+  // inside, and it still catches a player hugging the doorway edge (x=±5.9 is
+  // 5.9m from the centre line, inside 8).
+  level.triggers.push({ id: 'fog_gate', type: 'boss', x: 0, y: 0, z: 60.0, r: 8.0,
                         prompt: 'Enter the Kiln Court', once: true });
   level.fogGate = { x: 0, y: 0.1, z: 48.5, w: 5.0, h: 5.5 };
 
