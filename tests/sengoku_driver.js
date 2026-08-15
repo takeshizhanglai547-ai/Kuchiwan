@@ -295,6 +295,139 @@ const DRIVER = `
     if(!(fed>plain)) throw new Error('殴っても返しが重くならない: '+plain+' → '+fed);
     console.log('家康 三方ヶ原の反攻 OK (無傷 '+plain+' ／ 60ダメージ受けた後 '+fed+')'); }
 
+  // ===== 4b) 二の矢：三人の戦い方をもう一段はっきりさせる技 =====
+  // 信長：本能寺＝床に火柱を並べ、立てる場所を奪う
+  { const e=setupBoss('nobunaga','honnoji');
+    const p=players[0]; p.x=camX+400;
+    hazards.length=0;
+    runMove(e, MV.honnoji.dur);
+    const fires=hazards.filter(h=>h.kind==='eplant'&&h.art==='fire');
+    if(fires.length<4) throw new Error('火柱が並ばない: '+fires.length+'本');
+    const xs=fires.map(h=>Math.round(h.x)).sort((a,b)=>a-b);
+    if(new Set(xs).size!==fires.length) throw new Error('火柱が同じ場所に重なっている');
+    if(!(xs[xs.length-1]-xs[0]>300)) throw new Error('火柱が固まっていて避け放題: 幅'+(xs[xs.length-1]-xs[0]));
+    const warns=new Set(fires.map(h=>h.warn));
+    if(warns.size<2) throw new Error('全部同時に立つ＝時間差になっていない');
+    console.log('信長 本能寺 OK ('+fires.length+'本／幅'+(xs[xs.length-1]-xs[0])+'px／立つ時間差 '+warns.size+'段)'); }
+
+  // 火柱は跳べば越えられる（立つ場所を奪う技であって、避けられない技ではない）
+  { const burn=function(z){
+      const e=setupBoss('nobunaga','honnoji');
+      const p=players[0]; player=p; p.x=camX+400; p.hp=p.maxHp=99999; p.invuln=0;
+      hazards.length=0;
+      for(let f=0; f<MV.honnoji.dur; f++){ hitStop=0; p.invuln=0; p.z=z;
+        runBossMove(e); e.moveT++; updateHazards(); }
+      return p.maxHp-p.hp; };
+    const onGround=burn(0), inAir=burn(70);
+    if(!(onGround>0)) throw new Error('火柱が当たらない');
+    if(inAir>0) throw new Error('跳んでも火柱に焼かれる（避けようがない）');
+    console.log('火柱の抜け方 OK (地上 -'+onGround+'HP ／ 跳べば 0)'); }
+
+  // 信長：南蛮筒＝長い溜めから極太の一発。跳べば越えられる高さ
+  { const e=setupBoss('nobunaga','nanbanZutsu');
+    projectiles.length=0;
+    let shotAt=-1;
+    for(let f=0; f<MV.nanbanZutsu.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+      if(projectiles.length && shotAt<0) shotAt=f; }
+    if(shotAt<0) throw new Error('南蛮筒が撃たない');
+    if(!(shotAt>=20)) throw new Error('溜めが短すぎる: '+shotAt+'F');
+    const pr=projectiles[0];
+    const vol=ETYPE.nobunaga.dmg;
+    if(!(pr.r>=20)) throw new Error('極太の弾になっていない: r='+pr.r);
+    if(!(pr.dmg>vol)) throw new Error('普段の技より軽い: '+pr.dmg+' vs '+vol);
+    if(pr.homing) throw new Error('大筒が追尾している');
+    console.log('信長 南蛮筒 OK ('+shotAt+'F 溜め／半径'+pr.r+'／'+pr.dmg+'ダメージ／直進)'); }
+
+  // 秀吉：千成瓢箪＝撒いて時間差で弾ける
+  { const e=setupBoss('hideyoshi','hyotan');
+    hazards.length=0;
+    runMove(e, MV.hyotan.dur);
+    const g=hazards.filter(h=>h.kind==='eplant'&&h.art==='gourd');
+    if(g.length<3) throw new Error('瓢箪が撒かれない: '+g.length+'個');
+    if(new Set(g.map(h=>Math.round(h.x))).size!==g.length) throw new Error('同じ場所に重なっている');
+    if(!(g[0].warn>=20)) throw new Error('置いた瞬間に弾ける（予兆が無い）: '+g[0].warn+'F');
+    console.log('秀吉 千成瓢箪 OK ('+g.length+'個／'+g[0].warn+'F 後に弾ける)'); }
+
+  // 秀吉：猿飛＝頭上を跳び越えて背後へ回る
+  { const e=setupBoss('hideyoshi','saruTobi');
+    const p=players[0]; p.x=camX+400; e.x=camX+200; e.facing=1;
+    const side0=Math.sign(e.x-p.x);
+    let peak=0, crossed=false;
+    for(let f=0; f<MV.saruTobi.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+      peak=Math.max(peak,e.z||0);
+      if(Math.sign(e.x-p.x)!==side0 && Math.sign(e.x-p.x)!==0) crossed=true; }
+    if(!(peak>60)) throw new Error('跳ばずに走っているだけ: 最高'+peak.toFixed(0));
+    if(!crossed) throw new Error('主役を跳び越していない（背後を取れていない）');
+    if(e.z!==0) throw new Error('技が終わっても宙に浮いたまま: z='+e.z);
+    console.log('秀吉 猿飛 OK (最高'+peak.toFixed(0)+'／主役を跳び越す／着地する)'); }
+
+  // 家康：影武者＝姿を消し、三つの影のどれかから出る
+  { const seen=new Set();
+    for(let trial=0; trial<24; trial++){
+      const e=setupBoss('ieyasu','kagemusha');
+      const p=players[0]; p.x=camX+400; e.x=camX+700;
+      let hid=false;
+      for(let f=0; f<MV.kagemusha.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+        if(e.vanish>0) hid=true; }
+      if(!hid) throw new Error('姿を消していない');
+      if(!e.kmX || e.kmX.length!==3) throw new Error('影が3つ立たない');
+      seen.add(Math.round(e.x)); }
+    if(seen.size<2) throw new Error('毎回同じ影から出てくる（読まれる）: '+[...seen].join(','));
+    console.log('家康 影武者 OK (三つの影／出る位置が '+seen.size+'通り)'); }
+
+  // 家康：槍衾＝周囲が槍で埋まり、近づけない
+  { const e=setupBoss('ieyasu','yaribusuma');
+    hazards.length=0;
+    runMove(e, 20);
+    const y=hazards.filter(h=>h.kind==='eplant'&&h.art==='yari');
+    if(y.length<4) throw new Error('槍衾が立たない: '+y.length+'本');
+    const L=y.filter(h=>h.x<e.x).length, R=y.filter(h=>h.x>e.x).length;
+    if(!(L>=2 && R>=2)) throw new Error('片側にしか立たない: 左'+L+' 右'+R);
+    // 近づけば刺さり、離れていれば無事
+    const stab=function(dx){
+      const e2=setupBoss('ieyasu','yaribusuma');
+      const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=0; p.z=0;
+      hazards.length=0;
+      for(let f=0; f<MV.yaribusuma.dur; f++){ hitStop=0; p.invuln=0; p.x=e2.x+dx;
+        runBossMove(e2); e2.moveT++; updateHazards(); }
+      return p.maxHp-p.hp; };
+    const near=stab(60), far=stab(340);
+    if(!(near>0)) throw new Error('槍衾に近づいても刺さらない');
+    if(far>0) throw new Error('離れていても刺さる（引く選択肢が無い）');
+    console.log('家康 槍衾 OK ('+y.length+'本 左'+L+'/右'+R+'／近60px -'+near+'HP ／遠340px 0)'); }
+
+  // 三人の技構成が別物であること
+  { const sets=BOSS.map(k=>BOSSMOVES[ETYPE[k].bossKind]);
+    for(let i=0;i<3;i++){
+      const own=sets[i].filter(m=>!sets[(i+1)%3].includes(m)&&!sets[(i+2)%3].includes(m));
+      if(own.length<5) throw new Error(BOSS[i]+' の固有技が5つ未満: '+own.join(',')); }
+    console.log('三英傑の手札 OK (固有技が一人5つ以上／'+sets.map(x=>x.length).join('/')+'手)'); }
+
+  // ===== 4c) 戦闘前の口上 =====
+  // 全員が汎用の「いざ尋常に勝負！」に落ちていた
+  { const MYTH=['poseidon','hades','zeus'];
+    const HERO=['inu','shima','nuko','guard8','watch','wanden'];
+    const all=[];
+    for(const k of MYTH.concat(BOSS)){
+      const q=BOSSQUOTE[k];
+      if(!q) throw new Error(k+' に口上が無い');
+      if(q.indexOf('いざ尋常')>=0) throw new Error(k+' が汎用の口上のまま');
+      all.push(q);
+      // 主役ごとの言い分けもあること
+      const by=BOSSQUOTE_BY[k];
+      if(!by) throw new Error(k+' に主役ごとの口上が無い');
+      const sv=players[0].kind, per=[];
+      for(const h of HERO){ players[0].kind=h;
+        const line=bossQuoteFor(k);
+        if(!line) throw new Error(k+' × '+h+' の口上が空');
+        if(line===q) throw new Error(k+' が '+h+' 用の口上を持っていない');
+        per.push(line); }
+      players[0].kind=sv;
+      if(new Set(per).size!==HERO.length) throw new Error(k+' の主役別口上が重複している');
+      all.push.apply(all, per); }
+    if(new Set(all).size!==all.length) throw new Error('口上が他のボスと重複している');
+    console.log('戦闘前の口上 OK (6ボス×(汎用＋主役6人)＝'+all.length+'種、すべて別)'); }
+
   // ===== 5) 背景の三景 =====
   { const idx=[]; STAGE_THEME.forEach(function(T,i){ if(T.sengoku) idx.push(i); });
     if(idx.length!==3) throw new Error('戦国のテーマが3つでない: '+idx.length);

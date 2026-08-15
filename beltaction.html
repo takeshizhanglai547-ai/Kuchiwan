@@ -2854,6 +2854,23 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
           hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, true, 'magic'); }
       spark(h.x,h.y-40,h.col,18,10); dust(h.x,h.y,8); }
     if(h.t>=h.life) hazards.splice(i,1);
+  } else if(h.kind==='eplant'){   // 敵が床へ置く仕掛け：予兆 → 効果。art で見た目と当たり方を変える
+    //   fire  ＝火柱。立ち上がってしばらく居座る。跳べば越えられる高さ
+    //   gourd ＝瓢箪。溜めて一度だけ弾ける。範囲は広いが一瞬
+    //   yari  ＝槍衾。突き出ている間だけ、その場に近づけない
+    const on=(h.t>=h.warn), age=h.t-h.warn;
+    if(h.t===h.warn){ ring(h.x,h.y,h.col); shake=Math.max(shake,h.art==='gourd'?8:5);
+      if(h.art==='gourd'){ sfx.big(h.x); spark(h.x,h.y-30,h.col,20,11); dust(h.x,h.y,8); }
+      else sfx.heavy(h.x); }
+    if(on && perfTier<2 && h.t%3===0)
+      spark(h.x+rnd(-16,16), h.y-rnd(6,h.art==='yari'?54:70), h.col, 1, h.art==='fire'?6:4);
+    if(on){
+      const win=(h.art==='gourd')? (age===0) : (age<(h.dur||36) && age%11===0);
+      if(win){ const R=(h.art==='gourd')?58:(h.art==='yari'?38:42), ZC=(h.art==='yari')?26:44;
+        for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
+          if(Math.abs(pl.x-h.x)<R && Math.abs(pl.y-h.y)<48 && pl.z<ZC)
+            hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), pl.x<h.x?-1:1, h.art!=='fire', h.art==='gourd'?'blunt':'magic'); } } }
+    if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='ebolt'){   // ボスの落雷：予兆の輪 → 直撃
     if(h.t===26){
       ring(h.x,LANE,'#bfe9ff'); ring(h.x,LANE,'#fff'); spark(h.x,LANE-46,'#dff6ff',26,13); dust(h.x,LANE,10);
@@ -2973,6 +2990,44 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
       ctx.strokeStyle='rgba(190,238,255,.55)'; ctx.lineWidth=3;           // 水面を裂く線
       ctx.beginPath(); ctx.moveTo(-96,26); ctx.lineTo(44,26); ctx.stroke();
     }
+    ctx.restore();
+  } else if(h.kind==='eplant'){             // 床の仕掛け：予兆の輪 →（炎柱／瓢箪／槍衾）
+    const on=(h.t>=h.warn), age=h.t-h.warn, u=clamp(h.t/h.warn,0,1);
+    ctx.save();
+    if(!on){                                 // 予兆：閉じていく輪。どこが危ないかを先に見せる
+      ctx.globalAlpha=0.30+0.50*u; ctx.strokeStyle=h.col; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.ellipse(sx,gy,44*(1.5-u*0.5),15*(1.5-u*0.5),0,0,7); ctx.stroke();
+      ctx.globalAlpha=0.22+0.4*u;
+      ctx.beginPath(); ctx.ellipse(sx,gy,18,6,0,0,7); ctx.stroke();
+    } else if(h.art==='fire'){                // 火柱：加算で立ち上げ、白い芯を通す
+      const v=clamp(age/10,0,1), fade=clamp(1-(age-(h.dur||36))/12,0,1);
+      const hh=(120+26*Math.sin(gf*0.3))*v*fade;
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.92*fade;
+      const g=ctx.createLinearGradient(0,gy,0,gy-hh);
+      g.addColorStop(0,'rgba(255,196,90,.95)'); g.addColorStop(0.55,'rgba(255,110,30,.62)'); g.addColorStop(1,'rgba(255,60,10,0)');
+      ctx.fillStyle=g; ctx.beginPath();
+      ctx.moveTo(sx-30,gy); ctx.quadraticCurveTo(sx-12,gy-hh*0.65,sx+Math.sin(gf*0.2)*8,gy-hh);
+      ctx.quadraticCurveTo(sx+12,gy-hh*0.65,sx+30,gy); ctx.closePath(); ctx.fill();
+      const gw=ctx.createLinearGradient(0,gy,0,gy-hh*0.7);
+      gw.addColorStop(0,'rgba(255,255,235,.85)'); gw.addColorStop(1,'rgba(255,255,220,0)');
+      ctx.fillStyle=gw; ctx.beginPath();
+      ctx.moveTo(sx-11,gy); ctx.quadraticCurveTo(sx,gy-hh*0.5,sx,gy-hh*0.7);
+      ctx.quadraticCurveTo(sx,gy-hh*0.5,sx+11,gy); ctx.closePath(); ctx.fill();
+    } else if(h.art==='gourd'){               // 瓢箪：金のひょうたんが膨らんで弾ける
+      if(age<=0){ ctx.globalAlpha=0.95; ctx.fillStyle=h.col;
+        ctx.beginPath(); ctx.ellipse(sx,gy-13,10,13,0,0,7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(sx,gy-30,7,9,0,0,7); ctx.fill();
+        ctx.fillStyle='rgba(80,50,10,.8)'; ctx.fillRect(sx-2,gy-40,4,6); }
+      else { const v=clamp(age/12,0,1);
+        ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=(1-v)*0.85;
+        ctx.fillStyle=radGrad(sx,gy-24,20+64*v,'rgba(255,232,150,.95)','rgba(255,180,60,0)');
+        ctx.beginPath(); ctx.arc(sx,gy-24,20+64*v,0,7); ctx.fill(); }
+    } else {                                  // 槍衾：地面から槍が突き出て、引っ込む
+      const v=clamp(age/6,0,1), out=clamp(1-(age-(h.dur||36))/8,0,1), L=54*v*out;
+      ctx.globalAlpha=0.95; ctx.strokeStyle=h.col; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(sx,gy+4); ctx.lineTo(sx,gy-L); ctx.stroke();
+      ctx.fillStyle='#e8f0ff'; ctx.beginPath();
+      ctx.moveTo(sx,gy-L-13); ctx.lineTo(sx+6,gy-L+3); ctx.lineTo(sx-6,gy-L+3); ctx.closePath(); ctx.fill(); }
     ctx.restore();
   } else if(h.kind==='egrave'){             // 冥府の裁き：地面の印 → 噴き上がる黒炎と骸の腕
     const u=clamp(h.t/h.warn,0,1);
@@ -4673,9 +4728,11 @@ const BOSSMOVES={
   //   ゼウス    ＝落雷と神速。ガード不能を多く持つ
   // 汎用技の流用だけでは「三叉槍を持った紫のボス」で終わるので、
   // 神格ごとの大技を主軸に据え、汎用技は繋ぎとして残す
-  nobunaga: ['teppoVolley','tenkaFubu','demonKing','unblockSmash','dashThrust','teleSlash','bossGrab','groundSlam'],
-  hideyoshi:['ogaeshi','ichiyaJo','tripleStep','spearThrow','dashThrust','unblockSmash','bossGrab'],
-  ieyasu:   ['kakuyoku','mikataGaeshi','ichiyaJo','heavySwing','groundSlam','unblockSmash','bossGrab'],
+  // 五周目の三英傑は固有技を5つずつ持ち、汎用技は「間合いを詰める手」だけに絞る
+  nobunaga: ['teppoVolley','nanbanZutsu','honnoji','tenkaFubu','demonKing','unblockSmash','dashThrust','bossGrab'],
+  hideyoshi:['ogaeshi','saruTobi','hyotan','ichiyaJo','tripleStep','unblockSmash','bossGrab'],
+  // 一夜城は秀吉だけの手（墨俣の逸話）。家康と共有すると三人の色が混ざる
+  ieyasu:   ['kagemusha','yaribusuma','kakuyoku','mikataGaeshi','heavySwing','groundSlam','bossGrab'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
@@ -4731,7 +4788,15 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   bioblob:'ゾウショク…カイシ…スベテ　ワレラニ　ナル…', emperorX:'この星は我が庭。跪け、犬どもよ。',
   emperorX2:'これが銀河を統べる真の姿——星ごと消し飛ばしてくれる！',
   guard0:'八代目よ…門を守る覚悟、この零号が試そう！', rvSword:'いい太刀筋だ。だが俺の方が上だと証明させてもらう！',
-  rvFist:'その拳、俺と競い合おうぜ！本気で来いよ！', rvMage:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', rvGuard:'門番同士…どちらが硬いか、確かめようか！' };
+  rvFist:'その拳、俺と競い合おうぜ！本気で来いよ！', rvMage:'あら可愛い魔法使い。私の紅蓮で灰にしてあげる！', rvGuard:'門番同士…どちらが硬いか、確かめようか！',
+  // ── 四周目・神話の三柱 ──
+  poseidon:'海は我が庭。波に呑まれて、底で眠るがよい。',
+  hades:'死者は増える一方だ。……お前も、その数に入るだけのこと。',
+  zeus:'地上の子よ。汝の拳に、護るに足る理由はあるか。',
+  // ── 五周目・戦国の三英傑 ──
+  nobunaga:'であるか。犬の分際で、我が城まで来おったか。',
+  hideyoshi:'いやはや、強そうな犬じゃ！……で、わしの家来にならぬか？',
+  ieyasu:'……鳴かぬなら、鳴くまで待とう。だが貴殿は、待たせてはくれぬようじゃな。' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
@@ -4758,6 +4823,44 @@ const BOSSQUOTE_BY={
   pirate:{shima:'拳自慢の犬よ、海の男の喧嘩を見せてやらぁ！', nuko:'魔法のお嬢ちゃんかい！宝の匂いがするぜぇ！'},
   cactus:{shima:'素手でサボテンに触るとどうなるか…教えてやるサボ！', nuko:'砂漠の太陽がおまえの魔力を干上がらせるサボ！'},
   glaton:{shima:'肉の拳が鋼鉄に勝てるか、試してみるがいい！', nuko:'豆鉄砲のような魔法で、この装甲は抜けんぞ！'},
+  // ── 四周目・神話の三柱：主役ごとに「何を試すか」を変える ──
+  poseidon:{inu:'剣を持つ者よ。潮の流れに、その刃は届くか。',
+            shima:'素手で海に挑むか。よい、砕けるまで打ち寄せてやろう。',
+            nuko:'人の魔術か。海の水量の前では、火も雷も等しく消える。',
+            guard8:'その盾は堅かろう。だが波は、堅い岩ほどよく削る。',
+            watch:'盗人か。海の底には、盗めぬ宝がいくらでも眠っておる。',
+            wanden:'一の太刀に賭ける者か。ならば一の波で応えよう。'},
+  hades:{inu:'その剣で幾つ命を絶った。……皆こちらへ来ておるぞ。',
+         shima:'拳で死者を殴るか。何度でも立つぞ、彼らは。',
+         nuko:'魔法使いか。死者を呼ぶ理は、我のほうが古い。',
+         guard8:'守る者か。……守り切れなかった者の顔を、見せてやろうか。',
+         watch:'盗人め。冥府から盗み出せたものは、いまだ一つも無い。',
+         wanden:'剣鬼か。斬った数だけ、河の向こうに並んでおる。'},
+  zeus:{inu:'聖なる剣か。神を斬るつもりで抜いたのなら、見せてみよ。',
+        shima:'拳ひとつで天へ挑むか。……嫌いではない。',
+        nuko:'雷は我の領分ぞ、小さき魔法使いよ。真似ごとは通じぬ。',
+        guard8:'守る者よ。汝の背にあるものを、我に示せ。',
+        watch:'盗人よ。天の火を盗んだ者の末路を、知っておろうな。',
+        wanden:'一刀の者か。裁きの雷に、二の太刀は間に合わぬ。'},
+  // ── 五周目・戦国の三英傑：三人の性格をそのまま口上に出す ──
+  nobunaga:{inu:'剣か。古い。我は鉄砲で天下を獲る。',
+            shima:'拳ひとつで我が前に立つとは。愚かよな——気に入った。',
+            nuko:'魔法とやらか。南蛮の火薬のほうが、よほど確かに人を焼く。',
+            guard8:'守るだけの者に、天下は動かせぬ。押し通るぞ。',
+            watch:'盗人か。我も国を盗んで来た口よ。どちらが上手か、試すか。',
+            wanden:'一刀にすべてを賭ける——よい心得だ。だが我が三段撃ちは待たぬ。'},
+  hideyoshi:{inu:'その剣、値打ちものじゃな！わしにくれんか？だめ？ならば取るまで！',
+             shima:'拳と拳か！わしは戦より人たらしが得手じゃが、まあ付き合おうかの！',
+             nuko:'魔法使い殿か！わしの城には茶室もあるぞ、勝ったら見に来なされ！',
+             guard8:'おお堅そうな！——堅い城ほど、水で攻めるのが早いのじゃ。',
+             watch:'盗人じゃと？わしは針売りから天下人よ。出世は盗みより早いぞ！',
+             wanden:'居合とな！わしは逃げ足のほうが速いぞ、追いつけるかの！'},
+  ieyasu:{inu:'よい剣を持っておる。……焦って抜くでないぞ。',
+          shima:'拳か。堪えるということを、知っておるか。',
+          nuko:'派手な術じゃ。派手なものは、たいてい長く続かぬ。',
+          guard8:'守る者同士か。ならば分かろう——先に動いたほうが崩れる。',
+          watch:'盗人よ。わしは奪わぬ。落ちてくるのを、ただ待つのじゃ。',
+          wanden:'一の太刀か。……三方ヶ原で、わしも一度は死にかけた。今度は堪えるぞ。'},
   dragon:{shima:'空の上まで、その拳は届くまい！', nuko:'同じ炎を操る者同士…格の違いを見せてやろう！'},
   rival: {shima:'貴様の拳法、この剣で写し取らせてもらった！', nuko:'その彼方の魔法…闇で塗りつぶしてくれる！'},
   boss:  {shima:'拳ごときで帝国に楯突くか！身の程を知れ！', nuko:'彼方の力を借りる小娘…その魂、闇に頂こう！'},
@@ -5712,6 +5815,13 @@ const MV={
   //   家康＝受けて返す（正面から殴ると罰される）
   kakuyoku:{tele:26,dur:70,rec:32,minR:0,maxR:1400},                 // 鶴翼の陣：左右から挟み込む
   mikataGaeshi:{tele:44,dur:64,rec:40,minR:0,maxR:420,danger:1},     // 三方ヶ原の反攻：構えて耐え、溜めた分を返す
+  // 二の矢。三人の「戦い方」をもう一段はっきりさせるための技
+  honnoji:{tele:34,dur:96,rec:38,minR:0,maxR:1400},                  // 本能寺：床に火柱を並べ、立つ場所を奪う
+  nanbanZutsu:{tele:52,dur:56,rec:44,minR:180,maxR:1400,danger:1},   // 南蛮筒：長い溜め→極太の一発（跳べば越える）
+  hyotan:{tele:26,dur:80,rec:32,minR:0,maxR:1400},                   // 千成瓢箪：撒いて時間差で弾ける
+  saruTobi:{tele:22,dur:86,rec:30,minR:60,maxR:1400},                // 猿飛：頭上を三度跳び越して背後から刺す
+  kagemusha:{tele:24,dur:88,rec:34,minR:0,maxR:1400,danger:1},       // 影武者：三つの影から本物が出る
+  yaribusuma:{tele:30,dur:92,rec:36,minR:0,maxR:1400},               // 槍衾：周囲を槍で埋め、近づけなくする
   tsunami:{tele:36,dur:96,rec:40,minR:0,maxR:1400,danger:1},        // 津波：跳べば越えられる水の壁
   seaBeasts:{tele:30,dur:86,rec:32,minR:60,maxR:1400},              // 海獣召喚：サメとシャチが突進
   whaleRide:{tele:28,dur:104,rec:50,minR:0,maxR:1200,danger:1},     // 鯨駕：空から鯨ごと突っ込む
@@ -5873,6 +5983,72 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
         popText(e.x,e.y-e.h-24,'——時は来た','#a8e8c0',true);
         flashAt(4,'168,232,192',e.x,e.y-60); shake=Math.max(shake,11); hitStop=Math.max(hitStop,6);
         bShock(e,180,t.dmg+bonus); bUnblock(e,150,66,t.dmg+bonus); }
+      break;
+    // ── 信長：本能寺。床を火柱で埋め、立てる場所を奪う ──
+    case 'honnoji':
+      if(f===1){ popText(e.x,e.y-e.h-24,'焼き払え！','#ff8a3a',true); sfx.boss(e.x); flashAt(3,'255,120,50'); }
+      if(f===6){ const tp=nearestPlayerTo(e.x);
+        // 主役の足元を1本目にして左右へ広げる。等間隔なので「隙間」が読める
+        for(let k=-2;k<=2;k++)
+          hazards.push({kind:'eplant', art:'fire', x:clamp(tp.x+k*128, camX+40, camX+W-40), y:LANE,
+            t:0, warn:20+Math.abs(k)*7, dur:34, life:96, dmg:t.dmg-10, col:'#ff8a3a'}); }
+      if(f>6 && f%9===0) ember(e.x+rnd(-40,40), e.y-rnd(10,90), rnd(-1,1), -rnd(0.8,2.0), '#ff8a3a');
+      break;
+    // ── 信長：南蛮筒。長い溜めから極太の一発。高さは跳べば越えられる ──
+    case 'nanbanZutsu':
+      if(f===1){ popText(e.x,e.y-e.h-24,'南蛮筒、放て！','#ffd6a0',true); sfx.charge(e.x); }
+      if(f<26 && f%4===0) spark(e.x+e.facing*54, e.y-e.h*0.55, '#ffd6a0', 3, 5);
+      if(f===26){ const dir=e.facing;
+        smokePuff(e.x+dir*60, e.y-e.h*0.55, 7, '170,160,150');
+        flashAt(4,'255,190,120',e.x,e.y-60); shake=Math.max(shake,13); sfx.big(e.x); sfx.ko(e.x);
+        spawnProj(e.x+dir*60, e.y, dir*11, 0,
+          {owner:'enemy', dmg:t.dmg+14, color:'#ffd6a0', r:26, life:150, zz:44, wave:true}); }
+      break;
+    // ── 秀吉：千成瓢箪。撒いて時間差で弾ける。踏む場所を選ばせる ──
+    case 'hyotan':
+      if(f===1){ popText(e.x,e.y-e.h-24,'千成瓢箪！','#ffe38a',true); sfx.swing(1,'blade',e.x); }
+      if(f===10||f===20||f===30||f===40){ const k=(f-10)/10, tp=nearestPlayerTo(e.x);
+        const gx=clamp(tp.x+(k-1.5)*96+rnd(-24,24), camX+40, camX+W-40);
+        hazards.push({kind:'eplant', art:'gourd', x:gx, y:LANE, t:0, warn:34, life:56, dmg:t.dmg-4, col:'#ffe38a'});
+        spark(e.x+e.facing*30, e.y-e.h*0.6, '#ffe38a', 5, 6); }
+      break;
+    // ── 秀吉：猿飛。頭上を三度跳び越し、着地のたびに刺す ──
+    case 'saruTobi': {
+      if(f===1){ popText(e.x,e.y-e.h-24,'猿飛じゃ！','#ffe38a',true); sfx.dash(e.x); }
+      const leg=Math.floor((f-4)/26), k=(f-4)%26;
+      if(f>=4 && leg<3){
+        // 主役の「向こう側」へ降りる。手前に降ろすと跳び越したことにならない
+        if(k===0){ const tp=nearestPlayerTo(e.x), side=(tp.x<e.x)?-1:1;
+          e.hopX0=e.x; e.hopX1=clamp(tp.x + side*70, camX+40, camX+W-40);
+          e.facing=(e.hopX1<e.x)?-1:1; dust(e.x,e.y,6); }
+        if(k<16){ const u=k/16;
+          e.x=(e.hopX0||e.x)+((e.hopX1||e.x)-(e.hopX0||e.x))*u;
+          e.z=Math.sin(u*Math.PI)*120;                       // 頭上を越える高さ
+          if(gf%2===0 && perfTier<2) spark(e.x,e.y-e.z-10,'#ffe38a',1,4); }
+        if(k===16){ e.z=0; dust(e.x,e.y,8); shake=Math.max(shake,5);
+          const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1;
+          bArc(e,t.atkR-14,46,t.dmg-6,false,'#ffe38a'); } }
+      break; }
+    // ── 家康：影武者。三つの影が立ち、本物が一つから出る ──
+    case 'kagemusha':
+      if(f===1){ popText(e.x,e.y-e.h-24,'……どれが本物かの','#a8e8c0',true); sfx.guard(e.x); }
+      if(f===8){ const tp=nearestPlayerTo(e.x);
+        e.kmX=[clamp(tp.x-210,camX+40,camX+W-40), clamp(tp.x+210,camX+40,camX+W-40), clamp(tp.x+(tp.x<e.x?-1:1)*90,camX+40,camX+W-40)];
+        e.kmPick=(Math.random()*3)|0; e.vanish=44; }
+      if(f>8 && f<52 && e.kmX && gf%3===0)
+        for(const kx of e.kmX) spark(kx, LANE-rnd(10,90), '#a8e8c0', 1, 5);
+      if(f===52 && e.kmX){ e.x=e.kmX[e.kmPick||0]; e.y=LANE; e.vanish=0;
+        const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1;
+        ring(e.x,e.y,'#a8e8c0'); spark(e.x,e.y-50,'#a8e8c0',18,9); sfx.dash(e.x); }
+      if(f===62) bUnblock(e,150,60,t.dmg+8);
+      break;
+    // ── 家康：槍衾。周囲を槍で埋める。近づけないので、引いて待つしかない ──
+    case 'yaribusuma':
+      if(f===1){ popText(e.x,e.y-e.h-24,'槍衾、備えよ！','#a8e8c0',true); sfx.heavy(e.x); }
+      if(f===8){ for(let k=-3;k<=3;k++){ if(!k) continue;
+          hazards.push({kind:'eplant', art:'yari', x:clamp(e.x+k*62, camX+30, camX+W-30), y:LANE,
+            t:0, warn:16, dur:44, life:80, dmg:t.dmg-8, col:'#8a9a86'}); } }
+      if(f>8 && f<72 && gf%10===0) spark(e.x+rnd(-90,90), e.y-rnd(0,40), '#a8e8c0', 1, 4);
       break;
     // ══ 神話の三柱：専用の大技 ═══════════════════════════════════
     // ── ポセイドン：三叉槍を掲げて海を起こす。水の壁は跳べば越えられる ──
