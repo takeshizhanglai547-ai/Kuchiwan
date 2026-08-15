@@ -10,14 +10,15 @@ const DRIVER = `
   // タイトルのトグルから直接始めるしか手が無かった。
   // DOM を読まずに検証できるよう、判断は nextLap(l) に出してある
   { if(typeof nextLap!=='function') throw new Error('nextLap が無い');
-    const n1=nextLap(1), n2=nextLap(2), n3=nextLap(3), n4=nextLap(4);
+    const n1=nextLap(1), n2=nextLap(2), n3=nextLap(3), n4=nextLap(4), n5=nextLap(5);
     if(!n1||n1.lap!==2) throw new Error('一周目クリア後に二周目へ行けない');
     if(!n2||n2.lap!==3) throw new Error('二周目クリア後に三周目へ行けない');
     if(!n3||n3.lap!==4) throw new Error('三周目クリア後に四周目へ行けない');
-    if(n4) throw new Error('四周目の先があることになっている: '+JSON.stringify(n4.lap));
+    if(!n4||n4.lap!==5) throw new Error('四周目クリア後に五周目へ行けない');
+    if(n5) throw new Error('五周目の先があることになっている: '+JSON.stringify(n5.lap));
     // ラベルは周回ごとに別物であること（全部同じだと押しても行き先が分からない）
-    const labs=[n1.label,n2.label,n3.label];
-    if(new Set(labs).size!==3) throw new Error('次の周回のラベルが重複している: '+labs.join(' / '));
+    const labs=[n1.label,n2.label,n3.label,n4.label];
+    if(new Set(labs).size!==4) throw new Error('次の周回のラベルが重複している: '+labs.join(' / '));
     if(n3.label.indexOf('4周目')<0) throw new Error('三周目の次のラベルが四周目を指していない: '+n3.label);
     // go が実際にその周回を始めること
     setupRoster('inu'); startGame(); state='play';
