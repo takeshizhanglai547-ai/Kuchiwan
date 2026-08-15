@@ -51,9 +51,13 @@ const DRIVER = `
     // 攻撃力の下げ幅がHPの下げ幅より大きいこと（配分の意図そのもの）
     if(!(c4[1]/h4[1] < c4[0]/h4[0])) throw new Error('四周目：HPのほうを大きく削っている（短くなるだけ）');
     if(!(c5[1]/h5[1] < c5[0]/h5[0])) throw new Error('五周目：HPのほうを大きく削っている（短くなるだけ）');
-    // 周回の順序は通常でも高難易度でも保たれること（五周目が四周目より弱くならない）
-    if(!(c5[0]>c4[0] && c5[1]>c4[1])) throw new Error('通常で五周目が四周目以下: '+c4.join('/')+' → '+c5.join('/'));
+    // 高難易度では周回の順序が保たれること
     if(!(h5[0]>h4[0] && h5[1]>h4[1])) throw new Error('高難易度で五周目が四周目以下');
+    // 通常：HPの順序は保つが、攻撃力だけは五周目を四周目より軽くしている。
+    // 遊んだ上での指示で半減させた意図した例外なので、戻したら赤くなるよう固定する
+    if(!(c5[0]>c4[0])) throw new Error('通常で五周目のHPが四周目以下: '+c4[0]+' → '+c5[0]);
+    if(!(c5[1] <= c4[1]*0.60)) throw new Error('五周目の通常攻撃力が四周目の6割以下に収まっていない: '+c4[1]+' → '+c5[1]);
+    if(!(c5[1]>0)) throw new Error('五周目の攻撃力がゼロ');
     // 高難易度の全体係数を二重に掛けていないこと（掛けると従来より更に硬い第三の難易度になる）
     if(!(h4[0]<2.4 && h5[0]<2.9)) throw new Error('高難易度に全体係数が二重に掛かっている: '+h4[0]+' / '+h5[0]);
     // 一〜三周目は従来どおり（hardMode の全体係数がそのまま乗る）
@@ -79,10 +83,12 @@ const DRIVER = `
         const r={hp:Z.maxHp, dmg:h0-q.hp}; lap=sl; hardMode=sh; return r; };
       const w=mk(1,'wolf'), a2=mk(3,'greywan'), a4=mk(4,'mythguard'), a5=mk(5,'samurai');
       if(!(a4.hp>a2.hp && a4.dmg>a2.dmg)) throw new Error('通常の四周目が三周目以下になっている: 3周 '+a2.hp+'/'+a2.dmg+' → 4周 '+a4.hp+'/'+a4.dmg);
-      if(!(a5.hp>a4.hp && a5.dmg>a4.dmg)) throw new Error('通常の五周目が四周目以下になっている');
+      if(!(a5.hp>a4.hp)) throw new Error('通常の五周目のHPが四周目以下: '+a4.hp+' → '+a5.hp);
       if(!(a2.hp>w.hp)) throw new Error('前提が崩れている: 三周目は一周目より手強いはず');
-      console.log('通常でも右肩上がり OK (雑魚HP '+w.hp+'→'+a2.hp+'→'+a4.hp+'→'+a5.hp
-        +'／一撃 '+w.dmg+'→'+a2.dmg+'→'+a4.dmg+'→'+a5.dmg+')'); }
+      // 五周目の一撃だけは意図して軽い（半減の指示）。実際の敵でも四周目を下回ること
+      if(!(a5.dmg < a4.dmg*0.75)) throw new Error('五周目の一撃が半減されていない: 4周 '+a4.dmg+' → 5周 '+a5.dmg);
+      console.log('通常の並び OK (雑魚HP '+w.hp+'→'+a2.hp+'→'+a4.hp+'→'+a5.hp
+        +'／一撃 '+w.dmg+'→'+a2.dmg+'→'+a4.dmg+'→'+a5.dmg+'＝五周目だけ意図して軽い)'); }
     console.log('難易度の二段 OK (神話 通常 '+c4[0].toFixed(2)+'/'+c4[1].toFixed(2)
       +' 高 '+h4[0].toFixed(2)+'/'+h4[1].toFixed(2)
       +'／戦国 通常 '+c5[0].toFixed(2)+'/'+c5[1].toFixed(2)

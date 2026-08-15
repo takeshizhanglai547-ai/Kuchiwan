@@ -2326,7 +2326,9 @@ const LAP_DIFF={
   // 死ににくさは変わらない。カジュアルにしたいのは「一撃の重さ」のほう。
   // HP側は、最終周のボスが三周目のボスより軟らかくならない線で止めている
   4:{hp:1.30, dmg:0.90, hardHp:2.00, hardDmg:1.70},   // 神話
-  5:{hp:1.45, dmg:0.98, hardHp:2.40, hardDmg:1.95} }; // 戦国
+  // 五周目の通常だけ、遊んだ上での指示でさらに半減している（0.98 → 0.49）。
+  // そのぶん四周目より一撃が軽くなるが、これは意図した例外
+  5:{hp:1.45, dmg:0.49, hardHp:2.40, hardDmg:1.95} }; // 戦国
 function lapDiff(){
   const d=LAP_DIFF[clamp(lap|0,1,5)] || LAP_DIFF[1];
   if(hardMode && d.hardHp!=null) return {hp:d.hardHp, dmg:d.hardDmg, own:true};
