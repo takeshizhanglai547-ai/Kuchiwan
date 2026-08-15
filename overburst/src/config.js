@@ -162,7 +162,41 @@ export const CFG = {
     SPEED_FLOOR: 0.05,     // the sky still creeps, it does not freeze
     SPEED_PEAK: 0.22,      // how much of the streak keeps its brightest tap
     SHAKE_SCALE: 1.0,
-    ADAPTIVE: true,        // rolling frame-time fallback (bloom res + AO only)
+
+    // ---- frame pacing ------------------------------------------------
+    // The user's requirement this round is literally "do not drop frames".
+    // Three things are needed for that and all three live here.
+    ADAPTIVE: true,        // rolling-MEDIAN fallback ladder (bloom res, AO,
+                           // radial taps). Relative to the device tier
+                           // chosen by core/perfTier.js, never absolute.
+    TARGET_FPS: 60,        // the ladder measures against 1000/this
+    ADAPT_BUDGET_MS: 0,    // >0 forces the budget (QA: prove it engages)
+    ADAPT_DOWN_HOLD_S: 0,  // 0 = default 0.50 s of sustained miss
+    ADAPT_UP_HOLD_S: 0,    // 0 = default 6.0 s clean before climbing back
+
+    // Compile every shader at load, behind the title screen, with a
+    // progress readout. Measured: without it the program count climbs
+    // 97 -> 227 across a session and each new batch is a multi-second
+    // freeze in software GL / a visible hitch on real hardware.
+    WARMUP: true,
+    WARMUP_BATCH: 16,      // renderables per task — small, so the time
+                           // budgets below decide the actual granularity
+    WARMUP_FRAME_MS: 100,  // wall time per frame while the title screen is
+                           // up. 100 ms still repaints the progress bar and
+                           // still answers input; smaller just makes the
+                           // load longer for no gain.
+    WARMUP_RUSH_MS: 4000,  // ...and once the player has hit LAUNCH, get it
+                           // over with. Bounded, so nothing blocks forever.
+    WARMUP_UI: true,
+
+    // three bakes the light COUNTS into the program cache key, and
+    // WebGLRenderer.projectObject() drops an invisible light before it is
+    // ever counted. vfx.js parks its 5 detonation PointLights with
+    // visible = false, so the count walked 7 -> 12 -> 7 and every lit
+    // material in the arena was recompiled at each new value. Pinning the
+    // count keeps a parked light in the census at intensity 0 — zero
+    // pixels of difference, one program instead of six.
+    PIN_LIGHT_COUNT: true,
 
     // Nothing in this world resolves to a void. AC6 shadows are deep but the
     // overcast smog sky always bounces something back into them. Applied after

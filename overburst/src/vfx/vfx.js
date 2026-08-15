@@ -24,6 +24,15 @@
 //    .endTrail(id) .light(pos,color,peak,life,dist) .registerMech(root)
 //    .autoThrusters  (bool, default true) — set false if the player
 //                    system wants to drive plumes itself.
+//    .contactShadows (bool, default true) — projected blob darkening on
+//                    the deck under every foot in the arena. Fully
+//                    automatic: it reads ctx.player and ctx.enemies.alive()
+//                    itself, so nothing has to call it. See contact.js.
+//    .thrustLight    (bool, default true) — pooled PointLights on the
+//                    booster nozzles + the soot they leave on the deck.
+//                    Also automatic: every vfx.thruster() call feeds it.
+//    .thrustForce    (number|null) — QA only. Pins every nozzle to a
+//                    fixed intensity so a light/decal A/B is reproducible.
 //
 //  All calls are allocation-free: every field is a pooled instanced
 //  draw call and every options object below is a reused scratch.
@@ -63,7 +72,8 @@ import {
 } from './fields.js';
 import { CELL } from './vfxTextures.js';
 import { RibbonPool } from './ribbons.js';
-import { DebrisPool, LightPool, GhostPool } from './props.js';
+import { DebrisPool, LightPool, GhostPool, ThrustLights } from './props.js';
+import { ContactField } from './contact.js';
 
 // ------------------------------------------------------------------
 //  budget (VFX-local tuning: config.js is shared, this section is not)
@@ -72,6 +82,67 @@ const CAP = {
   SPARKS: 2400, SMOKE: 1200, FIRE: 900, SPRITES: 900, BEAMS: 256,
   DECALS: 96, PLUMES: 96, DEBRIS: 96, CASINGS: 48, LIGHTS: 5,
   TRAILS: 20, TRAIL_SEGS: 26, ARCS: 5, ARC_SEGS: 20, SHOCK: 48,
+  CONTACT: 64, THRUST_LIGHTS: 2, THRUST_CLUSTERS: 6,
+};
+
+// ------------------------------------------------------------------
+//  CONTACT SHADOWS — see contact.js for why these exist at all.
+//
+//  TWO LOBES PER MACHINE, and they multiply because two occluders do:
+//
+//    FOOT  one per sole, tight, hard. This is the "contact" the critics
+//          were missing. Measured: the deck 1.0 u from the sole centre
+//          is still inside the plateau, which is the 40-60 % band the
+//          brief asked for.
+//    BODY  one under the whole machine, wide and weak. Without it the
+//          foot lobes are entirely hidden UNDER the sole plate (which is
+//          1.68 x 2.32 — the first metre out from the ankle is roofed by
+//          the foot itself and never reaches the lens) and the effect is
+//          invisible from every playable camera. This lobe is what
+//          actually stops the mech reading as a sticker on the floor.
+// ------------------------------------------------------------------
+const CONTACT = {
+  // 0.145 * an 11.0 u mech = 1.60 u under each foot — barely wider than
+  // the sole plate that is casting it.
+  R_PER_HEIGHT: 0.145,
+  R_MIN: 0.55, R_MAX: 3.4,
+  STRENGTH: 0.46,     // peak LINEAR radiance removed at the contact point
+  PLATEAU: 0.46,      // flat out to 46 % of the radius, then shoulder
+
+  BODY_R: 0.40,       // x height -> 4.4 u under an 11 u mech
+  BODY_S: 0.26,
+  BODY_PLATEAU: 0.05, // pure falloff: no visible edge anywhere
+
+  // metres of clearance over which they fade out. A mech 4 m up still
+  // owns a soft patch of deck; by 9 m it owns nothing.
+  FADE_H: 9.0,
+  // exponent on that fade: >1 keeps the blob strong through the first
+  // stride-height of clearance and then loses it fast
+  FADE_P: 1.8,
+  // and the blob spreads + softens as it lifts, like a real penumbra
+  GROW_H: 0.55,
+  CULL: 300,          // world units from the lens
+  FOOT_DIST: 110,     // beyond this only the body lobe is worth an instance
+  GRAD_DIST: 120,     // beyond this the deck is sampled flat (1 tap, not 3)
+  GRAD_MAX: 0.9,      // clamp on the fitted slope
+};
+
+// Booster light. Calibrated against the muzzle table below: a rifle flash
+// is 90 cd, a plasma cannon 1500, a detonation peak 1900-3400. A sustained
+// main-nozzle burn has to sit WELL below the weapons — it is on screen for
+// the whole fight, so anything that reads as a flash reads as broken.
+// Measured at 460 cd the hip plate went +246 % and 85 % of the frame moved;
+// the values below put full assault boost at roughly +40 % on the plate.
+const THRUST = {
+  GAIN: 150,          // candela per unit of aggregate exhaust power
+  MAX: 105,
+  DIST: 30,           // reach; the deck is ~6-9 u under the nozzles
+  MIN_W: 0.045,       // below this the cluster is idle chuff, not a burn
+  CLUSTER_R2: 64,     // 8 u: one machine's nozzles, not two machines
+  DEPTH: 0.34,        // how far down the flame the light sits
+  SOOT_EVERY: 0.30,   // s between scorch decals under a sustained burn
+  SOOT_H: 8.0,        // only scorch if the nozzle is this close to the deck
+  SOOT_W: 0.18,       // and only above this aggregate power
 };
 
 // Linear HDR colours. The composite tonemaps with a soft shoulder at 0.86 and
@@ -193,6 +264,22 @@ export class VFX {
     this._qbCooldown = 0;
     this._plumeSeed = 0;
     this._extQB = false;
+    /** projected blob darkening under every foot in the arena. */
+    this.contactShadows = true;
+    /** pooled point light on the booster nozzles + its soot decal. */
+    this.thrustLight = true;
+    // per-frame nozzle clustering (one light per MACHINE, not per nozzle)
+    this._tcN = 0;
+    this._tcX = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcY = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcZ = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcW = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcR = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcG = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._tcB = new Float32Array(CAP.THRUST_CLUSTERS);
+    this._sootT = 0;
+    /** QA hook: force every nozzle to a fixed intensity (null = normal) */
+    this.thrustForce = null;
     // particle-count LOD: sim dt is clamped upstream, so measure wall time
     this.quality = 1;
     this._realDt = 0.016;
@@ -254,7 +341,13 @@ export class VFX {
       tint: [2.2, 0.62, 4.4], core: [4.6, 4.1, 5.6], renderOrder: 16,
     }, shared);
 
+    // Contact shadows go FIRST in the transparent queue (renderOrder 2,
+    // under the scorch decals at 3): they multiply the deck, so anything
+    // additive drawn after them must not be darkened by them.
+    this.contact = new ContactField(CAP.CONTACT, shared, 2);
+
     this.group.add(
+      this.contact.mesh,
       this.smoke_.mesh, this.smokeRib.mesh, this.fire_.mesh, this.plumes.mesh,
       this.shock.meshA, this.shock.meshB,
       this.sparks_.mesh, this.sprites.mesh, this.beams.mesh, this.decals.mesh,
@@ -264,6 +357,10 @@ export class VFX {
 
     this.debris_ = new DebrisPool(scene, CAP.DEBRIS, CAP.CASINGS);
     this.lights = new LightPool(scene, CAP.LIGHTS);
+    // Constructed HERE, at init, so the point-light census is final before
+    // PostFX.init() kicks off the shader warm-up. Adding a light later
+    // moves NUM_POINT_LIGHTS and recompiles every lit material in the arena.
+    this.thrusterLights = new ThrustLights(scene, CAP.THRUST_LIGHTS, THRUST.DIST);
     this.ghosts = new GhostPool(scene, 3, CFG.COLORS.PLAYER_ACCENT);
 
     // bound once so the drape fit never allocates a closure per explosion
@@ -324,9 +421,13 @@ export class VFX {
     this.shock.clear();
     this.smokeRib.clear();
     this.arcRib.clear();
+    this.contact.clear();
     this.debris_.clear();
     this.lights.clear();
+    this.thrusterLights.clear();
     this.ghosts.clear();
+    this._tcN = 0;
+    this._sootT = 0;
     this._trails.clear();
     this._staggers.length = 0;
     this._recent.fill(0);
@@ -358,6 +459,11 @@ export class VFX {
     this._updateStaggers(now, dt);
     this._updateTrails(now);
 
+    // every nozzle drawn this frame has now been clustered by thruster();
+    // hand the strongest clusters to the pooled lights and reset for the next
+    this._commitThrust(dt);
+    this._autoContact();
+
     this.debris_.update(dt, this._hooks);
     this.lights.update(dt);
     this.ghosts.update(dt);
@@ -368,7 +474,7 @@ export class VFX {
     this.sparks_.flush(); this.smoke_.flush(); this.fire_.flush();
     this.sprites.flush(); this.decals.flush();
     this.beams.endImmediate(); this.beams.flush();
-    this.plumes.flush(); this.shock.flush();
+    this.plumes.flush(); this.shock.flush(); this.contact.flush();
     if (this._qbCooldown > 0) this._qbCooldown -= dt;
   }
 
@@ -911,6 +1017,7 @@ export class VFX {
   // ================================================================
   /** immediate mode: call every frame while the booster burns */
   thruster(pos, dir, intensity = 1, o = EMPTY) {
+    if (this.thrustForce !== null) intensity = this.thrustForce;
     if (intensity <= 0.006) return;
     argPos(pos, _v);
     toVec(dir, _dir);
@@ -928,6 +1035,21 @@ export class VFX {
 
     this.plumes.add(_v.x, _v.y, _v.z, _dir.x, _dir.y, _dir.z,
       len, rad * (0.68 + i * 0.34), Math.min(1.0, 0.05 + i * 0.80), ca, cb, seed);
+
+    // ---- pooled nozzle light -------------------------------------
+    // Radiant power of an exhaust plume goes as (exit area) x (intensity),
+    // so weight by rad^2 * i^2 and sum the whole machine into ONE cluster.
+    // Sample the light a third of the way DOWN the flame, not at the
+    // throat: that is what puts spill on the hip plate above it and on
+    // the deck below it instead of a hot dot inside the nozzle bell.
+    if (this.thrustLight && i > 0.12) {
+      this._clusterThrust(
+        _v.x + _dir.x * len * THRUST.DEPTH,
+        _v.y + _dir.y * len * THRUST.DEPTH,
+        _v.z + _dir.z * len * THRUST.DEPTH,
+        i * i * rad * rad * 5.4, ca,
+      );
+    }
 
     // nozzle corona (immediate — one frame)
     const life = this._imLife();
@@ -1609,6 +1731,135 @@ export class VFX {
     this.mechPlume(mech, k, { kindMul: this._pKind });
   }
 
+  // ---- pooled thruster light -------------------------------------
+  /** fold one nozzle into the nearest machine-sized cluster */
+  _clusterThrust(x, y, z, w, col) {
+    const n = this._tcN;
+    for (let k = 0; k < n; k++) {
+      const dx = this._tcX[k] - x, dy = this._tcY[k] - y, dz = this._tcZ[k] - z;
+      if (dx * dx + dy * dy + dz * dz > THRUST.CLUSTER_R2) continue;
+      const w0 = this._tcW[k], W = w0 + w, inv = 1 / W;
+      this._tcX[k] = (this._tcX[k] * w0 + x * w) * inv;
+      this._tcY[k] = (this._tcY[k] * w0 + y * w) * inv;
+      this._tcZ[k] = (this._tcZ[k] * w0 + z * w) * inv;
+      this._tcR[k] = (this._tcR[k] * w0 + col[0] * w) * inv;
+      this._tcG[k] = (this._tcG[k] * w0 + col[1] * w) * inv;
+      this._tcB[k] = (this._tcB[k] * w0 + col[2] * w) * inv;
+      this._tcW[k] = W;
+      return;
+    }
+    if (n >= CAP.THRUST_CLUSTERS) return;
+    this._tcN = n + 1;
+    this._tcX[n] = x; this._tcY[n] = y; this._tcZ[n] = z; this._tcW[n] = w;
+    this._tcR[n] = col[0]; this._tcG[n] = col[1]; this._tcB[n] = col[2];
+  }
+
+  /** hand the strongest clusters to the pooled lights, then reset */
+  _commitThrust(dt) {
+    const TL = this.thrusterLights;
+    TL.begin();
+    const n = this._tcN;
+    this._tcTop = 0;                          // QA readout: top cluster power
+    if (n > 0 && this.thrustLight) {
+      // selection over <= 6 entries; a sort would allocate
+      for (let slot = 0; slot < CAP.THRUST_LIGHTS; slot++) {
+        let best = -1, bw = THRUST.MIN_W;
+        for (let k = 0; k < n; k++) if (this._tcW[k] > bw) { bw = this._tcW[k]; best = k; }
+        if (best < 0) break;
+        const x = this._tcX[best], y = this._tcY[best], z = this._tcZ[best];
+        const m = Math.max(this._tcR[best], this._tcG[best], this._tcB[best], 1e-3);
+        TL.aim(x, y, z, Math.min(THRUST.MAX, THRUST.GAIN * bw),
+          this._tcR[best] / m, this._tcG[best] / m, this._tcB[best] / m);
+        this._tcW[best] = 0;                  // consumed
+        if (slot === 0) { this._tcTop = bw; this._soot(dt, x, y, z, bw); }
+      }
+    }
+    TL.update(dt);
+    this._tcN = 0;
+  }
+
+  /** scorch the deck under a burn that is being held close to it */
+  _soot(dt, x, y, z, w) {
+    this._sootT -= dt;
+    if (this._sootT > 0 || w < THRUST.SOOT_W) return;
+    const gy = this._groundAt(x, z, y + 1.0);
+    const h = y - gy;
+    if (h < -0.5 || h > THRUST.SOOT_H) return;
+    this._sootT = THRUST.SOOT_EVERY;
+    const k = clamp(1 - h / THRUST.SOOT_H, 0, 1);
+    _v3.set(x + rand(-0.7, 0.7), gy, z + rand(-0.7, 0.7));
+    this.decal(_v3, UP, {
+      size: 2.0 + 3.0 * k, life: 6.0,
+      color: C.soot, opacity: 0.20 + 0.34 * k * k,
+    });
+  }
+
+  // ---- contact shadows -------------------------------------------
+  /** rebuilt every frame: one blob per foot, for the player and every hostile */
+  _autoContact() {
+    const cf = this.contact;
+    cf.begin();
+    if (!this.contactShadows) return;
+    const ctx = this.ctx;
+    const p = ctx.player;
+    if (p && p.alive !== false) this._contactFor(p);
+    const em = ctx.enemies;
+    const list = em && em.alive ? em.alive() : null;
+    if (list) for (let i = 0; i < list.length; i++) this._contactFor(list[i]);
+  }
+
+  _contactFor(ent) {
+    const root = ent.root;
+    if (!root || root.visible === false) return;
+    const pos = ent.pos || root.position;
+    const cam = this.ctx.camera.position;
+    const dx = pos.x - cam.x, dy = pos.y - cam.y, dz = pos.z - cam.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > CONTACT.CULL * CONTACT.CULL) return;
+    const grad = d2 < CONTACT.GRAD_DIST * CONTACT.GRAD_DIST;
+    const h = ent.height || 8;
+    const y0 = root.position.y;
+
+    // ---- BODY lobe: the machine's own footprint on the deck ----------
+    this._contactBlob(pos.x, pos.z, y0, h * CONTACT.BODY_R,
+      CONTACT.BODY_S, CONTACT.BODY_PLATEAU, grad);
+
+    // ---- FOOT lobes: the contact bite --------------------------------
+    if (d2 > CONTACT.FOOT_DIST * CONTACT.FOOT_DIST) return;
+    const parts = ent.mech && ent.mech.parts;
+    const aL = parts && parts.ankleL, aR = parts && parts.ankleR;
+    if (!aL || !aR) return;
+    // mechModel builds every root with the SOLE PLANE at local y = 0, so
+    // root.position.y is where the feet are when both are planted. The
+    // ankles give the XZ of each foot and, differenced against each other,
+    // which one is currently lifted mid-stride.
+    aL.updateWorldMatrix(true, false);
+    aR.updateWorldMatrix(true, false);
+    const eL = aL.matrixWorld.elements, eR = aR.matrixWorld.elements;
+    const lo = Math.min(eL[13], eR[13]);
+    const r = clamp(h * CONTACT.R_PER_HEIGHT, CONTACT.R_MIN, CONTACT.R_MAX);
+    this._contactBlob(eL[12], eL[14], y0 + (eL[13] - lo), r, CONTACT.STRENGTH, CONTACT.PLATEAU, grad);
+    this._contactBlob(eR[12], eR[14], y0 + (eR[13] - lo), r, CONTACT.STRENGTH, CONTACT.PLATEAU, grad);
+  }
+
+  _contactBlob(x, z, y, r, strength, core, grad) {
+    const gy = this._groundAt(x, z, y + 1.0);
+    const h = y - gy;
+    if (h > CONTACT.FADE_H || h < -2.5) return;
+    const t = clamp(1 - Math.max(0, h) / CONTACT.FADE_H, 0, 1);
+    const s = strength * Math.pow(t, CONTACT.FADE_P);
+    if (s < 0.008) return;
+    // penumbra: as the machine lifts, the patch spreads and softens
+    const rr = r * (1 + CONTACT.GROW_H * (1 - t));
+    let gx = 0, gz = 0;
+    if (grad) {
+      const e = rr * 0.75;
+      gx = clamp((this._groundAt(x + e, z, y + 1.0) - gy) / e, -CONTACT.GRAD_MAX, CONTACT.GRAD_MAX);
+      gz = clamp((this._groundAt(x, z + e, y + 1.0) - gy) / e, -CONTACT.GRAD_MAX, CONTACT.GRAD_MAX);
+    }
+    this.contact.add(x, gy, z, rr, s, gx, gz, core);
+  }
+
   // Fallback only: fires the QB signature off a velocity discontinuity when
   // nothing called quickBoost() for us. As soon as the player system calls it
   // once (it does), this shuts off for good — otherwise a hard wall collision
@@ -1657,7 +1908,7 @@ export class VFX {
   }
 
   dispose() {
-    for (const f of [this.sparks_, this.smoke_, this.fire_, this.sprites, this.beams, this.decals, this.plumes, this.shock]) f.dispose();
+    for (const f of [this.sparks_, this.smoke_, this.fire_, this.sprites, this.beams, this.decals, this.plumes, this.shock, this.contact]) f.dispose();
     this.smokeRib.dispose(); this.arcRib.dispose();
     this.debris_.dispose(); this.ghosts.dispose();
   }

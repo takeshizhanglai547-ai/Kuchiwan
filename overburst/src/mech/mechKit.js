@@ -60,10 +60,24 @@ export const THRUST_ROT = {
 // ------------------------------------------------------------------
 //  chamfered box. colour.r acts as a mask: 1 = flat face, 0 = bevel
 // ------------------------------------------------------------------
+//  BEVEL_GAIN exists because a physically honest chamfer is INVISIBLE at
+//  the range this game is played at. Measured: the hero lens resolves ~28 px
+//  per world unit, so the 0.05-0.11 chamfers this kit was authored with
+//  project to ONE pixel of arris. A one-pixel band cannot carry a value
+//  break, cannot carry a specular streak, and aliases away entirely the
+//  moment the mech moves — which is exactly why a critic measured the frame
+//  as "100 % axis-aligned rectangular prisms, not one chamfer" while the
+//  geometry insisted the chamfers were there.
+//  Scaling every authored chamfer here costs ZERO triangles (chamferBox
+//  emits 44 tris whatever the bevel width) and the 0.42 half-extent clamp
+//  below keeps thin plates proportional, so nothing inflates into an
+//  octagon. This is the single knob that puts the arris on the screen.
+export const BEVEL_GAIN = 2.05;
+
 export function chamferBox(w, h, d, chamfer) {
   const hx = w * 0.5, hy = h * 0.5, hz = d * 0.5;
-  const c = Math.max(0.003, Math.min(
-    chamfer ?? Math.min(w, h, d) * 0.16, hx * 0.46, hy * 0.46, hz * 0.46,
+  const c = Math.max(0.004, Math.min(
+    (chamfer ?? Math.min(w, h, d) * 0.16) * BEVEL_GAIN, hx * 0.42, hy * 0.42, hz * 0.42,
   ));
   const H = [hx, hy, hz];
   const I = [hx - c, hy - c, hz - c];
@@ -183,24 +197,29 @@ function boxProject(g, scale, ou, ov) {
 
 //  colour.r arrives as the chamfer mask (1 = flat plate face, 0 = bevel).
 //
-//  Painted armour is DARK. The chamfer is treated the way a real bevel on
-//  a painted steel plate behaves, which is NOT "uniformly brighter":
-//    * an UP-facing chamfer is where the paint gets scuffed off and where
-//      the sky lands — bare steel, and it is what draws the silhouette.
-//    * a SIDE-facing chamfer is just more paint in ALBEDO — it must not be
-//      lifted here. It is separated from the face in ROUGHNESS instead (see
-//      the asurf attribute below), so a side chamfer throws a view-dependent
-//      specular streak rather than a painted-on outline.
+//  Painted armour is DARK, and the chamfer is where it stops being painted.
+//    * an UP-facing chamfer is scuffed clean and catches the sky — bare
+//      steel, the strongest wear on the machine.
+//    * a SIDE-facing chamfer — every silhouette-forming edge on a walker —
+//      is rubbed back too, but PATCHILY. This used to be forced to exactly
+//      zero on the theory that a side chamfer should be separated from the
+//      face in roughness instead. Measured, that theory is false: toggling
+//      the roughness/metalness bevel injection on and off moves the arris
+//      read by 0.394 -> 0.378 (i.e. nothing, and the wrong way). A sharp
+//      specular lobe on a 45 deg facet only fires when the half-vector
+//      happens to line up, and under one key plus a dim smog IBL it is dark
+//      the rest of the time. The bevel needs a value of its own.
+//      What made the ORIGINAL uniform lift read as moulded plastic was that
+//      it was CONTINUOUS — an unbroken bright hairline around every box.
+//      So the lift is kept but broken up: hashed per vertex, so wear runs
+//      out along each arris instead of tracing it.
 //    * a DOWN-facing chamfer sits in the plate's own contact shadow — it
-//      goes darker than the face, and that dark line is what reads as a
-//      plate gap at 20–40 m.
-//  Lighting every bevel equally IN ALBEDO (the original behaviour) drew a
-//  bright outline around every single box on the frame: the exact signature
-//  of a moulded plastic toy.
+//      goes darker than the face, and that dark line reads as a plate gap.
 function paint(g, base, wear, ao, jitter, wearAmt = 0.52) {
-  const col = g.attributes.color, nrm = g.attributes.normal;
+  const col = g.attributes.color, nrm = g.attributes.normal, pos = g.attributes.position;
   _c1.set(base); _c2.set(wear);
   const jr = 1 + jitter;
+  const bare = new Float32Array(col.count);
   for (let i = 0; i < col.count; i++) {
     const m = col.getX(i);
     const ny = nrm.getY(i);
@@ -215,34 +234,54 @@ function paint(g, base, wear, ao, jitter, wearAmt = 0.52) {
     if (ny < 0) f *= 1 - 0.46 * bev * (-ny);
     if (f < 0) f = 0;
     const up = ny > 0 ? ny : 0;
-    const w = bev * wearAmt * up * Math.sqrt(up);    // bare steel, top edges
+    const side = Math.sqrt(ny * ny < 1 ? 1 - ny * ny : 0);
+    //  hash on the vertex's own position. chamferBox emits each bevel strip
+    //  as ONE quad spanning the whole edge, so the four corners sample four
+    //  different values and the wear ramps ALONG the arris — rubbed back at
+    //  one end, still painted at the other. That is the difference between
+    //  edge wear and a pinstripe.
+    let hs = Math.sin(pos.getX(i) * 91.37 + pos.getY(i) * 47.21 + pos.getZ(i) * 63.83) * 43758.5453;
+    hs -= Math.floor(hs);
+    const patch = 0.16 + 1.30 * hs * hs;             // biased low; occasional hot spot
+    const w = bev * wearAmt * (up * Math.sqrt(up) + 0.72 * side * patch);
+    bare[i] = w > 1 ? 1 : w;
     col.setXYZ(i,
       (_c1.r + (_c2.r - _c1.r) * w) * f,
       (_c1.g + (_c2.g - _c1.g) * w) * f,
       (_c1.b + (_c2.b - _c1.b) * w) * f);
   }
   col.needsUpdate = true;
+  return bare;
 }
 
 // ------------------------------------------------------------------
 //  asurf — the two per-vertex surface scalars the mech shaders read.
 //
-//    asurf.x  chamfer mask, 1 on a bevel strip / corner, 0 on a flat face.
-//             The hull/mech/dark/decal shaders drop ROUGHNESS and lift
-//             METALNESS here. That is the whole point: a milled arris is
-//             not a brighter painted line, it is a different finish, so it
-//             throws a specular streak that swings in and out as the camera
-//             moves and is dead the rest of the time.
+//    asurf.x  BARENESS, not the raw chamfer mask. The hull/mech/dark/decal
+//             shaders drop ROUGHNESS and lift METALNESS here.
+//             This used to be the raw mask (1 on every bevel strip), and
+//             measured against the beauty pass that was a NET LOSS on every
+//             axis — silhouette-arris contrast 0.425 with the injection off
+//             vs 0.421 on, mech value spread 0.178 -> 0.137, pixels over
+//             linear 1.0 0.0043 -> 0.0030. The reason is physical: metalness
+//             kills diffuse, so promoting a still-PAINTED bevel to metal
+//             hands back a narrow specular lobe that only fires when the
+//             half-vector lines up and takes away the diffuse that was
+//             carrying the edge the rest of the time.
+//             It is now the same per-vertex wear term paint() writes into
+//             albedo, so the finish change lands exactly where the paint is
+//             actually rubbed through to steel — bare metal is metal, paint
+//             stays dielectric, and the two agree.
 //    asurf.y  a per-PRIMITIVE scalar. On hull/mech/dark/decal it multiplies
-//             roughness (rubber boot 1.15, cast housing 1.25, hydraulic ram
-//             0.34); on glow/heat it multiplies emissive so one material can
-//             carry a dim seam strip and a white-hot optic core at once.
+//             roughness (oiled cable 1.02, rubber boot 1.30, carbon void
+//             1.36, cast housing 1.2-1.25, honed piston rod 0.34); on
+//             glow/heat it multiplies emissive so one material can carry a
+//             0.40 seam strip and a 2.7 optic core at once.
 // ------------------------------------------------------------------
-function surfAttr(g, scale) {
-  const col = g.attributes.color;
-  const n = col.count;
+function surfAttr(g, scale, bare) {
+  const n = g.attributes.position.count;
   const a = new Float32Array(n * 2);
-  for (let i = 0; i < n; i++) { a[i * 2] = 1 - col.getX(i); a[i * 2 + 1] = scale; }
+  for (let i = 0; i < n; i++) { a[i * 2] = bare ? bare[i] : 0; a[i * 2 + 1] = scale; }
   g.setAttribute('asurf', new THREE.Float32BufferAttribute(a, 2));
 }
 
@@ -345,19 +384,22 @@ export class Kit {
     _m.compose(_v, _q, _v2);
     g.applyMatrix4(_m);
     if (!o.keepUV) boxProject(g, o.uvScale ?? this.uvScale, o.uvOff ? o.uvOff[0] : 0, o.uvOff ? o.uvOff[1] : 0);
-    // surface scalar. Painted armour gets a per-plate sheen jitter on top of
-    // the requested finish — a repaint never comes back at the same gloss,
-    // and a frame where every plate has one roughness is a moulding.
-    const lit = key !== 'flame' && key !== 'heat' && key !== 'glow';
-    const rgh = o.rgh ?? o.emis ?? 1;   // `emis` is the readable alias on glow/heat
-    surfAttr(g, lit ? rgh * (1 + (this.rngS() - 0.5) * (o.rghJit ?? 0.42)) : rgh);
+    // Paint FIRST: it computes the per-vertex bareness that asurf.x carries,
+    // so the finish change and the albedo change describe the same wear.
+    let bare = null;
     if (key !== 'flame' && key !== 'heat') {
       const jit = o.jitter !== undefined ? o.jitter : (this.rng() - 0.5) * 0.19;
       // wear varies PER PLATE — a frame where every chamfer is rubbed back
       // by the same amount looks machined, not used.
       const wa = o.wearAmt ?? (0.30 + this.rng() * 0.64);
-      paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.40, jit, wa);
+      bare = paint(g, o.base ?? 0xffffff, o.wear ?? o.base ?? 0xffffff, o.ao ?? 0.40, jit, wa);
     }
+    // surface scalar. Painted armour gets a per-plate sheen jitter on top of
+    // the requested finish — a repaint never comes back at the same gloss,
+    // and a frame where every plate has one roughness is a moulding.
+    const lit = key !== 'flame' && key !== 'heat' && key !== 'glow';
+    const rgh = o.rgh ?? o.emis ?? 1;   // `emis` is the readable alias on glow/heat
+    surfAttr(g, lit ? rgh * (1 + (this.rngS() - 0.5) * (o.rghJit ?? 0.42)) : rgh, lit ? bare : null);
     this._bucket(key).push(g);
     return g;
   }
@@ -374,7 +416,7 @@ export class Kit {
     return this.put(new THREE.SphereGeometry(r, o.wseg ?? 10, o.hseg ?? 7), { ...o, x, y, z });
   }
   ring(r, tube, seg, x, y, z, o = {}) {
-    const g = new THREE.TorusGeometry(r, tube, o.rseg ?? 5, seg);
+    const g = new THREE.TorusGeometry(r, tube, o.rseg ?? 4, seg);
     g.rotateX(Math.PI / 2);                    // axis -> +Y
     return this.put(g, { ...o, x, y, z });
   }
@@ -389,7 +431,7 @@ export class Kit {
   }
   tube(pts, r, o = {}) {
     const curve = new THREE.CatmullRomCurve3(pts);
-    return this.put(new THREE.TubeGeometry(curve, o.seg ?? 10, r, o.rad ?? 5, false), { ...o });
+    return this.put(new THREE.TubeGeometry(curve, o.seg ?? 6, r, o.rad ?? 4, false), { ...o });
   }
   lathe(points, seg, x, y, z, o = {}) {
     return this.put(new THREE.LatheGeometry(points, seg), { ...o, x, y, z });
@@ -407,7 +449,7 @@ export class Kit {
     const n = o.slats ?? Math.max(3, Math.round(h / 0.15));
 
     let p = at(0, 0, -dep * 0.55);
-    this.plate(w, h, dep, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: o.housing ?? 0x08090b, ao: 0.06, c: 0.012, jitter: 0, rgh: 1.3, rghJit: 0 });
+    this.plate(w, h, dep, x + p.x, y + p.y, z + p.z, { ...rot, key: 'dark', base: o.housing ?? 0x08090b, ao: 0.06, c: 0.012, jitter: 0, rgh: 1.36, rghJit: 0 });
     this.plate(w + 0.13, h + 0.13, 0.055, x, y, z, { ...rot, key: o.key || 'hull', base: o.frame ?? 0x8b9096, wear: o.wear ?? 0xcbcfd3, c: 0.02, rgh: 0.86 });
     for (let i = 0; i < n; i++) {
       const yy = -h * 0.5 + h * ((i + 0.62) / n);
@@ -454,7 +496,7 @@ export class Kit {
       const q1 = A.clone().lerp(mid, 0.5); q1.y -= sag * 0.3;
       const q2 = mid.clone().lerp(B, 0.5); q2.y -= sag * 0.3;
       this.tube([A, q1, mid, q2, B], r * (0.8 + this.rng() * 0.45),
-        { key: 'dark', base: o.base ?? 0x24272b, ao: 0.5, seg: 6, rad: 4, rgh: o.rgh ?? 1.14, rghJit: 0.16, jitter: (this.rng() - 0.5) * 0.34 });
+        { key: 'dark', base: o.base ?? 0x24272b, ao: 0.5, seg: 6, rad: 4, rgh: o.rgh ?? 1.02, rghJit: 0.22, jitter: (this.rng() - 0.5) * 0.34 });
     }
   }
 
@@ -469,7 +511,7 @@ export class Kit {
     _q.setFromEuler(_e.set(o.rx || 0, o.ry || 0, o.rz || 0, 'XYZ'));
     _v.set(0, 0, -d * 0.45).applyQuaternion(_q);
     this.plate(w + 0.06, h + 0.06, d * 0.9, x + _v.x, y + _v.y, z + _v.z,
-      { ...o, key: 'dark', base: 0x06070a, ao: 0.05, c: 0.01, jitter: 0, rgh: 1.3, rghJit: 0 });
+      { ...o, key: 'dark', base: 0x06070a, ao: 0.05, c: 0.01, jitter: 0, rgh: 1.36, rghJit: 0 });
     this.blk(w, h, d, x, y, z, { ...o, key: 'glow', base: 0xffffff, jitter: 0, rgh: o.emis ?? 1 });
   }
 
@@ -490,11 +532,11 @@ export class Kit {
     const th = o.thick ?? r * 0.62;
     const base = o.base ?? 0x60666e;
     // disc + rim ring: the rim is what catches the key at a grazing angle
-    this.rod(r, th, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base, ao: 0.5, rgh: 0.72 });
-    this.rod(r * 0.72, th * 1.34, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base: 0x3d4249, ao: 0.6, rgh: 1.18 });
-    this.ring(r * 1.02, r * 0.115, o.seg ?? 14, x, y, z, { ...ax, key: 'mech', base: 0x878d94, ao: 0.4, rseg: 4, rgh: 0.44 });
+    this.rod(r, th, o.seg ?? 10, x, y, z, { ...ax, key: 'mech', base, ao: 0.5, rgh: 0.72 });
+    this.rod(r * 0.72, th * 1.34, o.seg ?? 8, x, y, z, { ...ax, key: 'mech', base: 0x3d4249, ao: 0.6, rgh: 1.18 });
+    this.ring(r * 1.02, r * 0.115, o.seg ?? 10, x, y, z, { ...ax, key: 'mech', base: 0x878d94, ao: 0.4, rseg: 3, rgh: 0.44 });
     // bolt ring on the outboard face
-    const nb = o.bolts ?? 6;
+    const nb = o.bolts ?? 4;
     const bx = x + (o.axis === 'z' ? 0 : s * th * 0.62);
     const bz = z + (o.axis === 'z' ? s * th * 0.62 : 0);
     for (let i = 0; i < nb; i++) {
@@ -517,12 +559,12 @@ export class Kit {
    */
   ram(x, y, z, r, len, o = {}) {
     const rot = { rx: o.rx || 0, ry: o.ry || 0, rz: o.rz || 0 };
-    this.rod(r, len, o.seg ?? 10, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0x3f444b, ao: 0.55, rgh: 1.24 });
+    this.rod(r, len, o.seg ?? 8, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0x3f444b, ao: 0.55, rgh: 1.24 });
     _q.setFromEuler(_e.set(rot.rx, rot.ry, rot.rz, 'XYZ'));
     for (const e of [-1, 1]) {
       _v.set(0, e * len * 0.5, 0).applyQuaternion(_q);
-      this.ring(r * 1.16, r * 0.24, o.seg ?? 10, x + _v.x, y + _v.y, z + _v.z,
-        { ...rot, key: 'mech', base: 0x8b9198, ao: 0.4, rseg: 4, rgh: 0.42 });
+      this.ring(r * 1.16, r * 0.24, o.seg ?? 7, x + _v.x, y + _v.y, z + _v.z,
+        { ...rot, key: 'mech', base: 0x8b9198, ao: 0.4, rseg: 3, rgh: 0.42 });
     }
     if (o.hose !== false) {
       _v.set(0, len * 0.34, 0).applyQuaternion(_q);
@@ -539,7 +581,7 @@ export class Kit {
    */
   piston(x, y, z, r, len, o = {}) {
     const rot = { rx: o.rx || 0, ry: o.ry || 0, rz: o.rz || 0 };
-    this.rod(r, len, o.seg ?? 10, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0xd9dee4, ao: 0.16, rgh: 0.34, rghJit: 0.08 });
+    this.rod(r, len, o.seg ?? 8, x, y, z, { ...rot, key: 'mech', base: o.base ?? 0xd9dee4, ao: 0.16, rgh: 0.34, rghJit: 0.08 });
     _q.setFromEuler(_e.set(rot.rx, rot.ry, rot.rz, 'XYZ'));
     _v.set(0, (o.dir ?? 1) * len * 0.5, 0).applyQuaternion(_q);
     // clevis eye at the far end
@@ -556,8 +598,8 @@ export class Kit {
       const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * h;
       const rr = r * (1 - Math.abs(t / (h * 0.5 + 1e-4)) * (o.taper ?? 0.14));
       _v.set(0, t, 0).applyQuaternion(_q);
-      this.ring(rr, r * (o.rib ?? 0.20), o.seg ?? 10, x + _v.x, y + _v.y, z + _v.z,
-        { ...rot, key: 'dark', base: o.base ?? 0x22252a, ao: 0.5, rseg: 4, rgh: 1.16, rghJit: 0.08 });
+      this.ring(rr, r * (o.rib ?? 0.20), o.seg ?? 7, x + _v.x, y + _v.y, z + _v.z,
+        { ...rot, key: 'dark', base: o.base ?? 0x22252a, ao: 0.5, rseg: 3, rgh: 1.30, rghJit: 0.10 });
     }
   }
 
@@ -656,7 +698,7 @@ export class Kit {
       { key: 'hull', base: o.base ?? 0x53585e, wear: o.wear ?? 0x8f959c, ao: 0.5, rgh: 0.82 });
     // deep dark throat — floor sunk well below the mouth so the slot has depth
     mk(chamferBox(w, len * 0.90, h, 0.018), 0, -len * 0.30, 0,
-      { key: 'dark', base: 0x04050a, ao: 0.03, jitter: 0, rgh: 1.3, rghJit: 0 });
+      { key: 'dark', base: 0x04050a, ao: 0.03, jitter: 0, rgh: 1.36, rghJit: 0 });
     // heat-stained liner (the heat material is BackSide, so we see its walls)
     mk(new THREE.BoxGeometry(w * 0.93, len * 1.2, h * 0.93), 0, -len * 0.02, 0,
       { key: 'heat', keepUV: true, rgh: o.heat ?? 1 });

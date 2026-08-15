@@ -1,10 +1,13 @@
 // ============================================================
 //  vfx/props.js — the non-particle pools:
-//    DebrisPool  tumbling instanced chunks + shell casings that
-//                collide with the world and drag their own smoke
-//    LightPool   pooled PointLights (added ONCE at init so three
-//                never has to recompile every shader mid-fight)
-//    GhostPool   quick-boost afterimages of the mech mesh
+//    DebrisPool   tumbling instanced chunks + shell casings that
+//                 collide with the world and drag their own smoke
+//    LightPool    pooled PointLights (added ONCE at init so three
+//                 never has to recompile every shader mid-fight)
+//    ThrustLights pooled PointLights for booster nozzles — SUSTAINED,
+//                 so they get their own slots instead of fighting the
+//                 detonation pool's decay model
+//    GhostPool    quick-boost afterimages of the mech mesh
 // ============================================================
 import * as THREE from 'three';
 
@@ -232,6 +235,107 @@ export class LightPool {
 
   clear() {
     for (const e of this.lights) { e.life = 0; e.light.intensity = 0; e.light.visible = false; }
+  }
+}
+
+// ------------------------------------------------------------------
+//  THRUSTER LIGHTS
+//
+//  vfx.thruster() drew a plume, a corona, a heat haze and heat specks
+//  and made ZERO light calls — the booster was the one genuinely
+//  missing light source in the game. The explosion rig could not be
+//  reused for it: LightPool models a DETONATION (hard punch + decaying
+//  fireball tail) and its slots are stolen by brightness, so a
+//  sustained burn would be evicted by the first hit and would pulse on
+//  the pool's own decay curve rather than on the throttle.
+//
+//  These slots are separate, permanent, and driven by the aggregate of
+//  every nozzle in a cluster (i.e. per mech, not per nozzle — twelve
+//  point lights on one machine is not a lighting model, it is a bill).
+//
+//  COMPILE SAFETY — this is the important part.
+//    three bakes NUM_POINT_LIGHTS into the program cache key, and
+//    WebGLRenderer.projectObject() drops an invisible light before it
+//    is counted. So these are constructed at VFX.init() (which runs
+//    before PostFX.init() starts the warm-up) and are NEVER made
+//    invisible: an idle slot sits at intensity 0, contributing exactly
+//    zero photons and keeping the census pinned. Same contract
+//    engine.stabiliseLights() enforces for the detonation pool.
+// ------------------------------------------------------------------
+export class ThrustLights {
+  constructor(scene, n = 2, distance = 26) {
+    this.slots = [];
+    for (let i = 0; i < n; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, distance, 2.0);
+      l.castShadow = false;
+      l.visible = true;               // ALWAYS — see the header
+      scene.add(l);
+      this.slots.push({
+        light: l, live: false,
+        x: 0, y: 0, z: 0, i: 0,       // current
+        tx: 0, ty: 0, tz: 0, ti: 0,   // target this frame
+        tr: 1, tg: 1, tb: 1, claimed: false,
+      });
+    }
+  }
+
+  /** clear this frame's targets — call before the aim() pass */
+  begin() {
+    for (const s of this.slots) { s.ti = 0; s.claimed = false; }
+  }
+
+  /**
+   * Claim the slot already nearest this cluster (so a slot keeps
+   * following the same machine frame to frame instead of swapping
+   * between the player and a boss when their weights cross over).
+   * @returns {boolean} false if every slot is taken
+   */
+  aim(x, y, z, intensity, r, g, b) {
+    let best = null, bestD = 144;     // 12 u: same machine, not a new one
+    for (const s of this.slots) {
+      if (s.claimed || !s.live) continue;
+      const dx = s.x - x, dy = s.y - y, dz = s.z - z;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    if (!best) for (const s of this.slots) { if (!s.claimed) { best = s; break; } }
+    if (!best) return false;
+    best.claimed = true;
+    best.tx = x; best.ty = y; best.tz = z;
+    best.ti = intensity;
+    best.tr = r; best.tg = g; best.tb = b;
+    return true;
+  }
+
+  update(dt) {
+    const k = dt > 0 ? dt : 1 / 60;
+    for (const s of this.slots) {
+      // A nozzle light is rigidly bolted to the machine: the POSITION
+      // snaps, only the throttle is smoothed. Attack is faster than
+      // release so an ignition reads as a punch and a cut reads as an
+      // afterglow — which is also what stops per-frame plume jitter from
+      // strobing the deck.
+      if (s.ti > 0) { s.x = s.tx; s.y = s.ty; s.z = s.tz; }
+      const rate = s.ti > s.i ? 20 : 9;
+      s.i += (s.ti - s.i) * Math.min(1, k * rate);
+      if (s.i < 0.6) {
+        s.i = 0;
+        s.live = false;
+        if (s.light.intensity !== 0) s.light.intensity = 0;
+        continue;
+      }
+      s.live = true;
+      s.light.position.set(s.x, s.y, s.z);
+      s.light.color.setRGB(s.tr, s.tg, s.tb);
+      s.light.intensity = s.i;
+    }
+  }
+
+  clear() {
+    for (const s of this.slots) {
+      s.i = 0; s.ti = 0; s.live = false; s.claimed = false;
+      s.light.intensity = 0;            // stays VISIBLE — census is pinned
+    }
   }
 }
 

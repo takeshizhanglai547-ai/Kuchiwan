@@ -620,21 +620,30 @@ export const ENV_REL = { hull: 0.84, mech: 1.00, dark: 0.24, heat: 0.28, decal: 
 // ==================================================================
 //  asurf shader injection.
 //
-//  mechKit writes a vec2 per vertex:  x = chamfer mask, y = per-primitive
-//  finish scalar.  Two things hang off it.
+//  mechKit writes a vec2 per vertex:  x = BARENESS (how far the paint is
+//  rubbed through to steel on this vertex), y = per-primitive finish scalar.
+//  Two things hang off it.
 //
-//  1. THE ARRIS.  The bevel used to be handled purely in albedo, and the
-//     side-facing case (every silhouette-forming edge on a walker) was
-//     deliberately zeroed to stop the frame outlining itself like a moulded
-//     toy. Correct diagnosis, wrong axis: a milled arris is not a paler
-//     paint stripe, it is a different FINISH. Dropping roughness on the
-//     bevel and lifting metalness gives it a specular lobe of its own, so
-//     the edge flares when the half-vector lines up and is dead otherwise.
-//     Albedo is untouched, so nothing is outlined at rest.
-//  2. THE FAMILIES.  y multiplies roughness on the lit materials (rubber
-//     1.15, cast housings 1.25, honed piston rods 0.34) and multiplies
-//     emissive on glow/heat, so one material can carry a dim seam strip and
-//     a white-hot optic core without a second draw call.
+//  1. THE ARRIS.  Three things have to be true at once or a chamfer does not
+//     read at 20-40 m, and only the third of them lives here:
+//       (a) the chamfer must be WIDE enough to survive rasterisation — see
+//           BEVEL_GAIN in mechKit. At the authored 0.05-0.11 it was one pixel.
+//       (b) it must carry a VALUE of its own, which is edge wear in albedo.
+//       (c) the finish changes where the paint is gone: roughness down,
+//           metalness up, so the bare band throws a specular streak that
+//           swings with the camera.
+//     (c) alone was tried and MEASURED as a net loss (arris contrast 0.425
+//     off vs 0.421 on, value spread 0.178 -> 0.137): promoting a bevel that
+//     is still painted to metal trades reliable diffuse for a lobe that
+//     rarely fires. Driving it off bareness instead of off the raw chamfer
+//     mask makes it a net gain, because now (b) and (c) describe the same
+//     patch of missing paint.
+//  2. THE FAMILIES.  y multiplies roughness on the lit materials (oiled cable
+//     1.02, rubber boot 1.30, carbon void 1.36, cast housings 1.2-1.25, honed
+//     piston rods 0.34) and multiplies emissive on glow/heat, so one material
+//     carries a 0.40 seam strip and a 2.7 optic core without a second draw
+//     call — which matters, because the profile blames the frame stalls on
+//     lazy shader compilation and this frame must not add programs.
 //
 //  NOTE: no template literals in here on purpose — a stray backtick inside
 //  a GLSL string has broken this build before. Plain arrays, joined.
@@ -717,7 +726,19 @@ export function makeMaterials(opts = {}) {
     emissive: new THREE.Color(0x000000),
     emissiveIntensity: 1.0,
     roughness: 1.0,
-    metalness: 1.0,
+    //  PAINT IS A DIELECTRIC. This was metalness 1.0, which multiplied by the
+    //  ORM blue channel put painted armour at ~0.6 metal — and a metal's
+    //  "albedo" is its F0, so the palette's 0.11-linear paint colour was being
+    //  used as the specular colour of a metal darker than any real alloy
+    //  (iron F0 is 0.56). Measured result: the whole machine sat at 0.075-0.11
+    //  display luminance in a FRONT-LIT view — a black blob with no value
+    //  structure, which is why nothing on it could approach 1.0 and why the
+    //  chamfers had nothing to be brighter than.
+    //  Painted steel is now dielectric (ORM blue 0.3-0.9 x 0.30 => 0.09-0.27,
+    //  a little metallic flake in the paint) and the BEVEL is where it turns
+    //  metal — uBevMet lifts the milled arris to bare steel. That material
+    //  break, not a paint stripe, is what reads as machined plate.
+    metalness: 0.30,
     envMap: T.envMap,
     envMapIntensity: ei * ENV_REL.hull,
     vertexColors: true,
@@ -725,8 +746,8 @@ export function makeMaterials(opts = {}) {
   });
   //  Painted armour spans matte repaint to satin factory finish (the ORM
   //  green channel is authored 0.13-0.79) and every chamfer on it is milled
-  //  back to ~0.17: that is the arris.
-  applySurf(hull, { bevRgh: 0.38, bevMet: 0.20 });
+  //  back to ~0.13 AND flipped to bare metal: that is the arris.
+  applySurf(hull, { bevRgh: 0.26, bevMet: 0.12 });
 
   // exposed mechanism: milled steel rods, actuators, hydraulic chrome.
   //  The material stays SATIN — at roughness 0.30 x the ORM every rod on the
@@ -734,7 +755,7 @@ export function makeMaterials(opts = {}) {
   //  spent per-primitive instead: only the honed piston rods and bolt heads
   //  get pulled down (asurf.y 0.34-0.52), cast vanes and hubs pushed up.
   const mech = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(opts.mechTint ?? 0x9aa0a6),
+    color: new THREE.Color(opts.mechTint ?? 0x9aa0a6).multiplyScalar(1.9),
     map: T.hullMap,
     roughnessMap: T.hullORM,
     roughness: 0.66,
@@ -751,21 +772,30 @@ export function makeMaterials(opts = {}) {
   //  so a throat can be a true void while a rubber boot still shows form.
   const dark = new THREE.MeshStandardMaterial({
     color: new THREE.Color(opts.darkTint ?? 0xc6cace),
-    roughness: 0.86,
+    //  This family has no roughnessMap, so its whole roughness range is
+    //  base x asurf.y. At base 0.86 with asurf.y authored 1.14-1.30 every
+    //  member clamped to 0.98-1.0: rubber boot, cable loom and dead-black
+    //  throat all landed on the same finish, which is one of the reasons the
+    //  frame read as a single moulding. Dropped so the authored spread has
+    //  somewhere to go — the family now runs ~0.72 (oiled cable) to ~0.97
+    //  (matte boot / carbon void).
+    roughness: 0.71,
     metalness: 0.12,
     envMap: T.envMap,
     envMapIntensity: ei * ENV_REL.dark,
     vertexColors: true,
     dithering: true,
   });
-  //  Rubber boots ride asurf.y ~1.16 (dead matte); a bevel on a moulding is
+  //  Rubber boots ride asurf.y 1.30 (dead matte); a bevel on a moulding is
   //  only slightly crisper, never a highlight.
   applySurf(dark, { bevRgh: 0.66, bevMet: 0.04 });
 
   //  The ONE genuinely HDR channel on the machine. Base radiance is well over
-  //  the bloom high-pass (linear 1.28 at the shipped grade) and asurf.y then
-  //  ranks the emitters inside the one material: optic core 1.9, blade 1.5,
-  //  seam strips 0.5 — so the visor blooms and the seams do not.
+  //  the bloom high-pass and asurf.y RANKS the emitters inside the one
+  //  material: head optic 2.7, blade core 2.3, blade sheath 1.35, rifle optic
+  //  1.15, cannon coils 0.85, seam strips 0.40. That ranking was documented
+  //  here but never actually passed at the call sites — every emitter on the
+  //  frame shipped at 1.0, so the visor could not out-bloom a seam light.
   const glow = new THREE.MeshStandardMaterial({
     color: new THREE.Color(0x04060a),
     emissive: accent.clone(),
