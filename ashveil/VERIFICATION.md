@@ -256,11 +256,23 @@ status:
   replacement doorway and the seal that covers it were both checked against
   computed extents before being accepted.
 
+**PROMOTED FROM THEORETICAL — now executed**
+- **The arena seal's exit paths.** Listed last round as the highest-value
+  untested path in the build, because a seal that fails to reopen walls the player
+  into the arena — strictly worse than the drift it prevents. Now covered by
+  `node tools/harness.js seal`, which asserts the state rather than reading it:
+
+  | Path | Director state | Seal |
+  |---|---|---|
+  | entering the arena | `boss` | closed |
+  | after death + respawn | `explore` | open |
+  | re-entering | `boss` | closed (re-arms) |
+  | after leash reset | `explore` | open |
+
+  Zero errors. The scenario fails its own exit code on any wrong combination, so
+  it cannot silently pass.
+
 **THEORETICAL — implemented, not observed**
-- The arena seal reopening on **death** and on **leash reset**. The victory path
-  is covered by the DoD run; the other two are code paths that have not been
-  separately exercised. If either is wrong the player is walled into the arena,
-  so this is the highest-value untested path in the build.
 - Phase 2's sheared chimney stack in a clean, unoccluded shot.
 
 **UNVERIFIED**
