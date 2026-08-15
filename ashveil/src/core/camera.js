@@ -179,7 +179,35 @@ export class GameCamera {
                                      this.pos.x + rx * off, this.pos.z + rz * off, this.pos.y);
       if (h < 1) off *= Math.max(0, h - 0.2);
     }
-    this.cam.position.set(this.pos.x + rx * off, this.pos.y, this.pos.z + rz * off);
+    // LOCK-ON PARALLAX.
+    //
+    // The boom sits behind the player ON the player->target axis, which means
+    // that by construction the target renders directly behind the player's own
+    // silhouette. Two reviewers found this independently: one measured the
+    // reticle at the same screen point in all twelve frames of a landed-hit
+    // sequence — squarely on the player's back — and reported never seeing the
+    // thing being killed.
+    //
+    // Removing the shoulder offset under lock-on (done to stop the target being
+    // shoved off-frame) made this worse, because it put the pair dead centre and
+    // perfectly aligned. The fix is not more offset applied to both eye and
+    // focus — that slides the whole frame — but a small lateral displacement of
+    // the EYE ONLY, so the camera looks along a slightly different line than it
+    // sits on. That is a deliberate toe-in, and it is what separates two subjects
+    // standing one behind the other.
+    let sideEye = 0;
+    if (this.target && this.target.alive) {
+      sideEye = 0.9 * clamp((dist - 2.6) / 2.4, 0, 1);
+      if (this.collision && sideEye > 0.01) {
+        const h = this.collision.rayXZ(this.pos.x, this.pos.z,
+                                       this.pos.x + rx * sideEye, this.pos.z + rz * sideEye,
+                                       this.pos.y);
+        if (h < 1) sideEye *= Math.max(0, h - 0.2);
+      }
+    }
+
+    this.cam.position.set(this.pos.x + rx * (off + sideEye), this.pos.y,
+                          this.pos.z + rz * (off + sideEye));
     _v.set(this.smoothFocus.x + rx * off, this.smoothFocus.y, this.smoothFocus.z + rz * off);
     this.cam.lookAt(_v);
 

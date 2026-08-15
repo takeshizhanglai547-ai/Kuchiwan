@@ -185,9 +185,27 @@ export const CLIP_HEAVY_CHARGED = new Clip({
       upperArmL: [-2.20, 0.36, 0.62], forearmL: [-1.30, 0, 0],
       thighR: [0.30, 0, 0], shinR: [0.44, 0, 0], thighL: [-0.16, 0, 0],
     } },
+    // The held beat is the tell and it stays. But held must not mean FROZEN: a
+    // reviewer diffed consecutive frames here and measured 1–2% of the character
+    // region changing per step, against 8.6% during the strike, and read the
+    // whole hold as a dead clip rather than a wind-up under strain. Two extra
+    // keys put a small tremor and a further creep-back into the hold, so the pose
+    // is still legibly the same pose while visibly costing the body something.
+    { t: 0.44, ease: 'linear', pose: {
+      hips: [-0.25, 0.63, 0], spine: [-0.29, 0.53, 0], chest: [-0.41, 0.65, 0], head: [-0.21, -0.35, 0],
+      upperArmR: [-2.90, 0.66, -0.90], forearmR: [-1.12, 0, 0],
+      upperArmL: [-2.24, 0.37, 0.63], forearmL: [-1.31, 0, 0],
+      thighR: [0.31, 0, 0], shinR: [0.45, 0, 0], thighL: [-0.17, 0, 0],
+    } },
+    { t: 0.52, ease: 'linear', pose: {
+      hips: [-0.28, 0.66, 0], spine: [-0.32, 0.56, 0], chest: [-0.45, 0.68, 0], head: [-0.24, -0.37, 0],
+      upperArmR: [-2.80, 0.62, -0.86], forearmR: [-1.00, 0, 0],
+      upperArmL: [-2.31, 0.39, 0.65], forearmL: [-1.36, 0, 0],
+      thighR: [0.33, 0, 0], shinR: [0.47, 0, 0], thighL: [-0.19, 0, 0],
+    } },
     { t: 0.58, ease: 'linear', pose: {
       hips: [-0.26, 0.64, 0], spine: [-0.30, 0.54, 0], chest: [-0.42, 0.66, 0], head: [-0.22, -0.36, 0],
-      upperArmR: [-2.85, 0.64, -0.88], forearmR: [-1.05, 0, 0],
+      upperArmR: [-2.95, 0.68, -0.92], forearmR: [-1.05, 0, 0],
       upperArmL: [-2.28, 0.38, 0.64], forearmL: [-1.34, 0, 0],
       thighR: [0.32, 0, 0], shinR: [0.46, 0, 0], thighL: [-0.18, 0, 0],
     } },

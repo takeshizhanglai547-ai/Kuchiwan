@@ -388,7 +388,10 @@ export function buildVolga(mats) {
   attach(rig, 'spine', taperBox(0.66, 0.54, 0.26, 0.42), iron, 0, 0.12, 0);
   attach(rig, 'chest', taperBox(0.86, 0.70, 0.42, 0.52), iron, 0, 0.18, 0);
   // ash-cloth apron, scorched
-  attach(rig, 'hips', taperBox(0.46, 0.70, 0.62, 0.36), cloth, 0, -0.28, 0);
+  // Held: phase 2 burns the apron away. It and the right pauldron are the two
+  // largest silhouette-defining pieces on the body, which is what a phase change
+  // has to alter to be legible across an arena.
+  const apron = attach(rig, 'hips', taperBox(0.46, 0.70, 0.62, 0.36), cloth, 0, -0.28, 0);
 
   // --- the kiln door in the chest: the single most important read in the fight ---
   const kilnFrame = new THREE.Mesh(box(0.46, 0.50, 0.10), dark);
@@ -438,7 +441,7 @@ export function buildVolga(mats) {
   gaze.position.set(0, 0.06, 0.175); rig.joints.head.add(gaze);
 
   // --- RIGHT SIDE: architecture. Oversized plates, the rake arm. ---
-  attach(rig, 'shoulderR', taperBox(0.50, 0.34, 0.36, 0.46), dark, -0.13, 0.05, 0);
+  const pauldronR = attach(rig, 'shoulderR', taperBox(0.50, 0.34, 0.36, 0.46), dark, -0.13, 0.05, 0);
   attach(rig, 'shoulderR', box(0.14, 0.24, 0.14), dark, -0.30, 0.16, 0, 0, 0, -0.35);
   attach(rig, 'upperArmR', taperBox(0.28, 0.24, 0.40, 0.28), iron, 0, -0.20, 0);
   attach(rig, 'forearmR', taperBox(0.26, 0.22, 0.38, 0.26), iron, 0, -0.19, 0);
@@ -482,7 +485,8 @@ export function buildVolga(mats) {
 
   return {
     rig, group: rig.root, weaponTip: tip, weaponBase: base,
-    kilnCore, kilnDoorL, kilnDoorR, rakeGlow, gaze, stacks, chestMat: mats.ember,
+    kilnCore, kilnDoorL, kilnDoorR, rakeGlow, gaze, stacks, apron, pauldronR,
+    chestMat: mats.ember,
     height: 4.6,
   };
 }

@@ -257,9 +257,14 @@ const SCENARIOS = {
       const s = await page.evaluate(() => {
         const g = window.ASHVEIL, p = g.player;
         const e = g.director.enemies.find(e => e.hp !== undefined);
-        return { t: +(p.clipTime || 0).toFixed(3), st: p.state, hp: Math.round(e ? e.hp : -1) };
+        // Stamp BOTH current and max HP. Stamping only the current value made a
+        // reviewer read `targetHp62` as "62 out of 100" and file a health-bar bug
+        // against a bar that was correct — the Ash Thrall's max is 62. Evidence
+        // that can be misread is the evidence's fault.
+        return { t: +(p.clipTime || 0).toFixed(3), st: p.state,
+                 hp: Math.round(e ? e.hp : -1), max: Math.round(e ? e.hpMax : -1) };
       });
-      await shot(`14_hit_${String(f).padStart(2, '0')}_t${s.t}_${s.st}_targetHp${s.hp}`);
+      await shot(`14_hit_${String(f).padStart(2, '0')}_t${s.t}_${s.st}_targetHp${s.hp}of${s.max}`);
       await advance(1 / 60);
     }
     result.notes.push(await page.evaluate(() => {
@@ -692,6 +697,8 @@ const SCENARIOS = {
         phase: b.phase,
         left: { sy: +st[0].scale.y.toFixed(3), rz: +st[0].rotation.z.toFixed(3), y: +st[0].position.y.toFixed(3) },
         right: { sy: +st[1].scale.y.toFixed(3), y: +st[1].position.y.toFixed(3) },
+        pauldronVisible: b.char.pauldronR ? b.char.pauldronR.visible : null,
+        apronScaleY: b.char.apron ? +b.char.apron.scale.y.toFixed(3) : null,
       };
     });
     await advance(0.3);
@@ -706,6 +713,12 @@ const SCENARIOS = {
     result.notes.push('phase 2: ' + JSON.stringify(after));
     if (after.left && after.left.sy > 0.9) {
       result.errors.push('PHASE2 FAIL: left stack not sheared (scale.y=' + after.left.sy + ')');
+    }
+    if (after.pauldronVisible !== false) {
+      result.errors.push('PHASE2 FAIL: right pauldron still present');
+    }
+    if (after.apronScaleY === null || after.apronScaleY > 0.5) {
+      result.errors.push('PHASE2 FAIL: apron not burned back (scale.y=' + after.apronScaleY + ')');
     }
   },
 

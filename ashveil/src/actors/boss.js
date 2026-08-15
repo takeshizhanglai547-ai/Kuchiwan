@@ -497,6 +497,23 @@ export class Boss extends Actor {
       stacks[1].scale.set(1, open ? 1.30 : 1, 1);
       stacks[1].position.y = open ? 0.58 : 0.46;
     }
+
+    // THE STACKS ALONE WERE NOT ENOUGH, and a rig dump proved it rather than an
+    // opinion: the shear applies correctly (left scale.y 1 -> 0.34, cant 0.18 ->
+    // 0.62) and a reviewer still read the two phases as silhouette-identical.
+    // Both are true. A chimney is ~1.2m on a 4.6m body, so altering it changes a
+    // quarter of the crown and nothing else — correct code, insufficient design.
+    //
+    // Phase 2 now sheds the two largest outline-defining pieces on the body: the
+    // oversized right pauldron burns off entirely, and the apron burns back to a
+    // ragged remnant. Those change the outline at any distance and from any
+    // angle, which is what the change has to survive.
+    const { apron, pauldronR } = this.char;
+    if (pauldronR) pauldronR.visible = !open;
+    if (apron) {
+      apron.scale.set(open ? 0.72 : 1, open ? 0.34 : 1, 1);
+      apron.position.y = open ? -0.14 : -0.28;
+    }
   }
 
   // --- damage ---------------------------------------------------------------
