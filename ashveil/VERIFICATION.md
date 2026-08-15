@@ -288,3 +288,41 @@ status:
   genuinely is an opaque slab larger than the character. Both the original claim
   and its withdrawal generalised from a single frame, and neither generalisation
   held.
+
+---
+
+## Round 6 resolved — verification on the final build
+
+**EXECUTED — all four checks, one build**
+
+| Check | Command | Result |
+|---|---|---|
+| Definition of Done | `fullrun` | `victory`, `bossHp 0`, zero errors |
+| Arena seal, three exit paths | `seal` | zero errors; closed on entry, open after death, open after leash reset, re-arms on re-entry |
+| Boss fight happens in the arena | `boss` | ends at `z = 63`; arena centre is `z = 66` |
+| Every stair in the level still works | `traverse` | zero errors, 16 shots |
+| Damage lands inside the active window | `combat` | target HP 62 → 45 between t = 0.317 and t = 0.400, active window 0.25–0.435 |
+
+**The root cause, and why the earlier entries above were misleading.** Wall
+collision permitted a 0.12 m step-over while the actor could climb 0.62 m, so the
+Kiln Court was never reachable on foot. Earlier rounds recorded the boss fight as
+EXECUTED and passing — which was true of the *encounter logic* but not of its
+*location*: the fight was running in the forecourt, not the arena, and no test
+asserted where it took place. **A test that checks a state flag but not a position
+can pass while the thing it is meant to protect is broken.** The `boss` scenario
+now reports the final position for exactly this reason.
+
+**STILL OPEN — observed, not fixed**
+- Ash motes read as soft white discs at 5–8 m. Scale is correct at that distance;
+  the remaining problem is contrast and colour.
+- Volga crowds the camera at very close range. The subject cutout is disabled at
+  short focus distances by design.
+- Enemies occlude the player at close range; the dissolve is architecture-only.
+- No hit-confirmation flash; damage numbers illegible.
+- The light attack's damage window opens before the blade begins travelling.
+
+**UNVERIFIED — unchanged**
+- 1080p/60fps. No GPU in this container.
+- All audio. Never heard.
+- Whether any of round 6's fixes satisfy a reviewer. **No critic has seen this
+  build.**

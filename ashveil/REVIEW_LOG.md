@@ -513,6 +513,79 @@ lengthening the walk; DoD restored to `victory` / `bossHp 0` / no errors.
 
 ---
 
+## Round 6 resolved — the root cause was one collision constant
+
+Four blind reviewers across four rounds reported the same thing: the boss fight
+is shot through walls. The responses were a shader dissolve, a multi-sample
+spring arm, relocated pillars, a moved wake trigger, a narrowed ring wall, and an
+arena seal. **All six were treating a symptom.**
+
+The cause: `CollisionWorld.resolveCircle` allowed an actor to pass a wall only if
+its top was within **0.12 m** of the actor's feet, while `Actor.update` will lift
+a grounded actor onto anything within **0.62 m**. Every stair in the level was
+climbable by the ground query and blocked by the wall query, so an actor stopped
+dead at the exact riser it was permitted to stand on.
+
+Concretely: the cistern exit stair tops out at `y = 0.40` with its last riser at
+`z = 50.45`. Walking north from the forecourt stopped at `z = 50.05`.
+
+**The Kiln Court had never been enterable on foot.** The boss encounter only
+appeared to work because its trigger fired at `z = 48.5`, before that riser — so
+the fight always happened in the forecourt, and the black masses filling every
+boss frame were forecourt arch piers. Critic D's "the fight is staged in the
+corridor, not the arena" was not a framing complaint. It was a literal
+description, and it was correct.
+
+Fix: `STEP_OVER = 0.45`, named and bounded just under the actor's own tolerance so
+nothing can pass a wall it cannot then stand on.
+
+### How it was actually found
+
+Three consecutive analytical fixes were wrong — the wake trigger left on the
+arch, a 6 m seal across a 29 m opening, and a trigger radius that silently undid
+its own relocation. Two of them broke the Definition of Done, and the regression
+checklist caught both.
+
+What worked was instrumenting the game instead of reasoning about it: a `probe`
+scenario that walks the player north and reports position every 0.6 s, and a
+`walls` scenario that dumps every collision segment near a point. The probe found
+the exact stall coordinate on its first run; the dump named the culprit segment.
+Both are now permanent harness scenarios.
+
+| Probe, before | Probe, after |
+|---|---|
+| t=1.2s → z=50.05 `explore` | t=1.2s → z=52.25 **`boss`** |
+| t=4.8s → z=50.05 `explore` | t=4.8s → z=67.01 `boss` |
+| t=7.8s → z=50.05 `explore` | t=7.8s → z=72.26 `boss` |
+
+### Verification on the resolved build
+
+| Check | Result |
+|---|---|
+| Definition of Done | `victory`, `bossHp 0`, zero errors |
+| Arena seal, all three exit paths | zero errors |
+| Boss fight location | **z = 63**, arena centre `z = 66` |
+| Location tour — every stair in the level | zero errors, 16 shots |
+
+The tour mattered most: `STEP_OVER` affects every staircase, so unblocking the
+arena while letting an actor walk through a low wall elsewhere would have been a
+bad trade. Nothing regressed.
+
+### Still open after round 6
+
+- **Ash motes.** The near-lens fade removed the worst of it, but at 5–8 m a 0.2 m
+  sprite is legitimately ~40 px and still reads as a soft white disc. The defect
+  is now contrast and colour, not scale. Reduced, not closed.
+- **Volga crowds the camera at very close range.** The subject cutout is
+  deliberately disabled at short focus distances, because applying it there eats
+  whatever the camera is inside, so tight quarters remain the weak case.
+- **Enemies occluding the player** at close range (A and E). The dissolve is
+  architecture-only by design.
+- **No hit-confirmation flash** on the struck actor; damage numbers illegible.
+- **The light attack's damage window opens before the blade travels.**
+
+---
+
 ## Circuit breaker status (§21)
 
 **Six rounds complete: one developer pass and five blind review rounds**, across
