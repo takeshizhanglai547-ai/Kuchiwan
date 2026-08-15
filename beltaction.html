@@ -114,6 +114,7 @@
     <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度モード：OFF</button>
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
+      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（コンボ練習）</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
@@ -283,6 +284,16 @@ addEventListener('keydown',e=>{
   titleIdle=0;
   if(state==='cut'){ if(e.code==='Escape'||e.code==='KeyK') cutSkip=true; else cutAdvance=true; e.preventDefault(); return; }
   if(e.code==='KeyP'&&(state==='play'||state==='pause')){ togglePause(); return; }
+  // ── トレーニングモードの操作。本編のキー割り当てと衝突しないものだけを使う
+  //    （U は掴み、K は回避、P は一時停止に既に割り当て済み）──
+  if(trainMode && (state==='play'||state==='pause')){
+    if(e.code==='KeyR'){ trainReset(); trainSpawnPosts(); e.preventDefault(); return; }
+    if(e.code==='KeyT'){ train.stance=(train.stance+1)%TRAIN_STANCE.length;
+      enemies.forEach(x=>{ if(ETYPE[x.type].train){ x.state='walk'; x.guardT=0; } }); e.preventDefault(); return; }
+    if(e.code==='KeyY'){ trainSetPosts(train.posts>=3?1:train.posts+1); e.preventDefault(); return; }
+    if(e.code==='KeyC'){ trainCycleLevel(); e.preventDefault(); return; }
+    if(e.code==='KeyN'){ trainCycleHero(); e.preventDefault(); return; }
+    if(e.code==='Escape'){ endTraining(); e.preventDefault(); return; } }
   const pa=CODE2PA[e.code]; if(!pa) return; const [pi,act]=pa; const inp=players[pi].in;
   if(!inp.keys[e.code]){ inp.keys[e.code]=true; mapKeysFor(pi);
     if(act==='atk') inp.pressed.atk=true; if(act==='grab') inp.pressed.grab=true; if(act==='jump') inp.pressed.jump=true; if(act==='grd') inp.pressed.grd=true;
@@ -464,7 +475,65 @@ const AMBSND={
   forest:{hz:3400,q:0.6, dur:1.6, v:0.022, sw:1.35},  // 森のざわめき
   machine:{hz:150,q:3.2, dur:2.2, v:0.028, sw:1.0},   // 機械・母船のハム
 };
+// ── キャラクターボイス ──────────────────────────────────────
+// 外部音源を持てない（単一HTMLで追加ファイルなし）ので、鳴き声も合成する。
+// 声は「声帯＝基本周波数の付いた波」と「共鳴＝フォルマント帯域」でできている。
+// 犬の「ワンッ」は F1≈760 / F2≈1750 あたりに山があり、猫の「ニャー」は
+// 立ち上がりで F2 が大きく動く。この2本の山をキャラごとに置き換えると別人に聞こえる。
+//   f0=声の高さ／f1,f2=共鳴の山／q=喉の締まり／bite=子音の息の当たり
+const VOICE={
+  inu:    {f0:300, f1:780, f2:1800, q:7.0, wave:'sawtooth', bite:0.30},   // 明るく張る若い犬
+  shima:  {f0:186, f1:560, f2:1180, q:6.0, wave:'sawtooth', bite:0.44},   // 胴の長い低い唸り
+  nuko:   {f0:520, f1:900, f2:2500, q:9.0, wave:'triangle', bite:0.10},   // 猫。子音が無く滑らか
+  guard8: {f0:148, f1:470, f2:960,  q:4.6, wave:'square',   bite:0.58},   // 機械仕掛けの重い声
+  watch:  {f0:392, f1:880, f2:2150, q:8.0, wave:'sawtooth', bite:0.22},   // 軽くて素早い
+  wanden: {f0:228, f1:640, f2:1450, q:6.2, wave:'sawtooth', bite:0.40} }; // low で鋭い気合い
+// 節ごとの [音程倍率, 長さ(秒), 音量倍率]
+const VOICE_LINE={
+  atk:  [[1.00,0.11,1.00]],                                  // 技：一声だけ短く張る
+  ult:  [[0.84,0.14,1.00],[1.34,0.30,1.08]],                 // 奥義：溜めてから高く伸ばす
+  hurt: [[1.24,0.10,0.92]],                                  // 被弾：高く短い
+  ko:   [[1.16,0.09,0.92],[0.70,0.30,0.80]] };               // 撃墜：高→低へ落ちる
+function voiceSyl(V,mul,dur,amp,x,dly){
+  if(!actx||!sndOn) return;
+  const t=actx.currentTime+(dly||0), O=sfxOut(x); if(!O) return;
+  const f0=V.f0*mul;
+  const o=actx.createOscillator(); o.type=V.wave;
+  // 立ち上がりで一度上へ跳ねてから落ちる。これが無いと「ブー」と鳴るだけで声にならない
+  o.frequency.setValueAtTime(f0*0.70,t);
+  o.frequency.exponentialRampToValueAtTime(f0*1.16,t+dur*0.16);
+  o.frequency.exponentialRampToValueAtTime(f0*0.78,t+dur);
+  const g=actx.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(amp,t+0.014);
+  g.gain.setValueAtTime(amp,t+dur*0.52);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  // フォルマント2本を並列に。直結を混ぜないので「母音の色」だけが残る
+  const mk=(f,q,gn)=>{ const bp=actx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.setValueAtTime(f,t); bp.Q.value=q;
+    const gg=actx.createGain(); gg.gain.value=gn; o.connect(bp); bp.connect(gg); gg.connect(g); return bp; };
+  mk(V.f1,V.q,1.0);
+  const b2=mk(V.f2,V.q*0.8,0.55);
+  b2.frequency.exponentialRampToValueAtTime(V.f2*0.60,t+dur);   // 口を閉じていく＝「ワゥ」「ニャ」
+  g.connect(O); o.start(t); o.stop(t+dur+0.02);
+  if(V.bite>0){                                                // 子音（息の当たり）
+    const s=actx.createBufferSource(); s.buffer=noiseBuf;
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=V.f2*1.1; bp.Q.value=1.2;
+    const ng=actx.createGain(); ng.gain.setValueAtTime(amp*V.bite,t);
+    ng.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    s.connect(bp); bp.connect(ng); ng.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.07); } }
+// 声が重なると一気に耳障りになるので、種類ごとに最短間隔を置く
+let _voiceCd=0;
+function playVoice(kind,line,x){
+  if(!actx||!sndOn) return;
+  if(gf<_voiceCd) return;
+  const V=VOICE[kind]||VOICE.inu, L=VOICE_LINE[line]||VOICE_LINE.atk;
+  _voiceCd=gf+(line==='ult'?46:line==='ko'?40:14);
+  const r=1+(Math.random()*0.07-0.035);            // 毎回わずかに揺らす＝同じ音の貼り付けに聞こえない
+  let d=0;
+  for(const sy of L){ voiceSyl(V, sy[0]*r, sy[1], 0.26*sy[2], x, d); d+=sy[1]*0.84; } }
 const sfx={
+  voice:(kind,line,x)=>playVoice(kind,line,x),
   // 空振り＝武器種ごとにバンドパスが抜けるスウッシュ。コンボ段数で開始帯域が上がり振りの速さが出る
   swing:(p=0,cls,x)=>{ const c=(HITSND[cls]||HITSND.blade).swoosh;
     swoosh(c[0], c[1], Math.max(500,c[2]-p*380), c[3], c[4], x);
@@ -1507,6 +1576,28 @@ function superEcho(x,y,color){
 }
 // 残響の減衰。flash と同じ場所で1フレームに1回だけ進める
 function updateEcho(){ if(echoT>0) echoT--; }
+// ── 奥義のカットイン ────────────────────────────────────────
+// 従来は閃光と集中線だけで、「誰が何を出したのか」が画に出ていなかった。
+// 格闘ゲームと同じで、止め絵の一枚が入るかどうかで技の格が決まる。
+//   0.00〜0.16 帯が走り込み、立ち絵が外から滑り込む
+//   0.16〜0.68 保持（技名が出る）
+//   0.68〜1.00 帯が抜けて立ち絵が流れ去る
+const ULT_CUT_MAX=54;
+const ultCut={t:0, kind:'inu', name:'', col:'#ffe14d', dir:1, pid:0};
+function ultCutIn(kind,name,col){
+  if(perfTier>=2) return;                        // 重いときは静かに省く
+  ultCut.t=ULT_CUT_MAX; ultCut.kind=kind; ultCut.name=name||'奥義';
+  ultCut.col=col||heroColOf(kind); ultCut.dir=(player&&player.facing)||1;
+  ultCut.pid=(player&&player.pid)|0;
+  camZoomT=Math.max(camZoomT,1.16); triggerSlow(30); }
+function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
+// 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
+const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
+  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝'};
+function beginUlt(p){
+  const k=p.kind;
+  sfx.voice(k,'ult',p.x);
+  ultCutIn(k, ULT_NAME[k]||'奥義', heroColOf(k)); }
 // 画面に残る余韻。技を撃った場所を中心に、暖色がゆっくり引いていく
 // 致命の一撃の締め。画面のフチを落として、主役と崩れた相手だけを残す
 function drawCritVignette(){
@@ -2368,6 +2459,10 @@ function commandSpecial(p){ if(p.z>0) return null;
   return null; }
 function beginAttack(type){
   const p=player, def=ATK[type];
+  if(trainMode && p===players[0]) trainLog(def&&def.name?def.name:type);
+  // 声は「ここぞ」でだけ出す。通常のジャブまで喋ると15分で耳が痛くなる
+  if(def && (def.special||def.finisher||def.charged||def.dimBlade))
+    sfx.voice(p.kind, def.dimBlade?'ult':'atk', p.x);
   p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{}};
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
@@ -3632,6 +3727,7 @@ function updatePlayer(){
     if((K.grab||pressed.grab) && p.z<=0){ if(beginSGMove(p)){ pressed.grab=false; return; } }   // 攻撃＋掴み＝キャラ別必殺技
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
+      beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
@@ -4421,6 +4517,9 @@ const ETYPE={
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
   // ── ワッチ登場に合わせた追加ステージ「月夜の宝物庫」の番人 ──
   goldgolem:{hp:900,sp:0.85,dmg:21,atkR:92,w:172,h:186,c1:'#e8c86a',c2:'#b8922e',c3:'#7a5e18',score:6800,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#fff0a0',name:'黄金傀儡ゴルドー'},
+  // ---- トレーニング用の的（反撃しない・倒れない）----
+  trainpost:{hp:60000,sp:1.1,dmg:0,atkR:0,w:60,h:86,c1:'#c8a878',c2:'#8a6a3e',c3:'#4a3418',score:0,
+    train:true,accent:'#ffd8a0',name:'訓練用の木犬'},
   // ---- 新エネミー：不死・機械の犬 ----
   zombiewan:{hp:74,sp:0.72,dmg:11,atkR:48,w:60,h:78,c1:'#6f8a54',c2:'#455a34',c3:'#28361e',score:360,zombie:true,accent:'#a6e070',name:'ゾンビワンコ'},          // 遅いが一度だけ蘇る
   skeletwan:{hp:40,sp:1.7,dmg:9,atkR:220,w:52,h:80,c1:'#eae7dc',c2:'#b7b3a4',c3:'#7c786a',score:380,boner:true,accent:'#cfe6ff',name:'スケルトンワンコ'},          // 遠距離から骨を投げる
@@ -4789,6 +4888,7 @@ function bossPoiseBroken(e){ const T=ETYPE[e.type];
   return !T.boss || T.tumbles || (e.poiseBreak||0)>gf; }
 function damageEnemy(e,dmg,kbx,knockdown,launch){
   const T=ETYPE[e.type];
+  e.lastHitF=gf;                                     // 訓練用の的の自動回復に使う
   const noStop=noHitStopOnce; noHitStopOnce=false;   // 連射弾などはヒットストップ無し
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
@@ -5257,6 +5357,15 @@ function updateEnemies(){
     const dx=p.x-e.x; e.facing=dx<0?-1:1;   // ※ anim/bob はループ先頭で常時進める
     const dist=Math.abs(dx), aligned=true;
     e.strafeCd--; if(e.strafeCd<=0){ e.strafeDir=Math.random()<0.5?-1:1; e.strafeCd=rnd(35,85); }
+    // ── 訓練用の的：一切反撃しない。姿勢だけを切り替える ──
+    if(t.train){
+      e.y=LANE; e.thinkCd=999; e.telegraph=0; e.atkTimer=0;
+      if(gf-(e.lastHitF||0)>90) e.hp=e.maxHp;            // 殴られなくなったら満タンへ戻す
+      if(train.stance===1){ if(dist>92) e.x+=Math.sign(dx)*t.sp; e.state='walk'; }
+      else if(train.stance===2){ if(e.guardT<=0 && e.stun<=0){ e.state='guard'; e.guardT=90; } }
+      else { const hd=(e.homeX==null?e.x:e.homeX)-e.x;   // 吹き飛ばされたら定位置へ歩いて戻る
+             if(Math.abs(hd)>6 && e.stun<=0 && e.z<=0){ e.x+=Math.sign(hd)*1.3; e.state='walk'; } else e.state='idle'; }
+      continue; }
     // 風船兵：ふわふわ漂って体当たりで破裂
     if(t.balloon){ e.z=Math.max(22, e.z+Math.sin(e.bob*1.6)*0.7+(36-e.z)*0.03);
       e.x+=Math.sign(dx)*t.sp*(0.85+0.3*Math.sin(e.bob)); e.y=LANE;
@@ -5873,6 +5982,7 @@ function hurtPlayer(p,dmg,dir,knockdown,cls,ivOv){ if(!p)p=player; if(p.invuln>0
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=(ivOv!=null)?ivOv:(knockdown?64:38); p.vx=dir*4; shake=7;
   flashRed(knockdown?5:4, p.x, p.y-46); kick(dir,-0.35,knockdown?8:5.5); hurtSound(dmg, p.x, cls); resetCombo();
+  sfx.voice(p.kind,'hurt',p.x);
   if(p.rig){ sprKick(p.rig.sq, 5); sprKick(p.rig.wob, dir*p.facing*8);
     if(p.rig.earL){ sprKick(p.rig.earL,-11); sprKick(p.rig.earR,-9.5); sprKick(p.rig.tail,10); } }   // 被弾でぐにゃっと歪み、耳と尻尾が跳ねる
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -5883,6 +5993,7 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
   p.hp=0;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
   p.state='dead'; p.downTimer=40; p.vz=8; p.riseVel=0;
+  sfx.voice(p.kind,'ko',p.x);
   const out = TWO_P ? (--coopLives<0) : (--p.lives<0);   // 2Pは共有残機プールを消費
   if(out){ p.active=false; popText(p.x,p.y-100,(p.kind==='shima'?'シマダックス':p.kind==='nuko'?'ヌコ':p.kind==='guard8'?'ガードワン8号':p.kind==='watch'?'ワッチ':p.kind==='wanden'?'ワンデン':'イッヌ')+' DOWN…','#ff5a5a',true);
     if(activePlayers().length===0) gameOver(); return; }
@@ -6278,6 +6389,13 @@ function buildEncounters3(){ resetWorldState(); trueBossSpawned=false;
 function buildEncounters4(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(MYTH_CH.slice(1,2),null);   // 四周目：海神の神殿から開始（頂は規定数クリアで解禁）
 }
+// クリア後に進める周回。DOM を読まずに検証できるよう、判断だけを関数に出す。
+// 三周目クリア後はここが null を返しており、四周目へ行けなかった
+function nextLap(l){
+  if(l>=4) return null;                              // 神話の先はまだ無い
+  if(l>=3) return {lap:4, label:'⚡ 4周目「神話」へ', go:startNG4};
+  if(l>=2) return {lap:3, label:'▶ 3周目「宇宙人の侵略」へ', go:startNG3};
+  return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
 function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
@@ -6314,6 +6432,73 @@ function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
   Music.stop(); saveProgress(1);
   startCutscene(NG2_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
 }
+
+//======================================================================
+//  トレーニングモード — コンボを練習するための的と記録
+//======================================================================
+// 本編と同じ更新経路（stepPlayers → updateEnemies → updateCombo）をそのまま使う。
+// 別実装にすると「練習で出た繋がりが本編では繋がらない」が起きるため。
+// 変えるのは3つだけ：湧きを止める／主役が死なない／的が反撃しない。
+let trainMode=false;
+const TRAIN_STANCE=['棒立ち（定位置へ戻る）','歩いて寄ってくる','ガードする'];
+const train={maxCombo:0, maxDmg:0, stance:0, posts:1, log:[], lastF:0};
+function trainReset(){ train.maxCombo=0; train.maxDmg=0; train.log.length=0; train.lastF=0;
+  resetCombo(); combo.breakT=0; combo.breakN=0;
+  enemies.length=0; particles.length=0; projectiles.length=0; hazards.length=0; }
+// 出した技を名前で記録する。何を入れたかが残らないと、繋がらなかった理由が分からない。
+// 間隔（フレーム）も併記する＝早すぎ／遅すぎがその場で読める
+function trainLog(name){ if(!trainMode||!name) return;
+  const gap = train.lastF ? (gf-train.lastF) : 0; train.lastF=gf;
+  train.log.push({n:name, gap:gap});
+  if(train.log.length>7) train.log.shift(); }
+function trainSpawnPosts(){
+  let n=0; for(const e of enemies) if(!e.dead && ETYPE[e.type].train) n++;
+  while(n<train.posts){
+    const x=clamp(camX+W*(0.46+n*0.13), camX+140, camX+W-70);
+    spawnEnemy('trainpost', x, LANE);
+    const e=enemies[enemies.length-1]; e.homeX=x; e.facing=-1; n++; } }
+function trainSetPosts(n){ train.posts=clamp(n,1,3);
+  for(let i=enemies.length-1;i>=0;i--){ if(ETYPE[enemies[i].type].train) enemies.splice(i,1); }
+  trainSpawnPosts(); }
+// 段位で技のモーションと威力が変わるので、Lv1／Lv8（熟練）／Lv16（極）を切り替えられるようにする
+const TRAIN_LVL=[1,8,16];
+const TRAIN_HERO=['inu','shima','nuko','guard8','watch','wanden'];
+// 練習相手を変えるより、練習する自分を変えられるほうが要る（技も繋がり方もキャラで別物）
+function trainCycleHero(){
+  const i=(TRAIN_HERO.indexOf(players[0].kind)+1)%TRAIN_HERO.length, lv=players[0].level|0;
+  setupRoster(TRAIN_HERO[i]);
+  players.forEach(q=>{ if(q.active){ resetPlayer(q,true); q.level=lv; q.dim=q.dimMax; q.x=camX+W*0.28; } });
+  player=players[0]; train.log.length=0; train.lastF=0; resetCombo();
+  popText(player.x, player.y-130, heroNameOf(players[0].kind), '#7dd0ff', true); }
+function trainCycleLevel(){ const p=players[0];
+  let i=TRAIN_LVL.indexOf(p.level|0); i=(i+1)%TRAIN_LVL.length;
+  players.forEach(q=>{ if(q.active){ q.level=TRAIN_LVL[i]; q.dim=q.dimMax; } });
+  popText(p.x, p.y-130, 'Lv.'+TRAIN_LVL[i]+'（'+(TRAIN_LVL[i]>=16?'極':TRAIN_LVL[i]>=8?'熟練':'初伝')+'）', '#ffe14d', true); }
+function startTraining(){ unlockAudio();
+  startGame();                                      // 本編と同じ初期化を通す
+  trainMode=true;
+  encounters=[]; npcs=[]; PITS=[]; hazards=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
+  WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
+  STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
+  camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
+  player=players[0]; goArrow=0; stageBanner=0; bgCacheTheme=-1; shopPending=0;
+  train.stance=0; train.posts=1;
+  trainReset(); trainSpawnPosts();
+  elStart.classList.add('hidden'); elResult.classList.add('hidden');
+  state='play'; if(sndOn) Music.start('battle'); }
+function endTraining(){ trainMode=false;
+  enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
+  cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
+  const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  Music.stop(); if(sndOn) Music.start('title'); }
+// 毎フレームの下支え。ここが無いと練習が「死んだ」「的が居なくなった」で中断される
+function trainUpkeep(){
+  for(const p of players){ if(!p.active) continue;
+    if(p.state==='dead'){ resetPlayer(p,false); }
+    p.hp=p.maxHp; p.lives=9; p.dim=p.dimMax; p.invuln=Math.max(p.invuln,1); }
+  trainSpawnPosts();
+  if(combo.count>train.maxCombo) train.maxCombo=combo.count;
+  if(combo.dmg>train.maxDmg) train.maxDmg=combo.dmg; }
 
 //======================================================================
 //  OPEN WORLD  —  ステージ選択マップ
@@ -6965,11 +7150,12 @@ function update(){
   if(state==='branch'){ updateBranch(); return; }
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
+  if(trainMode) trainUpkeep();
   stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -6979,7 +7165,7 @@ function update(){
 }
 // 敵の階級が上がった瞬間に知らせる（自分が強くなった＝敵も強くなった、を実感させる）
 let lastFoeTier=0;
-function checkFoeTierUp(){ const t=foeTier(); if(attractOn){ lastFoeTier=t; return; } if(t<=lastFoeTier){ lastFoeTier=t; return; }
+function checkFoeTierUp(){ const t=foeTier(); if(attractOn||trainMode){ lastFoeTier=t; return; } if(t<=lastFoeTier){ lastFoeTier=t; return; }
   lastFoeTier=t;
   stageBanner=stageBannerMax=170; stageBannerTxt='敵が強化された！'; stageBannerSub=(FOE_RANK_NAME[t]||'精鋭')+'級の手練れが現れる';
   const pl=activePlayers()[0]; if(pl){ popText(pl.x, pl.y-140, '敵の強さ ★'+t, FOE_RANK_COL[t]||'#ffd24d', true); }
@@ -7059,7 +7245,79 @@ function render(){
   }
   else if(flashCol!==FLASH_DEF){ flashCol=FLASH_DEF; flashX=flashY=null; }
   drawHUD();
+  drawUltCut();                                   // カットインはHUDより上（技の宣言なので何にも隠されない）
 }
+// ── 奥義のカットイン（描画）────────────────────────────────
+// 帯が上下に開いて立ち絵が滑り込み、技名が反対側から差し込む。
+// 立ち絵は本編と同じ drawPlayer をそのまま拡大して描く（別絵を持つと必ず本編とずれる）
+function drawUltCut(){
+  if(ultCut.t<=0) return;
+  const k=1-ultCut.t/ULT_CUT_MAX;
+  const io=1-Math.pow(1-clamp(k/0.16,0,1),3);      // 開くのは速く、止まりは緩く
+  const eo=clamp((k-0.72)/0.28,0,1);
+  const open=io*(1-eo*eo);                          // 帯の高さ（開いて→閉じる）
+  if(open<=0.004) return;
+  const rgb=hexRGB(ultCut.col), d=ultCut.dir>=0?1:-1;
+  const cy=H*0.50, bh=H*0.46*open, SH=52;           // SH＝上下の食い違い（傾き）
+  // 帯の外を沈める。ここが明るいままだと帯が浮かず、ただの半透明の板に見える
+  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.42*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
+  ctx.save();
+  ctx.beginPath();                                  // 傾いた帯で切り抜く
+  ctx.moveTo(-240+SH, cy-bh/2); ctx.lineTo(W+240+SH, cy-bh/2);
+  ctx.lineTo(W+240-SH, cy+bh/2); ctx.lineTo(-240-SH, cy+bh/2);
+  ctx.closePath(); ctx.clip();
+  // 1) 帯の地。まず不透明で塞いでから色を乗せる。半透明のままだと背景が透けて
+  //    「技の宣言」ではなく「画面が汚れた」ように見える
+  ctx.fillStyle='#07060e'; ctx.fillRect(-260,cy-bh/2,W+520,bh);
+  const bg=ctx.createLinearGradient(0,cy-bh/2,0,cy+bh/2);
+  bg.addColorStop(0,'rgba('+rgb+',.05)'); bg.addColorStop(0.5,'rgba('+rgb+',.34)');
+  bg.addColorStop(1,'rgba('+rgb+',.05)');
+  ctx.fillStyle=bg; ctx.fillRect(-260,cy-bh/2,W+520,bh);
+  // 2) 流れる集中線。止め絵に速度を足すのはこの層
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<18;i++){
+    const u=((i*0.137)+k*1.35)%1, lx=-260+u*(W+520);
+    const w2=6+((i*37)%5)*7, al=(0.10+0.13*((i*29)%4)/3)*(1-eo);
+    ctx.fillStyle='rgba('+rgb+','+al.toFixed(3)+')';
+    ctx.beginPath();
+    ctx.moveTo(lx+SH,cy-bh/2); ctx.lineTo(lx+w2+SH,cy-bh/2);
+    ctx.lineTo(lx+w2-SH,cy+bh/2); ctx.lineTo(lx-SH,cy+bh/2); ctx.closePath(); ctx.fill(); }
+  ctx.globalCompositeOperation='source-over';
+  // 3) 立ち絵。向いている側から滑り込み、抜けるときは奥へ流れる
+  if(open>0.35){
+    const px=lerp(W*0.5+d*W*0.75, W*0.5+d*W*0.24, io) + eo*d*W*0.30;
+    // 帯の高さから逆算する。立ち絵は足元が原点で上へ 168px ぶん伸びる（実測）ので、
+    // 頭が帯の上辺に収まり、足元だけが下辺で切れる大きさにする
+    // ガードワン8号だけ本編で 1.28倍の巨体として描かれるので、そのぶん割り戻す
+    const sc=clamp((bh+30)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.7, 2.8);
+    ctx.save(); ctx.globalAlpha=clamp((open-0.35)/0.30,0,1)*(1-eo);
+    ctx.translate(px, cy+bh*0.5+34); ctx.rotate(-d*0.06);
+    const sv=player; player=players[ultCut.pid]||players[0];
+    const svk=player.kind; player.kind=ultCut.kind;
+    drawPlayerPortrait(0,0,sc,-d,'idle');
+    player.kind=svk; player=sv;
+    ctx.restore(); }
+  ctx.restore();
+  // 4) 技名。帯の外へ少しはみ出させると「収まりきらない大技」に見える
+  if(open>0.6){
+    const ta=clamp((open-0.6)/0.25,0,1)*(1-eo);
+    const tx=lerp(W*0.5-d*W*0.55, W*0.5-d*W*0.20, io) - eo*d*W*0.22;
+    ctx.save(); ctx.globalAlpha=ta;
+    ctx.translate(tx, cy+8); ctx.rotate(-0.055); ctx.textAlign='center';
+    ctx.font='italic '+uif('900',44); ctx.lineJoin='round';
+    ctx.lineWidth=11; ctx.strokeStyle='rgba(8,6,14,.92)'; ctx.strokeText(ultCut.name,0,0);
+    const tg=ctx.createLinearGradient(0,-34,0,14);
+    tg.addColorStop(0,'#ffffff'); tg.addColorStop(0.52,ultCut.col); tg.addColorStop(1,'rgba('+rgb+',.72)');
+    ctx.fillStyle=tg; ctx.fillText(ultCut.name,0,0);
+    ctx.font=uif('bold',15); ctx.lineWidth=6; ctx.strokeStyle='rgba(8,6,14,.9)';
+    ctx.strokeText(heroNameOf(ultCut.kind),0,26);
+    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,26);
+    ctx.restore(); ctx.textAlign='left'; }
+  // 5) 帯の上下の縁に光の線を1本ずつ通す（帯が板のままにならない）
+  ctx.save(); ctx.globalAlpha=(1-eo)*0.9; ctx.strokeStyle=ultCut.col; ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.moveTo(-240+SH,cy-bh/2); ctx.lineTo(W+240+SH,cy-bh/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-240-SH,cy+bh/2); ctx.lineTo(W+240-SH,cy+bh/2); ctx.stroke();
+  ctx.restore(); }
 
 // ---------- Per-stage theme (hi-res, distinct mood for each stage) ----------
 const STAGE_THEME=[
@@ -10082,7 +10340,8 @@ function drawEnemy(e){
         v?ctx.lineTo(px+Math.cos(a)*rr,py+Math.sin(a)*rr):ctx.moveTo(px+Math.cos(a)*rr,py+Math.sin(a)*rr); }
       ctx.closePath(); ctx.fill(); }
     ctx.textAlign='left'; }
-  if(!t.boss&&!e.dead&&e.hp<e.maxHp){ const bw=38*s, hx=sx-bw/2, hy=sy-e.h*s-e.z-8;
+  // 訓練用の的はHPが6万あるので、体力バーを出しても目盛りが動かず邪魔にしかならない
+  if(!t.boss&&!t.train&&!e.dead&&e.hp<e.maxHp){ const bw=38*s, hx=sx-bw/2, hy=sy-e.h*s-e.z-8;
     ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(hx-1,hy-1,bw+2,5);
     ctx.fillStyle='#ff5a3c'; ctx.fillRect(hx,hy,bw*clamp(e.hp/e.maxHp,0,1),3); }
   ctx.globalAlpha=1;
@@ -11982,7 +12241,6 @@ function drawStageBannerScrim(){ if(stageBanner<=0) return; const B=stageBannerF
   ctx.moveTo(W/2-B.lw,cy+36); ctx.lineTo(W/2+B.lw,cy+36); ctx.stroke();
   ctx.restore(); }
 function drawHUD(){
-  drawScreenFrame();                              // 額縁はHUDより先＝パネルが額の上に載る
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
   let hudY=120;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
   HUD_BOTTOM=hudY;   // ポップの侵入を止める下限（この後パネルを積むたびに更新する）
@@ -12063,7 +12321,8 @@ function drawHUD(){
 
   ctx.textAlign='center'; ctx.fillStyle='#ffcf3a'; ctx.font='bold 15px Trebuchet MS';
   // stage は地図制では常に1に固定されるので、進捗は制覇数で出す（従来は全13面で STAGE 1/12 だった）
-  { const tot=curWorldLevels().length+2, cur=Math.min(tot, doneCount()+1);
+  if(trainMode) ctx.fillText('訓 練 場', W/2, 30);
+  else { const tot=curWorldLevels().length+2, cur=Math.min(tot, doneCount()+1);
     ctx.fillText((lap>=2?lap+'周目　':'')+'STAGE '+cur+' / '+tot, W/2, 30); }
   { ctx.save(); ctx.strokeStyle='rgba(255,210,80,.30)'; ctx.lineWidth=1;   // 見出しの上に細い罫を通して座りをよくする
     ctx.beginPath(); ctx.moveTo(W/2-64,15); ctx.lineTo(W/2+64,15); ctx.stroke(); ctx.restore(); }
@@ -12177,9 +12436,44 @@ function drawHUD(){
     ctx.fillStyle='#cfd6e0'; ctx.font='16px Trebuchet MS'; ctx.fillText('P で再開',W/2,H-30); ctx.textAlign='left'; }
   drawNPCPrompts();
   drawEventCard();
+  if(trainMode) drawTrainHUD();
   if(state==='talk') drawDialog();
   if(state==='branch') drawBranchUI();
 }
+// ── トレーニングの計器盤 ────────────────────────────────────
+// 「何を出したか」「何フレーム空いたか」が残らないと、繋がらなかった理由が分からない。
+// 数字だけでなく入力の履歴を出すのがこの画面の要
+function drawTrainHUD(){
+  const PW=250, PX=W-PW-14, PY=120;
+  const rows=Math.max(1, train.log.length);
+  const PH=151+rows*15;
+  panel(PX,PY,PW,PH);
+  ctx.textAlign='left';
+  ctx.fillStyle='#ffe14d'; ctx.font=uif('bold',14); ctx.fillText('トレーニング',PX+12,PY+20);
+  ctx.fillStyle='#cfd6e0'; ctx.font=uif('normal',12);
+  ctx.fillText('最大コンボ',PX+12,PY+42); ctx.fillText('最大ダメージ',PX+12,PY+60);
+  ctx.textAlign='right';
+  ctx.fillStyle='#7dff5a'; ctx.font=uif('bold',15);
+  ctx.fillText(String(train.maxCombo)+' HIT',PX+PW-12,PY+42);
+  ctx.fillStyle='#ffd24d'; ctx.fillText(String(train.maxDmg),PX+PW-12,PY+60);
+  ctx.textAlign='left';
+  ctx.fillStyle='#8d97a8'; ctx.font=uif('normal',11);
+  ctx.fillText('的 '+TRAIN_STANCE[train.stance]+' ×'+train.posts,PX+12,PY+78);
+  ctx.fillText(heroNameOf(players[0].kind)+'  Lv.'+(players[0].level|0),PX+12,PY+93);
+  ctx.fillText('R:リセット T:的 Y:数 C:段位 N:キャラ',PX+12,PY+108);
+  ctx.fillText('Esc でタイトルへ',PX+12,PY+123);
+  ctx.strokeStyle='rgba(255,210,80,.28)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(PX+12,PY+131); ctx.lineTo(PX+PW-12,PY+131); ctx.stroke();
+  // 入力履歴（古い順）。間隔は前の技からのフレーム数
+  ctx.font=uif('normal',12);
+  if(!train.log.length){ ctx.fillStyle='#5a6472'; ctx.fillText('技を出すとここに残る',PX+12,PY+149); }
+  for(let i=0;i<train.log.length;i++){ const L=train.log[i], y=PY+149+i*15;
+    const fresh=(i===train.log.length-1);
+    ctx.fillStyle=fresh?'#fff6c0':'#a8b2c0'; ctx.fillText(L.n,PX+12,y);
+    if(L.gap>0){ ctx.textAlign='right';
+      ctx.fillStyle=L.gap<=14?'#7dff5a':L.gap<=30?'#ffd24d':'#8d97a8';
+      ctx.fillText('+'+L.gap+'F',PX+PW-12,y); ctx.textAlign='left'; } }
+  ctx.textAlign='left'; }
 // ---------- 敵の強化度インジケータ：いまどれだけ敵が鍛えられているかを常時見せる ----------
 function drawFoePower(x, y){
   const tier=foeTier(), hp=foeHpGrow(), atk=foeDmgGrow();
@@ -12362,65 +12656,6 @@ function ornRect(x,y,w,h,style){
   if(perfTier>=2) return;
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
   ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
-// ── 画面そのものの額縁 ──────────────────────────────────────
-// 「絵が額に入っている」ことが、この画の様式をいちばん強く決める。パネル用の
-// 額縁部品は既にあったのに戦闘画面には一度も掛かっていなかった。
-// 帯は22pxに抑え、内側は完全に刳り抜くので、遊びの見え方は画面端しか変わらない。
-// 毎フレーム描くと重いので1枚のスプライトへ焼いて使い回す。
-const SFRM_B=22;                                  // 帯の太さ
-let _scrFrm=null, _scrFrmKey='';
-function screenFrame(){
-  const key=W+'x'+H;
-  if(_scrFrm && _scrFrmKey===key) return _scrFrm;
-  const c=document.createElement('canvas'); if(!c) return null;
-  c.width=W; c.height=H;
-  const g=c.getContext('2d'); if(!g) return null;
-  const B=SFRM_B;
-  // 1) 彫った石の外形
-  g.fillStyle=ORN.stoneLo; roundRectOn(g,0,0,W,H,12); g.fill();
-  // 2) 金のバンド。上下で明暗を反転させて、上から光が当たった立体に見せる
-  const lg=g.createLinearGradient(0,0,0,H);
-  lg.addColorStop(0,ORN.goldHi); lg.addColorStop(.20,ORN.gold);
-  lg.addColorStop(.52,ORN.goldLo); lg.addColorStop(.84,ORN.gold); lg.addColorStop(1,ORN.goldHi);
-  g.strokeStyle=lg; g.lineWidth=7; roundRectOn(g,4.5,4.5,W-9,H-9,9); g.stroke();
-  g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=2.4;
-  roundRectOn(g,B-2,B-2,W-(B-2)*2,H-(B-2)*2,7); g.stroke();
-  // 3) 内側を刳り抜く（ここから戦闘画面が見える）
-  g.save(); g.globalCompositeOperation='destination-out';
-  g.fillStyle='#000'; roundRectOn(g,B,B,W-B*2,H-B*2,7); g.fill(); g.restore();
-  // 4) 刳り抜きの縁に細い明暗を1本ずつ。これが無いと帯が板のままで厚みが出ない
-  g.strokeStyle='rgba(255,233,168,.30)'; g.lineWidth=1.2;
-  roundRectOn(g,B+0.6,B+0.6,W-(B+0.6)*2,H-(B+0.6)*2,6); g.stroke();
-  // 5) 四隅の唐草。刳り抜いた後に描くので、渦だけが内側へ張り出す
-  const K=1.9;
-  ornScroll(g,8,8,K,K);        ornScroll(g,W-8,8,-K,K);
-  ornScroll(g,8,H-8,K,-K);     ornScroll(g,W-8,H-8,-K,-K);
-  // 6) 上辺中央の銘（菱形）。中身は暗く塗る。ここにはステージ表示が重なるので、
-  //    明るい金で塗り潰すと文字が読めなくなる
-  const cw=168, cx=W/2;
-  g.fillStyle=ORN.gold; g.beginPath();
-  g.moveTo(cx-cw/2,B-3); g.lineTo(cx,1); g.lineTo(cx+cw/2,B-3); g.lineTo(cx,B+9); g.closePath(); g.fill();
-  g.fillStyle='rgba(24,20,14,.92)'; g.beginPath();
-  g.moveTo(cx-cw/2+9,B-3); g.lineTo(cx,5.6); g.lineTo(cx+cw/2-9,B-3); g.lineTo(cx,B+4.4); g.closePath(); g.fill();
-  // 下辺中央の受け
-  g.fillStyle=ORN.gold; g.beginPath();
-  g.moveTo(cx-58,H-B+2); g.lineTo(cx,H-2); g.lineTo(cx+58,H-B+2); g.closePath(); g.fill();
-  g.fillStyle='rgba(24,20,14,.9)'; g.beginPath();
-  g.moveTo(cx-44,H-B+4.6); g.lineTo(cx,H-6.2); g.lineTo(cx+44,H-B+4.6); g.closePath(); g.fill();
-  // 7) バンド上の鋲。等間隔の点が続くと「打ち込まれた金具」に見える
-  for(let bx2=64; bx2<W-56; bx2+=52){
-    for(const by2 of [11, H-11]){
-      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
-      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
-  for(let by2=76; by2<H-64; by2+=52){
-    for(const bx2 of [11, W-11]){
-      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
-      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
-  _scrFrm=c; _scrFrmKey=key; return c; }
-function drawScreenFrame(){
-  if(perfTier>=2) return;                          // 重いときは静かに外れる
-  const s=screenFrame(); if(!s) return;
-  ctx.drawImage(s,0,0,W,H); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
@@ -13303,7 +13538,7 @@ const elStart=document.getElementById('start'),elResult=document.getElementById(
 const elRTitle=document.getElementById('result-title'),elRSub=document.getElementById('result-sub');
 // ── ステージごとのオートセーブ（localStorage） ──
 let curMode='inu';
-function saveProgress(st){ if(attractOn) return;   // デモプレイでプレイヤーのセーブを上書きしない
+function saveProgress(st){ if(attractOn||trainMode) return;   // デモと練習でプレイヤーのセーブを上書きしない
   try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone,
@@ -13315,7 +13550,7 @@ function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); i
 function startGame(){ unlockAudio();
   score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
-  lap=1; mercRoster=[]; mercs=[];   // 周回と傭兵は新規開始でリセット
+  lap=1; mercRoster=[]; mercs=[]; trainMode=false;   // 周回・傭兵・練習は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
@@ -13327,7 +13562,8 @@ function startGame(){ unlockAudio();
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
-    if(sv.lap>=3){ lap=3; buildEncounters3(); }        // 三周目の続き＝侵略軍マップへ
+    if(sv.lap>=4){ lap=4; buildEncounters4(); }        // 四周目の続き＝神話マップへ
+    else if(sv.lap>=3){ lap=3; buildEncounters3(); }   // 三周目の続き＝侵略軍マップへ
     else if(sv.lap>=2){ lap=2; buildEncounters2(); }   // 二周目の続き＝蟲の世界マップへ
     if(Array.isArray(sv.mercs)) mercRoster=sv.mercs.filter(m=>m&&ETYPE[m.type]).map(m=>({type:m.type,hp:m.hp||1,maxHp:m.maxHp||m.hp||1}));
     if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
@@ -13344,16 +13580,18 @@ function gameOver(){ if(scr.dur<=0 && state!=='over'){ goScreen(gameOver,'fade',
   elResult.classList.remove('hidden'); }
 function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52); return; }   // 暗転してからリザルトを出す
   state='win'; Music.stop(); victoryJingle(); clearProgress();
-  if(lap>=3){ elRTitle.textContent='GALAXY CLEAR!!!'; elRTitle.style.color='#c8ffe8';
+  if(lap>=4){ elRTitle.textContent='MYTH CLEAR!!!!'; elRTitle.style.color='#fff6c0';
+    elRSub.textContent='三柱の神を打ち倒し、神話の頂に立った！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
+  } else if(lap>=3){ elRTitle.textContent='GALAXY CLEAR!!!'; elRTitle.style.color='#c8ffe8';
     elRSub.textContent='銀河侵略軍を退け、星そのものを守り抜いた！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else if(lap>=2){ elRTitle.textContent='TRUE ALL CLEAR!!'; elRTitle.style.color='#aef8ff';
     elRSub.textContent='蟲の世界をも救い、真の平和を取り戻した！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else { elRTitle.textContent='ALL CLEAR!'; elRTitle.style.color='#ffe14d';
     elRSub.textContent='ワンワン帝国を打ち倒した！  制覇フィールド '+doneCount()+'/'+WORLD_LEVELS.length+' ／ 出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0'); }
   const rb=document.getElementById('resumeBtn'); if(rb)rb.classList.add('hidden');
-  const nb=document.getElementById('ng2Btn');
-  if(nb){ nb.classList.toggle('hidden', lap>=3);           // 三周目クリア後は次が無い
-    nb.textContent = lap>=2 ? '▶ 3周目「宇宙人の侵略」へ' : '▶ 2周目「蟲の世界」へ';
+  const nb=document.getElementById('ng2Btn'), nx=nextLap(lap);
+  if(nb){ nb.classList.toggle('hidden', !nx);              // 四周目クリア後は次が無い
+    if(nx) nb.textContent=nx.label;
     nb.dataset.lap = String(lap); }
   elResult.classList.remove('hidden'); }
 function togglePause(){ state=state==='pause'?'play':'pause';
@@ -13391,10 +13629,12 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
            {t:'🛸 3周目「宇宙人の侵略」から', bg:'linear-gradient(180deg,#5a3aa8,#2a1a60)', c:'#e0d0ff'},
            {t:'⚡ 4周目「神話」から（超高難度）', bg:'linear-gradient(180deg,#c8a850,#6a5220)', c:'#fff6c0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:3];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
+const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{
+  unlockAudio(); fadeOverlay(document.getElementById('start'), ()=>goScreen(startTraining,'fade',40)); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
 document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
-const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ (lap>=2? startNG3 : startNG2)(); };
+const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ const nx=nextLap(lap); if(nx) nx.go(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
 const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };
 refreshContinueBtn();

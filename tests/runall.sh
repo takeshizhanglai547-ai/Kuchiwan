@@ -9,7 +9,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 export NM_TARGET="${NM_TARGET:-$D/../beltaction.html}"
 
 fail=0
-for t in rpg feat watch feat2 ng2 sg wanden ng3 boss lvup evo foeatk fix myth grow steam anim anim2 bg crit; do
+for t in rpg feat watch feat2 ng2 sg wanden ng3 boss lvup evo foeatk fix myth grow steam anim anim2 bg crit train voice; do
   f=$(mktemp /tmp/suite_${t}_XXXXXX.js)
   cat "$D"/nm_head.js "$D"/${t}_driver.js > "$f"
   printf "%-6s " "$t"
@@ -30,5 +30,5 @@ out=$(node "$D"/bgm_check.js 2>&1); rc=$?
 echo "$out" | tail -1
 if [ $rc -ne 0 ] || ! echo "$out" | grep -q 'PASSED'; then fail=1; echo "$out" | tail -12; fi
 echo "---"
-[ $fail -eq 0 ] && echo "ALL 21 SUITES PASSED" || echo "SOME SUITES FAILED"
+[ $fail -eq 0 ] && echo "ALL 23 SUITES PASSED" || echo "SOME SUITES FAILED"
 exit $fail
