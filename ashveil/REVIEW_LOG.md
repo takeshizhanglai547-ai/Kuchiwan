@@ -395,33 +395,164 @@ with the same weapon could streak from the previous swing's blade positions), bu
 
 ---
 
+## Round 6 — blind review, three seats, and the re-diagnosis that mattered
+
+Critics A, D and E each reviewed the refreshed capture set with no development
+history, no changelog, and no indication that anything had been changed since the
+last time any of them looked. All three returned **REDO**.
+
+### What round 6 found that five rounds of work had not
+
+**The boss fight was not happening in the arena.** Critic D noticed that every
+combat frame was shot in a narrow choke with tall masses flanking the camera,
+while the open plaza built for the fight sat unused a few metres north. Checking
+the capture's final player position confirmed it: `z = 50.2`, the arena's
+southern lip.
+
+This re-diagnoses four consecutive rounds of "camera occlusion" findings.
+Measuring the geometry rather than trusting the reading:
+
+- The wake trigger sat on the arch at `z = 48.5`, so Volga walked 18m south to
+  meet a player still standing in the entrance.
+- Worse, the arena's southern "entrance" was a **113-degree arc of missing ring
+  wall, an opening nearly 29m wide** (x −14.6 to 14.5, measured, not estimated).
+
+So the fight started in a doorway and then had a 29m hole to retreat through. The
+black masses filling every boss frame across four rounds of review were the ring
+wall segments either side of that hole. **A fight cannot stay in an arena that is
+open along one whole side**, and no amount of camera work fixes that — the
+occlusion was a symptom and the level geometry was the cause.
+
+Three changes, each verified against the next:
+1. Wake trigger moved to `z = 57` (arena floor), radius widened to 9m so a player
+   hugging a wall still crosses it.
+2. Ring wall threshold −0.55 → −0.94, leaving a ~12m doorway aligned with the
+   arch. The Kiln Court becomes an enclosure with one way in.
+3. An arena seal across that doorway, inert until the encounter starts. Opens
+   again on victory, on death, **and** on leash reset — any one left closed turns
+   the arena into a box the player cannot leave.
+
+**The character folds through the floor during the heavy attack.** Critic E,
+examining frames at 2–4× with brightness lift, found the player model lying flat
+and half-buried in the ground for the entire damage window (t = 0.75–1.033 against
+an active window of 0.695–0.92). These frames had been looked at directly in the
+previous round and the defect was not seen.
+
+Cause: `hips`, `spine` and `chest` are separate joints in a hierarchy, so their X
+rotations **compound**. Each authored value reads as a modest lean; they sum to
+1.30 rad on the heavy and 1.52 rad on the charged heavy — 74° and 87°. Both clips
+retuned to a deliberate ~45–50° fold.
+
+**The weapon trail, third attempt.** Critic A described it in `heavy_09` as an
+opaque polygon larger than the character, occluding the wall behind it. Two real
+causes, neither of them opacity:
+
+- The base edge kept 25% alpha, so the ribbon was a *filled* quad. On a wide swing
+  it folds over itself and `DoubleSide` stacks every fold toward opaque.
+- It retained 22 samples ≈ 0.36s of history against damage windows of 0.185s and
+  0.225s — so it was still carrying blade positions from the **wind-up**, when the
+  blade pointed somewhere else entirely. Connecting those to the follow-through is
+  what folded it into a sheet. No alpha value fixes a ribbon genuinely spanning
+  two unrelated poses.
+
+An earlier round had "fixed" this artefact by lowering its opacity, producing a
+fainter giant sheet. That is precisely the parameter-tuning failure §20 exists to
+prevent, committed anyway, and only caught because a blind reviewer described the
+geometry instead of the brightness.
+
+**The controls cheatsheet never retired.** Switched on at startup and never off,
+so it covered the lower-right quadrant of the arena for the whole boss fight with
+world geometry showing through the text. Correctly identified as a debug keybind
+dump. It is onboarding, not HUD: it now retires after 26s or when the fight
+begins.
+
+### A claim withdrawn, then partly reinstated
+
+An earlier round called a large cream wedge in the swing frames a broken weapon
+trail, then withdrew it after finding the same band in an idle frame. Critic E
+independently investigated the same band — cropping and brightening `light_01`
+at t = 0.067 with no attack in progress — and concluded it is a lit ledge at the
+base of the wall, with *"only the first ~190px out from the hand"* being actual
+trail.
+
+Both halves were partly wrong. In `light_04` the band **is** level lighting, so
+the withdrawal was right for that frame. In `heavy_09` the trail genuinely **is**
+a slab, so the withdrawal should not have covered that. The lesson recorded: a
+finding was generalised from one frame in each direction, and neither
+generalisation held.
+
+### A regression this round caused, and the checklist caught
+
+Moving the wake trigger **broke the Definition of Done**. The next `fullrun`
+returned `state: explore`, `bossHp: 900`, `DoD FAIL: run did not reach victory
+state` — the scripted walk stopped at `z = 50.1`, short of the new trigger, so the
+encounter never started. Caught only because §19 requires re-running the
+checklist rather than assuming a fix is inert. Fixed by widening the trigger and
+lengthening the walk; DoD restored to `victory` / `bossHp 0` / no errors.
+
+### Confirmed working, by capture
+
+| Item | Evidence |
+|---|---|
+| Definition of Done | `fullrun` → `victory`, `bossHp 0`, no errors; `boss engaged` at `state: boss`, reward granted (shards 1 → 3) |
+| Damage lands inside the active window | landed-hit strip stamps target HP per frame: 62 → 45 between t = 0.25 and t = 0.333, active window 0.25–0.435, sparks visible on the damage frame |
+| Trail timing | no trail during wind-up; present across the active window on both light and heavy |
+| Phase-2 frame that failed four rounds | `r12/boss/09_p2_2` shows both combatants, the open kiln glowing, and the reticle on target |
+
+### Still outstanding
+
+- Camera occlusion remains flagged by all three seats. The re-diagnosis is
+  producing better results than three rounds of camera work did, but no critic has
+  reviewed anything built after round 6.
+- Enemies stand between camera and player at close range (A and E both). The
+  dissolve is architecture-only by design, so characters do not fade.
+- No hit-confirmation flash on the struck actor; the damage number renders as
+  illegible grey.
+- The light attack's damage window opens before the blade begins travelling.
+- No round has returned PASS, from any seat.
+
+---
+
 ## Circuit breaker status (§21)
 
-**The five-round limit is reached and passed.** One developer pass, four blind
-review rounds, and four verification capture rounds. ADMIRE was never reached and
-is not claimed. Every critic seat that has ever run has returned REDO, and **no
-critic has seen anything built after round 4** — every round-5 change listed above
-is verified by capture, not by review.
+**Six rounds complete: one developer pass and five blind review rounds**, across
+fourteen verification capture rounds. ADMIRE was never reached and is not claimed.
+**Every critic seat that has ever run, in every round, has returned REDO.**
 
 **達成 / Achieved — executed, not inferred**
 - The vertical slice is completable start to finish with no developer
-  intervention. Machine-checked on the final build: `victory`, `bossHp 0`, zero
-  console errors.
+  intervention. Machine-checked repeatedly, including after each change that could
+  plausibly break it: `victory`, `bossHp 0`, zero console errors, with the reward
+  granted.
 - Hit detection measured: HIT at 1.0–2.6 m, clean miss at 3.0 m.
+- Damage lands inside the declared active window, evidenced by a strip that stamps
+  the target's HP into every frame rather than asking a reader to infer it.
 - Boss moveset with documented telegraph/active/punish windows, and a phase
-  transition that changes the rules — now also the silhouette and the arena light.
-- Attack timing is now *reviewable*: the swing strip proves the blade trail
-  coincides with the active window rather than the wind-up.
+  transition that changes the rules, the silhouette and the arena light.
+- The Kiln Court is now an enclosure the fight cannot leave.
 
 **部分達成 / Partially achieved**
-- Camera occlusion. Three of the four named frames are clean; the boss-in-corner
-  case is not. Reduced, not resolved.
-- Boss readability. The crown and the telegraph read; the fight still ends up
-  behind geometry in tight positions.
+- Camera occlusion. Correctly re-diagnosed in round 6 from a rendering problem to
+  a level-geometry problem, which produced more progress in one round than three
+  rounds of camera work. Not yet reviewed by anyone.
+- Boss readability. The crown, the telegraph and the phase change read; close
+  quarters are still the weak case.
 - Material coherence and player silhouette. Improved every round, never passed.
 
 **未達 / Not achieved**
-- **Combat feel has still never been successfully blind-reviewed.** The evidence
-  needed for it now exists for the first time; nobody has looked at it.
+- **Combat feel has still never been successfully blind-reviewed.** Round 6 was
+  the first round where the evidence for it existed; A used it to find real
+  animation defects, and those are now fixed and unreviewed.
 - Level design has had no blind review since round 2.
+- Enemies still occlude the player at close range.
+- No hit-confirmation flash; damage numbers illegible.
 - No round has returned PASS, from any seat.
+
+**What the six rounds actually demonstrate.** The loop is not converging on
+approval, and it should not be reported as if it were. What it is doing is finding
+genuinely different real defects each round — the fight being staged outside its
+own arena, a character folding through the floor, a trail spanning two unrelated
+poses — several of which had been looked at directly and missed. Three of the most
+consequential findings came from reviewers who were told nothing about the
+project, which is the strongest available evidence that the information isolation
+is doing its job rather than producing agreeable noise.

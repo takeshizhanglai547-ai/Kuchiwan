@@ -229,3 +229,50 @@ status:
   level lighting and a distant building. The trail re-priming bug found while
   chasing it is real and fixed, but it fixed a latent bug, not an observed
   artefact.
+
+---
+
+## Round 6 — what is and is not verified
+
+**EXECUTED — observed by running the build**
+- **Definition of Done, re-verified after every change that could break it.**
+  `fullrun` reaches `state: victory` with `bossHp 0` and an empty error list;
+  the run's own checkpoints show `boss engaged` at `state: boss` and the reward
+  granted (shards 1 → 3).
+- **A DoD regression this round caused, and the checklist caught.** Moving the
+  boss wake trigger made `fullrun` return `state: explore`, `bossHp 900`,
+  `DoD FAIL: run did not reach victory state`. It is recorded here rather than
+  quietly fixed, because it is the clearest evidence in this project that §19's
+  "re-run the checklist" rule earns its cost: the fix looked inert and was not.
+- **Damage lands inside the declared active window.** The landed-hit strip stamps
+  the target's HP into each filename: 62 → 45 between t = 0.25 and t = 0.333
+  against an active window of 0.25–0.435, with spark particles visible on the
+  damage frame. This replaces an earlier claim that could not be evidenced at all
+  because the capture was swinging at empty air.
+- **Trail timing.** No trail during wind-up on either attack; present across the
+  active window on both.
+- **Arena geometry measured, not estimated.** The southern opening was computed
+  from the ring-wall generator as a 113° arc spanning x −14.6 to 14.5. The
+  replacement doorway and the seal that covers it were both checked against
+  computed extents before being accepted.
+
+**THEORETICAL — implemented, not observed**
+- The arena seal reopening on **death** and on **leash reset**. The victory path
+  is covered by the DoD run; the other two are code paths that have not been
+  separately exercised. If either is wrong the player is walled into the arena,
+  so this is the highest-value untested path in the build.
+- Phase 2's sheared chimney stack in a clean, unoccluded shot.
+
+**UNVERIFIED**
+- **Whether round 6's changes satisfy anyone.** No critic has seen the narrowed
+  arena, the seal, the retuned heavy attack, the shortened trail, or the retired
+  controls overlay. Every round-6 fix is verified by capture only.
+- GPU cost of the dissolve and the 1080p/60fps target. No GPU here.
+- All audio. Never heard.
+
+**CORRECTED FROM THE PREVIOUS ROUND**
+- The claim that the large cream wedge in the swing frames was *not* the weapon
+  trail was over-broad. In `light_04` it is level lighting; in `heavy_09` the trail
+  genuinely is an opaque slab larger than the character. Both the original claim
+  and its withdrawal generalised from a single frame, and neither generalisation
+  held.
