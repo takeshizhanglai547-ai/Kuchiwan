@@ -570,7 +570,40 @@ export class Materials {
     // separate reason that a dither hole in the floor is worse than an occluder.
     this.faded = [this.stone, this.stoneDark, this.vault, this.column];
     applyNearFade(this.faded);
+
+    /**
+     * VOLGA'S OWN MATERIALS, cloned so the boss can dissolve without dissolving
+     * every other character that shares the common set.
+     *
+     * Three separate reviewers reported the same thing independently: the boss's
+     * own body is what hides the player. One counted five of fourteen fight
+     * frames with the player entirely behind boss geometry — at 6/100 health,
+     * unable to see their own character. The architecture dissolve could never
+     * have fixed that: it is architecture-only by design, and a boss is not
+     * architecture.
+     *
+     * These carry their own cutout, focused on the PLAYER rather than on the
+     * shot's subject. When a 4.6m boss steps between the camera and the player,
+     * it opens a hole around the player instead of swallowing them.
+     */
+    this.bossIron = this.iron.clone();
+    this.bossIronLight = this.ironLight.clone();
+    this.bossFlesh = this.ashFlesh.clone();
+    this.bossCloth = this.cloth.clone();
+    this.bossFaded = [this.bossIron, this.bossIronLight, this.bossFlesh, this.bossCloth];
+    applyNearFade(this.bossFaded, 0.42, 1.2);
+    this.list.push(...this.bossFaded);
+
     this._focus = new THREE.Vector3();
+  }
+
+  /** Boss-only view of the shared set, so Volga can fade without the player fading. */
+  get volgaSet() {
+    return {
+      iron: this.bossIron, ironLight: this.bossIronLight,
+      ashFlesh: this.bossFlesh, cloth: this.bossCloth,
+      ember: this.ember, emberDim: this.emberDim, bone: this.bone,
+    };
   }
 
   /**
@@ -582,7 +615,19 @@ export class Materials {
    * one project() and one distance per frame, shared by every faded material.
    */
   setFocus(camera, worldPoint) {
-    const u = this.faded[0]?.userData.nearFade;
+    this._applyFocus(this.faded, camera, worldPoint);
+  }
+
+  /**
+   * The boss's cutout always tracks the PLAYER, never the shot's subject —
+   * pointing it at the subject would make Volga dissolve himself.
+   */
+  setBossFocus(camera, playerPoint) {
+    this._applyFocus(this.bossFaded, camera, playerPoint);
+  }
+
+  _applyFocus(set, camera, worldPoint) {
+    const u = set[0]?.userData.nearFade;
     if (!u) return;
     this._focus.copy(worldPoint).project(camera);
     // Behind the camera, project() mirrors the point; park the cutout off-screen

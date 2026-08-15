@@ -80,7 +80,10 @@ const MOVES = {
 
 export class Boss extends Actor {
   constructor(mats, fx) {
-    const char = buildVolga(mats);
+    // Volga is built from HIS OWN material clones so his body can dissolve when
+    // it comes between the camera and the player, without every other character
+    // dissolving with him.
+    const char = buildVolga(mats.volgaSet ? { ...mats, ...mats.volgaSet } : mats);
     super(char, { hp: 900, poise: 220, poiseRegen: 30, radius: 1.25 });
     this.isBoss = true;
     this.name = 'VOLGA';

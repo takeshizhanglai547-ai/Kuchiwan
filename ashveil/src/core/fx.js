@@ -234,7 +234,13 @@ const TRAIL_FRAG = /* glsl */`
   void main() {
     // Fade hard along the length: the ribbon should suggest the arc that just happened,
     // not draw a permanent glowing rope behind the sword.
-    float age = pow(1.0 - vU, 3.4);
+    // Exponent was 3.4, which collapsed the ribbon almost entirely between two
+    // consecutive frames: measured, the swept region ran +11.3 luminance over its
+    // surroundings at t=0.75 and only +1.6 one frame later. It never actually
+    // darkened anything — a reviewer read that cliff as the effect inverting to
+    // light-absorbing, which the measurement does not support — but a trail that
+    // vanishes in 0.1s reads as a glitch either way. 2.4 makes it a fade.
+    float age = pow(1.0 - vU, 2.4);
 
     // A SWEPT EDGE, NOT A FILLED SHEET.
     //
@@ -388,7 +394,7 @@ const LIGHT_POOL    = 2;   // hard cap from the brief: VFX never adds a 3rd dyna
 // the ribbon back over itself into a sheet. 12 samples ≈ 0.20s covers the active
 // window and little else, so the ribbon traces the swing instead of the pose
 // change that preceded it.
-const TRAIL_SEG     = 12;
+const TRAIL_SEG     = 14;
 
 // Shake `amount` is a 0..1 trauma value, not metres. These convert it to world units so
 // that call sites can reason in "how big a hit was this" and the camera never has to

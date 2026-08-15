@@ -273,6 +273,10 @@ async function boot() {
     const focus = gameCam.target && gameCam.target.alive ? gameCam.target : player;
     _rv.set(focus.pos.x, focus.pos.y + (focus.height || 1.8) * 0.5, focus.pos.z);
     mats.setFocus(camera, _rv);
+    // Volga's own cutout tracks the player, so a 4.6m boss standing between the
+    // camera and the player opens around them instead of swallowing them.
+    _rv.set(player.pos.x, player.pos.y + 0.95, player.pos.z);
+    mats.setBossFocus(camera, _rv);
 
     composer.render();
   }
