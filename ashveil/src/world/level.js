@@ -339,8 +339,12 @@ export function buildLevel(scene, mats) {
   // convention is on the right side here — you do not get to leave a boss arena —
   // and a seal fixes the drift at its source rather than asking the camera to
   // cope with a fight happening inside a doorway.
+  // Spans the whole doorway, with margin. A 6m seal was useless: the arena's
+  // southern opening was a 113-degree arc nearly 29m wide, so the player simply
+  // walked around the seal and kept retreating. The opening is narrowed to a real
+  // doorway below; this covers it.
   const arenaSeal = [
-    { x0: -3.0, z0: 48.5, x1: 3.0, z1: 48.5, yMin: 0, yMax: 6.0, off: true },
+    { x0: -9.0, z0: 48.6, x1: 9.0, z1: 48.6, yMin: 0, yMax: 7.0, off: true },
   ];
   b.walls.push(...arenaSeal);
   level.arenaSeal = arenaSeal;
@@ -360,7 +364,13 @@ export function buildLevel(scene, mats) {
   for (let a = 0; a < Math.PI * 2; a += 0.30) {
     const nx = Math.sin(a), nz = Math.cos(a);
     if (nz > 0.74) continue;                                   // vista, facing north
-    if (nz < -0.55) continue;                                  // entrance, facing south
+    // Entrance, facing south. This was -0.55, which is a 113-degree arc — an
+    // opening nearly 29m wide. That is not a doorway, it is a missing third of
+    // the wall, and it is why the fight kept escaping the arena: the player
+    // retreating under pressure had a 29m hole to retreat through. -0.94 leaves a
+    // ~12m doorway aligned with the arch, so the Kiln Court is an enclosure with
+    // one way in rather than a C-shaped plaza.
+    if (nz < -0.94) continue;
     const h = 6 + Math.sin(a * 3) * 1.6;
     b.box({ x: AR.x + nx * 17.5, y: 0, z: AR.z + nz * 17.5, w: 3.0, h, d: 2.0, ry: -a, mat: 'stoneDark', uv: 2.6 });
   }
