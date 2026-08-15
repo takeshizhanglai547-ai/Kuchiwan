@@ -627,9 +627,11 @@ const SCENARIOS = {
     await shot('06_on_bridge');
     await report('on bridge');
 
-    // 7. to the boss
+    // 7. to the boss. The walk must reach the arena FLOOR, not just the arch —
+    // 2.2s stopped at z=50.1 and the encounter never started, failing the whole
+    // Definition of Done run.
     await at(0, 0.3, 45, 0);
-    await hold('KeyW', 2.2); await advance(1.2);
+    await hold('KeyW', 5.0); await advance(1.2);
     await shot('07_boss_engaged');
     await report('boss engaged');
 
