@@ -1436,7 +1436,7 @@ function dust(x,y,n=4){ const gl=groundLift(x);
 function smokePuff(x,y,n=3,rgb){ const gl=groundLift(x);
   let live=0;                                    // 煙は重なると一気に不透明になるので総数を頭打ちにする
   for(let i=0;i<particles.length;i++) if(particles[i].k==='smoke') live++;
-  n=Math.min(n,10-live); if(n<=0) return;
+  n=Math.min(n,14-live); if(n<=0) return;   // 爆発が必ず煙を残すようになったぶん、上限を14へ
   for(let i=0;i<n;i++){ const lf=Math.round(rnd(34,50));
     const lb=[[0,0,1]]; const nl=2+(Math.random()<0.5?1:0);                       // 単一の楕円だとエアブラシの丸い滲みにしか見えない
     for(let k=0;k<nl;k++) lb.push([rnd(-0.62,0.62),rnd(-0.5,0.46),rnd(0.44,0.82)]);  // 3〜4個の瘤を重ねてもくもくしたシルエットを作る
@@ -1588,6 +1588,13 @@ function ring(x,y,color,opt){ opt=opt||{};
 function shockwave(x,y,opt){ opt=opt||{};
   const R=opt.r||120, col=opt.color||'#ffe9a0', tier=perfTier;
   const heavy=opt.big!==false;
+  // 0) 炎の塊。これが無いと爆発が「光の輪」だけになり、質量が出ない。
+  //    layer:1 は push 順に描かれるので、加算の光より先に敷く
+  if(tier<2){ const lb=[[0,0,1]], nl=3+(heavy?1:0);
+    for(let k2=0;k2<nl;k2++) lb.push([rnd(-0.66,0.66),rnd(-0.60,0.34),rnd(0.46,0.86)]);
+    particles.push({k:'fireball',x,y:y-R*0.16,gl:groundLift(x),layer:1,delay:2,
+      r:R*(heavy?0.62:0.46), lobes:lb, rot:rnd(0,6.28), rv:rnd(-0.03,0.03),
+      life:heavy?34:26, max:heavy?34:26, color:col}); }
   // 1) 白い芯：立ち上がりが鋭く、すぐ消える
   particles.push({k:'shockcore',x,y,gl:groundLift(x),layer:1,delay:0,
     r:R*0.30,rMax:R*0.62,life:8,max:8,color:'#ffffff'});
@@ -1597,9 +1604,10 @@ function shockwave(x,y,opt){ opt=opt||{};
     particles.push({k:'shockring',x,y,gl:groundLift(x),layer:1,delay:i*4,
       r:R*0.12,r0:R*0.12,rMax:R*(1.0+i*0.34),sq:0.34,
       w:(heavy?18:12)*(1-i*0.26), life:18+i*4, max:18+i*4, color:i?col:'#ffffff'}); }
-  // 3) 床を這う砂塵リング（縦に強く潰して接地感を出す）
-  if(tier<2) particles.push({k:'shockring',x,y,gl:groundLift(x),layer:0,delay:2,
-    r:R*0.18,r0:R*0.18,rMax:R*1.5,sq:0.13,w:14,life:22,max:22,color:'rgba(190,175,150,.85)'});
+  // 3) 床を這う砂塵リング（縦に強く潰して接地感を出す）。
+  //    加算合成の shockring を流用していたので土埃まで光っていた。通常合成の別種にする
+  if(tier<2) particles.push({k:'dustring',x,y,gl:groundLift(x),layer:0,delay:2,
+    r:R*0.18,r0:R*0.18,rMax:R*1.5,sq:0.13,w:14,life:22,max:22,color:'58,46,36'});
   // 4) 噴き上がる爆風の柱：接地の衝撃が上へ抜ける（AAAのインパクトは必ず縦の成分を持つ）
   if(tier<2){
     particles.push({k:'shockplume',x,y,gl:groundLift(x),layer:1,delay:1,
@@ -1619,6 +1627,8 @@ function shockwave(x,y,opt){ opt=opt||{};
     particles.push({k:'spark',x,y:y-2,gl:groundLift(x),layer:1,delay:0,
       vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.42-1.2, r:rnd(2,4.4), life:16+((Math.random()*8)|0), max:24,
       color:i%3?col:'#fff', star:false}); }
+  // 6) 燃え残りの煙。光が消えたあとに何も残らないと「爆発した跡」にならない
+  if(tier<2) smokePuff(x, y+8, heavy?5:3, '40,32,26');
 }
 // 放射インパクト線：角度・長さ・太さを一本ずつ散らし、等間隔スポークの機械的な見た目を避ける
 function impactBurst(x,y,color,big,opt){ opt=opt||{};
@@ -1703,7 +1713,8 @@ function updateParticles(){
       if(p.floor!=null && p.y<p.floor){ p.y=p.floor; p.vy=Math.max(0,p.vy); }   // HUD を突き抜けない
       if(p.y>p.y0){ p.y=p.y0; p.vy*=-0.34; p.vx*=0.6; } }   // 床（湧いた高さ）で一度だけ弾む
     else if(p.k==='ring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.2)); }
-    else if(p.k==='shockring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
+    else if(p.k==='shockring'||p.k==='dustring'){ const a=p.life/p.max; p.r=p.r0+(p.rMax-p.r0)*(1-Math.pow(a,2.6)); }   // 出だしが速く外で減速
+    else if(p.k==='fireball'){ /* 形は寿命から引くので更新不要 */ }
     else if(p.k==='shockcore'){ const a=p.life/p.max; p.r=p.r+(p.rMax-p.r)*0.34; }
     else if(p.k==='shockplume'||p.k==='shockbeam'){ /* 形は寿命から直接引くので更新不要 */ }
     else if(p.k==='twinkle'){ p.rot=(p.rot||0)+0.18; }
@@ -1817,6 +1828,28 @@ function drawParticles(layer){
       ctx.globalCompositeOperation='source-over'; }
     else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
       ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
+    else if(p.k==='fireball'){    // 爆発の芯にある炎の塊。寿命後半で炎→煤へ移り、煙へ橋渡しする
+      const u=1-a, gr=p.r*(0.55+u*0.85);
+      p.rot+=p.rv;
+      ctx.save(); ctx.translate(sx,py); ctx.rotate(p.rot);
+      const g=ctx.createRadialGradient(0,0,gr*0.10,0,0,gr);
+      const soot=Math.pow(u,0.7);                                  // 炎から煤へ寄る度合い
+      // 寿命に比例して薄めると、周りの加算合成の光に飲まれて塊が消える。
+      // 塊として読ませたいので、寿命の後半まで不透明を保ってから抜く
+      const op=Math.pow(a,0.5);
+      g.addColorStop(0.00,'rgba(255,246,216,'+(op*(1-soot*0.90)).toFixed(3)+')');
+      g.addColorStop(0.35,'rgba('+hexRGB(p.color)+','+(op*0.95).toFixed(3)+')');
+      g.addColorStop(0.72,'rgba(138,42,16,'+(op*0.85).toFixed(3)+')');
+      g.addColorStop(1.00,'rgba(22,16,12,'+(op*0.55).toFixed(3)+')');
+      ctx.fillStyle=g; ctx.beginPath();
+      for(const L of p.lobes){ const lr=gr*L[2];
+        ctx.moveTo(gr*L[0]+lr, gr*L[1]); ctx.arc(gr*L[0], gr*L[1], lr, 0, 7); }
+      ctx.fill(); ctx.restore(); }
+    else if(p.k==='dustring'){    // 床を這う土埃の輪。加算にすると土が光るので通常合成で
+      const ea=Math.pow(a,1.35);
+      ctx.globalAlpha=ea*0.55; ctx.strokeStyle='rgba('+p.color+','+ea.toFixed(3)+')';
+      ctx.lineWidth=Math.max(0.8,p.w*ea);
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),0,0,7); ctx.stroke(); }
     else if(p.k==='shockring'){   // 衝撃リング：外へ抜けながら細く薄くなり、内側に薄い膜を伴う
       const ea=Math.pow(a,1.35);
       ctx.globalCompositeOperation='lighter';
@@ -6873,6 +6906,25 @@ function updateRigP(p){ const r=p.rig; if(!r) return;
   if(p.facing!==p.prevFacing){ sprKick(r.wob, -7.5); sprKick(r.capeM, 5*p.facing); }   // 振り向き：上体がしなって追いつく
   const dx=p.x-p.prevX;
   p.spdS=lerp(p.spdS||0, Math.abs(dx), 0.38);                        // スメア用の平滑化速度
+  // ── 歩行位相：実際に進んだ距離から積分する（敵側と同じ仕組み）。
+  //    従来プレイヤーだけは固定周期で腿を振っていたので、接地している足が
+  //    体の移動の40%ぶん動いていた（tests/anim_driver.js の実測）。
+  //    歩幅＝接地相で体が進む距離 にすると、接地中の足はワールド座標で静止する ──
+  { const mv=clamp(dx,-16,16)*(p.facing||1);                          // 向き付き。スプライトの反転と揃えないと左向きで滑る
+    const R=PLEG_L1+PLEG_L2;                                          // 脚の骨長（描画と同じ値）
+    const S=p._pstride=clamp(SPEED*60/PGAIT_CPS/(FIXED_SCALE*0.94), R*0.60, R*1.60);
+    const stepping=p.z<=0 && Math.abs(mv)>0.12 && (p.state==='walk'||p.state==='idle');
+    p.gaitW=(p.gaitW||0)+((stepping?1:0)-(p.gaitW||0))*0.30;
+    if(Math.abs(mv)<0.04 && p.z<=0){                                  // 止まったら位相を中立へ寄せる
+      const tgt=GAIT_D*0.5, u=gaitPh(p.gait||0);
+      let d=tgt-u; if(d>0.5)d-=1; if(d<-0.5)d+=1;
+      p.gait=(p.gait||0)+d*Math.PI*2*0.07; }
+    // 位相のクロックには「実際に描かれる倍率」を使う。FIXED_SCALE(1.82) をそのまま
+    // 使うと、主役は 0.94 倍（ガードワンはさらに1.28倍）で描かれるぶんだけずれて滑る
+    const psc=FIXED_SCALE*0.94*(p.kind==='guard8'?1.28:1);
+    const gk=(Math.PI*2*GAIT_D)/Math.max(6,S*psc);
+    const air=clamp((p.z||0)/24,0,1);                                 // 滞空中は歩容を回さない
+    p.gait=(p.gait||0)+mv*gk*(1-air); }
   const sway=clamp(-dx*p.facing*0.55, -7, 7);                        // マントは進行方向と逆へなびく
   sprUpd(r.sq, 0, 17, 0.5); sprUpd(r.wob, 0, 11, 0.5);
   sprUpd(r.capeM, sway, 9, 0.8); sprUpd(r.capeT, sway*1.6, 6.2, 0.55);
@@ -7866,6 +7918,19 @@ function hazeGrad(T,ti){
   g.addColorStop(0.88,'rgba('+rgb+','+Math.min(1,a*1.02).toFixed(3)+')');
   g.addColorStop(1.00,'rgba('+rgb+','+(a*0.72).toFixed(3)+')');
   _hzC[ti]=g; return g; }
+// 中景の層の色。大気遠近は山にしか掛かっておらず、中景（LAND）の3層は
+// shade() で明度を13〜18ずつ動かすだけだった。彩度もコントラストも3層で同じなので、
+// 画面の面積をいちばん食う中景が「型紙を3枚重ねた紙芝居」に潰れ、
+// しかも背後の山より鮮やかで遠近の順序が逆転していた。
+// 層が持っている視差をそのまま奥行きとして使い、遠い層ほど霞の色へ寄せる。
+// 色を混ぜると明暗差も自動的に縮むので、奥の稜線が暴れなくなる
+function landCol(T, base, par){
+  const t=clamp((0.72-par)*0.42, 0, 0.30);
+  const b=_rgba(base), h=_rgba(T.haze);
+  return 'rgb('+Math.round(b[0]*(1-t)+h[0]*t)+','
+               +Math.round(b[1]*(1-t)+h[1]*t)+','
+               +Math.round(b[2]*(1-t)+h[2]*t)+')';
+}
 // 遠景の山。色を青灰でハードコードすると業火の渓谷でも蜂の巣でも山だけ浮くので、
 // テーマの塔色から引いて霞の色へ層ごとに寄せる（遠いほど霞に溶ける＝大気遠近）
 function drawMountains(){ const T=curTheme(), yb=GROUND_TOP-24, hz=_rgba(T.haze);
@@ -7977,7 +8042,7 @@ const LAND={
     // 1本が11頂点あるので、間隔を詰めると描画コールが一気に倍になる。
     // 層数を perfTier で落とし、間隔も広めに取る
     const baseY=GROUND_TOP-2, LN=perfTier>=2?1:(perfTier>=1?2:3);
-    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=shade(T.tower,-30+L*13), step=[112,86,66][L];
+    for(let L=0;L<LN;L++){ const par=0.24+L*0.19, col=landCol(T,shade(T.tower,-30+L*13),par), step=[112,86,66][L];
       landRow(par,step,function(gx,g0){ const h=(58+L*26)+Math.abs(g0*47%(40+L*22)), x=gx+step/2;
         const w=step*0.52;
         ctx.fillStyle=col; ctx.beginPath();
@@ -7992,7 +8057,7 @@ const LAND={
   gorge:function(T){                                     // 業火の渓谷：切り立つ両岸と、奥に落ちる溶岩滝
     const baseY=GROUND_TOP-2;
     // 平らな頂とV字の切れ込みを持つ壁（sin を鈍らせると台地、鋭くすると谷）
-    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=shade(T.tower,-34+L*15), A=104+L*44, k=0.0021+L*0.0013;
+    for(let L=0;L<3;L++){ const par=0.22+L*0.18, col=landCol(T,shade(T.tower,-34+L*15),par), A=104+L*44, k=0.0021+L*0.0013;
       landRidge(col,par,baseY,function(wx){
         const v=Math.abs(Math.sin(wx*k)); return A*(0.16+0.84*Math.pow(v,0.22)); }); }
     // 溶岩滝：谷底へ落ちる帯。乱数ではなく世界座標で位置を決める（毎フレーム動かない）
@@ -8006,20 +8071,21 @@ const LAND={
   },
   castle:function(T){                                    // 魔界の城：尖塔の群れと、灯りの脈打つ主塔
     const baseY=GROUND_TOP-2;
-    ctx.fillStyle=shade(T.tower,-34);                     // 奥の岩壁
-    landRidge(shade(T.tower,-34),0.18,baseY,function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    landRidge(landCol(T,shade(T.tower,-34),0.18),0.18,baseY,   // 奥の岩壁
+      function(wx){ return 150+Math.sin(wx*0.0026)*44+Math.sin(wx*0.0071)*22; });
+    const spA=landCol(T,shade(T.tower,-16),0.40), spB=landCol(T,shade(T.tower,-26),0.40);
     landRow(0.40,132,function(gx,g0){                     // 尖塔列
       const h=126+Math.abs(g0*61%118), x=gx+66;
-      ctx.fillStyle=(g0%2)?shade(T.tower,-16):shade(T.tower,-26);
+      ctx.fillStyle=(g0%2)?spA:spB;
       ctx.beginPath(); ctx.moveTo(x-19,baseY); ctx.lineTo(x-13,baseY-h*0.70);
       ctx.lineTo(x,baseY-h); ctx.lineTo(x+13,baseY-h*0.70); ctx.lineTo(x+19,baseY); ctx.closePath(); ctx.fill(); });
     const cx=W*0.54-camX*0.46, top=baseY-262;             // 主塔（天守＋副塔＋城壁＋狭間）
     if(cx>-280&&cx<W+280){
-      ctx.fillStyle=shade(T.tower,-4); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
+      ctx.fillStyle=landCol(T,shade(T.tower,-4),0.46); ctx.fillRect(cx-58,top+72,116,baseY-top-72);
       ctx.beginPath(); ctx.moveTo(cx-70,top+76); ctx.lineTo(cx,top); ctx.lineTo(cx+70,top+76); ctx.closePath(); ctx.fill();
       for(const s of [-1,1]){ ctx.fillRect(cx+s*98-15,top+146,30,baseY-top-146);
         ctx.beginPath(); ctx.moveTo(cx+s*98-21,top+150); ctx.lineTo(cx+s*98,top+98); ctx.lineTo(cx+s*98+21,top+150); ctx.closePath(); ctx.fill(); }
-      ctx.fillStyle=shade(T.tower,-24); ctx.fillRect(cx-152,baseY-86,304,86);
+      ctx.fillStyle=landCol(T,shade(T.tower,-24),0.46); ctx.fillRect(cx-152,baseY-86,304,86);
       for(let k=-7;k<=7;k++) ctx.fillRect(cx+k*21-6,baseY-98,12,14);
       const fl=(0.55+0.35*Math.sin(gf*0.05)).toFixed(2);   // 窓の灯りが脈打つ
       ctx.fillStyle='rgba(255,120,60,'+fl+')';
@@ -8029,7 +8095,7 @@ const LAND={
   glacier:function(T){                                   // 氷雪：角ばったセラック（氷塔）。三角波で稜線を折る
     const baseY=GROUND_TOP-2;
     for(let L=0;L<3;L++){ const par=0.20+L*0.18, A=110+L*46, k=0.0016+L*0.0011;
-      landRidge(shade(T.tower,-26+L*16),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
+      landRidge(landCol(T,shade(T.tower,-26+L*16),par),par,baseY,function(wx){ return A*(0.34+0.66*tri(wx*k)); },16); }
     if(perfTier<1) landRow(0.56,190,function(gx,g0){      // 陽の当たる面だけ白く光らせる
       const h=120+Math.abs(g0*43%70), x=gx+95;
       ctx.fillStyle='rgba(255,255,255,.34)';
@@ -8037,19 +8103,20 @@ const LAND={
   },
   cavern:function(T){                                    // 水晶洞：頭上の岩天井と、足元から伸びる結晶柱
     const baseY=GROUND_TOP-2;
-    ctx.fillStyle=shade(T.tower,-30);                     // 天井（上から垂れる岩）
+    ctx.fillStyle=landCol(T,shade(T.tower,-30),0.26);     // 天井（上から垂れる岩）
     ctx.beginPath(); ctx.moveTo(-20,0);
     for(let sx=-20;sx<=W+20;sx+=20){ const wx=sx+camX*0.26;
       ctx.lineTo(sx, 74+Math.abs(Math.sin(wx*0.0042))*104+Math.sin(wx*0.011)*18); }
     ctx.lineTo(W+20,0); ctx.closePath(); ctx.fill();
+    const stalC=landCol(T,shade(T.tower,-22),0.30);
     if(perfTier<2) landRow(0.30,perfTier?200:150,function(gx,g0){       // 鍾乳石
       const h=44+Math.abs(g0*53%86), x=gx+75, y0=92+Math.abs(g0*31%54);
-      ctx.fillStyle=shade(T.tower,-22);
+      ctx.fillStyle=stalC;
       ctx.beginPath(); ctx.moveTo(x-13,y0); ctx.lineTo(x,y0+h); ctx.lineTo(x+13,y0); ctx.closePath(); ctx.fill(); });
     // 結晶柱。手前の層ほど数が多いので、低品質では奥の1層だけにする
     for(let L=0;L<(perfTier>=2?1:2);L++) landRow(0.34+L*0.22,(120-L*30)+(perfTier?46:0),function(gx,g0){
       const h=(90+L*54)+Math.abs(g0*67%(70+L*40)), x=gx+40, w=13+L*7;
-      ctx.fillStyle=shade(T.tower,-8+L*18);
+      ctx.fillStyle=landCol(T,shade(T.tower,-8+L*18),0.34+L*0.22);
       ctx.beginPath(); ctx.moveTo(x-w,baseY); ctx.lineTo(x-w*0.6,baseY-h*0.82);
       ctx.lineTo(x,baseY-h); ctx.lineTo(x+w*0.6,baseY-h*0.82); ctx.lineTo(x+w,baseY); ctx.closePath(); ctx.fill();
       if(perfTier<1){ ctx.fillStyle='rgba(150,235,255,.30)';
@@ -8063,20 +8130,21 @@ const LAND={
         ctx.beginPath(); ctx.ellipse(px,yb,80,20,0,0,7); ctx.ellipse(px+56,yb+9,58,15,0,0,7); ctx.fill(); } }
     const cx=W*0.52-camX*0.34, top=baseY-232;             // 神殿：破風＋エンタブラチュア
     if(cx>-300&&cx<W+300){
-      ctx.fillStyle=shade(T.tower,-14);
+      ctx.fillStyle=landCol(T,shade(T.tower,-14),0.34);
       ctx.beginPath(); ctx.moveTo(cx-158,top+58); ctx.lineTo(cx,top); ctx.lineTo(cx+158,top+58); ctx.closePath(); ctx.fill();
-      ctx.fillStyle=shade(T.tower,4); ctx.fillRect(cx-166,top+58,332,22);
-      for(let k=-4;k<=4;k++){ ctx.fillStyle=shade(T.tower,-6); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
+      ctx.fillStyle=landCol(T,shade(T.tower,4),0.34); ctx.fillRect(cx-166,top+58,332,22);
+      for(let k=-4;k<=4;k++){ ctx.fillStyle=landCol(T,shade(T.tower,-6),0.34); ctx.fillRect(cx+k*36-11,top+80,22,baseY-top-80);
         ctx.fillStyle='rgba(255,255,255,.20)'; ctx.fillRect(cx+k*36-11,top+80,6,baseY-top-80); } }
+    const colShaft=landCol(T,shade(T.tower,-10),0.58), colCap=landCol(T,shade(T.tower,10),0.58);
     landRow(0.58,116,function(gx,g0){                     // 手前に並ぶ独立柱（溝彫り入り）
       const h=132+Math.abs(g0*37%54), x=gx+58;
-      ctx.fillStyle=shade(T.tower,-10); ctx.fillRect(x-16,baseY-h,32,h);
-      ctx.fillStyle=shade(T.tower,10); ctx.fillRect(x-21,baseY-h-11,42,13);
+      ctx.fillStyle=colShaft; ctx.fillRect(x-16,baseY-h,32,h);
+      ctx.fillStyle=colCap;   ctx.fillRect(x-21,baseY-h-11,42,13);
       ctx.fillStyle='rgba(0,0,0,.14)'; for(let k=-1;k<=1;k++) ctx.fillRect(x+k*8-1.4,baseY-h+6,2.8,h-8); });
   },
   styx:function(T){                                      // 冥府：黒い河・枯木・折れた列柱
     const baseY=GROUND_TOP-2;
-    landRidge(shade(T.tower,10),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
+    landRidge(landCol(T,shade(T.tower,10),0.16),0.16,baseY,function(wx){ return 128+Math.sin(wx*0.0024)*30+Math.sin(wx*0.0068)*14; });
     ctx.fillStyle='rgba(4,2,10,.85)'; ctx.fillRect(0,baseY-52,W,52);            // 河面
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 鬼火の映り込み
       for(let i=0;i<7;i++){ const x=((i*173-camX*0.5)%(W+180)+W+180)%(W+180)-90;
@@ -8084,38 +8152,41 @@ const LAND={
         ctx.fillStyle='rgba(140,200,255,.9)';
         ctx.beginPath(); ctx.ellipse(x,baseY-26,26,5,0,0,7); ctx.fill(); }
       ctx.restore(); }
+    const deadC=landCol(T,shade(T.tower,26),0.44), pillC=landCol(T,shade(T.tower,20),0.44);
     landRow(0.44,180,function(gx,g0){                     // 枯木と折れ柱を交互に
       const x=gx+90;
       if(g0%2){ const h=96+Math.abs(g0*41%56);
-        ctx.strokeStyle=shade(T.tower,26); ctx.lineWidth=7; ctx.lineCap='round';
+        ctx.strokeStyle=deadC; ctx.lineWidth=7; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(x,baseY-52); ctx.lineTo(x-4,baseY-52-h); ctx.stroke();
         ctx.lineWidth=4;
         for(let b=0;b<3;b++){ const s=b%2?1:-1, y=baseY-52-h*(0.45+b*0.2);
           ctx.beginPath(); ctx.moveTo(x-2,y); ctx.lineTo(x+s*(22+b*6),y-16-b*5); ctx.stroke(); }
       } else { const h=70+Math.abs(g0*53%64);
-        ctx.fillStyle=shade(T.tower,20); ctx.fillRect(x-13,baseY-52-h,26,h);
+        ctx.fillStyle=pillC; ctx.fillRect(x-13,baseY-52-h,26,h);
         ctx.beginPath(); ctx.moveTo(x-13,baseY-52-h); ctx.lineTo(x+13,baseY-52-h+12); ctx.lineTo(x+13,baseY-52-h); ctx.closePath(); ctx.fill(); } });
   },
   sunken:function(T){                                    // 海神：沈んだ列柱のアーチと、差し込む光の柱
     const baseY=GROUND_TOP-2;
-    landRidge(shade(T.tower,-8),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
+    landRidge(landCol(T,shade(T.tower,-8),0.18),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';         // 海面から差す光の柱
       for(let i=0;i<5;i++){ const x=((i*286-camX*0.22)%(W+300)+W+300)%(W+300)-150;
         ctx.globalAlpha=0.12+0.05*Math.sin(gf*0.02+i);
         ctx.fillStyle='rgba(190,255,255,.8)';
         ctx.beginPath(); ctx.moveTo(x-16,0); ctx.lineTo(x+16,0); ctx.lineTo(x+58,baseY); ctx.lineTo(x-40,baseY); ctx.closePath(); ctx.fill(); }
       ctx.restore(); }
+    const archC=landCol(T,shade(T.tower,16),0.42);
     landRow(0.42,208,function(gx,g0){                     // 傾いて沈んだアーチ
       const x=gx+104, h=118+Math.abs(g0*47%52), tilt=((g0*29%14)-7)*0.012;
       ctx.save(); ctx.translate(x,baseY); ctx.rotate(tilt);
-      ctx.fillStyle=shade(T.tower,16);
+      ctx.fillStyle=archC;
       ctx.fillRect(-58,-h,20,h); ctx.fillRect(38,-h,20,h);
       ctx.beginPath(); ctx.moveTo(-58,-h); ctx.quadraticCurveTo(0,-h-46,58,-h);
       ctx.lineTo(58,-h+18); ctx.quadraticCurveTo(0,-h-24,-58,-h+18); ctx.closePath(); ctx.fill();
       ctx.restore(); });
+    const kelpC=landCol(T,shade(T.tower,30),0.66);
     if(perfTier<1) landRow(0.66,74,function(gx,g0){       // 揺れる海藻
       const x=gx+37, h=52+Math.abs(g0*31%44), sw=Math.sin(gf*0.035+g0)*9;
-      ctx.strokeStyle=shade(T.tower,30); ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.strokeStyle=kelpC; ctx.lineWidth=5; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6,x+sw,baseY-h); ctx.stroke(); });
   },
 };
@@ -8126,7 +8197,7 @@ function drawLand(T){
   ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);
 }
 function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
-  const c1=shade(T.tower,-16), c2=shade(T.tower,-30);
+  const c1=landCol(T,shade(T.tower,-16),par), c2=landCol(T,shade(T.tower,-30),par);
   for(let i=-1;i<16;i++){ const bw=124, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
     const h=64+Math.abs(g0*47%78), x=gx+bw/2, wob=(g0*29%17)-8;
     ctx.fillStyle=(g0%2)?c1:c2;
@@ -8445,7 +8516,9 @@ function drawPlayer(){
   ctx.save(); ctx.translate(sx,sy-p.z); ctx.scale(p.facing*s,s);
   // hw/hh はアクターのローカル単位で渡す。変換行列（kx/ky）に既に s と DPR が
   // 入っているので、ここで s を掛けると二乗になって矩形が入らなくなる
-  const _rim=(p.__portrait||blink)?null:rimBegin(46, 132);   // 立ち絵と点滅中は素通し
+  // 枠は実描画より広く取る。狭いと本体の縁が枠で切られ、輪郭リムを入れたときに
+  // その人工的な断面がいちばん明るい線として出る（実測: 待機で幅123 に対し枠104だった）
+  const _rim=(p.__portrait||blink)?null:rimBegin(68, 156);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -8871,12 +8944,26 @@ function drawPlayer(){
   const limbA = wanden?'#e6d9b8':watch?'#e2e8f0':shima?'#8a5a30':nuko?'#f0ecf6':g8?'#a5622e':'#e0d2ab', limbB = wanden?'#d5c49c':watch?'#cdd6e2':shima?'#7a4a24':nuko?'#e6e0f0':g8?'#8a4f22':'#ddcca0', bootB=wanden?'#241f1a':watch?'#3a2f22':shima?'#3a2410':nuko?'#7a4fb0':g8?'#3a2410':'#5a4022';
   const limbF = wanden?'#f2e6c8':watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#fbf8ff':g8?'#b5713a':'#efe2bc', bootF=wanden?'#32291f':watch?'#4a3826':shima?'#4a2e16':nuko?'#8a5fc0':g8?'#4a2e14':'#6b4f28', handCol=wanden?'#f2e6c8':watch?'#f4f8fc':shima?'#9a6a3a':nuko?'#ffffff':g8?'#8a4f22':'#f1e7cc';
   ctx.translate(bodyX,0); ctx.scale(sqX,sqY); ctx.translate(0,bodyY);
+  // ── 歩行中は足先の目標をワールドに固定して解く（接地ロック）。
+  //    アクターは translate(bodyX,0)→scale(sqX,sqY)→translate(0,bodyY) を通っているので、
+  //    床 y=0 に足を置くには目標を逆補正する。忘れると sqY と bodyY のぶん足が浮く ──
+  let _ftF=null, _ftB=null;
+  if(p.gaitW>0.02 && p.z<=0){
+    const S=p._pstride||14, LF=(PLEG_L1+PLEG_L2)*0.40*p.gaitW;
+    const fN=gaitStep(gaitPh(p.gait||0), S, LF, GAIT_D);
+    const fF=gaitStep(gaitPh(p.gait||0)+0.5, S, LF, GAIT_D);
+    // 局所点(tx,ty) → 親空間は (bodyX+tx*sqX, (ty+bodyY)*sqY)。その逆を解く
+    const inv=function(fx,fy,hipX){ return {tx:(hipX+fx-bodyX)/(sqX||1), ty:fy/(sqY||1)-bodyY}; };
+    _ftF=inv(fN.x, fN.y, 6); _ftB=inv(fF.x, fF.y, -5);
+  }
   // ---------- back-to-front ----------
   if(p.kind==='inu') drawCape(p,lean); else if(nuko) drawNukoRobeBack(p,lean);
   poseArm(-5,-30, backArm, 9,8, limbA, 0.85);                      // far arm
-  chibiLeg(-5, thB, kB, limbB, bootB);                             // far leg
+  if(_ftB) chibiLegTo(-5, _ftB.tx, _ftB.ty, limbB, bootB);
+  else     chibiLeg(-5, thB, kB, limbB, bootB);                    // far leg
   (wanden?wandenBody:watch?watchBody:shima?shimaBody:nuko?nukoBody:g8?guard8Body:chibiBody)(lean);
-  chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);               // near leg
+  if(_ftF) chibiLegTo(6, _ftF.tx, _ftF.ty, limbF, bootF, legF1, legF2);
+  else     chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);       // near leg
   (wanden?wandenHead:watch?watchHead:shima?shimaHead:nuko?nukoHead:g8?guard8Head:chibiHead)(lean);
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
@@ -8970,15 +9057,53 @@ function drawPlayer(){
   rimEnd(_rim, 1);
   ctx.restore(); ctx.globalAlpha=1;
 }
-function limbSeg(ax,ay,bx,by,w,col){ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); }
-function poseArm(shX,shY,swordAng,l1,l2,col,wm){          // swordAng: 0=forward,+down
-  const a=PI2-swordAng;                                   // convert to down-angle
-  const ex=shX+Math.sin(a)*l1, ey=shY+Math.cos(a)*l1;     // elbow
-  const bx=ex+Math.cos(a)*2, by=ey+Math.sin(a)*2+1;       // slight bend
-  const hx=bx+Math.sin(a)*l2, hy=by+Math.cos(a)*l2;       // hand
+// 手足は胴と同系色（イッヌは肌も体毛もクリーム）なので、輪郭線を1本入れないと
+// 胴に溶けて腕がどこにあるか読めない。肘を入れても見えないのはこれが理由だった。
+// 暗い下敷きを一度太く引いてから本色を重ねる＝縁だけが残る
+function limbSeg(ax,ay,bx,by,w,col){
+  ctx.lineCap='round';
+  ctx.strokeStyle='rgba(52,34,18,.46)'; ctx.lineWidth=w+2.2;
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  ctx.strokeStyle=col; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); }
+// 腕の骨長（肘を曲げた状態の上腕・前腕）。肩から手までの距離より長く取ってあるので、
+// 手が近いあいだは必ず肘が外へ張る
+const PARM_L1=11, PARM_L2=10;
+// swordAng: 0=前, +で下。
+// 以前は上腕と前腕を同じ向きへ継いでいたので腕は常に一直線で、振り抜きは
+// l1/l2 を伸ばして偽装していた（構えでも真っ直ぐ、振り切りでも真っ直ぐ）。
+// 肩→手の距離 D=l1+l2 はそのまま使うので、間合いも刃の軌跡も変わらない。
+// 変わるのは肘の位置だけ：D が骨より短いあいだは肘が張り、伸ばしきると真っ直ぐになる
+function poseArm(shX,shY,swordAng,l1,l2,col,wm,bend){
+  const a=PI2-swordAng;
+  const D=l1+l2;
+  const b1=Math.max(PARM_L1, D*0.53), b2=Math.max(PARM_L2, D*0.47);
+  const c=clamp((b1*b1+D*D-b2*b2)/(2*b1*(D||1e-6)),-1,1);
+  const th=a+Math.acos(c)*(bend===undefined?-1:bend);     // 既定は肘を下へ落とす
+  const ex=shX+Math.sin(th)*b1, ey=shY+Math.cos(th)*b1;   // elbow
+  const hx=shX+Math.sin(a)*D, hy=shY+Math.cos(a)*D;       // hand
   limbSeg(shX,shY,ex,ey,7*(wm||1),col); limbSeg(ex,ey,hx,hy,5.5*(wm||1),col);
   ctx.fillStyle=col; ctx.beginPath(); ctx.arc(hx,hy,3.4*(wm||1),0,7); ctx.fill();
   return {hx,hy};
+}
+const PLEG_L1=10, PLEG_L2=9;      // 主役の脚の骨長。位相の積分と描画で同じ値を使う
+const PGAIT_CPS=1.55;             // 1秒あたりの歩数（サイクル/秒）
+// 足先の目標へ二関節で解く版。接地している足をワールド座標に固定するために使う。
+// 中身は敵側の foeLegSolve と同じ
+function chibiLegTo(hipX,tx,ty,col,boot,l1,l2){
+  l1=l1||PLEG_L1; l2=l2||PLEG_L2; const hipY=-16;
+  let dx=tx-hipX, dy=ty-hipY, D=Math.hypot(dx,dy);
+  const Dmax=(l1+l2)*0.994, Dmin=Math.abs(l1-l2)+Math.min(l1,l2)*0.34;
+  if(D>Dmax||D<Dmin){ const nd=D>Dmax?Dmax:Dmin, sc=nd/(D||1e-6); dx*=sc; dy*=sc; D=nd; }
+  const base=Math.atan2(dx,dy);
+  const a=Math.acos(clamp((l1*l1+D*D-l2*l2)/(2*l1*D),-1,1));
+  const th=base+a;                                                   // 膝は前へ
+  const kx=hipX+Math.sin(th)*l1, ky=hipY+Math.cos(th)*l1;
+  const fx=hipX+dx, fy=hipY+dy;
+  limbSeg(hipX,hipY,kx,ky,10,col);
+  ctx.fillStyle='#cdbf95'; ctx.beginPath(); ctx.arc(kx,ky,3.6,0,7); ctx.fill();
+  limbSeg(kx,ky,fx,fy,8,col);
+  ctx.fillStyle=boot; ctx.beginPath(); ctx.ellipse(fx+2,fy+1,6,4.5,0,0,7); ctx.fill();
+  return {fx:fx, fy:fy};
 }
 function chibiLeg(hipX,thighAng,knee,col,boot,l1,l2){
   l1=l1||10; l2=l2||9; const hipY=-16;
@@ -9676,6 +9801,11 @@ const _rimS={};
 function rimCtx(){ if(!_rimCan){ _rimCan=document.createElement('canvas');
     _rimCan.width=RIM_CAN; _rimCan.height=RIM_CAN; _rimCtx=_rimCan.getContext('2d'); }
   return _rimCtx; }
+// 輪郭帯を作る作業用の2枚目。1枚だけ確保して使い回す
+let _rimTmp=null, _rimTmpC=null;
+function rimTmpCtx(){ if(!_rimTmp){ _rimTmp=document.createElement('canvas');
+    _rimTmp.width=RIM_CAN; _rimTmp.height=RIM_CAN; _rimTmpC=_rimTmp.getContext('2d'); }
+  return _rimTmpC; }
 // 光源側の暖色と反対側の陰を1枚に焼いたスプライト。向きと色ごとに1回だけ作る
 function rimSprite(dir,rgb){ const k=dir+'|'+rgb; let c=_rimS[k]; if(c) return c;
   c=document.createElement('canvas'); c.width=64; c.height=1;
@@ -9723,14 +9853,44 @@ function rimBegin(hw,hh){
   oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
   oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
   const st={main:ctx, M:M, bx:bx, by:by, w:w, h:h}; ctx=oc; return st; }
+// シルエットのαから輪郭帯を1本作り、色を付けて本体へ戻す。
+// ずらして destination-out すると「ずらした側の縁」だけが残る＝それが輪郭
+function rimEdge(st, dx, dy, rgb, alpha){
+  const tc=rimTmpCtx(); if(!tc) return;
+  const B=st.bx, Y=st.by, W2=st.w, H2=st.h;
+  tc.setTransform(1,0,0,1,0,0);
+  tc.globalCompositeOperation='source-over'; tc.globalAlpha=1;
+  tc.clearRect(B,Y,W2,H2);
+  tc.drawImage(_rimCan, B,Y,W2,H2, B,Y,W2,H2);                    // シルエットを複製
+  tc.globalCompositeOperation='destination-out';
+  tc.drawImage(_rimCan, B,Y,W2,H2, B+dx,Y+dy,W2,H2);              // ずらして削る＝縁が残る
+  tc.globalCompositeOperation='source-in';                        // 残った縁を単色で塗る
+  tc.fillStyle='rgb('+rgb+')'; tc.fillRect(B,Y,W2,H2);
+  // 枠の縁に触れている画素は、体の輪郭ではなく「枠で切られた断面」。
+  // ここを光らせると四角い線が出るので、内側3pxを残して落とす
+  tc.globalCompositeOperation='destination-out';
+  tc.fillStyle='#000';
+  tc.fillRect(B,Y,W2,3); tc.fillRect(B,Y+H2-3,W2,3);
+  tc.fillRect(B,Y,3,H2); tc.fillRect(B+W2-3,Y,3,H2);
+  const oc=_rimCtx;
+  oc.setTransform(1,0,0,1,0,0);
+  oc.globalCompositeOperation='lighter'; oc.globalAlpha=alpha;
+  oc.drawImage(_rimTmp, B,Y,W2,H2, B,Y,W2,H2);
+  oc.globalCompositeOperation='source-over'; oc.globalAlpha=1;
+}
 function rimEnd(st,strength){
   if(!st) return;
   const oc=ctx; ctx=st.main;
   const K=rimKey(), a=clamp(strength==null?1:strength,0,2);
   oc.save(); oc.setTransform(1,0,0,1,0,0);
-  oc.globalCompositeOperation='source-atop'; oc.globalAlpha=a;
-  oc.drawImage(rimSprite(K.dir,K.rgb), st.bx, st.by, st.w, st.h);   // 焼いた1枚を伸ばして乗せる
+  oc.globalCompositeOperation='source-atop'; oc.globalAlpha=a*0.52;
+  oc.drawImage(rimSprite(K.dir,K.rgb), st.bx, st.by, st.w, st.h);   // 面の陰影（横グラデ）は弱めて残す
   oc.restore();
+  // 輪郭に沿った線。従来はこの横グラデ1枚だけで、輪郭線は1本も出ていなかった。
+  // 効き量が「体が矩形のどこにいるか」で決まるため、実測でプレイヤーは
+  // 頭の縁で暖色α0.16・胴の縁で0.08 しか乗っていなかった
+  rimEdge(st, -K.dir*3, -2, K.rgb, a*0.95);                        // 光源側＝暖色の輪郭
+  rimEdge(st,  K.dir*3,  1, '120,170,255', a*0.45);                // 逆側＝寒色の照り返し
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
   ctx.drawImage(_rimCan, st.bx, st.by, st.w, st.h,
                 st.M.e-RIM_OX+st.bx, st.M.f-RIM_OY+st.by, st.w, st.h);
@@ -11822,6 +11982,7 @@ function drawStageBannerScrim(){ if(stageBanner<=0) return; const B=stageBannerF
   ctx.moveTo(W/2-B.lw,cy+36); ctx.lineTo(W/2+B.lw,cy+36); ctx.stroke();
   ctx.restore(); }
 function drawHUD(){
+  drawScreenFrame();                              // 額縁はHUDより先＝パネルが額の上に載る
   const p1shima=players[0].kind==='shima', p1nuko=players[0].kind==='nuko', p1g8=players[0].kind==='guard8', p1watch=players[0].kind==='watch', p1wd=players[0].kind==='wanden';
   let hudY=120;   // 左上ブロックの縦カーソル：以降のパネルはこの位置から順に積む（重ね書きの解消）
   HUD_BOTTOM=hudY;   // ポップの侵入を止める下限（この後パネルを積むたびに更新する）
@@ -12201,6 +12362,65 @@ function ornRect(x,y,w,h,style){
   if(perfTier>=2) return;
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
   ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+// ── 画面そのものの額縁 ──────────────────────────────────────
+// 「絵が額に入っている」ことが、この画の様式をいちばん強く決める。パネル用の
+// 額縁部品は既にあったのに戦闘画面には一度も掛かっていなかった。
+// 帯は22pxに抑え、内側は完全に刳り抜くので、遊びの見え方は画面端しか変わらない。
+// 毎フレーム描くと重いので1枚のスプライトへ焼いて使い回す。
+const SFRM_B=22;                                  // 帯の太さ
+let _scrFrm=null, _scrFrmKey='';
+function screenFrame(){
+  const key=W+'x'+H;
+  if(_scrFrm && _scrFrmKey===key) return _scrFrm;
+  const c=document.createElement('canvas'); if(!c) return null;
+  c.width=W; c.height=H;
+  const g=c.getContext('2d'); if(!g) return null;
+  const B=SFRM_B;
+  // 1) 彫った石の外形
+  g.fillStyle=ORN.stoneLo; roundRectOn(g,0,0,W,H,12); g.fill();
+  // 2) 金のバンド。上下で明暗を反転させて、上から光が当たった立体に見せる
+  const lg=g.createLinearGradient(0,0,0,H);
+  lg.addColorStop(0,ORN.goldHi); lg.addColorStop(.20,ORN.gold);
+  lg.addColorStop(.52,ORN.goldLo); lg.addColorStop(.84,ORN.gold); lg.addColorStop(1,ORN.goldHi);
+  g.strokeStyle=lg; g.lineWidth=7; roundRectOn(g,4.5,4.5,W-9,H-9,9); g.stroke();
+  g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=2.4;
+  roundRectOn(g,B-2,B-2,W-(B-2)*2,H-(B-2)*2,7); g.stroke();
+  // 3) 内側を刳り抜く（ここから戦闘画面が見える）
+  g.save(); g.globalCompositeOperation='destination-out';
+  g.fillStyle='#000'; roundRectOn(g,B,B,W-B*2,H-B*2,7); g.fill(); g.restore();
+  // 4) 刳り抜きの縁に細い明暗を1本ずつ。これが無いと帯が板のままで厚みが出ない
+  g.strokeStyle='rgba(255,233,168,.30)'; g.lineWidth=1.2;
+  roundRectOn(g,B+0.6,B+0.6,W-(B+0.6)*2,H-(B+0.6)*2,6); g.stroke();
+  // 5) 四隅の唐草。刳り抜いた後に描くので、渦だけが内側へ張り出す
+  const K=1.9;
+  ornScroll(g,8,8,K,K);        ornScroll(g,W-8,8,-K,K);
+  ornScroll(g,8,H-8,K,-K);     ornScroll(g,W-8,H-8,-K,-K);
+  // 6) 上辺中央の銘（菱形）。中身は暗く塗る。ここにはステージ表示が重なるので、
+  //    明るい金で塗り潰すと文字が読めなくなる
+  const cw=168, cx=W/2;
+  g.fillStyle=ORN.gold; g.beginPath();
+  g.moveTo(cx-cw/2,B-3); g.lineTo(cx,1); g.lineTo(cx+cw/2,B-3); g.lineTo(cx,B+9); g.closePath(); g.fill();
+  g.fillStyle='rgba(24,20,14,.92)'; g.beginPath();
+  g.moveTo(cx-cw/2+9,B-3); g.lineTo(cx,5.6); g.lineTo(cx+cw/2-9,B-3); g.lineTo(cx,B+4.4); g.closePath(); g.fill();
+  // 下辺中央の受け
+  g.fillStyle=ORN.gold; g.beginPath();
+  g.moveTo(cx-58,H-B+2); g.lineTo(cx,H-2); g.lineTo(cx+58,H-B+2); g.closePath(); g.fill();
+  g.fillStyle='rgba(24,20,14,.9)'; g.beginPath();
+  g.moveTo(cx-44,H-B+4.6); g.lineTo(cx,H-6.2); g.lineTo(cx+44,H-B+4.6); g.closePath(); g.fill();
+  // 7) バンド上の鋲。等間隔の点が続くと「打ち込まれた金具」に見える
+  for(let bx2=64; bx2<W-56; bx2+=52){
+    for(const by2 of [11, H-11]){
+      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
+      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
+  for(let by2=76; by2<H-64; by2+=52){
+    for(const bx2 of [11, W-11]){
+      g.fillStyle=ORN.goldHi; g.beginPath(); g.arc(bx2,by2,2.1,0,7); g.fill();
+      g.fillStyle=ORN.goldLo; g.beginPath(); g.arc(bx2+0.6,by2+0.7,1.2,0,7); g.fill(); } }
+  _scrFrm=c; _scrFrmKey=key; return c; }
+function drawScreenFrame(){
+  if(perfTier>=2) return;                          // 重いときは静かに外れる
+  const s=screenFrame(); if(!s) return;
+  ctx.drawImage(s,0,0,W,H); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
