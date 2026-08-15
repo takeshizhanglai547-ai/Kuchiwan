@@ -29,12 +29,64 @@ const DRIVER = `
     if(!encounters.length) throw new Error('戦国のエンカウンタが積まれていない');
     console.log('周回の続き OK (4→5／五周目の先は無し／'+n4.label+')'); }
 
-  // 難易度は四周目より必ず上（最高難度と名乗っている）
-  { const at=l=>{ const sv=lap; lap=l; const r=[diffHpMul(),diffDmgMul()]; lap=sv; return r; };
-    const a4=at(4), a5=at(5);
-    if(!(a5[0]>a4[0])) throw new Error('五周目のHP倍率が四周目以下: '+a4[0]+' → '+a5[0]);
-    if(!(a5[1]>a4[1])) throw new Error('五周目の攻撃力倍率が四周目以下: '+a4[1]+' → '+a5[1]);
-    console.log('難易度 OK (HP '+a4[0].toFixed(1)+'→'+a5[0].toFixed(1)+' / 攻撃 '+a4[1].toFixed(2)+'→'+a5[1].toFixed(2)+')'); }
+  // ── 難易度：神話と戦国は「通常＝カジュアル」「高難易度＝従来の値」の二段 ──
+  { const at=function(l,hard){ const sl=lap, sh=hardMode, st=TWO_P;
+      lap=l; hardMode=hard; TWO_P=false;
+      const r=[diffHpMul(), diffDmgMul()];
+      lap=sl; hardMode=sh; TWO_P=st; return r; };
+    // 高難易度＝従来の値そのもの。ここがずれると「今までどおり遊びたい人」の設定が消える
+    const h4=at(4,true), h5=at(5,true);
+    if(Math.abs(h4[0]-2.00)>1e-6 || Math.abs(h4[1]-1.70)>1e-6)
+      throw new Error('四周目の高難易度が従来の 2.00/1.70 でない: '+h4.join('/'));
+    if(Math.abs(h5[0]-2.40)>1e-6 || Math.abs(h5[1]-1.95)>1e-6)
+      throw new Error('五周目の高難易度が従来の 2.40/1.95 でない: '+h5.join('/'));
+    // 通常はそこから大きく下がっていること（3割以上）
+    const c4=at(4,false), c5=at(5,false);
+    // 下げ幅は攻撃力に厚く配る（HPを削っても戦いが短くなるだけで死ににくくはならない）。
+    // 攻撃力は半分以下、HPは7割以下を要求する
+    if(!(c4[1]<=h4[1]*0.55)) throw new Error('四周目の通常攻撃力が十分に下がっていない: '+c4[1]+' / 従来 '+h4[1]);
+    if(!(c5[1]<=h5[1]*0.55)) throw new Error('五周目の通常攻撃力が十分に下がっていない: '+c5[1]+' / 従来 '+h5[1]);
+    if(!(c4[0]<=h4[0]*0.70)) throw new Error('四周目の通常HPが十分に下がっていない: '+c4[0]+' / 従来 '+h4[0]);
+    if(!(c5[0]<=h5[0]*0.70)) throw new Error('五周目の通常HPが十分に下がっていない: '+c5[0]+' / 従来 '+h5[0]);
+    // 攻撃力の下げ幅がHPの下げ幅より大きいこと（配分の意図そのもの）
+    if(!(c4[1]/h4[1] < c4[0]/h4[0])) throw new Error('四周目：HPのほうを大きく削っている（短くなるだけ）');
+    if(!(c5[1]/h5[1] < c5[0]/h5[0])) throw new Error('五周目：HPのほうを大きく削っている（短くなるだけ）');
+    // 周回の順序は通常でも高難易度でも保たれること（五周目が四周目より弱くならない）
+    if(!(c5[0]>c4[0] && c5[1]>c4[1])) throw new Error('通常で五周目が四周目以下: '+c4.join('/')+' → '+c5.join('/'));
+    if(!(h5[0]>h4[0] && h5[1]>h4[1])) throw new Error('高難易度で五周目が四周目以下');
+    // 高難易度の全体係数を二重に掛けていないこと（掛けると従来より更に硬い第三の難易度になる）
+    if(!(h4[0]<2.4 && h5[0]<2.9)) throw new Error('高難易度に全体係数が二重に掛かっている: '+h4[0]+' / '+h5[0]);
+    // 一〜三周目は従来どおり（hardMode の全体係数がそのまま乗る）
+    const n3=at(3,false), q3=at(3,true);
+    if(Math.abs(n3[0]-1.60)>1e-6) throw new Error('三周目の通常が変わっている: '+n3[0]);
+    if(!(q3[0]>n3[0]*1.3)) throw new Error('三周目の高難易度に全体係数が乗っていない: '+n3[0]+' → '+q3[0]);
+    // どちらで遊んでいるかが名前で取れること（画面へ出すのに使う）
+    { const sl=lap, sh=hardMode;
+      lap=5; hardMode=false; const cn=lapDiffName();
+      hardMode=true; const hn=lapDiffName();
+      lap=1; const n1=lapDiffName();
+      lap=sl; hardMode=sh;
+      if(!cn||!hn||cn===hn) throw new Error('カジュアルと高難易度の名前が分かれていない: '+cn+' / '+hn);
+      if(n1!==null) throw new Error('一周目にも難易度名が出る（二段になっていない周回）: '+n1); }
+    // 倍率を下げても「周回が進むほど手強い」が実際の敵で崩れないこと。
+    // 倍率だけを見ていると、素のHPと攻撃力が周回ごとに大きいことを見落とす
+    { const mk=function(l,zk){ const sl=lap, sh=hardMode; lap=l; hardMode=false;
+        setupRoster('inu'); startGame(); state='play'; lap=l; hardMode=false; levelsDone={};
+        const q=players[0]; player=q; q.x=camX+200; q.y=LANE; q.hp=q.maxHp=99999; q.invuln=0; q.state='idle';
+        enemies.length=0; encounters.length=0;
+        spawnEnemy(zk, camX+300, LANE); const Z=enemies[0];
+        q.invuln=0; const h0=q.hp; tryHitPlayer(Z, ETYPE[zk].dmg*ZAKO_DMG, false, 200, 60);
+        const r={hp:Z.maxHp, dmg:h0-q.hp}; lap=sl; hardMode=sh; return r; };
+      const w=mk(1,'wolf'), a2=mk(3,'greywan'), a4=mk(4,'mythguard'), a5=mk(5,'samurai');
+      if(!(a4.hp>a2.hp && a4.dmg>a2.dmg)) throw new Error('通常の四周目が三周目以下になっている: 3周 '+a2.hp+'/'+a2.dmg+' → 4周 '+a4.hp+'/'+a4.dmg);
+      if(!(a5.hp>a4.hp && a5.dmg>a4.dmg)) throw new Error('通常の五周目が四周目以下になっている');
+      if(!(a2.hp>w.hp)) throw new Error('前提が崩れている: 三周目は一周目より手強いはず');
+      console.log('通常でも右肩上がり OK (雑魚HP '+w.hp+'→'+a2.hp+'→'+a4.hp+'→'+a5.hp
+        +'／一撃 '+w.dmg+'→'+a2.dmg+'→'+a4.dmg+'→'+a5.dmg+')'); }
+    console.log('難易度の二段 OK (神話 通常 '+c4[0].toFixed(2)+'/'+c4[1].toFixed(2)
+      +' 高 '+h4[0].toFixed(2)+'/'+h4[1].toFixed(2)
+      +'／戦国 通常 '+c5[0].toFixed(2)+'/'+c5[1].toFixed(2)
+      +' 高 '+h5[0].toFixed(2)+'/'+h5[1].toFixed(2)+')'); }
 
   // 五周目のセーブが復元できること
   { const realLS=global.localStorage, mem={};

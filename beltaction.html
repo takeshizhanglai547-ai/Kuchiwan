@@ -112,7 +112,7 @@
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
     <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-      <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度モード：OFF</button>
+      <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
       <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（コンボ練習）</button>
     </div>
@@ -2311,8 +2311,31 @@ let TWO_P=false;                     // co-op enabled
 let hardMode=false;                  // 高難易度モード
 let coopLives=0;                     // 2P：残機は共有プール
 // ── 難易度による補正 ──
-function diffHpMul(){ return (hardMode?1.35:1)*(TWO_P?1.4:1)*(lap>=5?2.4:lap>=4?2.0:lap>=3?1.6:lap>=2?1.3:1); }   // 敵HP（周回ごとに増量）
-function diffDmgMul(){ return (hardMode?1.3:1)*(TWO_P?1.15:1)*(lap>=5?1.95:lap>=4?1.7:lap>=3?1.4:lap>=2?1.2:1); }  // 敵の攻撃力（周回ごとに強化）
+// ── 周回ごとの敵の強さ ──────────────────────────────────────
+// 四周目「神話」と五周目「戦国」だけは、通常と高難易度で別の値を持つ。
+//   通常   ＝ 最後まで気楽に見て回れる量（従来の数字から3〜4割落とした）
+//   高難易度＝ 従来の数字そのもの
+// この2周回では hardMode の全体係数（×1.35 / ×1.3）を重ねない。重ねると
+// 「従来の強さ＝高難易度」にならず、従来より更に硬い third の難易度になってしまう。
+// 一〜三周目は従来どおり（hard は全体係数で上がる）
+const LAP_DIFF={
+  1:{hp:1.00, dmg:1.00},
+  2:{hp:1.30, dmg:1.20},
+  3:{hp:1.60, dmg:1.40},
+  // 下げ幅は攻撃力に厚く配る。HPを削っても戦いが「短く」なるだけで、
+  // 死ににくさは変わらない。カジュアルにしたいのは「一撃の重さ」のほう。
+  // HP側は、最終周のボスが三周目のボスより軟らかくならない線で止めている
+  4:{hp:1.30, dmg:0.90, hardHp:2.00, hardDmg:1.70},   // 神話
+  5:{hp:1.45, dmg:0.98, hardHp:2.40, hardDmg:1.95} }; // 戦国
+function lapDiff(){
+  const d=LAP_DIFF[clamp(lap|0,1,5)] || LAP_DIFF[1];
+  if(hardMode && d.hardHp!=null) return {hp:d.hardHp, dmg:d.hardDmg, own:true};
+  return {hp:d.hp, dmg:d.dmg, own:false}; }
+// own=true の周回は表の値が最終値。全体係数を掛けない
+function diffHpMul(){ const d=lapDiff(); return ((hardMode&&!d.own)?1.35:1)*(TWO_P?1.4:1)*d.hp; }   // 敵HP
+function diffDmgMul(){ const d=lapDiff(); return ((hardMode&&!d.own)?1.3:1)*(TWO_P?1.15:1)*d.dmg; }  // 敵の攻撃力
+// いま神話／戦国のどちらの難易度で遊んでいるかを画面へ出すための名前
+function lapDiffName(){ return (LAP_DIFF[clamp(lap|0,1,5)]||{}).hardHp==null ? null : (hardMode?'高難易度':'カジュアル'); }
 // ══════════════════════════════════════════════════════════════
 //  敵の成長：ステージを進めるほど、そして主役が強くなるほど敵も鍛えられる
 //  「制覇したフィールド数」と「主役の熟練度」の両輪で決まるので、
@@ -6981,7 +7004,8 @@ function drawMap(){
   ctx.fillStyle='rgba(60,90,60,.5)'; ctx.beginPath(); ctx.moveTo(0,H*0.7);
   for(let x=0;x<=W;x+=40){ ctx.lineTo(x, H*0.68+Math.sin(x*0.01+2)*30); } ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
-  const mapTitle=lap>=5?'戦国の世マップ　〜五周目〜':lap>=4?'神話の世界マップ　〜四周目〜':lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
+  const _dn=lapDiffName();
+  const mapTitle=lap>=5?('戦国の世マップ　〜五周目・'+_dn+'〜'):lap>=4?('神話の世界マップ　〜四周目・'+_dn+'〜'):lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
   ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText(mapTitle,W/2,52); ctx.fillText(mapTitle,W/2,52);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
   if(lap>=5){ ctx.fillText('天下布武　（制覇 '+doneCount()+' / '+WORLD5_LEVELS.length+'　'+(doneCount()>=NG5_UNLOCK?'炎上する天守が解禁された':'天守まで '+(NG5_UNLOCK-doneCount()))+'）', W/2, 96); }
@@ -14441,7 +14465,9 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
 const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{
   unlockAudio(); fadeOverlay(document.getElementById('start'), ()=>goScreen(startTraining,'fade',40)); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
-const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode; _hardBtn.textContent='高難易度モード：'+(hardMode?'ON':'OFF'); _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
+const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
+  // 四周目・五周目はこのトグルで「カジュアル」と「従来の強さ」が切り替わるので、そう書く
+  _hardBtn.textContent=hardMode?'高難易度：ON（神話・戦国も本気）':'高難易度：OFF（神話・戦国はカジュアル）'; _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
 document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
 const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ const nx=nextLap(lap); if(nx) nx.go(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
