@@ -586,6 +586,99 @@ bad trade. Nothing regressed.
 
 ---
 
+## Round 7 — blind review, three seats, and two false positives
+
+Critics A, D and E reviewed the round-6 build blind. All three returned **REDO**.
+This is the first round in which reviewers filed findings that turned out to be
+wrong, and the first in which two reviewers contradicted each other.
+
+### The disagreement, and how it resolved
+
+Critic A filed the lock-on health bar as dividing by the target's HP at
+acquisition rather than by its maximum, supported by pixel measurements: 163px
+full at HP 62, 119px at HP 45. Critic E measured the same bar and **rejected the
+finding**: *"The bar is exact — the Ash Thrall's max HP is 62, not 100. No bug."*
+
+E is right, and A's own arithmetic proves it: 119/163 = 0.730 and 45/62 = 0.726.
+A read the capture stamp `targetHp62` as "62 out of 100". No change was made to
+the bar. The stamp now reads `targetHp45of62`, because evidence that invites a
+wrong conclusion is the evidence's fault and not the reviewer's.
+
+E's second rejection independently settled something this log had already
+reversed itself on once: the long cream diagonal in the swing frames is the
+sunlit parapet edge, present in idle frames with no trail, and *"the real trail is
+only the segment above it, and it correctly traces the blade tip."* E also
+checked every filename's damage-window encoding and found no timing defect
+anywhere.
+
+### The second false positive, and why it was acted on anyway
+
+E reported the heavy trail inverting to *"a solid dark polygon that visibly
+darkens the parapet brickwork"* mid-damage-window. Measured against a control
+strip and a no-trail frame:
+
+| Frame | Swept region | Control | Delta |
+|---|---|---|---|
+| t=0.75 | 15.9 | 4.6 | +11.3 |
+| t=0.85 | 6.4 | 4.8 | +1.6 |
+| t=1.1 (no trail) | 5.5 | 4.7 | +0.8 |
+
+It never darkens — at t=0.85 it is still brighter than the same region with no
+trail at all. But a ribbon that collapses from +11.3 to +1.6 in a single frame
+reads as a glitch regardless of which direction it moves, so the falloff was
+softened. **The observation was right even though the diagnosis was wrong**, which
+is the most useful shape a review finding can have.
+
+### Confirmed and fixed
+
+| Finding | Seats | Resolution |
+|---|---|---|
+| The boss's own body hides the player — 5 of 14 fight frames | A, D, E | Volga rebuilt from cloned materials with his own cutout, focused on the PLAYER; a 4.6m boss stepping between camera and player now opens around them |
+| Locked target renders directly behind the player | A, D | Structural: the boom sits ON the player→target axis. Fixed with lateral displacement of the EYE only — a deliberate toe-in |
+| Ash motes read as opaque white spheres | D, E (and E in round 6) | See below |
+| Charged heavy's held tell is pixel-static | A | Measured at 1–2% frame delta against 8.6% during the strike. The long tell stays; two keys add tremor and creep-back |
+| Phase 2 is silhouette-identical to phase 1 | D | Right pauldron shed, apron burned back. Engine-asserted |
+
+### The ash motes took three fixes on three different properties
+
+This is worth recording because no amount of code reading would have found any of
+them, and because the first two fixes were confidently wrong.
+
+1. **Position.** Spawns within 3.5m of the lens rejected. Helped; insufficient —
+   ambient motes drift, so one that spawned legally wanders in anyway.
+2. **Brightness.** Measured 7:1 contrast against the ground — a mote at
+   (122,114,127) over ground at (15,14,32). Alpha 0.24 → 0.11 and the tint
+   darkened. Helped; still (61,58,65) against a near-black wall.
+3. **Size.** E measured "2–3px in the distance, 50–90px near camera — a 25x scale
+   swing." That 90px figure was literal: the vertex shader clamped `gl_PointSize`
+   to 90px as a **fill-rate guard**, and near-camera ash was simply hitting the
+   ceiling. E was reading the clamp. Ash and dust now cap at 20px; sparks and
+   embers keep the old ceiling.
+
+Each fix addressed a real property and none was sufficient alone, because the
+defect was three defects wearing one description.
+
+### Verification on the round-7 build
+
+| Check | Result |
+|---|---|
+| Definition of Done | `victory`, `bossHp 0`, zero errors |
+| Phase-2 silhouette assertions | pass — stacks sheared, pauldron hidden, apron at 0.34 |
+| Boss capture | zero errors, fight in the arena |
+| Location tour | zero errors, 16 shots |
+| Combat + swing | zero errors |
+| Landed hit | target visible beside the player, flashing white on the exact frame HP drops 62 → 45 |
+
+### Still open after round 7
+
+- Three location frames with the camera behind geometry: `loc_arena_far`,
+  `loc_cistern_floor`, `loc_bridge`.
+- The CONTROLS panel has no scrim and is illegible over sunlit paving.
+- The arena is dark: A measured 59.9% of one boss frame below luminance 16/255.
+- No seat has ever returned PASS, in seven rounds.
+
+---
+
 ## Circuit breaker status (§21)
 
 **Six rounds complete: one developer pass and five blind review rounds**, across
