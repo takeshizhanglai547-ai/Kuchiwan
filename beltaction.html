@@ -475,7 +475,65 @@ const AMBSND={
   forest:{hz:3400,q:0.6, dur:1.6, v:0.022, sw:1.35},  // 森のざわめき
   machine:{hz:150,q:3.2, dur:2.2, v:0.028, sw:1.0},   // 機械・母船のハム
 };
+// ── キャラクターボイス ──────────────────────────────────────
+// 外部音源を持てない（単一HTMLで追加ファイルなし）ので、鳴き声も合成する。
+// 声は「声帯＝基本周波数の付いた波」と「共鳴＝フォルマント帯域」でできている。
+// 犬の「ワンッ」は F1≈760 / F2≈1750 あたりに山があり、猫の「ニャー」は
+// 立ち上がりで F2 が大きく動く。この2本の山をキャラごとに置き換えると別人に聞こえる。
+//   f0=声の高さ／f1,f2=共鳴の山／q=喉の締まり／bite=子音の息の当たり
+const VOICE={
+  inu:    {f0:300, f1:780, f2:1800, q:7.0, wave:'sawtooth', bite:0.30},   // 明るく張る若い犬
+  shima:  {f0:186, f1:560, f2:1180, q:6.0, wave:'sawtooth', bite:0.44},   // 胴の長い低い唸り
+  nuko:   {f0:520, f1:900, f2:2500, q:9.0, wave:'triangle', bite:0.10},   // 猫。子音が無く滑らか
+  guard8: {f0:148, f1:470, f2:960,  q:4.6, wave:'square',   bite:0.58},   // 機械仕掛けの重い声
+  watch:  {f0:392, f1:880, f2:2150, q:8.0, wave:'sawtooth', bite:0.22},   // 軽くて素早い
+  wanden: {f0:228, f1:640, f2:1450, q:6.2, wave:'sawtooth', bite:0.40} }; // low で鋭い気合い
+// 節ごとの [音程倍率, 長さ(秒), 音量倍率]
+const VOICE_LINE={
+  atk:  [[1.00,0.11,1.00]],                                  // 技：一声だけ短く張る
+  ult:  [[0.84,0.14,1.00],[1.34,0.30,1.08]],                 // 奥義：溜めてから高く伸ばす
+  hurt: [[1.24,0.10,0.92]],                                  // 被弾：高く短い
+  ko:   [[1.16,0.09,0.92],[0.70,0.30,0.80]] };               // 撃墜：高→低へ落ちる
+function voiceSyl(V,mul,dur,amp,x,dly){
+  if(!actx||!sndOn) return;
+  const t=actx.currentTime+(dly||0), O=sfxOut(x); if(!O) return;
+  const f0=V.f0*mul;
+  const o=actx.createOscillator(); o.type=V.wave;
+  // 立ち上がりで一度上へ跳ねてから落ちる。これが無いと「ブー」と鳴るだけで声にならない
+  o.frequency.setValueAtTime(f0*0.70,t);
+  o.frequency.exponentialRampToValueAtTime(f0*1.16,t+dur*0.16);
+  o.frequency.exponentialRampToValueAtTime(f0*0.78,t+dur);
+  const g=actx.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(amp,t+0.014);
+  g.gain.setValueAtTime(amp,t+dur*0.52);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  // フォルマント2本を並列に。直結を混ぜないので「母音の色」だけが残る
+  const mk=(f,q,gn)=>{ const bp=actx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.setValueAtTime(f,t); bp.Q.value=q;
+    const gg=actx.createGain(); gg.gain.value=gn; o.connect(bp); bp.connect(gg); gg.connect(g); return bp; };
+  mk(V.f1,V.q,1.0);
+  const b2=mk(V.f2,V.q*0.8,0.55);
+  b2.frequency.exponentialRampToValueAtTime(V.f2*0.60,t+dur);   // 口を閉じていく＝「ワゥ」「ニャ」
+  g.connect(O); o.start(t); o.stop(t+dur+0.02);
+  if(V.bite>0){                                                // 子音（息の当たり）
+    const s=actx.createBufferSource(); s.buffer=noiseBuf;
+    const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=V.f2*1.1; bp.Q.value=1.2;
+    const ng=actx.createGain(); ng.gain.setValueAtTime(amp*V.bite,t);
+    ng.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    s.connect(bp); bp.connect(ng); ng.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.07); } }
+// 声が重なると一気に耳障りになるので、種類ごとに最短間隔を置く
+let _voiceCd=0;
+function playVoice(kind,line,x){
+  if(!actx||!sndOn) return;
+  if(gf<_voiceCd) return;
+  const V=VOICE[kind]||VOICE.inu, L=VOICE_LINE[line]||VOICE_LINE.atk;
+  _voiceCd=gf+(line==='ult'?46:line==='ko'?40:14);
+  const r=1+(Math.random()*0.07-0.035);            // 毎回わずかに揺らす＝同じ音の貼り付けに聞こえない
+  let d=0;
+  for(const sy of L){ voiceSyl(V, sy[0]*r, sy[1], 0.26*sy[2], x, d); d+=sy[1]*0.84; } }
 const sfx={
+  voice:(kind,line,x)=>playVoice(kind,line,x),
   // 空振り＝武器種ごとにバンドパスが抜けるスウッシュ。コンボ段数で開始帯域が上がり振りの速さが出る
   swing:(p=0,cls,x)=>{ const c=(HITSND[cls]||HITSND.blade).swoosh;
     swoosh(c[0], c[1], Math.max(500,c[2]-p*380), c[3], c[4], x);
@@ -1518,6 +1576,28 @@ function superEcho(x,y,color){
 }
 // 残響の減衰。flash と同じ場所で1フレームに1回だけ進める
 function updateEcho(){ if(echoT>0) echoT--; }
+// ── 奥義のカットイン ────────────────────────────────────────
+// 従来は閃光と集中線だけで、「誰が何を出したのか」が画に出ていなかった。
+// 格闘ゲームと同じで、止め絵の一枚が入るかどうかで技の格が決まる。
+//   0.00〜0.16 帯が走り込み、立ち絵が外から滑り込む
+//   0.16〜0.68 保持（技名が出る）
+//   0.68〜1.00 帯が抜けて立ち絵が流れ去る
+const ULT_CUT_MAX=54;
+const ultCut={t:0, kind:'inu', name:'', col:'#ffe14d', dir:1, pid:0};
+function ultCutIn(kind,name,col){
+  if(perfTier>=2) return;                        // 重いときは静かに省く
+  ultCut.t=ULT_CUT_MAX; ultCut.kind=kind; ultCut.name=name||'奥義';
+  ultCut.col=col||heroColOf(kind); ultCut.dir=(player&&player.facing)||1;
+  ultCut.pid=(player&&player.pid)|0;
+  camZoomT=Math.max(camZoomT,1.16); triggerSlow(30); }
+function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
+// 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
+const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
+  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝'};
+function beginUlt(p){
+  const k=p.kind;
+  sfx.voice(k,'ult',p.x);
+  ultCutIn(k, ULT_NAME[k]||'奥義', heroColOf(k)); }
 // 画面に残る余韻。技を撃った場所を中心に、暖色がゆっくり引いていく
 // 致命の一撃の締め。画面のフチを落として、主役と崩れた相手だけを残す
 function drawCritVignette(){
@@ -2380,6 +2460,9 @@ function commandSpecial(p){ if(p.z>0) return null;
 function beginAttack(type){
   const p=player, def=ATK[type];
   if(trainMode && p===players[0]) trainLog(def&&def.name?def.name:type);
+  // 声は「ここぞ」でだけ出す。通常のジャブまで喋ると15分で耳が痛くなる
+  if(def && (def.special||def.finisher||def.charged||def.dimBlade))
+    sfx.voice(p.kind, def.dimBlade?'ult':'atk', p.x);
   p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{}};
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
@@ -3644,6 +3727,7 @@ function updatePlayer(){
     if((K.grab||pressed.grab) && p.z<=0){ if(beginSGMove(p)){ pressed.grab=false; return; } }   // 攻撃＋掴み＝キャラ別必殺技
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
+      beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
@@ -5898,6 +5982,7 @@ function hurtPlayer(p,dmg,dir,knockdown,cls,ivOv){ if(!p)p=player; if(p.invuln>0
   dmg=Math.max(1,Math.round(dmg*(p.defMul||1)));   // 防御力（守りのマント）で軽減
   p.hp-=dmg; p.invuln=(ivOv!=null)?ivOv:(knockdown?64:38); p.vx=dir*4; shake=7;
   flashRed(knockdown?5:4, p.x, p.y-46); kick(dir,-0.35,knockdown?8:5.5); hurtSound(dmg, p.x, cls); resetCombo();
+  sfx.voice(p.kind,'hurt',p.x);
   if(p.rig){ sprKick(p.rig.sq, 5); sprKick(p.rig.wob, dir*p.facing*8);
     if(p.rig.earL){ sprKick(p.rig.earL,-11); sprKick(p.rig.earR,-9.5); sprKick(p.rig.tail,10); } }   // 被弾でぐにゃっと歪み、耳と尻尾が跳ねる
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
@@ -5908,6 +5993,7 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
   p.hp=0;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
   p.state='dead'; p.downTimer=40; p.vz=8; p.riseVel=0;
+  sfx.voice(p.kind,'ko',p.x);
   const out = TWO_P ? (--coopLives<0) : (--p.lives<0);   // 2Pは共有残機プールを消費
   if(out){ p.active=false; popText(p.x,p.y-100,(p.kind==='shima'?'シマダックス':p.kind==='nuko'?'ヌコ':p.kind==='guard8'?'ガードワン8号':p.kind==='watch'?'ワッチ':p.kind==='wanden'?'ワンデン':'イッヌ')+' DOWN…','#ff5a5a',true);
     if(activePlayers().length===0) gameOver(); return; }
@@ -7069,7 +7155,7 @@ function update(){
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -7159,7 +7245,79 @@ function render(){
   }
   else if(flashCol!==FLASH_DEF){ flashCol=FLASH_DEF; flashX=flashY=null; }
   drawHUD();
+  drawUltCut();                                   // カットインはHUDより上（技の宣言なので何にも隠されない）
 }
+// ── 奥義のカットイン（描画）────────────────────────────────
+// 帯が上下に開いて立ち絵が滑り込み、技名が反対側から差し込む。
+// 立ち絵は本編と同じ drawPlayer をそのまま拡大して描く（別絵を持つと必ず本編とずれる）
+function drawUltCut(){
+  if(ultCut.t<=0) return;
+  const k=1-ultCut.t/ULT_CUT_MAX;
+  const io=1-Math.pow(1-clamp(k/0.16,0,1),3);      // 開くのは速く、止まりは緩く
+  const eo=clamp((k-0.72)/0.28,0,1);
+  const open=io*(1-eo*eo);                          // 帯の高さ（開いて→閉じる）
+  if(open<=0.004) return;
+  const rgb=hexRGB(ultCut.col), d=ultCut.dir>=0?1:-1;
+  const cy=H*0.50, bh=H*0.46*open, SH=52;           // SH＝上下の食い違い（傾き）
+  // 帯の外を沈める。ここが明るいままだと帯が浮かず、ただの半透明の板に見える
+  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.42*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
+  ctx.save();
+  ctx.beginPath();                                  // 傾いた帯で切り抜く
+  ctx.moveTo(-240+SH, cy-bh/2); ctx.lineTo(W+240+SH, cy-bh/2);
+  ctx.lineTo(W+240-SH, cy+bh/2); ctx.lineTo(-240-SH, cy+bh/2);
+  ctx.closePath(); ctx.clip();
+  // 1) 帯の地。まず不透明で塞いでから色を乗せる。半透明のままだと背景が透けて
+  //    「技の宣言」ではなく「画面が汚れた」ように見える
+  ctx.fillStyle='#07060e'; ctx.fillRect(-260,cy-bh/2,W+520,bh);
+  const bg=ctx.createLinearGradient(0,cy-bh/2,0,cy+bh/2);
+  bg.addColorStop(0,'rgba('+rgb+',.05)'); bg.addColorStop(0.5,'rgba('+rgb+',.34)');
+  bg.addColorStop(1,'rgba('+rgb+',.05)');
+  ctx.fillStyle=bg; ctx.fillRect(-260,cy-bh/2,W+520,bh);
+  // 2) 流れる集中線。止め絵に速度を足すのはこの層
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<18;i++){
+    const u=((i*0.137)+k*1.35)%1, lx=-260+u*(W+520);
+    const w2=6+((i*37)%5)*7, al=(0.10+0.13*((i*29)%4)/3)*(1-eo);
+    ctx.fillStyle='rgba('+rgb+','+al.toFixed(3)+')';
+    ctx.beginPath();
+    ctx.moveTo(lx+SH,cy-bh/2); ctx.lineTo(lx+w2+SH,cy-bh/2);
+    ctx.lineTo(lx+w2-SH,cy+bh/2); ctx.lineTo(lx-SH,cy+bh/2); ctx.closePath(); ctx.fill(); }
+  ctx.globalCompositeOperation='source-over';
+  // 3) 立ち絵。向いている側から滑り込み、抜けるときは奥へ流れる
+  if(open>0.35){
+    const px=lerp(W*0.5+d*W*0.75, W*0.5+d*W*0.24, io) + eo*d*W*0.30;
+    // 帯の高さから逆算する。立ち絵は足元が原点で上へ 168px ぶん伸びる（実測）ので、
+    // 頭が帯の上辺に収まり、足元だけが下辺で切れる大きさにする
+    // ガードワン8号だけ本編で 1.28倍の巨体として描かれるので、そのぶん割り戻す
+    const sc=clamp((bh+30)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.7, 2.8);
+    ctx.save(); ctx.globalAlpha=clamp((open-0.35)/0.30,0,1)*(1-eo);
+    ctx.translate(px, cy+bh*0.5+34); ctx.rotate(-d*0.06);
+    const sv=player; player=players[ultCut.pid]||players[0];
+    const svk=player.kind; player.kind=ultCut.kind;
+    drawPlayerPortrait(0,0,sc,-d,'idle');
+    player.kind=svk; player=sv;
+    ctx.restore(); }
+  ctx.restore();
+  // 4) 技名。帯の外へ少しはみ出させると「収まりきらない大技」に見える
+  if(open>0.6){
+    const ta=clamp((open-0.6)/0.25,0,1)*(1-eo);
+    const tx=lerp(W*0.5-d*W*0.55, W*0.5-d*W*0.20, io) - eo*d*W*0.22;
+    ctx.save(); ctx.globalAlpha=ta;
+    ctx.translate(tx, cy+8); ctx.rotate(-0.055); ctx.textAlign='center';
+    ctx.font='italic '+uif('900',44); ctx.lineJoin='round';
+    ctx.lineWidth=11; ctx.strokeStyle='rgba(8,6,14,.92)'; ctx.strokeText(ultCut.name,0,0);
+    const tg=ctx.createLinearGradient(0,-34,0,14);
+    tg.addColorStop(0,'#ffffff'); tg.addColorStop(0.52,ultCut.col); tg.addColorStop(1,'rgba('+rgb+',.72)');
+    ctx.fillStyle=tg; ctx.fillText(ultCut.name,0,0);
+    ctx.font=uif('bold',15); ctx.lineWidth=6; ctx.strokeStyle='rgba(8,6,14,.9)';
+    ctx.strokeText(heroNameOf(ultCut.kind),0,26);
+    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,26);
+    ctx.restore(); ctx.textAlign='left'; }
+  // 5) 帯の上下の縁に光の線を1本ずつ通す（帯が板のままにならない）
+  ctx.save(); ctx.globalAlpha=(1-eo)*0.9; ctx.strokeStyle=ultCut.col; ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.moveTo(-240+SH,cy-bh/2); ctx.lineTo(W+240+SH,cy-bh/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-240-SH,cy+bh/2); ctx.lineTo(W+240-SH,cy+bh/2); ctx.stroke();
+  ctx.restore(); }
 
 // ---------- Per-stage theme (hi-res, distinct mood for each stage) ----------
 const STAGE_THEME=[
