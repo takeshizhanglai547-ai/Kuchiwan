@@ -178,7 +178,16 @@ const PARTICLE_VERT = /* glsl */`
     gl_Position = projectionMatrix * mv;
     // Perspective-correct point size, clamped: an un-clamped point sprite next to the
     // near plane can cost an entire frame in fill rate.
-    gl_PointSize = clamp(size * sizeCurve * uSizeScale / max(depth, 0.05), 1.0, 90.0);
+    // The upper clamp was a pure fill-rate guard at 90px, which is far larger
+    // than anything ash should ever be. A reviewer measured the same emitter
+    // drawing 2-3px motes in the distance and 50-90px discs near the camera — a
+    // 25x scale swing — and read the near ones as opaque balls hanging at head
+    // height with no source. They were reading the clamp.
+    //
+    // Ash and dust are ambient specks and get a tight cap; sparks, cinders and
+    // embers are meant to read as bright points up close and keep the old one.
+    float maxPx = (kind == 2 || kind == 3) ? 20.0 : 90.0;
+    gl_PointSize = clamp(size * sizeCurve * uSizeScale / max(depth, 0.05), 1.0, maxPx);
   }
 `;
 
