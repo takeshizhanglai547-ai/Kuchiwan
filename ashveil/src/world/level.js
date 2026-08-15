@@ -330,6 +330,21 @@ export function buildLevel(scene, mats) {
                         prompt: 'Enter the Kiln Court', once: true });
   level.fogGate = { x: 0, y: 0.1, z: 48.5, w: 5.0, h: 5.5 };
 
+  // The arena seal. Inert until the encounter starts, then solid.
+  //
+  // Moving the wake trigger onto the arena floor got the fight STARTING in the
+  // right place, but it did not keep it there: the player retreats south under
+  // pressure and the fight walks itself back out through the arch into the 5m
+  // entrance gap, which is where every occluded boss frame came from. Genre
+  // convention is on the right side here — you do not get to leave a boss arena —
+  // and a seal fixes the drift at its source rather than asking the camera to
+  // cope with a fight happening inside a doorway.
+  const arenaSeal = [
+    { x0: -3.0, z0: 48.5, x1: 3.0, z1: 48.5, yMin: 0, yMax: 6.0, off: true },
+  ];
+  b.walls.push(...arenaSeal);
+  level.arenaSeal = arenaSeal;
+
   // ==========================================================================
   // 9. KILN COURT — the arena
   // ==========================================================================

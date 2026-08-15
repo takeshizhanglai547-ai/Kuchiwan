@@ -275,6 +275,14 @@ export class Director {
     this.hud.toast('VOLGA, THE KILNWARDEN');
     this.fogGateHandle?.remove?.();
     this.fogGateHandle = null;
+    this._sealArena(true);
+  }
+
+  /** Close or open the arena mouth. Closed for the duration of the encounter. */
+  _sealArena(on) {
+    const seal = this.level.arenaSeal;
+    if (!seal) return;
+    for (const w of seal) w.off = !on;
   }
 
   _updateBossFight(dt, ctx) {
@@ -324,6 +332,9 @@ export class Director {
 
   onBossDefeated(boss) {
     this.state = 'victory';
+    // Victory, death and leash-reset all have to unseal, or the arena becomes a
+    // box the player cannot walk out of.
+    this._sealArena(false);
     this.victoryTimer = 0;
     this.rules.chipThroughGuard = false;
     this.hud.setBoss(null);
@@ -342,6 +353,7 @@ export class Director {
 
   _resetBoss() {
     this.state = 'explore';
+    this._sealArena(false);
     this._leaveTimer = 0;
     this.boss.reset();
     this.boss.noLock = true;
@@ -372,6 +384,7 @@ export class Director {
   }
 
   respawn() {
+    this._sealArena(false);
     this.hud.screen('none');
     this.state = 'explore';
     this.rules.chipThroughGuard = false;
