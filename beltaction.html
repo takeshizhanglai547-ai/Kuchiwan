@@ -6785,6 +6785,28 @@ function buildEncounters4(){ resetWorldState(); trueBossSpawned=false;
 function buildEncounters5(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(SENGOKU_CH.slice(1,2),null);   // 五周目：城下町から開始（天守は規定数クリアで解禁）
 }
+// 章の頭：初回はオープニングを見せ、やり直しでは飛ばす
+function ngBegin(open, skipOpen){
+  const go=()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); };
+  if(skipOpen) go(); else startCutscene(open, go); }
+// ── ゲームオーバーからの「最初から」──
+// 五周目で倒れて一周目の王都へ戻されるのは、やり直しではなく別のゲームだった。
+// 遊んでいた周回の頭へ戻す。支度金はタイトルの「N周目から」と同じ額を渡す
+// （二周目以降は前の周回の強化を引き継ぐ前提の設計なので、素の状態では成立しない）
+const LAP_RESTART={
+  2:{coins:200,  name:'2周目「蟲の世界」',   go:startNG2},
+  3:{coins:400,  name:'3周目「宇宙人の侵略」', go:startNG3},
+  4:{coins:700,  name:'4周目「神話」',       go:startNG4},
+  5:{coins:1000, name:'5周目「戦国」',       go:startNG5} };
+let retryLap=1;                        // 倒れた時点の周回。startGame が lap を1へ戻すので控えておく
+function restartFromLap(l){
+  clearProgress(); startGame();        // 強化とコインは新規と同じ扱い（周回だけ引き継ぐ）
+  const r=LAP_RESTART[l|0];
+  if(!r) return;                       // 一周目はそのまま王都から
+  coins=r.coins; r.go(true); }         // true＝オープニングは飛ばす
+// 「最初から」ボタンの中身。ボタンの配線はDOM越しで検査しにくいので、
+// どこへ戻るかの判断だけをここに出す
+function retryStart(){ restartFromLap(retryLap); }
 // クリア後に進める周回。DOM を読まずに検証できるよう、判断だけを関数に出す。
 // 三周目クリア後はここが null を返しており、四周目へ行けなかった
 function nextLap(l){
@@ -6794,7 +6816,7 @@ function nextLap(l){
   if(l>=2) return {lap:3, label:'▶ 3周目「宇宙人の侵略」へ', go:startNG3};
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
-function startNG5(){ unlockAudio(); lap=5; endingDone=false; cut=null;
+function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6803,10 +6825,10 @@ function startNG5(){ unlockAudio(); lap=5; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG5_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG5_OPEN, skipOpen);
 }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
-function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
+function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6815,10 +6837,10 @@ function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG4_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG4_OPEN, skipOpen);
 }
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
-function startNG3(){ unlockAudio(); lap=3; endingDone=false; cut=null;
+function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6827,10 +6849,10 @@ function startNG3(){ unlockAudio(); lap=3; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG3_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG3_OPEN, skipOpen);
 }
 // ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
-function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
+function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6839,7 +6861,7 @@ function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG2_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG2_OPEN, skipOpen);
 }
 
 //======================================================================
@@ -14406,9 +14428,14 @@ function gameOver(){ if(scr.dur<=0 && state!=='over'){ goScreen(gameOver,'fade',
   const sv=loadProgress(), rb=document.getElementById('resumeBtn');
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
   const nb=document.getElementById('ng2Btn'); if(nb)nb.classList.add('hidden');
+  retryLap=lap|0;                      // 「最初から」の戻り先。startGame より先に控える
+  { const tb=document.getElementById('retryBtn'), r=LAP_RESTART[retryLap];
+    if(tb) tb.textContent = r? ('▶ '+r.name+'の最初から') : '▶ 最初から'; }
   elResult.classList.remove('hidden'); }
 function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52); return; }   // 暗転してからリザルトを出す
   state='win'; Music.stop(); victoryJingle(); clearProgress();
+  retryLap=1;                          // クリア後の「最初から」は本当に最初から
+  { const tb=document.getElementById('retryBtn'); if(tb) tb.textContent='▶ 最初から'; }
   if(lap>=5){ elRTitle.textContent='SENGOKU CLEAR!!!!!'; elRTitle.style.color='#ffb26a';
     elRSub.textContent='三英傑を退け、戦の世に終止符を打った！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else if(lap>=4){ elRTitle.textContent='MYTH CLEAR!!!!'; elRTitle.style.color='#fff6c0';
@@ -14468,7 +14495,7 @@ document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('c
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
   // 四周目・五周目はこのトグルで「カジュアル」と「従来の強さ」が切り替わるので、そう書く
   _hardBtn.textContent=hardMode?'高難易度：ON（神話・戦国も本気）':'高難易度：OFF（神話・戦国はカジュアル）'; _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
-document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
+document.getElementById('retryBtn').onclick=()=>{ retryStart(); };
 const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ const nx=nextLap(lap); if(nx) nx.go(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
 const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };
