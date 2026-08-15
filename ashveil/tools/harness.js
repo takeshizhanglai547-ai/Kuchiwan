@@ -682,6 +682,26 @@ const SCENARIOS = {
    * fullrun scenario; this exercises the other two, which are otherwise only
    * verified by reading the code.
    */
+  /** Dump every collision wall segment near a point. */
+  async walls({ advance, page, result }) {
+    await advance(0.2);
+    const near = await page.evaluate(() => {
+      const g = window.ASHVEIL;
+      const cw = g.ctx.collision || g.collision;
+      const list = cw.walls || cw._walls || [];
+      const out = [];
+      for (const w of list) {
+        const zs = [w.z0, w.z1], xs = [w.x0, w.x1];
+        if (Math.min(...zs) > 53 || Math.max(...zs) < 47) continue;
+        if (Math.min(...xs) > 4 || Math.max(...xs) < -4) continue;
+        out.push(`x0=${w.x0.toFixed(2)} z0=${w.z0.toFixed(2)} x1=${w.x1.toFixed(2)} z1=${w.z1.toFixed(2)} y=${w.yMin}..${w.yMax} off=${!!w.off}`);
+      }
+      return { count: list.length, out };
+    });
+    result.notes.push(`total walls: ${near.count}`);
+    for (const l of near.out) result.notes.push('  ' + l);
+  },
+
   /** Walk north from the forecourt, reporting position, to find what blocks entry. */
   async probe({ at, advance, page, result }) {
     await at(0, 0.3, 45, 0);

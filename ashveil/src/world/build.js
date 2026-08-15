@@ -15,6 +15,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32, clamp } from '../core/util.js';
 
+/**
+ * How high a riser an actor may walk through, so the ground query can then lift
+ * it. Must stay below `Actor`'s grounded step tolerance (0.62) — an actor must
+ * never pass a wall it cannot afterwards stand on.
+ */
+const STEP_OVER = 0.45;
+
 const _m4 = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
@@ -432,7 +439,24 @@ export class CollisionWorld {
         if (s.off) continue;
         // Skip walls entirely above the actor's head or below their feet:
         // this is what lets the player walk over a low parapet from a high ledge.
-        if (s.yMax <= y + 0.12 || s.yMin >= top) continue;
+        //
+        // STEP_OVER must match what the actor can actually climb. It was 0.12,
+        // while `Actor.update` will happily lift a grounded actor onto anything
+        // within 0.62 — so every stair in the level was climbable by the ground
+        // query and blocked by the wall query, and the actor stopped dead at the
+        // riser it was allowed to stand on.
+        //
+        // That is not a cosmetic issue: it made the Kiln Court unreachable on
+        // foot. The cistern exit stair tops out at y=0.40 and its last riser sits
+        // at z=50.45, so walking north from the forecourt stopped at z=50.05 —
+        // and the boss encounter only ever appeared to work because its trigger
+        // fired at z=48.5, before the riser. The arena was never entered; the
+        // fight happened in the forecourt, which is the real source of the
+        // occluded boss framing reported across four rounds of review.
+        //
+        // Kept just under the actor's own 0.62 tolerance: an actor must never
+        // pass a wall it cannot then stand on top of.
+        if (s.yMax <= y + STEP_OVER || s.yMin >= top) continue;
         closestPointOnSeg(x, z, s.x0, s.z0, s.x1, s.z1, out);
         let dx = x - out.x, dz = z - out.z;
         let d2 = dx * dx + dz * dz;
