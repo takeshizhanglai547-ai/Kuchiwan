@@ -88,6 +88,78 @@ const DRIVER = `
   if(!projectiles.some(pr=>pr.owner==='player')) throw new Error('projectile not deflected during parry window');
   console.log('飛び道具パリィ OK (敵弾を弾き返して自分の弾に)');
 
+  // ===== 5b) 連続弾き =====
+  // 従来は「弾いても受けは延びず、窓が閉じれば空振りと同じ34Fの硬直」だった。
+  // 弾幕に対して一発しか返せず、成功しているのに罰される形になっていた
+  const shoot=function(px){ spawnProj(px, p.y, -8, 0, {owner:'enemy', dmg:12, color:'#f00', r:8, life:60, zz:40}); };
+  // (a) 弾くと受けが継ぎ足される
+  { p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1;
+    beginIaiParry(p);
+    for(let i=0;i<10;i++){ hitStop=0; slowmo=0; step(1); }     // 受けを残り少なくする
+    const before=p.ipWin;
+    if(!(before<=3)) throw new Error('この節の前提が崩れている: 受けが残りすぎ '+before);
+    shoot(p.x+40); hitStop=0; slowmo=0; step(1);
+    if(!(p.ipWin>before)) throw new Error('弾いても受けが継ぎ足されない: '+before+' → '+p.ipWin);
+    console.log('受けの継ぎ足し OK (残り'+before+'F → '+p.ipWin+'F)'); }
+  // (b) 同じ構えで何本も弾ける（従来は窓が閉じて1本まで）
+  { p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1; p.hp=p.maxHp;
+    beginIaiParry(p);
+    let ref=0;
+    // 受けが閉じた後に撃つと当然もらうので、開いている間だけ撃つ
+    for(let i=0;i<40 && p.state==='iparry';i++){
+      if(i%6===0 && p.ipWin>0) shoot(p.x+40);
+      hitStop=0; slowmo=0; step(1);
+      ref=p.ipRef||0; }
+    if(!(ref>=3)) throw new Error('一つの構えで3本以上弾けない: '+ref+'本');
+    if(p.hp!==p.maxHp) throw new Error('弾いたのに被弾している');
+    console.log('連続弾き OK (一つの構えで '+ref+'本／継ぎ足しの上限つき)'); }
+  // (c) 継ぎ足しには上限がある（弾幕の前に立っているだけで無敵にはならない）
+  { p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1; p.hp=p.maxHp;
+    beginIaiParry(p);
+    let f=0;
+    for(; f<400 && p.state==='iparry' && p.ipWin>0; f++){ shoot(p.x+40); hitStop=0; slowmo=0; step(1); }
+    if(!(p.ipWin<=0)) throw new Error('撃たれ続ける限り受けが閉じない（無敵になっている）: '+f+'F');
+    if(!(f<120)) throw new Error('受けが閉じるまで長すぎる: '+f+'F');
+    console.log('継ぎ足しの上限 OK ('+f+'F で受けが閉じる／弾いた '+p.ipRef+'本)'); }
+  // (d) 弾いて終わった構えの硬直は、空振りよりずっと短い
+  { const recover=function(fire){
+      p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1; p.hp=p.maxHp;
+      beginIaiParry(p);
+      for(let i=0;i<3;i++){ if(fire && i===0) shoot(p.x+40); hitStop=0; slowmo=0; step(1); }
+      let g=0; while(p.state==='iparry' && g<300){ hitStop=0; slowmo=0; step(1); g++; }
+      return g; };
+    const whiff=recover(false), ok=recover(true);
+    if(!(whiff>=30)) throw new Error('空振りの罰が消えている: '+whiff+'F');
+    if(!(ok<whiff*0.5)) throw new Error('弾いても空振りと同じだけ固まる: 空振り'+whiff+'F / 弾き'+ok+'F');
+    console.log('弾き後の硬直 OK (空振り '+whiff+'F ／ 弾いた後 '+ok+'F)'); }
+  // (e) 弾いた後の硬直中は再入力で繋げられる。空振りの硬直では繋げない
+  { const chain=function(fire){
+      p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1; p.hp=p.maxHp;
+      beginIaiParry(p);
+      for(let i=0;i<3;i++){ if(fire && i===0) shoot(p.x+40); hitStop=0; slowmo=0; step(1); }
+      while(p.state==='iparry' && p.ipWin>0){ hitStop=0; slowmo=0; step(1); }
+      if(!(p.ipStance>0)) throw new Error('硬直に入っていない');
+      p.in.pressed.grd=true; useInput(p.in);
+      hitStop=0; slowmo=0; step(1);
+      return p.ipWin; };
+    const okWin=chain(true), whiffWin=chain(false);
+    if(!(okWin>0)) throw new Error('弾いた後の硬直中に繋げない');
+    if(whiffWin>0) throw new Error('空振りの硬直中にも繋げてしまう（リスクが消える）');
+    console.log('繋ぎの再入力 OK (弾いた後は受け'+okWin+'Fで再開／空振り後は繋げない)'); }
+  // (f) 繋ぐほど返しが重くなる
+  { const dmgAt=function(n){
+      p.state='idle'; p.invuln=0; projectiles.length=0; enemies.length=0; p.facing=1;
+      beginIaiParry(p);
+      let last=0;
+      for(let i=0;i<n;i++){ shoot(p.x+40); hitStop=0; slowmo=0; step(1);
+        const mine=projectiles.filter(q=>q.owner==='player');
+        if(mine.length) last=mine[mine.length-1].dmg; }
+      return last; };
+    const d1=dmgAt(1), d3=dmgAt(3);
+    if(!(d1>0)) throw new Error('弾き返した弾にダメージが無い');
+    if(!(d3>d1)) throw new Error('繋いでも返しが重くならない: '+d1+' → '+d3);
+    console.log('繋ぎの見返り OK (1本目 '+d1+' → 3本目 '+d3+')'); }
+
   // ===== 6) 居合の技セット =====
   ['wd1','wd2','wd3','wd4','dtsubame','dnuki','dnukidn','dsuriashi','dyae','dzantetsu','dzetto','dshukuchi','dkaiden'].forEach(k=>{
     if(!ATK[k]) throw new Error('missing ATK '+k); });

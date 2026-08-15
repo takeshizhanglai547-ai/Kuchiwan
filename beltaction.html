@@ -2384,7 +2384,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
   p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
-  p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false;       // ワンデン：居合パリィの状態をリセット
+  p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
   p.wtT=0; p.wtMv=null; p.wtHit=0;                                  // 投げ技の状態をリセット
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
@@ -4253,8 +4253,19 @@ function beginSlide(){ const p=player; p.state='slide'; p.slideT=0; p.vx=p.facin
 //  ・受けを外すと「刀を構え直す」硬直＝完全に無防備。ハイリスク・ハイリターン
 //======================================================================
 const PARRY_WIN=12, PARRY_WHIFF=34;   // 受け（有効）フレーム／空振り時の構え直し硬直
-function beginIaiParry(p){ p=p||player;
+// ── 連続弾き ──
+// 飛び道具を弾いても受けは延びず、窓が閉じれば「空振り」と同じ34フレームの硬直に
+// 入っていた。弾幕に対して一発しか返せず、成功しているのに罰される形だった。
+//   弾いた瞬間に受けを継ぎ足す（PARRY_REFRESH）
+//   弾いて終わった構えの硬直は短くし（PARRY_CHAIN_REC）、その間の再入力で繋げられる
+//   一構えで継ぎ足せるのは PARRY_CHAIN_MAX 回まで。上限が無いと弾幕の前に
+//   立っているだけで無敵になる（再入力を挟めば続けられるので、腕前の話に残る）
+// 何も飛んで来ていないのに振ると従来どおり空振り硬直なので、連打は損のまま
+const PARRY_REFRESH=9, PARRY_CHAIN_REC=8, PARRY_CHAIN_MAX=5;
+function beginIaiParry(p,chain){ p=p||player;
   p.state='iparry'; p.ipT=0; p.ipWin=PARRY_WIN; p.ipDone=false; p.vx=0; p.charge=0; p.atkHeld=false; p.atk=null;
+  p.ipRef=0; p.ipStance=0;
+  if(!chain) p.ipChain=0;                       // 繋ぎでない＝新しい構え。連続数は数え直し
   const dir=K.left?-1:K.right?1:p.facing; p.facing=dir;
   sfx.guard(p.x); spark(p.x+dir*26,p.y-52,'#dff0ff',6,5); }
 function updateIaiParry(){ const p=player; p.ipT++; p.vx*=0.7; p.x+=p.vx;
@@ -4264,14 +4275,30 @@ function updateIaiParry(){ const p=player; p.ipT++; p.vx*=0.7; p.x+=p.vx;
     for(const pr of projectiles){ if(pr.owner==='player'||pr.dead)continue;
       if(Math.abs(pr.y-p.y)>36) continue;
       const dx=pr.x-p.x; if(Math.sign(dx)!==p.facing || Math.abs(dx)>72) continue;
-      pr.owner='player'; pr.vx=-pr.vx*1.6||(-p.facing*12); pr.vy*=-0.5; pr.dmg=Math.max(pr.dmg,24); pr.color='#e8f4ff';
-      popText(p.x,p.y-96,'弾いた！','#e8f4ff'); spark(pr.x,pr.y-40,'#ffffff',12,8); sfx.guard(p.x); }
-    if(p.ipWin===0 && !p.ipDone){ p.ipStance=PARRY_WHIFF; popText(p.x,p.y-100,'空振り…','#8fa8c8'); }   // 受け失敗＝構え直しの隙
+      const n=p.ipChain=(p.ipChain||0)+1;             // 繋いだ本数（構えを跨いで数える）
+      p.ipRef=(p.ipRef||0)+1;                          // この構えで弾いた本数
+      pr.owner='player'; pr.vx=-pr.vx*1.6||(-p.facing*12); pr.vy*=-0.5; pr.color='#e8f4ff';
+      // 繋ぐほど返しが重くなる（4本目で頭打ち）。危険を冒して受け続けた分の見返り
+      pr.dmg=Math.round(Math.max(pr.dmg,24)*(1+0.25*Math.min(n-1,4)));
+      if(p.ipRef<=PARRY_CHAIN_MAX) p.ipWin=Math.max(p.ipWin,PARRY_REFRESH);   // 受けを継ぎ足す
+      popText(p.x,p.y-96, n>1?('弾いた！ ×'+n):'弾いた！', n>1?'#ffffff':'#e8f4ff', n>=3);
+      spark(pr.x,pr.y-40,'#ffffff',12,8);
+      p.parryFx=Math.max(p.parryFx,12); p.charge=clamp(p.charge+0.12,0,1);
+      if(n>1){ sfx.parry(p.x); hitStop=Math.max(hitStop,4); } else sfx.guard(p.x);
+      score+=40*Math.min(n,5); }
+    if(p.ipWin===0 && !p.ipDone){
+      // 弾けていれば「成功」なので短い硬直で済ませる。空振りだけが罰せられる
+      if(p.ipRef>0){ p.ipStance=PARRY_CHAIN_REC; }
+      else { p.ipStance=PARRY_WHIFF; popText(p.x,p.y-100,'空振り…','#8fa8c8'); } }
     return; }
   // ── 構え直しの硬直（この間は無防備・行動不能）──
-  if(p.ipStance>0){ p.ipStance--; if(gf%6===0) dust(p.x,p.y,1);
-    if(p.ipStance<=0){ p.state='idle'; } return; }
-  p.state='idle'; }
+  if(p.ipStance>0){ p.ipStance--;
+    // 弾いた後の短い硬直だけは、もう一度弾きを入力して繋げられる＝連続弾き。
+    // 空振りの硬直（PARRY_WHIFF）では ipRef が0なのでここへ来ない
+    if(p.ipRef>0 && pressed && pressed.grd){ pressed.grd=false; beginIaiParry(p,true); return; }
+    if(gf%6===0) dust(p.x,p.y,1);
+    if(p.ipStance<=0){ p.state='idle'; p.ipChain=0; } return; }
+  p.state='idle'; p.ipChain=0; }
 // 秘剣・犬返し：受け成功で自動発動。刀が巨大化し、溜め→大上段→一閃の三段演出で斬り伏せる
 function wandenCounter(e,p){ p=p||player;
   p.ipDone=true; p.ipStance=0; p.invuln=Math.max(p.invuln,90);
@@ -5349,7 +5376,10 @@ function updateEnemies(){
       // 既定はメカワンコの赤い追尾弾。弓と鉄砲はここを差し替えて撃ち分ける
       const _sc=t.shotCol||'#ff3a3a', _ss=t.shotSpd||8.6, _sr=t.shotR||10, _sh=(t.shotHoming!==false);
       if(e.gunT===15){ spark(e.x+e.facing*20,e.y-e.h*0.62,_sc,8,6); ring(e.x+e.facing*20,e.y-e.h*0.62,_sc); }
-      if(e.gunT===7){ const dir=e.facing; spawnProj(e.x+dir*26, e.y-e.h*0.6, dir*_ss, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:_sr,life:120,zz:e.h*0.6,homing:_sh});
+      // 弾は「奥行き(y)＝撃った者のレーン」「高さ(zz)＝銃口の高さ」で撃つ。
+      // 従来は y に銃口の高さを入れており、直進弾は主役のレーンから 50 ずれたまま
+      // 素通りしていた（追尾弾は飛びながら y が寄るので当たっていて、気付けなかった）
+      if(e.gunT===7){ const dir=e.facing; spawnProj(e.x+dir*26, e.y, dir*_ss, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:_sr,life:120,zz:e.h*0.6,homing:_sh});
         if(t.shotWind){ sfx.big(e.x); smokePuff(e.x+dir*30, e.y-e.h*0.6, 3, '160,150,140'); flash=Math.max(flash,3); shake=Math.max(shake,4); }
         else sfx.zap(e.x);
         if(!t.shotWind) flash=Math.max(flash,2); }

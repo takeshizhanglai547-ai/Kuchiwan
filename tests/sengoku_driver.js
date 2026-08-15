@@ -133,6 +133,24 @@ const DRIVER = `
     if(!(ETYPE.teppo.dmg>ETYPE.yumihei.dmg)) throw new Error('鉄砲が弓より痛くない');
     console.log('射撃の撃ち分け OK (弓 '+y.wind+'F/'+y.spd+' 鉄砲 '+g.wind+'F/'+g.spd+'／どちらも直進)'); }
 
+  // 撃った弾が実際に当たること。
+  // 「弾が生まれたか」だけを見ていると、レーンがずれていて一度も当たらない弾を
+  // 正常と判定してしまう（実際に弓と鉄砲の弾が主役の 50 手前を素通りしていた）
+  { const dealt=function(k){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.x=camX+200; p.y=LANE; p.hp=p.maxHp=9999; p.invuln=0; p.state='idle'; p.facing=1;
+      enemies.length=0; projectiles.length=0; encounters.length=0;
+      spawnEnemy(k, camX+560, LANE);
+      const e=enemies[0]; e.facing=-1; e.thinkCd=99999; e.state='gunFire'; e.gunT=ETYPE[k].shotWind||18;
+      for(let f=0; f<120; f++){ hitStop=0; p.invuln=0; e.thinkCd=99999; step(1); }
+      return p.maxHp-p.hp; };
+    const dy=dealt('yumihei'), dt=dealt('teppo'), dm=dealt('mechawan');
+    if(!(dy>0)) throw new Error('弓の矢が一度も当たらない（レーンがずれている）');
+    if(!(dt>0)) throw new Error('鉄砲の弾が一度も当たらない（レーンがずれている）');
+    if(!(dm>0)) throw new Error('前提が崩れている: メカワンコの追尾弾は当たるはず');
+    if(!(dt>dy)) throw new Error('鉄砲が弓より痛くない（実測）: 弓'+dy+' 鉄砲'+dt);
+    console.log('弾が当たること OK (弓 -'+dy+'HP ／ 鉄砲 -'+dt+'HP ／ 追尾弾 -'+dm+'HP)'); }
+
   // 騎馬は突撃する（止まって殴るだけではない）
   { setupRoster('inu'); startGame(); state='play';
     enemies.length=0; const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
