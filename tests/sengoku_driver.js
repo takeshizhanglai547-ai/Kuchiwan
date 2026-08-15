@@ -29,12 +29,64 @@ const DRIVER = `
     if(!encounters.length) throw new Error('戦国のエンカウンタが積まれていない');
     console.log('周回の続き OK (4→5／五周目の先は無し／'+n4.label+')'); }
 
-  // 難易度は四周目より必ず上（最高難度と名乗っている）
-  { const at=l=>{ const sv=lap; lap=l; const r=[diffHpMul(),diffDmgMul()]; lap=sv; return r; };
-    const a4=at(4), a5=at(5);
-    if(!(a5[0]>a4[0])) throw new Error('五周目のHP倍率が四周目以下: '+a4[0]+' → '+a5[0]);
-    if(!(a5[1]>a4[1])) throw new Error('五周目の攻撃力倍率が四周目以下: '+a4[1]+' → '+a5[1]);
-    console.log('難易度 OK (HP '+a4[0].toFixed(1)+'→'+a5[0].toFixed(1)+' / 攻撃 '+a4[1].toFixed(2)+'→'+a5[1].toFixed(2)+')'); }
+  // ── 難易度：神話と戦国は「通常＝カジュアル」「高難易度＝従来の値」の二段 ──
+  { const at=function(l,hard){ const sl=lap, sh=hardMode, st=TWO_P;
+      lap=l; hardMode=hard; TWO_P=false;
+      const r=[diffHpMul(), diffDmgMul()];
+      lap=sl; hardMode=sh; TWO_P=st; return r; };
+    // 高難易度＝従来の値そのもの。ここがずれると「今までどおり遊びたい人」の設定が消える
+    const h4=at(4,true), h5=at(5,true);
+    if(Math.abs(h4[0]-2.00)>1e-6 || Math.abs(h4[1]-1.70)>1e-6)
+      throw new Error('四周目の高難易度が従来の 2.00/1.70 でない: '+h4.join('/'));
+    if(Math.abs(h5[0]-2.40)>1e-6 || Math.abs(h5[1]-1.95)>1e-6)
+      throw new Error('五周目の高難易度が従来の 2.40/1.95 でない: '+h5.join('/'));
+    // 通常はそこから大きく下がっていること（3割以上）
+    const c4=at(4,false), c5=at(5,false);
+    // 下げ幅は攻撃力に厚く配る（HPを削っても戦いが短くなるだけで死ににくくはならない）。
+    // 攻撃力は半分以下、HPは7割以下を要求する
+    if(!(c4[1]<=h4[1]*0.55)) throw new Error('四周目の通常攻撃力が十分に下がっていない: '+c4[1]+' / 従来 '+h4[1]);
+    if(!(c5[1]<=h5[1]*0.55)) throw new Error('五周目の通常攻撃力が十分に下がっていない: '+c5[1]+' / 従来 '+h5[1]);
+    if(!(c4[0]<=h4[0]*0.70)) throw new Error('四周目の通常HPが十分に下がっていない: '+c4[0]+' / 従来 '+h4[0]);
+    if(!(c5[0]<=h5[0]*0.70)) throw new Error('五周目の通常HPが十分に下がっていない: '+c5[0]+' / 従来 '+h5[0]);
+    // 攻撃力の下げ幅がHPの下げ幅より大きいこと（配分の意図そのもの）
+    if(!(c4[1]/h4[1] < c4[0]/h4[0])) throw new Error('四周目：HPのほうを大きく削っている（短くなるだけ）');
+    if(!(c5[1]/h5[1] < c5[0]/h5[0])) throw new Error('五周目：HPのほうを大きく削っている（短くなるだけ）');
+    // 周回の順序は通常でも高難易度でも保たれること（五周目が四周目より弱くならない）
+    if(!(c5[0]>c4[0] && c5[1]>c4[1])) throw new Error('通常で五周目が四周目以下: '+c4.join('/')+' → '+c5.join('/'));
+    if(!(h5[0]>h4[0] && h5[1]>h4[1])) throw new Error('高難易度で五周目が四周目以下');
+    // 高難易度の全体係数を二重に掛けていないこと（掛けると従来より更に硬い第三の難易度になる）
+    if(!(h4[0]<2.4 && h5[0]<2.9)) throw new Error('高難易度に全体係数が二重に掛かっている: '+h4[0]+' / '+h5[0]);
+    // 一〜三周目は従来どおり（hardMode の全体係数がそのまま乗る）
+    const n3=at(3,false), q3=at(3,true);
+    if(Math.abs(n3[0]-1.60)>1e-6) throw new Error('三周目の通常が変わっている: '+n3[0]);
+    if(!(q3[0]>n3[0]*1.3)) throw new Error('三周目の高難易度に全体係数が乗っていない: '+n3[0]+' → '+q3[0]);
+    // どちらで遊んでいるかが名前で取れること（画面へ出すのに使う）
+    { const sl=lap, sh=hardMode;
+      lap=5; hardMode=false; const cn=lapDiffName();
+      hardMode=true; const hn=lapDiffName();
+      lap=1; const n1=lapDiffName();
+      lap=sl; hardMode=sh;
+      if(!cn||!hn||cn===hn) throw new Error('カジュアルと高難易度の名前が分かれていない: '+cn+' / '+hn);
+      if(n1!==null) throw new Error('一周目にも難易度名が出る（二段になっていない周回）: '+n1); }
+    // 倍率を下げても「周回が進むほど手強い」が実際の敵で崩れないこと。
+    // 倍率だけを見ていると、素のHPと攻撃力が周回ごとに大きいことを見落とす
+    { const mk=function(l,zk){ const sl=lap, sh=hardMode; lap=l; hardMode=false;
+        setupRoster('inu'); startGame(); state='play'; lap=l; hardMode=false; levelsDone={};
+        const q=players[0]; player=q; q.x=camX+200; q.y=LANE; q.hp=q.maxHp=99999; q.invuln=0; q.state='idle';
+        enemies.length=0; encounters.length=0;
+        spawnEnemy(zk, camX+300, LANE); const Z=enemies[0];
+        q.invuln=0; const h0=q.hp; tryHitPlayer(Z, ETYPE[zk].dmg*ZAKO_DMG, false, 200, 60);
+        const r={hp:Z.maxHp, dmg:h0-q.hp}; lap=sl; hardMode=sh; return r; };
+      const w=mk(1,'wolf'), a2=mk(3,'greywan'), a4=mk(4,'mythguard'), a5=mk(5,'samurai');
+      if(!(a4.hp>a2.hp && a4.dmg>a2.dmg)) throw new Error('通常の四周目が三周目以下になっている: 3周 '+a2.hp+'/'+a2.dmg+' → 4周 '+a4.hp+'/'+a4.dmg);
+      if(!(a5.hp>a4.hp && a5.dmg>a4.dmg)) throw new Error('通常の五周目が四周目以下になっている');
+      if(!(a2.hp>w.hp)) throw new Error('前提が崩れている: 三周目は一周目より手強いはず');
+      console.log('通常でも右肩上がり OK (雑魚HP '+w.hp+'→'+a2.hp+'→'+a4.hp+'→'+a5.hp
+        +'／一撃 '+w.dmg+'→'+a2.dmg+'→'+a4.dmg+'→'+a5.dmg+')'); }
+    console.log('難易度の二段 OK (神話 通常 '+c4[0].toFixed(2)+'/'+c4[1].toFixed(2)
+      +' 高 '+h4[0].toFixed(2)+'/'+h4[1].toFixed(2)
+      +'／戦国 通常 '+c5[0].toFixed(2)+'/'+c5[1].toFixed(2)
+      +' 高 '+h5[0].toFixed(2)+'/'+h5[1].toFixed(2)+')'); }
 
   // 五周目のセーブが復元できること
   { const realLS=global.localStorage, mem={};
@@ -132,6 +184,24 @@ const DRIVER = `
     if(y.col===g.col) throw new Error('矢と弾が同じ色');
     if(!(ETYPE.teppo.dmg>ETYPE.yumihei.dmg)) throw new Error('鉄砲が弓より痛くない');
     console.log('射撃の撃ち分け OK (弓 '+y.wind+'F/'+y.spd+' 鉄砲 '+g.wind+'F/'+g.spd+'／どちらも直進)'); }
+
+  // 撃った弾が実際に当たること。
+  // 「弾が生まれたか」だけを見ていると、レーンがずれていて一度も当たらない弾を
+  // 正常と判定してしまう（実際に弓と鉄砲の弾が主役の 50 手前を素通りしていた）
+  { const dealt=function(k){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.x=camX+200; p.y=LANE; p.hp=p.maxHp=9999; p.invuln=0; p.state='idle'; p.facing=1;
+      enemies.length=0; projectiles.length=0; encounters.length=0;
+      spawnEnemy(k, camX+560, LANE);
+      const e=enemies[0]; e.facing=-1; e.thinkCd=99999; e.state='gunFire'; e.gunT=ETYPE[k].shotWind||18;
+      for(let f=0; f<120; f++){ hitStop=0; p.invuln=0; e.thinkCd=99999; step(1); }
+      return p.maxHp-p.hp; };
+    const dy=dealt('yumihei'), dt=dealt('teppo'), dm=dealt('mechawan');
+    if(!(dy>0)) throw new Error('弓の矢が一度も当たらない（レーンがずれている）');
+    if(!(dt>0)) throw new Error('鉄砲の弾が一度も当たらない（レーンがずれている）');
+    if(!(dm>0)) throw new Error('前提が崩れている: メカワンコの追尾弾は当たるはず');
+    if(!(dt>dy)) throw new Error('鉄砲が弓より痛くない（実測）: 弓'+dy+' 鉄砲'+dt);
+    console.log('弾が当たること OK (弓 -'+dy+'HP ／ 鉄砲 -'+dt+'HP ／ 追尾弾 -'+dm+'HP)'); }
 
   // 騎馬は突撃する（止まって殴るだけではない）
   { setupRoster('inu'); startGame(); state='play';
@@ -276,6 +346,139 @@ const DRIVER = `
     if(!(plain>0)) throw new Error('反攻が当たらない');
     if(!(fed>plain)) throw new Error('殴っても返しが重くならない: '+plain+' → '+fed);
     console.log('家康 三方ヶ原の反攻 OK (無傷 '+plain+' ／ 60ダメージ受けた後 '+fed+')'); }
+
+  // ===== 4b) 二の矢：三人の戦い方をもう一段はっきりさせる技 =====
+  // 信長：本能寺＝床に火柱を並べ、立てる場所を奪う
+  { const e=setupBoss('nobunaga','honnoji');
+    const p=players[0]; p.x=camX+400;
+    hazards.length=0;
+    runMove(e, MV.honnoji.dur);
+    const fires=hazards.filter(h=>h.kind==='eplant'&&h.art==='fire');
+    if(fires.length<4) throw new Error('火柱が並ばない: '+fires.length+'本');
+    const xs=fires.map(h=>Math.round(h.x)).sort((a,b)=>a-b);
+    if(new Set(xs).size!==fires.length) throw new Error('火柱が同じ場所に重なっている');
+    if(!(xs[xs.length-1]-xs[0]>300)) throw new Error('火柱が固まっていて避け放題: 幅'+(xs[xs.length-1]-xs[0]));
+    const warns=new Set(fires.map(h=>h.warn));
+    if(warns.size<2) throw new Error('全部同時に立つ＝時間差になっていない');
+    console.log('信長 本能寺 OK ('+fires.length+'本／幅'+(xs[xs.length-1]-xs[0])+'px／立つ時間差 '+warns.size+'段)'); }
+
+  // 火柱は跳べば越えられる（立つ場所を奪う技であって、避けられない技ではない）
+  { const burn=function(z){
+      const e=setupBoss('nobunaga','honnoji');
+      const p=players[0]; player=p; p.x=camX+400; p.hp=p.maxHp=99999; p.invuln=0;
+      hazards.length=0;
+      for(let f=0; f<MV.honnoji.dur; f++){ hitStop=0; p.invuln=0; p.z=z;
+        runBossMove(e); e.moveT++; updateHazards(); }
+      return p.maxHp-p.hp; };
+    const onGround=burn(0), inAir=burn(70);
+    if(!(onGround>0)) throw new Error('火柱が当たらない');
+    if(inAir>0) throw new Error('跳んでも火柱に焼かれる（避けようがない）');
+    console.log('火柱の抜け方 OK (地上 -'+onGround+'HP ／ 跳べば 0)'); }
+
+  // 信長：南蛮筒＝長い溜めから極太の一発。跳べば越えられる高さ
+  { const e=setupBoss('nobunaga','nanbanZutsu');
+    projectiles.length=0;
+    let shotAt=-1;
+    for(let f=0; f<MV.nanbanZutsu.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+      if(projectiles.length && shotAt<0) shotAt=f; }
+    if(shotAt<0) throw new Error('南蛮筒が撃たない');
+    if(!(shotAt>=20)) throw new Error('溜めが短すぎる: '+shotAt+'F');
+    const pr=projectiles[0];
+    const vol=ETYPE.nobunaga.dmg;
+    if(!(pr.r>=20)) throw new Error('極太の弾になっていない: r='+pr.r);
+    if(!(pr.dmg>vol)) throw new Error('普段の技より軽い: '+pr.dmg+' vs '+vol);
+    if(pr.homing) throw new Error('大筒が追尾している');
+    console.log('信長 南蛮筒 OK ('+shotAt+'F 溜め／半径'+pr.r+'／'+pr.dmg+'ダメージ／直進)'); }
+
+  // 秀吉：千成瓢箪＝撒いて時間差で弾ける
+  { const e=setupBoss('hideyoshi','hyotan');
+    hazards.length=0;
+    runMove(e, MV.hyotan.dur);
+    const g=hazards.filter(h=>h.kind==='eplant'&&h.art==='gourd');
+    if(g.length<3) throw new Error('瓢箪が撒かれない: '+g.length+'個');
+    if(new Set(g.map(h=>Math.round(h.x))).size!==g.length) throw new Error('同じ場所に重なっている');
+    if(!(g[0].warn>=20)) throw new Error('置いた瞬間に弾ける（予兆が無い）: '+g[0].warn+'F');
+    console.log('秀吉 千成瓢箪 OK ('+g.length+'個／'+g[0].warn+'F 後に弾ける)'); }
+
+  // 秀吉：猿飛＝頭上を跳び越えて背後へ回る
+  { const e=setupBoss('hideyoshi','saruTobi');
+    const p=players[0]; p.x=camX+400; e.x=camX+200; e.facing=1;
+    const side0=Math.sign(e.x-p.x);
+    let peak=0, crossed=false;
+    for(let f=0; f<MV.saruTobi.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+      peak=Math.max(peak,e.z||0);
+      if(Math.sign(e.x-p.x)!==side0 && Math.sign(e.x-p.x)!==0) crossed=true; }
+    if(!(peak>60)) throw new Error('跳ばずに走っているだけ: 最高'+peak.toFixed(0));
+    if(!crossed) throw new Error('主役を跳び越していない（背後を取れていない）');
+    if(e.z!==0) throw new Error('技が終わっても宙に浮いたまま: z='+e.z);
+    console.log('秀吉 猿飛 OK (最高'+peak.toFixed(0)+'／主役を跳び越す／着地する)'); }
+
+  // 家康：影武者＝姿を消し、三つの影のどれかから出る
+  { const seen=new Set();
+    for(let trial=0; trial<24; trial++){
+      const e=setupBoss('ieyasu','kagemusha');
+      const p=players[0]; p.x=camX+400; e.x=camX+700;
+      let hid=false;
+      for(let f=0; f<MV.kagemusha.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+        if(e.vanish>0) hid=true; }
+      if(!hid) throw new Error('姿を消していない');
+      if(!e.kmX || e.kmX.length!==3) throw new Error('影が3つ立たない');
+      seen.add(Math.round(e.x)); }
+    if(seen.size<2) throw new Error('毎回同じ影から出てくる（読まれる）: '+[...seen].join(','));
+    console.log('家康 影武者 OK (三つの影／出る位置が '+seen.size+'通り)'); }
+
+  // 家康：槍衾＝周囲が槍で埋まり、近づけない
+  { const e=setupBoss('ieyasu','yaribusuma');
+    hazards.length=0;
+    runMove(e, 20);
+    const y=hazards.filter(h=>h.kind==='eplant'&&h.art==='yari');
+    if(y.length<4) throw new Error('槍衾が立たない: '+y.length+'本');
+    const L=y.filter(h=>h.x<e.x).length, R=y.filter(h=>h.x>e.x).length;
+    if(!(L>=2 && R>=2)) throw new Error('片側にしか立たない: 左'+L+' 右'+R);
+    // 近づけば刺さり、離れていれば無事
+    const stab=function(dx){
+      const e2=setupBoss('ieyasu','yaribusuma');
+      const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=0; p.z=0;
+      hazards.length=0;
+      for(let f=0; f<MV.yaribusuma.dur; f++){ hitStop=0; p.invuln=0; p.x=e2.x+dx;
+        runBossMove(e2); e2.moveT++; updateHazards(); }
+      return p.maxHp-p.hp; };
+    const near=stab(60), far=stab(340);
+    if(!(near>0)) throw new Error('槍衾に近づいても刺さらない');
+    if(far>0) throw new Error('離れていても刺さる（引く選択肢が無い）');
+    console.log('家康 槍衾 OK ('+y.length+'本 左'+L+'/右'+R+'／近60px -'+near+'HP ／遠340px 0)'); }
+
+  // 三人の技構成が別物であること
+  { const sets=BOSS.map(k=>BOSSMOVES[ETYPE[k].bossKind]);
+    for(let i=0;i<3;i++){
+      const own=sets[i].filter(m=>!sets[(i+1)%3].includes(m)&&!sets[(i+2)%3].includes(m));
+      if(own.length<5) throw new Error(BOSS[i]+' の固有技が5つ未満: '+own.join(',')); }
+    console.log('三英傑の手札 OK (固有技が一人5つ以上／'+sets.map(x=>x.length).join('/')+'手)'); }
+
+  // ===== 4c) 戦闘前の口上 =====
+  // 全員が汎用の「いざ尋常に勝負！」に落ちていた
+  { const MYTH=['poseidon','hades','zeus'];
+    const HERO=['inu','shima','nuko','guard8','watch','wanden'];
+    const all=[];
+    for(const k of MYTH.concat(BOSS)){
+      const q=BOSSQUOTE[k];
+      if(!q) throw new Error(k+' に口上が無い');
+      if(q.indexOf('いざ尋常')>=0) throw new Error(k+' が汎用の口上のまま');
+      all.push(q);
+      // 主役ごとの言い分けもあること
+      const by=BOSSQUOTE_BY[k];
+      if(!by) throw new Error(k+' に主役ごとの口上が無い');
+      const sv=players[0].kind, per=[];
+      for(const h of HERO){ players[0].kind=h;
+        const line=bossQuoteFor(k);
+        if(!line) throw new Error(k+' × '+h+' の口上が空');
+        if(line===q) throw new Error(k+' が '+h+' 用の口上を持っていない');
+        per.push(line); }
+      players[0].kind=sv;
+      if(new Set(per).size!==HERO.length) throw new Error(k+' の主役別口上が重複している');
+      all.push.apply(all, per); }
+    if(new Set(all).size!==all.length) throw new Error('口上が他のボスと重複している');
+    console.log('戦闘前の口上 OK (6ボス×(汎用＋主役6人)＝'+all.length+'種、すべて別)'); }
 
   // ===== 5) 背景の三景 =====
   { const idx=[]; STAGE_THEME.forEach(function(T,i){ if(T.sengoku) idx.push(i); });

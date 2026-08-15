@@ -18,13 +18,36 @@ const DRIVER = `
   console.log('四周目の骨格 OK (3ステージ / 雑魚6種 / 神3柱、テーマ番号も範囲内)');
 
   // ===== 2) 難易度は周回で上がる =====
-  { const sv=lap;
-    const m=[1,2,3,4].map(function(L){ lap=L; return {hp:diffHpMul(), dmg:diffDmgMul()}; });
-    lap=sv;
-    for(let i=1;i<4;i++){ if(!(m[i].hp>m[i-1].hp)) throw new Error('周'+(i+1)+'でHP倍率が上がらない');
-      if(!(m[i].dmg>m[i-1].dmg)) throw new Error('周'+(i+1)+'で攻撃倍率が上がらない'); }
-    console.log('周回の難易度 OK (HP '+m.map(function(x){return x.hp.toFixed(2);}).join('→')
-      +' / 攻撃 '+m.map(function(x){return x.dmg.toFixed(2);}).join('→')+')'); }
+  // 四周目からは倍率表が二段（通常＝カジュアル／高難易度＝従来）になり、
+  // その2周回では hardMode の全体係数を重ねない。そのため「倍率の数字」だけを
+  // 並べると三周目の高難易度(2.16)が四周目の高難易度(2.00)を超える。
+  // 実際に手強いかどうかは倍率だけでは決まらない（雑魚の素の値が周回ごとに大きい）ので、
+  //   ・倍率の単調増加は表が変わっていない一〜三周目についてだけ見る
+  //   ・四周目までの通し順は、実際に湧かせた敵のHPと一撃で見る
+  { const sv=lap, sh=hardMode;
+    for(const hard of [false,true]){ hardMode=hard;
+      const m=[1,2,3].map(function(L){ lap=L; return {hp:diffHpMul(), dmg:diffDmgMul()}; });
+      for(let i=1;i<3;i++){ if(!(m[i].hp>m[i-1].hp)) throw new Error((hard?'高難易度':'通常')+'の周'+(i+1)+'でHP倍率が上がらない');
+        if(!(m[i].dmg>m[i-1].dmg)) throw new Error((hard?'高難易度':'通常')+'の周'+(i+1)+'で攻撃倍率が上がらない'); } }
+    lap=sv; hardMode=sh;
+    console.log('一〜三周目の倍率 OK (通常・高難易度とも右肩上がり)'); }
+  // 実際の敵で見た通し順。通常でも高難易度でも周回が進むほど手強いこと
+  { const mk=function(L,zk,hard){ const sl=lap, sh=hardMode;
+      setupRoster('inu'); startGame(); state='play'; lap=L; hardMode=hard; TWO_P=false; levelsDone={};
+      const q=players[0]; player=q; q.x=camX+200; q.y=LANE; q.hp=q.maxHp=99999; q.invuln=0; q.state='idle';
+      enemies.length=0; encounters.length=0;
+      spawnEnemy(zk, camX+300, LANE); const Z=enemies[0];
+      q.invuln=0; const h0=q.hp; tryHitPlayer(Z, ETYPE[zk].dmg*ZAKO_DMG, false, 200, 60);
+      const r={hp:Z.maxHp, dmg:h0-q.hp}; lap=sl; hardMode=sh; return r; };
+    const ZK=[[1,'wolf'],[2,'kamakiri'],[3,'greywan'],[4,'mythguard']];
+    for(const hard of [false,true]){
+      const row=ZK.map(function(z){ return mk(z[0],z[1],hard); });
+      for(let i=1;i<row.length;i++){
+        if(!(row[i].hp>row[i-1].hp)) throw new Error((hard?'高難易度':'通常')+'で周'+(i+1)+'の雑魚HPが上がらない: '+row[i-1].hp+' → '+row[i].hp);
+        if(!(row[i].dmg>row[i-1].dmg)) throw new Error((hard?'高難易度':'通常')+'で周'+(i+1)+'の一撃が上がらない: '+row[i-1].dmg+' → '+row[i].dmg); }
+      console.log('  '+(hard?'高難易度':'通常  ')+' 雑魚HP '+row.map(function(x){return x.hp;}).join('→')
+        +' / 一撃 '+row.map(function(x){return x.dmg;}).join('→')); }
+    console.log('周回の通し順 OK (通常・高難易度とも実測で右肩上がり)'); }
 
   // ===== 3) 分隊：同時に仕掛ける数が絞られている =====
   // 本編と同じ update() を回し、毎フレーム「攻撃権を持つ個体」を数える
@@ -234,8 +257,10 @@ const DRIVER = `
   // 通しプレイの実測で、当初の四周目は三周目と同じ被ダメージ量（1.01倍）しかなく、
   // 違いは「1発が重く、敵が3.6倍固い」だけ＝難しいのではなく長いだけだった。
   // 実際にダメージを決める経路（ZAKO_DMG×階級×難易度）を通して突き合わせる
+  // 四周目には「通常＝カジュアル」が入ったので、この設計上の要求（1.35倍）は
+  // 高難易度側で見る。通常側は「三周目より下がらない」ことだけを見る
   {
-    const sv=lap;
+    const sv=lap, sh=hardMode; hardMode=true;
     const eff=function(L,pool){ lap=L; let d=0,h=0;
       pool.forEach(function(k){ enemies.length=0; spawnEnemy(k,camX+400,LANE);
         const e=enemies[0];
@@ -260,7 +285,15 @@ const DRIVER = `
     // 固さで水増ししていないこと。HPだけ上げると「難しい」ではなく「長い」になる
     if(!(M.h<=A.h*2.2)) throw new Error('神話の雑魚が固すぎる（長いだけになる）: HP '
       +M.h.toFixed(0)+' vs '+A.h.toFixed(0)+'（'+(M.h/A.h).toFixed(2)+'倍）');
-    console.log('神話の脅威 OK (一撃 '+(M.d/A.d).toFixed(2)+'倍 / HP '+(M.h/A.h).toFixed(2)+'倍＝上限2.2倍)');
+    hardMode=sh;
+    // 通常（カジュアル）でも三周目を下回らないこと。下回ると周回が逆流する
+    { hardMode=false;
+      const A2=eff(3,ALIEN_ZAKO_POOL), M2=eff(4,MYTH_ZAKO_POOL);
+      lap=sv; hardMode=sh; enemies.length=0;
+      if(!(M2.d>A2.d)) throw new Error('通常の神話が三周目より軽い: 一撃 '
+        +M2.d.toFixed(1)+' vs '+A2.d.toFixed(1));
+      console.log('神話の脅威 OK (高難易度 一撃 '+(M.d/A.d).toFixed(2)+'倍＝要求1.35倍以上 / HP '
+        +(M.h/A.h).toFixed(2)+'倍＝上限2.2倍／通常でも '+(M2.d/A2.d).toFixed(2)+'倍)'); }
   }
 
   // ===== 9) 連携の追撃：一発通ったら次の一体へ攻撃権が渡ること =====
