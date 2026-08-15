@@ -135,3 +135,19 @@ combo, a roll and a charged heavy. It took several minutes of wall-clock to
 record because the capture machine has no GPU. The on-screen FPS counter in
 every capture reflects that software renderer and is **not** a performance
 result; see `VERIFICATION.md`.
+
+## Playable build
+
+A single-file build is produced by `node tools/bundle.js`, which collapses the
+~31 ES modules and the vendored three.js into one self-contained `.html` with no
+external requests. It rewrites import *specifiers* only — every module keeps its
+exact source, and the browser's own loader still resolves the graph — so circular
+imports, live bindings and execution order behave identically to the served
+tree.
+
+Verified by serving the bundle alone, with every other path returning 404, and
+running the game to a live frame: the only request that misses is `/favicon.ico`.
+
+Mobile: touch controls (virtual stick, attack / heavy / dodge / guard / flask /
+interact / lock-on) are injected when `ontouchstart` is present. Landscape only —
+a portrait phone gets a rotate prompt.

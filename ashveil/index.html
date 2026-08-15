@@ -26,6 +26,32 @@
   #boot .bar i { display:block; height:100%; width:0%; background:#ff6a1e; transition:width .3s ease; }
   #boot .err { color:#ff6a1e; font-size:.8rem; max-width:60ch; text-align:center;
                font-family:ui-monospace,monospace; letter-spacing:0; white-space:pre-wrap; }
+  /* Portrait hint. The game is a landscape experience — the HUD anchors to the
+     corners and the virtual stick expects thumb room either side — so a phone
+     held upright gets told once, in the game's own voice, rather than being left
+     to discover a squashed viewport. Pure CSS: no JS, no orientation listener. */
+  #rotate { display:none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate {
+      position:fixed; inset:0; z-index:10000; display:flex;
+      flex-direction:column; align-items:center; justify-content:center; gap:1.4rem;
+      background:#07080a; color:#c9bda6; text-align:center; padding:2rem;
+    }
+    #rotate .glyph {
+      width:3.2rem; height:5.2rem; border:2px solid #4a4550; border-radius:.4rem;
+      position:relative; animation:tip 2.4s ease-in-out infinite;
+    }
+    #rotate .glyph::after {
+      content:''; position:absolute; inset:auto 0 .5rem 0; margin:0 auto;
+      width:1.1rem; height:2px; background:#ff6a1e;
+    }
+    #rotate p { font-size:.82rem; letter-spacing:.34em; text-indent:.34em;
+                text-transform:uppercase; color:#6a6472; }
+    #rotate strong { font-weight:400; font-size:clamp(1.1rem,5vw,1.5rem);
+                     letter-spacing:.28em; text-indent:.28em; color:#c9bda6; }
+    @keyframes tip { 0%,55%,100%{transform:rotate(0)} 75%,90%{transform:rotate(-90deg)} }
+    @media (prefers-reduced-motion: reduce) { #rotate .glyph { animation:none } }
+  }
 </style>
 <script type="importmap">
 { "imports": {
@@ -35,6 +61,11 @@
 </script>
 </head>
 <body>
+  <div id="rotate" aria-hidden="true">
+    <div class="glyph"></div>
+    <strong>横向きに</strong>
+    <p>Turn your device sideways</p>
+  </div>
   <canvas id="view"></canvas>
   <div id="ui"></div>
 
