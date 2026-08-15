@@ -547,8 +547,18 @@ export class Materials {
       emissive: 0x2a0d03, emissiveIntensity: 0.10,
     });
 
+    /**
+     * Hit confirmation. Swapped onto a struck actor's whole body for ~90ms.
+     * Deliberately unlit-bright rather than merely emissive: the read has to
+     * survive a dark arena, and it has to be instantly separable from the ember
+     * palette that everything else in this world glows with — so it is near-white
+     * with only a trace of warmth, which nothing else on screen is.
+     */
+    this.hitFlash = new THREE.MeshBasicMaterial({ color: 0xffe9d2 });
+
     this.list = [this.stone, this.stoneDark, this.vault, this.column, this.ground, this.iron, this.ironLight,
-                 this.cloth, this.clothPlayer, this.bone, this.ember, this.emberDim, this.ashFlesh];
+                 this.cloth, this.clothPlayer, this.bone, this.ember, this.emberDim, this.ashFlesh,
+                 this.hitFlash];
 
     // Occluders that may dissolve rather than block the shot.
     //

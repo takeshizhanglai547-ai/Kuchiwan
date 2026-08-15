@@ -23,6 +23,20 @@ export class Actor {
     this.grounded = true;
     this.gravity = -26;
 
+    /**
+     * Hit-confirmation flash. The impact point already spawns sparks and a point
+     * light, but neither says *which actor got hit* — at a glance a spark between
+     * two bodies is ambiguous, and in a crowd it is useless. Flashing the struck
+     * actor itself is the channel that answers it.
+     *
+     * Implemented by swapping every mesh to one shared flash material and
+     * swapping back, rather than by giving each actor its own material instance:
+     * the level is merged to hold a draw-call budget and per-actor materials would
+     * spend that budget on something only visible for 90ms.
+     */
+    this._flashT = 0;
+    this._flashSwap = null;
+
     this.alive = true;
     this.hpMax = opts.hp ?? 100;
     this.hp = this.hpMax;
@@ -127,7 +141,35 @@ export class Actor {
    * Build this frame's pose: procedural locomotion underneath, action clip on top,
    * cross-faded by `blend`. Sub-classes set `blend` when they enter/leave states.
    */
+  /**
+   * Flash the whole body for `dur` seconds. Safe to call again while a flash is
+   * already running — the original materials are captured once, so re-entry
+   * extends the flash rather than capturing the flash material as the original
+   * and leaving the actor permanently lit.
+   */
+  flashHit(mat, dur = 0.09) {
+    if (!mat) return;
+    if (!this._flashSwap) {
+      const swap = [];
+      this.group.traverse((o) => {
+        if (o.isMesh && o.material !== mat) swap.push([o, o.material]);
+      });
+      for (const [o] of swap) o.material = mat;
+      this._flashSwap = swap;
+    }
+    this._flashT = Math.max(this._flashT, dur);
+  }
+
+  _updateFlash(dt) {
+    if (this._flashT <= 0) return;
+    this._flashT -= dt;
+    if (this._flashT > 0) return;
+    for (const [o, m] of this._flashSwap) o.material = m;
+    this._flashSwap = null;
+  }
+
   updatePose(dt, opts = {}) {
+    this._updateFlash(dt);
     this.animTime += dt;
     const speed = Math.hypot(this.vel.x, this.vel.z);
     this.gait = advanceGait(this.gait, this.grounded ? speed : 0, dt, opts.strideLength ?? 1.75);

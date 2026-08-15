@@ -682,6 +682,33 @@ const SCENARIOS = {
    * fullrun scenario; this exercises the other two, which are otherwise only
    * verified by reading the code.
    */
+  /** Assert the phase-2 silhouette change actually applies to the rig. */
+  async phase2({ advance, page, result }) {
+    const stacks = () => page.evaluate(() => {
+      const b = window.ASHVEIL.director.boss;
+      const st = b.char.stacks;
+      if (!st) return { err: 'no stacks on char' };
+      return {
+        phase: b.phase,
+        left: { sy: +st[0].scale.y.toFixed(3), rz: +st[0].rotation.z.toFixed(3), y: +st[0].position.y.toFixed(3) },
+        right: { sy: +st[1].scale.y.toFixed(3), y: +st[1].position.y.toFixed(3) },
+      };
+    });
+    await advance(0.3);
+    result.notes.push('phase 1: ' + JSON.stringify(await stacks()));
+    await page.evaluate(() => {
+      const g = window.ASHVEIL;
+      g.director.boss.phase = 2;
+      g.director.boss._applyPhaseVisuals();
+    });
+    await advance(0.3);
+    const after = await stacks();
+    result.notes.push('phase 2: ' + JSON.stringify(after));
+    if (after.left && after.left.sy > 0.9) {
+      result.errors.push('PHASE2 FAIL: left stack not sheared (scale.y=' + after.left.sy + ')');
+    }
+  },
+
   /** Dump every collision wall segment near a point. */
   async walls({ advance, page, result }) {
     await advance(0.2);

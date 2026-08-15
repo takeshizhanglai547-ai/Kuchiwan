@@ -42,8 +42,14 @@ export class Director {
     this.runTime = 0;
     this.bossEverEngaged = false;
 
-    /** Rule flags read by combat resolution — the boss flips these in phase 2. */
-    this.rules = { chipThroughGuard: false };
+    /**
+     * Rule flags read by combat resolution — the boss flips `chipThroughGuard` in
+     * phase 2. Also carries the shared material set, because damage resolution is
+     * where the hit-confirmation flash is triggered and it needs the flash
+     * material; this object is already the one thing every `applyDamage` call
+     * site passes through.
+     */
+    this.rules = { chipThroughGuard: false, mats };
 
     this._spawnEnemies();
     this._spawnBoss();

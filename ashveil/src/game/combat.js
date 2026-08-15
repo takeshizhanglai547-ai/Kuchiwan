@@ -207,6 +207,15 @@ export function applyDamage(target, info, attacker, ctx) {
     res.killed = true;
   }
 
+  // Confirm the hit ON THE STRUCK BODY. Sparks and an impact light already fire
+  // at the contact point, but a spark between two actors does not say which one
+  // took the damage — and in a group it says nothing at all. Blocked hits flash
+  // too, briefly and only when chip got through, so a guard that is failing reads
+  // differently from one that is holding.
+  if (res.dealt > 0 && ctx?.mats?.hitFlash) {
+    target.flashHit?.(ctx.mats.hitFlash, res.critical ? 0.13 : (res.chip ? 0.05 : 0.09));
+  }
+
   target.onDamaged?.(info, res, attacker);
   return res;
 }

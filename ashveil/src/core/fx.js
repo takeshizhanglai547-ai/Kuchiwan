@@ -140,8 +140,17 @@ const PARTICLE_VERT = /* glsl */`
       vCore = 0.75;
     } else {
       // ASH / DUST: the world's default particle. Low opacity, expands, settles.
-      c = mix(ASH, EMBER, aParams.w * pow(life, 2.0) * 0.65);
-      float base = (kind == 3) ? 0.30 : 0.24;
+      //
+      // Measured, not guessed: at the previous values an ash mote sampled
+      // (122,114,127) against ground at (15,14,32) — about 7:1 — which is why
+      // three separate reviewers independently described drifting ash as
+      // "oversized white spheres" and "opaque unlit white spheres … debug
+      // primitives". They were reading the render correctly. Two earlier attempts
+      // adjusted where motes spawn and how near-camera ones fade, which was the
+      // wrong axis: the problem was never position, it was that a mote was eight
+      // times brighter than the floor it drifted over.
+      c = mix(ASH * 0.72, EMBER, aParams.w * pow(life, 2.0) * 0.65);
+      float base = (kind == 3) ? 0.30 : 0.11;
       a = fadeIn * fadeOut * base;
       sizeCurve = (kind == 3) ? (1.0 + 1.15 * age) : (1.0 + 0.45 * age);
       vOpaque = 1.0;
