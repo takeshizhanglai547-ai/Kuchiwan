@@ -2,9 +2,13 @@
 
 #include "AshlineBridge.h"
 #include "AshlineEnemyActor.h"
+#include "AshlinePlayerPawn.h"
 #include "AshlineSim.h"          // ルール層。UEのヘッダを一切含まない
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/Engine.h"       // GEngine / EGetWorldErrorMode
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 
 AAshlineGameMode::AAshlineGameMode()
 {
@@ -15,6 +19,13 @@ AAshlineGameMode::AAshlineGameMode()
 
 	PrimaryActorTick.bCanEverTick = false;
 	bStartPlayersAsSpectators = false;
+
+	/* ブループリントを1つも作っていない状態でも遊べるようにしておく。
+	   ここを空にしておくと、再生ボタンを押したときUEの既定の ADefaultPawn が
+	   湧いて、空を飛ぶだけで入力も何も効かない画面になる。しかもエラーは
+	   1行も出ないので、初めての人は「壊れている」としか分からない。
+	   BP_AshlinePawn を作ったら、ワールドセッティング側の指定がこれを上書きする。 */
+	DefaultPawnClass = AAshlinePlayerPawn::StaticClass();
 }
 
 // 不完全型のまま TUniquePtr を破棄させないための実体。ヘッダ側に書けない。
@@ -46,6 +57,7 @@ void AAshlineGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	SpawnEnemyPool();
+	SpawnCoverMeshes();
 }
 
 void AAshlineGameMode::StartCombat()
@@ -96,10 +108,78 @@ void AAshlineGameMode::SpawnEnemyPool()
 }
 
 /* ---------------------------------------------------------------------------
-   レベル配置の補助。
+   遮蔽の見た目を並べる。
    遮蔽の当たり判定は kCovers が唯一の正で、見た目をそこからずらすと
    「見えている壁で弾が止まらない」という、遊んだ人が必ず理不尽に感じる
-   壊れ方をする。手で並べさせないための出口をここに置く。
+   壊れ方をする。だから人に並べさせない。ここが唯一の置き場所。
+
+   ブループリントのループで組ませていた時期があったが、ノードの名前も
+   ピンの構成もエンジンのバージョンで変わるうえ、書き写す途中の1箇所の
+   間違いがそのまま「見た目と当たりのズレ」になる。手順の側で防げない種類の
+   事故なので、C++ に引き取った。人がやるのは CoverMesh を選ぶことだけ。
+
+   コリジョンは必ず切る（CLAUDE.md §3-5）。当たり判定は AshlineWorld が
+   唯一の正で、UE 側にも当たりを持たせると2つの判定が押し合う。
+   --------------------------------------------------------------------------- */
+void AAshlineGameMode::SpawnCoverMeshes()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	if (!CoverMesh)
+	{
+		// 見た目が無いだけでルールは動く。落とさずに理由を残す。
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Ashline] CoverMesh が未設定です。遮蔽は当たりますが目に見えません。RUNBOOK 手順3-2を参照。"));
+		return;
+	}
+	if (CoverMeshHalfSize <= KINDA_SMALL_NUMBER)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[Ashline] CoverMeshHalfSize が 0 以下です。遮蔽の大きさを決められません。"));
+		return;
+	}
+
+	TArray<FVector> Centers;
+	TArray<FVector> Extents;
+	GetCoverBoxes(Centers, Extents);
+
+	// 見た目を持つための空のアクタ。GameMode 自身は非表示のアクタなので、
+	// そこにメッシュを付けると何も映らない。だから入れ物を別に立てる。
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* Holder = World->SpawnActor<AActor>(AActor::StaticClass(), Params);
+	if (!Holder)
+	{
+		return;
+	}
+
+	// 24個を1つのコンポーネントにまとめる（描画の負荷を1回分に抑える）。
+	CoverInstances = NewObject<UInstancedStaticMeshComponent>(Holder, TEXT("AshlineCoverInstances"));
+	CoverInstances->SetStaticMesh(CoverMesh);
+	CoverInstances->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CoverInstances->SetCollisionProfileName(TEXT("NoCollision"));
+	CoverInstances->SetGenerateOverlapEvents(false);
+	Holder->SetRootComponent(CoverInstances);
+	CoverInstances->RegisterComponent();
+	// 入れ物は原点に置く。インスタンスの座標はコアの絶対座標そのものなので、
+	// 入れ物を動かすと見た目だけがまとめてずれる。
+	CoverInstances->SetWorldTransform(FTransform::Identity);
+
+	for (int32 i = 0; i < Centers.Num(); ++i)
+	{
+		// GetCoverBoxes が返すのは「半サイズ」。メッシュ自身の半サイズで割ると拡大率になる。
+		const FVector Scale = Extents[i] / CoverMeshHalfSize;
+		CoverInstances->AddInstance(FTransform(FRotator::ZeroRotator, Centers[i], Scale));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Ashline] 遮蔽の見た目を %d 個配置しました。"), Centers.Num());
+}
+
+/* ---------------------------------------------------------------------------
+   レベル配置の補助（独自の見た目を作りたい場合のための出口）。
    --------------------------------------------------------------------------- */
 void AAshlineGameMode::GetCoverBoxes(TArray<FVector>& OutCenters, TArray<FVector>& OutExtents)
 {

@@ -12,7 +12,9 @@
 // 毎フレームの流れ（順序に意味がある）
 //   1. Enhanced Input で溜めた値を Ashline::Input に詰める
 //   2. Sim::Step(in, dt) を1回だけ呼ぶ
-//   3. Sim の結果を Actor / SpringArm / Camera に写す（変換は AshlineBridge のみ）
+//   3. Sim の結果を Actor / Camera に写す（変換は AshlineBridge のみ）
+//      カメラは「コアが出した視点位置と向きをそのまま置く」だけ。
+//      距離や肩の寄せをここで組み立て直すと、弾の飛ぶ線と画面がずれる。
 //   4. エッジ入力（押した瞬間のフラグ）を消す
 // =============================================================================
 #pragma once
@@ -60,9 +62,16 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
 	TObjectPtr<UStaticMeshComponent> PlaceholderMesh;
 
+	/**
+	 * 無効化済みのスプリングアーム（腕の長さ0・衝突判定なし）。
+	 * カメラのリグ（距離・肩・壁への寄せ）はすべてコアが持っているので、
+	 * このアームは何もしない。エディタで Do Collision Test や Target Arm Length を
+	 * 戻さないこと。戻すとコアの寄せと二重にかかり、画面と弾道がずれる。
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
 	TObjectPtr<USpringArmComponent> SpringArm;
 
+	/** 視点。毎フレーム Camera::ex/ey/ez と rotYaw/rotPitch をそのまま置く。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
 	TObjectPtr<UCameraComponent> Camera;
 
@@ -174,6 +183,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
 	float Peek = 0.0f;
 
+	/**
+	 * しゃがみ切ったときに仮の体をどれだけ下げるか[m]。
+	 * これは【見た目だけ】の値である。当たり判定もカメラもこの値を見ない
+	 * （カメラの高さはコアの Camera::ey が持っている）。
+	 * 本番のしゃがみ姿勢を AnimBP で作ったら、ここは 0 にして構わない。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Anim")
+	float CrouchVisualDip = 0.275f;
+
 private:
 	// ---- 入力ハンドラ（値を溜めるだけ。判断はしない） -------------------------
 	void OnMove(const FInputActionValue& Value);
@@ -187,7 +205,7 @@ private:
 	void OnActionCompleted(const FInputActionValue& Value);
 	void OnTapStarted(const FInputActionValue& Value);
 
-	void ApplySimToComponents(float DeltaSeconds);
+	void ApplySimToComponents();
 	float CurrentViewportAspect() const;
 
 	// 溜め込み用。Tick で読んで Ashline::Input に詰め、エッジ系はそこで消す。
@@ -199,11 +217,8 @@ private:
 	bool bActionEdge = false;
 	bool bTapEdge = false;
 
-	// ダッシュ中の縦揺れ用の位相。見た目だけの値なのでコアには持たせない。
-	float BobTime = 0.0f;
-
 	// 演出のきっかけを「変化した瞬間」に絞るための前フレームの値。
+	// 「撃った瞬間」はここに持たない。それはコアが LastShot().fired で持っている。
 	int32 LastPlayerState = -1;
 	float LastHp = -1.0f;
-	int32 LastAmmo = -1;
 };

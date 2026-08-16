@@ -74,6 +74,10 @@ void UAshlineHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	EnemiesAlive = Alive;
 
 	// --- 照準 ---------------------------------------------------------------
+	// レティクルの縦位置はコアの調整値をそのまま配る（ここで数字を書かない）。
+	// 撃つ方向を決めているのと同じ値でなければ、十字と弾の行き先が食い違う。
+	ReticleNdcY = Ashline::Cfg::cam::reticleNdcY;
+
 	Spread = S.CurrentSpread();
 	Exposure = FMath::Clamp(S.Exposure(), 0.0f, 1.0f);
 	bBlindFire = S.IsBlind();

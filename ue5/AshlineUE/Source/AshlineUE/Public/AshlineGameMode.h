@@ -22,6 +22,8 @@
 namespace Ashline { class Sim; }
 
 class AAshlineEnemyActor;
+class UInstancedStaticMeshComponent;
+class UStaticMesh;
 
 UCLASS()
 class ASHLINEUE_API AAshlineGameMode : public AGameModeBase
@@ -50,12 +52,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ashline")
 	void SetCombatEnabled(bool bEnabled);
 
-	// ---- 見た目を「当たり判定と同じ場所」に置くための情報 --------------------
+	// ---- 遮蔽の見た目 --------------------------------------------------------
 	// 遮蔽の当たり判定は AshlineConfig.generated.h の kCovers が唯一の正であり、
-	// レベルに置いたスタティックメッシュは1cmもそこからずれてはいけない。
-	// 手で並べると必ずずれるので、Blueprint の Construction Script から
-	// この関数で座標を受け取って生成すること。
-	/** 遮蔽の中心と半サイズ（どちらも Unreal の cm）。要素数は必ず一致する。 */
+	// レベルに置いたメッシュは1cmもそこからずれてはいけない。
+	// 手で並べると必ずずれるので、BeginPlay で C++ が自分で並べる。
+	// 人がやるのは「どのメッシュを使うか」を選ぶことだけにしてある。
+
+	/**
+	 * 遮蔽の見た目に使うメッシュ。`/Engine/BasicShapes/Cube` を入れる。
+	 * 未設定でもゲームは動く（遮蔽は当たるが目に見えないだけ）。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|World")
+	TObjectPtr<UStaticMesh> CoverMesh;
+
+	/**
+	 * CoverMesh の元の大きさの半分[cm]。拡大率をここから逆算する。
+	 * Engine の Cube は一辺100cmなので 50。他のメッシュに差し替えたときだけ触る。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|World")
+	float CoverMeshHalfSize = 50.0f;
+
+	/** 生成された遮蔽の見た目。中身は kCovers と同じ数だけのインスタンス。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|World")
+	TObjectPtr<UInstancedStaticMeshComponent> CoverInstances;
+
+	/**
+	 * 遮蔽の中心と半サイズ（どちらも Unreal の cm）。要素数は必ず一致する。
+	 * 通常は使う必要がない（BeginPlay が自分で並べる）。
+	 * 独自の見た目を作りたいときだけ、この関数から座標を受け取ること。
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Ashline|World")
 	static void GetCoverBoxes(TArray<FVector>& OutCenters, TArray<FVector>& OutExtents);
 
@@ -81,6 +106,7 @@ protected:
 
 private:
 	void SpawnEnemyPool();
+	void SpawnCoverMeshes();
 
 	TUniquePtr<Ashline::Sim> SimInstance;
 };

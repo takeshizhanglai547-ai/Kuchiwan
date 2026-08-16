@@ -58,24 +58,31 @@ AAshlinePlayerPawn::AAshlinePlayerPawn()
 		FVector(0.0f, 0.0f, -PlayerHalfHeightUE), FRotator(0.0f, -90.0f, 0.0f));
 	CharacterMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+	/* スプリングアームは「何もしない」状態に固定してある。
+	   カメラの腕の長さ・肩の寄せ・壁へのめり込み回避（引き寄せ）は、すべて
+	   コアの UpdateCamera が済ませて Camera::ex/ey/ez として出してくる。
+	   Sim::Shoot() はその同じ ex/ey/ez から射線を引くので、UE側で腕を伸ばしたり
+	   壁で引き寄せたりすると、「見えている位置」と「弾が出る位置」がずれる。
+	   ずれは見た目の違和感としてしか現れず、原因に辿り着けない壊れ方をする。
+
+	   ※ このアームの設定をエディタで元に戻さないこと。特に Do Collision Test は
+	     必ず false のまま。CLAUDE.md §3-5 のとおり UE の衝突は一切使わない。 */
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(Capsule);
-	// カメラの向きは Sim が決める。コントローラの回転に引きずられてはいけない。
 	SpringArm->bUsePawnControlRotation = false;
 	SpringArm->bInheritPitch = false;
 	SpringArm->bInheritYaw = false;
 	SpringArm->bInheritRoll = false;
-	// 位置の平滑化はコア側（camera.px/pz）で既に行っている。
-	// ここで更にラグを足すと二重に鈍って、狙いが指に付いてこなくなる。
 	SpringArm->bEnableCameraLag = false;
 	SpringArm->bEnableCameraRotationLag = false;
-	// 壁へのめり込み回避だけはUEの機能を使う（Web版の手書きレイと同じ役目）。
-	SpringArm->bDoCollisionTest = true;
-	SpringArm->ProbeSize = 12.0f;
-	SpringArm->TargetArmLength = Ashline::Cfg::cam::dist * FAshlineBridge::MetresToUE;
+	SpringArm->bDoCollisionTest = false;
+	SpringArm->TargetArmLength = 0.0f;
+	SpringArm->SocketOffset = FVector::ZeroVector;
 
+	/* カメラはアームにぶら下げない。毎フレーム、コアが確定させた視点を
+	   そのままワールド座標で置くため、間に何かを挟むとその何かが上書きする。 */
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
-	Camera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+	Camera->SetupAttachment(Capsule);
 	Camera->bUsePawnControlRotation = false;
 
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
@@ -305,10 +312,10 @@ void AAshlinePlayerPawn::Tick(float DeltaSeconds)
 	bActionEdge = false;
 	bTapEdge = false;
 
-	ApplySimToComponents(DeltaSeconds);
+	ApplySimToComponents();
 }
 
-void AAshlinePlayerPawn::ApplySimToComponents(float DeltaSeconds)
+void AAshlinePlayerPawn::ApplySimToComponents()
 {
 	// ここでは using namespace Ashline を使わない。
 	// このクラスには Camera という名前のコンポーネントがあり、Ashline::Camera と
@@ -339,7 +346,9 @@ void AAshlinePlayerPawn::ApplySimToComponents(float DeltaSeconds)
 
 	// しゃがみと着地の沈み込みは、当たり判定を動かさずに見た目だけ下げる。
 	// 本番のしゃがみ姿勢は AnimBP の仕事で、これはその前の仮表示。
-	const float DipUE = (P.crouch * 0.275f + P.landDip) * FAshlineBridge::MetresToUE;
+	// 沈み込み量はコアの調整値ではなく表示層だけの値なので、
+	// 数字を直に書かずにプロパティにしてある（エディタで見えるようにするため）。
+	const float DipUE = (P.crouch * CrouchVisualDip + P.landDip) * FAshlineBridge::MetresToUE;
 	if (CharacterMesh)
 	{
 		CharacterMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -PlayerHalfHeightUE - DipUE));
@@ -350,71 +359,43 @@ void AAshlinePlayerPawn::ApplySimToComponents(float DeltaSeconds)
 	}
 
 	// --- カメラ -------------------------------------------------------------
-	// 距離・高さ・肩の寄せは Cfg の値から組み立てる。
-	// UE層が Cfg を直接読む数少ない場所で、理由は
-	// 「コアの Camera 構造体が yaw/pitch/fov/coverBlend/px/pz しか公開しておらず、
-	//   リグの組み立て自体は表示側の仕事だから」。
-	//
-	// ※ Web版に対する既知の差（コアが値を公開していないため再現できない）:
-	//    ・低い遮蔽のときのカメラ高（coverUpLow）は使えない。常に coverUpHigh 側。
-	//    ・端に寄ったときの肩の左右入れ替え（CAM.side）は無く、常に右肩。
-	//    どちらも「当たり」ではなく「見え方」の差。コアが py/side を公開したら直せる。
-	const float CoverBlend = FMath::Clamp(C.coverBlend, 0.0f, 1.0f);
-	const float ArmLen = FMath::Lerp(Ashline::Cfg::cam::dist, Ashline::Cfg::cam::coverDist, CoverBlend);
-	const float Shoulder = FMath::Lerp(Ashline::Cfg::cam::shoulder, Ashline::Cfg::cam::coverShoulder, CoverBlend);
-	const float UpM = FMath::Lerp(Ashline::Cfg::cam::up, Ashline::Cfg::cam::coverUpHigh, CoverBlend) - P.crouch * 0.16f;
+	/* ここは「読むだけ」。組み立て直さないこと。
+	   Camera::ex/ey/ez は、腕の長さ・肩の寄せ・遮蔽ブレンド・しゃがみ・乗り出し、
+	   さらに壁へのめり込み回避（RayWorld による引き寄せ）まで済ませた
+	   確定した視点位置で、rotYaw/rotPitch は反動と縦揺れを含んだ確定した向き。
 
-	// 支点の高さ。乗り越え中は体ほど上げない（画面が泳ぐため）＝Web版と同じ意図。
-	const float PivotY = UpM + P.y * 0.35f
-		+ (P.peekMode == Ashline::PeekMode::Over ? P.peek * Ashline::Cfg::cover::peekRise : 0.0f);
+	   これをそのまま置かなければならない理由は見た目ではなく当たりである。
+	   Sim::Shoot() は同じ ex/ey/ez と rotYaw/rotPitch から射線を引く。
+	   UE側で少しでも別の場所にカメラを置いた瞬間、プレイヤーが見ている絵と
+	   弾が飛ぶ線が別物になる（柱1「止まれば当たる」が成立しなくなる）。
 
-	// ダッシュ中の縦揺れ。コアは sprintBlend を公開していないが、
-	// fov がまさにその値で fovBase〜fovSprint を補間したものなので逆算できる。
-	// 揺れ自体は見た目の話なので、コアに持たせずここで作る。
-	const float FovSpan = Ashline::Cfg::sprintCam::fovSprint - Ashline::Cfg::sprintCam::fovBase;
-	const float SprintBlend = (FMath::Abs(FovSpan) > KINDA_SMALL_NUMBER)
-		? FMath::Clamp((C.fov - Ashline::Cfg::sprintCam::fovBase) / FovSpan, 0.0f, 1.0f)
-		: 0.0f;
-	BobTime += DeltaSeconds;
-	const float Bob = FMath::Sin(BobTime * 2.0f * PI / Ashline::Cfg::sprintCam::bobPeriod)
-		* Ashline::Cfg::sprintCam::bobAmp * SprintBlend;
-
-	// 反動(kick)と揺れ(bob)は、コアの yaw/pitch には含まれていない。
-	// 含まれていたら二重に足すことになるので、必ずコアの実装を確認してから足すこと。
-	const float CoreYaw = C.yaw + C.kickY;
-	const float CorePitch = FMath::Clamp(C.pitch + C.kickP + Bob,
-		Ashline::Cfg::cam::pitchMin - 0.2f, Ashline::Cfg::cam::pitchMax + 0.2f);
-
-	if (SpringArm)
-	{
-		SpringArm->SetWorldLocationAndRotation(
-			FAshlineBridge::ToUnreal(C.px, PivotY, C.pz),
-			FAshlineBridge::RotatorFromCore(CoreYaw, CorePitch));
-		SpringArm->TargetArmLength = ArmLen * FAshlineBridge::MetresToUE;
-		// SocketOffset は腕の回転後の空間。Y が右。
-		// コアの shoulder が正のとき右肩で、コアの右(+X)は Unreal の右(+Y) に写る。
-		// 符号を反転させる必要はない（AshlineBridge の導出のとおり）。
-		SpringArm->SocketOffset = FVector(0.0f, Shoulder * FAshlineBridge::MetresToUE, 0.0f);
-	}
-
+	   以前ここには Cfg::cam::* から同じ式を組み直したコードがあったが、
+	   同じ式を2箇所に持つと必ず片方だけ直されて食い違う。書く場所は1つに決める。 */
 	if (Camera)
 	{
+		Camera->SetWorldLocationAndRotation(
+			FAshlineBridge::ToUnreal(C.ex, C.ey, C.ez),
+			FAshlineBridge::RotatorFromCore(C.rotYaw, C.rotPitch));
+
 		// コアの fov は three.js 由来＝垂直画角。UE は水平画角なので必ず変換する。
+		// この変換が意図どおり効くのは、アスペクト比の軸拘束が MaintainXFOV の
+		// ときだけ（Config/DefaultEngine.ini で固定してある。理由もそこに書いた）。
 		Camera->SetFieldOfView(FAshlineBridge::FovToUnreal(C.fov, CurrentViewportAspect()));
 	}
 
 	// --- 演出のきっかけ（変化した瞬間だけ Blueprint に投げる） ---------------
+	// 「このフレームで撃ったか」はコアが持っている。Sim::Step() の先頭で
+	// lastShot_.fired を落としているので、fired は「今フレーム撃った」の意味そのもの。
+	// 以前はここで残弾の減少から撃ったかどうかを推測していたが、
+	// 「撃ったか」は判断であってコアの仕事であり、表示層に置くとコアが直っても
+	// こちらが古い前提のまま残る。
 	const Ashline::ShotResult& Shot = S.LastShot();
-	if (Shot.fired && LastAmmo >= 0 && P.ammo < LastAmmo)
+	if (Shot.fired)
 	{
-		// 「撃った瞬間」の判定に残弾の減少を使う理由：
-		// LastShot() は直近の1発を保持し続けるので、fired だけを見ると
-		// 撃ち終わった後も毎フレーム発砲演出が出てしまう。
 		OnShotFired(FAshlineBridge::ToUnreal(Shot.muzzleX, Shot.muzzleY, Shot.muzzleZ),
 		            FAshlineBridge::ToUnreal(Shot.hitX, Shot.hitY, Shot.hitZ),
 		            Shot.hitEnemy, Shot.headshot);
 	}
-	LastAmmo = P.ammo;
 
 	if (LastHp >= 0.0f && P.hp < LastHp)
 	{

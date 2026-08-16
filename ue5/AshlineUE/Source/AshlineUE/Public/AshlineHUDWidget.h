@@ -104,6 +104,24 @@ public:
 	float BannerTimeLeft = 0.0f;
 
 	// ---- 照準 ---------------------------------------------------------------
+	/**
+	 * レティクル（照準）を置くべき縦位置。画面の高さの【半分】に対する割合で、
+	 * 正のとき中心より上。画面上の Y[px] にすると
+	 *     y = 画面高さ/2 - ReticleNdcY * 画面高さ/2
+	 * になる。
+	 *
+	 * 【重要】この値は飾りではない。コアは画面中央ではなく、ここで指した
+	 * 少しだけ上の点へ向かって弾を飛ばしている（AshlineWeapon.cpp の
+	 * CameraRayFromReticle）。既定値では画角65度のとき中心より約1.83度上で、
+	 * 20m 先で 0.64m の差になる。
+	 *
+	 * したがって十字を画面のど真ん中に描くと、「狙ったところに当たらない銃」に
+	 * なる。柱1（止まれば当たる）が最初の一発で嘘になるので、
+	 * 必ずこの値を使って十字の位置を決めること。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|HUD")
+	float ReticleNdcY = 0.0f;
+
 	/** 現在の弾のばらつき[rad]。レティクルの開き具合に使う。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Ashline|HUD")
 	float Spread = 0.0f;
