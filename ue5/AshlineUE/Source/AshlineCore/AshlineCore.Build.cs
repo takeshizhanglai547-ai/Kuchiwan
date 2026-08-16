@@ -23,19 +23,17 @@ public class AshlineCore : ModuleRules
 		// 共有PCHを噛ませると「UEに依存していない」ことを保証できなくなる。
 		PCHUsage = ModuleRules.PCHUsageMode.NoSharedPCHs;
 
-		// Unityビルド（複数の.cppを連結してコンパイルする最適化）を切る。
-		// ファイル数が5本しかないので速度上の損はほぼ無く、代わりに
-		// 「include を書き忘れた .cpp」が隣のファイルに救われて見逃される事故を防げる。
-		// ※ もしこの行で UnrealBuildTool がエラーを出す UE 版なら、消して構わない。
-		//    ビルド設定の話であり、ゲームの挙動には一切影響しない。
-		bUseUnity = false;
-
-		// このモジュールには IMPLEMENT_MODULE を書いた .cpp が無い。
-		// ルール層に UE のマクロを1つも入れないためで、代わりにここで
-		// 「実装モジュールを要求しない」と宣言する。
-		// ※ それでもエディタ起動時に AshlineCore を読み込めないと言われた場合の
-		//    対処は ue5/RUNBOOK.md の「困ったとき」1番目に書いてある。
-		bRequiresImplementModule = false;
+		// ここに bUseUnity / bRequiresImplementModule は書かない。
+		//
+		// 以前は書いていたが、どちらも「UE 5.5 にその名前の設定が実在するか」を
+		// この環境で確認できず、初回ビルドを落とす候補になっていた。
+		// 得られる効果に対して危険が釣り合わない。
+		//   - bUseUnity=false は5ファイルのビルド設定の話で、挙動に影響しない。
+		//   - bRequiresImplementModule=false はビルド時チェックを黙らせるだけで、
+		//     実行時のモジュール読み込みには何の効果も無い。入口が必要なら
+		//     入口を置くのが正しく、実際 Private/AshlineCoreModule.cpp に置いてある。
+		//
+		// 初回ビルドで落ちる原因を1つでも減らすことを優先する。
 
 		// Core だけ。ここに何かを足すときは、上のコメントを読み直すこと。
 		PublicDependencyModuleNames.AddRange(new string[] { "Core" });

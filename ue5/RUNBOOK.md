@@ -503,12 +503,11 @@ ASHLINE の弾は、画面の中心ではなく**わずかに上**へ向かっ�
 
 **症状**：エディタ起動時、またはビルド時に AshlineCore が読み込めないと言われる。
 
-**原因**：`AshlineCore` はゲームのルールだけを持つモジュールで、
-UE のマクロを一切含まないようにしてあります。そのため、UE が普通なら要求する
-「モジュールの入口」を書いていません。`AshlineCore.Build.cs` で
-「入口は要りません」と宣言していますが、環境によってはそれでも要求されます。
+**原因**：`.uproject` に載っているモジュールは、エディタ起動時に必ず
+読み込まれます。読み込むための「入口」がモジュールに無いと、このエラーが出ます。
+この画面の「リビルド」を押しても、同じものが出来上がるだけで直りません。
 
-**直し方**：このファイルは既に作ってあります。
+**現状**：入口のファイルは既に置いてあるので、本来この症状は出ないはずです。
 
 ```
 ue5\AshlineUE\Source\AshlineCore\Private\AshlineCoreModule.cpp
@@ -529,20 +528,24 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, AshlineCore);
 ### ② `.Build.cs` / `.Target.cs` の設定名が「存在しない」と言われる
 
 **症状**：ビルドの一番最初（コンパイルが始まる前）に、
-`bUseUnity`、`bRequiresImplementModule`、`EngineIncludeOrderVersion.Unreal5_5`
-といった単語を含むエラーが出て止まる。
+`.Build.cs` や `.Target.cs` に書かれた設定名が「存在しない」と言われて止まる。
 
-**原因**：これらはビルドの設定名で、UE のバージョンによって名前が変わることがあります。
-UE 5.5 で使える名前かどうかを、実機で確認できていません（§0 のとおりです）。
+**原因**：ビルドの設定名は UE のバージョンによって変わることがあります。
+UE 5.5 で使える名前かどうかを実機で確認できていないため、この可能性が残ります。
 **ゲームの中身とは関係のないエラーです。**
 
-**直し方**：エラーに出てきた単語を含む行を、丸ごと削除してください。
+**この危険を減らすために、実在を確認できていない設定は最初から外してあります。**
+残っているのは次の 3 つだけで、いずれも UE5 で長く使われている名前です。
 
-| 単語 | ファイル | 対処 |
-|---|---|---|
-| `bUseUnity` | `Source/AshlineCore/AshlineCore.Build.cs` | その行を削除（ビルドが少し遅くなるだけ） |
-| `bRequiresImplementModule` | 同上 | その行を削除し、**「困ったとき ①」の対処を必ず行う** |
-| `Unreal5_5` | `Source/AshlineUE.Target.cs` と `Source/AshlineUEEditor.Target.cs` | `EngineIncludeOrderVersion.Unreal5_5` を `EngineIncludeOrderVersion.Latest` に書き換える（**2ファイルとも**） |
+| 設定 | 場所 |
+|---|---|
+| `PCHUsage = ModuleRules.PCHUsageMode.NoSharedPCHs` | `AshlineCore.Build.cs` |
+| `DefaultBuildSettings = BuildSettingsVersion.V5` | 2つの `.Target.cs` |
+| `IncludeOrderVersion = EngineIncludeOrderVersion.Latest` | 2つの `.Target.cs` |
+
+**直し方**：それでもこの種のエラーが出たら、エラーに出てきた単語を含む行を
+丸ごと削除してください。3 つとも、消してもゲームの挙動は変わりません
+（ビルドの速さと、ヘッダの読み込み順の話です）。
 
 直したら、手順 2-2（プロジェクトファイルの生成）からやり直してください。
 
@@ -608,11 +611,12 @@ UE 5.5 で使える名前かどうかを、実機で確認できていません�
 正直に列挙します。PC 側で最初に疑うべき場所でもあります。
 
 1. **UE5 層のコード全体**。コンパイルしていません。
-2. `AshlineCore.Build.cs` の `bUseUnity = false` と
-   `bRequiresImplementModule = false`。UE 5.5 のビルドツールがこの名前の設定を
-   受け付けるかを実機で確認していません（「困ったとき ②」）。
-3. `EngineIncludeOrderVersion.Unreal5_5`。5.5 にこの名前があるはずですが、
-   確認していません（「困ったとき ②」）。
+2. **ビルド設定の名前**。実在を確認できなかった `bUseUnity` /
+   `bRequiresImplementModule` / `EngineIncludeOrderVersion.Unreal5_5` は、
+   初回ビルドが落ちる原因を減らすため**外しました**。
+   残した 3 つ（`NoSharedPCHs` / `BuildSettingsVersion.V5` /
+   `EngineIncludeOrderVersion.Latest`）も実機では未確認ですが、
+   UE5 で長く使われている名前です（「困ったとき ②」）。
 4. **視点の速さ**。コアの視点入力は「画面上の移動量（ピクセル）」を受け取り、
    感度はコアの中で掛ける作りになっています。UE5 側はそれに合わせてありますが、
    マウスの 1 カウントがどれくらいの数で届くかは実機でしか分かりません。
