@@ -1,0 +1,14 @@
+# UE5 が生成するもの。リポジトリに入れない（skill §2.7）
+AshlineUE/Binaries/
+AshlineUE/DerivedDataCache/
+AshlineUE/Intermediate/
+AshlineUE/Saved/
+AshlineUE/.vs/
+AshlineUE/*.sln
+# 検証の中間生成物
+tests/build/
+tests/probes.json
+tests/web_answers.json
+tests/core_answers.json
+tests/web_shape.json
+tests/core_shape.json

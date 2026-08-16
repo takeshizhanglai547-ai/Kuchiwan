@@ -10985,6 +10985,31 @@ function boot() {
       });
     },
     etype: function () { return ETYPE; },
+    /* UE5版との同値検証用のプローブ。読み取り専用で、ゲーム状態を一切変えない。
+       同じ問いをC++コアにも投げ、答えが一致することを実測で確かめるために使う。 */
+    probe: function (list) {
+      var out = [], o = { x: 0, z: 0 };
+      for (var i = 0; i < list.length; i++) {
+        var q = list[i];
+        if (q.k === 'ray') {
+          out.push(rayWorld(q.ox, q.oy, q.oz, q.dx, q.dy, q.dz,
+            q.maxT === undefined ? Infinity : q.maxT));
+        } else if (q.k === 'circle') {
+          resolveCircle(q.x, q.z, q.r, o);
+          out.push([o.x, o.z]);
+        } else if (q.k === 'cover') {
+          var f = findCover(q.x, q.z, q.d === undefined ? CFG.cover.snapDist : q.d);
+          out.push(f ? [faces.indexOf(f.face), f.t] : null);
+        } else out.push(null);
+      }
+      return out;
+    },
+    worldShape: function () {
+      return {
+        boxes: boxes.map(function (b) { return [b.minx, b.maxx, b.minz, b.maxz, b.top, b.cover ? 1 : 0]; }),
+        faces: faces.map(function (f) { return [f.nx, f.nz, f.ax, f.az, f.tx, f.tz, f.len, f.low ? 1 : 0]; })
+      };
+    },
     setHp: function (v) { P.hp = v; P.hurtT = 0; },
     res: function () { return { ratio: RES.ratio, max: RES.max, step: RES.steps, auto: RES.auto }; },
     render: function () {
