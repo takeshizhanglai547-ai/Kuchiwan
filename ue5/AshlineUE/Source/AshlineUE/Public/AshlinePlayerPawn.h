@@ -1,0 +1,188 @@
+// =============================================================================
+// AshlinePlayerPawn.h — 入力を集めて Sim に渡し、返ってきた数値を写すだけの器。
+//
+// この Pawn には「判断」を1つも書かないこと。
+//   ・遮蔽に入れるか？        → Sim が決める
+//   ・ダッシュできるか？      → Sim が決める
+//   ・撃てるか？              → Sim が決める
+// ここに if を書きたくなったら、それは AshlineCore に書くべき if である。
+// 表示層に判断が漏れると、UE5が無い環境で検証できない部分が増えていき、
+// 最終的に「PCで動かしてみないと分からない」状態に逆戻りする。
+//
+// 毎フレームの流れ（順序に意味がある）
+//   1. Enhanced Input で溜めた値を Ashline::Input に詰める
+//   2. Sim::Step(in, dt) を1回だけ呼ぶ
+//   3. Sim の結果を Actor / SpringArm / Camera に写す（変換は AshlineBridge のみ）
+//   4. エッジ入力（押した瞬間のフラグ）を消す
+// =============================================================================
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Pawn.h"
+
+#include "AshlinePlayerPawn.generated.h"
+
+class UCameraComponent;
+class UCapsuleComponent;
+class UInputAction;
+class UInputMappingContext;
+class USkeletalMeshComponent;
+class USpringArmComponent;
+class UStaticMeshComponent;
+struct FInputActionValue;
+
+UCLASS()
+class ASHLINEUE_API AAshlinePlayerPawn : public APawn
+{
+	GENERATED_BODY()
+
+public:
+	AAshlinePlayerPawn();
+
+	virtual void Tick(float DeltaSeconds) override;
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void PawnClientRestart() override;
+
+protected:
+	virtual void BeginPlay() override;
+
+	// ---- 見た目の部品 --------------------------------------------------------
+	// 当たり判定は AshlineCore が持っているので、このカプセルは
+	// 「大きさの目安」と各部品の親でしかない。UE側の物理は使わない。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
+	TObjectPtr<UCapsuleComponent> Capsule;
+
+	/** 本番用のキャラクター。メッシュ未割り当てでも落ちない。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
+	TObjectPtr<USkeletalMeshComponent> CharacterMesh;
+
+	/** キャラクターが用意できるまでの仮の胴体（既定で表示、SkeletalMeshを入れたら消す）。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
+	TObjectPtr<UStaticMeshComponent> PlaceholderMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
+	TObjectPtr<USpringArmComponent> SpringArm;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ashline|Components")
+	TObjectPtr<UCameraComponent> Camera;
+
+	// ---- Enhanced Input の受け口 --------------------------------------------
+	// アセット本体（IMC_/IA_）はエディタでしか作れない。ここは差し込み口だけ。
+	// 何をどこに割り当てるかは ue5/RUNBOOK.md の手順4に一覧がある。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputMappingContext> DefaultMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	int32 MappingContextPriority = 0;
+
+	/** 移動（Axis2D）。左スティック / WASD。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> MoveAction;
+
+	/** 視点（Axis2D・マウス）。画面ピクセルの移動量として扱う。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> LookAction;
+
+	/** 視点（Axis2D・右スティック）。-1..1 の傾きとして扱い、時間を掛ける。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> LookStickAction;
+
+	/** 射撃（Digital・押しっぱなし）。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> FireAction;
+
+	/** 文脈依存アクション（遮蔽 / ダッシュ / 乗り換え / 乗り越え）。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> ActionAction;
+
+	/** アクティブリロードの1タップ。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ashline|Input")
+	TObjectPtr<UInputAction> TapAction;
+
+	// ---- 感度 ---------------------------------------------------------------
+	// コアの Input::lookDX/DY は「カメラの回転量（ラジアン）」と定義されている
+	// （AshlineSim.h）。したがって入力の生の値をここでラジアンに直してから渡す。
+	/** マウス1カウントあたりの回転量[rad]。Web版の cam.sens と同じ既定値。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
+	float MouseLookScale = 0.0042f;
+
+	/** ゲームパッドの最大速度[rad/s]。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
+	float GamepadLookRate = 2.6f;
+
+	/** スティックの遊び。これ以下は0として捨てる。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
+	float LookStickDeadzone = 0.15f;
+
+	/**
+	 * 上下の向きが逆だったらここを反転させる。
+	 * Enhanced Input の Mouse XY 2D-Axis は「上に動かすとYが正」を前提にしている。
+	 * IMC 側に Negate 修飾子を足すと二重に反転するので、片方だけで調整すること。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
+	bool bInvertLookY = false;
+
+	// ---- Blueprint へ渡す演出のきっかけ --------------------------------------
+	// 音・Niagara・アニメーションはBlueprintの担当。C++は「起きた」ことだけ伝える。
+	/** 発砲した。銃口と着弾点はUnrealのcm。 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ashline|FX")
+	void OnShotFired(const FVector& MuzzleLocation, const FVector& ImpactLocation, bool bHitEnemy, bool bHeadshot);
+
+	/** 被弾した。 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ashline|FX")
+	void OnPlayerHurt(float RemainingHpFraction);
+
+	/** 状態が変わった（0=Free 1=ToCover 2=Cover 3=Roll 4=Swap 5=Vault）。 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ashline|FX")
+	void OnPlayerStateChanged(int32 NewState);
+
+	// ---- Blueprint から読める見た目用の数値 ----------------------------------
+	/** 走っているか。アニメーションBPが見る。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
+	bool bSprinting = false;
+
+	/** 歩幅の位相。足の接地に使う。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
+	float Stride = 0.0f;
+
+	/** 遮蔽での傾き -1..1。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
+	float Lean = 0.0f;
+
+	/** しゃがみ量 0..1。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
+	float Crouch = 0.0f;
+
+	/** 乗り出し量 0..1。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Ashline|Anim")
+	float Peek = 0.0f;
+
+private:
+	// ---- 入力ハンドラ（値を溜めるだけ。判断はしない） -------------------------
+	void OnMove(const FInputActionValue& Value);
+	void OnMoveCompleted(const FInputActionValue& Value);
+	void OnLookMouse(const FInputActionValue& Value);
+	void OnLookStick(const FInputActionValue& Value);
+	void OnLookStickCompleted(const FInputActionValue& Value);
+	void OnFireStarted(const FInputActionValue& Value);
+	void OnFireCompleted(const FInputActionValue& Value);
+	void OnActionStarted(const FInputActionValue& Value);
+	void OnActionCompleted(const FInputActionValue& Value);
+	void OnTapStarted(const FInputActionValue& Value);
+
+	void ApplySimToComponents(float DeltaSeconds);
+	float CurrentViewportAspect() const;
+
+	// 溜め込み用。Tick で読んで Ashline::Input に詰め、エッジ系はそこで消す。
+	FVector2D MoveInput = FVector2D::ZeroVector;
+	FVector2D LookMouseAccum = FVector2D::ZeroVector;   // マウス移動量の累積（1Tick分）
+	FVector2D LookStickInput = FVector2D::ZeroVector;   // スティックの傾き -1..1
+	bool bFireHeld = false;
+	bool bActionHeld = false;
+	bool bActionEdge = false;
+	bool bTapEdge = false;
+
+	int32 LastPlayerState = -1;
+	float LastHp = -1.0f;
+	bool bLastShotSeen = false;
+};

@@ -104,17 +104,30 @@ void TestWorld() {
   Check("遮蔽にめり込んだら外へ押し出される", moved && outside > 0.4f,
         "z=-9.4 -> (" + F(ox) + ", " + F(oz) + ")");
 
-  /* 外周の外へは出られないこと */
-  w.ResolveCircle(0.0f, 25.0f, Cfg::player::radius, ox, oz);
-  Check("外周壁の外へは出られない", oz < Cfg::arena::hz, "z=25 -> " + F(oz));
+  /* 外周の外へは出られないこと。
+     ResolveCircle は「今めり込んでいる分を押し出す」局所処理なので、
+     壁帯(z=20.0..20.6)の外側へ瞬間移動した点は引き戻さない。それが正しい。
+     検証すべきは「歩いて場外に出られない」ことなので、実際に歩かせる。 */
+  {
+    float px = 0.0f, pz = 18.0f;
+    for (int i = 0; i < 600; ++i) {           // 10秒ぶん、外へ押し続ける
+      w.ResolveCircle(px, pz + Cfg::move::walk / 60.0f, Cfg::player::radius, px, pz);
+    }
+    Check("歩いて外周壁の外へは出られない",
+          pz < Cfg::arena::hz && pz > Cfg::arena::hz - 1.0f,
+          "z=18.0 から外へ歩き続けて " + F(pz) + " で止まる（壁 z=" +
+              F(Cfg::arena::hz, 1) + "）");
+  }
 
   /* 面の a->b の向き：法線と接線が直交し、右手系の並びであること。
      この並びが崩れると乗り出しの左右が反転する。 */
+  /* 壁を向いた視線は -n。Y-up でその右方向は (-(-nz), 0, (-nx)) = (nz, 0, -nx)。
+     接線 t が右方向と一致していれば a->b が「左->右」に揃っている。
+     ここが逆転すると、端からの乗り出しが左右あべこべになる。 */
   bool orderOk = true;
   for (const Face& f : w.Faces()) {
     if (std::fabs(f.nx * f.tx + f.nz * f.tz) > 1e-5f) { orderOk = false; break; }
-    /* 法線を90°回した向きが接線と一致すること（左->右の並び） */
-    if (std::fabs(-f.nz - f.tx) > 1e-5f || std::fabs(f.nx - f.tz) > 1e-5f) { orderOk = false; break; }
+    if (std::fabs(f.tx - f.nz) > 1e-5f || std::fabs(f.tz + f.nx) > 1e-5f) { orderOk = false; break; }
   }
   Check("面の a->b が「壁を向いたときの左->右」で揃っている", orderOk);
 

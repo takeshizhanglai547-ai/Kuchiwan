@@ -333,15 +333,14 @@ int AimTargetOf(const Sim& sim) {
 /* --------------------------------------------------------------------------
    視点回転の減速（エイムマグネット）
 
-   UpdateLook（AshlinePlayer.cpp）から呼ばれる。本来は Sim のメンバにしたいが
-   AshlineSim.h を触れないため、名前空間スコープの関数として出す。
-   呼ぶ側は自分の TU で float MagnetSlowdown(const Sim&); と前方宣言すること。
-   assistScale を今の状態から引き直すのは Web版と同じ（被弾ノックバックで
-   速度が変わった直後でも、減速量が1フレーム古くならないようにするため）。
+   UpdateLook（AshlinePlayer.cpp）から呼ばれる。射撃層が持つ吸着状態を使うので
+   実体はこちらに置き、宣言だけ Sim のメンバとして AshlineSim.h にある。
+   assistScale をその場で引き直すのは Web版と同じ（被弾ノックバックで速度が
+   変わった直後でも、減速量が1フレーム古くならないようにするため）。
    -------------------------------------------------------------------------- */
-float MagnetSlowdown(const Sim& sim) {
-  if (AimTargetOf(sim) < 0) return 1.0f;
-  const float s = sim.AssistScale() * kAssistMagnetMul;
+float Sim::MagnetSlowdown() const {
+  if (AimTargetOf(*this) < 0) return 1.0f;
+  const float s = AssistScale() * kAssistMagnetMul;
   return 1.0f - Cfg::aim::magnetSlow * s * (1.0f - gAimTargetDist);
 }
 
