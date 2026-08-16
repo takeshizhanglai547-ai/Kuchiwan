@@ -104,19 +104,19 @@ void StartVault(Player& p, const VaultTarget& v) {
 void Sim::UpdateLook(const Input& in, float dt) {
   float dx = in.lookDX, dy = in.lookDY;
 
-  /* 自分でカメラを回し始めたら、遮蔽の自動アライン（UpdateCamera）は諦める。
-     Web版は「指が乗っているか」(IN.look.on) で判定しているが、コアには押下の
-     有無が入って来ない。実際に回した量で代用している。
-     TODO(統合): Input に look の押下フラグが増えたらそちらに寄せること。 */
-  if (dx != 0.0f || dy != 0.0f) player_.coverAlignT = 0.0f;
+  /* 自分でカメラを触り始めたら、遮蔽の自動アライン（UpdateCamera）は諦める。
+     判定は「動かした量」ではなく「指が乗っているか」。動かした量で見ると、
+     指を置いたまま静止している人の向きを勝手に回してしまう。 */
+  if (in.look) player_.coverAlignT = 0.0f;
 
   if (player_.sprint) { dx = 0.0f; dy = 0.0f; }   // ダッシュ中はカメラを預ける
   if (dx != 0.0f || dy != 0.0f) {
     // 感度の加速度カーブ：速いスワイプほど1pxあたりの回転が増える
     const float spd = Hypot2(dx, dy) / std::max(dt, 1e-3f) / 1000.0f;   // px/ms
     const float k = 1.0f + Cfg::cam::sensAccel * Clamp(spd / Cfg::cam::sensRef, 0.0f, 1.0f);
-    /* TODO(統合): magnetSlowdown() は AshlineWeapon.cpp 側 */
-    const float s = Cfg::cam::sens * k;
+    /* 吸着対象が近いほど感度を鈍らせる。実体は射撃層(AshlineWeapon.cpp)。
+       これを掛け忘れると、狙っている最中だけ感度が最大55%速すぎる。 */
+    const float s = Cfg::cam::sens * k * MagnetSlowdown();
     camera_.yaw -= dx * s;
     camera_.pitch = Clamp(camera_.pitch - dy * s, Cfg::cam::pitchMin, Cfg::cam::pitchMax);
   }
@@ -544,16 +544,14 @@ void Sim::UpdateAnim(float dt) {
   player_.stride += sp * dt * (player_.sprint ? 1.55f : 2.05f);
 
   /* 加速度から前傾を作り、バネで戻す。こうすると停止時に余韻(オーバーシュート)が出る。
-     TODO(統合): バネの速度 leanV を置く場所が Player に無い。AshlineSim.h に
-     `float leanV = 0;` を足して player_.leanV に移すこと。それまでの暫定で、
-     Sim を同一スレッドで2つ作ると lean だけが混線する。 */
-  static thread_local float leanV = 0.0f;
+     バネの速度は Sim ごとに持つ（関数内 static にすると、同一スレッドで
+     2つ動かしたときに前傾だけが混線する）。 */
   const float fx = YawDirX(player_.yaw), fz = YawDirZ(player_.yaw);
   const float accF = (player_.vx * fx + player_.vz * fz) / std::max(Cfg::move::sprint, 1.0f);
   const float tgtLean = Clamp(accF, -1.0f, 1.0f) * (player_.sprint ? 0.30f : 0.16f);
   const float k = 120.0f, c = 15.0f;
-  leanV += (-(player_.lean - tgtLean) * k - leanV * c) * dt;
-  player_.lean += leanV * dt;
+  player_.leanV += (-(player_.lean - tgtLean) * k - player_.leanV * c) * dt;
+  player_.lean += player_.leanV * dt;
 
   /* しゃがみ。低い遮蔽では乗り出すまで完全にしゃがみ、高い遮蔽では立ったまま
      （下げ切ると画面が壁で埋まる）。 */

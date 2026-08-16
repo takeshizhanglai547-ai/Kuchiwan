@@ -49,6 +49,11 @@ struct Input {
   bool action = false;      // 遮蔽/ダッシュ/乗り越えの共用ボタン
   bool actionEdge = false;  // このフレームで押された瞬間か
   bool tap = false;         // アクティブリロード用の「どこでもいい1タップ」
+  /* 視点操作に指（またはスティック）が触れているか。動かしていなくても true。
+     遮蔽に入った直後の向き自動補正は、これが立っている間は打ち切る。
+     「動かした量」で判定すると、指を置いたまま静止している人の向きを
+     勝手に回してしまう。 */
+  bool look = false;
 };
 
 /* 撃った結果。演出側（UE5のNiagara等）はこれだけを見る。 */
@@ -114,8 +119,14 @@ struct Player {
   float dmgMul = 1.0f;
   float blindT = 0;
 
-  /* 見た目に渡す量 */
-  float lean = 0, roll = 0, stride = 0, crouch = 0, landDip = 0, recoil = 0;
+  float flash = 0;         // マズルフラッシュの残りフレーム
+
+  /* 見た目に渡す量。
+     leanV は前傾の「速度」。前傾は2次のバネ(k=120,c=15)で、停止時に
+     行き過ぎてから戻ることが重さの表現そのものなので、速度を毎フレーム
+     持ち越さないと挙動が別物になる。Sim ごとに持つ必要がある
+     （関数内の static にすると、同一スレッドで2つ動かしたとき混線する）。*/
+  float lean = 0, leanV = 0, roll = 0, stride = 0, crouch = 0, landDip = 0, recoil = 0;
 };
 
 struct Camera {
@@ -200,6 +211,10 @@ class Sim {
   void UpdateWeapon(const Input& in, float dt);
   void Shoot();
   void MuzzlePos(float& mx, float& my, float& mz) const;
+  /* 吸着対象が画面中央に近いほど視点の回転を鈍らせる係数（1.0＝鈍らせない）。
+     視点操作(UpdateLook)がこれを掛けるので、射撃層が持ちながら移動層から呼ばれる。
+     これを落とすと、狙っている最中の感度が最大55%速すぎる状態になる。 */
+  float MagnetSlowdown() const;
 
   /* --- 敵と波（AshlineEnemy.cpp） --- */
   void UpdateEnemies(float dt);
