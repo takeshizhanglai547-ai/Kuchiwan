@@ -1,0 +1,3 @@
+/home/user/Kuchiwan/unreal/build/CMakeFiles/obtests.dir
+/home/user/Kuchiwan/unreal/build/CMakeFiles/edit_cache.dir
+/home/user/Kuchiwan/unreal/build/CMakeFiles/rebuild_cache.dir

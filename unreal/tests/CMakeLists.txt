@@ -20,4 +20,17 @@ file(GLOB OBCORE_SRC ${OBCORE}/Private/*.cpp)
 file(GLOB TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 add_executable(obtests ${TEST_SRC} ${OBCORE_SRC})
-target_include_directories(obtests PRIVATE ${OBCORE}/Public ${CMAKE_CURRENT_SOURCE_DIR})
+
+# The Unreal module is NOT built here and cannot be. Two of its headers are
+# deliberately engine-free — ObUnits.h (the metre/centimetre, Y-up/Z-up
+# boundary) and ObMechRig.h (the frame definition AC_DESIGN.md states as hard
+# proportion targets) — and putting its Public directory on the include path is
+# what lets test_ue_layer.cpp measure them. Nothing else in that module is
+# reachable from here: everything else in it includes CoreMinimal.h and would
+# fail to compile instantly if this were ever used to pull in more.
+set(OBUE ${CMAKE_CURRENT_SOURCE_DIR}/../OverburstUE/Source/OverburstUE)
+
+target_include_directories(obtests PRIVATE
+  ${OBCORE}/Public
+  ${OBUE}/Public
+  ${CMAKE_CURRENT_SOURCE_DIR})

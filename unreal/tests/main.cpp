@@ -71,12 +71,45 @@ void Suite_Config() {
 }
 
 // Suites added by their owning agents as systems land:
-//   Suite_Movement();  Suite_Energy();  Suite_Stagger();
-//   Suite_Ballistics(); Suite_AI();     Suite_Mission();
+//   Suite_Ballistics();
+
+// test_movement.cpp — movement solver, EN economy, ACS/stagger.
+void Suite_Movement();
+void Suite_Energy();
+void Suite_Stagger();
+
+// test_combat.cpp — the fixed loadout and the projectile maths.
+void Suite_Combat();
+
+// test_ai.cpp — enemy steering (incl. the AC duel) and the mission stage.
+void Suite_AI();
+void Suite_Mission();
+
+// test_ue_layer.cpp — the two ENGINE-FREE headers that live in the Unreal
+// module: the unit boundary and the mech rig definition. Everything else in
+// Source/OverburstUE/ touches Unreal types and is Tier 2 (reviewed, never
+// executed); these two were written without an engine dependency precisely so
+// they could be Tier 1 like the rest of this runner.
+void Suite_Units();
+void Suite_MechRig();
+void Suite_RigJoints();
+void Suite_RigRoster();
+void Suite_RigVsSim();
 
 int main() {
   std::printf("\033[1mObCore test runner\033[0m — engine-free verification of the Unreal target\n");
   Suite_Types();
   Suite_Config();
+  Suite_Movement();
+  Suite_Energy();
+  Suite_Stagger();
+  Suite_Combat();
+  Suite_AI();
+  Suite_Mission();
+  Suite_Units();
+  Suite_MechRig();
+  Suite_RigJoints();
+  Suite_RigRoster();
+  Suite_RigVsSim();
   return obtest::Report();
 }
