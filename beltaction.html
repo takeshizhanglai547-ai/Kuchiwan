@@ -1007,6 +1007,17 @@ const Music=(()=>{
     { bpm:150, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 22: 炎上する天守 — 都節 (D) を疾走で
       prog:[[50,53,57],[51,55,58],[45,48,52],[50,53,57],[50,53,57],[55,58,62],[51,55,58],[45,48,52]],
       mel:[74,75,79,81, 82,81,79,75, 74,79,82,86, 87,86,82,79, 74,75,79,82, 86,87,86,82, 79,75,74,70, 69,74,75,74] },
+    { bpm:88, lead:'sine', pad:'sawtooth', kit:'heavy',      // 23: 桶狭間の豪雨 — 律音階 (D)。半拍おきの間＝雨の重さ
+      // D E G A C。都節の b2 を使わず、代わりに b7(C) で沈ませる
+      prog:[[50,53,57],[48,52,55],[50,53,57],[45,48,52],[50,53,57],[55,58,62],[48,52,55],[50,53,57]],
+      mel:[74,76,79,74, 72,74,76,72, 69,72,74,72, 67,69,72,69, 74,76,79,81, 79,76,74,72, 72,69,67,64, 62,67,69,74],
+      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+    { bpm:116, lead:'triangle', pad:'triangle',              // 24: 川中島の朝霧 — 律音階 (G)。霧の中の対峙
+      prog:[[55,59,62],[53,57,60],[50,53,57],[55,59,62],[57,60,64],[53,57,60],[50,53,57],[55,59,62]],
+      mel:[79,81,84,79, 77,79,81,77, 74,77,79,77, 79,84,86,84, 81,84,86,91, 89,86,84,81, 79,77,74,72, 74,79,81,79] },
+    { bpm:142, lead:'square', pad:'sawtooth', drive:true,    // 25: 甲斐の山城 — ヨナ抜き長音階 (A)。高地の乾いた行進
+      prog:[[57,61,64],[52,56,59],[54,57,61],[57,61,64],[59,62,66],[52,56,59],[54,57,61],[57,61,64]],
+      mel:[81,83,85,88, 90,88,85,83, 81,78,76,78, 81,83,85,81, 85,88,90,93, 90,88,85,81, 78,76,73,76, 78,81,83,81] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -2326,7 +2337,9 @@ const LAP_DIFF={
   // 死ににくさは変わらない。カジュアルにしたいのは「一撃の重さ」のほう。
   // HP側は、最終周のボスが三周目のボスより軟らかくならない線で止めている
   4:{hp:1.30, dmg:0.90, hardHp:2.00, hardDmg:1.70},   // 神話
-  5:{hp:1.45, dmg:0.98, hardHp:2.40, hardDmg:1.95} }; // 戦国
+  // 五周目の通常だけ、遊んだ上での指示でさらに半減している（0.98 → 0.49）。
+  // そのぶん四周目より一撃が軽くなるが、これは意図した例外
+  5:{hp:1.45, dmg:0.49, hardHp:2.40, hardDmg:1.95} }; // 戦国
 function lapDiff(){
   const d=LAP_DIFF[clamp(lap|0,1,5)] || LAP_DIFF[1];
   if(hardMode && d.hardHp!=null) return {hp:d.hardHp, dmg:d.hardDmg, own:true};
@@ -2888,6 +2901,14 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(on && perfTier<2 && h.t%3===0)
       spark(h.x+rnd(-16,16), h.y-rnd(6,h.art==='yari'?54:70), h.col, 1, h.art==='fire'?6:4);
     if(on){
+      if(h.art==='water'){                             // 水攻め：押し流す。傷は浅いが位置を保てない
+        for(const pl of players){ if(!pl.active||pl.state==='dead') continue;
+          if(Math.abs(pl.x-h.x)<56 && Math.abs(pl.y-h.y)<48 && pl.z<26){
+            pl.vx += (h.vx||1)*0.9;
+            if(age%20===0 && pl.invuln<=0)
+              hurtPlayer(pl, Math.round(h.dmg*diffDmgMul()*foeDmgGrow()), (h.vx||1)>0?1:-1, false, 'blunt'); } }
+        if(h.t>=h.life) hazards.splice(i,1);
+        continue; }
       const win=(h.art==='gourd')? (age===0) : (age<(h.dur||36) && age%11===0);
       if(win){ const R=(h.art==='gourd')?58:(h.art==='yari'?38:42), ZC=(h.art==='yari')?26:44;
         for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
@@ -3045,6 +3066,14 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
         ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=(1-v)*0.85;
         ctx.fillStyle=radGrad(sx,gy-24,20+64*v,'rgba(255,232,150,.95)','rgba(255,180,60,0)');
         ctx.beginPath(); ctx.arc(sx,gy-24,20+64*v,0,7); ctx.fill(); }
+    } else if(h.art==='water'){               // 水攻め：浅い水面が流れる
+      const v=clamp(age/10,0,1), fade=clamp(1-(age-(h.dur||60))/16,0,1);
+      ctx.globalAlpha=0.42*v*fade; ctx.fillStyle=h.col;
+      ctx.beginPath(); ctx.ellipse(sx,gy+4,56,15,0,0,7); ctx.fill();
+      ctx.globalAlpha=0.7*v*fade; ctx.strokeStyle='rgba(230,248,255,.8)'; ctx.lineWidth=2;
+      for(let k=0;k<3;k++){ const ph=gf*0.09+k*2.1;
+        ctx.beginPath(); ctx.moveTo(sx-44,gy+2+k*5+Math.sin(ph)*2);
+        ctx.quadraticCurveTo(sx,gy-2+k*5+Math.sin(ph+1)*4, sx+44,gy+2+k*5+Math.sin(ph+2)*2); ctx.stroke(); }
     } else {                                  // 槍衾：地面から槍が突き出て、引っ込む
       const v=clamp(age/6,0,1), out=clamp(1-(age-(h.dur||36))/8,0,1), L=54*v*out;
       ctx.globalAlpha=0.95; ctx.strokeStyle=h.col; ctx.lineWidth=4; ctx.lineCap='round';
@@ -4702,6 +4731,26 @@ const ETYPE={
     sengoku:true,sengKind:'kiba',rider:true,riderKind:'horse',accent:'#ffd24d',name:'騎馬武者'},
   ninja:{hp:82,sp:2.8,dmg:24,atkR:64,w:50,h:80,c1:'#232a33',c2:'#141920',c3:'#080b0f',score:1500,
     sengoku:true,sengKind:'ninja',warper:true,accent:'#8ad6ff',name:'忍び'},
+  // ── 五周目「戦国」の雑魚（増補）──
+  // 既にある7種と役割が重ならないものだけを足す。
+  // 長柄で殴る／速射／曲射の大筒／軽騎兵／背後からの吹き矢／正面を通さない大盾／歩いて回り込む旗本
+  souhei:{hp:170,sp:1.5,dmg:28,atkR:104,w:60,h:92,c1:'#5a4a58',c2:'#382e3a',c3:'#1c161e',score:1600,
+    sengoku:true,sengKind:'souhei',rager:true,armor:true,accent:'#e8d8f0',name:'薙刀僧兵'},
+  saika:{hp:72,sp:1.9,dmg:16,atkR:290,w:52,h:80,c1:'#3c5a4a',c2:'#24362c',c3:'#121c16',score:1200,
+    sengoku:true,sengKind:'saika',gunner:true,shotCol:'#ffe0b0',shotSpd:13.5,shotR:5,shotHoming:false,
+    shotWind:12,accent:'#a8e8c8',name:'雑賀衆'},
+  ozutsu:{hp:120,sp:1.0,dmg:40,atkR:380,w:60,h:86,c1:'#4a4238',c2:'#2c2822',c3:'#161412',score:1800,
+    sengoku:true,sengKind:'ozutsu',gunner:true,shotCol:'#ffb060',shotSpd:7.5,shotR:18,shotHoming:false,
+    shotWind:48,accent:'#ff9a4a',name:'大筒足軽'},
+  horo:{hp:120,sp:2.8,dmg:24,atkR:88,w:100,h:92,c1:'#6a4a2a',c2:'#42301a',c3:'#1e1610',score:1700,
+    sengoku:true,sengKind:'horo',rider:true,riderKind:'horse',accent:'#ff9ac0',name:'母衣武者'},
+  kunoichi:{hp:76,sp:3.0,dmg:20,atkR:250,w:48,h:78,c1:'#3a2a3a',c2:'#221824',c3:'#100a12',score:1600,
+    sengoku:true,sengKind:'kunoichi',warper:true,gunner:true,shotCol:'#c8ffb0',shotSpd:11,shotR:5,shotHoming:false,
+    shotWind:16,accent:'#d6a6ff',name:'くノ一'},
+  oodate:{hp:240,sp:1.0,dmg:24,atkR:66,w:70,h:96,c1:'#4a4a3a',c2:'#2c2c22',c3:'#161610',score:1900,
+    sengoku:true,sengKind:'oodate',squad:true,phalanx:true,guarder:true,armor:true,accent:'#d8d0a0',name:'大盾武者'},
+  hatamoto:{hp:160,sp:2.3,dmg:27,atkR:80,w:58,h:90,c1:'#2a3a5a',c2:'#182238',c3:'#0a101c',score:1800,
+    sengoku:true,sengKind:'hatamoto',squad:true,flanker:true,accent:'#a8c8ff',name:'旗本'},
   // ── 五周目「戦国」の三英傑 ──
   nobunaga:{hp:1900,sp:1.9,dmg:40,atkR:118,w:96,h:130,c1:'#1a1a22',c2:'#0e0e14',c3:'#050508',score:34000,
     boss:true,bossKind:'nobunaga',weapon:'blade',accent:'#ff6a2a',sengoku:true,finalBoss:true,trueBoss:true,name:'第六天魔王 織田信長'},
@@ -4709,6 +4758,24 @@ const ETYPE={
     boss:true,bossKind:'hideyoshi',weapon:'spear',accent:'#ffe38a',sengoku:true,name:'太閤 羽柴秀吉'},
   ieyasu:{hp:1800,sp:1.5,dmg:36,atkR:110,w:100,h:126,c1:'#2a4a38',c2:'#183020',c3:'#0a1a10',score:28000,
     boss:true,bossKind:'ieyasu',weapon:'blade',accent:'#a8e8c0',sengoku:true,name:'東照大権現 徳川家康'},
+  // ── 五周目「戦国」の群雄（各国の大名）──
+  shingen:{hp:1700,sp:1.4,dmg:34,atkR:112,w:98,h:126,c1:'#7a1d1d',c2:'#4a1010',c3:'#240808',score:27000,
+    boss:true,bossKind:'shingen',weapon:'blade',accent:'#ffd0a0',sengoku:true,name:'甲斐の虎 武田信玄'},
+  kenshin:{hp:1550,sp:2.5,dmg:36,atkR:118,w:92,h:124,c1:'#e8e4d8',c2:'#a8a496',c3:'#4a4a44',score:27000,
+    boss:true,bossKind:'kenshin',weapon:'blade',accent:'#bfe9ff',sengoku:true,name:'越後の龍 上杉謙信'},
+  yoshimoto:{hp:1450,sp:1.2,dmg:30,atkR:106,w:96,h:120,c1:'#3a2a6a',c2:'#241848',c3:'#100a24',score:23000,
+    boss:true,bossKind:'yoshimoto',weapon:'blade',accent:'#e8c8ff',sengoku:true,name:'海道一の弓取 今川義元'},
+  mitsuhide:{hp:1600,sp:2.3,dmg:35,atkR:110,w:92,h:122,c1:'#2a4a5a',c2:'#183038',c3:'#0a171c',score:26000,
+    boss:true,bossKind:'mitsuhide',weapon:'blade',accent:'#9fe0ff',sengoku:true,name:'惟任日向守 明智光秀'},
+  // ── 中ボス（道中に立ちはだかる）──
+  katsuyori:{hp:1050,sp:2.6,dmg:31,atkR:100,w:86,h:114,c1:'#8a2020',c2:'#5a1010',c3:'#280808',score:15000,
+    boss:true,mini:true,bossKind:'katsuyori',weapon:'spear',accent:'#ff8a6a',sengoku:true,name:'武田勝頼'},
+  hisahide:{hp:980,sp:2.0,dmg:33,atkR:98,w:88,h:112,c1:'#3a2a1a',c2:'#241a10',c3:'#100a06',score:16000,
+    boss:true,mini:true,bossKind:'hisahide',weapon:'blade',accent:'#c8ff8a',sengoku:true,name:'梟雄 松永久秀'},
+  hanbei:{hp:900,sp:2.2,dmg:27,atkR:92,w:82,h:110,c1:'#d8d0b8',c2:'#9a9078',c3:'#4a4438',score:14000,
+    boss:true,mini:true,bossKind:'hanbei',weapon:'ogi',accent:'#fff0c0',sengoku:true,name:'今孔明 竹中半兵衛'},
+  kanbei:{hp:1020,sp:1.8,dmg:29,atkR:96,w:84,h:112,c1:'#1a3a4a',c2:'#102630',c3:'#061218',score:15000,
+    boss:true,mini:true,bossKind:'kanbei',weapon:'ogi',accent:'#8ad6ff',sengoku:true,name:'軍師 黒田官兵衛'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:120,w:146,h:210,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:160,w:323,h:228,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
@@ -4756,6 +4823,14 @@ const BOSSMOVES={
   hideyoshi:['ogaeshi','saruTobi','hyotan','ichiyaJo','tripleStep','unblockSmash','bossGrab'],
   // 一夜城は秀吉だけの手（墨俣の逸話）。家康と共有すると三人の色が混ざる
   ieyasu:   ['kagemusha','yaribusuma','kakuyoku','mikataGaeshi','heavySwing','groundSlam','bossGrab'],
+  shingen:  ['fuurinkazan','yaribusuma','heavySwing','groundSlam','unblockSmash','bossGrab'],
+  kenshin:  ['kurumagakari','teleSlash','dashThrust','tripleStep','unblockSmash','bossGrab'],
+  yoshimoto:['jouraku','kakuyoku','orbSpread','heavySwing','unblockSmash','bossGrab'],
+  mitsuhide:['muhon','hyotan','teleSlash','dashThrust','unblockSmash','bossGrab'],
+  katsuyori:['akazonae','dashThrust','tripleStep','unblockSmash'],
+  hisahide: ['hiragumo','hyotan','teleSlash','dashThrust','unblockSmash'],
+  hanbei:   ['saihai','kakuyoku','orbSpread','heavySwing'],
+  kanbei:   ['mizuzeme','yaribusuma','heavySwing','orbSpread'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
@@ -4819,7 +4894,15 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   // ── 五周目・戦国の三英傑 ──
   nobunaga:'であるか。犬の分際で、我が城まで来おったか。',
   hideyoshi:'いやはや、強そうな犬じゃ！……で、わしの家来にならぬか？',
-  ieyasu:'……鳴かぬなら、鳴くまで待とう。だが貴殿は、待たせてはくれぬようじゃな。' };
+  ieyasu:'……鳴かぬなら、鳴くまで待とう。だが貴殿は、待たせてはくれぬようじゃな。',
+  shingen:'疾きこと風の如く——動いてから読むのでは、遅いぞ。',
+  kenshin:'義によって立つ。欲で戦う者に、毘沙門天の刃は届かぬ。',
+  yoshimoto:'田舎の犬が、雅を解するとは思えぬがのう。ま、蹴鞠でもして待っておれ。',
+  mitsuhide:'……敵は、いつも背にあり。それを知らぬ者から順に消える。',
+  katsuyori:'父の名で語るな。武田は俺の代で、まだ終わらぬ！',
+  hisahide:'茶釜ひとつで城を買い、城ひとつで天下を賭ける。——面白かろう？',
+  hanbei:'力比べは致しませぬ。……もう、盤の上では終わっております。',
+  kanbei:'水は低きに流れ、城を沈める。貴殿はどちらに立っておられるかな。' };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
@@ -4831,6 +4914,8 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   chamboss:'bosseerie', chamurus:'bosschamu',
   poseidon:'bossmyth', hades:'bossmyth', zeus:'bossmyth',
   nobunaga:'bosssengoku', hideyoshi:'bosssengoku', ieyasu:'bosssengoku',
+  shingen:'bosssengoku', kenshin:'bosssengoku', yoshimoto:'bosssengoku', mitsuhide:'bosssengoku',
+  katsuyori:'bosssengoku', hisahide:'bosssengoku', hanbei:'bosssengoku', kanbei:'bosssengoku',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
@@ -5845,6 +5930,15 @@ const MV={
   saruTobi:{tele:22,dur:86,rec:30,minR:60,maxR:1400},                // 猿飛：頭上を三度跳び越して背後から刺す
   kagemusha:{tele:24,dur:88,rec:34,minR:0,maxR:1400,danger:1},       // 影武者：三つの影から本物が出る
   yaribusuma:{tele:30,dur:92,rec:36,minR:0,maxR:1400},               // 槍衾：周囲を槍で埋め、近づけなくする
+  // ── 群雄の一手 ──
+  fuurinkazan:{tele:30,dur:132,rec:40,minR:0,maxR:1400,danger:1},    // 風林火山：疾風→静止回復→火→不動の四相
+  kurumagakari:{tele:26,dur:88,rec:34,minR:0,maxR:800,danger:1},     // 車懸り：回りながら斬り進む
+  jouraku:{tele:28,dur:96,rec:36,minR:0,maxR:1400},                  // 上洛の行列：兵を並べて前進する
+  muhon:{tele:22,dur:64,rec:32,minR:0,maxR:1400,danger:1},           // 謀反の一閃：背後を取ってガード不能
+  akazonae:{tele:30,dur:92,rec:36,minR:0,maxR:1400},                 // 赤備え：騎馬を三騎、横一線に走らせる
+  hiragumo:{tele:44,dur:70,rec:44,minR:0,maxR:520,danger:1},         // 平蜘蛛：抱えた釜ごと大爆発
+  saihai:{tele:24,dur:66,rec:30,minR:0,maxR:1400},                   // 采配：味方を強化して隊列を組ませる
+  mizuzeme:{tele:30,dur:100,rec:36,minR:0,maxR:1400}, 
   tsunami:{tele:36,dur:96,rec:40,minR:0,maxR:1400,danger:1},        // 津波：跳べば越えられる水の壁
   seaBeasts:{tele:30,dur:86,rec:32,minR:60,maxR:1400},              // 海獣召喚：サメとシャチが突進
   whaleRide:{tele:28,dur:104,rec:50,minR:0,maxR:1200,danger:1},     // 鯨駕：空から鯨ごと突っ込む
@@ -6072,6 +6166,88 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
           hazards.push({kind:'eplant', art:'yari', x:clamp(e.x+k*62, camX+30, camX+W-30), y:LANE,
             t:0, warn:16, dur:44, life:80, dmg:t.dmg-8, col:'#8a9a86'}); } }
       if(f>8 && f<72 && gf%10===0) spark(e.x+rnd(-90,90), e.y-rnd(0,40), '#a8e8c0', 1, 4);
+      break;
+    // ── 信玄：風林火山。四つの相を続けて通す。相ごとに対処が変わる ──
+    case 'fuurinkazan': {
+      const ph=Math.floor(f/33);                       // 0=風 1=林 2=火 3=山
+      if(f%33===1){ const nm=['疾きこと風の如く','徐かなること林の如く','侵掠すること火の如く','動かざること山の如し'][ph];
+        popText(e.x,e.y-e.h-24,nm,['#bfe9ff','#a8e8c0','#ff8a3a','#d8c8a0'][ph],true); sfx.boss(e.x); }
+      const k=f%33;
+      if(ph===0){ if(k>4 && k<24){ e.x+=e.facing*13; if(k%4===0) bArc(e,72,46,t.dmg-8,false,'#bfe9ff'); } }
+      else if(ph===1){ if(k===8){ e.hp=Math.min(e.maxHp, e.hp+Math.round(e.maxHp*0.05)); ring(e.x,e.y,'#a8e8c0');
+          popText(e.x,e.y-e.h-8,'…静止','#a8e8c0'); }
+        if(k%6===0) spark(e.x+rnd(-30,30), e.y-rnd(10,80), '#a8e8c0', 1, 4); }
+      else if(ph===2){ if(k===6){ const tp=nearestPlayerTo(e.x);
+          for(let j=-1;j<=1;j++) hazards.push({kind:'eplant', art:'fire',
+            x:clamp(tp.x+j*116, camX+40, camX+W-40), y:LANE, t:0, warn:16+Math.abs(j)*6, dur:30, life:80,
+            dmg:t.dmg-10, col:'#ff8a3a'}); } }
+      else { if(k===4){ e.guardT=Math.max(e.guardT,26); popText(e.x,e.y-e.h-8,'不動','#d8c8a0'); }
+        if(k===26) bShock(e,150,t.dmg+4); }
+      break; }
+    // ── 謙信：車懸り。回りながら斬り進む。止まらないので置きに行くしかない ──
+    case 'kurumagakari':
+      if(f===1){ popText(e.x,e.y-e.h-24,'車懸りの陣！','#bfe9ff',true); sfx.dash(e.x); }
+      if(f>6 && f<70){ e.spin=(e.spin||0)+0.42; e.x+=e.facing*6;
+        if(f%7===0){ bArc(e,84,50,t.dmg-6,false,'#bfe9ff'); spark(e.x,e.y-50,'#bfe9ff',3,6); }
+        if(f%22===0){ const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1; } }
+      break;
+    // ── 義元：上洛の行列。兵を左右に侍らせながら悠々と進む ──
+    case 'jouraku':
+      if(f===1){ popText(e.x,e.y-e.h-24,'雅に参ろうぞ','#e8c8ff',true); sfx.boss(e.x); }
+      if(f===14||f===40){ bSummon(e); ring(e.x,e.y,'#e8c8ff'); }
+      if(f>18 && f<86){ e.x+=e.facing*2.6;
+        if(f%12===0){ bArc(e,t.atkR-10,46,t.dmg-10,false,'#e8c8ff'); }
+        if(f%9===0 && perfTier<2) spark(e.x+rnd(-40,40), e.y-rnd(20,100), '#e8c8ff', 1, 4); }
+      break;
+    // ── 光秀：謀反の一閃。背後を取ってからのガード不能 ──
+    case 'muhon':
+      if(f===1){ popText(e.x,e.y-e.h-24,'敵は……背にあり','#9fe0ff',true); sfx.guard(e.x); }
+      if(f===16){ const tp=nearestPlayerTo(e.x); e.vanish=18;
+        // 背後＝主役が向いている側の「逆」。+ にすると正面へ回り込んでしまう
+        e.x=clamp(tp.x - tp.facing*82, camX+40, camX+W-40); e.y=clamp(tp.y,GROUND_TOP,GROUND_BOT);
+        e.facing=(tp.x<e.x)?-1:1; spark(e.x,e.y-50,'#9fe0ff',16,9); sfx.dash(e.x); }
+      if(f===34) bUnblock(e,140,58,t.dmg+10);
+      break;
+    // ── 勝頼：赤備え。騎馬を三騎、時間差で横一線に走らせる ──
+    case 'akazonae':
+      if(f===1){ popText(e.x,e.y-e.h-24,'赤備え、突撃！','#ff8a6a',true); sfx.boss(e.x); }
+      if(f===12||f===30||f===48){ const k=(f-12)/18, tp=nearestPlayerTo(e.x);
+        const dir=(k%2)? 1 : -1, x0=dir>0? camX-70 : camX+W+70;
+        hazards.push({kind:'ebeast', x:x0, y:clamp(tp.y+(k-1)*22,GROUND_TOP,GROUND_BOT), vx:dir*10.5,
+          t:0, life:110, dmg:t.dmg-6, col:'#ff8a6a', art:'shark', kn:true});
+        sfx.dash(x0); }
+      break;
+    // ── 久秀：平蜘蛛。抱えた釜ごと大爆発。溜めが長いので離れれば躱せる ──
+    case 'hiragumo':
+      if(f===1){ popText(e.x,e.y-e.h-24,'この釜、渡すものか！','#c8ff8a',true); sfx.charge(e.x); }
+      if(f<44 && f%3===0) spark(e.x+rnd(-26,26), e.y-rnd(20,80), '#c8ff8a', 2, 5);
+      if(f===46){ flashAt(5,'200,255,138',e.x,e.y-50); shake=Math.max(shake,16); hitStop=Math.max(hitStop,8);
+        shockwave(e.x,e.y,{r:230, color:'#c8ff8a', big:true, heavy:true});
+        dust(e.x,e.y,20); sfx.big(e.x); sfx.ko(e.x);
+        for(const pl of players){ if(!pl.active||pl.state==='dead'||pl.invuln>0) continue;
+          if(Math.abs(pl.x-e.x)<200 && Math.abs(pl.y-e.y)<60)
+            hurtPlayer(pl, Math.round((t.dmg+16)*diffDmgMul()*foeDmgGrow()), pl.x<e.x?-1:1, true, 'blunt'); }
+        e.hp=Math.max(1, e.hp-Math.round(e.maxHp*0.06)); }   // 自分も焼く
+      break;
+    // ── 半兵衛：采配。味方を強化し、隊列を組ませる（本人は殴らない） ──
+    case 'saihai':
+      if(f===1){ popText(e.x,e.y-e.h-24,'——手筈どおりに','#fff0c0',true); sfx.guard(e.x); }
+      if(f===20){ let n=0;
+        for(const o of enemies){ if(o===e||o.dead||ETYPE[o.type].boss) continue;
+          o.buffTill=gf+300; o.thinkCd=0; n++; ring(o.x,o.y,'#fff0c0'); }
+        if(n===0) bSummon(e);                              // 誰も居なければ兵を呼ぶ
+        popText(e.x,e.y-e.h-8, n? ('全軍 鼓舞 '+n+'体') : '兵を呼ぶ','#fff0c0');
+        flashAt(2,'255,240,192',e.x,e.y-50); }
+      if(f>20 && f%10===0) spark(e.x+rnd(-40,40), e.y-rnd(20,90), '#fff0c0', 1, 4);
+      break;
+    // ── 官兵衛：水攻め。床が水になり、立っていられなくなる ──
+    case 'mizuzeme':
+      if(f===1){ popText(e.x,e.y-e.h-24,'水を引き入れよ','#8ad6ff',true); sfx.boss(e.x); }
+      if(f===18){ const tp=nearestPlayerTo(e.x), dir=(tp.x<e.x)?-1:1;
+        for(let k=-2;k<=2;k++) hazards.push({kind:'eplant', art:'water',
+          x:clamp(tp.x+k*104, camX+40, camX+W-40), y:LANE, t:0, warn:14, dur:60, life:96,
+          dmg:Math.max(2,t.dmg-22), col:'#8ad6ff', vx:dir*1});
+        ring(e.x,e.y,'#8ad6ff'); shake=Math.max(shake,6); }
       break;
     // ══ 神話の三柱：専用の大技 ═══════════════════════════════════
     // ── ポセイドン：三叉槍を掲げて海を起こす。水の壁は跳べば越えられる ──
@@ -6690,14 +6866,29 @@ const MYTH_CH=[
 // 兵種の役割を段階的に見せる。城下町で足軽と弓、野戦で鉄砲と騎馬、天守で総力戦。
 const SENGOKU_CH=[
   {theme:21,name:'炎上する天守',
-   gates:[{off:600,list:[['samurai',2],['teppo',1]]},{off:1000,list:[['kibahei',1],['ninja',2],['taisho',1]]},{off:1400,boss:true,list:[['nobunaga',1]]}],
+   gates:[{off:560,list:[['samurai',2],['teppo',1]]},{off:940,mini:true,list:[['mitsuhide',1]]},
+          {off:1240,list:[['hatamoto',1],['ninja',2],['oodate',1]]},{off:1600,boss:true,list:[['nobunaga',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['な、なんじゃこの城は…！わしらの知らん国じゃ。','旗印に「永楽通宝」——これは、遠い異国の戦の世のものじゃ。','ここの兵は役割が分かれておる。前で槍を並べ、後ろから射る。','矢と弾は撃つ前に必ず構える。構えを見たら、線から外れよ。','天守に居るのは「第六天魔王」と名乗る男じゃ。気をつけい。'],give:{heal:'full'}}},
   {theme:19,name:'夕暮れの城下町',
-   gates:[{off:560,list:[['ashigaru',3],['yumihei',1]]},{off:960,list:[['samurai',1],['ashigaru',2],['yumihei',2]]},{off:1400,boss:true,list:[['hideyoshi',1]]}],
+   gates:[{off:520,list:[['ashigaru',3],['yumihei',1]]},{off:900,mini:true,list:[['hanbei',1]]},
+          {off:1180,list:[['samurai',1],['ashigaru',2],['saika',2]]},{off:1560,boss:true,list:[['hideyoshi',1]]}],
    npc:{kind:'merchant',name:'行商猫チャミ',lines:['この町、店がいっぱいで目移りするニャ〜','でも侍がうろうろしてて物騒ニャ…','弓兵は遠くから狙ってくるから、柱の陰に入るといいニャ']}},
   {theme:20,name:'三方ヶ原の野',
-   gates:[{off:560,list:[['ashigaru',2],['kibahei',1]]},{off:960,list:[['teppo',2],['taisho',1],['samurai',1]]},{off:1400,boss:true,list:[['ieyasu',1]]}],
+   gates:[{off:520,list:[['ashigaru',2],['kibahei',1]]},{off:900,mini:true,list:[['kanbei',1]]},
+          {off:1180,list:[['teppo',2],['taisho',1],['hatamoto',1]]},{off:1560,boss:true,list:[['ieyasu',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平まで旗が並んでおる。これが「合戦」というやつじゃ。','騎馬が来る。あれは止まらん——避けるしかない。','狸のような男が陣を敷いておる。堅いぞ、あれは。']}},
+  {theme:22,name:'桶狭間の豪雨',
+   gates:[{off:520,list:[['ashigaru',3],['souhei',1]]},{off:900,mini:true,list:[['hisahide',1]]},
+          {off:1180,list:[['ozutsu',1],['oodate',2],['yumihei',1]]},{off:1560,boss:true,list:[['yoshimoto',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['ひどい雨じゃ。この谷、逃げ場が無いぞい。','大筒が来る。あれは山なりに落ちてくる——着弾の輪をよう見よ。','谷の奥で、公家めいた大将が輿に揺られておる。油断しておるようで、囲みは厚い。']}},
+  {theme:23,name:'川中島の朝霧',
+   gates:[{off:520,list:[['yumihei',2],['saika',2]]},{off:900,mini:true,list:[['katsuyori',1]]},
+          {off:1180,list:[['kibahei',1],['horo',2],['souhei',1]]},{off:1560,boss:true,list:[['kenshin',1]]}],
+   npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['霧で先が見えねえ…足音だけ聞け。','母衣を背負った早駆けが来るぜ。あれは止まらねえ。','川の向こうに、白い頭巾の大将が独りで立ってた。あれはヤバい。']}},
+  {theme:24,name:'甲斐の山城',
+   gates:[{off:520,list:[['oodate',2],['souhei',1]]},{off:900,list:[['kunoichi',2],['hatamoto',1]]},
+          {off:1240,list:[['ozutsu',1],['taisho',1],['kibahei',1]]},{off:1600,boss:true,list:[['shingen',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['丸太を組んだ砦じゃ。守るために作られておる。','くノ一が居る。背を取られるぞ、壁を背にせい。','山の主は動かぬ。動かぬまま、こちらの手を全部読んでおる。']}},
 ];
 const WORLD3_LEVELS=[
   {id:'w3kairou', b:SPACE_CH[1], mx:0.32, my:0.32},   // 星間回廊（円盤母艦ディスコ）
@@ -6716,13 +6907,16 @@ const WORLD4_FINAL=[
 ];
 const NG4_UNLOCK=2;   // 神話のステージをこの数クリアで「オリュンポスの頂」が解禁
 const WORLD5_LEVELS=[
-  {id:'w5machi', b:SENGOKU_CH[1], mx:0.28, my:0.60},   // 夕暮れの城下町（羽柴秀吉）
-  {id:'w5nohara',b:SENGOKU_CH[2], mx:0.56, my:0.32},   // 三方ヶ原の野（徳川家康）
+  {id:'w5machi', b:SENGOKU_CH[1], mx:0.20, my:0.62},   // 夕暮れの城下町（羽柴秀吉／竹中半兵衛）
+  {id:'w5nohara',b:SENGOKU_CH[2], mx:0.38, my:0.34},   // 三方ヶ原の野（徳川家康／黒田官兵衛）
+  {id:'w5oke',   b:SENGOKU_CH[3], mx:0.54, my:0.66},   // 桶狭間の豪雨（今川義元／松永久秀）
+  {id:'w5kawa',  b:SENGOKU_CH[4], mx:0.68, my:0.32},   // 川中島の朝霧（上杉謙信／武田勝頼）
+  {id:'w5kai',   b:SENGOKU_CH[5], mx:0.80, my:0.58},   // 甲斐の山城（武田信玄）
 ];
 const WORLD5_FINAL=[
-  {id:'w5tenshu', b:SENGOKU_CH[0], mx:0.86, my:0.20, locked:true, final:true},   // 炎上する天守（織田信長）
+  {id:'w5tenshu', b:SENGOKU_CH[0], mx:0.90, my:0.18, locked:true, final:true},   // 炎上する天守（織田信長／明智光秀）
 ];
-const NG5_UNLOCK=2;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
+const NG5_UNLOCK=3;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
@@ -6785,6 +6979,28 @@ function buildEncounters4(){ resetWorldState(); trueBossSpawned=false;
 function buildEncounters5(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(SENGOKU_CH.slice(1,2),null);   // 五周目：城下町から開始（天守は規定数クリアで解禁）
 }
+// 章の頭：初回はオープニングを見せ、やり直しでは飛ばす
+function ngBegin(open, skipOpen){
+  const go=()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); };
+  if(skipOpen) go(); else startCutscene(open, go); }
+// ── ゲームオーバーからの「最初から」──
+// 五周目で倒れて一周目の王都へ戻されるのは、やり直しではなく別のゲームだった。
+// 遊んでいた周回の頭へ戻す。支度金はタイトルの「N周目から」と同じ額を渡す
+// （二周目以降は前の周回の強化を引き継ぐ前提の設計なので、素の状態では成立しない）
+const LAP_RESTART={
+  2:{coins:200,  name:'2周目「蟲の世界」',   go:startNG2},
+  3:{coins:400,  name:'3周目「宇宙人の侵略」', go:startNG3},
+  4:{coins:700,  name:'4周目「神話」',       go:startNG4},
+  5:{coins:1000, name:'5周目「戦国」',       go:startNG5} };
+let retryLap=1;                        // 倒れた時点の周回。startGame が lap を1へ戻すので控えておく
+function restartFromLap(l){
+  clearProgress(); startGame();        // 強化とコインは新規と同じ扱い（周回だけ引き継ぐ）
+  const r=LAP_RESTART[l|0];
+  if(!r) return;                       // 一周目はそのまま王都から
+  coins=r.coins; r.go(true); }         // true＝オープニングは飛ばす
+// 「最初から」ボタンの中身。ボタンの配線はDOM越しで検査しにくいので、
+// どこへ戻るかの判断だけをここに出す
+function retryStart(){ restartFromLap(retryLap); }
 // クリア後に進める周回。DOM を読まずに検証できるよう、判断だけを関数に出す。
 // 三周目クリア後はここが null を返しており、四周目へ行けなかった
 function nextLap(l){
@@ -6794,7 +7010,7 @@ function nextLap(l){
   if(l>=2) return {lap:3, label:'▶ 3周目「宇宙人の侵略」へ', go:startNG3};
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
-function startNG5(){ unlockAudio(); lap=5; endingDone=false; cut=null;
+function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6803,10 +7019,10 @@ function startNG5(){ unlockAudio(); lap=5; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG5_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG5_OPEN, skipOpen);
 }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
-function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
+function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6815,10 +7031,10 @@ function startNG4(){ unlockAudio(); lap=4; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG4_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG4_OPEN, skipOpen);
 }
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
-function startNG3(){ unlockAudio(); lap=3; endingDone=false; cut=null;
+function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6827,10 +7043,10 @@ function startNG3(){ unlockAudio(); lap=3; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG3_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG3_OPEN, skipOpen);
 }
 // ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
-function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
+function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
@@ -6839,7 +7055,7 @@ function startNG2(){ unlockAudio(); lap=2; endingDone=false; cut=null;
   player=players[0]; goArrow=160; bgCacheTheme=-1;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   Music.stop(); saveProgress(1);
-  startCutscene(NG2_OPEN, ()=>{ state='play'; spawnMercs(); if(sndOn) Music.start('battle'); });
+  ngBegin(NG2_OPEN, skipOpen);
 }
 
 //======================================================================
@@ -7284,7 +7500,8 @@ const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','ho
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
 const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
-const SENGOKU_ZAKO_POOL=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja'];
+const SENGOKU_ZAKO_POOL=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja',
+  'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto'];
 function randZako(){ const P=lap>=5?SENGOKU_ZAKO_POOL:lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
 function randomizeZako(list){
   // ボス／ライバル／召喚専用（balloon等）は据え置き。雑魚エントリだけ種類と数をランダム化
@@ -7853,6 +8070,24 @@ const STAGE_THEME=[
     g:['#4a3428','#32221a','#1a100c'], cob:['#433024','#3a2920'], vig:'rgba(10,2,0,.66)',
     rimRGB:'255,150,70',
     amb:{shape:'spark',color:'rgba(255,180,90,.95)',rate:1.4,max:56,vy:-0.72,wind:0.16,r0:1.6,r1:3.8,glow:true,alpha:.95} },
+  // 22: 桶狭間の豪雨（黒雲の谷間・叩きつける雨）
+  { gsnd:'dirt', asnd:'wind', sky:['#161a24','#242c3a','#38424f','#4c5866'], sun:'rgba(110,126,150,', disc:'#5a6472', sunX:0.36,sunY:126, rays:0.03, tint:'rgba(90,110,140,.36)',
+    haze:'rgba(60,74,94,.52)', fog:'rgba(90,106,128,.56)', stars:0, tower:'#2a3240', sengoku:true, land:'okehazama', fg:'rock',
+    g:['#4a5240','#343a2c','#1e221a'], cob:['#454c3c','#3b4234'], vig:'rgba(4,8,14,.62)',
+    rimRGB:'190,214,255',
+    amb:{shape:'spark',color:'rgba(200,220,255,.85)',rate:2.6,max:80,vy:2.6,wind:-0.5,r0:0.9,r1:2.0,glow:false,alpha:.7} },
+  // 23: 川中島の朝霧（白い霧の川辺・葦の原）
+  { gsnd:'dirt', asnd:'wind', sky:['#8a94a0','#b0b8c0','#ccd2d6','#e2e6e6'], sun:'rgba(255,250,238,', sunX:0.28,sunY:104, rays:0.14, tint:'rgba(210,220,225,.34)',
+    haze:'rgba(200,210,216,.60)', fog:'rgba(220,228,232,.66)', stars:0, tower:'#6a7480', sengoku:true, land:'kawanaka', fg:'ashi',
+    g:['#7a8070','#5c6254','#3c4038'], cob:['#727868','#666c5c'], vig:'rgba(30,36,40,.36)',
+    rimRGB:'230,240,255',
+    amb:{shape:'petal',color:'rgba(240,246,250,.72)',rate:1.0,max:44,vy:0.18,wind:0.34,r0:2.0,r1:4.4,glow:false,alpha:.6} },
+  // 24: 甲斐の山城（切り立つ山と丸太の砦・晴れた高地）
+  { gsnd:'stone', asnd:'wind', sky:['#2a5a9a','#4a86c0','#86b4d6','#c2d8e0'], sun:'rgba(255,248,220,', sunX:0.68,sunY:78, rays:0.16, tint:'rgba(230,236,210,.26)',
+    haze:'rgba(150,180,200,.30)', fog:'rgba(190,206,214,.44)', stars:0, tower:'#4a5a52', sengoku:true, land:'yamajiro', fg:'nobori',
+    g:['#6a6a4a','#4c4c34','#2e2e20'], cob:['#646448','#5a5a40'], vig:'rgba(10,14,10,.44)',
+    rimRGB:'255,240,200',
+    amb:{shape:'petal',color:'rgba(228,240,210,.8)',rate:0.5,max:30,vy:0.36,wind:0.22,r0:2.2,r1:4.6,glow:false,alpha:.78} },
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -7909,7 +8144,8 @@ function drawBackground(){
       if(st.life<=0||st.x<-40) shootStars.splice(i,1); }
     ctx.restore(); }
   // 洞窟と海中は「空」が無い。雲と鳥をそのまま出すと水の中に雲が浮かぶ
-  const encl=(T.land==='cavern'||T.land==='sunken'||T.land==='tenshu');   // 天守は炎と黒煙の夜。白い雲が浮くと火事に見えない
+  // 天守は炎と黒煙の夜、桶狭間は豪雨。どちらも白いふわふわの雲が浮くと嘘になる
+  const encl=(T.land==='cavern'||T.land==='sunken'||T.land==='tenshu'||T.land==='okehazama');
   // clouds drift slowly even when standing still (skip for night/魔界)
   if(!T.stars && !encl){ const cl=-camX*0.12-gf*0.18;
     for(let i=0;i<10;i++){ const x=((i*360+cl)%(W+460)+W+460)%(W+460)-230; cloud(x,56+(i*53%70),58+(i%2)*24); } }
@@ -8053,7 +8289,7 @@ function drawSengokuFoe(e,t){
   const kind=t.sengKind||'ashigaru', anim=e.anim||0, atk=e.state==='attack', tele=e.telegraph>0;
   const bw=t.w, bh=t.h, walk=foeStep(e,5);
   const ward=(e.state==='mythward');        // 侍の斬り返しの構え（状態名は分隊AIと共通）
-  const gun=(e.state==='gunFire'), ride=(kind==='kiba');
+  const gun=(e.state==='gunFire'), ride=(kind==='kiba'||kind==='horo');
   ctx.save();
   if(ride){                                             // 馬体を先に描き、その上に騎手を乗せる
     const gy=-bh*0.30, gallop=Math.sin(anim*1.5);
@@ -8094,7 +8330,7 @@ function drawSengokuFoe(e,t){
     ctx.fillStyle=t.c2;
     for(const sgn of [-1,1]) roundRect(sgn*bw*0.26-6,ty+2,12,th2*0.52,3), ctx.fill(); }
   // 背中の指物（旗）。部隊であることが一目で分かる
-  if(kind==='ashigaru'||kind==='taisho'||kind==='kiba'){
+  if(kind==='ashigaru'||kind==='taisho'||kind==='kiba'||kind==='hatamoto'){
     const sw=Math.sin(gf*0.06+(e.id||0))*4;
     ctx.strokeStyle='#3a2c18'; ctx.lineWidth=2.4;
     ctx.beginPath(); ctx.moveTo(-bw*0.20,ty+8); ctx.lineTo(-bw*0.24+sw*0.3,ty-bh*0.36); ctx.stroke();
@@ -8106,12 +8342,12 @@ function drawSengokuFoe(e,t){
   const hx=0, hy=-bh*0.90;
   ctx.fillStyle='#e8d7b4'; ctx.beginPath(); ctx.arc(hx,hy,bh*0.095,0,7); ctx.fill();
   ctx.fillStyle='#1a1410'; ctx.fillRect(hx+bh*0.028,hy-bh*0.01,bh*0.05,2.6);   // 目
-  if(kind==='ninja'){                                                 // 頭巾（目だけ出す）
-    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.arc(hx,hy,bh*0.115,Math.PI*0.94,Math.PI*2.06); ctx.fill();
+  if(kind==='ninja'||kind==='kunoichi'||kind==='souhei'){              // 頭巾（目だけ出す）
+    ctx.fillStyle=(kind==='souhei')?'#e8e2d4':t.c2;   // 僧兵は白い裹頭。黒頭巾だと忍びと見分けが付かない ctx.beginPath(); ctx.arc(hx,hy,bh*0.115,Math.PI*0.94,Math.PI*2.06); ctx.fill();
     ctx.fillRect(hx-bh*0.115,hy+bh*0.012,bh*0.23,bh*0.09);
     ctx.fillStyle='#e8d7b4'; ctx.fillRect(hx-bh*0.05,hy-bh*0.012,bh*0.11,bh*0.032);
     ctx.fillStyle='#1a1410'; ctx.fillRect(hx+bh*0.018,hy-bh*0.006,bh*0.04,2.4);
-  } else if(kind==='samurai'||kind==='taisho'){                       // 兜＋前立（三日月／鍬形）
+  } else if(kind==='samurai'||kind==='taisho'||kind==='oodate'||kind==='hatamoto'){   // 兜＋前立
     // しころを顔の前まで回すと、兜が「顔の無い黒い箱」になる。左右にだけ垂らす
     ctx.fillStyle=shade(t.c2,-22);
     for(const sgn of [-1,1]){ ctx.beginPath();
@@ -8124,7 +8360,7 @@ function drawSengokuFoe(e,t){
     ctx.beginPath(); ctx.moveTo(hx-bh*0.075,hy+bh*0.020); ctx.lineTo(hx+bh*0.075,hy+bh*0.020);
     ctx.lineTo(hx+bh*0.052,hy+bh*0.085); ctx.lineTo(hx-bh*0.052,hy+bh*0.085); ctx.closePath(); ctx.fill();
     ctx.fillStyle=t.accent;
-    if(kind==='taisho'){                                              // 大将＝大きな三日月の前立
+    if(kind==='taisho'){                                              // 大将＝大きな三日月の前立  
       ctx.beginPath(); ctx.arc(hx,hy-bh*0.15,bh*0.13,Math.PI*1.10,Math.PI*1.90); 
       ctx.arc(hx,hy-bh*0.15,bh*0.085,Math.PI*1.90,Math.PI*1.10,true); ctx.closePath(); ctx.fill(); }
     else { for(const sgn of [-1,1]){ ctx.beginPath(); ctx.moveTo(hx+sgn*3,hy-bh*0.10);   // 侍＝鍬形
@@ -8177,6 +8413,70 @@ function drawSengokuFoe(e,t){
       ctx.globalAlpha=0.5+0.4*Math.sin(gf*0.5);
       ctx.fillStyle=radGrad(bw*0.16,-bh*0.60,10,'rgba(255,150,60,.95)','rgba(255,150,60,0)');
       ctx.beginPath(); ctx.arc(bw*0.16,-bh*0.60,10,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='souhei'){                                            // 薙刀（長柄の先に反った刃）
+    const ex=atk?0.26:0.06;
+    ctx.strokeStyle='#3a2c18'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-bw*0.26,-bh*0.24); ctx.lineTo(bw*(0.40+ex),-bh*0.62); ctx.stroke();
+    ctx.strokeStyle=e.rage?'#ffd0d0':'#dfe6ef'; ctx.lineWidth=e.rage?5.4:4.4;
+    ctx.beginPath(); ctx.moveTo(bw*(0.40+ex),-bh*0.62);
+    ctx.quadraticCurveTo(bw*(0.66+ex),-bh*0.78, bw*(0.62+ex),-bh*0.98); ctx.stroke();
+    ctx.fillStyle=t.accent;                                            // 首に掛けた数珠
+    for(let k=0;k<5;k++){ ctx.beginPath(); ctx.arc(-bw*0.10+k*5,-bh*0.80,2.2,0,7); ctx.fill(); } }
+  else if(kind==='saika'){                                             // 二丁の短筒
+    for(const sgn of [0,1]){ const yy=-bh*(0.54+sgn*0.10), xx=bw*(0.42-sgn*0.06);
+      ctx.strokeStyle='#3a2c18'; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(bw*0.02,yy+4); ctx.lineTo(xx,yy); ctx.stroke();
+      ctx.strokeStyle='#8a8a92'; ctx.lineWidth=2.2;
+      ctx.beginPath(); ctx.moveTo(bw*0.18,yy-1); ctx.lineTo(xx+8,yy-2); ctx.stroke(); }
+    if(gun){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.6+0.3*Math.sin(gf*0.7);
+      ctx.fillStyle=radGrad(bw*0.50,-bh*0.55,9,'rgba(255,220,150,.95)','rgba(255,220,150,0)');
+      ctx.beginPath(); ctx.arc(bw*0.50,-bh*0.55,9,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='ozutsu'){                                            // 大筒（太い筒を肩に担ぐ）
+    ctx.save(); ctx.translate(bw*0.04,-bh*0.62); ctx.rotate(-0.34);
+    ctx.fillStyle='#2c2822'; roundRect(-bw*0.18,-7,bw*0.72,14,5); ctx.fill();
+    ctx.fillStyle='#6a625a'; roundRect(bw*0.40,-9,bw*0.16,18,4); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2;
+    for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(-bw*0.10+k*bw*0.18,-7); ctx.lineTo(-bw*0.10+k*bw*0.18,7); ctx.stroke(); }
+    ctx.restore();
+    if(gun){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.4*Math.sin(gf*0.4);
+      ctx.fillStyle=radGrad(bw*0.62,-bh*0.80,15,'rgba(255,150,60,.95)','rgba(255,150,60,0)');
+      ctx.beginPath(); ctx.arc(bw*0.62,-bh*0.80,15,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='horo'){                                              // 母衣（背に膨らむ丸い布）＋手槍
+    // 寸法は鞍上の武者に合わせる。馬の bw/bh で描くと画面を覆う球になる
+    const rx=bw*0.15, ry=bh*0.19, cx2=-bw*0.19, cy2=-bh*0.66;
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+',.50)';
+    ctx.beginPath(); ctx.ellipse(cx2,cy2,rx,ry,-0.2,0,7); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=1.8;
+    for(let k=-1;k<=1;k++){ ctx.beginPath();
+      ctx.moveTo(cx2+k*5,cy2-ry*0.92); ctx.lineTo(cx2+k*6,cy2+ry*0.92); ctx.stroke(); }
+    ctx.strokeStyle='#4a3620'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-bw*0.10,-bh*0.40); ctx.lineTo(bw*0.52,-bh*0.66); ctx.stroke();
+    ctx.fillStyle='#dfe6ef'; ctx.beginPath();
+    ctx.moveTo(bw*0.52+12,-bh*0.70); ctx.lineTo(bw*0.48,-bh*0.60); ctx.lineTo(bw*0.50,-bh*0.71); ctx.closePath(); ctx.fill(); }
+  else if(kind==='kunoichi'){                                          // 吹き矢筒＋帯
+    ctx.strokeStyle='#2c2228'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.86); ctx.lineTo(bw*0.44,-bh*0.90); ctx.stroke();
+    ctx.fillStyle=t.accent; roundRect(-bw*0.25,-bh*0.52,bw*0.50,5,2); ctx.fill();
+    if(gun){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.55+0.3*Math.sin(gf*0.6);
+      ctx.fillStyle=radGrad(bw*0.48,-bh*0.90,9,'rgba(200,255,176,.95)','rgba(200,255,176,0)');
+      ctx.beginPath(); ctx.arc(bw*0.48,-bh*0.90,9,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='oodate'){                                            // 大盾（正面をふさぐ板）＋短槍
+    const grd=(e.state==='guard');
+    ctx.fillStyle=shade(t.c2,grd?14:0);
+    roundRect(bw*0.20,-bh*0.86,bw*0.26,bh*0.66,4); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2.6;
+    ctx.strokeRect(bw*0.24,-bh*0.80,bw*0.18,bh*0.54);
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.33,-bh*0.53,bh*0.055,0,7); ctx.fill();
+    ctx.strokeStyle='#4a3620'; ctx.lineWidth=4.4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-bw*0.16,-bh*0.44); ctx.lineTo(bw*0.34,-bh*0.62); ctx.stroke(); }
+  else if(kind==='hatamoto'){                                          // 二本差し（大小の刀）
+    for(const sgn of [0,1]){ const off=sgn*6;
+      ctx.strokeStyle=sgn?'#cfd8e6':'#dfe6ef'; ctx.lineWidth=sgn?3.2:4.2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(-bw*0.16+off,-bh*0.46);
+      ctx.quadraticCurveTo(bw*0.14+off,-bh*0.52, bw*0.30+off,-bh*0.40-sgn*6); ctx.stroke(); }
+    ctx.strokeStyle=t.accent; ctx.lineWidth=3.6; ctx.lineCap='round';   // 抜き身の一刀
+    ctx.beginPath(); ctx.moveTo(bw*0.08,-bh*0.60);
+    ctx.quadraticCurveTo(bw*0.40,-bh*0.76, bw*0.46,-bh*0.42); ctx.stroke(); }
   else if(kind==='ninja'){                                             // 小刀を逆手に＋手裏剣
     ctx.strokeStyle='#cfd8e6'; ctx.lineWidth=3.2; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(bw*0.12,-bh*0.54); ctx.lineTo(bw*0.34,-bh*0.68); ctx.stroke();
@@ -9091,6 +9391,76 @@ const LAND={
       ctx.fillStyle=ruin; ctx.fillRect(x-42,baseY-h,84,h);
       ctx.beginPath(); ctx.moveTo(x-54,baseY-h+4); ctx.quadraticCurveTo(x,baseY-h-18, x+54,baseY-h+4); ctx.closePath(); ctx.fill(); });
   },
+  okehazama:function(T){                                 // 桶狭間：切り立つ谷間と、叩きつける雨の筋
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-30),0.14),0.14,baseY,
+      function(wx){ return 150+Math.sin(wx*0.0018)*54+Math.sin(wx*0.0052)*24; });
+    // 両側からせり出す斜面。谷底に追い込まれている構図をつくる
+    const slope=landCol(T,shade(T.tower,10),0.36);
+    landRow(0.36,196,function(gx,g0){
+      const x=gx+98, h=112+Math.abs(g0*67%76);
+      ctx.fillStyle=slope; ctx.beginPath();
+      ctx.moveTo(x-108,baseY); ctx.lineTo(x-54,baseY-h);
+      ctx.lineTo(x+26,baseY-h*0.72); ctx.lineTo(x+104,baseY); ctx.closePath(); ctx.fill(); });
+    // 雨の筋。奥ほど細く、手前ほど太く傾ける（前景の雨は fg と ambient が担当）
+    if(perfTier<2){ ctx.save(); ctx.globalAlpha=0.20; ctx.strokeStyle='rgba(214,230,255,.9)'; ctx.lineWidth=1.4;
+      for(let k=0;k<46;k++){ const x=((k*137 - camX*0.5 - gf*9)%(W+180)+W+180)%(W+180)-90, y=(k*53)%(baseY-40);
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-9,y+34); ctx.stroke(); }
+      ctx.restore(); }
+    // 谷底の水たまり
+    const pond=landCol(T,shade(T.tower,26),0.62);
+    landRow(0.62,168,function(gx,g0){
+      const x=gx+84; ctx.fillStyle=pond;
+      ctx.beginPath(); ctx.ellipse(x,baseY-6,52+((g0*31)%26),9,0,0,7); ctx.fill(); });
+  },
+  kawanaka:function(T){                                  // 川中島：白い霧の帯と、川面に映る葦の原
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-18),0.12),0.12,baseY,
+      function(wx){ return 96+Math.sin(wx*0.0021)*30+Math.sin(wx*0.0061)*13; });
+    // 霧の帯。横に長い薄い楕円を三段、位相をずらして流す
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      for(let L=0;L<3;L++){ const y=baseY-40-L*34, sp=0.10+L*0.05;
+        ctx.globalAlpha=0.10+L*0.04; ctx.fillStyle='rgba(240,246,250,.9)';
+        for(let k=0;k<5;k++){ const x=((k*260 - camX*sp - gf*(0.3+L*0.2))%(W+320)+W+320)%(W+320)-160;
+          ctx.beginPath(); ctx.ellipse(x,y,150,17+L*4,0,0,7); ctx.fill(); } }
+      ctx.restore(); }
+    // 川。低い帯を横に通し、上に光の筋を置く
+    const riv=landCol(T,shade(T.tower,34),0.50);
+    ctx.fillStyle=riv; ctx.fillRect(0,baseY-30,W,30);
+    ctx.strokeStyle='rgba(246,250,252,.5)'; ctx.lineWidth=2;
+    for(let k=0;k<4;k++){ const y=baseY-26+k*7, ph=gf*0.05+k*1.4;
+      ctx.beginPath(); ctx.moveTo(0,y+Math.sin(ph)*2);
+      ctx.quadraticCurveTo(W*0.5,y+Math.sin(ph+1)*4, W,y+Math.sin(ph+2)*2); ctx.stroke(); }
+    // 葦の原
+    const ash=landCol(T,shade(T.tower,-6),0.66);
+    landRow(0.66,54,function(gx,g0){
+      const x=gx+27, h=44+Math.abs(g0*23%34), sw=Math.sin(gf*0.03+g0*0.7)*5;
+      ctx.strokeStyle=ash; ctx.lineWidth=2.4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6, x+sw,baseY-h); ctx.stroke();
+      ctx.fillStyle=ash; ctx.beginPath(); ctx.ellipse(x+sw,baseY-h-4,3,7,sw*0.05,0,7); ctx.fill(); });
+  },
+  yamajiro:function(T){                                  // 甲斐の山城：切り立つ峰と、丸太を組んだ砦
+    const baseY=GROUND_TOP-2;
+    // 奥の峰。三角波で角ばらせ、頂に雪を置く
+    for(let L=0;L<2;L++){ const par=0.16+L*0.16, col=landCol(T,shade(T.tower,-28+L*14),par);
+      landRow(par,180-L*44,function(gx,g0){
+        const step=180-L*44, x=gx+step/2, h=(150-L*36)+Math.abs(g0*71%(70-L*20));
+        ctx.fillStyle=col; ctx.beginPath();
+        ctx.moveTo(x-step*0.62,baseY); ctx.lineTo(x,baseY-h); ctx.lineTo(x+step*0.62,baseY); ctx.closePath(); ctx.fill();
+        if(L===0){ ctx.fillStyle='rgba(240,246,250,.82)'; ctx.beginPath();
+          ctx.moveTo(x-step*0.14,baseY-h*0.78); ctx.lineTo(x,baseY-h); ctx.lineTo(x+step*0.14,baseY-h*0.78);
+          ctx.closePath(); ctx.fill(); ctx.fillStyle=col; } }); }
+    // 丸太を組んだ砦。柵と櫓を段違いに置く
+    const logC=landCol(T,shade(T.tower,20),0.54), roofC=landCol(T,shade(T.tower,-14),0.54);
+    landRow(0.54,150,function(gx,g0){
+      const x=gx+75, h=58+Math.abs(g0*37%34);
+      ctx.fillStyle=logC;
+      for(let k=-3;k<=3;k++) ctx.fillRect(x+k*11-4,baseY-h,9,h);       // 丸太の柵
+      ctx.fillRect(x-40,baseY-h-8,80,9);
+      if(g0%3===0){ ctx.fillStyle=logC; ctx.fillRect(x-26,baseY-h-58,52,52);   // 櫓
+        ctx.fillStyle=roofC; ctx.beginPath();
+        ctx.moveTo(x-38,baseY-h-56); ctx.quadraticCurveTo(x,baseY-h-84, x+38,baseY-h-56); ctx.closePath(); ctx.fill(); } });
+  },
   sunken:function(T){                                    // 海神：沈んだ列柱のアーチと、差し込む光の柱
     const baseY=GROUND_TOP-2;
     landRidge(landCol(T,shade(T.tower,-8),0.18),0.18,baseY,function(wx){ return 116+Math.sin(wx*0.0028)*34+Math.sin(wx*0.0075)*16; });
@@ -9293,6 +9663,14 @@ function drawFgSilhouettes(T){ if(perfTier>=2) return;
           ctx.lineWidth=(12-k%3*2)*(1-seg*0.24);
           ctx.beginPath(); ctx.moveTo(x+a0,y0);
           ctx.quadraticCurveTo(x+(a0+a1)*0.5+(seg%2?7:-7),(y0+y1)/2, x+a1,y1); ctx.stroke(); } }
+    } else if(kind==='ashi'){                              // 手前に立つ葦の茂み（川中島）
+      ctx.lineCap='round'; ctx.strokeStyle=col;
+      for(let k=0;k<9;k++){ const x=sx-130+k*32, h=H*(0.30+((sx*5+k*17)%34)/110);
+        const sw=Math.sin(gf*0.026+k*0.8+sx*0.01)*13;
+        ctx.lineWidth=6-(k%3);
+        ctx.beginPath(); ctx.moveTo(x,H+10);
+        ctx.quadraticCurveTo(x+sw*0.4,H-h*0.55, x+sw,H-h); ctx.stroke();
+        ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(x+sw,H-h-9,5,13,sw*0.04,0,7); ctx.fill(); }
     } else if(kind==='nobori'){                            // 手前に立つ幟旗（城下町・天守）
       // 竿は地面から画面外まで通し、旗は上下2枚に分けて風の位相をずらす
       ctx.fillStyle=col;
@@ -11988,7 +12366,32 @@ const SENGOKU_ART={
              aura:'255,220,130', glow:'#ffe38a', weapon:'yari' },
   ieyasu:{   crest:'daikoku', armor:'#2a4a38', armor2:'#3e6a50', lace:'#d8c88a',
              haori:'#20321f', haori2:'#0e1a10', skin:'#dcc59c', metal:'#a8e8c0',
-             aura:'168,232,192', glow:'#a8e8c0', weapon:'ogi' }
+             aura:'168,232,192', glow:'#a8e8c0', weapon:'ogi' },
+  // ── 群雄。立物と陣羽織の色で見分ける ──
+  shingen:{  crest:'yak',     armor:'#7a1d1d', armor2:'#a83030', lace:'#f0d090',
+             haori:'#3a0c0c', haori2:'#180404', skin:'#e0c49c', metal:'#ffd0a0',
+             aura:'255,120,60', glow:'#ff9a4a', weapon:'gunbai' },
+  kenshin:{  crest:'hood',    armor:'#c8c4b6', armor2:'#e8e4d8', lace:'#7aa8c8',
+             haori:'#7a8898', haori2:'#3a4450', skin:'#e6d2ae', metal:'#bfe9ff',
+             aura:'190,235,255', glow:'#bfe9ff', weapon:'tachi' },
+  yoshimoto:{crest:'eboshi',  armor:'#3a2a6a', armor2:'#584298', lace:'#e8c8ff',
+             haori:'#6a4aa8', haori2:'#2a1a50', skin:'#f0dcc0', metal:'#e8c8ff',
+             aura:'220,180,255', glow:'#e8c8ff', weapon:'tachi' },
+  mitsuhide:{crest:'kikyo',   armor:'#2a4a5a', armor2:'#3e6a80', lace:'#cfe8f4',
+             haori:'#14323e', haori2:'#08181e', skin:'#dcc8a8', metal:'#9fe0ff',
+             aura:'150,220,255', glow:'#9fe0ff', weapon:'tachi' },
+  katsuyori:{crest:'horn',    armor:'#8a2020', armor2:'#c04040', lace:'#ffd0a0',
+             haori:'#4a0e0e', haori2:'#200606', skin:'#e8cca4', metal:'#ff8a6a',
+             aura:'255,140,100', glow:'#ff8a6a', weapon:'yari' },
+  hisahide:{ crest:'skull',   armor:'#3a2a1a', armor2:'#5a4630', lace:'#c8ff8a',
+             haori:'#1e160c', haori2:'#0c0804', skin:'#d8c098', metal:'#c8ff8a',
+             aura:'190,255,140', glow:'#c8ff8a', weapon:'tachi' },
+  hanbei:{   crest:'zukin',   armor:'#d8d0b8', armor2:'#f0e8d0', lace:'#b8a880',
+             haori:'#9a9078', haori2:'#5a5444', skin:'#f0dcbc', metal:'#fff0c0',
+             aura:'255,240,190', glow:'#fff0c0', weapon:'ogi' },
+  kanbei:{   crest:'mizu',    armor:'#1a3a4a', armor2:'#2a5a70', lace:'#8ad6ff',
+             haori:'#0e2430', haori2:'#04121a', skin:'#e0cca8', metal:'#8ad6ff',
+             aura:'138,214,255', glow:'#8ad6ff', weapon:'ogi' }
 };
 // 兜の立物を1つ描く。武将の見分けはここだけで付くので、テストはこの関数を
 // 差し替えて「誰の立物が何本・どの向きで生えたか」を実測できる
@@ -12006,6 +12409,72 @@ function warCrest(kind,A,hy,r){
       ctx.beginPath(); ctx.moveTo(-4,0); ctx.lineTo(-2.6,-r*2.7); ctx.lineTo(2.6,-r*2.7); ctx.lineTo(4,0);
       ctx.closePath(); ctx.fill(); ctx.restore(); n++; }
     return n; }
+  if(kind==='yak'){                                      // 諏訪法性：白い毛の房＋左右の鍬形
+    ctx.fillStyle='#f2ede0';
+    for(let i=-3;i<=3;i++){ ctx.save(); ctx.translate(i*r*0.28, hy-r*0.55); ctx.rotate(i*0.16);
+      ctx.beginPath(); ctx.ellipse(0,-r*0.85,r*0.20,r*0.95,0,0,7); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle=A.metal;
+    for(const sgn of [-1,1]){ ctx.beginPath();
+      ctx.moveTo(sgn*r*0.3,hy-r*0.7); ctx.quadraticCurveTo(sgn*r*1.9,hy-r*1.9, sgn*r*1.5,hy-r*2.3);
+      ctx.quadraticCurveTo(sgn*r*1.2,hy-r*1.5, sgn*r*0.1,hy-r*0.68); ctx.closePath(); ctx.fill(); }
+    return 9; }
+  if(kind==='hood'){                                     // 白頭巾＋日輪の前立（兜をかぶらない）
+    ctx.fillStyle='#f4f0e6';
+    ctx.beginPath(); ctx.ellipse(0,hy-r*0.45,r*1.45,r*1.25,0,Math.PI*0.96,Math.PI*2.04); ctx.fill();
+    ctx.fillRect(-r*1.45,hy-r*0.48,r*2.9,r*0.7);
+    ctx.fillStyle=A.metal; ctx.beginPath(); ctx.arc(0,hy-r*1.45,r*0.52,0,7); ctx.fill();
+    ctx.fillStyle='#f4f0e6'; ctx.beginPath(); ctx.arc(0,hy-r*1.45,r*0.26,0,7); ctx.fill();
+    return 1; }
+  if(kind==='horn'){                                     // 前へ突き出す一本角
+    ctx.beginPath(); ctx.moveTo(-r*0.36,hy-r*0.75);
+    ctx.quadraticCurveTo(r*1.5,hy-r*1.9, r*2.4,hy-r*1.35);
+    ctx.quadraticCurveTo(r*1.2,hy-r*1.35, r*0.30,hy-r*0.70); ctx.closePath(); ctx.fill();
+    return 1; }
+  if(kind==='eboshi'){                                   // 公家の立烏帽子（兜ではなく烏帽子）
+    ctx.fillStyle='#14121c';
+    ctx.beginPath(); ctx.moveTo(-r*0.85,hy-r*0.55);
+    ctx.quadraticCurveTo(-r*0.55,hy-r*2.6, r*0.30,hy-r*2.9);
+    ctx.quadraticCurveTo(r*0.60,hy-r*1.6, r*0.85,hy-r*0.55); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=A.metal; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-r*0.6,hy-r*1.2); ctx.lineTo(r*0.55,hy-r*1.45); ctx.stroke();
+    return 1; }
+  if(kind==='skull'){                                    // 髑髏の前立（梟雄）
+    ctx.fillStyle='#efe8d8';
+    ctx.beginPath(); ctx.arc(0,hy-r*1.55,r*0.60,0,7); ctx.fill();
+    ctx.fillRect(-r*0.34,hy-r*1.20,r*0.68,r*0.34);
+    ctx.fillStyle='#14100c';
+    ctx.beginPath(); ctx.arc(-r*0.24,hy-r*1.62,r*0.17,0,7); ctx.arc(r*0.24,hy-r*1.62,r*0.17,0,7); ctx.fill();
+    ctx.fillRect(-r*0.09,hy-r*1.34,r*0.18,r*0.20);
+    return 2; }
+  if(kind==='kikyo'){                                    // 桔梗紋（五弁の花）
+    ctx.fillStyle=A.metal;
+    for(let i=0;i<5;i++){ const a2=-Math.PI/2+i*(Math.PI*2/5);
+      ctx.beginPath();
+      ctx.moveTo(0,hy-r*1.35);
+      ctx.quadraticCurveTo(Math.cos(a2)*r*0.9, hy-r*1.35+Math.sin(a2)*r*0.9,
+                           Math.cos(a2)*r*1.15, hy-r*1.35+Math.sin(a2)*r*1.15);
+      ctx.quadraticCurveTo(Math.cos(a2+0.9)*r*0.7, hy-r*1.35+Math.sin(a2+0.9)*r*0.7, 0,hy-r*1.35);
+      ctx.closePath(); ctx.fill(); }
+    return 5; }
+  if(kind==='zukin'){                                    // 軍師の頭巾（立物は無く、布が後ろへ流れる）
+    ctx.fillStyle=shade(A.haori,16);
+    ctx.beginPath(); ctx.ellipse(0,hy-r*0.35,r*1.35,r*1.05,0,Math.PI*0.94,Math.PI*2.06); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-r*1.3,hy-r*0.4);
+    ctx.quadraticCurveTo(-r*2.6,hy+r*0.4, -r*2.2,hy+r*1.5);
+    ctx.lineTo(-r*0.9,hy+r*0.5); ctx.closePath(); ctx.fill();
+    return 0; }
+  if(kind==='mizu'){                                     // 如水：波形の前立
+    ctx.beginPath();
+    for(let i=0;i<3;i++){ const y2=hy-r*(1.05+i*0.42);
+      ctx.moveTo(-r*0.95,y2);
+      ctx.quadraticCurveTo(-r*0.3,y2-r*0.34, r*0.15,y2);
+      ctx.quadraticCurveTo(r*0.6,y2+r*0.30, r*0.95,y2-r*0.10);
+      ctx.lineTo(r*0.95,y2+r*0.14);
+      ctx.quadraticCurveTo(r*0.6,y2+r*0.52, r*0.15,y2+r*0.22);
+      ctx.quadraticCurveTo(-r*0.3,y2-r*0.12, -r*0.95,y2+r*0.22);
+      ctx.closePath(); }
+    ctx.fill();
+    return 3; }
   // daikoku：大黒頭巾。丸く低い鉢に、正面へ短い前立を1本
   ctx.beginPath(); ctx.ellipse(0,hy-r*0.55,r*1.35,r*0.95,0,Math.PI,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.moveTo(-5,hy-r*1.10); ctx.lineTo(0,hy-r*1.95); ctx.lineTo(5,hy-r*1.10); ctx.closePath(); ctx.fill();
@@ -12081,6 +12550,13 @@ function drawWarlord(e){
     ctx.moveTo(bw*0.60+18,-bh*0.40); ctx.lineTo(bw*0.56,-bh*0.28); ctx.lineTo(bw*0.60,-bh*0.42); ctx.closePath(); ctx.fill();
     ctx.strokeStyle='#e8f0ff'; ctx.lineWidth=4;
     ctx.beginPath(); ctx.moveTo(bw*0.50,-bh*0.40); ctx.lineTo(bw*0.62,-bh*0.22); ctx.stroke();
+    ctx.restore(); }
+  else if(A.weapon==='gunbai'){                           // 信玄の軍配団扇（四角く大きい）
+    ctx.save(); ctx.translate(bw*0.22,-bh*0.60); ctx.rotate(sw2*0.5);
+    ctx.strokeStyle='#3a2c18'; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,16); ctx.lineTo(bw*0.06,-bh*0.06); ctx.stroke();
+    ctx.fillStyle=A.metal; roundRect(bw*0.06-bw*0.13,-bh*0.34,bw*0.26,bh*0.28,5); ctx.fill();
+    ctx.fillStyle=shade(A.armor,-8); roundRect(bw*0.06-bw*0.08,-bh*0.29,bw*0.16,bh*0.18,3); ctx.fill();
     ctx.restore(); }
   else {                                                  // 軍配（家康）
     ctx.save(); ctx.translate(bw*0.24,-bh*0.62); ctx.rotate(sw2*0.6);
@@ -14406,9 +14882,14 @@ function gameOver(){ if(scr.dur<=0 && state!=='over'){ goScreen(gameOver,'fade',
   const sv=loadProgress(), rb=document.getElementById('resumeBtn');
   if(rb){ if(sv&&sv.stage>1){ rb.textContent='▶ ステージ'+sv.stage+'から再開'; rb.classList.remove('hidden'); } else rb.classList.add('hidden'); }
   const nb=document.getElementById('ng2Btn'); if(nb)nb.classList.add('hidden');
+  retryLap=lap|0;                      // 「最初から」の戻り先。startGame より先に控える
+  { const tb=document.getElementById('retryBtn'), r=LAP_RESTART[retryLap];
+    if(tb) tb.textContent = r? ('▶ '+r.name+'の最初から') : '▶ 最初から'; }
   elResult.classList.remove('hidden'); }
 function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52); return; }   // 暗転してからリザルトを出す
   state='win'; Music.stop(); victoryJingle(); clearProgress();
+  retryLap=1;                          // クリア後の「最初から」は本当に最初から
+  { const tb=document.getElementById('retryBtn'); if(tb) tb.textContent='▶ 最初から'; }
   if(lap>=5){ elRTitle.textContent='SENGOKU CLEAR!!!!!'; elRTitle.style.color='#ffb26a';
     elRSub.textContent='三英傑を退け、戦の世に終止符を打った！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else if(lap>=4){ elRTitle.textContent='MYTH CLEAR!!!!'; elRTitle.style.color='#fff6c0';
@@ -14468,7 +14949,7 @@ document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('c
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
   // 四周目・五周目はこのトグルで「カジュアル」と「従来の強さ」が切り替わるので、そう書く
   _hardBtn.textContent=hardMode?'高難易度：ON（神話・戦国も本気）':'高難易度：OFF（神話・戦国はカジュアル）'; _hardBtn.style.background=hardMode?'linear-gradient(180deg,#b83a24,#7a2010)':'linear-gradient(180deg,#3a3f4a,#20242c)'; _hardBtn.style.color=hardMode?'#fff':'#ff9a7a'; ui.move(); };
-document.getElementById('retryBtn').onclick=()=>{ clearProgress(); startGame(); };
+document.getElementById('retryBtn').onclick=()=>{ retryStart(); };
 const _ng2Btn=document.getElementById('ng2Btn'); if(_ng2Btn) _ng2Btn.onclick=()=>{ const nx=nextLap(lap); if(nx) nx.go(); };
 document.getElementById('resumeBtn').onclick=()=>{ const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } else startGame(); };
 const _contBtn=document.getElementById('continueBtn'); if(_contBtn) _contBtn.onclick=()=>{ unlockAudio(); const sv=loadProgress(); if(sv){ setupRoster(sv.mode||'inu'); startGameAt(sv.stage); } };

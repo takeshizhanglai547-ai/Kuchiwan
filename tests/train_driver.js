@@ -42,6 +42,68 @@ const DRIVER = `
     } finally { global.localStorage=realLS; } }
 
   // =====================================================================
+  //  1b) ゲームオーバーの「最初から」は遊んでいた周回の頭へ戻る
+  // =====================================================================
+  // 五周目で倒れて一周目の王都へ戻されるのは、やり直しではなく別のゲームだった
+  { if(typeof restartFromLap!=='function') throw new Error('restartFromLap が無い');
+    for(const l of [2,3,4,5]){ const r=LAP_RESTART[l];
+      if(!r) throw new Error(l+'周目の戻り先が無い');
+      if(typeof r.go!=='function') throw new Error(l+'周目の開始関数が無い');
+      if(!(r.coins>0)) throw new Error(l+'周目の支度金が無い（素の状態では成立しない設計）');
+      if(!r.name) throw new Error(l+'周目の名前が無い'); }
+    if(LAP_RESTART[1]) throw new Error('一周目に戻り先の表がある（そのまま王都から始まるべき）');
+    if(new Set([2,3,4,5].map(l=>LAP_RESTART[l].name)).size!==4) throw new Error('周回の名前が重複している');
+    if(new Set([2,3,4,5].map(l=>LAP_RESTART[l].coins)).size!==4) throw new Error('支度金が全部同じ');
+    // 支度金は周回が進むほど多い（後の周回ほど素の状態との差が大きいため）
+    for(let i=3;i<=5;i++) if(!(LAP_RESTART[i].coins>LAP_RESTART[i-1].coins))
+      throw new Error(i+'周目の支度金が前の周回以下: '+LAP_RESTART[i].coins);
+    console.log('戻り先の表 OK (2〜5周目／支度金 '+[2,3,4,5].map(l=>LAP_RESTART[l].coins).join('/')+')'); }
+
+  // 実際に戻ること。周回・エンカウンタ・支度金がその周回のものになる
+  { for(const l of [5,4,3,2]){
+      setupRoster('inu'); startGame(); state='play';
+      lap=1; coins=0;
+      restartFromLap(l);
+      if(lap!==l) throw new Error(l+'周目へ戻らない: lap='+lap);
+      if(!encounters.length) throw new Error(l+'周目のエンカウンタが積まれていない');
+      if(coins!==LAP_RESTART[l].coins) throw new Error(l+'周目の支度金が渡っていない: '+coins);
+      // やり直しでオープニングを毎回見せない
+      if(state==='cut') throw new Error(l+'周目のやり直しでオープニングが流れる'); }
+    // 一周目はそのまま王都から
+    setupRoster('inu'); startGame(); state='play'; lap=4;
+    restartFromLap(1);
+    if(lap!==1) throw new Error('一周目の指定で一周目にならない: '+lap);
+    console.log('周回のやり直し OK (2〜5周目それぞれの頭から／オープニングは飛ばす)'); }
+
+  // タイトルから始めたときはオープニングが流れること（やり直しとの差）
+  { setupRoster('inu'); startGame(); state='play';
+    startNG5();
+    const withOpen=state;
+    setupRoster('inu'); startGame(); state='play';
+    startNG5(true);
+    const skipped=state;
+    if(withOpen!=='cut') throw new Error('タイトルからの開始でオープニングが流れない: '+withOpen);
+    if(skipped==='cut') throw new Error('飛ばす指定でもオープニングが流れる');
+    console.log('オープニングの出し分け OK (通常 '+withOpen+' ／ やり直し '+skipped+')'); }
+
+  // 倒れた周回が控えられること。クリア後は「本当に最初から」に戻ること
+  { setupRoster('inu'); startGame(); state='play'; lap=5;
+    retryLap=1; state='over'; gameOver();
+    if(retryLap!==5) throw new Error('倒れた周回が控えられていない: '+retryLap);
+    lap=5; state='win'; winGame();
+    if(retryLap!==1) throw new Error('クリア後も周回が残っている（最初からが最初にならない）: '+retryLap);
+    state='play';
+    console.log('戻り先の記録 OK (倒れた周回を控え／クリア後は一周目へ)'); }
+
+  // ボタンの中身が「控えた周回」を見ていること（1固定になっていないこと）
+  { setupRoster('inu'); startGame(); state='play'; lap=5;
+    retryLap=1; state='over'; gameOver();          // ここで retryLap=5 が控えられる
+    retryStart();
+    if(lap!==5) throw new Error('「最初から」が控えた周回を見ていない: lap='+lap);
+    state='play';
+    console.log('「最初から」の行き先 OK (控えた5周目へ戻る)'); }
+
+  // =====================================================================
   //  2) トレーニングモード
   // =====================================================================
   { if(typeof startTraining!=='function') throw new Error('startTraining が無い');
