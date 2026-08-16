@@ -100,15 +100,32 @@ protected:
 	TObjectPtr<UInputAction> TapAction;
 
 	// ---- 感度 ---------------------------------------------------------------
-	// コアの Input::lookDX/DY は「カメラの回転量（ラジアン）」と定義されている
-	// （AshlineSim.h）。したがって入力の生の値をここでラジアンに直してから渡す。
-	/** マウス1カウントあたりの回転量[rad]。Web版の cam.sens と同じ既定値。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
-	float MouseLookScale = 0.0042f;
+	// 【重要】コアの Input::lookDX/DY が期待している単位は「画面上の移動量（px）」で、
+	// ラジアンではない。AshlineSim.h のコメントには「ラジアン」と書いてあるが、
+	// 実装（AshlinePlayer.cpp の UpdateLook）は
+	//     camera_.yaw -= dx * Cfg::cam::sens * (加速カーブ)
+	// という式で、感度も加速カーブもコアの中で掛けている。
+	// つまりここで感度を掛けると二重に掛かる（実測で200倍以上ずれる）。
+	// Web版との同値検証が通っているのは実装の側なので、実装に合わせる。
+	// ※ ヘッダのコメントと実装のこの食い違いは、コア側へ申し送りが必要。
+	//    もしコアが本当にラジアンを受け取るように直された場合は、
+	//    ここの2つの既定値も同時に直すこと（片方だけ直すと必ず壊れる）。
 
-	/** ゲームパッドの最大速度[rad/s]。 */
+	/**
+	 * マウス感度の倍率。1.0 でコア既定（＝Web版と同じ手触り）。
+	 * 基準の感度そのものは Cfg::cam::sens が持っているので、ここは倍率だけ。
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
-	float GamepadLookRate = 2.6f;
+	float MouseSensitivityScale = 1.0f;
+
+	/**
+	 * ゲームパッドを倒し切ったときの視点速度[px/秒 相当]。
+	 * コアが px を前提にしているので、スティックの傾きも px に換算して渡す。
+	 * 620 px/s ≒ 2.6 rad/s（Cfg::cam::sens を掛けた場合）。
+	 * 速すぎ / 遅すぎはこの数字だけで調整できる。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
+	float GamepadLookPixelRate = 620.0f;
 
 	/** スティックの遊び。これ以下は0として捨てる。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Ashline|Input")
@@ -182,7 +199,11 @@ private:
 	bool bActionEdge = false;
 	bool bTapEdge = false;
 
+	// ダッシュ中の縦揺れ用の位相。見た目だけの値なのでコアには持たせない。
+	float BobTime = 0.0f;
+
+	// 演出のきっかけを「変化した瞬間」に絞るための前フレームの値。
 	int32 LastPlayerState = -1;
 	float LastHp = -1.0f;
-	bool bLastShotSeen = false;
+	int32 LastAmmo = -1;
 };

@@ -43,7 +43,12 @@ struct Input {
   float stickX = 0.0f;   // -1..1 カメラ相対の左右
   float stickY = 0.0f;   // -1..1 カメラ相対の前後（+が前）
   float stickMag = 0.0f; // 0..1
-  float lookDX = 0.0f;   // カメラの回転量（ラジアン）
+  /* 視点の移動量。単位は「ピクセル相当の生の移動量」であって角度ではない。
+     UpdateLook が Cfg::cam::sens（rad/px）と速度に応じた加速カーブを内側で
+     掛けるので、ここにラジアンを入れると約240分の1の速さになる。
+     Web版はタッチのスワイプ距離(px)をそのまま渡している。UE5では
+     マウス/スティックの入力値に、この感度カーブが前提とする尺度を合わせること。 */
+  float lookDX = 0.0f;
   float lookDY = 0.0f;
   bool fire = false;
   bool action = false;      // 遮蔽/ダッシュ/乗り越えの共用ボタン
@@ -133,10 +138,24 @@ struct Camera {
   float yaw = Cfg::spawn::yaw;
   float pitch = 0;
   float kickP = 0, kickY = 0;
-  float fov = Cfg::sprintCam::fovBase;
+  float fov = Cfg::sprintCam::fovBase;   // 垂直画角（度）。UEは水平画角なので要変換
   float coverBlend = 0;
-  /* 追従位置。UE5 の SpringArm はこれを目標として動かす。 */
+  float sprintBlend = 0;
+  float bobT = 0;
+
+  /* 注視の支点（追従位置）。吸着の瞬間にワープしないよう常に平滑化する。 */
   float px = Cfg::spawn::x, pz = Cfg::spawn::z;
+  float py = Cfg::player::chest;
+
+  /* 肩の左右。既定は右(+1)。遮蔽の端に寄っているときだけその側へ寄せて視界を稼ぐ。 */
+  float side = 1;
+
+  /* --- ここから下は UpdateCamera が毎フレーム書く「確定した見え方」 ---
+     視点位置と最終的な向き。射撃の照準はここから引く。
+     以前は射撃層とUE5層がそれぞれ独立に再構成していたが、同じ式を2箇所に
+     持つと必ず片方だけ直されて食い違う。書く場所を1つに決める。 */
+  float ex = 0, ey = 0, ez = 0;     // 視点のワールド座標
+  float rotPitch = 0, rotYaw = 0;   // 反動と揺れを含んだ最終的な向き
 };
 
 enum class CombatState { Idle, Fight, Dead, Clear };
@@ -183,7 +202,11 @@ class Sim {
   float CurrentSpread() const;
   float AssistScale() const;
 
-  /* アクティブリロードの入力。受け付けたら true。 */
+  /* アクティブリロードの入力。受け付けたら true。
+     注意：成功窓の2つの設定値は単位が違う。Web版から引き継いだ形。
+       Cfg::fire::arAt  … バー全長に対する比 0..1（そのまま使う）
+       Cfg::fire::arWin … 秒（比に直すには reload で割る）
+     窓は [arAt, arAt + arWin/reload]。HUDを描くときも必ずこの式を使うこと。 */
   bool ActiveReloadTap();
 
   /* 検証用の書き込み口 */
