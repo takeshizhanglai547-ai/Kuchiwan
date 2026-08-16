@@ -119,22 +119,11 @@ EnemyHit EnemyRay(const Enemy& e, float ox, float oy, float oz,
    カメラの視点姿勢
 
    照準はカメラのレティクル位置から引くので、視点の world 座標が要る。
-   Web版は three.js の camera オブジェクトが持っているが、コアの Camera 構造体は
-   ピボット(px,pz)しか持たない。そのため updateCamera の最終段と同じ式で
-   ここで組み直す。値が二重に定義されるのは望ましくないので、本来は
-   Camera に視点座標を持たせて UpdateCamera が書き込むべき（報告済み）。
-
-   組み直せない量は3つあり、それぞれ次のように扱う。
-     CAM.py       : 平滑化前の目標値をそのまま使う（追従tau=0.05なので差は小さい）
-     CAM.side     : 平滑化前の wantSide をそのまま使う（判定式はWeb版と同一）
-     bob          : ダッシュ揺れ。ダッシュ中は canFire も assistScale も 0 なので
-                    射撃・吸着には効かない。0 とする。
+   その値は UpdateCamera（AshlinePlayer.cpp）が Camera::ex/ey/ez と
+   Camera::rotPitch/rotYaw に書き込み済みなので、ここでは読むだけにする。
+   Sim::Step の順序が UpdateCamera → UpdateWeapon なので、読む値は必ず
+   今フレームのものになる（AshlineSim.cpp。この順序を入れ替えないこと）。
    -------------------------------------------------------------------------- */
-struct CamPose {
-  float x = 0, y = 0, z = 0;      // 視点の world 座標
-  float yaw = 0, pitch = 0;       // 反動込みの姿勢
-  float fov = Cfg::sprintCam::fovBase;
-};
 
 /* three.js の Euler 'YXZ'（R = Ry * Rx）でベクトルを回す。 */
 void RotYXZ(float yaw, float pitch, float vx, float vy, float vz,
@@ -162,77 +151,22 @@ void InvRotYXZ(float yaw, float pitch, float vx, float vy, float vz,
   oz = -ay * sp + az * cp;
 }
 
-CamPose CameraEye(const Sim& sim) {
-  const World& w = sim.GetWorld();
-  const Player& p = sim.GetPlayer();
-  const Camera& c = sim.GetCamera();
-
-  CamPose o;
-  o.fov = c.fov;
-  o.pitch = Clamp(c.pitch + c.kickP, Cfg::cam::pitchMin - 0.2f, Cfg::cam::pitchMax + 0.2f);
-  o.yaw = c.yaw + c.kickY;
-
-  const bool inCover = (p.state == PlayerState::Cover || p.state == PlayerState::ToCover);
-  const Face* face = nullptr;
-  if (p.faceIndex >= 0 && p.faceIndex < static_cast<int>(w.Faces().size()))
-    face = &w.Faces()[p.faceIndex];
-
-  /* 肩の左右。既定は右肩。端に寄っているときだけ、その端の側へ寄せて視界を稼ぐ。 */
-  float sideSign = 1.0f;
-  if (inCover && face) {
-    if (p.peekMode == PeekMode::Side) {
-      sideSign = static_cast<float>(p.peekSide);
-    } else if (p.peekMode == PeekMode::Over) {
-      sideSign = 1.0f;                       // 低い遮蔽の立ち撃ちは既定の右肩
-    } else {
-      const CoverAnchor a = w.AnchorOn(*face, p.t);
-      const float dL = (p.t - a.minT) * face->len;
-      const float dR = (1.0f - a.minT - p.t) * face->len;
-      sideSign = (dL < 1.0f && dL < dR) ? -1.0f : 1.0f;
-    }
-  }
-
-  const float coverUp = (face && face->low) ? Cfg::cam::coverUpLow : Cfg::cam::coverUpHigh;
-  const float shoulder = Lerp(Cfg::cam::shoulder, Cfg::cam::coverShoulder, c.coverBlend) * sideSign;
-  const float dist = Lerp(Cfg::cam::dist, Cfg::cam::coverDist, c.coverBlend);
-  const float up = Lerp(Cfg::cam::up, coverUp, c.coverBlend) - p.crouch * 0.16f;
-
-  /* 注視の支点。py は胸の高さ（乗り出し分を含む）、up との差でカメラ高を作る。 */
-  const float py = Cfg::player::chest + p.y * 0.35f +
-                   (p.peekMode == PeekMode::Over ? p.peek * Cfg::cover::peekRise : 0.0f);
-  const float pvx = c.px;
-  const float pvy = py + (up - Cfg::player::chest);
-  const float pvz = c.pz;
-
-  /* カメラの当たり：支点から所望位置へレイを飛ばし、壁にめり込む分だけ引き寄せる。 */
-  float ox, oy, oz;
-  RotYXZ(o.yaw, o.pitch, shoulder, 0.0f, dist, ox, oy, oz);
-  const float ol = Hypot3(ox, oy, oz);
-  const float ux = ox / ol, uy = oy / ol, uz = oz / ol;
-  const float hit = w.RayWorld(pvx, pvy, pvz, ux, uy, uz, ol + 0.25f);
-  const float use = std::min(ol, std::max(0.55f, hit - 0.18f));
-  o.x = pvx + ux * use;
-  o.y = pvy + uy * use;
-  o.z = pvz + uz * use;
-  return o;
-}
-
 /* レティクル位置(NDC)からのカメラレイ。画面中央ではなく少し上（reticleNdcY）
    にレティクルがあるので、その分だけカメラ前方より上を向く。 */
-void AimRay(const CamPose& cp, float& dx, float& dy, float& dz) {
-  const float tanHalf = std::tan(cp.fov * 0.5f * kDeg);
+void AimRay(const Camera& c, float& dx, float& dy, float& dz) {
+  const float tanHalf = std::tan(c.fov * 0.5f * kDeg);
   const float ly = Cfg::cam::reticleNdcY * tanHalf;
   const float inv = 1.0f / Hypot3(0.0f, ly, 1.0f);
-  RotYXZ(cp.yaw, cp.pitch, 0.0f, ly * inv, -inv, dx, dy, dz);
+  RotYXZ(c.rotYaw, c.rotPitch, 0.0f, ly * inv, -inv, dx, dy, dz);
 }
 
 /* world 座標を NDC へ。カメラの後ろなら false。 */
-bool ProjectPoint(const CamPose& cp, float wx, float wy, float wz,
+bool ProjectPoint(const Camera& c, float wx, float wy, float wz,
                   float& ndcX, float& ndcY) {
   float vx, vy, vz;
-  InvRotYXZ(cp.yaw, cp.pitch, wx - cp.x, wy - cp.y, wz - cp.z, vx, vy, vz);
+  InvRotYXZ(c.rotYaw, c.rotPitch, wx - c.ex, wy - c.ey, wz - c.ez, vx, vy, vz);
   if (vz > -1e-4f) return false;                 // three.js の ndc.z > 1 に相当
-  const float tanHalf = std::tan(cp.fov * 0.5f * kDeg);
+  const float tanHalf = std::tan(c.fov * 0.5f * kDeg);
   const float w = -vz;
   ndcX = (vx / w) / (tanHalf * kViewAspect);
   ndcY = (vy / w) / tanHalf;
@@ -285,7 +219,8 @@ void AcquireTarget(const Sim& sim) {
   const float scale = sim.AssistScale();
   if (scale <= 0.0f) return;
 
-  const CamPose cp = CameraEye(sim);
+  /* 視点は UpdateCamera が今フレームに書いたものをそのまま使う。 */
+  const Camera& cam = sim.GetCamera();
   const World& w = sim.GetWorld();
   const std::vector<Enemy>& es = sim.GetEnemies();
 
@@ -296,7 +231,7 @@ void AcquireTarget(const Sim& sim) {
     const float chest = HitboxOf(e).chest;
 
     float ndcX = 0, ndcY = 0;
-    if (!ProjectPoint(cp, e.x, chest, e.z, ndcX, ndcY)) continue;
+    if (!ProjectPoint(cam, e.x, chest, e.z, ndcX, ndcY)) continue;
 
     /* Web版は画面ピクセルで測る（半径 R = 画面幅 * magnetFrac）。
        幅で割って正規化すると画面解像度が消え、縦横比だけが残る。 */
@@ -306,10 +241,10 @@ void AcquireTarget(const Sim& sim) {
     if (ratio > 1.0f) continue;
 
     /* 遮蔽越しの敵は吸着対象にしない */
-    const float dx = e.x - cp.x, dy = chest - cp.y, dz = e.z - cp.z;
+    const float dx = e.x - cam.ex, dy = chest - cam.ey, dz = e.z - cam.ez;
     const float dd = Hypot3(dx, dy, dz);
     if (dd < 1e-5f) continue;
-    if (w.RayWorld(cp.x, cp.y, cp.z, dx / dd, dy / dd, dz / dd, dd) < dd - 0.2f) continue;
+    if (w.RayWorld(cam.ex, cam.ey, cam.ez, dx / dd, dy / dd, dz / dd, dd) < dd - 0.2f) continue;
 
     if (ratio < best) {
       best = ratio;
@@ -515,15 +450,15 @@ void Sim::Shoot() {
     BlindMuzzle(player_, *face, mx, my, mz);
     BlindDir(camera_, *face, dx, dy, dz);
   } else {
-    /* 1) カメラから着弾点を求める（プレイヤーが見ている先） */
-    const CamPose cp = CameraEye(*this);
-    AimRay(cp, dx, dy, dz);
+    /* 1) カメラから着弾点を求める（プレイヤーが見ている先）。
+          視点と向きは UpdateCamera が今フレームに確定させたものを読むだけ。 */
+    AimRay(camera_, dx, dy, dz);
 
     const int ti = AimTargetOf(*this);
     if (ti >= 0) {   // スナップ補正（最大3°）
       const Enemy& tgt = enemies_[ti];
       const float chest = HitboxOf(tgt).chest;
-      float tx = tgt.x - cp.x, ty = chest - cp.y, tz = tgt.z - cp.z;
+      float tx = tgt.x - camera_.ex, ty = chest - camera_.ey, tz = tgt.z - camera_.ez;
       const float tl = Hypot3(tx, ty, tz);
       if (tl > 1e-5f) {
         tx /= tl;
@@ -538,17 +473,17 @@ void Sim::Shoot() {
       }
     }
 
-    const float tW = world_.RayWorld(cp.x, cp.y, cp.z, dx, dy, dz, kFar);
+    const float tW = world_.RayWorld(camera_.ex, camera_.ey, camera_.ez, dx, dy, dz, kFar);
     float tE = kInf;
     for (const Enemy& e : enemies_) {
       if (e.dead || !e.active) continue;
-      const EnemyHit r = EnemyRay(e, cp.x, cp.y, cp.z, dx, dy, dz);
+      const EnemyHit r = EnemyRay(e, camera_.ex, camera_.ey, camera_.ez, dx, dy, dz);
       if (r.t < tE) tE = r.t;
     }
     const float camT = std::min(tW, tE);
-    const float ix = cp.x + dx * camT;
-    const float iy = cp.y + dy * camT;
-    const float iz = cp.z + dz * camT;
+    const float ix = camera_.ex + dx * camT;
+    const float iy = camera_.ey + dy * camT;
+    const float iz = camera_.ez + dz * camT;
 
     /* 2) 銃口から着弾点へ向け直す。カメラの射線が通っていても、
           銃が遮蔽の裏にあれば壁に当たる ＝ 遮蔽を撃ち抜かない。 */

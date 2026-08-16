@@ -14,8 +14,10 @@
    game.js との差分（意図的なもの。詳細は各所の TODO(統合) を見ること）
      ・JS の P.face（オブジェクト参照）は faceIndex（World::Faces() の添字）。
      ・SFX 呼び出しはコアに無い。音は UE5 側が状態遷移を見て鳴らす。
-     ・カメラの肩寄せ・距離・当たり・揺れは描画層の話なので Camera 構造体に
-       持たせていない。ここでは状態として残る量だけを更新する。
+     ・three.js の camera オブジェクトが持っていた「視点の位置と最終的な向き」は、
+       Camera 構造体（ex/ey/ez, rotPitch/rotYaw）に置いて UpdateCamera が書く。
+       描画層の話に見えるが、射撃の照準がここから引かれる以上ルールの一部であり、
+       持ち主を1つに決めないと必ず食い違う（実際に食い違っていた）。
    ========================================================================== */
 #include "AshlineSim.h"
 
@@ -569,27 +571,67 @@ void Sim::UpdateAnim(float dt) {
 }
 
 /* =============================================================================
-   CAMERA
-   ここで更新するのは「次のフレームに持ち越す状態」だけ。
-   肩の左右寄せ・追従距離・注視点の高さ・壁への当たり・ダッシュ中の上下揺れは、
-   毎フレーム作り直せる派生量なので、Camera 構造体には持たせず描画層に任せる。
+   CAMERA — game.js の updateCamera そのもの。
+
+   ここは「持ち越す状態」だけでなく、視点の world 座標(ex,ey,ez)と反動・揺れ
+   込みの最終的な向き(rotPitch,rotYaw)まで書き切る。
+   理由：射撃の照準はカメラの射線から引くので、同じ式を射撃層やUE5層で組み直すと
+   必ず片方だけ直されて食い違う（実際に肩の左右と遮蔽時のカメラ高が食い違っていた）。
+   派生量に見えても、書く場所は1つに決める。
    ========================================================================== */
 void Sim::UpdateCamera(float dt) {
   // 反動の減衰
   camera_.kickP = Smooth(camera_.kickP, 0.0f, Cfg::fire::kickTau, dt);
   camera_.kickY = Smooth(camera_.kickY, 0.0f, Cfg::fire::kickTau, dt);
 
-  /* FOV。Web版は sprintBlend を平滑化してから FOV を lerp するが、
-     lerp も平滑化もブレンドに対して1次なので、FOV を同じ時定数で目標値へ
-     追わせれば値は一致する。中間状態を1つ減らすための書き換え。 */
-  const float tgtFov = player_.sprint ? Cfg::sprintCam::fovSprint : Cfg::sprintCam::fovBase;
-  camera_.fov = Smooth(camera_.fov, tgtFov, Cfg::sprintCam::fovTau, dt);
+  /* FOV とダッシュ中の縦揺れ。
+     揺れの振幅は sprintBlend に比例するので、FOV だけを目標値へ直接追わせて
+     sprintBlend を省くことはできない（省くと揺れが作れない）。Web版どおり
+     ブレンドを平滑化してから、FOV も揺れもそこから引く。 */
+  camera_.sprintBlend =
+      Smooth(camera_.sprintBlend, player_.sprint ? 1.0f : 0.0f, Cfg::sprintCam::fovTau, dt);
+  camera_.fov = Lerp(Cfg::sprintCam::fovBase, Cfg::sprintCam::fovSprint, camera_.sprintBlend);
+  camera_.bobT += dt;
+  const float bob = std::sin(camera_.bobT * kPi * 2.0f / Cfg::sprintCam::bobPeriod) *
+                    Cfg::sprintCam::bobAmp * camera_.sprintBlend;
 
   // 遮蔽ブレンド（0.25秒）
   const bool inCover =
       (player_.state == PlayerState::Cover || player_.state == PlayerState::ToCover);
   camera_.coverBlend =
       Smooth(camera_.coverBlend, inCover ? 1.0f : 0.0f, Cfg::cover::camBlend / 2.2f, dt);
+
+  /* JS の P.face（面オブジェクトへの参照。遮蔽から離れると null）に相当する。 */
+  const Face* face = nullptr;
+  if (player_.faceIndex >= 0 && player_.faceIndex < static_cast<int>(world_.Faces().size()))
+    face = &world_.Faces()[player_.faceIndex];
+
+  /* 肩の左右。既定は右肩(+1)。端に寄っているときだけ、その端の側へ寄せて視界を稼ぐ。 */
+  float wantSide = 1.0f;
+  if (inCover && face) {
+    if (player_.peekMode == PeekMode::Side) {
+      wantSide = static_cast<float>(player_.peekSide);   // 乗り出した側の肩で見る
+    } else if (player_.peekMode == PeekMode::Over) {
+      wantSide = 1.0f;                                   // 低い遮蔽の立ち撃ちは既定の右肩
+    } else {
+      const CoverAnchor a = world_.AnchorOn(*face, player_.t);
+      const float dL = (player_.t - a.minT) * face->len;
+      const float dR = (1.0f - a.minT - player_.t) * face->len;
+      /* 「左端まで1m未満、かつ右端より左端が近い」ときだけ左肩。
+         単に近い方の端を選ぶと、面のちょうど中央で肩が細かく入れ替わって
+         画面が揺れる。1m の枠を先に通すことがそのヒステリシスになっている。 */
+      wantSide = (dL < 1.0f && dL < dR) ? -1.0f : 1.0f;
+    }
+  }
+  camera_.side = Smooth(camera_.side, wantSide, Cfg::cover::camBlend / 2.2f, dt);
+
+  /* 低い遮蔽では視点を下げる。下げないと、しゃがんだ体の上を見下ろす絵になって
+     「隠れている」ことが画面から伝わらない。 */
+  const float coverUp = (face && face->low) ? Cfg::cam::coverUpLow : Cfg::cam::coverUpHigh;
+  const float shoulder =
+      Lerp(Cfg::cam::shoulder, Cfg::cam::coverShoulder, camera_.coverBlend) * camera_.side;
+  const float dist = Lerp(Cfg::cam::dist, Cfg::cam::coverDist, camera_.coverBlend);
+  const float up = Lerp(Cfg::cam::up, coverUp, camera_.coverBlend) - player_.crouch * 0.16f;
 
   /* 遮蔽に入ったら、壁越しを見る向きまでカメラを寄せる（§7のブレンド時間）。
      プレイヤーが自分でスワイプしたら割り込まない（coverAlignT は UpdateLook が折る）。 */
@@ -613,6 +655,71 @@ void Sim::UpdateCamera(float dt) {
                         : 0.035f;
   camera_.px = Smooth(camera_.px, tx, tau, dt);
   camera_.pz = Smooth(camera_.pz, tz, tau, dt);
+  /* 乗り越え中はカメラを体ほど上げない（画面が泳ぐのを避ける）。
+     立ち撃ちの浮き上がりだけは目標値に含める。 */
+  camera_.py = Smooth(camera_.py,
+                      Cfg::player::chest + player_.y * 0.35f +
+                          (player_.peekMode == PeekMode::Over
+                               ? player_.peek * Cfg::cover::peekRise
+                               : 0.0f),
+                      0.05f, dt);
+
+  /* 最終的な向き。反動(kick)と揺れ(bob)を足したうえで、視点操作の可動域より
+     わずかに広い枠で止める。枠を pitchMin/Max ちょうどにすると、上下限で
+     撃ったときに反動が丸ごと消えて手応えが無くなる。 */
+  camera_.rotPitch = Clamp(camera_.pitch + camera_.kickP + bob,
+                           Cfg::cam::pitchMin - 0.2f, Cfg::cam::pitchMax + 0.2f);
+  camera_.rotYaw = camera_.yaw + camera_.kickY;
+
+  /* 注視の支点。py は胸の高さ（乗り出し分を含む）で、up との差でカメラ高を作る。 */
+  const float pvx = camera_.px;
+  const float pvy = camera_.py + (up - Cfg::player::chest);
+  const float pvz = camera_.pz;
+
+  /* --- 追従オフセットを最終的な向きで回す ------------------------------------
+     Web版は three.js の Euler(pitch, yaw, 0, 'YXZ') を使う。'YXZ' は
+     R = Ry(yaw) * Rx(pitch) * Rz(0) の意味で、Rz は単位行列なので落ちる。
+     ここは符号を1つ間違えるとカメラが逆の肩に着くだけで、警告もテストも
+     出ないまま静かに壊れる。だから展開を残しておく。
+
+       cy = cos(rotYaw), sy = sin(rotYaw), cp = cos(rotPitch), sp = sin(rotPitch)
+
+               [  cy  0  sy ]            [ 1   0    0  ]
+       Ry(y) = [   0  1   0 ]    Rx(p) = [ 0  cp  -sp  ]
+               [ -sy  0  cy ]            [ 0  sp   cp  ]
+
+                        [  cy   sy*sp   sy*cp ]
+       Ry(y) * Rx(p) =  [   0      cp     -sp ]
+                        [ -sy   cy*sp   cy*cp ]
+
+     これに v = (vx, vy, vz) を掛けると
+       ox =  cy*vx + sy*sp*vy + sy*cp*vz
+       oy =            cp*vy  -    sp*vz
+       oz = -sy*vx + cy*sp*vy + cy*cp*vz
+
+     今回の v は (shoulder, 0, dist) なので vy = 0 で消える。
+
+     向きの確認（勘で反転させないための足場）
+       yaw=0, pitch=0 のとき (shoulder, 0, dist) はそのまま残る。
+       yaw y の前方向は (-sin y, 0, -cos y) なので右方向は (cos y, 0, -sin y)。
+       yaw=0 の右方向は +X。よって shoulder>0 は右肩越し、side=+1 が右で正しい。
+       pitch>0（上を向く）で oy = -sp*dist < 0、カメラは下がる。これも正しい。 */
+  const float cy = std::cos(camera_.rotYaw), sy = std::sin(camera_.rotYaw);
+  const float cp = std::cos(camera_.rotPitch), sp = std::sin(camera_.rotPitch);
+  const float offX = cy * shoulder + sy * cp * dist;
+  const float offY = -sp * dist;
+  const float offZ = -sy * shoulder + cy * cp * dist;
+
+  /* カメラの当たり：支点から所望位置へレイを飛ばし、壁にめり込む分だけ引き寄せる。
+     0.25 は「壁の少し先まで見に行く」余白、0.18 は壁からの離し、0.55 は
+     どんなに詰まっても頭にめり込ませない下限（いずれも game.js の直値）。 */
+  const float ol = Hypot3(offX, offY, offZ);
+  const float ux = offX / ol, uy = offY / ol, uz = offZ / ol;
+  const float hit = world_.RayWorld(pvx, pvy, pvz, ux, uy, uz, ol + 0.25f);
+  const float use = std::min(ol, std::max(0.55f, hit - 0.18f));
+  camera_.ex = pvx + ux * use;
+  camera_.ey = pvy + uy * use;
+  camera_.ez = pvz + uz * use;
 }
 
 }  // namespace Ashline
