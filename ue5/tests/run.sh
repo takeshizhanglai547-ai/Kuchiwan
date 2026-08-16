@@ -35,7 +35,10 @@ fi
 
 # ---- 2. コンパイル ----------------------------------------------------------
 step "2. UE非依存コアのコンパイル（clang++ -std=c++17 -Wall -Wextra）"
-CORE_SRC=$(find ue5/AshlineUE/Source/AshlineCore/Private -name '*.cpp' | sort)
+# AshlineCoreModule.cpp は UE のモジュール機構への入口だけを持つ唯一の例外で、
+# UEヘッダを含むためこの環境ではコンパイルできない。ルールは1行も入っていない。
+CORE_SRC=$(find ue5/AshlineUE/Source/AshlineCore/Private -name '*.cpp' \
+             ! -name 'AshlineCoreModule.cpp' | sort)
 INC="-Iue5/AshlineUE/Source/AshlineCore/Public"
 WARN="-Wall -Wextra -Wshadow -Wno-unused-parameter"
 

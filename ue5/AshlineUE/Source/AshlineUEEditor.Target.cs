@@ -1,4 +1,4 @@
-// ASHLINE — エディタ用ターゲット。中身は AshlineUE.Target.cs と対で維持すること。
+﻿// ASHLINE — エディタ用ターゲット。中身は AshlineUE.Target.cs と対で維持すること。
 using UnrealBuildTool;
 using System.Collections.Generic;
 

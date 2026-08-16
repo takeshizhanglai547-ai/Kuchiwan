@@ -36,7 +36,9 @@ def rel(p):
 
 
 def read(p):
-    with open(p, "r", encoding="utf-8") as f:
+    # utf-8-sig: ソースには BOM を付けてある（日本語ロケールのMSVC対策）ので、
+    # 読む側で必ず外す。外さないと先頭の一致判定が全て落ちる。
+    with open(p, "r", encoding="utf-8-sig") as f:
         return f.read()
 
 
@@ -104,6 +106,10 @@ def check_core_is_engine_free():
         problem("AshlineCore が無い")
         return
     for p in walk(CORE, {".h", ".cpp"}):
+        # 唯一の例外。UEのモジュール機構への入口だけを持ち、ルールは含まない。
+        # 例外を暗黙にせず、ここに名前で書いて見えるようにしておく。
+        if os.path.basename(p) == "AshlineCoreModule.cpp":
+            continue
         checks += 1
         txt = read(p)
         m = UE_TOKENS.search(txt)
@@ -111,6 +117,25 @@ def check_core_is_engine_free():
             line = txt[: m.start()].count("\n") + 1
             problem("AshlineCore がエンジンに依存している（コアの検証ができなくなる）: %s:%d 「%s」"
                     % (rel(p), line, m.group(0).strip()))
+
+    # 例外ファイルが本当に入口だけか。ルールが紛れ込んだら独立性が崩れる。
+    entry = os.path.join(CORE, "Private", "AshlineCoreModule.cpp")
+    if os.path.exists(entry):
+        checks += 1
+        body = read(entry)
+        if "IMPLEMENT_MODULE" not in body:
+            problem("AshlineCoreModule.cpp に IMPLEMENT_MODULE が無い"
+                    "（エディタが AshlineCore を読み込めず起動しない）")
+        # ブロックコメントを本文ごと落としてから数える。行頭が * とは限らない。
+        stripped = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+        stripped = re.sub(r"//[^\n]*", "", stripped)
+        code = [ln for ln in stripped.splitlines() if ln.strip()]
+        if len(code) > 4:
+            problem("AshlineCoreModule.cpp に入口以外のコードが入っている（%d行）: %s"
+                    % (len(code), " / ".join(x.strip() for x in code[:5])))
+    else:
+        problem("AshlineCoreModule.cpp が無い。.uproject に載ったモジュールは "
+                "IMPLEMENT_MODULE が無いと実行時にロードできず、エディタが開かない")
 
     # Build.cs が Engine を引いていないか
     bcs = os.path.join(CORE, "AshlineCore.Build.cs")

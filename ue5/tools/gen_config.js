@@ -159,7 +159,11 @@ w('} // namespace Cfg');
 w('} // namespace Ashline');
 w('');
 
-const text = L.join('\n');
+/* BOM を付けて書く。日本語コメントを含むソースを BOM 無しで置くと、
+   日本語ロケールのWindowsでMSVCがCP932として読み、文字列リテラルの
+   閉じ引用符やの改行を食い潰して C4819/C2001 を撒き散らす。
+   clang は BOM を無視するので、この環境の検証には影響しない。 */
+const text = '\ufeff' + L.join('\n');
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 const prev = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : null;
 fs.writeFileSync(OUT, text);
