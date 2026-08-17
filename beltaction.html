@@ -4752,8 +4752,16 @@ const ETYPE={
   hatamoto:{hp:160,sp:2.3,dmg:27,atkR:80,w:58,h:90,c1:'#2a3a5a',c2:'#182238',c3:'#0a101c',score:1800,
     sengoku:true,sengKind:'hatamoto',squad:true,flanker:true,accent:'#a8c8ff',name:'旗本'},
   // ── 五周目「戦国」の三英傑 ──
-  nobunaga:{hp:1900,sp:1.9,dmg:40,atkR:118,w:96,h:130,c1:'#1a1a22',c2:'#0e0e14',c3:'#050508',score:34000,
-    boss:true,bossKind:'nobunaga',weapon:'blade',accent:'#ff6a2a',sengoku:true,finalBoss:true,trueBoss:true,name:'第六天魔王 織田信長'},
+  // 五周目のラスボスも三段変身。人 → 鬼 → 魔王（デーモン）。
+  // HPは 1900 → 900+900+1100（合計2900＝従来の1.53倍）
+  nobunaga:{hp:900,sp:1.9,dmg:40,atkR:118,w:96,h:130,c1:'#1a1a22',c2:'#0e0e14',c3:'#050508',score:14000,
+    boss:true,bossKind:'nobunaga',weapon:'blade',accent:'#ff6a2a',sengoku:true,name:'第六天魔王 織田信長', evolveTo:'nobunaga2'},
+  nobunaga2:{hp:900,sp:2.4,dmg:46,atkR:128,w:108,h:146,c1:'#241018',c2:'#150a0e',c3:'#070304',score:20000,
+    boss:true,bossKind:'nobunaga2',weapon:'blade',accent:'#ff3a1a',sengoku:true,name:'鬼道 織田信長', evolveTo:'nobunaga3'},
+  // 最終形態。速さ・間合い・攻撃力すべてを本作の最大値に置く
+  nobunaga3:{hp:1100,sp:3.4,dmg:58,atkR:170,w:150,h:196,c1:'#2a0a12',c2:'#160408',c3:'#070102',score:90000,
+    boss:true,bossKind:'nobunaga3',weapon:'none',accent:'#ff2a10',sengoku:true,demon:true,
+    finalBoss:true,trueBoss:true,name:'第六天魔王 —— 降臨'},
   hideyoshi:{hp:1500,sp:2.4,dmg:34,atkR:104,w:88,h:118,c1:'#c8a03a',c2:'#8a6a18',c3:'#4a380a',score:26000,
     boss:true,bossKind:'hideyoshi',weapon:'spear',accent:'#ffe38a',sengoku:true,name:'太閤 羽柴秀吉'},
   ieyasu:{hp:1800,sp:1.5,dmg:36,atkR:110,w:100,h:126,c1:'#2a4a38',c2:'#183020',c3:'#0a1a10',score:28000,
@@ -4786,8 +4794,14 @@ const ETYPE={
     boss:true,bossKind:'poseidon',weapon:'spear',accent:'#d6ffff',myth:true,name:'海神ポセイドン'},
   hades:{hp:950,sp:2.0,dmg:34,atkR:104,w:92,h:172,c1:'#8f7fc8',c2:'#4a3a80',c3:'#1a1230',score:46000,
     boss:true,bossKind:'hades',weapon:'dark',accent:'#c8b8ff',myth:true,name:'冥王ハデス'},
-  zeus:{hp:1250,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:80000,
-    boss:true,bossKind:'zeus',weapon:'holy',accent:'#fff6c0',myth:true,finalBoss:true,trueBoss:true,name:'雷神ゼウス'},
+  // 四周目のラスボスは三段変身。第一形態は人の姿、第二で雷霆を解き放ち、第三で天空神の真体になる。
+  // HPは3つの合計が従来の1.6倍に収まるよう配分している（1250 → 620+620+760）
+  zeus:{hp:620,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:26000,
+    boss:true,bossKind:'zeus',weapon:'holy',accent:'#fff6c0',myth:true,name:'雷神ゼウス', evolveTo:'zeus2'},
+  zeus2:{hp:620,sp:2.6,dmg:44,atkR:126,w:118,h:206,c1:'#fffbe8',c2:'#e8c860',c3:'#7a5c18',score:30000,
+    boss:true,bossKind:'zeus2',weapon:'holy',accent:'#fff6c0',myth:true,name:'雷神ゼウス【神威】', evolveTo:'zeus3'},
+  zeus3:{hp:760,sp:3.0,dmg:52,atkR:140,w:136,h:238,c1:'#ffffff',c2:'#ffe98a',c3:'#8a6a10',score:80000,
+    boss:true,bossKind:'zeus3',weapon:'holy',accent:'#ffffff',myth:true,finalBoss:true,trueBoss:true,name:'天空神ゼウス【真体】'},
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
   // ---- 二周目・蟲の世界のボス ----
@@ -4820,6 +4834,9 @@ const BOSSMOVES={
   // 神格ごとの大技を主軸に据え、汎用技は繋ぎとして残す
   // 五周目の三英傑は固有技を5つずつ持ち、汎用技は「間合いを詰める手」だけに絞る
   nobunaga: ['teppoVolley','nanbanZutsu','honnoji','tenkaFubu','demonKing','unblockSmash','dashThrust','bossGrab'],
+  nobunaga2:['tenkaFubu','demonKing','honnoji','teppoVolley','unblockSmash','dashThrust','bossGrab'],
+  // 最終形態：固有の三技＋間合いを一瞬で消す手だけ。汎用の小技は持たせない
+  nobunaga3:['maouRush','hellFlame','demonDive','tenkaFubu','teleSlash','unblockSmash','bossGrab'],
   hideyoshi:['ogaeshi','saruTobi','hyotan','ichiyaJo','tripleStep','unblockSmash','bossGrab'],
   // 一夜城は秀吉だけの手（墨俣の逸話）。家康と共有すると三人の色が混ざる
   ieyasu:   ['kagemusha','yaribusuma','kakuyoku','mikataGaeshi','heavySwing','groundSlam','bossGrab'],
@@ -4834,6 +4851,8 @@ const BOSSMOVES={
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
+  zeus2:   ['judgeBolts','keraunos','stormFall','teleSlash','boltStrike','megaTornado','unblockSmash','bossGrab'],
+  zeus3:   ['tenchuu','judgeBolts','keraunos','stormFall','teleSlash','megaTornado','unblockSmash','groundSlam'],
   dragon: ['fireBreath','fireball','divebomb','clawSwoop','bulletHell'],
   ghost:  ['scytheSlash','phaseDash','vanishMove','skyDive','bladeParry'],                      // 大鎌の剣士型
   slime:  ['slimeBounce','slimeSlam','slimeBounce'],
@@ -4891,8 +4910,12 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   poseidon:'海は我が庭。波に呑まれて、底で眠るがよい。',
   hades:'死者は増える一方だ。……お前も、その数に入るだけのこと。',
   zeus:'地上の子よ。汝の拳に、護るに足る理由はあるか。',
+  zeus2:'——よかろう。人の身で、神威に触れてみるがいい。',
+  zeus3:'これが天である。仰げ。そして、砕けよ。',
   // ── 五周目・戦国の三英傑 ──
   nobunaga:'であるか。犬の分際で、我が城まで来おったか。',
+  nobunaga2:'……人の器では、足りぬ。ならば捨てるまでよ。',
+  nobunaga3:'我は第六天魔王。天も仏も、この炎の下にある。——踏み潰してくれよう。',
   hideyoshi:'いやはや、強そうな犬じゃ！……で、わしの家来にならぬか？',
   ieyasu:'……鳴かぬなら、鳴くまで待とう。だが貴殿は、待たせてはくれぬようじゃな。',
   shingen:'疾きこと風の如く——動いてから読むのでは、遅いぞ。',
@@ -4912,9 +4935,10 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   greyking:'bosseerie', ufoboss:'bossfast', bioblob:'bossheavy', emperorX:'bosscosmic', emperorX2:'bossalien',
   mumei:'bossrival', kamaboss:'bossfast', queenbee:'bossfast', kuwaboss:'bossheavy', spidboss:'bosseerie',
   chamboss:'bosseerie', chamurus:'bosschamu',
-  poseidon:'bossmyth', hades:'bossmyth', zeus:'bossmyth',
+  poseidon:'bossmyth', hades:'bossmyth', zeus:'bossmyth', zeus2:'boss2', zeus3:'boss3',
   nobunaga:'bosssengoku', hideyoshi:'bosssengoku', ieyasu:'bosssengoku',
   shingen:'bosssengoku', kenshin:'bosssengoku', yoshimoto:'bosssengoku', mitsuhide:'bosssengoku',
+  nobunaga2:'boss2', nobunaga3:'boss3',
   katsuyori:'bosssengoku', hisahide:'bosssengoku', hanbei:'bosssengoku', kanbei:'bosssengoku',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival' };
@@ -5930,6 +5954,12 @@ const MV={
   saruTobi:{tele:22,dur:86,rec:30,minR:60,maxR:1400},                // 猿飛：頭上を三度跳び越して背後から刺す
   kagemusha:{tele:24,dur:88,rec:34,minR:0,maxR:1400,danger:1},       // 影武者：三つの影から本物が出る
   yaribusuma:{tele:30,dur:92,rec:36,minR:0,maxR:1400},               // 槍衾：周囲を槍で埋め、近づけなくする
+  // ── ラスボスの最終形態 ──
+  //   予告は長め、隙も残す。避けられない技を並べると理不尽になるだけで威厳は出ない
+  maouRush:{tele:26,dur:112,rec:34,minR:0,maxR:1400,danger:1},       // 魔王の疾走：画面を四度横断する
+  hellFlame:{tele:38,dur:118,rec:42,minR:0,maxR:1400},               // 業火：床の端から端まで火柱が走る
+  demonDive:{tele:32,dur:98,rec:44,minR:0,maxR:1400,danger:1},       // 天魔墜つ：舞い上がって落ちる
+  tenchuu:{tele:40,dur:120,rec:44,minR:0,maxR:1400},                 // 天誅：全画面の落雷が三波
   // ── 群雄の一手 ──
   fuurinkazan:{tele:30,dur:132,rec:40,minR:0,maxR:1400,danger:1},    // 風林火山：疾風→静止回復→火→不動の四相
   kurumagakari:{tele:26,dur:88,rec:34,minR:0,maxR:800,danger:1},     // 車懸り：回りながら斬り進む
@@ -6029,6 +6059,53 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'darkBeam': if(f===16)bBeam(e,t.dmg+4); break;
     case 'teleSlash': if(f===10)bArc(e,98,48,t.dmg,true,'#c46bff'); break;
     case 'summon': if(f===14)bSummon(e); break;
+    // ══ ラスボス最終形態の大技 ═══════════════════════════════
+    // ── 第六天魔王：魔王の疾走。画面を四度横断する。止まる瞬間だけが反撃の機会 ──
+    case 'maouRush': {
+      if(f===1){ popText(e.x,e.y-e.h-30,'——退けぬのなら、踏み潰すまで','#ff3a1a',true); sfx.boss(e.x); flashAt(3,'255,58,16'); }
+      const leg=Math.floor(f/27), k=f%27;
+      if(leg<4){
+        if(k===0){ const tp=nearestPlayerTo(e.x); e.facing=tp.x<e.x?-1:1;
+          spark(e.x,e.y-e.h*0.5,'#ff3a1a',14,9); sfx.dash(e.x); }
+        if(k>=3 && k<19){ e.x+=e.facing*26; e.y=clamp(e.y,GROUND_TOP,GROUND_BOT);
+          if(gf%2===0){ dust(e.x-e.facing*30,e.y,4); ember(e.x+rnd(-30,30), e.y-rnd(10,110), rnd(-1,1), -rnd(1,3), '#ff6a2a'); }
+          bArc(e,96,64,t.dmg-14,true,'#ff3a1a'); }
+        if(k===19){ e.x=clamp(e.x, camX+40, camX+W-40); } }
+      break; }
+    // ── 第六天魔王：業火。床の端から端まで火柱が走り、立つ場所を奪う ──
+    case 'hellFlame':
+      if(f===1){ popText(e.x,e.y-e.h-30,'焼き尽くせ','#ff6a2a',true); sfx.boss(e.x); }
+      if(f<22 && f%2===0) ember(e.x+rnd(-70,70), e.y-rnd(0,150), rnd(-1.4,1.4), -rnd(1.4,3.2), gf%3?'#ff6a2a':'#ffd24d');
+      if(f===24){ flashAt(4,'255,106,42',e.x,e.y-70); shake=Math.max(shake,13);
+        // 端から端まで等間隔。時間差で走るので、隙間を選んで立ち位置を変え続ける
+        for(let k=0;k<9;k++)
+          hazards.push({kind:'eplant', art:'fire', x:camX+60+k*(W-120)/8, y:LANE,
+            t:0, warn:14+k*6, dur:30, life:130, dmg:t.dmg-22, col:'#ff6a2a'}); }
+      break;
+    // ── 第六天魔王：天魔墜つ。舞い上がって主役の頭上へ落ち、着地で全画面を揺らす ──
+    case 'demonDive':
+      if(f===1){ popText(e.x,e.y-e.h-30,'天魔、墜つ','#ff3a1a',true); sfx.rise(e.x); }
+      if(f<20){ e.z=(e.z||0)+13; if(gf%2===0) spark(e.x,e.y-e.z,'#ff3a1a',2,6); }
+      if(f>=20 && f<40){ const tp=nearestPlayerTo(e.x);          // 空中で主役の真上へ寄る
+        e.x+=clamp(tp.x-e.x,-16,16); e.y+=clamp(tp.y-e.y,-3,3); e.z=260; }
+      if(f>=40 && f<52){ e.z=Math.max(0, e.z-24); }
+      if(f===52){ e.z=0;
+        flashAt(6,'255,58,16',e.x,e.y); shake=Math.max(shake,18); quake=Math.max(quake,26);
+        hitStop=Math.max(hitStop,10); triggerSlow(26); sfx.big(e.x); sfx.ko(e.x);
+        bShock(e,300,t.dmg+10); dust(e.x,e.y,24);
+        for(const d2 of [-1,1])                                   // 左右へ走る地割れ
+          spawnProj(e.x+d2*50, e.y, d2*13, 0, {owner:'enemy',dmg:t.dmg-16,color:'#ff6a2a',r:20,life:80,zz:34,wave:true}); }
+      break;
+    // ── 天空神ゼウス：天誅。全画面の落雷が三波、間隔を詰めながら降る ──
+    case 'tenchuu':
+      if(f===1){ popText(e.x,e.y-e.h-30,'——仰げ','#ffffff',true); sfx.boss(e.x); flashAt(3,'255,255,255'); }
+      if(f<26 && f%3===0) spark(e.x+rnd(-80,80), e.y-rnd(40,190), '#eaf6ff', 2, 7);
+      for(let w=0; w<3; w++){ const t0=28+w*26;
+        if(f===t0){ const n=5+w, x0=camX+70;
+          for(let k=0;k<n;k++)
+            hazards.push({kind:'ebolt', x:x0+k*(W-140)/(n-1)+rnd(-18,18), y:LANE, t:0, life:52, dmg:t.dmg-12});
+          shake=Math.max(shake,9); sfx.zap(e.x); } }
+      break;
     // ══ 戦国の三英傑：専用の大技 ═══════════════════════════════
     // ── 信長：三段撃ち。三列が順に構えて撃つので、間合いではなく「列」を避ける ──
     case 'teppoVolley': {
@@ -11307,7 +11384,7 @@ function drawEnemy(e){
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
-  else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
+  else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.sengoku && !t.boss) drawSengokuFoe(e,t);
   else if(t.myth && !t.boss) drawMythFoe(e,t);
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
@@ -12368,6 +12445,10 @@ const SENGOKU_ART={
              haori:'#20321f', haori2:'#0e1a10', skin:'#dcc59c', metal:'#a8e8c0',
              aura:'168,232,192', glow:'#a8e8c0', weapon:'ogi' },
   // ── 群雄。立物と陣羽織の色で見分ける ──
+  // 鬼道：兜を捨て、額から角が生える。黒に赤の威糸
+  nobunaga2:{crest:'oni',     armor:'#241018', armor2:'#4a1a22', lace:'#ff3a1a',
+             haori:'#5a0c0c', haori2:'#1e0304', skin:'#c8a488', metal:'#ff6a2a',
+             aura:'255,60,20', glow:'#ff3a1a', weapon:'tachi' },
   shingen:{  crest:'yak',     armor:'#7a1d1d', armor2:'#a83030', lace:'#f0d090',
              haori:'#3a0c0c', haori2:'#180404', skin:'#e0c49c', metal:'#ffd0a0',
              aura:'255,120,60', glow:'#ff9a4a', weapon:'gunbai' },
@@ -12409,6 +12490,15 @@ function warCrest(kind,A,hy,r){
       ctx.beginPath(); ctx.moveTo(-4,0); ctx.lineTo(-2.6,-r*2.7); ctx.lineTo(2.6,-r*2.7); ctx.lineTo(4,0);
       ctx.closePath(); ctx.fill(); ctx.restore(); n++; }
     return n; }
+  if(kind==='oni'){                                      // 鬼の角：額から後ろへ反って伸びる二本
+    ctx.fillStyle=A.metal;
+    for(const sgn of [-1,1]){ ctx.beginPath();
+      ctx.moveTo(sgn*r*0.5,hy-r*0.55);
+      ctx.quadraticCurveTo(sgn*r*1.5,hy-r*2.2, sgn*r*1.05,hy-r*3.1);
+      ctx.quadraticCurveTo(sgn*r*1.1,hy-r*1.9, sgn*r*0.2,hy-r*0.52); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle=shade(A.metal,-30);                    // 角の根本の瘤
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.arc(sgn*r*0.42,hy-r*0.62,r*0.24,0,7); ctx.fill(); }
+    return 2; }
   if(kind==='yak'){                                      // 諏訪法性：白い毛の房＋左右の鍬形
     ctx.fillStyle='#f2ede0';
     for(let i=-3;i<=3;i++){ ctx.save(); ctx.translate(i*r*0.28, hy-r*0.55); ctx.rotate(i*0.16);
@@ -12479,6 +12569,126 @@ function warCrest(kind,A,hy,r){
   ctx.beginPath(); ctx.ellipse(0,hy-r*0.55,r*1.35,r*0.95,0,Math.PI,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.moveTo(-5,hy-r*1.10); ctx.lineTo(0,hy-r*1.95); ctx.lineTo(5,hy-r*1.10); ctx.closePath(); ctx.fill();
   return 1; }
+// ── 第六天魔王（信長の最終形態）──────────────────────────
+// 武将の絵の延長では「大きい侍」にしかならない。人の輪郭を捨て、
+// 角・翼・尾・爛々とした眼で「もう人ではない」ことを一目で伝える。
+// 明度は 体(ほぼ黒) < 筋の熾火(暗赤) < 眼と炎(白熱) の三段に離す
+function drawDemonKing(e){
+  const t=ETYPE[e.type], bw=t.w, bh=t.h;
+  const anim=e.anim||0, atk=(e.state==='bmove'), wind=(e.state==='bwind'||e.telegraph>0);
+  const br=Math.sin(anim*0.5)*4, pulse=0.5+0.5*Math.sin(gf*0.09);
+  const walk=foeStep(e,9);
+  ctx.save();
+  // 背後の黒炎。加算ではなく暗い塗りで「光を吸う」ようにする
+  if(perfTier<2){ ctx.save(); ctx.globalAlpha=0.55;
+    ctx.fillStyle='rgba(10,2,6,.9)';
+    for(let k=0;k<5;k++){ const ph=gf*0.05+k*1.3, hgt=bh*(0.9+0.35*Math.sin(ph));
+      ctx.beginPath(); ctx.moveTo(-bw*0.30+k*bw*0.15, 0);
+      ctx.quadraticCurveTo(-bw*0.24+k*bw*0.15+Math.sin(ph)*22, -hgt*0.6, -bw*0.30+k*bw*0.15+Math.sin(ph)*14, -hgt);
+      ctx.quadraticCurveTo(-bw*0.10+k*bw*0.15, -hgt*0.5, -bw*0.16+k*bw*0.15, 0);
+      ctx.closePath(); ctx.fill(); }
+    ctx.restore(); }
+  // 翼。羽ばたきは技中だけ大きく開く
+  { const open=0.35+(atk?0.5:0)+0.18*Math.sin(anim*0.9);
+    for(const sgn of [-1,1]){ ctx.save();
+      ctx.translate(sgn*bw*0.24, -bh*0.80); ctx.rotate(sgn*(0.62-open*0.95));
+      ctx.fillStyle='rgba(18,3,8,.95)';
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(sgn*bw*0.42,-bh*0.44, sgn*bw*0.78,-bh*0.30);
+      for(let k=0;k<4;k++){ const u=1-k*0.24;                       // 翼膜の切れ込み
+        ctx.quadraticCurveTo(sgn*bw*(0.52*u+0.10), -bh*(0.10*u), sgn*bw*(0.62*u), bh*(0.06+0.05*k)); }
+      ctx.quadraticCurveTo(sgn*bw*0.22,-bh*0.06, 0,0); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(180,30,10,'+(0.35+0.35*pulse).toFixed(2)+')'; ctx.lineWidth=2.4;
+      for(let k=0;k<4;k++){ ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.lineTo(sgn*bw*(0.70-k*0.15), -bh*(0.28-k*0.09)); ctx.stroke(); }
+      ctx.restore(); } }
+  // 尾。歩幅に合わせて振る
+  { ctx.strokeStyle='#160408'; ctx.lineWidth=13; ctx.lineCap='round';
+    const sw=Math.sin(anim*0.8)*26;
+    ctx.beginPath(); ctx.moveTo(-bw*0.16,-bh*0.34);
+    ctx.quadraticCurveTo(-bw*0.46+sw*0.3,-bh*0.20, -bw*0.52+sw,-bh*0.46); ctx.stroke();
+    ctx.fillStyle='#ff3a1a';                                        // 尾の先の炎
+    ctx.beginPath(); ctx.moveTo(-bw*0.52+sw,-bh*0.52);
+    ctx.lineTo(-bw*0.46+sw,-bh*0.40); ctx.lineTo(-bw*0.58+sw,-bh*0.40); ctx.closePath(); ctx.fill(); }
+  // 脚（獣脚：踵が高く、爪で立つ）
+  ctx.strokeStyle='#160408'; ctx.lineWidth=17; ctx.lineCap='round';
+  for(const sgn of [-1,1]){ const sw=walk*sgn;
+    ctx.beginPath(); ctx.moveTo(sgn*13,-bh*0.42);
+    ctx.lineTo(sgn*13+sw*0.5,-bh*0.24); ctx.lineTo(sgn*13+sw,-bh*0.09); ctx.stroke();
+    ctx.fillStyle='#0a0104';
+    ctx.beginPath(); ctx.ellipse(sgn*13+sw+6,-bh*0.03,15,7,0,0,7); ctx.fill();
+    ctx.fillStyle='#e8d8c0';                                        // 爪
+    for(let k=-1;k<=1;k++){ ctx.beginPath();
+      ctx.moveTo(sgn*13+sw+14+k*4,-bh*0.05); ctx.lineTo(sgn*13+sw+24+k*4,-bh*0.01);
+      ctx.lineTo(sgn*13+sw+14+k*4,-bh*0.005); ctx.closePath(); ctx.fill(); } }
+  // 胴。逆三角の巨躯に、熾火の筋を通す
+  const ty=-bh*0.86+br*0.3, th2=bh*0.48;
+  ctx.fillStyle='#160408';
+  ctx.beginPath(); ctx.moveTo(-bw*0.30,ty); ctx.lineTo(bw*0.30,ty);
+  ctx.quadraticCurveTo(bw*0.20,ty+th2*0.7, bw*0.16,ty+th2);
+  ctx.lineTo(-bw*0.16,ty+th2);
+  ctx.quadraticCurveTo(-bw*0.20,ty+th2*0.7, -bw*0.30,ty); ctx.closePath(); ctx.fill();
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.strokeStyle='rgba(255,58,16,'+(0.28+0.34*pulse).toFixed(2)+')'; ctx.lineWidth=3;
+    for(let k=1;k<5;k++){ const yy=ty+th2*k/5, wx=bw*(0.26-0.03*k);
+      ctx.beginPath(); ctx.moveTo(-wx,yy);
+      ctx.quadraticCurveTo(0,yy-6, wx,yy); ctx.stroke(); }
+    ctx.restore(); }
+  // 肩の岩塊
+  ctx.fillStyle='#1e0810';
+  for(const sgn of [-1,1]){ ctx.beginPath();
+    ctx.moveTo(sgn*bw*0.30,ty+4); ctx.lineTo(sgn*bw*0.46,ty-bh*0.06);
+    ctx.lineTo(sgn*bw*0.42,ty+th2*0.34); ctx.lineTo(sgn*bw*0.26,ty+th2*0.26); ctx.closePath(); ctx.fill(); }
+  // 腕。技中は前へ大きく突き出す
+  { const ex=atk?0.28:(wind?-0.08:0.06);
+    // 翼と同じ暗さだと腕が翼に溶ける。少し明るくして熾火の筋を1本通し、
+    // 高さも翼より下へ落として輪郭を分ける
+    ctx.strokeStyle='#2e0c14'; ctx.lineWidth=15; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.28,ty+th2*0.34);
+    ctx.lineTo(bw*(0.50+ex),ty+th2*0.66); ctx.lineTo(bw*(0.62+ex*1.6),ty+th2*0.44); ctx.stroke();
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle='rgba(255,58,16,'+(0.30+0.30*pulse).toFixed(2)+')'; ctx.lineWidth=2.4;
+      ctx.beginPath(); ctx.moveTo(bw*0.30,ty+th2*0.34);
+      ctx.lineTo(bw*(0.50+ex),ty+th2*0.66); ctx.lineTo(bw*(0.60+ex*1.6),ty+th2*0.46); ctx.stroke();
+      ctx.restore(); }
+    ctx.fillStyle='#e8d8c0';                                        // 五本の爪
+    for(let k=-2;k<=2;k++){ ctx.save();
+      ctx.translate(bw*(0.62+ex*1.6), ty+th2*0.44); ctx.rotate(k*0.26-0.3);
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(22,-4); ctx.lineTo(2,6); ctx.closePath(); ctx.fill();
+      ctx.restore(); } }
+  // 頭。角は四本、眼は横に裂けた白熱の線
+  const hy=-bh*0.96+br*0.4, r=bh*0.10;
+  ctx.fillStyle='#180509'; ctx.beginPath(); ctx.ellipse(0,hy,r*1.15,r*1.02,0,0,7); ctx.fill();
+  ctx.fillStyle='#0d0205';                                          // 顎
+  ctx.beginPath(); ctx.moveTo(-r*0.62,hy+r*0.34); ctx.lineTo(r*0.86,hy+r*0.30);
+  ctx.lineTo(r*0.52,hy+r*1.05); ctx.lineTo(-r*0.50,hy+r*0.98); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#e8d8c0';                                          // 牙
+  for(let k=0;k<4;k++){ ctx.beginPath();
+    ctx.moveTo(-r*0.34+k*r*0.34,hy+r*0.44); ctx.lineTo(-r*0.24+k*r*0.34,hy+r*0.86);
+    ctx.lineTo(-r*0.14+k*r*0.34,hy+r*0.44); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle='#0d0205';                                          // 角（大2・小2）
+  for(const sgn of [-1,1]){ ctx.beginPath();
+    ctx.moveTo(sgn*r*0.55,hy-r*0.55);
+    ctx.quadraticCurveTo(sgn*r*2.3,hy-r*2.4, sgn*r*1.5,hy-r*4.0);
+    ctx.quadraticCurveTo(sgn*r*1.6,hy-r*2.0, sgn*r*0.2,hy-r*0.5); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sgn*r*0.95,hy-r*0.25);
+    ctx.quadraticCurveTo(sgn*r*2.2,hy-r*0.9, sgn*r*2.5,hy-r*1.9);
+    ctx.quadraticCurveTo(sgn*r*1.7,hy-r*0.9, sgn*r*0.7,hy-r*0.2); ctx.closePath(); ctx.fill(); }
+  // 眼。ここだけを最も明るくする（顔の位置がここで決まる）
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.4*pulse;
+    ctx.fillStyle=radGrad(0,hy-r*0.05,r*1.9,'rgba(255,90,30,.95)','rgba(255,60,10,0)');
+    ctx.beginPath(); ctx.arc(0,hy-r*0.05,r*1.9,0,7); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle='#fff4e0';
+  for(const sgn of [-1,1]){ ctx.save(); ctx.translate(sgn*r*0.44,hy-r*0.10); ctx.rotate(sgn*0.22);
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.42,r*0.13,0,0,7); ctx.fill(); ctx.restore(); }
+  // 全身をなめる炎の気配
+  if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(atk?0.34:0.20)+0.12*pulse;
+    ctx.fillStyle=radGrad(0,-bh*0.52,bh*0.86,'rgba(255,58,16,.9)','rgba(255,58,16,0)');
+    ctx.beginPath(); ctx.arc(0,-bh*0.52,bh*0.86,0,7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+}
 function drawWarlord(e){
   const t=ETYPE[e.type], A=SENGOKU_ART[t.bossKind]||SENGOKU_ART.nobunaga;
   const bw=t.w, bh=t.h, anim=e.anim||0, walk=foeStep(e,7);
@@ -12587,7 +12797,15 @@ const GOD_ART={
             metal:'#5c5170', halo:'#c8b8ff', aura:'168,120,255'},
   zeus:    {prong:0, plen:0,  spread:0,    crown:'laurel', beard:'square',
             hair:'#fbf7ea', skin:'#c69a5c', robe1:'#d8c47e', robe2:'#6a4c12',
-            metal:'#ffd24d', halo:'#fff6c0', aura:'255,236,150'}
+            metal:'#ffd24d', halo:'#fff6c0', aura:'255,236,150'},
+  // 第二形態：雷霆を解き放った姿。衣が白熱し、光輪が青白く振れる
+  zeus2:   {prong:0, plen:0,  spread:0,    crown:'flame',  beard:'square',
+            hair:'#ffffff', skin:'#d8a862', robe1:'#fff0b0', robe2:'#8a6410',
+            metal:'#fff6c0', halo:'#eaf6ff', aura:'220,240,255'},
+  // 第三形態：天空神の真体。肌まで光を帯び、冠は波（湧き立つ雲）になる
+  zeus3:   {prong:0, plen:0,  spread:0,    crown:'wave',   beard:'wave',
+            hair:'#ffffff', skin:'#f0e0b0', robe1:'#ffffff', robe2:'#c8a83a',
+            metal:'#ffffff', halo:'#ffffff', aura:'255,255,255'}
 };
 // 穂先を1本描く。武器の描画は必ずここを通るので、
 // テストはこの関数を差し替えるだけで「何本・どの角度で生えているか」を実測できる
@@ -12623,7 +12841,7 @@ function godKeraunos(A,wind,swing){
 }
 // 神器一式。手の座標系で、柄が上へ伸びるように描く
 function godWeapon(kind,A,wind,swing){
-  if(kind==='zeus'){ godKeraunos(A,wind,swing); return; }
+  if(kind.indexOf('zeus')===0){ godKeraunos(A,wind,swing); return; }   // zeus/zeus2/zeus3 は雷霆を握る
   // 手より下に長く、上には頭の高さまで。柄の中ほどを握らせないと、
   // 穂先が画面の外（HUDの裏）へ飛び出して神器が見えない
   const L=84, BUTT=62;
@@ -12820,7 +13038,7 @@ function drawGod(e){
     ctx.beginPath(); ctx.moveTo(-13,HEAD-5); ctx.lineTo(-2,HEAD-1); ctx.moveTo(13,HEAD-5); ctx.lineTo(2,HEAD-1); ctx.stroke(); }
   // ── 神器を持つ腕 ──
   // ゼウスだけ構えが違う。雷霆は突く得物ではないので、腕を挙げて掲げさせる
-  { const rest=(kind==='zeus')? -1.42 : -0.30;
+  { const rest=(kind.indexOf('zeus')===0)? -1.42 : -0.30;
     let ang=rest; if(wind) ang=rest-0.80; else if(atk) ang=rest-0.80+pr*2.15;
     ang=foeArm(e,ang,0.32);
     ctx.save(); ctx.translate(26+armSwingX(e),SH+6); ctx.rotate(ang); ctx.scale(1+swing*0.30,1+swing*0.30);
@@ -14336,7 +14554,9 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   emperorX:'銀河侵略軍  皇帝', emperorX2:'銀河を統べる者',
   hbInu:'腕試しの好敵手', hbShima:'腕試しの好敵手', hbNuko:'腕試しの好敵手',
   hbGuard8:'腕試しの好敵手', hbWatch:'腕試しの好敵手', hbWanden:'腕試しの好敵手',
-  wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）' };
+  wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）',
+  zeus2:'神威解放（第二形態）', zeus3:'天空神 真体（最終形態）',
+  nobunaga2:'鬼道（第二形態）', nobunaga3:'第六天魔王（最終形態）' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
   {chapter:'序章', chapterSub:'ワンダフル王国', bgTheme:0, art:'city'},
@@ -14679,7 +14899,7 @@ function drawPlayerPortrait(px,py,sc,facing,st){ const p=player;
 function drawBossPortrait(type,px,py,sc,facing){ const t=ETYPE[type];
   const e={type,state:'walk',anim:gf*0.05,bob:gf*0.06,moveT:0,moveMax:1,telegraph:0,vanish:0,rage:false,hp:1,maxHp:1,h:t.h,w:t.w,facing:facing||-1};
   ctx.save(); ctx.translate(px,py); ctx.scale(facing*sc,sc);
-  const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
+  const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(type==='wanmen')drawWanmen(e); else if(type==='golux')drawGolux(e); else if(type==='papipoo')drawPapipoo(e); else if(bk==='guard0')drawGuard0(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='slime')drawSlime(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); ctx.restore(); }
 function cutWrap(txt,x,y,maxw,lh){ ctx.textAlign='left'; let line='',yy=y;
   for(const ch of txt){ if(ctx.measureText(line+ch).width>maxw){ ctx.fillText(line,x,yy); line=ch; yy+=lh; } else line+=ch; }
   ctx.fillText(line,x,yy); }

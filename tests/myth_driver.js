@@ -405,8 +405,12 @@ const DRIVER = `
   // 一方 危険度は 2.6倍。固さで水増しせず、危険さで難しくする形に収める
   {
     const sv=lap;
-    const eff=function(L,k){ lap=L; enemies.length=0; spawnEnemy(k,camX+400,LANE);
-      const e=enemies[0]; const v=e.maxHp; enemies.length=0; return v; };
+    // 多段変身のボスは、戦いの長さ＝全形態の合計。第一形態だけを見ると
+    // 「3つに割ったぶん軟らかくなった」と誤って読める
+    const eff=function(L,k){ lap=L; let total=0, ty=k, guard=0;
+      while(ty && guard++<8){ enemies.length=0; spawnEnemy(ty,camX+400,LANE);
+        total+=enemies[0].maxHp; ty=ETYPE[ty].evolveTo; }
+      enemies.length=0; return total; };
     const A3=['greyking','ufoboss','bioblob'].map(function(k){ return eff(3,k); });
     const G4=['poseidon','hades','zeus'].map(function(k){ return eff(4,k); });
     lap=sv; enemies.length=0;
@@ -414,10 +418,11 @@ const DRIVER = `
     const a3=avg(A3), g4=avg(G4);
     // 三周目のボスより固いこと（最終周のボスが軽いのはおかしい）
     if(!(g4>a3*1.05)) throw new Error('神が三周目のボスより固くない: '+Math.round(g4)+' vs '+Math.round(a3));
-    // ただし固さで水増ししないこと。2倍を超えると AI で4分を超える戦いになる
-    if(!(g4<=a3*2.0)) throw new Error('神が固すぎる（長いだけの戦いになる）: '
+    // ただし固さで水増ししないこと。2.4倍を超えると AI で4分を超える戦いになる
+    // （三段変身を入れたぶん、上限を 2.0 → 2.4 に引き上げている）
+    if(!(g4<=a3*2.4)) throw new Error('神が固すぎる（長いだけの戦いになる）: '
       +Math.round(g4)+' vs '+Math.round(a3)+'（'+(g4/a3).toFixed(2)+'倍）');
-    console.log('神の体力 OK (三周目のボスの '+(g4/a3).toFixed(2)+'倍＝上限2.0倍、'
+    console.log('神の体力 OK (三周目のボスの '+(g4/a3).toFixed(2)+'倍＝上限2.4倍、全形態の合計 '
       +G4.map(function(v){return Math.round(v);}).join('/')+')');
 
     // 大技には反撃の窓（技後の隙）が要る。既定は moveMax*0.35 を 8〜15F に丸めるので、
