@@ -771,6 +771,52 @@ const DRIVER = `
     if(cloudCalls>0) throw new Error('炎上する天守に雲が '+cloudCalls+'個 浮いている');
     console.log('戦国の六景 OK ('+lands.join('/')+' が別の形／天守に雲0個)'); }
 
+  // ===== 厚みと迫力（武将・魔王・火柱） =====
+  const lum2=function(c){ let r,g2,b;
+    if(c.charCodeAt(0)===35){ const n=c.length===4?c[1]+c[1]+c[2]+c[2]+c[3]+c[3]:c.slice(1);
+      r=parseInt(n.substr(0,2),16); g2=parseInt(n.substr(2,2),16); b=parseInt(n.substr(4,2),16); }
+    else { const i=c.indexOf('('), j=c.lastIndexOf(')');
+      if(i<0) return -1;
+      const p=c.slice(i+1,j).split(','); r=parseFloat(p[0]); g2=parseFloat(p[1]); b=parseFloat(p[2]);
+      if(p.length>3 && parseFloat(p[3])<0.5) return -1; }
+    if(!isFinite(r)) return -1;
+    return 0.30*r+0.59*g2+0.11*b; };
+  const gradSpan2=function(fn){
+    const real=ctx; let best=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='createLinearGradient'){ return function(){
+        const ls=[];
+        return { addColorStop:function(p,c){ const L=lum2(String(c)); if(L>=0) ls.push(L);
+            if(ls.length>1){ const s=Math.max.apply(null,ls)-Math.min.apply(null,ls); if(s>best) best=s; } } }; }; }
+      return t[k]; } });
+    try{ fn(); } finally { ctx=real; }
+    return best; };
+  { startNG5(true);
+    for(const k of LORDS.concat(['nobunaga2','nobunaga3'])){
+      enemies.length=0; spawnEnemy(k,camX+300,LANE);
+      const e=enemies[0]; perfTier=1;
+      const span=gradSpan2(function(){ drawEnemy(e); });
+      if(span<40) throw new Error(k+' の塊がベタ塗りに近い（塗りの明度差 '+Math.round(span)+' / 40以上ほしい）'); }
+    enemies.length=0;
+    console.log('武将と魔王の塊に厚みがある OK ('+(LORDS.length+2)+'体)'); }
+
+  // 火柱は、焼いた渦のスプライトを高さ200px超で貼ること（以前の炎は120px前後の三角だった）
+  { startNG5(true); hazards.length=0; enemies.length=0;
+    const sp=fireSprites();
+    if(!sp || sp.length<4) throw new Error('炎の渦のスプライトが焼かれていない');
+    hazards.push({kind:'eplant', art:'fire', x:camX+300, y:LANE, t:40, warn:16, dur:900, life:9000, dmg:10, col:'#ff8a3a'});
+    const real=ctx; let tall=0, wide=0, n=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='drawImage'){ return function(img,a,b2,c,d){ n++;
+        if(d>tall) tall=d; if(c>wide) wide=c; }; }
+      return t[k]; } });
+    try{ perfTier=1; drawHazards(); } finally { ctx=real; }
+    hazards.length=0;
+    if(!n) throw new Error('火柱が渦のスプライトを使っていない');
+    if(tall<200) throw new Error('火柱が低い（'+Math.round(tall)+' / 200以上ほしい）');
+    if(wide<80) throw new Error('火柱が細い（'+Math.round(wide)+' / 80以上ほしい）');
+    console.log('火柱が炎の大竜巻になっている OK (高さ'+Math.round(tall)+' 幅'+Math.round(wide)+')'); }
+
   console.log('SENGOKU TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
