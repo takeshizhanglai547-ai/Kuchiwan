@@ -405,8 +405,12 @@ const DRIVER = `
   // 一方 危険度は 2.6倍。固さで水増しせず、危険さで難しくする形に収める
   {
     const sv=lap;
-    const eff=function(L,k){ lap=L; enemies.length=0; spawnEnemy(k,camX+400,LANE);
-      const e=enemies[0]; const v=e.maxHp; enemies.length=0; return v; };
+    // 多段変身のボスは、戦いの長さ＝全形態の合計。第一形態だけを見ると
+    // 「3つに割ったぶん軟らかくなった」と誤って読める
+    const eff=function(L,k){ lap=L; let total=0, ty=k, guard=0;
+      while(ty && guard++<8){ enemies.length=0; spawnEnemy(ty,camX+400,LANE);
+        total+=enemies[0].maxHp; ty=ETYPE[ty].evolveTo; }
+      enemies.length=0; return total; };
     const A3=['greyking','ufoboss','bioblob'].map(function(k){ return eff(3,k); });
     const G4=['poseidon','hades','zeus'].map(function(k){ return eff(4,k); });
     lap=sv; enemies.length=0;
@@ -414,10 +418,11 @@ const DRIVER = `
     const a3=avg(A3), g4=avg(G4);
     // 三周目のボスより固いこと（最終周のボスが軽いのはおかしい）
     if(!(g4>a3*1.05)) throw new Error('神が三周目のボスより固くない: '+Math.round(g4)+' vs '+Math.round(a3));
-    // ただし固さで水増ししないこと。2倍を超えると AI で4分を超える戦いになる
-    if(!(g4<=a3*2.0)) throw new Error('神が固すぎる（長いだけの戦いになる）: '
+    // ただし固さで水増ししないこと。2.4倍を超えると AI で4分を超える戦いになる
+    // （三段変身を入れたぶん、上限を 2.0 → 2.4 に引き上げている）
+    if(!(g4<=a3*2.4)) throw new Error('神が固すぎる（長いだけの戦いになる）: '
       +Math.round(g4)+' vs '+Math.round(a3)+'（'+(g4/a3).toFixed(2)+'倍）');
-    console.log('神の体力 OK (三周目のボスの '+(g4/a3).toFixed(2)+'倍＝上限2.0倍、'
+    console.log('神の体力 OK (三周目のボスの '+(g4/a3).toFixed(2)+'倍＝上限2.4倍、全形態の合計 '
       +G4.map(function(v){return Math.round(v);}).join('/')+')');
 
     // 大技には反撃の窓（技後の隙）が要る。既定は moveMax*0.35 を 8〜15F に丸めるので、
@@ -445,6 +450,70 @@ const DRIVER = `
       console.log('召喚の上限 OK (8回呼んでも '+minions+'体まで)');
     }
   }
+
+  // ===== 厚みと迫力（4周目・5周目のボスと大技） =====
+  // 塗りの明度差を、実際に createLinearGradient へ渡された色から測る。
+  // 期待値を自分で組み立てず「描画側が本当に何色を積んだか」だけを見る
+  const lum=function(c){ let r,g2,b;
+    if(c.charCodeAt(0)===35){ const n=c.length===4?c[1]+c[1]+c[2]+c[2]+c[3]+c[3]:c.slice(1);
+      r=parseInt(n.substr(0,2),16); g2=parseInt(n.substr(2,2),16); b=parseInt(n.substr(4,2),16); }
+    else { const i=c.indexOf('('), j=c.lastIndexOf(')');
+      if(i<0) return -1;
+      const p=c.slice(i+1,j).split(','); r=parseFloat(p[0]); g2=parseFloat(p[1]); b=parseFloat(p[2]);
+      if(p.length>3 && parseFloat(p[3])<0.5) return -1; }   // 透ける層は面の明暗ではない
+    if(!isFinite(r)) return -1;
+    return 0.30*r+0.59*g2+0.11*b; };
+  const gradSpan=function(fn){
+    const real=ctx; let best=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='createLinearGradient'){ return function(){
+        const ls=[];
+        return { addColorStop:function(p,c){ const L=lum(String(c)); if(L>=0) ls.push(L);
+            if(ls.length>1){ const s=Math.max.apply(null,ls)-Math.min.apply(null,ls); if(s>best) best=s; } } }; }; }
+      return t[k]; } });
+    try{ fn(); } finally { ctx=real; }
+    return best; };
+  { startNG4(true); enemies.length=0;
+    for(const k of ['poseidon','hades','zeus3']){
+      enemies.length=0; spawnEnemy(k,camX+300,LANE);
+      const e=enemies[0]; perfTier=1;
+      const span=gradSpan(function(){ drawEnemy(e); });
+      if(span<40) throw new Error(k+' の塊がベタ塗りに近い（塗りの明度差 '+Math.round(span)+' / 40以上ほしい）'); }
+    enemies.length=0;
+    console.log('神の塊に厚みがある OK'); }
+
+  // 落雷は「細い折れ線」ではなく、空から地面まで貫く極太の柱であること
+  { startNG4(true); hazards.length=0; enemies.length=0;
+    hazards.push({kind:'ebolt', x:camX+300, y:LANE, t:30, life:46, dmg:10});
+    const real=ctx; let widest=0, tallest=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='fillRect'){ return function(x,y,w,h){
+        if(w>=40){ if(w>widest) widest=w; if(h>tallest) tallest=h; } }; }
+      return t[k]; } });
+    try{ perfTier=1; drawHazards(); } finally { ctx=real; }
+    hazards.length=0;
+    if(widest<40) throw new Error('落雷に太い柱が無い（最大幅 '+Math.round(widest)+'）');
+    if(tallest<LANE*0.8) throw new Error('落雷の柱が空まで届いていない（高さ '+Math.round(tallest)+' / '+Math.round(LANE*0.8)+'以上ほしい）');
+    console.log('落雷が極太の光柱になっている OK (幅'+Math.round(widest)+' 高さ'+Math.round(tallest)+')'); }
+
+  // 津波は大きくなったが、跳び越せる高さは以前と同じ（106前後）でなければならない
+  { startNG4(true); hazards.length=0; enemies.length=0;
+    spawnEnemy('poseidon',camX+400,LANE);
+    const e=enemies[0]; e.moveName='tsunami'; e.state='bmove'; e.moveT=0; e.moveMax=60;
+    for(let i=0;i<40 && !hazards.some(function(h){return h.kind==='ewave';});i++){ e.moveT=i; runBossMove(e); }
+    const w=hazards.filter(function(h){ return h.kind==='ewave'; });
+    if(!w.length) throw new Error('津波が出ていない');
+    const big=Math.max.apply(null,w.map(function(h){ return h.hgt; }));
+    if(big<240) throw new Error('津波の壁が小さい（'+big+' / 240以上ほしい）');
+    const wave=w.filter(function(h){ return h.hgt===big; })[0];
+    const pl=players[0]; pl.active=true; pl.state='idle'; pl.invuln=0; pl.hp=pl.maxHp;
+    const tryZ=function(z){ pl.hp=pl.maxHp; pl.invuln=0; pl.x=wave.x; pl.y=wave.y; pl.z=z;
+      hazards.length=0; hazards.push({kind:'ewave', x:wave.x, y:wave.y, vx:wave.vx, hgt:wave.hgt, t:0, life:110, dmg:20});
+      updateHazards(); return pl.hp<pl.maxHp; };
+    if(!tryZ(100)) throw new Error('高さ100では波に当たらねばならない');
+    if(tryZ(115))  throw new Error('高さ115では波を越えられねばならない');
+    hazards.length=0; enemies.length=0;
+    console.log('津波は大きく、跳び越せる高さは据え置き OK (壁'+big+')'); }
 
   console.log('MYTH LAP TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });

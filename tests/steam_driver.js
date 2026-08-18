@@ -414,6 +414,39 @@ const DRIVER = `
     console.log('奥義の残響 OK (echoT '+e0+'F / 遅延層'+late.length+'個・最大'+maxDelay+'F / 長寿命の火の粉'+slow.length+'個)');
   }
 
+  // ===== 衝撃波（wave 弾）は線ではなく帯で、弾の色を保つこと =====
+  { startGame();
+    projectiles.length=0; enemies.length=0;
+    const COL='#ffd24d';
+    spawnProj(players[0].x+60, players[0].y, 9, 0,
+      {owner:'player',dmg:1,color:COL,r:30,life:200,zz:32,pierce:true,wave:true});
+    if(!projectiles.length) throw new Error('衝撃波が出ていない');
+    // 塗られた1枚ごとに「その path の縦半径」と「そのとき使った色」を組で拾う。
+    // 期待値を自分で組み立てず、描画側が実際に fill へ渡したものだけを見る
+    const real=ctx; let last=null, pend=0; const blades=[];
+    ctx=new Proxy(real,{
+      set:function(t,k,v){ if(k==='fillStyle') last=String(v); t[k]=v; return true; },
+      get:function(t,k){
+        if(k==='beginPath')return function(){ pend=0; };
+        if(k==='ellipse')  return function(x,y,rx,ry){ if(ry>pend) pend=ry; };
+        if(k==='fill')     return function(){ blades.push({c:last, ry:pend}); };
+        if(k==='stroke')   return function(){};
+        return t[k]; } });
+    try{ perfTier=1; drawProjectiles(); } finally { ctx=real; }
+    projectiles.length=0;
+    // 以前は塗り1回＋ストローク3本の「細い三日月の線」だった
+    if(blades.length<6) throw new Error('衝撃波が塗りの帯になっていない（塗り '+blades.length+'枚 / 6枚以上ほしい）');
+    // 刃は当たり半径(30)より十分に大きく振り抜けていること
+    const big=blades.filter(function(b){ return b.c===COL && b.ry>=54; });
+    if(!big.length) throw new Error('弾の色で塗られた大きな刃が無い（弾色の最大 '
+      +Math.round(Math.max.apply(null,blades.filter(function(b){return b.c===COL;}).map(function(b){return b.ry;}).concat([0])))+' / 54以上ほしい）');
+    // 一番大きい1枚が白では、橙も金も水色も同じ白い塊になる（弾体で以前やらかしたのと同じ罠）
+    let top=blades[0];
+    for(const b of blades) if(b.ry>top.ry) top=b;
+    if(top.c==='#ffffff'||top.c==='#fff'||top.c==='white')
+      throw new Error('一番大きい刃が白一色（弾の色が飛んでいる）');
+    console.log('衝撃波が帯になっている OK (塗り'+blades.length+'枚／弾色の刃'+big.length+'枚／最大の刃 縦'
+      +Math.round(top.ry)+' 色'+top.c+')'); }
   console.log('STEAM POLISH TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

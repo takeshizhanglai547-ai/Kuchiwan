@@ -623,6 +623,130 @@ const DRIVER = `
     if(!(p.hp<p.maxHp)) throw new Error('水に浸かっても削られない');
     console.log('官兵衛 水攻め OK ('+w.length+'面／押し流し vx='+pushed.toFixed(1)+'／-'+(p.maxHp-p.hp)+'HP)'); }
 
+  // ===== 4e) ラスボスの三段変身 =====
+  // 四周目のゼウスと五周目の信長は、倒すたびに次の形態へ進化する
+  { const chain=function(k){ const r=[]; let ty=k, g=0;
+      while(ty && g++<8){ r.push(ty); ty=ETYPE[ty].evolveTo; } return r; };
+    for(const head of ['zeus','nobunaga']){
+      const c=chain(head);
+      if(c.length!==3) throw new Error(head+' の形態が3つでない: '+c.join('→'));
+      // 途中の形態で決着が付いてはいけない（evolveTo が先に見られるので実害はないが、意図の宣言）
+      for(let i=0;i<2;i++) if(ETYPE[c[i]].finalBoss) throw new Error(c[i]+' が最終扱いになっている');
+      if(!ETYPE[c[2]].finalBoss) throw new Error(c[2]+' が最終扱いでない（エンディングに繋がらない）');
+      if(!ETYPE[c[2]].trueBoss) throw new Error(c[2]+' が真ボス扱いでない');
+      // 形態が進むほど、速く・重く・間合いが広くなること
+      for(let i=1;i<3;i++){
+        if(!(ETYPE[c[i]].sp > ETYPE[c[i-1]].sp)) throw new Error(c[i]+' が前の形態より遅い: '+ETYPE[c[i-1]].sp+' → '+ETYPE[c[i]].sp);
+        if(!(ETYPE[c[i]].dmg > ETYPE[c[i-1]].dmg)) throw new Error(c[i]+' が前の形態より軽い');
+        if(!(ETYPE[c[i]].atkR > ETYPE[c[i-1]].atkR)) throw new Error(c[i]+' が前の形態より間合いが狭い');
+        if(!(ETYPE[c[i]].h > ETYPE[c[i-1]].h)) throw new Error(c[i]+' が前の形態より小さい'); }
+      // 名前・BGM・口上・肩書きが形態ごとに別であること
+      if(new Set(c.map(x=>ETYPE[x].name)).size!==3) throw new Error(head+' の形態名が重複している');
+      if(new Set(c.map(x=>BOSS_BGM[x])).size!==3) throw new Error(head+' の形態でBGMが変わらない: '+c.map(x=>BOSS_BGM[x]).join('/'));
+      for(const x of c) if(!BOSSQUOTE[x]) throw new Error(x+' に口上が無い（変身デモが「…」になる）');
+      if(new Set(c.map(x=>BOSSQUOTE[x])).size!==3) throw new Error(head+' の形態の口上が重複している');
+      for(let i=1;i<3;i++) if(!BOSSROLE[c[i]]) throw new Error(c[i]+' に肩書きが無い');
+      // 技も形態ごとに変わること
+      for(const x of c) if(!BOSSMOVES[ETYPE[x].bossKind]) throw new Error(x+' に技が無い');
+      const sets=c.map(x=>BOSSMOVES[ETYPE[x].bossKind].join(','));
+      if(new Set(sets).size!==3) throw new Error(head+' の形態で技構成が変わらない');
+      console.log('  '+head+' の三段 OK ('+c.map(x=>ETYPE[x].name).join(' → ')+')'); }
+    console.log('ラスボスの三段変身 OK (ゼウス・信長とも3形態／速さ・重さ・間合い・体格が段ごとに上がる)'); }
+
+  // 実際に倒すと次の形態へ進化し、三段目で決着すること
+  { setupRoster('inu'); startGame(); state='play'; lap=5; hardMode=false;
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    enemies.length=0; encounters.length=0;
+    spawnEnemy('nobunaga', p.x+240, LANE);
+    const e=enemies[0]; e.thinkCd=99999;
+    const seen=[e.type];
+    for(let phase=0; phase<2; phase++){
+      const before=e.type;
+      e.hp=1; killEnemy(e);
+      if(e.type===before) throw new Error(before+' を倒しても進化しない');
+      if(e.dead) throw new Error(before+' で決着してしまった（最終形態でないのに）');
+      if(!(e.transform>0)) throw new Error('進化の演出（無敵）が入っていない');
+      if(e.hp!==e.maxHp) throw new Error('進化後にHPが満タンでない: '+e.hp+'/'+e.maxHp);
+      seen.push(e.type); }
+    if(seen.join('→')!=='nobunaga→nobunaga2→nobunaga3') throw new Error('進化の順番が違う: '+seen.join('→'));
+    // 三段目は本当に死ぬ
+    e.hp=1; killEnemy(e);
+    if(!e.dead) throw new Error('最終形態を倒しても決着しない');
+    console.log('進化の連鎖 OK ('+seen.join(' → ')+'／三段目で決着)'); }
+
+  // 最終形態の絵が武将の絵ではなく専用の魔王の絵であること
+  { setupRoster('inu'); startGame(); state='play'; perfTier=1;
+    let viaDemon=0, viaLord=0;
+    const rd=drawDemonKing, rw=drawWarlord;
+    drawDemonKing=function(){ viaDemon++; return rd.apply(null,arguments); };
+    drawWarlord=function(){ viaLord++; return rw.apply(null,arguments); };
+    const sig={};
+    try { for(const k of ['nobunaga','nobunaga2','nobunaga3']){
+        enemies.length=0; spawnEnemy(k, players[0].x+200, LANE);
+        const e=enemies[0]; e.facing=-1; e.anim=1.0;
+        const r=shape(function(){ drawEnemy(e); });
+        if(r.n<60) throw new Error(k+' がほとんど描かれていない: '+r.n+'コール');
+        sig[k]=r.sig; } }
+    finally { drawDemonKing=rd; drawWarlord=rw; }
+    if(viaDemon!==1) throw new Error('魔王の絵を通るのが1形態でない: '+viaDemon);
+    if(viaLord!==2) throw new Error('武将の絵を通るのが2形態でない: '+viaLord);
+    const ks=Object.keys(sig);
+    for(let i=0;i<ks.length;i++) for(let j=i+1;j<ks.length;j++)
+      if(sig[ks[i]]===sig[ks[j]]) throw new Error('形態 '+ks[i]+' と '+ks[j]+' が同じ絵');
+    console.log('三形態の絵 OK (人→鬼は武将の絵／魔王だけ専用の絵／三つとも別の形)'); }
+
+  // 最終形態の三技が効くこと
+  { const e=setupBoss('nobunaga3','maouRush');
+    const p=players[0]; player=p; p.invuln=0; p.hp=p.maxHp=99999; p.x=e.x-120;
+    let travel=0, turns=0, pf=e.facing, hits=0;
+    const realHurt=hurtPlayer; hurtPlayer=function(){ hits++; return realHurt.apply(null,arguments); };
+    try { for(let f=0; f<MV.maouRush.dur; f++){ hitStop=0; p.invuln=0; const bx=e.x;
+      runBossMove(e); e.moveT++; travel+=Math.abs(e.x-bx); if(e.facing!==pf){ turns++; pf=e.facing; } } }
+    finally { hurtPlayer=realHurt; }
+    if(!(travel>700)) throw new Error('魔王の疾走で走っていない: '+travel.toFixed(0)+'px');
+    if(!(turns>=2)) throw new Error('往復していない: 向き変え '+turns+'回');
+    if(!(hits>0)) throw new Error('疾走が当たらない');
+    console.log('魔王の疾走 OK ('+travel.toFixed(0)+'px 走り／向き変え '+turns+'回／命中)'); }
+
+  { const e=setupBoss('nobunaga3','hellFlame');
+    hazards.length=0;
+    runMove(e, MV.hellFlame.dur);
+    const fires=hazards.filter(h=>h.kind==='eplant'&&h.art==='fire');
+    if(fires.length<8) throw new Error('業火の火柱が少ない: '+fires.length+'本');
+    const xs=fires.map(h=>h.x);
+    if(!(Math.max.apply(null,xs)-Math.min.apply(null,xs) > 700))
+      throw new Error('業火が画面の端まで届いていない: 幅'+(Math.max.apply(null,xs)-Math.min.apply(null,xs)).toFixed(0));
+    if(new Set(fires.map(h=>h.warn)).size<5) throw new Error('全部同時に立つ（隙間を選べない）');
+    console.log('業火 OK ('+fires.length+'本／幅'+(Math.max.apply(null,xs)-Math.min.apply(null,xs)).toFixed(0)+'px／時間差 '+new Set(fires.map(h=>h.warn)).size+'段)'); }
+
+  { const e=setupBoss('nobunaga3','demonDive');
+    // 空中のボスは汎用の追尾で毎フレーム2pxだけ寄る。近くに置くとそれだけで届いてしまい、
+    // この技の「主役の真上へ一気に寄る」部分を検査できない。遠くに置いて速さで見る
+    const p=players[0]; player=p; p.invuln=0; p.hp=p.maxHp=99999; p.x=e.x-400;
+    let peak=0, hit=false, near=1e9;
+    const realHurt=hurtPlayer; hurtPlayer=function(){ hit=true; return realHurt.apply(null,arguments); };
+    try { for(let f=0; f<MV.demonDive.dur; f++){ hitStop=0; p.invuln=0;
+      runBossMove(e); e.moveT++; peak=Math.max(peak,e.z||0);
+      if((e.z||0)>100) near=Math.min(near, Math.abs(e.x-p.x)); } }
+    finally { hurtPlayer=realHurt; }
+    if(!(peak>200)) throw new Error('舞い上がっていない: 最高'+peak.toFixed(0));
+    // 汎用の追尾だけなら 51フレーム×2px＝102px しか詰められない（残り約300px）
+    if(!(near<80)) throw new Error('主役の真上へ寄っていない: 最接近 '+near.toFixed(0)+'px');
+    if(e.z!==0) throw new Error('技が終わっても宙に浮いたまま: z='+e.z);
+    if(!hit) throw new Error('着地の衝撃が当たらない');
+    console.log('天魔墜つ OK (最高'+peak.toFixed(0)+'／真上へ '+near.toFixed(0)+'px まで寄る／着地で命中)'); }
+
+  { const e=setupBoss('zeus3','tenchuu');
+    hazards.length=0;
+    const waves=[]; let prev=0;
+    for(let f=0; f<MV.tenchuu.dur; f++){ hitStop=0; runBossMove(e); e.moveT++;
+      if(hazards.length>prev){ waves.push(hazards.length-prev); prev=hazards.length; } }
+    if(waves.length!==3) throw new Error('天誅が三波でない: '+waves.length+'波');
+    if(!(waves[2]>waves[0])) throw new Error('波を追うごとに本数が増えていない: '+waves.join('/'));
+    const xs=hazards.map(h=>h.x);
+    if(!(Math.max.apply(null,xs)-Math.min.apply(null,xs) > 600)) throw new Error('落雷が画面全体に散っていない');
+    console.log('天誅 OK ('+waves.join('→')+'本の三波／幅'+(Math.max.apply(null,xs)-Math.min.apply(null,xs)).toFixed(0)+'px)'); }
+
   // ===== 5) 背景の三景 =====
   { const idx=[]; STAGE_THEME.forEach(function(T,i){ if(T.sengoku) idx.push(i); });
     if(idx.length!==6) throw new Error('戦国のテーマが6つでない: '+idx.length);
@@ -646,6 +770,52 @@ const DRIVER = `
     finally { cloud=realCloud; }
     if(cloudCalls>0) throw new Error('炎上する天守に雲が '+cloudCalls+'個 浮いている');
     console.log('戦国の六景 OK ('+lands.join('/')+' が別の形／天守に雲0個)'); }
+
+  // ===== 厚みと迫力（武将・魔王・火柱） =====
+  const lum2=function(c){ let r,g2,b;
+    if(c.charCodeAt(0)===35){ const n=c.length===4?c[1]+c[1]+c[2]+c[2]+c[3]+c[3]:c.slice(1);
+      r=parseInt(n.substr(0,2),16); g2=parseInt(n.substr(2,2),16); b=parseInt(n.substr(4,2),16); }
+    else { const i=c.indexOf('('), j=c.lastIndexOf(')');
+      if(i<0) return -1;
+      const p=c.slice(i+1,j).split(','); r=parseFloat(p[0]); g2=parseFloat(p[1]); b=parseFloat(p[2]);
+      if(p.length>3 && parseFloat(p[3])<0.5) return -1; }
+    if(!isFinite(r)) return -1;
+    return 0.30*r+0.59*g2+0.11*b; };
+  const gradSpan2=function(fn){
+    const real=ctx; let best=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='createLinearGradient'){ return function(){
+        const ls=[];
+        return { addColorStop:function(p,c){ const L=lum2(String(c)); if(L>=0) ls.push(L);
+            if(ls.length>1){ const s=Math.max.apply(null,ls)-Math.min.apply(null,ls); if(s>best) best=s; } } }; }; }
+      return t[k]; } });
+    try{ fn(); } finally { ctx=real; }
+    return best; };
+  { startNG5(true);
+    for(const k of LORDS.concat(['nobunaga2','nobunaga3'])){
+      enemies.length=0; spawnEnemy(k,camX+300,LANE);
+      const e=enemies[0]; perfTier=1;
+      const span=gradSpan2(function(){ drawEnemy(e); });
+      if(span<40) throw new Error(k+' の塊がベタ塗りに近い（塗りの明度差 '+Math.round(span)+' / 40以上ほしい）'); }
+    enemies.length=0;
+    console.log('武将と魔王の塊に厚みがある OK ('+(LORDS.length+2)+'体)'); }
+
+  // 火柱は、焼いた渦のスプライトを高さ200px超で貼ること（以前の炎は120px前後の三角だった）
+  { startNG5(true); hazards.length=0; enemies.length=0;
+    const sp=fireSprites();
+    if(!sp || sp.length<4) throw new Error('炎の渦のスプライトが焼かれていない');
+    hazards.push({kind:'eplant', art:'fire', x:camX+300, y:LANE, t:40, warn:16, dur:900, life:9000, dmg:10, col:'#ff8a3a'});
+    const real=ctx; let tall=0, wide=0, n=0;
+    ctx=new Proxy(real,{ get:function(t,k){
+      if(k==='drawImage'){ return function(img,a,b2,c,d){ n++;
+        if(d>tall) tall=d; if(c>wide) wide=c; }; }
+      return t[k]; } });
+    try{ perfTier=1; drawHazards(); } finally { ctx=real; }
+    hazards.length=0;
+    if(!n) throw new Error('火柱が渦のスプライトを使っていない');
+    if(tall<200) throw new Error('火柱が低い（'+Math.round(tall)+' / 200以上ほしい）');
+    if(wide<80) throw new Error('火柱が細い（'+Math.round(wide)+' / 80以上ほしい）');
+    console.log('火柱が炎の大竜巻になっている OK (高さ'+Math.round(tall)+' 幅'+Math.round(wide)+')'); }
 
   console.log('SENGOKU TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
