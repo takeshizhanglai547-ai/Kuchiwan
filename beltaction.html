@@ -3681,8 +3681,13 @@ function updatePlayer(){
       else if(MCK){ p.jMkFire=true; p.jAtk=15; if(K.left||K.right) p.facing=K.left?-1:1;   // 空中＝前方へリボルバー
         p.vz=Math.max(p.vz,-1.5);
         const dir=p.facing; p.ammo=Math.max(0,(p.ammo==null?MK_AMMO:p.ammo)-1);
-        spawnProj(p.x+dir*30, p.y, dir*19, 0, {owner:'player', dmg:Math.round(15*(p.atkMul||1)),
-          color:'#ffe14d', r:9, life:52, zz:Math.max(p.z+34,36), vzz:-1.2, nostop:true});
+        // 高い所から水平に撃つと、弾が敵の頭上を素通りして一度も当たらない。
+        // 自分の高さに応じて撃ち下ろし、地上の敵の高さへ落ちるようにする
+        // 弾は「前方およそ140px先で地上の高さへ落ちる」角度で撃つ。
+        // 高さに合わせて落とし幅を決めないと、跳んだ高さぶん頭上を素通りする
+        const z0=Math.max(p.z+30,36);
+        spawnProj(p.x+dir*30, p.y, dir*14, 0, {owner:'player', dmg:Math.round(15*(p.atkMul||1)),
+          color:'#ffe14d', r:9, life:46, zz:z0, vzz:-Math.max(2.0, z0/10), nostop:true});
         mackMuzzle(p, dir, p.z+38, '#ffd24d', 7); sfx.zap(p.x); }
       else if(K.up && !p.jUpUsed){ p.jUp=true; p.jUpUsed=true; p.jAtk=22; p.vz=Math.max(p.vz,3)+9;   // 空中↑：昇天アッパー（敵を高く打ち上げつつ自分も上昇）
         const col=NUK?'#d6a6ff':SHI?'#aef8ff':(p.kind==='guard8'?'#ffd24d':'#ffe27a'); sfx.rise(p.x); sfx.swing(2, wsndOf(p.weapon), p.x);
@@ -4010,14 +4015,14 @@ function updatePlayer(){
       mackMuzzle(p, dir, 46, '#fff6c0', 15); sfx.big(p.x); shake=Math.max(shake,7); flash=Math.max(flash,3);
       for(let k=0;k<N;k++){ const sp=(k-(N-1)/2)*0.14;
         spawnProj(p.x+dir*30, p.y, dir*13, 0, {owner:'player', dmg:Math.round(9*mul),
-          color:k%2?'#ffd24d':'#fff6c0', r:7, life:11, zz:44+Math.sin(sp)*22, vzz:Math.sin(sp)*3, nostop:true}); }
+          color:k%2?'#ffd24d':'#fff6c0', r:7, life:8, zz:44+Math.sin(sp)*22, vzz:Math.sin(sp)*3, nostop:true}); }
       // 至近の一体には散弾が束で入る。ここがショットガンの「近づけば大ダメージ」
       let best=null,bd=1e9;
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
-        const dx=(e.x-p.x)*dir; if(dx<0||dx>96) continue; if(Math.abs(e.y-p.y)>56) continue;
+        const dx=(e.x-p.x)*dir; if(dx<0||dx>80) continue; if(Math.abs(e.y-p.y)>56) continue;
         if(dx<bd){ bd=dx; best=e; } }
-      if(best){ const close=1-clamp(bd/96,0,1);
-        damageEnemy(best, Math.round((26+40*close)*mul*(def.mkShot>=2?1.25:1)), dir*14, true);
+      if(best){ const close=1-clamp(bd/80,0,1);      // 鼻先ほど散弾が束で入る＝ここが「至近で大ダメージ」
+        damageEnemy(best, Math.round((24+86*close)*mul*(def.mkShot>=2?1.25:1)), dir*14, true);
         if(!best.dead) launchEnemy(best, dir*(16+14*close), -9-4*close, 3);
         hitStop=Math.max(hitStop,10); triggerSlow(14); } }
     // 前＝バズーカ。構えが長く連射できないぶん、当たれば大爆発
