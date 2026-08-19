@@ -105,6 +105,47 @@ const DRIVER = `
   p.in.K.atk=false;
   console.log('INPUT WIRING OK (K.atk + pressed.grab -> SG move, sgCd='+p.sgCd+')');
 
+  // ===== 蟲の見た目：白目とハイライトのある大きな目・ほっぺ・丸い足先 =====
+  { const BUGS=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi'];
+    // 塗るたびに「そのとき指定されていた色」を拾う。期待値を組み立てず、
+    // 描画側が実際に fill へ渡した色だけを見る
+    const paint=function(fn){ const real=ctx; let last=null; const cols=[]; let n=0, sig=0;
+      const num=function(v){ const x=(typeof v==='number'&&isFinite(v))?Math.round(v*4):0; sig=(sig*31+x)|0; };
+      ctx=new Proxy(real,{
+        set:function(t,k,v){ if(k==='fillStyle') last=String(v); t[k]=v; return true; },
+        get:function(t,k){
+          if(k==='fill'){ return function(){ cols.push(last); n++; sig=(sig*131+7)|0; }; }
+          if(k==='stroke'){ return function(){ n++; sig=(sig*131+3)|0; }; }
+          if(k==='moveTo'||k==='lineTo'||k==='arc'||k==='ellipse'||k==='quadraticCurveTo'){
+            return function(){ n++; sig=(sig*17+k.length)|0; for(let i=0;i<arguments.length;i++) num(arguments[i]); }; }
+          return t[k]; } });
+      try{ fn(); } finally { ctx=real; }
+      return {cols:cols, n:n, sig:sig}; };
+    const white=function(c){ if(!c) return false; const s2=c.toLowerCase();
+      if(s2==='#ffffff'||s2==='#fff'||s2==='white') return true;
+      if(s2.indexOf('255,255,255')<0) return false;
+      const i=s2.lastIndexOf(','); const a=parseFloat(s2.slice(i+1));
+      return !(a<0.85); };
+    const blush=function(c){ return !!c && c.indexOf('255,140,150')>=0; };
+    startNG2(true); enemies.length=0;
+    const sigs={};
+    for(const k of BUGS){
+      enemies.length=0; spawnEnemy(k, camX+300, LANE);
+      const e=enemies[0]; e.state='idle'; e.anim=6; perfTier=0;
+      const r=paint(function(){ drawBugFoe(e, ETYPE[k]); });
+      const w=r.cols.filter(white).length, bl=r.cols.filter(blush).length;
+      // 目は「光る点」ではなく、白目＋ハイライトのある丸い目にする
+      if(w<4) throw new Error(k+' の目に白目とハイライトが足りない（白い塗り '+w+'個／4個以上ほしい）');
+      if(bl<1) throw new Error(k+' にほっぺが無い');
+      if(sigs[r.sig]) throw new Error(k+' と '+sigs[r.sig]+' の絵が同じ形');
+      sigs[r.sig]=k; }
+    // やられ顔では白目を出さない（×目になる）
+    { enemies.length=0; spawnEnemy('kamakiri', camX+300, LANE);
+      const e=enemies[0]; e.state='hurt'; e.hurtTimer=20; perfTier=0;
+      const r=paint(function(){ drawBugFoe(e, ETYPE.kamakiri); });
+      if(r.cols.filter(white).length>=4) throw new Error('やられ顔でも普通の目のまま'); }
+    console.log('蟲の見た目 OK ('+BUGS.length+'種すべてに白目とハイライト・ほっぺ／7種とも別の形／やられ顔は×目)'); }
+
   console.log('SG/BUGZAKO TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
