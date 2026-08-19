@@ -144,6 +144,41 @@ const DRIVER = `
     if(!ATK.mkpile.rise) throw new Error('パイルバンカーが突き上げになっていない');
     console.log('奥義パイルバンカー OK ('+hit+'体巻き込み・突き上げ)'); }
 
+  // ===== 10) 後ろ前のドリル突進は、連打でヒット数と突進距離が伸びる =====
+  { // 敵を置くと押し合いと吹き飛びで距離がぶれるので、伸びの計測は敵なしで行う
+    const dash=function(mash,id){ const p=setup(); enemies.length=0;
+      p.spinCount=1; p.x=140; const x0=p.x;
+      let frames=0;
+      beginAttack(id);
+      for(let f=0;f<400;f++){
+        const on=(p.state==='attack' && p.atk && p.atk.def.mkDrill);
+        if(!on && frames>0) break;
+        if(mash && on && f%5===0) p.in.pressed.atk=true;
+        updatePlayer(p); if(on) frames++; }
+      return {dist:Math.abs(p.x-x0), frames:frames, n:p.spinCount|0}; };
+    const a=dash(false,'mkDrill'), b=dash(true,'mkDrill');
+    if(ATK.mkDrill.respinMax<3) throw new Error('ドリルの連打上限が '+ATK.mkDrill.respinMax);
+    if(b.n<ATK.mkDrill.respinMax) throw new Error('連打しても '+b.n+' 回までしか繋がらない');
+    if(b.frames < a.frames*2.5) throw new Error('連打してもヒット時間が伸びない（'+a.frames+'F→'+b.frames+'F）');
+    if(b.dist < a.dist*2.5) throw new Error('連打しても突進距離が伸びない（'+Math.round(a.dist)+'→'+Math.round(b.dist)+'）');
+    // タメ攻撃のドリルは伸びない（同じ得物でも使い分けが残っていること）
+    const c=dash(false,'mkCharge'), d=dash(true,'mkCharge');
+    if(Math.abs(d.dist-c.dist)>2 || d.frames!==c.frames)
+      throw new Error('タメのドリルまで連打で伸びている（'+Math.round(c.dist)+'/'+c.frames+'F → '+Math.round(d.dist)+'/'+d.frames+'F）');
+    // 入力から辿って確かめる。後ろ→前と入れて攻撃を押したらドリルが出て、
+    // かつ連打の種（spinCount）が立っていること。ここを見ないと
+    // 「技表ではドリルだが、実際に押すと連打が効かない」を取り逃がす
+    { const p=setup(); enemies.length=0; p.facing=1; p.spinCount=0; p.x=200;
+      p.in.cardSeq.length=0;
+      p.in.cardSeq.push({c:3, f:gf-6});      // 後ろ（左）
+      p.in.cardSeq.push({c:1, f:gf-2});      // 前（右）
+      p.in.pressed.atk=true; updatePlayer(p);
+      if(!(p.state==='attack' && p.atk && p.atk.def.mkDrill))
+        throw new Error('後ろ前＋攻撃でドリルが出ない（'+(p.atk?p.atk.def.name:p.state)+'）');
+      if((p.spinCount|0)<1) throw new Error('後ろ前で出したドリルに連打が効かない（spinCount='+p.spinCount+'）'); }
+    console.log('後ろ前のドリル突進 OK (連打なし '+Math.round(a.dist)+'px/'+a.frames+'F → 連打あり '
+      +Math.round(b.dist)+'px/'+b.frames+'F ×'+b.n+'／タメ版は伸びない)'); }
+
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

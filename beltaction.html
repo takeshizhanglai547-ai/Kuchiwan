@@ -2327,9 +2327,10 @@ const ATK={
   // →↓→＝ライフル狙撃。構えは長いが画面端まで貫く一発
   mkSnipe:{name:'ライフル狙撃', dur:38, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.40,to:-0.30, len:22, trail:'#bfe9ff', fist:true, special:true, superFx:true, mkSnipe:1},
   mkSnipe2:{name:'徹甲弾狙撃', dur:42, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.44,to:-0.30, len:22, trail:'#dff0ff', fist:true, special:true, superFx:true, mkSnipe:2},
-  // ダッシュ＝ドリル突進（タメ攻撃と同じ得物）
-  mkDrill:{name:'ドリル突進', dur:34, act:[4,28], reach:76, hh:50, dmg:7, kb:5, from:-0.18,to:0.18, len:26, trail:'#bfe9ff', fist:true, move:8.6, multi:true, multiGap:4, stinger:true, mkDrill:1},
-  mkDrill2:{name:'大回転ドリル突進', dur:42, act:[4,36], reach:88, hh:56, dmg:10, kb:6, from:-0.22,to:0.22, len:30, trail:'#dff0ff', fist:true, move:9.6, multi:true, multiGap:4, stinger:true, superFx:true, mkDrill:2},
+  // 後ろ前＝ドリル突進。連打すると技を撃ち直して、ヒット数も突進距離も伸びる
+  // （タメ攻撃のドリルは伸びない。同じ得物でも使い分けが残るようにする）
+  mkDrill:{name:'ドリル突進', dur:34, act:[4,28], reach:76, hh:50, dmg:7, kb:5, from:-0.18,to:0.18, len:26, trail:'#bfe9ff', fist:true, move:8.6, multi:true, multiGap:4, stinger:true, respin:true, respinMax:4, respinAt:22, mkDrill:1},
+  mkDrill2:{name:'大回転ドリル突進', dur:42, act:[4,36], reach:88, hh:56, dmg:10, kb:6, from:-0.22,to:0.22, len:30, trail:'#dff0ff', fist:true, move:9.6, multi:true, multiGap:4, stinger:true, respin:true, respinMax:5, respinAt:28, mkDrill:2},
   mkCharge:{name:'ドリルチャージ', charged:true, ctier:0, dur:38, act:[4,32], reach:82, hh:52, dmg:9, kb:6, from:-0.18,to:0.18, len:28, trail:'#bfe9ff', fist:true, move:9.0, multi:true, multiGap:4, stinger:true, mkDrill:1},
   mkCharge2:{name:'剛・ドリルチャージ', hold:5, charged:true, ctier:1, dur:44, act:[4,38], reach:94, hh:58, dmg:12, kb:7, from:-0.22,to:0.22, len:32, trail:'#dff0ff', fist:true, move:10.0, multi:true, multiGap:4, stinger:true, mkDrill:2},
   mkCharge3:{name:'極・ドリルインパクト', hold:4, charged:true, ctier:2, dur:52, act:[4,44], reach:108, hh:64, dmg:15, kb:8, from:-0.26,to:0.26, len:36, trail:'#ffffff', fist:true, move:11.0, multi:true, multiGap:4, stinger:true, superFx:true, mkDrill:3},
@@ -3766,7 +3767,11 @@ function updatePlayer(){
       if(a.t===def.act[1]+2){
         sprKick(p.rig.wob, -p.facing*7.0); sprKick(p.rig.sq, -3.4); sprKick(p.rig.capeT, 5.5); } }
     if(def.derive && pressed.atk && a.t>=def.act[0]){ pressed.atk=false; beginAttack(def.derive); return; }   // 派生技（振り上げ→叩きつけ）
-    if(def.respin && pressed.atk && a.t>=def.act[0] && (p.spinCount||0)>0 && p.spinCount<(def.respinMax||3)){ pressed.atk=false; const c=p.spinCount+1, ty=a.type; beginAttack(ty); p.spinCount=c; popText(p.x,p.y-100,'×'+c,'#ffd24d'); return; }   // 連打で連射（技ごとに上限）
+    // 連打で連射（技ごとに上限）。受け付けを act[0] のままにすると、速い連打が
+    // 技の頭で上限を使い切ってしまい、実測でドリルは 34F→46F しか伸びなかった。
+    // respinAt を持つ技は「振りの終わり際」でだけ受け、1回の連打で1回ぶん丸ごと足す
+    { const rAt=(def.respinAt!=null? def.respinAt : def.act[0]);
+      if(def.respin && pressed.atk && a.t>=rAt && (p.spinCount||0)>0 && p.spinCount<(def.respinMax||3)){ pressed.atk=false; const c=p.spinCount+1, ty=a.type; beginAttack(ty); p.spinCount=c; popText(p.x,p.y-100,'×'+c,'#ffd24d'); return; } }
     // 通常コンボ → 各種コマンド技へキャンセル発動（波動/昇竜/↓↑を先行入力しておけば繋がる）
     if(def.combo && a.t>=def.act[0] && pressed.atk){ const cm=commandSpecial(p); if(cm){ pressed.atk=false; consumeCmd(); popText(p.x,p.y-98,'キャンセル！','#9ff0ff'); beginAttack(cm); return; } }
     if(def.caller && pressed.atk && a.t>def.act[0]+4 && (p.callN||0)<5){ pressed.atk=false; p.callN=(p.callN||0)+1; nukoMeteorWave(p,3); popText(p.x,p.y-122,'隕石追加！ ×'+(6+p.callN*3),'#d6a6ff'); sfx.boss(p.x); }   // 連打で隕石が増える
@@ -4198,7 +4203,7 @@ function updatePlayer(){
     if(K.up){ beginAttack(specialFor(p,'up')); }  // 抜刀切り上げ / 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳（Lv3で上位技へ）
     else if(stingerReady(p.facing)){ const da=specialUpgraded(p,'dash');
       if(da){ beginAttack(da); if(ATK[da].respin) p.spinCount=1; consumeCmd(); p.atkHeld=true; return; }   // ダッシュ攻撃の上位技
-      if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkDrill'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
+      if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkDrill'); p.spinCount=1; } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
     else if(fwd){ const fu=specialUpgraded(p,'fwd');
       if(fu){ beginAttack(fu); p.atkHeld=true; p.atkHoldF=0; return; }                      // 前攻撃の上位技（武器フィニッシュより優先）
       if(WD){ beginAttack('dtsubame'); p.atkHeld=true; p.atkHoldF=0; return; }   // ワンデン前：燕返し
@@ -7293,7 +7298,8 @@ const CH1=[
 '↑＋攻撃は手榴弾。放物線で飛び、当たるか時間切れで爆発する。↓↑＋攻撃はショットガン——射程は短いが、鼻先で当てれば吹き飛ばして大ダメージじゃ。',
 '前＋攻撃はバズーカ。構えが長く連射はできぬが、当たれば大爆発で群れごと巻き込む。反動で後ろへ下がるので、壁際で撃つと立て直しやすい。',
 '下＋攻撃は丸太の振り下ろし。地面を跳ねて二度当たる、おぬしにとって数少ない近接の迎撃じゃ。懐に入られたらこれで押し返せ。',
-'←←や→→＋攻撃、それと溜め攻撃はドリル突進。↓→＋攻撃は「ファニング」——弾倉を減らさぬ扇撃ちの牽制。→↓→＋攻撃は「ライフル狙撃」で画面端まで貫くぞ。',
+'後ろ→前＋攻撃はドリル突進！　突進の最中に攻撃を連打すると、そのぶん突き進んでヒット数も伸びる。最大で四回まで繋がるぞ。',
+'溜め攻撃もドリルじゃが、こちらは連打で伸びぬ代わりに一撃が重い。↓→＋攻撃は「ファニング」——弾倉を減らさぬ扇撃ちの牽制。→↓→＋攻撃は「ライフル狙撃」で画面端まで貫くぞ。',
 '掴んでからも技がある。攻撃でゼロ距離早撃ち六射、↑でロケットを括りつけて打ち上げ爆発、後ろで背負い投げから止めの一発、↓でドリルを構えて突進じゃ。',
 '攻撃と掴みの同時押しで「Fireworks」！ワンコミルクを呷ってから、ショットガンを振り回しながら乱射する。押し続けた回数だけ乱射が伸びるぞ。',
 '奥義はぐるっと一回転＋攻撃で「パイルバンカー」！構えを取ってから、爆風を伴う巨大な杭を下から斜め上へ突き上げる！'],
