@@ -1,6 +1,6 @@
 #!/bin/bash
 # テストはこれまで /tmp に置いていたが、実行環境が使い捨てなので毎回失われていた。
-# リポジトリに置いて、どのセッションからでも同じ18スイートを回せるようにする。
+# リポジトリに置いて、どのセッションからでも同じスイート一式を回せるようにする。
 #
 # 各スイートは mktemp の別ファイルへ書き出してから実行する
 # （同じファイルを使い回すと、cat の書き込み中に node が読んでモジュールローダーが落ちる）。
@@ -9,7 +9,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 export NM_TARGET="${NM_TARGET:-$D/../beltaction.html}"
 
 fail=0
-for t in rpg feat watch feat2 ng2 sg wanden ng3 boss lvup evo foeatk fix myth grow steam anim anim2 bg crit train voice sengoku; do
+for t in rpg feat watch feat2 ng2 sg wanden ng3 boss lvup evo foeatk fix myth grow steam anim anim2 bg crit train voice sengoku mack; do
   f=$(mktemp /tmp/suite_${t}_XXXXXX.js)
   cat "$D"/nm_head.js "$D"/${t}_driver.js > "$f"
   printf "%-6s " "$t"
@@ -30,5 +30,5 @@ out=$(node "$D"/bgm_check.js 2>&1); rc=$?
 echo "$out" | tail -1
 if [ $rc -ne 0 ] || ! echo "$out" | grep -q 'PASSED'; then fail=1; echo "$out" | tail -12; fi
 echo "---"
-[ $fail -eq 0 ] && echo "ALL 24 SUITES PASSED" || echo "SOME SUITES FAILED"
+[ $fail -eq 0 ] && echo "ALL 25 SUITES PASSED" || echo "SOME SUITES FAILED"
 exit $fail
