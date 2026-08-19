@@ -53,6 +53,41 @@
   #result-title { font-size:clamp(34px,8vw,70px); font-weight:900; letter-spacing:6px; }
   #result-sub { font-size:18px; margin-top:10px; color:#ffd34d; letter-spacing:2px; }
 
+  /* ── スマホ：キャラが7人になってボタンが縦に積み上がり、その下の
+        「高難易度」「周回スタート」「トレーニング」が画面外へ押し出されて
+        押せなくなっていた。狭い画面ではボタンを小さくしてキャラを2列に畳み、
+        それでも入りきらない時のために縦スクロールも許す ── */
+  @media (max-width:640px), (max-height:660px){
+    .overlay { padding:10px 8px; justify-content:flex-start; overflow-y:auto;
+               touch-action:pan-y; -webkit-overflow-scrolling:touch; }
+    /* 収まるときは今までどおり中央、はみ出すときだけ上詰めにする。
+       justify-content:center のまま溢れさせると、上端が切れて掴めなくなる */
+    .overlay > *:first-child { margin-top:auto; }
+    .overlay > *:last-child  { margin-bottom:auto; }
+    .title-sub { font-size:10px; letter-spacing:3px; }
+    .title-main { font-size:clamp(24px,7.4vw,46px); letter-spacing:2px; margin:2px 0; }
+    .title-jp { font-size:clamp(11px,3.4vw,17px); letter-spacing:4px; margin-bottom:8px; }
+    .btn { margin-top:6px; padding:9px 10px; font-size:13px; letter-spacing:1px; border-width:1.5px;
+           border-radius:8px; box-shadow:0 3px 0 #9c5a00,0 5px 10px rgba(0,0,0,.45); }
+    .btn:active { transform:translateY(2px); box-shadow:0 1px 0 #9c5a00; }
+    .charrow { display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important;
+               width:100%; max-width:440px; }
+    .charrow .btn { margin-top:0; width:100%; padding:9px 4px; }
+    .optrow { gap:6px !important; margin-top:8px !important; width:100%; max-width:440px; }
+    .optrow .btn { font-size:11.5px !important; padding:7px 8px !important; margin-top:0; flex:1 1 100%; }
+    .moves { margin-top:8px; font-size:10.5px; line-height:1.5; padding:6px 10px; }
+    .moves h3 { font-size:11px; }
+    #result-sub { font-size:14px; }
+  }
+  /* 極端に狭い端末（iPhone SE 幅）では、さらに詰めて1画面に収める */
+  @media (max-width:400px){
+    .title-main { font-size:clamp(22px,6.6vw,34px); }
+    .btn { font-size:12px; padding:8px 6px; }
+    .charrow .btn { padding:8px 2px; letter-spacing:0; }
+    .optrow .btn { font-size:11px !important; padding:6px 6px !important; }
+    .moves { font-size:9.5px; padding:5px 8px; }
+  }
+
   /* sound toggle */
   #snd { position:absolute; top:6px; right:6px; z-index:25; width:34px; height:34px; border-radius:50%;
     background:rgba(8,10,20,.6); border:2px solid rgba(255,210,80,.6); color:#ffd34d; font-size:17px;
@@ -102,7 +137,7 @@
     <div class="title-main">聖犬士イッヌ</div>
     <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
     <button id="continueBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <div class="charrow" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="startBtn" class="btn">▶ 1P イッヌ</button>
       <button id="startShimaBtn" class="btn" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
       <button id="startNukoBtn" class="btn" style="background:linear-gradient(180deg,#ffb0e0,#c060a8)">▶ 1P ヌコ</button>
@@ -112,7 +147,7 @@
       <button id="startMackBtn" class="btn" style="background:linear-gradient(180deg,#f0c070,#a0521c);color:#2a1a10">▶ 1P 早撃ちマック</button>
       <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
     </div>
-    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <div class="optrow" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
       <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（コンボ練習）</button>
