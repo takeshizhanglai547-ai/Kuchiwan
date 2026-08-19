@@ -2073,6 +2073,10 @@ function drawParticles(layer){
       ctx.globalAlpha=ea; ctx.fillStyle='#fff';
       ctx.beginPath(); ctx.arc(sx,py,p.sz*0.55*ea+0.3,0,7); ctx.fill();
       ctx.globalCompositeOperation='source-over'; }
+    else if(p.k==='scorch'){ ctx.globalAlpha=Math.pow(a,0.7)*0.42;   // 爆心の焦げ跡。地面に貼り付いて薄れる
+      ctx.fillStyle='#231a12'; ctx.beginPath(); ctx.ellipse(sx,py,p.r*(1.1-0.1*a),p.r*0.24,0,0,7); ctx.fill();
+      ctx.globalAlpha=Math.pow(a,0.7)*0.22; ctx.fillStyle='#000';
+      ctx.beginPath(); ctx.ellipse(sx,py,p.r*0.62,p.r*0.14,0,0,7); ctx.fill(); }
     else if(p.k==='ring'){ ctx.globalAlpha=Math.pow(a,1.6)*0.72; ctx.strokeStyle=p.color; ctx.lineWidth=5.5*a+0.6;   // 広がりながら細くなる
       ctx.beginPath(); ctx.ellipse(sx,py,p.r,Math.max(1,p.r*p.sq),p.ang,0,7); ctx.stroke(); }
     else if(p.k==='fireball'){    // 爆発の芯にある炎の塊。寿命後半で炎→煤へ移り、煙へ橋渡しする
@@ -4310,12 +4314,17 @@ function updatePlayer(){
     // 弾種は命中時の効き方だけでなく、飛び方（速さ・重さ）も変える
     if(def.mkGL && a.t===def.act[0]){
       const dir=p.facing, mul=(p.atkMul||1), K=def.mkGL;
-      const SP={boom:{vx:9.0, grav:0.30, col:'#ffb85a', dmg:24, R:168, bd:54},
-                shrap:{vx:11.0,grav:0.24, col:'#dfe8f2', dmg:18, R:118, bd:30},
-                fire:{vx:8.2, grav:0.34, col:'#ff8a3a', dmg:20, R:140, bd:36}}[K];
+      // 山なりに飛び、頂点あたりで子弾へ分裂する。子弾は1発ぶんの威力の6割を
+      // 引き継ぐので、まとめて当てれば単発より重い
+      // splitT は「敵に届く前に必ず割れる」長さにする。頂点まで待つと
+      // 手前の敵に直撃してそのまま炸裂し、分裂が一度も起きなかった（実測で子弾0）
+      const SP={boom:{vx:8.4, grav:0.30, col:'#ffb85a', dmg:30, R:184, bd:68, n:4, st:11},
+                shrap:{vx:9.6, grav:0.26, col:'#dfe8f2', dmg:24, R:126, bd:38, n:4, st:10},
+                fire:{vx:7.8, grav:0.34, col:'#ff8a3a', dmg:26, R:146, bd:44, n:4, st:12}}[K];
       spawnProj(p.x+dir*30, p.y, dir*SP.vx, 0, {owner:'player',
-        dmg:Math.round(SP.dmg*mul), color:SP.col, r:11, life:70, zz:48, vzz:3.6, grav:SP.grav,
-        blast:true, blastR:SP.R, blastDmg:Math.round(SP.bd*mul), explode:true, glKind:K});
+        dmg:Math.round(SP.dmg*mul), color:SP.col, r:12, life:80, zz:48, vzz:5.2, grav:SP.grav,
+        blast:true, blastR:SP.R, blastDmg:Math.round(SP.bd*mul), explode:true, glKind:K,
+        splitT:SP.st, splitN:SP.n});
       mackMuzzle(p, dir, 46, SP.col, 12);
       // 技名は superFx の発動演出が出すので、ここでは重ねない（文字が重なって読めなくなる）
       p.vx=-dir*2.2; shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.launch(p.x, 0.8); }
@@ -8426,8 +8435,21 @@ function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,nostop:!!o.nostop,noLaunch:!!o.noLaunch,
     pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
     multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,blast:!!o.blast,blastR:o.blastR||110,blastDmg:o.blastDmg||30,
-    grav:o.grav||0,glKind:o.glKind||null,
+    grav:o.grav||0,glKind:o.glKind||null,splitT:(o.splitT!=null?o.splitT:null),splitN:o.splitN||0,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
+// 空中で子弾へ分裂する。親弾は消え、扇状に散った子弾がそれぞれ炸裂する
+function mackGLSplit(pr){
+  const K=pr.glKind, n=Math.max(2,pr.splitN||3), dir=(pr.vx>0?1:-1), zz=pr.zz;
+  ring(pr.x, pr.y-zz, '#ffffff'); ring(pr.x, pr.y-zz, pr.color);
+  spark(pr.x, pr.y-zz, pr.color, 16, 10); flashCore(pr.x, pr.y-zz, 22, '255,246,214');
+  sfx.gun(pr.x, 0.7); shake=Math.max(shake,5);
+  for(let k=0;k<n;k++){ const u=(n<2?0:(k/(n-1)-0.5)*2);
+    spawnProj(pr.x, pr.y, pr.vx*0.85 + u*3.4*dir, 0, {owner:'player',
+      dmg:Math.round(pr.dmg*0.42), color:pr.color, r:9, life:70,
+      zz:zz, vzz:2.2+Math.abs(u)*1.6, grav:0.58,
+      blast:true, blastR:Math.round(pr.blastR*0.74), blastDmg:Math.round(pr.blastDmg*0.62),
+      explode:true, glKind:K}); }
+}
 // グレネードランチャーの弾種ごとの効き。爆発そのもの（projExplode）の「あと」に足す
 //   boom ＝炸裂弾：まとめて吹き飛ばす
 //   shrap＝榴散弾：破片が扇状に飛び、離れた敵まで削る
@@ -8442,9 +8464,9 @@ function mackGLBurst(pr){
   } else if(K==='shrap'){
     // 破片は「近くの群れをまとめて削る」ぶんだけ。遠くまで飛ばすと
     // 画面端まで9発が貫通して、単発の炸裂弾の4倍以上になってしまった（実測304）
-    for(let k=0;k<7;k++){ const a=(k-3)*0.34;
+    for(let k=0;k<5;k++){ const a=(k-2)*0.38;
       spawnProj(x, y, Math.cos(a)*12*dir, Math.sin(a)*3.4, {owner:'player',
-        dmg:Math.round(pr.blastDmg*0.24), color:(k%2)?'#dfe8f2':'#ffffff', r:7, life:14,
+        dmg:Math.round(pr.blastDmg*0.13), color:(k%2)?'#dfe8f2':'#ffffff', r:7, life:14,
         zz:34+Math.sin(a)*26, vzz:Math.sin(a)*2.2, pierce:true, nostop:true}); }
     for(let k=0;k<3;k++) ring(x,y-16-k*18,'#dfe8f2');
     spark(x,y-30,'#ffffff',26,13); sfx.shotgun(x,0.8);
@@ -8458,9 +8480,38 @@ function mackGLBurst(pr){
     sfx.flame(x);
   }
 }
+// ── 爆発の絵。輪ひとつと火花だけでは「派手さ」が出ないので、
+//    ①白熱の芯 ②大きさの違う輪を3枚 ③火の玉 ④吹き飛ぶ瓦礫 ⑤煙 ⑥地面の焦げ
+//    を重ねる。重いので perfTier で段階的に落とす
+function bigExplosion(x,y,R,col){
+  const rgb=hexRGB(col||'#ffae42'), gl=groundLift(x);
+  // クラスター弾は数フレームのうちに4〜5発が続けて炸裂する。1発ぶんを満載で出すと
+  // 実測で粒180個・描画3524コール/frame まで跳ねたので、爆発の大きさと
+  // 「いま画面に出ている粒の数」で段階的に減らす
+  const sz=clamp(R/150,0.45,1.15);
+  const busy=clamp(1-(particles.length-40)/110, 0.28, 1);
+  const q=(perfTier>=2?0.4:perfTier>=1?0.7:1)*sz*busy;
+  const N=function(n){ return Math.max(1, Math.round(n*q)); };
+  flashCore(x,y,R*0.42,'255,246,214');
+  for(let k=0;k<3;k++) ring(x, y-k*10, k===1?'#ffffff':col, {delay:k*2, rMax:R*(0.55+k*0.42)});
+  if(perfTier<2 && busy>0.6){                              // 膨らむ火の玉
+    for(let k=0;k<N(5);k++){ const a2=k/5*TAU+Math.random();
+      particles.push({k:'twinkle', x:x+Math.cos(a2)*R*0.22, y:y+Math.sin(a2)*R*0.16,
+        life:12+k, max:12+k, r:R*(0.30-k*0.03), rot:Math.random()*6}); } }
+  spark(x, y, col, N(22), 13);
+  spark(x, y, '#fff6c0', N(12), 16);
+  if(perfTier<2){ for(let k=0;k<N(8);k++){                 // 吹き飛ぶ瓦礫
+      const a2=-Math.PI*0.15-Math.random()*Math.PI*0.7, v=rnd(3,7);
+      ember(x, y, Math.cos(a2)*v, Math.sin(a2)*v*1.2, (k%2)?col:'#fff6c0'); } }
+  smokePuff(x, y-R*0.12, N(4), rgb);
+  dust(x, LANE, N(10));
+  particles.push({k:'scorch', x:x, y:LANE, gl:gl, layer:0, delay:0, life:38, max:38, r:R*0.62});
+}
 // 爆発（バズーカ弾など）：着弾点周囲に範囲ダメージ
-function projExplode(x,y,R,dmg,color){ color=color||'#ffae42'; ring(x,y,color); ring(x,y,'#fff'); spark(x,y,color,28,13); dust(x,LANE,12);
-  shake=Math.max(shake,10); flash=Math.max(flash,4); hitStop=Math.max(hitStop,7); sfx.blast(x, clamp(R/150,0.7,1.5));
+function projExplode(x,y,R,dmg,color){ color=color||'#ffae42';
+  bigExplosion(x,y,R,color);
+  shake=Math.max(shake,10+Math.round(clamp(R/40,0,8))); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8);
+  sfx.blast(x, clamp(R/150,0.7,1.5));
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-x)<R && Math.abs(e.y-y)<96){ damageEnemy(e,dmg,(e.x<x?-1:1)*11,true); if(!e.dead)launchEnemy(e,(e.x<x?-1:1)*14,-10,3); } }); }
 // returns 'reflect' | 'gone' | null
 function projVsPlayer(pr,p){
@@ -8483,6 +8534,8 @@ function updateProjectiles(){
       if(pr.owner==='enemy'){ const tp=nearestPlayerTo(pr.x); if(tp){ tx=tp.x; ty=tp.y-26; } }
       else { let best=null,bd=1e9; for(const e of enemies){ if(e.dead||e.grabbedBy)continue; const d=Math.abs(e.x-pr.x)+Math.abs(e.y-pr.y)*0.6; if(d<bd){bd=d;best=e;} } if(best){ tx=best.x; ty=best.y-best.h*0.5; } }
       if(tx!=null){ const ang=Math.atan2(ty-(pr.y-pr.zz),tx-pr.x); const cur=Math.atan2(pr.vy,pr.vx); let d=ang-cur; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; const na=cur+clamp(d,pr.owner==='enemy'?-0.10:-0.16,pr.owner==='enemy'?0.10:0.16), sp=Math.hypot(pr.vx,pr.vy)||6; pr.vx=Math.cos(na)*sp; pr.vy=Math.sin(na)*sp; } }
+    if(pr.splitT!=null){ pr.splitT--;                               // 空中で子弾へ分裂する弾
+      if(pr.splitT<=0){ mackGLSplit(pr); projectiles.splice(i,1); continue; } }
     if(pr.grav) pr.vzz-=pr.grav;                                    // 放物線を描く弾（手榴弾など）
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>13)pr.trail.shift();   // 尾を長く取ってリボン化する
@@ -8493,7 +8546,10 @@ function updateProjectiles(){
         enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-pr.x)<90){ damageEnemy(e,pr.dmg+4,(e.x<pr.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<pr.x?-1:1)*14,-9,3); } });
         projectiles.splice(i,1); continue; }
       let hit=false; curHitCol=pr.color||'#ffe14d';   // 弾のヒットは弾の色で火花を出す（トレイルとヒットの色を揃える）
-      for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
+      // 割れる前の親弾は当たらない（信管が入っていない）。当たり判定を持たせると
+      // 手前の敵に直撃してそのまま炸裂し、分裂が一度も起きなかった
+      const armed=!(pr.splitT!=null && pr.splitT>0);
+      if(armed) for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
         if(pr.multihit){ if(gf-(pr.hitAt[e.id]!=null?pr.hitAt[e.id]:-999) < pr.hitGap) continue; }   // 多段ヒット：一定間隔で再ヒット
         else if(pr.pierce && pr.hit.has(e.id))continue;
         if(Math.abs(e.x-pr.x)<e.w*0.5+pr.r && Math.abs(e.y-pr.y)<(pr.wave?44+pr.r*0.3:(pr.blast?62:30)) && (pr.blast?pr.zz<e.h+50:pr.zz<e.h)){

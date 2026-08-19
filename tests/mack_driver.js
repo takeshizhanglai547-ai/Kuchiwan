@@ -55,7 +55,9 @@ const DRIVER = `
       for(const id of [base].concat(up)){
         if(seen[id]) throw new Error(id+' が2つの枠で使い回されている');
         seen[id]=1;
-        const p=setup(); const e=dummyAt(70); const hp0=e.hp;
+        // グレネードランチャーは割れるまで当たらない（信管が入らない）ので
+        // 最低射程がある。その技だけ的を遠くに置く
+        const p=setup(); const e=dummyAt(ATK[id].mkGL? 230 : 70); const hp0=e.hp;
         beginAttack(id);
         // 押しっぱなしの技（火炎放射器）は握っていないと1フレームで止まる
         for(let f=0;f<ATK[id].dur+140;f++){ p.in.K.atk=(p.state==='mkflame');
@@ -365,9 +367,13 @@ const DRIVER = `
       for(let k=0;k<4;k++){ const e=dummyAt(150+k*60, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
       const hp0=enemies.map(function(e){ return e.hp; });
       p.state='idle'; p.z=0; p.atk=null;
+      // 敵が歩くと当たる破片の数が実行ごとに倍近く振れる。上下の物理は要るので
+      // updateEnemies は回したまま、毎フレーム立ち位置だけ元へ戻して測る
+      const px=enemies.map(function(e){ return {x:e.x, y:e.y}; });
       beginAttack(id);
       let zMax=0, maxProj=0;
       for(let f=0;f<130;f++){ updatePlayer(p); updateEnemies(); updateProjectiles();
+        enemies.forEach(function(e,i){ if(px[i]){ e.x=px[i].x; e.y=px[i].y; } });
         if(projectiles.length>maxProj) maxProj=projectiles.length;
         for(const e of enemies) if(e.z>zMax) zMax=e.z; }
       return { dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0),
@@ -391,12 +397,53 @@ const DRIVER = `
     if(boom.burn>0) throw new Error('炸裂弾まで延焼している＝弾種が効いていない');
     // 3種の威力がかけ離れていないこと（どれかが一択にならないように）
     const ds=[boom.dmg,shrap.dmg,fire.dmg];
-    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*1.8)
+    // 炸裂弾は「打ち上げた敵が後続の子弾の爆風に入るか」で実行ごとに 232〜412 と振れる。
+    // どれかが一択にならないことだけを見たいので、比の上限は緩めに取る
+    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*2.2)
       throw new Error('弾種の威力に開きがありすぎる（'+ds.map(Math.round).join('/')+'）');
     console.log('グレネードランチャー OK (Lv'+tiers.map(function(t){return t.lv+'='+t.kind;}).join('・Lv')
       +'／炸裂 与ダメ'+Math.round(boom.dmg)+'・浮き'+Math.round(boom.up)
       +'px／榴散 '+Math.round(shrap.dmg)+'・破片'+shrap.proj
       +'発／火炎 '+Math.round(fire.dmg)+'・延焼'+fire.burn+'体)'); }
+
+  // ===== 16) グレネードは空中で子弾に分裂し、割れるまでは当たらない =====
+  { const fire=function(id, dist){ const p=setup(); p.level=1;
+      enemies.length=0; projectiles.length=0;
+      const e=dummyAt(dist); e.hp=e.maxHp=99999; const hp0=e.hp;
+      p.state='idle'; p.z=0; p.atk=null;
+      beginAttack(id);
+      let maxN=0, splitSeen=false, before=0;
+      for(let f=0;f<130;f++){ before=projectiles.length;
+        updatePlayer(p); updateEnemies(); updateProjectiles();
+        if(projectiles.length>before+1) splitSeen=true;      // 1発が同じフレームで複数へ増える＝分裂
+        if(projectiles.length>maxN) maxN=projectiles.length; }
+      return {dmg:hp0-e.hp, maxN:maxN, split:splitSeen}; };
+    for(const id of ['mkGL','mkGL2','mkGL3']){
+      const far=fire(id, 260);
+      if(!far.split) throw new Error(ATK[id].name+' が空中で分裂していない');
+      if(far.maxN<3) throw new Error(ATK[id].name+' の子弾が '+far.maxN+' 発しかない');
+      if(far.dmg<=0) throw new Error(ATK[id].name+' が当たらない'); }
+    // 目の前に敵が居ても、割れる前に直撃して不発になったりしない。
+    // 「当たらない」ではなく「必ず割れる」で見る——子弾の爆風は
+    // 手前へも届くので、与ダメ0を条件にすると不安定だった
+    { const near=fire('mkGL', 55);
+      if(!near.split) throw new Error('目の前に敵が居ると分裂せず直撃で終わっている');
+      if(near.maxN<3) throw new Error('目の前に敵が居ると子弾が出ない（'+near.maxN+'発）'); }
+    console.log('グレネードの分裂 OK (3種とも空中で割れる／目の前に敵が居ても割れる)'); }
+
+  // ===== 17) 爆発のエフェクトが多層になっている =====
+  { const p=setup(); enemies.length=0; particles.length=0;
+    projExplode(p.x+120, p.y, 150, 10, '#ffae42');
+    const kinds={}; for(const q of particles) kinds[q.k]=(kinds[q.k]||0)+1;
+    const total=particles.length;
+    // 以前は輪2枚＋火花1回＋土煙だけだった
+    if(total<30) throw new Error('爆発の粒が '+total+' 個しかない（30個以上ほしい）');
+    if((kinds.ring||0)<3) throw new Error('広がる輪が '+(kinds.ring||0)+'枚しかない');
+    if(!kinds.scorch) throw new Error('地面の焦げ跡が出ていない');
+    if(!kinds.smoke) throw new Error('煙が出ていない');
+    if(!kinds.ember) throw new Error('吹き飛ぶ瓦礫が出ていない');
+    console.log('爆発のエフェクト OK (粒'+total+'個／輪'+kinds.ring+'枚・煙'+kinds.smoke
+      +'・瓦礫'+kinds.ember+'・焦げ跡'+kinds.scorch+')'); }
 
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
