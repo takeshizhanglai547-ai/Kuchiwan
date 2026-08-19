@@ -178,20 +178,48 @@ const DRIVER = `
     console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
-  // ===== 9) 奥義パイルバンカーは前方の一帯を巻き込む =====
-  { const p=setup(); const es=[dummyAt(60,-20), dummyAt(110,0), dummyAt(160,20)];
-    es[2].z=90;                                   // 斜め上まで届くこと（真横だけの技ではない）
-    const hp0=es.map(function(e){ return e.hp; });
-    let zMax=0;
-    beginAttack('mkpile');
-    for(let f=0;f<ATK.mkpile.dur+40;f++){ updatePlayer(p); updateProjectiles(); if(p.z>zMax) zMax=p.z; }
-    const hit=es.filter(function(e,i){ return hp0[i]-e.hp>0; }).length;
-    if(hit<3) throw new Error('パイルバンカーが '+hit+' 体しか巻き込まない（斜め上の敵にも届くこと）');
-    // 本人は跳ばない。地に足をつけたまま杭だけが伸びる
-    if(zMax>2) throw new Error('パイルバンカーで本人が飛び上がっている（'+Math.round(zMax)+'px）');
-    if(ATK.mkpile.rise||ATK.mkpile.shoryu) throw new Error('パイルバンカーに跳び上がりの指定が残っている');
-    if(ATK.mkpile.hh<150) throw new Error('杭の届く高さが低い（hh='+ATK.mkpile.hh+'）');
-    console.log('奥義パイルバンカー OK (本人は跳ばず '+Math.round(zMax)+'px／斜め上の敵まで'+hit+'体巻き込み)'); }
+  // ===== 9) 奥義「装甲車突撃」：走りながら3種を乱射し、連打で走行が伸びる =====
+  { const drive=function(mash){ const p=setup(); p.dim=3;
+      enemies.length=0; projectiles.length=0;
+      for(let k=0;k<5;k++){ const e=dummyAt(140+k*90, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
+      const hp0=enemies.map(function(e){ return e.hp; });
+      p.state='idle'; p.z=0; p.atk=null; p.x=140;
+      const x0=p.x;
+      // 撃った弾の種類を数える。銃口炎はリボルバー、爆発する弾はバズーカ、
+      // 空中で割れる弾はグレネード——この3つが揃っていることを見る
+      let gunN=0, bazN=0, grenN=0;
+      const realM=mackMuzzle;
+      mackMuzzle=function(){ if(p.state==='mkcar') gunN++; return realM.apply(null,arguments); };
+      const seen=new Set();   // spin は毎フレーム回るので鍵に使えない。弾そのもので数える
+      let frames=0;
+      try{ beginMackCar(p);
+        for(let f=0;f<300;f++){ if(mash && f%6===0) p.in.pressed.atk=true;
+          updatePlayer(p); updateEnemies(); updateProjectiles();
+          // 子弾や破片まで数えると本数が水増しされる。撃った本体だけを見る
+          for(const q of projectiles){ if(seen.has(q))continue; seen.add(q);
+            if(q.splitT!=null) grenN++; else if(q.blast && q.r>=13) bazN++; }
+          if(p.state==='mkcar' && (p.carOut|0)<=0) frames++; } }
+      finally { mackMuzzle=realM; }
+      p.in.pressed.atk=false;
+      return {frames:frames, dist:p.x-x0, n:p.carN|0, gun:gunN, baz:bazN, gren:grenN,
+              dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0), state:p.state}; };
+    const a=drive(false), b=drive(true);
+    if(ULT_NAME.mack!=='装甲車突撃') throw new Error('奥義の名前が変わっていない: '+ULT_NAME.mack);
+    if(a.dist<300) throw new Error('装甲車が走っていない（'+Math.round(a.dist)+'px）');
+    if(a.dmg<=0) throw new Error('装甲車突撃が当たらない');
+    // 3種すべてを撃つこと
+    if(a.gun<8)  throw new Error('リボルバーの乱射が '+a.gun+' 発しかない');
+    // 走行が画面端で止まると発射の機会が減るので、下限は1発にする
+    if(a.baz<1)  throw new Error('バズーカが '+a.baz+' 発しかない');
+    if(a.gren<1) throw new Error('グレネードが出ていない');
+    // 連打で走行が伸びる
+    if(b.n<1) throw new Error('連打が記録されていない');
+    if(b.frames < a.frames*1.4) throw new Error('連打しても走行が伸びない（'+a.frames+'F→'+b.frames+'F）');
+    if(b.gun<=a.gun) throw new Error('連打しても乱射の回数が増えない（'+a.gun+'→'+b.gun+'）');
+    // 走り終われば必ず止まる（乗りっぱなしにならない）
+    if(a.state==='mkcar') throw new Error('装甲車から降りない');
+    console.log('奥義 装甲車突撃 OK (連打なし '+a.frames+'F/'+Math.round(a.dist)+'px・銃'+a.gun+'/バズーカ'+a.baz+'/グレネード'+a.gren
+      +' → 連打あり '+b.frames+'F・銃'+b.gun+'・×'+b.n+')'); }
 
   // ===== 10) 後ろ前のドリル突進は、連打でヒット数と突進距離が伸びる =====
   { // 敵を置くと押し合いと吹き飛びで距離がぶれるので、伸びの計測は敵なしで行う

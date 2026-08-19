@@ -1749,7 +1749,7 @@ function ultCutIn(kind,name,col){
 function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
 // 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
 const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
-  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝', mack:'パイルバンカー'};
+  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝', mack:'装甲車突撃'};
 function beginUlt(p){
   const k=p.kind;
   sfx.voice(k,'ult',p.x);
@@ -2468,7 +2468,6 @@ const ATK={
   // 奥義＝パイルバンカー。構えてから下段から斜め上へ突き上げる
   // 奥義＝パイルバンカー。跳ばずに地面へ踏ん張り、斜め上へ巨大な鉄杭を築き上げる。
   // rise/shoryu を持たせると本人が飛び上がってしまうので、両方とも外してある
-  mkpile:{name:'パイルバンカー', hold:10, dur:62, act:[24,46], reach:132, hh:190, dmg:16, kb:10, from:0.55,to:-1.55, len:60, trail:'#ffd24d', pivotY:-52, lunge:1.2, multi:true, multiGap:5, knock:true, special:true, superFx:true, mkPile:1, pileAt:10},
 };
 
 //======================================================================
@@ -3858,6 +3857,7 @@ function updatePlayer(){
   if(p.state==='mthrow'){ updateMackThrow(); return; }
   if(p.state==='fworks'){ updateFireworks(); return; }
   if(p.state==='mkflame'){ updateMackFlame(); return; }
+  if(p.state==='mkcar'){ updateMackCar(); return; }
   if(p.state==='crit'){ updateCrit(); return; }
   if(p.state==='sgact'){ updateSGAct(); return; }
   if(p.state==='ichimonji'){ updateIchimonji(); return; }
@@ -4458,7 +4458,7 @@ function updatePlayer(){
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
-      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginAttack('mkpile'); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
+      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackCar(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド（Lv10で上位技へ）
@@ -4880,6 +4880,95 @@ function updateFireworks(){ const p=player, dir=p.facing;
   if(T===MX+1){ ring(p.x,p.y-50,'#ffd24d'); popText(p.x,p.y-110,'Fireworks！ '+p.fwShots+'射','#ffd24d',true);
     flash=Math.max(flash,4); sfx.big(p.x); }
   if(T>MX+16){ p.state='idle'; p.invuln=Math.max(p.invuln,14); }
+}
+// ══ マックの奥義「装甲車突撃」──装甲車に飛び乗り、突っ走りながら
+//    リボルバー・バズーカ・グレネードを乱射する。攻撃連打で走行が伸びる ══
+const MKCAR_BASE=84, MKCAR_ADD=13, MKCAR_MASH=6, MKCAR_SPD=8.6;
+function beginMackCar(p){
+  p.state='mkcar'; p.carT=0; p.carN=0; p.carOut=0; p.carDir=p.facing; p.carHit={};
+  p.vx=0; p.charge=0; p.atk=null; p.atkHeld=false;
+  p.invuln=Math.max(p.invuln, MKCAR_BASE+MKCAR_ADD*MKCAR_MASH+30);
+  popText(p.x,p.y-140,'装甲車突撃！','#ffd24d',true);
+  triggerSlow(18); shake=Math.max(shake,10); flash=Math.max(flash,3);
+  sfx.launch(p.x,0.9); sfx.charge(p.x);
+  if(p.rig){ sprKick(p.rig.sq,-6); sprKick(p.rig.capeT,-8); }
+}
+function mkCarMax(p){ return MKCAR_BASE + MKCAR_ADD*Math.min(MKCAR_MASH,(p.carN||0)); }
+function updateMackCar(){
+  const p=player, dir=p.carDir||p.facing, mul=(p.atkMul||1)*evoMul(p), pr=p.in.pressed;
+  if(p.carOut>0){ p.carOut--; p.vx*=0.82; p.x+=p.vx;
+    if(p.carOut%4===0) dust(p.x-dir*20,p.y,3);
+    if(p.carOut<=0) p.state='idle';
+    return; }
+  p.carT++; p.facing=dir; p.invuln=Math.max(p.invuln,10);
+  // 連打の手応えは音と締めの表示で返す。1回ごとに ×N を出すと
+  // 6個の文字が画面に居座って、肝心の爆発が読めなくなる
+  if(pr.atk){ pr.atk=false; if((p.carN||0)<MKCAR_MASH){ p.carN=(p.carN||0)+1;
+      sfx.get(p.x); spark(p.x, p.y-70, '#ffd24d', 5, 7); } }
+  const T=p.carT, MX=mkCarMax(p);
+  if(T<=MX){
+    p.x=clamp(p.x+dir*MKCAR_SPD, camX+24, Math.min(WORLD_END, camX+W-24));
+    if(T%3===0){ dust(p.x-dir*26,p.y,2); }
+    if(T%6===0) sfx.step(p.x,'metal',1.2);
+    // 轢く：車体に触れた敵をまとめて跳ね飛ばす
+    enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
+      const dx=(e.x-p.x)*dir; if(dx<-46||dx>52) return; if(Math.abs(e.y-p.y)>50) return;
+      if((p.carHit[e.id]||0)>gf-14) return; p.carHit[e.id]=gf;
+      damageEnemy(e, Math.round(17*mul), dir*14, true);
+      if(!e.dead) launchEnemy(e, dir*20, -12, 3);
+      spark(e.x,e.y-e.h*0.5,'#ffd24d',12,10); shake=Math.max(shake,7); });
+    // ① リボルバーの連射
+    if(T%5===0){ const sp=rnd(-0.22,0.22);
+      spawnProj(p.x+dir*40, p.y, dir*18, 0, {owner:'player', dmg:Math.round(10*mul),
+        color:(T%8)?'#ffe14d':'#fff6c0', r:8, life:44, zz:52+Math.sin(sp)*20, vzz:Math.sin(sp)*3, nostop:true});
+      mackMuzzle(p, dir, 54, '#ffd24d', 5); if(T%12===0) sfx.gun(p.x,0.55); }
+    // ② バズーカ
+    if(T%26===13){ spawnProj(p.x+dir*46, p.y, dir*12, 0, {owner:'player', dmg:Math.round(20*mul),
+        color:'#ff8a3a', r:14, life:70, zz:62, blast:true, blastR:140, blastDmg:Math.round(32*mul)});
+      mackMuzzle(p, dir, 64, '#ffae42', 14); sfx.launch(p.x,0.8); shake=Math.max(shake,6); }
+    // ③ グレネード（空中で割れる）
+    if(T%36===25){ spawnProj(p.x+dir*36, p.y, dir*8.4, 0, {owner:'player', dmg:Math.round(18*mul),
+        color:'#ffb85a', r:11, life:80, zz:66, vzz:5.0, grav:0.30,
+        blast:true, blastR:150, blastDmg:Math.round(36*mul), explode:true, glKind:'boom',
+        splitT:11, splitN:3});
+      sfx.launch(p.x,0.7); }
+    return; }
+  if(T===MX+1){ // 急停止：土煙と締めの一発
+    shake=Math.max(shake,14); flash=Math.max(flash,4); dust(p.x,p.y,16);
+    projExplode(p.x+dir*70, p.y, 170, Math.round(40*mul), '#ffae42');
+    popText(p.x,p.y-124,'走行 '+MX+'F ／ 連打 ×'+(p.carN||0),'#ffd24d');
+    p.vx=dir*6; sfx.blast(p.x,1.2); }
+  if(T>MX+18){ p.carOut=14; }
+}
+// 装甲車の絵。本体の上に重ねて描く（乗り込んでいるように見せる）
+function drawMackCar(p){
+  if(p.state!=='mkcar') return;
+  const sx=p.x-camX, sy=p.y-groundLift(p.x), dir=p.carDir||p.facing;
+  const run=(p.carOut>0)?0:1, T=p.carT||0;
+  ctx.save(); ctx.translate(sx,sy); ctx.scale(dir,1);
+  const bob=Math.sin(T*0.55)*1.6*run;
+  ctx.translate(0,bob);
+  // 車体（前が低く後ろが高い装甲の楔）
+  ctx.fillStyle='#3a4a2e'; ctx.beginPath();
+  ctx.moveTo(-46,-6); ctx.lineTo(-40,-46); ctx.lineTo(10,-52); ctx.lineTo(44,-30);
+  ctx.lineTo(52,-8); ctx.lineTo(-46,-6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#5a6e46'; ctx.beginPath();
+  ctx.moveTo(-40,-46); ctx.lineTo(10,-52); ctx.lineTo(24,-40); ctx.lineTo(-36,-34); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#2a3620'; ctx.fillRect(-46,-14,98,8);                    // サイドスカート
+  ctx.fillStyle='#c8a24a'; ctx.fillRect(28,-30,18,5);                      // 前面の装甲板
+  // 排気（走行中だけ）
+  if(run && perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=0.5+0.3*Math.sin(T*0.9);
+    ctx.fillStyle=radGrad(-52,-30,16,'rgba(255,150,60,.9)','rgba(255,80,20,0)');
+    ctx.beginPath(); ctx.arc(-52,-30,16,0,7); ctx.fill(); ctx.restore(); }
+  // 車輪
+  for(const wx of [-30,2,34]){ ctx.fillStyle='#1a1e14';
+    ctx.beginPath(); ctx.arc(wx,-4,11,0,7); ctx.fill();
+    ctx.strokeStyle='#8a9099'; ctx.lineWidth=2.4;
+    ctx.save(); ctx.translate(wx,-4); ctx.rotate(T*0.55*run);
+    for(let k=0;k<3;k++){ ctx.rotate(TAU/3); ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(6,0); ctx.stroke(); }
+    ctx.restore(); }
+  ctx.restore();
 }
 // ── ワッチ：掴んで盗む（雑魚から武器・技・小判をスリ取る）──
 const STEAL_WEAPONS=['spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail'];
@@ -7589,7 +7678,7 @@ const CH1=[
 '攻撃と掴みの同時押しで「Fireworks」！ワンコミルクを呷ってから、ショットガンを振り回しながら乱射する。押し続けた回数だけ乱射が伸びるぞ。',
 '空中でも技が変わる。攻撃だけなら前へリボルバー（弾倉は減らぬ）、↓で宙返りから真下へ撃ち下ろす「レインストーム」——連打した回数だけ滞空して撃ち続ける。',
 '空中↑は「ドリルダッシュ」。まず刃を構えて一瞬止まり、そのあいだに入れた方向へ真っ直ぐ突っ込む。上へも、前斜め下へも、来た方向へも飛べるぞ。何も入れねば前斜め上じゃ。',
-'奥義はぐるっと一回転＋攻撃で「パイルバンカー」！地に足をつけたまま構えを取り、爆炎を纏った巨大な杭を斜め上へ築き上げて薙ぎ払う！'],
+'奥義はぐるっと一回転＋攻撃で「装甲車突撃」！装甲車に飛び乗って突っ走り、轢きながらリボルバー・バズーカ・グレネードを乱射する。攻撃を連打した回数だけ走行が伸び、最後は急停止して締めの一発じゃ！'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！',
 '——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。↓→や→↓→、↓↑だけでなく、上・下・前の技へも繋げられる。三つまで、同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
@@ -8816,7 +8905,8 @@ function render(){
         for(let g=0;g<7;g++){ o.pl.x=clamp(camX+ (g+0.5)/7*W + Math.sin(gf*0.5+g)*16, camX+24, camX+W-24); drawPlayer(); }
         ctx.restore(); o.pl.x=sx0; }
       if(o.pl.vehicle){ drawMountedVehicle(o.pl); const sz=o.pl.z; o.pl.z+=mountLift(o.pl); drawPlayer(); o.pl.z=sz; drawMountWeapon(o.pl); }   // 乗り物→鞍上に騎手→武器
-      else { drawPlayer(); if(o.pl.state==='gatling') drawGatlingGun(o.pl); if(o.pl.kind==='mack') drawMackAmmo(o.pl); } }
+      else { drawPlayer(); if(o.pl.state==='gatling') drawGatlingGun(o.pl);
+        if(o.pl.kind==='mack'){ drawMackCar(o.pl); drawMackAmmo(o.pl); } } }
     else drawEnemy(o.e); });
   player=players[0];
   drawHazards();
@@ -11014,6 +11104,11 @@ function drawPlayer(){
     else { const rr=(f>=4&&f<30)?1:0;                                        // ドリル突進：前傾で押し込む
       lean=0.34*rr; swAng=-0.06; backArm=0.30; faL1=14; faL2=14; faW=1.2;
       bodyX=6*rr; thF=0.5*rr; thB=-0.5*rr; kF=0.8*rr; kB=0.9*rr; sqX=1+0.08*rr; sqY=1-0.09*rr; } }
+  else if(st==='mkcar'){ mode='gun';                          // 装甲車：身を乗り出して撃ちまくる
+    const T=p.carT||0, run=(p.carOut>0)?0:1, rc=Math.abs(Math.sin(T*0.62))*run;
+    lean=-0.22-0.08*rc; swAng=-0.22-0.10*rc; backArm=0.50; faL1=13; faL2=13; faW=1.1;
+    bodyY=-6; bodyX=2; thF=0.95; thB=0.72; kF=1.45; kB=1.55;
+    sqX=1+0.04*rc; sqY=1-0.04*rc; }
   else if(st==='mkflame'){ mode='gun';                        // 火炎放射器：腰を落として噴射口を前へ
     const rc=Math.abs(Math.sin((p.flT||0)*0.55))*(p.flOut>0?0:1);
     lean=-0.16-0.05*rc; swAng=-0.10-0.06*rc; backArm=0.62; faL1=13; faL2=13; faW=1.15;
@@ -11252,7 +11347,7 @@ function drawPlayer(){
     const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
     let B=p.poseB;
     if(!B){ B=p.poseB=Object.assign({},_tgt); }
-    const snappy=(st==='attack'||st==='wthrow'||st==='mthrow'||st==='fworks'||st==='mkflame'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling'||st==='sgact');
+    const snappy=(st==='attack'||st==='wthrow'||st==='mthrow'||st==='fworks'||st==='mkflame'||st==='mkcar'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling'||st==='sgact');
     const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.80:(st==='land'||st==='getup')?0.55:0.26;
     const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
     for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;
@@ -12248,7 +12343,6 @@ function mackGear(p){
   if(st==='jump' && p.jMkUp) return 'drill';                 // 空中↑＝ドリルダッシュ
   if(st==='mthrow') return (p.mtMv==='drill')?'drill':'revolver';
   if(st==='attack' && p.atk){ const d=p.atk.def;
-    if(d.mkPile) return 'pile';
     if(d.flame) return 'flamer';
     if(d.mkGL) return 'launcher';
     if(d.mkDrill) return 'drill';
@@ -12324,44 +12418,6 @@ function drawMackWeapon(hx,hy,ang,gear){
       ctx.beginPath(); ctx.moveTo(10+u*30, -6.2*(1-u)*Math.cos(ph));
       ctx.lineTo(16+u*30, 6.2*(1-u)*Math.cos(ph)); ctx.stroke(); }
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(44,0,1.8,0,7); ctx.fill();
-  } else {                                                                    // パイルバンカー
-    // 杭は「築き上がる」もの。技の進み具合で伸ばし、最大で体の3倍近くまで出す
-    const p2=player, a2=(p2.state==='attack'&&p2.atk)?p2.atk:null;
-    let gw=0;
-    if(a2 && a2.def.mkPile){ const d2=a2.def, HIT=d2.act[0]+(d2.pileAt||0);
-      gw = a2.t<HIT ? clamp((a2.t-(HIT-8))/8,0,1)*0.22                       // 打ち込む直前に少しせり出す
-         : clamp((a2.t-HIT)/6,0,1);                                          // 発動で一気に伸び切る
-      if(a2.t>d2.act[1]) gw*=clamp(1-(a2.t-d2.act[1])/10,0,1); }             // 引き戻す
-    const L=26+124*gw, WD=5+11*gw;                                           // 最大 150 ＝従来の3倍超
-    ctx.fillStyle='#2a303a'; roundRect(-14,-13,40,26,5); ctx.fill();          // シリンダー（一回り大きく）
-    ctx.fillStyle='#4a5260'; roundRect(-14,-13,40,8,4); ctx.fill();
-    ctx.fillStyle='#c8a24a'; ctx.fillRect(-6,-13,5,26); ctx.fillRect(12,-13,5,26);
-    if(gw>0.02 && perfTier<2){                                                // 杭を包む爆炎
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      const gf2=ctx.createLinearGradient(24,0,24+L,0);
-      gf2.addColorStop(0,'rgba(255,246,206,'+(1.00*gw).toFixed(3)+')');
-      gf2.addColorStop(0.35,'rgba(255,150,44,'+(0.82*gw).toFixed(3)+')');
-      gf2.addColorStop(0.72,'rgba(240,80,18,'+(0.44*gw).toFixed(3)+')');
-      gf2.addColorStop(1,'rgba(200,40,10,0)');
-      ctx.fillStyle=gf2; ctx.beginPath();
-      ctx.moveTo(18,-WD*3.0); ctx.quadraticCurveTo(24+L*0.5,-WD*4.0, 24+L+22,0);
-      ctx.quadraticCurveTo(24+L*0.5, WD*4.0, 18, WD*3.0); ctx.closePath(); ctx.fill();
-      for(let k=0;k<8;k++){ const u=k/7, ph=gf*0.5+k*1.1;                     // 舐め上がる炎の舌
-        ctx.globalAlpha=(0.72-0.42*u)*gw;
-        ctx.fillStyle=(k%2)?'#ffd24d':'#ff8a3a';
-        ctx.beginPath(); ctx.ellipse(26+L*u, Math.sin(ph)*WD*1.7, 12-6*u, WD*(1.7-0.9*u), 0,0,7); ctx.fill(); }
-      ctx.globalAlpha=0.55*gw;                                                // 根元の爆炎
-      ctx.fillStyle=radGrad(26,0,WD*4.5,'rgba(255,230,150,.95)','rgba(255,80,20,0)');
-      ctx.beginPath(); ctx.arc(26,0,WD*4.5,0,7); ctx.fill();
-      ctx.restore(); }
-    ctx.fillStyle='#6a727e'; ctx.fillRect(24,-WD,L,WD*2);                     // 杭の本体
-    ctx.fillStyle='#aeb8c4'; ctx.fillRect(24,-WD,L,WD*0.8);
-    ctx.fillStyle='#dfe6ee'; ctx.fillRect(24,-WD*0.2,L,WD*0.34);
-    ctx.strokeStyle='rgba(20,24,30,.55)'; ctx.lineWidth=1.4;                  // 節（伸びたぶんが分かる）
-    for(let k=1;k<=3;k++){ const bx=24+L*k/4; ctx.beginPath(); ctx.moveTo(bx,-WD); ctx.lineTo(bx,WD); ctx.stroke(); }
-    ctx.fillStyle='#eef4fa'; ctx.beginPath();                                 // 切っ先
-    ctx.moveTo(24+L,-WD*1.5); ctx.lineTo(24+L+WD*3.4,0); ctx.lineTo(24+L,WD*1.5); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#ff8a3a'; ctx.beginPath(); ctx.ellipse(-15,0,4,9,0,0,7); ctx.fill();       // 後方の排気
   }
   ctx.restore();
 }
