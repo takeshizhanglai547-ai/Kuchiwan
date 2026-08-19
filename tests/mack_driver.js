@@ -56,7 +56,11 @@ const DRIVER = `
         if(seen[id]) throw new Error(id+' が2つの枠で使い回されている');
         seen[id]=1;
         const p=setup(); const e=dummyAt(70); const hp0=e.hp;
-        beginAttack(id); run(p, ATK[id].dur+70);
+        beginAttack(id);
+        // 押しっぱなしの技（火炎放射器）は握っていないと1フレームで止まる
+        for(let f=0;f<ATK[id].dur+140;f++){ p.in.K.atk=(p.state==='mkflame');
+          updatePlayer(p); updateProjectiles(); }
+        p.in.K.atk=false;
         const dmg=hp0-e.hp;
         if(dmg<=0) throw new Error(id+'（'+ATK[id].name+'）が一度も当たらない'); } }
     console.log('コマンド技7枠 OK (基本7＋上位7＝14技すべて命中する)'); }
@@ -127,16 +131,16 @@ const DRIVER = `
 
   // ===== 8) 空中技3種が別物 =====
   { const air=function(key,mash){ const p=setup();
-      const e=dummyAt(key==='up'?46:(key==='down'?30:120), 0); const hp0=e.hp;
-      if(key==='up'){ e.z=40; }                        // ドリルライズは斜め上へ伸びる技なので、少し上の敵を置く
-      projectiles.length=0; p.state='jump'; p.z=(key==='up'?40:150); p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
+      const e=dummyAt(key==='down'?30:120, 0); const hp0=e.hp;
+      projectiles.length=0; p.state='jump'; p.z=(key==='up'?120:150); p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
       p.in.K.up=(key==='up'); p.in.K.down=(key==='down'); p.in.pressed.atk=true;
       updatePlayer(p);
       const tag=p.jMkUp?'up':p.jMkDown?'down':p.jMkFire?'fwd':'other';
-      const z0=p.z, ez0=e.z; let zMax=p.z, ezMax=e.z, shots=0;
+      const z0=p.z, ez0=e.z; let zMax=p.z, ezMax=e.z, shots=0, blast=0;
       // 数えるのは「いま試している技が出ている間」だけ。技が切れたあとの
       // 連打は別の空中技（前へのリボルバー）を出すので、それを数えると
       // 「連打で伸びた」ことにならない
+      blast=projectiles.filter(function(q){ return q.blast; }).length;   // 空中↑は爆発する弾を投げる
       const onNow=function(){ return !!(key==='up'? p.jMkUp : key==='down'? p.jMkDown : p.jMkFire); };
       const realM=mackMuzzle; mackMuzzle=function(){ if(onNow()) shots++; return realM.apply(null,arguments); };
       try{ for(let f=0;f<160;f++){
@@ -149,7 +153,7 @@ const DRIVER = `
         if(p.z>zMax) zMax=p.z; if(e.z>ezMax) ezMax=e.z; } }
       finally { mackMuzzle=realM; }
       p.in.K.up=p.in.K.down=false;
-      return {tag:tag, dmg:hp0-e.hp, rise:zMax-z0, eRise:ezMax-ez0, ammo:p.ammo, shots:shots}; };
+      return {tag:tag, dmg:hp0-e.hp, rise:zMax-z0, eRise:ezMax-ez0, ammo:p.ammo, shots:shots, blast:blast}; };
     const u=air('up'), d=air('down'), f=air('fwd');
     if(u.tag!=='up')   throw new Error('空中↑がマック専用の技になっていない（'+u.tag+'）');
     if(d.tag!=='down') throw new Error('空中↓がマック専用の技になっていない（'+d.tag+'）');
@@ -158,14 +162,12 @@ const DRIVER = `
     // 空中では弾倉を減らさない（空中でリロードできないため）
     for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].ammo!==MK_AMMO)
       throw new Error('空中'+q[0]+'で弾倉が減っている（'+q[1].ammo+'）');
-    // 空中↑は「上昇する」技。バズーカのままだと反動で落ちるだけになる
-    if(u.rise<40) throw new Error('空中↑で上昇していない（'+Math.round(u.rise)+'px）');
-    // 刃に乗せたまま一緒に持ち上げる。置き去りにすると1〜2ヒットで終わる
-    if(u.eRise<40) throw new Error('ドリルライズが敵を持ち上げていない（'+Math.round(u.eRise)+'px）');
+    // 空中↑は手榴弾を放る技。爆発する弾が1個出ること
+    if(u.blast!==1) throw new Error('空中↑で手榴弾が出ていない（爆発弾 '+u.blast+'個）');
     // 空中↓は連打で乱射が伸びる
     const dm=air('down',true);
     if(dm.shots<=d.shots) throw new Error('空中↓を連打しても撃つ回数が伸びない（'+d.shots+'→'+dm.shots+'）');
-    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルライズ '+Math.round(u.rise)+'px上昇・敵も'+Math.round(u.eRise)+'px・'+Math.round(u.dmg)
+    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑手榴弾 '+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
   // ===== 9) 奥義パイルバンカーは前方の一帯を巻き込む =====
@@ -217,6 +219,52 @@ const DRIVER = `
       if((p.spinCount|0)<1) throw new Error('後ろ前で出したドリルに連打が効かない（spinCount='+p.spinCount+'）'); }
     console.log('後ろ前のドリル突進 OK (連打なし '+Math.round(a.dist)+'px/'+a.frames+'F → 連打あり '
       +Math.round(b.dist)+'px/'+b.frames+'F ×'+b.n+'／タメ版は伸びない)'); }
+
+  // ===== 11) リボルバーの6発目だけが吹き飛ばす =====
+  { const shot=function(id){ const p=setup(); const e=dummyAt(90);
+      projectiles.length=0; p.ammo=MK_AMMO; p.state='idle'; p.z=0; p.atk=null;
+      const hp0=e.hp; let zMax=0;
+      beginAttack(id);
+      for(let f=0;f<70;f++){ updatePlayer(p); updateEnemies(); updateProjectiles(); if(e.z>zMax) zMax=e.z; }
+      return {dmg:hp0-e.hp, up:zMax, air:(e.state==='air')}; };
+    const a1=shot('mk1'), a6=shot('mk6');
+    if(a1.dmg<=0||a6.dmg<=0) throw new Error('リボルバーが当たらない');
+    if(a1.up>4) throw new Error('1発目まで敵を浮かせている（'+Math.round(a1.up)+'px）＝6発目の特別さが無い');
+    if(a6.up<30) throw new Error('6発目が敵を吹き飛ばしていない（'+Math.round(a6.up)+'px）');
+    if(a6.dmg<=a1.dmg) throw new Error('6発目が1発目より軽い');
+    console.log('6発目の吹き飛ばし OK (1発目 '+Math.round(a1.dmg)+'・浮き'+Math.round(a1.up)
+      +'px ／ 6発目 '+Math.round(a6.dmg)+'・浮き'+Math.round(a6.up)+'px)'); }
+
+  // ===== 12) 下攻撃の火炎放射器は、押している間だけ吹き続ける =====
+  { const burn=function(hold){ const p=setup(); const e=dummyAt(70); const hp0=e.hp;
+      p.state='idle'; p.z=0; p.atk=null;
+      p.in.K.down=true; p.in.K.atk=true; p.in.pressed.atk=true;
+      updatePlayer(p); p.in.K.down=false;
+      let frames=0;
+      for(let f=0;f<300;f++){ if(f>=hold) p.in.K.atk=false;
+        updatePlayer(p); updateEnemies(); updateProjectiles();
+        if(p.state==='mkflame' && (p.flOut|0)<=0) frames++; }
+      p.in.K.atk=false;
+      return {frames:frames, dmg:hp0-e.hp, state:p.state}; };
+    const D=ATK[SPECIAL_BASE.mack.down];
+    if(!D || !D.flame) throw new Error('下攻撃が火炎放射器になっていない: '+SPECIAL_BASE.mack.down);
+    const shortB=burn(6), longB=burn(400);
+    if(shortB.frames<=0) throw new Error('火炎放射器が一度も吹かない');
+    if(longB.frames < shortB.frames*3) throw new Error('押しっぱなしでも伸びない（'+shortB.frames+'F→'+longB.frames+'F）');
+    if(longB.dmg < shortB.dmg*3) throw new Error('押しっぱなしでも与ダメが伸びない（'+Math.round(shortB.dmg)+'→'+Math.round(longB.dmg)+'）');
+    // 無限には吹けない。燃料を使い切れば必ず止まって隙になる
+    if(longB.frames > D.flDur+2) throw new Error('燃料の上限を超えて吹き続けている（'+longB.frames+'F）');
+    if(longB.state!=='idle') throw new Error('火炎放射器が終わらない（state='+longB.state+'）');
+    // 焼いた敵はしばらく延焼する
+    { const p=setup(); const e=dummyAt(70);
+      p.in.K.down=true; p.in.K.atk=true; p.in.pressed.atk=true; updatePlayer(p); p.in.K.down=false;
+      for(let f=0;f<24;f++){ updatePlayer(p); updateProjectiles(); }
+      p.in.K.atk=false;
+      if(!(e.burnT>0)) throw new Error('火炎放射器を浴びても延焼しない');
+      const h1=e.hp; for(let f=0;f<40;f++) updateEnemies();
+      if(e.hp>=h1) throw new Error('延焼中なのに減っていない'); }
+    console.log('火炎放射器 OK (すぐ離す '+shortB.frames+'F/'+Math.round(shortB.dmg)+' → 押しっぱなし '
+      +longB.frames+'F/'+Math.round(longB.dmg)+'・燃料'+D.flDur+'Fで打ち止め・延焼あり)'); }
 
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
