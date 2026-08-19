@@ -2370,7 +2370,9 @@ const ATK={
   mkCharge2:{name:'剛・ドリルチャージ', hold:5, charged:true, ctier:1, dur:44, act:[4,38], reach:94, hh:58, dmg:12, kb:7, from:-0.22,to:0.22, len:32, trail:'#dff0ff', fist:true, move:10.0, multi:true, multiGap:4, stinger:true, mkDrill:2},
   mkCharge3:{name:'極・ドリルインパクト', hold:4, charged:true, ctier:2, dur:52, act:[4,44], reach:108, hh:64, dmg:15, kb:8, from:-0.26,to:0.26, len:36, trail:'#ffffff', fist:true, move:11.0, multi:true, multiGap:4, stinger:true, superFx:true, mkDrill:3},
   // 奥義＝パイルバンカー。構えてから下段から斜め上へ突き上げる
-  mkpile:{name:'パイルバンカー', hold:10, dur:56, act:[24,38], reach:98, hh:520, dmg:15, kb:9, from:1.35,to:-1.95, len:54, trail:'#ffd24d', pivotY:-56, rise:true, riseV:20, riseG:0.86, multi:true, multiGap:5, shoryu:true, special:true, superFx:true, mkPile:1},
+  // 奥義＝パイルバンカー。跳ばずに地面へ踏ん張り、斜め上へ巨大な鉄杭を築き上げる。
+  // rise/shoryu を持たせると本人が飛び上がってしまうので、両方とも外してある
+  mkpile:{name:'パイルバンカー', hold:10, dur:62, act:[24,46], reach:132, hh:190, dmg:16, kb:10, from:0.55,to:-1.55, len:60, trail:'#ffd24d', pivotY:-52, lunge:1.2, multi:true, multiGap:5, knock:true, special:true, superFx:true, mkPile:1, pileAt:10},
 };
 
 //======================================================================
@@ -2514,8 +2516,10 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   } }
 // キャラごとの基本装備（オープニングのカットシーンでも正しい得物を持たせるために共用）
 function defaultWeaponFor(kind){ return kind==='shima'?'fists':kind==='nuko'?'wand':kind==='guard8'?'ghammer':kind==='wanden'?'inuboshi':kind==='mack'?'fists':'dagger'; }
-// 早撃ちマックの弾数。6発撃つとリロードが挟まる（弾切れは「隙」そのもの）
+// 早撃ちマックの弾数。6発撃つとリロードが挟まる（弾切れは「隙」そのもの）。
+// 空中の射撃だけは弾倉を減らさない（空中ではリロードできないため）
 const MK_AMMO=6;
+const MK_RAIN_MAX=5;   // 空中下「レインストーム」を連打で伸ばせる回数
 const SPEED=7.4, DEPTH_SPEED=0;   // 基本移動速度2倍（旧ダッシュ相当の快速がデフォルト）
 function activePlayers(){ return players.filter(p=>p.active); }
 function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='dead')continue; const d=Math.abs(p.x-x); if(d<bd){bd=d;best=p;} } return best||players[0]; }
@@ -2653,6 +2657,21 @@ function airRiseHit(p){ const col=p.kind==='nuko'?'#d6a6ff':p.kind==='shima'?'#a
     p.jHit.add(e.id); damageEnemy(e, Math.round(16*mul), p.facing*4, true); if(!e.dead) launchEnemy(e, p.facing*4, -17, Math.max(e.bounces||0,3));
     crescent(e.x,e.y-e.h*0.5,52,-1.7,1.3,col); spark(e.x,e.y-e.h*0.5,'#fff',10,8); });
   if(gf%2===0) spark(p.x+rnd(-10,10), p.y-p.z-rnd(10,40), col, 3, 6); }
+// 空中↑「ドリルライズ」：斜め前上へ構えた刃の当たり。
+// 昇天アッパー(airRiseHit)は真上を薄く見るだけなので、前へ張り出した刃には合わない
+function mackDrillRiseHit(p){ const mul=(p.atkMul||1), dir=p.facing;
+  enemies.forEach(e=>{ if(e.dead||e.grabbedBy||p.jHit.has(e.id))return;
+    const dx=(e.x-p.x)*dir, dz=(e.y-e.z)-(p.y-p.z);
+    if(dx<-26||dx>104) return; if(Math.abs(e.y-p.y)>64) return; if(dz<-130||dz>60) return;
+    p.jHit.add(e.id); noHitStopOnce=true;
+    damageEnemy(e, Math.round(11*mul), dir*3, false);
+    // 本人と同じ速さで持ち上げる。置いていくと刃の届く範囲から外れて
+    // 2ヒットで終わってしまう（実測 24ダメージ）。
+    // すでに浮いている敵にも state を入れ直さないと、vz を書いても動かない
+    if(!e.dead){ if(e.z<6) e.z=8; e.state='air'; e.bounces=Math.max(e.bounces||0,3);
+      e.vz=-Math.max(6, (p.vz||0)*0.9); }
+    spark(e.x, e.y-e.h*0.5, '#dff0ff', 6, 8); });
+}
 function guardWave(p){ const dir=p.facing, mul=(p.atkMul||1);
   spawnProj(p.x+dir*44, p.y, dir*7.5, 0, {owner:'player', dmg:Math.round(20*mul), color:'#ffd24d', r:20, life:40, zz:44, vzz:7, pierce:true, wave:true});
   ring(p.x+dir*44,p.y-60,'#ffd24d'); sfx.boss(p.x); }
@@ -3694,8 +3713,9 @@ function updatePlayer(){
     else if(p.jBolt){ p.vz-=1.0; }                                     // サンダークラッシュ：急降下
     else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
     else if(p.jHyaku && p.jAtk>0){ p.vz=Math.max(p.vz-0.13,-2.3); }    // 巨大百裂拳：ゆっくり高度落下
-    else if(p.jMkDown && p.jAtk>0){ p.vz=Math.max(p.vz-0.42,-3.4); }     // 宙返り撃ち：ゆっくり落ちながら撃つ
-    else if(p.jMkUp || p.jMkFire){ p.vz-=0.62; }                          // 銃の反動で落ちる
+    else if(p.jMkDown && p.jAtk>0){ p.vz=(p.jMkT||0)<10 ? p.vz-0.62 : Math.max(p.vz-0.16,-1.5); }   // 宙返り→撃ち下ろしの間はほぼ滞空
+    else if(p.jMkUp && p.jAtk>0){ p.vz=Math.max(p.vz-0.44,-3); p.x+=p.facing*1.6; }   // ドリルライズ：斜め前上へ伸び上がる
+    else if(p.jMkFire){ p.vz-=0.62; }                                     // 銃の反動で落ちる
     else if(p.jAtk>0 && !p.jKabuto && !p.jDown && !p.jFire && !p.jUp){ p.vz=0; }   // エリアルレイブ中は高度維持（ホバー。火球発射・昇天アッパー時は落下）
     else if(p.jUp && p.jAtk>0){ p.vz-=0.5; }                             // 昇天アッパー：跳び上がって弧を描いて落ちる
     else { p.vz-=0.62; }
@@ -3705,18 +3725,22 @@ function updatePlayer(){
     if(p.jBolt){ p.x+=p.facing*SPEED*1.6; if(gf%2===0) spark(p.x+rnd(-12,12),p.y-p.z-rnd(20,60),'#9fe8ff',1,4); }   // 雷をまとって斜め急降下
     // air attack
     if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
-      p.jMkUp=false; p.jMkDown=false; p.jMkFire=false; p.jMkT=0;
+      p.jMkUp=false; p.jMkDown=false; p.jMkFire=false; p.jMkT=0; p.jMkN=0;
       const MCK=(p.kind==='mack');
-      if(MCK && K.up){ p.jMkUp=true; p.jAtk=22; p.vz=Math.max(p.vz,-1);          // 空中↑＝真上へバズーカ
-        spawnProj(p.x, p.y, 0, 0, {owner:'player', dmg:Math.round(30*(p.atkMul||1)), color:'#ff8a3a',
-          r:15, life:52, zz:Math.max(p.z+30,44), vzz:13, blast:true, blastR:150, blastDmg:Math.round(50*(p.atkMul||1))});
-        mackMuzzle(p, p.facing, p.z+64, '#ffae42', 16); p.vz=Math.min(p.vz,-2)-2;   // 反動で落ちる
-        shake=Math.max(shake,9); flash=Math.max(flash,3); sfx.big(p.x); }
-      else if(MCK && K.down){ p.jMkDown=true; p.jAtk=30; p.vz=Math.max(p.vz,1)+3;   // 空中下＝宙返りしてから真下へ乱射
-        sfx.dash(p.x); spark(p.x,p.y-p.z-20,'#ffd24d',8,7); }
+      if(MCK && K.up){ p.jMkUp=true; p.jAtk=26; p.jMkT=0;                        // 空中↑＝斜め上へドリルを構えて上昇
+        p.vz=Math.max(p.vz,2)+11;
+        spark(p.x+p.facing*20, p.y-p.z-40, '#bfe9ff', 12, 8); ring(p.x+p.facing*16, p.y-p.z-40, '#dff0ff');
+        shake=Math.max(shake,5); sfx.rise(p.x); sfx.swing(1,'metal',p.x);
+        popText(p.x,p.y-p.z-78,'ドリルライズ！','#dff0ff'); }
+      else if(MCK && K.down){ p.jMkDown=true; p.jAtk=34; p.jMkT=0; p.jMkN=0;   // 空中下＝宙返りしてから真下へ撃ち下ろす
+        p.vz=Math.max(p.vz,2)+5;                                  // 一度ふわりと浮いてから撃ち始める
+        sfx.dash(p.x); spark(p.x,p.y-p.z-20,'#ffd24d',10,7);
+        popText(p.x,p.y-p.z-72,'レインストーム！','#ffd24d'); }
       else if(MCK){ p.jMkFire=true; p.jAtk=15; if(K.left||K.right) p.facing=K.left?-1:1;   // 空中＝前方へリボルバー
         p.vz=Math.max(p.vz,-1.5);
-        const dir=p.facing; p.ammo=Math.max(0,(p.ammo==null?MK_AMMO:p.ammo)-1);
+        // 空中のリボルバーは弾倉を減らさない。空中ではリロードできないので、
+        // 減らすと「跳んだら撃てない」だけの技になってしまう
+        const dir=p.facing;
         // 高い所から水平に撃つと、弾が敵の頭上を素通りして一度も当たらない。
         // 自分の高さに応じて撃ち下ろし、地上の敵の高さへ落ちるようにする
         // 弾は「前方およそ140px先で地上の高さへ落ちる」角度で撃つ。
@@ -3740,16 +3764,23 @@ function updatePlayer(){
       else if(SHI){ p.jHyaku=true; p.jAtk=28; sfx.swing(2, 'flesh', p.x); }   // シマ空中連打：巨大百裂拳（ゆっくり落下）
       else { sfx.swing(2, wsndOf(p.weapon), p.x); p.aerial=(p.aerial||0)+1; } }   // 通常空中斬り＝レイブ（高度維持）
     if(p.jAtk>0){ p.jAtk--;
-      if(p.jMkDown){ p.jMkT=(p.jMkT||0)+1;                       // 宙返り8F → そのあと下方向へ撃ち下ろす
+      if(p.jMkDown){ p.jMkT=(p.jMkT||0)+1;                       // 宙返り10F → そのあと下方向へ撃ち下ろす
+        // 連打した回数だけ滞空と乱射が伸びる（押しっぱなしでは伸びない）
+        if(pressed.atk && p.jMkT>10 && (p.jMkN||0)<MK_RAIN_MAX){ pressed.atk=false;
+          p.jMkN=(p.jMkN||0)+1; p.jAtk+=8; }   // 残り時間へ足す。max(,9) だと残りが多い間は伸びない
         // 真下だけに撃つと「自分の足元にいる敵」にしか当たらない。
-        // 扇に散らして、跳んで越しざまの敵にも届くようにする
-        if(p.jMkT>8 && p.jMkT%3===0 && (p.ammo|0)>0){ const sp=rnd(-0.6,0.6);
-          p.ammo=Math.max(0,(p.ammo|0)-1);
+        // 扇に散らして、跳んで越しざまの敵にも届くようにする。弾倉は減らさない
+        if(p.jMkT>10 && p.jMkT%4===0){ const sp=rnd(-0.6,0.6);
           spawnProj(p.x+Math.sin(sp)*12, p.y, Math.sin(sp)*9, 0, {owner:'player',
             dmg:Math.round(13*(p.atkMul||1)), color:'#ffe14d', r:9, life:40,
             zz:Math.max(p.z-6,2), vzz:-12, nostop:true});
           mackMuzzle(p, p.facing, p.z-4, '#ffd24d', 5); if(p.jMkT%9===0) sfx.zap(p.x); } }
-      else if(p.jMkUp||p.jMkFire){ /* 撃ち終わり。弾に任せる */ }
+      else if(p.jMkUp){ p.jMkT=(p.jMkT||0)+1;                    // ドリルライズ：上昇中ずっと刃が当たる
+        if(p.jMkT%4===0) p.jHit=new Set();                        // 一定間隔で刻み直す
+        mackDrillRiseHit(p);
+        if(p.jMkT%3===0){ spark(p.x+p.facing*rnd(14,34), p.y-p.z-rnd(30,70), (p.jMkT%6)?'#bfe9ff':'#ffffff', 2, 6);
+          if(p.jMkT%9===0) sfx.swing(1,'metal',p.x); } }
+      else if(p.jMkFire){ /* 撃ち終わり。弾に任せる */ }
       else if(p.jFire||p.jBolt){ /* 火球発射済み／落雷は着地時に判定 */ }
       else if(p.jUp){ if(p.jAtk>=8) airRiseHit(p); }   // 昇天アッパー：上昇中ずっと判定
       else if(p.jHyaku){ if(p.jAtk%4===0){ p.jHit=new Set(); jumpAttackHit(); } }   // 百裂拳は連続ヒット
@@ -4108,10 +4139,10 @@ function updatePlayer(){
       if(def.mkDrill>=3 && a.t%8===0) ring(p.x+p.facing*50, p.y-42, '#dff0ff'); }
     // 奥義＝パイルバンカー。溜めのあと杭を下から斜め上へ打ち上げる
     if(def.mkPile){
-      if(a.t<def.act[0]){ if(a.t%3===0){ const u=a.t/def.act[0];
+      if(a.t<def.act[0]+(def.pileAt||0)){ if(a.t%3===0){ const u=a.t/Math.max(1,def.act[0]);
           ember(p.x+rnd(-22,22), p.y-rnd(6,60), rnd(-0.6,0.6), -rnd(1.4,3.4), '#ffd24d');
           if(a.t%9===0){ ring(p.x, p.y-30, '#ffae42'); sfx.charge(p.x); } } }
-      if(a.t===def.act[0]){ const dir=p.facing, mul=(p.atkMul||1)*evoMul(p);
+      if(a.t===def.act[0]+(def.pileAt||0)){ const dir=p.facing, mul=(p.atkMul||1)*evoMul(p);
         // 杭の打ち込みそのもの。爆風が前方の一帯を吹き上げる
         for(let k=0;k<3;k++) ring(p.x+dir*(34+k*26), p.y-44-k*30, k%2?'#ffd24d':'#ffffff');
         spark(p.x+dir*44, p.y-60, '#fff6c0', 32, 14); spark(p.x+dir*30, p.y-20, '#ff8a3a', 22, 11);
@@ -4122,7 +4153,7 @@ function updatePlayer(){
           if((e.x-p.x)*dir>-40 && Math.abs(e.x-p.x)<180 && Math.abs(e.y-p.y)<76){
             damageEnemy(e, Math.round(66*mul), dir*12, true);
             if(!e.dead) launchEnemy(e, dir*14, -22, 3); } }); }
-      if(a.t>def.act[0] && a.t<def.act[1] && a.t%3===0)
+      if(a.t>def.act[0]+(def.pileAt||0) && a.t<def.act[1] && a.t%3===0)
         spark(p.x+p.facing*40, p.y-p.z-rnd(40,110), '#ffd24d', 3, 8); }
     // ── ワンデン「秘剣・八重霞」：前方に斬撃痕を刻み、時間差で炸裂させる ──
     if(def.yaegasumi && a.t===def.act[0]){ const dir=p.facing;
@@ -10556,6 +10587,9 @@ function drawPlayer(){
     if(p.atk.t>=_t0){ const _u=clamp((p.atk.t-_t0)/Math.max(1,_d.dur-_t0),0,1);
       ctx.translate(0,-34); ctx.rotate(easeOut(_u)*TAU); ctx.translate(0,34); } }
   if(st==='jump' && p.jDrop){ ctx.translate(0,-26); ctx.rotate((20-p.jAtk)*0.6); ctx.translate(0,26); }   // 回転踵落としの回転
+  // レインストームの入り：後方へ一回転してから撃ち下ろしの姿勢に入る
+  if(st==='jump' && p.jMkDown && (p.jMkT||0)<=10){ const u=clamp((p.jMkT||0)/10,0,1);
+    ctx.translate(0,-26); ctx.rotate(-u*Math.PI*2*p.facing); ctx.translate(0,26); }
 
   // ---------- pose params (swAng: 0=forward, +down) ----------
   let bodyY=0, bodyX=0, lean=0, swAng=-0.42, swExt=12, backArm=0.32, thF=0.14, thB=-0.14, kF=0.25, kB=0.25;
@@ -10591,6 +10625,14 @@ function drawPlayer(){
     kF =1.15+0.75*up-0.55*dn-0.45*near; kB =1.35+0.70*up-0.60*dn-0.50*near;
     lean=0.14*up-0.14*dn; bodyY=-2+2.4*up-1.8*dn;
     swAng=0.30-0.80*up+0.50*dn; backArm=0.25-0.66*up+0.58*dn;  // 上昇で腕が上がり、落下で下りる
+    if(p.jMkUp){                                              // ドリルライズ：斜め前上へ刃を構えて伸び上がる
+      swAng=-0.86; backArm=-0.30; faL1=13; faL2=13; faW=1.2;
+      lean=-0.30; bodyY=-4; thF=0.95; thB=0.72; kF=1.55; kB=1.70; sqX=0.92; sqY=1.10; }
+    else if(p.jMkDown){                                       // レインストーム：宙返り → 逆さに近い姿勢で撃ち下ろす
+      const T=p.jMkT||0;
+      if(T<=10){ /* 回転は下の rotate で掛ける */ lean=0.5; thF=1.25; thB=1.05; kF=1.8; kB=1.9; sqX=1.06; sqY=0.94; }
+      else { swAng=1.35+0.16*Math.sin(T*0.9); backArm=1.15; faL1=12; faL2=12; faW=1.1;
+        lean=0.24; bodyY=2; thF=0.30; thB=-0.24; kF=0.55; kB=0.62; } }
     sqX=1+0.05*ap; sqY=1-0.05*ap;                              // 頂点でだけわずかに開く
     // 速度による伸縮とばねの着地潰れは描画側（updateRigP と空中スケール）が既に掛けているので、
     // ここで重ねると二重に伸びる
@@ -11891,6 +11933,7 @@ function mackGear(p){
   const st=p.state;
   if(st==='fworks') return 'shotgun';
   if(st==='mthrow') return (p.mtMv==='drill')?'drill':'revolver';
+  if(st==='jump' && p.jMkUp) return 'drill';                 // 空中↑＝ドリルライズ
   if(st==='attack' && p.atk){ const d=p.atk.def;
     if(d.mkPile) return 'pile';
     if(d.mkLog) return 'log';
@@ -11936,14 +11979,43 @@ function drawMackWeapon(hx,hy,ang,gear){
       ctx.lineTo(16+u*30, 6.2*(1-u)*Math.cos(ph)); ctx.stroke(); }
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(44,0,1.8,0,7); ctx.fill();
   } else {                                                                    // パイルバンカー
-    ctx.fillStyle='#2f3540'; roundRect(-10,-9,30,18,4); ctx.fill();           // シリンダー
-    ctx.fillStyle='#4a5260'; roundRect(-10,-9,30,6,3); ctx.fill();
-    ctx.fillStyle='#c8a24a'; ctx.fillRect(-4,-9,4,18); ctx.fillRect(8,-9,4,18);
-    ctx.fillStyle='#8a9099'; ctx.fillRect(20,-5,26,10);                        // 打ち出される杭
-    ctx.fillStyle='#dfe6ee'; ctx.fillRect(20,-5,26,3);
-    ctx.fillStyle='#e8eef4'; ctx.beginPath();
-    ctx.moveTo(46,-5); ctx.lineTo(60,0); ctx.lineTo(46,5); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#ff8a3a'; ctx.beginPath(); ctx.ellipse(-11,0,3,7,0,0,7); ctx.fill();      // 後方の排気
+    // 杭は「築き上がる」もの。技の進み具合で伸ばし、最大で体の3倍近くまで出す
+    const p2=player, a2=(p2.state==='attack'&&p2.atk)?p2.atk:null;
+    let gw=0;
+    if(a2 && a2.def.mkPile){ const d2=a2.def, HIT=d2.act[0]+(d2.pileAt||0);
+      gw = a2.t<HIT ? clamp((a2.t-(HIT-8))/8,0,1)*0.22                       // 打ち込む直前に少しせり出す
+         : clamp((a2.t-HIT)/6,0,1);                                          // 発動で一気に伸び切る
+      if(a2.t>d2.act[1]) gw*=clamp(1-(a2.t-d2.act[1])/10,0,1); }             // 引き戻す
+    const L=26+124*gw, WD=5+11*gw;                                           // 最大 150 ＝従来の3倍超
+    ctx.fillStyle='#2a303a'; roundRect(-14,-13,40,26,5); ctx.fill();          // シリンダー（一回り大きく）
+    ctx.fillStyle='#4a5260'; roundRect(-14,-13,40,8,4); ctx.fill();
+    ctx.fillStyle='#c8a24a'; ctx.fillRect(-6,-13,5,26); ctx.fillRect(12,-13,5,26);
+    if(gw>0.02 && perfTier<2){                                                // 杭を包む爆炎
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      const gf2=ctx.createLinearGradient(24,0,24+L,0);
+      gf2.addColorStop(0,'rgba(255,246,206,'+(1.00*gw).toFixed(3)+')');
+      gf2.addColorStop(0.35,'rgba(255,150,44,'+(0.82*gw).toFixed(3)+')');
+      gf2.addColorStop(0.72,'rgba(240,80,18,'+(0.44*gw).toFixed(3)+')');
+      gf2.addColorStop(1,'rgba(200,40,10,0)');
+      ctx.fillStyle=gf2; ctx.beginPath();
+      ctx.moveTo(18,-WD*3.0); ctx.quadraticCurveTo(24+L*0.5,-WD*4.0, 24+L+22,0);
+      ctx.quadraticCurveTo(24+L*0.5, WD*4.0, 18, WD*3.0); ctx.closePath(); ctx.fill();
+      for(let k=0;k<8;k++){ const u=k/7, ph=gf*0.5+k*1.1;                     // 舐め上がる炎の舌
+        ctx.globalAlpha=(0.72-0.42*u)*gw;
+        ctx.fillStyle=(k%2)?'#ffd24d':'#ff8a3a';
+        ctx.beginPath(); ctx.ellipse(26+L*u, Math.sin(ph)*WD*1.7, 12-6*u, WD*(1.7-0.9*u), 0,0,7); ctx.fill(); }
+      ctx.globalAlpha=0.55*gw;                                                // 根元の爆炎
+      ctx.fillStyle=radGrad(26,0,WD*4.5,'rgba(255,230,150,.95)','rgba(255,80,20,0)');
+      ctx.beginPath(); ctx.arc(26,0,WD*4.5,0,7); ctx.fill();
+      ctx.restore(); }
+    ctx.fillStyle='#6a727e'; ctx.fillRect(24,-WD,L,WD*2);                     // 杭の本体
+    ctx.fillStyle='#aeb8c4'; ctx.fillRect(24,-WD,L,WD*0.8);
+    ctx.fillStyle='#dfe6ee'; ctx.fillRect(24,-WD*0.2,L,WD*0.34);
+    ctx.strokeStyle='rgba(20,24,30,.55)'; ctx.lineWidth=1.4;                  // 節（伸びたぶんが分かる）
+    for(let k=1;k<=3;k++){ const bx=24+L*k/4; ctx.beginPath(); ctx.moveTo(bx,-WD); ctx.lineTo(bx,WD); ctx.stroke(); }
+    ctx.fillStyle='#eef4fa'; ctx.beginPath();                                 // 切っ先
+    ctx.moveTo(24+L,-WD*1.5); ctx.lineTo(24+L+WD*3.4,0); ctx.lineTo(24+L,WD*1.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ff8a3a'; ctx.beginPath(); ctx.ellipse(-15,0,4,9,0,0,7); ctx.fill();       // 後方の排気
   }
   ctx.restore();
 }

@@ -119,30 +119,62 @@ const DRIVER = `
     console.log('Fireworks OK (連打なし '+a.shots+'射 → 連打あり '+b.shots+'射)'); }
 
   // ===== 8) 空中技3種が別物 =====
-  { const air=function(key){ const p=setup(); const e=dummyAt(key==='down'?30:120, 0); const hp0=e.hp;
-      projectiles.length=0; p.state='jump'; p.z=150; p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
+  { const air=function(key,mash){ const p=setup();
+      const e=dummyAt(key==='up'?46:(key==='down'?30:120), 0); const hp0=e.hp;
+      if(key==='up'){ e.z=40; }                        // ドリルライズは斜め上へ伸びる技なので、少し上の敵を置く
+      projectiles.length=0; p.state='jump'; p.z=(key==='up'?40:150); p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
       p.in.K.up=(key==='up'); p.in.K.down=(key==='down'); p.in.pressed.atk=true;
       updatePlayer(p);
       const tag=p.jMkUp?'up':p.jMkDown?'down':p.jMkFire?'fwd':'other';
-      for(let f=0;f<110;f++){ updatePlayer(p); updateProjectiles(); }
+      const z0=p.z, ez0=e.z; let zMax=p.z, ezMax=e.z, shots=0;
+      // 数えるのは「いま試している技が出ている間」だけ。技が切れたあとの
+      // 連打は別の空中技（前へのリボルバー）を出すので、それを数えると
+      // 「連打で伸びた」ことにならない
+      const onNow=function(){ return !!(key==='up'? p.jMkUp : key==='down'? p.jMkDown : p.jMkFire); };
+      const realM=mackMuzzle; mackMuzzle=function(){ if(onNow()) shots++; return realM.apply(null,arguments); };
+      try{ for(let f=0;f<160;f++){
+        p.in.K.up=p.in.K.down=false;            // 方向を離す。押しっぱなしだと技が終わるたび出し直され、
+                                                 // 「連打で伸びた」のか「2回出した」のか区別できない
+        if(mash && f%4===0) p.in.pressed.atk=true;
+        // 敵側の物理も回す。回さないと「刃に乗せて一緒に持ち上げる」が効かず、
+        // 置き去りにした敵に当たらないだけの結果になる
+        updatePlayer(p); updateEnemies(); updateProjectiles();
+        if(p.z>zMax) zMax=p.z; if(e.z>ezMax) ezMax=e.z; } }
+      finally { mackMuzzle=realM; }
       p.in.K.up=p.in.K.down=false;
-      return {tag:tag, dmg:hp0-e.hp}; };
+      return {tag:tag, dmg:hp0-e.hp, rise:zMax-z0, eRise:ezMax-ez0, ammo:p.ammo, shots:shots}; };
     const u=air('up'), d=air('down'), f=air('fwd');
     if(u.tag!=='up')   throw new Error('空中↑がマック専用の技になっていない（'+u.tag+'）');
     if(d.tag!=='down') throw new Error('空中↓がマック専用の技になっていない（'+d.tag+'）');
     if(f.tag!=='fwd')  throw new Error('空中前がマック専用の技になっていない（'+f.tag+'）');
     for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].dmg<=0) throw new Error('空中'+q[0]+'が当たらない');
-    if(u.dmg<=f.dmg) throw new Error('空中↑のバズーカが空中前のリボルバーより軽い（'+Math.round(u.dmg)+' vs '+Math.round(f.dmg)+'）');
-    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑バズーカ'+Math.round(u.dmg)+'／↓乱射'+Math.round(d.dmg)+')'); }
+    // 空中では弾倉を減らさない（空中でリロードできないため）
+    for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].ammo!==MK_AMMO)
+      throw new Error('空中'+q[0]+'で弾倉が減っている（'+q[1].ammo+'）');
+    // 空中↑は「上昇する」技。バズーカのままだと反動で落ちるだけになる
+    if(u.rise<40) throw new Error('空中↑で上昇していない（'+Math.round(u.rise)+'px）');
+    // 刃に乗せたまま一緒に持ち上げる。置き去りにすると1〜2ヒットで終わる
+    if(u.eRise<40) throw new Error('ドリルライズが敵を持ち上げていない（'+Math.round(u.eRise)+'px）');
+    // 空中↓は連打で乱射が伸びる
+    const dm=air('down',true);
+    if(dm.shots<=d.shots) throw new Error('空中↓を連打しても撃つ回数が伸びない（'+d.shots+'→'+dm.shots+'）');
+    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルライズ '+Math.round(u.rise)+'px上昇・敵も'+Math.round(u.eRise)+'px・'+Math.round(u.dmg)
+      +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
   // ===== 9) 奥義パイルバンカーは前方の一帯を巻き込む =====
   { const p=setup(); const es=[dummyAt(60,-20), dummyAt(110,0), dummyAt(160,20)];
+    es[2].z=90;                                   // 斜め上まで届くこと（真横だけの技ではない）
     const hp0=es.map(function(e){ return e.hp; });
-    beginAttack('mkpile'); run(p, ATK.mkpile.dur+40);
+    let zMax=0;
+    beginAttack('mkpile');
+    for(let f=0;f<ATK.mkpile.dur+40;f++){ updatePlayer(p); updateProjectiles(); if(p.z>zMax) zMax=p.z; }
     const hit=es.filter(function(e,i){ return hp0[i]-e.hp>0; }).length;
-    if(hit<3) throw new Error('パイルバンカーが '+hit+' 体しか巻き込まない');
-    if(!ATK.mkpile.rise) throw new Error('パイルバンカーが突き上げになっていない');
-    console.log('奥義パイルバンカー OK ('+hit+'体巻き込み・突き上げ)'); }
+    if(hit<3) throw new Error('パイルバンカーが '+hit+' 体しか巻き込まない（斜め上の敵にも届くこと）');
+    // 本人は跳ばない。地に足をつけたまま杭だけが伸びる
+    if(zMax>2) throw new Error('パイルバンカーで本人が飛び上がっている（'+Math.round(zMax)+'px）');
+    if(ATK.mkpile.rise||ATK.mkpile.shoryu) throw new Error('パイルバンカーに跳び上がりの指定が残っている');
+    if(ATK.mkpile.hh<150) throw new Error('杭の届く高さが低い（hh='+ATK.mkpile.hh+'）');
+    console.log('奥義パイルバンカー OK (本人は跳ばず '+Math.round(zMax)+'px／斜め上の敵まで'+hit+'体巻き込み)'); }
 
   // ===== 10) 後ろ前のドリル突進は、連打でヒット数と突進距離が伸びる =====
   { // 敵を置くと押し合いと吹き飛びで距離がぶれるので、伸びの計測は敵なしで行う
