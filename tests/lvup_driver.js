@@ -138,6 +138,49 @@ const DRIVER = `
     if(h2.du!=='ntyphoon'||h2.hadou!=='nfrost2'||h2.dp!=='nstar2'||h2.up!=='ntornado2'||h2.fwd!=='nflame2'||h2.dash!=='nrail2') throw new Error('hero boss did not scale with the player level'); }
   console.log('ライバル追従 OK (こちらのレベルに合わせてライバルの必殺技も進化)');
 
+  // ===== 異なるコマンド技どうしのキャンセル（全キャラ） =====
+  { const feed=function(p,seq){ p.in.cardSeq.length=0;
+      for(let i=0;i<seq.length;i++) p.in.cardSeq.push({c:seq[i], f:gf-(seq.length-i)*2}); };
+    const start=function(k){ setupRoster(k); startGame();
+      const p=players[0]; p.kind=k; resetPlayer(p,true); player=p;
+      enemies.length=0; p.state='idle'; p.z=0; p.atk=null; p.facing=1;
+      // 前のキャラの入力が残っていると、進める途中で勝手にキャンセルが発動して
+      // 何を測っているのか分からなくなる（実際に t0=0 になって取り逃がした）
+      p.in.cardSeq.length=0; p.in.pressed.atk=false; p.cxSlots=[];
+      for(const kk of ['left','right','up','down','atk']) p.in.K[kk]=false;
+      consumeCmd(); return p; };
+    const KINDS=['inu','shima','nuko','guard8','watch','wanden','mack'];
+    const ok=[];
+    for(const k of KINDS){
+      const p=start(k);
+      const hadou=specialFor(p,'hadou'), dp=specialFor(p,'dp');
+      if(!ATK[hadou]||!ATK[dp]) throw new Error(k+' の波動/昇竜が ATK に無い（'+hadou+'/'+dp+'）');
+      if(hadou===dp) throw new Error(k+' の波動と昇竜が同じ技');
+      beginAttack(hadou);
+      // 発生前はキャンセルできないこと（撃つ前から次の技へ飛べては困る）
+      feed(p,[1,2,1]); p.in.pressed.atk=true; updatePlayer(p);
+      if(p.atk && p.atk.type!==hadou) throw new Error(k+'：発生前にキャンセルできてしまう');
+      // 発生後（hold ぶんも進めてから）は昇竜へ繋がること
+      for(let f=0;f<ATK[hadou].act[0]+(ATK[hadou].hold|0)+2;f++) updatePlayer(p);
+      feed(p,[1,2,1]); p.in.pressed.atk=true; updatePlayer(p);
+      if(!p.atk || p.atk.type!==dp)
+        throw new Error(k+'：波動('+ATK[hadou].name+')から昇竜('+ATK[dp].name+')へ繋がらない（'+(p.atk?p.atk.type:'技なし')+'）');
+      if(!p.cxSlots || p.cxSlots.indexOf('hadou')<0 || p.cxSlots.indexOf('dp')<0)
+        throw new Error(k+'：連鎖の記録が残っていない '+JSON.stringify(p.cxSlots));
+      ok.push(k); }
+    // 同じ枠へは繋ぎ直せない（波動 → 波動の無限ループを防ぐ）
+    { const p=start('inu'); const hadou=specialFor(p,'hadou');
+      beginAttack(hadou);
+      for(let f=0;f<ATK[hadou].act[0]+(ATK[hadou].hold|0)+2;f++) updatePlayer(p);
+      const t0=p.atk.t;
+      feed(p,[2,1]); p.in.pressed.atk=true; updatePlayer(p);
+      // 繋ぎ直されたら技が頭から出し直されて t が戻る。ここを見るのが一番確実
+      if(p.atk && p.atk.type===hadou && p.atk.t<t0)
+        throw new Error('同じ枠へ繋ぎ直せてしまう（技が t='+t0+' から出し直されている）'); }
+    // ひと繋ぎの上限
+    if(CX_MAX>4) throw new Error('キャンセルの上限が緩すぎる（'+CX_MAX+'）');
+    console.log('コマンド技どうしのキャンセル OK ('+ok.length+'キャラで波動→昇竜／同じ枠は不可／上限'+CX_MAX+'技)'); }
+
   console.log('LEVEL-UP SPECIALS TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

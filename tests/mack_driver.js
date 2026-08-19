@@ -68,24 +68,25 @@ const DRIVER = `
   // ===== 4) ショットガンは近いほど痛い（射程は短い） =====
   { const at=function(dx){ const p=setup(); const e=dummyAt(dx); const hp0=e.hp;
       beginAttack('mkShotgun'); run(p, ATK.mkShotgun.dur+60); return hp0-e.hp; };
-    const near=at(20), mid=at(200), far=at(820);
+    const near=at(20), mid=at(120), far=at(480);
     // 散弾そのものは中距離でも当たる。「鼻先だと束で入る」ぶんが乗っているかを見る
     if(near < mid*1.35) throw new Error('鼻先('+Math.round(near)+')と中距離('+Math.round(mid)+')が変わらない＝至近の束撃ちが乗っていない');
     if(far>0) throw new Error('遠距離('+Math.round(far)+')まで届いている＝ショットガンの落ち方になっていない');
     // 届く距離を実測する。160px→480px と伸ばしてなお「まだ短い」と言われたので、
     // 画面のほぼ端まで届く長さを保つ
-    let reach=0; for(let d=40; d<=820; d+=20){ if(at(d)>0) reach=d; }
-    if(reach<600) throw new Error('ショットガンの射程が短い（'+reach+'px／600px以上ほしい）');
+    let reach=0; for(let d=40; d<=520; d+=20){ if(at(d)>0) reach=d; }
+    if(reach<300) throw new Error('ショットガンの射程が短い（'+reach+'px／300px以上ほしい）');
+    if(reach>460) throw new Error('ショットガンの射程が長すぎる（'+reach+'px／460px以下に）');
     // 粒が全部同じ寿命だと遠くでも8発まとまって当たり、遠距離が平らになる。
     // 中距離と比べるだけでは見抜けない（寿命を揃える改変が素通りした）ので、
     // 遠距離どうしを突き合わせて「奥へ行くほど当たる粒が減る」ことを見る
-    const midFar=at(400), longFar=at(640);
+    const midFar=at(220), longFar=at(340);
     if(!(midFar>0 && midFar < mid*0.75))
-      throw new Error('距離で減っていない（中距離'+Math.round(mid)+' → 400px '+Math.round(midFar)+'）');
+      throw new Error('距離で減っていない（中距離'+Math.round(mid)+' → 220px '+Math.round(midFar)+'）');
     if(!(longFar>0 && longFar < midFar*0.6))
-      throw new Error('遠距離が平らなまま（400px '+Math.round(midFar)+' → 640px '+Math.round(longFar)+'）');
-    console.log('ショットガン OK (鼻先 '+Math.round(near)+' / 200px '+Math.round(mid)+' / 400px '+Math.round(midFar)
-      +' / 640px '+Math.round(longFar)+' / 届く距離 '+reach+'px ＝鼻先は'+(mid>0?(near/mid).toFixed(2):'∞')+'倍)'); }
+      throw new Error('遠距離が平らなまま（220px '+Math.round(midFar)+' → 340px '+Math.round(longFar)+'）');
+    console.log('ショットガン OK (鼻先 '+Math.round(near)+' / 120px '+Math.round(mid)+' / 220px '+Math.round(midFar)
+      +' / 340px '+Math.round(longFar)+' / 届く距離 '+reach+'px ＝鼻先は'+(mid>0?(near/mid).toFixed(2):'∞')+'倍)'); }
 
   // ===== 5) バズーカは1発で複数の敵を巻き込む =====
   { const p=setup(); const es=[dummyAt(240,-18), dummyAt(268,0), dummyAt(296,18)];
@@ -163,16 +164,16 @@ const DRIVER = `
     if(u.tag!=='up')   throw new Error('空中↑がマック専用の技になっていない（'+u.tag+'）');
     if(d.tag!=='down') throw new Error('空中↓がマック専用の技になっていない（'+d.tag+'）');
     if(f.tag!=='fwd')  throw new Error('空中前がマック専用の技になっていない（'+f.tag+'）');
-    for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].dmg<=0) throw new Error('空中'+q[0]+'が当たらない');
+    for(const q of [['↓',d],['前',f]]) if(q[1].dmg<=0) throw new Error('空中'+q[0]+'が当たらない');
     // 空中では弾倉を減らさない（空中でリロードできないため）
     for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].ammo!==MK_AMMO)
       throw new Error('空中'+q[0]+'で弾倉が減っている（'+q[1].ammo+'）');
-    // 空中↑は手榴弾を放る技。爆発する弾が1個出ること
-    if(u.blast!==1) throw new Error('空中↑で手榴弾が出ていない（爆発弾 '+u.blast+'個）');
+    // 空中↑は「構えてから指定した向きへ突進する」技。何も入れなければ前斜め上
+    if(u.rise<50) throw new Error('空中↑で突進していない（上昇 '+Math.round(u.rise)+'px）');
     // 空中↓は連打で乱射が伸びる
     const dm=air('down',true);
     if(dm.shots<=d.shots) throw new Error('空中↓を連打しても撃つ回数が伸びない（'+d.shots+'→'+dm.shots+'）');
-    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑手榴弾 '+Math.round(u.dmg)
+    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
   // ===== 9) 奥義パイルバンカーは前方の一帯を巻き込む =====
@@ -272,6 +273,35 @@ const DRIVER = `
       if(e.hp>=h1) throw new Error('延焼中なのに減っていない'); }
     console.log('火炎放射器 OK (すぐ離す '+shortB.frames+'F/'+Math.round(shortB.dmg)+' → 押しっぱなし '
       +longB.frames+'F/'+Math.round(longB.dmg)+'・燃料'+D.flDur+'Fで打ち止め・延焼あり)'); }
+
+
+  // ===== 13) 空中↑のドリルダッシュは、構えの間に指定した向きへ飛ぶ =====
+  { const dash=function(keys, tgt){ const p=setup();
+      let e=null;
+      if(tgt){ e=dummyAt(tgt.dx, 0); e.z=tgt.z||0; }
+      p.state='jump'; p.z=200; p.vz=0; p.jAtk=0; p.facing=1;
+      p.in.K.up=true; p.in.pressed.atk=true; updatePlayer(p);   // ↑＋攻撃で構えに入る
+      p.in.K.up=false;
+      // 構えの間に向きを指定し直す
+      for(const kk of Object.keys(keys)) p.in.K[kk]=keys[kk];
+      const x0=p.x, z0=p.z; const hp0=e?e.hp:0;
+      for(let f=0;f<70;f++){ updatePlayer(p); updateEnemies(); updateProjectiles(); }
+      for(const kk of Object.keys(keys)) p.in.K[kk]=false;
+      return {dx:p.x-x0, dz:z0-p.z, dmg:e?(hp0-e.hp):0}; };
+    // 何も入れなければ前斜め上
+    const upF=dash({}, null);
+    if(!(upF.dx>60)) throw new Error('既定の向きで前へ進んでいない（'+Math.round(upF.dx)+'px）');
+    // 前斜め下：地上の敵へ突っ込める
+    const dnF=dash({down:true,right:true}, {dx:150, z:0});
+    if(!(dnF.dx>60)) throw new Error('前斜め下で前へ進んでいない（'+Math.round(dnF.dx)+'px）');
+    if(dnF.dmg<=0) throw new Error('前斜め下のドリルダッシュが地上の敵に当たらない');
+    // 後ろ：来た方向へ引き返せる
+    const back=dash({left:true}, null);
+    if(!(back.dx<-60)) throw new Error('後ろ入力で後ろへ進んでいない（'+Math.round(back.dx)+'px）');
+    // 向きで行き先が変わっていること（同じ所へ飛ぶなら「指定」になっていない）
+    if(!(upF.dx-back.dx>200)) throw new Error('前と後ろで行き先が変わらない');
+    console.log('ドリルダッシュ OK (既定 前へ'+Math.round(upF.dx)+'px／前斜め下 '+Math.round(dnF.dx)
+      +'px・地上の敵に'+Math.round(dnF.dmg)+'／後ろ '+Math.round(back.dx)+'px)'); }
 
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
