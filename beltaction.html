@@ -4086,13 +4086,15 @@ function updatePlayer(){
       mackMuzzle(p, dir, 46, '#fff6c0', 15); sfx.big(p.x); shake=Math.max(shake,7); flash=Math.max(flash,3);
       for(let k=0;k<N;k++){ const sp=(k-(N-1)/2)*0.14;
         spawnProj(p.x+dir*30, p.y, dir*13, 0, {owner:'player', dmg:Math.round(9*mul),
-          color:k%2?'#ffd24d':'#fff6c0', r:7, life:8, zz:44+Math.sin(sp)*22, vzz:Math.sin(sp)*3, nostop:true}); }
+          // 粒ごとに寿命を散らす。全部が同じだと遠くでも8発まとめて当たり、
+          // 「離れるほど当たる粒が減る」というショットガンの落ち方にならない
+          color:k%2?'#ffd24d':'#fff6c0', r:7, life:11+k*3, zz:44+Math.sin(sp)*18, vzz:Math.sin(sp)*1.0, nostop:true}); }
       // 至近の一体には散弾が束で入る。ここがショットガンの「近づけば大ダメージ」
       let best=null,bd=1e9;
       for(const e of enemies){ if(e.dead||e.grabbedBy)continue;
-        const dx=(e.x-p.x)*dir; if(dx<0||dx>80) continue; if(Math.abs(e.y-p.y)>56) continue;
+        const dx=(e.x-p.x)*dir; if(dx<0||dx>200) continue; if(Math.abs(e.y-p.y)>56) continue;
         if(dx<bd){ bd=dx; best=e; } }
-      if(best){ const close=1-clamp(bd/80,0,1);      // 鼻先ほど散弾が束で入る＝ここが「至近で大ダメージ」
+      if(best){ const close=1-clamp(bd/200,0,1);     // 鼻先ほど散弾が束で入る＝ここが「至近で大ダメージ」
         damageEnemy(best, Math.round((24+86*close)*mul*(def.mkShot>=2?1.25:1)), dir*14, true);
         if(!best.dead) launchEnemy(best, dir*(16+14*close), -9-4*close, 3);
         hitStop=Math.max(hitStop,10); triggerSlow(14); } }

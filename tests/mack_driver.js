@@ -63,13 +63,20 @@ const DRIVER = `
 
   // ===== 4) ショットガンは近いほど痛い（射程は短い） =====
   { const at=function(dx){ const p=setup(); const e=dummyAt(dx); const hp0=e.hp;
-      beginAttack('mkShotgun'); run(p, ATK.mkShotgun.dur+30); return hp0-e.hp; };
-    const near=at(20), mid=at(88), far=at(230);
+      beginAttack('mkShotgun'); run(p, ATK.mkShotgun.dur+60); return hp0-e.hp; };
+    const near=at(20), mid=at(200), far=at(560);
     // 散弾そのものは中距離でも当たる。「鼻先だと束で入る」ぶんが乗っているかを見る
     if(near < mid*1.35) throw new Error('鼻先('+Math.round(near)+')と中距離('+Math.round(mid)+')が変わらない＝至近の束撃ちが乗っていない');
-    if(far>0) throw new Error('遠距離('+Math.round(far)+')まで届いている＝ショットガンの射程になっていない');
-    console.log('ショットガン OK (鼻先 '+Math.round(near)+' / 中距離 '+Math.round(mid)+' / 遠距離 '+Math.round(far)
-      +' ＝鼻先は'+(mid>0?(near/mid).toFixed(2):'∞')+'倍)'); }
+    if(far>0) throw new Error('遠距離('+Math.round(far)+')まで届いている＝ショットガンの落ち方になっていない');
+    // 届く距離を実測する。以前は160pxしかなく「短すぎる」と言われた
+    let reach=0; for(let d=40; d<=560; d+=20){ if(at(d)>0) reach=d; }
+    if(reach<380) throw new Error('ショットガンの射程が短い（'+reach+'px／380px以上ほしい）');
+    // 粒が全部同じ寿命だと遠くでも8発まとまって当たる。距離で当たる粒が減ること
+    const midFar=at(340);
+    if(!(midFar>0 && midFar < mid*0.7))
+      throw new Error('距離で減っていない（中距離'+Math.round(mid)+' → 遠め'+Math.round(midFar)+'）');
+    console.log('ショットガン OK (鼻先 '+Math.round(near)+' / 中距離200px '+Math.round(mid)+' / 遠め340px '+Math.round(midFar)
+      +' / 届く距離 '+reach+'px ＝鼻先は'+(mid>0?(near/mid).toFixed(2):'∞')+'倍)'); }
 
   // ===== 5) バズーカは1発で複数の敵を巻き込む =====
   { const p=setup(); const es=[dummyAt(240,-18), dummyAt(268,0), dummyAt(296,18)];
