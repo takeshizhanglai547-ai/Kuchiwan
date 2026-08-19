@@ -2446,9 +2446,11 @@ const ATK={
   // レベルアップの技一覧など「技IDで技を指す」仕組みがそのまま使える
   mkFlame:{name:'火炎放射器', dur:8, act:[2,3], reach:0, hh:0, dmg:0, kb:0, from:-0.25,to:-0.15, len:20, trail:'#ff8a3a', fist:true, flame:1, flDur:104, flDmg:9, flReach:150, flHh:58},
   mkFlame2:{name:'大火炎放射器', dur:8, act:[2,3], reach:0, hh:0, dmg:0, kb:0, from:-0.30,to:-0.15, len:20, trail:'#ffae42', fist:true, flame:2, flDur:140, flDmg:12, flReach:196, flHh:70},
-  // ↓→＝ファニング。撃鉄を掌で叩く扇撃ち。弾は減らないが1発が軽い牽制技
-  mkFanning:{name:'ファニング', dur:30, act:[6,24], reach:30, hh:30, dmg:0, kb:0, from:-0.30,to:0.30, len:16, trail:'#ffe14d', fist:true, special:true, mkFan:1},
-  mkFanning2:{name:'ファニング・八連', dur:38, act:[6,32], reach:30, hh:30, dmg:0, kb:0, from:-0.36,to:0.36, len:16, trail:'#fff6c0', fist:true, special:true, superFx:true, mkFan:2},
+  // ↓→＝グレネードランチャー。バズーカと違って弾そのものを撃ち分ける。
+  // レベルで弾種が変わり、命中時の効き方がまるく変わる（炸裂→榴散→火炎）
+  mkGL:{name:'グレネードランチャー・炸裂弾', dur:34, act:[13,14], reach:30, hh:30, dmg:0, kb:0, from:-0.55,to:-0.25, len:20, trail:'#ffb85a', fist:true, special:true, superFx:true, mkGL:'boom'},
+  mkGL2:{name:'グレネードランチャー・榴散弾', dur:34, act:[13,14], reach:30, hh:30, dmg:0, kb:0, from:-0.58,to:-0.25, len:20, trail:'#dfe8f2', fist:true, special:true, superFx:true, mkGL:'shrap'},
+  mkGL3:{name:'グレネードランチャー・火炎弾', dur:36, act:[13,14], reach:30, hh:30, dmg:0, kb:0, from:-0.60,to:-0.25, len:20, trail:'#ff8a3a', fist:true, special:true, superFx:true, mkGL:'fire'},
   // →↓→＝ライフル狙撃。構えは長いが画面端まで貫く一発
   mkSnipe:{name:'ライフル狙撃', dur:38, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.40,to:-0.30, len:22, trail:'#bfe9ff', fist:true, special:true, superFx:true, mkSnipe:1},
   mkSnipe2:{name:'徹甲弾狙撃', dur:42, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.44,to:-0.30, len:22, trail:'#dff0ff', fist:true, special:true, superFx:true, mkSnipe:2},
@@ -2635,7 +2637,7 @@ const SPECIAL_BASE={
   wanden:{up:'dnuki',    fwd:'dtsubame',  down:'dsuriashi',   dash:'dshukuchi', hadou:'dyae',     dp:'dzantetsu', du:'dzetto'},
   // 早撃ちマック。↑＝手榴弾／前＝バズーカ／下＝丸太／↓↑＝ショットガン。
   // ダッシュはタメと同じドリル突進。↓→と→↓→はガンアクションで埋めた
-  mack:  {up:'mkGrenade', fwd:'mkBazooka', down:'mkFlame',     dash:'mkDrill',   hadou:'mkFanning',dp:'mkSnipe',   du:'mkShotgun'},
+  mack:  {up:'mkGrenade', fwd:'mkBazooka', down:'mkFlame',     dash:'mkDrill',   hadou:'mkGL',     dp:'mkSnipe',   du:'mkShotgun'},
 };
 // ATK に無い（専用ステートで動く）基本技の表示名
 const SPECIAL_BASE_NAME={'inu.down':'スライディング', 'inu.dash':'疾走居合斬り', 'nuko.dash':'マジックレール砲'};
@@ -2647,7 +2649,7 @@ const SPECIAL_UP={
   guard8:{up:[[3,'gupper2']],   du:[[5,'gimpact2']], fwd:[[7,'gsmash2']],    down:[[9,'ghead2']],      hadou:[[10,'gtackle2']], dp:[[10,'gdp2']],       dash:[[12,'gspin2']]},
   watch: {up:[[3,'wsmoke2']],   du:[[5,'wtech2']],   fwd:[[7,'wpistol2']],   down:[[9,'wmine2']],      hadou:[[10,'wknife2']],  dp:[[10,'wflip2']],     dash:[[12,'wheist2']]},
   wanden:{up:[[3,'dnuki2']],    du:[[5,'dzetto2']],  fwd:[[7,'dtsubame2']],  down:[[9,'dsuriashi2']],  hadou:[[10,'dyae2']],    dp:[[10,'dzantetsu2']], dash:[[12,'dshukuchi2']]},
-  mack:  {up:[[3,'mkGrenade2']],du:[[5,'mkShotgun2']],fwd:[[7,'mkBazooka2']],down:[[9,'mkFlame2']],    hadou:[[10,'mkFanning2']],dp:[[10,'mkSnipe2']],  dash:[[12,'mkDrill2']]},
+  mack:  {up:[[3,'mkGrenade2']],du:[[5,'mkShotgun2']],fwd:[[7,'mkBazooka2']],down:[[9,'mkFlame2']],    hadou:[[6,'mkGL2'],[12,'mkGL3']], dp:[[10,'mkSnipe2']],  dash:[[12,'mkDrill2']]},
 };
 // ── 技系統の熟達段位 ──
 // コマンド技7枠は SPECIAL_UP で上位技に差し替わるが、タメ攻撃・掴み技・空中技・
@@ -2696,6 +2698,18 @@ function slotOfMove(p,type){ const k=(p&&p.kind)||'inu';
     for(const u of (ups[sl]||[])) if(u[1]===type) return sl; }
   return null; }
 const CX_MAX=3;   // ひと繋ぎで通せるコマンド技の数（例：波動→昇竜→↓↑）
+// コマンド技どうしのキャンセル先。モーション入力（↓→／→↓→／↓↑）に加えて、
+// 上・下・前の単純な方向技へも繋げる。
+// 通常コンボからのキャンセルにはこれを使わない——歩きながら連打するだけで
+// 前攻撃が暴発して、コンボが繋がらなくなるため
+function cancelTarget(p){
+  if(p.z>0) return null;
+  const m=commandSpecial(p); if(m) return m;
+  const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
+  if(K.up)   return specialFor(p,'up');
+  if(K.down) return specialFor(p,'down');
+  if(fwd)    return specialFor(p,'fwd');
+  return null; }
 // コマンド技の選択（地上・波動/昇竜/↓↑）。通常コンボからのキャンセル発動にも共用
 function commandSpecial(p){ if(p.z>0) return null;
   if(dpReady(p.facing))      return specialFor(p,'dp');
@@ -4014,7 +4028,8 @@ function updatePlayer(){
     if(pressed.atk && a.t>=def.act[0]){
       const curSlot = def.combo? null : slotOfMove(p, a.type);
       if(def.combo || curSlot){
-        const cm=commandSpecial(p), ns=cm? slotOfMove(p,cm) : null;
+        // 通常コンボからはモーション入力のみ、コマンド技からは方向技も含めて繋げる
+        const cm=curSlot? cancelTarget(p) : commandSpecial(p), ns=cm? slotOfMove(p,cm) : null;
         const chain=(p.cxSlots&&p.cxSlots.length)? p.cxSlots : (curSlot?[curSlot]:[]);
         if(cm && ns && chain.indexOf(ns)<0 && chain.length<CX_MAX){
           pressed.atk=false; consumeCmd();
@@ -4291,13 +4306,19 @@ function updatePlayer(){
         shake=Math.max(shake,11); flash=Math.max(flash,4); sfx.launch(p.x); } }
     // 下＝火炎放射器。1フレーム目で「押している間ずっと吹く」専用ステートへ移る
     if(def.flame && a.t===1){ beginMackFlame(p, a.type); return; }
-    // ↓→＝ファニング。撃鉄を掌で叩く扇撃ち。弾倉は減らさない牽制技
-    if(def.mkFan && a.t>=def.act[0] && a.t<=def.act[1] && a.t%3===0){
-      const dir=p.facing, sp=rnd(-0.2,0.2), mul=(p.atkMul||1);
-      spawnProj(p.x+dir*30, p.y, dir*17, 0, {owner:'player', dmg:Math.round((def.mkFan>=2?9:7)*mul),
-        color:(a.t%6)?'#ffe14d':'#fff6c0', r:7, life:40, zz:42+Math.sin(sp)*14, vzz:Math.sin(sp)*4, nostop:true});
-      mackMuzzle(p, dir, 44+Math.sin(sp)*10, '#ffd24d', 5);
-      sfx.gun(p.x, 0.62); }
+    // ↓→＝グレネードランチャー。低い弧で飛び、当たるか時間切れで炸裂する。
+    // 弾種は命中時の効き方だけでなく、飛び方（速さ・重さ）も変える
+    if(def.mkGL && a.t===def.act[0]){
+      const dir=p.facing, mul=(p.atkMul||1), K=def.mkGL;
+      const SP={boom:{vx:9.0, grav:0.30, col:'#ffb85a', dmg:24, R:168, bd:54},
+                shrap:{vx:11.0,grav:0.24, col:'#dfe8f2', dmg:18, R:118, bd:30},
+                fire:{vx:8.2, grav:0.34, col:'#ff8a3a', dmg:20, R:140, bd:36}}[K];
+      spawnProj(p.x+dir*30, p.y, dir*SP.vx, 0, {owner:'player',
+        dmg:Math.round(SP.dmg*mul), color:SP.col, r:11, life:70, zz:48, vzz:3.6, grav:SP.grav,
+        blast:true, blastR:SP.R, blastDmg:Math.round(SP.bd*mul), explode:true, glKind:K});
+      mackMuzzle(p, dir, 46, SP.col, 12);
+      // 技名は superFx の発動演出が出すので、ここでは重ねない（文字が重なって読めなくなる）
+      p.vx=-dir*2.2; shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.launch(p.x, 0.8); }
     // →↓→＝ライフル狙撃。構えてから画面端まで貫く一発
     if(def.mkSnipe){
       if(a.t<def.act[0] && a.t%3===0){ const dir=p.facing;   // 照準の光条が伸びていく
@@ -7553,14 +7574,15 @@ const CH1=[
 '下＋攻撃は火炎放射器。攻撃ボタンを押している間ずっと吹き続け、浴びた敵はしばらく延焼する。吹きながらでも向きを変えてじりじり歩けるぞ。',
 'ただし燃料には限りがある。使い切ると大きな隙になるので、押しっぱなしにせず必要なだけ吹いて指を離すのが上手い使い方じゃ。',
 '後ろ→前＋攻撃はドリル突進！　突進の最中に攻撃を連打すると、そのぶん突き進んでヒット数も伸びる。最大で四回まで繋がるぞ。',
-'溜め攻撃もドリルじゃが、こちらは連打で伸びぬ代わりに一撃が重い。↓→＋攻撃は「ファニング」——弾倉を減らさぬ扇撃ちの牽制。→↓→＋攻撃は「ライフル狙撃」で画面端まで貫くぞ。',
+'溜め攻撃もドリルじゃが、こちらは連打で伸びぬ代わりに一撃が重い。→↓→＋攻撃は「ライフル狙撃」で画面端まで貫くぞ。',
+'↓→＋攻撃は「グレネードランチャー」。低い弧で飛んで炸裂する。腕が上がるにつれ弾そのものが変わり、Lv1は炸裂弾（まとめて吹き飛ばす）、Lv6で榴散弾（破片が扇に散って群れを削る）、Lv12で火炎弾（範囲の敵が延焼する）になるぞ。',
 '掴んでからも技がある。攻撃でゼロ距離早撃ち六射、↑でロケットを括りつけて打ち上げ爆発、後ろで背負い投げから止めの一発、↓でドリルを構えて突進じゃ。',
 '攻撃と掴みの同時押しで「Fireworks」！ワンコミルクを呷ってから、ショットガンを振り回しながら乱射する。押し続けた回数だけ乱射が伸びるぞ。',
 '空中でも技が変わる。攻撃だけなら前へリボルバー（弾倉は減らぬ）、↓で宙返りから真下へ撃ち下ろす「レインストーム」——連打した回数だけ滞空して撃ち続ける。',
 '空中↑は「ドリルダッシュ」。まず刃を構えて一瞬止まり、そのあいだに入れた方向へ真っ直ぐ突っ込む。上へも、前斜め下へも、来た方向へも飛べるぞ。何も入れねば前斜め上じゃ。',
 '奥義はぐるっと一回転＋攻撃で「パイルバンカー」！地に足をつけたまま構えを取り、爆炎を纏った巨大な杭を斜め上へ築き上げて薙ぎ払う！'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！',
-'——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。波動→昇竜→↓↑と三つまで繋げられるぞ。同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
+'——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。↓→や→↓→、↓↑だけでなく、上・下・前の技へも繋げられる。三つまで、同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
@@ -8404,8 +8426,38 @@ function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,nostop:!!o.nostop,noLaunch:!!o.noLaunch,
     pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
     multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,blast:!!o.blast,blastR:o.blastR||110,blastDmg:o.blastDmg||30,
-    grav:o.grav||0,
+    grav:o.grav||0,glKind:o.glKind||null,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
+// グレネードランチャーの弾種ごとの効き。爆発そのもの（projExplode）の「あと」に足す
+//   boom ＝炸裂弾：まとめて吹き飛ばす
+//   shrap＝榴散弾：破片が扇状に飛び、離れた敵まで削る
+//   fire ＝火炎弾：範囲の敵を延焼させ、地面に火が残る
+function mackGLBurst(pr){
+  const K=pr.glKind, x=pr.x, y=pr.y, R=pr.blastR||120, dir=(pr.vx>0?1:-1);
+  if(K==='boom'){
+    for(let k=0;k<2;k++) ring(x,y-20-k*26,k?'#ffffff':'#ffb85a');
+    shake=Math.max(shake,13); flash=Math.max(flash,5);
+    enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
+      if(Math.abs(e.x-x)<R && Math.abs(e.y-y)<96) launchEnemy(e,(e.x<x?-1:1)*20,-13,3); });
+  } else if(K==='shrap'){
+    // 破片は「近くの群れをまとめて削る」ぶんだけ。遠くまで飛ばすと
+    // 画面端まで9発が貫通して、単発の炸裂弾の4倍以上になってしまった（実測304）
+    for(let k=0;k<7;k++){ const a=(k-3)*0.34;
+      spawnProj(x, y, Math.cos(a)*12*dir, Math.sin(a)*3.4, {owner:'player',
+        dmg:Math.round(pr.blastDmg*0.24), color:(k%2)?'#dfe8f2':'#ffffff', r:7, life:14,
+        zz:34+Math.sin(a)*26, vzz:Math.sin(a)*2.2, pierce:true, nostop:true}); }
+    for(let k=0;k<3;k++) ring(x,y-16-k*18,'#dfe8f2');
+    spark(x,y-30,'#ffffff',26,13); sfx.shotgun(x,0.8);
+  } else if(K==='fire'){
+    enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
+      if(Math.abs(e.x-x)<R*1.15 && Math.abs(e.y-y)<96){
+        e.burnT=Math.max(e.burnT||0, 120); e.burnDmg=Math.max(e.burnDmg||0, Math.round(pr.blastDmg*0.10)); } });
+    if(perfTier<2) for(let k=0;k<14;k++)                      // 地面に残る火
+      ember(x+rnd(-R*0.7,R*0.7), LANE-rnd(0,26), rnd(-0.6,0.6), -rnd(1.0,2.6), (k%2)?'#ff8a3a':'#ffd24d');
+    for(let k=0;k<2;k++) ring(x,y-14-k*22,'#ff8a3a');
+    sfx.flame(x);
+  }
+}
 // 爆発（バズーカ弾など）：着弾点周囲に範囲ダメージ
 function projExplode(x,y,R,dmg,color){ color=color||'#ffae42'; ring(x,y,color); ring(x,y,'#fff'); spark(x,y,color,28,13); dust(x,LANE,12);
   shake=Math.max(shake,10); flash=Math.max(flash,4); hitStop=Math.max(hitStop,7); sfx.blast(x, clamp(R/150,0.7,1.5));
@@ -8437,6 +8489,7 @@ function updateProjectiles(){
     if(pr.owner==='player'){
       // 下方向エネルギー弾：地面で爆発（範囲ダメージ）
       if(pr.explode && pr.zz<=2){ ring(pr.x,LANE,pr.color); ring(pr.x,LANE,'#fff'); spark(pr.x,LANE,pr.color,20,11); dust(pr.x,LANE,12); shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.blast(pr.x, 0.85);
+        if(pr.glKind){ pr.y=LANE; mackGLBurst(pr); }
         enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-pr.x)<90){ damageEnemy(e,pr.dmg+4,(e.x<pr.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<pr.x?-1:1)*14,-9,3); } });
         projectiles.splice(i,1); continue; }
       let hit=false; curHitCol=pr.color||'#ffe14d';   // 弾のヒットは弾の色で火花を出す（トレイルとヒットの色を揃える）
@@ -8452,13 +8505,16 @@ function updateProjectiles(){
           projHitFx(pr,e.x,e.y-e.h*0.5);
           if(pr.multihit){ pr.hitAt[e.id]=gf; } else if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
       curHitCol='#ffe14d';
-      if(hit){ if(pr.blast) projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); else projHitFx(pr,pr.x,pr.y-pr.zz); projectiles.splice(i,1); continue; }
+      if(hit){ if(pr.blast){ projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); if(pr.glKind) mackGLBurst(pr); }
+        else projHitFx(pr,pr.x,pr.y-pr.zz); projectiles.splice(i,1); continue; }
     } else {
       let res=null; for(const p of players){ res=projVsPlayer(pr,p); if(res)break; }
       if(res==='reflect') continue;
       if(res==='gone'){ projectiles.splice(i,1); continue; }
     }
-    if(pr.life<=0 || pr.x<camX-100 || pr.x>camX+W+100 || pr.zz<-30){ if(pr.blast && pr.owner==='player' && pr.life<=0) projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); projectiles.splice(i,1); }
+    if(pr.life<=0 || pr.x<camX-100 || pr.x>camX+W+100 || pr.zz<-30){
+      if(pr.blast && pr.owner==='player' && pr.life<=0){ projExplode(pr.x,pr.y,pr.blastR,pr.blastDmg,pr.color); if(pr.glKind) mackGLBurst(pr); }
+      projectiles.splice(i,1); }
   }
 }
 // 着弾エフェクト：進行方向の逆へ扇状に飛ぶ火花＋進行軸へ潰した楕円リング＋0Fの白芯。
@@ -12138,6 +12194,7 @@ function mackGear(p){
   if(st==='attack' && p.atk){ const d=p.atk.def;
     if(d.mkPile) return 'pile';
     if(d.flame) return 'flamer';
+    if(d.mkGL) return 'launcher';
     if(d.mkDrill) return 'drill';
     if(d.mkBazooka) return 'bazooka';
     if(d.mkShot) return 'shotgun';
@@ -12163,6 +12220,15 @@ function drawMackWeapon(hx,hy,ang,gear){
     ctx.fillStyle='#2a3620'; ctx.beginPath(); ctx.ellipse(28,0,3.4,7,0,0,7); ctx.fill();   // 砲口
     ctx.fillStyle='#2a3620'; ctx.beginPath(); ctx.ellipse(-16,0,3,7.5,0,0,7); ctx.fill();  // 後方の噴出口
     ctx.fillStyle='#c8a24a'; ctx.fillRect(2,-9,6,3.4);                        // 照準
+  } else if(gear==='launcher'){
+    ctx.fillStyle='#3a2f22'; roundRect(-10,-2,12,8,2); ctx.fill();            // 銃床
+    ctx.fillStyle='#4a5260'; ctx.beginPath(); ctx.arc(2,0,7.5,0,7); ctx.fill();  // 回転弾倉
+    ctx.fillStyle='#2a3038'; for(let i=0;i<5;i++){ const a=gf*0.05+i*(TAU/5);
+      ctx.beginPath(); ctx.arc(2+Math.cos(a)*4.4, Math.sin(a)*4.4, 1.7, 0,7); ctx.fill(); }
+    ctx.fillStyle='#8a9099'; ctx.fillRect(9,-4.4,17,8.8);                     // 太い銃身
+    ctx.fillStyle='#c8ccd2'; ctx.fillRect(9,-4.4,17,2.6);
+    ctx.fillStyle='#1e242c'; ctx.beginPath(); ctx.ellipse(26,0,2.6,4.6,0,0,7); ctx.fill();
+    ctx.fillStyle='#c8a24a'; ctx.fillRect(12,-7.4,5,3);                       // 照門
   } else if(gear==='flamer'){
     ctx.fillStyle='#3a4a2e'; roundRect(-14,-7,20,14,4); ctx.fill();           // 燃料タンク
     ctx.fillStyle='#5a6e46'; roundRect(-14,-7,20,5,3); ctx.fill();

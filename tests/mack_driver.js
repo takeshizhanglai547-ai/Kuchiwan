@@ -332,7 +332,7 @@ const DRIVER = `
     { const k=kindsOf(fire('mkGrenade',ATK.mkGrenade.dur+140));
       if(!k.blast) throw new Error('手榴弾が爆発音で鳴っていない '+JSON.stringify(k)); }
     // 電撃の流用（zap）に戻っていないこと：主要な銃技はすべて銃系の音を出す
-    for(const id of ['mk1','mkShotgun','mkFanning','mkSnipe','mkBazooka']){
+    for(const id of ['mk1','mkShotgun','mkGL','mkSnipe','mkBazooka']){
       const k=kindsOf(fire(id));
       if(!(k.gun||k.shotgun||k.rifle||k.launch)) throw new Error(id+' が銃系の音を鳴らしていない'); }
     // 敵側：鉄砲兵は銃声、大筒足軽は砲声
@@ -346,6 +346,57 @@ const DRIVER = `
       if(!t1.rifle) throw new Error('鉄砲兵が銃声で鳴っていない '+JSON.stringify(t1));
       if(!t2.launch) throw new Error('大筒足軽が砲声で鳴っていない '+JSON.stringify(t2)); }
     console.log('銃とバズーカの音 OK (リボルバー／6発目は重く／ショットガン／ライフル／バズーカ発射＋着弾爆発／手榴弾／鉄砲兵・大筒足軽)'); }
+
+  // ===== 15) 波動コマンドはグレネードランチャー。レベルで弾種が変わり効果も別 =====
+  { const p0=setup();
+    const tiers=[];
+    for(const lv of [1,6,12]){ p0.level=lv; const id=specialFor(p0,'hadou');
+      if(!ATK[id]) throw new Error('Lv'+lv+' の波動技が ATK に無い: '+id);
+      if(!ATK[id].mkGL) throw new Error('Lv'+lv+' の波動技がグレネードランチャーでない: '+ATK[id].name);
+      tiers.push({lv:lv, id:id, kind:ATK[id].mkGL}); }
+    p0.level=1;
+    const kinds=tiers.map(function(t){ return t.kind; });
+    if(new Set(kinds).size!==3) throw new Error('弾種が3つに分かれていない: '+kinds.join('/'));
+    if(kinds.indexOf('boom')<0||kinds.indexOf('shrap')<0||kinds.indexOf('fire')<0)
+      throw new Error('炸裂弾・榴散弾・火炎弾が揃っていない: '+kinds.join('/'));
+    // 撃って、弾種ごとの効き方の違いを実測する
+    const shoot=function(id){ const p=setup(); p.level=1;
+      enemies.length=0; projectiles.length=0;
+      for(let k=0;k<4;k++){ const e=dummyAt(150+k*60, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
+      const hp0=enemies.map(function(e){ return e.hp; });
+      p.state='idle'; p.z=0; p.atk=null;
+      beginAttack(id);
+      let zMax=0, maxProj=0;
+      for(let f=0;f<130;f++){ updatePlayer(p); updateEnemies(); updateProjectiles();
+        if(projectiles.length>maxProj) maxProj=projectiles.length;
+        for(const e of enemies) if(e.z>zMax) zMax=e.z; }
+      return { dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0),
+               up:zMax, proj:maxProj,
+               burn:enemies.filter(function(e){ return (e.burnT||0)>0; }).length }; };
+    const boom=shoot(tiers.filter(function(t){return t.kind==='boom';})[0].id);
+    const shrap=shoot(tiers.filter(function(t){return t.kind==='shrap';})[0].id);
+    const fire=shoot(tiers.filter(function(t){return t.kind==='fire';})[0].id);
+    for(const q of [['炸裂弾',boom],['榴散弾',shrap],['火炎弾',fire]])
+      if(q[1].dmg<=0) throw new Error(q[0]+'が当たらない');
+    // 炸裂弾＝まとめて吹き飛ばす。爆発そのものにも打ち上げがあるので、
+    // 「他の弾種より明らかに高く飛ぶ」ことで見分ける
+    if(!(boom.up > Math.max(shrap.up, fire.up)*1.4))
+      throw new Error('炸裂弾の吹き飛ばしが他の弾種と変わらない（炸裂'+Math.round(boom.up)
+        +' / 榴散'+Math.round(shrap.up)+' / 火炎'+Math.round(fire.up)+'）');
+    // 榴散弾＝破片が複数飛ぶ
+    if(!(shrap.proj>=5)) throw new Error('榴散弾の破片が出ていない（同時に'+shrap.proj+'発）');
+    if(!(shrap.proj>boom.proj)) throw new Error('榴散弾と炸裂弾で弾の出方が変わらない');
+    // 火炎弾＝範囲の敵が延焼する
+    if(!(fire.burn>=2)) throw new Error('火炎弾で延焼していない（'+fire.burn+'体）');
+    if(boom.burn>0) throw new Error('炸裂弾まで延焼している＝弾種が効いていない');
+    // 3種の威力がかけ離れていないこと（どれかが一択にならないように）
+    const ds=[boom.dmg,shrap.dmg,fire.dmg];
+    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*1.8)
+      throw new Error('弾種の威力に開きがありすぎる（'+ds.map(Math.round).join('/')+'）');
+    console.log('グレネードランチャー OK (Lv'+tiers.map(function(t){return t.lv+'='+t.kind;}).join('・Lv')
+      +'／炸裂 与ダメ'+Math.round(boom.dmg)+'・浮き'+Math.round(boom.up)
+      +'px／榴散 '+Math.round(shrap.dmg)+'・破片'+shrap.proj
+      +'発／火炎 '+Math.round(fire.dmg)+'・延焼'+fire.burn+'体)'); }
 
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });

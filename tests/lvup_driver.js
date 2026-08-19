@@ -177,9 +177,34 @@ const DRIVER = `
       // 繋ぎ直されたら技が頭から出し直されて t が戻る。ここを見るのが一番確実
       if(p.atk && p.atk.type===hadou && p.atk.t<t0)
         throw new Error('同じ枠へ繋ぎ直せてしまう（技が t='+t0+' から出し直されている）'); }
+    // 上・下・前の方向技へもキャンセルできること
+    { const dirOk=[];
+      for(const k of KINDS){
+        for(const slot of ['up','down','fwd']){
+          const p=start(k);
+          const from=specialFor(p,'hadou'), want=specialFor(p,slot);
+          if(!want || !ATK[want] || !ATK[from]) continue;      // その枠を持たないキャラは飛ばす
+          if(slotOfMove(p,want)!==slot) continue;
+          beginAttack(from);
+          for(let f=0;f<ATK[from].act[0]+(ATK[from].hold|0)+2;f++) updatePlayer(p);
+          p.in.K.up=(slot==='up'); p.in.K.down=(slot==='down'); p.in.K.right=(slot==='fwd');
+          p.in.pressed.atk=true; updatePlayer(p);
+          const got=p.atk?p.atk.type:null;
+          p.in.K.up=p.in.K.down=p.in.K.right=false;
+          if(got!==want) throw new Error(k+'：波動から'+slot+'攻撃('+ATK[want].name+')へ繋がらない（'+(got||'技なし')+'）');
+          dirOk.push(k+'.'+slot); } }
+      if(dirOk.length<12) throw new Error('方向技へのキャンセルが通ったのが '+dirOk.length+' 通りしかない'); }
+    // 通常コンボからは方向技へ飛ばないこと。
+    // 歩きながら連打するだけで前攻撃が暴発すると、コンボが繋がらなくなる
+    { const p=start('inu'); const c1=comboMoveFor(p,1);
+      beginAttack(c1);
+      for(let f=0;f<ATK[c1].act[0]+1;f++) updatePlayer(p);
+      p.in.K.right=true; p.in.pressed.atk=true; updatePlayer(p);
+      const got=p.atk?p.atk.type:null; p.in.K.right=false;
+      if(got===specialFor(p,'fwd')) throw new Error('通常コンボ中に前入力で前攻撃が暴発する'); }
     // ひと繋ぎの上限
     if(CX_MAX>4) throw new Error('キャンセルの上限が緩すぎる（'+CX_MAX+'）');
-    console.log('コマンド技どうしのキャンセル OK ('+ok.length+'キャラで波動→昇竜／同じ枠は不可／上限'+CX_MAX+'技)'); }
+    console.log('コマンド技どうしのキャンセル OK ('+ok.length+'キャラで波動→昇竜／上下前の方向技へも／同じ枠は不可／通常コンボからは方向技へ飛ばない／上限'+CX_MAX+'技)'); }
 
   console.log('LEVEL-UP SPECIALS TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
