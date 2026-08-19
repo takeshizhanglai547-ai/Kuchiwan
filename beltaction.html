@@ -707,10 +707,98 @@ const sfx={
     g.gain.linearRampToValueAtTime(0.24,t+0.05); g.gain.exponentialRampToValueAtTime(0.0001,t+0.78);
     s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.6); s.stop(t+0.82);
     tone(96,.28,'sawtooth',.13,-40,null,x); },
+  // ── 銃声 ─────────────────────────────────────────────
+  // 銃の音は「①一瞬の破裂（数ms）②胴の押し ③部屋の余韻」の3層でできている。
+  // これまで銃撃に電撃の zap を流用していたので、撃っている感触が無かった。
+  // v で口径ぶんの重さを変える（リボルバー1／最後の1発1.5／ファニング0.7）
+  gun:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=(v==null?1:v);
+    const r=1+(Math.random()*0.10-0.05);                       // 連射しても機械的に揃わないよう毎発ずらす
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;    // ①破裂（High を一瞬だけ）
+      const hp=actx.createBiquadFilter(); hp.type='highpass';
+      hp.frequency.setValueAtTime(4200*r,t); hp.frequency.exponentialRampToValueAtTime(1400,t+0.03);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.52*V,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.035);
+      s.connect(hp); hp.connect(g); g.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.05); }
+    { const o=actx.createOscillator(), g=actx.createGain();    // ②胴の押し（低域が一気に落ちる）
+      o.type='triangle'; o.frequency.setValueAtTime(190*r,t);
+      o.frequency.exponentialRampToValueAtTime(58,t+0.075);
+      g.gain.setValueAtTime(0.30*V,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
+      o.connect(g); g.connect(O); o.start(t); o.stop(t+0.11); }
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;    // ③余韻（中域が跳ね返る）
+      const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.9;
+      bp.frequency.setValueAtTime(1500,t); bp.frequency.exponentialRampToValueAtTime(420,t+0.16);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.17*V,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+0.20);
+      s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.8); s.stop(t+0.22); } },
+  // ショットガン：破裂が太く、低域が長い。撃ったあとに薬莢を排出する金属音が付く
+  shotgun:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=(v==null?1:v);
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=0.7;
+      lp.frequency.setValueAtTime(6000,t); lp.frequency.exponentialRampToValueAtTime(260,t+0.22);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.60*V,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
+      s.connect(lp); lp.connect(g); g.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.28); }
+    { const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sawtooth'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(38,t+0.20);
+      const lp2=actx.createBiquadFilter(); lp2.type='lowpass'; lp2.frequency.value=520;
+      g.gain.setValueAtTime(0.40*V,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+      o.connect(lp2); lp2.connect(g); g.connect(O); o.start(t); o.stop(t+0.26); }
+    // 排莢：少し遅れて鳴る金属のチャッ
+    tone(2400,.04,'square',.055*V,-900,null,x,.17);
+    noise(.05,.07*V,4200,null,1.4,x); },
+  // ライフル：破裂がさらに鋭く、遠くまで抜ける長い余韻を持つ
+  rifle:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=(v==null?1:v);
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;
+      const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=6500;
+      const g=actx.createGain(); g.gain.setValueAtTime(0.62*V,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.022);
+      s.connect(hp); hp.connect(g); g.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.03); }
+    { const o=actx.createOscillator(), g=actx.createGain();
+      o.type='square'; o.frequency.setValueAtTime(240,t); o.frequency.exponentialRampToValueAtTime(64,t+0.10);
+      g.gain.setValueAtTime(0.30*V,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+      o.connect(g); g.connect(O); o.start(t); o.stop(t+0.14); }
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;   // 谷へ抜けていく尾
+      const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.6;
+      bp.frequency.setValueAtTime(2600,t); bp.frequency.exponentialRampToValueAtTime(300,t+0.55);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.16*V,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+      s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.8); s.stop(t+0.62); } },
+  // バズーカの発射：砲口の押し出し＋噴射が前へ抜ける風＋筒の共鳴
+  launch:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=(v==null?1:v);
+    { const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sawtooth'; o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(42,t+0.30);
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=700;
+      g.gain.setValueAtTime(0.42*V,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+      o.connect(lp); lp.connect(g); g.connect(O); o.start(t); o.stop(t+0.36); }
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;   // 噴射が前へ抜ける
+      const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.8;
+      bp.frequency.setValueAtTime(700,t); bp.frequency.exponentialRampToValueAtTime(3400,t+0.26);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.34*V,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+      s.connect(bp); bp.connect(g); g.connect(O); s.start(t,Math.random()*0.7); s.stop(t+0.36); }
+    tone(150,.09,'square',.14*V,-90,null,x); },                // 筒がカンと鳴る
   // 爆発：低い押し＋破裂＋余韻
-  blast:(x)=>{ tone(78,.36,'sawtooth',.22,-34,null,x);
-    noise(.30,.34,220,null,0.22,x); noise(.10,.26,2400,null,0.9,x);
-    tone(220,.10,'square',.10,-160,null,x); },
+  // 爆発：①瞬間の破裂 ②低いサブが落ちる ③広い帯域が下へ抜ける ④瓦礫の尾。
+  // 以前は tone と noise を4本並べただけで、大砲でも手榴弾でも同じ「ボフ」だった
+  blast:(x,v)=>{ if(!actx||!sndOn) return; const t=actx.currentTime, O=sfxOut(x), V=(v==null?1:v);
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;      // ①破裂
+      const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
+      const g=actx.createGain(); g.gain.setValueAtTime(0.50*V,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+      s.connect(hp); hp.connect(g); g.connect(O); s.start(t,Math.random()*0.9); s.stop(t+0.06); }
+    [[64,1.0],[64*1.008,0.66]].forEach(q=>{                      // ②サブが沈む（腹に来る層）
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(q[0],t); o.frequency.exponentialRampToValueAtTime(28,t+0.62);
+      g.gain.setValueAtTime(0.34*V*q[1],t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.70);
+      o.connect(g); g.connect(O); o.start(t); o.stop(t+0.74); });
+    { const s=actx.createBufferSource(); s.buffer=noiseBuf;      // ③炎が広がる
+      const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=0.7;
+      lp.frequency.setValueAtTime(5200,t); lp.frequency.exponentialRampToValueAtTime(180,t+0.42);
+      const g=actx.createGain(); g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.46*V,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.50);
+      s.connect(lp); lp.connect(g); g.connect(O); s.start(t,Math.random()*0.8); s.stop(t+0.54); }
+    for(let k=0;k<3;k++)                                          // ④跳ねる瓦礫
+      noise(.05,.09*V,1600+k*900,null,1.6,x); },
   ko:(x)=>{tone(120,.3,'sawtooth',.16,-80,null,x); noise(.3,.2,1200,null,0.3,x);},
   // ボスの咆哮／大技：サブのうねり＋中域のうなり＋ノイズテイルの3層（HITSND と同じ設計思想）
   // 奥義の残響：炸裂の「あと」に残る地鳴り。立ち上がりを遅くし、1.6秒かけて沈む。
@@ -3821,7 +3909,7 @@ function updatePlayer(){
         const z0=Math.max(p.z+30,36);
         spawnProj(p.x+dir*30, p.y, dir*14, 0, {owner:'player', dmg:Math.round(15*(p.atkMul||1)),
           color:'#ffe14d', r:9, life:46, zz:z0, vzz:-Math.max(2.0, z0/10), nostop:true});
-        mackMuzzle(p, dir, p.z+38, '#ffd24d', 7); sfx.zap(p.x); }
+        mackMuzzle(p, dir, p.z+38, '#ffd24d', 7); sfx.gun(p.x); }
       else if(K.up && !p.jUpUsed){ p.jUp=true; p.jUpUsed=true; p.jAtk=22; p.vz=Math.max(p.vz,3)+9;   // 空中↑：昇天アッパー（敵を高く打ち上げつつ自分も上昇）
         const col=NUK?'#d6a6ff':SHI?'#aef8ff':(p.kind==='guard8'?'#ffd24d':'#ffe27a'); sfx.rise(p.x); sfx.swing(2, wsndOf(p.weapon), p.x);
         spark(p.x,p.y-p.z-16,col,12,8); ring(p.x,p.y-p.z-30,col); popText(p.x,p.y-p.z-72,NUK?'星昇撃':SHI?'昇天脚':(p.kind==='guard8'?'ハンマーアッパー':p.kind==='watch'?'ツバメ返り':'天翔斬'),'#fff'); }
@@ -3847,7 +3935,7 @@ function updatePlayer(){
           spawnProj(p.x+Math.sin(sp)*12, p.y, Math.sin(sp)*9, 0, {owner:'player',
             dmg:Math.round(13*(p.atkMul||1)), color:'#ffe14d', r:9, life:40,
             zz:Math.max(p.z-6,2), vzz:-12, nostop:true});
-          mackMuzzle(p, p.facing, p.z-4, '#ffd24d', 5); if(p.jMkT%9===0) sfx.zap(p.x); } }
+          mackMuzzle(p, p.facing, p.z-4, '#ffd24d', 5); sfx.gun(p.x, 0.8); } }
       else if(p.jMkUp){ p.jMkT=(p.jMkT||0)+1;
         if(p.jMkT<=MK_AD_HOLD){                                  // 構え：方向を選び直せる
           const d=mackAirDashDir(p); p.mkAng=Math.atan2(-d.y, d.x*p.facing);
@@ -4159,7 +4247,7 @@ function updatePlayer(){
         dmg:Math.round((last?26:15)*(p.atkMul||1)), color:last?'#fff6c0':'#ffe14d',
         r:last?11:8, life:50, zz:44, nostop:!last, blow:last});   // 6発目だけ吹き飛ばす
       mackMuzzle(p, dir, 44, last?'#fff6c0':'#ffd24d', last?11:7);
-      sfx.zap(p.x); if(last){ shake=Math.max(shake,6); flash=Math.max(flash,3); popText(p.x,p.y-104,'ラストバレット！','#fff6c0'); }
+      sfx.gun(p.x, last?1.5:1); if(last){ shake=Math.max(shake,6); flash=Math.max(flash,3); popText(p.x,p.y-104,'ラストバレット！','#fff6c0'); }
       if(p.ammo<=0) popText(p.x,p.y-88,'弾切れ！','#ff9a5a'); }
     if(def.reload){
       if(a.t===4){ sfx.guard(p.x); spark(p.x+p.facing*20,p.y-52,'#c8a24a',5,5); }      // 弾倉を振り出す
@@ -4176,7 +4264,7 @@ function updatePlayer(){
     // ↓↑＝ショットガン。至近距離ほど当たる粒が増え、まとめて入ると吹き飛ぶ
     if(def.mkShot && (a.t===def.act[0] || (def.mkShot>=2 && a.t===def.act[0]+8))){
       const dir=p.facing, mul=(p.atkMul||1), N=8;
-      mackMuzzle(p, dir, 46, '#fff6c0', 15); sfx.big(p.x); shake=Math.max(shake,7); flash=Math.max(flash,3);
+      mackMuzzle(p, dir, 46, '#fff6c0', 15); sfx.shotgun(p.x); shake=Math.max(shake,7); flash=Math.max(flash,3);
       for(let k=0;k<N;k++){ const sp=(k-(N-1)/2)*0.14;
         spawnProj(p.x+dir*30, p.y, dir*13, 0, {owner:'player', dmg:Math.round(9*mul),
           // 粒ごとに寿命を散らす。全部が同じだと遠くでも8発まとめて当たり、
@@ -4200,7 +4288,7 @@ function updatePlayer(){
           blast:true, blastR:168, blastDmg:Math.round(56*mul)});
         mackMuzzle(p, dir, 48, '#ffae42', 20);
         p.vx=-dir*5.4;                                   // 反動で後ろへ下がる
-        shake=Math.max(shake,11); flash=Math.max(flash,4); sfx.big(p.x); sfx.boss(p.x); } }
+        shake=Math.max(shake,11); flash=Math.max(flash,4); sfx.launch(p.x); } }
     // 下＝火炎放射器。1フレーム目で「押している間ずっと吹く」専用ステートへ移る
     if(def.flame && a.t===1){ beginMackFlame(p, a.type); return; }
     // ↓→＝ファニング。撃鉄を掌で叩く扇撃ち。弾倉は減らさない牽制技
@@ -4209,7 +4297,7 @@ function updatePlayer(){
       spawnProj(p.x+dir*30, p.y, dir*17, 0, {owner:'player', dmg:Math.round((def.mkFan>=2?9:7)*mul),
         color:(a.t%6)?'#ffe14d':'#fff6c0', r:7, life:40, zz:42+Math.sin(sp)*14, vzz:Math.sin(sp)*4, nostop:true});
       mackMuzzle(p, dir, 44+Math.sin(sp)*10, '#ffd24d', 5);
-      if(a.t%9===0) sfx.zap(p.x); }
+      sfx.gun(p.x, 0.62); }
     // →↓→＝ライフル狙撃。構えてから画面端まで貫く一発
     if(def.mkSnipe){
       if(a.t<def.act[0] && a.t%3===0){ const dir=p.facing;   // 照準の光条が伸びていく
@@ -4218,7 +4306,7 @@ function updatePlayer(){
         spawnProj(p.x+dir*36, p.y, dir*30, 0, {owner:'player', dmg:Math.round((def.mkSnipe>=2?34:26)*mul),
           color:'#dff0ff', r:10, life:60, zz:46, pierce:true});
         mackMuzzle(p, dir, 46, '#dff0ff', 16);
-        p.vx=-dir*3.2; shake=Math.max(shake,9); flash=Math.max(flash,4); sfx.zap(p.x); sfx.big(p.x); } }
+        p.vx=-dir*3.2; shake=Math.max(shake,9); flash=Math.max(flash,4); sfx.rifle(p.x); } }
     // ドリル突進：回転する刃を前に突き出して進む
     if(def.mkDrill && a.t>=def.act[0] && a.t<=def.act[1]){
       if(a.t%2===0){ const dir=p.facing;
@@ -4674,11 +4762,12 @@ function updateMackThrow(){ const p=player, e=p.grabEnemy, mv=p.mtMv, dir=p.faci
     if(f<34){ e.facing=-dir; e.y=p.y; e.x=p.x+dir*34; e.z=0; }
     if(f>=6 && f<30 && (f-6)%4===0){ const k=(f-6)/4;
       mackMuzzle(p, dir, 46, k===5?'#fff6c0':'#ffd24d', k===5?13:6);
+      sfx.gun(p.x, k===5?1.5:1);
       damageEnemy(e, TD(Math.round((k===5?24:12)*A)), dir*(k===5?9:2), k===5);
       if(k===5 && !e.dead){ e.grabbedBy=0; launchEnemy(e, dir*24, -10, 3);
         shake=12; flash=Math.max(flash,4); hitStop=Math.max(hitStop,12); triggerSlow(20); }
       else { noHitStopOnce=true; }
-      sfx.zap(p.x); p.mtN=k+1; }
+      p.mtN=k+1; }
     if(f>=40){ if(e.grabbedBy)e.grabbedBy=0; mtEnd(p,16); }
   } else if(mv==='rocket'){              // ロケットを括りつけて打ち上げ、頭上で爆発させる
     if(f<10){ e.facing=-dir; e.y=p.y; e.x=p.x+dir*32; e.z=0; }
@@ -4755,7 +4844,8 @@ function updateFireworks(){ const p=player, dir=p.facing;
           dmg:Math.round(11*mul), color:(k%2)?'#ffd24d':'#fff6c0', r:8, life:38,
           zz:46+Math.sin(sp)*26, vzz:Math.sin(sp)*4, nostop:true}); }
       mackMuzzle(p, d2, 46, '#ffd24d', 6); p.fwShots++;
-      if(p.fwShots%4===0){ shake=Math.max(shake,5); sfx.zap(p.x); } }
+      sfx.shotgun(p.x, 0.55);
+      if(p.fwShots%4===0) shake=Math.max(shake,5); }
     return; }
   if(T===MX+1){ ring(p.x,p.y-50,'#ffd24d'); popText(p.x,p.y-110,'Fireworks！ '+p.fwShots+'射','#ffd24d',true);
     flash=Math.max(flash,4); sfx.big(p.x); }
@@ -5328,7 +5418,7 @@ const ETYPE={
     accent:'#d8e8b0',name:'弓兵'},
   teppo:{hp:92,sp:1.4,dmg:32,atkR:340,w:54,h:84,c1:'#4a4a52',c2:'#2c2c33',c3:'#15151a',score:1400,
     sengoku:true,sengKind:'teppo',gunner:true,shotCol:'#ffd6a0',shotSpd:15.5,shotR:8,shotHoming:false,
-    shotWind:34,accent:'#ffb26a',name:'鉄砲兵'},
+    shotWind:34,gunSnd:'rifle',accent:'#ffb26a',name:'鉄砲兵'},
   kibahei:{hp:190,sp:2.2,dmg:30,atkR:96,w:104,h:96,c1:'#5a3a22',c2:'#3a2412',c3:'#1c1008',score:1900,
     sengoku:true,sengKind:'kiba',rider:true,riderKind:'horse',accent:'#ffd24d',name:'騎馬武者'},
   ninja:{hp:82,sp:2.8,dmg:24,atkR:64,w:50,h:80,c1:'#232a33',c2:'#141920',c3:'#080b0f',score:1500,
@@ -5340,10 +5430,10 @@ const ETYPE={
     sengoku:true,sengKind:'souhei',rager:true,armor:true,accent:'#e8d8f0',name:'薙刀僧兵'},
   saika:{hp:72,sp:1.9,dmg:16,atkR:290,w:52,h:80,c1:'#3c5a4a',c2:'#24362c',c3:'#121c16',score:1200,
     sengoku:true,sengKind:'saika',gunner:true,shotCol:'#ffe0b0',shotSpd:13.5,shotR:5,shotHoming:false,
-    shotWind:12,accent:'#a8e8c8',name:'雑賀衆'},
+    shotWind:12,gunSnd:'rifle',accent:'#a8e8c8',name:'雑賀衆'},
   ozutsu:{hp:120,sp:1.0,dmg:40,atkR:380,w:60,h:86,c1:'#4a4238',c2:'#2c2822',c3:'#161412',score:1800,
     sengoku:true,sengKind:'ozutsu',gunner:true,shotCol:'#ffb060',shotSpd:7.5,shotR:18,shotHoming:false,
-    shotWind:48,accent:'#ff9a4a',name:'大筒足軽'},
+    shotWind:48,gunSnd:'cannon',accent:'#ff9a4a',name:'大筒足軽'},
   horo:{hp:120,sp:2.8,dmg:24,atkR:88,w:100,h:92,c1:'#6a4a2a',c2:'#42301a',c3:'#1e1610',score:1700,
     sengoku:true,sengKind:'horo',rider:true,riderKind:'horse',accent:'#ff9ac0',name:'母衣武者'},
   kunoichi:{hp:76,sp:3.0,dmg:20,atkR:250,w:48,h:78,c1:'#3a2a3a',c2:'#221824',c3:'#100a12',score:1600,
@@ -6234,7 +6324,11 @@ function updateEnemies(){
       // 従来は y に銃口の高さを入れており、直進弾は主役のレーンから 50 ずれたまま
       // 素通りしていた（追尾弾は飛びながら y が寄るので当たっていて、気付けなかった）
       if(e.gunT===7){ const dir=e.facing; spawnProj(e.x+dir*26, e.y, dir*_ss, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:_sr,life:120,zz:e.h*0.6,homing:_sh});
-        if(t.shotWind){ sfx.big(e.x); smokePuff(e.x+dir*30, e.y-e.h*0.6, 3, '160,150,140'); flash=Math.max(flash,3); shake=Math.max(shake,4); }
+        // 火薬の得物だけを銃声で鳴らす。同じ shotWind でも くノ一 の投擲は別物なので
+        // gunSnd を持つ敵だけに限る（レイガン兵のような光線銃も zap のまま）
+        if(t.gunSnd==='cannon') sfx.launch(e.x, 1.1);
+        else if(t.gunSnd==='rifle') sfx.rifle(e.x, 0.9);
+        if(t.shotWind){ if(!t.gunSnd) sfx.big(e.x); smokePuff(e.x+dir*30, e.y-e.h*0.6, 3, '160,150,140'); flash=Math.max(flash,3); shake=Math.max(shake,4); }
         else sfx.zap(e.x);
         if(!t.shotWind) flash=Math.max(flash,2); }
       if(e.gunT<=0){ e.state='walk'; e.thinkCd=rnd(22,42); } continue; }
@@ -8314,7 +8408,7 @@ function spawnProj(x,y,vx,vy,o){ o=o||{};
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
 // 爆発（バズーカ弾など）：着弾点周囲に範囲ダメージ
 function projExplode(x,y,R,dmg,color){ color=color||'#ffae42'; ring(x,y,color); ring(x,y,'#fff'); spark(x,y,color,28,13); dust(x,LANE,12);
-  shake=Math.max(shake,10); flash=Math.max(flash,4); hitStop=Math.max(hitStop,7); sfx.big(x);
+  shake=Math.max(shake,10); flash=Math.max(flash,4); hitStop=Math.max(hitStop,7); sfx.blast(x, clamp(R/150,0.7,1.5));
   enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-x)<R && Math.abs(e.y-y)<96){ damageEnemy(e,dmg,(e.x<x?-1:1)*11,true); if(!e.dead)launchEnemy(e,(e.x<x?-1:1)*14,-10,3); } }); }
 // returns 'reflect' | 'gone' | null
 function projVsPlayer(pr,p){
@@ -8342,7 +8436,7 @@ function updateProjectiles(){
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>13)pr.trail.shift();   // 尾を長く取ってリボン化する
     if(pr.owner==='player'){
       // 下方向エネルギー弾：地面で爆発（範囲ダメージ）
-      if(pr.explode && pr.zz<=2){ ring(pr.x,LANE,pr.color); ring(pr.x,LANE,'#fff'); spark(pr.x,LANE,pr.color,20,11); dust(pr.x,LANE,12); shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.big(pr.x);
+      if(pr.explode && pr.zz<=2){ ring(pr.x,LANE,pr.color); ring(pr.x,LANE,'#fff'); spark(pr.x,LANE,pr.color,20,11); dust(pr.x,LANE,12); shake=Math.max(shake,7); flash=Math.max(flash,3); sfx.blast(pr.x, 0.85);
         enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-pr.x)<90){ damageEnemy(e,pr.dmg+4,(e.x<pr.x?-1:1)*10,true); if(!e.dead)launchEnemy(e,(e.x<pr.x?-1:1)*14,-9,3); } });
         projectiles.splice(i,1); continue; }
       let hit=false; curHitCol=pr.color||'#ffe14d';   // 弾のヒットは弾の色で火花を出す（トレイルとヒットの色を揃える）

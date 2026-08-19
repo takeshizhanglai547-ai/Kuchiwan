@@ -303,6 +303,50 @@ const DRIVER = `
     console.log('ドリルダッシュ OK (既定 前へ'+Math.round(upF.dx)+'px／前斜め下 '+Math.round(dnF.dx)
       +'px・地上の敵に'+Math.round(dnF.dmg)+'／後ろ '+Math.round(back.dx)+'px)'); }
 
+  // ===== 14) 銃とバズーカは専用の発射音・爆発音で鳴る =====
+  { const SND=['gun','shotgun','rifle','launch','blast'];
+    for(const k of SND) if(typeof sfx[k]!=='function') throw new Error('専用の音が無い: sfx.'+k);
+    // どの技がどの音を鳴らしたかを、実際に呼ばれた関数で拾う
+    const listen=function(fn){ const real={}, log=[];
+      for(const k of SND){ real[k]=sfx[k]; (function(kk){ sfx[kk]=function(x,v){ log.push({k:kk, v:(v==null?1:v)}); }; })(k); }
+      try{ fn(); } finally { for(const k of SND) sfx[k]=real[k]; }
+      return log; };
+    const fire=function(id,frames){ const p=setup(); dummyAt(70);
+      p.ammo=MK_AMMO; p.state='idle'; p.z=0; p.atk=null;
+      return listen(function(){ beginAttack(id);
+        for(let f=0;f<(frames||ATK[id].dur+80);f++){ updatePlayer(p); updateProjectiles(); } }); };
+    const kindsOf=function(log){ const o={}; for(const e of log) o[e.k]=(o[e.k]||0)+1; return o; };
+    // リボルバー：1〜5発目と6発目で音の重さが変わる
+    { const a=fire('mk1'), b=fire('mk6');
+      if(!kindsOf(a).gun) throw new Error('リボルバーが銃声で鳴っていない '+JSON.stringify(kindsOf(a)));
+      if(!kindsOf(b).gun) throw new Error('6発目が銃声で鳴っていない');
+      const va=a.filter(function(e){return e.k==='gun';})[0].v, vb=b.filter(function(e){return e.k==='gun';})[0].v;
+      if(!(vb>va)) throw new Error('6発目の銃声が1発目と同じ重さ（'+va+' / '+vb+'）'); }
+    // ショットガン／ライフル／バズーカ
+    { const k=kindsOf(fire('mkShotgun')); if(!k.shotgun) throw new Error('ショットガンが専用音で鳴っていない '+JSON.stringify(k)); }
+    { const k=kindsOf(fire('mkSnipe'));   if(!k.rifle)   throw new Error('ライフル狙撃が専用音で鳴っていない '+JSON.stringify(k)); }
+    { const k=kindsOf(fire('mkBazooka',ATK.mkBazooka.dur+120));
+      if(!k.launch) throw new Error('バズーカが発射音で鳴っていない '+JSON.stringify(k));
+      if(!k.blast)  throw new Error('バズーカの着弾が爆発音で鳴っていない '+JSON.stringify(k)); }
+    // 手榴弾も爆発音
+    { const k=kindsOf(fire('mkGrenade',ATK.mkGrenade.dur+140));
+      if(!k.blast) throw new Error('手榴弾が爆発音で鳴っていない '+JSON.stringify(k)); }
+    // 電撃の流用（zap）に戻っていないこと：主要な銃技はすべて銃系の音を出す
+    for(const id of ['mk1','mkShotgun','mkFanning','mkSnipe','mkBazooka']){
+      const k=kindsOf(fire(id));
+      if(!(k.gun||k.shotgun||k.rifle||k.launch)) throw new Error(id+' が銃系の音を鳴らしていない'); }
+    // 敵側：鉄砲兵は銃声、大筒足軽は砲声
+    { const shoot=function(ty){ const p=setup(); enemies.length=0;
+        spawnEnemy(ty, p.x+200, p.y); const e=enemies[0];
+        // 射撃の状態へ直接入れる。AIが撃つ気になるまで待つと、
+        // 出現位置や乱数で撃たないまま終わって「音が無い」と誤判定する
+        e.state='gunFire'; e.gunT=8; e.facing=-1;
+        return listen(function(){ for(let f=0;f<6;f++){ gf++; updateEnemies(); updateProjectiles(); } }); };
+      const t1=kindsOf(shoot('teppo')), t2=kindsOf(shoot('ozutsu'));
+      if(!t1.rifle) throw new Error('鉄砲兵が銃声で鳴っていない '+JSON.stringify(t1));
+      if(!t2.launch) throw new Error('大筒足軽が砲声で鳴っていない '+JSON.stringify(t2)); }
+    console.log('銃とバズーカの音 OK (リボルバー／6発目は重く／ショットガン／ライフル／バズーカ発射＋着弾爆発／手榴弾／鉄砲兵・大筒足軽)'); }
+
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
