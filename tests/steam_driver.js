@@ -144,7 +144,8 @@ const DRIVER = `
 
   // ===== 技ごとの専用SE と 格闘ゲーム調のエフェクト =====
   { // 1) 専用SEが存在すること
-    for(const k of ['tornado','beamCharge','beamFire','thunder','blade','flame','blast'])
+    const SE_LIST=['tornado','beamCharge','beamFire','thunder','blade','flame','blast','gun','shotgun','rifle','launch'];
+    for(const k of SE_LIST)
       if(typeof sfx[k]!=='function') throw new Error('専用SEが無い: sfx.'+k);
     // 2) それぞれの技に結線されていること（汎用の sfx.big/boss で済ませていない）
     const src=(f)=>f.toString();
@@ -157,7 +158,7 @@ const DRIVER = `
     if(bsrc.indexOf('sfx.tornado')<0) throw new Error('敵の竜巻に轟音が無い');
     // 3) SEが例外を出さずに鳴ること（無音モードでも経路を通す）
     sndOn=false;
-    for(const k of ['tornado','beamCharge','beamFire','thunder','blade','flame','blast']) sfx[k](100);
+    for(const k of SE_LIST) sfx[k](100);
     // 4) 斬撃の軌跡が多層＋火の粉になっていること
     particles.length=0;
     crescent(400, LANE-50, 90, -0.9, 0.9, '#ffe14d');
@@ -191,7 +192,7 @@ const DRIVER = `
       if(n<20) throw new Error('superFx の技が '+n+' 個しかない');
       const bs=beginAttack.toString();
       if(bs.indexOf('superFlash(')<0) throw new Error('superFx から発動演出が呼ばれていない'); }
-    console.log('技のSEとエフェクト OK (専用SE7種／軌跡'+arcs.length+'層＋火の粉'+embs.length+'個／十字フレア／集中線とカメラの寄り)'); }
+    console.log('技のSEとエフェクト OK (専用SE'+SE_LIST.length+'種／軌跡'+arcs.length+'層＋火の粉'+embs.length+'個／十字フレア／集中線とカメラの寄り)'); }
 
   // ===== 奥義のモーション：深い溜め・3キーの振り抜き・ばねのキック =====
   { setupRoster('inu'); startGame(); state='play';
