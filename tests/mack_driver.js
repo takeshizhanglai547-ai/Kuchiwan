@@ -254,7 +254,9 @@ const DRIVER = `
     if(longB.dmg < shortB.dmg*3) throw new Error('押しっぱなしでも与ダメが伸びない（'+Math.round(shortB.dmg)+'→'+Math.round(longB.dmg)+'）');
     // 無限には吹けない。燃料を使い切れば必ず止まって隙になる
     if(longB.frames > D.flDur+2) throw new Error('燃料の上限を超えて吹き続けている（'+longB.frames+'F）');
-    if(longB.state!=='idle') throw new Error('火炎放射器が終わらない（state='+longB.state+'）');
+    // 「idle に戻る」まで見ると、敵に殴られて hurt になっただけで落ちる。
+    // 確かめたいのは「吹きっぱなしにならない」ことだけ
+    if(longB.state==='mkflame') throw new Error('火炎放射器が終わらない（吹きっぱなし）');
     // 焼いた敵はしばらく延焼する
     { const p=setup(); const e=dummyAt(70);
       p.in.K.down=true; p.in.K.atk=true; p.in.pressed.atk=true; updatePlayer(p); p.in.K.down=false;
