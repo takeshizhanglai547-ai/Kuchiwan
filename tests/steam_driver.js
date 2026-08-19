@@ -1,3 +1,4 @@
+global.__HTML = html;
 const DRIVER = `
 (async()=>{
   const step=(n)=>{ for(let i=0;i<n;i++){ if(global.rafCb){ const cb=global.rafCb; global.rafCb=null; cb(); } } };
@@ -447,6 +448,36 @@ const DRIVER = `
       throw new Error('一番大きい刃が白一色（弾の色が飛んでいる）');
     console.log('衝撃波が帯になっている OK (塗り'+blades.length+'枚／弾色の刃'+big.length+'枚／最大の刃 縦'
       +Math.round(top.ry)+' 色'+top.c+')'); }
+  // ===== タイトル画面：キャラのぶんだけボタンがあり、狭い画面では小さくなること =====
+  { const H=global.__HTML||'';
+    if(!H) throw new Error('HTML を取れていない');
+    // 1) 起動ボタンがキャラ数ぶんある（キャラを足してボタンを忘れると誰も選べない）
+    let nBtn=0, i=0;
+    for(;;){ const j=H.indexOf('class="btn"', i); if(j<0) break; i=j+5;
+      const line=H.slice(H.lastIndexOf('<button', j), H.indexOf('</button>', j));
+      if(line.indexOf('1P ')>=0) nBtn++; }
+    if(nBtn!==CHARS.length) throw new Error('1P ボタンが '+nBtn+'個／キャラは '+CHARS.length+'人');
+    // 2) すべての 1P ボタンに onclick が配線されている
+    let k=0; const ids=[];
+    for(;;){ const j=H.indexOf('id="start', k); if(j<0) break; k=j+9;
+      const q=H.indexOf('"', j+4+5); const id=H.slice(j+4, q+1).replace(/"/g,'');
+      if(ids.indexOf(id)<0) ids.push(id); }
+    for(const id of ids){ if(H.indexOf("getElementById('"+id+"')")<0)
+      throw new Error(id+' に onclick が配線されていない'); }
+    // 3) 狭い画面ではボタンが小さくなる。素の .btn と @media 内の .btn を突き合わせる
+    const px=function(chunk, sel){ const a2=chunk.indexOf(sel); if(a2<0) return null;
+      const b2=chunk.indexOf('font-size:', a2); if(b2<0) return null;
+      return parseFloat(chunk.slice(b2+10)); };
+    const css=H.slice(H.indexOf('<style>'), H.indexOf('</style>'));
+    const mq=css.indexOf('@media (max-width:640px)');
+    if(mq<0) throw new Error('スマホ向けの縮小指定が無い');
+    const base=px(css.slice(0,mq), '.btn {'), small=px(css.slice(mq), '.btn {');
+    if(base==null||small==null) throw new Error('.btn の文字サイズを読めない');
+    if(!(small < base*0.75)) throw new Error('狭い画面でボタンが小さくなっていない（'+base+'px → '+small+'px）');
+    if(css.indexOf('.charrow')<0 || css.indexOf('grid-template-columns')<0)
+      throw new Error('狭い画面でキャラのボタンを畳む指定が無い');
+    console.log('タイトルのボタン OK (1P '+nBtn+'個＝キャラ'+CHARS.length+'人・全部配線済み／狭い画面で '+base+'px→'+small+'px・2列に畳む)'); }
+
   console.log('STEAM POLISH TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
