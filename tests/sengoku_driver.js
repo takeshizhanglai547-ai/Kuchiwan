@@ -817,6 +817,41 @@ const DRIVER = `
     if(wide<80) throw new Error('火柱が細い（'+Math.round(wide)+' / 80以上ほしい）');
     console.log('火柱が炎の大竜巻になっている OK (高さ'+Math.round(tall)+' 幅'+Math.round(wide)+')'); }
 
+  // ===== 半兵衛の召喚は、この戦いで合計8体まで =====
+  { startNG5(true); enemies.length=0; hazards.length=0; projectiles.length=0;
+    const pl=players[0]; pl.active=true; pl.state='idle'; pl.x=400; pl.y=LANE; pl.z=0; pl.hp=pl.maxHp;
+    spawnEnemy('hanbei', 700, LANE);
+    const e=enemies[0];
+    if(!e || ETYPE[e.type].bossKind!=='hanbei') throw new Error('半兵衛が出ていない');
+    let total=0;
+    for(let round=0; round<12; round++){
+      for(const mv of ['kakuyoku','saihai']){
+        e.state='bmove'; e.moveName=mv; e.moveMax=60;
+        for(let f=1; f<=50; f++){ e.moveT=f; runBossMove(e); } }
+      // 湧いた兵を数えて片付ける。倒すそばから湧く状況を再現しないと、
+      // 同時数の頭打ち(4体)に隠れて「総数が無限」であることが見えない
+      for(let i=enemies.length-1;i>=0;i--) if(enemies[i]!==e){ total++; enemies.splice(i,1); } }
+    enemies.length=0;
+    if(total>8) throw new Error('半兵衛が合計 '+total+' 体呼んだ（8体まで）');
+    if(total<4) throw new Error('半兵衛が兵をほとんど呼ばない（合計 '+total+'体）');
+    console.log('半兵衛の召喚 OK (12周ぶん回して合計 '+total+' 体)'); }
+
+  // ===== 3ステージ目でラスボス（炎上する天守）を選べる =====
+  { startNG5(true);
+    const fin=allMapNodes().filter(function(n){ return n.final; })[0];
+    const norm=curWorldLevels().filter(function(n){ return !n.final; });
+    if(!fin) throw new Error('天守のノードが無い');
+    if(norm.length<2) throw new Error('通常ステージが2つ未満');
+    levelsDone={};
+    if(nodeUnlocked(fin)) throw new Error('制覇0で天守が解禁されている');
+    levelsDone[norm[0].id]=true;
+    if(nodeUnlocked(fin)) throw new Error('制覇1で天守が解禁されている（2ステージ目で挑めてしまう）');
+    levelsDone[norm[1].id]=true;
+    if(!nodeUnlocked(fin)) throw new Error('制覇2でも天守が解禁されない（3ステージ目に選べない）');
+    if(!nodeEnterable(fin)) throw new Error('天守が解禁されても入れない');
+    levelsDone={};
+    console.log('天守の解禁 OK (2ステージ制覇＝3ステージ目に選べる)'); }
+
   console.log('SENGOKU TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

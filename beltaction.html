@@ -4925,8 +4925,10 @@ const ETYPE={
     boss:true,mini:true,bossKind:'katsuyori',weapon:'spear',accent:'#ff8a6a',sengoku:true,name:'武田勝頼'},
   hisahide:{hp:980,sp:2.0,dmg:33,atkR:98,w:88,h:112,c1:'#3a2a1a',c2:'#241a10',c3:'#100a06',score:16000,
     boss:true,mini:true,bossKind:'hisahide',weapon:'blade',accent:'#c8ff8a',sengoku:true,name:'梟雄 松永久秀'},
+  // sumMax＝この戦いで呼べる兵の総数。上限が無いと倒すそばから湧き続け、
+  // 半兵衛戦が「取り巻きを延々倒す作業」になって終わらなかった
   hanbei:{hp:900,sp:2.2,dmg:27,atkR:92,w:82,h:110,c1:'#d8d0b8',c2:'#9a9078',c3:'#4a4438',score:14000,
-    boss:true,mini:true,bossKind:'hanbei',weapon:'ogi',accent:'#fff0c0',sengoku:true,name:'今孔明 竹中半兵衛'},
+    boss:true,mini:true,bossKind:'hanbei',weapon:'ogi',accent:'#fff0c0',sengoku:true,sumMax:8,name:'今孔明 竹中半兵衛'},
   kanbei:{hp:1020,sp:1.8,dmg:29,atkR:96,w:84,h:112,c1:'#1a3a4a',c2:'#102630',c3:'#061218',score:15000,
     boss:true,mini:true,bossKind:'kanbei',weapon:'ogi',accent:'#8ad6ff',sengoku:true,name:'軍師 黒田官兵衛'},
   // ---- 三周目・宇宙人のボス ----
@@ -6165,12 +6167,22 @@ function bOrbs(e,n,spreadDeg,spd,dmg,col){ const t=ETYPE[e.type], dir=e.facing, 
   sfx.swing(0, esndOf(e), e.x); }
 function bMeteor(e,n,dmg,col){ const tp=nearestPlayerTo(e.x); for(let i=0;i<n;i++) spawnProj(tp.x+rnd(-180,180), clamp(tp.y+rnd(-12,12),GROUND_TOP,GROUND_BOT), rnd(-1,1), 0, {dmg,color:col||'#ffb02e',r:12,life:60,zz:185,vzz:-7.5}); }
 function bBeam(e,dmg,col){ const t=ETYPE[e.type], dir=e.facing; spawnProj(e.x+dir*30, e.y, dir*13, 0, {dmg,color:col||t.accent,r:18,life:100,zz:60}); sfx.boss(e.x); shake=Math.max(shake,5); }
+// この戦いであと何体まで呼べるか。ETYPE の sumMax を持つボスだけに効く
+// （持たないボスは従来どおり無制限）。e.sumN は敵1体ごとの値なので、
+// 戦いが変われば自然に0へ戻る
+function summonQuota(e,want){
+  const t=ETYPE[e.type], mx=t&&t.sumMax;      // 型を持たない呼び出し（テストの仮の敵）でも落ちないように
+  if(mx==null) return want;
+  return clamp(mx-(e.sumN||0), 0, want); }
+function summonUse(e,n){ if(n>0) e.sumN=(e.sumN||0)+n; }
 function bSummon(e){
   // 呼びすぎると本体が壁の向こうになり、ボス戦が「取り巻きを延々倒す作業」になる。
   // 実測でハデスの与ダメが他のボスの 1/3 まで落ちていた
   let live=0; for(const o of enemies) if(!o.dead && !ETYPE[o.type].boss) live++;
   if(live>=4) return;
-  for(let i=0;i<2;i++) spawnEnemy(lap>=5?(i?'ashigaru':'samurai'):lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
+  const q=summonQuota(e,2); if(!q) return;
+  summonUse(e,q);
+  for(let i=0;i<q;i++) spawnEnemy(lap>=5?(i?'ashigaru':'samurai'):lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
 function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.7, dir>0?-1.05:Math.PI-1.05, dir>0?1.05:Math.PI+1.05, '#ff4d6a');
@@ -6307,10 +6319,16 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
     case 'kakuyoku':
       if(f===1){ popText(e.x,e.y-e.h-24,'鶴翼の陣！','#a8e8c0',true); sfx.boss(e.x); }
       if(f===20){ const tp=nearestPlayerTo(e.x);
+        // 以前はここだけ無条件に2体ずつ湧いていた。総数と同時数の両方で止める
+        let live=0; for(const o2 of enemies) if(!o2.dead && !ETYPE[o2.type].boss) live++;
+        let q=(live>=6)?0:summonQuota(e,2), made=0;
         for(const d2 of [-1,1]){ const x0=tp.x+d2*280;
-          spawnEnemy('ashigaru', clamp(x0, camX+30, camX+W-30), clamp(tp.y+d2*18,GROUND_TOP,GROUND_BOT));
-          const o=enemies[enemies.length-1]; if(o){ o.facing=-d2; o.thinkCd=0; }
-          ring(x0, tp.y, '#a8e8c0'); } }
+          if(made<q){
+            spawnEnemy('ashigaru', clamp(x0, camX+30, camX+W-30), clamp(tp.y+d2*18,GROUND_TOP,GROUND_BOT));
+            const o=enemies[enemies.length-1]; if(o){ o.facing=-d2; o.thinkCd=0; }
+            made++; }
+          ring(x0, tp.y, '#a8e8c0'); }        // 兵が来なくても陣の印は出す（次の挟撃の予兆）
+        summonUse(e,made); }
       if(f===44){ for(const d2 of [-1,1])                               // 両翼から挟む波
         spawnProj(nearestPlayerTo(e.x).x+d2*260, e.y, -d2*10, 0, {owner:'enemy',dmg:t.dmg-8,color:'#a8e8c0',r:13,life:70,zz:40,wave:true}); }
       break;
@@ -6457,8 +6475,10 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
       if(f===20){ let n=0;
         for(const o of enemies){ if(o===e||o.dead||ETYPE[o.type].boss) continue;
           o.buffTill=gf+300; o.thinkCd=0; n++; ring(o.x,o.y,'#fff0c0'); }
-        if(n===0) bSummon(e);                              // 誰も居なければ兵を呼ぶ
-        popText(e.x,e.y-e.h-8, n? ('全軍 鼓舞 '+n+'体') : '兵を呼ぶ','#fff0c0');
+        let called=0;
+        if(n===0){ const before=enemies.length; bSummon(e); called=enemies.length-before; }   // 誰も居なければ兵を呼ぶ
+        // 呼べる兵を使い切ったら、そう言う。「兵を呼ぶ」と出て誰も来ないと不具合に見える
+        popText(e.x,e.y-e.h-8, n? ('全軍 鼓舞 '+n+'体') : (called? '兵を呼ぶ' : '……手勢は尽き申した'),'#fff0c0');
         flashAt(2,'255,240,192',e.x,e.y-50); }
       if(f>20 && f%10===0) spark(e.x+rnd(-40,40), e.y-rnd(20,90), '#fff0c0', 1, 4);
       break;
@@ -7138,7 +7158,8 @@ const WORLD5_LEVELS=[
 const WORLD5_FINAL=[
   {id:'w5tenshu', b:SENGOKU_CH[0], mx:0.90, my:0.18, locked:true, final:true},   // 炎上する天守（織田信長／明智光秀）
 ];
-const NG5_UNLOCK=3;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
+const NG5_UNLOCK=2;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
+                      // ＝3ステージ目でラスボスへ挑める（神話の頂と同じ歩数）
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
