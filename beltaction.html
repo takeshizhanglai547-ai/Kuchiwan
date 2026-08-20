@@ -1749,7 +1749,7 @@ function ultCutIn(kind,name,col){
 function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
 // 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
 const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
-  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝', mack:'装甲車突撃'};
+  guard8:'メガトンクエイク', watch:'ロックンロール', wanden:'秘剣・免許皆伝', mack:'絨毯爆撃'};
 function beginUlt(p){
   const k=p.kind;
   sfx.voice(k,'ult',p.x);
@@ -3857,7 +3857,7 @@ function updatePlayer(){
   if(p.state==='mthrow'){ updateMackThrow(); return; }
   if(p.state==='fworks'){ updateFireworks(); return; }
   if(p.state==='mkflame'){ updateMackFlame(); return; }
-  if(p.state==='mkcar'){ updateMackCar(); return; }
+  if(p.state==='mkraid'){ updateMackRaid(); return; }
   if(p.state==='crit'){ updateCrit(); return; }
   if(p.state==='sgact'){ updateSGAct(); return; }
   if(p.state==='ichimonji'){ updateIchimonji(); return; }
@@ -4458,7 +4458,7 @@ function updatePlayer(){
     if(rotationReady() && p.dim>0){
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
-      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackCar(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
+      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド（Lv10で上位技へ）
@@ -4881,94 +4881,95 @@ function updateFireworks(){ const p=player, dir=p.facing;
     flash=Math.max(flash,4); sfx.big(p.x); }
   if(T>MX+16){ p.state='idle'; p.invuln=Math.max(p.invuln,14); }
 }
-// ══ マックの奥義「装甲車突撃」──装甲車に飛び乗り、突っ走りながら
-//    リボルバー・バズーカ・グレネードを乱射する。攻撃連打で走行が伸びる ══
-const MKCAR_BASE=84, MKCAR_ADD=13, MKCAR_MASH=6, MKCAR_SPD=8.6;
-function beginMackCar(p){
-  p.state='mkcar'; p.carT=0; p.carN=0; p.carOut=0; p.carDir=p.facing; p.carHit={};
+// ══ マックの奥義「絨毯爆撃」──トランシーバーで爆撃機とドローンを呼び、
+//    画面全体を端から端まで焼き払う。攻撃連打で爆撃の回数が伸びる ══
+const MKRAID_CALL=34, MKRAID_RUN=150, MKRAID_ADD=30, MKRAID_MASH=4;
+function beginMackRaid(p){
+  p.state='mkraid'; p.raidT=0; p.raidN=0; p.raidOut=0; p.raidDir=p.facing;
+  p.bomber=null; p.drones=null; p.raidHit={};
   p.vx=0; p.charge=0; p.atk=null; p.atkHeld=false;
-  p.invuln=Math.max(p.invuln, MKCAR_BASE+MKCAR_ADD*MKCAR_MASH+30);
-  popText(p.x,p.y-140,'装甲車突撃！','#ffd24d',true);
-  triggerSlow(18); shake=Math.max(shake,10); flash=Math.max(flash,3);
-  sfx.launch(p.x,0.9); sfx.charge(p.x);
-  if(p.rig){ sprKick(p.rig.sq,-6); sprKick(p.rig.capeT,-8); }
+  p.invuln=Math.max(p.invuln, MKRAID_CALL+MKRAID_RUN+MKRAID_ADD*MKRAID_MASH+40);
+  popText(p.x,p.y-140,'爆撃要請！　座標送る！','#ffd24d',true);
+  triggerSlow(20); sfx.charge(p.x); sfx.zap(p.x);      // 無線のノイズ
 }
-function mkCarMax(p){ return MKCAR_BASE + MKCAR_ADD*Math.min(MKCAR_MASH,(p.carN||0)); }
-function updateMackCar(){
-  const p=player, dir=p.carDir||p.facing, mul=(p.atkMul||1)*evoMul(p), pr=p.in.pressed;
-  if(p.carOut>0){ p.carOut--; p.vx*=0.82; p.x+=p.vx;
-    if(p.carOut%4===0) dust(p.x-dir*20,p.y,3);
-    if(p.carOut<=0) p.state='idle';
+function mkRaidMax(p){ return MKRAID_RUN + MKRAID_ADD*Math.min(MKRAID_MASH,(p.raidN||0)); }
+function updateMackRaid(){
+  const p=player, dir=p.raidDir||p.facing, mul=(p.atkMul||1)*evoMul(p), pr=p.in.pressed;
+  if(p.raidOut>0){ p.raidOut--; if(p.raidOut<=0) p.state='idle'; return; }
+  p.raidT++; p.facing=dir; p.invuln=Math.max(p.invuln,10);
+  const T=p.raidT;
+  // ── 呼び出し：トランシーバーを構えて座標を送る ──
+  if(T<=MKRAID_CALL){
+    if(T%6===0){ spark(p.x+dir*18, p.y-96, '#bfe9ff', 2, 5); sfx.guard(p.x); }   // 無線の応答
+    if(T===MKRAID_CALL){
+      p.bomber={sx:-160, y:70};                                                   // 画面の左外から入ってくる
+      p.drones=[{sx:W+120, y:150, ph:0},{sx:W+220, y:210, ph:2.1},{sx:W+320, y:120, ph:4.2}];
+      sfx.launch(p.x,1.1); shake=Math.max(shake,8); flash=Math.max(flash,3);
+      popText(p.x,p.y-118,'ブラボー隊、来る！','#ffd24d'); }
     return; }
-  p.carT++; p.facing=dir; p.invuln=Math.max(p.invuln,10);
-  // 連打の手応えは音と締めの表示で返す。1回ごとに ×N を出すと
-  // 6個の文字が画面に居座って、肝心の爆発が読めなくなる
-  if(pr.atk){ pr.atk=false; if((p.carN||0)<MKCAR_MASH){ p.carN=(p.carN||0)+1;
-      sfx.get(p.x); spark(p.x, p.y-70, '#ffd24d', 5, 7); } }
-  const T=p.carT, MX=mkCarMax(p);
-  if(T<=MX){
-    p.x=clamp(p.x+dir*MKCAR_SPD, camX+24, Math.min(WORLD_END, camX+W-24));
-    if(T%3===0){ dust(p.x-dir*26,p.y,2); }
-    if(T%6===0) sfx.step(p.x,'metal',1.2);
-    // 轢く：車体に触れた敵をまとめて跳ね飛ばす
-    enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
-      const dx=(e.x-p.x)*dir; if(dx<-46||dx>52) return; if(Math.abs(e.y-p.y)>50) return;
-      if((p.carHit[e.id]||0)>gf-14) return; p.carHit[e.id]=gf;
-      damageEnemy(e, Math.round(17*mul), dir*14, true);
-      if(!e.dead) launchEnemy(e, dir*20, -12, 3);
-      spark(e.x,e.y-e.h*0.5,'#ffd24d',12,10); shake=Math.max(shake,7); });
-    // ① リボルバーの連射
-    if(T%5===0){ const sp=rnd(-0.22,0.22);
-      spawnProj(p.x+dir*40, p.y, dir*18, 0, {owner:'player', dmg:Math.round(10*mul),
-        color:(T%8)?'#ffe14d':'#fff6c0', r:8, life:44, zz:52+Math.sin(sp)*20, vzz:Math.sin(sp)*3, nostop:true});
-      mackMuzzle(p, dir, 54, '#ffd24d', 5); if(T%12===0) sfx.gun(p.x,0.55); }
-    // ② バズーカ
-    if(T%26===13){ spawnProj(p.x+dir*46, p.y, dir*12, 0, {owner:'player', dmg:Math.round(20*mul),
-        color:'#ff8a3a', r:14, life:70, zz:62, blast:true, blastR:140, blastDmg:Math.round(32*mul)});
-      mackMuzzle(p, dir, 64, '#ffae42', 14); sfx.launch(p.x,0.8); shake=Math.max(shake,6); }
-    // ③ グレネード（空中で割れる）
-    if(T%36===25){ spawnProj(p.x+dir*36, p.y, dir*8.4, 0, {owner:'player', dmg:Math.round(18*mul),
-        color:'#ffb85a', r:11, life:80, zz:66, vzz:5.0, grav:0.30,
-        blast:true, blastR:150, blastDmg:Math.round(36*mul), explode:true, glKind:'boom',
-        splitT:11, splitN:3});
-      sfx.launch(p.x,0.7); }
+  const R=T-MKRAID_CALL, MX=mkRaidMax(p);
+  if(pr.atk){ pr.atk=false; if((p.raidN||0)<MKRAID_MASH && R<MX-20){ p.raidN=(p.raidN||0)+1;
+      sfx.get(p.x); spark(p.x, p.y-70, '#ffd24d', 5, 7);
+      if(p.drones) p.drones.push({sx:W+140, y:110+((p.raidN*47)%120), ph:p.raidN*1.7}); } }
+  if(R<=MX){
+    // ── 爆撃機：画面を横切りながら等間隔で爆弾を落とす ──
+    const B=p.bomber;
+    if(B){ B.sx+=6.4; if(B.sx>W+200) B.sx=-200;                                   // 端まで抜けたら折り返して二度目の爆撃
+      if(R%9===0){ const wx=camX+B.sx+rnd(-14,14);
+        spawnProj(wx, LANE, rnd(-0.6,0.6), 0, {owner:'player', dmg:Math.round(10*mul),
+          color:'#ffb85a', r:11, life:140, zz:H-B.y-30, vzz:-8.4,
+          blast:true, blastR:118, blastDmg:Math.round(19*mul), explode:true});
+        if(R%27===0) sfx.launch(p.x,0.45); } }
+    // ── ドローン：ゆっくり流れながら真下へ撃ち下ろす ──
+    if(p.drones) for(let i=0;i<p.drones.length;i++){ const d=p.drones[i];
+      d.sx-=3.2; d.y+=Math.sin(gf*0.06+d.ph)*0.9;
+      if(d.sx<-140) d.sx=W+140;
+      if((R+i*4)%15===0){ const wx=camX+d.sx;
+        spawnProj(wx, LANE, rnd(-1.2,1.2), 0, {owner:'player', dmg:Math.round(7*mul),
+          color:'#dff0ff', r:8, life:120, zz:H-d.y-20, vzz:-11, nostop:true});
+        if((R+i*4)%36===0) sfx.gun(p.x,0.4); } }
+    if(R%30===0) shake=Math.max(shake,5);
     return; }
-  if(T===MX+1){ // 急停止：土煙と締めの一発
-    shake=Math.max(shake,14); flash=Math.max(flash,4); dust(p.x,p.y,16);
-    projExplode(p.x+dir*70, p.y, 170, Math.round(40*mul), '#ffae42');
-    popText(p.x,p.y-124,'走行 '+MX+'F ／ 連打 ×'+(p.carN||0),'#ffd24d');
-    p.vx=dir*6; sfx.blast(p.x,1.2); }
-  if(T>MX+18){ p.carOut=14; }
+  // ── 締め：画面を端から端まで一斉に叩く ──
+  if(R===MX+1){
+    for(let k=0;k<7;k++){ const wx=camX+40+k*(W-80)/6;
+      spawnProj(wx, LANE, 0, 0, {owner:'player', dmg:Math.round(16*mul),
+        color:'#ffae42', r:14, life:120, zz:H-40-k*8, vzz:-13,
+        blast:true, blastR:150, blastDmg:Math.round(28*mul), explode:true}); }
+    flash=Math.max(flash,6); shake=Math.max(shake,16); triggerSlow(26);
+    sfx.blast(p.x,1.3); sfx.boss(p.x);
+    popText(p.x,p.y-124,'爆撃 '+MX+'F ／ 増援 ×'+(p.raidN||0),'#ffd24d'); }
+  if(R>MX+30){ p.bomber=null; p.drones=null; p.raidOut=16; }
 }
-// 装甲車の絵。本体の上に重ねて描く（乗り込んでいるように見せる）
-function drawMackCar(p){
-  if(p.state!=='mkcar') return;
-  const sx=p.x-camX, sy=p.y-groundLift(p.x), dir=p.carDir||p.facing;
-  const run=(p.carOut>0)?0:1, T=p.carT||0;
-  ctx.save(); ctx.translate(sx,sy); ctx.scale(dir,1);
-  const bob=Math.sin(T*0.55)*1.6*run;
-  ctx.translate(0,bob);
-  // 車体（前が低く後ろが高い装甲の楔）
-  ctx.fillStyle='#3a4a2e'; ctx.beginPath();
-  ctx.moveTo(-46,-6); ctx.lineTo(-40,-46); ctx.lineTo(10,-52); ctx.lineTo(44,-30);
-  ctx.lineTo(52,-8); ctx.lineTo(-46,-6); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#5a6e46'; ctx.beginPath();
-  ctx.moveTo(-40,-46); ctx.lineTo(10,-52); ctx.lineTo(24,-40); ctx.lineTo(-36,-34); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#2a3620'; ctx.fillRect(-46,-14,98,8);                    // サイドスカート
-  ctx.fillStyle='#c8a24a'; ctx.fillRect(28,-30,18,5);                      // 前面の装甲板
-  // 排気（走行中だけ）
-  if(run && perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
-    ctx.globalAlpha=0.5+0.3*Math.sin(T*0.9);
-    ctx.fillStyle=radGrad(-52,-30,16,'rgba(255,150,60,.9)','rgba(255,80,20,0)');
-    ctx.beginPath(); ctx.arc(-52,-30,16,0,7); ctx.fill(); ctx.restore(); }
-  // 車輪
-  for(const wx of [-30,2,34]){ ctx.fillStyle='#1a1e14';
-    ctx.beginPath(); ctx.arc(wx,-4,11,0,7); ctx.fill();
-    ctx.strokeStyle='#8a9099'; ctx.lineWidth=2.4;
-    ctx.save(); ctx.translate(wx,-4); ctx.rotate(T*0.55*run);
-    for(let k=0;k<3;k++){ ctx.rotate(TAU/3); ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(6,0); ctx.stroke(); }
+// 爆撃機とドローンの絵。どちらも画面座標で描く（空を飛んでいるので地形に乗らない）
+function drawMackRaid(p){
+  if(p.state!=='mkraid') return;
+  const B=p.bomber;
+  if(B){ ctx.save(); ctx.translate(B.sx, B.y);
+    ctx.fillStyle='#2a3620'; ctx.beginPath();                                     // 胴
+    ctx.moveTo(-52,0); ctx.quadraticCurveTo(-30,-11,26,-9); ctx.quadraticCurveTo(56,-4,60,0);
+    ctx.quadraticCurveTo(40,7,-20,8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3a4a2e'; ctx.beginPath();                                     // 主翼
+    ctx.moveTo(-6,-2); ctx.lineTo(30,-2); ctx.lineTo(16,20); ctx.lineTo(-14,20); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-6,-2); ctx.lineTo(30,-2); ctx.lineTo(18,-20); ctx.lineTo(-10,-20); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#1e2618'; ctx.beginPath();                                     // 尾翼
+    ctx.moveTo(-52,0); ctx.lineTo(-42,-18); ctx.lineTo(-32,0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#bfe9ff'; ctx.beginPath(); ctx.ellipse(44,-3,8,4,0,0,7); ctx.fill();   // 風防
+    for(const ex of [-2,22]){ ctx.fillStyle='#4a5260';                            // エンジン
+      roundRect(ex-6,6,12,8,3); ctx.fill();
+      if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.6;
+        ctx.fillStyle=radGrad(ex-10,10,10,'rgba(255,180,90,.9)','rgba(255,120,40,0)');
+        ctx.beginPath(); ctx.arc(ex-10,10,10,0,7); ctx.fill(); ctx.restore(); } }
     ctx.restore(); }
-  ctx.restore();
+  if(p.drones) for(const d of p.drones){ ctx.save(); ctx.translate(d.sx, d.y);
+    ctx.fillStyle='#3a4450'; roundRect(-9,-5,18,10,3); ctx.fill();                // 機体
+    ctx.fillStyle='#c8ccd2'; ctx.fillRect(-9,-5,18,3);
+    ctx.fillStyle='#ff5a3a'; ctx.beginPath(); ctx.arc(0,0,2.2,0,7); ctx.fill();   // 目印の赤灯
+    ctx.strokeStyle='#8a9099'; ctx.lineWidth=2;
+    for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(s*7,-3); ctx.lineTo(s*15,-8); ctx.stroke();
+      ctx.save(); ctx.translate(s*15,-8); ctx.rotate(gf*0.9+d.ph);                // 回るローター
+      ctx.fillStyle='rgba(220,235,250,.55)'; ctx.beginPath(); ctx.ellipse(0,0,9,2,0,0,7); ctx.fill(); ctx.restore(); }
+    ctx.restore(); }
 }
 // ── ワッチ：掴んで盗む（雑魚から武器・技・小判をスリ取る）──
 const STEAL_WEAPONS=['spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail'];
@@ -7678,7 +7679,7 @@ const CH1=[
 '攻撃と掴みの同時押しで「Fireworks」！ワンコミルクを呷ってから、ショットガンを振り回しながら乱射する。押し続けた回数だけ乱射が伸びるぞ。',
 '空中でも技が変わる。攻撃だけなら前へリボルバー（弾倉は減らぬ）、↓で宙返りから真下へ撃ち下ろす「レインストーム」——連打した回数だけ滞空して撃ち続ける。',
 '空中↑は「ドリルダッシュ」。まず刃を構えて一瞬止まり、そのあいだに入れた方向へ真っ直ぐ突っ込む。上へも、前斜め下へも、来た方向へも飛べるぞ。何も入れねば前斜め上じゃ。',
-'奥義はぐるっと一回転＋攻撃で「装甲車突撃」！装甲車に飛び乗って突っ走り、轢きながらリボルバー・バズーカ・グレネードを乱射する。攻撃を連打した回数だけ走行が伸び、最後は急停止して締めの一発じゃ！'],
+'奥義はぐるっと一回転＋攻撃で「絨毯爆撃」！トランシーバーで爆撃機とドローンを呼び、画面じゅうを端から端まで焼き払う。攻撃を連打すればドローンの増援が来て、爆撃も長引くぞ。締めは横一線の一斉投下じゃ！'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！',
 '——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。↓→や→↓→、↓↑だけでなく、上・下・前の技へも繋げられる。三つまで、同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',
@@ -8906,7 +8907,7 @@ function render(){
         ctx.restore(); o.pl.x=sx0; }
       if(o.pl.vehicle){ drawMountedVehicle(o.pl); const sz=o.pl.z; o.pl.z+=mountLift(o.pl); drawPlayer(); o.pl.z=sz; drawMountWeapon(o.pl); }   // 乗り物→鞍上に騎手→武器
       else { drawPlayer(); if(o.pl.state==='gatling') drawGatlingGun(o.pl);
-        if(o.pl.kind==='mack'){ drawMackCar(o.pl); drawMackAmmo(o.pl); } } }
+        if(o.pl.kind==='mack'){ drawMackRaid(o.pl); drawMackAmmo(o.pl); } } }
     else drawEnemy(o.e); });
   player=players[0];
   drawHazards();
@@ -11104,11 +11105,10 @@ function drawPlayer(){
     else { const rr=(f>=4&&f<30)?1:0;                                        // ドリル突進：前傾で押し込む
       lean=0.34*rr; swAng=-0.06; backArm=0.30; faL1=14; faL2=14; faW=1.2;
       bodyX=6*rr; thF=0.5*rr; thB=-0.5*rr; kF=0.8*rr; kB=0.9*rr; sqX=1+0.08*rr; sqY=1-0.09*rr; } }
-  else if(st==='mkcar'){ mode='gun';                          // 装甲車：身を乗り出して撃ちまくる
-    const T=p.carT||0, run=(p.carOut>0)?0:1, rc=Math.abs(Math.sin(T*0.62))*run;
-    lean=-0.22-0.08*rc; swAng=-0.22-0.10*rc; backArm=0.50; faL1=13; faL2=13; faW=1.1;
-    bodyY=-6; bodyX=2; thF=0.95; thB=0.72; kF=1.45; kB=1.55;
-    sqX=1+0.04*rc; sqY=1-0.04*rc; }
+  else if(st==='mkraid'){ mode='gun';                         // 爆撃要請：トランシーバーを耳へ当てて空を仰ぐ
+    const T=p.raidT||0, called=(T>MKRAID_CALL)?1:0;
+    lean=-0.30+0.10*called; swAng=-1.55+0.25*called; backArm=0.30; faL1=11; faL2=11; faW=1.0;
+    bodyY=-2; thF=0.26; thB=-0.24; kF=0.50; kB=0.44; sqX=1-0.03; sqY=1+0.04; }
   else if(st==='mkflame'){ mode='gun';                        // 火炎放射器：腰を落として噴射口を前へ
     const rc=Math.abs(Math.sin((p.flT||0)*0.55))*(p.flOut>0?0:1);
     lean=-0.16-0.05*rc; swAng=-0.10-0.06*rc; backArm=0.62; faL1=13; faL2=13; faW=1.15;
@@ -11347,7 +11347,7 @@ function drawPlayer(){
     const _tgt={bodyY,bodyX,lean,swAng,swExt,backArm,thF,thB,kF,kB,sqX,sqY,faL1,faL2,faW,legF1,legF2};
     let B=p.poseB;
     if(!B){ B=p.poseB=Object.assign({},_tgt); }
-    const snappy=(st==='attack'||st==='wthrow'||st==='mthrow'||st==='fworks'||st==='mkflame'||st==='mkcar'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling'||st==='sgact');
+    const snappy=(st==='attack'||st==='wthrow'||st==='mthrow'||st==='fworks'||st==='mkflame'||st==='mkraid'||st==='dogret'||st==='ichimonji'||st==='rush'||st==='tkick'||st==='iaidash'||st==='dunk'||st==='guard'||st==='iparry'||st==='gquake'||st==='gatling'||st==='sgact');
     const k=snappy?0.5:(st==='hurt'||st==='down'||st==='dead')?0.80:(st==='land'||st==='getup')?0.55:0.26;
     const kArm=snappy?0.74:k;   // 武器腕は俊敏に振り切る（高速連撃でも振り幅を殺さない）
     for(const key in _tgt){ const kk=(key==='swAng'||key==='swExt'||key==='backArm')?kArm:k;
