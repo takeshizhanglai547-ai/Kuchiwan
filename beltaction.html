@@ -2458,10 +2458,10 @@ const ATK={
   // →↓→＝ライフル狙撃。構えは長いが画面端まで貫く一発
   mkSnipe:{name:'ライフル狙撃', dur:38, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.40,to:-0.30, len:22, trail:'#bfe9ff', fist:true, special:true, superFx:true, mkSnipe:1},
   mkSnipe2:{name:'徹甲弾狙撃', dur:42, act:[18,19], reach:30, hh:30, dmg:0, kb:0, from:-0.44,to:-0.30, len:22, trail:'#dff0ff', fist:true, special:true, superFx:true, mkSnipe:2},
-  // 後ろ前＝ドリル突進。連打すると技を撃ち直して、ヒット数も突進距離も伸びる
-  // （タメ攻撃のドリルは伸びない。同じ得物でも使い分けが残るようにする）
-  mkDrill:{name:'ドリル突進', dur:34, act:[4,28], reach:76, hh:50, dmg:7, kb:5, from:-0.18,to:0.18, len:26, trail:'#bfe9ff', fist:true, move:8.6, multi:true, multiGap:4, stinger:true, respin:true, respinMax:4, respinAt:22, mkDrill:1},
-  mkDrill2:{name:'大回転ドリル突進', dur:42, act:[4,36], reach:88, hh:56, dmg:10, kb:6, from:-0.22,to:0.22, len:30, trail:'#dff0ff', fist:true, move:9.6, multi:true, multiGap:4, stinger:true, respin:true, respinMax:5, respinAt:28, mkDrill:2},
+  // 後ろ前＝溜めてから正面へ巨大な杭を突き出す。連打で伸びる突進ではなく、
+  // 「一発だけ、当たれば画面端まで吹き飛ぶ」単発技（multi を付けない＝1体1ヒット）
+  mkPileB:{name:'パイルバンカー', hold:12, dur:52, act:[10,24], reach:130, hh:66, dmg:34, kb:20, from:-0.04,to:0.04, len:64, trail:'#ffd24d', fist:true, pivotY:-52, knock:true, superFx:true, pileB:1},
+  mkPileB2:{name:'剛・パイルバンカー', hold:14, dur:60, act:[12,28], reach:154, hh:74, dmg:46, kb:24, from:-0.05,to:0.05, len:76, trail:'#fff6c0', fist:true, pivotY:-52, knock:true, superFx:true, pileB:2},
   mkCharge:{name:'ドリルチャージ', charged:true, ctier:0, dur:38, act:[4,32], reach:82, hh:52, dmg:9, kb:6, from:-0.18,to:0.18, len:28, trail:'#bfe9ff', fist:true, move:9.0, multi:true, multiGap:4, stinger:true, mkDrill:1},
   mkCharge2:{name:'剛・ドリルチャージ', hold:5, charged:true, ctier:1, dur:44, act:[4,38], reach:94, hh:58, dmg:12, kb:7, from:-0.22,to:0.22, len:32, trail:'#dff0ff', fist:true, move:10.0, multi:true, multiGap:4, stinger:true, mkDrill:2},
   mkCharge3:{name:'極・ドリルインパクト', hold:4, charged:true, ctier:2, dur:52, act:[4,44], reach:108, hh:64, dmg:15, kb:8, from:-0.26,to:0.26, len:36, trail:'#ffffff', fist:true, move:11.0, multi:true, multiGap:4, stinger:true, superFx:true, mkDrill:3},
@@ -2639,8 +2639,8 @@ const SPECIAL_BASE={
   watch: {up:'wsmoke',   fwd:'wpistol',   down:'wmine',       dash:'wheist',    hadou:'wknife',   dp:'wflip',     du:'wtech'},
   wanden:{up:'dnuki',    fwd:'dtsubame',  down:'dsuriashi',   dash:'dshukuchi', hadou:'dyae',     dp:'dzantetsu', du:'dzetto'},
   // 早撃ちマック。↑＝手榴弾／前＝バズーカ／下＝丸太／↓↑＝ショットガン。
-  // ダッシュはタメと同じドリル突進。↓→と→↓→はガンアクションで埋めた
-  mack:  {up:'mkGrenade', fwd:'mkBazooka', down:'mkFlame',     dash:'mkDrill',   hadou:'mkGL',     dp:'mkSnipe',   du:'mkShotgun'},
+  // ダッシュ（後ろ前）はパイルバンカー。タメ攻撃はドリル突進のまま。↓→と→↓→はガンアクションで埋めた
+  mack:  {up:'mkGrenade', fwd:'mkBazooka', down:'mkFlame',     dash:'mkPileB',   hadou:'mkGL',     dp:'mkSnipe',   du:'mkShotgun'},
 };
 // ATK に無い（専用ステートで動く）基本技の表示名
 const SPECIAL_BASE_NAME={'inu.down':'スライディング', 'inu.dash':'疾走居合斬り', 'nuko.dash':'マジックレール砲'};
@@ -2652,7 +2652,7 @@ const SPECIAL_UP={
   guard8:{up:[[3,'gupper2']],   du:[[5,'gimpact2']], fwd:[[7,'gsmash2']],    down:[[9,'ghead2']],      hadou:[[10,'gtackle2']], dp:[[10,'gdp2']],       dash:[[12,'gspin2']]},
   watch: {up:[[3,'wsmoke2']],   du:[[5,'wtech2']],   fwd:[[7,'wpistol2']],   down:[[9,'wmine2']],      hadou:[[10,'wknife2']],  dp:[[10,'wflip2']],     dash:[[12,'wheist2']]},
   wanden:{up:[[3,'dnuki2']],    du:[[5,'dzetto2']],  fwd:[[7,'dtsubame2']],  down:[[9,'dsuriashi2']],  hadou:[[10,'dyae2']],    dp:[[10,'dzantetsu2']], dash:[[12,'dshukuchi2']]},
-  mack:  {up:[[3,'mkGrenade2']],du:[[5,'mkShotgun2']],fwd:[[7,'mkBazooka2']],down:[[9,'mkFlame2']],    hadou:[[6,'mkGL2'],[12,'mkGL3']], dp:[[10,'mkSnipe2']],  dash:[[12,'mkDrill2']]},
+  mack:  {up:[[3,'mkGrenade2']],du:[[5,'mkShotgun2']],fwd:[[7,'mkBazooka2']],down:[[9,'mkFlame2']],    hadou:[[6,'mkGL2'],[12,'mkGL3']], dp:[[10,'mkSnipe2']],  dash:[[12,'mkPileB2']]},
 };
 // ── 技系統の熟達段位 ──
 // コマンド技7枠は SPECIAL_UP で上位技に差し替わるが、タメ攻撃・掴み技・空中技・
@@ -4343,24 +4343,26 @@ function updatePlayer(){
         spark(p.x+dir*(46+rnd(0,18)), p.y-rnd(24,58), (a.t%4)?'#bfe9ff':'#ffffff', 2, 6);
         if(a.t%6===0){ dust(p.x,p.y,2); sfx.swing(1,'metal',p.x); } }
       if(def.mkDrill>=3 && a.t%8===0) ring(p.x+p.facing*50, p.y-42, '#dff0ff'); }
-    // 奥義＝パイルバンカー。溜めのあと杭を下から斜め上へ打ち上げる
-    if(def.mkPile){
-      if(a.t<def.act[0]+(def.pileAt||0)){ if(a.t%3===0){ const u=a.t/Math.max(1,def.act[0]);
-          ember(p.x+rnd(-22,22), p.y-rnd(6,60), rnd(-0.6,0.6), -rnd(1.4,3.4), '#ffd24d');
-          if(a.t%9===0){ ring(p.x, p.y-30, '#ffae42'); sfx.charge(p.x); } } }
-      if(a.t===def.act[0]+(def.pileAt||0)){ const dir=p.facing, mul=(p.atkMul||1)*evoMul(p);
-        // 杭の打ち込みそのもの。爆風が前方の一帯を吹き上げる
-        for(let k=0;k<3;k++) ring(p.x+dir*(34+k*26), p.y-44-k*30, k%2?'#ffd24d':'#ffffff');
-        spark(p.x+dir*44, p.y-60, '#fff6c0', 32, 14); spark(p.x+dir*30, p.y-20, '#ff8a3a', 22, 11);
-        dust(p.x+dir*30, p.y, 16); quake=Math.max(quake||0,26);
-        shake=Math.max(shake,18); flash=Math.max(flash,6); hitStop=Math.max(hitStop,14); triggerSlow(30);
-        sfx.big(p.x); sfx.boss(p.x); sfx.ko(p.x);
-        enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return;
-          if((e.x-p.x)*dir>-40 && Math.abs(e.x-p.x)<180 && Math.abs(e.y-p.y)<76){
-            damageEnemy(e, Math.round(66*mul), dir*12, true);
-            if(!e.dead) launchEnemy(e, dir*14, -22, 3); } }); }
-      if(a.t>def.act[0]+(def.pileAt||0) && a.t<def.act[1] && a.t%3===0)
-        spark(p.x+p.facing*40, p.y-p.z-rnd(40,110), '#ffd24d', 3, 8); }
+    // ── 後ろ前＝パイルバンカー。溜めて構えてから、正面へ杭を撃ち出す ──
+    // 打撃そのものは通常の判定（単発・knock）に任せ、ここでは撃鉄の爆炎だけを足す。
+    // 吹き飛ばしは doPlayerHit の pileB 分岐が受け持つ
+    if(def.pileB){
+      const T2=(def.pileB>=2)?2:1, RR=def.reach*REACH;
+      if(a.t===def.act[0]){ const dir=p.facing;
+        // 杭の射出。薬室の爆発が杭の付け根から前方へ抜ける
+        for(let k=0;k<4;k++) ring(p.x+dir*(38+k*RR*0.22), p.y-56, (k%2)?'#ffd24d':'#fff6c0');
+        spark(p.x+dir*RR*0.72, p.y-56, '#fff6c0', 24+T2*8, 15, {aim:(dir>0?0:Math.PI), spread:0.45});
+        spark(p.x+dir*26, p.y-46, '#ff8a3a', 16+T2*6, 10);
+        for(let k=0;k<4+T2*2;k++)
+          ember(p.x+dir*(28+k*22), p.y-34-rnd(0,34), dir*rnd(0.8,3.0), -rnd(1.0,2.8), (k%2)?'#ff8a3a':'#ffd24d');
+        dust(p.x+dir*34, p.y, 12); quake=Math.max(quake||0, 14+T2*8);
+        shake=Math.max(shake, 13+T2*5); flash=Math.max(flash, 4+T2); hitStop=Math.max(hitStop, 5+T2);
+        p.vx=-dir*4.2;                                   // 反動でわずかに退がる
+        sfx.big(p.x); sfx.launch(p.x); if(T2>=2) sfx.boss(p.x); }
+      // 突き切っている間、杭の胴から抜ける熱と土煙
+      if(a.t>def.act[0] && a.t<def.act[1] && a.t%3===0){ const dir=p.facing;
+        spark(p.x+dir*rnd(40,RR*0.9), p.y-rnd(38,74), (a.t%6)?'#ffd24d':'#fff6c0', 3, 8);
+        if(a.t%9===0) dust(p.x+dir*RR*0.6, p.y, 3); } }
     // ── ワンデン「秘剣・八重霞」：前方に斬撃痕を刻み、時間差で炸裂させる ──
     if(def.yaegasumi && a.t===def.act[0]){ const dir=p.facing;
       popText(p.x,p.y-122,'秘剣・八重霞！','#dff0ff',true); sfx.dash(p.x); sfx.swing(1, wsndOf(p.weapon), p.x); flash=Math.max(flash,3); shake=7;
@@ -4475,7 +4477,7 @@ function updatePlayer(){
     if(K.up){ beginAttack(specialFor(p,'up')); }  // 抜刀切り上げ / 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳（Lv3で上位技へ）
     else if(stingerReady(p.facing)){ const da=specialUpgraded(p,'dash');
       if(da){ beginAttack(da); if(ATK[da].respin) p.spinCount=1; consumeCmd(); p.atkHeld=true; return; }   // ダッシュ攻撃の上位技
-      if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkDrill'); p.spinCount=1; } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
+      if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkPileB'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
     else if(fwd){ const fu=specialUpgraded(p,'fwd');
       if(fu){ beginAttack(fu); p.atkHeld=true; p.atkHoldF=0; return; }                      // 前攻撃の上位技（武器フィニッシュより優先）
       if(WD){ beginAttack('dtsubame'); p.atkHeld=true; p.atkHoldF=0; return; }   // ワンデン前：燕返し
@@ -4555,6 +4557,7 @@ function doPlayerHit(a){
     if(!e.dead){
       if(def.oneInch){ if(ETYPE[e.type].boss||ETYPE[e.type].mini) launchEnemy(e, dir*46*LX, -9*LX, 3); else startBlastoff(e, dir); }   // 雑魚は一撃スターKO／ボスは超ノックバック
       else if(def.shoryu) launchEnemy(e, dir*4*LX, -24*LX, 4);   // 一緒に打ち上げ → 空中コンボへ
+      else if(def.pileB) launchEnemy(e, dir*(46+def.pileB*8)*LX, -11*LX, 5);   // 杭は真横へ叩き出す＝画面端まで吹き飛ばす
       else if(def.finisher) launchEnemy(e, dir*26*LX, -13*LX, 4);
       else if(def.aoe) launchEnemy(e, dir*30*LX, -10*LX, 4);
       else if(def.stinger) launchEnemy(e, dir*28*LX, -7*LX, 4);
@@ -10946,7 +10949,12 @@ function drawPlayer(){
   // 入っているので、ここで s を掛けると二乗になって矩形が入らなくなる
   // 枠は実描画より広く取る。狭いと本体の縁が枠で切られ、輪郭リムを入れたときに
   // その人工的な断面がいちばん明るい線として出る（実測: 待機で幅123 に対し枠104だった）
-  const _rim=(p.__portrait||blink)?null:rimBegin(68, 156);   // 立ち絵と点滅中は素通し
+  // パイルバンカーは杭が体の外へローカル180ほど出る。オフスクリーン枠は
+  // rimRect の上限（RIM_CAN=640px）に収まらない幅を要求するので、広げても素通しに落ちる。
+  // 枠を68のままにすると縁で杭が直線的に切れ、薄い長方形の継ぎ目として画面に出るので、
+  // この技の間だけリムを諦める（明示的に外す）
+  const _pileOut=(p.state==='attack' && p.atk && p.atk.def.pileB);
+  const _rim=(p.__portrait||blink||_pileOut)?null:rimBegin(68, 156);   // 立ち絵と点滅中は素通し
   // ── ばねの二次動作：着地スクワッシュ／しなり／速度スメア（足元を支点に）──
   if(p.rig){
     // 係数はばねの実測ピーク（着地0.151／踏切0.112／振り向き0.314）から逆算している。
@@ -12345,6 +12353,7 @@ function mackGear(p){
   if(st==='attack' && p.atk){ const d=p.atk.def;
     if(d.flame) return 'flamer';
     if(d.mkGL) return 'launcher';
+    if(d.pileB) return 'pile';
     if(d.mkDrill) return 'drill';
     if(d.mkBazooka) return 'bazooka';
     if(d.mkShot) return 'shotgun';
@@ -12408,6 +12417,79 @@ function drawMackWeapon(hx,hy,ang,gear){
           ctx.fillStyle=(k%2)?'#ffd24d':'#ff8a3a';
           ctx.beginPath(); ctx.ellipse(28+RR*u, Math.sin(ph)*RR*0.14*u, RR*0.16, RR*(0.09+0.13*u), 0,0,7); ctx.fill(); }
         ctx.restore(); } }
+    } else if(gear==='pile'){
+    // 巨大な杭打ち機。溜めの間は杭を薬室へ引き込み、撃発で一気に前へ伸ばす。
+    // 伸びきった先端はローカル約128＝技のリーチ(reach*REACH/FIXED_SCALE)に合わせてある。
+    // ここを長くしすぎると「先が当たらない絵」になる
+    const p4=player, a4=(p4.state==='attack' && p4.atk && p4.atk.def.pileB)?p4.atk:null;
+    const D4=a4?a4.def:null, T4=(D4&&D4.pileB>=2)?2:1;
+    let u=0;                                                                  // 0=引き込み 1=突き切り
+    // 伸びは「発生の2フレーム前から」始めて、判定が出る act[0] では既に伸びきらせる。
+    // 発生と同時にヒットストップが掛かるので、そこから伸ばすと止まった絵が引っ込んだ杭になる
+    if(a4){ if(a4.hold>0) u=-0.16*clamp(a4.chg/10,0,1);
+      else if(a4.t<D4.act[0]) u=-0.16+1.16*clamp((a4.t-(D4.act[0]-2))/2,0,1);
+      else u=1-0.20*clamp((a4.t-D4.act[1])/12,0,1); }
+    else u=1;
+    const LEN=(T4>=2?126:106), BW=(T4>=2?19:16.5);                            // 杭の伸び代と太さ
+    const tip=26+LEN*u, S4=(T4>=2?1.18:1);
+    // ── 撃発の爆炎は機体の下に敷く。上に重ねると薬室が真っ白に飛ぶ ──
+    if(a4 && a4.hold<=0 && a4.t>=D4.act[0] && a4.t<D4.act[0]+10 && perfTier<2){
+      const fu=1-(a4.t-D4.act[0])/10;
+      ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.80*fu;
+      for(let i=0;i<5;i++){ const fx=26-i*9, fr=(10+i*4)*fu*S4;
+        ctx.fillStyle=(i%2)?'#ffd24d':'#ff8a3a';
+        ctx.beginPath(); ctx.ellipse(fx,-1+Math.sin(gf*0.8+i)*3, fr, fr*0.66, 0,0,7); ctx.fill(); }
+      ctx.globalAlpha=0.50*fu; ctx.fillStyle='#fff6c0';
+      ctx.beginPath(); ctx.ellipse(30,0, 18*fu*S4, 11*fu*S4, 0,0,7); ctx.fill();
+      ctx.restore(); }
+    ctx.save(); ctx.scale(S4,S4);
+    // 上体のしなり（rig.wob は最大0.26rad）は、杭のように長い得物の先端では20°近い振れになり、
+    // せっかくの「正面へ突き出す」絵が地面へ突き刺さる絵になる。機体は水平に保ち、しなりは体だけに残す
+    { const _wb=(player.rig? clamp(player.rig.wob.x*0.32,-0.26,0.26) : 0); ctx.rotate(-(_wb+ang)); }
+    ctx.translate(0, 13*clamp(-u/0.16,0,1));   // 構えの間は腰だめ。顔の前に機体が居座らないようにする
+    // ── 杭：ほぼ等幅の角柱＋鑿のような先端。細く尖らせると鉛筆に見える ──
+    ctx.fillStyle='#6d7783'; ctx.beginPath();
+    ctx.moveTo(20,-BW); ctx.lineTo(tip-BW*0.8,-BW*0.86); ctx.lineTo(tip,-BW*0.34);
+    ctx.lineTo(tip,BW*0.34); ctx.lineTo(tip-BW*0.8,BW*0.86); ctx.lineTo(20,BW); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#c3ccd8'; ctx.beginPath();                                 // 峰の照り
+    ctx.moveTo(20,-BW); ctx.lineTo(tip-BW*0.8,-BW*0.86); ctx.lineTo(tip-BW*0.8,-BW*0.34); ctx.lineTo(20,-BW*0.42); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3a4048'; ctx.beginPath();                                 // 下面の影
+    ctx.moveTo(20,BW); ctx.lineTo(tip-BW*0.8,BW*0.86); ctx.lineTo(tip-BW*0.8,BW*0.40); ctx.lineTo(20,BW*0.46); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#8c95a1'; ctx.fillRect(20,-BW*0.16,Math.max(0,tip-24),BW*0.32);   // 中央の稜線
+    for(let i=1;i<5;i++){ const bx=20+(tip-20)*i/5;                           // 杭の節（伸びが見えるように等間隔）
+      if(bx>tip-6) continue;
+      ctx.fillStyle='#525b66'; ctx.fillRect(bx-2.4,-BW*0.92,4.8,BW*1.84); }
+    ctx.fillStyle='#eef4fb'; ctx.beginPath();                                 // 先端の刃こぼれた光
+    ctx.moveTo(tip-9,-BW*0.5); ctx.lineTo(tip,-BW*0.3); ctx.lineTo(tip,BW*0.1); ctx.lineTo(tip-9,-BW*0.1); ctx.closePath(); ctx.fill();
+    // ── 薬室（機関部）。杭より後に描いて手前へ出す ──
+    ctx.fillStyle='#262c34'; roundRect(-30,-20,58,40,6); ctx.fill();          // 本体
+    ctx.fillStyle='#464f5c'; roundRect(-30,-20,58,13,5); ctx.fill();          // 上面の照り
+    ctx.fillStyle='#1a1f26'; roundRect(-36,-24,12,48,4); ctx.fill();          // 後端の緩衝器
+    ctx.fillStyle='#5a6470'; roundRect(-24,-27,30,9,3); ctx.fill();           // 上の油圧筒
+    ctx.fillStyle='#8d97a4'; roundRect(-24,-27,30,4,2); ctx.fill();
+    for(let i=0;i<3;i++){ ctx.fillStyle='#3a424c'; ctx.fillRect(-20+i*15,-21,5,42); }   // 締め輪
+    for(let i=0;i<4;i++){ ctx.fillStyle='#c8a24a';                            // 真鍮のボルト
+      ctx.beginPath(); ctx.arc(-24+i*16, (i%2)?15:-15, 2.6, 0,7); ctx.fill(); }
+    ctx.fillStyle='#7d8794'; roundRect(24,-BW-4,10,(BW+4)*2,3); ctx.fill();   // 銃口の襟（杭の出口）
+    ctx.fillStyle='#aab4c1'; roundRect(24,-BW-4,10,5,2); ctx.fill();
+    ctx.fillStyle='#8a5a2e'; roundRect(-16,16,20,10,3); ctx.fill();           // 握り
+    ctx.fillStyle='#c8a24a'; ctx.fillRect(2,-30,8,5);                         // 真鍮の照門
+    // 溜めの間は薬室が焼ける。汎用の火の粉だけだと「重い物を構えている」だけに見える
+    if(a4 && a4.hold>0 && perfTier<2){ const cu=clamp(a4.chg/12,0,1);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=0.28+0.50*cu; ctx.fillStyle='#ff8a3a';
+      ctx.beginPath(); ctx.ellipse(26,0, 6+11*cu, 5+9*cu, 0,0,7); ctx.fill();
+      ctx.globalAlpha=(0.30+0.45*cu)*(0.62+0.38*Math.sin(gf*0.9)); ctx.fillStyle='#fff6c0';
+      ctx.beginPath(); ctx.ellipse(26,0, 3+5*cu, 2.5+4.5*cu, 0,0,7); ctx.fill();
+      ctx.restore(); }
+    // 後端の排気。撃発の直後だけ、緩衝器から蒸気が抜ける
+    if(a4 && a4.hold<=0 && a4.t>=D4.act[0] && a4.t<D4.act[0]+14 && perfTier<2){
+      const su=1-(a4.t-D4.act[0])/14;
+      ctx.globalAlpha=0.42*su; ctx.fillStyle='#dfe6ee';
+      for(let i=0;i<3;i++){ const r=(6+i*5)*su;
+        ctx.beginPath(); ctx.arc(-40-i*9, -6+Math.sin(gf*0.6+i*2)*4, r, 0,7); ctx.fill(); }
+      ctx.globalAlpha=1; }
+    ctx.restore();
     } else if(gear==='drill'){
     ctx.fillStyle='#3a3f48'; roundRect(-8,-5,18,10,3); ctx.fill();            // 機関部
     const sp=gf*0.9;                                                          // 回転する刃
