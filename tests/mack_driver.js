@@ -178,48 +178,46 @@ const DRIVER = `
     console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
-  // ===== 9) 奥義「装甲車突撃」：走りながら3種を乱射し、連打で走行が伸びる =====
-  { const drive=function(mash){ const p=setup(); p.dim=3;
+  // ===== 9) 奥義「絨毯爆撃」：爆撃機とドローンを呼び、画面全体を焼く =====
+  { const raid=function(mash){ const p=setup(); p.dim=3;
       enemies.length=0; projectiles.length=0;
-      for(let k=0;k<5;k++){ const e=dummyAt(140+k*90, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
+      // 画面の左端・中央・右端に置く。「画面全体」に届くかを見たいので広く散らす
+      for(let k=0;k<6;k++){ const e=dummyAt(-60+k*160, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
       const hp0=enemies.map(function(e){ return e.hp; });
-      p.state='idle'; p.z=0; p.atk=null; p.x=140;
-      const x0=p.x;
-      // 撃った弾の種類を数える。銃口炎はリボルバー、爆発する弾はバズーカ、
-      // 空中で割れる弾はグレネード——この3つが揃っていることを見る
-      let gunN=0, bazN=0, grenN=0;
-      const realM=mackMuzzle;
-      mackMuzzle=function(){ if(p.state==='mkcar') gunN++; return realM.apply(null,arguments); };
-      const seen=new Set();   // spin は毎フレーム回るので鍵に使えない。弾そのもので数える
-      let frames=0;
-      try{ beginMackCar(p);
-        for(let f=0;f<300;f++){ if(mash && f%6===0) p.in.pressed.atk=true;
-          updatePlayer(p); updateEnemies(); updateProjectiles();
-          // 子弾や破片まで数えると本数が水増しされる。撃った本体だけを見る
-          for(const q of projectiles){ if(seen.has(q))continue; seen.add(q);
-            if(q.splitT!=null) grenN++; else if(q.blast && q.r>=13) bazN++; }
-          if(p.state==='mkcar' && (p.carOut|0)<=0) frames++; } }
-      finally { mackMuzzle=realM; }
+      p.state='idle'; p.z=0; p.atk=null;
+      beginMackRaid(p);
+      let frames=0, bombs=0, sawBomber=false, drN=0, bxMin=1e9, bxMax=-1e9;
+      const seen=new Set();
+      for(let f=0;f<420;f++){ if(mash && f%20===0) p.in.pressed.atk=true;
+        updatePlayer(p); updateEnemies(); updateProjectiles();
+        if(p.bomber){ sawBomber=true;                       // 爆撃機が画面を横切ること
+          if(p.bomber.sx<bxMin) bxMin=p.bomber.sx; if(p.bomber.sx>bxMax) bxMax=p.bomber.sx; }
+        if(p.drones) drN=Math.max(drN, p.drones.length);
+        for(const q of projectiles){ if(seen.has(q))continue; seen.add(q); bombs++; }
+        if(p.state==='mkraid') frames++; }
       p.in.pressed.atk=false;
-      return {frames:frames, dist:p.x-x0, n:p.carN|0, gun:gunN, baz:bazN, gren:grenN,
-              dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0), state:p.state}; };
-    const a=drive(false), b=drive(true);
-    if(ULT_NAME.mack!=='装甲車突撃') throw new Error('奥義の名前が変わっていない: '+ULT_NAME.mack);
-    if(a.dist<300) throw new Error('装甲車が走っていない（'+Math.round(a.dist)+'px）');
-    if(a.dmg<=0) throw new Error('装甲車突撃が当たらない');
-    // 3種すべてを撃つこと
-    if(a.gun<8)  throw new Error('リボルバーの乱射が '+a.gun+' 発しかない');
-    // 走行が画面端で止まると発射の機会が減るので、下限は1発にする
-    if(a.baz<1)  throw new Error('バズーカが '+a.baz+' 発しかない');
-    if(a.gren<1) throw new Error('グレネードが出ていない');
-    // 連打で走行が伸びる
-    if(b.n<1) throw new Error('連打が記録されていない');
-    if(b.frames < a.frames*1.4) throw new Error('連打しても走行が伸びない（'+a.frames+'F→'+b.frames+'F）');
-    if(b.gun<=a.gun) throw new Error('連打しても乱射の回数が増えない（'+a.gun+'→'+b.gun+'）');
-    // 走り終われば必ず止まる（乗りっぱなしにならない）
-    if(a.state==='mkcar') throw new Error('装甲車から降りない');
-    console.log('奥義 装甲車突撃 OK (連打なし '+a.frames+'F/'+Math.round(a.dist)+'px・銃'+a.gun+'/バズーカ'+a.baz+'/グレネード'+a.gren
-      +' → 連打あり '+b.frames+'F・銃'+b.gun+'・×'+b.n+')'); }
+      const hit=enemies.filter(function(e,i){ return hp0[i]-e.hp>0; }).length;
+      return {frames:frames, bombs:bombs, n:p.raidN|0, hit:hit, total:enemies.length,
+              bomber:sawBomber, run:(bxMax>bxMin? bxMax-bxMin : 0), drone:drN, state:p.state,
+              dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0)}; };
+    const a=raid(false), b=raid(true);
+    if(ULT_NAME.mack!=='絨毯爆撃') throw new Error('奥義の名前が変わっていない: '+ULT_NAME.mack);
+    if(!a.bomber) throw new Error('爆撃機が来ていない');
+    if(a.drone<2) throw new Error('ドローンが '+a.drone+' 機しか来ていない');
+    // 爆撃機が動かなければ、同じ場所に落とすだけで「絨毯」にならない
+    if(a.run<400) throw new Error('爆撃機が画面を横切っていない（移動 '+Math.round(a.run)+'px）');
+    if(a.bombs<20) throw new Error('投下数が '+a.bombs+' 発しかない');
+    // 画面の端から端まで届くこと。1体でも取り残したら「絨毯」ではない
+    if(a.hit<a.total) throw new Error('画面全体を焼けていない（'+a.hit+'/'+a.total+'体）');
+    // 連打で増援と爆撃が伸びる
+    if(b.n<1) throw new Error('連打で増援が来ない');
+    if(b.drone<=a.drone) throw new Error('連打してもドローンが増えない（'+a.drone+'→'+b.drone+'機）');
+    if(b.frames<=a.frames) throw new Error('連打しても爆撃が長引かない（'+a.frames+'F→'+b.frames+'F）');
+    if(b.bombs<=a.bombs) throw new Error('連打しても投下数が増えない（'+a.bombs+'→'+b.bombs+'）');
+    // 必ず終わる（呼びっぱなしにならない）
+    if(a.state==='mkraid') throw new Error('爆撃が終わらない');
+    console.log('奥義 絨毯爆撃 OK (連打なし '+a.frames+'F・'+a.bombs+'発・'+a.hit+'/'+a.total
+      +'体に命中 → 連打あり '+b.frames+'F・'+b.bombs+'発・増援×'+b.n+')'); }
 
   // ===== 10) 後ろ前のドリル突進は、連打でヒット数と突進距離が伸びる =====
   { // 敵を置くと押し合いと吹き飛びで距離がぶれるので、伸びの計測は敵なしで行う
@@ -425,9 +423,10 @@ const DRIVER = `
     if(boom.burn>0) throw new Error('炸裂弾まで延焼している＝弾種が効いていない');
     // 3種の威力がかけ離れていないこと（どれかが一択にならないように）
     const ds=[boom.dmg,shrap.dmg,fire.dmg];
-    // 炸裂弾は「打ち上げた敵が後続の子弾の爆風に入るか」で実行ごとに 232〜412 と振れる。
-    // どれかが一択にならないことだけを見たいので、比の上限は緩めに取る
-    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*2.2)
+    // 炸裂弾は「打ち上げた敵が後続の子弾の爆風に入るか」で実行ごとに 180〜412 と振れる。
+    // 高さまで固定すると吹き飛ばしの検査ができなくなるので、比の上限を緩めて許容する。
+    // 見たいのは「どれかが一択にならない」ことだけ
+    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*2.6)
       throw new Error('弾種の威力に開きがありすぎる（'+ds.map(Math.round).join('/')+'）');
     console.log('グレネードランチャー OK (Lv'+tiers.map(function(t){return t.lv+'='+t.kind;}).join('・Lv')
       +'／炸裂 与ダメ'+Math.round(boom.dmg)+'・浮き'+Math.round(boom.up)
