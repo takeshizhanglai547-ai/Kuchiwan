@@ -219,40 +219,72 @@ const DRIVER = `
     console.log('奥義 絨毯爆撃 OK (連打なし '+a.frames+'F・'+a.bombs+'発・'+a.hit+'/'+a.total
       +'体に命中 → 連打あり '+b.frames+'F・'+b.bombs+'発・増援×'+b.n+')'); }
 
-  // ===== 10) 後ろ前のドリル突進は、連打でヒット数と突進距離が伸びる =====
-  { // 敵を置くと押し合いと吹き飛びで距離がぶれるので、伸びの計測は敵なしで行う
-    const dash=function(mash,id){ const p=setup(); enemies.length=0;
-      p.spinCount=1; p.x=140; const x0=p.x;
-      let frames=0;
-      beginAttack(id);
-      for(let f=0;f<400;f++){
-        const on=(p.state==='attack' && p.atk && p.atk.def.mkDrill);
-        if(!on && frames>0) break;
-        if(mash && on && f%5===0) p.in.pressed.atk=true;
-        updatePlayer(p); if(on) frames++; }
-      return {dist:Math.abs(p.x-x0), frames:frames, n:p.spinCount|0}; };
-    const a=dash(false,'mkDrill'), b=dash(true,'mkDrill');
-    if(ATK.mkDrill.respinMax<3) throw new Error('ドリルの連打上限が '+ATK.mkDrill.respinMax);
-    if(b.n<ATK.mkDrill.respinMax) throw new Error('連打しても '+b.n+' 回までしか繋がらない');
-    if(b.frames < a.frames*2.5) throw new Error('連打してもヒット時間が伸びない（'+a.frames+'F→'+b.frames+'F）');
-    if(b.dist < a.dist*2.5) throw new Error('連打しても突進距離が伸びない（'+Math.round(a.dist)+'→'+Math.round(b.dist)+'）');
-    // タメ攻撃のドリルは伸びない（同じ得物でも使い分けが残っていること）
-    const c=dash(false,'mkCharge'), d=dash(true,'mkCharge');
-    if(Math.abs(d.dist-c.dist)>2 || d.frames!==c.frames)
-      throw new Error('タメのドリルまで連打で伸びている（'+Math.round(c.dist)+'/'+c.frames+'F → '+Math.round(d.dist)+'/'+d.frames+'F）');
-    // 入力から辿って確かめる。後ろ→前と入れて攻撃を押したらドリルが出て、
-    // かつ連打の種（spinCount）が立っていること。ここを見ないと
-    // 「技表ではドリルだが、実際に押すと連打が効かない」を取り逃がす
-    { const p=setup(); enemies.length=0; p.facing=1; p.spinCount=0; p.x=200;
+  // ===== 10) 後ろ前＝溜めてから正面へ突き出す単発のパイルバンカー（吹き飛ばし付き） =====
+  { // ヒット数は damageEnemy を横取りして数える。与ダメの合計から割り戻すと
+    // 「1発の威力」を技表から取ることになり、multi を足す改変を素通りさせる
+    const pile=function(id, dist){ const p=setup(); const e=dummyAt(dist==null?180:dist);
+      const x0=e.x, px0=p.x;
+      let first=-1, hits=0, air=false, zmax=0, mx=0, gear='', held=0, f=0;
+      const real=damageEnemy;
+      damageEnemy=function(tgt){ if(tgt===e){ hits++; if(first<0) first=f; } return real.apply(null,arguments); };
+      try{ beginAttack(id);
+        for(f=0; f<120; f++){
+          if(p.state==='attack' && p.atk && p.atk.def===ATK[id]){
+            if(p.atk.hold>0) held++;
+            gear=mackGear(p); }
+          updatePlayer(p); updateEnemies(); updateProjectiles();
+          // 当たるまでは的を動かさない。歩いて寄って来られると、間合いを縮める改変を
+          // 「溜めている間に敵が近づいたから当たった」で素通ししてしまう
+          if(first<0){ e.x=x0; e.vx=0; }
+          if(e.state==='air'||e.state==='blastoff') air=true;   // 16%の確率で星KOに化けるので両方見る
+          if(e.z>zmax) zmax=e.z;
+          const d=Math.abs(e.x-x0); if(d>mx) mx=d; }
+      } finally { damageEnemy=real; }
+      return {first:first, hits:hits, air:air, z:Math.round(zmax), mx:Math.round(mx),
+              gear:gear, held:held, dmg:Math.round(4000-e.hp), walk:Math.round(Math.abs(p.x-px0))}; };
+
+    const a=pile('mkPileB');
+    // 単発であること
+    if(a.hits!==1) throw new Error('単発のはずが '+a.hits+' ヒットしている');
+    // 溜めてから出ること。構えのフレームが実在し、当たるのも十分あとになる
+    if(a.held<8) throw new Error('溜めの構えが '+a.held+'F しかない');
+    if(a.first<18) throw new Error('溜めずに '+a.first+'F で当たっている');
+    // 突進ではなく「その場で突き出す」。マックが敵まで走っていってはいけない
+    if(a.walk>24) throw new Error('突き出しではなく '+a.walk+'px 突進している');
+    // 正面へ届くこと（180px 先で動かない的に当たっている）
+    if(a.dmg<=0) throw new Error('正面180pxの敵に当たらない（間合いが足りない）');
+    // 吹き飛ばし属性。打ち出した敵が浮いて、画面の端まで飛ぶ
+    if(!a.air) throw new Error('当てても敵が浮かない（吹き飛ばし属性が無い）: '+JSON.stringify(a));
+    if(a.z<40) throw new Error('吹き飛びの高さが '+a.z+'px しかない');
+    if(a.mx<400) throw new Error('吹き飛ばした距離が '+a.mx+'px しかない');
+    // 握っている得物が杭打ち機であること（ここを見ないと絵だけリボルバーのままになる）
+    if(a.gear!=='pile') throw new Error('杭打ち機ではなく '+(a.gear||'なし')+' を握っている');
+
+    // Lv12 の上位技。基本技より重く、こちらも単発のまま
+    const b=pile('mkPileB2');
+    if(b.hits!==1) throw new Error('上位技が '+b.hits+' ヒットになっている');
+    if(b.dmg<=a.dmg) throw new Error('上位技が重くない（'+a.dmg+' → '+b.dmg+'）');
+    { const p=setup(); p.level=12;
+      if(specialFor(p,'dash')!=='mkPileB2') throw new Error('Lv12で上位技に差し替わらない（'+specialFor(p,'dash')+'）');
+      p.level=1;
+      if(specialFor(p,'dash')!=='mkPileB') throw new Error('Lv1のダッシュ枠が '+specialFor(p,'dash')); }
+
+    // タメ攻撃はドリル突進のまま。杭に置き換わって使い分けが消えていないこと
+    const c=pile('mkCharge');
+    if(c.hits<3) throw new Error('タメのドリルが多段でなくなっている（'+c.hits+'ヒット）');
+    if(c.gear!=='drill') throw new Error('タメ攻撃の得物が '+(c.gear||'なし')+'（ドリルのはず）');
+
+    // 入力から辿る。後ろ→前と入れて攻撃を押したら杭が出ること。
+    // ここを見ないと「技表では杭だが、実際に押すと別の技」を取り逃がす
+    { const p=setup(); enemies.length=0; p.facing=1; p.x=200;
       p.in.cardSeq.length=0;
       p.in.cardSeq.push({c:3, f:gf-6});      // 後ろ（左）
       p.in.cardSeq.push({c:1, f:gf-2});      // 前（右）
       p.in.pressed.atk=true; updatePlayer(p);
-      if(!(p.state==='attack' && p.atk && p.atk.def.mkDrill))
-        throw new Error('後ろ前＋攻撃でドリルが出ない（'+(p.atk?p.atk.def.name:p.state)+'）');
-      if((p.spinCount|0)<1) throw new Error('後ろ前で出したドリルに連打が効かない（spinCount='+p.spinCount+'）'); }
-    console.log('後ろ前のドリル突進 OK (連打なし '+Math.round(a.dist)+'px/'+a.frames+'F → 連打あり '
-      +Math.round(b.dist)+'px/'+b.frames+'F ×'+b.n+'／タメ版は伸びない)'); }
+      if(!(p.state==='attack' && p.atk && p.atk.def.pileB))
+        throw new Error('後ろ前＋攻撃で杭が出ない（'+(p.atk?p.atk.def.name:p.state)+'）'); }
+    console.log('後ろ前のパイルバンカー OK (溜め'+a.held+'F→'+a.first+'F で単発命中／その場で'+a.walk
+      +'px／'+a.z+'px 浮かせて'+a.mx+'px 吹き飛ばし／上位技 '+a.dmg+'→'+b.dmg+'）'); }
 
   // ===== 11) リボルバーの6発目だけが吹き飛ばす =====
   { const shot=function(id){ const p=setup(); const e=dummyAt(90);
