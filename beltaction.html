@@ -1602,6 +1602,33 @@ function terrAt(x){
 // スマブラの「ステージごと動く場面」。区間へ踏み込むと足場ごと大きく昇降し、
 // その間はその区間から出られない。昇り切ったあとの世界は新しい高さで続く
 const LIFT_RISE=520, LIFT_DUR=300, LIFT_W=520;
+// ── 積み重なった足場（terr:'tower'）──
+// 「谷に落ちたら即ミス」ではなく、頭上の床へ跳び乗って上へ登っていく区間。
+// 落ちても下の床（最後は地面）に戻るだけで、何度でもやり直せる。
+//   PLATS: {x0,x1,h}  h＝その場の地面からの高さ
+//   アクターは fl（今立っている床の高さ）を持ち、z は「その床からの高さ」のまま。
+//   こうすると既存の「p.z<=0 なら接地」という判定を一切変えずに済む
+// 一段96px・板幅340px・間隔250px。跳ぶと水平に約350px 進むので、
+// 板が狭い／間隔が詰まっていると全力の跳躍が必ず行き過ぎて着地できない（実測: 幅200px で0回着地）
+const TOWER_RISE=480, TOWER_STEPS=4, TOWER_GAP=250, TOWER_HW=170;
+let PLATS=[];
+// 高さ h の床が x にあるか（乗っている床が続いているかの判定）
+function platAt(x,h){ for(let i=0;i<PLATS.length;i++){ const P=PLATS[i];
+    if(Math.abs(P.h-h)<0.5 && x>=P.x0 && x<=P.x1) return P; } return null; }
+// h より下でいちばん高い床（無ければ地面＝0）
+function platBelow(x,h){ let best=0; for(let i=0;i<PLATS.length;i++){ const P=PLATS[i];
+    if(P.h<h-0.5 && x>=P.x0 && x<=P.x1 && P.h>best) best=P.h; } return best; }
+// A0（前）→A1（後）と降りる間に踏み抜いた床のうち、いちばん高いもの。
+// 上りでは拾わない＝下からはすり抜けられる一方通行の床になる
+function platLanding(x,A0,A1){ let best=null;
+  for(let i=0;i<PLATS.length;i++){ const P=PLATS[i];
+    if(x<P.x0||x>P.x1) continue;
+    if(P.h<=A0+0.01 && P.h>=A1-0.01){ if(!best||P.h>best.h) best=P; } }
+  return best; }
+// 描画に使う「足元の画面Y」。床に乗っているぶんだけ持ち上げる
+function actorGY(a){ return a.y - groundLift(a.x) - (a.fl||0); }
+// 打撃の高さ比べに使う絶対高度（床＋その床からの高さ）
+function zAbs(a){ return (a.fl||0) + (a.z||0); }
 let LIFTS=[];               // {x0,x1,dir,off,t,state,st}
 // 区間より右（＝これから進む先）はすべて一緒に昇降させる。
 // 区間だけ動かすと、降り切った先が元の高さのままで崖になる
@@ -1615,6 +1642,11 @@ function terrLiftBase(x){
     return 0; }
   if(t.e0===t.e1) return t.e0;
   const u=clamp((x-t.x0)/Math.max(1,t.x1-t.x0),0,1);
+  if(t.kind==='tower'){                                  // 足場の塔：手前は平ら、奥に一枚の高い壁
+    // 壁は幅ゼロの段差にする。少しでも幅があると、その斜面の途中に着地できてしまい
+    // 足場を使わずに壁をよじ登れる（実測: 幅38pxで480px／幅5.7pxでも152px 登れた）
+    const AT=0.62;
+    return t.e0+(t.e1-t.e0)*((u<AT)?0:1); }
   if(t.kind==='climb'||t.kind==='dive'){                 // 階段：踏み面は水平、蹴上げだけで上がる
     const n=TERR_STEPS, k=Math.min(n-1, Math.floor(u*n)), fu=u*n-k;
     const s2=(fu<1-TERR_RISER)? 0 : (fu-(1-TERR_RISER))/TERR_RISER;
@@ -1624,7 +1656,7 @@ function terrLiftBase(x){
 // 見た目の傾き。階段では局所の微分が0と∞を往復するので、区画の平均勾配を返す
 // （局所の傾きをそのまま使うと、段をまたぐたびに遠景の地面が跳ねる）
 function terrTilt(x){ const t=terrAt(x);
-  if(t && (t.kind==='climb'||t.kind==='dive')) return (t.e1-t.e0)/Math.max(1,t.x1-t.x0);
+  if(t && (t.kind==='climb'||t.kind==='dive'||t.kind==='tower')) return (t.e1-t.e0)/Math.max(1,t.x1-t.x0);
   return terrSlope(x); }
 // 坂の傾き（px/px）。落石の転がる向きと速さ、坂の見た目の陰影に使う
 // 昇降区間の段差は「傾き」ではないので、地形そのものの高さだけから出す
@@ -2651,7 +2683,7 @@ function spawnMoonWave(p,def){ const dir=p.facing;
   spawnProj(p.x+dir*46, p.y, dir*13, 0, {owner:'player', dmg:Math.round((12+(def.dmg||0)*0.3)*(p.atkMul||1)),
     color:'#cfeaff', r:15, life:46, zz:48, pierce:true, wave:true, noLaunch:true, nostop:true});
   spark(p.x+dir*40,p.y-44,'#cfeaff',5,6); }
-function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1; p._tx=null;
+function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1; p._tx=null; p.fl=0; p._pa=null;
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
@@ -3212,6 +3244,29 @@ function tickLifts(){
 }
 // 昇降中の縦坑。足場の外側に岩肌の壁を立てて、進行方向と逆へ流す。
 // これが無いと、画面のどこも動かないので「昇っている」ことが伝わらない
+// ── 積み重なった床 ──
+// 上へ登っていく区間の足場。乗る面（上端）がどこかを迷わせないよう、
+// 天板を明るく・厚みと影を持たせて、地面より手前の物として描く
+function drawPlatforms(){
+  if(!PLATS.length) return;
+  const T=curTheme();
+  for(let i=0;i<PLATS.length;i++){ const P=PLATS[i];
+    const x0=P.x0-camX, x1=P.x1-camX; if(x1<-60||x0>W+60) continue;
+    const gy=LANE-groundLift((P.x0+P.x1)*0.5), y=gy-P.h, wdt=x1-x0;
+    ctx.save();
+    // 下へ落ちる影。床の下が暗いと「上に乗る物」だと分かる
+    ctx.fillStyle='rgba(0,0,0,.30)';
+    ctx.beginPath(); ctx.ellipse((x0+x1)*0.5, gy+2, wdt*0.44, 10, 0,0,7); ctx.fill();
+    ctx.fillStyle=shade(T.g[2],-18); roundRect(x0, y-2, wdt, 26, 6); ctx.fill();      // 厚み
+    ctx.fillStyle=shade(T.g[1],-4);  roundRect(x0, y-10, wdt, 16, 6); ctx.fill();     // 側面
+    ctx.fillStyle=shade(T.g[0],26);  roundRect(x0, y-12, wdt, 9, 5); ctx.fill();      // 天板＝乗る面
+    ctx.fillStyle='rgba(255,255,255,.20)'; ctx.fillRect(x0+4, y-12, wdt-8, 3);
+    ctx.strokeStyle='rgba(20,16,10,.55)'; ctx.lineWidth=2; roundRect(x0, y-12, wdt, 36, 6); ctx.stroke();
+    // 端の飾り。長い板が「浮いている足場」に見えるよう、両端に受けを入れる
+    ctx.fillStyle=shade(T.g[2],-26);
+    roundRect(x0+3, y+18, 16, 22, 4); ctx.fill(); roundRect(x1-19, y+18, 16, 22, 4); ctx.fill();
+    ctx.restore(); }
+}
 function drawLiftShaft(){
   for(let i=0;i<LIFTS.length;i++){ const L=LIFTS[i];
     if(L.state!=='run') continue;
@@ -4841,7 +4896,7 @@ function updatePlayer(){
   // ── 足音：歩行中に一定歩幅で接地音を鳴らす。巨体（ガードワン8号）は遅く重い ──
   // pid で位相をずらし、2P CO-OP でも二人の足音が完全同位相で重ならないようにする
   if(mx && p.z<=0 && ((gf+p.pid*4)%(p.kind==='guard8'?15:10))===0) sfx.step(p.x, groundSnd(), p.kind==='guard8'?1.6:1);
-  if(p.z<=0 && overPit(p.x)) beginFall(p);   // 足元が谷なら落下（ジャンプで越える）
+  if(p.z<=0 && !(p.fl>0) && overPit(p.x)) beginFall(p);   // 足元が谷なら落下（床に乗っている間は除く）
 }
 function beginFall(p){ if(p.state==='falling'||p.state==='dead') return;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; } p.atk=null;
@@ -4864,6 +4919,9 @@ function doPlayerHit(a){
     if(Math.abs(e.y-p.y)>hh) return;
     const canHigh = def.rise||def.special||def.launch;
     if(!canHigh && e.z>175) return;                                          // 高く浮いた敵は打上げ/空中技で拾う
+    // 積み重なった床：別の階に居る相手には届かない。
+    // z だけを見ると、頭上の床に立つ敵（z=0）が地上から殴れてしまう
+    if(PLATS.length && Math.abs(zAbs(e)-zAbs(p))>120) return;
     let dir=p.facing;
     if(def.omni){ if(Math.abs(e.x-p.x)>reach) return; dir=e.x<p.x?-1:1; }   // 全方位
     else { const dx=e.x-hx, back=Math.max(16, reach*(def.shoulder?0.95:0.32));   // 近接マージン（鉄山靠は体当たりなので通過中も当たる）
@@ -5716,7 +5774,7 @@ function updateGatling(){ const p=player; p.gatT++; p.invuln=Math.max(p.invuln,6
   } else if(p.gatT>p.gatEndT||!p.gatEndT){ if(!p.gatEndT) p.gatEndT=p.gatT+18; if(p.gatT>=p.gatEndT){ p.state='idle'; p.gatEndT=0; } }
   p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); }
 // ガトリングガンの描画（render 側で drawPlayer の後に呼ぶ）
-function drawGatlingGun(p){ const sx=p.x-camX, gy=p.y-groundLift(p.x)-p.z; ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
+function drawGatlingGun(p){ const sx=p.x-camX, gy=actorGY(p)-p.z; ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
   const T=p.gatT||0, spun=clamp(T/GAT_SPIN,0,1);
   const firing=T>GAT_SPIN && (p.gatShots||0)<100;
   const ang=Math.sin(T*0.34)*1.0*spun - (1-spun)*0.30;   // 回りきるまでは銃口を伏せている
@@ -6721,9 +6779,14 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
 // 移動が終わったあと（描画の前）にまとめて直す
 function terrainStepFoes(){
   for(const e of enemies){
+    // 床との付き合わせ。落ちたら空中状態にして、既存の空中物理に任せる
+    if(!e.dead){
+      if(platStep(e) && e.state!=='air'){ e.state='air'; e.vz=0; e.bounces=0; }
+      else if((e.fl||0)>0 && e.z<=0 && e.state==='air'){ e.state='walk'; e.vz=0; } }
     const px=e._tx; e._tx=e.x;
     if(px==null || e.x===px || Math.abs(e.x-px)>=90) continue;
     const dh=terrLift(e.x)-terrLift(px);
+    if(dh!==0 && e.fl){ e.z+=e.fl; e.fl=0; e._pa=e.z; }  // 地面が変わったら床から降りる
     if(dh!==0 && e.z>0){ e.z=Math.max(0,e.z-dh); }      // 空中は絶対高度を保つ
     // 谷は敵にとっても壁。跳べないので縁の外へ戻す（歩かせると奈落の上に浮いて見える）
     if(e.z<=0 && !e.dead && e.state!=='air' && e.state!=='blastoff' && overPit(e.x)){
@@ -7093,6 +7156,8 @@ function updateGait(){
 function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock,zmax,ivOv){
   if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>(zmax==null?14:zmax)) return false;
   if(Math.abs(p.y-e.y)>(hh||34)) return false;
+  // 積み重なった床：別の階に立っている相手には届かない（下の階から頭上を殴れてしまう）
+  if(PLATS.length && Math.abs(zAbs(p)-zAbs(e))>120) return false;
   const dx=p.x-e.x;
   if(reach>=0){ if(Math.sign(dx)!==e.facing&&Math.abs(dx)>10) return false; if(Math.abs(dx)>reach) return false; }
   else if(Math.abs(dx)>-reach) return false;                   // AoE radius = -reach
@@ -7952,11 +8017,11 @@ function drawVehicles(){
     ctx.fillStyle='rgba(255,225,80,'+(0.55+0.35*Math.sin(gf*0.12))+')'; ctx.font='bold 13px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
     ctx.strokeStyle='rgba(0,0,0,.7)'; ctx.lineWidth=3; ctx.strokeText('▲乗れる', sx, gy-108); ctx.fillText('▲乗れる', sx, gy-108); ctx.textAlign='left'; });
 }
-function drawMountedVehicle(p){ if(!p.vehicle)return; const sx=p.x-camX, gy=p.y-groundLift(p.x);
+function drawMountedVehicle(p){ if(!p.vehicle)return; const sx=p.x-camX, gy=actorGY(p);
   drawVehicleShape(sx, gy, p.facing, VEHDEF[p.vehicle], p.vehicle, p);
 }
 // 騎乗者が持つ武器（描画は騎手より前面。render 側で drawPlayer の後に呼ぶ）
-function drawMountWeapon(p){ const sx=p.x-camX, gy=p.y-groundLift(p.x); ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
+function drawMountWeapon(p){ const sx=p.x-camX, gy=actorGY(p); ctx.save(); ctx.translate(sx,gy); ctx.scale(p.facing,1);
   if(p.vehicle==='horse'){
     const active=p.mAtk==='lance'&&p.mAtkT>0; const sw=active?(1-p.mAtkT/26):-1;
     let ang = sw>=0 ? (-2.0 + sw*2.9) : (-0.55 + Math.sin((p.anim||0)*0.5)*0.05);   // 上段→前方へ薙ぐ／構え
@@ -8111,7 +8176,7 @@ const SEGS={
       {theme:3,name:'渓谷の最深部',
        gates:[{off:520,list:[['zombiewan',1],['skeletwan',1]]},{off:600,list:[['bikewan',1],['trailerwan',1]]},{off:900,list:[['akita',1],['pierrot',1],['gripper',1]]},{off:1300,boss:true,list:[['noroinu',1]]}],
        npc:{kind:'villager',name:'逃げ遅れた村犬',lines:['この先の呪い犬は、触れるだけで呪いをうつしてくる…','掴み技で投げ飛ばせば呪いも怖くないワン！']}} ],
-    [ {theme:2,name:'月詠の森',
+    [ {theme:2,name:'月詠の森',terr:'tower',
        gates:[{off:520,list:[['zombiewan',1],['skeletwan',1]]},{off:600,list:[['dober',1],['pierrot',1],['hyena',1]]},{off:1300,boss:true,list:[['ghost',3]]}],
        npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:{
          inu:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、剣士さま。'],
@@ -8131,7 +8196,7 @@ const SEGS={
     [ {theme:3,name:'灼熱の砂漠',
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
-      {theme:9,name:'灼熱の巨大廃墟',terr:'up',
+      {theme:9,name:'灼熱の巨大廃墟',terr:'tower',
        gates:[{off:520,list:[['mechawan',1],['skeletwan',1]]},{off:600,list:[['bikewan',1],['trailerwan',1]]},{off:900,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
        npc:{kind:'villager',name:'考古学犬ホリダス',lines:['この巨大廃墟…登るほどに古代文明の深淵へ近づく。','鋼鉄のグラトンは遺跡の守護兵。図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
@@ -8208,7 +8273,7 @@ const SPACE_CH=[
 const SPACE_FINAL={theme:15,name:'皇帝の玉座',len:1500,noPit:true,
   gates:[{off:560,list:[['greywan',1],['raygun',1],['floater',1],['probe',1]]},{off:1000,boss:true,final:true,list:[['emperorX',1]]}]};
 const MYTH_CH=[
-  {theme:16,name:'オリュンポスの神域',
+  {theme:16,name:'オリュンポスの神域',terr:'tower',
    gates:[{off:600,list:[['mythguard',1],['mythhop',1]]},{off:1000,list:[['mythblade',1],['mythflank',1],['mythseer',1]]},{off:1400,boss:true,list:[['zeus',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['お、おい…！雲の上に、白い柱の国が現れたぞい…！','あれは神々の座「オリュンポス」じゃ。人の世の外にある。','ここの兵は今までとまるで違う。数で押してはこん——順番に、間合いを計って来おる。','正面から殴り合うな。回り込め、引け、着地を狙え。','雷を司る主神ゼウスが、頂で待っておる。'],give:{heal:'full'}}},
   {theme:18,name:'海神の神殿',
@@ -8241,7 +8306,7 @@ const SENGOKU_CH=[
    gates:[{off:520,list:[['yumihei',2],['saika',2]]},{off:900,mini:true,list:[['katsuyori',1]]},
           {off:1180,list:[['kibahei',1],['horo',2],['souhei',1]]},{off:1560,boss:true,list:[['kenshin',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['霧で先が見えねえ…足音だけ聞け。','母衣を背負った早駆けが来るぜ。あれは止まらねえ。','川の向こうに、白い頭巾の大将が独りで立ってた。あれはヤバい。']}},
-  {theme:24,name:'甲斐の山城',terr:'up',
+  {theme:24,name:'甲斐の山城',terr:'tower',
    gates:[{off:520,list:[['oodate',2],['souhei',1]]},{off:900,list:[['kunoichi',2],['hatamoto',1]]},
           {off:1240,list:[['ozutsu',1],['taisho',1],['kibahei',1]]},{off:1600,boss:true,list:[['shingen',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['丸太を組んだ砦じゃ。守るために作られておる。','くノ一が居る。背を取られるぞ、壁を背にせい。','山の主は動かぬ。動かぬまま、こちらの手を全部読んでおる。']}},
@@ -8305,8 +8370,8 @@ function addBlocks(blocks,opts){
     // （積まないと、坂の次の区画で標高が0へ戻って境目が崖になる）
     { const e0=terrElev, up=(b.terr==='up'), dn=(b.terr==='down'),
             cl=(b.terr==='climb'), dv=(b.terr==='dive'),
-            lu=(b.terr==='liftup'), ld=(b.terr==='liftdown');
-      let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : cl? TERR_CLIMB : dv? -TERR_CLIMB : 0);
+            lu=(b.terr==='liftup'), ld=(b.terr==='liftdown'), tw=(b.terr==='tower');
+      let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : cl? TERR_CLIMB : dv? -TERR_CLIMB : tw? TOWER_RISE : 0);
       // 標高に「地面=0」の床を置くと、最初の区画が下り坂だったときに 0→0 で平坦に潰れる。
       // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
       const CAP=TERR_RISE*3; if(e1<-CAP) e1=-CAP; if(e1>CAP) e1=CAP;
@@ -8315,6 +8380,12 @@ function addBlocks(blocks,opts){
       // 全段に開けると休む場所が無くなるので一段おき
       if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
         const bx=B+len*(k/TERR_STEPS); PITS.push([bx-130, bx-16]); } }
+      // 足場の塔：壁の手前に、右上がりに床を積む。最後の床から高い地面へ跳び移る
+      if(tw){ const rx=B+Math.round(len*0.62);
+        for(let k=1;k<=TOWER_STEPS;k++){
+          const h=Math.round(TOWER_RISE*k/(TOWER_STEPS+1));
+          const cx=rx-(TOWER_STEPS-k+1)*TOWER_GAP;
+          PLATS.push({x0:cx-TOWER_HW, x1:cx+TOWER_HW, h:h, st:st}); } }
       // 昇降区間は区画のちょうど中ほどに置く（門の湧きと重ならない位置）
       if(lu||ld){ const lx0=B+Math.round(len*0.40);
         LIFTS.push({x0:lx0, x1:lx0+LIFT_W, dir:lu?1:-1, off:0, t:0, state:'idle', st:st}); }
@@ -8335,7 +8406,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
-  TERRS=[]; LIFTS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -8478,7 +8549,7 @@ function startTraining(){ unlockAudio();
   startGame();                                      // 本編と同じ初期化を通す
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; LIFTS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
   camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
@@ -9242,7 +9313,7 @@ function updateCamera(){
   camX=clamp(camX,0,WORLD_END-W);
   // ── 縦の追従：坂を登れば世界を下へ、降りれば上へずらして、主役を画面のほぼ同じ高さに保つ ──
   // これが無いと標高200pxの坂で主役が画面の上端へ抜ける。うねりは追わない（画面が波打つ）
-  { const cy = pl? terrLift(pl.x) : (TERRS.length? terrLift(camX+W*0.5) : 0);
+  { const cy = pl? terrLift(pl.x)+(pl.fl||0) : (TERRS.length? terrLift(camX+W*0.5) : 0);
     camY += (cy-camY)*0.12; if(Math.abs(cy-camY)<0.3) camY=cy; }
   // 寄っている間は可視域が狭まるので、プレイヤーの拘束もその分だけ内側へ寄せる
   const vm=W*(1-1/Math.max(camZoom,1))*0.5;
@@ -9315,14 +9386,46 @@ function updateRigP(p){ const r=p.rig; if(!r) return;
 //      （やらないと、段を跳び越すときに段の上で勝手に浮き上がる／めり込む）
 //   2. 地上で登れない段差へ踏み込んだら押し戻す＝壁。跳ばないと登れない
 //   3. 地上で大きく落ち込んだら、瞬間移動させずに落下させる
+// 積み重なった床との付き合わせ。プレイヤーにも敵にも同じ規則を当てる
+//   ・降りている間だけ床に乗る（下から跳ぶとすり抜ける＝一方通行）
+//   ・乗っている床の縁から踏み出したら、下の床（最後は地面）へ落ちる
+// 戻り値は「落ち始めたか」。呼び側で空中状態へ移すのに使う
+function platStep(a){
+  // 床の無い場面（塔以外のステージ／場面転換のあと）では、持ち越した fl を高さへ戻す。
+  // 残したままだと、床が無いのに宙に立っているように描かれる
+  if(!PLATS.length){ if(a.fl){ a.z=(a.z||0)+a.fl; a.fl=0; } a._pa=zAbs(a); return false; }
+  const A0=a._pa, A1=zAbs(a);
+  a._pa=A1;
+  if(a.state==='dead') return false;
+  if(A0!=null && A1<A0-0.001 && a.z>0){         // 降下中：踏み抜いた床に乗る
+    const P=platLanding(a.x, A0, A1);
+    if(P && P.h>(a.fl||0)-0.5){ a.fl=P.h; a.z=0; a.vz=0; a._pa=P.h;
+      if(gf%2===0) dust(a.x, a.y-P.h, 3);
+      return false; } }
+  if(a.z<=0 && (a.fl||0)>0 && !platAt(a.x, a.fl)){   // 床の縁から踏み出した＝落ちる
+    const below=platBelow(a.x, a.fl);
+    a.z=a.fl-below; a.fl=below; a.vz=0; a._pa=zAbs(a);
+    return true; }
+  return false;
+}
+function airborneFromPlat(p){                    // 落下へ移す（ジャンプ状態の物理へ委ねる）
+  if(p.state==='walk'||p.state==='idle'){
+    p.vz=0; p.state='jump'; p.jAtk=0; p.aerial=0;
+    p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+    p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false; p.jMkFire=false; }
+}
 function terrainStep(p){
   const px=p._tx;
   p._tx=p.x;
-  if(px==null || p.state==='dead' || p.state==='falling') return;
+  if(px==null || p.state==='dead' || p.state==='falling'){ p._pa=zAbs(p); return; }
+  if(platStep(p)) airborneFromPlat(p);
   const dx=p.x-px;
   if(dx===0 || Math.abs(dx)>90) return;          // 場面転換などの瞬間移動は対象外
   const dh=terrLift(p.x)-terrLift(px);
   if(dh===0) return;
+  // 地面の高さが変わったら床から降りる。fl は「その場の地面からの高さ」なので、
+  // 地面が変わったまま持ち越すと、新しい地面の上に浮いたままになる
+  if(p.fl){ p.z+=p.fl; p.fl=0; p._pa=p.z; }
   if(p.z>0){                                     // 1. 空中：絶対高度を保つ
     const nz=p.z-dh;
     // まだ段の天端より低いのに段へ潜り込もうとしている＝壁の腹にぶつかった。
@@ -9406,6 +9509,7 @@ function render(){
   ctx.save(); if(camY) ctx.translate(0, camY);
   drawGround();
   drawLiftShaft();
+  drawPlatforms();
   ctx.restore();
   drawStageBannerScrim();
   ctx.save(); if(camY) ctx.translate(0, camY);   // ステージバナーの暗幕は背景側へ：敵の予兆マークを暗くしない
@@ -11467,7 +11571,7 @@ const PI2=Math.PI/2;   // ※四分の一回転。全周は TAU を使うこと�
 const TAU=Math.PI*2;
 // ---- Player: cute 2-head-tall chibi (feet at y=0, body grows upward) ----
 function drawPlayer(){
-  const p=player, s=depthScale(p.y)*0.94*(p.kind==='guard8'?1.28:1), sx=p.x-camX, sy=p.y-groundLift(p.x), st=p.state, ph=p.anim;   // ガードワン8号は巨体
+  const p=player, s=depthScale(p.y)*0.94*(p.kind==='guard8'?1.28:1), sx=p.x-camX, sy=actorGY(p), st=p.state, ph=p.anim;   // ガードワン8号は巨体
   const gph=p.animG||0;                                  // 攻撃中も止まらない生命感用タイマー
   EYE_O=eyeBlink(p); EYE_GZ=p.gaze||0;                   // まばたきと視線（値の前進は updateRigP）
   const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
@@ -13057,7 +13161,7 @@ function mackIcon(x,y){ ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc
 // 残弾表示。頭上に6発ぶんの薬莢を並べる（HUDへ出すと相方の画面まで埋まる）
 function drawMackAmmo(p){
   if(p.state==='dead') return;
-  const n=(p.ammo==null?MK_AMMO:p.ammo)|0, sx=p.x-camX, sy=p.y-p.z-groundLift(p.x)-142;
+  const n=(p.ammo==null?MK_AMMO:p.ammo)|0, sx=p.x-camX, sy=actorGY(p)-p.z-142;
   ctx.save();
   for(let i=0;i<MK_AMMO;i++){ const bx=sx-(MK_AMMO-1)*4 + i*8;
     ctx.fillStyle=(i<n)?'#ffd24d':'rgba(90,74,52,.55)';
@@ -13206,7 +13310,7 @@ function drawEnemy(e){
   // gsc＝描画倍率。各ボスの描画関数は座標を直書きしているので、
   // 体格を変えるにはここで掛けるしかない。t.w/t.h（掴み間合いと空中判定）も
   // 同じ倍率で上げておかないと、見た目と当たりがずれる
-  const t=ETYPE[e.type], s=depthScale(e.y)*(t.gsc||1), sx=e.x-camX, sy=e.y-groundLift(e.x);
+  const t=ETYPE[e.type], s=depthScale(e.y)*(t.gsc||1), sx=e.x-camX, sy=actorGY(e);
   if(sx<-230||sx>W+230) return;   // 負荷対策：画面外の敵は描かない（引きのズームぶん余裕を持たせる）
   // ── 地面から出てくる敵：噴き出すまでは土の下。本体は描かず、割れた地面と盛り上がりだけを見せる ──
   if(e.state==='enter' && e.entry==='burrow' && e.entT<ENT_BURROW){
