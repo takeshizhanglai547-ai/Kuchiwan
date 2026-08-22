@@ -378,6 +378,126 @@ const DRIVER = `
     if(paint(LIFT_RISE,'done').length>0) throw new Error('昇降が終わっても縦坑の壁が残っている');
     console.log('縦坑の壁 OK ('+a.length+'枚・昇降で y '+ys(a)+'→'+ys(b)+'／発動前と終了後は描かない)'); }
 
+  // ===== 13) 足場の塔：頭上の床へ跳び乗って上へ登る（落ちても即ミスにしない） =====
+  { const p=setup(); build(['tower']); const T=TERRS[0];
+    if(PLATS.length<3) throw new Error('足場が '+PLATS.length+' 枚しかない');
+    // 床は右上がりに並び、隣どうしが重なっている（重なりが無いと跳び移れない）
+    for(let k=1;k<PLATS.length;k++){
+      if(!(PLATS[k].h>PLATS[k-1].h)) throw new Error(k+'枚目が上がっていない（'+PLATS[k-1].h+'→'+PLATS[k].h+'）');
+      if(!(PLATS[k].x0<PLATS[k-1].x1)) throw new Error(k+'枚目と手前の床が離れている（'+PLATS[k-1].x1+' → '+PLATS[k].x0+'）'); }
+    // 一段の高さは跳べる範囲（真上に跳ぶと約230px 上がる）
+    const step=PLATS[0].h;
+    if(!(step>40)) throw new Error('一段が '+step+'px しかない（跳ぶ意味が無い）');
+    if(!(step<200)) throw new Error('一段が '+step+'px あって跳んでも届かない');
+    // 谷は開けない（落ちて即ミスにする作りではない）
+    if(PITS.some(function(q){ return q[0]>=T.x0 && q[1]<=T.x1; }))
+      throw new Error('足場の塔に谷が開いている（落ちたら即ミスになる）');
+
+    // 床の縁まで歩いて真上に跳ぶだけのAIで、いちばん上まで登れること
+    const top=PLATS[PLATS.length-1];
+    p.x=PLATS[0].x0-40; p._tx=null; p._pa=0; p.z=0; p.fl=0; WORLD_END=T.x1+600;
+    let maxFl=0, fell=0, died=0;
+    for(let f=0;f<2400;f++){
+      camX=clamp(p.x-300,0,WORLD_END-W);
+      for(const k in p.in.K) p.in.K[k]=false;
+      let next=null;
+      for(const P of PLATS){ if(P.h>(p.fl||0)+1 && (!next||P.h<next.h)) next=P; }
+      if(p.z<=0 && p.state!=='jump'){
+        if(next){ if(p.x<next.x0+60) p.in.K.right=true; else p.in.pressed.jump=true; }
+        else { if(p.x<top.x1-60) p.in.K.right=true; else p.in.pressed.jump=true; } }
+      else p.in.K.right=true;                       // 空中では前へ
+      updatePlayer(p); terrainStep(p);
+      if((p.fl||0)>maxFl) maxFl=p.fl;
+      if(p.state==='falling') fell++;
+      if(p.state==='dead') died++;
+      if(terrLift(p.x)>=TOWER_RISE-4 && p.z<=0) break; }
+    if(died>0) throw new Error('落ちてミスになっている（'+died+'F）');
+    if(fell>0) throw new Error('落とし穴の落下に入っている（'+fell+'F）');
+    if(maxFl<top.h) throw new Error('いちばん上の床（'+top.h+'px）まで登れない（最高 '+maxFl+'px）');
+    if(!(terrLift(p.x)>=TOWER_RISE-4)) throw new Error('塔を越えて高い地面へ出られない（標高 '+Math.round(terrLift(p.x))+'px）');
+    console.log('足場の塔 OK ('+PLATS.length+'枚・一段'+step+'px・重なり'+(PLATS[0].x1-PLATS[1].x0)
+      +'px／床'+maxFl+'px まで登って標高'+Math.round(terrLift(p.x))+'px の地面へ・落下ミス0)'); }
+
+  // ===== 14) 床は一方通行。落ちても下の床へ戻るだけ =====
+  { const p=setup(); build(['tower']);
+    const P1=PLATS[0];
+    // 下から跳ぶとすり抜ける（上りでは乗らない）
+    p.x=(P1.x0+P1.x1)*0.5; p._tx=null; p._pa=0; p.z=0; p.fl=0;
+    p.in.pressed.jump=true; updatePlayer(p); terrainStep(p);
+    let through=false;
+    for(let f=0;f<20;f++){ updatePlayer(p); terrainStep(p);
+      if(p.z+ (p.fl||0) > P1.h+20 && (p.fl||0)===0) through=true; }
+    if(!through) throw new Error('下から跳んでも床をすり抜けない（上りで乗ってしまう）');
+    // 落ちてくると乗る
+    let landed=-1;
+    for(let f=0;f<90;f++){ updatePlayer(p); terrainStep(p);
+      if((p.fl||0)===P1.h){ landed=f; break; } }
+    if(landed<0) throw new Error('落ちてきても床に乗らない');
+    // 縁から踏み出すと下の床（ここでは地面）へ落ちる。ミスにはならない
+    p.x=P1.x1-4; p._tx=P1.x1-4; p.z=0; p.fl=P1.h; p._pa=P1.h; p.state='walk';
+    let off=-1;
+    for(let f=0;f<160;f++){ p.in.K.right=true; updatePlayer(p); terrainStep(p);
+      if(p.state==='dead'||p.state==='falling') throw new Error('床から落ちてミスになっている');
+      if((p.fl||0)===0 && p.z<=0 && p.x>P1.x1){ off=f; break; } }
+    if(off<0) throw new Error('床の縁から踏み出しても落ちない（宙に立っている）');
+    // 床の下に谷があっても、床に乗っている間は落ちない
+    { const q=setup(); build(['tower']); const Q=PLATS[0];
+      PITS.push([Q.x0-20, Q.x1+20]);                 // 床の真下を谷にする
+      q.x=(Q.x0+Q.x1)*0.5; q._tx=q.x; q.z=0; q.fl=Q.h; q._pa=Q.h; q.state='idle';
+      for(let f=0;f<90;f++){ updatePlayer(q); terrainStep(q);
+        if(q.state==='falling'||q.state==='dead') throw new Error('床に乗っているのに谷へ落ちている'); }
+      // 同じ場所でも地面に降りれば落ちる（谷そのものは効いている＝検査が空回りしていない）
+      q.fl=0; q.z=0; q._pa=0; q.state='idle'; let fellNow=false;
+      for(let f=0;f<40;f++){ updatePlayer(q); terrainStep(q); if(q.state==='falling'){ fellNow=true; break; } }
+      if(!fellNow) throw new Error('地面に立っても谷に落ちない（谷の検査が空回りしている）'); }
+    console.log('床の一方通行 OK (下からすり抜け→'+landed+'Fで着地／縁から'+off+'Fで地面へ・ミスなし／床の下が谷でも落ちない)'); }
+
+  // ===== 16) 壁は床を使わずには越えられない =====
+  // 床が無ければ登れないことを確かめないと、「壁が緩くて空中で少しずつよじ登れる」
+  // 作りになっていても、床を使うAIでは気付けない
+  { const p=setup(); build(['tower']); const T=TERRS[0];
+    const saved=PLATS.slice(); PLATS.length=0;              // 床を外して壁だけにする
+    const rx=T.x0+Math.round((T.x1-T.x0)*0.62);
+    p.x=rx-420; p._tx=null; p._pa=0; p.z=0; p.fl=0; WORLD_END=T.x1+600;
+    let best=0;
+    for(let f=0;f<900;f++){
+      camX=clamp(p.x-300,0,WORLD_END-W);
+      p.in.K.right=true;
+      if(p.z<=0 && p.state!=='jump' && (terrLift(p.x+30)-terrLift(p.x))>TERR_STEP_MAX) p.in.pressed.jump=true;
+      updatePlayer(p); terrainStep(p);
+      if(terrLift(p.x)>best) best=terrLift(p.x); }
+    PLATS.push.apply(PLATS, saved);
+    if(best>40) throw new Error('床を使わずに壁を '+Math.round(best)+'px よじ登れる');
+    console.log('壁 OK (床を外すと '+Math.round(best)+'px しか登れない＝床が要る)'); }
+
+  // ===== 15) 別の階に立つ相手には打撃が届かない =====
+  { const p=setup(); build(['tower']); const P=PLATS[PLATS.length-1];
+    const hit=function(sameFloor){ enemies.length=0;
+      p.x=(P.x0+P.x1)*0.5; p._tx=p.x; p._pa=0; p.z=0; p.fl=sameFloor?P.h:0; p._pa=zAbs(p);
+      p.state='idle'; p.atk=null; p.invuln=0;
+      spawnEnemy('wolf', p.x+60, LANE); const e=enemies[0];
+      e.hp=e.maxHp=4000; e.fl=P.h; e.z=0; e._pa=zAbs(e); e.state='walk'; e.thinkCd=999;
+      const hp0=e.hp;
+      beginAttack('c4');
+      for(let f=0;f<40;f++){ updatePlayer(p); }
+      return hp0-e.hp; };
+    const same=hit(true), below=hit(false);
+    if(!(same>0)) throw new Error('同じ床の上でも当たらない（測れていない）');
+    if(below>0) throw new Error('地上から頭上の床に立つ敵へ '+below+' ダメージ通っている');
+    // 逆向きも。地上の敵が頭上の床に立つ主役を殴れてはいけない
+    const taken=function(sameFloor){ enemies.length=0;
+      p.x=(P.x0+P.x1)*0.5; p._tx=p.x; p.z=0; p.fl=P.h; p._pa=zAbs(p);
+      p.state='idle'; p.atk=null; p.invuln=0; p.hp=p.maxHp=999;
+      spawnEnemy('wolf', p.x+40, LANE); const e=enemies[0];
+      e.fl=sameFloor?P.h:0; e.z=0; e._pa=zAbs(e); e.facing=-1; e.state='attack';   // 主役のほうを向かせる
+      const hp0=p.hp;
+      for(let f=0;f<12;f++){ p.invuln=0; enemyAttackHit(e, ATK_VAR[0], ATK_VAR[0].hits[0]); }
+      return hp0-p.hp; };
+    const t1=taken(true), t2=taken(false);
+    if(!(t1>0)) throw new Error('同じ床の敵からも殴られない（測れていない）');
+    if(t2>0) throw new Error('地上の敵が頭上の床に立つ主役へ '+t2+' ダメージ通している');
+    console.log('階をまたぐ打撃 OK (同じ床 与'+same+'／別の階 '+below+'　被'+t1+'／'+t2+')'); }
+
   console.log('TERRAIN TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
