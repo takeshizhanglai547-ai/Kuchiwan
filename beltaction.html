@@ -220,7 +220,7 @@ const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger spr
 const RISE_CEIL = 320;                     // 上昇技（昇竜など）の最高到達点＝画面天井。これ以上は上がらない
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
-let state='title', camX=0, camY=0, score=0, coins=0;
+let state='title', camX=0, camY=0, camLockX=null, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
 let critCam=0;   // 致命の一撃の演出フレーム（画面を暗く締めて主役だけを立たせる）
 // 全画面フラッシュの色。既定は被弾通知の赤。技ごとに色を指定すると加算合成の発光フラッシュになる
@@ -1598,7 +1598,16 @@ function terrAt(x){
   for(const t of TERRS){ if(x>=t.x0 && x<t.x1){ _terrLast=t; return t; } }
   return null; }
 // 区画の地形が作る標高。付け根と登り切りは smoothstep で寝かせ、折れ線に見えないようにする
-function terrLift(x){
+// ── 動く地形（昇降区間）──
+// スマブラの「ステージごと動く場面」。区間へ踏み込むと足場ごと大きく昇降し、
+// その間はその区間から出られない。昇り切ったあとの世界は新しい高さで続く
+const LIFT_RISE=520, LIFT_DUR=300, LIFT_W=520;
+let LIFTS=[];               // {x0,x1,dir,off,t,state,st}
+// 区間より右（＝これから進む先）はすべて一緒に昇降させる。
+// 区間だけ動かすと、降り切った先が元の高さのままで崖になる
+function liftAdd(x){ let a=0; for(let i=0;i<LIFTS.length;i++){ const L=LIFTS[i]; if(x>=L.x0) a+=L.off; } return a; }
+function terrLift(x){ return terrLiftBase(x)+liftAdd(x); }
+function terrLiftBase(x){
   const t=terrAt(x);
   if(!t){ const F=TERRS[0], L=TERRS[TERRS.length-1];
     if(F && x<F.x0) return F.e0;                      // ワールド手前は最初の区画の標高で埋める
@@ -1618,7 +1627,8 @@ function terrTilt(x){ const t=terrAt(x);
   if(t && (t.kind==='climb'||t.kind==='dive')) return (t.e1-t.e0)/Math.max(1,t.x1-t.x0);
   return terrSlope(x); }
 // 坂の傾き（px/px）。落石の転がる向きと速さ、坂の見た目の陰影に使う
-function terrSlope(x){ return (terrLift(x+24)-terrLift(x-24))/48; }
+// 昇降区間の段差は「傾き」ではないので、地形そのものの高さだけから出す
+function terrSlope(x){ return (terrLiftBase(x+24)-terrLiftBase(x-24))/48; }
 function groundLift(x){
   const t=terrAt(x), slope=t&&t.e0!==t.e1;
   // 坂の上では従来のうねりを弱める。強い傾斜に細かい波を重ねると足元がガタつく
@@ -1947,10 +1957,13 @@ function impactBurst(x,y,color,big,opt){ opt=opt||{};
 // 全部同時に出して同時に消える従来の作りでは一撃の重みが出ないため、層ごとに立ち上がりをずらす
 function hitFx(x,y,dmg,heavy,col){
   const big=!!heavy||dmg>=22, c=col||'#ffe14d';
-  flashCore(x,y,big?30:19,'255,255,255');                       // 芯は常に白。色が付いても衝撃の白い核は残す
-  spark(x,y,c, big?15:7, big?9:6, {delay:1});                   // 火花＝技・武器の色
-  ring(x,y,mixWhite(c,big?0.58:0.34),{delay:3,rMax:big?62:38}); // 輪＝その色を白寄りにブレンド
-  if(dmg>=10) impactBurst(x,y,'#ffffff',big,{delay:6});         // 放射線＝白（色は火花が担当）
+  // コンボの段位で打撃の見た目を盛る。繋ぐほど画面が熱くなるのが分かるようにする
+  const ht=comboHeat(), hm=1+ht*0.85;
+  flashCore(x,y,(big?30:19)*(1+ht*0.35),'255,255,255');         // 芯は常に白。色が付いても衝撃の白い核は残す
+  spark(x,y,c, Math.round((big?15:7)*hm), (big?9:6)*(1+ht*0.20), {delay:1});   // 火花＝技・武器の色
+  ring(x,y,mixWhite(c,big?0.58:0.34),{delay:3,rMax:(big?62:38)*(1+ht*0.30)});  // 輪＝その色を白寄りにブレンド
+  if(ht>=0.6) ring(x,y,comboRank(combo.count)[2],{delay:6,rMax:(big?86:58)});  // 高段位はもう一枚、段位の色で
+  if(dmg>=10) impactBurst(x,y,'#ffffff',big||ht>=0.8,{delay:6});               // 放射線＝白（色は火花が担当）
   if(big) smokePuff(x,y+12,3,themeSmokeRGB());   // 大打撃だけ煙を足す（通常打撃で画面を汚さない）
 }
 // 円弧のリボン：外周＝刃先、内周は u^0.62 で絞って尾側を細く消す。剣戟トレイルと同じ視覚言語を
@@ -2717,6 +2730,11 @@ function evoMul(p){ return [1, 1.35, 1.75][evoTier(p)]; }
 const EVO_NAME=['','熟練','極'];
 // 投げ技のダメージ。掴み技は関数ごとに直値で書かれているので、段位はここで一括して掛ける
 function TD(n){ return Math.round(n*evoMul(player)); }
+// ── 奥義に必要な奥義ストック ──
+// 既定は1。マックの「絨毯爆撃」は画面全体を端から端まで焼き払って
+// 雑魚の波を丸ごと消してしまうので、3つ貯めないと撃てないようにする
+const ULT_COST={mack:3};
+function ultCost(p){ return ULT_COST[(p&&p.kind)||'inu']||1; }
 const SPECIAL_SLOTS=['up','du','fwd','down','hadou','dp','dash'];
 const SPECIAL_SLOT_NAME={up:'上攻撃', fwd:'前攻撃', down:'下攻撃', dash:'ダッシュ攻撃', hadou:'波動コマンド', dp:'昇竜コマンド', du:'↓↑コマンド'};
 const SPECIAL_SLOT_CMD ={up:'↑ ＋攻撃', fwd:'→ ＋攻撃', down:'↓ ＋攻撃', dash:'→→ ＋攻撃', hadou:'↓→ ＋攻撃', dp:'→↓→ ＋攻撃', du:'↓↑ ＋攻撃'};
@@ -3145,6 +3163,98 @@ function spawnBoulder(x, dir){
                 r:BOULDER_R, spin:0, hitP:{}, hitE:{}, z:0, vz:0});
   sfx.big(x); shake=Math.max(shake,6); popText(x, LANE-190, '落石！', '#ffae42', true); }
 // 下り坂の区画に居る間だけ、たまに背後から岩を落とす
+// ── 昇降区間の進行 ──
+// 区間へ踏み込むと発動。足場ごと大きく昇降し、終わるまでその区間から出られない。
+// 高さは terrLift（＝liftAdd）が持つので、カメラも敵も地面もひとりでに付いてくる
+function tickLifts(){
+  camLockX=null;
+  const pl=activePlayers().filter(function(q){ return q.state!=='dead'; })[0];
+  if(!pl) return;
+  for(let i=0;i<LIFTS.length;i++){ const L=LIFTS[i];
+    if(L.state==='done') continue;
+    if(L.state==='idle'){
+      // ボス戦の最中には始めない。名乗りと画面演出がぶつかるうえ、
+      // 足場に閉じ込めるとボスの間合いの取り方が崩れる
+      { const enc=encounters[encIndex];
+        if(enc && enc.spawned && !enc.cleared && (enc.boss||enc.rival)) continue; }
+      if(pl.x>L.x0+50 && pl.x<L.x1){ L.state='run'; L.t=0;
+        popText(pl.x, pl.y-152, L.dir>0?'足場がせり上がる！':'足場が沈んでいく！', '#ffd24d', true);
+        shake=Math.max(shake,12); quake=Math.max(quake||0,16); flash=Math.max(flash,3);
+        sfx.big(pl.x); sfx.boss(pl.x); }
+      continue; }
+    L.t++;
+    camLockX=clamp((L.x0+L.x1)*0.5-W*0.5, 0, Math.max(0,WORLD_END-W));
+    const u=clamp(L.t/LIFT_DUR,0,1);
+    const sm=(u<0.5)? 2*u*u : 1-Math.pow(-2*u+2,2)*0.5;      // 動き出しと止まりを寝かせる
+    L.off=L.dir*LIFT_RISE*sm;
+    // 揺れと土煙。動いていることを体で分からせる
+    quake=Math.max(quake||0, 5+3*Math.abs(Math.sin(L.t*0.19)));
+    if(L.t%6===0) dust(rnd(L.x0+30,L.x1-30), LANE, 2);
+    if(perfTier<2 && L.t%3===0){ const gy=LANE-groundLift(pl.x);
+      ember(rnd(L.x0,L.x1), gy-rnd(0,300), rnd(-1.2,1.2), (L.dir>0? rnd(1.6,4.2) : -rnd(1.6,4.2)), (L.t%6)?'#c8b48a':'#8a7a5e'); }
+    if(L.t%40===0) sfx.step(pl.x,'stone',1.9);
+    // 区間の外へは出さない。出られると「乗っている」感が消える
+    for(const q of players) if(q.active && q.state!=='dead') q.x=clamp(q.x, L.x0+34, L.x1-34);
+    for(const e of enemies) if(!e.dead) e.x=clamp(e.x, L.x0+22, L.x1-22);
+    // 移動中の襲撃：空から降ってくる（戦闘中の門があるときは増やさない）
+    { const enc=encounters[encIndex];
+      const busy=(enc && enc.spawned && !enc.cleared);
+      if(!busy && (L.t===80 || L.t===170 || L.t===250)){
+        const n=(L.t===250)?2:1;
+        for(let k=0;k<n;k++){
+          let sx=rnd(L.x0+70,L.x1-70);
+          if(Math.abs(sx-pl.x)<130) sx=(sx<pl.x)? L.x0+70 : L.x1-70;
+          spawnEnemyEntry(randZako(), sx, LANE, 'drop'); } } }
+    if(u>=1){ L.state='done'; L.off=L.dir*LIFT_RISE;
+      shake=Math.max(shake,13); flash=Math.max(flash,4); quake=Math.max(quake||0,18);
+      dust(pl.x,pl.y,16); sfx.big(pl.x);
+      popText(pl.x, pl.y-146, L.dir>0?'頂上に着いた！':'大空洞に降り立った！', '#ffe14d', true); } }
+}
+// 昇降中の縦坑。足場の外側に岩肌の壁を立てて、進行方向と逆へ流す。
+// これが無いと、画面のどこも動かないので「昇っている」ことが伝わらない
+function drawLiftShaft(){
+  for(let i=0;i<LIFTS.length;i++){ const L=LIFTS[i];
+    if(L.state!=='run') continue;
+    const lx=L.x0-camX, rx=L.x1-camX;
+    if(rx<-40 || lx>W+40) continue;
+    const scroll=-L.off;                            // 昇るほど壁は下へ流れる
+    const T=curTheme(), rock=shade(T.g[2],-6), rock2=shade(T.g[1],-16);
+    // この関数は translate(0,camY) の下で呼ばれるので、画面に映る描画Yは -camY 〜 -camY+H。
+    // ここを H+|camY|*2 まで広げて塗ると、標高が高いステージほど画面外を無駄に塗る（実測 +1744コール）
+    const VY0=-camY-60, VH=H+120;
+    const band=function(x0,x1){
+      if(x1<=x0) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0,VY0,x1-x0,VH); ctx.clip();
+      ctx.fillStyle=rock; ctx.fillRect(x0,VY0,x1-x0,VH);
+      const SZ=148, off=((scroll%SZ)+SZ)%SZ;
+      for(let y=VY0-SZ; y<VY0+VH; y+=SZ){
+        const yy=y+off;
+        for(let x=x0-SZ; x<x1+SZ; x+=SZ*0.86){
+          const jitter=((Math.floor(x/37)+Math.floor(yy/53))%3)*9;
+          ctx.fillStyle=((Math.floor(x/61)+Math.floor(yy/71))%2)? rock2 : shade(T.g[2],-14);
+          roundRect(x+jitter, yy, SZ*0.72, SZ*0.46, 8); ctx.fill(); }
+      }
+      // 一定間隔の梁。同じ模様の繰り返しだけだと、速さも向きも読み取れない
+      { const GS=248, goff=((scroll%GS)+GS)%GS;
+        for(let y=VY0-GS; y<VY0+VH; y+=GS){ const yy=y+goff;
+          ctx.fillStyle=shade(T.g[1],10); ctx.fillRect(x0-8, yy, (x1-x0)+16, 15);
+          ctx.fillStyle='rgba(0,0,0,.42)'; ctx.fillRect(x0-8, yy+15, (x1-x0)+16, 7);
+          ctx.fillStyle=shade(T.g[0],26); ctx.fillRect(x0-8, yy, (x1-x0)+16, 4); } }
+      // 坑の縁を暗く落として奥行きを出す
+      const eg=ctx.createLinearGradient(x0,0,x0+(x1-x0)*0.5,0);
+      eg.addColorStop(0,'rgba(0,0,0,0)'); eg.addColorStop(1,'rgba(0,0,0,.55)');
+      ctx.fillStyle=eg; ctx.fillRect(x0,VY0,x1-x0,VH);
+      ctx.restore(); };
+    band(-60, Math.min(lx, W+60));
+    band(Math.max(rx,-60), W+60);
+    // 流れ落ちる砂利。壁の模様だけだと速さが読めない
+    if(perfTier<2){ ctx.save(); ctx.fillStyle='rgba(210,196,168,.55)';
+      for(let k=0;k<12;k++){ const ph=((gf*(L.dir>0?7:-7)+k*173)%(H+200)+(H+200))%(H+200);
+        const gx=(k%2)? rnd(0,Math.max(0,lx)) : rnd(Math.min(W,rx),W);
+        ctx.fillRect(gx, -camY+ph-100, 2.4, 12+((k*13)%18)); }
+      ctx.restore(); }
+  }
+}
 function tickBoulders(){
   const pl=activePlayers().filter(q=>q.state!=='dead')[0];
   if(!pl || !stageIsDown(pl.x)){ boulderCd=0; return; }
@@ -3457,6 +3567,41 @@ function drawCarriers(){
         ctx.beginPath(); ctx.arc(-18,6,2.6,0,7); ctx.fill(); }
     }
     ctx.restore(); }
+}
+// ── コンボの段位で画面のフチが灯る ──
+// 数字が増えるだけでは手が熱くならない。繋いでいる間ずっと画面が段位の色を帯び、
+// 段位が上がった瞬間だけ強く閃く。これが「繋ぐと派手になる」の本体
+function drawComboGlow(){
+  const ht=comboHeat();
+  // flare は段位ごとに長さが違う（16〜36F）。決め打ちの数で割ると 1 を超えて
+  // 下の半径が負になり、ブラウザの ellipse が例外を投げる
+  const fl=(combo.flare>0 && combo.flareMax>0)? clamp(combo.flare/combo.flareMax,0,1) : 0;
+  if(ht<=0.001 && fl<=0) return;
+  const R=comboRank(combo.count), rgb=hexRGB(R[2]);
+  const base=ht*0.30 + fl*0.34;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  // フチの帯（上下左右）。中央は素通しにして戦闘の視認性を落とさない
+  const th=Math.round(56+70*ht+40*fl);
+  const g1=ctx.createLinearGradient(0,0,0,th);
+  g1.addColorStop(0,'rgba('+rgb+','+(base*0.9).toFixed(3)+')'); g1.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g1; ctx.fillRect(0,0,W,th);
+  const g2=ctx.createLinearGradient(0,H,0,H-th);
+  g2.addColorStop(0,'rgba('+rgb+','+(base*1.05).toFixed(3)+')'); g2.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g2; ctx.fillRect(0,H-th,W,th);
+  const g3=ctx.createLinearGradient(0,0,th*1.2,0);
+  g3.addColorStop(0,'rgba('+rgb+','+(base*0.8).toFixed(3)+')'); g3.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g3; ctx.fillRect(0,0,th*1.2,H);
+  const g4=ctx.createLinearGradient(W,0,W-th*1.2,0);
+  g4.addColorStop(0,'rgba('+rgb+','+(base*0.8).toFixed(3)+')'); g4.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g4; ctx.fillRect(W-th*1.2,0,th*1.2,H);
+  // 段位が上がった瞬間の閃光の輪。画面の中心から一度だけ広がる
+  if(fl>0){ const u=1-fl, rr=Math.max(6, W*(0.16+0.62*u));
+    ctx.globalAlpha=fl*0.55; ctx.strokeStyle='rgba('+rgb+',1)'; ctx.lineWidth=Math.max(1.5,14*fl);
+    ctx.beginPath(); ctx.ellipse(W*0.5,H*0.54,rr,rr*0.62,0,0,7); ctx.stroke(); ctx.globalAlpha=1; }
+  ctx.restore();
+  // 高段位では火の粉が下から立ちのぼる（画面そのものが燃えている感じ）
+  if(ht>=0.6 && perfTier<2 && gf%3===0){
+    ember(camX+rnd(0,W), LANE-groundLift(camX+W*0.5)+rnd(-10,30), rnd(-0.6,0.6), -rnd(1.4,3.4), R[2]); }
 }
 function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   const wide=(h.kind==='ebeam'||h.kind==='ebolt'||h.kind==='pbeam');
@@ -4641,10 +4786,16 @@ function updatePlayer(){
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
     const NK=p.kind==='nuko', GD=p.kind==='guard8', WA=p.kind==='watch', WD=p.kind==='wanden', MK=p.kind==='mack';
     if((K.grab||pressed.grab) && p.z<=0){ if(beginSGMove(p)){ pressed.grab=false; return; } }   // 攻撃＋掴み＝キャラ別必殺技
-    if(rotationReady() && p.dim>0){
+    if(rotationReady()){
+      const cost=ultCost(p);
+      if(p.dim<cost){ consumeCmd();
+        popText(p.x,p.y-110,'奥義ストックが足りない（'+cost+'必要）','#c46bff',true);
+        for(let k=0;k<cost;k++) spark(p.x-14+k*14,p.y-96,'#c46bff',4,4); sfx.guard(p.x); return; }
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
       beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
-      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension'); consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
+      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension');
+      p.dim-=(cost-1);   // 各入口が1つ消費しているので、残りぶんをここで引く
+      consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド（Lv10で上位技へ）
@@ -6376,7 +6527,7 @@ function killEnemy(e){ const T=ETYPE[e.type];
     spark(e.x,e.y-e.h*0.5,'#a6e070',18,9); ring(e.x,e.y-e.h*0.4,'#a6e070'); popText(e.x,e.y-e.h-8,'まだ死なん…！','#a6e070',true); sfx.boss(e.x); return; }
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
   const rb=1+0.5*(e.rank||0);   // 階級ぶんの見返り
-  score+=Math.round((T.score+combo.count*10)*rb); gainXp(Math.round(T.score*rb)); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko(e.x);
+  score+=Math.round((T.score+combo.count*10)*rb); gainXp(Math.round(T.score*rb*comboXpMul())); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko(e.x);
   flashAt(T.boss?6:3,'255,248,225', e.x, e.y-e.h*0.5); kick(e.vx>=0?1:-1,-0.7, T.boss?13:5.5); punchIn(T.boss?0.075:0.02);
   if(T.boss){ shake=10; triggerSlow(40,0.24);
     for(let k=0;k<5;k++){ ring(e.x+rnd(-30,30),e.y-e.h*0.4,'#ffac3a'); spark(e.x+rnd(-30,30),e.y-rnd(0,e.h),'#ffd24d',10,8); } }
@@ -7938,7 +8089,8 @@ const CH1=[
 '攻撃と掴みの同時押しで「Fireworks」！ワンコミルクを呷ってから、ショットガンを振り回しながら乱射する。押し続けた回数だけ乱射が伸びるぞ。',
 '空中でも技が変わる。攻撃だけなら前へリボルバー（弾倉は減らぬ）、↓で宙返りから真下へ撃ち下ろす「レインストーム」——連打した回数だけ滞空して撃ち続ける。',
 '空中↑は「ドリルダッシュ」。まず刃を構えて一瞬止まり、そのあいだに入れた方向へ真っ直ぐ突っ込む。上へも、前斜め下へも、来た方向へも飛べるぞ。何も入れねば前斜め上じゃ。',
-'奥義はぐるっと一回転＋攻撃で「絨毯爆撃」！トランシーバーで爆撃機とドローンを呼び、画面じゅうを端から端まで焼き払う。攻撃を連打すればドローンの増援が来て、爆撃も長引くぞ。締めは横一線の一斉投下じゃ！'],
+'奥義はぐるっと一回転＋攻撃で「絨毯爆撃」！トランシーバーで爆撃機とドローンを呼び、画面じゅうを端から端まで焼き払う。攻撃を連打すればドローンの増援が来て、爆撃も長引くぞ。締めは横一線の一斉投下じゃ！',
+'——ただし絨毯爆撃は他の奥義と違って、奥義ストックを三つ食う。頭上の菱形が三つ揃うまでは撃てぬ。コンボを三十まで繋ぐか、ボスを倒すかで貯まるぞ。ここぞという乱戦まで取っておけ。'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！',
 '——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。↓→や→↓→、↓↑だけでなく、上・下・前の技へも繋げられる。三つまで、同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
   {theme:1,name:'黄昏の城下町',terr:'down',
@@ -7970,7 +8122,7 @@ const SEGS={
        npc:{kind:'villager',name:'鉱夫犬ホリオ',lines:['この水晶洞、迷い込むと二度と出られんと言われとる…','三つ首の獣ケルベが奥に巣食う。上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
   B:[
-    [ {theme:8,name:'海賊飛行艇の甲板',
+    [ {theme:8,name:'海賊飛行艇の甲板',terr:'liftup',
        gates:[{off:600,list:[['hyena',1],['pierrot',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
        npc:{kind:'sailor',name:'空賊シオマル',lines:['この飛行艇、風を掴んで大空をゆくのさ！足を滑らせるなよ。','でけぇスライムが甲板を占領してやがる。斬るたび分裂するから、小さいのから片付けな！']}},
       {theme:1,name:'海賊王の埠頭',
@@ -8020,13 +8172,13 @@ const BUG_CH=[
   {theme:9,name:'大輪の花園',
    gates:[{off:600,list:[['kamakiri',1],['hachibo',1],['ari',1]]},{off:1000,list:[['kamakiri',1],['kumo',1]]},{off:1400,boss:true,list:[['kamaboss',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう…！一夜にして王国が「蟲の世界」に呑まれてしもうた。','花も草も巨大化し、蟲の軍勢「大蟲帝国」が各地を支配しておる。二周目の敵は手強いぞ、心してかかれ！','聞けば宿屋のチャムの様子もおかしいらしい…。何かあったら、店を頼るのじゃぞ…いや、頼って良いのか…？'],give:{heal:'full'}}},
-  {theme:10,name:'蜂の巣大空洞',terr:'up',
+  {theme:10,name:'蜂の巣大空洞',terr:'liftup',
    gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
    npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
   {theme:11,name:'蜘蛛糸の森',terr:'climb',
    gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
    npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
-  {theme:12,name:'地底の蟻帝国',terr:'down',
+  {theme:12,name:'地底の蟻帝国',terr:'liftdown',
    gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['mukade',1],['dangoro',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
    npc:{kind:'villager',name:'考古学犬ホリダス',lines:['地下都市がまるごと蟻の帝国に…！光る茸だけが頼りだ。','大顎公クワガタスの突進は壁まで止まらん。ジャンプでかわして背中を叩け！']}},
 ];
@@ -8043,7 +8195,7 @@ const WORLD2_FINAL=[
 const NG2_UNLOCK=3;   // 蟲の世界のステージをこの数クリアで「蟲の女王の間」が解禁
 // ══ 三周目「宇宙人の侵略」：星を奪いに来た銀河侵略軍と戦う ══
 const SPACE_CH=[
-  {theme:13,name:'墜ちた円盤',
+  {theme:13,name:'墜ちた円盤',terr:'liftdown',
    gates:[{off:600,list:[['greywan',1],['raygun',1],['floater',1]]},{off:1000,list:[['greywan',1],['probe',1]]},{off:1400,boss:true,list:[['greyking',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう！今度は空から円盤が降ってきおった…！','「銀河侵略軍」——星ごと生き物を採取しに来た宇宙人どもじゃ。','奴らは光線を撃ってくる。物陰は無い、避けるか弾き返すしかないぞ！'],give:{heal:'full'}}},
   {theme:14,name:'星間回廊',terr:'up',
@@ -8152,7 +8304,8 @@ function addBlocks(blocks,opts){
     // 区画の地形。terr が無い区画も直前の標高を引き継いだ平坦区画として積む
     // （積まないと、坂の次の区画で標高が0へ戻って境目が崖になる）
     { const e0=terrElev, up=(b.terr==='up'), dn=(b.terr==='down'),
-            cl=(b.terr==='climb'), dv=(b.terr==='dive');
+            cl=(b.terr==='climb'), dv=(b.terr==='dive'),
+            lu=(b.terr==='liftup'), ld=(b.terr==='liftdown');
       let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : cl? TERR_CLIMB : dv? -TERR_CLIMB : 0);
       // 標高に「地面=0」の床を置くと、最初の区画が下り坂だったときに 0→0 で平坦に潰れる。
       // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
@@ -8162,6 +8315,9 @@ function addBlocks(blocks,opts){
       // 全段に開けると休む場所が無くなるので一段おき
       if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
         const bx=B+len*(k/TERR_STEPS); PITS.push([bx-130, bx-16]); } }
+      // 昇降区間は区画のちょうど中ほどに置く（門の湧きと重ならない位置）
+      if(lu||ld){ const lx0=B+Math.round(len*0.40);
+        LIFTS.push({x0:lx0, x1:lx0+LIFT_W, dir:lu?1:-1, off:0, t:0, state:'idle', st:st}); }
       terrElev=e1; _terrLast=null; }
     b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss, mini:g.mini, rival:g.rival,
       final:g.final, branchAfter:(g.boss&&last&&opts&&opts.branchAfter)||undefined }); });
@@ -8179,7 +8335,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
-  TERRS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -8322,7 +8478,7 @@ function startTraining(){ unlockAudio();
   startGame();                                      // 本編と同じ初期化を通す
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
   camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
@@ -8780,16 +8936,39 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
 const COMBO_RANK=[[2,'D','#cfd8e6','#8fa0b4'],[8,'C','#7dd0ff','#2f7fbf'],[16,'B','#7dff5a','#2f9f3a'],
   [28,'A','#ffd24d','#c07a10'],[45,'S','#ff9a3a','#c04a10'],[70,'SS','#ff5aa0','#a01050']];
 function comboRank(n){ let r=COMBO_RANK[0]; for(const q of COMBO_RANK) if(n>=q[0]) r=q; return r; }
-const combo={count:0,timer:0,pop:0,dmg:0,rank:0,breakT:0,breakN:0};
+// ── コンボの段位（0=D … 5=SS）と、その段位が持つ効果 ──
+// 以前のコンボは数字が増えるだけで、繋いでも繋がなくても何も変わらなかった。
+// 段位に「経験値の倍率」と「演出の濃さ」を紐づけて、繋ぐ意味を作る
+function comboTier(n){ const c=(n==null?combo.count:n); let t=0;
+  for(let i=0;i<COMBO_RANK.length;i++) if(c>=COMBO_RANK[i][0]) t=i;
+  return (c>=COMBO_RANK[0][0])? t : -1; }        // 2ヒット未満は段位なし（-1）
+const COMBO_XP=[1.00,1.15,1.30,1.55,1.85,2.30];  // D/C/B/A/S/SS の経験値倍率
+function comboXpMul(){ const t=comboTier(); return t<0?1:COMBO_XP[t]; }
+// 演出の濃さ 0〜1。火花の量・画面のフチの光・打撃の重みに掛ける
+function comboHeat(){ const t=comboTier(); return t<0?0:clamp(t/(COMBO_RANK.length-1),0,1); }
+const combo={count:0,timer:0,pop:0,dmg:0,rank:0,breakT:0,breakN:0,flare:0,flareMax:0};
 function addCombo(dmg){ combo.count++; combo.timer=100; combo.dmg+=(dmg|0);
   combo.pop=Math.max(combo.pop,1);
   const rk=COMBO_RANK.indexOf(comboRank(combo.count));
-  if(rk>combo.rank){ combo.rank=rk; combo.pop=1.55; }   // 段位更新＝より大きく跳ねる
+  if(rk>combo.rank){ combo.rank=rk; combo.pop=1.55;     // 段位更新＝より大きく跳ねる
+    // ── 段位が上がった瞬間だけ、画面ごと反応させる ──
+    // 上の段ほど派手に。ここが無いと「数字が変わっただけ」で終わる
+    const R=COMBO_RANK[rk], pl=player;
+    if(rk>=1 && pl){
+      combo.flare=combo.flareMax=16+rk*4;   // 段位ごとに長さが違うので、正規化用の最大値も持つ
+      popText(pl.x, pl.y-134-rk*6, 'RANK '+R[1]+'!', R[2], rk>=3);
+      ring(pl.x, pl.y-46, R[2]); if(rk>=2) ring(pl.x, pl.y-46, '#fff');
+      spark(pl.x, pl.y-46, R[2], 8+rk*5, 7+rk);
+      flash=Math.max(flash, 2+rk*0.6); shake=Math.max(shake, 3+rk);
+      camZoomT=Math.max(camZoomT, 1.02+rk*0.012);
+      sfx.twinkle(pl.x);
+      if(rk>=4){ superFlash(pl.x, pl.y-56, R[2]); triggerSlow(14+rk*3); sfx.boss(pl.x); } } }
   if(combo.count>=10)score+=5;
   if(combo.count===30 && player.dim<player.dimMax){ player.dim++; popText(player.x,player.y-120,'奥義ストック +1','#d6a6ff',true); ring(player.x,player.y-46,'#c46bff'); } }
 function resetCombo(){ if(combo.count>=8){ combo.breakT=42; combo.breakN=combo.count; }
   combo.count=0; combo.timer=0; combo.pop=0; combo.dmg=0; combo.rank=0; }
 function updateCombo(){ combo.pop*=0.80; if(combo.pop<0.004) combo.pop=0;
+  if(combo.flare>0) combo.flare--;
   if(combo.breakT>0) combo.breakT--;
   if(combo.timer>0){ combo.timer--;
     if(combo.timer===0){ if(combo.count>=8){ combo.breakT=42; combo.breakN=combo.count; }
@@ -9054,9 +9233,12 @@ function updateCamera(){
   const target=clamp(camFocusX()+camLead-W*0.5,0,WORLD_END-W);
   const enc=encounters[encIndex];
   const maxC=(enc&&!enc.cleared&&enc.spawned)?clamp(enc.at-W*0.45,0,WORLD_END-W):WORLD_END-W;
-  const goal=Math.min(target,maxC), d=goal-camX;
+  // 昇降中は区間の中央へ寄せる。主役を追うと端に寄ったときに縦坑の壁が片側しか映らず、
+  // 「坑の中を動いている」ことが読めなくなる
+  const goal=(camLockX!=null)? camLockX : Math.min(target,maxC), d=goal-camX;
   // ── デッドゾーン：14px 以内の微動では世界を動かさない（立ち止まると画面が完全に静まる）──
-  if(Math.abs(d)>14) camX+=(d-Math.sign(d)*14)*0.135;
+  if(camLockX!=null) camX+=d*0.14;
+  else if(Math.abs(d)>14) camX+=(d-Math.sign(d)*14)*0.135;
   camX=clamp(camX,0,WORLD_END-W);
   // ── 縦の追従：坂を登れば世界を下へ、降りれば上へずらして、主役を画面のほぼ同じ高さに保つ ──
   // これが無いと標高200pxの坂で主役が画面の上端へ抜ける。うねりは追わない（画面が波打つ）
@@ -9178,7 +9360,7 @@ function update(){
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
-  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -9223,6 +9405,7 @@ function render(){
   ctx.save(); if(camY) ctx.translate(0, clamp(camY*0.30,-40,40)); drawBackground(); ctx.restore();
   ctx.save(); if(camY) ctx.translate(0, camY);
   drawGround();
+  drawLiftShaft();
   ctx.restore();
   drawStageBannerScrim();
   ctx.save(); if(camY) ctx.translate(0, camY);   // ステージバナーの暗幕は背景側へ：敵の予兆マークを暗くしない
@@ -9254,6 +9437,7 @@ function render(){
   drawLighting();
   drawEcho();                           // 奥義の残響。照明のあと・数字の前に敷く（数字を沈ませない）
   drawCritVignette();                   // 致命の一撃：画面のフチを落として主役と相手だけを残す
+  drawComboGlow();                      // コンボの段位で画面のフチが段位の色に灯る
   ctx.save(); if(camY) ctx.translate(0, camY);
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
   ctx.restore();
@@ -15715,12 +15899,17 @@ function drawHUD(){
     ctx.fillStyle=tr<0.25?(gf%8<4?'#ff4d2d':'#a83a20'):V.col; ctx.fillRect(122,hudY+10,112*tr,7);   // 残り時間（残りわずかで赤点滅）
     ctx.fillStyle='#cfe0ff'; ctx.font=uif('normal',10); ctx.fillText((player.vehicle==='horse'?'攻撃=大槍':'攻撃=バズーカ')+' / 掴み=降車 / 被弾で落馬',22,hudY+33); hudY+=44; }
   // 奥義（次元斬）ストック：1Pパネル2行目の左
-  ctx.font=uif('bold',11); ctx.fillStyle='#d6a6ff'; ctx.fillText('奥義',22,95);
-  for(let i=0;i<player.dimMax;i++){ const dx=56+i*15, on=i<player.dim;
-    ctx.save(); ctx.translate(dx,91); ctx.rotate(Math.PI/4);
-    if(on){ ctx.fillStyle=radGrad(0,0,7,'#fff','#a040ff'); ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='#e6c6ff'; }
-    else { ctx.fillStyle='rgba(120,90,160,.25)'; ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='rgba(200,160,255,.4)'; }
-    ctx.lineWidth=1.4; ctx.strokeRect(-5,-5,10,10); ctx.restore(); }
+  { const _uc=ultCost(player), _ready=player.dim>=_uc;
+    ctx.font=uif('bold',11); ctx.fillStyle=_ready?'#d6a6ff':'rgba(214,166,255,.55)'; ctx.fillText('奥義',22,95);
+    for(let i=0;i<player.dimMax;i++){ const dx=56+i*15, on=i<player.dim;
+      ctx.save(); ctx.translate(dx,91); ctx.rotate(Math.PI/4);
+      if(on){ ctx.fillStyle=radGrad(0,0,7,'#fff','#a040ff'); ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='#e6c6ff'; }
+      else { ctx.fillStyle='rgba(120,90,160,.25)'; ctx.fillRect(-5,-5,10,10); ctx.strokeStyle='rgba(200,160,255,.4)'; }
+      ctx.lineWidth=1.4; ctx.strokeRect(-5,-5,10,10); ctx.restore(); }
+    // 2つ以上要る奥義は、必要数を書いておかないと「押しても出ない」だけになる
+    if(_uc>1){ const bx=56+player.dimMax*15+2;
+      ctx.font=uif('bold',11); ctx.textAlign='left';
+      ctx.fillStyle=_ready?'#ffd24d':'rgba(255,210,77,.45)'; ctx.fillText('×'+_uc, bx, 95); } }
   // 現在の武器＋残り時間（イッヌのみ）
   if(player.weapon!=='dagger' && player.weapon!=='fists'){ const W2=WEAPONS[player.weapon];
     ctx.fillStyle=W2.col; ctx.font=uif('bold',12); ctx.fillText('武器: '+W2.name, 284, 40);
@@ -15849,6 +16038,10 @@ function drawHUD(){
       ctx.fillStyle='rgba(0,0,0,.55)'; roundRect(0,50,124,5,2); ctx.fill();
       ctx.fillStyle=combo.timer<26?'#ff5a6a':R[2]; roundRect(0,50,124*clamp(combo.timer/100,0,1),5,2); ctx.fill();
       if(combo.dmg>0){ ctx.fillStyle='rgba(255,255,255,.72)'; ctx.font=uif('bold',11); ctx.fillText('DAMAGE '+combo.dmg,0,70); }
+      // 経験値の倍率。ここに出さないと「繋ぐと得をする」ことが伝わらない
+      { const xm=comboXpMul();
+        if(xm>1.001){ ctx.font=uif('900',13); ctx.fillStyle=R[2];
+          ctx.fillText('EXP ×'+xm.toFixed(2), 0, combo.dmg>0?86:70); } }
       ctx.restore(); }
     else if(combo.breakT>0){ const bk=combo.breakT/42; ctx.save();
       ctx.globalAlpha=clamp(bk*1.6,0,1); ctx.translate(30,cTop+34-(1-bk)*10); ctx.rotate(-0.052);

@@ -7,6 +7,10 @@ const DRIVER = `
   const setup=function(){ sndOn=false; setupRoster('inu'); startGame();
     const p=players[0]; resetPlayer(p,true); player=p;
     p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
+    // 前の項目で押しっぱなしにした入力が残ると、次の項目が勝手に歩き出す
+    for(const k in p.in.K) p.in.K[k]=false;
+    for(const k in p.in.pressed) p.in.pressed[k]=false;
+    p.in.cardSeq.length=0;
     enemies.length=0; projectiles.length=0; hazards.length=0; return p; };
   // 好きな並びの区画を組んでワールドを作り直す
   const build=function(kinds){ resetWorldState();
@@ -291,6 +295,88 @@ const DRIVER = `
       const e2=enemies[0];
       if(overPit(e2.x)) throw new Error('谷の真上に敵が湧いている（x='+Math.round(e2.x)+' / 谷 '+Math.round(pit[0])+'〜'+Math.round(pit[1])+'）'); }
     console.log('敵と谷 OK (縁の '+Math.round(pit[0]-maxX)+'px 手前で踏み止まる)'); }
+
+  // ===== 11) 動く地形（昇降区間）：踏み込むと足場ごと昇降し、終わるまで出られない =====
+  { const ride=function(kind){ const p=setup(); build([kind]);
+      const L=LIFTS[0]; if(!L) throw new Error(kind+' に昇降区間が置かれていない');
+      const T=TERRS[0]; WORLD_END=T.x1+600;
+      p.x=L.x0-120; p._tx=null; p.z=0; camX=Math.max(0,p.x-300); camY=terrLift(p.x);
+      const h0=terrLift(p.x);
+      let state0=L.state, started=-1, outside=0, maxOut=0, frames=0, camMax=0, camDev=0;
+      // 発動前：区間の手前では動かない
+      for(let f=0;f<60;f++){ tickLifts(); updatePlayer(p); terrainStep(p); }
+      const preOff=L.off, preState=L.state;
+      // 区間へ踏み込む
+      p.x=L.x0+80; p._tx=null;
+      for(let f=0;f<900;f++){
+        p.in.K.right=true;                                    // ずっと右へ歩き続ける
+        tickLifts(); updatePlayer(p); terrainStep(p); updateCamera();
+        if(started<0 && L.state==='run') started=f;
+        if(L.state==='run'){ frames++;
+          const over=Math.max(0, p.x-(L.x1-30), (L.x0+30)-p.x);
+          if(over>maxOut) maxOut=over;
+          if(over>6) outside++; }
+        if(Math.abs(camY)>camMax) camMax=Math.abs(camY);
+        // 寄り始めの60フレームは除く（発動時のカメラ位置から寄ってくる途中は当然ずれている）
+        if(L.state==='run' && L.t>60){ const dev=Math.abs(((L.x0+L.x1)*0.5-camX)-W*0.5); if(dev>camDev) camDev=dev; }
+        if(L.state==='done') break; }
+      return {pre:preOff, preState:preState, started:started, frames:frames, outside:outside,
+              maxOut:Math.round(maxOut), off:Math.round(L.off), state:L.state,
+              dh:Math.round(terrLift(p.x)-h0), camMax:Math.round(camMax), camDev:Math.round(camDev),
+              x0:L.x0, x1:L.x1}; };
+
+    const up=ride('liftup');
+    if(up.preState!=='idle' || up.pre!==0) throw new Error('区間の手前なのに動き出している（'+up.preState+'/'+up.pre+'）');
+    if(up.started<0) throw new Error('区間へ踏み込んでも動き出さない');
+    if(up.state!=='done') throw new Error('昇降が終わらない（'+up.frames+'F 経過して '+up.state+'）');
+    if(!(up.frames>120)) throw new Error('昇降が '+up.frames+'F で終わっている（一瞬で移動している）');
+    if(!(up.off>=400)) throw new Error('昇った量が '+up.off+'px しかない');
+    if(!(up.dh>=400)) throw new Error('昇ったのに足元の高さが '+up.dh+'px しか変わっていない');
+    if(!(up.camMax>=300)) throw new Error('カメラが '+up.camMax+'px しか動いていない（画面が付いてきていない）');
+    if(up.outside>0) throw new Error('昇降中に区間の外へ '+up.maxOut+'px はみ出している（'+up.outside+'F）');
+    // 昇降中は区間の中央を画面中央へ置く。主役を追うと端に寄って縦坑の壁が片側しか映らない
+    if(up.camDev>140) throw new Error('昇降中にカメラが区間の中央から '+up.camDev+'px ずれる');
+    const dn=ride('liftdown');
+    if(!(dn.off<=-400)) throw new Error('降りた量が '+dn.off+'px しかない');
+    if(!(dn.dh<=-400)) throw new Error('降りたのに足元の高さが '+dn.dh+'px しか変わっていない');
+    // 昇降のあとも世界は新しい高さで続く（区間の先が元の高さのままだと崖になる）
+    { const p=setup(); build(['liftup']); const L=LIFTS[0];
+      L.state='done'; L.off=LIFT_RISE;
+      const inside=terrLift(L.x1-10), beyond=terrLift(L.x1+400);
+      if(Math.abs(inside-beyond)>8)
+        throw new Error('昇り切った先が '+Math.round(inside-beyond)+'px ずれている（崖になる）'); }
+    // 本編に昇る区間と降りる区間が入っていること
+    resetWorldState();
+    const kinds={};
+    [CH1, FINAL_CH, BUG_CH, SPACE_CH, MYTH_CH, SENGOKU_CH].forEach(function(ch){
+      ch.forEach(function(b){ if(b.terr) kinds[b.terr]=(kinds[b.terr]||0)+1; }); });
+    ['A','B'].forEach(function(k){ SEGS[k].forEach(function(pair){ pair.forEach(function(b){
+      if(b.terr) kinds[b.terr]=(kinds[b.terr]||0)+1; }); }); });
+    if(!(kinds.liftup>=1)) throw new Error('本編に昇る動く地形が無い');
+    if(!(kinds.liftdown>=1)) throw new Error('本編に降りる動く地形が無い');
+    console.log('動く地形 OK (昇り '+up.off+'px を'+up.frames+'Fかけて・カメラ'+up.camMax+'px 追従／降り '+dn.off
+      +'px／区間外へのはみ出し0・カメラのずれ'+up.camDev+'px／本編 昇'+kinds.liftup+'・降'+kinds.liftdown+'区画)'); }
+
+  // ===== 12) 昇降中は縦坑の壁が流れる（画面のどこかが動かないと昇っている感が出ない） =====
+  { // 壁の石は ctx のメソッドではなく大域の roundRect が描く。
+    // ctx を差し替えても捕まらないので、実装が実際に呼ぶ関数のほうを張る
+    const realRR=roundRect;
+    const paint=function(off, state){ const p=setup(); build(['liftup']); const L=LIFTS[0];
+      L.state=state||'run'; L.off=off; L.t=60;
+      p.x=(L.x0+L.x1)*0.5; camX=p.x-W*0.5; camY=0;   // camY を固定して「流れた量」だけを見る
+      const rects=[];
+      roundRect=function(x,y,w,h,r){ rects.push([Math.round(x),Math.round(y)]); return realRR.apply(null,arguments); };
+      try{ drawLiftShaft(); } finally { roundRect=realRR; }
+      return rects; };
+    const a=paint(60), b=paint(160);
+    if(a.length<10) throw new Error('縦坑の壁が描かれていない（'+a.length+'枚）');
+    // 昇った量が変われば壁の縦位置も変わる＝流れている
+    const ys=function(r){ return r.map(function(q){return q[1];}).sort(function(x,y){return x-y;})[0]; };
+    if(ys(a)===ys(b)) throw new Error('昇降しても縦坑の壁が動かない（どちらも y='+ys(a)+'）');
+    // 発動前と昇降後は描かない（ずっと壁が立っていると通路が塞がって見える）
+    if(paint(0,'idle').length>0) throw new Error('発動前から縦坑の壁が立っている');
+    if(paint(LIFT_RISE,'done').length>0) throw new Error('昇降が終わっても縦坑の壁が残っている');
+    console.log('縦坑の壁 OK ('+a.length+'枚・昇降で y '+ys(a)+'→'+ys(b)+'／発動前と終了後は描かない)'); }
 
   console.log('TERRAIN TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });

@@ -504,6 +504,29 @@ const DRIVER = `
     console.log('爆発のエフェクト OK (粒'+total+'個／輪'+kinds.ring+'枚・煙'+kinds.smoke
       +'・瓦礫'+kinds.ember+'・焦げ跡'+kinds.scorch+')'); }
 
+  // ===== 18) 奥義「絨毯爆撃」は奥義ストックを3つ食う =====
+  { const fire=function(stock){ const p=setup(); enemies.length=0;
+      p.dim=stock; p.dimMax=5; p.state='idle'; p.z=0; p.atk=null;
+      p.in.cardSeq.length=0; p.in.pressed.atk=false;
+      // 一回転コマンド（rotationReady）を仕込んでから攻撃を押す
+      for(let c=0;c<8;c++) p.in.cardSeq.push({c:c, f:gf-(9-c)});
+      p.in.pressed.atk=true; updatePlayer(p);
+      return {st:p.state, dim:p.dim}; };
+    if(ULT_COST.mack!==3) throw new Error('マックの奥義の必要ストックが '+ULT_COST.mack);
+    const a=fire(3);
+    if(a.st!=='mkraid') throw new Error('ストック3でも奥義が出ない（'+a.st+'）');
+    if(a.dim!==0) throw new Error('ストック3で撃って '+a.dim+' 残っている（3消費していない）');
+    const b=fire(2);
+    if(b.st==='mkraid') throw new Error('ストック2でも奥義が出てしまう');
+    if(b.dim!==2) throw new Error('出せなかったのにストックが '+b.dim+' へ減っている');
+    const c=fire(5);
+    if(c.st!=='mkraid') throw new Error('ストック5で奥義が出ない');
+    if(c.dim!==2) throw new Error('ストック5から撃って '+c.dim+' 残（3消費なら2のはず）');
+    // 他のキャラは従来どおり1つ
+    { const q=setup(); q.kind='inu'; resetPlayer(q,true); q.kind='inu'; player=q;
+      if(ultCost(q)!==1) throw new Error('イッヌの必要ストックが '+ultCost(q)); }
+    console.log('奥義のストック消費 OK (マック3必要・3→0／2では不発でストックも減らない／5→2／他キャラは1)'); }
+
   console.log('MACK TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
