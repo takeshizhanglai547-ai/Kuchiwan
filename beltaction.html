@@ -2243,6 +2243,13 @@ function drawParticles(layer){
       const lb=p.lobes||[[0,0,1]];
       for(let q=0;q<lb.length;q++) ctx.ellipse(lb[q][0]*R,lb[q][1]*R,R*lb[q][2],R*lb[q][2]*0.82,0,0,7);
       ctx.fill(); }
+    else if(p.k==='evoAfter'){   // 段位の残像：極以上の必殺技で、通り過ぎた体の影が段位の色で残る
+      ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=a*a*0.40; ctx.translate(sx, py-(p.zz||0)); ctx.scale(p.face*FIXED_SCALE*0.92, FIXED_SCALE*0.92);
+      ctx.fillStyle=p.color||'#ffd24d';
+      ctx.beginPath(); ctx.ellipse(0,-26,13,17,0,0,7); ctx.fill();      // 胴
+      ctx.beginPath(); ctx.ellipse(0,-50,18,17,0,0,7); ctx.fill();      // 頭
+      ctx.fillRect(-10,-13,8,14); ctx.fillRect(3,-13,8,14); }           // 脚
     else if(p.k==='wandenAfter'){ // 縮地の残像：通り過ぎたワンデンの影が薄く残る
       ctx.globalAlpha=a*0.5; ctx.translate(sx, py); ctx.scale(p.face*FIXED_SCALE*0.9, FIXED_SCALE*0.9);
       ctx.fillStyle='rgba(190,215,240,.85)';
@@ -2756,17 +2763,23 @@ const SPECIAL_UP={
 // コマンド技7枠は SPECIAL_UP で上位技に差し替わるが、タメ攻撃・掴み技・空中技・
 // 同時押しの奥義には進化が無く、Lv1のまま最後まで変わらなかった。
 // この4系統は技IDを増やす代わりに「段位」で威力と演出を段階的に伸ばす
-const EVO_LV=[8,16];                                  // ここを超えるたびに一段上がる
-function evoTier(p){ const lv=(p&&p.level)||1; return lv>=EVO_LV[1]?2 : lv>=EVO_LV[0]?1 : 0; }
-function evoMul(p){ return [1, 1.35, 1.75][evoTier(p)]; }
-const EVO_NAME=['','熟練','極'];
+const EVO_LV=[6,12,20];                               // ここを超えるたびに一段上がる（基本→熟練→極→神域の4段）
+function evoTier(p){ const lv=(p&&p.level)||1;
+  return lv>=EVO_LV[2]?3 : lv>=EVO_LV[1]?2 : lv>=EVO_LV[0]?1 : 0; }
+function evoMul(p){ return [1, 1.30, 1.65, 2.10][evoTier(p)]; }
+const EVO_NAME=['','熟練','極','神域'];
+const EVO_COL=['#cfd8e6','#9fe8ff','#ffd24d','#ff8aff'];   // 段位の色。演出の色味をここで統一する
+// 演出の濃さ。段位が上がるほど輪も火花もスローも増える
+function evoFx(p){ return evoTier(p); }
 // 投げ技のダメージ。掴み技は関数ごとに直値で書かれているので、段位はここで一括して掛ける
 function TD(n){ return Math.round(n*evoMul(player)); }
 // ── 奥義に必要な奥義ストック ──
 // 既定は1。マックの「絨毯爆撃」は画面全体を端から端まで焼き払って
 // 雑魚の波を丸ごと消してしまうので、3つ貯めないと撃てないようにする
 const ULT_COST={mack:3};
-function ultCost(p){ return ULT_COST[(p&&p.kind)||'inu']||1; }
+// 段位が上がるほど奥義は重く派手になるので、消費するストックも段位ぶん増える。
+// 受け皿（dimMax）も段位で増やすので、貯める手間の比は変わらない
+function ultCost(p){ return (ULT_COST[(p&&p.kind)||'inu']||1) + evoTier(p); }
 const SPECIAL_SLOTS=['up','du','fwd','down','hadou','dp','dash'];
 const SPECIAL_SLOT_NAME={up:'上攻撃', fwd:'前攻撃', down:'下攻撃', dash:'ダッシュ攻撃', hadou:'波動コマンド', dp:'昇竜コマンド', du:'↓↑コマンド'};
 const SPECIAL_SLOT_CMD ={up:'↑ ＋攻撃', fwd:'→ ＋攻撃', down:'↓ ＋攻撃', dash:'→→ ＋攻撃', hadou:'↓→ ＋攻撃', dp:'→↓→ ＋攻撃', du:'↓↑ ＋攻撃'};
@@ -2789,7 +2802,7 @@ function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot';
   if(p.kind==='mack') return 'mk'+clamp(step,1,MK_AMMO);   // マック：リボルバーの6連射（拾い物では構えを変えない）
   const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':p.kind==='watch'?'wc':'c')+step; }
 function chargeMoveFor(p){ if(p.kind==='nuko')return 'nbeam';   // ヌコのビームは nukoCast(6) 側で段位を見る
-  const sfx2=['','2','3'][evoTier(p)];                          // タメ攻撃も段位で上位技へ差し替わる
+  const sfx2=['','2','3','3'][evoTier(p)];   // 神域は極と同じ技IDで、威力と演出だけ段位ぶん伸びる                          // タメ攻撃も段位で上位技へ差し替わる
   if(p.kind==='mack')return 'mkCharge'+sfx2;                    // マックのタメ＝ドリル突進
   if(p.kind==='guard8')return 'chargeHammer'+sfx2;
   if(p.weapon==='spear')return 'chargeSpear'+sfx2;
@@ -2828,7 +2841,12 @@ function beginAttack(type){
   // 声は「ここぞ」でだけ出す。通常のジャブまで喋ると15分で耳が痛くなる
   if(def && (def.special||def.finisher||def.charged||def.dimBlade))
     sfx.voice(p.kind, def.dimBlade?'ult':'atk', p.x);
-  p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{}};
+  // コマンド技7枠とタメ攻撃にも段位を効かせる。以前この2系統は上位技への差し替えだけで、
+  // 段位（熟練/極/神域）の伸びが乗っていなかった。1発ぶんの倍率はここで焼き込む
+  //（毎ヒット slotOfMove を引くと、多段技で7枠×上位技ぶんの走査を繰り返すことになる）
+  const _isSp=!!(def.charged || def.dimBlade || slotOfMove(p,type));
+  p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{},
+         evo:_isSp?evoMul(p):1, tier:_isSp?evoTier(p):0};
   p.cxSlots=[];   // キャンセルの連鎖。ここで切れる（繋いだ側が呼んだ直後に入れ直す）
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
@@ -2968,7 +2986,7 @@ function updateGuardQuake(){ const p=player; p.gqT++; p.invuln=Math.max(p.invuln
   else if(p.gqT>30){ p.z-=36; if(gf%2===0) spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,40), '#ffb85a', 2,5);   // 急降下
     if(p.z<=0){ p.z=0; guardQuakeImpact(p); p.state='land'; p.landT=26; return; } }
 }
-function guardQuakeImpact(p){ const mul=(p.atkMul||1);
+function guardQuakeImpact(p){ const mul=(p.atkMul||1);   // 段位は下の TD() が掛ける（ここで掛けると二重になる）
   quake=Math.max(quake,64); shake=Math.max(shake,24); hitStop=Math.max(hitStop,22); flashAt(7,'255,210,77'); triggerSlow(38);
   camZoomT=Math.max(camZoomT,1.11);
   hitSound(46,'blunt',0,p.x); sfx.big(p.x); sfx.ko(p.x);                                                        // 破壊音（重層クラッシュ）
@@ -4048,19 +4066,20 @@ const SG_CD=540;   // 約9秒のクールタイム
 // シマ／ヌコ／ガードワン／ワッチの4つは p.state すら設定しておらず、効果だけが出て
 // モーションが一切無かった。専用ステートを与え、段位で振りと段数を変える。
 //   dur  = 技の総フレーム／burst = 効果が出るフレーム（段位ごとに段数が増える）
+// 攻撃＋掴みの同時押し技。段位ごとに名前・長さ・爆発の段数を持つ（4段）
 const SG_ACT={
   shima:{ col:'#ffd24d',
-    name:['虎魂・大喝！！','虎魂・双喝！！','虎魂・獅子吼！！！'],
-    dur:[38,48,60], burst:[[16],[14,30],[12,26,42]] },
+    name:['虎魂・大喝！！','虎魂・双喝！！','虎魂・獅子吼！！！','虎魂・天雷咆哮！！！！'],
+    dur:[38,48,60,76], burst:[[16],[14,30],[12,26,42],[10,22,36,52]] },
   nuko:{ col:'#d6a6ff',
-    name:['精霊大召喚・エレメンタルバースト！','四大召喚・エレメンタルストーム！','万象召喚・エレメンタルカタストロフ！'],
-    dur:[42,54,68], burst:[[18],[16,34],[14,30,48]] },
+    name:['精霊大召喚・エレメンタルバースト！','四大召喚・エレメンタルストーム！','万象召喚・エレメンタルカタストロフ！','天地召喚・エレメンタルジェネシス！！'],
+    dur:[42,54,68,86], burst:[[18],[16,34],[14,30,48],[12,26,42,60]] },
   guard8:{ col:'#c8ccd4',
-    name:['不動要塞・アイアンウォール！','鋼鉄要塞・アイアンウォール改！','絶対要塞・アダマントウォール！！'],
-    dur:[40,50,62], burst:[[18],[16,32],[14,28,44]] },
+    name:['不動要塞・アイアンウォール！','鋼鉄要塞・アイアンウォール改！','絶対要塞・アダマントウォール！！','神鉄要塞・オリハルコンウォール！！！'],
+    dur:[40,50,62,78], burst:[[18],[16,32],[14,28,44],[12,24,38,54]] },
   watch:{ col:'#ffe14d',
-    name:['大怪盗・銭形乱舞！','大怪盗・小判時雨！','大怪盗・黄金大盤振舞！！'],
-    dur:[38,50,64], burst:[[14],[12,28],[10,24,40]] },
+    name:['大怪盗・銭形乱舞！','大怪盗・小判時雨！','大怪盗・黄金大盤振舞！！','大怪盗・千両万来！！！'],
+    dur:[38,50,64,80], burst:[[14],[12,28],[10,24,40],[8,20,34,50]] },
 };
 function sgTierOf(p){ return evoTier(p); }
 function beginSGMove(p){
@@ -4094,10 +4113,10 @@ function updateSGAct(){ const p=player, A=SG_ACT[p.sgKind], ti=p.sgTier|0;
 function beginMuchiRen(p){ const ti=evoTier(p);
   p.state='ichimonji'; p.imT=0; p.imHit=false; p.imTier=ti; p.imN=0; p.vx=0;
   p.invuln=Math.max(p.invuln,52+18*ti); p.atk=null; p.charge=0; p.atkHeld=false;
-  popText(p.x,p.y-136,['大居合・一文字！','大居合・十文字！','大居合・万字斬り！！'][ti],'#ffffff',true);
+  popText(p.x,p.y-136,['大居合・一文字！','大居合・十文字！','大居合・万字斬り！！','大居合・天満ノ太刀！！！'][ti],'#ffffff',true);
   triggerSlow(30); sfx.charge(p.x); }
 function updateIchimonji(){ const p=player, dir=p.facing; p.imT++; p.invuln=Math.max(p.invuln,8); p.vx*=0.8; p.x+=p.vx;
-  const ti=p.imTier|0, CUT=[[14],[14,30],[14,28,44]][ti];        // 段位で一閃の本数が増える
+  const ti=p.imTier|0, CUT=[[14],[14,30],[14,28,44],[12,26,40,56]][ti];        // 段位で一閃の本数が増える
   if(p.imT<CUT[0]){ if(gf%2===0) spark(p.x+dir*24, p.y-rnd(20,80), '#dfeaf6', 2, 5); return; }   // 溜め（鯉口を切る）
   const ci=CUT.indexOf(p.imT);
   if(ci>=0){   // 解き放つ一閃：画面端まで届く長大な横薙ぎ
@@ -4109,8 +4128,8 @@ function updateIchimonji(){ const p=player, dir=p.facing; p.imT++; p.invuln=Math
     let n=0;
     for(const e of enemies){ if(e.dead)continue; const dx=(e.x-p.x)*dir;
       if(dx<-40 || dx>760) continue; if(Math.abs(e.y-p.y)>58) continue;
-      noHitStopOnce=(n>0); damageEnemy(e,TD( Math.round(52*(p.atkMul||1)*[1,1.10,1.22][ti])), dir*9, true); n++; }
-    if(n && ci===0) popText(p.x,p.y-108,n+'体を'+['一文字','十文字','万字'][ti]+'に断つ！','#cfeaff');
+      noHitStopOnce=(n>0); damageEnemy(e,TD( Math.round(52*(p.atkMul||1)*[1,1.10,1.22,1.36][ti])), dir*9, true); n++; }
+    if(n && ci===0) popText(p.x,p.y-108,n+'体を'+['一文字','十文字','万字','天満'][ti]+'に断つ！','#cfeaff');
     p.imHit=true;
     if(lastCut && ti>=2){ superFlash(p.x+dir*120,p.y-54,'#ffffff'); triggerSlow(30); }
     return; }
@@ -4118,10 +4137,10 @@ function updateIchimonji(){ const p=player, dir=p.facing; p.imT++; p.invuln=Math
 // イッヌ「秘剣・無月」：画面内の敵から敵へ神速で斬り抜ける五連閃
 function beginMugetsu(p){
   const targets=enemies.filter(e=>!e.dead && e.state!=='blastoff' && Math.abs(e.x-(camX+W/2))<W*0.72)
-    .sort((a,b)=>Math.abs(a.x-p.x)-Math.abs(b.x-p.x)).slice(0,[5,7,9][evoTier(p)]);
+    .sort((a,b)=>Math.abs(a.x-p.x)-Math.abs(b.x-p.x)).slice(0,[5,7,9,12][evoTier(p)]);
   p.state='mugetsu'; p.mgT=0; p.mgI=0; p.mgList=targets; p.mgTier=evoTier(p);
   p.invuln=90+24*p.mgTier; p.vx=0; p.atk=null; p.charge=0; p.atkHeld=false;
-  popText(p.x,p.y-128,['秘剣・無月！','秘剣・無月・朧！','秘剣・無月・虚空！！'][p.mgTier],'#cfe0ff',true); ring(p.x,p.y-44,'#cfe0ff');
+  popText(p.x,p.y-128,['秘剣・無月！','秘剣・無月・朧！','秘剣・無月・虚空！！','秘剣・無月・彼岸！！！'][p.mgTier],'#cfe0ff',true); ring(p.x,p.y-44,'#cfe0ff');
   flash=Math.max(flash,4); triggerSlow(18); sfx.boss(p.x); sfx.dash(p.x); }
 function updateMugetsu(p){ p.mgT++; p.invuln=Math.max(p.invuln,10);
   if(p.mgT%6!==0) return;
@@ -4146,7 +4165,7 @@ function updateMugetsu(p){ p.mgT++; p.invuln=Math.max(p.invuln,10);
 // ── 奥義の効果本体。seg = 何段目か／n = 全段数。段位で段数そのものが増える ──
 function sgBurst(p,kind,ti,seg,n){
   const last=(seg===n-1), mul=(p.atkMul||1), dir=p.facing;
-  const F=[1,1.18,1.40][ti];                          // 段位ごとの威力係数
+  const F=[1,1.18,1.40,1.70][ti];                     // 段位ごとの威力係数
   if(kind==='shima'){                                  // 虎魂：咆哮が段ごとに前へ広がる
     const R=W*(0.42+0.20*seg+0.10*ti);
     ring(p.x,p.y-46,'#ffd24d'); ring(p.x,p.y-46,'#fff');
@@ -4373,7 +4392,7 @@ function updatePlayer(){
 
   if(p.state==='attack'){
     const a=p.atk, def=a.def;
-    // ── 深い溜め：a.t を止めて構えのまま数フレーム保持する。
+  // ── 深い溜め：a.t を止めて構えのまま数フレーム保持する。
     //    ドラゴンズクラウンの必殺技は「沈み込む → 一気に振り抜く → 長い余韻」で、
     //    この最初の溜めが無いと、どれだけ派手な軌跡を足しても軽く見える ──
     if(a.hold>0){ a.hold--; a.chg++;
@@ -4397,6 +4416,14 @@ function updatePlayer(){
         if(_inv) p.invuln=Math.max(p.invuln, Math.min(10+(def.act[1]-def.act[0])*0.35, 18)); }
       saveInput(p.in); return; }
     a.t++;
+    // ── 段位のオーラと残像 ──
+    // 威力の数字だけ上げても「進化した」ようには見えない。極（2段）以上の必殺技では
+    // 体から段位の色が立ちのぼり、神域（3段）では通り過ぎた体が残像として残る
+    if(a.tier>=2 && perfTier<2 && a.t%3===0)
+      ember(p.x+rnd(-22,22), p.y-rnd(4,74), rnd(-0.7,0.7), -rnd(1.4,3.2+a.tier), EVO_COL[a.tier]);
+    if(a.tier>=3 && perfTier<2 && a.t%2===0 && a.t<=def.act[1]+4)
+      particles.push({k:'evoAfter', x:p.x, y:p.y, zz:p.z||0, gl:groundLift(p.x), face:p.facing,
+                      color:EVO_COL[3], life:14, max:14, layer:0});
     // ── ばねのキック：発生で振り抜きの初動、振り切りで反動が戻る ──
     if(p.rig && (def.superFx||def.finisher||def.rise)){
       if(a.t===def.act[0]){
@@ -4799,12 +4826,12 @@ function updatePlayer(){
           p.x=clamp(tg.x-(((a.t/5|0)%2)?-56:56), camX+22, camX+W-22); p.facing=tg.x>=p.x?1:-1;
           crescent(tg.x, tg.y-tg.h*0.5, 76, -1.4, 1.4, '#ffffff');
           spark(tg.x, tg.y-tg.h*0.5, '#ffffff', 14, 11); noHitStopOnce=true;
-          damageEnemy(tg, Math.round(26*(p.atkMul||1)), p.facing*4, false); shake=Math.max(shake,6); sfx.swing(1, wsndOf(p.weapon), p.x); }
+          damageEnemy(tg, TD(Math.round(26*(p.atkMul||1))), p.facing*4, false); shake=Math.max(shake,6); sfx.swing(1, wsndOf(p.weapon), p.x); }
         else { crescent(p.x+p.facing*80, p.y-52, 90, -1.2, 1.2, '#ffffff'); sfx.swing(1, wsndOf(p.weapon), p.x); } }
       if(a.t===def.act[1]+2){ flash=Math.max(flash,6); shake=14; hitStop=Math.max(hitStop,16); triggerSlow(30); sfx.ko(p.x);
         popText(p.x,p.y-118,'——納刀。','#e8f4ff',true);
         for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-(camX+W/2))>W*0.6)continue;
-          noHitStopOnce=true; damageEnemy(e, Math.round(44*(p.atkMul||1)), (e.x<p.x?-1:1)*8, true); } } }
+          noHitStopOnce=true; damageEnemy(e, TD(Math.round(44*(p.atkMul||1))), (e.x<p.x?-1:1)*8, true); } } }
     if(def.kiBurst && a.t===def.act[0]){ shimaKiBurst(p); }                    // 爆裂・羅漢衝波：全方位の気功大爆発
     if(def.hammerImpact && a.t===def.act[0]){ guardHammerImpact(p); }          // メテオ・ハンマーインパクト：三重衝撃波の大叩き
     // active hit window
@@ -4907,7 +4934,7 @@ function doPlayerHit(a){
   const reach=def.reach*REACH*W.reach, hh=def.hh*HH;
   const hx=p.x+p.facing*reach*0.45;
   const watchWpn = p.kind==='watch' && p.weapon!=='dagger' && p.weapon!=='fists';   // ワッチ：拾った武器での攻撃が得意（大幅強化）
-  const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg*(p.atkMul||1)*(watchWpn?1.75:1), LX=W.launch;
+  const dmgMul=((def.counter&&p.counterPow)?1.6:1)*W.dmg*(p.atkMul||1)*(watchWpn?1.75:1)*(a.evo||1), LX=W.launch;
   curHitIsMelee=true;   // ゴルックスのパリィ判定用：近接ヒット中フラグ
   curHitSnd=W.snd||null;   // この一撃の打撃音を武器種から決める
   // 火花・輪の色を技／武器から引く。決め技（finisher/aoe）だけは技側の白を優先して決定打の白さを守る
@@ -4942,6 +4969,15 @@ function doPlayerHit(a){
     }
     damageEnemy(e,def.dmg*dmgMul,def.kb*dir*W.kb,def.knock,def.launch);
     if(def.special) hitStop=Math.max(hitStop,5);
+    // ── 段位の上乗せ演出 ──
+    // 威力だけ上げても手応えは変わらない。段位ぶん輪と火花を足し、
+    // 神域（3段目）では止めと閃光まで入れて「別物になった」ことを画面で返す
+    if(a.tier>0){ const _ec=EVO_COL[a.tier], _hy=e.y-e.h*0.5;
+      ring(e.x,_hy,_ec,{delay:2,rMax:52+18*a.tier});
+      spark(e.x,_hy,_ec,4+4*a.tier,7+a.tier,{delay:2});
+      if(a.tier>=2){ ring(e.x,_hy,'#fff',{delay:5,rMax:70+20*a.tier}); shake=Math.max(shake,5+a.tier*2); }
+      if(a.tier>=3){ hitStop=Math.max(hitStop,8); flash=Math.max(flash,4);
+        if(def.finisher||def.knock||def.special){ superFlash(e.x,_hy,_ec); triggerSlow(16); } } }
     if(def.counter&&p.counterPow){ popText(e.x,e.y-e.h-12,'COUNTER!','#bfe9ff',true); triggerSlow(18); }
     // ワンインチブロー：命中で真昇竜拳ばりの特大ヒットストップ＆一撃で画面端へ吹き飛ばし
     if(def.oneInch){ hitStop=Math.max(hitStop,30); triggerSlow(48); flash=Math.max(flash,6); shake=Math.max(shake,18);
@@ -5440,7 +5476,7 @@ function beginGiantSwing(e){ const p=player; p.state='gswing'; p.gswingT=0; p.gs
   e.state='grabbed'; e.grabbedBy=1; p.grabEnemy=e; p.gswingHit=new Set(); sfx.dash(p.x); popText(p.x,p.y-104,'ジャイアントスイング!','#ffd24d',true); }
 function updateGiantSwing(){ const p=player, e=p.grabEnemy;
   if(!e || e.dead){ p.state='idle'; p.grabEnemy=null; return; }
-  p.gswingT++; const _gt=p.gsTier|0, T=p.gswingT, dur=[48,64,84][_gt];   // 段位で回す回数が増える
+  p.gswingT++; const _gt=p.gsTier|0, T=p.gswingT, dur=[48,64,84,108][_gt];   // 段位で回す回数が増える
   p.gswingRot += 0.52+0.10*_gt;
   const ang=p.gswingRot, R=54;
   e.x=clamp(p.x+Math.cos(ang)*R, camX+18, camX+W-18); e.y=p.y; e.z=Math.max(0,26+Math.sin(ang)*22); e.facing=Math.cos(ang)>0?-1:1; e.vx=0; e.vz=0;
@@ -5504,7 +5540,7 @@ function grabGanzan(e){ const p=player;
 // 掴み上：ジャンプしてからのパワーダンク（持ち上げて急降下で叩きつけ）
 function beginDunk(e){ const p=player; p.state='dunk'; p.dunkT=0; p.z=0; p.vz=0; p.grabEnemy=e;
   e.state='grabbed'; e.grabbedBy=1; p.dkTier=evoTier(p); p.invuln=Math.max(p.invuln,44+16*p.dkTier); sfx.dash(p.x);
-  popText(p.x,p.y-104,['パワーダンク!','ロケットダンク!!','天空スラムダンク!!!'][p.dkTier],'#ffd24d',true); }
+  popText(p.x,p.y-104,['パワーダンク!','ロケットダンク!!','天空スラムダンク!!!','超新星ダンク!!!!'][p.dkTier],'#ffd24d',true); }
 function updateDunk(){ const p=player, e=p.grabEnemy; if(!e){ p.state='idle'; return; } p.dunkT++; const dir=p.facing;
   const _dt=p.dkTier|0, DH=128*(1+0.30*_dt);   // 段位で高く舞い上がる
   if(p.dunkT<=16){ p.z=Math.sin((p.dunkT/16)*Math.PI*0.5)*DH; e.x=p.x; e.y=p.y; e.z=p.z+42; e.facing=-dir; if(p.dunkT%3===0)spark(p.x,p.y-p.z-30,'#ffd24d',3,6); }   // 跳び上がる
@@ -6570,12 +6606,16 @@ function gainXp(scoreVal){ const g=Math.max(1,Math.round((scoreVal||0)/10));
         spark(p.x,p.y-50,'#ff8aff',30,13); flash=Math.max(flash,5); shake=Math.max(shake,9); triggerSlow(22); sfx.boss(p.x); sfx.twinkle(p.x); }
       // ── 段位の昇格：タメ攻撃・掴み技・空中技・奥義がまとめて一段上がる ──
       const ti=EVO_LV.indexOf(p.level);
-      if(ti>=0){ const nm=EVO_NAME[ti+1]; p.evolveFx=110;
-        popText(p.x, p.y-186, '免許皆伝 ——【'+nm+'】', '#ffd24d', true);
-        popText(p.x, p.y-158, 'タメ攻撃・掴み技・空中技・奥義が進化した！', '#ffe9a0', true);
-        for(let k2=0;k2<5;k2++) ring(p.x,p.y-50,k2%2?'#ffd24d':'#fff');
-        superFlash(p.x,p.y-56,'#ffd24d'); spark(p.x,p.y-50,'#ffd24d',36,14);
-        flash=Math.max(flash,6); shake=Math.max(shake,12); triggerSlow(30); camZoomT=Math.max(camZoomT,1.12);
+      if(ti>=0){ const tier=ti+1, nm=EVO_NAME[tier], col=EVO_COL[tier]; p.evolveFx=110+30*tier;
+        // 奥義は段位ぶん重くなる。受け皿も一緒に増やして、貯める手間の比を変えない
+        p.dimMax=(p.dimMax||3)+1; p.dim=Math.min(p.dimMax,(p.dim||0)+1);
+        popText(p.x, p.y-186-tier*8, '免許皆伝 ——【'+nm+'】', col, true);
+        popText(p.x, p.y-158-tier*8, '必殺技・奥義・タメ攻撃・掴み技・投げ技が進化した！', '#ffe9a0', true);
+        popText(p.x, p.y-130-tier*8, '奥義の消費ストック '+(ultCost(p))+'（最大 '+p.dimMax+'）', '#d6a6ff', true);
+        for(let k2=0;k2<4+tier*2;k2++) ring(p.x,p.y-50,k2%2?col:'#fff');
+        superFlash(p.x,p.y-56,col); spark(p.x,p.y-50,col,30+tier*10,12+tier*2);
+        flash=Math.max(flash,5+tier); shake=Math.max(shake,10+tier*3); triggerSlow(26+tier*8);
+        camZoomT=Math.max(camZoomT,1.10+tier*0.02);
         sfx.boss(p.x); sfx.rise(p.x); sfx.twinkle(p.x); } } }); }
 function killEnemy(e){ const T=ETYPE[e.type];
   if(e.grabTarget) releaseEnemyGrab(e);                     // 掴み中に倒されたらプレイヤーを解放
@@ -11690,7 +11730,7 @@ function drawPlayer(){
     // ここで重ねると二重に伸びる
     // 空中技も段位で振りを変える。段位で伸びていたのはダメージと間合いだけで、
     // モーションは全レベル共通だった
-    const _at=evoTier(p), _ax=[0,1,2][_at];
+    const _at=evoTier(p), _ax=[0,1,2,3][_at];
     if(p.jAtk>0){ const e=easeOut(1-p.jAtk/18); const big=Math.sin(clamp(1-p.jAtk/18,0,1)*Math.PI)*(1+0.22*_ax);
       if(p.jDown){ // 下突き：剣を真下に突き刺す（両脚を伸ばし直立）
         swAng=1.55; swExt=24*(1+0.8*big); trailCol='#aef0ff'; tA0=1.3; tA1=1.7; trailW=1.8;
