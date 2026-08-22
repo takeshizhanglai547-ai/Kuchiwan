@@ -220,7 +220,7 @@ const LANE = 488, FIXED_SCALE = 1.82;     // single-plane brawler — larger spr
 const RISE_CEIL = 320;                     // 上昇技（昇竜など）の最高到達点＝画面天井。これ以上は上がらない
 const CEIL_Z = 408;                        // ceiling height (juggle bounces off the top of the screen)
 
-let state='title', camX=0, score=0, coins=0;
+let state='title', camX=0, camY=0, score=0, coins=0;
 let shake=0, hitStop=0, flash=0, bossIntro=0, goArrow=0, gf=0, quake=0; // gf = global frame
 let critCam=0;   // 致命の一撃の演出フレーム（画面を暗く締めて主役だけを立たせる）
 // 全画面フラッシュの色。既定は被弾通知の赤。技ごとに色を指定すると加算合成の発光フラッシュになる
@@ -1575,10 +1575,63 @@ function mkRig(){ return { sq:mkSpring(0), wob:mkSpring(0), capeM:mkSpring(0), c
   earL:mkSpring(0), earR:mkSpring(0), tail:mkSpring(0) }; }   // 垂れ耳と尻尾も布と同じ二次動作で揺らす
 function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprite size on a single lane
 // マリオ風の地面の起伏。worldX に応じて足元の高さ(描画上)を上下させる（0=平地, 正=高い丘）
-function groundLift(x){ const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32; return Math.max(0,a)*30; }
+// ── ステージごとの地形 ──
+// 従来 groundLift は全ステージ共通の正弦のうねりだけで、どの区画も同じ「平坦な道」だった。
+// 区画（addBlocks のブロック）に terr:'up'|'down' を持たせて、大きな登り坂・下り坂を作る。
+// 標高は区画をまたいで連続させる（terr の付いていない区画も、直前の標高をそのまま引き継ぐ）。
+// これをやらないと区画の境目が崖になる。
+// 高さは描画とカメラにしか効かない（当たり判定は p.y=LANE のまま）ので、
+// 坂を入れても戦闘のロジックには一切触らない
+const TERR_RISE=300;                 // 坂ひとつぶんの高低差（px）。区画長1900に対して最大勾配で約24%＝画面幅ぶんで260px上がる
+// ── 縦ステージ（terr:'climb'|'dive'）──
+// 踏み面は水平、蹴上げはほぼ垂直の階段。歩いては登れず、跳ばないと上がれない高さにする。
+// 段の手前には谷（PITS）を置くので、跳び損ねると落下＝ワンアウト
+const TERR_CLIMB=600;                // 縦ステージの総高低差（px）
+const TERR_STEPS=6;                  // 段数。踏み面 約317px＝乱戦できる広さ
+const TERR_RISER=0.05;               // 蹴上げに使う踏み面の割合。狭いほど壁に近い（317*0.05=16px で100px上がる）
+const TERR_STEP_MAX=20;              // これを超える段差は歩いて登れない（＝壁）。坂の最大勾配は1歩1.7pxなので通る
+const TERR_DROP_MIN=26;              // これを超える落差は「落ちる」。段を降りるときに瞬間移動しないための境目
+let TERRS=[];                        // {x0,x1,e0,e1,kind}
+let _terrLast=null;
+function terrAt(x){
+  const L=_terrLast; if(L && x>=L.x0 && x<L.x1) return L;
+  for(const t of TERRS){ if(x>=t.x0 && x<t.x1){ _terrLast=t; return t; } }
+  return null; }
+// 区画の地形が作る標高。付け根と登り切りは smoothstep で寝かせ、折れ線に見えないようにする
+function terrLift(x){
+  const t=terrAt(x);
+  if(!t){ const F=TERRS[0], L=TERRS[TERRS.length-1];
+    if(F && x<F.x0) return F.e0;                      // ワールド手前は最初の区画の標高で埋める
+    if(L && x>=L.x1) return L.e1;                     // 末尾も同じ（境界で0へ落として崖にしない）
+    return 0; }
+  if(t.e0===t.e1) return t.e0;
+  const u=clamp((x-t.x0)/Math.max(1,t.x1-t.x0),0,1);
+  if(t.kind==='climb'||t.kind==='dive'){                 // 階段：踏み面は水平、蹴上げだけで上がる
+    const n=TERR_STEPS, k=Math.min(n-1, Math.floor(u*n)), fu=u*n-k;
+    const s2=(fu<1-TERR_RISER)? 0 : (fu-(1-TERR_RISER))/TERR_RISER;
+    return t.e0+(t.e1-t.e0)*((k+s2)/n); }
+  const sm=u*u*(3-2*u);
+  return t.e0+(t.e1-t.e0)*sm; }
+// 見た目の傾き。階段では局所の微分が0と∞を往復するので、区画の平均勾配を返す
+// （局所の傾きをそのまま使うと、段をまたぐたびに遠景の地面が跳ねる）
+function terrTilt(x){ const t=terrAt(x);
+  if(t && (t.kind==='climb'||t.kind==='dive')) return (t.e1-t.e0)/Math.max(1,t.x1-t.x0);
+  return terrSlope(x); }
+// 坂の傾き（px/px）。落石の転がる向きと速さ、坂の見た目の陰影に使う
+function terrSlope(x){ return (terrLift(x+24)-terrLift(x-24))/48; }
+function groundLift(x){
+  const t=terrAt(x), slope=t&&t.e0!==t.e1;
+  // 坂の上では従来のうねりを弱める。強い傾斜に細かい波を重ねると足元がガタつく
+  const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32;
+  return Math.max(0,a)*30*(slope?0.34:1) + terrLift(x); }
 // 谷（落ちると即死）。ワールド構築時にステージ区画ごとへランダム配置される
 let PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
 function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
+function pitAt(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return p; } return null; }
+// 谷の上に立たせない。復帰位置がそのまま谷だと、戻った瞬間にまた落ちる
+function escapePit(p){ let g=0; const dir=(p.x<camX+W*0.5)?60:-60;
+  while(overPit(p.x) && g++<24) p.x+=dir;
+  p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); p._tx=null; }
 // ステージ番号→ビジュアルテーマ（分岐ルートで動的に決まる）
 let STAGE2THEME={}, STAGE_NAME={};
 function themeIdxFor(st){ return STAGE2THEME[st]!=null ? clamp(STAGE2THEME[st],0,STAGE_THEME.length-1) : clamp(st-1,0,STAGE_THEME.length-1); }
@@ -2585,7 +2638,7 @@ function spawnMoonWave(p,def){ const dir=p.facing;
   spawnProj(p.x+dir*46, p.y, dir*13, 0, {owner:'player', dmg:Math.round((12+(def.dmg||0)*0.3)*(p.atkMul||1)),
     color:'#cfeaff', r:15, life:46, zz:48, pierce:true, wave:true, noLaunch:true, nostop:true});
   spark(p.x+dir*40,p.y-44,'#cfeaff',5,6); }
-function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
+function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1; p._tx=null;
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
@@ -3081,7 +3134,47 @@ function guardHammerImpact(p){ const mul=(p.atkMul||1);
 function dropOldTwister(){
   for(const h of hazards){ if((h.kind==='etwister'||h.kind==='ptwister') && h.life-h.t>30) h.t=h.life-30; }
 }
+// ── 下り坂の落石：主役の背後（坂の上）から大岩が転がって追い抜いていく ──
+// 「下り坂を降りているだけ」だと道が長いだけになるので、後ろを気にする理由を作る。
+// 岩は坂の傾きぶんだけ加速し、跳ねる。ジャンプで避けるか、上を跳び越す
+let boulderCd=0;
+const BOULDER_R=70;                  // 主役の背丈（約150px）に迫る大きさ。小さいと「石ころ」に見える
+function stageIsDown(x){ const t=terrAt(x); return !!(t && t.kind==='down'); }
+function spawnBoulder(x, dir){
+  hazards.push({kind:'boulder', x:x, y:LANE, t:0, life:900, vx:dir*7.2, dir:dir,
+                r:BOULDER_R, spin:0, hitP:{}, hitE:{}, z:0, vz:0});
+  sfx.big(x); shake=Math.max(shake,6); popText(x, LANE-190, '落石！', '#ffae42', true); }
+// 下り坂の区画に居る間だけ、たまに背後から岩を落とす
+function tickBoulders(){
+  const pl=activePlayers().filter(q=>q.state!=='dead')[0];
+  if(!pl || !stageIsDown(pl.x)){ boulderCd=0; return; }
+  if(boulderCd>0){ boulderCd--; return; }
+  boulderCd=rnd(300,470)|0;
+  if(hazards.some(h=>h.kind==='boulder')) return;      // 同時に2つは出さない（避け続けるだけになる）
+  spawnBoulder(camX-90, 1); }
 function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; h.t++;
+  if(h.kind==='boulder'){
+    // 坂の傾きで加速する。平地へ出ると転がり続けて減速し、やがて砕ける
+    const sl=terrSlope(h.x);                            // 下りなら負（右へ行くほど低い）
+    h.vx += (-sl)*0.52;                                 // 下り勾配で加速（下りは sl<0 なので前へ）
+    h.vx = clamp(h.vx, h.dir*3.0, h.dir*17);
+    h.x += h.vx; h.spin += h.vx/h.r;
+    // 跳ねる。地面の起伏を拾って上下する
+    h.vz-=0.9; h.z+=h.vz;
+    if(h.z<=0){ h.z=0; if(h.vz<-3){ h.vz=-h.vz*0.42; dust(h.x,LANE,6); quake=Math.max(quake||0,7); sfx.step(h.x,'stone',1.8); } else h.vz=0; }
+    if(h.t%3===0){ dust(h.x-h.dir*h.r*0.6, LANE, 3); }
+    if(h.t%9===0 && perfTier<2) ember(h.x-h.dir*rnd(10,50), LANE-rnd(4,40), -h.dir*rnd(1,4), -rnd(0.4,2), '#c8b48a');
+    // 当たり判定：跳び越せるように、岩の高さより上に居れば当たらない
+    for(const q of players){ if(!q.active||q.state==='dead'||q.state==='falling') continue;
+      if(Math.abs(q.x-h.x)<h.r+18 && q.z < h.z+h.r*1.35 && !h.hitP[q.pid]){
+        h.hitP[q.pid]=1; hurtPlayer(q, 16, h.dir, true); shake=Math.max(shake,12); } }
+    for(const e of enemies){ if(e.dead||e.grabbedBy) continue;      // 敵も轢く
+      if(Math.abs(e.x-h.x)<h.r+16 && e.z<h.z+h.r*1.35 && !h.hitE[e.id]){
+        h.hitE[e.id]=1; damageEnemy(e, 26, h.dir*12, true); if(!e.dead) launchEnemy(e, h.dir*20, -12, 3); } }
+    if(h.x-camX>W+260 || h.t>=h.life){
+      dust(h.x,LANE,10); for(let k=0;k<3;k++) ring(h.x,LANE-30,'#c8b48a');
+      hazards.splice(i,1); }
+    continue; }
   // 持続する技の音を鳴らし続ける（一発鳴らして終わりだと、画面に居座る渦やビームが無音になる）
   if((h.kind==='ptwister'||h.kind==='etwister') && h.t%26===0 && h.t<h.life-20) sfx.tornado(h.x,0.55);
   // 竜巻：渦の外周に沿って火の粉を巻き上げる。積み上げた輪だけでは回転の速度が読めない
@@ -3313,11 +3406,96 @@ function fireSprites(){
   }
   return _frSpr;
 }
+// ── ヘリとドローン：敵を吊り下げて飛んできて、真上で切り離す ──
+// 影を地面に落とすのが要点。空だけを飛ばすと「何かが上に居る」ことに気付けない
+function drawCarriers(){
+  for(const c of carriers){ const sx=c.x-camX; if(sx<-260||sx>W+260) continue;
+    const gy=LANE-groundLift(c.x), cy=gy-c.z, face=c.dir;
+    // 真下の地面の影＝落ちてくる位置の予告
+    ctx.save(); ctx.globalAlpha=0.26; ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.ellipse(sx, gy+3, 34, 9, 0,0,7); ctx.fill(); ctx.restore();
+    // 吊り索
+    if(c.hold){ const eh=(ETYPE[c.hold.type].h||100);
+      ctx.strokeStyle='#3a3f48'; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.moveTo(sx, cy+14); ctx.lineTo(c.hold.x-camX, gy-c.hold.z-eh); ctx.stroke();
+      ctx.strokeStyle='#8a9099'; ctx.lineWidth=1.1;
+      ctx.beginPath(); ctx.moveTo(sx-0.8, cy+14); ctx.lineTo(c.hold.x-camX-0.8, gy-c.hold.z-eh); ctx.stroke(); }
+    // 吊る相手より小さいと「運んでいる」に見えない。機体そのものを大きく描く
+    const CS=(c.kind==='heli')?1.42:1.14;
+    ctx.save(); ctx.translate(sx, cy); ctx.scale(face*CS,CS); ctx.rotate(-0.06*face);
+    if(c.kind==='heli'){
+      ctx.fillStyle='#2f3a2a'; roundRect(-34,-16,64,30,10); ctx.fill();            // 胴
+      ctx.fillStyle='#48583c'; roundRect(-34,-16,64,10,8); ctx.fill();
+      ctx.fillStyle='#8fd4ec'; ctx.beginPath(); ctx.ellipse(20,-2,12,9,0,0,7); ctx.fill();   // 風防
+      ctx.fillStyle='#2f3a2a'; ctx.fillRect(-72,-6,42,8);                          // テールブーム
+      ctx.fillStyle='#48583c'; ctx.beginPath(); ctx.moveTo(-72,-14); ctx.lineTo(-58,-2); ctx.lineTo(-72,6); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#3a3f48'; ctx.lineWidth=3; ctx.lineCap='round';             // 降着装置
+      ctx.beginPath(); ctx.moveTo(-18,14); ctx.lineTo(-22,26); ctx.moveTo(14,14); ctx.lineTo(18,26);
+      ctx.moveTo(-30,26); ctx.lineTo(26,26); ctx.stroke();
+      ctx.fillStyle='#20262c'; ctx.fillRect(-4,-24,7,10);                           // ローターマスト
+      { const b=Math.abs(Math.cos(c.rot))*0.9+0.1;                                  // メインローター（回転で長さが伸縮）
+        ctx.save(); ctx.globalAlpha=0.72; ctx.fillStyle='#1e242c';
+        ctx.fillRect(-96*b,-26,192*b,5); ctx.restore(); }
+      { const tb=Math.abs(Math.sin(c.rot*1.4));                                      // テールローター
+        ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle='#1e242c';
+        ctx.fillRect(-76,-22*tb-2,4,44*tb+4); ctx.restore(); }
+      if(Math.floor(c.rot*0.2)%2===0){ ctx.fillStyle='#ff5a5a';                      // 航空灯
+        ctx.beginPath(); ctx.arc(-70,4,3,0,7); ctx.fill(); }
+    } else {
+      ctx.fillStyle='#2a3038'; roundRect(-22,-9,44,20,7); ctx.fill();               // ドローン本体
+      ctx.fillStyle='#4a5460'; roundRect(-22,-9,44,7,6); ctx.fill();
+      ctx.fillStyle='#8fd4ec'; ctx.beginPath(); ctx.arc(12,2,4.2,0,7); ctx.fill();   // レンズ
+      ctx.strokeStyle='#3a424c'; ctx.lineWidth=3.4;                                  // アーム
+      ctx.beginPath(); ctx.moveTo(-14,-4); ctx.lineTo(-36,-14); ctx.moveTo(14,-4); ctx.lineTo(36,-14);
+      ctx.moveTo(-14,2); ctx.lineTo(-32,12); ctx.moveTo(14,2); ctx.lineTo(32,12); ctx.stroke();
+      for(const rp of [[-36,-16],[36,-16],[-32,10],[32,10]]){                         // 4発のローター
+        const b=Math.abs(Math.cos(c.rot*1.7+rp[0]))*0.8+0.2;
+        ctx.save(); ctx.globalAlpha=0.60; ctx.fillStyle='#1e242c';
+        ctx.fillRect(rp[0]-17*b, rp[1]-2, 34*b, 3.4); ctx.restore();
+        ctx.fillStyle='#20262c'; ctx.beginPath(); ctx.arc(rp[0],rp[1],3,0,7); ctx.fill(); }
+      if(Math.floor(c.rot*0.25)%2===0){ ctx.fillStyle='#7dff5a';
+        ctx.beginPath(); ctx.arc(-18,6,2.6,0,7); ctx.fill(); }
+    }
+    ctx.restore(); }
+}
 function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   const wide=(h.kind==='ebeam'||h.kind==='ebolt'||h.kind==='pbeam');
   if(!wide && (sx<-80||sx>W+80)) continue;
   if(wide && (sx<-1600||sx>W+1600)) continue;
   const gy=LANE-groundLift(h.x);
+  if(h.kind==='boulder'){                    // 大岩：転がる向きへ回した割れ目で回転を見せる
+    const by=gy-h.z-h.r, R=h.r;
+    ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.ellipse(sx, gy+4, R*(0.94-h.z*0.0012), R*0.26, 0,0,7); ctx.fill(); ctx.restore();
+    // 転がってきた跡の砂煙。岩そのものより先に「来ている」ことを伝える
+    if(perfTier<2){ ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#c8b48a';
+      for(let k=1;k<=3;k++){ const dx=-h.dir*(R*0.9+k*R*0.62);
+        ctx.beginPath(); ctx.ellipse(sx+dx, gy-6-Math.sin(gf*0.3+k)*4, R*(0.5-k*0.10), R*(0.30-k*0.06), 0,0,7); ctx.fill(); }
+      ctx.restore(); }
+    ctx.save(); ctx.translate(sx, by); ctx.rotate(h.spin);
+    const gg=ctx.createRadialGradient(-R*0.34,-R*0.40,R*0.12, 0,0,R*1.06);
+    gg.addColorStop(0,'#b0a493'); gg.addColorStop(0.55,'#7d7266'); gg.addColorStop(1,'#3f3830');
+    ctx.fillStyle=gg;
+    ctx.beginPath();                          // ごつごつした輪郭（真円だとボールに見える）
+    for(let k=0;k<11;k++){ const a=k/11*TAU, rr=R*(0.90+0.14*Math.sin(k*2.7));
+      ctx[k?'lineTo':'moveTo'](Math.cos(a)*rr, Math.sin(a)*rr); }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(30,24,18,.55)'; ctx.lineWidth=3; ctx.lineJoin='round'; ctx.stroke();
+    ctx.strokeStyle='rgba(24,20,16,.45)'; ctx.lineWidth=2.4;   // 割れ目
+    for(let k=0;k<3;k++){ const a=k*2.1;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*R*0.18, Math.sin(a)*R*0.18);
+      ctx.lineTo(Math.cos(a+0.7)*R*0.86, Math.sin(a+0.7)*R*0.86); ctx.stroke(); }
+    ctx.fillStyle='rgba(255,246,220,.26)';    // 峰の照り
+    ctx.beginPath(); ctx.ellipse(-R*0.30,-R*0.40, R*0.42, R*0.26, -0.6, 0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,236,196,.16)';    // 面を割る明るいファセット（丸い塊が岩に見える）
+    for(let k=0;k<3;k++){ const a=k*2.4+0.4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*R*0.15, Math.sin(a)*R*0.15);
+      ctx.lineTo(Math.cos(a+0.55)*R*0.90, Math.sin(a+0.55)*R*0.90);
+      ctx.lineTo(Math.cos(a+1.05)*R*0.86, Math.sin(a+1.05)*R*0.86);
+      ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+    continue; }
   if(h.kind==='ewave'){                     // 大津波：切り立った壁が巻き込みながら押し寄せる
     // 当たり判定は「z が h.hgt*0.41 より下」。実体の壁の下半分が危険域で、
     // 上の泡と飛沫は跳び越せる側――という読みになるよう明度を分ける
@@ -3864,7 +4042,13 @@ function updatePlayer(){
   if(p.state==='roll'){ updateRoll(); return; }
   if(p.state==='wheel'){ updateWheel(); return; }
   if(p.state==='screw'){ updateScrew(); return; }
-  if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4; if(p.fallT>=22){ loseLife(p); } return; }   // 谷に落下→ミス
+  if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4;
+    if(p.fallT>=22){
+      // アトラクトでは loseLife が「全快して戻る」だけなので、状態を戻さないと
+      // falling のまま毎フレーム沈み続けて、デモがそこで止まる
+      if(attractOn){ p.state='idle'; p.z=0; p.vz=0; p.hp=p.maxHp; p.invuln=80; escapePit(p); }
+      else loseLife(p); }
+    return; }   // 谷に落下→ミス
   if(p.state==='rush'){ updateRush(); return; }
   if(p.state==='iaidash'){ updateIaiDash(); return; }
   if(p.state==='dunk'){ updateDunk(); return; }
@@ -5824,7 +6008,43 @@ const BOSSQUOTE_BY={
 };
 function bossQuoteFor(key){ const o=BOSSQUOTE_BY[key], k=players[0].kind;
   return (o&&o[k]) || BOSSQUOTE[key]; }
+// ── 雑魚の登場演出 ──
+// 従来はどの雑魚も「画面の横から歩いて出てくる」だけで、
+// どこから来るかが常に分かっていた。空から吊り下ろす／地面を割って出る を足す。
+let carriers=[];             // 敵を運ぶヘリ／ドローン。切り離したあとも飛び去るまで残る
+const ENT_BURROW=46;         // 地割れ→噴き出すまでのフレーム
+const ENT_DROP_Z=330;        // 吊り下げの高度。これ以上高いと機体がHUDへ潜る
+function spawnEnemyEntry(type,x,y,entry){
+  spawnEnemy(type,x,y);
+  const e=enemies[enemies.length-1], t=ETYPE[type];
+  if(entry==='drop'){
+    const heavy=(t.w||40)>=70 || (t.h||100)>=100;              // 大きい敵はヘリ、小さい敵はドローン（狼 58x80 はドローン、マスチフ 74x90 はヘリ）
+    const dir=(x<camX+W*0.5)?1:-1;
+    e.state='enter'; e.entry='drop'; e.entT=0; e.carried=true; e.vz=0;
+    e.hangH=72+(t.h||100);                                     // 機体の腹から敵の足元までの距離。索が見えるだけの余裕を取る
+    e.z=ENT_DROP_Z-e.hangH;
+    carriers.push({kind:heavy?'heli':'drone', x:x-dir*(W*0.55), z:ENT_DROP_Z, vx:dir*7.4,
+                   hold:e, t:0, life:420, rot:0, dir:dir, dropX:x});
+  } else if(entry==='burrow'){
+    e.state='enter'; e.entry='burrow'; e.entT=0; e.z=0; e.vz=0;
+  } else { e.entry='side'; }
+  return e; }
+function updateCarriers(){
+  for(let i=carriers.length-1;i>=0;i--){ const c=carriers[i]; c.t++; c.x+=c.vx; c.rot+=1.1;
+    c.z += Math.sin(c.t*0.09)*0.9;                              // 空中でわずかに上下する
+    if(c.hold){ const e=c.hold;
+      if(e.dead || e.state!=='enter'){ c.hold=null; }
+      else { e.carried=true; e.x=c.x; e.z=c.z-(e.hangH||120); e.facing=(nearestPlayerTo(e.x).x<e.x)?-1:1;
+        if((c.dir>0 && c.x>=c.dropX) || (c.dir<0 && c.x<=c.dropX)){
+          e.carried=false; e.vz=0; c.hold=null;                 // 切り離し
+          spark(e.x, LANE-e.z-30, '#dfe8f2', 9, 6); sfx.jump(e.x); } } }
+    if(perfTier<2 && c.t%5===0) dust(c.x+rnd(-14,14), LANE-c.z+34, 1);   // 吹き下ろし
+    if(c.t>=c.life || c.x<camX-520 || c.x>camX+W+520) carriers.splice(i,1); }
+}
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
+  // 谷の真上には湧かせない。湧いた敵は跳べないので、そこから一歩も動けなくなる
+  if(overPit(x)){ let g=0; const step=(x<player.x)? -60 : 60;
+    while(overPit(x) && g++<12) x+=step; }
   const dm=diffHpMul(), gw=foeHpGrow();
   // 階級：進行が進むほど「精鋭」以上の個体が混ざる（ボス・乗り物・主役ボスは対象外）
   let rank=0; const tier=foeTier();
@@ -6031,6 +6251,7 @@ function damageEnemy(e,dmg,kbx,knockdown,launch){
   const noStop=noHitStopOnce; noHitStopOnce=false;   // 連射弾などはヒットストップ無し
   if(T.bossKind==='ghost' && e.vanish>10){ spark(e.x,e.y-e.h*0.5,'#bfe9ff',5,5); popText(e.x,e.y-e.h-6,'すりぬけ','#bfe9ff'); return; }  // 透明中はすり抜け
   if(e.sub){ spark(e.x,e.y,'#9fbfe0',5,5); return; }   // 陸鮫：地中は無敵
+  if(e.state==='enter'){ spark(e.x,e.y-e.z-20,'#c8b48a',4,5); return; }   // 登場中（吊られている／土の下）は無敵
   if(e.transform>0){ spark(e.x,e.y-e.h*0.5,'#c46bff',5,6); return; }   // 形態進化中は無敵
   // ── 不死隊エリュシオンの「斬り返し」：構え中に当てると受け流して反撃に転じる ──
   // ダメージは半分だけ通り、次のフレームで踏み込み突きが返ってくる。
@@ -6343,6 +6564,22 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(14,-4,2.2,0,7); ctx.fill();
   }
   ctx.restore(); }); }
+// ── 敵と地形の付き合わせ ──
+// updateEnemies の中でやると、状態ごとの continue を跨げないうえ、
+// 「動いた次のフレームに押し戻す」ことになって縁で1フレームだけ谷の上に立つ。
+// 移動が終わったあと（描画の前）にまとめて直す
+function terrainStepFoes(){
+  for(const e of enemies){
+    const px=e._tx; e._tx=e.x;
+    if(px==null || e.x===px || Math.abs(e.x-px)>=90) continue;
+    const dh=terrLift(e.x)-terrLift(px);
+    if(dh!==0 && e.z>0){ e.z=Math.max(0,e.z-dh); }      // 空中は絶対高度を保つ
+    // 谷は敵にとっても壁。跳べないので縁の外へ戻す（歩かせると奈落の上に浮いて見える）
+    if(e.z<=0 && !e.dead && e.state!=='air' && e.state!=='blastoff' && overPit(e.x)){
+      const P=pitAt(e.x);
+      if(P){ e.x=(px<=P[0])? P[0]-16 : P[1]+16; e.vx=0; }
+      e._tx=e.x; } }
+}
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
@@ -6364,6 +6601,24 @@ function updateEnemies(){
     if(e.state==='blastoff'){ e.bo++; e.x+=e.vx; e.z+=e.boVz; e.vx*=0.992; e.boVz*=0.99; e.spin+=0.6;
       if(gf%2===0) spark(e.x,e.y-e.z,'#ffe14d',2,6);
       if(e.x<camX-110||e.x>camX+W+110||e.z>420||e.bo>95){ starTwinkle(e); enemies.splice(i,1); }
+      continue; }
+    // ── 登場演出：吊り下ろし／地面から噴き出す ──
+    // ここで continue して AI と物理を止める。止めないと吊られたまま歩き出す
+    if(e.state==='enter'){ e.entT++;
+      if(e.entry==='drop'){
+        if(!e.carried){ e.vz+=0.9; e.z=Math.max(0,e.z-e.vz);
+          if(e.z<=0){ e.vz=0; e.state='walk'; e.entry=null; e.sqv=6.5; e.thinkCd=rnd(10,26);
+            dust(e.x,e.y,13); ring(e.x,e.y,'#c8b48a'); shake=Math.max(shake,6); quake=Math.max(quake||0,6); sfx.land(e.x); } }
+      } else if(e.entry==='burrow'){
+        if(e.entT<ENT_BURROW){ e.z=0;                          // 地割れ：まだ土の下
+          if(e.entT===1){ ring(e.x,e.y,'#c8b48a'); sfx.step(e.x,'dirt',1.7); }
+          if(e.entT%4===0) dust(e.x+rnd(-26,26), e.y, 2);
+          if(e.entT===ENT_BURROW-1){ e.vz=-14; dust(e.x,e.y,18);   // 噴き出す
+            ring(e.x,e.y,'#c8b48a'); ring(e.x,e.y,'#fff6c0');
+            shake=Math.max(shake,9); quake=Math.max(quake||0,11); sfx.big(e.x); } }
+        else { e.vz+=0.9; e.z=Math.max(0,e.z-e.vz);
+          if(e.z<=0 && e.vz>0){ e.vz=0; e.state='walk'; e.entry=null; e.sqv=5; e.thinkCd=rnd(8,20); dust(e.x,e.y,8); } }
+      } else { e.state='walk'; e.entry=null; }
       continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
     if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
@@ -7628,6 +7883,7 @@ function drawVehicleShape(sx, gy, face, V, kind, p){ ctx.save(); ctx.translate(s
 }
 //======================================================================
 let encounters,curGateX=WORLD_END,encIndex=0;
+let terrElev=0;                 // addBlocks が積み上げていく標高（区画をまたいで連続させる）
 let npcs=[], worldCursor=0, nextStage=1, stageStartX={}, shownStBanner={};
 let metNPC=0, chestsOpened=0, routesChosen=[];
 let pendingBranch=null, branchSel=0, branchNav=0, dialog=null;
@@ -7685,7 +7941,7 @@ const CH1=[
 '奥義はぐるっと一回転＋攻撃で「絨毯爆撃」！トランシーバーで爆撃機とドローンを呼び、画面じゅうを端から端まで焼き払う。攻撃を連打すればドローンの増援が来て、爆撃も長引くぞ。締めは横一線の一斉投下じゃ！'],
      watch:['おお、噂の盗賊ワッチか…吊り目の悪ガキと聞いておったが、頼りにさせてもらうぞ。','素の腕っぷしは弱いが、お前さんは「盗み」の天才じゃ。拾った武器を使えば見違えるほど強くなる（アイテム攻撃が得意）。','連打で小刀コンボ、↓→＋攻撃でクナイ乱舞（三連手裏剣）、→↓→＋攻撃で螺旋昇り（宙返り斬り）。','↑＋攻撃でけむり玉（目くらまし＆一瞬無敵）、前＋攻撃で二丁拳銃の早撃ち、←←や→→＋攻撃で神速の強奪（影分身の疾走）、下＋攻撃で地雷を仕掛けられるぞ。','敵を掴んで攻撃すれば、武器や技、小判までスリ取れる。','そして奥義——ぐるっと一回転＋攻撃で「ロックンロール」！巨大ガトリングを構え、正面の上から下まで全画面を100連射で掃射する大技じゃ。','各ステージのボスを倒せばその必殺技も奪える（↓↑＋攻撃）。コンボからコマンド技へのキャンセルも使いこなすのじゃ！',
 '——そうそう、これは誰にでも言えることじゃが。コマンド技を出している最中に「別の」コマンド技を入れると、そこへキャンセルして繋がる。↓→や→↓→、↓↑だけでなく、上・下・前の技へも繋げられる。三つまで、同じ技へは繋ぎ直せぬ。','新技もあるぞ。攻撃と掴みの同時押しで「大怪盗・銭形乱舞」——小判の嵐で前方を薙ぎ、当てた敵から小銭をせしめるのじゃ！']}}},
-  {theme:1,name:'黄昏の城下町',
+  {theme:1,name:'黄昏の城下町',terr:'down',
    gates:[{off:600,list:[['hyena',1],['kirebouzu',1],['pounce',1]]},{off:900,list:[['bikewan',1]]},{off:1150,mini:true,rival:true,list:[['@rival',1]]},{off:1700,boss:true,list:[['shark',1]]}],
    npc:{kind:'pup',name:'まいごのコイヌ',once:true,lines:{
      inu:['ぐすっ…こわかったよぉ…','おにいちゃんの剣、かっこいい！これ、ひろったの。お礼だワン！'],
@@ -7694,7 +7950,7 @@ const CH1=[
 ];
 const SEGS={
   A:[
-    [ {theme:3,name:'業火の渓谷',
+    [ {theme:3,name:'業火の渓谷',terr:'down',
        gates:[{off:600,list:[['boar',1],['kirebouzu',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
        npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:{
          inu:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','剣士のおぬしには、わしの自信作をくれてやる！溶岩で鍛えた一級品だぞ。'],
@@ -7709,7 +7965,7 @@ const SEGS={
          inu:['ようこそ、月詠の森へ…','亡霊たちは透けている間は斬れません。実体を現した瞬間を狙うのです。','月のご加護を、剣士さま。'],
          shima:['ようこそ、月詠の森へ…','亡霊は透けている間、拳も通りません。実体化の瞬間に叩き込むのです。','月のご加護を、拳士さま。'],
          nuko:['あら…あなたからは月と同じ魔力の香りがします。','亡霊は実体を現した瞬間しか傷つきません。炎の柱を置いて待つのも良いでしょう。','同じ魔を扱う者として…ご武運を、ヌコさま。']},give:{heal:'full'}}},
-      {theme:6,name:'瑠璃の水晶洞',
+      {theme:6,name:'瑠璃の水晶洞',terr:'down',
        gates:[{off:600,list:[['ari',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
        npc:{kind:'villager',name:'鉱夫犬ホリオ',lines:['この水晶洞、迷い込むと二度と出られんと言われとる…','三つ首の獣ケルベが奥に巣食う。上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
@@ -7723,19 +7979,19 @@ const SEGS={
     [ {theme:3,name:'灼熱の砂漠',
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
-      {theme:9,name:'灼熱の巨大廃墟',
+      {theme:9,name:'灼熱の巨大廃墟',terr:'up',
        gates:[{off:520,list:[['mechawan',1],['skeletwan',1]]},{off:600,list:[['bikewan',1],['trailerwan',1]]},{off:900,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
        npc:{kind:'villager',name:'考古学犬ホリダス',lines:['この巨大廃墟…登るほどに古代文明の深淵へ近づく。','鋼鉄のグラトンは遺跡の守護兵。図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
 };
 const FINAL_CH=[
-  {theme:5,name:'氷雪の霊峰',
+  {theme:5,name:'氷雪の霊峰',terr:'up',
    gates:[{off:520,list:[['mechawan',1],['zombiewan',1]]},{off:600,list:[['kirebouzu',1],['mastiff',1],['onibouzu',1]]},{off:1300,boss:true,list:[['dragon',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:{
      inu:['ここまで来たか、勇者どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。聖剣の輝きを信じるのじゃぞ。','王国みんなの祈りが、そなたの剣と共にある！'],
      shima:['ここまで来たか、拳聖どの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。じゃが、おぬしの拳はもっと多くの型を持っておろう。','王国みんなの祈りが、その拳に宿っておる！'],
      nuko:['ここまで来たか、ヌコどの…ワシも陰ながら追って来たのじゃ。','大帝は三つの姿を持つ。じゃが恐れるな、彼方の友がついておる。','王国みんなの祈りが、そなたの杖に灯っておるぞ！']}}},
-  {theme:4,name:'暗黒の城門',
+  {theme:4,name:'暗黒の城門',terr:'up',
    gates:[{off:600,list:[['pierrot',1],['gripper',1],['onibouzu',1],['ari',1]]},{off:1300,boss:true,list:[['rival',1]]}],
    npc:{kind:'villager',name:'囚われの近衛犬',once:true,lines:{
      inu:['くっ…ここを守る黒犬士クロイヌは、かつて王国一の剣士だった…','同じ剣士のあんたなら分かるはず。どうか…奴の剣を、止めてやってくれ…'],
@@ -7750,7 +8006,7 @@ const FINAL_CH=[
    gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
 ];
 // ── ワッチの登場に合わせた追加ステージ「月夜の宝物庫」＋追加ボス「黄金傀儡ゴルドー」──
-const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',
+const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',terr:'dive',
   gates:[{off:560,list:[['gripper',1],['pounce',1],['pierrot',1]]},{off:640,list:[['bikewan',1]]},
          {off:1000,list:[['akita',1],['mastiff',1],['onibouzu',1]]},{off:1400,boss:true,list:[['goldgolem',1]]}],
   npc:{kind:'merchant',name:'宝物庫の番犬ラテ',once:true,lines:{
@@ -7764,13 +8020,13 @@ const BUG_CH=[
   {theme:9,name:'大輪の花園',
    gates:[{off:600,list:[['kamakiri',1],['hachibo',1],['ari',1]]},{off:1000,list:[['kamakiri',1],['kumo',1]]},{off:1400,boss:true,list:[['kamaboss',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう…！一夜にして王国が「蟲の世界」に呑まれてしもうた。','花も草も巨大化し、蟲の軍勢「大蟲帝国」が各地を支配しておる。二周目の敵は手強いぞ、心してかかれ！','聞けば宿屋のチャムの様子もおかしいらしい…。何かあったら、店を頼るのじゃぞ…いや、頼って良いのか…？'],give:{heal:'full'}}},
-  {theme:10,name:'蜂の巣大空洞',
+  {theme:10,name:'蜂の巣大空洞',terr:'up',
    gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
    npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
-  {theme:11,name:'蜘蛛糸の森',
+  {theme:11,name:'蜘蛛糸の森',terr:'climb',
    gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
    npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
-  {theme:12,name:'地底の蟻帝国',
+  {theme:12,name:'地底の蟻帝国',terr:'down',
    gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['mukade',1],['dangoro',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
    npc:{kind:'villager',name:'考古学犬ホリダス',lines:['地下都市がまるごと蟻の帝国に…！光る茸だけが頼りだ。','大顎公クワガタスの突進は壁まで止まらん。ジャンプでかわして背中を叩け！']}},
 ];
@@ -7790,10 +8046,10 @@ const SPACE_CH=[
   {theme:13,name:'墜ちた円盤',
    gates:[{off:600,list:[['greywan',1],['raygun',1],['floater',1]]},{off:1000,list:[['greywan',1],['probe',1]]},{off:1400,boss:true,list:[['greyking',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう！今度は空から円盤が降ってきおった…！','「銀河侵略軍」——星ごと生き物を採取しに来た宇宙人どもじゃ。','奴らは光線を撃ってくる。物陰は無い、避けるか弾き返すしかないぞ！'],give:{heal:'full'}}},
-  {theme:14,name:'星間回廊',
+  {theme:14,name:'星間回廊',terr:'up',
    gates:[{off:560,list:[['raygun',2],['floater',1]]},{off:960,list:[['probe',1],['greywan',1],['slimealien',1]]},{off:1400,boss:true,list:[['ufoboss',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['母船の中だ…！オレは三日前に吸い上げられちまってな。','円盤母艦ディスコは急降下してくる。着地の瞬間が狙い目だ！']}},
-  {theme:15,name:'母船コア',
+  {theme:15,name:'母船コア',terr:'climb',
    gates:[{off:560,list:[['slimealien',2],['floater',1]]},{off:960,list:[['probe',2],['raygun',1]]},{off:1400,boss:true,list:[['bioblob',1]]}],
    npc:{kind:'villager',name:'研究犬ラボット',lines:['このコアが母船の心臓部だ。壊せば侵略は止まる…！','増殖体バイオブロブは叩くほど分裂する。小さいのから片付けろ！']}},
 ];
@@ -7806,14 +8062,14 @@ const MYTH_CH=[
   {theme:18,name:'海神の神殿',
    gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['また会ったな…！今度は海の底だぜ。','この神殿の主は三叉の槍を持ってる。大波が来るから、来ると分かったら跳べ。','青銅の盾持ちは正面が通らねえ。背中を取れ。']}},
-  {theme:17,name:'冥府ステュクスの河',
+  {theme:17,name:'冥府ステュクスの河',terr:'dive',
    gates:[{off:560,list:[['mythflank',2],['mythblade',1]]},{off:960,list:[['mythbull',1],['mythguard',1],['mythseer',1]]},{off:1400,boss:true,list:[['hades',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ここから先は死者の国じゃ。生きたまま渡った者はおらん。','影が背に回るぞ。一体を追うな、囲まれる。','冥王ハデスは死者を呼ぶ。倒しても、倒しても——']}},
 ];
 // ── 五周目「戦国」の三章 ──
 // 兵種の役割を段階的に見せる。城下町で足軽と弓、野戦で鉄砲と騎馬、天守で総力戦。
 const SENGOKU_CH=[
-  {theme:21,name:'炎上する天守',
+  {theme:21,name:'炎上する天守',terr:'up',
    gates:[{off:560,list:[['samurai',2],['teppo',1]]},{off:940,mini:true,list:[['mitsuhide',1]]},
           {off:1240,list:[['hatamoto',1],['ninja',2],['oodate',1]]},{off:1600,boss:true,list:[['nobunaga',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['な、なんじゃこの城は…！わしらの知らん国じゃ。','旗印に「永楽通宝」——これは、遠い異国の戦の世のものじゃ。','ここの兵は役割が分かれておる。前で槍を並べ、後ろから射る。','矢と弾は撃つ前に必ず構える。構えを見たら、線から外れよ。','天守に居るのは「第六天魔王」と名乗る男じゃ。気をつけい。'],give:{heal:'full'}}},
@@ -7825,7 +8081,7 @@ const SENGOKU_CH=[
    gates:[{off:520,list:[['ashigaru',2],['kibahei',1]]},{off:900,mini:true,list:[['kanbei',1]]},
           {off:1180,list:[['teppo',2],['taisho',1],['hatamoto',1]]},{off:1560,boss:true,list:[['ieyasu',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平まで旗が並んでおる。これが「合戦」というやつじゃ。','騎馬が来る。あれは止まらん——避けるしかない。','狸のような男が陣を敷いておる。堅いぞ、あれは。']}},
-  {theme:22,name:'桶狭間の豪雨',
+  {theme:22,name:'桶狭間の豪雨',terr:'dive',
    gates:[{off:520,list:[['ashigaru',3],['souhei',1]]},{off:900,mini:true,list:[['hisahide',1]]},
           {off:1180,list:[['ozutsu',1],['oodate',2],['yumihei',1]]},{off:1560,boss:true,list:[['yoshimoto',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ひどい雨じゃ。この谷、逃げ場が無いぞい。','大筒が来る。あれは山なりに落ちてくる——着弾の輪をよう見よ。','谷の奥で、公家めいた大将が輿に揺られておる。油断しておるようで、囲みは厚い。']}},
@@ -7833,7 +8089,7 @@ const SENGOKU_CH=[
    gates:[{off:520,list:[['yumihei',2],['saika',2]]},{off:900,mini:true,list:[['katsuyori',1]]},
           {off:1180,list:[['kibahei',1],['horo',2],['souhei',1]]},{off:1560,boss:true,list:[['kenshin',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['霧で先が見えねえ…足音だけ聞け。','母衣を背負った早駆けが来るぜ。あれは止まらねえ。','川の向こうに、白い頭巾の大将が独りで立ってた。あれはヤバい。']}},
-  {theme:24,name:'甲斐の山城',
+  {theme:24,name:'甲斐の山城',terr:'up',
    gates:[{off:520,list:[['oodate',2],['souhei',1]]},{off:900,list:[['kunoichi',2],['hatamoto',1]]},
           {off:1240,list:[['ozutsu',1],['taisho',1],['kibahei',1]]},{off:1600,boss:true,list:[['shingen',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['丸太を組んだ砦じゃ。守るために作られておる。','くノ一が居る。背を取られるぞ、壁を背にせい。','山の主は動かぬ。動かぬまま、こちらの手を全部読んでおる。']}},
@@ -7893,7 +8149,20 @@ function addBlocks(blocks,opts){
   blocks.forEach((b,bi)=>{
     const B=worldCursor, st=nextStage++, len=b.len||1900, last=bi===blocks.length-1;
     STAGE2THEME[st]=b.theme; STAGE_NAME[st]=b.name; stageStartX[st]=B;
-    if(B>0 && !b.noPit && Math.random()<0.5) PITS.push([B+260,B+372]);
+    // 区画の地形。terr が無い区画も直前の標高を引き継いだ平坦区画として積む
+    // （積まないと、坂の次の区画で標高が0へ戻って境目が崖になる）
+    { const e0=terrElev, up=(b.terr==='up'), dn=(b.terr==='down'),
+            cl=(b.terr==='climb'), dv=(b.terr==='dive');
+      let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : cl? TERR_CLIMB : dv? -TERR_CLIMB : 0);
+      // 標高に「地面=0」の床を置くと、最初の区画が下り坂だったときに 0→0 で平坦に潰れる。
+      // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
+      const CAP=TERR_RISE*3; if(e1<-CAP) e1=-CAP; if(e1>CAP) e1=CAP;
+      TERRS.push({x0:B, x1:B+len, e0:e0, e1:e1, kind:b.terr||'flat', st:st});
+      // 縦ステージは段の手前に谷を開ける。跳び損ねれば落下＝ワンアウト。
+      // 全段に開けると休む場所が無くなるので一段おき
+      if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
+        const bx=B+len*(k/TERR_STEPS); PITS.push([bx-130, bx-16]); } }
+      terrElev=e1; _terrLast=null; }
     b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss, mini:g.mini, rival:g.rival,
       final:g.final, branchAfter:(g.boss&&last&&opts&&opts.branchAfter)||undefined }); });
     if(b.npc) placeNPC(Object.assign({x:B+840+rnd(-60,60)},b.npc));
@@ -7910,6 +8179,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
+  TERRS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -7960,7 +8230,7 @@ function nextLap(l){
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
 function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters5();
@@ -7972,7 +8242,7 @@ function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
 }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
 function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters4();
@@ -7984,7 +8254,7 @@ function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
 }
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
 function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters3();
@@ -7996,7 +8266,7 @@ function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
 }
 // ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
 function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters2();
@@ -8051,7 +8321,8 @@ function trainCycleLevel(){ const p=players[0];
 function startTraining(){ unlockAudio();
   startGame();                                      // 本編と同じ初期化を通す
   trainMode=true;
-  encounters=[]; npcs=[]; PITS=[]; hazards=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
+  encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
+  TERRS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
   camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
@@ -8470,8 +8741,22 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
     const extra=(TWO_P?1:0)+(hardMode?1:0);   // 2P／高難易度は雑魚が増える
     spawnList.forEach(([type,n])=>{ const rt=type==='@rival'?rivalFor(players[0].kind):type; const tt=ETYPE[rt]; const cnt=(tt.boss||tt.mini)?n:n+1+extra;
       for(let i=0;i<cnt;i++){ const side=off%2===0?1:-1;
-      const sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
-      spawnEnemy(rt,clamp(sx,enc.at-260,enc.at+W*0.7),rnd(GROUND_TOP+20,GROUND_BOT-10)); off++; } });
+      // ── 出現の型を混ぜる ──
+      // 全員が横から歩いてくると、どこから来るかが常に分かってしまう。
+      // ボス・ライバル・飛行する敵は従来どおり（吊るす／埋める意味が無い）
+      let ent='side';
+      if(!tt.boss && !tt.mini && !tt.rider && !tt.flyer && !tt.balloon && !enc.rival){
+        const r=Math.random();
+        if(r<0.20) ent='drop'; else if(r<0.36) ent='burrow'; }
+      let sx=side>0?camX+W+40+rnd(0,120):camX-40-rnd(0,120);
+      if(ent!=='side'){
+        // 画面の中に湧く型は、主役の真上・足元に出さない（避けようが無い）
+        const px=players[0].x;
+        for(let g=0; g<8; g++){ sx=camX+rnd(W*0.18, W*0.92); if(Math.abs(sx-px)>150) break; } }
+      const ex=clamp(sx, enc.at-260, enc.at+W*0.7);
+      if(ent==='side') spawnEnemy(rt, ex, rnd(GROUND_TOP+20,GROUND_BOT-10));
+      else spawnEnemyEntry(rt, ex, rnd(GROUND_TOP+20,GROUND_BOT-10), ent);
+      off++; } });
     if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('bosseerie'); } }
     else if(enc.rival){ startRivalCut(rivalFor(players[0].kind)); }
     else if(enc.mini){ bossIntro=130; }
@@ -8773,6 +9058,10 @@ function updateCamera(){
   // ── デッドゾーン：14px 以内の微動では世界を動かさない（立ち止まると画面が完全に静まる）──
   if(Math.abs(d)>14) camX+=(d-Math.sign(d)*14)*0.135;
   camX=clamp(camX,0,WORLD_END-W);
+  // ── 縦の追従：坂を登れば世界を下へ、降りれば上へずらして、主役を画面のほぼ同じ高さに保つ ──
+  // これが無いと標高200pxの坂で主役が画面の上端へ抜ける。うねりは追わない（画面が波打つ）
+  { const cy = pl? terrLift(pl.x) : (TERRS.length? terrLift(camX+W*0.5) : 0);
+    camY += (cy-camY)*0.12; if(Math.abs(cy-camY)<0.3) camY=cy; }
   // 寄っている間は可視域が狭まるので、プレイヤーの拘束もその分だけ内側へ寄せる
   const vm=W*(1-1/Math.max(camZoom,1))*0.5;
   players.forEach(p=>{ if(p.active) p.x=clamp(p.x,camX+vm+24,camX+W-vm-24); });
@@ -8837,11 +9126,41 @@ function updateRigP(p){ const r=p.rig; if(!r) return;
     const gz=bd<430? clamp((bx-p.x)*p.facing*0.006,-1.25,1.25) : 0;
     p.gaze=lerp(p.gaze||0, gz, 0.11); }
   p.prevZ=p.z; p.prevFacing=p.facing; p.prevX=p.x; }
+// ── 地形と体の付き合わせ ──
+// p.x は40か所以上で書き換わるので、段差の処理は「1フレームぶんの移動量」を
+// あとからまとめて見るほうが安全。x の変化と地形の高低差だけを見る
+//   1. 空中で横へ動いたら、地形の高さの差ぶん z を戻して絶対高度を保つ
+//      （やらないと、段を跳び越すときに段の上で勝手に浮き上がる／めり込む）
+//   2. 地上で登れない段差へ踏み込んだら押し戻す＝壁。跳ばないと登れない
+//   3. 地上で大きく落ち込んだら、瞬間移動させずに落下させる
+function terrainStep(p){
+  const px=p._tx;
+  p._tx=p.x;
+  if(px==null || p.state==='dead' || p.state==='falling') return;
+  const dx=p.x-px;
+  if(dx===0 || Math.abs(dx)>90) return;          // 場面転換などの瞬間移動は対象外
+  const dh=terrLift(p.x)-terrLift(px);
+  if(dh===0) return;
+  if(p.z>0){                                     // 1. 空中：絶対高度を保つ
+    const nz=p.z-dh;
+    // まだ段の天端より低いのに段へ潜り込もうとしている＝壁の腹にぶつかった。
+    // ここで z を0へ丸めると、壁際で跳んだ瞬間に上昇ぶんを食われて登れなくなる
+    if(nz<0 && dh>TERR_STEP_MAX){ p.x=px; p._tx=px; p.vx=0; return; }
+    p.z=Math.max(0, nz); return; }
+  if(dh>TERR_STEP_MAX){                          // 2. 壁：登れないので押し戻す
+    p.x=px; p._tx=px; p.vx=0;
+    if(gf%9===0) dust(p.x+Math.sign(dx)*14, p.y, 1);
+    return; }
+  if(-dh>TERR_DROP_MIN && (p.state==='walk'||p.state==='idle')){   // 3. 段を降りる＝落ちる
+    p.z=-dh; p.vz=0; p.state='jump'; p.jAtk=0; p.aerial=0;
+    p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+    p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false; p.jMkFire=false; }
+}
 function stepPlayers(){
   for(const pl of players){ if(!pl.active) continue;
     player=pl; useInput(pl.in); updateRigP(pl);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
-    else { updatePlayer();
+    else { updatePlayer(); terrainStep(pl);
       if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
     saveInput(pl.in);
   }
@@ -8859,7 +9178,7 @@ function update(){
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
-  stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); updateHazards(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -8893,8 +9212,20 @@ function render(){
   ctx.translate(shkX+Math.sin(camBreath*0.73)*1.1, shkY+qy+Math.sin(camBreath)*1.6);   // 呼吸：静止時も画面が生きている
   if(shkRot!==0){ ctx.translate(W*0.5,H*0.5); ctx.rotate(shkRot); ctx.translate(-W*0.5,-H*0.5); }
   if(hitStop>2) ctx.translate(rnd(-1.1,1.1),rnd(-1.1,1.1));               // 凍結中の高周波ラトル（止まっても死なない）
-  drawBackground(); drawGround();
-  drawStageBannerScrim();   // ステージバナーの暗幕は背景側へ：敵の予兆マークを暗くしない
+  // ── 縦カメラ：坂・段差のぶんだけ世界を上下へずらす ──
+  // 背景は視差ぶんだけ（0.3倍）動かす。等倍で動かすと空ごと持ち上がって高さが伝わらない。
+  // 全画面の覆い（暗幕・照明・ヴィネット）は動かさないので、この外に置く
+  // 背景を視差でずらすと、ずらした側に何も塗られていない黒帯が出る。
+  // 先に空のいちばん上の色でキャンバス全体を塗り、その上へずらした背景を重ねる
+  if(camY){ const _T=curTheme(); ctx.fillStyle=(_T.sky&&_T.sky[0])||_T.g[0]; ctx.fillRect(0,0,W,H); }
+  // 背景は焼いた1枚絵なので、大きくずらすと絵の端が継ぎ目として出る。
+  // ずらし幅は40pxまでに抑える（縦の移動感は地面の傾きと地形そのものが持っている）
+  ctx.save(); if(camY) ctx.translate(0, clamp(camY*0.30,-40,40)); drawBackground(); ctx.restore();
+  ctx.save(); if(camY) ctx.translate(0, camY);
+  drawGround();
+  ctx.restore();
+  drawStageBannerScrim();
+  ctx.save(); if(camY) ctx.translate(0, camY);   // ステージバナーの暗幕は背景側へ：敵の予兆マークを暗くしない
   drawNPCs();
   drawItems();
   drawVehicles();
@@ -8914,14 +9245,18 @@ function render(){
     else drawEnemy(o.e); });
   player=players[0];
   drawHazards();
+  drawCarriers();
   drawProjectiles();
   drawParticles(1);                     // 火花・衝撃リング・放射線はキャラの前
   drawGreatOne();
   drawForeground();
+  ctx.restore();
   drawLighting();
   drawEcho();                           // 奥義の残響。照明のあと・数字の前に敷く（数字を沈ませない）
   drawCritVignette();                   // 致命の一撃：画面のフチを落として主役と相手だけを残す
+  ctx.save(); if(camY) ctx.translate(0, camY);
   drawParticles(2);                     // ダメージ数字は最前面（他のエフェクトに埋もれさせない）
+  ctx.restore();
   ctx.restore();
   // ── 閃光：全面ベタ塗りをやめ、打点から広がる放射グラデにする。立ち上がりを鋭く・減衰を速く ──
   if(flash>0){
@@ -10648,28 +10983,51 @@ function sheen(x,y,rw,rh,ang,a){
 
 function drawGround(){
   const T=curTheme();
-  const g=ctx.createLinearGradient(0,GROUND_TOP,0,H); g.addColorStop(0,T.g[0]); g.addColorStop(.5,T.g[1]); g.addColorStop(1,T.g[2]);
-  ctx.fillStyle=g; ctx.fillRect(0,GROUND_TOP,W,H-GROUND_TOP);
+  // ── 遠景の地面（帯と石畳）は坂の傾きへ倒す ──
+  // 稜線だけを斜めにしても、画面の大半を占めるこの帯が水平のままだと
+  // 目は「平坦な道」と読む。画面中央の傾きで帯ごとせん断する
+  // 稜線と同じだけ倒すと、帯が画面の大半を覆って背景の町並みを飲み込む。
+  // 0.55倍に抑えると「傾いている」ことは伝わり、奥の絵も残る（実測: 等倍だと左端が126px、0.55倍で258px）
+  const _sl=TERRS.length? clamp(terrTilt(camX+W*0.5)*0.55,-0.19,0.19) : 0;
+  // camY で世界を上下にずらすので、「奥の地面」と「画面下まで塗る底」を素の座標のままにすると
+  // 標高の高い／低いステージで帯が画面外へ飛び、地面の下に塗り残しの黒が出る。
+  //   GT ＝ 奥の帯の上端（camY の8割を打ち消す＝2割だけ視差で動く）
+  //   BOT ＝ 画面の下端より下（camY のぶん深く掘る）
+  const GT=GROUND_TOP-camY*0.8, BOT=H-camY+620;
+  ctx.save();
+  if(_sl){ ctx.translate(W*0.5,0); ctx.transform(1,-_sl,0,1,0,0); ctx.translate(-W*0.5,0); }
+  const OVER=Math.abs(_sl)*W*0.6+4;               // 傾けたぶん左右に食い出すので、帯を広く塗る
+  const g=ctx.createLinearGradient(0,GT,0,BOT+OVER); g.addColorStop(0,T.g[0]); g.addColorStop(.5,T.g[1]); g.addColorStop(1,T.g[2]);
+  ctx.fillStyle=g; ctx.fillRect(-OVER,GT,W+OVER*2,BOT-GT+OVER*2);
   // cobblestones（負荷対策：行数と装飾を間引いた軽量版）
-  for(let r=0;r<6;r++){ const y=GROUND_TOP+r*r*4+r*8; if(y>H)break;
+  for(let r=0;r<6;r++){ const y=GT+r*r*4+r*8; if(y>BOT+OVER)break;
     const sz=30+r*12, off=((-(camX)% sz)+sz)%sz + (r%2?sz/2:0);
-    for(let x=-sz;x<W+sz;x+=sz){ const cxs=x-off+sz/2, cys=y+sz*0.34;
+    for(let x=-sz-OVER;x<W+sz+OVER;x+=sz){ const cxs=x-off+sz/2, cys=y+sz*0.34;
       ctx.fillStyle= (Math.floor((x-off)/sz)+r)%2? T.cob[0]:T.cob[1];
       ctx.beginPath(); ctx.ellipse(cxs,cys,sz*0.46,sz*0.30,0,0,7); ctx.fill(); }
   }
   // top edge shadow (wall base)
-  const es=ctx.createLinearGradient(0,GROUND_TOP-2,0,GROUND_TOP+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=es; ctx.fillRect(0,GROUND_TOP-2,W,18);
+  const es=ctx.createLinearGradient(0,GT-2,0,GT+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=es; ctx.fillRect(-OVER,GT-2,W+OVER*2,18);
+  ctx.restore();
   // ── 谷（落とし穴）：暗い奈落を描く ──
   for(const pit of PITS){ const x0=pit[0]-camX, x1=pit[1]-camX; if(x1<-30||x0>W+30)continue;
-    const cg=ctx.createLinearGradient(0,LANE-70,0,H); cg.addColorStop(0,'#0c0c16'); cg.addColorStop(1,'#000');
-    ctx.fillStyle=cg; ctx.fillRect(x0,LANE-70,x1-x0,H-(LANE-70)); }
+    // 奈落は「谷の縁の高さ」から掘る。LANE 決め打ちだと、坂や段の上では縁とずれて
+    // 宙に浮いた黒い四角になる。深さも camY のぶん余分に伸ばして画面下まで届かせる
+    // 上端は両側の縁のうち高いほうに合わせる。決め打ちで持ち上げると、
+    // 段の上では地面より高く飛び出して「黒い柱」に見える
+    const top=LANE-Math.max(groundLift(pit[0]),groundLift(pit[1]))-2, bot=BOT;
+    const cg=ctx.createLinearGradient(0,top,0,bot); cg.addColorStop(0,'#0c0c16'); cg.addColorStop(1,'#000');
+    ctx.fillStyle=cg; ctx.fillRect(x0,top,x1-x0,bot-top);
+    // 縁の岩肌。真っ黒な矩形のままだと「穴」ではなく「黒い板」に見える
+    ctx.fillStyle='rgba(0,0,0,.55)';
+    ctx.beginPath(); ctx.ellipse((x0+x1)*0.5, top+10, (x1-x0)*0.52, 13, 0,0,7); ctx.fill(); }
   // ── マリオ風の起伏した前景の地面（キャラはこの稜線の上に立つ。谷では地面が無い）──
   const step=10;
-  ctx.beginPath(); ctx.moveTo(0,H);
-  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; const ty=overPit(wx)?H:(LANE-groundLift(wx)); ctx.lineTo(sx,ty); }
-  ctx.lineTo(W,H); ctx.closePath();
-  const hg=ctx.createLinearGradient(0,LANE-70,0,H); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
+  ctx.beginPath(); ctx.moveTo(0,BOT);
+  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; const ty=overPit(wx)?BOT:(LANE-groundLift(wx)); ctx.lineTo(sx,ty); }
+  ctx.lineTo(W,BOT); ctx.closePath();
+  const hg=ctx.createLinearGradient(0,LANE-groundLift(camX+W*0.5)-70,0,BOT); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
   ctx.fillStyle=hg; ctx.fill();
   // 稜線のハイライト＆縁取り（谷では分断）
   ctx.strokeStyle=shade(T.g[0],44); ctx.lineWidth=5; ctx.lineCap='round'; ctx.lineJoin='round';
@@ -12666,6 +13024,24 @@ function drawEnemy(e){
   // 同じ倍率で上げておかないと、見た目と当たりがずれる
   const t=ETYPE[e.type], s=depthScale(e.y)*(t.gsc||1), sx=e.x-camX, sy=e.y-groundLift(e.x);
   if(sx<-230||sx>W+230) return;   // 負荷対策：画面外の敵は描かない（引きのズームぶん余裕を持たせる）
+  // ── 地面から出てくる敵：噴き出すまでは土の下。本体は描かず、割れた地面と盛り上がりだけを見せる ──
+  if(e.state==='enter' && e.entry==='burrow' && e.entT<ENT_BURROW){
+    const u=clamp(e.entT/ENT_BURROW,0,1), r=34+48*u, hgt=8+22*u;
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,.46)';                       // 割れ目の影
+    ctx.beginPath(); ctx.ellipse(sx, sy, r*0.86, r*0.30, 0,0,7); ctx.fill();
+    ctx.fillStyle='#6d5f49';                               // 盛り上がった土
+    ctx.beginPath(); ctx.ellipse(sx, sy-hgt*0.35, r, hgt, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle='#8a7a5e';
+    ctx.beginPath(); ctx.ellipse(sx-r*0.18, sy-hgt*0.5, r*0.62, hgt*0.66, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle='rgba(28,22,14,.6)'; ctx.lineWidth=2.6; ctx.lineCap='round';   // 放射状のひび
+    for(let k=0;k<5;k++){ const a=k*1.27+0.4, L=r*(0.7+0.5*u);
+      ctx.beginPath(); ctx.moveTo(sx+Math.cos(a)*r*0.30, sy+Math.sin(a)*r*0.10);
+      ctx.lineTo(sx+Math.cos(a)*L, sy+Math.sin(a)*L*0.34); ctx.stroke(); }
+    if(u>0.62){ ctx.fillStyle='rgba(255,214,120,'+(0.30*(u-0.62)/0.38).toFixed(3)+')';   // 出てくる直前の光
+      ctx.beginPath(); ctx.ellipse(sx, sy-hgt*0.4, r*0.42, hgt*0.7, 0, Math.PI, 0); ctx.fill(); }
+    ctx.restore();
+    return; }
   if(t.heroBoss){   // 腕試しの主役ボスは、プレイヤーとまったく同じ描画で出す
     let ha=1; if(e.dead&&e.deadTimer<22) ha=clamp(e.deadTimer/22,0,1);
     drawHeroBossEnemy(e,t,sx,sy,s,ha);
@@ -16631,7 +17007,7 @@ function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
   if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
-  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; combo.count=0; gf=0; shopPending=0;
+  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
   lap=1; mercRoster=[]; mercs=[]; trainMode=false;   // 周回・傭兵・練習は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
