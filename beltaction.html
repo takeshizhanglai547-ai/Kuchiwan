@@ -1583,6 +1583,14 @@ function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprit
 // 高さは描画とカメラにしか効かない（当たり判定は p.y=LANE のまま）ので、
 // 坂を入れても戦闘のロジックには一切触らない
 const TERR_RISE=300;                 // 坂ひとつぶんの高低差（px）。区画長1900に対して最大勾配で約24%＝画面幅ぶんで260px上がる
+// ── 縦ステージ（terr:'climb'|'dive'）──
+// 踏み面は水平、蹴上げはほぼ垂直の階段。歩いては登れず、跳ばないと上がれない高さにする。
+// 段の手前には谷（PITS）を置くので、跳び損ねると落下＝ワンアウト
+const TERR_CLIMB=600;                // 縦ステージの総高低差（px）
+const TERR_STEPS=6;                  // 段数。踏み面 約317px＝乱戦できる広さ
+const TERR_RISER=0.05;               // 蹴上げに使う踏み面の割合。狭いほど壁に近い（317*0.05=16px で100px上がる）
+const TERR_STEP_MAX=20;              // これを超える段差は歩いて登れない（＝壁）。坂の最大勾配は1歩1.7pxなので通る
+const TERR_DROP_MIN=26;              // これを超える落差は「落ちる」。段を降りるときに瞬間移動しないための境目
 let TERRS=[];                        // {x0,x1,e0,e1,kind}
 let _terrLast=null;
 function terrAt(x){
@@ -1597,8 +1605,18 @@ function terrLift(x){
     if(L && x>=L.x1) return L.e1;                     // 末尾も同じ（境界で0へ落として崖にしない）
     return 0; }
   if(t.e0===t.e1) return t.e0;
-  const u=clamp((x-t.x0)/Math.max(1,t.x1-t.x0),0,1), sm=u*u*(3-2*u);
+  const u=clamp((x-t.x0)/Math.max(1,t.x1-t.x0),0,1);
+  if(t.kind==='climb'||t.kind==='dive'){                 // 階段：踏み面は水平、蹴上げだけで上がる
+    const n=TERR_STEPS, k=Math.min(n-1, Math.floor(u*n)), fu=u*n-k;
+    const s2=(fu<1-TERR_RISER)? 0 : (fu-(1-TERR_RISER))/TERR_RISER;
+    return t.e0+(t.e1-t.e0)*((k+s2)/n); }
+  const sm=u*u*(3-2*u);
   return t.e0+(t.e1-t.e0)*sm; }
+// 見た目の傾き。階段では局所の微分が0と∞を往復するので、区画の平均勾配を返す
+// （局所の傾きをそのまま使うと、段をまたぐたびに遠景の地面が跳ねる）
+function terrTilt(x){ const t=terrAt(x);
+  if(t && (t.kind==='climb'||t.kind==='dive')) return (t.e1-t.e0)/Math.max(1,t.x1-t.x0);
+  return terrSlope(x); }
 // 坂の傾き（px/px）。落石の転がる向きと速さ、坂の見た目の陰影に使う
 function terrSlope(x){ return (terrLift(x+24)-terrLift(x-24))/48; }
 function groundLift(x){
@@ -1609,6 +1627,11 @@ function groundLift(x){
 // 谷（落ちると即死）。ワールド構築時にステージ区画ごとへランダム配置される
 let PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
 function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
+function pitAt(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return p; } return null; }
+// 谷の上に立たせない。復帰位置がそのまま谷だと、戻った瞬間にまた落ちる
+function escapePit(p){ let g=0; const dir=(p.x<camX+W*0.5)?60:-60;
+  while(overPit(p.x) && g++<24) p.x+=dir;
+  p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24)); p._tx=null; }
 // ステージ番号→ビジュアルテーマ（分岐ルートで動的に決まる）
 let STAGE2THEME={}, STAGE_NAME={};
 function themeIdxFor(st){ return STAGE2THEME[st]!=null ? clamp(STAGE2THEME[st],0,STAGE_THEME.length-1) : clamp(st-1,0,STAGE_THEME.length-1); }
@@ -2615,7 +2638,7 @@ function spawnMoonWave(p,def){ const dir=p.facing;
   spawnProj(p.x+dir*46, p.y, dir*13, 0, {owner:'player', dmg:Math.round((12+(def.dmg||0)*0.3)*(p.atkMul||1)),
     color:'#cfeaff', r:15, life:46, zz:48, pierce:true, wave:true, noLaunch:true, nostop:true});
   spark(p.x+dir*40,p.y-44,'#cfeaff',5,6); }
-function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1;
+function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+30, camX+W-30); p.y=LANE; p.vx=p.vy=0; p.facing=1; p._tx=null;
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
@@ -4019,7 +4042,13 @@ function updatePlayer(){
   if(p.state==='roll'){ updateRoll(); return; }
   if(p.state==='wheel'){ updateWheel(); return; }
   if(p.state==='screw'){ updateScrew(); return; }
-  if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4; if(p.fallT>=22){ loseLife(p); } return; }   // 谷に落下→ミス
+  if(p.state==='falling'){ p.fallT++; p.z-=14; p.x+=p.vx*0.4;
+    if(p.fallT>=22){
+      // アトラクトでは loseLife が「全快して戻る」だけなので、状態を戻さないと
+      // falling のまま毎フレーム沈み続けて、デモがそこで止まる
+      if(attractOn){ p.state='idle'; p.z=0; p.vz=0; p.hp=p.maxHp; p.invuln=80; escapePit(p); }
+      else loseLife(p); }
+    return; }   // 谷に落下→ミス
   if(p.state==='rush'){ updateRush(); return; }
   if(p.state==='iaidash'){ updateIaiDash(); return; }
   if(p.state==='dunk'){ updateDunk(); return; }
@@ -6013,6 +6042,9 @@ function updateCarriers(){
     if(c.t>=c.life || c.x<camX-520 || c.x>camX+W+520) carriers.splice(i,1); }
 }
 function spawnEnemy(type,x,y){ const t=ETYPE[type];
+  // 谷の真上には湧かせない。湧いた敵は跳べないので、そこから一歩も動けなくなる
+  if(overPit(x)){ let g=0; const step=(x<player.x)? -60 : 60;
+    while(overPit(x) && g++<12) x+=step; }
   const dm=diffHpMul(), gw=foeHpGrow();
   // 階級：進行が進むほど「精鋭」以上の個体が混ざる（ボス・乗り物・主役ボスは対象外）
   let rank=0; const tier=foeTier();
@@ -6532,6 +6564,22 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(14,-4,2.2,0,7); ctx.fill();
   }
   ctx.restore(); }); }
+// ── 敵と地形の付き合わせ ──
+// updateEnemies の中でやると、状態ごとの continue を跨げないうえ、
+// 「動いた次のフレームに押し戻す」ことになって縁で1フレームだけ谷の上に立つ。
+// 移動が終わったあと（描画の前）にまとめて直す
+function terrainStepFoes(){
+  for(const e of enemies){
+    const px=e._tx; e._tx=e.x;
+    if(px==null || e.x===px || Math.abs(e.x-px)>=90) continue;
+    const dh=terrLift(e.x)-terrLift(px);
+    if(dh!==0 && e.z>0){ e.z=Math.max(0,e.z-dh); }      // 空中は絶対高度を保つ
+    // 谷は敵にとっても壁。跳べないので縁の外へ戻す（歩かせると奈落の上に浮いて見える）
+    if(e.z<=0 && !e.dead && e.state!=='air' && e.state!=='blastoff' && overPit(e.x)){
+      const P=pitAt(e.x);
+      if(P){ e.x=(px<=P[0])? P[0]-16 : P[1]+16; e.vx=0; }
+      e._tx=e.x; } }
+}
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
@@ -7958,7 +8006,7 @@ const FINAL_CH=[
    gates:[{off:900,boss:true,final:true,list:[['boss',1]]}]},
 ];
 // ── ワッチの登場に合わせた追加ステージ「月夜の宝物庫」＋追加ボス「黄金傀儡ゴルドー」──
-const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',
+const TAKARA_STAGE={theme:6,name:'月夜の宝物庫',terr:'dive',
   gates:[{off:560,list:[['gripper',1],['pounce',1],['pierrot',1]]},{off:640,list:[['bikewan',1]]},
          {off:1000,list:[['akita',1],['mastiff',1],['onibouzu',1]]},{off:1400,boss:true,list:[['goldgolem',1]]}],
   npc:{kind:'merchant',name:'宝物庫の番犬ラテ',once:true,lines:{
@@ -7975,7 +8023,7 @@ const BUG_CH=[
   {theme:10,name:'蜂の巣大空洞',terr:'up',
    gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
    npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
-  {theme:11,name:'蜘蛛糸の森',
+  {theme:11,name:'蜘蛛糸の森',terr:'climb',
    gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
    npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
   {theme:12,name:'地底の蟻帝国',terr:'down',
@@ -8001,7 +8049,7 @@ const SPACE_CH=[
   {theme:14,name:'星間回廊',terr:'up',
    gates:[{off:560,list:[['raygun',2],['floater',1]]},{off:960,list:[['probe',1],['greywan',1],['slimealien',1]]},{off:1400,boss:true,list:[['ufoboss',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['母船の中だ…！オレは三日前に吸い上げられちまってな。','円盤母艦ディスコは急降下してくる。着地の瞬間が狙い目だ！']}},
-  {theme:15,name:'母船コア',
+  {theme:15,name:'母船コア',terr:'climb',
    gates:[{off:560,list:[['slimealien',2],['floater',1]]},{off:960,list:[['probe',2],['raygun',1]]},{off:1400,boss:true,list:[['bioblob',1]]}],
    npc:{kind:'villager',name:'研究犬ラボット',lines:['このコアが母船の心臓部だ。壊せば侵略は止まる…！','増殖体バイオブロブは叩くほど分裂する。小さいのから片付けろ！']}},
 ];
@@ -8014,7 +8062,7 @@ const MYTH_CH=[
   {theme:18,name:'海神の神殿',
    gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['また会ったな…！今度は海の底だぜ。','この神殿の主は三叉の槍を持ってる。大波が来るから、来ると分かったら跳べ。','青銅の盾持ちは正面が通らねえ。背中を取れ。']}},
-  {theme:17,name:'冥府ステュクスの河',terr:'down',
+  {theme:17,name:'冥府ステュクスの河',terr:'dive',
    gates:[{off:560,list:[['mythflank',2],['mythblade',1]]},{off:960,list:[['mythbull',1],['mythguard',1],['mythseer',1]]},{off:1400,boss:true,list:[['hades',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ここから先は死者の国じゃ。生きたまま渡った者はおらん。','影が背に回るぞ。一体を追うな、囲まれる。','冥王ハデスは死者を呼ぶ。倒しても、倒しても——']}},
 ];
@@ -8033,7 +8081,7 @@ const SENGOKU_CH=[
    gates:[{off:520,list:[['ashigaru',2],['kibahei',1]]},{off:900,mini:true,list:[['kanbei',1]]},
           {off:1180,list:[['teppo',2],['taisho',1],['hatamoto',1]]},{off:1560,boss:true,list:[['ieyasu',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平まで旗が並んでおる。これが「合戦」というやつじゃ。','騎馬が来る。あれは止まらん——避けるしかない。','狸のような男が陣を敷いておる。堅いぞ、あれは。']}},
-  {theme:22,name:'桶狭間の豪雨',
+  {theme:22,name:'桶狭間の豪雨',terr:'dive',
    gates:[{off:520,list:[['ashigaru',3],['souhei',1]]},{off:900,mini:true,list:[['hisahide',1]]},
           {off:1180,list:[['ozutsu',1],['oodate',2],['yumihei',1]]},{off:1560,boss:true,list:[['yoshimoto',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ひどい雨じゃ。この谷、逃げ場が無いぞい。','大筒が来る。あれは山なりに落ちてくる——着弾の輪をよう見よ。','谷の奥で、公家めいた大将が輿に揺られておる。油断しておるようで、囲みは厚い。']}},
@@ -8103,12 +8151,17 @@ function addBlocks(blocks,opts){
     STAGE2THEME[st]=b.theme; STAGE_NAME[st]=b.name; stageStartX[st]=B;
     // 区画の地形。terr が無い区画も直前の標高を引き継いだ平坦区画として積む
     // （積まないと、坂の次の区画で標高が0へ戻って境目が崖になる）
-    { const e0=terrElev, up=(b.terr==='up'), dn=(b.terr==='down');
-      let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : 0);
+    { const e0=terrElev, up=(b.terr==='up'), dn=(b.terr==='down'),
+            cl=(b.terr==='climb'), dv=(b.terr==='dive');
+      let e1=e0 + (up? TERR_RISE : dn? -TERR_RISE : cl? TERR_CLIMB : dv? -TERR_CLIMB : 0);
       // 標高に「地面=0」の床を置くと、最初の区画が下り坂だったときに 0→0 で平坦に潰れる。
       // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
       const CAP=TERR_RISE*3; if(e1<-CAP) e1=-CAP; if(e1>CAP) e1=CAP;
       TERRS.push({x0:B, x1:B+len, e0:e0, e1:e1, kind:b.terr||'flat', st:st});
+      // 縦ステージは段の手前に谷を開ける。跳び損ねれば落下＝ワンアウト。
+      // 全段に開けると休む場所が無くなるので一段おき
+      if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
+        const bx=B+len*(k/TERR_STEPS); PITS.push([bx-130, bx-16]); } }
       terrElev=e1; _terrLast=null; }
     b.gates.forEach(g=>{ encounters.push({st, at:B+g.off, list:g.list, boss:g.boss, mini:g.mini, rival:g.rival,
       final:g.final, branchAfter:(g.boss&&last&&opts&&opts.branchAfter)||undefined }); });
@@ -9073,11 +9126,41 @@ function updateRigP(p){ const r=p.rig; if(!r) return;
     const gz=bd<430? clamp((bx-p.x)*p.facing*0.006,-1.25,1.25) : 0;
     p.gaze=lerp(p.gaze||0, gz, 0.11); }
   p.prevZ=p.z; p.prevFacing=p.facing; p.prevX=p.x; }
+// ── 地形と体の付き合わせ ──
+// p.x は40か所以上で書き換わるので、段差の処理は「1フレームぶんの移動量」を
+// あとからまとめて見るほうが安全。x の変化と地形の高低差だけを見る
+//   1. 空中で横へ動いたら、地形の高さの差ぶん z を戻して絶対高度を保つ
+//      （やらないと、段を跳び越すときに段の上で勝手に浮き上がる／めり込む）
+//   2. 地上で登れない段差へ踏み込んだら押し戻す＝壁。跳ばないと登れない
+//   3. 地上で大きく落ち込んだら、瞬間移動させずに落下させる
+function terrainStep(p){
+  const px=p._tx;
+  p._tx=p.x;
+  if(px==null || p.state==='dead' || p.state==='falling') return;
+  const dx=p.x-px;
+  if(dx===0 || Math.abs(dx)>90) return;          // 場面転換などの瞬間移動は対象外
+  const dh=terrLift(p.x)-terrLift(px);
+  if(dh===0) return;
+  if(p.z>0){                                     // 1. 空中：絶対高度を保つ
+    const nz=p.z-dh;
+    // まだ段の天端より低いのに段へ潜り込もうとしている＝壁の腹にぶつかった。
+    // ここで z を0へ丸めると、壁際で跳んだ瞬間に上昇ぶんを食われて登れなくなる
+    if(nz<0 && dh>TERR_STEP_MAX){ p.x=px; p._tx=px; p.vx=0; return; }
+    p.z=Math.max(0, nz); return; }
+  if(dh>TERR_STEP_MAX){                          // 2. 壁：登れないので押し戻す
+    p.x=px; p._tx=px; p.vx=0;
+    if(gf%9===0) dust(p.x+Math.sign(dx)*14, p.y, 1);
+    return; }
+  if(-dh>TERR_DROP_MIN && (p.state==='walk'||p.state==='idle')){   // 3. 段を降りる＝落ちる
+    p.z=-dh; p.vz=0; p.state='jump'; p.jAtk=0; p.aerial=0;
+    p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+    p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false; p.jMkFire=false; }
+}
 function stepPlayers(){
   for(const pl of players){ if(!pl.active) continue;
     player=pl; useInput(pl.in); updateRigP(pl);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
-    else { updatePlayer();
+    else { updatePlayer(); terrainStep(pl);
       if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
     saveInput(pl.in);
   }
@@ -9095,7 +9178,7 @@ function update(){
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
-  stepPlayers(); updateEnemies(); updateMercs(); updateProjectiles(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -9132,7 +9215,12 @@ function render(){
   // ── 縦カメラ：坂・段差のぶんだけ世界を上下へずらす ──
   // 背景は視差ぶんだけ（0.3倍）動かす。等倍で動かすと空ごと持ち上がって高さが伝わらない。
   // 全画面の覆い（暗幕・照明・ヴィネット）は動かさないので、この外に置く
-  ctx.save(); if(camY) ctx.translate(0, camY*0.30); drawBackground(); ctx.restore();
+  // 背景を視差でずらすと、ずらした側に何も塗られていない黒帯が出る。
+  // 先に空のいちばん上の色でキャンバス全体を塗り、その上へずらした背景を重ねる
+  if(camY){ const _T=curTheme(); ctx.fillStyle=(_T.sky&&_T.sky[0])||_T.g[0]; ctx.fillRect(0,0,W,H); }
+  // 背景は焼いた1枚絵なので、大きくずらすと絵の端が継ぎ目として出る。
+  // ずらし幅は40pxまでに抑える（縦の移動感は地面の傾きと地形そのものが持っている）
+  ctx.save(); if(camY) ctx.translate(0, clamp(camY*0.30,-40,40)); drawBackground(); ctx.restore();
   ctx.save(); if(camY) ctx.translate(0, camY);
   drawGround();
   ctx.restore();
@@ -10900,33 +10988,46 @@ function drawGround(){
   // 目は「平坦な道」と読む。画面中央の傾きで帯ごとせん断する
   // 稜線と同じだけ倒すと、帯が画面の大半を覆って背景の町並みを飲み込む。
   // 0.55倍に抑えると「傾いている」ことは伝わり、奥の絵も残る（実測: 等倍だと左端が126px、0.55倍で258px）
-  const _sl=TERRS.length? clamp(terrSlope(camX+W*0.5)*0.55,-0.19,0.19) : 0;
+  const _sl=TERRS.length? clamp(terrTilt(camX+W*0.5)*0.55,-0.19,0.19) : 0;
+  // camY で世界を上下にずらすので、「奥の地面」と「画面下まで塗る底」を素の座標のままにすると
+  // 標高の高い／低いステージで帯が画面外へ飛び、地面の下に塗り残しの黒が出る。
+  //   GT ＝ 奥の帯の上端（camY の8割を打ち消す＝2割だけ視差で動く）
+  //   BOT ＝ 画面の下端より下（camY のぶん深く掘る）
+  const GT=GROUND_TOP-camY*0.8, BOT=H-camY+620;
   ctx.save();
   if(_sl){ ctx.translate(W*0.5,0); ctx.transform(1,-_sl,0,1,0,0); ctx.translate(-W*0.5,0); }
   const OVER=Math.abs(_sl)*W*0.6+4;               // 傾けたぶん左右に食い出すので、帯を広く塗る
-  const g=ctx.createLinearGradient(0,GROUND_TOP,0,H+OVER); g.addColorStop(0,T.g[0]); g.addColorStop(.5,T.g[1]); g.addColorStop(1,T.g[2]);
-  ctx.fillStyle=g; ctx.fillRect(-OVER,GROUND_TOP,W+OVER*2,H-GROUND_TOP+OVER*2);
+  const g=ctx.createLinearGradient(0,GT,0,BOT+OVER); g.addColorStop(0,T.g[0]); g.addColorStop(.5,T.g[1]); g.addColorStop(1,T.g[2]);
+  ctx.fillStyle=g; ctx.fillRect(-OVER,GT,W+OVER*2,BOT-GT+OVER*2);
   // cobblestones（負荷対策：行数と装飾を間引いた軽量版）
-  for(let r=0;r<6;r++){ const y=GROUND_TOP+r*r*4+r*8; if(y>H+OVER)break;
+  for(let r=0;r<6;r++){ const y=GT+r*r*4+r*8; if(y>BOT+OVER)break;
     const sz=30+r*12, off=((-(camX)% sz)+sz)%sz + (r%2?sz/2:0);
     for(let x=-sz-OVER;x<W+sz+OVER;x+=sz){ const cxs=x-off+sz/2, cys=y+sz*0.34;
       ctx.fillStyle= (Math.floor((x-off)/sz)+r)%2? T.cob[0]:T.cob[1];
       ctx.beginPath(); ctx.ellipse(cxs,cys,sz*0.46,sz*0.30,0,0,7); ctx.fill(); }
   }
   // top edge shadow (wall base)
-  const es=ctx.createLinearGradient(0,GROUND_TOP-2,0,GROUND_TOP+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=es; ctx.fillRect(-OVER,GROUND_TOP-2,W+OVER*2,18);
+  const es=ctx.createLinearGradient(0,GT-2,0,GT+16); es.addColorStop(0,'rgba(0,0,0,.35)'); es.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=es; ctx.fillRect(-OVER,GT-2,W+OVER*2,18);
   ctx.restore();
   // ── 谷（落とし穴）：暗い奈落を描く ──
   for(const pit of PITS){ const x0=pit[0]-camX, x1=pit[1]-camX; if(x1<-30||x0>W+30)continue;
-    const cg=ctx.createLinearGradient(0,LANE-70,0,H); cg.addColorStop(0,'#0c0c16'); cg.addColorStop(1,'#000');
-    ctx.fillStyle=cg; ctx.fillRect(x0,LANE-70,x1-x0,H-(LANE-70)); }
+    // 奈落は「谷の縁の高さ」から掘る。LANE 決め打ちだと、坂や段の上では縁とずれて
+    // 宙に浮いた黒い四角になる。深さも camY のぶん余分に伸ばして画面下まで届かせる
+    // 上端は両側の縁のうち高いほうに合わせる。決め打ちで持ち上げると、
+    // 段の上では地面より高く飛び出して「黒い柱」に見える
+    const top=LANE-Math.max(groundLift(pit[0]),groundLift(pit[1]))-2, bot=BOT;
+    const cg=ctx.createLinearGradient(0,top,0,bot); cg.addColorStop(0,'#0c0c16'); cg.addColorStop(1,'#000');
+    ctx.fillStyle=cg; ctx.fillRect(x0,top,x1-x0,bot-top);
+    // 縁の岩肌。真っ黒な矩形のままだと「穴」ではなく「黒い板」に見える
+    ctx.fillStyle='rgba(0,0,0,.55)';
+    ctx.beginPath(); ctx.ellipse((x0+x1)*0.5, top+10, (x1-x0)*0.52, 13, 0,0,7); ctx.fill(); }
   // ── マリオ風の起伏した前景の地面（キャラはこの稜線の上に立つ。谷では地面が無い）──
   const step=10;
-  ctx.beginPath(); ctx.moveTo(0,H);
-  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; const ty=overPit(wx)?H:(LANE-groundLift(wx)); ctx.lineTo(sx,ty); }
-  ctx.lineTo(W,H); ctx.closePath();
-  const hg=ctx.createLinearGradient(0,LANE-70,0,H); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
+  ctx.beginPath(); ctx.moveTo(0,BOT);
+  for(let sx=0;sx<=W+step;sx+=step){ const wx=sx+camX; const ty=overPit(wx)?BOT:(LANE-groundLift(wx)); ctx.lineTo(sx,ty); }
+  ctx.lineTo(W,BOT); ctx.closePath();
+  const hg=ctx.createLinearGradient(0,LANE-groundLift(camX+W*0.5)-70,0,BOT); hg.addColorStop(0,shade(T.g[0],18)); hg.addColorStop(.55,T.g[1]); hg.addColorStop(1,T.g[2]);
   ctx.fillStyle=hg; ctx.fill();
   // 稜線のハイライト＆縁取り（谷では分断）
   ctx.strokeStyle=shade(T.g[0],44); ctx.lineWidth=5; ctx.lineCap='round'; ctx.lineJoin='round';
