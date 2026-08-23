@@ -189,6 +189,64 @@ const DRIVER = `
       throw new Error('マックの店にほかのキャラの服が並んでいる');
     console.log('店 OK (買える服 '+buyable.length+'着・購入で即着用・持っている服は着替え行になる)'); }
 
+  // ===== 8) かぶり物が入れ替わる（色だけでなく顔まわりの目印ごと変わる） =====
+  { const L=costumeList('mack');
+    // 20着すべてにかぶり物があり、種類表に載っていること
+    const use={};
+    costumeList('inu').forEach(function(C){
+      if(!C.head) throw new Error(C.name+' にかぶり物が無い');
+      if(COS_HEAD.indexOf(C.head)<0) throw new Error(C.name+' のかぶり物 '+C.head+' が種類表に無い');
+      use[C.head]=(use[C.head]||0)+1; });
+    if(Object.keys(use).length<6) throw new Error('かぶり物が '+Object.keys(use).length+' 種類しか使われていない');
+    // 固有の帽子（マックの十徳帽）は、服のかぶり物を着ている間は描かれない
+    const real=ctx;
+    const hatCalls=function(p, fn){ let n=0;
+      try{ ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
+            if(k==='fillRect'||k==='ellipse'||k==='lineTo'||k==='arc') return function(){ n++; return v.apply(t,arguments); };
+            if(typeof v==='function') return function(){ return v.apply(t,arguments); };
+            return v; }, set:function(t,k,v){ t[k]=v; return true; } });
+        player=p; fn();
+      } finally { ctx=real; }
+      return n; };
+    const p=setup('mack'); p.wear=null;
+    const bare=hatCalls(p, drawStetson);
+    if(!(bare>0)) throw new Error('十徳帽が描かれていない（測れていない）');
+    const H=L.filter(function(C){ return C.head; })[0];
+    gainCostume(p, H.id);
+    const worn=hatCalls(p, drawStetson);
+    if(worn!==0) throw new Error('服のかぶり物を着ても十徳帽が描かれている（'+worn+'回）');
+    // 服のかぶり物そのものは描かれる。種類ごとに形が違うこと
+    const shapes={};
+    COS_HEAD.forEach(function(h){
+      const C=costumeList('inu').filter(function(c){ return c.head===h; })[0];
+      if(!C) return;
+      let pts=[];
+      try{ ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
+            if(k==='lineTo'||k==='moveTo') return function(x,y){ pts.push(Math.round(x)+','+Math.round(y)); return v.apply(t,arguments); };
+            if(k==='fillRect') return function(x,y,w,hh){ pts.push('R'+Math.round(x)+','+Math.round(y)+','+Math.round(w)+','+Math.round(hh)); return v.apply(t,arguments); };
+            if(k==='ellipse') return function(x,y,rx,ry){ pts.push('E'+Math.round(x)+','+Math.round(y)+','+Math.round(rx)+','+Math.round(ry)); return v.apply(t,arguments); };
+            if(typeof v==='function') return function(){ return v.apply(t,arguments); };
+            return v; }, set:function(t,k,v){ t[k]=v; return true; } });
+        drawCosHat(C);
+      } finally { ctx=real; }
+      if(!pts.length) throw new Error(h+' のかぶり物が何も描かれていない');
+      const sig=pts.join('|');
+      if(shapes[sig]) throw new Error(h+' と '+shapes[sig]+' が同じ形をしている');
+      shapes[sig]=h; });
+    if(Object.keys(shapes).length<6) throw new Error('形の違うかぶり物が '+Object.keys(shapes).length+' 種類しかない');
+    // キャラ描画から呼ばれていること（直に呼べても、本編で描かれなければ意味がない）
+    { const q=setup('inu'); const C2=costumeList('inu').filter(function(c){ return c.head; })[0];
+      gainCostume(q, C2.id);
+      let n=0; const oh=drawCosHat;
+      drawCosHat=function(c){ if(c===C2) n++; return oh.apply(null,arguments); };
+      try{ player=q; drawPlayer(); } finally { drawCosHat=oh; }
+      if(n!==1) throw new Error('キャラ描画からかぶり物が '+n+' 回しか呼ばれない');
+      q.wear=null; let n2=0;
+      drawCosHat=function(){ n2++; return oh.apply(null,arguments); };
+      try{ player=q; drawPlayer(); } finally { drawCosHat=oh; }
+      if(n2!==0) throw new Error('何も着ていないのにかぶり物が描かれている'); }
+    console.log('かぶり物 OK ('+Object.keys(shapes).length+'種類すべて別の形／着ると固有の帽子が消える)'); }
+
   console.log('COSTUME TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

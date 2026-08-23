@@ -6691,31 +6691,35 @@ function coinDrop(e,T){ const n=T.boss?(T.finalBoss?30:14):(T.mini?7:(T.charge||
 // ══════════════════════════════════════════════════════════════════
 // acc の種類：cape=マント / plate=胸当て / pauldron=肩当て / scarf=襟巻 /
 //             wing=翼 / halo=光輪 / crown=冠 / sash=たすき / none=無し
-const COS_ACC=['none','cape','plate','pauldron','scarf','sash','wing','halo','crown'];
+const COS_ACC=['none','cape','plate','pauldron','scarf','sash','wing','halo','crown','cap'];
+// かぶり物の種類。'cap' は装飾としても使うので両方に入っている
+const COS_HEAD=['helm','horn','bandana','hood','straw','tophat','cap','tiara'];
 // 配色のひな型。[胴の陰, 胴の中間, 胴の明, 靴の陰, 靴の明, 手] の6色
 function cosPal(a,b,f,ba,bf,h){ return {a:a,b:b,f:f,ba:ba,bf:bf,h:h}; }
 // 20着ぶんの雛形。色と装飾と守りだけを差し替えて各キャラへ配る
+// 6列目＝かぶり物。色だけ変えても同じキャラに見えるので、
+// 顔まわりの目印（マックの十徳帽・ワッチのシルクハット）ごと取り替える
 const COS_PLAN=[
-  ['布の旅装',      'none',    0,   26,  ['#d8cbb0','#c4b79c','#eae0c8','#4a3a26','#6b5638','#f0e6cc']],
-  ['麻の胴着',      'sash',    0,   34,  ['#cfc6ae','#b8ae94','#e6ddc4','#42352a','#605040','#eee2c6']],
-  ['旅人の外套',    'cape',    0,   40,  ['#9fb0c4','#8695a8','#c6d4e2','#33404e','#4c5c6e','#dde6f0']],
-  ['見習いの胴衣',  'none',    1,   58,  ['#9fd6ff','#79b6e2','#cbeaff','#2a4a66','#3f6a90','#e2f2ff']],
-  ['森番の外套',    'cape',    1,   66,  ['#8fbf7a','#6f9c5c','#c2e2ae','#2c3f24','#425f36','#dff0d0']],
-  ['砂漠の衣',      'scarf',   1,   72,  ['#e8c98a','#cfae6c','#f6e6bc','#5a4222','#7c5c30','#f8ecd0']],
-  ['鉄の胸当て',    'plate',   1,   88,  ['#aab4c1','#8c96a4','#d6dee8','#33393f','#4a525c','#e4eaf2']],
-  ['狩人の革鎧',    'pauldron',1,   96,  ['#a8763e','#8a5c2c','#d0a066','#3a2612','#57381c','#e6c894']],
-  ['蒼玉の礼装',    'cape',    2,  120,  ['#6f8fe0','#5570bc','#a8c0f4','#22305a','#33487e','#d8e4ff']],
-  ['紅蓮の戦衣',    'sash',    2,  132,  ['#e06a4a','#bc4e34','#f4a084','#5a2016','#7e3020','#ffcdb8']],
-  ['翠玉の法衣',    'scarf',   2,  140,  ['#5fc79a','#46a67c','#a2e6c8','#1e4a36','#2e6a4e','#d4f6e6']],
-  ['銀の甲冑',      'plate',   2,  158,  ['#c8d2de','#a4aebc','#eef4fc','#3c444e','#58626e','#f0f6ff']],
-  ['黒鉄の重鎧',    'pauldron',2,  172,  ['#5a626c','#42484f','#8a94a0','#22262a','#343a40','#a8b2be']],
-  ['月影の装束',    'cape',    3,  200,  ['#7a6fb0','#5c528c','#b6aae2','#2a2450','#3e3670','#ded4ff']],
-  ['焔皇の陣羽織',  'cape',    3,  216,  ['#ff8a3a','#d2601c','#ffc088','#5e2408','#883a12','#ffd8b0']],
-  ['氷結の鎧',      'plate',   3,  228,  ['#9fe4f6','#78c2d8','#d8f6ff','#22505e','#356e80','#e6fbff']],
-  ['雷神の胴丸',    'pauldron',3,  244,  ['#ffe14d','#d8b820','#fff4a8','#5a4a08','#82680e','#fff8c8']],
-  ['聖翼の法衣',    'wing',    4,  300,  ['#f6f0d8','#ded4b0','#fffdf0','#6a5a34','#8c7846','#fffef6']],
-  ['天冠の礼装',    'crown',   4,  340,  ['#ffd24d','#dca81c','#fff0b4','#6a4a08','#946a12','#fff6d4']],
-  ['神域の衣',      'halo',    4,  420,  ['#ff8aff','#d45cd4','#ffcaff','#5a1a5a','#822682','#ffe2ff']],
+  ['布の旅装',      'none',    0,   26,  ['#d8cbb0','#c4b79c','#eae0c8','#4a3a26','#6b5638','#f0e6cc'], 'bandana'],
+  ['麻の胴着',      'sash',    0,   34,  ['#cfc6ae','#b8ae94','#e6ddc4','#42352a','#605040','#eee2c6'], 'straw'],
+  ['旅人の外套',    'cape',    0,   40,  ['#9fb0c4','#8695a8','#c6d4e2','#33404e','#4c5c6e','#dde6f0'], 'hood'],
+  ['見習いの胴衣',  'cap',     1,   58,  ['#9fd6ff','#79b6e2','#cbeaff','#2a4a66','#3f6a90','#e2f2ff'], 'cap'],
+  ['森番の外套',    'cape',    1,   66,  ['#8fbf7a','#6f9c5c','#c2e2ae','#2c3f24','#425f36','#dff0d0'], 'hood'],
+  ['砂漠の衣',      'scarf',   1,   72,  ['#e8c98a','#cfae6c','#f6e6bc','#5a4222','#7c5c30','#f8ecd0'], 'straw'],
+  ['鉄の胸当て',    'plate',   1,   88,  ['#aab4c1','#8c96a4','#d6dee8','#33393f','#4a525c','#e4eaf2'], 'helm'],
+  ['狩人の革鎧',    'pauldron',1,   96,  ['#a8763e','#8a5c2c','#d0a066','#3a2612','#57381c','#e6c894'], 'bandana'],
+  ['蒼玉の礼装',    'cape',    2,  120,  ['#6f8fe0','#5570bc','#a8c0f4','#22305a','#33487e','#d8e4ff'], 'tophat'],
+  ['紅蓮の戦衣',    'sash',    2,  132,  ['#e06a4a','#bc4e34','#f4a084','#5a2016','#7e3020','#ffcdb8'], 'bandana'],
+  ['翠玉の法衣',    'scarf',   2,  140,  ['#5fc79a','#46a67c','#a2e6c8','#1e4a36','#2e6a4e','#d4f6e6'], 'hood'],
+  ['銀の甲冑',      'plate',   2,  158,  ['#c8d2de','#a4aebc','#eef4fc','#3c444e','#58626e','#f0f6ff'], 'helm'],
+  ['黒鉄の重鎧',    'pauldron',2,  172,  ['#5a626c','#42484f','#8a94a0','#22262a','#343a40','#a8b2be'], 'horn'],
+  ['月影の装束',    'cape',    3,  200,  ['#7a6fb0','#5c528c','#b6aae2','#2a2450','#3e3670','#ded4ff'], 'hood'],
+  ['焔皇の陣羽織',  'cape',    3,  216,  ['#ff8a3a','#d2601c','#ffc088','#5e2408','#883a12','#ffd8b0'], 'horn'],
+  ['氷結の鎧',      'plate',   3,  228,  ['#9fe4f6','#78c2d8','#d8f6ff','#22505e','#356e80','#e6fbff'], 'helm'],
+  ['雷神の胴丸',    'pauldron',3,  244,  ['#ffe14d','#d8b820','#fff4a8','#5a4a08','#82680e','#fff8c8'], 'horn'],
+  ['聖翼の法衣',    'wing',    4,  300,  ['#f6f0d8','#ded4b0','#fffdf0','#6a5a34','#8c7846','#fffef6'], 'tiara'],
+  ['天冠の礼装',    'crown',   4,  340,  ['#ffd24d','#dca81c','#fff0b4','#6a4a08','#946a12','#fff6d4'], 'tophat'],
+  ['神域の衣',      'halo',    4,  420,  ['#ff8aff','#d45cd4','#ffcaff','#5a1a5a','#822682','#ffe2ff'], 'tiara'],
 ];
 const COS_DEF=[0.00,0.03,0.06,0.10,0.15];   // 稀少度ごとの被ダメージ軽減
 // キャラごとに名前の頭を変えて、同じ雛形でも別物として並ぶようにする
@@ -6724,7 +6728,7 @@ const COS_PREFIX={inu:'聖犬士の', shima:'拳聖の', nuko:'魔導の', guard
 const COSTUMES={};
 (function(){ for(const k in COS_PREFIX){ COSTUMES[k]=COS_PLAN.map(function(q,i){
     return {id:k+'_'+i, kind:k, name:COS_PREFIX[k]+q[0], acc:q[1], rare:q[2], cost:q[3],
-            pal:cosPal(q[4][0],q[4][1],q[4][2],q[4][3],q[4][4],q[4][5]), def:COS_DEF[q[2]]}; }); } })();
+            pal:cosPal(q[4][0],q[4][1],q[4][2],q[4][3],q[4][4],q[4][5]), head:q[5], def:COS_DEF[q[2]]}; }); } })();
 function costumeList(kind){ return COSTUMES[kind]||COSTUMES.inu; }
 function costumeById(id){ if(!id) return null;
   const k=String(id).split('_')[0], L=COSTUMES[k]; if(!L) return null;
@@ -12298,6 +12302,8 @@ function drawPlayer(){
   if(_ftF) chibiLegTo(6, _ftF.tx, _ftF.ty, limbF, bootF, legF1, legF2);
   else     chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);       // near leg
   (mack?mackHead:wanden?wandenHead:watch?watchHead:shima?shimaHead:nuko?nukoHead:g8?guard8Head:chibiHead)(lean);
+  // かぶり物は頭より後に描く。前に描くと頭の毛並みに隠れて、頭巾や略帽が見えなくなる
+  if(_cos && _cos.head){ ctx.save(); ctx.rotate(lean*0.26); drawCosHat(_cos); ctx.restore(); }
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
     ctx.beginPath(); ctx.arc(0,-40,22+p.charge*22,0,7); ctx.fill(); ctx.restore(); }
@@ -12983,6 +12989,10 @@ function drawCosFront(C,lean){
     ctx.fillStyle=q.f; ctx.fillRect(-5,-38,3.2,30);
     ctx.restore();
     ctx.fillStyle=q.b; ctx.fillRect(-12,-17,24,4);
+  } else if(a==='cap'){                              // 略帽は帽子側で描くので、体には肩章だけ足す
+    for(const sg of [-1,1]){ ctx.save(); ctx.scale(sg,1);
+      ctx.fillStyle=q.f; roundRect(7,-33,10,5,2); ctx.fill();
+      ctx.fillStyle=q.a; ctx.fillRect(9,-32,6,1.6); ctx.restore(); }
   } else if(a==='crown'){                            // 冠：帽子や兜の上に載るよう、頭より一段高く
     ctx.fillStyle=radGrad(0,-68,10,q.f,q.a);
     ctx.beginPath();
@@ -13321,7 +13331,8 @@ function mackHead(lean){
   ctx.restore();
 }
 // テンガロンハット。シルエットだけでマックと分かる一番強い記号なので独立させる
-function drawStetson(){ ctx.save(); ctx.translate(0,-14);
+function drawStetson(){ if(cosHead()) return;   // 服のかぶり物が優先
+  ctx.save(); ctx.translate(0,-14);
   ctx.fillStyle='#4a3018'; ctx.beginPath(); ctx.ellipse(0,2,23,7,0,0,7); ctx.fill();          // つば
   ctx.fillStyle='#5c3c1e'; ctx.beginPath();                                                    // クラウン（中央がへこむ）
   ctx.moveTo(-12,2); ctx.quadraticCurveTo(-13,-13,-4,-15); ctx.quadraticCurveTo(0,-11,4,-15);
@@ -13524,7 +13535,78 @@ function drawMackAmmo(p){
   if(n<=0){ ctx.fillStyle='#ff9a5a'; ctx.font='bold 11px "Hiragino Maru Gothic ProN",sans-serif';
     ctx.textAlign='center'; ctx.fillText('RELOAD', sx, sy-10); ctx.textAlign='left'; }
   ctx.restore(); }
-function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
+// ── 服・防具による「かぶり物」の差し替え ──
+// 色を変えるだけでは同じキャラに見える。マックの十徳帽やワッチのシルクハットのような
+// 顔まわりの目印そのものを取り替えると、遠目にも「別の装備をしている」と分かる。
+// 各キャラ固有の帽子を描く関数から、まずここを通す（戻り値 true なら固有の帽子は描かない）
+function cosHead(){ const C=wornCostume(player); return (C&&C.head)?C.head:null; }
+// 頭の描画関数はキャラごとに別（マックは十徳帽、ワッチはシルクハット）。
+// そこから描くと持っていないキャラに出せないので、抑止だけをそちらへ任せ、
+// 実際の描画は体の前の装飾と同じ一箇所（drawCosFront）から出す
+function drawCosHat(C){
+  const h=C&&C.head; if(!h) return false;
+  const q=C.pal;
+  ctx.save(); ctx.translate(0,-52);
+  if(h==='helm'){                                    // 騎士兜：面頬つき
+    ctx.fillStyle=radGrad(0,-8,20,q.f,q.a);
+    ctx.beginPath(); ctx.ellipse(0,-6,15,15,0,Math.PI,0); ctx.fill();
+    ctx.fillRect(-15,-6,30,14);
+    ctx.fillStyle=q.a; ctx.fillRect(-15,4,30,4);
+    ctx.fillStyle='#15171c'; for(let k=-2;k<=2;k++) ctx.fillRect(-11+k*0+(k*5),-2,3,8);   // 面頬の隙間
+    ctx.fillStyle=q.b; ctx.beginPath();                                                    // 前立て
+    ctx.moveTo(-2,-21); ctx.lineTo(2,-21); ctx.lineTo(4,-8); ctx.lineTo(-4,-8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#e0463a'; ctx.beginPath();                                              // 兜の房
+    ctx.moveTo(0,-22); ctx.quadraticCurveTo(12,-30,16,-14); ctx.quadraticCurveTo(6,-20,0,-18); ctx.closePath(); ctx.fill();
+  } else if(h==='horn'){                             // 角兜
+    ctx.fillStyle=radGrad(0,-6,18,q.f,q.a);
+    ctx.beginPath(); ctx.ellipse(0,-2,15,13,0,Math.PI,0); ctx.fill(); ctx.fillRect(-15,-2,30,6);
+    ctx.fillStyle=q.b;
+    for(const sg of [-1,1]){ ctx.save(); ctx.scale(sg,1);
+      ctx.beginPath(); ctx.moveTo(9,-8); ctx.quadraticCurveTo(26,-16,24,-34);
+      ctx.quadraticCurveTo(18,-20,7,-13); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle='#c8a24a'; ctx.fillRect(-15,2,30,3.4);
+  } else if(h==='bandana'){                          // 鉢巻き（結び目が風になびく）
+    const bw=Math.sin(gf*0.12)*3;
+    ctx.fillStyle=q.a; ctx.fillRect(-15,-6,30,7);
+    ctx.fillStyle=q.f; ctx.fillRect(-15,-6,30,2.6);
+    ctx.fillStyle=q.a; ctx.beginPath();
+    ctx.moveTo(-13,-4); ctx.quadraticCurveTo(-28+bw,2,-30+bw,12); ctx.lineTo(-22+bw,10);
+    ctx.quadraticCurveTo(-20,0,-11,0); ctx.closePath(); ctx.fill();
+  } else if(h==='hood'){                             // 頭巾（目元だけ覗く）
+    ctx.fillStyle=q.a; ctx.beginPath();
+    ctx.moveTo(-17,6); ctx.quadraticCurveTo(-19,-20,0,-22); ctx.quadraticCurveTo(19,-20,17,6);
+    ctx.quadraticCurveTo(0,-2,-17,6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=q.b; ctx.beginPath();
+    ctx.moveTo(-17,6); ctx.quadraticCurveTo(-8,0,0,0); ctx.quadraticCurveTo(-8,4,-14,10); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0,-1,13,5,0,0,7); ctx.fill();
+  } else if(h==='straw'){                            // 編笠：大きく平たい
+    ctx.fillStyle=q.f; ctx.beginPath(); ctx.ellipse(0,-2,28,10,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.b; ctx.beginPath(); ctx.ellipse(0,-2,28,9,0,Math.PI,0); ctx.fill();
+    ctx.strokeStyle=q.a; ctx.lineWidth=1.2;
+    for(let k=1;k<5;k++){ ctx.beginPath(); ctx.ellipse(0,-2,28-k*5.4,(10-k*1.8),0,Math.PI,0); ctx.stroke(); }
+    ctx.fillStyle=q.a; ctx.fillRect(-28,-3,56,3);
+  } else if(h==='tophat'){                           // シルクハット
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(0,2,21,6.5,0,0,7); ctx.fill();
+    ctx.fillStyle=q.b; ctx.fillRect(-11,-18,22,20);
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(0,-18,11,4,0,0,7); ctx.fill();
+    ctx.fillStyle=q.f; ctx.fillRect(-11,-4,22,4.4);
+    ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(-9,-16,4,15);
+  } else if(h==='cap'){                              // 略帽（つばが前へ突き出す）
+    ctx.fillStyle=q.b; ctx.beginPath(); ctx.ellipse(0,-3,14,11,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.f; ctx.beginPath(); ctx.ellipse(-3,-6,9,7,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(11,-2,15,4.6,0.12,0,7); ctx.fill();
+    ctx.fillStyle=q.a; ctx.fillRect(-14,-4,28,3);
+  } else if(h==='tiara'){                            // 宝冠
+    ctx.fillStyle=radGrad(0,-12,12,q.f,q.a); ctx.beginPath();
+    ctx.moveTo(-14,-4); ctx.lineTo(-9,-16); ctx.lineTo(-4,-7); ctx.lineTo(0,-20);
+    ctx.lineTo(4,-7); ctx.lineTo(9,-16); ctx.lineTo(14,-4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=q.a; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.fillStyle='#7de0ff'; ctx.beginPath(); ctx.arc(0,-9,2.6,0,7); ctx.fill();
+    ctx.fillStyle=q.b; ctx.fillRect(-14,-5,28,3.4);
+  } else { ctx.restore(); return false; }
+  ctx.restore(); return true; }
+function drawTopHat(){ if(cosHead()) return;   // 服のかぶり物が優先
+  ctx.save(); ctx.translate(0,-15);
   ctx.fillStyle='#20222a'; ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,7); ctx.fill();          // つば
   ctx.fillStyle='#2a2d38'; ctx.fillRect(-11,-16,22,18);                                        // クラウン
   ctx.fillStyle='#1a1c24'; ctx.beginPath(); ctx.ellipse(0,-16,11,4,0,0,7); ctx.fill();          // 天面
