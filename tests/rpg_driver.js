@@ -110,15 +110,44 @@ const DRIVER = `
   console.log('BUGGY MANUAL DISMOUNT OK');
 
   // ===== 6b) ガトリングは背の低い敵にもちゃんと当たる（弾が頭上を素通りしない）=====
-  setupRoster('inu'); startGame(); state='play'; const bz=players[0]; player=bz; bz.x=400; bz.hp=bz.maxHp=99999; bz.lives=99;
-  vehicles.length=0; enemies.length=0; projectiles.length=0;
-  spawnVehicle(bz.x,'buggy'); bz.in.pressed.grab=true; useInput(bz.in); tryMount(); bz.in.pressed.grab=false;
-  spawnEnemy('corgi', bz.x+150, bz.y); const cg=enemies[0]; cg.thinkCd=9999; cg.hp=cg.maxHp=9999;   // corgi h=60（背が低い）
-  if(ETYPE.corgi.h>60) throw new Error('test assumes corgi is short');
-  player=bz; useInput(bz.in); bz.in.keys={}; hitStop=0; slowmo=0; bz.in.pressed.atk=true; step(1);
-  for(let i=0;i<BUGGY_GAT_T+30;i++){ hitStop=0; slowmo=0; step(1); }
-  if(cg.hp>=9999) throw new Error('ガトリングが背の低い敵に当たらない（弾が頭上を素通りしている）');
-  console.log('GATLING HIT OK (背の低い corgi h='+ETYPE.corgi.h+' に '+(9999-cg.hp)+' ダメージ)');
+  // 以前はここでゲームループを回して当たり判定を見ていたので、
+  //   ・弾が高さ150（敵の背は最大でも190・中央値100）を飛んでいて一発も当たらない
+  //   ・当たっていたのは車体の体当たりぶん
+  // でも緑になっていた。ループを回さず、砲塔と弾だけを進めて弾の高さを直接測る
+  { setupRoster('inu'); startGame(); state='play';
+    const bz=players[0]; player=bz; bz.hp=bz.maxHp=99999; bz.lives=99; bz.invuln=99999;
+    vehicles.length=0; enemies.length=0; projectiles.length=0;
+    bz.x=400; bz._tx=null; bz.z=0; bz.facing=1;
+    spawnVehicle(bz.x,'buggy'); bz.in.pressed.grab=true; useInput(bz.in); tryMount(); bz.in.pressed.grab=false;
+    if(!bz.vehicle) throw new Error('バギーに乗れていない');
+    spawnEnemy('corgi', bz.x+420, bz.y); const cg=enemies[0];
+    cg.hp=cg.maxHp=9999; cg.thinkCd=99999; cg.poise=99999;
+    if(ETYPE.corgi.h>60) throw new Error('test assumes corgi is short');
+    const cx0=cg.x, cy0=cg.y, bx0=bz.x;
+    // 砲塔を直接まわす。ゲームループを回すと湧きや遭遇に巻き込まれて発射数が毎回変わる
+    bz.mAtk='gat'; bz.mAtkT=BUGGY_GAT_T; bz.mGatN=0; bz.mGatSpin=0;
+    let fired=0, before=1e9, lowest=1e9;
+    const seen=new Set();
+    for(let f=0;f<BUGGY_GAT_T+40;f++){
+      hitStop=0; slowmo=0;
+      bz.x=bx0; bz._tx=null; bz.facing=1; bz.z=0;      // 体当たりで当てないよう釘付けにする
+      cg.x=cx0; cg.y=cy0; cg.z=0; cg.vx=0; cg.state='idle';
+      updatePlayer(bz); updateProjectiles();
+      projectiles.forEach(function(pr){ if(pr.owner!=='player') return;
+        if(!seen.has(pr)){ seen.add(pr); fired++; }
+        if(pr.zz<lowest) lowest=pr.zz;
+        // 当たった弾はその場で消えるので、届く直前（手前20〜160px）の高さを拾う
+        const d=cg.x-pr.x; if(d>20 && d<160 && pr.zz<before) before=pr.zz; }); }
+    if(fired<10) throw new Error('ガトリングが '+fired+' 発しか出ていない');
+    if(before>1e8) throw new Error('弾が敵の手前まで届いていない（測れていない）');
+    if(!(before<ETYPE.corgi.h))
+      throw new Error('弾が敵の頭上を素通りしている（敵の手前での弾の高さ '+Math.round(before)+' ＞ 背 '+ETYPE.corgi.h+'）');
+    const dmg=9999-cg.hp;
+    if(!(dmg>0)) throw new Error('ガトリングが背の低い敵に当たらない');
+    // 何発も当たること（まぐれ当たり1発ではない）
+    if(!(dmg >= 9*5)) throw new Error('当たったのが '+Math.round(dmg/9)+' 発だけ（射線が敵の背をかすめている）');
+    console.log('GATLING HIT OK (背の低い corgi h='+ETYPE.corgi.h+' に '+dmg+' ダメージ＝'+Math.round(dmg/9)
+      +'発／'+fired+'発中／敵の手前での弾の高さ '+Math.round(before)+'・最低 '+Math.round(lowest)+')'); }
 
   // ===== 6c) random zako spawns vary across playthroughs =====
   const fixed=[['wolf',1],['corgi',1],['ari',1]];

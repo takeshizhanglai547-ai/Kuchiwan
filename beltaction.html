@@ -8639,6 +8639,14 @@ function fireBazooka(p){ const dir=p.facing;
   sfx.big(p.x); sfx.dash(p.x); shake=Math.max(shake,6); flash=Math.max(flash,2); spark(p.x+dir*64,p.y-58,'#ffd24d',16,10); ring(p.x+dir*54,p.y-56,'#ffae42'); p.vx=-dir*3; }
 // バギーの後部ガトリング：立ち上がり→連射の長さと間隔
 const BUGGY_GAT_T=54, BUGGY_GAT_WIND=8, BUGGY_GAT_GAP=3;
+// 砲塔の取り付け位置と俯角。弾はここから計算した砲口を使うので、絵と射線がずれない
+const BUGGY_GAT_MX=-92, BUGGY_GAT_MY=-84, BUGGY_GAT_TILT=0.30, BUGGY_GAT_LEN=96;
+// 砲口の高さ（地面からの px）。前下がりに傾けたぶん取り付け位置より低くなる
+const BUGGY_GAT_ZZ = -(BUGGY_GAT_MY + Math.sin(BUGGY_GAT_TILT)*BUGGY_GAT_LEN);
+// 弾はここまで落ちたら水平に薙ぐ。敵の背は最小46pxなので、これより低くしておく
+const BUGGY_GAT_FLOOR=34;
+// 砲口の前後位置（車体の中心から見た前方向のオフセット）
+const BUGGY_GAT_MZX = BUGGY_GAT_MX + Math.cos(BUGGY_GAT_TILT)*BUGGY_GAT_LEN;
 function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
   if(p.invuln>0)p.invuln--;
   p.anim=(p.anim||0)+0.34; p.z=0; p.vz=0; if(p.mAtkT>0)p.mAtkT--;
@@ -8661,12 +8669,14 @@ function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
     if(el>=BUGGY_GAT_WIND && el%BUGGY_GAT_GAP===0){ const dir=p.facing;
       p.mGatN=(p.mGatN||0)+1;
       const ang=Math.sin(p.mGatN*0.9)*0.16;                       // 上下に振りながら掃射
-      // 砲口（車体の中心から前へ約10px・高さ150）から出す。ここがずれると
-      // 「後ろで光っているのに弾は別の場所から飛ぶ」絵になる
-      spawnProj(p.x+dir*10, p.y-150, dir*(19+rnd(0,2)), 0, {owner:'player',
+      // 砲口から出す。ここがずれると「後ろで光っているのに弾は別の場所から飛ぶ」絵になる。
+      // 出たあとは前下がりに落ちて、BUGGY_GAT_FLOOR の高さで水平に薙ぐ
+      // 第2引数は「奥行きのレーン」で、高さではない（高さは zz）。
+      // ここに p.y-150 を渡していたため、弾は敵より150px 奥の列を飛んでいて一発も当たらなかった
+      spawnProj(p.x+dir*BUGGY_GAT_MZX, p.y, dir*(19+rnd(0,2)), 0, {owner:'player',
         dmg:Math.round(9*(p.atkMul||1)), color:(p.mGatN%2)?'#ffe14d':'#ff8a3a', r:8, life:44,
-        zz:150, vzz:Math.sin(ang)*10, nostop:true, pierce:false});
-      spark(p.x+dir*30, p.y-150, '#ffe9a0', 3, 9, {aim:dir>0?0:Math.PI, spread:0.35});
+        zz:BUGGY_GAT_ZZ, vzz:-1.7+Math.sin(ang)*0.8, zFloor:BUGGY_GAT_FLOOR, nostop:true, pierce:false});
+      spark(p.x+dir*(BUGGY_GAT_MZX+18), p.y-BUGGY_GAT_ZZ+4, '#ffe9a0', 3, 9, {aim:dir>0?0:Math.PI, spread:0.35});
       shake=Math.max(shake,3); p.x-=dir*0.9;                      // 反動でわずかに押し戻される
       if(p.mGatN%3===1) sfx.gun(p.x, 0.7); } }
   // 大槍のヒット判定（薙ぎ払いの中盤・前方広範囲）
@@ -8781,10 +8791,12 @@ function drawVehicleShape(sx, gy, face, V, kind, p){ ctx.save(); ctx.translate(s
     // 撃っている間は銃身が回り、砲口が光る
     { const firing=p && p.mAtk==='gat' && (p.mAtkT||0)>0;
       const spin=(p&&p.mGatSpin)||0;
-      ctx.save(); ctx.translate(-86,-150);   // 運転席の後ろ・高い位置。銃身がキャビンの上を越えて前へ出る
+      // ロールケージの上に載せていたころは砲口が高さ160px にあり、弾が敵の頭上を素通りしていた
+      // （敵の背は中央値100px・最小46px）。後部デッキへ下ろし、銃身も前下がりに傾ける
+      ctx.save(); ctx.translate(-92,-84);   // 運転席の後ろ・荷台の上
       ctx.fillStyle='#3a3f48'; roundRect(-16,-10,32,26,5); ctx.fill();                 // 砲座
       ctx.fillStyle='#4a525e'; roundRect(-16,-10,32,9,4); ctx.fill();
-      ctx.save(); ctx.rotate(-0.12);
+      ctx.save(); ctx.rotate(BUGGY_GAT_TILT);
       ctx.fillStyle='#2a2f36'; roundRect(-6,-14,30,18,4); ctx.fill();                   // 機関部
       for(let k=0;k<6;k++){ const a=spin+k*(TAU/6), yy=Math.sin(a)*7;                   // 6本の銃身
         ctx.fillStyle=(Math.cos(a)>0)?'#c8ccd4':'#7d8794';
@@ -9876,7 +9888,7 @@ function spawnProj(x,y,vx,vy,o){ o=o||{};
     pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
     boomer:!!o.boomer,boomDir:null,bx0:0,
     multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,blast:!!o.blast,blastR:o.blastR||110,blastDmg:o.blastDmg||30,
-    grav:o.grav||0,glKind:o.glKind||null,splitT:(o.splitT!=null?o.splitT:null),splitN:o.splitN||0,
+    grav:o.grav||0,zFloor:(o.zFloor!=null?o.zFloor:null),glKind:o.glKind||null,splitT:(o.splitT!=null?o.splitT:null),splitN:o.splitN||0,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
 // 空中で子弾へ分裂する。親弾は消え、扇状に散った子弾がそれぞれ炸裂する
 function mackGLSplit(pr){
@@ -9984,6 +9996,8 @@ function updateProjectiles(){
       // 手元まで帰ってきたら消える。そのまま抜けると、背後へ飛び去って画面外で当たり続ける
       if((pr.x-pr.bx0)*pr.boomDir < -18){ spark(pr.x, pr.y-pr.zz, pr.color, 6, 6); projectiles.splice(i,1); continue; } }
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
+    // 掃射する弾は、狙いの高さまで落ちたらそこで水平に走らせる（そのまま落ちると地面へ潜る）
+    if(pr.zFloor!=null && pr.zz<=pr.zFloor){ pr.zz=pr.zFloor; pr.vzz=0; }
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>13)pr.trail.shift();   // 尾を長く取ってリボン化する
     if(pr.owner==='player'){
       // 下方向エネルギー弾：地面で爆発（範囲ダメージ）
