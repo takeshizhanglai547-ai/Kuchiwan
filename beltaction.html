@@ -150,7 +150,7 @@
     <div class="optrow" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
-      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（コンボ練習）</button>
+      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（キャラを選んでコンボ練習）</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
@@ -17631,8 +17631,7 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
            {t:'⚡ 4周目「神話」から（超高難度）', bg:'linear-gradient(180deg,#c8a850,#6a5220)', c:'#fff6c0'},
            {t:'⚔ 5周目「戦国」から（最高難度）', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:4];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
-const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{
-  unlockAudio(); fadeOverlay(document.getElementById('start'), ()=>goScreen(startTraining,'fade',40)); };
+const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{ startTrainSelect(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
   // 四周目・五周目はこのトグルで「カジュアル」と「従来の強さ」が切り替わるので、そう書く
@@ -17981,8 +17980,20 @@ const CHARS=[
   {k:'mack',  name:'早撃ちマック',  col:'#f0b45a', icon:(x,y)=>mackIcon(x,y)},
 ];
 let csSel=[0,1], csLock=[false,false], csNav=[0,0];
+// キャラ選択画面の用途。'coop'＝2人で本編／'train'＝1人でトレーニング
+let csMode='coop';
+// トレーニングも同じ選択画面を使う。別画面を作ると、キャラが増えたときに
+// 片方だけ足し忘れる（2P選択には全キャラ並ぶのに練習では選べない、が実際に起きていた）
+function startTrainSelect(){
+  const enter=()=>{ csMode='train'; csSel=[0,0]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
+    const es=document.getElementById('start'); if(es) es.classList.add('hidden');
+    const er=document.getElementById('result'); if(er) er.classList.add('hidden');
+    unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } };
+  unlockAudio();
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function start2PSelect(){
-  const enter=()=>{ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+  const enter=()=>{ csMode='coop'; csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
     players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
     const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
     const er=document.getElementById('result'); if(er) er.classList.add('hidden');
@@ -17990,26 +18001,32 @@ function start2PSelect(){
   unlockAudio();
   fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function updateCharSel(){
-  for(let pi=0;pi<2;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
+  // トレーニングは1人で選ぶ。2P側の入力は見ない（2Pのキーで勝手に確定してしまう）
+  const nP=(csMode==='train')?1:2;
+  for(let pi=0;pi<nP;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
     if(!csLock[pi]){
       if(csNav[pi]<=0){ if(K.left){ csSel[pi]=(csSel[pi]+CHARS.length-1)%CHARS.length; csNav[pi]=11; ui.move(); }
         else if(K.right){ csSel[pi]=(csSel[pi]+1)%CHARS.length; csNav[pi]=11; ui.move(); } }
       if(pr.atk||pr.jump){ pr.atk=false; pr.jump=false; csLock[pi]=true; ui.ok(); }
     } else { if(pr.grab||pr.grd){ pr.grab=false; pr.grd=false; csLock[pi]=false; ui.ng(); } }   // 決定後キャンセル
   }
+  if(csMode==='train'){
+    if(csLock[0]){ csLock=[false,false]; setupRoster(CHARS[csSel[0]].k); startTraining(); }
+    return; }
   if(csLock[0]&&csLock[1]){ players[0].kind=CHARS[csSel[0]].k; players[1].kind=CHARS[csSel[1]].k; csLock=[false,false]; beginAdventure(); }
 }
 function drawCharSel(){
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#26406a'); g.addColorStop(.6,'#3a5a7a'); g.addColorStop(1,'#2a3a44'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   for(let i=0;i<70;i++){ const x=(i*137.5)%W, y=(i*71.3)%(H*0.55); ctx.globalAlpha=0.25+0.45*Math.abs(Math.sin(gf*0.02+i)); ctx.fillStyle='#dfe7ff'; ctx.fillRect(x,y,1.6,1.6);} ctx.globalAlpha=1;
   ctx.textAlign='center'; ctx.fillStyle='#ffe14d'; ctx.font='900 32px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.strokeStyle='#000'; ctx.lineWidth=5;
-  ctx.strokeText('2P CO-OP　キャラクター選択',W/2,64); ctx.fillText('2P CO-OP　キャラクター選択',W/2,64);
+  { const _t=(csMode==='train')?'🥊 トレーニング　キャラクター選択':'2P CO-OP　キャラクター選択';
+    ctx.strokeText(_t,W/2,64); ctx.fillText(_t,W/2,64); }
   // キャラが増えても収まるよう、幅から逆算してカードサイズを決める
   const n=CHARS.length, gap=n>5?10:(n>4?12:18);
   const cw=Math.min(n>4?168:178, Math.floor((W-40-(n-1)*gap)/n));
   const sc=clamp(cw/74, 1.6, 2.5), tot=n*cw+(n-1)*gap, x0=(W-tot)/2, cy=H*0.5;
   for(let i=0;i<n;i++){ const cx=x0+i*(cw+gap)+cw/2;
-    const p1=csSel[0]===i, p2=csSel[1]===i;
+    const p1=csSel[0]===i, p2=(csMode!=='train')&&csSel[1]===i;
     ctx.fillStyle='rgba(0,0,0,.34)'; roundRect(cx-cw/2,cy-96,cw,190,16); ctx.fill();
     ctx.lineWidth=(p1||p2)?4:2; ctx.strokeStyle=(p1&&p2)?'#fff':(p1?'#7dd0ff':(p2?'#ff9a5a':'rgba(255,255,255,.25)')); ctx.stroke();
     ctx.save(); ctx.translate(cx,cy-14); ctx.scale(sc,sc); CHARS[i].icon(0,0); ctx.restore();
@@ -18018,9 +18035,13 @@ function drawCharSel(){
     if(p2) drawSelTag(cx+40, cy-118, '#ff9a5a', '2P', csLock[1]);
   }
   ctx.fillStyle='#cfe0ff'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）',W/2,H-42);
-  ctx.fillStyle=(csLock[0]&&csLock[1])?'#7dff7d':'#8fa8c8'; ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText(hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！',W/2,H-18);
+  ctx.fillText((csMode==='train')
+    ? '矢印／WASD で選択・J/F で決定　（練習中も N キーでキャラを切り替えられます）'
+    : '1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）',W/2,H-42);
+  ctx.fillStyle=(csMode==='train')? '#7dd0ff' : ((csLock[0]&&csLock[1])?'#7dff7d':'#8fa8c8');
+  ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText((csMode==='train')? '決定でトレーニング開始！'
+    : (hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！'),W/2,H-18);
   ctx.textAlign='left';
 }
 function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,y+10); ctx.lineTo(x-9,y-4); ctx.lineTo(x+9,y-4); ctx.closePath(); ctx.fill();

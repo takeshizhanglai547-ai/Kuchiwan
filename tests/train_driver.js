@@ -1,3 +1,4 @@
+global.__HTML = html;
 const DRIVER = `
 (async()=>{
   const step=(n)=>{ for(let i=0;i<n;i++){ if(global.rafCb){ const cb=global.rafCb; global.rafCb=null; cb(); } } };
@@ -248,6 +249,72 @@ const DRIVER = `
     trainMode=true; startGame();
     if(trainMode) throw new Error('通常のゲーム開始で trainMode が落ちない');
     console.log('練習の終了 OK (タイトルへ戻り／的を片付け／通常開始でも必ず解除)'); }
+
+  // ===== N) タイトルからトレーニングするキャラを選べる =====
+  // 以前はボタンを押すと直前のキャラでいきなり始まり、全キャラを選ぶ手立てが
+  // 「始めてから N キーで回す」しか無かった
+  { // タイトルのボタンと同じ入口を通す（状態を直に作ると、入口の取り違えを見逃す）
+    const enterVia=function(fn){ trainMode=false; state='title';
+      fn();
+      for(let i=0;i<60 && state!=='charsel';i++) step(1);
+      if(state!=='charsel') throw new Error('選択画面へ入れない（state='+state+'）'); };
+    enterVia(startTrainSelect);
+    if(csMode!=='train') throw new Error('トレーニングの入口なのに csMode='+csMode);
+    enterVia(start2PSelect);
+    if(csMode!=='coop') throw new Error('2P CO-OP の入口なのに csMode='+csMode);
+    enterVia(startTrainSelect);
+    // 選択画面には全キャラが並ぶ
+    if(CHARS.length<7) throw new Error('選択画面のキャラが '+CHARS.length+' 人しかいない');
+    const roster=CHARS.map(function(c){ return c.k; });
+    TRAIN_HERO.forEach(function(k){ if(roster.indexOf(k)<0)
+      throw new Error('トレーニングで回せる '+k+' が選択画面に居ない'); });
+    // 7人それぞれを選んで決定すると、そのキャラでトレーニングが始まる
+    const got=[];
+    for(let i=0;i<CHARS.length;i++){
+      csMode='train'; csSel=[i,0]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+      const inp=players[0].in;
+      for(const k in inp.K) inp.K[k]=false;
+      for(const k in inp.pressed) inp.pressed[k]=false;
+      inp.pressed.atk=true;
+      updateCharSel();          // 決定 → 練習開始
+      if(!trainMode) throw new Error(CHARS[i].k+' を選んでもトレーニングが始まらない');
+      if(players[0].kind!==CHARS[i].k)
+        throw new Error('選んだのは '+CHARS[i].k+' なのに '+players[0].kind+' で始まっている');
+      if(TWO_P) throw new Error('トレーニングが2人用で始まっている');
+      got.push(players[0].kind); }
+    if(new Set(got).size!==CHARS.length) throw new Error('同じキャラばかり始まっている: '+got.join(','));
+    // 2P側のキーでは確定しない（1人で選ぶ画面なので）
+    { csMode='train'; csSel=[3,0]; csLock=[false,false]; csNav=[0,0]; state='charsel'; trainMode=false;
+      const i2=players[1].in;
+      for(const k in i2.pressed) i2.pressed[k]=false;
+      i2.pressed.atk=true;
+      updateCharSel();
+      if(trainMode) throw new Error('2P のキーでトレーニングが始まってしまう');
+      // 2P側の入力そのものを読まないこと（読むと選択枠が動いて紛らわしい）
+      if(csLock[1]) throw new Error('1人で選ぶ画面なのに 2P の決定を受け付けている');
+      i2.K.right=true; csNav[1]=0; const sel1=csSel[1];
+      updateCharSel();
+      if(csSel[1]!==sel1) throw new Error('1人で選ぶ画面なのに 2P の十字キーで選択が動く'); }
+    // 2P CO-OP の選択は従来どおり二人そろって決定
+    { enterVia(start2PSelect); csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; trainMode=false;
+      const a=players[0].in, b=players[1].in;
+      for(const k in a.pressed) a.pressed[k]=false;
+      for(const k in b.pressed) b.pressed[k]=false;
+      a.pressed.atk=true; updateCharSel();
+      if(csLock[0]!==true) throw new Error('2P選択で1Pが決定できない');
+      if(state!=='charsel') throw new Error('1Pだけの決定で先へ進んでいる'); }
+    // タイトルのボタンが選択画面へ繋がっていること。
+    // ヘッドレスの document はすべてを飲み込む張りぼてなので onclick は捕まえられない。
+    // 配線そのものは中身（HTML＋スクリプト）の文字列で確かめる
+    { const H=global.__HTML||'';
+      const at=H.indexOf('trainBtn');
+      if(at<0) throw new Error('トレーニングのボタンが見当たらない');
+      const wire=H.indexOf("_trainBtn.onclick");
+      if(wire<0) throw new Error('トレーニングのボタンに処理が繋がっていない');
+      const tail=H.slice(wire, wire+220);
+      if(tail.indexOf('startTrainSelect')<0)
+        throw new Error('トレーニングのボタンがキャラ選択画面を通っていない: '+tail.slice(0,120)); }
+    console.log('トレーニングのキャラ選択 OK ('+got.length+'人すべて選んで開始できる／2Pのキーでは始まらない／ボタンは選択画面へ)'); }
 
   console.log('TRAINING TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
