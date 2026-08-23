@@ -188,22 +188,16 @@ const DRIVER = `
     // 期待値は直値で書く。TERR_STEP_MAX と比べると、その定数を上げた瞬間に素通りする
     if(!(maxStep>24)) throw new Error('段差 '+maxStep.toFixed(1)+'px では歩いて登れてしまう');
     // 蹴上げは壁。歩いて押し込んでも標高が上がらないこと
-    // （谷の無い段＝k=2 の蹴上げで確かめる。谷のある段だと落下が先に起きて壁を試せない）
     { const p2=setup(); build(['climb']); const T2=TERRS[0];
       const bx=T2.x0+(T2.x1-T2.x0)*2/TERR_STEPS;
       p2.x=bx-70; p2._tx=null; p2.z=0; camX=Math.max(0,p2.x-300); WORLD_END=T2.x1+600;
       const lift0=terrLift(p2.x);
-      // 30フレーム＝約192px。壁が効いていなければ蹴上げを越えるが、次の谷までは届かない
-      // （長く歩かせると、壁を素通りしたあと谷へ落ちて別の理由で赤くなり、何を見たのか分からなくなる）
+      // 30フレーム＝約192px。壁が効いていなければ蹴上げを越える
       for(let f=0;f<30;f++){ p2.in.K.right=true; updatePlayer(p2); terrainStep(p2); }
-      if(overPit(p2.x)) throw new Error('壁の検査が谷に落ちている（配置がずれている）');
       if(terrLift(p2.x)-lift0 > 4)
         throw new Error('歩くだけで '+Math.round(terrLift(p2.x)-lift0)+'px 登れてしまう（蹴上げが壁になっていない）');
       if(p2.x >= bx) throw new Error('蹴上げを歩いて通り抜けている（x='+Math.round(p2.x)+' 段='+Math.round(bx)+'）');
       build(['climb']); }
-    // 谷が開いていて、跳ばないと越えられない
-    const pits=PITS.filter(function(q){ return q[0]>=T.x0 && q[1]<=T.x1; });
-    if(pits.length<2) throw new Error('縦ステージに谷が '+pits.length+' 箇所しかない');
     // 本編にも縦ステージが入っていること
     resetWorldState();
     const kinds={};
@@ -214,7 +208,7 @@ const DRIVER = `
     if(!(kinds.climb>=2)) throw new Error('本編の登る縦ステージが '+(kinds.climb|0)+' しかない');
     if(!(kinds.dive>=2)) throw new Error('本編の降りる縦ステージが '+(kinds.dive|0)+' しかない');
     console.log('縦ステージの地形 OK (高低差'+(T.e1-T.e0)+'px・段差'+maxStep.toFixed(0)+'px＞歩ける上限'+TERR_STEP_MAX
-      +'・谷'+pits.length+'箇所／本編 登り'+kinds.climb+'・降り'+kinds.dive+'区画)'); }
+      +'／本編 登り'+kinds.climb+'・降り'+kinds.dive+'区画)'); }
 
   // ===== 8) 歩くだけでは登れず落ちる。跳べば登り切れる =====
   { const run=function(kind, useJump){ const p=setup(); build([kind]); const T=TERRS[0];
@@ -247,9 +241,10 @@ const DRIVER = `
       return {fell:fell, wall:wall, popped:popped, absJump:absJump, worstAbs:Math.round(worstAbs),
               x:Math.round(p.x), end:T.x1, lift:Math.round(terrLift(p.x)), lives:p.lives}; };
     const walkOnly=run('climb',false), jumped=run('climb',true);
-    // 歩くだけ＝谷に落ちるか壁で止まる。どちらにせよ登り切れない
+    // 歩くだけ＝蹴上げが壁になって止まる。落とし穴は無いので、壁だけで止まらなければならない
     if(walkOnly.x>=walkOnly.end-200) throw new Error('跳ばずに登り切れてしまう');
-    if(walkOnly.fell===0 && walkOnly.wall===0) throw new Error('歩くだけで谷にも壁にも当たらない');
+    if(walkOnly.wall===0) throw new Error('歩くだけで壁に当たらない');
+    if(walkOnly.fell>0) throw new Error('落とし穴が残っている（歩いただけで '+walkOnly.fell+' 回落ちた）');
     // 跳べば登り切る。落ちずに、最上段まで届く
     if(jumped.fell>0) throw new Error('跳んでも '+jumped.fell+' 回落ちる');
     if(jumped.x < jumped.end-200) throw new Error('跳んでも登り切れない（x='+jumped.x+'/'+jumped.end+'）');
@@ -262,40 +257,32 @@ const DRIVER = `
     if(dove.fell>0) throw new Error('降りる縦ステージで '+dove.fell+' 回落ちる');
     if(dove.lift > -480) throw new Error('降りきれていない（標高 '+dove.lift+'px）');
     if(dove.absJump>0) throw new Error('降りで高度が '+dove.absJump+' 回瞬間移動する（最大 '+dove.worstAbs+'px）＝段を降りるときに飛んでいる');
-    console.log('縦ステージの踏破 OK (歩くだけ→x='+walkOnly.x+'で落下'+walkOnly.fell+'/壁'+walkOnly.wall
+    console.log('縦ステージの踏破 OK (歩くだけ→x='+walkOnly.x+'で壁'+walkOnly.wall
       +'／跳べば標高'+jumped.lift+'px まで登頂・壁'+jumped.wall+'回／降りは'+dove.lift+'px)'); }
 
-  // ===== 9) 谷に落ちたらワンアウト =====
-  { const p=setup(); build(['climb']); const T=TERRS[0];
-    const pit=PITS.filter(function(q){ return q[0]>=T.x0; })[0];
-    p.x=(pit[0]+pit[1])*0.5; p._tx=null; p.z=0; p.state='idle'; p.lives=3;
-    const l0=p.lives;
-    let dead=false;
-    for(let f=0;f<200;f++){ updatePlayer(p); terrainStep(p); if(p.state==='dead'){ dead=true; break; } }
-    if(!dead) throw new Error('谷の上に立っても落ちない');
-    if(p.lives!==l0-1) throw new Error('落ちても残機が減らない（'+l0+'→'+p.lives+'）');
-    console.log('落下でワンアウト OK (残機 '+l0+'→'+p.lives+')'); }
-
-  // ===== 10) 敵は谷へ踏み込まない（跳べないので落ちるか宙に浮く） =====
-  { const p=setup(); build(['climb']); const T=TERRS[0];
-    const pit=PITS.filter(function(q){ return q[0]>=T.x0; })[0];
-    enemies.length=0;
-    p.x=pit[1]+120; p._tx=null; camX=Math.max(0,p.x-400);          // 主役は谷の向こう
-    spawnEnemy('wolf', pit[0]-90, LANE);                            // 敵は谷の手前
-    const e=enemies[0]; e.thinkCd=0;
-    let over=0, minX=e.x, maxX=e.x;
-    for(let f=0;f<400;f++){ updateEnemies(); terrainStepFoes();
-      if(e.z<=0 && overPit(e.x)) over++;
-      if(e.x<minX) minX=e.x; if(e.x>maxX) maxX=e.x; }
-    if(over>0) throw new Error('敵が谷の上を '+over+'F 歩いている');
-    if(maxX>pit[0]+8) throw new Error('敵が谷へ '+Math.round(maxX-pit[0])+'px 踏み込んでいる');
-    // 縁までは寄って来ること（ただ動かないだけでは検査になっていない）
-    if(maxX < pit[0]-140) throw new Error('敵が谷の縁まで来ない（'+Math.round(pit[0]-maxX)+'px 手前）');
-    // 谷の真上に湧かせない（跳べないので、そこから一歩も動けない置物になる）
-    { enemies.length=0; spawnEnemy('wolf', (pit[0]+pit[1])*0.5, LANE);
-      const e2=enemies[0];
-      if(overPit(e2.x)) throw new Error('谷の真上に敵が湧いている（x='+Math.round(e2.x)+' / 谷 '+Math.round(pit[0])+'〜'+Math.round(pit[1])+'）'); }
-    console.log('敵と谷 OK (縁の '+Math.round(pit[0]-maxX)+'px 手前で踏み止まる)'); }
+  // ===== 9) 落とし穴はどこにも開かない =====
+  // 縦ステージは以前ここに谷を開けていた。跳ぶ理由は蹴上げ（壁）だけで足りるので廃止した
+  { const H=global.__HTML||'';
+    // 初期値も空にしておく。ワールドを組む前に参照される経路は今は無いが、
+    // ここに穴が書いてあると「消し忘れ」がそのまま残る
+    if(H.indexOf('let PITS=[];')<0) throw new Error('PITS の初期値に落とし穴が書かれている');
+    const kinds=['flat','up','down','climb','dive','liftup','liftdown','tower'];
+    kinds.forEach(function(k){ const p=setup(); build([k]);
+      if(PITS.length) throw new Error(k+' の区画に落とし穴が '+PITS.length+' 箇所ある'); });
+    // 本編のワールドを丸ごと組んでも開かない
+    resetWorldState(); buildEncounters();
+    if(PITS.length) throw new Error('本編のワールドに落とし穴が '+PITS.length+' 箇所ある');
+    // 実際に歩き回っても落下状態にならない
+    { const p=setup(); build(['climb','dive','down']);
+      p.x=TERRS[0].x0+40; p._tx=null; p.z=0; p.state='idle'; p.lives=3;
+      let fell=0;
+      for(let f=0;f<1400;f++){ p.in.K.right=true;
+        if(f%22===0) p.in.pressed.jump=true;
+        updatePlayer(p); terrainStep(p);
+        if(p.state==='falling'||p.state==='dead') fell++; }
+      if(fell>0) throw new Error('歩いていたら '+fell+'F ぶん落下した（落とし穴が残っている）');
+      if(p.lives!==3) throw new Error('残機が '+p.lives+' に減っている（落下ミスが起きている）'); }
+    console.log('落とし穴なし OK (8種の地形と本編ワールドで0箇所・歩き回っても落下0)'); }
 
   // ===== 11) 動く地形（昇降区間）：踏み込むと足場ごと昇降し、終わるまで出られない =====
   { const ride=function(kind){ const p=setup(); build([kind]);
@@ -390,9 +377,6 @@ const DRIVER = `
     const step=PLATS[0].h;
     if(!(step>40)) throw new Error('一段が '+step+'px しかない（跳ぶ意味が無い）');
     if(!(step<200)) throw new Error('一段が '+step+'px あって跳んでも届かない');
-    // 谷は開けない（落ちて即ミスにする作りではない）
-    if(PITS.some(function(q){ return q[0]>=T.x0 && q[1]<=T.x1; }))
-      throw new Error('足場の塔に谷が開いている（落ちたら即ミスになる）');
 
     // 床の縁まで歩いて真上に跳ぶだけのAIで、いちばん上まで登れること
     const top=PLATS[PLATS.length-1];
@@ -441,17 +425,7 @@ const DRIVER = `
       if(p.state==='dead'||p.state==='falling') throw new Error('床から落ちてミスになっている');
       if((p.fl||0)===0 && p.z<=0 && p.x>P1.x1){ off=f; break; } }
     if(off<0) throw new Error('床の縁から踏み出しても落ちない（宙に立っている）');
-    // 床の下に谷があっても、床に乗っている間は落ちない
-    { const q=setup(); build(['tower']); const Q=PLATS[0];
-      PITS.push([Q.x0-20, Q.x1+20]);                 // 床の真下を谷にする
-      q.x=(Q.x0+Q.x1)*0.5; q._tx=q.x; q.z=0; q.fl=Q.h; q._pa=Q.h; q.state='idle';
-      for(let f=0;f<90;f++){ updatePlayer(q); terrainStep(q);
-        if(q.state==='falling'||q.state==='dead') throw new Error('床に乗っているのに谷へ落ちている'); }
-      // 同じ場所でも地面に降りれば落ちる（谷そのものは効いている＝検査が空回りしていない）
-      q.fl=0; q.z=0; q._pa=0; q.state='idle'; let fellNow=false;
-      for(let f=0;f<40;f++){ updatePlayer(q); terrainStep(q); if(q.state==='falling'){ fellNow=true; break; } }
-      if(!fellNow) throw new Error('地面に立っても谷に落ちない（谷の検査が空回りしている）'); }
-    console.log('床の一方通行 OK (下からすり抜け→'+landed+'Fで着地／縁から'+off+'Fで地面へ・ミスなし／床の下が谷でも落ちない)'); }
+    console.log('床の一方通行 OK (下からすり抜け→'+landed+'Fで着地／縁から'+off+'Fで地面へ・ミスなし)'); }
 
   // ===== 16) 壁は床を使わずには越えられない =====
   // 床が無ければ登れないことを確かめないと、「壁が緩くて空中で少しずつよじ登れる」
@@ -506,6 +480,9 @@ const DRIVER = `
       seen[STAGE_GIM[1]]=(seen[STAGE_GIM[1]]||0)+1; seen[STAGE_GIM[2]]=(seen[STAGE_GIM[2]]||0)+1; }
     const kinds=Object.keys(seen);
     if(kinds.length<4) throw new Error('抽選される仕掛けが '+kinds.length+' 種類しかない');
+    // 地面から生える棘は廃止した。表にも抽選結果にも残っていないこと
+    if(GIMMICKS.some(function(g){ return g.id==='spike'; })) throw new Error('棘の仕掛けが表に残っている');
+    if(seen.spike) throw new Error('棘の仕掛けが抽選されている');
     kinds.forEach(function(k){ if(!gimmickById(k)) throw new Error('種類表に無い仕掛けが出た: '+k); });
     // 下り坂でしか出ない落石は、平坦な区画では引かれない
     if(seen.boulder) throw new Error('平坦な区画で落石が抽選されている');
@@ -537,7 +514,7 @@ const DRIVER = `
         const d=Math.abs(p.x-x0); if(d>moved) moved=d; }
       return {dmg:hp0-p.hp, warn:warnSeen, spawned:spawned, moved:moved, first:firstHit}; };
     const rep=[];
-    ['meteor','bolt','geyser','spike'].forEach(function(id){
+    ['meteor','bolt','geyser'].forEach(function(id){
       const r=run(id);
       if(!(r.spawned>0)) throw new Error(id+' が一つも出ない');
       if(!(r.warn>0)) throw new Error(id+' に予兆が出ない（避けようがない）');
@@ -556,7 +533,7 @@ const DRIVER = `
     if(H.indexOf('let gimOn=true')<0) throw new Error('本番の gimOn が true で初期化されていない（仕掛けが一切出ない）');
     const p=setup(); resetWorldState();
     addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
-    stage=1; STAGE_GIM[1]='spike'; gimOn=true; gimStage=1;
+    stage=1; STAGE_GIM[1]='geyser'; gimOn=true; gimStage=1;
     p.x=camX+500; p.hp=p.maxHp=99999;
     // ボスが居る間は一つも湧かない
     let bossType=null;

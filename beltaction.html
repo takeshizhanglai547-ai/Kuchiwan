@@ -1585,7 +1585,7 @@ function depthScale(y){ return FIXED_SCALE; } // depth removed — uniform sprit
 const TERR_RISE=300;                 // 坂ひとつぶんの高低差（px）。区画長1900に対して最大勾配で約24%＝画面幅ぶんで260px上がる
 // ── 縦ステージ（terr:'climb'|'dive'）──
 // 踏み面は水平、蹴上げはほぼ垂直の階段。歩いては登れず、跳ばないと上がれない高さにする。
-// 段の手前には谷（PITS）を置くので、跳び損ねると落下＝ワンアウト
+// 段は跳ばないと登れない高さにするだけで、落とし穴は開けない
 const TERR_CLIMB=600;                // 縦ステージの総高低差（px）
 const TERR_STEPS=6;                  // 段数。踏み面 約317px＝乱戦できる広さ
 const TERR_RISER=0.05;               // 蹴上げに使う踏み面の割合。狭いほど壁に近い（317*0.05=16px で100px上がる）
@@ -1666,8 +1666,9 @@ function groundLift(x){
   // 坂の上では従来のうねりを弱める。強い傾斜に細かい波を重ねると足元がガタつく
   const a=Math.sin(x*0.0090)+Math.sin(x*0.0041+2.1)*0.7+Math.sin(x*0.020+0.6)*0.32;
   return Math.max(0,a)*30*(slope?0.34:1) + terrLift(x); }
-// 谷（落ちると即死）。ワールド構築時にステージ区画ごとへランダム配置される
-let PITS=[[1080,1210],[2400,2520],[4250,4380],[6060,6190],[8250,8380],[10240,10370],[11480,11610],[12620,12740],[13820,13940],[15020,15140],[16220,16340]];
+// 落とし穴は廃止した。地面はどこも繋がっている。
+// 判定そのものは残してあるが、PITS へ何も積まないので常に「穴なし」を返す
+let PITS=[];
 function overPit(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return true; } return false; }
 function pitAt(x){ for(const p of PITS){ if(x>p[0] && x<p[1]) return p; } return null; }
 // 谷の上に立たせない。復帰位置がそのまま谷だと、戻った瞬間にまた落ちる
@@ -3580,7 +3581,6 @@ const GIMMICKS=[
   {id:'meteor',   name:'隕石雨',     col:'#ff8a3a', cd:[210,340]},                  // 空から隕石が降る
   {id:'bolt',     name:'落雷',       col:'#9fe8ff', cd:[190,300]},                  // 予兆のあと真上から落雷
   {id:'geyser',   name:'噴出',       col:'#dfe8f2', cd:[170,280]},                  // 地面から蒸気が噴き上がる
-  {id:'spike',    name:'棘',         col:'#c8ccd4', cd:[150,240]},                  // 床から棘が生える
   {id:'gale',     name:'突風',       col:'#cfe0ff', cd:[240,380]},                  // 横風で足を取られる
 ];
 function gimmickById(id){ for(let i=0;i<GIMMICKS.length;i++) if(GIMMICKS[i].id===id) return GIMMICKS[i]; return null; }
@@ -3626,11 +3626,6 @@ function tickGimmicks(){
     for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-260,260), camX+40, camX+W-40);
       hazards.push({kind:'geyser', x:tx, y:LANE, t:0, life:86, warn:30+k*9, hitP:{}, hitE:{}});
       gimWarnAt(tx, '#dfe8f2', 30+k*9); } }
-  else if(G.id==='spike'){                                // 棘：床から生えて、しばらく残る
-    const n=2+((Math.random()*3)|0);
-    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-280,280), camX+40, camX+W-40);
-      hazards.push({kind:'gspike', x:tx, y:LANE, t:0, life:150, warn:32+k*8, hitP:{}, hitE:{}});
-      gimWarnAt(tx, '#c8ccd4', 32+k*8); } }
   else if(G.id==='gale'){                                 // 突風：一定時間、横へ押し流される
     const dir=(Math.random()<0.5)?-1:1;
     hazards.push({kind:'gale', x:camX+W*0.5, y:LANE, t:0, life:150, dir:dir});
@@ -3705,14 +3700,6 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
       if(perfTier<2 && h.t%2===0){ const gy=LANE-groundLift(h.x);
         ember(h.x+rnd(-14,14), gy-rnd(0,30), rnd(-0.8,0.8), -rnd(6,11), (h.t%4)?'#dfe8f2':'#ffffff'); }
       if((h.t-h.warn)===0){ sfx.step(h.x,'stone',1.6); shake=Math.max(shake,6); } }
-    if(h.t>=h.life) hazards.splice(i,1);
-    continue; }
-  // ── 棘：床から生えて、しばらく残ってから引っ込む ──
-  if(h.kind==='gspike'){
-    if(h.t===h.warn){ dust(h.x,LANE,8); sfx.hit(h.x); shake=Math.max(shake,5); }
-    if(h.t>=h.warn && h.t<h.life-20){ h.r=58;
-      if((h.t-h.warn)%20===0){ h.hitP={}; h.hitE={}; }
-      gimHit(h, 12, true, 118); }
     if(h.t>=h.life) hazards.splice(i,1);
     continue; }
   // ── 突風：吹いている間ずっと横へ押し流す ──
@@ -4155,26 +4142,6 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
       ctx.beginPath(); ctx.ellipse(sx+Math.sin(gf*0.22+k*1.7)*18, yy, 34-k*3, 26-k*2.4, 0,0,7); ctx.fill(); }
     ctx.globalAlpha=0.5*up; ctx.fillStyle='#ffffff';
     ctx.beginPath(); ctx.ellipse(sx, gy-6, 44, 14, 0,0,7); ctx.fill();     // 噴き出し口
-    ctx.restore(); continue; }
-  if(h.kind==='gspike'){                      // 棘：床を突き破って生える鉄の杭
-    if(h.t<h.warn) continue;
-    const up=clamp((h.t-h.warn)/8,0,1)*clamp((h.life-h.t)/16,0,1);
-    if(up<=0) continue;
-    const sx=h.x-camX, H2=132*up;
-    ctx.save();
-    ctx.fillStyle='rgba(0,0,0,.34)'; ctx.beginPath(); ctx.ellipse(sx,gy+3,64,14,0,0,7); ctx.fill();
-    // 突き破った床のかけら
-    ctx.fillStyle='rgba(60,52,44,.55)';
-    for(let k=-3;k<=3;k++){ if(!k) continue;
-      ctx.beginPath(); ctx.moveTo(sx+k*17-6,gy+3); ctx.lineTo(sx+k*17, gy-9-Math.abs(k)*2); ctx.lineTo(sx+k*17+6,gy+3); ctx.closePath(); ctx.fill(); }
-    for(let k=-2;k<=2;k++){ const bx=sx+k*24, hh=H2*(1-Math.abs(k)*0.18);
-      const g2=ctx.createLinearGradient(bx,gy,bx,gy-hh);
-      g2.addColorStop(0,'#3d444d'); g2.addColorStop(0.55,'#98a3b1'); g2.addColorStop(1,'#f3f8ff');
-      ctx.fillStyle=g2; ctx.beginPath();
-      ctx.moveTo(bx-12,gy+3); ctx.lineTo(bx-3,gy-hh*0.55); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+3,gy-hh*0.55); ctx.lineTo(bx+12,gy+3); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle='rgba(16,20,26,.6)'; ctx.lineWidth=2; ctx.stroke();
-      ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath();      // 刃先の光
-      ctx.moveTo(bx-2,gy-hh*0.62); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+2,gy-hh*0.62); ctx.closePath(); ctx.fill(); }
     ctx.restore(); continue; }
   if(h.kind==='gale'){                        // 突風：画面を横切る風の筋
     const u=Math.min(1, Math.min(h.t, h.life-h.t)/22);
@@ -9125,10 +9092,6 @@ function addBlocks(blocks,opts){
       TERRS.push({x0:B, x1:B+len, e0:e0, e1:e1, kind:b.terr||'flat', st:st});
       // ステージごとに仕掛けを1つ引く。地形が同じでも毎回ちがう仕掛けが出る
       STAGE_GIM[st]=rollGimmick(b.terr||'flat');
-      // 縦ステージは段の手前に谷を開ける。跳び損ねれば落下＝ワンアウト。
-      // 全段に開けると休む場所が無くなるので一段おき
-      if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
-        const bx=B+len*(k/TERR_STEPS); PITS.push([bx-130, bx-16]); } }
       // 足場の塔：壁の手前に、右上がりに床を積む。最後の床から高い地面へ跳び移る
       if(tw){ const rx=B+Math.round(len*0.62);
         for(let k=1;k<=TOWER_STEPS;k++){
