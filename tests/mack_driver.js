@@ -434,20 +434,22 @@ const DRIVER = `
     const shoot=function(id){ const p=setup(); p.level=1;
       enemies.length=0; projectiles.length=0;
       for(let k=0;k<4;k++){ const e=dummyAt(150+k*60, ((k%3)-1)*14); e.hp=e.maxHp=99999; }
-      const hp0=enemies.map(function(e){ return e.hp; });
+      // 吹き飛ばされた敵は enemies から抜けることがある。添字で hp を突き合わせると
+      // 並びがずれて「ダメージ0」に化けるので、敵そのものを捕まえて maxHp との差で測る
+      const list=enemies.slice();
       p.state='idle'; p.z=0; p.atk=null;
       // 敵が歩くと当たる破片の数が実行ごとに倍近く振れる。上下の物理は要るので
       // updateEnemies は回したまま、毎フレーム立ち位置だけ元へ戻して測る
-      const px=enemies.map(function(e){ return {x:e.x, y:e.y}; });
+      const px=list.map(function(e){ return {x:e.x, y:e.y}; });
       beginAttack(id);
       let zMax=0, maxProj=0;
       for(let f=0;f<130;f++){ updatePlayer(p); updateEnemies(); updateProjectiles();
-        enemies.forEach(function(e,i){ if(px[i]){ e.x=px[i].x; e.y=px[i].y; } });
+        list.forEach(function(e,i){ if(px[i]){ e.x=px[i].x; e.y=px[i].y; } });
         if(projectiles.length>maxProj) maxProj=projectiles.length;
-        for(const e of enemies) if(e.z>zMax) zMax=e.z; }
-      return { dmg:enemies.reduce(function(a,e,i){ return a+(hp0[i]-e.hp); },0),
+        for(const e of list) if(e.z>zMax) zMax=e.z; }
+      return { dmg:list.reduce(function(a,e){ return a+(e.maxHp-e.hp); },0),
                up:zMax, proj:maxProj,
-               burn:enemies.filter(function(e){ return (e.burnT||0)>0; }).length }; };
+               burn:list.filter(function(e){ return (e.burnT||0)>0; }).length }; };
     const boom=shoot(tiers.filter(function(t){return t.kind==='boom';})[0].id);
     const shrap=shoot(tiers.filter(function(t){return t.kind==='shrap';})[0].id);
     const fire=shoot(tiers.filter(function(t){return t.kind==='fire';})[0].id);
@@ -466,10 +468,9 @@ const DRIVER = `
     if(boom.burn>0) throw new Error('炸裂弾まで延焼している＝弾種が効いていない');
     // 3種の威力がかけ離れていないこと（どれかが一択にならないように）
     const ds=[boom.dmg,shrap.dmg,fire.dmg];
-    // 炸裂弾は「打ち上げた敵が後続の子弾の爆風に入るか」で実行ごとに 180〜412 と振れる。
-    // 高さまで固定すると吹き飛ばしの検査ができなくなるので、比の上限を緩めて許容する。
-    // 見たいのは「どれかが一択にならない」ことだけ
-    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*2.6)
+    // 敵そのものを捕まえて測るようにしてから、与ダメは実行ごとに動かなくなった
+    // （炸裂412／榴散406／火炎328）。開きは1.26倍なので、上限も実測に見合う値まで締める
+    if(Math.max.apply(null,ds) > Math.min.apply(null,ds)*1.6)
       throw new Error('弾種の威力に開きがありすぎる（'+ds.map(Math.round).join('/')+'）');
     console.log('グレネードランチャー OK (Lv'+tiers.map(function(t){return t.lv+'='+t.kind;}).join('・Lv')
       +'／炸裂 与ダメ'+Math.round(boom.dmg)+'・浮き'+Math.round(boom.up)
