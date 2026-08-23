@@ -2361,6 +2361,14 @@ const ATK={
   ax1:{name:'兜割り', dur:20, act:[7,12], reach:100, hh:60, dmg:18, kb:8,  from:-1.9, to:0.9, len:60, trail:'#ffd0a0', pivotY:-68, lunge:1.8, knock:true, combo:1},
   ax2:{name:'返し斬り', dur:20, act:[7,12], reach:100, hh:56, dmg:18, kb:8, from:1.2, to:-1.6, len:60, trail:'#ffd0a0', pivotY:-66, lunge:1.6, combo:2},
   ax3:{name:'大回転斬', dur:32, act:[6,26], reach:116, hh:58, dmg:10, kb:16, from:-3.1, to:3.1, len:66, trail:'#fff', pivotY:-64, lunge:1.6, multi:true, multiGap:5, spin:true, knock:true, finisher:true, combo:3},
+  // ── 追加武器：死神の大鎌＝長い間合いを刈り取る4段。最後は一回転して薙ぎ払う ──
+  sc1:{name:'刈り取り', dur:19, act:[7,13], reach:132, hh:52, dmg:15, kb:7, from:-1.5, to:1.4, len:84, trail:'#c9a6ff', pivotY:-58, lunge:1.2, combo:1},
+  sc2:{name:'返し刈り', dur:19, act:[7,13], reach:132, hh:52, dmg:16, kb:7, from:1.4, to:-1.5, len:84, trail:'#c9a6ff', pivotY:-58, lunge:1.2, combo:2},
+  sc3:{name:'首刈り', dur:22, act:[8,15], reach:126, hh:74, dmg:19, kb:9, from:-2.1, to:0.5, len:86, trail:'#d6bcff', pivotY:-70, lunge:1.4, knock:true, combo:3},
+  sc4:{name:'冥府送り', dur:34, act:[7,28], reach:142, hh:60, dmg:12, kb:14, from:-3.1, to:3.1, len:92, trail:'#ffffff', pivotY:-62, lunge:1.6, multi:true, multiGap:5, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ── 追加武器：斬馬刀＝5倍の刀身。振りかぶりも振り抜きも遅いが、当たれば場が消し飛ぶ ──
+  zb1:{name:'大上段斬り', hold:8, dur:52, act:[26,36], reach:180, hh:96, dmg:64, kb:26, from:-2.3, to:1.3, len:150, trail:'#eaf2ff', pivotY:-84, lunge:2.6, knock:true, finisher:true, zanba:true, combo:1},
+  zb2:{name:'豪風薙ぎ', hold:10, dur:64, act:[30,46], reach:196, hh:88, dmg:78, kb:32, from:-3.1, to:3.1, len:164, trail:'#ffffff', pivotY:-80, lunge:2.2, multi:true, multiGap:8, spin:true, knock:true, finisher:true, aoe:true, zanba:true, combo:2},
   // ── 追加武器：鉄球フレイル（ガードワン）＝振り回して広範囲を薙ぐ4段 ──
   fl1:{name:'横薙ぎ', dur:18, act:[6,12], reach:118, hh:52, dmg:13, kb:9, from:-1.6, to:1.6, len:72, trail:'#c9ccd4', pivotY:-60, lunge:1.4, spin:true, knock:true, combo:1},
   fl2:{name:'唐竹割り', dur:20, act:[8,14], reach:110, hh:64, dmg:15, kb:10, from:-2.0, to:0.6, len:74, trail:'#c9ccd4', pivotY:-66, lunge:1.2, knock:true, combo:2},
@@ -2660,6 +2668,8 @@ const WEAPONS={
   // ── ガードワン8号：基本装備の巨大ハンマー ──
   ghammer:{snd:'blunt', name:'巨大ハンマー', reach:1.2, dmg:1.0, kb:1.6, ext:1.3, trail:'#ffb85a', launch:1.5, col:'#c9ccd4'},
   gaxe: {snd:'chop', name:'大戦斧', reach:1.28, dmg:1.25, kb:1.3, ext:1.35, trail:'#ffd0a0', launch:1.35, col:'#d0a060'},   // ガードワン：鋭い縦斬り
+  scythe:{snd:'blade', name:'死神の大鎌', reach:1.55, dmg:1.30, kb:1.15, ext:1.7, trail:'#c9a6ff', launch:1.25, col:'#a76bff'},   // 長い間合いを薙ぐ。刈り取るような横振り
+  zanbatou:{snd:'blunt', name:'斬馬刀', reach:1.95, dmg:2.60, kb:2.4, ext:2.6, trail:'#eaf2ff', launch:2.2, col:'#b6c4d6'},   // 通常の5倍の刀身。一撃は絶大だが隙も絶大
   gflail:{snd:'blunt', name:'鉄球フレイル', reach:1.4, dmg:1.05, kb:1.5, ext:1.5, trail:'#c9ccd4', launch:1.4, col:'#9aa0ac'},  // ガードワン：広範囲の振り回し
   // ── ショップ限定（永続装備） ──
   holy:  {snd:'blade', name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
@@ -2729,7 +2739,8 @@ function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!
 // 装備武器ごとにコンボのモーションを差し替える
 const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'],
   twin:['tw1','tw2','tw3','tw4','tw5'], claw:['cl1','cl2','cl3','cl4'],
-  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'] };
+  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'],
+  scythe:['sc1','sc2','sc3','sc4'], zanbatou:['zb1','zb2'] };
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
 function comboMaxFor(p){ if(p.kind==='nuko') return 1; if(p.kind==='wanden') return 4; if(p.kind==='mack') return MK_AMMO; const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
 // ══════════════════════════════════════════════════════════════
@@ -6754,11 +6765,11 @@ const CHARMS={
 function charmDropKind(){ const ids=Object.keys(CHARMS).filter(id=>players.some(p=>p.active&&p.kind===CHARMS[id].who)); return ids.length? ids[(Math.random()*ids.length)|0] : null; }
 function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー/双剣、シマ=ヌンチャク/トンファー/鉄爪、ヌコ=魔導書）
   const pool=[];
-  if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer','twin');
+  if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer','twin','scythe','zanbatou');
   if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa','claw');
   if(players.some(p=>p.active && p.kind==='nuko')) pool.push('tome');
-  if(players.some(p=>p.active && p.kind==='guard8')) pool.push('gaxe','gflail');
-  if(players.some(p=>p.active && p.kind==='watch')) pool.push('spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail');   // 盗賊ワッチは全ての武器を扱える
+  if(players.some(p=>p.active && p.kind==='guard8')) pool.push('gaxe','gflail','zanbatou');
+  if(players.some(p=>p.active && p.kind==='watch')) pool.push('spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail','scythe','zanbatou');   // 盗賊ワッチは全ての武器を扱える
   if(!pool.length) return 'hp';
   return pool[Math.floor(Math.random()*pool.length)];
 }
@@ -6791,9 +6802,9 @@ function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(p.kind==='watch') return kind!=='tome'&&kind!=='wand'&&kind!=='staff2';   // ワッチ＝魔法以外の全武器を扱える（アイテム攻撃が得意）
   if(p.kind==='mack') return false;                                               // マック＝自前の銃火器だけで戦う（拾い物は取らない）
   if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
-  if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail';                     // ガードワン8号＝大戦斧・フレイルも扱う
+  if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail'||kind==='zanbatou';   // ガードワン8号＝大戦斧・フレイル・斬馬刀（巨体だから振り回せる）
   if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa'||kind==='claw';   // シマ＝拳法武器のみ
-  return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger';          // イッヌ＝剣系のみ
+  return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger'||kind==='scythe'||kind==='zanbatou';   // イッヌ＝剣系＋大鎌・斬馬刀
 }
 function pickerFor(it){ // nearest eligible player on the ground
   let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='down'||p.state==='dead')continue;
@@ -6865,9 +6876,24 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#4a2a78'; ctx.beginPath(); ctx.moveTo(-11,1); ctx.quadraticCurveTo(0,6,11,1); ctx.lineTo(11,5); ctx.quadraticCurveTo(0,10,-11,5); ctx.closePath(); ctx.fill();
     for(const s2 of [-1,1]){ ctx.fillStyle='#f4eeff'; ctx.beginPath(); ctx.moveTo(0,2); ctx.quadraticCurveTo(s2*6,-2,s2*11,0); ctx.lineTo(s2*11,3); ctx.quadraticCurveTo(s2*6,1,0,5); ctx.closePath(); ctx.fill(); }
     drawStar(0,-6,2,4.4,'#c89cff');
-  } else if(it.kind==='gaxe'){ ctx.rotate(-0.4);      // 大戦斧
-    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(-10,10); ctx.lineTo(8,-8); ctx.stroke();
-    ctx.fillStyle=radGrad(9,-9,10,'#f4dca0','#8a6a30'); ctx.beginPath(); ctx.moveTo(6,-6); ctx.quadraticCurveTo(20,-16,16,-4); ctx.quadraticCurveTo(20,6,6,-2); ctx.closePath(); ctx.fill();
+  } else if(it.kind==='gaxe'){ ctx.rotate(-0.4);      // 大戦斧：柄を挟む頭と背の平ら
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-12,12); ctx.lineTo(10,-10); ctx.stroke();
+    ctx.save(); ctx.translate(8,-8); ctx.rotate(-0.79);
+    ctx.fillStyle=radGrad(4,0,14,'#eef3fa','#5d6672'); ctx.beginPath();
+    ctx.moveTo(-4,-5); ctx.lineTo(2,-13); ctx.quadraticCurveTo(14,-9,14,0);
+    ctx.quadraticCurveTo(14,9,2,13); ctx.lineTo(-4,5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3a4048'; ctx.fillRect(-10,-6,6,12);
+    ctx.restore();
+  } else if(it.kind==='scythe'){ ctx.rotate(-0.3);   // 死神の大鎌
+    ctx.strokeStyle='#2a2430'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-12,13); ctx.lineTo(11,-6); ctx.stroke();
+    ctx.fillStyle=radGrad(4,-12,16,'#ffffff','#5a7a92'); ctx.beginPath();
+    ctx.moveTo(11,-6); ctx.quadraticCurveTo(14,-20,-4,-18); ctx.quadraticCurveTo(6,-14,8,-4); ctx.closePath(); ctx.fill();
+  } else if(it.kind==='zanbatou'){ ctx.rotate(-0.5);  // 斬馬刀
+    ctx.fillStyle='#2f2a26'; ctx.fillRect(-13,-3,10,6);
+    ctx.fillStyle=radGrad(0,0,5,'#e6c56a','#8a6a1e'); ctx.beginPath(); ctx.ellipse(-2,0,2.6,7,0,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(8,0,18,'#f2f7ff','#68758a'); ctx.beginPath();
+    ctx.moveTo(0,-8); ctx.lineTo(15,-7); ctx.lineTo(20,0); ctx.lineTo(15,7); ctx.lineTo(0,8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillRect(1,-7,14,2);
   } else if(it.kind==='gflail'){                      // 鉄球フレイル
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-11,8); ctx.lineTo(0,-2); ctx.stroke();
     ctx.strokeStyle='#9aa0ac'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(6,-6); ctx.stroke();
@@ -8067,7 +8093,7 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
 let vehicles=[];   // フィールド上の乗り物ピックアップ {x,kind,taken}
 const VEHDEF={
   horse:{name:'馬',        sp:1.7,  hp:60, ram:12, dur:420, col:'#8a5a34', c2:'#5c3a20', mane:'#3a2414'},   // dur=乗れる時間(フレーム)。攻撃を受けると落馬
-  buggy:{name:'バギーカー', sp:2.0,  hp:96, ram:16, dur:360, col:'#c0392b', c2:'#7a2018', mane:'#2a2a30'},   // 速い分だけ持続は短め
+  buggy:{name:'バギーカー', sp:2.0,  hp:96, ram:20, dur:360, col:'#c0392b', c2:'#7a2018', mane:'#2a2a30'},   // 速い分だけ持続は短め。車体が大きくなったぶん体当たりも重い
 };
 function spawnVehicle(x,kind){ vehicles.push({x:clamp(x,80,WORLD_END-80),kind,taken:false,bob:Math.random()*6}); }
 function tryMount(){ const p=player; if(p.vehicle||p.z>0) return false;
@@ -8089,11 +8115,13 @@ function dismount(p,crashed){ const V=VEHDEF[p.vehicle]; const timeout=(crashed=
     enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<126 && Math.abs(e.y-p.y)<60){ damageEnemy(e,28,(e.x<p.x?-1:1)*11,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*13,-9,3); } }); }
   else { popText(p.x,p.y-100,'降りた','#cfe0ff'); sfx.land(p.x); } }
 // 騎乗者を鞍の高さまで持ち上げるオフセット
-function mountLift(p){ return p.vehicle==='buggy'?52:70; }
+function mountLift(p){ return p.vehicle==='buggy'?86:70; }   // 車体を大きくしたぶん、座席の高さも上げる
 // バギーのバズーカ弾を発射
 function fireBazooka(p){ const dir=p.facing;
   spawnProj(p.x+dir*58, p.y, dir*10.5, 0, {owner:'player', dmg:Math.round(12*(p.atkMul||1)), color:'#ffae42', r:15, life:84, zz:46, blast:true, blastR:104, blastDmg:Math.round(26*(p.atkMul||1))});
   sfx.big(p.x); sfx.dash(p.x); shake=Math.max(shake,6); flash=Math.max(flash,2); spark(p.x+dir*64,p.y-58,'#ffd24d',16,10); ring(p.x+dir*54,p.y-56,'#ffae42'); p.vx=-dir*3; }
+// バギーの後部ガトリング：立ち上がり→連射の長さと間隔
+const BUGGY_GAT_T=54, BUGGY_GAT_WIND=8, BUGGY_GAT_GAP=3;
 function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
   if(p.invuln>0)p.invuln--;
   p.anim=(p.anim||0)+0.34; p.z=0; p.vz=0; if(p.mAtkT>0)p.mAtkT--;
@@ -8104,10 +8132,26 @@ function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
   let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx) p.facing=mx;
   const spd=SPEED*V.sp*(p.spdMul||1)*(p.mAtkT>0?0.55:1);   // 武器振り中は少し減速
   p.x+=mx*spd;
-  // 専用攻撃：馬＝大槍の薙ぎ払い、バギー＝バズーカ
+  // 専用攻撃：馬＝大槍の薙ぎ払い、バギー＝後部ガトリングの連射
   if(pressed.atk && (p.mAtkT||0)<=0){ pressed.atk=false;
     if(p.vehicle==='horse'){ p.mAtk='lance'; p.mAtkT=26; p.mHit=new Set(); sfx.swing(2, 'thrust', p.x); sfx.dash(p.x); spark(p.x+p.facing*70,p.y-72,'#aef8ff',12,9); }
-    else { p.mAtk='bazooka'; p.mAtkT=22; fireBazooka(p); } }
+    else { p.mAtk='gat'; p.mAtkT=BUGGY_GAT_T; p.mGatN=0; p.mGatSpin=0; sfx.rise(p.x); } }
+  // ── バギーの後部ガトリング：撃っている間ずっと弾がばら撒かれる ──
+  // 1発ずつは軽いが、連射のあいだ前へ走り続けられるのが持ち味
+  if(p.mAtk==='gat' && (p.mAtkT||0)>0){
+    p.mGatSpin=(p.mGatSpin||0)+0.55;
+    const el=BUGGY_GAT_T-p.mAtkT;
+    if(el>=BUGGY_GAT_WIND && el%BUGGY_GAT_GAP===0){ const dir=p.facing;
+      p.mGatN=(p.mGatN||0)+1;
+      const ang=Math.sin(p.mGatN*0.9)*0.16;                       // 上下に振りながら掃射
+      // 砲口（車体の中心から前へ約10px・高さ150）から出す。ここがずれると
+      // 「後ろで光っているのに弾は別の場所から飛ぶ」絵になる
+      spawnProj(p.x+dir*10, p.y-150, dir*(19+rnd(0,2)), 0, {owner:'player',
+        dmg:Math.round(9*(p.atkMul||1)), color:(p.mGatN%2)?'#ffe14d':'#ff8a3a', r:8, life:44,
+        zz:150, vzz:Math.sin(ang)*10, nostop:true, pierce:false});
+      spark(p.x+dir*30, p.y-150, '#ffe9a0', 3, 9, {aim:dir>0?0:Math.PI, spread:0.35});
+      shake=Math.max(shake,3); p.x-=dir*0.9;                      // 反動でわずかに押し戻される
+      if(p.mGatN%3===1) sfx.gun(p.x, 0.7); } }
   // 大槍のヒット判定（薙ぎ払いの中盤・前方広範囲）
   if(p.mAtk==='lance' && p.mAtkT>=6 && p.mAtkT<=20){ const dir=p.facing;
     enemies.forEach(e=>{ if(e.dead||e.grabbedBy||(p.mHit&&p.mHit.has(e.id)))return; const dx=(e.x-p.x)*dir;
@@ -8186,24 +8230,65 @@ function drawVehicleShape(sx, gy, face, V, kind, p){ ctx.save(); ctx.translate(s
     // 手綱
     ctx.strokeStyle='#2a1c10'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(112,-146); ctx.lineTo(22,-108); ctx.stroke();
   } else {
+    // ── バギーカー ──
+    // 従来は馬より小さくて「乗っている」感が出なかったので、全体を1.4倍の骨格で組み直し、
+    // 後部にガトリング砲塔を載せる
     // タイヤ（大きなオフロードタイヤ・回転）
-    for(const wx of [-52,52]){ ctx.save(); ctx.translate(wx,-24); ctx.rotate(t*0.6);
-      ctx.fillStyle='#15151a'; ctx.beginPath(); ctx.arc(0,0,28,0,7); ctx.fill();
-      ctx.fillStyle='#2a2a32'; for(let k=0;k<8;k++){ ctx.save(); ctx.rotate(k*0.785); ctx.fillRect(-3,-28,6,8); ctx.restore(); }   // トレッド
-      ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,12,0,7); ctx.fill(); ctx.fillStyle='#c8ccd4'; ctx.beginPath(); ctx.arc(0,0,5,0,7); ctx.fill();
+    for(const wx of [-74,74]){ ctx.save(); ctx.translate(wx,-34); ctx.rotate(t*0.6);
+      ctx.fillStyle='#15151a'; ctx.beginPath(); ctx.arc(0,0,40,0,7); ctx.fill();
+      ctx.fillStyle='#2a2a32'; for(let k=0;k<10;k++){ ctx.save(); ctx.rotate(k*0.628); ctx.fillRect(-4,-40,8,11); ctx.restore(); }   // トレッド
+      ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,17,0,7); ctx.fill();
+      ctx.fillStyle='#c8ccd4'; ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill();
+      ctx.strokeStyle='#5a606a'; ctx.lineWidth=3;                                    // スポーク
+      for(let k=0;k<5;k++){ ctx.save(); ctx.rotate(k*1.257); ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(0,-16); ctx.stroke(); ctx.restore(); }
       ctx.restore(); }
-    // 車体（ワイド）
-    ctx.fillStyle=V.c2; ctx.beginPath(); ctx.moveTo(-64,-30); ctx.lineTo(64,-30); ctx.lineTo(64,-48); ctx.lineTo(-64,-48); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(-60,-48); ctx.lineTo(62,-48); ctx.lineTo(46,-82); ctx.lineTo(-40,-82); ctx.closePath(); ctx.fill();   // キャビン
-    ctx.fillStyle=V.c2; ctx.fillRect(-66,-40,132,10);                                    // バンパー
+    // サスペンション（車体とタイヤをつなぐアーム）
+    ctx.strokeStyle='#3a3f48'; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-74,-34); ctx.lineTo(-46,-52); ctx.moveTo(74,-34); ctx.lineTo(46,-52); ctx.stroke();
+    // 車体（ワイド・低く長い）
+    ctx.fillStyle=V.c2; ctx.beginPath(); ctx.moveTo(-92,-42); ctx.lineTo(92,-42); ctx.lineTo(92,-66); ctx.lineTo(-92,-66); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(-86,-66); ctx.lineTo(88,-66); ctx.lineTo(64,-112); ctx.lineTo(-56,-112); ctx.closePath(); ctx.fill();   // キャビン
+    ctx.fillStyle='rgba(255,255,255,.16)'; ctx.beginPath(); ctx.moveTo(-86,-66); ctx.lineTo(88,-66); ctx.lineTo(88,-74); ctx.lineTo(-86,-74); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=V.c2; ctx.fillRect(-96,-56,192,14);                                  // バンパー
+    ctx.fillStyle='#2a2a30';                                                            // 前後の牽引フック
+    ctx.fillRect(92,-56,14,8); ctx.fillRect(-106,-56,14,8);
     // ロールケージ
-    ctx.strokeStyle='#2a2a30'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(-40,-82); ctx.lineTo(-30,-108); ctx.lineTo(30,-108); ctx.lineTo(46,-82); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-30,-108); ctx.lineTo(-24,-84); ctx.moveTo(30,-108); ctx.lineTo(24,-84); ctx.stroke();
+    ctx.strokeStyle='#2a2a30'; ctx.lineWidth=7; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-56,-112); ctx.lineTo(-42,-152); ctx.lineTo(42,-152); ctx.lineTo(64,-112); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-42,-152); ctx.lineTo(-34,-116); ctx.moveTo(42,-152); ctx.lineTo(34,-116); ctx.stroke();
+    ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(-42,-136); ctx.lineTo(42,-136); ctx.stroke();   // 横桟
     // シート
-    ctx.fillStyle='#33333c'; ctx.fillRect(-18,-104,32,22);
+    ctx.fillStyle='#33333c'; ctx.fillRect(-26,-146,44,32);
+    ctx.fillStyle='#44444f'; ctx.fillRect(-26,-146,44,8);
+    // ── 後部のガトリング砲塔 ──
+    // 撃っている間は銃身が回り、砲口が光る
+    { const firing=p && p.mAtk==='gat' && (p.mAtkT||0)>0;
+      const spin=(p&&p.mGatSpin)||0;
+      ctx.save(); ctx.translate(-86,-150);   // 運転席の後ろ・高い位置。銃身がキャビンの上を越えて前へ出る
+      ctx.fillStyle='#3a3f48'; roundRect(-16,-10,32,26,5); ctx.fill();                 // 砲座
+      ctx.fillStyle='#4a525e'; roundRect(-16,-10,32,9,4); ctx.fill();
+      ctx.save(); ctx.rotate(-0.12);
+      ctx.fillStyle='#2a2f36'; roundRect(-6,-14,30,18,4); ctx.fill();                   // 機関部
+      for(let k=0;k<6;k++){ const a=spin+k*(TAU/6), yy=Math.sin(a)*7;                   // 6本の銃身
+        ctx.fillStyle=(Math.cos(a)>0)?'#c8ccd4':'#7d8794';
+        ctx.fillRect(20, yy-3.4, 76, 6.4); }
+      ctx.fillStyle='#1e242c'; ctx.beginPath(); ctx.ellipse(96,0,6,10,0,0,7); ctx.fill(); // 砲口
+      if(firing){ ctx.save(); ctx.globalCompositeOperation='lighter';
+        const fu=0.6+0.4*Math.sin(gf*1.7);
+        ctx.fillStyle='rgba(255,236,150,'+(0.85*fu).toFixed(2)+')';
+        ctx.beginPath(); ctx.ellipse(104,0,18*fu,10*fu,0,0,7); ctx.fill();
+        ctx.fillStyle='rgba(255,150,60,'+(0.5*fu).toFixed(2)+')';
+        ctx.beginPath(); ctx.ellipse(116,0,26*fu,7*fu,0,0,7); ctx.fill(); ctx.restore(); }
+      ctx.restore();
+      // 弾帯
+      ctx.strokeStyle='#c8a24a'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(-10,10); ctx.quadraticCurveTo(-24,26,-14,38); ctx.stroke();
+      ctx.restore(); }
     // ヘッドライト
-    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,235,140,.9)'; ctx.beginPath(); ctx.arc(60,-58,6,0,7); ctx.fill();
-    ctx.fillStyle='rgba(255,235,140,.25)'; ctx.beginPath(); ctx.moveTo(60,-58); ctx.lineTo(120,-72); ctx.lineTo(120,-44); ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,235,140,.9)';
+    ctx.beginPath(); ctx.arc(86,-82,8,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(86,-62,6,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,235,140,.25)'; ctx.beginPath(); ctx.moveTo(88,-80); ctx.lineTo(168,-100); ctx.lineTo(168,-52); ctx.closePath(); ctx.fill(); ctx.restore();
     // 排気煙（走行中）
     if(moving && gf%3===0){ ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle='#9a9aa2'; ctx.beginPath(); ctx.arc(-70,-46,5,0,7); ctx.fill(); ctx.restore(); }
   }
@@ -12535,13 +12620,74 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.fillStyle=mega?'#c8961a':'#7a7e8a';                                                                // リベット
     for(const ry of [-hh2+5, 0, hh2-5]){ ctx.beginPath(); ctx.arc(L+27,ry,2,0,7); ctx.fill(); }
     if(big>1) ctx.restore();
-  } else if(wk==='gaxe'){ const L=ext*0.7+20;   // 大戦斧：長い柄＋巨大な斧刃
-    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=5.5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(L,0); ctx.stroke();
-    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L,0,3,0,7); ctx.fill();
-    const bl=ctx.createLinearGradient(L,-26,L+30,26); bl.addColorStop(0,'#f4dca0'); bl.addColorStop(.5,'#d0a060'); bl.addColorStop(1,'#8a6a30');
-    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L,-4); ctx.quadraticCurveTo(L+34,-30,L+26,0); ctx.quadraticCurveTo(L+34,30,L,4); ctx.closePath(); ctx.fill();   // 三日月刃
-    ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(L+2,-3); ctx.quadraticCurveTo(L+28,-22,L+22,-1); ctx.stroke();
-    ctx.fillStyle='#8a6a30'; ctx.fillRect(L-3,-8,6,16);   // 刃元の金具
+  } else if(wk==='gaxe'){ const L=ext*0.7+20;   // 大戦斧
+    // 以前は柄の先に三日月を1枚置いただけで、「棒の先の月」にしか見えなかった。
+    // 斧に見せる要素は3つ：柄を横から挟む頭（目・ヒツ）／背の平ら（ポール）／
+    // 刃先が柄より手元側まで垂れ下がる「顎（ヒゲ）」。この3つを描く
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=7; ctx.lineCap='round';                    // 太い柄
+    ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(L+10,0); ctx.stroke();
+    ctx.strokeStyle='#6a4a24'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-16,-1.6); ctx.lineTo(L+8,-1.6); ctx.stroke();
+    ctx.fillStyle='#2a1c10'; ctx.fillRect(-18,-5,8,10);                                  // 尻の金具
+    ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=1.6;                                        // 柄巻き
+    for(let i=-12;i<8;i+=5){ ctx.beginPath(); ctx.moveTo(i,-3.6); ctx.lineTo(i+3,3.6); ctx.stroke(); }
+    // 頭（斧身）：柄を挟む鉄の塊
+    const hd=ctx.createLinearGradient(L-8,-30,L+18,30);
+    hd.addColorStop(0,'#eef3fa'); hd.addColorStop(0.42,'#b9c2cf'); hd.addColorStop(1,'#5d6672');
+    ctx.fillStyle=hd; ctx.beginPath();
+    ctx.moveTo(L-10,-9);                                   // 目（柄を挟む部分）の上
+    ctx.lineTo(L+2,-34);                                   // 上の角
+    ctx.quadraticCurveTo(L+30,-24, L+30,0);                // 刃の外側（上半分）
+    ctx.quadraticCurveTo(L+30,24, L+2,34);                 // 刃の外側（下半分）
+    ctx.lineTo(L-10,9);                                    // 顎（柄より手元へ垂れる）
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(24,20,16,.62)'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+    ctx.fillStyle='#3a4048'; ctx.beginPath();              // 背の平ら（ポール）＝叩く面
+    ctx.moveTo(L-22,-11); ctx.lineTo(L-8,-11); ctx.lineTo(L-8,11); ctx.lineTo(L-22,11); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#59616b'; ctx.fillRect(L-22,-11,14,5);
+    ctx.fillStyle='#2f353c'; ctx.fillRect(L-11,-12,7,24);  // 目（柄を通す穴）の縁
+    ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath();// 刃先の光
+    ctx.moveTo(L+4,-30); ctx.quadraticCurveTo(L+27,-21, L+27,0);
+    ctx.quadraticCurveTo(L+27,21, L+4,30); ctx.lineTo(L+8,26);
+    ctx.quadraticCurveTo(L+23,18, L+23,0); ctx.quadraticCurveTo(L+23,-18, L+8,-26); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#8a6a30'; ctx.beginPath(); ctx.arc(L+11,0,3,0,7); ctx.fill();          // 鋲
+  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：長い柄の先から直角に大きく反る刃
+    ctx.strokeStyle='#2a2430'; ctx.lineWidth=6.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-26,6); ctx.quadraticCurveTo(L*0.5,-6, L,-10); ctx.stroke();   // 反りのある柄
+    ctx.strokeStyle='#43394f'; ctx.lineWidth=2.6;
+    ctx.beginPath(); ctx.moveTo(-26,4); ctx.quadraticCurveTo(L*0.5,-8, L,-12); ctx.stroke();
+    ctx.fillStyle='#6a5a2a'; ctx.fillRect(-28,1,9,10);                                     // 石突き
+    ctx.fillStyle='#c8a24a'; ctx.beginPath(); ctx.arc(L-4,-10,4.6,0,7); ctx.fill();         // 刃元の金具
+    const sb=ctx.createLinearGradient(L,-14,L-30,-84);
+    sb.addColorStop(0,'#ffffff'); sb.addColorStop(0.35,'#cfe4f2'); sb.addColorStop(1,'#5a7a92');
+    ctx.fillStyle=sb; ctx.beginPath();
+    ctx.moveTo(L-2,-10);
+    ctx.quadraticCurveTo(L+18,-52, L-34,-86);          // 刃の外周（大きく反る）
+    ctx.quadraticCurveTo(L-16,-46, L-10,-8);           // 峰側へ戻る
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(20,18,26,.6)'; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=2.2;                            // 刃筋
+    ctx.beginPath(); ctx.moveTo(L-2,-12); ctx.quadraticCurveTo(L+15,-50, L-32,-82); ctx.stroke();
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';                    // 刃にまとわる冥い燐光
+      ctx.globalAlpha=0.22+0.10*Math.sin(gf*0.15);
+      ctx.fillStyle=radGrad(L-16,-48,44,'#a76bff','rgba(120,60,200,0)');
+      ctx.beginPath(); ctx.arc(L-16,-48,44,0,7); ctx.fill(); ctx.restore(); }
+  } else if(wk==='zanbatou'){ const L=ext*1.5+120;   // 斬馬刀：常識外れに巨大な大剣
+    ctx.fillStyle='#2f2a26'; ctx.fillRect(-34,-6,40,12);                                   // 両手で握る長い柄
+    ctx.strokeStyle='#7a6a4a'; ctx.lineWidth=2;
+    for(let i=-32;i<4;i+=6){ ctx.beginPath(); ctx.moveTo(i,-6); ctx.lineTo(i+4,6); ctx.stroke(); }
+    ctx.fillStyle='#3a3f48'; ctx.fillRect(-38,-9,8,18);                                    // 柄頭
+    ctx.fillStyle=radGrad(8,0,16,'#e6c56a','#8a6a1e');                                     // 巨大な鍔
+    ctx.beginPath(); ctx.ellipse(8,0,7,20,0,0,7); ctx.fill();
+    const zb=ctx.createLinearGradient(10,-30,L,30);
+    zb.addColorStop(0,'#f2f7ff'); zb.addColorStop(0.45,'#b6c4d6'); zb.addColorStop(1,'#68758a');
+    ctx.fillStyle=zb; ctx.beginPath();
+    ctx.moveTo(12,-26); ctx.lineTo(L-30,-24); ctx.lineTo(L,-6); ctx.lineTo(L,6);
+    ctx.lineTo(L-30,24); ctx.lineTo(12,26); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(22,26,34,.6)'; ctx.lineWidth=2.4; ctx.lineJoin='round'; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.55)'; ctx.fillRect(14,-24,L-46,5);                    // 峰の照り
+    ctx.fillStyle='rgba(0,0,0,.20)'; ctx.fillRect(14,18,L-46,6);                           // 下面の陰
+    ctx.strokeStyle='rgba(40,46,58,.5)'; ctx.lineWidth=2.6;                                // 樋（血抜きの溝）
+    ctx.beginPath(); ctx.moveTo(24,0); ctx.lineTo(L-42,0); ctx.stroke();
   } else if(wk==='gflail'){ const L=ext*0.55+16, fa=Math.sin(gf*0.6)*0.9+0.5;   // 鉄球フレイル：柄＋鎖＋トゲ鉄球
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L,0); ctx.stroke();
     const ex2=L+8+Math.cos(fa)*14, ey2=Math.sin(fa)*14;
@@ -16209,7 +16355,7 @@ function drawHUD(){
     ctx.fillStyle=V.col; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('乗物: '+V.name,22,hudY+17);
     const tr=clamp(player.vehT/(V.dur||420),0,1); barFrame(120,hudY+8,116,11);
     ctx.fillStyle=tr<0.25?(gf%8<4?'#ff4d2d':'#a83a20'):V.col; ctx.fillRect(122,hudY+10,112*tr,7);   // 残り時間（残りわずかで赤点滅）
-    ctx.fillStyle='#cfe0ff'; ctx.font=uif('normal',10); ctx.fillText((player.vehicle==='horse'?'攻撃=大槍':'攻撃=バズーカ')+' / 掴み=降車 / 被弾で落馬',22,hudY+33); hudY+=44; }
+    ctx.fillStyle='#cfe0ff'; ctx.font=uif('normal',10); ctx.fillText((player.vehicle==='horse'?'攻撃=大槍':'攻撃=ガトリング連射')+' / 掴み=降車 / 被弾で落車',22,hudY+33); hudY+=44; }
   // 奥義（次元斬）ストック：1Pパネル2行目の左
   { const _uc=ultCost(player), _ready=player.dim>=_uc;
     ctx.font=uif('bold',11); ctx.fillStyle=_ready?'#d6a6ff':'rgba(214,166,255,.55)'; ctx.fillText('奥義',22,95);

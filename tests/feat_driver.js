@@ -95,6 +95,67 @@ const DRIVER = `
   if(!(Math.abs(tr.vz) < 8)) throw new Error('trailer armor not resisting launch (vz='+tr.vz+', expected ~7 from -14x0.5)');
   console.log('ENEMY TRAILER ARMOR OK (launch vz -14 -> '+tr.vz.toFixed(1)+', no star-KO)');
 
+  // ===== 追加武器：死神の大鎌と斬馬刀 =====
+  { // 定義が揃っていること
+    ['scythe','zanbatou'].forEach(function(k){
+      if(!WEAPONS[k]) throw new Error(k+' の武器定義が無い');
+      if(!WEAPON_COMBO[k]) throw new Error(k+' のコンボが無い');
+      WEAPON_COMBO[k].forEach(function(id){ if(!ATK[id]) throw new Error(k+' のコンボ技 '+id+' が ATK に無い'); }); });
+    // 斬馬刀は「一撃が絶大／隙も絶大」。大鎌は「間合いが長い」
+    const ax=ATK[WEAPON_COMBO.gaxe[0]], zb=ATK[WEAPON_COMBO.zanbatou[0]], sc=ATK[WEAPON_COMBO.scythe[0]];
+    if(!(zb.dmg>ax.dmg*2.5)) throw new Error('斬馬刀の一撃が '+zb.dmg+'（大戦斧 '+ax.dmg+' の2.5倍未満）');
+    if(!(zb.act[0]>=20)) throw new Error('斬馬刀の振りかぶりが '+zb.act[0]+'F しかない（隙が大きくない）');
+    if(!(zb.dur-zb.act[1]>=12)) throw new Error('斬馬刀の振り抜き後の隙が '+(zb.dur-zb.act[1])+'F しかない');
+    if(!(zb.dur>ax.dur*2)) throw new Error('斬馬刀の全体フレームが '+zb.dur+'（大戦斧 '+ax.dur+' の2倍未満）');
+    if(!(WEAPONS.zanbatou.reach>WEAPONS.gaxe.reach*1.4)) throw new Error('斬馬刀の間合いが伸びていない');
+    if(!(WEAPONS.scythe.reach>WEAPONS.gaxe.reach*1.15)) throw new Error('大鎌の間合いが伸びていない');
+    // 実際に持って振ると当たり、斬馬刀のほうが重い
+    const swing=function(kind,weapon,id){ setupRoster(kind); startGame(); state='play';
+      const p=players[0]; player=p; p.atkMul=1; p.weapon=weapon; p.weaponT=99999;
+      p.x=camX+300; p.facing=1; p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
+      enemies.length=0; encounters.length=0;
+      spawnEnemy('wolf', p.x+150, LANE); const e=enemies[0]; e.hp=e.maxHp=999999; e.thinkCd=999999;
+      const hp0=e.hp; beginAttack(id);
+      for(let f=0;f<120;f++){ hitStop=0; updatePlayer(p); }
+      return hp0-e.hp; };
+    const dSc=swing('inu','scythe','sc1'), dZb=swing('inu','zanbatou','zb1'), dAx=swing('guard8','gaxe','ax1');
+    if(!(dSc>0)) throw new Error('大鎌が当たらない');
+    if(!(dZb>0)) throw new Error('斬馬刀が当たらない');
+    if(!(dZb>dAx*2)) throw new Error('斬馬刀の実ダメージが '+dZb+'（大戦斧 '+dAx+' の2倍未満）');
+    // 拾える相手：イッヌとワッチは両方、シマは扱えない
+    if(!canPick({kind:'inu'},'scythe')) throw new Error('イッヌが大鎌を拾えない');
+    if(!canPick({kind:'inu'},'zanbatou')) throw new Error('イッヌが斬馬刀を拾えない');
+    if(!canPick({kind:'guard8'},'zanbatou')) throw new Error('ガードワンが斬馬刀を拾えない');
+    if(canPick({kind:'shima'},'zanbatou')) throw new Error('シマが斬馬刀を拾えてしまう');
+    console.log('追加武器 OK (大鎌 実ダメージ'+dSc+'・間合い'+WEAPONS.scythe.reach
+      +'／斬馬刀 '+dZb+'・振りかぶり'+zb.act[0]+'F・全体'+zb.dur+'F／大戦斧 '+dAx+')'); }
+
+  // ===== 斧の見た目：三日月ではなく「斧」の形をしていること =====
+  // 以前は柄の先に三日月を1枚置いただけで、棒の先の月にしか見えなかった。
+  // 斧に見せる3要素（柄を挟む頭／背の平ら／柄より手元へ垂れる顎）が描かれているかを、
+  // 実装が呼ぶ描画命令の座標から確かめる
+  { const real=ctx;
+    const shape=function(weapon){ setupRoster('guard8'); startGame(); state='play';
+      const p=players[0]; player=p; p.weapon=weapon; p.weaponT=99999;
+      const rects=[], polys=[];
+      try{ ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
+            if(k==='fillRect') return function(x,y,w,h){ rects.push([x,y,w,h]); return v.apply(t,arguments); };
+            if(k==='lineTo'||k==='moveTo') return function(x,y){ polys.push([x,y]); return v.apply(t,arguments); };
+            if(typeof v==='function') return function(){ return v.apply(t,arguments); };
+            return v; }, set:function(t,k,v){ t[k]=v; return true; } });
+        drawBlade(0,0,0,30);
+      } finally { ctx=real; }
+      return {rects:rects, polys:polys}; };
+    const a=shape('gaxe');
+    if(a.polys.length<6) throw new Error('斧の刃が描かれていない');
+    // 頭は柄（y=0）の上下へ大きく張り出す：|y|>=24 の点が上下ともにあること
+    const up=a.polys.some(function(q){ return q[1]<=-24; }), dn=a.polys.some(function(q){ return q[1]>=24; });
+    if(!up||!dn) throw new Error('斧の刃が柄の上下へ張り出していない（三日月のまま）');
+    // 背の平ら（ポール）＝刃の反対側に置かれた縦長の矩形があること
+    const poll=a.rects.some(function(r){ return r[3]>=18 && r[2]<=18 && r[0]>0; });
+    if(!poll) throw new Error('斧の背の平ら（ポール）が無い');
+    console.log('斧の形 OK (柄の上下へ張り出す頭＋背の平ら)'); }
+
   console.log('NEW FEATURES TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

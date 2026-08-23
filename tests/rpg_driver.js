@@ -87,32 +87,38 @@ const DRIVER = `
   let tdrop=false; for(let i=0;i<8 && !tdrop;i++){ hitStop=0; step(1); if(!r.vehicle) tdrop=true; }
   if(!tdrop) throw new Error('vehicle did not auto-dismount at time limit');
   console.log('TIME-LIMIT AUTO-DISMOUNT OK (dur horse='+VEHDEF.horse.dur+'f, buggy='+VEHDEF.buggy.dur+'f)');
-  // buggy bazooka attack
+  // ── バギーの後部ガトリング（以前はバズーカ1発だった）──
+  // 1発ずつは軽いが、連射のあいだ弾がばら撒かれる。弾数と与ダメの両方を見る
   hitStop=0; slowmo=0;
   vehicles.length=0; spawnVehicle(r.x, 'buggy'); r.in.pressed.grab=true; useInput(r.in); tryMount(); r.in.pressed.grab=false;
   if(r.vehicle!=='buggy') throw new Error('failed to mount buggy');
   projectiles.length=0; enemies.length=0; spawnEnemy('wolf', r.x+170, r.y); const be=enemies[0]; be.thinkCd=9999; be.hp=be.maxHp=9999; const beh0=be.hp;
   player=r; useInput(r.in); r.in.keys={}; hitStop=0; slowmo=0; r.in.pressed.atk=true; step(1);
-  if(!projectiles.some(pr=>pr.owner==='player'&&pr.blast)) throw new Error('bazooka fired no blast projectile');
-  for(let i=0;i<44;i++){ hitStop=0; slowmo=0; step(1); }
-  if(be.hp>=beh0) throw new Error('bazooka blast did not damage enemy');
-  console.log('BUGGY BAZOOKA OK (blast dmg='+(beh0-be.hp)+')');
+  if(r.mAtk!=='gat') throw new Error('バギーの攻撃がガトリングになっていない（mAtk='+r.mAtk+'）');
+  let fired=0; const gatSeen=new Set();
+  for(let i=0;i<BUGGY_GAT_T+30;i++){ hitStop=0; slowmo=0; step(1);
+    projectiles.forEach(pr=>{ if(pr.owner==='player' && !gatSeen.has(pr)){ gatSeen.add(pr); fired++; } }); }
+  if(fired<6) throw new Error('ガトリングが '+fired+' 発しか出ていない（連射になっていない）');
+  if(be.hp>=beh0) throw new Error('ガトリングが敵に当たっていない');
+  // 単発の重い弾ではないこと（1発あたりの威力が軽い＝連射で削る武装）
+  const per=(beh0-be.hp)/fired;
+  if(per>30) throw new Error('1発が '+per.toFixed(1)+' ダメージもある（バズーカのままでは）');
+  console.log('BUGGY GATLING OK ('+fired+'発・与ダメ'+(beh0-be.hp)+'・1発あたり'+per.toFixed(1)+')');
   // manual dismount
   r.in.keys={}; hitStop=0; slowmo=0; r.in.pressed.grab=true; step(3);
   if(r.vehicle) throw new Error('manual dismount failed');
   console.log('BUGGY MANUAL DISMOUNT OK');
 
-  // ===== 6b) bazooka reliably HITS a SHORT enemy (was flying over) & explodes =====
+  // ===== 6b) ガトリングは背の低い敵にもちゃんと当たる（弾が頭上を素通りしない）=====
   setupRoster('inu'); startGame(); state='play'; const bz=players[0]; player=bz; bz.x=400; bz.hp=bz.maxHp=99999; bz.lives=99;
   vehicles.length=0; enemies.length=0; projectiles.length=0;
   spawnVehicle(bz.x,'buggy'); bz.in.pressed.grab=true; useInput(bz.in); tryMount(); bz.in.pressed.grab=false;
-  spawnEnemy('corgi', bz.x+150, bz.y); const cg=enemies[0]; cg.thinkCd=9999; cg.hp=cg.maxHp=9999;   // corgi h=60 (shorter than old zz=60)
+  spawnEnemy('corgi', bz.x+150, bz.y); const cg=enemies[0]; cg.thinkCd=9999; cg.hp=cg.maxHp=9999;   // corgi h=60（背が低い）
   if(ETYPE.corgi.h>60) throw new Error('test assumes corgi is short');
   player=bz; useInput(bz.in); bz.in.keys={}; hitStop=0; slowmo=0; bz.in.pressed.atk=true; step(1);
-  let sawExplosion=false, hh=cg.hp;
-  for(let i=0;i<40;i++){ hitStop=0; slowmo=0; const before=projectiles.length; step(1); if(cg.hp<hh){ sawExplosion=true; } }
-  if(cg.hp>=9999) throw new Error('BAZOOKA still whiffs a short enemy (no hit detection)');
-  console.log('BAZOOKA HIT+EXPLODE OK (short enemy corgi h='+ETYPE.corgi.h+', dmg='+(9999-cg.hp)+')');
+  for(let i=0;i<BUGGY_GAT_T+30;i++){ hitStop=0; slowmo=0; step(1); }
+  if(cg.hp>=9999) throw new Error('ガトリングが背の低い敵に当たらない（弾が頭上を素通りしている）');
+  console.log('GATLING HIT OK (背の低い corgi h='+ETYPE.corgi.h+' に '+(9999-cg.hp)+' ダメージ)');
 
   // ===== 6c) random zako spawns vary across playthroughs =====
   const fixed=[['wolf',1],['corgi',1],['ari',1]];
