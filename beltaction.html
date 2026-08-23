@@ -3339,6 +3339,89 @@ function drawLiftShaft(){
       ctx.restore(); }
   }
 }
+// ══════════════════════════════════════════════════════════════════
+//  ステージのギミック
+//  区画ごとに抽選する。同じ地形でも毎回ちがう仕掛けが出るようにして、
+//  「この坂＝落石」と覚えたら終わり、にならないようにする
+// ══════════════════════════════════════════════════════════════════
+const GIMMICKS=[
+  {id:'boulder',  name:'落石',       col:'#c8b48a', slope:'down', cd:[300,470]},   // 坂の上から大岩
+  {id:'meteor',   name:'隕石雨',     col:'#ff8a3a', cd:[210,340]},                  // 空から隕石が降る
+  {id:'bolt',     name:'落雷',       col:'#9fe8ff', cd:[190,300]},                  // 予兆のあと真上から落雷
+  {id:'geyser',   name:'噴出',       col:'#dfe8f2', cd:[170,280]},                  // 地面から蒸気が噴き上がる
+  {id:'spike',    name:'棘',         col:'#c8ccd4', cd:[150,240]},                  // 床から棘が生える
+  {id:'gale',     name:'突風',       col:'#cfe0ff', cd:[240,380]},                  // 横風で足を取られる
+];
+function gimmickById(id){ for(let i=0;i<GIMMICKS.length;i++) if(GIMMICKS[i].id===id) return GIMMICKS[i]; return null; }
+let STAGE_GIM={};      // stage番号 -> ギミックのid（addBlocks が抽選して入れる）
+let gimCd=0, gimWarn=[], gimStage=-1;
+let gimOn=true;        // 仕掛けの発生そのものを止める（ヘッドレス検証で乱数を排すため）
+// 区画に合うギミックを1つ引く。下り坂の落石だけは地形が要るので、そこでしか出さない
+function rollGimmick(terr){
+  const pool=GIMMICKS.filter(function(g){ return !g.slope || g.slope===terr; });
+  return pool[(Math.random()*pool.length)|0].id; }
+function curGimmick(){ const g=STAGE_GIM[stage]; return g? gimmickById(g) : null; }
+// 予兆の輪。落ちてくる位置を先に見せないと理不尽になる
+function gimWarnAt(x, col, life){ gimWarn.push({x:x, t:0, life:life||46, col:col||'#ffd24d'}); }
+function tickGimmicks(){
+  for(let i=gimWarn.length-1;i>=0;i--){ const w=gimWarn[i]; w.t++; if(w.t>=w.life) gimWarn.splice(i,1); }
+  const pl=activePlayers().filter(function(q){ return q.state!=='dead'; })[0];
+  if(!pl || state!=='play' || trainMode){ gimCd=0; return; }
+  if(!gimOn){ gimCd=0; return; }
+  const G=curGimmick(); if(!G){ gimCd=0; return; }
+  // ボス戦の最中は出さない。ボスの弾幕と重なると、避ける場所が無くなって理不尽になる
+  for(let i=0;i<enemies.length;i++){ const E=ETYPE[enemies[i].type];
+    if(!enemies[i].dead && E && E.boss) return; }
+  if(G.id==='boulder'){ tickBoulders(); return; }        // 落石は坂の上から転がす専用の処理
+  // 区画に入った瞬間に落ちてこないよう、最初の一発だけ間を置く
+  if(gimStage!==stage){ gimStage=stage; gimCd=rnd(G.cd[0],G.cd[1])|0; return; }
+  if(gimCd>0){ gimCd--; return; }
+  gimCd=rnd(G.cd[0],G.cd[1])|0;
+  const px=pl.x;
+  if(G.id==='meteor'){                                    // 隕石雨：3〜5発をばらまく
+    const n=3+((Math.random()*3)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-300,300), camX+40, camX+W-40);
+      hazards.push({kind:'meteor', x:tx, y:LANE, t:0, life:200, warn:38+k*7, z:620+rnd(0,160), vz:0, r:44+rnd(0,18), hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#ff8a3a', 38+k*7); }
+    popText(px, LANE-groundLift(px)-190, '隕石が降ってくる！', '#ff8a3a', true); sfx.boss(px); shake=Math.max(shake,6); }
+  else if(G.id==='bolt'){                                 // 落雷：予兆のあと柱が落ちる
+    const n=2+((Math.random()*2)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-240,240), camX+40, camX+W-40);
+      hazards.push({kind:'gbolt', x:tx, y:LANE, t:0, life:60, warn:34+k*10, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#9fe8ff', 34+k*10); }
+    popText(px, LANE-groundLift(px)-190, '雷が落ちる！', '#9fe8ff', true); sfx.zap(px); }
+  else if(G.id==='geyser'){                               // 噴出：足元から蒸気が吹き上げる
+    const n=2+((Math.random()*2)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-260,260), camX+40, camX+W-40);
+      hazards.push({kind:'geyser', x:tx, y:LANE, t:0, life:86, warn:30+k*9, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#dfe8f2', 30+k*9); } }
+  else if(G.id==='spike'){                                // 棘：床から生えて、しばらく残る
+    const n=2+((Math.random()*3)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-280,280), camX+40, camX+W-40);
+      hazards.push({kind:'gspike', x:tx, y:LANE, t:0, life:150, warn:32+k*8, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#c8ccd4', 32+k*8); } }
+  else if(G.id==='gale'){                                 // 突風：一定時間、横へ押し流される
+    const dir=(Math.random()<0.5)?-1:1;
+    hazards.push({kind:'gale', x:camX+W*0.5, y:LANE, t:0, life:150, dir:dir});
+    popText(px, LANE-groundLift(px)-190, (dir>0?'追い風':'向かい風')+'の突風！', '#cfe0ff', true); sfx.dash(px); }
+}
+// 予兆の輪を地面へ描く（ハザードの本体より前に出す）
+function drawGimWarn(){
+  for(let i=0;i<gimWarn.length;i++){ const w=gimWarn[i], sx=w.x-camX;
+    if(sx<-60||sx>W+60) continue;
+    const gy=LANE-groundLift(w.x), u=w.t/w.life, pulse=0.5+0.5*Math.sin(w.t*0.4);
+    ctx.save(); ctx.globalAlpha=0.30+0.45*pulse;
+    ctx.strokeStyle=w.col; ctx.lineWidth=3;
+    ctx.lineWidth=5;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 62*(1-u*0.35), 22*(1-u*0.35), 0,0,7); ctx.stroke();
+    ctx.globalAlpha=0.16+0.20*pulse;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 84*(1-u*0.20), 30*(1-u*0.20), 0,0,7); ctx.stroke();   // 外周
+    ctx.globalAlpha=0.18+0.24*pulse; ctx.fillStyle=w.col;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 56*(1-u*0.35), 19*(1-u*0.35), 0,0,7); ctx.fill();
+    ctx.globalAlpha=0.55+0.4*pulse; ctx.fillStyle=w.col; ctx.font=uif('900',30); ctx.textAlign='center';
+    ctx.fillText('!', sx, gy-26); ctx.textAlign='left';
+    ctx.restore(); }
+}
 function tickBoulders(){
   const pl=activePlayers().filter(q=>q.state!=='dead')[0];
   if(!pl || !stageIsDown(pl.x)){ boulderCd=0; return; }
@@ -3346,7 +3429,73 @@ function tickBoulders(){
   boulderCd=rnd(300,470)|0;
   if(hazards.some(h=>h.kind==='boulder')) return;      // 同時に2つは出さない（避け続けるだけになる）
   spawnBoulder(camX-90, 1); }
+// ステージのギミックが出す仕掛けの共通の当たり判定。
+// 予兆（warn）の間は当たらず、そこを過ぎてから効く
+function gimHit(h, dmg, kn, zTop){
+  for(const q of players){ if(!q.active||q.state==='dead'||q.state==='falling') continue;
+    if(h.hitP[q.pid]) continue;
+    if(Math.abs(q.x-h.x)>(h.r||34)) continue;
+    if(zTop!=null && q.z>zTop) continue;
+    h.hitP[q.pid]=1; hurtPlayer(q, dmg, (q.x<h.x?-1:1), kn); }
+  for(const e of enemies){ if(e.dead||e.grabbedBy) continue;
+    if(h.hitE[e.id]) continue;
+    if(Math.abs(e.x-h.x)>(h.r||34)) continue;
+    if(zTop!=null && e.z>zTop) continue;
+    h.hitE[e.id]=1; damageEnemy(e, Math.round(dmg*1.6), (e.x<h.x?-1:1)*8, true); }
+}
 function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; h.t++;
+  // ── 隕石：予兆の輪のあと、空から落ちてきて着弾で爆ぜる ──
+  if(h.kind==='meteor'){
+    if(h.t<h.warn){ /* まだ空の上。予兆だけ */ }
+    else { h.vz+=1.35; h.z-=h.vz;
+      if(perfTier<2 && h.t%2===0) ember(h.x+rnd(-10,10), LANE-groundLift(h.x)-h.z, rnd(-1,1), rnd(1,3), (h.t%4)?'#ff8a3a':'#ffd24d');
+      if(h.z<=0){ h.z=0;
+        bigExplosion(h.x, LANE-groundLift(h.x)-10, h.r*3.2, '#ff8a3a');
+        shake=Math.max(shake,14); quake=Math.max(quake||0,16); flash=Math.max(flash,4);
+        h.r=h.r*2.6; gimHit(h, 20, true, 150);
+        sfx.blast(h.x); hazards.splice(i,1); continue; } }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 落雷：予兆のあと真上から柱が落ち、短く残る ──
+  if(h.kind==='gbolt'){
+    if(h.t===h.warn){ h.r=30; gimHit(h, 18, true, 260);
+      flash=Math.max(flash,5); shake=Math.max(shake,12); sfx.zap(h.x); sfx.big(h.x);
+      const gy=LANE-groundLift(h.x);
+      for(let k=0;k<3;k++) ring(h.x, gy, k%2?'#9fe8ff':'#ffffff');
+      spark(h.x, gy-40, '#9fe8ff', 26, 13); dust(h.x, LANE, 12); }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 噴出：地面から蒸気が吹き上げ、しばらく吹き続ける ──
+  if(h.kind==='geyser'){
+    if(h.t>=h.warn && h.t<h.life-16){
+      h.r=30;
+      if((h.t-h.warn)%14===0){ h.hitP={}; h.hitE={}; }     // 吹いている間は一定間隔で当たり直す
+      gimHit(h, 9, false, 210);
+      if(perfTier<2 && h.t%2===0){ const gy=LANE-groundLift(h.x);
+        ember(h.x+rnd(-14,14), gy-rnd(0,30), rnd(-0.8,0.8), -rnd(6,11), (h.t%4)?'#dfe8f2':'#ffffff'); }
+      if((h.t-h.warn)===0){ sfx.step(h.x,'stone',1.6); shake=Math.max(shake,6); } }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 棘：床から生えて、しばらく残ってから引っ込む ──
+  if(h.kind==='gspike'){
+    if(h.t===h.warn){ dust(h.x,LANE,8); sfx.hit(h.x); shake=Math.max(shake,5); }
+    if(h.t>=h.warn && h.t<h.life-20){ h.r=58;
+      if((h.t-h.warn)%20===0){ h.hitP={}; h.hitE={}; }
+      gimHit(h, 12, true, 118); }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 突風：吹いている間ずっと横へ押し流す ──
+  if(h.kind==='gale'){
+    const u=Math.min(1, Math.min(h.t, h.life-h.t)/22);        // 立ち上がりと収まりを寝かせる
+    const push=h.dir*2.6*u;
+    for(const q of players){ if(!q.active||q.state==='dead') continue;
+      q.x=clamp(q.x+push, camX+24, Math.min(WORLD_END, camX+W-24)); }
+    for(const e of enemies){ if(e.dead) continue; e.x+=push*0.6; }
+    if(perfTier<2 && h.t%2===0){ const gy=LANE-groundLift(camX+W*0.5);
+      ember(camX+(h.dir>0?-20:W+20), gy-rnd(10,190), h.dir*rnd(9,16), rnd(-1.2,1.2), '#cfe0ff'); }
+    if(h.t%30===0) sfx.dash(camX+W*0.5);
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
   if(h.kind==='boulder'){
     // 坂の傾きで加速する。平地へ出ると転がり続けて減速し、やがて砕ける
     const sl=terrSlope(h.x);                            // 下りなら負（右へ行くほど低い）
@@ -3692,6 +3841,117 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   if(!wide && (sx<-80||sx>W+80)) continue;
   if(wide && (sx<-1600||sx>W+1600)) continue;
   const gy=LANE-groundLift(h.x);
+  if(h.kind==='meteor'){                     // 隕石：燃えながら落ちてくる火球と尾
+    if(h.t<h.warn) continue;                 // 予兆の間はまだ空の上
+    const my=gy-h.z, R=h.r, mx=h.x-camX;
+    ctx.save();
+    // 尾は空が明るいと加算では消えてしまう。まず不透明の炎で形を出し、そのうえに加算の芯を重ねる
+    const TL=R*6.2;
+    const tg=ctx.createLinearGradient(0,my-TL,0,my+R*0.4);
+    tg.addColorStop(0,'rgba(255,120,30,0)'); tg.addColorStop(0.45,'rgba(255,140,40,.55)');
+    tg.addColorStop(0.8,'rgba(255,196,90,.85)'); tg.addColorStop(1,'rgba(255,240,200,.95)');
+    ctx.fillStyle=tg; ctx.beginPath();
+    ctx.moveTo(mx-R*0.92, my); ctx.quadraticCurveTo(mx-R*0.5, my-TL*0.55, mx, my-TL);
+    ctx.quadraticCurveTo(mx+R*0.5, my-TL*0.55, mx+R*0.92, my); ctx.closePath(); ctx.fill();
+    // 揺らぎ。左右に舌を出して、まっすぐな三角に見えないようにする
+    ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,170,60,.9)';
+    for(let k=0;k<3;k++){ const yy=my-TL*(0.24+k*0.22), sw=(k%2?1:-1);
+      ctx.beginPath(); ctx.moveTo(mx, yy+R*0.5);
+      ctx.quadraticCurveTo(mx+sw*R*(1.1-k*0.2), yy, mx, yy-R*0.9); ctx.closePath(); ctx.fill(); }
+    ctx.globalAlpha=1; ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(mx, my-R*0.4, R*2.3,'rgba(255,236,180,.85)','rgba(255,110,20,0)');
+    ctx.beginPath(); ctx.ellipse(mx, my-R*0.4, R*2.3, R*2.6, 0,0,7); ctx.fill();
+    ctx.restore();
+    // 岩そのもの。輪郭を暗く落として、火の中で黒く抜ける
+    ctx.fillStyle=radGrad(mx-R*0.34, my-R*0.34, R*1.35, '#7b5a3e','#241209');
+    ctx.beginPath();
+    for(let k=0;k<11;k++){ const a=k/11*TAU, rr=R*(0.84+0.20*Math.sin(k*2.3));
+      ctx[k?'lineTo':'moveTo'](mx+Math.cos(a)*rr, my+Math.sin(a)*rr); }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(24,10,4,.75)'; ctx.lineWidth=3; ctx.stroke();
+    // 割れ目から漏れる熱
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.strokeStyle='rgba(255,170,60,.9)'; ctx.lineWidth=Math.max(2,R*0.10); ctx.lineCap='round';
+    for(let k=0;k<3;k++){ const a=k*2.1+0.6;
+      ctx.beginPath(); ctx.moveTo(mx+Math.cos(a)*R*0.72, my+Math.sin(a)*R*0.72);
+      ctx.lineTo(mx+Math.cos(a+0.9)*R*0.26, my+Math.sin(a+0.9)*R*0.26); ctx.stroke(); }
+    // 進行方向の縁だけ白熱させる
+    ctx.strokeStyle='rgba(255,240,200,.85)'; ctx.lineWidth=Math.max(2.5,R*0.13);
+    ctx.beginPath(); ctx.arc(mx, my, R*0.92, 0.35, Math.PI-0.35); ctx.stroke();
+    ctx.restore();
+    continue; }
+  if(h.kind==='gbolt'){                       // 落雷：真上から地面まで貫く光の柱
+    if(h.t<h.warn) continue;
+    const u=clamp(1-(h.t-h.warn)/24,0,1); if(u<=0) continue;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=u;
+    const sx=h.x-camX;
+    // 天から地面までを一本で貫く。短いと「落ちてきた」感が出ない
+    const NS=Math.ceil((gy+120)/64);
+    ctx.fillStyle=radGrad(sx, gy-NS*32, 120*u,'rgba(160,220,255,.30)','rgba(120,200,255,0)');
+    ctx.beginPath(); ctx.ellipse(sx, gy-NS*32, 120*u, NS*36, 0,0,7); ctx.fill();   // 柱まわりの薄明かり
+    ctx.strokeStyle='#4fb8ff'; ctx.lineWidth=34*u; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    let yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-22,22), yy); }
+    ctx.stroke();
+    ctx.strokeStyle='#9fe8ff'; ctx.lineWidth=17*u;
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-16,16), yy); }
+    ctx.stroke();
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=7*u;
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-10,10), yy); }
+    ctx.stroke();
+    // 枝分かれ。一本槍だと板に見える
+    ctx.lineWidth=5*u; ctx.strokeStyle='#cdeeff';
+    for(let k=1;k<NS;k+=2){ const by=gy-k*64, bd=(k%2)?1:-1;
+      ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx+bd*rnd(30,64), by-rnd(20,50)); ctx.stroke(); }
+    ctx.fillStyle=radGrad(sx,gy,170*u,'rgba(210,244,255,.8)','rgba(120,200,255,0)');
+    ctx.beginPath(); ctx.ellipse(sx,gy,170*u,50*u,0,0,7); ctx.fill();
+    ctx.restore(); continue; }
+  if(h.kind==='geyser'){                      // 噴出：地面から吹き上がる蒸気の柱
+    if(h.t<h.warn) continue;
+    const el=h.t-h.warn, up=clamp(el/10,0,1)*clamp((h.life-16-h.t)/12,0,1);
+    if(up<=0) continue;
+    const sx=h.x-camX, H2=340*up;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.55*up;
+    const g=ctx.createLinearGradient(0,gy,0,gy-H2);
+    g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(0.5,'rgba(210,230,244,.5)'); g.addColorStop(1,'rgba(190,214,236,0)');
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(sx-34,gy); ctx.quadraticCurveTo(sx-52,gy-H2*0.6, sx-26,gy-H2);
+    ctx.lineTo(sx+26,gy-H2); ctx.quadraticCurveTo(sx+52,gy-H2*0.6, sx+34,gy); ctx.closePath(); ctx.fill();
+    for(let k=0;k<7;k++){ const yy=gy-H2*((k+1)/8)-Math.sin(gf*0.3+k)*8;
+      ctx.globalAlpha=0.38*up; ctx.fillStyle='#eef4fb';
+      ctx.beginPath(); ctx.ellipse(sx+Math.sin(gf*0.22+k*1.7)*18, yy, 34-k*3, 26-k*2.4, 0,0,7); ctx.fill(); }
+    ctx.globalAlpha=0.5*up; ctx.fillStyle='#ffffff';
+    ctx.beginPath(); ctx.ellipse(sx, gy-6, 44, 14, 0,0,7); ctx.fill();     // 噴き出し口
+    ctx.restore(); continue; }
+  if(h.kind==='gspike'){                      // 棘：床を突き破って生える鉄の杭
+    if(h.t<h.warn) continue;
+    const up=clamp((h.t-h.warn)/8,0,1)*clamp((h.life-h.t)/16,0,1);
+    if(up<=0) continue;
+    const sx=h.x-camX, H2=132*up;
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,.34)'; ctx.beginPath(); ctx.ellipse(sx,gy+3,64,14,0,0,7); ctx.fill();
+    // 突き破った床のかけら
+    ctx.fillStyle='rgba(60,52,44,.55)';
+    for(let k=-3;k<=3;k++){ if(!k) continue;
+      ctx.beginPath(); ctx.moveTo(sx+k*17-6,gy+3); ctx.lineTo(sx+k*17, gy-9-Math.abs(k)*2); ctx.lineTo(sx+k*17+6,gy+3); ctx.closePath(); ctx.fill(); }
+    for(let k=-2;k<=2;k++){ const bx=sx+k*24, hh=H2*(1-Math.abs(k)*0.18);
+      const g2=ctx.createLinearGradient(bx,gy,bx,gy-hh);
+      g2.addColorStop(0,'#3d444d'); g2.addColorStop(0.55,'#98a3b1'); g2.addColorStop(1,'#f3f8ff');
+      ctx.fillStyle=g2; ctx.beginPath();
+      ctx.moveTo(bx-12,gy+3); ctx.lineTo(bx-3,gy-hh*0.55); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+3,gy-hh*0.55); ctx.lineTo(bx+12,gy+3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(16,20,26,.6)'; ctx.lineWidth=2; ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath();      // 刃先の光
+      ctx.moveTo(bx-2,gy-hh*0.62); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+2,gy-hh*0.62); ctx.closePath(); ctx.fill(); }
+    ctx.restore(); continue; }
+  if(h.kind==='gale'){                        // 突風：画面を横切る風の筋
+    const u=Math.min(1, Math.min(h.t, h.life-h.t)/22);
+    ctx.save(); ctx.globalAlpha=0.20*u; ctx.strokeStyle='#cfe0ff'; ctx.lineWidth=2.4; ctx.lineCap='round';
+    for(let k=0;k<12;k++){ const yy=60+((k*97+gf*9*h.dir)%(H-120));
+      const x0=((k*173+gf*14*h.dir)%(W+260))-130;
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+h.dir*70, yy+Math.sin(k)*6); ctx.stroke(); }
+    ctx.restore(); continue; }
   if(h.kind==='boulder'){                    // 大岩：転がる向きへ回した割れ目で回転を見せる
     const by=gy-h.z-h.r, R=h.r;
     ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#000';
@@ -8577,6 +8837,8 @@ function addBlocks(blocks,opts){
       // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
       const CAP=TERR_RISE*3; if(e1<-CAP) e1=-CAP; if(e1>CAP) e1=CAP;
       TERRS.push({x0:B, x1:B+len, e0:e0, e1:e1, kind:b.terr||'flat', st:st});
+      // ステージごとに仕掛けを1つ引く。地形が同じでも毎回ちがう仕掛けが出る
+      STAGE_GIM[st]=rollGimmick(b.terr||'flat');
       // 縦ステージは段の手前に谷を開ける。跳び損ねれば落下＝ワンアウト。
       // 全段に開けると休む場所が無くなるので一段おき
       if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
@@ -8608,6 +8870,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
   TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  STAGE_GIM={}; gimCd=0; gimWarn=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -8658,7 +8921,7 @@ function nextLap(l){
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
 function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters5();
@@ -8670,7 +8933,7 @@ function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
 }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
 function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters4();
@@ -8682,7 +8945,7 @@ function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
 }
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
 function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters3();
@@ -8694,7 +8957,7 @@ function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
 }
 // ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
 function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters2();
@@ -8751,6 +9014,7 @@ function startTraining(){ unlockAudio();
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
   TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  STAGE_GIM={}; gimCd=0; gimWarn=[];
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
   camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
@@ -9163,7 +9427,10 @@ function randomizeZako(list){
 }
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
   if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st);
-    if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=stageBannerMax=150; stageBannerTxt='STAGE '+enc.st; stageBannerSub=(STAGE_NAME[enc.st]||''); } }
+    if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=stageBannerMax=150; stageBannerTxt='STAGE '+enc.st;
+      // どの仕掛けが出るステージかを名前の横に出す。予告が無いと初見で理不尽になる
+      const _g=gimmickById(STAGE_GIM[enc.st]);
+      stageBannerSub=(STAGE_NAME[enc.st]||'')+(_g?('　― '+_g.name+'注意 ―'):''); } }
     let off=0;
     const spawnList=(!enc.boss && !enc.rival && !enc.mini) ? randomizeZako(enc.list) : enc.list;   // 通常戦は雑魚をランダム化
     const extra=(TWO_P?1:0)+(hardMode?1:0);   // 2P／高難易度は雑魚が増える
@@ -9664,7 +9931,7 @@ function update(){
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
-  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -9732,6 +9999,7 @@ function render(){
         if(o.pl.kind==='mack'){ drawMackRaid(o.pl); drawMackAmmo(o.pl); } } }
     else drawEnemy(o.e); });
   player=players[0];
+  drawGimWarn();
   drawHazards();
   drawCarriers();
   drawProjectiles();
@@ -17767,7 +18035,7 @@ function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
   if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
-  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; gf=0; shopPending=0;
+  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
   lap=1; mercRoster=[]; mercs=[]; trainMode=false;   // 周回・傭兵・練習は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
