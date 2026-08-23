@@ -4,16 +4,27 @@ const DRIVER = `
   const KINDS=['inu','shima','nuko','guard8','watch','wanden'];
 
   // ===== 1) 段位の境界 =====
-  if(EVO_LV.length!==2) throw new Error('EVO_LV should have 2 thresholds');
-  [[1,0],[7,0],[8,1],[15,1],[16,2],[30,2]].forEach(function(c){
+  // 段位は4段（基本／熟練／極／神域）。境界は EVO_LV の3つ
+  if(EVO_LV.length!==3) throw new Error('EVO_LV は3つの境界を持つべき（今 '+EVO_LV.length+'）');
+  [[1,0],[5,0],[6,1],[11,1],[12,2],[19,2],[20,3],[60,3]].forEach(function(c){
     const t=evoTier({level:c[0]});
     if(t!==c[1]) throw new Error('evoTier(Lv'+c[0]+') = '+t+', expected '+c[1]); });
-  console.log('段位の境界 OK (Lv1-7=0 / Lv8-15=1 / Lv16+=2)');
+  if(EVO_NAME.length!==4) throw new Error('段位名が '+EVO_NAME.length+' 個しかない');
+  for(let i=1;i<4;i++) if(!EVO_NAME[i]) throw new Error(i+'段目の段位名が空');
+  // 威力の倍率は段位ごとに単調増加する（同じ値が並んだら段位が効いていない）
+  for(let i=1;i<4;i++){ const a=evoMul({level:i===1?1:EVO_LV[i-2]}), b=evoMul({level:EVO_LV[i-1]});
+    if(!(b>a)) throw new Error(i+'段目で威力の倍率が上がらない（'+a+' → '+b+'）'); }
+  if(!(evoMul({level:EVO_LV[2]})>=2)) throw new Error('最高段位でも威力が '+evoMul({level:EVO_LV[2]})+' 倍しかない');
+  console.log('段位の境界 OK (4段: Lv1-'+(EVO_LV[0]-1)+'=0 / '+EVO_LV[0]+'-'+(EVO_LV[1]-1)+'=1 / '
+    +EVO_LV[1]+'-'+(EVO_LV[2]-1)+'=2 / '+EVO_LV[2]+'+=3、倍率 '+[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]].map(function(l){return evoMul({level:l});}).join('/')+')');
 
   // ===== 2) タメ攻撃が段位で別の技IDに差し替わる =====
   const seen={};
   KINDS.forEach(function(k){
-    const ids=[1,8,16].map(function(lv){ return chargeMoveFor({kind:k,level:lv,weapon:defaultWeaponFor(k)}); });
+    // 技IDは3種類（基本／剛／極）。神域は極と同じIDで、威力は段位の倍率で伸びる
+    const ids=[1,EVO_LV[0],EVO_LV[1]].map(function(lv){ return chargeMoveFor({kind:k,level:lv,weapon:defaultWeaponFor(k)}); });
+    if(chargeMoveFor({kind:k,level:EVO_LV[2],weapon:defaultWeaponFor(k)})!==ids[2])
+      throw new Error(k+' の神域が極と別のIDになっている（存在しない技IDを引く）');
     ids.forEach(function(id){ if(!ATK[id]) throw new Error(k+' charge move has no ATK def: '+id); });
     if(k!=='nuko'){
       if(ids[0]===ids[1]||ids[1]===ids[2]) throw new Error(k+' charge did not evolve: '+ids.join(' -> '));
@@ -111,21 +122,23 @@ const DRIVER = `
         hitStop=0; slowmo=0; step(1); }
     } finally { sgBurst=ob; }
     return {dmg:before-e.hp, segs:segs}; }
-  { const r0=sgRunAt('shima',1), r1=sgRunAt('shima',8), r2=sgRunAt('shima',16);
+  { const r0=sgRunAt('shima',1), r1=sgRunAt('shima',EVO_LV[0]), r2=sgRunAt('shima',EVO_LV[1]), r3=sgRunAt('shima',EVO_LV[2]);
     if(!(r1.dmg>r0.dmg)) throw new Error('SG did not grow at Lv8: '+r0.dmg+' -> '+r1.dmg);
-    if(!(r2.dmg>r1.dmg)) throw new Error('SG did not grow at Lv16: '+r1.dmg+' -> '+r2.dmg);
+    if(!(r2.dmg>r1.dmg)) throw new Error('SG did not grow at Lv'+EVO_LV[1]+': '+r1.dmg+' -> '+r2.dmg);
+    if(!(r3.dmg>r2.dmg)) throw new Error('SG did not grow at Lv'+EVO_LV[2]+': '+r2.dmg+' -> '+r3.dmg);
     // 段数そのものが増えること（威力倍率だけ上げても通らないようにする）
-    if(!(r0.segs===1&&r1.segs===2&&r2.segs===3))
-      throw new Error('奥義の段数が 1/2/3 になっていない: '+r0.segs+'/'+r1.segs+'/'+r2.segs);
-    console.log('奥義の進化 OK (虎魂の実ダメージ '+r0.dmg+' → '+r1.dmg+' → '+r2.dmg+'、段数 '+r0.segs+'→'+r1.segs+'→'+r2.segs+')');
+    if(!(r0.segs===1&&r1.segs===2&&r2.segs===3&&r3.segs===4))
+      throw new Error('攻撃＋掴みの段数が 1/2/3/4 になっていない: '+[r0,r1,r2,r3].map(function(r){return r.segs;}).join('/'));
+    console.log('攻撃＋掴みの進化 OK (虎魂の実ダメージ '+[r0,r1,r2,r3].map(function(r){return r.dmg;}).join(' → ')
+      +'、段数 '+[r0,r1,r2,r3].map(function(r){return r.segs;}).join('→')+')');
     // 4キャラすべてが専用ステートに入り、段位で段数が増えること
     ['nuko','guard8','watch'].forEach(function(k){
-      const a=sgRunAt(k,1), b=sgRunAt(k,16);
-      if(a.segs!==1||b.segs!==3) throw new Error(k+' の奥義の段数が 1/3 になっていない: '+a.segs+'/'+b.segs);
-      if(!(b.dmg>a.dmg)) throw new Error(k+' の奥義が段位で強くなっていない: '+a.dmg+' -> '+b.dmg); });
-    console.log('奥義の段数 OK (ヌコ・ガードワン・ワッチも Lv1で1段 → Lv16で3段)');
+      const a=sgRunAt(k,1), b=sgRunAt(k,EVO_LV[2]);
+      if(a.segs!==1||b.segs!==4) throw new Error(k+' の攻撃＋掴みの段数が 1/4 になっていない: '+a.segs+'/'+b.segs);
+      if(!(b.dmg>a.dmg)) throw new Error(k+' の攻撃＋掴みが段位で強くなっていない: '+a.dmg+' -> '+b.dmg); });
+    console.log('攻撃＋掴みの段数 OK (ヌコ・ガードワン・ワッチも Lv1で1段 → Lv'+EVO_LV[2]+'で4段)');
     // ワンデンは一閃の本数、イッヌは斬る相手の数が段位で増える
-    const w0=sgRunAt('wanden',1), w2=sgRunAt('wanden',16);
+    const w0=sgRunAt('wanden',1), w2=sgRunAt('wanden',EVO_LV[2]);
     if(!(w2.dmg>w0.dmg)) throw new Error('ワンデンの奥義が段位で強くなっていない: '+w0.dmg+' -> '+w2.dmg);
     function cutsOf(lv){ setupRoster('wanden'); startGame(); state='play';
       const q=players[0]; player=q; q.level=lv; q.atkMul=1; q.x=camX+400; q.facing=1; q.sgCd=0; q.hp=q.maxHp=99999;
@@ -134,17 +147,19 @@ const DRIVER = `
       beginSGMove(q);
       let mx=0; for(let i=0;i<160 && q.state==='ichimonji';i++){ hitStop=0; slowmo=0; step(1); mx=Math.max(mx,q.imN||0); }
       return mx; }
-    const c1=cutsOf(1), c8=cutsOf(8), c16=cutsOf(16);
-    if(!(c1===1&&c8===2&&c16===3)) throw new Error('大居合の一閃が 1/2/3 本になっていない: '+c1+'/'+c8+'/'+c16);
+    const c1=cutsOf(1), c8=cutsOf(EVO_LV[0]), c16=cutsOf(EVO_LV[1]), c20=cutsOf(EVO_LV[2]);
+    if(!(c1===1&&c8===2&&c16===3&&c20===4)) throw new Error('大居合の一閃が 1/2/3/4 本になっていない: '+[c1,c8,c16,c20].join('/'));
     function mgTargetsOf(lv){ setupRoster('inu'); startGame(); state='play';
       const q=players[0]; player=q; q.level=lv; q.atkMul=1; q.x=camX+300; q.sgCd=0; q.hp=q.maxHp=99999;
       enemies.length=0; encounters.length=0;
-      for(let i=0;i<12;i++){ spawnEnemy('wolf', q.x+60+i*30, LANE); }
+      // 対象上限より多く置く。ちょうど12体だと、上限が undefined になって
+      // 「全員を斬る」に化けた場合と区別がつかない
+      for(let i=0;i<18;i++){ spawnEnemy('wolf', q.x+60+i*26, LANE); }
       enemies.forEach(function(e){ e.hp=e.maxHp=999999; e.thinkCd=999999; });
       beginSGMove(q); return q.mgList.length; }
-    const m1=mgTargetsOf(1), m8=mgTargetsOf(8), m16=mgTargetsOf(16);
-    if(!(m1===5&&m8===7&&m16===9)) throw new Error('無月の対象が 5/7/9 体になっていない: '+m1+'/'+m8+'/'+m16);
-    console.log('ワンデン・イッヌの奥義 OK (一閃 '+c1+'→'+c8+'→'+c16+'本 / 無月 '+m1+'→'+m8+'→'+m16+'体)'); }
+    const m1=mgTargetsOf(1), m8=mgTargetsOf(EVO_LV[0]), m16=mgTargetsOf(EVO_LV[1]), m20=mgTargetsOf(EVO_LV[2]);
+    if(!(m1===5&&m8===7&&m16===9&&m20===12)) throw new Error('無月の対象が 5/7/9/12 体になっていない: '+[m1,m8,m16,m20].join('/'));
+    console.log('ワンデン・イッヌの攻撃＋掴み OK (一閃 '+[c1,c8,c16,c20].join('→')+'本 / 無月 '+[m1,m8,m16,m20].join('→')+'体)'); }
 
   // ===== 6) ヌコのビームは本数が増える =====
   function beamLanesAt(lv){
@@ -174,20 +189,22 @@ const DRIVER = `
       try { gainXp(xp); } finally { popText=op; }
       return {said:said, lv:p.level,
               grad:said.filter(function(t){ return t.indexOf('免許皆伝')>=0; }) }; }
-    // gainXp の引数はスコア値で、XP はその 1/10。Lv7 の xpNext は 100 なので 1000 必要
-    const a=sayOnLevelUp(7, 1000);      // Lv7 -> Lv8（段位1）
-    if(a.lv!==8) throw new Error('Lv7 から Lv8 に上がっていない: '+a.lv);
-    if(a.grad.length!==1) throw new Error('Lv8 で免許皆伝の告知が '+a.grad.length+' 回');
-    if(a.grad[0].indexOf(EVO_NAME[1])<0) throw new Error('Lv8 の告知に段位名「'+EVO_NAME[1]+'」が無い: '+a.grad[0]);
-    const b=sayOnLevelUp(8, 1000);        // Lv8 -> Lv9（段位は変わらない）
-    if(b.lv!==9) throw new Error('Lv8 から Lv9 に上がっていない: '+b.lv);
-    if(b.grad.length!==0) throw new Error('Lv9 で告知が出ている: '+b.grad.join(' / '));
-    const c=sayOnLevelUp(15, 1000);       // Lv15 -> Lv16（段位2）
-    if(c.grad.length!==1) throw new Error('Lv16 で免許皆伝の告知が '+c.grad.length+' 回');
-    if(c.grad[0].indexOf(EVO_NAME[2])<0) throw new Error('Lv16 の告知に段位名「'+EVO_NAME[2]+'」が無い: '+c.grad[0]);
-    const d=sayOnLevelUp(1, 40000000);   // 一気に飛ばしても両方の告知を取りこぼさない
-    if(d.grad.length!==2) throw new Error('Lv1 から大量XPで告知が '+d.grad.length+' 回（2回であるべき）');
-    console.log('昇格の告知 OK (Lv8『'+a.grad[0]+'』/ Lv9 は無し / Lv16『'+c.grad[0]+'』/ 一気飛ばしでも2回)');
+    // gainXp の引数はスコア値で、XP はその 1/10。境界の一つ手前から1レベル上げる
+    const said=[];
+    for(let i=0;i<EVO_LV.length;i++){ const lv=EVO_LV[i];
+      const r=sayOnLevelUp(lv-1, 1000);
+      if(r.lv!==lv) throw new Error('Lv'+(lv-1)+' から Lv'+lv+' に上がっていない: '+r.lv);
+      if(r.grad.length!==1) throw new Error('Lv'+lv+' で免許皆伝の告知が '+r.grad.length+' 回');
+      if(r.grad[0].indexOf(EVO_NAME[i+1])<0)
+        throw new Error('Lv'+lv+' の告知に段位名「'+EVO_NAME[i+1]+'」が無い: '+r.grad[0]);
+      said.push(r.grad[0]); }
+    // 段位が変わらないレベルアップでは出さない
+    const b=sayOnLevelUp(EVO_LV[0], 1000);
+    if(b.grad.length!==0) throw new Error('Lv'+(EVO_LV[0]+1)+' で告知が出ている: '+b.grad.join(' / '));
+    const d=sayOnLevelUp(1, 40000000);   // 一気に飛ばしても取りこぼさない
+    if(d.grad.length!==EVO_LV.length)
+      throw new Error('Lv1 から大量XPで告知が '+d.grad.length+' 回（'+EVO_LV.length+'回であるべき）');
+    console.log('昇格の告知 OK ('+said.join(' / ')+' ／段位据え置きのレベルでは無し／一気飛ばしでも'+EVO_LV.length+'回)');
   }
 
   // ===== 8) 段位で技IDが変わっても、タメ攻撃の開始演出と武器効果が消えないこと =====
@@ -362,6 +379,129 @@ const DRIVER = `
     console.log('空中技のモーション OK (振り幅 '+A.map(function(r){return r.range.toFixed(2);}).join('→')
       +'rad、極だけ返す刃で切り返す)');
   }
+
+  // ===== 9) 神域（4段目）まで、全系統が実際に伸びる =====
+  // 以前は段位が2段しか無く、コマンド技7枠には段位そのものが乗っていなかった。
+  // 「4段階の進化」が名前だけになっていないか、実ダメージで確かめる
+  { const hitAt=function(kind, id, lv){
+      setupRoster(kind); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.hp=p.maxHp=99999;
+      p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
+      enemies.length=0; projectiles.length=0; hazards.length=0;
+      // 踏み込む技（居合は move:9 で12フレーム前進する）は、近すぎると通り過ぎて当たらない。
+      // 距離を散らして置き、合計の与ダメージで比べる
+      [90,150,210].forEach(function(d){ spawnEnemy('wolf', p.x+d, p.y);
+        const e=enemies[enemies.length-1]; e.hp=e.maxHp=999999; e.thinkCd=9999; });
+      const hp0=enemies.reduce(function(a,e){ return a+e.hp; },0);
+      beginAttack(id);
+      for(let f=0;f<70;f++){ updatePlayer(p); updateProjectiles(); }
+      return hp0-enemies.reduce(function(a,e){ return a+e.hp; },0); };
+    // コマンド技（イッヌの前攻撃＝居合）を4段位で測る。技IDは Lv7 で一度だけ差し替わる
+    const lvs=[1, EVO_LV[0], EVO_LV[1], EVO_LV[2]];
+    const dmg=lvs.map(function(lv){ return hitAt('inu','iai',lv); });
+    if(dmg[0]<=0) throw new Error('コマンド技が当たっていない（測れていない）');
+    for(let i=1;i<4;i++) if(!(dmg[i]>dmg[i-1]))
+      throw new Error('コマンド技が'+i+'段目で伸びていない（'+dmg.join(' → ')+'）');
+    if(!(dmg[3]>=dmg[0]*1.9)) throw new Error('神域でも '+dmg[0]+'→'+dmg[3]+' しか伸びない');
+    // 通常コンボには段位を乗せない（乗せると全体が二重に伸びる）
+    const cmb=lvs.map(function(lv){ return hitAt('inu','c1',lv); });
+    if(cmb[3]!==cmb[0]) throw new Error('通常コンボにも段位が乗っている（'+cmb.join(' → ')+'）');
+    console.log('コマンド技の段位 OK (居合の実ダメージ '+dmg.join(' → ')+'／通常コンボは '+cmb[0]+' のまま)'); }
+
+  // ===== 10) 奥義は段位ぶんストックを食い、受け皿も一緒に増える =====
+  { const costs=[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]].map(function(lv){ return ultCost({kind:'inu',level:lv}); });
+    for(let i=1;i<4;i++) if(!(costs[i]>costs[i-1]))
+      throw new Error('段位が上がっても奥義の消費が増えない（'+costs.join(' → ')+'）');
+    // キャラごとの基準値は保たれる（マックは絨毯爆撃なので重い）
+    const mk=[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]].map(function(lv){ return ultCost({kind:'mack',level:lv}); });
+    for(let i=0;i<4;i++) if(mk[i]!==costs[i]+2)
+      throw new Error('マックの上乗せが崩れている（'+mk.join('/')+' vs '+costs.join('/')+'）');
+    // 昇格すると受け皿（dimMax）が増え、撃てなくならない
+    setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.atkMul=1; p.level=EVO_LV[0]-1; p.xp=0; p.xpNext=100;
+    p.x=camX+400; p.hp=p.maxHp=99999; enemies.length=0; encounters.length=0;
+    const max0=p.dimMax;
+    gainXp(1000);
+    if(p.level!==EVO_LV[0]) throw new Error('昇格していない（Lv'+p.level+'）');
+    if(!(p.dimMax>max0)) throw new Error('昇格しても奥義ストックの上限が増えない（'+max0+' → '+p.dimMax+'）');
+    if(p.dimMax<ultCost(p)) throw new Error('上限 '+p.dimMax+' が必要数 '+ultCost(p)+' に届かず、奥義が撃てない');
+    console.log('奥義の消費ストック OK (イッヌ '+costs.join(' → ')+'／マック '+mk.join(' → ')
+      +'／昇格で上限 '+max0+'→'+p.dimMax+')'); }
+
+  // ===== 11) 奥義そのものの威力も段位で伸びる（7キャラ全部） =====
+  { const ultDmg=function(kind, lv){
+      setupRoster(kind); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+W*0.4; p.facing=1;
+      p.hp=p.maxHp=99999; p.dim=p.dimMax=9; p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
+      enemies.length=0; encounters.length=0; projectiles.length=0; particles.length=0; hazards.length=0;
+      // 隕石や絨毯爆撃は落ちる位置に乱数が入る。画面幅に散らして当たり外れの振れを小さくする
+      for(let i=0;i<9;i++){ spawnEnemy('wolf', camX+80+i*((W-160)/8), LANE);
+        const e=enemies[i]; e.hp=e.maxHp=9999999; e.thinkCd=999999; }
+      // 配列そのものを合計すると、星KOで敵が取り除かれた瞬間に「HP全部ぶんの与ダメ」に化ける。
+      // 実体を捕まえておいて、その HP だけを見る
+      const list=enemies.slice();
+      const hp0=list.reduce(function(a,e){ return a+e.hp; },0);
+      const pin=list.map(function(e){ return e.x; });
+      // 一回転コマンドの入力経路は状態依存なので、各キャラの入口を直に叩く
+      if(kind==='shima') beginSeven();
+      else if(kind==='guard8') beginGuardQuake();
+      else if(kind==='watch') beginGatling(p);
+      else if(kind==='wanden') beginAttack('dkaiden');
+      else if(kind==='mack') beginMackRaid(p);
+      else if(kind==='nuko') beginAttack('nmeteor');
+      else beginAttack('dimension');
+      // 的は動かさない。吹き飛んで判定の帯から出ると、威力ではなく
+      // 「何発当たったか」を測ることになり、段位の伸びが見えなくなる
+      for(let i=0;i<420;i++){ hitStop=0; slowmo=0; step(1);
+        list.forEach(function(e,j){ e.x=pin[j]; e.vx=0; e.z=0; e.vz=0;
+          if(e.state==='blastoff'){ e.state='walk'; e.bo=0; } }); }
+      return hp0-list.reduce(function(a,e){ return a+e.hp; },0); };
+    // 乱数の残りは平均で均す（同じ設定を3回まわす）
+    const avg=function(k,lv){ let t=0; for(let i=0;i<3;i++) t+=ultDmg(k,lv); return t/3; };
+    const kinds=['inu','shima','nuko','guard8','watch','wanden','mack'], rep=[];
+    kinds.forEach(function(k){
+      const lo=avg(k,1), hi=avg(k,EVO_LV[2]);
+      if(!(lo>0)) throw new Error(k+' の奥義が当たっていない（測れていない）');
+      if(!(hi>lo*1.4)) throw new Error(k+' の奥義が段位で伸びない（'+Math.round(lo)+' → '+Math.round(hi)+'）');
+      rep.push(k+' '+Math.round(lo)+'→'+Math.round(hi)); });
+    console.log('奥義の威力の段位 OK ('+rep.join(' / ')+')'); }
+
+  // ===== 12) 段位が上がるほど演出が濃くなる =====
+  // 威力だけ伸ばして演出を据え置くと「数字が増えただけ」になる。
+  // 1ヒットぶんに出る粒と輪の数、神域の残像を実測する
+  { const fxAt=function(lv){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=lv; p.atkMul=1; p.x=camX+300; p.facing=1;
+      p.hp=p.maxHp=99999; p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
+      enemies.length=0; encounters.length=0; particles.length=0;
+      spawnEnemy('wolf', p.x+120, LANE); const e=enemies[0]; e.hp=e.maxHp=999999; e.thinkCd=999999;
+      // 打撃のときに増える輪だけを数える。particles の総数だと、段位のオーラ（火の粉）で
+      // 増えたのか打撃の演出で増えたのかが分からない
+      // 「1ヒットあたり何枚の輪が出るか」で見る。総数だと、当たった回数の違いに
+      // 演出の濃さが埋もれる（段位で技IDが変わると多段になることがある）
+      let rings=0, hits=0; const oring=ring, odmg=damageEnemy;
+      ring=function(){ rings++; return oring.apply(null,arguments); };
+      damageEnemy=function(){ hits++; return odmg.apply(null,arguments); };
+      let after=0;
+      try{ beginAttack('iai');
+        for(let f=0;f<60;f++){ hitStop=0; updatePlayer(p);
+          after+=particles.filter(function(q){ return q.k==='evoAfter'; }).length? 1:0; }
+      } finally { ring=oring; damageEnemy=odmg; }
+      return {parts:particles.length, rings:rings, hits:hits,
+              per:hits?rings/hits:0, after:after}; };
+    const a=fxAt(1), b=fxAt(EVO_LV[1]), c=fxAt(EVO_LV[2]);
+    if(!(a.hits>0&&b.hits>0&&c.hits>0)) throw new Error('打撃が当たっていない（測れていない）');
+    // 1ヒットあたりの輪（実測）：基本1枚／極3枚／神域6枚。
+    // 神域は超閃光がさらに輪を重ねるぶん倍になる。段位ごとの上乗せを1つでも外すと
+    // 3枚→2枚、6枚→5枚に落ちるので、直値で押さえる
+    if(Math.abs(a.per-1)>0.01) throw new Error('基本段位の1ヒットあたりの輪が '+a.per.toFixed(2)+'枚（1枚のはず）');
+    if(Math.abs(b.per-3)>0.01) throw new Error('極の1ヒットあたりの輪が '+b.per.toFixed(2)+'枚（3枚のはず）');
+    if(Math.abs(c.per-6)>0.01) throw new Error('神域の1ヒットあたりの輪が '+c.per.toFixed(2)+'枚（6枚のはず）');
+    if(!(c.parts>a.parts)) throw new Error('神域でも演出の粒が増えない（'+a.parts+' → '+c.parts+'）');
+    if(a.after>0) throw new Error('基本段位なのに残像が出ている');
+    if(!(c.after>0)) throw new Error('神域なのに残像が出ない');
+    console.log('段位の演出 OK (1ヒットあたりの輪 '+a.per.toFixed(1)+' → '+b.per.toFixed(1)+' → '+c.per.toFixed(1)
+      +'枚／粒 '+a.parts+' → '+c.parts+'／残像は神域だけ '+c.after+'F)'); }
 
   console.log('EVOLUTION TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
