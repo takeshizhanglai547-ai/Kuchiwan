@@ -6449,6 +6449,10 @@ const ETYPE={
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
   noroinu:{hp:600,sp:1.8,dmg:16,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
+  // ── ステージ間イベントの隠しボス。既存の描き方を借りて、色と強さで別の相手にする ──
+  hbLuna: {hp:1150,sp:2.2,dmg:24,atkR:88,w:132,h:140,c1:'#dfe8ff',c2:'#8fa6d0',c3:'#3a4a6a',score:14000,boss:true,bossKind:'noroinu',weapon:'none',accent:'#bfe9ff',name:'月狼ルーナ',hidden:true},
+  hbAbyss:{hp:1250,sp:2.3,dmg:26,atkR:96,w:172,h:140,c1:'#3a2a5a',c2:'#1e1436',c3:'#0a0618',score:15000,boss:true,bossKind:'shark',  weapon:'none',accent:'#c46bff',name:'深淵鮫アビス',hidden:true},
+  hbCrysta:{hp:1400,sp:0.9,dmg:28,atkR:96,w:180,h:196,c1:'#a8e4ff',c2:'#4a8ac0',c3:'#1e3a68',score:16000,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#dffcff',name:'水晶傀儡クリスタ',hidden:true},
   // ── ワッチ登場に合わせた追加ステージ「月夜の宝物庫」の番人 ──
   goldgolem:{hp:900,sp:0.85,dmg:21,atkR:92,w:172,h:186,c1:'#e8c86a',c2:'#b8922e',c3:'#7a5e18',score:6800,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#fff0a0',name:'黄金傀儡ゴルドー'},
   // ---- トレーニング用の的（反撃しない・倒れない）----
@@ -6675,6 +6679,10 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   dragon:'我が業火、ジャンプでかわせるか？', ghost:'ヒヒヒ…３人で斬り刻んでやる〜', slime:'ぷるぷる…叩くほど増えるぞ！', rival:'貴様の技、すべて頂いた！',
   shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
   cactus:'チクチクの雨を浴びるがいい！',
+  // ── ステージ間イベントの隠しボス ──
+  hbLuna:'月光の鍵に呼ばれたか……銀の牙、受けてみよ！',
+  hbAbyss:'羅針盤の指す先は、我が腹の中よ——！',
+  hbCrysta:'千年ノ眠リヲ　覚マシタルハ　汝カ……砕ケヨ',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
   golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！',
@@ -7290,6 +7298,11 @@ const CHARMS={
   mackBelt:{who:'mack',  name:'速装弾帯',       col:'#e8c04a', msg:'最大HPアップ！',   apply:p=>{ p.maxHp+=24; p.hp+=24; } },
   g8Core:{who:'guard8',  name:'重装の心臓',     col:'#c9ccd4', msg:'最大HP大アップ！', apply:p=>{ p.maxHp+=36; p.hp+=36; } },
   g8Gear:{who:'guard8',  name:'剛力の歯車',     col:'#ffd24d', msg:'攻撃力アップ！',   apply:p=>{ p.atkMul=(p.atkMul||1)+0.13; } },
+  // ── ステージ間イベントの褒美。キャラを選ばない（who:'*'）──
+  evHeart:{who:'*', name:'氷炎の心臓', col:'#8fd8ff', msg:'最大HP大アップ＆攻撃力アップ！',
+    apply:p=>{ p.maxHp+=40; p.hp+=40; p.atkMul=(p.atkMul||1)+0.10; } },
+  evCrown:{who:'*', name:'王家の秘宝', col:'#ffe14d', msg:'奥義ストック＋1＆守りが上がった！',
+    apply:p=>{ p.dimMax=(p.dimMax||3)+1; p.dim=Math.min(p.dimMax,(p.dim||0)+1); p.defMul=Math.max(0.4,(p.defMul||1)-0.12); p.coinMul=(p.coinMul||1)+0.5; } },
 };
 function charmDropKind(){ const ids=Object.keys(CHARMS).filter(id=>players.some(p=>p.active&&p.kind===CHARMS[id].who)); return ids.length? ids[(Math.random()*ids.length)|0] : null; }
 function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（拾えない武器は落とさない）
@@ -7332,7 +7345,7 @@ function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=(p.kind==='watch'?2300:110
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
-  if(CHARMS[kind]) return p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ拾える
+  if(CHARMS[kind]) return CHARMS[kind].who==='*' || p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ（イベント品は誰でも）
   const who=(WEAPONS[kind]||{}).who;
   if(who) return who===p.kind || (p.kind==='watch' && who!=='nuko');   // 追加武器は持ち主のみ（ワッチは魔法の触媒以外を扱える）
   if(p.kind==='wanden') return kind==='moon'||kind==='holy'||kind==='inuboshi2';   // ワンデン＝愛刀「犬干し竿」系と聖剣のみ（一刀流の矜持）
@@ -9332,6 +9345,49 @@ const WORLD_FINAL=[
   {id:'maou',   b:FINAL_CH[2],  mx:0.95, my:0.16, locked:true, final:true},   // 魔王の間
 ];
 const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒の城門」が解禁
+// ══════════════════════════════════════════════════════════════════
+//  ステージ間イベント
+//  あるステージで手に入る「キーアイテム」を持ったまま別のステージを選ぶと、
+//  そこでだけ隠しボスが現れたり、専用の褒美が置かれている。
+//  持っていなければ何も起きない＝地図を眺めて順番を考える意味を作る
+// ══════════════════════════════════════════════════════════════════
+const KEYITEMS={
+  moonkey:{name:'月光の鍵',     col:'#bfe9ff', hint:'月詠の森'},
+  compass:{name:'深海の羅針盤', col:'#7fd0ff', hint:'海賊飛行艇の甲板'},
+  gear:   {name:'古代の歯車',   col:'#ffd24d', hint:'瑠璃の水晶洞'},
+  frost:  {name:'氷結の宝珠',   col:'#8fd8ff', hint:'業火の渓谷'},
+  crest:  {name:'黄金の紋章',   col:'#ffe14d', hint:'暗黒の城門'},
+};
+const STAGE_EVENTS=[
+  // from のステージで手に入り、at のステージで使われる
+  {key:'moonkey', from:'yugure', on:'rival', at:'mori',     kind:'boss', boss:'hbLuna',
+   title:'月光の扉がひらく', line:'月光の鍵が疼く——森の奥から、銀の獣が歩み出た。'},
+  {key:'compass', from:'futou',  on:'clear', at:'hikoutei', kind:'boss', boss:'hbAbyss',
+   title:'羅針盤が北を失う', line:'羅針盤の針が真下を指す——甲板の影から、深淵の顎が浮かび上がった。'},
+  {key:'gear',    from:'haikyo', on:'clear', at:'suisho',   kind:'boss', boss:'hbCrysta',
+   title:'眠れる機構が動く', line:'古代の歯車が噛み合った——水晶の巨人が、千年ぶりに膝を伸ばす。'},
+  {key:'frost',   from:'reihou', on:'clear', at:'gouka',    kind:'gift', give:'evHeart',
+   title:'炎と氷が釣り合う', line:'氷結の宝珠が溶けだし、渓谷の炎と溶け合って一つの心臓になった。'},
+  {key:'crest',   from:'takara', on:'clear', at:'joumon',   kind:'gift', give:'evCrown',
+   title:'王家の秘宝がひらく', line:'黄金の紋章が城門の紋に重なる——封じられていた宝物庫が口を開けた。'},
+];
+let keyHeld={}, eventDone={};
+function eventsAt(levelId){ return STAGE_EVENTS.filter(function(E){
+  return E.at===levelId && keyHeld[E.key] && !eventDone[E.key]; }); }
+// そのノードに「今すぐ起きるイベント」があるか（地図の！印）
+function nodeHasEvent(node){ return node && eventsAt(node.id).length>0; }
+// キーアイテムを渡す。すでに持っていれば何もしない
+function grantKey(key){ if(!key || keyHeld[key] || eventDone[key]) return false;
+  keyHeld[key]=true; const K=KEYITEMS[key];
+  const p=players[0];
+  popText(p.x, p.y-140, K.name+'を手に入れた！', K.col, true);
+  popText(p.x, p.y-108, '「'+K.hint+'」で何かが起きる…', '#ffffff');
+  ring(p.x,p.y-60,K.col); spark(p.x,p.y-60,K.col,22,10); sfx.get(p.x); flash=Math.max(flash,3);
+  return true; }
+// ステージを出るときに、そのステージで手に入るキーアイテムを配る
+function grantKeysFor(levelId, on){
+  let n=0; STAGE_EVENTS.forEach(function(E){ if(E.from===levelId && E.on===on && grantKey(E.key)) n++; });
+  return n; }
 let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
 function curWorldLevels(){ return lap>=5? WORLD5_LEVELS : lap>=4? WORLD4_LEVELS : lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
 function allMapNodes(){ return lap>=5? WORLD5_LEVELS.concat(WORLD5_FINAL) : lap>=4? WORLD4_LEVELS.concat(WORLD4_FINAL) : lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
@@ -9347,6 +9403,26 @@ function nodeUnlocked(node){
 }
 function nodeSelectable(node){ return nodeUnlocked(node) && !levelsDone[node.id]; }   // 「次に進むべき場所」の判定
 function nodeEnterable(node){ return nodeUnlocked(node); }                            // 制覇済みでも再挑戦できる（コイン稼ぎの導線）
+// キーアイテム持ちで入ったステージに、隠しボスや褒美を差し込む。
+// 隠しボスは「最後のボスの手前」に入れる。ボス撃破がステージ終了なので、
+// 後ろに足すと戦う前にステージが終わってしまう
+function applyStageEvents(node){
+  const evs=eventsAt(node.id); if(!evs.length) return;
+  evs.forEach(function(E){
+    if(E.kind==='boss'){
+      // 最後のボス戦の手前へ割り込ませる。無ければ末尾に足す
+      let bi=-1; for(let i=encounters.length-1;i>=0;i--){ if(encounters[i].boss){ bi=i; break; } }
+      const prevAt=(bi>0? encounters[bi-1].at : 0);
+      const at=(bi>=0)? Math.max(prevAt+340, encounters[bi].at-680) : Math.max(600, WORLD_END-700);
+      const enc={st:stage, at:at, list:[[E.boss,1]], boss:false, mini:true, evKey:E.key, evTitle:E.title, evLine:E.line};
+      if(bi>=0) encounters.splice(bi,0,enc); else encounters.push(enc); }
+    else {
+      // 褒美はステージの入口に置く。取り逃さないよう地面に落としておく
+      makeItem(360, E.give);
+      eventDone[E.key]=true; keyHeld[E.key]=false;
+      stageEventBanner=stageEventBannerMax=200; stageEventTxt=E.title; stageEventSub=E.line; } });
+}
+let stageEventBanner=0, stageEventBannerMax=1, stageEventTxt='', stageEventSub='';
 // 1レベルだけを読み込んで開始（x=0 起点の独立フィールド）
 function loadLevel(node){
   resetWorldState(); curLevelId=node.id; curLevelFinal=!!node.final;
@@ -9358,6 +9434,7 @@ function loadLevel(node){
   spawnVehicle(WORLD_END*0.26, buggyLv.includes(node.id)?'buggy':'horse');
   if(WORLD_END>1500) spawnVehicle(WORLD_END*0.58, buggyLv.includes(node.id)?'horse':'buggy');
   players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
+  applyStageEvents(node);          // キーアイテムを持っていれば、このステージだけの出来事が起きる
   camX=0; camReset(); player=players[0]; goArrow=160; shopPending=0; spawnMercs();   // 雇った傭兵も同行
   state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
   saveProgress(1);
@@ -9452,6 +9529,13 @@ function drawMap(){
       ctx.beginPath(); ctx.arc(x,y,21+pu*5,0,7); ctx.stroke();
       ctx.globalAlpha=0.9; ctx.fillStyle='#ffe14d'; ctx.font='bold 10px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
       ctx.fillText('▼ 次はここ', x, y-27); ctx.restore(); }
+    // キーアイテムを持って入ると何かが起きるノードは、青い輪と「！」で知らせる
+    if(unl && nodeHasEvent(node)){ const pe=0.5+0.5*Math.sin(gf*0.13);
+      ctx.save(); ctx.globalAlpha=0.42+pe*0.5; ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=2.2+pe*2.6;
+      ctx.beginPath(); ctx.arc(x,y,25+pe*6,0,7); ctx.stroke();
+      ctx.globalAlpha=0.95; ctx.fillStyle='#bfe9ff'; ctx.font='900 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+      ctx.strokeStyle='rgba(6,12,24,.9)'; ctx.lineWidth=4;
+      ctx.strokeText('!', x+26, y-16); ctx.fillText('!', x+26, y-16); ctx.restore(); }
     // ノード円
     ctx.fillStyle=done?'rgba(90,180,110,.9)':(unl?'rgba(255,210,80,.92)':'rgba(90,90,110,.8)');
     if(sel){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(x,y,34,'rgba(255,240,150,.8)','rgba(255,240,150,0)'); ctx.beginPath(); ctx.arc(x,y,34,0,7); ctx.fill(); ctx.restore(); ctx.fillStyle=unl&&!done?'#fff':'rgba(255,210,80,.92)'; }
@@ -9472,6 +9556,17 @@ function drawMap(){
     ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3;
     const ny=y+(done||!unl?34:45); ctx.strokeText(nm,x,ny); ctx.fillText(nm,x,ny);
   });
+  // 持っているキーアイテム。どこで使えるかまで書かないと、持っている意味に気付けない
+  { const held=Object.keys(KEYITEMS).filter(function(k){ return keyHeld[k] && !eventDone[k]; });
+    if(held.length){ ctx.textAlign='left';
+      ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif';
+      ctx.fillStyle='rgba(8,10,20,.72)'; roundRect(12, H-150, 236, 22+held.length*17, 6); ctx.fill();
+      ctx.strokeStyle='rgba(191,233,255,.5)'; ctx.lineWidth=1.4; roundRect(12.5, H-149.5, 235, 21+held.length*17, 6); ctx.stroke();
+      ctx.fillStyle='#bfe9ff'; ctx.fillText('所持しているキーアイテム', 22, H-134);
+      held.forEach(function(k,i){ const K=KEYITEMS[k], yy=H-118+i*17;
+        ctx.fillStyle=K.col; drawStar(28, yy-4, 2.0, 5.0, K.col);
+        ctx.fillStyle='#ffffff'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+        ctx.fillText(K.name+' → '+K.hint, 40, yy); }); } }
   // 選択中ノードの情報カード：難度・ボスの有無・想定報酬を出して「選ぶ材料」を与える
   { const node=nodes[mapSel];
     if(node){ const done=levelsDone[node.id], unl=nodeUnlocked(node), tr=tierOf(node), bk=bossOf(node);
@@ -9727,16 +9822,29 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
       off++; } });
     if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('bosseerie'); } }
     else if(enc.rival){ startRivalCut(rivalFor(players[0].kind)); }
+    else if(enc.evKey){ bossIntro=170; sfx.boss(); if(Music.setMode)Music.setMode('bosseerie');
+      stageEventBanner=stageEventBannerMax=200; stageEventTxt=enc.evTitle||''; stageEventSub=enc.evLine||'';
+      flash=Math.max(flash,4); shake=Math.max(shake,10); }
     else if(enc.mini){ bossIntro=130; }
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
       if(!enc.final){ stageBanner=stageBannerMax=160; stageBannerTxt='STAGE CLEAR!'; stageBannerSub='体力回復！  次のステージへ →';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
-        if(curLevelId) levelsDone[curLevelId]=true;   // このフィールドを制覇済みに
+        if(curLevelId){ levelsDone[curLevelId]=true;   // このフィールドを制覇済みに
+          grantKeysFor(curLevelId,'clear'); }          // 制覇でもらえるキーアイテム
         startStageClearDemo(enc.st); }   // ステージクリアの短いデモ→終了後にショップ→マップ
     } else if(enc.rival){ score+=1200; player.hp=Math.min(player.maxHp, player.hp+30); Music.setMode('battle');
+        grantKeysFor(curLevelId,'rival');   // ライバルを倒すと手に入るキーアイテム
         startRivalClearDemo(); }         // ライバル撃破の短い掛け合い
+    else if(enc.evKey){                  // 隠しボス撃破：鍵を使い切り、褒美を落とす
+        eventDone[enc.evKey]=true; keyHeld[enc.evKey]=false;
+        score+=4000; player.hp=Math.min(player.maxHp, player.hp+60);
+        player.dim=Math.min(player.dimMax,(player.dim||0)+1);
+        makeItem(player.x+40, 'costume'); makeItem(player.x-40, weaponDropKind());
+        for(let k=0;k<14;k++) makeCoin(player.x+rnd(-70,70), 5);
+        stageEventBanner=stageEventBannerMax=190; stageEventTxt='隠しボス撃破！'; stageEventSub=(KEYITEMS[enc.evKey]||{}).name+'の導きは、ここで果たされた';
+        Music.setMode('battle'); }
     else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
 }
@@ -10214,7 +10322,7 @@ function update(){
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--; if(stageEventBanner>0)stageEventBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -17412,6 +17520,27 @@ function drawHUD(){
     ctx.lineWidth=4; ctx.strokeStyle='rgba(10,8,4,.92)'; ctx.strokeText(sub,W/2+ox*0.6,cy+30);
     ctx.fillStyle='#fff'; ctx.fillText(sub,W/2+ox*0.6,cy+30);
     ctx.textAlign='left'; ctx.restore(); }
+  if(stageEventBanner>0){
+    // ステージ間イベントの告知。STAGE バナーと重ならないよう、画面の下寄りに置く
+    const u=stageEventBanner/stageEventBannerMax;
+    const a=Math.min(1, Math.min(u,1-u)*5.5+0.25), cy=H*0.74;
+    ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center';
+    const sg=ctx.createLinearGradient(0,cy-42,0,cy+34);
+    sg.addColorStop(0,'rgba(0,0,0,0)'); sg.addColorStop(.3,'rgba(10,6,20,.78)');
+    sg.addColorStop(.72,'rgba(10,6,20,.78)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=sg; ctx.fillRect(-96,cy-42,W+192,76);
+    ctx.strokeStyle='rgba(191,233,255,.9)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W*0.14,cy-34); ctx.lineTo(W*0.86,cy-34);
+    ctx.moveTo(W*0.14,cy+26); ctx.lineTo(W*0.86,cy+26); ctx.stroke();
+    let fs=34; ctx.font='italic '+uif('900',fs);
+    while(ctx.measureText(stageEventTxt).width>W-140 && fs>18){ fs-=2; ctx.font='italic '+uif('900',fs); }
+    ctx.lineJoin='round'; ctx.lineWidth=6; ctx.strokeStyle='#0a1428'; ctx.fillStyle='#bfe9ff';
+    ctx.strokeText(stageEventTxt,W/2,cy-4); ctx.fillText(stageEventTxt,W/2,cy-4);
+    let ss=16; ctx.font=uif('bold',ss);
+    while(ctx.measureText(stageEventSub).width>W-160 && ss>10){ ss-=1; ctx.font=uif('bold',ss); }
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(6,10,20,.92)'; ctx.strokeText(stageEventSub,W/2,cy+18);
+    ctx.fillStyle='#ffffff'; ctx.fillText(stageEventSub,W/2,cy+18);
+    ctx.textAlign='left'; ctx.restore(); }
   { // コンボカードはバナーより後に描く（バナーの暗幕と金線に埋もれさせない）
     const cTop=Math.max(hudY+26, 176);   // 額縁の張り出しぶん下げる
     if(combo.count>=2){ const a=clamp(combo.timer/26,0,1), R=comboRank(combo.count), pp=combo.pop;
@@ -18623,6 +18752,7 @@ function saveProgress(st){ if(attractOn||trainMode) return;   // デモと練習
   try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone,
+    keys:keyHeld, evdone:eventDone,
     lap:lap, mercs:mercRoster.map(r=>({type:r.type,hp:Math.max(1,Math.round(r.hp)),maxHp:r.maxHp}))})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
@@ -18633,6 +18763,7 @@ function startGame(){ unlockAudio();
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
   lap=1; mercRoster=[]; mercs=[]; trainMode=false;   // 周回・傭兵・練習は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
+  keyHeld={}; eventDone={}; stageEventBanner=0;   // キーアイテムとステージ間イベントもリセット
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
   if(TWO_P) coopLives = hardMode?3:5;   // 2P：残機は共有プール
@@ -18647,6 +18778,8 @@ function startGameAt(stageN){ startGame();
     else if(sv.lap>=4){ lap=4; buildEncounters4(); }   // 四周目の続き＝神話マップへ
     else if(sv.lap>=3){ lap=3; buildEncounters3(); }   // 三周目の続き＝侵略軍マップへ
     else if(sv.lap>=2){ lap=2; buildEncounters2(); }   // 二周目の続き＝蟲の世界マップへ
+    if(sv.keys) keyHeld=Object.assign({},sv.keys);        // 持っているキーアイテム
+    if(sv.evdone) eventDone=Object.assign({},sv.evdone);  // 済んだステージ間イベント
     if(Array.isArray(sv.mercs)) mercRoster=sv.mercs.filter(m=>m&&ETYPE[m.type]).map(m=>({type:m.type,hp:m.hp||1,maxHp:m.maxHp||m.hp||1}));
     if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
       if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; if(u.level)p.level=u.level; if(u.xp!=null)p.xp=u.xp; if(u.xpNext)p.xpNext=u.xpNext; } });
