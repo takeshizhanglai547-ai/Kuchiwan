@@ -150,7 +150,7 @@
     <div class="optrow" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
       <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
       <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
-      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（コンボ練習）</button>
+      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（キャラを選んでコンボ練習）</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
@@ -2361,11 +2361,185 @@ const ATK={
   ax1:{name:'兜割り', dur:20, act:[7,12], reach:100, hh:60, dmg:18, kb:8,  from:-1.9, to:0.9, len:60, trail:'#ffd0a0', pivotY:-68, lunge:1.8, knock:true, combo:1},
   ax2:{name:'返し斬り', dur:20, act:[7,12], reach:100, hh:56, dmg:18, kb:8, from:1.2, to:-1.6, len:60, trail:'#ffd0a0', pivotY:-66, lunge:1.6, combo:2},
   ax3:{name:'大回転斬', dur:32, act:[6,26], reach:116, hh:58, dmg:10, kb:16, from:-3.1, to:3.1, len:66, trail:'#fff', pivotY:-64, lunge:1.6, multi:true, multiGap:5, spin:true, knock:true, finisher:true, combo:3},
+  // ── 追加武器：死神の大鎌＝長い間合いを刈り取る4段。最後は一回転して薙ぎ払う ──
+  sk1:{name:'刈り取り', dur:19, act:[7,13], reach:132, hh:52, dmg:15, kb:7, from:-1.5, to:1.4, len:84, trail:'#c9a6ff', pivotY:-58, lunge:1.2, combo:1},
+  sk2:{name:'返し刈り', dur:19, act:[7,13], reach:132, hh:52, dmg:16, kb:7, from:1.4, to:-1.5, len:84, trail:'#c9a6ff', pivotY:-58, lunge:1.2, combo:2},
+  sk3:{name:'首刈り', dur:22, act:[8,15], reach:126, hh:74, dmg:19, kb:9, from:-2.1, to:0.5, len:86, trail:'#d6bcff', pivotY:-70, lunge:1.4, knock:true, combo:3},
+  sk4:{name:'冥府送り', dur:34, act:[7,28], reach:142, hh:60, dmg:12, kb:14, from:-3.1, to:3.1, len:92, trail:'#ffffff', pivotY:-62, lunge:1.6, multi:true, multiGap:5, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ── 追加武器：斬馬刀＝5倍の刀身。振りかぶりも振り抜きも遅いが、当たれば場が消し飛ぶ ──
+  zb1:{name:'大上段斬り', hold:8, dur:52, act:[26,36], reach:180, hh:96, dmg:64, kb:26, from:-2.3, to:1.3, len:150, trail:'#eaf2ff', pivotY:-84, lunge:2.6, knock:true, finisher:true, zanba:true, combo:1},
+  zb2:{name:'豪風薙ぎ', hold:10, dur:64, act:[30,46], reach:196, hh:88, dmg:78, kb:32, from:-3.1, to:3.1, len:164, trail:'#ffffff', pivotY:-80, lunge:2.2, multi:true, multiGap:8, spin:true, knock:true, finisher:true, aoe:true, zanba:true, combo:2},
   // ── 追加武器：鉄球フレイル（ガードワン）＝振り回して広範囲を薙ぐ4段 ──
   fl1:{name:'横薙ぎ', dur:18, act:[6,12], reach:118, hh:52, dmg:13, kb:9, from:-1.6, to:1.6, len:72, trail:'#c9ccd4', pivotY:-60, lunge:1.4, spin:true, knock:true, combo:1},
   fl2:{name:'唐竹割り', dur:20, act:[8,14], reach:110, hh:64, dmg:15, kb:10, from:-2.0, to:0.6, len:74, trail:'#c9ccd4', pivotY:-66, lunge:1.2, knock:true, combo:2},
   fl3:{name:'グルグル振り', dur:22, act:[4,18], reach:120, hh:56, dmg:8, kb:6, from:-3.1, to:3.1, len:74, trail:'#e0e4ec', pivotY:-60, multi:true, multiGap:4, spin:true, combo:3},
   fl4:{name:'鉄球大車輪', dur:36, act:[4,30], reach:128, hh:60, dmg:8, kb:18, from:-3.1, to:3.1, len:78, trail:'#fff', pivotY:-58, multi:true, multiGap:4, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ══════════════════════════════════════════════════════════════
+  //  追加武器の連撃（各キャラ5種）
+  //  同じ「振る」でも、刀は反りに沿った弧、槍は直線、鎖は大きな円と、
+  //  from/to と len と軸（pivotY）で振りの筋を変えて別物に見せる
+  // ══════════════════════════════════════════════════════════════
+  // ── イッヌ：桜花刀＝反りに沿った四段。締めは飛燕の袈裟斬り ──
+  kt1:{name:'抜き胴', dur:14, act:[4,9], reach:104, hh:48, dmg:11, kb:5, from:-1.2, to:1.0, len:56, trail:'#ffd6ea', pivotY:-56, lunge:1.4, combo:1},
+  kt2:{name:'逆袈裟', dur:14, act:[4,9], reach:104, hh:54, dmg:12, kb:5, from:1.3, to:-1.2, len:56, trail:'#ffd6ea', pivotY:-60, lunge:1.2, combo:2},
+  kt3:{name:'唐竹', dur:17, act:[6,11], reach:110, hh:66, dmg:14, kb:7, from:-2.0, to:0.7, len:60, trail:'#ffe0f0', pivotY:-66, lunge:1.5, knock:true, combo:3},
+  kt4:{name:'桜花・飛燕', dur:26, act:[8,18], reach:124, hh:60, dmg:20, kb:14, from:-2.2, to:1.6, len:70, trail:'#ffffff', pivotY:-62, lunge:2.2, knock:true, finisher:true, sakura:true, combo:4},
+  // ── イッヌ：レイピア＝手数の刺突五段。ほぼ真っ直ぐで振り幅が無い ──
+  rp1:{name:'刺突', dur:9,  act:[3,6], reach:112, hh:34, dmg:6, kb:2, from:-0.12, to:-0.06, len:62, trail:'#d8e4ff', pivotY:-52, lunge:1.8, combo:1},
+  rp2:{name:'返し突き', dur:9, act:[3,6], reach:112, hh:34, dmg:6, kb:2, from:0.10, to:0.04, len:62, trail:'#d8e4ff', pivotY:-52, lunge:1.8, combo:2},
+  rp3:{name:'二段突き', dur:11, act:[3,8], reach:118, hh:38, dmg:7, kb:2, from:-0.10, to:0.02, len:64, trail:'#e6eeff', pivotY:-54, lunge:2.0, multi:true, multiGap:3, combo:3},
+  rp4:{name:'跳ね上げ', dur:12, act:[4,8], reach:114, hh:60, dmg:8, kb:4, from:0.5, to:-0.7, len:62, trail:'#e6eeff', pivotY:-56, lunge:1.4, combo:4},
+  rp5:{name:'百刺し', dur:30, act:[4,26], reach:126, hh:44, dmg:6, kb:2, from:-0.16, to:0.16, len:68, trail:'#ffffff', pivotY:-52, lunge:1.2, multi:true, multiGap:2, finisher:true, thrustRain:true, combo:5},
+  // ── イッヌ：フランベルジュ＝波打つ刃。三段だが一撃が重く、斬り口から炎が立つ ──
+  fb1:{name:'炎断ち', dur:19, act:[7,13], reach:104, hh:56, dmg:19, kb:9, from:-1.7, to:1.1, len:58, trail:'#ff9a3a', pivotY:-62, lunge:1.5, knock:true, emberEdge:true, combo:1},
+  fb2:{name:'返し炎', dur:19, act:[7,13], reach:104, hh:56, dmg:20, kb:9, from:1.3, to:-1.5, len:58, trail:'#ff9a3a', pivotY:-62, lunge:1.4, emberEdge:true, combo:2},
+  fb3:{name:'焦土斬', dur:30, act:[10,20], reach:118, hh:64, dmg:28, kb:18, from:-2.3, to:1.4, len:66, trail:'#ffd24d', pivotY:-68, lunge:2.0, knock:true, finisher:true, aoe:true, emberEdge:true, fireBurst:true, combo:3},
+  // ── イッヌ：チャクラム＝投げて戻る輪。手元では小さく薙ぎ、締めで投擲 ──
+  ck1:{name:'輪薙ぎ', dur:11, act:[3,7], reach:88, hh:44, dmg:8, kb:3, from:-1.1, to:0.9, len:34, trail:'#7df0e0', pivotY:-54, lunge:1.2, spin:true, combo:1},
+  ck2:{name:'返し輪', dur:11, act:[3,7], reach:88, hh:44, dmg:9, kb:3, from:1.0, to:-1.1, len:34, trail:'#7df0e0', pivotY:-54, lunge:1.2, spin:true, combo:2},
+  ck3:{name:'旋輪投げ', dur:26, act:[8,10], reach:60, hh:40, dmg:6, kb:2, from:-0.6, to:0.6, len:32, trail:'#aef8ee', pivotY:-52, spin:true, finisher:true, combo:3, pshot:{dmg:16,color:'#7df0e0',speed:11,r:22,life:70,multihit:true,hitGap:18,style:'spike',boomer:true}},
+  // ── イッヌ：ランス＝馬上槍。長い直線の突きで前へ出る ──
+  ln1:{name:'構え突き', dur:18, act:[7,13], reach:158, hh:44, dmg:16, kb:9, from:-0.14, to:-0.06, len:104, trail:'#ffe9a0', pivotY:-54, lunge:2.6, combo:1},
+  ln2:{name:'突き上げ', dur:20, act:[8,14], reach:150, hh:78, dmg:17, kb:10, from:0.6, to:-0.9, len:104, trail:'#ffe9a0', pivotY:-58, lunge:2.0, knock:true, combo:2},
+  ln3:{name:'突撃', dur:34, act:[6,28], reach:168, hh:50, dmg:13, kb:16, from:-0.10, to:-0.04, len:112, trail:'#ffffff', pivotY:-52, move:9.5, multi:true, multiGap:6, knock:true, finisher:true, stinger:true, combo:3},
+  // ── シマ：三節棍＝節ごとに折れて伸びる。五段の乱れ打ち ──
+  ss1:{name:'折り打ち', dur:11, act:[3,7], reach:112, hh:48, dmg:8, kb:3, from:-1.5, to:1.2, len:52, trail:'#ffe27a', pivotY:-58, lunge:1.1, combo:1},
+  ss2:{name:'返し折り', dur:11, act:[3,7], reach:112, hh:48, dmg:8, kb:3, from:1.3, to:-1.4, len:52, trail:'#ffe27a', pivotY:-58, lunge:1.1, combo:2},
+  ss3:{name:'背面打ち', dur:13, act:[4,9], reach:116, hh:52, dmg:9, kb:4, from:-2.4, to:0.6, len:54, trail:'#ffe9a0', pivotY:-62, lunge:1.2, combo:3},
+  ss4:{name:'脇溜め', dur:13, act:[4,9], reach:112, hh:44, dmg:10, kb:4, from:2.2, to:-0.4, len:54, trail:'#ffe9a0', pivotY:-56, lunge:1.2, combo:4},
+  ss5:{name:'乱れ三節', dur:30, act:[4,26], reach:126, hh:56, dmg:7, kb:12, from:-3.1, to:3.1, len:58, trail:'#ffffff', pivotY:-58, multi:true, multiGap:4, spin:true, knock:true, finisher:true, combo:5},
+  // ── シマ：六尺棒＝間合いの長い四段。突きと薙ぎを混ぜる ──
+  bo1:{name:'順突き', dur:12, act:[4,8], reach:136, hh:40, dmg:10, kb:5, from:-0.12, to:-0.04, len:76, trail:'#e6d2a8', pivotY:-54, lunge:1.6, combo:1},
+  bo2:{name:'水平払い', dur:15, act:[5,10], reach:132, hh:46, dmg:11, kb:7, from:-1.6, to:1.5, len:78, trail:'#e6d2a8', pivotY:-56, lunge:1.2, combo:2},
+  bo3:{name:'足払い', dur:15, act:[5,10], reach:128, hh:30, dmg:11, kb:6, from:1.5, to:-1.5, len:78, trail:'#f0e2c0', pivotY:-30, lunge:1.2, knock:true, combo:3},
+  bo4:{name:'旋棍', dur:32, act:[5,28], reach:140, hh:52, dmg:8, kb:14, from:-3.1, to:3.1, len:82, trail:'#ffffff', pivotY:-54, multi:true, multiGap:5, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ── シマ：双棍カリ＝短く速い五段。間合いは無いが手数で押す ──
+  kl1:{name:'右打ち', dur:8, act:[2,5], reach:78, hh:42, dmg:7, kb:2, from:-0.9, to:0.6, len:26, trail:'#ffcf9a', pivotY:-56, lunge:1.4, combo:1},
+  kl2:{name:'左打ち', dur:8, act:[2,5], reach:78, hh:42, dmg:7, kb:2, from:0.8, to:-0.7, len:26, trail:'#ffcf9a', pivotY:-52, lunge:1.4, combo:2},
+  kl3:{name:'交差打ち', dur:10, act:[3,7], reach:82, hh:46, dmg:8, kb:3, from:-1.2, to:1.0, len:28, trail:'#ffd6a8', pivotY:-58, lunge:1.5, multi:true, multiGap:3, combo:3},
+  kl4:{name:'肘落とし', dur:11, act:[3,7], reach:76, hh:50, dmg:9, kb:4, from:-1.8, to:0.4, len:26, trail:'#ffd6a8', pivotY:-60, lunge:1.2, combo:4},
+  kl5:{name:'連環打', dur:26, act:[3,22], reach:88, hh:48, dmg:6, kb:10, from:-1.4, to:1.4, len:30, trail:'#ffffff', pivotY:-56, multi:true, multiGap:3, knock:true, finisher:true, combo:5},
+  // ── シマ：流星錘＝鎖の先の錘。大きな円を描いて遠くまで届く ──
+  mh1:{name:'縦回し', dur:20, act:[7,14], reach:142, hh:70, dmg:14, kb:10, from:-2.6, to:0.8, len:96, trail:'#ffb85a', pivotY:-64, lunge:0.8, knock:true, combo:1},
+  mh2:{name:'横回し', dur:20, act:[7,14], reach:150, hh:52, dmg:14, kb:11, from:-1.6, to:1.6, len:100, trail:'#ffb85a', pivotY:-58, lunge:0.8, spin:true, combo:2},
+  mh3:{name:'打ち下ろし', dur:24, act:[9,16], reach:138, hh:74, dmg:18, kb:14, from:-2.8, to:1.0, len:98, trail:'#ffd24d', pivotY:-70, lunge:1.2, knock:true, combo:3},
+  mh4:{name:'流星乱舞', dur:38, act:[5,32], reach:156, hh:62, dmg:9, kb:18, from:-3.1, to:3.1, len:104, trail:'#ffffff', pivotY:-60, multi:true, multiGap:4, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ── シマ：鉄扇＝開いて受け、閉じて打つ四段。締めは扇を開いて周囲を薙ぐ ──
+  fn1:{name:'閉扇打ち', dur:10, act:[3,6], reach:86, hh:44, dmg:9, kb:4, from:-1.0, to:0.8, len:30, trail:'#ffd6e8', pivotY:-56, lunge:1.3, combo:1},
+  fn2:{name:'扇返し', dur:10, act:[3,6], reach:86, hh:44, dmg:9, kb:4, from:0.9, to:-1.0, len:30, trail:'#ffd6e8', pivotY:-56, lunge:1.3, combo:2},
+  fn3:{name:'開扇薙ぎ', dur:15, act:[5,10], reach:98, hh:52, dmg:12, kb:7, from:-1.5, to:1.3, len:44, trail:'#ffe0ee', pivotY:-58, lunge:1.2, fanOpen:true, combo:3},
+  fn4:{name:'鉄扇乱華', dur:28, act:[5,24], reach:110, hh:58, dmg:8, kb:13, from:-3.1, to:3.1, len:48, trail:'#ffffff', pivotY:-56, multi:true, multiGap:4, spin:true, knock:true, finisher:true, fanOpen:true, combo:4},
+  // ── ヌコ：星霊オーブ＝浮かぶ球を弾き飛ばす。近接ではなく飛ぶ ──
+  ob1:{name:'星弾', dur:14, act:[5,7], reach:44, hh:38, dmg:4, kb:1, from:-0.4, to:0.2, len:20, trail:'#b0e8ff', pivotY:-56, fist:true, combo:1, pshot:{dmg:11,color:'#b0e8ff',speed:10,r:16,life:70}},
+  ob2:{name:'双星弾', dur:14, act:[5,7], reach:44, hh:38, dmg:4, kb:1, from:0.3, to:-0.3, len:20, trail:'#b0e8ff', pivotY:-56, fist:true, combo:2, pshot:{dmg:10,color:'#cfe8ff',speed:10,r:15,life:70,count:2,spread:1.6}},
+  ob3:{name:'星霊爆', dur:26, act:[9,12], reach:52, hh:42, dmg:5, kb:2, from:-0.6, to:0.5, len:22, trail:'#ffffff', pivotY:-56, fist:true, finisher:true, combo:3, pshot:{dmg:20,color:'#7fd0ff',speed:8,r:28,life:80,explode:true,count:3,spread:2.2}},
+  // ── ヌコ：氷晶のロッド＝突き刺す氷の柱。当てると凍りつく ──
+  cy1:{name:'氷柱突き', dur:15, act:[5,10], reach:96, hh:46, dmg:12, kb:5, from:-0.2, to:0.05, len:52, trail:'#8fd8ff', pivotY:-56, lunge:1.4, frostEdge:true, combo:1},
+  cy2:{name:'氷刃薙ぎ', dur:15, act:[5,10], reach:100, hh:50, dmg:13, kb:6, from:-1.3, to:1.1, len:54, trail:'#8fd8ff', pivotY:-58, lunge:1.2, frostEdge:true, combo:2},
+  cy3:{name:'絶氷', dur:28, act:[9,14], reach:108, hh:60, dmg:20, kb:12, from:-1.9, to:1.2, len:60, trail:'#ffffff', pivotY:-64, lunge:1.4, knock:true, finisher:true, aoe:true, frostEdge:true, combo:3, pshot:{dmg:14,color:'#8fd8ff',speed:7,r:26,life:70,style:'spike',count:3,spread:2.0}},
+  // ── ヌコ：祈祷の鈴＝鳴らすと衝撃の輪が広がる。当たり判定は自分の周り ──
+  bl1:{name:'一鈴', dur:15, act:[5,9], reach:74, hh:56, dmg:10, kb:6, from:-0.5, to:0.5, len:22, trail:'#ffe9a0', pivotY:-58, fist:true, ringWave:true, combo:1},
+  bl2:{name:'二鈴', dur:15, act:[5,9], reach:80, hh:60, dmg:11, kb:7, from:0.5, to:-0.5, len:22, trail:'#ffe9a0', pivotY:-58, fist:true, ringWave:true, combo:2},
+  bl3:{name:'万鈴', dur:32, act:[6,26], reach:104, hh:72, dmg:7, kb:14, from:-0.7, to:0.7, len:24, trail:'#ffffff', pivotY:-58, fist:true, multi:true, multiGap:5, knock:true, finisher:true, aoe:true, ringWave:true, combo:3},
+  // ── ヌコ：タロット＝札を投げる。曲がって飛ぶ三段 ──
+  tr1:{name:'愚者の札', dur:12, act:[4,6], reach:40, hh:36, dmg:3, kb:1, from:-0.3, to:0.2, len:18, trail:'#d6b0ff', pivotY:-56, fist:true, combo:1, pshot:{dmg:9,color:'#d6b0ff',speed:12,r:13,life:66,count:2,spread:1.1}},
+  tr2:{name:'戦車の札', dur:12, act:[4,6], reach:40, hh:36, dmg:3, kb:1, from:0.2, to:-0.3, len:18, trail:'#d6b0ff', pivotY:-56, fist:true, combo:2, pshot:{dmg:10,color:'#e0c4ff',speed:12,r:13,life:66,count:2,spread:2.4}},
+  tr3:{name:'塔の札', dur:26, act:[8,11], reach:46, hh:40, dmg:4, kb:2, from:-0.4, to:0.4, len:20, trail:'#ffffff', pivotY:-56, fist:true, finisher:true, combo:3, pshot:{dmg:13,color:'#b98aff',speed:11,r:16,life:78,count:5,spread:2.0,pierce:true}},
+  // ── ヌコ：星屑の箒＝長い柄で薙ぐ。掃いた跡に星屑が残る ──
+  br1:{name:'掃き払い', dur:14, act:[5,9], reach:118, hh:42, dmg:10, kb:6, from:-1.5, to:1.4, len:70, trail:'#ffd0f0', pivotY:-52, lunge:1.2, dustTrail:true, combo:1},
+  br2:{name:'返し掃き', dur:14, act:[5,9], reach:118, hh:42, dmg:10, kb:6, from:1.4, to:-1.5, len:70, trail:'#ffd0f0', pivotY:-52, lunge:1.2, dustTrail:true, combo:2},
+  br3:{name:'星屑の渦', dur:30, act:[5,26], reach:128, hh:56, dmg:7, kb:12, from:-3.1, to:3.1, len:74, trail:'#ffffff', pivotY:-54, multi:true, multiGap:4, spin:true, knock:true, finisher:true, aoe:true, dustTrail:true, combo:3},
+  // ── ガードワン：鉄柱＝ただの柱。振り回すだけで場が消し飛ぶ ──
+  pl1:{name:'薙ぎ倒し', dur:26, act:[10,17], reach:138, hh:60, dmg:24, kb:16, from:-1.5, to:1.4, len:110, trail:'#c8ccd4', pivotY:-62, lunge:1.6, knock:true, combo:1},
+  pl2:{name:'突き倒し', dur:26, act:[10,17], reach:152, hh:48, dmg:25, kb:18, from:-0.10, to:-0.04, len:118, trail:'#c8ccd4', pivotY:-56, lunge:2.4, knock:true, combo:2},
+  pl3:{name:'柱落とし', dur:38, act:[16,26], reach:144, hh:70, dmg:38, kb:26, from:-2.2, to:1.2, len:120, trail:'#ffffff', pivotY:-70, lunge:1.8, knock:true, finisher:true, aoe:true, shock:26, combo:3},
+  // ── ガードワン：錨＝鎖ごと振り回し、鉤で引っ掛ける ──
+  an1:{name:'錨薙ぎ', dur:24, act:[9,16], reach:146, hh:58, dmg:22, kb:16, from:-1.7, to:1.5, len:104, trail:'#9ad0e0', pivotY:-62, lunge:1.4, spin:true, knock:true, combo:1},
+  an2:{name:'鉤掛け', dur:24, act:[9,16], reach:150, hh:66, dmg:23, kb:17, from:1.5, to:-2.0, len:106, trail:'#9ad0e0', pivotY:-66, lunge:1.2, knock:true, combo:2},
+  an3:{name:'投錨', dur:40, act:[14,30], reach:160, hh:64, dmg:36, kb:28, from:-2.6, to:1.4, len:112, trail:'#ffffff', pivotY:-72, lunge:1.6, knock:true, finisher:true, aoe:true, shock:24, combo:3},
+  // ── ガードワン：削岩ドリル＝一撃は軽いが押し当てて削り続ける ──
+  dr1:{name:'押し当て', dur:16, act:[4,13], reach:104, hh:44, dmg:5, kb:1, from:-0.10, to:-0.04, len:58, trail:'#ffd24d', pivotY:-54, lunge:1.2, multi:true, multiGap:3, drill:true, combo:1},
+  dr2:{name:'上向き削り', dur:16, act:[4,13], reach:104, hh:64, dmg:5, kb:1, from:-0.5, to:-0.4, len:58, trail:'#ffd24d', pivotY:-62, lunge:1.2, multi:true, multiGap:3, drill:true, combo:2},
+  dr3:{name:'下向き削り', dur:16, act:[4,13], reach:104, hh:32, dmg:5, kb:1, from:0.5, to:0.4, len:58, trail:'#ffd24d', pivotY:-40, lunge:1.2, multi:true, multiGap:3, drill:true, combo:3},
+  dr4:{name:'貫通削岩', dur:40, act:[5,34], reach:118, hh:50, dmg:6, kb:14, from:-0.12, to:0.0, len:64, trail:'#ffffff', pivotY:-54, move:6.5, multi:true, multiGap:2, knock:true, finisher:true, drill:true, combo:4},
+  // ── ガードワン：大盾＝殴る武器ではないが、体重ごとぶつける ──
+  bs1:{name:'盾殴り', dur:20, act:[7,13], reach:92, hh:56, dmg:20, kb:18, from:-0.9, to:0.7, len:40, trail:'#e6e9f0', pivotY:-58, lunge:2.0, knock:true, shieldFace:true, combo:1},
+  bs2:{name:'盾返し', dur:20, act:[7,13], reach:92, hh:56, dmg:21, kb:19, from:0.8, to:-0.9, len:40, trail:'#e6e9f0', pivotY:-58, lunge:1.8, knock:true, shieldFace:true, combo:2},
+  bs3:{name:'シールドチャージ', dur:34, act:[5,28], reach:100, hh:60, dmg:28, kb:30, from:-0.10, to:0.0, len:44, trail:'#ffffff', pivotY:-56, move:10.5, knock:true, finisher:true, shoulder:true, shieldFace:true, combo:3},
+  // ── ガードワン：チェーンソー＝刃が回り続ける。当て続けて削る ──
+  cs1:{name:'切り込み', dur:15, act:[4,12], reach:98, hh:50, dmg:5, kb:1, from:-1.0, to:0.6, len:52, trail:'#ff5a5a', pivotY:-58, lunge:1.2, multi:true, multiGap:3, sawEdge:true, combo:1},
+  cs2:{name:'挽き返し', dur:15, act:[4,12], reach:98, hh:50, dmg:5, kb:1, from:0.7, to:-1.0, len:52, trail:'#ff5a5a', pivotY:-58, lunge:1.2, multi:true, multiGap:3, sawEdge:true, combo:2},
+  cs3:{name:'押し込み', dur:18, act:[4,15], reach:104, hh:54, dmg:6, kb:1, from:-0.12, to:-0.02, len:54, trail:'#ff7a7a', pivotY:-56, lunge:1.6, multi:true, multiGap:3, sawEdge:true, combo:3},
+  cs4:{name:'挽き切り', dur:40, act:[5,34], reach:112, hh:58, dmg:6, kb:16, from:-3.1, to:3.1, len:58, trail:'#ffffff', pivotY:-56, multi:true, multiGap:2, spin:true, knock:true, finisher:true, aoe:true, sawEdge:true, combo:4},
+  // ── ワッチ：鞭＝画面の端まで届く。当たり判定が細く長い ──
+  wp1:{name:'打ち鞭', dur:16, act:[6,11], reach:180, hh:36, dmg:9, kb:4, from:-0.5, to:0.3, len:120, trail:'#c8a86a', pivotY:-54, whipLash:true, combo:1},
+  wp2:{name:'返し鞭', dur:16, act:[6,11], reach:180, hh:36, dmg:9, kb:4, from:0.4, to:-0.5, len:120, trail:'#c8a86a', pivotY:-54, whipLash:true, combo:2},
+  wp3:{name:'巻き上げ', dur:20, act:[7,13], reach:170, hh:70, dmg:11, kb:8, from:0.8, to:-1.2, len:118, trail:'#e0c48a', pivotY:-60, knock:true, whipLash:true, combo:3},
+  wp4:{name:'蛇咬乱打', dur:34, act:[5,30], reach:196, hh:48, dmg:7, kb:12, from:-0.8, to:0.8, len:128, trail:'#ffffff', pivotY:-54, multi:true, multiGap:4, knock:true, finisher:true, whipLash:true, combo:4},
+  // ── ワッチ：ブーメラン＝投げて戻る。手元では殴らず、飛ばして当てる ──
+  bm1:{name:'投げ', dur:16, act:[5,7], reach:52, hh:38, dmg:4, kb:1, from:-0.5, to:0.3, len:22, trail:'#aef8d8', pivotY:-56, fist:true, combo:1, pshot:{dmg:12,color:'#aef8d8',speed:12,r:18,life:66,multihit:true,hitGap:18,boomer:true}},
+  bm2:{name:'低い投げ', dur:16, act:[5,7], reach:52, hh:38, dmg:4, kb:1, from:0.4, to:-0.4, len:22, trail:'#aef8d8', pivotY:-56, fist:true, combo:2, pshot:{dmg:12,color:'#5ad890',speed:13,r:18,life:66,multihit:true,hitGap:18,low:true,boomer:true}},
+  bm3:{name:'三枚おろし', dur:28, act:[8,11], reach:58, hh:42, dmg:5, kb:2, from:-0.6, to:0.6, len:24, trail:'#ffffff', pivotY:-56, fist:true, finisher:true, combo:3, pshot:{dmg:14,color:'#aef8d8',speed:12,r:20,life:78,multihit:true,hitGap:18,count:3,spread:2.4,boomer:true}},
+  // ── ワッチ：ヨーヨー＝糸で伸びる五段。伸びて戻る往復で当たる ──
+  yy1:{name:'投げ落とし', dur:10, act:[3,7], reach:118, hh:44, dmg:7, kb:2, from:-0.8, to:0.5, len:66, trail:'#ff8ae0', pivotY:-56, yoyoLine:true, combo:1},
+  yy2:{name:'引き戻し', dur:10, act:[3,7], reach:118, hh:44, dmg:7, kb:2, from:0.6, to:-0.8, len:66, trail:'#ff8ae0', pivotY:-56, yoyoLine:true, combo:2},
+  yy3:{name:'犬の散歩', dur:13, act:[4,10], reach:126, hh:28, dmg:8, kb:3, from:1.2, to:1.5, len:70, trail:'#ffa0e8', pivotY:-30, yoyoLine:true, combo:3},
+  yy4:{name:'ループ', dur:13, act:[4,10], reach:122, hh:66, dmg:8, kb:4, from:-1.6, to:0.4, len:70, trail:'#ffa0e8', pivotY:-64, yoyoLine:true, combo:4},
+  yy5:{name:'流星ヨーヨー', dur:30, act:[4,26], reach:138, hh:56, dmg:6, kb:12, from:-3.1, to:3.1, len:74, trail:'#ffffff', pivotY:-56, multi:true, multiGap:3, spin:true, knock:true, finisher:true, yoyoLine:true, combo:5},
+  // ── ワッチ：クロスボウ＝撃つ。矢は貫通し、締めは三本同時 ──
+  cb1:{name:'速射', dur:14, act:[5,7], reach:46, hh:36, dmg:3, kb:1, from:-0.16, to:-0.10, len:24, trail:'#d6deec', pivotY:-54, fist:true, combo:1, pshot:{dmg:13,color:'#d6deec',speed:16,r:11,life:80,pierce:true,style:'spike'}},
+  cb2:{name:'狙い撃ち', dur:16, act:[6,8], reach:46, hh:36, dmg:3, kb:1, from:-0.14, to:-0.08, len:24, trail:'#eef2f8', pivotY:-54, fist:true, combo:2, pshot:{dmg:15,color:'#eef2f8',speed:18,r:11,life:90,pierce:true,style:'spike'}},
+  cb3:{name:'三連弩', dur:28, act:[9,12], reach:50, hh:40, dmg:4, kb:2, from:-0.14, to:-0.06, len:26, trail:'#ffffff', pivotY:-54, fist:true, finisher:true, combo:3, pshot:{dmg:14,color:'#ffffff',speed:17,r:12,life:90,pierce:true,style:'spike',count:3,spread:1.6}},
+  // ── ワッチ：仕込み杖＝杖のまま打ち、締めで抜いて斬る ──
+  cn1:{name:'杖打ち', dur:12, act:[4,8], reach:104, hh:48, dmg:10, kb:5, from:-1.2, to:0.9, len:58, trail:'#c8a84a', pivotY:-56, lunge:1.4, combo:1},
+  cn2:{name:'突き杖', dur:12, act:[4,8], reach:112, hh:40, dmg:10, kb:5, from:-0.12, to:-0.05, len:60, trail:'#c8a84a', pivotY:-54, lunge:1.8, combo:2},
+  cn3:{name:'払い', dur:15, act:[5,10], reach:108, hh:52, dmg:12, kb:7, from:1.3, to:-1.3, len:58, trail:'#e0c46a', pivotY:-58, lunge:1.2, combo:3},
+  cn4:{name:'抜き打ち', dur:28, act:[10,17], reach:126, hh:60, dmg:22, kb:15, from:-2.1, to:1.5, len:68, trail:'#ffffff', pivotY:-62, lunge:2.2, knock:true, finisher:true, caneDraw:true, combo:4},
+  // ── ワンデン：野太刀＝三段だが一振りが桁違いに重い ──
+  nd1:{name:'鬼哭・袈裟', dur:24, act:[10,16], reach:172, hh:76, dmg:26, kb:14, from:-2.1, to:1.1, len:132, trail:'#ffd0d0', pivotY:-74, lunge:1.8, knock:true, combo:1},
+  nd2:{name:'鬼哭・逆袈裟', dur:24, act:[10,16], reach:172, hh:76, dmg:27, kb:14, from:1.3, to:-2.0, len:132, trail:'#ffd0d0', pivotY:-74, lunge:1.6, knock:true, combo:2},
+  nd3:{name:'鬼哭・大車', dur:40, act:[14,32], reach:186, hh:84, dmg:40, kb:26, from:-3.1, to:3.1, len:140, trail:'#ffffff', pivotY:-72, lunge:1.8, multi:true, multiGap:7, spin:true, knock:true, finisher:true, aoe:true, combo:3},
+  // ── ワンデン：小太刀＝間合いは無いが、五段の速い連斬 ──
+  kd1:{name:'霞・一', dur:8,  act:[2,5], reach:86, hh:44, dmg:6, kb:2, from:-1.0, to:0.7, len:40, trail:'#eaf6ff', pivotY:-56, lunge:1.5, combo:1},
+  kd2:{name:'霞・二', dur:8,  act:[2,5], reach:86, hh:44, dmg:6, kb:2, from:0.8, to:-0.9, len:40, trail:'#eaf6ff', pivotY:-56, lunge:1.5, combo:2},
+  kd3:{name:'霞・三', dur:9,  act:[3,6], reach:90, hh:52, dmg:7, kb:2, from:-1.5, to:0.4, len:42, trail:'#f4faff', pivotY:-60, lunge:1.4, combo:3},
+  kd4:{name:'霞・四', dur:9,  act:[3,6], reach:90, hh:38, dmg:7, kb:3, from:1.4, to:-0.4, len:42, trail:'#f4faff', pivotY:-48, lunge:1.4, combo:4},
+  kd5:{name:'霞・散', dur:26, act:[3,22], reach:100, hh:56, dmg:5, kb:10, from:-1.8, to:1.8, len:44, trail:'#ffffff', pivotY:-56, multi:true, multiGap:3, knock:true, finisher:true, combo:5},
+  // ── ワンデン：長巻＝長い柄の大太刀。円を描いて薙ぐ四段 ──
+  ng1:{name:'巻き薙ぎ', dur:18, act:[7,12], reach:154, hh:56, dmg:18, kb:10, from:-1.8, to:1.5, len:110, trail:'#e0ffe8', pivotY:-62, lunge:1.5, knock:true, combo:1},
+  ng2:{name:'巻き返し', dur:18, act:[7,12], reach:154, hh:56, dmg:18, kb:10, from:1.6, to:-1.8, len:110, trail:'#e0ffe8', pivotY:-62, lunge:1.4, combo:2},
+  ng3:{name:'柄打ち', dur:16, act:[5,10], reach:120, hh:64, dmg:15, kb:12, from:-2.2, to:0.2, len:64, trail:'#c8e8d0', pivotY:-66, lunge:1.6, knock:true, combo:3},
+  ng4:{name:'長巻旋', dur:34, act:[6,28], reach:166, hh:62, dmg:10, kb:18, from:-3.1, to:3.1, len:116, trail:'#ffffff', pivotY:-60, multi:true, multiGap:5, spin:true, knock:true, finisher:true, aoe:true, combo:4},
+  // ── ワンデン：妖刀＝斬るほど刀が持ち主を喰う。一撃が重い代わりに戻りが遅い ──
+  mu1:{name:'妖・薙ぎ', dur:20, act:[8,13], reach:126, hh:56, dmg:22, kb:9, from:-1.6, to:1.3, len:78, trail:'#ff6a8a', pivotY:-60, lunge:1.5, cursedEdge:true, combo:1},
+  mu2:{name:'妖・返し', dur:20, act:[8,13], reach:126, hh:56, dmg:23, kb:9, from:1.4, to:-1.6, len:78, trail:'#ff6a8a', pivotY:-60, lunge:1.4, cursedEdge:true, combo:2},
+  mu3:{name:'妖・突き', dur:22, act:[9,14], reach:134, hh:44, dmg:24, kb:11, from:-0.12, to:-0.04, len:82, trail:'#ff8aa4', pivotY:-54, lunge:2.0, knock:true, cursedEdge:true, combo:3},
+  mu4:{name:'妖・血振り', dur:34, act:[12,26], reach:146, hh:64, dmg:34, kb:20, from:-2.4, to:1.6, len:88, trail:'#ffffff', pivotY:-64, lunge:1.8, knock:true, finisher:true, aoe:true, cursedEdge:true, combo:4},
+  // ── ワンデン：白鞘＝抜かずに鞘で打ち、締めで抜刀する三段 ──
+  sy1:{name:'鞘打ち', dur:15, act:[5,10], reach:132, hh:52, dmg:13, kb:9, from:-1.5, to:1.2, len:88, trail:'#fffaf0', pivotY:-58, lunge:1.4, sheath:true, knock:true, combo:1},
+  sy2:{name:'鞘返し', dur:15, act:[5,10], reach:132, hh:52, dmg:13, kb:9, from:1.3, to:-1.5, len:88, trail:'#fffaf0', pivotY:-58, lunge:1.3, sheath:true, combo:2},
+  sy3:{name:'無銘・抜刀', dur:30, act:[12,18], reach:150, hh:62, dmg:28, kb:18, from:-2.2, to:1.4, len:96, trail:'#ffffff', pivotY:-62, lunge:2.2, knock:true, finisher:true, aoe:true, iai:true, combo:3},
+  // ── マック：大型リボルバー＝一発が重い三連射 ──
+  rv1:{name:'一発', dur:14, act:[5,7], reach:44, hh:36, dmg:2, kb:1, from:-0.16, to:-0.10, len:22, trail:'#ffd24d', pivotY:-52, fist:true, gunPose:true, combo:1, pshot:{dmg:17,color:'#ffd24d',speed:19,r:12,life:70,pierce:true}},
+  rv2:{name:'二発', dur:14, act:[5,7], reach:44, hh:36, dmg:2, kb:1, from:-0.14, to:-0.08, len:22, trail:'#ffd24d', pivotY:-52, fist:true, gunPose:true, combo:2, pshot:{dmg:17,color:'#ffe9a0',speed:19,r:12,life:70,pierce:true}},
+  rv3:{name:'止めの一発', dur:26, act:[9,11], reach:48, hh:40, dmg:3, kb:2, from:-0.14, to:-0.06, len:24, trail:'#ffffff', pivotY:-52, fist:true, gunPose:true, finisher:true, combo:3, pshot:{dmg:30,color:'#ffffff',speed:21,r:18,life:80,pierce:true,explode:true}},
+  // ── マック：短機関銃＝一発は軽いが五連で撃ち込む ──
+  sm1:{name:'点射・一', dur:7, act:[2,4], reach:40, hh:34, dmg:1, kb:1, from:-0.14, to:-0.10, len:20, trail:'#ffe9a0', pivotY:-52, fist:true, gunPose:true, combo:1, pshot:{dmg:7,color:'#ffe9a0',speed:20,r:9,life:60}},
+  sm2:{name:'点射・二', dur:7, act:[2,4], reach:40, hh:34, dmg:1, kb:1, from:-0.13, to:-0.09, len:20, trail:'#ffe9a0', pivotY:-52, fist:true, gunPose:true, combo:2, pshot:{dmg:7,color:'#ffe9a0',speed:20,r:9,life:60}},
+  sm3:{name:'点射・三', dur:7, act:[2,4], reach:40, hh:34, dmg:1, kb:1, from:-0.12, to:-0.08, len:20, trail:'#fff6c0', pivotY:-52, fist:true, gunPose:true, combo:3, pshot:{dmg:7,color:'#fff6c0',speed:20,r:9,life:60}},
+  sm4:{name:'点射・四', dur:7, act:[2,4], reach:40, hh:34, dmg:1, kb:1, from:-0.11, to:-0.07, len:20, trail:'#fff6c0', pivotY:-52, fist:true, gunPose:true, combo:4, pshot:{dmg:7,color:'#fff6c0',speed:20,r:9,life:60}},
+  sm5:{name:'掃射', dur:22, act:[4,6], reach:44, hh:38, dmg:2, kb:1, from:-0.14, to:-0.04, len:22, trail:'#ffffff', pivotY:-52, fist:true, gunPose:true, finisher:true, combo:5, pshot:{dmg:8,color:'#ffffff',speed:20,r:10,life:66,count:5,spread:1.4}},
+  // ── マック：レーザーライフル＝細く速い光条。貫通する ──
+  ls1:{name:'照射', dur:15, act:[6,8], reach:44, hh:36, dmg:2, kb:1, from:-0.15, to:-0.10, len:26, trail:'#7df0ff', pivotY:-52, fist:true, gunPose:true, combo:1, pshot:{dmg:15,color:'#7df0ff',speed:24,r:13,life:90,pierce:true,style:'wave'}},
+  ls2:{name:'連射', dur:15, act:[6,8], reach:44, hh:36, dmg:2, kb:1, from:-0.14, to:-0.09, len:26, trail:'#aef8ff', pivotY:-52, fist:true, gunPose:true, combo:2, pshot:{dmg:15,color:'#aef8ff',speed:24,r:13,life:90,pierce:true,style:'wave'}},
+  ls3:{name:'収束照射', dur:30, act:[11,14], reach:48, hh:40, dmg:3, kb:2, from:-0.14, to:-0.06, len:28, trail:'#ffffff', pivotY:-52, fist:true, gunPose:true, finisher:true, combo:3, pshot:{dmg:26,color:'#ffffff',speed:26,r:34,life:110,pierce:true,style:'wave',multihit:true,hitGap:6}},
+  // ── マック：火炎放射器＝一粒は軽いが、面で焼く ──
+  fm1:{name:'噴射・短', dur:14, act:[4,11], reach:112, hh:52, dmg:4, kb:1, from:-0.14, to:-0.02, len:40, trail:'#ff8a3a', pivotY:-52, fist:true, gunPose:true, multi:true, multiGap:3, flameJet:true, combo:1},
+  fm2:{name:'噴射・薙ぎ', dur:16, act:[4,13], reach:118, hh:60, dmg:4, kb:1, from:-0.5, to:0.4, len:42, trail:'#ff8a3a', pivotY:-56, fist:true, gunPose:true, multi:true, multiGap:3, flameJet:true, combo:2},
+  fm3:{name:'火の海', dur:36, act:[5,30], reach:132, hh:66, dmg:5, kb:12, from:-0.7, to:0.7, len:46, trail:'#ffd24d', pivotY:-54, fist:true, gunPose:true, multi:true, multiGap:2, knock:true, finisher:true, aoe:true, flameJet:true, combo:3},
+  // ── マック：レールガン＝溜めて撃つ一撃。外すと大きな隙 ──
+  rg1:{name:'加速射', hold:10, dur:44, act:[22,25], reach:50, hh:44, dmg:3, kb:2, from:-0.14, to:-0.08, len:30, trail:'#bffcff', pivotY:-52, fist:true, gunPose:true, railCharge:true, combo:1, pshot:{dmg:48,color:'#bffcff',speed:28,r:40,life:130,pierce:true,style:'wave',multihit:true,hitGap:5}},
+  rg2:{name:'超電磁砲', hold:14, dur:60, act:[32,36], reach:56, hh:48, dmg:4, kb:3, from:-0.12, to:-0.04, len:32, trail:'#ffffff', pivotY:-52, fist:true, gunPose:true, railCharge:true, finisher:true, combo:2, pshot:{dmg:76,color:'#ffffff',speed:30,r:56,life:150,pierce:true,style:'wave',multihit:true,hitGap:4}},
   gupper:{name:'ハンマー振り上げ', dur:26, act:[8,14], reach:96, hh:200, dmg:18, kb:8, from:1.1, to:-1.9, len:66, trail:'#ffd24d', pivotY:-64, launch:14, derive:'gslamdown'},
   gslamdown:{name:'振り下ろし叩きつけ', dur:26, act:[9,15], reach:106, hh:64, dmg:22, kb:12, from:-1.9, to:1.2, len:70, trail:'#fff', pivotY:-70, lunge:1.2, knock:true, aoe:true, finisher:true},
   gspin:{name:'ハンマー旋風突進', dur:30, act:[3,26], reach:104, hh:56, dmg:9, kb:6, from:-3.1, to:3.1, len:66, trail:'#ffb85a', pivotY:-58, move:7.5, multi:true, multiGap:5, spin:true, stinger:true, respin:true, respinMax:4, knock:true},
@@ -2660,6 +2834,8 @@ const WEAPONS={
   // ── ガードワン8号：基本装備の巨大ハンマー ──
   ghammer:{snd:'blunt', name:'巨大ハンマー', reach:1.2, dmg:1.0, kb:1.6, ext:1.3, trail:'#ffb85a', launch:1.5, col:'#c9ccd4'},
   gaxe: {snd:'chop', name:'大戦斧', reach:1.28, dmg:1.25, kb:1.3, ext:1.35, trail:'#ffd0a0', launch:1.35, col:'#d0a060'},   // ガードワン：鋭い縦斬り
+  scythe:{snd:'blade', name:'死神の大鎌', reach:1.55, dmg:1.30, kb:1.15, ext:1.7, trail:'#c9a6ff', launch:1.25, col:'#a76bff'},   // 長い間合いを薙ぐ。刈り取るような横振り
+  zanbatou:{snd:'blunt', name:'斬馬刀', reach:1.95, dmg:2.60, kb:2.4, ext:2.6, trail:'#eaf2ff', launch:2.2, col:'#b6c4d6'},   // 通常の5倍の刀身。一撃は絶大だが隙も絶大
   gflail:{snd:'blunt', name:'鉄球フレイル', reach:1.4, dmg:1.05, kb:1.5, ext:1.5, trail:'#c9ccd4', launch:1.4, col:'#9aa0ac'},  // ガードワン：広範囲の振り回し
   // ── ショップ限定（永続装備） ──
   holy:  {snd:'blade', name:'聖剣デュランワン', reach:1.25, dmg:1.45, kb:1.2, ext:1.3, trail:'#ffe9a0', launch:1.15, col:'#ffe14d'},
@@ -2671,7 +2847,55 @@ const WEAPONS={
   inuboshi2:{snd:'longblade', name:'犬干し竿・真打', reach:2.5, dmg:1.6, kb:1.3, ext:3.2, trail:'#ffffff', launch:1.25, col:'#ffffff'},   // ワンデンの永続強化：さらに研ぎ澄まされた長刀
   // ── イベント武器：ムーンライトソード（イッヌ）＝振るたび月光の光波が飛ぶ ──
   moon:  {snd:'blade', name:'ムーンライトソード', reach:1.32, dmg:1.5, kb:1.3, ext:1.4, trail:'#bfe9ff', launch:1.2, col:'#bfe9ff', wave:true},
+  // ══════════════════════════════════════════════════════════════
+  //  キャラごとの追加武器（各5種）。それぞれ専用の連撃と持ち姿を持つ
+  //  who を書いた武器は、そのキャラだけが拾える（ワッチは例外的に全部扱える）
+  // ══════════════════════════════════════════════════════════════
+  // ── イッヌ：剣の系譜 ──
+  katana:  {snd:'blade', name:'桜花刀',           who:'inu', reach:1.22, dmg:1.28, kb:1.1, ext:1.35, trail:'#ffd6ea', launch:1.15, col:'#ff9ec4'},
+  rapier:  {snd:'thrust',name:'黒鉄のレイピア',   who:'inu', reach:1.36, dmg:0.92, kb:0.8, ext:1.5,  trail:'#d8e4ff', launch:0.9,  col:'#8fa6d8'},
+  flamberge:{snd:'blade',name:'炎刃フランベルジュ',who:'inu', reach:1.20, dmg:1.62, kb:1.35,ext:1.3,  trail:'#ff9a3a', launch:1.3,  col:'#ff7a2a'},
+  chakram: {snd:'blade', name:'輪刃チャクラム',   who:'inu', reach:1.10, dmg:1.10, kb:0.9, ext:1.0,  trail:'#7df0e0', launch:1.0,  col:'#4fd8c8'},
+  lance:   {snd:'thrust',name:'聖騎士のランス',   who:'inu', reach:1.85, dmg:1.45, kb:1.6, ext:2.3,  trail:'#ffe9a0', launch:1.5,  col:'#e8c86a'},
+  // ── シマダックス：拳法の得物 ──
+  sansetsu:{snd:'chop',  name:'三節棍',           who:'shima', reach:1.34, dmg:1.22, kb:1.0, ext:1.5, trail:'#ffe27a', launch:1.0, col:'#e0b64a'},
+  bostaff: {snd:'blunt', name:'六尺棒',           who:'shima', reach:1.52, dmg:1.15, kb:1.25,ext:1.9, trail:'#e6d2a8', launch:1.15,col:'#c8a870'},
+  kali:    {snd:'blunt', name:'双棍カリ',         who:'shima', reach:1.00, dmg:1.30, kb:0.95,ext:0.9, trail:'#ffcf9a', launch:0.95,col:'#d89a5a'},
+  meteorh: {snd:'blunt', name:'流星錘',           who:'shima', reach:1.60, dmg:1.35, kb:1.55,ext:2.0, trail:'#ffb85a', launch:1.5, col:'#b0741e'},
+  ironfan: {snd:'chop',  name:'鉄扇',             who:'shima', reach:1.08, dmg:1.20, kb:1.15,ext:1.0, trail:'#ffd6e8', launch:1.1, col:'#e05a7a'},
+  // ── ヌコ：魔法の触媒 ──
+  orb:     {snd:'magic', name:'星霊オーブ',       who:'nuko', reach:1.00, dmg:1.25, kb:1.0, ext:0.9, trail:'#b0e8ff', launch:1.0, col:'#7fd0ff'},
+  icerod:  {snd:'magic', name:'氷晶のロッド',     who:'nuko', reach:1.05, dmg:1.35, kb:1.1, ext:1.1, trail:'#8fd8ff', launch:1.1, col:'#6ec4f0'},
+  bell:    {snd:'magic', name:'祈祷の鈴',         who:'nuko', reach:0.95, dmg:1.15, kb:1.0, ext:0.8, trail:'#ffe9a0', launch:1.0, col:'#ffd24d'},
+  tarot:   {snd:'magic', name:'タロットの束',     who:'nuko', reach:1.20, dmg:1.20, kb:0.9, ext:1.0, trail:'#d6b0ff', launch:0.95,col:'#b98aff'},
+  broom:   {snd:'magic', name:'星屑の箒',         who:'nuko', reach:1.30, dmg:1.10, kb:1.2, ext:1.6, trail:'#ffd0f0', launch:1.15,col:'#c88ad0'},
+  // ── ガードワン8号：重量級の得物 ──
+  pillar:  {snd:'blunt', name:'鉄柱',             who:'guard8', reach:1.45, dmg:1.75, kb:2.0, ext:2.1, trail:'#c8ccd4', launch:1.9, col:'#8a919c'},
+  anchor:  {snd:'blunt', name:'錨',               who:'guard8', reach:1.50, dmg:1.85, kb:2.1, ext:1.9, trail:'#9ad0e0', launch:2.0, col:'#5a8a9a'},
+  jackdrill:{snd:'blunt',name:'削岩ドリル',       who:'guard8', reach:1.15, dmg:0.75, kb:0.7, ext:1.3, trail:'#ffd24d', launch:0.7, col:'#e0a020'},
+  bshield: {snd:'blunt', name:'鉄壁の大盾',       who:'guard8', reach:1.05, dmg:1.55, kb:2.2, ext:1.0, trail:'#e6e9f0', launch:1.8, col:'#b0b6c2'},
+  chainsaw:{snd:'chop',  name:'チェーンソー',     who:'guard8', reach:1.12, dmg:0.70, kb:0.6, ext:1.2, trail:'#ff5a5a', launch:0.6, col:'#d43a3a'},
+  // ── ワッチ：盗賊の飛び道具と仕掛け ──
+  whip:    {snd:'chop',  name:'蛇咬の鞭',         who:'watch', reach:1.90, dmg:0.95, kb:0.9, ext:2.4, trail:'#c8a86a', launch:0.9, col:'#8a6a3a'},
+  boomerang:{snd:'chop', name:'鋼のブーメラン',   who:'watch', reach:1.15, dmg:1.05, kb:0.9, ext:1.0, trail:'#aef8d8', launch:0.95,col:'#5ad890'},
+  yoyo:    {snd:'blunt', name:'殺人ヨーヨー',     who:'watch', reach:1.40, dmg:1.00, kb:0.85,ext:1.5, trail:'#ff8ae0', launch:0.9, col:'#e05ac0'},
+  crossbow:{snd:'thrust',name:'クロスボウ',       who:'watch', reach:1.05, dmg:1.15, kb:1.0, ext:0.9, trail:'#d6deec', launch:1.0, col:'#9aa4b4'},
+  canesword:{snd:'blade',name:'仕込み杖',         who:'watch', reach:1.30, dmg:1.35, kb:1.1, ext:1.45,trail:'#ffe9a0', launch:1.15,col:'#c8a84a'},
+  // ── ワンデン：一刀流の刀（拾っても一刀のまま） ──
+  nodachi: {snd:'longblade', name:'野太刀・鬼哭', who:'wanden', reach:2.10, dmg:1.75, kb:1.5, ext:2.7, trail:'#ffd0d0', launch:1.5, col:'#e0a0a0'},
+  kodachi: {snd:'blade', name:'小太刀・霞',       who:'wanden', reach:1.05, dmg:0.90, kb:0.8, ext:1.1, trail:'#eaf6ff', launch:0.85,col:'#cfe0f0'},
+  nagamaki:{snd:'longblade', name:'長巻',         who:'wanden', reach:1.85, dmg:1.45, kb:1.35,ext:2.4, trail:'#e0ffe8', launch:1.35,col:'#a8d8b0'},
+  muramasa:{snd:'blade', name:'妖刀ムラマサ',     who:'wanden', reach:1.45, dmg:1.95, kb:1.2, ext:1.7, trail:'#ff6a8a', launch:1.25,col:'#d02a4a'},
+  shirasaya:{snd:'longblade', name:'白鞘・無銘',  who:'wanden', reach:1.70, dmg:1.30, kb:1.1, ext:2.0, trail:'#fffaf0', launch:1.1, col:'#f0e6d2'},
+  // ── マック：拾える火器（自前の銃と持ち替える） ──
+  revolver:{snd:'blunt', name:'大型リボルバー',   who:'mack', reach:1.00, dmg:1.45, kb:1.3, ext:0.8, trail:'#ffd24d', launch:1.2, col:'#c8a020'},
+  smg:     {snd:'blunt', name:'短機関銃',         who:'mack', reach:1.00, dmg:0.62, kb:0.6, ext:0.8, trail:'#ffe9a0', launch:0.6, col:'#8a8f9a'},
+  laserrifle:{snd:'magic',name:'レーザーライフル',who:'mack', reach:1.00, dmg:1.25, kb:1.0, ext:1.0, trail:'#7df0ff', launch:1.0, col:'#3ad0e8'},
+  flamer:  {snd:'magic', name:'火炎放射器',       who:'mack', reach:1.00, dmg:0.55, kb:0.5, ext:1.0, trail:'#ff8a3a', launch:0.5, col:'#ff6a1a'},
+  railgun: {snd:'magic', name:'レールガン',       who:'mack', reach:1.00, dmg:2.40, kb:2.2, ext:1.2, trail:'#bffcff', launch:2.0, col:'#7fe8ff'},
 };
+// 追加武器を「誰の得物か」で引く。ワッチだけは魔法以外の全てを扱える
+const WEAPON_OWNER=(function(){ const m={}; for(const k in WEAPONS){ if(WEAPONS[k].who) (m[WEAPONS[k].who]=m[WEAPONS[k].who]||[]).push(k); } return m; })();
 // 武器キーから打撃音クラスを引く（未装備・不明なら刃物系を既定にして後方互換を保つ）
 const wsndOf=w=>((WEAPONS[w]||{}).snd)||'blade';
 // 現在のステージテーマに対応する足音の材質（STAGE_THEME.gsnd）
@@ -2729,9 +2953,25 @@ function nearestPlayerTo(x){ let best=null,bd=1e9; for(const p of players){ if(!
 // 装備武器ごとにコンボのモーションを差し替える
 const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3'], nunchaku:['nc1','nc2','nc3','nc4','nc5'], tonfa:['tf1','tf2','tf3','tf4'],
   twin:['tw1','tw2','tw3','tw4','tw5'], claw:['cl1','cl2','cl3','cl4'],
-  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'] };
+  ghammer:['gh1','gh2','gh3'], megaton:['gh1','gh2','gh3'], gaxe:['ax1','ax2','ax3'], gflail:['fl1','fl2','fl3','fl4'],
+  scythe:['sk1','sk2','sk3','sk4'], zanbatou:['zb1','zb2'],
+  // ── 追加武器（各キャラ5種）。どれも専用の連撃を持つ ──
+  katana:['kt1','kt2','kt3','kt4'], rapier:['rp1','rp2','rp3','rp4','rp5'], flamberge:['fb1','fb2','fb3'],
+  chakram:['ck1','ck2','ck3'], lance:['ln1','ln2','ln3'],
+  sansetsu:['ss1','ss2','ss3','ss4','ss5'], bostaff:['bo1','bo2','bo3','bo4'], kali:['kl1','kl2','kl3','kl4','kl5'],
+  meteorh:['mh1','mh2','mh3','mh4'], ironfan:['fn1','fn2','fn3','fn4'],
+  orb:['ob1','ob2','ob3'], icerod:['cy1','cy2','cy3'], bell:['bl1','bl2','bl3'], tarot:['tr1','tr2','tr3'], broom:['br1','br2','br3'],
+  pillar:['pl1','pl2','pl3'], anchor:['an1','an2','an3'], jackdrill:['dr1','dr2','dr3','dr4'],
+  bshield:['bs1','bs2','bs3'], chainsaw:['cs1','cs2','cs3','cs4'],
+  whip:['wp1','wp2','wp3','wp4'], boomerang:['bm1','bm2','bm3'], yoyo:['yy1','yy2','yy3','yy4','yy5'],
+  crossbow:['cb1','cb2','cb3'], canesword:['cn1','cn2','cn3','cn4'],
+  nodachi:['nd1','nd2','nd3'], kodachi:['kd1','kd2','kd3','kd4','kd5'], nagamaki:['ng1','ng2','ng3','ng4'],
+  muramasa:['mu1','mu2','mu3','mu4'], shirasaya:['sy1','sy2','sy3'],
+  revolver:['rv1','rv2','rv3'], smg:['sm1','sm2','sm3','sm4','sm5'], laserrifle:['ls1','ls2','ls3'],
+  flamer:['fm1','fm2','fm3'], railgun:['rg1','rg2'] };
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
-function comboMaxFor(p){ if(p.kind==='nuko') return 1; if(p.kind==='wanden') return 4; if(p.kind==='mack') return MK_AMMO; const s=comboSet(p); return s? s.length : (p.kind==='shima'?5:4); }
+function comboMaxFor(p){ const s=comboSet(p); if(s) return s.length;   // 拾った武器の連撃が最優先
+  if(p.kind==='nuko') return 1; if(p.kind==='wanden') return 4; if(p.kind==='mack') return MK_AMMO; return (p.kind==='shima'?5:4); }
 // ══════════════════════════════════════════════════════════════
 //  レベルアップによる必殺技の進化
 //  Lv5 で ↓↑必殺技が別技に、Lv10 で 波動／昇竜 が上位技へ変わる（見た目も別物になる）
@@ -2797,7 +3037,9 @@ function specialsUnlockedAt(kind,lv){ const out=[];
   for(const slot of SPECIAL_SLOTS){ for(const u of (ups[slot]||[])){
     if(u[0]===lv && ATK[u[1]]) out.push({slot, id:u[1], name:ATK[u[1]].name}); } }
   return out; }
-function comboMoveFor(p,step){ if(p.kind==='nuko') return 'mgshot';
+function comboMoveFor(p,step){ const _s=comboSet(p);
+  if(_s) return _s[clamp(step,1,_s.length)-1];    // 追加武器はキャラの既定の構えより優先される
+  if(p.kind==='nuko') return 'mgshot';
   if(p.kind==='wanden') return 'wd'+clamp(step,1,4);   // ワンデン：長剣「犬干し竿」の居合コンボ（武器を拾っても構えは変えない）
   if(p.kind==='mack') return 'mk'+clamp(step,1,MK_AMMO);   // マック：リボルバーの6連射（拾い物では構えを変えない）
   const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':p.kind==='watch'?'wc':'c')+step; }
@@ -2887,7 +3129,7 @@ function firePShot(p,o){ o=o||{}; const dir=p.facing, mul=p.kind==='nuko'?nukoMu
   const col=o.color||'#9ff0ff', n=o.count||1;
   for(let k=0;k<n;k++){ const vy=o.spread? (k-(n-1)/2)*o.spread : (o.vy||0);
     spawnProj(p.x+dir*46, p.y-(o.zoff||0), dir*(o.speed||9), vy, {owner:'player', dmg:Math.round((o.dmg||18)*mul), color:col,
-      r:o.r||16, life:o.life||64, zz:(o.low?14:44), vzz:o.vzz||0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike', explode:!!o.explode, homing:!!o.homing, multihit:!!o.multihit, hitGap:o.hitGap}); }
+      r:o.r||16, life:o.life||64, zz:(o.low?14:44), vzz:o.vzz||0, pierce:!!o.pierce, wave:o.style==='wave', spike:o.style==='spike', explode:!!o.explode, homing:!!o.homing, multihit:!!o.multihit, hitGap:o.hitGap, boomer:!!o.boomer}); }
   spark(p.x+dir*46, p.y-46, col, 14, 8); ring(p.x+dir*40, p.y-42, col); flash=Math.max(flash,2); sfx.dash(p.x); sfx.rise(p.x); }
 // ── 空中↑コマンド技：昇天アッパー。敵を高く打ち上げつつ自分も少し上昇する ──
 function airRiseHit(p){ const col=p.kind==='nuko'?'#d6a6ff':p.kind==='shima'?'#aef8ff':p.kind==='guard8'?'#ffd24d':'#ffe27a';
@@ -3328,6 +3570,89 @@ function drawLiftShaft(){
       ctx.restore(); }
   }
 }
+// ══════════════════════════════════════════════════════════════════
+//  ステージのギミック
+//  区画ごとに抽選する。同じ地形でも毎回ちがう仕掛けが出るようにして、
+//  「この坂＝落石」と覚えたら終わり、にならないようにする
+// ══════════════════════════════════════════════════════════════════
+const GIMMICKS=[
+  {id:'boulder',  name:'落石',       col:'#c8b48a', slope:'down', cd:[300,470]},   // 坂の上から大岩
+  {id:'meteor',   name:'隕石雨',     col:'#ff8a3a', cd:[210,340]},                  // 空から隕石が降る
+  {id:'bolt',     name:'落雷',       col:'#9fe8ff', cd:[190,300]},                  // 予兆のあと真上から落雷
+  {id:'geyser',   name:'噴出',       col:'#dfe8f2', cd:[170,280]},                  // 地面から蒸気が噴き上がる
+  {id:'spike',    name:'棘',         col:'#c8ccd4', cd:[150,240]},                  // 床から棘が生える
+  {id:'gale',     name:'突風',       col:'#cfe0ff', cd:[240,380]},                  // 横風で足を取られる
+];
+function gimmickById(id){ for(let i=0;i<GIMMICKS.length;i++) if(GIMMICKS[i].id===id) return GIMMICKS[i]; return null; }
+let STAGE_GIM={};      // stage番号 -> ギミックのid（addBlocks が抽選して入れる）
+let gimCd=0, gimWarn=[], gimStage=-1;
+let gimOn=true;        // 仕掛けの発生そのものを止める（ヘッドレス検証で乱数を排すため）
+// 区画に合うギミックを1つ引く。下り坂の落石だけは地形が要るので、そこでしか出さない
+function rollGimmick(terr){
+  const pool=GIMMICKS.filter(function(g){ return !g.slope || g.slope===terr; });
+  return pool[(Math.random()*pool.length)|0].id; }
+function curGimmick(){ const g=STAGE_GIM[stage]; return g? gimmickById(g) : null; }
+// 予兆の輪。落ちてくる位置を先に見せないと理不尽になる
+function gimWarnAt(x, col, life){ gimWarn.push({x:x, t:0, life:life||46, col:col||'#ffd24d'}); }
+function tickGimmicks(){
+  for(let i=gimWarn.length-1;i>=0;i--){ const w=gimWarn[i]; w.t++; if(w.t>=w.life) gimWarn.splice(i,1); }
+  const pl=activePlayers().filter(function(q){ return q.state!=='dead'; })[0];
+  if(!pl || state!=='play' || trainMode){ gimCd=0; return; }
+  if(!gimOn){ gimCd=0; return; }
+  const G=curGimmick(); if(!G){ gimCd=0; return; }
+  // ボス戦の最中は出さない。ボスの弾幕と重なると、避ける場所が無くなって理不尽になる
+  for(let i=0;i<enemies.length;i++){ const E=ETYPE[enemies[i].type];
+    if(!enemies[i].dead && E && E.boss) return; }
+  if(G.id==='boulder'){ tickBoulders(); return; }        // 落石は坂の上から転がす専用の処理
+  // 区画に入った瞬間に落ちてこないよう、最初の一発だけ間を置く
+  if(gimStage!==stage){ gimStage=stage; gimCd=rnd(G.cd[0],G.cd[1])|0; return; }
+  if(gimCd>0){ gimCd--; return; }
+  gimCd=rnd(G.cd[0],G.cd[1])|0;
+  const px=pl.x;
+  if(G.id==='meteor'){                                    // 隕石雨：3〜5発をばらまく
+    const n=3+((Math.random()*3)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-300,300), camX+40, camX+W-40);
+      hazards.push({kind:'meteor', x:tx, y:LANE, t:0, life:200, warn:38+k*7, z:620+rnd(0,160), vz:0, r:44+rnd(0,18), hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#ff8a3a', 38+k*7); }
+    popText(px, LANE-groundLift(px)-190, '隕石が降ってくる！', '#ff8a3a', true); sfx.boss(px); shake=Math.max(shake,6); }
+  else if(G.id==='bolt'){                                 // 落雷：予兆のあと柱が落ちる
+    const n=2+((Math.random()*2)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-240,240), camX+40, camX+W-40);
+      hazards.push({kind:'gbolt', x:tx, y:LANE, t:0, life:60, warn:34+k*10, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#9fe8ff', 34+k*10); }
+    popText(px, LANE-groundLift(px)-190, '雷が落ちる！', '#9fe8ff', true); sfx.zap(px); }
+  else if(G.id==='geyser'){                               // 噴出：足元から蒸気が吹き上げる
+    const n=2+((Math.random()*2)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-260,260), camX+40, camX+W-40);
+      hazards.push({kind:'geyser', x:tx, y:LANE, t:0, life:86, warn:30+k*9, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#dfe8f2', 30+k*9); } }
+  else if(G.id==='spike'){                                // 棘：床から生えて、しばらく残る
+    const n=2+((Math.random()*3)|0);
+    for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-280,280), camX+40, camX+W-40);
+      hazards.push({kind:'gspike', x:tx, y:LANE, t:0, life:150, warn:32+k*8, hitP:{}, hitE:{}});
+      gimWarnAt(tx, '#c8ccd4', 32+k*8); } }
+  else if(G.id==='gale'){                                 // 突風：一定時間、横へ押し流される
+    const dir=(Math.random()<0.5)?-1:1;
+    hazards.push({kind:'gale', x:camX+W*0.5, y:LANE, t:0, life:150, dir:dir});
+    popText(px, LANE-groundLift(px)-190, (dir>0?'追い風':'向かい風')+'の突風！', '#cfe0ff', true); sfx.dash(px); }
+}
+// 予兆の輪を地面へ描く（ハザードの本体より前に出す）
+function drawGimWarn(){
+  for(let i=0;i<gimWarn.length;i++){ const w=gimWarn[i], sx=w.x-camX;
+    if(sx<-60||sx>W+60) continue;
+    const gy=LANE-groundLift(w.x), u=w.t/w.life, pulse=0.5+0.5*Math.sin(w.t*0.4);
+    ctx.save(); ctx.globalAlpha=0.30+0.45*pulse;
+    ctx.strokeStyle=w.col; ctx.lineWidth=3;
+    ctx.lineWidth=5;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 62*(1-u*0.35), 22*(1-u*0.35), 0,0,7); ctx.stroke();
+    ctx.globalAlpha=0.16+0.20*pulse;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 84*(1-u*0.20), 30*(1-u*0.20), 0,0,7); ctx.stroke();   // 外周
+    ctx.globalAlpha=0.18+0.24*pulse; ctx.fillStyle=w.col;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 56*(1-u*0.35), 19*(1-u*0.35), 0,0,7); ctx.fill();
+    ctx.globalAlpha=0.55+0.4*pulse; ctx.fillStyle=w.col; ctx.font=uif('900',30); ctx.textAlign='center';
+    ctx.fillText('!', sx, gy-26); ctx.textAlign='left';
+    ctx.restore(); }
+}
 function tickBoulders(){
   const pl=activePlayers().filter(q=>q.state!=='dead')[0];
   if(!pl || !stageIsDown(pl.x)){ boulderCd=0; return; }
@@ -3335,7 +3660,73 @@ function tickBoulders(){
   boulderCd=rnd(300,470)|0;
   if(hazards.some(h=>h.kind==='boulder')) return;      // 同時に2つは出さない（避け続けるだけになる）
   spawnBoulder(camX-90, 1); }
+// ステージのギミックが出す仕掛けの共通の当たり判定。
+// 予兆（warn）の間は当たらず、そこを過ぎてから効く
+function gimHit(h, dmg, kn, zTop){
+  for(const q of players){ if(!q.active||q.state==='dead'||q.state==='falling') continue;
+    if(h.hitP[q.pid]) continue;
+    if(Math.abs(q.x-h.x)>(h.r||34)) continue;
+    if(zTop!=null && q.z>zTop) continue;
+    h.hitP[q.pid]=1; hurtPlayer(q, dmg, (q.x<h.x?-1:1), kn); }
+  for(const e of enemies){ if(e.dead||e.grabbedBy) continue;
+    if(h.hitE[e.id]) continue;
+    if(Math.abs(e.x-h.x)>(h.r||34)) continue;
+    if(zTop!=null && e.z>zTop) continue;
+    h.hitE[e.id]=1; damageEnemy(e, Math.round(dmg*1.6), (e.x<h.x?-1:1)*8, true); }
+}
 function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; h.t++;
+  // ── 隕石：予兆の輪のあと、空から落ちてきて着弾で爆ぜる ──
+  if(h.kind==='meteor'){
+    if(h.t<h.warn){ /* まだ空の上。予兆だけ */ }
+    else { h.vz+=1.35; h.z-=h.vz;
+      if(perfTier<2 && h.t%2===0) ember(h.x+rnd(-10,10), LANE-groundLift(h.x)-h.z, rnd(-1,1), rnd(1,3), (h.t%4)?'#ff8a3a':'#ffd24d');
+      if(h.z<=0){ h.z=0;
+        bigExplosion(h.x, LANE-groundLift(h.x)-10, h.r*3.2, '#ff8a3a');
+        shake=Math.max(shake,14); quake=Math.max(quake||0,16); flash=Math.max(flash,4);
+        h.r=h.r*2.6; gimHit(h, 20, true, 150);
+        sfx.blast(h.x); hazards.splice(i,1); continue; } }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 落雷：予兆のあと真上から柱が落ち、短く残る ──
+  if(h.kind==='gbolt'){
+    if(h.t===h.warn){ h.r=30; gimHit(h, 18, true, 260);
+      flash=Math.max(flash,5); shake=Math.max(shake,12); sfx.zap(h.x); sfx.big(h.x);
+      const gy=LANE-groundLift(h.x);
+      for(let k=0;k<3;k++) ring(h.x, gy, k%2?'#9fe8ff':'#ffffff');
+      spark(h.x, gy-40, '#9fe8ff', 26, 13); dust(h.x, LANE, 12); }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 噴出：地面から蒸気が吹き上げ、しばらく吹き続ける ──
+  if(h.kind==='geyser'){
+    if(h.t>=h.warn && h.t<h.life-16){
+      h.r=30;
+      if((h.t-h.warn)%14===0){ h.hitP={}; h.hitE={}; }     // 吹いている間は一定間隔で当たり直す
+      gimHit(h, 9, false, 210);
+      if(perfTier<2 && h.t%2===0){ const gy=LANE-groundLift(h.x);
+        ember(h.x+rnd(-14,14), gy-rnd(0,30), rnd(-0.8,0.8), -rnd(6,11), (h.t%4)?'#dfe8f2':'#ffffff'); }
+      if((h.t-h.warn)===0){ sfx.step(h.x,'stone',1.6); shake=Math.max(shake,6); } }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 棘：床から生えて、しばらく残ってから引っ込む ──
+  if(h.kind==='gspike'){
+    if(h.t===h.warn){ dust(h.x,LANE,8); sfx.hit(h.x); shake=Math.max(shake,5); }
+    if(h.t>=h.warn && h.t<h.life-20){ h.r=58;
+      if((h.t-h.warn)%20===0){ h.hitP={}; h.hitE={}; }
+      gimHit(h, 12, true, 118); }
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
+  // ── 突風：吹いている間ずっと横へ押し流す ──
+  if(h.kind==='gale'){
+    const u=Math.min(1, Math.min(h.t, h.life-h.t)/22);        // 立ち上がりと収まりを寝かせる
+    const push=h.dir*2.6*u;
+    for(const q of players){ if(!q.active||q.state==='dead') continue;
+      q.x=clamp(q.x+push, camX+24, Math.min(WORLD_END, camX+W-24)); }
+    for(const e of enemies){ if(e.dead) continue; e.x+=push*0.6; }
+    if(perfTier<2 && h.t%2===0){ const gy=LANE-groundLift(camX+W*0.5);
+      ember(camX+(h.dir>0?-20:W+20), gy-rnd(10,190), h.dir*rnd(9,16), rnd(-1.2,1.2), '#cfe0ff'); }
+    if(h.t%30===0) sfx.dash(camX+W*0.5);
+    if(h.t>=h.life) hazards.splice(i,1);
+    continue; }
   if(h.kind==='boulder'){
     // 坂の傾きで加速する。平地へ出ると転がり続けて減速し、やがて砕ける
     const sl=terrSlope(h.x);                            // 下りなら負（右へ行くほど低い）
@@ -3681,6 +4072,117 @@ function drawHazards(){ for(const h of hazards){ const sx=h.x-camX;
   if(!wide && (sx<-80||sx>W+80)) continue;
   if(wide && (sx<-1600||sx>W+1600)) continue;
   const gy=LANE-groundLift(h.x);
+  if(h.kind==='meteor'){                     // 隕石：燃えながら落ちてくる火球と尾
+    if(h.t<h.warn) continue;                 // 予兆の間はまだ空の上
+    const my=gy-h.z, R=h.r, mx=h.x-camX;
+    ctx.save();
+    // 尾は空が明るいと加算では消えてしまう。まず不透明の炎で形を出し、そのうえに加算の芯を重ねる
+    const TL=R*6.2;
+    const tg=ctx.createLinearGradient(0,my-TL,0,my+R*0.4);
+    tg.addColorStop(0,'rgba(255,120,30,0)'); tg.addColorStop(0.45,'rgba(255,140,40,.55)');
+    tg.addColorStop(0.8,'rgba(255,196,90,.85)'); tg.addColorStop(1,'rgba(255,240,200,.95)');
+    ctx.fillStyle=tg; ctx.beginPath();
+    ctx.moveTo(mx-R*0.92, my); ctx.quadraticCurveTo(mx-R*0.5, my-TL*0.55, mx, my-TL);
+    ctx.quadraticCurveTo(mx+R*0.5, my-TL*0.55, mx+R*0.92, my); ctx.closePath(); ctx.fill();
+    // 揺らぎ。左右に舌を出して、まっすぐな三角に見えないようにする
+    ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,170,60,.9)';
+    for(let k=0;k<3;k++){ const yy=my-TL*(0.24+k*0.22), sw=(k%2?1:-1);
+      ctx.beginPath(); ctx.moveTo(mx, yy+R*0.5);
+      ctx.quadraticCurveTo(mx+sw*R*(1.1-k*0.2), yy, mx, yy-R*0.9); ctx.closePath(); ctx.fill(); }
+    ctx.globalAlpha=1; ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(mx, my-R*0.4, R*2.3,'rgba(255,236,180,.85)','rgba(255,110,20,0)');
+    ctx.beginPath(); ctx.ellipse(mx, my-R*0.4, R*2.3, R*2.6, 0,0,7); ctx.fill();
+    ctx.restore();
+    // 岩そのもの。輪郭を暗く落として、火の中で黒く抜ける
+    ctx.fillStyle=radGrad(mx-R*0.34, my-R*0.34, R*1.35, '#7b5a3e','#241209');
+    ctx.beginPath();
+    for(let k=0;k<11;k++){ const a=k/11*TAU, rr=R*(0.84+0.20*Math.sin(k*2.3));
+      ctx[k?'lineTo':'moveTo'](mx+Math.cos(a)*rr, my+Math.sin(a)*rr); }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(24,10,4,.75)'; ctx.lineWidth=3; ctx.stroke();
+    // 割れ目から漏れる熱
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.strokeStyle='rgba(255,170,60,.9)'; ctx.lineWidth=Math.max(2,R*0.10); ctx.lineCap='round';
+    for(let k=0;k<3;k++){ const a=k*2.1+0.6;
+      ctx.beginPath(); ctx.moveTo(mx+Math.cos(a)*R*0.72, my+Math.sin(a)*R*0.72);
+      ctx.lineTo(mx+Math.cos(a+0.9)*R*0.26, my+Math.sin(a+0.9)*R*0.26); ctx.stroke(); }
+    // 進行方向の縁だけ白熱させる
+    ctx.strokeStyle='rgba(255,240,200,.85)'; ctx.lineWidth=Math.max(2.5,R*0.13);
+    ctx.beginPath(); ctx.arc(mx, my, R*0.92, 0.35, Math.PI-0.35); ctx.stroke();
+    ctx.restore();
+    continue; }
+  if(h.kind==='gbolt'){                       // 落雷：真上から地面まで貫く光の柱
+    if(h.t<h.warn) continue;
+    const u=clamp(1-(h.t-h.warn)/24,0,1); if(u<=0) continue;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=u;
+    const sx=h.x-camX;
+    // 天から地面までを一本で貫く。短いと「落ちてきた」感が出ない
+    const NS=Math.ceil((gy+120)/64);
+    ctx.fillStyle=radGrad(sx, gy-NS*32, 120*u,'rgba(160,220,255,.30)','rgba(120,200,255,0)');
+    ctx.beginPath(); ctx.ellipse(sx, gy-NS*32, 120*u, NS*36, 0,0,7); ctx.fill();   // 柱まわりの薄明かり
+    ctx.strokeStyle='#4fb8ff'; ctx.lineWidth=34*u; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    let yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-22,22), yy); }
+    ctx.stroke();
+    ctx.strokeStyle='#9fe8ff'; ctx.lineWidth=17*u;
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-16,16), yy); }
+    ctx.stroke();
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=7*u;
+    ctx.beginPath(); ctx.moveTo(sx, gy);
+    yy=gy; for(let k=0;k<NS;k++){ yy-=64; ctx.lineTo(sx+rnd(-10,10), yy); }
+    ctx.stroke();
+    // 枝分かれ。一本槍だと板に見える
+    ctx.lineWidth=5*u; ctx.strokeStyle='#cdeeff';
+    for(let k=1;k<NS;k+=2){ const by=gy-k*64, bd=(k%2)?1:-1;
+      ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx+bd*rnd(30,64), by-rnd(20,50)); ctx.stroke(); }
+    ctx.fillStyle=radGrad(sx,gy,170*u,'rgba(210,244,255,.8)','rgba(120,200,255,0)');
+    ctx.beginPath(); ctx.ellipse(sx,gy,170*u,50*u,0,0,7); ctx.fill();
+    ctx.restore(); continue; }
+  if(h.kind==='geyser'){                      // 噴出：地面から吹き上がる蒸気の柱
+    if(h.t<h.warn) continue;
+    const el=h.t-h.warn, up=clamp(el/10,0,1)*clamp((h.life-16-h.t)/12,0,1);
+    if(up<=0) continue;
+    const sx=h.x-camX, H2=340*up;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.55*up;
+    const g=ctx.createLinearGradient(0,gy,0,gy-H2);
+    g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(0.5,'rgba(210,230,244,.5)'); g.addColorStop(1,'rgba(190,214,236,0)');
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(sx-34,gy); ctx.quadraticCurveTo(sx-52,gy-H2*0.6, sx-26,gy-H2);
+    ctx.lineTo(sx+26,gy-H2); ctx.quadraticCurveTo(sx+52,gy-H2*0.6, sx+34,gy); ctx.closePath(); ctx.fill();
+    for(let k=0;k<7;k++){ const yy=gy-H2*((k+1)/8)-Math.sin(gf*0.3+k)*8;
+      ctx.globalAlpha=0.38*up; ctx.fillStyle='#eef4fb';
+      ctx.beginPath(); ctx.ellipse(sx+Math.sin(gf*0.22+k*1.7)*18, yy, 34-k*3, 26-k*2.4, 0,0,7); ctx.fill(); }
+    ctx.globalAlpha=0.5*up; ctx.fillStyle='#ffffff';
+    ctx.beginPath(); ctx.ellipse(sx, gy-6, 44, 14, 0,0,7); ctx.fill();     // 噴き出し口
+    ctx.restore(); continue; }
+  if(h.kind==='gspike'){                      // 棘：床を突き破って生える鉄の杭
+    if(h.t<h.warn) continue;
+    const up=clamp((h.t-h.warn)/8,0,1)*clamp((h.life-h.t)/16,0,1);
+    if(up<=0) continue;
+    const sx=h.x-camX, H2=132*up;
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,.34)'; ctx.beginPath(); ctx.ellipse(sx,gy+3,64,14,0,0,7); ctx.fill();
+    // 突き破った床のかけら
+    ctx.fillStyle='rgba(60,52,44,.55)';
+    for(let k=-3;k<=3;k++){ if(!k) continue;
+      ctx.beginPath(); ctx.moveTo(sx+k*17-6,gy+3); ctx.lineTo(sx+k*17, gy-9-Math.abs(k)*2); ctx.lineTo(sx+k*17+6,gy+3); ctx.closePath(); ctx.fill(); }
+    for(let k=-2;k<=2;k++){ const bx=sx+k*24, hh=H2*(1-Math.abs(k)*0.18);
+      const g2=ctx.createLinearGradient(bx,gy,bx,gy-hh);
+      g2.addColorStop(0,'#3d444d'); g2.addColorStop(0.55,'#98a3b1'); g2.addColorStop(1,'#f3f8ff');
+      ctx.fillStyle=g2; ctx.beginPath();
+      ctx.moveTo(bx-12,gy+3); ctx.lineTo(bx-3,gy-hh*0.55); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+3,gy-hh*0.55); ctx.lineTo(bx+12,gy+3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(16,20,26,.6)'; ctx.lineWidth=2; ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath();      // 刃先の光
+      ctx.moveTo(bx-2,gy-hh*0.62); ctx.lineTo(bx,gy-hh); ctx.lineTo(bx+2,gy-hh*0.62); ctx.closePath(); ctx.fill(); }
+    ctx.restore(); continue; }
+  if(h.kind==='gale'){                        // 突風：画面を横切る風の筋
+    const u=Math.min(1, Math.min(h.t, h.life-h.t)/22);
+    ctx.save(); ctx.globalAlpha=0.20*u; ctx.strokeStyle='#cfe0ff'; ctx.lineWidth=2.4; ctx.lineCap='round';
+    for(let k=0;k<12;k++){ const yy=60+((k*97+gf*9*h.dir)%(H-120));
+      const x0=((k*173+gf*14*h.dir)%(W+260))-130;
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+h.dir*70, yy+Math.sin(k)*6); ctx.stroke(); }
+    ctx.restore(); continue; }
   if(h.kind==='boulder'){                    // 大岩：転がる向きへ回した割れ目で回転を見せる
     const by=gy-h.z-h.r, R=h.r;
     ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#000';
@@ -4472,6 +4974,40 @@ function updatePlayer(){
     if(def.pshot && a.t===def.act[0]){ firePShot(p, def.pshot); }             // 波動拳コマンド＝前方へ飛ぶ飛び道具
     if(def.pillar && a.t>=def.act[0] && a.t%3===0){ for(let k=0;k<3;k++) spark(p.x, p.y-40-k*46, '#fff6c0',4,7); }   // 天翔龍閃＝光の柱
     if(def.firetrail && a.t%2===0){ spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,54), (gf%2)?'#ff9a3a':'#ffd24d',3,6); }     // 烈火昇龍脚＝炎の尾
+    // ── 追加武器ごとの見せ場。振っている最中に、その得物らしい粒を足す ──
+    if(def.sakura && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){         // 桜花刀＝斬り筋に花びらが散る
+      for(let k=0;k<2;k++) ember(p.x+p.facing*rnd(30,110), p.y-p.z-rnd(30,90), rnd(-1.4,1.4), -rnd(0.4,1.6), (k?'#ffd6ea':'#ffffff')); }
+    if(def.emberEdge && a.t>=def.act[0] && a.t<=def.act[1]){                    // フランベルジュ＝刃の縁が燃える
+      spark(p.x+p.facing*rnd(40,110), p.y-p.z-rnd(30,80), (gf%2)?'#ff9a3a':'#ffd24d', 3, 7); }
+    if(def.fireBurst && a.t===def.act[1]){ const dir=p.facing;                  // 焦土斬＝斬り終わりに火柱
+      ring(p.x+dir*70,p.y-40,'#ff9a3a'); ring(p.x+dir*70,p.y-40,'#ffd24d');
+      spark(p.x+dir*70,p.y-50,'#ffb85a',22,12); flash=Math.max(flash,3); shake=Math.max(shake,7); sfx.blast(p.x,0.7); }
+    if(def.thrustRain && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){      // 百刺し＝突きの残像
+      const dir=p.facing; spark(p.x+dir*rnd(70,126), p.y-p.z-rnd(34,58), '#ffffff', 3, 9, {aim:dir>0?0:Math.PI, spread:0.22}); }
+    if(def.frostEdge && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){       // 氷晶＝冷気の粒
+      ember(p.x+p.facing*rnd(40,100), p.y-p.z-rnd(30,80), rnd(-1,1), rnd(0.3,1.4), (gf%2)?'#8fd8ff':'#ffffff'); }
+    if(def.ringWave && a.t===def.act[0]){ ring(p.x,p.y-56,'#ffe9a0'); sfx.get(p.x); }   // 鈴＝鳴らすと輪が広がる
+    if(def.ringWave && def.multi && a.t>def.act[0] && a.t<=def.act[1] && (a.t-def.act[0])%6===0) ring(p.x,p.y-56,'#fff6c0');
+    if(def.dustTrail && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){       // 箒＝掃いた跡の星屑
+      spark(p.x+p.facing*rnd(50,124), p.y-p.z-rnd(10,40), (gf%2)?'#ffd0f0':'#ffffff', 2, 5); }
+    if(def.drill && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){           // ドリル＝削りかす
+      const dir=p.facing; spark(p.x+dir*rnd(80,116), p.y-p.z-rnd(30,60), (gf%2)?'#ffd24d':'#c8b48a', 3, 7, {aim:dir>0?Math.PI:0, spread:1.1});
+      if(a.t%6===0) sfx.hit(p.x, 0.4); }
+    if(def.sawEdge && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){         // チェーンソー＝火花が後ろへ飛ぶ
+      const dir=p.facing; spark(p.x+dir*rnd(70,110), p.y-p.z-rnd(30,66), (gf%2)?'#ff5a5a':'#ffd24d', 3, 8, {aim:dir>0?Math.PI:0, spread:1.4}); }
+    if(def.whipLash && a.t===def.act[0]){ const dir=p.facing;                    // 鞭＝しなりの音と先端の弾け
+      spark(p.x+dir*168, p.y-56, '#ffffff', 10, 10); sfx.dash(p.x); }
+    if(def.yoyoLine && a.t>=def.act[0] && a.t<=def.act[1] && a.t%3===0){        // ヨーヨー＝糸の軌跡
+      spark(p.x+p.facing*rnd(70,132), p.y-p.z-rnd(20,70), '#ff8ae0', 2, 5); }
+    if(def.flameJet && a.t>=def.act[0] && a.t<=def.act[1]){                      // 火炎放射＝面で焼く
+      const dir=p.facing; for(let k=0;k<2;k++) ember(p.x+dir*rnd(30,def.reach), p.y-p.z-rnd(20,def.hh), dir*rnd(2,6), rnd(-1.6,0.6), (gf+k)%2?'#ff8a3a':'#ffd24d');
+      if(a.t%6===0) sfx.flame&&sfx.flame(p.x); }
+    if(def.railCharge){                                                          // レールガン＝溜まっていく帯電
+      if(a.t<def.act[0] && a.t%3===0){ const u=a.t/def.act[0];
+        spark(p.x+p.facing*(26+u*18), p.y-52, '#bffcff', 2, 4+u*6); }
+      if(a.t===def.act[0]){ flash=Math.max(flash,4); shake=Math.max(shake,9); p.x-=p.facing*7; sfx.big(p.x); } }
+    if(def.cursedEdge && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){      // 妖刀＝血のような尾
+      ember(p.x+p.facing*rnd(40,110), p.y-p.z-rnd(30,80), rnd(-1,1), rnd(-0.6,0.8), (gf%2)?'#ff6a8a':'#d02a4a'); }
     if(def.starRain && a.t===def.act[0]){ for(let k=0;k<5;k++) spawnProj(p.x+rnd(-72,72), p.y, rnd(-2,2), 0, {owner:'player',dmg:Math.round(12*nukoMul(p)),color:'#d6a6ff',r:12,life:96,zz:H+rnd(0,70),vzz:-11,explode:true}); ring(p.x,p.y-60,'#d6a6ff'); sfx.boss(p.x); }   // 星辰昇華＝天から星屑を降らせる
     if(def.rushEnd && a.t===def.dur-6){ enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<120 && (p.facing>0?e.x>p.x-30:e.x<p.x+30)){ damageEnemy(e,Math.round(16*(p.atkMul||1)),p.facing*10,true); if(!e.dead)launchEnemy(e,p.facing*12,-15,3); } }); spark(p.x+p.facing*40,p.y-52,'#fff',16,10); ring(p.x+p.facing*30,p.y-52,'#ffd24d'); shake=Math.max(shake,8); hitStop=Math.max(hitStop,8); }   // 羅刹連拳＝フィニッシュで打ち上げ
     if(def.iai && a.t===def.act[0]){ const dir=p.facing; crescent(p.x+dir*64,p.y-52,96,dir>0?-0.45:Math.PI-0.45,dir>0?0.45:Math.PI+0.45,'#eaffff'); spark(p.x+dir*78,p.y-52,'#fff',18,11); flash=Math.max(flash,2); hitStop=Math.max(hitStop,4); }   // 居合の閃光
@@ -4901,7 +5437,7 @@ function updatePlayer(){
       if(MK){ beginAttack('mkBazooka'); p.atkHeld=true; p.atkHoldF=0; return; }   // マック前：バズーカ（連射できないぶん一撃が重い）
       const cs=comboSet(p); if(cs){ beginAttack(cs[cs.length-1]); }            // 武器持ち＝強攻撃（武器フィニッシュ）
       else if(SH){ beginAttack('tessan'); } else if(NK){ beginAttack('nflame'); } else if(WA){ beginAttack('wpistol'); } else { beginAttack('iai'); } }  // 鉄山靠 / 炎の柱 / 二丁拳銃 / 居合斬り
-    else if(MK && (p.ammo|0)<=0){ beginAttack('mkReload'); }   // 撃ち切ったら次の入力は必ずリロード
+    else if(MK && !comboSet(p) && (p.ammo|0)<=0){ beginAttack('mkReload'); }   // 撃ち切ったら次の入力は必ずリロード（拾った火器を構えている間は自前の弾を数えない）
     else { const maxc=comboMaxFor(p); const next=(p.comboTimer>0 && p.comboStep<maxc)? p.comboStep+1:1; beginAttack(comboMoveFor(p,next)); }
     p.atkHeld=true; p.atkHoldF=0;
     return;
@@ -5913,6 +6449,10 @@ const ETYPE={
   pirate:{hp:820,sp:1.5,dmg:22,atkR:84,w:132,h:140,c1:'#7a5fa6',c2:'#4a3470',c3:'#281a44',score:7000,boss:true,bossKind:'pirate',weapon:'cutlass',accent:'#ffd24d',name:'海賊王カイゾクカイ'},
   noroinu:{hp:600,sp:1.8,dmg:16,atkR:80,w:124,h:132,c1:'#3a3640',c2:'#211e28',c3:'#100e16',score:9500,boss:true,bossKind:'noroinu',weapon:'none',accent:'#b06bff',name:'呪い犬ノロ'},
   cactus:{hp:720,sp:0.85,dmg:15,atkR:72,w:138,h:150,c1:'#7bb352',c2:'#4f7d33',c3:'#335020',score:7500,boss:true,bossKind:'cactus',weapon:'none',accent:'#ffb02e',name:'サボテン犬サボロー'},
+  // ── ステージ間イベントの隠しボス。既存の描き方を借りて、色と強さで別の相手にする ──
+  hbLuna: {hp:1150,sp:2.2,dmg:24,atkR:88,w:132,h:140,c1:'#dfe8ff',c2:'#8fa6d0',c3:'#3a4a6a',score:14000,boss:true,bossKind:'noroinu',weapon:'none',accent:'#bfe9ff',name:'月狼ルーナ',hidden:true},
+  hbAbyss:{hp:1250,sp:2.3,dmg:26,atkR:96,w:172,h:140,c1:'#3a2a5a',c2:'#1e1436',c3:'#0a0618',score:15000,boss:true,bossKind:'shark',  weapon:'none',accent:'#c46bff',name:'深淵鮫アビス',hidden:true},
+  hbCrysta:{hp:1400,sp:0.9,dmg:28,atkR:96,w:180,h:196,c1:'#a8e4ff',c2:'#4a8ac0',c3:'#1e3a68',score:16000,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#dffcff',name:'水晶傀儡クリスタ',hidden:true},
   // ── ワッチ登場に合わせた追加ステージ「月夜の宝物庫」の番人 ──
   goldgolem:{hp:900,sp:0.85,dmg:21,atkR:92,w:172,h:186,c1:'#e8c86a',c2:'#b8922e',c3:'#7a5e18',score:6800,boss:true,bossKind:'goldgolem',weapon:'club',accent:'#fff0a0',name:'黄金傀儡ゴルドー'},
   // ---- トレーニング用の的（反撃しない・倒れない）----
@@ -6139,6 +6679,10 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   dragon:'我が業火、ジャンプでかわせるか？', ghost:'ヒヒヒ…３人で斬り刻んでやる〜', slime:'ぷるぷる…叩くほど増えるぞ！', rival:'貴様の技、すべて頂いた！',
   shark:'地の底から喰らいついてやる！', pirate:'者ども、かかれぇ！宝はいただきだ！', noroinu:'呪いの焔、逃げられはせぬ…',
   cactus:'チクチクの雨を浴びるがいい！',
+  // ── ステージ間イベントの隠しボス ──
+  hbLuna:'月光の鍵に呼ばれたか……銀の牙、受けてみよ！',
+  hbAbyss:'羅針盤の指す先は、我が腹の中よ——！',
+  hbCrysta:'千年ノ眠リヲ　覚マシタルハ　汝カ……砕ケヨ',
   wolfking:'グォオオ…！これが真の姿だ！', darkknight:'これが最終形態…暗黒剣を喰らえ！',
   wanmen:'我ガ呼ビ声ニ抗ウカ…矮小ナル星ノ子ヨ！',
   golux:'いざ尋常に——その剣、全身全霊で受けてみせよ！', papipoo:'よく来たな弟弟子。拳の真髄、見せてやろう！',
@@ -6680,31 +7224,35 @@ function coinDrop(e,T){ const n=T.boss?(T.finalBoss?30:14):(T.mini?7:(T.charge||
 // ══════════════════════════════════════════════════════════════════
 // acc の種類：cape=マント / plate=胸当て / pauldron=肩当て / scarf=襟巻 /
 //             wing=翼 / halo=光輪 / crown=冠 / sash=たすき / none=無し
-const COS_ACC=['none','cape','plate','pauldron','scarf','sash','wing','halo','crown'];
+const COS_ACC=['none','cape','plate','pauldron','scarf','sash','wing','halo','crown','cap'];
+// かぶり物の種類。'cap' は装飾としても使うので両方に入っている
+const COS_HEAD=['helm','horn','bandana','hood','straw','tophat','cap','tiara'];
 // 配色のひな型。[胴の陰, 胴の中間, 胴の明, 靴の陰, 靴の明, 手] の6色
 function cosPal(a,b,f,ba,bf,h){ return {a:a,b:b,f:f,ba:ba,bf:bf,h:h}; }
 // 20着ぶんの雛形。色と装飾と守りだけを差し替えて各キャラへ配る
+// 6列目＝かぶり物。色だけ変えても同じキャラに見えるので、
+// 顔まわりの目印（マックの十徳帽・ワッチのシルクハット）ごと取り替える
 const COS_PLAN=[
-  ['布の旅装',      'none',    0,   26,  ['#d8cbb0','#c4b79c','#eae0c8','#4a3a26','#6b5638','#f0e6cc']],
-  ['麻の胴着',      'sash',    0,   34,  ['#cfc6ae','#b8ae94','#e6ddc4','#42352a','#605040','#eee2c6']],
-  ['旅人の外套',    'cape',    0,   40,  ['#9fb0c4','#8695a8','#c6d4e2','#33404e','#4c5c6e','#dde6f0']],
-  ['見習いの胴衣',  'none',    1,   58,  ['#9fd6ff','#79b6e2','#cbeaff','#2a4a66','#3f6a90','#e2f2ff']],
-  ['森番の外套',    'cape',    1,   66,  ['#8fbf7a','#6f9c5c','#c2e2ae','#2c3f24','#425f36','#dff0d0']],
-  ['砂漠の衣',      'scarf',   1,   72,  ['#e8c98a','#cfae6c','#f6e6bc','#5a4222','#7c5c30','#f8ecd0']],
-  ['鉄の胸当て',    'plate',   1,   88,  ['#aab4c1','#8c96a4','#d6dee8','#33393f','#4a525c','#e4eaf2']],
-  ['狩人の革鎧',    'pauldron',1,   96,  ['#a8763e','#8a5c2c','#d0a066','#3a2612','#57381c','#e6c894']],
-  ['蒼玉の礼装',    'cape',    2,  120,  ['#6f8fe0','#5570bc','#a8c0f4','#22305a','#33487e','#d8e4ff']],
-  ['紅蓮の戦衣',    'sash',    2,  132,  ['#e06a4a','#bc4e34','#f4a084','#5a2016','#7e3020','#ffcdb8']],
-  ['翠玉の法衣',    'scarf',   2,  140,  ['#5fc79a','#46a67c','#a2e6c8','#1e4a36','#2e6a4e','#d4f6e6']],
-  ['銀の甲冑',      'plate',   2,  158,  ['#c8d2de','#a4aebc','#eef4fc','#3c444e','#58626e','#f0f6ff']],
-  ['黒鉄の重鎧',    'pauldron',2,  172,  ['#5a626c','#42484f','#8a94a0','#22262a','#343a40','#a8b2be']],
-  ['月影の装束',    'cape',    3,  200,  ['#7a6fb0','#5c528c','#b6aae2','#2a2450','#3e3670','#ded4ff']],
-  ['焔皇の陣羽織',  'cape',    3,  216,  ['#ff8a3a','#d2601c','#ffc088','#5e2408','#883a12','#ffd8b0']],
-  ['氷結の鎧',      'plate',   3,  228,  ['#9fe4f6','#78c2d8','#d8f6ff','#22505e','#356e80','#e6fbff']],
-  ['雷神の胴丸',    'pauldron',3,  244,  ['#ffe14d','#d8b820','#fff4a8','#5a4a08','#82680e','#fff8c8']],
-  ['聖翼の法衣',    'wing',    4,  300,  ['#f6f0d8','#ded4b0','#fffdf0','#6a5a34','#8c7846','#fffef6']],
-  ['天冠の礼装',    'crown',   4,  340,  ['#ffd24d','#dca81c','#fff0b4','#6a4a08','#946a12','#fff6d4']],
-  ['神域の衣',      'halo',    4,  420,  ['#ff8aff','#d45cd4','#ffcaff','#5a1a5a','#822682','#ffe2ff']],
+  ['布の旅装',      'none',    0,   26,  ['#d8cbb0','#c4b79c','#eae0c8','#4a3a26','#6b5638','#f0e6cc'], 'bandana'],
+  ['麻の胴着',      'sash',    0,   34,  ['#cfc6ae','#b8ae94','#e6ddc4','#42352a','#605040','#eee2c6'], 'straw'],
+  ['旅人の外套',    'cape',    0,   40,  ['#9fb0c4','#8695a8','#c6d4e2','#33404e','#4c5c6e','#dde6f0'], 'hood'],
+  ['見習いの胴衣',  'cap',     1,   58,  ['#9fd6ff','#79b6e2','#cbeaff','#2a4a66','#3f6a90','#e2f2ff'], 'cap'],
+  ['森番の外套',    'cape',    1,   66,  ['#8fbf7a','#6f9c5c','#c2e2ae','#2c3f24','#425f36','#dff0d0'], 'hood'],
+  ['砂漠の衣',      'scarf',   1,   72,  ['#e8c98a','#cfae6c','#f6e6bc','#5a4222','#7c5c30','#f8ecd0'], 'straw'],
+  ['鉄の胸当て',    'plate',   1,   88,  ['#aab4c1','#8c96a4','#d6dee8','#33393f','#4a525c','#e4eaf2'], 'helm'],
+  ['狩人の革鎧',    'pauldron',1,   96,  ['#a8763e','#8a5c2c','#d0a066','#3a2612','#57381c','#e6c894'], 'bandana'],
+  ['蒼玉の礼装',    'cape',    2,  120,  ['#6f8fe0','#5570bc','#a8c0f4','#22305a','#33487e','#d8e4ff'], 'tophat'],
+  ['紅蓮の戦衣',    'sash',    2,  132,  ['#e06a4a','#bc4e34','#f4a084','#5a2016','#7e3020','#ffcdb8'], 'bandana'],
+  ['翠玉の法衣',    'scarf',   2,  140,  ['#5fc79a','#46a67c','#a2e6c8','#1e4a36','#2e6a4e','#d4f6e6'], 'hood'],
+  ['銀の甲冑',      'plate',   2,  158,  ['#c8d2de','#a4aebc','#eef4fc','#3c444e','#58626e','#f0f6ff'], 'helm'],
+  ['黒鉄の重鎧',    'pauldron',2,  172,  ['#5a626c','#42484f','#8a94a0','#22262a','#343a40','#a8b2be'], 'horn'],
+  ['月影の装束',    'cape',    3,  200,  ['#7a6fb0','#5c528c','#b6aae2','#2a2450','#3e3670','#ded4ff'], 'hood'],
+  ['焔皇の陣羽織',  'cape',    3,  216,  ['#ff8a3a','#d2601c','#ffc088','#5e2408','#883a12','#ffd8b0'], 'horn'],
+  ['氷結の鎧',      'plate',   3,  228,  ['#9fe4f6','#78c2d8','#d8f6ff','#22505e','#356e80','#e6fbff'], 'helm'],
+  ['雷神の胴丸',    'pauldron',3,  244,  ['#ffe14d','#d8b820','#fff4a8','#5a4a08','#82680e','#fff8c8'], 'horn'],
+  ['聖翼の法衣',    'wing',    4,  300,  ['#f6f0d8','#ded4b0','#fffdf0','#6a5a34','#8c7846','#fffef6'], 'tiara'],
+  ['天冠の礼装',    'crown',   4,  340,  ['#ffd24d','#dca81c','#fff0b4','#6a4a08','#946a12','#fff6d4'], 'tophat'],
+  ['神域の衣',      'halo',    4,  420,  ['#ff8aff','#d45cd4','#ffcaff','#5a1a5a','#822682','#ffe2ff'], 'tiara'],
 ];
 const COS_DEF=[0.00,0.03,0.06,0.10,0.15];   // 稀少度ごとの被ダメージ軽減
 // キャラごとに名前の頭を変えて、同じ雛形でも別物として並ぶようにする
@@ -6713,7 +7261,7 @@ const COS_PREFIX={inu:'聖犬士の', shima:'拳聖の', nuko:'魔導の', guard
 const COSTUMES={};
 (function(){ for(const k in COS_PREFIX){ COSTUMES[k]=COS_PLAN.map(function(q,i){
     return {id:k+'_'+i, kind:k, name:COS_PREFIX[k]+q[0], acc:q[1], rare:q[2], cost:q[3],
-            pal:cosPal(q[4][0],q[4][1],q[4][2],q[4][3],q[4][4],q[4][5]), def:COS_DEF[q[2]]}; }); } })();
+            pal:cosPal(q[4][0],q[4][1],q[4][2],q[4][3],q[4][4],q[4][5]), head:q[5], def:COS_DEF[q[2]]}; }); } })();
 function costumeList(kind){ return COSTUMES[kind]||COSTUMES.inu; }
 function costumeById(id){ if(!id) return null;
   const k=String(id).split('_')[0], L=COSTUMES[k]; if(!L) return null;
@@ -6750,15 +7298,26 @@ const CHARMS={
   mackBelt:{who:'mack',  name:'速装弾帯',       col:'#e8c04a', msg:'最大HPアップ！',   apply:p=>{ p.maxHp+=24; p.hp+=24; } },
   g8Core:{who:'guard8',  name:'重装の心臓',     col:'#c9ccd4', msg:'最大HP大アップ！', apply:p=>{ p.maxHp+=36; p.hp+=36; } },
   g8Gear:{who:'guard8',  name:'剛力の歯車',     col:'#ffd24d', msg:'攻撃力アップ！',   apply:p=>{ p.atkMul=(p.atkMul||1)+0.13; } },
+  // ── ステージ間イベントの褒美。キャラを選ばない（who:'*'）──
+  evHeart:{who:'*', name:'氷炎の心臓', col:'#8fd8ff', msg:'最大HP大アップ＆攻撃力アップ！',
+    apply:p=>{ p.maxHp+=40; p.hp+=40; p.atkMul=(p.atkMul||1)+0.10; } },
+  evCrown:{who:'*', name:'王家の秘宝', col:'#ffe14d', msg:'奥義ストック＋1＆守りが上がった！',
+    apply:p=>{ p.dimMax=(p.dimMax||3)+1; p.dim=Math.min(p.dimMax,(p.dim||0)+1); p.defMul=Math.max(0.4,(p.defMul||1)-0.12); p.coinMul=(p.coinMul||1)+0.5; } },
 };
 function charmDropKind(){ const ids=Object.keys(CHARMS).filter(id=>players.some(p=>p.active&&p.kind===CHARMS[id].who)); return ids.length? ids[(Math.random()*ids.length)|0] : null; }
-function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（イッヌ=槍/ハンマー/双剣、シマ=ヌンチャク/トンファー/鉄爪、ヌコ=魔導書）
+function weaponDropKind(){ // 出場キャラに合わせて武器ドロップを選ぶ（拾えない武器は落とさない）
   const pool=[];
-  if(players.some(p=>p.active && p.kind==='inu')) pool.push('spear','hammer','twin');
-  if(players.some(p=>p.active && p.kind==='shima')) pool.push('nunchaku','tonfa','claw');
-  if(players.some(p=>p.active && p.kind==='nuko')) pool.push('tome');
-  if(players.some(p=>p.active && p.kind==='guard8')) pool.push('gaxe','gflail');
-  if(players.some(p=>p.active && p.kind==='watch')) pool.push('spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail');   // 盗賊ワッチは全ての武器を扱える
+  const has=function(k){ return players.some(p=>p.active && p.kind===k); };
+  if(has('inu')) pool.push('spear','hammer','twin','scythe','zanbatou');
+  if(has('shima')) pool.push('nunchaku','tonfa','claw');
+  if(has('nuko')) pool.push('tome');
+  if(has('guard8')) pool.push('gaxe','gflail','zanbatou');
+  if(has('watch')) pool.push('spear','hammer','twin','nunchaku','tonfa','claw','gaxe','gflail','scythe','zanbatou');   // 盗賊ワッチは全ての武器を扱える
+  // 追加武器：出場しているキャラの得物だけを混ぜる。
+  // ワッチは魔法の触媒（ヌコ用）以外なら誰の得物でも扱えるので、まとめて足す
+  for(const who in WEAPON_OWNER){ const list=WEAPON_OWNER[who];
+    if(has(who)) for(let i=0;i<list.length;i++) pool.push(list[i]);
+    else if(has('watch') && who!=='nuko') for(let i=0;i<list.length;i++) pool.push(list[i]); }
   if(!pool.length) return 'hp';
   return pool[Math.floor(Math.random()*pool.length)];
 }
@@ -6786,14 +7345,16 @@ function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=(p.kind==='watch'?2300:110
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
   if(kind==='hp'||kind==='costume') return true;
-  if(CHARMS[kind]) return p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ拾える
+  if(CHARMS[kind]) return CHARMS[kind].who==='*' || p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ（イベント品は誰でも）
+  const who=(WEAPONS[kind]||{}).who;
+  if(who) return who===p.kind || (p.kind==='watch' && who!=='nuko');   // 追加武器は持ち主のみ（ワッチは魔法の触媒以外を扱える）
   if(p.kind==='wanden') return kind==='moon'||kind==='holy'||kind==='inuboshi2';   // ワンデン＝愛刀「犬干し竿」系と聖剣のみ（一刀流の矜持）
   if(p.kind==='watch') return kind!=='tome'&&kind!=='wand'&&kind!=='staff2';   // ワッチ＝魔法以外の全武器を扱える（アイテム攻撃が得意）
-  if(p.kind==='mack') return false;                                               // マック＝自前の銃火器だけで戦う（拾い物は取らない）
+  if(p.kind==='mack') return false;                                               // マック＝自前の銃火器だけで戦う（拾い物の近接武器は取らない）
   if(p.kind==='nuko') return kind==='tome';                                       // ヌコ＝魔導書のみ
-  if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail';                     // ガードワン8号＝大戦斧・フレイルも扱う
+  if(p.kind==='guard8') return kind==='gaxe'||kind==='gflail'||kind==='zanbatou';   // ガードワン8号＝大戦斧・フレイル・斬馬刀（巨体だから振り回せる）
   if(p.kind==='shima') return kind==='nunchaku'||kind==='tonfa'||kind==='claw';   // シマ＝拳法武器のみ
-  return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger';          // イッヌ＝剣系のみ
+  return kind==='spear'||kind==='hammer'||kind==='twin'||kind==='dagger'||kind==='scythe'||kind==='zanbatou';   // イッヌ＝剣系＋大鎌・斬馬刀
 }
 function pickerFor(it){ // nearest eligible player on the ground
   let best=null,bd=1e9; for(const p of players){ if(!p.active||p.state==='down'||p.state==='dead')continue;
@@ -6865,9 +7426,24 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#4a2a78'; ctx.beginPath(); ctx.moveTo(-11,1); ctx.quadraticCurveTo(0,6,11,1); ctx.lineTo(11,5); ctx.quadraticCurveTo(0,10,-11,5); ctx.closePath(); ctx.fill();
     for(const s2 of [-1,1]){ ctx.fillStyle='#f4eeff'; ctx.beginPath(); ctx.moveTo(0,2); ctx.quadraticCurveTo(s2*6,-2,s2*11,0); ctx.lineTo(s2*11,3); ctx.quadraticCurveTo(s2*6,1,0,5); ctx.closePath(); ctx.fill(); }
     drawStar(0,-6,2,4.4,'#c89cff');
-  } else if(it.kind==='gaxe'){ ctx.rotate(-0.4);      // 大戦斧
-    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(-10,10); ctx.lineTo(8,-8); ctx.stroke();
-    ctx.fillStyle=radGrad(9,-9,10,'#f4dca0','#8a6a30'); ctx.beginPath(); ctx.moveTo(6,-6); ctx.quadraticCurveTo(20,-16,16,-4); ctx.quadraticCurveTo(20,6,6,-2); ctx.closePath(); ctx.fill();
+  } else if(it.kind==='gaxe'){ ctx.rotate(-0.4);      // 大戦斧：柄を挟む頭と背の平ら
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-12,12); ctx.lineTo(10,-10); ctx.stroke();
+    ctx.save(); ctx.translate(8,-8); ctx.rotate(-0.79);
+    ctx.fillStyle=radGrad(4,0,14,'#eef3fa','#5d6672'); ctx.beginPath();
+    ctx.moveTo(-4,-5); ctx.lineTo(2,-13); ctx.quadraticCurveTo(14,-9,14,0);
+    ctx.quadraticCurveTo(14,9,2,13); ctx.lineTo(-4,5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3a4048'; ctx.fillRect(-10,-6,6,12);
+    ctx.restore();
+  } else if(it.kind==='scythe'){ ctx.rotate(-0.3);   // 死神の大鎌
+    ctx.strokeStyle='#2a2430'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-12,13); ctx.lineTo(11,-6); ctx.stroke();
+    ctx.fillStyle=radGrad(4,-12,16,'#ffffff','#5a7a92'); ctx.beginPath();
+    ctx.moveTo(11,-6); ctx.quadraticCurveTo(14,-20,-4,-18); ctx.quadraticCurveTo(6,-14,8,-4); ctx.closePath(); ctx.fill();
+  } else if(it.kind==='zanbatou'){ ctx.rotate(-0.5);  // 斬馬刀
+    ctx.fillStyle='#2f2a26'; ctx.fillRect(-13,-3,10,6);
+    ctx.fillStyle=radGrad(0,0,5,'#e6c56a','#8a6a1e'); ctx.beginPath(); ctx.ellipse(-2,0,2.6,7,0,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(8,0,18,'#f2f7ff','#68758a'); ctx.beginPath();
+    ctx.moveTo(0,-8); ctx.lineTo(15,-7); ctx.lineTo(20,0); ctx.lineTo(15,7); ctx.lineTo(0,8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillRect(1,-7,14,2);
   } else if(it.kind==='gflail'){                      // 鉄球フレイル
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-11,8); ctx.lineTo(0,-2); ctx.stroke();
     ctx.strokeStyle='#9aa0ac'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(6,-6); ctx.stroke();
@@ -8067,7 +8643,7 @@ function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
 let vehicles=[];   // フィールド上の乗り物ピックアップ {x,kind,taken}
 const VEHDEF={
   horse:{name:'馬',        sp:1.7,  hp:60, ram:12, dur:420, col:'#8a5a34', c2:'#5c3a20', mane:'#3a2414'},   // dur=乗れる時間(フレーム)。攻撃を受けると落馬
-  buggy:{name:'バギーカー', sp:2.0,  hp:96, ram:16, dur:360, col:'#c0392b', c2:'#7a2018', mane:'#2a2a30'},   // 速い分だけ持続は短め
+  buggy:{name:'バギーカー', sp:2.0,  hp:96, ram:20, dur:360, col:'#c0392b', c2:'#7a2018', mane:'#2a2a30'},   // 速い分だけ持続は短め。車体が大きくなったぶん体当たりも重い
 };
 function spawnVehicle(x,kind){ vehicles.push({x:clamp(x,80,WORLD_END-80),kind,taken:false,bob:Math.random()*6}); }
 function tryMount(){ const p=player; if(p.vehicle||p.z>0) return false;
@@ -8089,11 +8665,13 @@ function dismount(p,crashed){ const V=VEHDEF[p.vehicle]; const timeout=(crashed=
     enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<126 && Math.abs(e.y-p.y)<60){ damageEnemy(e,28,(e.x<p.x?-1:1)*11,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*13,-9,3); } }); }
   else { popText(p.x,p.y-100,'降りた','#cfe0ff'); sfx.land(p.x); } }
 // 騎乗者を鞍の高さまで持ち上げるオフセット
-function mountLift(p){ return p.vehicle==='buggy'?52:70; }
+function mountLift(p){ return p.vehicle==='buggy'?86:70; }   // 車体を大きくしたぶん、座席の高さも上げる
 // バギーのバズーカ弾を発射
 function fireBazooka(p){ const dir=p.facing;
   spawnProj(p.x+dir*58, p.y, dir*10.5, 0, {owner:'player', dmg:Math.round(12*(p.atkMul||1)), color:'#ffae42', r:15, life:84, zz:46, blast:true, blastR:104, blastDmg:Math.round(26*(p.atkMul||1))});
   sfx.big(p.x); sfx.dash(p.x); shake=Math.max(shake,6); flash=Math.max(flash,2); spark(p.x+dir*64,p.y-58,'#ffd24d',16,10); ring(p.x+dir*54,p.y-56,'#ffae42'); p.vx=-dir*3; }
+// バギーの後部ガトリング：立ち上がり→連射の長さと間隔
+const BUGGY_GAT_T=54, BUGGY_GAT_WIND=8, BUGGY_GAT_GAP=3;
 function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
   if(p.invuln>0)p.invuln--;
   p.anim=(p.anim||0)+0.34; p.z=0; p.vz=0; if(p.mAtkT>0)p.mAtkT--;
@@ -8104,10 +8682,26 @@ function updateMounted(p){ const V=VEHDEF[p.vehicle]||VEHDEF.horse;
   let mx=0; if(K.left)mx=-1; if(K.right)mx=1; if(mx) p.facing=mx;
   const spd=SPEED*V.sp*(p.spdMul||1)*(p.mAtkT>0?0.55:1);   // 武器振り中は少し減速
   p.x+=mx*spd;
-  // 専用攻撃：馬＝大槍の薙ぎ払い、バギー＝バズーカ
+  // 専用攻撃：馬＝大槍の薙ぎ払い、バギー＝後部ガトリングの連射
   if(pressed.atk && (p.mAtkT||0)<=0){ pressed.atk=false;
     if(p.vehicle==='horse'){ p.mAtk='lance'; p.mAtkT=26; p.mHit=new Set(); sfx.swing(2, 'thrust', p.x); sfx.dash(p.x); spark(p.x+p.facing*70,p.y-72,'#aef8ff',12,9); }
-    else { p.mAtk='bazooka'; p.mAtkT=22; fireBazooka(p); } }
+    else { p.mAtk='gat'; p.mAtkT=BUGGY_GAT_T; p.mGatN=0; p.mGatSpin=0; sfx.rise(p.x); } }
+  // ── バギーの後部ガトリング：撃っている間ずっと弾がばら撒かれる ──
+  // 1発ずつは軽いが、連射のあいだ前へ走り続けられるのが持ち味
+  if(p.mAtk==='gat' && (p.mAtkT||0)>0){
+    p.mGatSpin=(p.mGatSpin||0)+0.55;
+    const el=BUGGY_GAT_T-p.mAtkT;
+    if(el>=BUGGY_GAT_WIND && el%BUGGY_GAT_GAP===0){ const dir=p.facing;
+      p.mGatN=(p.mGatN||0)+1;
+      const ang=Math.sin(p.mGatN*0.9)*0.16;                       // 上下に振りながら掃射
+      // 砲口（車体の中心から前へ約10px・高さ150）から出す。ここがずれると
+      // 「後ろで光っているのに弾は別の場所から飛ぶ」絵になる
+      spawnProj(p.x+dir*10, p.y-150, dir*(19+rnd(0,2)), 0, {owner:'player',
+        dmg:Math.round(9*(p.atkMul||1)), color:(p.mGatN%2)?'#ffe14d':'#ff8a3a', r:8, life:44,
+        zz:150, vzz:Math.sin(ang)*10, nostop:true, pierce:false});
+      spark(p.x+dir*30, p.y-150, '#ffe9a0', 3, 9, {aim:dir>0?0:Math.PI, spread:0.35});
+      shake=Math.max(shake,3); p.x-=dir*0.9;                      // 反動でわずかに押し戻される
+      if(p.mGatN%3===1) sfx.gun(p.x, 0.7); } }
   // 大槍のヒット判定（薙ぎ払いの中盤・前方広範囲）
   if(p.mAtk==='lance' && p.mAtkT>=6 && p.mAtkT<=20){ const dir=p.facing;
     enemies.forEach(e=>{ if(e.dead||e.grabbedBy||(p.mHit&&p.mHit.has(e.id)))return; const dx=(e.x-p.x)*dir;
@@ -8186,24 +8780,65 @@ function drawVehicleShape(sx, gy, face, V, kind, p){ ctx.save(); ctx.translate(s
     // 手綱
     ctx.strokeStyle='#2a1c10'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(112,-146); ctx.lineTo(22,-108); ctx.stroke();
   } else {
+    // ── バギーカー ──
+    // 従来は馬より小さくて「乗っている」感が出なかったので、全体を1.4倍の骨格で組み直し、
+    // 後部にガトリング砲塔を載せる
     // タイヤ（大きなオフロードタイヤ・回転）
-    for(const wx of [-52,52]){ ctx.save(); ctx.translate(wx,-24); ctx.rotate(t*0.6);
-      ctx.fillStyle='#15151a'; ctx.beginPath(); ctx.arc(0,0,28,0,7); ctx.fill();
-      ctx.fillStyle='#2a2a32'; for(let k=0;k<8;k++){ ctx.save(); ctx.rotate(k*0.785); ctx.fillRect(-3,-28,6,8); ctx.restore(); }   // トレッド
-      ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,12,0,7); ctx.fill(); ctx.fillStyle='#c8ccd4'; ctx.beginPath(); ctx.arc(0,0,5,0,7); ctx.fill();
+    for(const wx of [-74,74]){ ctx.save(); ctx.translate(wx,-34); ctx.rotate(t*0.6);
+      ctx.fillStyle='#15151a'; ctx.beginPath(); ctx.arc(0,0,40,0,7); ctx.fill();
+      ctx.fillStyle='#2a2a32'; for(let k=0;k<10;k++){ ctx.save(); ctx.rotate(k*0.628); ctx.fillRect(-4,-40,8,11); ctx.restore(); }   // トレッド
+      ctx.fillStyle='#8a8f99'; ctx.beginPath(); ctx.arc(0,0,17,0,7); ctx.fill();
+      ctx.fillStyle='#c8ccd4'; ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill();
+      ctx.strokeStyle='#5a606a'; ctx.lineWidth=3;                                    // スポーク
+      for(let k=0;k<5;k++){ ctx.save(); ctx.rotate(k*1.257); ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(0,-16); ctx.stroke(); ctx.restore(); }
       ctx.restore(); }
-    // 車体（ワイド）
-    ctx.fillStyle=V.c2; ctx.beginPath(); ctx.moveTo(-64,-30); ctx.lineTo(64,-30); ctx.lineTo(64,-48); ctx.lineTo(-64,-48); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(-60,-48); ctx.lineTo(62,-48); ctx.lineTo(46,-82); ctx.lineTo(-40,-82); ctx.closePath(); ctx.fill();   // キャビン
-    ctx.fillStyle=V.c2; ctx.fillRect(-66,-40,132,10);                                    // バンパー
+    // サスペンション（車体とタイヤをつなぐアーム）
+    ctx.strokeStyle='#3a3f48'; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-74,-34); ctx.lineTo(-46,-52); ctx.moveTo(74,-34); ctx.lineTo(46,-52); ctx.stroke();
+    // 車体（ワイド・低く長い）
+    ctx.fillStyle=V.c2; ctx.beginPath(); ctx.moveTo(-92,-42); ctx.lineTo(92,-42); ctx.lineTo(92,-66); ctx.lineTo(-92,-66); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=V.col; ctx.beginPath(); ctx.moveTo(-86,-66); ctx.lineTo(88,-66); ctx.lineTo(64,-112); ctx.lineTo(-56,-112); ctx.closePath(); ctx.fill();   // キャビン
+    ctx.fillStyle='rgba(255,255,255,.16)'; ctx.beginPath(); ctx.moveTo(-86,-66); ctx.lineTo(88,-66); ctx.lineTo(88,-74); ctx.lineTo(-86,-74); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=V.c2; ctx.fillRect(-96,-56,192,14);                                  // バンパー
+    ctx.fillStyle='#2a2a30';                                                            // 前後の牽引フック
+    ctx.fillRect(92,-56,14,8); ctx.fillRect(-106,-56,14,8);
     // ロールケージ
-    ctx.strokeStyle='#2a2a30'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(-40,-82); ctx.lineTo(-30,-108); ctx.lineTo(30,-108); ctx.lineTo(46,-82); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-30,-108); ctx.lineTo(-24,-84); ctx.moveTo(30,-108); ctx.lineTo(24,-84); ctx.stroke();
+    ctx.strokeStyle='#2a2a30'; ctx.lineWidth=7; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-56,-112); ctx.lineTo(-42,-152); ctx.lineTo(42,-152); ctx.lineTo(64,-112); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-42,-152); ctx.lineTo(-34,-116); ctx.moveTo(42,-152); ctx.lineTo(34,-116); ctx.stroke();
+    ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(-42,-136); ctx.lineTo(42,-136); ctx.stroke();   // 横桟
     // シート
-    ctx.fillStyle='#33333c'; ctx.fillRect(-18,-104,32,22);
+    ctx.fillStyle='#33333c'; ctx.fillRect(-26,-146,44,32);
+    ctx.fillStyle='#44444f'; ctx.fillRect(-26,-146,44,8);
+    // ── 後部のガトリング砲塔 ──
+    // 撃っている間は銃身が回り、砲口が光る
+    { const firing=p && p.mAtk==='gat' && (p.mAtkT||0)>0;
+      const spin=(p&&p.mGatSpin)||0;
+      ctx.save(); ctx.translate(-86,-150);   // 運転席の後ろ・高い位置。銃身がキャビンの上を越えて前へ出る
+      ctx.fillStyle='#3a3f48'; roundRect(-16,-10,32,26,5); ctx.fill();                 // 砲座
+      ctx.fillStyle='#4a525e'; roundRect(-16,-10,32,9,4); ctx.fill();
+      ctx.save(); ctx.rotate(-0.12);
+      ctx.fillStyle='#2a2f36'; roundRect(-6,-14,30,18,4); ctx.fill();                   // 機関部
+      for(let k=0;k<6;k++){ const a=spin+k*(TAU/6), yy=Math.sin(a)*7;                   // 6本の銃身
+        ctx.fillStyle=(Math.cos(a)>0)?'#c8ccd4':'#7d8794';
+        ctx.fillRect(20, yy-3.4, 76, 6.4); }
+      ctx.fillStyle='#1e242c'; ctx.beginPath(); ctx.ellipse(96,0,6,10,0,0,7); ctx.fill(); // 砲口
+      if(firing){ ctx.save(); ctx.globalCompositeOperation='lighter';
+        const fu=0.6+0.4*Math.sin(gf*1.7);
+        ctx.fillStyle='rgba(255,236,150,'+(0.85*fu).toFixed(2)+')';
+        ctx.beginPath(); ctx.ellipse(104,0,18*fu,10*fu,0,0,7); ctx.fill();
+        ctx.fillStyle='rgba(255,150,60,'+(0.5*fu).toFixed(2)+')';
+        ctx.beginPath(); ctx.ellipse(116,0,26*fu,7*fu,0,0,7); ctx.fill(); ctx.restore(); }
+      ctx.restore();
+      // 弾帯
+      ctx.strokeStyle='#c8a24a'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(-10,10); ctx.quadraticCurveTo(-24,26,-14,38); ctx.stroke();
+      ctx.restore(); }
     // ヘッドライト
-    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,235,140,.9)'; ctx.beginPath(); ctx.arc(60,-58,6,0,7); ctx.fill();
-    ctx.fillStyle='rgba(255,235,140,.25)'; ctx.beginPath(); ctx.moveTo(60,-58); ctx.lineTo(120,-72); ctx.lineTo(120,-44); ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='rgba(255,235,140,.9)';
+    ctx.beginPath(); ctx.arc(86,-82,8,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(86,-62,6,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,235,140,.25)'; ctx.beginPath(); ctx.moveTo(88,-80); ctx.lineTo(168,-100); ctx.lineTo(168,-52); ctx.closePath(); ctx.fill(); ctx.restore();
     // 排気煙（走行中）
     if(moving && gf%3===0){ ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle='#9a9aa2'; ctx.beginPath(); ctx.arc(-70,-46,5,0,7); ctx.fill(); ctx.restore(); }
   }
@@ -8488,6 +9123,8 @@ function addBlocks(blocks,opts){
       // 高さは描画とカメラにしか効かないので、負の側にも同じだけ余裕を取る
       const CAP=TERR_RISE*3; if(e1<-CAP) e1=-CAP; if(e1>CAP) e1=CAP;
       TERRS.push({x0:B, x1:B+len, e0:e0, e1:e1, kind:b.terr||'flat', st:st});
+      // ステージごとに仕掛けを1つ引く。地形が同じでも毎回ちがう仕掛けが出る
+      STAGE_GIM[st]=rollGimmick(b.terr||'flat');
       // 縦ステージは段の手前に谷を開ける。跳び損ねれば落下＝ワンアウト。
       // 全段に開けると休む場所が無くなるので一段おき
       if(cl||dv){ for(let k=1;k<TERR_STEPS;k++){ if(k%2===0) continue;
@@ -8519,6 +9156,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
   TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  STAGE_GIM={}; gimCd=0; gimWarn=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
 }
@@ -8569,7 +9207,7 @@ function nextLap(l){
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
 function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters5();
@@ -8581,7 +9219,7 @@ function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
 }
 // ── 四周目「神話」開始（強化と傭兵は引き継ぎ）──
 function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters4();
@@ -8593,7 +9231,7 @@ function startNG4(skipOpen){ unlockAudio(); lap=4; endingDone=false; cut=null;
 }
 // ── 三周目「宇宙人の侵略」開始（強化と傭兵は引き継ぎ）──
 function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters3();
@@ -8605,7 +9243,7 @@ function startNG3(skipOpen){ unlockAudio(); lap=3; endingDone=false; cut=null;
 }
 // ── 二周目「蟲の世界」開始（レベル・強化・コイン・傭兵は一周目から引き継ぎ）──
 function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
-  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; shopPending=0;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
   slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
   buildEncounters2();
@@ -8662,6 +9300,7 @@ function startTraining(){ unlockAudio();
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
   TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  STAGE_GIM={}; gimCd=0; gimWarn=[];
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
   camX=0; players.forEach(p=>{ if(p.active){ resetPlayer(p,true); p.x=camX+W*0.28; p.level=1; } });
@@ -8706,6 +9345,49 @@ const WORLD_FINAL=[
   {id:'maou',   b:FINAL_CH[2],  mx:0.95, my:0.16, locked:true, final:true},   // 魔王の間
 ];
 const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒の城門」が解禁
+// ══════════════════════════════════════════════════════════════════
+//  ステージ間イベント
+//  あるステージで手に入る「キーアイテム」を持ったまま別のステージを選ぶと、
+//  そこでだけ隠しボスが現れたり、専用の褒美が置かれている。
+//  持っていなければ何も起きない＝地図を眺めて順番を考える意味を作る
+// ══════════════════════════════════════════════════════════════════
+const KEYITEMS={
+  moonkey:{name:'月光の鍵',     col:'#bfe9ff', hint:'月詠の森'},
+  compass:{name:'深海の羅針盤', col:'#7fd0ff', hint:'海賊飛行艇の甲板'},
+  gear:   {name:'古代の歯車',   col:'#ffd24d', hint:'瑠璃の水晶洞'},
+  frost:  {name:'氷結の宝珠',   col:'#8fd8ff', hint:'業火の渓谷'},
+  crest:  {name:'黄金の紋章',   col:'#ffe14d', hint:'暗黒の城門'},
+};
+const STAGE_EVENTS=[
+  // from のステージで手に入り、at のステージで使われる
+  {key:'moonkey', from:'yugure', on:'rival', at:'mori',     kind:'boss', boss:'hbLuna',
+   title:'月光の扉がひらく', line:'月光の鍵が疼く——森の奥から、銀の獣が歩み出た。'},
+  {key:'compass', from:'futou',  on:'clear', at:'hikoutei', kind:'boss', boss:'hbAbyss',
+   title:'羅針盤が北を失う', line:'羅針盤の針が真下を指す——甲板の影から、深淵の顎が浮かび上がった。'},
+  {key:'gear',    from:'haikyo', on:'clear', at:'suisho',   kind:'boss', boss:'hbCrysta',
+   title:'眠れる機構が動く', line:'古代の歯車が噛み合った——水晶の巨人が、千年ぶりに膝を伸ばす。'},
+  {key:'frost',   from:'reihou', on:'clear', at:'gouka',    kind:'gift', give:'evHeart',
+   title:'炎と氷が釣り合う', line:'氷結の宝珠が溶けだし、渓谷の炎と溶け合って一つの心臓になった。'},
+  {key:'crest',   from:'takara', on:'clear', at:'joumon',   kind:'gift', give:'evCrown',
+   title:'王家の秘宝がひらく', line:'黄金の紋章が城門の紋に重なる——封じられていた宝物庫が口を開けた。'},
+];
+let keyHeld={}, eventDone={};
+function eventsAt(levelId){ return STAGE_EVENTS.filter(function(E){
+  return E.at===levelId && keyHeld[E.key] && !eventDone[E.key]; }); }
+// そのノードに「今すぐ起きるイベント」があるか（地図の！印）
+function nodeHasEvent(node){ return node && eventsAt(node.id).length>0; }
+// キーアイテムを渡す。すでに持っていれば何もしない
+function grantKey(key){ if(!key || keyHeld[key] || eventDone[key]) return false;
+  keyHeld[key]=true; const K=KEYITEMS[key];
+  const p=players[0];
+  popText(p.x, p.y-140, K.name+'を手に入れた！', K.col, true);
+  popText(p.x, p.y-108, '「'+K.hint+'」で何かが起きる…', '#ffffff');
+  ring(p.x,p.y-60,K.col); spark(p.x,p.y-60,K.col,22,10); sfx.get(p.x); flash=Math.max(flash,3);
+  return true; }
+// ステージを出るときに、そのステージで手に入るキーアイテムを配る
+function grantKeysFor(levelId, on){
+  let n=0; STAGE_EVENTS.forEach(function(E){ if(E.from===levelId && E.on===on && grantKey(E.key)) n++; });
+  return n; }
 let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
 function curWorldLevels(){ return lap>=5? WORLD5_LEVELS : lap>=4? WORLD4_LEVELS : lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
 function allMapNodes(){ return lap>=5? WORLD5_LEVELS.concat(WORLD5_FINAL) : lap>=4? WORLD4_LEVELS.concat(WORLD4_FINAL) : lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
@@ -8721,6 +9403,26 @@ function nodeUnlocked(node){
 }
 function nodeSelectable(node){ return nodeUnlocked(node) && !levelsDone[node.id]; }   // 「次に進むべき場所」の判定
 function nodeEnterable(node){ return nodeUnlocked(node); }                            // 制覇済みでも再挑戦できる（コイン稼ぎの導線）
+// キーアイテム持ちで入ったステージに、隠しボスや褒美を差し込む。
+// 隠しボスは「最後のボスの手前」に入れる。ボス撃破がステージ終了なので、
+// 後ろに足すと戦う前にステージが終わってしまう
+function applyStageEvents(node){
+  const evs=eventsAt(node.id); if(!evs.length) return;
+  evs.forEach(function(E){
+    if(E.kind==='boss'){
+      // 最後のボス戦の手前へ割り込ませる。無ければ末尾に足す
+      let bi=-1; for(let i=encounters.length-1;i>=0;i--){ if(encounters[i].boss){ bi=i; break; } }
+      const prevAt=(bi>0? encounters[bi-1].at : 0);
+      const at=(bi>=0)? Math.max(prevAt+340, encounters[bi].at-680) : Math.max(600, WORLD_END-700);
+      const enc={st:stage, at:at, list:[[E.boss,1]], boss:false, mini:true, evKey:E.key, evTitle:E.title, evLine:E.line};
+      if(bi>=0) encounters.splice(bi,0,enc); else encounters.push(enc); }
+    else {
+      // 褒美はステージの入口に置く。取り逃さないよう地面に落としておく
+      makeItem(360, E.give);
+      eventDone[E.key]=true; keyHeld[E.key]=false;
+      stageEventBanner=stageEventBannerMax=200; stageEventTxt=E.title; stageEventSub=E.line; } });
+}
+let stageEventBanner=0, stageEventBannerMax=1, stageEventTxt='', stageEventSub='';
 // 1レベルだけを読み込んで開始（x=0 起点の独立フィールド）
 function loadLevel(node){
   resetWorldState(); curLevelId=node.id; curLevelFinal=!!node.final;
@@ -8732,6 +9434,7 @@ function loadLevel(node){
   spawnVehicle(WORLD_END*0.26, buggyLv.includes(node.id)?'buggy':'horse');
   if(WORLD_END>1500) spawnVehicle(WORLD_END*0.58, buggyLv.includes(node.id)?'horse':'buggy');
   players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.x=clamp(90+p.pid*60,30,WORLD_END-30); } });
+  applyStageEvents(node);          // キーアイテムを持っていれば、このステージだけの出来事が起きる
   camX=0; camReset(); player=players[0]; goArrow=160; shopPending=0; spawnMercs();   // 雇った傭兵も同行
   state='play'; if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
   saveProgress(1);
@@ -8826,6 +9529,13 @@ function drawMap(){
       ctx.beginPath(); ctx.arc(x,y,21+pu*5,0,7); ctx.stroke();
       ctx.globalAlpha=0.9; ctx.fillStyle='#ffe14d'; ctx.font='bold 10px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
       ctx.fillText('▼ 次はここ', x, y-27); ctx.restore(); }
+    // キーアイテムを持って入ると何かが起きるノードは、青い輪と「！」で知らせる
+    if(unl && nodeHasEvent(node)){ const pe=0.5+0.5*Math.sin(gf*0.13);
+      ctx.save(); ctx.globalAlpha=0.42+pe*0.5; ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=2.2+pe*2.6;
+      ctx.beginPath(); ctx.arc(x,y,25+pe*6,0,7); ctx.stroke();
+      ctx.globalAlpha=0.95; ctx.fillStyle='#bfe9ff'; ctx.font='900 20px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+      ctx.strokeStyle='rgba(6,12,24,.9)'; ctx.lineWidth=4;
+      ctx.strokeText('!', x+26, y-16); ctx.fillText('!', x+26, y-16); ctx.restore(); }
     // ノード円
     ctx.fillStyle=done?'rgba(90,180,110,.9)':(unl?'rgba(255,210,80,.92)':'rgba(90,90,110,.8)');
     if(sel){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=radGrad(x,y,34,'rgba(255,240,150,.8)','rgba(255,240,150,0)'); ctx.beginPath(); ctx.arc(x,y,34,0,7); ctx.fill(); ctx.restore(); ctx.fillStyle=unl&&!done?'#fff':'rgba(255,210,80,.92)'; }
@@ -8846,6 +9556,17 @@ function drawMap(){
     ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=3;
     const ny=y+(done||!unl?34:45); ctx.strokeText(nm,x,ny); ctx.fillText(nm,x,ny);
   });
+  // 持っているキーアイテム。どこで使えるかまで書かないと、持っている意味に気付けない
+  { const held=Object.keys(KEYITEMS).filter(function(k){ return keyHeld[k] && !eventDone[k]; });
+    if(held.length){ ctx.textAlign='left';
+      ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif';
+      ctx.fillStyle='rgba(8,10,20,.72)'; roundRect(12, H-150, 236, 22+held.length*17, 6); ctx.fill();
+      ctx.strokeStyle='rgba(191,233,255,.5)'; ctx.lineWidth=1.4; roundRect(12.5, H-149.5, 235, 21+held.length*17, 6); ctx.stroke();
+      ctx.fillStyle='#bfe9ff'; ctx.fillText('所持しているキーアイテム', 22, H-134);
+      held.forEach(function(k,i){ const K=KEYITEMS[k], yy=H-118+i*17;
+        ctx.fillStyle=K.col; drawStar(28, yy-4, 2.0, 5.0, K.col);
+        ctx.fillStyle='#ffffff'; ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
+        ctx.fillText(K.name+' → '+K.hint, 40, yy); }); } }
   // 選択中ノードの情報カード：難度・ボスの有無・想定報酬を出して「選ぶ材料」を与える
   { const node=nodes[mapSel];
     if(node){ const done=levelsDone[node.id], unl=nodeUnlocked(node), tr=tierOf(node), bk=bossOf(node);
@@ -9074,7 +9795,10 @@ function randomizeZako(list){
 }
 function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleared)return;
   if(!enc.spawned && player.x>enc.at-200){ enc.spawned=true; curGateX=enc.at; stage=enc.st; saveProgress(enc.st);
-    if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=stageBannerMax=150; stageBannerTxt='STAGE '+enc.st; stageBannerSub=(STAGE_NAME[enc.st]||''); } }
+    if(!shownStBanner[enc.st]){ shownStBanner[enc.st]=1; if(!enc.boss){ stageBanner=stageBannerMax=150; stageBannerTxt='STAGE '+enc.st;
+      // どの仕掛けが出るステージかを名前の横に出す。予告が無いと初見で理不尽になる
+      const _g=gimmickById(STAGE_GIM[enc.st]);
+      stageBannerSub=(STAGE_NAME[enc.st]||'')+(_g?('　― '+_g.name+'注意 ―'):''); } }
     let off=0;
     const spawnList=(!enc.boss && !enc.rival && !enc.mini) ? randomizeZako(enc.list) : enc.list;   // 通常戦は雑魚をランダム化
     const extra=(TWO_P?1:0)+(hardMode?1:0);   // 2P／高難易度は雑魚が増える
@@ -9098,16 +9822,29 @@ function updateEncounters(){ const enc=encounters[encIndex]; if(!enc||enc.cleare
       off++; } });
     if(enc.boss){ const btype=(enc.list.find(([ty])=>ETYPE[ty].boss)||[])[0]; if(btype) startBossCut(btype, enc.st); else { sfx.boss(); Music.setMode('bosseerie'); } }
     else if(enc.rival){ startRivalCut(rivalFor(players[0].kind)); }
+    else if(enc.evKey){ bossIntro=170; sfx.boss(); if(Music.setMode)Music.setMode('bosseerie');
+      stageEventBanner=stageEventBannerMax=200; stageEventTxt=enc.evTitle||''; stageEventSub=enc.evLine||'';
+      flash=Math.max(flash,4); shake=Math.max(shake,10); }
     else if(enc.mini){ bossIntro=130; }
   }
   if(enc.spawned&&aliveCount()===0&&projectiles.filter(pr=>pr.owner==='enemy').length===0){ enc.cleared=true; encIndex++; curGateX=WORLD_END; goArrow=160; score+=300;
     if(enc.boss){
       if(!enc.final){ stageBanner=stageBannerMax=160; stageBannerTxt='STAGE CLEAR!'; stageBannerSub='体力回復！  次のステージへ →';
         player.hp=Math.min(player.maxHp, player.hp+45); player.dim=Math.min(player.dimMax,player.dim+1); score+=1500; Music.setMode('battle');
-        if(curLevelId) levelsDone[curLevelId]=true;   // このフィールドを制覇済みに
+        if(curLevelId){ levelsDone[curLevelId]=true;   // このフィールドを制覇済みに
+          grantKeysFor(curLevelId,'clear'); }          // 制覇でもらえるキーアイテム
         startStageClearDemo(enc.st); }   // ステージクリアの短いデモ→終了後にショップ→マップ
     } else if(enc.rival){ score+=1200; player.hp=Math.min(player.maxHp, player.hp+30); Music.setMode('battle');
+        grantKeysFor(curLevelId,'rival');   // ライバルを倒すと手に入るキーアイテム
         startRivalClearDemo(); }         // ライバル撃破の短い掛け合い
+    else if(enc.evKey){                  // 隠しボス撃破：鍵を使い切り、褒美を落とす
+        eventDone[enc.evKey]=true; keyHeld[enc.evKey]=false;
+        score+=4000; player.hp=Math.min(player.maxHp, player.hp+60);
+        player.dim=Math.min(player.dimMax,(player.dim||0)+1);
+        makeItem(player.x+40, 'costume'); makeItem(player.x-40, weaponDropKind());
+        for(let k=0;k<14;k++) makeCoin(player.x+rnd(-70,70), 5);
+        stageEventBanner=stageEventBannerMax=190; stageEventTxt='隠しボス撃破！'; stageEventSub=(KEYITEMS[enc.evKey]||{}).name+'の導きは、ここで果たされた';
+        Music.setMode('battle'); }
     else if(encounters[encIndex]&&!encounters[encIndex].boss) Music.setMode('battle');
   }
 }
@@ -9174,6 +9911,7 @@ let projectiles=[];
 function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,nostop:!!o.nostop,noLaunch:!!o.noLaunch,
     pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
+    boomer:!!o.boomer,boomDir:null,bx0:0,
     multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,blast:!!o.blast,blastR:o.blastR||110,blastDmg:o.blastDmg||30,
     grav:o.grav||0,glKind:o.glKind||null,splitT:(o.splitT!=null?o.splitT:null),splitN:o.splitN||0,
     life:o.life||150,r:o.r||11,dmg:o.dmg||10,color:o.color||'#d46bff',owner:o.owner||'enemy',spin:Math.random()*6,trail:[]}); }
@@ -9277,6 +10015,11 @@ function updateProjectiles(){
     if(pr.splitT!=null){ pr.splitT--;                               // 空中で子弾へ分裂する弾
       if(pr.splitT<=0){ mackGLSplit(pr); projectiles.splice(i,1); continue; } }
     if(pr.grav) pr.vzz-=pr.grav;                                    // 放物線を描く弾（手榴弾など）
+    // 戻ってくる投擲（チャクラム・ブーメラン）。まっすぐ飛んで減速し、反転して帰る
+    if(pr.boomer){ if(pr.boomDir==null){ pr.boomDir=Math.sign(pr.vx)||1; pr.bx0=pr.x; }
+      pr.vx-=pr.boomDir*0.62;
+      // 手元まで帰ってきたら消える。そのまま抜けると、背後へ飛び去って画面外で当たり続ける
+      if((pr.x-pr.bx0)*pr.boomDir < -18){ spark(pr.x, pr.y-pr.zz, pr.color, 6, 6); projectiles.splice(i,1); continue; } }
     pr.x+=pr.vx; pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4); pr.zz+=pr.vzz; pr.life--; pr.spin+=0.4;
     pr.trail.push({x:pr.x,y:pr.y-pr.zz}); if(pr.trail.length>13)pr.trail.shift();   // 尾を長く取ってリボン化する
     if(pr.owner==='player'){
@@ -9575,11 +10318,11 @@ function update(){
   if(state!=='play') return;
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
-  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickBoulders(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
-  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--;
+  if(quake>0)quake--; if(flash>0)flash--; if(critCam>0)critCam--; updateEcho(); updateUltCut(); if(bossIntro>0)bossIntro--; if(goArrow>0)goArrow--; if(stageBanner>0)stageBanner--; if(stageEventBanner>0)stageEventBanner--;
   if(shopPending>0 && state==='play'){ shopPending--; if(shopPending===0) goScreen(enterShop,'shutter',36); }   // 会話などで中断されたら次のフレームで再試行
   updateEventCard();
   // ── 環境音：ステージの地形に応じた風・洞窟・機械のうねりを約2.3秒おきに流す。
@@ -9643,6 +10386,7 @@ function render(){
         if(o.pl.kind==='mack'){ drawMackRaid(o.pl); drawMackAmmo(o.pl); } } }
     else drawEnemy(o.e); });
   player=players[0];
+  drawGimWarn();
   drawHazards();
   drawCarriers();
   drawProjectiles();
@@ -12213,6 +12957,8 @@ function drawPlayer(){
   if(_ftF) chibiLegTo(6, _ftF.tx, _ftF.ty, limbF, bootF, legF1, legF2);
   else     chibiLeg(6, thF, kF, limbF, bootF, legF1, legF2);       // near leg
   (mack?mackHead:wanden?wandenHead:watch?watchHead:shima?shimaHead:nuko?nukoHead:g8?guard8Head:chibiHead)(lean);
+  // かぶり物は頭より後に描く。前に描くと頭の毛並みに隠れて、頭巾や略帽が見えなくなる
+  if(_cos && _cos.head){ ctx.save(); ctx.rotate(lean*0.26); drawCosHat(_cos); ctx.restore(); }
   if(p.charge>0.05){ ctx.save(); ctx.globalAlpha=0.3+p.charge*0.4;
     ctx.fillStyle=radGrad(0,-40,22+p.charge*22,p.charge>=0.45?'rgba(255,230,90,.9)':'rgba(120,200,255,.7)','rgba(255,230,90,0)');
     ctx.beginPath(); ctx.arc(0,-40,22+p.charge*22,0,7); ctx.fill(); ctx.restore(); }
@@ -12535,13 +13281,74 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.fillStyle=mega?'#c8961a':'#7a7e8a';                                                                // リベット
     for(const ry of [-hh2+5, 0, hh2-5]){ ctx.beginPath(); ctx.arc(L+27,ry,2,0,7); ctx.fill(); }
     if(big>1) ctx.restore();
-  } else if(wk==='gaxe'){ const L=ext*0.7+20;   // 大戦斧：長い柄＋巨大な斧刃
-    ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=5.5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(L,0); ctx.stroke();
-    ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L,0,3,0,7); ctx.fill();
-    const bl=ctx.createLinearGradient(L,-26,L+30,26); bl.addColorStop(0,'#f4dca0'); bl.addColorStop(.5,'#d0a060'); bl.addColorStop(1,'#8a6a30');
-    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L,-4); ctx.quadraticCurveTo(L+34,-30,L+26,0); ctx.quadraticCurveTo(L+34,30,L,4); ctx.closePath(); ctx.fill();   // 三日月刃
-    ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(L+2,-3); ctx.quadraticCurveTo(L+28,-22,L+22,-1); ctx.stroke();
-    ctx.fillStyle='#8a6a30'; ctx.fillRect(L-3,-8,6,16);   // 刃元の金具
+  } else if(wk==='gaxe'){ const L=ext*0.7+20;   // 大戦斧
+    // 以前は柄の先に三日月を1枚置いただけで、「棒の先の月」にしか見えなかった。
+    // 斧に見せる要素は3つ：柄を横から挟む頭（目・ヒツ）／背の平ら（ポール）／
+    // 刃先が柄より手元側まで垂れ下がる「顎（ヒゲ）」。この3つを描く
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=7; ctx.lineCap='round';                    // 太い柄
+    ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(L+10,0); ctx.stroke();
+    ctx.strokeStyle='#6a4a24'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-16,-1.6); ctx.lineTo(L+8,-1.6); ctx.stroke();
+    ctx.fillStyle='#2a1c10'; ctx.fillRect(-18,-5,8,10);                                  // 尻の金具
+    ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=1.6;                                        // 柄巻き
+    for(let i=-12;i<8;i+=5){ ctx.beginPath(); ctx.moveTo(i,-3.6); ctx.lineTo(i+3,3.6); ctx.stroke(); }
+    // 頭（斧身）：柄を挟む鉄の塊
+    const hd=ctx.createLinearGradient(L-8,-30,L+18,30);
+    hd.addColorStop(0,'#eef3fa'); hd.addColorStop(0.42,'#b9c2cf'); hd.addColorStop(1,'#5d6672');
+    ctx.fillStyle=hd; ctx.beginPath();
+    ctx.moveTo(L-10,-9);                                   // 目（柄を挟む部分）の上
+    ctx.lineTo(L+2,-34);                                   // 上の角
+    ctx.quadraticCurveTo(L+30,-24, L+30,0);                // 刃の外側（上半分）
+    ctx.quadraticCurveTo(L+30,24, L+2,34);                 // 刃の外側（下半分）
+    ctx.lineTo(L-10,9);                                    // 顎（柄より手元へ垂れる）
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(24,20,16,.62)'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+    ctx.fillStyle='#3a4048'; ctx.beginPath();              // 背の平ら（ポール）＝叩く面
+    ctx.moveTo(L-22,-11); ctx.lineTo(L-8,-11); ctx.lineTo(L-8,11); ctx.lineTo(L-22,11); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#59616b'; ctx.fillRect(L-22,-11,14,5);
+    ctx.fillStyle='#2f353c'; ctx.fillRect(L-11,-12,7,24);  // 目（柄を通す穴）の縁
+    ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath();// 刃先の光
+    ctx.moveTo(L+4,-30); ctx.quadraticCurveTo(L+27,-21, L+27,0);
+    ctx.quadraticCurveTo(L+27,21, L+4,30); ctx.lineTo(L+8,26);
+    ctx.quadraticCurveTo(L+23,18, L+23,0); ctx.quadraticCurveTo(L+23,-18, L+8,-26); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#8a6a30'; ctx.beginPath(); ctx.arc(L+11,0,3,0,7); ctx.fill();          // 鋲
+  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：長い柄の先から直角に大きく反る刃
+    ctx.strokeStyle='#2a2430'; ctx.lineWidth=6.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-26,6); ctx.quadraticCurveTo(L*0.5,-6, L,-10); ctx.stroke();   // 反りのある柄
+    ctx.strokeStyle='#43394f'; ctx.lineWidth=2.6;
+    ctx.beginPath(); ctx.moveTo(-26,4); ctx.quadraticCurveTo(L*0.5,-8, L,-12); ctx.stroke();
+    ctx.fillStyle='#6a5a2a'; ctx.fillRect(-28,1,9,10);                                     // 石突き
+    ctx.fillStyle='#c8a24a'; ctx.beginPath(); ctx.arc(L-4,-10,4.6,0,7); ctx.fill();         // 刃元の金具
+    const sb=ctx.createLinearGradient(L,-14,L-30,-84);
+    sb.addColorStop(0,'#ffffff'); sb.addColorStop(0.35,'#cfe4f2'); sb.addColorStop(1,'#5a7a92');
+    ctx.fillStyle=sb; ctx.beginPath();
+    ctx.moveTo(L-2,-10);
+    ctx.quadraticCurveTo(L+18,-52, L-34,-86);          // 刃の外周（大きく反る）
+    ctx.quadraticCurveTo(L-16,-46, L-10,-8);           // 峰側へ戻る
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(20,18,26,.6)'; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=2.2;                            // 刃筋
+    ctx.beginPath(); ctx.moveTo(L-2,-12); ctx.quadraticCurveTo(L+15,-50, L-32,-82); ctx.stroke();
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';                    // 刃にまとわる冥い燐光
+      ctx.globalAlpha=0.22+0.10*Math.sin(gf*0.15);
+      ctx.fillStyle=radGrad(L-16,-48,44,'#a76bff','rgba(120,60,200,0)');
+      ctx.beginPath(); ctx.arc(L-16,-48,44,0,7); ctx.fill(); ctx.restore(); }
+  } else if(wk==='zanbatou'){ const L=ext*1.5+120;   // 斬馬刀：常識外れに巨大な大剣
+    ctx.fillStyle='#2f2a26'; ctx.fillRect(-34,-6,40,12);                                   // 両手で握る長い柄
+    ctx.strokeStyle='#7a6a4a'; ctx.lineWidth=2;
+    for(let i=-32;i<4;i+=6){ ctx.beginPath(); ctx.moveTo(i,-6); ctx.lineTo(i+4,6); ctx.stroke(); }
+    ctx.fillStyle='#3a3f48'; ctx.fillRect(-38,-9,8,18);                                    // 柄頭
+    ctx.fillStyle=radGrad(8,0,16,'#e6c56a','#8a6a1e');                                     // 巨大な鍔
+    ctx.beginPath(); ctx.ellipse(8,0,7,20,0,0,7); ctx.fill();
+    const zb=ctx.createLinearGradient(10,-30,L,30);
+    zb.addColorStop(0,'#f2f7ff'); zb.addColorStop(0.45,'#b6c4d6'); zb.addColorStop(1,'#68758a');
+    ctx.fillStyle=zb; ctx.beginPath();
+    ctx.moveTo(12,-26); ctx.lineTo(L-30,-24); ctx.lineTo(L,-6); ctx.lineTo(L,6);
+    ctx.lineTo(L-30,24); ctx.lineTo(12,26); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(22,26,34,.6)'; ctx.lineWidth=2.4; ctx.lineJoin='round'; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.55)'; ctx.fillRect(14,-24,L-46,5);                    // 峰の照り
+    ctx.fillStyle='rgba(0,0,0,.20)'; ctx.fillRect(14,18,L-46,6);                           // 下面の陰
+    ctx.strokeStyle='rgba(40,46,58,.5)'; ctx.lineWidth=2.6;                                // 樋（血抜きの溝）
+    ctx.beginPath(); ctx.moveTo(24,0); ctx.lineTo(L-42,0); ctx.stroke();
   } else if(wk==='gflail'){ const L=ext*0.55+16, fa=Math.sin(gf*0.6)*0.9+0.5;   // 鉄球フレイル：柄＋鎖＋トゲ鉄球
     ctx.strokeStyle='#3a2a18'; ctx.lineWidth=5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(L,0); ctx.stroke();
     const ex2=L+8+Math.cos(fa)*14, ey2=Math.sin(fa)*14;
@@ -12573,6 +13380,321 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-9,-1.2); ctx.lineTo(L-2,-1.2); ctx.stroke();
     ctx.strokeStyle='#2e2012'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(0,8); ctx.stroke();          // 握り（垂直グリップ）
     ctx.fillStyle='#caa54a'; ctx.beginPath(); ctx.arc(L,0,2.4,0,7); ctx.fill();
+  // ══════════════════════════════════════════════════════════════
+  //  追加武器の持ち姿。刀身の形・柄の長さ・付属物で、遠目にも別物と分かるようにする
+  // ══════════════════════════════════════════════════════════════
+  } else if(wk==='katana'){ const L=ext*1.05+34;                              // 桜花刀：反りの深い打刀。柄巻きと桜の散り
+    ctx.fillStyle='#2e2a34'; ctx.fillRect(-14,-2.6,16,5.2);
+    ctx.strokeStyle='#c86a90'; ctx.lineWidth=1.1; for(let i=-13;i<1;i+=3.2){ ctx.beginPath(); ctx.moveTo(i,-2.6); ctx.lineTo(i+2.2,2.6); ctx.stroke(); }
+    ctx.fillStyle=radGrad(3,0,5,'#ffd6ea','#9a4a6a'); ctx.beginPath(); ctx.ellipse(3,0,3.2,5.6,0,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(5,-4,L+12,4); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.5,'#ffe6f2'); bl.addColorStop(1,'#c88aa8');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(6,-3.4);
+    ctx.quadraticCurveTo(L*0.55,-6.4,L+2,-2.6); ctx.lineTo(L+14,0); ctx.lineTo(L+2,2.2);
+    ctx.quadraticCurveTo(L*0.55,-0.6,6,3.2); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.moveTo(8,-1.8); ctx.quadraticCurveTo(L*0.55,-4.2,L,-1.4); ctx.stroke();
+    ctx.fillStyle='rgba(255,170,210,.75)';                                      // 刃を追う桜の花びら
+    for(let k=0;k<3;k++){ const q=L*(0.3+k*0.24), yy=-8-Math.sin(gf*0.16+k*2)*4;
+      ctx.beginPath(); ctx.ellipse(q, yy, 3.2, 2.0, gf*0.05+k, 0,7); ctx.fill(); }
+  } else if(wk==='rapier'){ const L=ext*1.25+40;                              // レイピア：細い直刀＋籠状の護拳
+    ctx.fillStyle='#26242c'; ctx.fillRect(-11,-2.2,12,4.4);
+    ctx.strokeStyle='#8fa6d8'; ctx.lineWidth=1.8;                              // 籠（ソードナックル）
+    ctx.beginPath(); ctx.arc(3,0,7,-1.9,1.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(3,0,4.4,-2.2,2.2); ctx.stroke();
+    ctx.fillStyle='#d8e4ff'; ctx.beginPath(); ctx.arc(2,0,2.6,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(6,-1.4,L+10,1.4); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.6,'#d8e4ff'); bl.addColorStop(1,'#7f8fb8');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(7,-1.5); ctx.lineTo(L,-0.9); ctx.lineTo(L+11,0); ctx.lineTo(L,0.9); ctx.lineTo(7,1.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=0.7; ctx.beginPath(); ctx.moveTo(8,-0.5); ctx.lineTo(L,-0.3); ctx.stroke();
+  } else if(wk==='flamberge'){ const L=ext*1.02+30;                           // フランベルジュ：波打つ刃。縁が燃える
+    ctx.fillStyle='#4a2a18'; ctx.fillRect(-10,-3,12,6);
+    ctx.fillStyle='#ff9a3a'; ctx.fillRect(2,-6,4,12);                          // 鍔
+    const N=7, seg=L/N;
+    ctx.fillStyle=(function(){ const g=ctx.createLinearGradient(6,-6,L+12,6); g.addColorStop(0,'#fff2d0'); g.addColorStop(.5,'#ffb85a'); g.addColorStop(1,'#a03a10'); return g; })();
+    ctx.beginPath(); ctx.moveTo(6,-3.6);
+    for(let k=0;k<N;k++){ const x0=6+seg*k, x1=6+seg*(k+1);
+      ctx.quadraticCurveTo((x0+x1)/2, -3.6+((k%2)?4.4:-4.4), x1, -3.6); }
+    ctx.lineTo(L+14,0); ctx.lineTo(6+seg*N,3.6);
+    for(let k=N-1;k>=0;k--){ const x0=6+seg*k, x1=6+seg*(k+1);
+      ctx.quadraticCurveTo((x0+x1)/2, 3.6+((k%2)?-4.4:4.4), x0, 3.6); }
+    ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.35+0.2*Math.sin(gf*0.3);
+    ctx.fillStyle=radGrad(L*0.6,0,20,'rgba(255,150,50,.9)','rgba(255,90,20,0)'); ctx.beginPath(); ctx.ellipse(L*0.6,0,L*0.6,10,0,0,7); ctx.fill(); ctx.restore();
+  } else if(wk==='chakram'){ const R=12+ext*0.10;                              // チャクラム：手元で回る輪刃
+    ctx.save(); ctx.translate(R+6,0); ctx.rotate(gf*0.42);
+    const rg=ctx.createRadialGradient(0,0,R*0.55, 0,0,R); rg.addColorStop(0,'rgba(0,0,0,0)'); rg.addColorStop(0.6,'#7df0e0'); rg.addColorStop(1,'#1a8a80');
+    ctx.strokeStyle=rg; ctx.lineWidth=R*0.34; ctx.beginPath(); ctx.arc(0,0,R*0.82,0,TAU); ctx.stroke();
+    ctx.fillStyle='#eafffb';                                                    // 外周の刃
+    for(let k=0;k<8;k++){ const a=k/8*TAU;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*R*0.92, Math.sin(a)*R*0.92);
+      ctx.lineTo(Math.cos(a+0.20)*R*1.30, Math.sin(a+0.20)*R*1.30);
+      ctx.lineTo(Math.cos(a+0.40)*R*0.92, Math.sin(a+0.40)*R*0.92); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  } else if(wk==='lance'){ const L=ext*1.55+66;                                // ランス：円錐の穂と大きな手甲皿（ヴァンプレート）
+    ctx.strokeStyle='#6a5230'; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-18,0); ctx.lineTo(L*0.6,0); ctx.stroke();
+    ctx.fillStyle=radGrad(2,0,16,'#ffe9a0','#8a6a1e'); ctx.beginPath();          // 手甲皿
+    ctx.moveTo(0,-16); ctx.quadraticCurveTo(16,-11,16,0); ctx.quadraticCurveTo(16,11,0,16); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#6a4a10'; ctx.lineWidth=1.6; ctx.stroke();
+    const cg=ctx.createLinearGradient(L*0.55,-9,L+18,0); cg.addColorStop(0,'#fff6d8'); cg.addColorStop(.6,'#e8c86a'); cg.addColorStop(1,'#8a6a1e');
+    ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(L*0.58,-9); ctx.lineTo(L+18,0); ctx.lineTo(L*0.58,9); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(90,64,16,.7)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.fillStyle='#c8a84a'; for(let k=1;k<4;k++){ ctx.beginPath(); ctx.ellipse(L*0.58-k*13,0,2.6,7,0,0,7); ctx.fill(); }   // 節輪
+  } else if(wk==='sansetsu'){ const L=ext*0.34+11, a1=Math.sin(gf*0.55)*1.0, a2=Math.sin(gf*0.55+1.1)*1.2;   // 三節棍：三本が節で折れる
+    ctx.lineCap='round';
+    const seg=function(x0,y0,ang,col){ const x1=x0+Math.cos(ang)*L, y1=y0+Math.sin(ang)*L;
+      ctx.strokeStyle=col; ctx.lineWidth=5.2; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+      ctx.strokeStyle='#e0b64a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x1,y1,2.6,0,7); ctx.stroke(); return [x1,y1]; };
+    let q=seg(0,0,0,'#6a4a24'); q=seg(q[0],q[1],a1,'#7a5628'); seg(q[0],q[1],a1+a2,'#6a4a24');
+  } else if(wk==='bostaff'){ const L=ext*0.62+34;                              // 六尺棒：前後に同じだけ伸びる長い棒
+    ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-L*0.72,0); ctx.lineTo(L,0); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.20)'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(-L*0.68,-1.4); ctx.lineTo(L-3,-1.4); ctx.stroke();
+    ctx.fillStyle='#4a3a20'; ctx.fillRect(L-8,-4,7,8); ctx.fillRect(-L*0.72,-4,7,8);   // 石突きの金具
+    ctx.strokeStyle='#c8a870'; ctx.lineWidth=1.4; for(const q of [-L*0.34, 0, L*0.4]){ ctx.beginPath(); ctx.moveTo(q,-3.4); ctx.lineTo(q,3.4); ctx.stroke(); }
+  } else if(wk==='kali'){ const L=ext*0.4+18;                                   // カリ：短い棒を左右に一本ずつ
+    for(const off of [-4,5]){ ctx.save(); ctx.translate(0,off); ctx.rotate(off>0?0.34:-0.22);
+      ctx.strokeStyle='#8a5a2a'; ctx.lineWidth=4.6; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(-7,0); ctx.lineTo(L,0); ctx.stroke();
+      ctx.strokeStyle='#d89a5a'; ctx.lineWidth=1.4;
+      for(let i=2;i<L-2;i+=6){ ctx.beginPath(); ctx.moveTo(i,-2.4); ctx.lineTo(i,2.4); ctx.stroke(); }
+      ctx.restore(); }
+  } else if(wk==='meteorh'){ const L=ext*0.7+40, sw=Math.sin(gf*0.5)*0.6;      // 流星錘：長い鎖の先に錘
+    const ex=Math.cos(sw)*L, ey=Math.sin(sw)*L;
+    ctx.strokeStyle='#8a8f9a'; ctx.lineWidth=2.2;
+    for(let k=0;k<9;k++){ const u=k/9, v=(k+1)/9;
+      ctx.beginPath(); ctx.ellipse(ex*(u+v)/2, ey*(u+v)/2, 3.4, 2.2, sw, 0,7); ctx.stroke(); }
+    ctx.fillStyle=radGrad(ex-3,ey-3,13,'#ffd8a0','#6a4410'); ctx.beginPath(); ctx.ellipse(ex,ey,11,9,sw,0,7); ctx.fill();
+    ctx.strokeStyle='#3a2408'; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.fillStyle='#ffb85a'; ctx.beginPath(); ctx.arc(ex-3,ey-3,2.6,0,7); ctx.fill();
+  } else if(wk==='ironfan'){ const open=(player.atk&&player.atk.def&&player.atk.def.fanOpen)?1:0, R=(open?24:8)+ext*0.06;
+    ctx.save(); ctx.translate(4,0);
+    if(open){ const g=ctx.createLinearGradient(0,0,R,0); g.addColorStop(0,'#e05a7a'); g.addColorStop(0.6,'#ffd6e8'); g.addColorStop(1,'#ffffff');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,R,-1.15,1.15); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#7a2038'; ctx.lineWidth=1.6; ctx.stroke();
+      ctx.strokeStyle='rgba(120,32,56,.6)'; ctx.lineWidth=1.2;
+      for(let k=-3;k<=3;k++){ const a=k*0.33; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R); ctx.stroke(); } }
+    else { ctx.fillStyle='#e05a7a'; ctx.beginPath(); ctx.moveTo(-2,-4); ctx.lineTo(R+16,-2.4); ctx.lineTo(R+16,2.4); ctx.lineTo(-2,4); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#7a2038'; ctx.lineWidth=1.4; ctx.stroke(); }
+    ctx.fillStyle='#c8a84a'; ctx.beginPath(); ctx.arc(0,0,3,0,7); ctx.fill();
+    ctx.restore();
+  } else if(wk==='orb'){ const R=9+ext*0.05, fy=-10+Math.sin(gf*0.13)*4;        // 星霊オーブ：手から浮いた球
+    ctx.save(); ctx.translate(10,fy);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(0,0,R*2.2,'rgba(127,208,255,.8)','rgba(127,208,255,0)'); ctx.beginPath(); ctx.arc(0,0,R*2.2,0,7); ctx.fill(); ctx.restore();
+    ctx.fillStyle=radGrad(-R*0.35,-R*0.35,R*1.3,'#ffffff','#2a6a9a'); ctx.beginPath(); ctx.arc(0,0,R,0,7); ctx.fill();
+    for(let k=0;k<3;k++){ const a=gf*0.07+k*(TAU/3); drawStar(Math.cos(a)*(R+7), Math.sin(a)*(R+7)*0.6, 1.4, 3.4, k?'#b0e8ff':'#ffffff'); }
+    ctx.restore();
+  } else if(wk==='icerod'){ const L=ext*0.8+26;                                 // 氷晶のロッド：先端に結晶が咲く
+    ctx.strokeStyle='#4a6a8a'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(L*0.68,0); ctx.stroke();
+    const cg=ctx.createLinearGradient(L*0.6,-14,L+14,14); cg.addColorStop(0,'#ffffff'); cg.addColorStop(.5,'#8fd8ff'); cg.addColorStop(1,'#2a7ab0');
+    ctx.fillStyle=cg;
+    for(const q of [[0,1.0],[-0.75,0.62],[0.75,0.62]]){ ctx.save(); ctx.rotate(q[0]); const S=(L*0.34+13)*q[1];
+      ctx.beginPath(); ctx.moveTo(L*0.62,-4.2); ctx.lineTo(L*0.62+S,0); ctx.lineTo(L*0.62,4.2); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.4+0.2*Math.sin(gf*0.22);
+    ctx.fillStyle=radGrad(L*0.8,0,16,'rgba(143,216,255,.9)','rgba(143,216,255,0)'); ctx.beginPath(); ctx.arc(L*0.8,0,16,0,7); ctx.fill(); ctx.restore();
+  } else if(wk==='bell'){ const sw=Math.sin(gf*0.4)*0.5;                        // 祈祷の鈴：房のついた神楽鈴
+    ctx.save(); ctx.rotate(sw*0.4);
+    ctx.strokeStyle='#8a2a2a'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(10,0); ctx.stroke();
+    for(let k=0;k<3;k++){ const bx=14+k*7, by=(k-1)*8;
+      ctx.fillStyle=radGrad(bx-2,by-2,8,'#fff6c0','#a07a10'); ctx.beginPath(); ctx.arc(bx,by,5.6,0,7); ctx.fill();
+      ctx.strokeStyle='#6a4a08'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(bx-5,by+2); ctx.lineTo(bx+5,by+2); ctx.stroke(); }
+    ctx.strokeStyle='#e05a7a'; ctx.lineWidth=2;                                  // 房
+    for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(8,2); ctx.quadraticCurveTo(4+k*2, 12+sw*4, 0+k*3, 20+sw*6); ctx.stroke(); }
+    ctx.restore();
+  } else if(wk==='tarot'){ const sp=gf*0.06;                                    // タロット：手の周りを回る札
+    for(let k=0;k<4;k++){ const a=sp+k*(TAU/4), rr=15+Math.sin(gf*0.1+k)*3;
+      ctx.save(); ctx.translate(10+Math.cos(a)*rr, Math.sin(a)*rr*0.7); ctx.rotate(a*0.6);
+      ctx.fillStyle=(k%2)?'#f4eeff':'#d6b0ff'; ctx.fillRect(-5,-8,10,16);
+      ctx.strokeStyle='#6a3aa0'; ctx.lineWidth=1.1; ctx.strokeRect(-5,-8,10,16);
+      drawStar(0,0,1.2,3.0,'#b98aff'); ctx.restore(); }
+  } else if(wk==='broom'){ const L=ext*0.9+30;                                  // 星屑の箒：柄の先が穂に広がる
+    ctx.strokeStyle='#6a4a2a'; ctx.lineWidth=4.4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-14,0); ctx.lineTo(L*0.66,0); ctx.stroke();
+    ctx.strokeStyle='#c88ad0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(L*0.6,-4); ctx.lineTo(L*0.6,4); ctx.stroke();
+    ctx.strokeStyle='#d8b06a'; ctx.lineWidth=1.8;
+    for(let k=-4;k<=4;k++){ ctx.beginPath(); ctx.moveTo(L*0.64,0);
+      ctx.quadraticCurveTo(L*0.85, k*2.2, L+6, k*7.5); ctx.stroke(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(let k=0;k<3;k++) drawStar(L*0.9+Math.sin(gf*0.2+k)*6, (k-1)*8, 1.2, 3.2, '#ffd0f0'); ctx.restore();
+  } else if(wk==='pillar'){ const L=ext*0.9+52;                                 // 鉄柱：ただの角柱。太さで語る
+    const g=ctx.createLinearGradient(0,-15,0,15); g.addColorStop(0,'#e2e6ee'); g.addColorStop(.45,'#9aa1ac'); g.addColorStop(1,'#4a5058');
+    ctx.fillStyle=g; ctx.fillRect(-8,-15,L+8,30);
+    ctx.strokeStyle='rgba(20,24,30,.6)'; ctx.lineWidth=2; ctx.strokeRect(-8,-15,L+8,30);
+    ctx.fillStyle='#3a4048'; for(let k=0;k<4;k++) ctx.fillRect(-4+k*(L/4),-15,5,30);   // 締め輪
+    ctx.fillStyle='rgba(255,255,255,.28)'; ctx.fillRect(-6,-12,L+4,5);
+  } else if(wk==='anchor'){ const L=ext*0.72+40;                                // 錨：長い柄の先が両側に湾曲した爪
+    ctx.strokeStyle='#5a6a72'; ctx.lineWidth=8; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-14,0); ctx.lineTo(L,0); ctx.stroke();
+    ctx.strokeStyle='#8ab0c0'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(L*0.36,-16); ctx.lineTo(L*0.36,16); ctx.stroke();   // ストック
+    ctx.strokeStyle='#7aa0b0'; ctx.lineWidth=8; ctx.lineCap='round';
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.moveTo(L*0.92,0);
+      ctx.quadraticCurveTo(L*0.96, sgn*22, L+12, sgn*26); ctx.stroke(); }
+    ctx.fillStyle='#cfe6f0'; for(const sgn of [-1,1]){ ctx.beginPath();
+      ctx.moveTo(L+8,sgn*20); ctx.lineTo(L+22,sgn*30); ctx.lineTo(L+6,sgn*30); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='#8a8f9a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(-16,0,6,0,7); ctx.stroke();   // 環
+  } else if(wk==='jackdrill'){ const L=ext*0.55+30, sp=gf*0.9;                  // 削岩ドリル：回る螺旋
+    ctx.fillStyle='#3a3e46'; ctx.fillRect(-14,-11,26,22);                        // 機関部
+    ctx.fillStyle='#e0a020'; ctx.fillRect(-12,-9,7,18);
+    ctx.strokeStyle='#22262c'; ctx.lineWidth=2; ctx.strokeRect(-14,-11,26,22);
+    const dg=ctx.createLinearGradient(12,-8,L+18,8); dg.addColorStop(0,'#e6eaf2'); dg.addColorStop(.5,'#9aa2ae'); dg.addColorStop(1,'#5a6068');
+    ctx.fillStyle=dg; ctx.beginPath(); ctx.moveTo(12,-8); ctx.lineTo(L+18,0); ctx.lineTo(12,8); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,220,120,.85)'; ctx.lineWidth=2;                     // 螺旋の溝（回って見えるよう位相をずらす）
+    for(let k=0;k<5;k++){ const u=((k*0.2+sp/6)%1), x0=12+(L+6)*u, w2=8*(1-u);
+      ctx.beginPath(); ctx.moveTo(x0,-w2); ctx.lineTo(x0+7,w2); ctx.stroke(); }
+  } else if(wk==='bshield'){ const R=20+ext*0.06;                               // 大盾：面で見せる。武器というより壁
+    const g=ctx.createLinearGradient(-4,-R,14,R); g.addColorStop(0,'#f0f3f8'); g.addColorStop(.5,'#b0b6c2'); g.addColorStop(1,'#5a606c');
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(2,-R); ctx.quadraticCurveTo(20,-R*0.6, 20,0); ctx.quadraticCurveTo(20,R*0.6, 2,R);
+    ctx.quadraticCurveTo(-6,R*0.5, -6,0); ctx.quadraticCurveTo(-6,-R*0.5, 2,-R); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#3a3f48'; ctx.lineWidth=2.6; ctx.stroke();
+    ctx.fillStyle='#c8a84a'; ctx.beginPath(); ctx.arc(7,0,5.4,0,7); ctx.fill();    // ボス（中央の突起）
+    ctx.strokeStyle='#8a6a1e'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(2,-R*0.55); ctx.lineTo(2,R*0.55); ctx.stroke();
+  } else if(wk==='chainsaw'){ const L=ext*0.6+34, sp=(gf*1.6)%8;                 // チェーンソー：走るチェーンの歯
+    ctx.fillStyle='#d43a3a'; ctx.fillRect(-16,-10,24,20);                          // 本体
+    ctx.strokeStyle='#7a1414'; ctx.lineWidth=2; ctx.strokeRect(-16,-10,24,20);
+    ctx.fillStyle='#3a3e46'; ctx.fillRect(-12,-6,6,12);
+    const bg=ctx.createLinearGradient(8,-7,L+14,7); bg.addColorStop(0,'#c8ccd4'); bg.addColorStop(1,'#7a8088');
+    ctx.fillStyle=bg; ctx.beginPath();
+    ctx.moveTo(8,-7); ctx.lineTo(L+6,-5); ctx.quadraticCurveTo(L+16,0, L+6,5); ctx.lineTo(8,7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#f0f4fa';                                                        // 歯（位相をずらして走らせる）
+    for(let x0=10-sp;x0<L+4;x0+=8){ ctx.beginPath(); ctx.moveTo(x0,-7); ctx.lineTo(x0+4,-11); ctx.lineTo(x0+6,-7); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x0+2,7); ctx.lineTo(x0+6,11); ctx.lineTo(x0+8,7); ctx.closePath(); ctx.fill(); }
+  } else if(wk==='whip'){ const L=ext*1.1+70, w=Math.sin(gf*0.42);               // 鞭：垂れてうねる一本の帯
+    ctx.fillStyle='#4a3218'; ctx.fillRect(-12,-3.4,15,6.8);
+    ctx.strokeStyle='#c8a86a'; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(3,0);
+    for(let k=1;k<=6;k++){ const u=k/6, x0=3+L*u, yy=Math.sin(w*2+u*4.2)*14*u;
+      ctx.lineWidth=4.4*(1-u*0.75); ctx.lineTo(x0,yy); }
+    ctx.stroke();
+    ctx.strokeStyle='rgba(60,40,16,.6)'; ctx.lineWidth=1.2;
+    for(let k=1;k<6;k++){ const u=k/6, x0=3+L*u, yy=Math.sin(w*2+u*4.2)*14*u;
+      ctx.beginPath(); ctx.moveTo(x0,yy-3); ctx.lineTo(x0,yy+3); ctx.stroke(); }
+  } else if(wk==='boomerang'){ const R=13+ext*0.05;                              // ブーメラン：への字の板が回る
+    ctx.save(); ctx.translate(9,-2); ctx.rotate(gf*0.38);
+    const g=ctx.createLinearGradient(-R,-R,R,R); g.addColorStop(0,'#eafff2'); g.addColorStop(1,'#2a9a60');
+    ctx.fillStyle=g; ctx.beginPath();
+    ctx.moveTo(-R,-R*0.35); ctx.quadraticCurveTo(0,-R*0.9, R*0.5,R*0.7);
+    ctx.lineTo(R*0.16,R*0.95); ctx.quadraticCurveTo(-R*0.2,-R*0.25, -R*0.95,R*0.05); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#146a3a'; ctx.lineWidth=1.6; ctx.stroke(); ctx.restore();
+  } else if(wk==='yoyo'){ const L=ext*0.7+30, sw=Math.sin(gf*0.45);              // ヨーヨー：糸で垂れる二枚重ね
+    const ex=L*0.9, ey=Math.abs(sw)*16;
+    ctx.strokeStyle='rgba(255,240,255,.85)'; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(2,0); ctx.quadraticCurveTo(ex*0.5, ey*0.3, ex, ey); ctx.stroke();
+    ctx.fillStyle=radGrad(ex-3,ey-3,12,'#ffd0f0','#8a2a70'); ctx.beginPath(); ctx.arc(ex,ey,9.5,0,7); ctx.fill();
+    ctx.strokeStyle='#5a1050'; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.fillStyle='#ff8ae0'; ctx.beginPath(); ctx.ellipse(ex,ey,9.5,3.2,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(ex-3.4,ey-3.4,2.4,0,7); ctx.fill();
+  } else if(wk==='crossbow'){ const L=ext*0.5+26;                                // クロスボウ：横に張った弓と番えた矢
+    ctx.fillStyle='#5a4228'; ctx.beginPath(); ctx.moveTo(-14,-3.6); ctx.lineTo(L,-3.0); ctx.lineTo(L,3.0); ctx.lineTo(-14,3.6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#2e2216'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.strokeStyle='#7a6242'; ctx.lineWidth=4; ctx.lineCap='round';               // 弓（上下に張り出す）
+    ctx.beginPath(); ctx.moveTo(L*0.66,-19); ctx.quadraticCurveTo(L*0.86,0, L*0.66,19); ctx.stroke();
+    ctx.strokeStyle='rgba(240,244,250,.9)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(L*0.66,-19); ctx.lineTo(L*0.30,0); ctx.lineTo(L*0.66,19); ctx.stroke();
+    ctx.fillStyle='#d6deec'; ctx.beginPath(); ctx.moveTo(L*0.3,-1.6); ctx.lineTo(L+14,0); ctx.lineTo(L*0.3,1.6); ctx.closePath(); ctx.fill();
+  } else if(wk==='canesword'){ const drawn=!!(player.atk&&player.atk.def&&player.atk.def.caneDraw), L=ext*1.0+34;
+    ctx.strokeStyle='#3a2a16'; ctx.lineWidth=5.6; ctx.lineCap='round';             // 杖（鞘）
+    ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(drawn?L*0.34:L,0); ctx.stroke();
+    ctx.strokeStyle='#c8a84a'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.arc(-11,-4,5,0.4,4.2); ctx.stroke();   // 握りの曲がり
+    if(drawn){ const bl=ctx.createLinearGradient(L*0.3,-2.6,L+14,2.6);
+      bl.addColorStop(0,'#ffffff'); bl.addColorStop(.5,'#ffe9a0'); bl.addColorStop(1,'#a08020');
+      ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L*0.34,-2.4); ctx.lineTo(L+4,-1.4); ctx.lineTo(L+16,0); ctx.lineTo(L+4,1.4); ctx.lineTo(L*0.34,2.4); ctx.closePath(); ctx.fill(); }
+  } else if(wk==='nodachi'){ const L=ext*1.35+96;                                // 野太刀：巨大な反り。柄も長い
+    ctx.fillStyle='#33202a'; ctx.fillRect(-24,-3.4,26,6.8);
+    ctx.strokeStyle='#c05a6a'; ctx.lineWidth=1.2; for(let i=-23;i<1;i+=3.6){ ctx.beginPath(); ctx.moveTo(i,-3.4); ctx.lineTo(i+2.4,3.4); ctx.stroke(); }
+    ctx.fillStyle=radGrad(3,0,7,'#ffd0d0','#8a3040'); ctx.beginPath(); ctx.ellipse(3,0,4.0,7.4,0,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(5,-6,L+16,6); bl.addColorStop(0,'#fff4f4'); bl.addColorStop(.5,'#ffd0d0'); bl.addColorStop(1,'#a06a70');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(6,-5.4);
+    ctx.quadraticCurveTo(L*0.55,-9.6,L+4,-3.6); ctx.lineTo(L+20,0); ctx.lineTo(L+4,3.2);
+    ctx.quadraticCurveTo(L*0.55,-0.6,6,4.8); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(9,-3.0); ctx.quadraticCurveTo(L*0.55,-6.6,L+2,-2.2); ctx.stroke();
+  } else if(wk==='kodachi'){ const L=ext*0.62+18;                                // 小太刀：短い一本。反りは浅い
+    ctx.fillStyle='#2a2e36'; ctx.fillRect(-9,-2.4,10,4.8);
+    ctx.fillStyle=radGrad(2,0,4,'#eaf6ff','#6a7a90'); ctx.beginPath(); ctx.ellipse(2,0,2.6,4.6,0,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(4,-3,L+10,3); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.5,'#eaf6ff'); bl.addColorStop(1,'#93a8bd');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(5,-2.8);
+    ctx.quadraticCurveTo(L*0.55,-4.2,L,-2.0); ctx.lineTo(L+11,0); ctx.lineTo(L,1.8);
+    ctx.quadraticCurveTo(L*0.55,-0.4,5,2.6); ctx.closePath(); ctx.fill();
+  } else if(wk==='nagamaki'){ const L=ext*0.9+40;                                // 長巻：柄と刃がほぼ同じ長さ
+    ctx.strokeStyle='#2e3a30'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-30,0); ctx.lineTo(L*0.5,0); ctx.stroke();
+    ctx.strokeStyle='#a8d8b0'; ctx.lineWidth=1.4;
+    for(let i=-28;i<L*0.46;i+=6){ ctx.beginPath(); ctx.moveTo(i,-3.4); ctx.lineTo(i+3.4,3.4); ctx.stroke(); }
+    ctx.fillStyle='#7a9a80'; ctx.beginPath(); ctx.ellipse(L*0.5,0,3.2,6.4,0,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(L*0.5,-5,L+14,5); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.5,'#e0ffe8'); bl.addColorStop(1,'#7aa886');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(L*0.52,-4.4);
+    ctx.quadraticCurveTo(L*0.78,-6.6,L+2,-2.8); ctx.lineTo(L+16,0); ctx.lineTo(L+2,2.6);
+    ctx.quadraticCurveTo(L*0.78,-0.6,L*0.52,4.0); ctx.closePath(); ctx.fill();
+  } else if(wk==='muramasa'){ const L=ext*1.1+40;                                // 妖刀：刃から血のような滲みが立ちのぼる
+    ctx.fillStyle='#2a1018'; ctx.fillRect(-14,-3,16,6);
+    ctx.strokeStyle='#8a1030'; ctx.lineWidth=1.2; for(let i=-13;i<1;i+=3.2){ ctx.beginPath(); ctx.moveTo(i,-3); ctx.lineTo(i+2.2,3); ctx.stroke(); }
+    ctx.fillStyle=radGrad(3,0,6,'#ff9ab0','#6a0a20'); ctx.beginPath(); ctx.ellipse(3,0,3.4,6.2,0,0,7); ctx.fill();
+    const bl=ctx.createLinearGradient(5,-4,L+12,4); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.4,'#ffc4d0'); bl.addColorStop(1,'#8a1030');
+    ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(6,-3.8);
+    ctx.quadraticCurveTo(L*0.55,-6.8,L+2,-2.8); ctx.lineTo(L+14,0); ctx.lineTo(L+2,2.4);
+    ctx.quadraticCurveTo(L*0.55,-0.6,6,3.6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,60,110,.9)'; ctx.lineWidth=1.4; ctx.beginPath();     // 血の刃文
+    ctx.moveTo(8,-2.0); ctx.quadraticCurveTo(L*0.5,-5.0,L,-1.6); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.30+0.16*Math.sin(gf*0.24);
+    ctx.fillStyle=radGrad(L*0.6,0,18,'rgba(255,40,90,.9)','rgba(255,40,90,0)'); ctx.beginPath(); ctx.ellipse(L*0.6,0,L*0.6,9,0,0,7); ctx.fill(); ctx.restore();
+  } else if(wk==='shirasaya'){ const L=ext*1.05+52;                              // 白鞘：抜き身は白木の鞘に納まっている
+    const drawn=!!(player.atk&&player.atk.def&&player.atk.def.iai);
+    ctx.fillStyle='#e6dcc4'; ctx.fillRect(-16,-3.6,18,7.2);                        // 白木の柄
+    ctx.strokeStyle='#c2b48a'; ctx.lineWidth=1.2; ctx.strokeRect(-16,-3.6,18,7.2);
+    if(!drawn){ const sg=ctx.createLinearGradient(4,-5,L+8,5);
+      sg.addColorStop(0,'#fffaf0'); sg.addColorStop(.5,'#efe6d2'); sg.addColorStop(1,'#c8bb9a');
+      ctx.fillStyle=sg; ctx.beginPath(); ctx.moveTo(4,-4.6);
+      ctx.quadraticCurveTo(L*0.55,-6.0,L+6,-3.2); ctx.quadraticCurveTo(L+11,0,L+6,3.0);
+      ctx.quadraticCurveTo(L*0.55,-0.2,4,4.2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(150,138,110,.7)'; ctx.lineWidth=1.2; ctx.stroke(); }
+    else { const bl=ctx.createLinearGradient(4,-4,L+16,4); bl.addColorStop(0,'#ffffff'); bl.addColorStop(.5,'#f4f8ff'); bl.addColorStop(1,'#a8b6c8');
+      ctx.fillStyle=bl; ctx.beginPath(); ctx.moveTo(5,-3.6);
+      ctx.quadraticCurveTo(L*0.55,-6.2,L+2,-2.6); ctx.lineTo(L+18,0); ctx.lineTo(L+2,2.2);
+      ctx.quadraticCurveTo(L*0.55,-0.4,5,3.4); ctx.closePath(); ctx.fill(); }
+  } else if(wk==='revolver'){                                                     // 大型リボルバー：太い銃身と回転弾倉
+    ctx.fillStyle='#3a3630'; ctx.beginPath(); ctx.moveTo(-4,2); ctx.lineTo(2,2); ctx.lineTo(4,14); ctx.lineTo(-6,14); ctx.closePath(); ctx.fill();   // 銃把
+    ctx.fillStyle='#c8a020'; ctx.fillRect(-2,-6,30,8);                              // 銃身
+    ctx.strokeStyle='#6a5210'; ctx.lineWidth=1.6; ctx.strokeRect(-2,-6,30,8);
+    ctx.fillStyle='#8a7a30'; ctx.beginPath(); ctx.arc(4,-1,6.4,0,7); ctx.fill();     // 弾倉
+    ctx.strokeStyle='#4a3a08'; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.fillStyle='#2a2418'; for(let k=0;k<6;k++){ const a=gf*0.05+k*(TAU/6);
+      ctx.beginPath(); ctx.arc(4+Math.cos(a)*3.6,-1+Math.sin(a)*3.6,1.1,0,7); ctx.fill(); }
+    ctx.fillStyle='#ffe9a0'; ctx.fillRect(26,-5,3,2);                                // 照星
+  } else if(wk==='smg'){                                                            // 短機関銃：短い銃身と長い弾倉
+    ctx.fillStyle='#4a4e56'; ctx.fillRect(-6,-6,26,9);
+    ctx.fillStyle='#2e3238'; ctx.fillRect(-8,-2,8,12);                               // 銃把
+    ctx.fillStyle='#3a3e46'; ctx.fillRect(6,2,5,16);                                 // 弾倉
+    ctx.fillStyle='#8a8f9a'; ctx.fillRect(18,-4,16,5);                               // 銃身
+    ctx.fillStyle='#22262c'; for(let k=0;k<4;k++) ctx.fillRect(20+k*4,-4,2,5);        // 放熱スリット
+    ctx.strokeStyle='#1a1d22'; ctx.lineWidth=1.4; ctx.strokeRect(-6,-6,26,9);
+  } else if(wk==='laserrifle'){ const L=26+ext*0.12;                                // レーザーライフル：発光する集光器
+    ctx.fillStyle='#3a4650'; ctx.fillRect(-10,-6,26,10);
+    ctx.fillStyle='#242c34'; ctx.fillRect(-12,-1,8,13);
+    ctx.fillStyle='#5a6a76'; ctx.fillRect(16,-4,L,7);
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.3*Math.sin(gf*0.3);
+    ctx.fillStyle='#3ad0e8'; ctx.fillRect(16,-2,L,3);
+    ctx.fillStyle=radGrad(16+L,0,12,'rgba(125,240,255,.9)','rgba(125,240,255,0)'); ctx.beginPath(); ctx.arc(16+L,0,12,0,7); ctx.fill(); ctx.restore();
+    ctx.strokeStyle='#1a2228'; ctx.lineWidth=1.4; ctx.strokeRect(-10,-6,26,10);
+  } else if(wk==='flamer'){                                                          // 火炎放射器：太いノズルと種火
+    ctx.fillStyle='#5a3a1a'; ctx.fillRect(-12,-7,22,12);
+    ctx.fillStyle='#2e2418'; ctx.fillRect(-14,-1,8,13);
+    ctx.fillStyle='#8a5a2a'; ctx.beginPath(); ctx.moveTo(10,-7); ctx.lineTo(30,-10); ctx.lineTo(30,8); ctx.lineTo(10,5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#3a2410'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter';                               // 種火
+    const fw=0.7+0.3*Math.sin(gf*0.5);
+    ctx.fillStyle=radGrad(32,-1,12*fw,'rgba(255,180,60,.95)','rgba(255,90,20,0)');
+    ctx.beginPath(); ctx.ellipse(32,-1,12*fw,7*fw,0,0,7); ctx.fill(); ctx.restore();
+  } else if(wk==='railgun'){ const L=34+ext*0.16, ch=(player.atk&&player.atk.def&&player.atk.def.railCharge)?1:0;
+    ctx.fillStyle='#2e3a44'; ctx.fillRect(-14,-8,28,13);                              // 機関部
+    ctx.fillStyle='#1a2028'; ctx.fillRect(-16,0,9,14);
+    ctx.fillStyle='#6a7a88'; ctx.fillRect(14,-9,L,5); ctx.fillRect(14,4,L,5);          // 二本のレール
+    ctx.strokeStyle='#101820'; ctx.lineWidth=1.4; ctx.strokeRect(-14,-8,28,13);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const pw=(ch?0.7:0.3)+0.3*Math.sin(gf*(ch?0.8:0.2));
+    ctx.globalAlpha=pw; ctx.fillStyle='#bffcff'; ctx.fillRect(14,-4,L,8);              // レール間の帯電
+    for(let k=0;k<4;k++){ const x0=16+k*(L/4);                                          // 走る火花
+      ctx.fillStyle='#ffffff'; ctx.fillRect(x0+((gf*3+k*9)%(L/4)),-4,2,8); }
+    ctx.fillStyle=radGrad(14+L,0,16*pw,'rgba(191,252,255,.95)','rgba(191,252,255,0)');
+    ctx.beginPath(); ctx.arc(14+L,0,16*pw,0,7); ctx.fill(); ctx.restore();
   } else { // dagger
     ctx.fillStyle='#caa54a'; ctx.fillRect(-1,-4,4,9);
     ctx.fillStyle=radGrad(1,0,3,'#ffe98a','#b8860b'); ctx.beginPath(); ctx.arc(1,0,2.4,0,7); ctx.fill();
@@ -12837,6 +13959,10 @@ function drawCosFront(C,lean){
     ctx.fillStyle=q.f; ctx.fillRect(-5,-38,3.2,30);
     ctx.restore();
     ctx.fillStyle=q.b; ctx.fillRect(-12,-17,24,4);
+  } else if(a==='cap'){                              // 略帽は帽子側で描くので、体には肩章だけ足す
+    for(const sg of [-1,1]){ ctx.save(); ctx.scale(sg,1);
+      ctx.fillStyle=q.f; roundRect(7,-33,10,5,2); ctx.fill();
+      ctx.fillStyle=q.a; ctx.fillRect(9,-32,6,1.6); ctx.restore(); }
   } else if(a==='crown'){                            // 冠：帽子や兜の上に載るよう、頭より一段高く
     ctx.fillStyle=radGrad(0,-68,10,q.f,q.a);
     ctx.beginPath();
@@ -13175,7 +14301,8 @@ function mackHead(lean){
   ctx.restore();
 }
 // テンガロンハット。シルエットだけでマックと分かる一番強い記号なので独立させる
-function drawStetson(){ ctx.save(); ctx.translate(0,-14);
+function drawStetson(){ if(cosHead()) return;   // 服のかぶり物が優先
+  ctx.save(); ctx.translate(0,-14);
   ctx.fillStyle='#4a3018'; ctx.beginPath(); ctx.ellipse(0,2,23,7,0,0,7); ctx.fill();          // つば
   ctx.fillStyle='#5c3c1e'; ctx.beginPath();                                                    // クラウン（中央がへこむ）
   ctx.moveTo(-12,2); ctx.quadraticCurveTo(-13,-13,-4,-15); ctx.quadraticCurveTo(0,-11,4,-15);
@@ -13378,7 +14505,78 @@ function drawMackAmmo(p){
   if(n<=0){ ctx.fillStyle='#ff9a5a'; ctx.font='bold 11px "Hiragino Maru Gothic ProN",sans-serif';
     ctx.textAlign='center'; ctx.fillText('RELOAD', sx, sy-10); ctx.textAlign='left'; }
   ctx.restore(); }
-function drawTopHat(){ ctx.save(); ctx.translate(0,-15);
+// ── 服・防具による「かぶり物」の差し替え ──
+// 色を変えるだけでは同じキャラに見える。マックの十徳帽やワッチのシルクハットのような
+// 顔まわりの目印そのものを取り替えると、遠目にも「別の装備をしている」と分かる。
+// 各キャラ固有の帽子を描く関数から、まずここを通す（戻り値 true なら固有の帽子は描かない）
+function cosHead(){ const C=wornCostume(player); return (C&&C.head)?C.head:null; }
+// 頭の描画関数はキャラごとに別（マックは十徳帽、ワッチはシルクハット）。
+// そこから描くと持っていないキャラに出せないので、抑止だけをそちらへ任せ、
+// 実際の描画は体の前の装飾と同じ一箇所（drawCosFront）から出す
+function drawCosHat(C){
+  const h=C&&C.head; if(!h) return false;
+  const q=C.pal;
+  ctx.save(); ctx.translate(0,-52);
+  if(h==='helm'){                                    // 騎士兜：面頬つき
+    ctx.fillStyle=radGrad(0,-8,20,q.f,q.a);
+    ctx.beginPath(); ctx.ellipse(0,-6,15,15,0,Math.PI,0); ctx.fill();
+    ctx.fillRect(-15,-6,30,14);
+    ctx.fillStyle=q.a; ctx.fillRect(-15,4,30,4);
+    ctx.fillStyle='#15171c'; for(let k=-2;k<=2;k++) ctx.fillRect(-11+k*0+(k*5),-2,3,8);   // 面頬の隙間
+    ctx.fillStyle=q.b; ctx.beginPath();                                                    // 前立て
+    ctx.moveTo(-2,-21); ctx.lineTo(2,-21); ctx.lineTo(4,-8); ctx.lineTo(-4,-8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#e0463a'; ctx.beginPath();                                              // 兜の房
+    ctx.moveTo(0,-22); ctx.quadraticCurveTo(12,-30,16,-14); ctx.quadraticCurveTo(6,-20,0,-18); ctx.closePath(); ctx.fill();
+  } else if(h==='horn'){                             // 角兜
+    ctx.fillStyle=radGrad(0,-6,18,q.f,q.a);
+    ctx.beginPath(); ctx.ellipse(0,-2,15,13,0,Math.PI,0); ctx.fill(); ctx.fillRect(-15,-2,30,6);
+    ctx.fillStyle=q.b;
+    for(const sg of [-1,1]){ ctx.save(); ctx.scale(sg,1);
+      ctx.beginPath(); ctx.moveTo(9,-8); ctx.quadraticCurveTo(26,-16,24,-34);
+      ctx.quadraticCurveTo(18,-20,7,-13); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle='#c8a24a'; ctx.fillRect(-15,2,30,3.4);
+  } else if(h==='bandana'){                          // 鉢巻き（結び目が風になびく）
+    const bw=Math.sin(gf*0.12)*3;
+    ctx.fillStyle=q.a; ctx.fillRect(-15,-6,30,7);
+    ctx.fillStyle=q.f; ctx.fillRect(-15,-6,30,2.6);
+    ctx.fillStyle=q.a; ctx.beginPath();
+    ctx.moveTo(-13,-4); ctx.quadraticCurveTo(-28+bw,2,-30+bw,12); ctx.lineTo(-22+bw,10);
+    ctx.quadraticCurveTo(-20,0,-11,0); ctx.closePath(); ctx.fill();
+  } else if(h==='hood'){                             // 頭巾（目元だけ覗く）
+    ctx.fillStyle=q.a; ctx.beginPath();
+    ctx.moveTo(-17,6); ctx.quadraticCurveTo(-19,-20,0,-22); ctx.quadraticCurveTo(19,-20,17,6);
+    ctx.quadraticCurveTo(0,-2,-17,6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=q.b; ctx.beginPath();
+    ctx.moveTo(-17,6); ctx.quadraticCurveTo(-8,0,0,0); ctx.quadraticCurveTo(-8,4,-14,10); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0,-1,13,5,0,0,7); ctx.fill();
+  } else if(h==='straw'){                            // 編笠：大きく平たい
+    ctx.fillStyle=q.f; ctx.beginPath(); ctx.ellipse(0,-2,28,10,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.b; ctx.beginPath(); ctx.ellipse(0,-2,28,9,0,Math.PI,0); ctx.fill();
+    ctx.strokeStyle=q.a; ctx.lineWidth=1.2;
+    for(let k=1;k<5;k++){ ctx.beginPath(); ctx.ellipse(0,-2,28-k*5.4,(10-k*1.8),0,Math.PI,0); ctx.stroke(); }
+    ctx.fillStyle=q.a; ctx.fillRect(-28,-3,56,3);
+  } else if(h==='tophat'){                           // シルクハット
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(0,2,21,6.5,0,0,7); ctx.fill();
+    ctx.fillStyle=q.b; ctx.fillRect(-11,-18,22,20);
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(0,-18,11,4,0,0,7); ctx.fill();
+    ctx.fillStyle=q.f; ctx.fillRect(-11,-4,22,4.4);
+    ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(-9,-16,4,15);
+  } else if(h==='cap'){                              // 略帽（つばが前へ突き出す）
+    ctx.fillStyle=q.b; ctx.beginPath(); ctx.ellipse(0,-3,14,11,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.f; ctx.beginPath(); ctx.ellipse(-3,-6,9,7,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle=q.a; ctx.beginPath(); ctx.ellipse(11,-2,15,4.6,0.12,0,7); ctx.fill();
+    ctx.fillStyle=q.a; ctx.fillRect(-14,-4,28,3);
+  } else if(h==='tiara'){                            // 宝冠
+    ctx.fillStyle=radGrad(0,-12,12,q.f,q.a); ctx.beginPath();
+    ctx.moveTo(-14,-4); ctx.lineTo(-9,-16); ctx.lineTo(-4,-7); ctx.lineTo(0,-20);
+    ctx.lineTo(4,-7); ctx.lineTo(9,-16); ctx.lineTo(14,-4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=q.a; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.fillStyle='#7de0ff'; ctx.beginPath(); ctx.arc(0,-9,2.6,0,7); ctx.fill();
+    ctx.fillStyle=q.b; ctx.fillRect(-14,-5,28,3.4);
+  } else { ctx.restore(); return false; }
+  ctx.restore(); return true; }
+function drawTopHat(){ if(cosHead()) return;   // 服のかぶり物が優先
+  ctx.save(); ctx.translate(0,-15);
   ctx.fillStyle='#20222a'; ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,7); ctx.fill();          // つば
   ctx.fillStyle='#2a2d38'; ctx.fillRect(-11,-16,22,18);                                        // クラウン
   ctx.fillStyle='#1a1c24'; ctx.beginPath(); ctx.ellipse(0,-16,11,4,0,0,7); ctx.fill();          // 天面
@@ -16209,7 +17407,7 @@ function drawHUD(){
     ctx.fillStyle=V.col; ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('乗物: '+V.name,22,hudY+17);
     const tr=clamp(player.vehT/(V.dur||420),0,1); barFrame(120,hudY+8,116,11);
     ctx.fillStyle=tr<0.25?(gf%8<4?'#ff4d2d':'#a83a20'):V.col; ctx.fillRect(122,hudY+10,112*tr,7);   // 残り時間（残りわずかで赤点滅）
-    ctx.fillStyle='#cfe0ff'; ctx.font=uif('normal',10); ctx.fillText((player.vehicle==='horse'?'攻撃=大槍':'攻撃=バズーカ')+' / 掴み=降車 / 被弾で落馬',22,hudY+33); hudY+=44; }
+    ctx.fillStyle='#cfe0ff'; ctx.font=uif('normal',10); ctx.fillText((player.vehicle==='horse'?'攻撃=大槍':'攻撃=ガトリング連射')+' / 掴み=降車 / 被弾で落車',22,hudY+33); hudY+=44; }
   // 奥義（次元斬）ストック：1Pパネル2行目の左
   { const _uc=ultCost(player), _ready=player.dim>=_uc;
     ctx.font=uif('bold',11); ctx.fillStyle=_ready?'#d6a6ff':'rgba(214,166,255,.55)'; ctx.fillText('奥義',22,95);
@@ -16321,6 +17519,27 @@ function drawHUD(){
     // 副題も縁取る：暗幕が敵の後ろへ回ったぶん、キャラの上でも白が飛ばないようにする
     ctx.lineWidth=4; ctx.strokeStyle='rgba(10,8,4,.92)'; ctx.strokeText(sub,W/2+ox*0.6,cy+30);
     ctx.fillStyle='#fff'; ctx.fillText(sub,W/2+ox*0.6,cy+30);
+    ctx.textAlign='left'; ctx.restore(); }
+  if(stageEventBanner>0){
+    // ステージ間イベントの告知。STAGE バナーと重ならないよう、画面の下寄りに置く
+    const u=stageEventBanner/stageEventBannerMax;
+    const a=Math.min(1, Math.min(u,1-u)*5.5+0.25), cy=H*0.74;
+    ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center';
+    const sg=ctx.createLinearGradient(0,cy-42,0,cy+34);
+    sg.addColorStop(0,'rgba(0,0,0,0)'); sg.addColorStop(.3,'rgba(10,6,20,.78)');
+    sg.addColorStop(.72,'rgba(10,6,20,.78)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=sg; ctx.fillRect(-96,cy-42,W+192,76);
+    ctx.strokeStyle='rgba(191,233,255,.9)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W*0.14,cy-34); ctx.lineTo(W*0.86,cy-34);
+    ctx.moveTo(W*0.14,cy+26); ctx.lineTo(W*0.86,cy+26); ctx.stroke();
+    let fs=34; ctx.font='italic '+uif('900',fs);
+    while(ctx.measureText(stageEventTxt).width>W-140 && fs>18){ fs-=2; ctx.font='italic '+uif('900',fs); }
+    ctx.lineJoin='round'; ctx.lineWidth=6; ctx.strokeStyle='#0a1428'; ctx.fillStyle='#bfe9ff';
+    ctx.strokeText(stageEventTxt,W/2,cy-4); ctx.fillText(stageEventTxt,W/2,cy-4);
+    let ss=16; ctx.font=uif('bold',ss);
+    while(ctx.measureText(stageEventSub).width>W-160 && ss>10){ ss-=1; ctx.font=uif('bold',ss); }
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(6,10,20,.92)'; ctx.strokeText(stageEventSub,W/2,cy+18);
+    ctx.fillStyle='#ffffff'; ctx.fillText(stageEventSub,W/2,cy+18);
     ctx.textAlign='left'; ctx.restore(); }
   { // コンボカードはバナーより後に描く（バナーの暗幕と金線に埋もれさせない）
     const cTop=Math.max(hudY+26, 176);   // 額縁の張り出しぶん下げる
@@ -17533,16 +18752,18 @@ function saveProgress(st){ if(attractOn||trainMode) return;   // デモと練習
   try{
   const upg=players.map(p=>({maxHp:p.maxHp,atkMul:p.atkMul||1,defMul:p.defMul||1,spdMul:p.spdMul||1,coinMul:p.coinMul||1,dimMax:p.dimMax,lives:p.lives,permWeapon:p.permWeapon||null,armored:!!p.armored,costume:!!p.costume,level:p.level||1,xp:p.xp||0,xpNext:p.xpNext||100}));
   localStorage.setItem('kuchiwan_save', JSON.stringify({stage:doneCount()+1,mode:curMode,coins:coins,upg:upg,done:levelsDone,
+    keys:keyHeld, evdone:eventDone,
     lap:lap, mercs:mercRoster.map(r=>({type:r.type,hp:Math.max(1,Math.round(r.hp)),maxHp:r.maxHp}))})); }catch(e){} }
 function loadProgress(){ try{ const s=localStorage.getItem('kuchiwan_save'); if(!s)return null; const o=JSON.parse(s); if(o&&o.stage>=1)return o; }catch(e){} return null; }
 function clearProgress(){ try{ localStorage.removeItem('kuchiwan_save'); }catch(e){} }
 function refreshContinueBtn(){ const b=document.getElementById('continueBtn'); if(!b)return; const sv=loadProgress();
   if(sv&&sv.stage>1){ b.textContent='▶ つづきから（ステージ'+sv.stage+'）'; b.classList.remove('hidden'); } else b.classList.add('hidden'); }
 function startGame(){ unlockAudio();
-  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; combo.count=0; gf=0; shopPending=0;
+  score=0; coins=0; camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; gf=0; shopPending=0;
   slowmo=0; slowAcc=0; stage=1; stageBanner=0; hitStop=0; cut=null; endingDone=false;
   lap=1; mercRoster=[]; mercs=[]; trainMode=false;   // 周回・傭兵・練習は新規開始でリセット
   levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false; lastFoeTier=0; buildEncounters();
+  keyHeld={}; eventDone={}; stageEventBanner=0;   // キーアイテムとステージ間イベントもリセット
   players[0].active=true; players[1].active=TWO_P;
   players.forEach(p=>{ if(p.active) resetPlayer(p,true); });
   if(TWO_P) coopLives = hardMode?3:5;   // 2P：残機は共有プール
@@ -17557,6 +18778,8 @@ function startGameAt(stageN){ startGame();
     else if(sv.lap>=4){ lap=4; buildEncounters4(); }   // 四周目の続き＝神話マップへ
     else if(sv.lap>=3){ lap=3; buildEncounters3(); }   // 三周目の続き＝侵略軍マップへ
     else if(sv.lap>=2){ lap=2; buildEncounters2(); }   // 二周目の続き＝蟲の世界マップへ
+    if(sv.keys) keyHeld=Object.assign({},sv.keys);        // 持っているキーアイテム
+    if(sv.evdone) eventDone=Object.assign({},sv.evdone);  // 済んだステージ間イベント
     if(Array.isArray(sv.mercs)) mercRoster=sv.mercs.filter(m=>m&&ETYPE[m.type]).map(m=>({type:m.type,hp:m.hp||1,maxHp:m.maxHp||m.hp||1}));
     if(sv.upg) players.forEach((p,i)=>{ const u=sv.upg[i]; if(u){ if(u.maxHp){p.maxHp=u.maxHp;p.hp=u.maxHp;} if(u.atkMul)p.atkMul=u.atkMul; if(u.defMul)p.defMul=u.defMul; if(u.spdMul)p.spdMul=u.spdMul; if(u.coinMul)p.coinMul=u.coinMul; if(u.dimMax){p.dimMax=u.dimMax;p.dim=Math.min(p.dimMax,p.dim);} if(u.lives)p.lives=u.lives;
       if(u.permWeapon&&WEAPONS[u.permWeapon]){p.permWeapon=u.permWeapon;p.weapon=u.permWeapon;} if(u.armored)p.armored=true; if(u.costume)p.costume=true; if(u.level)p.level=u.level; if(u.xp!=null)p.xp=u.xp; if(u.xpNext)p.xpNext=u.xpNext; } });
@@ -17631,8 +18854,7 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
            {t:'⚡ 4周目「神話」から（超高難度）', bg:'linear-gradient(180deg,#c8a850,#6a5220)', c:'#fff6c0'},
            {t:'⚔ 5周目「戦国」から（最高難度）', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:4];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
-const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{
-  unlockAudio(); fadeOverlay(document.getElementById('start'), ()=>goScreen(startTraining,'fade',40)); };
+const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{ startTrainSelect(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
   // 四周目・五周目はこのトグルで「カジュアル」と「従来の強さ」が切り替わるので、そう書く
@@ -17981,8 +19203,20 @@ const CHARS=[
   {k:'mack',  name:'早撃ちマック',  col:'#f0b45a', icon:(x,y)=>mackIcon(x,y)},
 ];
 let csSel=[0,1], csLock=[false,false], csNav=[0,0];
+// キャラ選択画面の用途。'coop'＝2人で本編／'train'＝1人でトレーニング
+let csMode='coop';
+// トレーニングも同じ選択画面を使う。別画面を作ると、キャラが増えたときに
+// 片方だけ足し忘れる（2P選択には全キャラ並ぶのに練習では選べない、が実際に起きていた）
+function startTrainSelect(){
+  const enter=()=>{ csMode='train'; csSel=[0,0]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
+    const es=document.getElementById('start'); if(es) es.classList.add('hidden');
+    const er=document.getElementById('result'); if(er) er.classList.add('hidden');
+    unlockAudio(); if(sndOn){ if(!Music.isPlaying())Music.start('title'); } };
+  unlockAudio();
+  fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function start2PSelect(){
-  const enter=()=>{ csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+  const enter=()=>{ csMode='coop'; csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
     players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
     const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
     const er=document.getElementById('result'); if(er) er.classList.add('hidden');
@@ -17990,26 +19224,32 @@ function start2PSelect(){
   unlockAudio();
   fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function updateCharSel(){
-  for(let pi=0;pi<2;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
+  // トレーニングは1人で選ぶ。2P側の入力は見ない（2Pのキーで勝手に確定してしまう）
+  const nP=(csMode==='train')?1:2;
+  for(let pi=0;pi<nP;pi++){ const inp=players[pi].in, K=inp.K, pr=inp.pressed; if(csNav[pi]>0)csNav[pi]--;
     if(!csLock[pi]){
       if(csNav[pi]<=0){ if(K.left){ csSel[pi]=(csSel[pi]+CHARS.length-1)%CHARS.length; csNav[pi]=11; ui.move(); }
         else if(K.right){ csSel[pi]=(csSel[pi]+1)%CHARS.length; csNav[pi]=11; ui.move(); } }
       if(pr.atk||pr.jump){ pr.atk=false; pr.jump=false; csLock[pi]=true; ui.ok(); }
     } else { if(pr.grab||pr.grd){ pr.grab=false; pr.grd=false; csLock[pi]=false; ui.ng(); } }   // 決定後キャンセル
   }
+  if(csMode==='train'){
+    if(csLock[0]){ csLock=[false,false]; setupRoster(CHARS[csSel[0]].k); startTraining(); }
+    return; }
   if(csLock[0]&&csLock[1]){ players[0].kind=CHARS[csSel[0]].k; players[1].kind=CHARS[csSel[1]].k; csLock=[false,false]; beginAdventure(); }
 }
 function drawCharSel(){
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#26406a'); g.addColorStop(.6,'#3a5a7a'); g.addColorStop(1,'#2a3a44'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   for(let i=0;i<70;i++){ const x=(i*137.5)%W, y=(i*71.3)%(H*0.55); ctx.globalAlpha=0.25+0.45*Math.abs(Math.sin(gf*0.02+i)); ctx.fillStyle='#dfe7ff'; ctx.fillRect(x,y,1.6,1.6);} ctx.globalAlpha=1;
   ctx.textAlign='center'; ctx.fillStyle='#ffe14d'; ctx.font='900 32px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.strokeStyle='#000'; ctx.lineWidth=5;
-  ctx.strokeText('2P CO-OP　キャラクター選択',W/2,64); ctx.fillText('2P CO-OP　キャラクター選択',W/2,64);
+  { const _t=(csMode==='train')?'🥊 トレーニング　キャラクター選択':'2P CO-OP　キャラクター選択';
+    ctx.strokeText(_t,W/2,64); ctx.fillText(_t,W/2,64); }
   // キャラが増えても収まるよう、幅から逆算してカードサイズを決める
   const n=CHARS.length, gap=n>5?10:(n>4?12:18);
   const cw=Math.min(n>4?168:178, Math.floor((W-40-(n-1)*gap)/n));
   const sc=clamp(cw/74, 1.6, 2.5), tot=n*cw+(n-1)*gap, x0=(W-tot)/2, cy=H*0.5;
   for(let i=0;i<n;i++){ const cx=x0+i*(cw+gap)+cw/2;
-    const p1=csSel[0]===i, p2=csSel[1]===i;
+    const p1=csSel[0]===i, p2=(csMode!=='train')&&csSel[1]===i;
     ctx.fillStyle='rgba(0,0,0,.34)'; roundRect(cx-cw/2,cy-96,cw,190,16); ctx.fill();
     ctx.lineWidth=(p1||p2)?4:2; ctx.strokeStyle=(p1&&p2)?'#fff':(p1?'#7dd0ff':(p2?'#ff9a5a':'rgba(255,255,255,.25)')); ctx.stroke();
     ctx.save(); ctx.translate(cx,cy-14); ctx.scale(sc,sc); CHARS[i].icon(0,0); ctx.restore();
@@ -18018,9 +19258,13 @@ function drawCharSel(){
     if(p2) drawSelTag(cx+40, cy-118, '#ff9a5a', '2P', csLock[1]);
   }
   ctx.fillStyle='#cfe0ff'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）',W/2,H-42);
-  ctx.fillStyle=(csLock[0]&&csLock[1])?'#7dff7d':'#8fa8c8'; ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText(hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！',W/2,H-18);
+  ctx.fillText((csMode==='train')
+    ? '矢印／WASD で選択・J/F で決定　（練習中も N キーでキャラを切り替えられます）'
+    : '1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）',W/2,H-42);
+  ctx.fillStyle=(csMode==='train')? '#7dd0ff' : ((csLock[0]&&csLock[1])?'#7dff7d':'#8fa8c8');
+  ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillText((csMode==='train')? '決定でトレーニング開始！'
+    : (hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！'),W/2,H-18);
   ctx.textAlign='left';
 }
 function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,y+10); ctx.lineTo(x-9,y-4); ctx.lineTo(x+9,y-4); ctx.closePath(); ctx.fill();

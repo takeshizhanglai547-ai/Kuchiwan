@@ -5,6 +5,9 @@ const fs = require('fs');
 const html = fs.readFileSync(process.env.NM_TARGET || require('path').resolve('beltaction.html'), 'utf8');
 let code = html.match(/<script>([\s\S]*)<\/script>/)[1];
 code = code.replace('"use strict";', '');
+// ステージの仕掛けは乱数で湧くので、検証中は既定で止める。
+// 仕掛けそのものを見るスイート（terr）は driver 側で gimOn=true に戻す
+code = code + "\n;gimOn=false;";
 
 function absorber() {
   const fn = function () { return proxy; };

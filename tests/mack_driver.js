@@ -139,7 +139,11 @@ const DRIVER = `
 
   // ===== 8) 空中技3種が別物 =====
   { const air=function(key,mash){ const p=setup();
-      const e=dummyAt(key==='down'?30:120, 0); const hp0=e.hp;
+      const e=dummyAt(key==='down'?30:120, 0);
+      // 空中↓は弾を扇に散らすので、的が一体だと「たまたま全部外れた」だけで落ちる。
+      // 扇の幅ぶん的を並べて、当たったかどうかを運に左右されない形で測る
+      const fan=(key==='down')? [dummyAt(-46,0), dummyAt(86,0)] : [];
+      const all=[e].concat(fan), hp0=all.reduce(function(a2,q){ return a2+q.hp; },0);
       projectiles.length=0; p.state='jump'; p.z=(key==='up'?120:150); p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
       p.in.K.up=(key==='up'); p.in.K.down=(key==='down'); p.in.pressed.atk=true;
       updatePlayer(p);
@@ -158,10 +162,14 @@ const DRIVER = `
         // 敵側の物理も回す。回さないと「刃に乗せて一緒に持ち上げる」が効かず、
         // 置き去りにした敵に当たらないだけの結果になる
         updatePlayer(p); updateEnemies(); updateProjectiles();
+        // 扇の広さを測るので、的が歩いて弾の下へ入ってきては測れない。横位置だけ釘付けにする
+        if(key==='down') all.forEach(function(q){ q.x=(q._fx!=null?q._fx:(q._fx=q.x)); q.vx=0; });
         if(p.z>zMax) zMax=p.z; if(e.z>ezMax) ezMax=e.z; } }
       finally { mackMuzzle=realM; }
       p.in.K.up=p.in.K.down=false;
-      return {tag:tag, dmg:hp0-e.hp, rise:zMax-z0, eRise:ezMax-ez0, ammo:p.ammo, shots:shots, blast:blast}; };
+      return {tag:tag, dmg:hp0-all.reduce(function(a2,q){ return a2+q.hp; },0),
+        left:(fan.length? fan[0].maxHp-fan[0].hp : 0),
+        rise:zMax-z0, eRise:ezMax-ez0, ammo:p.ammo, shots:shots, blast:blast}; };
     const u=air('up'), d=air('down'), f=air('fwd');
     if(u.tag!=='up')   throw new Error('空中↑がマック専用の技になっていない（'+u.tag+'）');
     if(d.tag!=='down') throw new Error('空中↓がマック専用の技になっていない（'+d.tag+'）');
@@ -175,6 +183,9 @@ const DRIVER = `
     // 空中↓は連打で乱射が伸びる
     const dm=air('down',true);
     if(dm.shots<=d.shots) throw new Error('空中↓を連打しても撃つ回数が伸びない（'+d.shots+'→'+dm.shots+'）');
+    // 真下だけに撃つ技ではない。落下点の後ろ 46px の的にも届くのが設計。
+    // 前方の的は主役が落ちながら前へ寄るぶん当たってしまうので、後ろ側だけで測る
+    if(!(dm.left>0)) throw new Error('空中↓が扇に散っていない（落下点の後ろ46pxの的に当たらない）');
     console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 

@@ -1,3 +1,4 @@
+global.__HTML = html;
 const DRIVER = `
 (async()=>{
   // ═══ 地形（坂道）と落石 ═══
@@ -497,6 +498,81 @@ const DRIVER = `
     if(!(t1>0)) throw new Error('同じ床の敵からも殴られない（測れていない）');
     if(t2>0) throw new Error('地上の敵が頭上の床に立つ主役へ '+t2+' ダメージ通している');
     console.log('階をまたぐ打撃 OK (同じ床 与'+same+'／別の階 '+below+'　被'+t1+'／'+t2+')'); }
+
+  // ===== 17) ステージのギミックは区画ごとに抽選される =====
+  { const seen={};
+    for(let t=0;t<80;t++){ resetWorldState();
+      addBlocks([{theme:0,name:'A',noPit:true,gates:[]},{theme:0,name:'B',noPit:true,gates:[]}],null);
+      seen[STAGE_GIM[1]]=(seen[STAGE_GIM[1]]||0)+1; seen[STAGE_GIM[2]]=(seen[STAGE_GIM[2]]||0)+1; }
+    const kinds=Object.keys(seen);
+    if(kinds.length<4) throw new Error('抽選される仕掛けが '+kinds.length+' 種類しかない');
+    kinds.forEach(function(k){ if(!gimmickById(k)) throw new Error('種類表に無い仕掛けが出た: '+k); });
+    // 下り坂でしか出ない落石は、平坦な区画では引かれない
+    if(seen.boulder) throw new Error('平坦な区画で落石が抽選されている');
+    { let sawBoulder=false;
+      for(let t=0;t<80;t++){ resetWorldState();
+        addBlocks([{theme:0,name:'D',terr:'down',noPit:true,gates:[]}],null);
+        if(STAGE_GIM[1]==='boulder') sawBoulder=true; }
+      if(!sawBoulder) throw new Error('下り坂でも落石が一度も抽選されない'); }
+    console.log('ギミックの抽選 OK ('+kinds.length+'種類が混ざる／落石は下り坂だけ)'); }
+
+  // ===== 18) 追加した仕掛けが実際に当たる（隕石・落雷・噴出・棘）／突風は押し流す =====
+  { const run=function(id){ const p=setup(); resetWorldState();
+      addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
+      stage=1; STAGE_GIM[1]=id; gimOn=true; gimStage=1; gimCd=0; gimWarn.length=0; hazards.length=0;
+      p.x=camX+500; p.hp=p.maxHp=99999; p.invuln=0; p.z=0;
+      let warnSeen=0, spawned=0, firstHit=-1, moved=0;
+      const hp0=p.hp, x0=p.x;
+      for(let f=0;f<420;f++){
+        p.invuln=0;
+        tickGimmicks();
+        // 仕掛けは範囲を絞って出るので、主役の真上へ寄せて必ず当たる形にする
+        hazards.forEach(function(h){ if(h.kind!=='boulder'&&h.kind!=='gale') h.x=p.x; });
+        gimWarn.forEach(function(w){ w.x=p.x; });
+        if(gimWarn.length) warnSeen++;
+        spawned=Math.max(spawned,hazards.length);
+        updateHazards();
+        if(firstHit<0 && p.hp<hp0) firstHit=f;
+        // 突風は向きが毎回変わるので、最後の位置ではなく「いちばん流された量」を見る
+        const d=Math.abs(p.x-x0); if(d>moved) moved=d; }
+      return {dmg:hp0-p.hp, warn:warnSeen, spawned:spawned, moved:moved, first:firstHit}; };
+    const rep=[];
+    ['meteor','bolt','geyser','spike'].forEach(function(id){
+      const r=run(id);
+      if(!(r.spawned>0)) throw new Error(id+' が一つも出ない');
+      if(!(r.warn>0)) throw new Error(id+' に予兆が出ない（避けようがない）');
+      if(!(r.dmg>0)) throw new Error(id+' が当たらない');
+      rep.push(id+' '+r.dmg); });
+    // 突風は押し流す（ダメージではなく位置で効く）
+    const g=run('gale');
+    if(!(g.spawned>0)) throw new Error('突風が出ない');
+    if(!(g.moved>40)) throw new Error('突風で '+Math.round(g.moved)+'px しか流されない');
+    rep.push('gale '+Math.round(g.moved)+'px');
+    console.log('追加の仕掛け OK ('+rep.join(' / ')+')'); }
+
+
+  // ===== 19) 本番では仕掛けが動いている／ボス戦の最中は出さない =====
+  { const H=global.__HTML||'';
+    if(H.indexOf('let gimOn=true')<0) throw new Error('本番の gimOn が true で初期化されていない（仕掛けが一切出ない）');
+    const p=setup(); resetWorldState();
+    addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
+    stage=1; STAGE_GIM[1]='spike'; gimOn=true; gimStage=1;
+    p.x=camX+500; p.hp=p.maxHp=99999;
+    // ボスが居る間は一つも湧かない
+    let bossType=null;
+    for(const k in ETYPE) if(ETYPE[k].boss){ bossType=k; break; }
+    if(!bossType) throw new Error('ボスの型が見つからない（測れていない）');
+    hazards.length=0; gimWarn.length=0; gimCd=0;
+    spawnEnemy(bossType, p.x+200, LANE);
+    for(let f=0;f<600;f++){ gimCd=0; tickGimmicks(); }
+    const withBoss=hazards.length;
+    // ボスが居なくなれば湧く
+    enemies.length=0; hazards.length=0; gimWarn.length=0; gimCd=0;
+    for(let f=0;f<600;f++){ gimCd=0; tickGimmicks(); }
+    const noBoss=hazards.length;
+    if(withBoss>0) throw new Error('ボス戦の最中に仕掛けが '+withBoss+' 個湧いている');
+    if(!(noBoss>0)) throw new Error('ボスが居なくても仕掛けが湧かない（測れていない）');
+    console.log('仕掛けの発生条件 OK (本番は有効／ボス戦中は0個・非ボス時は'+noBoss+'個)'); }
 
   console.log('TERRAIN TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
