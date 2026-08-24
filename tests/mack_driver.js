@@ -147,7 +147,7 @@ const DRIVER = `
       projectiles.length=0; p.state='jump'; p.z=(key==='up'?120:150); p.vz=0; p.jAtk=0; p.jUpUsed=false; p.ammo=MK_AMMO;
       p.in.K.up=(key==='up'); p.in.K.down=(key==='down'); p.in.pressed.atk=true;
       updatePlayer(p);
-      const tag=p.jMkUp?'up':p.jMkDown?'down':p.jMkFire?'fwd':'other';
+      const tag=p.jMkUp?'up':p.jMkDown?'down':(p.jRave|0)>0?'rave':'other';
       const z0=p.z, ez0=e.z; let zMax=p.z, ezMax=e.z, shots=0, blast=0;
       // 数えるのは「いま試している技が出ている間」だけ。技が切れたあとの
       // 連打は別の空中技（前へのリボルバー）を出すので、それを数えると
@@ -173,7 +173,10 @@ const DRIVER = `
     const u=air('up'), d=air('down'), f=air('fwd');
     if(u.tag!=='up')   throw new Error('空中↑がマック専用の技になっていない（'+u.tag+'）');
     if(d.tag!=='down') throw new Error('空中↓がマック専用の技になっていない（'+d.tag+'）');
-    if(f.tag!=='fwd')  throw new Error('空中前がマック専用の技になっていない（'+f.tag+'）');
+    // 空中の無入力は、1発撃って終わりではなく3段の連射コンボになった
+    if(f.tag!=='rave') throw new Error('空中の通常攻撃が連射コンボになっていない（'+f.tag+'）');
+    if(!(AIR_RAVE.mack.length===3)) throw new Error('マックの空中コンボが '+AIR_RAVE.mack.length+' 段しかない');
+    if(!AIR_RAVE.mack.every(function(R){ return !!R.shot; })) throw new Error('マックの空中コンボに撃たない段がある');
     for(const q of [['↓',d],['前',f]]) if(q[1].dmg<=0) throw new Error('空中'+q[0]+'が当たらない');
     // 空中では弾倉を減らさない（空中でリロードできないため）
     for(const q of [['↑',u],['↓',d],['前',f]]) if(q[1].ammo!==MK_AMMO)
@@ -186,7 +189,7 @@ const DRIVER = `
     // 真下だけに撃つ技ではない。落下点の後ろ 46px の的にも届くのが設計。
     // 前方の的は主役が落ちながら前へ寄るぶん当たってしまうので、後ろ側だけで測る
     if(!(dm.left>0)) throw new Error('空中↓が扇に散っていない（落下点の後ろ46pxの的に当たらない）');
-    console.log('空中技 OK (前リボルバー'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
+    console.log('空中技 OK (通常＝3段連射 与ダメ'+Math.round(f.dmg)+'／↑ドリルダッシュ '+Math.round(u.rise)+'px・'+Math.round(u.dmg)
       +'／↓乱射 連打なし'+d.shots+'発→連打あり'+dm.shots+'発・弾倉は減らない)'); }
 
   // ===== 9) 奥義「絨毯爆撃」：爆撃機とドローンを呼び、画面全体を焼く =====
