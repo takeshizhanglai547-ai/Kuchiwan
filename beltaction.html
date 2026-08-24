@@ -7891,8 +7891,16 @@ function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock,zmax,ivOv,launch){
     if(!unblock){ sfx.guard(p.x); spark(p.x+p.facing*24,p.y-46,'#9fd6ff',8); p.vx=e.facing*1.8; shake=3; resetCombo(); p.guardFx=8; return true; }
     popText(p.x,p.y-70,'GUARD CRUSH!','#ff4d6a',true); flash=Math.max(flash,4);
   }
+  // 倒れる一撃は本編でも宙へ吹き飛ばす（受け身が取れるので、その場に寝るより手が残る）。
+  // launch を明示で渡された技（主役ボスの打ち上げ技など）はその値を尊重する
+  if(launch==null) launch = knock ? foeLaunchPow(e, dmg) : 0;
   hurtPlayer(p,dmg,e.facing,knock,esndOf(e),ivOv,launch); return true;
 }
+// 敵の一撃がどれくらい吹き飛ばすか。格が上なほど、重い一撃なほど飛ぶ
+function foeLaunchPow(e, dmg){
+  const T=ETYPE[e.type]||{};
+  const rank=T.boss? 1.8 : (T.mini? 0.9 : 0);
+  return clamp(1.5 + (dmg||0)*0.055 + rank, 1.5, 5); }
 // hit whichever player(s) are in range; returns true if any connected
 function tryHitPlayer(e,dmg,knock,reach,hh,unblock,zmax,ivOv){
   let hit=false;
@@ -8689,7 +8697,7 @@ function hurtPlayer(p,dmg,dir,knockdown,cls,ivOv,launch){ if(!p)p=player; if(p.i
   p.charge=0; p.atkHeld=false; spark(p.x,p.y-42,'#ff4444',9);
   if(p.hp<=0){ loseLife(p); return; }
   // 吹き飛ばし技、あるいは宙に居るところを倒された場合は、受け身の取れる吹き飛びにする
-  if(launch>0){ p.invuln=Math.min(p.invuln,24); launchPlayer(p, dir, launch); return; }
+  if(launch>0){ p.invuln = vsMode? Math.min(p.invuln,24) : Math.max(p.invuln,46); launchPlayer(p, dir, launch); return; }
   if(knockdown && p.z>4){ p.tumble=true; p.recovUsed=false; p.tumbleT=0; }
   p.state=knockdown?'down':'hurt'; p.hurtTimer=14; p.downTimer=46; }
 function loseLife(p){ if(!p)p=player; if(p.state==='dead')return;
@@ -15202,7 +15210,7 @@ function heroDoHit(e,a){ const g=e.ghost, def=a.def, WP=WEAPONS[g.weapon]||WEAPO
     const dmg=Math.max(1, Math.round((def.dmg||8)*dmgMul));
     // 打ち上げ技は launchPlayer 側で宙へ運ぶ。以前ここで z を直接いじっていたが、
     // 倒れ判定が先に state='down' にするので一度も効いていなかった
-    const lp=def.launch? clamp((typeof def.launch==='number'? def.launch/4.5 : 3), 1, 6) : 0;
+    const lp=def.launch? clamp((typeof def.launch==='number'? def.launch/4.5 : 3), 1, 6) : null;
     if(hitOnePlayer(p, e, dmg, !!(def.knock||def.finisher||def.launch), reach, hh, !!def.unblock, null, null, lp)){
       if(def.multi) a.lastHit[p.pid]=gf; else a.hitSet.add(p.pid); } } }
 // 毎フレームの技進行（移動・飛び道具・当たり判定・終了）
