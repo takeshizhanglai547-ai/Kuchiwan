@@ -57,6 +57,53 @@ const DRIVER = `
     if(!(p.z>0 && p.tumble)) throw new Error('吹き飛ばし技でも宙へ運ばれない');
     console.log('技による使い分け OK (通常の倒れ＝その場／吹き飛ばし＝宙へ)'); }
 
+  // ===== 3b) 本編でも、敵の倒れる一撃で吹き飛ばされる（受け身も取れる） =====
+  { const hitBy=function(type, knock){
+      setupRoster('inu'); startGame(); state='play'; hardMode=false;
+      const p=players[0]; p.hp=p.maxHp=99999; p.lives=9; p.invuln=0; p.z=0; p.vz=0;
+      p.state='idle'; p.atk=null; p.x=600; p._tx=null; p.facing=-1; p.guardStart=-999;
+      enemies.length=0; spawnEnemy(type, p.x+40, p.y);
+      const e=enemies[0]; e.facing=1; e.x=p.x-40;
+      if(!hitOnePlayer(p, e, 12, knock, 200, 60)) throw new Error(type+' の攻撃が当たらない（測れていない）');
+      return {z:p.z, vz:p.vz||0, vx:p.vx||0, tumble:!!p.tumble, state:p.state}; };
+    // 倒れる一撃＝宙へ吹き飛ばされ、受け身が取れる状態になる
+    const zk=hitBy('wolf', true);
+    if(!(zk.z>0 && zk.vz>0)) throw new Error('本編の雑魚に倒されても宙へ上がらない（z='+Math.round(zk.z)+'）');
+    if(!zk.tumble) throw new Error('本編の吹き飛びで受け身が取れない');
+    if(zk.state!=='down') throw new Error('吹き飛びが倒れ状態になっていない（'+zk.state+'）');
+    // 倒れない一撃＝その場でのけぞるだけ
+    const soft=hitBy('wolf', false);
+    if(soft.z>0) throw new Error('のけぞりだけの一撃でも宙へ浮いている');
+    if(soft.tumble) throw new Error('のけぞりが吹き飛び扱いになっている');
+    // 格が上の相手ほど強く飛ばす
+    let bossType=null; for(const k in ETYPE) if(ETYPE[k].boss && !ETYPE[k].heroBoss){ bossType=k; break; }
+    if(!bossType) throw new Error('ボスの型が見つからない（測れていない）');
+    const bs=hitBy(bossType, true);
+    if(!(bs.vz>zk.vz)) throw new Error('ボスの一撃が雑魚と同じだけしか飛ばさない（'+bs.vz.toFixed(1)+' vs '+zk.vz.toFixed(1)+'）');
+    // 与ダメを揃えて比べる。揃えないと「ボスは元の攻撃力が高いから飛ぶ」だけを見てしまい、
+    // 格による差が消えても気付けない
+    { enemies.length=0; spawnEnemy('wolf', 600, LANE); const z1=enemies[0];
+      enemies.length=0; spawnEnemy(bossType, 600, LANE); const b1=enemies[0];
+      const pz=foeLaunchPow(z1, 20), pb=foeLaunchPow(b1, 20);
+      if(!(pb>pz+0.5)) throw new Error('同じ与ダメだと格の差が出ない（雑魚 '+pz.toFixed(2)+' / ボス '+pb.toFixed(2)+'）'); }
+    console.log('本編の吹き飛び OK (雑魚 vz'+zk.vz.toFixed(1)+'／'+ETYPE[bossType].name+' vz'+bs.vz.toFixed(1)+'／のけぞりは浮かない)'); }
+
+  // ===== 3c) 本編で吹き飛ばされても受け身が取れ、画面の外へは運ばれない =====
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; p.hp=p.maxHp=99999; p.lives=9; p.invuln=0; p.z=0;
+    p.state='idle'; p.x=camX+60; p._tx=null; p.in.keys={}; p.in.pressed.jump=false;
+    enemies.length=0; spawnEnemy('wolf', p.x+60, p.y);
+    const e=enemies[0]; e.facing=-1; e.x=p.x+60;                 // 画面の左端へ向けて吹き飛ばす
+    hitOnePlayer(p, e, 40, true, 200, 60);
+    if(!p.tumble) throw new Error('吹き飛んでいない（測れていない）');
+    let minGap=1e9;
+    for(let f=0;f<RECOV_LOCK+2;f++){ step(1); const g=p.x-camX; if(g<minGap) minGap=g; }
+    // 画面の外へは運ばれない（既存の x クランプが効いている。吹き飛びで抜けないことの確認）
+    if(minGap<18) throw new Error('吹き飛びで画面の外（左端から '+Math.round(minGap)+'px）へ運ばれている');
+    p.in.pressed.jump=true; step(1);
+    if(p.state!=='jump') throw new Error('本編では受け身が取れない（'+p.state+'）');
+    console.log('本編の受け身 OK (画面の左端から '+Math.round(minGap)+'px で止まり、跳躍で復帰)'); }
+
   // ===== 4) 対戦モードの土俵 =====
   { players[0].kind='inu'; players[1].kind='shima'; startVersus();
     if(!vsMode) throw new Error('対戦モードになっていない');
