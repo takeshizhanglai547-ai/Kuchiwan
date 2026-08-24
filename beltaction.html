@@ -2367,23 +2367,88 @@ const ATK={
   ntornado:{name:'サイクロンライズ', dur:30, act:[2,24], reach:74, hh:520, dmg:7, kb:6, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true, ntor:true},
   nmeteor:{name:'彼方からの呼び声', dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
   // ══════════════════════════════════════════════════════════════
+  //  空中のコマンド技（各キャラ3つ＝昇竜／波動／↓↑）
+  //  地上の技をそのまま出すと「地面用の技を宙で振っている」だけになるので、
+  //  空中でしか意味を持たない三つの型に作り分ける
+  //    dp   ＝斜め下への急降下攻撃（着地で衝撃波）
+  //    hadou＝落ちながら撒く飛び道具
+  //    du   ＝その場に留まって周囲を刈る
+  // ══════════════════════════════════════════════════════════════
+  // ── イッヌ ──
+  aiDp:{name:'天墜斬', dur:40, act:[8,34], reach:120, hh:96, dmg:26, kb:14, from:-1.9,to:1.2, len:76, trail:'#bfe9ff', pivotY:-56,
+    special:true, knock:true, multi:true, multiGap:7, airDive:{at:6, g:1.5, max:22, vx:5.0}, airShock:{r:150, dmg:26, col:'#bfe9ff'}, airLand:16},
+  aiHa:{name:'断空・十字波', dur:38, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-1.2,to:1.2, len:56, trail:'#bffcff', pivotY:-50,
+    special:true, superFx:true, airHover:24, airLand:12,
+    pshot:{dmg:17,color:'#bffcff',speed:11,r:40,life:120,pierce:true,style:'wave',count:2,spread:3.2}},
+  aiDu:{name:'浮身・円環斬', dur:46, act:[8,40], reach:110, hh:110, dmg:8, kb:5, from:-3.1,to:3.1, len:66, trail:'#fff0b0', pivotY:-50,
+    special:true, omni:true, multi:true, multiGap:5, spin:true, airHover:40, airLand:12},
+  // ── シマダックス ──
+  ashDp:{name:'墜龍脚', dur:38, act:[6,32], reach:104, hh:92, dmg:24, kb:14, from:-1.5,to:1.0, len:30, trail:'#ff9a3a', pivotY:-52,
+    special:true, fist:true, kick:true, knock:true, multi:true, multiGap:7, airDive:{at:5, g:1.7, max:24, vx:5.6}, airShock:{r:160, dmg:24, col:'#ff9a3a'}, airLand:18},
+  ashHa:{name:'双掌・気功弾', dur:36, act:[11,13], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.4, len:26, trail:'#aef8ff', pivotY:-48,
+    special:true, fist:true, superFx:true, airHover:22, airLand:12,
+    pshot:{dmg:16,color:'#aef8ff',speed:10,r:26,life:100,explode:true,count:2,spread:2.6}},
+  ashDu:{name:'浮空・千手', dur:48, act:[6,42], reach:96, hh:104, dmg:6, kb:3, from:-0.6,to:0.6, len:28, trail:'#ffd24d', pivotY:-52,
+    special:true, fist:true, punch:true, omni:true, multi:true, multiGap:3, airHover:42, airLand:12},
+  // ── ヌコ ──
+  anDp:{name:'星穿ち', dur:40, act:[8,34], reach:96, hh:96, dmg:22, kb:12, from:-1.6,to:1.1, len:60, trail:'#d6b0ff', pivotY:-54,
+    special:true, knock:true, multi:true, multiGap:7, airDive:{at:6, g:1.4, max:21, vx:4.4}, airShock:{r:170, dmg:24, col:'#d6b0ff'}, airLand:16},
+  anHa:{name:'氷結・扇状弾', dur:38, act:[12,14], reach:40, hh:40, dmg:0, kb:0, from:-0.5,to:0.3, len:24, trail:'#8fd8ff', pivotY:-48,
+    special:true, fist:true, superFx:true, airHover:24, airLand:12,
+    pshot:{dmg:13,color:'#8fd8ff',speed:9,r:24,life:110,style:'spike',count:5,spread:2.8,multihit:true,hitGap:9}},
+  anDu:{name:'浮遊・星環', dur:50, act:[8,44], reach:104, hh:112, dmg:7, kb:4, from:-3.1,to:3.1, len:40, trail:'#ffd0f0', pivotY:-50,
+    special:true, fist:true, omni:true, multi:true, multiGap:4, spin:true, airHover:44, airLand:12},
+  // ── ガードワン8号 ──
+  agDp:{name:'鉄槌落とし', dur:44, act:[8,38], reach:128, hh:104, dmg:32, kb:20, from:-2.2,to:1.3, len:92, trail:'#ffb85a', pivotY:-64,
+    special:true, knock:true, bighammer:true, airDive:{at:7, g:1.6, max:23, vx:4.0}, airShock:{r:200, dmg:34, col:'#ffb85a'}, airLand:22},
+  agHa:{name:'投擲・鉄球', dur:40, act:[13,15], reach:44, hh:44, dmg:0, kb:0, from:-1.4,to:0.6, len:56, trail:'#c9ccd4', pivotY:-58,
+    special:true, superFx:true, airHover:26, airLand:14,
+    pshot:{dmg:26,color:'#c9ccd4',speed:9,r:30,life:110,pierce:true,explode:true}},
+  agDu:{name:'空中大車輪', dur:52, act:[8,46], reach:126, hh:118, dmg:9, kb:8, from:-3.1,to:3.1, len:86, trail:'#ffd24d', pivotY:-56,
+    special:true, omni:true, multi:true, multiGap:5, spin:true, knock:true, airHover:46, airLand:16},
+  // ── ワッチ ──
+  awDp:{name:'跳燕・強奪落とし', dur:38, act:[6,32], reach:104, hh:92, dmg:23, kb:13, from:-1.7,to:1.1, len:52, trail:'#ff8ae0', pivotY:-54,
+    special:true, fist:true, knock:true, multi:true, multiGap:6, airDive:{at:5, g:1.6, max:23, vx:5.4}, airShock:{r:150, dmg:22, col:'#ff8ae0'}, airLand:14},
+  awHa:{name:'空中クナイ・扇撒き', dur:34, act:[10,12], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.3, len:22, trail:'#cfe0f0', pivotY:-48,
+    special:true, superFx:true, airHover:20, airLand:10,
+    pshot:{dmg:12,color:'#cfe0f0',speed:13,r:12,life:80,pierce:true,style:'spike',count:5,spread:3.0}},
+  awDu:{name:'滞空・煙幕乱刃', dur:46, act:[8,40], reach:112, hh:108, dmg:7, kb:4, from:-3.1,to:3.1, len:52, trail:'#e0c4ff', pivotY:-52,
+    special:true, omni:true, multi:true, multiGap:4, spin:true, airHover:40, airLand:12},
+  // ── ワンデン ──
+  adDp:{name:'空蝉・落とし燕', dur:42, act:[8,36], reach:160, hh:100, dmg:30, kb:16, from:-2.1,to:1.4, len:118, trail:'#eaf6ff', pivotY:-60,
+    special:true, knock:true, multi:true, multiGap:8, airDive:{at:6, g:1.5, max:23, vx:5.2}, airShock:{r:170, dmg:30, col:'#eaf6ff'}, airLand:18},
+  adHa:{name:'飛燕波', dur:40, act:[13,15], reach:44, hh:44, dmg:0, kb:0, from:-1.6,to:1.4, len:110, trail:'#ffffff', pivotY:-56,
+    special:true, superFx:true, iai:true, airHover:26, airLand:14,
+    pshot:{dmg:22,color:'#ffffff',speed:12,r:44,life:130,pierce:true,style:'wave',multihit:true,hitGap:7}},
+  adDu:{name:'滞空・霞連斬', dur:50, act:[8,44], reach:150, hh:112, dmg:9, kb:5, from:-3.1,to:3.1, len:112, trail:'#e8f4ff', pivotY:-56,
+    special:true, omni:true, multi:true, multiGap:5, spin:true, airHover:44, airLand:16},
+  // ── 早撃ちマック ──
+  amDp:{name:'急降下狙撃', dur:40, act:[8,34], reach:96, hh:92, dmg:20, kb:12, from:-0.6,to:0.4, len:30, trail:'#ffd24d', pivotY:-50,
+    special:true, fist:true, gunPose:true, knock:true, airDive:{at:6, g:1.5, max:22, vx:4.6}, airShock:{r:150, dmg:26, col:'#ffd24d'}, airLand:16},
+  amHa:{name:'空中グレネード', dur:38, act:[12,14], reach:40, hh:40, dmg:0, kb:0, from:-0.5,to:0.2, len:24, trail:'#ffb85a', pivotY:-48,
+    special:true, fist:true, gunPose:true, superFx:true, airHover:24, airLand:12,
+    pshot:{dmg:20,color:'#ffb85a',speed:8,r:24,life:110,explode:true,count:3,spread:2.4}},
+  amDu:{name:'空中ショットガン・扇撃ち', dur:44, act:[10,12], reach:44, hh:44, dmg:0, kb:0, from:-0.6,to:0.5, len:26, trail:'#ffe9a0', pivotY:-50,
+    special:true, fist:true, gunPose:true, superFx:true, airHover:38, airLand:12,
+    pshot:{dmg:11,color:'#ffe9a0',speed:14,r:14,life:60,count:7,spread:3.6}},
+  // ══════════════════════════════════════════════════════════════
   //  空中奥義（各キャラ1つ）。地上の奥義とは別の技として作る。
   //  地上が「その場で構えて放つ」ものなら、空中は「落ちながら／留まりながら」の型にする
   // ══════════════════════════════════════════════════════════════
   aInu:{name:'天光・双輪斬空', ultMove:true, dur:64, act:[8,52], reach:150, hh:150, dmg:9, kb:5, from:-3.1,to:3.1, len:74, trail:'#fff0b0', pivotY:-46,
-    omni:true, multi:true, multiGap:5, special:true, superFx:true, spin:true, airFloat:true, airLand:16, airUlt:'inu'},
-  aShima:{name:'隕鉄脚・落星撃', ultMove:true, dur:56, act:[26,44], reach:120, hh:120, dmg:26, kb:22, from:-1.2,to:1.2, len:30, trail:'#ff9a3a', pivotY:-40,
-    fist:true, kick:true, special:true, superFx:true, knock:true, finisher:true, aoe:true, airLand:22, airSlam:true, airUlt:'shima'},
+    omni:true, multi:true, multiGap:5, special:true, superFx:true, spin:true, airLand:16, airRise:7, airHover:56, airUlt:'inu'},
+  aShima:{name:'隕鉄脚・落星撃', ultMove:true, dur:56, act:[40,50], reach:120, hh:120, dmg:26, kb:22, from:-1.2,to:1.2, len:30, trail:'#ff9a3a', pivotY:-40,
+    fist:true, kick:true, special:true, superFx:true, knock:true, finisher:true, aoe:true, airLand:22, airRise:19, airHover:16, airSlam:true, airUlt:'shima'},
   aNuko:{name:'星屑の雨・アステリズム', ultMove:true, dur:74, act:[14,64], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.4, len:22, trail:'#ffd0f0', pivotY:-46,
-    fist:true, special:true, superFx:true, airFloat:true, airLand:14, airUlt:'nuko'},
-  aGuard:{name:'軌道爆撃・アンカードロップ', ultMove:true, dur:60, act:[30,48], reach:150, hh:130, dmg:34, kb:28, from:-2.4,to:1.4, len:110, trail:'#ffb85a', pivotY:-70,
-    special:true, superFx:true, knock:true, finisher:true, aoe:true, shock:34, bighammer:true, airLand:26, airSlam:true, airUlt:'guard8'},
+    fist:true, special:true, superFx:true, airLand:14, airRise:7, airHover:66, airUlt:'nuko'},
+  aGuard:{name:'軌道爆撃・アンカードロップ', ultMove:true, dur:60, act:[44,52], reach:150, hh:130, dmg:34, kb:28, from:-2.4,to:1.4, len:110, trail:'#ffb85a', pivotY:-70,
+    special:true, superFx:true, knock:true, finisher:true, aoe:true, shock:34, bighammer:true, airLand:26, airRise:14, airHover:16, airSlam:true, airUlt:'guard8'},
   aWatch:{name:'影襲・スカイレイド', ultMove:true, dur:66, act:[10,56], reach:132, hh:110, dmg:8, kb:4, from:-2.4,to:2.4, len:56, trail:'#ff8ae0', pivotY:-52,
-    multi:true, multiGap:4, special:true, superFx:true, airFloat:true, airLand:14, airUlt:'watch'},
+    multi:true, multiGap:4, special:true, superFx:true, airLand:14, airRise:7, airHover:58, airUlt:'watch'},
   aWanden:{name:'飛燕・八重霞', ultMove:true, dur:70, act:[12,58], reach:170, hh:120, dmg:12, kb:6, from:-2.6,to:2.6, len:120, trail:'#eaf6ff', pivotY:-56,
-    multi:true, multiGap:5, special:true, superFx:true, airFloat:true, airLand:18, airUlt:'wanden'},
+    multi:true, multiGap:5, special:true, superFx:true, airLand:18, airRise:7, airHover:62, airUlt:'wanden'},
   aMack:{name:'空爆要請・スカイストライク', ultMove:true, dur:76, act:[16,66], reach:44, hh:44, dmg:0, kb:0, from:-0.3,to:0.2, len:24, trail:'#ffd24d', pivotY:-46,
-    fist:true, gunPose:true, special:true, superFx:true, airFloat:true, airLand:16, airUlt:'mack'},
+    fist:true, gunPose:true, special:true, superFx:true, airLand:16, airRise:7, airHover:68, airUlt:'mack'},
   // ── ガードワン8号（巨大ハンマー）：重量級3段＋コマンド技 ──
   gh1:{name:'豪快横薙ぎ', dur:22, act:[8,14], reach:104, hh:54, dmg:16, kb:9,  from:-1.4, to:1.3,  len:64, trail:'#ffb85a', pivotY:-64, lunge:1.6, knock:true, combo:1},
   gh2:{name:'返し打ち',   dur:22, act:[8,14], reach:104, hh:56, dmg:16, kb:9,  from:1.2,  to:-1.4, len:64, trail:'#ffb85a', pivotY:-66, lunge:1.4, combo:2},
@@ -3112,20 +3177,32 @@ function commandSpecial(p){ if(p.z>0) return null;
 // これが無いと、空中でコマンド技を出した瞬間に z が凍って宙に貼りついた
 // キャラごとの空中奥義。地上の奥義と食い違うよう、効果の出し方そのものを変える
 const AIR_ULT={inu:'aInu', shima:'aShima', nuko:'aNuko', guard8:'aGuard', watch:'aWatch', wanden:'aWanden', mack:'aMack'};
+// 空中のコマンド技。地上の specialFor とは別表で、空中でしか出ない技を引く
+const AIR_SPECIAL={
+  inu:   {dp:'aiDp',  hadou:'aiHa',  du:'aiDu'},
+  shima: {dp:'ashDp', hadou:'ashHa', du:'ashDu'},
+  nuko:  {dp:'anDp',  hadou:'anHa',  du:'anDu'},
+  guard8:{dp:'agDp',  hadou:'agHa',  du:'agDu'},
+  watch: {dp:'awDp',  hadou:'awHa',  du:'awDu'},
+  wanden:{dp:'adDp',  hadou:'adHa',  du:'adDu'},
+  mack:  {dp:'amDp',  hadou:'amHa',  du:'amDu'},
+};
+function airSpecialFor(p, slot){ const t=AIR_SPECIAL[p.kind]; return (t&&t[slot]&&ATK[t[slot]])? t[slot] : specialFor(p,slot); }
 function airUltTick(p, a, def){
   const t=a.t, dir=p.facing, mul=(p.atkMul||1)*(a.evo||1), K2=def.airUlt;
   if(K2==='inu'){                    // 二回転しながら全方位へ真空刃を撒き、締めに光柱
-    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%6===0){
-      const n=(t-def.act[0])/6;
+    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%8===0){
+      const n=(t-def.act[0])/8;
+      // 高さは固定。自分の高度に合わせると、低く出したとき地面を撫でて全員に何度も当たった
       for(const sg of [1,-1]) spawnProj(p.x+sg*20, p.y, sg*(9+n*0.4), 0, {owner:'player',
-        dmg:Math.round(TD(14)*mul), color:(n%2)?'#fff0b0':'#ffffff', r:34, life:70, zz:Math.max(p.z-6,10),
-        wave:true, pierce:true, multihit:true, hitGap:6});
+        dmg:Math.round(TD(13)*mul), color:(n%2)?'#fff0b0':'#ffffff', r:34, life:70, zz:34,
+        wave:true, pierce:true, multihit:true, hitGap:14});
       crescent(p.x, p.y-p.z-46, 86, -3.1, 3.1, (n%2)?'#fff0b0':'#ffffff'); }
     if(t===def.act[1]+2){ ring(p.x,p.y,'#fff0b0'); ring(p.x,p.y,'#ffffff');
       for(let k=0;k<4;k++) spark(p.x, p.y-k*70, '#fff6c0', 12, 11);
       flash=Math.max(flash,5); shake=Math.max(shake,12); sfx.big(p.x); } }
-  else if(K2==='shima'){             // 丸まって隕石のように落ち、着地で大爆発
-    if(t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.9, -26); p.avx=dir*3.2;
+  else if(K2==='shima'){             // 一度跳び上がってから、隕石のように落ちて大爆発
+    if(t>def.airHover && t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.9, -26); p.avx=dir*3.2;
       if(t%2===0) ember(p.x+rnd(-16,16), p.y-p.z-rnd(0,50), rnd(-1.4,1.4), rnd(2,5), (t%4)?'#ff9a3a':'#ffd24d'); }
     if(t===def.act[0]){ bigExplosion(p.x, p.y-10, 190, '#ff9a3a');
       ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#ffffff'); dust(p.x,p.y,22);
@@ -3140,14 +3217,14 @@ function airUltTick(p, a, def){
         zz:H+rnd(0,120), vzz:-12, explode:true});
       if((t-def.act[0])%20===0) sfx.rise(p.x); }
     if(t===def.act[0]){ ring(p.x,p.y-p.z-40,'#d6b0ff'); sfx.boss(p.x); } }
-  else if(K2==='guard8'){            // 錨ごと落下し、着地で三重の衝撃波
-    if(t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.6, -24);
+  else if(K2==='guard8'){            // 錨ごと高く構えてから落下し、着地で三重の衝撃波
+    if(t>def.airHover && t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.6, -24);
       if(t%3===0) spark(p.x+rnd(-20,20), p.y-p.z-rnd(0,60), '#ffb85a', 3, 7); }
     if(t===def.act[0]){ shake=Math.max(shake,22); quake=Math.max(quake||0,26); flash=Math.max(flash,6);
       triggerSlow(24); sfx.big(p.x); sfx.ko(p.x); dust(p.x,p.y,24);
       for(let k=0;k<3;k++) shockwave(p.x, p.y, {r:120+k*90, color:k?'#ffb85a':'#ffffff', big:true});
       enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>330) return;
-        damageEnemy(e, TD(Math.round(48*mul)), (e.x<p.x?-1:1)*14, true);
+        damageEnemy(e, TD(Math.round(38*mul)), (e.x<p.x?-1:1)*14, true);
         if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*20, -14, 4); }); } }
   else if(K2==='watch'){             // 影が四方から乱れ突き、締めに金貨が弾ける
     if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%4===0){
@@ -3161,30 +3238,36 @@ function airUltTick(p, a, def){
     if(t===def.act[1]+2){ for(let k=0;k<14;k++) makeCoin(p.x+rnd(-90,90), 4);
       ring(p.x,p.y-p.z-40,'#ffe14d'); flash=Math.max(flash,4); shake=Math.max(shake,10); sfx.coin(p.x); } }
   else if(K2==='wanden'){            // 落ちながら八連の居合。最後に納刀の一閃
-    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%6===0){
-      const n=(t-def.act[0])/6, sg=(n%2)?1:-1;
+    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%9===0){
+      const n=(t-def.act[0])/9, sg=(n%2)?1:-1;
       crescent(p.x+sg*70, p.y-p.z-46, 104, sg>0?-1.5:1.5, sg>0?1.5:-1.5, (n%2)?'#eaf6ff':'#ffffff');
       spark(p.x+sg*70, p.y-p.z-46, '#eaf6ff', 6, 9); sfx.swing(1,'longblade',p.x);
       enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
         if(Math.abs(e.x-p.x)>180 || Math.abs(e.y-p.y)>80) return;
-        noHitStopOnce=true; damageEnemy(e, TD(Math.round(15*mul)), sg*4, false); }); }
+        noHitStopOnce=true; damageEnemy(e, TD(Math.round(13*mul)), sg*4, false); }); }
     if(t===def.act[1]+2){ flash=Math.max(flash,6); shake=Math.max(shake,14); hitStop=Math.max(hitStop,14); triggerSlow(26);
       popText(p.x,p.y-p.z-118,'——八重霞。','#e8f4ff',true); sfx.ko(p.x);
       enemies.forEach(function(e){ if(e.dead) return; if(Math.abs(e.x-p.x)>300) return;
-        noHitStopOnce=true; damageEnemy(e, TD(Math.round(46*mul)), (e.x<p.x?-1:1)*9, true); }); } }
+        noHitStopOnce=true; damageEnemy(e, TD(Math.round(34*mul)), (e.x<p.x?-1:1)*9, true); }); } }
   else if(K2==='mack'){              // 地上を照準し、順に爆撃が落ちてくる
     if(t===def.act[0]){ popText(p.x,p.y-p.z-110,'空爆要請！','#ffd24d',true); sfx.boss(p.x); }
-    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%7===0){
-      const n=(t-def.act[0])/7, tx=clamp(p.x+dir*(90+n*95), camX+40, camX+W-40);
-      gimWarnAt(tx, '#ffd24d', 22);
+    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%5===0){
+      // 前だけに落とすと背中側の敵に一発も届かない。前後へ交互に振って面で焼く
+      const n=(t-def.act[0])/5, sg=(n%2)?1:-1;
+      const tx=clamp(p.x+dir*sg*(70+((n/2)|0)*110), camX+40, camX+W-40);
+      gimWarnAt(tx, '#ffd24d', 20);
       spawnProj(tx, LANE, 0, 0, {owner:'player', dmg:Math.round(TD(22)*mul), color:'#ffd24d',
-        r:20, life:80, zz:H+40, vzz:-16, explode:true, blast:true, blastR:150, blastDmg:Math.round(TD(30)*mul)});
+        r:20, life:80, zz:H+40, vzz:-16, explode:true, blast:true, blastR:170, blastDmg:Math.round(TD(30)*mul)});
       sfx.launch(p.x, 0.7); } }
 }
 function beginAirAttack(type){
-  const p=player, z0=p.z, vz0=p.vz;
+  const p=player, z0=p.z, vz0=p.vz, def=ATK[type];
   beginAttack(type);
-  if(p.atk){ p.atk.air=true; p.z=z0; p.vz=vz0; p.jAtk=0; p.jRave=0; p.raveT=0; }
+  if(p.atk){ p.atk.air=true; p.z=z0; p.vz=vz0; p.jAtk=0; p.jRave=0; p.raveT=0;
+    // 低い所から出しても成立するよう、出だしで高さを稼ぐ
+    if(def && def.airRise){ p.vz=Math.max(p.vz, def.airRise); p.z=Math.max(p.z, 40); }
+    // 奥義は出している間ずっと無敵。出際を潰されると1ストックが丸ごと消える
+    if(def && def.ultMove) p.invuln=Math.max(p.invuln, (def.dur|0)+16); }
   return true; }
 function beginAttack(type){
   const p=player, def=ATK[type];
@@ -4909,8 +4992,9 @@ function updatePlayer(){
     if(p.jBolt){ p.x+=p.facing*SPEED*1.6; if(gf%2===0) spark(p.x+rnd(-12,12),p.y-p.z-rnd(20,60),'#9fe8ff',1,4); }   // 雷をまとって斜め急降下
     // ── 空中の奥義とコマンド技。通常の空中攻撃より先に見る ──
     if(pressed.atk && p.jAtk<=0){
-      // 空中奥義：地上の奥義とは別の技。ストックの消費は同じ
-      if(rotationReady()){
+      // 空中奥義：地上の奥義とは別の技。ストックの消費は同じ。
+      // 空中でレバーを回すのは難しいので、攻撃＋掴みの同時押しでも出せるようにする
+      if(rotationReady() || K.grab || pressed.grab){
         pressed.atk=false;
         const cost=ultCost(p);
         if(p.dim<cost){ consumeCmd();
@@ -4920,9 +5004,9 @@ function updatePlayer(){
         beginAirAttack(AIR_ULT[p.kind]||'aInu');
         p.dim-=cost; p.invuln=Math.max(p.invuln,40); consumeCmd(); return; }
       // 空中のコマンド技。地上と同じ入力で、落ちながら出る
-      if(dpReady(p.facing)){ pressed.atk=false; beginAirAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }
-      if(hadokenReady(p.facing)){ pressed.atk=false; beginAirAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; }
-      if(downUpReady()){ pressed.atk=false; beginAirAttack(specialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }
+      if(dpReady(p.facing)){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }
+      if(hadokenReady(p.facing)){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; }
+      if(downUpReady()){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }
     }
     // air attack
     if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
@@ -5492,13 +5576,30 @@ function updatePlayer(){
     if(def.airUlt) airUltTick(p, a, def);
     // 空中から出した技：技の最中も落ち続ける。着地したら技を打ち切って着地硬直へ
     if(a.air && !def.rise){
-      p.vz=(p.vz||0)-(def.airFloat? 0.20 : 0.52);
+      // 斜め下への急降下。落ちる勢いと前へ出る勢いをここで作る
+      if(def.airDive && a.t>=def.airDive.at){
+        p.vz=Math.max((p.vz||0)-def.airDive.g, -def.airDive.max);
+        p.avx=p.facing*def.airDive.vx;
+        if(a.t%2===0) spark(p.x+rnd(-12,12), p.y-p.z-rnd(10,50), def.trail||'#ffffff', 2, 6); }
+      // 出だしは跳び上がる。低い所から出しても技として成立させるため
+      else if(def.airRise && a.t<=8){ p.vz=def.airRise; }
+      // 出し切る前に着地して打ち切られるのを防ぐ。技の間は宙に留まる（airHover）
+      else if(def.airHover && a.t<=def.airHover){ p.vz=Math.sin(a.t*0.16)*0.7; }
+      else p.vz=(p.vz||0)-(def.airFloat? 0.20 : 0.52);
       p.z=Math.max(0,(p.z||0)+p.vz);
       if(p.avx){ p.x+=p.avx; p.avx*=0.92; }
       if(p.z<=0){ p.z=0; p.vz=0; p.avx=0;
         // 落下してぶつける型の奥義は、決まったフレームではなく着地した瞬間に効かせる。
         // 高い所から落ちると act[0] へ届く前に着いてしまい、一度も爆発しなかった
         if(def.airSlam && !a.slammed){ a.slammed=true; a.t=def.act[0]; airUltTick(p, a, def); }
+        // 急降下技は叩きつけた地面から衝撃波が走る（当てられなくても着地に意味を持たせる）
+        if(def.airShock && !a.shocked){ a.shocked=true; const S=def.airShock;
+          shockwave(p.x, p.y, {r:S.r, color:S.col||'#ffffff', big:true});
+          ring(p.x,p.y,S.col||'#ffffff'); dust(p.x,p.y,14);
+          shake=Math.max(shake,12); flash=Math.max(flash,3); sfx.big(p.x);
+          enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>S.r) return;
+            damageEnemy(e, TD(Math.round(S.dmg*(p.atkMul||1)*(a.evo||1))), (e.x<p.x?-1:1)*10, true);
+            if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*14, -11, 3); }); }
         p.state='land'; p.landT=def.airLand||10; p.atk=null; p.comboStep=0;
         dust(p.x,p.y,7); sfx.land(p.x); return; } }
     // active hit window
