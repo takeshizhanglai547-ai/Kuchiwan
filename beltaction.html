@@ -1602,6 +1602,14 @@ function terrAt(x){
 // スマブラの「ステージごと動く場面」。区間へ踏み込むと足場ごと大きく昇降し、
 // その間はその区間から出られない。昇り切ったあとの世界は新しい高さで続く
 const LIFT_RISE=520, LIFT_DUR=300, LIFT_W=520;
+// せり上がったあと、区間の手前へ架ける階段。
+// これが無いと、上がりきったあとに左へ落ちた時点で 520px の壁が立ちはだかり、
+// 二度と戻れなくなる（実機で詰みの報告あり）。一段は跳んで越えられる高さに収める
+const LIFT_STEPS=5;                 // 段数。520px を6回に割るので一段 87px（塔の96pxより易しい）
+// 段は区間の手前（左）へ架ける。区間は区画の先頭から760px の位置に置かれるので、
+// 5段ぶんの幅が760px を超えると区画の外へはみ出す
+const LIFT_STEP_GAP=110;            // 段どうしの横の間隔（5段で550px）
+const LIFT_STEP_HW=120;             // 段の半幅（隣とは130px 重なるので、乗り継ぎの窓が広い）
 // ── 積み重なった足場（terr:'tower'）──
 // 「谷に落ちたら即ミス」ではなく、頭上の床へ跳び乗って上へ登っていく区間。
 // 落ちても下の床（最後は地面）に戻るだけで、何度でもやり直せる。
@@ -3501,7 +3509,23 @@ function tickLifts(){
     if(u>=1){ L.state='done'; L.off=L.dir*LIFT_RISE;
       shake=Math.max(shake,13); flash=Math.max(flash,4); quake=Math.max(quake||0,18);
       dust(pl.x,pl.y,16); sfx.big(pl.x);
-      popText(pl.x, pl.y-146, L.dir>0?'頂上に着いた！':'大空洞に降り立った！', '#ffe14d', true); } }
+      popText(pl.x, pl.y-146, L.dir>0?'頂上に着いた！':'大空洞に降り立った！', '#ffe14d', true);
+      buildLiftStairs(L); } }
+}
+// せり上がった区間の手前へ、跳んで登れる段を架ける。
+// liftAdd は x>=L.x0 をまとめて持ち上げるので、境目がそのまま 520px の壁になる。
+// 上がりきったあとに左へ落ちると戻る手段が無くなるため、崩れた岩棚に見立てた段を置く
+function buildLiftStairs(L){
+  if(L.dir<=0 || L.stairs) return;          // 沈む区間は、降りた先が進行方向なので要らない
+  L.stairs=true;
+  for(let k=1;k<=LIFT_STEPS;k++){
+    const h=Math.round(LIFT_RISE*k/(LIFT_STEPS+1));
+    // いちばん上の段は壁のすぐ手前へ。ここから跳べば、せり上がった地面へ乗り移れる
+    const cx=L.x0-LIFT_STEP_HW-10-(LIFT_STEPS-k)*LIFT_STEP_GAP;
+    PLATS.push({x0:cx-LIFT_STEP_HW, x1:cx+LIFT_STEP_HW, h:h, st:L.st});
+    dust(cx, LANE-groundLift(cx)-h, 4); }
+  const pl=activePlayers().filter(function(q){ return q.state!=='dead'; })[0];
+  if(pl) popText(pl.x, pl.y-118, '崩れた岩が足場になった', '#c8b48a');
 }
 // 昇降中の縦坑。足場の外側に岩肌の壁を立てて、進行方向と逆へ流す。
 // これが無いと、画面のどこも動かないので「昇っている」ことが伝わらない

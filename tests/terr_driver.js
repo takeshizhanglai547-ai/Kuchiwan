@@ -345,6 +345,48 @@ const DRIVER = `
     console.log('動く地形 OK (昇り '+up.off+'px を'+up.frames+'Fかけて・カメラ'+up.camMax+'px 追従／降り '+dn.off
       +'px／区間外へのはみ出し0・カメラのずれ'+up.camDev+'px／本編 昇'+kinds.liftup+'・降'+kinds.liftdown+'区画)'); }
 
+  // ===== 11b) せり上がったあと、落ちても跳んで戻れる =====
+  // liftAdd は区間より右をまとめて持ち上げるので、境目はそのまま520pxの壁になる。
+  // 上がりきったあとに左へ落ちると戻れず詰む、という報告があった
+  { const p=setup(); build(['liftup']);
+    const L=LIFTS[0]; if(!L) throw new Error('昇降区間が置かれていない');
+    const T=TERRS[0]; WORLD_END=T.x1+900;
+    // 上がりきるまで回す
+    p.x=L.x0+80; p._tx=null; p.z=0;
+    for(let f=0;f<900 && L.state!=='done'; f++){ tickLifts(); updatePlayer(p); terrainStep(p); }
+    if(L.state!=='done') throw new Error('昇降が終わらない（測れていない）');
+    const top=terrLift(L.x0+40);                     // せり上がった側の高さ
+    if(!(top>=400)) throw new Error('せり上がっていない（'+Math.round(top)+'px）');
+    // 段が架かっていること。一段の落差が跳べる高さに収まっていること
+    const st=PLATS.filter(function(q){ return q.x1<=L.x0 && q.h>0; }).sort(function(a2,b2){ return a2.h-b2.h; });
+    if(st.length<3) throw new Error('手前に段が '+st.length+' 枚しか架かっていない');
+    let prev=0, worst=0;
+    st.forEach(function(q){ const d=q.h-prev; if(d>worst) worst=d; prev=q.h; });
+    const last=top-prev;                              // 最上段から地面へ跳び移る落差
+    if(last>worst) worst=last;
+    // 期待値は直値で書く。TERR_STEP_MAX と比べると、その定数を上げた瞬間に素通りする
+    if(worst>100) throw new Error('一段の落差が '+Math.round(worst)+'px あって跳んで登れない');
+    // 段は壁より手前（左）に架かる。右へ架けても落ちた側からは届かない
+    st.forEach(function(q){ if(q.x1>L.x0) throw new Error('段が壁の向こう側に架かっている'); });
+    // 実際に、落ちた場所から跳んで登り切れる
+    // いちばん下の段の手前に降ろす。区画の外（負のx）へ出すと壁に貼りついて測れない
+    const startX=Math.max(st[0].x0-120, T.x0+30);
+    if(!(st[0].x0>T.x0+10)) throw new Error('いちばん下の段が区画の外にはみ出している（段 '+Math.round(st[0].x0)+' ／区画の頭 '+Math.round(T.x0)+'）');
+    p.x=startX; p._tx=null; p.z=0; p.vz=0; p.fl=0; p._pa=0;
+    p.state='idle'; p.atk=null; p.invuln=99999; p.hp=p.maxHp=99999; p.lives=9;
+    let hi=0, reached=false;
+    for(let f=0;f<900;f++){
+      p.in.K.right=true;
+      if(p.z<=0 && p.state!=='jump') p.in.pressed.jump=true;   // 着地したらすぐ跳ぶ（人がやる登り方）
+      updatePlayer(p); terrainStep(p);
+      const abs=(p.fl||0)+terrLift(p.x);
+      if(abs>hi) hi=abs;
+      if(p.x>L.x0+60 && p.z<=0 && terrLift(p.x)>=400){ reached=true; break; } }
+    p.in.K.right=false;
+    if(!reached) throw new Error('落ちた場所から登り直せない（届いた最高高度 '+Math.round(hi)+'px／頂上 '+Math.round(top)+'px）');
+    console.log('せり上がったあとの登り直し OK ('+st.length+'段・一段の落差 最大'+Math.round(worst)+'px／'
+      +Math.round(startX)+'px から頂上'+Math.round(top)+'px へ復帰)'); }
+
   // ===== 12) 昇降中は縦坑の壁が流れる（画面のどこかが動かないと昇っている感が出ない） =====
   { // 壁の石は ctx のメソッドではなく大域の roundRect が描く。
     // ctx を差し替えても捕まらないので、実装が実際に呼ぶ関数のほうを張る
