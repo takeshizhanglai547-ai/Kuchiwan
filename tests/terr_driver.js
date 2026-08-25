@@ -88,6 +88,9 @@ const DRIVER = `
         // 岩が目前に来たフレームだけ跳ぶ（実際の回避と同じ間合い）
         if(jump && p.z<=0 && Math.abs(b.x-p.x)<170 && b.x<p.x) p.in.pressed.jump=true;   // 入力から跳ばせる（本編と同じ経路）
         updatePlayer(p); updateHazards();
+        // 本編の入力層は毎フレーム押下を落とす。ここで落とさないと押しっぱなし扱いになり、
+        // 空中で二段ジャンプに拾われて軌道が変わってしまう
+        p.in.pressed.jump=false;
         if(hazards.indexOf(b)<0) break;
         if(Math.abs(b.vx)>vmax) vmax=Math.abs(b.vx);
         const gap=Math.abs(b.x-p.x); if(gap<minGap) minGap=gap;

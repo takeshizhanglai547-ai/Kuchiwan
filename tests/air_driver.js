@@ -170,14 +170,10 @@ const DRIVER = `
         ids[air]=k+'/'+sl; }); });
     if(Object.keys(ids).length!==KINDS.length*SLOTS.length)
       throw new Error('空中技が '+Object.keys(ids).length+' 個しかない（'+(KINDS.length*SLOTS.length)+'個のはず）');
-    // 昇竜枠は共通の型（急降下＋着地の衝撃波）でよい
-    KINDS.forEach(function(k){
-      const dp=ATK[airSpecialFor({kind:k},'dp')];
-      if(!dp.airDive) throw new Error(k+' の昇竜コマンドが急降下になっていない');
-      if(!dp.airShock) throw new Error(k+' の急降下に着地の衝撃波が無い'); });
-    // 波動枠と↓↑枠は、キャラごとに別の仕掛けであること。
-    // 「どれも飛び道具を撃つだけ」「どれも回転するだけ」で揃ってしまうのを防ぐ
-    ['hadou','du'].forEach(function(sl){
+    // 3枠とも、キャラごとに別の仕掛けであること。
+    // 「どれも叩きつけ」「どれも飛び道具を撃つだけ」「どれも回転するだけ」で
+    // 揃ってしまうのを防ぐ（3枠それぞれで実際にそうなっていた）
+    ['dp','hadou','du'].forEach(function(sl){
       const fx={}, plain=[];
       KINDS.forEach(function(k){
         const d=ATK[airSpecialFor({kind:k},sl)];
@@ -193,11 +189,17 @@ const DRIVER = `
         throw new Error(sl+' の仕掛けが '+Object.keys(fx).length+' 種類しかない'); });
     // ↓↑が全キャラ「回転」にならないこと（実際にそうなっていて、個性が無いと指摘された）
     { const spin=KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'du')].spin; });
-      if(spin.length>1) throw new Error('↓↑が '+spin.length+' キャラで回転技（回転で通すのは拳法家1人まで）: '+spin.join(',')); }
+      if(spin.length>1) throw new Error('↓↑が '+spin.length+' キャラで回転技（回転で通すのは1人まで）: '+spin.join(',')); }
+    // 昇竜が全キャラ「叩きつけ」にならないこと
+    { const dive=KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'dp')].airDive; });
+      if(dive.length>1) throw new Error('昇竜が '+dive.length+' キャラで叩きつけ（急降下で通すのは1人まで）: '+dive.join(',')); }
+    // 昇竜は上がる技が主体であること（叩きつけ一辺倒への逆戻りを防ぐ）
+    { const rise=KINDS.filter(function(k){ const d=ATK[airSpecialFor({kind:k},'dp')]; return d.rise||d.shoryu; });
+      if(rise.length<2) throw new Error('昇竜で上がる技が '+rise.length+' キャラしかない'); }
     // 波動枠が「前へ弾を撃つだけ」にならないこと（1キャラでも残っていれば指摘の再発）
     { const shot=KINDS.filter(function(k){ const d=ATK[airSpecialFor({kind:k},'hadou')]; return !!d.pshot && !d.airFx; });
       if(shot.length) throw new Error('波動が撃つだけのままのキャラがいる: '+shot.join(',')); }
-    console.log('空中コマンド技 21種 OK (昇竜＝急降下／波動と↓↑はキャラごとに別の仕掛け)'); }
+    console.log('空中コマンド技 21種 OK (昇竜・波動・↓↑とも、7キャラそれぞれ別の仕掛け)'); }
 
   // ===== 9) 空中のコマンド技が実際に出て、敵に届く =====
   { const SLOTS=['dp','hadou','du'];
@@ -221,8 +223,8 @@ const DRIVER = `
           step(1); }
         const dmg=hp0-list.reduce(function(a2,e){ return a2+e.hp; },0);
         if(!(dmg>0)) throw new Error(k+'/'+sl+'（'+ATK[want].name+'）が一体も削らない'); }); });
-    // 急降下技は、着地したときに衝撃波を出す（当てられなくても着地に意味を持たせる）
-    KINDS.forEach(function(k){
+    // 急降下型の技だけは、着地したときに衝撃波を出す（当てられなくても着地に意味を持たせる）
+    KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'dp')].airDive; }).forEach(function(k){
       const p=setup(k);
       p.state='jump'; p.z=150; p.vz=0; p.jAtk=0;
       enemies.length=0; spawnEnemy('wolf', p.x+300, p.y);   // 近接では届かない位置
@@ -404,6 +406,64 @@ const DRIVER = `
     if(g8.dmg < base*0.35) throw new Error('ガードワンの空中奥義だけ弱すぎる（'+Math.round(g8.dmg)+' / 他 '+Math.round(base)+'）');
     console.log('作り直した空中奥義 OK (ヌコ '+Math.round(nu.dmg)+'/'+nu.hit+'体・空中で'+Math.round(nu.midAir)
       +'／ガードワン '+Math.round(g8.dmg)+'/'+g8.hit+'体・空中で'+Math.round(g8.midAir)+')'); }
+
+  // ===== 16) 空中でもう一度だけ跳べる（二段ジャンプ） =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    if(p.state!=='jump') throw new Error('跳べていない');
+    // 一段目の頂点まで待つ
+    let apex1=p.z;
+    for(let f=0;f<40;f++){ step(1); if(p.z>apex1) apex1=p.z; if(p.vz<=0) break; }
+    const zAt=p.z;
+    // 落ち始めてから二段目
+    for(let f=0;f<10;f++) step(1);
+    const zBefore=p.z;
+    p.in.pressed.jump=true; step(1);
+    if(!(p.vz>0)) throw new Error('二段ジャンプで上を向かない（vz='+(p.vz||0).toFixed(1)+'）');
+    let apex2=p.z;
+    for(let f=0;f<40;f++){ step(1); if(p.z>apex2) apex2=p.z; if(p.vz<=0) break; }
+    if(!(apex2>zBefore+80)) throw new Error('二段ジャンプで '+Math.round(apex2-zBefore)+'px しか上がらない');
+    if(!(apex2>apex1)) throw new Error('二段ジャンプで一段目の頂点を越えられない（'+Math.round(apex1)+'→'+Math.round(apex2)+'）');
+    // 三段目は無い
+    const z3=p.z; p.in.pressed.jump=true; step(1);
+    if(p.vz>0.5) throw new Error('三段目が跳べてしまう');
+    // 着地すると回数が戻る。地上から跳び直さず、宙に投げ出された場合でも戻ること
+    for(let f=0;f<200 && p.z>0; f++) step(1);
+    for(let f=0;f<20 && p.state!=='idle'; f++) step(1);
+    if((p.djUsed|0)) throw new Error('着地しても二段ジャンプの回数が戻らない');
+    p.state='jump'; p.z=120; p.vz=0; p.jAtk=0;      // 縁から踏み外した想定
+    p.in.pressed.jump=true; step(1);
+    if(!(p.vz>0)) throw new Error('落下中に二段ジャンプが出せない（着地で戻っていない）');
+    console.log('二段ジャンプ OK (一段目 '+Math.round(apex1)+'px → 二段目 '+Math.round(apex2)+'px・空中では一度きり・着地で復活)'); }
+
+  // ===== 17) 二段ジャンプは空中攻撃を割り込んで出せる／回避中は出せない =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    p.in.pressed.atk=true; step(1);
+    if(!((p.jRave|0)>0)) throw new Error('空中攻撃が出ていない（測れていない）');
+    p.in.pressed.jump=true; step(1);
+    if((p.jRave|0)!==0 || p.jAtk>0) throw new Error('二段ジャンプで空中攻撃を打ち切れない');
+    if(!(p.vz>0)) throw new Error('攻撃中は二段ジャンプが出せない');
+    // 回避を出している最中は割り込めない
+    const q=setup('inu');
+    q.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    q.in.K.right=true; q.in.pressed.grd=true; step(1);
+    if(!((q.adT|0)>0)) throw new Error('空中回避が出ていない（測れていない）');
+    q.in.pressed.jump=true; step(1);
+    if(q.djUsed) throw new Error('空中回避の最中に二段ジャンプが割り込める');
+    q.in.K.right=false;
+    // 着地したフレームの入力は通常の跳躍が受け取る。二段目が横取りすると、
+    // 地面から跳んだつもりが空中の一回を消費して、そのあと跳べなくなる
+    { const r=setup('inu');
+      r.state='jump'; r.z=0; r.vz=-6; r.jAtk=0; r.djUsed=false;
+      r.in.pressed.jump=true; step(1);
+      if(r.djUsed) throw new Error('接地しているのに二段ジャンプが入力を横取りする');
+      // そのまま着地→跳躍で、空中の一回はまだ残っている
+      for(let f=0;f<20 && r.state!=='idle' && r.z>0; f++) step(1);
+      if(r.djUsed) throw new Error('地上へ降りる間に二段ジャンプが消費されている'); }
+    console.log('二段ジャンプの割り込み OK (空中攻撃はキャンセルできる／回避中は割り込めない)'); }
 
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
