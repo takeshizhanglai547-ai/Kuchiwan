@@ -88,33 +88,51 @@ const DRIVER = `
   const stMv=watchDrive(()=>{ wm.in.cardSeq=[{c:3,f:gf},{c:1,f:gf}]; });
   if(stMv!=='wheist') throw new Error('watch stinger should be wheist (got '+stMv+')');
   const fwMv=watchDrive(()=>{ wm.in.keys['_r']=true; });
-  if(fwMv!=='wpistol') throw new Error('watch forward-attack should be wpistol (got '+fwMv+')');
+  if(fwMv!=='wwire') throw new Error('watch forward-attack should be wwire (got '+fwMv+')');
   const dnMv=watchDrive(()=>{ wm.in.keys['_d']=true; });
-  if(dnMv!=='wmine') throw new Error('watch down-attack should be wmine (got '+dnMv+')');
+  if(dnMv!=='wpin') throw new Error('watch down-attack should be wpin (got '+dnMv+')');
   [upMv,stMv,fwMv,dnMv,'wc1','wknife','wflip'].forEach(mv=>{ if(['shoryu','iai','iwave','idragon','iswords','c1'].includes(mv)) throw new Error('watch still using inu move: '+mv); });
-  console.log('ワッチ ORIGINAL MOVESET OK (上=wsmoke / ←→=wheist / 前=wpistol / 下=wmine)');
+  // 銃と爆発物は早撃ちマックの持ち味なので、ワッチの技に混ぜない
+  { const MK=SPECIAL_BASE.mack, WA=SPECIAL_BASE.watch;
+    ['up','fwd','down','dash','hadou','dp','du'].forEach(function(sl){
+      const w=ATK[WA[sl]]; if(!w) throw new Error('ワッチの '+sl+' が無い');
+      if(w.pistols||w.pistolsX||w.revolver||w.gunPose) throw new Error('ワッチの '+sl+' が銃撃技（'+w.name+'）');
+      if(w.placeMine||w.mineRow) throw new Error('ワッチの '+sl+' が地雷設置（'+w.name+'）');
+      // マックと同じ技IDを共有していないこと
+      ['up','fwd','down','dash','hadou','dp','du'].forEach(function(s2){
+        if(WA[sl]===MK[s2]) throw new Error('ワッチとマックが同じ技を使っている: '+WA[sl]); }); }); }
+  console.log('ワッチ ORIGINAL MOVESET OK (上=wsmoke / ←→=wheist / 前=wwire / 下=wpin／銃も地雷も持たない)');
 
-  // ===== 8) 地雷設置：設置→敵が近づくと起爆 =====
-  hazards.length=0; wm.state='idle'; wm.z=0; wm.x=400; wm.facing=1; hitStop=0; slowmo=0;
-  beginAttack('wmine'); for(let i=0;i<12;i++){ hitStop=0; slowmo=0; step(1); }
-  const mine=hazards.find(h=>h.kind==='mine'); if(!mine) throw new Error('地雷 not placed');
-  enemies.length=0; spawnEnemy('wolf', 420, LANE); const me=enemies[0]; me.thinkCd=9999; me.hp=me.maxHp=9999;
-  let detonated=false; for(let i=0;i<30;i++){ hitStop=0; slowmo=0; step(1); if(!hazards.some(h=>h.kind==='mine')){ detonated=true; break; } }
-  if(!detonated) throw new Error('地雷 did not detonate near enemy');
-  if(me.hp>=9999 && !me.dead) throw new Error('地雷 explosion dealt no damage');
-  console.log('ワッチ 地雷設置 OK (placed, detonated near enemy, dmg='+(9999-me.hp)+')');
+  // ===== 8) 影縫い：範囲の敵の足を止める =====
+  hazards.length=0; enemies.length=0; wm.state='idle'; wm.z=0; wm.x=400; wm.facing=1; hitStop=0; slowmo=0;
+  { const pins=[];
+    for(let k=0;k<3;k++){ spawnEnemy('wolf', wm.x+70+k*40, LANE); const e=enemies[enemies.length-1];
+      e.thinkCd=0; e.hp=e.maxHp=9999; pins.push(e); }
+    const hp0=pins.reduce(function(a,e){ return a+e.hp; },0);
+    beginAttack('wpin');
+    for(let i=0;i<20;i++){ hitStop=0; slowmo=0; step(1); }
+    // 縫い留めは長く効くこと。damageEnemy の短いのけぞり（十数フレーム）と区別する
+    const stuck=pins.filter(function(e){ return (e.stun|0)>60; }).length;
+    if(stuck<2) throw new Error('影縫いで長く足が止まった敵が '+stuck+'体しかいない（stun='
+      +pins.map(function(e){ return e.stun|0; }).join('/')+'）');
+    if(!(hp0-pins.reduce(function(a,e){ return a+e.hp; },0) > 0)) throw new Error('影縫いでダメージが入らない');
+    // 縫われている間は動けない
+    const e0=pins[0], x0=e0.x;
+    for(let i=0;i<70;i++){ hitStop=0; slowmo=0; step(1); }
+    if(Math.abs(e0.x-x0)>24) throw new Error('影縫いのあとも '+Math.round(Math.abs(e0.x-x0))+'px 動いている');
+    console.log('ワッチ 影縫い OK ('+stuck+'体の足を止め、'+Math.round(Math.abs(e0.x-x0))+'px しか動かない)'); }
 
-  // ===== 9) 二丁拳銃：弾を連射＆命中 =====
-  projectiles.length=0; enemies.length=0; wm.state='idle'; wm.x=400; wm.facing=1; hitStop=0; slowmo=0;
-  spawnEnemy('wolf', wm.x+110, LANE); const be=enemies[0]; be.thinkCd=9999; be.hp=be.maxHp=9999; const beY=be.y;
-  beginAttack('wpistol'); let bulSeen=false;
-  for(let i=0;i<30;i++){ hitStop=0; slowmo=0;
-    be.state='idle'; be.vx=0; be.vz=0; be.z=0; be.y=beY; be.stun=0;   // 敵を静止させて判定を決定的に
-    if(projectiles.some(pr=>pr.owner==='player'))bulSeen=true; step(1); }
-  // 至近距離では弾が生成と同フレームで着弾・消滅するため、命中（ダメージ）を主判定にする
-  if(be.hp>=9999 && !be.dead && !bulSeen) throw new Error('二丁拳銃 fired no bullets and dealt no damage');
-  if(be.hp>=9999 && !be.dead) throw new Error('二丁拳銃 bullets have NO hit detection');
-  console.log('ワッチ 二丁拳銃 OK (bullets fired & HIT, dmg='+(9999-be.hp)+')');
+  // ===== 9) 鋼糸：離れた敵を手繰り寄せて斬る =====
+  projectiles.length=0; enemies.length=0; wm.state='idle'; wm.z=0; wm.x=400; wm.facing=1; hitStop=0; slowmo=0;
+  { spawnEnemy('wolf', wm.x+170, LANE); const be=enemies[0]; be.thinkCd=9999; be.hp=be.maxHp=9999; be.poise=9999;
+    const d0=be.x-wm.x, h0=be.hp;
+    beginAttack('wwire');
+    for(let i=0;i<34;i++){ hitStop=0; slowmo=0; be.vx=0; be.state='idle'; step(1); }
+    const d1=be.x-wm.x;
+    if(!(d1 < d0-50)) throw new Error('鋼糸で手繰り寄せられていない（'+Math.round(d0)+'→'+Math.round(d1)+'px）');
+    if(!(h0-be.hp>0)) throw new Error('鋼糸で引き寄せた敵にダメージが入らない');
+    if(projectiles.some(function(pr){ return pr.owner==='player'; })) throw new Error('鋼糸なのに弾が出ている');
+    console.log('ワッチ 鋼糸 OK ('+Math.round(d0)+'→'+Math.round(d1)+'px へ手繰り寄せ・与ダメ'+(h0-be.hp)+')'); }
 
   // ===== 10) ロックンロール（ガトリング奥義）：100連射 =====
   setupRoster('watch'); startGame(); state='play'; const wg=players[0]; player=wg; wg.x=400; wg.facing=1; wg.hp=wg.maxHp=99999; wg.dim=3;
