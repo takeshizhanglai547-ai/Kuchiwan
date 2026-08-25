@@ -3048,7 +3048,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -5261,6 +5261,20 @@ function updatePlayer(){
       if(p.z<=0){ p.z=0; p.adT=0; p.vz=0; p.state='land'; p.landT=8; dust(p.x,p.y,6); sfx.land(p.x); }
       else if(p.adT<=0){ p.vz=Math.min(p.adVz, 0); }
       return; }
+    // 二段ジャンプ：空中でもう一度だけ跳べる。斬っている最中でも割り込める（空中連携の足がかり）
+    // 接地している間は通常の跳躍に譲る。着地したフレームの入力を二段目が横取りすると、
+    // 地面から跳んだつもりが空中の一回を消費して、そのあと跳べなくなる
+    if(pressed.jump && !p.djUsed && p.z>6){ pressed.jump=false;
+      p.djUsed=true; p.vz=DJUMP_VZ;
+      let mx2=0; if(K.left)mx2=-1; else if(K.right)mx2=1;
+      if(mx2){ p.facing=mx2; p.avx=mx2*4.2; } else p.avx*=0.5;
+      // 出していた空中攻撃は打ち切る（跳びながら振り直せる）
+      p.jAtk=0; p.jRave=0; p.raveT=0;
+      p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+      p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
+      ring(p.x, p.y-p.z-16, '#cfe8ff');
+      for(let k=0;k<8;k++) spark(p.x+rnd(-18,18), p.y-p.z-rnd(0,14), '#cfe8ff', 2, 6, {aim:Math.PI/2, spread:0.7});
+      dust(p.x, p.y-p.z, 4); sfx.jump(p.x); return; }
     // 回避ボタン：空中では一度だけ、入れた向きへ身をかわす
     if(pressed.grd && !p.adUsed){ pressed.grd=false;
       let dx=0, dy=0;
@@ -5389,7 +5403,7 @@ function updatePlayer(){
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
       if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
       p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
-      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0;
+      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false;
       p.jMkUp=false; p.jMkDown=false; dust(p.x,p.y,7); sfx.land(p.x); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
@@ -5961,7 +5975,7 @@ function updatePlayer(){
   // 回避ボタン：通常キャラはローリング／ワンデンだけは刀のパリィ（リスクとリターンの構え）
   if(pressed.grd && p.z<=0){ pressed.grd=false; if(p.kind==='wanden') beginIaiParry(p); else beginRoll(); return; }
   // jump start
-  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
+  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
 
   const SH=p.kind==='shima';
   // ---- charge release ----
@@ -9292,6 +9306,9 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
 // ── 空中回避（エアドッジ）──
 // 地上のローリングと同じ回避ボタンで、空中でも一度だけ身をかわせる。
 // 吹き飛びが大きくなったぶん、空中でも自分から動ける手段が要る
+// ── 二段ジャンプ ──
+// 空中でもう一度だけ跳べる。空中戦を作り込んだぶん、届かない高さを自分で作れるようにする
+const DJUMP_VZ=15;      // 二段目の初速（地上は17。少し弱くして地上跳びの価値を残す）
 const ADODGE_T=15;      // 動いている長さ
 const ADODGE_INV=22;    // 無敵の長さ
 const ADODGE_SP=13;     // 初速
@@ -9326,7 +9343,7 @@ function launchPlayer(p, dir, power){
 function airRecover(p){
   p.tumble=false; p.recovUsed=true; p.state='jump';
   p.vz=Math.max(p.vz||0, RECOV_VZ); p.vx*=0.35;
-  p.jAtk=0; p.aerial=0; p.jUpUsed=false; p.adUsed=false; p.adT=0;
+  p.jAtk=0; p.aerial=0; p.jUpUsed=false; p.adUsed=false; p.adT=0; p.djUsed=false;
   p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
   p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
   p.invuln=Math.max(p.invuln, RECOV_INV);

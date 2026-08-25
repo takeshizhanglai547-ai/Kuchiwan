@@ -407,6 +407,64 @@ const DRIVER = `
     console.log('作り直した空中奥義 OK (ヌコ '+Math.round(nu.dmg)+'/'+nu.hit+'体・空中で'+Math.round(nu.midAir)
       +'／ガードワン '+Math.round(g8.dmg)+'/'+g8.hit+'体・空中で'+Math.round(g8.midAir)+')'); }
 
+  // ===== 16) 空中でもう一度だけ跳べる（二段ジャンプ） =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    if(p.state!=='jump') throw new Error('跳べていない');
+    // 一段目の頂点まで待つ
+    let apex1=p.z;
+    for(let f=0;f<40;f++){ step(1); if(p.z>apex1) apex1=p.z; if(p.vz<=0) break; }
+    const zAt=p.z;
+    // 落ち始めてから二段目
+    for(let f=0;f<10;f++) step(1);
+    const zBefore=p.z;
+    p.in.pressed.jump=true; step(1);
+    if(!(p.vz>0)) throw new Error('二段ジャンプで上を向かない（vz='+(p.vz||0).toFixed(1)+'）');
+    let apex2=p.z;
+    for(let f=0;f<40;f++){ step(1); if(p.z>apex2) apex2=p.z; if(p.vz<=0) break; }
+    if(!(apex2>zBefore+80)) throw new Error('二段ジャンプで '+Math.round(apex2-zBefore)+'px しか上がらない');
+    if(!(apex2>apex1)) throw new Error('二段ジャンプで一段目の頂点を越えられない（'+Math.round(apex1)+'→'+Math.round(apex2)+'）');
+    // 三段目は無い
+    const z3=p.z; p.in.pressed.jump=true; step(1);
+    if(p.vz>0.5) throw new Error('三段目が跳べてしまう');
+    // 着地すると回数が戻る。地上から跳び直さず、宙に投げ出された場合でも戻ること
+    for(let f=0;f<200 && p.z>0; f++) step(1);
+    for(let f=0;f<20 && p.state!=='idle'; f++) step(1);
+    if((p.djUsed|0)) throw new Error('着地しても二段ジャンプの回数が戻らない');
+    p.state='jump'; p.z=120; p.vz=0; p.jAtk=0;      // 縁から踏み外した想定
+    p.in.pressed.jump=true; step(1);
+    if(!(p.vz>0)) throw new Error('落下中に二段ジャンプが出せない（着地で戻っていない）');
+    console.log('二段ジャンプ OK (一段目 '+Math.round(apex1)+'px → 二段目 '+Math.round(apex2)+'px・空中では一度きり・着地で復活)'); }
+
+  // ===== 17) 二段ジャンプは空中攻撃を割り込んで出せる／回避中は出せない =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    p.in.pressed.atk=true; step(1);
+    if(!((p.jRave|0)>0)) throw new Error('空中攻撃が出ていない（測れていない）');
+    p.in.pressed.jump=true; step(1);
+    if((p.jRave|0)!==0 || p.jAtk>0) throw new Error('二段ジャンプで空中攻撃を打ち切れない');
+    if(!(p.vz>0)) throw new Error('攻撃中は二段ジャンプが出せない');
+    // 回避を出している最中は割り込めない
+    const q=setup('inu');
+    q.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    q.in.K.right=true; q.in.pressed.grd=true; step(1);
+    if(!((q.adT|0)>0)) throw new Error('空中回避が出ていない（測れていない）');
+    q.in.pressed.jump=true; step(1);
+    if(q.djUsed) throw new Error('空中回避の最中に二段ジャンプが割り込める');
+    q.in.K.right=false;
+    // 着地したフレームの入力は通常の跳躍が受け取る。二段目が横取りすると、
+    // 地面から跳んだつもりが空中の一回を消費して、そのあと跳べなくなる
+    { const r=setup('inu');
+      r.state='jump'; r.z=0; r.vz=-6; r.jAtk=0; r.djUsed=false;
+      r.in.pressed.jump=true; step(1);
+      if(r.djUsed) throw new Error('接地しているのに二段ジャンプが入力を横取りする');
+      // そのまま着地→跳躍で、空中の一回はまだ残っている
+      for(let f=0;f<20 && r.state!=='idle' && r.z>0; f++) step(1);
+      if(r.djUsed) throw new Error('地上へ降りる間に二段ジャンプが消費されている'); }
+    console.log('二段ジャンプの割り込み OK (空中攻撃はキャンセルできる／回避中は割り込めない)'); }
+
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
