@@ -31,7 +31,27 @@
   #snd { transition:opacity .26s ease; }
   body.transitioning #snd { opacity:.15; }
   /* タイトルは背後の豪華な演出を活かすため、オーバーレイを控えめに */
-  #start.overlay { background:radial-gradient(ellipse at center 38%, rgba(10,6,26,.30), rgba(3,2,10,.72) 78%); }
+  /* 背後の絵（英雄の勢揃い・城・魔王）を活かすため、暗幕は上下だけに掛ける */
+  /* メニューは上寄せ。中央に置くと、画面下に並ぶ英雄の勢揃いを跨いで隠してしまう */
+  #start.overlay { justify-content:flex-start; gap:10px; padding:16px 20px 12px;
+    background:linear-gradient(180deg, rgba(4,3,12,.80) 0%, rgba(4,3,12,.20) 26%, rgba(4,3,12,.10) 52%, rgba(3,2,10,.86) 100%); }
+  .titleblock { display:flex; flex-direction:column; align-items:center; }
+  /* ロゴの下に一本通す金線。字と本編の境目を作って座りをよくする */
+  .title-rule { width:min(520px,74vw); height:2px; margin:2px 0 6px;
+    background:linear-gradient(90deg, rgba(255,210,80,0), rgba(255,210,80,.9), rgba(255,210,80,0));
+    box-shadow:0 0 10px rgba(255,190,60,.7); }
+  /* メニューは額縁に収める。画面いっぱいに並べると絵が全部隠れる */
+  .menupanel { display:flex; flex-direction:column; align-items:center; gap:8px;
+    padding:14px 22px 16px; border-radius:14px; max-width:min(760px,94vw);
+    background:linear-gradient(180deg, rgba(14,10,26,.86), rgba(6,4,14,.92));
+    border:2px solid rgba(255,210,80,.55);
+    box-shadow:0 0 0 1px rgba(0,0,0,.6) inset, 0 10px 34px rgba(0,0,0,.62), 0 0 26px rgba(255,180,60,.18); }
+  .menurow { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #start .moves { margin-top:auto; }
+  .pickhead { color:#ffd34d; font-size:14px; letter-spacing:4px; font-weight:800; text-shadow:0 0 8px #b8860b; }
+  .btn-lg { margin-top:4px; padding:14px 52px; font-size:22px; }
+  .btn-sm { margin-top:0; padding:9px 18px; font-size:15px; letter-spacing:1.5px; }
+  .btn-xs { margin-top:0; padding:7px 14px; font-size:13px; letter-spacing:1px; }
   #start .title-main { text-shadow:0 4px 0 rgba(120,60,0,.5), 0 0 22px rgba(255,180,40,.6); }
   #start .title-jp { text-shadow:0 0 10px #ff8a00, 0 2px 6px #000; }
   .title-sub { font-size:14px; letter-spacing:6px; color:#ffd34d; text-shadow:0 0 8px #b8860b; }
@@ -70,6 +90,8 @@
     .btn { margin-top:6px; padding:9px 10px; font-size:13px; letter-spacing:1px; border-width:1.5px;
            border-radius:8px; box-shadow:0 3px 0 #9c5a00,0 5px 10px rgba(0,0,0,.45); }
     .btn:active { transform:translateY(2px); box-shadow:0 1px 0 #9c5a00; }
+    .menupanel { padding:10px 12px 12px; gap:6px; }
+    .btn-lg { padding:11px 26px; font-size:17px; }
     .charrow { display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important;
                width:100%; max-width:440px; }
     .charrow .btn { margin-top:0; width:100%; padding:9px 4px; }
@@ -133,29 +155,46 @@
   <div id="snd">♪</div>
 
   <div id="start" class="overlay">
-    <div class="title-sub">ARCADE BELT ACTION</div>
-    <div class="title-main">聖犬士イッヌ</div>
-    <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
-    <button id="continueBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
-    <div class="charrow" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-      <button id="startBtn" class="btn">▶ 1P イッヌ</button>
-      <button id="startShimaBtn" class="btn" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
-      <button id="startNukoBtn" class="btn" style="background:linear-gradient(180deg,#ffb0e0,#c060a8)">▶ 1P ヌコ</button>
-      <button id="startG8Btn" class="btn" style="background:linear-gradient(180deg,#e0a45f,#a05a22)">▶ 1P ガードワン8号</button>
-      <button id="startWatchBtn" class="btn" style="background:linear-gradient(180deg,#eef2f7,#aab6c4);color:#2a3038">▶ 1P 盗賊ワッチ</button>
-      <button id="startWandenBtn" class="btn" style="background:linear-gradient(180deg,#e8dcb4,#8a2a24);color:#2a1a10">▶ 1P 剣鬼ワンデン</button>
-      <button id="startMackBtn" class="btn" style="background:linear-gradient(180deg,#f0c070,#a0521c);color:#2a1a10">▶ 1P 早撃ちマック</button>
-      <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
+    <div class="titleblock">
+      <div class="title-sub">ARCADE BELT ACTION</div>
+      <div class="title-main">聖犬士イッヌ</div>
+      <div class="title-rule"></div>
+      <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
     </div>
-    <div class="optrow" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-      <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
-      <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
-      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（キャラを選んでコンボ練習）</button>
-      <button id="vsBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,200,.6);color:#ff8ad0">⚔ 対戦モード（ふたりで勝負・ストック制）</button>
+    <!-- 主要メニュー。キャラ選びは「はじめる」を押してから開く。
+         以前は12個のボタンが画面を覆い、背後の絵（英雄の勢揃い・城・魔王）が
+         一切見えなかった -->
+    <div id="mainMenu" class="menupanel">
+      <button id="continueBtn" class="btn btn-lg hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
+      <button id="playBtn" class="btn btn-lg">▶ はじめる</button>
+      <div class="menurow">
+        <button id="vsBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,200,.6);color:#ff8ad0">⚔ 対戦モード</button>
+        <button id="trainBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング</button>
+      </div>
+      <div class="menurow">
+        <button id="hardBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF</button>
+        <button id="ng2SelBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回：1周目</button>
+      </div>
+    </div>
+    <!-- キャラ選び。「はじめる」で開く -->
+    <div id="charPick" class="menupanel hidden">
+      <div class="pickhead">出撃する犬士を選べ</div>
+      <div class="charrow" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:720px">
+        <button id="startBtn" class="btn btn-sm">▶ 1P イッヌ</button>
+        <button id="startShimaBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
+        <button id="startNukoBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#ffb0e0,#c060a8)">▶ 1P ヌコ</button>
+        <button id="startG8Btn" class="btn btn-sm" style="background:linear-gradient(180deg,#e0a45f,#a05a22)">▶ 1P ガードワン8号</button>
+        <button id="startWatchBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#eef2f7,#aab6c4);color:#2a3038">▶ 1P 盗賊ワッチ</button>
+        <button id="startWandenBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#e8dcb4,#8a2a24);color:#2a1a10">▶ 1P 剣鬼ワンデン</button>
+        <button id="startMackBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#f0c070,#a0521c);color:#2a1a10">▶ 1P 早撃ちマック</button>
+        <button id="start2Btn" class="btn btn-sm" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
+      </div>
+      <button id="pickBackBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(200,210,230,.5);color:#cfe0ff">← もどる</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
     </div>
+  </div>
   </div>
 
   <div id="result" class="overlay hidden">
@@ -1843,14 +1882,15 @@ function updateEcho(){ if(echoT>0) echoT--; }
 //   0.00〜0.16 帯が走り込み、立ち絵が外から滑り込む
 //   0.16〜0.68 保持（技名が出る）
 //   0.68〜1.00 帯が抜けて立ち絵が流れ去る
-const ULT_CUT_MAX=54;
+// カットインは1秒あれば足りる。長いと肝心の奥義のモーションが見えないまま終わる
+const ULT_CUT_MAX=36;
 const ultCut={t:0, kind:'inu', name:'', col:'#ffe14d', dir:1, pid:0};
 function ultCutIn(kind,name,col){
   if(perfTier>=2) return;                        // 重いときは静かに省く
   ultCut.t=ULT_CUT_MAX; ultCut.kind=kind; ultCut.name=name||'奥義';
   ultCut.col=col||heroColOf(kind); ultCut.dir=(player&&player.facing)||1;
   ultCut.pid=(player&&player.pid)|0;
-  camZoomT=Math.max(camZoomT,1.16); triggerSlow(30); }
+  camZoomT=Math.max(camZoomT,1.16); triggerSlow(10); }   // スローを長く掛けると、体感の尺が1秒を大きく超える
 function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
 // 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
 const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
@@ -2377,60 +2417,52 @@ const ATK={
   // ── イッヌ ──
   aiDp:{name:'天墜斬', dur:40, act:[8,34], reach:120, hh:96, dmg:26, kb:14, from:-1.9,to:1.2, len:76, trail:'#bfe9ff', pivotY:-56,
     special:true, knock:true, multi:true, multiGap:7, airDive:{at:6, g:1.5, max:22, vx:5.0}, airShock:{r:150, dmg:26, col:'#bfe9ff'}, airLand:16},
-  aiHa:{name:'断空・十字波', dur:38, act:[12,14], reach:44, hh:40, dmg:0, kb:0, from:-1.2,to:1.2, len:56, trail:'#bffcff', pivotY:-50,
-    special:true, superFx:true, airHover:24, airLand:12,
-    pshot:{dmg:17,color:'#bffcff',speed:11,r:40,life:120,pierce:true,style:'wave',count:2,spread:3.2}},
-  aiDu:{name:'浮身・円環斬', dur:46, act:[8,40], reach:110, hh:110, dmg:8, kb:5, from:-3.1,to:3.1, len:66, trail:'#fff0b0', pivotY:-50,
-    special:true, omni:true, multi:true, multiGap:5, spin:true, airHover:40, airLand:12},
+  aiHa:{name:'断空・地走り', dur:44, act:[12,16], reach:52, hh:44, dmg:0, kb:0, from:-2.2,to:1.4, len:70, trail:'#bffcff', pivotY:-52,
+    special:true, superFx:true, airHover:26, airLand:14, airFx:'inuHa'},
+  aiDu:{name:'浮身・八双落とし', dur:44, act:[16,38], reach:74, hh:230, dmg:34, kb:18, from:-1.4,to:-1.2, len:92, trail:'#fff0b0', pivotY:-40,
+    special:true, knock:true, finisher:true, airHover:14, airLand:20, airFx:'inuDu'},
   // ── シマダックス ──
   ashDp:{name:'墜龍脚', dur:38, act:[6,32], reach:104, hh:92, dmg:24, kb:14, from:-1.5,to:1.0, len:30, trail:'#ff9a3a', pivotY:-52,
     special:true, fist:true, kick:true, knock:true, multi:true, multiGap:7, airDive:{at:5, g:1.7, max:24, vx:5.6}, airShock:{r:160, dmg:24, col:'#ff9a3a'}, airLand:18},
-  ashHa:{name:'双掌・気功弾', dur:36, act:[11,13], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.4, len:26, trail:'#aef8ff', pivotY:-48,
-    special:true, fist:true, superFx:true, airHover:22, airLand:12,
-    pshot:{dmg:16,color:'#aef8ff',speed:10,r:26,life:100,explode:true,count:2,spread:2.6}},
-  ashDu:{name:'浮空・千手', dur:48, act:[6,42], reach:96, hh:104, dmg:6, kb:3, from:-0.6,to:0.6, len:28, trail:'#ffd24d', pivotY:-52,
-    special:true, fist:true, punch:true, omni:true, multi:true, multiGap:3, airHover:42, airLand:12},
+  ashHa:{name:'墜震掌', dur:40, act:[10,20], reach:132, hh:96, dmg:9, kb:6, from:-0.8,to:0.5, len:28, trail:'#aef8ff', pivotY:-50,
+    special:true, fist:true, punch:true, superFx:true, multi:true, multiGap:4, airHover:20, airLand:14, airFx:'shimaHa'},
+  ashDu:{name:'空中・羅漢乱舞', dur:50, act:[6,44], reach:100, hh:110, dmg:6, kb:3, from:-3.1,to:3.1, len:28, trail:'#ffd24d', pivotY:-52,
+    special:true, fist:true, punch:true, omni:true, multi:true, multiGap:3, spin:true, airHover:44, airLand:12, airFx:'shimaDu'},
   // ── ヌコ ──
   anDp:{name:'星穿ち', dur:40, act:[8,34], reach:96, hh:96, dmg:22, kb:12, from:-1.6,to:1.1, len:60, trail:'#d6b0ff', pivotY:-54,
     special:true, knock:true, multi:true, multiGap:7, airDive:{at:6, g:1.4, max:21, vx:4.4}, airShock:{r:170, dmg:24, col:'#d6b0ff'}, airLand:16},
-  anHa:{name:'氷結・扇状弾', dur:38, act:[12,14], reach:40, hh:40, dmg:0, kb:0, from:-0.5,to:0.3, len:24, trail:'#8fd8ff', pivotY:-48,
-    special:true, fist:true, superFx:true, airHover:24, airLand:12,
-    pshot:{dmg:13,color:'#8fd8ff',speed:9,r:24,life:110,style:'spike',count:5,spread:2.8,multihit:true,hitGap:9}},
-  anDu:{name:'浮遊・星環', dur:50, act:[8,44], reach:104, hh:112, dmg:7, kb:4, from:-3.1,to:3.1, len:40, trail:'#ffd0f0', pivotY:-50,
-    special:true, fist:true, omni:true, multi:true, multiGap:4, spin:true, airHover:44, airLand:12},
+  anHa:{name:'魔法陣・落星', dur:46, act:[12,16], reach:44, hh:44, dmg:0, kb:0, from:-0.5,to:0.3, len:24, trail:'#8fd8ff', pivotY:-48,
+    special:true, fist:true, cast:0, superFx:true, airHover:28, airLand:14, airFx:'nukoHa'},
+  anDu:{name:'星霊召喚・小星', dur:44, act:[10,14], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.4, len:22, trail:'#ffd0f0', pivotY:-48,
+    special:true, fist:true, superFx:true, airHover:32, airLand:12, airFx:'nukoDu'},
   // ── ガードワン8号 ──
   agDp:{name:'鉄槌落とし', dur:44, act:[8,38], reach:128, hh:104, dmg:32, kb:20, from:-2.2,to:1.3, len:92, trail:'#ffb85a', pivotY:-64,
     special:true, knock:true, bighammer:true, airDive:{at:7, g:1.6, max:23, vx:4.0}, airShock:{r:200, dmg:34, col:'#ffb85a'}, airLand:22},
-  agHa:{name:'投擲・鉄球', dur:40, act:[13,15], reach:44, hh:44, dmg:0, kb:0, from:-1.4,to:0.6, len:56, trail:'#c9ccd4', pivotY:-58,
-    special:true, superFx:true, airHover:26, airLand:14,
-    pshot:{dmg:26,color:'#c9ccd4',speed:9,r:30,life:110,pierce:true,explode:true}},
-  agDu:{name:'空中大車輪', dur:52, act:[8,46], reach:126, hh:118, dmg:9, kb:8, from:-3.1,to:3.1, len:86, trail:'#ffd24d', pivotY:-56,
-    special:true, omni:true, multi:true, multiGap:5, spin:true, knock:true, airHover:46, airLand:16},
+  agHa:{name:'鎖付き鉄球・引き寄せ', dur:46, act:[12,16], reach:44, hh:44, dmg:0, kb:0, from:-1.4,to:0.6, len:56, trail:'#c9ccd4', pivotY:-58,
+    special:true, superFx:true, airHover:30, airLand:16, airFx:'g8Ha'},
+  agDu:{name:'空中要塞化', dur:56, act:[8,50], reach:118, hh:120, dmg:11, kb:14, from:-0.3,to:0.3, len:40, trail:'#e6e9f0', pivotY:-56,
+    special:true, omni:true, multi:true, multiGap:8, knock:true, airHover:50, airLand:18, airFx:'g8Du'},
   // ── ワッチ ──
   awDp:{name:'跳燕・強奪落とし', dur:38, act:[6,32], reach:104, hh:92, dmg:23, kb:13, from:-1.7,to:1.1, len:52, trail:'#ff8ae0', pivotY:-54,
     special:true, fist:true, knock:true, multi:true, multiGap:6, airDive:{at:5, g:1.6, max:23, vx:5.4}, airShock:{r:150, dmg:22, col:'#ff8ae0'}, airLand:14},
-  awHa:{name:'空中クナイ・扇撒き', dur:34, act:[10,12], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.3, len:22, trail:'#cfe0f0', pivotY:-48,
-    special:true, superFx:true, airHover:20, airLand:10,
-    pshot:{dmg:12,color:'#cfe0f0',speed:13,r:12,life:80,pierce:true,style:'spike',count:5,spread:3.0}},
-  awDu:{name:'滞空・煙幕乱刃', dur:46, act:[8,40], reach:112, hh:108, dmg:7, kb:4, from:-3.1,to:3.1, len:52, trail:'#e0c4ff', pivotY:-52,
-    special:true, omni:true, multi:true, multiGap:4, spin:true, airHover:40, airLand:12},
+  awHa:{name:'空中撒菱', dur:38, act:[10,14], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.3, len:22, trail:'#cfe0f0', pivotY:-48,
+    special:true, superFx:true, airHover:22, airLand:10, airFx:'watchHa'},
+  awDu:{name:'煙玉・空蝉落とし', dur:52, act:[10,46], reach:96, hh:104, dmg:7, kb:4, from:-0.7,to:0.7, len:40, trail:'#e0c4ff', pivotY:-52,
+    special:true, multi:true, multiGap:6, airLand:8, airFx:'watchDu'},
   // ── ワンデン ──
   adDp:{name:'空蝉・落とし燕', dur:42, act:[8,36], reach:160, hh:100, dmg:30, kb:16, from:-2.1,to:1.4, len:118, trail:'#eaf6ff', pivotY:-60,
     special:true, knock:true, multi:true, multiGap:8, airDive:{at:6, g:1.5, max:23, vx:5.2}, airShock:{r:170, dmg:30, col:'#eaf6ff'}, airLand:18},
-  adHa:{name:'飛燕波', dur:40, act:[13,15], reach:44, hh:44, dmg:0, kb:0, from:-1.6,to:1.4, len:110, trail:'#ffffff', pivotY:-56,
-    special:true, superFx:true, iai:true, airHover:26, airLand:14,
-    pshot:{dmg:22,color:'#ffffff',speed:12,r:44,life:130,pierce:true,style:'wave',multihit:true,hitGap:7}},
-  adDu:{name:'滞空・霞連斬', dur:50, act:[8,44], reach:150, hh:112, dmg:9, kb:5, from:-3.1,to:3.1, len:112, trail:'#e8f4ff', pivotY:-56,
-    special:true, omni:true, multi:true, multiGap:5, spin:true, airHover:44, airLand:16},
+  adHa:{name:'飛燕・空蝉斬', dur:46, act:[14,22], reach:150, hh:110, dmg:26, kb:12, from:-1.8,to:1.6, len:112, trail:'#ffffff', pivotY:-56,
+    special:true, iai:true, superFx:true, knock:true, airHover:30, airLand:18, airFx:'wandenHa'},
+  adDu:{name:'霞・八相', dur:54, act:[10,48], reach:150, hh:112, dmg:10, kb:5, from:-2.4,to:2.4, len:112, trail:'#e8f4ff', pivotY:-56,
+    special:true, multi:true, multiGap:6, airLand:16, airFx:'wandenDu'},
   // ── 早撃ちマック ──
   amDp:{name:'急降下狙撃', dur:40, act:[8,34], reach:96, hh:92, dmg:20, kb:12, from:-0.6,to:0.4, len:30, trail:'#ffd24d', pivotY:-50,
     special:true, fist:true, gunPose:true, knock:true, airDive:{at:6, g:1.5, max:22, vx:4.6}, airShock:{r:150, dmg:26, col:'#ffd24d'}, airLand:16},
-  amHa:{name:'空中グレネード', dur:38, act:[12,14], reach:40, hh:40, dmg:0, kb:0, from:-0.5,to:0.2, len:24, trail:'#ffb85a', pivotY:-48,
-    special:true, fist:true, gunPose:true, superFx:true, airHover:24, airLand:12,
-    pshot:{dmg:20,color:'#ffb85a',speed:8,r:24,life:110,explode:true,count:3,spread:2.4}},
-  amDu:{name:'空中ショットガン・扇撃ち', dur:44, act:[10,12], reach:44, hh:44, dmg:0, kb:0, from:-0.6,to:0.5, len:26, trail:'#ffe9a0', pivotY:-50,
-    special:true, fist:true, gunPose:true, superFx:true, airHover:38, airLand:12,
-    pshot:{dmg:11,color:'#ffe9a0',speed:14,r:14,life:60,count:7,spread:3.6}},
+  amHa:{name:'時限爆弾・投下', dur:40, act:[11,15], reach:40, hh:40, dmg:0, kb:0, from:-0.5,to:0.2, len:24, trail:'#ffb85a', pivotY:-48,
+    special:true, fist:true, gunPose:true, superFx:true, airHover:24, airLand:12, airFx:'mackHa'},
+  amDu:{name:'空中リロード＆掃射', dur:52, act:[14,46], reach:40, hh:40, dmg:0, kb:0, from:-0.6,to:0.5, len:26, trail:'#ffe9a0', pivotY:-50,
+    special:true, fist:true, gunPose:true, superFx:true, airHover:46, airLand:12, airFx:'mackDu'},
   // ══════════════════════════════════════════════════════════════
   //  空中奥義（各キャラ1つ）。地上の奥義とは別の技として作る。
   //  地上が「その場で構えて放つ」ものなら、空中は「落ちながら／留まりながら」の型にする
@@ -2439,10 +2471,10 @@ const ATK={
     omni:true, multi:true, multiGap:5, special:true, superFx:true, spin:true, airLand:16, airRise:7, airHover:56, airUlt:'inu'},
   aShima:{name:'隕鉄脚・落星撃', ultMove:true, dur:56, act:[40,50], reach:120, hh:120, dmg:26, kb:22, from:-1.2,to:1.2, len:30, trail:'#ff9a3a', pivotY:-40,
     fist:true, kick:true, special:true, superFx:true, knock:true, finisher:true, aoe:true, airLand:22, airRise:19, airHover:16, airSlam:true, airUlt:'shima'},
-  aNuko:{name:'星屑の雨・アステリズム', ultMove:true, dur:74, act:[14,64], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.4, len:22, trail:'#ffd0f0', pivotY:-46,
-    fist:true, special:true, superFx:true, airLand:14, airRise:7, airHover:66, airUlt:'nuko'},
-  aGuard:{name:'軌道爆撃・アンカードロップ', ultMove:true, dur:60, act:[44,52], reach:150, hh:130, dmg:34, kb:28, from:-2.4,to:1.4, len:110, trail:'#ffb85a', pivotY:-70,
-    special:true, superFx:true, knock:true, finisher:true, aoe:true, shock:34, bighammer:true, airLand:26, airRise:14, airHover:16, airSlam:true, airUlt:'guard8'},
+  aNuko:{name:'天穹・アステリズム', ultMove:true, dur:82, act:[14,70], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.4, len:22, trail:'#ffd0f0', pivotY:-46,
+    fist:true, special:true, superFx:true, airLand:16, airRise:7, airHover:74, airUlt:'nuko'},
+  aGuard:{name:'軌道爆撃・アンカードロップ', ultMove:true, dur:72, act:[52,60], reach:150, hh:130, dmg:34, kb:28, from:-2.4,to:1.4, len:110, trail:'#ffb85a', pivotY:-70,
+    special:true, superFx:true, knock:true, finisher:true, aoe:true, shock:34, bighammer:true, airLand:26, airRise:16, airHover:20, airSlam:true, airUlt:'guard8'},
   aWatch:{name:'影襲・スカイレイド', ultMove:true, dur:66, act:[10,56], reach:132, hh:110, dmg:8, kb:4, from:-2.4,to:2.4, len:56, trail:'#ff8ae0', pivotY:-52,
     multi:true, multiGap:4, special:true, superFx:true, airLand:14, airRise:7, airHover:58, airUlt:'watch'},
   aWanden:{name:'飛燕・八重霞', ultMove:true, dur:70, act:[12,58], reach:170, hh:120, dmg:12, kb:6, from:-2.6,to:2.6, len:120, trail:'#eaf6ff', pivotY:-56,
@@ -2859,7 +2891,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: defaultWeaponFor(kind), weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
+  weapon: defaultWeaponFor(kind), weaponT:0, heldWeapon:null, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0,
   level:1, xp:0, xpNext:100, vehicle:null, vehHp:0, vehRam:0, vehT:0, stolen:[], stealCd:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -3014,7 +3046,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -3022,13 +3054,13 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0;
-  p.weapon=p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;
+  p.weapon=p.heldWeapon||p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;   // 拾った武器はやられても持ち続ける
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
   p.vehicle=null; p.vehHp=0; p.vehRam=0; p.vehT=0; p.mAtk=null; p.mAtkT=0;   // 乗り物は各フィールドで乗り直す
   p.stealCd=0;   // ワッチ：掴み奪取のクールダウン。奪った技(stolen)はフィールドを跨いで保持
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.wear=null; p.wardrobe=[]; p.atkMul=1; p.defMul=1; p.spdMul=1; p.coinMul=1; p.maxHp=120; p.hp=120; p.dimMax=3; p.level=1; p.xp=0; p.xpNext=100; p.stolen=[];
-    p.permWeapon=null; p.weapon=defaultWeaponFor(p.kind);
+    p.permWeapon=null; p.heldWeapon=null; p.weapon=defaultWeaponFor(p.kind);
     if(p.kind==='watch'){ p.atkMul=0.72; p.spdMul=1.18; p.lives=4; p.maxHp=108; p.hp=108; }   // 盗賊ワッチ：素の戦闘力は低いが素早く残機多め
     if(p.kind==='wanden'){ p.atkMul=1.18; p.spdMul=0.94; p.lives=2; p.maxHp=100; p.hp=100; }  // 居合の達人ワンデン：紙装甲・少残機だが一撃が重いテクニカル型
     // 早撃ちマック：遠距離アタッカー・高機動。弾で戦うぶん近接の間合いが薄い
@@ -3207,25 +3239,60 @@ function airUltTick(p, a, def){
     if(t===def.act[0]){ bigExplosion(p.x, p.y-10, 190, '#ff9a3a');
       ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#ffffff'); dust(p.x,p.y,22);
       shake=Math.max(shake,20); quake=Math.max(quake||0,22); flash=Math.max(flash,6); triggerSlow(26); sfx.blast(p.x); sfx.ko(p.x);
-      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>240) return;
-        damageEnemy(e, TD(Math.round(52*mul)), (e.x<p.x?-1:1)*12, true);
+      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>270) return;
+        damageEnemy(e, TD(Math.round(66*mul)), (e.x<p.x?-1:1)*12, true);
         if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*24, -16, 4); }); } }
-  else if(K2==='nuko'){              // 空に留まり、画面じゅうへ星屑を降らせる
-    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%5===0){
-      for(let k=0;k<2;k++) spawnProj(camX+rnd(40,W-40), p.y, rnd(-1.6,1.6), 0, {owner:'player',
-        dmg:Math.round(TD(13)*mul), color:(k?'#ffd0f0':'#b0e8ff'), r:15, life:120,
-        zz:H+rnd(0,120), vzz:-12, explode:true});
-      if((t-def.act[0])%20===0) sfx.rise(p.x); }
-    if(t===def.act[0]){ ring(p.x,p.y-p.z-40,'#d6b0ff'); sfx.boss(p.x); } }
-  else if(K2==='guard8'){            // 錨ごと高く構えてから落下し、着地で三重の衝撃波
+  else if(K2==='nuko'){              // 敵に星印を打ち、線で結んで星座にする。結んだ線の上を雷が走る
+    if(t===def.act[0]){ ring(p.x,p.y-p.z-40,'#d6b0ff'); ring(p.x,p.y-p.z-40,'#ffffff');
+      popText(p.x,p.y-p.z-110,'星よ、繋がれ——','#d6b0ff',true); sfx.boss(p.x); sfx.rise(p.x);
+      a.mark=[]; }
+    // 前半：画面じゅうの敵へ順に星印を打つ
+    if(t>def.act[0] && t<def.act[0]+34 && t%3===0){
+      const cand=enemies.filter(function(e){ return !e.dead && !e.grabbedBy && Math.abs(e.x-(camX+W/2))<W*0.62
+        && (a.mark||[]).indexOf(e)<0; });
+      if(cand.length){ const e=cand[0]; (a.mark=a.mark||[]).push(e);
+        drawStar(0,0,0,0,'#fff');   // 実体は下の描画で出す（ここでは印だけ付ける）
+        spark(e.x, e.y-e.h*0.6, '#ffd0f0', 8, 8); ring(e.x, e.y-e.h*0.5, '#d6b0ff');
+        noHitStopOnce=true; damageEnemy(e, TD(Math.round(16*mul)), 0, false); sfx.get(e.x); } }
+    // 後半：星印どうしを線で結び、線の上を雷が走る（印が多いほど強い＝雑魚の群れに刺さる）
+    if(t>=def.act[0]+36 && t<=def.act[1] && (t-(def.act[0]+36))%6===0){
+      const ms=(a.mark||[]).filter(function(e){ return !e.dead; });
+      const n=(t-(def.act[0]+36))/6;
+      if(ms.length){ const e=ms[n%ms.length], e2=ms[(n+1)%ms.length];
+        for(let k=0;k<8;k++){ const u=k/8;
+          spark(e.x+(e2.x-e.x)*u, (e.y-e.h*0.5)+((e2.y-e2.h*0.5)-(e.y-e.h*0.5))*u, (k%2)?'#ffffff':'#b0e8ff', 2, 6); }
+        ms.forEach(function(q){ if(q.dead) return;
+          noHitStopOnce=true; damageEnemy(q, TD(Math.round(15*mul)), 0, false);
+          if(!q.dead && n%3===2) launchEnemy(q, (q.x<p.x?-1:1)*8, -12, 3); });
+        flash=Math.max(flash,2); if(n%3===0) sfx.zap(e.x); } }
+    if(t===def.act[1]+2){ const ms=(a.mark||[]).filter(function(e){ return !e.dead; });
+      flash=Math.max(flash,6); shake=Math.max(shake,14); triggerSlow(24); sfx.big(p.x);
+      popText(p.x,p.y-p.z-110,'——星座、完成！','#ffffff',true);
+      ms.forEach(function(q){ ring(q.x,q.y-q.h*0.5,'#ffffff'); spark(q.x,q.y-q.h*0.5,'#d6b0ff',16,11);
+        noHitStopOnce=true; damageEnemy(q, TD(Math.round(48*mul)), (q.x<p.x?-1:1)*10, true); }); } }
+  else if(K2==='guard8'){            // 錨を鎖で振り回しながら落ち、着地で地面を三重に叩き割る
+    // 落下中：鎖の先の錨がぐるぐる回り、周りを巻き込む（以前は落ちるだけで、当てる手段が着地しか無かった）
     if(t>def.airHover && t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.6, -24);
-      if(t%3===0) spark(p.x+rnd(-20,20), p.y-p.z-rnd(0,60), '#ffb85a', 3, 7); }
-    if(t===def.act[0]){ shake=Math.max(shake,22); quake=Math.max(quake||0,26); flash=Math.max(flash,6);
-      triggerSlow(24); sfx.big(p.x); sfx.ko(p.x); dust(p.x,p.y,24);
-      for(let k=0;k<3;k++) shockwave(p.x, p.y, {r:120+k*90, color:k?'#ffb85a':'#ffffff', big:true});
-      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>330) return;
-        damageEnemy(e, TD(Math.round(38*mul)), (e.x<p.x?-1:1)*14, true);
-        if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*20, -14, 4); }); } }
+      const ang=t*0.34, rr=124;
+      const ax=p.x+Math.cos(ang)*rr, ay=p.y-p.z-50+Math.sin(ang)*rr*0.62;
+      for(let k=1;k<5;k++){ const u=k/5;   // 鎖
+        spark(p.x+(ax-p.x)*u, (p.y-p.z-50)+(ay-(p.y-p.z-50))*u, '#9aa0ac', 1, 3); }
+      spark(ax, ay, '#ffb85a', 3, 7);
+      if(t%3===0) enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
+        if(Math.abs(e.x-ax)>66 || Math.abs(e.y-p.y)>80) return;
+        noHitStopOnce=true; damageEnemy(e, TD(Math.round(14*mul)), (e.x<p.x?-1:1)*5, false);
+        if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*6, -9, 3); }); }
+    if(t===def.act[0]){ shake=Math.max(shake,24); quake=Math.max(quake||0,28); flash=Math.max(flash,6);
+      triggerSlow(28); sfx.big(p.x); sfx.ko(p.x); dust(p.x,p.y,26);
+      popText(p.x,p.y-110,'アンカードロップ！！','#ffb85a',true);
+      for(let k=0;k<3;k++) shockwave(p.x, p.y, {r:130+k*100, color:k?'#ffb85a':'#ffffff', big:true});
+      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; const d=Math.abs(e.x-p.x); if(d>380) return;
+        damageEnemy(e, TD(Math.round((d<150?52:36)*mul)), (e.x<p.x?-1:1)*16, true);
+        if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*24, -16, 4); });
+      // 割れた地面が左右へ走る（届かなかった敵にも追撃が届く）
+      for(const sg of [1,-1]) spawnProj(p.x+sg*40, p.y, sg*12, 0, {owner:'player',
+        dmg:Math.round(TD(24)*mul), color:'#ffb85a', r:34, life:70, zz:18,
+        wave:true, pierce:true, multihit:true, hitGap:10}); } }
   else if(K2==='watch'){             // 影が四方から乱れ突き、締めに金貨が弾ける
     if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%4===0){
       const n=(t-def.act[0])/4, sg=(n%2)?1:-1;
@@ -3259,6 +3326,133 @@ function airUltTick(p, a, def){
       spawnProj(tx, LANE, 0, 0, {owner:'player', dmg:Math.round(TD(22)*mul), color:'#ffd24d',
         r:20, life:80, zz:H+40, vzz:-16, explode:true, blast:true, blastR:170, blastDmg:Math.round(TD(30)*mul)});
       sfx.launch(p.x, 0.7); } }
+}
+// ══════════════════════════════════════════════════════════════════
+//  空中コマンド技の中身
+//  「地上の技を宙で出す」だけにならないよう、キャラごとに別の仕掛けを持たせる。
+//  波動枠は撃つ／設置する／引き寄せる／消える と型そのものを変え、
+//  ↓↑枠は回転一辺倒をやめて、落とす・召喚する・籠もる・隠れる に分ける
+// ══════════════════════════════════════════════════════════════════
+function airSpecialTick(p, a, def){
+  const t=a.t, dir=p.facing, mul=(p.atkMul||1)*(a.evo||1), K2=def.airFx;
+  const D=function(n){ return Math.round(n*mul); };
+  // ── 波動枠 ──
+  if(K2==='inuHa'){                    // 空から地面へ叩きつけ、着弾から左右へ刃が地を走る
+    if(t===def.act[0]){ const gx=p.x+dir*70;
+      crescent(p.x+dir*40, p.y-p.z-40, 100, -2.2, 1.4, '#bffcff');
+      spawnProj(p.x+dir*30, p.y, dir*6, 0, {owner:'player', dmg:D(16), color:'#bffcff',
+        r:34, life:40, zz:Math.max(p.z-10,14), vzz:-Math.max(3, p.z/9), wave:true, pierce:true});
+      sfx.swing(1, wsndOf(p.weapon), p.x); }
+    if(t===def.act[1]){ // 着弾点から左右へ地走り
+      for(const sg of [1,-1]) spawnProj(p.x+sg*24, p.y, sg*13, 0, {owner:'player', dmg:D(18),
+        color:'#bffcff', r:30, life:90, zz:16, wave:true, pierce:true, multihit:true, hitGap:9});
+      ring(p.x, p.y, '#bffcff'); dust(p.x,p.y,8); shake=Math.max(shake,7); sfx.blast(p.x,0.6); } }
+  else if(K2==='shimaHa'){             // 掌打の反動で自分は後ろへ跳び、前方へ円錐の気を放つ
+    if(t===def.act[0]){ p.avx=-dir*9; p.vz=Math.max(p.vz,3);
+      ring(p.x+dir*30, p.y-p.z-46, '#aef8ff'); sfx.heavy(p.x); shake=Math.max(shake,8); }
+    if(t>=def.act[0] && t<=def.act[1] && t%3===0){
+      const n=(t-def.act[0])/3;
+      for(const sp of [-0.5,0,0.5]) spawnProj(p.x+dir*36, p.y, dir*(9+n), sp*2.4, {owner:'player',
+        dmg:D(9), color:(n%2)?'#aef8ff':'#ffffff', r:20+n*4, life:26,
+        zz:Math.max(p.z-4,12), vzz:-Math.max(2.5, p.z/7), zFloor:26, nostop:true});
+      spark(p.x+dir*46, p.y-p.z-46, '#aef8ff', 4, 8); } }
+  else if(K2==='nukoHa'){              // 足元に魔法陣を敷き、そこから斜め下へ星が降り続ける
+    if(t===def.act[0]){ ring(p.x, p.y, '#8fd8ff'); ring(p.x, p.y, '#d6b0ff'); sfx.rise(p.x);
+      // 陣そのものが残って、踏んだ敵を撃つ
+      spawnProj(p.x, p.y, 0, 0, {owner:'player', dmg:D(11), color:'#8fd8ff', r:66, life:150,
+        zz:10, multihit:true, hitGap:14, pierce:true}); }
+    if(t>def.act[0] && t<def.dur-6 && t%5===0){
+      const sg=((t/5)|0)%2? 1 : -1;
+      spawnProj(p.x+sg*rnd(10,70), p.y, sg*2.2, 0, {owner:'player', dmg:D(13), color:(sg>0)?'#d6b0ff':'#8fd8ff',
+        r:16, life:70, zz:Math.max(p.z+20,40), vzz:-9, explode:true}); } }
+  else if(K2==='g8Ha'){                // 鉄球を鎖で投げ、引き戻す反動で自分が前へ出る
+    if(t===def.act[0]){
+      spawnProj(p.x+dir*34, p.y, dir*15, 0, {owner:'player', dmg:D(28), color:'#c9ccd4',
+        r:28, life:70, zz:Math.max(p.z-6,16), vzz:-Math.max(2.2, p.z/12), zFloor:30, multihit:true, hitGap:16, boomer:true});
+      sfx.launch(p.x,0.8); shake=Math.max(shake,7); }
+    if(t===def.act[0]+10){ p.avx=dir*11; p.vz=Math.max(p.vz,2);   // 鎖に引かれて前進
+      spark(p.x, p.y-p.z-46, '#c9ccd4', 8, 7); sfx.dash(p.x); }
+    // 鎖の見た目：自分と鉄球を結ぶ
+    if(t>=def.act[0] && t%2===0){ const pr=projectiles.filter(function(q){ return q.owner==='player' && q.boomer; })[0];
+      if(pr){ const n=6; for(let k=1;k<n;k++){ const u=k/n;
+        spark(p.x+(pr.x-p.x)*u, (p.y-p.z-44)+((pr.y-pr.zz)-(p.y-p.z-44))*u, '#9aa0ac', 1, 3); } } } }
+  else if(K2==='watchHa'){             // 真下へ撒菱をばら撒く。地面に残って踏んだ敵を刺す
+    if(t===def.act[0]){ sfx.dash(p.x);
+      for(let k=0;k<7;k++){ const sx=p.x+(k-3)*30;
+        spawnProj(sx, p.y, (k-3)*1.1, 0, {owner:'player', dmg:D(9), color:'#cfe0f0', r:13,
+          life:260, zz:Math.max(p.z-6,14), vzz:-7, zFloor:12, style:'spike', multihit:true, hitGap:22, pierce:true}); }
+      spark(p.x, p.y-p.z-30, '#cfe0f0', 12, 8); } }
+  else if(K2==='wandenHa'){            // 一瞬消えて、いちばん近い敵の向こう側へ現れ、すれ違いざまに斬る
+    if(t===def.act[0]){
+      let tg=null, bd=1e9;
+      for(const e of enemies){ if(e.dead||e.grabbedBy) continue; const d=Math.abs(e.x-p.x)+Math.abs(e.y-p.y)*0.5;
+        if(d<bd){ bd=d; tg=e; } }
+      const fromX=p.x;
+      if(tg){ p.x=clamp(tg.x+((tg.x>=p.x)?1:-1)*70, camX+30, Math.min(WORLD_END, camX+W-30));
+        p.facing=(tg.x>=fromX)? -1 : 1; p.z=Math.max(p.z, (tg.z||0)+30); }
+      else { p.x=clamp(p.x+dir*150, camX+30, Math.min(WORLD_END, camX+W-30)); }
+      p._tx=null; p.avx=0; p.vz=0;
+      for(let k=0;k<5;k++){ const u=k/5, ax=fromX+(p.x-fromX)*u;
+        particles.push({k:'wandenAfter', x:ax, y:p.y-p.z, gl:groundLift(ax), face:p.facing, life:12+k*2, max:12+k*2}); }
+      flash=Math.max(flash,3); sfx.dash(p.x); sfx.swing(1,'longblade',p.x); }
+    if(t===def.act[0]+6){ crescent(p.x+p.facing*80, p.y-p.z-46, 120, -1.7, 1.7, '#ffffff');
+      spark(p.x+p.facing*70, p.y-p.z-46, '#eaf6ff', 12, 10); hitStop=Math.max(hitStop,6); } }
+  else if(K2==='mackHa'){              // 真下へ時限爆弾を落とす。少し遅れて大きく爆ぜる
+    if(t===def.act[0]){
+      spawnProj(p.x+dir*10, p.y, dir*2.4, 0, {owner:'player', dmg:D(10), color:'#ffb85a', r:16,
+        life:200, zz:Math.max(p.z-4,18), vzz:-6, grav:0.34, blast:true, blastR:190,
+        blastDmg:D(46), explode:true, splitT:null});
+      gimWarnAt(p.x+dir*30, '#ffb85a', 40);
+      popText(p.x, p.y-p.z-96, '伏せてろ！', '#ffb85a', true); sfx.launch(p.x,0.7); } }
+  // ── ↓↑枠 ──
+  else if(K2==='inuDu'){               // 刀を立てて急停止し、真下へ長い刺突
+    if(t<def.act[0]){ p.vz=Math.max(p.vz*0.6, -1.2); p.avx*=0.7; }
+    if(t===def.act[0]){ p.vz=-19; p.avx=0; sfx.heavy(p.x); flash=Math.max(flash,3);
+      popText(p.x, p.y-p.z-96, '八双落とし', '#fff0b0'); }
+    if(t>=def.act[0] && t<=def.act[1] && t%2===0)
+      spark(p.x, p.y-p.z+rnd(0,40), '#fff0b0', 3, 8, {aim:Math.PI/2, spread:0.3}); }
+  else if(K2==='shimaDu'){             // 拳法家だけは回転を残す。空中で足技を連ねる
+    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%6===0)
+      spark(p.x+rnd(-40,40), p.y-p.z-rnd(20,70), '#ffd24d', 4, 7); }
+  else if(K2==='nukoDu'){              // 追尾する小星を3つ呼ぶ。しばらく勝手に敵を追う
+    if(t===def.act[0]){ ring(p.x, p.y-p.z-40, '#ffd0f0'); sfx.rise(p.x);
+      for(let k=0;k<3;k++) spawnProj(p.x+(k-1)*22, p.y-(k-1)*6, dir*4, (k-1)*1.6, {owner:'player',
+        dmg:D(14), color:k===1?'#ffffff':'#ffd0f0', r:15, life:190,
+        zz:Math.max(p.z-8,26), vzz:-2.6, zFloor:28, homing:true, multihit:true, hitGap:20});
+      popText(p.x, p.y-p.z-96, '小星、おいで！', '#ffd0f0'); } }
+  else if(K2==='g8Du'){                // その場に籠もる。装甲を張って触れた敵を弾く
+    if(t===def.act[0]){ p.fortT=Math.max(p.fortT||0, def.dur-def.act[0]+10);
+      ring(p.x, p.y-p.z-40, '#e6e9f0'); ring(p.x, p.y-p.z-40, '#ffffff');
+      popText(p.x, p.y-p.z-100, '空中要塞化！', '#e6e9f0', true); sfx.guard(p.x); }
+    if(t>=def.act[0] && t%4===0){ const rr=70+18*Math.sin(t*0.2);
+      for(let k=0;k<3;k++){ const ang=t*0.09+k*(TAU/3);
+        spark(p.x+Math.cos(ang)*rr, p.y-p.z-46+Math.sin(ang)*rr*0.5, '#e6e9f0', 2, 5); } } }
+  else if(K2==='watchDu'){             // 煙で消える。落下が遅くなり、その間ずっと無敵
+    if(t===def.act[0]){ p.invuln=Math.max(p.invuln, def.dur-def.act[0]+14);
+      for(let k=0;k<14;k++) spark(p.x+rnd(-30,30), p.y-p.z-rnd(10,70), '#b6c2d6', 3, 6);
+      dust(p.x, p.y-p.z, 10); popText(p.x, p.y-p.z-96, 'ドロン！', '#e0c4ff'); sfx.dash(p.x); }
+    if(t>def.act[0] && t<def.act[1]){ p.vz=Math.max(p.vz, -1.4);      // ふわりと降りる
+      if(t%3===0) spark(p.x+rnd(-16,16), p.y-p.z-rnd(0,50), '#b6c2d6', 2, 4); } }
+  else if(K2==='wandenDu'){            // 落ちながら残像を置き、通った線を後から斬撃が走る
+    if(t>=def.act[0] && (t-def.act[0])%5===0){
+      const n=(t-def.act[0])/5;
+      p.wdTrail=p.wdTrail||[]; p.wdTrail.push({x:p.x, z:p.z, t:0});
+      particles.push({k:'wandenAfter', x:p.x, y:p.y-p.z, gl:groundLift(p.x), face:p.facing, life:16, max:16});
+      if(n>=3){ const q=p.wdTrail.shift();
+        crescent(q.x, p.y-q.z-46, 96, -1.6, 1.6, (n%2)?'#e8f4ff':'#ffffff');
+        spark(q.x, p.y-q.z-46, '#e8f4ff', 5, 8); sfx.swing(1,'longblade',q.x);
+        enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
+          if(Math.abs(e.x-q.x)>70 || Math.abs(e.y-p.y)>70) return;
+          noHitStopOnce=true; damageEnemy(e, D(13), (e.x<q.x?-1:1)*4, false); }); } }
+    if(t===def.dur-1) p.wdTrail=null; }
+  else if(K2==='mackDu'){              // 弾倉を入れ替え、真下へ扇状に撃ち下ろす
+    if(t===def.act[0]-4){ p.ammo=MK_AMMO; popText(p.x, p.y-p.z-96, 'リロード！', '#ffe9a0'); sfx.reload&&sfx.reload(p.x); }
+    if(t>=def.act[0] && t<=def.act[1] && (t-def.act[0])%4===0){
+      const n=(t-def.act[0])/4;
+      for(const sp of [-0.7,0,0.7]){ const ang=Math.PI/2 + sp*0.5 + Math.sin(n)*0.1;
+        spawnProj(p.x, p.y, Math.cos(ang)*dir*7, 0, {owner:'player', dmg:D(9), color:(n%2)?'#ffe9a0':'#ffd24d',
+          r:10, life:40, zz:Math.max(p.z-6,12), vzz:-Math.sin(ang)*13, nostop:true}); }
+      mackMuzzle(p, dir, p.z-10, '#ffd24d', 6); if(n%2===0) sfx.gun(p.x, 0.7); } }
 }
 function beginAirAttack(type){
   const p=player, z0=p.z, vz0=p.vz, def=ATK[type];
@@ -4903,7 +5097,7 @@ function updatePlayer(){
     if(p.fortT===0) popText(p.x,p.y-112,'要塞化 解除','#9fb4cf'); }   // アイアンウォール持続
   if(p.comboTimer>0)p.comboTimer--; else if(p.state!=='attack') p.comboStep=0;
 
-  if(p.state==='down'){ p.downTimer--; p.vx*=0.86; p.x+=p.vx;
+  if(p.state==='down'){ p.downTimer--; p.vx*=(p.tumble?0.91:0.86); p.x+=p.vx;   // 吹き飛びは尾を長く引かせる
     // 空中で吹き飛ばされている間は、少し遅れてから跳躍ボタンで受け身を取れる
     if(p.tumble && p.z>0){ p.tumbleT=(p.tumbleT||0)+1;
       if(p.tumbleT>=RECOV_LOCK && !p.recovUsed && (pressed.jump||pressed.grd)){
@@ -4967,6 +5161,22 @@ function updatePlayer(){
 
   // ---- jump (high jump + aerial rave) ----
   if(p.state==='jump'){
+    // 空中回避：出ている間は他の入力を受けず、真っ直ぐ滑る
+    if((p.adT|0)>0){ p.adT--;
+      p.x+=p.adVx; p.z=Math.max(0, p.z+p.adVz);
+      p.adVx*=0.94; p.adVz*=0.90;
+      p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
+      if(gf%2===0) particles.push({k:'wandenAfter', x:p.x, y:p.y-p.z, gl:groundLift(p.x), face:p.facing, life:10, max:10});
+      if(p.z<=0){ p.z=0; p.adT=0; p.vz=0; p.state='land'; p.landT=8; dust(p.x,p.y,6); sfx.land(p.x); }
+      else if(p.adT<=0){ p.vz=Math.min(p.adVz, 0); }
+      return; }
+    // 回避ボタン：空中では一度だけ、入れた向きへ身をかわす
+    if(pressed.grd && !p.adUsed){ pressed.grd=false;
+      let dx=0, dy=0;
+      if(K.left)dx=-1; else if(K.right)dx=1;
+      if(K.up)dy=1; else if(K.down)dy=-1;
+      if(!dx && !dy) dx=p.facing;                 // 何も入れなければ向いている方へ
+      beginAirDodge(p, dx, dy); return; }
     if(p.jHammer){ p.vz-=1.15; }                                       // 地球割パンチ：超急降下
     else if(p.jBolt){ p.vz-=1.0; }                                     // サンダークラッシュ：急降下
     else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
@@ -5088,7 +5298,7 @@ function updatePlayer(){
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
       if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
       p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
-      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0;
+      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0;
       p.jMkUp=false; p.jMkDown=false; dust(p.x,p.y,7); sfx.land(p.x); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
@@ -5574,6 +5784,7 @@ function updatePlayer(){
     if(def.kiBurst && a.t===def.act[0]){ shimaKiBurst(p); }                    // 爆裂・羅漢衝波：全方位の気功大爆発
     if(def.hammerImpact && a.t===def.act[0]){ guardHammerImpact(p); }          // メテオ・ハンマーインパクト：三重衝撃波の大叩き
     if(def.airUlt) airUltTick(p, a, def);
+    if(def.airFx) airSpecialTick(p, a, def);
     // 空中から出した技：技の最中も落ち続ける。着地したら技を打ち切って着地硬直へ
     if(a.air && !def.rise){
       // 斜め下への急降下。落ちる勢いと前へ出る勢いをここで作る
@@ -5618,7 +5829,7 @@ function updatePlayer(){
   // 回避ボタン：通常キャラはローリング／ワンデンだけは刀のパリィ（リスクとリターンの構え）
   if(pressed.grd && p.z<=0){ pressed.grd=false; if(p.kind==='wanden') beginIaiParry(p); else beginRoll(); return; }
   // jump start
-  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
+  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
 
   const SH=p.kind==='shima';
   // ---- charge release ----
@@ -7659,7 +7870,9 @@ function dropCostumeFor(p){
   const fresh=pool.filter(function(C){ return own.indexOf(C.id)<0; });
   const pick=(fresh.length?fresh:pool);
   return pick[(Math.random()*pick.length)|0].id; }
-function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=(p.kind==='watch'?2300:1100);   // ワッチは武器を長く扱える
+// 拾った武器は持ち続ける。以前は制限時間で元の得物へ戻っていたが、
+// せっかく拾っても次のステージへ持ち越せず、集める意味が無かった
+function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=0; p.heldWeapon=kind;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.get(p.x); }
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
@@ -8944,16 +9157,35 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
 //  吹き飛ばされている間は、少し遅れてから跳躍ボタンで体勢を立て直せる。
 //  これが無いと、一度打ち上げられたら落ちるまで何もできない
 // ══════════════════════════════════════════════════════════════
+// ── 空中回避（エアドッジ）──
+// 地上のローリングと同じ回避ボタンで、空中でも一度だけ身をかわせる。
+// 吹き飛びが大きくなったぶん、空中でも自分から動ける手段が要る
+const ADODGE_T=15;      // 動いている長さ
+const ADODGE_INV=22;    // 無敵の長さ
+const ADODGE_SP=13;     // 初速
+function beginAirDodge(p, dx, dy){
+  p.adUsed=true; p.adT=ADODGE_T;
+  const len=Math.hypot(dx,dy)||1;
+  p.adVx=(dx/len)*ADODGE_SP; p.adVz=(dy/len)*ADODGE_SP*0.78;
+  if(dx) p.facing=(dx>0)?1:-1;
+  p.vz=0; p.avx=0; p.jAtk=0; p.jRave=0; p.raveT=0;
+  p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+  p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
+  p.invuln=Math.max(p.invuln, ADODGE_INV);
+  ring(p.x, p.y-p.z-44, '#9fd6ff'); spark(p.x, p.y-p.z-44, '#cfe8ff', 10, 7);
+  sfx.dash(p.x); }
 const RECOV_LOCK=12;    // 打ち上げからこのフレーム数は受け身を取れない（即キャンセルさせない）
 const RECOV_VZ=9.5;     // 受け身で得る上昇
 const RECOV_INV=30;     // 受け身のあとの無敵
 function launchPlayer(p, dir, power){
   power=Math.max(1, power||1);
   p.state='down'; p.tumble=true; p.recovUsed=false; p.tumbleT=0;
-  p.z=Math.max(p.z||0, 14);
-  p.vz=Math.min(9+power*1.7, 22);
-  p.vx=dir*Math.min(6+power*1.5, 17);
-  p.downTimer=Math.max(p.downTimer|0, 40+Math.round(power*6));
+  p.z=Math.max(p.z||0, 16);
+  // 以前は高さ82〜151px・距離56〜83px で、自分の跳躍（225px）より小さかった。
+  // 「吹き飛ばされた」と分かる大きさへ引き上げる（受け身で立て直せるので理不尽にはならない）
+  p.vz=Math.min(15+power*3.2, 36);
+  p.vx=dir*Math.min(11+power*3.4, 30);
+  p.downTimer=Math.max(p.downTimer|0, 52+Math.round(power*9));
   p.riseVel=0; p.charge=0; p.atkHeld=false;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
   ring(p.x, p.y-p.z-40, '#ffd24d'); spark(p.x, p.y-p.z-40, '#fff', 14, 10);
@@ -8962,7 +9194,7 @@ function launchPlayer(p, dir, power){
 function airRecover(p){
   p.tumble=false; p.recovUsed=true; p.state='jump';
   p.vz=Math.max(p.vz||0, RECOV_VZ); p.vx*=0.35;
-  p.jAtk=0; p.aerial=0; p.jUpUsed=false;
+  p.jAtk=0; p.aerial=0; p.jUpUsed=false; p.adUsed=false; p.adT=0;
   p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
   p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
   p.invuln=Math.max(p.invuln, RECOV_INV);
@@ -9732,7 +9964,7 @@ function startVersus(){ unlockAudio();
     p.x=(i===0)? W*0.24 : W*0.76; p._tx=null; p.facing=(i===0)?1:-1;
     p.level=1; p.lives=99; p.vsStock=vsStockMax; p.vsKO=0;
     p.hp=p.maxHp=260; p.dim=p.dimMax=3; p.atkMul=1; p.defMul=1; p.spdMul=1;
-    p.weapon=defaultWeaponFor(p.kind); p.permWeapon=null; p.weaponT=0; });
+    p.weapon=defaultWeaponFor(p.kind); p.permWeapon=null; p.heldWeapon=null; p.weaponT=0; });
   player=players[0]; goArrow=0; stageBanner=0; bgCacheTheme=-1; shopPending=0;
   vsWinner=-1; vsOverT=0; vsIntro=110;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
@@ -9742,6 +9974,7 @@ function endVersus(){ vsMode=false; TWO_P=false; camLockX=null; gimOn=true;
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title'); }
 // 対戦の相手（自分ではないほうの主役）
 function vsFoeOf(p){ for(let i=0;i<players.length;i++){ const q=players[i];
@@ -9786,6 +10019,7 @@ function endTraining(){ trainMode=false;
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title'); }
 // 毎フレームの下支え。ここが無いと練習が「死んだ」「的が居なくなった」で中断される
 function trainUpkeep(){
@@ -9940,6 +10174,9 @@ function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
         if(sc<bs){ bs=sc; best=i; } }
       if(best>=0){ mapSel=best; ui.move(); } else if(ui.ng) ui.ng();
       mapNavCd=10; } }
+  // 掴みボタンでいつでも店へ。買い物のためにステージを1つ消化する必要が無くなる
+  if(pressed.grab||pressed.grd){ pressed.grab=false; pressed.grd=false;
+    ui.ok(); saveInput(players[0].in); goScreen(enterShop,'shutter',34); return; }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
     const node=nodes[mapSel];
     if(nodeEnterable(node)){ ui.ok(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
@@ -10062,7 +10299,18 @@ function drawMap(){
         ctx.fillText(fitText(done?'制覇済み（再挑戦できる）':'未制覇　報酬コイン 目安 '+(60+tr*45), cw-28), cx+14, cy+64); }
       ctx.textAlign='center'; } }
   ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃',W/2,H-22); ctx.textAlign='left';
+  ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃　／　掴みボタンでチャムの店',W/2,H-22); ctx.textAlign='left';
+  // 店へ行けることを絵でも示す。文字だけだと「いつでも買える」ことに気付かれない
+  { const bx=W-124, by=64;
+    ctx.save();
+    ctx.fillStyle='rgba(8,10,20,.78)'; roundRect(bx-46,by-40,104,80,10); ctx.fill();
+    ctx.strokeStyle='rgba(255,210,80,.65)'; ctx.lineWidth=1.8; roundRect(bx-45.5,by-39.5,103,79,10); ctx.stroke();
+    ctx.save(); ctx.translate(bx+4,by+26); ctx.scale(0.42,0.42); drawCham(0,0); ctx.restore();
+    ctx.fillStyle='#ffe14d'; ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    ctx.fillText('チャムの店', bx+6, by-24);
+    ctx.fillStyle='#cfe0ff'; ctx.font='11px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText('掴み／回避', bx+6, by+36);
+    ctx.textAlign='left'; ctx.restore(); }
 }
 
 //======================================================================
@@ -10794,7 +11042,7 @@ function stepPlayers(){
     player=pl; useInput(pl.in); updateRigP(pl);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
     else { updatePlayer(); terrainStep(pl);
-      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
+    }
     saveInput(pl.in);
   }
   player=players[0];
@@ -10940,9 +11188,11 @@ function drawUltCut(){
   const open=io*(1-eo*eo);                          // 帯の高さ（開いて→閉じる）
   if(open<=0.004) return;
   const rgb=hexRGB(ultCut.col), d=ultCut.dir>=0?1:-1;
-  const cy=H*0.50, bh=H*0.46*open, SH=52;           // SH＝上下の食い違い（傾き）
+  // 帯は画面の上寄りへ。中央に置くと、ちょうど主役の立つ高さを覆って
+  // 奥義のモーションが一切見えないまま終わっていた
+  const cy=H*0.30, bh=H*0.34*open, SH=52;           // SH＝上下の食い違い（傾き）
   // 帯の外を沈める。ここが明るいままだと帯が浮かず、ただの半透明の板に見える
-  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.42*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
+  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.26*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
   ctx.save();
   ctx.beginPath();                                  // 傾いた帯で切り抜く
   ctx.moveTo(-240+SH, cy-bh/2); ctx.lineTo(W+240+SH, cy-bh/2);
@@ -10971,7 +11221,7 @@ function drawUltCut(){
     // 帯の高さから逆算する。立ち絵は足元が原点で上へ 168px ぶん伸びる（実測）ので、
     // 頭が帯の上辺に収まり、足元だけが下辺で切れる大きさにする
     // ガードワン8号だけ本編で 1.28倍の巨体として描かれるので、そのぶん割り戻す
-    const sc=clamp((bh+30)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.7, 2.8);
+    const sc=clamp((bh+24)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.62, 2.8);
     ctx.save(); ctx.globalAlpha=clamp((open-0.35)/0.30,0,1)*(1-eo);
     ctx.translate(px, cy+bh*0.5+34); ctx.rotate(-d*0.06);
     const sv=player; player=players[ultCut.pid]||players[0];
@@ -10986,14 +11236,14 @@ function drawUltCut(){
     const tx=lerp(W*0.5-d*W*0.55, W*0.5-d*W*0.20, io) - eo*d*W*0.22;
     ctx.save(); ctx.globalAlpha=ta;
     ctx.translate(tx, cy+8); ctx.rotate(-0.055); ctx.textAlign='center';
-    ctx.font='italic '+uif('900',44); ctx.lineJoin='round';
+    ctx.font='italic '+uif('900',36); ctx.lineJoin='round';
     ctx.lineWidth=11; ctx.strokeStyle='rgba(8,6,14,.92)'; ctx.strokeText(ultCut.name,0,0);
     const tg=ctx.createLinearGradient(0,-34,0,14);
     tg.addColorStop(0,'#ffffff'); tg.addColorStop(0.52,ultCut.col); tg.addColorStop(1,'rgba('+rgb+',.72)');
     ctx.fillStyle=tg; ctx.fillText(ultCut.name,0,0);
     ctx.font=uif('bold',15); ctx.lineWidth=6; ctx.strokeStyle='rgba(8,6,14,.9)';
-    ctx.strokeText(heroNameOf(ultCut.kind),0,26);
-    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,26);
+    ctx.strokeText(heroNameOf(ultCut.kind),0,24);
+    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,24);
     ctx.restore(); ctx.textAlign='left'; }
   // 5) 帯の上下の縁に光の線を1本ずつ通す（帯が板のままにならない）
   ctx.save(); ctx.globalAlpha=(1-eo)*0.9; ctx.strokeStyle=ultCut.col; ctx.lineWidth=2.4;
@@ -13805,27 +14055,30 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.quadraticCurveTo(L+27,21, L+4,30); ctx.lineTo(L+8,26);
     ctx.quadraticCurveTo(L+23,18, L+23,0); ctx.quadraticCurveTo(L+23,-18, L+8,-26); ctx.closePath(); ctx.fill();
     ctx.fillStyle='#8a6a30'; ctx.beginPath(); ctx.arc(L+11,0,3,0,7); ctx.fill();          // 鋲
-  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：長い柄の先から直角に大きく反る刃
+  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：柄の先から前方へ大きく反る刃
+    // 刃は「振る方向へ鉤が開く」向きに付ける。以前は後ろへ反っていて、
+    // 刈り取る側（内側の刃）が敵の反対を向いていた
     ctx.strokeStyle='#2a2430'; ctx.lineWidth=6.5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-26,6); ctx.quadraticCurveTo(L*0.5,-6, L,-10); ctx.stroke();   // 反りのある柄
     ctx.strokeStyle='#43394f'; ctx.lineWidth=2.6;
     ctx.beginPath(); ctx.moveTo(-26,4); ctx.quadraticCurveTo(L*0.5,-8, L,-12); ctx.stroke();
     ctx.fillStyle='#6a5a2a'; ctx.fillRect(-28,1,9,10);                                     // 石突き
     ctx.fillStyle='#c8a24a'; ctx.beginPath(); ctx.arc(L-4,-10,4.6,0,7); ctx.fill();         // 刃元の金具
-    const sb=ctx.createLinearGradient(L,-14,L-30,-84);
+    const sb=ctx.createLinearGradient(L,-14,L+30,-84);
     sb.addColorStop(0,'#ffffff'); sb.addColorStop(0.35,'#cfe4f2'); sb.addColorStop(1,'#5a7a92');
     ctx.fillStyle=sb; ctx.beginPath();
-    ctx.moveTo(L-2,-10);
-    ctx.quadraticCurveTo(L+18,-52, L-34,-86);          // 刃の外周（大きく反る）
-    ctx.quadraticCurveTo(L-16,-46, L-10,-8);           // 峰側へ戻る
+    ctx.moveTo(L+2,-10);
+    ctx.quadraticCurveTo(L-18,-52, L+34,-86);          // 峰（外周）は後ろへ膨らみ、切っ先は前へ
+    ctx.quadraticCurveTo(L+16,-46, L+10,-8);           // 内側へ戻る
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle='rgba(20,18,26,.6)'; ctx.lineWidth=1.8; ctx.stroke();
-    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=2.2;                            // 刃筋
-    ctx.beginPath(); ctx.moveTo(L-2,-12); ctx.quadraticCurveTo(L+15,-50, L-32,-82); ctx.stroke();
+    // 刃筋は内側（鉤の内側＝実際に刈る側）へ通す
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(L+4,-12); ctx.quadraticCurveTo(L+15,-48, L+32,-82); ctx.stroke();
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';                    // 刃にまとわる冥い燐光
       ctx.globalAlpha=0.22+0.10*Math.sin(gf*0.15);
-      ctx.fillStyle=radGrad(L-16,-48,44,'#a76bff','rgba(120,60,200,0)');
-      ctx.beginPath(); ctx.arc(L-16,-48,44,0,7); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle=radGrad(L+16,-48,44,'#a76bff','rgba(120,60,200,0)');
+      ctx.beginPath(); ctx.arc(L+16,-48,44,0,7); ctx.fill(); ctx.restore(); }
   } else if(wk==='zanbatou'){ const L=ext*1.5+120;   // 斬馬刀：常識外れに巨大な大剣
     ctx.fillStyle='#2f2a26'; ctx.fillRect(-34,-6,40,12);                                   // 両手で握る長い柄
     ctx.strokeStyle='#7a6a4a'; ctx.lineWidth=2;
@@ -17916,11 +18169,9 @@ function drawHUD(){
     if(_uc>1){ const bx=56+player.dimMax*15+2;
       ctx.font=uif('bold',11); ctx.textAlign='left';
       ctx.fillStyle=_ready?'#ffd24d':'rgba(255,210,77,.45)'; ctx.fillText('×'+_uc, bx, 95); } }
-  // 現在の武器＋残り時間（イッヌのみ）
+  // 現在の武器（拾ったら持ち続けるので、残り時間の帯はもう要らない）
   if(player.weapon!=='dagger' && player.weapon!=='fists'){ const W2=WEAPONS[player.weapon];
-    ctx.fillStyle=W2.col; ctx.font=uif('bold',12); ctx.fillText('武器: '+W2.name, 284, 40);
-    const bw=76, tx=284, ty=46; ctx.fillStyle='rgba(4,5,11,.9)'; roundRect(tx,ty,bw,6,3); ctx.fill();
-    ctx.fillStyle=W2.col; roundRect(tx,ty,Math.max(2,bw*clamp(player.weaponT/1100,0,1)),6,3); ctx.fill(); }
+    ctx.fillStyle=W2.col; ctx.font=uif('bold',12); ctx.fillText('武器: '+W2.name, 284, 40); }
   // 2P パネル（シマダックス）
   if(players[1].active){ const q=players[1]; hudY+=6; panelOrn(12,hudY,238,56,'stone');
     ctx.fillStyle=heroColOf(q.kind); ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('2P  '+heroNameOf(q.kind),22,hudY+17);
@@ -18896,22 +19147,58 @@ function startRivalClearDemo(){ const type=rivalFor(players[0].kind); const L=RI
   startCutscene([{boss:type, stageN:stage, name:ETYPE[type].name, role:'好敵手', text:L.win}], ()=>{ state='play'; goArrow=160; }); }
 // ── ステージクリアの短いデモ（キャラ×ステージのひとこと）──
 const CLEAR_LINE={
-  '王都郊外':{inu:'まずは一勝。だが帝国の本隊はこれからだ。',shima:'ウォームアップにしちゃ、悪くねえ拳だったぜ。',nuko:'ふぅ…最初の関門、突破！次も頑張るぞ。',guard8:'門の外は、こんなに広かったのか…。行くぞ。'},
-  '黄昏の城下町':{inu:'夕陽が痛いな…先を急ごう。',shima:'この街の連中、意外と骨があったな。',nuko:'夕焼け、きれい…って見とれてる場合じゃない！',guard8:'民の暮らしは、必ず守る。'},
-  '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。'},
-  '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。'},
-  '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。'},
+  // ── 一周目：13ステージ×7キャラ ──
+  '王都郊外':{inu:'まずは一勝。だが帝国の本隊はこれからだ。',shima:'ウォームアップにしちゃ、悪くねえ拳だったぜ。',nuko:'ふぅ…最初の関門、突破！次も頑張るぞ。',guard8:'門の外は、こんなに広かったのか…。行くぞ。',watch:'手始めにしちゃ実入りが少ないな。次だ、次。',wanden:'……鈍っては、おらんようだ。',mack:'ヒュウ！　肩ならしにしちゃ上出来だ。'},
+  '黄昏の城下町':{inu:'夕陽が痛いな…先を急ごう。',shima:'この街の連中、意外と骨があったな。',nuko:'夕焼け、きれい…って見とれてる場合じゃない！',guard8:'民の暮らしは、必ず守る。',watch:'この街、まだ灯りが残ってる。守る価値はあるさ。',wanden:'……夕闇は、抜き身によく似合う。',mack:'日が暮れる前に片付いた。上出来だろ？'},
+  '業火の渓谷':{inu:'この熱気…剣の柄まで焼けそうだ。',shima:'汗が塩になるぜ。だが拳は冷めてねえ。',nuko:'あっつい！　水の魔法、覚えとけばよかった…！',guard8:'装甲が焼ける。だが止まる理由にはならん。',watch:'火の粉で上着が台無しだ。弁償してもらうぞ。',wanden:'……炎は、刃を鈍らせぬ。',mack:'火薬持ちにゃ最悪の場所だったな。抜けたぜ。'},
+  '渓谷の最深部':{inu:'底が見えぬほど深い。だが道はまだ続く。',shima:'地の底まで来て、まだ上がある気がするぜ。',nuko:'このへん、魔力の流れが濃い…気をつけなきゃ。',guard8:'退路は無い。ならば前へ進むのみ。',watch:'こんな奥に何を隠してやがる。気になるね。',wanden:'……深く沈むほど、静かになる。',mack:'反響で耳がやられる。さっさと出よう。'},
+  '月詠の森':{inu:'木々の間から月が見える。道標にしよう。',shima:'静かすぎて、逆に落ち着かねえな。',nuko:'月明かりの森…わたしの魔法、いちばん冴える場所！',guard8:'足場が悪い。皆、離れるなよ。',watch:'月夜は盗人の時間だ。俺の庭みたいなもんさ。',wanden:'……月と、刃と、静寂。悪くない。',mack:'月が明るすぎる。狙撃には向かねえな。'},
+  '瑠璃の水晶洞':{inu:'水晶が剣を映す。己の腕を見透かされるようだ。',shima:'反射がうるせえ。どれが本体か分かりゃしねえ。',nuko:'わあ、きれい…！　この水晶、魔力を溜め込んでる。',guard8:'一歩ごとに反響する。ここでは静かに動け。',watch:'この水晶、いくらで売れると思う？　……冗談だ。',wanden:'……鏡は、己の未熟を映す。',mack:'跳弾が怖い場所だ。撃つ角度に気をつけな。'},
+  '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。',watch:'空飛ぶ金庫か。悪くない趣味してるじゃないか。',wanden:'……足場が揺れる。ならば、揺れごと斬る。',mack:'風で弾が流れる。補正が要るな。'},
+  '海賊王の埠頭':{inu:'潮の匂いだ。この先は海路か。',shima:'船乗り相手の喧嘩は久しぶりだぜ。',nuko:'船がいっぱい…！　どれかに乗れば早いかも？',guard8:'港は民の玄関だ。荒らさせはせん。',watch:'港町は情報の宝庫だ。少し聞き込みしていくか。',wanden:'……潮風は、刃を錆びさせる。手入れが要る。',mack:'酒場でも探すか。……冗談だよ、先を急ごう。'},
+  '灼熱の砂漠':{inu:'砂が剣の隙間に入る。厄介だな。',shima:'足を取られる砂地で踏ん張るのも修行のうちだ。',nuko:'水…水がほしい…！　次の街まで我慢…！',guard8:'関節に砂が噛む。整備が要るな。',watch:'蜃気楼に何度騙されたことか。もううんざりだ。',wanden:'……砂は、足跡を消してくれる。',mack:'砂で銃身が詰まる。まめに掃除しねえとな。'},
+  '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。',watch:'こういう遺跡にゃ、必ず隠し部屋があるもんだ。',wanden:'……朽ちてなお、佇まいが残っている。',mack:'崩れかけの足場だ。走るなら一気に行くぜ。'},
   '月夜の宝物庫':{inu:'王国の秘宝、確かに取り戻したぞ。',shima:'金ピカの番人、いい打ち応えだったぜ。',nuko:'きらきらのお宝がいっぱい…！ちゃんと返さなきゃ。',guard8:'宝は民のもの。しかと守り抜く。',watch:'ふぅ…お宝は残らず“盗み返し”完了ってな。粋だろ？',wanden:'……金塊も、刃の前では等しくただの的だ。',mack:'金貨も弾丸も、要は当てどころさ。返しに行こうぜ。'},
+  '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。',watch:'指がかじかむ。錠前破りには最悪の天気だ。',wanden:'……白い息が、間合いを教えてくれる。',mack:'引き金が凍る前に片付いてよかったぜ。'},
+  '暗黒の城門':{inu:'ここが最後の門か。……行くぞ。',shima:'門の向こうに親玉がいる。腕が鳴るぜ。',nuko:'こわい…けど、ここまで来たんだもん。進む！',guard8:'門を守るのが俺の役目だ。今日は、破るがな。',watch:'厳重な錠前だ。……こじ開け甲斐があるってもんさ。',wanden:'……門とは、斬るためにあるものだ。',mack:'デカい扉だ。弾より足で行った方が早いな。'},
+  '魔王の間':{inu:'長い道のりだった。すべてはこの一太刀のために。',shima:'ここまで来たら、拳一つで語るだけだ。',nuko:'お師匠さま…見ていて。わたし、ちゃんと戦うから。',guard8:'王都の門番として、ここで果たす責務がある。',watch:'最後の一仕事だ。取り返すぜ、全部な。',wanden:'……名も無き刃が、王を斬る。それだけだ。',mack:'最後の弾は、いちばんデカい的に取ってある。'},
 };
+// ステージを出るときの、相棒（看板娘チャム／2P）の返し。
+// 主役のひとことで終わると独り言に見えるので、必ず受け手を置いて会話にする
+const PARTNER_LINE={
+  '王都郊外':'お疲れさま！　次は城下町だにゃ。灯りが消える前に行っておいで。',
+  '黄昏の城下町':'城下の噂を仕入れといたにゃ。渓谷の方で地面が揺れてるって。',
+  '業火の渓谷':'熱かったでしょ？　冷たい水、まけとくにゃ。……代金はもらうけど。',
+  '渓谷の最深部':'こんな底まで潜るなんて無茶するにゃあ。地図、書き足しといたよ。',
+  '月詠の森':'森の獣は月に合わせて動くにゃ。次は満ちる前に抜けた方がいい。',
+  '瑠璃の水晶洞':'その水晶、うちで買い取るにゃ。……持って帰ってきてないの？　もう！',
+  '海賊飛行艇の甲板':'空の上で商売できたら楽なのににゃあ。着陸したら寄っておくれ。',
+  '海賊王の埠頭':'港が空いたにゃ！　これで仕入れの船が通せる。ありがとにゃ。',
+  '灼熱の砂漠':'砂まみれだにゃ…。装備の手入れ、うちでやってあげるにゃ。',
+  '灼熱の巨大廃墟':'あの遺跡、昔は帝国の工場だったって話にゃ。気をつけてね。',
+  '月夜の宝物庫':'秘宝が戻れば王都も落ち着くにゃ。……ちょっとだけ、見せて？',
+  '氷雪の霊峰':'山を越えたにゃ！　この先はもう帝国の懐だよ。備えを整えてから行こ。',
+  '暗黒の城門':'門が開いたにゃ……。ここから先は、あたしは入れない。無事で。',
+  '魔王の間':'……信じてたにゃ。おかえり、英雄さま。',
+};
+function partnerLineFor(stName){
+  return PARTNER_LINE[stName] || 'いい戦いだったにゃ！　次の支度、手伝うよ。'; }
 function stageClearLine(stName, kind){ const o=CLEAR_LINE[stName];
   if(o&&o[kind]) return o[kind];
   const gen={inu:'また一つ、王国を取り戻した。次へ進もう。',shima:'いい戦いだった。次はもっと強えのが来るか？',nuko:'ここも切り抜けた！この調子で行こう。',guard8:'一区画、守り抜いた。まだ止まれん。',watch:'ちょろいもんだったな。次のお宝はどこだ？',wanden:'……一太刀で足りた。次へ。',mack:'ヒュウ！　弾はまだ残ってる。次の町へ行こうぜ！'};
   return gen[kind]||gen.inu; }
 function startStageClearDemo(stN){ const stName=STAGE_NAME[stN]||('STAGE '+stN);
-  startCutscene([
-    {bgTheme:themeIdxFor(stN), art:'clear', name:'', text:'STAGE '+stN+'　'+stName+'　クリア！'},
-    {bgTheme:themeIdxFor(stN), art:'player', name:'@hero', text:stageClearLine(stName, players[0].kind)},
-  ], ()=>{ state='play'; shopPending=120; }); }
+  const th=themeIdxFor(stN), two=!!(players[1]&&players[1].active);
+  // 一言で終わらせず、受け手を置いて掛け合いにする。
+  // 2人プレイなら相棒が、1人なら看板娘チャムが返す
+  const sc=[
+    {bgTheme:th, art:'clear', name:'', text:'STAGE '+stN+'　'+stName+'　クリア！'},
+    {bgTheme:th, art:'player', name:'@hero', text:stageClearLine(stName, players[0].kind)},
+  ];
+  if(two) sc.push({bgTheme:th, art:'p2', name:heroNameOf(players[1].kind),
+    text:stageClearLine(stName, players[1].kind)});
+  sc.push({bgTheme:th, art:'cham', name:'チャム', role:'よろず屋の看板娘', text:partnerLineFor(stName)});
+  startCutscene(sc, ()=>{ state='play'; shopPending=120; }); }
 // ラスボス形態変化のデモシーン
 function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode(bossMusicFor(nt)); sfx.boss(); sfx.transform();
   startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
@@ -19190,6 +19477,12 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
       ctx.fillText('STAGE '+(sc.stageN||1)+'  BOSS',W/2,86); ctx.globalAlpha=1; ctx.textAlign='left';
   } else if(sc.art==='player'){ const q=easeOut(clamp(cut.t/26,0,1));
       ctx.save(); ctx.globalAlpha=q; drawPlayerPortrait(lerp(W*0.5-40,W*0.5,q),H*0.80,2.2,1,'idle'); ctx.restore();
+  } else if(sc.art==='cham'){ const q=easeOut(clamp(cut.t/26,0,1));   // 看板娘チャム（通信役）
+      ctx.save(); ctx.globalAlpha=q; ctx.translate(lerp(W*0.5+40,W*0.5,q), H*0.86); ctx.scale(1.7,1.7); drawCham(0,0); ctx.restore();
+  } else if(sc.art==='p2'){ const q=easeOut(clamp(cut.t/26,0,1));      // 2P（相棒の主役）
+      const keep=player; player=players[1]||players[0];
+      ctx.save(); ctx.globalAlpha=q; drawPlayerPortrait(lerp(W*0.5+40,W*0.5,q),H*0.80,2.2,-1,'idle'); ctx.restore();
+      player=keep;
   } else if(sc.art==='invade'){ drawMarch();
   } else if(sc.art==='fall'){ ctx.save(); ctx.globalAlpha=clamp(1-cut.t/120,0,1); drawBossPortrait('boss',W*0.5,H*0.82,1.6,-1); ctx.restore();
       ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<5;i++){ const a=cut.t*0.1+i; ctx.fillStyle='rgba(198,120,255,.5)'; ctx.beginPath(); ctx.arc(W/2+Math.cos(a)*cut.t*2,H*0.5+Math.sin(a)*cut.t*1.4,4,0,7); ctx.fill(); } ctx.restore();
@@ -19361,6 +19654,15 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
            {t:'⚔ 5周目「戦国」から（最高難度）', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:4];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
 const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{ startTrainSelect(); };
+// タイトルは主要メニューだけを出し、キャラ選びは「はじめる」で開く。
+// 12個のボタンを並べていたころは、背後の絵が一切見えなかった
+function showCharPick(on){
+  const m=document.getElementById('mainMenu'), c=document.getElementById('charPick');
+  if(!m||!c) return;
+  m.classList.toggle('hidden', !!on); c.classList.toggle('hidden', !on);
+  unlockAudio(); if(sndOn) ui.ok(); }
+const _playBtn=document.getElementById('playBtn'); if(_playBtn) _playBtn.onclick=()=>{ showCharPick(true); };
+const _pickBack=document.getElementById('pickBackBtn'); if(_pickBack) _pickBack.onclick=()=>{ showCharPick(false); };
 const _vsBtn=document.getElementById('vsBtn'); if(_vsBtn) _vsBtn.onclick=()=>{ startVsSelect(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
@@ -19577,6 +19879,7 @@ function endAttract(){
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0;
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title');
 }
 // ── 自動デモ：実際のゲームを AI が操作する ──
