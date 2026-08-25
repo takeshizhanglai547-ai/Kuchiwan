@@ -3014,7 +3014,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -4903,7 +4903,7 @@ function updatePlayer(){
     if(p.fortT===0) popText(p.x,p.y-112,'要塞化 解除','#9fb4cf'); }   // アイアンウォール持続
   if(p.comboTimer>0)p.comboTimer--; else if(p.state!=='attack') p.comboStep=0;
 
-  if(p.state==='down'){ p.downTimer--; p.vx*=0.86; p.x+=p.vx;
+  if(p.state==='down'){ p.downTimer--; p.vx*=(p.tumble?0.91:0.86); p.x+=p.vx;   // 吹き飛びは尾を長く引かせる
     // 空中で吹き飛ばされている間は、少し遅れてから跳躍ボタンで受け身を取れる
     if(p.tumble && p.z>0){ p.tumbleT=(p.tumbleT||0)+1;
       if(p.tumbleT>=RECOV_LOCK && !p.recovUsed && (pressed.jump||pressed.grd)){
@@ -4967,6 +4967,22 @@ function updatePlayer(){
 
   // ---- jump (high jump + aerial rave) ----
   if(p.state==='jump'){
+    // 空中回避：出ている間は他の入力を受けず、真っ直ぐ滑る
+    if((p.adT|0)>0){ p.adT--;
+      p.x+=p.adVx; p.z=Math.max(0, p.z+p.adVz);
+      p.adVx*=0.94; p.adVz*=0.90;
+      p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
+      if(gf%2===0) particles.push({k:'wandenAfter', x:p.x, y:p.y-p.z, gl:groundLift(p.x), face:p.facing, life:10, max:10});
+      if(p.z<=0){ p.z=0; p.adT=0; p.vz=0; p.state='land'; p.landT=8; dust(p.x,p.y,6); sfx.land(p.x); }
+      else if(p.adT<=0){ p.vz=Math.min(p.adVz, 0); }
+      return; }
+    // 回避ボタン：空中では一度だけ、入れた向きへ身をかわす
+    if(pressed.grd && !p.adUsed){ pressed.grd=false;
+      let dx=0, dy=0;
+      if(K.left)dx=-1; else if(K.right)dx=1;
+      if(K.up)dy=1; else if(K.down)dy=-1;
+      if(!dx && !dy) dx=p.facing;                 // 何も入れなければ向いている方へ
+      beginAirDodge(p, dx, dy); return; }
     if(p.jHammer){ p.vz-=1.15; }                                       // 地球割パンチ：超急降下
     else if(p.jBolt){ p.vz-=1.0; }                                     // サンダークラッシュ：急降下
     else if(p.jDrop){ p.vz-=0.7; }                                     // 回転踵落とし：回転しながら降下
@@ -5088,7 +5104,7 @@ function updatePlayer(){
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
       if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
       p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
-      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0;
+      p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0;
       p.jMkUp=false; p.jMkDown=false; dust(p.x,p.y,7); sfx.land(p.x); }
     p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
     return;
@@ -5618,7 +5634,7 @@ function updatePlayer(){
   // 回避ボタン：通常キャラはローリング／ワンデンだけは刀のパリィ（リスクとリターンの構え）
   if(pressed.grd && p.z<=0){ pressed.grd=false; if(p.kind==='wanden') beginIaiParry(p); else beginRoll(); return; }
   // jump start
-  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
+  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
 
   const SH=p.kind==='shima';
   // ---- charge release ----
@@ -8944,16 +8960,35 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
 //  吹き飛ばされている間は、少し遅れてから跳躍ボタンで体勢を立て直せる。
 //  これが無いと、一度打ち上げられたら落ちるまで何もできない
 // ══════════════════════════════════════════════════════════════
+// ── 空中回避（エアドッジ）──
+// 地上のローリングと同じ回避ボタンで、空中でも一度だけ身をかわせる。
+// 吹き飛びが大きくなったぶん、空中でも自分から動ける手段が要る
+const ADODGE_T=15;      // 動いている長さ
+const ADODGE_INV=22;    // 無敵の長さ
+const ADODGE_SP=13;     // 初速
+function beginAirDodge(p, dx, dy){
+  p.adUsed=true; p.adT=ADODGE_T;
+  const len=Math.hypot(dx,dy)||1;
+  p.adVx=(dx/len)*ADODGE_SP; p.adVz=(dy/len)*ADODGE_SP*0.78;
+  if(dx) p.facing=(dx>0)?1:-1;
+  p.vz=0; p.avx=0; p.jAtk=0; p.jRave=0; p.raveT=0;
+  p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
+  p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
+  p.invuln=Math.max(p.invuln, ADODGE_INV);
+  ring(p.x, p.y-p.z-44, '#9fd6ff'); spark(p.x, p.y-p.z-44, '#cfe8ff', 10, 7);
+  sfx.dash(p.x); }
 const RECOV_LOCK=12;    // 打ち上げからこのフレーム数は受け身を取れない（即キャンセルさせない）
 const RECOV_VZ=9.5;     // 受け身で得る上昇
 const RECOV_INV=30;     // 受け身のあとの無敵
 function launchPlayer(p, dir, power){
   power=Math.max(1, power||1);
   p.state='down'; p.tumble=true; p.recovUsed=false; p.tumbleT=0;
-  p.z=Math.max(p.z||0, 14);
-  p.vz=Math.min(9+power*1.7, 22);
-  p.vx=dir*Math.min(6+power*1.5, 17);
-  p.downTimer=Math.max(p.downTimer|0, 40+Math.round(power*6));
+  p.z=Math.max(p.z||0, 16);
+  // 以前は高さ82〜151px・距離56〜83px で、自分の跳躍（225px）より小さかった。
+  // 「吹き飛ばされた」と分かる大きさへ引き上げる（受け身で立て直せるので理不尽にはならない）
+  p.vz=Math.min(15+power*3.2, 36);
+  p.vx=dir*Math.min(11+power*3.4, 30);
+  p.downTimer=Math.max(p.downTimer|0, 52+Math.round(power*9));
   p.riseVel=0; p.charge=0; p.atkHeld=false;
   if(p.grabEnemy){ p.grabEnemy.grabbedBy=0; p.grabEnemy=null; }
   ring(p.x, p.y-p.z-40, '#ffd24d'); spark(p.x, p.y-p.z-40, '#fff', 14, 10);
@@ -8962,7 +8997,7 @@ function launchPlayer(p, dir, power){
 function airRecover(p){
   p.tumble=false; p.recovUsed=true; p.state='jump';
   p.vz=Math.max(p.vz||0, RECOV_VZ); p.vx*=0.35;
-  p.jAtk=0; p.aerial=0; p.jUpUsed=false;
+  p.jAtk=0; p.aerial=0; p.jUpUsed=false; p.adUsed=false; p.adT=0;
   p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false;
   p.jBolt=false; p.jFire=false; p.jUp=false; p.jMkUp=false; p.jMkDown=false;
   p.invuln=Math.max(p.invuln, RECOV_INV);

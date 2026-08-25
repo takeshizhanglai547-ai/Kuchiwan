@@ -267,6 +267,79 @@ const DRIVER = `
     if(!p.atk || p.atk.type!==AIR_ULT.inu) throw new Error('攻撃＋掴みで空中奥義が出ない（'+(p.atk&&p.atk.type)+'）');
     console.log('空中奥義の入力 OK (レバー回し以外に 攻撃＋掴み でも出る)'); }
 
+  // ===== 12) 空中でも回避できる（エアドッジ） =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    if(p.state!=='jump') throw new Error('跳べていない');
+    p.invuln=0;
+    const x0=p.x, z0=p.z;
+    p.in.K.right=true; p.in.pressed.grd=true; step(1);
+    if(!((p.adT|0)>0)) throw new Error('空中で回避が出ない');
+    if(!(p.invuln>=ADODGE_INV-1)) throw new Error('空中回避に無敵が付かない（'+p.invuln+'）');
+    let moved=0;
+    for(let f=0;f<ADODGE_T;f++){ const px=p.x; step(1); moved+=Math.abs(p.x-px); }
+    p.in.K.right=false;
+    if(!(moved>60)) throw new Error('空中回避で '+Math.round(moved)+'px しか動かない');
+    if(!(p.x>x0+40)) throw new Error('入れた向き（右）へ移動していない');
+    // 二度目は出ない（着地するまで一度きり）
+    p.in.pressed.grd=true; step(1);
+    if((p.adT|0)>0) throw new Error('着地せずに二度目の空中回避が出る');
+    console.log('空中回避 OK ('+Math.round(moved)+'px 移動・無敵'+ADODGE_INV+'F・空中では一度きり)'); }
+
+  // ===== 13) 上下方向へも回避でき、着地すると回数が戻る =====
+  { const p=setup('inu');
+    p.in.pressed.jump=true; step(1);
+    for(let f=0;f<8;f++) step(1);
+    const z0=p.z;
+    p.in.K.up=true; p.in.pressed.grd=true; step(1);
+    let peak=p.z;
+    for(let f=0;f<ADODGE_T;f++){ step(1); if(p.z>peak) peak=p.z; }
+    p.in.K.up=false;
+    if(!(peak>z0+30)) throw new Error('上へ回避しても上がらない（'+Math.round(z0)+'→'+Math.round(peak)+'）');
+    // 着地して跳び直せば、また使える
+    for(let f=0;f<200 && p.z>0; f++) step(1);
+    for(let f=0;f<20 && p.state!=='idle'; f++) step(1);
+    p.in.pressed.jump=true; step(1);
+    for(let f=0;f<6;f++) step(1);
+    p.in.pressed.grd=true; step(1);
+    if(!((p.adT|0)>0)) throw new Error('跳び直しても空中回避が戻らない');
+    console.log('空中回避の向きと回数 OK (上へ '+Math.round(peak-z0)+'px／跳び直しで復活)'); }
+
+  // ===== 14) 吹き飛ばしが自分の跳躍に見合う大きさになっている =====
+  { const kb=function(type, dmg){
+      const p=setup('inu'); p.invuln=0; p.z=0; p.state='idle';
+      p.x=camX+W*0.5; p._tx=null; p.facing=-1;
+      enemies.length=0; spawnEnemy(type, p.x-50, p.y);
+      const e=enemies[0]; e.facing=1; e.x=p.x-50;
+      const x0=p.x;
+      if(!hitOnePlayer(p, e, dmg, true, 200, 60)) throw new Error(type+' の攻撃が当たらない（測れていない）');
+      let peak=0, far=0;
+      for(let f=0;f<220;f++){ step(1); if(p.z>peak) peak=p.z;
+        const d=Math.abs(p.x-x0); if(d>far) far=d;
+        if(p.z<=0 && f>4 && p.state!=='down') break; }
+      return {peak:peak, far:far}; };
+    // 期待値は直値で置く。定数と比べると、その定数を下げた瞬間に素通りする
+    const z=kb('wolf',10);
+    if(!(z.peak>180)) throw new Error('雑魚に倒されても '+Math.round(z.peak)+'px しか浮かない');
+    if(!(z.far>120)) throw new Error('雑魚に倒されても '+Math.round(z.far)+'px しか飛ばない');
+    let bossType=null; for(const k in ETYPE) if(ETYPE[k].boss && !ETYPE[k].heroBoss){ bossType=k; break; }
+    const b2=kb(bossType,16);
+    if(!(b2.peak>z.peak+80)) throw new Error('ボスの一撃が雑魚と大差ない高さ（'+Math.round(z.peak)+' / '+Math.round(b2.peak)+'）');
+    // 吹き飛ばされている最中に受け身が取れること（大きくしたぶん、逃げ道が要る）
+    { const p=setup('inu'); p.invuln=0; p.z=0; p.state='idle'; p.x=camX+W*0.5; p._tx=null;
+      enemies.length=0; spawnEnemy('wolf', p.x-50, p.y);
+      const e=enemies[0]; e.facing=1; e.x=p.x-50;
+      hitOnePlayer(p, e, 10, true, 200, 60);
+      for(let f=0;f<RECOV_LOCK+2;f++) step(1);
+      p.in.pressed.jump=true; step(1);
+      if(p.state!=='jump') throw new Error('大きく吹き飛ばされると受け身が取れない（'+p.state+'）');
+      // 受け身のあとは空中回避も使える
+      p.in.pressed.grd=true; step(1);
+      if(!((p.adT|0)>0)) throw new Error('受け身のあとに空中回避が使えない'); }
+    console.log('吹き飛ばしの大きさ OK (雑魚 高さ'+Math.round(z.peak)+'px・距離'+Math.round(z.far)
+      +'px／'+ETYPE[bossType].name+' 高さ'+Math.round(b2.peak)+'px・距離'+Math.round(b2.far)+'px／受け身と空中回避で復帰可)'); }
+
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
