@@ -31,7 +31,27 @@
   #snd { transition:opacity .26s ease; }
   body.transitioning #snd { opacity:.15; }
   /* タイトルは背後の豪華な演出を活かすため、オーバーレイを控えめに */
-  #start.overlay { background:radial-gradient(ellipse at center 38%, rgba(10,6,26,.30), rgba(3,2,10,.72) 78%); }
+  /* 背後の絵（英雄の勢揃い・城・魔王）を活かすため、暗幕は上下だけに掛ける */
+  /* メニューは上寄せ。中央に置くと、画面下に並ぶ英雄の勢揃いを跨いで隠してしまう */
+  #start.overlay { justify-content:flex-start; gap:10px; padding:16px 20px 12px;
+    background:linear-gradient(180deg, rgba(4,3,12,.80) 0%, rgba(4,3,12,.20) 26%, rgba(4,3,12,.10) 52%, rgba(3,2,10,.86) 100%); }
+  .titleblock { display:flex; flex-direction:column; align-items:center; }
+  /* ロゴの下に一本通す金線。字と本編の境目を作って座りをよくする */
+  .title-rule { width:min(520px,74vw); height:2px; margin:2px 0 6px;
+    background:linear-gradient(90deg, rgba(255,210,80,0), rgba(255,210,80,.9), rgba(255,210,80,0));
+    box-shadow:0 0 10px rgba(255,190,60,.7); }
+  /* メニューは額縁に収める。画面いっぱいに並べると絵が全部隠れる */
+  .menupanel { display:flex; flex-direction:column; align-items:center; gap:8px;
+    padding:14px 22px 16px; border-radius:14px; max-width:min(760px,94vw);
+    background:linear-gradient(180deg, rgba(14,10,26,.86), rgba(6,4,14,.92));
+    border:2px solid rgba(255,210,80,.55);
+    box-shadow:0 0 0 1px rgba(0,0,0,.6) inset, 0 10px 34px rgba(0,0,0,.62), 0 0 26px rgba(255,180,60,.18); }
+  .menurow { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #start .moves { margin-top:auto; }
+  .pickhead { color:#ffd34d; font-size:14px; letter-spacing:4px; font-weight:800; text-shadow:0 0 8px #b8860b; }
+  .btn-lg { margin-top:4px; padding:14px 52px; font-size:22px; }
+  .btn-sm { margin-top:0; padding:9px 18px; font-size:15px; letter-spacing:1.5px; }
+  .btn-xs { margin-top:0; padding:7px 14px; font-size:13px; letter-spacing:1px; }
   #start .title-main { text-shadow:0 4px 0 rgba(120,60,0,.5), 0 0 22px rgba(255,180,40,.6); }
   #start .title-jp { text-shadow:0 0 10px #ff8a00, 0 2px 6px #000; }
   .title-sub { font-size:14px; letter-spacing:6px; color:#ffd34d; text-shadow:0 0 8px #b8860b; }
@@ -70,6 +90,8 @@
     .btn { margin-top:6px; padding:9px 10px; font-size:13px; letter-spacing:1px; border-width:1.5px;
            border-radius:8px; box-shadow:0 3px 0 #9c5a00,0 5px 10px rgba(0,0,0,.45); }
     .btn:active { transform:translateY(2px); box-shadow:0 1px 0 #9c5a00; }
+    .menupanel { padding:10px 12px 12px; gap:6px; }
+    .btn-lg { padding:11px 26px; font-size:17px; }
     .charrow { display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important;
                width:100%; max-width:440px; }
     .charrow .btn { margin-top:0; width:100%; padding:9px 4px; }
@@ -133,29 +155,46 @@
   <div id="snd">♪</div>
 
   <div id="start" class="overlay">
-    <div class="title-sub">ARCADE BELT ACTION</div>
-    <div class="title-main">聖犬士イッヌ</div>
-    <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
-    <button id="continueBtn" class="btn hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
-    <div class="charrow" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-      <button id="startBtn" class="btn">▶ 1P イッヌ</button>
-      <button id="startShimaBtn" class="btn" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
-      <button id="startNukoBtn" class="btn" style="background:linear-gradient(180deg,#ffb0e0,#c060a8)">▶ 1P ヌコ</button>
-      <button id="startG8Btn" class="btn" style="background:linear-gradient(180deg,#e0a45f,#a05a22)">▶ 1P ガードワン8号</button>
-      <button id="startWatchBtn" class="btn" style="background:linear-gradient(180deg,#eef2f7,#aab6c4);color:#2a3038">▶ 1P 盗賊ワッチ</button>
-      <button id="startWandenBtn" class="btn" style="background:linear-gradient(180deg,#e8dcb4,#8a2a24);color:#2a1a10">▶ 1P 剣鬼ワンデン</button>
-      <button id="startMackBtn" class="btn" style="background:linear-gradient(180deg,#f0c070,#a0521c);color:#2a1a10">▶ 1P 早撃ちマック</button>
-      <button id="start2Btn" class="btn" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
+    <div class="titleblock">
+      <div class="title-sub">ARCADE BELT ACTION</div>
+      <div class="title-main">聖犬士イッヌ</div>
+      <div class="title-rule"></div>
+      <div class="title-jp">〜 ワンワン帝国の野望 〜</div>
     </div>
-    <div class="optrow" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-      <button id="hardBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF（神話・戦国はカジュアル）</button>
-      <button id="ng2SelBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回スタート：1周目</button>
-      <button id="trainBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング（キャラを選んでコンボ練習）</button>
-      <button id="vsBtn" class="btn" style="font-size:15px;height:auto;padding:8px 18px;background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,200,.6);color:#ff8ad0">⚔ 対戦モード（ふたりで勝負・ストック制）</button>
+    <!-- 主要メニュー。キャラ選びは「はじめる」を押してから開く。
+         以前は12個のボタンが画面を覆い、背後の絵（英雄の勢揃い・城・魔王）が
+         一切見えなかった -->
+    <div id="mainMenu" class="menupanel">
+      <button id="continueBtn" class="btn btn-lg hidden" style="background:linear-gradient(180deg,#7dd0ff,#3a8ad0)">▶ つづきから</button>
+      <button id="playBtn" class="btn btn-lg">▶ はじめる</button>
+      <div class="menurow">
+        <button id="vsBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,200,.6);color:#ff8ad0">⚔ 対戦モード</button>
+        <button id="trainBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング</button>
+      </div>
+      <div class="menurow">
+        <button id="hardBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF</button>
+        <button id="ng2SelBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回：1周目</button>
+      </div>
+    </div>
+    <!-- キャラ選び。「はじめる」で開く -->
+    <div id="charPick" class="menupanel hidden">
+      <div class="pickhead">出撃する犬士を選べ</div>
+      <div class="charrow" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:720px">
+        <button id="startBtn" class="btn btn-sm">▶ 1P イッヌ</button>
+        <button id="startShimaBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#e0b07a,#b07a44)">▶ 1P シマダックス</button>
+        <button id="startNukoBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#ffb0e0,#c060a8)">▶ 1P ヌコ</button>
+        <button id="startG8Btn" class="btn btn-sm" style="background:linear-gradient(180deg,#e0a45f,#a05a22)">▶ 1P ガードワン8号</button>
+        <button id="startWatchBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#eef2f7,#aab6c4);color:#2a3038">▶ 1P 盗賊ワッチ</button>
+        <button id="startWandenBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#e8dcb4,#8a2a24);color:#2a1a10">▶ 1P 剣鬼ワンデン</button>
+        <button id="startMackBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#f0c070,#a0521c);color:#2a1a10">▶ 1P 早撃ちマック</button>
+        <button id="start2Btn" class="btn btn-sm" style="background:linear-gradient(180deg,#ffd08a,#ff8e2e)">▶ 2P CO-OP</button>
+      </div>
+      <button id="pickBackBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(200,210,230,.5);color:#cfe0ff">← もどる</button>
     </div>
     <div class="moves">
       移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
     </div>
+  </div>
   </div>
 
   <div id="result" class="overlay hidden">
@@ -2859,7 +2898,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
   rushT:0, rushHits:0, rushHold:0, rushPhase:0, rushFinT:0, iaiT:0, iaiMax:0, iaiCount:0, iaiHit:null, dunkT:0, spinCount:0,
   gswingT:0, gswingRot:0, gswingHit:null, tkTarget:null, tkPhase:0, tkT:0, tkHit:false, tkBackDir:1, fallT:0,
-  weapon: defaultWeaponFor(kind), weaponT:0, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
+  weapon: defaultWeaponFor(kind), weaponT:0, heldWeapon:null, costume:false, atkMul:1, defMul:1, spdMul:1, coinMul:1,
   dim:1, dimMax:3, comboMile:0, counterPow:false, riseG:1.1, respawnT:0,
   level:1, xp:0, xpNext:100, vehicle:null, vehHp:0, vehRam:0, vehT:0, stolen:[], stealCd:0 }; }
 let players=[ makePlayer(0,'inu'), makePlayer(1,'shima') ];
@@ -3022,13 +3061,13 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   if(p.grabEnemy)p.grabEnemy.grabbedBy=0; p.grabEnemy=null; p.grabSub='hold'; p.grabAnim=0; p.punch=0; p.slideT=0; p.wheelT=0; p.wheelRot=0; p.screwT=0; p.screwRot=0;
   if(p.grabbedByEnemy){ if(p.grabbedByEnemy.grabTarget===p){p.grabbedByEnemy.grabTarget=null; p.grabbedByEnemy.state='walk';} p.grabbedByEnemy=null; }
   p.rushT=0; p.rushHits=0; p.rushHold=0; p.rushPhase=0; p.rushFinT=0; p.gswingT=0; p.gswingHit=null; p.tkTarget=null; p.tkPhase=0;
-  p.weapon=p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;
+  p.weapon=p.heldWeapon||p.permWeapon||defaultWeaponFor(p.kind); p.weaponT=0;   // 拾った武器はやられても持ち続ける
   p.jDrop=false; p.hadouT=0; p.hadouShots=0; p.hadouHold=0; p.sevenT=0;
   p.counterPow=false; p.riseG=1.1;
   p.vehicle=null; p.vehHp=0; p.vehRam=0; p.vehT=0; p.mAtk=null; p.mAtkT=0;   // 乗り物は各フィールドで乗り直す
   p.stealCd=0;   // ワッチ：掴み奪取のクールダウン。奪った技(stolen)はフィールドを跨いで保持
   p.hp=p.maxHp; if(full){ p.lives=3; p.dim=1; p.costume=false; p.armored=false; p.wear=null; p.wardrobe=[]; p.atkMul=1; p.defMul=1; p.spdMul=1; p.coinMul=1; p.maxHp=120; p.hp=120; p.dimMax=3; p.level=1; p.xp=0; p.xpNext=100; p.stolen=[];
-    p.permWeapon=null; p.weapon=defaultWeaponFor(p.kind);
+    p.permWeapon=null; p.heldWeapon=null; p.weapon=defaultWeaponFor(p.kind);
     if(p.kind==='watch'){ p.atkMul=0.72; p.spdMul=1.18; p.lives=4; p.maxHp=108; p.hp=108; }   // 盗賊ワッチ：素の戦闘力は低いが素早く残機多め
     if(p.kind==='wanden'){ p.atkMul=1.18; p.spdMul=0.94; p.lives=2; p.maxHp=100; p.hp=100; }  // 居合の達人ワンデン：紙装甲・少残機だが一撃が重いテクニカル型
     // 早撃ちマック：遠距離アタッカー・高機動。弾で戦うぶん近接の間合いが薄い
@@ -7675,7 +7714,9 @@ function dropCostumeFor(p){
   const fresh=pool.filter(function(C){ return own.indexOf(C.id)<0; });
   const pick=(fresh.length?fresh:pool);
   return pick[(Math.random()*pick.length)|0].id; }
-function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=(p.kind==='watch'?2300:1100);   // ワッチは武器を長く扱える
+// 拾った武器は持ち続ける。以前は制限時間で元の得物へ戻っていたが、
+// せっかく拾っても次のステージへ持ち越せず、集める意味が無かった
+function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=0; p.heldWeapon=kind;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.get(p.x); }
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
@@ -9767,7 +9808,7 @@ function startVersus(){ unlockAudio();
     p.x=(i===0)? W*0.24 : W*0.76; p._tx=null; p.facing=(i===0)?1:-1;
     p.level=1; p.lives=99; p.vsStock=vsStockMax; p.vsKO=0;
     p.hp=p.maxHp=260; p.dim=p.dimMax=3; p.atkMul=1; p.defMul=1; p.spdMul=1;
-    p.weapon=defaultWeaponFor(p.kind); p.permWeapon=null; p.weaponT=0; });
+    p.weapon=defaultWeaponFor(p.kind); p.permWeapon=null; p.heldWeapon=null; p.weaponT=0; });
   player=players[0]; goArrow=0; stageBanner=0; bgCacheTheme=-1; shopPending=0;
   vsWinner=-1; vsOverT=0; vsIntro=110;
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
@@ -9777,6 +9818,7 @@ function endVersus(){ vsMode=false; TWO_P=false; camLockX=null; gimOn=true;
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title'); }
 // 対戦の相手（自分ではないほうの主役）
 function vsFoeOf(p){ for(let i=0;i<players.length;i++){ const q=players[i];
@@ -9821,6 +9863,7 @@ function endTraining(){ trainMode=false;
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title'); }
 // 毎フレームの下支え。ここが無いと練習が「死んだ」「的が居なくなった」で中断される
 function trainUpkeep(){
@@ -9975,6 +10018,9 @@ function updateMap(){ useInput(players[0].in); if(mapNavCd>0)mapNavCd--;
         if(sc<bs){ bs=sc; best=i; } }
       if(best>=0){ mapSel=best; ui.move(); } else if(ui.ng) ui.ng();
       mapNavCd=10; } }
+  // 掴みボタンでいつでも店へ。買い物のためにステージを1つ消化する必要が無くなる
+  if(pressed.grab||pressed.grd){ pressed.grab=false; pressed.grd=false;
+    ui.ok(); saveInput(players[0].in); goScreen(enterShop,'shutter',34); return; }
   if(pressed.atk||pressed.jump){ pressed.atk=false; pressed.jump=false;
     const node=nodes[mapSel];
     if(nodeEnterable(node)){ ui.ok(); saveInput(players[0].in); goScreen(()=>loadLevel(node),'iris',42); return; }
@@ -10097,7 +10143,18 @@ function drawMap(){
         ctx.fillText(fitText(done?'制覇済み（再挑戦できる）':'未制覇　報酬コイン 目安 '+(60+tr*45), cw-28), cx+14, cy+64); }
       ctx.textAlign='center'; } }
   ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='13px "Hiragino Maru Gothic ProN",sans-serif';
-  ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃',W/2,H-22); ctx.textAlign='left';
+  ctx.fillText('矢印／スティックで選択　／　攻撃ボタンで出撃　／　掴みボタンでチャムの店',W/2,H-22); ctx.textAlign='left';
+  // 店へ行けることを絵でも示す。文字だけだと「いつでも買える」ことに気付かれない
+  { const bx=W-124, by=64;
+    ctx.save();
+    ctx.fillStyle='rgba(8,10,20,.78)'; roundRect(bx-46,by-40,104,80,10); ctx.fill();
+    ctx.strokeStyle='rgba(255,210,80,.65)'; ctx.lineWidth=1.8; roundRect(bx-45.5,by-39.5,103,79,10); ctx.stroke();
+    ctx.save(); ctx.translate(bx+4,by+26); ctx.scale(0.42,0.42); drawCham(0,0); ctx.restore();
+    ctx.fillStyle='#ffe14d'; ctx.font='bold 12px "Hiragino Maru Gothic ProN",sans-serif'; ctx.textAlign='center';
+    ctx.fillText('チャムの店', bx+6, by-24);
+    ctx.fillStyle='#cfe0ff'; ctx.font='11px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.fillText('掴み／回避', bx+6, by+36);
+    ctx.textAlign='left'; ctx.restore(); }
 }
 
 //======================================================================
@@ -10829,7 +10886,7 @@ function stepPlayers(){
     player=pl; useInput(pl.in); updateRigP(pl);
     if(pl.state==='dead'){ pl.respawnT--; if(pl.respawnT<=0 && (TWO_P?coopLives>=0:pl.lives>=0)) resetPlayer(pl,false); }
     else { updatePlayer(); terrainStep(pl);
-      if(pl.weaponT>0){ pl.weaponT--; if(pl.weaponT<=0){ const base=pl.permWeapon||defaultWeaponFor(pl.kind); if(pl.weapon!==base){ pl.weapon=base; popText(pl.x,pl.y-110, pl.permWeapon?WEAPONS[base].name+'に戻した':(base==='fists'?'素手に戻った':base==='wand'?'星の杖に戻した':base==='ghammer'?'巨大ハンマーに戻した':base==='inuboshi'?'犬干し竿に戻した':'短剣に戻った'),'#cfd8e6'); } } } }
+    }
     saveInput(pl.in);
   }
   player=players[0];
@@ -13840,27 +13897,30 @@ function drawBlade(hx,hy,ang,ext){ const wk=player.weapon||'dagger';
     ctx.quadraticCurveTo(L+27,21, L+4,30); ctx.lineTo(L+8,26);
     ctx.quadraticCurveTo(L+23,18, L+23,0); ctx.quadraticCurveTo(L+23,-18, L+8,-26); ctx.closePath(); ctx.fill();
     ctx.fillStyle='#8a6a30'; ctx.beginPath(); ctx.arc(L+11,0,3,0,7); ctx.fill();          // 鋲
-  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：長い柄の先から直角に大きく反る刃
+  } else if(wk==='scythe'){ const L=ext*1.05+58;   // 死神の大鎌：柄の先から前方へ大きく反る刃
+    // 刃は「振る方向へ鉤が開く」向きに付ける。以前は後ろへ反っていて、
+    // 刈り取る側（内側の刃）が敵の反対を向いていた
     ctx.strokeStyle='#2a2430'; ctx.lineWidth=6.5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-26,6); ctx.quadraticCurveTo(L*0.5,-6, L,-10); ctx.stroke();   // 反りのある柄
     ctx.strokeStyle='#43394f'; ctx.lineWidth=2.6;
     ctx.beginPath(); ctx.moveTo(-26,4); ctx.quadraticCurveTo(L*0.5,-8, L,-12); ctx.stroke();
     ctx.fillStyle='#6a5a2a'; ctx.fillRect(-28,1,9,10);                                     // 石突き
     ctx.fillStyle='#c8a24a'; ctx.beginPath(); ctx.arc(L-4,-10,4.6,0,7); ctx.fill();         // 刃元の金具
-    const sb=ctx.createLinearGradient(L,-14,L-30,-84);
+    const sb=ctx.createLinearGradient(L,-14,L+30,-84);
     sb.addColorStop(0,'#ffffff'); sb.addColorStop(0.35,'#cfe4f2'); sb.addColorStop(1,'#5a7a92');
     ctx.fillStyle=sb; ctx.beginPath();
-    ctx.moveTo(L-2,-10);
-    ctx.quadraticCurveTo(L+18,-52, L-34,-86);          // 刃の外周（大きく反る）
-    ctx.quadraticCurveTo(L-16,-46, L-10,-8);           // 峰側へ戻る
+    ctx.moveTo(L+2,-10);
+    ctx.quadraticCurveTo(L-18,-52, L+34,-86);          // 峰（外周）は後ろへ膨らみ、切っ先は前へ
+    ctx.quadraticCurveTo(L+16,-46, L+10,-8);           // 内側へ戻る
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle='rgba(20,18,26,.6)'; ctx.lineWidth=1.8; ctx.stroke();
-    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=2.2;                            // 刃筋
-    ctx.beginPath(); ctx.moveTo(L-2,-12); ctx.quadraticCurveTo(L+15,-50, L-32,-82); ctx.stroke();
+    // 刃筋は内側（鉤の内側＝実際に刈る側）へ通す
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(L+4,-12); ctx.quadraticCurveTo(L+15,-48, L+32,-82); ctx.stroke();
     if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';                    // 刃にまとわる冥い燐光
       ctx.globalAlpha=0.22+0.10*Math.sin(gf*0.15);
-      ctx.fillStyle=radGrad(L-16,-48,44,'#a76bff','rgba(120,60,200,0)');
-      ctx.beginPath(); ctx.arc(L-16,-48,44,0,7); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle=radGrad(L+16,-48,44,'#a76bff','rgba(120,60,200,0)');
+      ctx.beginPath(); ctx.arc(L+16,-48,44,0,7); ctx.fill(); ctx.restore(); }
   } else if(wk==='zanbatou'){ const L=ext*1.5+120;   // 斬馬刀：常識外れに巨大な大剣
     ctx.fillStyle='#2f2a26'; ctx.fillRect(-34,-6,40,12);                                   // 両手で握る長い柄
     ctx.strokeStyle='#7a6a4a'; ctx.lineWidth=2;
@@ -17951,11 +18011,9 @@ function drawHUD(){
     if(_uc>1){ const bx=56+player.dimMax*15+2;
       ctx.font=uif('bold',11); ctx.textAlign='left';
       ctx.fillStyle=_ready?'#ffd24d':'rgba(255,210,77,.45)'; ctx.fillText('×'+_uc, bx, 95); } }
-  // 現在の武器＋残り時間（イッヌのみ）
+  // 現在の武器（拾ったら持ち続けるので、残り時間の帯はもう要らない）
   if(player.weapon!=='dagger' && player.weapon!=='fists'){ const W2=WEAPONS[player.weapon];
-    ctx.fillStyle=W2.col; ctx.font=uif('bold',12); ctx.fillText('武器: '+W2.name, 284, 40);
-    const bw=76, tx=284, ty=46; ctx.fillStyle='rgba(4,5,11,.9)'; roundRect(tx,ty,bw,6,3); ctx.fill();
-    ctx.fillStyle=W2.col; roundRect(tx,ty,Math.max(2,bw*clamp(player.weaponT/1100,0,1)),6,3); ctx.fill(); }
+    ctx.fillStyle=W2.col; ctx.font=uif('bold',12); ctx.fillText('武器: '+W2.name, 284, 40); }
   // 2P パネル（シマダックス）
   if(players[1].active){ const q=players[1]; hudY+=6; panelOrn(12,hudY,238,56,'stone');
     ctx.fillStyle=heroColOf(q.kind); ctx.font=uif('bold',13); ctx.textAlign='left'; ctx.fillText('2P  '+heroNameOf(q.kind),22,hudY+17);
@@ -18931,22 +18989,58 @@ function startRivalClearDemo(){ const type=rivalFor(players[0].kind); const L=RI
   startCutscene([{boss:type, stageN:stage, name:ETYPE[type].name, role:'好敵手', text:L.win}], ()=>{ state='play'; goArrow=160; }); }
 // ── ステージクリアの短いデモ（キャラ×ステージのひとこと）──
 const CLEAR_LINE={
-  '王都郊外':{inu:'まずは一勝。だが帝国の本隊はこれからだ。',shima:'ウォームアップにしちゃ、悪くねえ拳だったぜ。',nuko:'ふぅ…最初の関門、突破！次も頑張るぞ。',guard8:'門の外は、こんなに広かったのか…。行くぞ。'},
-  '黄昏の城下町':{inu:'夕陽が痛いな…先を急ごう。',shima:'この街の連中、意外と骨があったな。',nuko:'夕焼け、きれい…って見とれてる場合じゃない！',guard8:'民の暮らしは、必ず守る。'},
-  '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。'},
-  '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。'},
-  '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。'},
+  // ── 一周目：13ステージ×7キャラ ──
+  '王都郊外':{inu:'まずは一勝。だが帝国の本隊はこれからだ。',shima:'ウォームアップにしちゃ、悪くねえ拳だったぜ。',nuko:'ふぅ…最初の関門、突破！次も頑張るぞ。',guard8:'門の外は、こんなに広かったのか…。行くぞ。',watch:'手始めにしちゃ実入りが少ないな。次だ、次。',wanden:'……鈍っては、おらんようだ。',mack:'ヒュウ！　肩ならしにしちゃ上出来だ。'},
+  '黄昏の城下町':{inu:'夕陽が痛いな…先を急ごう。',shima:'この街の連中、意外と骨があったな。',nuko:'夕焼け、きれい…って見とれてる場合じゃない！',guard8:'民の暮らしは、必ず守る。',watch:'この街、まだ灯りが残ってる。守る価値はあるさ。',wanden:'……夕闇は、抜き身によく似合う。',mack:'日が暮れる前に片付いた。上出来だろ？'},
+  '業火の渓谷':{inu:'この熱気…剣の柄まで焼けそうだ。',shima:'汗が塩になるぜ。だが拳は冷めてねえ。',nuko:'あっつい！　水の魔法、覚えとけばよかった…！',guard8:'装甲が焼ける。だが止まる理由にはならん。',watch:'火の粉で上着が台無しだ。弁償してもらうぞ。',wanden:'……炎は、刃を鈍らせぬ。',mack:'火薬持ちにゃ最悪の場所だったな。抜けたぜ。'},
+  '渓谷の最深部':{inu:'底が見えぬほど深い。だが道はまだ続く。',shima:'地の底まで来て、まだ上がある気がするぜ。',nuko:'このへん、魔力の流れが濃い…気をつけなきゃ。',guard8:'退路は無い。ならば前へ進むのみ。',watch:'こんな奥に何を隠してやがる。気になるね。',wanden:'……深く沈むほど、静かになる。',mack:'反響で耳がやられる。さっさと出よう。'},
+  '月詠の森':{inu:'木々の間から月が見える。道標にしよう。',shima:'静かすぎて、逆に落ち着かねえな。',nuko:'月明かりの森…わたしの魔法、いちばん冴える場所！',guard8:'足場が悪い。皆、離れるなよ。',watch:'月夜は盗人の時間だ。俺の庭みたいなもんさ。',wanden:'……月と、刃と、静寂。悪くない。',mack:'月が明るすぎる。狙撃には向かねえな。'},
+  '瑠璃の水晶洞':{inu:'水晶が剣を映す。己の腕を見透かされるようだ。',shima:'反射がうるせえ。どれが本体か分かりゃしねえ。',nuko:'わあ、きれい…！　この水晶、魔力を溜め込んでる。',guard8:'一歩ごとに反響する。ここでは静かに動け。',watch:'この水晶、いくらで売れると思う？　……冗談だ。',wanden:'……鏡は、己の未熟を映す。',mack:'跳弾が怖い場所だ。撃つ角度に気をつけな。'},
+  '海賊飛行艇の甲板':{inu:'空の上とはな…足元に気をつけねば。',shima:'風が強えが、拳の重さは変わらねえ！',nuko:'空を飛ぶ船なんて、魔法みたい！',guard8:'この高さ…落ちたらタダじゃ済まんな。',watch:'空飛ぶ金庫か。悪くない趣味してるじゃないか。',wanden:'……足場が揺れる。ならば、揺れごと斬る。',mack:'風で弾が流れる。補正が要るな。'},
+  '海賊王の埠頭':{inu:'潮の匂いだ。この先は海路か。',shima:'船乗り相手の喧嘩は久しぶりだぜ。',nuko:'船がいっぱい…！　どれかに乗れば早いかも？',guard8:'港は民の玄関だ。荒らさせはせん。',watch:'港町は情報の宝庫だ。少し聞き込みしていくか。',wanden:'……潮風は、刃を錆びさせる。手入れが要る。',mack:'酒場でも探すか。……冗談だよ、先を急ごう。'},
+  '灼熱の砂漠':{inu:'砂が剣の隙間に入る。厄介だな。',shima:'足を取られる砂地で踏ん張るのも修行のうちだ。',nuko:'水…水がほしい…！　次の街まで我慢…！',guard8:'関節に砂が噛む。整備が要るな。',watch:'蜃気楼に何度騙されたことか。もううんざりだ。',wanden:'……砂は、足跡を消してくれる。',mack:'砂で銃身が詰まる。まめに掃除しねえとな。'},
+  '灼熱の巨大廃墟':{inu:'古の遺跡か…登るごとに謎が深まる。',shima:'こんな高さまで登るとは、脚が鍛えられるぜ。',nuko:'この廃墟、古代魔法の匂いがする…。',guard8:'崩れかけの門でも、守るべきものはある。',watch:'こういう遺跡にゃ、必ず隠し部屋があるもんだ。',wanden:'……朽ちてなお、佇まいが残っている。',mack:'崩れかけの足場だ。走るなら一気に行くぜ。'},
   '月夜の宝物庫':{inu:'王国の秘宝、確かに取り戻したぞ。',shima:'金ピカの番人、いい打ち応えだったぜ。',nuko:'きらきらのお宝がいっぱい…！ちゃんと返さなきゃ。',guard8:'宝は民のもの。しかと守り抜く。',watch:'ふぅ…お宝は残らず“盗み返し”完了ってな。粋だろ？',wanden:'……金塊も、刃の前では等しくただの的だ。',mack:'金貨も弾丸も、要は当てどころさ。返しに行こうぜ。'},
+  '氷雪の霊峰':{inu:'凍える山だが、剣は鈍らせん。',shima:'寒さで拳が縮こまる…気合いだ！',nuko:'さむっ！温かい魔法があればなぁ…。',guard8:'吹雪の中でも、俺は倒れん。',watch:'指がかじかむ。錠前破りには最悪の天気だ。',wanden:'……白い息が、間合いを教えてくれる。',mack:'引き金が凍る前に片付いてよかったぜ。'},
+  '暗黒の城門':{inu:'ここが最後の門か。……行くぞ。',shima:'門の向こうに親玉がいる。腕が鳴るぜ。',nuko:'こわい…けど、ここまで来たんだもん。進む！',guard8:'門を守るのが俺の役目だ。今日は、破るがな。',watch:'厳重な錠前だ。……こじ開け甲斐があるってもんさ。',wanden:'……門とは、斬るためにあるものだ。',mack:'デカい扉だ。弾より足で行った方が早いな。'},
+  '魔王の間':{inu:'長い道のりだった。すべてはこの一太刀のために。',shima:'ここまで来たら、拳一つで語るだけだ。',nuko:'お師匠さま…見ていて。わたし、ちゃんと戦うから。',guard8:'王都の門番として、ここで果たす責務がある。',watch:'最後の一仕事だ。取り返すぜ、全部な。',wanden:'……名も無き刃が、王を斬る。それだけだ。',mack:'最後の弾は、いちばんデカい的に取ってある。'},
 };
+// ステージを出るときの、相棒（看板娘チャム／2P）の返し。
+// 主役のひとことで終わると独り言に見えるので、必ず受け手を置いて会話にする
+const PARTNER_LINE={
+  '王都郊外':'お疲れさま！　次は城下町だにゃ。灯りが消える前に行っておいで。',
+  '黄昏の城下町':'城下の噂を仕入れといたにゃ。渓谷の方で地面が揺れてるって。',
+  '業火の渓谷':'熱かったでしょ？　冷たい水、まけとくにゃ。……代金はもらうけど。',
+  '渓谷の最深部':'こんな底まで潜るなんて無茶するにゃあ。地図、書き足しといたよ。',
+  '月詠の森':'森の獣は月に合わせて動くにゃ。次は満ちる前に抜けた方がいい。',
+  '瑠璃の水晶洞':'その水晶、うちで買い取るにゃ。……持って帰ってきてないの？　もう！',
+  '海賊飛行艇の甲板':'空の上で商売できたら楽なのににゃあ。着陸したら寄っておくれ。',
+  '海賊王の埠頭':'港が空いたにゃ！　これで仕入れの船が通せる。ありがとにゃ。',
+  '灼熱の砂漠':'砂まみれだにゃ…。装備の手入れ、うちでやってあげるにゃ。',
+  '灼熱の巨大廃墟':'あの遺跡、昔は帝国の工場だったって話にゃ。気をつけてね。',
+  '月夜の宝物庫':'秘宝が戻れば王都も落ち着くにゃ。……ちょっとだけ、見せて？',
+  '氷雪の霊峰':'山を越えたにゃ！　この先はもう帝国の懐だよ。備えを整えてから行こ。',
+  '暗黒の城門':'門が開いたにゃ……。ここから先は、あたしは入れない。無事で。',
+  '魔王の間':'……信じてたにゃ。おかえり、英雄さま。',
+};
+function partnerLineFor(stName){
+  return PARTNER_LINE[stName] || 'いい戦いだったにゃ！　次の支度、手伝うよ。'; }
 function stageClearLine(stName, kind){ const o=CLEAR_LINE[stName];
   if(o&&o[kind]) return o[kind];
   const gen={inu:'また一つ、王国を取り戻した。次へ進もう。',shima:'いい戦いだった。次はもっと強えのが来るか？',nuko:'ここも切り抜けた！この調子で行こう。',guard8:'一区画、守り抜いた。まだ止まれん。',watch:'ちょろいもんだったな。次のお宝はどこだ？',wanden:'……一太刀で足りた。次へ。',mack:'ヒュウ！　弾はまだ残ってる。次の町へ行こうぜ！'};
   return gen[kind]||gen.inu; }
 function startStageClearDemo(stN){ const stName=STAGE_NAME[stN]||('STAGE '+stN);
-  startCutscene([
-    {bgTheme:themeIdxFor(stN), art:'clear', name:'', text:'STAGE '+stN+'　'+stName+'　クリア！'},
-    {bgTheme:themeIdxFor(stN), art:'player', name:'@hero', text:stageClearLine(stName, players[0].kind)},
-  ], ()=>{ state='play'; shopPending=120; }); }
+  const th=themeIdxFor(stN), two=!!(players[1]&&players[1].active);
+  // 一言で終わらせず、受け手を置いて掛け合いにする。
+  // 2人プレイなら相棒が、1人なら看板娘チャムが返す
+  const sc=[
+    {bgTheme:th, art:'clear', name:'', text:'STAGE '+stN+'　'+stName+'　クリア！'},
+    {bgTheme:th, art:'player', name:'@hero', text:stageClearLine(stName, players[0].kind)},
+  ];
+  if(two) sc.push({bgTheme:th, art:'p2', name:heroNameOf(players[1].kind),
+    text:stageClearLine(stName, players[1].kind)});
+  sc.push({bgTheme:th, art:'cham', name:'チャム', role:'よろず屋の看板娘', text:partnerLineFor(stName)});
+  startCutscene(sc, ()=>{ state='play'; shopPending=120; }); }
 // ラスボス形態変化のデモシーン
 function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode(bossMusicFor(nt)); sfx.boss(); sfx.transform();
   startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
@@ -19225,6 +19319,12 @@ function drawCut(){ if(!cut)return; const sc=cut.scenes[cut.i];
       ctx.fillText('STAGE '+(sc.stageN||1)+'  BOSS',W/2,86); ctx.globalAlpha=1; ctx.textAlign='left';
   } else if(sc.art==='player'){ const q=easeOut(clamp(cut.t/26,0,1));
       ctx.save(); ctx.globalAlpha=q; drawPlayerPortrait(lerp(W*0.5-40,W*0.5,q),H*0.80,2.2,1,'idle'); ctx.restore();
+  } else if(sc.art==='cham'){ const q=easeOut(clamp(cut.t/26,0,1));   // 看板娘チャム（通信役）
+      ctx.save(); ctx.globalAlpha=q; ctx.translate(lerp(W*0.5+40,W*0.5,q), H*0.86); ctx.scale(1.7,1.7); drawCham(0,0); ctx.restore();
+  } else if(sc.art==='p2'){ const q=easeOut(clamp(cut.t/26,0,1));      // 2P（相棒の主役）
+      const keep=player; player=players[1]||players[0];
+      ctx.save(); ctx.globalAlpha=q; drawPlayerPortrait(lerp(W*0.5+40,W*0.5,q),H*0.80,2.2,-1,'idle'); ctx.restore();
+      player=keep;
   } else if(sc.art==='invade'){ drawMarch();
   } else if(sc.art==='fall'){ ctx.save(); ctx.globalAlpha=clamp(1-cut.t/120,0,1); drawBossPortrait('boss',W*0.5,H*0.82,1.6,-1); ctx.restore();
       ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<5;i++){ const a=cut.t*0.1+i; ctx.fillStyle='rgba(198,120,255,.5)'; ctx.beginPath(); ctx.arc(W/2+Math.cos(a)*cut.t*2,H*0.5+Math.sin(a)*cut.t*1.4,4,0,7); ctx.fill(); } ctx.restore();
@@ -19396,6 +19496,15 @@ const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn
            {t:'⚔ 5周目「戦国」から（最高難度）', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:4];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
 const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{ startTrainSelect(); };
+// タイトルは主要メニューだけを出し、キャラ選びは「はじめる」で開く。
+// 12個のボタンを並べていたころは、背後の絵が一切見えなかった
+function showCharPick(on){
+  const m=document.getElementById('mainMenu'), c=document.getElementById('charPick');
+  if(!m||!c) return;
+  m.classList.toggle('hidden', !!on); c.classList.toggle('hidden', !on);
+  unlockAudio(); if(sndOn) ui.ok(); }
+const _playBtn=document.getElementById('playBtn'); if(_playBtn) _playBtn.onclick=()=>{ showCharPick(true); };
+const _pickBack=document.getElementById('pickBackBtn'); if(_pickBack) _pickBack.onclick=()=>{ showCharPick(false); };
 const _vsBtn=document.getElementById('vsBtn'); if(_vsBtn) _vsBtn.onclick=()=>{ startVsSelect(); };
 document.getElementById('start2Btn').onclick=()=>{ unlockAudio(); setupRoster('coop'); start2PSelect(); };
 const _hardBtn=document.getElementById('hardBtn'); if(_hardBtn) _hardBtn.onclick=()=>{ hardMode=!hardMode;
@@ -19612,6 +19721,7 @@ function endAttract(){
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0; mercs.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0;
   const es=document.getElementById('start'); if(es) es.classList.remove('hidden');
+  if(typeof showCharPick==='function') showCharPick(false);   // タイトルへ戻ったらキャラ選びは畳む
   Music.stop(); if(sndOn) Music.start('title');
 }
 // ── 自動デモ：実際のゲームを AI が操作する ──

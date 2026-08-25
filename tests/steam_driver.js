@@ -454,7 +454,7 @@ const DRIVER = `
     if(!H) throw new Error('HTML を取れていない');
     // 1) 起動ボタンがキャラ数ぶんある（キャラを足してボタンを忘れると誰も選べない）
     let nBtn=0, i=0;
-    for(;;){ const j=H.indexOf('class="btn"', i); if(j<0) break; i=j+5;
+    for(;;){ const j=H.indexOf('class="btn', i); if(j<0) break; i=j+5;
       const line=H.slice(H.lastIndexOf('<button', j), H.indexOf('</button>', j));
       if(line.indexOf('1P ')>=0) nBtn++; }
     if(nBtn!==CHARS.length) throw new Error('1P ボタンが '+nBtn+'個／キャラは '+CHARS.length+'人');

@@ -38,7 +38,10 @@ const DRIVER = `
   if(!canPick(w,'spear')) throw new Error('watch cannot pick spear');
   if(!canPick(w,'hammer')) throw new Error('watch cannot pick hammer');
   if(canPick(w,'tome')) throw new Error('watch should not pick magic tome');
-  giveWeapon(w,'spear'); if(w.weaponT<=1100) throw new Error('watch weapon duration not extended ('+w.weaponT+')');
+  // 拾った武器は時間で消えず、次のステージへ持ち越す（制限時間の作りはやめた）
+  giveWeapon(w,'spear');
+  if(w.weaponT!==0) throw new Error('拾った武器に制限時間が付いている（'+w.weaponT+'）');
+  if(w.heldWeapon!=='spear') throw new Error('拾った武器が持ち物として記録されていない（'+w.heldWeapon+'）');
   // weapon damage bonus: same weapon/move/range, watch vs inu — watch's item bonus should net MORE despite its low base
   function dmgWith(kind,weap,ex){ setupRoster(kind); startGame(); state='play'; const q=players[0]; player=q; q.x=400; q.facing=1; q.weapon=weap; q.state='idle';
     enemies.length=0; spawnEnemy('wolf',400+ex,LANE); const e=enemies[0]; e.thinkCd=9999; e.hp=e.maxHp=99999; beginAttack('sp1'); for(let i=0;i<16;i++){ hitStop=0; step(1); } return 99999-e.hp; }

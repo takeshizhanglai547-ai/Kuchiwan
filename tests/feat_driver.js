@@ -1,3 +1,4 @@
+global.__HTML = html;
 const DRIVER = `
 (async()=>{
   const step=(n)=>{ for(let i=0;i<n;i++){ if(global.rafCb){ const cb=global.rafCb; global.rafCb=null; cb(); } } };
@@ -155,6 +156,79 @@ const DRIVER = `
     const poll=a.rects.some(function(r){ return r[3]>=18 && r[2]<=18 && r[0]>0; });
     if(!poll) throw new Error('斧の背の平ら（ポール）が無い');
     console.log('斧の形 OK (柄の上下へ張り出す頭＋背の平ら)'); }
+
+  // ===== 拾った武器・買った武器は次のステージへ持ち越す =====
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0];
+    giveWeapon(p,'spear');
+    if(p.weaponT!==0) throw new Error('拾った武器に制限時間が付いている（'+p.weaponT+'）');
+    for(let f=0;f<400;f++){ hitStop=0; slowmo=0; step(1); }
+    if(p.weapon!=='spear') throw new Error('放っておくと '+p.weapon+' に戻る（持ち続けるはず）');
+    // 次のステージへ
+    loadLevel(WORLD_LEVELS[1]);
+    if(players[0].weapon!=='spear') throw new Error('次のステージで '+players[0].weapon+' に戻っている');
+    // やられて復帰しても持ったまま
+    const q=players[0]; q.hp=1; q.invuln=0; q.lives=3; loseLife(q);
+    resetPlayer(q,false);
+    if(q.weapon!=='spear') throw new Error('復帰すると '+q.weapon+' に戻っている');
+    // 新規開始では手放す
+    startGame();
+    if(players[0].weapon==='spear') throw new Error('新規開始でも拾った武器を持っている');
+    console.log('武器の持ち越し OK (時間で消えない／次のステージ・復帰でも保持／新規開始で手放す)'); }
+
+  // ===== 地図からいつでもチャムの店へ行ける =====
+  { setupRoster('inu'); startGame();
+    enterMap();
+    if(state!=='map') throw new Error('地図へ入れない（'+state+'）');
+    players[0].in.pressed.grab=true;
+    updateMap();
+    for(let f=0;f<80 && state!=='shop'; f++) step(1);
+    if(state!=='shop') throw new Error('地図から店へ行けない（'+state+'）');
+    if(!shopRows.length) throw new Error('店の品揃えが空');
+    console.log('地図から店 OK (掴みボタンでチャムの店・品数'+shopRows.length+')'); }
+
+  // ===== ステージ間の会話が掛け合いになっている =====
+  { setupRoster('inu'); startGame(); state='play';
+    startStageClearDemo(1);
+    if(!cut || !cut.scenes) throw new Error('クリアのデモが始まらない');
+    const sc=cut.scenes;
+    if(sc.length<3) throw new Error('クリアの会話が '+sc.length+' 場面しかない（掛け合いになっていない）');
+    if(!sc.some(function(q){ return q.art==='player'; })) throw new Error('主役のひとことが無い');
+    const rep2=sc.filter(function(q){ return q.art==='cham'||q.art==='p2'; });
+    if(!rep2.length) throw new Error('受け手（チャム／2P）の返しが無い');
+    if(!rep2[0].text || rep2[0].text.length<8) throw new Error('返しが短すぎる');
+    // 一周目の13ステージは、7キャラ全員に専用の台詞がある
+    const KIND7=['inu','shima','nuko','guard8','watch','wanden','mack'];
+    const names=Object.keys(CLEAR_LINE);
+    if(names.length<13) throw new Error('クリア台詞のあるステージが '+names.length+' しかない');
+    names.forEach(function(nm){ KIND7.forEach(function(k){
+      if(!CLEAR_LINE[nm][k]) throw new Error(nm+' に '+k+' の台詞が無い');
+      if(!PARTNER_LINE[nm]) throw new Error(nm+' に相棒の返しが無い'); }); });
+    // 主役と相棒で同じ文が出ない
+    names.forEach(function(nm){ KIND7.forEach(function(k){
+      if(CLEAR_LINE[nm][k]===PARTNER_LINE[nm]) throw new Error(nm+'/'+k+' の台詞と返しが同じ'); }); });
+    cut=null; state='play';
+    console.log('ステージ間の会話 OK ('+names.length+'ステージ×7キャラ＋相棒の返し／'+sc.length+'場面の掛け合い)'); }
+
+  // ===== 死神の大鎌は刃が前を向いている =====
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.weapon='scythe'; p.atk=null;
+    const real=ctx; const pts=[];
+    ctx=new Proxy(real,{ get(t,k){
+      if(k==='moveTo'||k==='lineTo'||k==='quadraticCurveTo'||k==='arc'){
+        return function(){ const a=Array.prototype.slice.call(arguments);
+          if(k==='quadraticCurveTo'){ pts.push([a[0],a[1]]); pts.push([a[2],a[3]]); }
+          else pts.push([a[0],a[1]]); return undefined; }; }
+      const v=t[k]; return (typeof v==='function')? function(){ return t[k].apply(t,arguments); } : v; },
+      set(t,k,v){ t[k]=v; return true; } });
+    gf=0; drawBlade(0,0,0,30); ctx=real;
+    // 柄の長さ（この先に刃が付く）
+    const L=30*1.05+58;
+    const blade=pts.filter(function(q){ return q[1] < -30; });   // 刃は柄より上へ張り出す部分
+    if(blade.length<3) throw new Error('刃が描かれていない（'+blade.length+'点）');
+    const tip=blade.reduce(function(a,b){ return (b[1]<a[1])? b : a; });
+    if(!(tip[0] > L)) throw new Error('刃の先が柄より後ろ（x='+tip[0].toFixed(0)+' ／柄の先 '+L.toFixed(0)+'）＝向きが逆');
+    console.log('大鎌の向き OK (刃の先が柄の先より '+Math.round(tip[0]-L)+'px 前へ出ている)'); }
 
   console.log('NEW FEATURES TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });

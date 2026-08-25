@@ -309,12 +309,22 @@ const DRIVER = `
   // リスポーン（残機を消費して復帰）
   p.hp=1; p.invuln=0; p.lives=3; loseLife(p); p=players[0]; player=p;
   if(!LONG(p.weapon)) throw new Error('respawn reverted the sword to '+p.weapon);
-  // 拾った武器の時間切れ → 犬干し竿へ戻る（短剣ではない）
+  // 拾った武器は持ち続ける（時間切れで戻る作りはやめた）。
+  // ただし何も拾っていないときは、必ず犬干し竿に戻ること
   state='play'; p.active=true; p.state='idle'; p.hp=p.maxHp; p.z=0;
-  giveWeapon(p,'moon'); p.weaponT=2;
-  for(let i=0;i<40 && p.weapon==='moon';i++){ hitStop=0; slowmo=0; step(1); }
-  if(!LONG(p.weapon)) throw new Error('weapon timeout reverted to '+p.weapon+' instead of the long sword');
-  console.log('長刀の維持 OK (開始/フィールド読込/2周目/リスポーン/武器時間切れ すべて '+p.weapon+')');
+  giveWeapon(p,'moon');
+  if(p.weaponT!==0) throw new Error('拾った武器に制限時間が付いている（'+p.weaponT+'）');
+  for(let i=0;i<200;i++){ hitStop=0; slowmo=0; step(1); }
+  if(p.weapon!=='moon') throw new Error('拾った武器が '+p.weapon+' に戻っている（持ち続けるはず）');
+  // 別のフィールドへ行っても、やられて復帰しても持ったまま
+  loadLevel(WORLD_LEVELS[1]); p=players[0]; player=p;
+  if(p.weapon!=='moon') throw new Error('次のステージで '+p.weapon+' に戻っている');
+  state='play'; p.hp=1; p.invuln=0; p.lives=3; loseLife(p); p=players[0]; player=p;
+  if(p.weapon!=='moon') throw new Error('やられて復帰すると '+p.weapon+' に戻っている');
+  // 拾っていない状態では長刀
+  p.heldWeapon=null; resetPlayer(p,false);
+  if(!LONG(p.weapon)) throw new Error('何も拾っていないのに '+p.weapon+' になっている');
+  console.log('長刀の維持 OK (開始/フィールド読込/2周目/リスポーン すべて '+p.weapon+'／拾った武器は次のステージへ持ち越す)');
   // 英雄の武具はワンデンには真打（長刀のまま強化）
   setupRoster('wanden'); startGame(); state='play'; p=players[0]; player=p; p.permWeapon=null;
   coins=999; enterShop(); gacha=null;
