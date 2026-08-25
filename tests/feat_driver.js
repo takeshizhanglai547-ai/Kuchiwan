@@ -62,6 +62,48 @@ const DRIVER = `
   if(!sawSword) throw new Error('iswords spawned no holy-sword particles');
   if(iw.hp>=9999) throw new Error('iswords did not hit forward enemy');
   console.log('INU 聖剣乱舞 OK (holy swords, dmg='+(9999-iw.hp)+')');
+  // ↓↑ は「前方一列」ではなく全方位の結界。前も後ろも削り、締めで外へ弾く
+  { const ringRun=function(move){
+      setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.x=600; p._tx=null; p.facing=1; p.level=1;
+      p.hp=p.maxHp=99999; p.state='idle'; p.atk=null; p.z=0;
+      enemies.length=0; particles.length=0; projectiles.length=0;
+      spawnEnemy('wolf', p.x+110, LANE); const fE=enemies[0];
+      spawnEnemy('wolf', p.x-110, LANE); const bE=enemies[1];
+      [fE,bE].forEach(function(e){ e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; });
+      // 開幕の無敵時間が残っていると、結界の無敵と区別が付かない
+      p.invuln=0;
+      const D=ATK[move]; beginAttack(move);
+      const free=(D.hold|0)+D.act[1];        // 締めの手前までは動かないよう押さえておく
+      let inv=0, blades=[]; const seen=new Set();
+      for(let i=0;i<free+26;i++){ hitStop=0; slowmo=0;
+        if(i<free){ [fE,bE].forEach(function(e){ e.x=e._fx; e.vx=0; e.vz=0; e.z=0; e.hurtTimer=0; }); }
+        if(p.invuln>0) inv++;
+        step(1);
+        // 立った聖剣の位置を拾う（技の定数ではなく、実際に生えた本数と位置で測る）。
+        // 寿命が尽きた粒子は配列から抜けるので、添字ではなく粒子そのもので重複を避ける
+        for(let q=0;q<particles.length;q++){ const t2=particles[q];
+          if(t2 && t2.k==='hsword' && !seen.has(t2)){ seen.add(t2); blades.push(t2.x-p.x); } } }
+      return {front:99999-fE.hp, back:99999-bE.hp, inv:inv, blades:blades,
+              fvx:fE.vx, bvx:bE.vx}; };
+    const r1=ringRun('iswords');
+    if(!(r1.front>0)) throw new Error('聖剣結界が前の敵に当たらない');
+    if(!(r1.back>0))  throw new Error('聖剣結界が後ろの敵に当たらない（前方一列のまま）');
+    // superFx の出だし20Fぶんだけでは「結界」にならない。振りの間じゅう守られること
+    if(!(r1.inv>=40)) throw new Error('結界の無敵が '+r1.inv+'F しか続かない（出だしだけ）');
+    if(!(r1.blades.some(function(d){ return d>30; }) && r1.blades.some(function(d){ return d<-30; })))
+      throw new Error('聖剣が片側にしか立たない');
+    if(!(r1.bvx<-5 && r1.fvx>5))
+      throw new Error('締めで外へ弾いていない（後ろ '+r1.bvx.toFixed(1)+' 前 '+r1.fvx.toFixed(1)+'）');
+    const r2=ringRun('iswords2');
+    const span=function(b){ return Math.max.apply(null, b.map(Math.abs)); };
+    // Lv5 は対の円を同時に立てる＝1回の発動で倍以上生える
+    if(!(r2.blades.length >= r1.blades.length*2))
+      throw new Error('Lv5 が対の円になっていない（'+r1.blades.length+'→'+r2.blades.length+'本）');
+    if(!(span(r2.blades) > span(r1.blades)+20))
+      throw new Error('Lv5 で結界が広がっていない（'+Math.round(span(r1.blades))+'→'+Math.round(span(r2.blades))+'px）');
+    console.log('INU 円環結界 OK (前'+r1.front+'/後'+r1.back+'・聖剣'+r1.blades.length+'本 半径'+Math.round(span(r1.blades))
+      +'px・無敵'+r1.inv+'F・締めで外へ／Lv5 は '+r2.blades.length+'本 半径'+Math.round(span(r2.blades))+'px)'); }
   // shima one-inch blow: close hit with massive hitstop
   setupRoster('shima'); startGame(); state='play'; const ps=players[0]; player=ps; ps.x=400; ps.hp=ps.maxHp=99999; ps.facing=1;
   enemies.length=0; projectiles.length=0; spawnEnemy('wolf', ps.x+28, LANE); const se=enemies[0]; se.thinkCd=9999; se.hp=se.maxHp=9999;
