@@ -170,14 +170,34 @@ const DRIVER = `
         ids[air]=k+'/'+sl; }); });
     if(Object.keys(ids).length!==KINDS.length*SLOTS.length)
       throw new Error('空中技が '+Object.keys(ids).length+' 個しかない（'+(KINDS.length*SLOTS.length)+'個のはず）');
-    // 三つの型が別物になっていること（急降下／飛び道具／滞空）
+    // 昇竜枠は共通の型（急降下＋着地の衝撃波）でよい
     KINDS.forEach(function(k){
-      const dp=ATK[airSpecialFor({kind:k},'dp')], ha=ATK[airSpecialFor({kind:k},'hadou')], du=ATK[airSpecialFor({kind:k},'du')];
+      const dp=ATK[airSpecialFor({kind:k},'dp')];
       if(!dp.airDive) throw new Error(k+' の昇竜コマンドが急降下になっていない');
-      if(!dp.airShock) throw new Error(k+' の急降下に着地の衝撃波が無い');
-      if(!ha.pshot) throw new Error(k+' の波動コマンドが飛び道具になっていない');
-      if(!(du.airHover>=30)) throw new Error(k+' の↓↑コマンドが滞空しない（airHover='+du.airHover+'）'); });
-    console.log('空中コマンド技 21種 OK (急降下／飛び道具／滞空の三型)'); }
+      if(!dp.airShock) throw new Error(k+' の急降下に着地の衝撃波が無い'); });
+    // 波動枠と↓↑枠は、キャラごとに別の仕掛けであること。
+    // 「どれも飛び道具を撃つだけ」「どれも回転するだけ」で揃ってしまうのを防ぐ
+    ['hadou','du'].forEach(function(sl){
+      const fx={}, plain=[];
+      KINDS.forEach(function(k){
+        const d=ATK[airSpecialFor({kind:k},sl)];
+        if(!d.airFx && !d.pshot) plain.push(k+'/'+sl);      // 中身の無いただの一振り
+        const id=d.airFx || ('pshot:'+JSON.stringify(d.pshot||{}));
+        if(fx[id]) throw new Error(sl+' の中身が '+fx[id]+' と '+k+' で同じ（'+id+'）');
+        fx[id]=k; });
+      if(plain.length) throw new Error('中身の無い空中技がある: '+plain.join(','));
+      // 「飛び道具を1発撃つだけ」で済ませない。7キャラとも専用の仕掛けを持つこと
+      const noFx=KINDS.filter(function(k){ return !ATK[airSpecialFor({kind:k},sl)].airFx; });
+      if(noFx.length) throw new Error(sl+' に専用の仕掛けが無いキャラがいる: '+noFx.join(','));
+      if(Object.keys(fx).length!==KINDS.length)
+        throw new Error(sl+' の仕掛けが '+Object.keys(fx).length+' 種類しかない'); });
+    // ↓↑が全キャラ「回転」にならないこと（実際にそうなっていて、個性が無いと指摘された）
+    { const spin=KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'du')].spin; });
+      if(spin.length>1) throw new Error('↓↑が '+spin.length+' キャラで回転技（回転で通すのは拳法家1人まで）: '+spin.join(',')); }
+    // 波動枠が「前へ弾を撃つだけ」にならないこと（1キャラでも残っていれば指摘の再発）
+    { const shot=KINDS.filter(function(k){ const d=ATK[airSpecialFor({kind:k},'hadou')]; return !!d.pshot && !d.airFx; });
+      if(shot.length) throw new Error('波動が撃つだけのままのキャラがいる: '+shot.join(',')); }
+    console.log('空中コマンド技 21種 OK (昇竜＝急降下／波動と↓↑はキャラごとに別の仕掛け)'); }
 
   // ===== 9) 空中のコマンド技が実際に出て、敵に届く =====
   { const SLOTS=['dp','hadou','du'];
@@ -339,6 +359,51 @@ const DRIVER = `
       if(!((p.adT|0)>0)) throw new Error('受け身のあとに空中回避が使えない'); }
     console.log('吹き飛ばしの大きさ OK (雑魚 高さ'+Math.round(z.peak)+'px・距離'+Math.round(z.far)
       +'px／'+ETYPE[bossType].name+' 高さ'+Math.round(b2.peak)+'px・距離'+Math.round(b2.far)+'px／受け身と空中回避で復帰可)'); }
+
+  // ===== 15) 作り直した空中奥義（ヌコ・ガードワン）が、独自の仕掛けで戦えている =====
+  { const ult=function(k, place){
+      const p=setup(k); p.dimMax=9; p.dim=9; p.invuln=0;
+      enemies.length=0;
+      const list=[];
+      place.forEach(function(dx){ spawnEnemy('wolf', p.x+dx, p.y); const e=enemies[enemies.length-1];
+        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); });
+      const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+      p.state='jump'; p.z=210; p.vz=0; p.jAtk=0;
+      const real=rotationReady; rotationReady=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+      let midAir=0;                       // 着地する前に与えたダメージ
+      for(let f=0;f<240;f++){ hitStop=0; slowmo=0;
+        list.forEach(function(e){ e.x=e._fx; e.vx=0; e.state='walk'; });
+        if(p.z>4) midAir=hp0-list.reduce(function(a2,e){ return a2+e.hp; },0);
+        step(1); }
+      return {dmg:hp0-list.reduce(function(a2,e){ return a2+e.hp; },0),
+              hit:list.filter(function(e){ return e.hp<e.maxHp; }).length, midAir:midAir}; };
+    // ヌコ：離れて散らばった敵も、星座で結んでまとめて焼く。
+    // 印を打つ→線で結ぶ→締める、の三段が効いていること（何回damageが入ったかで見る）
+    const spread=[-320,-210,-110,-30,60,150,250,340];
+    const hits=function(k){ const real=damageEnemy; const n={};
+      damageEnemy=function(e){ if(e) n[e.id]=(n[e.id]||0)+1; return real.apply(null, arguments); };
+      let r; try{ r=ult(k, spread); } finally { damageEnemy=real; }
+      const vals=Object.keys(n).map(function(q){ return n[q]; });
+      return {r:r, most:vals.length? Math.max.apply(null,vals) : 0}; };
+    const nuH=hits('nuko');
+    if(nuH.most<4) throw new Error('ヌコの空中奥義が同じ敵へ '+nuH.most+' 回しか入らない（星座で繋いでいない）');
+    const nu=nuH.r;
+    if(nu.hit<6) throw new Error('ヌコの空中奥義が散らばった敵に '+nu.hit+'/8体 しか届かない');
+    if(!(nu.dmg>500)) throw new Error('ヌコの空中奥義が弱い（'+Math.round(nu.dmg)+'）');
+    if(!(nu.midAir>0)) throw new Error('ヌコの空中奥義が空中にいる間に何もしていない');
+    // ガードワン：落ちている最中も鎖の錨で巻き込み、着地で地面を割る
+    const g8=ult('guard8', spread);
+    if(g8.hit<6) throw new Error('ガードワンの空中奥義が '+g8.hit+'/8体 にしか届かない');
+    if(!(g8.dmg>500)) throw new Error('ガードワンの空中奥義が弱い（'+Math.round(g8.dmg)+'）');
+    if(!(g8.midAir>0)) throw new Error('ガードワンの空中奥義が、落ちている間は当てる手段が無い（着地頼み）');
+    // 他の主役と比べて極端に劣らないこと
+    const others=['inu','wanden','mack'].map(function(k){ return ult(k, spread).dmg; });
+    const base=Math.max.apply(null, others);
+    if(nu.dmg < base*0.35) throw new Error('ヌコの空中奥義だけ弱すぎる（'+Math.round(nu.dmg)+' / 他 '+Math.round(base)+'）');
+    if(g8.dmg < base*0.35) throw new Error('ガードワンの空中奥義だけ弱すぎる（'+Math.round(g8.dmg)+' / 他 '+Math.round(base)+'）');
+    console.log('作り直した空中奥義 OK (ヌコ '+Math.round(nu.dmg)+'/'+nu.hit+'体・空中で'+Math.round(nu.midAir)
+      +'／ガードワン '+Math.round(g8.dmg)+'/'+g8.hit+'体・空中で'+Math.round(g8.midAir)+')'); }
 
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
