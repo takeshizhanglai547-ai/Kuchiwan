@@ -136,6 +136,29 @@ const DRIVER = `
     const t0=ultCut.t;
     let f=0; while(ultCut.t>0 && f<400){ hitStop=0; step(1); f++; }
     if(ultCut.t>0) throw new Error('カットインが消えない（400フレーム経過）');
+    // 尺は1秒程度に収める。長いと肝心の奥義のモーションが見えないまま終わる
+    // 実測でカットインが消えるまで 1061ms。スローが乗るぶん、フレーム数は1秒より短く取る
+    if(t0>44) throw new Error('カットインが '+t0+'フレームある（実時間で1秒を超える）');
+    if(t0<20) throw new Error('カットインが '+t0+'フレームしかなく、技名が読めない');
+    // スローの掛かりぶんも尺に効く。フレーム数だけ短くしても、
+    // スローを長く掛ければ実時間は伸びるので、そちらも押さえる
+    { const realSlow=triggerSlow; let slowT=0;
+      triggerSlow=function(n){ slowT=Math.max(slowT, n|0); return realSlow.apply(null,arguments); };
+      try{ ultCut.t=0; ultCutIn('inu','次元斬','#ffe14d'); } finally { triggerSlow=realSlow; }
+      if(slowT>16) throw new Error('カットインのスローが '+slowT+'フレーム（実時間が1秒を超える）');
+      ultCut.t=0; }
+    // 帯が主役の立つ高さを覆っていないこと。中央に置くと奥義のモーションが隠れる
+    { const real=ctx; const ys=[];
+      ctx=new Proxy(real,{ get(t,k){
+        if(k==='fillRect'){ return function(x,y,w2,h2){ if(h2!==H) ys.push(y+h2); }; }
+        if(k==='lineTo'||k==='moveTo'){ return function(x,y){ ys.push(y); }; }
+        const v=t[k]; return (typeof v==='function')? function(){ return t[k].apply(t,arguments); } : v; },
+        set(t,k,v){ t[k]=v; return true; } });
+      ultCutIn('inu','次元斬','#ffe14d'); ultCut.t=Math.round(t0*0.55);
+      drawUltCut(); ctx=real;
+      const bottom=ys.reduce(function(a2,y){ return Math.max(a2,y); }, 0);
+      if(!(bottom < H*0.66)) throw new Error('カットインが画面の '+Math.round(bottom/H*100)+'% まで下りている（主役が隠れる）');
+      ultCut.t=0; }
     if(f>90) throw new Error('カットインが長すぎる: '+f+'フレーム');
     if(f<30) throw new Error('カットインが短すぎる: '+f+'フレーム');
     console.log('カットインの尺 OK (立ち上がり '+t0+' → '+f+'フレームで消える)'); }

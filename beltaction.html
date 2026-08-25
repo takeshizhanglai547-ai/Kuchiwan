@@ -1882,14 +1882,15 @@ function updateEcho(){ if(echoT>0) echoT--; }
 //   0.00〜0.16 帯が走り込み、立ち絵が外から滑り込む
 //   0.16〜0.68 保持（技名が出る）
 //   0.68〜1.00 帯が抜けて立ち絵が流れ去る
-const ULT_CUT_MAX=54;
+// カットインは1秒あれば足りる。長いと肝心の奥義のモーションが見えないまま終わる
+const ULT_CUT_MAX=36;
 const ultCut={t:0, kind:'inu', name:'', col:'#ffe14d', dir:1, pid:0};
 function ultCutIn(kind,name,col){
   if(perfTier>=2) return;                        // 重いときは静かに省く
   ultCut.t=ULT_CUT_MAX; ultCut.kind=kind; ultCut.name=name||'奥義';
   ultCut.col=col||heroColOf(kind); ultCut.dir=(player&&player.facing)||1;
   ultCut.pid=(player&&player.pid)|0;
-  camZoomT=Math.max(camZoomT,1.16); triggerSlow(30); }
+  camZoomT=Math.max(camZoomT,1.16); triggerSlow(10); }   // スローを長く掛けると、体感の尺が1秒を大きく超える
 function updateUltCut(){ if(ultCut.t>0) ultCut.t--; }
 // 奥義の入口はキャラごとに6か所に分かれているので、名前と色だけをここに集める
 const ULT_NAME={inu:'次 元 斬', shima:'七死ワン生', nuko:'彼方からの呼び声',
@@ -11187,9 +11188,11 @@ function drawUltCut(){
   const open=io*(1-eo*eo);                          // 帯の高さ（開いて→閉じる）
   if(open<=0.004) return;
   const rgb=hexRGB(ultCut.col), d=ultCut.dir>=0?1:-1;
-  const cy=H*0.50, bh=H*0.46*open, SH=52;           // SH＝上下の食い違い（傾き）
+  // 帯は画面の上寄りへ。中央に置くと、ちょうど主役の立つ高さを覆って
+  // 奥義のモーションが一切見えないまま終わっていた
+  const cy=H*0.30, bh=H*0.34*open, SH=52;           // SH＝上下の食い違い（傾き）
   // 帯の外を沈める。ここが明るいままだと帯が浮かず、ただの半透明の板に見える
-  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.42*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
+  ctx.save(); ctx.fillStyle='rgba(2,3,8,'+(0.26*open).toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore();
   ctx.save();
   ctx.beginPath();                                  // 傾いた帯で切り抜く
   ctx.moveTo(-240+SH, cy-bh/2); ctx.lineTo(W+240+SH, cy-bh/2);
@@ -11218,7 +11221,7 @@ function drawUltCut(){
     // 帯の高さから逆算する。立ち絵は足元が原点で上へ 168px ぶん伸びる（実測）ので、
     // 頭が帯の上辺に収まり、足元だけが下辺で切れる大きさにする
     // ガードワン8号だけ本編で 1.28倍の巨体として描かれるので、そのぶん割り戻す
-    const sc=clamp((bh+30)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.7, 2.8);
+    const sc=clamp((bh+24)/(168*(ultCut.kind==='guard8'?1.28:1)), 0.62, 2.8);
     ctx.save(); ctx.globalAlpha=clamp((open-0.35)/0.30,0,1)*(1-eo);
     ctx.translate(px, cy+bh*0.5+34); ctx.rotate(-d*0.06);
     const sv=player; player=players[ultCut.pid]||players[0];
@@ -11233,14 +11236,14 @@ function drawUltCut(){
     const tx=lerp(W*0.5-d*W*0.55, W*0.5-d*W*0.20, io) - eo*d*W*0.22;
     ctx.save(); ctx.globalAlpha=ta;
     ctx.translate(tx, cy+8); ctx.rotate(-0.055); ctx.textAlign='center';
-    ctx.font='italic '+uif('900',44); ctx.lineJoin='round';
+    ctx.font='italic '+uif('900',36); ctx.lineJoin='round';
     ctx.lineWidth=11; ctx.strokeStyle='rgba(8,6,14,.92)'; ctx.strokeText(ultCut.name,0,0);
     const tg=ctx.createLinearGradient(0,-34,0,14);
     tg.addColorStop(0,'#ffffff'); tg.addColorStop(0.52,ultCut.col); tg.addColorStop(1,'rgba('+rgb+',.72)');
     ctx.fillStyle=tg; ctx.fillText(ultCut.name,0,0);
     ctx.font=uif('bold',15); ctx.lineWidth=6; ctx.strokeStyle='rgba(8,6,14,.9)';
-    ctx.strokeText(heroNameOf(ultCut.kind),0,26);
-    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,26);
+    ctx.strokeText(heroNameOf(ultCut.kind),0,24);
+    ctx.fillStyle='#e6ecf4'; ctx.fillText(heroNameOf(ultCut.kind),0,24);
     ctx.restore(); ctx.textAlign='left'; }
   // 5) 帯の上下の縁に光の線を1本ずつ通す（帯が板のままにならない）
   ctx.save(); ctx.globalAlpha=(1-eo)*0.9; ctx.strokeStyle=ultCut.col; ctx.lineWidth=2.4;
