@@ -2407,6 +2407,111 @@ const ATK={
   ntornado:{name:'サイクロンライズ', dur:30, act:[2,24], reach:74, hh:520, dmg:7, kb:6, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true, ntor:true},
   nmeteor:{name:'彼方からの呼び声', dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
   // ══════════════════════════════════════════════════════════════
+  //  武器ごとの奥義
+  //  拾った得物を握っている間は、奥義もその武器の技になる。
+  //  ストックの消費はキャラの奥義と同じ
+  // ══════════════════════════════════════════════════════════════
+  wuSpear:{name:'穿貫・千本槍', ultMove:true, dur:64, act:[10,54], reach:230, hh:70, dmg:13, kb:6, from:-0.2,to:0.2, len:140, trail:'#aef8ff', pivotY:-54, special:true, superFx:true, multi:true, multiGap:3, move:3.2, knock:true},
+  wuHammer:{name:'天砕・流星槌', ultMove:true, dur:70, act:[24,58], reach:190, hh:120, dmg:20, kb:22, from:-2.6,to:1.6, len:84, trail:'#ffb02e', pivotY:-76, special:true, superFx:true, multi:true, multiGap:8, knock:true, aoe:true, shock:34, bighammer:true},
+  wuNunchaku:{name:'双龍・乱れ千打', ultMove:true, dur:70, act:[8,62], reach:150, hh:120, dmg:9, kb:5, from:-3.1,to:3.1, len:64, trail:'#ffe27a', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:2, spin:true},
+  wuTonfa:{name:'鉄槌・十六連打', ultMove:true, dur:64, act:[8,56], reach:112, hh:100, dmg:12, kb:6, from:-1.6,to:1.6, len:34, trail:'#bfe9ff', pivotY:-60, special:true, superFx:true, multi:true, multiGap:3, knock:true},
+  wuTwin:{name:'双牙・無限乱舞', ultMove:true, dur:68, act:[8,60], reach:140, hh:110, dmg:10, kb:4, from:-3.1,to:3.1, len:38, trail:'#ffd6e8', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:2},
+  wuClaw:{name:'真空・爪嵐', ultMove:true, dur:66, act:[12,56], reach:60, hh:48, dmg:0, kb:0, from:-1.2,to:1.0, len:36, trail:'#aef8d8', pivotY:-56, special:true, superFx:true, pshot:{dmg:18,color:'#aef8d8',speed:12,r:30,life:120,pierce:true,style:'wave',count:5,spread:3.0,multihit:true,hitGap:8}},
+  wuGhammer:{name:'剛槌・三連震', ultMove:true, dur:72, act:[22,60], reach:200, hh:120, dmg:22, kb:24, from:-2.4,to:1.5, len:88, trail:'#ffb85a', pivotY:-78, special:true, superFx:true, multi:true, multiGap:9, knock:true, aoe:true, shock:36, bighammer:true},
+  wuMegaton:{name:'メガトン・天地開闢', ultMove:true, dur:76, act:[26,64], reach:220, hh:130, dmg:26, kb:28, from:-2.6,to:1.5, len:94, trail:'#ffd24d', pivotY:-80, special:true, superFx:true, multi:true, multiGap:9, knock:true, aoe:true, shock:42, bighammer:true},
+  wuGaxe:{name:'断頭・大回旋', ultMove:true, dur:70, act:[8,62], reach:170, hh:110, dmg:13, kb:16, from:-3.1,to:3.1, len:78, trail:'#ffd0a0', pivotY:-64, special:true, superFx:true, omni:true, multi:true, multiGap:4, spin:true, knock:true},
+  wuGflail:{name:'鉄球・破城大車輪', ultMove:true, dur:74, act:[8,66], reach:200, hh:120, dmg:12, kb:18, from:-3.1,to:3.1, len:110, trail:'#c9ccd4', pivotY:-60, special:true, superFx:true, omni:true, multi:true, multiGap:4, spin:true, knock:true},
+  // 大鎌：両手で高速回転させて刈り取る（ご指定の技）
+  wuScythe:{name:'冥王・輪廻刈り', ultMove:true, dur:78, act:[8,70], reach:210, hh:130, dmg:12, kb:10, from:-3.1,to:3.1, len:118, trail:'#c9a6ff', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:3, spin:true, knock:true, scytheStorm:true},
+  wuZanbatou:{name:'斬馬・断絶', ultMove:true, hold:16, dur:80, act:[38,60], reach:280, hh:150, dmg:130, kb:44, from:-2.8,to:1.6, len:200, trail:'#eaf2ff', pivotY:-90, special:true, superFx:true, knock:true, finisher:true, aoe:true, zanba:true},
+  wuKatana:{name:'桜花・八重散らし', ultMove:true, dur:70, act:[10,62], reach:160, hh:110, dmg:13, kb:7, from:-3.1,to:3.1, len:80, trail:'#ffd6ea', pivotY:-60, special:true, superFx:true, omni:true, multi:true, multiGap:4, sakura:true, knock:true},
+  wuRapier:{name:'千華・無限刺突', ultMove:true, dur:72, act:[6,66], reach:150, hh:70, dmg:7, kb:2, from:-0.18,to:0.18, len:78, trail:'#d8e4ff', pivotY:-52, special:true, superFx:true, multi:true, multiGap:2, thrustRain:true, move:2.2},
+  wuFlamberge:{name:'業炎・焦土烈斬', ultMove:true, dur:70, act:[12,60], reach:180, hh:120, dmg:16, kb:14, from:-3.1,to:3.1, len:78, trail:'#ff9a3a', pivotY:-66, special:true, superFx:true, omni:true, multi:true, multiGap:5, emberEdge:true, fireBurst:true, knock:true},
+  wuChakram:{name:'輪廻・八輪乱舞', ultMove:true, dur:66, act:[10,58], reach:56, hh:48, dmg:0, kb:0, from:-3.1,to:3.1, len:34, trail:'#7df0e0', pivotY:-52, special:true, superFx:true, spin:true, pshot:{dmg:20,color:'#7df0e0',speed:12,r:26,life:130,multihit:true,hitGap:14,style:'spike',boomer:true,count:8,spread:3.4}},
+  wuLance:{name:'聖騎士・全軍突撃', ultMove:true, dur:72, act:[6,64], reach:220, hh:80, dmg:15, kb:20, from:-0.12,to:-0.04, len:150, trail:'#ffe9a0', pivotY:-52, special:true, superFx:true, move:12, multi:true, multiGap:4, stinger:true, knock:true},
+  wuSansetsu:{name:'三節・百花乱打', ultMove:true, dur:72, act:[8,64], reach:160, hh:120, dmg:9, kb:5, from:-3.1,to:3.1, len:66, trail:'#ffe27a', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:2, spin:true},
+  wuBostaff:{name:'六尺・大水車', ultMove:true, dur:70, act:[8,62], reach:180, hh:120, dmg:11, kb:10, from:-3.1,to:3.1, len:96, trail:'#e6d2a8', pivotY:-56, special:true, superFx:true, omni:true, multi:true, multiGap:3, spin:true, knock:true},
+  wuKali:{name:'連環・千手棍', ultMove:true, dur:68, act:[6,62], reach:120, hh:100, dmg:8, kb:3, from:-1.6,to:1.6, len:34, trail:'#ffcf9a', pivotY:-56, special:true, superFx:true, multi:true, multiGap:2},
+  wuMeteorh:{name:'流星・天墜錘', ultMove:true, dur:76, act:[10,68], reach:210, hh:130, dmg:13, kb:18, from:-3.1,to:3.1, len:120, trail:'#ffb85a', pivotY:-60, special:true, superFx:true, omni:true, multi:true, multiGap:4, spin:true, knock:true},
+  wuIronfan:{name:'鉄扇・百華繚乱', ultMove:true, dur:68, act:[8,60], reach:150, hh:110, dmg:11, kb:9, from:-3.1,to:3.1, len:56, trail:'#ffd6e8', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:3, spin:true, fanOpen:true, knock:true},
+  wuOrb:{name:'星霊・大星霜', ultMove:true, dur:70, act:[10,14], reach:46, hh:42, dmg:0, kb:0, from:-0.4,to:0.3, len:22, trail:'#b0e8ff', pivotY:-56, special:true, fist:true, superFx:true, pshot:{dmg:16,color:'#b0e8ff',speed:10,r:24,life:190,count:12,spread:3.4,homing:true,multihit:true,hitGap:14}},
+  wuIcerod:{name:'絶対零度・氷獄', ultMove:true, dur:70, act:[12,16], reach:52, hh:46, dmg:0, kb:0, from:-0.4,to:0.2, len:28, trail:'#8fd8ff', pivotY:-56, special:true, superFx:true, frostEdge:true, pshot:{dmg:20,color:'#8fd8ff',speed:8,r:36,life:170,style:'spike',count:8,spread:3.2,multihit:true,hitGap:9}},
+  wuBell:{name:'神楽・万鈴響', ultMove:true, dur:74, act:[8,66], reach:200, hh:160, dmg:11, kb:14, from:-0.7,to:0.7, len:26, trail:'#ffe9a0', pivotY:-58, special:true, fist:true, superFx:true, omni:true, multi:true, multiGap:4, ringWave:true, knock:true},
+  wuTarot:{name:'大アルカナ・審判', ultMove:true, dur:70, act:[10,14], reach:48, hh:42, dmg:0, kb:0, from:-0.5,to:0.4, len:22, trail:'#d6b0ff', pivotY:-56, special:true, fist:true, superFx:true, pshot:{dmg:17,color:'#d6b0ff',speed:13,r:18,life:150,count:14,spread:3.6,pierce:true}},
+  wuBroom:{name:'星屑・銀河掃射', ultMove:true, dur:72, act:[8,64], reach:190, hh:120, dmg:10, kb:12, from:-3.1,to:3.1, len:92, trail:'#ffd0f0', pivotY:-54, special:true, superFx:true, omni:true, multi:true, multiGap:3, spin:true, dustTrail:true, knock:true},
+  wuPillar:{name:'鉄柱・城砕き', ultMove:true, dur:76, act:[24,64], reach:230, hh:130, dmg:24, kb:30, from:-2.2,to:1.7, len:132, trail:'#c8ccd4', pivotY:-66, special:true, superFx:true, multi:true, multiGap:8, knock:true, aoe:true, shock:38},
+  wuAnchor:{name:'錨・大渦巻き', ultMove:true, dur:74, act:[8,66], reach:210, hh:120, dmg:13, kb:20, from:-3.1,to:3.1, len:118, trail:'#9ad0e0', pivotY:-64, special:true, superFx:true, omni:true, multi:true, multiGap:4, spin:true, knock:true},
+  wuJackdrill:{name:'削岩・大貫通', ultMove:true, dur:76, act:[5,70], reach:150, hh:80, dmg:8, kb:3, from:-0.12,to:0.0, len:74, trail:'#ffd24d', pivotY:-54, special:true, superFx:true, move:10, multi:true, multiGap:2, stinger:true, drill:true, knock:true},
+  wuBshield:{name:'鉄壁・要塞突撃', ultMove:true, dur:70, act:[6,62], reach:140, hh:100, dmg:16, kb:30, from:-0.12,to:0.0, len:50, trail:'#e6e9f0', pivotY:-56, special:true, superFx:true, move:12, multi:true, multiGap:5, shoulder:true, shieldFace:true, knock:true},
+  wuChainsaw:{name:'チェーンソー・鏖殺', ultMove:true, dur:80, act:[6,74], reach:150, hh:110, dmg:7, kb:2, from:-3.1,to:3.1, len:66, trail:'#ff5a5a', pivotY:-58, special:true, superFx:true, omni:true, multi:true, multiGap:2, spin:true, sawEdge:true},
+  wuWhip:{name:'蛇咬・百鞭', ultMove:true, dur:74, act:[6,68], reach:250, hh:90, dmg:9, kb:12, from:-1.2,to:1.2, len:150, trail:'#c8a86a', pivotY:-54, special:true, superFx:true, omni:true, multi:true, multiGap:3, whipLash:true, knock:true},
+  wuBoomerang:{name:'鋼・旋風返し', ultMove:true, dur:68, act:[10,14], reach:52, hh:44, dmg:0, kb:0, from:-0.6,to:0.5, len:26, trail:'#aef8d8', pivotY:-54, special:true, fist:true, superFx:true, pshot:{dmg:18,color:'#aef8d8',speed:13,r:22,life:150,multihit:true,hitGap:14,count:9,spread:3.4,boomer:true}},
+  wuYoyo:{name:'流星・双子座', ultMove:true, dur:74, act:[6,68], reach:190, hh:120, dmg:9, kb:8, from:-3.1,to:3.1, len:96, trail:'#ff8ae0', pivotY:-56, special:true, superFx:true, omni:true, multi:true, multiGap:2, spin:true, yoyoLine:true},
+  wuCrossbow:{name:'弩・矢の絨毯', ultMove:true, dur:70, act:[8,12], reach:50, hh:42, dmg:0, kb:0, from:-0.16,to:-0.06, len:28, trail:'#d6deec', pivotY:-54, special:true, fist:true, superFx:true, pshot:{dmg:18,color:'#d6deec',speed:19,r:13,life:150,pierce:true,style:'spike',count:12,spread:2.8}},
+  wuCanesword:{name:'仕込み杖・紳士の作法', ultMove:true, dur:70, act:[12,62], reach:170, hh:110, dmg:14, kb:10, from:-3.1,to:3.1, len:80, trail:'#ffe9a0', pivotY:-62, special:true, superFx:true, omni:true, multi:true, multiGap:4, caneDraw:true, knock:true},
+  wuNodachi:{name:'鬼哭・修羅', ultMove:true, dur:78, act:[12,70], reach:240, hh:140, dmg:18, kb:18, from:-3.1,to:3.1, len:160, trail:'#ffd0d0', pivotY:-82, special:true, superFx:true, omni:true, multi:true, multiGap:6, spin:true, knock:true},
+  wuKodachi:{name:'霞・無双連斬', ultMove:true, dur:70, act:[4,66], reach:130, hh:100, dmg:8, kb:3, from:-1.8,to:1.8, len:48, trail:'#eaf6ff', pivotY:-56, special:true, superFx:true, multi:true, multiGap:2},
+  wuNagamaki:{name:'長巻・円月', ultMove:true, dur:74, act:[8,66], reach:220, hh:130, dmg:15, kb:16, from:-3.1,to:3.1, len:140, trail:'#e0ffe8', pivotY:-62, special:true, superFx:true, omni:true, multi:true, multiGap:4, spin:true, knock:true},
+  wuMuramasa:{name:'妖刀・血風録', ultMove:true, dur:74, act:[10,66], reach:190, hh:120, dmg:17, kb:12, from:-3.1,to:3.1, len:104, trail:'#ff6a8a', pivotY:-66, special:true, superFx:true, omni:true, multi:true, multiGap:4, cursedEdge:true, knock:true},
+  wuShirasaya:{name:'無銘・一期一振', ultMove:true, hold:14, dur:72, act:[34,50], reach:250, hh:130, dmg:104, kb:34, from:-2.6,to:1.6, len:150, trail:'#fffaf0', pivotY:-64, special:true, superFx:true, sheath:true, iai:true, knock:true, finisher:true, aoe:true},
+  wuRevolver:{name:'早撃ち・十二連', ultMove:true, dur:72, act:[6,66], reach:48, hh:44, dmg:0, kb:0, from:-0.16,to:-0.06, len:26, trail:'#ffd24d', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:22,color:'#ffd24d',speed:21,r:14,life:150,pierce:true,count:6,spread:1.6}},
+  wuSmg:{name:'短機関銃・弾幕', ultMove:true, dur:76, act:[6,70], reach:48, hh:44, dmg:0, kb:0, from:-0.14,to:-0.06, len:24, trail:'#ffe9a0', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:10,color:'#ffe9a0',speed:22,r:10,life:120,count:16,spread:2.4}},
+  wuLaserrifle:{name:'レーザー・殲滅照射', ultMove:true, dur:74, act:[14,18], reach:52, hh:46, dmg:0, kb:0, from:-0.14,to:-0.06, len:30, trail:'#7df0ff', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:44,color:'#7df0ff',speed:27,r:56,life:180,pierce:true,style:'wave',multihit:true,hitGap:4,count:2,spread:1.2}},
+  wuFlamer:{name:'火炎放射・煉獄', ultMove:true, dur:84, act:[6,78], reach:190, hh:110, dmg:7, kb:3, from:-1.1,to:1.1, len:56, trail:'#ff8a3a', pivotY:-54, special:true, fist:true, gunPose:true, superFx:true, omni:true, multi:true, multiGap:2, flameJet:true},
+  wuRailgun:{name:'超電磁砲・要塞貫通', ultMove:true, hold:20, dur:86, act:[46,50], reach:58, hh:50, dmg:0, kb:0, from:-0.12,to:-0.04, len:34, trail:'#bffcff', pivotY:-52, special:true, fist:true, gunPose:true, railCharge:true, superFx:true, pshot:{dmg:150,color:'#bffcff',speed:32,r:70,life:200,pierce:true,style:'wave',multihit:true,hitGap:4}},
+  // ══════════════════════════════════════════════════════════════
+  //  武器ごとの前攻撃（→＋攻撃）
+  //  拾った得物で通常連撃だけが変わるのでは物足りないので、
+  //  コマンド技の顔である前攻撃を、武器そのものの持ち味で置き換える
+  // ══════════════════════════════════════════════════════════════
+  wfSpear:{name:'必殺・三段突き', dur:30, act:[8,22], reach:186, hh:48, dmg:16, kb:9, from:-0.14,to:-0.04, len:112, trail:'#aef8ff', pivotY:-54, special:true, multi:true, multiGap:5, lunge:2.6, knock:true},
+  wfHammer:{name:'渾身の兜割り', dur:34, act:[14,22], reach:118, hh:72, dmg:38, kb:22, from:-2.2,to:1.3, len:70, trail:'#ffb02e', pivotY:-72, special:true, knock:true, finisher:true, aoe:true, shock:22, lunge:2.2},
+  wfNunchaku:{name:'乱れ二節棍', dur:36, act:[6,30], reach:132, hh:58, dmg:8, kb:4, from:-3.1,to:3.1, len:58, trail:'#ffe27a', pivotY:-58, special:true, multi:true, multiGap:3, spin:true, lunge:1.2},
+  wfTonfa:{name:'肘打ち・鉄槌落とし', dur:28, act:[9,16], reach:96, hh:66, dmg:30, kb:18, from:-1.9,to:1.0, len:30, trail:'#bfe9ff', pivotY:-64, special:true, knock:true, finisher:true, lunge:2.4},
+  wfTwin:{name:'双牙・十字斬', dur:30, act:[7,22], reach:114, hh:62, dmg:11, kb:4, from:-1.6,to:1.6, len:34, trail:'#ffd6e8', pivotY:-58, special:true, multi:true, multiGap:4, lunge:2.0},
+  wfClaw:{name:'かまいたち三連', dur:32, act:[8,12], reach:60, hh:44, dmg:0, kb:0, from:-1.0,to:0.8, len:34, trail:'#aef8d8', pivotY:-56, special:true, superFx:true, pshot:{dmg:15,color:'#aef8d8',speed:12,r:22,life:80,pierce:true,style:'wave',count:3,spread:2.2}},
+  wfGhammer:{name:'大地砕き・改', dur:36, act:[14,24], reach:126, hh:70, dmg:40, kb:24, from:-2.1,to:1.2, len:76, trail:'#ffb85a', pivotY:-74, special:true, knock:true, finisher:true, aoe:true, shock:28, lunge:2.0},
+  wfMegaton:{name:'メガトン一閃', dur:40, act:[16,26], reach:134, hh:74, dmg:48, kb:28, from:-2.3,to:1.3, len:82, trail:'#ffd24d', pivotY:-76, special:true, knock:true, finisher:true, aoe:true, shock:34, lunge:2.2, superFx:true},
+  wfGaxe:{name:'首刈り・大車輪', dur:38, act:[8,32], reach:128, hh:64, dmg:11, kb:16, from:-3.1,to:3.1, len:70, trail:'#ffd0a0', pivotY:-64, special:true, multi:true, multiGap:4, spin:true, knock:true, lunge:1.6},
+  wfGflail:{name:'鉄球・振り回し投げ', dur:40, act:[10,32], reach:150, hh:66, dmg:10, kb:14, from:-3.1,to:3.1, len:96, trail:'#c9ccd4', pivotY:-60, special:true, multi:true, multiGap:4, spin:true, knock:true},
+  wfScythe:{name:'魂刈り', dur:34, act:[10,24], reach:158, hh:72, dmg:30, kb:16, from:-2.4,to:1.6, len:100, trail:'#c9a6ff', pivotY:-62, special:true, knock:true, finisher:true, aoe:true, lunge:1.8},
+  wfZanbatou:{name:'一刀両断', hold:12, dur:60, act:[30,44], reach:210, hh:110, dmg:92, kb:36, from:-2.5,to:1.4, len:172, trail:'#eaf2ff', pivotY:-86, special:true, knock:true, finisher:true, aoe:true, zanba:true, lunge:2.8, superFx:true},
+  wfKatana:{name:'桜花・抜き打ち', dur:30, act:[10,18], reach:132, hh:66, dmg:34, kb:16, from:-2.2,to:1.5, len:74, trail:'#ffd6ea', pivotY:-64, special:true, iai:true, knock:true, finisher:true, lunge:2.6},
+  wfRapier:{name:'百花繚乱・刺突', dur:38, act:[5,32], reach:134, hh:48, dmg:6, kb:2, from:-0.16,to:0.16, len:70, trail:'#d8e4ff', pivotY:-52, special:true, multi:true, multiGap:2, lunge:1.6},
+  wfFlamberge:{name:'炎刃・焦土斬', dur:36, act:[12,24], reach:124, hh:70, dmg:42, kb:20, from:-2.4,to:1.4, len:70, trail:'#ff9a3a', pivotY:-70, special:true, knock:true, finisher:true, aoe:true, emberEdge:true, fireBurst:true, lunge:2.0},
+  wfChakram:{name:'旋輪・双投げ', dur:32, act:[9,12], reach:56, hh:44, dmg:0, kb:0, from:-0.6,to:0.6, len:32, trail:'#7df0e0', pivotY:-52, special:true, spin:true, superFx:true, pshot:{dmg:20,color:'#7df0e0',speed:12,r:24,life:90,multihit:true,hitGap:16,style:'spike',boomer:true,count:2,spread:1.6}},
+  wfLance:{name:'騎士の突撃', dur:44, act:[6,36], reach:180, hh:52, dmg:14, kb:18, from:-0.12,to:-0.04, len:118, trail:'#ffe9a0', pivotY:-52, special:true, move:11, multi:true, multiGap:5, stinger:true, respin:true, respinMax:4, knock:true},
+  wfSansetsu:{name:'三節・乱打', dur:38, act:[6,32], reach:136, hh:60, dmg:8, kb:4, from:-3.1,to:3.1, len:60, trail:'#ffe27a', pivotY:-58, special:true, multi:true, multiGap:3, spin:true, lunge:1.2},
+  wfBostaff:{name:'六尺・水車', dur:36, act:[8,30], reach:150, hh:58, dmg:10, kb:8, from:-3.1,to:3.1, len:84, trail:'#e6d2a8', pivotY:-56, special:true, multi:true, multiGap:4, spin:true, knock:true},
+  wfKali:{name:'連環・双棍乱舞', dur:34, act:[4,28], reach:92, hh:52, dmg:7, kb:2, from:-1.4,to:1.4, len:30, trail:'#ffcf9a', pivotY:-56, special:true, multi:true, multiGap:2, lunge:1.8},
+  wfMeteorh:{name:'流星・大車輪', dur:44, act:[10,36], reach:168, hh:70, dmg:11, kb:16, from:-3.1,to:3.1, len:108, trail:'#ffb85a', pivotY:-60, special:true, multi:true, multiGap:4, spin:true, knock:true},
+  wfIronfan:{name:'鉄扇・華吹雪', dur:34, act:[8,26], reach:120, hh:62, dmg:10, kb:8, from:-3.1,to:3.1, len:50, trail:'#ffd6e8', pivotY:-58, special:true, multi:true, multiGap:4, spin:true, fanOpen:true, knock:true},
+  wfOrb:{name:'星霊・七連弾', dur:38, act:[8,11], reach:44, hh:40, dmg:0, kb:0, from:-0.4,to:0.3, len:20, trail:'#b0e8ff', pivotY:-56, special:true, fist:true, superFx:true, pshot:{dmg:13,color:'#b0e8ff',speed:11,r:17,life:90,count:7,spread:2.6,homing:true}},
+  wfIcerod:{name:'絶氷・氷柱林', dur:36, act:[10,13], reach:50, hh:44, dmg:0, kb:0, from:-0.4,to:0.2, len:26, trail:'#8fd8ff', pivotY:-56, special:true, superFx:true, frostEdge:true, pshot:{dmg:17,color:'#8fd8ff',speed:8,r:30,life:90,style:'spike',count:4,spread:1.8,multihit:true,hitGap:10}},
+  wfBell:{name:'鈴・鎮魂の輪', dur:40, act:[8,32], reach:130, hh:96, dmg:9, kb:12, from:-0.6,to:0.6, len:24, trail:'#ffe9a0', pivotY:-58, special:true, fist:true, omni:true, multi:true, multiGap:5, ringWave:true, knock:true},
+  wfTarot:{name:'運命の札・全札投げ', dur:36, act:[9,12], reach:46, hh:40, dmg:0, kb:0, from:-0.5,to:0.4, len:20, trail:'#d6b0ff', pivotY:-56, special:true, fist:true, superFx:true, pshot:{dmg:14,color:'#d6b0ff',speed:13,r:15,life:84,count:9,spread:3.2,pierce:true}},
+  wfBroom:{name:'星屑・大掃除', dur:38, act:[8,30], reach:140, hh:64, dmg:9, kb:10, from:-3.1,to:3.1, len:80, trail:'#ffd0f0', pivotY:-54, special:true, multi:true, multiGap:4, spin:true, dustTrail:true, knock:true},
+  wfPillar:{name:'鉄柱・薙ぎ倒し', dur:40, act:[14,28], reach:172, hh:70, dmg:46, kb:30, from:-1.7,to:1.6, len:120, trail:'#c8ccd4', pivotY:-64, special:true, knock:true, finisher:true, aoe:true, shock:26, lunge:1.6},
+  wfAnchor:{name:'錨・投擲', dur:38, act:[11,14], reach:52, hh:48, dmg:0, kb:0, from:-1.6,to:0.8, len:96, trail:'#9ad0e0', pivotY:-64, special:true, superFx:true, pshot:{dmg:44,color:'#9ad0e0',speed:11,r:34,life:90,pierce:true,explode:true}},
+  wfJackdrill:{name:'削岩ドリル突進', dur:44, act:[4,38], reach:120, hh:56, dmg:6, kb:2, from:-0.12,to:0.0, len:64, trail:'#ffd24d', pivotY:-54, special:true, move:9.5, multi:true, multiGap:2, stinger:true, respin:true, respinMax:5, drill:true, knock:true},
+  wfBshield:{name:'大盾・シールドバッシュ', dur:36, act:[6,30], reach:108, hh:64, dmg:36, kb:34, from:-0.12,to:0.0, len:46, trail:'#e6e9f0', pivotY:-56, special:true, move:11.5, shoulder:true, shieldFace:true, knock:true, finisher:true},
+  wfChainsaw:{name:'チェーンソー挽き切り', dur:46, act:[5,40], reach:118, hh:60, dmg:6, kb:2, from:-1.2,to:1.0, len:58, trail:'#ff5a5a', pivotY:-58, special:true, multi:true, multiGap:2, sawEdge:true, lunge:1.4, respin:true, respinMax:4},
+  wfWhip:{name:'蛇咬・八連鞭', dur:42, act:[6,36], reach:210, hh:56, dmg:8, kb:10, from:-0.9,to:0.9, len:132, trail:'#c8a86a', pivotY:-54, special:true, multi:true, multiGap:4, whipLash:true, knock:true},
+  wfBoomerang:{name:'鋼のブーメラン・五枚', dur:34, act:[9,12], reach:50, hh:42, dmg:0, kb:0, from:-0.6,to:0.5, len:24, trail:'#aef8d8', pivotY:-54, special:true, fist:true, superFx:true, pshot:{dmg:16,color:'#aef8d8',speed:13,r:20,life:84,multihit:true,hitGap:16,count:5,spread:2.8,boomer:true}},
+  wfYoyo:{name:'流星ヨーヨー・二重', dur:40, act:[6,34], reach:150, hh:62, dmg:8, kb:6, from:-3.1,to:3.1, len:80, trail:'#ff8ae0', pivotY:-56, special:true, multi:true, multiGap:3, spin:true, yoyoLine:true},
+  wfCrossbow:{name:'速射・弩の雨', dur:40, act:[7,10], reach:48, hh:40, dmg:0, kb:0, from:-0.16,to:-0.06, len:26, trail:'#d6deec', pivotY:-54, special:true, fist:true, superFx:true, pshot:{dmg:16,color:'#d6deec',speed:18,r:12,life:100,pierce:true,style:'spike',count:6,spread:2.0}},
+  wfCanesword:{name:'仕込み杖・抜き打ち', dur:32, act:[11,18], reach:138, hh:64, dmg:36, kb:18, from:-2.2,to:1.5, len:74, trail:'#ffe9a0', pivotY:-62, special:true, caneDraw:true, iai:true, knock:true, finisher:true, lunge:2.6},
+  wfNodachi:{name:'鬼哭・唐竹割り', dur:40, act:[16,26], reach:196, hh:96, dmg:56, kb:26, from:-2.4,to:1.3, len:146, trail:'#ffd0d0', pivotY:-80, special:true, knock:true, finisher:true, aoe:true, lunge:2.2},
+  wfKodachi:{name:'霞・疾風連斬', dur:36, act:[4,30], reach:104, hh:58, dmg:7, kb:2, from:-1.6,to:1.6, len:44, trail:'#eaf6ff', pivotY:-56, special:true, multi:true, multiGap:2, lunge:2.0},
+  wfNagamaki:{name:'長巻・大旋回', dur:40, act:[8,34], reach:180, hh:70, dmg:12, kb:14, from:-3.1,to:3.1, len:124, trail:'#e0ffe8', pivotY:-62, special:true, multi:true, multiGap:4, spin:true, knock:true},
+  wfMuramasa:{name:'妖刀・血染めの一閃', dur:36, act:[12,22], reach:154, hh:72, dmg:52, kb:22, from:-2.5,to:1.6, len:96, trail:'#ff6a8a', pivotY:-66, special:true, cursedEdge:true, knock:true, finisher:true, aoe:true, lunge:2.4},
+  wfShirasaya:{name:'無銘・鞘走り', dur:34, act:[12,20], reach:164, hh:66, dmg:38, kb:18, from:-2.3,to:1.5, len:104, trail:'#fffaf0', pivotY:-62, special:true, sheath:true, iai:true, knock:true, finisher:true, lunge:2.8},
+  wfRevolver:{name:'早撃ち・六連', dur:38, act:[6,32], reach:46, hh:42, dmg:0, kb:0, from:-0.16,to:-0.06, len:24, trail:'#ffd24d', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:18,color:'#ffd24d',speed:20,r:12,life:90,pierce:true,count:3,spread:1.2}},
+  wfSmg:{name:'短機関銃・掃射', dur:44, act:[6,38], reach:46, hh:42, dmg:0, kb:0, from:-0.14,to:-0.06, len:22, trail:'#ffe9a0', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:9,color:'#ffe9a0',speed:21,r:9,life:70,count:8,spread:1.8}},
+  wfLaserrifle:{name:'レーザー・貫通照射', dur:40, act:[12,15], reach:50, hh:44, dmg:0, kb:0, from:-0.14,to:-0.06, len:28, trail:'#7df0ff', pivotY:-52, special:true, fist:true, gunPose:true, superFx:true, pshot:{dmg:34,color:'#7df0ff',speed:26,r:40,life:120,pierce:true,style:'wave',multihit:true,hitGap:6}},
+  wfFlamer:{name:'火炎放射・薙ぎ払い', dur:48, act:[6,42], reach:150, hh:78, dmg:6, kb:2, from:-0.8,to:0.8, len:46, trail:'#ff8a3a', pivotY:-54, special:true, fist:true, gunPose:true, multi:true, multiGap:2, flameJet:true},
+  wfRailgun:{name:'超電磁砲・照準射撃', hold:16, dur:64, act:[36,40], reach:56, hh:48, dmg:0, kb:0, from:-0.12,to:-0.04, len:32, trail:'#bffcff', pivotY:-52, special:true, fist:true, gunPose:true, railCharge:true, superFx:true, pshot:{dmg:96,color:'#bffcff',speed:30,r:56,life:160,pierce:true,style:'wave',multihit:true,hitGap:4}},
+  // ══════════════════════════════════════════════════════════════
   //  空中のコマンド技（各キャラ3つ＝昇竜／波動／↓↑）
   //  地上の技をそのまま出すと「地面用の技を宙で振っている」だけになるので、
   //  空中でしか意味を持たない三つの型に作り分ける
@@ -3099,6 +3204,64 @@ const WEAPON_COMBO={ spear:['sp1','sp2','sp3','sp4'], hammer:['hm1','hm2','hm3']
   muramasa:['mu1','mu2','mu3','mu4'], shirasaya:['sy1','sy2','sy3'],
   revolver:['rv1','rv2','rv3'], smg:['sm1','sm2','sm3','sm4','sm5'], laserrifle:['ls1','ls2','ls3'],
   flamer:['fm1','fm2','fm3'], railgun:['rg1','rg2'] };
+// ══════════════════════════════════════════════════════════════
+//  武器ごとのコマンド技・奥義
+//  拾った得物を握っている間は、前攻撃と奥義がその武器の技になる。
+//  ここに無い枠（上・下・ダッシュ・波動・昇竜・↓↑）はキャラ本来の技のまま
+// ══════════════════════════════════════════════════════════════
+const WEAPON_SPECIAL={
+  spear:{fwd:'wfSpear', ult:'wuSpear'},
+  hammer:{fwd:'wfHammer', ult:'wuHammer'},
+  nunchaku:{fwd:'wfNunchaku', ult:'wuNunchaku'},
+  tonfa:{fwd:'wfTonfa', ult:'wuTonfa'},
+  twin:{fwd:'wfTwin', ult:'wuTwin'},
+  claw:{fwd:'wfClaw', ult:'wuClaw'},
+  ghammer:{fwd:'wfGhammer', ult:'wuGhammer'},
+  megaton:{fwd:'wfMegaton', ult:'wuMegaton'},
+  gaxe:{fwd:'wfGaxe', ult:'wuGaxe'},
+  gflail:{fwd:'wfGflail', ult:'wuGflail'},
+  scythe:{fwd:'wfScythe', ult:'wuScythe'},
+  zanbatou:{fwd:'wfZanbatou', ult:'wuZanbatou'},
+  katana:{fwd:'wfKatana', ult:'wuKatana'},
+  rapier:{fwd:'wfRapier', ult:'wuRapier'},
+  flamberge:{fwd:'wfFlamberge', ult:'wuFlamberge'},
+  chakram:{fwd:'wfChakram', ult:'wuChakram'},
+  lance:{fwd:'wfLance', ult:'wuLance'},
+  sansetsu:{fwd:'wfSansetsu', ult:'wuSansetsu'},
+  bostaff:{fwd:'wfBostaff', ult:'wuBostaff'},
+  kali:{fwd:'wfKali', ult:'wuKali'},
+  meteorh:{fwd:'wfMeteorh', ult:'wuMeteorh'},
+  ironfan:{fwd:'wfIronfan', ult:'wuIronfan'},
+  orb:{fwd:'wfOrb', ult:'wuOrb'},
+  icerod:{fwd:'wfIcerod', ult:'wuIcerod'},
+  bell:{fwd:'wfBell', ult:'wuBell'},
+  tarot:{fwd:'wfTarot', ult:'wuTarot'},
+  broom:{fwd:'wfBroom', ult:'wuBroom'},
+  pillar:{fwd:'wfPillar', ult:'wuPillar'},
+  anchor:{fwd:'wfAnchor', ult:'wuAnchor'},
+  jackdrill:{fwd:'wfJackdrill', ult:'wuJackdrill'},
+  bshield:{fwd:'wfBshield', ult:'wuBshield'},
+  chainsaw:{fwd:'wfChainsaw', ult:'wuChainsaw'},
+  whip:{fwd:'wfWhip', ult:'wuWhip'},
+  boomerang:{fwd:'wfBoomerang', ult:'wuBoomerang'},
+  yoyo:{fwd:'wfYoyo', ult:'wuYoyo'},
+  crossbow:{fwd:'wfCrossbow', ult:'wuCrossbow'},
+  canesword:{fwd:'wfCanesword', ult:'wuCanesword'},
+  nodachi:{fwd:'wfNodachi', ult:'wuNodachi'},
+  kodachi:{fwd:'wfKodachi', ult:'wuKodachi'},
+  nagamaki:{fwd:'wfNagamaki', ult:'wuNagamaki'},
+  muramasa:{fwd:'wfMuramasa', ult:'wuMuramasa'},
+  shirasaya:{fwd:'wfShirasaya', ult:'wuShirasaya'},
+  revolver:{fwd:'wfRevolver', ult:'wuRevolver'},
+  smg:{fwd:'wfSmg', ult:'wuSmg'},
+  laserrifle:{fwd:'wfLaserrifle', ult:'wuLaserrifle'},
+  flamer:{fwd:'wfFlamer', ult:'wuFlamer'},
+  railgun:{fwd:'wfRailgun', ult:'wuRailgun'},
+};
+// 武器の技があればそれを、無ければキャラの技を返す
+function weaponSpecialFor(p, slot){
+  const t=WEAPON_SPECIAL[p&&p.weapon];
+  return (t && t[slot] && ATK[t[slot]]) ? t[slot] : null; }
 function comboSet(p){ return WEAPON_COMBO[p.weapon] || null; }
 function comboMaxFor(p){ const s=comboSet(p); if(s) return s.length;   // 拾った武器の連撃が最優先
   if(p.kind==='nuko') return 1; if(p.kind==='wanden') return 4; if(p.kind==='mack') return MK_AMMO; return (p.kind==='shima'?5:4); }
@@ -5501,6 +5664,16 @@ function updatePlayer(){
     if(def.pillar && a.t>=def.act[0] && a.t%3===0){ for(let k=0;k<3;k++) spark(p.x, p.y-40-k*46, '#fff6c0',4,7); }   // 天翔龍閃＝光の柱
     if(def.firetrail && a.t%2===0){ spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,54), (gf%2)?'#ff9a3a':'#ffd24d',3,6); }     // 烈火昇龍脚＝炎の尾
     // ── 追加武器ごとの見せ場。振っている最中に、その得物らしい粒を足す ──
+    if(def.scytheStorm && a.t>=def.act[0] && a.t<=def.act[1]){   // 大鎌を両手で回し続ける
+      // 全周のリングを毎フレーム重ねると画面が白飛びするので、刃の通り道だけを弧で描く
+      const sp=a.t*0.9, R=104+10*Math.sin(a.t*0.14);
+      if(a.t%3===0){ const c=sp%TAU;
+        crescent(p.x, p.y-56, R, c-0.8, c+0.8, (a.t%12===0)?'#ffffff':'#c9a6ff', {big:false});
+        crescent(p.x, p.y-56, R, c+Math.PI-0.8, c+Math.PI+0.8, '#c9a6ff', {big:false});
+        for(let k=0;k<2;k++){ const ang=sp+k*Math.PI;
+          spark(p.x+Math.cos(ang)*R*0.7, p.y-56+Math.sin(ang)*R*0.34, '#c9a6ff', 2, 7); } }
+      if(a.t%6===0) sfx.swing(1, 'blade', p.x);
+      if(a.t===def.act[0]) popText(p.x, p.y-120, '——刈り取れ。', '#c9a6ff', true); }
     if(def.sakura && a.t>=def.act[0] && a.t<=def.act[1] && a.t%2===0){         // 桜花刀＝斬り筋に花びらが散る
       for(let k=0;k<2;k++) ember(p.x+p.facing*rnd(30,110), p.y-p.z-rnd(30,90), rnd(-1.4,1.4), -rnd(0.4,1.6), (k?'#ffd6ea':'#ffffff')); }
     if(def.emberEdge && a.t>=def.act[0] && a.t<=def.act[1]){                    // フランベルジュ＝刃の縁が燃える
@@ -6029,6 +6202,10 @@ function updatePlayer(){
         popText(p.x,p.y-110,'奥義ストックが足りない（'+cost+'必要）','#c46bff',true);
         for(let k=0;k<cost;k++) spark(p.x-14+k*14,p.y-96,'#c46bff',4,4); sfx.guard(p.x); return; }
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
+      // 武器を拾っている間は、その得物の奥義になる
+      { const wu=weaponSpecialFor(p,'ult');
+        if(wu){ beginUlt(p, ATK[wu].name); beginAttack(wu); p.dim-=cost;
+          p.invuln=Math.max(p.invuln, 40); consumeCmd(); return; } }
       beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
       if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension');
       p.dim-=(cost-1);   // 各入口が1つ消費しているので、残りぶんをここで引く
@@ -6050,7 +6227,11 @@ function updatePlayer(){
     else if(stingerReady(p.facing)){ const da=specialUpgraded(p,'dash');
       if(da){ beginAttack(da); if(ATK[da].respin) p.spinCount=1; consumeCmd(); p.atkHeld=true; return; }   // ダッシュ攻撃の上位技
       if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkPileB'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
-    else if(fwd){ const fu=specialUpgraded(p,'fwd');
+    else if(fwd){
+      // 武器を拾っている間は、その得物の前攻撃が出る
+      { const wf=weaponSpecialFor(p,'fwd');
+        if(wf){ beginAttack(wf); if(ATK[wf].respin) p.spinCount=1; p.atkHeld=true; p.atkHoldF=0; return; } }
+      const fu=specialUpgraded(p,'fwd');
       if(fu){ beginAttack(fu); p.atkHeld=true; p.atkHoldF=0; return; }                      // 前攻撃の上位技（武器フィニッシュより優先）
       if(WD){ beginAttack('dtsubame'); p.atkHeld=true; p.atkHoldF=0; return; }   // ワンデン前：燕返し
       if(MK){ beginAttack('mkBazooka'); p.atkHeld=true; p.atkHoldF=0; return; }   // マック前：バズーカ（連射できないぶん一撃が重い）
