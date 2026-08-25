@@ -2527,12 +2527,12 @@ const ATK={
   aiDu:{name:'空中・円環斬', dur:46, act:[8,40], reach:112, hh:112, dmg:9, kb:6, from:-3.1,to:3.1, len:70, trail:'#fff0b0', pivotY:-50,
     special:true, omni:true, multi:true, multiGap:5, spin:true, knock:true, airHover:40, airLand:12, airFx:'inuDu'},
   // ── シマダックス ──
-  ashDp:{name:'隕拳・双掌墜', dur:44, act:[26,40], reach:110, hh:110, dmg:0, kb:0, from:-2.0,to:1.2, len:32, trail:'#ff9a3a', pivotY:-52,
-    special:true, fist:true, noMelee:true, airHover:12, airLand:18, airMeteor:{g:2.0, max:27, r:150, dmg:34, bounce:4, col:'#ff9a3a'}, airFx:'shimaDp'},
+  ashDp:{name:'昇龍・天穿脚', dur:48, act:[4,34], reach:96, hh:150, dmg:7, kb:3, from:1.3,to:-2.4, len:34, trail:'#aef8ff', pivotY:-58,
+    special:true, fist:true, kick:true, multi:true, multiGap:3, airClimb:{vz:13.5, t:30}, airLand:8, airFx:'shimaDp'},
   ashHa:{name:'墜震掌', dur:40, act:[10,20], reach:132, hh:96, dmg:9, kb:6, from:-0.8,to:0.5, len:28, trail:'#aef8ff', pivotY:-50,
     special:true, fist:true, punch:true, superFx:true, multi:true, multiGap:4, airHover:20, airLand:14, airFx:'shimaHa'},
-  ashDu:{name:'空中・鉄山靠', dur:40, act:[8,32], reach:104, hh:88, dmg:28, kb:22, from:-0.2,to:0.2, len:30, trail:'#ffd24d', pivotY:-52,
-    special:true, fist:true, shoulder:true, knock:true, finisher:true, airLand:16, airFx:'shimaDu'},
+  ashDu:{name:'烈空・三角跳び', dur:54, act:[6,48], reach:104, hh:96, dmg:10, kb:6, from:0.35,to:0.05, len:30, trail:'#ffd24d', pivotY:-52,
+    special:true, fist:true, kick:true, multi:true, multiGap:6, knock:true, airLand:8, airFx:'shimaDu'},
   // ── ヌコ ──
   anDp:{name:'星穿ちの柱', dur:46, act:[12,18], reach:60, hh:60, dmg:0, kb:0, from:-1.6,to:1.1, len:60, trail:'#d6b0ff', pivotY:-54,
     special:true, fist:true, superFx:true, airHover:30, airLand:16, airFx:'nukoDp'},
@@ -3583,11 +3583,28 @@ function airSpecialTick(p, a, def){
       crescent(p.x+dir*40, p.y-p.z-70, 104, dir>0?-2.2:Math.PI+2.2, dir>0?0.8:Math.PI-0.8, '#ffffff');
       spark(p.x, p.y-p.z-60, '#bfe9ff', 10, 9); sfx.swing(1, wsndOf(p.weapon), p.x); }
     if(t%3===0) spark(p.x+rnd(-14,14), p.y-p.z-rnd(20,70), '#bfe9ff', 2, 5); }
-  else if(K2==='shimaDp'){             // 一瞬止まって両拳を組み、真下へ落ちる
-    if(t===1){ popText(p.x, p.y-p.z-100, '隕拳！', '#ff9a3a', true); sfx.heavy(p.x);
-      ring(p.x, p.y-p.z-46, '#ff9a3a'); }
-    if(t<=(def.airHover|0) && t%2===0) spark(p.x+rnd(-20,20), p.y-p.z-46+rnd(-16,16), '#ffd24d', 3, 6);
-    if(t>(def.airHover|0) && t%2===0) ember(p.x+rnd(-14,14), p.y-p.z-rnd(0,50), rnd(-1,1), rnd(2,5), (t%4)?'#ff9a3a':'#ffd24d'); }
+  else if(K2==='shimaDp'){             // 螺旋を描いて蹴り上がる。捉えた敵も一緒に持ち上げる
+    const C=def.airClimb||{t:1};
+    if(t===1){ popText(p.x, p.y-p.z-100, '天穿脚！', '#aef8ff', true); sfx.rise(p.x); sfx.swing(1,'flesh',p.x);
+      ring(p.x, p.y-p.z-30, '#aef8ff'); }
+    if(t<=C.t){                                       // 登っている間じゅう螺旋の軌跡
+      const w=t*0.55;
+      spark(p.x+Math.cos(w)*26, p.y-p.z-30-t*1.4, (t%3)?'#aef8ff':'#ffffff', 2, 5);
+      if(t%4===0) sfx.swing(0.7, 'flesh', p.x);
+      // 巻き上げ：足元の敵を自分と一緒に引き上げる（落としてしまうと連係が切れる）
+      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
+        if(Math.abs(e.x-p.x)>84 || Math.abs(e.y-p.y)>70) return;
+        // 追い付かせるのではなく貼り付ける。少しずつ持ち上げると登る速さに置いていかれ、
+        // 「巻き上げ」にならずただの多段になる
+        if(e.z < p.z-40){ e.z=p.z-40; e.vz=Math.min(e.vz||0, -2); } }); }   // 敵の vz は負が上
+    if(t===def.act[1]){                               // 締めの一蹴りで打ち上げ、二段ジャンプが戻る
+      popText(p.x, p.y-p.z-104, '穿てッ！', '#ffffff', true); sfx.heavy(p.x);
+      ring(p.x, p.y-p.z-40, '#aef8ff'); shake=Math.max(shake,7); hitStop=Math.max(hitStop,5);
+      p.djUsed=false;
+      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
+        if(Math.abs(e.x-p.x)>96 || Math.abs(e.y-p.y)>70) return;
+        launchEnemy(e, dir*3, -16, Math.max(e.bounces||0, 3));
+        spark(e.x, e.y-e.h*0.5, '#ffffff', 8, 8); }); } }
   else if(K2==='nukoDp'){              // 上がらず、足元から星の柱を突き上げる（柱はその場に残る）
     if(t===def.act[0]){ const tx=p.x+dir*90;
       ring(tx, p.y, '#d6b0ff'); popText(p.x, p.y-p.z-100, '星穿ち！', '#d6b0ff', true); sfx.boss(p.x);
@@ -3649,11 +3666,18 @@ function airSpecialTick(p, a, def){
       const n=(t-def.act[0])/5;
       crescent(p.x, p.y-p.z-46, 108, -3.1, 3.1, (n%2)?'#fff0b0':'#ffffff');
       spark(p.x+rnd(-60,60), p.y-p.z-rnd(20,70), '#fff0b0', 3, 7); } }
-  else if(K2==='shimaDu'){             // 体ごとぶつける。水平に突進して押し込む
-    if(t===def.act[0]){ p.avx=dir*17; p.vz=Math.max(p.vz, 1.2);
-      popText(p.x, p.y-p.z-96, '鉄山靠！', '#ffd24d', true); sfx.heavy(p.x); shake=Math.max(shake,8); }
-    if(t>def.act[0] && t<=def.act[1]){ p.avx*=0.965;          // 減速しにくい＝押し切る
-      if(t%2===0) spark(p.x-dir*20, p.y-p.z-rnd(20,60), '#ffd24d', 3, 7); } }
+  else if(K2==='shimaDu'){             // 見えない足場を三度蹴って、上下にジグザグしながら前へ抜ける
+    // 蹴るたびに縦の向きが変わる（上→下→上）。前へは進み続けるので、間合いを詰める足にもなる
+    const STEP=[{at:6,vz:9.0,vx:10},{at:22,vz:-7.5,vx:13},{at:38,vz:10.5,vx:11}];
+    for(let i=0;i<STEP.length;i++){ const q=STEP[i]; if(t!==q.at) continue;
+      p.vz=q.vz; p.avx=dir*q.vx;
+      ring(p.x-dir*18, p.y-p.z-40, '#ffd24d');
+      spark(p.x-dir*22, p.y-p.z-40, (i===1)?'#ffffff':'#ffd24d', 8, 9);
+      crescent(p.x+dir*30, p.y-p.z-44, 56, -1.5+ (q.vz>0?0:1.0), 1.2+(q.vz>0?0:1.0), '#ffd24d');
+      sfx.dash(p.x); sfx.swing(1, 'flesh', p.x); shake=Math.max(shake,4);
+      if(i===0) popText(p.x, p.y-p.z-100, '三角跳び！', '#ffd24d', true);
+      if(i===2){ popText(p.x, p.y-p.z-104, '烈空脚ッ！', '#ffffff', true); hitStop=Math.max(hitStop,4); } }
+    if(t%2===0) spark(p.x-dir*14, p.y-p.z-rnd(20,60), (t%4)?'#ffd24d':'#ffffff', 2, 6); }
   else if(K2==='nukoDu'){              // 追尾する小星を3つ呼ぶ。しばらく勝手に敵を追う
     if(t===def.act[0]){ ring(p.x, p.y-p.z-40, '#ffd0f0'); sfx.rise(p.x);
       for(let k=0;k<3;k++) spawnProj(p.x+(k-1)*22, p.y-(k-1)*6, dir*4, (k-1)*1.6, {owner:'player',
@@ -6125,6 +6149,9 @@ function updatePlayer(){
         if(a.t%2===0) spark(p.x+rnd(-12,12), p.y-p.z-rnd(10,50), def.trail||'#ffffff', 2, 6); }
       // 出だしは跳び上がる。低い所から出しても技として成立させるため
       else if(def.airRise && a.t<=8){ p.vz=def.airRise; }
+      // 蹴り上がり続ける技：勢いを落としながら登る。登り切ったら下の重力へ落ちる
+      else if(def.airClimb && a.t<=def.airClimb.t){
+        p.vz=def.airClimb.vz*(1-a.t/def.airClimb.t); }
       // 出し切る前に着地して打ち切られるのを防ぐ。技の間は宙に留まる（airHover）
       else if(def.airHover && a.t<=def.airHover){ p.vz=Math.sin(a.t*0.16)*0.7; }
       else p.vz=(p.vz||0)-(def.airFloat? 0.20 : 0.52);

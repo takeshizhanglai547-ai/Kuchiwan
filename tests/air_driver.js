@@ -472,7 +472,7 @@ const DRIVER = `
     console.log('二段ジャンプの割り込み OK (空中攻撃はキャンセルできる／回避中は割り込めない)'); }
 
   // ===== 18) メテオ技：宙で止まってから落ち、敵を地面へ叩きつけて跳ね返す =====
-  { ['shima','guard8'].forEach(function(k){
+  { ['guard8'].forEach(function(k){
       const id=airSpecialFor({kind:k},'dp'), def=ATK[id];
       if(!def.airMeteor) throw new Error(k+' の空中昇竜がメテオ技になっていない');
       const p=setup(k);
@@ -499,7 +499,7 @@ const DRIVER = `
       if(!(dmg>0)) throw new Error(k+' のメテオ技が当たらない');
       if(!(bounced>0)) throw new Error(k+' のメテオ技で敵が跳ね返らない');
       if(p.z>4) throw new Error(k+' のメテオ技が着地しない（z='+Math.round(p.z)+'）'); });
-    console.log('メテオ技 OK (シマ・ガードワンとも 構えの間は滞空→落下→着弾で地面バウンド)'); }
+    console.log('メテオ技 OK (ガードワン：構えの間は滞空→落下→着弾で地面バウンド)'); }
 
   // ===== 19) マックの空中3枠：斜め下マグナム／前方ガトリング／全周掃射 =====
   { const shots=function(sl, gate){
@@ -534,6 +534,81 @@ const DRIVER = `
     const back=ar.list.filter(function(pr){ return Math.sign(pr.vx)!==Math.sign(ga.list[0].vx); }).length;
     if(!(back>=3)) throw new Error('全周掃射なのに後ろへ '+back+' 発しか飛ばない');
     console.log('マックの空中3枠 OK (マグナム1発'+mg.list[0].dmg+'ダメ貫通／斉射'+ga.n+'発／全周'+ar.n+'発・うち後方'+back+'発)'); }
+
+  // ===== 20) シマの空中昇竜＝蹴り上がり。登る・巻き上げる・締めで二段ジャンプが戻る =====
+  { const id=airSpecialFor({kind:'shima'},'dp'), def=ATK[id];
+    if(def.airMeteor) throw new Error('シマの空中昇竜がまた落下技になっている');
+    const p=setup('shima');
+    p.state='jump'; p.z=90; p.vz=0; p.jAtk=0; p.djUsed=true;   // 二段ジャンプは使い切った状態から
+    enemies.length=0;
+    const list=[];
+    for(let j=0;j<3;j++){ spawnEnemy('wolf', p.x-30+j*40, p.y); const e=enemies[enemies.length-1];
+      e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; e.z=0; list.push(e); }
+    const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+    // 巻き上げの測定用に、蹴りの当たらない真後ろへ1体置く。
+    // 前の敵で測ると「殴った衝撃で浮いた」ぶんと区別が付かない
+    spawnEnemy('wolf', p.x-80, p.y);
+    const back=enemies[enemies.length-1];
+    back.hp=back.maxHp=99999; back.poise=99999; back.thinkCd=99999; back._fx=back.x; back.z=0;
+    const bhp0=back.hp;
+    const rd=dpReady; dpReady=function(){ return true; };
+    try{ p.in.pressed.atk=true; step(1); } finally { dpReady=rd; }
+    if(!p.atk || p.atk.type!==id) throw new Error('シマの空中昇竜が出ない');
+    const z0=p.z;
+    let top=p.z, lift=0, dj=true, fin=0;
+    for(let f=0;f<70;f++){ hitStop=0; slowmo=0;
+      list.forEach(function(e){ e.x=e._fx; e.vx=0; });
+      back.x=back._fx; back.vx=0;
+      step(1);
+      if(p.z>top) top=p.z;
+      // 締めの打ち上げ（32フレームあたり）は範囲が広く後ろにも届くので、その手前までで測る
+      if(f<26 && back.z>lift) lift=back.z;
+      // 締めは蹴りの当たらない後ろの敵まで巻き込んで打ち上げる。
+      // 前の敵で測ると多段の吹き飛ばしと区別が付かない
+      // 締めは32フレームあたり。落ちて地面で跳ねたぶんを拾わないよう、着地前の窓だけで測る
+      if(f>=26 && f<=40 && (back.vz||0)<fin) fin=back.vz;   // 敵の vz は負が上
+      // 二段ジャンプは「宙にいるうちに」戻ること。着地でも戻るので、着地後に見ると意味が無い
+      if(!p.djUsed && p.z>20) dj=false; }
+    const hits=Math.round(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0));
+    if(!(top-z0 >= 150)) throw new Error('蹴り上がらない（'+Math.round(top-z0)+'px しか上がらない）');
+    if(!(hits>0)) throw new Error('蹴り上がりが当たらない');
+    if(bhp0-back.hp > 0) throw new Error('後ろの敵にまで蹴りが当たっている（巻き上げの測定が成立しない）');
+    if(!(lift >= 120)) throw new Error('蹴りの当たらない敵を巻き上げていない（'+Math.round(lift)+'px）');
+    if(!(fin <= -9)) throw new Error('締めの一蹴りで周りを打ち上げていない（後ろの敵の勢いが '+(-fin).toFixed(1)+'）');
+    if(dj) throw new Error('宙にいるうちに二段ジャンプが戻らない（着地するまで戻らない）');
+    console.log('シマの空中昇竜 OK ('+def.name+'・'+Math.round(top-z0)+'px 上昇／敵を '+Math.round(lift)+'px 巻き上げ／締めの打ち上げ '+(-fin).toFixed(1)+'／二段ジャンプ復活)'); }
+
+  // ===== 21) シマの空中↓↑＝三角跳び。縦の向きが何度も変わりながら前へ抜ける =====
+  { const id=airSpecialFor({kind:'shima'},'du'), def=ATK[id];
+    const p=setup('shima');
+    p.state='jump'; p.z=140; p.vz=0; p.jAtk=0;
+    enemies.length=0;
+    const list=[];
+    for(let j=0;j<4;j++){ spawnEnemy('wolf', p.x+50+j*60, p.y); const e=enemies[enemies.length-1];
+      e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; e.z=0; list.push(e); }
+    const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+    const x0=p.x;
+    const rd=downUpReady; downUpReady=function(){ return true; };
+    try{ p.in.pressed.atk=true; step(1); } finally { downUpReady=rd; }
+    if(!p.atk || p.atk.type!==id) throw new Error('シマの空中↓↑が出ない');
+    // 実際の高さの上下を数える（vz ではなく z の増減で見る＝実装の変数に寄りかからない）
+    let kicks=0, up=null, zp=p.z, far=p.x, dropped=0, hi=p.z;
+    for(let f=0;f<80 && p.atk; f++){ hitStop=0; slowmo=0;
+      list.forEach(function(e){ e.x=e._fx; e.vx=0; });
+      step(1);
+      const d=p.z-zp; zp=p.z;
+      if(Math.abs(d)>0.4){ const u=(d>0);
+        if(up===false && u) kicks++;      // 落ちている途中から上がり直した＝蹴り直し
+        if(u && p.z>hi) hi=p.z;
+        if(!u) dropped=Math.max(dropped, hi-p.z);
+        up=u; }
+      if(p.x>far) far=p.x; }
+    const hits=Math.round(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0));
+    if(!(kicks>=2)) throw new Error('蹴り直しが '+kicks+' 回しかない（三角跳びなら2回以上）');
+    if(!(dropped>=40)) throw new Error('間に落ちる区間が '+Math.round(dropped)+'px しかない（上→下→上になっていない）');
+    if(!(far-x0 >= 120)) throw new Error('前へ '+Math.round(far-x0)+'px しか進まない');
+    if(!(hits>0)) throw new Error('三角跳びが当たらない');
+    console.log('シマの空中↓↑ OK ('+def.name+'・蹴り直し '+kicks+'回／間に '+Math.round(dropped)+'px 落ちる／前へ '+Math.round(far-x0)+'px／'+hits+'ダメージ)'); }
 
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
