@@ -2321,7 +2321,21 @@ function drawParticles(layer){
       ctx.beginPath(); ctx.moveTo(sx, py-p.h);
       for(let i=1;i<=9;i++){ ctx.lineTo(sx+(i<9?rnd(-12,12):0), (py-p.h)+p.h*(i/9)); }
       ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.8; ctx.stroke(); }
-    else if(p.k==='hsword'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a; const top=py-p.h;   // 聖剣（地面から突き上がる金色の剣）
+    else if(p.k==='fsword'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;   // 天から降ってきて突き刺さる聖剣
+      const age=p.max-p.life, u=Math.min(1, age/Math.max(1,p.fall||9));
+      const off=(1-u)*(p.drop||420), base=py-off, top=base-p.h;
+      if(u<1){ const g=ctx.createLinearGradient(sx, top-260, sx, top);   // 落ちてくる光の尾
+        g.addColorStop(0,'rgba(255,246,208,0)'); g.addColorStop(1,'rgba(255,246,208,.85)');
+        ctx.strokeStyle=g; ctx.lineWidth=13; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(sx, top-260); ctx.lineTo(sx, top); ctx.stroke(); }
+      ctx.strokeStyle='#fff0a0'; ctx.lineWidth=8*a+2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(sx,base); ctx.lineTo(sx,top+8); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.moveTo(sx,base); ctx.lineTo(sx,top+10); ctx.stroke();
+      ctx.fillStyle='#fff6d0'; ctx.beginPath(); ctx.moveTo(sx-6,top+14); ctx.lineTo(sx,top-10); ctx.lineTo(sx+6,top+14); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#ffe14d'; ctx.lineWidth=3.8;
+      ctx.beginPath(); ctx.moveTo(sx-13,base-p.h*0.16); ctx.lineTo(sx+13,base-p.h*0.16); ctx.stroke(); }
+    else if(p.k==='hsword'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a; const top=py-p.h;   // 聖剣（地面に突き立った金色の剣）
       ctx.strokeStyle='#fff0a0'; ctx.lineWidth=7*a+2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(sx,top+8); ctx.stroke();
       ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(sx,top+10); ctx.stroke();
       ctx.fillStyle='#fff6d0'; ctx.beginPath(); ctx.moveTo(sx-5,top+12); ctx.lineTo(sx,top-8); ctx.lineTo(sx+5,top+12); ctx.closePath(); ctx.fill();   // 刃先
@@ -2574,8 +2588,10 @@ const ATK={
   // ══════════════════════════════════════════════════════════════
   aInu:{name:'天光・双輪斬空', ultMove:true, dur:64, act:[8,52], reach:150, hh:150, dmg:9, kb:5, from:-3.1,to:3.1, len:74, trail:'#fff0b0', pivotY:-46,
     omni:true, multi:true, multiGap:5, special:true, superFx:true, spin:true, airLand:16, airRise:7, airHover:56, airUlt:'inu'},
-  aShima:{name:'隕鉄脚・落星撃', ultMove:true, dur:56, act:[40,50], reach:120, hh:120, dmg:26, kb:22, from:-1.2,to:1.2, len:30, trail:'#ff9a3a', pivotY:-40,
-    fist:true, kick:true, special:true, superFx:true, knock:true, finisher:true, aoe:true, airLand:22, airRise:19, airHover:16, airSlam:true, airUlt:'shima'},
+  // 落ちて爆発する型はガードワンの空中奥義と同じ形だったので、
+  // 「宙へ引きずり上げてまとめて殴る」拳法家らしい型に変えた
+  aShima:{name:'羅漢・天地無双拳', ultMove:true, dur:88, act:[18,74], reach:150, hh:150, dmg:0, kb:0, from:-0.6,to:0.6, len:30, trail:'#ffd24d', pivotY:-46,
+    fist:true, punch:true, special:true, superFx:true, noMelee:true, airLand:16, airRise:9, airHover:84, airUlt:'shima'},
   aNuko:{name:'天穹・アステリズム', ultMove:true, dur:82, act:[14,70], reach:40, hh:40, dmg:0, kb:0, from:-0.4,to:0.4, len:22, trail:'#ffd0f0', pivotY:-46,
     fist:true, special:true, superFx:true, airLand:16, airRise:7, airHover:74, airUlt:'nuko'},
   aGuard:{name:'軌道爆撃・アンカードロップ', ultMove:true, dur:72, act:[52,60], reach:150, hh:130, dmg:34, kb:28, from:-2.4,to:1.4, len:110, trail:'#ffb85a', pivotY:-70,
@@ -2786,9 +2802,9 @@ const ATK={
   // 昇竜＝三段に斬り上げる龍の閃光。超高空へ打ち上げ長い無敵
   idragon:{name:'天翔龍閃', hold:10, dur:40, act:[2,34], reach:72, hh:640, dmg:16, kb:6, from:1.5,to:-2.2, len:70, trail:'#ffe27a', pivotY:-46, rise:true, riseV:36, riseG:0.56, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true},
   // ↓↑＝円環斬：剣を三百六十度に振り回し周囲すべてを多段で斬る渦（衝撃波ではない）
-  // 前方一列だと囲まれたときに何もできなかったので、自分を中心に全方位へ聖剣を立てる結界にした
-  iswords:{name:'聖剣・円環結界', hold:10, dur:48, act:[4,34], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff0b0', pivotY:-56, special:true, superFx:true,
-    swordRing:{n:10, r0:84, r1:158, dmg:14, burst:22, r:170}},
+  // 地面から生えるだけでは地味だったので、天から聖剣が降ってきて突き刺さる型にした
+  iswords:{name:'聖剣・断罪の降臨', hold:10, dur:56, act:[4,40], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff0b0', pivotY:-56, special:true, superFx:true, noMelee:true,
+    swordFall:{n:8, spread:200, fall:9, dmg:17, burst:26, r:210}},
   // シマ（拳法）＝一気に距離を詰める接近格闘
   // 波動＝無敵で突進しながらの連拳乱打→打ち上げ。飛び道具ではなく肉薄する超必
   srush:{name:'羅刹連拳', dur:40, act:[3,34], reach:96, hh:110, dmg:8, kb:4, from:-0.1,to:0.1, len:28, trail:'#ffd24d', fist:true, punch:true, move:13, multi:true, multiGap:3, knock:true, finisher:true, superRush:true, rushEnd:true},
@@ -2849,8 +2865,8 @@ const ATK={
   //  いずれも元の技とは別モーション・別演出になる
   // ══════════════════════════════════════════════════════════════
   // ── イッヌ ──
-  iswords2:{name:'聖剣・十字天光', hold:12, dur:62, act:[6,50], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff6d0', pivotY:-56, special:true, superFx:true,
-    swordRing:{n:16, r0:92, r1:214, dmg:20, burst:34, r:230, cross:true, pillar:true}},   // 二重の円環と、締めの天光柱
+  iswords2:{name:'聖剣・審判の大降臨', hold:12, dur:78, act:[6,58], reach:44, hh:40, dmg:0, kb:0, from:-0.3,to:0.3, len:44, trail:'#fff6d0', pivotY:-56, special:true, superFx:true, noMelee:true,
+    swordFall:{n:16, spread:290, fall:9, dmg:23, burst:40, r:280, twin:true, pillar:true}},   // 左右同時に降らせ、締めは天光柱
   iwave2:{name:'真空・双烈斬空波', hold:5, dur:38, act:[12,16], reach:56, hh:44, dmg:0, kb:0, from:-1.9,to:1.9, len:66, trail:'#bffcff', pivotY:-56, special:true, iai:true, superFx:true, twinWave:true},   // 上下二段の巨大真空波
   idragon2:{name:'天翔龍閃・双龍昇天', hold:12, dur:48, act:[2,42], reach:84, hh:700, dmg:19, kb:7, from:1.6,to:-2.4, len:78, trail:'#ffe27a', pivotY:-46, rise:true, riseV:42, riseG:0.48, multi:true, multiGap:3, shoryu:true, superFx:true, pillar:true, twinDragon:true},
   // ── シマダックス ──
@@ -3401,15 +3417,44 @@ function airUltTick(p, a, def){
     if(t===def.act[1]+2){ ring(p.x,p.y,'#fff0b0'); ring(p.x,p.y,'#ffffff');
       for(let k=0;k<4;k++) spark(p.x, p.y-k*70, '#fff6c0', 12, 11);
       flash=Math.max(flash,5); shake=Math.max(shake,12); sfx.big(p.x); } }
-  else if(K2==='shima'){             // 一度跳び上がってから、隕石のように落ちて大爆発
-    if(t>def.airHover && t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.9, -26); p.avx=dir*3.2;
-      if(t%2===0) ember(p.x+rnd(-16,16), p.y-p.z-rnd(0,50), rnd(-1.4,1.4), rnd(2,5), (t%4)?'#ff9a3a':'#ffd24d'); }
-    if(t===def.act[0]){ bigExplosion(p.x, p.y-10, 190, '#ff9a3a');
-      ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#ffffff'); dust(p.x,p.y,22);
-      shake=Math.max(shake,20); quake=Math.max(quake||0,22); flash=Math.max(flash,6); triggerSlow(26); sfx.blast(p.x); sfx.ko(p.x);
-      enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>270) return;
-        damageEnemy(e, TD(Math.round(66*mul)), (e.x<p.x?-1:1)*12, true);
-        if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*24, -16, 4); }); } }
+  else if(K2==='shima'){             // 周りを宙へ引きずり上げ、まとめて殴り続け、最後に地面へ叩き落とす
+    const held=function(r){ return enemies.filter(function(e){ return !e.dead && !e.grabbedBy
+      && Math.abs(e.x-p.x)<r && Math.abs(e.y-p.y)<96; }); };
+    if(t===1){ popText(p.x, p.y-p.z-112, '寄れィ——！', '#ffd24d', true); sfx.rise(p.x); sfx.boss(p.x);
+      for(let k=0;k<3;k++) ring(p.x, p.y-p.z-40-k*30, (k%2)?'#ffd24d':'#ffffff'); }
+    // 前半：間合いの敵を自分の高さまで吸い上げる
+    // 一点へ寄せると全員が重なって一体に見えるので、周りをぐるぐる回す
+    const orbit=function(list, i, rate){ const n=Math.max(1,list.length), e=list[i];
+      const ang=i/n*TAU + t*0.11;
+      const tx=p.x+Math.cos(ang)*52, tz=(p.z-26)+Math.sin(ang)*24;
+      e.x += (tx-e.x)*rate; e.z += (tz-e.z)*rate; e.vz=Math.min(e.vz||0, 0);
+      e.state='air'; e.bounces=Math.max(e.bounces||0, 2); };
+    if(t<def.act[0]){ const g=held(300); g.forEach(function(e,i){ orbit(g, i, 0.22);
+        if(t%4===0) spark(e.x, e.y-e.h*0.5, '#ffd24d', 3, 6); });
+      if(t%3===0) spark(p.x+rnd(-44,44), p.y-p.z-rnd(0,84), '#ffd24d', 2, 6); }
+    // 中盤：宙に留めたまま高速で殴り続ける
+    if(t>=def.act[0] && t<=def.act[1]){
+      const list=held(170);
+      list.forEach(function(e,i){ orbit(list, i, 0.24); e.vz=0; });
+      if(t===def.act[0]){ popText(p.x, p.y-p.z-112, '無双拳ッ！', '#ffffff', true);
+        sfx.heavy(p.x); flash=Math.max(flash,3); }
+      if(t%4===0){ list.forEach(function(e){ noHitStopOnce=true;
+          damageEnemy(e, TD(Math.round(5*mul)), 0, false);
+          spark(e.x+rnd(-20,20), e.y-e.h*0.6, (t%8)?'#ffd24d':'#ffffff', 4, 8); });
+        shake=Math.max(shake,3); sfx.swing(1, 'flesh', p.x); }
+      if(t%2===0) spark(p.x+rnd(-30,30), p.y-p.z-rnd(10,70), '#ffd24d', 2, 7); }
+    // 締め：掴んだ全員を地面へ叩き落とす
+    if(t===def.act[1]+2){ const list=held(200);
+      popText(p.x, p.y-p.z-112, '——落ちろ。', '#ffffff', true);
+      shake=Math.max(shake,18); quake=Math.max(quake||0,20); flash=Math.max(flash,5);
+      triggerSlow(24); hitStop=Math.max(hitStop,10); sfx.blast(p.x); sfx.ko(p.x);
+      shockwave(p.x, p.y, {r:210, color:'#ffd24d', big:true});
+      ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#ffffff'); dust(p.x,p.y,20);
+      list.forEach(function(e){ e.z=0; e.vz=0;
+        damageEnemy(e, TD(Math.round(46*mul)), (e.x<p.x?-1:1)*10, true);
+        if(e.dead) return;
+        launchEnemy(e, (e.x<p.x?-1:1)*10, -14, Math.max(e.bounces||0, 4));
+        spark(e.x, e.y, '#ffffff', 12, 10); }); } }
   else if(K2==='nuko'){              // 敵に星印を打ち、線で結んで星座にする。結んだ線の上を雷が走る
     if(t===def.act[0]){ ring(p.x,p.y-p.z-40,'#d6b0ff'); ring(p.x,p.y-p.z-40,'#ffffff');
       popText(p.x,p.y-p.z-110,'星よ、繋がれ——','#d6b0ff',true); sfx.boss(p.x); sfx.rise(p.x);
@@ -4060,27 +4105,32 @@ function nukoThunderWave(p,n){ const mul=nukoMul(p);
       if(Math.abs(e.x-tx)<60 && e.z<220){ noHitStopOnce=true; damageEnemy(e,Math.round(15*mul),(e.x<tx?-1:1)*4,true);
         if(!e.dead&&e.z<2){ e.z=2; e.vz=Math.max(e.vz,2); } } } }
   flashAt(3,'159,232,255'); shake=Math.max(shake,6); sfx.zap(p.x); sfx.boss(p.x); }
-// ══ イッヌ ↓↑「聖剣・円環結界」：自分を中心に聖剣が螺旋を描いて突き立つ ══
-// 位置は「向いている方向の一列」ではなく円周。囲まれたときの切り返しに使えるようにした
-function holyRing(p, i, n, o, off){ o=o||{};
-  const mul=(p.atkMul||1)*(o.mul||1);
-  const ang=i/n*TAU + (off||0);                       // 全周は TAU（PI2 は四分の一回転）
-  const u=(n<=1)?1:i/(n-1);
-  const r0=o.r0||64, r=r0+((o.r1||150)-r0)*u;         // 内から外へ広がる螺旋
-  const bx=clamp(p.x+Math.cos(ang)*r, camX+20, camX+W-20);
-  const by=p.y+Math.sin(ang)*r*0.40;                  // 帯の奥行きぶんは潰す
-  const gy=by-groundLift(bx);
-  particles.push({k:'hsword', x:bx, y:gy, h:110+rnd(0,30), life:16, max:16});
-  ring(bx,gy-12,'#fff0a0'); spark(bx,gy-46,'#fff6d0',9,9); dust(bx,gy,3);
+// ══ イッヌ ↓↑「聖剣・断罪の降臨」：天から聖剣が降ってきて地面へ突き刺さる ══
+// 落ちる位置は左右へ交互に広がるので、囲まれていても背後まで届く
+function holySky(p, i, n, o, side, a){ o=o||{};
+  const sp=o.spread||200, half=Math.max(1, Math.ceil(n/2)-1), k=Math.floor(i/2);
+  const dx=(side!=null?side:((i%2)?-1:1))*(46 + k*(sp-46)/half);
+  const bx=clamp(p.x+dx, camX+20, camX+W-20);
+  const by=p.y+((i%3)-1)*26;                          // 帯の奥行きにも散らす
+  const gy=by-groundLift(bx), fall=o.fall||9;
+  particles.push({k:'fsword', x:bx, y:gy, h:118+rnd(0,28), drop:430, fall:fall, life:fall+16, max:fall+16});
+  spark(bx, gy-330, '#fff6d0', 5, 7);
+  if(i===0){ flash=Math.max(flash,2); sfx.rise(bx); }
+  sfx.swing(2, 'longblade', bx);
+  // 当たりは「落ち切った瞬間」に出す。降ってくる絵と判定をずらさない
+  (a.pend=a.pend||[]).push({x:bx, y:by, gy:gy, at:a.t+fall}); }
+// 突き刺さった瞬間：光が爆ぜて周りを打ち上げ、剣はしばらく地面に残る
+function holyStab(p, s, o){ o=o||{}; const mul=(p.atkMul||1);
+  particles.push({k:'hsword', x:s.x, y:s.gy, h:112+rnd(0,26), life:20, max:20});
+  ring(s.x, s.gy-12, '#fff0a0'); spark(s.x, s.gy-46, '#fff6d0', 13, 11); dust(s.x, s.gy, 5);
+  shake=Math.max(shake,5); sfx.heavy(s.x);
   enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return;
-    if(Math.abs(e.x-bx)>52 || Math.abs(e.y-by)>46 || e.z>=160) return;
+    if(Math.abs(e.x-s.x)>54 || Math.abs(e.y-s.y)>48 || e.z>=170) return;
     if(e.iswCd && gf-e.iswCd<8) return; e.iswCd=gf;
     const d=(e.x<p.x?-1:1);
-    damageEnemy(e, Math.round((o.dmg||14)*mul), d*8, true);
+    damageEnemy(e, Math.round((o.dmg||17)*mul), d*8, true);
     if(!e.dead) launchEnemy(e, d*6, -13, 3);
-    spark(e.x, e.y-e.h*0.5, '#fff0a0', 10, 8); });
-  if(i===0){ sfx.rise(bx); flash=Math.max(flash,2); }
-  if(i%2===0) sfx.swing(2, 'longblade', bx); }
+    spark(e.x, e.y-e.h*0.5, '#fff0a0', 10, 8); }); }
 // 締め：結界が弾けて、円の中の敵を外へ吹き飛ばす
 function holyBurst(p, o){ o=o||{}; const mul=(p.atkMul||1), R=o.r||170;
   for(let k=0;k<3;k++) ring(p.x, p.y-24-k*26, (k%2)?'#fff6d0':'#ffffff');
@@ -5764,15 +5814,17 @@ function updatePlayer(){
     if(def.iai && a.t===def.act[0]){ const dir=p.facing; crescent(p.x+dir*64,p.y-52,96,dir>0?-0.45:Math.PI-0.45,dir>0?0.45:Math.PI+0.45,'#eaffff'); spark(p.x+dir*78,p.y-52,'#fff',18,11); flash=Math.max(flash,2); hitStop=Math.max(hitStop,4); }   // 居合の閃光
     if(def.popUp && a.t===def.act[0]){ ring(p.x,p.y,'#ffd24d'); ring(p.x,p.y,'#fff'); spark(p.x,p.y-24,'#fff',18,10); dust(p.x,p.y,10); shake=Math.max(shake,7); hitStop=Math.max(hitStop,6); sfx.heavy(p.x); sfx.rise(p.x);   // 崩天脚＝周囲を真上へ吹き上げ
       enemies.forEach(e=>{ if(e.dead||e.grabbedBy)return; if(Math.abs(e.x-p.x)<120 && Math.abs(e.y-p.y)<62){ damageEnemy(e,Math.round(18*(p.atkMul||1)),0,true); if(!e.dead)launchEnemy(e,(e.x<p.x?-1:1)*2,-17,3); } }); }
-    // ── イッヌ ↓↑「聖剣・円環結界」：全方位へ聖剣が突き立ち、締めに弾ける ──
-    if(def.swordRing){ const R=def.swordRing;
+    // ── イッヌ ↓↑「聖剣・断罪の降臨」：天から聖剣が降り注ぎ、締めに一斉に弾ける ──
+    if(def.swordFall){ const R=def.swordFall;
       if(a.t>=def.act[0] && a.t<=def.act[1]){
         const every=Math.max(1, Math.round((def.act[1]-def.act[0])/R.n));
         if((a.t-def.act[0])%every===0){ const i=(a.t-def.act[0])/every;
-          if(i<R.n){ holyRing(p, i, R.n, R, 0);
-            if(R.cross) holyRing(p, i, R.n, R, Math.PI); } }   // 上位技は対の円も同時に立てる
-        p.invuln=Math.max(p.invuln, 6); }                      // 結界の中は守られる
-      if(a.t===def.act[1]+2){ holyBurst(p, R); if(R.pillar) holyPillar(p); } }
+          if(i<R.n){ holySky(p, i, R.n, R, null, a);
+            if(R.twin) holySky(p, i, R.n, R, ((i%2)?1:-1), a); } }   // 上位技は左右同時に降らせる
+        p.invuln=Math.max(p.invuln, 6); }                            // 剣の檻の中は守られる
+      if(a.pend) for(let q=a.pend.length-1;q>=0;q--){                 // 落ち切った剣から順に地面を割る
+        if(a.t>=a.pend[q].at){ holyStab(p, a.pend[q], R); a.pend.splice(q,1); } }
+      if(a.t===def.act[1]+2+(R.fall||9)){ holyBurst(p, R); if(R.pillar) holyPillar(p); } }
     // ── Lv10「真空・双烈斬空波」：上下二段の巨大真空波 ──
     if(def.twinWave && a.t===def.act[0]){ const dir=p.facing, mul=(p.atkMul||1);
       // 地を這う波・胸元の波・頭上の波の三段。空中の敵も逃がさない
@@ -13642,7 +13694,7 @@ function drawPlayer(){
   const _spec = st==='attack' && p.atk && p.atk.def.dimBlade;
   if(st==='attack' && p.atk){ const _d=p.atk.def;
     if(_d.dimBlade)                        ctx.rotate(Math.sin(p.atk.t*0.55)*0.28);   // 次元斬：従来どおり
-    else if(_d.swordRing)   ctx.rotate(Math.sin(p.atk.t*0.22)*0.07);   // 聖剣結界：ゆっくり大きく
+    else if(_d.swordFall)   ctx.rotate(Math.sin(p.atk.t*0.22)*0.07);   // 聖剣の降臨：ゆっくり大きく
     else if(_d.stormCall||_d.caller)       ctx.rotate(Math.sin(p.atk.t*0.38)*0.05); } // 詠唱：微振動
   if(st==='attack' && p.atk && p.atk.def.spin){ ctx.rotate(p.atk.t*0.5); }   // 回し蹴り/グルグルの回転
   // タメ攻撃の段位：極（ctier2）は振り抜きに合わせて体ごと一回転する。

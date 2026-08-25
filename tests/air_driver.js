@@ -610,6 +610,50 @@ const DRIVER = `
     if(!(hits>0)) throw new Error('三角跳びが当たらない');
     console.log('シマの空中↓↑ OK ('+def.name+'・蹴り直し '+kicks+'回／間に '+Math.round(dropped)+'px 落ちる／前へ '+Math.round(far-x0)+'px／'+hits+'ダメージ)'); }
 
+  // ===== 22) シマの空中奥義＝引きずり上げてまとめて殴り、最後に地面へ叩き落とす =====
+  { const id=AIR_ULT.shima, def=ATK[id];
+    const p=setup('shima'); p.dimMax=9; p.dim=9;
+    p.state='jump'; p.z=210; p.vz=0; p.jAtk=0;
+    enemies.length=0;
+    const list=[];
+    [-250, 120, 240].forEach(function(dx){ spawnEnemy('wolf', p.x+dx, p.y);
+      const e=enemies[enemies.length-1];
+      e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e.z=0; list.push(e); });
+    const far0=Math.abs(list[0].x-p.x);
+    const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+    const real=rotationReady; rotationReady=function(){ return true; };
+    try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+    if(!p.atk || p.atk.type!==id) throw new Error('シマの空中奥義が出ない');
+    let lifted=0, gathered=1e9, slammed=false, hiWhenSlam=0, midDmg=0, prevDmg=0;
+    const total=function(){ return Math.round(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0)); };
+    const zPrev=list.map(function(){ return 0; });
+    for(let f=0;f<150;f++){ hitStop=0; slowmo=0;
+      list.forEach(function(e){ e.vx=0; e.state=(e.z>0?'air':'walk'); });
+      step(1);
+      // 吸い上げ：一番遠い敵が自分の高さの近くまで来ること
+      const lo=Math.min.apply(null, list.map(function(e){ return e.z; }));
+      if(lo>lifted) lifted=lo;
+      const fx=Math.max.apply(null, list.map(function(e){ return Math.abs(e.x-p.x); }));
+      if(fx<gathered) gathered=fx;
+      // 叩き落とし：自分がまだ宙にいるうちに、全員が地面まで落とされること
+      // 叩き落とした瞬間＝高い所にいた敵が1フレームで地面まで落ちたフレーム。
+      // 「全員が地面にいる」で見ると、跳ね返って落ち切るまでの数十フレーム後になり、
+      // 締めの一撃も宙での連打に数えてしまう
+      if(!slammed && p.z>90 && list.some(function(e,ix){
+        return zPrev[ix]>100 && e.z<40 && zPrev[ix]-e.z>100; })){   // 跳ね返るので「ちょうど0」では捉えられない
+        slammed=true; hiWhenSlam=p.z; midDmg=prevDmg; }
+      list.forEach(function(e,ix){ zPrev[ix]=e.z; });
+      prevDmg=total(); }
+    const dmg=Math.round(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0));
+    if(!(lifted >= 120)) throw new Error('宙へ引きずり上げていない（一番低い敵で '+Math.round(lifted)+'px）');
+    if(!(gathered <= 120)) throw new Error('手元へ集めていない（一番遠い敵が '+Math.round(gathered)+'px・開始時 '+Math.round(far0)+'px）');
+    if(!slammed) throw new Error('自分が宙にいるうちに地面へ叩き落としていない');
+    if(!(dmg>0)) throw new Error('シマの空中奥義が削らない');
+    if(!(midDmg>0)) throw new Error('宙で殴っていない（叩き落とすまでのダメージが 0）');
+    if(def.airSlam || def.airMeteor) throw new Error('シマの空中奥義がまた自分から落ちる型に戻っている');
+    console.log('シマの空中奥義 OK ('+def.name+'・'+Math.round(far0)+'px 先の敵を '+Math.round(gathered)
+      +'px まで引き寄せ '+Math.round(lifted)+'px 持ち上げ／宙で'+midDmg+'／z='+Math.round(hiWhenSlam)+' から叩き落とし／計'+dmg+'ダメージ)'); }
+
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
