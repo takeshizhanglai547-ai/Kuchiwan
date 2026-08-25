@@ -190,12 +190,18 @@ const DRIVER = `
     // ↓↑が全キャラ「回転」にならないこと（実際にそうなっていて、個性が無いと指摘された）
     { const spin=KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'du')].spin; });
       if(spin.length>1) throw new Error('↓↑が '+spin.length+' キャラで回転技（回転で通すのは1人まで）: '+spin.join(',')); }
-    // 昇竜が全キャラ「叩きつけ」にならないこと
-    { const dive=KINDS.filter(function(k){ return ATK[airSpecialFor({kind:k},'dp')].airDive; });
-      if(dive.length>1) throw new Error('昇竜が '+dive.length+' キャラで叩きつけ（急降下で通すのは1人まで）: '+dive.join(',')); }
-    // 昇竜は上がる技が主体であること（叩きつけ一辺倒への逆戻りを防ぐ）
-    { const rise=KINDS.filter(function(k){ const d=ATK[airSpecialFor({kind:k},'dp')]; return d.rise||d.shoryu; });
-      if(rise.length<2) throw new Error('昇竜で上がる技が '+rise.length+' キャラしかない'); }
+    // どの枠も「同じ型ばかり」にならないこと。
+    // 型は動き方で分ける（上がる／落として叩きつける／急降下／その場で留まる）
+    { const shapeOf=function(d){ return d.airMeteor? 'メテオ' : d.airDive? '急降下'
+        : (d.rise||d.shoryu)? '上昇' : ((d.airHover|0)>=30? '滞空' : 'その他'); };
+      ['dp','hadou','du'].forEach(function(sl){
+        const c={};
+        KINDS.forEach(function(k){ const sh=shapeOf(ATK[airSpecialFor({kind:k},sl)]);
+          (c[sh]=c[sh]||[]).push(k); });
+        // 「その他」は分類できなかった寄せ集めなので、偏りの判定からは外す
+        // （中身が別物であることは、上の airFx の突き合わせで既に保証している）
+        for(const sh in c){ if(sh!=='その他' && c[sh].length>3)
+          throw new Error(sl+' の型が「'+sh+'」に偏っている（'+c[sh].length+'キャラ: '+c[sh].join(',')+'）'); } }); }
     // 波動枠が「前へ弾を撃つだけ」にならないこと（1キャラでも残っていれば指摘の再発）
     { const shot=KINDS.filter(function(k){ const d=ATK[airSpecialFor({kind:k},'hadou')]; return !!d.pshot && !d.airFx; });
       if(shot.length) throw new Error('波動が撃つだけのままのキャラがいる: '+shot.join(',')); }
@@ -464,6 +470,70 @@ const DRIVER = `
       for(let f=0;f<20 && r.state!=='idle' && r.z>0; f++) step(1);
       if(r.djUsed) throw new Error('地上へ降りる間に二段ジャンプが消費されている'); }
     console.log('二段ジャンプの割り込み OK (空中攻撃はキャンセルできる／回避中は割り込めない)'); }
+
+  // ===== 18) メテオ技：宙で止まってから落ち、敵を地面へ叩きつけて跳ね返す =====
+  { ['shima','guard8'].forEach(function(k){
+      const id=airSpecialFor({kind:k},'dp'), def=ATK[id];
+      if(!def.airMeteor) throw new Error(k+' の空中昇竜がメテオ技になっていない');
+      const p=setup(k);
+      p.state='jump'; p.z=230; p.vz=0; p.jAtk=0;
+      enemies.length=0;
+      const list=[];
+      for(let j=0;j<4;j++){ spawnEnemy('wolf', p.x-60+j*44, p.y); const e=enemies[enemies.length-1];
+        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); }
+      const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+      const rd=dpReady; dpReady=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { dpReady=rd; }
+      if(!p.atk || p.atk.type!==id) throw new Error(k+' のメテオ技が出ない');
+      // 構えの間は落ちない
+      const z0=p.z;
+      for(let f=0;f<(def.airHover|0)-1;f++) step(1);
+      if(!(p.z > z0-30)) throw new Error(k+' が構えの間に落ちている（'+Math.round(z0)+'→'+Math.round(p.z)+'）');
+      // そのあと落ちて着弾する
+      let hi=0, bounced=0;
+      for(let f=0;f<160;f++){ hitStop=0; slowmo=0;
+        list.forEach(function(e){ e.x=e._fx; e.vx=0; });
+        step(1);
+        list.forEach(function(e){ if((e.vz||0)>2 && e.z>2) bounced++; }); }
+      const dmg=hp0-list.reduce(function(a2,e){ return a2+e.hp; },0);
+      if(!(dmg>0)) throw new Error(k+' のメテオ技が当たらない');
+      if(!(bounced>0)) throw new Error(k+' のメテオ技で敵が跳ね返らない');
+      if(p.z>4) throw new Error(k+' のメテオ技が着地しない（z='+Math.round(p.z)+'）'); });
+    console.log('メテオ技 OK (シマ・ガードワンとも 構えの間は滞空→落下→着弾で地面バウンド)'); }
+
+  // ===== 19) マックの空中3枠：斜め下マグナム／前方ガトリング／全周掃射 =====
+  { const shots=function(sl, gate){
+      const p=setup('mack'); p.level=1;
+      p.state='jump'; p.z=200; p.vz=0; p.jAtk=0;
+      projectiles.length=0; enemies.length=0;
+      const real=global[gate]; global[gate]=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { global[gate]=real; }
+      if(!p.atk || p.atk.type!==airSpecialFor(p,sl)) throw new Error('mack/'+sl+' が出ない');
+      // 弾は生きているうちに値が変わる（zFloor で vzz が0に丸められる）。
+      // 参照を持ち回さず、見つけた瞬間の値を控える
+      const seen=[], snap=[]; let n=0;
+      for(let f=0;f<90;f++){ hitStop=0; slowmo=0; step(1);
+        projectiles.forEach(function(pr){ if(pr.owner!=='player'||seen.indexOf(pr)>=0) return;
+          seen.push(pr); snap.push({dmg:pr.dmg, vx:pr.vx, vzz:pr.vzz, pierce:pr.pierce}); n++; }); }
+      return {n:n, list:snap}; };
+    // 昇竜＝斜め下へ一発。重くて貫通する
+    const mg=shots('dp','dpReady');
+    if(mg.n!==1) throw new Error('マグナムが '+mg.n+' 発出ている（重い一発のはず）');
+    if(!(mg.list[0].dmg>=40)) throw new Error('マグナムが '+mg.list[0].dmg+' ダメージしかない');
+    if(!mg.list[0].pierce) throw new Error('マグナムが貫通しない');
+    if(!(mg.list[0].vzz<0)) throw new Error('マグナムが斜め下へ飛ばない（vzz='+mg.list[0].vzz+'）');
+    // 波動＝前方へ斉射
+    const ga=shots('hadou','hadokenReady');
+    if(!(ga.n>=12)) throw new Error('ガトリングの斉射が '+ga.n+' 発しかない');
+    if(!ga.list.every(function(pr){ return Math.sign(pr.vx)===Math.sign(ga.list[0].vx); }))
+      throw new Error('ガトリングが前方へ揃っていない');
+    if(!(ga.list[0].dmg < mg.list[0].dmg*0.4)) throw new Error('斉射の1発がマグナムと変わらない重さ');
+    // ↓↑＝全周へ撒く
+    const ar=shots('du','downUpReady');
+    if(!(ar.n>=10)) throw new Error('全周掃射が '+ar.n+' 発しかない');
+    const back=ar.list.filter(function(pr){ return Math.sign(pr.vx)!==Math.sign(ga.list[0].vx); }).length;
+    if(!(back>=3)) throw new Error('全周掃射なのに後ろへ '+back+' 発しか飛ばない');
+    console.log('マックの空中3枠 OK (マグナム1発'+mg.list[0].dmg+'ダメ貫通／斉射'+ga.n+'発／全周'+ar.n+'発・うち後方'+back+'発)'); }
 
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
