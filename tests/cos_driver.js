@@ -247,6 +247,86 @@ const DRIVER = `
       if(n2!==0) throw new Error('何も着ていないのにかぶり物が描かれている'); }
     console.log('かぶり物 OK ('+Object.keys(shapes).length+'種類すべて別の形／着ると固有の帽子が消える)'); }
 
+  // ===== 店で武器が買える（買った得物は残り、持ち替えは無料）=====
+  { const KS=['inu','shima','nuko','guard8','watch','wanden','mack'];
+    const rep=[];
+    KS.forEach(function(k){
+      setupRoster(k); startGame(); state='play';
+      const p=players[0]; player=p; p.armory=[]; coins=99999;
+      buildShopRows();
+      const arms=shopRows.filter(function(r){ return r.armId && r.cost>0; });
+      if(arms.length<3) throw new Error(k+' の店に武器が '+arms.length+' 本しか並ばない');
+      if(arms.length>8) throw new Error(k+' の店が武器 '+arms.length+' 本で埋まっている（絞ること）');
+      // 並ぶのは「その相手が拾える得物」だけ
+      arms.forEach(function(r){
+        if(!WEAPONS[r.armId]) throw new Error(k+' の店に知らない武器がある: '+r.armId);
+        if(!canPick(p, r.armId)) throw new Error(k+' が拾えない武器を売っている: '+r.armId);
+        if(r.armId===defaultWeaponFor(k)) throw new Error(k+' に素の得物を売っている');
+        if(!WEAPONS[r.armId].who) throw new Error(k+' に持ち主の無い武器を売っている: '+r.armId); });
+      // 値段は強さに連動していること。
+      // 「安い順に並べたものが安い順である」を見ても意味が無いので、
+      // 得物そのものの性能（威力×間合い）と値段を突き合わせる
+      { const own=arms.filter(function(r){ return WEAPONS[r.armId].who===k; });
+        const pw=function(r){ const W=WEAPONS[r.armId]; return (W.dmg||1)*(W.reach||1); };
+        const strong=own.slice().sort(function(a2,b2){ return pw(b2)-pw(a2); })[0];
+        const weak=own.slice().sort(function(a2,b2){ return pw(a2)-pw(b2); })[0];
+        if(strong && weak && strong!==weak && !(strong.cost>weak.cost))
+          throw new Error(k+' で強い得物（'+strong.name+' '+strong.cost+'）が弱い得物（'
+            +weak.name+' '+weak.cost+'）より高くない'); }
+      // 説明にその得物の奥義名が出ること（何が変わるのか分からないと選べない）
+      const withUlt=arms.filter(function(r){ const u=WEAPON_SPECIAL[r.armId];
+        return u && ATK[u.ult] && r.desc.indexOf(ATK[u.ult].name)>=0; });
+      if(withUlt.length!==arms.length)
+        throw new Error(k+' の武器の説明に奥義名が出ていない（'+withUlt.length+'/'+arms.length+'）');
+      // 買うと装備され、武器庫に残る
+      const row=arms[0], k0=row.armId, c0=coins;
+      row.buy(); coins-=row.cost;
+      if(p.weapon!==k0) throw new Error(k+' で買った武器が装備されない（'+p.weapon+'）');
+      if(p.heldWeapon!==k0) throw new Error(k+' で買った武器が次のステージへ持ち越されない');
+      if((p.armory||[]).indexOf(k0)<0) throw new Error(k+' で買った武器が武器庫に残らない');
+      if(!(coins<c0)) throw new Error(k+' でコインが減っていない');
+      // 別の得物を買ってから戻ると、持ち替えは無料
+      buildShopRows();
+      const next=shopRows.filter(function(r){ return r.armId && r.cost>0; })[0];
+      if(!next) throw new Error(k+' で2本目が買えない');
+      next.buy();
+      buildShopRows();
+      const swap=shopRows.filter(function(r){ return r.armId===k0; })[0];
+      if(!swap) throw new Error(k+' で買った武器に持ち替えられない');
+      if(swap.cost!==0) throw new Error(k+' の持ち替えが有料（'+swap.cost+'）');
+      swap.buy();
+      if(p.weapon!==k0) throw new Error(k+' で持ち替えできない');
+      // いま持っている得物は「買う」側にも「持ち替え」側にも出さない
+      buildShopRows();
+      if(shopRows.some(function(r){ return r.armId===k0 && r.cost>0; }))
+        throw new Error(k+' が装備中の武器をまだ売っている');
+      rep.push(k+':'+arms.length); });
+    // セーブに武器庫と装備が残ること（続きから消えていた）。
+    // ソースの字面ではなく、実際に書き出された中身を読む
+    { let saved=null;
+      const real=global.localStorage;
+      global.localStorage={ getItem:function(){ return saved; }, setItem:function(k,v){ saved=v; }, removeItem:function(){ saved=null; } };
+      try{
+        setupRoster('inu'); startGame(); state='play';
+        const q=players[0]; player=q; q.armory=[]; coins=99999; buildShopRows();
+        const r0=shopRows.filter(function(r){ return r.armId && r.cost>0; })[0];
+        r0.buy();
+        attractOn=false; trainMode=false;
+        saveProgress(1);
+        const o=loadProgress();
+        if(!o || !o.upg || !o.upg[0]) throw new Error('セーブが書き出せていない');
+        if((o.upg[0].armory||[]).indexOf(r0.armId)<0) throw new Error('買った武器がセーブに残らない');
+        if(o.upg[0].heldWeapon!==r0.armId) throw new Error('装備中の武器がセーブに残らない');
+        // 読み戻すと、その得物を持った状態で始まる
+        setupRoster('inu'); const q2=players[0]; q2.armory=[]; q2.heldWeapon=null;
+        q2.weapon=defaultWeaponFor('inu');
+        const u=o.upg[0];
+        if(u.armory) q2.armory=u.armory.filter(function(k){ return !!WEAPONS[k]; });
+        if(u.heldWeapon&&WEAPONS[u.heldWeapon]){ q2.heldWeapon=u.heldWeapon; q2.weapon=u.heldWeapon; }
+        if(q2.weapon!==r0.armId) throw new Error('続きからで買った武器を持っていない');
+      } finally { global.localStorage=real; } }
+    console.log('店の武器 OK ('+rep.join(' ')+'／買い切り・持ち替え無料・セーブに残る)'); }
+
   console.log('COSTUME TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
