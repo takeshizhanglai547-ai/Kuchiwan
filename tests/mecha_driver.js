@@ -232,6 +232,42 @@ const DRIVER = `
       throw new Error('空の章に屋内テーマが割り当たっている（雲も鳥も出ない）');
     console.log('章と背景の対応 OK'); }
 
+  // ラストの演出：液体金属。傷が塞がり、倒すと写し取った姿を流してから溶け落ちる
+  { const T=ETYPE.mkOmega3;
+    if(!T.t1000) throw new Error('最終形態が液体金属になっていない');
+    if(typeof drawT1000!=='function') throw new Error('液体金属の描画が無い');
+    setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    // 1) 液体金属は専用の描画を通る
+    { enemies.length=0; p.x=600; p._tx=null; spawnEnemy('mkOmega3', 760, LANE);
+      let hit=false; const real=drawT1000;
+      drawT1000=function(){ hit=true; return real.apply(null,arguments); };
+      try{ enemies.forEach(drawEnemy); } finally { drawT1000=real; }
+      if(!hit) throw new Error('最終形態が液体金属の絵で描かれていない'); }
+    // 2) 撃たれると銀の飛沫が散る（傷が塞がる演出）
+    { enemies.length=0; spawnEnemy('mkOmega3', 760, LANE); const e=enemies[0];
+      particles.length=0; e.hurtTimer=12;
+      enemies.forEach(drawEnemy);
+      const n=particles.length;
+      if(!(n>0)) throw new Error('撃たれても飛沫が出ない（傷が塞がって見えない）'); }
+    // 3) とどめ：立ったまま形を失い、写し取った姿を流してから床へ広がる
+    { enemies.length=0; spawnEnemy('mkOmega3', 760, LANE); const e=enemies[0];
+      e.hp=1; killEnemy(e);
+      if(e.t1kMelt==null) throw new Error('溶け落ちる段取りが始まらない');
+      if(e.state==='down') throw new Error('液体金属が倒れ込んでいる（斜めの板になる）');
+      if(!(e.deadTimer>=130)) throw new Error('溶ける時間が '+e.deadTimer+'F しかない（流れ終わる前に消える）');
+      // 実際に段取りが進み、写し取った姿の段階と、床へ広がる段階の両方を通ること
+      let sawCopy=false, sawPool=false;
+      for(let f=0;f<200 && enemies.length; f++){ hitStop=0; slowmo=0;
+        const m=e.t1kMelt||0, mu=Math.min(1,m/96);
+        if(m>0 && mu<0.55) sawCopy=true;
+        if(mu>=0.55 && mu<1) sawPool=true;
+        updateEnemies(); }
+      if(!sawCopy) throw new Error('写し取った姿を流す段階を通っていない');
+      if(!sawPool) throw new Error('床へ広がる段階まで到達していない');
+      if(enemies.length) throw new Error('溶け切っても消えない'); }
+    console.log('液体金属のラスト OK (専用の絵／飛沫／立ったまま姿を流して溶け落ちる)'); }
+
   console.log('MECHA TEST PASSED');
   process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message); process.exit(1); });

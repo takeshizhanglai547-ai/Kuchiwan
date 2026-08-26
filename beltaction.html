@@ -8046,9 +8046,11 @@ const ETYPE={
   mkOmega2:{hp:1050,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
     name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
-  mkOmega3:{hp:1250,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:1.42,c1:'#ffffff',c2:'#8fa6c4',c3:'#0a0e16',score:150000,
-    boss:true,bossKind:'guard0',weapon:'none',accent:'#ff6a3a',mecha:true,
-    finalBoss:true,trueBoss:true,name:'王機オメガ ——真核起動'},
+  // 最終形態は液体金属。装甲を捨てた王機は、鏡のような銀の身体で立ち上がる。
+  // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を順に流してから溶け落ちる
+  mkOmega3:{hp:1250,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
+    boss:true,bossKind:'guard0',weapon:'none',accent:'#bfe9ff',mecha:true,t1000:true,
+    finalBoss:true,trueBoss:true,name:'王機オメガ ——液体金属'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:120,w:146,h:210,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:160,w:323,h:228,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
@@ -8220,7 +8222,7 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   mkVault:'封鎖区画　開放。……試作機ノ　性能検証ヲ　開始スル。被検体ハ　オ前ダ。',
   mkOmega:'我ハ王機。犬ノ王国ガ　鉄ヲ知ッタ日カラ、コノ日ハ　決マッテイタ。——起動スル。',
   mkOmega2:'装甲ヲ　捨テル。……守ル必要ガ　無イト　判断シタ。',
-  mkOmega3:'炉心　直結。演算ヲ　破棄。——コレガ　痛ミカ。初メテ　知ッタ。', };
+  mkOmega3:'固体デ　在ル　必要ハ　無イ。……オ前ノ　形モ、後デ　貰ウ。', };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
@@ -8676,6 +8678,11 @@ function killEnemy(e){ const T=ETYPE[e.type];
   if(T.zombie && !e.revived){ e.revived=true; e.hp=Math.max(1,Math.round(e.maxHp*0.5)); e.state='down'; e.downTimer=100; e.reviveT=100; e.stun=0; e.vx=0; e.vz=0; e.z=0; e.grabbedBy=0;
     spark(e.x,e.y-e.h*0.5,'#a6e070',18,9); ring(e.x,e.y-e.h*0.4,'#a6e070'); popText(e.x,e.y-e.h-8,'まだ死なん…！','#a6e070',true); sfx.boss(e.x); return; }
   e.dead=true; e.deadTimer=T.boss?70:44; e.state='down'; e.downTimer=44; e.vx*=1.5;
+  // 液体金属は溶け切るまで見せる。70フレームでは姿が流れ終わる前に消える
+  if(T.t1000){ e.t1kMelt=0; e.deadTimer=150; e.vx=0;
+    // 倒れた敵は横へ傾いて描かれる。溶け落ちる姿が斜めの板になってしまうので、
+    // 液体金属だけは立ったまま流れさせる
+    e.state='walk'; e.downTimer=0; }
   const rb=1+0.5*(e.rank||0);   // 階級ぶんの見返り
   score+=Math.round((T.score+combo.count*10)*rb); gainXp(Math.round(T.score*rb*comboXpMul())); spark(e.x,e.y-e.h*0.5,'#ff7a2a',T.boss?34:18,T.boss?12:9); ring(e.x,e.y-e.h*0.4,'#ffac3a'); sfx.ko(e.x);
   flashAt(T.boss?6:3,'255,248,225', e.x, e.y-e.h*0.5); kick(e.vx>=0?1:-1,-0.7, T.boss?13:5.5); punchIn(T.boss?0.075:0.02);
@@ -8691,7 +8698,9 @@ function killEnemy(e){ const T=ETYPE[e.type];
     if(!T.trueBoss && !trueBossSpawned && trueBossFor(players[0].kind)){   // 大帝撃破後にキャラ別の真ボスが出現
       trueBossSpawned=true; setTimeout(()=>{ if(state==='play'||state==='cut') startTrueBossReveal(); }, 1100);
     } else {
-      setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, 1100);
+      // 溶け落ちる段取りが終わってから幕を引く。1.1秒だと写し取った姿の途中で
+      // エンディングが被さって、いちばん見せたいところが消える
+      setTimeout(()=>{ if(state==='play'||state==='cut') startEnding(); }, T.t1000?2700:1100);
     } } }
 // キャラ別の真の最終ボス（イッヌ=ゴルックス／シマ=パピプー／ヌコ=ワンメンドーズ）
 function trueBossFor(kind){ return {inu:'golux', shima:'papipoo', nuko:'wanmen', guard8:'guard0', watch:'phantom', wanden:'mumei', mack:'phantom'}[kind]||null; }
@@ -9036,7 +9045,13 @@ function updateEnemies(){
     if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){
       if(inFlood(e) && e.z<flood.lvl-10) e.vz=Math.min(e.vz*0.90, 2.4);   // 水中：敵もゆっくり沈む（vz は正が下）
       e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
-    if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
+    if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);}
+      // 液体金属は「倒れて消える」のではなく、写し取った姿を流してから溶け落ちる。
+      // 絵の側が e.t1kMelt を見て段取りを進めるので、ここでは時計だけ回す
+      if(e.t1kMelt!=null){ e.t1kMelt++; e.vx=0;
+        if(e.t1kMelt===1){ sfx.big(e.x); shake=Math.max(shake,14); triggerSlow(30,0.22); }
+        if(e.t1kMelt===54) popText(e.x,e.y-120,'——形ガ　保テナイ','#dfeaff',true); }
+      if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.zankai>0){ e.zankai--; if(gf%6<3)spark(e.x,e.y-e.h*0.95,'#ff4d6a',2,4); if(e.zankai<=0){ zankaiBoom(e); continue; } }   // 残悔拳カウントダウン
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
     if(e.stun>0)e.stun--; if(e.guardCd>0)e.guardCd--;
@@ -17060,7 +17075,8 @@ function drawEnemy(e){
     // 接地ロックを壊さないまま、胴と頭が腕振りの反対位相で振れる
     if(e.gaitW>0.02){ const _f=gaitStep(gaitPh(e.gait||0),1,0,e._gd);
       ctx.rotate(-_f.x*0.055*e.gaitW); } }
-  if(e.state==='down'||e.dead){ const fall=e.dead?1:easeOut(clamp(((e.downMax||46)-e.downTimer)/7,0,1));   // 倒れ込みに7Fの落下を与える
+  // 液体金属は倒れ込まない。立ったまま形を失って床へ流れるので、傾けると板が転がる絵になる
+  if((e.state==='down'||e.dead) && e.t1kMelt==null){ const fall=e.dead?1:easeOut(clamp(((e.downMax||46)-e.downTimer)/7,0,1));   // 倒れ込みに7Fの落下を与える
     ctx.rotate(0.30+0.68*fall); ctx.translate(0,8*fall); }
   else if(e.state==='getup'){ const g=easeOut(clamp(1-e.getT/Math.max(1,e.getMax||16),0,1));                // 起き上がり：伏せから立ち上がる
     ctx.rotate(0.98*(1-g)); ctx.translate(0,8*(1-g)-3*Math.sin(g*Math.PI)); }
@@ -19186,6 +19202,92 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
 // ── 六周目の真ラスボス「王機 メカワンコ・オメガ」──
 // 既存のボス体型を流用すると、ふわふわの紫犬がハンマーを持った姿になった（実機で確認）。
 // 王だけは専用に起こす。巨大な鋼の犬頭を玉座の躯体に載せ、四本の腕で支える
+// ══ 液体金属の王機（ターミネーターの液体金属をイメージした最終形態）══
+// 「固さ」を描かないのが要。板と縁ではなく、身体を横切る鏡の帯で形を見せる。
+// 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を流してから溶け落ちる
+function drawT1000(e,t,W2,H2,bob,atk,tele,anim){
+  const melt=e.t1kMelt||0;                       // 0＝健在。上がるほど溶ける
+  const mu=Math.min(1, melt/96);
+  const hurtT=e.hurtTimer||0;
+  // ── 溶け落ちる最中：写し取った姿を順に流してから、銀の水たまりへ ──
+  if(melt>0){
+    const sq=1-mu;                               // 縦に潰れていく
+    if(mu<0.55){                                 // 前半：コピーした姿がめまぐるしく入れ替わる
+      const fm=(Math.floor(melt*0.5)%3);
+      ctx.fillStyle='rgba(228,240,255,'+(0.9-mu*0.5).toFixed(2)+')';
+      const hh=H2*sq;
+      if(fm===0){                                // 箱型の機兵
+        ctx.fillRect(-W2*0.26,-hh*0.92,W2*0.52,hh*0.62);
+        ctx.fillRect(-W2*0.16,-hh*0.30,W2*0.32,hh*0.30);
+      } else if(fm===1){                          // 細い人型
+        ctx.fillRect(-W2*0.13,-hh*0.98,W2*0.26,hh*0.44);
+        ctx.fillRect(-W2*0.09,-hh*0.54,W2*0.18,hh*0.54);
+      } else {                                    // 四つ足の犬
+        ctx.beginPath(); ctx.ellipse(0,-hh*0.44,W2*0.30,hh*0.20,0,0,TAU); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(W2*0.26,-hh*0.60,W2*0.14,hh*0.13,0,0,TAU); ctx.fill();
+        for(const sg of [-1,1]) ctx.fillRect(sg*W2*0.20-4,-hh*0.26,8,hh*0.26); }
+      if(melt%4===0){ spark(e.x+rnd(-W2*0.4,W2*0.4), e.y-rnd(0,H2*0.8), '#dfeaff', 3, 7);
+        if(melt%12===0) sfx.zap(e.x); }
+    } else {                                     // 後半：形を保てず、床へ広がる
+      const pu=(mu-0.55)/0.45, r=W2*(0.34+0.62*pu);
+      ctx.fillStyle='rgba(206,224,244,'+(0.85*(1-pu*0.5)).toFixed(2)+')';
+      ctx.beginPath(); ctx.ellipse(0,-6,r,H2*0.055*(1+pu),0,0,TAU); ctx.fill();
+      const hh=H2*0.5*(1-pu);                    // 崩れかけの塊
+      if(hh>4){ ctx.beginPath(); ctx.ellipse(0,-hh*0.5,W2*0.24*(1-pu*0.6),hh*0.5,0,0,TAU); ctx.fill(); }
+      if(melt%3===0){ ember(e.x+rnd(-r,r), e.y-rnd(0,20), rnd(-0.6,0.6), -rnd(1.2,2.6), (melt%6)?'#dfeaff':'#ffffff');
+        if(melt%9===0) dust(e.x+rnd(-r,r), e.y, 2); } }
+    return; }
+  // ── 健在時：鏡の身体。横切る明帯だけで丸みと流動を出す ──
+  const hy=-H2*0.80+bob;
+  ctx.fillStyle=t.c2;                            // 素地（中間の明度）
+  ctx.beginPath();
+  ctx.moveTo(-W2*0.24,0); ctx.lineTo(W2*0.24,0);
+  ctx.lineTo(W2*0.30,-H2*0.52); ctx.lineTo(W2*0.20,-H2*0.86);
+  ctx.lineTo(-W2*0.20,-H2*0.86); ctx.lineTo(-W2*0.30,-H2*0.52); ctx.closePath(); ctx.fill();
+  // 鏡の帯。身体の上をゆっくり流れ、位置で明度が変わる＝金属が動いて見える
+  for(let k=0;k<4;k++){
+    const u=((k/4 + gf*0.005 + (e.id||0)*0.13)%1);
+    const y=-H2*0.86+u*H2*0.86, w=W2*(0.24+0.10*Math.sin(u*Math.PI));
+    ctx.fillStyle='rgba(28,48,72,0.30)';                       // 影の帯
+    ctx.fillRect(-w,y,w*2,H2*0.075);
+    ctx.fillStyle='rgba(255,255,255,'+(0.42+0.34*Math.sin(u*Math.PI)).toFixed(2)+')';
+    ctx.fillRect(-w,y+H2*0.020,w*2,H2*0.030); }                // 走る明帯＝鏡の照り
+  { const u=((gf*0.010+(e.id||0)*0.4)%1);                      // 一本だけ強い照り返し
+    const y=-H2*0.86+u*H2*0.86, w=W2*0.30;
+    ctx.fillStyle='rgba(255,255,255,0.92)'; ctx.fillRect(-w,y,w*2,H2*0.016); }
+  // ── 腕：構えると先が刃に伸びる ──
+  for(const sgn of [-1,1]){
+    const ex=(atk||tele)? 1 : 0;
+    ctx.strokeStyle=t.c1; ctx.lineWidth=W2*0.052;
+    ctx.beginPath(); ctx.moveTo(sgn*W2*0.22,-H2*0.66+bob*0.3);
+    ctx.lineTo(sgn*W2*(0.36+ex*0.10),-H2*(0.44-ex*0.06)); ctx.stroke();
+    if(ex){ ctx.fillStyle='rgba(240,248,255,.95)';      // 伸びた刃
+      ctx.beginPath();
+      ctx.moveTo(sgn*W2*0.44,-H2*0.50); ctx.lineTo(sgn*W2*0.86,-H2*0.40);
+      ctx.lineTo(sgn*W2*0.44,-H2*0.36); ctx.closePath(); ctx.fill(); }
+    else { ctx.fillStyle=t.c1;                          // 収めた手先
+      ctx.beginPath(); ctx.ellipse(sgn*W2*0.36,-H2*0.44,W2*0.05,H2*0.035,0,0,TAU); ctx.fill(); } }
+  // ── 頭：面は無く、輪郭と細い眼だけ。犬の耳の名残を薄く残す ──
+  ctx.fillStyle=t.c1;
+  ctx.beginPath(); ctx.ellipse(0,hy,W2*0.17,H2*0.115,0,0,TAU); ctx.fill();
+  ctx.fillStyle=shade(t.c2,-6);
+  ctx.beginPath(); ctx.ellipse(W2*0.13,hy+H2*0.012,W2*0.09,H2*0.045,0,0,TAU); ctx.fill();
+  for(const sgn of [-1,1]){ ctx.fillStyle=t.c1; ctx.beginPath();
+    ctx.moveTo(sgn*W2*0.10,hy-H2*0.08); ctx.lineTo(sgn*W2*0.15,hy-H2*0.19);
+    ctx.lineTo(sgn*W2*0.02,hy-H2*0.09); ctx.closePath(); ctx.fill(); }
+  { ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+','+(0.6+0.4*Math.sin(gf*0.11)).toFixed(2)+')';
+    ctx.fillRect(-W2*0.12,hy-H2*0.012,W2*0.26,H2*0.020); ctx.restore(); }
+  // ── 傷が塞がる：撃たれた瞬間に銀の飛沫が散り、すぐ吸い戻される ──
+  if(hurtT>0){
+    const u=Math.min(1,hurtT/12);
+    ctx.fillStyle='rgba(255,255,255,'+(0.55*u).toFixed(2)+')';
+    for(let k=0;k<5;k++){ const a2=(e.id||0)+k*1.7+gf*0.2, r=W2*0.30*u;
+      ctx.beginPath(); ctx.ellipse(Math.cos(a2)*r, -H2*0.5+Math.sin(a2)*r*0.6,
+        W2*0.05*u, W2*0.05*u, 0,0,TAU); ctx.fill(); }
+    if(hurtT===12){ for(let k=0;k<6;k++)
+      ember(e.x+rnd(-W2*0.3,W2*0.3), e.y-H2*0.5+rnd(-20,20), rnd(-1.6,1.6), -rnd(0.6,2.0), '#dfeaff'); } }
+}
 function drawMechaKing(e){
   const t=ETYPE[e.type], hurt=enemyHurt(e);
   // 呼び出し側の座標系は「足元が原点・実寸に近いピクセル」。
@@ -19198,6 +19300,8 @@ function drawMechaKing(e){
   ctx.save();
   ctx.lineJoin='round'; ctx.lineCap='round';
   const bob=Math.sin(anim*0.9)*4;
+  // ── 液体金属の最終形態：溶け落ちる最期まで、ここで全部やる ──
+  if(t.t1000){ drawT1000(e,t,W2,H2,bob,atk,tele,anim); ctx.restore(); return; }
   // 背景から切り出す影。金色の玉座の間では鋼色がそのまま沈んで、王が見えなかった
   { ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle='rgba(8,10,18,1)';
     ctx.beginPath(); ctx.moveTo(-W2*0.48,6); ctx.lineTo(W2*0.48,6);
