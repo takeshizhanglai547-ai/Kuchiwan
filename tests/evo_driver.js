@@ -408,14 +408,28 @@ const DRIVER = `
     if(cmb[3]!==cmb[0]) throw new Error('通常コンボにも段位が乗っている（'+cmb.join(' → ')+'）');
     console.log('コマンド技の段位 OK (居合の実ダメージ '+dmg.join(' → ')+'／通常コンボは '+cmb[0]+' のまま)'); }
 
-  // ===== 10) 奥義は段位ぶんストックを食い、受け皿も一緒に増える =====
-  { const costs=[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]].map(function(lv){ return ultCost({kind:'inu',level:lv}); });
-    for(let i=1;i<4;i++) if(!(costs[i]>costs[i-1]))
-      throw new Error('段位が上がっても奥義の消費が増えない（'+costs.join(' → ')+'）');
-    // キャラごとの基準値は保たれる（マックは絨毯爆撃なので重い）
-    const mk=[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]].map(function(lv){ return ultCost({kind:'mack',level:lv}); });
-    for(let i=0;i<4;i++) if(mk[i]!==costs[i]+2)
-      throw new Error('マックの上乗せが崩れている（'+mk.join('/')+' vs '+costs.join('/')+'）');
+  // ===== 10) 奥義の消費は2で頭打ち（マックの地上奥義だけは段位ぶん重くなる） =====
+  { const LVS=[1,EVO_LV[0],EVO_LV[1],EVO_LV[2]];
+    const costs=LVS.map(function(lv){ return ultCost({kind:'inu',level:lv}); });
+    // 育てるほど撃てなくなるのを避ける。上げても2まで
+    if(!(costs[1]>costs[0])) throw new Error('段位が上がっても消費が変わらない（'+costs.join(' → ')+'）');
+    for(let i=0;i<4;i++) if(costs[i]>2)
+      throw new Error('奥義の消費が2を超えている（'+costs.join(' → ')+'）');
+    if(costs[3]!==costs[1]) throw new Error('2で頭打ちになっていない（'+costs.join(' → ')+'）');
+    // 空中奥義も同じ頭打ち。マックも空中は他と同じ
+    ['inu','shima','nuko','guard8','watch','wanden','mack'].forEach(function(k){
+      LVS.forEach(function(lv){
+        const air=ultCost({kind:k,level:lv}, true);
+        if(air>2) throw new Error(k+' の空中奥義の消費が '+air+'（2を超えている）'); });
+      if(k==='mack') return;
+      LVS.forEach(function(lv){
+        const g=ultCost({kind:k,level:lv});
+        if(g>2) throw new Error(k+' の地上奥義の消費が '+g+'（2を超えている）'); }); });
+    // マックの地上奥義（絨毯爆撃）だけは重いままで、段位ぶん増える
+    const mk=LVS.map(function(lv){ return ultCost({kind:'mack',level:lv}); });
+    for(let i=1;i<4;i++) if(!(mk[i]>mk[i-1]))
+      throw new Error('マックの地上奥義が段位で重くならない（'+mk.join(' → ')+'）');
+    if(!(mk[0]>costs[0])) throw new Error('マックの地上奥義が他と同じ重さになっている（'+mk.join('/')+'）');
     // 昇格すると受け皿（dimMax）が増え、撃てなくならない
     setupRoster('inu'); startGame(); state='play';
     const p=players[0]; player=p; p.atkMul=1; p.level=EVO_LV[0]-1; p.xp=0; p.xpNext=100;
@@ -425,7 +439,7 @@ const DRIVER = `
     if(p.level!==EVO_LV[0]) throw new Error('昇格していない（Lv'+p.level+'）');
     if(!(p.dimMax>max0)) throw new Error('昇格しても奥義ストックの上限が増えない（'+max0+' → '+p.dimMax+'）');
     if(p.dimMax<ultCost(p)) throw new Error('上限 '+p.dimMax+' が必要数 '+ultCost(p)+' に届かず、奥義が撃てない');
-    console.log('奥義の消費ストック OK (イッヌ '+costs.join(' → ')+'／マック '+mk.join(' → ')
+    console.log('奥義の消費ストック OK (イッヌ '+costs.join(' → ')+'（2で頭打ち）／マックの地上 '+mk.join(' → ')
       +'／昇格で上限 '+max0+'→'+p.dimMax+')'); }
 
   // ===== 11) 奥義そのものの威力も段位で伸びる（7キャラ全部） =====

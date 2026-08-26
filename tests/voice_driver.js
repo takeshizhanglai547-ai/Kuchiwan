@@ -177,12 +177,15 @@ const DRIVER = `
     if(new Set(Object.keys(seen).map(k=>seen[k].n)).size!==6) throw new Error('技名が同じキャラがいる');
     console.log('全キャラの発動 OK (6キャラ: '+Object.keys(seen).map(k=>seen[k].n).join(' / ')+')'); }
 
-  // 奥義の入口は updatePlayer の中で6キャラに分岐している。分岐より前に beginUlt が
+  // 奥義の入口は fireGroundUlt の中で6キャラに分岐している。分岐より前に beginUlt が
   // 入っていないと、どれかのキャラだけ無言・カットイン無しで出てしまう。
   // 実際の入力（→↓←↑の回転コマンド）は再現しにくいので、分岐そのものを検査する
-  { const src=updatePlayer.toString();
+  { const src=fireGroundUlt.toString();
     const i=src.indexOf('beginSeven()');
-    if(i<0) throw new Error('奥義の分岐が updatePlayer に見つからない');
+    if(i<0) throw new Error('奥義の分岐が fireGroundUlt に見つからない');
+    // 入口が1本であること＝どこから撃っても同じ道を通る
+    if(updatePlayer.toString().indexOf('beginSeven()')>=0)
+      throw new Error('奥義の分岐が updatePlayer にも残っている（入口が二重）');
     const head=src.slice(Math.max(0,i-400), i);
     const j=head.lastIndexOf('beginUlt(');
     if(j<0) throw new Error('奥義の分岐の手前で beginUlt を呼んでいない＝一部のキャラで演出が出ない');

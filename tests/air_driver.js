@@ -654,6 +654,104 @@ const DRIVER = `
     console.log('シマの空中奥義 OK ('+def.name+'・'+Math.round(far0)+'px 先の敵を '+Math.round(gathered)
       +'px まで引き寄せ '+Math.round(lifted)+'px 持ち上げ／宙で'+midDmg+'／z='+Math.round(hiWhenSlam)+' から叩き落とし／計'+dmg+'ダメージ)'); }
 
+  // ===== 23) 空中コマンド技どうしがキャンセルで繋がる（枠ごとに1回きり） =====
+  { const chainOf=function(k){
+      const p=setup(k); p.dimMax=9; p.dim=0;      // 奥義に化けないようストックは空に
+      p.state='jump'; p.z=240; p.vz=0; p.jAtk=0; p.airChain={};
+      enemies.length=0; projectiles.length=0;
+      const seen=[];
+      const fire=function(gate){
+        const real=global[gate]; global[gate]=function(){ return true; };
+        hitStop=0; slowmo=0;                       // 技の演出でフレームが飛ぶと入力が届かない
+        try{ p.in.pressed.atk=true; step(1); } finally { global[gate]=real; }
+        const t=p.atk && p.atk.type;
+        if(t && seen.indexOf(t)<0) seen.push(t);
+        return t; };
+      const a1=fire('dpReady');
+      p.z=Math.max(p.z,200);
+      const a2=fire('hadokenReady');
+      p.z=Math.max(p.z,200);
+      const a3=fire('downUpReady');
+      p.z=Math.max(p.z,200);
+      const a4=fire('dpReady');                   // 同じ枠は二度目が出ない
+      return {p:p, a:[a1,a2,a3,a4], seen:seen}; };
+    KINDS.forEach(function(k){
+      const r=chainOf(k);
+      const want=[airSpecialFor({kind:k},'dp'), airSpecialFor({kind:k},'hadou'), airSpecialFor({kind:k},'du')];
+      for(let i=0;i<3;i++) if(r.a[i]!==want[i])
+        throw new Error(k+' の空中コマンドが繋がらない（'+(i+1)+'手目 '+r.a[i]+'／'+want[i]+' のはず）');
+      if(r.a[3]===want[0] && r.a[2]!==want[0])
+        throw new Error(k+' が同じ枠を二度出せてしまう（1回の跳躍で各枠1度きり）'); });
+    // 着地すれば繋げる枠が戻る
+    { const p=setup('inu'); p.dim=0;
+      p.state='jump'; p.z=200; p.vz=0; p.jAtk=0; p.airChain={};
+      const r1=dpReady; dpReady=function(){ return true; };
+      hitStop=0; slowmo=0;
+      try{ p.in.pressed.atk=true; step(1); } finally { dpReady=r1; }
+      if(!p.atk) throw new Error('空中コマンドが出ない');
+      for(let f=0;f<200 && p.z>0; f++){ hitStop=0; slowmo=0; step(1); }
+      for(let f=0;f<30 && p.state!=='idle'; f++){ hitStop=0; slowmo=0; step(1); }
+      if(p.airChain && p.airChain.dp) throw new Error('着地しても繋げる枠が戻らない'); }
+    console.log('空中コマンドの連携 OK (7キャラとも 昇竜→波動→↓↑ をキャンセルで繋げる／同じ枠は1度きり／着地で戻る)'); }
+
+  // ===== 24) 空中の技からでも奥義キャンセルで割り込める =====
+  { KINDS.forEach(function(k){
+      const p=setup(k); p.dimMax=9; p.dim=9;
+      p.state='jump'; p.z=240; p.vz=0; p.jAtk=0; p.airChain={};
+      enemies.length=0; projectiles.length=0;
+      const r1=dpReady; dpReady=function(){ return true; };
+      hitStop=0; slowmo=0;
+      try{ p.in.pressed.atk=true; step(1); } finally { dpReady=r1; }
+      if(!p.atk || p.atk.type!==airSpecialFor(p,'dp')) throw new Error(k+' の空中コマンドが出ない');
+      const dim0=p.dim;
+      // 技の最中に 攻撃＋掴み
+      hitStop=0; slowmo=0;
+      p.in.K.grab=true; p.in.pressed.atk=true; step(1); p.in.K.grab=false;
+      if(!p.atk || p.atk.type!==AIR_ULT[k])
+        throw new Error(k+' の空中技から奥義へ割り込めない（'+(p.atk&&p.atk.type)+'）');
+      if(!(p.dim<dim0)) throw new Error(k+' の奥義キャンセルでストックを消費していない'); });
+    console.log('空中の奥義キャンセル OK (7キャラとも コマンド技の最中に 攻撃＋掴み で空中奥義)'); }
+
+  // ===== 25) ヌコの空中奥義は星印と星座の線が実際に出る =====
+  { const p=setup('nuko'); p.dimMax=9; p.dim=9;
+    const _pt=perfTier; perfTier=1;      // 本番と同じ粒子上限で見る
+    p.state='jump'; p.z=220; p.vz=0; p.jAtk=0;
+    enemies.length=0;
+    const list=[];
+    for(let j=0;j<5;j++){ spawnEnemy('wolf', p.x-160+j*80, p.y); const e=enemies[enemies.length-1];
+      e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); }
+    const real=rotationReady; rotationReady=function(){ return true; };
+    try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+    if(!p.atk || p.atk.type!==AIR_ULT.nuko) throw new Error('ヌコの空中奥義が出ない');
+    let stars=0, lines=0, bothAt=0, lineLen=0, starF=0, lineF=0, markOnly=0, fin=0;
+    for(let f=0;f<170;f++){ hitStop=0; slowmo=0;
+      list.forEach(function(e){ e.x=e._fx; e.vx=0; });
+      step(1);
+      const st=particles.filter(function(q){ return q && q.k==='cstar'; });
+      const ln=particles.filter(function(q){ return q && q.k==='cline'; });
+      if(st.length>stars) stars=st.length;
+      if(ln.length>lines) lines=ln.length;
+      ln.forEach(function(q){ const d=Math.hypot(q.x2-q.x, q.y2-q.y); if(d>lineLen) lineLen=d; });
+      if(st.length && ln.length) bothAt++;
+      if(st.length) starF++;
+      if(ln.length) lineF++;
+      if(st.length && !ln.length) markOnly++;     // 印を打っている間＝まだ線が無い時間
+      // 締めの線は白。粒子の上限を超えると、いちばん見せたい線から捨てられていた
+      const wh=ln.filter(function(q){ return q.color==='#ffffff'; }).length;
+      if(wh>fin) fin=wh; }
+    if(!(stars>=3)) throw new Error('星印が同時に '+stars+' 個しか出ていない（印を付けた敵ぶん出ること）');
+    if(!(lines>=2)) throw new Error('星座の線が '+lines+' 本しか出ていない');
+    if(!(lineLen>=60)) throw new Error('星座の線が '+Math.round(lineLen)+'px しかない（点を撒いているだけ）');
+    if(!(bothAt>=10)) throw new Error('星と線が同時に見えているのが '+bothAt+'F しかない');
+    // 締めの一瞬だけ出しても「見えない」ままなので、出ている長さでも見る
+    if(!(starF>=45)) throw new Error('星印が見えているのが '+starF+'F しかない（締めの一瞬だけ）');
+    if(!(lineF>=45)) throw new Error('星座の線が見えているのが '+lineF+'F しかない（締めの一瞬だけ）');
+    if(!(markOnly>=10)) throw new Error('印を打っている間に星が見えていない（'+markOnly+'F）');
+    if(!(fin>=3)) throw new Error('締めの星座が '+fin+' 本しか残らない（粒子の上限で捨てられている）');
+    perfTier=_pt;
+    console.log('ヌコの空中奥義の見た目 OK (星印 同時'+stars+'個/'+starF+'F・線 同時'+lines+'本 最長'+Math.round(lineLen)
+      +'px/'+lineF+'F・重なって見える'+bothAt+'F・印だけの間'+markOnly+'F・締めの星座'+fin+'本)'); }
+
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
