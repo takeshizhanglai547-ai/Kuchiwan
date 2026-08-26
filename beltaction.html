@@ -3304,7 +3304,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.evW=null; p.evAmmo=0; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -6710,6 +6710,14 @@ function updatePlayer(){
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
     pressed.atk=false;
+    // 拾った火器は他のどの技よりも先に出る。ラスボス戦で「撃つ」を最優先にするため
+    if((p.evAmmo|0)>0 && p.z<=0){
+      const sg=(p.evW==='sg');
+      beginAttack(sg?'mkShotgun':'mkGL');
+      p.evAmmo--;
+      if(p.evAmmo<=0){ p.evW=null; popText(p.x,p.y-92,'弾切れ','#ff9a5a'); }
+      else popText(p.x,p.y-92,'残り '+p.evAmmo,'#ffd24d');
+      p.atkHeld=true; return; }
     // 崩れているボスが間合いにいれば、他のどの技よりも先に致命の一撃
     if(p.z<=0){ const ct=critTarget(p); if(ct){ beginCrit(p,ct); return; } }
     const fwd=(p.facing>0&&K.right)||(p.facing<0&&K.left);
@@ -8358,7 +8366,9 @@ function spawnEnemy(type,x,y){ const t=ETYPE[type];
     bob:Math.random()*6,strafeDir:Math.random()<0.5?-1:1,strafeCd:rnd(30,90),hopT:0,
     moveName:'',moveT:0,moveMax:0,moveCd:Math.round(rnd(40,80)*(t.aggro||1)),vanish:0,rage:false,lastMove:'',slammed:false,bounces:0,danger:false,
     kbHits:0,kbT:0,poiseBreak:0,parryStance:0,
-    rank:rank, dead:false,deadTimer:0,thinkCd:Math.round(rnd(20,60)/foeSpdGrow())}); }
+    rank:rank, dead:false,deadTimer:0,thinkCd:Math.round(rnd(20,60)/foeSpdGrow())});
+  // 液体金属が立った瞬間から、溶鉱炉へ突き落とすイベント戦が始まる
+  if(t.t1000 && !t1k.on) t1kBegin(enemies[enemies.length-1]); }
 // ── 雑魚の近接攻撃の型 ──
 // 以前は全ての近接敵が同じタイミングの単発を振るだけで、間合いに入ったら
 // 何が来るか常に同じだった。構え（telegraph）の長さ・段数・当たる高さを変え、
@@ -8672,6 +8682,12 @@ function gainXp(scoreVal){ const g=Math.max(1,Math.round((scoreVal||0)/10));
         camZoomT=Math.max(camZoomT,1.10+tier*0.02);
         sfx.boss(p.x); sfx.rise(p.x); sfx.twinkle(p.x); } } }); }
 function killEnemy(e){ const T=ETYPE[e.type];
+  // 液体金属は傷が塞がる。炉へ落とすまでは倒せない（殴り続けても終わらないのが狙い）
+  if(T.t1000 && t1k.on && !e.t1kFall){
+    e.hp=Math.max(1, Math.round(e.maxHp*0.32)); e.state='walk'; e.stun=0; e.dead=false;
+    popText(e.x, e.y-e.h-8, '——傷ガ　塞ガル', '#dfeaff', true);
+    for(let k=0;k<10;k++) ember(e.x+rnd(-30,30), e.y-rnd(20,90), rnd(-1.4,1.4), -rnd(0.8,2.4), '#dfeaff');
+    ring(e.x, e.y-e.h*0.5, '#dfeaff'); sfx.guard(e.x); return; }
   if(e.grabTarget) releaseEnemyGrab(e);                     // 掴み中に倒されたらプレイヤーを解放
   if(T.evolveTo){ evolveBoss(e,T); return; }               // 多段ボス：倒すと次形態へ進化
   // ゾンビワンコ：一度だけ蘇る（不死）
@@ -8863,6 +8879,7 @@ function giveWeapon(p,kind){ p.weapon=kind; p.weaponT=0; p.heldWeapon=kind;
   popText(p.x,p.y-110,WEAPONS[kind].name+'を装備！',WEAPONS[kind].col,true); ring(p.x,p.y-40,WEAPONS[kind].col); spark(p.x,p.y-40,WEAPONS[kind].col,14,8); sfx.get(p.x); }
 function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='coin') return false;   // コインは専用処理（吸い寄せ）で取得するのでここでは拾わない
+  if(kind==='evsg'||kind==='evgl') return true;   // ラスボス戦の火器は誰でも拾える（拾えないと詰む）
   if(kind==='hp'||kind==='costume') return true;
   if(CHARMS[kind]) return CHARMS[kind].who==='*' || p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ（イベント品は誰でも）
   const who=(WEAPONS[kind]||{}).who;
@@ -8892,6 +8909,11 @@ function updateItems(){
       else if(it.kind==='costume'){ p.costume=true; p.hp=Math.min(p.maxHp,p.hp+20);
         gainCostume(p, dropCostumeFor(p)); sfx.get(p.x); }
       else if(CHARMS[it.kind]){ const C=CHARMS[it.kind]; C.apply(p); popText(p.x,p.y-112,C.name+'　'+C.msg,C.col,true); ring(p.x,p.y-40,C.col); ring(p.x,p.y-40,'#fff'); spark(p.x,p.y-40,C.col,20,10); sfx.get(p.x); }
+      else if(it.kind==='evsg'||it.kind==='evgl'){
+        const sg=(it.kind==='evsg');
+        p.evW=sg?'sg':'gl'; p.evAmmo=sg?4:2;
+        popText(p.x,p.y-112,(sg?'ショットガン':'グレネードランチャー')+'　×'+p.evAmmo,'#ffd24d',true);
+        ring(p.x,p.y-40,'#ffd24d'); spark(p.x,p.y-40,'#ffd24d',16,9); sfx.get(p.x); }
       else giveWeapon(p,it.kind);
       items.splice(i,1); continue;
     }
@@ -8904,7 +8926,8 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
   // 床の影
   ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,it.z+ (8+Math.sin(it.bob)*4),12,4,0,0,7); ctx.fill();
   // 光暈
-  const gc = it.kind==='hp'?'#7dff5a':(it.kind==='costume'||it.kind==='coin'?'#ffe14d':(CHARMS[it.kind]?CHARMS[it.kind].col:WEAPONS[it.kind].col));
+  const gc = it.kind==='hp'?'#7dff5a':(it.kind==='costume'||it.kind==='coin'?'#ffe14d':
+    (it.kind==='evsg'?'#ffd24d':(it.kind==='evgl'?'#ffb85a':(CHARMS[it.kind]?CHARMS[it.kind].col:(WEAPONS[it.kind]||{col:'#ffe14d'}).col))));
   ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5+0.2*Math.sin(it.bob*1.5);
   ctx.fillStyle=radGrad(0,0,20,gc,'rgba(0,0,0,0)'); ctx.beginPath(); ctx.arc(0,0,20,0,7); ctx.fill(); ctx.restore();
   if(it.kind==='coin'){ // コイン（回転する金貨）
@@ -8915,6 +8938,19 @@ function drawItems(){ items.forEach(it=>{ const sx=it.x-camX, sy=LANE-groundLift
     ctx.fillStyle='#c8814a'; ctx.beginPath(); ctx.ellipse(-1,1,9,6.5,0,0,7); ctx.fill();
     ctx.fillStyle='#f6e3c0'; ctx.fillRect(8,-1,7,4); ctx.strokeStyle='#a86a36'; ctx.lineWidth=1; ctx.strokeRect(8,-1,7,4);
     ctx.fillStyle='#7dff5a'; ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('+',0,-10); ctx.textAlign='left';
+  } else if(it.kind==='evsg'||it.kind==='evgl'){   // ラスボス戦だけ落ちている火器
+    const sg=(it.kind==='evsg');
+    ctx.rotate(-0.28);
+    ctx.fillStyle='#3a3a42'; ctx.fillRect(-15,-3,26,6);                 // 機関部
+    ctx.fillStyle='#6a4a28'; ctx.fillRect(-19,-4,8,9);                  // 銃床
+    if(sg){ ctx.fillStyle='#8a8f9a'; ctx.fillRect(9,-3,15,3);           // 二本の銃身
+            ctx.fillRect(9,1,15,3);
+            ctx.fillStyle='#c8a020'; ctx.fillRect(-4,3,7,4); }          // 前手
+    else  { ctx.fillStyle='#8a8f9a'; ctx.fillRect(9,-5,17,9);           // 太い筒
+            ctx.fillStyle='#ffb85a'; ctx.beginPath(); ctx.arc(1,4,5,0,TAU); ctx.fill(); }  // 弾倉
+    ctx.rotate(0.28);
+    ctx.fillStyle=sg?'#ffd24d':'#ffb85a'; ctx.font=uif('bold',9); ctx.textAlign='center';
+    ctx.fillText(sg?'SG':'GL',0,-14); ctx.textAlign='left';
   } else if(it.kind==='spear'){ ctx.rotate(-0.5);
     ctx.strokeStyle='#6a4a28'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-14,8); ctx.lineTo(12,-10); ctx.stroke();
     ctx.fillStyle=radGrad(14,-12,6,'#fff',WEAPONS.spear.col); ctx.beginPath(); ctx.moveTo(8,-7);ctx.lineTo(20,-16);ctx.lineTo(11,-13); ctx.fill();
@@ -10699,7 +10735,7 @@ const MECHA_CH=[
   {theme:30,name:'中枢炉心「大王座」',terr:'tower',
    gates:[{off:560,list:[['mkHeavy',1],['mkBeam',1]]},{off:940,mini:true,list:[['mkMOld',1]]},
           {off:1240,list:[['mkShield',2],['mkDrone',2],['mkFlank',1]]},{off:1600,boss:true,list:[['mkOmega',1]]}],
-   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
+   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','最後の姿は液体じゃ。斬っても撃っても、傷はすぐ塞がってしまう。','床に転がる火器を拾え。撃った弾だけが、あやつを炉の縁へ押しやれる。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
   {theme:28,name:'鋼鉄の外郭門',terr:'up',
    gates:[{off:520,list:[['mkDuel',3],['mkGun',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
           {off:1180,list:[['mkShield',2],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkGolem',1]]}],
@@ -10799,7 +10835,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; t1kReset(); _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
@@ -11011,7 +11047,7 @@ function startVersus(){ unlockAudio();
   players[0].kind=k1; players[1].kind=k2;
   vsMode=true; trainMode=false; attractOn=false; hardMode=false;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; t1kReset(); _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[]; gimOn=false;   // 対戦中に仕掛けは出さない（実力勝負にする）
   enemies.length=0; projectiles.length=0;
   camX=0; camY=0; camLockX=0;
@@ -11064,7 +11100,7 @@ function startTraining(){ unlockAudio();
   startGame();                                      // 本編と同じ初期化を通す
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; t1kReset(); _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[];
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
@@ -11850,6 +11886,8 @@ function updateProjectiles(){
           else damageEnemy(e,pr.dmg,pr.vx>0?9:-9,true);
           if(pr.wave&&!pr.noLaunch&&!pr.multihit&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*16,-8,3);
           if(pr.blow&&!e.dead)launchEnemy(e,(pr.vx>0?1:-1)*22,-11,3);   // 吹き飛ばす弾（リボルバーの6発目など）
+          // 液体金属は撃たれたぶんだけ後ずさる。殴っても塞がるので、押せるのは弾だけ
+          if(t1k.on && pr.vx>0) t1kShove(e, pr.blast? 26 : 6);
           projHitFx(pr,e.x,e.y-e.h*0.5);
           if(pr.multihit){ pr.hitAt[e.id]=gf; } else if(pr.pierce){ pr.hit.add(e.id); } else { hit=true; break; } } }
       curHitCol='#ffe14d';
@@ -12130,7 +12168,7 @@ function update(){
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
   if(vsMode) vsUpkeep();
-  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); tickSwells(); tickFlood(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); tickSwells(); tickFlood(); t1kTick(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -12203,6 +12241,7 @@ function render(){
   drawCarriers();
   drawProjectiles();
   drawParticles(1);                     // 火花・衝撃リング・放射線はキャラの前
+  drawFurnace();                        // ラスボス戦の溶鉱炉（キャラの後ろ、前景の手前）
   drawFlood();                          // 増水：水面より下を青く沈める（キャラの上に重ねる）
   drawGreatOne();
   drawForeground();
@@ -19205,6 +19244,79 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
 // ══ 液体金属の王機（ターミネーターの液体金属をイメージした最終形態）══
 // 「固さ」を描かないのが要。板と縁ではなく、身体を横切る鏡の帯で形を見せる。
 // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を流してから溶け落ちる
+// ══ ラスボス戦：溶鉱炉へ突き落とすイベント戦 ══
+// 液体金属は殴っても塞がってしまう。地面に湧く火器を拾って撃ち込み、
+// 少しずつ端の溶鉱炉へ押し込むのが唯一の決着。
+// 「撃つと押せる／殴っても塞がる」を体で分からせるのが狙い
+let t1k={on:false, x0:0, x1:0, furnace:0, cd:0, next:0, push:0, warned:false};
+function t1kReset(){ t1k.on=false; t1k.push=0; t1k.cd=0; t1k.next=0; t1k.warned=false; }
+// 液体金属のボスが立ったら、その場を闘技場にして端に炉を置く
+function t1kBegin(e){
+  t1k.on=true; t1k.push=0; t1k.cd=90; t1k.next=0; t1k.warned=false;
+  t1k.x0=e.x-560; t1k.x1=e.x+520; t1k.furnace=e.x+470;
+  popText(e.x, e.y-170, '溶鉱炉へ突き落とせ！　落ちている火器で撃ち込め', '#ffb02e', true);
+  sfx.boss(e.x); flashAt(3,'255,176,46'); }
+// 火器の湧き。撃ち切っても必ず次が来るので、詰まって手詰まりにならない
+function t1kTick(){
+  if(!t1k.on) return;
+  const boss=enemies.find(function(q){ return !q.dead && ETYPE[q.type] && ETYPE[q.type].t1000; });
+  if(!boss){ t1k.on=false; return; }
+  // ボスは炉から逃げる向きへ戻ろうとする。押した手応えを残すため、戻りはゆっくり
+  if(boss.x>t1k.x0+40 && !boss.t1kFall) boss.x-=0.16;
+  boss.x=clamp(boss.x, t1k.x0+30, t1k.furnace+8);
+  if(t1k.cd>0){ t1k.cd--; return; }
+  const live=items.filter(function(q){ return q.kind==='evsg'||q.kind==='evgl'; }).length;
+  if(live>=2){ t1k.cd=40; return; }
+  const pl=activePlayers()[0];
+  const kx=clamp((pl?pl.x:boss.x)+rnd(-260,260), t1k.x0+60, t1k.x1-60);
+  makeItem(kx, (t1k.next++%2)? 'evgl' : 'evsg');
+  ring(kx, LANE-groundLift(kx), '#ffd24d'); sfx.get(kx);
+  t1k.cd=rnd(210,290)|0; }
+// 撃ち込んだぶんだけ炉へ寄る。殴りでは動かない（塞がってしまう）
+function t1kShove(e, amt){
+  if(!t1k.on || !e || e.t1kFall) return;
+  const T=ETYPE[e.type]; if(!T || !T.t1000) return;
+  e.x=Math.min(t1k.furnace+8, e.x+amt);
+  t1k.push=Math.max(t1k.push, (e.x-t1k.x0)/Math.max(1,t1k.furnace-t1k.x0));
+  spark(e.x-30, e.y-e.h*0.5, '#dfeaff', 5, 8);
+  if(!t1k.warned && t1k.push>0.55){ t1k.warned=true;
+    popText(e.x, e.y-150, 'もう少しで炉だ——押し切れ！', '#ffb02e', true); }
+  if(e.x>=t1k.furnace-6) t1kFall(e); }
+// 炉へ落ちる。ここからは溶け落ちる段取りへ繋ぐ
+function t1kFall(e){
+  if(e.t1kFall) return;
+  e.t1kFall=1; e.hp=1; e.state='down'; e.stun=60; e.vx=0;
+  popText(e.x, e.y-170, '炉へ落ちた！', '#ffb02e', true);
+  for(let k=0;k<3;k++) ring(e.x, e.y-20-k*26, k%2?'#ffb02e':'#fff6c0');
+  for(let k=0;k<18;k++) ember(e.x+rnd(-40,40), e.y-rnd(0,60), rnd(-1.6,1.6), -rnd(1.6,4.2), (k%2)?'#ffb02e':'#ff6a1a');
+  shake=Math.max(shake,18); flashAt(5,'255,176,46'); triggerSlow(26); sfx.big(e.x); sfx.ko(e.x);
+  killEnemy(e); }
+// 炉の絵。闘技場の端で、赤熱した口が脈を打つ
+function drawFurnace(){
+  if(!t1k.on) return;
+  const sx=t1k.furnace-camX;
+  if(sx<-260||sx>W+260) return;
+  const gy=LANE-groundLift(t1k.furnace);
+  ctx.save();
+  ctx.fillStyle='#1a1410';                                   // 炉の縁
+  ctx.fillRect(sx-96, gy-26, 192, 34);
+  ctx.fillStyle='#2a1e16'; ctx.fillRect(sx-110, gy-14, 220, 22);
+  const pu=0.72+0.28*Math.sin(gf*0.07);
+  ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle='rgba(255,140,40,'+(0.55*pu).toFixed(2)+')';  // 湯面
+  ctx.beginPath(); ctx.ellipse(sx, gy-18, 86, 15, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle='rgba(255,238,180,'+(0.85*pu).toFixed(2)+')';
+  ctx.beginPath(); ctx.ellipse(sx, gy-18, 52, 8, 0, 0, TAU); ctx.fill();
+  ctx.restore();
+  if(perfTier<2 && gf%3===0)
+    ember(t1k.furnace+rnd(-70,70), gy-20, rnd(-0.7,0.7), -rnd(1.2,3.0), (gf%6)?'#ffb02e':'#ff6a1a');
+  // 押し込みの進み具合。どれだけ寄せたかが見えないと、撃つ意味が伝わらない
+  { const w=200, x=Math.round(W*0.5-w/2), y=64;
+    ctx.save(); ctx.fillStyle='rgba(10,8,6,.72)'; roundRect(x-4,y-4,w+8,16,5); ctx.fill();
+    ctx.fillStyle='rgba(255,176,46,.95)'; ctx.fillRect(x,y,Math.round(w*clamp(t1k.push,0,1)),8);
+    ctx.fillStyle='#fff'; ctx.font=uif('bold',10); ctx.textAlign='center';
+    ctx.fillText('炉まで押し込め', W*0.5, y-6); ctx.textAlign='left'; ctx.restore(); }
+}
 function drawT1000(e,t,W2,H2,bob,atk,tele,anim){
   const melt=e.t1kMelt||0;                       // 0＝健在。上がるほど溶ける
   const mu=Math.min(1, melt/96);
