@@ -479,6 +479,62 @@ const DRIVER = `
       throw new Error('狭い画面でキャラのボタンを畳む指定が無い');
     console.log('タイトルのボタン OK (1P '+nBtn+'個＝キャラ'+CHARS.length+'人・全部配線済み／狭い画面で '+base+'px→'+small+'px・2列に畳む)'); }
 
+  // ===== 操作説明：タイトルに畳んだ操作説明があり、増えたコマンドが全部載っている =====
+  { const H=global.__HTML||'';
+    if(H.indexOf('id="howtoBtn"')<0) throw new Error('タイトルに操作説明のボタンが無い');
+    if(H.indexOf('id="howto"')<0) throw new Error('操作説明のパネルが無い');
+    if(H.indexOf('id="howtoBackBtn"')<0) throw new Error('操作説明から戻れない');
+    const st=H.indexOf('id="howto"'), en=H.indexOf('id="howtoBackBtn"');
+    if(en<=st) throw new Error('操作説明のパネルの中に戻るボタンが無い');
+    const body=H.slice(st,en);
+    // コマンドの入力そのものが載っていること（技名だけの一覧では入力が分からない）
+    ['↑ ＋攻撃','→ ＋攻撃','↓ ＋攻撃','→→ ＋攻撃','↓→ ＋攻撃','→↓→ ＋攻撃','↓↑ ＋攻撃','攻撃＋掴み']
+      .forEach(function(c){ if(body.indexOf(c)<0) throw new Error('操作説明に「'+c+'」が無い'); });
+    // このセッションで足した仕掛けと連携も説明されていること
+    ['二段ジャンプ','奥義キャンセル','空中連携','増水','地鳴り','レバー1回転']
+      .forEach(function(c){ if(body.indexOf(c)<0) throw new Error('操作説明に「'+c+'」の説明が無い'); });
+    // パネルの中身が縦に溢れないよう、スクロールできること
+    if(H.indexOf('.howto {')<0 || H.slice(H.indexOf('.howto {'), H.indexOf('.howto {')+220).indexOf('overflow-y:auto')<0)
+      throw new Error('操作説明が画面から溢れる（スクロールできない）');
+    console.log('操作説明 OK (7つのコマンド＋奥義・キャンセル・空中連携・水中/地形を掲載)'); }
+
+  // ===== トレーニング：コマンド表が出て、キャラごとに中身が変わる =====
+  { if(typeof drawTrainMoves!=='function') throw new Error('トレーニングのコマンド表が無い');
+    if(!('moves' in train)) throw new Error('コマンド表の開閉フラグが無い');
+    if(train.moves!==true) throw new Error('コマンド表が既定で閉じている（気付かれない）');
+    const H=global.__HTML||'';
+    if(H.indexOf('M:技表')<0) throw new Error('トレーニングの操作案内に開閉キーが載っていない');
+    if(H.indexOf("e.code==='KeyM'")<0) throw new Error('M キーで開閉できない');
+    // 表に出る中身を、実際に引ける技名として突き合わせる
+    const rows=function(kind, lv){
+      const q={kind:kind, level:lv};
+      return SPECIAL_SLOTS.map(function(sl){
+        const up=specialUpgraded(q,sl), id=up||SPECIAL_BASE[kind][sl];
+        return (id&&ATK[id]&&ATK[id].name) || SPECIAL_BASE_NAME[kind+'.'+sl] || '—'; }); };
+    ['inu','shima','nuko','guard8','watch','wanden','mack'].forEach(function(k){
+      const r=rows(k,1);
+      if(r.length!==7) throw new Error(k+' のコマンド表が7枠になっていない');
+      const blank=r.filter(function(n){ return n==='—'; });
+      if(blank.length) throw new Error(k+' のコマンド表に名前の無い枠がある（'+blank.length+'個）'); });
+    // レベルで中身が変わる（上位技に置き換わったことが表からも分かる）
+    { const lo=rows('inu',1).join('|'), hi=rows('inu',12).join('|');
+      if(lo===hi) throw new Error('レベルを上げてもコマンド表が変わらない'); }
+    // 描画そのものが通ること（枠と中身の高さの式がずれていないか）
+    { setupRoster('shima'); startTraining(); const q=players[0]; q.level=12;
+      // 実際に画面へ書かれた文字を横取りする。行数だけ数えると、
+      // 技名の行を落としてもコマンド名や注記のぶんで通ってしまう
+      const said=[]; const real=ctx; ctx=new Proxy(real,{get:function(t,k){
+        if(k==='fillText'){ return function(txt){ said.push(String(txt)); return real.fillText.apply(real,arguments); }; }
+        const v=t[k]; return (typeof v==='function')? v.bind(t) : v; }});
+      try{ drawTrainMoves(); } finally { ctx=real; }
+      const want=rows('shima',12);
+      const miss=want.filter(function(n){ return said.indexOf(n)<0; });
+      if(miss.length) throw new Error('コマンド表に技名が出ていない: '+miss.join(','));
+      SPECIAL_SLOTS.forEach(function(sl){
+        if(said.indexOf(SPECIAL_SLOT_CMD[sl])<0) throw new Error('コマンド表に入力「'+SPECIAL_SLOT_CMD[sl]+'」が出ていない'); });
+      endTraining(); }
+    console.log('トレーニングのコマンド表 OK (7キャラ×7枠が埋まる／レベルで中身が変わる)'); }
+
   console.log('STEAM POLISH TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

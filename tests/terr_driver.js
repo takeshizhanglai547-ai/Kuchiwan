@@ -5,6 +5,7 @@ const DRIVER = `
   // 以前はどの区画も同じ正弦のうねりだけで、全ステージが同じ平坦な道だった。
   // 区画ごとの標高と、下り坂の落石トラップを実測する。
 
+  const step=function(n){ for(let i=0;i<(n||1);i++){ if(global.rafCb){ const cb=global.rafCb; global.rafCb=null; cb(); } } };
   const setup=function(){ sndOn=false; setupRoster('inu'); startGame();
     const p=players[0]; resetPlayer(p,true); player=p;
     p.state='idle'; p.z=0; p.atk=null; p.invuln=0;
@@ -419,9 +420,9 @@ const DRIVER = `
       if(!(PLATS[k].h>PLATS[k-1].h)) throw new Error(k+'枚目が上がっていない（'+PLATS[k-1].h+'→'+PLATS[k].h+'）');
       if(!(PLATS[k].x0<PLATS[k-1].x1)) throw new Error(k+'枚目と手前の床が離れている（'+PLATS[k-1].x1+' → '+PLATS[k].x0+'）'); }
     // 一段の高さは跳べる範囲（真上に跳ぶと約230px 上がる）
-    const step=PLATS[0].h;
-    if(!(step>40)) throw new Error('一段が '+step+'px しかない（跳ぶ意味が無い）');
-    if(!(step<200)) throw new Error('一段が '+step+'px あって跳んでも届かない');
+    const stepH=PLATS[0].h;
+    if(!(stepH>40)) throw new Error('一段が '+stepH+'px しかない（跳ぶ意味が無い）');
+    if(!(stepH<200)) throw new Error('一段が '+stepH+'px あって跳んでも届かない');
 
     // 床の縁まで歩いて真上に跳ぶだけのAIで、いちばん上まで登れること
     const top=PLATS[PLATS.length-1];
@@ -445,7 +446,7 @@ const DRIVER = `
     if(fell>0) throw new Error('落とし穴の落下に入っている（'+fell+'F）');
     if(maxFl<top.h) throw new Error('いちばん上の床（'+top.h+'px）まで登れない（最高 '+maxFl+'px）');
     if(!(terrLift(p.x)>=TOWER_RISE-4)) throw new Error('塔を越えて高い地面へ出られない（標高 '+Math.round(terrLift(p.x))+'px）');
-    console.log('足場の塔 OK ('+PLATS.length+'枚・一段'+step+'px・重なり'+(PLATS[0].x1-PLATS[1].x0)
+    console.log('足場の塔 OK ('+PLATS.length+'枚・一段'+stepH+'px・重なり'+(PLATS[0].x1-PLATS[1].x0)
       +'px／床'+maxFl+'px まで登って標高'+Math.round(terrLift(p.x))+'px の地面へ・落下ミス0)'); }
 
   // ===== 14) 床は一方通行。落ちても下の床へ戻るだけ =====
@@ -595,6 +596,122 @@ const DRIVER = `
     if(withBoss>0) throw new Error('ボス戦の最中に仕掛けが '+withBoss+' 個湧いている');
     if(!(noBoss>0)) throw new Error('ボスが居なくても仕掛けが湧かない（測れていない）');
     console.log('仕掛けの発生条件 OK (本番は有効／ボス戦中は0個・非ボス時は'+noBoss+'個)'); }
+
+  // ===== 21) 降ってくる仕掛けは間遠に。1回の発生数も抑える =====
+  { const burst=function(id){ const p=setup(); resetWorldState();
+      addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
+      stage=1; STAGE_GIM[1]=id; gimOn=true; gimStage=1; gimCd=0; gimWarn.length=0; hazards.length=0;
+      p.x=camX+500; p.hp=p.maxHp=99999; p.invuln=99999; p.z=0;
+      // 1回ぶんの発生数と、次に出るまでの間隔を実測する
+      let n1=0, gap=0, n2=0;
+      tickGimmicks();                       // 区画に入った1回目は間を置くだけ
+      for(let f=0;f<40;f++){ tickGimmicks(); if(hazards.length){ n1=hazards.length; break; } }
+      hazards.length=0;
+      for(let f=0;f<2000;f++){ gap++; tickGimmicks(); if(hazards.length){ n2=hazards.length; break; } }
+      return {n:Math.max(n1,n2), gap:gap}; };
+    const rep=[];
+    [['meteor',3],['bolt',2],['geyser',2]].forEach(function(q){
+      const r=burst(q[0]);
+      if(!(r.n>0)) throw new Error(q[0]+' が出ない');
+      if(r.n>q[1]) throw new Error(q[0]+' が1回に '+r.n+' 個も降る（'+q[1]+'個までにする）');
+      // 7秒（420F）より短い間隔で降り続けると、避けているだけの時間になる
+      if(!(r.gap>=400)) throw new Error(q[0]+' が '+r.gap+'F おきに降る（間遠にする）');
+      rep.push(q[0]+' '+r.n+'個/'+r.gap+'F'); });
+    console.log('降る仕掛けの頻度 OK ('+rep.join(' ')+')'); }
+
+  // ===== 22) 地鳴り：地面が隆起して、また元に戻る（越えられる高さで、痛くない） =====
+  { const p=setup(); resetWorldState();
+    addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
+    stage=1; STAGE_GIM[1]='quake'; gimOn=true; gimStage=1; gimCd=0;
+    SWELLS.length=0; hazards.length=0;
+    p.x=camX+500; p.hp=p.maxHp=99999; p.invuln=0; p.z=0;
+    tickGimmicks(); for(let f=0;f<40 && !SWELLS.length; f++) tickGimmicks();
+    if(!SWELLS.length) throw new Error('地鳴りでうねりが起きない');
+    const S=SWELLS[0], cx=(S.x0+S.x1)*0.5;
+    const base=terrLiftBase(cx);
+    p.x=cx;                              // うねりの真上に立たせる（外に居ると痛いかどうか測れない）
+    let peak=0, back=null, ease=0, seenPeak=0;
+    const hp0=p.hp;
+    gimOn=false;                         // 2本目が重なると、1本の高さも戻り方も測れなくなる
+    const series=[];
+    for(let f=0;f<900;f++){ p.invuln=0; p.x=cx; tickSwells();
+      series.push(Math.abs(swellAdd(cx)));
+      if(!SWELLS.length && back===null) back=Math.abs(swellAdd(cx)); }
+    // 頂点を出してから、その前後で「途中の高さ」を何フレーム通ったかを数える。
+    // 立ち上がりも戻りも、一瞬で切り替わると足元が飛ぶ
+    let top=0;
+    for(let i=0;i<series.length;i++) if(series[i]>top){ top=series[i]; seenPeak=i; }
+    peak=top;
+    let riseEase=0;
+    for(let i=0;i<series.length;i++){
+      const mid=(series[i]>top*0.15 && series[i]<top*0.85);
+      if(!mid) continue;
+      if(i<seenPeak) riseEase++; else ease++; }
+    if(!(peak>=60)) throw new Error('地面が '+Math.round(peak)+'px しか動かない');
+    // ジャンプで越えられない段差にしない（跳躍の頂点は実測で 200px 以上ある）
+    if(peak>170) throw new Error('地面が '+Math.round(peak)+'px も動く（ジャンプで越えられない）');
+    if(back===null) throw new Error('うねりが終わらない（地形が動きっぱなし）');
+    if(!(back<1)) throw new Error('うねりが元に戻らない（残り '+Math.round(back)+'px）');
+    if(!(ease>=20)) throw new Error('うねりが '+ease+'F で消える（すとんと戻ると足元が飛ぶ）');
+    if(!(riseEase>=20)) throw new Error('うねりが '+riseEase+'F で立ち上がる（一瞬で持ち上がると足元が飛ぶ）');
+    if(p.hp<hp0) throw new Error('地鳴りでダメージを受けている（'+(hp0-p.hp)+'）');
+    if(Math.abs(terrLiftBase(cx)-base)>0.01) throw new Error('元の地形そのものが書き換わっている');
+    gimOn=true;
+    console.log('地鳴り OK (最大 '+Math.round(peak)+'px 隆起（'+riseEase+'F かけて上がり '+ease+'F かけて戻る）／ダメージなし)'); }
+
+  // ===== 23) 増水：水中は落下が遅く、ジャンプで何度でも掻き上がれる。時間で引く =====
+  { const p=setup(); resetWorldState();
+    addBlocks([{theme:0,name:'G',noPit:true,gates:[]}],null);
+    stage=1; STAGE_GIM[1]='flood'; gimOn=true; gimStage=1; gimCd=0;
+    flood.on=false; flood.lvl=0; hazards.length=0; SWELLS.length=0;
+    p.x=camX+500; p.hp=p.maxHp=99999; p.invuln=0; p.z=0;
+    tickGimmicks(); for(let f=0;f<40 && !flood.on; f++) tickGimmicks();
+    if(!flood.on) throw new Error('増水が始まらない');
+    // 水位が上がりきるまで進める
+    let top=0;
+    for(let f=0;f<120;f++){ tickFlood(); if(flood.lvl>top) top=flood.lvl; }
+    if(!(top>=200)) throw new Error('水位が '+Math.round(top)+'px しか上がらない');
+    if(!inWater({x:p.x, z:0})) throw new Error('足元が水中扱いになっていない');
+    // 落下の速さ：同じ主役・同じ高さで、水の有無だけを入れ替えて比べる
+    const wetX=p.x, wetLvl=flood.lvl, wx0=flood.x0, wx1=flood.x1;
+    const fallOf=function(wet){
+      flood.on=wet; flood.lvl=wet?wetLvl:0; flood.x0=wx0; flood.x1=wx1;
+      p.x=wetX; p._tx=null; p.atk=null; p.invuln=99999;
+      p.state='jump'; p.z=200; p.vz=0; p.jAtk=0;
+      for(const k in p.in.K) p.in.K[k]=false;
+      for(const k in p.in.pressed) p.in.pressed[k]=false;
+      const z0=p.z;
+      for(let f=0;f<24;f++){ hitStop=0; slowmo=0; step(1); }
+      return z0-p.z; };
+    const wet=fallOf(true), dry=fallOf(false);
+    if(!(wet < dry*0.7)) throw new Error('水中でも同じ速さで沈む（水中 '+Math.round(wet)+'px／陸上 '+Math.round(dry)+'px）');
+    // ジャンプで何度でも掻き上がれる（二段ジャンプの回数を使い切っていても効く）
+    flood.on=true; flood.lvl=wetLvl; flood.x0=wx0; flood.x1=wx1;
+    p.x=wetX; p._tx=null; p.atk=null; p.invuln=99999;
+    p.state='jump'; p.z=120; p.vz=0; p.jAtk=0; p.djUsed=true;
+    let strokes=0;
+    for(let k=0;k<3;k++){
+      p.in.pressed.jump=true; hitStop=0; slowmo=0; step(1);
+      if(p.vz>4) strokes++;
+      for(let f=0;f<8;f++){ hitStop=0; slowmo=0; step(1); }
+      if(p.z<20) p.z=120; }
+    if(strokes<3) throw new Error('水中でジャンプが '+strokes+' 回しか効かない（何度でも掻けること）');
+    // 溺れない：水中に居続けても減らない
+    { p.invuln=0; p.state='idle'; p.z=0; p.hp=p.maxHp;
+      const hp0=p.hp;
+      for(let f=0;f<200;f++){ hitStop=0; slowmo=0; flood.lvl=wetLvl; step(1); }
+      if(p.hp<hp0) throw new Error('水中でダメージを受けている（'+(hp0-p.hp)+'）'); }
+    // 放っておけば必ず引く
+    { flood.on=true; flood.t=0; let n=0, ebb=0, peakL=0;
+      while(flood.on && n<2000){ tickFlood(); n++;
+        if(flood.lvl>peakL) peakL=flood.lvl;
+        // 引いていく途中の高さを何フレームも通ること（最後に0を代入するだけでは水が引いて見えない）
+        if(peakL>10 && flood.lvl>peakL*0.1 && flood.lvl<peakL*0.9) ebb++; }
+      if(flood.on) throw new Error('水が引かない（'+n+'F 経っても）');
+      if(flood.lvl>2) throw new Error('引いたのに水位が残っている（'+Math.round(flood.lvl)+'px）');
+      if(!(ebb>=40)) throw new Error('水位が '+ebb+'F しか動かない（上がって消えるだけ）'); }
+    console.log('増水 OK (水位 '+Math.round(top)+'px・落下 水中'+Math.round(wet)+'px<陸上'+Math.round(dry)
+      +'px・掻き上がり'+strokes+'回・溺れない・時間で引く)'); }
 
   console.log('TERRAIN TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
