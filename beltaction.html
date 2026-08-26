@@ -69,6 +69,16 @@
   .moves { margin-top:16px; font-size:12.5px; color:#dfeaff; line-height:1.7; max-width:600px; text-align:center;
     background:rgba(255,255,255,.05); border:1px solid rgba(255,210,80,.25); border-radius:10px; padding:9px 16px; }
   .moves h3 { color:#ffd34d; letter-spacing:3px; margin-bottom:6px; font-size:13px; }
+  .howto { max-width:min(900px,96vw); max-height:min(70vh,600px); overflow-y:auto; }
+  .howtogrid { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:4px; }
+  .howcol { min-width:min(390px,92vw); flex:1 1 380px; }
+  .howcol h4 { color:#ffd34d; font-size:12.5px; letter-spacing:2px; margin:8px 0 4px; }
+  .howcol table { width:100%; border-collapse:collapse; font-size:12.5px; color:#dfeaff; }
+  .howcol td { padding:2px 6px; vertical-align:top; line-height:1.45;
+    border-bottom:1px solid rgba(255,255,255,.07); }
+  .howcol td:first-child { color:#9fb4cc; white-space:nowrap; width:38%; }
+  .howcol td.cmd { color:#ff9a3a; font-weight:800; }
+  .howcol b { color:#7fd0ff; }
   .moves b { color:#7fd0ff; } .moves .cmd { color:#ff9a3a; font-weight:800; }
   #result-title { font-size:clamp(34px,8vw,70px); font-weight:900; letter-spacing:6px; }
   #result-sub { font-size:18px; margin-top:10px; color:#ffd34d; letter-spacing:2px; }
@@ -172,6 +182,7 @@
         <button id="trainBtn" class="btn btn-sm" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(125,208,255,.6);color:#7dd0ff">🥊 トレーニング</button>
       </div>
       <div class="menurow">
+        <button id="howtoBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,210,80,.6);color:#ffd34d">📖 操作説明</button>
         <button id="hardBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(255,120,90,.6);color:#ff9a7a">高難易度：OFF</button>
         <button id="ng2SelBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(140,230,110,.6);color:#a0e87a">周回：1周目</button>
       </div>
@@ -191,8 +202,54 @@
       </div>
       <button id="pickBackBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(200,210,230,.5);color:#cfe0ff">← もどる</button>
     </div>
+    <!-- 操作説明。技が増えて一行では収まらなくなったので、別パネルに畳んだ -->
+    <div id="howto" class="menupanel hidden howto">
+      <div class="pickhead">操 作 説 明</div>
+      <div class="howtogrid">
+        <div class="howcol">
+          <h4>基本</h4>
+          <table>
+            <tr><td>移動</td><td><b>矢印 / WASD</b></td></tr>
+            <tr><td>攻撃</td><td><b>J / F</b>（連打でコンボ）</td></tr>
+            <tr><td>ジャンプ</td><td><b>Space / V</b>（空中でもう一度＝二段ジャンプ）</td></tr>
+            <tr><td>回避</td><td><b>K / G</b>（空中でも回避できる）</td></tr>
+            <tr><td>掴み</td><td><b>L / H</b>（NPCの前で＝会話・乗り物に乗る）</td></tr>
+            <tr><td>タメ攻撃</td><td>攻撃を<b>押しっぱなし</b>で離す</td></tr>
+            <tr><td>ガード</td><td>後ろへ歩く（敵の攻撃に合わせるとジャストガード）</td></tr>
+          </table>
+          <h4>水中・地形</h4>
+          <table>
+            <tr><td>増水</td><td>水中では<b>ジャンプ連打で泳ぎ上がれる</b>。息切れもダメージも無い</td></tr>
+            <tr><td>地鳴り</td><td>地面が隆起・沈下する。段差はジャンプで越えられる</td></tr>
+            <tr><td>足場</td><td>昇降区間に入ると足場ごと大きく動く</td></tr>
+          </table>
+        </div>
+        <div class="howcol">
+          <h4>必殺コマンド（地上・空中とも）</h4>
+          <table>
+            <tr><td class="cmd">↑ ＋攻撃</td><td>上攻撃</td></tr>
+            <tr><td class="cmd">→ ＋攻撃</td><td>前攻撃</td></tr>
+            <tr><td class="cmd">↓ ＋攻撃</td><td>下攻撃</td></tr>
+            <tr><td class="cmd">→→ ＋攻撃</td><td>ダッシュ攻撃</td></tr>
+            <tr><td class="cmd">↓→ ＋攻撃</td><td>波動コマンド</td></tr>
+            <tr><td class="cmd">→↓→ ＋攻撃</td><td>昇竜コマンド</td></tr>
+            <tr><td class="cmd">↓↑ ＋攻撃</td><td>↓↑コマンド</td></tr>
+            <tr><td class="cmd">攻撃＋掴み</td><td>キャラ別の投げ技</td></tr>
+          </table>
+          <h4>奥義とキャンセル</h4>
+          <table>
+            <tr><td class="cmd">レバー1回転 ＋攻撃</td><td>奥義（空中は <b>攻撃＋掴み</b> でも出る）</td></tr>
+            <tr><td>奥義キャンセル</td><td><b>どの技の最中でも</b>奥義コマンドで割り込める</td></tr>
+            <tr><td>空中連携</td><td>空中のコマンド技は<b>別の枠なら繋げられる</b>（各枠1回きり）</td></tr>
+            <tr><td>武器</td><td>拾った得物で<b>通常技・前攻撃・奥義が専用モーション</b>に変わる</td></tr>
+            <tr><td>レベル</td><td>Lv3〜12 で各コマンド技が上位技へ、Lv8/16 で段位が上がる</td></tr>
+          </table>
+        </div>
+      </div>
+      <button id="howtoBackBtn" class="btn btn-xs" style="background:linear-gradient(180deg,#3a3f4a,#20242c);border-color:rgba(200,210,230,.5);color:#cfe0ff">← もどる</button>
+    </div>
     <div class="moves">
-      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">スマホは画面の操作パッドで</span>
+      移動 <b>矢印/WASD</b>　攻撃 <b>J/F</b>　ジャンプ <b>Space/V</b>　回避 <b>K/G</b>　掴み <b>L/H</b>（<span class="cmd">NPCの前で＝会話</span>）　　<span style="opacity:.7;display:inline-block;white-space:nowrap">くわしくは「操作説明」へ</span>
     </div>
   </div>
   </div>
@@ -369,6 +426,7 @@ addEventListener('keydown',e=>{
     if(e.code==='KeyY'){ trainSetPosts(train.posts>=3?1:train.posts+1); e.preventDefault(); return; }
     if(e.code==='KeyC'){ trainCycleLevel(); e.preventDefault(); return; }
     if(e.code==='KeyN'){ trainCycleHero(); e.preventDefault(); return; }
+    if(e.code==='KeyM'){ train.moves=!train.moves; e.preventDefault(); return; }   // コマンド表の開閉
     if(e.code==='Escape'){ endTraining(); e.preventDefault(); return; } }
   const pa=CODE2PA[e.code]; if(!pa) return; const [pi,act]=pa; const inp=players[pi].in;
   if(!inp.keys[e.code]){ inp.keys[e.code]=true; mapKeysFor(pi);
@@ -1681,7 +1739,17 @@ let LIFTS=[];               // {x0,x1,dir,off,t,state,st}
 // 区間より右（＝これから進む先）はすべて一緒に昇降させる。
 // 区間だけ動かすと、降り切った先が元の高さのままで崖になる
 function liftAdd(x){ let a=0; for(let i=0;i<LIFTS.length;i++){ const L=LIFTS[i]; if(x>=L.x0) a+=L.off; } return a; }
-function terrLift(x){ return terrLiftBase(x)+liftAdd(x); }
+// ── 地鳴り：道の一部がゆっくり隆起して、また戻る ──
+// 段差はジャンプで越えられる高さに抑え、ダメージも通せんぼも無し。
+// 「地形が動く」ことだけを見せて、詰まらせない
+let SWELLS=[];              // {x0,x1,amp,t,rise,hold,fall}
+function swellAdd(x){ let a=0;
+  for(let i=0;i<SWELLS.length;i++){ const S=SWELLS[i];
+    if(x<=S.x0 || x>=S.x1) continue;
+    const u=(x-S.x0)/(S.x1-S.x0);
+    a += S.amp * Math.sin(Math.PI*u) * S.env; }
+  return a; }
+function terrLift(x){ return terrLiftBase(x)+liftAdd(x)+swellAdd(x); }
 function terrLiftBase(x){
   const t=terrAt(x);
   if(!t){ const F=TERRS[0], L=TERRS[TERRS.length-1];
@@ -4401,10 +4469,13 @@ function drawLiftShaft(){
 // ══════════════════════════════════════════════════════════════════
 const GIMMICKS=[
   {id:'boulder',  name:'落石',       col:'#c8b48a', slope:'down', cd:[300,470]},   // 坂の上から大岩
-  {id:'meteor',   name:'隕石雨',     col:'#ff8a3a', cd:[210,340]},                  // 空から隕石が降る
-  {id:'bolt',     name:'落雷',       col:'#9fe8ff', cd:[190,300]},                  // 予兆のあと真上から落雷
-  {id:'geyser',   name:'噴出',       col:'#dfe8f2', cd:[170,280]},                  // 地面から蒸気が噴き上がる
-  {id:'gale',     name:'突風',       col:'#cfe0ff', cd:[240,380]},                  // 横風で足を取られる
+  // 降ってくる系は間隔を倍以上に取る。以前は3〜5秒おきに降り、避けるだけの時間が続いた
+  {id:'meteor',   name:'隕石雨',     col:'#ff8a3a', cd:[520,760]},                  // 空から隕石が降る
+  {id:'bolt',     name:'落雷',       col:'#9fe8ff', cd:[480,700]},                  // 予兆のあと真上から落雷
+  {id:'geyser',   name:'噴出',       col:'#dfe8f2', cd:[440,660]},                  // 地面から蒸気が噴き上がる
+  {id:'gale',     name:'突風',       col:'#cfe0ff', cd:[300,460]},                  // 横風で足を取られる
+  {id:'quake',    name:'地鳴り',     col:'#c8b48a', cd:[420,640]},                  // 足元が波打って隆起・沈下する
+  {id:'flood',    name:'増水',       col:'#7fd8ff', cd:[900,1300]},                 // 水位が上がって水中戦になる
 ];
 function gimmickById(id){ for(let i=0;i<GIMMICKS.length;i++) if(GIMMICKS[i].id===id) return GIMMICKS[i]; return null; }
 let STAGE_GIM={};      // stage番号 -> ギミックのid（addBlocks が抽選して入れる）
@@ -4432,28 +4503,117 @@ function tickGimmicks(){
   if(gimCd>0){ gimCd--; return; }
   gimCd=rnd(G.cd[0],G.cd[1])|0;
   const px=pl.x;
-  if(G.id==='meteor'){                                    // 隕石雨：3〜5発をばらまく
-    const n=3+((Math.random()*3)|0);
+  if(G.id==='meteor'){                                    // 隕石雨：2〜3発をばらまく
+    const n=2+((Math.random()*2)|0);
     for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-300,300), camX+40, camX+W-40);
       hazards.push({kind:'meteor', x:tx, y:LANE, t:0, life:200, warn:38+k*7, z:620+rnd(0,160), vz:0, r:44+rnd(0,18), hitP:{}, hitE:{}});
       gimWarnAt(tx, '#ff8a3a', 38+k*7); }
     popText(px, LANE-groundLift(px)-190, '隕石が降ってくる！', '#ff8a3a', true); sfx.boss(px); shake=Math.max(shake,6); }
   else if(G.id==='bolt'){                                 // 落雷：予兆のあと柱が落ちる
-    const n=2+((Math.random()*2)|0);
+    const n=1+((Math.random()*2)|0);
     for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-240,240), camX+40, camX+W-40);
       hazards.push({kind:'gbolt', x:tx, y:LANE, t:0, life:60, warn:34+k*10, hitP:{}, hitE:{}});
       gimWarnAt(tx, '#9fe8ff', 34+k*10); }
     popText(px, LANE-groundLift(px)-190, '雷が落ちる！', '#9fe8ff', true); sfx.zap(px); }
   else if(G.id==='geyser'){                               // 噴出：足元から蒸気が吹き上げる
-    const n=2+((Math.random()*2)|0);
+    const n=1+((Math.random()*2)|0);
     for(let k=0;k<n;k++){ const tx=clamp(px+rnd(-260,260), camX+40, camX+W-40);
       hazards.push({kind:'geyser', x:tx, y:LANE, t:0, life:86, warn:30+k*9, hitP:{}, hitE:{}});
       gimWarnAt(tx, '#dfe8f2', 30+k*9); } }
+  else if(G.id==='quake'){                                // 地鳴り：道の一部が隆起して、また戻る
+    if(SWELLS.length>=2) return;                          // 同時に何本も動かすと足場が読めない
+    const up=(Math.random()<0.55), w=rnd(420,700)|0;
+    const cx=clamp(px+rnd(-160,420), camX+120, camX+W+700);
+    SWELLS.push({x0:cx-w*0.5, x1:cx+w*0.5, amp:(up?1:-1)*rnd(70,120), env:0, t:0,
+      rise:70, hold:rnd(200,340)|0, fall:90});
+    gimWarnAt(cx, '#c8b48a', 40);
+    popText(px, LANE-groundLift(px)-190, up?'地面がせり上がる！':'地面が沈んでいく！', '#c8b48a', true);
+    sfx.big(px); shake=Math.max(shake,8); quake=Math.max(quake||0,14); }
+  else if(G.id==='flood'){                                // 増水：あたり一帯が水に沈む
+    if(flood.on) return;
+    flood.on=true; flood.t=0; flood.lvl=0;
+    flood.x0=px-1500; flood.x1=px+1500;
+    popText(px, LANE-groundLift(px)-190, '水が押し寄せる！　ジャンプで泳げ！', '#7fd8ff', true);
+    sfx.boss(px); shake=Math.max(shake,10); flashAt(3,'127,216,255'); }
   else if(G.id==='gale'){                                 // 突風：一定時間、横へ押し流される
     const dir=(Math.random()<0.5)?-1:1;
     hazards.push({kind:'gale', x:camX+W*0.5, y:LANE, t:0, life:150, dir:dir});
     popText(px, LANE-groundLift(px)-190, (dir>0?'追い風':'向かい風')+'の突風！', '#cfe0ff', true); sfx.dash(px); }
 }
+// ══ 地鳴り：うねりの進行 ══
+// 立ち上がり→保持→戻り。戻すので地形が壊れっぱなしにならない
+function tickSwells(){
+  for(let i=SWELLS.length-1;i>=0;i--){ const S=SWELLS[i];
+    S.t++;
+    const R=S.rise, H=S.hold, F=S.fall;
+    if(S.t<=R) S.env=S.t/R;
+    else if(S.t<=R+H) S.env=1;
+    else S.env=Math.max(0, 1-(S.t-R-H)/F);
+    // 動いている間だけ土煙と揺れ。止まっている間は静か
+    const moving=(S.t<=R)||(S.t>R+H && S.t<=R+H+F);
+    if(moving){
+      quake=Math.max(quake||0, 4);
+      if(S.t%5===0) dust(rnd(S.x0+20,S.x1-20), LANE, 2);
+      if(perfTier<2 && S.t%4===0)
+        ember(rnd(S.x0,S.x1), LANE-groundLift(rnd(S.x0,S.x1))-rnd(0,60), rnd(-1,1),
+          (S.amp>0? rnd(1.0,2.6) : -rnd(1.0,2.6)), (S.t%8)?'#c8b48a':'#8a7a5e'); }
+    if(S.t>R+H+F) SWELLS.splice(i,1); }
+}
+// ══ 増水：水位が上がって水中戦になる ══
+// 沈められるだけでは理不尽なので、水の中では落下が遅くなり、ジャンプで何度でも掻き上がれる。
+// ダメージも息継ぎも無い。時間で必ず引く
+const FLOOD_TOP=330;        // 水面の高さ（足元からの z）
+let flood={on:false, t:0, life:0, x0:0, x1:0, lvl:0};
+function floodTop(){ return flood.lvl; }
+function inFlood(a){ return flood.on && flood.lvl>6 && a && a.x>flood.x0 && a.x<flood.x1; }
+function inWater(a){ return inFlood(a) && (a.z||0) < flood.lvl-10; }
+function tickFlood(){
+  if(!flood.on) return;
+  flood.t++;
+  const RISE=70, HOLD=460, FALL=110;
+  if(flood.t<=RISE) flood.lvl=FLOOD_TOP*(flood.t/RISE);
+  else if(flood.t<=RISE+HOLD) flood.lvl=FLOOD_TOP;
+  else flood.lvl=FLOOD_TOP*Math.max(0, 1-(flood.t-RISE-HOLD)/FALL);
+  // 泡。水中にいる間ずっと立ちのぼる
+  if(perfTier<2 && flood.t%3===0){
+    const bx=rnd(Math.max(flood.x0,camX-40), Math.min(flood.x1,camX+W+40));
+    ember(bx, LANE-groundLift(bx)-rnd(0,flood.lvl), rnd(-0.5,0.5), -rnd(1.2,3.0), '#bfe9ff'); }
+  if(flood.t===1){ sfx.big((flood.x0+flood.x1)*0.5); }
+  if(flood.t>RISE+HOLD+FALL){ flood.on=false; flood.lvl=0;
+    const pl=activePlayers()[0]; if(pl) popText(pl.x, pl.y-160, '水が引いた', '#7fd8ff', true); }
+}
+// ══ 増水の描画：水面より下だけを青く沈める ══
+// キャラの上に薄く重ねる。完全に隠すと自分がどこにいるか分からなくなる
+function drawFlood(){
+  if(!flood.on || flood.lvl<=2) return;
+  const x0=Math.max(flood.x0-camX, -20), x1=Math.min(flood.x1-camX, W+20);
+  if(x1<=x0) return;
+  ctx.save();
+  // 水面の高さは足元の起伏に沿わせる。平らな一本線だと地形の上に板が浮いて見える
+  const step=26, pts=[];
+  for(let sx=x0; sx<=x1+step; sx+=step){
+    const wx=sx+camX, gy=LANE-groundLift(wx);
+    pts.push([sx, gy-flood.lvl + Math.sin(wx*0.010+gf*0.06)*5 + Math.sin(wx*0.023-gf*0.04)*3]); }
+  // 水中（面より下）を塗る
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.lineTo(pts[pts.length-1][0], H+40); ctx.lineTo(pts[0][0], H+40); ctx.closePath();
+  const g=ctx.createLinearGradient(0, pts[0][1], 0, H);
+  g.addColorStop(0,'rgba(120,205,255,.30)'); g.addColorStop(0.45,'rgba(46,130,205,.40)');
+  g.addColorStop(1,'rgba(16,60,120,.52)');
+  ctx.fillStyle=g; ctx.fill();
+  // 水面のきらめき
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle='rgba(190,238,255,.85)'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1.2;
+  ctx.beginPath();
+  for(let i=0;i<pts.length;i++){ const y=pts[i][1]+7+Math.sin(i*1.7+gf*0.09)*3;
+    i?ctx.lineTo(pts[i][0],y):ctx.moveTo(pts[i][0],y); }
+  ctx.stroke();
+  ctx.restore(); }
 // 予兆の輪を地面へ描く（ハザードの本体より前に出す）
 function drawGimWarn(){
   for(let i=0;i<gimWarn.length;i++){ const w=gimWarn[i], sx=w.x-camX;
@@ -5595,6 +5755,13 @@ function updatePlayer(){
     // 二段ジャンプ：空中でもう一度だけ跳べる。斬っている最中でも割り込める（空中連携の足がかり）
     // 接地している間は通常の跳躍に譲る。着地したフレームの入力を二段目が横取りすると、
     // 地面から跳んだつもりが空中の一回を消費して、そのあと跳べなくなる
+    // 水中は「掻いて上がる」。回数を数えないので、沈められても必ず戻ってこられる
+    if(pressed.jump && inWater(p) && p.z>2){ pressed.jump=false;
+      p.vz=Math.max(p.vz, 11.5);
+      let mw=0; if(K.left)mw=-1; else if(K.right)mw=1;
+      if(mw){ p.facing=mw; p.avx=mw*3.0; }
+      for(let k=0;k<4;k++) ember(p.x+rnd(-14,14), p.y-p.z-rnd(0,30), rnd(-0.7,0.7), -rnd(1.4,3.2), '#bfe9ff');
+      ring(p.x, p.y-p.z-16, '#7fd8ff'); sfx.jump(p.x); return; }
     if(pressed.jump && !p.djUsed && p.z>6){ pressed.jump=false;
       p.djUsed=true; p.vz=DJUMP_VZ;
       let mx2=0; if(K.left)mx2=-1; else if(K.right)mx2=1;
@@ -5628,6 +5795,7 @@ function updatePlayer(){
     else if(p.jAtk>0 && !p.jKabuto && !p.jDown && !p.jFire && !p.jUp){ p.vz=Math.max(p.vz-0.16, -2.4); }
     else if(p.jUp && p.jAtk>0){ p.vz-=0.5; }                             // 昇天アッパー：跳び上がって弧を描いて落ちる
     else { p.vz-=0.62; }
+    if(inWater(p)) p.vz=Math.max(p.vz*0.90, -2.4);      // 水中：ゆっくり沈む
     p.z+=p.vz;
     let mx=0; if(K.left)mx=-1; if(K.right)mx=1;
     if(p.jMkUp) mx=0;                                                     // ドリルダッシュ中は舵を切れない（向きは開始時に確定）
@@ -6327,6 +6495,7 @@ function updatePlayer(){
       // 出し切る前に着地して打ち切られるのを防ぐ。技の間は宙に留まる（airHover）
       else if(def.airHover && a.t<=def.airHover){ p.vz=Math.sin(a.t*0.16)*0.7; }
       else p.vz=(p.vz||0)-(def.airFloat? 0.20 : 0.52);
+      if(inWater(p)) p.vz=Math.max(p.vz*0.90, -2.4);    // 水中：技を出していてもゆっくり沈む
       p.z=Math.max(0,(p.z||0)+p.vz);
       if(p.avx){ p.x+=p.avx; p.avx*=0.92; }
       if(p.z<=0){ p.z=0; p.vz=0; p.avx=0;
@@ -8603,7 +8772,9 @@ function updateEnemies(){
       } else { e.state='walk'; e.entry=null; }
       continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
-    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){ e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
+    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){
+      if(inFlood(e) && e.z<flood.lvl-10) e.vz=Math.min(e.vz*0.90, 2.4);   // 水中：敵もゆっくり沈む（vz は正が下）
+      e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);} if(e.deadTimer<=0)enemies.splice(i,1); continue; }
     if(e.zankai>0){ e.zankai--; if(gf%6<3)spark(e.x,e.y-e.h*0.95,'#ff4d6a',2,4); if(e.zankai<=0){ zankaiBoom(e); continue; } }   // 残悔拳カウントダウン
     if(e.grabbedBy){ if(e.stun>0)e.stun--; continue; }          // held by player — suspend AI
@@ -10308,7 +10479,7 @@ function applyRoute(key,sel){ addBlocks(SEGS[key][sel], key==='A'?{branchAfter:'
   if(key==='B') addBlocks(FINAL_CH,null); }
 function resetWorldState(){
   encounters=[]; npcs=[]; PITS=[]; STAGE2THEME={}; STAGE_NAME={}; stageStartX={}; shownStBanner={}; vehicles=[]; mercs=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[];
   worldCursor=0; nextStage=1; encIndex=0;
   pendingBranch=null; dialog=null; ultLocked=false; bgCacheTheme=-1;
@@ -10415,7 +10586,7 @@ function startNG2(skipOpen){ unlockAudio(); lap=2; endingDone=false; cut=null;
 // 変えるのは3つだけ：湧きを止める／主役が死なない／的が反撃しない。
 let trainMode=false;
 const TRAIN_STANCE=['棒立ち（定位置へ戻る）','歩いて寄ってくる','ガードする'];
-const train={maxCombo:0, maxDmg:0, stance:0, posts:1, log:[], lastF:0};
+const train={maxCombo:0, maxDmg:0, stance:0, posts:1, log:[], lastF:0, moves:true};
 function trainReset(){ train.maxCombo=0; train.maxDmg=0; train.log.length=0; train.lastF=0;
   resetCombo(); combo.breakT=0; combo.breakN=0;
   enemies.length=0; particles.length=0; projectiles.length=0; hazards.length=0; }
@@ -10503,7 +10674,7 @@ function startVersus(){ unlockAudio();
   players[0].kind=k1; players[1].kind=k2;
   vsMode=true; trainMode=false; attractOn=false; hardMode=false;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[]; gimOn=false;   // 対戦中に仕掛けは出さない（実力勝負にする）
   enemies.length=0; projectiles.length=0;
   camX=0; camY=0; camLockX=0;
@@ -10556,7 +10727,7 @@ function startTraining(){ unlockAudio();
   startGame();                                      // 本編と同じ初期化を通す
   trainMode=true;
   encounters=[]; npcs=[]; PITS=[]; hazards=[]; carriers=[]; items=[]; vehicles=[]; mercs=[]; mercRoster=[];
-  TERRS=[]; LIFTS=[]; PLATS=[]; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
+  TERRS=[]; LIFTS=[]; PLATS=[]; SWELLS=[]; flood.on=false; flood.lvl=0; _terrLast=null; terrElev=0; camY=0; boulderCd=0;
   STAGE_GIM={}; gimCd=0; gimWarn=[];
   WORLD_END=100000; curGateX=WORLD_END; worldCursor=0; encIndex=0;
   STAGE2THEME[1]=0; STAGE_NAME[1]='訓練場'; stageStartX[1]=0;
@@ -11611,7 +11782,7 @@ function update(){
   if(attractOn){ attractAI(players[0]); updateAttract(); }
   if(trainMode) trainUpkeep();
   if(vsMode) vsUpkeep();
-  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
+  stepPlayers(); updateEnemies(); terrainStepFoes(); updateMercs(); updateProjectiles(); tickLifts(); tickGimmicks(); tickSwells(); tickFlood(); updateHazards(); updateCarriers(); updateItems(); updateEncounters(); updateNPCs(); updateCamera(); updateCombo(); updateParticles();
   // 既存の shake 代入（145箇所）は増分を検出して方向つきインパルスへ変換する
   if(shake>shkSeen) kick(rnd(-0.95,0.95), -0.62, (shake-shkSeen)*0.78);
   if(shake>0)shake-=0.7; shkSeen=Math.max(0,shake);
@@ -11684,6 +11855,7 @@ function render(){
   drawCarriers();
   drawProjectiles();
   drawParticles(1);                     // 火花・衝撃リング・放射線はキャラの前
+  drawFlood();                          // 増水：水面より下を青く沈める（キャラの上に重ねる）
   drawGreatOne();
   drawForeground();
   ctx.restore();
@@ -18894,7 +19066,7 @@ function drawHUD(){
     ctx.fillStyle='#cfd6e0'; ctx.font='16px Trebuchet MS'; ctx.fillText('P で再開',W/2,H-30); ctx.textAlign='left'; }
   drawNPCPrompts();
   drawEventCard();
-  if(trainMode) drawTrainHUD();
+  if(trainMode){ drawTrainHUD(); if(train.moves) drawTrainMoves(); }
   if(state==='talk') drawDialog();
   if(state==='branch') drawBranchUI();
 }
@@ -18918,7 +19090,7 @@ function drawTrainHUD(){
   ctx.fillStyle='#8d97a8'; ctx.font=uif('normal',11);
   ctx.fillText('的 '+TRAIN_STANCE[train.stance]+' ×'+train.posts,PX+12,PY+78);
   ctx.fillText(heroNameOf(players[0].kind)+'  Lv.'+(players[0].level|0),PX+12,PY+93);
-  ctx.fillText('R:リセット T:的 Y:数 C:段位 N:キャラ',PX+12,PY+108);
+  ctx.fillText('R:リセット T:的 Y:数 C:段位 N:キャラ M:技表',PX+12,PY+108);
   ctx.fillText('Esc でタイトルへ',PX+12,PY+123);
   ctx.strokeStyle='rgba(255,210,80,.28)'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(PX+12,PY+131); ctx.lineTo(PX+PW-12,PY+131); ctx.stroke();
@@ -18931,6 +19103,50 @@ function drawTrainHUD(){
     if(L.gap>0){ ctx.textAlign='right';
       ctx.fillStyle=L.gap<=14?'#7dff5a':L.gap<=30?'#ffd24d':'#8d97a8';
       ctx.fillText('+'+L.gap+'F',PX+PW-12,y); ctx.textAlign='left'; } }
+  ctx.textAlign='left'; }
+// ---------- トレーニングのコマンド表：いま使えるコマンド技を、入力とセットで並べる ----------
+// 技が増えて「何が出せるのか」が画面から分からなくなっていた。
+// 名前だけでなく、レベルで置き換わった上位技かどうかもその場で見せる
+function drawTrainMoves(){
+  const p=activePlayers()[0]||players[0]; if(!p) return;
+  const PW=308, PX=14, PY=120;
+  const rows=SPECIAL_SLOTS.length, EXTRA=5;
+  // 中身の高さと同じ式で枠を取る。定数で置くと、行を足したときに文字が枠からはみ出る
+  const PH=60+rows*17+16+EXTRA*25+10;
+  panel(PX,PY,PW,PH);
+  ctx.textAlign='left';
+  ctx.fillStyle='#ffe14d'; ctx.font=uif('bold',14);
+  ctx.fillText('コマンド技  '+heroNameOf(p.kind)+' Lv.'+(p.level|0), PX+12, PY+20);
+  ctx.fillStyle='#8d97a8'; ctx.font=uif('normal',11);
+  ctx.fillText('M で開閉／→ は向いている方向', PX+12, PY+36);
+  ctx.strokeStyle='rgba(255,210,80,.28)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(PX+12,PY+43); ctx.lineTo(PX+PW-12,PY+43); ctx.stroke();
+  let y=PY+60;
+  for(let i=0;i<rows;i++){ const sl=SPECIAL_SLOTS[i];
+    const up=specialUpgraded(p,sl), id=up||SPECIAL_BASE[p.kind][sl];
+    const nm=(id&&ATK[id]&&ATK[id].name) || SPECIAL_BASE_NAME[p.kind+'.'+sl] || '—';
+    ctx.font=uif('bold',11); ctx.fillStyle='#ff9a3a';
+    ctx.fillText(SPECIAL_SLOT_CMD[sl], PX+12, y);
+    ctx.font=uif('normal',12); ctx.fillStyle=up?'#7dff5a':'#dfe6f0';
+    ctx.fillText(nm, PX+104, y);
+    if(up){ ctx.font=uif('bold',10); ctx.fillStyle='#7dff5a'; ctx.textAlign='right';
+      ctx.fillText('上位', PX+PW-12, y); ctx.textAlign='left'; }
+    y+=17; }
+  ctx.strokeStyle='rgba(255,210,80,.28)';
+  ctx.beginPath(); ctx.moveTo(PX+12,y-6); ctx.lineTo(PX+PW-12,y-6); ctx.stroke();
+  y+=10;
+  const cost=ultCost(p);
+  const extra=[
+    ['レバー1回転＋攻撃', '奥義（'+ULT_NAME[p.kind]+'）　ストック'+cost],
+    ['空中で 攻撃＋掴み', '空中奥義（'+airUltName(p.kind)+'）'],
+    ['技の最中に奥義', 'どの技からでもキャンセルで割り込める'],
+    ['空中で別枠のコマンド', 'コマンド技どうしを繋げる（各枠1回きり）'],
+    ['攻撃＋掴み（地上）', 'キャラ別の投げ技'],
+  ];
+  for(let i=0;i<extra.length;i++){
+    ctx.font=uif('bold',10); ctx.fillStyle='#ff9a3a'; ctx.fillText(extra[i][0], PX+12, y);
+    ctx.font=uif('normal',10.5); ctx.fillStyle='#b8c4d4'; ctx.fillText(extra[i][1], PX+12, y+12);
+    y+=25; }
   ctx.textAlign='left'; }
 // ---------- 敵の強化度インジケータ：いまどれだけ敵が鍛えられているかを常時見せる ----------
 function drawFoePower(x, y){
@@ -20208,10 +20424,19 @@ const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onc
 // タイトルは主要メニューだけを出し、キャラ選びは「はじめる」で開く。
 // 12個のボタンを並べていたころは、背後の絵が一切見えなかった
 function showCharPick(on){
-  const m=document.getElementById('mainMenu'), c=document.getElementById('charPick');
+  const m=document.getElementById('mainMenu'), c=document.getElementById('charPick'), h=document.getElementById('howto');
   if(!m||!c) return;
+  if(h) h.classList.add('hidden');
   m.classList.toggle('hidden', !!on); c.classList.toggle('hidden', !on);
   unlockAudio(); if(sndOn) ui.ok(); }
+function showHowTo(on){
+  const m=document.getElementById('mainMenu'), c=document.getElementById('charPick'), h=document.getElementById('howto');
+  if(!m||!h) return;
+  if(c) c.classList.add('hidden');
+  m.classList.toggle('hidden', !!on); h.classList.toggle('hidden', !on);
+  unlockAudio(); if(sndOn) ui.ok(); }
+const _howtoBtn=document.getElementById('howtoBtn'); if(_howtoBtn) _howtoBtn.onclick=()=>{ showHowTo(true); };
+const _howtoBack=document.getElementById('howtoBackBtn'); if(_howtoBack) _howtoBack.onclick=()=>{ showHowTo(false); };
 const _playBtn=document.getElementById('playBtn'); if(_playBtn) _playBtn.onclick=()=>{ showCharPick(true); };
 const _pickBack=document.getElementById('pickBackBtn'); if(_pickBack) _pickBack.onclick=()=>{ showCharPick(false); };
 const _vsBtn=document.getElementById('vsBtn'); if(_vsBtn) _vsBtn.onclick=()=>{ startVsSelect(); };
