@@ -209,12 +209,22 @@ const DRIVER = `
     const drew=[];
     MB.forEach(function(k){
       enemies.length=0; spawnEnemy(k, 660, LANE);
-      let hit=false; const real=drawMechaKing;
-      drawMechaKing=function(e){ hit=true; return real(e); };
-      try{ enemies.forEach(drawEnemy); } finally { drawMechaKing=real; }
+      // 機械の絵は二種類ある。地上のボスは王機の型、飛ぶボスは砲艦の型。
+      // どちらも通らなければ、既存の獣や円盤の絵を流用していることになる
+      let hit=false; const rk=drawMechaKing, ra=drawMechaAir;
+      drawMechaKing=function(e){ hit=true; return rk(e); };
+      drawMechaAir=function(e){ hit=true; return ra(e); };
+      try{ enemies.forEach(drawEnemy); } finally { drawMechaKing=rk; drawMechaAir=ra; }
       if(!hit) drew.push(k); });
     if(drew.length) throw new Error('機械の絵で描かれないボスがいる: '+drew.join(','));
-    console.log('機械のボスの絵 OK ('+MB.length+'体すべて専用の絵)'); }
+    // 飛ぶボスは砲艦の絵。地上の型に落ちると、空に玉座が浮くことになる
+    ['mkSky','mkMWing'].forEach(function(k){
+      enemies.length=0; spawnEnemy(k, 660, LANE);
+      let air=false; const ra=drawMechaAir;
+      drawMechaAir=function(e){ air=true; return ra(e); };
+      try{ enemies.forEach(drawEnemy); } finally { drawMechaAir=ra; }
+      if(!air) throw new Error(k+' が砲艦の絵で描かれていない'); });
+    console.log('機械のボスの絵 OK ('+MB.length+'体すべて専用の絵／飛ぶ2体は砲艦の型)'); }
 
   // 章の背景が章の中身と合っていること。
   // テーマ番号を宣言順で振っていたころは、坑道に昼の空と雲海が出ていた
@@ -335,6 +345,42 @@ const DRIVER = `
     console.log('拾って撃つ OK (弾で '+Math.round(e2.x-bx)+'px 押し／殴りでは押せない)'); }
   console.log('溶鉱炉のイベント戦 OK (火器が湧く／殴っては倒せない／撃つと押せる／炉で決着)');
     }
+
+  // 追加した三体：空から撃つ大型機／道を均す圧砕機／倒れても起き上がる鋼の骨
+  { if(!ETYPE.mkSky.flyer) throw new Error('大型航空兵器が飛ばない');
+    if(!ETYPE.mkDozer.charge) throw new Error('圧砕機が突進しない');
+    if(!ETYPE.mkBone.zombie) throw new Error('鋼骨兵が起き上がらない');
+    setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999; p.atkMul=99;
+    // 1) 大型航空兵器は宙に留まる（地面に降りて殴られるだけの的にならない）
+    { enemies.length=0; t1kReset(); p.x=600; p._tx=null;
+      spawnEnemy('mkSky', 900, LANE); const e=enemies[0];
+      e.thinkCd=999999; let hi=0;
+      for(let f=0;f<120;f++){ hitStop=0; slowmo=0; updateEnemies(); if(e.z>hi) hi=e.z; }
+      if(!(hi>=20)) throw new Error('大型航空兵器が浮かない（最高 '+Math.round(hi)+'px）');
+      if(!(e.z>10)) throw new Error('大型航空兵器が地面に降りてしまう'); }
+    // 2) 圧砕機は重い。雑魚の中でいちばん体が大きく、いちばん遅い
+    { const Z=MECHA_ZAKO_POOL.map(function(k){ return ETYPE[k]; });
+      const wid=Math.max.apply(null, Z.map(function(q){ return q.w; }));
+      if(ETYPE.mkDozer.w!==wid) throw new Error('圧砕機が雑魚で最大の体格になっていない');
+      const slow=Math.min.apply(null, Z.map(function(q){ return q.sp; }));
+      if(ETYPE.mkDozer.sp!==slow) throw new Error('圧砕機が雑魚で最も遅くない'); }
+    // 3) 鋼骨兵は一度倒しても起き上がる
+    { enemies.length=0; t1kReset();
+      spawnEnemy('mkBone', 700, LANE); const e=enemies[0];
+      e.hp=1; killEnemy(e);
+      if(e.dead) throw new Error('鋼骨兵が一度目で倒れてしまう');
+      if(!e.revived) throw new Error('起き上がった印が付いていない');
+      e.hp=1; killEnemy(e);
+      if(!e.dead) throw new Error('二度目でも倒れない（無限に起き上がる）'); }
+    // 4) 三体とも機械の絵で描かれる
+    { ['mkDozer','mkBone'].forEach(function(k){
+        enemies.length=0; spawnEnemy(k, 660, LANE);
+        let hit=false; const rf=drawMechaFoe;
+        drawMechaFoe=function(e,t){ hit=true; return rf(e,t); };
+        try{ enemies.forEach(drawEnemy); } finally { drawMechaFoe=rf; }
+        if(!hit) throw new Error(k+' が機械の絵で描かれていない'); }); }
+    console.log('追加の三体 OK (空は浮く／圧砕機は最大最遅／鋼骨兵は一度だけ起き上がる)'); }
 
   console.log('MECHA TEST PASSED');
   process.exit(0);

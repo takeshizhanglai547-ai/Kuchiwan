@@ -108,7 +108,23 @@ try{
     if(my===b0) throw new Error('bossmyth が定義されておらず BATTLE[0] へ落ちている');
     console.log('神のボス曲 OK (汎用ボス曲とも BATTLE[0] とも別の旋律、'+my.split(',').length+'音)'); }
 
-  // ===== 六周目：追跡テーマの作風（3+3+2 の不均等な足取り）=====
+  // ===== 二〜五周目：ステージごとに刻みが違うこと =====
+// 音階と旋律は章ごとに書き分けてあったのに、刻みが既定のまま横並びだった。
+// 聴くとどのステージも同じ運びに聞こえるので、絵に合わせて刻みを与えている
+{ const sig={}, dup=[];
+  for(let i=9;i<=24;i++){
+    const r=analyze(HTML,'battle',i,3,32), S=r.S;
+    if(!S.rhy) throw new Error('テーマ'+i+' に刻みの指定が無い（既定の運びのまま）');
+    const k=S.rhy.slice(0,8).join(',')+'|'+(S.kit||(S.drive?'drive':'straight'));
+    if(sig[k]!=null) dup.push(i+'と'+sig[k]);
+    sig[k]=i; }
+  // 全16ステージが完全に別々である必要は無いが、半分以上が同じ運びでは章の差が出ない
+  if(dup.length>3) throw new Error('刻みが同じステージが多すぎる: '+dup.join(' / '));
+  const kinds=Object.keys(sig).length;
+  if(kinds<10) throw new Error('二〜五周目の刻みが '+kinds+' 種類しかない（16ステージ）');
+  console.log('章ごとの刻み OK ('+kinds+'種類／重なりは '+dup.length+'組)'); }
+
+// ===== 六周目：追跡テーマの作風（3+3+2 の不均等な足取り）=====
 // 映画の旋律は使わない。借りたのは「8つの刻みを 3+3+2 に割る足取り」と
 // 「金属を叩く打点」だけ。ここではその二つが実際に鳴っているかを測る
 { const STEPS=[0,3,6];
