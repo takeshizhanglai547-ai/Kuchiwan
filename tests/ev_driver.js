@@ -1,11 +1,16 @@
 global.__HTML = html;
 const DRIVER = `
 (async()=>{
-  const nodeOf=function(id){ return WORLD_LEVELS.concat(WORLD_FINAL).find(function(n){ return n.id===id; }); };
+  // 周回が増えるたびに書き換えるのを避け、全周回のノードをまとめて見る。
+  // 一周目だけを見ていたので、六周目のイベントを足した途端に「そんなステージは無い」で落ちた
+  const ALLNODES=WORLD_LEVELS.concat(WORLD_FINAL, WORLD2_LEVELS, WORLD2_FINAL,
+    WORLD3_LEVELS, WORLD3_FINAL, WORLD4_LEVELS, WORLD4_FINAL,
+    WORLD5_LEVELS, WORLD5_FINAL, WORLD6_LEVELS, WORLD6_FINAL);
+  const nodeOf=function(id){ return ALLNODES.find(function(n){ return n.id===id; }); };
 
   // ===== 1) イベント表そのものの整合 =====
   { if(STAGE_EVENTS.length<5) throw new Error('ステージ間イベントが '+STAGE_EVENTS.length+' 件しかない');
-    const ids={}; WORLD_LEVELS.concat(WORLD_FINAL).forEach(function(n){ ids[n.id]=1; });
+    const ids={}; ALLNODES.forEach(function(n){ ids[n.id]=1; });
     const keys={}, ats={};
     STAGE_EVENTS.forEach(function(E){
       if(!ids[E.from]) throw new Error(E.key+' の入手先 '+E.from+' というステージが無い');

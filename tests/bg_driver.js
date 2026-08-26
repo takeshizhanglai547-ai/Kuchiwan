@@ -98,13 +98,13 @@ const DRIVER = `
 
   // ===== 6) 前景シルエットの種類が実装済みのものであること =====
   // 綴りを間違えると、既定の「ただの四角い柱」に黙って落ちる
-  { const OK=['pipe','stem','branch','pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi'];
+  { const OK=['pipe','stem','branch','pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi','duct','gantry','circuit','cable'];
     STAGE_THEME.forEach(function(T,i){
       if(T.fg && OK.indexOf(T.fg)<0) throw new Error('テーマ'+i+' の前景 '+T.fg+' が未実装'); });
     // 実装された種類が本当に別々の形を描くこと（既定へ落ちていないことの実測）
     const T0=STAGE_THEME.filter(function(x){ return x.fg==='colon'; })[0];
     const sg={};
-    ['pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi'].forEach(function(k){
+    ['pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi','duct','gantry','circuit','cable'].forEach(function(k){
       const save=T0.fg; T0.fg=k;
       const r=shape(function(){ drawFgSilhouettes(T0); });
       T0.fg=save;
@@ -113,7 +113,22 @@ const DRIVER = `
     const ks=Object.keys(sg);
     for(let i=0;i<ks.length;i++) for(let j=i+1;j<ks.length;j++)
       if(sg[ks[i]]===sg[ks[j]]) throw new Error('前景 '+ks[i]+' と '+ks[j]+' が同じ形');
-    console.log('前景シルエット OK ('+ks.length+'種すべて別の形)'); }
+    // 上の白名簿は手で書くので、名簿に足したのに実装を書き忘れると素通りする。
+    // 実装の無い kind を1つ描いて「既定の四角い柱」の署名を取り、それと同じ形の
+    // ものを落とす（2026-08-26 の監査で duct の実装を消しても全スイート緑だった）
+    { const save=T0.fg; T0.fg='__notimplemented__';
+      const base=shape(function(){ drawFgSilhouettes(T0); }).sig; T0.fg=save;
+      ks.forEach(function(k){ if(sg[k]===base) throw new Error('前景 '+k+' が未実装（既定の四角い柱に落ちている）'); }); }
+    console.log('前景シルエット OK ('+ks.length+'種すべて別の形・既定落ちなし)'); }
+
+  // ===== 6b) テーマが指す中景の地形が実装済みであること =====
+  // land の綴りを間違えると、黙って既定の尾根 drawRidgeRow に落ちる。
+  // fg には白名簿があったが land には何の検査も無く、綴り間違いが素通りしていた
+  { const miss=[];
+    STAGE_THEME.forEach(function(T,i){ if(T.land && !LAND[T.land]) miss.push('テーマ'+i+':'+T.land); });
+    if(miss.length) throw new Error('未実装の中景地形: '+miss.join(', '));
+    const kinds={}; STAGE_THEME.forEach(function(T){ if(T.land) kinds[T.land]=1; });
+    console.log('中景の地形 OK ('+Object.keys(kinds).length+'種すべて LAND に実装済み)'); }
 
   // ===== 7) 洞窟と海中に雲と鳥を出さないこと =====
   { const cav=STAGE_THEME.filter(function(x){ return x.land==='cavern'; })[0];

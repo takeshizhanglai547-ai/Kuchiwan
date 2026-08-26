@@ -25,7 +25,7 @@ const DRIVER = `
   { if(typeof startNG5!=='function') throw new Error('startNG5 が無い');
     const n4=nextLap(4), n5=nextLap(5);
     if(!n4 || n4.lap!==5) throw new Error('四周目クリア後に五周目へ行けない');
-    if(n5) throw new Error('五周目の先があることになっている');
+    if(!n5 || n5.lap!==6) throw new Error('五周目の先（六周目）へ行けない');
     if(n4.label.indexOf('5周目')<0) throw new Error('ラベルが五周目を指していない: '+n4.label);
     setupRoster('inu'); startGame(); state='play';
     n4.go();

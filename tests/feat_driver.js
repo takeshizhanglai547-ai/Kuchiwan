@@ -122,15 +122,21 @@ const DRIVER = `
       p.invuln=0;
       const D=ATK[move]; beginAttack(move);
       const free=(D.hold|0)+D.act[1];        // 締めの手前までは動かないよう押さえておく
-      let inv=0, blades=[], fall=null, stab=null, pairs=0; const seen=new Set();
+      let inv=0, blades=[], fall=null, stab=null, pairs=0, fvx=0, bvx=0; const seen=new Set();
       const px0=p.x, py0=p.y;
       for(let i=0;i<free+26;i++){ hitStop=0; slowmo=0;
         // カメラが動くと updatePlayer の末尾の clamp で自分が押し出され、
         // 「後ろの敵」が自分より前に来てしまう。左右の判定を測るので自分も固定する
         p.x=px0; p.y=py0;
-        if(i<free){ [fE,bE].forEach(function(e){ e.x=e._fx; e.vx=0; e.vz=0; e.z=0; e.hurtTimer=0; }); }
+        // 敵は最後まで位置を固定する。締めの弾きは「自分から見て左右どちらに居るか」で
+        // 向きを決めるので、解放した数フレームのあいだに歩いて自分より前へ回り込むと、
+        // 後ろの敵まで前へ飛んで測定が壊れる（実測で25回に1回ほど起きていた）
+        [fE,bE].forEach(function(e){ e.x=e._fx; e.vz=0; e.z=0; e.hurtTimer=0; });
+        if(i<free){ fE.vx=0; bE.vx=0; }
         if(p.invuln>0) inv++;
         step(1);
+        if(i>=free){ if(Math.abs(fE.vx)>Math.abs(fvx)) fvx=fE.vx;
+                     if(Math.abs(bE.vx)>Math.abs(bvx)) bvx=bE.vx; }
         // 立った聖剣の位置を拾う（技の定数ではなく、実際に生えた本数と位置で測る）。
         // 寿命が尽きた粒子は配列から抜けるので、添字ではなく粒子そのもので重複を避ける
         const now=[];
@@ -144,7 +150,7 @@ const DRIVER = `
         // 同じフレームに左右へ1本ずつ刺さったか（上位技の「左右同時」はここでしか見えない）
         if(now.some(function(d){ return d>0; }) && now.some(function(d){ return d<0; })) pairs++; }
       return {front:99999-fE.hp, back:99999-bE.hp, inv:inv, blades:blades,
-              fvx:fE.vx, bvx:bE.vx, fall:fall, stab:stab, pairs:pairs}; };
+              fvx:fvx, bvx:bvx, fall:fall, stab:stab, pairs:pairs}; };
     const r1=ringRun('iswords');
     if(!(r1.front>0)) throw new Error('降ってきた聖剣が前の敵に当たらない');
     if(!(r1.back>0))  throw new Error('降ってきた聖剣が後ろの敵に当たらない（前方一列のまま）');
