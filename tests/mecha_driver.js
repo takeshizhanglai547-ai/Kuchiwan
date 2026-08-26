@@ -251,9 +251,13 @@ const DRIVER = `
       const n=particles.length;
       if(!(n>0)) throw new Error('撃たれても飛沫が出ない（傷が塞がって見えない）'); }
     // 3) とどめ：立ったまま形を失い、写し取った姿を流してから床へ広がる
-    { enemies.length=0; spawnEnemy('mkOmega3', 760, LANE); const e=enemies[0];
+    { enemies.length=0; items.length=0; t1kReset();
+      spawnEnemy('mkOmega3', 760, LANE); const e=enemies[0];
+      // 殴って倒すのではなく、炉へ落として決着する（イベント戦なのでそれが唯一の道）
       e.hp=1; killEnemy(e);
-      if(e.t1kMelt==null) throw new Error('溶け落ちる段取りが始まらない');
+      if(e.dead) throw new Error('殴りで倒せてしまう（傷が塞がるはず）');
+      t1kFall(e);
+      if(e.t1kMelt==null) throw new Error('炉へ落ちても溶け落ちる段取りが始まらない');
       if(e.state==='down') throw new Error('液体金属が倒れ込んでいる（斜めの板になる）');
       if(!(e.deadTimer>=130)) throw new Error('溶ける時間が '+e.deadTimer+'F しかない（流れ終わる前に消える）');
       // 実際に段取りが進み、写し取った姿の段階と、床へ広がる段階の両方を通ること
@@ -267,6 +271,70 @@ const DRIVER = `
       if(!sawPool) throw new Error('床へ広がる段階まで到達していない');
       if(enemies.length) throw new Error('溶け切っても消えない'); }
     console.log('液体金属のラスト OK (専用の絵／飛沫／立ったまま姿を流して溶け落ちる)'); }
+
+  // ラスボス戦は溶鉱炉へ突き落とすイベント戦。撃って押す以外に決着が無い
+  {
+ setupRoster('inu'); startGame(); state='play'; gimOn=false;
+  const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+  enemies.length=0; items.length=0; t1kReset();
+  p.x=600; p._tx=null; p.facing=1;
+  spawnEnemy('mkOmega3', 900, LANE); const e=enemies[0];
+  if(!t1k.on) throw new Error('イベント戦が始まらない');
+  console.log('炉の位置 '+Math.round(t1k.furnace)+' / ボス '+Math.round(e.x));
+  // 火器が湧く
+  let got=0;
+  for(let f=0;f<900;f++){ hitStop=0; slowmo=0; t1kTick(); updateItems();
+    const it=items.filter(function(q){ return q.kind==='evsg'||q.kind==='evgl'; })[0];
+    if(it){ got++; items.length=0; } }
+  if(got<2) throw new Error('火器が '+got+' 回しか湧かない');
+  console.log('火器の湧き '+got+'回');
+  // 殴っても倒せない（塞がる）
+  e.hp=1; killEnemy(e);
+  if(e.dead) throw new Error('殴りで倒せてしまう');
+  console.log('殴りでは倒せない（HP '+Math.round(e.hp)+' へ戻る）');
+  // 撃つと押せる
+  const x0=e.x;
+  for(let k=0;k<20;k++) t1kShove(e, 12);
+  if(!(e.x>x0+100)) throw new Error('撃っても押せない（'+Math.round(x0)+'→'+Math.round(e.x)+'）');
+  console.log('押し込み '+Math.round(x0)+'→'+Math.round(e.x)+' (炉 '+Math.round(t1k.furnace)+')');
+  // 炉まで押し切ると落ちる
+  for(let k=0;k<80 && !e.t1kFall;k++) t1kShove(e, 20);
+  if(!e.t1kFall) throw new Error('炉まで押しても落ちない');
+  if(e.t1kMelt==null) throw new Error('落ちても溶け落ちる段取りへ繋がらない');
+  console.log('炉へ落下 OK（溶け落ちへ接続）');
+  // 実際に拾って撃つところまで通す。t1kShove を直接呼ぶだけでは、
+  // 弾と押し込みが繋がっているかを確かめたことにならない
+  { enemies.length=0; items.length=0; t1kReset();
+    p.x=600; p._tx=null; p.facing=1; p.state='idle'; p.atk=null; p.z=0;
+    p.evW=null; p.evAmmo=0;
+    spawnEnemy('mkOmega3', 820, LANE); const e2=enemies[0];
+    e2.thinkCd=999999; e2.hp=e2.maxHp=999999;
+    makeItem(605,'evsg');
+    for(let f=0;f<40 && !(p.evAmmo>0); f++){ hitStop=0; slowmo=0; updateItems(); step(1); }
+    if(!(p.evAmmo>0)) throw new Error('落ちている火器を拾えない');
+    const bx=e2.x;
+    for(let f=0;f<60;f++){ hitStop=0; slowmo=0;
+      if(f===0) p.in.pressed.atk=true;
+      p.x=600; e2.vx=0;
+      useInput(p.in); updatePlayer(p); saveInput(p.in); updateProjectiles(); }
+    if(!(e2.x>bx+10)) throw new Error('撃っても炉へ寄らない（'+Math.round(bx)+'→'+Math.round(e2.x)+'）');
+    // 弾数は有限。撃ち切ったら次を拾いに行く作りなので、減らないと撃ちっぱなしで終わる
+    { const a0=p.evAmmo|0;
+      for(let f=0;f<200 && (p.evAmmo|0)>0; f++){ hitStop=0; slowmo=0;
+        if(f%22===0) p.in.pressed.atk=true;
+        p.x=600; useInput(p.in); updatePlayer(p); saveInput(p.in); }
+      if((p.evAmmo|0)>0) throw new Error('撃っても弾が減らない（'+a0+'発のまま）');
+      if(p.evW) throw new Error('撃ち切っても構えが残っている'); }
+    const sx=e2.x;
+    // 殴りでは押せない（塞がってしまう）
+    for(let f=0;f<80;f++){ hitStop=0; slowmo=0;
+      if(f%14===0) p.in.pressed.atk=true;
+      p.x=e2.x-70; p._tx=null; p.facing=1; e2.vx=0;
+      useInput(p.in); updatePlayer(p); saveInput(p.in); }
+    if(e2.x>sx+10) throw new Error('殴りでも炉へ押せてしまう（'+Math.round(sx)+'→'+Math.round(e2.x)+'）');
+    console.log('拾って撃つ OK (弾で '+Math.round(e2.x-bx)+'px 押し／殴りでは押せない)'); }
+  console.log('溶鉱炉のイベント戦 OK (火器が湧く／殴っては倒せない／撃つと押せる／炉で決着)');
+    }
 
   console.log('MECHA TEST PASSED');
   process.exit(0);
