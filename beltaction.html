@@ -1183,26 +1183,31 @@ const Music=(()=>{
       rhy:[2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2] },   // 全編8分の羽音（熊蜂）
     { bpm:96, lead:'sine', pad:'sawtooth',                 // 12: 蜘蛛糸の森 — 怪しく揺れる糸 (Ebm)
       prog:[[51,54,58],[46,49,53],[48,51,55],[44,47,51],[51,54,58],[49,53,56],[46,49,53],[46,50,53]],
-      mel:[75,78,82,80, 78,75,70,75, 77,80,84,80, 73,77,80,77, 75,78,82,87, 84,82,78,80, 77,73,70,73, 70,73,77,82] },
+      mel:[75,78,82,80, 78,75,70,75, 77,80,84,80, 73,77,80,77, 75,78,82,87, 84,82,78,80, 77,73,70,73, 70,73,77,82],
+      rhy:[1,0,0,2, 1,0,0,2, 1,0,0,2, 1,0,0,2, 1,0,0,2, 1,0,0,2, 1,0,0,2, 1,0,0,2] },   // 糸を引きずる間。三拍目を空けて足を取られる
     { bpm:140, lead:'square', pad:'sawtooth', drive:true, kit:'march',  // 13: 地底の蟻帝国 — 大行進マーチ (Gm)
       prog:[[55,58,62],[50,53,57],[51,55,58],[53,56,60],[55,58,62],[48,51,55],[50,53,57],[50,54,57]],
       mel:[67,70,74,72, 70,67,63,67, 69,72,75,72, 65,68,72,68, 67,70,74,79, 77,75,72,74, 70,67,65,67, 62,65,69,74],
       rhy:[1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0] },   // 4拍目を空けた行進曲の呼吸
     { bpm:118, lead:'sine', pad:'sawtooth',                // 14: 墜ちた円盤 — 無重力の浮遊感 (C whole-tone風)
       prog:[[48,52,56],[50,54,58],[46,50,54],[48,52,56],[52,56,60],[50,54,58],[44,48,52],[46,50,54]],
-      mel:[72,76,80,78, 76,72,68,72, 74,78,82,78, 72,68,64,68, 76,80,84,80, 78,74,70,74, 68,72,76,72, 70,74,78,74] },
+      mel:[72,76,80,78, 76,72,68,72, 74,78,82,78, 72,68,64,68, 76,80,84,80, 78,74,70,74, 68,72,76,72, 70,74,78,74],
+      rhy:[1,0,0,0, 2,0,0,0, 1,0,0,0, 2,0,0,0, 1,0,0,0, 2,0,0,0, 1,0,0,0, 2,0,0,0] },   // 無重力。音の間が長く、次の足場が来ない
     { bpm:146, lead:'sawtooth', pad:'sawtooth', drive:true,  // 15: 星間回廊 — 冷たい追跡 (F#m)
       prog:[[54,57,61],[49,52,56],[51,55,58],[47,50,54],[54,57,61],[52,55,59],[49,52,56],[47,51,54]],
-      mel:[78,81,85,83, 81,78,73,78, 80,83,87,83, 76,80,83,80, 78,81,85,90, 88,85,81,83, 80,76,73,76, 71,76,80,83] },
+      mel:[78,81,85,83, 81,78,73,78, 80,83,87,83, 76,80,83,80, 78,81,85,90, 88,85,81,83, 80,76,73,76, 71,76,80,83],
+      rhy:[2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2, 2,2,2,2] },   // 均等な8分＝表情を変えずに追ってくる
     { bpm:158, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 16: 母船コア — 侵略者の心臓部 (Dm)
       prog:[[50,53,57],[49,52,56],[51,54,58],[48,51,55],[50,53,57],[45,48,52],[47,50,54],[46,49,53]],
-      mel:[74,77,81,86, 84,81,77,79, 76,79,83,79, 74,77,81,77, 74,78,81,86, 88,86,81,78, 77,74,70,74, 69,74,77,81] },
+      mel:[74,77,81,86, 84,81,77,79, 76,79,83,79, 74,77,81,77, 74,78,81,86, 88,86,81,78, 77,74,70,74, 69,74,77,81],
+      rhy:[3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0, 3,1,1,0] },   // 付点で押し込む＝母船の心臓が急かす
     // ── 四周目・神話の三章。ここが無いと themeIdx 16〜18 で BATTLE[i] が undefined になり、
     //    scheduleStep が毎フレーム例外を投げて神話ステージのBGMが丸ごと鳴らなかった ──
     { bpm:134, lead:'triangle', pad:'sawtooth', epic:true,   // 17: オリュンポスの神域 — 天上の荘厳 (D リディア)
       // #4（G#）を旋律に置いて、長調の明るさに「人の世の外」の浮遊感を足す
       prog:[[50,54,57],[45,49,52],[47,50,54],[43,47,50],[50,54,57],[42,45,49],[43,47,50],[45,49,52]],
-      mel:[74,78,81,86, 85,81,78,74, 76,81,85,81, 78,74,71,74, 74,78,81,86, 88,86,81,78, 80,76,73,76, 74,78,81,85] },
+      mel:[74,78,81,86, 85,81,78,74, 76,81,85,81, 78,74,71,74, 74,78,81,86, 88,86,81,78, 80,76,73,76, 74,78,81,85],
+      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 半拍おきの広い間＝天上の悠々
     { bpm:92, lead:'sine', pad:'sawtooth', kit:'heavy',      // 18: 冥府ステュクスの河 — 沈む足取り (C フリギア)
       // b2（Db）で下降する。ハーフタイムのキットと合わせて「渡れない河」の重さを出す
       prog:[[48,51,55],[49,53,56],[44,48,51],[43,46,50],[48,51,55],[41,44,48],[49,53,56],[48,51,55]],
@@ -1221,7 +1226,8 @@ const Music=(()=>{
     { bpm:126, lead:'triangle', pad:'triangle',             // 20: 夕暮れの城下町 — ヨナ抜き長音階 (D)
       // D E F# A B のみ。第4音(G)と第7音(C#)を1つも置かない＝これだけで「和」に聞こえる
       prog:[[50,54,57],[47,50,54],[45,49,52],[50,54,57],[52,55,59],[47,50,54],[45,49,52],[50,54,57]],
-      mel:[74,76,78,81, 83,81,78,76, 74,71,69,71, 74,76,78,74, 78,81,83,86, 83,81,78,74, 71,69,66,69, 71,74,76,74] },
+      mel:[74,76,78,81, 83,81,78,76, 74,71,69,71, 74,76,78,74, 78,81,83,86, 83,81,78,74, 71,69,66,69, 71,74,76,74],
+      rhy:[1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1] },   // 二拍目を空けた町の拍子＝人の歩調
     { bpm:104, lead:'square', pad:'sawtooth', kit:'heavy',   // 21: 合戦の野 — 都節 (D)。陣太鼓の四つ打ち
       // D Eb G A Bb。b2(Eb) が旋律の要。休符を多く取り、太鼓の間で緊張を持たせる
       prog:[[50,53,57],[50,53,57],[46,50,53],[45,50,53],[50,53,57],[51,55,58],[45,48,52],[50,53,57]],
@@ -1229,7 +1235,8 @@ const Music=(()=>{
       rhy:[3,0,1,0, 3,0,1,1, 3,0,1,0, 3,1,0,1, 3,0,1,0, 3,0,1,1, 3,0,1,0, 3,1,1,0] },
     { bpm:150, lead:'sawtooth', pad:'sawtooth', drive:true, epic:true,   // 22: 炎上する天守 — 都節 (D) を疾走で
       prog:[[50,53,57],[51,55,58],[45,48,52],[50,53,57],[50,53,57],[55,58,62],[51,55,58],[45,48,52]],
-      mel:[74,75,79,81, 82,81,79,75, 74,79,82,86, 87,86,82,79, 74,75,79,82, 86,87,86,82, 79,75,74,70, 69,74,75,74] },
+      mel:[74,75,79,81, 82,81,79,75, 74,79,82,86, 87,86,82,79, 74,75,79,82, 86,87,86,82, 79,75,74,70, 69,74,75,74],
+      rhy:[3,2,1,0, 3,2,1,0, 3,2,1,0, 3,2,1,0, 3,2,1,0, 3,2,1,0, 3,2,1,0, 3,2,1,0] },   // 付点から詰めて休符へ落ちる＝炎の中の駆け足
     { bpm:88, lead:'sine', pad:'sawtooth', kit:'heavy',      // 23: 桶狭間の豪雨 — 律音階 (D)。半拍おきの間＝雨の重さ
       // D E G A C。都節の b2 を使わず、代わりに b7(C) で沈ませる
       prog:[[50,53,57],[48,52,55],[50,53,57],[45,48,52],[50,53,57],[55,58,62],[48,52,55],[50,53,57]],
@@ -1237,45 +1244,51 @@ const Music=(()=>{
       rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
     { bpm:116, lead:'triangle', pad:'triangle',              // 24: 川中島の朝霧 — 律音階 (G)。霧の中の対峙
       prog:[[55,59,62],[53,57,60],[50,53,57],[55,59,62],[57,60,64],[53,57,60],[50,53,57],[55,59,62]],
-      mel:[79,81,84,79, 77,79,81,77, 74,77,79,77, 79,84,86,84, 81,84,86,91, 89,86,84,81, 79,77,74,72, 74,79,81,79] },
+      mel:[79,81,84,79, 77,79,81,77, 74,77,79,77, 79,84,86,84, 81,84,86,91, 89,86,84,81, 79,77,74,72, 74,79,81,79],
+      rhy:[1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0] },   // 霧に音が呑まれる。長い空白のあとに一打だけ返る
     { bpm:142, lead:'square', pad:'sawtooth', drive:true,    // 25: 甲斐の山城 — ヨナ抜き長音階 (A)。高地の乾いた行進
       prog:[[57,61,64],[52,56,59],[54,57,61],[57,61,64],[59,62,66],[52,56,59],[54,57,61],[57,61,64]],
-      mel:[81,83,85,88, 90,88,85,83, 81,78,76,78, 81,83,85,81, 85,88,90,93, 90,88,85,81, 78,76,73,76, 78,81,83,81] },
+      mel:[81,83,85,88, 90,88,85,83, 81,78,76,78, 81,83,85,81, 85,88,90,93, 90,88,85,81, 78,76,73,76, 78,81,83,81],
+      rhy:[1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0] },   // 乾いた四拍＝高地の行軍
     // ── 六周目・メカワンコキングダムの六章 ──
+    // 映画の追跡テーマを「作風として」モチーフにしている。旋律は書き写さず、
+    // その筋を作っている三つの要素だけを借りた：
+    //   ① 8つの刻みを 3+3+2 に割る不均等な足取り（kit:'anvil'）＝引きずりながら追ってくる歩幅
+    //   ② 金属を叩く芯と長い余韻。旋律ではなく打点で機械を鳴らす
+    //   ③ 動かない低音の反復と短調。和音は変わっても根音は戻ってくる
     // 六周目は pal()===3（電子キック＋クラップ＋FMベル）が編曲側で自動的に掛かる。
-    // 曲データ側で持続層を足すと必ずぶつかるので、機械らしさは音階と rhy の刻みだけで作る
-    { bpm:150, lead:'square', pad:'sawtooth', drive:true, kit:'march',   // 26: 巨大工廠 — Em 自然短音階。付点＝鍛造ハンマーの打刻
-      // 行進のキック（4分の均等踏み）に、付点8分＋16分の食い込みを2拍おきに重ねる。
-      // 同じ音を叩き続ける旋律なので、音程ではなく「打点」で工場を鳴らす
-      prog:[[52,55,59],[55,59,62],[50,54,57],[52,55,59],[48,52,55],[50,54,57],[47,50,54],[52,55,59]],
-      mel:[76,76,71,76, 74,74,79,74, 69,71,74,78, 76,74,71,67, 72,72,76,79, 74,74,78,81, 83,81,78,74, 76,71,67,64],
-      rhy:[3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0] },   // 二打ずつの鍛造。休符は槌を振り上げる間
-    { bpm:96, lead:'triangle', pad:'sawtooth', kit:'heavy',   // 27: 発電炉の底 — F# ロクリア (b5)。ハーフタイムの間＝炉の鼓動
-      // 主和音が減三和音のまま解決しない。b5 の宙吊りを八小節保たせて「制御できていない炉」にする
-      prog:[[54,57,60],[47,50,54],[55,59,62],[54,57,60],[45,48,52],[52,55,59],[50,54,57],[54,57,60]],
-      // ハーフタイムで奇数スロットが休符になるので、鳴る偶数スロット側だけで音階を出し切る
-      mel:[78,79,79,81, 81,79,78,76, 76,74,74,72, 78,76,72,71, 78,81,83,84, 84,83,83,81, 81,79,79,78, 78,76,74,71],
-      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 半拍おきの間＝重く脈打つ炉
-    { bpm:138, lead:'triangle', pad:'sawtooth', drive:true,   // 28: 軌道エレベーター — A リディア (#4)。昇り続ける8分
-      // #4(D#) が長調の明るさに「地上ではない場所」の浮遊感を足す。旋律は八小節かけて上へ行く
-      prog:[[45,49,52],[47,51,54],[52,56,59],[45,49,52],[49,52,56],[47,51,54],[54,57,61],[52,56,59]],
-      mel:[81,83,85,88, 87,85,83,80, 80,83,85,88, 85,81,78,76, 85,88,90,93, 92,90,87,85, 85,83,81,78, 76,80,83,85],
-      rhy:[2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0] },   // 三段登って一拍休む＝昇降機の呼吸
-    { bpm:158, lead:'square', pad:'sawtooth', drive:true,   // 29: 電脳都市 — E フリギア (b2)。明滅する16分
-      // b2(F) を旋律の要に置く。2拍目を丸ごと落として「信号が欠ける」間を作る
-      prog:[[52,55,59],[53,57,60],[52,55,59],[50,53,57],[52,55,59],[48,52,55],[53,57,60],[52,55,59]],
-      mel:[76,77,76,71, 77,81,79,77, 76,74,72,71, 74,72,69,74, 76,77,79,84, 84,83,81,79, 77,81,77,72, 71,74,76,71],
-      rhy:[2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1] },   // 走査線が抜ける2拍目の空白
-    { bpm:112, lead:'sine', pad:'sawtooth',   // 30: 廃棄されたドック — C ドリア (b3・♮6)。錆びた滑車の軋み
-      // 短調なのに6度が長い＝寂れているのに湿っぽくならない。未知を歩いて確かめる章
-      prog:[[48,51,55],[46,50,53],[50,53,57],[48,51,55],[51,55,58],[43,46,50],[46,50,53],[48,51,55]],
-      mel:[72,75,79,77, 75,74,70,74, 74,77,81,77, 75,72,70,67, 75,79,82,79, 77,74,70,74, 70,74,77,74, 72,70,67,72],
-      rhy:[1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1] },   // 2拍目を空ける＝引っ掛かる滑車
-    { bpm:158, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 31: 中枢演算室 — Gm 和声的短音階 (F#)。玉座の決戦
-      // 導音 F# を立てて、機械の王に「王」の荘厳を与える。epic の層（オルガン・聖歌隊・
-      // ブラス・ティンパニ）は既存の実装がそのまま掛かるので、曲データ側では何も足さない
-      prog:[[43,46,50],[50,54,57],[48,51,55],[43,46,50],[51,55,58],[46,50,53],[50,54,57],[43,46,50]],
-      mel:[79,82,86,84, 82,79,74,78, 75,79,84,79, 74,79,82,79, 79,82,87,86, 86,82,79,82, 78,74,70,74, 67,70,74,79] },
+    // CLAUDE.md のとおり持続層は足さない。色は音階と刻みだけで作る
+    { bpm:104, lead:'square', pad:'sawtooth', kit:'anvil',   // 26: 溶鉱炉 第七区 — Em 自然短音階。3+3+2 の鍛造
+      // 根音 E へ何度でも戻る。上がっても必ず引き戻される＝逃げても追いつかれる
+      prog:[[52,55,59],[52,55,59],[50,53,57],[52,55,59],[48,52,55],[52,55,59],[47,50,54],[52,55,59]],
+      mel:[64,64,67,64, 71,67,64,62, 64,64,67,71, 74,71,67,64, 64,64,66,64, 71,69,67,66, 64,62,59,62, 64,64,67,64],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0] },   // 打点は 3+3+2 の頭だけ。間が足音になる
+    { bpm:96, lead:'triangle', pad:'sawtooth', kit:'anvil',   // 27: 電磁の大坑道 — F# ロクリア (b5)。解決しない炉の脈
+      // 主和音が減三和音のまま八小節解決しない。b5 の宙吊りが「制御できていない」音
+      prog:[[54,57,60],[54,57,60],[52,55,59],[54,57,60],[47,50,54],[54,57,60],[50,54,57],[54,57,60]],
+      mel:[54,54,57,54, 60,57,54,53, 54,54,57,60, 61,60,57,54, 54,54,55,54, 60,59,57,55, 54,53,50,53, 54,54,57,54],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0] },   // 同じ足取りを一段低く。坑道の反響ぶん遅い
+    { bpm:120, lead:'triangle', pad:'sawtooth', drive:true, kit:'anvil',   // 28: 天空の軌道橋 — A 自然短音階。高いところの追跡
+      // 旋律だけを1オクターブ上へ置く。足取りは同じなので「同じものが上まで追ってくる」
+      prog:[[45,48,52],[45,48,52],[43,46,50],[45,48,52],[50,53,57],[45,48,52],[41,44,48],[45,48,52]],
+      mel:[81,81,84,81, 88,84,81,79, 81,81,84,88, 91,88,84,81, 81,81,83,81, 88,86,84,83, 81,79,76,79, 81,81,84,81],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0, 1,0,1,0] },   // 終盤2小節だけ刻みが詰まる＝橋の上で距離が縮む
+    { bpm:132, lead:'square', pad:'sawtooth', drive:true, kit:'anvil',   // 29: 鋼鉄の外郭門 — E フリギア (b2)。門の前の緊張
+      // b2(F) を旋律の要に置く。半音でぶつかる二度が、近づいてはいけない気配になる
+      prog:[[52,55,59],[52,55,59],[53,57,60],[52,55,59],[48,52,55],[52,55,59],[53,57,60],[52,55,59]],
+      mel:[64,64,65,64, 71,69,65,64, 64,64,65,69, 72,71,69,65, 64,64,65,64, 71,72,71,69, 65,64,60,64, 64,64,65,64],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0] },
+    { bpm:112, lead:'sine', pad:'sawtooth', kit:'anvil',   // 30: 歯車の大回廊 — C 自然短音階。錆びた歯車の噛み合い
+      // 三度を長く伸ばさず、根音と五度だけで往復する。歯が噛んで戻る動きそのもの
+      prog:[[48,51,55],[48,51,55],[46,50,53],[48,51,55],[43,46,50],[48,51,55],[44,48,51],[48,51,55]],
+      mel:[60,60,63,60, 67,63,60,58, 60,60,63,67, 70,67,63,60, 60,60,62,60, 67,65,63,62, 60,58,55,58, 60,60,63,60],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0] },
+    { bpm:140, lead:'square', pad:'sawtooth', drive:true, epic:true, kit:'anvil',   // 31: 中枢炉心「大王座」 — Gm 和声的短音階 (F#)
+      // 玉座だけ導音 F# を立て、足取りはそのまま。追ってきたものが正面に座っている
+      // epic の層（オルガン・聖歌隊・ブラス・ティンパニ）は既存の実装が掛かるので、曲側では足さない
+      prog:[[43,46,50],[43,46,50],[50,54,57],[43,46,50],[48,51,55],[43,46,50],[46,50,53],[43,46,50]],
+      mel:[55,55,58,55, 62,58,55,54, 55,55,58,62, 66,62,58,55, 55,55,57,55, 62,60,58,57, 55,54,50,54, 55,55,58,55],
+      rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 後半は刻みを詰めて追い込む
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -1578,7 +1591,17 @@ const Music=(()=>{
       bassN(bn,t,stepDur*0.92); }
     if(!S.soft){                                                                                // ── ドラムキット（周回パレットで音色が入れ替わる）──
       const KICK = P===3? elecKick : kick;
-      if(kit==='heavy'){ if(st===0) KICK(t,1); if(st===6) KICK(t,0.8); if(st===4) snare(t,1,P); } // ハーフタイムの重圧
+      // 金床（anvil）：8つの刻みを 3+3+2 に割って打つ。均等でない足取りが
+      // 「機械が引きずりながら追ってくる」感じを作る。六周目のために足した
+      if(kit==='anvil'){
+        if(st===0||st===3||st===6){                        // 3+3+2 の頭で金属を叩く
+          KICK(t, st===0?1:0.82);
+          fmBell(midi(root+24), t, stepDur*1.6, st===0?0.030:0.020);   // 金床の余韻
+          tom(t+stepDur*0.04, st===0?96:120, 0.55); }
+        if(st===4) snare(t,0.9,P);                          // 裏の芯だけ残す
+        if(sec>=2 && st===7) KICK(t,0.5);                   // B以降だけ、次の小節へ食い込む一打
+      }
+      else if(kit==='heavy'){ if(st===0) KICK(t,1); if(st===6) KICK(t,0.8); if(st===4) snare(t,1,P); } // ハーフタイムの重圧
       else {
         if(st===0||st===4) KICK(t,1);
         if(kit==='march'){ if(st===2||st===6) KICK(t,0.55); }                                   // 行進曲：4分の均等踏み
@@ -8026,6 +8049,19 @@ const ETYPE={
     boss:true,bossKind:'rival',weapon:'dark',accent:'#c8b0ff',mecha:true,name:'影写将 ミラージュ'},
   // ── 六周目の真ラスボス ──
   // gsc＝描画倍率。drawGuard0 は座標を直書きしているので、体格はここで伸ばす
+  // ── 六周目の追加兵：空・重・骨 ──
+  // 王国の三本柱。空から掃射する大型機、道を均す圧砕機、そして倒れても起き上がる鋼の骨。
+  // どれも「まっすぐ来て止まらない」のが共通した怖さ
+  mkDozer:{hp:520,sp:0.62,dmg:46,atkR:104,w:152,h:112,c1:'#8a7f5e',c2:'#4e4838',c3:'#241f16',score:5200,
+    mecha:true,mechaKind:'dozer',charge:true,armor:true,accent:'#ffb02e',name:'圧砕機 ドーザーガル'},
+  // zombie＝一度だけ起き上がる既存の仕組み。骨の兵は「倒しても這って来る」ので流用する
+  mkBone:{hp:150,sp:2.6,dmg:38,atkR:76,w:52,h:92,c1:'#dfe6f0',c2:'#94a2b4',c3:'#2a3240',score:3400,
+    mecha:true,mechaKind:'bone',zombie:true,flanker:true,accent:'#ff3a2a',name:'鋼骨兵 スケルガ'},
+  // 空を飛ぶ雑魚には浮遊の実装が無い（浮くのはボスの処理だけ）ので、
+  // 大型航空兵器は中ボス級として置く。そうしないと地面に降りて殴られるだけの的になる
+  mkSky:{hp:1180,sp:2.2,dmg:44,atkR:150,w:196,h:104,c1:'#6a7482',c2:'#39404c',c3:'#181d24',score:22000,
+    boss:true,mini:true,bossKind:'ufoboss',weapon:'none',accent:'#ff6a3a',mecha:true,flyer:true,
+    hoverZ:150, name:'掃討機 スカイレイダー'},
   // ── 六周目の中ボス（道中に立ちはだかる試作機）──
   // 雑魚の役割をそのまま一回り大きくした個体。HPは五周目の中ボス（900〜1050）に
   // 六周目の係数を掛けた線に置く。技表は流用元の bossKind から引く
@@ -8139,6 +8175,8 @@ const BOSSMOVES={
   // 二形態目は装甲を捨てて速さで押す。三形態目は炉心むき出しの大技だけ
   mkOmega2: ['dashThrust','tripleStep','teleSlash','judgeBolts','bodyCharge','rivalCombo','unblockSmash'],
   mkOmega3: ['megaBeam','megaTornado','tenchuu','meteorCall','judgeBolts','hammerQuake','bossGrab','unblockSmash'],
+  // 掃討機：上空から撃ち下ろす手だけで組む。地上の掴みや薙ぎは持たせない
+  mkSky:    ['bulletHell','orbSpread','meteorCall','cannonFire','divebomb'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
@@ -8228,6 +8266,7 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   mkSwarm:'一機　壊シタカ。工廠ハ　毎分　十二機　造ル。数エテ　ミロ。',
   mkMirror:'ドレガ　本物カ　当テテミロ。……全部　本物ダ。',
   mkVault:'封鎖区画　開放。……試作機ノ　性能検証ヲ　開始スル。被検体ハ　オ前ダ。',
+  mkSky:'制空権ハ　我ガ方ニ　アリ。地上ノ　個体ニ　逃ゲ場ハ　無イ。',
   mkOmega:'我ハ王機。犬ノ王国ガ　鉄ヲ知ッタ日カラ、コノ日ハ　決マッテイタ。——起動スル。',
   mkOmega2:'装甲ヲ　捨テル。……守ル必要ガ　無イト　判断シタ。',
   mkOmega3:'固体デ　在ル　必要ハ　無イ。……オ前ノ　形モ、後デ　貰ウ。', };
@@ -8248,6 +8287,7 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   // ── 六周目・メカワンコキングダム ──
   mkGolem:'bossheavy', mkTurret:'bossfast', mkArc:'bosscosmic',
   mkSwarm:'bossheavy', mkMirror:'bossrival', mkOmega:'boss3', mkOmega2:'bossfast', mkOmega3:'boss3',
+  mkSky:'bossfast',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival', hbMack:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
@@ -10162,7 +10202,7 @@ function bossTick(e,t){ const p=nearestPlayerTo(e.x), dx=p.x-e.x, dist=Math.abs(
     popText(e.x,e.y-e.h-12,'本気を出す…！',t.accent,true); ring(e.x,e.y-e.h*0.5,t.accent); spark(e.x,e.y-e.h*0.5,t.accent,16,9); sfx.boss(e.x); }
   const rageMul=(e.rage?1.4:1)*(e.cursed?1.5:1);
   // 飛行ボスのホバリング高度（ドラゴン＝高め、幽霊＝低め）。divebomb中は手動制御
-  if(t.flyer && !(e.state==='bmove'&&(e.moveName==='divebomb'||e.moveName==='skyDive'))){ const hov=(kind==='dragon'?78:34)+Math.sin(e.bob)*6; e.z += (hov-e.z)*0.12; e.vz=0; }
+  if(t.flyer && !(e.state==='bmove'&&(e.moveName==='divebomb'||e.moveName==='skyDive'))){ const hov=(t.hoverZ||(kind==='dragon'?78:34))+Math.sin(e.bob)*6; e.z += (hov-e.z)*0.12; e.vz=0; }   // hoverZ＝機体ごとの巡航高度（大型航空兵器は頭上を通り過ぎる高さが要る）
   if(e.state!=='bmove' && e.state!=='brec') e.facing=dx<0?-1:1;   // 余韻中は振り抜いた向きを保つ
   if(e.state==='bwind'){ e.moveT--; e.telegraph=Math.max(e.moveT,0);
     if(e.moveT<=0){ e.state='bmove'; e.moveT=0; e.telegraph=0; startBossMove(e); } return; }
@@ -10737,7 +10777,7 @@ const MECHA_CH=[
           {off:1240,list:[['mkShield',2],['mkDrone',2],['mkFlank',1]]},{off:1600,boss:true,list:[['mkOmega',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','最後の姿は液体じゃ。斬っても撃っても、傷はすぐ塞がってしまう。','床に転がる火器を拾え。撃った弾だけが、あやつを炉の縁へ押しやれる。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
   {theme:28,name:'鋼鉄の外郭門',terr:'up',
-   gates:[{off:520,list:[['mkDuel',3],['mkGun',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
+   gates:[{off:520,list:[['mkDuel',3],['mkDozer',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
           {off:1180,list:[['mkShield',2],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkGolem',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平の果てまで鉄の壁じゃ。門の高さは、王城の三倍はあるぞい…！','あの鉄の犬どもは痛みを感じん。怯まぬ相手には、掴んで投げるのが早い。','弾を撃ってくる型がおる。当たる寸前に後ろへ歩けば、弾はそのまま撃ち返せるのじゃ。','門は開かん。ならば横の足場を跳んで越えるまでよ。空中でもう一度跳べるのを忘れるでない。']}},
   {theme:29,name:'歯車の大回廊',terr:'liftup',
@@ -10746,16 +10786,17 @@ const MECHA_CH=[
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['見ろよ、天井まで歯車だ。俺たちが歩いてるこの床も、たぶん誰かの部品だぜ。','盾持ちの鉄犬は正面を固める。回避で背後に回り込め！','この回廊は床ごと昇っちまう。乗る場所は自分で選べよ。','連打で繋いで段位を上げろ。段位が上がるほど、貰える経験値が増えるんだ。']},
    npc2:{kind:'altar',name:'整備ドックの祈り台',once:true,atX:1640,lines:['鉄の犬たちが、代わる代わる頭を下げていく台だ。','機械にも祈る先があるらしい。……こちらも、ひとつ祈らせてもらおう。'],give:{shrine:true}}},
   {theme:26,name:'電磁の大坑道',terr:'dive',
-   gates:[{off:520,list:[['mkBomb',2],['mkBlink',1]]},{off:900,mini:true,list:[['mkMCoil',1]]},
-          {off:1180,list:[['mkHeavy',1],['mkGun',2],['mkFix',1]]},{off:1560,boss:true,list:[['mkArc',1]]}],
+   gates:[{off:520,list:[['mkBomb',2],['mkBone',2]]},{off:900,mini:true,list:[['mkMCoil',1]]},
+          {off:1180,list:[['mkHeavy',1],['mkGun',2],['mkDozer',1]]},{off:1560,boss:true,list:[['mkArc',1]]}],
    npc:{kind:'smith',name:'工房犬ハガネ',lines:['こいつら、掘ってるんじゃない。地面ごと「造ってる」んだ。信じられるかい？','雷を溜める型がいる。溜め始めたら、光った輪の外へ出ろ。輪の中は全部当たる。','こっちも溜められるぞ。攻撃を押しっぱなしにして離せば、タメ攻撃だ。','下りきった先は水が来る。水中はジャンプ連打で泳ぎ上がれる。溺れやしないさ。']}},
   {theme:27,name:'天空の軌道橋',terr:'climb',
-   gates:[{off:520,list:[['mkDrone',2],['mkBeam',1]]},{off:900,mini:true,list:[['mkMWing',1]]},
+   gates:[{off:520,list:[['mkDrone',2],['mkBeam',1]]},{off:900,mini:true,list:[['mkSky',1]]},
+          {off:1120,mini:true,list:[['mkMWing',1]]},
           {off:1180,list:[['mkFlank',1],['mkBeam',1],['mkShield',1]]},{off:1560,boss:true,list:[['mkTurret',1]]}],
    npc:{kind:'merchant',name:'行商猫チャミ',lines:['空に線路が浮いてるニャ…支えの柱が、どこにも無いニャ！','橋の上は飛ぶ鉄鳥だらけニャ。空中でも回避できるから、跳んでから避けるニャ','空中のコマンド技は、枠が違えば繋がるニャ。ただし各枠1回きりニャ','落ちてる得物は拾っていくニャ。通常技も前攻撃も奥義も、まるごと別物になるニャ']}},
   {theme:25,name:'溶鉱炉 第七区',terr:'tower',
    gates:[{off:520,list:[['mkHeavy',2],['mkFix',1]]},{off:900,mini:true,list:[['mkMHammer',1]]},
-          {off:1240,list:[['mkFlank',1],['mkBeam',1],['mkBlink',2]]},{off:1600,boss:true,list:[['mkMirror',1]]}],
+          {off:1240,list:[['mkFlank',1],['mkBone',2],['mkBlink',1]]},{off:1600,boss:true,list:[['mkMirror',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['炉の底が見えん…この国は、犬を「鋳て」おるのか。恐ろしい話じゃ。','背へ回り込む型がおる。壁を背にせい、そうすれば挟まれぬ。','足場が右上がりに積んである。跳び移って、高い地面へ上がるのじゃ。','どんな技の最中でも、奥義のコマンドで割り込める。追い詰められたら回すのじゃ。']}},
 ];
 const WORLD6_LEVELS=[
@@ -11607,7 +11648,8 @@ const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','ho
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
 const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
 // 六周目「メカワンコキングダム」の雑魚は全て機械。犬タイプは混ぜない
-const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink'];
+const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink',
+  'mkDozer','mkBone'];
 const SENGOKU_ZAKO_POOL=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja',
   'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto'];
 function randZako(){ const P=lap>=6?MECHA_ZAKO_POOL:lap>=5?SENGOKU_ZAKO_POOL:lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
@@ -12884,6 +12926,35 @@ function drawMechaFoe(e,t){
     for(const sgn of [-1,1]){ ctx.moveTo(sgn*4,ty+th2);
       ctx.quadraticCurveTo(sgn*bw*0.14,ty+th2+bh*0.10, sgn*bw*0.06,ty+th2+bh*0.18); }
     ctx.stroke(); }
+  else if(kind==='dozer'){                                          // 前面の排土板と履帯。止まらないのが怖さ
+    ctx.fillStyle=shade(t.c3,-10);                                  // 履帯（下半分をまるごと覆う）
+    ctx.fillRect(-bw*0.42,-bh*0.30,bw*0.84,bh*0.26);
+    ctx.fillStyle=shade(t.c2,-16);
+    for(let k=0;k<7;k++) ctx.fillRect(-bw*0.40+k*bw*0.115,-bh*0.28,bw*0.055,bh*0.22);   // 履板
+    ctx.fillStyle=t.c3;                                             // 転輪
+    for(let k=0;k<3;k++){ ctx.beginPath();
+      ctx.arc(-bw*0.26+k*bw*0.26,-bh*0.16,bh*0.075,0,TAU); ctx.fill(); }
+    ctx.fillStyle=t.accent;                                         // 排土板（前面へ大きく張り出す）
+    ctx.beginPath();
+    ctx.moveTo(bw*0.30,-bh*0.06); ctx.lineTo(bw*0.52,-bh*0.02);
+    ctx.lineTo(bw*0.52,-bh*0.54); ctx.lineTo(bw*0.30,-bh*0.46); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=shade(t.c3,-20);                                  // 刃こぼれの筋
+    for(let k=0;k<3;k++) ctx.fillRect(bw*0.44,-bh*0.44+k*bh*0.14,bw*0.08,3);
+    ctx.strokeStyle=t.c3; ctx.lineWidth=6;                          // 排土板を支える腕
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.42); ctx.lineTo(bw*0.32,-bh*0.26); ctx.stroke();
+    if(e.state==='charge'||e.telegraph>0){ ctx.save(); ctx.globalAlpha=0.28;   // 突進の予告：土煙
+      ctx.fillStyle='#c8b48a'; ctx.beginPath();
+      ctx.ellipse(-bw*0.46,-bh*0.10,bw*0.16,bh*0.09,0,0,TAU); ctx.fill(); ctx.restore(); } }
+  else if(kind==='bone'){                                           // 装甲を持たない鋼の骨。細く、速く、止まらない
+    ctx.strokeStyle=t.c1; ctx.lineWidth=5; ctx.lineCap='round';     // 肋
+    for(let k=0;k<4;k++){ const y=ty+bh*0.06+k*bh*0.075;
+      ctx.beginPath(); ctx.moveTo(-bw*0.14,y); ctx.quadraticCurveTo(0,y+bh*0.035,bw*0.14,y); ctx.stroke(); }
+    ctx.strokeStyle=shade(t.c2,-10); ctx.lineWidth=6;               // 背骨
+    ctx.beginPath(); ctx.moveTo(0,ty+bh*0.02); ctx.lineTo(0,ty+th2+bh*0.02); ctx.stroke();
+    ctx.fillStyle=t.c1;                                             // 骨盤
+    ctx.fillRect(-bw*0.13,ty+th2-bh*0.02,bw*0.26,bh*0.06);
+    if(e.revived){ ctx.save(); ctx.globalAlpha=0.30; ctx.fillStyle='#ff3a2a';   // 一度倒れた個体は赤熱している
+      ctx.beginPath(); ctx.ellipse(0,ty+bh*0.16,bw*0.20,bh*0.16,0,0,TAU); ctx.fill(); ctx.restore(); } }
   else if(kind==='bomb'){                                           // 腹に抱えた炸薬。点滅で「触れるな」を伝える
     const bl=0.35+0.55*Math.abs(Math.sin(gf*0.30)), cy=ty+th2*0.66;
     ctx.fillStyle=shade(t.c3,-18); ctx.beginPath(); ctx.arc(0,cy,bh*0.13,0,7); ctx.fill();
@@ -17159,6 +17230,7 @@ function drawEnemy(e){
   else if(e.type==='papipoo'){ drawPapipoo(e); }
   else if(e.type==='chamboss'){ drawChamBoss(e); }
   else if(e.type==='chamurus'){ drawChamurus(e); }
+  else if(t.mecha && t.boss && t.flyer){ drawMechaAir(e); }   // 大型航空兵器は横に長い機体で描く
   else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
@@ -17174,7 +17246,7 @@ function drawEnemy(e){
   else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
   else if(t.rider) drawRider(e,t);
   else drawBeast(e);
-  if(t.zombie||t.boner||(t.mecha&&!t.mechaKind)) drawFoeOverlay(e,t);   // 六周目の兵は drawMechaFoe が自前で単眼を描くので重ねない
+  if((t.zombie&&!t.mechaKind)||t.boner||(t.mecha&&!t.mechaKind)) drawFoeOverlay(e,t);   // 六周目の兵は drawMechaFoe が自前で単眼を描くので重ねない
   const bugOwn = t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss';
   if(t.bug && t.boss && e.type!=='chamurus' && !bugOwn) drawBugOverlay(e,t);   // 専用の蟲ボディを持つボスには重ねない
   rimEnd(_erim, 1.15);
@@ -19400,6 +19472,52 @@ function drawT1000(e,t,W2,H2,bob,atk,tele,anim){
     if(hurtT===12){ for(let k=0;k<6;k++)
       ember(e.x+rnd(-W2*0.3,W2*0.3), e.y-H2*0.5+rnd(-20,20), rnd(-1.6,1.6), -rnd(0.6,2.0), '#dfeaff'); } }
 }
+// ══ 掃討機 スカイレイダー：上空から撃ち下ろす大型航空兵器 ══
+// 既存の飛行ボスの絵（円盤・飛竜）はどれも生き物か円盤で、機械の砲艦に見えない。
+// 横に長い機体・傾いたローター・下向きの砲塔で「頭上を通り過ぎる」形にする
+function drawMechaAir(e){
+  const t=ETYPE[e.type], W2=t.w*0.46, H2=t.h*0.62;
+  const atk=(e.state==='bmove'), tele=(e.state==='bwind'), anim=e.anim||0;
+  // 傾けすぎると墜落機に見える。水平を保ったまま、わずかに機首を上下させる程度に留める
+  const roll=Math.sin(anim*0.7)*0.025 + (atk?-0.05:0);
+  ctx.save(); ctx.rotate(roll);
+  // 胴：前が細く後ろが太い。後端に排気口
+  ctx.fillStyle=t.c2;
+  ctx.beginPath();
+  ctx.moveTo(W2*0.92,-H2*0.52); ctx.lineTo(-W2*0.78,-H2*0.66);
+  ctx.lineTo(-W2*0.86,-H2*0.28); ctx.lineTo(W2*0.86,-H2*0.24); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=shade(t.c3,-12); ctx.fillRect(-W2*0.92,-H2*0.60,W2*0.14,H2*0.30);
+  { ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.55;
+    ctx.fillStyle='#ff8a3a';
+    ctx.beginPath(); ctx.ellipse(-W2*1.04,-H2*0.45,W2*0.12,H2*0.10,0,0,TAU); ctx.fill(); ctx.restore(); }
+  // 主翼と、左右に張り出したローター（斜めに寝かせて回転を見せる）
+  ctx.strokeStyle=t.c3; ctx.lineWidth=7;
+  for(const sgn of [-1,1]){
+    ctx.beginPath(); ctx.moveTo(sgn*W2*0.18,-H2*0.50); ctx.lineTo(sgn*W2*0.50,-H2*0.88); ctx.stroke();
+    ctx.save(); ctx.translate(sgn*W2*0.50,-H2*0.90);
+    ctx.strokeStyle='rgba(220,232,246,.85)'; ctx.lineWidth=3;
+    const sp=anim*2.4+sgn;
+    for(let k=0;k<2;k++){ const a2=sp+k*PI2*2;                       // 全周は TAU。ここは半回転ぶんの2枚
+      ctx.beginPath(); ctx.moveTo(-Math.cos(a2)*W2*0.24,-Math.sin(a2)*H2*0.06);
+      ctx.lineTo(Math.cos(a2)*W2*0.24,Math.sin(a2)*H2*0.06); ctx.stroke(); }
+    ctx.restore(); ctx.strokeStyle=t.c3; ctx.lineWidth=7; }
+  // 下向きの砲塔。構えると銃口が赤熱する
+  ctx.fillStyle=t.c3; ctx.fillRect(W2*0.20,-H2*0.24,W2*0.30,H2*0.16);
+  ctx.fillStyle=shade(t.c2,-18); ctx.fillRect(W2*0.28,-H2*0.10,W2*0.08,H2*0.16);
+  if(atk||tele){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba(255,120,60,'+(0.5+0.5*Math.sin(gf*0.5)).toFixed(2)+')';
+    ctx.beginPath(); ctx.arc(W2*0.32,H2*0.06,H2*0.07,0,TAU); ctx.fill(); ctx.restore(); }
+  // 機首の単眼（探照灯）。地上を舐めるように振る
+  { ctx.save(); ctx.globalCompositeOperation='lighter';
+    const sw=Math.sin(gf*0.04)*0.28;
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+',0.85)';
+    ctx.beginPath(); ctx.arc(W2*0.84,-H2*0.40,H2*0.06,0,TAU); ctx.fill();
+    ctx.globalAlpha=0.16; ctx.beginPath();
+    ctx.moveTo(W2*0.84,-H2*0.40);
+    ctx.lineTo(W2*0.84+Math.cos(1.2+sw)*W2*1.4, -H2*0.40+Math.sin(1.2+sw)*H2*2.2);
+    ctx.lineTo(W2*0.84+Math.cos(1.7+sw)*W2*1.4, -H2*0.40+Math.sin(1.7+sw)*H2*2.2);
+    ctx.closePath(); ctx.fill(); ctx.restore(); }
+  ctx.restore(); }
 function drawMechaKing(e){
   const t=ETYPE[e.type], hurt=enemyHurt(e);
   // 呼び出し側の座標系は「足元が原点・実寸に近いピクセル」。
@@ -20916,7 +21034,7 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   mkOmega2:'装甲解除（第二形態）', mkOmega3:'真核起動（最終形態）',
   mkMScout:'鋼機王国  先行偵察', mkMArms:'鋼機王国  多腕作業機', mkMCoil:'鋼機王国  電磁試作',
   mkMWing:'鋼機王国  飛行試作', mkMHammer:'鋼機王国  打鉄機', mkMOld:'鋼機王国  旧型王機',
-  mkVault:'封鎖区画の試作機' };
+  mkVault:'封鎖区画の試作機', mkSky:'鋼機王国  制空権' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
   {chapter:'序章', chapterSub:'ワンダフル王国', bgTheme:0, art:'city'},

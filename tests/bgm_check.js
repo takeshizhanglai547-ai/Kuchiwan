@@ -108,5 +108,55 @@ try{
     if(my===b0) throw new Error('bossmyth が定義されておらず BATTLE[0] へ落ちている');
     console.log('神のボス曲 OK (汎用ボス曲とも BATTLE[0] とも別の旋律、'+my.split(',').length+'音)'); }
 
-  console.log('BGM FORM/VOICING TEST PASSED');
+  // ===== 二〜五周目：ステージごとに刻みが違うこと =====
+// 音階と旋律は章ごとに書き分けてあったのに、刻みが既定のまま横並びだった。
+// 聴くとどのステージも同じ運びに聞こえるので、絵に合わせて刻みを与えている
+{ const sig={}, dup=[];
+  for(let i=9;i<=24;i++){
+    const r=analyze(HTML,'battle',i,3,32), S=r.S;
+    if(!S.rhy) throw new Error('テーマ'+i+' に刻みの指定が無い（既定の運びのまま）');
+    const k=S.rhy.slice(0,8).join(',')+'|'+(S.kit||(S.drive?'drive':'straight'));
+    if(sig[k]!=null) dup.push(i+'と'+sig[k]);
+    sig[k]=i; }
+  // 全16ステージが完全に別々である必要は無いが、半分以上が同じ運びでは章の差が出ない
+  if(dup.length>3) throw new Error('刻みが同じステージが多すぎる: '+dup.join(' / '));
+  const kinds=Object.keys(sig).length;
+  if(kinds<10) throw new Error('二〜五周目の刻みが '+kinds+' 種類しかない（16ステージ）');
+  console.log('章ごとの刻み OK ('+kinds+'種類／重なりは '+dup.length+'組)'); }
+
+// ===== 六周目：追跡テーマの作風（3+3+2 の不均等な足取り）=====
+// 映画の旋律は使わない。借りたのは「8つの刻みを 3+3+2 に割る足取り」と
+// 「金属を叩く打点」だけ。ここではその二つが実際に鳴っているかを測る
+{ const STEPS=[0,3,6];
+  const rep=[];
+  for(let i=25;i<=30;i++){
+    const r=analyze(HTML,'battle',i,6,64);
+    const sd=60/r.S.bpm/2;
+    if(r.S.kit!=='anvil') throw new Error('テーマ'+i+' が金床の刻みになっていない（kit='+r.S.kit+'）');
+    const stepOf=n=>Math.round(n.t0/sd)%8;
+    const kicks=r.notes.filter(n=>n.part==='kick');
+    if(!kicks.length) throw new Error('テーマ'+i+' に打点が無い');
+    // 打点が 3+3+2 の頭に寄っていること。均等な 0/2/4/6 や 0/4 では別物になる
+    const on=kicks.filter(n=>STEPS.indexOf(stepOf(n))>=0).length;
+    const ratio=on/kicks.length;
+    if(!(ratio>=0.75)) throw new Error('テーマ'+i+' の打点が 3+3+2 に乗っていない（'+Math.round(ratio*100)+'%）');
+    // 4分の均等踏み（2 と 6 が同数）になっていないこと＝行進曲に戻っていない
+    const at2=kicks.filter(n=>stepOf(n)===2).length, at3=kicks.filter(n=>stepOf(n)===3).length;
+    if(!(at3>at2)) throw new Error('テーマ'+i+' が均等な四つ打ちに戻っている（3拍目'+at3+' vs 2拍目'+at2+'）');
+    // 金属の余韻（FMベル）が打点と同じ数だけ乗っていること。
+    // 割合で見ると、宇宙パレットが元から鳴らしている FM ベルに薄められて判定が鈍る
+    const bells=r.notes.filter(n=>n.part==='fmbell');
+    const bon=bells.filter(n=>STEPS.indexOf(stepOf(n))>=0).length;
+    if(!(bon>=kicks.length*0.9))
+      throw new Error('テーマ'+i+' の金属の余韻が打点に足りない（打'+kicks.length+' に対し '+bon+'）');
+    rep.push(i+':'+Math.round(ratio*100)+'%'); }
+  // 六曲が互いに別の旋律であること（同じ足取りでも曲は書き分ける）
+  { const sig={};
+    for(let i=25;i<=30;i++){ const r=analyze(HTML,'battle',i,6,64);
+      const k=r.notes.filter(n=>n.part==='lead').map(n=>n.pitch).join(',');
+      if(sig[k]) throw new Error('テーマ'+i+' と '+sig[k]+' の旋律が同じ');
+      sig[k]=i; } }
+  console.log('六周目の足取り OK (3+3+2 の打点 '+rep.join(' ')+'／金属の余韻つき／六曲とも別の旋律)'); }
+
+console.log('BGM FORM/VOICING TEST PASSED');
 }catch(e){ console.error('FAIL:', e.message); process.exit(1); }
