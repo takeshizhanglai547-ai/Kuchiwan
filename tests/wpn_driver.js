@@ -281,6 +281,90 @@ const DRIVER = `
     p.weapon=defaultWeaponFor('inu'); p.heldWeapon=null; p.dim=0; p.atk=null;
     console.log('コマンド入力 OK (47本とも前攻撃・奥義コマンドから専用技／素の得物は '+back+')'); }
 
+  // ===== 15) 奥義の型が武器ごとに散っている（その場で回転して連打ばかりにしない） =====
+  { setupRoster('inu'); startGame(); state='play'; hardMode=false;
+    const p=players[0]; player=p;
+    // 型は「フラグ」ではなく、実際に走らせた動きで決める。
+    // 前へ出た距離・出した弾・上がった高さ・背後に当たったか・一撃の重さ
+    const probe=function(w){
+      const id=WEAPON_SPECIAL[w].ult, D=ATK[id];
+      p.kind='inu'; p.weapon=w; p.heldWeapon=w; p.state='idle'; p.atk=null; p.z=0; p.vz=0;
+      p.invuln=99999; p.hp=p.maxHp=99999; p.x=600; p._tx=null; p.facing=1; p.level=1;
+      p.dimMax=9; p.dim=9; p.comboStep=0;
+      enemies.length=0; projectiles.length=0; particles.length=0;
+      const all=[];
+      for(let k=0;k<4;k++){ spawnEnemy('wolf', 700+k*90, LANE); all.push(enemies[enemies.length-1]); }
+      for(let k=0;k<2;k++){ spawnEnemy('wolf', 480-k*90, LANE); all.push(enemies[enemies.length-1]); }
+      all.forEach(function(e){ e.hp=e.maxHp=999999; e.poise=999999; e.thinkCd=999999; e._fx=e.x; });
+      const rear=all.slice(4);
+      const x0=p.x, pe=all.map(function(){ return 0; });
+      let far=0, shots=0, air=0, peak=0;
+      beginAttack(id);
+      for(let f=0;f<(D.dur||40)+(D.hold||0)+56;f++){ hitStop=0; slowmo=0; particles.length=0;
+        all.forEach(function(e){ e.x=e._fx; e.vx=0; e.z=0; e.state='walk'; e.hurtTimer=0; });
+        updatePlayer(p); updateProjectiles();
+        if(projectiles.length>shots) shots=projectiles.length;
+        if(p.z>air) air=p.z;
+        const d=Math.abs(p.x-x0); if(d>far) far=d;
+        all.forEach(function(e,ix){ const now=999999-e.hp, d2=now-pe[ix]; pe[ix]=now;
+          if(d2>peak) peak=d2; }); }
+      const back=rear.reduce(function(a2,e){ return a2+(999999-e.hp); },0);
+      const tot=all.reduce(function(a2,e){ return a2+(999999-e.hp); },0);
+      // 実際に削れた敵のうち、いちばん遠かった距離＝その奥義の届く間合い
+      let hit=0;
+      all.forEach(function(e,ix){ if(pe[ix]>0){ const d3=Math.abs(e._fx-x0); if(d3>hit) hit=d3; } });
+      return {w:w, far:far, shots:shots, air:air, peak:peak, back:back, tot:tot, hit:hit}; };
+    const shapeOf=function(r){
+      if(r.far>=120) return '突進';
+      if(r.air>=60) return '跳躍';
+      if(r.peak>=40 && r.shots<=2) return '一撃';
+      if(r.shots>=1) return '飛び道具';
+      if(r.back>0) return '全方位';
+      return '前方連打'; };
+    const kinds={}, res=[];
+    Object.keys(WEAPON_SPECIAL).forEach(function(w){ const r=probe(w); r.sh=shapeOf(r); res.push(r);
+      (kinds[r.sh]=kinds[r.sh]||[]).push(w); });
+    const names=Object.keys(kinds);
+    if(names.length<5) throw new Error('奥義の型が '+names.length+' 種類しかない（'+names.join('/')+'）');
+    const N=res.length;
+    names.forEach(function(k){ if(kinds[k].length > Math.ceil(N/3))
+      throw new Error('奥義が「'+k+'」に偏っている（'+kinds[k].length+'/'+N+'本）'); });
+    // 分類が絵空事でないこと：型どおりの動きを実際にしている
+    kinds['突進']&&kinds['突進'].forEach(function(w){ const r=res.filter(function(q){return q.w===w;})[0];
+      if(!(r.far>=120)) throw new Error(w+' が突進に分類されたのに前へ出ていない'); });
+    kinds['飛び道具']&&kinds['飛び道具'].forEach(function(w){ const r=res.filter(function(q){return q.w===w;})[0];
+      if(!(r.shots>=1)) throw new Error(w+' が飛び道具に分類されたのに弾が出ていない'); });
+    // どの奥義もちゃんと当たる
+    const dead=res.filter(function(r){ return !(r.tot>0); }).map(function(r){ return r.w; });
+    if(dead.length) throw new Error('当たらない奥義がある: '+dead.join(','));
+    // このセッションで作り分けた得物は、狙った動きを実際にしていること。
+    // 「型」の名前ではなく、測った値そのもので押さえる（1本だけ戻しても赤くなる）
+    const at=function(w){ return res.filter(function(q){ return q.w===w; })[0]; };
+    const SPEC={
+      nunchaku:['far',120],  broom:['far',200],   chainsaw:['far',90],  twin:['far',120],
+      bostaff:['air',60],
+      gaxe:['shots',2],      gflail:['shots',1],  katana:['peak',60],   nodachi:['peak',40],
+      anchor:['peak',25],    yoyo:['shots',2],
+      sansetsu:['shots',1],  ironfan:['shots',3], flamberge:['shots',2], muramasa:['shots',2],
+      meteorh:['hit',330],   whip:['hit',330],    nagamaki:['peak',18],
+      scythe:['back',1],
+    };
+    Object.keys(SPEC).forEach(function(w){ const q=SPEC[w][0], need=SPEC[w][1], r=at(w);
+      if(!r) throw new Error(w+' を測れていない');
+      if(!(r[q]>=need)) throw new Error(w+' の奥義が狙いどおり動いていない（'+q+'='
+        +Math.round(r[q]*10)/10+'／'+need+'以上のはず）'); });
+    // 間合いの長い前方連打は、その場に留まって奥まで届くこと
+    ['meteorh','whip'].forEach(function(w){ const r=at(w);
+      if(r.far>=120) throw new Error(w+' が突進になっている（'+Math.round(r.far)+'px 前進）'); });
+    // 「その場で回転して連打」だけの奥義は、指定のある大鎌ほか2本まで
+    const spinny=Object.keys(WEAPON_SPECIAL).filter(function(w){ const d=ATK[WEAPON_SPECIAL[w].ult];
+      const r=res.filter(function(q){ return q.w===w; })[0];
+      return d.omni && d.spin && d.multi && r.far<60 && r.shots===0; });
+    if(spinny.length>2) throw new Error('その場で回転して連打する奥義が '+spinny.length+' 本ある: '+spinny.join(','));
+    p.weapon=defaultWeaponFor('inu'); p.heldWeapon=null; enemies.length=0; projectiles.length=0;
+    console.log('奥義の型 OK ('+names.map(function(k){ return k+':'+kinds[k].length; }).join(' ')
+      +'／回転連打は '+spinny.length+'本)'); }
+
   console.log('WEAPON TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
