@@ -8037,9 +8037,18 @@ const ETYPE={
   // 封鎖区画の試作機（ステージイベントで解放される）
   mkVault:{hp:1600,sp:2.0,dmg:40,atkR:106,w:94,h:120,c1:'#5a6472',c2:'#2e3540',c3:'#12161c',score:26000,
     boss:true,mini:true,bossKind:'gigas',weapon:'club',accent:'#8fe8ff',mecha:true,name:'封鎖区画の試作機'},
-  mkOmega:{hp:3400,sp:1.6,dmg:56,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:150000,
+  // 三段変身。玉座 → 装甲を捨てた本体 → 炉心むき出しの真核。
+  // 大王座の長老が「王の姿は三度、形を変える」と言うので、形態を持たせないと嘘になる。
+  // HPは 1300+1050+1250＝3600（単一形態のときの3400から微増）
+  mkOmega:{hp:1300,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
-    finalBoss:true,trueBoss:true,name:'王機 メカワンコ・オメガ'},
+    name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
+  mkOmega2:{hp:1050,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
+    boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
+    name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
+  mkOmega3:{hp:1250,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:1.42,c1:'#ffffff',c2:'#8fa6c4',c3:'#0a0e16',score:150000,
+    boss:true,bossKind:'guard0',weapon:'none',accent:'#ff6a3a',mecha:true,
+    finalBoss:true,trueBoss:true,name:'王機オメガ ——真核起動'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:120,w:146,h:210,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:160,w:323,h:228,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
@@ -8117,6 +8126,9 @@ const BOSSMOVES={
   mkMirror: ['kagemusha','muhon','teleSlash','rivalCombo','rivalDash','bladeParry','megaTornado'],
   // 真ラスボス：予告の長い大技を主軸に、繋ぎは間合いを消す手だけ
   mkOmega:  ['megaBeam','tenchuu','hammerQuake','judgeBolts','meteorCall','megaTornado','bodyCharge','unblockSmash','bossGrab'],
+  // 二形態目は装甲を捨てて速さで押す。三形態目は炉心むき出しの大技だけ
+  mkOmega2: ['dashThrust','tripleStep','teleSlash','judgeBolts','bodyCharge','rivalCombo','unblockSmash'],
+  mkOmega3: ['megaBeam','megaTornado','tenchuu','meteorCall','judgeBolts','hammerQuake','bossGrab','unblockSmash'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
@@ -8206,7 +8218,9 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   mkSwarm:'一機　壊シタカ。工廠ハ　毎分　十二機　造ル。数エテ　ミロ。',
   mkMirror:'ドレガ　本物カ　当テテミロ。……全部　本物ダ。',
   mkVault:'封鎖区画　開放。……試作機ノ　性能検証ヲ　開始スル。被検体ハ　オ前ダ。',
-  mkOmega:'我ハ王機。犬ノ王国ガ　鉄ヲ知ッタ日カラ、コノ日ハ　決マッテイタ。——起動スル。', };
+  mkOmega:'我ハ王機。犬ノ王国ガ　鉄ヲ知ッタ日カラ、コノ日ハ　決マッテイタ。——起動スル。',
+  mkOmega2:'装甲ヲ　捨テル。……守ル必要ガ　無イト　判断シタ。',
+  mkOmega3:'炉心　直結。演算ヲ　破棄。——コレガ　痛ミカ。初メテ　知ッタ。', };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
@@ -8223,7 +8237,7 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   katsuyori:'bosssengoku', hisahide:'bosssengoku', hanbei:'bosssengoku', kanbei:'bosssengoku',
   // ── 六周目・メカワンコキングダム ──
   mkGolem:'bossheavy', mkTurret:'bossfast', mkArc:'bosscosmic',
-  mkSwarm:'bossheavy', mkMirror:'bossrival', mkOmega:'boss3',
+  mkSwarm:'bossheavy', mkMirror:'bossrival', mkOmega:'boss3', mkOmega2:'bossfast', mkOmega3:'boss3',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival', hbMack:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
@@ -10664,39 +10678,41 @@ const NG5_UNLOCK=2;   // 戦国のステージをこの数クリアで「炎上�
 // ── 六周目「メカワンコキングダム」の六章 ──
 // 機械の国の仕組みを外側から順に剥いでいく。外郭→動力→燃料→流通→生産→中枢。
 // 歩くほど「この国が何で出来ているか」が分かる＝探究がそのまま進行になる
+// テーマ番号は「章の中身」に合わせて振る。宣言順のまま振っていたときは、
+// 坑道に昼の空と雲海が出て、軌道橋の下に地上の高層ビルが建っていた
 const MECHA_CH=[
   {theme:30,name:'中枢炉心「大王座」',terr:'tower',
    gates:[{off:560,list:[['mkHeavy',1],['mkBeam',1]]},{off:940,mini:true,list:[['mkMOld',1]]},
           {off:1240,list:[['mkShield',2],['mkDrone',2],['mkFlank',1]]},{off:1600,boss:true,list:[['mkOmega',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
-  {theme:25,name:'鋼鉄の外郭門',terr:'up',
+  {theme:28,name:'鋼鉄の外郭門',terr:'up',
    gates:[{off:520,list:[['mkDuel',3],['mkGun',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
           {off:1180,list:[['mkShield',2],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkGolem',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平の果てまで鉄の壁じゃ。門の高さは、王城の三倍はあるぞい…！','あの鉄の犬どもは痛みを感じん。怯まぬ相手には、掴んで投げるのが早い。','弾を撃ってくる型がおる。当たる寸前に後ろへ歩けば、弾はそのまま撃ち返せるのじゃ。','門は開かん。ならば横の足場を跳んで越えるまでよ。空中でもう一度跳べるのを忘れるでない。']}},
-  {theme:26,name:'歯車の大回廊',terr:'liftup',
+  {theme:29,name:'歯車の大回廊',terr:'liftup',
    gates:[{off:520,list:[['mkFix',2],['mkShield',1]]},{off:900,mini:true,list:[['mkMArms',1]]},
           {off:1180,list:[['mkBeam',1],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkSwarm',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['見ろよ、天井まで歯車だ。俺たちが歩いてるこの床も、たぶん誰かの部品だぜ。','盾持ちの鉄犬は正面を固める。回避で背後に回り込め！','この回廊は床ごと昇っちまう。乗る場所は自分で選べよ。','連打で繋いで段位を上げろ。段位が上がるほど、貰える経験値が増えるんだ。']},
    npc2:{kind:'altar',name:'整備ドックの祈り台',once:true,atX:1640,lines:['鉄の犬たちが、代わる代わる頭を下げていく台だ。','機械にも祈る先があるらしい。……こちらも、ひとつ祈らせてもらおう。'],give:{shrine:true}}},
-  {theme:27,name:'電磁の大坑道',terr:'dive',
+  {theme:26,name:'電磁の大坑道',terr:'dive',
    gates:[{off:520,list:[['mkBomb',2],['mkBlink',1]]},{off:900,mini:true,list:[['mkMCoil',1]]},
           {off:1180,list:[['mkHeavy',1],['mkGun',2],['mkFix',1]]},{off:1560,boss:true,list:[['mkArc',1]]}],
    npc:{kind:'smith',name:'工房犬ハガネ',lines:['こいつら、掘ってるんじゃない。地面ごと「造ってる」んだ。信じられるかい？','雷を溜める型がいる。溜め始めたら、光った輪の外へ出ろ。輪の中は全部当たる。','こっちも溜められるぞ。攻撃を押しっぱなしにして離せば、タメ攻撃だ。','下りきった先は水が来る。水中はジャンプ連打で泳ぎ上がれる。溺れやしないさ。']}},
-  {theme:28,name:'天空の軌道橋',terr:'climb',
-   gates:[{off:520,list:[['mkDrone',2],['mkDrone',1]]},{off:900,mini:true,list:[['mkMWing',1]]},
+  {theme:27,name:'天空の軌道橋',terr:'climb',
+   gates:[{off:520,list:[['mkDrone',2],['mkBeam',1]]},{off:900,mini:true,list:[['mkMWing',1]]},
           {off:1180,list:[['mkFlank',1],['mkBeam',1],['mkShield',1]]},{off:1560,boss:true,list:[['mkTurret',1]]}],
    npc:{kind:'merchant',name:'行商猫チャミ',lines:['空に線路が浮いてるニャ…支えの柱が、どこにも無いニャ！','橋の上は飛ぶ鉄鳥だらけニャ。空中でも回避できるから、跳んでから避けるニャ','空中のコマンド技は、枠が違えば繋がるニャ。ただし各枠1回きりニャ','落ちてる得物は拾っていくニャ。通常技も前攻撃も奥義も、まるごと別物になるニャ']}},
-  {theme:29,name:'溶鉱炉 第七区',terr:'tower',
+  {theme:25,name:'溶鉱炉 第七区',terr:'tower',
    gates:[{off:520,list:[['mkHeavy',2],['mkFix',1]]},{off:900,mini:true,list:[['mkMHammer',1]]},
           {off:1240,list:[['mkFlank',1],['mkBeam',1],['mkBlink',2]]},{off:1600,boss:true,list:[['mkMirror',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['炉の底が見えん…この国は、犬を「鋳て」おるのか。恐ろしい話じゃ。','背へ回り込む型がおる。壁を背にせい、そうすれば挟まれぬ。','足場が右上がりに積んである。跳び移って、高い地面へ上がるのじゃ。','どんな技の最中でも、奥義のコマンドで割り込める。追い詰められたら回すのじゃ。']}},
 ];
 const WORLD6_LEVELS=[
-  {id:'w6mon',  b:MECHA_CH[1], mx:0.18, my:0.60},   // 鋼鉄の外郭門（鉄門将ゲートル／斥候機スカウタ）
-  {id:'w6koro', b:MECHA_CH[2], mx:0.34, my:0.30},   // 歯車の大回廊（歯車王ギアード／多腕機アームズ）
-  {id:'w6kou',  b:MECHA_CH[3], mx:0.50, my:0.68},   // 電磁の大坑道（雷髄ボルテッカ／電磁機コイラ）
-  {id:'w6hashi',b:MECHA_CH[4], mx:0.66, my:0.28},   // 天空の軌道橋（軌道竜レイルドン／飛行機ウィンガ）
-  {id:'w6ro',   b:MECHA_CH[5], mx:0.80, my:0.60},   // 溶鉱炉 第七区（溶鋼獣モルテン／打鉄機ハンマ）
+  {id:'w6mon',  b:MECHA_CH[1], mx:0.18, my:0.60},   // 鋼鉄の外郭門（鋼牙将ギガディーン／先行偵察機スカウタα）
+  {id:'w6koro', b:MECHA_CH[2], mx:0.34, my:0.30},   // 歯車の大回廊（増殖将レプリカ／多腕作業機アームズ）
+  {id:'w6kou',  b:MECHA_CH[3], mx:0.50, my:0.68},   // 電磁の大坑道（電磁将ヴォルテクス／電磁試作機コイラ）
+  {id:'w6hashi',b:MECHA_CH[4], mx:0.66, my:0.28},   // 天空の軌道橋（砲塔将バリスタ／飛行試作機ウィンガ）
+  {id:'w6ro',   b:MECHA_CH[5], mx:0.80, my:0.60},   // 溶鉱炉 第七区（影写将ミラージュ／打鉄機ハンマ）
 ];
 const WORLD6_FINAL=[
   {id:'w6core', b:MECHA_CH[0], mx:0.91, my:0.18, locked:true, final:true},   // 中枢炉心「大王座」（機工王コアワン）
@@ -17088,7 +17104,7 @@ function drawEnemy(e){
   else if(e.type==='papipoo'){ drawPapipoo(e); }
   else if(e.type==='chamboss'){ drawChamBoss(e); }
   else if(e.type==='chamurus'){ drawChamurus(e); }
-  else if(t.mecha && t.boss && t.finalBoss){ drawMechaKing(e); }   // 王機だけは専用の絵（流用だと紫のふわふわ犬になる）
+  else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
@@ -19236,7 +19252,9 @@ function drawMechaKing(e){
   ctx.fillStyle=shade(t.c3,-34); ctx.fillRect(-W2*0.17,hy-H2*0.045,W2*0.32,H2*0.055);
   { ctx.save(); ctx.globalCompositeOperation='lighter';
     const scan=Math.sin(gf*0.05)*W2*0.12;
-    ctx.fillStyle='rgba('+hexRGB(t.accent)+',0.95)';
+    // 殴られている間は走査光が赤く振れる。他のボス（drawGuard0／drawBigBoss 等）は
+    // hurtEye で被弾を返すが、王機には顔が無い。単眼の色でしか手応えを返せない
+    ctx.fillStyle='rgba('+hexRGB(hurt?'#ff5a6a':t.accent)+',0.95)';
     ctx.fillRect(-W2*0.02+scan,hy-H2*0.042,W2*0.06,H2*0.049); ctx.restore(); }
   // ── 背の排熱塔。溜めの間は激しく吹く ──
   ctx.fillStyle=shade(t.c3,-10);
@@ -20675,7 +20693,14 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   hbGuard8:'腕試しの好敵手', hbWatch:'腕試しの好敵手', hbWanden:'腕試しの好敵手',
   wolfking:'真・ワンワン帝国 覇王（第二形態）', darkknight:'暗黒剣士（最終形態）',
   zeus2:'神威解放（第二形態）', zeus3:'天空神 真体（最終形態）',
-  nobunaga2:'鬼道（第二形態）', nobunaga3:'第六天魔王（最終形態）' };
+  nobunaga2:'鬼道（第二形態）', nobunaga3:'第六天魔王（最終形態）',
+  mkGolem:'鋼機王国  第一将　鉄壁', mkTurret:'鋼機王国  第二将　砲門',
+  mkArc:'鋼機王国  第三将　雷速', mkSwarm:'鋼機王国  第四将　工廠',
+  mkMirror:'鋼機王国  第五将　虚像', mkOmega:'鋼機王国を統べる王機',
+  mkOmega2:'装甲解除（第二形態）', mkOmega3:'真核起動（最終形態）',
+  mkMScout:'鋼機王国  先行偵察', mkMArms:'鋼機王国  多腕作業機', mkMCoil:'鋼機王国  電磁試作',
+  mkMWing:'鋼機王国  飛行試作', mkMHammer:'鋼機王国  打鉄機', mkMOld:'鋼機王国  旧型王機',
+  mkVault:'封鎖区画の試作機' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
   {chapter:'序章', chapterSub:'ワンダフル王国', bgTheme:0, art:'city'},
@@ -20812,7 +20837,9 @@ function startOpening(){ Music.stop();
   players.forEach(pp=>{ if(!pp.permWeapon) pp.weapon=defaultWeaponFor(pp.kind); });
   startCutscene(storyOpenFor(), ()=>startGame()); }
 function startBossCut(type,stageN){ Music.setMode(bossMusicFor(type)); sfx.boss();
-  const intro={boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[ETYPE[type].bossKind],text:bossQuoteFor(type)};
+  // 肩書きはまず type で引く。既存ボスの bossKind を流用したボス（mumei や六周目の五将）が
+  // 流用元の肩書き（「ワンワン帝国 第六の将」等）を名乗ってしまうため
+  const intro={boss:type,stageN,name:ETYPE[type].name,role:BOSSROLE[type]||BOSSROLE[ETYPE[type].bossKind],text:bossQuoteFor(type)};
   // ラスボス（大帝）直前にはキャラ別の「転」シーン、チャム戦には正体バレのシーンを前置き
   const turn=(ETYPE[type].bossKind==='emperor')?storyTurnFor():(type==='chamboss'?CHAM_PRE:(type==='emperorX'?ALIEN_PRE:null));
   startCutscene(turn?[...turn,intro]:[intro], ()=>{ state='play'; }); }
@@ -20959,9 +20986,9 @@ const CHAM_PRE=[
 ];
 const NG6_OPEN=[
   {chapter:true, title:'第六章', sub:'メカワンコキングダム'},
-  {bgTheme:25, art:'invade', name:'', text:'戦の世が旗を畳んだ夜明け。地平線が、まっすぐな一本の線になっていた。山ではない。継ぎ目のある、鉄の壁だった。'},
-  {bgTheme:25, art:'invade', name:'長老モフじい', text:'「……端から端まで、壁が続いておる。あれは城ではない。国じゃ。国がまるごと、鉄で出来ておるのじゃ」'},
-  {bgTheme:26, art:'invade', name:'', text:'門が音もなく持ち上がる。見上げるほどの歯車が噛み合い、光る油が管を巡り、鉄の犬たちが列をなして黙々と歩いていた。'},
+  {bgTheme:28, art:'invade', name:'', text:'戦の世が旗を畳んだ夜明け。地平線が、まっすぐな一本の線になっていた。山ではない。継ぎ目のある、鉄の壁だった。'},
+  {bgTheme:28, art:'invade', name:'長老モフじい', text:'「……端から端まで、壁が続いておる。あれは城ではない。国じゃ。国がまるごと、鉄で出来ておるのじゃ」'},
+  {bgTheme:29, art:'invade', name:'', text:'門が音もなく持ち上がる。見上げるほどの歯車が噛み合い、光る油が管を巡り、鉄の犬たちが列をなして黙々と歩いていた。'},
   {bgTheme:29, art:'invade', name:'', text:'炉の火が地平を赤く染める。ここでは犬が生まれるのではない——鋳られるのだ。空には、支えの無い線路が幾重にも架かっていた。'},
   {bgTheme:30, art:'invade', name:'？？？', text:'『——観測。有機個体、確認。ようこそ、メカワンコキングダムへ。諸君は、その脆い肉を捨てるために来たのだ』'},
   {bgTheme:30, art:'player', name:'@hero', text:'「捨てるつもりはない。……この国の奥に何があるのか、この目で見るまでは帰らないぞ」'},
