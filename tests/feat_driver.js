@@ -52,6 +52,53 @@ const DRIVER = `
   if(players[0].kind!==CHARS[p1pick].k) throw new Error('P1 kind not applied');
   console.log('2P CHAR SELECT OK (P1='+players[0].kind+', P2='+players[1].kind+', started -> '+state+')');
 
+  // ===== 4b) 奥義は通常技・コマンド技のどれからでもキャンセルで出せる =====
+  { const cancelFrom=function(kind, move){
+      setupRoster(kind); startGame(); state='play';
+      const p=players[0]; player=p; p.level=1; p.x=600; p._tx=null; p.facing=1; p.y=LANE;
+      p.hp=p.maxHp=99999; p.state='idle'; p.atk=null; p.z=0;
+      p.dimMax=9; p.dim=9; ultLocked=false;
+      enemies.length=0; encounters.length=0; projectiles.length=0;
+      consumeCmd();
+      beginAttack(move);
+      if(p.state!=='attack') throw new Error(kind+'/'+move+' が出ていない');
+      const before=p.atk.type, dim0=p.dim;
+      const real=rotationReady; rotationReady=function(){ return true; };
+      hitStop=0; slowmo=0;                       // 演出でフレームが飛ぶと入力が届かない
+      try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+      return {before:before, after:(p.atk&&p.atk.type)||p.state, dim0:dim0, dim:p.dim, p:p}; };
+    // 通常コンボの1段目から
+    { const r=cancelFrom('inu','c1');
+      if(r.after===r.before) throw new Error('通常技から奥義へ割り込めない（'+r.after+'）');
+      if(!(r.dim<r.dim0)) throw new Error('奥義キャンセルでストックを消費していない'); }
+    // コマンド技から（7キャラぶん・地上の↓↑技を起点にする）
+    { const KS=['inu','shima','nuko','guard8','watch','wanden','mack'];
+      const bad=[];
+      KS.forEach(function(k){
+        const mv=specialFor({kind:k,level:1},'du');
+        if(!ATK[mv]) return;
+        const r=cancelFrom(k, mv);
+        if(r.after===r.before) bad.push(k+'/'+mv);
+        else if(!(r.dim<r.dim0)) bad.push(k+'（ストック未消費）'); });
+      if(bad.length) throw new Error('コマンド技から奥義へ割り込めない: '+bad.join(',')); }
+    // 奥義から奥義へは繋げない。イッヌは技IDが同じなので、
+    // 技名ではなくストックが二重に減っていないかで見る
+    { const r=cancelFrom('inu','dimension');
+      if(r.after!==r.before) throw new Error('奥義から奥義へ繋がってしまう（'+r.before+'→'+r.after+'）');
+      if(r.dim!==r.dim0) throw new Error('奥義から奥義へ繋がってストックが二重に減っている（'+r.dim0+'→'+r.dim+'）'); }
+    // ストックが足りなければ技はそのまま続く
+    { setupRoster('inu'); startGame(); state='play';
+      const p=players[0]; player=p; p.level=1; p.x=600; p._tx=null; p.facing=1;
+      p.hp=p.maxHp=99999; p.state='idle'; p.atk=null; p.z=0; p.dimMax=9; p.dim=0;
+      enemies.length=0; encounters.length=0; consumeCmd();
+      beginAttack('c1');
+      const real=rotationReady; rotationReady=function(){ return true; };
+      hitStop=0; slowmo=0;
+      try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+      if(!p.atk || p.atk.type!=='c1') throw new Error('ストック0でも奥義に化けている（'+(p.atk&&p.atk.type)+'）');
+      if(p.dim<0) throw new Error('ストックが負になっている'); }
+    console.log('奥義キャンセル OK (通常技・7キャラのコマンド技から割り込める／奥義からは繋がらない／ストック0なら技が続く)'); }
+
   // ===== 5) redesigned ↓↑ specials (inu/shima/guard8) =====
   ['iswords','soneinch','gimpact','nthunder'].forEach(k=>{ if(!ATK[k]) throw new Error('missing ATK '+k); });
   // inu 聖剣乱舞: rising holy swords hit forward enemies + spawn hsword particles
@@ -66,7 +113,7 @@ const DRIVER = `
   { const ringRun=function(move){
       setupRoster('inu'); startGame(); state='play';
       const p=players[0]; player=p; p.x=600; p._tx=null; p.facing=1; p.level=1;
-      p.hp=p.maxHp=99999; p.state='idle'; p.atk=null; p.z=0;
+      p.hp=p.maxHp=99999; p.state='idle'; p.atk=null; p.z=0; p.y=LANE;
       enemies.length=0; particles.length=0; projectiles.length=0;
       spawnEnemy('wolf', p.x+110, LANE); const fE=enemies[0];
       spawnEnemy('wolf', p.x-110, LANE); const bE=enemies[1];
@@ -76,7 +123,11 @@ const DRIVER = `
       const D=ATK[move]; beginAttack(move);
       const free=(D.hold|0)+D.act[1];        // 締めの手前までは動かないよう押さえておく
       let inv=0, blades=[], fall=null, stab=null, pairs=0; const seen=new Set();
+      const px0=p.x, py0=p.y;
       for(let i=0;i<free+26;i++){ hitStop=0; slowmo=0;
+        // カメラが動くと updatePlayer の末尾の clamp で自分が押し出され、
+        // 「後ろの敵」が自分より前に来てしまう。左右の判定を測るので自分も固定する
+        p.x=px0; p.y=py0;
         if(i<free){ [fE,bE].forEach(function(e){ e.x=e._fx; e.vx=0; e.vz=0; e.z=0; e.hurtTimer=0; }); }
         if(p.invuln>0) inv++;
         step(1);

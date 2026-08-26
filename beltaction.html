@@ -2321,6 +2321,31 @@ function drawParticles(layer){
       ctx.beginPath(); ctx.moveTo(sx, py-p.h);
       for(let i=1;i<=9;i++){ ctx.lineTo(sx+(i<9?rnd(-12,12):0), (py-p.h)+p.h*(i/9)); }
       ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.8; ctx.stroke(); }
+    else if(p.k==='cline'){                                            // 星座の線
+      // 加算合成だけだと明るい空に溶けて見えない。先に濃い縁取りを敷いてから光らせる
+      const ex=p.x2-camX, ey=p.y2, LW=(p.w||8)*(0.6+0.4*a);
+      ctx.lineCap='round';
+      ctx.globalAlpha=a*0.85; ctx.strokeStyle='rgba(24,8,48,.92)'; ctx.lineWidth=LW+7;
+      ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+      ctx.strokeStyle=p.color||'#b0e8ff'; ctx.lineWidth=LW+3;
+      ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,.98)'; ctx.lineWidth=Math.max(2.4, LW*0.42);
+      ctx.beginPath(); ctx.moveTo(sx,py); ctx.lineTo(ex,ey); ctx.stroke(); }
+    else if(p.k==='cstar'){                                            // 敵に打った星印
+      const R=(p.r||18)*(0.82+0.26*Math.sin(gf*0.30+(p.ph||0)));
+      // 縁取り（通常合成）→ 淡い光暈 → 白い星本体、の順に重ねる
+      ctx.globalAlpha=a*0.9; ctx.strokeStyle='rgba(24,8,48,.9)'; ctx.lineWidth=5; ctx.lineJoin='round';
+      ctx.beginPath();
+      for(let q2=0;q2<10;q2++){ const rr=q2%2?R:R*0.42, an=Math.PI/5*q2-Math.PI/2;
+        ctx[q2?'lineTo':'moveTo'](sx+Math.cos(an)*rr, py+Math.sin(an)*rr); }
+      ctx.closePath(); ctx.stroke();
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;
+      const g=ctx.createRadialGradient(sx,py,0,sx,py,R*2.6);
+      g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(0.35,'rgba(214,176,255,.6)'); g.addColorStop(1,'rgba(214,176,255,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,py,R*2.6,0,TAU); ctx.fill();
+      drawStar(sx,py,R,R*0.42,'#ffffff');
+      ctx.globalAlpha=a*0.85; drawStar(sx,py,R*0.60,R*0.25,p.color||'#d6b0ff'); }
     else if(p.k==='fsword'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=a;   // 天から降ってきて突き刺さる聖剣
       const age=p.max-p.life, u=Math.min(1, age/Math.max(1,p.fall||9));
       const off=(1-u)*(p.drop||420), base=py-off, top=base-p.h;
@@ -2397,7 +2422,7 @@ const ATK={
   // ── 必殺技（イッヌ）──
   shoryu:{name:'昇竜拳', hold:6, dur:30, act:[2,24], reach:60, hh:520, dmg:8, kb:5, from:1.2, to:-1.9, len:50, trail:'#ffe27a', pivotY:-50, lunge:0, launch:0, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true},
   stinger:{name:'スティンガー', dur:24, act:[3,18], reach:78, hh:42, dmg:14, kb:9, from:-0.12, to:-0.12, len:48, trail:'#9fe8ff', pivotY:-52, move:9.0, multi:true, multiGap:7, stinger:true},
-  dimension:{name:'次元斬', dimBlade:true, dur:48, act:[6,42], reach:158, hh:160, dmg:11, kb:7, from:-3.1, to:3.1, len:64, trail:'#c46bff', pivotY:-46, omni:true, multi:true, multiGap:6, special:true},
+  dimension:{name:'次元斬', isUlt:true, dimBlade:true, dur:48, act:[6,42], reach:158, hh:160, dmg:11, kb:7, from:-3.1, to:3.1, len:64, trail:'#c46bff', pivotY:-46, omni:true, multi:true, multiGap:6, special:true},
   gcounter:{name:'ガードカウンター', dur:24, act:[3,9], reach:86, hh:54, dmg:22, kb:15, from:-0.7, to:0.9, len:50, trail:'#bfe9ff', pivotY:-56, lunge:2.6, knock:true, counter:true},
   iai:{name:'居合斬り', dur:22, act:[8,12], reach:112, hh:52, dmg:26, kb:14, from:-0.18, to:0.18, len:60, trail:'#dff0ff', pivotY:-56, move:9, knock:true, finisher:true, iai:true},
   // ── シマダックス（拳法）──
@@ -2419,7 +2444,7 @@ const ATK={
   nflame:{name:'フレイムピラー', dur:24, act:[9,10], reach:30, hh:30, dmg:0, kb:0, from:-1.0,to:-0.2, len:18, trail:'#ff9a3a', fist:true, cast:7},
   ngnd:{name:'ディレイバースト', dur:24, act:[10,11], reach:30, hh:30, dmg:0, kb:0, from:0.9,to:1.3, len:14, trail:'#ffae42', fist:true, cast:8},
   ntornado:{name:'サイクロンライズ', dur:30, act:[2,24], reach:74, hh:520, dmg:7, kb:6, from:1.2,to:-1.9, len:24, trail:'#aef8ff', fist:true, rise:true, riseV:24, riseG:0.8, multi:true, multiGap:5, shoryu:true, ntor:true},
-  nmeteor:{name:'彼方からの呼び声', dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
+  nmeteor:{name:'彼方からの呼び声', isUlt:true, dur:84, act:[14,15], reach:30, hh:30, dmg:0, kb:0, from:-1.6,to:-1.5, len:22, trail:'#c46bff', fist:true, cast:5, caller:true},
   // ══════════════════════════════════════════════════════════════
   //  武器ごとの奥義
   //  拾った得物を握っている間は、奥義もその武器の技になる。
@@ -2859,7 +2884,7 @@ const ATK={
     pshot:{dmg:24,color:'#cfeaff',speed:12,r:36,life:120,multihit:true,hitGap:8,style:'wave',pierce:true,low:true}},
   // ↓↑＝絶刀（溜めて放つ画面貫通の一閃）
   dzetto:{name:'絶刀',    hold:12, dur:46, act:[16,22], reach:190, hh:70, dmg:56, kb:22, from:-0.14,to:0.14, len:96, trail:'#ffffff', pivotY:-56, special:true, iai:true, superFx:true, zetto:true, knock:true},
-  dkaiden:{name:'無名一刀流・皆伝', dur:60, act:[10,50], reach:150, hh:64, dmg:0, kb:0, from:-0.3,to:0.3, len:70, trail:'#ffffff', pivotY:-56, special:true, superFx:true, kaiden:true},   // 奥義＝画面全体への連続居合
+  dkaiden:{name:'無名一刀流・皆伝', isUlt:true, dur:60, act:[10,50], reach:150, hh:64, dmg:0, kb:0, from:-0.3,to:0.3, len:70, trail:'#ffffff', pivotY:-56, special:true, superFx:true, kaiden:true},   // 奥義＝画面全体への連続居合
   // ══════════════════════════════════════════════════════════════
   //  レベルで解禁される上位必殺技（Lv5＝↓↑／Lv10＝波動・昇竜）
   //  いずれも元の技とは別モーション・別演出になる
@@ -3331,7 +3356,25 @@ function TD(n){ return Math.round(n*evoMul(player)); }
 const ULT_COST={mack:3};
 // 段位が上がるほど奥義は重く派手になるので、消費するストックも段位ぶん増える。
 // 受け皿（dimMax）も段位で増やすので、貯める手間の比は変わらない
-function ultCost(p){ return (ULT_COST[(p&&p.kind)||'inu']||1) + evoTier(p); }
+// 段位が上がるほど奥義が重くなると、育てるほど撃てなくなる。
+// マックの地上奥義（空爆要請）だけは元から重い技として据え置き、他は2で頭打ちにする
+function ultCost(p, air){
+  const k=(p&&p.kind)||'inu';
+  if(k==='mack' && !air) return (ULT_COST.mack||1) + evoTier(p);
+  return Math.min(2, 1 + evoTier(p)); }
+// 地上の奥義を起動する。通常の入力からも、技中の奥義キャンセルからも同じ道を通す
+function fireGroundUlt(p, cost){
+  const SH=p.kind==='shima', NK=p.kind==='nuko', GD=p.kind==='guard8',
+        WA=p.kind==='watch', WD=p.kind==='wanden', MK=p.kind==='mack';
+  // 武器を拾っている間は、その得物の奥義になる
+  const wu=weaponSpecialFor(p,'ult');
+  if(wu){ beginUlt(p, ATK[wu].name); beginAttack(wu); p.dim-=cost;
+    p.invuln=Math.max(p.invuln, 40); return; }
+  beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
+  if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); }
+  else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; }
+  else beginAttack(NK?'nmeteor':'dimension');
+  p.dim-=(cost-1); }   // 各入口が1つ消費しているので、残りぶんをここで引く
 const SPECIAL_SLOTS=['up','du','fwd','down','hadou','dp','dash'];
 const SPECIAL_SLOT_NAME={up:'上攻撃', fwd:'前攻撃', down:'下攻撃', dash:'ダッシュ攻撃', hadou:'波動コマンド', dp:'昇竜コマンド', du:'↓↑コマンド'};
 const SPECIAL_SLOT_CMD ={up:'↑ ＋攻撃', fwd:'→ ＋攻撃', down:'↓ ＋攻撃', dash:'→→ ＋攻撃', hadou:'↓→ ＋攻撃', dp:'→↓→ ＋攻撃', du:'↓↑ ＋攻撃'};
@@ -3464,25 +3507,40 @@ function airUltTick(p, a, def){
       const cand=enemies.filter(function(e){ return !e.dead && !e.grabbedBy && Math.abs(e.x-(camX+W/2))<W*0.62
         && (a.mark||[]).indexOf(e)<0; });
       if(cand.length){ const e=cand[0]; (a.mark=a.mark||[]).push(e);
-        drawStar(0,0,0,0,'#fff');   // 実体は下の描画で出す（ここでは印だけ付ける）
-        spark(e.x, e.y-e.h*0.6, '#ffd0f0', 8, 8); ring(e.x, e.y-e.h*0.5, '#d6b0ff');
+        spark(e.x, e.y-e.h*0.6, '#ffd0f0', 10, 9); ring(e.x, e.y-e.h*0.5, '#d6b0ff');
         noHitStopOnce=true; damageEnemy(e, TD(Math.round(16*mul)), 0, false); sfx.get(e.x); } }
+    // 星印は「打って終わり」だと1フレームで消えて何も見えない。
+    // 印の付いた敵に星を出し続け、追従させる
+    if(t>def.act[0] && t<=def.act[1]+10){
+      (a.mark||[]).forEach(function(e,ix){ if(e.dead) return;
+        particles.push({k:'cstar', x:e.x, y:e.y-e.h*0.62, r:24+((ix%3)*4), ph:ix*1.7,
+          color:'#d6b0ff', layer:1, life:3, max:3}); }); }
     // 後半：星印どうしを線で結び、線の上を雷が走る（印が多いほど強い＝雑魚の群れに刺さる）
     if(t>=def.act[0]+36 && t<=def.act[1] && (t-(def.act[0]+36))%6===0){
       const ms=(a.mark||[]).filter(function(e){ return !e.dead; });
       const n=(t-(def.act[0]+36))/6;
       if(ms.length){ const e=ms[n%ms.length], e2=ms[(n+1)%ms.length];
-        for(let k=0;k<8;k++){ const u=k/8;
-          spark(e.x+(e2.x-e.x)*u, (e.y-e.h*0.5)+((e2.y-e2.h*0.5)-(e.y-e.h*0.5))*u, (k%2)?'#ffffff':'#b0e8ff', 2, 6); }
+        // 点をちりばめるだけでは線に見えない。太い光の線そのものを引いて残す
+        particles.push({k:'cline', x:e.x, y:e.y-e.h*0.62, x2:e2.x, y2:e2.y-e2.h*0.62,
+          color:'#b0e8ff', w:12, layer:1, life:26, max:26});
+        for(let k=0;k<10;k++){ const u=k/10;
+          spark(e.x+(e2.x-e.x)*u, (e.y-e.h*0.62)+((e2.y-e2.h*0.62)-(e.y-e.h*0.62))*u, (k%2)?'#ffffff':'#b0e8ff', 3, 8); }
         ms.forEach(function(q){ if(q.dead) return;
           noHitStopOnce=true; damageEnemy(q, TD(Math.round(15*mul)), 0, false);
           if(!q.dead && n%3===2) launchEnemy(q, (q.x<p.x?-1:1)*8, -12, 3); });
         flash=Math.max(flash,2); if(n%3===0) sfx.zap(e.x); } }
     if(t===def.act[1]+2){ const ms=(a.mark||[]).filter(function(e){ return !e.dead; });
-      flash=Math.max(flash,6); shake=Math.max(shake,14); triggerSlow(24); sfx.big(p.x);
+      flash=Math.max(flash,6); shake=Math.max(shake,14); triggerSlow(24); sfx.big(p.x); sfx.ko(p.x);
       popText(p.x,p.y-p.z-110,'——星座、完成！','#ffffff',true);
-      ms.forEach(function(q){ ring(q.x,q.y-q.h*0.5,'#ffffff'); spark(q.x,q.y-q.h*0.5,'#d6b0ff',16,11);
-        noHitStopOnce=true; damageEnemy(q, TD(Math.round(48*mul)), (q.x<p.x?-1:1)*10, true); }); } }
+      ms.forEach(function(q,ix){ ring(q.x,q.y-q.h*0.5,'#ffffff'); spark(q.x,q.y-q.h*0.5,'#d6b0ff',9,12);
+        particles.push({k:'cstar', x:q.x, y:q.y-q.h*0.62, r:30, ph:ix*1.7, color:'#ffffff', layer:1, life:30, max:30});
+        noHitStopOnce=true; damageEnemy(q, TD(Math.round(48*mul)), (q.x<p.x?-1:1)*10, true); });
+      // 締めは全部の星を一斉に線で結んで焼き切る。
+      // 線は「最後に」積む——上限を超えたぶんは寿命の比が同じなら積んだ順に捨てられるので、
+      // 火花より先に積むと、いちばん見せたい線から消えていた
+      for(let i2=0;i2<ms.length && ms.length>=2;i2++){ const e=ms[i2], e2=ms[(i2+1)%ms.length];
+        particles.push({k:'cline', x:e.x, y:e.y-e.h*0.62, x2:e2.x, y2:e2.y-e2.h*0.62,
+          color:'#ffffff', w:16, layer:1, life:34, max:34}); } } }
   else if(K2==='guard8'){            // 錨を鎖で振り回しながら落ち、着地で地面を三重に叩き割る
     // 落下中：鎖の先の錨がぐるぐる回り、周りを巻き込む（以前は落ちるだけで、当てる手段が着地しか無かった）
     if(t>def.airHover && t<def.act[0]){ p.vz=Math.max((p.vz||0)-1.6, -24);
@@ -5584,7 +5642,7 @@ function updatePlayer(){
       // 空中でレバーを回すのは難しいので、攻撃＋掴みの同時押しでも出せるようにする
       if(rotationReady() || K.grab || pressed.grab){
         pressed.atk=false;
-        const cost=ultCost(p);
+        const cost=ultCost(p, true);
         if(p.dim<cost){ consumeCmd();
           popText(p.x,p.y-p.z-110,'奥義ストックが足りない（'+cost+'必要）','#c46bff',true); sfx.guard(p.x); return; }
         if(p.kind==='nuko' && ultLocked){ consumeCmd(); popText(p.x,p.y-p.z-110,'奥義が封じられている…！','#c46bff',true); return; }
@@ -5592,9 +5650,9 @@ function updatePlayer(){
         beginAirAttack(AIR_ULT[p.kind]||'aInu');
         p.dim-=cost; p.invuln=Math.max(p.invuln,40); consumeCmd(); return; }
       // 空中のコマンド技。地上と同じ入力で、落ちながら出る
-      if(dpReady(p.facing)){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }
-      if(hadokenReady(p.facing)){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; }
-      if(downUpReady()){ pressed.atk=false; beginAirAttack(airSpecialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }
+      if(dpReady(p.facing)){ pressed.atk=false; (p.airChain=p.airChain||{}).dp=1; beginAirAttack(airSpecialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }
+      if(hadokenReady(p.facing)){ pressed.atk=false; (p.airChain=p.airChain||{}).hadou=1; beginAirAttack(airSpecialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; }
+      if(downUpReady()){ pressed.atk=false; (p.airChain=p.airChain||{}).du=1; beginAirAttack(airSpecialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }
     }
     // air attack
     if(pressed.atk && p.jAtk<=0){ pressed.atk=false; p.jAtk=13; p.jHit=new Set(); p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
@@ -5670,7 +5728,7 @@ function updatePlayer(){
       else if(p.jHyaku){ if(p.jAtk%4===0){ p.jHit=new Set(); jumpAttackHit(); } }   // 百裂拳は連続ヒット
       else if(p.jHammer){ jumpAttackHit(); }   // ダブルハンマーは落下中ずっと判定
       else if(p.jAtk>=3 && p.jAtk<=11) jumpAttackHit(); }
-    if(p.z<=0){ p.z=0; p.vz=0;
+    if(p.z<=0){ p.z=0; p.vz=0; p.airChain={};   // 着地したら空中コマンドの繋ぎ直しを許す
       if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
       if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
       if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
@@ -5685,6 +5743,37 @@ function updatePlayer(){
 
   if(p.state==='attack'){
     const a=p.atk, def=a.def;
+    // ── 奥義キャンセル：通常技・コマンド技のどれからでも、奥義コマンドで割り込める ──
+    // （奥義から奥義へは繋げない。ストックが足りなければ普通に技を続ける）
+    if(pressed.atk && !def.ultMove && !def.isUlt){
+      const _air=p.z>6;
+      if(rotationReady() || (_air && (K.grab||pressed.grab))){
+        const cost=ultCost(p, _air);
+        if(p.kind==='nuko' && ultLocked){ pressed.atk=false; consumeCmd();
+          popText(p.x,p.y-p.z-110,'奥義が封じられている…！','#c46bff',true); }
+        else if(p.dim<cost){ pressed.atk=false; consumeCmd();
+          popText(p.x,p.y-p.z-110,'奥義ストックが足りない（'+cost+'必要）','#c46bff',true); sfx.guard(p.x); }
+        else {
+          pressed.atk=false; p.atk=null; p.state=_air?'jump':'idle';
+          p.comboStep=0; p.comboTimer=0; p.charge=0; p.atkHeld=false;
+          ring(p.x, p.y-p.z-46, '#c46bff'); spark(p.x, p.y-p.z-46, '#c46bff', 12, 9); sfx.rise(p.x);
+          if(_air){ beginUlt(p, airUltName(p.kind)); beginAirAttack(AIR_ULT[p.kind]||'aInu');
+            p.dim-=cost; p.invuln=Math.max(p.invuln,40); }
+          else fireGroundUlt(p, cost);
+          consumeCmd(); return; } } }
+    // ── 空中コマンド技どうしのキャンセル：別の枠のコマンドなら繋げる ──
+    // 同じ枠へは繋げない（無限に伸びる）。1回の跳躍で各枠1度きり
+    if(pressed.atk && a.air && p.z>6 && !def.ultMove && !def.isUlt){
+      const _sl=[['dp', dpReady(p.facing)], ['hadou', hadokenReady(p.facing)], ['du', downUpReady()]];
+      for(let i=0;i<_sl.length;i++){
+        if(!_sl[i][1]) continue;
+        const slot=_sl[i][0], nx=airSpecialFor(p, slot);
+        if(nx===a.type) continue;
+        p.airChain=p.airChain||{};
+        if(p.airChain[slot]) continue;
+        pressed.atk=false; p.airChain[slot]=1; p.atk=null; p.state='jump';
+        spark(p.x, p.y-p.z-46, '#9fe8ff', 10, 8); ring(p.x, p.y-p.z-46, '#9fe8ff'); sfx.dash(p.x);
+        beginAirAttack(nx); consumeCmd(); p.atkHeld=true; return; } }
   // ── 深い溜め：a.t を止めて構えのまま数フレーム保持する。
     //    ドラゴンズクラウンの必殺技は「沈み込む → 一気に振り抜く → 長い余韻」で、
     //    この最初の溜めが無いと、どれだけ派手な軌跡を足しても軽く見える ──
@@ -6266,7 +6355,7 @@ function updatePlayer(){
           enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>S.r) return;
             damageEnemy(e, TD(Math.round(S.dmg*(p.atkMul||1)*(a.evo||1))), (e.x<p.x?-1:1)*10, true);
             if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*14, -11, 3); }); }
-        p.state='land'; p.landT=def.airLand||10; p.atk=null; p.comboStep=0;
+        p.state='land'; p.landT=def.airLand||10; p.atk=null; p.comboStep=0; p.airChain={};
         dust(p.x,p.y,7); sfx.land(p.x); return; } }
     // active hit window
     // noMelee：技そのものが当たりを持つので、通常の打撃判定は出さない。
@@ -6286,7 +6375,7 @@ function updatePlayer(){
   // 回避ボタン：通常キャラはローリング／ワンデンだけは刀のパリィ（リスクとリターンの構え）
   if(pressed.grd && p.z<=0){ pressed.grd=false; if(p.kind==='wanden') beginIaiParry(p); else beginRoll(); return; }
   // jump start
-  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.charge=0; p.jUp=false; p.jUpUsed=false; sfx.jump(p.x); return; }
+  if(pressed.jump && p.z<=0){ pressed.jump=false; p.state='jump'; p.vz=17; p.jAtk=0; p.aerial=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.charge=0; p.jUp=false; p.jUpUsed=false; p.airChain={}; sfx.jump(p.x); return; }
 
   const SH=p.kind==='shima';
   // ---- charge release ----
@@ -6312,13 +6401,7 @@ function updatePlayer(){
         popText(p.x,p.y-110,'奥義ストックが足りない（'+cost+'必要）','#c46bff',true);
         for(let k=0;k<cost;k++) spark(p.x-14+k*14,p.y-96,'#c46bff',4,4); sfx.guard(p.x); return; }
       if(NK && ultLocked){ consumeCmd(); popText(p.x,p.y-110,'奥義が封じられている…！','#c46bff',true); spark(p.x,p.y-40,'#c46bff',8,5); return; }   // ワンメンドーズが「呼び声」を奪っている
-      // 武器を拾っている間は、その得物の奥義になる
-      { const wu=weaponSpecialFor(p,'ult');
-        if(wu){ beginUlt(p, ATK[wu].name); beginAttack(wu); p.dim-=cost;
-          p.invuln=Math.max(p.invuln, 40); consumeCmd(); return; } }
-      beginUlt(p);   // カットインと気合い（6キャラの入口はこの1行に集約する）
-      if(SH) beginSeven(); else if(GD){ beginGuardQuake(); } else if(WA){ beginGatling(p); } else if(WD){ beginAttack('dkaiden'); p.dim--; } else if(MK){ beginMackRaid(p); p.dim--; } else beginAttack(NK?'nmeteor':'dimension');
-      p.dim-=(cost-1);   // 各入口が1つ消費しているので、残りぶんをここで引く
+      fireGroundUlt(p, cost);
       consumeCmd(); return; } // 七死ワン生 / メガトンクエイク / ロックンロール / 皆伝 / 呼び声 / 次元斬
     // ── 必殺コマンド技（全キャラ・地上）：→↓→＝昇竜／↓→＝波動／↓↑＝地面技 ──
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
