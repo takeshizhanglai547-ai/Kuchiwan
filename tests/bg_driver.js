@@ -98,13 +98,13 @@ const DRIVER = `
 
   // ===== 6) 前景シルエットの種類が実装済みのものであること =====
   // 綴りを間違えると、既定の「ただの四角い柱」に黙って落ちる
-  { const OK=['pipe','stem','branch','pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi'];
+  { const OK=['pipe','stem','branch','pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi','duct','gantry','circuit','cable'];
     STAGE_THEME.forEach(function(T,i){
       if(T.fg && OK.indexOf(T.fg)<0) throw new Error('テーマ'+i+' の前景 '+T.fg+' が未実装'); });
     // 実装された種類が本当に別々の形を描くこと（既定へ落ちていないことの実測）
     const T0=STAGE_THEME.filter(function(x){ return x.fg==='colon'; })[0];
     const sg={};
-    ['pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi'].forEach(function(k){
+    ['pillar','stalac','icicle','dead','kelp','rock','spire','colon','nobori','yari','ashi','duct','gantry','circuit','cable'].forEach(function(k){
       const save=T0.fg; T0.fg=k;
       const r=shape(function(){ drawFgSilhouettes(T0); });
       T0.fg=save;

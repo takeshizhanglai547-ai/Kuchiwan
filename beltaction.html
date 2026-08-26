@@ -1241,6 +1241,41 @@ const Music=(()=>{
     { bpm:142, lead:'square', pad:'sawtooth', drive:true,    // 25: 甲斐の山城 — ヨナ抜き長音階 (A)。高地の乾いた行進
       prog:[[57,61,64],[52,56,59],[54,57,61],[57,61,64],[59,62,66],[52,56,59],[54,57,61],[57,61,64]],
       mel:[81,83,85,88, 90,88,85,83, 81,78,76,78, 81,83,85,81, 85,88,90,93, 90,88,85,81, 78,76,73,76, 78,81,83,81] },
+    // ── 六周目・メカワンコキングダムの六章 ──
+    // 六周目は pal()===3（電子キック＋クラップ＋FMベル）が編曲側で自動的に掛かる。
+    // 曲データ側で持続層を足すと必ずぶつかるので、機械らしさは音階と rhy の刻みだけで作る
+    { bpm:150, lead:'square', pad:'sawtooth', drive:true, kit:'march',   // 26: 巨大工廠 — Em 自然短音階。付点＝鍛造ハンマーの打刻
+      // 行進のキック（4分の均等踏み）に、付点8分＋16分の食い込みを2拍おきに重ねる。
+      // 同じ音を叩き続ける旋律なので、音程ではなく「打点」で工場を鳴らす
+      prog:[[52,55,59],[55,59,62],[50,54,57],[52,55,59],[48,52,55],[50,54,57],[47,50,54],[52,55,59]],
+      mel:[76,76,71,76, 74,74,79,74, 69,71,74,78, 76,74,71,67, 72,72,76,79, 74,74,78,81, 83,81,78,74, 76,71,67,64],
+      rhy:[3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0, 3,0,3,0] },   // 二打ずつの鍛造。休符は槌を振り上げる間
+    { bpm:96, lead:'triangle', pad:'sawtooth', kit:'heavy',   // 27: 発電炉の底 — F# ロクリア (b5)。ハーフタイムの間＝炉の鼓動
+      // 主和音が減三和音のまま解決しない。b5 の宙吊りを八小節保たせて「制御できていない炉」にする
+      prog:[[54,57,60],[47,50,54],[55,59,62],[54,57,60],[45,48,52],[52,55,59],[50,54,57],[54,57,60]],
+      // ハーフタイムで奇数スロットが休符になるので、鳴る偶数スロット側だけで音階を出し切る
+      mel:[78,79,79,81, 81,79,78,76, 76,74,74,72, 78,76,72,71, 78,81,83,84, 84,83,83,81, 81,79,79,78, 78,76,74,71],
+      rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 半拍おきの間＝重く脈打つ炉
+    { bpm:138, lead:'triangle', pad:'sawtooth', drive:true,   // 28: 軌道エレベーター — A リディア (#4)。昇り続ける8分
+      // #4(D#) が長調の明るさに「地上ではない場所」の浮遊感を足す。旋律は八小節かけて上へ行く
+      prog:[[45,49,52],[47,51,54],[52,56,59],[45,49,52],[49,52,56],[47,51,54],[54,57,61],[52,56,59]],
+      mel:[81,83,85,88, 87,85,83,80, 80,83,85,88, 85,81,78,76, 85,88,90,93, 92,90,87,85, 85,83,81,78, 76,80,83,85],
+      rhy:[2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0, 2,2,2,0] },   // 三段登って一拍休む＝昇降機の呼吸
+    { bpm:158, lead:'square', pad:'sawtooth', drive:true,   // 29: 電脳都市 — E フリギア (b2)。明滅する16分
+      // b2(F) を旋律の要に置く。2拍目を丸ごと落として「信号が欠ける」間を作る
+      prog:[[52,55,59],[53,57,60],[52,55,59],[50,53,57],[52,55,59],[48,52,55],[53,57,60],[52,55,59]],
+      mel:[76,77,76,71, 77,81,79,77, 76,74,72,71, 74,72,69,74, 76,77,79,84, 84,83,81,79, 77,81,77,72, 71,74,76,71],
+      rhy:[2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1, 2,0,2,1] },   // 走査線が抜ける2拍目の空白
+    { bpm:112, lead:'sine', pad:'sawtooth',   // 30: 廃棄されたドック — C ドリア (b3・♮6)。錆びた滑車の軋み
+      // 短調なのに6度が長い＝寂れているのに湿っぽくならない。未知を歩いて確かめる章
+      prog:[[48,51,55],[46,50,53],[50,53,57],[48,51,55],[51,55,58],[43,46,50],[46,50,53],[48,51,55]],
+      mel:[72,75,79,77, 75,74,70,74, 74,77,81,77, 75,72,70,67, 75,79,82,79, 77,74,70,74, 70,74,77,74, 72,70,67,72],
+      rhy:[1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1] },   // 2拍目を空ける＝引っ掛かる滑車
+    { bpm:158, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 31: 中枢演算室 — Gm 和声的短音階 (F#)。玉座の決戦
+      // 導音 F# を立てて、機械の王に「王」の荘厳を与える。epic の層（オルガン・聖歌隊・
+      // ブラス・ティンパニ）は既存の実装がそのまま掛かるので、曲データ側では何も足さない
+      prog:[[43,46,50],[50,54,57],[48,51,55],[43,46,50],[51,55,58],[46,50,53],[50,54,57],[43,46,50]],
+      mel:[79,82,86,84, 82,79,74,78, 75,79,84,79, 74,79,82,79, 79,82,87,86, 86,82,79,82, 78,74,70,74, 67,70,74,79] },
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -3136,16 +3171,20 @@ const LAP_DIFF={
   4:{hp:1.30, dmg:0.90, hardHp:2.00, hardDmg:1.70},   // 神話
   // 五周目の通常だけ、遊んだ上での指示でさらに半減している（0.98 → 0.49）。
   // そのぶん四周目より一撃が軽くなるが、これは意図した例外
-  5:{hp:1.45, dmg:0.49, hardHp:2.40, hardDmg:1.95} }; // 戦国
+  5:{hp:1.45, dmg:0.49, hardHp:2.40, hardDmg:1.95},   // 戦国
+  // 六周目。ETYPE の素の攻撃力を戦国の約1.30倍に上げてあるので、
+  // ここの係数は 0.49→0.52 の微増に留める（両方を1.3倍すると合計1.7倍になり、
+  // 一発でHPの大半を持っていく理不尽になる）。伸ばすのはHPと点数のほう
+  6:{hp:1.60, dmg:0.52, hardHp:2.70, hardDmg:2.15} }; // メカワンコキングダム
 function lapDiff(){
-  const d=LAP_DIFF[clamp(lap|0,1,5)] || LAP_DIFF[1];
+  const d=LAP_DIFF[clamp(lap|0,1,6)] || LAP_DIFF[1];
   if(hardMode && d.hardHp!=null) return {hp:d.hardHp, dmg:d.hardDmg, own:true};
   return {hp:d.hp, dmg:d.dmg, own:false}; }
 // own=true の周回は表の値が最終値。全体係数を掛けない
 function diffHpMul(){ const d=lapDiff(); return ((hardMode&&!d.own)?1.35:1)*(TWO_P?1.4:1)*d.hp; }   // 敵HP
 function diffDmgMul(){ const d=lapDiff(); return ((hardMode&&!d.own)?1.3:1)*(TWO_P?1.15:1)*d.dmg; }  // 敵の攻撃力
 // いま神話／戦国のどちらの難易度で遊んでいるかを画面へ出すための名前
-function lapDiffName(){ return (LAP_DIFF[clamp(lap|0,1,5)]||{}).hardHp==null ? null : (hardMode?'高難易度':'カジュアル'); }
+function lapDiffName(){ return (LAP_DIFF[clamp(lap|0,1,6)]||{}).hardHp==null ? null : (hardMode?'高難易度':'カジュアル'); }
 // ══════════════════════════════════════════════════════════════
 //  敵の成長：ステージを進めるほど、そして主役が強くなるほど敵も鍛えられる
 //  「制覇したフィールド数」と「主役の熟練度」の両輪で決まるので、
@@ -7894,6 +7933,37 @@ const ETYPE={
     sengoku:true,sengKind:'oodate',squad:true,phalanx:true,guarder:true,armor:true,accent:'#d8d0a0',name:'大盾武者'},
   hatamoto:{hp:160,sp:2.3,dmg:27,atkR:80,w:58,h:90,c1:'#2a3a5a',c2:'#182238',c3:'#0a101c',score:1800,
     sengoku:true,sengKind:'hatamoto',squad:true,flanker:true,accent:'#a8c8ff',name:'旗本'},
+  // ── 六周目「メカワンコキングダム」の雑魚 ──
+  // 王国の兵は全て機械。役割は「装甲板の形」で読ませる ── 盾は板、砲は筒、
+  // 遊撃は折り畳み刃、整備は三本爪。色だけで分けると、鋼色の群れが一塊に見える。
+  //   mecha:true は一周目のメカワンコ T-800 と共用（金属の識別ディテール用）。
+  //   六周目の兵は mechaKind を持ち、描画は drawMechaFoe が受け持つ
+  mkShield:{hp:312,sp:0.95,dmg:32,atkR:68,w:76,h:100,c1:'#8f9fb0',c2:'#4e5a6c',c3:'#232a36',score:3000,
+    mecha:true,mechaKind:'shield',squad:true,phalanx:true,guarder:true,armor:true,accent:'#8ad6ff',name:'盾機兵ガルドラム'},
+  mkGun:{hp:156,sp:0.95,dmg:48,atkR:380,w:66,h:92,c1:'#9a9482',c2:'#5c584a',c3:'#2b2a24',score:2900,
+    mecha:true,mechaKind:'gun',gunner:true,armor:true,shotCol:'#ff9a4a',shotSpd:7.0,shotR:19,shotHoming:false,
+    shotWind:50,gunSnd:'cannon',accent:'#ff9a4a',name:'重砲機兵ハウザー'},
+  mkBeam:{hp:102,sp:1.75,dmg:25,atkR:320,w:54,h:86,c1:'#a8b6c4',c2:'#5a6a80',c3:'#28303c',score:1600,
+    mecha:true,mechaKind:'beam',gunner:true,shotCol:'#7df0ff',shotSpd:13.0,shotR:7,
+    accent:'#7df0ff',name:'光条機兵レイザー'},
+  mkFlank:{hp:208,sp:2.4,dmg:35,atkR:82,w:60,h:92,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:2900,
+    mecha:true,mechaKind:'flank',squad:true,flanker:true,accent:'#d6a6ff',name:'遊撃機兵スカージ'},
+  // rager の告知は共通実装の直値で「キレた！！」「ふぅ…」と出る（9058-9062行）。
+  // 機械が「キレた」と言うのは字面が浮くが、文言を変えると既存のキレボウズにも波及する。
+  // 気になるなら実装側を t.rager の告知テーブルに分ける ── 本設計では触っていない
+  mkHeavy:{hp:260,sp:1.05,dmg:40,atkR:90,w:92,h:110,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:3000,
+    mecha:true,mechaKind:'heavy',charge:true,armor:true,rager:true,accent:'#ff6a3a',name:'重装機兵グランドール'},
+  mkDrone:{hp:100,sp:2.5,dmg:30,atkR:62,w:58,h:66,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:2400,
+    mecha:true,mechaKind:'drone',flyer:true,pouncer:true,accent:'#ffd24d',name:'索敵機ドローンアイ'},
+  mkBomb:{hp:46,sp:2.6,dmg:26,atkR:44,w:50,h:62,c1:'#c8b48a',c2:'#7a6a48',c3:'#3a3220',score:1700,
+    mecha:true,mechaKind:'bomb',balloon:true,accent:'#ff4d3a',name:'自爆機兵ブリッツ'},
+  mkFix:{hp:260,sp:1.25,dmg:36,atkR:84,w:66,h:98,c1:'#9ac8b0',c2:'#4a7a64',c3:'#1e3830',score:2720,
+    mecha:true,mechaKind:'fix',buffer:true,armor:true,accent:'#a8ffd8',name:'整備機兵ティンカー'},
+  mkDuel:{hp:196,sp:1.7,dmg:34,atkR:80,w:60,h:92,c1:'#c4ccd8',c2:'#6e7686',c3:'#2c3240',score:2100,
+    mecha:true,mechaKind:'duel',squad:true,riposte:true,guarder:true,armor:true,accent:'#fff0a0',name:'決闘機兵ソードラ'},
+  mkBlink:{hp:100,sp:2.9,dmg:27,atkR:250,w:50,h:80,c1:'#8ea8c8',c2:'#46608a',c3:'#1e2a40',score:2560,
+    mecha:true,mechaKind:'blink',warper:true,gunner:true,shotCol:'#c8b0ff',shotSpd:11.5,shotR:6,shotHoming:false,
+    shotWind:14,accent:'#c8b0ff',name:'転送機兵ジャンパー'},
   // ── 五周目「戦国」の三英傑 ──
   // 五周目のラスボスも三段変身。人 → 鬼 → 魔王（デーモン）。
   // HPは 1900 → 900+900+1100（合計2900＝従来の1.53倍）
@@ -7929,6 +7999,47 @@ const ETYPE={
     boss:true,mini:true,bossKind:'hanbei',weapon:'ogi',accent:'#fff0c0',sengoku:true,sumMax:8,name:'今孔明 竹中半兵衛'},
   kanbei:{hp:1020,sp:1.8,dmg:29,atkR:96,w:84,h:112,c1:'#1a3a4a',c2:'#102630',c3:'#061218',score:15000,
     boss:true,mini:true,bossKind:'kanbei',weapon:'ogi',accent:'#8ad6ff',sengoku:true,name:'軍師 黒田官兵衛'},
+  // ── 六周目「メカワンコキングダム」の五将 ──
+  // 描画は既存のボス体型を流用する（bossKind）。新しい kind を作ると
+  // drawBigBoss の既定寸法に落ちて、5体とも同じ寸胴になる。
+  // 技表は type キーで BOSSMOVES に登録すること。bossKind で引かれると
+  // 流用元（グラトン等）の技をそのまま持ってしまう
+  mkGolem:{hp:2340,sp:0.85,dmg:44,atkR:112,w:210,h:224,c1:'#8a939e',c2:'#4a525c',c3:'#22262e',score:42000,
+    boss:true,bossKind:'glaton',weapon:'club',accent:'#ff8a3a',mecha:true,name:'鋼牙将 ギガディーン'},
+  mkTurret:{hp:2100,sp:1.15,dmg:42,atkR:150,w:168,h:178,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:42000,
+    boss:true,bossKind:'moloch',weapon:'none',accent:'#ffb02e',mecha:true,name:'砲塔将 バリスタ'},
+  mkArc:{hp:1950,sp:3.1,dmg:45,atkR:132,w:92,h:172,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:43000,
+    boss:true,bossKind:'vesper',weapon:'spear',accent:'#bff4ff',mecha:true,name:'電磁将 ヴォルテクス'},
+  // sumMax＝この戦いで呼べる総数。上限が無いと倒すそばから湧き続け、
+  // 半兵衛戦が「取り巻きを延々倒す作業」になった前例がある
+  mkSwarm:{hp:2250,sp:1.05,dmg:38,atkR:104,w:180,h:186,c1:'#a89a6a',c2:'#5e5430',c3:'#2a2612',score:42000,
+    boss:true,bossKind:'gigas',weapon:'club',accent:'#ffe14d',mecha:true,sumMax:10,name:'増殖将 レプリカ'},
+  mkMirror:{hp:2080,sp:2.7,dmg:44,atkR:108,w:74,h:132,c1:'#3a4050',c2:'#1e2230',c3:'#0a0c14',score:44000,
+    boss:true,bossKind:'rival',weapon:'dark',accent:'#c8b0ff',mecha:true,name:'影写将 ミラージュ'},
+  // ── 六周目の真ラスボス ──
+  // gsc＝描画倍率。drawGuard0 は座標を直書きしているので、体格はここで伸ばす
+  // ── 六周目の中ボス（道中に立ちはだかる試作機）──
+  // 雑魚の役割をそのまま一回り大きくした個体。HPは五周目の中ボス（900〜1050）に
+  // 六周目の係数を掛けた線に置く。技表は流用元の bossKind から引く
+  mkMScout:{hp:1240,sp:2.6,dmg:36,atkR:96,w:82,h:110,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:19000,
+    boss:true,mini:true,bossKind:'vesper',weapon:'spear',accent:'#d6a6ff',mecha:true,name:'先行偵察機 スカウタα'},
+  mkMArms:{hp:1320,sp:1.6,dmg:38,atkR:104,w:96,h:118,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:20000,
+    boss:true,mini:true,bossKind:'glaton',weapon:'club',accent:'#ffb02e',mecha:true,name:'多腕作業機 アームズ'},
+  mkMCoil:{hp:1180,sp:2.2,dmg:39,atkR:118,w:80,h:114,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:20000,
+    boss:true,mini:true,bossKind:'vesper',weapon:'blade',accent:'#bff4ff',mecha:true,name:'電磁試作機 コイラ'},
+  mkMWing:{hp:1150,sp:2.9,dmg:37,atkR:100,w:88,h:100,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:20000,
+    boss:true,mini:true,bossKind:'vesper',weapon:'blade',accent:'#ffd24d',mecha:true,flyer:true,name:'飛行試作機 ウィンガ'},
+  mkMHammer:{hp:1400,sp:1.3,dmg:41,atkR:110,w:100,h:122,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:21000,
+    boss:true,mini:true,bossKind:'glaton',weapon:'club',accent:'#ff8a3a',mecha:true,name:'打鉄機 ハンマ'},
+  // 大王座の手前に立つ旧世代機。王の一つ前の型という設定なので、技は王と同じ系統から引く
+  mkMOld:{hp:1500,sp:1.7,dmg:42,atkR:112,w:104,h:130,c1:'#7a8290',c2:'#3e4450',c3:'#1a1e26',score:24000,
+    boss:true,mini:true,bossKind:'guard0',weapon:'none',accent:'#c8d4e4',mecha:true,name:'旧型王機 プロトタイプ零'},
+  // 封鎖区画の試作機（ステージイベントで解放される）
+  mkVault:{hp:1600,sp:2.0,dmg:40,atkR:106,w:94,h:120,c1:'#5a6472',c2:'#2e3540',c3:'#12161c',score:26000,
+    boss:true,mini:true,bossKind:'gigas',weapon:'club',accent:'#8fe8ff',mecha:true,name:'封鎖区画の試作機'},
+  mkOmega:{hp:3400,sp:1.6,dmg:56,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:150000,
+    boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
+    finalBoss:true,trueBoss:true,name:'王機 メカワンコ・オメガ'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:120,w:146,h:210,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:160,w:323,h:228,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
@@ -7993,6 +8104,19 @@ const BOSSMOVES={
   hisahide: ['hiragumo','hyotan','teleSlash','dashThrust','unblockSmash'],
   hanbei:   ['saihai','kakuyoku','orbSpread','heavySwing'],
   kanbei:   ['mizuzeme','yaribusuma','heavySwing','orbSpread'],
+  // ── 六周目「メカワンコキングダム」の五将 ──
+  //   ギガディーン＝重量（地響きで立つ場所を奪う）
+  //   バリスタ    ＝弾幕と長い溜めの一撃（南蛮筒＝レールガンとして流用）
+  //   ヴォルテクス＝速度と落雷（見切りを持つので押しっぱなしが罰される）
+  //   レプリカ    ＝増える（一夜城＝工廠の再建として流用。sumMax で総数を止める）
+  //   ミラージュ  ＝分身と背後（影武者と謀反をそのまま機械のホログラムに読み替える）
+  mkGolem:  ['hammerQuake','groundSlam','heavySwing','bodyCharge','bossGrab','unblockSmash'],
+  mkTurret: ['nanbanZutsu','bulletHell','orbSpread','meteorCall','cannonFire','groundSlam','unblockSmash'],
+  mkArc:    ['judgeBolts','boltStrike','dashThrust','tripleStep','teleSlash','spearThrow','bladeParry','unblockSmash'],
+  mkSwarm:  ['ichiyaJo','summon','bodyCharge','groundSlam','orbSpread','unblockSmash'],
+  mkMirror: ['kagemusha','muhon','teleSlash','rivalCombo','rivalDash','bladeParry','megaTornado'],
+  // 真ラスボス：予告の長い大技を主軸に、繋ぎは間合いを消す手だけ
+  mkOmega:  ['megaBeam','tenchuu','hammerQuake','judgeBolts','meteorCall','megaTornado','bodyCharge','unblockSmash','bossGrab'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
@@ -8074,7 +8198,15 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   katsuyori:'父の名で語るな。武田は俺の代で、まだ終わらぬ！',
   hisahide:'茶釜ひとつで城を買い、城ひとつで天下を賭ける。——面白かろう？',
   hanbei:'力比べは致しませぬ。……もう、盤の上では終わっております。',
-  kanbei:'水は低きに流れ、城を沈める。貴殿はどちらに立っておられるかな。' };
+  kanbei:'水は低きに流れ、城を沈める。貴殿はどちらに立っておられるかな。',
+  // ── 六周目・メカワンコキングダムの五将 ──
+  mkGolem:'我ガ装甲ニ　傷ヲ付ケタ者ハ　居ナイ。零号機　ヨリ　厚イ。',
+  mkTurret:'射程ノ内ニ　入ッタ。……ソレガ　オ前ノ　最後ノ　選択ダ。',
+  mkArc:'速サデ　勝ツ　ツモリカ。雷ヨリ　速ク　動ケルナラ　ドウゾ。',
+  mkSwarm:'一機　壊シタカ。工廠ハ　毎分　十二機　造ル。数エテ　ミロ。',
+  mkMirror:'ドレガ　本物カ　当テテミロ。……全部　本物ダ。',
+  mkVault:'封鎖区画　開放。……試作機ノ　性能検証ヲ　開始スル。被検体ハ　オ前ダ。',
+  mkOmega:'我ハ王機。犬ノ王国ガ　鉄ヲ知ッタ日カラ、コノ日ハ　決マッテイタ。——起動スル。', };
 // ── 各ボス専用BGM（ステージのボスごとに曲が変わる）──
 const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossfast', pirate:'bossfast',
   gigas:'bossheavy', glaton:'bossheavy', slime:'bossheavy', cactus:'bossheavy',
@@ -8089,6 +8221,9 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   shingen:'bosssengoku', kenshin:'bosssengoku', yoshimoto:'bosssengoku', mitsuhide:'bosssengoku',
   nobunaga2:'boss2', nobunaga3:'boss3',
   katsuyori:'bosssengoku', hisahide:'bosssengoku', hanbei:'bosssengoku', kanbei:'bosssengoku',
+  // ── 六周目・メカワンコキングダム ──
+  mkGolem:'bossheavy', mkTurret:'bossfast', mkArc:'bosscosmic',
+  mkSwarm:'bossheavy', mkMirror:'bossrival', mkOmega:'boss3',
   rvSword:'bossrival', rvFist:'bossrival', rvMage:'bossrival', rvGuard:'bossrival',
   hbInu:'bossrival', hbShima:'bossrival', hbNuko:'bossrival', hbGuard8:'bossrival', hbWatch:'bossrival', hbWanden:'bossrival', hbMack:'bossrival' };
 function bossMusicFor(type){ return BOSS_BGM[type] || 'boss'; }
@@ -9401,7 +9536,7 @@ function bSummon(e){
   if(live>=4) return;
   const q=summonQuota(e,2); if(!q) return;
   summonUse(e,q);
-  for(let i=0;i<q;i++) spawnEnemy(lap>=5?(i?'ashigaru':'samurai'):lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
+  for(let i=0;i<q;i++) spawnEnemy(lap>=6?(i?'mkDuel':'mkShield'):lap>=5?(i?'ashigaru':'samurai'):lap>=4?(i?'mythflank':'mythblade'):lap>=3?(i?'raygun':'greywan'):lap>=2?(i?'hachibo':'kamakiri'):(i?'hyena':'wolf'), e.x+rnd(-70,70), clamp(e.y+rnd(-20,20),GROUND_TOP,GROUND_BOT)); ring(e.x,e.y-e.h*0.5,'#c46bff'); }
 // ガード不能の特大斬撃（パリィのみ防御可）
 function bUnblock(e,reach,hh,dmg){ const dir=e.facing, ex=e.x+dir*reach*0.6, ey=e.y-e.h*0.45;
   crescent(ex,ey,reach*0.7, dir>0?-1.05:Math.PI-1.05, dir>0?1.05:Math.PI+1.05, '#ff4d6a');
@@ -10526,6 +10661,48 @@ const WORLD5_FINAL=[
 ];
 const NG5_UNLOCK=2;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
                       // ＝3ステージ目でラスボスへ挑める（神話の頂と同じ歩数）
+// ── 六周目「メカワンコキングダム」の六章 ──
+// 機械の国の仕組みを外側から順に剥いでいく。外郭→動力→燃料→流通→生産→中枢。
+// 歩くほど「この国が何で出来ているか」が分かる＝探究がそのまま進行になる
+const MECHA_CH=[
+  {theme:30,name:'中枢炉心「大王座」',terr:'tower',
+   gates:[{off:560,list:[['mkHeavy',1],['mkBeam',1]]},{off:940,mini:true,list:[['mkMOld',1]]},
+          {off:1240,list:[['mkShield',2],['mkDrone',2],['mkFlank',1]]},{off:1600,boss:true,list:[['mkOmega',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
+  {theme:25,name:'鋼鉄の外郭門',terr:'up',
+   gates:[{off:520,list:[['mkDuel',3],['mkGun',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
+          {off:1180,list:[['mkShield',2],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkGolem',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平の果てまで鉄の壁じゃ。門の高さは、王城の三倍はあるぞい…！','あの鉄の犬どもは痛みを感じん。怯まぬ相手には、掴んで投げるのが早い。','弾を撃ってくる型がおる。当たる寸前に後ろへ歩けば、弾はそのまま撃ち返せるのじゃ。','門は開かん。ならば横の足場を跳んで越えるまでよ。空中でもう一度跳べるのを忘れるでない。']}},
+  {theme:26,name:'歯車の大回廊',terr:'liftup',
+   gates:[{off:520,list:[['mkFix',2],['mkShield',1]]},{off:900,mini:true,list:[['mkMArms',1]]},
+          {off:1180,list:[['mkBeam',1],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkSwarm',1]]}],
+   npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['見ろよ、天井まで歯車だ。俺たちが歩いてるこの床も、たぶん誰かの部品だぜ。','盾持ちの鉄犬は正面を固める。回避で背後に回り込め！','この回廊は床ごと昇っちまう。乗る場所は自分で選べよ。','連打で繋いで段位を上げろ。段位が上がるほど、貰える経験値が増えるんだ。']},
+   npc2:{kind:'altar',name:'整備ドックの祈り台',once:true,atX:1640,lines:['鉄の犬たちが、代わる代わる頭を下げていく台だ。','機械にも祈る先があるらしい。……こちらも、ひとつ祈らせてもらおう。'],give:{shrine:true}}},
+  {theme:27,name:'電磁の大坑道',terr:'dive',
+   gates:[{off:520,list:[['mkBomb',2],['mkBlink',1]]},{off:900,mini:true,list:[['mkMCoil',1]]},
+          {off:1180,list:[['mkHeavy',1],['mkGun',2],['mkFix',1]]},{off:1560,boss:true,list:[['mkArc',1]]}],
+   npc:{kind:'smith',name:'工房犬ハガネ',lines:['こいつら、掘ってるんじゃない。地面ごと「造ってる」んだ。信じられるかい？','雷を溜める型がいる。溜め始めたら、光った輪の外へ出ろ。輪の中は全部当たる。','こっちも溜められるぞ。攻撃を押しっぱなしにして離せば、タメ攻撃だ。','下りきった先は水が来る。水中はジャンプ連打で泳ぎ上がれる。溺れやしないさ。']}},
+  {theme:28,name:'天空の軌道橋',terr:'climb',
+   gates:[{off:520,list:[['mkDrone',2],['mkDrone',1]]},{off:900,mini:true,list:[['mkMWing',1]]},
+          {off:1180,list:[['mkFlank',1],['mkBeam',1],['mkShield',1]]},{off:1560,boss:true,list:[['mkTurret',1]]}],
+   npc:{kind:'merchant',name:'行商猫チャミ',lines:['空に線路が浮いてるニャ…支えの柱が、どこにも無いニャ！','橋の上は飛ぶ鉄鳥だらけニャ。空中でも回避できるから、跳んでから避けるニャ','空中のコマンド技は、枠が違えば繋がるニャ。ただし各枠1回きりニャ','落ちてる得物は拾っていくニャ。通常技も前攻撃も奥義も、まるごと別物になるニャ']}},
+  {theme:29,name:'溶鉱炉 第七区',terr:'tower',
+   gates:[{off:520,list:[['mkHeavy',2],['mkFix',1]]},{off:900,mini:true,list:[['mkMHammer',1]]},
+          {off:1240,list:[['mkFlank',1],['mkBeam',1],['mkBlink',2]]},{off:1600,boss:true,list:[['mkMirror',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['炉の底が見えん…この国は、犬を「鋳て」おるのか。恐ろしい話じゃ。','背へ回り込む型がおる。壁を背にせい、そうすれば挟まれぬ。','足場が右上がりに積んである。跳び移って、高い地面へ上がるのじゃ。','どんな技の最中でも、奥義のコマンドで割り込める。追い詰められたら回すのじゃ。']}},
+];
+const WORLD6_LEVELS=[
+  {id:'w6mon',  b:MECHA_CH[1], mx:0.18, my:0.60},   // 鋼鉄の外郭門（鉄門将ゲートル／斥候機スカウタ）
+  {id:'w6koro', b:MECHA_CH[2], mx:0.34, my:0.30},   // 歯車の大回廊（歯車王ギアード／多腕機アームズ）
+  {id:'w6kou',  b:MECHA_CH[3], mx:0.50, my:0.68},   // 電磁の大坑道（雷髄ボルテッカ／電磁機コイラ）
+  {id:'w6hashi',b:MECHA_CH[4], mx:0.66, my:0.28},   // 天空の軌道橋（軌道竜レイルドン／飛行機ウィンガ）
+  {id:'w6ro',   b:MECHA_CH[5], mx:0.80, my:0.60},   // 溶鉱炉 第七区（溶鋼獣モルテン／打鉄機ハンマ）
+];
+const WORLD6_FINAL=[
+  {id:'w6core', b:MECHA_CH[0], mx:0.91, my:0.18, locked:true, final:true},   // 中枢炉心「大王座」（機工王コアワン）
+];
+const NG6_UNLOCK=2;   // 機械の国のステージをこの数クリアで「大王座」が解禁
+                      // ＝3ステージ目でラスボスへ挑める（戦国の天守と同じ歩数）
 // ── ランダムイベント（区画ごとに抽選で配置。未知の世界の冒険感を演出）──
 const EVENT_POOL=[
   {w:14,make:x=>({x,kind:'chest',name:'宝箱',once:true,lines:['古びた宝箱を見つけた！','そーっと開けてみよう…'],give:{chest:true}})},
@@ -10608,6 +10785,9 @@ function buildEncounters3(){ resetWorldState(); trueBossSpawned=false;
 function buildEncounters4(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(MYTH_CH.slice(1,2),null);   // 四周目：海神の神殿から開始（頂は規定数クリアで解禁）
 }
+function buildEncounters6(){ resetWorldState(); trueBossSpawned=false;
+  addBlocks(MECHA_CH.slice(1,2),null);   // 六周目：外郭門から開始（大王座は規定数クリアで解禁）
+}
 function buildEncounters5(){ resetWorldState(); trueBossSpawned=false;
   addBlocks(SENGOKU_CH.slice(1,2),null);   // 五周目：城下町から開始（天守は規定数クリアで解禁）
 }
@@ -10623,7 +10803,8 @@ const LAP_RESTART={
   2:{coins:200,  name:'2周目「蟲の世界」',   go:startNG2},
   3:{coins:400,  name:'3周目「宇宙人の侵略」', go:startNG3},
   4:{coins:700,  name:'4周目「神話」',       go:startNG4},
-  5:{coins:1000, name:'5周目「戦国」',       go:startNG5} };
+  5:{coins:1000, name:'5周目「戦国」',       go:startNG5},
+  6:{coins:1400, name:'6周目「メカワンコキングダム」', go:startNG6} };
 let retryLap=1;                        // 倒れた時点の周回。startGame が lap を1へ戻すので控えておく
 function restartFromLap(l){
   clearProgress(); startGame();        // 強化とコインは新規と同じ扱い（周回だけ引き継ぐ）
@@ -10636,11 +10817,24 @@ function retryStart(){ restartFromLap(retryLap); }
 // クリア後に進める周回。DOM を読まずに検証できるよう、判断だけを関数に出す。
 // 三周目クリア後はここが null を返しており、四周目へ行けなかった
 function nextLap(l){
-  if(l>=5) return null;                              // 戦国の先はまだ無い
+  if(l>=6) return null;                              // メカワンコキングダムの先はまだ無い
+  if(l>=5) return {lap:6, label:'⚙ 6周目「メカワンコキングダム」へ', go:startNG6};
   if(l>=4) return {lap:5, label:'⚔ 5周目「戦国」へ', go:startNG5};
   if(l>=3) return {lap:4, label:'⚡ 4周目「神話」へ', go:startNG4};
   if(l>=2) return {lap:3, label:'▶ 3周目「宇宙人の侵略」へ', go:startNG3};
   return {lap:2, label:'▶ 2周目「蟲の世界」へ', go:startNG2}; }
+// ── 六周目「メカワンコキングダム」開始（強化と傭兵は引き継ぎ）──
+function startNG6(skipOpen){ unlockAudio(); lap=6; endingDone=false; cut=null;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
+  slowmo=0; slowAcc=0; stageBanner=0; hitStop=0; stage=1;
+  levelsDone={}; mapSel=0; curLevelId=null; curLevelFinal=false;
+  buildEncounters6();
+  players.forEach(p=>{ if(p.active) resetPlayer(p,false); });
+  player=players[0]; goArrow=160; bgCacheTheme=-1;
+  elStart.classList.add('hidden'); elResult.classList.add('hidden');
+  Music.stop(); saveProgress(1);
+  ngBegin(NG6_OPEN, skipOpen);
+}
 // ── 五周目「戦国」開始（強化と傭兵は引き継ぎ）──
 function startNG5(skipOpen){ unlockAudio(); lap=5; endingDone=false; cut=null;
   camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[]; combo.count=0; shopPending=0;
@@ -10894,6 +11088,8 @@ const FINAL_UNLOCK=6;   // 通常ステージをこの数クリアで「暗黒�
 // ══════════════════════════════════════════════════════════════════
 const KEYITEMS={
   moonkey:{name:'月光の鍵',     col:'#bfe9ff', hint:'月詠の森'},
+  mcard:  {name:'発行済み認証札', col:'#8fe8ff', hint:'電磁の大坑道'},
+  mcore:  {name:'予備炉心',       col:'#ffb26a', hint:'天空の軌道橋'},
   compass:{name:'深海の羅針盤', col:'#7fd0ff', hint:'海賊飛行艇の甲板'},
   gear:   {name:'古代の歯車',   col:'#ffd24d', hint:'瑠璃の水晶洞'},
   frost:  {name:'氷結の宝珠',   col:'#8fd8ff', hint:'業火の渓谷'},
@@ -10901,6 +11097,11 @@ const KEYITEMS={
 };
 const STAGE_EVENTS=[
   // from のステージで手に入り、at のステージで使われる
+  // ── 六周目「メカワンコキングダム」──
+  {key:'mcard', from:'w6mon', on:'clear', at:'w6kou',   kind:'boss', boss:'mkVault',
+   title:'封鎖区画がひらく', line:'認証札が青く灯る——坑道の隔壁が持ち上がり、封じられていた試作機が這い出してきた。'},
+  {key:'mcore', from:'w6kou', on:'clear', at:'w6hashi', kind:'gift', give:'evHeart',
+   title:'予備炉心に火が入る', line:'持ち帰った炉心が橋の端子と噛み合った。熱が、そのまま力に変わっていく。'},
   {key:'moonkey', from:'yugure', on:'rival', at:'mori',     kind:'boss', boss:'hbLuna',
    title:'月光の扉がひらく', line:'月光の鍵が疼く——森の奥から、銀の獣が歩み出た。'},
   {key:'compass', from:'futou',  on:'clear', at:'hikoutei', kind:'boss', boss:'hbAbyss',
@@ -10930,10 +11131,11 @@ function grantKeysFor(levelId, on){
   let n=0; STAGE_EVENTS.forEach(function(E){ if(E.from===levelId && E.on===on && grantKey(E.key)) n++; });
   return n; }
 let levelsDone={}, mapSel=0, mapNavCd=0, curLevelId=null, curLevelFinal=false;
-function curWorldLevels(){ return lap>=5? WORLD5_LEVELS : lap>=4? WORLD4_LEVELS : lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
-function allMapNodes(){ return lap>=5? WORLD5_LEVELS.concat(WORLD5_FINAL) : lap>=4? WORLD4_LEVELS.concat(WORLD4_FINAL) : lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
+function curWorldLevels(){ return lap>=6? WORLD6_LEVELS : lap>=5? WORLD5_LEVELS : lap>=4? WORLD4_LEVELS : lap>=3? WORLD3_LEVELS : lap>=2? WORLD2_LEVELS : WORLD_LEVELS; }
+function allMapNodes(){ return lap>=6? WORLD6_LEVELS.concat(WORLD6_FINAL) : lap>=5? WORLD5_LEVELS.concat(WORLD5_FINAL) : lap>=4? WORLD4_LEVELS.concat(WORLD4_FINAL) : lap>=3? WORLD3_LEVELS.concat(WORLD3_FINAL) : lap>=2? WORLD2_LEVELS.concat(WORLD2_FINAL) : WORLD_LEVELS.concat(WORLD_FINAL); }
 function doneCount(){ return curWorldLevels().filter(l=>levelsDone[l.id]).length; }
 function nodeUnlocked(node){
+  if(lap>=6) return node.final? doneCount()>=NG6_UNLOCK : true;  // 六周目：大王座＝規定数クリアで解禁
   if(lap>=5) return node.final? doneCount()>=NG5_UNLOCK : true;  // 五周目：天守＝規定数クリアで解禁
   if(lap>=4) return node.final? doneCount()>=NG4_UNLOCK : true;  // 四周目：頂＝規定数クリアで解禁
   if(lap>=3) return node.final? doneCount()>=NG3_UNLOCK : true;  // 三周目：玉座＝規定数クリアで解禁
@@ -11027,10 +11229,11 @@ function drawMap(){
   for(let x=0;x<=W;x+=40){ ctx.lineTo(x, H*0.68+Math.sin(x*0.01+2)*30); } ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.fill();
   ctx.fillStyle='#ffe14d'; ctx.font='900 30px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif'; ctx.textAlign='center';
   const _dn=lapDiffName();
-  const mapTitle=lap>=5?('戦国の世マップ　〜五周目・'+_dn+'〜'):lap>=4?('神話の世界マップ　〜四周目・'+_dn+'〜'):lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
+  const mapTitle=lap>=6?('鋼機王国マップ　〜六周目・'+_dn+'〜'):lap>=5?('戦国の世マップ　〜五周目・'+_dn+'〜'):lap>=4?('神話の世界マップ　〜四周目・'+_dn+'〜'):lap>=3?'銀河侵略軍マップ　〜三周目〜':lap>=2?'蟲の世界マップ　〜二周目〜':'ワールドマップ';
   ctx.strokeStyle='#000'; ctx.lineWidth=5; ctx.strokeText(mapTitle,W/2,52); ctx.fillText(mapTitle,W/2,52);
   ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif'; ctx.fillStyle='#cfe0ff';
-  if(lap>=5){ ctx.fillText('天下布武　（制覇 '+doneCount()+' / '+WORLD5_LEVELS.length+'　'+(doneCount()>=NG5_UNLOCK?'炎上する天守が解禁された':'天守まで '+(NG5_UNLOCK-doneCount()))+'）', W/2, 96); }
+  if(lap>=6){ ctx.fillText('王機を止めよ　（制覇 '+doneCount()+' / '+WORLD6_LEVELS.length+'　'+(doneCount()>=NG6_UNLOCK?'中枢炉心「大王座」が解禁された':'大王座まで '+(NG6_UNLOCK-doneCount()))+'）', W/2, 96); }
+  else if(lap>=5){ ctx.fillText('天下布武　（制覇 '+doneCount()+' / '+WORLD5_LEVELS.length+'　'+(doneCount()>=NG5_UNLOCK?'炎上する天守が解禁された':'天守まで '+(NG5_UNLOCK-doneCount()))+'）', W/2, 96); }
   else if(lap>=4){ ctx.fillText('神々の座へ　（制覇 '+doneCount()+' / '+WORLD4_LEVELS.length+'　'+(doneCount()>=NG4_UNLOCK?'オリュンポスの頂が解禁された':'頂まで '+(NG4_UNLOCK-doneCount()))+'）', W/2, 96); }
   else ctx.fillText(lap>=3
     ? '侵略者の艦隊へ　（制覇 '+doneCount()+' / '+WORLD3_LEVELS.length+'　'+(doneCount()>=NG3_UNLOCK?'玉座が解禁された（挑戦は任意）':'玉座まで '+(NG3_UNLOCK-doneCount()))+'）'
@@ -11122,7 +11325,7 @@ function drawMap(){
       ctx.fillText(fitText(node.b.name, cw-28), cx+14, cy+22);
       ctx.font='12px "Hiragino Maru Gothic ProN",sans-serif';
       if(!unl){ ctx.fillStyle='#9fb0c4';
-        ctx.fillText(fitText(lap>=5?'天守は規定数の制覇で解禁':lap>=4?'頂は規定数の制覇で解禁':lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cw-28), cx+14, cy+44); }
+        ctx.fillText(fitText(lap>=6?'大王座は規定数の制覇で解禁':lap>=5?'天守は規定数の制覇で解禁':lap>=4?'頂は規定数の制覇で解禁':lap>=3?'玉座は規定数の制覇で解禁':lap>=2?'女王の間は規定数の制覇で解禁':(node.final?'城門を突破すると解禁':'規定数の制覇で解禁'), cw-28), cx+14, cy+44); }
       else { ctx.fillStyle='#9fb0c4'; ctx.fillText('推奨難度', cx+14, cy+44);
         const col=FOE_RANK_COL[Math.min(4,tr)]||'#ffd24d';
         for(let k=0;k<4;k++) drawStar(cx+78+k*15, cy+40, 2.2, 5.2, k<tr?col:'rgba(255,255,255,.16)');
@@ -11304,7 +11507,7 @@ function triggerHeroDuel(n){
 function speechQueue(e,txt){ if(!e) return; e.duelSay=txt; e.duelSayT=150; }
 function triggerAmbush(n){ showEventCard('ambush','囲まれた！','左右から一斉に襲いかかってくる');
   popText(n.x,LANE-140,'待ち伏せだ！','#ff5a5a',true); sfx.boss(n.x); shake=Math.max(shake,6);
-  const picks=lap>=5?['ashigaru','samurai','yumihei','kibahei']:lap>=4?['mythguard','mythblade','mythflank','mythseer']:lap>=3?['greywan','raygun','floater','slimealien']:lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
+  const picks=lap>=6?['mkDuel','mkShield','mkGun','mkFlank']:lap>=5?['ashigaru','samurai','yumihei','kibahei']:lap>=4?['mythguard','mythblade','mythflank','mythseer']:lap>=3?['greywan','raygun','floater','slimealien']:lap>=2?['kamakiri','hachibo','kumo','mukade']:['wolf','hyena','ari','kirebouzu'];
   for(let i=0;i<4;i++) spawnEnemy(picks[i%picks.length], n.x+(i%2?1:-1)*(W*0.52+rnd(0,90)), rnd(GROUND_TOP+20,GROUND_BOT-10)); }
 function updateNPCs(){
   for(const n of npcs){
@@ -11336,9 +11539,11 @@ const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','ho
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
 const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
+// 六周目「メカワンコキングダム」の雑魚は全て機械。犬タイプは混ぜない
+const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink'];
 const SENGOKU_ZAKO_POOL=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja',
   'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto'];
-function randZako(){ const P=lap>=5?SENGOKU_ZAKO_POOL:lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
+function randZako(){ const P=lap>=6?MECHA_ZAKO_POOL:lap>=5?SENGOKU_ZAKO_POOL:lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
 function randomizeZako(list){
   // ボス／ライバル／召喚専用（balloon等）は据え置き。雑魚エントリだけ種類と数をランダム化
   const out=list.map(([type,n])=>{ const tt=ETYPE[type];
@@ -12225,6 +12430,46 @@ const STAGE_THEME=[
     g:['#6a6a4a','#4c4c34','#2e2e20'], cob:['#646448','#5a5a40'], vig:'rgba(10,14,10,.44)',
     rimRGB:'255,240,200',
     amb:{shape:'petal',color:'rgba(228,240,210,.8)',rate:0.5,max:30,vy:0.36,wind:0.22,r0:2.2,r1:4.6,glow:false,alpha:.78} },
+  // ── 六周目・メカワンコキングダムのテーマ ──
+  // 機械の王国は「暖色の火」と「冷色の演算光」の対比で章を分ける。
+  // 25/29 は炉と錆の暖色、26/28 は炉心と電脳の冷色、27 は空、30 は金。
+  // 隣り合う章が同じ色相にならないので、周回全体が1色に潰れない
+  // 25: 巨大工廠（高炉の列と、床を流れる溶鉄の樋）
+  { gsnd:'metal', asnd:'machine', sky:['#120d0e','#241512','#4a2216','#8a3c18'], sun:'rgba(255,150,60,', disc:'#ff8a2a', sunX:0.5,sunY:150, rays:0.08, tint:'rgba(255,110,40,.34)',
+    haze:'rgba(96,44,26,.46)', fog:'rgba(150,70,34,.50)', stars:0, tower:'#5a4a44', mecha:true, land:'foundry', fg:'duct',
+    g:['#4a4440','#332e2c','#1c1918'], cob:['#454040','#3a3634'], vig:'rgba(8,2,0,.62)',
+    rimRGB:'255,160,80',
+    amb:{shape:'spark',color:'rgba(255,178,80,.95)',rate:1.3,max:54,vy:-0.66,wind:0.18,r0:1.5,r1:3.6,glow:true,alpha:.95} },
+  // 26: 発電炉の底（見上げる炉心と、天井から降りる冷却管）
+  { gsnd:'metal', asnd:'machine', sky:['#01060c','#03121e','#062a3e','#0a4a60'], sun:'rgba(120,230,255,', disc:'#bff4ff', sunX:0.5,sunY:96, rays:0.10, tint:'rgba(60,190,255,.34)',
+    haze:'rgba(10,58,86,.48)', fog:'rgba(24,96,128,.48)', stars:0, tower:'#123a4e', mecha:true, land:'reactor', fg:'duct',
+    g:['#26424e','#182c36','#0c161c'], cob:['#243e4a','#1e3440'], vig:'rgba(0,6,14,.66)',
+    rimRGB:'150,230,255',
+    amb:{shape:'spark',color:'rgba(170,245,255,.95)',rate:1.0,max:48,vy:-0.52,wind:0.06,r0:1.2,r1:3.0,glow:true,alpha:.95} },
+  // 27: 軌道エレベーター（雲海を貫く一本の塔と、昇っていく昇降機）
+  { gsnd:'metal', asnd:'wind', sky:['#06103a','#173a72','#4f86bc','#bcd9e6'], sun:'rgba(255,250,230,', sunX:0.30,sunY:70, rays:0.18, tint:'rgba(200,224,255,.26)',
+    haze:'rgba(150,182,214,.30)', fog:'rgba(196,214,228,.44)', stars:0, tower:'#3e5a78', mecha:true, land:'tether', fg:'gantry',
+    g:['#6e7a86','#4c565f','#2a3138'], cob:['#68737e','#5a646d'], vig:'rgba(6,10,22,.48)',
+    rimRGB:'255,238,200',
+    amb:{shape:'spark',color:'rgba(226,242,255,.85)',rate:0.5,max:30,vy:-0.34,wind:0.36,r0:1.2,r1:2.8,glow:true,alpha:.78} },
+  // 28: 電脳都市（地平へ収束する光の格子と、窓が走査線のように瞬く演算塔）
+  { gsnd:'metal', asnd:'machine', sky:['#03040f','#0a0824','#160e42','#26146a'], sun:'rgba(255,110,220,', disc:'#ff7ad0', sunX:0.66,sunY:86, rays:0.06, tint:'rgba(150,60,255,.34)',
+    haze:'rgba(40,20,90,.42)', fog:'rgba(70,40,140,.46)', stars:110, tower:'#1e1a4a', mecha:true, land:'datacity', fg:'circuit',
+    g:['#2c2a52','#1c1a38','#0e0c1e'], cob:['#2a2850','#232144'], vig:'rgba(2,0,14,.64)',
+    rimRGB:'150,220,255',
+    amb:{shape:'spark',color:'rgba(150,230,255,.95)',rate:0.9,max:46,vy:-0.28,wind:0.10,r0:1.1,r1:2.8,glow:true,alpha:.95} },
+  // 29: 廃棄されたドック（座礁した巨艦の骸と、傾いたクレーンの列）
+  { gsnd:'metal', asnd:'wind', sky:['#4a4038','#7a6248','#ae8a5e','#d8bd8a'], sun:'rgba(255,214,150,', sunX:0.78,sunY:126, rays:0.12, tint:'rgba(200,150,90,.34)',
+    haze:'rgba(140,112,80,.40)', fog:'rgba(176,146,108,.50)', stars:0, tower:'#6a5a4a', mecha:true, land:'scrapdock', fg:'gantry',
+    g:['#5e5448','#423b32','#241f1a'], cob:['#585045','#4c453c'], vig:'rgba(16,10,4,.54)',
+    rimRGB:'255,206,140',
+    amb:{shape:'spark',color:'rgba(214,190,150,.80)',rate:0.7,max:38,vy:0.12,wind:0.26,r0:1.4,r1:3.2,glow:false,alpha:.7} },
+  // 30: 王の玉座＝中枢演算室（光輪を背負う玉座と、四方から集まる演算塔）
+  { gsnd:'metal', asnd:'machine', sky:['#050403','#12100a','#241d0e','#3e3216'], sun:'rgba(255,226,140,', disc:'#ffe27a', sunX:0.5,sunY:104, rays:0.14, tint:'rgba(255,200,90,.32)',
+    haze:'rgba(70,58,26,.46)', fog:'rgba(120,100,50,.48)', stars:0, tower:'#3a3220', mecha:true, land:'coreroom', fg:'cable',
+    g:['#4a4230','#332d20','#1a1710'], cob:['#443c2c','#3a3426'], vig:'rgba(6,4,0,.66)',
+    rimRGB:'255,224,150',
+    amb:{shape:'spark',color:'rgba(255,226,150,.92)',rate:0.8,max:42,vy:-0.24,wind:0.08,r0:1.3,r1:3.2,glow:true,alpha:.92} },
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -12282,7 +12527,9 @@ function drawBackground(){
     ctx.restore(); }
   // 洞窟と海中は「空」が無い。雲と鳥をそのまま出すと水の中に雲が浮かぶ
   // 天守は炎と黒煙の夜、桶狭間は豪雨。どちらも白いふわふわの雲が浮くと嘘になる
-  const encl=(T.land==='cavern'||T.land==='sunken'||T.land==='tenshu'||T.land==='okehazama');
+  // 工廠・炉室・中枢演算室は屋内。煤煙と隔壁の下に白い雲と渡り鳥が湧くと嘘になる
+  const encl=(T.land==='cavern'||T.land==='sunken'||T.land==='tenshu'||T.land==='okehazama'
+            ||T.land==='foundry'||T.land==='reactor'||T.land==='coreroom');
   // clouds drift slowly even when standing still (skip for night/魔界)
   if(!T.stars && !encl){ const cl=-camX*0.12-gf*0.18;
     for(let i=0;i<10;i++){ const x=((i*360+cl)%(W+460)+W+460)%(W+460)-230; cloud(x,56+(i*53%70),58+(i%2)*24); } }
@@ -12422,6 +12669,192 @@ function drawMythFoe(e,t){
 // 兵種の見分けは「頭」と「得物」で付ける。陣笠＝足軽と射手、兜＝侍と大将、
 // 頭巾＝忍び。胴は共通の胴丸（横に威糸を通した札）にして、部隊としての統一感を出す。
 // 明度は 胴(c1) < 札の縁(c2) < 顔と得物 の順に離す（近いと1つの塊に潰れる）
+// ── 六周目「メカワンコキングダム」の雑魚 ──
+// 戦国と同じ書き方（ctx のプリミティブのみ）。機械なので面は角ばらせる ──
+// これは絵の都合であると同時に描画コールの都合でもある。roundRect は
+// beginPath+moveTo+arcTo×4+closePath で8コール、fillRect は1コール。
+// 肩・頭・継ぎ目・ルーバーを角にしただけで1体あたり40コール以上減った
+// （16体同時のシーンで既に約19ms、垂直同期の下限は16.7ms）。
+// 丸めるのはシルエットを決める胴だけに絞っている。
+// 合成モードを変えるのは動力炉・単眼・砲口・構えの光の4箇所だけ。
+function drawMechaFoe(e,t){
+  const kind=t.mechaKind||'shield', anim=e.anim||0, atk=e.state==='attack', tele=e.telegraph>0;
+  const bw=t.w, bh=t.h, walk=foeStep(e,5);
+  const ward=(e.state==='mythward');        // 斬り返しの構え（状態名は分隊AIと共通なので侍と同じ）
+  const gun=(e.state==='gunFire'), grd=(e.state==='guard');
+  // 浮遊は絵の中だけ。雑魚の flyer には浮遊の実装が無く（浮くのは bossTick のボスだけ）、
+  // e.z を触ると当たり判定の高さまで上がって、殴れない敵になる
+  const fly=(kind==='drone'), hov=fly? Math.sin(anim*1.6)*4-bh*0.08 : 0;
+  const ty=-bh*0.80, th2=bh*0.42;           // 胴の上端と高さ
+  ctx.save(); ctx.translate(0,hov); ctx.lineJoin='round'; ctx.lineCap='round';
+  // ── 脚：太腿と脛の二節サーボ。膝の受け軸を1枚の板で打つと「関節」に見える ──
+  if(fly){                                  // 飛行型は脚の代わりに吊り下げの支持架（1本の経路で2本引く）
+    ctx.strokeStyle=t.c3; ctx.lineWidth=5; ctx.beginPath();
+    for(const sgn of [-1,1]){ ctx.moveTo(sgn*bw*0.16,ty+th2-4); ctx.lineTo(sgn*bw*0.22,ty+th2+bh*0.12); }
+    ctx.stroke();
+  } else {
+    for(const sgn of [-1,1]){ const sw=walk*sgn, kx=sgn*6+sw*0.7, ky=-bh*0.21;
+      ctx.strokeStyle=t.c3; ctx.lineWidth=10;                        // 太腿
+      ctx.beginPath(); ctx.moveTo(sgn*6,-bh*0.40); ctx.lineTo(kx,ky); ctx.stroke();
+      ctx.strokeStyle=shade(t.c2,-18); ctx.lineWidth=7;              // 脛
+      ctx.beginPath(); ctx.moveTo(kx,ky); ctx.lineTo(sgn*6+sw,-bh*0.03); ctx.stroke();
+      ctx.fillStyle=t.c2; ctx.fillRect(sgn*6+sw-7,-bh*0.05,14,bh*0.05);   // 接地板
+      ctx.fillStyle=t.accent; ctx.fillRect(kx-2.5,ky-2.5,5,5); } }        // 膝の受け軸
+  // ── 露出した配線：腰から胴へ2本。歩調に合わせて揺れる（1経路にまとめる）──
+  ctx.strokeStyle='#2a2c34'; ctx.lineWidth=2.2; ctx.beginPath();
+  for(const sgn of [-1,1]){ const sw=Math.sin(anim*1.6+sgn)*3;
+    ctx.moveTo(sgn*bw*0.14,ty+th2-2);
+    ctx.quadraticCurveTo(sgn*bw*0.24+sw,ty+th2*0.62, sgn*bw*0.13,ty+th2*0.18); }
+  ctx.stroke();
+  // ── 胴：ここだけ丸める。シルエットを決める面なので8コール払う価値がある ──
+  ctx.fillStyle=t.c1; roundRect(-bw*0.26,ty,bw*0.52,th2,5); ctx.fill();
+  ctx.fillStyle=shade(t.c2,-26);                                    // 装甲板の継ぎ目
+  for(let k=1;k<3;k++) ctx.fillRect(-bw*0.24,ty+th2*k/3,bw*0.48,1.5);
+  ctx.fillStyle=t.c2; ctx.fillRect(-bw*0.26,ty+th2-5,bw*0.52,6);    // 腰の帯
+  ctx.fillStyle=shade(t.c3,-10);                                    // 排熱ルーバー（胸の三枚羽）
+  for(let k=0;k<3;k++) ctx.fillRect(-bw*0.17,ty+bh*0.06+k*5,bw*0.13,2.6);
+  ctx.fillStyle=t.c2;                                               // 肩の装甲板（角のまま＝機械らしい）
+  for(const sgn of [-1,1]) ctx.fillRect(sgn*bw*0.28-7,ty-2,14,th2*0.46);
+  // 動力炉。過熱中（rager）は明るくなるので、暴走が一目で分かる
+  { ctx.save(); ctx.globalCompositeOperation='lighter';
+    const pw=0.5+0.5*Math.sin(gf*0.13+(e.id||0));
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+','+(0.32+0.38*pw+(e.rage?0.25:0))+')';
+    ctx.beginPath(); ctx.arc(bw*0.08,ty+th2*0.34,bh*0.05,0,7); ctx.fill(); ctx.restore(); }
+  // ── 頭：角ばった箱にバイザーの溝と単眼 ──
+  const hx=0, hy=-bh*0.92;
+  ctx.fillStyle=t.c2; ctx.fillRect(hx-bh*0.10,hy-bh*0.075,bh*0.20,bh*0.15);
+  ctx.fillStyle=shade(t.c3,-24); ctx.fillRect(hx-bh*0.085,hy-bh*0.015,bh*0.17,bh*0.045);
+  { ctx.save(); ctx.globalCompositeOperation='lighter';
+    const g=0.55+0.45*Math.sin(gf*0.18+(e.id||0)*1.7);
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+','+g+')';
+    ctx.beginPath(); ctx.arc(hx+bh*0.035,hy+bh*0.006,bh*0.03,0,7); ctx.fill(); ctx.restore(); }
+  ctx.strokeStyle=t.c3; ctx.lineWidth=2;                            // 通信アンテナ
+  ctx.beginPath(); ctx.moveTo(hx-bh*0.06,hy-bh*0.075); ctx.lineTo(hx-bh*0.09,hy-bh*0.17); ctx.stroke();
+  // ── 犬の印：垂れ耳・突き出た口・尾。ここが無いと「メカワンコ」ではなく
+  //    ただの人型ロボットに見える（実機の絵で確認した）──
+  { const eh=bh*0.13, ew=bh*0.062;                                  // 折れた板の垂れ耳を左右へ
+    ctx.fillStyle=shade(t.c2,-10);
+    for(const sgn of [-1,1]){ ctx.save(); ctx.translate(hx+sgn*bh*0.105, hy-bh*0.055);
+      ctx.rotate(sgn*0.42+Math.sin(anim*1.1+sgn)*0.05);
+      ctx.fillRect(-ew*0.5,0,ew,eh);
+      ctx.fillStyle=t.accent; ctx.fillRect(-ew*0.5+1,eh-4,ew-2,2.5);  // 耳の内側の受光帯
+      ctx.fillStyle=shade(t.c2,-10); ctx.restore(); } }
+  { ctx.fillStyle=shade(t.c2,10);                                    // 突き出た口吻（前へ一段）
+    ctx.fillRect(hx+bh*0.09,hy-bh*0.012,bh*0.075,bh*0.062);
+    ctx.fillStyle=shade(t.c3,-30);                                   // 鼻先の吸気口
+    ctx.fillRect(hx+bh*0.155,hy-bh*0.004,bh*0.014,bh*0.046);
+    ctx.fillStyle=shade(t.c3,-18);                                   // 顎のスリット
+    for(let q=0;q<2;q++) ctx.fillRect(hx+bh*0.10,hy+bh*0.022+q*bh*0.016,bh*0.055,2); }
+  { ctx.strokeStyle=t.c3; ctx.lineWidth=5; ctx.lineCap='round';      // 節でできた尾。歩くと振れる
+    const tw=Math.sin(anim*1.7)*0.30;
+    ctx.beginPath(); ctx.moveTo(-bw*0.30,ty+bh*0.16);
+    ctx.quadraticCurveTo(-bw*0.46,ty+bh*0.06+tw*10, -bw*0.50,ty-bh*0.06+tw*16); ctx.stroke();
+    ctx.fillStyle=t.accent; ctx.fillRect(-bw*0.52,ty-bh*0.08+tw*16,5,5); }
+  // ── 背の排気筒。走っている間と過熱中は熱を吐く ──
+  ctx.fillStyle=shade(t.c3,-14);
+  for(const off of [0,7]) ctx.fillRect(-bw*0.30-off*0.5,ty+bh*0.02+off,6,bh*0.09);
+  if((e.gaitW||0)>0.5 || e.rage){ ctx.save(); ctx.globalAlpha=0.20;
+    ctx.fillStyle=e.rage?'#ff7a3a':'#9aa4b0';
+    ctx.beginPath(); ctx.ellipse(-bw*0.42,ty+bh*0.10,bw*0.12,bh*0.05,0,0,7); ctx.fill(); ctx.restore(); }
+  // ── 得物：役割ごとに形を変える。色だけで分けると鋼色の群れが一塊に見える ──
+  if(kind==='shield'){                                              // 塔盾＋短い杭打ち機
+    ctx.fillStyle=shade(t.c2,grd?18:0); ctx.fillRect(bw*0.20,-bh*0.90,bw*0.28,bh*0.70);
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2.6; ctx.strokeRect(bw*0.24,-bh*0.84,bw*0.20,bh*0.58);
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.34,-bh*0.55,bh*0.05,0,7); ctx.fill();
+    ctx.strokeStyle=t.c3; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(-bw*0.12,-bh*0.46); ctx.lineTo(bw*(atk?0.46:0.30),-bh*0.58); ctx.stroke(); }
+  else if(kind==='gun'){                                            // 肩載せの重砲。撃つ瞬間だけ砲口が灯る
+    ctx.save(); ctx.translate(bw*0.02,-bh*0.66); ctx.rotate(-0.30);
+    ctx.fillStyle=shade(t.c3,-8); ctx.fillRect(-bw*0.20,-8,bw*0.78,16);
+    ctx.fillStyle=t.c2; ctx.fillRect(bw*0.44,-10,bw*0.18,20);
+    ctx.fillStyle=t.accent;                                         // 冷却フィン
+    for(let k=0;k<3;k++) ctx.fillRect(-bw*0.10+k*bw*0.18,-8,2,16);
+    ctx.restore();
+    if(gun){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=0.5+0.4*Math.sin(gf*0.4);
+      ctx.fillStyle='rgba('+hexRGB(t.shotCol||t.accent)+',.9)';
+      ctx.beginPath(); ctx.arc(bw*0.66,-bh*0.84,14,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='beam'){                                           // 腕に生えた光条砲。溜めると鏡筒が灯る
+    ctx.strokeStyle=t.c2; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.60); ctx.lineTo(bw*0.44,-bh*0.64); ctx.stroke();
+    ctx.fillStyle=shade(t.c3,-6); ctx.fillRect(bw*0.36,-bh*0.70,bw*0.22,12);
+    ctx.fillStyle=t.accent; ctx.fillRect(bw*0.56,-bh*0.68,5,8);
+    if(gun){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=0.45+0.4*Math.sin(gf*0.6);
+      ctx.fillStyle='rgba('+hexRGB(t.shotCol||t.accent)+',.9)';
+      ctx.beginPath(); ctx.arc(bw*0.62,-bh*0.64,10,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='flank'){                                          // 両腕の折り畳み刃。攻撃で前へ展開する
+    const ex=atk?0.22:0.02;
+    for(const sgn of [0,1]){ const oy=-bh*(0.56+sgn*0.10);
+      ctx.strokeStyle=sgn?shade(t.c2,20):'#dfe6ef'; ctx.lineWidth=sgn?3.0:4.0;
+      ctx.beginPath(); ctx.moveTo(bw*0.06,oy);
+      ctx.quadraticCurveTo(bw*(0.34+ex),oy-bh*0.10, bw*(0.48+ex),oy+bh*0.06); ctx.stroke(); }
+    ctx.fillStyle=t.accent; ctx.fillRect(bw*0.04,-bh*0.62,bw*0.06,3); }
+  else if(kind==='heavy'){                                          // 油圧の大槌。過熱すると打点が赤熱する
+    const ex=atk?0.20:0;
+    ctx.strokeStyle=t.c3; ctx.lineWidth=7;
+    ctx.beginPath(); ctx.moveTo(-bw*0.20,-bh*0.36); ctx.lineTo(bw*(0.34+ex),-bh*0.70); ctx.stroke();
+    ctx.fillStyle=e.rage?'#c0503a':shade(t.c2,-10);
+    ctx.fillRect(bw*(0.30+ex),-bh*0.86,bw*0.26,bh*0.24);
+    ctx.strokeStyle=e.rage?'#ffb07a':t.accent; ctx.lineWidth=2.4;
+    ctx.strokeRect(bw*(0.33+ex),-bh*0.82,bw*0.20,bh*0.16);
+    ctx.strokeStyle=shade(t.c3,20); ctx.lineWidth=3;                // 油圧シリンダ
+    ctx.beginPath(); ctx.moveTo(bw*0.02,-bh*0.52); ctx.lineTo(bw*(0.28+ex),-bh*0.68); ctx.stroke(); }
+  else if(kind==='drone'){                                          // 四枚のローターと吊り下げの爪
+    ctx.strokeStyle=shade(t.c2,10); ctx.lineWidth=3; ctx.beginPath();
+    for(const sgn of [-1,1]){ ctx.moveTo(sgn*bw*0.18,ty+bh*0.04); ctx.lineTo(sgn*bw*0.42,ty-bh*0.04); }
+    ctx.stroke();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2; ctx.beginPath();
+    for(const sgn of [-1,1]){ const cx=sgn*bw*0.42, cy=ty-bh*0.04;
+      // PI2 は四分の一回転。4枚羽なので k*PI2 で90度ずつ正しく割れる（全周は TAU）
+      for(let k=0;k<4;k++){ const a=gf*0.5*sgn+k*PI2;
+        ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(a)*bw*0.16, cy+Math.sin(a)*bh*0.05); } }
+    ctx.stroke();
+    ctx.strokeStyle=t.c3; ctx.lineWidth=4; ctx.beginPath();         // 吊り下げの爪
+    for(const sgn of [-1,1]){ ctx.moveTo(sgn*4,ty+th2);
+      ctx.quadraticCurveTo(sgn*bw*0.14,ty+th2+bh*0.10, sgn*bw*0.06,ty+th2+bh*0.18); }
+    ctx.stroke(); }
+  else if(kind==='bomb'){                                           // 腹に抱えた炸薬。点滅で「触れるな」を伝える
+    const bl=0.35+0.55*Math.abs(Math.sin(gf*0.30)), cy=ty+th2*0.66;
+    ctx.fillStyle=shade(t.c3,-18); ctx.beginPath(); ctx.arc(0,cy,bh*0.13,0,7); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+','+bl+')';
+    ctx.beginPath(); ctx.arc(0,cy,bh*0.10,0,7); ctx.fill(); ctx.restore();
+    ctx.strokeStyle=shade(t.c2,-20); ctx.lineWidth=2; ctx.beginPath();   // 拘束バンド
+    ctx.arc(0,cy,bh*0.13,0.5,1.9); ctx.moveTo(-bh*0.12,cy+bh*0.05); ctx.arc(0,cy,bh*0.13,3.6,5.0);
+    ctx.stroke(); }
+  else if(kind==='fix'){                                            // 整備アーム＋支援フィールドの環
+    ctx.strokeStyle=t.c2; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.62);
+    ctx.quadraticCurveTo(bw*0.40,-bh*0.78, bw*0.46,-bh*0.52); ctx.stroke();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=3; ctx.beginPath();     // 先端の三本爪
+    for(let k=-1;k<=1;k++){ ctx.moveTo(bw*0.46,-bh*0.52); ctx.lineTo(bw*0.54,-bh*0.52+k*bh*0.06); }
+    ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=0.18+0.12*Math.sin(gf*0.10);
+    ctx.strokeStyle=t.accent; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(0,-bh*0.42,bw*0.72,bh*0.20,0,0,7); ctx.stroke(); ctx.restore(); }
+  else if(kind==='duel'){                                           // 単分子の長刀。構え中は刃が白熱する
+    ctx.strokeStyle=ward?'#ffffff':'#e2ecf6'; ctx.lineWidth=ward?5.0:3.8;
+    ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.56);
+    ctx.quadraticCurveTo(bw*0.44,-bh*0.72, bw*0.50,-bh*0.32); ctx.stroke();
+    ctx.strokeStyle=t.c3; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.56); ctx.lineTo(-bw*0.06,-bh*0.50); ctx.stroke();
+    if(ward){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=0.28+0.22*Math.sin(gf*0.28);
+      ctx.fillStyle='rgba('+hexRGB(t.accent)+',.85)';
+      ctx.beginPath(); ctx.arc(bw*0.34,-bh*0.54,bh*0.20,0,7); ctx.fill(); ctx.restore(); } }
+  else {                                                            // 'blink'：転送コイル＋短刀
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2.4; ctx.beginPath();
+    for(let k=0;k<2;k++) ctx.arc(-bw*0.02,ty+th2*0.40,bh*0.16+k*4, -0.9+gf*0.06, 0.9+gf*0.06);
+    ctx.stroke();
+    ctx.strokeStyle='#cfd8e6'; ctx.lineWidth=3.2;
+    ctx.beginPath(); ctx.moveTo(bw*0.12,-bh*0.52); ctx.lineTo(bw*0.34,-bh*0.66); ctx.stroke(); }
+  // 構え／攻撃中は機体全体が薄く光る（戦国と同じ扱い。何が来るかを構えで読ませる）
+  if(tele||atk){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.16;
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(0,-bh*0.5,bw*0.5,bh*0.5,0,0,7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+}
 function drawSengokuFoe(e,t){
   const kind=t.sengKind||'ashigaru', anim=e.anim||0, atk=e.state==='attack', tele=e.telegraph>0;
   const bw=t.w, bh=t.h, walk=foeStep(e,5);
@@ -13576,6 +14009,232 @@ const LAND={
       ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6, x+sw,baseY-h); ctx.stroke();
       ctx.fillStyle=ash; ctx.beginPath(); ctx.ellipse(x+sw,baseY-h-4,3,7,sw*0.05,0,7); ctx.fill(); });
   },
+  // ── 六周目・メカの六景 ──────────────────────────────────
+  // 機械は「等間隔」で描く。自然物の乱数の高さと違い、同じ形が同じ間隔で並ぶことそのものが
+  // 人工物の記号になる。高さだけを通し番号で振って、単調にならない程度に段違いにする
+  foundry:function(T){                                   // 巨大工廠：高炉の列と、床を流れる溶鉄の樋
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-34),0.14),0.14,baseY,   // 奥の隔壁（工場の外壁）
+      function(wx){ return 158+Math.sin(wx*0.0016)*26+Math.sin(wx*0.0049)*12; });
+    // 高炉の列。胴は上へすぼまる台形、頭に煙突を1本立てる
+    const bodyC=landCol(T,shade(T.tower,-12),0.32), pipeC=landCol(T,shade(T.tower,10),0.32);
+    landRow(0.32,236,function(gx,g0){
+      const x=gx+118, h=176+Math.abs(g0*53%74);
+      ctx.fillStyle=bodyC; ctx.beginPath();
+      ctx.moveTo(x-58,baseY); ctx.lineTo(x-40,baseY-h); ctx.lineTo(x+40,baseY-h); ctx.lineTo(x+58,baseY); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=pipeC; ctx.fillRect(x-13,baseY-h-66,26,68);            // 煙突
+      ctx.fillRect(x-21,baseY-h-72,42,10);                                 // 笠
+      for(let k=0;k<3;k++) ctx.fillRect(x-46+k*32,baseY-h*0.62,9,h*0.62);  // 胴に走る配管
+      // 出湯口の火。加算で描いて空の赤と繋げる。radGrad はキャッシュ付きだが
+      // x が毎フレーム動く＝毎回作り直しになるので、1つおき・高品質時のみに絞る
+      if(perfTier<1 && g0%2===0){ ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.globalAlpha=0.26+0.12*Math.sin(gf*0.09+g0);
+        ctx.fillStyle=radGrad(x,baseY-26,54,'rgba(255,190,90,.9)','rgba(255,90,20,0)');
+        ctx.beginPath(); ctx.arc(x,baseY-26,54,0,7); ctx.fill(); ctx.restore(); } });
+    // 溶鉄の樋。横に一本通し、上に加算の帯を2本重ねる（外＝橙／芯＝白熱）
+    ctx.fillStyle=landCol(T,shade(T.tower,-20),0.50); ctx.fillRect(0,baseY-46,W,46);
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.34+0.10*Math.sin(gf*0.05);
+    ctx.fillStyle='rgba(255,150,50,.8)'; ctx.fillRect(0,baseY-40,W,12);
+    ctx.fillStyle='rgba(255,238,180,.8)'; ctx.fillRect(0,baseY-36,W,4); ctx.restore();
+    // 手前：天井走行クレーンの桁と、吊り下がった取鍋
+    if(perfTier<2){ const beamC=landCol(T,shade(T.tower,22),0.66);
+      landRow(0.66,190,function(gx,g0){
+        const x=gx+95, y=baseY-152-((g0*29)%26);
+        ctx.fillStyle=beamC; ctx.fillRect(x-92,y,184,14);
+        ctx.fillRect(x-8,y+14,16,32);                                      // 巻き上げ機
+        ctx.strokeStyle=beamC; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(x,y+46); ctx.lineTo(x,y+76); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-22,y+76); ctx.lineTo(x+22,y+76);     // 取鍋
+        ctx.lineTo(x+15,y+102); ctx.lineTo(x-15,y+102); ctx.closePath(); ctx.fill(); }); }
+  },
+  reactor:function(T){                                   // 発電炉の底：見上げる炉心と、天井から地面まで通る冷却管
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-30),0.16),0.16,baseY,   // 炉室の壁
+      function(wx){ return 168+Math.sin(wx*0.0021)*18+Math.sin(wx*0.0063)*9; });
+    // 炉心。画面の上方に一つだけ据えて脈打たせる（見上げる構図をここで決める）
+    const cx=W*0.50-camX*0.20, cy=64, pul=0.5+0.5*Math.sin(gf*0.05);
+    if(cx>-300&&cx<W+300){
+      if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.globalAlpha=0.24+0.16*pul;
+        ctx.fillStyle=radGrad(cx,cy+26,150,'rgba(150,240,255,.95)','rgba(60,160,255,0)');
+        ctx.beginPath(); ctx.arc(cx,cy+26,150,0,7); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle=landCol(T,shade(T.tower,20),0.20);
+      ctx.fillRect(cx-96,cy-40,192,26); ctx.fillRect(cx-72,cy+66,144,22);  // 上下の遮蔽環
+      for(let k=-3;k<=3;k++) ctx.fillRect(cx+k*26-7,cy-16,14,84); }        // 制御棒
+    // 冷却管：天井から地面まで通る太い管。等間隔＝人工物であることを形で言う
+    const pipeC=landCol(T,shade(T.tower,-6),0.36), bandC=landCol(T,shade(T.tower,18),0.36);
+    landRow(0.36,124,function(gx,g0){
+      const x=gx+62, w2=(g0%3)?18:30;
+      ctx.fillStyle=pipeC; ctx.fillRect(x-w2/2,0,w2,baseY);
+      ctx.fillStyle=bandC;                                                 // 継ぎ手のフランジ
+      for(let k=0;k<4;k++) ctx.fillRect(x-w2/2-5,42+k*84+((g0*13)%40),w2+10,11); });
+    // 管を流れる冷却材の光。管ごとに位相をずらして下から上へ抜ける
+    if(perfTier<1){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.30;
+      ctx.fillStyle='rgba(170,245,255,.9)';
+      landRow(0.36,124,function(gx,g0){
+        const x=gx+62, ph=(gf*2.2+g0*57)%(baseY+120);
+        ctx.fillRect(x-2,baseY-ph,4,72); });
+      ctx.restore(); }
+    // 手前：炉底の足場（縞鋼板の桁と脚）
+    const deckC=landCol(T,shade(T.tower,28),0.62);
+    landRow(0.62,168,function(gx,g0){
+      const x=gx+84, h=34+((g0*23)%18);
+      ctx.fillStyle=deckC; ctx.fillRect(x-80,baseY-h,160,10);
+      for(let k=-2;k<=2;k++) ctx.fillRect(x+k*36-4,baseY-h+10,8,h-10); });
+  },
+  tether:function(T){                                    // 軌道エレベーター：雲海を貫く一本の塔と、昇っていく昇降機
+    const baseY=GROUND_TOP-2;
+    // 雲海の帯。塔の足元を隠して「見上げる高さ」を作る（列柱の雲海と同じ手だが層と速度が違う）
+    ctx.fillStyle='rgba(238,246,252,.30)';
+    for(let L=0;L<2;L++){ const step=260+L*90, off=((camX*(0.10+L*0.06))%step+step)%step, yb=baseY-176+L*46;
+      for(let x=-step;x<W+step;x+=step){ const px=x-off;
+        ctx.beginPath(); ctx.ellipse(px,yb,86,20,0,0,7); ctx.ellipse(px+60,yb+10,62,15,0,0,7); ctx.fill(); } }
+    const shaft=landCol(T,shade(T.tower,12),0.16), edge=landCol(T,shade(T.tower,36),0.16);
+    const cx=W*0.46-camX*0.16;
+    if(cx>-260&&cx<W+260){
+      // 主塔。上へ細って画面の上端を突き抜ける（＝終わりが見えない高さ）
+      ctx.fillStyle=shaft; ctx.beginPath();
+      ctx.moveTo(cx-96,baseY); ctx.lineTo(cx-26,-10); ctx.lineTo(cx+26,-10); ctx.lineTo(cx+96,baseY); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=edge;                                                  // 稜の帯（無いと塔が1枚の板に見える）
+      ctx.beginPath(); ctx.moveTo(cx-30,baseY); ctx.lineTo(cx-9,-10); ctx.lineTo(cx+1,-10); ctx.lineTo(cx-14,baseY); ctx.closePath(); ctx.fill();
+      for(let k=0;k<9;k++){ const y=baseY-k*46; if(y<-10) break;           // 段ごとの環
+        const w2=96-(baseY-y)*0.16; ctx.fillRect(cx-w2,y-7,w2*2,8); }
+      // 昇降機。塔に沿って上へ流れる
+      if(perfTier<2){ for(let k=0;k<3;k++){
+        const p=((gf*0.6+k*260)%(baseY+120))/(baseY+120), y=baseY-p*(baseY+120);
+        const w2=Math.max(10,96-(baseY-y)*0.16);
+        ctx.fillStyle=edge; ctx.fillRect(cx-w2*0.42,y-14,w2*0.84,26);
+        ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.42;
+        ctx.fillStyle='rgba(200,240,255,.9)'; ctx.fillRect(cx-w2*0.34,y-8,w2*0.68,6); ctx.restore(); } }
+      // 控えケーブル：塔から地平へ斜めに張る
+      if(perfTier<1){ ctx.strokeStyle=edge; ctx.lineWidth=3;
+        for(const s of [-1,1]) for(let k=0;k<2;k++){
+          ctx.beginPath(); ctx.moveTo(cx+s*20,60+k*90);
+          ctx.quadraticCurveTo(cx+s*(200+k*120),baseY-90, cx+s*(360+k*180),baseY); ctx.stroke(); } } }
+    // 手前：発射管制の櫓（四角い骨組み）
+    const towerC=landCol(T,shade(T.tower,26),0.58);
+    landRow(0.58,206,function(gx,g0){
+      const x=gx+103, h=96+Math.abs(g0*41%54);
+      ctx.fillStyle=towerC;
+      ctx.fillRect(x-34,baseY-h,9,h); ctx.fillRect(x+25,baseY-h,9,h);      // 2本の脚
+      for(let k=0;k<4;k++) ctx.fillRect(x-34,baseY-h+k*(h/4),68,6);        // 横桁
+      ctx.fillRect(x-42,baseY-h-16,84,18); });                             // 頂部の作業台
+  },
+  datacity:function(T){                                  // 電脳都市：地平へ収束する光の格子と、窓が走査線のように瞬く演算塔
+    const baseY=GROUND_TOP-2;
+    // 奥：地平へ収束する光の格子。線だけで「無限に続く床」を作る
+    if(perfTier<2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.16;
+      ctx.strokeStyle='rgba(120,200,255,.9)'; ctx.lineWidth=1.4;
+      const hz=baseY-150;
+      for(let k=-9;k<=9;k++){ const x=W*0.5+k*54-((camX*0.10)%54);
+        ctx.beginPath(); ctx.moveTo(x,hz); ctx.lineTo(W*0.5+(x-W*0.5)*3.4,baseY); ctx.stroke(); }
+      for(let k=1;k<7;k++){ const y=hz+(baseY-hz)*(k*k/49);
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ctx.restore(); }
+    // 演算塔の列。三層で退かせ、層ごとに窓の色を変える（奥＝水色／中＝紫／手前＝桃）
+    const LN=perfTier>=2?1:(perfTier>=1?2:3);
+    for(let L=0;L<LN;L++){
+      const par=0.24+L*0.18, step=[164,128,96][L], col=landCol(T,shade(T.tower,-6+L*16),par);
+      const win=['rgba(120,220,255,','rgba(190,140,255,','rgba(255,140,220,'][L], front=(L===LN-1);
+      landRow(par,step,function(gx,g0){
+        const h=(150+L*46)+Math.abs(g0*67%(96+L*40)), x=gx+step/2, w2=step*0.56;
+        ctx.fillStyle=col; ctx.fillRect(x-w2/2,baseY-h,w2,h);
+        ctx.fillRect(x-6,baseY-h-24,12,26);                                // 頂部のアンテナ
+        // 窓は「面をまとめて1枚＋走査中の1行だけ明るく」。行ごとに描くと塔の数だけ矩形が倍増する
+        const rows=Math.max(1,Math.floor(h/26));
+        ctx.fillStyle=win+'0.20)'; ctx.fillRect(x-w2/2+5,baseY-h+8,w2-10,rows*26-19);
+        const lit=Math.floor(gf*0.08+g0*3)%rows;
+        ctx.fillStyle=win+'0.85)'; ctx.fillRect(x-w2/2+5,baseY-h+8+lit*26,w2-10,7);
+        if(front&&perfTier<1){ ctx.fillStyle=col;                          // 手前の層だけ窓の桟を入れる
+          for(let k=-1;k<=1;k++) ctx.fillRect(x+k*(w2*0.28)-2,baseY-h+8,4,rows*26-19); } }); }
+    // 手前：宙を横切るデータの帯
+    if(perfTier<1){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      for(let k=0;k<5;k++){ const y=90+k*54, sp=1.6+k*0.5, x=((gf*sp+k*331)%(W+340))-170;
+        ctx.globalAlpha=0.22+0.10*Math.sin(gf*0.07+k);
+        ctx.fillStyle='rgba(150,230,255,.9)'; ctx.fillRect(x,y,150,3);
+        ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fillRect(x+120,y,30,3); }
+      ctx.restore(); }
+  },
+  scrapdock:function(T){                                 // 廃棄ドック：座礁した巨艦の骸と、傾いたクレーンの列
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-30),0.14),0.14,baseY,   // ドックの擁壁（三角波で角ばった段にする）
+      function(wx){ return 96+tri(wx*0.0009)*54; },28);
+    // 座礁した巨艦。1隻だけ大きく傾けて置き、肋材を露出させる
+    const cx=W*0.44-camX*0.30;
+    if(cx>-460&&cx<W+460){
+      const hull=landCol(T,shade(T.tower,-10),0.30), rib=landCol(T,shade(T.tower,24),0.30);
+      ctx.save(); ctx.translate(cx,baseY); ctx.rotate(-0.10);
+      ctx.fillStyle=hull; ctx.beginPath();
+      ctx.moveTo(-300,0); ctx.lineTo(-250,-150); ctx.lineTo(210,-150);
+      ctx.quadraticCurveTo(330,-120, 300,0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=rib;
+      for(let k=0;k<8;k++) ctx.fillRect(-236+k*58,-206,11,66);             // 剥き出しの肋材
+      ctx.fillRect(-250,-212,540,10);                                      // 甲板の縁
+      ctx.fillStyle=hull; ctx.fillRect(-120,-262,96,54);                   // 艦橋
+      ctx.fillStyle=rib;  ctx.fillRect(-108,-306,12,46);                   // マスト
+      ctx.restore(); }
+    // 傾いたクレーンの列。脚をA字に組み、腕を斜めに突き出す
+    const crC=landCol(T,shade(T.tower,16),0.46);
+    landRow(0.46,214,function(gx,g0){
+      const x=gx+107, h=134+Math.abs(g0*43%58), tl=((g0*37%10)-5)*0.014;
+      ctx.save(); ctx.translate(x,baseY); ctx.rotate(tl);
+      ctx.strokeStyle=crC; ctx.lineWidth=7; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(-34,0); ctx.lineTo(0,-h); ctx.lineTo(34,0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-20,-h*0.44); ctx.lineTo(20,-h*0.44); ctx.stroke();
+      ctx.lineWidth=6;
+      ctx.beginPath(); ctx.moveTo(-6,-h); ctx.lineTo(96,-h-34); ctx.stroke();       // 腕
+      ctx.beginPath(); ctx.moveTo(-6,-h); ctx.lineTo(-62,-h+16); ctx.stroke();      // 釣り合い錘側
+      if(perfTier<1){ ctx.lineWidth=2.4;
+        ctx.beginPath(); ctx.moveTo(74,-h-27); ctx.lineTo(74,-h+34); ctx.stroke();  // 吊り索
+        ctx.fillStyle=crC; ctx.fillRect(64,-h+34,20,16); }                          // フック
+      ctx.restore(); });
+    // 手前：積み上げたコンテナ。段ごとに少しずらして「崩れかけ」に見せる
+    if(perfTier<2){ const cA=landCol(T,'#8a5a3a',0.68), cB=landCol(T,'#4a6a70',0.68);
+      landRow(0.68,158,function(gx,g0){
+        const x=gx+79, n=1+((g0*7)%3);
+        for(let k=0;k<n;k++){ const w2=96-k*10, y=baseY-30-k*30, dx=((k*13)%9)-4;
+          ctx.fillStyle=((g0+k)%2)?cA:cB; ctx.fillRect(x-w2/2+dx,y,w2,28);
+          ctx.fillStyle='rgba(0,0,0,.22)'; ctx.fillRect(x-w2/2+dx,y,w2,4); } }); }
+  },
+  coreroom:function(T){                                  // 中枢演算室：光輪を背負う玉座と、四方から集まる演算塔
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-28),0.14),0.14,baseY,   // 円蓋の壁
+      function(wx){ return 176+Math.sin(wx*0.0018)*14; });
+    // 演算ラックの列。上端を揃えて「整然と並ぶ機械」に見せる（自然物との違いはここ）
+    for(let L=0;L<(perfTier>=2?1:2);L++){
+      const par=0.26+L*0.20, step=[118,86][L], col=landCol(T,shade(T.tower,-4+L*18),par);
+      landRow(par,step,function(gx,g0){
+        const h=(126+L*40)+Math.abs(g0*29%(34+L*22)), x=gx+step/2, w2=step*0.62;
+        ctx.fillStyle=col; ctx.fillRect(x-w2/2,baseY-h,w2,h);
+        ctx.fillStyle='rgba(255,214,120,.28)';
+        for(let k=0;k<4;k++) ctx.fillRect(x-w2/2+4,baseY-h+10+k*22,w2-8,5); }); }
+    // 玉座。三段の壇に据え、背後に光輪を回す
+    const cx=W*0.50-camX*0.40, top=baseY-268, dais=baseY-78;
+    if(cx>-340&&cx<W+340){
+      if(perfTier<2){ const pul=0.5+0.5*Math.sin(gf*0.04);
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.globalAlpha=0.20+0.12*pul;
+        ctx.fillStyle=radGrad(cx,top+70,180,'rgba(255,226,140,.95)','rgba(255,150,40,0)');
+        ctx.beginPath(); ctx.arc(cx,top+70,180,0,7); ctx.fill();
+        ctx.globalAlpha=0.30; ctx.strokeStyle='rgba(255,236,170,.9)'; ctx.lineWidth=4;
+        for(let k=0;k<3;k++){ const r=104+k*26;                            // 傾いた環が逆向きに回る
+          ctx.beginPath(); ctx.ellipse(cx,top+70,r,r*0.34,gf*0.004*(k%2?-1:1),0,7); ctx.stroke(); }
+        ctx.restore(); }
+      const thr=landCol(T,shade(T.tower,26),0.40), gild=landCol(T,shade(T.tower,54),0.40);
+      for(let k=0;k<3;k++){ ctx.fillStyle=(k%2)?thr:gild;                  // 三段の壇
+        ctx.fillRect(cx-150+k*38,baseY-26-k*26,300-k*76,28); }
+      ctx.fillStyle=thr; ctx.fillRect(cx-58,top+96,116,dais-(top+96));     // 背もたれ
+      ctx.beginPath(); ctx.moveTo(cx-58,top+96); ctx.lineTo(cx,top+40); ctx.lineTo(cx+58,top+96); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=gild;
+      for(const s of [-1,1]) ctx.fillRect(cx+s*78-14,top+150,28,dais-(top+150)); }   // 肘掛けの柱
+    // 手前：床から玉座へ集まるケーブル束。先を中央へ寄せて視線を玉座へ導く
+    if(perfTier<1){ const cab=landCol(T,shade(T.tower,-16),0.70);
+      ctx.strokeStyle=cab; ctx.lineWidth=9; ctx.lineCap='round';
+      landRow(0.70,96,function(gx,g0){
+        const x=gx+48, h=52+Math.abs(g0*19%40), sw=Math.sin(gf*0.02+g0)*4;
+        ctx.beginPath(); ctx.moveTo(x,baseY+6);
+        ctx.quadraticCurveTo(x+sw*2,baseY-h*0.7, x+(W*0.5-x)*0.12+sw,baseY-h); ctx.stroke(); }); }
+  },
   yamajiro:function(T){                                  // 甲斐の山城：切り立つ峰と、丸太を組んだ砦
     const baseY=GROUND_TOP-2;
     // 奥の峰。三角波で角ばらせ、頂に雪を置く
@@ -13879,6 +14538,41 @@ function drawFgSilhouettes(T){ if(perfTier>=2) return;
         ctx.beginPath(); ctx.moveTo(x,H+10); ctx.lineTo(x+tilt,H-h); ctx.stroke();
         ctx.fillStyle=col; ctx.beginPath();                // 穂先
         ctx.moveTo(x+tilt,H-h-30); ctx.lineTo(x+tilt+9,H-h+2); ctx.lineTo(x+tilt-9,H-h+2); ctx.closePath(); ctx.fill(); }
+    } else if(kind==='duct'){                              // 天井から降りる太いダクトと配管（工廠・炉室）
+      ctx.fillStyle=col;
+      for(let k=0;k<2;k++){ const x=sx-58+k*116, w=44+((sx*3+k*17)%18);
+        ctx.fillRect(x-w/2,-10,w,H*0.46+((sx*7+k*29)%70));
+        for(let f=0;f<3;f++) ctx.fillRect(x-w/2-9,30+f*96,w+18,16); }      // フランジ
+      ctx.fillRect(sx-150,H*0.30,300,26);                                  // 横に渡る太管
+      ctx.lineCap='round'; ctx.strokeStyle=col; ctx.lineWidth=11;
+      for(let k=0;k<3;k++){ const x=sx-96+k*96;                            // 垂れ下がる細管
+        ctx.beginPath(); ctx.moveTo(x,H*0.36); ctx.quadraticCurveTo(x+18,H*0.52,x-8,H*0.64); ctx.stroke(); }
+    } else if(kind==='gantry'){                            // 門型クレーンの脚（ドック・軌道塔）
+      ctx.fillStyle=col;
+      for(const s of [-1,1]) ctx.fillRect(sx+s*104-15,H*0.18,30,H);        // 2本の脚
+      ctx.fillRect(sx-140,H*0.14,280,30);                                  // 桁
+      ctx.fillRect(sx-16,H*0.44,32,26);                                    // 巻上機
+      ctx.strokeStyle=col; ctx.lineWidth=8; ctx.lineCap='round';
+      for(let k=0;k<4;k++){ const y=H*0.30+k*H*0.16;                       // 筋交い（×に組む）
+        ctx.beginPath(); ctx.moveTo(sx-104,y); ctx.lineTo(sx+104,y+H*0.16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx+104,y); ctx.lineTo(sx-104,y+H*0.16); ctx.stroke(); }
+    } else if(kind==='circuit'){                           // 手前の演算塔。窓の一行だけが走査線のように動く
+      for(let k=0;k<2;k++){ const x=sx-62+k*124, w=76+((sx*5+k*23)%22), top=H*(0.10+((sx*3+k*31)%20)/140);
+        ctx.fillStyle=col; ctx.fillRect(x-w/2,top,w,H-top);
+        ctx.fillRect(x-9,top-34,18,36);                                    // 頂部のアンテナ
+        const rows=6, lit=Math.floor(gf*0.06+k*3+sx*0.01)%rows;
+        ctx.fillStyle='rgba(140,220,255,.9)';
+        for(let r=0;r<rows;r++){ ctx.globalAlpha=(r===lit)?0.55:0.16;
+          ctx.fillRect(x-w/2+8,top+18+r*((H-top-30)/rows),w-16,6); }
+        ctx.globalAlpha=0.90; ctx.fillStyle=col; }
+    } else if(kind==='cable'){                             // 天井から垂れるケーブル束（炉心・中枢）
+      ctx.lineCap='round'; ctx.strokeStyle=col;
+      for(let k=0;k<6;k++){ const x=sx-130+k*52, h=H*(0.42+((sx*7+k*19)%40)/110);
+        const ph=gf*0.018+k*0.9+sx*0.01, a=Math.sin(ph)*13;
+        ctx.lineWidth=15-(k%3)*4;
+        ctx.beginPath(); ctx.moveTo(x,-10);
+        ctx.quadraticCurveTo(x+a,h*0.62, x+a*0.4,h); ctx.stroke();
+        ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x+a*0.4,h,10-(k%3)*2,0,7); ctx.fill(); }   // 端子
     } else if(kind==='rock'){                              // せり出す岩棚（渓谷）
       ctx.beginPath(); ctx.moveTo(sx-150,H+10); ctx.lineTo(sx-118,H*0.30);
       ctx.lineTo(sx-40,H*0.44); ctx.lineTo(sx+26,H*0.24); ctx.lineTo(sx+72,H*0.52);
@@ -16394,11 +17088,13 @@ function drawEnemy(e){
   else if(e.type==='papipoo'){ drawPapipoo(e); }
   else if(e.type==='chamboss'){ drawChamBoss(e); }
   else if(e.type==='chamurus'){ drawChamurus(e); }
+  else if(t.mecha && t.boss && t.finalBoss){ drawMechaKing(e); }   // 王機だけは専用の絵（流用だと紫のふわふわ犬になる）
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
   else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.sengoku && !t.boss) drawSengokuFoe(e,t);
+  else if(t.mechaKind && !t.boss) drawMechaFoe(e,t);   // 六周目。t.mecha ではなく mechaKind で分岐する（一周目のメカワンコ T-800 を巻き込まないため）
   else if(t.myth && !t.boss) drawMythFoe(e,t);
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
   else if(t.bug) drawBugFoe(e,t);
@@ -16407,7 +17103,7 @@ function drawEnemy(e){
   else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
   else if(t.rider) drawRider(e,t);
   else drawBeast(e);
-  if(t.zombie||t.boner||t.mecha) drawFoeOverlay(e,t);
+  if(t.zombie||t.boner||(t.mecha&&!t.mechaKind)) drawFoeOverlay(e,t);   // 六周目の兵は drawMechaFoe が自前で単眼を描くので重ねない
   const bugOwn = t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss';
   if(t.bug && t.boss && e.type!=='chamurus' && !bugOwn) drawBugOverlay(e,t);   // 専用の蟲ボディを持つボスには重ねない
   rimEnd(_erim, 1.15);
@@ -18471,6 +19167,83 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
 }
 // ── 真ボス ワンメンドーズ：複眼を持つ上位者（アメンドーズ風）──
 // ── ガードワン真ボス：先代門番ガードワン零号（黒鉄の巨躯・大槌）──
+// ── 六周目の真ラスボス「王機 メカワンコ・オメガ」──
+// 既存のボス体型を流用すると、ふわふわの紫犬がハンマーを持った姿になった（実機で確認）。
+// 王だけは専用に起こす。巨大な鋼の犬頭を玉座の躯体に載せ、四本の腕で支える
+function drawMechaKing(e){
+  const t=ETYPE[e.type], hurt=enemyHurt(e);
+  // 呼び出し側の座標系は「足元が原点・実寸に近いピクセル」。
+  // t.w/t.h をそのまま使うと画面いっぱいの化け物になり、頭が画面外へ出た
+  const S=t.gsc||1, W2=t.w*0.44*S, H2=t.h*0.62*S;
+  const atk=(e.state==='bmove'), tele=(e.state==='bwind'), anim=e.anim||0;
+  // 呼び出し側（drawEnemy）が既に足元へ原点を移し、向きも反転させている。
+  // ここで座標を作り直すと画面外へ飛ぶうえ、rimBegin のオフスクリーン枠から
+  // はみ出して四角く切り落とされる（実機では姿ごと消えていた）
+  ctx.save();
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  const bob=Math.sin(anim*0.9)*4;
+  // 背景から切り出す影。金色の玉座の間では鋼色がそのまま沈んで、王が見えなかった
+  { ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle='rgba(8,10,18,1)';
+    ctx.beginPath(); ctx.moveTo(-W2*0.48,6); ctx.lineTo(W2*0.48,6);
+    ctx.lineTo(W2*0.36,-H2*0.52); ctx.lineTo(W2*0.30,-H2*0.98);
+    ctx.lineTo(-W2*0.30,-H2*0.98); ctx.lineTo(-W2*0.36,-H2*0.52); ctx.closePath(); ctx.fill();
+    ctx.restore(); }
+  // ── 玉座の躯体：台形の基部から柱が二本立ち、上に胸郭が載る ──
+  ctx.fillStyle=shade(t.c3,-16);
+  ctx.beginPath(); ctx.moveTo(-W2*0.42,0); ctx.lineTo(W2*0.42,0);
+  ctx.lineTo(W2*0.30,-H2*0.20); ctx.lineTo(-W2*0.30,-H2*0.20); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=t.c2;
+  for(const sgn of [-1,1]) ctx.fillRect(sgn*W2*0.20-W2*0.05,-H2*0.44,W2*0.10,H2*0.25);
+  ctx.fillStyle=t.c1; ctx.fillRect(-W2*0.30,-H2*0.66+bob*0.3,W2*0.60,H2*0.24);
+  ctx.fillStyle=shade(t.c2,-12); ctx.fillRect(-W2*0.30,-H2*0.50+bob*0.3,W2*0.60,H2*0.05);
+  // 胸の炉心。溜めの間は膨らんで光る
+  { const r=H2*(tele?0.085+0.02*Math.sin(gf*0.4):0.062);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+','+(0.55+0.45*Math.sin(gf*0.16))+')';
+    ctx.beginPath(); ctx.arc(0,-H2*0.55+bob*0.3,r,0,TAU); ctx.fill(); ctx.restore();
+    ctx.strokeStyle=shade(t.c3,-20); ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(0,-H2*0.55+bob*0.3,r+5,0,TAU); ctx.stroke(); }
+  // ── 四本の腕：上二本は前へ、下二本は基部を掴んで支える ──
+  ctx.strokeStyle=t.c2; ctx.lineCap='round';
+  for(const sgn of [-1,1]){
+    const sw=atk? 0.55*sgn : Math.sin(anim*0.8+sgn)*0.10;
+    ctx.lineWidth=W2*0.055;
+    ctx.beginPath(); ctx.moveTo(sgn*W2*0.28,-H2*0.60+bob*0.3);
+    ctx.lineTo(sgn*W2*0.44,-H2*0.42+sw*H2*0.10);
+    ctx.lineTo(sgn*W2*0.40+ (atk?W2*0.16:0), -H2*0.24+sw*H2*0.16); ctx.stroke();
+    ctx.lineWidth=W2*0.040;
+    ctx.beginPath(); ctx.moveTo(sgn*W2*0.26,-H2*0.48+bob*0.3);
+    ctx.lineTo(sgn*W2*0.38,-H2*0.30); ctx.lineTo(sgn*W2*0.30,-H2*0.12); ctx.stroke();
+    ctx.fillStyle=t.accent;
+    ctx.fillRect(sgn*W2*0.44-3,-H2*0.42+sw*H2*0.10-3,6,6); }
+  // ── 頭：巨大な鋼の犬頭。角ばった兜に、立ち耳と長い口吻 ──
+  const hy=-H2*0.78+bob;
+  ctx.fillStyle=t.c1; ctx.fillRect(-W2*0.20,hy-H2*0.13,W2*0.40,H2*0.24);
+  ctx.fillStyle=shade(t.c2,-10);                                   // 前へ張り出す口吻
+  ctx.fillRect(W2*0.16,hy-H2*0.03,W2*0.24,H2*0.13);
+  ctx.fillStyle=shade(t.c3,-28); ctx.fillRect(W2*0.37,hy-H2*0.02,W2*0.04,H2*0.10);
+  for(let q=0;q<3;q++) ctx.fillRect(W2*0.19,hy+H2*0.035+q*H2*0.028,W2*0.18,3);   // 牙の噛み合わせ
+  ctx.fillStyle=t.c2;                                              // 立ち耳（王だけは尖らせる）
+  for(const sgn of [-1,1]){ ctx.beginPath();
+    ctx.moveTo(sgn*W2*0.16,hy-H2*0.12); ctx.lineTo(sgn*W2*0.22,hy-H2*0.30);
+    ctx.lineTo(sgn*W2*0.05,hy-H2*0.14); ctx.closePath(); ctx.fill(); }
+  // 王冠：頭頂に三本の尖塔
+  ctx.fillStyle=t.accent;
+  for(let q=0;q<3;q++){ const cx2=(q-1)*W2*0.09;
+    ctx.beginPath(); ctx.moveTo(cx2-W2*0.03,hy-H2*0.13);
+    ctx.lineTo(cx2,hy-H2*0.24); ctx.lineTo(cx2+W2*0.03,hy-H2*0.13); ctx.closePath(); ctx.fill(); }
+  // 単眼：横一文字のバイザーに、走査する光点
+  ctx.fillStyle=shade(t.c3,-34); ctx.fillRect(-W2*0.17,hy-H2*0.045,W2*0.32,H2*0.055);
+  { ctx.save(); ctx.globalCompositeOperation='lighter';
+    const scan=Math.sin(gf*0.05)*W2*0.12;
+    ctx.fillStyle='rgba('+hexRGB(t.accent)+',0.95)';
+    ctx.fillRect(-W2*0.02+scan,hy-H2*0.042,W2*0.06,H2*0.049); ctx.restore(); }
+  // ── 背の排熱塔。溜めの間は激しく吹く ──
+  ctx.fillStyle=shade(t.c3,-10);
+  for(const off of [0,1,2]) ctx.fillRect(-W2*0.40-off*W2*0.06,-H2*0.70+off*H2*0.04,W2*0.05,H2*0.22);
+  if(tele||atk){ ctx.save(); ctx.globalAlpha=0.26; ctx.fillStyle='#ff9a4a';
+    ctx.beginPath(); ctx.ellipse(-W2*0.50,-H2*0.62,W2*0.16,H2*0.10,0,0,TAU); ctx.fill(); ctx.restore(); }
+  ctx.restore(); }
 function drawGuard0(e){ const t=ETYPE[e.type]; const atk=e.state==='bmove', tele=e.state==='bwind'; const walk=foeStep(e,4); const big=t.w>90;
   const sc=big?1:0.72; ctx.save(); ctx.scale(sc,sc);
   // 重厚な脚甲
@@ -20083,6 +20856,13 @@ const CLEAR_LINE={
 // ステージを出るときの、相棒（看板娘チャム／2P）の返し。
 // 主役のひとことで終わると独り言に見えるので、必ず受け手を置いて会話にする
 const PARTNER_LINE={
+  // ── 六周目「メカワンコキングダム」（行商猫チャミの一言）──
+  '鋼鉄の外郭門':'門の内側、ぜんぶ鉄だったにゃ…。うちの棚も鉄にしたら泥棒よけになるかにゃ？',
+  '歯車の大回廊':'あの歯車、ひとつ持って帰れないかにゃ。……重すぎて無理だったにゃ。',
+  '電磁の大坑道':'びりびりして毛が逆立ったにゃ！　しばらく金物には触りたくないにゃ…',
+  '天空の軌道橋':'下を見ちゃだめだったにゃ。橋の下、雲しか無かったにゃ…',
+  '溶鉱炉 第七区':'あそこで鉄の犬が生まれてたにゃ。……生まれる、で合ってるのかにゃ？',
+  '中枢炉心「大王座」':'……歯車が止まった音、聞こえたにゃ。おかえり。ちゃんと痛いまま帰ってきたにゃね。',
   '王都郊外':'お疲れさま！　次は城下町だにゃ。灯りが消える前に行っておいで。',
   '黄昏の城下町':'城下の噂を仕入れといたにゃ。渓谷の方で地面が揺れてるって。',
   '業火の渓谷':'熱かったでしょ？　冷たい水、まけとくにゃ。……代金はもらうけど。',
@@ -20177,6 +20957,24 @@ const CHAM_PRE=[
   {bgTheme:10, art:'invade', name:'？？？', text:'「やあ、いらっしゃい。……ふふ、そんなに驚いた顔しなくてもいいニャ」'},
   {bgTheme:10, art:'player', name:'@hero', text:'（チャム……！？ 宿屋のチャムが、どうしてここに——）'},
 ];
+const NG6_OPEN=[
+  {chapter:true, title:'第六章', sub:'メカワンコキングダム'},
+  {bgTheme:25, art:'invade', name:'', text:'戦の世が旗を畳んだ夜明け。地平線が、まっすぐな一本の線になっていた。山ではない。継ぎ目のある、鉄の壁だった。'},
+  {bgTheme:25, art:'invade', name:'長老モフじい', text:'「……端から端まで、壁が続いておる。あれは城ではない。国じゃ。国がまるごと、鉄で出来ておるのじゃ」'},
+  {bgTheme:26, art:'invade', name:'', text:'門が音もなく持ち上がる。見上げるほどの歯車が噛み合い、光る油が管を巡り、鉄の犬たちが列をなして黙々と歩いていた。'},
+  {bgTheme:29, art:'invade', name:'', text:'炉の火が地平を赤く染める。ここでは犬が生まれるのではない——鋳られるのだ。空には、支えの無い線路が幾重にも架かっていた。'},
+  {bgTheme:30, art:'invade', name:'？？？', text:'『——観測。有機個体、確認。ようこそ、メカワンコキングダムへ。諸君は、その脆い肉を捨てるために来たのだ』'},
+  {bgTheme:30, art:'player', name:'@hero', text:'「捨てるつもりはない。……この国の奥に何があるのか、この目で見るまでは帰らないぞ」'},
+];
+const NG6_END=[
+  {bgTheme:30, boss:'mkOmega', name:'王機 メカワンコ・オメガ', role:'鋼の王', text:'渾身の一撃が、王の核を撃ち抜いた。「……計算外。摩耗する体で、なぜ、ここまで動ける」'},
+  {bgTheme:30, art:'peace', name:'', text:'「我は死を消したかった。だから民を鉄に置き換えた。錆びぬ体を与え、その代わりに——痛みごと、奪ったのだ」'},
+  {bgTheme:29, art:'player', name:'王機オメガ', text:'「貴様の体は傷だらけだ。折れて、焼けて、それでも立った。……その痛みが、力だったというのか」'},
+  {bgTheme:26, art:'gather', name:'', text:'中枢の炉が落ち、国じゅうの歯車が初めて止まった。静寂の中で、鉄の犬たちが一斉に顔を上げる——そして、尻尾をふった。'},
+  {bgTheme:25, art:'gather', name:'長老モフじい', text:'「……鉄の中にも、ちゃんと居ったのじゃな。おかえり、と言うてやろう。長いこと、働きづめじゃったのう」'},
+  {bgTheme:0,  art:'fireworks', name:'王女ペロ', text:'「神さま、天下人、そして鋼の王まで。……あなたが帰ってくる道の先には、まだ知らない世界があるのね」'},
+  {bgTheme:0,  art:'end', name:'', text:'★  聖  犬  士  機  甲  篇  ★     ここまで付き合ってくれて、ありがとう。'},
+];
 const NG5_OPEN=[
   {chapter:true, title:'第五章', sub:'戦国'},
   {bgTheme:19, art:'invade', name:'', text:'神々が雲へ還った翌朝。王都の空に、見たことのない旗指物がはためいていた。瓦屋根の町並みが、地平まで続いている。'},
@@ -20251,7 +21049,7 @@ function spawnTrueBoss(ty){
 function startEnding(){ if(endingDone)return; endingDone=true;
   // 専用エンディングBGMへ切り替え（感動の大団円）
   if(sndOn){ if(!Music.isPlaying())Music.start('ending'); else Music.setMode('ending'); } else Music.stop();
-  const scenes = lap>=5 ? NG5_END : lap>=4 ? NG4_END : lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
+  const scenes = lap>=6 ? NG6_END : lap>=5 ? NG5_END : lap>=4 ? NG4_END : lap>=3 ? NG3_END : lap>=2 ? NG2_END : storyEndFor().concat(ENDING_FINALE);   // 周回ごとの真エンディング
   startCutscene(scenes, ()=>winGame()); }
 function nextCutScene(){ if(!cut)return; cut.i++; cut.t=0; cut.fade=14; ui.move();
   if(cut.i>=cut.scenes.length){ const cb=cut.onDone; cut=null; if(cb)cb(); } }
@@ -20490,7 +21288,8 @@ function startGame(){ unlockAudio();
 function startGameAt(stageN){ startGame();
   const sv=loadProgress();
   if(sv){ coins=sv.coins||0;
-    if(sv.lap>=5){ lap=5; buildEncounters5(); }        // 五周目の続き＝戦国マップへ
+    if(sv.lap>=6){ lap=6; buildEncounters6(); }        // 六周目の続き＝鋼機王国マップへ
+    else if(sv.lap>=5){ lap=5; buildEncounters5(); }   // 五周目の続き＝戦国マップへ
     else if(sv.lap>=4){ lap=4; buildEncounters4(); }   // 四周目の続き＝神話マップへ
     else if(sv.lap>=3){ lap=3; buildEncounters3(); }   // 三周目の続き＝侵略軍マップへ
     else if(sv.lap>=2){ lap=2; buildEncounters2(); }   // 二周目の続き＝蟲の世界マップへ
@@ -20519,7 +21318,9 @@ function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52)
   state='win'; Music.stop(); victoryJingle(); clearProgress();
   retryLap=1;                          // クリア後の「最初から」は本当に最初から
   { const tb=document.getElementById('retryBtn'); if(tb) tb.textContent='▶ 最初から'; }
-  if(lap>=5){ elRTitle.textContent='SENGOKU CLEAR!!!!!'; elRTitle.style.color='#ffb26a';
+  if(lap>=6){ elRTitle.textContent='MECHA CLEAR!!!!!!'; elRTitle.style.color='#8fe8ff';
+    elRSub.textContent='鋼の王国を止め、歯車に心を取り戻させた！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
+  } else if(lap>=5){ elRTitle.textContent='SENGOKU CLEAR!!!!!'; elRTitle.style.color='#ffb26a';
     elRSub.textContent='三英傑を退け、戦の世に終止符を打った！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
   } else if(lap>=4){ elRTitle.textContent='MYTH CLEAR!!!!'; elRTitle.style.color='#fff6c0';
     elRSub.textContent='三柱の神を打ち倒し、神話の頂に立った！  出会った仲間 '+metNPC+'匹 ／ 宝箱 '+chestsOpened+'個  SCORE '+String(score).padStart(6,'0');
@@ -20551,6 +21352,7 @@ function fadeOverlay(el,cb){
   setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fading'); cb&&cb(); }, 260); }
 function beginAdventure(){
   const go=()=>{
+    if(ng2Sel>=6){ startGame(); coins=1400; startNG6(); return; }
     if(ng2Sel>=5){ startGame(); coins=1000; startNG5(); return; }
     if(ng2Sel>=4){ startGame(); coins=700; startNG4(); return; }
     if(ng2Sel>=3){ startGame(); coins=400; startNG3(); return; }
@@ -20566,12 +21368,13 @@ const _watchBtn=document.getElementById('startWatchBtn'); if(_watchBtn) _watchBt
 const _wandenBtn=document.getElementById('startWandenBtn'); if(_wandenBtn) _wandenBtn.onclick=()=>{ unlockAudio(); setupRoster('wanden'); beginAdventure(); };
 const _mackBtn=document.getElementById('startMackBtn'); if(_mackBtn) _mackBtn.onclick=()=>{ unlockAudio(); setupRoster('mack'); beginAdventure(); };
 const _ng2SelBtn=document.getElementById('ng2SelBtn'); if(_ng2SelBtn) _ng2SelBtn.onclick=()=>{
-  ng2Sel = ng2Sel===0?2 : ng2Sel===2?3 : ng2Sel===3?4 : ng2Sel===4?5 : 0;   // 1→2→3→4→5→1周目
+  ng2Sel = ng2Sel===0?2 : ng2Sel===2?3 : ng2Sel===3?4 : ng2Sel===4?5 : ng2Sel===5?6 : 0;   // 1→2→3→4→5→6→1周目
   const L=[{t:'周回スタート：1周目', bg:'linear-gradient(180deg,#3a3f4a,#20242c)', c:'#a0e87a'},
            {t:'🐛 2周目「蟲の世界」から', bg:'linear-gradient(180deg,#4a9a34,#2a6a1c)', c:'#fff'},
            {t:'🛸 3周目「宇宙人の侵略」から', bg:'linear-gradient(180deg,#5a3aa8,#2a1a60)', c:'#e0d0ff'},
            {t:'⚡ 4周目「神話」から（超高難度）', bg:'linear-gradient(180deg,#c8a850,#6a5220)', c:'#fff6c0'},
-           {t:'⚔ 5周目「戦国」から（最高難度）', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:4];
+           {t:'⚔ 5周目「戦国」から', bg:'linear-gradient(180deg,#a83828,#5a1810)', c:'#ffd6a0'},
+           {t:'⚙ 6周目「メカワンコキングダム」から（最高難度）', bg:'linear-gradient(180deg,#2a4a6a,#0e1a2a)', c:'#8fe8ff'}][ng2Sel===0?0:ng2Sel===2?1:ng2Sel===3?2:ng2Sel===4?3:ng2Sel===5?4:5];
   _ng2SelBtn.textContent=L.t; _ng2SelBtn.style.background=L.bg; _ng2SelBtn.style.color=L.c; ui.move(); };
 const _trainBtn=document.getElementById('trainBtn'); if(_trainBtn) _trainBtn.onclick=()=>{ startTrainSelect(); };
 // タイトルは主要メニューだけを出し、キャラ選びは「はじめる」で開く。
