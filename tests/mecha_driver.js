@@ -355,10 +355,12 @@ const DRIVER = `
     // 1) 大型航空兵器は宙に留まる（地面に降りて殴られるだけの的にならない）
     { enemies.length=0; t1kReset(); p.x=600; p._tx=null;
       spawnEnemy('mkSky', 900, LANE); const e=enemies[0];
-      e.thinkCd=999999; let hi=0;
-      for(let f=0;f<120;f++){ hitStop=0; slowmo=0; updateEnemies(); if(e.z>hi) hi=e.z; }
-      if(!(hi>=20)) throw new Error('大型航空兵器が浮かない（最高 '+Math.round(hi)+'px）');
-      if(!(e.z>10)) throw new Error('大型航空兵器が地面に降りてしまう'); }
+      e.thinkCd=999999; let hi=0, up=0;
+      for(let f=0;f<120;f++){ hitStop=0; slowmo=0; updateEnemies();
+        if(e.z>hi) hi=e.z; if(e.z>40) up++; }
+      if(!(hi>=100)) throw new Error('大型航空兵器が浮かない（最高 '+Math.round(hi)+'px）');
+      // 技によっては一時的に降りるので、最終フレームの高さではなく滞空していた割合で見る
+      if(!(up>=90)) throw new Error('大型航空兵器が地上に居る時間が長い（'+up+'/120F）'); }
     // 2) 圧砕機は重い。雑魚の中でいちばん体が大きく、いちばん遅い
     { const Z=MECHA_ZAKO_POOL.map(function(k){ return ETYPE[k]; });
       const wid=Math.max.apply(null, Z.map(function(q){ return q.w; }));
@@ -381,6 +383,38 @@ const DRIVER = `
         try{ enemies.forEach(drawEnemy); } finally { drawMechaFoe=rf; }
         if(!hit) throw new Error(k+' が機械の絵で描かれていない'); }); }
     console.log('追加の三体 OK (空は浮く／圧砕機は最大最遅／鋼骨兵は一度だけ起き上がる)'); }
+
+  // 実際の戦いの入り口を通す。ここを見ていなかったので、遊ぶと
+  // ①イベント戦が始まらない ②形態変化で流用元の台詞が出る の二つが残っていた
+  { setupRoster('guard8'); startGame(); state='play';
+    const q=players[0]; player=q; q.hp=q.maxHp=99999; q.invuln=99999;
+    enemies.length=0; items.length=0; t1kReset();
+    // 第一形態が湧いた時点で、もう溶鉱炉のイベント戦であること。
+    // t1kBegin は spawnEnemy からしか呼ばれないので、第三形態にだけ印を付けると
+    // 進化で辿り着く本番では一度も始まらない
+    spawnEnemy('mkOmega', 900, LANE); const e=enemies[0];
+    if(!t1k.on) throw new Error('第一形態でイベント戦が始まらない');
+    if(!(t1k.furnace>e.x)) throw new Error('溶鉱炉が前方に置かれていない');
+    // 形態変化のカットインが「その形態自身」の名乗りを喋ること。
+    // bossKind で引くと、体型を流用した形態が流用元（ガードワン零号）を名乗る
+    const said=[];
+    const realCut=startCutscene;
+    startCutscene=function(sc,cb){ sc.forEach(function(x){
+      said.push((x.name||'')+'|'+(x.role||'')+'|'+(x.text||'')); }); if(cb)cb(); };
+    try{ e.hp=1; killEnemy(e); e.hp=1; killEnemy(e); } finally { startCutscene=realCut; }
+    if(said.length<2) throw new Error('形態変化のカットインが出ない（'+said.length+'件）');
+    said.forEach(function(x){
+      if(x.indexOf('ガードワン')>=0 || x.indexOf('門番')>=0 || x.indexOf('八代目')>=0)
+        throw new Error('形態変化で流用元の台詞が出ている: '+x.slice(0,40)); });
+    ['mkOmega2','mkOmega3'].forEach(function(k){
+      const nm=ETYPE[k].name, ro=BOSSROLE[k];
+      if(!said.some(function(x){ return x.indexOf(nm)>=0; }))
+        throw new Error(k+' の名乗りがカットインに出ていない');
+      if(!ro) throw new Error(k+' に肩書きが無い');
+      if(!said.some(function(x){ return x.indexOf(nm)>=0 && x.indexOf(ro)>=0; }))
+        throw new Error(k+' の肩書き「'+ro+'」がカットインに出ていない（流用元を引いている）'); });
+    if(e.type!=='mkOmega3') throw new Error('第三形態まで進まない（'+e.type+'）');
+    console.log('ラスボス戦の入り口 OK (第一形態からイベント戦／形態変化は自分の名乗り)'); }
 
   console.log('MECHA TEST PASSED');
   process.exit(0);
