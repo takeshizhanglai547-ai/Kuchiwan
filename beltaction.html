@@ -8086,15 +8086,15 @@ const ETYPE={
   // HPは 1300+1050+1250＝3600（単一形態のときの3400から微増）
   mkOmega:{hp:1300,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
-    name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
+    t1kEvent:true, name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
   mkOmega2:{hp:1050,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
-    name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
+    t1kEvent:true, name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
   // 最終形態は液体金属。装甲を捨てた王機は、鏡のような銀の身体で立ち上がる。
   // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を順に流してから溶け落ちる
   mkOmega3:{hp:1250,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#bfe9ff',mecha:true,t1000:true,
-    finalBoss:true,trueBoss:true,name:'王機オメガ ——液体金属'},
+    t1kEvent:true, finalBoss:true,trueBoss:true,name:'王機オメガ ——液体金属'},
   // ---- 三周目・宇宙人のボス ----
   greyking:{hp:900,sp:2.0,dmg:20,atkR:120,w:146,h:210,c1:'#9fe6c8',c2:'#5aa88a',c3:'#2a5a48',score:7200,boss:true,bossKind:'greyking',weapon:'none',accent:'#c8ffe8',alien:true,name:'大灰星人ゼータ'},
   ufoboss:{hp:860,sp:2.4,dmg:21,atkR:160,w:323,h:228,c1:'#b8a8e0',c2:'#6a5aa0',c3:'#2a2050',score:7600,boss:true,bossKind:'ufoboss',weapon:'none',accent:'#d8c8ff',alien:true,flyer:true,name:'円盤母艦ディスコ'},
@@ -8408,7 +8408,7 @@ function spawnEnemy(type,x,y){ const t=ETYPE[type];
     kbHits:0,kbT:0,poiseBreak:0,parryStance:0,
     rank:rank, dead:false,deadTimer:0,thinkCd:Math.round(rnd(20,60)/foeSpdGrow())});
   // 液体金属が立った瞬間から、溶鉱炉へ突き落とすイベント戦が始まる
-  if(t.t1000 && !t1k.on) t1kBegin(enemies[enemies.length-1]); }
+  if(t.t1kEvent && !t1k.on) t1kBegin(enemies[enemies.length-1]); }
 // ── 雑魚の近接攻撃の型 ──
 // 以前は全ての近接敵が同じタイミングの単発を振るだけで、間合いに入ったら
 // 何が来るか常に同じだった。構え（telegraph）の長さ・段数・当たる高さを変え、
@@ -21031,7 +21031,7 @@ const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝
   mkGolem:'鋼機王国  第一将　鉄壁', mkTurret:'鋼機王国  第二将　砲門',
   mkArc:'鋼機王国  第三将　雷速', mkSwarm:'鋼機王国  第四将　工廠',
   mkMirror:'鋼機王国  第五将　虚像', mkOmega:'鋼機王国を統べる王機',
-  mkOmega2:'装甲解除（第二形態）', mkOmega3:'真核起動（最終形態）',
+  mkOmega2:'装甲解除（第二形態）', mkOmega3:'液体金属（最終形態）',
   mkMScout:'鋼機王国  先行偵察', mkMArms:'鋼機王国  多腕作業機', mkMCoil:'鋼機王国  電磁試作',
   mkMWing:'鋼機王国  飛行試作', mkMHammer:'鋼機王国  打鉄機', mkMOld:'鋼機王国  旧型王機',
   mkVault:'封鎖区画の試作機', mkSky:'鋼機王国  制空権' };
@@ -21259,7 +21259,10 @@ function startStageClearDemo(stN){ const stName=STAGE_NAME[stN]||('STAGE '+stN);
   startCutscene(sc, ()=>{ state='play'; shopPending=120; }); }
 // ラスボス形態変化のデモシーン
 function startTransformCut(nt){ const N=ETYPE[nt], bk=N.bossKind; if(Music.setMode)Music.setMode(bossMusicFor(nt)); sfx.boss(); sfx.transform();
-  startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[bk]||'', text:bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
+  // 肩書きと名乗りは、まず「その形態そのもの」で引く。bossKind で引くと、
+  // 体型を流用した形態が流用元の台詞を喋る（王機がガードワン零号を名乗っていた）
+  startCutscene([{boss:nt, stageN:stage, name:N.name, role:BOSSROLE[nt]||BOSSROLE[bk]||'',
+    text:bossQuoteFor(nt)||bossQuoteFor(bk)||'…', transform:true}], ()=>{ state='play'; }); }
 // ── ヌコ・真ボス「ワンメンドーズ」出現の衝撃の真相 ──
 const WANMEN_REVEAL=[
   {bgTheme:4, art:'fall', name:'', text:'ダークワンワン大帝、崩れ落ちる——だがその刹那、空が裂け、見覚えのある気配が降りてきた。'},
