@@ -416,6 +416,56 @@ const DRIVER = `
     if(e.type!=='mkOmega3') throw new Error('第三形態まで進まない（'+e.type+'）');
     console.log('ラスボス戦の入り口 OK (第一形態からイベント戦／形態変化は自分の名乗り)'); }
 
+  // 攻撃を機械に寄せた：撃ち分け三種と、空から突っ込む立体的な攻め
+  { setupRoster('inu'); startGame(); state='play';
+    const q=players[0]; player=q; q.hp=q.maxHp=99999; q.invuln=99999;
+    const fire=function(k){
+      enemies.length=0; projectiles.length=0; t1kReset();
+      q.x=600; q._tx=null; q.facing=1;
+      spawnEnemy(k, 800, LANE); const e=enemies[0];
+      e.state='gunFire'; e.gunT=16; e.facing=-1;
+      // 弾は飛びながら中身が書き換わる（重力で vzz が反転する）。
+      // 見つけた瞬間の値を控える——後から読むと「打ち上がっていない」ことになる
+      const seen=[], snap=[];
+      for(let f=0;f<40;f++){ hitStop=0; slowmo=0; updateEnemies(); updateProjectiles();
+        projectiles.forEach(function(z){ if(z.owner==='enemy' && seen.indexOf(z)<0){ seen.push(z);
+          snap.push({vx:z.vx, vzz:z.vzz||0, r:z.r, pierce:!!z.pierce, grav:z.grav||0}); } }); }
+      return snap[0]||null; };
+    const laser=fire('mkBeam'), how=fire('mkGun'), rock=fire('mkBlink');
+    if(!laser||!how||!rock) throw new Error('撃ってこない兵がいる');
+    // 光条＝速くて貫通、榴弾＝山なり、ロケット＝遅くて大きい。三つが別物であること
+    if(!(laser.pierce)) throw new Error('光条が貫通しない');
+    if(!(Math.abs(laser.vx)>=18)) throw new Error('光条が速くない（'+Math.round(Math.abs(laser.vx))+'）');
+    if(!(how.grav>0)) throw new Error('榴弾が山なりに落ちない');
+    if(!(how.vzz>0)) throw new Error('榴弾が上へ打ち上がらない');
+    if(!(rock.r>=16)) throw new Error('ロケットが大きくない（r'+rock.r+'）');
+    if(!(Math.abs(rock.vx)<=7)) throw new Error('ロケットが遅くない（'+Math.round(Math.abs(rock.vx))+'）');
+    if(Math.abs(laser.vx)<=Math.abs(rock.vx)) throw new Error('光条とロケットの速さが逆');
+    // 空中突撃：跳び上がってから落ちてくる
+    ['mkFlank','mkDrone'].forEach(function(k){
+      enemies.length=0; t1kReset(); q.x=600; q._tx=null;
+      spawnEnemy(k, 900, LANE); const e=enemies[0]; e.thinkCd=0;
+      let hi=0, dove=false, landed=false;
+      for(let f=0;f<240;f++){ hitStop=0; slowmo=0; updateEnemies();
+        if(e.z>hi) hi=e.z;
+        if(e.state==='dive') dove=true;
+        if(dove && e.z<=0) landed=true; }
+      if(!dove) throw new Error(k+' が空中突撃をしない');
+      if(!(hi>=80)) throw new Error(k+' が '+Math.round(hi)+'px しか上がらない');
+      if(!landed) throw new Error(k+' が降りてこない'); });
+    console.log('機械の攻め OK (光条は貫通・榴弾は山なり・ロケットは大きく遅い／遊撃機と索敵機は空から突っ込む)'); }
+
+  // 耐久を半分にした。長いだけの戦いにしないための調整
+  { const Z=MECHA_ZAKO_POOL.map(function(k){ return ETYPE[k].hp; });
+    const avg=Z.reduce(function(a2,b2){ return a2+b2; },0)/Z.length;
+    // 五周目の雑魚の平均と比べる。倍以上あると「硬いだけ」に戻る
+    const S5=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja']
+      .map(function(k){ return ETYPE[k].hp; });
+    const avg5=S5.reduce(function(a2,b2){ return a2+b2; },0)/S5.length;
+    if(!(avg < avg5*1.4)) throw new Error('六周目の雑魚が硬すぎる（平均 '+Math.round(avg)+' / 五周目 '+Math.round(avg5)+'）');
+    if(!(ETYPE.mkOmega3.hp < 800)) throw new Error('ラスボス最終形態が硬すぎる（'+ETYPE.mkOmega3.hp+'）');
+    console.log('耐久 OK (六周目の雑魚 平均'+Math.round(avg)+' / 五周目 平均'+Math.round(avg5)+')'); }
+
   console.log('MECHA TEST PASSED');
   process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message); process.exit(1); });

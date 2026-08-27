@@ -7969,32 +7969,32 @@ const ETYPE={
   // 遊撃は折り畳み刃、整備は三本爪。色だけで分けると、鋼色の群れが一塊に見える。
   //   mecha:true は一周目のメカワンコ T-800 と共用（金属の識別ディテール用）。
   //   六周目の兵は mechaKind を持ち、描画は drawMechaFoe が受け持つ
-  mkShield:{hp:312,sp:0.95,dmg:32,atkR:68,w:76,h:100,c1:'#8f9fb0',c2:'#4e5a6c',c3:'#232a36',score:3000,
+  mkShield:{hp:156,sp:0.95,dmg:32,atkR:68,w:76,h:100,c1:'#8f9fb0',c2:'#4e5a6c',c3:'#232a36',score:3000,
     mecha:true,mechaKind:'shield',squad:true,phalanx:true,guarder:true,armor:true,accent:'#8ad6ff',name:'盾機兵ガルドラム'},
-  mkGun:{hp:156,sp:0.95,dmg:48,atkR:380,w:66,h:92,c1:'#9a9482',c2:'#5c584a',c3:'#2b2a24',score:2900,
+  mkGun:{hp:78,sp:0.95,dmg:48,atkR:380,w:66,h:92,c1:'#9a9482',c2:'#5c584a',c3:'#2b2a24',score:2900,
     mecha:true,mechaKind:'gun',gunner:true,armor:true,shotCol:'#ff9a4a',shotSpd:7.0,shotR:19,shotHoming:false,
-    shotWind:50,gunSnd:'cannon',accent:'#ff9a4a',name:'重砲機兵ハウザー'},
-  mkBeam:{hp:102,sp:1.75,dmg:25,atkR:320,w:54,h:86,c1:'#a8b6c4',c2:'#5a6a80',c3:'#28303c',score:1600,
-    mecha:true,mechaKind:'beam',gunner:true,shotCol:'#7df0ff',shotSpd:13.0,shotR:7,
+    shotKind:'howitzer',shotWind:50,gunSnd:'cannon',accent:'#ff9a4a',name:'重砲機兵ハウザー'},
+  mkBeam:{hp:51,sp:1.75,dmg:25,atkR:320,w:54,h:86,c1:'#a8b6c4',c2:'#5a6a80',c3:'#28303c',score:1600,
+    mecha:true,mechaKind:'beam',gunner:true,shotKind:'laser',shotCol:'#7df0ff',shotSpd:13.0,shotR:7,
     accent:'#7df0ff',name:'光条機兵レイザー'},
-  mkFlank:{hp:208,sp:2.4,dmg:35,atkR:82,w:60,h:92,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:2900,
-    mecha:true,mechaKind:'flank',squad:true,flanker:true,accent:'#d6a6ff',name:'遊撃機兵スカージ'},
+  mkFlank:{hp:104,sp:2.4,dmg:35,atkR:82,w:60,h:92,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:2900,
+    mecha:true,mechaKind:'flank',squad:true,flanker:true,diver:true,accent:'#d6a6ff',name:'遊撃機兵スカージ'},
   // rager の告知は共通実装の直値で「キレた！！」「ふぅ…」と出る（9058-9062行）。
   // 機械が「キレた」と言うのは字面が浮くが、文言を変えると既存のキレボウズにも波及する。
   // 気になるなら実装側を t.rager の告知テーブルに分ける ── 本設計では触っていない
-  mkHeavy:{hp:260,sp:1.05,dmg:40,atkR:90,w:92,h:110,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:3000,
+  mkHeavy:{hp:130,sp:1.05,dmg:40,atkR:90,w:92,h:110,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:3000,
     mecha:true,mechaKind:'heavy',charge:true,armor:true,rager:true,accent:'#ff6a3a',name:'重装機兵グランドール'},
-  mkDrone:{hp:100,sp:2.5,dmg:30,atkR:62,w:58,h:66,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:2400,
-    mecha:true,mechaKind:'drone',flyer:true,pouncer:true,accent:'#ffd24d',name:'索敵機ドローンアイ'},
-  mkBomb:{hp:46,sp:2.6,dmg:26,atkR:44,w:50,h:62,c1:'#c8b48a',c2:'#7a6a48',c3:'#3a3220',score:1700,
+  mkDrone:{hp:50,sp:2.5,dmg:30,atkR:62,w:58,h:66,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:2400,
+    mecha:true,mechaKind:'drone',flyer:true,diver:true,accent:'#ffd24d',name:'索敵機ドローンアイ'},
+  mkBomb:{hp:23,sp:2.6,dmg:26,atkR:44,w:50,h:62,c1:'#c8b48a',c2:'#7a6a48',c3:'#3a3220',score:1700,
     mecha:true,mechaKind:'bomb',balloon:true,accent:'#ff4d3a',name:'自爆機兵ブリッツ'},
-  mkFix:{hp:260,sp:1.25,dmg:36,atkR:84,w:66,h:98,c1:'#9ac8b0',c2:'#4a7a64',c3:'#1e3830',score:2720,
+  mkFix:{hp:130,sp:1.25,dmg:36,atkR:84,w:66,h:98,c1:'#9ac8b0',c2:'#4a7a64',c3:'#1e3830',score:2720,
     mecha:true,mechaKind:'fix',buffer:true,armor:true,accent:'#a8ffd8',name:'整備機兵ティンカー'},
-  mkDuel:{hp:196,sp:1.7,dmg:34,atkR:80,w:60,h:92,c1:'#c4ccd8',c2:'#6e7686',c3:'#2c3240',score:2100,
-    mecha:true,mechaKind:'duel',squad:true,riposte:true,guarder:true,armor:true,accent:'#fff0a0',name:'決闘機兵ソードラ'},
-  mkBlink:{hp:100,sp:2.9,dmg:27,atkR:250,w:50,h:80,c1:'#8ea8c8',c2:'#46608a',c3:'#1e2a40',score:2560,
+  mkDuel:{hp:98,sp:1.7,dmg:34,atkR:80,w:60,h:92,c1:'#c4ccd8',c2:'#6e7686',c3:'#2c3240',score:2100,
+    mecha:true,mechaKind:'duel',squad:true,riposte:true,guarder:true,armor:true,meleeKind:'pile',accent:'#fff0a0',name:'決闘機兵ソードラ'},
+  mkBlink:{hp:50,sp:2.9,dmg:27,atkR:250,w:50,h:80,c1:'#8ea8c8',c2:'#46608a',c3:'#1e2a40',score:2560,
     mecha:true,mechaKind:'blink',warper:true,gunner:true,shotCol:'#c8b0ff',shotSpd:11.5,shotR:6,shotHoming:false,
-    shotWind:14,accent:'#c8b0ff',name:'転送機兵ジャンパー'},
+    shotKind:'rocket',shotWind:26,accent:'#c8b0ff',name:'転送機兵ジャンパー'},
   // ── 五周目「戦国」の三英傑 ──
   // 五周目のラスボスも三段変身。人 → 鬼 → 魔王（デーモン）。
   // HPは 1900 → 900+900+1100（合計2900＝従来の1.53倍）
@@ -8035,64 +8035,64 @@ const ETYPE={
   // drawBigBoss の既定寸法に落ちて、5体とも同じ寸胴になる。
   // 技表は type キーで BOSSMOVES に登録すること。bossKind で引かれると
   // 流用元（グラトン等）の技をそのまま持ってしまう
-  mkGolem:{hp:2340,sp:0.85,dmg:44,atkR:112,w:210,h:224,c1:'#8a939e',c2:'#4a525c',c3:'#22262e',score:42000,
+  mkGolem:{hp:1170,sp:0.85,dmg:44,atkR:112,w:210,h:224,c1:'#8a939e',c2:'#4a525c',c3:'#22262e',score:42000,
     boss:true,bossKind:'glaton',weapon:'club',accent:'#ff8a3a',mecha:true,name:'鋼牙将 ギガディーン'},
-  mkTurret:{hp:2100,sp:1.15,dmg:42,atkR:150,w:168,h:178,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:42000,
+  mkTurret:{hp:1050,sp:1.15,dmg:42,atkR:150,w:168,h:178,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:42000,
     boss:true,bossKind:'moloch',weapon:'none',accent:'#ffb02e',mecha:true,name:'砲塔将 バリスタ'},
-  mkArc:{hp:1950,sp:3.1,dmg:45,atkR:132,w:92,h:172,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:43000,
+  mkArc:{hp:975,sp:3.1,dmg:45,atkR:132,w:92,h:172,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:43000,
     boss:true,bossKind:'vesper',weapon:'spear',accent:'#bff4ff',mecha:true,name:'電磁将 ヴォルテクス'},
   // sumMax＝この戦いで呼べる総数。上限が無いと倒すそばから湧き続け、
   // 半兵衛戦が「取り巻きを延々倒す作業」になった前例がある
-  mkSwarm:{hp:2250,sp:1.05,dmg:38,atkR:104,w:180,h:186,c1:'#a89a6a',c2:'#5e5430',c3:'#2a2612',score:42000,
+  mkSwarm:{hp:1125,sp:1.05,dmg:38,atkR:104,w:180,h:186,c1:'#a89a6a',c2:'#5e5430',c3:'#2a2612',score:42000,
     boss:true,bossKind:'gigas',weapon:'club',accent:'#ffe14d',mecha:true,sumMax:10,name:'増殖将 レプリカ'},
-  mkMirror:{hp:2080,sp:2.7,dmg:44,atkR:108,w:74,h:132,c1:'#3a4050',c2:'#1e2230',c3:'#0a0c14',score:44000,
+  mkMirror:{hp:1040,sp:2.7,dmg:44,atkR:108,w:74,h:132,c1:'#3a4050',c2:'#1e2230',c3:'#0a0c14',score:44000,
     boss:true,bossKind:'rival',weapon:'dark',accent:'#c8b0ff',mecha:true,name:'影写将 ミラージュ'},
   // ── 六周目の真ラスボス ──
   // gsc＝描画倍率。drawGuard0 は座標を直書きしているので、体格はここで伸ばす
   // ── 六周目の追加兵：空・重・骨 ──
   // 王国の三本柱。空から掃射する大型機、道を均す圧砕機、そして倒れても起き上がる鋼の骨。
   // どれも「まっすぐ来て止まらない」のが共通した怖さ
-  mkDozer:{hp:520,sp:0.62,dmg:46,atkR:104,w:152,h:112,c1:'#8a7f5e',c2:'#4e4838',c3:'#241f16',score:5200,
-    mecha:true,mechaKind:'dozer',charge:true,armor:true,accent:'#ffb02e',name:'圧砕機 ドーザーガル'},
+  mkDozer:{hp:260,sp:0.62,dmg:46,atkR:104,w:152,h:112,c1:'#8a7f5e',c2:'#4e4838',c3:'#241f16',score:5200,
+    mecha:true,mechaKind:'dozer',charge:true,armor:true,meleeKind:'drill',accent:'#ffb02e',name:'圧砕機 ドーザーガル'},
   // zombie＝一度だけ起き上がる既存の仕組み。骨の兵は「倒しても這って来る」ので流用する
-  mkBone:{hp:150,sp:2.6,dmg:38,atkR:76,w:52,h:92,c1:'#dfe6f0',c2:'#94a2b4',c3:'#2a3240',score:3400,
+  mkBone:{hp:75,sp:2.6,dmg:38,atkR:76,w:52,h:92,c1:'#dfe6f0',c2:'#94a2b4',c3:'#2a3240',score:3400,
     mecha:true,mechaKind:'bone',zombie:true,flanker:true,accent:'#ff3a2a',name:'鋼骨兵 スケルガ'},
   // 空を飛ぶ雑魚には浮遊の実装が無い（浮くのはボスの処理だけ）ので、
   // 大型航空兵器は中ボス級として置く。そうしないと地面に降りて殴られるだけの的になる
-  mkSky:{hp:1180,sp:2.2,dmg:44,atkR:150,w:196,h:104,c1:'#6a7482',c2:'#39404c',c3:'#181d24',score:22000,
+  mkSky:{hp:590,sp:2.2,dmg:44,atkR:150,w:196,h:104,c1:'#6a7482',c2:'#39404c',c3:'#181d24',score:22000,
     boss:true,mini:true,bossKind:'ufoboss',weapon:'none',accent:'#ff6a3a',mecha:true,flyer:true,
     hoverZ:150, name:'掃討機 スカイレイダー'},
   // ── 六周目の中ボス（道中に立ちはだかる試作機）──
   // 雑魚の役割をそのまま一回り大きくした個体。HPは五周目の中ボス（900〜1050）に
   // 六周目の係数を掛けた線に置く。技表は流用元の bossKind から引く
-  mkMScout:{hp:1240,sp:2.6,dmg:36,atkR:96,w:82,h:110,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:19000,
+  mkMScout:{hp:620,sp:2.6,dmg:36,atkR:96,w:82,h:110,c1:'#b0a4c8',c2:'#5e5280',c3:'#2a2440',score:19000,
     boss:true,mini:true,bossKind:'vesper',weapon:'spear',accent:'#d6a6ff',mecha:true,name:'先行偵察機 スカウタα'},
-  mkMArms:{hp:1320,sp:1.6,dmg:38,atkR:104,w:96,h:118,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:20000,
+  mkMArms:{hp:660,sp:1.6,dmg:38,atkR:104,w:96,h:118,c1:'#8a8e96',c2:'#4a4e56',c3:'#22262c',score:20000,
     boss:true,mini:true,bossKind:'glaton',weapon:'club',accent:'#ffb02e',mecha:true,name:'多腕作業機 アームズ'},
-  mkMCoil:{hp:1180,sp:2.2,dmg:39,atkR:118,w:80,h:114,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:20000,
+  mkMCoil:{hp:590,sp:2.2,dmg:39,atkR:118,w:80,h:114,c1:'#8ad0e8',c2:'#2f7a9a',c3:'#123044',score:20000,
     boss:true,mini:true,bossKind:'vesper',weapon:'blade',accent:'#bff4ff',mecha:true,name:'電磁試作機 コイラ'},
-  mkMWing:{hp:1150,sp:2.9,dmg:37,atkR:100,w:88,h:100,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:20000,
+  mkMWing:{hp:575,sp:2.9,dmg:37,atkR:100,w:88,h:100,c1:'#c0cad6',c2:'#6a7a90',c3:'#303a48',score:20000,
     boss:true,mini:true,bossKind:'vesper',weapon:'blade',accent:'#ffd24d',mecha:true,flyer:true,name:'飛行試作機 ウィンガ'},
-  mkMHammer:{hp:1400,sp:1.3,dmg:41,atkR:110,w:100,h:122,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:21000,
+  mkMHammer:{hp:700,sp:1.3,dmg:41,atkR:110,w:100,h:122,c1:'#9a8e70',c2:'#5c5238',c3:'#2a2618',score:21000,
     boss:true,mini:true,bossKind:'glaton',weapon:'club',accent:'#ff8a3a',mecha:true,name:'打鉄機 ハンマ'},
   // 大王座の手前に立つ旧世代機。王の一つ前の型という設定なので、技は王と同じ系統から引く
-  mkMOld:{hp:1500,sp:1.7,dmg:42,atkR:112,w:104,h:130,c1:'#7a8290',c2:'#3e4450',c3:'#1a1e26',score:24000,
+  mkMOld:{hp:750,sp:1.7,dmg:42,atkR:112,w:104,h:130,c1:'#7a8290',c2:'#3e4450',c3:'#1a1e26',score:24000,
     boss:true,mini:true,bossKind:'guard0',weapon:'none',accent:'#c8d4e4',mecha:true,name:'旧型王機 プロトタイプ零'},
   // 封鎖区画の試作機（ステージイベントで解放される）
-  mkVault:{hp:1600,sp:2.0,dmg:40,atkR:106,w:94,h:120,c1:'#5a6472',c2:'#2e3540',c3:'#12161c',score:26000,
+  mkVault:{hp:800,sp:2.0,dmg:40,atkR:106,w:94,h:120,c1:'#5a6472',c2:'#2e3540',c3:'#12161c',score:26000,
     boss:true,mini:true,bossKind:'gigas',weapon:'club',accent:'#8fe8ff',mecha:true,name:'封鎖区画の試作機'},
   // 三段変身。玉座 → 装甲を捨てた本体 → 炉心むき出しの真核。
   // 大王座の長老が「王の姿は三度、形を変える」と言うので、形態を持たせないと嘘になる。
   // HPは 1300+1050+1250＝3600（単一形態のときの3400から微増）
-  mkOmega:{hp:1300,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
+  mkOmega:{hp:650,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
     t1kEvent:true, name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
-  mkOmega2:{hp:1050,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
+  mkOmega2:{hp:525,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
     t1kEvent:true, name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
   // 最終形態は液体金属。装甲を捨てた王機は、鏡のような銀の身体で立ち上がる。
   // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を順に流してから溶け落ちる
-  mkOmega3:{hp:1250,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
+  mkOmega3:{hp:625,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#bfe9ff',mecha:true,t1000:true,
     t1kEvent:true, finalBoss:true,trueBoss:true,name:'王機オメガ ——液体金属'},
   // ---- 三周目・宇宙人のボス ----
@@ -9206,7 +9206,29 @@ function updateEnemies(){
       // 弾は「奥行き(y)＝撃った者のレーン」「高さ(zz)＝銃口の高さ」で撃つ。
       // 従来は y に銃口の高さを入れており、直進弾は主役のレーンから 50 ずれたまま
       // 素通りしていた（追尾弾は飛びながら y が寄るので当たっていて、気付けなかった）
-      if(e.gunT===7){ const dir=e.facing; spawnProj(e.x+dir*26, e.y, dir*_ss, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:_sr,life:120,zz:e.h*0.6,homing:_sh});
+      if(e.gunT===7){ const dir=e.facing;
+        // 機械の兵は「同じ赤い弾」ではなく得物で撃ち分ける。
+        // shotKind＝laser（速い貫通の光条）／rocket（遅く大きい弾）／howitzer（山なりに落とす）
+        const SK=t.shotKind;
+        if(SK==='laser'){
+          spawnProj(e.x+dir*30, e.y, dir*22, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:6,life:60,
+            zz:e.h*0.62, pierce:true, nostop:true});
+          for(let q=1;q<7;q++) spark(e.x+dir*(30+q*26), e.y-e.h*0.62, _sc, 1, 3);   // 発射線の残光
+          flash=Math.max(flash,2); sfx.zap(e.x); }
+        else if(SK==='rocket'){
+          spawnProj(e.x+dir*30, e.y, dir*5.2, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:20,life:150,
+            zz:e.h*0.58, homing:false});
+          smokePuff(e.x+dir*34, e.y-e.h*0.58, 5, '150,140,132');
+          shake=Math.max(shake,5); sfx.launch(e.x, 0.95); }
+        else if(SK==='howitzer'){
+          // 山なりに落とす。撃ってくる相手の正面ではなく「頭の上」が危ない
+          const tp=nearestPlayerTo(e.x), dx=tp? (tp.x-e.x) : dir*300;
+          const vx=clamp(dx/46, -9, 9);
+          spawnProj(e.x+dir*24, e.y, vx, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:22,life:140,
+            zz:e.h*0.72, vzz:9.2, grav:0.42, homing:false});
+          gimWarnAt(e.x+vx*46, _sc, 44);                        // 落ちる場所を先に見せる
+          shake=Math.max(shake,6); sfx.launch(e.x, 1.1); }
+        else spawnProj(e.x+dir*26, e.y, dir*_ss, 0, {owner:'enemy',dmg:t.dmg,color:_sc,r:_sr,life:120,zz:e.h*0.6,homing:_sh});
         // 火薬の得物だけを銃声で鳴らす。同じ shotWind でも くノ一 の投擲は別物なので
         // gunSnd を持つ敵だけに限る（レイガン兵のような光線銃も zap のまま）
         if(t.gunSnd==='cannon') sfx.launch(e.x, 1.1);
@@ -9265,8 +9287,17 @@ function updateEnemies(){
       // 当たった後も踏み込み続けると、ガード・回避した側の体を突き抜けて背後に立つ。
       // 突進型（charge）は下で既に毎フレーム6px進むので、そこへ上乗せもしない
       if(V.step && !t.charge && !e.atkLanded) e.x+=e.facing*V.step;
+      // ドリル：押し当てている間じゅう削る。1回で終わると体当たりと区別が付かない
+      if(t.meleeKind==='drill' && el>0 && el%7===0){ e.atkLanded=false;
+        if(V.hits && V.hits.length) enemyAttackHit(e,V,V.hits[0]);
+        spark(e.x+e.facing*40, e.y-e.h*0.45, t.accent||'#ffb02e', 3, 7);
+        if(el%14===0) sfx.swing(1,'chop',e.x); }
       if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(7,19)*(e.rage?0.6:1);} if(t.charge)e.x+=e.facing*6; continue; }
     if(e.telegraph>0){ e.telegraph--;
+      // パイルバンカー：杭を引き込む音と火花で、重い一撃が来ることを長めに知らせる
+      if(t.meleeKind==='pile' && e.telegraph%4===0){
+        spark(e.x+e.facing*34, e.y-e.h*0.55, t.accent||'#fff0a0', 2, 5);
+        if(e.telegraph%12===0) sfx.charge(e.x); }
       if(e.telegraph===0){
         if(e.feint){ e.feint=false; e.state='walk'; e.vx=0;    // 誘い：構えを解いて後ろへ跳ぶ
           e.x-=e.facing*16; dust(e.x,e.y,4); e.thinkCd=rnd(10,22); continue; }
@@ -9349,6 +9380,30 @@ function updateEnemies(){
         e.state='guard'; e.guardT=rnd(50,90); e.guardCd=rnd(40,70); continue; }
     }
     // 跳躍犬: 中距離から飛びかかる
+    // 空中突撃：一度高く跳んでから、主役の真上へ落ちてくる。
+    // 横からしか来ない敵ばかりだと、地上を下がるだけで捌けてしまう
+    if(t.diver && e.state==='walk' && dist>90 && dist<420 && e.thinkCd<=0 && e.stun<=0 && e.z<=0){
+      e.state='divePrep'; e.dvT=22; e.thinkCd=rnd(90,150);
+      ring(e.x, e.y-e.h*0.5, t.accent||'#ffd24d'); sfx.rise(e.x); continue; }
+    if(e.state==='divePrep'){ e.dvT--;
+      e.z += (150-e.z)*0.16;                                    // ふわりと上がる
+      const tp0=nearestPlayerTo(e.x); if(tp0) e.x += clamp((tp0.x-e.x)*0.06, -7, 7);
+      if(e.dvT%3===0) spark(e.x+rnd(-16,16), e.y-e.z-e.h*0.4, t.accent||'#ffd24d', 2, 5);
+      if(e.dvT<=0){ e.state='dive'; e.dvT=40;
+        const tp=nearestPlayerTo(e.x);
+        e.dvx=tp? clamp((tp.x-e.x)/12, -11, 11) : e.facing*6;
+        gimWarnAt(e.x+e.dvx*10, t.accent||'#ffd24d', 26); sfx.dash(e.x); }
+      continue; }
+    if(e.state==='dive'){ e.dvT--;
+      e.x+=e.dvx; e.z=Math.max(0, e.z-13);
+      if(e.z<=0 || e.dvT<=0){                                   // 着地：足元へ衝撃
+        e.z=0; e.state='walk'; e.thinkCd=rnd(30,60);
+        dust(e.x,e.y,8); shake=Math.max(shake,7); sfx.big(e.x);
+        ring(e.x,e.y,t.accent||'#ffd24d');
+        players.forEach(function(q){ if(!q.active||q.state==='dead') return;
+          if(Math.abs(q.x-e.x)>96 || Math.abs(q.y-e.y)>70) return;
+          hurtPlayer(q, Math.round(t.dmg*diffDmgMul()*foeDmgGrow()), (q.x<e.x?-1:1), true, 'blunt'); }); }
+      continue; }
     if(t.pouncer && dist>120 && dist<360 && e.thinkCd<=0 && e.stun<=0){ e.state='crouch'; e.crouchT=18; e.thinkCd=rnd(45,80); continue; }
     // 盾犬兵: プレイヤーの攻撃を察知して構える
     if(t.guarder && dist<t.atkR+72 && e.guardCd<=0 && e.stun<=0 && (p.state==='attack'||Math.random()<0.02)){ e.state='guard'; e.guardT=rnd(36,72); e.guardCd=rnd(50,85); continue; }
@@ -12942,7 +12997,7 @@ function drawMechaFoe(e,t){
     for(let k=0;k<3;k++) ctx.fillRect(bw*0.44,-bh*0.44+k*bh*0.14,bw*0.08,3);
     ctx.strokeStyle=t.c3; ctx.lineWidth=6;                          // 排土板を支える腕
     ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.42); ctx.lineTo(bw*0.32,-bh*0.26); ctx.stroke();
-    if(e.state==='charge'||e.telegraph>0){ ctx.save(); ctx.globalAlpha=0.28;   // 突進の予告：土煙
+    if(e.telegraph>0||e.state==='attack'){ ctx.save(); ctx.globalAlpha=0.28;   // 突進の予告と最中：土煙（'charge' という状態は存在しない）
       ctx.fillStyle='#c8b48a'; ctx.beginPath();
       ctx.ellipse(-bw*0.46,-bh*0.10,bw*0.16,bh*0.09,0,0,TAU); ctx.fill(); ctx.restore(); } }
   else if(kind==='bone'){                                           // 装甲を持たない鋼の骨。細く、速く、止まらない
