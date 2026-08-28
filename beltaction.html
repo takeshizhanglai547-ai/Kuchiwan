@@ -8245,10 +8245,10 @@ const ETYPE={
   // HPは 1300+1050+1250＝3600（単一形態のときの3400から微増）
   mkOmega:{hp:650,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
-    t1kEvent:true, name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
+    name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
   mkOmega2:{hp:525,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
-    t1kEvent:true, name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
+    name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
   // 最終形態は液体金属。装甲を捨てた王機は、鏡のような銀の身体で立ち上がる。
   // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を順に流してから溶け落ちる
   mkOmega3:{hp:625,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
@@ -8999,6 +8999,10 @@ function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
   flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(e.x); sfx.transform(e.x); sfx.ko(e.x);
+  // 液体金属になった瞬間にイベント戦へ入る。ここでしか捕まえられない——
+  // evolveBoss は e.type を書き換えるだけで spawnEnemy を通らないので、
+  // 湧きのフックは第1形態でしか鳴らない（そして t1kTick が次のフレームで消していた）
+  if(N.t1kEvent && !t1k.on) t1kBegin(e);
   if(Music.setMode) Music.setMode(bossMusicFor(nt));   // 形態ごとにBGMを激化（boss2/boss3/チャムルス等はBOSS_BGMで解決）
   for(let k=0;k<8;k++){ ring(e.x+rnd(-40,40),e.y-e.h*0.4,'#c46bff'); spark(e.x+rnd(-40,40),e.y-rnd(0,e.h),'#c46bff',12,10); }
   popText(e.x,e.y-e.h-24,'進化！','#d6a6ff',true);
@@ -20287,19 +20291,21 @@ function drawGhost(e){ const t=ETYPE[e.type]; const sway=Math.sin(e.anim*1.6)*4,
 // 液体金属は殴っても塞がってしまう。地面に湧く火器を拾って撃ち込み、
 // 少しずつ端の溶鉱炉へ押し込むのが唯一の決着。
 // 「撃つと押せる／殴っても塞がる」を体で分からせるのが狙い
-let t1k={on:false, x0:0, x1:0, furnace:0, cd:0, next:0, push:0, warned:false};
-function t1kReset(){ t1k.on=false; t1k.push=0; t1k.cd=0; t1k.next=0; t1k.warned=false; }
+let t1k={on:false, x0:0, x1:0, furnace:0, cd:0, next:0, push:0, warned:false, said:false};
+function t1kReset(){ t1k.on=false; t1k.push=0; t1k.cd=0; t1k.next=0; t1k.warned=false; t1k.said=false; }
 // 液体金属のボスが立ったら、その場を闘技場にして端に炉を置く
 function t1kBegin(e){
-  t1k.on=true; t1k.push=0; t1k.cd=90; t1k.next=0; t1k.warned=false;
-  t1k.x0=e.x-560; t1k.x1=e.x+520; t1k.furnace=e.x+470;
-  popText(e.x, e.y-170, '溶鉱炉へ突き落とせ！　落ちている火器で撃ち込め', '#ffb02e', true);
-  sfx.boss(e.x); flashAt(3,'255,176,46'); }
+  t1k.on=true; t1k.push=0; t1k.cd=90; t1k.next=0; t1k.warned=false; t1k.said=false;
+  t1k.x0=e.x-560; t1k.x1=e.x+520; t1k.furnace=e.x+470; }
 // 火器の湧き。撃ち切っても必ず次が来るので、詰まって手詰まりにならない
 function t1kTick(){
   if(!t1k.on) return;
   const boss=enemies.find(function(q){ return !q.dead && ETYPE[q.type] && ETYPE[q.type].t1000; });
   if(!boss){ t1k.on=false; return; }
+  // 告知は戦いが動き出してから一度だけ。形態変化のデモの裏で出しても読めない
+  if(!t1k.said && state==='play'){ t1k.said=true;
+    popText(boss.x, boss.y-170, '溶鉱炉へ突き落とせ！　落ちている火器で撃ち込め', '#ffb02e', true);
+    sfx.boss(boss.x); flashAt(3,'255,176,46'); }
   // ボスは炉から逃げる向きへ戻ろうとする。押した手応えを残すため、戻りはゆっくり
   if(boss.x>t1k.x0+40 && !boss.t1kFall) boss.x-=0.16;
   boss.x=clamp(boss.x, t1k.x0+30, t1k.furnace+8);
