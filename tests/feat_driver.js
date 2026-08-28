@@ -344,6 +344,96 @@ const DRIVER = `
     if(!(tip[0] > L)) throw new Error('刃の先が柄より後ろ（x='+tip[0].toFixed(0)+' ／柄の先 '+L.toFixed(0)+'）＝向きが逆');
     console.log('大鎌の向き OK (刃の先が柄の先より '+Math.round(tip[0]-L)+'px 前へ出ている)'); }
 
+  // ===== ジャスト回避：当たる直前の回避で、前転せず相手の背へ回り込む =====
+  { const setup=function(kind){ setupRoster(kind||'inu'); startGame(); state='play'; gimOn=false;
+      const p=players[0]; p.kind=kind||'inu'; resetPlayer(p,true); player=p;
+      p.hp=p.maxHp=9999; p.lives=9; p.invuln=0; p.level=1;
+      p.state='idle'; p.z=0; p.vz=0; p.atk=null; p.x=600; p._tx=null; p.facing=1;
+      enemies.length=0; projectiles.length=0; encounters.length=0; particles.length=0;
+      p.in.keys={}; p.in.K={}; for(const k in p.in.pressed) p.in.pressed[k]=false;
+      hitStop=0; slowmo=0; consumeCmd(); return p; };
+    const foe=function(p, dx){ spawnEnemy('wolf', p.x+dx, p.y);
+      const e=enemies[enemies.length-1];
+      e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e.facing=(dx>0?-1:1); return e; };
+
+    // 1) 受付内に攻撃が届けば見切りになる。無傷で、相手の背中側に立っている
+    { const p=setup(); const e=foe(p, 40);
+      beginRoll();
+      const hp0=p.hp;
+      const ok=hitOnePlayer(p, e, 20, false, 60, 40);
+      if(!ok) throw new Error('見切りの間合いで攻撃が素通りした');
+      if(p.state!=='jdodge') throw new Error('当たる直前の回避が見切りにならない（'+p.state+'）');
+      if(p.hp!==hp0) throw new Error('見切ったのにダメージを受けている（'+(hp0-p.hp)+'）');
+      // 背後＝相手が向いている側の反対
+      const back=e.x - e.facing*46;
+      if(!(Math.abs(p.x-back)<8)) throw new Error('相手の背後へ回り込んでいない（自分 '+Math.round(p.x)+' / 背後 '+Math.round(back)+'）');
+      if(p.facing!==e.facing) throw new Error('回り込んだあと相手の背中を向いていない');
+      // 前転していない：転がりの回転も移動速度も残っていない
+      if(Math.abs(p.vx)>0.01) throw new Error('前転の勢いが残っている（vx='+p.vx.toFixed(2)+'）'); }
+
+    // 2) 受付を過ぎたら見切りにならない（押しっぱなしで得をさせない）
+    { const p=setup(); const e=foe(p, 40);
+      const x0=p.x;
+      beginRoll();
+      for(let f=0;f<14;f++){ hitStop=0; slowmo=0; step(1); }
+      // 転がって間合いから出たぶんを戻す。位置ごと動かすと「受付が切れたから当たらない」のか
+      // 「離れたから当たらない」のか区別できず、受付を消す改変が素通りする
+      p.x=x0; e.x=x0+40; p.y=e.y;
+      const st0=p.state, w0=p.jdWin|0;
+      if(st0!=='roll') throw new Error('14F では前転がまだ続いているはず（'+st0+'）');
+      hitOnePlayer(p, e, 20, false, 60, 40);
+      if(p.state==='jdodge') throw new Error('受付を過ぎても見切りになる（回避開始から14F後・受付残り '+w0+'）'); }
+
+    // 3) 回避していなければ普通に食らう
+    { const p=setup(); const e=foe(p, 40);
+      const hp0=p.hp;
+      hitOnePlayer(p, e, 20, false, 60, 40);
+      if(p.state==='jdodge') throw new Error('回避していないのに見切りが出る');
+      if(!(p.hp<hp0)) throw new Error('回避していないのにダメージを受けない'); }
+
+    // 4) 届かない攻撃では発動しない（空振りに合わせて押しても背後は取れない）
+    { const p=setup(); const e=foe(p, 400);
+      beginRoll();
+      hitOnePlayer(p, e, 20, false, 60, 40);
+      if(p.state==='jdodge') throw new Error('400px 離れた攻撃でも見切りが出る'); }
+
+    // 5) 見切ったあと、硬直を待たずに攻撃へ移れる
+    { const p=setup(); const e=foe(p, 40);
+      beginRoll(); hitOnePlayer(p, e, 20, false, 60, 40);
+      if(p.state!=='jdodge') throw new Error('見切りが出ていない');
+      hitStop=0; slowmo=0; p.in.pressed.atk=true; step(1);
+      if(p.state!=='attack') throw new Error('見切りのあと、すぐに攻撃へ移れない（'+p.state+'）'); }
+
+    // 6) 飛び道具も見切れる
+    { const p=setup();
+      spawnProj(p.x+12, p.y, -9, 0, {owner:'enemy', dmg:20, color:'#fff', r:16, life:60, zz:30});
+      const pr=projectiles[projectiles.length-1];
+      beginRoll();
+      const hp0=p.hp;
+      const r=projVsPlayer(pr, p);
+      if(p.state!=='jdodge') throw new Error('飛び道具を見切れない（'+p.state+' / '+r+'）');
+      if(p.hp!==hp0) throw new Error('弾を見切ったのにダメージを受けている'); }
+
+    // 7) 見切っている間は半透明で描かれる（点滅ではなく薄く消える）
+    //    実際に描画へ渡される globalAlpha を横取りして測る。自前で組み立てて比べると、
+    //    描画側だけに掛かる分岐を丸ごと見落とす
+    { const alphasOf=function(p){
+        const real=ctx, seen=[];
+        ctx=new Proxy(real, { get(t,k){ const v=t[k]; return (typeof v==='function')? v.bind(t) : v; },
+                              set(t,k,v){ if(k==='globalAlpha') seen.push(v); t[k]=v; return true; } });
+        try{ drawPlayer(); } finally { ctx=real; }
+        return seen; };
+      const p=setup(); const e=foe(p, 40);
+      beginRoll(); hitOnePlayer(p, e, 20, false, 60, 40);
+      if(p.state!=='jdodge') throw new Error('見切りが出ていない');
+      const semi=alphasOf(p).filter(function(v){ return v>0.2 && v<0.5; });
+      if(!semi.length) throw new Error('見切り中に半透明で描かれていない（渡された alpha: なし）');
+      // 無敵でもない素の待機では出ないこと（＝ただの点滅と取り違えていない）
+      const q=setup(); q.invuln=0; q.state='idle';
+      const semi2=alphasOf(q).filter(function(v){ return v>0.2 && v<0.5; });
+      if(semi2.length) throw new Error('待機中も半透明で描かれている（'+semi2.join(',')+'）'); }
+    console.log('ジャスト回避 OK (受付9F・背後へ回り込み・即反撃・弾も見切る・半透明)'); }
+
   console.log('NEW FEATURES TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

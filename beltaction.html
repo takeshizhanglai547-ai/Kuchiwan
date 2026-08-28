@@ -214,6 +214,7 @@
             <tr><td>ジャンプ</td><td><b>Space / V</b>（空中でもう一度＝二段ジャンプ）</td></tr>
             <tr><td>踏み台ジャンプ</td><td>空中で<b>敵の頭上</b>に重なって<b>ジャンプ</b>＝跳び直せる（同じ敵は着地まで一度きり）</td></tr>
             <tr><td>回避</td><td><b>K / G</b>（空中でも回避できる）</td></tr>
+            <tr><td>ジャスト回避</td><td>攻撃が届く<b>直前</b>に回避＝前転せず半透明で<b>相手の背後へ回り込む</b>（そのまま反撃）</td></tr>
             <tr><td>掴み</td><td><b>L / H</b>（NPCの前で＝会話・乗り物に乗る）</td></tr>
             <tr><td>タメ攻撃</td><td>攻撃を<b>押しっぱなし</b>で離す</td></tr>
             <tr><td>ガード</td><td>後ろへ歩く（敵の攻撃に合わせるとジャストガード）</td></tr>
@@ -2431,6 +2432,12 @@ function drawParticles(layer){
       ctx.beginPath(); ctx.ellipse(0,-26,13,17,0,0,7); ctx.fill();      // 胴
       ctx.beginPath(); ctx.ellipse(0,-50,18,17,0,0,7); ctx.fill();      // 頭
       ctx.fillRect(-10,-13,8,14); ctx.fillRect(3,-13,8,14); }           // 脚
+    else if(p.k==='jdAfter'){ // ジャスト回避の残像：得物を持たない素の影（キャラを選ばない）
+      ctx.globalAlpha=a*0.45; ctx.translate(sx, py); ctx.scale(p.face*FIXED_SCALE*0.92, FIXED_SCALE*0.92);
+      ctx.fillStyle='rgba(200,232,255,.9)';
+      ctx.beginPath(); ctx.ellipse(0,-26,13,16,0,0,7); ctx.fill();                          // 胴
+      ctx.beginPath(); ctx.ellipse(0,-50,17,16,0,0,7); ctx.fill();                          // 頭
+      ctx.fillRect(-9,-13,7,14); ctx.fillRect(3,-13,7,14); }                                 // 脚
     else if(p.k==='wandenAfter'){ // 縮地の残像：通り過ぎたワンデンの影が薄く残る
       ctx.globalAlpha=a*0.5; ctx.translate(sx, py); ctx.scale(p.face*FIXED_SCALE*0.9, FIXED_SCALE*0.9);
       ctx.fillStyle='rgba(190,215,240,.85)';
@@ -3166,7 +3173,7 @@ function makePlayer(pid,kind){ return { pid, kind, active:pid===0, in:makeInput(
   state:'idle', anim:0, atk:null, comboStep:0, comboTimer:0,
   hurtTimer:0, invuln:0, downTimer:0, dashCd:0,
   charge:0, atkHeld:false, atkHoldF:0, riseVel:0, z:0, vz:0,
-  guardStart:-99, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, jDrop:false, jHammer:false, jHyaku:false, landT:0, aerial:0,
+  guardStart:-99, jdWin:0, jdHit:false, jdT:0, parryFx:0, guardFx:0, jAtk:0, jHit:null, jKabuto:false, jDown:false, jDrop:false, jHammer:false, jHyaku:false, landT:0, aerial:0,
   hadouT:0, hadouShots:0, hadouHold:0, sevenT:0,
   grabEnemy:null, grabbedByEnemy:null, grabT:0, grabSub:'hold', grabAnim:0, punch:0,
   slideT:0, slideHit:null, rollT:0, rollDir:1, rollRot:0, wheelT:0, wheelRot:0, wheelHit:null, screwT:0, screwRot:0,
@@ -3331,7 +3338,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.evW=null; p.evAmmo=0; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.stompSet=null; p.airChain={}; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.evW=null; p.evAmmo=0; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.stompSet=null; p.airChain={}; p.jdWin=0; p.jdHit=false; p.jdT=0; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -6112,6 +6119,13 @@ function updatePlayer(){
     return;
   }
   if(p.state==='land'){ p.landT--; p.vx*=0.8; p.x+=p.vx; p.x=clamp(p.x,camX+24,camX+W-24); if(p.landT<=0)p.state='idle'; return; }
+  // ── ジャスト回避のあと：薄いまま相手の背に立つ。何か入力があればその場で切り上げ、
+  //    同じフレームのうちに通常の処理へ流す（「即座に攻撃へ移れる」の実体はここ）──
+  if(p.state==='jdodge'){ p.jdT--;
+    p.invuln=Math.max(p.invuln,4);
+    if(p.jdT%3===0) particles.push({k:'jdAfter', x:p.x, y:p.y-p.z, gl:groundLift(p.x), face:p.facing, life:8, max:8});
+    if(p.jdT<=0 || pressed.atk || pressed.grab || pressed.jump || pressed.grd || K.left || K.right) p.state='idle';
+    if(p.state==='jdodge'){ p.x=clamp(p.x,camX+24,Math.min(WORLD_END,camX+W-24)); return; } }
 
   if(p.state==='attack'){
     const a=p.atk, def=a.def;
@@ -7710,10 +7724,36 @@ function updateWandenCounter(){ const p=player, dir=p.facing; p.dgT++; p.invuln=
   // ── 納刀：静かに刀を鞘へ ──
   if(p.dgT===26){ sfx.guard(p.x); spark(p.x-dir*8,p.y-46,'#dfeaf6',8,5); }
   if(p.dgT>=40){ p.state='idle'; p.invuln=Math.max(p.invuln,20); } }
+// ── ジャスト回避 ──
+// 攻撃が届く直前に回避を押すと、前転せずに半透明のまま相手の背へ回り込む。
+// 受付は9F（ジャストガードと同じ）。空振りしたぶんは普通の前転として残るので、
+// 「押しておけば得」にはならない
+const JDODGE_WIN=9;    // 回避を出してから、この時間内に届いた攻撃を見切る
+const JDODGE_T=18;     // 回り込んだあとの姿勢。攻撃・掴み・跳躍のどれでも即座に切り上げられる
 function beginRoll(){ const p=player; const dir=K.left?-1:K.right?1:p.facing;
   p.state='roll'; p.rollT=0; p.rollDir=dir; p.rollRot=0; p.facing=dir; p.vx=dir*19; p.charge=0; p.atkHeld=false;
+  p.jdWin=JDODGE_WIN; p.jdHit=false;
   p.invuln=Math.max(p.invuln,26); sfx.dash(p.x); dust(p.x,p.y,8); spark(p.x,p.y-12,'#cfe6ff',7,6); }
+// 見切りが成立したか。無敵より先に見るので、回避の i-frame に食われない
+function jdodgeReady(p){ return !!(p && p.active && p.state==='roll' && (p.jdWin|0)>0 && !p.jdHit && p.state!=='dead'); }
+function beginJustDodge(p, e, srcX){
+  p.jdHit=true; p.jdWin=0;
+  const ex=(e? e.x : (srcX!=null? srcX : p.x)), ef=(e? e.facing : (p.x<ex? 1 : -1));
+  // 「背後」＝相手が向いている側の反対。掴んで殴れる間合いまで詰める
+  const bx=ex - ef*46;
+  for(let k=0;k<5;k++) particles.push({k:'jdAfter', x:lerp(p.x,bx,k/5), y:p.y-p.z,
+    gl:groundLift(lerp(p.x,bx,k/5)), face:p.facing, life:10+k*2, max:10+k*2});
+  p.x=clamp(bx, camX+24, Math.min(WORLD_END, camX+W-24));
+  if(e) p.y=clamp(e.y, GROUND_TOP, GROUND_BOT);
+  p.facing=ef;                                   // 相手と同じ向き＝背中を見ている
+  p.state='jdodge'; p.jdT=JDODGE_T; p.vx=0; p.vz=0; p.z=0; p.rollT=0;
+  p.invuln=Math.max(p.invuln, JDODGE_T+10);
+  p.charge=0; p.atkHeld=false; p.comboStep=0; p.comboTimer=0;
+  ring(p.x, p.y-46, '#bfe9ff'); spark(p.x, p.y-46, '#dff6ff', 12, 8);
+  popText(p.x, p.y-104, 'ジャスト回避！', '#bfe9ff', true);
+  hitStop=Math.max(hitStop,6); triggerSlow(22); sfx.dash(p.x); sfx.rise(p.x); }
 function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.92; p.rollRot+=p.rollDir*0.40;
+  if((p.jdWin|0)>0) p.jdWin--;
   if(p.rollT<22) p.invuln=Math.max(p.invuln,3);    // 転がり中は無敵
   if(gf%2===0)dust(p.x,p.y,2);
   p.x=clamp(p.x,camX+24,Math.min(WORLD_END,camX+W-24));
@@ -9560,6 +9600,9 @@ function updateGait(){
 // hh はレーン（奥行き）方向の許容で、高さではない。高さは zmax（既定14）で切る。
 // 既定のままだと跳ぶだけで全ての近接をかわせてしまうので、対空の型だけ zmax を上げる
 function hitOnePlayer(p,e,dmg,knock,reach,hh,unblock,zmax,ivOv,launch){
+  // ── ジャスト回避：回避には無敵が付いているので、invuln より後ろに置くと一生届かない ──
+  if(jdodgeReady(p) && Math.abs(p.y-e.y)<=(hh||34)+16
+     && Math.abs(p.x-e.x)<=(reach>=0? reach : -reach)+28){ beginJustDodge(p,e); return true; }
   if(!p.active||p.state==='down'||p.state==='dead'||p.state==='wheel'||p.invuln>0||p.state==='slide'||p.state==='egrab'||p.z>(zmax==null?14:zmax)) return false;
   if(Math.abs(p.y-e.y)>(hh||34)) return false;
   // 積み重なった床：別の階に立っている相手には届かない（下の階から頭上を殴れてしまう）
@@ -12016,6 +12059,7 @@ function projVsPlayer(pr,p){
   const overIt = p.z > pr.zz+18;
   if(!near||overIt) return null;
   const dir=pr.vx>0?1:-1, fromFront=Math.sign(pr.x-p.x)===-p.facing;
+  if(jdodgeReady(p)){ beginJustDodge(p, null, pr.x); return 'gone'; }   // 弾も見切れる（飛んできた側へ回り込む）
   if(p.state==='slide'||p.invuln>0) return null;          // dodged
   if(p.state==='guard' && fromFront){
     if(gf-p.guardStart<=9){ pr.owner='player'; pr.vx=-pr.vx*1.5||(-p.facing*9); pr.vy*=-0.5; pr.vzz=0; pr.dmg=Math.max(pr.dmg,18); pr.color='#bfe9ff';
@@ -14991,7 +15035,11 @@ function drawPlayer(){
   const p=player, s=depthScale(p.y)*0.94*(p.kind==='guard8'?1.28:1), sx=p.x-camX, sy=actorGY(p), st=p.state, ph=p.anim;   // ガードワン8号は巨体
   const gph=p.animG||0;                                  // 攻撃中も止まらない生命感用タイマー
   EYE_O=eyeBlink(p); EYE_GZ=p.gaze||0;                   // まばたきと視線（値の前進は updateRigP）
-  const blink=p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
+  // ジャスト回避中は点滅ではなく「薄く消えている」。点滅させると見切ったのか
+  // ただ無敵なのかが区別できない
+  const _jdG=(st==='jdodge');
+  const blink=!_jdG && p.invuln>0&&Math.floor(p.invuln/4)%2===0; if(blink)ctx.globalAlpha=0.5;
+  if(_jdG) ctx.globalAlpha=0.40;
   softShadow(sx,sy,26*s*(1-Math.min(p.z/130,0.5)));
   // 自機の常時識別リング。乱戦で敵に前後を挟まれても自分を見失わないための最小限の目印。
   // 地面に描くだけなのでスプライト・当たり判定・演出のどれとも干渉しない
@@ -20535,7 +20583,7 @@ function drawTrainHUD(){
 function drawTrainMoves(){
   const p=activePlayers()[0]||players[0]; if(!p) return;
   const PW=308, PX=14, PY=120;
-  const rows=SPECIAL_SLOTS.length, EXTRA=7;
+  const rows=SPECIAL_SLOTS.length, EXTRA=8;
   // 中身の高さと同じ式で枠を取る。定数で置くと、行を足したときに文字が枠からはみ出る
   const PH=60+rows*17+16+EXTRA*25+10;
   panel(PX,PY,PW,PH);
@@ -20566,6 +20614,7 @@ function drawTrainMoves(){
     ['空中で 攻撃＋掴み', '空中奥義（'+airUltName(p.kind)+'）'],
     ['技の最中に奥義', 'どの技からでもキャンセルで割り込める'],
     ['空中で別枠のコマンド', 'コマンド技どうしを繋げる（各枠1回きり）'],
+    ['当たる直前に回避', 'ジャスト回避。背後へ回り込み、そのまま反撃に移れる'],
     ['地上技の最中にジャンプ', 'コマンド技をジャンプで切り上げる'],
     ['空中で敵の頭上＋ジャンプ', '踏み台ジャンプ。跳べる回数が戻る（同じ敵は着地まで1回）'],
     ['攻撃＋掴み（地上）', 'キャラ別の投げ技'],
