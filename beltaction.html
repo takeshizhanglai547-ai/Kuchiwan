@@ -7942,9 +7942,9 @@ const ETYPE={
   houndmaster:{gaitK:0.076,gaitA:0.96,hp:58,sp:1.8,dmg:8,atkR:128,w:60,h:86,c1:'#5c4a6a',c2:'#382a44',c3:'#1e1626',score:520,gear:'whip',grappler:true,accent:'#ff6ad0',name:'犬使いのムチ'},
   // ---- 一周目の中ボス／ボス ----
   // 二足のボスばかりだったので、四つ足の巨獣で並びを崩す（beastBoss＝獣の絵のまま巨大化）
-  mbVolg:{gaitK:0.090,gaitA:1.16,hp:520,sp:2.5,dmg:16,atkR:86,w:96,h:110,gsc:1.45,c1:'#4a5060',c2:'#2a2f3c',c3:'#14171e',score:5200,boss:true,mini:true,beastBoss:true,gear:'twinblade',accent:'#9fe8ff',name:'双牙のヴォルグ'},
-  mbSiege:{gaitK:0.034,gaitA:0.62,hp:760,sp:0.8,dmg:20,atkR:96,w:118,h:126,gsc:1.7,c1:'#8a7a5e',c2:'#5a4c34',c3:'#33291a',score:6200,boss:true,mini:true,beastBoss:true,gear:'ballista',terraform:true,quakeAmp:104,quakeW:460,accent:'#ffb85a',name:'攻城犬ゴライアス'},
-  bsGriff:{hp:980,sp:2.2,dmg:19,atkR:104,w:132,h:124,gsc:1.55,c1:'#c8cedc',c2:'#78808f',c3:'#3c424e',score:8600,boss:true,beastBoss:true,gear:'bigwings',flyer:true,hoverZ:96,accent:'#bfe9ff',name:'嵐雲のグリフォ'},
+  mbVolg:{gaitK:0.090,gaitA:1.16,hp:520,sp:2.5,dmg:16,atkR:86,w:96,h:110,gsc:1.45,c1:'#4a5060',c2:'#2a2f3c',c3:'#14171e',score:5200,boss:true,mini:true,bigFoe:true,gear:'twinblade',accent:'#9fe8ff',name:'双牙のヴォルグ'},
+  mbSiege:{gaitK:0.034,gaitA:0.62,hp:760,sp:0.8,dmg:20,atkR:96,w:118,h:126,gsc:1.7,c1:'#8a7a5e',c2:'#5a4c34',c3:'#33291a',score:6200,boss:true,mini:true,bigFoe:true,gear:'ballista',terraform:true,quakeAmp:104,quakeW:460,accent:'#ffb85a',name:'攻城犬ゴライアス'},
+  bsGriff:{hp:980,sp:2.2,dmg:19,atkR:104,w:132,h:124,gsc:1.55,c1:'#c8cedc',c2:'#78808f',c3:'#3c424e',score:8600,boss:true,bigFoe:true,gear:'bigwings',flyer:true,hoverZ:96,accent:'#bfe9ff',name:'嵐雲のグリフォ'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -8231,6 +8231,18 @@ const ETYPE={
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
   // ---- 二周目・蟲の世界のボス ----
+  // ---- 二周目の新顔：大蟲帝国の別働隊 ----
+  tonbo:{hp:44,sp:2.4,dmg:11,atkR:60,w:74,h:52,c1:'#4ac8d8',c2:'#20808c',c3:'#0e4048',score:520,bug:true,bugKind:'dragonfly',zflyer:true,hoverZ:66,accent:'#bff4ff',name:'ヤンマ飛行兵'},
+  semi:{hp:62,sp:1.5,dmg:10,atkR:66,w:62,h:66,c1:'#6a7a4a',c2:'#41502c',c3:'#222a16',score:500,bug:true,bugKind:'cicada',gun:true,shotCol:'#dff0b0',shotSpd:5,shotR:26,shotHoming:false,accent:'#dff0b0',name:'爆音ゼミ'},
+  kera:{hp:104,sp:1.0,dmg:12,atkR:56,w:70,h:60,c1:'#a07a52',c2:'#6a4c30',c3:'#3a281a',score:640,bug:true,bugKind:'mole',terraform:true,quakeDown:true,quakeAmp:82,quakeW:360,accent:'#e8c8a0',name:'ケラ掘削兵'},
+  mizusumashi:{hp:38,sp:2.9,dmg:11,atkR:50,w:54,h:46,c1:'#2a3a52',c2:'#16233a',c3:'#080e1c',score:480,bug:true,bugKind:'whirl',charge:true,accent:'#8fd8ff',name:'ミズスマシ突撃'},
+  kamadouma:{hp:46,sp:2.5,dmg:12,atkR:200,w:56,h:64,c1:'#8a7a5a',c2:'#5a4c34',c3:'#2e2618',score:500,bug:true,bugKind:'cricket',pouncer:true,accent:'#e8dcb4',name:'カマドウマ'},
+  minomushi:{hp:150,sp:0.75,dmg:12,atkR:52,w:58,h:78,c1:'#7a5a3a',c2:'#4e3822',c3:'#281c10',score:600,bug:true,bugKind:'bagworm',guarder:true,armor:true,accent:'#c8a06a',name:'ミノガード'},
+  agehachou:{hp:44,sp:1.9,dmg:10,atkR:64,w:70,h:60,c1:'#d86ab0',c2:'#8c3070',c3:'#4a1440',score:560,bug:true,bugKind:'butterfly',zflyer:true,hoverZ:92,accent:'#ffd0f0',name:'アゲハ幻惑兵'},
+  // ---- 二周目の中ボス／ボス ----
+  mbYanmar:{hp:640,sp:2.6,dmg:17,atkR:96,w:132,h:82,gsc:1.32,c1:'#4ac8d8',c2:'#20808c',c3:'#0e4048',score:6000,boss:true,mini:true,bug:true,bigFoe:true,bugKind:'dragonfly',zflyer:true,hoverZ:88,accent:'#bff4ff',name:'大蜻蛉ヤンマル'},
+  mbKerad:{hp:880,sp:0.85,dmg:21,atkR:92,w:124,h:104,gsc:1.42,c1:'#a07a52',c2:'#6a4c30',c3:'#3a281a',score:6600,boss:true,mini:true,bug:true,bigFoe:true,bugKind:'mole',terraform:true,quakeAmp:100,quakeW:440,accent:'#e8c8a0',name:'土竜将ケラード'},
+  bsGranAnt:{hp:1150,sp:1.4,dmg:22,atkR:104,w:150,h:112,gsc:1.52,c1:'#3a2f24',c2:'#241c14',c3:'#0e0a06',score:9200,boss:true,bug:true,bigFoe:true,bugKind:'ant',terraform:true,quakeDown:true,quakeAmp:110,quakeW:480,accent:'#ff8a3a',name:'蟻帝グランアント'},
   kamaboss:{hp:760,sp:2.4,dmg:19,atkR:104,w:112,h:183,c1:'#7dd45a',c2:'#4a9a34',c3:'#26571a',score:6200,boss:true,bossKind:'kamaboss',weapon:'claw',accent:'#d6ff9f',bug:true,name:'鎌将軍カマキリギス'},
   queenbee:{hp:700,sp:2.2,dmg:18,atkR:111,w:169,h:183,c1:'#ffd24d',c2:'#c8901e',c3:'#5c3c0a',score:6600,boss:true,bossKind:'queenbee',weapon:'spear',accent:'#ffe9a0',bug:true,flyer:true,name:'女王蜂ビーヴァ'},
   kuwaboss:{hp:940,sp:0.9,dmg:23,atkR:104,w:203,h:215,c1:'#5a4a3a',c2:'#38291c',c3:'#1c120a',score:7200,boss:true,bossKind:'kuwaboss',weapon:'club',accent:'#c8a06a',bug:true,name:'大顎公クワガタス'},
@@ -8248,6 +8260,10 @@ const BOSSMOVES={
   garm:   ['clawCombo','lunge','roar','skyDive','unblockSmash'],
   // 一周目の新しい獣たち。既存の型を混ぜず、それぞれ別の距離帯を得意にする
   mbVolg: ['clawCombo','dashThrust','tripleStep','lunge','skyDive'],          // 二刀＝手数と踏み込み
+  // 二周目の新しい蟲たち
+  mbYanmar:  ['skyDive','dashThrust','spikeVolley','tripleStep','bulletHell'],   // 蜻蛉＝空からの刺突と弾幕
+  mbKerad:   ['groundSlam','burrowBite','hammerQuake','bodyCharge','unblockSmash'],  // 土竜＝地を叩き、潜って噛む
+  bsGranAnt: ['summon','burrowBite','groundSlam','bossGrab','spikeVolley','unblockSmash'],  // 蟻帝＝兵を呼び、地から食らいつく
   mbSiege:['groundSlam','heavySwing','spikeVolley','bodyCharge','unblockSmash'],  // 攻城＝重い一撃と投射
   bsGriff:['skyDive','megaTornado','spikeVolley','bulletHell','clawCombo'],   // 飛行＝空からの制圧
   gigas:  ['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash'],
@@ -10936,13 +10952,13 @@ const BUG_CH=[
    gates:[{off:600,list:[['kamakiri',1],['hachibo',1],['ari',1]]},{off:1000,list:[['kamakiri',1],['kumo',1]]},{off:1400,boss:true,list:[['kamaboss',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう…！一夜にして王国が「蟲の世界」に呑まれてしもうた。','花も草も巨大化し、蟲の軍勢「大蟲帝国」が各地を支配しておる。二周目の敵は手強いぞ、心してかかれ！','聞けば宿屋のチャムの様子もおかしいらしい…。何かあったら、店を頼るのじゃぞ…いや、頼って良いのか…？'],give:{heal:'full'}}},
   {theme:10,name:'蜂の巣大空洞',terr:'liftup',
-   gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
+   gates:[{off:600,list:[['hachibo',1],['hachibo',1],['hotarubi',1]]},{off:900,list:[['hachibo',1],['kabuto',1]]},{off:1120,mini:true,list:[['mbYanmar',1]]},{off:1400,boss:true,list:[['queenbee',1]]}],
    npc:{kind:'sailor',name:'蜜集め犬ハニマル',lines:['ここは蜂の巣のド真ん中！壁の蜜、ちょっと舐めたら兵隊蜂に囲まれたワン…','女王蜂ビーヴァは空から急降下してくる。着地の瞬間が狙い目だワン！']}},
   {theme:11,name:'蜘蛛糸の森',terr:'climb',
-   gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
+   gates:[{off:520,list:[['kumo',1],['mukade',1]]},{off:900,list:[['kumo',1],['kamakiri',1],['dangoro',1]]},{off:1120,mini:true,list:[['bsGranAnt',1]]},{off:1400,boss:true,list:[['spidboss',1]]}],
    npc:{kind:'miko',name:'巫女犬ツキミ',once:true,lines:['この森の糸は、触れる者の心まで搦め捕ります…','糸姫アラクネは毒糸の弾幕と瞬間移動を使います。撃ち終わりの隙を突くのです。','月のご加護を。'],give:{heal:'full'}}},
   {theme:12,name:'地底の蟻帝国',terr:'liftdown',
-   gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['mukade',1],['dangoro',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
+   gates:[{off:520,list:[['ari',2],['kabuto',1]]},{off:900,list:[['ari',2],['mukade',1],['dangoro',1]]},{off:1120,mini:true,list:[['mbKerad',1]]},{off:1400,boss:true,list:[['kuwaboss',1]]}],
    npc:{kind:'villager',name:'考古学犬ホリダス',lines:['地下都市がまるごと蟻の帝国に…！光る茸だけが頼りだ。','大顎公クワガタスの突進は壁まで止まらん。ジャンプでかわして背中を叩け！']}},
 ];
 const BUG_FINAL={theme:10,name:'蟲の女王の間',len:1500,noPit:true,
@@ -11915,7 +11931,8 @@ const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober','akita','bomber','warpdog','gripper','pierrot','kirebouzu','ari','onibouzu','zombiewan','skeletwan','mechawan','bikewan',
   'lancer','hawkdog','drummer','slinger','torchdog','quakedog','houndmaster'];
 // 二周目「蟲の世界」の雑魚は犬タイプではなく蟲タイプのみで構成
-const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari'];
+const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari',
+  'tonbo','semi','kera','mizusumashi','kamadouma','minomushi','agehachou'];
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
 const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
@@ -17552,7 +17569,10 @@ function drawEnemy(e){
   else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
-  else if(t.beastBoss) drawBeast(e);   // 四つ足のまま大きくなるボス（二足のボス絵へ流すと別人になる）
+  // 家族の絵のまま大きくなるボス。二足のボス絵へ流すと、獣も蟲も同じ人型の別人になる
+  else if(t.bigFoe){ if(t.bug) drawBugFoe(e,t); else if(t.alien) drawAlienFoe(e,t);
+    else if(t.myth) drawMythFoe(e,t); else if(t.sengoku) drawSengokuFoe(e,t);
+    else if(t.mechaKind) drawMechaFoe(e,t); else drawBeast(e); }
   else if(t.boss && t.alien) drawAlienBoss(e);
   else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.sengoku && !t.boss) drawSengokuFoe(e,t);
@@ -17886,6 +17906,94 @@ function drawBugFoe(e,t){ const kind=t.bugKind||'mantis', anim=e.anim||0;
     ctx.quadraticCurveTo(hdX+bw*0.30,hdY-bh*0.34,hdX+bw*0.30,hdY-bh*0.44); ctx.stroke();
     ctx.fillStyle=shade(t.c1,26); ctx.beginPath(); ctx.arc(hdX+bw*0.30,hdY-bh*0.44,4.6,0,7); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.20)'; ctx.beginPath(); ctx.ellipse(abX-4,cy-bh*0.12,abR*0.5,bh*0.1,-0.4,0,7); ctx.fill(); }
+  // ── 二周目の新顔。種類ごとに「体のどこかが大きく張り出す」形で分ける ──
+  if(kind==='dragonfly'){                        // ヤンマ：細長い腹と、透けた四枚羽
+    ctx.fillStyle=t.c2; ctx.beginPath();
+    ctx.ellipse(-bw*0.34,cy+2,bw*0.30,bh*0.13,0,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,10); ctx.lineWidth=1.6;
+    for(let k=1;k<=4;k++){ ctx.beginPath(); ctx.moveTo(-bw*0.10-k*bw*0.11,cy-bh*0.11);
+      ctx.lineTo(-bw*0.10-k*bw*0.11,cy+bh*0.13); ctx.stroke(); }
+    ctx.save(); ctx.globalAlpha=0.42; ctx.fillStyle='#dff8ff';
+    const fl=Math.abs(Math.sin(gf*0.9+(e.x||0)))*0.5+0.2;
+    for(const sg of [-1,1]) for(const off of [0.02,-0.14]){
+      ctx.save(); ctx.translate(bw*off, cy-bh*0.20); ctx.rotate(sg*fl*0.7-0.25);
+      ctx.beginPath(); ctx.ellipse(-bw*0.30,0,bw*0.36,bh*0.09,0,0,7); ctx.fill(); ctx.restore(); }
+    ctx.restore(); }
+  else if(kind==='cicada'){                      // ゼミ：屋根のように背を覆う翅と、鳴くたび震える腹
+    const cry=(atk||e.state==='gunFire')? Math.abs(Math.sin(gf*0.8)) : 0;
+    ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle=shade(t.c1,30);
+    ctx.beginPath(); ctx.moveTo(bw*0.10,cy-bh*0.22);
+    ctx.quadraticCurveTo(-bw*0.34,cy-bh*0.30, -bw*0.44,cy+bh*0.16);
+    ctx.quadraticCurveTo(-bw*0.16,cy+bh*0.06, bw*0.08,cy-bh*0.06); ctx.fill(); ctx.restore();
+    ctx.strokeStyle=shade(t.c3,14); ctx.lineWidth=1.4;
+    for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(bw*0.04,cy-bh*0.16+k*4);
+      ctx.lineTo(-bw*0.40,cy+bh*0.02+k*5); ctx.stroke(); }
+    if(cry>0.2){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.35*cry;
+      ctx.strokeStyle=t.accent; ctx.lineWidth=3;
+      for(let k=1;k<=2;k++){ ctx.beginPath(); ctx.arc(bw*0.20,cy,bw*(0.32+0.22*k)*cry,-0.9,0.9); ctx.stroke(); }
+      ctx.restore(); } }
+  else if(kind==='mole'){                        // ケラ：土を掻く大きな前肢
+    const dig=(e.state==='quakeWind')? Math.sin(gf*0.55)*0.5 : 0;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(bw*(0.16+sg*0.05), cy+bh*0.06); ctx.rotate(-0.35+dig+sg*0.2);
+      ctx.fillStyle=sg? shade(t.c1,18) : t.c2;
+      ctx.beginPath(); ctx.ellipse(bw*0.16,0,bw*0.20,bh*0.15,0,0,7); ctx.fill();
+      ctx.strokeStyle=shade(t.c3,20); ctx.lineWidth=3; ctx.lineCap='round';
+      for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(bw*0.26,k*4);
+        ctx.lineTo(bw*0.40,k*6); ctx.stroke(); }
+      ctx.restore(); } }
+  else if(kind==='whirl'){                       // ミズスマシ：つるりとした甲と、後ろに引く水紋
+    ctx.fillStyle=radGrad(-bw*0.06,cy-bh*0.14,bw*0.40,'#cfe6ff',t.c2);
+    ctx.beginPath(); ctx.ellipse(-bw*0.04,cy,bw*0.38,bh*0.30,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(-bw*0.14,cy-bh*0.14,bw*0.16,bh*0.07,-0.3,0,7); ctx.fill();
+    if(e.state==='walk'||atk){ ctx.strokeStyle='rgba(143,216,255,.55)'; ctx.lineWidth=2;
+      for(let k=1;k<=3;k++){ ctx.beginPath();
+        ctx.arc(-bw*(0.40+k*0.18), cy+bh*0.16, bw*0.14*k, -0.7, 0.7); ctx.stroke(); } } }
+  else if(kind==='cricket'){                     // カマドウマ：畳んだ跳ね脚が体より高く張り出す
+    const coil=(e.state==='crouch'||e.telegraph>0)? 1 : 0;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(-bw*(0.06+sg*0.06), cy+bh*0.04);
+      ctx.strokeStyle=sg? t.c2 : shade(t.c3,10); ctx.lineWidth=7; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.lineTo(-bw*0.10, -bh*(0.34+0.10*coil));
+      ctx.lineTo(-bw*0.24, cy>0?0:bh*0.06); ctx.stroke(); ctx.restore(); }
+    ctx.strokeStyle=shade(t.c2,26); ctx.lineWidth=1.8;
+    for(const a of [-1,1]){ ctx.beginPath(); ctx.moveTo(hdX,hdY-hdR*0.5);
+      ctx.quadraticCurveTo(hdX-bw*0.20*a, hdY-bh*0.42, hdX-bw*0.34, hdY-bh*0.30); ctx.stroke(); } }
+  else if(kind==='bagworm'){                     // ミノガード：枝と葉を綴じた蓑。守っている間は縮こまる
+    const shut=(e.state==='guard')?1:0;
+    ctx.fillStyle=t.c2; ctx.beginPath();
+    ctx.moveTo(bw*0.10,cy-bh*0.34); ctx.lineTo(-bw*0.40,cy-bh*0.10+shut*4);
+    ctx.lineTo(-bw*0.34,cy+bh*0.40); ctx.lineTo(bw*0.14,cy+bh*0.28); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,16); ctx.lineWidth=3; ctx.lineCap='round';
+    for(let k=0;k<5;k++){ const u=k/4;
+      ctx.beginPath(); ctx.moveTo(bw*(0.10-0.44*u), cy-bh*0.30+u*bh*0.16);
+      ctx.lineTo(bw*(0.16-0.44*u), cy+bh*(0.10+0.18*u)); ctx.stroke(); }
+    ctx.fillStyle=shade(t.c1,20);
+    for(let k=0;k<3;k++){ ctx.beginPath();
+      ctx.ellipse(bw*(0.02-0.16*k), cy+bh*(0.02+0.10*k), bw*0.10, bh*0.06, 0.5, 0,7); ctx.fill(); } }
+  else if(kind==='butterfly'){                   // アゲハ：体より大きい四枚翅と、こぼれる鱗粉
+    const fl=Math.sin(gf*0.16+(e.x||0))*0.35;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(-bw*0.04+sg*7, cy-bh*0.06+sg*4);
+      ctx.rotate(sg? fl*0.5 : -fl*0.5);
+      ctx.fillStyle=sg? shade(t.c1,18) : t.c2;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(-bw*0.44,-bh*0.62, -bw*0.62,-bh*0.06);
+      ctx.quadraticCurveTo(-bw*0.40,-bh*0.02, 0,0); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0,4);
+      ctx.quadraticCurveTo(-bw*0.34,bh*0.34, -bw*0.46,bh*0.10);
+      ctx.quadraticCurveTo(-bw*0.26,bh*0.06, 0,4); ctx.fill();
+      ctx.fillStyle=t.accent;
+      ctx.beginPath(); ctx.ellipse(-bw*0.36,-bh*0.24,bw*0.09,bh*0.09,0,0,7); ctx.fill();
+      ctx.restore(); }
+    if(perfTier<2 && gf%6===0) ember(e.x+rnd(-16,16), e.y-e.z-bh*0.5, rnd(-0.3,0.3), rnd(0.4,1.0), t.accent); }
+  else if(kind==='ant'){                         // 蟻帝：三節の胴と、体の半分ほどある大顎
+    for(let seg=2;seg>=0;seg--){ ctx.fillStyle=seg%2? shade(t.c1,20) : t.c2;
+      ctx.beginPath(); ctx.ellipse(-bw*(0.10+seg*0.16), cy+seg*2, bw*0.17, bh*(0.24-seg*0.03), 0,0,7); ctx.fill(); }
+    ctx.strokeStyle=shade(t.c1,30); ctx.lineWidth=6; ctx.lineCap='round';
+    for(const sg of [-1,1]){ ctx.beginPath(); ctx.moveTo(hdX+hdR*0.86, hdY+hdR*sg*0.36);
+      ctx.quadraticCurveTo(hdX+bw*0.52, hdY+hdR*sg*1.7+(atk?sg*-8:0), hdX+bw*0.66, hdY+hdR*sg*0.5); ctx.stroke();
+      ctx.fillStyle=shade(t.c1,30); ctx.beginPath();
+      ctx.arc(hdX+bw*0.66, hdY+hdR*sg*0.5, 4.6, 0, 7); ctx.fill(); } }
   // ── 羽（蜂・蛍は高速羽ばたき）──
   if(kind==='bee'||kind==='firefly'){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#e8f4ff';
     const flap=Math.abs(Math.sin(gf*0.6+(e.x||0)))*0.8+0.2;
@@ -21439,6 +21547,7 @@ function drawGacha(){
 //  CUTSCENES  (opening / boss intros / ending)
 //======================================================================
 const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワンワン帝国  攻城隊長', bsGriff:'ワンワン帝国  空の斥候長',
+  mbYanmar:'大蟲帝国  空戦隊長', mbKerad:'大蟲帝国  掘削将', bsGranAnt:'大蟲帝国  地底の帝',
   garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',

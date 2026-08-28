@@ -14,29 +14,36 @@ const DRIVER = `
     const e=enemies[enemies.length-1];
     e.hp=e.maxHp=99999; e.poise=99999; e.state='walk'; e.entry=null; e.entT=99; return e; };
 
-  // ── 一周目に足した10体 ──
-  const L1Z=['lancer','hawkdog','drummer','slinger','torchdog','quakedog','houndmaster'];
-  const L1B=['mbVolg','mbSiege','bsGriff'];
+  // ── 周ごとに足した新顔。周を増やすときはここへ1行足す ──
+  const NEW=[
+    {lap:1, name:'一周目', zako:['lancer','hawkdog','drummer','slinger','torchdog','quakedog','houndmaster'],
+     boss:['mbVolg','mbSiege','bsGriff'], pool:ZAKO_POOL, stages:[CH1,SEGS,FINAL_CH]},
+    {lap:2, name:'二周目', zako:['tonbo','semi','kera','mizusumashi','kamadouma','minomushi','agehachou'],
+     boss:['mbYanmar','mbKerad','bsGranAnt'], pool:BUG_ZAKO_POOL, stages:[BUG_CH,BUG_FINAL]},
+  ];
+  const ALLZ=[], ALLB=[];
+  NEW.forEach(function(N){ ALLZ.push.apply(ALLZ,N.zako); ALLB.push.apply(ALLB,N.boss); });
+  const L1Z=ALLZ, L1B=ALLB;
 
   // ===== 1) 名前・数値・出現先が揃っている =====
-  { L1Z.concat(L1B).forEach(function(k){
+  { NEW.forEach(function(N){
+      if(N.zako.length+N.boss.length!==10) throw new Error(N.name+' の新顔が '+(N.zako.length+N.boss.length)+' 体しかない');
+      N.zako.forEach(function(k){ if(N.pool.indexOf(k)<0) throw new Error(N.name+'：'+k+' が湧きプールに入っていない'); });
+      const txt=JSON.stringify(N.stages);
+      N.boss.forEach(function(k){ if(txt.indexOf('"'+k+'"')<0) throw new Error(N.name+'：'+k+' がどのステージにも配置されていない'); }); });
+    L1Z.concat(L1B).forEach(function(k){
       const t=ETYPE[k];
       if(!t) throw new Error(k+' が ETYPE に無い');
       if(!t.name) throw new Error(k+' に名前が無い');
       if(!(t.hp>0 && t.dmg>0 && t.w>0 && t.h>0)) throw new Error(k+' の数値が入っていない');
       if(!(t.score>0)) throw new Error(k+' にスコアが無い'); });
-    // 雑魚は湧きのプールに入っていること（入れ忘れると一生出てこない）
-    L1Z.forEach(function(k){ if(ZAKO_POOL.indexOf(k)<0) throw new Error(k+' が一周目の湧きプールに入っていない'); });
-    // 中ボス・ボスは道中の関門に置かれていること
-    const txt=JSON.stringify([CH1,SEGS,FINAL_CH]);
-    L1B.forEach(function(k){ if(txt.indexOf('"'+k+'"')<0) throw new Error(k+' がどのステージにも配置されていない'); });
     // 名乗りの肩書き
     L1B.forEach(function(k){ if(!BOSSROLE[k]) throw new Error(k+' に肩書きが無い'); });
     // 名前が既存と衝突していない
     { const seen={}; for(const k in ETYPE){ const n=ETYPE[k].name; if(!n) continue;
         if(seen[n] && (L1Z.concat(L1B).indexOf(k)>=0)) throw new Error('名前が既存と同じ: '+n);
         seen[n]=k; } }
-    console.log('一周目の新顔 OK ('+L1Z.length+'体の雑魚＋'+L1B.length+'体の中ボス／ボス)'); }
+    console.log('新顔の登録 OK ('+NEW.map(function(N){ return N.name+' '+N.zako.length+'+'+N.boss.length; }).join(' / ')+')'); }
 
   // ===== 2) 実際に湧いて、殴れて、倒せる =====
   { L1Z.concat(L1B).forEach(function(k){
@@ -47,7 +54,7 @@ const DRIVER = `
       if(!(e.hp<hp0)) throw new Error(k+' に攻撃が通らない');
       e.hp=1; damageEnemy(e, 60, 4, true);
       if(!e.dead) throw new Error(k+' が倒せない'); });
-    console.log('新顔の被弾と撃破 OK (10体すべて)'); }
+    console.log('新顔の被弾と撃破 OK ('+(L1Z.length+L1B.length)+'体すべて)'); }
 
   // ===== 3) 装備ごとに絵が違う（同じ犬の色違いになっていないこと） =====
   //   自前で形を組み立てて比べると、描画側だけの分岐を丸ごと見落とす。
@@ -64,19 +71,29 @@ const DRIVER = `
         set(t,k,v){ sig+='='+k+':'+v+';'; t[k]=v; return true; } });
       try{ drawEnemy(e); } finally { ctx=real; }
       return sig; };
-    const sigs={}, base=fingerprint('wolf');
-    L1Z.concat(L1B).forEach(function(k){ const f=fingerprint(k);
+    // 比較の基準は「同じ家族の既存の1体」。別の家族と比べても差が出て当たり前で、
+    // 作り分けの検査にならない
+    const BASE={1:'wolf', 2:'kamakiri', 3:'greywan', 4:'mythhop', 5:'ashigaru', 6:'mkShield'};
+    const sigs={}, bases={};
+    NEW.forEach(function(N){ bases[N.lap]=fingerprint(BASE[N.lap]); });
+    NEW.forEach(function(N){ N.zako.concat(N.boss).forEach(function(k){ const f=fingerprint(k);
       if(!(f.length>40)) throw new Error(k+' が何も描いていない');
-      if(f===base) throw new Error(k+' の絵が既存のグレー狼と完全に同じ');
-      sigs[k]=f; });
-    // 新顔どうしも別物であること（装備を付け忘れると同じ指紋になる）
+      if(f===bases[N.lap]) throw new Error(k+' の絵が既存の '+ETYPE[BASE[N.lap]].name+' と完全に同じ');
+      sigs[k]=f; }); });
+    // 新顔どうしも別物であること（作り分けを忘れると同じ指紋になる）
     const keys=Object.keys(sigs);
     for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++)
       if(sigs[keys[i]]===sigs[keys[j]]) throw new Error(keys[i]+' と '+keys[j]+' の絵が同一');
-    // 装備ぶんの描画が本当に増えていること（色だけ変えた犬なら長さは変わらない）
-    L1Z.forEach(function(k){ if(!(sigs[k].length > base.length*1.02))
-      throw new Error(k+' の描画量が素の犬とほぼ同じ（装備が描かれていない）'); });
-    console.log('装備ごとの絵 OK (10体それぞれ別の描画／素の犬より嵩がある)'); }
+    // 「基準の1体が描かない図形」を自分だけが描いていること。
+    // 長さで比べると、基準の方が装飾の多い種（カマキリの 2鎌など）で必ず負ける
+    const uniq=function(f, b){ const have={};
+      b.split(';').forEach(function(c){ have[c]=(have[c]|0)+1; });
+      let n=0; f.split(';').forEach(function(c){ if(have[c]) have[c]--; else n++; });
+      return n; };
+    NEW.forEach(function(N){ N.zako.concat(N.boss).forEach(function(k){
+      const n=uniq(sigs[k], bases[N.lap]);
+      if(!(n>=12)) throw new Error(k+' が '+ETYPE[BASE[N.lap]].name+' に無い図形を '+n+' 回しか描いていない（色違いのまま）'); }); });
+    console.log('見た目の作り分け OK ('+(L1Z.length+L1B.length)+'体それぞれ別の描画)'); }
 
   // ===== 4) 飛行兵：高度を保ち、急降下で降りてきて当てる =====
   { const p=setup(); p.invuln=0; p.hp=p.maxHp=99999;
