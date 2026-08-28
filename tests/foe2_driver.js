@@ -20,6 +20,8 @@ const DRIVER = `
      boss:['mbVolg','mbSiege','bsGriff'], pool:ZAKO_POOL, stages:[CH1,SEGS,FINAL_CH]},
     {lap:2, name:'二周目', zako:['tonbo','semi','kera','mizusumashi','kamadouma','minomushi','agehachou'],
      boss:['mbYanmar','mbKerad','bsGranAnt'], pool:BUG_ZAKO_POOL, stages:[BUG_CH,BUG_FINAL]},
+    {lap:3, name:'三周目', zako:['saucer','gravitor','beamer','crawler','abductor','clonepod','mindwave'],
+     boss:['mbVisitor','mbGravion','bsHive'], pool:ALIEN_ZAKO_POOL, stages:[SPACE_CH,SPACE_FINAL]},
   ];
   const ALLZ=[], ALLB=[];
   NEW.forEach(function(N){ ALLZ.push.apply(ALLZ,N.zako); ALLB.push.apply(ALLB,N.boss); });

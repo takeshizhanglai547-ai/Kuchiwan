@@ -8231,6 +8231,18 @@ const ETYPE={
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
   // ---- 二周目・蟲の世界のボス ----
+  // ---- 三周目の新顔：銀河侵略軍の別働隊 ----
+  saucer:{hp:46,sp:2.2,dmg:12,atkR:60,w:72,h:44,c1:'#cfe0f0',c2:'#7a8ca8',c3:'#3a4658',score:560,alien:true,alienKind:'disc',zflyer:true,hoverZ:72,accent:'#9fd6ff',name:'小型円盤スカウト'},
+  gravitor:{hp:110,sp:1.0,dmg:13,atkR:60,w:64,h:84,c1:'#8a9fd8',c2:'#4e5c96',c3:'#242c52',score:700,alien:true,alienKind:'gravor',terraform:true,quakeAmp:96,quakeW:420,accent:'#c8d8ff',name:'重力工作機'},
+  beamer:{hp:58,sp:1.5,dmg:12,atkR:250,w:54,h:82,c1:'#ffb0d8',c2:'#c05a90',c3:'#5c2044',score:620,alien:true,alienKind:'beamer',gun:true,shotKind:'laser',shotCol:'#ff8ae0',accent:'#ffd0f0',name:'収束光線兵'},
+  crawler:{hp:66,sp:2.7,dmg:12,atkR:54,w:70,h:56,c1:'#7a8a6a',c2:'#4a5642',c3:'#242c20',score:580,alien:true,alienKind:'crawler',charge:true,accent:'#c8ff8a',name:'多脚偵察機'},
+  abductor:{hp:74,sp:1.6,dmg:10,atkR:150,w:58,h:86,c1:'#d8c86a',c2:'#96842e',c3:'#4a4012',score:660,alien:true,alienKind:'abductor',grappler:true,accent:'#fff0a0',name:'捕獲光線兵'},
+  clonepod:{hp:170,sp:0.8,dmg:14,atkR:56,w:62,h:78,c1:'#a0e8c8',c2:'#4e9a7a',c3:'#1e4a38',score:700,alien:true,alienKind:'pod',guarder:true,armor:true,accent:'#d0ffe8',name:'分裂ポッド'},
+  mindwave:{hp:70,sp:1.4,dmg:11,atkR:66,w:56,h:80,c1:'#c8a0ff',c2:'#7a4ec0',c3:'#3a1e68',score:660,alien:true,alienKind:'psi',buffer:true,accent:'#e8d0ff',name:'精神波兵'},
+  // ---- 三周目の中ボス／ボス ----
+  mbVisitor:{hp:780,sp:2.4,dmg:19,atkR:104,w:150,h:70,gsc:1.35,c1:'#cfe0f0',c2:'#7a8ca8',c3:'#3a4658',score:6800,boss:true,mini:true,alien:true,bigFoe:true,alienKind:'disc',zflyer:true,hoverZ:104,accent:'#9fd6ff',name:'中型円盤ヴィジター'},
+  mbGravion:{hp:1000,sp:0.9,dmg:22,atkR:96,w:110,h:130,gsc:1.42,c1:'#8a9fd8',c2:'#4e5c96',c3:'#242c52',score:7400,boss:true,mini:true,alien:true,bigFoe:true,alienKind:'gravor',terraform:true,quakeAmp:112,quakeW:480,accent:'#c8d8ff',name:'重力将グラヴィオン'},
+  bsHive:{hp:1320,sp:1.6,dmg:24,atkR:110,w:118,h:132,gsc:1.55,c1:'#b06bff',c2:'#6a2ec0',c3:'#2e1258',score:10200,boss:true,alien:true,bigFoe:true,alienKind:'psi',flyer:true,hoverZ:70,accent:'#e8d0ff',name:'母船の意思ハイヴマインド'},
   // ---- 二周目の新顔：大蟲帝国の別働隊 ----
   tonbo:{hp:44,sp:2.4,dmg:11,atkR:60,w:74,h:52,c1:'#4ac8d8',c2:'#20808c',c3:'#0e4048',score:520,bug:true,bugKind:'dragonfly',zflyer:true,hoverZ:66,accent:'#bff4ff',name:'ヤンマ飛行兵'},
   semi:{hp:62,sp:1.5,dmg:10,atkR:66,w:62,h:66,c1:'#6a7a4a',c2:'#41502c',c3:'#222a16',score:500,bug:true,bugKind:'cicada',gun:true,shotCol:'#dff0b0',shotSpd:5,shotR:26,shotHoming:false,accent:'#dff0b0',name:'爆音ゼミ'},
@@ -8262,6 +8274,10 @@ const BOSSMOVES={
   mbVolg: ['clawCombo','dashThrust','tripleStep','lunge','skyDive'],          // 二刀＝手数と踏み込み
   // 二周目の新しい蟲たち
   mbYanmar:  ['skyDive','dashThrust','spikeVolley','tripleStep','bulletHell'],   // 蜻蛉＝空からの刺突と弾幕
+  // 三周目の侵略軍
+  mbVisitor: ['skyDive','bulletHell','orbSpread','dashThrust','megaBeam'],       // 円盤＝上空からの掃射
+  mbGravion: ['groundSlam','hammerQuake','meteorCall','bossGrab','unblockSmash'],// 重力＝地を押し下げ、落とす
+  bsHive:    ['boltStrike','orbSpread','megaTornado','teleSlash','summon','bulletHell'],  // 意思＝念で撃ち、瞬間移動する
   mbKerad:   ['groundSlam','burrowBite','hammerQuake','bodyCharge','unblockSmash'],  // 土竜＝地を叩き、潜って噛む
   bsGranAnt: ['summon','burrowBite','groundSlam','bossGrab','spikeVolley','unblockSmash'],  // 蟻帝＝兵を呼び、地から食らいつく
   mbSiege:['groundSlam','heavySwing','spikeVolley','bodyCharge','unblockSmash'],  // 攻城＝重い一撃と投射
@@ -10975,13 +10991,13 @@ const NG2_UNLOCK=3;   // 蟲の世界のステージをこの数クリアで「�
 // ══ 三周目「宇宙人の侵略」：星を奪いに来た銀河侵略軍と戦う ══
 const SPACE_CH=[
   {theme:13,name:'墜ちた円盤',terr:'liftdown',
-   gates:[{off:600,list:[['greywan',1],['raygun',1],['floater',1]]},{off:1000,list:[['greywan',1],['probe',1]]},{off:1400,boss:true,list:[['greyking',1]]}],
+   gates:[{off:600,list:[['greywan',1],['raygun',1],['floater',1]]},{off:1000,list:[['greywan',1],['probe',1]]},{off:1150,mini:true,list:[['bsHive',1]]},{off:1400,boss:true,list:[['greyking',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ま、また会ったのう！今度は空から円盤が降ってきおった…！','「銀河侵略軍」——星ごと生き物を採取しに来た宇宙人どもじゃ。','奴らは光線を撃ってくる。物陰は無い、避けるか弾き返すしかないぞ！'],give:{heal:'full'}}},
   {theme:14,name:'星間回廊',terr:'up',
-   gates:[{off:560,list:[['raygun',2],['floater',1]]},{off:960,list:[['probe',1],['greywan',1],['slimealien',1]]},{off:1400,boss:true,list:[['ufoboss',1]]}],
+   gates:[{off:560,list:[['raygun',2],['floater',1]]},{off:960,list:[['probe',1],['greywan',1],['slimealien',1]]},{off:1150,mini:true,list:[['mbVisitor',1]]},{off:1400,boss:true,list:[['ufoboss',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['母船の中だ…！オレは三日前に吸い上げられちまってな。','円盤母艦ディスコは急降下してくる。着地の瞬間が狙い目だ！']}},
   {theme:15,name:'母船コア',terr:'climb',
-   gates:[{off:560,list:[['slimealien',2],['floater',1]]},{off:960,list:[['probe',2],['raygun',1]]},{off:1400,boss:true,list:[['bioblob',1]]}],
+   gates:[{off:560,list:[['slimealien',2],['floater',1]]},{off:960,list:[['probe',2],['raygun',1]]},{off:1150,mini:true,list:[['mbGravion',1]]},{off:1400,boss:true,list:[['bioblob',1]]}],
    npc:{kind:'villager',name:'研究犬ラボット',lines:['このコアが母船の心臓部だ。壊せば侵略は止まる…！','増殖体バイオブロブは叩くほど分裂する。小さいのから片付けろ！']}},
 ];
 const SPACE_FINAL={theme:15,name:'皇帝の玉座',len:1500,noPit:true,
@@ -11934,7 +11950,8 @@ const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober
 const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari',
   'tonbo','semi','kera','mizusumashi','kamadouma','minomushi','agehachou'];
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
-const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien'];
+const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien',
+  'saucer','gravitor','beamer','crawler','abductor','clonepod','mindwave'];
 const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
 // 六周目「メカワンコキングダム」の雑魚は全て機械。犬タイプは混ぜない
 const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink',
@@ -13531,6 +13548,100 @@ function drawAlienFoe(e,t){ const kind=t.alienKind||'grey', anim=e.anim||0, atk=
   ctx.strokeStyle=t.c1; ctx.lineWidth=4.4;
   ctx.beginPath(); ctx.moveTo(-bw*0.18,cy); ctx.lineTo(-bw*0.42,cy+bh*0.2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(bw*0.18,cy); ctx.lineTo(bw*0.44,cy-(atk?bh*0.14:0)+bh*0.16); ctx.stroke();
+  if(kind==='disc'){                 // 小型円盤：本体そのものが機体。頭は描かない
+    const spin=(e.anim||0)*2.2;
+    ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,cy+bh*0.30,bw*0.50,bh*0.14,0,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(-bw*0.14,cy-bh*0.10,bw*0.52,shade(t.c1,26),t.c2);
+    ctx.beginPath(); ctx.ellipse(0,cy,bw*0.52,bh*0.24,0,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c3,10);
+    ctx.beginPath(); ctx.ellipse(0,cy+bh*0.10,bw*0.40,bh*0.13,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(190,232,255,.75)';                    // ドーム
+    ctx.beginPath(); ctx.ellipse(0,cy-bh*0.16,bw*0.22,bh*0.22,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(-bw*0.07,cy-bh*0.24,bw*0.07,bh*0.06,-0.4,0,7); ctx.fill();
+    for(let k=0;k<6;k++){ const a=spin+k*(TAU/6);            // 底面の灯りが回る
+      ctx.fillStyle=(k%2)? t.accent : '#ffffff';
+      ctx.beginPath(); ctx.arc(Math.cos(a)*bw*0.34, cy+bh*0.12+Math.sin(a)*bh*0.05, 3.2,0,7); ctx.fill(); }
+    if(e.state==='swoop'||e.state==='swoopUp'){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(0,cy+bh*0.4,bw*0.5,'rgba(159,214,255,.6)','rgba(159,214,255,0)');
+      ctx.beginPath(); ctx.moveTo(-bw*0.2,cy+bh*0.1); ctx.lineTo(bw*0.2,cy+bh*0.1);
+      ctx.lineTo(bw*0.42,cy+bh*0.9); ctx.lineTo(-bw*0.42,cy+bh*0.9); ctx.fill(); ctx.restore(); }
+    ctx.restore(); return; }
+  if(kind==='gravor'){               // 重力工作機：腹に抱えた重力球と、地を掴む三本脚
+    const pull=(e.state==='quakeWind')?1:0;
+    ctx.strokeStyle=t.c3; ctx.lineWidth=6; ctx.lineCap='round';
+    for(const sg of [-1,0,1]){ ctx.beginPath(); ctx.moveTo(sg*bw*0.10, cy+bh*0.10);
+      ctx.quadraticCurveTo(sg*bw*0.30, cy+bh*0.36, sg*bw*0.34, cy+bh*0.54); ctx.stroke(); }
+    ctx.fillStyle=radGrad(-bw*0.06,cy-bh*0.02,bw*0.34,shade(t.c1,20),t.c2);
+    ctx.beginPath(); ctx.ellipse(0,cy+bh*0.02,bw*0.30,bh*0.24,0,0,7); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const r=bw*0.16*(1+pull*0.5+0.1*Math.sin(gf*0.2));
+    ctx.fillStyle=radGrad(0,cy+bh*0.04,r*1.6,'rgba(200,216,255,.95)','rgba(120,140,255,0)');
+    ctx.beginPath(); ctx.arc(0,cy+bh*0.04,r*1.6,0,7); ctx.fill(); ctx.restore();
+    if(pull){ ctx.strokeStyle='rgba(200,216,255,.5)'; ctx.lineWidth=2;
+      for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(0,cy+bh*0.04, r*(1.6+k*0.7), 0, 7); ctx.stroke(); } } }
+  if(kind==='beamer'){               // 収束光線兵：肩に載る長い砲身と冷却フィン
+    const fire=(e.state==='gunFire');
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(-bw*0.02,cy+bh*0.06,bw*0.22,bh*0.22,0,0,7); ctx.fill();
+    ctx.save(); ctx.translate(bw*0.10, cy-bh*0.06); ctx.rotate(-0.12);
+    ctx.fillStyle=shade(t.c3,24); ctx.fillRect(0,-6,bw*0.62,12);
+    ctx.fillStyle=shade(t.c1,20); ctx.fillRect(bw*0.44,-9,bw*0.14,18);
+    for(let k=0;k<4;k++){ ctx.fillStyle=shade(t.c2,10); ctx.fillRect(bw*(0.08+k*0.09),-13,4,10); }
+    if(fire){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(bw*0.62,0,26,'#ffffff','rgba(255,138,224,0)');
+      ctx.beginPath(); ctx.arc(bw*0.62,0,26,0,7); ctx.fill(); ctx.restore(); }
+    ctx.restore(); }
+  if(kind==='crawler'){              // 多脚偵察機：低い胴と、六本の折れ脚＋単眼
+    const st=Math.sin(anim*3.0);
+    ctx.strokeStyle=t.c3; ctx.lineWidth=4; ctx.lineCap='round';
+    for(let i=0;i<3;i++) for(const sg of [-1,1]){
+      const lx=(i-1)*bw*0.22, sw=Math.sin(anim*3.0+i*2.1+(sg>0?0:Math.PI))*5;
+      ctx.beginPath(); ctx.moveTo(lx, cy+bh*0.06);
+      ctx.lineTo(lx+sg*bw*0.16+sw, cy+bh*0.26);
+      ctx.lineTo(lx+sg*bw*0.22+sw*1.4, cy+bh*0.54); ctx.stroke(); }
+    ctx.fillStyle=radGrad(-bw*0.10,cy-bh*0.06,bw*0.40,shade(t.c1,22),t.c2);
+    ctx.beginPath(); ctx.ellipse(0,cy,bw*0.38,bh*0.20,0,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c3,-6); ctx.beginPath(); ctx.ellipse(bw*0.24,cy-bh*0.04,bw*0.11,bh*0.11,0,0,7); ctx.fill();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.26+st*1.5,cy-bh*0.04,bw*0.05,0,7); ctx.fill();
+    ctx.restore(); return; }
+  if(kind==='abductor'){             // 捕獲光線兵：腰から下げた投光器。掴むと光の筒が伸びる
+    const grab=(e.state==='gripping'||atk)?1:0;
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(0,cy+bh*0.04,bw*0.24,bh*0.24,0,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c3,20); ctx.beginPath();
+    ctx.moveTo(bw*0.14,cy+bh*0.02); ctx.lineTo(bw*0.40,cy-bh*0.06);
+    ctx.lineTo(bw*0.40,cy+bh*0.14); ctx.lineTo(bw*0.14,cy+bh*0.16); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(bw*0.40,cy+bh*0.04,20,'#fff6c0','rgba(255,240,160,0)');
+    ctx.beginPath(); ctx.arc(bw*0.40,cy+bh*0.04,20,0,7); ctx.fill();
+    if(grab){ ctx.fillStyle='rgba(255,240,160,.35)'; ctx.beginPath();
+      ctx.moveTo(bw*0.36,cy-bh*0.02); ctx.lineTo(bw*0.44,cy+bh*0.10);
+      ctx.lineTo(bw*1.5,cy+bh*0.42); ctx.lineTo(bw*1.5,cy-bh*0.30); ctx.fill(); }
+    ctx.restore(); }
+  if(kind==='pod'){                  // 分裂ポッド：厚い殻。守っている間は殻を閉じる
+    const shut=(e.state==='guard')?1:0;
+    ctx.fillStyle=shade(t.c3,10); ctx.beginPath(); ctx.ellipse(0,cy+bh*0.06,bw*0.34,bh*0.30,0,0,7); ctx.fill();
+    for(const sg of [-1,1]){ ctx.save(); ctx.translate(sg*bw*0.06*(1-shut), cy+bh*0.04); ctx.rotate(sg*0.24*(1-shut));
+      ctx.fillStyle=sg>0? shade(t.c1,18) : t.c2;
+      ctx.beginPath(); ctx.ellipse(sg*bw*0.14,0,bw*0.20,bh*0.30,0,0,7); ctx.fill();
+      ctx.strokeStyle=shade(t.c3,26); ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(sg*bw*0.14,0,bw*0.20,bh*0.30,0,0,7); ctx.stroke(); ctx.restore(); }
+    if(!shut){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(0,cy+bh*0.04,bw*0.16,'rgba(208,255,232,.9)','rgba(208,255,232,0)');
+      ctx.beginPath(); ctx.arc(0,cy+bh*0.04,bw*0.16,0,7); ctx.fill(); ctx.restore(); }
+    ctx.restore(); return; }
+  if(kind==='psi'){                  // 精神波兵：露出した脳と、頭上を巡る波紋
+    ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(0,cy+bh*0.06,bw*0.22,bh*0.24,0,0,7); ctx.fill();
+    ctx.fillStyle=radGrad(-bw*0.06,cy-bh*0.40,bw*0.30,shade(t.c1,34),t.c2);
+    ctx.beginPath(); ctx.ellipse(0,cy-bh*0.34,bw*0.28,bh*0.20,0,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,26); ctx.lineWidth=2.4;
+    for(let k=-1;k<=1;k++){ ctx.beginPath();
+      ctx.moveTo(-bw*0.22, cy-bh*0.34+k*6);
+      ctx.quadraticCurveTo(0, cy-bh*0.44+k*6, bw*0.22, cy-bh*0.34+k*6); ctx.stroke(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle=t.accent; ctx.lineWidth=2;
+    for(let k=1;k<=3;k++){ const ph=(gf*0.04+k*0.33)%1;
+      ctx.globalAlpha=0.5*(1-ph);
+      ctx.beginPath(); ctx.ellipse(0,cy-bh*0.34, bw*(0.30+ph*0.5), bh*(0.22+ph*0.4), 0,0,7); ctx.stroke(); }
+    ctx.restore(); }
   if(kind==='gunner'){ // レイガン
     ctx.save(); ctx.translate(bw*0.46,cy+bh*0.14); ctx.rotate(atk?-0.2:0.1);
     ctx.fillStyle='#3a3450'; roundRect(-4,-5,20,9,3); ctx.fill();
@@ -21548,6 +21659,7 @@ function drawGacha(){
 //======================================================================
 const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワンワン帝国  攻城隊長', bsGriff:'ワンワン帝国  空の斥候長',
   mbYanmar:'大蟲帝国  空戦隊長', mbKerad:'大蟲帝国  掘削将', bsGranAnt:'大蟲帝国  地底の帝',
+  mbVisitor:'銀河侵略軍  空挺分隊', mbGravion:'銀河侵略軍  重力兵団長', bsHive:'銀河侵略軍  母船の意思',
   garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
