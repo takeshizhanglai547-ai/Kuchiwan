@@ -8039,6 +8039,28 @@ const ETYPE={
     myth:true,mythKind:'seer',seer:true,gunner:true,squad:true,accent:'#d6fffa',name:'神託のオラクル'},
   mythbull:{hp:180,sp:1.35,dmg:32,atkR:72,w:76,h:96,c1:'#c08a5a',c2:'#8a5c34',c3:'#4a2e18',score:1500,
     myth:true,mythKind:'bull',charge:true,squad:true,armor:true,accent:'#ffc890',name:'迷宮のミノタウロス'},
+  // ---- 五周目の新顔：戦国の別動隊 ----
+  karasu:{hp:105,sp:2.3,dmg:24,atkR:66,w:64,h:80,c1:'#2e2a36',c2:'#1a1720',c3:'#0a080e',score:1250,
+    sengoku:true,sengKind:'tengu',zflyer:true,hoverZ:64,accent:'#ff6a3a',name:'烏天狗の斥候'},
+  dozoku:{hp:190,sp:0.95,dmg:26,atkR:62,w:70,h:82,c1:'#6a5a44',c2:'#42382a',c3:'#221c14',score:1450,
+    sengoku:true,sengKind:'mogura',terraform:true,quakeDown:true,quakeAmp:96,quakeW:420,accent:'#c8b48a',name:'土竜衆'},
+  hokyu:{hp:120,sp:1.4,dmg:23,atkR:66,w:60,h:84,c1:'#8a6a3a',c2:'#5a4424',c3:'#2e2212',score:1300,
+    sengoku:true,sengKind:'horoku',gunner:true,shotKind:'howitzer',shotCol:'#ffb060',shotR:18,shotHoming:false,accent:'#ffd0a0',name:'焙烙火矢兵'},
+  kusarigama:{hp:130,sp:1.9,dmg:22,atkR:150,w:62,h:86,c1:'#4a5a4a',c2:'#2c382c',c3:'#141c14',score:1350,
+    sengoku:true,sengKind:'kusari',grappler:true,accent:'#c8ffb0',name:'鎖鎌兵'},
+  kashira:{hp:125,sp:2.5,dmg:25,atkR:70,w:58,h:84,c1:'#241c2e',c2:'#150f1c',c3:'#07050c',score:1450,
+    sengoku:true,sengKind:'kashira',warper:true,gunner:true,shotCol:'#8ad6ff',shotSpd:14,shotR:5,shotHoming:false,accent:'#8ad6ff',name:'忍び頭'},
+  yaribusuma:{hp:200,sp:1.05,dmg:26,atkR:120,w:68,h:90,c1:'#a89060',c2:'#6e5c38',c3:'#3a301c',score:1500,
+    sengoku:true,sengKind:'yaribu',squad:true,phalanx:true,guarder:true,armor:true,accent:'#e8dcb4',name:'槍衾組'},
+  jindaiko:{hp:150,sp:1.2,dmg:22,atkR:60,w:66,h:86,c1:'#b8462e',c2:'#7a2818',c3:'#3e120a',score:1400,
+    sengoku:true,sengKind:'taiko',buffer:true,squad:true,accent:'#ffd24d',name:'陣太鼓衆'},
+  // ---- 五周目の中ボス／ボス ----
+  mbTengu:{hp:1500,sp:2.5,dmg:28,atkR:106,w:126,h:112,gsc:1.4,c1:'#2e2a36',c2:'#1a1720',c3:'#0a080e',score:13000,
+    boss:true,mini:true,sengoku:true,bigFoe:true,sengKind:'tengu',zflyer:true,hoverZ:104,accent:'#ff6a3a',name:'大天狗ソウジョウ'},
+  mbMogura:{hp:1900,sp:0.9,dmg:32,atkR:100,w:120,h:126,gsc:1.48,c1:'#6a5a44',c2:'#42382a',c3:'#221c14',score:14000,
+    boss:true,mini:true,sengoku:true,bigFoe:true,sengKind:'mogura',terraform:true,quakeAmp:116,quakeW:500,accent:'#c8b48a',name:'土竜頭ドリュウ'},
+  bsOni:{hp:2350,sp:1.8,dmg:36,atkR:118,w:140,h:150,gsc:1.55,c1:'#b8382e',c2:'#7a1c16',c3:'#3e0a08',score:19000,
+    boss:true,sengoku:true,bigFoe:true,sengKind:'oni',terraform:true,quakeAmp:120,quakeW:520,accent:'#ffd24d',name:'鬼武者ライシュウ'},
   // ---- 四周目の新顔：神域の眷属 ----
   mythpeg:{hp:96,sp:2.4,dmg:23,atkR:66,w:78,h:72,c1:'#f6f2e4',c2:'#c8c0a8',c3:'#6e6650',score:1150,
     myth:true,mythKind:'pegasus',zflyer:true,hoverZ:70,squad:true,accent:'#ffe9a0',name:'天馬ペガソス兵'},
@@ -8253,6 +8275,28 @@ const ETYPE={
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
   // ---- 二周目・蟲の世界のボス ----
+  // ---- 六周目の新顔：機工王の新造兵 ----
+  mkHover:{hp:80,sp:2.3,dmg:22,atkR:64,w:76,h:56,c1:'#8a9aa8',c2:'#4e5c68',c3:'#242c34',score:1250,
+    mecha:true,mechaKind:'hover',zflyer:true,hoverZ:72,gun:true,shotKind:'laser',shotCol:'#9fe8ff',accent:'#9fe8ff',name:'ホバー戦闘機'},
+  mkQuake:{hp:170,sp:0.9,dmg:25,atkR:62,w:76,h:88,c1:'#7a6a52',c2:'#4c4030',c3:'#26201a',score:1500,
+    mecha:true,mechaKind:'quake',terraform:true,quakeAmp:100,quakeW:440,accent:'#ffb02e',name:'地質改変機'},
+  mkRail:{hp:96,sp:1.3,dmg:24,atkR:320,w:62,h:86,c1:'#6a7a96',c2:'#3e4a5e',c3:'#1c222c',score:1350,
+    mecha:true,mechaKind:'rail',gun:true,shotKind:'laser',shotCol:'#dff6ff',shotWind:30,accent:'#dff6ff',name:'レールガン狙撃機'},
+  mkFlail:{hp:150,sp:1.5,dmg:24,atkR:150,w:70,h:90,c1:'#8a6a4a',c2:'#563e28',c3:'#2a1e14',score:1450,
+    mecha:true,mechaKind:'flail',grappler:true,accent:'#ffb85a',name:'鉄球アーム'},
+  mkSpider:{hp:135,sp:1.2,dmg:23,atkR:70,w:82,h:70,c1:'#5a6a5a',c2:'#364036',c3:'#1a1e1a',score:1400,
+    mecha:true,mechaKind:'legs',gun:true,shotKind:'howitzer',shotCol:'#c8ff8a',shotR:18,accent:'#c8ff8a',name:'多脚砲台'},
+  mkWall:{hp:260,sp:0.75,dmg:24,atkR:58,w:78,h:94,c1:'#9aa4b0',c2:'#5c6470',c3:'#2c3238',score:1600,
+    mecha:true,mechaKind:'wall',guarder:true,armor:true,accent:'#cfe0f0',name:'展開装甲壁'},
+  mkHive:{hp:64,sp:2.9,dmg:20,atkR:200,w:56,h:48,c1:'#c8a04a',c2:'#8a6a24',c3:'#463410',score:1200,
+    mecha:true,mechaKind:'swarm',pouncer:true,accent:'#ffe14d',name:'群体ドローン'},
+  // ---- 六周目の中ボス／ボス ----
+  mkMHover:{hp:1750,sp:2.4,dmg:30,atkR:110,w:150,h:82,gsc:1.4,c1:'#8a9aa8',c2:'#4e5c68',c3:'#242c34',score:15000,
+    boss:true,mini:true,mecha:true,bigFoe:true,mechaKind:'hover',zflyer:true,hoverZ:108,accent:'#9fe8ff',name:'制空機 ヴァルチャ'},
+  mkMQuake:{hp:2150,sp:0.85,dmg:34,atkR:104,w:132,h:130,gsc:1.5,c1:'#7a6a52',c2:'#4c4030',c3:'#26201a',score:16000,
+    boss:true,mini:true,mecha:true,bigFoe:true,mechaKind:'quake',terraform:true,quakeAmp:120,quakeW:520,accent:'#ffb02e',name:'掘削母機 テラモール'},
+  mkArsenal:{hp:2650,sp:1.5,dmg:38,atkR:120,w:146,h:150,gsc:1.6,c1:'#4a5260',c2:'#2a3038',c3:'#12161c',score:22000,
+    boss:true,mecha:true,bigFoe:true,mechaKind:'legs',gun:true,shotKind:'rocket',shotCol:'#ff8a3a',shotR:20,accent:'#ff8a3a',name:'兵装王アーセナル'},
   // ---- 三周目の新顔：銀河侵略軍の別働隊 ----
   saucer:{hp:46,sp:2.2,dmg:12,atkR:60,w:72,h:44,c1:'#cfe0f0',c2:'#7a8ca8',c3:'#3a4658',score:560,alien:true,alienKind:'disc',zflyer:true,hoverZ:72,accent:'#9fd6ff',name:'小型円盤スカウト'},
   gravitor:{hp:110,sp:1.0,dmg:13,atkR:60,w:64,h:84,c1:'#8a9fd8',c2:'#4e5c96',c3:'#242c52',score:700,alien:true,alienKind:'gravor',terraform:true,quakeAmp:96,quakeW:420,accent:'#c8d8ff',name:'重力工作機'},
@@ -8300,6 +8344,14 @@ const BOSSMOVES={
   mbVisitor: ['skyDive','bulletHell','orbSpread','dashThrust','megaBeam'],       // 円盤＝上空からの掃射
   // 四周目の神域
   mbPegas:  ['skyDive','tripleStep','dashThrust','stormFall','bladeParry'],       // 天馬＝空から降りて突く
+  // 五周目の別動隊
+  mbTengu:  ['skyDive','kakuyoku','tripleStep','saruTobi','bladeParry'],
+  mbMogura: ['groundSlam','burrowBite','hammerQuake','bodyCharge','unblockSmash'],
+  bsOni:    ['maouRush','hellFlame','heavySwing','groundSlam','bossGrab','unblockSmash'],
+  // 六周目の新造兵
+  mkMHover: ['skyDive','bulletHell','megaBeam','spikeVolley','dashThrust'],
+  mkMQuake: ['groundSlam','hammerQuake','meteorCall','bodyCharge','unblockSmash'],
+  mkArsenal:['bulletHell','spikeVolley','megaBeam','orbSpread','groundSlam','unblockSmash'],
   mbTitan:  ['groundSlam','hammerQuake','heavySwing','bodyCharge','unblockSmash'],// 巨人＝地を割る一撃
   bsTyphon: ['bulletHell','spikeVolley','meteorCall','summon','megaTornado','bossGrab'],  // 万獣の父＝弾幕と召喚
   mbGravion: ['groundSlam','hammerQuake','meteorCall','bossGrab','unblockSmash'],// 重力＝地を押し下げ、落とす
@@ -11047,15 +11099,15 @@ const SENGOKU_CH=[
           {off:1240,list:[['hatamoto',1],['ninja',2],['oodate',1]]},{off:1600,boss:true,list:[['nobunaga',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['な、なんじゃこの城は…！わしらの知らん国じゃ。','旗印に「永楽通宝」——これは、遠い異国の戦の世のものじゃ。','ここの兵は役割が分かれておる。前で槍を並べ、後ろから射る。','矢と弾は撃つ前に必ず構える。構えを見たら、線から外れよ。','天守に居るのは「第六天魔王」と名乗る男じゃ。気をつけい。'],give:{heal:'full'}}},
   {theme:19,name:'夕暮れの城下町',
-   gates:[{off:520,list:[['ashigaru',3],['yumihei',1]]},{off:900,mini:true,list:[['hanbei',1]]},
+   gates:[{off:520,list:[['ashigaru',3],['yumihei',1]]},{off:900,mini:true,list:[['hanbei',1]]},{off:1120,mini:true,list:[['mbTengu',1]]},
           {off:1180,list:[['samurai',1],['ashigaru',2],['saika',2]]},{off:1560,boss:true,list:[['hideyoshi',1]]}],
    npc:{kind:'merchant',name:'行商猫チャミ',lines:['この町、店がいっぱいで目移りするニャ〜','でも侍がうろうろしてて物騒ニャ…','弓兵は遠くから狙ってくるから、柱の陰に入るといいニャ']}},
   {theme:20,name:'三方ヶ原の野',
-   gates:[{off:520,list:[['ashigaru',2],['kibahei',1]]},{off:900,mini:true,list:[['kanbei',1]]},
+   gates:[{off:520,list:[['ashigaru',2],['kibahei',1]]},{off:900,mini:true,list:[['kanbei',1]]},{off:1120,mini:true,list:[['mbMogura',1]]},
           {off:1180,list:[['teppo',2],['taisho',1],['hatamoto',1]]},{off:1560,boss:true,list:[['ieyasu',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平まで旗が並んでおる。これが「合戦」というやつじゃ。','騎馬が来る。あれは止まらん——避けるしかない。','狸のような男が陣を敷いておる。堅いぞ、あれは。']}},
   {theme:22,name:'桶狭間の豪雨',terr:'dive',
-   gates:[{off:520,list:[['ashigaru',3],['souhei',1]]},{off:900,mini:true,list:[['hisahide',1]]},
+   gates:[{off:520,list:[['ashigaru',3],['souhei',1]]},{off:900,mini:true,list:[['hisahide',1]]},{off:1120,mini:true,list:[['bsOni',1]]},
           {off:1180,list:[['ozutsu',1],['oodate',2],['yumihei',1]]},{off:1560,boss:true,list:[['yoshimoto',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ひどい雨じゃ。この谷、逃げ場が無いぞい。','大筒が来る。あれは山なりに落ちてくる——着弾の輪をよう見よ。','谷の奥で、公家めいた大将が輿に揺られておる。油断しておるようで、囲みは厚い。']}},
   {theme:23,name:'川中島の朝霧',
@@ -11106,16 +11158,16 @@ const MECHA_CH=[
           {off:1240,list:[['mkShield',2],['mkDrone',2],['mkFlank',1]]},{off:1600,boss:true,list:[['mkOmega',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['ここが心の臓じゃ。国じゅうの歯車が、この一点へ向かって回っておる…！','玉座の主は「機工王」と名乗った。犬を鉄に置き換えれば、誰も死なぬ——とな。','王の姿は三度、形を変える。倒したと思うたところが本番じゃぞ。','奥義の玉は残しておけ。形が変わる境目で、いちばん効く。','最後の姿は液体じゃ。斬っても撃っても、傷はすぐ塞がってしまう。','床に転がる火器を拾え。撃った弾だけが、あやつを炉の縁へ押しやれる。','傷は癒しておいた。……行ってこい。ワシらの世界を、鉄に明け渡すでないぞ。'],give:{heal:'full'}}},
   {theme:28,name:'鋼鉄の外郭門',terr:'up',
-   gates:[{off:520,list:[['mkDuel',3],['mkDozer',1]]},{off:900,mini:true,list:[['mkMScout',1]]},
+   gates:[{off:520,list:[['mkDuel',3],['mkDozer',1],['mkHover',1],['mkRail',1]]},{off:900,mini:true,list:[['mkMScout',1]]},{off:1120,mini:true,list:[['mkMHover',1]]},
           {off:1180,list:[['mkShield',2],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkGolem',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['見よ、地平の果てまで鉄の壁じゃ。門の高さは、王城の三倍はあるぞい…！','あの鉄の犬どもは痛みを感じん。怯まぬ相手には、掴んで投げるのが早い。','弾を撃ってくる型がおる。当たる寸前に後ろへ歩けば、弾はそのまま撃ち返せるのじゃ。','門は開かん。ならば横の足場を跳んで越えるまでよ。空中でもう一度跳べるのを忘れるでない。']}},
   {theme:29,name:'歯車の大回廊',terr:'liftup',
-   gates:[{off:520,list:[['mkFix',2],['mkShield',1]]},{off:900,mini:true,list:[['mkMArms',1]]},
+   gates:[{off:520,list:[['mkFix',2],['mkShield',1],['mkWall',1],['mkFlail',1]]},{off:900,mini:true,list:[['mkMArms',1]]},{off:1120,mini:true,list:[['mkMQuake',1]]},
           {off:1180,list:[['mkBeam',1],['mkDuel',2],['mkDrone',1]]},{off:1560,boss:true,list:[['mkSwarm',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['見ろよ、天井まで歯車だ。俺たちが歩いてるこの床も、たぶん誰かの部品だぜ。','盾持ちの鉄犬は正面を固める。回避で背後に回り込め！','この回廊は床ごと昇っちまう。乗る場所は自分で選べよ。','連打で繋いで段位を上げろ。段位が上がるほど、貰える経験値が増えるんだ。']},
    npc2:{kind:'altar',name:'整備ドックの祈り台',once:true,atX:1640,lines:['鉄の犬たちが、代わる代わる頭を下げていく台だ。','機械にも祈る先があるらしい。……こちらも、ひとつ祈らせてもらおう。'],give:{shrine:true}}},
   {theme:26,name:'電磁の大坑道',terr:'dive',
-   gates:[{off:520,list:[['mkBomb',2],['mkBone',2]]},{off:900,mini:true,list:[['mkMCoil',1]]},
+   gates:[{off:520,list:[['mkBomb',2],['mkBone',2],['mkQuake',1],['mkSpider',1],['mkHive',1]]},{off:900,mini:true,list:[['mkMCoil',1]]},{off:1120,mini:true,list:[['mkArsenal',1]]},
           {off:1180,list:[['mkHeavy',1],['mkGun',2],['mkDozer',1]]},{off:1560,boss:true,list:[['mkArc',1]]}],
    npc:{kind:'smith',name:'工房犬ハガネ',lines:['こいつら、掘ってるんじゃない。地面ごと「造ってる」んだ。信じられるかい？','雷を溜める型がいる。溜め始めたら、光った輪の外へ出ろ。輪の中は全部当たる。','こっちも溜められるぞ。攻撃を押しっぱなしにして離せば、タメ攻撃だ。','下りきった先は水が来る。水中はジャンプ連打で泳ぎ上がれる。溺れやしないさ。']}},
   {theme:27,name:'天空の軌道橋',terr:'climb',
@@ -11982,9 +12034,11 @@ const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','
   'mythpeg','mythtitan','mythgorgo','mythcent','mythcerb','mythsiren','mythcyclo'];
 // 六周目「メカワンコキングダム」の雑魚は全て機械。犬タイプは混ぜない
 const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink',
-  'mkDozer','mkBone'];
+  'mkDozer','mkBone',
+  'mkHover','mkQuake','mkRail','mkFlail','mkSpider','mkWall','mkHive'];
 const SENGOKU_ZAKO_POOL=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja',
-  'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto'];
+  'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto',
+  'karasu','dozoku','hokyu','kusarigama','kashira','yaribusuma','jindaiko'];
 function randZako(){ const P=lap>=6?MECHA_ZAKO_POOL:lap>=5?SENGOKU_ZAKO_POOL:lap>=4?MYTH_ZAKO_POOL:lap>=3?ALIEN_ZAKO_POOL:lap>=2?BUG_ZAKO_POOL:ZAKO_POOL; return P[(Math.random()*P.length)|0]; }
 function randomizeZako(list){
   // ボス／ライバル／召喚専用（balloon等）は据え置き。雑魚エントリだけ種類と数をランダム化
@@ -13410,6 +13464,79 @@ function drawMechaFoe(e,t){
       ctx.globalAlpha=0.28+0.22*Math.sin(gf*0.28);
       ctx.fillStyle='rgba('+hexRGB(t.accent)+',.85)';
       ctx.beginPath(); ctx.arc(bw*0.34,-bh*0.54,bh*0.20,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='hover'){                                          // ホバー：翼状の機体と、下向きの噴射口
+    ctx.fillStyle=shade(t.c1,16);
+    ctx.beginPath(); ctx.moveTo(-bw*0.46,-bh*0.50); ctx.lineTo(bw*0.42,-bh*0.62);
+    ctx.lineTo(bw*0.46,-bh*0.38); ctx.lineTo(-bw*0.40,-bh*0.28); ctx.fill();
+    ctx.fillStyle=t.c3; ctx.fillRect(-bw*0.30,-bh*0.30,bw*0.16,bh*0.12);
+    ctx.fillRect(bw*0.10,-bh*0.34,bw*0.16,bh*0.12);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(const ox of [-0.22, 0.18]){ ctx.fillStyle=radGrad(bw*ox,-bh*0.16,14,'rgba(159,232,255,.85)','rgba(159,232,255,0)');
+      ctx.beginPath(); ctx.arc(bw*ox,-bh*0.16,14,0,7); ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.ellipse(bw*0.30,-bh*0.52,bw*0.09,bh*0.06,0,0,7); ctx.fill(); }
+  else if(kind==='quake'){                                          // 地質改変機：腹の杭打ち機と、地を掴む脚
+    const dr=(e.state==='quakeWind')? Math.min(1,(34-(e.qwT||0))/14) : 0;
+    ctx.fillStyle=t.c3; roundRect(-bw*0.18,-bh*0.44,bw*0.36,bh*0.30,4); ctx.fill();
+    ctx.fillStyle=shade(t.c1,18); roundRect(-bw*0.08,-bh*0.30+dr*10,bw*0.16,bh*0.34,3); ctx.fill();
+    ctx.strokeStyle=t.c2; ctx.lineWidth=6; ctx.lineCap='round';
+    for(const sg of [-1,1]){ ctx.beginPath(); ctx.moveTo(sg*bw*0.20,-bh*0.44);
+      ctx.quadraticCurveTo(sg*bw*0.42,-bh*0.30, sg*bw*0.38,-bh*0.06); ctx.stroke(); }
+    if(dr>0.4){ ctx.strokeStyle='rgba(255,176,46,'+(0.45*dr).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(0,-bh*0.10,bw*(0.34+dr*0.3),0,7); ctx.stroke(); } }
+  else if(kind==='rail'){                                           // レールガン：肩に跨る長大な砲と支持脚
+    const chg=(e.state==='gunFire')?1:0;
+    ctx.strokeStyle=t.c3; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(-bw*0.16,-bh*0.36); ctx.lineTo(-bw*0.34,-bh*0.02); ctx.stroke();
+    ctx.fillStyle=shade(t.c2,10); ctx.fillRect(-bw*0.30,-bh*0.72,bw*0.90,bh*0.13);
+    ctx.fillStyle=shade(t.c1,26); ctx.fillRect(bw*0.42,-bh*0.76,bw*0.20,bh*0.21);
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-bw*0.26,-bh*0.66); ctx.lineTo(bw*0.56,-bh*0.66); ctx.stroke();
+    if(chg){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(bw*0.62,-bh*0.66,20,'#ffffff','rgba(223,246,255,0)');
+      ctx.beginPath(); ctx.arc(bw*0.62,-bh*0.66,20,0,7); ctx.fill(); ctx.restore(); } }
+  else if(kind==='flail'){                                          // 鉄球アーム：伸びる腕の先に鉄球
+    const ex=(e.state==='attack'||e.state==='gripping')?1:0;
+    ctx.strokeStyle='#8a9098'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.56);
+    if(ex) ctx.lineTo(bw*1.4,-bh*0.44); else ctx.quadraticCurveTo(bw*0.34,-bh*0.30,bw*0.20,-bh*0.06);
+    ctx.stroke();
+    const bx=ex? bw*1.4 : bw*0.20, by=ex? -bh*0.44 : -bh*0.06;
+    ctx.fillStyle=shade(t.c1,10); ctx.beginPath(); ctx.arc(bx,by,bh*0.13,0,7); ctx.fill();
+    ctx.fillStyle=t.c3;
+    for(let k=0;k<4;k++){ const a=k*(TAU/4)+gf*0.05;
+      ctx.beginPath(); ctx.moveTo(bx+Math.cos(a)*bh*0.10,by+Math.sin(a)*bh*0.10);
+      ctx.lineTo(bx+Math.cos(a)*bh*0.22,by+Math.sin(a)*bh*0.22);
+      ctx.lineTo(bx+Math.cos(a+0.5)*bh*0.10,by+Math.sin(a+0.5)*bh*0.10); ctx.fill(); } }
+  else if(kind==='legs'){                                           // 多脚砲台：低い胴に六本の脚と背の迫撃砲
+    ctx.strokeStyle=t.c3; ctx.lineWidth=5; ctx.lineCap='round';
+    for(let i=0;i<3;i++) for(const sg of [-1,1]){
+      const lx=(i-1)*bw*0.20, sw=Math.sin(anim*2.4+i*2.1+(sg>0?0:Math.PI))*5;
+      ctx.beginPath(); ctx.moveTo(lx,-bh*0.40);
+      ctx.lineTo(lx+sg*bw*0.18+sw,-bh*0.22); ctx.lineTo(lx+sg*bw*0.26+sw*1.4,0); ctx.stroke(); }
+    ctx.fillStyle=shade(t.c1,14); roundRect(-bw*0.26,-bh*0.58,bw*0.52,bh*0.22,5); ctx.fill();
+    ctx.save(); ctx.translate(bw*0.02,-bh*0.58); ctx.rotate(-0.9);
+    ctx.fillStyle=t.c3; ctx.fillRect(0,-6,bw*0.34,12);
+    ctx.fillStyle=shade(t.c2,20); ctx.fillRect(bw*0.28,-9,bw*0.10,18); ctx.restore();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.18,-bh*0.48,4.4,0,7); ctx.fill(); }
+  else if(kind==='wall'){                                           // 展開装甲壁：守ると板が左右へ開く
+    const grd=(e.state==='guard')?1:0;
+    for(const sg of [-1,1]){ ctx.save(); ctx.translate(sg*bw*(0.12+grd*0.20),-bh*0.56); ctx.rotate(sg*grd*0.18);
+      ctx.fillStyle=sg>0? shade(t.c1,14) : t.c2;
+      roundRect(-bw*0.13,-bh*0.24,bw*0.26,bh*0.52,4); ctx.fill();
+      ctx.strokeStyle=t.accent; ctx.lineWidth=2; ctx.strokeRect(-bw*0.09,-bh*0.18,bw*0.18,bh*0.40);
+      ctx.restore(); }
+    ctx.fillStyle=t.c3; roundRect(-bw*0.09,-bh*0.60,bw*0.18,bh*0.34,4); ctx.fill();
+    ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(0,-bh*0.50,4.4,0,7); ctx.fill(); }
+  else if(kind==='swarm'){                                          // 群体ドローン：小さな機体が三つ寄り集まる
+    for(let k=0;k<3;k++){ const a=gf*0.06+k*(TAU/3);
+      const ox=Math.cos(a)*bw*0.20, oy=-bh*0.40+Math.sin(a)*bh*0.16;
+      ctx.fillStyle=k?shade(t.c2,10):shade(t.c1,18);
+      ctx.beginPath(); ctx.ellipse(ox,oy,bw*0.16,bh*0.11,0,0,7); ctx.fill();
+      ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(ox+bw*0.08,oy,3,0,7); ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=radGrad(ox,oy+bh*0.10,9,'rgba(255,225,77,.7)','rgba(255,225,77,0)');
+      ctx.beginPath(); ctx.arc(ox,oy+bh*0.10,9,0,7); ctx.fill(); ctx.restore(); } }
   else {                                                            // 'blink'：転送コイル＋短刀
     ctx.strokeStyle=t.accent; ctx.lineWidth=2.4; ctx.beginPath();
     for(let k=0;k<2;k++) ctx.arc(-bw*0.02,ty+th2*0.40,bh*0.16+k*4, -0.9+gf*0.06, 0.9+gf*0.06);
@@ -13589,6 +13716,89 @@ function drawSengokuFoe(e,t){
     ctx.beginPath(); ctx.moveTo(-bw*0.10,-bh*0.40); ctx.lineTo(bw*0.52,-bh*0.66); ctx.stroke();
     ctx.fillStyle='#dfe6ef'; ctx.beginPath();
     ctx.moveTo(bw*0.52+12,-bh*0.70); ctx.lineTo(bw*0.48,-bh*0.60); ctx.lineTo(bw*0.50,-bh*0.71); ctx.closePath(); ctx.fill(); }
+  else if(kind==='tengu'){                                             // 烏天狗：黒い羽と、長い鼻の面
+    const fl=Math.sin((e.anim||0)*2.0)*0.4;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(-bw*0.02+sg*7,-bh*0.62+sg*5); ctx.rotate(sg? fl : -fl);
+      ctx.fillStyle=sg? shade(t.c1,22) : t.c3;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(-bw*0.46,-bh*0.34, -bw*0.70,bh*0.04);
+      ctx.quadraticCurveTo(-bw*0.38,-bh*0.02, 0,bh*0.08); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle='#e8503a';
+    ctx.beginPath(); ctx.moveTo(bw*0.12,-bh*0.84); ctx.lineTo(bw*0.46,-bh*0.80); ctx.lineTo(bw*0.12,-bh*0.74); ctx.fill();
+    ctx.strokeStyle='#2a2228'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-bw*0.16,-bh*0.56); ctx.lineTo(bw*0.30,-bh*0.36); ctx.stroke(); }
+  else if(kind==='mogura'){                                            // 土竜衆：鉄の爪と、背負った唐鍬
+    const dig=(e.state==='quakeWind')? Math.min(1,(34-(e.qwT||0))/14) : 0;
+    ctx.save(); ctx.translate(-bw*0.10,-bh*0.66); ctx.rotate(-0.6-dig*0.9);
+    ctx.strokeStyle='#4a3620'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-bw*0.40,-bh*0.10); ctx.stroke();
+    ctx.fillStyle=shade(t.c1,20);
+    ctx.beginPath(); ctx.moveTo(-bw*0.40,-bh*0.20); ctx.lineTo(-bw*0.58,-bh*0.06);
+    ctx.lineTo(-bw*0.40,bh*0.02); ctx.fill(); ctx.restore();
+    ctx.strokeStyle=shade(t.c1,28); ctx.lineWidth=3.4; ctx.lineCap='round';
+    for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(bw*0.16,-bh*0.44+k*5);
+      ctx.lineTo(bw*0.40,-bh*0.42+k*7); ctx.stroke(); } }
+  else if(kind==='horoku'){                                            // 焙烙火矢：導火線の付いた玉と、投げ縄
+    const fz=Math.sin(gf*0.4)*1.6;
+    ctx.strokeStyle='#4a3620'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.60); ctx.lineTo(bw*0.34,-bh*0.74); ctx.stroke();
+    ctx.fillStyle='#3a2e22'; ctx.beginPath(); ctx.arc(bw*0.40,-bh*0.78,bh*0.11,0,7); ctx.fill();
+    ctx.strokeStyle='#8a7a58'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.moveTo(bw*0.44,-bh*0.86); ctx.lineTo(bw*0.50,-bh*0.96); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=radGrad(bw*0.50,-bh*0.98+fz,9,'#fff6c0','rgba(255,120,40,0)');
+    ctx.beginPath(); ctx.arc(bw*0.50,-bh*0.98+fz,9,0,7); ctx.fill(); ctx.restore(); }
+  else if(kind==='kusari'){                                            // 鎖鎌：分銅の鎖が垂れ、攻撃で伸びる
+    const ex=(e.state==='attack'||e.state==='gripping')?1:0;
+    ctx.strokeStyle='#8a9098'; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(bw*0.10,-bh*0.58);
+    if(ex) ctx.quadraticCurveTo(bw*0.80,-bh*0.86, bw*1.5,-bh*0.42);
+    else   ctx.quadraticCurveTo(bw*0.30,-bh*0.24, bw*0.16,-bh*0.04);
+    ctx.stroke();
+    ctx.fillStyle='#6a7078'; ctx.beginPath();
+    ctx.arc(ex? bw*1.5 : bw*0.16, ex? -bh*0.42 : -bh*0.04, 6,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c1,20); ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-bw*0.10,-bh*0.60); ctx.lineTo(-bw*0.30,-bh*0.78); ctx.stroke();
+    ctx.fillStyle='#e2ecf6'; ctx.beginPath();
+    ctx.moveTo(-bw*0.30,-bh*0.78); ctx.quadraticCurveTo(-bw*0.52,-bh*0.90,-bw*0.44,-bh*0.66); ctx.fill(); }
+  else if(kind==='kashira'){                                           // 忍び頭：頭巾の房と、両手の手裏剣
+    ctx.strokeStyle=t.c2; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-bw*0.06,-bh*0.86);
+    ctx.quadraticCurveTo(-bw*0.34,-bh*0.80, -bw*0.44,-bh*0.60); ctx.stroke();
+    for(const sg of [-1,1]){ ctx.save(); ctx.translate(sg*bw*0.28,-bh*0.50); ctx.rotate(gf*0.24*sg);
+      ctx.fillStyle=t.accent;
+      for(let k=0;k<4;k++){ ctx.rotate(Math.PI/2);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(9,-3); ctx.lineTo(9,3); ctx.fill(); }
+      ctx.restore(); } }
+  else if(kind==='yaribu'){                                            // 槍衾：三本の長槍を束ねて構える
+    const grd=(e.state==='guard');
+    for(let k=-1;k<=1;k++){ ctx.strokeStyle=k? '#6a5230' : '#4a3620'; ctx.lineWidth=k?3.4:4.6;
+      ctx.beginPath(); ctx.moveTo(-bw*0.10,-bh*0.50+k*7);
+      ctx.lineTo(bw*(grd?0.86:0.70),-bh*0.62+k*10); ctx.stroke();
+      ctx.fillStyle='#e2ecf6'; ctx.beginPath();
+      const tx=bw*(grd?0.86:0.70), ty2=-bh*0.62+k*10;
+      ctx.moveTo(tx,ty2-4); ctx.lineTo(tx+bw*0.18,ty2); ctx.lineTo(tx,ty2+4); ctx.fill(); } }
+  else if(kind==='taiko'){                                             // 陣太鼓：背に負う大太鼓と撥
+    const beat=Math.max(0,Math.sin(gf*0.22))*((e.state==='attack'||e.telegraph>0)?1:0.4);
+    ctx.fillStyle='#4a3018'; ctx.beginPath(); ctx.ellipse(-bw*0.24,-bh*0.56,bh*0.20,bh*0.19-beat*2,0,0,7); ctx.fill();
+    ctx.fillStyle='#e8dcc0'; ctx.beginPath(); ctx.ellipse(-bw*0.24,-bh*0.56,bh*0.15,bh*0.14-beat*2,0,0,7); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2.4; ctx.beginPath(); ctx.arc(-bw*0.24,-bh*0.56,bh*0.15,0,7); ctx.stroke();
+    ctx.strokeStyle='#8a6a3a'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.56); ctx.lineTo(bw*0.10-beat*8,-bh*0.78); ctx.stroke();
+    if(beat>0.6){ ctx.strokeStyle='rgba(255,210,77,.45)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(-bw*0.24,-bh*0.56,bh*(0.20+beat*0.24),0,7); ctx.stroke(); } }
+  else if(kind==='oni'){                                               // 鬼武者：二本の角と、担いだ金棒
+    ctx.strokeStyle='#efe6cf'; ctx.lineWidth=6; ctx.lineCap='round';
+    for(const sg of [-1,1]){ ctx.beginPath(); ctx.moveTo(bw*0.06+sg*bh*0.07,-bh*0.90);
+      ctx.quadraticCurveTo(bw*0.06+sg*bh*0.17,-bh*1.02, bw*0.02+sg*bh*0.13,-bh*1.14); ctx.stroke(); }
+    ctx.save(); ctx.translate(-bw*0.06,-bh*0.66); ctx.rotate(-0.72);
+    ctx.strokeStyle='#3a2a18'; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-bw*0.10,-bh*0.52); ctx.stroke();
+    ctx.fillStyle='#6a5a44'; roundRect(-bw*0.20,-bh*0.86,bw*0.22,bh*0.36,6); ctx.fill();
+    ctx.fillStyle='#8a7a58';
+    for(let k=0;k<4;k++) for(const sg of [-1,1]){
+      ctx.beginPath(); ctx.arc(-bw*0.09+sg*bw*0.10, -bh*(0.80-k*0.08), 3.2,0,7); ctx.fill(); }
+    ctx.restore(); }
   else if(kind==='kunoichi'){                                          // 吹き矢筒＋帯
     ctx.strokeStyle='#2c2228'; ctx.lineWidth=4; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(bw*0.06,-bh*0.86); ctx.lineTo(bw*0.44,-bh*0.90); ctx.stroke();
@@ -17794,14 +18004,14 @@ function drawEnemy(e){
   else if(e.type==='papipoo'){ drawPapipoo(e); }
   else if(e.type==='chamboss'){ drawChamBoss(e); }
   else if(e.type==='chamurus'){ drawChamurus(e); }
-  else if(t.mecha && t.boss && t.flyer){ drawMechaAir(e); }   // 大型航空兵器は横に長い機体で描く
-  else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
-  else if(t.bossKind==='guard0'){ drawGuard0(e); }
-  else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   // 家族の絵のまま大きくなるボス。二足のボス絵へ流すと、獣も蟲も同じ人型の別人になる
   else if(t.bigFoe){ if(t.bug) drawBugFoe(e,t); else if(t.alien) drawAlienFoe(e,t);
     else if(t.myth) drawMythFoe(e,t); else if(t.sengoku) drawSengokuFoe(e,t);
     else if(t.mechaKind) drawMechaFoe(e,t); else drawBeast(e); }
+  else if(t.mecha && t.boss && t.flyer){ drawMechaAir(e); }   // 大型航空兵器は横に長い機体で描く
+  else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
+  else if(t.bossKind==='guard0'){ drawGuard0(e); }
+  else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
   else if(t.boss && t.alien) drawAlienBoss(e);
   else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.sengoku && !t.boss) drawSengokuFoe(e,t);
@@ -21779,6 +21989,9 @@ const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワン�
   mbYanmar:'大蟲帝国  空戦隊長', mbKerad:'大蟲帝国  掘削将', bsGranAnt:'大蟲帝国  地底の帝',
   mbVisitor:'銀河侵略軍  空挺分隊', mbGravion:'銀河侵略軍  重力兵団長', bsHive:'銀河侵略軍  母船の意思',
   mbPegas:'神域  天馬騎兵長', mbTitan:'神域  巨人族の王', bsTyphon:'神域  万獣の父',
+  mbTengu:'戦国  空駆けの別動隊', mbMogura:'戦国  坑道衆の頭', bsOni:'戦国  修羅の鬼将',
+  mkMHover:'メカワンコキングダム  制空戦隊長', mkMQuake:'メカワンコキングダム  掘削母機',
+  mkArsenal:'メカワンコキングダム  兵装王',
   garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',

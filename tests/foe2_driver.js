@@ -24,6 +24,10 @@ const DRIVER = `
      boss:['mbVisitor','mbGravion','bsHive'], pool:ALIEN_ZAKO_POOL, stages:[SPACE_CH,SPACE_FINAL]},
     {lap:4, name:'四周目', zako:['mythpeg','mythtitan','mythgorgo','mythcent','mythcerb','mythsiren','mythcyclo'],
      boss:['mbPegas','mbTitan','bsTyphon'], pool:MYTH_ZAKO_POOL, stages:[MYTH_CH]},
+    {lap:5, name:'五周目', zako:['karasu','dozoku','hokyu','kusarigama','kashira','yaribusuma','jindaiko'],
+     boss:['mbTengu','mbMogura','bsOni'], pool:SENGOKU_ZAKO_POOL, stages:[SENGOKU_CH]},
+    {lap:6, name:'六周目', zako:['mkHover','mkQuake','mkRail','mkFlail','mkSpider','mkWall','mkHive'],
+     boss:['mkMHover','mkMQuake','mkArsenal'], pool:MECHA_ZAKO_POOL, stages:[MECHA_CH]},
   ];
   const ALLZ=[], ALLB=[];
   NEW.forEach(function(N){ ALLZ.push.apply(ALLZ,N.zako); ALLB.push.apply(ALLB,N.boss); });
@@ -41,6 +45,21 @@ const DRIVER = `
       if(!t.name) throw new Error(k+' に名前が無い');
       if(!(t.hp>0 && t.dmg>0 && t.w>0 && t.h>0)) throw new Error(k+' の数値が入っていない');
       if(!(t.score>0)) throw new Error(k+' にスコアが無い'); });
+    // ETYPE の鍵がぶつかっていないこと。同じ鍵は黙って上書きされるので、
+    // 既存のボスを新しい雑魚で潰しても誰も気付かない（実際 mkSwarm でやった）
+    // ※ドライバはテンプレートリテラルの中身なので正規表現は使わない
+    { const src=String(__HTML), NL=String.fromCharCode(10);
+      const i=src.indexOf('const ETYPE={');
+      const body=src.slice(i, src.indexOf(NL+'};', i));
+      const seenK={}, dup=[];
+      body.split(NL).forEach(function(line){
+        if(line.slice(0,2)!=='  ' || line.slice(2,3)===' ') return;
+        const c=line.indexOf(':{'); if(c<0) return;
+        const k=line.slice(2,c).trim();
+        if(!k || k.indexOf(' ')>=0 || k.indexOf('/')>=0) return;
+        if(seenK[k]) dup.push(k); seenK[k]=1; });
+      if(dup.length) throw new Error('ETYPE の鍵が重複している: '+dup.join(','));
+      if(!(Object.keys(seenK).length>150)) throw new Error('ETYPE の鍵を '+Object.keys(seenK).length+' 個しか拾えていない（走査が効いていない）'); }
     // 名乗りの肩書き
     L1B.forEach(function(k){ if(!BOSSROLE[k]) throw new Error(k+' に肩書きが無い'); });
     // 名前が既存と衝突していない
@@ -63,9 +82,14 @@ const DRIVER = `
   // ===== 3) 装備ごとに絵が違う（同じ犬の色違いになっていないこと） =====
   //   自前で形を組み立てて比べると、描画側だけの分岐を丸ごと見落とす。
   //   実際に ctx へ飛ぶ呼び出しの並びを横取りして指紋を取る
-  { const fingerprint=function(type){
-      const p=setup(); const e=put(p, type, 120);
-      e.z=0; e.state='walk'; e.anim=1.0; e.bob=0.5; e.gait=0.8; e.gaitW=1;
+  { const fingerprintOf=function(e){
+      // ボスはリムライトのためにオフスクリーンの ctx へ描く。素のままだと
+      // 本体の描画がこちらへ来ず、影と転送しか拾えない（＝絵を測れていない）。
+      // 品質を1段落とすとリムを通らなくなるので、その間だけ落として測る
+      const _pt=perfTier; perfTier=1;
+      // 時計を止める。gf は回転や明滅の角度に入っているので、止めないと
+      // 同じ絵でも呼ぶたびに指紋が変わり、比較が全部素通りする
+      const _gf=gf; gf=1000;
       const real=ctx; let sig='';
       ctx=new Proxy(real, {
         get(t,k){ const v=t[k];
@@ -73,8 +97,11 @@ const DRIVER = `
             .map(function(a){ return (typeof a==='number')? a.toFixed(1) : String(a); }).join(',')+';'; return v.apply(t,arguments); };
           return v; },
         set(t,k,v){ sig+='='+k+':'+v+';'; t[k]=v; return true; } });
-      try{ drawEnemy(e); } finally { ctx=real; }
+      try{ drawEnemy(e); } finally { ctx=real; perfTier=_pt; gf=_gf; }
       return sig; };
+    const mkFoe=function(type){ const p=setup(); const e=put(p, type, 120);
+      e.z=0; e.state='walk'; e.anim=1.0; e.bob=0.5; e.gait=0.8; e.gaitW=1; e.id=7; return e; };
+    const fingerprint=function(type){ return fingerprintOf(mkFoe(type)); };
     // 比較の基準は「同じ家族の既存の1体」。別の家族と比べても差が出て当たり前で、
     // 作り分けの検査にならない
     const BASE={1:'wolf', 2:'kamakiri', 3:'greywan', 4:'mythhop', 5:'ashigaru', 6:'mkShield'};
@@ -88,6 +115,18 @@ const DRIVER = `
     const keys=Object.keys(sigs);
     for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++)
       if(sigs[keys[i]]===sigs[keys[j]]) throw new Error(keys[i]+' と '+keys[j]+' の絵が同一');
+    // 「この種のための描画分岐が本当にあるか」を、種別だけを無効な値へ差し替えて確かめる。
+    //   分岐が無ければ家族の既定の絵へ落ちるので、差し替えても指紋は変わらない。
+    //   （実際、ホバー機の分岐を消しても既定の絵に化けるだけで、色が違うぶん
+    //     「他と別の絵」の検査は素通りしていた）
+    const KINDF={1:'gear', 2:'bugKind', 3:'alienKind', 4:'mythKind', 5:'sengKind', 6:'mechaKind'};
+    NEW.forEach(function(N){ const fl=KINDF[N.lap];
+      N.zako.concat(N.boss).forEach(function(k){
+        // 同じ個体を2回描く。作り直すと id や湧き位置が変わり、絵が同じでも指紋がずれる
+        const t=ETYPE[k], keep=t[fl], e=mkFoe(k);
+        const a=fingerprintOf(e);
+        t[fl]='__nosuchkind'; const b=fingerprintOf(e); t[fl]=keep;
+        if(a===b) throw new Error(k+' に専用の描画分岐が無い（'+fl+' を無効にしても絵が変わらない＝家族の既定の絵のまま）'); }); });
     // 「基準の1体が描かない図形」を自分だけが描いていること。
     // 長さで比べると、基準の方が装飾の多い種（カマキリの 2鎌など）で必ず負ける
     const uniq=function(f, b){ const have={};

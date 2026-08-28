@@ -209,12 +209,14 @@ const DRIVER = `
     const drew=[];
     MB.forEach(function(k){
       enemies.length=0; spawnEnemy(k, 660, LANE);
-      // 機械の絵は二種類ある。地上のボスは王機の型、飛ぶボスは砲艦の型。
-      // どちらも通らなければ、既存の獣や円盤の絵を流用していることになる
-      let hit=false; const rk=drawMechaKing, ra=drawMechaAir;
+      // 機械の絵は三種類ある。地上のボスは王機の型、飛ぶボスは砲艦の型、
+      // 兵の型をそのまま大きくしたボス（bigFoe）は兵の絵。
+      // どれも通らなければ、既存の獣や円盤の絵を流用していることになる
+      let hit=false; const rk=drawMechaKing, ra=drawMechaAir, rf=drawMechaFoe;
       drawMechaKing=function(e){ hit=true; return rk(e); };
       drawMechaAir=function(e){ hit=true; return ra(e); };
-      try{ enemies.forEach(drawEnemy); } finally { drawMechaKing=rk; drawMechaAir=ra; }
+      drawMechaFoe=function(e,t){ hit=true; return rf(e,t); };
+      try{ enemies.forEach(drawEnemy); } finally { drawMechaKing=rk; drawMechaAir=ra; drawMechaFoe=rf; }
       if(!hit) drew.push(k); });
     if(drew.length) throw new Error('機械の絵で描かれないボスがいる: '+drew.join(','));
     // 飛ぶボスは砲艦の絵。地上の型に落ちると、空に玉座が浮くことになる
