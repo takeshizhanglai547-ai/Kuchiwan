@@ -14,8 +14,9 @@ const DRIVER = `
     if(!ETYPE[k].boss) throw new Error(k+' が boss でない');
     if(!(BOSSMOVES[k]||[]).length) throw new Error(k+' に技表が無い'); });
   MYTH_ZAKO_POOL.forEach(function(k){ if(!ETYPE[k]) throw new Error('雑魚 '+k+' が無い'); });
-  if(MYTH_ZAKO_POOL.length!==6) throw new Error('神話の雑魚が6種でない');
-  console.log('四周目の骨格 OK (3ステージ / 雑魚6種 / 神3柱、テーマ番号も範囲内)');
+  // 種類は増やしていく前提なので下限で見る（増やすたびに直す定数にしない）
+  if(MYTH_ZAKO_POOL.length<6) throw new Error('神話の雑魚が '+MYTH_ZAKO_POOL.length+' 種しかない');
+  console.log('四周目の骨格 OK (3ステージ / 雑魚'+MYTH_ZAKO_POOL.length+'種 / 神3柱、テーマ番号も範囲内)');
 
   // ===== 2) 難易度は周回で上がる =====
   // 四周目からは倍率表が二段（通常＝カジュアル／高難易度＝従来）になり、
@@ -84,9 +85,14 @@ const DRIVER = `
     enemies.length=0; encounters.length=0; particles.length=0;
     for(let i=0;i<4;i++) spawnEnemy('mythflank', p.x+150+i*50, LANE);
     enemies.forEach(function(e){ e.hp=e.maxHp=999999; });
+    // 回り込みの向きも待ち時間も乱数なので、種を固定しないと同じ設定で
+    // 34F〜200F と振れる（しきい値 40F の際どいところで時々落ちていた）
+    const _rr=Math.random; let _sd=20260828;
+    Math.random=function(){ _sd=(_sd*1103515245+12345)&0x7fffffff; return (_sd>>>8)/0x7fffff; };
     let behind=0;
-    for(let f=0;f<420;f++){ hitStop=0; slowmo=0; step(1);
-      if(f>180 && enemies.some(function(e){ return !e.dead && e.x < p.x-30; })) behind++; }
+    try{ for(let f=0;f<420;f++){ hitStop=0; slowmo=0; step(1);
+      if(f>180 && enemies.some(function(e){ return !e.dead && e.x < p.x-30; })) behind++; } }
+    finally { Math.random=_rr; }
     if(!(behind>40)) throw new Error('回り込み役が一度も背後に回らない（'+behind+'フレーム）');
     console.log('回り込み OK (最初は全員前方、'+behind+'フレームで背後を取っていた)');
   }

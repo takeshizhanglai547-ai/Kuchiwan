@@ -154,7 +154,8 @@ const DRIVER = `
     if(!ETYPE.taisho.buffer) throw new Error('足軽大将が味方を鼓舞しない');
     if(!ETYPE.samurai.riposte) throw new Error('侍が斬り返さない');
     // 湧きの抽選に入っていること
-    if(SENGOKU_ZAKO_POOL.length!==14) throw new Error('抽選プールが14種でない: '+SENGOKU_ZAKO_POOL.length);
+    // 種類は増やしていく前提なので下限で見る（増やすたびに直す定数にしない）
+    if(SENGOKU_ZAKO_POOL.length<14) throw new Error('抽選プールが '+SENGOKU_ZAKO_POOL.length+' 種しかない');
     // 増補ぶんも役割が重ならないこと
     if(!ETYPE.souhei.rager) throw new Error('薙刀僧兵が激昂しない');
     if(!(ETYPE.saika.shotWind < ETYPE.teppo.shotWind)) throw new Error('雑賀衆が鉄砲より速射でない');
