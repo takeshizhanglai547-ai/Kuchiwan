@@ -151,6 +151,12 @@ const DRIVER = `
         if(now.some(function(d){ return d>0; }) && now.some(function(d){ return d<0; })) pairs++; }
       return {front:99999-fE.hp, back:99999-bE.hp, inv:inv, blades:blades,
               fvx:fvx, bvx:bvx, fall:fall, stab:stab, pairs:pairs}; };
+    // 乱数を固定する。星KO（吹っ飛びが一定確率で画面外へ飛び去る）を引くと
+    // 敵の vx が別物になり、締めの弾きを測っている最中に時々落ちていた
+    const _rr=Math.random; let _seed=20260828;
+    const _fix=function(){ Math.random=function(){ _seed=(_seed*1103515245+12345)&0x7fffffff; return (_seed>>>8)/0x7fffff; }; };
+    const _unfix=function(){ Math.random=_rr; };
+    _fix();
     const r1=ringRun('iswords');
     if(!(r1.front>0)) throw new Error('降ってきた聖剣が前の敵に当たらない');
     if(!(r1.back>0))  throw new Error('降ってきた聖剣が後ろの敵に当たらない（前方一列のまま）');
@@ -174,6 +180,7 @@ const DRIVER = `
       throw new Error('Lv5 で本数が倍になっていない（'+r1.blades.length+'→'+r2.blades.length+'本）');
     if(!(span(r2.blades) > span(r1.blades)+20))
       throw new Error('Lv5 で降る範囲が広がっていない（'+Math.round(span(r1.blades))+'→'+Math.round(span(r2.blades))+'px）');
+    _unfix();
     console.log('INU 断罪の降臨 OK (前'+r1.front+'/後'+r1.back+'・聖剣'+r1.blades.length+'本 幅'+Math.round(span(r1.blades))
       +'px・降下'+(r1.stab-r1.fall)+'F・無敵'+r1.inv+'F・締めで外へ／Lv5 は '+r2.blades.length+'本 幅'+Math.round(span(r2.blades))+'px・左右同時'+r2.pairs+'回)'); }
   // shima one-inch blow: close hit with massive hitstop

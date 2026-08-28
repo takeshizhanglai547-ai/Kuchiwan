@@ -7930,6 +7930,21 @@ const ETYPE={
   kirebouzu:{hp:56,sp:1.9,dmg:10,atkR:50,w:60,h:66,c1:'#e8503a',c2:'#a82818',c3:'#5c130a',score:400,rager:true,accent:'#ffd24d',name:'キレボウズ'},
   ari:    {hp:38,sp:2.4,dmg:9, atkR:44,w:52,h:56,c1:'#34343e',c2:'#1c1c24',c3:'#0a0a10',score:360,digger:true,accent:'#d04030',name:'兵隊アリ'},
   onibouzu:{gaitK:0.040,gaitA:0.70,hp:88,sp:1.1,dmg:12,atkR:56,w:74,h:96,c1:'#3a55c8',c2:'#24348c',c3:'#121a4a',score:560,buffer:true,accent:'#c46bff',name:'オニボウズ'},
+  // ---- 一周目の新顔：帝国の別働隊 ----
+  // 犬の家族（drawBeast）に装備（gear）を載せて silhouette を分ける。
+  // 色だけ変えると、群れたときに同じ獣が並んでいるようにしか見えない
+  lancer:{gaitK:0.062,gaitA:0.86,hp:46,sp:1.4,dmg:10,atkR:112,w:60,h:82,c1:'#8ea4c8',c2:'#4e6288',c3:'#2a364e',score:340,gear:'lance',accent:'#dfe8ff',name:'槍衾犬'},
+  hawkdog:{hp:32,sp:2.2,dmg:9,atkR:56,w:56,h:66,c1:'#6f5a48',c2:'#463628',c3:'#241a12',score:420,gear:'wings',zflyer:true,hoverZ:58,accent:'#ffd24d',name:'鷹犬ハヤブサ'},
+  drummer:{gaitK:0.052,gaitA:0.78,hp:70,sp:1.1,dmg:9,atkR:52,w:66,h:84,c1:'#c05a3a',c2:'#7c3220',c3:'#43180e',score:460,gear:'drum',buffer:true,accent:'#ffd24d',name:'陣太鼓犬'},
+  slinger:{gaitK:0.070,gaitA:0.92,hp:40,sp:1.6,dmg:8,atkR:60,w:56,h:76,c1:'#a08a5e',c2:'#6a5836',c3:'#3c301c',score:400,gear:'sling',gun:true,shotKind:'howitzer',shotCol:'#c8b48a',shotR:16,accent:'#e8dcb4',name:'投石犬'},
+  torchdog:{gaitK:0.100,gaitA:1.10,hp:36,sp:2.3,dmg:11,atkR:48,w:54,h:76,c1:'#d07a3a',c2:'#8c4a18',c3:'#4e260c',score:400,gear:'torch',charge:true,accent:'#ffb02e',name:'松明犬'},
+  quakedog:{gaitK:0.040,gaitA:0.70,hp:96,sp:0.95,dmg:12,atkR:58,w:76,h:92,c1:'#7a6a52',c2:'#4c4030',c3:'#2a2318',score:620,gear:'maul',terraform:true,quakeAmp:92,quakeW:400,accent:'#c8b48a',name:'地鳴り犬'},
+  houndmaster:{gaitK:0.076,gaitA:0.96,hp:58,sp:1.8,dmg:8,atkR:128,w:60,h:86,c1:'#5c4a6a',c2:'#382a44',c3:'#1e1626',score:520,gear:'whip',grappler:true,accent:'#ff6ad0',name:'犬使いのムチ'},
+  // ---- 一周目の中ボス／ボス ----
+  // 二足のボスばかりだったので、四つ足の巨獣で並びを崩す（beastBoss＝獣の絵のまま巨大化）
+  mbVolg:{gaitK:0.090,gaitA:1.16,hp:520,sp:2.5,dmg:16,atkR:86,w:96,h:110,gsc:1.45,c1:'#4a5060',c2:'#2a2f3c',c3:'#14171e',score:5200,boss:true,mini:true,beastBoss:true,gear:'twinblade',accent:'#9fe8ff',name:'双牙のヴォルグ'},
+  mbSiege:{gaitK:0.034,gaitA:0.62,hp:760,sp:0.8,dmg:20,atkR:96,w:118,h:126,gsc:1.7,c1:'#8a7a5e',c2:'#5a4c34',c3:'#33291a',score:6200,boss:true,mini:true,beastBoss:true,gear:'ballista',terraform:true,quakeAmp:104,quakeW:460,accent:'#ffb85a',name:'攻城犬ゴライアス'},
+  bsGriff:{hp:980,sp:2.2,dmg:19,atkR:104,w:132,h:124,gsc:1.55,c1:'#c8cedc',c2:'#78808f',c3:'#3c424e',score:8600,boss:true,beastBoss:true,gear:'bigwings',flyer:true,hoverZ:96,accent:'#bfe9ff',name:'嵐雲のグリフォ'},
   // ---- Stage bosses 1–5 ----
   garm:  {hp:380,sp:1.8,dmg:14,atkR:78,w:108,h:128,c1:'#b7c0ce',c2:'#5a6170',c3:'#2e323b',score:3000,boss:true,bossKind:'garm',  weapon:'claw', accent:'#ff5a3c', name:'鉄爪のガルム'},
   gigas: {hp:600,sp:0.8,dmg:20,atkR:86,w:176,h:192,c1:'#b58f5a',c2:'#6f5026',c3:'#33240f',score:3600,boss:true,bossKind:'gigas', weapon:'club', accent:'#ffd24d', name:'岩塊のギガス'},
@@ -8231,6 +8246,10 @@ const ETYPE={
 const BOSSMOVES={
   // ── タイプ別の個性：剣士＝跳躍急降下＋見切り／飛び道具＝弾幕／魔法使い＝落雷・竜巻／ラスボス＝極太ビーム ──
   garm:   ['clawCombo','lunge','roar','skyDive','unblockSmash'],
+  // 一周目の新しい獣たち。既存の型を混ぜず、それぞれ別の距離帯を得意にする
+  mbVolg: ['clawCombo','dashThrust','tripleStep','lunge','skyDive'],          // 二刀＝手数と踏み込み
+  mbSiege:['groundSlam','heavySwing','spikeVolley','bodyCharge','unblockSmash'],  // 攻城＝重い一撃と投射
+  bsGriff:['skyDive','megaTornado','spikeVolley','bulletHell','clawCombo'],   // 飛行＝空からの制圧
   gigas:  ['heavySwing','groundSlam','bodyCharge','bossGrab','unblockSmash'],
   vesper: ['dashThrust','tripleStep','spearThrow','skyDive','bladeParry','unblockSmash'],       // 槍の速攻＋見切り
   moloch: ['fireball','flameSpread','meteor','bulletHell','heavySwing','unblockSmash'],         // 業火の弾幕
@@ -9218,7 +9237,8 @@ function updateEnemies(){
       } else { e.state='walk'; e.entry=null; }
       continue; }
     // air physics (juggle): z=height above ground, vz<0 = rising  ※飛行ボスは独自管理
-    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')){
+    if((e.state==='air'||e.state==='pounce'||e.z>0) && !(t.boss&&t.flyer&&e.state!=='air') && !(t.balloon&&e.state==='walk')
+       && !(t.zflyer && !t.boss && e.state!=='air' && !e.dead)){
       if(inFlood(e) && e.z<flood.lvl-10) e.vz=Math.min(e.vz*0.90, 2.4);   // 水中：敵もゆっくり沈む（vz は正が下）
       e.z=Math.max(0,e.z - e.vz); e.vz+=0.9; }   // 飛行ボスも打ち上げ中は物理に従う
     if(e.dead){ e.deadTimer--; e.x+=e.vx; e.vx*=0.86; if(e.z>0){e.vz+=0.9;e.z=Math.max(0,e.z-e.vz);}
@@ -9393,6 +9413,31 @@ function updateEnemies(){
         spark(e.x+e.facing*40, e.y-e.h*0.45, t.accent||'#ffb02e', 3, 7);
         if(el%14===0) sfx.swing(1,'chop',e.x); }
       if(e.atkTimer<=0){ e.state='walk'; e.thinkCd=rnd(7,19)*(e.rage?0.6:1);} if(t.charge)e.x+=e.facing*6; continue; }
+    // ── 急降下（飛行兵）と地鳴り（地形兵）の進行 ──
+    // 溜めは telegraph ではなく自前の時計で持つ。telegraph に載せると、
+    // 下の汎用ハンドラが「構え終わり＝殴る」へ横取りして、専用の攻めが出ない。
+    // 「！」の表示だけは同じ仕組みに乗せたいので、値は毎フレーム入れ直す
+    if(e.state==='swoopUp'){ const HOV=t.hoverZ||54;
+      e.swT--; e.telegraph=Math.max(e.swT,0); e.teleMax=SWOOP_WIND;
+      e.z += (HOV+78-e.z)*0.18; e.vz=0; e.vx=0;
+      if(e.swT<=0){ e.state='swoop'; e.swT=SWOOP_DUR; e.telegraph=0;
+        const tp=nearestPlayerTo(e.x);
+        e.facing=(tp && tp.x<e.x)?-1:1;
+        e.swVx=e.facing*(3.4+t.sp*0.9); e.swHit=false;
+        if(tp) gimWarnAt(tp.x, t.accent||'#ffd24d', 22); sfx.dash(e.x); }
+      continue; }
+    if(e.state==='swoop'){ const HOV=t.hoverZ||54;
+      e.swT--; e.x+=e.swVx; e.vz=0;
+      const u=1-e.swT/SWOOP_DUR;                       // 弧を描いて降り、また昇る
+      e.z=Math.max(0, (HOV+78) - Math.sin(u*Math.PI)*(HOV+96));
+      if(gf%2===0) spark(e.x-e.swVx*3, e.y-e.z-e.h*0.4, t.accent||'#ffd24d', 1, 4);
+      if(!e.swHit && e.z<44 && tryHitPlayer(e, t.dmg*ZAKO_DMG*zakoBuffMul(e), true, 58, 46)) e.swHit=true;
+      if(e.swT<=0){ e.state='walk'; e.thinkCd=rnd(80,140); }
+      continue; }
+    if(e.state==='quakeWind'){ e.qwT--; e.telegraph=Math.max(e.qwT,0); e.teleMax=QUAKE_WIND; e.vx=0;
+      if(e.qwT%6===0) dust(e.x+rnd(-24,24), e.y, 2);
+      if(e.qwT<=0){ e.state='walk'; e.telegraph=0; e.thinkCd=rnd(150,240); foeQuake(e); }
+      continue; }
     if(e.telegraph>0){ e.telegraph--;
       // パイルバンカー：杭を引き込む音と火花で、重い一撃が来ることを長めに知らせる
       if(t.meleeKind==='pile' && e.telegraph%4===0){
@@ -9424,6 +9469,21 @@ function updateEnemies(){
       if(dist<30 && p.z<e.z+34){ tryHitPlayer(e,t.dmg*ZAKO_DMG,false,-48,60);
         spark(e.x,e.y-e.z,e.red?'#ff5a5a':'#5a8aff',16,8); ring(e.x,e.y-e.z,'#fff'); sfx.hit(e.x); e.hp=0; killEnemy(e); }
       continue; }
+    // ── 飛行する雑魚：地面に降りずに高度を保ち、間合いに入ると急降下で襲う ──
+    // 打ち上げられている間（air）だけは物理に任せる。ここで高度を戻すと、
+    // 叩き落としても即座に浮き直して空中コンボが成立しない
+    if(t.zflyer){
+      // 通常時：巡航高度でふわふわ漂いながら間合いを詰める（急降下の進行は上の状態処理）
+      e.z += ((t.hoverZ||54)+Math.sin(e.bob*1.7)*8-e.z)*0.12; e.vz=0;
+      if(e.state==='walk' && e.stun<=0 && dist>70 && dist<430 && e.thinkCd<=0){
+        e.state='swoopUp'; e.swT=SWOOP_WIND; e.teleMax=SWOOP_WIND;
+        e.thinkCd=rnd(90,150); continue; } }
+    // ── 地形を動かす敵：足元の地面をせり上げる（沈める）。乗っていると打ち上げられる ──
+    // 輪で場所を先に見せる。見てから離れれば当たらないので、逃げ場のない攻撃にはしない
+    if(t.terraform && e.stun<=0 && !e.grabbedBy && e.state==='walk' && dist<540
+       && e.thinkCd<=0 && SWELLS.length<2){
+      e.state='quakeWind'; e.qwT=QUAKE_WIND; e.teleMax=QUAKE_WIND; e.vx=0;
+      e.qwX=p.x; gimWarnAt(p.x, '#c8b48a', QUAKE_WIND); sfx.charge(e.x); continue; }
     // キレボウズ：定期的にブチギレて攻撃力・速度・手数が上昇
     if(t.rager){ if(e.rageT>0){ e.rageT--; if(gf%4===0)spark(e.x+rnd(-14,14),e.y-e.h*rnd(0.4,1.1),'#ff6a3a',2,5);
         if(e.rageT<=0){ e.rage=false; popText(e.x,e.y-e.h-6,'ふぅ…','#cfcfcf'); } }
@@ -9637,6 +9697,27 @@ function tryHitPlayer(e,dmg,knock,reach,hh,unblock,zmax,ivOv){
   return hit;
 }
 const ZAKO_DMG=4.0;   // 雑魚の攻撃力（難易度UP：従来の2倍）
+// ── 新しい攻めの型：急降下する飛行兵と、地形をせり上げる兵 ──
+const SWOOP_WIND=24, SWOOP_DUR=38;   // 舞い上がる溜め／滑空して降りる時間
+const QUAKE_WIND=34;                 // 地鳴りの溜め（この間に輪の外へ出れば当たらない）
+// 足元の地面をせり上げ（沈め）て打ち上げる。うねりそのものは仕掛けの SWELLS を共有するので、
+// 隆起した地形の上に本当に立てる（見た目だけの演出にはしない）
+function foeQuake(e){ const t=ETYPE[e.type], tp=nearestPlayerTo(e.x);
+  const cx=(e.qwX!=null? e.qwX : (tp? tp.x : e.x));
+  const w=t.quakeW||380, up=(t.quakeDown? -1 : 1), amp=t.quakeAmp||88;
+  SWELLS.push({x0:cx-w*0.5, x1:cx+w*0.5, amp:up*amp, env:0, t:0, rise:24, hold:70, fall:52});
+  shake=Math.max(shake,12); quake=Math.max(quake||0,16); sfx.big(e.x); dust(cx,LANE,16);
+  ring(cx, LANE-groundLift(cx), '#c8b48a');
+  popText(cx, LANE-groundLift(cx)-170, up>0?'地面がせり上がる！':'地面が抜ける！', '#c8b48a', true);
+  const dmg=Math.round(t.dmg*ZAKO_DMG*0.55*zakoBuffMul(e));
+  for(const q of players){ if(!q.active||q.z>26) continue;
+    if(Math.abs(q.x-cx)>w*0.45) continue;
+    // 打ち上げは hurtPlayer の launch に任せる。先に state='jump' を立てても、
+    // 直後の hurtPlayer が 'hurt' で上書きして跳ね上がりが消える
+    hurtPlayer(q, dmg, (q.x<cx?-1:1), true, 'blunt', null, up>0? 2.2 : 0); }
+  for(const o of enemies){ if(o===e||o.dead||o.grabbedBy) continue;
+    if(Math.abs(o.x-cx)<w*0.45 && o.z<20) o.vz=Math.min(o.vz||0,-7); }   // 敵の vz は負が上
+}
 function zakoBuffMul(e){ return (e.rage?1.6:1)*(e.buffTill>gf?1.3:1); }   // 怒り／円陣強化（難易度・成長分は hitOnePlayer 側でまとめて掛ける）
 function pounceStrike(e){ const t=ETYPE[e.type]; tryHitPlayer(e,t.dmg*ZAKO_DMG*zakoBuffMul(e),true,t.atkR*0.5+30,46); }
 // ---- 組み付き犬の掴み（プレイヤー拘束）----
@@ -10785,7 +10866,7 @@ const CH1=[
 const SEGS={
   A:[
     [ {theme:3,name:'業火の渓谷',terr:'down',
-       gates:[{off:600,list:[['boar',1],['kirebouzu',1],['bomber',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
+       gates:[{off:600,list:[['boar',1],['kirebouzu',1],['bomber',1]]},{off:980,mini:true,list:[['mbVolg',1]]},{off:1300,boss:true,list:[['moloch',1]]}],
        npc:{kind:'smith',name:'鍛冶犬ドワン',once:true,lines:{
          inu:['こんな谷まで来るとは物好きな…いや、見上げた根性だ！','剣士のおぬしには、わしの自信作をくれてやる！溶岩で鍛えた一級品だぞ。'],
          shima:['その拳ダコ…相当鍛えとるな。気に入った！','拳で戦うおぬしにはコイツだ！持っていけ！'],
@@ -10800,7 +10881,7 @@ const SEGS={
          shima:['ようこそ、月詠の森へ…','亡霊は透けている間、拳も通りません。実体化の瞬間に叩き込むのです。','月のご加護を、拳士さま。'],
          nuko:['あら…あなたからは月と同じ魔力の香りがします。','亡霊は実体を現した瞬間しか傷つきません。炎の柱を置いて待つのも良いでしょう。','同じ魔を扱う者として…ご武運を、ヌコさま。']},give:{heal:'full'}}},
       {theme:6,name:'瑠璃の水晶洞',terr:'down',
-       gates:[{off:600,list:[['ari',1],['pounce',1],['gripper',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
+       gates:[{off:600,list:[['ari',1],['pounce',1],['gripper',1]]},{off:980,mini:true,list:[['mbSiege',1]]},{off:1300,boss:true,list:[['cerbe',1]]}],
        npc:{kind:'villager',name:'鉱夫犬ホリオ',lines:['この水晶洞、迷い込むと二度と出られんと言われとる…','三つ首の獣ケルベが奥に巣食う。上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
   B:[
@@ -10808,7 +10889,7 @@ const SEGS={
        gates:[{off:600,list:[['hyena',1],['pierrot',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
        npc:{kind:'sailor',name:'空賊シオマル',lines:['この飛行艇、風を掴んで大空をゆくのさ！足を滑らせるなよ。','でけぇスライムが甲板を占領してやがる。斬るたび分裂するから、小さいのから片付けな！']}},
       {theme:1,name:'海賊王の埠頭',
-       gates:[{off:600,list:[['mastiff',1],['kirebouzu',1],['onibouzu',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
+       gates:[{off:600,list:[['mastiff',1],['kirebouzu',1],['onibouzu',1]]},{off:980,mini:true,list:[['bsGriff',1]]},{off:1300,boss:true,list:[['pirate',1]]}],
        npc:{kind:'villager',name:'酒場の看板犬',lines:['海賊王の錨投げは、空に逃げても追いかけてくる…','懐に飛び込んで連打するのが一番だワン！']}} ],
     [ {theme:3,name:'灼熱の砂漠',
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
@@ -11831,7 +11912,8 @@ function confirmBranch(){ const key=pendingBranch; pendingBranch=null;
   startCutscene(opt.cut, ()=>{ state='play'; goArrow=160; }); }
 const aliveCount=()=>enemies.filter(e=>!e.dead).length;
 // ── 雑魚のランダム出現：ステージごとに顔ぶれ・数が変わり、周回しても飽きない ──
-const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober','akita','bomber','warpdog','gripper','pierrot','kirebouzu','ari','onibouzu','zombiewan','skeletwan','mechawan','bikewan'];
+const ZAKO_POOL=['wolf','hyena','boar','guard','pounce','corgi','mastiff','dober','akita','bomber','warpdog','gripper','pierrot','kirebouzu','ari','onibouzu','zombiewan','skeletwan','mechawan','bikewan',
+  'lancer','hawkdog','drummer','slinger','torchdog','quakedog','houndmaster'];
 // 二周目「蟲の世界」の雑魚は犬タイプではなく蟲タイプのみで構成
 const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','hotarubi','ari'];
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
@@ -17470,6 +17552,7 @@ function drawEnemy(e){
   else if(t.mecha && t.boss){ drawMechaKing(e); }   // 機械の国のボスは全て専用の絵（流用だと毛むくじゃらの獣が出る）
   else if(t.bossKind==='guard0'){ drawGuard0(e); }
   else if(t.boss && (t.bossKind==='kamaboss'||t.bossKind==='queenbee'||t.bossKind==='kuwaboss'||t.bossKind==='spidboss')) drawBugBoss(e);
+  else if(t.beastBoss) drawBeast(e);   // 四つ足のまま大きくなるボス（二足のボス絵へ流すと別人になる）
   else if(t.boss && t.alien) drawAlienBoss(e);
   else if(t.boss){ const bk=t.bossKind; if(GOD_ART[bk])drawGod(e); else if(ETYPE[e.type]&&ETYPE[e.type].demon)drawDemonKing(e); else if(SENGOKU_ART[bk])drawWarlord(e); else if(bk==='emperor')drawBoss(e); else if(bk==='dragon')drawDragon(e); else if(bk==='ghost')drawGhost(e); else if(bk==='rival')drawRival(e); else if(bk==='shark')drawShark(e); else if(bk==='pirate')drawPirate(e); else if(bk==='noroinu')drawNoroinu(e); else if(bk==='cactus')drawCactus(e); else if(bk==='wolfking')drawWolfKing(e); else if(bk==='darkknight')drawDarkKnight(e); else drawBigBoss(e); }
   else if(t.sengoku && !t.boss) drawSengokuFoe(e,t);
@@ -17478,6 +17561,7 @@ function drawEnemy(e){
   else if(t.alien && !t.boss) drawAlienFoe(e,t);
   else if(t.bug) drawBugFoe(e,t);
   else if(e.type==='bitter') drawBitter(e); else if(e.type==='warpdog') drawWarpdog(e);
+  else if(t.gear) drawBeast(e);   // 装備持ちの犬。役割フラグ（buffer 等）より先に見る
   else if(t.summoner) drawPierrot(e); else if(t.balloon) drawBalloonFoe(e);
   else if(t.rager) drawKirebouzu(e); else if(t.digger) drawAri(e); else if(t.buffer) drawOnibouzu(e);
   else if(t.rider) drawRider(e,t);
@@ -18127,8 +18211,108 @@ function drawBeast(e){ const t=ETYPE[e.type], atk=e.state==='attack', tele=e.tel
   if(t.bomber){ ctx.strokeStyle='#7a7268'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(hx,hy-13); ctx.lineTo(hx+2,hy-21); ctx.stroke();
     const fz=Math.sin(gf*0.4)*1.5; ctx.save(); ctx.globalCompositeOperation='lighter';
     ctx.fillStyle=radGrad(hx+2,hy-23+fz,6,'#fff6c0','#ff5a2a'); ctx.beginPath(); ctx.arc(hx+2,hy-23+fz,3.6,0,7); ctx.fill(); ctx.restore(); }
+  drawBeastGear(e,t);                                 // 背や口元に載る装備（種類ごとの silhouette）
   drawBeastClaw(e);                                   // exaggerated swiping claw on tele/attack
 }
+// ── 獣に載せる装備 ──
+// 犬の家族は色と歩容しか差が無く、10体並べても「同じ獣の色違い」に見える。
+// 背中と口元に嵩のあるものを載せると、遠目のシルエットで種類が分かる
+function drawBeastGear(e,t){ const G=t.gear; if(!G) return;
+  const anim=e.anim||0, atk=e.state==='attack', tele=e.telegraph>0;
+  const ac=t.accent||'#ffd24d';
+  ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
+  if(G==='lance'){                                    // 長槍：口にくわえて前へ突き出す
+    const ex=atk?46:(tele?-8:22);
+    ctx.strokeStyle='#6a4a2c'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(6,-40); ctx.lineTo(74+ex,-52); ctx.stroke();
+    ctx.fillStyle='#dfe8ff'; ctx.beginPath();
+    ctx.moveTo(74+ex,-56); ctx.lineTo(100+ex,-53); ctx.lineTo(74+ex,-48); ctx.fill();
+    ctx.strokeStyle=ac; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(62+ex,-51); ctx.lineTo(70+ex,-52); ctx.stroke(); }
+  else if(G==='wings'){                               // 翼：羽ばたきに合わせて畳んだり開いたり
+    const sw=Math.sin(anim*2.4), open=(e.state==='swoop')?1.15:(0.55+0.45*sw);
+    // 奥の翼→胴→手前の翼、の順に重ねる。同じ色で2枚描くと1枚の板に見える
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(sg?7:-5, sg?4:-5);
+      ctx.fillStyle=sg? shade(t.c1,10) : shade(t.c3,10);
+      ctx.beginPath(); ctx.moveTo(-2,-44);
+      ctx.quadraticCurveTo(-40-26*open,-74-34*open, -78-38*open,-38-26*open);
+      ctx.quadraticCurveTo(-44-14*open,-40-8*open, -6,-32); ctx.fill();
+      ctx.strokeStyle='rgba(255,210,77,.45)'; ctx.lineWidth=1.6;
+      for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.moveTo(-4,-42);
+        ctx.quadraticCurveTo(-30-10*k,-52-9*k, -62-30*open,-40-20*open); ctx.stroke(); }
+      ctx.restore(); } }
+  else if(G==='drum'){                                // 陣太鼓：背に括りつけた胴。叩くたびに歪む
+    const beat=Math.max(0, Math.sin(gf*0.22))*(atk||tele?1:0.35);
+    ctx.fillStyle='#5a3a20'; ctx.beginPath(); ctx.ellipse(-8,-52,17,13-beat*2,0,0,7); ctx.fill();
+    ctx.fillStyle='#e8dcc0'; ctx.beginPath(); ctx.ellipse(-8,-52,13,9-beat*2,0,0,7); ctx.fill();
+    ctx.strokeStyle=ac; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.arc(-8,-52,13,0,7); ctx.stroke();
+    ctx.strokeStyle='#3a2410'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(-20,-44); ctx.lineTo(4,-40); ctx.stroke();
+    if(beat>0.6){ ctx.strokeStyle='rgba(255,210,77,.5)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(-8,-52,17+beat*9,0,7); ctx.stroke(); } }
+  else if(G==='sling'){                               // 投石帯：背負った石袋と、振り回す帯
+    ctx.fillStyle='#6a5836'; ctx.beginPath(); ctx.ellipse(-14,-48,13,11,0,0,7); ctx.fill();
+    ctx.fillStyle='#8a7a58'; ctx.beginPath(); ctx.arc(-18,-52,4,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(-10,-50,3.4,0,7); ctx.fill();
+    const w=(atk||tele)? gf*0.5 : anim*0.8;
+    ctx.strokeStyle='#c8b48a'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(14,-42); ctx.lineTo(14+Math.cos(w)*26,-42+Math.sin(w)*26); ctx.stroke();
+    ctx.fillStyle='#9a8a6a'; ctx.beginPath(); ctx.arc(14+Math.cos(w)*26,-42+Math.sin(w)*26,5,0,7); ctx.fill(); }
+  else if(G==='torch'){                               // 松明：背の柄に灯る炎（走ると尾を引く）
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-10,-44); ctx.lineTo(-24,-72); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const fz=Math.sin(gf*0.42)*3;
+    ctx.fillStyle=radGrad(-25,-78+fz,13,'#fff6c0','rgba(255,90,42,0)');
+    ctx.beginPath(); ctx.arc(-25,-78+fz,13,0,7); ctx.fill(); ctx.restore();
+    ctx.fillStyle='#ffb02e'; ctx.beginPath();
+    ctx.moveTo(-25,-88+fz); ctx.quadraticCurveTo(-19,-76,-25,-70); ctx.quadraticCurveTo(-31,-76,-25,-88+fz); ctx.fill(); }
+  else if(G==='maul'){                                // 大槌：背に担いだ石頭。溜め中は振り上げる
+    const up=(e.state==='quakeWind')? Math.min(1,(34-(e.qwT||0))/12) : 0;
+    ctx.save(); ctx.translate(-6,-48); ctx.rotate(-0.5-up*0.9);
+    ctx.strokeStyle='#4a3a24'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-34,-12); ctx.stroke();
+    ctx.fillStyle='#6a6258'; ctx.fillRect(-48,-24,18,24);
+    ctx.fillStyle='#8a8278'; ctx.fillRect(-48,-24,18,7);
+    ctx.restore();
+    if(up>0.5){ ctx.strokeStyle='rgba(200,180,138,'+(0.4*up).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(0,-30,40+up*14,0,7); ctx.stroke(); } }
+  else if(G==='whip'){                                // 鞭：垂らした縄が、攻撃で前へ伸びる
+    const ex=atk?1:0;
+    ctx.strokeStyle='#7a4a6a'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(10,-42);
+    if(ex) ctx.quadraticCurveTo(70,-64,132,-34);
+    else   ctx.quadraticCurveTo(30,-20,18,-2);
+    ctx.stroke();
+    ctx.fillStyle=ac; ctx.beginPath(); ctx.arc(ex?132:18, ex?-34:-2, 3.4,0,7); ctx.fill(); }
+  else if(G==='twinblade'){                           // 双牙：背の鞘から交差して突き出た二刀
+    for(const sg of [-1,1]){ ctx.save(); ctx.translate(-6,-50); ctx.rotate(sg*0.55-0.3);
+      ctx.strokeStyle='#2a2f3c'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-16,0); ctx.stroke();
+      ctx.fillStyle='#dfe8ff'; ctx.beginPath();
+      ctx.moveTo(0,-3); ctx.lineTo(52,-1); ctx.lineTo(0,3); ctx.fill();
+      ctx.restore(); }
+    ctx.strokeStyle=ac; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(-18,-56); ctx.lineTo(6,-46); ctx.stroke(); }
+  else if(G==='ballista'){                            // 攻城弩：背に据えた投石機。溜めで弦を引く
+    const pull=(e.state==='quakeWind'||tele)? 1 : 0;
+    ctx.fillStyle='#5a4c34'; ctx.fillRect(-30,-70,44,10);
+    ctx.fillStyle='#3a3024'; ctx.fillRect(-30,-70,44,3);
+    ctx.strokeStyle='#7a6a4a'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-30,-60); ctx.lineTo(-16,-44); ctx.moveTo(14,-60); ctx.lineTo(2,-44); ctx.stroke();
+    ctx.strokeStyle='#c8b48a'; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(-28,-74); ctx.lineTo(-6+pull*10,-66); ctx.lineTo(12,-74); ctx.stroke();
+    ctx.fillStyle='#6a6258'; ctx.beginPath(); ctx.arc(-6+pull*10,-68,7,0,7); ctx.fill(); }
+  else if(G==='bigwings'){                            // 大翼：畳むと背の峰、開くと嵐雲を巻く帆
+    const sw=Math.sin(anim*1.5), open=0.75+0.25*sw;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(sg? 8:-2, sg? 3:-3);
+      ctx.fillStyle=sg? shade(t.c2,-6) : shade(t.c1,-4);
+      ctx.beginPath(); ctx.moveTo(0,-46);
+      ctx.quadraticCurveTo(-46-26*open,-92-30*open, -96-40*open,-46-24*open);
+      ctx.quadraticCurveTo(-52-16*open,-46-6*open, -4,-34); ctx.fill();
+      ctx.strokeStyle='rgba(190,230,255,.5)'; ctx.lineWidth=2;
+      for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.moveTo(-6,-42);
+        ctx.quadraticCurveTo(-40-14*k,-62-10*k, -80-26*open,-48-14*open); ctx.stroke(); }
+      ctx.restore(); } }
+  ctx.restore(); }
 // big, cathartic clawed foreleg that winds up then swings huge during the attack
 // 歩幅（実移動から積分した位相）。旧来の e.anim 固定周期に代わる歩行の駆動源
 function foeStep(e,amp){ return Math.sin(e.gait||0)*(amp||4)*(e.gaitW||0); }
@@ -21254,7 +21438,8 @@ function drawGacha(){
 //======================================================================
 //  CUTSCENES  (opening / boss intros / ending)
 //======================================================================
-const BOSSROLE={ garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
+const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワンワン帝国  攻城隊長', bsGriff:'ワンワン帝国  空の斥候長',
+  garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
   shark:'地を泳ぐ陸鮫', pirate:'七つの海の海賊王', noroinu:'呪詛の魔犬', cactus:'砂漠の棘針', goldgolem:'宝物庫の黄金傀儡',
