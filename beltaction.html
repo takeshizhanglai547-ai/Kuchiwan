@@ -8039,6 +8039,28 @@ const ETYPE={
     myth:true,mythKind:'seer',seer:true,gunner:true,squad:true,accent:'#d6fffa',name:'神託のオラクル'},
   mythbull:{hp:180,sp:1.35,dmg:32,atkR:72,w:76,h:96,c1:'#c08a5a',c2:'#8a5c34',c3:'#4a2e18',score:1500,
     myth:true,mythKind:'bull',charge:true,squad:true,armor:true,accent:'#ffc890',name:'迷宮のミノタウロス'},
+  // ---- 四周目の新顔：神域の眷属 ----
+  mythpeg:{hp:96,sp:2.4,dmg:23,atkR:66,w:78,h:72,c1:'#f6f2e4',c2:'#c8c0a8',c3:'#6e6650',score:1150,
+    myth:true,mythKind:'pegasus',zflyer:true,hoverZ:70,squad:true,accent:'#ffe9a0',name:'天馬ペガソス兵'},
+  mythtitan:{hp:210,sp:0.85,dmg:30,atkR:74,w:86,h:100,c1:'#9aa0a8',c2:'#5e646e',c3:'#2e3238',score:1700,
+    myth:true,mythKind:'titan',terraform:true,quakeAmp:104,quakeW:440,squad:true,armor:true,accent:'#ffd0a0',name:'大地の巨人ギガース'},
+  mythgorgo:{hp:120,sp:1.5,dmg:24,atkR:280,w:60,h:88,c1:'#8ad8a0',c2:'#4a9060',c3:'#204630',score:1250,
+    myth:true,mythKind:'gorgon',gunner:true,shotCol:'#c8ff9f',squad:true,accent:'#d0ffc0',name:'蛇髪のゴルゴー'},
+  mythcent:{hp:165,sp:2.2,dmg:27,atkR:96,w:96,h:92,c1:'#b98a5a',c2:'#7c5630',c3:'#42301a',score:1400,
+    myth:true,mythKind:'centaur',charge:true,squad:true,accent:'#ffd8a0',name:'弓兵ケンタウロス'},
+  mythcerb:{hp:140,sp:2.5,dmg:25,atkR:62,w:82,h:74,c1:'#5a4a68',c2:'#362a44',c3:'#1a1226',score:1300,
+    myth:true,mythKind:'hound',pouncer:true,squad:true,accent:'#c46bff',name:'冥府の番犬ケルベロイ'},
+  mythsiren:{hp:88,sp:1.8,dmg:21,atkR:72,w:62,h:84,c1:'#a8d8ff',c2:'#5a8ac8',c3:'#26466e',score:1200,
+    myth:true,mythKind:'siren',zflyer:true,hoverZ:96,buffer:true,squad:true,accent:'#dff0ff',name:'歌姫セイレーン'},
+  mythcyclo:{hp:230,sp:1.0,dmg:31,atkR:78,w:88,h:104,c1:'#c8a878',c2:'#8a6e42',c3:'#463620',score:1800,
+    myth:true,mythKind:'cyclops',grappler:true,squad:true,armor:true,accent:'#ffc890',name:'単眼のキュクロプス'},
+  // ---- 四周目の中ボス／ボス ----
+  mbPegas:{hp:1250,sp:2.6,dmg:26,atkR:104,w:144,h:106,gsc:1.4,c1:'#f6f2e4',c2:'#c8c0a8',c3:'#6e6650',score:11000,
+    boss:true,mini:true,myth:true,bigFoe:true,mythKind:'pegasus',zflyer:true,hoverZ:104,accent:'#ffe9a0',name:'白翼将ペガシオス'},
+  mbTitan:{hp:1700,sp:0.85,dmg:31,atkR:100,w:130,h:138,gsc:1.5,c1:'#9aa0a8',c2:'#5e646e',c3:'#2e3238',score:12000,
+    boss:true,mini:true,myth:true,bigFoe:true,mythKind:'titan',terraform:true,quakeAmp:120,quakeW:500,accent:'#ffd0a0',name:'巨人王アトラス'},
+  bsTyphon:{hp:2050,sp:1.7,dmg:34,atkR:116,w:150,h:140,gsc:1.6,c1:'#7a3a5a',c2:'#4a1e36',c3:'#220c18',score:16000,
+    boss:true,myth:true,bigFoe:true,mythKind:'gorgon',terraform:true,quakeDown:true,quakeAmp:120,quakeW:520,accent:'#ff6ad0',name:'万獣の父テュポーン'},
   // ── 五周目「戦国」の雑魚 ──
   // 兵種で役割を分ける。数で押す足軽、正面を通さない侍、隊を鼓舞する足軽大将、
   // 間合いを支配する弓と鉄砲、駆け抜ける騎馬、背後を取る忍び。
@@ -8276,6 +8298,10 @@ const BOSSMOVES={
   mbYanmar:  ['skyDive','dashThrust','spikeVolley','tripleStep','bulletHell'],   // 蜻蛉＝空からの刺突と弾幕
   // 三周目の侵略軍
   mbVisitor: ['skyDive','bulletHell','orbSpread','dashThrust','megaBeam'],       // 円盤＝上空からの掃射
+  // 四周目の神域
+  mbPegas:  ['skyDive','tripleStep','dashThrust','stormFall','bladeParry'],       // 天馬＝空から降りて突く
+  mbTitan:  ['groundSlam','hammerQuake','heavySwing','bodyCharge','unblockSmash'],// 巨人＝地を割る一撃
+  bsTyphon: ['bulletHell','spikeVolley','meteorCall','summon','megaTornado','bossGrab'],  // 万獣の父＝弾幕と召喚
   mbGravion: ['groundSlam','hammerQuake','meteorCall','bossGrab','unblockSmash'],// 重力＝地を押し下げ、落とす
   bsHive:    ['boltStrike','orbSpread','megaTornado','teleSlash','summon','bulletHell'],  // 意思＝念で撃ち、瞬間移動する
   mbKerad:   ['groundSlam','burrowBite','hammerQuake','bodyCharge','unblockSmash'],  // 土竜＝地を叩き、潜って噛む
@@ -11004,13 +11030,13 @@ const SPACE_FINAL={theme:15,name:'皇帝の玉座',len:1500,noPit:true,
   gates:[{off:560,list:[['greywan',1],['raygun',1],['floater',1],['probe',1]]},{off:1000,boss:true,final:true,list:[['emperorX',1]]}]};
 const MYTH_CH=[
   {theme:16,name:'オリュンポスの神域',terr:'tower',
-   gates:[{off:600,list:[['mythguard',1],['mythhop',1]]},{off:1000,list:[['mythblade',1],['mythflank',1],['mythseer',1]]},{off:1400,boss:true,list:[['zeus',1]]}],
+   gates:[{off:600,list:[['mythguard',1],['mythhop',1]]},{off:1000,list:[['mythblade',1],['mythflank',1],['mythseer',1]]},{off:1150,mini:true,list:[['bsTyphon',1]]},{off:1400,boss:true,list:[['zeus',1]]}],
    npc:{kind:'elder',name:'長老モフじい',once:true,lines:['お、おい…！雲の上に、白い柱の国が現れたぞい…！','あれは神々の座「オリュンポス」じゃ。人の世の外にある。','ここの兵は今までとまるで違う。数で押してはこん——順番に、間合いを計って来おる。','正面から殴り合うな。回り込め、引け、着地を狙え。','雷を司る主神ゼウスが、頂で待っておる。'],give:{heal:'full'}}},
   {theme:18,name:'海神の神殿',
-   gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
+   gates:[{off:560,list:[['mythguard',2],['mythseer',1]]},{off:960,list:[['mythhop',2],['mythblade',1]]},{off:1150,mini:true,list:[['mbPegas',1]]},{off:1400,boss:true,list:[['poseidon',1]]}],
    npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['また会ったな…！今度は海の底だぜ。','この神殿の主は三叉の槍を持ってる。大波が来るから、来ると分かったら跳べ。','青銅の盾持ちは正面が通らねえ。背中を取れ。']}},
   {theme:17,name:'冥府ステュクスの河',terr:'dive',
-   gates:[{off:560,list:[['mythflank',2],['mythblade',1]]},{off:960,list:[['mythbull',1],['mythguard',1],['mythseer',1]]},{off:1400,boss:true,list:[['hades',1]]}],
+   gates:[{off:560,list:[['mythflank',2],['mythblade',1]]},{off:960,list:[['mythbull',1],['mythguard',1],['mythseer',1]]},{off:1150,mini:true,list:[['mbTitan',1]]},{off:1400,boss:true,list:[['hades',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['ここから先は死者の国じゃ。生きたまま渡った者はおらん。','影が背に回るぞ。一体を追うな、囲まれる。','冥王ハデスは死者を呼ぶ。倒しても、倒しても——']}},
 ];
 // ── 五周目「戦国」の三章 ──
@@ -11952,7 +11978,8 @@ const BUG_ZAKO_POOL=['kamakiri','hachibo','kabuto','kumo','dangoro','mukade','ho
 // 三周目「宇宙人の侵略」の雑魚は宇宙人タイプのみで構成
 const ALIEN_ZAKO_POOL=['greywan','raygun','floater','probe','slimealien',
   'saucer','gravitor','beamer','crawler','abductor','clonepod','mindwave'];
-const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull'];
+const MYTH_ZAKO_POOL=['mythhop','mythguard','mythblade','mythflank','mythseer','mythbull',
+  'mythpeg','mythtitan','mythgorgo','mythcent','mythcerb','mythsiren','mythcyclo'];
 // 六周目「メカワンコキングダム」の雑魚は全て機械。犬タイプは混ぜない
 const MECHA_ZAKO_POOL=['mkShield','mkGun','mkBeam','mkFlank','mkHeavy','mkDrone','mkBomb','mkFix','mkDuel','mkBlink',
   'mkDozer','mkBone'];
@@ -13070,6 +13097,97 @@ function drawMythFoe(e,t){
     ctx.fillStyle=radGrad(bw*0.24,-bh*1.00,bh*0.13,'rgba(214,255,250,.95)','rgba(214,255,250,0)');
     ctx.beginPath(); ctx.arc(bw*0.24,-bh*1.00,bh*0.13,0,7); ctx.fill(); ctx.restore();
     ctx.fillStyle=t.accent; ctx.beginPath(); ctx.arc(bw*0.24,-bh*1.00,bh*0.05,0,7); ctx.fill(); }
+  else if(kind==='pegasus'){                             // 天馬：背の大翼と、握った短槍
+    const fl=Math.sin(anim*2.0)*0.35;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(-bw*0.06+sg*8, -bh*0.62+sg*5); ctx.rotate(sg? fl : -fl);
+      ctx.fillStyle=sg? '#ffffff' : shade(t.c2,16);
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(-bw*0.50,-bh*0.44, -bw*0.72,-bh*0.02);
+      ctx.quadraticCurveTo(-bw*0.42,-bh*0.04, 0,bh*0.08); ctx.fill();
+      ctx.strokeStyle='rgba(200,190,150,.6)'; ctx.lineWidth=1.6;
+      for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.moveTo(-bw*0.04,-bh*0.02);
+        ctx.quadraticCurveTo(-bw*0.30-k*6,-bh*0.20-k*3, -bw*0.62,-bh*0.02); ctx.stroke(); }
+      ctx.restore(); }
+    ctx.strokeStyle='#8a7a56'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(bw*0.04,-bh*0.52); ctx.lineTo(bw*0.52,-bh*0.66); ctx.stroke();
+    ctx.fillStyle=t.accent; ctx.beginPath();
+    ctx.moveTo(bw*0.50,-bh*0.72); ctx.lineTo(bw*0.70,-bh*0.66); ctx.lineTo(bw*0.50,-bh*0.60); ctx.fill(); }
+  else if(kind==='titan'){                               // 巨人：岩を纏った肩と、地を打つ拳
+    const sm=(e.state==='quakeWind')? Math.min(1,(34-(e.qwT||0))/14) : 0;
+    for(const sg of [-1,1]){ ctx.fillStyle=shade(t.c2,-8);
+      ctx.beginPath();
+      ctx.moveTo(sg*bw*0.16,-bh*0.72); ctx.lineTo(sg*bw*0.44,-bh*0.62);
+      ctx.lineTo(sg*bw*0.38,-bh*0.42); ctx.lineTo(sg*bw*0.14,-bh*0.48); ctx.fill();
+      ctx.fillStyle=shade(t.c1,16);
+      ctx.beginPath();
+      ctx.moveTo(sg*bw*0.20,-bh*0.70); ctx.lineTo(sg*bw*0.38,-bh*0.63);
+      ctx.lineTo(sg*bw*0.33,-bh*0.53); ctx.fill(); }
+    ctx.save(); ctx.translate(bw*0.26,-bh*0.36); ctx.rotate(-0.5-sm*0.9);
+    ctx.fillStyle=shade(t.c2,10); ctx.beginPath(); ctx.arc(0,0,bh*0.14,0,7); ctx.fill();
+    ctx.fillStyle=shade(t.c1,20); ctx.beginPath(); ctx.arc(-3,-3,bh*0.07,0,7); ctx.fill();
+    ctx.restore();
+    if(sm>0.5){ ctx.strokeStyle='rgba(255,208,160,'+(0.4*sm).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(0,-bh*0.4,bh*0.5+sm*16,0,7); ctx.stroke(); } }
+  else if(kind==='gorgon'){                              // ゴルゴー：蛇の髪と、下半身の巻いた尾
+    const wr=Math.sin(anim*1.6);
+    ctx.strokeStyle=shade(t.c1,20); ctx.lineWidth=4; ctx.lineCap='round';
+    for(let k=0;k<6;k++){ const a=-2.4+k*0.42, sw=Math.sin(anim*2.2+k)*5;
+      ctx.beginPath(); ctx.moveTo(hx,hy-bh*0.02);
+      ctx.quadraticCurveTo(hx+Math.cos(a)*bh*0.20+sw, hy+Math.sin(a)*bh*0.20,
+                           hx+Math.cos(a)*bh*0.30+sw*1.4, hy+Math.sin(a)*bh*0.30); ctx.stroke(); }
+    ctx.fillStyle=t.c2;
+    ctx.beginPath(); ctx.moveTo(-bw*0.12,-bh*0.30);
+    ctx.quadraticCurveTo(-bw*0.52,-bh*0.10+wr*4, -bw*0.30,bh*0.02);
+    ctx.quadraticCurveTo(-bw*0.10,-bh*0.06, bw*0.10,-bh*0.24); ctx.fill();
+    ctx.fillStyle=shade(t.c1,26);
+    for(let k=0;k<4;k++){ ctx.beginPath();
+      ctx.ellipse(-bw*(0.14+k*0.09), -bh*(0.24-k*0.05)+wr*2, bw*0.05, bh*0.035, 0.4,0,7); ctx.fill(); } }
+  else if(kind==='centaur'){                             // ケンタウロス：馬体の下半身と大弓
+    ctx.fillStyle=t.c2;
+    ctx.beginPath(); ctx.ellipse(-bw*0.16,-bh*0.26,bw*0.32,bh*0.18,0,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,10); ctx.lineWidth=6; ctx.lineCap='round';
+    for(let i=0;i<2;i++) for(const sg of [-1,1]){
+      const lx=-bw*(0.04+i*0.24), sw=Math.sin(anim*2.4+i*2+(sg>0?0:Math.PI))*6;
+      ctx.beginPath(); ctx.moveTo(lx,-bh*0.16);
+      ctx.lineTo(lx+sw*0.5,-bh*0.06); ctx.lineTo(lx+sw,0); ctx.stroke(); }
+    ctx.strokeStyle='#f0e0b8'; ctx.lineWidth=3.4;
+    ctx.beginPath(); ctx.arc(bw*0.24,-bh*0.60,bh*0.24,-1.15,1.15); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(bw*0.24+Math.cos(-1.15)*bh*0.24,-bh*0.60+Math.sin(-1.15)*bh*0.24);
+    ctx.lineTo(bw*0.24+Math.cos(1.15)*bh*0.24,-bh*0.60+Math.sin(1.15)*bh*0.24); ctx.stroke(); }
+  else if(kind==='hound'){                               // ケルベロイ：低い体に三つの首
+    ctx.fillStyle=t.c2;
+    ctx.beginPath(); ctx.ellipse(-bw*0.10,-bh*0.34,bw*0.34,bh*0.20,0,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,6); ctx.lineWidth=6; ctx.lineCap='round';
+    for(let i=0;i<2;i++) for(const sg of [-1,1]){ const lx=-bw*(0.02+i*0.22), sw=Math.sin(anim*2.6+i*2+(sg>0?0:Math.PI))*6;
+      ctx.beginPath(); ctx.moveTo(lx,-bh*0.24); ctx.lineTo(lx+sw,0); ctx.stroke(); }
+    for(let k=-1;k<=1;k++){ ctx.save(); ctx.translate(bw*0.16+k*4, -bh*(0.50+Math.abs(k)*0.02)); ctx.rotate(k*0.34);
+      ctx.fillStyle=k? shade(t.c2,-6) : shade(t.c1,14);
+      ctx.beginPath(); ctx.ellipse(0,0,bh*0.13,bh*0.10,0,0,7); ctx.fill();
+      ctx.fillStyle=shade(t.c1,10); ctx.beginPath(); ctx.ellipse(bh*0.10,bh*0.02,bh*0.07,bh*0.05,0,0,7); ctx.fill();
+      ctx.fillStyle='#ff6a4a'; ctx.beginPath(); ctx.arc(bh*0.02,-bh*0.02,2.6,0,7); ctx.fill();
+      ctx.restore(); } }
+  else if(kind==='siren'){                               // セイレーン：羽根の腕と、歌の波紋
+    const fl=Math.sin(anim*1.8)*0.4;
+    for(const sg of [0,1]){ ctx.save(); ctx.translate(-bw*0.02+sg*7,-bh*0.52+sg*4); ctx.rotate(sg? fl : -fl*1.2);
+      ctx.fillStyle=sg? shade(t.c1,20) : t.c2;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(-bw*0.34,-bh*0.22,-bw*0.54,bh*0.10);
+      ctx.quadraticCurveTo(-bw*0.28,-bh*0.02,0,bh*0.06); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle=t.accent; ctx.lineWidth=2;
+    for(let k=1;k<=3;k++){ const ph=(gf*0.035+k*0.33)%1; ctx.globalAlpha=0.45*(1-ph);
+      ctx.beginPath(); ctx.arc(hx+bh*0.06, hy+bh*0.04, bh*(0.16+ph*0.7), -1.0, 1.0); ctx.stroke(); }
+    ctx.restore(); }
+  else if(kind==='cyclops'){                             // キュクロプス：太い腕と、額の単眼
+    for(const sg of [-1,1]){ ctx.strokeStyle=t.c2; ctx.lineWidth=13; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(sg*bw*0.12,-bh*0.62);
+      ctx.quadraticCurveTo(sg*bw*0.40,-bh*0.48, sg*bw*0.36,-bh*0.20); ctx.stroke(); }
+    ctx.fillStyle=shade(t.c1,20);
+    ctx.beginPath(); ctx.ellipse(hx+bh*0.02, hy-bh*0.02, bh*0.09, bh*0.085, 0,0,7); ctx.fill();
+    ctx.fillStyle='#2a1a10'; ctx.beginPath(); ctx.arc(hx+bh*0.04, hy-bh*0.02, bh*0.045,0,7); ctx.fill();
+    ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(hx+bh*0.02, hy-bh*0.04, bh*0.016,0,7); ctx.fill();
+    ctx.strokeStyle=shade(t.c3,10); ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(hx-bh*0.08,hy-bh*0.10); ctx.lineTo(hx+bh*0.12,hy-bh*0.13); ctx.stroke(); }
   else if(kind==='bull'){                                // 牛頭＋双斧
     ctx.fillStyle=t.c2; ctx.beginPath(); ctx.ellipse(hx+bw*0.06,hy+bh*0.03,bh*0.10,bh*0.075,0,0,7); ctx.fill();
     ctx.strokeStyle='#efe6cf'; ctx.lineWidth=5; ctx.lineCap='round';
@@ -21660,6 +21778,7 @@ function drawGacha(){
 const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワンワン帝国  攻城隊長', bsGriff:'ワンワン帝国  空の斥候長',
   mbYanmar:'大蟲帝国  空戦隊長', mbKerad:'大蟲帝国  掘削将', bsGranAnt:'大蟲帝国  地底の帝',
   mbVisitor:'銀河侵略軍  空挺分隊', mbGravion:'銀河侵略軍  重力兵団長', bsHive:'銀河侵略軍  母船の意思',
+  mbPegas:'神域  天馬騎兵長', mbTitan:'神域  巨人族の王', bsTyphon:'神域  万獣の父',
   garm:'ワンワン帝国  第一の将', gigas:'ワンワン帝国  第二の将', vesper:'ワンワン帝国  第三の将',
   moloch:'ワンワン帝国  第四の将', cerbe:'ワンワン帝国  第五の将', glaton:'ワンワン帝国  第六の将', emperor:'ワンワン帝国  覇王',
   dragon:'帝国の飛竜', ghost:'帝国の亡霊三兄弟', slime:'帝国の軟体兵団', rival:'漆黒の犬士',
