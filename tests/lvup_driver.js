@@ -160,8 +160,14 @@ const DRIVER = `
       // 発生前はキャンセルできないこと（撃つ前から次の技へ飛べては困る）
       feed(p,[1,2,1]); p.in.pressed.atk=true; updatePlayer(p);
       if(p.atk && p.atk.type!==hadou) throw new Error(k+'：発生前にキャンセルできてしまう');
+      // 押しっぱなしを解く。ここを残すと、発生フレームに届いた瞬間に勝手にキャンセルが
+      // 走って「二度目の入力で繋がったのか、さっきの入力が遅れて効いたのか」が分からない
+      // （実際ヌコはここで昇竜へ飛び、昇竜のまま最後の判定を素通りしていた）
+      p.in.pressed.atk=false; p.in.K.atk=false; p.in.cardSeq.length=0; consumeCmd();
       // 発生後（hold ぶんも進めてから）は昇竜へ繋がること
       for(let f=0;f<ATK[hadou].act[0]+(ATK[hadou].hold|0)+2;f++) updatePlayer(p);
+      if(!p.atk || p.atk.type!==hadou)
+        throw new Error(k+'：二度目の入力を待つ前に技が '+(p.atk?p.atk.type:'技なし')+' へ変わっている');
       feed(p,[1,2,1]); p.in.pressed.atk=true; updatePlayer(p);
       if(!p.atk || p.atk.type!==dp)
         throw new Error(k+'：波動('+ATK[hadou].name+')から昇竜('+ATK[dp].name+')へ繋がらない（'+(p.atk?p.atk.type:'技なし')+'）');
