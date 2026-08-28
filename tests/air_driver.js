@@ -471,35 +471,78 @@ const DRIVER = `
       if(r.djUsed) throw new Error('地上へ降りる間に二段ジャンプが消費されている'); }
     console.log('二段ジャンプの割り込み OK (空中攻撃はキャンセルできる／回避中は割り込めない)'); }
 
-  // ===== 18) メテオ技：宙で止まってから落ち、敵を地面へ叩きつけて跳ね返す =====
-  { ['guard8'].forEach(function(k){
-      const id=airSpecialFor({kind:k},'dp'), def=ATK[id];
-      if(!def.airMeteor) throw new Error(k+' の空中昇竜がメテオ技になっていない');
-      const p=setup(k);
-      p.state='jump'; p.z=230; p.vz=0; p.jAtk=0;
+  // ===== 18) 作り直した4つの空中コマンド技が、それぞれ別の運び方をしている =====
+  //   期待値は直値で書く。技の定数（airDive.at / hangDrop / act）から作ると、
+  //   その定数を壊した改変を素通りする
+  { const air=function(k, sl, gateName, z0, place, pin){
+      const p=setup(k); const id=airSpecialFor(p, sl);
+      p.state='jump'; p.z=z0; p.vz=0; p.jAtk=0; p.invuln=99999;
       enemies.length=0;
       const list=[];
-      for(let j=0;j<4;j++){ spawnEnemy('wolf', p.x-60+j*44, p.y); const e=enemies[enemies.length-1];
-        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); }
-      const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
-      const rd=dpReady; dpReady=function(){ return true; };
-      try{ p.in.pressed.atk=true; step(1); } finally { dpReady=rd; }
-      if(!p.atk || p.atk.type!==id) throw new Error(k+' のメテオ技が出ない');
-      // 構えの間は落ちない
-      const z0=p.z;
-      for(let f=0;f<(def.airHover|0)-1;f++) step(1);
-      if(!(p.z > z0-30)) throw new Error(k+' が構えの間に落ちている（'+Math.round(z0)+'→'+Math.round(p.z)+'）');
-      // そのあと落ちて着弾する
-      let hi=0, bounced=0;
-      for(let f=0;f<160;f++){ hitStop=0; slowmo=0;
-        list.forEach(function(e){ e.x=e._fx; e.vx=0; });
-        step(1);
-        list.forEach(function(e){ if((e.vz||0)>2 && e.z>2) bounced++; }); }
-      const dmg=hp0-list.reduce(function(a2,e){ return a2+e.hp; },0);
-      if(!(dmg>0)) throw new Error(k+' のメテオ技が当たらない');
-      if(!(bounced>0)) throw new Error(k+' のメテオ技で敵が跳ね返らない');
-      if(p.z>4) throw new Error(k+' のメテオ技が着地しない（z='+Math.round(p.z)+'）'); });
-    console.log('メテオ技 OK (ガードワン：構えの間は滞空→落下→着弾で地面バウンド)'); }
+      (place||[]).forEach(function(dx){ spawnEnemy('wolf', p.x+dx, p.y);
+        const e=enemies[enemies.length-1];
+        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); });
+      const real=global[gateName]; global[gateName]=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { global[gateName]=real; }
+      if(!p.atk || p.atk.type!==id) throw new Error(k+'/'+sl+' が出ない（'+(p.atk&&p.atk.type)+'）');
+      const x0=p.x, zs=[p.z], xs=[p.x], vzs=[];
+      const px0=p.x;
+      for(let f=0;f<150;f++){ hitStop=0; slowmo=0;
+        list.forEach(function(e){ e.x=e._fx; e.vx=0; e.z=0; e.state='walk'; });
+        if(pin) p.x=px0;
+        step(1); zs.push(p.z); xs.push(p.x); vzs.push(p.vz||0); }
+      return {p:p, id:id, def:ATK[id], zs:zs, xs:xs, vzs:vzs, x0:x0, list:list,
+              dmg:list.map(function(e){ return e.maxHp-e.hp; })}; };
+
+    // ── イッヌ：一度真上へ抜けてから、斜め下へ突っ込む（V字） ──
+    { const r=air('inu','dp','dpReady', 120, [], false);
+      const peak=Math.max.apply(null, r.zs), last=r.zs[r.zs.length-1];
+      if(!(peak>r.zs[0]+60)) throw new Error('イッヌの空中昇竜が上へ抜けない（'+Math.round(r.zs[0])+'→頂点'+Math.round(peak)+'）');
+      if(!(last<=4)) throw new Error('イッヌの空中昇竜が落ちてこない（z='+Math.round(last)+'）');
+      const fwd=Math.abs(r.xs[r.xs.length-1]-r.x0);
+      if(!(fwd>150)) throw new Error('イッヌの空中昇竜が前へ '+Math.round(fwd)+'px しか進まない（真上に跳ぶだけ）');
+      // 頂点が前半に来ること＝「上がってから落ちる」順序（落ちてから上がるのでは別技）
+      let pi=0; for(let i=0;i<r.zs.length;i++) if(r.zs[i]===peak) pi=i;
+      if(!(pi<26)) throw new Error('イッヌの空中昇竜の頂点が '+pi+'F 目（先に上がってから落ちること）'); }
+
+    // ── ガードワン：落ちずに滞空したまま前へ滑る（大車輪） ──
+    { const r=air('guard8','dp','dpReady', 200, [], false);
+      const hang=r.zs.slice(0,40);
+      const drop=hang[0]-Math.min.apply(null, hang);
+      if(!(drop<40)) throw new Error('ガードワンの空中昇竜が滞空せず '+Math.round(drop)+'px 落ちる');
+      const fwd=Math.abs(r.xs[40]-r.x0);
+      if(!(fwd>100)) throw new Error('ガードワンの空中昇竜が前へ '+Math.round(fwd)+'px しか進まない（その場で止まっている）');
+      if(!(r.zs[r.zs.length-1]<=4)) throw new Error('ガードワンの空中昇竜が最後まで落ちてこない');
+      // 落ちて叩きつける技ではなくなったこと（同じ技に戻す改変を弾く）
+      if(r.def.airMeteor) throw new Error('ガードワンの空中昇竜が落下メテオのまま'); }
+    // 回転しているので、前だけでなく背後の敵も刈る
+    { const r=air('guard8','dp','dpReady', 200, [-64, 64], true);
+      if(!(r.dmg[0]>0)) throw new Error('ガードワンの大車輪が背後の敵に当たらない（回っていない）');
+      if(!(r.dmg[1]>0)) throw new Error('ガードワンの大車輪が前の敵に当たらない'); }
+
+    // ── ワッチ：糸で引き上げられ、そのあと一定の速さで降りてくる（急降下しない） ──
+    { const r=air('watch','du','downUpReady', 90, [], false);
+      if(!(r.zs[2]>r.zs[0]+20)) throw new Error('ワッチの空中↓↑が糸で引き上げられない（'+Math.round(r.zs[0])+'→'+Math.round(r.zs[2])+'）');
+      let maxStep=0;
+      for(let i=3;i<40;i++){ const d=r.zs[i-1]-r.zs[i]; if(d>maxStep) maxStep=d; }
+      if(!(maxStep>0.5)) throw new Error('ワッチの空中↓↑が降りてこない（その場ホバー）');
+      if(!(maxStep<4)) throw new Error('ワッチの空中↓↑が1フレームで '+maxStep.toFixed(1)+'px 落ちる（糸で降りているように見えない）'); }
+    { const r=air('watch','du','downUpReady', 120, [-60, 60], true);
+      if(!(r.dmg[0]>0 && r.dmg[1]>0)) throw new Error('ワッチの影車が前後の敵をまとめて刈れない（'+r.dmg.join('/')+'）'); }
+
+    // ── ワンデン：真下だけを斬る（横には届かない）／振り下ろしで一気に落ちる ──
+    { const r=air('wanden','du','downUpReady', 160, [0, 120], true);
+      if(!(r.dmg[0]>0)) throw new Error('ワンデンの空中↓↑が真下の敵に当たらない');
+      if(r.dmg[1]>0) throw new Error('ワンデンの空中↓↑が 120px 横の敵にも当たる（真下へ落とす斬撃になっていない）');
+      if(!(r.dmg[0]>=30)) throw new Error('ワンデンの空中↓↑が '+r.dmg[0]+' しか削らない（当たれば重い一撃のはず）');
+      // 「いつか落ちる」ではなく「振り下ろしと同時に一気に落ちる」ことを見る。
+      // 最速 vz だけだと、重力に任せて落ちても 40F ほどで到達して素通りした
+      let jerk=0;
+      for(let i=1;i<60;i++){ const d=r.vzs[i-1]-r.vzs[i]; if(d>jerk) jerk=d; }
+      if(!(jerk>5)) throw new Error('ワンデンの空中↓↑で落下が一気に始まらない（1F の加速が最大 '+jerk.toFixed(1)+'px・重力だけなら 0.5）');
+      const fastest=Math.min.apply(null, r.vzs.slice(0,60));
+      if(!(fastest<=-9)) throw new Error('ワンデンの空中↓↑で落下が始まらない（最速 vz='+fastest.toFixed(1)+'）'); }
+    console.log('作り直した空中コマンド技 OK (イッヌ=上へ抜けて急降下／ガードワン=滞空して前進・背後も刈る／ワッチ=吊られて降下／ワンデン=真下だけを斬る)'); }
 
   // ===== 19) マックの空中3枠：斜め下マグナム／前方ガトリング／全周掃射 =====
   { const shots=function(sl, gate){
@@ -751,6 +794,121 @@ const DRIVER = `
     perfTier=_pt;
     console.log('ヌコの空中奥義の見た目 OK (星印 同時'+stars+'個/'+starF+'F・線 同時'+lines+'本 最長'+Math.round(lineLen)
       +'px/'+lineF+'F・重なって見える'+bothAt+'F・印だけの間'+markOnly+'F・締めの星座'+fin+'本)'); }
+
+  // ===== 22) 飛び上がる地上技から空中コマンド技へ繋がる =====
+  { const feed=function(p,seq){ p.in.cardSeq.length=0;
+      for(let i=0;i<seq.length;i++) p.in.cardSeq.push({c:seq[i], f:gf-(seq.length-i)*2}); };
+    const ok=[];
+    KINDS.forEach(function(k){
+      const p=setup(k);
+      const dp=specialFor(p,'dp');
+      if(!ATK[dp] || !ATK[dp].rise) return;              // 飛び上がる昇竜を持つキャラだけが対象
+      beginAttack(dp);
+      for(let f=0;f<40 && p.z<=6 && p.state==='attack';f++){ hitStop=0; slowmo=0; step(1); }
+      if(!(p.z>6)) throw new Error(k+' の昇竜が飛び上がらない（z='+Math.round(p.z)+'）');
+      hitStop=0; slowmo=0;                                // 止まっている間は入力が読まれない
+      const want=airSpecialFor(p,'du');
+      const real=downUpReady; downUpReady=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { downUpReady=real; }
+      if(!p.atk || p.atk.type!==want)
+        throw new Error(k+'：飛び上がる昇竜から空中↓↑（'+ATK[want].name+'）へ繋がらない（'+(p.atk&&p.atk.type)+'）');
+      if(!p.atk.air) throw new Error(k+'：繋いだ先が空中技として扱われていない');
+      if(!(p.z>6)) throw new Error(k+'：繋いだ瞬間に地面へ落ちている');
+      ok.push(k); });
+    if(ok.length<3) throw new Error('飛び上がる昇竜から繋げたのが '+ok.length+' キャラしかない');
+    // 地上に立ったままの技からは繋がらない（波動を空中技に化けさせない）
+    { const p=setup('nuko');
+      const hadou=specialFor(p,'hadou');
+      beginAttack(hadou);
+      for(let f=0;f<ATK[hadou].act[0]+2;f++){ hitStop=0; slowmo=0; p.z=0; step(1); }
+      p.z=0; hitStop=0; slowmo=0;
+      const real=downUpReady; downUpReady=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { downUpReady=real; }
+      if(p.atk && p.atk.air) throw new Error('地上の波動から空中技へ化けてしまう（'+p.atk.type+'）'); }
+    console.log('昇竜→空中コマンド OK ('+ok.length+'キャラ／地上に立つ技からは繋がらない)'); }
+
+  // ===== 23) 地上のコマンド技はジャンプで切り上げられる（奥義は切れない） =====
+  { const ok=[];
+    KINDS.forEach(function(k){
+      ['hadou','du'].forEach(function(sl){
+        const p=setup(k); const id=specialFor(p,sl);
+        if(!ATK[id] || ATK[id].rise) return;             // 飛び上がる技はそもそも地上に居ない
+        beginAttack(id);
+        for(let f=0;f<3;f++){ if(p.state!=='attack') return; hitStop=0; slowmo=0; step(1); }
+        if(p.state!=='attack') return;
+        hitStop=0; slowmo=0; p.in.pressed.jump=true; step(1);
+        if(p.state!=='jump') throw new Error(k+'/'+sl+'（'+ATK[id].name+'）がジャンプで切り上げられない（'+p.state+'）');
+        if(p.atk) throw new Error(k+'/'+sl+' の技が残ったまま跳んでいる');
+        for(let f=0;f<6;f++){ hitStop=0; slowmo=0; step(1); }
+        if(!(p.z>20)) throw new Error(k+'/'+sl+' のキャンセルで '+Math.round(p.z)+'px しか浮かない');
+        ok.push(k+'/'+sl); }); });
+    if(ok.length<8) throw new Error('ジャンプで切り上げられた技が '+ok.length+' 通りしかない');
+    // 奥義は切り上げられない（跳んで無敵だけ持ち帰れては困る）
+    { const p=setup('inu'); p.dimMax=9; p.dim=9;
+      const real=rotationReady; rotationReady=function(){ return true; };
+      try{ p.in.pressed.atk=true; step(1); } finally { rotationReady=real; }
+      if(!p.atk || !(p.atk.def.ultMove||p.atk.def.dimBlade)) throw new Error('奥義が出ていない（'+(p.atk&&p.atk.type)+'）');
+      for(let f=0;f<3;f++){ hitStop=0; slowmo=0; step(1); }
+      hitStop=0; slowmo=0; p.in.pressed.jump=true; step(1);
+      if(p.state==='jump') throw new Error('奥義がジャンプで切り上げられてしまう'); }
+    console.log('ジャンプキャンセル OK ('+ok.length+'通りの地上コマンド技／奥義は切れない)'); }
+
+  // ===== 24) 踏み台ジャンプ：敵の頭を蹴ると跳べる回数が戻る =====
+  { const rise=function(p){ let ap=p.z; for(let f=0;f<40;f++){ hitStop=0; slowmo=0; step(1); if(p.z>ap) ap=p.z; if(p.vz<=0) break; } return ap; };
+    const jmp=function(q){ hitStop=0; slowmo=0; q.in.pressed.jump=true; step(1); };
+    // 敵がいなければ三段目は無い（従来どおり）
+    { const p=setup('inu'); enemies.length=0;
+      jmp(p); rise(p);
+      jmp(p); rise(p);
+      const z3=p.z; jmp(p);
+      if(p.vz>0.5) throw new Error('敵がいないのに三段目が跳べる（vz='+p.vz.toFixed(1)+'）'); }
+    // 敵の頭上でジャンプ＝踏み台。回数が戻り、もう一度二段ジャンプできる
+    { const p=setup('inu');
+      // 敵は遠くに置いてから跳ぶ。近くに居ると二段目そのものが踏み台になってしまい、
+      // 「回数を使い切ったあとに戻ったのか」が測れない
+      enemies.length=0; spawnEnemy('wolf', p.x+600, p.y);
+      const e=enemies[0]; e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x;
+      jmp(p); rise(p);
+      jmp(p); rise(p);          // ここで二段目を使い切る
+      if(!p.djUsed) throw new Error('二段ジャンプを使ったのに記録が残っていない');
+      const hp0=e.hp;
+      e.x=p.x; e.vx=0;
+      const zB=p.z;
+      jmp(p);
+      if(!(p.vz>0)) throw new Error('踏み台ジャンプで上を向かない（vz='+(p.vz||0).toFixed(1)+'）');
+      if(p.djUsed) throw new Error('踏み台を踏んでも跳べる回数が戻らない');
+      if(!(hp0-e.hp>0)) throw new Error('踏み台にした敵にダメージが入らない');
+      const ap=rise(p);
+      if(!(ap>zB+80)) throw new Error('踏み台ジャンプで '+Math.round(ap-zB)+'px しか上がらない');
+      // 戻ってきた二段ジャンプを使い切ってから、同じ敵をもう一度踏もうとする。
+      // 同じ相手は着地するまで一度きり（その場に浮き続けられては困る）
+      e.x=p.x; e.vx=0; jmp(p); rise(p);
+      if(!p.djUsed) throw new Error('踏み台のあとの二段ジャンプが記録されていない');
+      e.x=p.x; e.vx=0; jmp(p);
+      if(p.vz>0.5) throw new Error('同じ敵を何度も踏める（vz='+p.vz.toFixed(1)+'）');
+      // 別の敵なら踏める
+      enemies.length=0; spawnEnemy('wolf', p.x, p.y);
+      const e2=enemies[0]; e2.hp=e2.maxHp=99999; e2.poise=99999; e2.thinkCd=99999;
+      e2.x=p.x; jmp(p);
+      if(!(p.vz>0)) throw new Error('別の敵を踏み台にできない'); }
+    // 遠い敵は踏めない
+    { const p=setup('inu');
+      enemies.length=0; spawnEnemy('wolf', p.x+240, p.y);
+      const e=enemies[0]; e.thinkCd=99999; e._fx=e.x;
+      jmp(p); rise(p);
+      jmp(p); rise(p);
+      e.x=e._fx; jmp(p);
+      if(p.vz>0.5) throw new Error('240px 離れた敵を踏み台にできてしまう'); }
+    // 着地すれば記録は消える
+    { const p=setup('inu');
+      enemies.length=0; spawnEnemy('wolf', p.x, p.y);
+      const e=enemies[0]; e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999;
+      jmp(p); rise(p);
+      e.x=p.x; jmp(p);
+      if(!p.stompSet || p.stompSet.size!==1) throw new Error('踏んだ相手が記録されていない');
+      for(let f=0;f<120 && p.z>0;f++){ hitStop=0; slowmo=0; e.x=p.x-400; step(1); }
+      if(p.stompSet) throw new Error('着地しても踏み台の記録が残っている'); }
+    console.log('踏み台ジャンプ OK (敵の頭で回数が戻る／同じ敵は着地まで一度／遠い敵は踏めない)'); }
 
   console.log('AERIAL TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
