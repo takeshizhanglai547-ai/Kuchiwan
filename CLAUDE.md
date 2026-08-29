@@ -24,8 +24,12 @@
 ## テスト
 
 ```bash
-bash tests/runall.sh          # 18スイート
+bash tests/runall.sh          # 35スイート
 ```
+
+ラスボス戦だけを確かめたいときは、ブラウザで `beltaction.html#bosstest` を開く
+（キャラ指定は `#bosstest=guard8`）。大王座を頭から歩き直さずに、王機オメガの
+三形態と溶鉱炉のイベント戦だけに入れる。テストからは `startBossTest('guard8')`。
 
 テストは `tests/` にある（以前は `/tmp` に置いていたが、実行環境が使い捨てなので
 セッションのたびに失われていた）。ドライバは `tests/*_driver.js`、ハーネスは

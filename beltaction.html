@@ -22697,6 +22697,34 @@ function fadeOverlay(el,cb){
   if(!el || el.classList.contains('hidden')){ cb&&cb(); return; }
   el.classList.add('fading');
   setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fading'); cb&&cb(); }, 260); }
+// ══════════════════════════════════════════════════════════════
+//  試験ステージ：六周目のラスボス戦だけを切り出す
+// ══════════════════════════════════════════════════════════════
+// 大王座を頭から歩き直さないと最終戦に辿り着けないので、三形態＋溶鉱炉の
+// イベント戦だけを確かめる場所を用意する。
+//   ブラウザ：beltaction.html#bosstest（キャラ指定は #bosstest=guard8）
+//   テスト  ：startBossTest('guard8') を直接呼ぶ（本編と同じ関門・カットを通る）
+const BOSS_TEST_STAGE={theme:30, name:'試験：ラスボス戦', len:2600, noPit:true,
+  gates:[{off:520, boss:true, final:true, list:[['mkOmega',1]]}]};
+function startBossTest(kind){
+  unlockAudio();
+  if(kind) setupRoster(kind);
+  lap=6; endingDone=false; cut=null; hardMode=false;
+  camX=0; particles=[]; enemies=[]; projectiles=[]; items=[]; amb=[]; hazards=[]; carriers=[]; gimWarn=[];
+  combo.count=0; shopPending=0; slowmo=0; slowAcc=0; stageBanner=0; hitStop=0;
+  levelsDone={}; mapSel=0; curLevelId='bosstest'; curLevelFinal=true;
+  resetWorldState();
+  addBlocks([BOSS_TEST_STAGE], null);
+  stage=1; for(const k in STAGE2THEME){ stage=k|0; break; }
+  // 試験なので、技が一通り出る状態から始める（Lv1で最終戦だけ挑んでも読み合いにならない）
+  players.forEach(p=>{ if(p.active){ resetPlayer(p,false); p.level=20; p.dim=p.dimMax=3;
+    p.x=clamp(120+p.pid*60, 30, WORLD_END-30); } });
+  camX=0; camReset(); player=players[0]; goArrow=0; gimOn=false;
+  if(elStart) elStart.classList.add('hidden');
+  if(elResult) elResult.classList.add('hidden');
+  state='play';
+  if(sndOn){ if(!Music.isPlaying())Music.start('battle'); else Music.setMode('battle'); }
+}
 function beginAdventure(){
   const go=()=>{
     if(ng2Sel>=6){ startGame(); coins=1400; startNG6(); return; }
@@ -23196,7 +23224,14 @@ function loopBody(){
   drawScreenFx();
   requestAnimationFrame(loop);
 }
-buildEncounters(); loop();
+buildEncounters();
+// #bosstest で開くと、タイトルを飛ばしてラスボス戦の試験ステージから始まる
+try{ const _h=String(location.hash||'');
+  if(_h.indexOf('#bosstest')===0){
+    const _k=(_h.split('=')[1]||'guard8');
+    const _ok=['inu','shima','nuko','guard8','watch','wanden','mack'];
+    startGame(); startBossTest(_ok.indexOf(_k)>=0? _k : 'guard8'); } }catch(_e){}
+loop();
 </script>
 </body>
 </html>
