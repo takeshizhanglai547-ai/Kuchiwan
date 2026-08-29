@@ -391,19 +391,43 @@ const DRIVER = `
   { setupRoster('guard8'); startGame(); state='play';
     const q=players[0]; player=q; q.hp=q.maxHp=99999; q.invuln=99999;
     enemies.length=0; items.length=0; t1kReset();
-    // 第一形態が湧いた時点で、もう溶鉱炉のイベント戦であること。
-    // t1kBegin は spawnEnemy からしか呼ばれないので、第三形態にだけ印を付けると
-    // 進化で辿り着く本番では一度も始まらない
+    // イベント戦は「液体金属になってから」。第一・第二形態では始まらないこと
     spawnEnemy('mkOmega', 900, LANE); const e=enemies[0];
-    if(!t1k.on) throw new Error('第一形態でイベント戦が始まらない');
-    if(!(t1k.furnace>e.x)) throw new Error('溶鉱炉が前方に置かれていない');
+    if(t1k.on) throw new Error('第一形態でイベント戦が始まっている（第三形態の戦いのはず）');
+    // 湧いた直後に始めてしまうと、t1kTick が「液体金属が居ない」と見て
+    // 次のフレームで自分で消す。回してもイベントが立っていないことまで見る
+    for(let f=0;f<30;f++){ hitStop=0; slowmo=0; t1kTick(); }
+    if(t1k.on) throw new Error('第一形態でイベント戦が立っている');
     // 形態変化のカットインが「その形態自身」の名乗りを喋ること。
     // bossKind で引くと、体型を流用した形態が流用元（ガードワン零号）を名乗る
     const said=[];
     const realCut=startCutscene;
     startCutscene=function(sc,cb){ sc.forEach(function(x){
       said.push((x.name||'')+'|'+(x.role||'')+'|'+(x.text||'')); }); if(cb)cb(); };
-    try{ e.hp=1; killEnemy(e); e.hp=1; killEnemy(e); } finally { startCutscene=realCut; }
+    try{
+      e.hp=1; killEnemy(e);                                   // 第一 → 第二
+      if(e.type!=='mkOmega2') throw new Error('第二形態へ変わらない（'+e.type+'）');
+      for(let f=0;f<30;f++){ hitStop=0; slowmo=0; t1kTick(); }
+      if(t1k.on) throw new Error('第二形態でイベント戦が始まっている');
+      e.hp=1; killEnemy(e);                                   // 第二 → 第三（液体金属）
+      if(e.type!=='mkOmega3') throw new Error('第三形態へ変わらない（'+e.type+'）');
+    } finally { startCutscene=realCut; }
+    // ここからが本番。進化で辿り着いた第三形態でイベント戦が立ち、消えないこと
+    if(!t1k.on) throw new Error('第三形態へ進化してもイベント戦が始まらない');
+    if(!(t1k.furnace>e.x)) throw new Error('溶鉱炉が前方に置かれていない');
+    { const fx=t1k.furnace;
+      let live=0;
+      for(let f=0;f<600;f++){ hitStop=0; slowmo=0; t1kTick(); updateItems();
+        if(!t1k.on) throw new Error('イベント戦が '+f+'F で消えた（t1kTick が液体金属を見つけられていない）');
+        live=Math.max(live, items.filter(function(q){ return q.kind==='evsg'||q.kind==='evgl'; }).length); }
+      if(t1k.furnace!==fx) throw new Error('炉の位置が動いている');
+      if(!(live>0)) throw new Error('イベント戦の火器が一度も湧かない');
+      // 殴っても倒せない（撃って炉へ落とすしかない）
+      e.hp=1; killEnemy(e);
+      if(e.dead) throw new Error('第三形態が殴りで倒せてしまう（イベント戦になっていない）');
+      // 撃てば炉の方へ寄る
+      const x0=e.x; t1kShove(e, 30);
+      if(!(e.x>x0+10)) throw new Error('撃ち込んでも炉へ寄らない（'+Math.round(x0)+'→'+Math.round(e.x)+'）'); }
     if(said.length<2) throw new Error('形態変化のカットインが出ない（'+said.length+'件）');
     said.forEach(function(x){
       if(x.indexOf('ガードワン')>=0 || x.indexOf('門番')>=0 || x.indexOf('八代目')>=0)
