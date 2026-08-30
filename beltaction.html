@@ -11491,6 +11491,7 @@ function startVersus(){ unlockAudio();
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   state='play'; if(sndOn){ Music.stop(); Music.start('bossrival'); } }
 function endVersus(){ vsMode=false; TWO_P=false; camLockX=null; gimOn=true;
+  players[1].active=false; setTouchMode(false);   // 一人用の操作面へ戻す
   players.forEach(function(p){ p.vsStock=0; });
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;
   cut=null; hitStop=0; slowmo=0; flash=0; shake=0; quake=0; state='title';
@@ -22794,7 +22795,9 @@ sndBtn.onclick=()=>{ initAudio(); sndOn=!sndOn; sndBtn.textContent=sndOn?'♪':'
 //======================================================================
 const isTouch=('ontouchstart'in window)||navigator.maxTouchPoints>0;
 if(isTouch) document.getElementById('touch').style.display='block';
-function setTouchMode(twop){ const t=document.getElementById('touch'); if(!t)return; t.classList.toggle('twop', !!twop); }
+let touch2P=false;   // 画面上の操作パッドを二人ぶん出しているか
+function setTouchMode(twop){ touch2P=!!twop;
+  const t=document.getElementById('touch'); if(!t)return; t.classList.toggle('twop', !!twop); }
 function bindBtn(id,key,pi){ const el=document.getElementById(id); if(!el)return; const IN=()=>players[pi].in;
   el.addEventListener('touchstart',e=>{ e.preventDefault(); const i=IN(); i.keys['_'+key]=true; mapKeysFor(pi);
     if(key==='atk')i.pressed.atk=true; if(key==='grab')i.pressed.grab=true; if(key==='jump')i.pressed.jump=true; if(key==='grd')i.pressed.grd=true; },{passive:false});
@@ -23134,6 +23137,7 @@ function startTrainSelect(){
   fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function startVsSelect(){
   const enter=()=>{ csMode='vs'; csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    TWO_P=true; players[1].active=true; setTouchMode(true);   // 2P の操作面を出す（対戦は二人で選ぶ）
     players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
     const es=document.getElementById('start'); if(es) es.classList.add('hidden');
     const er=document.getElementById('result'); if(er) er.classList.add('hidden');
@@ -23142,6 +23146,7 @@ function startVsSelect(){
   fadeOverlay(document.getElementById('start'), ()=>goScreen(enter,'fade',36)); }
 function start2PSelect(){
   const enter=()=>{ csMode='coop'; csSel=[0,1]; csLock=[false,false]; csNav=[0,0]; state='charsel';
+    TWO_P=true; players[1].active=true; setTouchMode(true);   // 呼び出し側に頼らず、ここで必ず出す
     players.forEach(p=>{ p.in.pressed.atk=p.in.pressed.jump=p.in.pressed.grab=p.in.pressed.grd=false; });
     const es=document.getElementById('start'); if(es) es.classList.add('hidden');   // HTMLのスタート画面を隠す
     const er=document.getElementById('result'); if(er) er.classList.add('hidden');
@@ -23183,14 +23188,19 @@ function drawCharSel(){
     if(p1) drawSelTag(cx-40, cy-118, '#7dd0ff', '1P', csLock[0]);
     if(p2) drawSelTag(cx+40, cy-118, '#ff9a5a', '2P', csLock[1]);
   }
-  ctx.fillStyle='#cfe0ff'; ctx.font='14px "Hiragino Maru Gothic ProN",sans-serif';
+  // 二人ぶんの操作パッドを出している間は、案内が親指の下に隠れる。
+  // パッドの上へ逃がし、キーではなくパッドの言葉で書く
+  const _pad=(typeof touch2P!=='undefined') && touch2P;
+  const _y1=_pad? H-150 : H-42, _y2=_pad? H-128 : H-18;
+  ctx.fillStyle='#cfe0ff'; ctx.font=(_pad?'12.5px':'14px')+' "Hiragino Maru Gothic ProN",sans-serif';
   ctx.fillText((csMode==='train')
     ? '矢印／WASD で選択・J/F で決定　（練習中も N キーでキャラを切り替えられます）'
-    : '1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）',W/2,H-42);
+    : (_pad ? '1P：左のスティックで選択・「攻」で決定　　2P：右のスティックで選択・「攻」で決定　（「掴」で取り消し）'
+            : '1P：矢印で選択・J/決定　　2P：WASDで選択・F/決定　（決定後は L/H でキャンセル）'),W/2,_y1);
   ctx.fillStyle=(csMode==='train')? '#7dd0ff' : (csMode==='vs'? ((csLock[0]&&csLock[1])?'#ff8ad0':'#d8a8c8') : ((csLock[0]&&csLock[1])?'#7dff7d':'#8fa8c8'));
   ctx.font='bold 15px "Hiragino Maru Gothic ProN",sans-serif';
   ctx.fillText((csMode==='train')? '決定でトレーニング開始！' : (csMode==='vs')? (csLock[0]&&csLock[1]? '対戦開始！' : '1Pと2Pがそれぞれ選んで決定')
-    : (hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！'),W/2,H-18);
+    : (hardMode?'高難易度モード ON　／　二人とも決定でスタート！':'二人とも決定でスタート！'),W/2,_y2);
   ctx.textAlign='left';
 }
 function drawSelTag(x,y,col,label,locked){ ctx.save(); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,y+10); ctx.lineTo(x-9,y-4); ctx.lineTo(x+9,y-4); ctx.closePath(); ctx.fill();
