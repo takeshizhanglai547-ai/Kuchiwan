@@ -211,6 +211,61 @@ const DRIVER = `
     console.log('選択画面 OK (1P ワッチ／2P マックで開始)');
     endVersus(); }
 
+  // ===== 対戦のキャラ選択：2P が選んで決定できる =====
+  //   2P のスティックとボタンは #touch.twop でしか出ない。CO-OP はボタン側で
+  //   setupRoster('coop') を通るので出ていたが、対戦は一度も通っておらず、
+  //   タッチ端末では 2P が「選ぶことも決めることも」できなかった
+  { const enterSel=function(mode){
+      endVersus(); TWO_P=false; setTouchMode(false);
+      players.forEach(function(p){ for(const k in p.in.pressed) p.in.pressed[k]=false;
+        p.in.K={}; p.in.keys={}; });
+      if(mode==='vs') startVsSelect(); else start2PSelect();
+      // 画面遷移のフェードを待たずに中身へ入る（描画側の演出は検査の対象外）
+      for(let f=0;f<180 && state!=='charsel';f++) step(1);
+      if(state!=='charsel') throw new Error(mode+'：キャラ選択に入れない（state='+state+'）');
+      return mode; };
+
+    // 1) 対戦の選択画面で、二人ぶんの操作面が出ていること
+    enterSel('vs');
+    if(csMode!=='vs') throw new Error('対戦の選択画面になっていない（'+csMode+'）');
+    if(!touch2P) throw new Error('対戦の選択画面で 2P の操作パッドが出ていない（タッチ端末では 2P が何も押せない）');
+    if(!players[1].active) throw new Error('対戦の選択画面で 2P が有効になっていない');
+
+    // 2) 2P の入力でカーソルが動き、決定できること（1P の入力とは独立）
+    { const sel0=csSel[1].slice? csSel[1] : csSel[1];
+      players[1].in.K.right=true; csNav[1]=0; updateCharSel(); players[1].in.K.right=false;
+      if(csSel[1]===sel0) throw new Error('2P のカーソルが動かない');
+      const sel1p=csSel[0];
+      players[1].in.pressed.atk=true; updateCharSel();
+      if(!csLock[1]) throw new Error('2P が決定できない');
+      if(csLock[0]) throw new Error('2P の決定で 1P まで決まってしまう');
+      if(csSel[0]!==sel1p) throw new Error('2P の操作で 1P のカーソルが動いている');
+      // 決定の取り消しも 2P 側だけ
+      players[1].in.pressed.grab=true; updateCharSel();
+      if(csLock[1]) throw new Error('2P が決定を取り消せない');
+      players[1].in.pressed.atk=true; updateCharSel(); }
+
+    // 3) 二人とも決定したら、選んだキャラで対戦が始まる
+    { const k1=CHARS[csSel[0]].k, k2=CHARS[csSel[1]].k;
+      players[0].in.pressed.atk=true; updateCharSel();
+      if(!vsMode) throw new Error('二人とも決定しても対戦が始まらない');
+      if(players[0].kind!==k1 || players[1].kind!==k2)
+        throw new Error('選んだキャラで始まっていない（'+players[0].kind+'/'+players[1].kind+' 期待 '+k1+'/'+k2+'）');
+      if(!players[1].active) throw new Error('対戦中に 2P が有効になっていない'); }
+
+    // 4) 対戦を抜けたら一人用の操作面へ戻る（本編に 2P のパッドが残らない）
+    { endVersus();
+      if(touch2P) throw new Error('対戦を抜けても 2P の操作パッドが出たまま');
+      if(players[1].active) throw new Error('対戦を抜けても 2P が有効なまま'); }
+
+    // 5) CO-OP の選択画面でも同じこと（呼び出し側に頼らない）
+    { enterSel('coop');
+      if(!touch2P) throw new Error('CO-OP の選択画面で 2P の操作パッドが出ていない');
+      players[1].in.pressed.atk=true; updateCharSel();
+      if(!csLock[1]) throw new Error('CO-OP で 2P が決定できない');
+      csLock=[false,false]; state='title'; endVersus(); }
+    console.log('対戦のキャラ選択 OK (2P の操作面が出る／2P だけで選んで決定・取り消し／選んだキャラで開始／抜けたら戻る)'); }
+
   console.log('VERSUS TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
