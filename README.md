@@ -31,7 +31,36 @@
 |---|---|
 | `index.html` | 公開版エントリ（聖犬士イッヌの伝説。`inu_no_densetsu.html` と同一内容） |
 | `inu_no_densetsu.html` | 犬ゲーム本体（単一HTML） |
+| `beltaction.html` | ベルトアクション「聖犬士イッヌ」本体 |
+| `beltaction_pixel.html` | 同・**2Dドット絵版**（PIXEL EDITION）。中身は下記 |
 | `mech.html` ほか | 別作品（3D メカシューター KUCHIWAN）の関連ファイル |
+
+## ドット絵版（`beltaction_pixel.html`）
+
+`beltaction.html` を**一切書き換えず**、末尾へ描画レイヤーを差し込んで組み立てる別ページ。
+ゲームの中身（ステージ・敵・技・進行）は本編とまったく同じで、絵だけが差し替わる。
+
+```bash
+./tools/build_pixel.sh          # beltaction.html + px/*.js + px/pixel.css → beltaction_pixel.html
+./tools/check.sh beltaction_pixel.html                 # 構文チェック
+NM_TARGET="$PWD/beltaction_pixel.html" bash tests/runall.sh   # 本編と同じ35スイート
+NODE_PATH=/opt/node22/lib/node_modules node tools/shot.js beltaction_pixel.html /tmp/shots
+```
+
+| ファイル | 担当 |
+|---|---|
+| `px/00_core.js` | 480×270 バッファ／階調圧縮＋秩序ディザ／整数倍転送 |
+| `px/01_paint.js` | ドット絵用の描画道具（格子吸着・段グラデ・市松ディザ・輪郭抽出・文字絵スプライト） |
+| `px/10_player.js` | プレイヤーと装備、共有の陰影プリミティブ |
+| `px/20_foes.js` | 敵とボス |
+| `px/30_bg.js` | 背景・地形・照明 |
+| `px/40_fx.js` | 火花・斬撃・爆発・弾・画面演出 |
+| `px/50_ui.js` | HUD・タイトル・メニュー |
+| `px/pixel.css` | HTML外装（メニュー・音量ボタン・タッチUI）のドット絵化 |
+
+**なぜ「低解像度で描いてから色数を落とす」順なのか。** canvas のアンチエイリアスでできた
+中間色が、階調を落とした瞬間に1ドットの中間色へ潰れる。これはドット絵職人が輪郭へ手で置く
+アンチエイリアスと同じ結果になる。先に色を落としてから縮小すると、ただの汚い縮小画像になる。
 
 ## GitHub Pages で公開する手順
 
