@@ -157,11 +157,169 @@
   #bJmp2 { right:184px; bottom:10px; width:58px; height:58px; }
   #bGrd2 { right:118px; bottom:76px; width:58px; height:58px; }
   #bGrab2{ right:184px; bottom:76px; width:58px; height:58px; }
+
+/* ===== PIXEL LAYER (px/pixel.css) ===== */
+/* ══════════════════════════════════════════════════════════════════
+   HTMLの外装をドット絵に合わせる
+   ══════════════════════════════════════════════════════════════════
+   タイトルのメニュー・音量ボタン・タッチパッドは canvas ではなく
+   HTML+CSS でできている。ここが角丸・ぼかし・なめらかなグラデのままだと、
+   ドット絵の画面の上に「別の時代のUI」が乗って全部台無しになる。
+
+   ドット絵のUIに必要なのは三つだけ：
+     ・角丸とぼかしを全部殺す
+     ・グラデーションは hard stop（0 50%, 50% 100%）で「段」にする
+     ・面取りは inset box-shadow の 2px ベベル（左上が明・右下が暗）
+   2px を単位にしているのは、世界のドット1個ぶん（480×270→960×540）に
+   合わせるため。ここを 1px や 3px にすると密度がずれて浮く。
+   ══════════════════════════════════════════════════════════════════ */
+
+:root{
+  --px:2px;
+  --pxGoldHi:#ffe9a8; --pxGold:#ffc23c; --pxGoldMid:#e0921c; --pxGoldLo:#8f5000;
+  --pxInk:#140d22; --pxInk2:#2a1c3e; --pxParch:#f3e2b4;
+}
+
+/* 角丸・ぼかし・柔らかい影を根こそぎ落とす。個別に消すと必ず取りこぼす */
+#wrap, #wrap *,
+.overlay, .overlay *,
+#snd, #touch, #touch *{
+  border-radius:0 !important;
+  -webkit-backdrop-filter:none !important;
+  backdrop-filter:none !important;
+  text-rendering:geometricPrecision;
+}
+
+#game{
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  box-shadow:0 0 0 var(--px) #000, 0 0 0 calc(var(--px)*2) var(--pxInk2) !important;
+}
+
+/* ── 覆い ─────────────────────────────────────────────────────────
+   なめらかな放射グラデをやめ、段で落とす。さらに2px の市松を薄く重ねて、
+   世界のドット密度と揃える（CSSでできるディザはこれが限界） */
+.overlay{
+  background:
+    repeating-conic-gradient(rgba(255,255,255,.028) 0% 25%, rgba(0,0,0,.028) 0% 50%) 0 0 / calc(var(--px)*2) calc(var(--px)*2),
+    linear-gradient(180deg, rgba(6,4,14,.90) 0 12%, rgba(10,7,22,.60) 12% 34%,
+                            rgba(10,7,22,.42) 34% 62%, rgba(4,3,11,.90) 62% 100%) !important;
+}
+#start.overlay{
+  background:
+    repeating-conic-gradient(rgba(255,255,255,.028) 0% 25%, rgba(0,0,0,.028) 0% 50%) 0 0 / calc(var(--px)*2) calc(var(--px)*2),
+    linear-gradient(180deg, rgba(4,3,12,.86) 0 14%, rgba(4,3,12,.26) 14% 40%,
+                            rgba(4,3,12,.16) 40% 66%, rgba(3,2,10,.90) 66% 100%) !important;
+}
+
+/* ── 額縁パネル ───────────────────────────────────────────────────
+   外周1px の墨線、内側2px の金の帯、地は2段のベタ。
+   四隅は clip-path で 45度に2ドット落とす＝ドット絵の面取り */
+.panel{
+  background:linear-gradient(180deg,#191129 0 52%,#0c0818 52% 100%) !important;
+  border:var(--px) solid var(--pxGoldMid) !important;
+  box-shadow:
+    inset var(--px) var(--px) 0 rgba(255,233,168,.30),
+    inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.65),
+    0 0 0 var(--px) #000 !important;
+  clip-path:polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px),
+                    calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+/* ── ボタン ───────────────────────────────────────────────────────
+   なめらかなグラデ＋丸角＋ぼけ影 → 2段のベタ＋2pxベベル＋硬い落ち影 */
+.btn{
+  border-radius:0 !important;
+  border:var(--px) solid var(--pxInk) !important;
+  background:linear-gradient(180deg,
+      var(--pxGoldHi) 0 26%, var(--pxGold) 26% 60%, var(--pxGoldMid) 60% 100%) !important;
+  color:#2a1400 !important;
+  text-shadow:0 var(--px) 0 rgba(255,255,255,.35) !important;
+  box-shadow:
+    inset var(--px) var(--px) 0 rgba(255,252,224,.85),
+    inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(140,70,0,.85),
+    0 calc(var(--px)*3) 0 var(--pxGoldLo),
+    0 calc(var(--px)*3) 0 var(--px) #000 !important;
+  clip-path:polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px),
+                    calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px);
+  transition:none !important;
+}
+.btn:active{
+  transform:translateY(calc(var(--px)*3)) !important;
+  box-shadow:
+    inset var(--px) var(--px) 0 rgba(255,252,224,.60),
+    inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(140,70,0,.85),
+    0 0 0 var(--px) #000 !important;
+}
+.btn.off, .btn[disabled]{ filter:none !important; opacity:.55; }
+
+/* ── タイトルの文字 ───────────────────────────────────────────────
+   ぼんやり光る text-shadow をやめ、2ドットずつ段で落とす影＋墨の縁取りに。
+   ドット絵のロゴは「にじみが無い」ことが命 */
+/* background の一括指定は background-clip も既定へ戻す。!important で上書きすると
+   本編が別行で指定していた -webkit-background-clip:text が effectively 無効になり、
+   文字ではなく「金色の箱」が出る（実際にそうなった）。clip も併せて指定し直す */
+.title-main{
+  background-image:linear-gradient(180deg,
+      #fff6d0 0 30%, #ffcf3a 30% 62%, #c8881a 62% 100%) !important;
+  -webkit-background-clip:text !important; background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+  -webkit-text-stroke:var(--px) var(--pxInk);
+  paint-order:stroke fill;
+  filter:drop-shadow(0 var(--px) 0 #7a3b00) drop-shadow(0 calc(var(--px)*2) 0 #3a1b00) !important;
+}
+#start .title-main{ text-shadow:none !important; }
+.title-sub{
+  color:var(--pxGold) !important;
+  text-shadow:var(--px) var(--px) 0 #000 !important;
+  font-family:'Courier New','MS Gothic',monospace !important;
+}
+.title-jp{
+  color:var(--pxParch) !important;
+  text-shadow:var(--px) var(--px) 0 #000, 0 0 0 #000 !important;
+}
+#start .title-jp{ text-shadow:var(--px) var(--px) 0 #000 !important; }
+/* 罫線：ぼかした光の帯 → 3段のベタ */
+.title-rule{
+  height:calc(var(--px)*2) !important;
+  background:linear-gradient(90deg,
+      rgba(255,210,80,0) 0 8%, var(--pxGoldMid) 8% 22%, var(--pxGoldHi) 22% 78%,
+      var(--pxGoldMid) 78% 92%, rgba(255,210,80,0) 92% 100%) !important;
+  box-shadow:0 var(--px) 0 rgba(0,0,0,.7) !important;
+}
+
+/* ── 音量ボタン・タッチUI ─────────────────────────────────────────
+   真円は低解像度のドット絵に無い形。八角に落として面取りする */
+#snd{
+  background:linear-gradient(180deg,#241a38 0 50%,#140d22 50% 100%) !important;
+  border:var(--px) solid var(--pxGoldMid) !important;
+  color:var(--pxGoldHi) !important;
+  box-shadow:inset var(--px) var(--px) 0 rgba(255,233,168,.25), 0 0 0 var(--px) #000 !important;
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+}
+.stk, .stk .knob, .tbtn{
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+  box-shadow:none !important;
+}
+.stk{ background:rgba(255,255,255,.06) !important; border:var(--px) solid rgba(255,255,255,.22) !important; }
+.stk .knob{ background:rgba(255,255,255,.28) !important; border:var(--px) solid rgba(255,255,255,.88) !important; }
+.tbtn{
+  border:var(--px) solid rgba(0,0,0,.75) !important;
+  box-shadow:inset var(--px) var(--px) 0 rgba(255,255,255,.28),
+             inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.45) !important;
+}
+
+/* 選択肢の行：うっすら光る枠 → 硬い墨枠＋1段の地 */
+.optrow, .charrow, .moves{
+  background:rgba(255,255,255,.045) !important;
+  border:var(--px) solid rgba(255,210,80,.30) !important;
+}
+
 </style>
 </head>
 <body>
 <div id="wrap">
-  <canvas id="game" style="image-rendering:pixelated;image-rendering:crisp-edges;"></canvas>
+  <canvas id="game"></canvas>
   <div id="snd">♪</div>
 
   <div id="start" class="overlay">
@@ -23289,6 +23447,22 @@ const pxOvlCtx = pxOvl.getContext('2d');
 // ── 表示キャンバスのコンテキスト（HUD と等倍のUIはここへ）──
 const pxDisp = ctx;
 
+// ── 本物のキャンバスかどうか ──────────────────────────────────
+// tests/nm_head.js のヘッドレス検証は、canvas も 2D コンテキストも
+// 何でも吸い込む Proxy に差し替える。そこへ 480×270 ぶんの
+// getImageData／画素ループを流すと、1画素ごとに Proxy のトラップが走って
+// スイートが数分止まる（実際にタイムアウトした）。
+// 本物のキャンバスでないと分かったら、転送も階調圧縮も丸ごと畳む。
+// 描画関数の差し替え（px/10〜50）はそのまま効くので、
+// 絵を検査するスイートは新しい描画コードを通る。
+const PX_REAL = (() => {
+  try {
+    const t = pxCtx.getImageData(0, 0, 1, 1);
+    return !!(t && ArrayBuffer.isView(t.data) && t.data.length === 4);
+  } catch (e) { return false; }
+})();
+if (!PX_REAL) PX.on = false;
+
 function pxResetWorld() {
   pxCtx.setTransform(1 / PX_SC, 0, 0, 1 / PX_SC, 0, 0);
   pxCtx.imageSmoothingEnabled = true;   // 縮小した素材はなめらかに。輪郭は階調圧縮で立つ
@@ -23300,11 +23474,13 @@ function pxResetDisp() {
 
 // setupCanvas は本編が resize() から呼ぶ。ドット絵版では表示キャンバスを
 // 内部解像度の整数倍に固定する（半端な倍率にすると拡大でドットが不揃いになる）。
-setupCanvas = function () {
-  cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
-  pxResetDisp(); pxResetWorld();
-};
-setupCanvas(); resize();
+if (PX_REAL) {
+  setupCanvas = function () {
+    cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
+    pxResetDisp(); pxResetWorld();
+  };
+  setupCanvas(); resize();
+}
 
 //──────────────────────────────────────────────────────────────────
 //  階調圧縮＋ディザ
@@ -23429,37 +23605,39 @@ function pxOverlayPass(fn) {
   ctx.restore();
 }
 
-// HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
-// 「世界＝ドット絵／文字＝等倍」の二層構成にしている。
-// UI の図形側（枠・ゲージ・アイコン）は px/40_ui.js が2ドット格子へ揃える
-const pxRawHUD = drawHUD;
-drawHUD = function () { pxPresent(); pxRawHUD(); };
+if (PX_REAL) {
+  // HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
+  // 「世界＝ドット絵／文字＝等倍」の二層構成にしている。
+  // UI の図形側（枠・ゲージ・アイコン）は px/50_ui.js が2ドット格子へ揃える
+  const pxRawHUD = drawHUD;
+  drawHUD = function () { pxPresent(); pxRawHUD(); };
 
-// 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
-// いったんドットバッファへ描いてから拡大して重ねる
-const pxRawUltCut = drawUltCut;
-drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
+  // 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
+  // いったんドットバッファへ描いてから拡大して重ねる
+  const pxRawUltCut = drawUltCut;
+  drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
 
-// 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
-// ここをドットへ落とすと 6px の漢字になって一切読めない
-for (const nm of ['drawShop', 'drawMap', 'drawCharSel', 'drawCut']) {
-  const raw = window[nm];
-  if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+  // 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
+  // ここをドットへ落とすと 6px の漢字になって一切読めない
+  for (const nm of ['drawShop', 'drawMap', 'drawCharSel', 'drawCut']) {
+    const raw = window[nm];
+    if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+  }
+
+  // 本編の loop は各分岐の末尾で requestAnimationFrame(loop) を呼んで抜ける。
+  // その外側を包めば、どの分岐を通っても「フレーム頭で初期化・末尾で転送」が効く
+  const pxRawLoopBody = loopBody;
+  loop = function () {
+    pxBeginFrame();
+    try { pxRawLoopBody(); }
+    catch (err) { console.error(err); if (attractOn) endAttract(); requestAnimationFrame(loop); }
+    pxPresent();
+  };
+
+  // 内部解像度が4分の1になって描画負荷が大きく下がるので、
+  // 本編が自動で落とす品質段階の初期値を最上位へ戻す（リムライトが効く）
+  perfTier = 0;
 }
-
-// 本編の loop は各分岐の末尾で requestAnimationFrame(loop) を呼んで抜ける。
-// その外側を包めば、どの分岐を通っても「フレーム頭で初期化・末尾で転送」が効く
-const pxRawLoopBody = loopBody;
-loop = function () {
-  pxBeginFrame();
-  try { pxRawLoopBody(); }
-  catch (err) { console.error(err); if (attractOn) endAttract(); requestAnimationFrame(loop); }
-  pxPresent();
-};
-
-// 内部解像度が4分の1になって描画負荷が大きく下がるので、
-// 本編が自動で落とす品質段階の初期値を最上位へ戻す（リムライトが効く）
-perfTier = 0;
 
 // デバッグ用：コンソールから PX.levels などを触って見え方を確かめる
 window.PX = PX;

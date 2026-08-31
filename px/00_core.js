@@ -39,6 +39,22 @@ const pxOvlCtx = pxOvl.getContext('2d');
 // ── 表示キャンバスのコンテキスト（HUD と等倍のUIはここへ）──
 const pxDisp = ctx;
 
+// ── 本物のキャンバスかどうか ──────────────────────────────────
+// tests/nm_head.js のヘッドレス検証は、canvas も 2D コンテキストも
+// 何でも吸い込む Proxy に差し替える。そこへ 480×270 ぶんの
+// getImageData／画素ループを流すと、1画素ごとに Proxy のトラップが走って
+// スイートが数分止まる（実際にタイムアウトした）。
+// 本物のキャンバスでないと分かったら、転送も階調圧縮も丸ごと畳む。
+// 描画関数の差し替え（px/10〜50）はそのまま効くので、
+// 絵を検査するスイートは新しい描画コードを通る。
+const PX_REAL = (() => {
+  try {
+    const t = pxCtx.getImageData(0, 0, 1, 1);
+    return !!(t && ArrayBuffer.isView(t.data) && t.data.length === 4);
+  } catch (e) { return false; }
+})();
+if (!PX_REAL) PX.on = false;
+
 function pxResetWorld() {
   pxCtx.setTransform(1 / PX_SC, 0, 0, 1 / PX_SC, 0, 0);
   pxCtx.imageSmoothingEnabled = true;   // 縮小した素材はなめらかに。輪郭は階調圧縮で立つ
@@ -50,11 +66,13 @@ function pxResetDisp() {
 
 // setupCanvas は本編が resize() から呼ぶ。ドット絵版では表示キャンバスを
 // 内部解像度の整数倍に固定する（半端な倍率にすると拡大でドットが不揃いになる）。
-setupCanvas = function () {
-  cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
-  pxResetDisp(); pxResetWorld();
-};
-setupCanvas(); resize();
+if (PX_REAL) {
+  setupCanvas = function () {
+    cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
+    pxResetDisp(); pxResetWorld();
+  };
+  setupCanvas(); resize();
+}
 
 //──────────────────────────────────────────────────────────────────
 //  階調圧縮＋ディザ
@@ -179,37 +197,39 @@ function pxOverlayPass(fn) {
   ctx.restore();
 }
 
-// HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
-// 「世界＝ドット絵／文字＝等倍」の二層構成にしている。
-// UI の図形側（枠・ゲージ・アイコン）は px/40_ui.js が2ドット格子へ揃える
-const pxRawHUD = drawHUD;
-drawHUD = function () { pxPresent(); pxRawHUD(); };
+if (PX_REAL) {
+  // HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
+  // 「世界＝ドット絵／文字＝等倍」の二層構成にしている。
+  // UI の図形側（枠・ゲージ・アイコン）は px/50_ui.js が2ドット格子へ揃える
+  const pxRawHUD = drawHUD;
+  drawHUD = function () { pxPresent(); pxRawHUD(); };
 
-// 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
-// いったんドットバッファへ描いてから拡大して重ねる
-const pxRawUltCut = drawUltCut;
-drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
+  // 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
+  // いったんドットバッファへ描いてから拡大して重ねる
+  const pxRawUltCut = drawUltCut;
+  drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
 
-// 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
-// ここをドットへ落とすと 6px の漢字になって一切読めない
-for (const nm of ['drawShop', 'drawMap', 'drawCharSel', 'drawCut']) {
-  const raw = window[nm];
-  if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+  // 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
+  // ここをドットへ落とすと 6px の漢字になって一切読めない
+  for (const nm of ['drawShop', 'drawMap', 'drawCharSel', 'drawCut']) {
+    const raw = window[nm];
+    if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+  }
+
+  // 本編の loop は各分岐の末尾で requestAnimationFrame(loop) を呼んで抜ける。
+  // その外側を包めば、どの分岐を通っても「フレーム頭で初期化・末尾で転送」が効く
+  const pxRawLoopBody = loopBody;
+  loop = function () {
+    pxBeginFrame();
+    try { pxRawLoopBody(); }
+    catch (err) { console.error(err); if (attractOn) endAttract(); requestAnimationFrame(loop); }
+    pxPresent();
+  };
+
+  // 内部解像度が4分の1になって描画負荷が大きく下がるので、
+  // 本編が自動で落とす品質段階の初期値を最上位へ戻す（リムライトが効く）
+  perfTier = 0;
 }
-
-// 本編の loop は各分岐の末尾で requestAnimationFrame(loop) を呼んで抜ける。
-// その外側を包めば、どの分岐を通っても「フレーム頭で初期化・末尾で転送」が効く
-const pxRawLoopBody = loopBody;
-loop = function () {
-  pxBeginFrame();
-  try { pxRawLoopBody(); }
-  catch (err) { console.error(err); if (attractOn) endAttract(); requestAnimationFrame(loop); }
-  pxPresent();
-};
-
-// 内部解像度が4分の1になって描画負荷が大きく下がるので、
-// 本編が自動で落とす品質段階の初期値を最上位へ戻す（リムライトが効く）
-perfTier = 0;
 
 // デバッグ用：コンソールから PX.levels などを触って見え方を確かめる
 window.PX = PX;

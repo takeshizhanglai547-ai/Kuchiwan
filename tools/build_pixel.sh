@@ -23,14 +23,20 @@ CUT=$(grep -n '^</script>' "$SRC" | tail -1 | cut -d: -f1)
   tail -n +$CUT "$SRC"
 } > "$OUT"
 
-# タイトルとメタだけ差し替える（本編と別ページであることを明示）
-node - "$OUT" <<'NODE'
-const fs=require('fs'), p=process.argv[2];
+# タイトルと、HTML外装のドット絵化CSSを差し込む。
+# メニューや音量ボタンは canvas ではなく HTML なので、CSS 側も直さないと
+# ドット絵の画面の上に角丸とぼかしのUIが乗ってしまう
+node - "$OUT" "$D/px/pixel.css" <<'NODE'
+const fs=require('fs'), p=process.argv[2], cssPath=process.argv[3];
 let s=fs.readFileSync(p,'utf8');
 s=s.replace('<title>聖犬士イッヌ - ベルトアクション</title>',
             '<title>聖犬士イッヌ ドット絵版 - PIXEL EDITION</title>');
-s=s.replace('<canvas id="game"></canvas>',
-            '<canvas id="game" style="image-rendering:pixelated;image-rendering:crisp-edges;"></canvas>');
+if(fs.existsSync(cssPath)){
+  const css=fs.readFileSync(cssPath,'utf8');
+  const i=s.lastIndexOf('</style>');
+  if(i<0) throw new Error('</style> が見つからない：CSSを差し込めない');
+  s=s.slice(0,i)+'\n/* ===== PIXEL LAYER (px/pixel.css) ===== */\n'+css+'\n'+s.slice(i);
+}
 fs.writeFileSync(p,s);
 NODE
 echo "built $OUT ($(wc -l < "$OUT") lines)"
