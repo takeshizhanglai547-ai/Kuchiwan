@@ -24412,18 +24412,17 @@ function pxLine(x0, y0, x1, y1, col, wdt) {
   //────────────────────────────────────────────────────────────────
   //  タイトル：ドット絵のロゴ
   //────────────────────────────────────────────────────────────────
-  // ロゴは DOM 側（.titleblock）に文字で載っていた。等倍のブラウザ文字は
-  // ドット絵の背景から完全に浮くので、場所だけ残して canvas のドット文字へ移す
+  // ロゴは DOM 側（.titleblock）にブラウザの文字として載っていた。等倍のなめらかな
+  // 字はドット絵の背景から完全に浮くので、canvas のドット文字へ移す。
+  // DOM 側は「場所だけ」残す（display:none にするとメニューが上へ詰めてロゴに重なる）。
+  //
+  // ※ ボタンやパネルの見た目は px/pixel.css（別担当）が持っている。
+  //   ここで触ると二重に効くので、ロゴを canvas へ移すのに要る1行だけに絞ってある。
   try {
     const sty = document.createElement('style');
     sty.textContent =
       '.titleblock{visibility:hidden;height:180px}' +
-      '@media (max-width:640px),(max-height:660px){.titleblock{height:112px}}' +
-      '.menupanel{border-radius:0!important;border-width:2px!important;' +
-      'box-shadow:0 0 0 2px #05040a,0 0 0 4px rgba(255,210,80,.35),0 8px 0 rgba(0,0,0,.55)!important}' +
-      '.btn{border-radius:0!important;border-width:2px!important;' +
-      'box-shadow:0 0 0 2px #2a1600,0 6px 0 #9c5a00!important}' +
-      '.btn:active{box-shadow:0 0 0 2px #2a1600,0 2px 0 #9c5a00!important}';
+      '@media (max-width:640px),(max-height:660px){.titleblock{height:112px}}';
     document.head.appendChild(sty);
   } catch (e) { }
 
