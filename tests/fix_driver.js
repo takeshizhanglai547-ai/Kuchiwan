@@ -237,7 +237,14 @@ const DRIVER = `
       if(!r2) throw new Error('DPR2相当の拡大でリムが素通しになる（実機で効かない）');
       if(!(r2.h>r1.h*3)) throw new Error('矩形が拡大を反映していない: h '+r1.h+' → '+r2.h);
       if(!(r2.w>r1.w*3)) throw new Error('矩形の幅が拡大を反映していない: w '+r1.w+' → '+r2.w);
-      if(rimRect(20,20,46,132)) throw new Error('収まらない大きさでも素通しにしていない（キャラが欠ける）');
+      if(rimRect(20,20,46,132)) throw new Error('rimRect が枠を越えても矩形を返す（欠けたまま転送される）');
+      // 枠に入らないときは「諦める」のではなく「焼く倍率を落とす」。
+      // 諦める実装だと、DPR2の端末では全ボスが、DPR1でも神と最終ボスが素通しになり、
+      // リムライトが主役級の相手で一度も出ていなかった
+      { const f20=rimFit(20,20,46,132);
+        if(!(f20>0 && f20<1)) throw new Error('入らない大きさで焼く倍率が下がらない（'+f20+'）');
+        if(!rimRect(20*f20,20*f20,46,132)) throw new Error('倍率を落としても枠に入らない');
+        if(rimFit(1,1,46,132)!==1) throw new Error('入る大きさなのに倍率を落としている'); }
       // 呼び出し側がローカル単位で渡していること（s を掛けると二乗になって入らなくなる）
       if(rimRect(3.4,3.4,46*1.7,132*1.7)) throw new Error('呼び出し側で s を掛けると入らなくなる＝二重掛けの兆候');
       // rimBegin が変換行列から実寸を取っていること。
@@ -249,10 +256,21 @@ const DRIVER = `
                 const v=t[key]; return (typeof v==='function')? v.bind(t) : v; } });
               return fn(); }
         finally { ctx = real; } }
-      const gotSmall=withScale(1, function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return !!r; });
-      const gotBig  =withScale(20,function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return !!r; });
-      if(!gotSmall) throw new Error('等倍で rimBegin が素通しになる');
-      if(gotBig) throw new Error('拡大20倍でも rimBegin が素通しにならない＝変換行列を見ていない');
+      const small=withScale(1, function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return r; });
+      const big  =withScale(20,function(){ const r=rimBegin(46,132); if(r) rimEnd(r,1); return r; });
+      if(!small) throw new Error('等倍で rimBegin が素通しになる');
+      if(!big) throw new Error('拡大20倍で rimBegin が素通しになる（リムが一度も出ない）');
+      // 変換行列を見ていることは「倍率に応じて焼き倍率が下がる」ことで示す。
+      // 素通しの有無で見ると、行列を無視した実装でも常に矩形が返って素通りする
+      if(!(small.fit===1)) throw new Error('等倍なのに焼き倍率を落としている（'+small.fit+'）');
+      if(!(big.fit<0.2)) throw new Error('20倍でも焼き倍率が下がらない＝変換行列を見ていない（'+big.fit+'）');
+      // 実機の値でも出ること。神は t.h+120、最終ボスは gsc1.85 で、どちらも従来は素通しだった
+      { const KY=2*FIXED_SCALE;                       // DPR2 × 基本倍率
+        [['神(h186+120)',186*0.92,306,1],['最終ボス(h196,gsc1.85)',118*0.62,226,1.85],
+         ['鋼鉄のグラトン(h206)',196*0.62,236,1]].forEach(function(q){
+          const k=KY*q[3];
+          if(!rimRect(k*rimFit(k,k,q[1],q[2]), k*rimFit(k,k,q[1],q[2]), q[1], q[2]))
+            throw new Error(q[0]+' が DPR2 で枠に入らない'); }); }
     }
     perfTier=old;
     console.log('リムライトの適応品質 OK (tier0のみ有効／スプライト使い回し／DPR2で有効・入らなければ素通し)');
