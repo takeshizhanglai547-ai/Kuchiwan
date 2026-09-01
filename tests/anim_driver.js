@@ -308,6 +308,120 @@ const DRIVER = `
     if(rec[1].c!=='#f1e7cc') throw new Error('本色が最後に来ていない: '+rec[1].c);
     console.log('手足の輪郭線 OK (下敷き '+rec[0].w+'px → 本色 '+rec[1].w+'px)'); }
 
+  // ===== 腕振りと胴の上下が、脚と同じ時計で回る =====
+  //   以前は腕が p.anim（毎フレーム固定 0.36）由来の 6.9Hz、脚は移動距離から
+  //   積分した 1.55歩/秒 で、1歩のあいだに腕が4.4往復していた。
+  //   期待値は直値で書く（実装の定数から作ると、その定数を壊した瞬間に素通りする）
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    enemies.length=0; encounters.length=0; particles.length=0;
+    p.x=600; p._tx=null; p.state='idle'; p.z=0;
+    // 実際に描画へ渡る腕の角度を横取りする（poseArm の第3引数＝後ろ腕の角度）。
+    // poseB を読むと歩行の周期成分はローパスの外で足されるので拾えない
+    const realArm=poseArm; let arm=[], gp=[], cur=null;
+    poseArm=function(x,y,ang){ if(cur===null) cur=ang; return realArm.apply(null, arguments); };
+    try{
+      for(let f=0;f<160;f++){ hitStop=0; slowmo=0; p.in.K.right=true; step(1);
+        cur=null; perfTier=1; drawPlayer();
+        if(f>=40 && cur!==null){ arm.push(cur); gp.push(gaitPh(p.gait||0)); } }
+    } finally { poseArm=realArm; }
+    p.in.K.right=false;
+    if(!(arm.length>80)) throw new Error('腕の角度が取れていない（'+arm.length+'フレーム）');
+    // 平均まわりの符号で往復を数える（静止分のオフセットを除く）
+    { const mean=arm.reduce((a,b)=>a+b,0)/arm.length; for(let i=0;i<arm.length;i++) arm[i]-=mean; }
+    // 腕の振り＝backArm の符号反転回数、脚の歩数＝位相の巻き戻り回数
+    let armCross=0; for(let i=1;i<arm.length;i++) if((arm[i-1]<0)!==(arm[i]<0)) armCross++;
+    let steps=0;    for(let i=1;i<gp.length;i++) if(gp[i]<gp[i-1]) steps++;
+    if(!(steps>=2)) throw new Error('計測区間で '+steps+' 歩しか歩いていない');
+    const armCycles=armCross/2, ratio=armCycles/Math.max(1,steps);
+    // 1歩＝腕1往復。窓を広く取ると、固定クロックへ戻す改変（この歩速では 1.38倍）が
+    // 素通りしたので、実測 1.05 のまわりで締める
+    if(!(ratio>0.85 && ratio<1.25))
+      throw new Error('腕の振りが脚と合っていない（'+steps+'歩で腕 '+armCycles.toFixed(1)+'往復＝'+ratio.toFixed(1)+'倍）');
+    console.log('腕と脚の同期 OK ('+steps+'歩で腕 '+armCycles.toFixed(1)+'往復＝'+ratio.toFixed(2)+'倍／改修前は4.4倍)'); }
+
+  // ===== 通常攻撃にも二次的な動きが入る =====
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    enemies.length=0; encounters.length=0;
+    const swing=function(type){ p.x=600; p._tx=null; p.state='idle'; p.z=0; p.atk=null;
+      p.rig.sq.x=p.rig.sq.v=0; p.rig.wob.x=p.rig.wob.v=0;
+      if(p.rig.earL){ p.rig.earL.x=p.rig.earL.v=0; p.rig.tail.x=p.rig.tail.v=0; }
+      beginAttack(type);
+      let sq=0, wob=0, ear=0;
+      for(let f=0;f<40;f++){ hitStop=0; slowmo=0; step(1);
+        sq=Math.max(sq,Math.abs(p.rig.sq.x)); wob=Math.max(wob,Math.abs(p.rig.wob.x));
+        if(p.rig.earL) ear=Math.max(ear,Math.abs(p.rig.earL.x)); }
+      return {sq:sq, wob:wob, ear:ear}; };
+    // しきい値は実測から置く（改修前は通常技のばねが全て 0 だった）：
+    //   c1(kb3) 潰れ0.047 しなり0.139 耳2.24 ／ c4(kb12) 0.134/0.397/4.22 ／ 必殺技 0.126
+    const c1=swing('c1');                       // 通常コンボの1段目
+    if(!(c1.sq>0.02)) throw new Error('通常攻撃で潰れが入らない（sq='+c1.sq.toFixed(3)+'）');
+    if(!(c1.wob>0.06)) throw new Error('通常攻撃で胴のしなりが入らない（wob='+c1.wob.toFixed(3)+'）');
+    if(!(c1.ear>0.8)) throw new Error('通常攻撃で耳が動かない（ear='+c1.ear.toFixed(3)+'）');
+    // 重い技ほど強く出ること（一律だと軽重が消える）
+    const c4=swing('c4');
+    if(!(c4.sq>c1.sq*1.8)) throw new Error('重い技（kb12）の潰れが軽い技（kb3）と大差ない（'+c4.sq.toFixed(3)+' vs '+c1.sq.toFixed(3)+'）');
+    const sp=swing(specialFor(p,'hadou'));
+    if(!(sp.sq>c1.sq*1.8)) throw new Error('必殺技の潰れが通常技と大差ない（'+sp.sq.toFixed(3)+' vs '+c1.sq.toFixed(3)+'）');
+    console.log('通常攻撃の二次的な動き OK (c1 潰れ'+c1.sq.toFixed(3)+'／しなり'+c1.wob.toFixed(3)+'／耳'+c1.ear.toFixed(2)
+      +'、c4 '+c4.sq.toFixed(3)+'、必殺技 '+sp.sq.toFixed(3)+'／改修前は通常技すべて0)'); }
+
+  // ===== 前転はちょうど2回転で終わり、直立へ跳ね戻らない =====
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    enemies.length=0; encounters.length=0;
+    p.x=600; p._tx=null; p.state='idle'; p.z=0;
+    beginRoll();
+    let last=0, maxJump=0, prev=p.rollRot;
+    for(let f=0;f<40 && p.state==='roll';f++){ hitStop=0; slowmo=0; step(1);
+      maxJump=Math.max(maxJump, Math.abs(p.rollRot-prev)); prev=p.rollRot; last=p.rollRot; }
+    const turns=Math.abs(last)/TAU;
+    if(!(Math.abs(turns-2)<0.02)) throw new Error('前転が '+turns.toFixed(2)+' 回転で終わる（ちょうど2回転のはず）');
+    if(!(maxJump<0.9)) throw new Error('前転の途中で '+maxJump.toFixed(2)+'rad 跳ぶ');
+    console.log('前転の着地 OK ('+turns.toFixed(2)+'回転ちょうどで終わる／1フレームの最大回転 '+maxJump.toFixed(2)+'rad)'); }
+
+  // ===== 敵の「構え → 攻撃」で姿勢が跳ばない =====
+  //   telegraph が 0 になった同じ更新で attack へ移るので、沈み込み
+  //   （rotate -0.24 / translate -11,4.5 / scale 1.13）が次の描画で丸ごと消えていた。
+  //   実際に ctx へ渡る変換を横取りして、1フレームの跳びを測る
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p; p.hp=p.maxHp=99999; p.invuln=99999;
+    enemies.length=0; encounters.length=0; particles.length=0;
+    p.x=600; p._tx=null; p.state='idle';
+    spawnEnemy('wolf', p.x+40, LANE); const e=enemies[0];
+    e.hp=e.maxHp=99999; e.entry=null; e.thinkCd=0;
+    const real=ctx; const rec=[];
+    let rot=0, tx=0, ty=0, on=false;
+    const prox=new Proxy(real, { get(t,k){
+      if(k==='rotate') return function(a){ if(on) rot+=a; };
+      if(k==='translate') return function(x,y){ if(on){ tx+=x; ty+=y; } };
+      const v=t[k]; return (typeof v==='function')? v.bind(t) : v; } });
+    let sawTele=false, sawAtk=false;
+    try{
+      for(let f=0;f<400;f++){ hitStop=0; slowmo=0;
+        e.x=p.x+40; e.vx=0; e.z=0; if(e.thinkCd>0) e.thinkCd=0;   // 位置は固定して姿勢だけ見る
+        step(1);
+        if(e.state==='telegraph'||e.telegraph>0) sawTele=true;
+        if(e.state==='attack') sawAtk=true;
+        rot=0; tx=0; ty=0; on=true; ctx=prox;
+        try{ drawEnemy(e); } finally { ctx=real; on=false; }
+        rec.push({st:e.state, tel:e.telegraph, rot:rot, tx:tx, ty:ty}); }
+    } finally { ctx=real; }
+    if(!sawTele||!sawAtk) throw new Error('構えと攻撃を観測できていない（構え'+sawTele+' 攻撃'+sawAtk+'）');
+    // 「構え中 → 攻撃の1フレーム目」の境目だけを見る
+    let worstRot=0, worstTx=0, at=-1;
+    for(let i=1;i<rec.length;i++){
+      if(!(rec[i-1].tel>0 && rec[i].st==='attack')) continue;
+      const dr=Math.abs(rec[i].rot-rec[i-1].rot), dx=Math.abs(rec[i].tx-rec[i-1].tx);
+      if(dr>worstRot){ worstRot=dr; at=i; } if(dx>worstTx) worstTx=dx; }
+    if(at<0) throw new Error('構えから攻撃への境目が観測できない');
+    // この合計には体の部品（爪・牙・武器）の回転も混ざるので、絶対値ではなく
+    // 改修前との差で見る。実測：溜めを一瞬で捨てる実装 0.410rad → 抜けを作ると 0.170rad。
+    // しきい値は直値 0.25（実装の定数から作らない）
+    if(!(worstRot<0.25)) throw new Error('構えから攻撃へ移る1フレームで '+worstRot.toFixed(3)+'rad 跳ぶ（溜めを捨てる実装は0.410）');
+    console.log('敵の構えの抜け OK (境目の跳び 回転'+worstRot.toFixed(3)+'rad・移動'+worstTx.toFixed(1)+'px／溜めを捨てる実装は0.410rad)'); }
+
   console.log('DISNEY ANIMATION TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
