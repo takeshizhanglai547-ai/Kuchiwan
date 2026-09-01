@@ -309,6 +309,23 @@
              inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.45) !important;
 }
 
+/* ── リザルト（GAME OVER / ALL CLEAR）─────────────────────────────
+   画面でいちばん大きい文字が、なめらかなサンセリフのままだった（目視監査 F-7）。
+   金の段グラデ＋墨の縁取り＋2ドットずつ落とす影で、タイトルロゴと同じ語彙に揃える */
+#result-title{
+  background-image:linear-gradient(180deg,
+      #fff6d0 0 30%, var(--pxGold) 30% 62%, #b9761a 62% 100%) !important;
+  -webkit-background-clip:text !important; background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+  -webkit-text-stroke:var(--px) var(--pxInk);
+  paint-order:stroke fill;
+  filter:drop-shadow(0 var(--px) 0 #7a3b00) drop-shadow(0 calc(var(--px)*2) 0 #2a1200) !important;
+}
+#result-sub{
+  color:var(--pxParch) !important;
+  text-shadow:var(--px) var(--px) 0 #000 !important;
+}
+
 /* 選択肢の行：うっすら光る枠 → 硬い墨枠＋1段の地 */
 .optrow, .charrow, .moves{
   background:rgba(255,255,255,.045) !important;
