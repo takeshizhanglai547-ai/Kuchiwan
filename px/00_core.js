@@ -126,6 +126,15 @@ function pxBuildQuant() {
   _pxQuantLv = n;
 }
 
+// 平らな面はディザを抜く。
+// ドット絵の作法は「広い面はベタ、丸みのある面だけディザ」。全面に一律で
+// Bayer を掛けると、拡大したときに新聞の網点にしか見えない（実際そうなった）。
+// 左と上の**両方**が元色と同じなら平ら、と判定する：
+//   ・べた塗りの壁 → 左も上も同じ → ディザを切る
+//   ・縦のグラデ   → 左は同じだが上が違う → ディザは残る
+//   ・横のグラデ   → 上は同じだが左が違う → ディザは残る
+// 「左が同じなら平ら」だけにすると、空の縦グラデが段だけになって縞が出る。
+let _pxTopRow = null;
 function pxPostProcess() {
   if (PX.levels >= 32 && !PX.grade) return;          // 実質無加工なら触らない
   if (_pxQuantLv !== (PX.levels | 0)) pxBuildQuant();
@@ -134,12 +143,21 @@ function pxPostProcess() {
   const step = 255 / (Math.max(2, PX.levels | 0) - 1);
   const amp = step * PX.dither;
   const G = PX_GRADE, Q = PX_QUANT, B = PX_BAYER;
+  if (!_pxTopRow || _pxTopRow.length !== W2 * 3) _pxTopRow = new Uint8Array(W2 * 3);
+  const T = _pxTopRow;
+  T.fill(255);                                       // 1行目に上の行は無い＝平らとは見なさない
   let i = 0;
   for (let y = 0; y < H2; y++) {
     const brow = (y & 3) << 2;
+    let pr = -1, pg = -1, pb = -1;                   // 左隣の「加工前」の色
     for (let x = 0; x < W2; x++, i += 4) {
-      const idx = (((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3)) * 3;
-      const dz = B[brow | (x & 3)] * amp;
+      const r = d[i], g = d[i + 1], b = d[i + 2], t = x * 3;
+      const flat = (r === pr && g === pg && b === pb) &&
+                   (r === T[t] && g === T[t + 1] && b === T[t + 2]);
+      pr = r; pg = g; pb = b;
+      T[t] = r; T[t + 1] = g; T[t + 2] = b;
+      const idx = (((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)) * 3;
+      const dz = flat ? 0 : B[brow | (x & 3)] * amp;
       d[i]     = Q[(G[idx]     + dz + 128.5) | 0];
       d[i + 1] = Q[(G[idx + 1] + dz + 128.5) | 0];
       d[i + 2] = Q[(G[idx + 2] + dz + 128.5) | 0];
