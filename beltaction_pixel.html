@@ -23462,7 +23462,10 @@ const PX = {
   // 「ドット絵」ではなく「新聞の写真」になる。14 前後が、平らな面はベタで乗り、
   // グラデーションだけがディザに割れる境目（実測でこの値を選んだ）
   levels: 14,
-  dither: 0.9,             // ディザの強さ（0で無効）
+  // ディザの強さ。0.9 は「1段ぶんまるごと揺らす」量で、平面まで市松に割れて
+  // 網点に見えた（目視監査の最大の指摘）。0.55 だと、段の境目だけが崩れて
+  // 平らな面はベタのまま残る
+  dither: 0.55,
   grade: true,             // 色調補正（影を寒色へ・光を暖色へ・彩度を持ち上げる）
   on: true,
 };
@@ -23511,19 +23514,14 @@ if (PX_REAL) {
     cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
     pxResetDisp(); pxResetWorld();
   };
-  // 表示倍率を半段刻みに丸める。
-  // 本編の resize は画面に収まる実数倍（例 1.0417倍）で CSS の大きさを決める。
-  // ドット絵をその倍率で引き伸ばすと、ある列だけ2画面ドット・隣は1画面ドット、
-  // という不揃いな拡大になって、せっかくのドットがにじむ。
-  // 裏画面は 960×540（＝バッファ 480×270 の2倍）なので、CSS倍率が 0.5 刻みなら
-  // バッファ1ドットは必ず整数個の画面ドットになる。
-  // 0.5 未満（画面が 480×270 より狭い端末）は丸めない。丸めると画面からはみ出す
-  resize = function () {
-    setupCanvas();
-    let r = Math.min(window.innerWidth / W, window.innerHeight / H);
-    if (r >= 0.5) r = Math.floor(r * 2) / 2;
-    cv.style.width = (W * r) + 'px'; cv.style.height = (H * r) + 'px';
-  };
+  // 表示倍率は本編と同じ「画面に収まる実数倍」のままにする。
+  // 一度これを 0.5 刻みへ丸めたが、監査の実測で 800×600 のウィンドウが
+  // 480×270 まで落ち、画面の82%が黒帯になった（1280×720 でも面積の44%を捨てる）。
+  // さらにキャンバスだけ縮んで HTML のメニューは CSS px 固定なので、
+  // メニューがゲーム画面より大きくなってタイトルロゴを覆った。
+  // 実数倍でも image-rendering:pixelated なのでドットの縁はぼけない。
+  // 起きるのは「ある列だけ1画面ドット広い」という不揃いだけで、
+  // 画面の8割を捨てるより明らかに軽い副作用
   resize();
 }
 
@@ -23680,19 +23678,26 @@ const PX_TEXT_STATE = ['font', 'fillStyle', 'strokeStyle', 'lineWidth', 'globalA
 function pxWorldSharpText(fn) {
   if (!PX.on) { fn(); return; }
   const real = pxCtx, queue = [];
-  const rec = new Proxy(real, {
-    get(t, k) {
-      if (k === 'fillText' || k === 'strokeText') return function () {
-        const s = {}; for (const p of PX_TEXT_STATE) s[p] = t[p];
-        queue.push({ k, a: Array.prototype.slice.call(arguments), M: t.getTransform(), s });
-      };
-      const v = t[k];
-      return typeof v === 'function' ? v.bind(t) : v;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-  const keep = ctx; ctx = rec;
-  try { fn(); } finally { ctx = keep === rec ? real : keep; }
+  // ctx を Proxy で包むのは駄目。canvas の組み込みメソッドは受け手（this）が
+  // Proxy だと "Illegal invocation" で落ちる。実際、UI層が
+  // `raw.call(ctx, …)` の形で組み込みを呼んでいて、地図が毎フレーム例外を投げた。
+  // 代わりに本物のコンテキストへ**自前のプロパティを被せて**プロトタイプの
+  // メソッドを隠し、終わったら消す。this は常に本物のままになる
+  const rec = (k) => function () {
+    const s = {}; for (const p of PX_TEXT_STATE) s[p] = real[p];
+    queue.push({ k, a: Array.prototype.slice.call(arguments), M: real.getTransform(), s });
+  };
+  const had = Object.prototype.hasOwnProperty.call(real, 'fillText');
+  const prevF = real.fillText, prevS = real.strokeText;
+  real.fillText = rec('fillText');
+  real.strokeText = rec('strokeText');
+  const keep = ctx; ctx = real;
+  try { fn(); }
+  finally {
+    ctx = keep;
+    if (had) { real.fillText = prevF; real.strokeText = prevS; }
+    else { delete real.fillText; delete real.strokeText; }
+  }
   pxPresent();                                   // ここで ctx は表示キャンバスへ移る
   // バッファ座標 → 表示座標は整数倍（cv.width/PX.W）。控えた変換をその倍率で
   // 掛け直せば、文字は元の論理位置・元の大きさのまま等倍で出る
@@ -23715,14 +23720,21 @@ function pxWorldSharpText(fn) {
 
   // 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
   // いったんドットバッファへ描いてから拡大して重ねる
+  // 立ち絵はドット、技名とキャラ名は等倍で描き直す。
+  // 全部を 480×270 へ落としていたので「聖犬士イッヌ」の漢字が潰れて
+  // 読めなくなっていた（監査で指摘）
   const pxRawUltCut = drawUltCut;
-  drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
+  drawUltCut = function () { if (ultCut.t <= 0) return; pxWorldSharpText(pxRawUltCut); };
 
   // 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
   // ここをドットへ落とすと 6px の漢字になって一切読めない
+  // これらも「絵はドット・文字は等倍」で描く。
+  // 以前は pxPresent() してから等倍で丸ごと描いていたので、世界バッファを
+  // 一切通らず、猫のなめらかグラデ・角丸カード・放射ぼかしのランプが
+  // 前の版のまま残っていた（監査で「3画面まるごと未対応」と指摘）
   for (const nm of ['drawShop', 'drawMap', 'drawCharSel']) {
     const raw = window[nm];
-    if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+    if (typeof raw === 'function') window[nm] = function () { pxWorldSharpText(raw); };
   }
 
   // 会話・カットシーンは「立ち絵＋長い本文」なので、全部を等倍で描くと
@@ -25413,7 +25425,16 @@ function pxLine(x0, y0, x1, y1, col, wdt) {
         // 地平線に近いほど濃い。1.0 で頭打ちにせず 0.74 で止める
         // （地平線付近が単色に潰れると、かえって奥行きが消える）
         const raw = Math.min(0.74, 0.05 + 0.80 * Math.pow(Math.min(1.15, t), 1.25));
-        stipple(0, y, CW, D, solid, Math.round(raw * LV) / LV);
+        // 霞は市松ではなくベタの半透明で乗せる。
+        // 空のほぼ全面を覆う膜なので、ここを市松で作ると画面全体が網点になる
+        // （監査で「新聞写真に見える」と指摘された主因。孤立市松ドットの割合を
+        //  層ごとに切って測ったところ、背景だけで 4.3ポイントを占めていた）。
+        // 段割りは 00_core.js の階調圧縮（14段）が受け持ち、段の境目は
+        // そこの秩序ディザが崩す。膜の側で二重に割る必要はない。
+        ctx.globalAlpha = Math.min(1, col[3] * 1.5) * (Math.round(raw * LV) / LV);
+        ctx.fillStyle = base;
+        ctx.fillRect(0, y, CW, D);
+        ctx.globalAlpha = 1;
       }
       // いちばん奥だけ薄いベタを重ねて、網目が粗く見えるのを抑える。
       // ここを1枚のベタで敷くと、始まりの行が硬い横線として画面に出るので、
@@ -25943,17 +25964,22 @@ function pxLine(x0, y0, x1, y1, col, wdt) {
     const tn = T.tint ? _rgba(T.tint) : null;
     const vg = _rgba(T.vig), sn = pxRGB(T.sun + '1)');
     const sx0 = w * T.sunX, sy0 = T.sunY * 0.5, bR = h * 0.9;
-    const cx = w * 0.5, cy = h * 0.48, ri = h * 0.28 / dv, ro = h * 0.88, LV = 6;
+    const cx = w * 0.5, cy = h * 0.48, ri = h * 0.28 / dv, ro = h * 0.88, LV = 14;
     let i = 0;
     for (let y = 0; y < h; y++) {
       const brow = (y & 3) << 2;
       for (let x = 0; x < w; x++, i += 4) {
-        const bay = B4[brow | (x & 3)] / 16;
+        // 画面いっぱいの膜（色被せ・日輪ブルーム・ヴィネット）に Bayer を混ぜると、
+        // 暗部が黒との50%市松になって画面全体が網点に見える（目視監査の主因）。
+        // ここは段数を増やして素直に割り、段の境目を崩す仕事は
+        // 00_core.js の階調圧縮側の秩序ディザに任せる。
+        // bay は残してあるが 0 なので、段の中は必ずベタになる
+        const bay = 0;
         let R = 0, G = 0, Bb = 0, A = 0;
         if (tn) { R = tn[0]; G = tn[1]; Bb = tn[2]; A = tn[3]; }
         const dxs = x - sx0, dys = y - sy0, ds = Math.sqrt(dxs * dxs + dys * dys) / bR;
         if (ds < 1) {                                  // 日輪のブルームを4段で
-          const ba = 0.13 * (Math.floor((1 - ds) * (1 - ds) * 4 + bay) / 4);
+          const ba = 0.13 * (Math.floor((1 - ds) * (1 - ds) * 10 + bay) / 10);
           if (ba > 0.001) {
             const na = ba + A * (1 - ba), k = A * (1 - ba);
             R = (sn[0] * ba + R * k) / na; G = (sn[1] * ba + G * k) / na; Bb = (sn[2] * ba + Bb * k) / na;

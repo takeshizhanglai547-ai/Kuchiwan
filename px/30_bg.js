@@ -278,7 +278,16 @@
         // 地平線に近いほど濃い。1.0 で頭打ちにせず 0.74 で止める
         // （地平線付近が単色に潰れると、かえって奥行きが消える）
         const raw = Math.min(0.74, 0.05 + 0.80 * Math.pow(Math.min(1.15, t), 1.25));
-        stipple(0, y, CW, D, solid, Math.round(raw * LV) / LV);
+        // 霞は市松ではなくベタの半透明で乗せる。
+        // 空のほぼ全面を覆う膜なので、ここを市松で作ると画面全体が網点になる
+        // （監査で「新聞写真に見える」と指摘された主因。孤立市松ドットの割合を
+        //  層ごとに切って測ったところ、背景だけで 4.3ポイントを占めていた）。
+        // 段割りは 00_core.js の階調圧縮（14段）が受け持ち、段の境目は
+        // そこの秩序ディザが崩す。膜の側で二重に割る必要はない。
+        ctx.globalAlpha = Math.min(1, col[3] * 1.5) * (Math.round(raw * LV) / LV);
+        ctx.fillStyle = base;
+        ctx.fillRect(0, y, CW, D);
+        ctx.globalAlpha = 1;
       }
       // いちばん奥だけ薄いベタを重ねて、網目が粗く見えるのを抑える。
       // ここを1枚のベタで敷くと、始まりの行が硬い横線として画面に出るので、
@@ -808,17 +817,22 @@
     const tn = T.tint ? _rgba(T.tint) : null;
     const vg = _rgba(T.vig), sn = pxRGB(T.sun + '1)');
     const sx0 = w * T.sunX, sy0 = T.sunY * 0.5, bR = h * 0.9;
-    const cx = w * 0.5, cy = h * 0.48, ri = h * 0.28 / dv, ro = h * 0.88, LV = 6;
+    const cx = w * 0.5, cy = h * 0.48, ri = h * 0.28 / dv, ro = h * 0.88, LV = 14;
     let i = 0;
     for (let y = 0; y < h; y++) {
       const brow = (y & 3) << 2;
       for (let x = 0; x < w; x++, i += 4) {
-        const bay = B4[brow | (x & 3)] / 16;
+        // 画面いっぱいの膜（色被せ・日輪ブルーム・ヴィネット）に Bayer を混ぜると、
+        // 暗部が黒との50%市松になって画面全体が網点に見える（目視監査の主因）。
+        // ここは段数を増やして素直に割り、段の境目を崩す仕事は
+        // 00_core.js の階調圧縮側の秩序ディザに任せる。
+        // bay は残してあるが 0 なので、段の中は必ずベタになる
+        const bay = 0;
         let R = 0, G = 0, Bb = 0, A = 0;
         if (tn) { R = tn[0]; G = tn[1]; Bb = tn[2]; A = tn[3]; }
         const dxs = x - sx0, dys = y - sy0, ds = Math.sqrt(dxs * dxs + dys * dys) / bR;
         if (ds < 1) {                                  // 日輪のブルームを4段で
-          const ba = 0.13 * (Math.floor((1 - ds) * (1 - ds) * 4 + bay) / 4);
+          const ba = 0.13 * (Math.floor((1 - ds) * (1 - ds) * 10 + bay) / 10);
           if (ba > 0.001) {
             const na = ba + A * (1 - ba), k = A * (1 - ba);
             R = (sn[0] * ba + R * k) / na; G = (sn[1] * ba + G * k) / na; Bb = (sn[2] * ba + Bb * k) / na;

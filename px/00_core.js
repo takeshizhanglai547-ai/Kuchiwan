@@ -22,7 +22,10 @@ const PX = {
   // 「ドット絵」ではなく「新聞の写真」になる。14 前後が、平らな面はベタで乗り、
   // グラデーションだけがディザに割れる境目（実測でこの値を選んだ）
   levels: 14,
-  dither: 0.9,             // ディザの強さ（0で無効）
+  // ディザの強さ。0.9 は「1段ぶんまるごと揺らす」量で、平面まで市松に割れて
+  // 網点に見えた（目視監査の最大の指摘）。0.55 だと、段の境目だけが崩れて
+  // 平らな面はベタのまま残る
+  dither: 0.55,
   grade: true,             // 色調補正（影を寒色へ・光を暖色へ・彩度を持ち上げる）
   on: true,
 };
@@ -71,19 +74,14 @@ if (PX_REAL) {
     cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
     pxResetDisp(); pxResetWorld();
   };
-  // 表示倍率を半段刻みに丸める。
-  // 本編の resize は画面に収まる実数倍（例 1.0417倍）で CSS の大きさを決める。
-  // ドット絵をその倍率で引き伸ばすと、ある列だけ2画面ドット・隣は1画面ドット、
-  // という不揃いな拡大になって、せっかくのドットがにじむ。
-  // 裏画面は 960×540（＝バッファ 480×270 の2倍）なので、CSS倍率が 0.5 刻みなら
-  // バッファ1ドットは必ず整数個の画面ドットになる。
-  // 0.5 未満（画面が 480×270 より狭い端末）は丸めない。丸めると画面からはみ出す
-  resize = function () {
-    setupCanvas();
-    let r = Math.min(window.innerWidth / W, window.innerHeight / H);
-    if (r >= 0.5) r = Math.floor(r * 2) / 2;
-    cv.style.width = (W * r) + 'px'; cv.style.height = (H * r) + 'px';
-  };
+  // 表示倍率は本編と同じ「画面に収まる実数倍」のままにする。
+  // 一度これを 0.5 刻みへ丸めたが、監査の実測で 800×600 のウィンドウが
+  // 480×270 まで落ち、画面の82%が黒帯になった（1280×720 でも面積の44%を捨てる）。
+  // さらにキャンバスだけ縮んで HTML のメニューは CSS px 固定なので、
+  // メニューがゲーム画面より大きくなってタイトルロゴを覆った。
+  // 実数倍でも image-rendering:pixelated なのでドットの縁はぼけない。
+  // 起きるのは「ある列だけ1画面ドット広い」という不揃いだけで、
+  // 画面の8割を捨てるより明らかに軽い副作用
   resize();
 }
 
@@ -240,19 +238,26 @@ const PX_TEXT_STATE = ['font', 'fillStyle', 'strokeStyle', 'lineWidth', 'globalA
 function pxWorldSharpText(fn) {
   if (!PX.on) { fn(); return; }
   const real = pxCtx, queue = [];
-  const rec = new Proxy(real, {
-    get(t, k) {
-      if (k === 'fillText' || k === 'strokeText') return function () {
-        const s = {}; for (const p of PX_TEXT_STATE) s[p] = t[p];
-        queue.push({ k, a: Array.prototype.slice.call(arguments), M: t.getTransform(), s });
-      };
-      const v = t[k];
-      return typeof v === 'function' ? v.bind(t) : v;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-  const keep = ctx; ctx = rec;
-  try { fn(); } finally { ctx = keep === rec ? real : keep; }
+  // ctx を Proxy で包むのは駄目。canvas の組み込みメソッドは受け手（this）が
+  // Proxy だと "Illegal invocation" で落ちる。実際、UI層が
+  // `raw.call(ctx, …)` の形で組み込みを呼んでいて、地図が毎フレーム例外を投げた。
+  // 代わりに本物のコンテキストへ**自前のプロパティを被せて**プロトタイプの
+  // メソッドを隠し、終わったら消す。this は常に本物のままになる
+  const rec = (k) => function () {
+    const s = {}; for (const p of PX_TEXT_STATE) s[p] = real[p];
+    queue.push({ k, a: Array.prototype.slice.call(arguments), M: real.getTransform(), s });
+  };
+  const had = Object.prototype.hasOwnProperty.call(real, 'fillText');
+  const prevF = real.fillText, prevS = real.strokeText;
+  real.fillText = rec('fillText');
+  real.strokeText = rec('strokeText');
+  const keep = ctx; ctx = real;
+  try { fn(); }
+  finally {
+    ctx = keep;
+    if (had) { real.fillText = prevF; real.strokeText = prevS; }
+    else { delete real.fillText; delete real.strokeText; }
+  }
   pxPresent();                                   // ここで ctx は表示キャンバスへ移る
   // バッファ座標 → 表示座標は整数倍（cv.width/PX.W）。控えた変換をその倍率で
   // 掛け直せば、文字は元の論理位置・元の大きさのまま等倍で出る
@@ -275,14 +280,21 @@ function pxWorldSharpText(fn) {
 
   // 奥義カットインは HUD より上だが、ベクタのまま出すと画面で浮くので
   // いったんドットバッファへ描いてから拡大して重ねる
+  // 立ち絵はドット、技名とキャラ名は等倍で描き直す。
+  // 全部を 480×270 へ落としていたので「聖犬士イッヌ」の漢字が潰れて
+  // 読めなくなっていた（監査で指摘）
   const pxRawUltCut = drawUltCut;
-  drawUltCut = function () { if (ultCut.t <= 0) return; pxOverlayPass(pxRawUltCut); };
+  drawUltCut = function () { if (ultCut.t <= 0) return; pxWorldSharpText(pxRawUltCut); };
 
   // 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
   // ここをドットへ落とすと 6px の漢字になって一切読めない
+  // これらも「絵はドット・文字は等倍」で描く。
+  // 以前は pxPresent() してから等倍で丸ごと描いていたので、世界バッファを
+  // 一切通らず、猫のなめらかグラデ・角丸カード・放射ぼかしのランプが
+  // 前の版のまま残っていた（監査で「3画面まるごと未対応」と指摘）
   for (const nm of ['drawShop', 'drawMap', 'drawCharSel']) {
     const raw = window[nm];
-    if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
+    if (typeof raw === 'function') window[nm] = function () { pxWorldSharpText(raw); };
   }
 
   // 会話・カットシーンは「立ち絵＋長い本文」なので、全部を等倍で描くと
