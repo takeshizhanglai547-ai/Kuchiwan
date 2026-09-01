@@ -193,6 +193,32 @@
   // そこを削ると「軽いが別のゲーム」になる
   const FOEQ = { lv: 3, auto: true };
   window.PXFOE = FOEQ;
+
+  // 段を「本編のガバナー perfTier」から決めるのはやめた。
+  // 性能監査で実測したところ、敵16体の場面で perfTier が 1↔2 を約1.5〜2.5秒おきに
+  // 往復し（600フレームで5回）、そのたびに**雑魚16体の輪郭が一斉に消えては戻る**。
+  // 原因は本編の閾値（21.5ms で降格・17.6ms で復帰）の境目に、この層を足した
+  // フレーム時間がちょうど乗ってしまうこと。壁時計で決めるかぎり振動は止まらない。
+  //
+  // 代わりに**敵の数**で決める。費用は体数にほぼ比例する（実測 0.61ms/体）ので
+  // 上限を数で切れば、フレーム時間を見なくても予算が守れる。数は湧きと撃破でしか
+  // 変わらないので、切り替わりは稀で、しかも画面が賑やかな瞬間に紛れる。
+  // 行きと戻りで閾値をずらして（ヒステリシス）、境目での往復も止める。
+  let _slowLatch = 0;         // 本当に遅い端末の保険。一度掛かったら簡単には外さない
+  function foePickLv() {
+    const n = (typeof enemies !== 'undefined' && enemies) ? enemies.length : 0;
+    if (typeof perfTier !== 'undefined') {
+      if (perfTier >= 2) _slowLatch = 600;              // 10秒ぶん保持
+      else if (perfTier === 0 && _slowLatch > 0) _slowLatch--;
+    }
+    let lv = FOEQ.lv;
+    if (lv >= 3 && n > 6) lv = 2;                       // 落ちる側は 6/10
+    else if (lv === 2 && n > 10) lv = 1;
+    if (lv <= 1 && n <= 7) lv = 2;                      // 戻る側は 7/4（重ならない）
+    if (lv === 2 && n <= 4) lv = 3;
+    if (_slowLatch > 0) lv = Math.min(lv, 1);           // ボスの輪郭だけは残す
+    FOEQ.lv = lv;
+  }
   let busy = false;
   function foeArt(t, hw, up, down, bodyH, mat, ocol, fn) {
     if (!PX.on || busy || (typeof pxOutlineDepth !== 'undefined' && pxOutlineDepth > 0)) { fn(); return; }
@@ -384,8 +410,7 @@
         const t = (e && e.type && ETYPE[e.type]) || null;
         if (!t || !PX.on) return raw.call(this, e, a2, a3, a4);
         ensure();
-        if (FOEQ.auto) FOEQ.lv = (typeof perfTier === 'undefined') ? 3
-          : (perfTier >= 2 ? 1 : perfTier >= 1 ? 2 : 3);
+        if (FOEQ.auto) foePickLv();
         const lv = FOEQ.lv;
         ctx.save();
         foePose(e, t);   // 姿勢の変化は最も軽いので、どの段でも残す
