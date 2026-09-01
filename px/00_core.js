@@ -71,7 +71,20 @@ if (PX_REAL) {
     cv.width = PX.W * PX.ZOOM; cv.height = PX.H * PX.ZOOM;
     pxResetDisp(); pxResetWorld();
   };
-  setupCanvas(); resize();
+  // 表示倍率を半段刻みに丸める。
+  // 本編の resize は画面に収まる実数倍（例 1.0417倍）で CSS の大きさを決める。
+  // ドット絵をその倍率で引き伸ばすと、ある列だけ2画面ドット・隣は1画面ドット、
+  // という不揃いな拡大になって、せっかくのドットがにじむ。
+  // 裏画面は 960×540（＝バッファ 480×270 の2倍）なので、CSS倍率が 0.5 刻みなら
+  // バッファ1ドットは必ず整数個の画面ドットになる。
+  // 0.5 未満（画面が 480×270 より狭い端末）は丸めない。丸めると画面からはみ出す
+  resize = function () {
+    setupCanvas();
+    let r = Math.min(window.innerWidth / W, window.innerHeight / H);
+    if (r >= 0.5) r = Math.floor(r * 2) / 2;
+    cv.style.width = (W * r) + 'px'; cv.style.height = (H * r) + 'px';
+  };
+  resize();
 }
 
 //──────────────────────────────────────────────────────────────────
@@ -216,7 +229,45 @@ function pxOverlayPass(fn) {
 }
 
 if (PX_REAL) {
-  // HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
+  // 「絵はドット・文字は等倍」を1つの描画関数の中で両立させる。
+// fn の描画を全部ドットバッファへ流しつつ、fillText / strokeText だけは
+// 描かずに控えておき、転送したあとで表示キャンバスへ描き直す。
+// 480×270 では日本語が 6px になって読めないが、絵まで等倍にすると
+// 立ち絵だけベクタで残って画面から浮く。その両取りのための仕組み。
+const PX_TEXT_STATE = ['font', 'fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha',
+  'textAlign', 'textBaseline', 'lineJoin', 'miterLimit', 'globalCompositeOperation',
+  'shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY'];
+function pxWorldSharpText(fn) {
+  if (!PX.on) { fn(); return; }
+  const real = pxCtx, queue = [];
+  const rec = new Proxy(real, {
+    get(t, k) {
+      if (k === 'fillText' || k === 'strokeText') return function () {
+        const s = {}; for (const p of PX_TEXT_STATE) s[p] = t[p];
+        queue.push({ k, a: Array.prototype.slice.call(arguments), M: t.getTransform(), s });
+      };
+      const v = t[k];
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const keep = ctx; ctx = rec;
+  try { fn(); } finally { ctx = keep === rec ? real : keep; }
+  pxPresent();                                   // ここで ctx は表示キャンバスへ移る
+  // バッファ座標 → 表示座標は整数倍（cv.width/PX.W）。控えた変換をその倍率で
+  // 掛け直せば、文字は元の論理位置・元の大きさのまま等倍で出る
+  const k = cv.width / PX.W;
+  for (const q of queue) {
+    pxDisp.save();
+    pxDisp.setTransform(q.M.a * k, q.M.b * k, q.M.c * k, q.M.d * k, q.M.e * k, q.M.f * k);
+    for (const p of PX_TEXT_STATE) { try { pxDisp[p] = q.s[p]; } catch (e) {} }
+    try { pxDisp[q.k].apply(pxDisp, q.a); } catch (e) {}
+    pxDisp.restore();
+  }
+  pxResetDisp();
+}
+
+// HUD は等倍側で描く。480×270 に落とすと日本語が読めなくなるため、
   // 「世界＝ドット絵／文字＝等倍」の二層構成にしている。
   // UI の図形側（枠・ゲージ・アイコン）は px/50_ui.js が2ドット格子へ揃える
   const pxRawHUD = drawHUD;
@@ -229,10 +280,16 @@ if (PX_REAL) {
 
   // 文字が主役の画面（店・地図・キャラ選択・会話）は等倍側で描く。
   // ここをドットへ落とすと 6px の漢字になって一切読めない
-  for (const nm of ['drawShop', 'drawMap', 'drawCharSel', 'drawCut']) {
+  for (const nm of ['drawShop', 'drawMap', 'drawCharSel']) {
     const raw = window[nm];
     if (typeof raw === 'function') window[nm] = function () { pxPresent(); return raw.apply(this, arguments); };
   }
+
+  // 会話・カットシーンは「立ち絵＋長い本文」なので、全部を等倍で描くと
+  // 立ち絵だけベクタのまま残って画面から浮く（実際にボス登場の会話で浮いた）。
+  // 絵はドットバッファへ落とし、文字だけを等倍で描き直す。
+  const pxRawCut = drawCut;
+  drawCut = function () { pxWorldSharpText(pxRawCut); };
 
   // 本編の loop は各分岐の末尾で requestAnimationFrame(loop) を呼んで抜ける。
   // その外側を包めば、どの分岐を通っても「フレーム頭で初期化・末尾で転送」が効く

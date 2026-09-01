@@ -942,11 +942,25 @@
     pxDitherRect(0, H - th - PXU * 3, W, PXU * 3, 'rgba(0,0,0,0)', P[2], 0.5);
     pxDitherRect(th, 0, PXU * 3, H, 'rgba(0,0,0,0)', P[2], 0.5);
     pxDitherRect(W - th - PXU * 3, 0, PXU * 3, H, 'rgba(0,0,0,0)', P[2], 0.5);
-    // 段位が上がった瞬間の輪
+    // 段位が上がった瞬間の輪。
+    // ここだけは自前のドット輪（ringBand）ではなく ctx.ellipse で描く。
+    // 480×270 へ落としてから14段へ切るので、楕円のアンチエイリアスは
+    // 1ドットの中間色へ潰れて、結局ドットの輪になる（＝見た目は変わらない）。
+    // 半径と線幅はドット格子へ丸めてあるので、縁が薄墨にならない。
     if (fl > 0) {
-      const u = 1 - fl, rr = Math.max(PXU * 3, W * (0.16 + 0.62 * u));
-      ctx.globalAlpha = fl * 0.8;
-      ringBand(W * 0.5, H * 0.54, rr, rr * 0.62, Math.max(2, dR(16 * fl)), P[4], P[2], '#ffffff');
+      const u = 1 - fl;
+      const rr = Math.max(PXU * 3, Math.round(W * (0.16 + 0.62 * u) / PXU) * PXU);
+      const lw = Math.max(PXU, Math.round(14 * fl / PXU) * PXU);
+      // 輪はひとつ。同じパスを太→細と2回なぞって、帯＋1ドットの芯にする。
+      // 半径を変えて何本も引くと「広がる輪」が1フレームに複数ある状態になり、
+      // 輪の育ち方が読めなくなる。
+      // 濃さは本編と同じ fl*0.55 を上限にする。lighter で重ねるので、
+      // 3本 × α0.8 で引いたときは画面いっぱいの白い輪に飛んだ
+      ctx.beginPath();
+      ctx.ellipse(W * 0.5, H * 0.54, rr, rr * 0.62, 0, 0, TAU);
+      for (const [col, w, a] of [[P[2], lw, 0.55], [P[4], PXU, 0.30]]) {
+        ctx.globalAlpha = fl * a; ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1; ctx.restore();
     if (ht >= 0.6 && perfTier < 2 && gf % 3 === 0)
