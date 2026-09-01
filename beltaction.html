@@ -312,6 +312,9 @@ function setupCanvas(){
   DPR = Math.min(window.devicePixelRatio||1, 2);
   cv.width = W*DPR; cv.height = H*DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  // 既定は 'low'（ミップ無しの双一次）。拡大して貼るスプライトが甘くなる。
+  // cv.width への代入でコンテキストの状態は初期化されるので、ここで毎回入れ直す
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
 }
 setupCanvas();
 
@@ -1231,7 +1234,7 @@ const Music=(()=>{
       prog:[[50,54,57],[47,50,54],[45,49,52],[50,54,57],[52,55,59],[47,50,54],[45,49,52],[50,54,57]],
       mel:[74,76,78,81, 83,81,78,76, 74,71,69,71, 74,76,78,74, 78,81,83,86, 83,81,78,74, 71,69,66,69, 71,74,76,74],
       rhy:[1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1] },   // 二拍目を空けた町の拍子＝人の歩調
-    { bpm:104, lead:'square', pad:'sawtooth', kit:'heavy',   // 21: 合戦の野 — 都節 (D)。陣太鼓の四つ打ち
+    { bpm:104, lead:'square', pad:'sawtooth', kit:'taiko',   // 21: 合戦の野 — 都節 (D)。陣太鼓の送り打ち
       // D Eb G A Bb。b2(Eb) が旋律の要。休符を多く取り、太鼓の間で緊張を持たせる
       prog:[[50,53,57],[50,53,57],[46,50,53],[45,50,53],[50,53,57],[51,55,58],[45,48,52],[50,53,57]],
       mel:[74,75,79,74, 81,79,75,74, 70,74,75,74, 69,74,70,69, 74,75,79,82, 81,79,75,79, 75,74,70,67, 69,70,74,74],
@@ -1245,11 +1248,11 @@ const Music=(()=>{
       prog:[[50,53,57],[48,52,55],[50,53,57],[45,48,52],[50,53,57],[55,58,62],[48,52,55],[50,53,57]],
       mel:[74,76,79,74, 72,74,76,72, 69,72,74,72, 67,69,72,69, 74,76,79,81, 79,76,74,72, 72,69,67,64, 62,67,69,74],
       rhy:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
-    { bpm:116, lead:'triangle', pad:'triangle',              // 24: 川中島の朝霧 — 律音階 (G)。霧の中の対峙
+    { bpm:116, lead:'triangle', pad:'triangle', kit:'taiko',  // 24: 川中島の朝霧 — 律音階 (G)。霧の中の対峙
       prog:[[55,59,62],[53,57,60],[50,53,57],[55,59,62],[57,60,64],[53,57,60],[50,53,57],[55,59,62]],
       mel:[79,81,84,79, 77,79,81,77, 74,77,79,77, 79,84,86,84, 81,84,86,91, 89,86,84,81, 79,77,74,72, 74,79,81,79],
       rhy:[1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,1,0] },   // 霧に音が呑まれる。長い空白のあとに一打だけ返る
-    { bpm:142, lead:'square', pad:'sawtooth', drive:true,    // 25: 甲斐の山城 — ヨナ抜き長音階 (A)。高地の乾いた行進
+    { bpm:142, lead:'square', pad:'sawtooth', drive:true, kit:'gallop',   // 25: 甲斐の山城 — ヨナ抜き長音階 (A)。高地を駆ける騎馬
       prog:[[57,61,64],[52,56,59],[54,57,61],[57,61,64],[59,62,66],[52,56,59],[54,57,61],[57,61,64]],
       mel:[81,83,85,88, 90,88,85,83, 81,78,76,78, 81,83,85,81, 85,88,90,93, 90,88,85,81, 78,76,73,76, 78,81,83,81],
       rhy:[1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0] },   // 乾いた四拍＝高地の行軍
@@ -1305,7 +1308,7 @@ const Music=(()=>{
     boss3:{ bpm:162, lead:'square', pad:'sawtooth', drive:true, epic:true,   // 最終形態：決戦の頂 (Dm 荘厳・大団円)
       prog:[[50,53,57],[46,50,53],[53,57,60],[48,52,55],[50,53,57],[46,50,53],[43,46,50],[45,49,52]],
       mel:[74,77,81,86, 82,81,77,74, 77,81,84,81, 79,84,79,76, 74,77,81,86, 86,89,86,82, 79,82,86,82, 81,76,73,69] },
-    bossfast:{ bpm:168, lead:'square', pad:'sawtooth', drive:true,   // 俊敏なボス：疾走戦 (Em)
+    bossfast:{ bpm:168, lead:'square', pad:'sawtooth', drive:true, kit:'gallop',   // 俊敏なボス：疾走戦 (Em)
       // 全編 m7 のモーダル疾走（三和音より暗く速く聞こえる）
       prog:[[52,55,59,62],[47,50,54,57],[54,57,61,64],[49,52,56,59],[52,55,59,62],[45,48,52,55],[47,50,54,57],[47,50,54,57]],
       mel:[76,79,83,81, 76,79,76,72, 72,76,72,69, 71,75,78,83, 76,79,83,88, 84,81,77,81, 83,78,74,78, 78,74,71,67],
@@ -1380,8 +1383,12 @@ const Music=(()=>{
   function bassN(n,t,dur){ voice(midi(n),t,dur,'sawtooth',0.115,0.008,720);
     const sub=(midi(n-12)>=30)?n-12:n;                                              // 30Hz未満のサブは可聴下限以下でヘッドルームを食うだけなのでオクターブ下げを諦める
     voice(midi(sub),t,dur,'sine',0.09,0.008,300); }
-  // ── 周回パレット：1周目=生オーケストラ／2周目(蟲)=木質パーカッション＋マリンバ／3周目(宇宙)=電子ドラム＋FMベル ──
-  function pal(){ const L=lap|0; return L>=3?3:(L>=2?2:1); }
+  // ── 周回パレット ──
+  //   1=生オーケストラ／2(蟲)=木質パーカッション＋マリンバ／3(宇宙)=電子ドラム＋FMベル
+  //   4(神話)=大太鼓と竪琴／5(戦国)=和太鼓と締太鼓／6(機械)=金属の打楽器
+  //   4〜6 は長らく3を共用していて、神話も戦国も宇宙と同じ音で鳴っていた。
+  //   持続音は増やさず、既にある単発の打楽器と撥弦の差し替えだけで分ける
+  function pal(){ const L=lap|0; return L>=6?6:(L>=5?5:(L>=4?4:(L>=3?3:(L>=2?2:1)))); }
   function pluck(f,t,dur,vol){                                                       // 蟲の世界：木の実を叩くマリンバ／カリンバ
     const o=actx.createOscillator(),o2=actx.createOscillator(),g=actx.createGain(),g2=actx.createGain();
     const lp=actx.createBiquadFilter(); lp.type='lowpass';
@@ -1429,7 +1436,11 @@ const Music=(()=>{
     g.gain.setValueAtTime(0.34*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
     o.connect(g); g.connect(bus()); o.start(t); o.stop(t+0.16); }
   // p=周回パレット。1=生スネア／2=乾いた木質シェル（蟲）／3=長く尾を引くクラップ（宇宙）
-  function snare(t,v,p){ p=p||1; const bf=[0,2100,3100,1650][p], bq=[0,0.8,1.7,0.55][p], dc=[0,0.12,0.085,0.19][p], sh=[0,196,262,147][p];
+  // 表は周回ぶんの長さを必ず持たせる。短いまま pal() を増やすと bf/bq/dc/sh が
+  // undefined になり、周波数が NaN になって音が消える
+  function snare(t,v,p){ p=p||1;
+    const bf=[0,2100,3100,1650,2400,1250,3400][p], bq=[0,0.8,1.7,0.55,0.65,0.40,2.1][p],
+          dc=[0,0.12,0.085,0.19,0.16,0.22,0.07][p], sh=[0,196,262,147,175,110,294][p];
     const s=actx.createBufferSource(); s.buffer=noiseBuf; const g=actx.createGain();
     const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=bf; bp.Q.value=bq;
     g.gain.setValueAtTime(0.2*v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dc);
@@ -1558,7 +1569,7 @@ const Music=(()=>{
     // ── 32小節フォーム：8小節ごとに A(0)/A'(1)/B(2)/B'(3) を進め、層をゲートして展開を作る。
     //    データを増やさずに実効ループ長を4倍にし、「同じ8小節の永久反復」から脱する ──
     if(s===0) loopN=(loopN+1)&3;
-    const sec=loopN; S._sec=sec; const P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:7800);
+    const sec=loopN; S._sec=sec; const P=pal(), kit=S.kit||(S.drive?'drive':'straight'), hz=P===2?9600:(P===3?6400:(P===5?5200:(P===6?8800:(P===4?7200:7800))));
     // pad：和音を close voicing のまま root〜root+8 に敷き、bass(〜root) と lead(root+12〜) の谷を埋める。
     // 以前は +12・第3声だけ +24 で lead の音域に丸ごと重なり、団子の 77% を作っていた。
     // S._po は曲ごとに一度だけ算出する基準オクターブ（低い調の曲だけ +12 して 80Hz 級の濁りを避ける）
@@ -1575,7 +1586,10 @@ const Music=(()=>{
       S._mar=mn; }
     // 周回ごとの色づけは「持続音を足す」ではなくリズム層で行う（下のベースのパターン参照）。
     // 編曲が密なのでパッドに声部を足すと、木琴・アルペジオ・対旋律のどれかと必ずぶつかる
-    if(st===0){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
+    // B の頭1小節だけパッドを抜いて、旋律とベースと太鼓だけにする。
+    // 層を足すのではなく抜くことで色を変える（足すと必ず飽和する）
+    const _brk = (!S.soft && sec===2 && bar===0);
+    if(st===0 && !_brk){ ch.forEach(n=>strings(n+S._po,t,stepDur*8*0.96,S.pad,S.soft?0.030:0.040)); }
     if(S.epic){                                                                                // ── 最終決戦：荘厳な大団円オーケストレーション ──
       if(st===0){ organ(ch,t,stepDur*8,S._po-12); choir(choirN(ch,S._po),t,stepDur*8*0.92);      // オルガン土台(パッドの1オクターブ下)＋聖歌隊(9thの保続＝旋律が踏まない音)
         if(sec>=2||bar%2===0) brass(ch,t,stepDur*1.8); }                                        // パワーブラス(根音・3度)はA/A'では1小節おき、B以降は毎小節
@@ -1589,6 +1603,9 @@ const Music=(()=>{
     else { // ベースの歩き方も周回で変える（1周目=ウォーキング／2周目=跳ねる／3周目=8分の推進）
       const BN = P===2 ? [root-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12,root-12,ch[1]-12,ch[2]-12]
                : P===3 ? [root-12,root-12,root-12,ch[2]-12,root-12,root-12,ch[1]-12,ch[2]-12]
+               : P===4 ? [root-12,ch[1]-12,ch[2]-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12,root-12]   // 神話：階段状に上下する
+               : P===5 ? [root-12,root-12,root-12,root-12,ch[1]-12,ch[1]-12,root-12,ch[2]-12]     // 戦国：根音の持続（都節の下）
+               : P===6 ? [root-12,ch[2]-12,ch[2]-12,root-12,ch[1]-12,ch[1]-12,ch[2]-12,root-12]   // 機械：3+3+2 に合わせて跳ねる
                :         [root-12,root-12,ch[2]-12,root-12,ch[1]-12,root-12,ch[2]-12,ch[1]-12];
       const bn=BN[st];   // 5拍目の素の root は pad の根音と同音だったので3度へ
       bassN(bn,t,stepDur*0.92); }
@@ -1604,6 +1621,24 @@ const Music=(()=>{
         if(st===4) snare(t,0.9,P);                          // 裏の芯だけ残す
         if(sec>=2 && st===7) KICK(t,0.5);                   // B以降だけ、次の小節へ食い込む一打
       }
+      // 和太鼓（taiko）：頭で大太鼓、裏で締太鼓、小節の終わりに二つ打ちの送り。
+      // heavy が空けている 1/2/3/5/7 の隙間を埋めるので、同じ曲でも足取りが変わる
+      else if(kit==='taiko'){
+        if(st===0){ KICK(t,1); tom(t,104,0.9); }
+        if(st===3) tom(t,104,0.55);
+        if(st===4){ KICK(t,0.85); snare(t,0.8,P); }
+        if(st===6) tom(t,88,0.5);
+        if(st===7) tom(t,88,0.72);                          // 次の小節へ送る「ドン・ドコ」
+      }
+      // 早駆け（gallop）：8つを 3+1+3+1 に割る。march（0/2/4/6）とも anvil（0/3/6）とも
+      // 重ならない足取りにして、騎馬と追撃の場面を分ける
+      else if(kit==='gallop'){
+        if(st===0) KICK(t,1);
+        if(st===3) KICK(t,0.78);
+        if(st===4) KICK(t,0.9);
+        if(st===7) KICK(t,0.62);
+        if(st===2||st===6) snare(t,1,P);
+      }
       else if(kit==='heavy'){ if(st===0) KICK(t,1); if(st===6) KICK(t,0.8); if(st===4) snare(t,1,P); } // ハーフタイムの重圧
       else {
         if(st===0||st===4) KICK(t,1);
@@ -1617,10 +1652,14 @@ const Music=(()=>{
       hat(t,st%2?0.55:1,hz);
       if(sec>=1) hat(t+stepDur/2,sec>=3?0.5:0.4,hz);                                            // 16分裏ハットはA'以降
       if(st===0&&bar%4===0){ const tt=t+stepDur*0.22;                                           // キックと重心を分けるため半歩後ろへ
-        if(P===2) tom(tt,152,1); else if(P===3) elecKick(tt,0.85); else timp(tt,root,1); }
+        if(P===2) tom(tt,152,1);
+        else if(P===3||P===6) elecKick(tt,0.85);
+        else if(P===5){ tom(tt,112,1); tom(tt+stepDur*0.5,88,0.66); }   // 戦国：陣太鼓の二つ打ち
+        else timp(tt,root,1); }
       if(S.epic&&st===4&&sec>=2&&bar%2===1) timp(t,root,0.7);                                   // 最終決戦：ティンパニの追い打ち（ベースの根音と重なるのでB以降・1小節おきに絞る）
       if(S._mar!=null) pluck(midi(S._mar),t,stepDur*0.7,0.022);                                 // 蟲：木質のオフビート（パッドの1オクターブ上を巡るオスティナート）
-      if(P===3&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);                  // 宇宙：金属的な余韻
+      if((P===3||P===6)&&st===0&&bar%2===0) fmBell(midi(ch[2]+24),t,stepDur*3.2,0.024);         // 宇宙・機械：金属的な余韻
+      if(P===5&&st===2&&bar%2===1) pluck(midi(ch[1]+12),t,stepDur*0.9,0.020);                   // 戦国：撥弦の合いの手（箏の一節）
     } else {                                                                                    // ── 静曲（町／タイトル／エンディング）にも32小節フォームを効かせる ──
       hat(t,st===0?0.3:0.14,hz);
       if(sec>=1) hat(t+stepDur/2,0.10,hz+2400);                                                 // A'：8分裏のシェイカー
@@ -3338,7 +3377,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
   for(let g=0; g<40 && overPit(p.x); g++) p.x=Math.max(camX+30, p.x-30);   // 谷の上に復帰しない
   p.fallT=0;
   p.state='idle'; p.atk=null; p.comboStep=0; p.comboTimer=0; p.hurtTimer=0; p.invuln=80; p.downTimer=0; p.respawnT=0;
-  p.charge=0; p.atkHeld=false; p.evW=null; p.evAmmo=0; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.stompSet=null; p.airChain={}; p.jdWin=0; p.jdHit=false; p.jdT=0; p.landT=0; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
+  p.charge=0; p.atkHeld=false; p.evW=null; p.evAmmo=0; p.z=0; p.vz=0; p.riseVel=0; p.tumble=false; p.recovUsed=false; p.tumbleT=0; p.jRave=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.stompSet=null; p.airChain={}; p.jdWin=0; p.jdHit=false; p.jdT=0; p.landT=0; p.landMax=22; p.guardStart=-99; p.parryFx=0; p.guardFx=0;
   p.sgCd=0; p.fortT=0; p.mgList=null; p.mgI=0; p.mgT=0;   // 攻撃＋掴み必殺技の状態をリセット
   p.ipT=0; p.ipWin=0; p.ipStance=0; p.ipDone=false; p.ipRef=0; p.ipChain=0;   // ワンデン：居合パリィの状態をリセット
   p.dgT=0; p.dgMain=null; p.dgHit=false; p.imT=0; p.imHit=false;   // 犬返し／一文字の状態をリセット
@@ -4174,7 +4213,7 @@ function updateGuardQuake(){ const p=player; p.gqT++; p.invuln=Math.max(p.invuln
   if(p.gqT<24){ p.z+=18; if(gf%3===0) dust(p.x,p.y,2); }                                   // 画面外へ大跳躍
   else if(p.gqT===24){ const t=nearestEnemy(); if(t) p.x=clamp(t.x, camX+60, camX+W-60); p.z=Math.max(p.z, H+100); }   // 上空で狙いを定める
   else if(p.gqT>30){ p.z-=36; if(gf%2===0) spark(p.x+rnd(-14,14), p.y-p.z-rnd(0,40), '#ffb85a', 2,5);   // 急降下
-    if(p.z<=0){ p.z=0; guardQuakeImpact(p); p.state='land'; p.landT=26; return; } }
+    if(p.z<=0){ p.z=0; guardQuakeImpact(p); p.state='land'; p.landT=p.landMax=26; return; } }
 }
 function guardQuakeImpact(p){ const mul=(p.atkMul||1);   // 段位は下の TD() が掛ける（ここで掛けると二重になる）
   quake=Math.max(quake,64); shake=Math.max(shake,24); hitStop=Math.max(hitStop,22); flashAt(7,'255,210,77'); triggerSlow(38);
@@ -5957,7 +5996,7 @@ function updatePlayer(){
       p.adVx*=0.94; p.adVz*=0.90;
       p.x=clamp(p.x, camX+24, Math.min(WORLD_END, camX+W-24));
       if(gf%2===0) particles.push({k:'wandenAfter', x:p.x, y:p.y-p.z, gl:groundLift(p.x), face:p.facing, life:10, max:10});
-      if(p.z<=0){ p.z=0; p.adT=0; p.vz=0; p.state='land'; p.landT=8; dust(p.x,p.y,6); sfx.land(p.x); }
+      if(p.z<=0){ p.z=0; p.adT=0; p.vz=0; p.state='land'; p.landT=p.landMax=8; dust(p.x,p.y,6); sfx.land(p.x); }
       else if(p.adT<=0){ p.vz=Math.min(p.adVz, 0); }
       return; }
     // 二段ジャンプ：空中でもう一度だけ跳べる。斬っている最中でも割り込める（空中連携の足がかり）
@@ -6108,10 +6147,10 @@ function updatePlayer(){
       else if(p.jHammer){ jumpAttackHit(); }   // ダブルハンマーは落下中ずっと判定
       else if(p.jAtk>=3 && p.jAtk<=11) jumpAttackHit(); }
     if(p.z<=0){ p.z=0; p.vz=0; p.airChain={}; p.stompSet=null;   // 着地したら空中コマンドの繋ぎ直しと踏み台を許す
-      if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
-      if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
-      if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
-      if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
+      if(p.jKabuto&&p.jAtk>0){ kabutoLand(); p.state='land'; p.landT=p.landMax=22; p.jAtk=0; p.jKabuto=false; p.jDown=false; dust(p.x,p.y,10); return; } // 兜割は着地硬直
+      if(p.jHammer&&p.jAtk>0){ earthSplit(); p.state='land'; p.landT=p.landMax=24; p.jAtk=0; p.jHammer=false; return; } // 地球割パンチ着地＝地震
+      if(p.jDrop&&p.jAtk>0){ heelLand(); p.state='land'; p.landT=p.landMax=12; p.jAtk=0; p.jDrop=false; dust(p.x,p.y,9); return; } // 回転踵落とし着地
+      if(p.jBolt&&p.jAtk>0){ boltLand(); p.state='land'; p.landT=p.landMax=18; p.jAtk=0; p.jBolt=false; return; } // サンダークラッシュ着地＝巨大落雷
       p.state='idle'; p.jAtk=0; p.jKabuto=false; p.jDown=false; p.jDrop=false; p.jHammer=false; p.jHyaku=false; p.jBolt=false; p.jFire=false; p.jUp=false;
       p.jRave=0; p.aerial=0; p.raveT=0; p.avx=0; p.adUsed=false; p.adT=0; p.djUsed=false;
       p.jMkUp=false; p.jMkDown=false; dust(p.x,p.y,7); sfx.land(p.x); }
@@ -6207,13 +6246,18 @@ function updatePlayer(){
       particles.push({k:'evoAfter', x:p.x, y:p.y, zz:p.z||0, gl:groundLift(p.x), face:p.facing,
                       color:EVO_COL[3], life:14, max:14, layer:0});
     // ── ばねのキック：発生で振り抜きの初動、振り切りで反動が戻る ──
-    if(p.rig && (def.superFx||def.finisher||def.rise)){
+    // ばねを必殺技だけに限っていたので、遊んでいる時間の大半を占める通常コンボは
+    // 潰れも胴のしなりもマントの返しも一切無く、耳と尻尾は死んでいた。
+    // 全ての技に入れ、吹き飛ばし量（kb）で強さを割る
+    if(p.rig){
+      const _m=(def.superFx||def.finisher||def.rise)? 1 : clamp((def.kb||4)/10, 0.35, 1.0);
       if(a.t===def.act[0]){
-        sprKick(p.rig.sq, def.rise? -6.5 : 5.5);
-        sprKick(p.rig.wob, p.facing*(def.rise? 6 : 9.5));
-        sprKick(p.rig.capeT, def.rise? -9 : 7.5); sprKick(p.rig.capeM, -p.facing*6); }
+        sprKick(p.rig.sq, (def.rise? -6.5 : 5.5)*_m);
+        sprKick(p.rig.wob, p.facing*(def.rise? 6 : 9.5)*_m);
+        sprKick(p.rig.capeT, (def.rise? -9 : 7.5)*_m); sprKick(p.rig.capeM, -p.facing*6*_m);
+        if(p.rig.earL){ sprKick(p.rig.earL,-5*_m); sprKick(p.rig.earR,-4.4*_m); sprKick(p.rig.tail,6*_m); } }
       if(a.t===def.act[1]+2){
-        sprKick(p.rig.wob, -p.facing*7.0); sprKick(p.rig.sq, -3.4); sprKick(p.rig.capeT, 5.5); } }
+        sprKick(p.rig.wob, -p.facing*7.0*_m); sprKick(p.rig.sq, -3.4*_m); sprKick(p.rig.capeT, 5.5*_m); } }
     if(def.derive && pressed.atk && a.t>=def.act[0]){ pressed.atk=false; beginAttack(def.derive); return; }   // 派生技（振り上げ→叩きつけ）
     // 連打で連射（技ごとに上限）。受け付けを act[0] のままにすると、速い連打が
     // 技の頭で上限を使い切ってしまい、実測でドリルは 34F→46F しか伸びなかった。
@@ -6772,7 +6816,7 @@ function updatePlayer(){
           enemies.forEach(function(e){ if(e.dead||e.grabbedBy) return; if(Math.abs(e.x-p.x)>S.r) return;
             damageEnemy(e, TD(Math.round(S.dmg*(p.atkMul||1)*(a.evo||1))), (e.x<p.x?-1:1)*10, true);
             if(!e.dead) launchEnemy(e, (e.x<p.x?-1:1)*14, -11, 3); }); }
-        p.state='land'; p.landT=def.airLand||10; p.atk=null; p.comboStep=0; p.airChain={}; p.stompSet=null;
+        p.state='land'; p.landT=p.landMax=(def.airLand||10); p.atk=null; p.comboStep=0; p.airChain={}; p.stompSet=null;
         dust(p.x,p.y,7); sfx.land(p.x); return; } }
     // active hit window
     // noMelee：技そのものが当たりを持つので、通常の打撃判定は出さない。
@@ -7752,7 +7796,11 @@ function beginJustDodge(p, e, srcX){
   ring(p.x, p.y-46, '#bfe9ff'); spark(p.x, p.y-46, '#dff6ff', 12, 8);
   popText(p.x, p.y-104, 'ジャスト回避！', '#bfe9ff', true);
   hitStop=Math.max(hitStop,6); triggerSlow(22); sfx.dash(p.x); sfx.rise(p.x); }
-function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.92; p.rollRot+=p.rollDir*0.40;
+function updateRoll(){ const p=player; p.rollT++; p.x+=p.vx; p.vx*=0.92;
+  // 回転は積み上げず、進捗から作る。積み上げると 28F で 11.2rad＝1.78回転になり、
+  // 終わった瞬間に約 -78度 から直立へ跳ね戻っていた。
+  // ちょうど2回転で終わらせ、丸め込みと踏み切りが読めるよう両端を緩める
+  { const u=clamp(p.rollT/28,0,1); p.rollRot=p.rollDir*TAU*2*(u*u*(3-2*u)); }
   if((p.jdWin|0)>0) p.jdWin--;
   if(p.rollT<22) p.invuln=Math.max(p.invuln,3);    // 転がり中は無敵
   if(gf%2===0)dust(p.x,p.y,2);
@@ -9313,7 +9361,9 @@ function terrainStepFoes(){
 function updateEnemies(){
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i], t=ETYPE[e.type]; const p=nearestPlayerTo(e.x);
     if(e.hitFace>0)e.hitFace--;   // やられ顔タイマー
-    if(e.state!==e._ps){ if(e.state==='down') e.downMax=e.downTimer; e._ps=e.state; }   // 状態遷移の検出（倒れ込みカーブの基準）
+    if(e.state!==e._ps){ if(e.state==='down') e.downMax=e.downTimer;
+      if(e.state==='hurt') e.hurtMax=e.hurtTimer;   // のけぞりの尺は技ごとに 7〜110F と幅がある
+      e._ps=e.state; }   // 状態遷移の検出（倒れ込みカーブの基準）
     if(!t.boss){ e.anim+=(e.state==='walk'?0.18:0.09); e.bob+=(e.state==='walk'?0.12:0.06); }   // 生命感は行動中も止めない（ガード中・拘束中の凍結を防ぐ）
     // ばねのスクワッシュ（減衰振動）：被弾・着地の「ぷにっ」を全エネミー共通で
     { const w=15, z=0.55, a=-w*w*(e.sq||0)-2*z*w*(e.sqv||0);
@@ -10999,7 +11049,7 @@ const SEGS={
        npc:{kind:'villager',name:'鉱夫犬ホリオ',lines:['この水晶洞、迷い込むと二度と出られんと言われとる…','三つ首の獣ケルベが奥に巣食う。上攻撃で浮かせて空中コンボが安全だぞ！']}} ],
   ],
   B:[
-    [ {theme:8,name:'海賊飛行艇の甲板',terr:'liftup',
+    [ {theme:7,name:'海賊飛行艇の甲板',terr:'liftup',
        gates:[{off:600,list:[['hyena',1],['pierrot',1],['corgi',1]]},{off:1300,boss:true,list:[['slime',1]]}],
        npc:{kind:'sailor',name:'空賊シオマル',lines:['この飛行艇、風を掴んで大空をゆくのさ！足を滑らせるなよ。','でけぇスライムが甲板を占領してやがる。斬るたび分裂するから、小さいのから片付けな！']}},
       {theme:1,name:'海賊王の埠頭',
@@ -11008,7 +11058,7 @@ const SEGS={
     [ {theme:3,name:'灼熱の砂漠',
        gates:[{off:600,list:[['ari',2],['gripper',1]]},{off:1300,boss:true,list:[['cactus',1]]}],
        npc:{kind:'merchant2',name:'砂漠の行商犬',once:true,lines:['よう旅の犬士！水はいるかい？','こんな所まで来た記念だ。サービスしとくよ！'],give:{heal:60,coins:10}}},
-      {theme:9,name:'灼熱の巨大廃墟',terr:'tower',
+      {theme:8,name:'灼熱の巨大廃墟',terr:'tower',
        gates:[{off:520,list:[['mechawan',1],['skeletwan',1]]},{off:600,list:[['bikewan',1],['trailerwan',1]]},{off:900,list:[['akita',1],['onibouzu',1],['boar',1]]},{off:1300,boss:true,list:[['glaton',1]]}],
        npc:{kind:'villager',name:'考古学犬ホリダス',lines:['この巨大廃墟…登るほどに古代文明の深淵へ近づく。','鋼鉄のグラトンは遺跡の守護兵。図体がでかい分、攻撃後の隙も大きい。回避で背後に回り込め！']}} ],
   ],
@@ -12996,8 +13046,11 @@ function drawAmbient(T){ ctx.save(); if(T.amb.glow)ctx.globalCompositeOperation=
 let bgCache=null, bgCacheTheme=-1;
 function buildSkyCache(T,ti){
   bgCacheTheme=ti;
-  bgCache=document.createElement('canvas'); bgCache.width=W; bgCache.height=GROUND_TOP+30;
-  const c=bgCache.getContext('2d'), sk=T.sky;
+  bgCache=document.createElement('canvas');
+  bgCache.width=Math.round(W*DPR); bgCache.height=Math.round((GROUND_TOP+30)*DPR);
+  const c=bgCache.getContext('2d'); c.setTransform(DPR,0,0,DPR,0,0);
+  c.imageSmoothingEnabled=true; c.imageSmoothingQuality='high';
+  const sk=T.sky;
   const sky=c.createLinearGradient(0,0,0,GROUND_TOP);
   sky.addColorStop(0,sk[0]); sky.addColorStop(.45,sk[1]); sky.addColorStop(.8,sk[2]); sky.addColorStop(1,sk[3]);
   c.fillStyle=sky; c.fillRect(0,0,W,GROUND_TOP+30);
@@ -13016,7 +13069,7 @@ function buildSkyCache(T,ti){
 function drawBackground(){
   const T=curTheme(), ti=themeIdxFor(stage);
   if(ti!==bgCacheTheme||!bgCache) buildSkyCache(T,ti);
-  ctx.drawImage(bgCache,0,0);
+  ctx.drawImage(bgCache,0,0,W,GROUND_TOP+30);   // 論理サイズで戻す（中身は DPR 倍で焼いてある）
   // stars (night / 魔界) — twinkle so drawn live
   if(T.stars){ ctx.save(); for(let i=0;i<T.stars;i++){ const sxp=(i*137.5)%W, syp=(i*71.3)%(GROUND_TOP-60);
     const tw=0.4+0.6*Math.abs(Math.sin(gf*0.03+i)); ctx.globalAlpha=tw*0.9; ctx.fillStyle=i%7?'#dfe7ff':'#fff6c0';
@@ -15668,13 +15721,22 @@ function drawPlayer(){
   let faL1=9, faL2=8, faW=0.95, legF1=10, legF2=9, sqX=1, sqY=1;     // limb stretch & squash/stretch
   // ── 歩行の周期成分は poseB のローパスに通さない（通すと腿の振りが4割、上下動が2割まで減衰し、
   //     歩幅が足りず足が滑る）。ゲート cycW でなめらかに出し入れしてポップだけ防ぐ ──
+  // 上体は脚と同じ時計で振る。以前は p.anim（毎フレーム固定 0.36）から
+  // sin(ph*2) を作っていたので 6.9Hz、脚は移動距離から積分した 1.55歩/秒——
+  // つまり1歩のあいだに腕が4.4往復していた（胴の上下は倍の 13.8Hz）。
+  // 足と繋がって見えないのはこれが原因なので、位相も出し入れのゲートも脚と共有する
   p.cycW=(p.cycW||0)+((st==='walk'?1:0)-(p.cycW||0))*0.26;
   let _cyc=null;
-  if(p.cycW>0.004){ const cw=p.cycW, w=Math.sin(ph*2), wk=Math.sin(ph*2-0.6);
-    _cyc={ thF:w*0.85*cw, thB:-w*0.85*cw, kF:Math.max(0,wk)*0.80*cw, kB:Math.max(0,-wk)*0.80*cw,
-      bodyY:-Math.abs(Math.cos(ph*2))*2.4*cw,             // 一番高いのは足が揃う瞬間、接地で沈む
-      swAng:-w*0.48*cw, backArm:w*0.72*cw,                // 腕は腿と対角に振る
-      lean:w*0.05*cw, bodyX:Math.sin(ph*2+1.35)*1.1*cw }; // 体幹のひねり（肩と腰を逆位相に）
+  { const gw=Math.min(p.cycW, (p.gaitW||0));              // 「歩く姿勢」かつ「実際に動いている」ときだけ
+    if(gw>0.004){ const cw=gw, u=gaitPh(p.gait||0)*TAU;
+      const w=Math.sin(u), wk=Math.sin(u-0.6);
+      _cyc={ thF:w*0.85*cw, thB:-w*0.85*cw, kF:Math.max(0,wk)*0.80*cw, kB:Math.max(0,-wk)*0.80*cw,
+        // 上下動の振幅は脚の可動域で決まる。周期が正しくなったぶん1歩あたりの
+        // 沈み込みが深くなり、脚が届かなくなった足先の分だけ接地足が滑る。
+        // 実測：振幅 0.8→滑り11% / 1.2→12% / 1.6→13% / 2.4→14%（許容は13%未満）
+        bodyY:-Math.abs(Math.cos(u))*1.2*cw,              // 一番高いのは足が揃う瞬間、接地で沈む
+        swAng:-w*0.32*cw, backArm:w*0.46*cw,              // 腕は腿と対角に振る（周期が正しくなったぶん振り幅は抑える）
+        lean:w*0.05*cw, bodyX:Math.sin(u+1.35)*1.1*cw }; }
   }
   if(st==='walk'){ thF=0; thB=0; kF=0.3; kB=0.3; bodyY=0; swAng=-0.42; backArm=0.3; lean=0.06; }
   else if(st==='idle'){ const br=Math.sin(ph*1.5);        // 呼吸＋ゆっくりした重心移動（周期を非整数比にして単調さを消す）
@@ -15745,7 +15807,10 @@ function drawPlayer(){
     // 攻撃していない滞空では3相で決めた腕の角度をそのまま使う。
     // ここで定数に上書きしていたため、上昇で腕が上がり落下で下りる動きが1フレームも起きていなかった
     }
-  else if(st==='land'){ const k=clamp(1-p.landT/22,0,1), r=easeOut(k);   // 着地硬直：接地の瞬間が最も深く、そこから伸び上がる
+  else if(st==='land'){
+    // 22 固定で割っていたので、landT=8 の技では最初のフレームで既に95%伸び上がり、
+    // landT=26 の技では潰れきったまま始まっていた。実際の尺で正規化する
+    const k=clamp(1-p.landT/Math.max(1,p.landMax||22),0,1), r=easeOut(k);   // 接地の瞬間が最も深く、そこから伸び上がる
     bodyY=12*(1-r)+2; thF=0.70-0.44*r; thB=-0.70+0.44*r; kF=1.60*(1-r)+0.28; kB=1.60*(1-r)+0.28;
     lean=0.16*(1-r); swAng=0.90-0.72*r; backArm=0.50-0.22*r;
     sqX=1+0.18*(1-r); sqY=1-0.22*(1-r); }
@@ -17843,6 +17908,16 @@ function rimRect(kx,ky,hw,hh){
   const h=Math.ceil(Math.max(24,hh)*ky)+16;
   if(w>RIM_CAN || h>RIM_OY || w/2>RIM_OX) return null;
   return {w:w,h:h}; }
+// 枠に入り切らないときに焼く倍率をどこまで落とせばよいか。
+// 諦めて素通しにすると「リムが一度も出ない」ことになる——実際そうなっていた。
+// DPR2の端末では全てのボスが、DPR1でも神と最終ボスが枠を越えていて、
+// 目標の暖色のリムライトが主役級の相手で一度も効いていなかった。
+// リムは低周波の光なので、小さく焼いて拡大して戻しても崩れない
+function rimFit(kx,ky,hw,hh){
+  const fx=(RIM_CAN-14)/Math.max(1, Math.max(24,hw)*2*kx);
+  const fy=(RIM_OY-18)/Math.max(1, Math.max(24,hh)*ky);
+  const fw=(RIM_OX*2-14)/Math.max(1, Math.max(24,hw)*2*kx);
+  return Math.min(1, fx, fy, fw); }
 function rimBegin(hw,hh){
   // 最上位の品質でだけ効かせる。この環境（GPU無しのソフトウェアラスタ）では
   // プレイヤー＋ボスの2体で render() が 2.98ms → 8.03ms（+5.06ms）になる。
@@ -17852,15 +17927,17 @@ function rimBegin(hw,hh){
   const oc=rimCtx(); if(!oc) return null;
   const M=ctx.getTransform();
   const kx=Math.abs(M.a)||1, ky=Math.abs(M.d)||1;          // デバイスpxへの倍率
-  const R=rimRect(kx,ky,hw,hh);
-  // 入りきらないときはリムを諦めて素通しにする。欠けたまま転送すると
-  // キャラが半分消える（実機DPR2で発生した）
+  // 入り切らないときは諦めず、焼く倍率（fit）だけ落として拡大して戻す。
+  // 欠けたまま転送するとキャラが半分消えるので、切るのではなく縮める
+  const fit=rimFit(kx,ky,hw,hh);
+  const R=rimRect(kx*fit,ky*fit,hw,hh);
   if(!R) return null;
   const w=R.w, h=R.h;
   const bx=Math.max(0, RIM_OX-w/2), by=Math.max(0, RIM_OY-h);
   oc.setTransform(1,0,0,1,0,0); oc.clearRect(bx,by,w,h);
-  oc.setTransform(M.a,M.b,M.c,M.d,RIM_OX,RIM_OY);
-  const st={main:ctx, M:M, bx:bx, by:by, w:w, h:h}; ctx=oc; return st; }
+  oc.setTransform(M.a*fit,M.b*fit,M.c*fit,M.d*fit,RIM_OX,RIM_OY);
+  oc.imageSmoothingEnabled=true; oc.imageSmoothingQuality='high';
+  const st={main:ctx, M:M, bx:bx, by:by, w:w, h:h, fit:fit}; ctx=oc; return st; }
 // シルエットのαから輪郭帯を1本作り、色を付けて本体へ戻す。
 // ずらして destination-out すると「ずらした側の縁」だけが残る＝それが輪郭
 function rimEdge(st, dx, dy, rgb, alpha){
@@ -17900,8 +17977,12 @@ function rimEnd(st,strength){
   rimEdge(st, -K.dir*3, -2, K.rgb, a*0.95);                        // 光源側＝暖色の輪郭
   rimEdge(st,  K.dir*3,  1, '120,170,255', a*0.45);                // 逆側＝寒色の照り返し
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  // 縮めて焼いた場合は、その逆数で拡大して戻す。原点（足元）は
+  // オフスクリーンの (RIM_OX,RIM_OY) が本体の (M.e,M.f) に対応する
+  const iv=1/(st.fit||1);
   ctx.drawImage(_rimCan, st.bx, st.by, st.w, st.h,
-                st.M.e-RIM_OX+st.bx, st.M.f-RIM_OY+st.by, st.w, st.h);
+                st.M.e+(st.bx-RIM_OX)*iv, st.M.f+(st.by-RIM_OY)*iv, st.w*iv, st.h*iv);
   ctx.restore(); }
 const HITCAN=640, HITOX=320, HITOY=520;   // オフスクリーンの大きさと原点（足元）
 let _hitCan=null, _hitCtx=null, hwFocus=-1;
@@ -17965,22 +18046,36 @@ function drawEnemy(e){
     if(e.gaitW>0.02){ const _f=gaitStep(gaitPh(e.gait||0),1,0,e._gd);
       ctx.rotate(-_f.x*0.055*e.gaitW); } }
   // 液体金属は倒れ込まない。立ったまま形を失って床へ流れるので、傾けると板が転がる絵になる
-  if((e.state==='down'||e.dead) && e.t1kMelt==null){ const fall=e.dead?1:easeOut(clamp(((e.downMax||46)-e.downTimer)/7,0,1));   // 倒れ込みに7Fの落下を与える
-    ctx.rotate(0.30+0.68*fall); ctx.translate(0,8*fall); }
+  if((e.state==='down'||e.dead) && e.t1kMelt==null){
+    // 入りで既に 0.30rad（17度）傾いていたので、のけぞり（-0.15）から26度を1フレームで跳んでいた。
+    // また easeOut は「最初がいちばん速い」——重力で倒れる体は逆なので、加速する曲線にする
+    const fall=e.dead?1:Math.pow(clamp(((e.downMax||46)-e.downTimer)/7,0,1),1.7);
+    ctx.rotate(0.98*fall); ctx.translate(0,8*fall); }
   else if(e.state==='getup'){ const g=easeOut(clamp(1-e.getT/Math.max(1,e.getMax||16),0,1));                // 起き上がり：伏せから立ち上がる
     ctx.rotate(0.98*(1-g)); ctx.translate(0,8*(1-g)-3*Math.sin(g*Math.PI)); }
   else if(e.state==='bstagger'){                                                                            // 体勢崩壊：膝をつき、前のめりに沈む
     const u=clamp(1-(e.stagT||0)/CRIT_WINDOW,0,1), s2=Math.min(1,u*5);
     ctx.rotate(0.20*s2*e.facing*-1); ctx.translate(-6*s2*e.facing, 14*s2); ctx.scale(1+0.10*s2, 1-0.16*s2); }
-  else if(e.state==='hurt'){ const h=clamp(e.hurtTimer/16,0,1);                                             // のけぞってから戻る
-    ctx.translate(-7*h,0); ctx.rotate(-0.15*h); }
+  else if(e.state==='hurt'){
+    // 16 で割っていたので、7F の技では振り幅の44%までしか反らず、
+    // 90F の技では74F ぶん凍りついたまま最後だけ等速で戻っていた。
+    // 実際の尺で正規化し、戻りを緩め、長い硬直には細かい震えを残す
+    const u=clamp(e.hurtTimer/Math.max(1,e.hurtMax||16),0,1), h=easeOut(u);
+    ctx.translate(-7*h,0); ctx.rotate(-0.15*h + (u>0.4? Math.sin(gf*0.7)*0.012 : 0)); }
   // telegraph = crouch+lean back (wind-up); attack/bmove = explosive lunge + stretch
   if(e.telegraph>0){ const w=1-e.telegraph/(e.teleMax||26), coil=w<0.34?easeOut(w/0.34):1;   // 頭3割で一気に沈み込み、残りは溜めを保持する
     const shiv=w>0.66? Math.sin(w*52)*1.5*(w-0.66)/0.34 : 0;                                 // 発射直前の武者震い
     ctx.rotate(-0.24*coil); ctx.translate(-11*coil+shiv,4.5*coil); ctx.scale(1+0.13*coil,1-0.13*coil); }
   else if(e.state==='attack'){ const pr=clamp((e.atkMax-e.atkTimer)/Math.max(1,e.atkMax),0,1), w=clamp((e.atkMax-e.atkTimer)/4,0,1);
     const big=pr<0.26? easeOut(pr/0.26) : 1-easeOut(clamp((pr-0.26)/0.74,0,1))*0.82;          // 炸裂は速く、戻りは遅く＝余韻
-    ctx.translate(10*w+11*big,0); ctx.rotate(0.12*w); ctx.scale(1+0.17*big,1-0.13*big); }
+    // 構えの沈み込み（rotate -0.24 / translate -11,4.5 / scale 1.13）は、
+    // telegraph が 0 になった同じ更新で attack へ移るため、次の描画で丸ごと消えていた。
+    // 11px 前へ飛び、13.7度 起き上がり、13% 伸びる——踏み込む前に一度カクつく。
+    // 余韻（brec）と同じやり方で、溜めの姿勢から3フレームかけて抜ける
+    const rel=1-clamp((e.atkMax-e.atkTimer)/3,0,1);
+    ctx.rotate(-0.24*rel + 0.12*w);
+    ctx.translate(-11*rel + 10*w + 11*big, 4.5*rel);
+    ctx.scale(1+0.13*rel+0.17*big, 1-0.13*rel-0.13*big); }
   else if(e.state==='bmove'){ const tt=clamp(e.moveT/Math.max(1,e.moveMax),0,1);
     const big=tt<0.30? easeOut(tt/0.30) : 1-easeOut(clamp((tt-0.30)/0.70,0,1))*0.75;          // 左右対称のベルをやめ、炸裂を鋭くする
     ctx.rotate(0.07+0.05*big); ctx.translate(6+9*big,0); ctx.scale(1+0.11*big,1-0.08*big); }
@@ -21534,11 +21629,17 @@ function roundRectOn(g,x,y,w,h,r){ r=Math.max(0,Math.min(r,w/2,h/2));
 function ornSprite(w,h,style){
   w=Math.round(w); h=Math.round(h);
   if(w<24||h<16) return null;
-  const key=w+'|'+h+'|'+style; let c=_ornCache.get(key); if(c) return c;
+  // 額縁は 0.9px の線と半径1.0の鋲でできている。1倍で焼いて2倍で貼ると
+  // いちばん細い線がそのまま2倍に滲む。画面と同じ密度で焼く
+  const key=w+'|'+h+'|'+style+'|'+DPR; let c=_ornCache.get(key); if(c) return c;
   if(_ornBakes>=1) return null;                   // 焼き込みが1フレームに集中しないよう1枚まで
   _ornBakes++;
-  c=document.createElement('canvas'); c.width=w+ORN_PAD*2; c.height=h+ORN_PAD*2;
-  ornPaint(c.getContext('2d'),ORN_PAD,ORN_PAD,w,h,style);
+  c=document.createElement('canvas');
+  c.width=Math.round((w+ORN_PAD*2)*DPR); c.height=Math.round((h+ORN_PAD*2)*DPR);
+  const g=c.getContext('2d'); g.setTransform(DPR,0,0,DPR,0,0);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+  ornPaint(g,ORN_PAD,ORN_PAD,w,h,style);
+  c._lw=w+ORN_PAD*2; c._lh=h+ORN_PAD*2;           // 論理サイズ（貼るときはこの寸法で戻す）
   if(_ornCache.size>24) _ornCache.clear();
   _ornCache.set(key,c); return c; }
 // 既存の panel はそのまま描き、その外側に額縁だけを重ねる
@@ -21546,12 +21647,12 @@ function panelOrn(x,y,w,h,style){
   panel(x,y,w,h);
   if(perfTier>=2) return;                          // 重いときは素のパネルへ静かに落ちる
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
-  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD, s._lw||s.width, s._lh||s.height); }
 // 羊皮紙や石板の上に額縁だけを重ねる版（受け皿は呼び出し側が用意する）
 function ornRect(x,y,w,h,style){
   if(perfTier>=2) return;
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
-  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD, s._lw||s.width, s._lh||s.height); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
@@ -22824,7 +22925,10 @@ makeStick('stick',0); makeStick('stick2',1);
 //======================================================================
 //  Resize
 //======================================================================
-function resize(){ setupCanvas(); const r=Math.min(window.innerWidth/W,window.innerHeight/H);
+function resize(){ const d0=DPR; setupCanvas();
+  // DPR が変わったら、前の密度で焼いたスプライトは捨てる（ここは宣言が揃ったあと）
+  if(DPR!==d0){ if(typeof _ornCache!=='undefined') _ornCache.clear(); bgCacheTheme=-1; }
+  const r=Math.min(window.innerWidth/W,window.innerHeight/H);
   cv.style.width=(W*r)+'px'; cv.style.height=(H*r)+'px'; }
 addEventListener('resize',resize); resize();
 

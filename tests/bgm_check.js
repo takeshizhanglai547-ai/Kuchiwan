@@ -158,5 +158,70 @@ try{
       sig[k]=i; } }
   console.log('六周目の足取り OK (3+3+2 の打点 '+rep.join(' ')+'／金属の余韻つき／六曲とも別の旋律)'); }
 
+  // ===== 周回パレットが6周ぶんに分かれている =====
+  //   4〜6周目は長らく3周目（宇宙）と同じ音で鳴っていた。
+  //   持続音は増やさず、打楽器・撥弦・ベースの歩き方だけで分ける
+  { const bassOf=(idx,lap)=>{ const r=analyze(HTML,'battle',idx,lap,128);
+      return r.notes.filter(n=>n.part==='bass').slice(0,16).map(n=>Math.round(n.pitch)).join(','); };
+    const seen={}, dup=[];
+    for(let L=1;L<=6;L++){ const k=bassOf(0,L); if(seen[k]!=null) dup.push(seen[k]+'周目と'+L+'周目'); seen[k]=L; }
+    if(dup.length) throw new Error('ベースの歩き方が同じ周回がある: '+dup.join(' / '));
+    // 打楽器の音色表が短いまま pal() を増やすと、添字が表の外へ出て周波数が
+    // undefined になり、その周回だけ音が消える。解析器はスネアの芯の音高を
+    // 拾わない（part='snare' の pitch は 0）ので、表の長さそのものを見る。
+    // パレットの最大値と表の長さという、互いに独立な二つを突き合わせている
+    { const src=require('fs').readFileSync(HTML,'utf8');
+      const ln=src.split('\n').find(l=>l.indexOf('function snare(t,v,p)')>=0);
+      const body=src.slice(src.indexOf('function snare(t,v,p)'));
+      const arrs=(body.slice(0,600).match(/\[[0-9.,\s]+\]/g)||[]);
+      if(arrs.length<4) throw new Error('スネアの音色表が読み取れない');
+      arrs.slice(0,4).forEach(function(a,i){
+        const n2=a.split(',').length;
+        if(n2<7) throw new Error('スネアの音色表 '+i+' が '+n2+' 要素しかない（周回は6まであるので7要素必要）'); });
+      if(!ln) throw new Error('snare の定義が見つからない'); }
+    console.log('周回パレット OK (6周ぶんベースの運びが別／音色表は7要素そろっている)'); }
+
+  // ===== 新しいキットが、既存のどれとも違う打点で鳴る =====
+  { const hist=(part,idx)=>{ const r=analyze(HTML,'battle',idx,5,128);
+      const sd=60/r.S.bpm/2, h=[0,0,0,0,0,0,0,0];
+      r.notes.filter(n=>n.part===part).forEach(n=>{ h[Math.round(n.t0/sd)%8]++; });
+      return h; };
+    // 和太鼓（合戦の野／川中島）：小節の終わりに送りの二つ打ちが入る。
+    // ソースのコメント番号は1始まりなので、配列の添字は1つ小さい
+    [20,23].forEach(function(i){ const T=hist('tom',i);
+      if(!(T[6]>0 && T[7]>0)) throw new Error('battle['+i+'] に和太鼓の送り打ち（6,7）が無い: '+T.join(','));
+      if(!(T[6]+T[7] > T[1]+T[5])) throw new Error('battle['+i+'] の太鼓が送りになっていない: '+T.join(',')); });
+    // 早駆け（甲斐の山城）：3+1+3+1 ＝ 0/3/4/7。march(0,2,4,6) とも anvil(0,3,6) とも違う
+    { const K=hist('kick',24);
+      [0,3,4,7].forEach(function(st){ if(!(K[st]>0)) throw new Error('早駆けの打点 '+st+' が無い: '+K.join(',')); });
+      if(!(K[2]===0 && K[6]===0)) throw new Error('早駆けが行進曲の打点まで踏んでいる: '+K.join(',')); }
+    console.log('新しい足取り OK (和太鼓＝小節末の送り／早駆け＝0,3,4,7 で行進曲とも金床とも別)'); }
+
+  // ===== B の頭で層を抜く（足すのではなく抜いて色を変える） =====
+  //   セクション全体の総数で見ると、境目の音の取り違えで数音ぶれて判定がつかない。
+  //   「各セクションの先頭1小節」だけを数えると、抜いた1小節がそのまま出る
+  { const padBar0=(mode,idx,lap)=>{ const r=analyze(HTML,mode,idx,lap,256);
+      const sd=60/r.S.bpm/2, span=sd*64, bar=sd*8, c=[0,0,0,0];
+      r.notes.filter(n=>n.part==='pad').forEach(n=>{
+        const s=Math.floor((n.t0+1e-6)/span), o=n.t0-s*span;
+        if(s>=0 && s<4 && o < bar-1e-6) c[s]++; });
+      return c; };
+    const c=padBar0('battle',0,1);
+    if(!(c[0]>0 && c[1]>0 && c[3]>0)) throw new Error('A/A\u2032/B\u2032 の頭にパッドが無い: '+c.join('/'));
+    if(c[2]!==0) throw new Error('B の頭でパッドが抜けていない: '+c.join('/'));
+    const t=padBar0('town',0,1);
+    if(!(t[2]>0)) throw new Error('静曲でもパッドを抜いている: '+t.join('/'));
+    console.log('Bの息継ぎ OK (各セクション先頭小節のパッド '+c.join('/')+'／静曲は据え置き '+t.join('/')+')'); }
+
+  // ===== 背景テーマに穴が無い（曲が鳴る機会の無いテーマを作らない） =====
+  { const src=require('fs').readFileSync(HTML,'utf8');
+    const used=new Set();
+    (src.match(/theme:[0-9]+/g)||[]).forEach(m=>used.add(+m.slice(6)));
+    const i0=src.indexOf('const STAGE_THEME=['), i1=src.indexOf('\n];', i0);
+    const n=(src.slice(i0,i1).match(/^  \{ /gm)||[]).length;
+    const gaps=[]; for(let i=0;i<n;i++) if(!used.has(i)) gaps.push(i);
+    if(gaps.length) throw new Error('どのステージからも使われていない背景テーマ: '+gaps.join(',')+'（その曲は一生鳴らない）');
+    console.log('テーマの穴 OK ('+n+'種すべてがステージから参照されている)'); }
+
 console.log('BGM FORM/VOICING TEST PASSED');
 }catch(e){ console.error('FAIL:', e.message); process.exit(1); }
