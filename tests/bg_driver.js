@@ -184,6 +184,29 @@ const DRIVER = `
     console.log('二つの町 OK (片方は城・片方は市場の門／夕暮れだけ窓に灯りが入る)');
   }
 
+  // ===== 焼き込みは画面と同じ密度で作る（1倍で焼いて2倍で貼らない） =====
+  //   額縁は 0.9px の線と半径1.0の鋲でできているので、1倍で焼くと拡大時に滲む
+  { // ヘッドレスのキャンバスは寸法を返さないので、生成そのものを横取りして
+    //   「何画素で焼いたか」を捕まえる
+    const old=DPR, realCE=document.createElement;
+    const sink=document.createElement('canvas').getContext('2d');
+    const bake=function(dpr){ let got=null;
+      document.createElement=function(t){ if(t!=='canvas') return realCE.call(document,t);
+        const o={ width:0, height:0, getContext:function(){ return sink; } }; got=o; return o; };
+      try{ DPR=dpr; _ornCache.clear(); _ornBakes=0;
+           const sp=ornSprite(200,60,'gold');
+           return {w:got?got.width:0, h:got?got.height:0, lw:sp&&sp._lw, lh:sp&&sp._lh}; }
+      finally { document.createElement=realCE; } };
+    try{
+      const a=bake(1), b=bake(2);
+      if(!(a.w>0&&b.w>0)) throw new Error('額縁が焼けていない');
+      if(!(b.w===a.w*2 && b.h===a.h*2))
+        throw new Error('額縁が画面と同じ密度で焼かれていない（'+a.w+'x'+a.h+' → '+b.w+'x'+b.h+'）');
+      if(!(b.lw===a.lw && b.lh===a.lh))
+        throw new Error('論理サイズが密度で変わっている（貼る大きさが変わってしまう）');
+    } finally { DPR=old; _ornCache.clear(); _ornBakes=0; }
+    console.log('焼き込みの密度 OK (額縁は DPR ぶんの画素で焼き、貼る大きさは論理サイズのまま)'); }
+
   console.log('BACKGROUND LAYOUT TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

@@ -312,6 +312,9 @@ function setupCanvas(){
   DPR = Math.min(window.devicePixelRatio||1, 2);
   cv.width = W*DPR; cv.height = H*DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  // 既定は 'low'（ミップ無しの双一次）。拡大して貼るスプライトが甘くなる。
+  // cv.width への代入でコンテキストの状態は初期化されるので、ここで毎回入れ直す
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
 }
 setupCanvas();
 
@@ -13043,8 +13046,11 @@ function drawAmbient(T){ ctx.save(); if(T.amb.glow)ctx.globalCompositeOperation=
 let bgCache=null, bgCacheTheme=-1;
 function buildSkyCache(T,ti){
   bgCacheTheme=ti;
-  bgCache=document.createElement('canvas'); bgCache.width=W; bgCache.height=GROUND_TOP+30;
-  const c=bgCache.getContext('2d'), sk=T.sky;
+  bgCache=document.createElement('canvas');
+  bgCache.width=Math.round(W*DPR); bgCache.height=Math.round((GROUND_TOP+30)*DPR);
+  const c=bgCache.getContext('2d'); c.setTransform(DPR,0,0,DPR,0,0);
+  c.imageSmoothingEnabled=true; c.imageSmoothingQuality='high';
+  const sk=T.sky;
   const sky=c.createLinearGradient(0,0,0,GROUND_TOP);
   sky.addColorStop(0,sk[0]); sky.addColorStop(.45,sk[1]); sky.addColorStop(.8,sk[2]); sky.addColorStop(1,sk[3]);
   c.fillStyle=sky; c.fillRect(0,0,W,GROUND_TOP+30);
@@ -13063,7 +13069,7 @@ function buildSkyCache(T,ti){
 function drawBackground(){
   const T=curTheme(), ti=themeIdxFor(stage);
   if(ti!==bgCacheTheme||!bgCache) buildSkyCache(T,ti);
-  ctx.drawImage(bgCache,0,0);
+  ctx.drawImage(bgCache,0,0,W,GROUND_TOP+30);   // 論理サイズで戻す（中身は DPR 倍で焼いてある）
   // stars (night / 魔界) — twinkle so drawn live
   if(T.stars){ ctx.save(); for(let i=0;i<T.stars;i++){ const sxp=(i*137.5)%W, syp=(i*71.3)%(GROUND_TOP-60);
     const tw=0.4+0.6*Math.abs(Math.sin(gf*0.03+i)); ctx.globalAlpha=tw*0.9; ctx.fillStyle=i%7?'#dfe7ff':'#fff6c0';
@@ -21623,11 +21629,17 @@ function roundRectOn(g,x,y,w,h,r){ r=Math.max(0,Math.min(r,w/2,h/2));
 function ornSprite(w,h,style){
   w=Math.round(w); h=Math.round(h);
   if(w<24||h<16) return null;
-  const key=w+'|'+h+'|'+style; let c=_ornCache.get(key); if(c) return c;
+  // 額縁は 0.9px の線と半径1.0の鋲でできている。1倍で焼いて2倍で貼ると
+  // いちばん細い線がそのまま2倍に滲む。画面と同じ密度で焼く
+  const key=w+'|'+h+'|'+style+'|'+DPR; let c=_ornCache.get(key); if(c) return c;
   if(_ornBakes>=1) return null;                   // 焼き込みが1フレームに集中しないよう1枚まで
   _ornBakes++;
-  c=document.createElement('canvas'); c.width=w+ORN_PAD*2; c.height=h+ORN_PAD*2;
-  ornPaint(c.getContext('2d'),ORN_PAD,ORN_PAD,w,h,style);
+  c=document.createElement('canvas');
+  c.width=Math.round((w+ORN_PAD*2)*DPR); c.height=Math.round((h+ORN_PAD*2)*DPR);
+  const g=c.getContext('2d'); g.setTransform(DPR,0,0,DPR,0,0);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+  ornPaint(g,ORN_PAD,ORN_PAD,w,h,style);
+  c._lw=w+ORN_PAD*2; c._lh=h+ORN_PAD*2;           // 論理サイズ（貼るときはこの寸法で戻す）
   if(_ornCache.size>24) _ornCache.clear();
   _ornCache.set(key,c); return c; }
 // 既存の panel はそのまま描き、その外側に額縁だけを重ねる
@@ -21635,12 +21647,12 @@ function panelOrn(x,y,w,h,style){
   panel(x,y,w,h);
   if(perfTier>=2) return;                          // 重いときは素のパネルへ静かに落ちる
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
-  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD, s._lw||s.width, s._lh||s.height); }
 // 羊皮紙や石板の上に額縁だけを重ねる版（受け皿は呼び出し側が用意する）
 function ornRect(x,y,w,h,style){
   if(perfTier>=2) return;
   const s=ornSprite(w,h,style||'gold'); if(!s) return;
-  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD); }
+  ctx.drawImage(s, Math.round(x)-ORN_PAD, Math.round(y)-ORN_PAD, s._lw||s.width, s._lh||s.height); }
 function panel(x,y,w,h){
   const c=Math.min(11, h*0.34);
   ctx.fillStyle=panelGrad(y,h); bevelPath(x,y,w,h,c); ctx.fill();
@@ -22913,7 +22925,10 @@ makeStick('stick',0); makeStick('stick2',1);
 //======================================================================
 //  Resize
 //======================================================================
-function resize(){ setupCanvas(); const r=Math.min(window.innerWidth/W,window.innerHeight/H);
+function resize(){ const d0=DPR; setupCanvas();
+  // DPR が変わったら、前の密度で焼いたスプライトは捨てる（ここは宣言が揃ったあと）
+  if(DPR!==d0){ if(typeof _ornCache!=='undefined') _ornCache.clear(); bgCacheTheme=-1; }
+  const r=Math.min(window.innerWidth/W,window.innerHeight/H);
   cv.style.width=(W*r)+'px'; cv.style.height=(H*r)+'px'; }
 addEventListener('resize',resize); resize();
 
