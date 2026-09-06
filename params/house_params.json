@@ -1,0 +1,247 @@
+{
+  "_schema": {
+    "version": "1.0.0",
+    "description": "xevoSigma PREMIUM Custom Residence - Single Source of Truth (SSOT).",
+    "contract": [
+      "EVERY dimensional value in this project MUST originate here.",
+      "No script, no .blend file and no Unreal asset may hard-code a building dimension.",
+      "Each entry carries a `status` field. Legal values:",
+      "  CONFIRMED  - directly readable from a supplied drawing, or stated by the client.",
+      "  DERIVED    - computed from CONFIRMED values by an explicit, documented rule.",
+      "  ASSUMED    - not in any drawing; a placeholder chosen by the ArchViz team.",
+      "  UNRESOLVED - required, not yet known, and NOT safe to guess. Blocks completion.",
+      "A build performed while any UNRESOLVED entry is reachable from the geometry graph",
+      "produces a PLACEHOLDER MASSING, never a digital twin. qa_verify.py enforces this."
+    ],
+    "unit_policy": {
+      "length": "m",
+      "note": "1 Blender Unit = 1 m. Unreal import scale 100 (1 uu = 1 cm). No exceptions."
+    }
+  },
+
+  "project": {
+    "name": "xevoSigma PREMIUM Custom Residence Digital Twin",
+    "builder": { "value": "Daiwa House Industry - xevoSigma PREMIUM", "status": "CONFIRMED", "source": "client brief" },
+    "drawing_set_received": {
+      "value": false,
+      "status": "CONFIRMED",
+      "source": "session inspection 2026-09-06: /mnt/attach empty, repository contains no drawing files",
+      "note": "The brief refers to attached site plan / 1F plan / 2F plan / elevations / sections. NONE were delivered to this session. See docs/DRAWING_ANALYSIS.md."
+    },
+    "model_state": {
+      "value": "PLACEHOLDER_MASSING",
+      "status": "DERIVED",
+      "note": "Becomes CANDIDATE_TWIN only when every UNRESOLVED entry below is filled from the drawing set."
+    }
+  },
+
+  "conventions": {
+    "jo_to_sqm": {
+      "value": 1.6562,
+      "unit": "m2",
+      "status": "ASSUMED",
+      "source": "1 tatami = 910 x 1820 mm (kyoma-han / metric module) = 1.6562 m2",
+      "note": "AMBIGUITY - Japanese house-maker plans quote 'jo' under at least two conventions: 1.6562 m2 (910x1820 module) and 1.62 m2 (the minimum permitted by the Fair Competition Code on real-estate advertising, Enforcement Rules Art.10). 17.3 jo therefore means 28.65 m2 OR 28.03 m2, a 0.6 m2 spread. Confirm which convention the Daiwa House plan uses before treating any music-room area as fixed.",
+      "alternatives": { "fair_trade_min": 1.62, "kyoma": 1.824 }
+    },
+    "planning_module": {
+      "value": 0.455,
+      "unit": "m",
+      "status": "ASSUMED",
+      "note": "Half-ken metric module. xevoSigma is a steel-frame system on a grid; the actual module (455 / 910 / 1000 mm) MUST be read off the plan. All grid snapping in the build scripts uses this value."
+    }
+  },
+
+  "site": {
+    "boundary_polygon_m": { "value": null, "status": "UNRESOLVED", "source_required": "site plan (haichi-zu)" },
+    "area_m2":            { "value": null, "status": "UNRESOLVED", "source_required": "site plan" },
+    "road_side":          { "value": null, "status": "UNRESOLVED", "source_required": "site plan", "note": "north/south/east/west - drives privacy strategy and facade hierarchy" },
+    "true_north_deg":     { "value": null, "status": "UNRESOLVED", "source_required": "site plan", "note": "REQUIRED before any sun study is meaningful (section Q)" },
+    "gl_to_1fl_m":        { "value": null, "status": "UNRESOLVED", "source_required": "section drawing", "note": "GL to 1st floor level. Typical 0.40-0.60 m; NOT assumed." },
+    "setbacks_m":         { "value": null, "status": "UNRESOLVED", "source_required": "site plan" },
+    "placeholder": {
+      "note": "Used ONLY to keep the placeholder massing buildable. Never render as fact.",
+      "boundary_polygon_m": [[0,0],[18.0,0],[18.0,14.0],[0,14.0]],
+      "gl_to_1fl_m": 0.50,
+      "true_north_deg": 0.0,
+      "status": "ASSUMED"
+    }
+  },
+
+  "building": {
+    "footprint_polygon_m": { "value": null, "status": "UNRESOLVED", "source_required": "1F plan" },
+    "gfa_1f_m2":           { "value": null, "status": "UNRESOLVED", "source_required": "1F plan" },
+    "gfa_2f_m2":           { "value": null, "status": "UNRESOLVED", "source_required": "2F plan" },
+    "structure":           { "value": "steel frame (xevoSigma system)", "status": "ASSUMED", "note": "xevoSigma is Daiwa House's steel-frame line; confirm on the drawing title block." },
+    "exterior_wall_thickness_m": { "value": null, "status": "UNRESOLVED", "source_required": "plan wall hatch / spec sheet" },
+    "interior_wall_thickness_m": { "value": null, "status": "UNRESOLVED", "source_required": "plan wall hatch" },
+    "placeholder": {
+      "note": "Rectangular stand-in only. The real footprint is almost certainly articulated.",
+      "footprint_polygon_m": [[0,0],[10.92,0],[10.92,8.19],[0,8.19]],
+      "exterior_wall_thickness_m": 0.180,
+      "interior_wall_thickness_m": 0.105,
+      "status": "ASSUMED"
+    }
+  },
+
+  "levels": {
+    "fl_1f_m":               { "value": 0.000, "status": "DERIVED", "note": "datum by definition" },
+    "ceiling_h_1f_m":        { "value": null, "status": "UNRESOLVED", "source_required": "section drawing",
+                                "note": "xevoSigma marketing promotes a 2720 mm ceiling grade. That is a PRODUCT OPTION, not a fact about this house. Do not model 2.72 m until the section confirms it." },
+    "floor_to_floor_1f_m":   { "value": null, "status": "UNRESOLVED", "source_required": "section drawing" },
+    "ceiling_h_2f_m":        { "value": null, "status": "UNRESOLVED", "source_required": "section drawing" },
+    "ridge_height_m":        { "value": null, "status": "UNRESOLVED", "source_required": "elevation drawing" },
+    "eaves_height_m":        { "value": null, "status": "UNRESOLVED", "source_required": "elevation drawing" },
+    "eaves_projection_m":    { "value": null, "status": "UNRESOLVED", "source_required": "elevation / section",
+                                "note": "'Deep eaves' is a stated design intent (section H) but the projection is a drawing value." },
+    "placeholder": {
+      "ceiling_h_1f_m": 2.400, "floor_to_floor_1f_m": 2.900,
+      "ceiling_h_2f_m": 2.400, "eaves_projection_m": 0.600,
+      "status": "ASSUMED"
+    }
+  },
+
+  "music_room": {
+    "_priority": "CRITICAL - see docs/PIANO_ROOM_REQUIREMENTS.md. This room may not be modelled as a generic bedroom, guest room, western-style room or multi-purpose room under any circumstance.",
+    "program": { "value": "GRAND PIANO SOUNDPROOF MUSIC ROOM", "status": "CONFIRMED", "source": "client brief section B" },
+    "floor": { "value": 1, "status": "CONFIRMED", "source": "client brief section B" },
+    "plan_area_jo": { "value": 17.3, "unit": "jo", "status": "CONFIRMED", "source": "client brief section B (as annotated on the Daiwa House plan)" },
+    "plan_area_m2": {
+      "value": 28.65, "unit": "m2", "status": "DERIVED",
+      "rule": "17.3 jo x 1.6562 m2/jo",
+      "note": "28.03 m2 under the 1.62 m2/jo convention. Both carried until the convention is confirmed."
+    },
+    "gross_internal_x_m": { "value": null, "status": "UNRESOLVED", "source_required": "1F plan", "note": "Area alone does not fix the shape. A 28.65 m2 room can be 5.46x5.25 or 7.28x3.94 - the second cannot hold two grand pianos. THE ASPECT RATIO IS THE DECIDING VARIABLE." },
+    "gross_internal_y_m": { "value": null, "status": "UNRESOLVED", "source_required": "1F plan" },
+    "gross_ceiling_h_m":  { "value": null, "status": "UNRESOLVED", "source_required": "section drawing" },
+    "pianos": { "value": 2, "status": "CONFIRMED", "source": "client brief section C" },
+    "simultaneous_performers": { "value": 2, "status": "CONFIRMED", "source": "client brief section C" },
+
+    "acoustic_construction": {
+      "_status_note": "ASSUMED throughout. No acoustic specification has been supplied. These are typical residential piano-room build-ups used to bound the net-area problem, NOT a specification.",
+      "target_grade": { "value": "Dr-50", "status": "ASSUMED", "note": "Typical residential grand-piano room target. Dr-45 is often sold as 'piano-capable' but is marginal for two grands." },
+      "wall_buildup_per_side_m":  { "value": 0.150, "status": "ASSUMED", "range": [0.120, 0.200], "note": "Independent inner stud wall + air gap + absorbent + 2x plasterboard, measured from the finished face of the base construction." },
+      "floating_floor_rise_m":    { "value": 0.150, "status": "ASSUMED", "range": [0.100, 0.200] },
+      "ceiling_drop_m":           { "value": 0.200, "status": "ASSUMED", "range": [0.150, 0.250] },
+      "door": {
+        "type": { "value": "acoustic door, single leaf", "status": "ASSUMED" },
+        "clear_width_m":  { "value": 0.750, "status": "ASSUMED", "note": "TYPICAL FOR AN ACOUSTIC DOOR AND A KNOWN PROBLEM - see delivery_access below." },
+        "clear_height_m": { "value": 2.000, "status": "ASSUMED" },
+        "airlock_vestibule": { "value": false, "status": "ASSUMED", "note": "A two-door airlock raises isolation but consumes ~1.6-2.5 m2 of the 28.65 m2." }
+      },
+      "ventilation": { "value": "acoustically-lined supply/extract with attenuators", "status": "ASSUMED" },
+      "hvac":        { "value": "dedicated wall-mounted or ducted unit, isolated penetrations", "status": "ASSUMED" }
+    },
+
+    "delivery_access": {
+      "_priority": "HIGH RISK",
+      "note": "A grand piano is moved on its bass side on a skid: approx L long x 0.50 m thick x (case width + skid) tall. It cannot be reduced further. An acoustic door of 750 mm clear width is a plausible show-stopper for a 1490-1580 mm wide instrument on its side.",
+      "required_clear_width_m":  { "value": 0.800, "status": "ASSUMED", "note": "practical minimum quoted by piano movers" },
+      "required_clear_height_m": { "value": 1.900, "status": "ASSUMED" },
+      "turning_space_required":  { "value": true, "status": "DERIVED", "note": "A 2.0-2.8 m long rigid object must be able to turn from the approach route into the room opening." },
+      "resolution_options": [
+        "Oversize / double-leaf acoustic door",
+        "Removable acoustic wall panel used once at installation",
+        "Full-height sliding sash (hakidashi-mado) to the garden as the delivery route",
+        "Install both instruments before the acoustic lining is closed up (sequencing constraint on the builder)"
+      ]
+    },
+
+    "instruments": {
+      "piano_A": { "model_key": "yamaha_c7x", "status": "ASSUMED", "note": "Client has not nominated instruments. Semi-concert selected as the realistic upper bound for a residential room." },
+      "piano_B": { "model_key": "yamaha_c3x", "status": "ASSUMED" }
+    },
+
+    "clearances_m": {
+      "_status": "ASSUMED",
+      "wall_to_piano":        { "value": 0.500, "note": "tuning/moving access and rim breathing room; acoustics also disfavour a hard-tight rim" },
+      "between_pianos":       { "value": 0.600, "note": "shared circulation between the two instruments" },
+      "player_zone_depth":    { "value": 1.100, "note": "bench (0.36) + seated player + ability to stand and leave" },
+      "player_zone_width":    { "value": 1.400, "note": "wider than the 1.22 m playing width of 88 keys" },
+      "tuner_side_access":    { "value": 0.600 }
+    },
+
+    "placeholder": {
+      "_status": "ASSUMED PROBE — NOT THIS HOUSE",
+      "note": "Used only by build_house.py --placeholder. This is the best-behaved candidate from the Phase 6 study (docs/PIANO_FIT_REPORT.md §6.2): a 10 x 14 bay room on the assumed 455 mm module, which has both the largest net floor area and the fewest degenerate axial modes of the shapes tested. It is a PROBE so that the pipeline can be exercised end-to-end — it is not a claim about the real room.",
+      "gross_internal_x_m": 4.550,
+      "gross_internal_y_m": 6.370,
+      "gross_ceiling_h_m": 2.720
+    },
+
+    "interior_proposal": {
+      "_status": "PROPOSAL - NOT A SPECIFICATION (client brief section E)",
+      "concept": "Luxury Residential Music Salon - not a studio.",
+      "elements": ["natural timber", "timber louvre acoustic panels", "concealed cove lighting",
+                   "dimmable circuits", "picture light", "score storage / sheet-music shelving",
+                   "reflective front wall, absorptive rear wall", "heavy drapery for variable acoustics"]
+    }
+  },
+
+  "rooms": {
+    "_status": "UNRESOLVED",
+    "source_required": "1F plan + 2F plan",
+    "note": "Populated into docs/ROOM_SCHEDULE.csv on drawing receipt. Only the music room is known today."
+  },
+
+  "openings": {
+    "_status": "UNRESOLVED",
+    "source_required": "1F plan, 2F plan, all elevations",
+    "note": "Populated into docs/OPENING_SCHEDULE.csv on drawing receipt."
+  },
+
+  "void": {
+    "present": { "value": true, "status": "CONFIRMED", "source": "client brief section G (LDK -> void -> 2F)" },
+    "polygon_m": { "value": null, "status": "UNRESOLVED", "source_required": "2F plan (void outline) cross-checked against the section" },
+    "note": "The vertical relationship 1F LDK -> void -> 2F must be resolved from the SECTION, not inferred from the plans (client brief section G)."
+  },
+
+  "stair": {
+    "present": { "value": true, "status": "CONFIRMED" },
+    "type":    { "value": null, "status": "UNRESOLVED", "source_required": "1F/2F plan" },
+    "riser_h_m": { "value": null, "status": "UNRESOLVED", "source_required": "section drawing" },
+    "tread_d_m": { "value": null, "status": "UNRESOLVED", "source_required": "plan" },
+    "riser_count": { "value": null, "status": "UNRESOLVED" },
+    "note": "Building Standards Act Enforcement Order Art.23 sets minima for dwellings (tread >= 150 mm, riser <= 230 mm, width >= 750 mm). Those are legal FLOORS, not this house's dimensions - qa_verify.py checks the drawing values against them, it does not substitute them."
+  },
+
+  "balcony": {
+    "present": { "value": true, "status": "CONFIRMED", "source": "client brief section A" },
+    "polygon_m": { "value": null, "status": "UNRESOLVED", "source_required": "2F plan + elevation" },
+    "parapet_h_m": { "value": null, "status": "UNRESOLVED", "source_required": "elevation" }
+  },
+
+  "roof": {
+    "type": { "value": null, "status": "UNRESOLVED", "source_required": "elevations + site plan roof outline" },
+    "pitch": { "value": null, "status": "UNRESOLVED", "source_required": "elevation" }
+  },
+
+  "landscape": {
+    "_status": "DESIGN PROPOSAL / CONCEPT MODEL (client brief section I). Explicitly NOT a specification.",
+    "options": {
+      "A": { "name": "Planting-led",              "water_feature": false },
+      "B": { "name": "Planting + water feature",  "water_feature": true, "note": "client brief section K - alternative only" }
+    },
+    "default_option": "A",
+    "elements": ["approach", "entrance porch", "gate post", "delivery box", "parking", "bicycle/motorcycle",
+                 "garden", "planting", "symbol tree", "shrubs", "ground cover", "lawn", "feature stone",
+                 "gravel", "paving", "path lighting", "uplighting", "facade lighting"],
+    "planting_policy": "Japanese residential species; framed views from inside outward; never dense enough to hide the building (client brief section J)."
+  },
+
+  "lighting": {
+    "time_of_day_presets": ["Morning", "Daytime", "Sunset", "Night"],
+    "latitude_deg":  { "value": null, "status": "UNRESOLVED", "source_required": "site address", "note": "REQUIRED for a physically correct sun path." },
+    "longitude_deg": { "value": null, "status": "UNRESOLVED", "source_required": "site address" },
+    "placeholder": { "latitude_deg": 35.68, "longitude_deg": 139.77, "status": "ASSUMED", "note": "Tokyo. Placeholder only." }
+  },
+
+  "walkthrough": {
+    "eye_height_m":       { "value": 1.560, "status": "ASSUMED", "note": "Standing eye height, adult in Japan (~1.70 m stature). User-adjustable at runtime per client brief section O." },
+    "eye_height_range_m": [1.400, 1.800],
+    "seated_eye_height_m":{ "value": 1.150, "status": "ASSUMED", "note": "Sofa-seated viewpoint required by client brief section A." },
+    "walk_speed_mps":     { "value": 1.30, "status": "ASSUMED" },
+    "slow_walk_speed_mps":{ "value": 0.55, "status": "ASSUMED" },
+    "crouch_eye_height_m":{ "value": 0.950, "status": "ASSUMED" }
+  }
+}

@@ -1,0 +1,6 @@
+opening_id,type,room_id,wall,position_x_m,width_m,height_m,sill_h_m,swing,glazing,status,source,notes
+O-001,DOOR_ACOUSTIC,R-01,,,0.750,2.000,0.000,,,ASSUMED,-,"CRITICAL RISK: 750 mm clear is below the 800 mm practical minimum for delivering a grand piano. See PIANO_ROOM_REQUIREMENTS §5.4."
+O-002,WINDOW,R-01,,,,,,,,UNRESOLVED,1階平面図+立面図,"Music room daylight — 建築基準法第28条1項 requires effective daylight area >= 1/7 floor area for a 住宅の居室 (approx 4.1 m2 here), subject to the 令19条3項 relaxation effective 2023-04-01. Confirm route with the 確認検査機関."
+O-003,DOOR_ENTRANCE,R-03,,,,,,,,UNRESOLVED,1階平面図+立面図,"Also the piano delivery route — clear width and turning space required"
+O-004,WINDOW_LARGE,R-02,,,,,,,,UNRESOLVED,1階平面図+立面図,"Large opening is stated design intent (brief §H); dimensions are a drawing value"
+O-005,DOOR_SLIDING,R-02,,,,,,,,UNRESOLVED,1階平面図,"Garden access (掃き出し窓) — a candidate piano delivery route"

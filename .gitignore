@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+Blender/*.blend
+Blender/*.blend[0-9]

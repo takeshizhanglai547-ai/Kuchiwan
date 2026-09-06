@@ -1,0 +1,15 @@
+room_id,name_ja,name_en,floor,program,area_jo,area_m2,gross_x_m,gross_y_m,ceiling_h_m,status,source,notes
+R-01,音楽室,Grand Piano Soundproof Music Room,1,MUSIC_ROOM_SOUNDPROOF,17.3,28.65,,,,PARTIAL,client brief §B,"CRITICAL. Program and area CONFIRMED; shape and height UNRESOLVED. Net after lining approx 25.8 m2 / 15.3 帖. Two grand pianos + two performers required."
+R-02,LDK,Living Dining Kitchen,1,LDK,,,,,,UNRESOLVED,1階平面図,"Double-height void over part of it (brief §G)"
+R-03,玄関,Entrance / Genkan,1,ENTRANCE,,,,,,UNRESOLVED,1階平面図,
+R-04,ホール,Entrance Hall,1,CIRCULATION,,,,,,UNRESOLVED,1階平面図,"Piano delivery route passes through here — turning geometry required"
+R-05,階段,Stair,1-2,CIRCULATION,,,,,,UNRESOLVED,平面図+断面図,
+R-06,吹抜け,Double-height Void,1-2,VOID,,,,,,UNRESOLVED,2階平面図+断面図,"Resolve from the SECTION"
+R-07,主寝室,Main Bedroom,2,BEDROOM,,,,,,UNRESOLVED,2階平面図,
+R-08,子供室,Child Room,2,BEDROOM,,,,,,UNRESOLVED,2階平面図,"Count unknown"
+R-09,書斎,Study,2,STUDY,,,,,,UNRESOLVED,2階平面図,
+R-10,バルコニー,Balcony,2,EXTERIOR,,,,,,UNRESOLVED,2階平面図+立面図,
+R-11,浴室,Bathroom,,SANITARY,,,,,,UNRESOLVED,平面図,
+R-12,洗面脱衣,Washroom,,SANITARY,,,,,,UNRESOLVED,平面図,
+R-13,便所,WC,,SANITARY,,,,,,UNRESOLVED,平面図,
+R-14,収納,Storage,,STORAGE,,,,,,UNRESOLVED,平面図,

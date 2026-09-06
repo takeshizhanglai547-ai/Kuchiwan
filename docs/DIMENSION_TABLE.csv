@@ -1,0 +1,41 @@
+id,category,item,value,unit,status,source_drawing,notes
+D-001,site,Site boundary polygon,,m,UNRESOLVED,配置図,Required for landscape and for any exterior camera
+D-002,site,Site area,,m2,UNRESOLVED,配置図,
+D-003,site,Road side,,-,UNRESOLVED,配置図,Drives privacy strategy and facade hierarchy
+D-004,site,True north,,deg,UNRESOLVED,配置図,BLOCKS any meaningful sun study (QA-14)
+D-005,site,GL to 1FL,,m,UNRESOLVED,断面図,Typical 0.40-0.60 m; not assumed
+D-006,site,Setbacks,,m,UNRESOLVED,配置図,
+D-007,building,Footprint polygon,,m,UNRESOLVED,1階平面図,
+D-008,building,1F gross floor area,,m2,UNRESOLVED,1階平面図,
+D-009,building,2F gross floor area,,m2,UNRESOLVED,2階平面図,
+D-010,building,Exterior wall thickness,,m,UNRESOLVED,平面図 wall hatch,
+D-011,building,Interior wall thickness,,m,UNRESOLVED,平面図 wall hatch,
+D-012,levels,1F ceiling height,,m,UNRESOLVED,断面図,xevoΣ markets a 2720 mm grade; that is a product option not a fact about this house
+D-013,levels,1F floor to floor,,m,UNRESOLVED,断面図,
+D-014,levels,2F ceiling height,,m,UNRESOLVED,断面図,
+D-015,levels,Ridge height,,m,UNRESOLVED,立面図,
+D-016,levels,Eaves height,,m,UNRESOLVED,立面図,
+D-017,levels,Eaves projection,,m,UNRESOLVED,立面図/断面図,Deep eaves are stated design intent (brief H) but the projection is a drawing value
+D-018,music,Music room plan area,17.3,帖,CONFIRMED,client brief §B,CRITICAL
+D-019,music,Music room plan area,28.65,m2,DERIVED,17.3 × 1.6562,28.03 m2 under the 1.62 m2/帖 convention
+D-020,music,Music room gross internal X,,m,UNRESOLVED,1階平面図,CRITICAL — highest value unknown in the project
+D-021,music,Music room gross internal Y,,m,UNRESOLVED,1階平面図,CRITICAL — area does not fix aspect ratio
+D-022,music,Music room gross ceiling height,,m,UNRESOLVED,断面図,CRITICAL — 令21条 compliance depends on this minus the lining
+D-023,music,Acoustic wall build-up per side,0.150,m,ASSUMED,-,range 0.120-0.200; no acoustic spec supplied
+D-024,music,Floating floor rise,0.150,m,ASSUMED,-,range 0.100-0.200
+D-025,music,Isolated ceiling drop,0.200,m,ASSUMED,-,range 0.150-0.250
+D-026,music,Acoustic door clear width,0.750,m,ASSUMED,-,BELOW the 800 mm mover minimum — see PIANO_ROOM_REQUIREMENTS §5.4
+D-027,void,Void outline polygon,,m,UNRESOLVED,2階平面図+断面図,Must be resolved from the SECTION not inferred from plans
+D-028,stair,Stair type,,-,UNRESOLVED,平面図,
+D-029,stair,Riser height,,m,UNRESOLVED,断面図,建築基準法施行令第23条 max 0.230 m for a dwelling
+D-030,stair,Tread depth,,m,UNRESOLVED,平面図,建築基準法施行令第23条 min 0.150 m
+D-031,stair,Riser count,,-,UNRESOLVED,断面図,
+D-032,balcony,Balcony outline,,m,UNRESOLVED,2階平面図,
+D-033,balcony,Parapet height,,m,UNRESOLVED,立面図,
+D-034,roof,Roof type,,-,UNRESOLVED,立面図,
+D-035,roof,Roof pitch,,-,UNRESOLVED,立面図,
+D-036,lighting,Site latitude,,deg,UNRESOLVED,site address,
+D-037,lighting,Site longitude,,deg,UNRESOLVED,site address,
+D-038,walkthrough,Standing eye height,1.560,m,ASSUMED,-,adult in Japan ~1.70 m stature; runtime adjustable 1.400-1.800
+D-039,walkthrough,Seated eye height,1.150,m,ASSUMED,-,sofa viewpoint required by brief §A
+D-040,conventions,Planning module,0.455,m,ASSUMED,-,must be read off the plan; xevoΣ is a steel frame system on a grid
