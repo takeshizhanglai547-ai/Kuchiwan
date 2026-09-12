@@ -5,8 +5,10 @@ const DRIVER = `
   // 戦国編は「人気が高いので倍に」という指示で、章3→6・雑魚7→14・武将3→11 に増やした
   const ZAKO=['ashigaru','samurai','taisho','yumihei','teppo','kibahei','ninja',
               'souhei','saika','ozutsu','horo','kunoichi','oodate','hatamoto'];
-  const BOSS=['nobunaga','hideyoshi','ieyasu','shingen','kenshin','yoshimoto','mitsuhide'];   // 章のボス
-  const MINI=['katsuyori','hisahide','hanbei','kanbei'];                                       // 中ボス
+  const BOSS=['nobunaga','hideyoshi','ieyasu','shingen','kenshin','yoshimoto','mitsuhide',
+              'masamune','yukimura','motonari','ujiyasu','yoshihiro'];                          // 章のボス
+  const MINI=['katsuyori','hisahide','hanbei','kanbei',
+              'tadakatsu','mitsunari','muneshige','motochika','toshiie'];                       // 中ボス
   const LORDS=BOSS.concat(MINI);
   // 描画コールの形を取る物差し。ctx の束縛ごと差し替える（プロキシではメソッドを差せない）
   function shape(fn){
@@ -112,7 +114,8 @@ const DRIVER = `
     } finally { global.localStorage=realLS; } }
 
   // 章とワールドマップ
-  { if(SENGOKU_CH.length!==6) throw new Error('戦国の章が6つでない: '+SENGOKU_CH.length);
+  // 章は増えていく前提なので下限で見る（増やすたびに直す定数にしない）
+  { if(SENGOKU_CH.length<11) throw new Error('戦国の章が '+SENGOKU_CH.length+' しかない');
     const bosses=[], minis=[];
     SENGOKU_CH.forEach(function(ch,i){
       if(!ch.name) throw new Error('章'+i+' に名前が無い');
@@ -122,11 +125,11 @@ const DRIVER = `
       ch.gates.filter(function(g){ return g.mini; }).forEach(function(g){ minis.push(g.list[0][0]); });
       if(STAGE_THEME[ch.theme]===undefined) throw new Error('章'+i+' のテーマ '+ch.theme+' が無い');
       if(!STAGE_THEME[ch.theme].sengoku) throw new Error('章'+i+' が戦国のテーマを指していない'); });
-    if(new Set(bosses).size!==6) throw new Error('章ごとのボスが重複している: '+bosses.join(','));
+    if(new Set(bosses).size!==bosses.length) throw new Error('章ごとのボスが重複している: '+bosses.join(','));
     for(const b of bosses) if(BOSS.indexOf(b)<0) throw new Error('知らない章ボス: '+b);
-    if(new Set(SENGOKU_CH.map(c=>c.theme)).size!==6) throw new Error('章のテーマが重複している');
+    if(new Set(SENGOKU_CH.map(c=>c.theme)).size!==SENGOKU_CH.length) throw new Error('章のテーマが重複している');
     // 中ボスが道中に出ること。4人全員がどこかの章に居る
-    if(new Set(minis).size<5) throw new Error('中ボスの門が5つ未満: '+minis.join(','));
+    if(new Set(minis).size<MINI.length) throw new Error('中ボスの門が '+new Set(minis).size+' しかない: '+minis.join(','));
     for(const m of MINI) if(minis.indexOf(m)<0) throw new Error('中ボス '+m+' がどの章にも出ない');
     if(minis.indexOf('mitsuhide')<0) throw new Error('明智光秀が中ボスとして出ない');
     // マップ：2ノード＋最終1（最終は規定数クリアで解禁）
@@ -136,6 +139,17 @@ const DRIVER = `
     const fin=WORLD5_FINAL[0];
     const sd=levelsDone; levelsDone={};
     if(nodeUnlocked(fin)) throw new Error('制覇0でも天守が解禁されている');
+    // 章を足してノードを足し忘れると、作った章に一生入れない。
+    // 「全部の章がちょうど1つのノードに載る」で見る
+    const nodes=allMapNodes();
+    SENGOKU_CH.forEach(function(ch,i){
+      const on=nodes.filter(function(n){ return n.b===ch; });
+      if(on.length!==1) throw new Error('章'+i+'「'+ch.name+'」を指すノードが '+on.length+'個'); });
+    // 地図上で重なっていないこと（重なると片方が押せない）
+    for(let i=0;i<nodes.length;i++) for(let j=i+1;j<nodes.length;j++){
+      const a=nodes[i], b2=nodes[j];
+      if(Math.abs(a.mx-b2.mx)<0.05 && Math.abs(a.my-b2.my)<0.07)
+        throw new Error('地図で '+a.id+' と '+b2.id+' が重なっている'); }
     lap=sv; levelsDone=sd;
     console.log('章とマップ OK ('+SENGOKU_CH.length+'章／ボス '+bosses.join('・')+'／中ボス '+MINI.join('・')+'／天守は施錠)'); }
 
@@ -624,6 +638,150 @@ const DRIVER = `
     if(!(p.hp<p.maxHp)) throw new Error('水に浸かっても削られない');
     console.log('官兵衛 水攻め OK ('+w.length+'面／押し流し vx='+pushed.toFixed(1)+'／-'+(p.maxHp-p.hp)+'HP)'); }
 
+  // ===== 4f) さらに増えた十人の大技 =====
+  // ここは「何かが起きた」ではなく「その武将にしか起きないこと」を見る。
+  // 召喚・突進・弾は他の武将にもあるので、数・間隔・届く距離で切り分ける
+
+  // 政宗：騎馬鉄砲＝止まらずに撃つ（撃つ場所が毎回ずれる）
+  { const e=setupBoss('masamune','kibateppo');
+    const shots=[]; let prev=0, travel=0;
+    for(let f=0; f<MV.kibateppo.dur; f++){ hitStop=0; const bx=e.x;
+      runBossMove(e); e.moveT++; travel+=Math.abs(e.x-bx);
+      if(projectiles.length>prev){ shots.push(e.x); prev=projectiles.length; } }
+    if(!(travel>300)) throw new Error('騎馬鉄砲で駆けていない: '+travel.toFixed(0)+'px');
+    if(shots.length<4) throw new Error('斉射が '+shots.length+'発しかない');
+    const span=Math.max.apply(null,shots)-Math.min.apply(null,shots);
+    if(!(span>200)) throw new Error('同じ場所から撃っている（駆けながらではない）: '+span.toFixed(0)+'px');
+    if(!projectiles.every(q=>q.nostop)) throw new Error('馬上筒の弾が壁で止まる');
+    console.log('政宗 騎馬鉄砲 OK ('+travel.toFixed(0)+'px 駆けて '+shots.length+'発／撃った位置の幅 '+span.toFixed(0)+'px)'); }
+
+  // 幸村：十文字槍＝一直線。途中で振り向かず、最後がガード不能
+  { const e=setupBoss('yukimura','jumonji');
+    const p=players[0]; player=p; p.x=e.x-200;                     // 突き抜けさせる：背後に置き去る
+    const f0=e.facing; let travel=0, net0=e.x, turned=0, unb=0;
+    const realTry=tryHitPlayer;
+    tryHitPlayer=function(a,b,c,d,h,u){ if(u) unb++; return realTry.apply(null,arguments); };
+    try { for(let f=0; f<MV.jumonji.dur; f++){ hitStop=0; const bx=e.x;
+        runBossMove(e); e.moveT++; travel+=Math.abs(e.x-bx);
+        if(e.facing!==f0) turned++; } }
+    finally { tryHitPlayer=realTry; }
+    const net=Math.abs(e.x-net0);
+    if(!(travel>400)) throw new Error('十文字槍で突っ込んでいない: '+travel.toFixed(0)+'px');
+    if(!(net>travel*0.95)) throw new Error('一直線ではない（往復している）: 正味'+net.toFixed(0)+'/総'+travel.toFixed(0));
+    if(turned>0) throw new Error('突撃中に '+turned+'F 振り向いている');
+    if(unb<1) throw new Error('締めのガード不能が出ない');
+    console.log('幸村 十文字槍 OK ('+net.toFixed(0)+'px 一直線／締めにガード不能 '+unb+'回)'); }
+
+  // 元就：三本の矢＝一本ずつ三度、最後に三本まとめて
+  { const e=setupBoss('motonari','sanbonya');
+    const waves=[]; let prev=0;
+    for(let f=0; f<MV.sanbonya.dur; f++){ hitStop=0;
+      runBossMove(e); e.moveT++;
+      if(projectiles.length>prev){ waves.push(projectiles.length-prev); prev=projectiles.length; } }
+    const singles=waves.filter(n=>n===1).length, bundle=waves.filter(n=>n>=3).length;
+    if(singles!==3) throw new Error('一本ずつの矢が '+singles+'本（三本ではない）');
+    if(bundle!==1) throw new Error('束ねた一撃が '+bundle+'回');
+    if(!projectiles.slice(0,3).every(q=>q.homing)) throw new Error('一本の矢が追わない');
+    if(!projectiles.slice(-3).every(q=>q.pierce)) throw new Error('束ねた矢が貫かない');
+    console.log('元就 三本の矢 OK (単発3本＝追尾／束ね'+waves[waves.length-1]+'本＝貫通)'); }
+
+  // 氏康：総構え＝主役を石垣で挟み、自分は固める
+  { const e=setupBoss('ujiyasu','sougamae');
+    const p=players[0]; player=p; p.x=e.x-300; hazards.length=0; e.guardT=0;
+    let guarded=0;
+    for(let f=0; f<MV.sougamae.dur; f++){ hitStop=0;
+      runBossMove(e); e.moveT++; if(e.guardT>0) guarded++; }
+    const rocks=hazards.filter(h=>h.kind==='eplant'&&h.art==='rock');
+    if(rocks.length<3) throw new Error('石垣が '+rocks.length+'枚しか立たない');
+    // 主役を挟むこと。全部が同じ側に出ると、後ろへ下がるだけで無効になる
+    const L=rocks.filter(h=>h.x<p.x).length, R=rocks.filter(h=>h.x>p.x).length;
+    if(!(L>0 && R>0)) throw new Error('石垣が片側に寄っている: 左'+L+'/右'+R);
+    if(!(guarded>20)) throw new Error('本人が固めない: '+guarded+'F');
+    console.log('氏康 総構え OK (石垣 左'+L+'/右'+R+'／不落 '+guarded+'F)'); }
+
+  // 義弘：捨て奸＝殿を残して、主役を追い越して前へ抜ける
+  { const e=setupBoss('yoshihiro','sutegamari');
+    const p=players[0]; player=p; p.x=e.x-320;
+    const side0=(e.x>p.x)?1:-1, n0=enemies.length;
+    let crossed=0;
+    for(let f=0; f<MV.sutegamari.dur; f++){ hitStop=0;
+      runBossMove(e); e.moveT++;
+      if(((e.x>p.x)?1:-1)!==side0) crossed++; }
+    if(enemies.length<=n0) throw new Error('殿（しんがり）を置いていかない');
+    if(crossed<1) throw new Error('主役を追い越していない（ただの後退）');
+    console.log('義弘 捨て奸 OK (殿 '+(enemies.length-n0)+'体／'+crossed+'F 主役の向こう側)'); }
+
+  // 忠勝：蜻蛉切＝他の武将が届かない間合いから薙ぐ
+  { const reachOf=function(k,mv){ const e=setupBoss(k,mv);
+      const p=players[0]; player=p; p.invuln=0; p.hp=p.maxHp=99999;
+      let far=0;
+      for(let f=0; f<MV[mv].dur; f++){ hitStop=0;
+        for(let d=340; d>=60; d-=20){
+          // 一度殴られると state が 'hurt'/'down' になって以降の距離が全部素通りするので、
+          // 距離ごとに主役を作り直したのと同じ状態へ戻す
+          p.state='idle'; p.invuln=0; p.hp=p.maxHp; p.z=0; p.vx=0; p.y=e.y; p.x=e.x-d;
+          const t0=e.moveT; runBossMove(e); e.moveT=t0;                 // 同じフレームを距離ごとに試す
+          if(p.hp<p.maxHp && d>far) far=d; }
+        e.moveT++; }
+      return far; };
+    const tonbo=reachOf('tadakatsu','tonbogiri'), yari=reachOf('ieyasu','kakuyoku');
+    if(!(tonbo>=200)) throw new Error('蜻蛉切が '+tonbo+'px しか届かない');
+    if(!(tonbo>yari+40)) throw new Error('間合いが他と変わらない: 蜻蛉切'+tonbo+' / 鶴翼'+yari);
+    console.log('忠勝 蜻蛉切 OK ('+tonbo+'px 届く／鶴翼は '+yari+'px)'); }
+
+  // 三成：大一大万大吉＝兵を並べ、並べた兵を鼓舞する
+  { const e=setupBoss('mitsunari','daiichi');
+    const n0=enemies.length;
+    runMove(e, MV.daiichi.dur);
+    const mob=enemies.filter(o=>o!==e && !o.dead);
+    if(mob.length<3) throw new Error('兵が '+mob.length+'体しか並ばない');
+    const buffed=mob.filter(o=>o.buffTill>gf).length;
+    if(buffed<3) throw new Error('鼓舞された兵が '+buffed+'体しかいない');
+    console.log('三成 大一大万大吉 OK ('+mob.length+'体並べて '+buffed+'体を鼓舞)'); }
+
+  // 宗茂：雷切＝落とす場所を先に知らせ、その場所だけを撃つ
+  { const e=setupBoss('muneshige','raikiri');
+    const p=players[0]; player=p; p.invuln=0; p.hp=p.maxHp=99999;
+    gimWarn.length=0;
+    let warnX=null, warnAt=-1, hitAt=-1;
+    p.x=e.x-260;
+    for(let f=0; f<MV.raikiri.dur; f++){ hitStop=0; p.invuln=0;
+      const hp0=p.hp; runBossMove(e); e.moveT++;
+      if(warnX===null && gimWarn.length){ warnX=gimWarn[0].x; warnAt=f; }
+      if(hitAt<0 && p.hp<hp0) hitAt=f; }
+    if(warnX===null) throw new Error('落雷の予告が出ない');
+    if(hitAt<0) throw new Error('雷が当たらない');
+    if(!(hitAt-warnAt>=10)) throw new Error('予告から落雷まで '+(hitAt-warnAt)+'F しかない（避けられない）');
+    // 予告の外へ逃げれば当たらないこと
+    const e2=setupBoss('muneshige','raikiri');
+    const q=players[0]; player=q; q.invuln=0; q.hp=q.maxHp=99999; q.x=e2.x-260;
+    let moved=false;
+    for(let f=0; f<MV.raikiri.dur; f++){ hitStop=0; q.invuln=0;
+      runBossMove(e2); e2.moveT++;
+      // 締めの薙ぎ（間合い120）まで避けたいので、本人から遠ざかる側へ退く
+      if(!moved && gimWarn.length){ q.x=gimWarn[gimWarn.length-1].x-200; moved=true; } }
+    if(q.hp<q.maxHp) throw new Error('予告の外へ逃げても当たる（避けられない技）');
+    console.log('宗茂 雷切 OK (予告 '+warnAt+'F → 落雷 '+hitAt+'F／外へ逃げれば無傷)'); }
+
+  // 元親：一領具足＝足元から湧く（横から歩いてこない）
+  { const e=setupBoss('motochika','ichiryo');
+    const entries=[]; const realSp=spawnEnemyEntry;
+    spawnEnemyEntry=function(ty,x,y,en){ entries.push(en); return realSp.apply(null,arguments); };
+    try { runMove(e, MV.ichiryo.dur); } finally { spawnEnemyEntry=realSp; }
+    if(entries.length<3) throw new Error('百姓が '+entries.length+'人しか起きない');
+    if(!entries.every(en=>en==='burrow')) throw new Error('横から湧いている: '+entries.join(','));
+    console.log('元親 一領具足 OK ('+entries.length+'人が足元から起きる)'); }
+
+  // 利家：又左の槍＝三段。突くたびに遠くまで届く
+  { const e=setupBoss('toshiie','matazaemon');
+    const reach=[]; const realArc=bArc;
+    bArc=function(o,r){ reach.push(r); return realArc.apply(null,arguments); };
+    try { runMove(e, MV.matazaemon.dur); } finally { bArc=realArc; }
+    if(reach.length!==3) throw new Error('三段になっていない: '+reach.length+'段');
+    for(let i=1;i<reach.length;i++) if(!(reach[i]>reach[i-1]+20))
+      throw new Error('段ごとに伸びていない: '+reach.join('/'));
+    console.log('利家 又左の槍 OK (間合い '+reach.join('→')+'px)'); }
+
   // ===== 4e) ラスボスの三段変身 =====
   // 四周目のゼウスと五周目の信長は、倒すたびに次の形態へ進化する
   { const chain=function(k){ const r=[]; let ty=k, g=0;
@@ -750,10 +908,11 @@ const DRIVER = `
 
   // ===== 5) 背景の三景 =====
   { const idx=[]; STAGE_THEME.forEach(function(T,i){ if(T.sengoku) idx.push(i); });
-    if(idx.length!==6) throw new Error('戦国のテーマが6つでない: '+idx.length);
+    // 景色は増えていく前提なので下限で見る。ただし「どれも別の地形」は守る
+    if(idx.length<11) throw new Error('戦国のテーマが '+idx.length+' しかない');
     const lands=idx.map(i=>STAGE_THEME[i].land), fgs=idx.map(i=>STAGE_THEME[i].fg);
     for(const l of lands) if(!LAND[l]) throw new Error('地形 '+l+' が未実装（既定の尾根に落ちる）');
-    if(new Set(lands).size!==6) throw new Error('六景の地形が重複している: '+lands.join(','));
+    if(new Set(lands).size!==lands.length) throw new Error('戦国の地形が重複している: '+lands.join(','));
     const sig={};
     for(const l of lands){ const r=shape(function(){ LAND[l](STAGE_THEME[idx[0]]); });
       if(r.n<40) throw new Error('地形 '+l+' がほとんど描かれていない: '+r.n);
@@ -842,16 +1001,22 @@ const DRIVER = `
     const fin=allMapNodes().filter(function(n){ return n.final; })[0];
     const norm=curWorldLevels().filter(function(n){ return !n.final; });
     if(!fin) throw new Error('天守のノードが無い');
-    if(norm.length<2) throw new Error('通常ステージが2つ未満');
+    // 解禁の歩数は拠点の数に合わせて動く。定数を直書きせず NG5_UNLOCK から作り、
+    //   ・ちょうど手前までは開かない
+    //   ・規定数で開く
+    //   ・全体の半分より手前で開く（終盤まで待たされない）
+    // の三つで縛る
+    if(norm.length<NG5_UNLOCK+1) throw new Error('通常ステージが解禁数より少ない: '+norm.length);
+    if(!(NG5_UNLOCK*2<=norm.length)) throw new Error('天守の解禁が遅すぎる（'+NG5_UNLOCK+'/'+norm.length+'）');
     levelsDone={};
     if(nodeUnlocked(fin)) throw new Error('制覇0で天守が解禁されている');
-    levelsDone[norm[0].id]=true;
-    if(nodeUnlocked(fin)) throw new Error('制覇1で天守が解禁されている（2ステージ目で挑めてしまう）');
-    levelsDone[norm[1].id]=true;
-    if(!nodeUnlocked(fin)) throw new Error('制覇2でも天守が解禁されない（3ステージ目に選べない）');
+    for(let i=0;i<NG5_UNLOCK-1;i++) levelsDone[norm[i].id]=true;
+    if(nodeUnlocked(fin)) throw new Error('制覇'+(NG5_UNLOCK-1)+'で天守が解禁されている（1つ手前で挑めてしまう）');
+    levelsDone[norm[NG5_UNLOCK-1].id]=true;
+    if(!nodeUnlocked(fin)) throw new Error('制覇'+NG5_UNLOCK+'でも天守が解禁されない');
     if(!nodeEnterable(fin)) throw new Error('天守が解禁されても入れない');
     levelsDone={};
-    console.log('天守の解禁 OK (2ステージ制覇＝3ステージ目に選べる)'); }
+    console.log('天守の解禁 OK ('+NG5_UNLOCK+'ステージ制覇＝全'+norm.length+'中の'+(NG5_UNLOCK+1)+'ステージ目に選べる)'); }
 
   console.log('SENGOKU TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });

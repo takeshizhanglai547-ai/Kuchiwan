@@ -90,12 +90,26 @@ try{
     if(head<0) throw new Error('STAGE_THEME が見つからない');
     const blk=html.slice(head), nTheme=(blk.slice(0,blk.indexOf('\n];')).match(/^ {2}\{ /gm)||[]).length;
     if(nTheme<19) throw new Error('STAGE_THEME の数え上げに失敗した: '+nTheme);
+    // 曲を足すときは行をコピーして数字だけ変えるので、旋律まで同じ曲が紛れ込む。
+    // 「鳴ること」だけでなく「どれとも違う旋律であること」も見る
+    const tune={}, mel={}, cho={};
     for(let i=0;i<nTheme;i++){
-      let n=0;
-      try { n=analyze(HTML,'battle',i,4,64).notes.length; }
+      let r=null;
+      try { r=analyze(HTML,'battle',i,4,64); }
       catch(e){ throw new Error('テーマ'+i+' の戦闘曲が無い（BGMが例外で止まる）: '+e.message); }
-      if(!n) throw new Error('テーマ'+i+' の戦闘曲が1音も鳴らない'); }
-    console.log('テーマと曲の対応 OK (背景テーマ'+nTheme+'種すべてに戦闘曲がある)'); }
+      if(!r.notes.length) throw new Error('テーマ'+i+' の戦闘曲が1音も鳴らない');
+      tune[i]=r.notes.filter(x=>x.part==='lead').map(x=>Math.round(x.pitch)).join(',');
+      if(!tune[i]) throw new Error('テーマ'+i+' の戦闘曲に旋律が無い');
+      // 刻みが違うと鳴る音列は変わるので、鳴った音だけでは「旋律の使い回し」を見逃す。
+      // 主題そのもの（mel / prog）も突き合わせる
+      mel[i]=(r.S.mel||[]).join(',');
+      if(!mel[i]) throw new Error('テーマ'+i+' の戦闘曲に主題（mel）が無い');
+      cho[i]=JSON.stringify(r.S.prog||[]); }
+    for(let i=0;i<nTheme;i++) for(let j=i+1;j<nTheme;j++){
+      if(tune[i]===tune[j]) throw new Error('テーマ'+i+' と '+j+' の戦闘曲が同じ旋律（曲を増やしたつもりで増えていない）');
+      if(mel[i]===mel[j]) throw new Error('テーマ'+i+' と '+j+' の主題が同じ（行を複製しただけ）');
+      if(cho[i]===cho[j]) throw new Error('テーマ'+i+' と '+j+' の和声進行が同じ（行を複製しただけ）'); }
+    console.log('テーマと曲の対応 OK (背景テーマ'+nTheme+'種すべてに別々の戦闘曲がある)'); }
 
   // ===== 6) 神には専用のボス曲があること =====
   // SONGS[mode] は無ければ BATTLE[0] へ黙って落ちるので、曲名を消しても音は鳴る。
@@ -112,7 +126,9 @@ try{
 // 音階と旋律は章ごとに書き分けてあったのに、刻みが既定のまま横並びだった。
 // 聴くとどのステージも同じ運びに聞こえるので、絵に合わせて刻みを与えている
 { const sig={}, dup=[];
-  for(let i=9;i<=24;i++){
+  // 9〜24 は二〜五周目の元からの章、31〜35 は後から足した戦国の五章
+  const IDX=[]; for(let i=9;i<=24;i++) IDX.push(i); for(let i=31;i<=35;i++) IDX.push(i);
+  for(const i of IDX){
     const r=analyze(HTML,'battle',i,3,32), S=r.S;
     if(!S.rhy) throw new Error('テーマ'+i+' に刻みの指定が無い（既定の運びのまま）');
     const k=S.rhy.slice(0,8).join(',')+'|'+(S.kit||(S.drive?'drive':'straight'));
@@ -121,8 +137,8 @@ try{
   // 全16ステージが完全に別々である必要は無いが、半分以上が同じ運びでは章の差が出ない
   if(dup.length>3) throw new Error('刻みが同じステージが多すぎる: '+dup.join(' / '));
   const kinds=Object.keys(sig).length;
-  if(kinds<10) throw new Error('二〜五周目の刻みが '+kinds+' 種類しかない（16ステージ）');
-  console.log('章ごとの刻み OK ('+kinds+'種類／重なりは '+dup.length+'組)'); }
+  if(kinds<18) throw new Error('二〜五周目の刻みが '+kinds+' 種類しかない（'+IDX.length+'ステージ）');
+  console.log('章ごとの刻み OK ('+kinds+'種類／'+IDX.length+'章／重なりは '+dup.length+'組)'); }
 
 // ===== 六周目：追跡テーマの作風（3+3+2 の不均等な足取り）=====
 // 映画の旋律は使わない。借りたのは「8つの刻みを 3+3+2 に割る足取り」と
