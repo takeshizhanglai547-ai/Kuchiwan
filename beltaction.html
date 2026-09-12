@@ -1295,6 +1295,27 @@ const Music=(()=>{
       prog:[[43,46,50],[43,46,50],[50,54,57],[43,46,50],[48,51,55],[43,46,50],[46,50,53],[43,46,50]],
       mel:[55,55,58,55, 62,58,55,54, 55,55,58,62, 66,62,58,55, 55,55,57,55, 62,60,58,57, 55,54,50,54, 55,55,58,55],
       rhy:[1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },   // 後半は刻みを詰めて追い込む
+    // ── 五周目の増援ステージ（31〜35）──
+    { bpm:98, lead:'sine', pad:'sawtooth', kit:'heavy',      // 31: 奥州の雪原 — 律音階 (A)。雪が音を吸う
+      prog:[[57,60,64],[55,59,62],[52,55,59],[57,60,64],[62,65,69],[55,59,62],[52,55,59],[57,60,64]],
+      mel:[69,72,74,72, 69,67,64,67, 69,74,76,74, 72,69,67,64, 69,72,76,79, 76,74,72,69, 67,64,62,64, 67,69,72,69],
+      rhy:[1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1] },   // 二拍空けて一打＝雪の静けさ
+    { bpm:152, lead:'square', pad:'sawtooth', drive:true, kit:'gallop',   // 32: 大坂・真田丸 — 都節 (A)。赤備えの突撃
+      prog:[[57,60,64],[58,62,65],[53,57,60],[57,60,64],[57,60,64],[62,65,69],[58,62,65],[53,57,60]],
+      mel:[69,70,74,76, 77,76,74,70, 69,74,77,81, 82,81,77,74, 69,70,74,77, 81,82,81,77, 74,70,69,65, 64,69,70,69],
+      rhy:[3,1,2,1, 3,1,2,1, 3,1,2,1, 3,1,2,1, 3,1,2,1, 3,1,2,1, 3,1,2,1, 3,1,2,1] },   // 付点で前へ前へ
+    { bpm:84, lead:'triangle', pad:'triangle', kit:'taiko',   // 33: 厳島の潮騒 — 律音階 (E)。引き潮の間
+      prog:[[52,55,59],[57,60,64],[50,53,57],[52,55,59],[59,62,66],[57,60,64],[50,53,57],[52,55,59]],
+      mel:[64,67,69,71, 69,67,64,62, 64,69,71,74, 71,69,67,64, 71,74,76,74, 71,69,67,69, 64,62,59,62, 64,67,64,62],
+      rhy:[1,0,2,0, 1,0,1,0, 1,0,2,0, 1,0,1,0, 1,0,2,0, 1,0,1,0, 1,0,2,0, 1,0,1,0] },   // 寄せては返す二拍子
+    { bpm:112, lead:'square', pad:'sawtooth', kit:'march',    // 34: 小田原の総構え — 都節 (D)。動かぬ壁
+      prog:[[50,53,57],[50,53,57],[51,55,58],[50,53,57],[45,48,52],[50,53,57],[51,55,58],[50,53,57]],
+      mel:[62,63,67,62, 62,67,69,67, 63,62,58,62, 63,67,69,74, 74,69,67,63, 62,63,67,69, 67,63,62,58, 57,62,63,62],
+      rhy:[1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1] },   // 四分の均等踏み＝城は動かぬ
+    { bpm:138, lead:'sawtooth', pad:'sawtooth', drive:true, kit:'taiko',  // 35: 薩摩の火口 — ヨナ抜き短音階 (C)。噴煙の下
+      prog:[[48,51,55],[53,56,60],[46,50,53],[48,51,55],[55,58,62],[53,56,60],[46,50,53],[48,51,55]],
+      mel:[60,63,65,67, 70,67,65,63, 60,65,67,70, 72,70,67,65, 72,70,67,72, 75,72,70,67, 65,63,60,58, 60,63,60,55],
+      rhy:[2,1,1,0, 2,1,1,0, 2,1,1,0, 2,1,1,0, 2,1,1,0, 2,1,1,0, 2,1,1,0, 2,1,1,0] },   // 八分二つで畳みかける
   ];
   const SONGS={
     boss:{ bpm:152, lead:'square', pad:'sawtooth', drive:true,   // 怒涛のボス戦 (Dm)
@@ -8237,6 +8258,28 @@ const ETYPE={
     boss:true,mini:true,bossKind:'hanbei',weapon:'ogi',accent:'#fff0c0',sengoku:true,sumMax:8,name:'今孔明 竹中半兵衛'},
   kanbei:{hp:1020,sp:1.8,dmg:29,atkR:96,w:84,h:112,c1:'#1a3a4a',c2:'#102630',c3:'#061218',score:15000,
     boss:true,mini:true,bossKind:'kanbei',weapon:'ogi',accent:'#8ad6ff',sengoku:true,name:'軍師 黒田官兵衛'},
+  // ── 五周目の増援：各地の大名（大名5・中ボス5）──
+  masamune:{hp:1680,sp:2.4,dmg:35,atkR:114,w:94,h:124,c1:'#1c1c24',c2:'#101016',c3:'#06060a',score:28000,
+    boss:true,bossKind:'masamune',weapon:'blade',accent:'#e8e0c0',sengoku:true,name:'独眼竜 伊達政宗'},
+  yukimura:{hp:1620,sp:2.7,dmg:37,atkR:122,w:92,h:122,c1:'#a81a1a',c2:'#6a0e0e',c3:'#300606',score:29000,
+    boss:true,bossKind:'yukimura',weapon:'spear',accent:'#ff8a5a',sengoku:true,name:'日本一の兵 真田幸村'},
+  motonari:{hp:1500,sp:1.6,dmg:32,atkR:116,w:94,h:120,c1:'#2a5a4a',c2:'#173a2e',c3:'#081c16',score:26000,
+    boss:true,bossKind:'motonari',weapon:'ogi',accent:'#9fe8c8',sengoku:true,name:'謀神 毛利元就'},
+  ujiyasu:{hp:1820,sp:1.2,dmg:33,atkR:104,w:102,h:128,c1:'#3a4a6a',c2:'#243048',c3:'#101624',score:27000,
+    boss:true,bossKind:'ujiyasu',weapon:'blade',accent:'#a8c8ff',sengoku:true,name:'相模の獅子 北条氏康'},
+  yoshihiro:{hp:1750,sp:2.2,dmg:38,atkR:118,w:96,h:126,c1:'#6a2a1a',c2:'#421810',c3:'#1e0a06',score:29000,
+    boss:true,bossKind:'yoshihiro',weapon:'blade',accent:'#ffa24a',sengoku:true,name:'鬼島津 島津義弘'},
+  tadakatsu:{hp:1150,sp:2.1,dmg:36,atkR:126,w:90,h:118,c1:'#2a2a32',c2:'#18181e',c3:'#0a0a0e',score:17000,
+    boss:true,mini:true,bossKind:'tadakatsu',weapon:'spear',accent:'#d8e8ff',sengoku:true,name:'蜻蛉切 本多忠勝'},
+  mitsunari:{hp:980,sp:2.0,dmg:29,atkR:96,w:84,h:112,c1:'#4a3a6a',c2:'#2e2444',c3:'#141020',score:15000,
+    boss:true,mini:true,bossKind:'mitsunari',weapon:'ogi',accent:'#c8b0ff',sengoku:true,sumMax:9,name:'大一大万大吉 石田三成'},
+  muneshige:{hp:1100,sp:2.4,dmg:32,atkR:104,w:86,h:116,c1:'#8a6a1a',c2:'#5a4410',c3:'#281e06',score:16000,
+    boss:true,mini:true,bossKind:'muneshige',weapon:'blade',accent:'#ffe08a',sengoku:true,name:'西国無双 立花宗茂'},
+  motochika:{hp:1060,sp:2.6,dmg:31,atkR:108,w:86,h:114,c1:'#1a4a3a',c2:'#0e2e24',c3:'#041410',score:16000,
+    boss:true,mini:true,bossKind:'motochika',weapon:'spear',accent:'#8affc8',sengoku:true,name:'土佐の出来人 長宗我部元親'},
+  toshiie:{hp:1120,sp:2.3,dmg:33,atkR:120,w:88,h:116,c1:'#b8a030',c2:'#7a6818',c3:'#382e08',score:16000,
+    boss:true,mini:true,bossKind:'toshiie',weapon:'spear',accent:'#ffe14d',sengoku:true,name:'槍の又左 前田利家'},
+  // ── 六周目「メカワンコキングダム」の五将 ──
   // ── 六周目「メカワンコキングダム」の五将 ──
   // 描画は既存のボス体型を流用する（bossKind）。新しい kind を作ると
   // drawBigBoss の既定寸法に落ちて、5体とも同じ寸胴になる。
@@ -8436,6 +8479,17 @@ const BOSSMOVES={
   hisahide: ['hiragumo','hyotan','teleSlash','dashThrust','unblockSmash'],
   hanbei:   ['saihai','kakuyoku','orbSpread','heavySwing'],
   kanbei:   ['mizuzeme','yaribusuma','heavySwing','orbSpread'],
+  // ── 増援の群雄 ──
+  masamune: ['kibateppo','teppoVolley','dashThrust','tripleStep','bladeParry','unblockSmash','bossGrab'],
+  yukimura: ['jumonji','skyDive','dashThrust','tripleStep','yaribusuma','unblockSmash','bossGrab'],
+  motonari: ['sanbonya','kakuyoku','spikeVolley','orbSpread','unblockSmash'],
+  ujiyasu:  ['sougamae','yaribusuma','groundSlam','heavySwing','bladeParry','unblockSmash','bossGrab'],
+  yoshihiro:['sutegamari','bodyCharge','dashThrust','heavySwing','unblockSmash','bossGrab'],
+  tadakatsu:['tonbogiri','yaribusuma','dashThrust','tripleStep','heavySwing'],
+  mitsunari:['daiichi','kakuyoku','orbSpread','boltStrike'],
+  muneshige:['raikiri','teleSlash','dashThrust','tripleStep','unblockSmash'],
+  motochika:['ichiryo','spikeVolley','dashThrust','saruTobi','unblockSmash'],
+  toshiie:  ['matazaemon','bodyCharge','heavySwing','dashThrust','unblockSmash'],
   // ── 六周目「メカワンコキングダム」の五将 ──
   //   ギガディーン＝重量（地響きで立つ場所を奪う）
   //   バリスタ    ＝弾幕と長い溜めの一撃（南蛮筒＝レールガンとして流用）
@@ -8533,6 +8587,16 @@ const BOSSQUOTE={ garm:'我が鉄爪、受けてみよ！', gigas:'踏み潰し�
   yoshimoto:'田舎の犬が、雅を解するとは思えぬがのう。ま、蹴鞠でもして待っておれ。',
   mitsuhide:'……敵は、いつも背にあり。それを知らぬ者から順に消える。',
   katsuyori:'父の名で語るな。武田は俺の代で、まだ終わらぬ！',
+  masamune:'二十年、遅く生まれた。——その二十年、ここで取り返す。',
+  yukimura:'退き方は知らぬ。教わらなんだのでな。',
+  motonari:'一本なら折れる。三本ならば折れぬ。……さて、貴殿は何本かな。',
+  ujiyasu:'攻めるは易く、守るは難し。この総構え、崩してみせよ。',
+  yoshihiro:'退くときは、前へ退く。——島津のやり方じゃ。',
+  tadakatsu:'この槍、蜻蛉が止まれば二つに裂ける。……触れぬがよい。',
+  mitsunari:'大一大万大吉。一人が万人のため、万人が一人のため。',
+  muneshige:'西国無双と呼ばれておる。……呼ばれるだけの働きは、見せよう。',
+  motochika:'田を耕す手で槍を持つ。一領具足、甘く見るな。',
+  toshiie:'槍の又左よ。……久しく錆びさせておらぬ。',
   hisahide:'茶釜ひとつで城を買い、城ひとつで天下を賭ける。——面白かろう？',
   hanbei:'力比べは致しませぬ。……もう、盤の上では終わっております。',
   kanbei:'水は低きに流れ、城を沈める。貴殿はどちらに立っておられるかな。',
@@ -8561,6 +8625,9 @@ const BOSS_BGM={ garm:'boss', shark:'bossfast', vesper:'bossfast', dragon:'bossf
   shingen:'bosssengoku', kenshin:'bosssengoku', yoshimoto:'bosssengoku', mitsuhide:'bosssengoku',
   nobunaga2:'boss2', nobunaga3:'boss3',
   katsuyori:'bosssengoku', hisahide:'bosssengoku', hanbei:'bosssengoku', kanbei:'bosssengoku',
+  masamune:'bosssengoku', yukimura:'bosssengoku', motonari:'bosssengoku',
+  ujiyasu:'bosssengoku', yoshihiro:'bosssengoku', tadakatsu:'bosssengoku',
+  mitsunari:'bosssengoku', muneshige:'bosssengoku', motochika:'bosssengoku', toshiie:'bosssengoku',
   // ── 六周目・メカワンコキングダム ──
   mkGolem:'bossheavy', mkTurret:'bossfast', mkArc:'bosscosmic',
   mkSwarm:'bossheavy', mkMirror:'bossrival', mkOmega:'boss3', mkOmega2:'bossfast', mkOmega3:'boss3',
@@ -9972,6 +10039,17 @@ const MV={
   // ── 群雄の一手 ──
   fuurinkazan:{tele:30,dur:132,rec:40,minR:0,maxR:1400,danger:1},    // 風林火山：疾風→静止回復→火→不動の四相
   kurumagakari:{tele:26,dur:88,rec:34,minR:0,maxR:800,danger:1},     // 車懸り：回りながら斬り進む
+  // ── 増援の群雄。全員が「他の誰も持たない手」を一つ持つ ──
+  kibateppo:{tele:26,dur:86,rec:32,minR:120,maxR:1400},               // 騎馬鉄砲：駆けながら斉射する
+  jumonji:{tele:30,dur:74,rec:38,minR:0,maxR:1400,danger:1},          // 十文字槍：止まらぬ一直線の突撃
+  sanbonya:{tele:28,dur:96,rec:34,minR:150,maxR:1400},                // 三本の矢：一本ずつ、最後に束ねて
+  sougamae:{tele:32,dur:104,rec:38,minR:0,maxR:1400},                 // 総構え：壁を立てて寄せ付けぬ
+  sutegamari:{tele:26,dur:92,rec:34,minR:0,maxR:1400},                // 捨て奸：殿を置いて、前へ退く
+  tonbogiri:{tele:38,dur:70,rec:42,minR:0,maxR:900,danger:1},         // 蜻蛉切：間合いの外から薙ぐ
+  daiichi:{tele:28,dur:88,rec:34,minR:0,maxR:1400},                   // 大一大万大吉：兵を並べて士気を上げる
+  raikiri:{tele:30,dur:68,rec:36,minR:0,maxR:1000,danger:1},          // 雷切：落ちる雷ごと斬る
+  ichiryo:{tele:30,dur:94,rec:34,minR:0,maxR:1400},                   // 一領具足：田から兵が起き上がる
+  matazaemon:{tele:24,dur:78,rec:32,minR:0,maxR:900},                 // 又左の槍：三段、突くたび遠くなる
   jouraku:{tele:28,dur:96,rec:36,minR:0,maxR:1400},                  // 上洛の行列：兵を並べて前進する
   muhon:{tele:22,dur:64,rec:32,minR:0,maxR:1400,danger:1},           // 謀反の一閃：背後を取ってガード不能
   akazonae:{tele:30,dur:92,rec:36,minR:0,maxR:1400},                 // 赤備え：騎馬を三騎、横一線に走らせる
@@ -10286,6 +10364,107 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
       else { if(k===4){ e.guardT=Math.max(e.guardT,26); popText(e.x,e.y-e.h-8,'不動','#d8c8a0'); }
         if(k===26) bShock(e,150,t.dmg+4); }
       break; }
+    // ── 政宗：騎馬鉄砲。駆け抜けながら、走った線に沿って弾を置いていく ──
+    case 'kibateppo':
+      if(f===1){ popText(e.x,e.y-e.h-24,'撃ちながら駆けよ！','#e8e0c0',true); sfx.dash(e.x); }
+      if(f===8){ const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1; }
+      if(f>10 && f<74){ e.x+=e.facing*7.2;
+        if(f%11===0){ spawnProj(e.x, e.y, 0, 0, {owner:'enemy', dmg:t.dmg-10, color:'#ffe9a0',
+            r:9, life:90, zz:e.h*0.55, vzz:0.2, grav:0.10, nostop:true});
+          spark(e.x+e.facing*22, e.y-e.h*0.55, '#ffe9a0', 5, 7); sfx.gun(e.x); shake=Math.max(shake,4); }
+        if(f%6===0) dust(e.x,e.y,2); }
+      break;
+    // ── 幸村：十文字槍。溜めてから一直線。途中で向きを変えない ──
+    case 'jumonji':
+      if(f===1){ popText(e.x,e.y-e.h-24,'退き方は知らぬ！','#ff8a5a',true); sfx.rise(e.x);
+        const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1; }
+      if(f>12 && f<58){ e.x+=e.facing*11.5;
+        if(f%4===0){ particles.push({k:'wandenAfter', x:e.x, y:e.y, gl:groundLift(e.x), face:e.facing, life:10, max:10});
+          bArc(e,96,54,t.dmg-6,true,'#ff8a5a'); }
+        if(f%8===0) spark(e.x-e.facing*20, e.y-e.h*0.5, '#ff8a5a', 3, 7); }
+      if(f===60) bUnblock(e,128,58,t.dmg+8);
+      break;
+    // ── 元就：三本の矢。一本ずつでは折れる。最後に束ねて撃つ ──
+    case 'sanbonya':
+      if(f===1){ popText(e.x,e.y-e.h-24,'一本なら折れる','#9fe8c8',true); sfx.boss(e.x); }
+      if(f===18||f===34||f===50){ const n2=(f-18)/16;
+        spawnProj(e.x+e.facing*26, e.y, e.facing*(9+n2*1.5), 0, {owner:'enemy', dmg:t.dmg-12,
+          color:'#9fe8c8', r:8, life:110, zz:e.h*(0.48+n2*0.10), homing:true});
+        spark(e.x+e.facing*30, e.y-e.h*0.5, '#9fe8c8', 4, 6); sfx.swing(0.8,'longblade',e.x); }
+      if(f===70){ popText(e.x,e.y-e.h-24,'三本ならば折れぬ','#9fe8c8',true);
+        for(let j=-1;j<=1;j++) spawnProj(e.x+e.facing*26, e.y, e.facing*13, j*1.6, {owner:'enemy',
+          dmg:t.dmg-2, color:'#cfeee0', r:14, life:120, zz:e.h*0.55, pierce:true});
+        ring(e.x,e.y-e.h*0.5,'#9fe8c8'); flash=Math.max(flash,3); sfx.big(e.x); }
+      break;
+    // ── 氏康：総構え。石垣を三つ立て、その裏から押し返す ──
+    case 'sougamae':
+      if(f===1){ popText(e.x,e.y-e.h-24,'この構え、崩してみよ','#a8c8ff',true); sfx.heavy(e.x); }
+      if(f===16){ const tp=nearestPlayerTo(e.x);
+        for(let j=-1;j<=1;j++) hazards.push({kind:'eplant', art:'rock',
+          x:clamp(tp.x+j*130, camX+40, camX+W-40), y:LANE, t:0, warn:20+Math.abs(j)*5, dur:46, life:120,
+          dmg:t.dmg-12, col:'#a8c8ff'});
+        ring(e.x,e.y,'#a8c8ff'); }
+      if(f===40){ e.guardT=Math.max(e.guardT,48); popText(e.x,e.y-e.h-8,'不落','#a8c8ff'); }
+      if(f>44 && f<96 && f%14===0) bShock(e,128,t.dmg-6);
+      break;
+    // ── 義弘：捨て奸。殿を置いて、前へ退く ──
+    case 'sutegamari':
+      if(f===1){ popText(e.x,e.y-e.h-24,'前へ退けェ！','#ffa24a',true); sfx.boss(e.x); }
+      if(f===14){ bSummon(e); ring(e.x,e.y,'#ffa24a'); }
+      if(f===30){ const tp=nearestPlayerTo(e.x); e.vanish=14;
+        e.x=clamp(tp.x + (tp.x<e.x?1:-1)*150, camX+40, camX+W-40);
+        e.facing=(tp.x<e.x)?-1:1; spark(e.x,e.y-50,'#ffa24a',14,9); }
+      if(f>40 && f<84){ e.x+=e.facing*9.5;
+        if(f%7===0){ bArc(e,88,52,t.dmg-6,true,'#ffa24a'); ember(e.x+rnd(-20,20), e.y-rnd(10,60), rnd(-0.6,0.6), -rnd(1,2.6), '#ffa24a'); } }
+      break;
+    // ── 忠勝：蜻蛉切。間合いの外から、長い一薙ぎ ──
+    case 'tonbogiri':
+      if(f===1){ popText(e.x,e.y-e.h-24,'……触れぬがよい','#d8e8ff',true); sfx.charge(e.x); }
+      if(f<36 && f%4===0) spark(e.x+e.facing*(60+f*2), e.y-e.h*0.55, '#d8e8ff', 2, 4);
+      if(f===40){ bUnblock(e,230,64,t.dmg+12);
+        crescent(e.x+e.facing*120, e.y-e.h*0.5, 200, e.facing>0?-1.1:Math.PI+1.1, e.facing>0?1.1:Math.PI-1.1, '#d8e8ff');
+        flash=Math.max(flash,3); shake=Math.max(shake,11); sfx.big(e.x); }
+      if(f===52) bArc(e,170,58,t.dmg-4,true,'#d8e8ff');
+      break;
+    // ── 三成：大一大万大吉。兵を並べ、士気で押す ──
+    case 'daiichi':
+      if(f===1){ popText(e.x,e.y-e.h-24,'一人は万人のために','#c8b0ff',true); sfx.boss(e.x); }
+      if(f===14||f===38||f===62) bSummon(e);
+      if(f===30||f===54){ enemies.forEach(function(o){ if(o.dead||o===e) return;
+          if(Math.abs(o.x-e.x)>360) return; o.buffTill=gf+180; spark(o.x,o.y-o.h-4,'#c8b0ff',4,5); });
+        ring(e.x,e.y-e.h*0.4,'#c8b0ff'); popText(e.x,e.y-e.h-8,'万人は一人のために','#c8b0ff'); }
+      if(f%10===0 && perfTier<2) spark(e.x+rnd(-36,36), e.y-rnd(20,96), '#c8b0ff', 1, 4);
+      break;
+    // ── 宗茂：雷切。落ちる雷を、落ちる前に斬る ──
+    case 'raikiri':
+      if(f===1){ popText(e.x,e.y-e.h-24,'雷を斬る','#ffe08a',true); sfx.charge(e.x); }
+      if(f===20){ const tp=nearestPlayerTo(e.x); e.rkX=clamp(tp.x, camX+40, camX+W-40);
+        gimWarnAt(e.rkX, '#ffe08a', 20); }
+      if(f===42){ const bx=(e.rkX!=null? e.rkX : e.x+e.facing*120);
+        for(let k=0;k<7;k++) particles.push({k:'bolt', x:bx+rnd(-10,10), y:LANE-groundLift(bx)-k*52, len:44, life:12, max:12});
+        flash=Math.max(flash,5); shake=Math.max(shake,13); sfx.thunder(bx);
+        players.forEach(function(q){ if(!q.active||q.invuln>0) return;
+          if(Math.abs(q.x-bx)<96) hurtPlayer(q, Math.round((t.dmg+8)*foeAtkMul(e)), (q.x<bx?-1:1), true, 'magic'); }); }
+      if(f===54) bArc(e,120,56,t.dmg,true,'#ffe08a');
+      break;
+    // ── 元親：一領具足。田を耕していた者が、足元から起き上がる ──
+    case 'ichiryo':
+      if(f===1){ popText(e.x,e.y-e.h-24,'鍬を槍に持ち替えよ','#8affc8',true); sfx.step(e.x,'dirt',1.6); }
+      if(f===16||f===44||f===70){ const tp=nearestPlayerTo(e.x);
+        const bx=clamp(tp.x+rnd(-170,170), camX+50, camX+W-50);
+        spawnEnemyEntry('ashigaru', bx, clamp(tp.y+rnd(-30,30),GROUND_TOP,GROUND_BOT), 'burrow');
+        dust(bx,LANE,8); ring(bx,LANE,'#8affc8'); }
+      if(f%9===0 && perfTier<2) dust(e.x+rnd(-50,50), e.y, 2);
+      break;
+    // ── 利家：又左の槍。三段、突くたびに遠くなる ──
+    case 'matazaemon':
+      if(f===1){ popText(e.x,e.y-e.h-24,'槍の又左、参る','#ffe14d',true); sfx.rise(e.x); }
+      if(f===20||f===42||f===64){ const n2=(f-20)/22;
+        e.x+=e.facing*(10+n2*8);
+        bArc(e, 120+n2*46, 54, t.dmg-6+n2*5, n2>=2, '#ffe14d');
+        spark(e.x+e.facing*(90+n2*40), e.y-e.h*0.5, '#ffe14d', 6, 8);
+        sfx.swing(1,'longblade',e.x); if(n2>=2){ shake=Math.max(shake,9); hitStop=Math.max(hitStop,6); } }
+      break;
     // ── 謙信：車懸り。回りながら斬り進む。止まらないので置きに行くしかない ──
     case 'kurumagakari':
       if(f===1){ popText(e.x,e.y-e.h-24,'車懸りの陣！','#bfe9ff',true); sfx.dash(e.x); }
@@ -11172,6 +11351,27 @@ const SENGOKU_CH=[
    gates:[{off:520,list:[['oodate',2],['souhei',1]]},{off:900,list:[['kunoichi',2],['hatamoto',1]]},
           {off:1240,list:[['ozutsu',1],['taisho',1],['kibahei',1]]},{off:1600,boss:true,list:[['shingen',1]]}],
    npc:{kind:'elder',name:'長老モフじい',lines:['丸太を組んだ砦じゃ。守るために作られておる。','くノ一が居る。背を取られるぞ、壁を背にせい。','山の主は動かぬ。動かぬまま、こちらの手を全部読んでおる。']}},
+  // ── ここから増援の五国。どれも先に「その国の戦い方」を兵で見せてから大名が出る ──
+  {theme:31,name:'奥州の雪原',
+   gates:[{off:520,list:[['ashigaru',3],['teppo',1]]},{off:900,list:[['kibahei',2],['yumihei',1]]},
+          {off:1180,mini:true,list:[['toshiie',1]]},{off:1500,boss:true,list:[['masamune',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['雪が音を消しておる。足音も、馬の脚も聞こえん。','鉄砲を馬に乗せて撃つ者がおるそうじゃ。撃ってから寄るのでは間に合わん。','奥州の主は、右の目を失うておる。——だが見えておるぞ、全部。']}},
+  {theme:32,name:'大坂・真田丸',terr:'up',
+   gates:[{off:520,list:[['ashigaru',3],['yaribusuma',1]]},{off:900,list:[['saika',2],['teppo',1]]},
+          {off:1180,mini:true,list:[['mitsunari',1]]},{off:1500,boss:true,list:[['yukimura',1]]}],
+   npc:{kind:'merchant',name:'行商猫チャミ',lines:['出丸ニャ。ここだけ外へ突き出しとるニャ〜','柵と槍衾で、まっすぐ進めんようになっとるニャ。','赤い具足の一隊が来たら逃げるニャ。あれは退かんニャ。']}},
+  {theme:33,name:'厳島の潮騒',terr:'dive',
+   gates:[{off:520,list:[['ninja',2],['kunoichi',1]]},{off:900,list:[['yumihei',2],['oodate',1]]},
+          {off:1180,mini:true,list:[['muneshige',1]]},{off:1500,boss:true,list:[['motonari',1]]}],
+   npc:{kind:'sailor',name:'漂流犬スペーシー',lines:['引き潮だ。いまなら渡れるが、戻りは知らねえぞ。','この島の主は戦わねえ。戦う前に、もう勝ってる。','矢が三方から来たら、それは囲まれてる合図だ。']}},
+  {theme:34,name:'小田原の総構え',terr:'tower',
+   gates:[{off:520,list:[['oodate',2],['ashigaru',2]]},{off:900,list:[['ozutsu',1],['hatamoto',1],['souhei',1]]},
+          {off:1180,mini:true,list:[['tadakatsu',1]]},{off:1500,boss:true,list:[['ujiyasu',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['町ごと壁で囲うておる。攻める側が音を上げるまで、ここは落ちん。','大盾が前を塞ぐ。正面から押しても一歩も動かんぞ。','鹿の角を生やした男がおる。あれは——近寄るでない。']}},
+  {theme:35,name:'薩摩の火口',terr:'down',
+   gates:[{off:520,list:[['ashigaru',2],['jindaiko',1]]},{off:900,list:[['saika',2],['kusarigama',1]]},
+          {off:1180,mini:true,list:[['motochika',1]]},{off:1500,boss:true,list:[['yoshihiro',1]]}],
+   npc:{kind:'elder',name:'長老モフじい',lines:['地の割れ目から熱が漏れておる。長居はできんぞ。','ここの兵は退かぬ。退くときですら、前へ退くのじゃと。','鬼と呼ばれた男が待っておる。……鬼というのは、褒め言葉らしいのう。']}},
 ];
 const WORLD3_LEVELS=[
   {id:'w3kairou', b:SPACE_CH[1], mx:0.32, my:0.32},   // 星間回廊（円盤母艦ディスコ）
@@ -11195,12 +11395,17 @@ const WORLD5_LEVELS=[
   {id:'w5oke',   b:SENGOKU_CH[3], mx:0.54, my:0.66},   // 桶狭間の豪雨（今川義元／松永久秀）
   {id:'w5kawa',  b:SENGOKU_CH[4], mx:0.68, my:0.32},   // 川中島の朝霧（上杉謙信／武田勝頼）
   {id:'w5kai',   b:SENGOKU_CH[5], mx:0.80, my:0.58},   // 甲斐の山城（武田信玄）
+  {id:'w5ou',    b:SENGOKU_CH[6], mx:0.14, my:0.26},   // 奥州の雪原（伊達政宗／前田利家）
+  {id:'w5sanada',b:SENGOKU_CH[7], mx:0.30, my:0.82},   // 大坂・真田丸（真田幸村／石田三成）
+  {id:'w5miya',  b:SENGOKU_CH[8], mx:0.48, my:0.14},   // 厳島の潮騒（毛利元就／立花宗茂）
+  {id:'w5odawara',b:SENGOKU_CH[9],mx:0.62, my:0.84},   // 小田原の総構え（北条氏康／本多忠勝）
+  {id:'w5satsuma',b:SENGOKU_CH[10],mx:0.74, my:0.14},  // 薩摩の火口（島津義弘／長宗我部元親）
 ];
 const WORLD5_FINAL=[
   {id:'w5tenshu', b:SENGOKU_CH[0], mx:0.90, my:0.18, locked:true, final:true},   // 炎上する天守（織田信長／明智光秀）
 ];
-const NG5_UNLOCK=2;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
-                      // ＝3ステージ目でラスボスへ挑める（神話の頂と同じ歩数）
+const NG5_UNLOCK=4;   // 戦国のステージをこの数クリアで「炎上する天守」が解禁
+                      // 拠点が5→10へ倍になったので、2のままだと全体の2割で天守が開いてしまう
 // ── 六周目「メカワンコキングダム」の六章 ──
 // 機械の国の仕組みを外側から順に剥いでいく。外郭→動力→燃料→流通→生産→中枢。
 // 歩くほど「この国が何で出来ているか」が分かる＝探究がそのまま進行になる
@@ -13025,6 +13230,36 @@ const STAGE_THEME=[
     g:['#4a4230','#332d20','#1a1710'], cob:['#443c2c','#3a3426'], vig:'rgba(6,4,0,.66)',
     rimRGB:'255,224,150',
     amb:{shape:'spark',color:'rgba(255,226,150,.92)',rate:0.8,max:42,vy:-0.24,wind:0.08,r0:1.3,r1:3.2,glow:true,alpha:.92} },
+  // 31: 奥州の雪原（低い鉛色の空・積もった雪・旗指物だけが色を持つ）
+  { gsnd:'dirt', asnd:'wind', sky:['#8a94a8','#a6b0c0','#c4ccd8','#dde3ea'], sun:'rgba(236,242,250,', sunX:0.30,sunY:84, rays:0.05, tint:'rgba(200,214,232,.26)',
+    haze:'rgba(196,210,228,.44)', fog:'rgba(214,226,240,.56)', stars:0, tower:'#6a7486', sengoku:true, land:'glacier', fg:'nobori',
+    g:['#dfe6ee','#c2cbd8','#97a2b2'], cob:['#cfd8e4','#bcc6d4'], vig:'rgba(10,14,22,.42)',
+    rimRGB:'220,234,255',
+    amb:{shape:'spark',color:'rgba(248,252,255,.88)',rate:1.3,max:52,vy:0.34,wind:0.22,r0:1.2,r1:2.8,glow:false,alpha:.82} },
+  // 32: 大坂・真田丸（夕焼けに焼ける赤土の出丸・柵と槍衾）
+  { gsnd:'dirt', asnd:'wind', sky:['#c05a30','#dc8446','#eeae66','#f6d79a'], sun:'rgba(255,226,168,', sunX:0.74,sunY:120, rays:0.16, tint:'rgba(230,140,80,.30)',
+    haze:'rgba(212,138,86,.40)', fog:'rgba(228,166,110,.50)', stars:0, tower:'#7a3a22', sengoku:true, land:'castle', fg:'yari',
+    g:['#8a4a2c','#67361f','#3e1f12'], cob:['#7e422a','#6b3722'], vig:'rgba(26,8,4,.52)',
+    rimRGB:'255,196,140',
+    amb:{shape:'spark',color:'rgba(255,196,130,.86)',rate:1.0,max:44,vy:-0.20,wind:0.26,r0:1.4,r1:3.4,glow:true,alpha:.84} },
+  // 33: 厳島の潮騒（引き潮の浅瀬・沖に浮かぶ鳥居・夜明けの藍）
+  { gsnd:'dirt', asnd:'wind', sky:['#1e3a5e','#356088','#5e8fb4','#9ec6d8'], sun:'rgba(214,240,255,', sunX:0.22,sunY:104, rays:0.07, tint:'rgba(110,160,200,.28)',
+    haze:'rgba(120,166,200,.42)', fog:'rgba(160,198,224,.52)', stars:34, tower:'#2a4a68', sengoku:true, land:'sunken', fg:'ashi',
+    g:['#4a6a7e','#33505f','#1c313c'], cob:['#456374','#3a5464'], vig:'rgba(4,10,20,.54)',
+    rimRGB:'190,226,255',
+    amb:{shape:'spark',color:'rgba(206,236,255,.80)',rate:0.8,max:38,vy:-0.12,wind:0.18,r0:1.2,r1:3.0,glow:true,alpha:.76} },
+  // 34: 小田原の総構え（延々と続く土塁と石垣・厚い曇り）
+  { gsnd:'dirt', asnd:'wind', sky:['#5c6270','#787f8c','#9aa0aa','#bcc0c6'], sun:'rgba(226,230,236,', sunX:0.56,sunY:92, rays:0.04, tint:'rgba(170,176,188,.26)',
+    haze:'rgba(160,168,180,.40)', fog:'rgba(188,194,204,.50)', stars:0, tower:'#4e5460', sengoku:true, land:'sogamae', fg:'rock',
+    g:['#6e6a60','#514e47','#31302c'], cob:['#67635a','#5a5750'], vig:'rgba(10,10,14,.50)',
+    rimRGB:'226,232,244',
+    amb:{shape:'spark',color:'rgba(214,220,232,.74)',rate:0.7,max:34,vy:-0.08,wind:0.24,r0:1.3,r1:3.0,glow:false,alpha:.68} },
+  // 35: 薩摩の火口（噴煙の下の黒い岩場・地の割れ目から漏れる熱）
+  { gsnd:'dirt', asnd:'wind', sky:['#2a1a18','#4a2418','#7a3a1c','#b06030'], sun:'rgba(255,188,110,', sunX:0.46,sunY:132, rays:0.12, tint:'rgba(200,90,40,.32)',
+    haze:'rgba(150,70,40,.44)', fog:'rgba(186,104,58,.52)', stars:0, tower:'#3a2018', sengoku:true, land:'gorge', fg:'rock',
+    g:['#4a3830','#332622','#1c1412'], cob:['#443228','#3a2a22'], vig:'rgba(18,4,0,.58)',
+    rimRGB:'255,176,110',
+    amb:{shape:'spark',color:'rgba(255,182,110,.92)',rate:1.2,max:48,vy:-0.30,wind:0.14,r0:1.4,r1:3.6,glow:true,alpha:.90} }
 ];
 function curTheme(){ return STAGE_THEME[themeIdxFor(stage)]; }
 let amb=[], shootStars=[], birds=[];
@@ -14936,6 +15171,49 @@ const LAND={
       ctx.strokeStyle=ash; ctx.lineWidth=2.4; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(x,baseY); ctx.quadraticCurveTo(x+sw*0.5,baseY-h*0.6, x+sw,baseY-h); ctx.stroke();
       ctx.fillStyle=ash; ctx.beginPath(); ctx.ellipse(x+sw,baseY-h-4,3,7,sw*0.05,0,7); ctx.fill(); });
+  },
+  sogamae:function(T){                                   // 小田原の総構え：地平まで続く土塁と、柵・櫓・空堀
+    const baseY=GROUND_TOP-2;
+    landRidge(landCol(T,shade(T.tower,-32),0.12),0.12,baseY,   // 箱根の山
+      function(wx){ return 132+Math.sin(wx*0.0016)*48+Math.sin(wx*0.0049)*20; });
+    // 土塁：台形の帯を横に通す。上辺を下辺より短くすると「盛り土」に見える
+    const doC=landCol(T,shade(T.tower,22),0.40), doT=landCol(T,shade(T.tower,40),0.40);
+    const topY=baseY-96, botY=baseY-30, slope=26;
+    ctx.fillStyle=doC; ctx.beginPath();
+    ctx.moveTo(-20,botY); ctx.lineTo(-20+slope,topY); ctx.lineTo(W+20-slope,topY); ctx.lineTo(W+20,botY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=doT; ctx.fillRect(0,topY,W,6);                // 天端の明るい面
+    // 柵（さく）：土塁の天端に立つ杭の列。横木を二本通して垣にする
+    const sakC=landCol(T,shade(T.tower,-10),0.40);
+    ctx.fillStyle=sakC;
+    landRow(0.40,26,function(gx,g0){ ctx.fillRect(gx+11,topY-30-((g0*13)%5),5,32); });
+    ctx.fillRect(0,topY-22,W,3); ctx.fillRect(0,topY-10,W,3);
+    // 櫓（やぐら）：等間隔に建つ二層の物見。入母屋の屋根を掛ける
+    const yaC=landCol(T,shade(T.tower,14),0.40), yaR=landCol(T,shade(T.tower,-22),0.40);
+    landRow(0.40,470,function(gx,g0){
+      const x=gx+235, h=62+((g0*29)%3)*10;
+      ctx.fillStyle=yaC; ctx.fillRect(x-26,topY-h,52,h);
+      ctx.fillStyle='rgba(24,20,16,.5)';
+      for(let k=-1;k<=1;k++) ctx.fillRect(x+k*17-4,topY-h+16,8,13);
+      ctx.fillStyle=yaR; ctx.beginPath();                       // 下層の庇
+      ctx.moveTo(x-40,topY-h*0.42); ctx.lineTo(x+40,topY-h*0.42);
+      ctx.lineTo(x+28,topY-h*0.52); ctx.lineTo(x-28,topY-h*0.52); ctx.closePath(); ctx.fill();
+      ctx.beginPath();                                          // 上層の反り屋根
+      ctx.moveTo(x-44,topY-h+6); ctx.quadraticCurveTo(x-16,topY-h-22, x,topY-h-24);
+      ctx.quadraticCurveTo(x+16,topY-h-22, x+44,topY-h+6); ctx.closePath(); ctx.fill(); });
+    // 空堀：土塁の足元をえぐる V 字。影を先に置いて深さを出す
+    const hori=landCol(T,shade(T.tower,-40),0.58);
+    ctx.fillStyle=hori; ctx.beginPath(); ctx.moveTo(0,botY);
+    for(let x=0;x<=W;x+=64){ const wx=x+camX*0.58;
+      ctx.lineTo(x,botY+16+Math.abs(Math.sin(wx*0.0034))*22); }
+    ctx.lineTo(W,botY); ctx.closePath(); ctx.fill();
+    // 逆茂木：手前に交差させて突き立てた乱杭
+    const saka=landCol(T,shade(T.tower,-14),0.72);
+    ctx.strokeStyle=saka; ctx.lineWidth=4; ctx.lineCap='round';
+    landRow(0.72,96,function(gx,g0){
+      const x=gx+48, h=34+((g0*17)%4)*7;
+      ctx.beginPath(); ctx.moveTo(x-16,baseY); ctx.lineTo(x+14,baseY-h);
+      ctx.moveTo(x+16,baseY); ctx.lineTo(x-14,baseY-h); ctx.stroke(); });
   },
   // ── 六周目・メカの六景 ──────────────────────────────────
   // 機械は「等間隔」で描く。自然物の乱数の高さと違い、同じ形が同じ間隔で並ぶことそのものが
@@ -19426,7 +19704,38 @@ const SENGOKU_ART={
              aura:'255,240,190', glow:'#fff0c0', weapon:'ogi' },
   kanbei:{   crest:'mizu',    armor:'#1a3a4a', armor2:'#2a5a70', lace:'#8ad6ff',
              haori:'#0e2430', haori2:'#04121a', skin:'#e0cca8', metal:'#8ad6ff',
-             aura:'138,214,255', glow:'#8ad6ff', weapon:'ogi' }
+             aura:'138,214,255', glow:'#8ad6ff', weapon:'ogi' },
+  // ── 増援の群雄。立物は家紋と前立をそのまま形にする ──
+  masamune:{ crest:'moon',    armor:'#1c1c24', armor2:'#33333f', lace:'#e8e0c0',
+             haori:'#101018', haori2:'#050508', skin:'#e2caa2', metal:'#e8e0c0',
+             aura:'232,224,192', glow:'#e8e0c0', weapon:'tachi' },
+  yukimura:{ crest:'rokumon', armor:'#a81a1a', armor2:'#d04040', lace:'#ffd0a0',
+             haori:'#6a0c0c', haori2:'#2a0404', skin:'#e8cca4', metal:'#ff8a5a',
+             aura:'255,138,90', glow:'#ff8a5a', weapon:'yari' },
+  motonari:{ crest:'arrows',  armor:'#2a5a4a', armor2:'#3e8068', lace:'#cfeee0',
+             haori:'#153a2e', haori2:'#071c16', skin:'#dcc59c', metal:'#9fe8c8',
+             aura:'159,232,200', glow:'#9fe8c8', weapon:'ogi' },
+  ujiyasu:{  crest:'scale',   armor:'#3a4a6a', armor2:'#566a96', lace:'#cfe0ff',
+             haori:'#1e2840', haori2:'#0a0e1c', skin:'#e0cca8', metal:'#a8c8ff',
+             aura:'168,200,255', glow:'#a8c8ff', weapon:'tachi' },
+  yoshihiro:{crest:'maruju',  armor:'#6a2a1a', armor2:'#9a4428', lace:'#ffd0a0',
+             haori:'#3a1408', haori2:'#180804', skin:'#dcbe96', metal:'#ffa24a',
+             aura:'255,162,74', glow:'#ffa24a', weapon:'tachi' },
+  tadakatsu:{crest:'deer',    armor:'#2a2a32', armor2:'#44444e', lace:'#d8e8ff',
+             haori:'#16161c', haori2:'#08080c', skin:'#e2caa2', metal:'#d8e8ff',
+             aura:'216,232,255', glow:'#d8e8ff', weapon:'yari' },
+  mitsunari:{crest:'dai',     armor:'#4a3a6a', armor2:'#6a548e', lace:'#e0d0ff',
+             haori:'#2a2044', haori2:'#120e20', skin:'#e6d2ae', metal:'#c8b0ff',
+             aura:'200,176,255', glow:'#c8b0ff', weapon:'ogi' },
+  muneshige:{crest:'gion',    armor:'#8a6a1a', armor2:'#b8922e', lace:'#fff0c0',
+             haori:'#4a3a0c', haori2:'#1e1604', skin:'#e8cca4', metal:'#ffe08a',
+             aura:'255,224,138', glow:'#ffe08a', weapon:'tachi' },
+  motochika:{crest:'katabami',armor:'#1a4a3a', armor2:'#2a7058', lace:'#c0ffe0',
+             haori:'#0e2e24', haori2:'#04120e', skin:'#dcc59c', metal:'#8affc8',
+             aura:'138,255,200', glow:'#8affc8', weapon:'yari' },
+  toshiie:{  crest:'ume',     armor:'#b8a030', armor2:'#e0c850', lace:'#fff6c0',
+             haori:'#6a5810', haori2:'#2a2406', skin:'#e6cfa4', metal:'#ffe14d',
+             aura:'255,225,77', glow:'#ffe14d', weapon:'yari' }
 };
 // 兜の立物を1つ描く。武将の見分けはここだけで付くので、テストはこの関数を
 // 差し替えて「誰の立物が何本・どの向きで生えたか」を実測できる
@@ -19519,6 +19828,80 @@ function warCrest(kind,A,hy,r){
       ctx.closePath(); }
     ctx.fill();
     return 3; }
+  // ── 増援の群雄。戻り値＝立物の本数（テストはここを差し替えて実測する）──
+  if(kind==='moon'){                                     // 三日月：左へ大きく傾ぐ弦月の前立
+    ctx.beginPath();
+    ctx.arc(-r*0.25,hy-r*1.9,r*1.55,-2.5,0.5);
+    ctx.arc(-r*0.05,hy-r*2.05,r*1.30,0.5,-2.5,true);
+    ctx.closePath(); ctx.fill();
+    return 1; }
+  if(kind==='rokumon'){                                  // 六文銭：二段に並ぶ六枚の穴あき銭
+    for(let i=0;i<6;i++){ const cx=(i%3-1)*r*0.78, cy=hy-r*(1.05+((i/3)|0)*0.72);
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.33,0,7); ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation='destination-out';
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.12,0,7); ctx.fill(); ctx.restore(); }
+    return 6; }
+  if(kind==='arrows'){                                   // 三本の矢：束ねた矢が斜めに立つ
+    for(let i=-1;i<=1;i++){ const ox=i*r*0.42;
+      ctx.save(); ctx.translate(ox,0); ctx.rotate(i*0.22);
+      ctx.fillRect(-r*0.10,hy-r*2.5,r*0.20,r*1.8);
+      ctx.beginPath(); ctx.moveTo(0,hy-r*2.95);
+      ctx.lineTo(r*0.30,hy-r*2.42); ctx.lineTo(-r*0.30,hy-r*2.42); ctx.closePath(); ctx.fill();
+      ctx.restore(); }
+    ctx.fillStyle=shade(A.metal,-30); ctx.fillRect(-r*0.85,hy-r*1.12,r*1.7,r*0.20);
+    return 3; }
+  if(kind==='scale'){                                    // 三つ鱗：三角を三つ積んだ北条の紋
+    for(const p2 of [[0,-2.30,0.70],[-0.62,-1.26,0.62],[0.62,-1.26,0.62]]){
+      ctx.beginPath(); ctx.moveTo(p2[0]*r, hy+(p2[1]-p2[2])*r);
+      ctx.lineTo((p2[0]+p2[2])*r, hy+p2[1]*r);
+      ctx.lineTo((p2[0]-p2[2])*r, hy+p2[1]*r); ctx.closePath(); ctx.fill(); }
+    return 3; }
+  if(kind==='maruju'){                                   // 丸に十字：輪の中を十字が貫く
+    ctx.lineWidth=r*0.26; ctx.strokeStyle=A.metal;
+    ctx.beginPath(); ctx.arc(0,hy-r*1.55,r*0.95,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r*0.95,hy-r*1.55); ctx.lineTo(r*0.95,hy-r*1.55);
+    ctx.moveTo(0,hy-r*2.50); ctx.lineTo(0,hy-r*0.60); ctx.stroke();
+    return 1; }
+  if(kind==='deer'){                                     // 鹿角脇立：左右へ跳ね上がる枝角
+    for(const sgn of [-1,1]){
+      ctx.lineWidth=r*0.24; ctx.strokeStyle=A.metal; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(sgn*r*0.72,hy-r*0.55);
+      ctx.quadraticCurveTo(sgn*r*2.0,hy-r*1.4, sgn*r*2.1,hy-r*2.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sgn*r*1.62,hy-r*1.42);
+      ctx.quadraticCurveTo(sgn*r*2.6,hy-r*1.6, sgn*r*2.9,hy-r*2.1); ctx.stroke(); }
+    return 2; }
+  if(kind==='dai'){                                      // 大一大万大吉：三文字を板に彫る
+    ctx.fillStyle=shade(A.armor,24);
+    ctx.fillRect(-r*1.25,hy-r*2.15,r*2.5,r*1.25);
+    ctx.fillStyle=A.metal; ctx.lineWidth=r*0.14; ctx.strokeStyle=A.metal;
+    for(let i=-1;i<=1;i++){ const cx=i*r*0.80, cy=hy-r*1.52;
+      ctx.beginPath(); ctx.moveTo(cx-r*0.30,cy-r*0.18); ctx.lineTo(cx+r*0.30,cy-r*0.18);
+      ctx.moveTo(cx,cy-r*0.34); ctx.lineTo(cx,cy+r*0.34);
+      ctx.moveTo(cx-r*0.28,cy+r*0.34); ctx.lineTo(cx+r*0.28,cy+r*0.34); ctx.stroke(); }
+    return 3; }
+  if(kind==='gion'){                                     // 祇園守：帯を交差させた守り札
+    ctx.fillStyle=A.metal;
+    ctx.fillRect(-r*0.30,hy-r*2.45,r*0.60,r*1.75);
+    ctx.fillRect(-r*1.05,hy-r*1.85,r*2.1,r*0.52);
+    ctx.save(); ctx.translate(0,hy-r*1.55); ctx.rotate(0.78);
+    ctx.fillRect(-r*0.22,-r*0.95,r*0.44,r*1.9); ctx.restore();
+    return 2; }
+  if(kind==='katabami'){                                 // 酢漿草：三枚のハート葉が寄る
+    for(let i=0;i<3;i++){ const a2=-Math.PI/2+i*(Math.PI*2/3);
+      const cx=Math.cos(a2)*r*0.62, cy=hy-r*1.55+Math.sin(a2)*r*0.62;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy+r*0.42);
+      ctx.quadraticCurveTo(cx-r*0.66,cy-r*0.10, cx-r*0.22,cy-r*0.46);
+      ctx.quadraticCurveTo(cx,cy-r*0.16, cx+r*0.22,cy-r*0.46);
+      ctx.quadraticCurveTo(cx+r*0.66,cy-r*0.10, cx,cy+r*0.42);
+      ctx.closePath(); ctx.fill(); }
+    return 3; }
+  if(kind==='ume'){                                      // 梅鉢：中心の玉を五つの花弁が囲む
+    ctx.beginPath(); ctx.arc(0,hy-r*1.55,r*0.34,0,7); ctx.fill();
+    for(let i=0;i<5;i++){ const a2=-Math.PI/2+i*(Math.PI*2/5);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a2)*r*0.80, hy-r*1.55+Math.sin(a2)*r*0.80, r*0.30, 0, 7); ctx.fill(); }
+    return 5; }
   // daikoku：大黒頭巾。丸く低い鉢に、正面へ短い前立を1本
   ctx.beginPath(); ctx.ellipse(0,hy-r*0.55,r*1.35,r*0.95,0,Math.PI,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.moveTo(-5,hy-r*1.10); ctx.lineTo(0,hy-r*1.95); ctx.lineTo(5,hy-r*1.10); ctx.closePath(); ctx.fill();
@@ -22119,7 +22502,11 @@ const BOSSROLE={ mbVolg:'ワンワン帝国  牙の別働隊', mbSiege:'ワン�
   mkOmega2:'装甲解除（第二形態）', mkOmega3:'液体金属（最終形態）',
   mkMScout:'鋼機王国  先行偵察', mkMArms:'鋼機王国  多腕作業機', mkMCoil:'鋼機王国  電磁試作',
   mkMWing:'鋼機王国  飛行試作', mkMHammer:'鋼機王国  打鉄機', mkMOld:'鋼機王国  旧型王機',
-  mkVault:'封鎖区画の試作機', mkSky:'鋼機王国  制空権' };
+  mkVault:'封鎖区画の試作機', mkSky:'鋼機王国  制空権',
+  masamune:'奥州  独眼の竜', yukimura:'真田  日本一の兵', motonari:'中国路  謀の神',
+  ujiyasu:'相模  不落の獅子', yoshihiro:'薩摩  鬼と呼ばれた男',
+  tadakatsu:'徳川四天王  蜻蛉切', mitsunari:'佐和山  義の軍師',
+  muneshige:'筑後  西国無双', motochika:'土佐  一領具足の主', toshiie:'加賀  槍の又左' };
 // ── 主人公キャラごとのオープニング／エンディング ──
 const OPEN_COMMON=[
   {chapter:'序章', chapterSub:'ワンダフル王国', bgTheme:0, art:'city'},
