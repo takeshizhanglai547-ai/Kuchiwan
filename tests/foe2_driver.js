@@ -28,6 +28,19 @@ const DRIVER = `
      boss:['mbTengu','mbMogura','bsOni'], pool:SENGOKU_ZAKO_POOL, stages:[SENGOKU_CH]},
     {lap:6, name:'六周目', zako:['mkHover','mkQuake','mkRail','mkFlail','mkSpider','mkWall','mkHive'],
      boss:['mkMHover','mkMQuake','mkArsenal'], pool:MECHA_ZAKO_POOL, stages:[MECHA_CH]},
+    // ── 二陣：道具・習性で攻め方を分けた十体ずつ ──
+    {lap:1, name:'一周目・二陣', zako:['netdog','bucklerdog','horndog','crossdog','kitedog','digdog','belldog','oildog','stiltdog','mirrordog'],
+     boss:[], pool:ZAKO_POOL, stages:[CH1,SEGS,FINAL_CH]},
+    {lap:2, name:'二周目・二陣', zako:['suzumebachi','genjibotaru','kabutomushi','kamadouma2','gomimushi','arijigoku','minminzemi','mizukamakiri','oomukade','tamamushi'],
+     boss:[], pool:BUG_ZAKO_POOL, stages:[BUG_CH,BUG_FINAL]},
+    {lap:3, name:'三周目・二陣', zako:['swarmpod','voidgazer','magnetron','phasewalker','harvester','sporecloud','railpod','shieldorb','tentaclord','mimicwan'],
+     boss:[], pool:ALIEN_ZAKO_POOL, stages:[SPACE_CH,SPACE_FINAL]},
+    {lap:4, name:'四周目・二陣', zako:['mythharpy','mythsatyr','mythhydra','mythminos','mythsphinx','mythnaiad','mythtalos','mythfury','mythdryad','mythcharon'],
+     boss:[], pool:MYTH_ZAKO_POOL, stages:[MYTH_CH]},
+    {lap:5, name:'五周目・二陣', zako:['gunpei','shinobiinu','onnamusha','tekkaimusha','hiyaslinger','doronin','yamabushi','bajutsu','kusarifundo','kagemusha2'],
+     boss:[], pool:SENGOKU_ZAKO_POOL, stages:[SENGOKU_CH]},
+    {lap:6, name:'六周目・二陣', zako:['mkTesla','mkMag','mkReflect','mkSaw','mkMortar','mkCloak','mkCarrier','mkDriller','mkRepair','mkSentinel'],
+     boss:[], pool:MECHA_ZAKO_POOL, stages:[MECHA_CH]},
   ];
   const ALLZ=[], ALLB=[];
   NEW.forEach(function(N){ ALLZ.push.apply(ALLZ,N.zako); ALLB.push.apply(ALLB,N.boss); });
