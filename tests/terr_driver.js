@@ -713,6 +713,53 @@ const DRIVER = `
     console.log('増水 OK (水位 '+Math.round(top)+'px・落下 水中'+Math.round(wet)+'px<陸上'+Math.round(dry)
       +'px・掻き上がり'+strokes+'回・溺れない・時間で引く)'); }
 
+  // ===== 尾根と谷：越えたら元の高さへ戻る地形 =====
+  // 既存の地形はどれも一方向（上るだけ／下るだけ）で、
+  // 「途中で戻る」形が1つも無かった。端と端が同じ高さになることで見る
+  { const mk=function(kind, e1){
+      TERRS.length=0;
+      TERRS.push({x0:0, x1:1900, e0:0, e1:(e1||0), kind:kind, st:0});
+      _terrLast=null;            // 区画の引き当ては直前の1件を覚えている。
+                                 // 消さないと、同じ範囲の古い区画（別の kind）が返る
+      // x=1900 は区画の外（x<x1 が偽）なので、末尾の標高がそのまま返って
+      // kind の形を迂回する。区画の内側だけを刻む
+      const hs=[]; for(let x=0; x<=1880; x+=20) hs.push(terrLiftBase(x));
+      return hs; };
+    const ridge=mk('ridge'), chasm=mk('chasm');
+    const hi=Math.max.apply(null,ridge), lo=Math.min.apply(null,chasm);
+    // 端は元の高さのまま（境目が崖にならない）
+    if(Math.abs(ridge[0])>1 || Math.abs(ridge[ridge.length-1])>1)
+      throw new Error('尾根の端が元の高さに戻らない: '+ridge[0].toFixed(1)+' / '+ridge[ridge.length-1].toFixed(1));
+    if(Math.abs(chasm[0])>1 || Math.abs(chasm[chasm.length-1])>1)
+      throw new Error('谷の端が元の高さに戻らない: '+chasm[0].toFixed(1)+' / '+chasm[chasm.length-1].toFixed(1));
+    // 中ほどが実際に盛り上がる／沈む（平らに潰れていない）
+    if(!(hi>60)) throw new Error('尾根が盛り上がらない: 最高 '+hi.toFixed(0)+'px');
+    if(!(lo<-60)) throw new Error('谷が沈まない: 最低 '+lo.toFixed(0)+'px');
+    // 尾根は上ってから下る（単調でない）＝どの既存地形とも形が違う
+    const up1=ridge.slice(0, (ridge.length>>1)), dn1=ridge.slice(ridge.length>>1);
+    if(!(Math.max.apply(null,up1)>40)) throw new Error('尾根の前半で上らない');
+    if(!(dn1[dn1.length-1] < Math.max.apply(null,dn1)-40)) throw new Error('尾根の後半で下らない');
+    // 一方向の地形（up）と見分けが付くこと
+    // 一方向の坂は区画の出口の標高そのもので上がるので、比較用は出口を直値で与える
+    const up=mk('up', 300);
+    if(Math.abs(up[up.length-1]-up[0])<40) throw new Error('比較用の up が上っていない（測り方が壊れている）');
+    if(Math.abs(ridge[ridge.length-1]-ridge[0]) > 1)
+      throw new Error('尾根が一方向の坂になっている');
+    console.log('尾根と谷 OK (尾根 +'+hi.toFixed(0)+'px／谷 '+lo.toFixed(0)+'px／どちらも端で元の高さへ戻る)'); }
+
+  // 実際にステージへ配られていること（作っただけで誰も通らない地形にしない）
+  { const used={};
+    // 章の表は配列とは限らない（SEGS は入れ子）。中身を辿って terr を数える
+    const walk=function(v,d){ if(!v || d>4) return;
+      if(Array.isArray(v)){ v.forEach(function(q){ walk(q,d+1); }); return; }
+      if(typeof v!=='object') return;
+      if(v.terr) used[v.terr]=(used[v.terr]|0)+1;
+      if(v.blocks) walk(v.blocks,d+1); };
+    walk([CH1,SEGS,FINAL_CH,BUG_CH,BUG_FINAL,SPACE_CH,SPACE_FINAL,MYTH_CH,SENGOKU_CH,MECHA_CH],0);
+    if(!used.ridge) throw new Error('尾根を使っている章が無い');
+    if(!used.chasm) throw new Error('谷を使っている章が無い');
+    console.log('尾根と谷の配置 OK (尾根 '+used.ridge+'章／谷 '+used.chasm+'章)'); }
+
   console.log('TERRAIN TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
