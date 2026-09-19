@@ -365,6 +365,79 @@ const DRIVER = `
     console.log('奥義の型 OK ('+names.map(function(k){ return k+':'+kinds[k].length; }).join(' ')
       +'／回転連打は '+spinny.length+'本)'); }
 
+  // ===== 12) 得物ごとの空中奥義 =====
+  // 以前は空中奥義がキャラに1つで、どの得物を握っても同じ技が出ていた
+  { const ws=Object.keys(WEAPON_SPECIAL);
+    const ids={}, names={};
+    ws.forEach(function(w){ const id=WEAPON_SPECIAL[w].air;
+      if(!id) throw new Error(w+' に空中奥義が無い');
+      const d=ATK[id]; if(!d) throw new Error(w+' の空中奥義 '+id+' が ATK に無い');
+      if(!d.ultMove) throw new Error(w+' の空中奥義が奥義扱いになっていない');
+      if(ids[id]) throw new Error('空中奥義 '+id+' を '+ids[id]+' と '+w+' が共有している');
+      ids[id]=w;
+      if(names[d.name]) throw new Error('同じ空中奥義名がある: '+d.name+'（'+names[d.name]+' と '+w+'）');
+      names[d.name]=w; });
+    // 型が1つに偏っていないこと（全部メテオ、などにしない）
+    const shapeOf=function(d){ return d.airMeteor? 'メテオ' : d.airDive? '急降下'
+      : d.rise? '上昇' : ((d.airHover|0)>=30? '滞空' : 'その他'); };
+    const c={}; ws.forEach(function(w){ const sh=shapeOf(ATK[WEAPON_SPECIAL[w].air]);
+      (c[sh]=c[sh]||[]).push(w); });
+    const kinds=Object.keys(c);
+    if(kinds.length<3) throw new Error('空中奥義の型が '+kinds.length+' 種類しかない');
+    kinds.forEach(function(k){ if(c[k].length > Math.ceil(ws.length/2))
+      throw new Error('空中奥義が「'+k+'」に偏っている（'+c[k].length+'/'+ws.length+'本）'); });
+    console.log('得物ごとの空中奥義 OK ('+ws.length+'本・すべて別物／型 '+kinds.map(function(k){return k+' '+c[k].length;}).join('・')+')'); }
+
+  // 実際に空中で撃つと、握っている得物の空中奥義が出ること
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p;
+    // 技IDを直に叩くと「差し替えの道筋」を通らない。
+    // 本編と同じ入力（空中で奥義コマンド）を通して、何が出たかを見る
+    const tryAir=function(w){
+      p.kind='inu'; p.weapon=w; p.heldWeapon=w; p.state='jump'; p.atk=null;
+      p.z=210; p.vz=0; p.jAtk=0; p.invuln=99999; p.hp=p.maxHp=99999;
+      p.x=600; p._tx=null; p.facing=1; p.dimMax=9; p.dim=9; p.level=1;
+      enemies.length=0;
+      for(const kk in p.in.pressed) p.in.pressed[kk]=false;
+      const real=rotationReady; rotationReady=function(){ return true; };
+      try { p.in.pressed.atk=true; hitStop=0; slowmo=0;
+        useInput(p.in); updatePlayer(p); saveInput(p.in); }
+      finally { rotationReady=real; }
+      return p.atk && p.atk.type; };
+    // 素手（専用の得物を持たない）ならキャラ本来の空中奥義に戻ること
+    const inuW=WEAPON_OWNER.inu[0];
+    if(tryAir(inuW)!==WEAPON_SPECIAL[inuW].air) throw new Error('得物の空中奥義が出ない');
+    p.weapon='dagger'; p.heldWeapon=null;
+    if(weaponAirUlt(p)) throw new Error('素の得物でも武器の空中奥義が引ける');
+    // 既定の得物ではキャラ本来の空中奥義が残ること
+    // （残さないと、ガードワンの固有技が既定の大槌に隠れて一生出ない）
+    ['inu','shima','nuko','guard8','watch','wanden','mack'].forEach(function(kd){
+      const q={kind:kd, weapon:defaultWeaponFor(kd)};
+      if(weaponAirUlt(q)) throw new Error(kd+' の既定の得物がキャラ本来の空中奥義を潰している'); });
+    console.log('空中奥義の差し替え OK (拾うと '+ATK[WEAPON_SPECIAL[inuW].air].name+'／既定の得物ならキャラ本来の技)'); }
+
+  // 空中奥義が実際に敵へ届くこと
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p;
+    const dead=[];
+    Object.keys(WEAPON_SPECIAL).forEach(function(w){
+      p.kind='inu'; p.weapon=w; p.heldWeapon=w; p.state='jump'; p.atk=null;
+      p.z=110; p.vz=0; p.invuln=99999; p.hp=p.maxHp=99999; p.x=600; p._tx=null; p.facing=1;
+      p.dimMax=9; p.dim=9; p.comboStep=0;
+      enemies.length=0; projectiles.length=0;
+      const list=[];
+      for(let k=0;k<5;k++){ spawnEnemy('wolf', 560+k*55, LANE); const e=enemies[enemies.length-1];
+        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; e._fx=e.x; list.push(e); }
+      const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+      const id=WEAPON_SPECIAL[w].air, D=ATK[id];
+      beginAirAttack(id);
+      for(let f=0;f<(D.dur||60)+70;f++){ hitStop=0; slowmo=0; particles.length=0;
+        list.forEach(function(e){ e.x=e._fx; e.vx=0; e.z=0; e.state='walk'; e.hurtTimer=0; });
+        updatePlayer(p); updateProjectiles(); }
+      if(!(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0) > 0)) dead.push(w); });
+    if(dead.length) throw new Error('当たらない空中奥義がある: '+dead.join(','));
+    console.log('空中奥義の命中 OK ('+Object.keys(WEAPON_SPECIAL).length+'本すべてが敵に届く)'); }
+
   console.log('WEAPON TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
