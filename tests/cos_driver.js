@@ -13,7 +13,7 @@ const DRIVER = `
   // ===== 1) 7キャラそれぞれに20着ある =====
   { const ids={}, names={};
     KINDS.forEach(function(k){ const L=costumeList(k);
-      if(L.length!==20) throw new Error(k+' の服が '+L.length+' 着しかない');
+      if(L.length!==30) throw new Error(k+' の服が '+L.length+' 着しかない');
       L.forEach(function(C){
         if(C.kind!==k) throw new Error(C.id+' の持ち主が '+C.kind);
         if(ids[C.id]) throw new Error('IDが重複している: '+C.id);
@@ -23,12 +23,12 @@ const DRIVER = `
         if(COS_ACC.indexOf(C.acc)<0) throw new Error(C.name+' の装飾 '+C.acc+' が種類表に無い');
         if(!(C.cost>0)) throw new Error(C.name+' の値段が '+C.cost);
         if(!C.pal || !C.pal.a || !C.pal.f) throw new Error(C.name+' に配色が無い'); }); });
-    if(Object.keys(ids).length!==140) throw new Error('全体で '+Object.keys(ids).length+' 着（140着であるべき）');
+    if(Object.keys(ids).length!==210) throw new Error('全体で '+Object.keys(ids).length+' 着（210着であるべき）');
     // 値段は稀少度とともに上がる（同じ並びで安い方が強い、が無いこと）
     KINDS.forEach(function(k){ const L=costumeList(k);
       for(let i=1;i<L.length;i++) if(!(L[i].cost>L[i-1].cost))
         throw new Error(k+' の '+i+'着目で値段が上がらない（'+L[i-1].cost+' → '+L[i].cost+'）'); });
-    console.log('服・防具の品目 OK (7キャラ×20着＝'+Object.keys(ids).length+'着、ID・名前とも重複なし)'); }
+    console.log('服・防具の品目 OK (7キャラ×30着＝'+Object.keys(ids).length+'着、ID・名前とも重複なし)'); }
 
   // ===== 2) 装飾は1種類に偏らない（全部が同じ見た目では「20種類」にならない） =====
   { const L=costumeList('inu'), use={};
@@ -326,6 +326,44 @@ const DRIVER = `
         if(q2.weapon!==r0.armId) throw new Error('続きからで買った武器を持っていない');
       } finally { global.localStorage=real; } }
     console.log('店の武器 OK ('+rep.join(' ')+'／買い切り・持ち替え無料・セーブに残る)'); }
+
+  // ===== キャラ専用の鎧：雛形の使い回しでないこと =====
+  // 既存の20着は全キャラ共通の雛形で、名前の頭が違うだけだった。
+  // 後半の10着は、そのキャラのためだけに配色と装飾を決めてある
+  { const KINDS=['inu','shima','nuko','guard8','watch','wanden','mack'];
+    const OWN_N=10;
+    KINDS.forEach(function(k){ const L=costumeList(k);
+      const own=L.slice(L.length-OWN_N);
+      if(own.length!==OWN_N) throw new Error(k+' の専用の鎧が '+own.length+' 着');
+      KINDS.forEach(function(k2){ if(k2===k) return;
+        const M=costumeList(k2), o2=M.slice(M.length-OWN_N);
+        own.forEach(function(C,i){
+          if(C.pal.a===o2[i].pal.a && C.pal.f===o2[i].pal.f)
+            throw new Error(k+' と '+k2+' の '+(i+1)+'着目が同じ配色（雛形の使い回し）'); }); });
+      own.forEach(function(C){ if(C.name.indexOf(COS_PREFIX[k])===0)
+        throw new Error(C.name+' が共通の雛形の名付けのまま'); });
+      const base=L[L.length-OWN_N-1];
+      if(!(own[0].cost>base.cost)) throw new Error(k+' の専用の鎧が雛形より安い（'+base.cost+' → '+own[0].cost+'）'); });
+    const seen={};
+    KINDS.forEach(function(k){ costumeList(k).slice(-OWN_N).forEach(function(C){
+      if(seen[C.name]) throw new Error('専用の鎧の名前が重複: '+C.name);
+      seen[C.name]=k; }); });
+    console.log('専用の鎧 OK (7キャラ×'+OWN_N+'着＝'+Object.keys(seen).length+'着／どれも雛形の使い回しでない)'); }
+
+  // 1着の中で明度が3段に分かれていること。
+  // 近い明度ばかりで組むと、色相が違っても画面では1つの塊に潰れる
+  // （ゼウスの初稿が「クリーム色の四角」になったのと同じ失敗）
+  { const lum=function(h){ const t=String(h).slice(1);
+      const q=(t.length===3)? t[0]+t[0]+t[1]+t[1]+t[2]+t[2] : t;
+      return 0.30*parseInt(q.substr(0,2),16)+0.59*parseInt(q.substr(2,2),16)+0.11*parseInt(q.substr(4,2),16); };
+    let worst=999, worstN='';
+    ['inu','shima','nuko','guard8','watch','wanden','mack'].forEach(function(k){
+      costumeList(k).forEach(function(C){
+        const ls=[C.pal.a,C.pal.b,C.pal.f,C.pal.ba,C.pal.bf,C.pal.h].map(lum);
+        const sp=Math.max.apply(null,ls)-Math.min.apply(null,ls);
+        if(sp<worst){ worst=sp; worstN=C.name; } }); });
+    if(!(worst>=60)) throw new Error('明度が3段に分かれていない服がある: '+worstN+'（明度差 '+Math.round(worst)+'）');
+    console.log('明度の段 OK (いちばん平らな '+worstN+' でも明度差 '+Math.round(worst)+')'); }
 
   console.log('COSTUME TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
