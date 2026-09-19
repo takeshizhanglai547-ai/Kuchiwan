@@ -8026,7 +8026,7 @@ const ETYPE={
   // 一周目の最終形態。実測で 1.86倍しかなく、1面ボスのガルム（2.15倍）より小さかった。
   // gsc で 1.85倍に引き伸ばし、掴み間合い(w)・空中判定(h)・間合い(atkR)も同じ倍率で上げる
   // （リーチが伸びるぶん明確に強くなる。一周目の締めなので意図的にそうしている）
-  boss3: {hp:1750,sp:2.7,dmg:28,atkR:155,w:118,h:196,gsc:1.85,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
+  boss3: {hp:2300,sp:2.7,dmg:38,atkR:155,w:118,h:196,gsc:1.85,c1:'#1c1822',c2:'#100c16',c3:'#040208',score:24000,boss:true,bossKind:'darkknight',weapon:'dark',accent:'#c46bff', name:'暗黒剣士　ダークワンワン', finalBoss:true},
   // ── ヌコ・真エンド限定の真ボス：上位者ワンメンドーズ ──
   wanmen:{hp:2200,sp:2.2,dmg:30,atkR:96,w:150,h:170,c1:'#2a1448',c2:'#160a2c',c3:'#070314',score:40000,boss:true,bossKind:'wanmen',weapon:'scythe',accent:'#c46bff', name:'上位者ワンメンドーズ',flyer:true,finalBoss:true,trueBoss:true},
   // ── イッヌ・真ボス：黄金の剣士ゴルックス（豪剣の高速剣・パリィ反撃・イッヌ風の技）──
@@ -8228,10 +8228,10 @@ const ETYPE={
   // HPは 1900 → 900+900+1100（合計2900＝従来の1.53倍）
   nobunaga:{hp:900,sp:1.9,dmg:40,atkR:118,w:96,h:130,c1:'#1a1a22',c2:'#0e0e14',c3:'#050508',score:14000,
     boss:true,bossKind:'nobunaga',weapon:'blade',accent:'#ff6a2a',sengoku:true,name:'第六天魔王 織田信長', evolveTo:'nobunaga2'},
-  nobunaga2:{hp:900,sp:2.4,dmg:46,atkR:128,w:108,h:146,c1:'#241018',c2:'#150a0e',c3:'#070304',score:20000,
+  nobunaga2:{hp:1080,sp:2.4,dmg:50,atkR:128,w:108,h:146,c1:'#241018',c2:'#150a0e',c3:'#070304',score:20000,
     boss:true,bossKind:'nobunaga2',weapon:'blade',accent:'#ff3a1a',sengoku:true,name:'鬼道 織田信長', evolveTo:'nobunaga3'},
   // 最終形態。速さ・間合い・攻撃力すべてを本作の最大値に置く
-  nobunaga3:{hp:1100,sp:3.4,dmg:58,atkR:170,w:150,h:196,c1:'#2a0a12',c2:'#160408',c3:'#070102',score:90000,
+  nobunaga3:{hp:1380,sp:3.4,dmg:58,atkR:170,w:150,h:196,c1:'#2a0a12',c2:'#160408',c3:'#070102',score:90000,
     boss:true,bossKind:'nobunaga3',weapon:'none',accent:'#ff2a10',sengoku:true,demon:true,
     finalBoss:true,trueBoss:true,name:'第六天魔王 —— 降臨'},
   hideyoshi:{hp:1500,sp:2.4,dmg:34,atkR:104,w:88,h:118,c1:'#c8a03a',c2:'#8a6a18',c3:'#4a380a',score:26000,
@@ -8337,12 +8337,12 @@ const ETYPE={
   mkOmega:{hp:650,sp:1.6,dmg:52,atkR:136,w:200,h:220,gsc:1.35,c1:'#eaf2ff',c2:'#7d8fa8',c3:'#141a26',score:40000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#ffd24d',mecha:true,
     name:'王機 メカワンコ・オメガ', evolveTo:'mkOmega2'},
-  mkOmega2:{hp:525,sp:2.3,dmg:58,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
+  mkOmega2:{hp:720,sp:2.3,dmg:70,atkR:150,w:180,h:206,gsc:1.22,c1:'#cfe0f4',c2:'#5e7488',c3:'#101622',score:60000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#7df0ff',mecha:true,
     name:'王機オメガ ——装甲解除', evolveTo:'mkOmega3'},
   // 最終形態は液体金属。装甲を捨てた王機は、鏡のような銀の身体で立ち上がる。
   // 傷は塞がり、腕は刃に変わり、倒れると写し取った姿を順に流してから溶け落ちる
-  mkOmega3:{hp:625,sp:2.8,dmg:64,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
+  mkOmega3:{hp:790,sp:2.8,dmg:84,atkR:170,w:214,h:236,gsc:0.98,c1:'#eef4ff',c2:'#9fb4cc',c3:'#20303f',score:150000,
     boss:true,bossKind:'guard0',weapon:'none',accent:'#bfe9ff',mecha:true,t1000:true,
     t1kEvent:true, finalBoss:true,trueBoss:true,name:'王機オメガ ——液体金属'},
   // ---- 三周目・宇宙人のボス ----
@@ -8359,9 +8359,9 @@ const ETYPE={
   // HPは3つの合計が従来の1.6倍に収まるよう配分している（1250 → 620+620+760）
   zeus:{hp:620,sp:2.2,dmg:38,atkR:116,w:104,h:186,c1:'#f4ecd0',c2:'#c8a850',c3:'#6a5220',score:26000,
     boss:true,bossKind:'zeus',weapon:'holy',accent:'#fff6c0',myth:true,name:'雷神ゼウス', evolveTo:'zeus2'},
-  zeus2:{hp:620,sp:2.6,dmg:44,atkR:126,w:118,h:206,c1:'#fffbe8',c2:'#e8c860',c3:'#7a5c18',score:30000,
+  zeus2:{hp:760,sp:2.6,dmg:48,atkR:126,w:118,h:206,c1:'#fffbe8',c2:'#e8c860',c3:'#7a5c18',score:30000,
     boss:true,bossKind:'zeus2',weapon:'holy',accent:'#fff6c0',myth:true,name:'雷神ゼウス【神威】', evolveTo:'zeus3'},
-  zeus3:{hp:760,sp:3.0,dmg:52,atkR:140,w:136,h:238,c1:'#ffffff',c2:'#ffe98a',c3:'#8a6a10',score:80000,
+  zeus3:{hp:980,sp:3.0,dmg:52,atkR:140,w:136,h:238,c1:'#ffffff',c2:'#ffe98a',c3:'#8a6a10',score:80000,
     boss:true,bossKind:'zeus3',weapon:'holy',accent:'#ffffff',myth:true,finalBoss:true,trueBoss:true,name:'天空神ゼウス【真体】'},
   emperorX:{hp:1900,sp:2.3,dmg:29,atkR:96,w:78,h:136,c1:'#c8b0ff',c2:'#6a4ab0',c3:'#2a1850',score:26000,boss:true,bossKind:'emperorX',weapon:'dark',accent:'#d8c8ff',alien:true,name:'宇宙皇帝ワンダルク', evolveTo:'emperorX2'},
   emperorX2:{hp:2800,sp:1.9,dmg:34,atkR:120,w:186,h:200,c1:'#9fffd8',c2:'#3aa890',c3:'#0f3a34',score:60000,boss:true,bossKind:'emperorX2',weapon:'none',accent:'#c8ffe8',alien:true,flyer:true,finalBoss:true,trueBoss:true,name:'真・宇宙皇帝ワンダルク'},
@@ -8465,9 +8465,9 @@ const BOSSMOVES={
   // 神格ごとの大技を主軸に据え、汎用技は繋ぎとして残す
   // 五周目の三英傑は固有技を5つずつ持ち、汎用技は「間合いを詰める手」だけに絞る
   nobunaga: ['teppoVolley','nanbanZutsu','honnoji','tenkaFubu','demonKing','unblockSmash','dashThrust','bossGrab'],
-  nobunaga2:['tenkaFubu','demonKing','honnoji','teppoVolley','unblockSmash','dashThrust','bossGrab'],
+  nobunaga2:['tenkaFubu','demonKing','honnoji','teppoVolley','unblockSmash','dashThrust','bossGrab','nanbanZutsu'],
   // 最終形態：固有の三技＋間合いを一瞬で消す手だけ。汎用の小技は持たせない
-  nobunaga3:['maouRush','hellFlame','demonDive','tenkaFubu','teleSlash','unblockSmash','bossGrab'],
+  nobunaga3:['maouRush','hellFlame','demonDive','tenkaFubu','teleSlash','unblockSmash','bossGrab','nanbanZutsu','honnoji'],
   hideyoshi:['ogaeshi','saruTobi','hyotan','ichiyaJo','tripleStep','unblockSmash','bossGrab'],
   // 一夜城は秀吉だけの手（墨俣の逸話）。家康と共有すると三人の色が混ざる
   ieyasu:   ['kagemusha','yaribusuma','kakuyoku','mikataGaeshi','heavySwing','groundSlam','bossGrab'],
@@ -8504,15 +8504,15 @@ const BOSSMOVES={
   // 真ラスボス：予告の長い大技を主軸に、繋ぎは間合いを消す手だけ
   mkOmega:  ['megaBeam','tenchuu','hammerQuake','judgeBolts','meteorCall','megaTornado','bodyCharge','unblockSmash','bossGrab'],
   // 二形態目は装甲を捨てて速さで押す。三形態目は炉心むき出しの大技だけ
-  mkOmega2: ['dashThrust','tripleStep','teleSlash','judgeBolts','bodyCharge','rivalCombo','unblockSmash'],
-  mkOmega3: ['megaBeam','megaTornado','tenchuu','meteorCall','judgeBolts','hammerQuake','bossGrab','unblockSmash'],
+  mkOmega2: ['mkPurge','dashThrust','tripleStep','teleSlash','judgeBolts','bodyCharge','rivalCombo','unblockSmash','megaTornado','hammerQuake'],
+  mkOmega3: ['mkPurge','megaBeam','megaTornado','tenchuu','meteorCall','judgeBolts','hammerQuake','bossGrab','unblockSmash','bodyCharge','dashThrust'],
   // 掃討機：上空から撃ち下ろす手だけで組む。地上の掴みや薙ぎは持たせない
   mkSky:    ['bulletHell','orbSpread','meteorCall','cannonFire','divebomb'],
   poseidon:['tsunami','seaBeasts','whaleRide','dashThrust','spearThrow','tripleStep','unblockSmash','bossGrab'],
   hades:   ['deadRise','soulChain','underworld','teleSlash','darkBeam','orbSpread','unblockSmash','bossGrab'],
   zeus:    ['judgeBolts','keraunos','stormFall','boltStrike','teleSlash','megaTornado','unblockSmash','groundSlam'],
   zeus2:   ['judgeBolts','keraunos','stormFall','teleSlash','boltStrike','megaTornado','unblockSmash','bossGrab'],
-  zeus3:   ['tenchuu','judgeBolts','keraunos','stormFall','teleSlash','megaTornado','unblockSmash','groundSlam'],
+  zeus3:   ['tenchuu','judgeBolts','keraunos','stormFall','teleSlash','megaTornado','unblockSmash','groundSlam','boltStrike','bossGrab'],
   dragon: ['fireBreath','fireball','divebomb','clawSwoop','bulletHell'],
   ghost:  ['scytheSlash','phaseDash','vanishMove','skyDive','bladeParry'],                      // 大鎌の剣士型
   slime:  ['slimeBounce','slimeSlam','slimeBounce'],
@@ -8522,7 +8522,7 @@ const BOSSMOVES={
   noroinu:['curseFlame','clawCombo','curseDash','boltStrike','megaTornado'],                    // 魔法使い型
   cactus: ['spikeVolley','growCactus','spikeBurst','bulletHell','rollTackle'],
   wolfking:['lunge','bodyCharge','clawCombo','groundSlam','darkBeam','bulletHell','boltStrike','summon','unblockSmash'],
-  darkknight:['rivalCombo','iaiCharge','dimSlash','skyDive','bladeParry','teleSlash','megaBeam','darkMajin'],  // ラスボス剣士
+  darkknight:['rivalCombo','iaiCharge','dimSlash','skyDive','bladeParry','teleSlash','megaBeam','darkMajin','bulletHell','meteorCall'],  // ラスボス剣士：剣に変わっても帝の弾幕は捨てない
   golux:  ['rivalCombo','goluxIai','goluxKabuto','skyDive','bladeParry','megaBeam','goluxIai'],  // イッヌ風：疾走連続居合・兜割
   wanmen: ['scytheSlash','phaseDash','meteorCall','boltStrike','megaTornado','megaBeam','vanishMove'],  // 上位者：雷と竜巻と極太光線
   guard0: ['heavySwing','groundSlam','hammerQuake','bodyCharge','megaBeam','unblockSmash'],      // 門番零号：大槌の地震＋極太ビーム
@@ -9110,7 +9110,13 @@ function evolveBoss(e,T){ const nt=T.evolveTo, N=ETYPE[nt];
   score+=8000;
   if(e.grabbedBy){ e.grabbedBy=0; players.forEach(pp=>{ if(pp.grabEnemy===e){ pp.grabEnemy=null;   // 掴み中に進化したら解放
     if(['grab','gswing','dunk','wheel','screw','tkick'].includes(pp.state)) pp.state='idle'; } }); }
-  e.type=nt; e.hp=N.hp; e.maxHp=N.hp; e.w=N.w; e.h=N.h; e.phase=(e.phase||1)+1;
+  // 湧きの時点で掛かっている周回・難易度・成長の補正を、進化でも同じだけ掛ける。
+  // 素の N.hp をそのまま入れていたので、形態が変わるたびに補正ぶんが剥がれ落ち、
+  // 進むほど柔らかくなっていた（一周目の実測で 2400 → 1850）
+  const dm2=diffHpMul(), gw2=foeHpGrow();
+  const hpMul2=1.6*(1+(dm2-1)*0.5)*(1+(gw2-1)*0.62);          // ボスの倍率（spawnEnemy と同じ式）
+  const nhp=Math.round(N.hp*hpMul2);
+  e.type=nt; e.hp=nhp; e.maxHp=nhp; e.w=N.w; e.h=N.h; e.phase=(e.phase||1)+1;
   e.transform=36; e.state='walk'; e.moveName=''; e.moveT=0; e.telegraph=0; e.atkTimer=0; e.vx=0; e.vz=0; e.z=0; e.stun=0;
   e.moveCd=70; e.cursed=false; e.sub=false; e.grow=0; e.rage=false; e.invuln=0; e.curseCd=null;
   flash=Math.max(flash,7); shake=16; hitStop=Math.max(hitStop,16); triggerSlow(46); sfx.boss(e.x); sfx.transform(e.x); sfx.ko(e.x);
@@ -10040,6 +10046,7 @@ const MV={
   fuurinkazan:{tele:30,dur:132,rec:40,minR:0,maxR:1400,danger:1},    // 風林火山：疾風→静止回復→火→不動の四相
   kurumagakari:{tele:26,dur:88,rec:34,minR:0,maxR:800,danger:1},     // 車懸り：回りながら斬り進む
   // ── 増援の群雄。全員が「他の誰も持たない手」を一つ持つ ──
+  mkPurge:{tele:30,dur:104,rec:40,minR:0,maxR:1400,danger:1},          // 装甲投棄：捨てた装甲を撒き、身軽になった本体が往復する
   kibateppo:{tele:26,dur:86,rec:32,minR:120,maxR:1400},               // 騎馬鉄砲：駆けながら斉射する
   jumonji:{tele:30,dur:74,rec:38,minR:0,maxR:1400,danger:1},          // 十文字槍：止まらぬ一直線の突撃
   sanbonya:{tele:28,dur:96,rec:34,minR:150,maxR:1400},                // 三本の矢：一本ずつ、最後に束ねて
@@ -10373,6 +10380,26 @@ function runBossMove(e){ const t=ETYPE[e.type], n=e.moveName, f=e.moveT;
             r:9, life:90, zz:e.h*0.55, vzz:0.2, grav:0.10, nostop:true});
           spark(e.x+e.facing*22, e.y-e.h*0.55, '#ffe9a0', 5, 7); sfx.gun(e.x); shake=Math.max(shake,4); }
         if(f%6===0) dust(e.x,e.y,2); }
+      break;
+    // ── 王機オメガ・装甲解除：捨てた装甲そのものを武器にする ──
+    // 第2形態は近接だけの構成で、実測の脅威が第1形態の 0.66倍まで落ちていた。
+    // 「装甲を捨てた」ことが強さの理由になるよう、捨てた装甲を撒く技を持たせる
+    case 'mkPurge':
+      if(f===1){ popText(e.x,e.y-e.h-24,'装甲、投棄スル','#7df0ff',true); sfx.charge(e.x); }
+      if(f===20){ // 装甲板を全周へ飛ばす。全周は TAU（PI2 は四分の一回転）
+        for(let k=0;k<10;k++){ const a=k/10*TAU;
+          spawnProj(e.x, e.y, Math.cos(a)*9.5, Math.sin(a)*2.4, {owner:'enemy', dmg:t.dmg-10,
+            color:'#9fc4e0', r:13, life:80, zz:e.h*0.45, pierce:true, nostop:true,
+            plate:true, spin0:a}); }
+        ring(e.x,e.y-e.h*0.4,'#7df0ff'); ring(e.x,e.y-e.h*0.4,'#fff');
+        flash=Math.max(flash,4); shake=Math.max(shake,12); sfx.big(e.x); }
+      // 身軽になった本体が三度、画面を横切る
+      if(f>34 && f<92){ const leg=Math.floor((f-34)/20);
+        if((f-34)%20===0){ const tp=nearestPlayerTo(e.x); e.facing=(tp.x<e.x)?-1:1; }
+        e.x=clamp(e.x+e.facing*(10.5+leg*1.5), camX+40, camX+W-40);
+        if(f%4===0){ particles.push({k:'wandenAfter', x:e.x, y:e.y, gl:groundLift(e.x), face:e.facing, life:9, max:9});
+          bArc(e,104,54,t.dmg-8,true,'#7df0ff'); } }
+      if(f===96) bShock(e,150,t.dmg);
       break;
     // ── 幸村：十文字槍。溜めてから一直線。途中で向きを変えない ──
     case 'jumonji':
@@ -12428,7 +12455,7 @@ function spawnProj(x,y,vx,vy,o){ o=o||{};
   projectiles.push({x,y,vx,vy,zz:(o.zz!=null?o.zz:56),vzz:o.vzz||0,explode:!!o.explode,nostop:!!o.nostop,noLaunch:!!o.noLaunch,
     // 誰が撃った弾か。対戦で「自分の弾が自分に当たる」のを避けるために持たせる
     pid:(o.pid!=null? o.pid : ((o.owner==='player' && player)? player.pid : -1)),
-    pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,
+    pierce:!!o.pierce||!!o.multihit,wave:!!o.wave,blow:!!o.blow,hit:(o.pierce||o.multihit)?new Set():null,homing:!!o.homing,spike:!!o.spike,plate:!!o.plate,spin0:o.spin0||0,
     boomer:!!o.boomer,boomDir:null,bx0:0,
     multihit:!!o.multihit,hitGap:o.hitGap||8,hitAt:o.multihit?{}:null,blast:!!o.blast,blastR:o.blastR||110,blastDmg:o.blastDmg||30,
     grav:o.grav||0,zFloor:(o.zFloor!=null?o.zFloor:null),glKind:o.glKind||null,splitT:(o.splitT!=null?o.splitT:null),splitN:o.splitN||0,
@@ -12647,6 +12674,20 @@ function drawProjectiles(){
     if(pr.spike){ const ang=Math.atan2(pr.vy,pr.vx); ctx.save(); ctx.translate(sx,sy); ctx.rotate(ang);
       ctx.fillStyle=pr.color; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(-pr.r*0.5,pr.r*0.7); ctx.lineTo(-pr.r*0.5,-pr.r*0.7); ctx.closePath(); ctx.fill();
       ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(pr.r+4,0); ctx.lineTo(0,pr.r*0.28); ctx.lineTo(0,-pr.r*0.28); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
+    // ── 投げ捨てられた装甲板：回りながら飛ぶ金属の板 ──
+    // 既定の光弾だと「装甲を投棄した」ことが絵で伝わらないので、板の形で描く
+    if(pr.plate){ const w2=pr.r*1.55, h2=pr.r*0.62;
+      ctx.save(); ctx.translate(sx,sy); ctx.rotate((pr.spin0||0)+gf*0.19);
+      ctx.fillStyle='rgba(20,28,38,.75)';                      // 裏側（影）
+      ctx.fillRect(-w2, -h2+2.5, w2*2, h2*2);
+      ctx.fillStyle=pr.color; ctx.fillRect(-w2, -h2, w2*2, h2*2);
+      ctx.fillStyle=mixWhite(pr.color,0.55);                   // 面の照り返し
+      ctx.fillRect(-w2*0.82, -h2*0.55, w2*1.64, h2*0.5);
+      ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=1.6;
+      ctx.strokeRect(-w2, -h2, w2*2, h2*2);
+      ctx.fillStyle='rgba(20,28,38,.7)';                       // 留め具
+      for(let k=-1;k<=1;k+=2) ctx.fillRect(k*w2*0.62-2, -2, 4, 4);
+      ctx.restore(); return; }
     ctx.save(); ctx.globalCompositeOperation='lighter';
     // ── 尾：円の数珠つなぎをやめ、中点を結ぶ1本の連続リボンにする（速いほど長く引く） ──
     const tl=pr.trail, n=tl.length;

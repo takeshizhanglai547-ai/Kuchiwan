@@ -31,7 +31,7 @@ const DRIVER = `
     spawnEnemy(k, back?540:660, LANE); const e=enemies[0];
     if(back){ p.facing=-1; }
     if(!e) { dead.push(k+'(湧かない)'); return; }
-    const hp0=e.hp;
+    const hp0=e.hp, type0=e.type;
     for(let f=0;f<120;f++){ hitStop=0; slowmo=0; particles.length=0;
       if(f%14===0){ p.in.pressed.atk=true; }
       e.x=back?540:660; e.vx=0; e.z=0; e.facing=back?1:-1;
@@ -39,7 +39,10 @@ const DRIVER = `
       // ここで見たいのは当たり判定が届くかどうかなので、構えは止めておく
       e.guardCd=999; if(e.state==='guard'){ e.state='walk'; e.guardT=0; }
       useInput(p.in); updatePlayer(p); saveInput(p.in); updateEnemies(); updateProjectiles(); }
-    if(!(hp0-e.hp>0) && !e.dead) dead.push(k+'(殴れない)');
+    // 多段ボスは殴り切ると次の形態へ進化し、HPが新形態の値へ「増える」。
+    // 残りHPの引き算だけで見ていると、進化したせいで「殴れない」と誤判定する
+    // （進化が周回補正を剥がしていた頃は、たまたま減ったように見えて通っていた）
+    if(!(hp0-e.hp>0) && !e.dead && e.type===type0) dead.push(k+'(殴れない)');
   });
   if(dead.length) throw new Error('触れない敵: '+dead.join(','));
   console.log('敵 '+ALL.length+'種すべて湧いて殴れる');
