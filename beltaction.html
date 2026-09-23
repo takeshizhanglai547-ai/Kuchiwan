@@ -217,6 +217,7 @@
             <tr><td>ジャスト回避</td><td>攻撃が届く<b>直前</b>に回避＝前転せず半透明で<b>相手の背後へ回り込む</b>（そのまま反撃）</td></tr>
             <tr><td>掴み</td><td><b>L / U / Shift</b>（NPCの前で＝会話・乗り物に乗る）</td></tr>
             <tr><td>2Pのキー</td><td>移動 <b>WASD</b>／攻撃 <b>F</b>／回避 <b>G</b>／掴み <b>H</b>／ジャンプ <b>V / B</b></td></tr>
+            <tr><td>対戦モード</td><td><b>掴み</b>で相手を掴んで投げる（ガードでは止まらない／掴まれたら<b>連打</b>で抜ける）。ガードを<b>当たる瞬間</b>に合わせるとジャストガード＝弾き返して奥義が貯まる</td></tr>
             <tr><td>タメ攻撃</td><td>攻撃を<b>押しっぱなし</b>で離す</td></tr>
             <tr><td>ガード</td><td>後ろへ歩く（敵の攻撃に合わせるとジャストガード）</td></tr>
           </table>
@@ -6879,6 +6880,8 @@ function updatePlayer(){
       if(p.z<=0){ p.vz=0; dust(p.x,p.y,5); sfx.land(p.x); } }
     if(p.hurtTimer<=0 && p.z<=0) p.state='idle'; return; }
   if(p.state==='egrab'){ updateEnemyGrab(); return; }
+  if(p.state==='vsgrab'){ updateVsGrab(); return; }        // 対戦の掴み投げ
+  if(p.state==='vshold'){ p.vx=0; return; }                // 掴まれている側は動けない
   if(p.state==='grab'){ updateGrab(); return; }
   if(p.state==='slide'){ updateSlide(); return; }
   if(p.state==='iparry'){ updateIaiParry(); return; }
@@ -7780,6 +7783,8 @@ function updatePlayer(){
   // ---- grab button (掴み)：敵がいなければ近くのNPCと会話。攻撃同時押しでキャラ別の必殺技 ----
   if(pressed.grab){ pressed.grab=false;
     if((K.atk||pressed.atk) && p.z<=0){ if(beginSGMove(p)){ pressed.atk=false; return; } }
+    if(vsMode){ if(vsTryGrab(p)) return;                  // 対戦：相手を掴む
+      sfx.swing(0, wsndOf(p.weapon), p.x); spark(p.x+p.facing*30,p.y-30,'#cfd8e6',5,4); return; }
     if(tryMount()) return; if(tryTalk()) return; tryGrab(); return; }
   // ---- attack press (edge-triggered) ----
   if(pressed.atk){
@@ -7886,15 +7891,74 @@ function vsMeleeHit(a){
   const dir=(dx>=0)?1:-1;
   // ガード：正面からの一撃は防げる（ガード不能技は貫通する）
   const fromFront=(Math.sign(dx)===-o.facing);
-  if(o.state==='guard' && fromFront && !def.unblock){
-    sfx.guard(o.x); spark(o.x-dir*24, o.y-o.z-46, '#9fd6ff', 8); o.vx=dir*2.2; o.guardFx=8;
-    shake=Math.max(shake,3); hitStop=Math.max(hitStop,3); return; }
+  if(o.state==='guard' && fromFront){
+    // ジャストガード：受けた瞬間に合わせるとガード不能技も弾き返す。
+    // 本編と同じ9フレームの窓。素のガードだけだと「先に振った方が勝つ」になる
+    if(gf-o.guardStart<=9){ vsParry(o, p); return; }
+    if(!def.unblock){
+      sfx.guard(o.x); spark(o.x-dir*24, o.y-o.z-46, '#9fd6ff', 8); o.vx=dir*2.2; o.guardFx=8;
+      shake=Math.max(shake,3); hitStop=Math.max(hitStop,3); return; } }
   const dmg=Math.max(1, Math.round((def.dmg||8)*WP.dmg*(p.atkMul||1)*(a.evo||1)*VS_DMG));
   const pow=vsLaunchPow(def)*WP.launch;
   spark(o.x, o.y-o.z-52, WP.trail||def.trail||'#ffe14d', pow>3?14:8, pow>3?10:7);
   hitStop=Math.max(hitStop, pow>3?9:4);
   addCombo(dmg);
   hurtPlayer(o, dmg, dir, pow>0, WP.snd, null, pow); }
+// 対戦のジャストガード。受けた側が有利を取り、振った側は大きく硬直する
+function vsParry(def_p, atk_p){
+  atk_p.state='idle'; atk_p.atk=null; atk_p.atkHeld=false;
+  atk_p.hurtTimer=Math.max(atk_p.hurtTimer||0, 30);       // 振り終わりを長く晒す
+  atk_p.vx=def_p.facing*2.2;
+  def_p.parryFx=16; def_p.invuln=Math.max(def_p.invuln, 10);
+  def_p.dim=Math.min(def_p.dimMax||3, (def_p.dim||0)+1);  // 受け切ると奥義が1つ貯まる
+  spark(def_p.x+def_p.facing*30, def_p.y-def_p.z-58, '#ffffff', 18, 9);
+  ring(def_p.x+def_p.facing*26, def_p.y-def_p.z-58, '#bfe9ff');
+  ring(def_p.x+def_p.facing*26, def_p.y-def_p.z-58, '#ffffff');
+  popText(def_p.x, def_p.y-def_p.z-104, 'PARRY!', '#9ff0ff', true);
+  hitStop=14; flash=Math.max(flash,3); shake=4; sfx.parry(def_p.x); sfx.rise(atk_p.x); }
+// ── 対戦の掴み投げ ──
+// ガードでは止まらないので、固め合いを崩す手になる。
+// 掴まれた側はボタン連打で早く抜けられる（一方的に決まり続けない）
+const VS_GRAB_R=58, VS_GRAB_HOLD=26, VS_THROW_DMG=16, VS_THROW_POW=9;
+function vsTryGrab(p){
+  if(!vsMode) return false;
+  const o=vsFoeOf(p); if(!o) return false;
+  if(o.state==='dead'||o.invuln>0||o.vsHeldBy!=null) return false;
+  if(p.z>6 || o.z>6) return false;                        // 地上どうしだけ
+  const dx=o.x-p.x;
+  if(Math.sign(dx)!==p.facing && Math.abs(dx)>14) return false;
+  if(Math.abs(dx)>VS_GRAB_R || Math.abs(o.y-p.y)>44) return false;
+  p.state='vsgrab'; p.vsGrabT=0; p.atk=null;
+  o.vsHeldBy=p.pid; o.vsMash=0; o.state='vshold'; o.vx=0; o.vz=0; o.z=0; o.atk=null;
+  sfx.dash(p.x); spark(p.x+p.facing*30, p.y-30, '#ffe9a0', 8, 5);
+  popText(o.x, o.y-104, 'つかんだ！', '#ffe14d'); return true; }
+function vsGrabRelease(p, o){
+  if(o){ o.vsHeldBy=null; o.vsMash=0; if(o.state==='vshold') o.state='idle'; }
+  p.state='idle'; p.vsGrabT=0; }
+function updateVsGrab(){
+  const p=player, o=vsFoeOf(p);
+  if(!o || o.vsHeldBy!==p.pid || o.state==='dead'){ vsGrabRelease(p, o); return; }
+  p.vsGrabT=(p.vsGrabT|0)+1;
+  p.vx=0;
+  o.x=p.x+p.facing*34; o.y=p.y; o.z=0; o.vx=0; o.vz=0;    // 目の前へ引き寄せる
+  if((p.vsGrabT%4)===0) spark(o.x, o.y-46, '#ffe9a0', 2, 5);
+  // 掴まれた側の抵抗。連打ぶんだけ早く抜ける
+  const oi=o.in; if(oi && (oi.pressed.atk||oi.pressed.jump||oi.pressed.grab)){
+    oi.pressed.atk=false; oi.pressed.jump=false; oi.pressed.grab=false; o.vsMash=(o.vsMash|0)+1; }
+  if((o.vsMash|0)>=8){ popText(o.x,o.y-104,'ぬけた！','#9fd6ff');
+    o.invuln=Math.max(o.invuln,20); vsGrabRelease(p,o); return; }
+  // 投げる：攻撃を押すか、掴んだまま一定時間で自動的に
+  const mine=p.in;
+  const throwNow=(mine && mine.pressed.atk) || p.vsGrabT>=VS_GRAB_HOLD;
+  if(mine && mine.pressed.atk) mine.pressed.atk=false;
+  if(!throwNow) return;
+  const dir=p.facing;
+  vsGrabRelease(p, o);
+  const dmg=Math.max(1, Math.round(VS_THROW_DMG*(p.atkMul||1)*VS_DMG));
+  spark(o.x, o.y-52, '#ffd24d', 16, 10); ring(o.x, o.y-52, '#ffd24d');
+  hitStop=Math.max(hitStop,10); shake=Math.max(shake,9); sfx.big(p.x);
+  popText(p.x, p.y-112, '投げ！', '#ffd24d', true);
+  hurtPlayer(o, dmg, dir, true, 'flesh', null, VS_THROW_POW); }
 function doPlayerHit(a){
   const p=player, def=a.def, W=WEAPONS[p.weapon]||WEAPONS.dagger;
   const reach=def.reach*REACH*W.reach, hh=def.hh*HH;
@@ -12906,6 +12970,8 @@ function startVersus(){ unlockAudio();
   elStart.classList.add('hidden'); elResult.classList.add('hidden');
   state='play'; if(sndOn){ Music.stop(); Music.start('bossrival'); } }
 function endVersus(){ vsMode=false; TWO_P=false; camLockX=null; gimOn=true;
+  players.forEach(function(q){ q.vsHeldBy=null; q.vsMash=0; q.vsGrabT=0;
+    if(q.state==='vsgrab'||q.state==='vshold') q.state='idle'; });
   players[1].active=false; setTouchMode(false);   // 一人用の操作面へ戻す
   players.forEach(function(p){ p.vsStock=0; });
   enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;

@@ -266,6 +266,82 @@ const DRIVER = `
       csLock=[false,false]; state='title'; endVersus(); }
     console.log('対戦のキャラ選択 OK (2P の操作面が出る／2P だけで選んで決定・取り消し／選んだキャラで開始／抜けたら戻る)'); }
 
+  // ===== ジャストガード：受けた瞬間に合わせると弾き返す =====
+  // 素のガードしか無いと「先に振った方が勝つ」になり、固め合いが崩せない
+  { players[0].kind='inu'; players[1].kind='inu'; startVersus();
+    const a=players[0], b=players[1];
+    const trial=function(justT, move){
+      a.x=400; a._tx=null; a.z=0; a.facing=1; a.state='idle'; a.atk=null; a.invuln=0; a.hurtTimer=0;
+      b.x=452; b._tx=null; b.z=0; b.facing=-1; b.invuln=0; b.hp=b.maxHp; b.state='guard';
+      b.guardStart=justT; b.parryFx=0; b.dim=0; b.dimMax=3;
+      const h0=b.hp;
+      player=a; beginAttack(move);
+      let parried=false;
+      for(let f=0;f<26;f++){ hitStop=0; slowmo=0; b.x=452; b.invuln=0; b.state='guard';
+        step(1); if(b.parryFx>0) parried=true; }
+      return {dmg:h0-b.hp, parried:parried, stun:a.hurtTimer|0, dim:b.dim|0}; };
+    const just=trial(gf, 'c1');            // 今まさに構えた＝窓の中
+    const late=trial(gf-60, 'c1');         // ずっと構えっぱなし＝ただのガード
+    if(!just.parried) throw new Error('合わせてもジャストガードにならない');
+    if(late.parried) throw new Error('構えっぱなしでもジャストガードになる（窓が効いていない）');
+    if(!(just.stun>late.stun)) throw new Error('弾いても相手が硬直しない（'+just.stun+' vs '+late.stun+'）');
+    if(!(just.dim>0)) throw new Error('弾いても奥義が貯まらない');
+    // ガード不能技もジャストガードなら弾けること（本編と同じ扱い）
+    let unb=null; for(const k in ATK){ if(ATK[k].unblock){ unb=k; break; } }
+    if(unb){ const j2=trial(gf, unb), l2=trial(gf-60, unb);
+      if(!j2.parried) throw new Error('ガード不能技をジャストガードで弾けない');
+      if(!(l2.dmg>0)) throw new Error('ガード不能技が素のガードで止まっている（測れていない）'); }
+    console.log('ジャストガード OK (窓の中だけ弾く／相手の硬直 '+late.stun+'→'+just.stun+'F／奥義+'+just.dim+')'); }
+
+  // ===== 掴み投げ：ガードでは止まらない =====
+  { players[0].kind='inu'; players[1].kind='inu'; startVersus();
+    const a=players[0], b=players[1];
+    const setup=function(guard){
+      a.x=400; a._tx=null; a.z=0; a.facing=1; a.state='idle'; a.atk=null; a.invuln=0; a.vsGrabT=0;
+      b.x=436; b._tx=null; b.z=0; b.facing=-1; b.invuln=0; b.hp=b.maxHp; b.vsHeldBy=null; b.vsMash=0;
+      b.state=guard?'guard':'idle'; b.guardStart=-999;
+      for(const k in a.in.pressed) a.in.pressed[k]=false;
+      for(const k in b.in.pressed) b.in.pressed[k]=false;
+      player=a; };
+    // 掴める
+    setup(false);
+    if(!vsTryGrab(a)) throw new Error('間合いにいる相手を掴めない');
+    if(a.state!=='vsgrab') throw new Error('掴んでも状態が変わらない（'+a.state+'）');
+    if(b.vsHeldBy!==a.pid) throw new Error('掴まれた側に印が付かない');
+    // 掴んだまま投げると、ダメージが入って吹き飛ぶ
+    { const h0=b.hp; let launched=false;
+      for(let f=0;f<60;f++){ hitStop=0; slowmo=0; step(1); if(b.z>10) launched=true; }
+      if(!(h0-b.hp>0)) throw new Error('投げてもダメージが入らない');
+      if(!launched) throw new Error('投げても吹き飛ばない（'+b.z.toFixed(1)+'px）');
+      if(a.state==='vsgrab') throw new Error('投げたのに掴んだまま'); }
+    // ガードしていても掴める（固め合いを崩す手）
+    setup(true);
+    if(!vsTryGrab(a)) throw new Error('ガード中の相手を掴めない（崩す手が無い）');
+    // 離れていると掴めない
+    setup(false); b.x=a.x+300;
+    if(vsTryGrab(a)) throw new Error('間合いの外でも掴める');
+    // 背中側は掴めない
+    setup(false); b.x=a.x-36;
+    if(vsTryGrab(a)) throw new Error('後ろにいる相手を掴める');
+    console.log('掴み投げ OK (掴める／投げると飛ぶ／ガードでは止まらない／間合いと向きを見る)'); }
+
+  // 掴まれた側は連打で抜けられる（一方的に決まり続けない）
+  { players[0].kind='inu'; players[1].kind='inu'; startVersus();
+    const a=players[0], b=players[1];
+    a.x=400; a._tx=null; a.z=0; a.facing=1; a.state='idle'; a.atk=null; a.invuln=0;
+    b.x=436; b._tx=null; b.z=0; b.facing=-1; b.invuln=0; b.hp=b.maxHp; b.vsHeldBy=null; b.vsMash=0;
+    b.state='idle'; player=a;
+    if(!vsTryGrab(a)) throw new Error('掴めない（測れていない）');
+    const h0=b.hp;
+    let freed=false;
+    for(let f=0;f<40;f++){ hitStop=0; slowmo=0;
+      b.in.pressed.atk=true;                          // 掴まれた側が連打する
+      step(1);
+      if(b.vsHeldBy==null && a.state!=='vsgrab'){ freed=true; break; } }
+    if(!freed) throw new Error('連打しても抜けられない');
+    if(h0-b.hp>0) throw new Error('抜けたのに投げのダメージが入っている');
+    console.log('抜け出し OK (連打で抜けられ、投げは決まらない)'); }
+
   console.log('VERSUS TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
