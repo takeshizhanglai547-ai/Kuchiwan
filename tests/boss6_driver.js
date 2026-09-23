@@ -70,7 +70,10 @@ const DRIVER = `
         if(bb.type!=='mkOmega3'){ if(state==='play'){ bb.hp=1; killEnemy(bb); } }
         else if(reached<0) reached=f; }
       else { enemies.forEach(function(e){ if(!e.dead && state==='play'){ e.hp=1; killEnemy(e); } }); }
-      if(reached>=0 && f-reached>400) break; }
+      // 形態変化のデモ（state==='cut'）の間は火器の湧きが止まるので、
+      // 猶予を固定の400フレームにしていると、デモが長引いた回だけ落ちていた
+      if(reached>=0 && f-reached>1200) break;
+      if(reached>=0 && t1k.on && items.some(function(q){ return q.kind==='evsg'||q.kind==='evgl'; })) break; }
     if(arrived<0) throw new Error('大王座を歩いてもボス関門に辿り着けない（塔の段差を越えられていない可能性）');
     if(forms.join('→')!=='mkOmega→mkOmega2→mkOmega3')
       throw new Error('本編の道筋で三形態を辿れない（'+forms.join('→')+'）');

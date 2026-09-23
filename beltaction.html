@@ -16774,13 +16774,36 @@ function cloud(x,y,r){
     g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,.5)'); c.fillStyle=g;
     c.beginPath(); c.arc(cx0,cy0,R*.6,0,7); c.arc(cx0+R*.5,cy0+6,R*.5,0,7); c.arc(cx0-R*.5,cy0+8,R*.45,0,7); c.arc(cx0+R*.2,cy0-R*.3,R*.45,0,7); c.fill(); }
   const sc=r/58; ctx.drawImage(_cloudSpr, x-100*sc, y-62*sc, 200*sc, 130*sc); }
-function drawTower(x,y,w,h,col,haze){ const g=ctx.createLinearGradient(x,0,x+w,0); g.addColorStop(0,col); g.addColorStop(1,shade(col,-20));
-  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
-  ctx.fillStyle=shade(col,-30); for(let i=0;i<w;i+=14)ctx.fillRect(x+i,y,8,8);
-  ctx.fillStyle='#3b6fb5'; ctx.beginPath(); ctx.moveTo(x-6,y); ctx.lineTo(x+w/2,y-46); ctx.lineTo(x+w+6,y); ctx.fill();
-  ctx.fillStyle=shade('#3b6fb5',-25); ctx.beginPath(); ctx.moveTo(x+w/2,y-46); ctx.lineTo(x+w+6,y); ctx.lineTo(x+w/2,y); ctx.fill();
-  ctx.strokeStyle='#c0392b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x+w/2,y-46); ctx.lineTo(x+w/2,y-62); ctx.stroke();
-  ctx.fillStyle='#d23'; ctx.beginPath(); ctx.moveTo(x+w/2,y-62); ctx.lineTo(x+w/2+15,y-57); ctx.lineTo(x+w/2,y-52); ctx.fill(); }
+// 塔の絵そのもの。焼き込み先の ctx を受け取れるよう、描画先を引数に取る
+function paintTower(g,x,y,w,h,col){
+  const gr=g.createLinearGradient(x,0,x+w,0); gr.addColorStop(0,col); gr.addColorStop(1,shade(col,-20));
+  g.fillStyle=gr; g.fillRect(x,y,w,h);
+  g.fillStyle=shade(col,-30); for(let i=0;i<w;i+=14)g.fillRect(x+i,y,8,8);
+  g.fillStyle='#3b6fb5'; g.beginPath(); g.moveTo(x-6,y); g.lineTo(x+w/2,y-46); g.lineTo(x+w+6,y); g.fill();
+  g.fillStyle=shade('#3b6fb5',-25); g.beginPath(); g.moveTo(x+w/2,y-46); g.lineTo(x+w+6,y); g.lineTo(x+w/2,y); g.fill();
+  g.strokeStyle='#c0392b'; g.lineWidth=2; g.beginPath(); g.moveTo(x+w/2,y-46); g.lineTo(x+w/2,y-62); g.stroke();
+  g.fillStyle='#d23'; g.beginPath(); g.moveTo(x+w/2,y-62); g.lineTo(x+w/2+15,y-57); g.lineTo(x+w/2,y-52); g.fill(); }
+// 塔は同じ絵を12本並べるだけなので、1枚だけ焼いて貼る。
+// 生で描くと1本につきグラデ1本＋十数コール掛かり、背景の描画コールの大半を占めていた
+const TOWER_PAD=64;                       // 屋根と旗が上へ62px出るぶんの余白
+const _towerCache=new Map();
+function towerSprite(w,h,col){
+  w=Math.round(w); h=Math.round(h);
+  const key=w+'|'+h+'|'+col+'|'+DPR; let c=_towerCache.get(key); if(c) return c;
+  _towerBakes++;
+  c=document.createElement('canvas');
+  c.width=Math.round((w+24)*DPR); c.height=Math.round((h+TOWER_PAD)*DPR);
+  const g=c.getContext('2d'); if(!g) return null;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+  paintTower(g, 12, TOWER_PAD, w, h, col);
+  c._lw=w+24; c._lh=h+TOWER_PAD;
+  if(_towerCache.size>12) _towerCache.clear();
+  _towerCache.set(key,c); return c; }
+function drawTower(x,y,w,h,col,haze){
+  const c=towerSprite(w,h,col);
+  if(!c || !c._lw){ paintTower(ctx,x,y,w,h,col); return; }   // 焼けない環境では生で描く
+  ctx.drawImage(c, x-12, y-TOWER_PAD, c._lw, c._lh); }
 // 城下町の市場門。王都と同じ城を出すと、二つの町テーマが時間帯の違いだけになる
 function drawMarketGate(cx,top){ ctx.save();
   const H0=GROUND_TOP-top;
@@ -17447,29 +17470,84 @@ function drawRidgeRow(T){ const par=0.62, baseY=GROUND_TOP-2;
     ctx.lineTo(x+60,baseY); ctx.closePath(); ctx.fill(); }
   ctx.fillStyle=hazeGrad(T,themeIdxFor(stage)); ctx.fillRect(0,GROUND_TOP-70,W,70);   // 上のベタと同じグラデなので継ぎ目が出ない
 }
-function drawBuildings(lit){ const par=0.62, baseY=GROUND_TOP-2;
+// 町並み。146px間隔で同じ並びが繰り返すので、見えている範囲＋余白を
+// 1枚の帯に焼いて貼る。生で描くと1軒につきグラデ3本・約50コール掛かり、
+// 15軒で背景の描画コールの大半を占めていた。
+// 窓の灯りだけは gf で明滅するので焼き込まず、帯の上へ生で重ねる
+const BLD_W=146, BLD_PAR=0.62, BLD_MARGIN=4*146;     // 余白4軒ぶん＝約940px 歩くまで焼き直さない
+let _bldStrip=null, _bldBakes=0, _towerBakes=0;
+// 町並みの置き場所。元の並びは gx = i*bw - (px%bw) - bw で、
+// g0 で書き直すと g0*bw - px - bw になる。帯・生描き・灯りの3か所で使うので1本にまとめる
+function bldX(g0, px){ return g0*BLD_W - px - BLD_W; }
+function bldVariant(g0){
   const cols=['#caa15a','#b9854a','#d8b56b','#a8753c','#c69a55'], roofs=['#9c3b2e','#7a3528','#b5503a'];
-  for(let i=-1;i<14;i++){ const bw=146, gx=i*bw-(camX*par)%bw-bw, g0=Math.floor((camX*par)/bw)+i;
-    const h=92+Math.abs(g0*53%64), y=baseY-h;
-    const idx=((g0%cols.length)+cols.length)%cols.length;
-    const wall=ctx.createLinearGradient(0,y,0,y+h); wall.addColorStop(0,cols[idx]); wall.addColorStop(1,shade(cols[idx],-26));
-    ctx.fillStyle=wall; ctx.fillRect(gx,y,bw-8,h);
-    ctx.strokeStyle='rgba(70,40,18,.55)'; ctx.lineWidth=3; ctx.strokeRect(gx,y,bw-8,h);
-    ctx.beginPath(); ctx.moveTo(gx,y+h*0.5); ctx.lineTo(gx+bw-8,y+h*0.5); ctx.moveTo(gx+(bw-8)/2,y); ctx.lineTo(gx+(bw-8)/2,y+h); ctx.stroke();
-    const ridx=((g0%roofs.length)+roofs.length)%roofs.length;
-    ctx.fillStyle=roofs[ridx]; ctx.beginPath(); ctx.moveTo(gx-10,y); ctx.lineTo(gx+(bw-8)/2,y-38); ctx.lineTo(gx+bw,y); ctx.fill();
-    ctx.fillStyle=shade(roofs[ridx],-22); ctx.beginPath(); ctx.moveTo(gx+(bw-8)/2,y-38); ctx.lineTo(gx+bw,y); ctx.lineTo(gx+(bw-8)/2,y); ctx.fill();
-    // windows (glass gradient, or warm lit at dusk/night)
-    let wi=0;
-    for(const wx of [gx+20,gx+bw-58]){ const wy=y+22; const on=lit && (((g0*7+wi)%3)===0);
-      if(on){ const fl=0.75+0.25*Math.abs(Math.sin(gf*0.05+g0*3+wi)); ctx.fillStyle='#ffcf66'; ctx.globalAlpha=fl; ctx.fillRect(wx,wy,30,34); ctx.globalAlpha=1;
-      } else { const wg=ctx.createLinearGradient(0,wy,0,wy+34); wg.addColorStop(0,lit?'#26405c':'#bfe4ff'); wg.addColorStop(1,lit?'#16263a':'#3a6a8c'); ctx.fillStyle=wg; ctx.fillRect(wx,wy,30,34); }
-      ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=2; ctx.strokeRect(wx,wy,30,34); ctx.beginPath(); ctx.moveTo(wx+15,wy);ctx.lineTo(wx+15,wy+34);ctx.moveTo(wx,wy+17);ctx.lineTo(wx+30,wy+17); ctx.stroke(); wi++; }
-    if(g0%3===0){ ctx.fillStyle='#5a3a1c'; ctx.fillRect(gx+34,y+h-42,bw-80,30);
-      ctx.strokeStyle='#3a2410'; ctx.strokeRect(gx+34,y+h-42,bw-80,30);
-      ctx.fillStyle='#ffe6b0'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
-      ctx.fillText(g0%2?'肉球亭':'イッヌ商店',gx+(bw-8)/2,y+h-21); ctx.textAlign='left'; }
-  }
+  return { h:92+Math.abs(g0*53%64),
+           idx:((g0%cols.length)+cols.length)%cols.length,
+           ridx:((g0%roofs.length)+roofs.length)%roofs.length,
+           cols:cols, roofs:roofs, sign:(g0%3===0), signText:(g0%2?'肉球亭':'イッヌ商店') }; }
+// 1軒ぶんの静止画（灯りの明滅を除く）。gx は帯の中の左端
+function paintBuilding(g, gx, baseY, g0, lit){
+  const V=bldVariant(g0), bw=BLD_W, h=V.h, y=baseY-h;
+  const wall=g.createLinearGradient(0,y,0,y+h);
+  wall.addColorStop(0,V.cols[V.idx]); wall.addColorStop(1,shade(V.cols[V.idx],-26));
+  g.fillStyle=wall; g.fillRect(gx,y,bw-8,h);
+  g.strokeStyle='rgba(70,40,18,.55)'; g.lineWidth=3; g.strokeRect(gx,y,bw-8,h);
+  g.beginPath(); g.moveTo(gx,y+h*0.5); g.lineTo(gx+bw-8,y+h*0.5); g.moveTo(gx+(bw-8)/2,y); g.lineTo(gx+(bw-8)/2,y+h); g.stroke();
+  g.fillStyle=V.roofs[V.ridx]; g.beginPath(); g.moveTo(gx-10,y); g.lineTo(gx+(bw-8)/2,y-38); g.lineTo(gx+bw,y); g.fill();
+  g.fillStyle=shade(V.roofs[V.ridx],-22); g.beginPath(); g.moveTo(gx+(bw-8)/2,y-38); g.lineTo(gx+bw,y); g.lineTo(gx+(bw-8)/2,y); g.fill();
+  let wi=0;
+  for(const wx of [gx+20,gx+bw-58]){ const wy=y+22;
+    // 灯る窓には消灯のガラスを焼かない。元は壁の上へ直接ともし火を重ねており、
+    // 下に暗いガラスを敷くと、明滅で薄くなった瞬間の色が変わってしまう
+    if(!(lit && ((g0*7+wi)%3)===0)){
+      const wg=g.createLinearGradient(0,wy,0,wy+34);
+      wg.addColorStop(0,lit?'#26405c':'#bfe4ff'); wg.addColorStop(1,lit?'#16263a':'#3a6a8c');
+      g.fillStyle=wg; g.fillRect(wx,wy,30,34); }
+    g.strokeStyle='#5a3a1c'; g.lineWidth=2; g.strokeRect(wx,wy,30,34);
+    g.beginPath(); g.moveTo(wx+15,wy); g.lineTo(wx+15,wy+34); g.moveTo(wx,wy+17); g.lineTo(wx+30,wy+17); g.stroke(); wi++; }
+  if(V.sign){ g.fillStyle='#5a3a1c'; g.fillRect(gx+34,y+h-42,bw-80,30);
+    g.strokeStyle='#3a2410'; g.strokeRect(gx+34,y+h-42,bw-80,30);
+    g.fillStyle='#ffe6b0'; g.font='bold 16px sans-serif'; g.textAlign='center';
+    g.fillText(V.signText,gx+(bw-8)/2,y+h-21); g.textAlign='left'; } }
+// 帯を焼く。px0 は視差座標（camX*BLD_PAR）の左端
+function buildStrip(px0, wide, lit, baseY){
+  _bldBakes++;
+  const c=document.createElement('canvas');
+  const topPad=60;                                   // 屋根が上へ38px出るぶん
+  c.width=Math.round(wide*DPR); c.height=Math.round((baseY+topPad)*DPR);
+  const g=c.getContext('2d'); if(!g) return null;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+  // 元の並びは gx = i*bw - (px%bw) - bw。g0 で書き直すと g0*bw - px - bw になる
+  const i0=Math.floor(px0/BLD_W), i1=Math.ceil((px0+wide+BLD_W)/BLD_W)+1;
+  for(let g0=i0; g0<=i1; g0++) paintBuilding(g, bldX(g0,px0), baseY, g0, lit);
+  return {x0:px0, w:wide, lit:lit, cv:c, base:baseY}; }
+function drawBuildings(lit){
+  const baseY=GROUND_TOP-2, px=camX*BLD_PAR;
+  const need0=px-BLD_W, need1=px+W+BLD_W;
+  const S=_bldStrip;
+  if(!S || S.lit!==lit || S.base!==baseY || need0<S.x0 || need1>S.x0+S.w){
+    _bldStrip=buildStrip(px-BLD_MARGIN, W+BLD_MARGIN*2, lit, baseY); }
+  const T=_bldStrip;
+  if(!T || !T.cv){                                   // 焼けない環境では生で描く
+    const i0=Math.floor(px/BLD_W), i1=Math.ceil((px+W+BLD_W)/BLD_W)+1;
+    for(let g0=i0; g0<=i1; g0++) paintBuilding(ctx, bldX(g0,px), baseY, g0, lit); }
+  else {
+    // 端数の位置で貼ると再標本化されて、屋根の斜線や窓枠が1px 滲む。
+    // 転送元をデバイス画素へ吸着させ、等倍のまま写す（ctx は DPR 倍で構えてある）
+    const sw=Math.round(W*DPR), sh=T.cv.height;
+    let sx=Math.round((px-T.x0)*DPR);
+    sx=clamp(sx, 0, Math.max(0, T.cv.width-sw));
+    ctx.drawImage(T.cv, sx, 0, sw, sh, 0, 0, W, sh/DPR); }
+  // 灯る窓だけは明滅するので、焼かずに毎フレーム重ねる
+  if(lit){ const i0=Math.floor(px/BLD_W), i1=Math.ceil((px+W+BLD_W)/BLD_W)+1;
+    for(let g0=i0; g0<=i1; g0++){ const V=bldVariant(g0), gx=bldX(g0,px), h=V.h, y=baseY-h;
+      let wi=0;
+      for(const wx of [gx+20,gx+BLD_W-58]){ const wy=y+22;
+        if(((g0*7+wi)%3)===0){
+          const fl=0.75+0.25*Math.abs(Math.sin(gf*0.05+g0*3+wi));
+          ctx.fillStyle='#ffcf66'; ctx.globalAlpha=fl; ctx.fillRect(wx,wy,30,34); ctx.globalAlpha=1; }
+        wi++; } } }
 }
 // 自分の出力（rgb(...)）も食えるようにしてある。shade(shade(c,-46),14) のような
 // 入れ子で NaN を返すと、canvas が前の fillStyle を使い回して色が化ける
@@ -26129,7 +26207,10 @@ makeStick('stick',0); makeStick('stick2',1);
 //======================================================================
 function resize(){ const d0=DPR; setupCanvas();
   // DPR が変わったら、前の密度で焼いたスプライトは捨てる（ここは宣言が揃ったあと）
-  if(DPR!==d0){ if(typeof _ornCache!=='undefined') _ornCache.clear(); bgCacheTheme=-1; }
+  if(DPR!==d0){ if(typeof _ornCache!=='undefined') _ornCache.clear();
+    if(typeof _towerCache!=='undefined') _towerCache.clear();
+    if(typeof _bldStrip!=='undefined') _bldStrip=null;
+    bgCacheTheme=-1; }
   const r=Math.min(window.innerWidth/W,window.innerHeight/H);
   cv.style.width=(W*r)+'px'; cv.style.height=(H*r)+'px'; }
 addEventListener('resize',resize); resize();
