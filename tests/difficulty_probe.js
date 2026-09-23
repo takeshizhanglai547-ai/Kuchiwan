@@ -50,9 +50,10 @@ const DRIVER = `
     return {L:L,dmg:dmg,hits:hits,stunF:stunF,maxStun:maxStun,kills:kills,dealt:dealt,
             down:down,frames:frames,med:hist[(hist.length/2)|0]||0,foeHP:foeHP/Math.max(1,nFoe)};
   }
-  const F=8000, SEEDS=[11,22,33];
+  const F=Number(process.env.NM_F||6000), SEEDS=(process.env.NM_SEEDS||"11,22,33").split(",").map(Number);
+  const LAPS=(process.env.NM_LAPS||"3,4").split(",").map(Number);
   const agg={};
-  [3,4].forEach(function(L){
+  LAPS.forEach(function(L){
     const rs=SEEDS.map(function(sd){ return run(L,F,sd); });
     const sum=function(f){ return rs.reduce(function(a,r){ return a+f(r); },0); };
     agg[L]={L:L, frames:F*rs.length, dmg:sum(function(r){return r.dmg;}),
@@ -62,7 +63,7 @@ const DRIVER = `
       foeHP:rs[0].foeHP, med:0,
       each:rs.map(function(r){ return Math.round(r.dmg/r.frames*1000); })};
     agg[L].med=Math.round(agg[L].dmg/agg[L].hits||0); });
-  const out=[agg[3],agg[4]];
+  const out=LAPS.map(function(L){ return agg[L]; });
   out.forEach(function(r){ const k=1000/r.frames;
     console.log('周'+r.L
       +'  被ダメ '+(r.dmg*k).toFixed(0).padStart(4)+'/1000F'
@@ -75,12 +76,12 @@ const DRIVER = `
       +'  種別 '+r.each.join('/')); });
   const a=out[0], b=out[1];
   console.log('---');
-  console.log('四周目/三周目： 被ダメ '+(b.dmg/Math.max(1,a.dmg)).toFixed(2)+'倍'
+  console.log('周'+LAPS[1]+'/周'+LAPS[0]+'： 被ダメ '+(b.dmg/Math.max(1,a.dmg)).toFixed(2)+'倍'
     +' / 被弾回数 '+(b.hits/Math.max(1,a.hits)).toFixed(2)+'倍'
     +' / 一撃 '+(b.med/Math.max(1,a.med)).toFixed(2)+'倍'
     +' / 撃破速度 '+(b.kills/Math.max(1,a.kills)).toFixed(2)+'倍'
     +' / 硬直時間 '+(b.stunF/Math.max(1,a.stunF)).toFixed(2)+'倍');
-  console.log('HP800なら、四周目は '+(b.dmg/800*(1000/b.frames)).toFixed(2)+'回/1000F、三周目は '+(a.dmg/800*(1000/a.frames)).toFixed(2)+'回/1000F の割合で力尽きる');
+  console.log('HP800なら、周'+LAPS[1]+'は '+(b.dmg/800*(1000/b.frames)).toFixed(2)+'回/1000F、周'+LAPS[0]+'は '+(a.dmg/800*(1000/a.frames)).toFixed(2)+'回/1000F の割合で力尽きる');
   process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;

@@ -495,6 +495,47 @@ const DRIVER = `
     if(!(ETYPE.mkOmega3.hp < 800)) throw new Error('ラスボス最終形態が硬すぎる（'+ETYPE.mkOmega3.hp+'）');
     console.log('耐久 OK (六周目の雑魚 平均'+Math.round(avg)+' / 五周目 平均'+Math.round(avg5)+')'); }
 
+  // ===== 六周目は五周目より手応えがあること =====
+  // デモAIに戦わせる difficulty_probe は種ごとの振れが3.4倍あり、12種回しても
+  // 10〜20%の差を判定できなかった（それで「未収束」と誤読していた）。
+  // ここは主役を動かさず、乱数も固定して決定論で測る
+  { const step2=(n)=>{ for(let i=0;i<n;i++){ if(global.rafCb){ const cb=global.rafCb; global.rafCb=null; cb(); } } };
+    const seedRandom=function(sd){ let x=sd>>>0;
+      Math.random=function(){ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; };
+    const realRandom=Math.random;
+    const POOL={5:SENGOKU_ZAKO_POOL, 6:MECHA_ZAKO_POOL};
+    const FR=700, SEEDS=[3,11,23], OFF=[-230,-150,-80,80,150,230];
+    const pressOf=function(L, sd){
+      seedRandom(sd);
+      setupRoster('inu'); startGame(); state='play'; gimOn=false; lap=L;
+      const q=players[0]; player=q; q.hp=q.maxHp=999999; q.invuln=0; q.level=20;
+      q.x=600; q._tx=null; q.z=0;
+      enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;
+      const P=POOL[L];
+      for(let i=0;i<OFF.length;i++){ spawnEnemy(P[(i*7+sd)%P.length], 600+OFF[i], LANE);
+        const e=enemies[enemies.length-1]; e.entry=null; e.hp=e.maxHp=999999; }
+      let dmg=0; const rh=hurtPlayer;
+      hurtPlayer=function(x){ const t=x||player, b=t.hp; const r=rh.apply(null,arguments);
+        if(t===q) dmg+=Math.max(0,b-t.hp); return r; };
+      try { for(let f=0; f<FR; f++){ hitStop=0; slowmo=0;
+          q.hp=q.maxHp; q.invuln=0; q.state='idle'; q.vx=0; q.z=0; q.x=600;
+          enemies.forEach(function(e){ if(!e.dead){ e.stun=0; e.hp=e.maxHp; } });
+          step2(1); } }
+      finally { hurtPlayer=rh; Math.random=realRandom; }
+      return dmg/FR*1000; };
+    const mean=function(L){ const v=SEEDS.map(function(sd){ return pressOf(L,sd); });
+      return v.reduce(function(a,b){return a+b;},0)/v.length; };
+    const p5=mean(5), p6=mean(6);
+    if(!(p5>0 && p6>0)) throw new Error('圧を測れていない（周5 '+p5.toFixed(0)+' / 周6 '+p6.toFixed(0)+'）');
+    const ratio=p6/p5;
+    if(!(ratio>=1.15)) throw new Error('六周目が五周目より手応えが無い（集団の圧 '+ratio.toFixed(2)+'倍・1.15倍以上であるべき）');
+    const hpOf=function(P){ return P.reduce(function(a,k){ return a+ETYPE[k].hp; },0)/P.length; };
+    const hr=hpOf(MECHA_ZAKO_POOL)/hpOf(SENGOKU_ZAKO_POOL);
+    if(!(hr<1.25)) throw new Error('六周目の雑魚が耐久で稼いでいる（素のHP '+hr.toFixed(2)+'倍・1.25倍未満であるべき）');
+    const capAt=function(L){ const sv=lap; lap=L; const c=squadCap(); lap=sv; return c; };
+    if(!(capAt(6)>capAt(5))) throw new Error('六周目の同時攻撃数が五周目と同じ（'+capAt(5)+' / '+capAt(6)+'）');
+    console.log('六周目の手応え OK (集団の圧 '+ratio.toFixed(2)+'倍／素のHP '+hr.toFixed(2)+'倍＝長いだけではない／同時攻撃 '+capAt(5)+'→'+capAt(6)+')'); }
+
   console.log('MECHA TEST PASSED');
   process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message); process.exit(1); });
