@@ -496,6 +496,44 @@ const DRIVER = `
     // パネルの中身が縦に溢れないよう、スクロールできること
     if(H.indexOf('.howto {')<0 || H.slice(H.indexOf('.howto {'), H.indexOf('.howto {')+220).indexOf('overflow-y:auto')<0)
       throw new Error('操作説明が画面から溢れる（スクロールできない）');
+    // ── 載っているキーが、実際の割り当てと合っていること ──
+    // 1Pと2Pのキーが混ざって1人ぶんとして並んでいた（攻撃「J / F」＝Fは2P、
+    // 回避「K / G」＝Gは2P、掴み「L / H」＝Hは2P）。
+    // ※ドライバはテンプレートリテラルの中なので正規表現は使わない
+    { const NL=String.fromCharCode(10);
+      const cell=function(label){                       // その行の右側（キーが書いてある側）を取る
+        const i=body.indexOf('<td>'+label+'</td>'); if(i<0) return null;
+        const j=body.indexOf('<td>', i+4); if(j<0) return null;
+        const k=body.indexOf('</td>', j); if(k<0) return null;
+        return body.slice(j+4, k); };
+      // キーは <b>…</b> の中にだけ書く。説明文まで拾うと「NPCの前で」の N を
+      // キーと誤認する（実際に誤認した）
+      const lettersIn=function(txt){ const out=[];
+        let i=0;
+        while(true){ const a=txt.indexOf('<b>', i); if(a<0) break;
+          const b2=txt.indexOf('</b>', a); if(b2<0) break;
+          const seg=txt.slice(a+3, b2);
+          for(let k=0;k<seg.length;k++){ const c=seg.charAt(k);
+            if(c>='A' && c<='Z'){
+              const nx=(k+1<seg.length)? seg.charAt(k+1) : ' ';
+              if(nx>='a' && nx<='z') continue;           // Space / Shift のような語は単独キーではない
+              out.push(c); } }
+          i=b2+4; }
+        return out; };
+      const codeOf=function(ch){ return 'Key'+ch; };
+      const rows=[['攻撃','atk'],['回避','grd'],['掴み','grab']];
+      rows.forEach(function(r){
+        const txt=cell(r[0]); if(txt===null) throw new Error('操作説明に「'+r[0]+'」の行が無い');
+        const ls=lettersIn(txt);
+        if(!ls.length) throw new Error('操作説明の「'+r[0]+'」にキーが書かれていない');
+        ls.forEach(function(ch){
+          if(KEYMAP[0][r[1]].indexOf(codeOf(ch))<0){
+            const who=(KEYMAP[1][r[1]].indexOf(codeOf(ch))>=0)? '（2Pのキー）' : '（誰の割り当てにも無い）';
+            throw new Error('操作説明の「'+r[0]+'」に 1P ではない '+ch+' が載っている'+who); } }); });
+      // 2Pのキーも別行として載っていること（1Pの行に混ぜない）
+      if(body.indexOf('2Pのキー')<0) throw new Error('2Pのキーの案内が無い');
+      console.log('操作説明のキー OK (攻撃・回避・掴みの英字がすべて 1P の割り当てと一致／2Pは別行)'); }
+
     console.log('操作説明 OK (7つのコマンド＋奥義・キャンセル・空中連携・水中/地形を掲載)'); }
 
   // ===== トレーニング：コマンド表が出て、キャラごとに中身が変わる =====
