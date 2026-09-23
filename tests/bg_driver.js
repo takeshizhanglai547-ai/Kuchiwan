@@ -207,6 +207,67 @@ const DRIVER = `
     } finally { DPR=old; _ornCache.clear(); _ornBakes=0; }
     console.log('焼き込みの密度 OK (額縁は DPR ぶんの画素で焼き、貼る大きさは論理サイズのまま)'); }
 
+  // ===== 町並みと塔は焼き込んで貼る（毎フレーム描き直さない）=====
+  // 壁時計はこの実行環境で当てにならないので、決定論の「1フレームの描画コール数」で見る
+  { const count=function(fn){
+      const real=ctx; let n=0, grad=0;
+      ctx=new Proxy(real,{ get:function(t,k){ const v=t[k];
+        if(typeof v==='function') return function(){ n++;
+          if(k==='createLinearGradient'||k==='createRadialGradient') grad++;
+          return v.apply(t,arguments); };
+        return v; }, set:function(t,k,v){ n++; t[k]=v; return true; } });
+      try{ fn(); } finally { ctx=real; }
+      return {n:n, grad:grad}; };
+    setupRoster('inu'); startGame(); state='play'; gimOn=false; perfTier=0;
+    enemies.length=0; players[0].invuln=99999;
+    // 王都（町並みと塔が出るテーマ）で測る
+    let ti=-1; STAGE_THEME.forEach(function(T,i){ if(ti<0 && T.town) ti=i; });
+    if(ti<0) throw new Error('町のテーマが見つからない');
+    const sv=STAGE2THEME[stage]; STAGE2THEME[stage]=ti;
+    bgCacheTheme=-1; count(function(){ drawBackground(); });      // 1回目は焼き込みが走るので捨てる
+    const r=count(function(){ drawBackground(); });
+    // 建物と塔を抜いたときとの差＝その2つに掛かっているコール数
+    const rb=drawBuildings, rt=drawTower;
+    drawBuildings=function(){}; drawTower=function(){};
+    const wo=count(function(){ drawBackground(); });
+    drawBuildings=rb; drawTower=rt;
+    STAGE2THEME[stage]=sv; bgCacheTheme=-1;
+    const cost=r.n-wo.n, grad=r.grad-wo.grad;
+    // 生で描いていた頃は 1248コール・グラデ60本だった。貼るだけなら二桁で足りる
+    if(!(cost<120)) throw new Error('町並みと塔に '+cost+'コール掛かっている（焼き込みが効いていない。生描きは1248）');
+    if(!(grad<=2)) throw new Error('町並みと塔で毎フレーム グラデを '+grad+'本作っている（焼き込めば0のはず）');
+    if(!(r.n<700)) throw new Error('背景ぜんぶで '+r.n+'コール（生描きの頃は1690）');
+    console.log('背景の焼き込み OK (町並みと塔 '+cost+'コール・グラデ'+grad+'／背景ぜんぶ '+r.n+'コール)'); }
+
+  // 焼いた絵の置き場所が、生で描いていた頃と同じであること。
+  // 直したとき1軒ぶん（146px）横へずれた。期待値は元の式
+  //   gx = i*bw - (px%bw) - bw, g0 = floor(px/bw)+i
+  // から手で出した直値を置く（実装の式から作ると、式を壊しても一緒に動いて素通りする）
+  { const want=[[0,0,-146],[1000,6,-270],[2537.4,17,-201.4]];
+    want.forEach(function(q){ const px=q[0], g0=q[1], ex=q[2];
+      const got=bldX(g0, px);
+      if(Math.abs(got-ex)>0.01)
+        throw new Error('町並みの置き場所がずれている: px='+px+' の g0='+g0+' が x='+got.toFixed(2)+'（'+ex+' のはず）'); });
+    // 隣どうしの間隔が1軒ぶんであること
+    if(Math.abs((bldX(4,0)-bldX(3,0))-146)>0.01) throw new Error('町並みの間隔が146pxでない');
+    console.log('町並みの置き場所 OK (px=0/1000/2537.4 の3点とも生描きの頃と同じ)'); }
+
+  // 焼き直しが毎フレーム走っていないこと。
+  // 焼き込みは別のキャンバスへ描くので、本体の描画コールを数えても見えない
+  { setupRoster('inu'); startGame(); state='play'; gimOn=false; perfTier=0;
+    enemies.length=0; players[0].invuln=99999;
+    let ti=-1; STAGE_THEME.forEach(function(T,i){ if(ti<0 && T.town) ti=i; });
+    const sv=STAGE2THEME[stage]; STAGE2THEME[stage]=ti;
+    _bldStrip=null; _bldBakes=0; _towerBakes=0; _towerCache.clear();
+    camX=0; drawBackground();                       // 1回目の焼き込み
+    const b0=_bldBakes, t0=_towerBakes;
+    for(let f=0; f<120; f++){ camX+=2; drawBackground(); }   // 240px ぶん歩く
+    const nb=_bldBakes-b0, nt=_towerBakes-t0;
+    STAGE2THEME[stage]=sv; bgCacheTheme=-1;
+    if(nt!==0) throw new Error('塔を歩くたびに焼き直している（'+nt+'回／120フレーム）');
+    if(!(nb<=1)) throw new Error('町並みを毎フレーム焼き直している（'+nb+'回／120フレーム・余白4軒ぶんなら0〜1回のはず）');
+    console.log('焼き直しの頻度 OK (240px 歩いて 町並み '+nb+'回・塔 '+nt+'回)'); }
+
   console.log('BACKGROUND LAYOUT TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
 `;
