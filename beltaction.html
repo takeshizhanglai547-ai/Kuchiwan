@@ -3779,7 +3779,7 @@ function foeTier(){ return clamp(Math.floor(foeGrowth()/3.2), 0, 4); } // 0〜4�
 // 敵1体の最終攻撃力倍率（難易度・成長・階級をここに集約する）
 function foeAtkMul(e){ return diffDmgMul()*foeDmgGrow()*(1+0.30*((e&&e.rank)||0))*((e&&e.dmgUp)||1); }   // dmgUp＝信長の第六天魔王のような自己強化
 function enemyLaunchMul(){ return hardMode?0.5:1; }                    // 高難易度：吹っ飛びにくい
-function enemyThinkMul(){ return (hardMode?1.7:1)*foeSpdGrow(); }      // 高難易度・成長：思考が速い＝攻撃頻度UP
+function enemyThinkMul(){ return (hardMode?1.7:1)*foeSpdGrow()*(lap>=6?1.22:1); }   // 高難易度・成長・六周目：思考が速い＝攻撃頻度UP
 function grantLives(n){ if(TWO_P) coopLives+=n; else players.forEach(p=>{ if(p.active) p.lives+=n; }); }
 function livesLeft(){ return TWO_P?coopLives:(player?player.lives:0); }
 useInput(players[0].in); mapKeysFor(0); mapKeysFor(1);
@@ -9902,7 +9902,11 @@ let _sqLast=0;
 // 同時に仕掛けてよい数。神話の章だけ1体ぶん厚くする。
 // 実測で四周目の被弾回数が三周目の 0.31倍しかなく、「賢い連携」のつもりが
 // 手数を減らして間延びさせていた
-function squadCap(){ return lap>=4 ? (hardMode?4:3) : (hardMode?3:2); }   // 戦国も分隊で来る（lap5 は lap>=4 に含まれる）
+// 六周目は lap>=4 の枠に入っていて、五周目と同じ同時攻撃数だった。
+// 実測で六周目の被弾回数は五周目の 0.76倍しかなく、一撃だけ 1.38倍重い＝
+// 「難しいのではなく長いだけ」の形になっていた。最後の周回は手数で締める
+function squadCap(){ return lap>=6 ? (hardMode?5:4)
+                          : lap>=4 ? (hardMode?4:3) : (hardMode?3:2); }
 // 連携の追撃。一体の攻撃が届いた瞬間、待機している最も近い味方へ攻撃権を渡す。
 // プレイヤーの硬直と重なるので「2発目が見えない」圧力になる。
 // 攻撃力もHPも上げずに圧を作るための仕掛け
