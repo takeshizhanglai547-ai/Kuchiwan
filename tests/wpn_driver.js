@@ -377,16 +377,37 @@ const DRIVER = `
       ids[id]=w;
       if(names[d.name]) throw new Error('同じ空中奥義名がある: '+d.name+'（'+names[d.name]+' と '+w+'）');
       names[d.name]=w; });
-    // 型が1つに偏っていないこと（全部メテオ、などにしない）
+    // 体の運び方（落とす／急降下／上がる／留まる）が1つに偏らないこと
     const shapeOf=function(d){ return d.airMeteor? 'メテオ' : d.airDive? '急降下'
       : d.rise? '上昇' : ((d.airHover|0)>=30? '滞空' : 'その他'); };
     const c={}; ws.forEach(function(w){ const sh=shapeOf(ATK[WEAPON_SPECIAL[w].air]);
       (c[sh]=c[sh]||[]).push(w); });
     const kinds=Object.keys(c);
-    if(kinds.length<3) throw new Error('空中奥義の型が '+kinds.length+' 種類しかない');
+    if(kinds.length<3) throw new Error('空中奥義の動きが '+kinds.length+' 種類しかない');
     kinds.forEach(function(k){ if(c[k].length > Math.ceil(ws.length/2))
-      throw new Error('空中奥義が「'+k+'」に偏っている（'+c[k].length+'/'+ws.length+'本）'); });
-    console.log('得物ごとの空中奥義 OK ('+ws.length+'本・すべて別物／型 '+kinds.map(function(k){return k+' '+c[k].length;}).join('・')+')'); }
+      throw new Error('空中奥義の動きが「'+k+'」に偏っている（'+c[k].length+'/'+ws.length+'本）'); });
+    // ── 中身の作り分け ──
+    // 動きだけ分けても「どの得物でも同じ技」になる（実際そうなっていて指摘された）。
+    // 得物の系統ごとに別の仕掛け（waFx）を持ち、1系統に偏らないこと
+    const fx={}; ws.forEach(function(w){ const d=ATK[WEAPON_SPECIAL[w].air];
+      if(!d.waFx) throw new Error(w+' の空中奥義に中身（waFx）が無い');
+      (fx[d.waFx]=fx[d.waFx]||[]).push(w); });
+    const fxs=Object.keys(fx);
+    if(fxs.length<10) throw new Error('空中奥義の仕掛けが '+fxs.length+' 種類しかない（得物の系統ぶん要る）');
+    fxs.forEach(function(k){ if(fx[k].length > Math.ceil(ws.length/4))
+      throw new Error('空中奥義の仕掛けが「'+k+'」に偏っている（'+fx[k].length+'/'+ws.length+'本）'); });
+    // 同じ系統でも得物ごとに威力と広さが違うこと（同系統が全部同じ数値なら作り分けていない）
+    fxs.forEach(function(k){ if(fx[k].length<2) return;
+      const pw=new Set(fx[k].map(function(w){ return ATK[WEAPON_SPECIAL[w].air].waPow; }));
+      if(pw.size<2) throw new Error(k+' の '+fx[k].length+'本が全部同じ威力（得物ごとの差が無い）'); });
+    // airDive / airMeteor は真偽ではなく設定を取る。true を渡すと
+    // 落ちも突っ込みもせず、宙に浮いたまま終わる（実際そうなっていた）
+    ws.forEach(function(w){ const d=ATK[WEAPON_SPECIAL[w].air];
+      if(d.airDive && (d.airDive===true || !(d.airDive.g>0) || !(d.airDive.max>0)))
+        throw new Error(w+' の急降下に設定が無い（true のままでは落ちない）');
+      if(d.airMeteor && (d.airMeteor===true || !(d.airMeteor.g>0) || !(d.airMeteor.r>0)))
+        throw new Error(w+' のメテオに設定が無い（true のままでは落ちない）'); });
+    console.log('得物ごとの空中奥義 OK ('+ws.length+'本／仕掛け '+fxs.length+'種・動き '+kinds.length+'種)'); }
 
   // 実際に空中で撃つと、握っている得物の空中奥義が出ること
   { setupRoster('inu'); startGame(); state='play';
@@ -437,6 +458,88 @@ const DRIVER = `
       if(!(hp0-list.reduce(function(a2,e){ return a2+e.hp; },0) > 0)) dead.push(w); });
     if(dead.length) throw new Error('当たらない空中奥義がある: '+dead.join(','));
     console.log('空中奥義の命中 OK ('+Object.keys(WEAPON_SPECIAL).length+'本すべてが敵に届く)'); }
+
+  // 系統ごとの仕掛けが実際に走っていること。
+  // 技の数値だけ見ていると、中身を呼ぶ1行を消しても素の斬撃で当たるので素通りする
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p;
+    const run=function(w){
+      p.kind='inu'; p.weapon=w; p.heldWeapon=w; p.state='jump'; p.atk=null;
+      p.z=190; p.vz=0; p.invuln=99999; p.hp=p.maxHp=99999;
+      p.x=600; p._tx=null; p.facing=1; p.dimMax=9; p.dim=9; p.level=1;
+      enemies.length=0; projectiles.length=0; hazards.length=0; particles.length=0;
+      for(let k=0;k<4;k++){ spawnEnemy('wolf', 700+k*80, LANE); const e=enemies[enemies.length-1];
+        e.hp=e.maxHp=99999; e.poise=99999; e.thinkCd=99999; }
+      const id=WEAPON_SPECIAL[w].air, D=ATK[id];
+      let proj=0, haz=0, high=0;
+      beginAttack(id); p.state='jump';
+      beginAirAttack(id);
+      for(let f=0;f<(D.dur||60)+40;f++){ hitStop=0; slowmo=0; particles.length=0;
+        updatePlayer(p); updateProjectiles(); updateHazards();
+        if(projectiles.length>proj){ proj=projectiles.length;
+          projectiles.forEach(function(q){ if(q.zz>150) high=1; }); }
+        if(hazards.length>haz) haz=hazards.length; }
+      return {proj:proj, haz:haz, high:high}; };
+    // 系統ごとの「その仕掛けでしか起きないこと」
+    const want=[
+      ['starbow','bow',   function(r){ return r.high>0; }, '頭上から矢が降ってこない'],
+      ['grimoire','tome', function(r){ return r.haz>=2;  }, '床に呪印が並ばない'],
+      ['flamerod','rod',  function(r){ return r.proj>=6; }, '全方位へ弾が放たれない'],
+      ['minigun','gun',   function(r){ return r.proj>=4; }, '真下へばら撒かない'],
+      ['kunai','thrown',  function(r){ return r.proj>=2; }, '投げた得物が出ない'],
+    ];
+    want.forEach(function(q){
+      const w=q[0];
+      if(!WEAPON_SPECIAL[w]) throw new Error('検査用の得物 '+w+' が無い');
+      if(ATK[WEAPON_SPECIAL[w].air].waFx!==q[1])
+        throw new Error(w+' の系統が '+ATK[WEAPON_SPECIAL[w].air].waFx+'（'+q[1]+' のはず）');
+      const r=run(w);
+      if(!q[2](r)) throw new Error(w+'（'+q[1]+'）の仕掛けが走っていない: '+q[3]
+        +'（弾'+r.proj+'／設置'+r.haz+'／高所'+r.high+'）'); });
+    console.log('系統ごとの仕掛け OK (矢の雨・呪印・全方位弾・掃射・投擲が実際に出る)'); }
+
+  // ===== 13) 地上の武器専用奥義に、極端な当たり外れが無いこと =====
+  // 実測で最大が最小の115倍あり、「弱い得物を拾うと損」になっていた。
+  // 期待値を組み立てず、実際に hurtPlayer ではなく damageEnemy へ入った量を測る
+  { setupRoster('inu'); startGame(); state='play';
+    const p=players[0]; player=p;
+    const seedRandom=function(seed){ let x=seed>>>0;
+      Math.random=function(){ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; };
+    const realRandom=Math.random;
+    const powOf=function(id){
+      let best=0;
+      // 間合いの得手不得手で不当に低く出ないよう、3つの距離で試して最大を取る
+      for(const D0 of [60,120,190]){
+        seedRandom(20260923);                      // 乱数を固定しないと同じ技でも値が振れる
+        p.kind='inu'; p.weapon='dagger'; p.heldWeapon=null; p.state='idle'; p.atk=null;
+        p.z=0; p.vz=0; p.invuln=99999; p.hp=p.maxHp=999999; p.x=600; p._tx=null; p.facing=1;
+        p.dimMax=9; p.dim=9; p.level=1; p.comboStep=0; p.spinCount=1;
+        enemies.length=0; projectiles.length=0; particles.length=0; hazards.length=0;
+        const list=[];
+        for(let k=0;k<6;k++){ spawnEnemy('wolf', 600+D0+k*70, LANE); const e=enemies[enemies.length-1];
+          e.hp=e.maxHp=999999; e.poise=999999; e.thinkCd=999999; e._fx=e.x; list.push(e); }
+        const hp0=list.reduce(function(a2,e){ return a2+e.hp; },0);
+        const D=ATK[id];
+        beginAttack(id);
+        for(let f=0;f<(D.dur||60)+(D.hold||0)+80;f++){ hitStop=0; slowmo=0; particles.length=0;
+          list.forEach(function(e){ e.x=e._fx; e.vx=0; e.z=0; e.state='walk'; e.hurtTimer=0; });
+          updatePlayer(p); updateProjectiles(); updateHazards(); }
+        const dmg=hp0-list.reduce(function(a2,e){ return a2+e.hp; },0);
+        if(dmg>best) best=dmg; }
+      Math.random=realRandom;
+      return best; };
+    const ws=Object.keys(WEAPON_SPECIAL), pow={};
+    ws.forEach(function(w){ pow[w]=powOf(WEAPON_SPECIAL[w].ult); });
+    const vals=ws.map(function(w){ return pow[w]; }).sort(function(a2,b){ return a2-b; });
+    const med=vals[vals.length>>1], lo=vals[0], hi=vals[vals.length-1];
+    // 下限は直値でも置く。中央値との比だけだと、全部まとめて弱くしても素通りする
+    if(!(lo>=700)) { let who=''; ws.forEach(function(w){ if(pow[w]===lo) who=w; });
+      throw new Error('奥義が弱すぎる得物がある: '+who+'（'+Math.round(lo)+'／下限700）'); }
+    if(!(lo >= med*0.55)) { let who=''; ws.forEach(function(w){ if(pow[w]===lo) who=w; });
+      throw new Error('奥義の当たり外れが大きい: '+who+' が中央値の '+(lo/med).toFixed(2)+'倍（0.55倍以上であるべき）'); }
+    if(!(hi/Math.max(1,lo) <= 14)) throw new Error('最強と最弱の差が '+(hi/lo).toFixed(1)+'倍（14倍以内であるべき）');
+    console.log('奥義の均し OK (最小 '+Math.round(lo)+' ／中央値 '+Math.round(med)+' ／最大 '+Math.round(hi)
+      +' ＝ '+(hi/lo).toFixed(1)+'倍・中央値比 '+(lo/med).toFixed(2)+')'); }
 
   console.log('WEAPON TEST PASSED'); process.exit(0);
 })().catch(e=>{ console.error('FAIL:', e.message, e.stack); process.exit(1); });
