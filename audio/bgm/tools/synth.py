@@ -106,7 +106,7 @@ def organ(f, dur, vel, rng, bright=1.0):
     return 0.18 * vel * y * env_adsr(n, 0.02, 0.1, 0.9, 0.2, dur)
 
 
-def strings(f, dur, vel, rng, attack=0.25, release=0.6, bright=1.0, voices=3):
+def strings(f, dur, vel, rng, attack=0.25, release=0.6, bright=1.0, voices=3, trem=0.0):
     n = int((dur + release + 0.1) * SR)
     y = np.zeros(n)
     for i in range(voices):
@@ -115,6 +115,12 @@ def strings(f, dur, vel, rng, attack=0.25, release=0.6, bright=1.0, voices=3):
         y += _saw(fr, rng.uniform())
     y = _lp(y / voices, min(f * 5 * bright + 800, 7000))
     y = _hp(y, 60)
+    if trem:
+        # トレモロ（弓の細かい往復）：不規則な 11〜13Hz の揺れ
+        t = np.arange(n) / SR
+        rate = 12 + 0.8 * np.sin(2 * np.pi * 0.7 * t + rng.uniform(0, 6.28))
+        ph = 2 * np.pi * np.cumsum(rate) / SR
+        y *= 1 - trem * 0.5 * (1 + np.sin(ph))
     return 0.22 * vel * y * env_adsr(n, attack, 0.2, 0.85, release, dur)
 
 
@@ -132,7 +138,11 @@ def choir(f, dur, vel, rng, vowel="a"):
     y /= 4
     forms = {"a": [(700, 1.0), (1220, 0.55), (2600, 0.25)],
              "o": [(450, 1.0), (800, 0.6), (2830, 0.12)],
-             "u": [(325, 1.0), (700, 0.35), (2530, 0.08)]}[vowel]
+             "u": [(325, 1.0), (700, 0.35), (2530, 0.08)],
+             # 男声（低く暗い）
+             "A": [(650, 1.0), (1080, 0.5), (2450, 0.14)],
+             "O": [(400, 1.0), (750, 0.5), (2400, 0.08)],
+             "U": [(300, 1.0), (620, 0.3), (2300, 0.05)]}[vowel]
     out = np.zeros(n)
     for fc, g in forms:
         out += g * _bp(y, fc * 0.82, fc * 1.18)
@@ -220,15 +230,22 @@ def harp(f, dur, vel, rng):
     return 0.3 * vel * y * atk
 
 
-def musicbox(f, dur, vel, rng):
+def musicbox(f, dur, vel, rng, wow=0.0):
+    """オルゴール。wow>0 で古びて伸びたゼンマイのような音程の揺れ（セント単位）。"""
     n = int(3.2 * SR)
     t = np.arange(n) / SR
+    if wow:
+        f = f * 2 ** (rng.uniform(-wow, wow) / 1200)
+        warp = 1 + (wow / 1200) * np.log(2) * np.sin(2 * np.pi * 0.55 * t + rng.uniform(0, 6.28))
+        tt = np.cumsum(warp) / SR
+    else:
+        tt = t
     parts = [(1.0, 1.0, 1.1), (2.0, 0.18, 2.2), (4.0 * 1.02, 0.12, 4.5), (5.93, 0.07, 7.0), (8.3, 0.04, 10.0)]
     y = np.zeros(n)
     for r, a, d in parts:
         fr = f * r
         if fr < NYQ * 0.9:
-            y += a * np.exp(-t * d) * np.sin(2 * np.pi * fr * t)
+            y += a * np.exp(-t * d) * np.sin(2 * np.pi * fr * tt)
     y += 0.08 * _hp(rng.standard_normal(n), 5000) * np.exp(-t * 200)
     return 0.25 * vel * y * np.clip(t / 0.001, 0, 1)
 
@@ -374,20 +391,35 @@ class Song:
         if abs(pos / self.bpb - round(pos / self.bpb)) > 1e-6:
             print(f"  ! line bar {bar}: {pos} 拍は小節の途中で終わっています")
 
-    def hit(self, midis, bar, beat, vel=0.9, pan=0.0, gain=1.0, rev=0.35):
-        self.add(orchhit(midis, vel * self.rng.uniform(0.93, 1.03), self.rng), self.t(bar, beat), pan, gain, rev, human=0.002)
+    def hit(self, midis, bar, beat, vel=0.9, pan=0.0, gain=1.0, rev=0.35, cut=6500):
+        self.add(orchhit(midis, vel * self.rng.uniform(0.93, 1.03), self.rng, cut=cut),
+                 self.t(bar, beat), pan, gain, rev, human=0.002)
+
+    def bed(self, sig, gain=1.0, rev=0.3, xfade=2.0):
+        """曲全体に敷く環境音・ドローン。ループの継ぎ目で自然にクロスフェードさせる。
+        sig は (2, n + xfade) 以上の長さを想定。"""
+        L = self.n + int(xfade * SR)
+        sig = np.asarray(sig)[..., :L].copy()
+        x = int(xfade * SR)
+        ramp = np.sin(np.linspace(0, np.pi / 2, x))
+        sig[..., :x] *= ramp
+        sig[..., self.n:self.n + x] *= ramp[::-1]
+        self.add(sig, 0.0, 0.0, gain, rev, human=0)
 
     def drum(self, inst, bar, beat, vel=0.8, pan=0.0, gain=1.0, rev=0.15, **kw):
         sig = inst(vel * self.rng.uniform(0.9, 1.05), self.rng, **kw)
         self.add(sig, self.t(bar, beat), pan, gain, rev, human=0.002)
 
-    def render(self, path, rt60=3.5, wet=0.5, predelay=0.03, damp=5000, drive=1.5, target=0.89):
+    def render(self, path, rt60=3.5, wet=0.5, predelay=0.03, damp=5000, drive=1.5, target=0.89, lp=None):
         irL, irR = make_ir(rt60, predelay, damp)
         wetL = fftconvolve(self.send[0], irL)[: self.dry.shape[1]]
         wetR = fftconvolve(self.send[1], irR)[: self.dry.shape[1]]
         mix = self.dry + wet * np.vstack([wetL, wetR])
         # 低域カットは折り返し前に行う（後で行うとフィルタ初期状態で継ぎ目にクリックが出る）
-        mix = _hp(mix, 28)
+        mix = _hp(mix, 35)
+        if lp:
+            # 全体を少し暗くする（1次のなだらかな高域カット）
+            mix = 0.35 * mix + 0.65 * _lp(mix, lp, order=1)
         # シームレスループ: 末尾からはみ出した余韻を冒頭へ折り返す
         tail = mix[:, self.n:]
         out = mix[:, : self.n].copy()
@@ -412,7 +444,7 @@ def write_wav(path, stereo):
 # ---------------------------------------------------------------- 和音
 
 QUAL = {"": [0, 4, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "7": [0, 4, 7, 10],
-        "sus4": [0, 5, 7], "m7": [0, 3, 7, 10]}
+        "sus4": [0, 5, 7], "m7": [0, 3, 7, 10], "aug": [0, 4, 8], "dim7": [0, 3, 6, 9]}
 
 
 def chord(sym, octave=3):
@@ -444,7 +476,7 @@ def seq(f, dur, vel, rng, cut=1.0):
     return 0.16 * vel * y * env_adsr(n, 0.002, 0.1, 0.6, 0.05, dur)
 
 
-def sbrass(f, dur, vel, rng):
+def sbrass(f, dur, vel, rng, cut=1.0):
     """厚いシンセブラス（3音デチューン＋フィルタースウェル）。"""
     n = int((dur + 0.3) * SR)
     t = np.arange(n) / SR
@@ -453,13 +485,13 @@ def sbrass(f, dur, vel, rng):
         y += _saw(np.full(n, f * 2 ** ((c + rng.uniform(-2, 2)) / 1200)), rng.uniform())
     y /= 3
     dark = _lp(y, f * 2 + 400)
-    bright = _lp(y, min(f * 9 + 2500, 10000))
+    bright = _lp(y, min((f * 9 + 2500) * cut, 10000))
     fenv = np.clip(t / 0.06, 0, 1) * (0.6 + 0.4 * np.exp(-t * 4))
     y = dark * (1 - fenv) + bright * fenv
     return 0.24 * vel * y * env_adsr(n, 0.02, 0.2, 0.85, 0.25, dur)
 
 
-def orchhit(midis, vel, rng, length=0.9):
+def orchhit(midis, vel, rng, length=0.9, cut=6500):
     """オーケストラヒット：弦・金管・低音・ノイズを一瞬で重ねた和音の一撃。"""
     n = int(length * SR)
     t = np.arange(n) / SR
@@ -468,7 +500,7 @@ def orchhit(midis, vel, rng, length=0.9):
         f = hz(p)
         for c in (-9, 0, 9):
             y += _saw(np.full(n, f * 2 ** (c / 1200)), rng.uniform())
-    y = _lp(y / (3 * len(midis)), 6500) * np.exp(-t * 6.5)
+    y = _lp(y / (3 * len(midis)), cut) * np.exp(-t * 6.5)
     lo = hz(min(midis) - 12)
     y += 0.8 * (np.sin(2 * np.pi * lo * t) + 0.4 * _lp(_saw(np.full(n, lo)), 900)) * np.exp(-t * 5)
     y += 0.5 * _lp(rng.standard_normal(n), 5000) * np.exp(-t * 35)
@@ -558,3 +590,47 @@ def vox_phrase(song, bar, notes, vel=0.8, pan=0.0, rev=0.5, gain=1.0, vowel="a",
         y = y * amp * env
         y += 0.02 * _bp(song.rng.standard_normal(n), 1500, 5000) * env
         song.add(0.42 * vel * y, song.t(bar, start_beat), pan, gain, rev, human=0)
+
+
+# ================================================================ ダークファンタジー用の追加音色
+
+def wind(seconds, rng, lo=180, hi=1400, rate=0.08):
+    """廃墟を吹き抜ける風（ステレオ）。ゆっくり唸るように帯域と音量が揺れる。"""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    out = []
+    for ch in range(2):
+        nz = rng.standard_normal(n)
+        a = _bp(nz, lo, lo * 2.2)
+        b = _bp(nz, hi * 0.5, hi)
+        lfo = 0.5 + 0.5 * np.sin(2 * np.pi * rate * t + rng.uniform(0, 6.28) + ch)
+        lfo2 = 0.6 + 0.4 * np.sin(2 * np.pi * rate * 1.7 * t + rng.uniform(0, 6.28))
+        out.append((a * (1 - lfo) + 0.6 * b * lfo) * lfo2)
+    return 0.35 * np.vstack(out)
+
+
+def drone(f, seconds, rng, cut=320):
+    """曲全体に敷く低い持続音（ステレオ、わずかにうなる）。"""
+    n = int(seconds * SR)
+    out = []
+    for ch in range(2):
+        y = np.zeros(n)
+        for c in (-8, 0, 7):
+            y += _saw(np.full(n, f * 2 ** ((c + rng.uniform(-2, 2)) / 1200)), rng.uniform())
+        y += 0.8 * _saw(np.full(n, f * 0.5), rng.uniform())
+        out.append(_lp(y / 4, cut))
+    return 0.25 * np.vstack(out)
+
+
+def anvil(f, dur, vel, rng):
+    """金床／鎖を打つような短い金属音。"""
+    return fmbell(f, dur, vel, rng, ratio=1.414, index=7.0, decay=7.0, length=1.2)
+
+
+def warsnare(vel, rng):
+    """低く太い軍鼓のスネア（ゲートなし、長い残響向け）。"""
+    n = int(0.6 * SR)
+    t = np.arange(n) / SR
+    body = np.sin(2 * np.pi * (150 + 50 * np.exp(-t * 30)) * t) * np.exp(-t * 12)
+    nz = _bp(rng.standard_normal(n), 900, 5000) * np.exp(-t * 9)
+    return 0.5 * vel * (0.8 * body + nz)
