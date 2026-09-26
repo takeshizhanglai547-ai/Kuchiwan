@@ -634,3 +634,219 @@ def warsnare(vel, rng):
     body = np.sin(2 * np.pi * (150 + 50 * np.exp(-t * 30)) * t) * np.exp(-t * 12)
     nz = _bp(rng.standard_normal(n), 900, 5000) * np.exp(-t * 9)
     return 0.5 * vel * (0.8 * body + nz)
+
+
+# ================================================================ 第4版：トラップ系ビート＆ホラー音響
+# （キタニタツヤ的な「深い低音＋トラップ由来のリズム」と、敵デザインに合わせた
+#   スチームパンク×ボディホラーの効果音的な楽器）
+
+def _glide_track(song, notes, start_beat, n, glide):
+    """[(midi, pos, dur), ...] からポルタメント付きの半音軌跡と「発音からの経過秒」を作る。"""
+    target = np.empty(n)
+    since = np.empty(n)
+    for k, (mm, p, d) in enumerate(notes):
+        i0 = int((p - start_beat) * song.beat * SR)
+        i1 = n if k == len(notes) - 1 else int((p - start_beat + d) * song.beat * SR)
+        target[i0:i1] = mm
+        since[i0:i1] = np.arange(i1 - i0) / SR
+    a = np.exp(-1 / (glide * SR))
+    semi, _ = signal.lfilter([1 - a], [1, -a], target, zi=[a * target[0]])
+    return semi, since
+
+
+def _split_phrases(notes):
+    phrases, cur, pos = [], [], 0.0
+    for nt, d in notes:
+        if nt is None:
+            if cur:
+                phrases.append(cur)
+                cur = []
+        else:
+            cur.append((m(nt), pos, d))
+        pos += d
+    if cur:
+        phrases.append(cur)
+    return phrases, pos
+
+
+def b808_phrase(song, bar, notes, vel=0.9, gain=1.0, glide=0.035, drive=2.2, decay=1.6):
+    """トラップの 808 ベース：音程が滑り、各音でアタックが立ち、歪みで倍音が乗る。"""
+    phrases, pos = _split_phrases(notes)
+    if abs(pos / song.bpb - round(pos / song.bpb)) > 1e-6:
+        print(f"  ! b808_phrase bar {bar}: {pos} 拍は小節の途中で終わっています")
+    for ph in phrases:
+        sb = ph[0][1]
+        total = sum(d for _, _, d in ph) * song.beat
+        n = int((total + 0.25) * SR)
+        semi, since = _glide_track(song, ph, sb, n, glide)
+        fr = hz(semi) * (1 + 0.9 * np.exp(-since * 45))  # 各音の頭で一瞬ピッチが落ちる「パンチ」
+        y = np.sin(2 * np.pi * np.cumsum(fr) / SR)
+        amp = 0.3 + 0.7 * np.exp(-since * decay)
+        t = np.arange(n) / SR
+        env = np.clip(t / 0.003, 0, 1)
+        off = int(total * SR)
+        env[off:] *= np.exp(-np.arange(n - off) / SR * 30)
+        y = np.tanh(drive * y * amp) / np.tanh(drive) * env
+        y += 0.15 * _hp(song.rng.standard_normal(n), 3000) * np.exp(-since * 250) * env
+        song.add(0.5 * vel * y, song.t(bar, sb), 0.0, gain, 0.03, human=0)
+
+
+def dbass(f, dur, vel, rng, drive=3.0, cut=1600):
+    """歪ませたピック弾きのエレキベース（キタニ的な前に出るベースライン用）。"""
+    n = int((dur + 0.08) * SR)
+    t = np.arange(n) / SR
+    fa = np.full(n, f)
+    p0 = rng.uniform()
+    y = _saw(fa, p0) + 0.6 * (_saw(fa, p0) - _saw(fa, p0 + 0.5))
+    y = _lp(y, cut) * (0.6 + 0.4 * np.exp(-t * 6))
+    y = np.tanh(drive * y) / np.tanh(drive)
+    y = _lp(y, cut * 1.8) + 0.5 * np.sin(2 * np.pi * f * t)
+    y += 0.2 * _bp(rng.standard_normal(n), 1500, 5000) * np.exp(-t * 200)  # ピックのアタック
+    return 0.24 * vel * y * env_adsr(n, 0.003, 0.12, 0.75, 0.04, dur)
+
+
+def clap(vel, rng):
+    n = int(0.45 * SR)
+    t = np.arange(n) / SR
+    nz = _bp(rng.standard_normal(n), 900, 3500)
+    env = np.zeros(n)
+    for k, dly in enumerate((0.0, 0.011, 0.022, 0.034)):
+        i = int(dly * SR)
+        env[i:] += (1.0 if k == 3 else 0.7) * np.exp(-(t[: n - i]) * (60 if k < 3 else 11))
+    return 0.5 * vel * nz * env
+
+
+def that(vel, rng, open_=False):
+    """トラップ用のタイトなハイハット（暗めに帯域制限）。"""
+    n = int((0.25 if open_ else 0.05) * SR)
+    t = np.arange(n) / SR
+    y = _bp(rng.standard_normal(n), 5500, 10500) * np.exp(-t * (14 if open_ else 90))
+    return 0.14 * vel * y
+
+
+def rim(vel, rng):
+    n = int(0.12 * SR)
+    t = np.arange(n) / SR
+    y = np.sin(2 * np.pi * 1700 * t) * np.exp(-t * 60) + 0.6 * _bp(rng.standard_normal(n), 2000, 6000) * np.exp(-t * 80)
+    return 0.22 * vel * y
+
+
+def heartbeat(vel, rng):
+    """低く湿った心音（ドクン、ドクン）。"""
+    n = int(0.9 * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for dly, a in ((0.0, 1.0), (0.27, 0.7)):
+        i = int(dly * SR)
+        tt = t[: n - i]
+        y[i:] += a * np.sin(2 * np.pi * (42 + 25 * np.exp(-tt * 30)) * tt) * np.exp(-tt * 11)
+    return 0.9 * vel * _lp(y, 200)
+
+
+def steam(vel, rng, length=0.7):
+    """配管から噴き出す蒸気。"""
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    y = _bp(rng.standard_normal(n), 2500, 9000) * np.clip(t / 0.03, 0, 1) * np.exp(-t * 4.5)
+    return 0.3 * vel * y
+
+
+def chains(vel, rng):
+    """鎖がじゃらりと鳴る金属音。"""
+    n = int(0.6 * SR)
+    y = np.zeros(n)
+    for k in range(rng.integers(6, 10)):
+        i = int(rng.uniform(0, 0.22) * SR)
+        f = rng.uniform(2200, 5200)
+        tt = np.arange(n - i) / SR
+        y[i:] += rng.uniform(0.4, 1.0) * np.sin(2 * np.pi * f * tt + 3 * np.sin(2 * np.pi * f * 1.37 * tt)) * np.exp(-tt * 45)
+    return 0.12 * vel * y
+
+
+def creak(vel, rng, length=1.6, f0=55, f1=32):
+    """錆びた鉄扉／歯車がきしむ音（スティックスリップ）。"""
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    rate = f0 + (f1 - f0) * t / length + 6 * rng.standard_normal(n).cumsum() / np.sqrt(n)
+    ph = np.cumsum(rate) / SR
+    pulses = (np.diff(np.floor(ph), prepend=0) > 0).astype(float)
+    y = _bp(pulses, 350, 1600) + 0.5 * _bp(pulses, 1800, 3200)
+    env = np.sin(np.pi * t / length) ** 0.6
+    return 0.9 * vel * y * env
+
+
+def growl(f, dur, vel, rng):
+    """獣のうなり：低いノコギリ波を不規則に震わせ、男声の母音で絞る。"""
+    n = int((dur + 0.3) * SR)
+    t = np.arange(n) / SR
+    jitter = _lp(rng.standard_normal(n), 25)
+    jitter /= np.max(np.abs(jitter)) + 1e-9
+    fr = f * (1 + 0.06 * jitter) * (1 - 0.15 * t / (dur + 0.3))
+    y = _saw(fr, rng.uniform()) + 0.5 * _saw(fr * 1.01, rng.uniform())
+    am = 0.6 + 0.4 * np.abs(_lp(rng.standard_normal(n), 35)) / 0.1
+    y *= np.clip(am, 0, 1.6)
+    out = _bp(y, 250, 520) + 0.6 * _bp(y, 600, 950) + 0.2 * _bp(y, 2000, 2800) + 0.4 * _lp(y, 180)
+    out = np.tanh(2.5 * out)
+    return 0.35 * vel * out * env_adsr(n, 0.08, 0.2, 0.9, 0.3, dur)
+
+
+def cluster_gliss(song, bar, beat, beats, lo, hi, voices=10, slide=-5.0, vel=0.5, pan=0.0, rev=0.55, gain=1.0):
+    """弦のクラスター・グリッサンド（ホラー映画的な不協和の弦の塊が滑っていく）。"""
+    dur = beats * song.beat
+    n = int((dur + 0.8) * SR)
+    t = np.arange(n) / SR
+    rng = song.rng
+    out = np.zeros((2, n))
+    for v in range(voices):
+        st = rng.uniform(lo, hi)
+        path = st + slide * rng.uniform(0.6, 1.3) * np.clip(t / dur, 0, 1) ** rng.uniform(0.7, 1.6)
+        fr = hz(path) * (1 + 0.004 * np.sin(2 * np.pi * rng.uniform(4.5, 6.5) * t))
+        y = _lp(_saw(fr, rng.uniform()), 3500)
+        rate = rng.uniform(10, 14)
+        y *= 1 - 0.4 * (1 + np.sin(2 * np.pi * rate * t)) / 2
+        p = rng.uniform(-0.8, 0.8)
+        th = (p + 1) * np.pi / 4
+        out[0] += y * np.cos(th)
+        out[1] += y * np.sin(th)
+    env = env_adsr(n, dur * 0.35, 0.1, 1.0, 0.6, dur)
+    out = out / voices * env * 0.5 * vel
+    song.add(out * np.sqrt(2), song.t(bar, beat), pan, gain, rev, human=0)
+
+
+def reverse_swell(song, bar, beat, midis, beats=2.0, vel=0.7, gain=1.0, rev=0.3):
+    """逆再生のようにせり上がって、指定の拍でぷつりと切れるスウェル。"""
+    dur = beats * song.beat
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for p in midis:
+        for c in (-10, 0, 10):
+            y += _saw(np.full(n, hz(p) * 2 ** (c / 1200)), song.rng.uniform())
+    y = _lp(y / (3 * len(midis)), 2500) + 0.4 * _bp(song.rng.standard_normal(n), 800, 6000)
+    y *= (t / dur) ** 3
+    start = song.t(bar, beat) - dur
+    song.add(0.35 * vel * y, start, 0.0, gain, rev, human=0)
+
+
+def whisper(seconds, rng):
+    """聞き取れない囁きの群れ（母音フォルマントを切り替えるノイズ、ステレオ）。"""
+    n = int(seconds * SR)
+    out = []
+    forms = [(700, 1220), (400, 800), (300, 2300), (500, 1500), (350, 1900)]
+    for ch in range(2):
+        nz = rng.standard_normal(n)
+        y = np.zeros(n)
+        seg = int(0.18 * SR)
+        for i in range(0, n, seg):
+            f1, f2 = forms[rng.integers(len(forms))]
+            j = min(i + seg + 800, n)
+            w = np.hanning(j - i)
+            y[i:j] += (_bp(nz[i:j], f1 * 0.8, f1 * 1.2) + 0.7 * _bp(nz[i:j], f2 * 0.85, f2 * 1.15)) * w
+        gate = _lp((rng.uniform(size=n) < 0.00006).astype(float).cumsum() % 2, 3)
+        out.append(y * (0.3 + 0.7 * gate))
+    return 0.5 * np.vstack(out)
+
+
+def tinybells(f, dur, vel, rng):
+    """蛾に吊られた小さな鈴（高く不揃いにうなる）。"""
+    return fmbell(f * 2 ** (rng.uniform(-25, 25) / 1200), dur, vel, rng, ratio=2.76, index=2.5, decay=3.0, length=2.0)
