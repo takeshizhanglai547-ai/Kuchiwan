@@ -371,6 +371,11 @@ class Song:
                 b = bar + int(pos // self.bpb)
                 self.note(inst, nt, b, pos % self.bpb, d, **kw)
             pos += d
+        if abs(pos / self.bpb - round(pos / self.bpb)) > 1e-6:
+            print(f"  ! line bar {bar}: {pos} 拍は小節の途中で終わっています")
+
+    def hit(self, midis, bar, beat, vel=0.9, pan=0.0, gain=1.0, rev=0.35):
+        self.add(orchhit(midis, vel * self.rng.uniform(0.93, 1.03), self.rng), self.t(bar, beat), pan, gain, rev, human=0.002)
 
     def drum(self, inst, bar, beat, vel=0.8, pan=0.0, gain=1.0, rev=0.15, **kw):
         sig = inst(vel * self.rng.uniform(0.9, 1.05), self.rng, **kw)
@@ -419,3 +424,137 @@ def chord(sym, octave=3):
         rest = rest[1:]
     base = m(f"{root}{octave}")
     return [base + i for i in QUAL[rest]]
+
+
+# ================================================================ テクノポップ×オーケストラ系の追加楽器
+# （平沢進的な「シーケンサー＋オーケストラヒット＋裏声リード」の質感を作るための音色）
+
+def seq(f, dur, vel, rng, cut=1.0):
+    """16分で刻むアナログ風シーケンサー音（パルス波＋ノコギリ、フィルターがすぐ閉じる）。"""
+    n = int((dur + 0.15) * SR)
+    fa = np.full(n, f)
+    p0 = rng.uniform()
+    y = _saw(fa, p0) - _saw(fa, p0 + 0.3)
+    y += 0.5 * _saw(fa * 2 ** (7 / 1200), rng.uniform())
+    t = np.arange(n) / SR
+    dark = _lp(y, f * 1.5 + 200)
+    bright = _lp(y, min(f * 10 * cut + 2000, 12000))
+    fenv = np.exp(-t * 18)
+    y = dark * (1 - fenv) + bright * fenv
+    return 0.16 * vel * y * env_adsr(n, 0.002, 0.1, 0.6, 0.05, dur)
+
+
+def sbrass(f, dur, vel, rng):
+    """厚いシンセブラス（3音デチューン＋フィルタースウェル）。"""
+    n = int((dur + 0.3) * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for c in (-11, 0, 11):
+        y += _saw(np.full(n, f * 2 ** ((c + rng.uniform(-2, 2)) / 1200)), rng.uniform())
+    y /= 3
+    dark = _lp(y, f * 2 + 400)
+    bright = _lp(y, min(f * 9 + 2500, 10000))
+    fenv = np.clip(t / 0.06, 0, 1) * (0.6 + 0.4 * np.exp(-t * 4))
+    y = dark * (1 - fenv) + bright * fenv
+    return 0.24 * vel * y * env_adsr(n, 0.02, 0.2, 0.85, 0.25, dur)
+
+
+def orchhit(midis, vel, rng, length=0.9):
+    """オーケストラヒット：弦・金管・低音・ノイズを一瞬で重ねた和音の一撃。"""
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for p in midis:
+        f = hz(p)
+        for c in (-9, 0, 9):
+            y += _saw(np.full(n, f * 2 ** (c / 1200)), rng.uniform())
+    y = _lp(y / (3 * len(midis)), 6500) * np.exp(-t * 6.5)
+    lo = hz(min(midis) - 12)
+    y += 0.8 * (np.sin(2 * np.pi * lo * t) + 0.4 * _lp(_saw(np.full(n, lo)), 900)) * np.exp(-t * 5)
+    y += 0.5 * _lp(rng.standard_normal(n), 5000) * np.exp(-t * 35)
+    return 0.55 * vel * y * np.clip(t / 0.003, 0, 1)
+
+
+def fmbell(f, dur, vel, rng, ratio=3.5, index=3.0, decay=1.4, length=3.0):
+    """FM 合成の鐘／ガムラン風の金属音。"""
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    idx = index * np.exp(-t * 3) + 0.3
+    y = np.sin(2 * np.pi * f * t + idx * np.sin(2 * np.pi * f * ratio * t))
+    return 0.2 * vel * y * np.exp(-t * decay) * np.clip(t / 0.002, 0, 1)
+
+
+def gsnare(vel, rng):
+    """ゲートリバーブ付きスネア（80年代的に「バシャッ」と切れる）。"""
+    base = snare(vel, rng)
+    n = int(0.3 * SR)
+    t = np.arange(n) / SR
+    gate = np.clip((0.15 - t) / 0.012, 0, 1)
+    tailn = _lp(_hp(rng.standard_normal(n), 400), 7000) * gate * (0.6 + 0.4 * np.exp(-t * 8))
+    out = np.zeros(max(n, len(base)))
+    out[:len(base)] += base
+    out[:n] += 0.22 * vel * tailn
+    return out
+
+
+def stom(f, vel, rng):
+    """シモンズ風エレクトロニック・タム（ピッチが大きく下がる）。"""
+    n = int(0.7 * SR)
+    t = np.arange(n) / SR
+    fr = f * (1 + 1.2 * np.exp(-t * 14))
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    y = np.sin(ph) * np.exp(-t * 5) + 0.15 * _hp(rng.standard_normal(n), 3000) * np.exp(-t * 90)
+    return 0.6 * vel * y
+
+
+_VOWELS = {"a": [(800, 1.0), (1200, 0.6), (2800, 0.35), (3500, 0.18)],
+           "o": [(500, 1.0), (850, 0.6), (2800, 0.2), (3400, 0.1)],
+           "u": [(350, 1.0), (750, 0.35), (2600, 0.12), (3300, 0.06)]}
+
+
+def vox_phrase(song, bar, notes, vel=0.8, pan=0.0, rev=0.5, gain=1.0, vowel="a", glide=0.045, vib=0.35):
+    """
+    裏声リード：音と音の間をポルタメントで滑らかにつなぐ「歌う」シンセ。
+    notes = [(音名 or None, 拍数), ...]。None で息継ぎ（フレーズを切る）。
+    """
+    phrases, cur, pos = [], [], 0.0
+    for nt, d in notes:
+        if nt is None:
+            if cur:
+                phrases.append(cur)
+                cur = []
+        else:
+            cur.append((m(nt), pos, d))
+        pos += d
+    if cur:
+        phrases.append(cur)
+    if abs(pos / song.bpb - round(pos / song.bpb)) > 1e-6:
+        print(f"  ! vox_phrase bar {bar}: {pos} 拍は小節の途中で終わっています")
+    for ph in phrases:
+        start_beat = ph[0][1]
+        total = sum(d for _, _, d in ph) * song.beat
+        n = int((total + 0.6) * SR)
+        target = np.empty(n)
+        since = np.empty(n)
+        for k, (mm, p, d) in enumerate(ph):
+            i0 = int((p - start_beat) * song.beat * SR)
+            i1 = n if k == len(ph) - 1 else int((p - start_beat + d) * song.beat * SR)
+            target[i0:i1] = mm
+            since[i0:i1] = np.arange(i1 - i0) / SR
+        a = np.exp(-1 / (glide * SR))
+        semi, _ = signal.lfilter([1 - a], [1, -a], target, zi=[a * target[0]])
+        t = np.arange(n) / SR
+        vib_d = vib * np.clip((since - 0.15) / 0.3, 0, 1) * np.sin(2 * np.pi * 5.6 * t)
+        fr = hz(semi + vib_d)
+        osc = 0.55 * _saw(fr, song.rng.uniform()) + 0.7 * np.sin(2 * np.pi * np.cumsum(fr) / SR)
+        y = np.zeros(n)
+        for fc, g in _VOWELS[vowel]:
+            y += g * _bp(osc, fc * 0.85, fc * 1.15)
+        y += 0.35 * _lp(osc, 900)
+        amp = 1 - 0.35 * np.exp(-since / 0.035)
+        env = np.clip(t / 0.04, 0, 1)
+        off = int(total * SR)
+        env[off:] *= np.exp(-np.arange(n - off) / SR * 14)
+        y = y * amp * env
+        y += 0.02 * _bp(song.rng.standard_normal(n), 1500, 5000) * env
+        song.add(0.42 * vel * y, song.t(bar, start_beat), pan, gain, rev, human=0)
