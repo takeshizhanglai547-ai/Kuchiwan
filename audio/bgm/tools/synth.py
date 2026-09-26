@@ -1,0 +1,421 @@
+"""
+聖犬士イッヌ BGM 用の小さなソフトシンセ（numpy / scipy のみで動作）。
+
+楽器（オルガン・弦・聖歌隊・チェンバロ・鐘・金管・ハープ・オルゴール・打楽器）と
+大聖堂リバーブ、シームレスループ書き出しを提供する。
+"""
+import numpy as np
+from scipy import signal
+from scipy.signal import fftconvolve
+import wave
+
+SR = 44100
+NYQ = SR / 2
+
+_NOTE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+
+
+def m(name):
+    """'C#4' / 'Bb2' -> MIDI 番号。int ならそのまま返す。"""
+    if isinstance(name, (int, np.integer)):
+        return int(name)
+    n = _NOTE[name[0]]
+    i = 1
+    while i < len(name) and name[i] in "#b":
+        n += 1 if name[i] == "#" else -1
+        i += 1
+    return n + 12 * (int(name[i:]) + 1)
+
+
+def hz(midi):
+    return 440.0 * 2 ** ((midi - 69) / 12)
+
+
+def env_adsr(n, a, d, s, r, dur):
+    """dur 秒でゲートオフ、その後 r 秒でリリース。n はサンプル総数。"""
+    t = np.arange(n) / SR
+    e = np.empty(n)
+    a = max(a, 1e-4)
+    d = max(d, 1e-4)
+    att = t < a
+    e[att] = t[att] / a
+    dec = (~att) & (t < a + d)
+    e[dec] = 1 - (1 - s) * (t[dec] - a) / d
+    sus = t >= a + d
+    e[sus] = s
+    # ゲートオフ時点の値からリリース
+    gate = int(min(dur, n / SR) * SR)
+    if gate < n:
+        g = e[gate - 1] if gate > 0 else 0.0
+        tr = (np.arange(n - gate)) / SR
+        e[gate:] = g * np.exp(-tr * 6.9 / max(r, 1e-3))
+    return e
+
+
+def _saw(freq_arr, phase0=0.0):
+    """PolyBLEP 帯域制限ノコギリ波。freq_arr はサンプル毎の周波数。"""
+    dt = freq_arr / SR
+    ph = (np.cumsum(dt) + phase0) % 1.0
+    y = 2 * ph - 1
+    m1 = ph < dt
+    x = ph[m1] / dt[m1]
+    y[m1] -= x + x - x * x - 1
+    m2 = ph > 1 - dt
+    x = (ph[m2] - 1) / dt[m2]
+    y[m2] -= x * x + x + x + 1
+    return y
+
+
+def _lp(x, fc, order=2):
+    fc = min(fc, NYQ * 0.95)
+    b, a = signal.butter(order, fc / NYQ, "low")
+    return signal.lfilter(b, a, x)
+
+
+def _hp(x, fc, order=2):
+    b, a = signal.butter(order, fc / NYQ, "high")
+    return signal.lfilter(b, a, x)
+
+
+def _bp(x, lo, hi, order=2):
+    hi = min(hi, NYQ * 0.95)
+    b, a = signal.butter(order, [lo / NYQ, hi / NYQ], "band")
+    return signal.lfilter(b, a, x)
+
+
+def _vibrato(n, f0, rate=5.2, depth=0.004, delay=0.3, rng=None):
+    t = np.arange(n) / SR
+    ph = rng.uniform(0, 2 * np.pi) if rng is not None else 0
+    ramp = np.clip((t - delay) / 0.4, 0, 1)
+    return f0 * (1 + depth * ramp * np.sin(2 * np.pi * rate * t + ph))
+
+
+# ---------------------------------------------------------------- 楽器
+
+def organ(f, dur, vel, rng, bright=1.0):
+    n = int((dur + 0.25) * SR)
+    t = np.arange(n) / SR
+    ratios = [0.5, 1, 2, 3, 4, 6, 8]
+    amps = [0.55, 1.0, 0.75, 0.35, 0.4 * bright, 0.18 * bright, 0.2 * bright]
+    y = np.zeros(n)
+    for r, a in zip(ratios, amps):
+        fr = f * r
+        if fr < NYQ * 0.9:
+            y += a * np.sin(2 * np.pi * fr * t + rng.uniform(0, 6.28))
+    y *= 1 + 0.06 * np.sin(2 * np.pi * 5.6 * t)  # ロータリー風の揺れ
+    return 0.18 * vel * y * env_adsr(n, 0.02, 0.1, 0.9, 0.2, dur)
+
+
+def strings(f, dur, vel, rng, attack=0.25, release=0.6, bright=1.0, voices=3):
+    n = int((dur + release + 0.1) * SR)
+    y = np.zeros(n)
+    for i in range(voices):
+        det = 2 ** ((rng.uniform(-9, 9)) / 1200)
+        fr = _vibrato(n, f * det, rate=rng.uniform(4.8, 5.8), depth=0.0035, rng=rng)
+        y += _saw(fr, rng.uniform())
+    y = _lp(y / voices, min(f * 5 * bright + 800, 7000))
+    y = _hp(y, 60)
+    return 0.22 * vel * y * env_adsr(n, attack, 0.2, 0.85, release, dur)
+
+
+def stacc(f, dur, vel, rng):
+    return strings(f, min(dur, 0.12), vel, rng, attack=0.008, release=0.12, bright=1.6)
+
+
+def choir(f, dur, vel, rng, vowel="a"):
+    n = int((dur + 1.0) * SR)
+    y = np.zeros(n)
+    for i in range(4):
+        det = 2 ** ((rng.uniform(-12, 12)) / 1200)
+        fr = _vibrato(n, f * det, rate=rng.uniform(4.5, 5.5), depth=0.006, delay=0.2, rng=rng)
+        y += _saw(fr, rng.uniform())
+    y /= 4
+    forms = {"a": [(700, 1.0), (1220, 0.55), (2600, 0.25)],
+             "o": [(450, 1.0), (800, 0.6), (2830, 0.12)],
+             "u": [(325, 1.0), (700, 0.35), (2530, 0.08)]}[vowel]
+    out = np.zeros(n)
+    for fc, g in forms:
+        out += g * _bp(y, fc * 0.82, fc * 1.18)
+    out += 0.25 * _lp(y, 500)
+    # 息のノイズ
+    out += 0.015 * _bp(rng.standard_normal(n), 2000, 6000)
+    return 0.55 * vel * out * env_adsr(n, 0.35, 0.3, 0.9, 0.9, dur)
+
+
+def harpsichord(f, dur, vel, rng):
+    ring = min(dur + 0.4, 2.5)
+    n = int(ring * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for k in range(1, 28):
+        fr = f * k * (1 + 0.0004 * k * k)
+        if fr > NYQ * 0.9:
+            break
+        amp = abs(np.sin(np.pi * k * 0.12)) / k ** 0.7
+        dec = 1.2 + 0.45 * k
+        y += amp * np.exp(-t * dec) * np.sin(2 * np.pi * fr * t + rng.uniform(0, 6.28))
+    # 4フィート弦（1オクターブ上）を薄く
+    y += 0.25 * np.exp(-t * 3) * np.sin(2 * np.pi * f * 2.002 * t)
+    rel = np.ones(n)
+    g = int(dur * SR)
+    if g < n:
+        rel[g:] = np.exp(-np.arange(n - g) / SR * 25)
+    atk = np.clip(t / 0.002, 0, 1)
+    return 0.16 * vel * y * rel * atk
+
+
+def bell(f, dur, vel, rng, length=6.0):
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    parts = [(0.5, 0.9, 0.35), (1.0, 1.0, 0.45), (1.19, 0.6, 0.7), (1.56, 0.45, 0.9),
+             (2.0, 0.5, 1.1), (2.51, 0.3, 1.6), (2.66, 0.25, 1.8), (3.01, 0.2, 2.2),
+             (4.1, 0.15, 3.0), (5.4, 0.1, 4.0)]
+    y = np.zeros(n)
+    for r, a, d in parts:
+        fr = f * r
+        if fr < NYQ * 0.9:
+            beat = 1 + 0.04 * np.sin(2 * np.pi * rng.uniform(0.5, 2) * t)
+            y += a * beat * np.exp(-t * d) * np.sin(2 * np.pi * fr * t + rng.uniform(0, 6.28))
+    strike = _bp(rng.standard_normal(n), 1500, 6000) * np.exp(-t * 60)
+    y += 0.3 * strike
+    atk = np.clip(t / 0.001, 0, 1)
+    return 0.22 * vel * y * atk
+
+
+def brass(f, dur, vel, rng):
+    n = int((dur + 0.35) * SR)
+    y = np.zeros(n)
+    for i in range(2):
+        det = 2 ** (rng.uniform(-6, 6) / 1200)
+        fr = _vibrato(n, f * det, rate=5.0, depth=0.003, delay=0.35, rng=rng)
+        y += _saw(fr, rng.uniform())
+    y /= 2
+    dark = _lp(y, f * 2 + 300)
+    brightv = _lp(y, min(f * 8 + 1500, 8000))
+    t = np.arange(n) / SR
+    fenv = np.clip(t / 0.08, 0, 1) * (0.55 + 0.45 * np.exp(-t * 2.5)) * vel
+    y = dark * (1 - fenv) + brightv * fenv
+    return 0.28 * vel * y * env_adsr(n, 0.05, 0.25, 0.8, 0.3, dur)
+
+
+def bass(f, dur, vel, rng):
+    n = int((dur + 0.15) * SR)
+    t = np.arange(n) / SR
+    y = _saw(np.full(n, f), rng.uniform())
+    y = _lp(y, 700) + 0.7 * np.sin(2 * np.pi * f * t)
+    return 0.3 * vel * y * env_adsr(n, 0.005, 0.15, 0.75, 0.08, dur)
+
+
+def harp(f, dur, vel, rng):
+    ring = 3.0
+    n = int(ring * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for k in range(1, 12):
+        fr = f * k
+        if fr > NYQ * 0.9:
+            break
+        y += (1 / k ** 1.6) * np.exp(-t * (0.9 + 0.6 * k)) * np.sin(2 * np.pi * fr * t + rng.uniform(0, 6.28))
+    atk = np.clip(t / 0.003, 0, 1)
+    return 0.3 * vel * y * atk
+
+
+def musicbox(f, dur, vel, rng):
+    n = int(3.2 * SR)
+    t = np.arange(n) / SR
+    parts = [(1.0, 1.0, 1.1), (2.0, 0.18, 2.2), (4.0 * 1.02, 0.12, 4.5), (5.93, 0.07, 7.0), (8.3, 0.04, 10.0)]
+    y = np.zeros(n)
+    for r, a, d in parts:
+        fr = f * r
+        if fr < NYQ * 0.9:
+            y += a * np.exp(-t * d) * np.sin(2 * np.pi * fr * t)
+    y += 0.08 * _hp(rng.standard_normal(n), 5000) * np.exp(-t * 200)
+    return 0.25 * vel * y * np.clip(t / 0.001, 0, 1)
+
+
+def pad(f, dur, vel, rng):
+    """低く暗いドローン。"""
+    n = int((dur + 1.5) * SR)
+    y = np.zeros(n)
+    for i in range(3):
+        det = 2 ** (rng.uniform(-10, 10) / 1200)
+        y += _saw(np.full(n, f * det), rng.uniform())
+    y = _lp(y / 3, 380)
+    return 0.3 * vel * y * env_adsr(n, 1.2, 0.5, 0.9, 1.5, dur)
+
+
+# ---------------------------------------------------------------- 打楽器
+
+def kick(vel, rng):
+    n = int(0.45 * SR)
+    t = np.arange(n) / SR
+    fr = 45 + 90 * np.exp(-t * 28)
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    y = np.sin(ph) * np.exp(-t * 7)
+    y += 0.3 * _hp(rng.standard_normal(n), 2500) * np.exp(-t * 180)
+    return 0.62 * vel * y
+
+
+def taiko(vel, rng):
+    n = int(1.4 * SR)
+    t = np.arange(n) / SR
+    fr = 58 + 40 * np.exp(-t * 14)
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    y = np.sin(ph) * np.exp(-t * 3.2) + 0.4 * np.sin(1.6 * ph) * np.exp(-t * 5)
+    y += 0.35 * _lp(rng.standard_normal(n), 900) * np.exp(-t * 25)
+    return 0.9 * vel * y
+
+
+def snare(vel, rng):
+    n = int(0.35 * SR)
+    t = np.arange(n) / SR
+    body = np.sin(2 * np.pi * (185 + 40 * np.exp(-t * 40)) * t) * np.exp(-t * 22)
+    nz = _bp(rng.standard_normal(n), 1500, 8000) * np.exp(-t * 16)
+    return 0.45 * vel * (0.6 * body + nz)
+
+
+def hat(vel, rng, open_=False):
+    n = int((0.35 if open_ else 0.08) * SR)
+    t = np.arange(n) / SR
+    y = _bp(rng.standard_normal(n), 6500, 12000) * np.exp(-t * (9 if open_ else 55))
+    return 0.12 * vel * y
+
+
+def crash(vel, rng):
+    n = int(2.5 * SR)
+    t = np.arange(n) / SR
+    y = _bp(rng.standard_normal(n), 3500, 11000) * np.exp(-t * 1.8)
+    for fr in [3150, 4570, 5320, 6890]:
+        y += 0.15 * np.sin(2 * np.pi * fr * t + rng.uniform(0, 6.28)) * np.exp(-t * 2.5)
+    return 0.2 * vel * y * np.clip(t / 0.002, 0, 1)
+
+
+def tom(f, vel, rng):
+    n = int(0.6 * SR)
+    t = np.arange(n) / SR
+    fr = f * (1 + 0.5 * np.exp(-t * 20))
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    y = np.sin(ph) * np.exp(-t * 7) + 0.1 * _lp(rng.standard_normal(n), 3000) * np.exp(-t * 40)
+    return 0.6 * vel * y
+
+
+def timpani(f, vel, rng, length=2.2):
+    n = int(length * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for r, a, d in [(1, 1.0, 1.6), (1.5, 0.5, 2.2), (1.98, 0.35, 2.8), (2.44, 0.2, 3.5)]:
+        y += a * np.exp(-t * d) * np.sin(2 * np.pi * f * r * t + rng.uniform(0, 6.28))
+    y += 0.3 * _lp(rng.standard_normal(n), 600) * np.exp(-t * 30)
+    return 0.55 * vel * y * np.clip(t / 0.003, 0, 1)
+
+
+# ---------------------------------------------------------------- ミキサー
+
+def make_ir(rt60, predelay=0.03, damp=5000, seed=7):
+    rng = np.random.default_rng(seed)
+    n = int(rt60 * 1.2 * SR)
+    t = np.arange(n) / SR
+    out = []
+    for ch in range(2):
+        nz = rng.standard_normal(n)
+        early = _lp(nz, damp) * np.exp(-t * 6.9 / rt60)
+        late = _lp(nz, damp * 0.35) * np.exp(-t * 6.9 / (rt60 * 1.15))
+        mix = np.clip(t / (rt60 * 0.5), 0, 1)
+        ir = early * (1 - mix) + late * mix
+        ir *= np.clip(t / 0.01, 0, 1)
+        pre = np.zeros(int(predelay * SR))
+        ir = np.concatenate([pre, ir])
+        out.append(ir / np.sqrt(np.sum(ir ** 2)))
+    return out
+
+
+class Song:
+    def __init__(self, bpm, bars, beats_per_bar=4, tail=7.0, seed=1):
+        self.bpm = bpm
+        self.bpb = beats_per_bar
+        self.beat = 60.0 / bpm
+        self.length = bars * beats_per_bar * self.beat
+        self.n = int(round(self.length * SR))
+        tot = self.n + int(tail * SR)
+        self.dry = np.zeros((2, tot))
+        self.send = np.zeros((2, tot))
+        self.rng = np.random.default_rng(seed)
+
+    def t(self, bar, beat=0.0):
+        """小節番号(1始まり)と拍(0始まり)を秒へ。"""
+        return ((bar - 1) * self.bpb + beat) * self.beat
+
+    def add(self, sig, t0, pan=0.0, gain=1.0, rev=0.3, human=0.004):
+        t0 = t0 + (self.rng.uniform(-human, human) if human else 0)
+        i0 = max(int(t0 * SR), 0)
+        sig = np.asarray(sig) * gain
+        if sig.ndim == 1:
+            th = (pan + 1) * np.pi / 4
+            sig = np.vstack([sig * np.cos(th), sig * np.sin(th)]) * np.sqrt(2)
+        L = min(sig.shape[1], self.dry.shape[1] - i0)
+        if L <= 0:
+            return
+        self.dry[:, i0:i0 + L] += sig[:, :L] * (1 - 0.35 * rev)
+        self.send[:, i0:i0 + L] += sig[:, :L] * rev
+
+    def note(self, inst, note, bar, beat, dur_beats, vel=0.8, pan=0.0, gain=1.0, rev=0.3, **kw):
+        v = vel * self.rng.uniform(0.92, 1.05)
+        sig = inst(hz(m(note)), dur_beats * self.beat, v, self.rng, **kw)
+        self.add(sig, self.t(bar, beat), pan, gain, rev)
+
+    def line(self, inst, bar, notes, **kw):
+        """notes: [(音名 or None, 拍数), ...] を bar 1拍目から順に並べる。"""
+        pos = 0.0
+        for nt, d in notes:
+            if nt is not None:
+                b = bar + int(pos // self.bpb)
+                self.note(inst, nt, b, pos % self.bpb, d, **kw)
+            pos += d
+
+    def drum(self, inst, bar, beat, vel=0.8, pan=0.0, gain=1.0, rev=0.15, **kw):
+        sig = inst(vel * self.rng.uniform(0.9, 1.05), self.rng, **kw)
+        self.add(sig, self.t(bar, beat), pan, gain, rev, human=0.002)
+
+    def render(self, path, rt60=3.5, wet=0.5, predelay=0.03, damp=5000, drive=1.5, target=0.89):
+        irL, irR = make_ir(rt60, predelay, damp)
+        wetL = fftconvolve(self.send[0], irL)[: self.dry.shape[1]]
+        wetR = fftconvolve(self.send[1], irR)[: self.dry.shape[1]]
+        mix = self.dry + wet * np.vstack([wetL, wetR])
+        # 低域カットは折り返し前に行う（後で行うとフィルタ初期状態で継ぎ目にクリックが出る）
+        mix = _hp(mix, 28)
+        # シームレスループ: 末尾からはみ出した余韻を冒頭へ折り返す
+        tail = mix[:, self.n:]
+        out = mix[:, : self.n].copy()
+        k = min(tail.shape[1], self.n)
+        out[:, :k] += tail[:, :k]
+        out /= np.max(np.abs(out)) + 1e-9
+        out = np.tanh(drive * out) / np.tanh(drive)
+        out *= target / (np.max(np.abs(out)) + 1e-9)
+        write_wav(path, out)
+        return out
+
+
+def write_wav(path, stereo):
+    pcm = (np.clip(stereo.T, -1, 1) * 32767).astype("<i2")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm.tobytes())
+
+
+# ---------------------------------------------------------------- 和音
+
+QUAL = {"": [0, 4, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "7": [0, 4, 7, 10],
+        "sus4": [0, 5, 7], "m7": [0, 3, 7, 10]}
+
+
+def chord(sym, octave=3):
+    """'Dm' / 'Bb' / 'B7' / 'Asus4' -> ルート音程 octave のMIDIリスト"""
+    root = sym[0]
+    rest = sym[1:]
+    if rest[:1] in ("#", "b"):
+        root += rest[0]
+        rest = rest[1:]
+    base = m(f"{root}{octave}")
+    return [base + i for i in QUAL[rest]]
