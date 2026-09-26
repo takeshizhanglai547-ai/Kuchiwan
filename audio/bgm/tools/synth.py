@@ -867,3 +867,76 @@ def dguitar(f, dur, vel, rng, mute=False, fifth=True):
     y = _hp(y, 80)
     env = env_adsr(n, 0.002, 0.07, 0.25, 0.03, dur) if mute else env_adsr(n, 0.003, 0.25, 0.85, 0.15, dur)
     return 0.15 * vel * y * env
+
+
+# ================================================================ 第6版：オペラ風の混声合唱
+
+_OPERA = {  # (女声, 男声) それぞれの母音フォルマント。末尾の 3kHz 付近は「歌手のフォルマント」
+    "a": ([(850, 1.0), (1250, 0.6), (2900, 0.45), (3300, 0.3)], [(700, 1.0), (1150, 0.55), (2500, 0.3), (3000, 0.35)]),
+    "o": ([(560, 1.0), (950, 0.55), (2850, 0.35), (3300, 0.22)], [(460, 1.0), (820, 0.5), (2450, 0.2), (2950, 0.3)]),
+    "e": ([(600, 1.0), (2100, 0.5), (2900, 0.4), (3400, 0.25)], [(480, 1.0), (1800, 0.45), (2500, 0.3), (3000, 0.3)]),
+}
+
+
+def opera(f, dur, vel, rng, vowel="a", female=None, swell=False, stacc=False, cons=0.6):
+    """オペラ的な合唱パート（1 声部＝6 人）。深く速いビブラート、歌手のフォルマント、子音のアタック。
+    swell=True でクレッシェンド、stacc=True で短く切る（「ハッ！」のような掛け声）。"""
+    if female is None:
+        female = f > 260
+    rel = 0.15 if stacc else 0.7
+    n = int((dur + rel + 0.2) * SR)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for i in range(6):
+        det = 2 ** (rng.uniform(-14, 14) / 1200)
+        rate = rng.uniform(5.3, 6.4)
+        depth = rng.uniform(0.012, 0.02)          # ±20〜35 セント：オペラ的な深いビブラート
+        ramp = np.clip((t - 0.12) / 0.35, 0, 1)
+        fr = f * det * (1 + depth * ramp * np.sin(2 * np.pi * rate * t + rng.uniform(0, 6.28)))
+        y += _saw(fr, rng.uniform()) + 0.3 * np.sin(2 * np.pi * np.cumsum(fr) / SR)
+    y /= 6
+    out = np.zeros(n)
+    for fc, g in _OPERA[vowel][0 if female else 1]:
+        out += g * _bp(y, fc * 0.86, fc * 1.14)
+    out += 0.3 * _lp(y, 600 if female else 400)
+    # 子音（t / d / k の破裂と息）
+    if cons:
+        burst = _bp(rng.standard_normal(n), 2500, 7000) * np.exp(-t * 90)
+        out += cons * 0.25 * burst
+    out += 0.012 * _bp(rng.standard_normal(n), 3000, 8000)
+    if stacc:
+        env = env_adsr(n, 0.015, 0.08, 0.7, rel, min(dur, 0.35))
+    elif swell:
+        env = env_adsr(n, dur * 0.7, 0.1, 1.0, rel, dur) * (0.4 + 0.6 * np.clip(t / (dur + 1e-9), 0, 1))
+    else:
+        env = env_adsr(n, 0.09, 0.25, 0.9, rel, dur)
+    return 1.5 * vel * out * env
+
+
+def satb(song, bar, notes, harm, vel=0.8, rev=0.55, vowel="a", gain=1.0, stacc=False, swell=False,
+         parts="SATB"):
+    """旋律（ソプラノ）に和声 harm(小節番号)->コード記号 をつけた 4 声の混声合唱。"""
+    pos = 0.0
+    for nt, d in notes:
+        if nt is not None:
+            b = bar + int(pos // song.bpb)
+            bt = pos % song.bpb
+            sop = m(nt)
+            tones = chord(harm(b), 3)
+            pcs = sorted({p % 12 for p in tones})
+
+            def below(limit, lo):
+                c = [p for p in range(lo, limit) if p % 12 in pcs]
+                return max(c) if c else limit - 5
+            alto = below(sop - 2, sop - 12)
+            ten = below(min(alto - 2, 67), 50)
+            bas = tones[0] % 12 + 36
+            while bas < 40:
+                bas += 12
+            voices = {"S": (sop, 0.25, True), "A": (alto, -0.25, True), "T": (ten, 0.35, False), "B": (bas, -0.35, False)}
+            for k in parts:
+                p, pan, fem = voices[k]
+                sig = opera(hz(p), d * song.beat, vel * (1.0 if k in "SB" else 0.85) * song.rng.uniform(0.93, 1.03),
+                            song.rng, vowel=vowel, female=fem, stacc=stacc, swell=swell)
+                song.add(sig, song.t(b, bt), pan, gain, rev, human=0.006)
+        pos += d

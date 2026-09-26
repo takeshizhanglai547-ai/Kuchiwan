@@ -23,7 +23,7 @@ import numpy as np
 from synth import (Song, chord, m, hz, strings, stacc, choir, bell, brass, bass, pad, kick, taiko, timpani,
                    musicbox, harp, organ, seq, sbrass, stom, vox_phrase, wind, drone, anvil, crash,
                    warsnare, snare, b808_phrase, dbass, clap, that, rim, heartbeat, steam, chains,
-                   creak, growl, cluster_gliss, reverse_swell, whisper, tinybells, dguitar, SR)
+                   creak, growl, cluster_gliss, reverse_swell, whisper, tinybells, dguitar, opera, satb, SR)
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
@@ -284,6 +284,11 @@ def title():
     s.line(choir, 11, theme + theme, vel=0.8, pan=-0.2, rev=0.55, vowel="O")
     s.line(brass, 11, tp(theme + theme, -12), vel=0.7, pan=0.1, rev=0.4)
     reverse_swell(s, 17, 0, [m("Bb2"), m("Db3"), m("F3")], beats=3, vel=0.8)
+    # --- オペラ合唱
+    H = lambda b: prog[b - 1]
+    satb(s, 7, [("Bb4", 4), ("Ab4", 4), ("Gb4", 4), ("A4", 4)], H, vel=0.6, vowel="o", swell=True)
+    satb(s, 11, tp(theme + theme, 12), H, vel=0.85, vowel="a", gain=1.1)
+    satb(s, 15, [("F4", 8)], H, vel=0.45, vowel="o", parts="SA")
     return s, dict(rt60=4.2, wet=0.45, predelay=0.04, damp=4500, drive=1.6, lp=9000)
 
 
@@ -365,6 +370,11 @@ def stage():
     s.drum(chains, 12, 2, vel=0.8, pan=0.5, rev=0.3)
     reverse_swell(s, 13, 0, dark_hit("F#"), beats=2, vel=0.8)
     reverse_swell(s, 29, 0, dark_hit("F#"), beats=2, vel=0.9)
+    # --- オペラ合唱
+    H = lambda b: prog[b - 1]
+    satb(s, 21, [(("F#4" if c == "Bm" else "C#5"), 4) for c in prog[20:28]], H, vel=0.6, vowel="o", swell=True)
+    satb(s, 29, tp(PB + PA, 12), H, vel=0.75, vowel="a", stacc=True, gain=1.1)
+    satb(s, 37, [("F#5", 1)] * 4 + [("G5", 1)] * 4 + [("F#5", 1)] * 8, H, vel=0.9, vowel="a", stacc=True, gain=1.2)
     return s, dict(rt60=2.8, wet=0.32, predelay=0.02, damp=6000, drive=1.8, lp=11000)
 
 
@@ -506,6 +516,12 @@ def boss():
     for bar in (9, 25, 41):
         s.note(bell, "D3", bar, 0, 4, vel=0.8, pan=-0.3, rev=0.55)
         s.note(bell, "G#3", bar, 0.02, 4, vel=0.45, pan=0.3, rev=0.55)
+    # --- オペラ合唱
+    H = lambda b: prog[b - 1]
+    satb(s, 1, [("D5", 8), ("A5", 8)], lambda b: "Dm", vel=0.6, vowel="a", swell=True, parts="SA")
+    satb(s, 25, tp(chant, 12), H, vel=0.9, vowel="e", gain=1.1)
+    satb(s, 33, [("A5", 8), ("Bb5", 8), ("A5", 8), ("A5", 8)], H, vel=0.65, vowel="a", swell=True, parts="SAB")
+    satb(s, 41, fin, H, vel=0.95, vowel="a", gain=1.15)
     return s, dict(rt60=3.2, wet=0.35, predelay=0.03, damp=5500, drive=1.8, lp=11000)
 
 
@@ -567,6 +583,11 @@ def prayer():
     s.drum(creak, 12, 0, vel=0.4, rev=0.55)
     for bar, p in ((6, "G#6"), (11, "E6"), (14, "C#7")):
         s.note(tinybells, p, bar, 2.5, 1, vel=0.28, pan=0.6, rev=0.6)
+    # --- オペラ合唱（遠くの女声）
+    Hn = ["C#m", "C#m", "A", "G#"]
+    H = lambda b: Hn[(b - 1) % 4]
+    satb(s, 9, [("E5", 4), ("E5", 4), ("E5", 4), ("D#5", 4)], H, vel=0.4, vowel="o", swell=True, parts="SA", gain=0.9)
+    satb(s, 13, tp(mel, 12), H, vel=0.5, vowel="a", parts="SAT", gain=0.9)
     return s, dict(rt60=4.8, wet=0.5, predelay=0.05, damp=4500, drive=1.5, lp=9000)
 
 
