@@ -1,26 +1,29 @@
 """
-聖犬士イッヌ — BGM 4曲の作曲スクリプト（第4版：ホラー×ビート版）。
+聖犬士イッヌ — BGM 4曲の作曲スクリプト（第5版：パブリックドメインのクラシック編曲版）。
 
-  - 作風の手本: 平沢進「BERSERK -Forces-」（シーケンサー、オーケストラヒット、裏声風リード）
-  - ビートの手本: キタニタツヤ（深い 808 ベースとトラップ由来のリズム、前に出る歪んだベースライン）
-  - 世界観: ベルセルク／ブラッドボーン的ダークファンタジー。敵デザイン（ペスト医師の火炎放射兵、
-    盾の甲羅兵、機械の蜘蛛、鈴を吊った蛾、角の獣）に合わせ、蒸気・鎖・きしむ鉄・鈴・獣のうなり・
-    心音・囁き・弦のクラスター・グリッサンドでおどろおどろしさを足している
-  - 和声: フリギア旋法（♭2）・三全音・ラメント・ベース・短三和音の半音下降。旋律はすべてオリジナル
-    （ボス曲の Dies irae のみ 13 世紀のグレゴリオ聖歌＝パブリックドメインを引用）
+保護期間の満了したクラシック（パブリックドメイン）を原曲に、平沢進／キタニタツヤ風に編曲する。
+  1. タイトル   : ショパン「葬送行進曲」（ピアノソナタ第2番 第3楽章, 1839／ショパン 1849年没）
+  2. ステージ1 : グリーグ「山の魔王の宮殿にて」（ペール・ギュント, 1875／グリーグ 1907年没）
+  3. ボス       : J.S.バッハ「トッカータとフーガ ニ短調」BWV565（18世紀前半／バッハ 1750年没）
+                  ＋ 聖歌「怒りの日（Dies irae）」（13世紀）
+  4. 休息       : ベートーヴェン「月光」第1楽章（ピアノソナタ第14番, 1801／ベートーヴェン 1827年没）
+
+編曲の方針:
+  - 平沢進「BERSERK -Forces-」的な要素: 16分のシーケンサー、オーケストラヒット、裏声風リード
+  - キタニタツヤ的なビート: 808、トラップのハイハット・ロール、ゴーストノート入りのロック、歪みベース
+  - 戦闘とボスは激しく: 歪んだギターのパワーコード、ツーバス、ブラストビート
+  - 原曲の主題は忠実に、展開部・経過句・リフは本編曲のオリジナル
 
   python compose_bgm.py            -> ../ に WAV 4曲を書き出し
   python compose_bgm.py --mp3      -> 試聴用 MP3 も書き出し（lameenc が必要）
-
-各曲は「最後のサンプル → 最初のサンプル」が自然につながるシームレスループ。
 """
 import os
 import sys
 import numpy as np
-from synth import (Song, chord, m, hz, strings, choir, bell, brass, bass, pad, kick, taiko, timpani,
-                   musicbox, harp, organ, seq, sbrass, stom, vox_phrase, wind, drone, anvil,
+from synth import (Song, chord, m, hz, strings, stacc, choir, bell, brass, bass, pad, kick, taiko, timpani,
+                   musicbox, harp, organ, seq, sbrass, stom, vox_phrase, wind, drone, anvil, crash,
                    warsnare, snare, b808_phrase, dbass, clap, that, rim, heartbeat, steam, chains,
-                   creak, growl, cluster_gliss, reverse_swell, whisper, tinybells, SR)
+                   creak, growl, cluster_gliss, reverse_swell, whisper, tinybells, dguitar, SR)
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
@@ -177,350 +180,393 @@ def bass_riff(s, sym, bar, octave=2, vel=0.85, kind="funk"):
         s.note(dbass, r + iv, bar, off, d * 0.9, vel=vel, pan=-0.05, rev=0.05)
 
 
+def power(s, note, bar, beat, beats, vel=0.8, mute=False):
+    """ギター 2 本を左右に振ったパワーコード（ダブリング）。"""
+    for pn in (-0.75, 0.75):
+        s.note(dguitar, note, bar, beat, beats, vel=vel, pan=pn, rev=0.12, mute=mute)
+
+
+def chug(s, root, bar, pattern, vel=0.8):
+    """ブリッジミュートの刻み。pattern=[(拍, 長さ, 音程差, ミュート?), ...]"""
+    for b, d, iv, mu in pattern:
+        power(s, root + iv, bar, b, d, vel=vel, mute=mu)
+
+
+def metal_bar(s, bar, vel=1.0, blast=False, crash_=False, roll=None):
+    """ツーバスのメタルビート。blast=True でスネアも 8 分で連打。"""
+    for k in range(16):
+        s.drum(kick, bar, k * 0.25, vel=(0.9 if k % 2 == 0 else 0.7) * vel, rev=0.03)
+    for b in ((0.5, 1.5, 2.5, 3.5, 1, 3) if blast else (1, 3)):
+        s.drum(snare, bar, b, vel=(0.95 if b in (1, 3) else 0.6) * vel, rev=0.12)
+        if b in (1, 3):
+            s.drum(warsnare, bar, b, vel=0.35 * vel, rev=0.3)
+    hats(s, bar, 0.5, vel=0.5 * vel, rolls=[roll] if roll else (), open_at=(1.5, 3.5))
+    if crash_:
+        s.drum(crash, bar, 0, vel=0.7 * vel, pan=-0.3, rev=0.25)
+
+
 # =====================================================================
 # 1. 聖犬士の誓い — タイトル
-#    Dm, 140BPM（ハーフタイム）, 32小節。心音と囁きの闇 → 808 のトラップビートで哀歌 → ロックで決起。
+#    原曲: ショパン「葬送行進曲」（ピアノソナタ第2番 変ロ短調 作品35 第3楽章, 1839）
+#    B♭m, 70BPM, 16小節。弔鐘の和音 → 808 のトラップで裏声が主題 → 展開 → 合唱とギターで主題を再現。
 # =====================================================================
 def title():
-    s = Song(bpm=140, bars=32, seed=5001)
-    lay_beds(s, wind_gain=0.35, whisper_gain=0.12, drone_note="D2", drone_gain=0.35)
-    progA = [("Dm", "D"), ("A", "C#"), ("Dm", "C"), ("Bdim7", "B"),
-             ("Bb", "Bb"), ("Gm", "G"), ("Asus4", "A"), ("A", "A")]
-    progB = ["Dm", "Eb", "Cm", "Dm", "Bbm", "Gm", "Eb", "A"]
+    s = Song(bpm=70, bars=16, seed=9001)
+    lay_beds(s, wind_gain=0.3, whisper_gain=0.08, drone_note="Bb1", drone_gain=0.3)
+    T1 = [("Bb4", 1), ("Bb4", 0.75), ("Bb4", 0.25), ("Bb4", 2)]
+    T2 = [("Db5", 0.75), ("C5", 0.25), ("C5", 0.75), ("Bb4", 0.25), ("Bb4", 0.75), ("A4", 0.25), ("Bb4", 1)]
+    theme = T1 + T2
+    prog = ["Bbm", "Bbm", "Bbm", "Bbm", "Bbm", "Bbm",
+            "Gb", "Db", "Ebm", "F",
+            "Bbm", "Bbm", "Bbm", "Bbm",
+            "Bbm", "Bbm"]
 
-    # ---- 1〜8 小節：闇（ビートなし）
-    for bar in range(1, 9):
-        s.drum(heartbeat, bar, 0, vel=0.9, rev=0.2)
-        s.drum(heartbeat, bar, 2, vel=0.8, rev=0.2)
-        if bar >= 5:
-            dark_seq(s, "Dm", bar, vel=0.45, cut=0.25)
-    s.note(bell, "D3", 1, 0, 4, vel=0.85, pan=-0.2, rev=0.6)
-    for p in ("D3", "Eb3", "Ab3"):
-        s.note(bell, p, 5, 0, 4, vel=0.5, pan=0.2, rev=0.6)
-    box = [("A5", 2), ("G5", 2), ("F5", 2), ("E5", 2), ("F5", 2), ("D5", 2), ("C#5", 4)]
-    s.line(musicbox, 1, box, vel=0.7, pan=0.35, rev=0.6, wow=22)
-    s.line(musicbox, 5, tp(box, -1)[:4] + box[4:], vel=0.6, pan=0.35, rev=0.65, wow=35)
-    s.drum(creak, 2, 0, vel=0.6, rev=0.5)
-    s.drum(creak, 6, 1, vel=0.7, rev=0.5)
-    s.note(growl, "D2", 3, 0, 5, vel=0.8, pan=-0.3, rev=0.4)
-    s.note(growl, "Ab1", 7, 0, 6, vel=0.9, pan=0.3, rev=0.4)
-    cluster_gliss(s, 5, 0, 16, 62, 76, slide=-6, vel=0.55, rev=0.6)
-    reverse_swell(s, 9, 0, dark_hit("Dm"), beats=4, vel=0.9)
-    hats(s, 8, 0.5, vel=0.35, rolls=[(2.0, 2.0, 0.125)])
-
-    # ---- 9〜24 小節：トラップの哀歌（コードは 2 小節ずつ）
-    chords = []
-    for c, b in progA:
-        chords += [(c, b), (c, b)]
-    for i, (c, b) in enumerate(chords):
-        bar = 9 + i
-        dark_seq(s, c, bar, vel=0.55, cut=0.45)
+    for i, c in enumerate(prog):
+        bar = i + 1
+        sec = ("intro" if bar <= 2 else "A" if bar <= 6 else "dev" if bar <= 10
+               else "A2" if bar <= 14 else "out")
+        # 左手の弔鐘：B♭m と G♭/B♭ を 4 分で交互に（原曲の伴奏型）
+        if c == "Bbm":
+            for k in range(4):
+                tones = ["Bb2", "Db3", "F3"] if k % 2 == 0 else ["Bb2", "Db3", "Gb3"]
+                for p in tones:
+                    s.note(organ, p, bar, k, 0.9, vel=0.4, rev=0.5, bright=0.6)
+                s.note(strings, "Bb1", bar, k, 0.9, vel=0.4, rev=0.4, attack=0.02, bright=0.6)
+        else:
+            for p in voiced(c, 50):
+                s.note(organ, p, bar, 0, 4, vel=0.45, rev=0.5, bright=0.6)
+        if sec == "intro":
+            s.drum(heartbeat, bar, 0, vel=0.8, rev=0.2)
+            s.drum(heartbeat, bar, 2, vel=0.7, rev=0.2)
+            continue
+        dark_seq(s, c, bar, vel=0.5, cut=0.45)
         trem_strings(s, c, bar, vel=0.28)
-        if bar >= 17:
-            low_brass(s, c, bar, vel=0.45)
-        kicks = (0, 0.75, 2.5) if i % 2 == 0 else (0, 0.75, 1.5, 2.75, 3.25)
-        roll = R32 if i % 4 == 1 else RTRIP if i % 4 == 3 else None
-        trap_bar(s, bar, kicks=kicks, roll=roll, open_at=(1.5,) if i % 2 else ())
-        if i % 4 == 3:
-            s.drum(chains, bar, 3.5, vel=0.8, pan=0.5, rev=0.3)
-        if bar >= 17:
-            bass_riff(s, c, bar, vel=0.55)
-    b808_phrase(s, 9, [(m(f"{b}1") + (12 if m(f"{b}1") < 33 else 0) + dv, d)
-                       for c, b in chords for dv, d in ((0, 0.75), (0, 1.75), (12, 0.5), (0, 1.0))], vel=0.95)
-    for bar in (9, 17):
-        s.hit(dark_hit("Dm" if bar == 9 else "Bb"), bar, 0, vel=0.9, cut=3200)
-    melA = [("A5", 3), ("G5", 0.5), ("F5", 0.5), ("E5", 3), (None, 1),
-            ("F5", 1), ("E5", 1), ("D5", 1), ("F5", 1), ("Ab5", 2), ("G5", 1), ("F5", 1),
-            ("F5", 2), ("D5", 1), ("Bb4", 1), ("D5", 1.5), ("Eb5", 0.5), ("D5", 2),
-            ("E5", 2), ("D5", 2), ("C#5", 4)]
-    vox_phrase(s, 9, stretch(melA, 2), vel=0.85, rev=0.6, vowel="o", glide=0.07)
-
-    # ---- 25〜32 小節：ロックで決起（1 小節 1 コード）
-    for i, c in enumerate(progB):
-        bar = 25 + i
-        dark_seq(s, c, bar, vel=0.7, cut=0.7)
-        male_choir(s, c, bar, vel=0.7, vowel="A")
-        low_brass(s, c, bar, vel=0.6)
-        trem_strings(s, c, bar, vel=0.35, lo=62)
-        bass_riff(s, c, bar, vel=0.85)
-        s.note(bass, root_of(c, 1), bar, 0, 4, vel=0.6, rev=0.05)
-        rock_bar(s, bar, roll=R32 if i % 2 else None)
-        for bt in (0, 1.5, 3):
-            s.hit(dark_hit(c), bar, bt, vel=0.85 if bt == 0 else 0.65, cut=3500)
-        if i % 2 == 0:
-            s.drum(steam, bar, 2.5, vel=0.7, pan=-0.5, rev=0.3)
-    melB = [("D6", 2), ("C6", 1), ("A5", 1), ("Bb5", 2), ("Eb6", 2),
-            ("Eb6", 1), ("D6", 1), ("C6", 2), ("A5", 3), (None, 1),
-            ("Db6", 2), ("C6", 1), ("Bb5", 1), ("Bb5", 2), ("A5", 1), ("G5", 1),
-            ("G5", 1.5), ("Bb5", 0.5), ("Eb6", 2), ("C#6", 3), ("A5", 1)]
-    vox_phrase(s, 25, melB, vel=0.95, rev=0.55, vowel="a", glide=0.06)
-    s.line(brass, 25, tp(melB, -24), vel=0.5, pan=-0.2, rev=0.45, gain=0.8)
-    s.note(bell, "D3", 25, 0, 4, vel=0.8, pan=-0.2, rev=0.6)
-    # ループ先（冒頭の闇）へ吸い込まれる逆再生
-    reverse_swell(s, 33, 0, [m("D3"), m("Eb3"), m("A3")], beats=4, vel=0.8)
+        if sec in ("A", "dev"):
+            kicks = (0, 0.75, 2.5) if bar % 2 else (0, 0.75, 1.5, 2.75, 3.25)
+            roll = RTRIP if bar % 2 == 0 else R32
+            for b in kicks:
+                s.drum(kick, bar, b, vel=0.9, rev=0.04)
+            for b in (1, 3):
+                s.drum(clap, bar, b, vel=0.8, rev=0.18)
+                s.drum(snare, bar, b, vel=0.55, rev=0.12)
+            hats(s, bar, 0.25, vel=0.45, rolls=[roll])
+        if sec == "dev":
+            male_choir(s, c, bar, vel=0.55, vowel="O")
+            s.hit(dark_hit(c), bar, 0, vel=0.85, cut=3200)
+        if sec == "A2":
+            male_choir(s, c, bar, vel=0.75, vowel="A")
+            low_brass(s, c, bar, vel=0.6)
+            rock_bar(s, bar, kicks=(0, 0.5, 0.75, 2, 2.25, 2.5), roll=R32 if bar % 2 == 0 else None)
+            for b, d in ((0, 1), (1, 0.75), (1.75, 0.25), (2, 2)):
+                power(s, "Bb2", bar, b, d, vel=0.8)
+            s.hit(dark_hit(c), bar, 0, vel=0.95, cut=3500)
+            if bar % 2 == 1:
+                s.drum(crash, bar, 0, vel=0.6, pan=-0.3, rev=0.25)
+        if sec == "out":
+            s.drum(heartbeat, bar, 0, vel=0.9, rev=0.2)
+            s.drum(heartbeat, bar, 2, vel=0.8, rev=0.2)
+            s.note(growl, "Bb1", bar, 0, 3.5, vel=0.7, pan=0.3, rev=0.4)
+    b808_phrase(s, 3, bars808(prog[2:10], "A"), vel=0.95)
+    b808_phrase(s, 11, bars808(prog[10:14], "B"), vel=0.9)
+    for bar in (1, 3, 11, 15):
+        s.note(bell, "Bb2", bar, 0, 4, vel=0.85, pan=-0.2, rev=0.6)
+        s.note(bell, "F3", bar, 2, 4, vel=0.4, pan=0.3, rev=0.6)
+    # 主題：導入はオルゴール、A は裏声、A2 は裏声＋合唱＋金管の 3 オクターブ
+    s.line(musicbox, 1, theme, vel=0.7, pan=0.35, rev=0.6, wow=25)
+    vox_phrase(s, 3, theme + tp(theme, 12), vel=0.9, rev=0.55, vowel="o", glide=0.05)
+    dev = [("Bb4", 1), ("Db5", 0.75), ("C5", 0.25), ("Bb4", 1), ("Gb4", 1),
+           ("Ab4", 1), ("F4", 0.75), ("Ab4", 0.25), ("Db5", 2),
+           ("Gb5", 1), ("F5", 0.75), ("Eb5", 0.25), ("Db5", 1), ("Bb4", 1),
+           ("C5", 0.75), ("Bb4", 0.25), ("A4", 1), ("C5", 2)]
+    vox_phrase(s, 7, tp(dev, 12), vel=0.9, rev=0.6, vowel="a", glide=0.06)
+    s.line(strings, 7, dev, vel=0.45, pan=0.2, rev=0.5, attack=0.05)
+    vox_phrase(s, 11, tp(theme, 12) + tp(theme, 12), vel=0.95, rev=0.55, vowel="a")
+    s.line(choir, 11, theme + theme, vel=0.8, pan=-0.2, rev=0.55, vowel="O")
+    s.line(brass, 11, tp(theme + theme, -12), vel=0.7, pan=0.1, rev=0.4)
+    reverse_swell(s, 17, 0, [m("Bb2"), m("Db3"), m("F3")], beats=3, vel=0.8)
     return s, dict(rt60=4.2, wet=0.45, predelay=0.04, damp=4500, drive=1.6, lp=9000)
 
 
 # =====================================================================
-# 2. 鐘楼の廃聖堂 — ステージ1
-#    E フリギア, 150BPM, 32小節。蒸気と歯車の工房。歪みベースのリフで始まり、ロック⇄トラップを行き来。
+# 2. 鐘楼の廃聖堂 — ステージ1（通常戦闘）
+#    原曲: グリーグ「山の魔王の宮殿にて」（『ペール・ギュント』作品23, 1875）
+#    Bm, 176BPM, 40小節。原曲どおり静かに始まり、ロック → メタル → 808 ドロップ → 全開と加速度的に激化。
 # =====================================================================
 def stage():
-    s = Song(bpm=150, bars=32, seed=6002)
-    lay_beds(s, wind_gain=0.2, whisper_gain=0.06, drone_note="E2", drone_gain=0.3)
-    prog = ["Em", "Em", "Em", "Em",
-            "Em", "F", "Em", "Bb", "Em", "F", "Dm", "B",
-            "Am", "Em", "F", "B", "Am", "Em", "Fm", "B",
-            "Em", "F", "Em", "Bb", "Em", "F", "Dm", "B",
-            "Am", "F", "Bb", "B"]
-    riff = [(0, 0.5, 0), (0.5, 0.5, 0), (1, 0.25, 1), (1.25, 0.75, 0), (2, 0.5, 7), (2.5, 0.5, 6), (3, 1, "3")]
+    s = Song(bpm=176, bars=40, seed=9002)
+    lay_beds(s, wind_gain=0.15, whisper_gain=0.04, drone_note="B1", drone_gain=0.25)
+    PA = [("B3", .5), ("C#4", .5), ("D4", .5), ("E4", .5), ("F#4", .5), ("D4", .5), ("F#4", 1),
+          ("F4", .5), ("C#4", .5), ("F4", 1), ("E4", .5), ("C4", .5), ("E4", 1),
+          ("B3", .5), ("C#4", .5), ("D4", .5), ("E4", .5), ("F#4", .5), ("D4", .5), ("F#4", .5), ("B4", .5),
+          ("A4", .5), ("F#4", .5), ("D4", .5), ("F#4", .5), ("A4", 2)]
+    PB = [("F#4", .5), ("G#4", .5), ("A#4", .5), ("B4", .5), ("C#5", .5), ("A#4", .5), ("C#5", 1),
+          ("D5", .5), ("A#4", .5), ("D5", 1), ("C#5", .5), ("A#4", .5), ("C#5", 1),
+          ("F#4", .5), ("G#4", .5), ("A#4", .5), ("B4", .5), ("C#5", .5), ("A#4", .5), ("C#5", .5), ("F#5", .5),
+          ("E5", .5), ("C#5", .5), ("A#4", .5), ("C#5", .5), ("E5", 2)]
+    harmA, harmB = ["Bm", "F#", "Bm", "Bm"], ["F#", "F#", "F#", "F#"]
+    plan = (["intro"] * 4 + ["A"] * 8 + ["B"] * 4 + ["A1"] * 4 + ["drop"] * 8 + ["full"] * 8 + ["end"] * 4)
+    prog = harmA * 3 + harmB + harmA + harmA * 2 + harmB + harmA + ["Bm", "G", "F#", "F#"]
     for i, c in enumerate(prog):
         bar = i + 1
-        sec = ("intro" if bar <= 4 else "A" if bar <= 12 else "B" if bar <= 20
-               else "A2" if bar <= 28 else "turn")
-        r2 = root_of(c, 2)
-        t3 = third_of(c)
+        sec = plan[i]
+        root = "B1" if c == "Bm" else "F#1" if c == "F#" else "G1"
         if sec == "intro":
-            s.drum(steam, bar, 0, vel=0.8, pan=-0.5, rev=0.35)
-            s.drum(steam, bar, 2.5, vel=0.5, pan=0.5, rev=0.35)
-            s.drum(rim, bar, 1.75, vel=0.6, pan=0.3, rev=0.2)
-            s.drum(rim, bar, 3.25, vel=0.5, pan=0.3, rev=0.2)
-            if bar >= 3:
-                bass_riff(s, c, bar, vel=0.9)
-            if bar == 4:
-                hats(s, 4, 0.5, vel=0.45, rolls=[(2.0, 2.0, 0.125)])
-                for k in range(8):
-                    s.drum(snare, 4, 2 + k * 0.25, vel=0.3 + 0.08 * k, rev=0.1)
+            s.drum(heartbeat, bar, 0, vel=0.7, rev=0.2)
+            s.drum(steam, bar, 2, vel=0.4, pan=0.5, rev=0.3)
             continue
-        dark_seq(s, c, bar, vel=0.65, cut=0.6)
-        if sec in ("A", "A2"):
-            bass_riff(s, c, bar, vel=0.85)
-            for off, d, iv in riff:
-                iv = t3 if iv == "3" else iv
-                s.note(brass, r2 + iv, bar, off, d * 0.9, vel=0.75, pan=-0.25, rev=0.3)
+        dark_seq(s, c, bar, vel=0.6, cut=0.7)
+        if sec == "A":
             rock_bar(s, bar, roll=R32 if bar % 4 == 0 else None)
-            if bar % 2 == 0:
-                s.note(anvil, "D#5", bar, 3.5, 0.5, vel=0.4, pan=0.55, rev=0.25)
-            if bar % 4 == 1:
-                s.drum(steam, bar, 0, vel=0.7, pan=-0.5, rev=0.3)
-        if sec == "B":
-            male_choir(s, c, bar, vel=0.55, vowel="O")
+            bass_riff(s, c, bar, vel=0.85)
+        elif sec in ("B", "A1"):
+            metal_bar(s, bar, crash_=bar % 4 == 1, roll=R32 if bar % 4 == 0 else None)
+            chug(s, m(root) + 12, bar, [(0, .5, 0, False), (.5, .25, 0, True), (.75, .25, 0, True),
+                                        (1, .5, 0, True), (1.5, .5, 1, False), (2, .5, 0, True),
+                                        (2.5, .25, 0, True), (2.75, .25, 0, True), (3, 1, 6, False)], vel=0.8)
+            bass_riff(s, c, bar, vel=0.8, kind="338")
+            s.hit(dark_hit(c), bar, 0, vel=0.9, cut=3800)
+        elif sec == "drop":
             trap_bar(s, bar, kicks=(0, 0.75, 2.5) if bar % 2 else (0, 0.75, 1.5, 2.75, 3.25),
-                     roll=RTRIP if bar % 2 == 0 else None)
-            s.note(tinybells, root_of(c, 5) + 7, bar, 1.5, 1, vel=0.35, pan=0.6, rev=0.5)
-        if sec == "A2":
-            male_choir(s, c, bar, vel=0.55, vowel="A")
-            trem_strings(s, c, bar, vel=0.3, lo=64)
+                     roll=RTRIP if bar % 2 == 0 else R32)
+            chug(s, m(root) + 12, bar, [(0, .25, 0, True), (.75, .25, 0, True), (2.5, .25, 0, True)], vel=0.7)
+            male_choir(s, c, bar, vel=0.6, vowel="O")
+        elif sec == "full":
+            metal_bar(s, bar, blast=bar % 2 == 0, crash_=True, roll=R32 if bar % 4 == 0 else None)
+            power(s, m(root) + 12, bar, 0, 2, vel=0.9)
+            power(s, m(root) + 12, bar, 2, 2, vel=0.85)
+            male_choir(s, c, bar, vel=0.7, vowel="A")
+            trem_strings(s, c, bar, vel=0.3, lo=62)
             for bt in (0, 1.5, 3):
-                s.hit(dark_hit(c), bar, bt, vel=0.85 if bt == 0 else 0.65, cut=3500)
-        if sec == "turn":
-            male_choir(s, c, bar, vel=0.65, vowel="A")
-            if bar <= 30:
-                s.drum(heartbeat, bar, 0, vel=0.9, rev=0.2)
-                s.drum(heartbeat, bar, 2, vel=0.8, rev=0.2)
-                s.note(growl, root_of(c, 2), bar, 0, 3.5, vel=0.8, pan=-0.3, rev=0.4)
-            else:
-                trap_bar(s, bar, kicks=(0, 0.75, 2.5), roll=RTRIP2 if bar == 32 else R32)
-        if bar in (5, 13, 21):
-            s.hit(dark_hit(c), bar, 0, vel=0.95, cut=3500)
-        if bar in (12, 20, 28):
-            s.drum(chains, bar, 2, vel=0.9, pan=-0.4, rev=0.3)
-    b808_phrase(s, 13, bars808(prog[12:20], "B"), vel=0.95)
-    b808_phrase(s, 31, bars808(prog[30:32], "A"), vel=0.9)
-    for bar in (1, 13, 29):
-        s.note(bell, "E3", bar, 0, 4, vel=0.75, pan=-0.25, rev=0.55)
-        s.note(bell, "Bb3", bar, 2, 4, vel=0.35, pan=0.3, rev=0.55)
-    s.drum(creak, 9, 0, vel=0.6, rev=0.5)
-    s.drum(creak, 25, 2, vel=0.6, rev=0.5)
-    cluster_gliss(s, 27, 0, 8, 64, 76, slide=5, vel=0.5)
-    cluster_gliss(s, 29, 0, 8, 55, 70, slide=-7, vel=0.55)
-    reverse_swell(s, 21, 0, dark_hit("Em"), beats=2, vel=0.8)
-
-    melB = [("E5", 2), ("C5", 1), ("A4", 1), ("B4", 1.5), ("C5", 0.5), ("B4", 2),
-            ("A4", 1), ("C5", 1), ("F5", 2), ("D#5", 3), (None, 1),
-            ("A5", 2), ("G5", 1), ("E5", 1), ("G5", 1.5), ("F5", 0.5), ("E5", 2),
-            ("Ab5", 2), ("F5", 1), ("C5", 1), ("B4", 2), ("D#5", 2)]
-    vox_phrase(s, 13, melB, vel=0.95, rev=0.55, vowel="o")
-    s.line(strings, 13, tp(melB, -12), vel=0.4, pan=0.2, rev=0.5, attack=0.08, bright=0.8)
-    vox_phrase(s, 29, [("E5", 2), ("C5", 2), ("A4", 2), ("C5", 1), ("F5", 1),
-                       ("F5", 2), ("D5", 2), ("D#5", 3), (None, 1)], vel=0.9, rev=0.6, vowel="a")
-    return s, dict(rt60=3.2, wet=0.38, predelay=0.03, damp=5000, drive=1.7, lp=9500)
+                s.hit(dark_hit(c), bar, bt, vel=0.9 if bt == 0 else 0.7, cut=4000)
+        elif sec == "end":
+            # 原曲の結末のような和音の連打
+            for bt in (0, 1, 2, 3):
+                s.hit(dark_hit(c), bar, bt, vel=1.0, cut=4200)
+                power(s, m(root) + 12, bar, bt, 0.8, vel=0.9)
+                s.drum(taiko, bar, bt, vel=0.9, rev=0.35)
+                s.drum(kick, bar, bt, vel=0.9)
+            if bar == 40:
+                for k in range(16):
+                    s.drum(snare, bar, k * 0.25, vel=0.4 + 0.035 * k, rev=0.1)
+    b808_phrase(s, 21, bars808(prog[20:28], "A"), vel=1.0)
+    # 主題
+    s.line(stacc, 1, tp(PA, -12), vel=0.6, pan=-0.2, rev=0.35)                        # 原曲どおりのピチカート低音で開始
+    s.line(dbass, 5, tp(PA, -12) + tp(PA, -12), vel=0.8, pan=0.0, rev=0.05)            # 歪みベースが主題を弾く
+    s.line(seq, 9, PA, vel=0.7, pan=0.3, rev=0.2, cut=1.0)
+    s.line(sbrass, 13, PB + PA, vel=0.85, pan=0.1, rev=0.3, cut=0.6)
+    s.line(strings, 13, tp(PB + PA, 12), vel=0.45, pan=-0.2, rev=0.35, attack=0.01, bright=1.2)
+    vox_phrase(s, 21, stretch(PA, 2), vel=0.9, rev=0.55, vowel="a", glide=0.04)
+    s.line(sbrass, 29, PB + PA, vel=0.9, pan=0.1, rev=0.3, cut=0.7)
+    s.line(choir, 29, tp(PB + PA, -12), vel=0.8, pan=-0.2, rev=0.45, vowel="A")
+    vox_phrase(s, 29, tp(PB + PA, 12), vel=0.75, rev=0.5, vowel="a", glide=0.02, vib=0.2)
+    for bar in (5, 13, 21, 29, 37):
+        s.note(bell, "B2", bar, 0, 4, vel=0.7, pan=-0.25, rev=0.5)
+    s.drum(creak, 2, 0, vel=0.5, rev=0.5)
+    s.drum(chains, 12, 2, vel=0.8, pan=0.5, rev=0.3)
+    reverse_swell(s, 13, 0, dark_hit("F#"), beats=2, vel=0.8)
+    reverse_swell(s, 29, 0, dark_hit("F#"), beats=2, vel=0.9)
+    return s, dict(rt60=2.8, wet=0.32, predelay=0.02, damp=6000, drive=1.8, lp=11000)
 
 
 # =====================================================================
 # 3. 魔王デスニャーン — ボス戦
-#    C（ロクリア的）, 170BPM, 40小節。獣の咆哮 → ロック → Dies irae の 808 ドロップ →
-#    心音が早まるホラー中間部 → 全部入り。
+#    原曲: J.S.バッハ「トッカータとフーガ ニ短調」BWV565 ＋ 聖歌「怒りの日（Dies irae）」
+#    Dm, 184BPM, 48小節。オルガン独奏の開幕 → ツーバスのメタル → Dies irae の 808 ドロップ
+#    → 心音が早まるホラー → トッカータ主題で全開。
 # =====================================================================
 def boss():
-    s = Song(bpm=170, bars=40, seed=7003)
-    lay_beds(s, wind_gain=0.18, whisper_gain=0.08, drone_note="C2", drone_gain=0.3)
-    prog = ["Cm", "Cm", "Cm", "Cm",
-            "Cm", "Db", "Cm", "Gb", "Cm", "Db", "Fm", "G",
-            "Cm", "Cm", "Ab", "Ab", "Fm", "Fm", "G", "G",
-            "Cm", "Bm", "Bbm", "Am", "Abm", "Db", "Fm", "G",
-            "Cm", "Cm", "Db", "Gb", "Cm", "Cm", "Fm", "G",
-            "Ab", "Ab", "G", "G"]
+    s = Song(bpm=184, bars=48, seed=9003)
+    lay_beds(s, wind_gain=0.15, whisper_gain=0.05, drone_note="D2", drone_gain=0.25)
+    # トッカータ冒頭（モルデント → 下降 → 嬰ハ → ニ）を 3 オクターブで
+    toc = [("A5", .25), ("G5", .25), ("A5", 2.5), (None, 1),
+           ("G5", .25), ("F5", .25), ("E5", .25), ("D5", .25), ("C#5", 1), ("D5", 2)]
+    toc2 = [("A4", .25), ("G4", .25), ("A4", 2.5), (None, 1),
+            ("E4", .5), ("F4", .5), ("C#4", 1), ("D4", 2)]
+    toc3 = [("A3", .25), ("G3", .25), ("A3", 2.5), (None, 1)]
+    plan = (["intro"] * 8 + ["riff"] * 8 + ["motif"] * 8 + ["dies"] * 8 + ["horror"] * 8 + ["final"] * 8)
+    prog = (["Dm"] * 5 + ["C#dim7", "C#dim7", "Dm"] +
+            ["Dm", "Gm", "C#dim7", "Dm", "Bb", "Gm", "A", "A"] +
+            ["Dm", "A", "Dm", "A", "Bb", "Gm", "Edim", "A"] +
+            ["Dm", "Dm", "Bb", "Bb", "Gm", "Gm", "A", "A"] +
+            ["Dm", "C#dim7", "Bbm", "A", "Dm", "C#dim7", "Bb", "A"] +
+            ["Dm", "A", "Dm", "A", "Bb", "Gm", "Edim", "A"])
     for i, c in enumerate(prog):
         bar = i + 1
-        sec = ("intro" if bar <= 4 else "A" if bar <= 12 else "B" if bar <= 20
-               else "C" if bar <= 28 else "A2" if bar <= 36 else "build")
-        if sec not in ("intro", "C"):
-            dark_seq(s, c, bar, vel=0.65, cut=0.8)
+        sec = plan[i]
+        r2 = root_of(c, 2)
         if sec == "intro":
+            if bar in (2, 4):
+                s.hit(dark_hit("Dm" if bar == 2 else "Dm"), bar, 2, vel=0.9, cut=3000)
+            continue
+        if sec != "horror":
+            dark_seq(s, c, bar, vel=0.6, cut=0.9)
+        if sec == "riff":
+            metal_bar(s, bar, blast=bar % 2 == 0, crash_=bar % 4 == 1, roll=R32 if bar % 4 == 0 else None)
+            # オルガンの 16 分ペダル音型（A を軸に下降）＝トッカータ的な技巧
+            top = root_of(c, 5)
+            fig = [top + 7, top + 5, top + 7, top + 3, top + 7, top + 2, top + 7, top,
+                   top + 7, top + 5, top + 7, top + 3, top + 7, top + 2, top + 7, top - 1]
+            for k, p in enumerate(fig):
+                s.note(organ, p - 12, bar, k * 0.25, 0.22, vel=0.55, pan=0.2, rev=0.3, bright=1.2)
+            chug(s, r2, bar, [(0, .5, 0, False), (.5, .25, 0, True), (.75, .25, 0, True), (1, .25, 0, True),
+                              (1.25, .25, 1, True), (1.5, .5, 0, False), (2, .25, 0, True), (2.25, .25, 0, True),
+                              (2.5, .5, 6, False), (3, .5, 5, False), (3.5, .5, 1, False)], vel=0.85)
+            bass_riff(s, c, bar, vel=0.8, kind="338")
+            s.hit(dark_hit(c), bar, 0, vel=0.95, cut=4000)
+        elif sec == "motif":
+            metal_bar(s, bar, crash_=True, roll=R32 if bar % 2 == 0 else None)
+            power(s, r2 + 12, bar, 0, 2, vel=0.9)
+            power(s, r2 + 12, bar, 2, 2, vel=0.85)
+            male_choir(s, c, bar, vel=0.7, vowel="A")
             for bt in (0, 1.5, 3):
-                s.drum(taiko, bar, bt, vel=1.0 if bt == 0 else 0.8, rev=0.4)
-            s.drum(heartbeat, bar, 0, vel=0.9, rev=0.2)
-            s.drum(heartbeat, bar, 2, vel=0.9, rev=0.2)
-        if sec in ("A", "A2"):
-            rock_bar(s, bar, kicks=(0, 0.75, 1.5, 2.25, 2.5, 3.5) if sec == "A2" else (0, 0.75, 2.25, 2.5),
-                     roll=R32 if bar % 4 == 0 else None)
-            bass_riff(s, c, bar, vel=0.9, kind="338")
-            for bt in (0, 1.5, 3):
-                s.hit(dark_hit(c), bar, bt, vel=1.0 if bt == 0 else 0.8, cut=3800)
-            s.note(anvil, "F#5", bar, 3.5, 0.5, vel=0.4, pan=0.55, rev=0.25)
-        if sec == "B":
+                s.hit(dark_hit(c), bar, bt, vel=0.9 if bt == 0 else 0.7, cut=4000)
+        elif sec == "dies":
             trap_bar(s, bar, kicks=(0, 0.75, 2.5) if bar % 2 else (0, 0.75, 1.5, 2.75, 3.25),
                      roll=RTRIP if bar % 2 == 0 else R32)
+            chug(s, r2, bar, [(0, .25, 0, True), (.75, .25, 0, True), (2.5, .25, 0, True)], vel=0.75)
             if bar % 2:
                 s.drum(chains, bar, 1.5, vel=0.6, pan=-0.5, rev=0.3)
-        if sec == "C":
-            # ホラー中間部：ドラムは消え、心音だけが早まっていく
+        elif sec == "horror":
             s.note(bass, root_of(c, 1), bar, 0, 4, vel=0.8, rev=0.1)
-            s.note(pad, root_of(c, 2), bar, 0, 4, vel=0.7, rev=0.3)
+            s.note(organ, r2, bar, 0, 4, vel=0.5, rev=0.5, bright=0.6)
             trem_strings(s, c, bar, vel=0.42, lo=55)
-            male_choir(s, c, bar, vel=0.65, vowel="A")
-            s.note(organ, root_of(c, 2), bar, 0, 4, vel=0.45, rev=0.5, bright=0.6)
-            beats_per_hb = 2.0 if bar < 25 else 1.0 if bar < 27 else 0.5
+            male_choir(s, c, bar, vel=0.6, vowel="A")
+            step = 2.0 if bar < 37 else 1.0 if bar < 39 else 0.5
             k = 0.0
             while k < 4:
                 s.drum(heartbeat, bar, k, vel=0.95, rev=0.15)
-                k += beats_per_hb
-            if bar >= 27:
-                hats(s, bar, 0.5, vel=0.35 + 0.1 * (bar - 27), rolls=[RTRIP2] if bar == 28 else ())
-        if sec == "build":
-            male_choir(s, c, bar, vel=0.8, vowel="A")
-            trem_strings(s, c, bar, vel=0.45, lo=60)
-            n = 8 if bar < 39 else 16
-            for k in range(n):
-                s.drum(snare, bar, k * 4 / n, vel=0.3 + 0.5 * k / n, rev=0.15)
-            hats(s, bar, 0.25, vel=0.5, rolls=[(2.0, 2.0, 0.125)] if bar == 40 else ())
-            for bt in (0, 1.5, 3):
-                s.hit(dark_hit(c), bar, bt, vel=0.9, cut=3800)
+                k += step
+            # トッカータ風の減七の和音が低音から駆け上がる
+            if c == "C#dim7":
+                base = m("C#3")
+                for k2 in range(16):
+                    p = base + [0, 3, 6, 9][k2 % 4] + 12 * (k2 // 4)
+                    s.note(organ, p, bar, k2 * 0.25, 4 - k2 * 0.25, vel=0.4, rev=0.5, bright=0.9)
             if bar >= 39:
-                for k in range(16):
-                    s.drum(lambda v, r_: timpani(98, v, r_, 0.8), bar, k * 0.25,
-                           vel=0.3 + 0.02 * (k + (bar - 39) * 16), rev=0.3)
-        if bar in (12, 20, 36):
-            for k, f in enumerate([147, 131, 110, 98, 87, 73, 65, 55]):
-                s.drum(lambda v, r_, f=f: stom(f, v, r_), bar, 2 + k * 0.25, vel=0.75, pan=0.4 - k * 0.1, rev=0.3)
-    # 808：B（Dies irae のドロップ）と A2
-    b808_phrase(s, 13, bars808(prog[12:20], "A"), vel=1.0)
-    b808_phrase(s, 29, bars808(prog[28:36], "B"), vel=0.9)
-    # 導入：獣の咆哮、不協和な合唱クラスター、三全音の鐘、裏声の悲鳴
-    s.note(growl, "C2", 1, 0, 7, vel=1.0, pan=-0.2, rev=0.4)
-    s.note(growl, "F#1", 3, 0, 7, vel=1.0, pan=0.2, rev=0.4)
-    for p, pn in (("C3", -0.4), ("Db4", 0.4), ("Gb3", 0.0), ("C4", -0.2)):
-        s.note(choir, p, 1, 0, 16, vel=0.55, pan=pn, rev=0.65, vowel="A")
-    for bar in (1, 3, 21, 25):
-        s.note(bell, "C3", bar, 0, 4, vel=0.85, pan=-0.3, rev=0.55)
-        s.note(bell, "F#3", bar, 0.02, 4, vel=0.5, pan=0.3, rev=0.55)
-    vox_phrase(s, 1, [("C6", 3), ("B5", 1), ("Bb5", 2), ("A5", 2), ("Ab5", 4), ("G5", 4)],
-               vel=0.85, rev=0.7, vowel="a", glide=0.12)
-    reverse_swell(s, 5, 0, dark_hit("Cm"), beats=4, vel=0.9)
-    # A：トロンボーンの威圧的な旋律
-    melA = [("C4", 1.5), ("Db4", 1.5), ("C4", 1), ("F4", 1.5), ("Eb4", 1.5), ("Db4", 1),
-            ("C4", 1.5), ("Eb4", 1.5), ("G4", 1), ("Gb4", 3), ("F4", 1),
-            ("C4", 1.5), ("Db4", 1.5), ("C4", 1), ("Ab4", 1.5), ("G4", 1.5), ("F4", 1),
-            ("Ab4", 1.5), ("G4", 1.5), ("F4", 1), ("G3", 2), ("B3", 2)]
-    s.line(brass, 5, melA, vel=0.95, pan=0.05, rev=0.35, gain=1.1)
-    s.line(sbrass, 5, tp(melA, -12), vel=0.6, pan=-0.1, rev=0.3, cut=0.35)
-    # B：Dies irae（男声合唱＋低音金管）の上に裏声
-    dies = [("Eb4", 1), ("D4", 1), ("Eb4", 1), ("C4", 1), ("D4", 1), ("Bb3", 1), ("C4", 2)]
-    dies_hm = [("D4", 1), ("C4", 1), ("D4", 1), ("B3", 1), ("C4", 1), ("Ab3", 1), ("B3", 2)]
-    chant = dies + tp(dies, -4) + tp(dies, -7) + dies_hm
-    s.line(choir, 13, chant, vel=0.85, pan=-0.2, rev=0.55, vowel="O")
-    s.line(choir, 13, tp(chant, -12), vel=0.75, pan=0.2, rev=0.55, vowel="U")
-    s.line(brass, 13, chant, vel=0.7, pan=0.0, rev=0.4)
-    vox_phrase(s, 13, [("G5", 4), ("Ab5", 4), ("Eb5", 4), ("F5", 2), ("Eb5", 2),
-                       ("C5", 4), ("Db5", 4), ("D5", 4), ("B4", 4)], vel=0.9, rev=0.6, vowel="a", glide=0.08)
-    # C：ホラー中間部
-    vox_phrase(s, 21, [("G5", 4), ("F#5", 4), ("F5", 4), ("E5", 4),
-                       ("Eb5", 4), ("F5", 2), ("Ab5", 2), ("Ab5", 2), ("C6", 2), ("B5", 4)],
-               vel=0.9, rev=0.65, vowel="a", glide=0.14)
-    cluster_gliss(s, 21, 0, 8, 60, 76, slide=-7, vel=0.6)
-    cluster_gliss(s, 25, 0, 8, 50, 66, slide=6, vel=0.6)
-    s.note(growl, "C2", 22, 0, 6, vel=0.9, pan=-0.3, rev=0.4)
-    s.note(growl, "Gb1", 26, 0, 6, vel=0.9, pan=0.3, rev=0.4)
-    s.drum(creak, 23, 0, vel=0.7, rev=0.5)
-    s.drum(chains, 24, 2, vel=0.9, pan=0.5, rev=0.4)
-    for bar, p in ((23, "Ab5"), (24, "A5"), (27, "D6")):
-        s.note(tinybells, p, bar, 1, 1, vel=0.4, pan=0.6, rev=0.55)
-    reverse_swell(s, 29, 0, dark_hit("Cm"), beats=4, vel=0.95)
-    # A2：Dies irae をシンセブラスで高く、間に裏声
-    for bar in (29, 33):
-        s.line(sbrass, bar, tp(dies, 12), vel=0.85, pan=0.1, rev=0.35, cut=0.6)
-        s.line(choir, bar, dies, vel=0.7, rev=0.55, vowel="O")
-    vox_phrase(s, 31, [("Ab5", 3), ("F5", 1), ("Gb5", 2), ("Db5", 2)], vel=0.9, rev=0.6)
-    vox_phrase(s, 35, [("C6", 2), ("Ab5", 2), ("B5", 4)], vel=0.9, rev=0.6)
-    return s, dict(rt60=3.6, wet=0.4, predelay=0.03, damp=5000, drive=1.8, lp=9500)
+                hats(s, bar, 0.25, vel=0.4 + 0.1 * (bar - 39), rolls=[(2.0, 2.0, 0.125)] if bar == 40 else ())
+                for k2 in range(8 if bar == 39 else 16):
+                    s.drum(snare, bar, k2 * (0.5 if bar == 39 else 0.25), vel=0.3 + 0.03 * k2, rev=0.1)
+        elif sec == "final":
+            metal_bar(s, bar, blast=True, crash_=True, roll=R32 if bar % 2 == 0 else None)
+            power(s, r2 + 12, bar, 0, 1.5, vel=0.95)
+            power(s, r2 + 12, bar, 1.5, 1.5, vel=0.9)
+            power(s, r2 + 13, bar, 3, 1, vel=0.9)
+            male_choir(s, c, bar, vel=0.8, vowel="A")
+            trem_strings(s, c, bar, vel=0.4, lo=62)
+            for bt in (0, 1.5, 3):
+                s.hit(dark_hit(c), bar, bt, vel=1.0 if bt == 0 else 0.8, cut=4200)
+            s.note(anvil, "F#5", bar, 3.5, 0.5, vel=0.4, pan=0.55, rev=0.25)
+    # --- 導入：オルガン独奏のトッカータ、裏声と低音ギターが重なる
+    s.line(organ, 1, toc + toc2 + toc3 + [(None, 4)], vel=0.9, rev=0.7, bright=1.2)
+    s.line(organ, 1, tp(toc + toc2 + toc3 + [(None, 4)], -12), vel=0.6, rev=0.7, bright=1.0)
+    vox_phrase(s, 1, toc, vel=0.7, rev=0.7, vowel="a", glide=0.02, vib=0.25)
+    s.note(organ, "D2", 5, 0, 16, vel=0.8, rev=0.6)
+    s.note(organ, "D1", 5, 0, 16, vel=0.6, rev=0.6)
+    for k in range(8, 24):   # 減七の和音を低音から 8 分で積み上げる（6〜7 小節目）
+        p = m("C#3") + [0, 3, 6, 9][k % 4] + 12 * (k // 8 - 1)
+        if True:
+            s.note(organ, p, 5 + (k // 8), (k % 8) * 0.5, 0.45, vel=0.55, rev=0.6, bright=1.1)
+    for p in ("D3", "F3", "A3", "D4", "F4", "A4"):
+        s.note(organ, p, 8, 0, 4, vel=0.8, rev=0.7, bright=1.2)
+    s.hit(dark_hit("Dm"), 8, 0, vel=1.0, cut=3500)
+    s.drum(taiko, 8, 0, vel=1.0, rev=0.4)
+    s.note(growl, "D2", 5, 0, 8, vel=0.8, pan=-0.3, rev=0.4)
+    reverse_swell(s, 9, 0, dark_hit("Dm"), beats=4, vel=0.9)
+    # --- motif：トッカータの主題を金管＋ギター＋裏声で
+    s.line(sbrass, 17, toc + toc2 + toc + [("A4", 2), ("C#5", 2), ("E5", 4)], vel=0.95, pan=0.05, rev=0.3, cut=0.7)
+    s.line(brass, 17, tp(toc + toc2 + toc + [("A4", 2), ("C#5", 2), ("E5", 4)], -12), vel=0.8, pan=-0.2, rev=0.35)
+    vox_phrase(s, 17, toc + toc2 + toc + [("A4", 2), ("C#5", 2), ("E5", 4)], vel=0.8, rev=0.55, glide=0.02, vib=0.2)
+    # --- dies：Dies irae（ニ短調）を男声合唱と 808 で
+    dies = [("F4", 1), ("E4", 1), ("F4", 1), ("D4", 1), ("E4", 1), ("C4", 1), ("D4", 2)]
+    chant = (dies + [("D4", 1), ("C4", 1), ("D4", 1), ("Bb3", 1), ("C4", 1), ("A3", 1), ("Bb3", 2)]
+             + [("Bb3", 1), ("A3", 1), ("Bb3", 1), ("G3", 1), ("A3", 1), ("F3", 1), ("G3", 2)]
+             + [("E4", 1), ("D4", 1), ("E4", 1), ("C#4", 1), ("D4", 1), ("Bb3", 1), ("C#4", 2)])
+    s.line(choir, 25, chant, vel=0.9, pan=-0.2, rev=0.55, vowel="O")
+    s.line(choir, 25, tp(chant, -12), vel=0.8, pan=0.2, rev=0.55, vowel="U")
+    s.line(brass, 25, chant, vel=0.75, rev=0.4)
+    b808_phrase(s, 25, bars808(prog[24:32], "A"), vel=1.0)
+    vox_phrase(s, 25, [("A5", 4), ("Bb5", 4), ("F5", 4), ("G5", 2), ("F5", 2),
+                       ("D5", 4), ("Eb5", 4), ("E5", 4), ("C#5", 4)], vel=0.9, rev=0.6, vowel="a", glide=0.08)
+    # --- horror
+    cluster_gliss(s, 33, 0, 8, 60, 76, slide=-7, vel=0.6)
+    cluster_gliss(s, 37, 0, 8, 50, 66, slide=6, vel=0.6)
+    s.note(growl, "D2", 34, 0, 6, vel=0.9, pan=-0.3, rev=0.4)
+    s.note(growl, "Ab1", 38, 0, 6, vel=0.9, pan=0.3, rev=0.4)
+    s.drum(creak, 35, 0, vel=0.7, rev=0.5)
+    vox_phrase(s, 33, [("A5", 4), ("G#5", 4), ("G5", 4), ("F#5", 4), ("F5", 4), ("E5", 4), ("F5", 4), ("E5", 4)],
+               vel=0.85, rev=0.65, vowel="a", glide=0.14)
+    reverse_swell(s, 41, 0, dark_hit("Dm"), beats=4, vel=1.0)
+    # --- final：トッカータ主題を全員で
+    fin = toc + toc2 + toc + [("A4", 2), ("C#5", 2), ("E5", 4)]
+    s.line(sbrass, 41, fin, vel=1.0, pan=0.05, rev=0.3, cut=0.8)
+    s.line(organ, 41, fin, vel=0.7, rev=0.4, bright=1.2)
+    s.line(choir, 41, tp(fin, -12), vel=0.8, pan=-0.2, rev=0.45, vowel="A")
+    vox_phrase(s, 41, fin, vel=0.85, rev=0.5, glide=0.02, vib=0.2)
+    b808_phrase(s, 41, bars808(prog[40:48], "B"), vel=0.85)
+    for bar in (9, 25, 41):
+        s.note(bell, "D3", bar, 0, 4, vel=0.8, pan=-0.3, rev=0.55)
+        s.note(bell, "G#3", bar, 0.02, 4, vel=0.45, pan=0.3, rev=0.55)
+    return s, dict(rt60=3.2, wet=0.35, predelay=0.03, damp=5500, drive=1.8, lp=11000)
 
 
 # =====================================================================
-# 4. 祈りの灯 — セーブ地点・休息・エンディング
-#    Gm, 70BPM, 16小節。狂ったオルゴールと囁き、遅いローファイ・トラップのビート。
+# 4. 祈りの灯 — セーブ地点・休息
+#    原曲: ベートーヴェン「ピアノソナタ第14番 嬰ハ短調『月光』」第1楽章（1801）
+#    C#m, 70BPM, 16小節。原曲の 3 連アルペジオとトラップの 3 連ハットを重ねたローファイ・トラップ。
 # =====================================================================
 def prayer():
-    s = Song(bpm=70, bars=16, seed=8004)
-    lay_beds(s, wind_gain=0.28, whisper_gain=0.1, drone_note="G1", drone_gain=0.25, drone_cut=220)
-    prog = [("Gm", "G"), ("D", "F#"), ("Gm", "F"), ("Edim", "E"),
-            ("Eb", "Eb"), ("Cm", "C"), ("D", "D"), ("D", "D"),
-            ("Cm", "C"), ("Gm", "G"), ("Ab", "Ab"), ("D", "D"),
-            ("Cm", "C"), ("Gm", "G"), ("Eb", "Eb"), ("D", "D")]
-    for i, (c, b) in enumerate(prog):
-        bar = i + 1
-        r, t3, t5 = chord(c, 3)[:3]
-        for k, p in enumerate([r, t5, r + 12, t3 + 12, r + 12, t5, t3 + 12, t5 + 12]):
-            s.note(harp, p, bar, k * 0.5, 0.5, vel=0.4 if k else 0.5, pan=-0.35, rev=0.55)
-        bn = m(f"{b}2")
-        s.note(strings, bn, bar, 0, 4, vel=0.42, pan=-0.1, rev=0.55, attack=0.5, bright=0.55)
-        if bar >= 5:
-            for j, p in enumerate(voiced(c, 55)):
-                s.note(strings, p, bar, 0, 4, vel=0.25, pan=[-0.5, 0.1, 0.5][j % 3],
-                       rev=0.65, attack=0.8, release=1.0, bright=0.55)
-            # 遅いトラップ：キックと 808 は同じ位置、スネアは 3 拍目、ハットは 3 連を混ぜる
+    s = Song(bpm=70, bars=16, seed=9004)
+    lay_beds(s, wind_gain=0.25, whisper_gain=0.07, drone_note="C#2", drone_gain=0.2, drone_cut=220)
+    # 原曲冒頭 4 小節の和声：C#m | C#m/B | A → D/F# | G#sus4 → G#7
+    halves = [
+        [("C#m", ["G#3", "C#4", "E4"], ["C#2", "C#3"])] * 2,
+        [("C#m", ["G#3", "C#4", "E4"], ["B1", "B2"])] * 2,
+        [("A", ["A3", "C#4", "E4"], ["A1", "A2"]), ("D", ["A3", "D4", "F#4"], ["F#1", "F#2"])],
+        [("G#", ["G#3", "C#4", "D#4"], ["G#1", "G#2"]), ("G#", ["G#3", "C4", "F#4"], ["G#1", "G#2"])],
+    ]
+    for bar in range(1, 17):
+        cyc = (bar - 1) // 4
+        for h, (c, arp, bs) in enumerate(halves[(bar - 1) % 4]):
+            for k in range(6):   # 3 連 8 分 × 2 拍
+                s.note(harp, arp[k % 3], bar, h * 2 + k / 3, 1 / 3, vel=0.55 if k % 3 == 0 else 0.42,
+                       pan=-0.3, rev=0.55)
+            for p in bs:
+                s.note(strings, p, bar, h * 2, 2, vel=0.45, pan=-0.1, rev=0.55, attack=0.3, bright=0.55)
+            if cyc >= 2:
+                for j, p in enumerate(arp):
+                    s.note(choir, p, bar, h * 2, 2, vel=0.3, pan=[-0.4, 0, 0.4][j], rev=0.7, vowel="U")
+        if cyc >= 1:
+            # 遅いトラップ：スネア 3 拍目、ハットは原曲と同じ 3 連で刻み、時々ロール
             for bt in (0, 1.75, 2.5):
                 s.drum(kick, bar, bt, vel=0.7, rev=0.05)
             s.drum(snare, bar, 2, vel=0.5, rev=0.25)
             s.drum(rim, bar, 2, vel=0.4, rev=0.2)
-            hats(s, bar, 0.5, vel=0.35, rolls=[RTRIP] if bar % 2 == 0 else [(1.0, 1.0, 1 / 6)] if bar % 4 == 3 else ())
-        if bar >= 9:
-            male_choir(s, c, bar, beats=4, vel=0.35, vowel="U")
-    b808_phrase(s, 5, [(low_root(c) + dv, d) for c, _ in prog[4:]
-                       for dv, d in ((0, 1.75), (0, 0.75), (0, 1.5))], vel=0.75, decay=1.0)
-    s.note(bell, "G3", 1, 0, 4, vel=0.6, pan=0.3, rev=0.65)
-    s.note(bell, "Db4", 9, 0, 4, vel=0.35, pan=-0.3, rev=0.65)
-    s.drum(creak, 4, 0, vel=0.45, rev=0.55)
-    s.drum(chains, 12, 3, vel=0.5, pan=0.5, rev=0.5)
-    s.drum(heartbeat, 8, 2, vel=0.7, rev=0.2)
-    s.drum(heartbeat, 16, 2, vel=0.7, rev=0.2)
-    melA = [("D5", 1), ("G5", 1), ("Bb5", 1.5), ("A5", 0.5),
-            ("A5", 3), ("F#5", 1),
-            ("G5", 1), ("Bb5", 1), ("D6", 2),
-            ("Bb5", 2), ("G5", 1), ("E5", 1),
-            ("G5", 1), ("Bb5", 1), ("Eb6", 2),
-            ("C6", 2), ("Eb5", 2),
-            ("F#5", 1), ("A5", 1), ("C6", 2),
-            ("A5", 4)]
-    melB = [("Eb5", 3), ("G5", 1), ("D5", 3), ("Bb4", 1),
-            ("C5", 1), ("Eb5", 1), ("Ab5", 2), ("F#5", 4),
-            ("G5", 3), ("Eb5", 1), ("D5", 2), ("Bb4", 1), ("G4", 1),
-            ("G4", 1), ("Bb4", 1), ("Eb5", 2), ("D5", 3), ("C5", 1)]
-    s.line(musicbox, 1, melA, vel=0.85, pan=0.2, rev=0.6, wow=18)
-    s.line(musicbox, 9, tp(melB, 12), vel=0.55, pan=0.3, rev=0.65, wow=30)
-    vox_phrase(s, 9, melB, vel=0.8, rev=0.7, vowel="o", glide=0.07, vib=0.3)
-    for bar, p in ((6, "G6"), (11, "Ab6"), (14, "D6")):
-        s.note(tinybells, p, bar, 2.5, 1, vel=0.3, pan=0.6, rev=0.6)
+            hats(s, bar, 1 / 3, vel=0.32, rolls=[(3.0, 1.0, 1 / 6)] if bar % 2 == 0 else ())
+    notes808 = []
+    for bar in range(5, 17):
+        for h, (c, arp, bs) in enumerate(halves[(bar - 1) % 4]):
+            r = m(bs[0])
+            while r < 33:
+                r += 12
+            while r > 44:
+                r -= 12
+            notes808 += [(r, 1.25), (r, 0.75)]
+    b808_phrase(s, 5, notes808, vel=0.7, decay=1.0)
+    # 原曲の旋律の入り（付点のリズムで繰り返される嬰ト音）を裏声で
+    mel = [("G#4", .75), ("G#4", .25), ("G#4", 3),
+           ("G#4", .75), ("G#4", .25), ("G#4", 1), ("A4", 2),
+           ("E4", 2), ("F#4", 2),
+           ("D#4", 2), ("C4", 2)]
+    vox_phrase(s, 5, mel, vel=0.75, rev=0.7, vowel="o", glide=0.06, vib=0.3)
+    vox_phrase(s, 9, tp(mel, 12), vel=0.7, rev=0.7, vowel="u", glide=0.06, vib=0.3)
+    s.line(musicbox, 13, tp(mel, 12), vel=0.6, pan=0.3, rev=0.65, wow=25)
+    vox_phrase(s, 13, mel, vel=0.7, rev=0.7, vowel="o", glide=0.06, vib=0.3)
+    s.note(bell, "C#3", 1, 0, 4, vel=0.55, pan=0.3, rev=0.65)
+    s.note(bell, "G3", 9, 0, 4, vel=0.3, pan=-0.3, rev=0.65)
+    s.drum(heartbeat, 8, 2, vel=0.6, rev=0.2)
+    s.drum(creak, 12, 0, vel=0.4, rev=0.55)
+    for bar, p in ((6, "G#6"), (11, "E6"), (14, "C#7")):
+        s.note(tinybells, p, bar, 2.5, 1, vel=0.28, pan=0.6, rev=0.6)
     return s, dict(rt60=4.8, wet=0.5, predelay=0.05, damp=4500, drive=1.5, lp=9000)
 
 

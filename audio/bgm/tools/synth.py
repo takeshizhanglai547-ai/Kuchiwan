@@ -850,3 +850,20 @@ def whisper(seconds, rng):
 def tinybells(f, dur, vel, rng):
     """蛾に吊られた小さな鈴（高く不揃いにうなる）。"""
     return fmbell(f * 2 ** (rng.uniform(-25, 25) / 1200), dur, vel, rng, ratio=2.76, index=2.5, decay=3.0, length=2.0)
+
+
+# ================================================================ 第5版：激しい戦闘用
+
+def dguitar(f, dur, vel, rng, mute=False, fifth=True):
+    """歪んだエレキギターのパワーコード（根音＋5度＋オクターブ）。mute=True でブリッジミュートの刻み。"""
+    n = int((dur + (0.05 if mute else 0.3)) * SR)
+    y = np.zeros(n)
+    for r in ((1.0, 1.4983, 2.0) if fifth else (1.0,)):
+        for c in (-7, 6):
+            y += _saw(np.full(n, f * r * 2 ** ((c + rng.uniform(-2, 2)) / 1200)), rng.uniform())
+    y = _hp(y, 90)
+    y = np.tanh(9 * y / 3) / np.tanh(3)
+    y = _lp(_lp(y, 2600 if mute else 4800), 5500)
+    y = _hp(y, 80)
+    env = env_adsr(n, 0.002, 0.07, 0.25, 0.03, dur) if mute else env_adsr(n, 0.003, 0.25, 0.85, 0.15, dur)
+    return 0.15 * vel * y * env
