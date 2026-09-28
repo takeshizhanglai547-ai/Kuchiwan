@@ -182,7 +182,8 @@ function damage(t, amount, info){
   dmg = Math.max(1, Math.round(dmg));
   const launchReq = (info.up||0) > 0 || (t.y > 0.05 && !t.def?.boss) || (info.power||1) >= 3;
   t.hp -= dmg;
-  t.flashT = 6; t.hpShowT = 180; t.hurtDir = dir; t.lastHitBy = src;
+  // bosses get hit constantly: a short flash keeps them readable instead of permanently white
+  t.flashT = (t.def && t.def.boss) ? 2 : 6; t.hpShowT = 180; t.hurtDir = dir; t.lastHitBy = src;
   const x = t.x - dir*t.radius*0.4, y = t.y + t.height*0.55, z = t.z + 0.35;
   const stop = info.stop!=null ? info.stop : hitstopFor(dmg, launchReq);
   G.hitStop = Math.max(G.hitStop, stop + (t.hp<=0 ? 3 : 0));
