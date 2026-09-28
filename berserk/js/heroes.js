@@ -18,6 +18,7 @@
  *            hold?: {frames, cost, fire(h)} },
  *    awaken: { name, type:'buff'|'screen', dur, start(h), update(h), end(h), colors? },
  *    drawBack(c,h), drawFront(c,h),           // 追加描画（オーラ等）
+ *    init(h), update(h, game, input),        // 生成時 / 毎フレームの追加処理（重力倍率 h.gravMul など）
  *    portrait(c, x, y, s),                    // 省略時はリグで描く
  *  }
  * ===================================================================== */
@@ -184,6 +185,7 @@
       this.downAfter = 4; this.getupInvul = 50; this.downTime = 30; this.deadTime = 1e9;
       this.bloodCol = '#9e0d14';
       this.isHero = true;
+      if (def.init) def.init(this);
     }
     get ctrl() { return BK.autoplay ? BK.autoCtrl : BK.input; }
     get specialCost() { return Math.ceil(this.maxHp * (this.def.specialCost || 0.08)); }
@@ -198,6 +200,7 @@
       if (this.superArmor > 0 && !this.awkT) this.superArmor--;
       this.updateShot(I);
       this.updateAwaken();
+      if (d.update) d.update(this, game, I);
       // 溜め
       if (I.held.atk) this.chargeT++;
       else { if (this.chargeT >= CHARGE_FRAMES) this.chargeRel = 10; this.chargeT = 0; }

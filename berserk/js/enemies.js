@@ -100,6 +100,30 @@
       this.ai.mode = 'recover';
       this.ai.cd = (m.ai && m.ai.cd) || U.randi(30, 60);
     }
+    /** 主人公を掴む（悪霊の張り付き・拷問官の掴みなど）。成功で true */
+    grabHero(h, o) {
+      if (!h || h.dead || !h.hurtable || h.state === 'grabbed' || h.grabbing || h.z > 30) return false;
+      if (h.move) h.endMove();
+      h.state = 'grabbed'; h.grabbedBy = this; h.escape = 0; h.vx = 0; h.vy = 0;
+      this.grabbing = h;
+      this.escapeNeed = (o && o.escapeNeed) || 10;
+      BK.audio.sfx('grab');
+      return true;
+    }
+    releaseHero() {
+      const h = this.grabbing;
+      this.grabbing = null;
+      if (h && h.grabbedBy === this) { h.grabbedBy = null; if (h.state === 'grabbed') h.state = 'idle'; }
+    }
+    /** 掴んでいる主人公に直接ダメージ（のけぞらせない） */
+    drainHero(dmg) {
+      const h = this.grabbing;
+      if (!h || h.dead) return;
+      if (BK.god) { h.flash = 4; return; }
+      h.hp -= dmg; h.flash = 4;
+      if (h.onDamaged) h.onDamaged(dmg, this, {});
+      if (h.hp <= 0) { h.hp = 0; this.releaseHero(); h.die(this, { dmg }, this.face); }
+    }
     /** 敵弾を撃つ */
     shoot(o) {
       const p = new BK.Projectile(Object.assign({ team: 'enemy', owner: this, x: this.x + this.face * 24, y: this.y, z: this.z + 50, vx: this.face * 5 }, o));
