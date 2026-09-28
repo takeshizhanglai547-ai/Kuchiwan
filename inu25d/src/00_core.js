@@ -116,6 +116,7 @@ G.initRenderer = function(canvas){
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0xbfe6ff, 1);
+  renderer.info.autoReset = false;       // renderNow() resets once per frame so info covers every pass
 
   const scene = G.scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xcfeaff, 30, 90);
@@ -460,7 +461,7 @@ function frame(now){
   try {
     if(sc && sc.frame) sc.frame(dt);
     G.cam.frame(dt);
-    if(G.renderer) G.renderer.render(G.scene, G.camera);
+    renderNow();
   } catch(err){ G.logError('frame '+G.sceneName, err); }
   governor(dt);
 }
@@ -480,7 +481,15 @@ G.start = function(){
 };
 G.stop = function(){ running = false; };
 // deterministic stepping for tests (no rAF): advance n ticks and render once
-G.step = function(n){ for(let i=0;i<(n||1);i++) tick(); syncVisuals(1); const sc=G.scenes[G.sceneName]; if(sc && sc.frame) sc.frame(G.cfg.TICK); G.cam.frame(G.cfg.TICK); if(G.renderer) G.renderer.render(G.scene, G.camera); };
+G.step = function(n){ for(let i=0;i<(n||1);i++) tick(); syncVisuals(1); const sc=G.scenes[G.sceneName]; if(sc && sc.frame) sc.frame(G.cfg.TICK); G.cam.frame(G.cfg.TICK); renderNow(); };
+// one frame's worth of rendering; renderer.info covers the whole frame (post passes included)
+function renderNow(){
+  const r = G.renderer; if(!r) return;
+  r.info.reset();
+  if(G.post && G.post.active){ try { G.post.render(G.scene, G.camera); return; } catch(err){ G.logError('post', err); G.post.enabled = false; } }
+  r.setRenderTarget(null);
+  r.render(G.scene, G.camera);
+}
 
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ G.bus.emit('hidden', {}); } else { last = performance.now(); G.bus.emit('visible', {}); }

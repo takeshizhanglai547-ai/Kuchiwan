@@ -207,3 +207,23 @@ cd /tmp && NODE_PATH=/opt/node22/lib/node_modules node /tmp/shotX.js
 `const PI2=Math.PI/2` ——**四分の一回転**。`for(i<4) i*PI2` のように4分割で使うのが正しく、
 `i/n*PI2` で全周のつもりに使うと90度の扇形になる。過去に4件の誤用があった
 （トゲ・ガトリングの銃身・銃口炎・花火）。全周は `TAU` を使う。
+
+## 2.5D リメイク「もふもふ聖犬士イッヌ」（beltaction25d.html）
+
+`beltaction.html` のコンセプトを、ピクサー風 3D（Three.js r160）の 2.5D ベルトアクションとして作り直したもの。
+小学生向け・スマホ対応。**`beltaction25d.html` は生成物なので直接編集しない**。
+
+- ソースは `inu25d/src/NN_*.js`（1ファイル1モジュール、IIFE で `window.G` にだけ公開）。
+  `node tools/build25d.js` が構文チェックして1枚の HTML に焼き込む。設計の約束は `inu25d/CONTRACT.md`、
+  キャラ・ステージ・敵の中身は `inu25d/CONCEPT.md`。
+- three.js は本番では jsDelivr から読む。この実行環境は CDN が塞がっているので、試験は
+  `tests/vendor/three-0.160.0.min.js` へ差し替えて開く（harness が自動でやる）。
+- 目視: `cd /tmp && NODE_PATH=/opt/node22/lib/node_modules node /home/user/Kuchiwan/tools/shot25d.js --eval "..." --shot x.png`。
+  `#test` で開くので rAF は回らない。`G.step(n)` で n 刻み進めて1回描く。
+  `G.debug.play('inu', 0)`（ステージへ直行）、`G.debug.arena('inu')`（平らな広場）、`G.debug.autoplay(true)`（ボットが操作）。
+- 試験: `cd /tmp && NODE_PATH=/opt/node22/lib/node_modules node /home/user/Kuchiwan/tests/25d/suite.js [filter]`、
+  ミューテーション: `bash tests/25d/mutate.sh`（`tests/25d/mutations.txt` はタブ区切り。JS の `||` と衝突するので `|` 区切りにしない）。
+  最初の mutate.sh は `cd` に失敗して試験が走らないのを「killed」と数えていた。**起動失敗を赤扱いしない**こと。
+- 押下はヒットストップ中も捨てない（`G.playerCtl.queue`）。捨てるとコンボの3段目以降が出なくなる。
+- ふみつけは1回の滞空で1度だけ。毎回許すと、敵の真上で永久に跳ね続けて降りられなくなる。
+- 描画コールは輪郭線（背面ポリゴン）で倍になる。部品は頂点カラーで結合（`G.look.builder()`）してから輪郭を付ける。
