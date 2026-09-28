@@ -242,7 +242,7 @@
 
   BK.registerHero({
     id: 'guts', name: 'ガッツ', title: '黒い剣士',
-    desc: '鉄塊のごとき大剣「ドラゴンころし」を振るう。一撃が重く間合いも最長。義手のボウガンは長押しで大砲に。',
+    desc: '鉄塊のごとき大剣「ドラゴンころし」を振るう。\n一撃が重く、間合いも最長。\n義手のボウガンは長押しで大砲になる。',
     stats: { life: 4, power: 5, speed: 2, reach: 5, shot: 3 },
     color: '#b3121b',
     maxHp: 150, walk: 2.0, walkY: 1.35, run: 4.1, jumpV: 9.4, jumpVX: 2.6, runJumpVX: 4.6, weight: 1.45, w: 30, h: 98,

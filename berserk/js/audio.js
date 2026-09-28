@@ -53,7 +53,7 @@
         A.verbSend.connect(A.verb); A.verb.connect(A.comp);
         if (A._pendingSong) { const s = A._pendingSong; A._pendingSong = null; A.playSong(s); }
       }
-      if (A.ctx.state === 'suspended') A.ctx.resume();
+      if (A.ctx.state !== 'running' && A.ctx.state !== 'closed') A.ctx.resume(); // iOS の 'interrupted' からも復帰
     } catch (e) { /* audio unsupported */ }
   };
   A.suspend = function () { try { A.ctx && A.ctx.suspend(); } catch (e) { /* ignore */ } };
@@ -221,10 +221,10 @@
     if (!A.ctx || A.ctx.state !== 'running' || A.muted) return;
     const fn = S[name];
     if (!fn) return;
-    const now = A.ctx.currentTime;
-    if (A._lastSfx[name] && now - A._lastSfx[name] < 0.025) return;
-    A._lastSfx[name] = now;
     opt = opt || {};
+    const now = A.ctx.currentTime, key = opt.pitch ? name + '@' + opt.pitch : name; // 音程違いの重ね鳴らしは間引かない
+    if (A._lastSfx[key] && now - A._lastSfx[key] < 0.025) return;
+    A._lastSfx[key] = now;
     try { fn((opt.pitch || 1) * U.rand(0.96, 1.04), opt.vol == null ? 1 : opt.vol); } catch (e) { /* ignore */ }
   };
 
@@ -364,7 +364,7 @@
     const horizon = A.ctx.currentTime + 0.14;
     if (s.next < A.ctx.currentTime - 0.3) s.next = A.ctx.currentTime + 0.02; // 復帰時の遅延を吸収
     while (s.next < horizon) {
-      for (const tr of s.tracks) {
+      if (!A.muted) for (const tr of s.tracks) { // ミュート中は音を作らず、曲の位置だけ進める
         if (!tr.inst || !tr.len) continue;
         const ev = tr.seq[s.step % tr.len];
         if (!ev || ev === '-') continue;

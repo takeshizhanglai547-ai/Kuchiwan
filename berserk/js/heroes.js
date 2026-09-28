@@ -51,7 +51,7 @@
       o = o || {};
       const m = S.muzzle(h, o.fwd || 30, o.z || 56);
       BK.game.addProjectile(new BK.Projectile({
-        x: m.x, y: m.y, z: m.z, vx: h.face * (o.spd || 11), w: 18, h: 8, team: 'hero', owner: h, dmg: o.dmg || 4, kb: 'light', push: 1.2, stop: 2, life: 60, sfx: 'hit',
+        x: m.x, y: m.y, z: m.z, vx: h.face * (o.spd || 11), w: 18, h: 56, team: 'hero', owner: h, dmg: o.dmg || 4, kb: 'light', push: 1.2, stop: 2, life: 60, sfx: 'hit',
         drawFn(c, sx, sy, p) {
           c.strokeStyle = o.col || '#d8d0b8'; c.lineWidth = 2;
           c.beginPath(); c.moveTo(sx - p.face * 12, sy); c.lineTo(sx + p.face * 6, sy); c.stroke();
@@ -64,7 +64,7 @@
       o = o || {};
       const m = S.muzzle(h, 26, o.z || 60);
       BK.game.addProjectile(new BK.Projectile({
-        x: m.x, y: m.y, z: m.z, vx: h.face * (o.spd || 10), w: 14, h: 8, team: 'hero', owner: h, dmg: o.dmg || 6, kb: 'light', push: 1.5, stop: 2, life: 55, sfx: 'slash',
+        x: m.x, y: m.y, z: m.z, vx: h.face * (o.spd || 10), w: 14, h: 56, team: 'hero', owner: h, dmg: o.dmg || 6, kb: 'light', push: 1.5, stop: 2, life: 55, sfx: 'slash',
         drawFn(c, sx, sy, p) {
           c.strokeStyle = 'rgba(230,236,245,0.35)'; c.lineWidth = 1; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - p.vx * 2.5, sy); c.stroke();
           c.save(); c.translate(sx, sy); c.rotate(p.t * 0.9 * p.face);
@@ -74,9 +74,9 @@
       }));
     },
     bomb(h) {
-      const m = S.muzzle(h, 20, 70);
+      const m = S.muzzle(h, 20, 56);
       BK.game.addProjectile(new BK.Projectile({
-        x: m.x, y: m.y, z: m.z, vx: h.face * 5, vz: 5.5, grav: 0.35, w: 12, h: 12, team: 'hero', owner: h, dmg: 10, kb: 'down', life: 120, harmless: false,
+        x: m.x, y: m.y, z: m.z, vx: h.face * 5, vz: 2.5, grav: 0.35, w: 12, h: 36, team: 'hero', owner: h, dmg: 10, kb: 'down', life: 120, harmless: false,
         onGround(p) { p.remove = true; BK.combat.explode(p.x, p.y, 0, 50, 26, 'hero', h); },
         onHit(p) { p.remove = true; BK.combat.explode(p.x, p.y, p.z, 50, 26, 'hero', h); },
         drawFn(c, sx, sy, p) {
@@ -86,9 +86,9 @@
       }));
     },
     firepot(h) {
-      const m = S.muzzle(h, 20, 70);
+      const m = S.muzzle(h, 20, 56);
       BK.game.addProjectile(new BK.Projectile({
-        x: m.x, y: m.y, z: m.z, vx: h.face * 4.6, vz: 5, grav: 0.35, w: 12, h: 12, team: 'hero', owner: h, dmg: 6, kb: 'light', life: 120,
+        x: m.x, y: m.y, z: m.z, vx: h.face * 4.6, vz: 2.5, grav: 0.35, w: 12, h: 36, team: 'hero', owner: h, dmg: 6, kb: 'light', life: 120,
         onGround(p) { p.remove = true; S.firePatch(p.x, p.y, 'hero', h); },
         onHit(p) { p.remove = true; S.firePatch(p.x, p.y, 'hero', h); },
         drawFn(c, sx, sy, p) {
@@ -117,7 +117,7 @@
     spear(h) {
       const m = S.muzzle(h, 20, 62);
       BK.game.addProjectile(new BK.Projectile({
-        x: m.x, y: m.y, z: m.z, vx: h.face * 13, w: 40, h: 8, team: 'hero', owner: h, dmg: 18, kb: 'down', push: 4, life: 70, pierce: 3, stop: 5,
+        x: m.x, y: m.y, z: m.z, vx: h.face * 13, w: 40, h: 56, team: 'hero', owner: h, dmg: 18, kb: 'down', push: 4, life: 70, pierce: 3, stop: 5,
         drawFn(c, sx, sy, p) {
           c.strokeStyle = '#6a4a2a'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(sx - p.face * 26, sy); c.lineTo(sx + p.face * 12, sy); c.stroke();
           R.poly(c, [sx + p.face * 12, sy - 3.5, sx + p.face * 22, sy, sx + p.face * 12, sy + 3.5], '#d0d4d8', '#333');
@@ -196,6 +196,7 @@
     update(game) {
       const I = this.ctrl, d = this.def;
       this.animT++;
+      if (I.pressed.atk) this._atkF = BK.frame;
       if (this.invul > 0) this.invul--;
       if (this.flash > 0) this.flash--;
       if (this.shotCd > 0) this.shotCd--;
@@ -223,8 +224,11 @@
       if (this.move) {
         const m = this.move;
         if (I.pressed.atk) this.bufA = 9; else if (this.bufA > 0) this.bufA--;
-        if (m.comboIdx != null && this.mf <= 4 && I.pressed.jmp && this.canSpecial()) {
+        const spOk = (m.comboIdx != null || m === d.moves.dash || m === d.moves.shoot || m === d.moves.charge) && this.canSpecial();
+        if (spOk && (I.pressed.sp || (m.comboIdx != null && I.pressed.jmp && BK.frame - (this._atkF == null ? -99 : this._atkF) <= 4))) {
           this.endMove(); this.doSpecial();
+        } else if (I.pressed.awk && this.awk >= 100 && (m.comboIdx != null || m === d.moves.shoot) && !this._awkPending) {
+          this.endMove(); this.doAwaken();
         } else if (m.comboIdx != null && this.mf >= (m.cancel || m.dur) && this.bufA > 0 && this.moveHit && m.comboIdx < 3) {
           this.bufA = 0; this.startCombo(m.comboIdx + 1);
         } else if (m.comboIdx != null && this.mf >= (m.cancel || m.dur) && this.chargeRel > 0 && d.moves.charge) {
@@ -239,11 +243,14 @@
       if (this.state === 'grab') { this.updateGrab(I, game); this.physics(); return; }
       if (this.state === 'jsq') {
         this.st++;
-        if (I.pressed.atk && this.canSpecial()) { this.doSpecial(); this.physics(); return; }
+        if ((I.pressed.atk || I.pressed.sp) && this.canSpecial()) { this.doSpecial(); this.physics(); return; }
         if (this.st >= 3) this.launchJump(I);
         this.physics(); return;
       }
-      if (this.landT > 0) { this.landT--; this.physics(); return; }
+      if (this.landT > 0) {
+        if (I.pressed.sp && this.canSpecial()) { this.landT = 0; this.doSpecial(); this.physics(); return; }
+        this.landT--; this.physics(); return;
+      }
       if (this.z > 0 || this.state === 'air') { this.updateAir(I); this.physics(); return; }
       this.updateGround(I, game);
       this.physics();
@@ -279,7 +286,7 @@
       }
       if (d.shot.hold && I.held.sht && !this.sub) {
         this.holdS++;
-        if (this.holdS === d.shot.hold.frames && this.ammo >= d.shot.hold.cost) {
+        if (this.holdS >= d.shot.hold.frames && this.ammo >= d.shot.hold.cost) {
           this.ammo -= d.shot.hold.cost; this.holdS = 0;
           d.shot.hold.fire(this);
           return;
@@ -290,7 +297,9 @@
       const sp = this.speedMul;
       let vx = I.dirX * d.walk * sp, vy = I.dirY * d.walkY * sp;
       if (I.dirX !== 0 && this.state !== 'run') {
-        if (I.dashTap === I.dirX || (I.stickFull >= 22 && BK.input.touchMode) || I.stickFull >= 22 && I === BK.input && BK.input.src.kb.run) { this.state = 'run'; this.runDir = I.dirX; BK.fx.dust(this.x - this.face * 8, this.y, 3); }
+        const tapDash = I.dashTap === I.dirX;
+        const autoDash = (I.stickFull >= 22 && BK.input.touchMode) || (I.stickFull >= 1 && I === BK.input && BK.input.src.kb.run);
+        if (tapDash || autoDash) { this.state = 'run'; this.runDir = I.dirX; this.autoRun = !tapDash; BK.fx.dust(this.x - this.face * 8, this.y, 3); }
       }
       if (this.state === 'run') {
         if (I.dirX !== this.runDir) this.state = 'idle';
@@ -301,10 +310,10 @@
       this.vx = vx; this.vy = vy;
       if (this.state !== 'run') this.state = (vx || vy) ? 'walk' : 'idle';
       this.walkPh += this.state === 'run' ? 0.3 * sp : (vx || vy) ? 0.2 * sp : 0;
-      // 掴み（敵に向かって歩き続ける）
-      if (this.state === 'walk' && I.dirX === this.face) {
+      // 掴み（敵に向かって歩き続ける）。倒しっぱなしの自動ダッシュでぶつかっても掴む（→→ の意図的なダッシュは素通り）
+      if ((this.state === 'walk' || (this.state === 'run' && this.autoRun)) && I.dirX === this.face) {
         const e = game.findGrabbable(this);
-        if (e) { if (++this.contactT >= 7) this.startGrab(e); }
+        if (e) { if (++this.contactT >= (this.state === 'run' ? 1 : 7)) { this.vx = 0; this.startGrab(e); } }
         else this.contactT = 0;
       } else this.contactT = 0;
     }
@@ -365,7 +374,8 @@
         const idef = BK.itemDefs[this.sub.id];
         this.shotCd = idef.fire(this) || 10;
         if (--this.sub.ammo <= 0) this.sub = null;
-        if (!air && d.moves.shoot) this.startMove(d.moves.shoot);
+        const sm = d.moves.subShoot || d.moves.shoot;
+        if (!air && sm) this.startMove(sm);
         return true;
       }
       if (this.reloading || this.ammo <= 0) return false;
@@ -440,7 +450,7 @@
       this.grabT++;
       if (I.pressed.atk) {
         const dir = I.dirX;
-        if ((dir !== 0 && this.knees >= 1) || this.knees >= 3 || !this.def.moves.knee) {
+        if ((dir !== 0 && (this.knees >= 1 || dir !== this.face)) || this.knees >= 3 || !this.def.moves.knee) {
           this.throwDir = dir || this.face;
           if (this.throwDir !== this.face) this.face = this.throwDir; // 背負い投げ
           this.startMove(this.def.moves.throw);
@@ -476,6 +486,8 @@
       // 敵（悪霊など）に掴まれている: 連打・レバガチャで脱出
       const g = this.grabbedBy;
       if (!g || g.dead) { this.grabbedBy = null; this.state = 'idle'; return; }
+      // 位置を決めない張り付き（悪霊）は重力で地面へ降ろす
+      if (this.z > 0 && !g.move) { this.z = Math.max(0, this.z + this.vz); this.vz = this.z > 0 ? this.vz - BK.GRAV * (this.gravMul != null ? this.gravMul : 1) : 0; }
       let n = (I.pressed.atk ? 1 : 0) + (I.pressed.jmp ? 1 : 0) + (I.pressed.sht ? 1 : 0);
       if (I.dirX !== I.prevDirX && I.dirX !== 0) n++;
       if (I.dirY !== I.prevDirY && I.dirY !== 0) n++;
@@ -504,7 +516,7 @@
     }
     onDealDamage(dmg, target) {
       if (target && target.isProp) return;
-      this.awk = Math.min(100, this.awk + dmg * 0.32);
+      if (!(this.awkT > 0)) this.awk = Math.min(100, this.awk + dmg * 0.32); // 覚醒中はゲージを溜めない
       if (BK.game) BK.game.onHeroDealt(dmg, target);
     }
     die(src, h, dir) {

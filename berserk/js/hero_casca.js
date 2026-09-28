@@ -415,7 +415,7 @@
 
   BK.registerHero({
     id: 'casca', name: 'キャスカ', title: '鷹の団 千人長',
-    desc: '鷹の団の女剣士。反りのある細身の剣で素早い連撃を刻む。空中攻撃が当たると跳ね上がり、空中で最大3回まで連続攻撃できる。',
+    desc: '鷹の団の女剣士。反りのある細身の剣で素早い連撃。\n空中攻撃が当たると跳ね上がり、\n空中で最大3回まで連続攻撃できる。',
     stats: { life: 2, power: 3, speed: 5, reach: 3, shot: 4 },
     color: '#5a82c8',
     maxHp: 105, walk: 2.6, walkY: 1.7, run: 5.0, jumpV: 9.8, jumpVX: 3.0, runJumpVX: 5.4, weight: 1.15, w: 24, h: 88,

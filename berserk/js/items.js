@@ -131,8 +131,9 @@
 
   /** 敵が落とすアイテムのテーブル（重み付き） */
   BK.dropTable = {
-    common: [[60, null], [10, 'bread'], [6, 'wine'], [10, 'silver'], [4, 'gold'], [3, 'knives'], [2, 'bowgun'], [2, 'bombs'], [1, 'firepot'], [2, 'spear']],
-    prop: [[16, 'bread'], [12, 'meat'], [10, 'wine'], [3, 'roast'], [14, 'silver'], [8, 'gold'], [3, 'gem'], [6, 'bowgun'], [5, 'bombs'], [4, 'firepot'], [6, 'knives'], [4, 'spear']],
+    // 武器は主に樽・木箱から（AvP 同様）。雑魚からはたまに
+    common: [[64, null], [10, 'bread'], [6, 'wine'], [10, 'silver'], [4, 'gold'], [1, 'knives'], [1, 'bowgun'], [1, 'bombs'], [1, 'spear']],
+    prop: [[16, 'bread'], [12, 'meat'], [10, 'wine'], [3, 'roast'], [14, 'silver'], [8, 'gold'], [3, 'gem'], [1, 'behelit'], [6, 'bowgun'], [5, 'bombs'], [4, 'firepot'], [6, 'knives'], [4, 'spear']],
   };
 
   // --------------------------------------------------------- item entity
@@ -143,12 +144,23 @@
     }
     update(game) {
       this.t++;
-      if (this.z > 0 || this.vz > 0) { this.z += this.vz; this.vz -= 0.4; this.x += this.vx; if (this.z <= 0) { this.z = 0; this.vz = 0; this.vx = 0; } }
+      if (this.z > 0 || this.vz > 0) {
+        this.z += this.vz; this.vz -= 0.4; this.x += this.vx;
+        // 着地点は画面内に収める（カメラは戻らないので、画面外に落ちると拾えなくなる）
+        if (this.z <= 0) { this.z = 0; this.vz = 0; this.vx = 0; this.x = U.clamp(this.x, BK.cam.x + 24, BK.cam.x + BK.W - 24); }
+      }
       if (--this.life <= 0) this.remove = true;
       const h = game.hero;
       if (!h || h.dead || this.t < 14 || this.z > 10) return;
       if (h.state === 'grabbed' || h.state === 'down' || h.state === 'fall') return;
-      if (Math.abs(h.x - this.x) < 20 && Math.abs(h.y - this.y) < 12) this.pickup(h, game);
+      if (Math.abs(h.x - this.x) < 20 && Math.abs(h.y - this.y) < 12) {
+        // 別の武器を持っている時は自動で持ち替えない（上に立って 射 で持ち替え）
+        if (this.def.kind === 'weapon' && h.sub && h.sub.id !== this.id && !h.ctrl.pressed.sht) {
+          if (!this.hinted) { this.hinted = true; BK.fx.text(this.x, this.y, 40, '射で持ち替え', '#ffd0a0', 11); }
+          return;
+        }
+        this.pickup(h, game);
+      }
     }
     pickup(h, game) {
       const d = this.def;

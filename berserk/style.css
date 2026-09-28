@@ -58,7 +58,7 @@ body {
 #bk-b-sp  { --sz: min(52px, 14vh); right: calc(var(--sar) + min(26px, 7vh)); bottom: calc(var(--sab) + min(152px, 40vh)); }
 #bk-b-awk { --sz: min(50px, 13.5vh); right: calc(var(--sar) + min(180px, 47vh)); bottom: calc(var(--sab) + min(150px, 39vh)); opacity: .22; }
 #bk-b-awk.ready { opacity: 1; border-color: rgba(255, 60, 40, 1); animation: bk-pulse .6s ease-in-out infinite alternate; }
-#bk-b-pause { --sz: min(38px, 10vh); right: calc(var(--sar) + 8px); top: calc(var(--sat) + min(58px, 15vh)); opacity: .7; }
+#bk-b-pause { --sz: min(38px, 10vh); right: calc(var(--sar) + 8px); top: calc(var(--sat) + var(--cv-top, 0px) + min(58px, 15vh)); opacity: .7; }
 #bk-b-pause b { font-size: calc(var(--sz) * .32); letter-spacing: -.1em; }
 .bk-btn.bk-hide { display: none; }
 @keyframes bk-pulse { from { box-shadow: 0 0 4px rgba(255, 40, 20, .6); } to { box-shadow: 0 0 22px rgba(255, 40, 20, 1); } }

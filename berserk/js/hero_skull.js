@@ -564,6 +564,10 @@
         BK.fx.shake(5, 10); BK.fx.dust(h.x + h.face * 30, h.y, 6);
       },
     },
+    subShoot: { // 拾った武器を投げる／撃つ（光刃の大振りではなく素早い片手動作）
+      dur: 10, cancelShot: 5,
+      kf: [[0, { aB: 60, eB: 40, lean: 6 }], [3, { aB: 95, eB: 0, lean: 10 }, 'snap'], [10, { aB: 70, eB: 20, lean: 6 }]],
+    },
     shoot: { // 光刃: 横薙ぎで霊気の三日月を放つ
       dur: 22, cancelShot: 12, trail: [1, 6], trailCol: '#d6eaff',
       kf: [[0, { aF: 150, eF: 40, wAbs: 225, lean: -6, aB: 40, eB: 70 }],
@@ -600,7 +604,7 @@
 
   BK.registerHero({
     id: 'skull', name: '髑髏の騎士', title: '使徒を狩る者',
-    desc: '漆黒の甲冑に髑髏の兜。最も重く、最も打たれ強い。長剣の重い連撃と盾打ち、霊気の三日月「光刃」で使徒を断つ。',
+    desc: '漆黒の甲冑に髑髏の兜。最も重く、最も打たれ強い。\n長剣の重い連撃と盾打ち、\n霊気の三日月「光刃」で使徒を断つ。',
     stats: { life: 5, power: 4, speed: 2, reach: 4, shot: 3 },
     color: '#d8cfb4',
     maxHp: 190, walk: 1.8, walkY: 1.2, run: 3.8, jumpV: 9.0, jumpVX: 2.4, runJumpVX: 4.2, weight: 1.7, w: 32, h: 102,

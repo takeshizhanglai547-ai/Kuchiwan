@@ -156,6 +156,16 @@
       this.physics();
       // 画面外に逃げすぎない
       if (!this.entering && !this.def.freeRoam) this.x = U.clamp(this.x, BK.cam.x - 50, BK.cam.x + BK.W + 50);
+      // 仲間とぴったり重ならないよう、少しずつ離れる（2体が1体に見えるのを防ぐ）
+      if (!this.boss && this.z <= 0 && game) for (const o of game.actors) {
+        if (o === this || o.team !== 'enemy' || o.dead || o.boss || o.isProp || o.z > 0) continue;
+        const ddx = this.x - o.x, ddy = this.y - o.y;
+        if (Math.abs(ddx) < 14 && Math.abs(ddy) < 6) {
+          const s = (ddx || (this.uid > o.uid ? 1 : -1)) > 0 ? 1 : -1;
+          this.x += s * 0.7;
+          this.y = U.clamp(this.y + ((ddy || s) > 0 ? 0.35 : -0.35), 0, BK.DEPTH);
+        }
+      }
     }
     land() { if (this.state === 'air') { this.state = 'idle'; BK.fx.dust(this.x, this.y, 5); BK.audio.sfx('land', { pitch: 0.8 }); } }
 
@@ -180,8 +190,13 @@
       }
       switch (ai.mode) {
         case 'attack': {
-          const tx = h.x + side * range * 0.9, ty = h.y;
-          const m = this.pickMove(adx, ady);
+          // 画面外からは攻撃しない: 回り込み先が画面外なら反対側から攻める
+          const lo = BK.cam.x + 24, hi = BK.cam.x + BK.W - 24;
+          let tx = h.x + side * range * 0.9;
+          if (tx < lo || tx > hi) tx = h.x - side * range * 0.9;
+          const ty = h.y;
+          const inView = this.x > lo && this.x < hi;
+          const m = inView ? this.pickMove(adx, ady) : null;
           if (m && ady <= ((m.ai && m.ai.dy) || 8)) { this.attack(m); return; }
           this.moveToward(tx, ty, (this.def.speed || 1.2) * 1.15);
           this.face = U.sign(dx);
@@ -194,7 +209,8 @@
           else if (ai.cd > 10 && U.chance(0.02)) { this.vx = side * 1.5; }
           break;
         default: { // wait
-          const tx = h.x + side * ai.waitDist;
+          let tx = h.x + side * ai.waitDist; // 見えない位置では待機しない
+          if (tx < BK.cam.x + 24 || tx > BK.cam.x + BK.W - 24) tx = U.clamp(h.x - side * ai.waitDist, BK.cam.x + 24, BK.cam.x + BK.W - 24);
           const ty = U.clamp(h.y + ai.slotY, 4, BK.DEPTH - 4);
           const far = Math.abs(this.x - tx) > 8 || Math.abs(this.y - ty) > 6;
           if (far) this.moveToward(tx, ty, (this.def.speed || 1.2) * 0.7);

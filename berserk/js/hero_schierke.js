@@ -461,11 +461,28 @@
     c.globalAlpha = a0;
   }
   /** 画面上部に大きく浮かぶ精霊の文字（HUD と重ならない中央寄りの帯に並べる） */
+  // 大きな漢字は一度だけ描いてキャッシュし、拡大縮小して貼る（毎フレーム異なるフォントサイズで描くと重い）
+  const KANJI_SPR = new Map();
+  function kanjiSprite(ch, col) {
+    const rs = Math.min(BK.renderScale, 2), key = ch + col + rs.toFixed(2);
+    let cv = KANJI_SPR.get(key);
+    if (!cv) {
+      const S = 62, pad = 8;
+      cv = document.createElement('canvas');
+      cv.width = cv.height = Math.ceil((S + pad * 2) * rs);
+      const k = cv.getContext('2d'); k.scale(rs, rs);
+      BK.text(k, ch, S / 2 + pad, S / 2 + pad, { size: S, color: col, stroke: '#08040a', strokeW: 6, weight: 800 });
+      cv.lw = S + pad * 2; KANJI_SPR.set(key, cv);
+    }
+    return cv;
+  }
   function kanji(ch, col, slot) {
+    kanjiSprite(ch, col);
     BK.fx.add({
       type: 'custom', x: BK.cam.x + BK.W * (0.32 + slot * 0.12), y: 0, z: BK.FLOOR_TOP - 86, life: 56,
       draw(c, sx, sy, k) {
-        BK.text(c, ch, sx, sy, { size: 50 + (1 - k) * 12, color: col, alpha: Math.min(1, k * 1.8) * 0.9, stroke: '#08040a', strokeW: 6, weight: 800 });
+        const cv = kanjiSprite(ch, col), s = (50 + (1 - k) * 12) / 62 * cv.lw;
+        c.globalAlpha = Math.min(1, k * 1.8) * 0.9; c.drawImage(cv, sx - s / 2, sy - s / 2, s, s); c.globalAlpha = 1;
       },
     });
   }
@@ -727,6 +744,15 @@
       sfx: [[2, 'swing']],
       onFrame(h, f) { if (f === 5) { const t = tipNow(h); windFx(t.x, h.y, t.z, h.face, 4); } },
     },
+    downAtk: { // 空中 ↓+斬: 杖を突き立てて急降下
+      air: true, dur: 80, trail: [5, 80], trailCol: '#c8f7e6',
+      kf: [[0, { aF: 160, eF: 20, wAbs: 190, lF: 50, kF: 80, lB: 0, kB: 70, cape: 1 }],
+        [6, { aF: 20, eF: 0, wAbs: 0, lF: 30, kF: 50, lB: -10, kB: 40, lean: 10, cape: 1.4, glow: 1 }, 'snap'],
+        [80, { aF: 20, eF: 0, wAbs: 0, lF: 30, kF: 50, lB: -10, kB: 40, lean: 10, cape: 1.4, glow: 1 }]],
+      hits: [{ f: [6, 80], x: [-8, 40], z: [-50, 36], d: 18, dmg: 12, kb: 'down', push: 3 }],
+      onFrame(h, f) { if (f === 6) { h.vz = -8; h.vx *= 0.3; BK.audio.sfx('swing'); } },
+      onEnd(h) { if (h.z <= 1) { windFx(h.x + h.face * 14, h.y, 6, h.face, 5); BK.fx.dust(h.x + h.face * 14, h.y, 6); } },
+    },
     rising: { // 上昇気流: 杖を振り上げ、竜巻で敵を打ち上げる
       dur: 38, trail: [5, 12], invul: [0, 10], trailCol: '#c8f7e6',
       kf: [[0, { aF: 20, eF: 20, wAbs: -10, lean: 20, lF: 40, kF: 70, lB: -20, kB: 60, drop: 3 }],
@@ -828,7 +854,7 @@
 
   BK.registerHero({
     id: 'schierke', name: 'シールケ', title: '魔女の弟子',
-    desc: '大きな帽子の小さな魔女。体は脆いが魔術は随一。敵を自動で追う「精霊の火」と、風・雷・火を宿す杖術で戦う。',
+    desc: '大きな帽子の小さな魔女。体は脆いが魔術は随一。\n敵を自動で追う「精霊の火」と、\n風・雷・火を宿す杖術で戦う。',
     stats: { life: 2, power: 2, speed: 4, reach: 2, shot: 5 },
     color: '#8fe8cf',
     maxHp: 95, walk: 2.4, walkY: 1.6, run: 4.6, jumpV: 9.6, jumpVX: 2.8, runJumpVX: 5.0, weight: 1.0, w: 24, h: 84,

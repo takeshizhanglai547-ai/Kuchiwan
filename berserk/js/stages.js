@@ -27,13 +27,14 @@
     _cache: new Map(),
     /** オフスクリーンに一度だけ描いてキャッシュ（解像度変化で作り直し） */
     layer(key, w, h, fn) {
-      const rs = Math.min(BK.renderScale, 2);
+      // 倍率を段階化: URLバー等でわずかに renderScale が変わっても全レイヤーを作り直さない
+      const r = BK.renderScale, rs = r > 1.5 ? 2 : r > 1.1 ? 1.5 : 1;
       const k = key + '@' + rs.toFixed(2);
       let cv = this._cache.get(k);
       if (cv) { this._cache.delete(k); this._cache.set(k, cv); } // LRU: 最近使ったものを末尾へ
       if (!cv) {
         // 解像度が変わったら古い倍率のキャッシュは捨てる
-        if (this._rs !== rs) { this._rs = rs; for (const key of Array.from(this._cache.keys())) if (!key.endsWith('@' + rs.toFixed(2))) this._cache.delete(key); }
+        if (this._rs !== rs) { this._rs = rs; for (const [key, old] of Array.from(this._cache)) if (!key.endsWith('@' + rs.toFixed(2))) { old.width = old.height = 0; this._cache.delete(key); } }
         cv = document.createElement('canvas');
         cv.width = Math.ceil(w * rs); cv.height = Math.ceil(h * rs);
         const c = cv.getContext('2d');
@@ -41,7 +42,7 @@
         fn(c, w, h);
         cv.lw = w; cv.lh = h;
         this._cache.set(k, cv);
-        if (this._cache.size > 48) this._cache.delete(this._cache.keys().next().value);
+        if (this._cache.size > 48) { const [ok, oc] = this._cache.entries().next().value; oc.width = oc.height = 0; this._cache.delete(ok); }
       }
       return cv;
     },
@@ -242,13 +243,15 @@
       const fx = BK.fx;
       this.time++;
       if (this.banners.length) { for (const b of this.banners) b.t++; this.banners = this.banners.filter(b => b.t < b.dur); }
-      if (fx.hitstop > 0) { fx.hitstop--; fx.shakeT > 0 && fx.update(); return; }
-      if (fx.slowmo > 0) { fx.slowmo--; if (fx.slowmo % 2) { fx.update(); return; } }
+      // 止まっているフレームの押下は次のフレームへ持ち越す（連打・必殺の取りこぼし防止）
+      if (fx.hitstop > 0) { fx.hitstop--; BK.input.defer(); fx.shakeT > 0 && fx.update(); return; }
+      if (fx.slowmo > 0) { fx.slowmo--; if (fx.slowmo % 2) { BK.input.defer(); fx.update(); return; } }
       const h = this.hero;
       if (BK.autoplay) BK.autoCtrl.think(this);
       // 覚醒演出中は周囲が止まる
       if (this.freezeT > 0) {
         this.freezeT--;
+        if (this.freezer !== h) BK.input.defer();
         fx.darken = Math.min(0.55, fx.darken + 0.05);
         if (this.freezer) this.freezer.update(this);
         fx.update();
@@ -278,7 +281,7 @@
       if (this.clearT > 0) {
         this.clearT++;
         const cd = (this.boss && this.boss.def && this.boss.def.clearDelay) || 60;
-        if (this.clearT === cd) { this.banner('STAGE CLEAR', '#ffd27a', null, 200); BK.audio.playSong('clear'); }
+        if (this.clearT === cd) { this.banner('ROUND CLEAR', '#ffd27a', null, 200); BK.audio.playSong('clear'); }
         if (this.clearT > cd + 170 && BK.scene && BK.scene.onStageClear) BK.scene.onStageClear();
       }
     }

@@ -24,7 +24,7 @@
         scene: BK.sceneName, frame: BK.frame, errors: BK.errors.slice(0, 5),
         stage: g ? g.stageIdx : null, camX: BK.cam.x, time: g ? g.time : 0,
         hero: g && g.hero ? { x: g.hero.x, y: g.hero.y, hp: g.hero.hp, lives: g.hero.lives, state: g.hero.state, dead: g.hero.dead } : null,
-        enemies: g ? g.actors.filter(a => a.team === 'enemy' && !a.dead).length : 0,
+        enemies: g && g.actors ? g.actors.filter(a => a.team === 'enemy' && !a.dead).length : 0,
         boss: g && g.boss ? { name: g.boss.name, hp: g.boss.hp, dead: g.boss.dead } : null,
         bossDefeated: g ? g.bossDefeated : false, lock: g && g.lock ? g.lock.ev.at : null, evIdx: g ? g.evIdx : 0,
         score: g ? g.score : 0,

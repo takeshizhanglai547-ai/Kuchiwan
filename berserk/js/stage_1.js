@@ -93,7 +93,7 @@
     props: [
       { x: 330, y: 30, type: 'barrel' }, { x: 380, y: 96, type: 'crate', item: 'meat' },
       { x: 1050, y: 20, type: 'barrel', item: 'bowgun' }, { x: 1500, y: 90, type: 'crate' }, { x: 1540, y: 70, type: 'barrel' },
-      { x: 2250, y: 40, type: 'barrel', item: 'roast' }, { x: 2800, y: 100, type: 'crate', item: 'bombs' }, { x: 3060, y: 20, type: 'barrel' },
+      { x: 2250, y: 40, type: 'barrel', item: 'roast' }, { x: 2800, y: 100, type: 'crate', item: 'bombs' }, { x: 3060, y: 20, type: 'barrel', item: 'behelit' },
     ],
     events: [
       { at: 120, waves: [[{ t: 'undead', side: 'R', y: 40 }, { t: 'undead', side: 'R', y: 90, off: 40 }], [{ t: 'undead', side: 'R', y: 20 }, { t: 'undead', side: 'L', y: 80 }]] },

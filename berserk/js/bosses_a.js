@@ -1254,7 +1254,7 @@
   }
 
   BK.registerEnemy({
-    id: 'count', name: '伯爵', title: '伯爵', boss: true,
+    id: 'count', name: '伯爵', title: '異端狩りの領主', boss: true,
     hp: 520, w: 196, h: 128, weight: 9, speed: 0.55, speedY: 0.45, score: 10000, bossBonus: 40000,
     poise: 90, shadowR: 118, bloodCol: '#6a2a24', drop: null, dieSfx: 'roar', diePitch: 0.5,
     dieW: 230, dieH: 150,
@@ -1708,7 +1708,7 @@
   }
 
   BK.registerEnemy({
-    id: 'zodd', name: '不死のゾッド', title: '不死者', boss: true,
+    id: 'zodd', name: '不死のゾッド', title: '戦いに飢えた使徒', boss: true,
     hp: 650, w: 60, h: 172, weight: 4, speed: 1.45, speedY: 1.0, score: 15000, bossBonus: 50000,
     poise: 85, shadowR: 46, bloodCol: '#6a0a0a', drop: null, dieSfx: 'roar', diePitch: 0.6,
     dieW: 120, dieH: 200,

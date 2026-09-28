@@ -77,20 +77,26 @@ window.BK = window.BK || {};
   BK.canvas = cv; BK.ctx = ctx;
   BK.renderScale = 1; BK.cssScale = 1;
 
+  // ノッチ等のセーフエリアを除いた幅を測るための要素（キャンバスをセーフエリア内に収める）
+  const safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;top:0;bottom:0;left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px)';
+  document.body.appendChild(safeProbe);
   function resize() {
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const vw = safeProbe.getBoundingClientRect().width || window.innerWidth, vh = window.innerHeight;
     const aspect = vw / vh;
     BK.W = Math.round(U.clamp(BK.H * aspect, 560, 800));
     const cssScale = Math.min(vw / BK.W, vh / BK.H);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     // バッキングストアが大きすぎるとスマホで重いので幅 1600px 程度に抑える
-    const rs = Math.min(cssScale * dpr, 1600 / BK.W);
+    const rs = Math.min(cssScale * dpr, 1600 / BK.W, BK.qualityCap || 9);
     cv.style.width = Math.round(BK.W * cssScale) + 'px';
     cv.style.height = Math.round(BK.H * cssScale) + 'px';
     cv.width = Math.round(BK.W * rs);
     cv.height = Math.round(BK.H * rs);
     BK.renderScale = cv.width / BK.W;
     BK.cssScale = cssScale;
+    BK.needsRender = true; // バッキングストア再確保で絵が消えるため
+    document.documentElement.style.setProperty('--cv-top', Math.max(0, (vh - BK.H * cssScale) / 2) + 'px');
     updateRotateHint();
   }
   window.addEventListener('resize', resize);
@@ -102,8 +108,11 @@ window.BK = window.BK || {};
   function updateRotateHint() {
     if (!rotEl) return;
     const portrait = window.innerHeight > window.innerWidth * 1.05;
-    rotEl.hidden = !(BK.input && BK.input.touchMode && portrait && !rotateDismissed);
+    const show = !!(BK.input && BK.input.touchMode && portrait && !rotateDismissed);
+    if (show && rotEl.hidden && BK.scene && BK.scene.onHide) BK.scene.onHide(); // プレイ中なら自動ポーズ
+    rotEl.hidden = !show;
   }
+  BK.rotateHintShown = () => !!rotEl && !rotEl.hidden;
   BK.updateRotateHint = updateRotateHint;
   const rotBtn = document.getElementById('bk-rot-dismiss');
   if (rotBtn) rotBtn.addEventListener('click', () => { rotateDismissed = true; updateRotateHint(); });
@@ -164,8 +173,11 @@ window.BK = window.BK || {};
     let dy = (I.held.down ? 1 : 0) - (I.held.up ? 1 : 0);
     const mag = Math.hypot(I.ax, I.ay);
     if (mag > 0.3) {
-      dx = Math.abs(I.ax) > 0.38 ? Math.sign(I.ax) : 0;
-      dy = Math.abs(I.ay) > 0.42 ? Math.sign(I.ay) : 0;
+      // ヒステリシス: 倒している方向は少し戻しただけでは解除しない（指の震えで誤ダッシュしない）
+      const hx = I.dirX !== 0 && Math.sign(I.ax) === I.dirX ? 0.24 : 0.38;
+      const hy = I.dirY !== 0 && Math.sign(I.ay) === I.dirY ? 0.28 : 0.42;
+      dx = Math.abs(I.ax) > hx ? Math.sign(I.ax) : 0;
+      dy = Math.abs(I.ay) > hy ? Math.sign(I.ay) : 0;
     }
     I.prevDirX = I.dirX; I.prevDirY = I.dirY;
     I.dirX = dx; I.dirY = dy;
@@ -177,6 +189,8 @@ window.BK = window.BK || {};
       if (f - I._xRel[I.dirX] <= 14 && f - I._xPressAt[I.dirX] <= 26) I.dashTap = I.dirX;
       I._xPressAt[I.dirX] = f;
     }
+    if (!I.dashTap && I._dashCarry) I.dashTap = I._dashCarry;
+    I._dashCarry = 0;
     // オートダッシュ用: スティックを横に倒し切っている時間
     const full = (mag > 0.88 && Math.abs(I.ax) > 0.8) || (I.src.kb.run && dx !== 0);
     I.stickFull = full ? I.stickFull + 1 : 0;
@@ -185,6 +199,11 @@ window.BK = window.BK || {};
     if (I.dirY === -1 && I.prevDirY !== -1 && f - I._downAt <= 18) I.duFrame = f;
   };
   I.consumeTap = function () { const t = I.tap; I.tap = null; return t; };
+  /** ヒットストップ等でゲームが止まったフレームの押下を、次のフレームへ持ち越す */
+  I.defer = function () {
+    for (const b of ['atk', 'jmp', 'sht', 'sp', 'awk']) if (I.pressed[b]) I._pc[b]++;
+    if (I.dashTap) I._dashCarry = I.dashTap;
+  };
   /** メニューでの決定 (攻撃 / ジャンプ / Enter / タップ) */
   I.confirm = function () { return I.pressed.atk || I.pressed.start || I.pressed.jmp; };
 
@@ -211,7 +230,7 @@ window.BK = window.BK || {};
     if (b === 'run') { I.src.kb.run = false; return; }
     I.release('kb', b);
   });
-  window.addEventListener('blur', () => { I.releaseAll('kb'); I.releaseAll('touch'); });
+  window.addEventListener('blur', () => { I.releaseAll('kb'); I.releaseAll('touch'); if (BK.scene && BK.scene.onHide) BK.scene.onHide(); });
 
   // gamepad (standard mapping)
   const PADMAP = { 0: 'jmp', 1: 'sht', 2: 'atk', 3: 'sp', 5: 'awk', 7: 'awk', 9: 'start', 8: 'pause', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
@@ -351,6 +370,8 @@ window.BK = window.BK || {};
     I.tap = { x: (e.clientX - r.left) / r.width * BK.W, y: (e.clientY - r.top) / r.height * BK.H };
     I.anyKey = true;
   }, { passive: false });
+  // タッチの pointerdown をユーザー操作と数えないブラウザがある → 指を離した時にも音声を解錠
+  ['pointerup', 'touchend', 'click'].forEach(t => window.addEventListener(t, () => { if (BK.audio && BK.audio.unlock) BK.audio.unlock(); }, { capture: true, passive: true }));
   // iOS のダブルタップ拡大・ピンチ拡大を抑止
   document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1 || e.target === cv || touchEl.contains(e.target)) e.preventDefault(); }, { passive: false });
@@ -530,7 +551,13 @@ window.BK = window.BK || {};
   function frame(now) {
     requestAnimationFrame(frame);
     if (!last) last = now;
+    if (BK.halt) { last = now; acc = 0; return; } // テスト用: 自動進行を止めて BK.stepOnce() で1フレームずつ進める
     let dt = now - last; last = now;
+    // 自動画質: プレイ中に重いフレーム(24ms超)が続いたら内部解像度を2割下げる（最低 1.0）
+    if (BK.sceneName === 'play' && !(BK.turbo > 1) && !document.hidden && dt < 250) {
+      BK._slow = dt > 24 ? (BK._slow || 0) + 1 : Math.max(0, (BK._slow || 0) - 2);
+      if (BK._slow > 90 && BK.renderScale > 1.05) { BK._slow = 0; BK.qualityCap = Math.max(1, BK.renderScale * 0.8); resize(); }
+    }
     if (dt > 250) dt = STEP; // タブ復帰時などの大ジャンプは捨てる
     acc += dt;
     let n = 0;
@@ -544,7 +571,8 @@ window.BK = window.BK || {};
         acc -= STEP; n++;
       }
       if (n >= 4) acc = 0;
-      render();
+      // 90/120Hz 端末では更新の無い rAF が来る。同じ絵を描き直さない
+      if (n > 0 || BK.needsRender) { BK.needsRender = false; render(); }
     } catch (err) {
       BK.errors.push(String(err && err.stack || err));
       if (BK.errors.length < 5) console.error(err);
@@ -556,6 +584,13 @@ window.BK = window.BK || {};
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, BK.W, BK.H);
     if (BK.scene && BK.scene.draw) BK.scene.draw(ctx);
   }
+  /** テスト用: 1フレームだけ進めて描画する */
+  BK.stepOnce = function (noDraw) {
+    I.step();
+    BK.frame++; BK.sceneT++;
+    if (BK.scene && BK.scene.update) BK.scene.update();
+    if (!noDraw) render();
+  };
   BK.start = function (firstScene) {
     if (running) return;
     running = true;

@@ -81,7 +81,7 @@
       const g = c.createLinearGradient(0, 0, 0, H);
       g.addColorStop(0, '#070203'); g.addColorStop(0.7, '#230507'); g.addColorStop(1, '#3a0a0a');
       c.fillStyle = g; c.fillRect(0, 0, W, H);
-      drawEclipse(c, W * 0.5, 118, 62, t);
+      drawEclipse(c, W * 0.5, 104, 50, t);
       // 丘と剣士のシルエット
       c.fillStyle = '#050102';
       c.beginPath(); c.moveTo(0, H); c.lineTo(0, 300); c.quadraticCurveTo(W * 0.3, 262, W * 0.5, 268); c.quadraticCurveTo(W * 0.72, 274, W, 300); c.lineTo(W, H); c.fill();
@@ -89,7 +89,13 @@
       c.strokeStyle = '#050102'; c.lineWidth = 2;
       for (let i = 0; i < 26; i++) { const x = (i * 71) % W, y = 290 + ((i * 37) % 30); c.beginPath(); c.moveTo(x, y); c.lineTo(x + ((i % 3) - 1) * 4, y - 16 - (i % 4) * 4); c.stroke(); }
       const guts = BK.heroes.guts;
-      if (guts) drawHeroFigure(c, guts, W * 0.5, 272, 1.25, t, { tint: '#050102', pose: R.merge(guts.stance, { cape: 0.6 + Math.sin(t * 0.05) * 0.2 }) });
+      if (guts) {
+        // 丘の上に立つ黒い剣士（紅い空を背に、縁を赤く光らせる）
+        const gp = R.merge(guts.stance, { cape: 0.6 + Math.sin(t * 0.05) * 0.2 });
+        const gx = W * 0.8, gy = 288;
+        drawHeroFigure(c, guts, gx + 1.5, gy - 1, 1.4, t, { tint: '#9a1a12', pose: gp });
+        drawHeroFigure(c, guts, gx, gy, 1.4, t, { tint: '#050102', pose: gp });
+      }
       drawAsh(c, 60);
       // タイトル
       const pulse = 0.85 + Math.sin(t * 0.05) * 0.15;
@@ -145,7 +151,7 @@
       g.addColorStop(0, '#0b0405'); g.addColorStop(1, '#2a0808');
       c.fillStyle = g; c.fillRect(0, 0, W, H);
       drawAsh(c, 40, '#a03020');
-      T(c, '剣士を選べ', W / 2, 22, { size: 18, color: INK, weight: 800, stroke: '#000' });
+      T(c, '戦士を選べ', W / 2, 22, { size: 18, color: INK, weight: 800, stroke: '#000' });
       const n = BK.heroOrder.length;
       const cw = Math.min(150, (W - 40) / n - 8), gap = 8;
       const x0 = W / 2 - (n * cw + (n - 1) * gap) / 2;
@@ -192,8 +198,10 @@
   function wrapText(c, str, x, y, maxW, lh, o) {
     c.font = BK.font(o.size || 12, o.weight);
     let line = '', yy = y;
+    const NOSTART = '、。，．・：；？！ー）」』】…ぁぃぅぇぉっゃゅょァィゥェォッャュョ'; // 行頭に置かない文字（ぶら下げ）
     for (const ch of str) {
-      if (ch === '\n' || c.measureText(line + ch).width > maxW) { T(c, line, x, yy, Object.assign({ align: 'left' }, o)); yy += lh; line = ch === '\n' ? '' : ch; }
+      const over = c.measureText(line + ch).width > maxW;
+      if (ch === '\n' || (over && !NOSTART.includes(ch))) { T(c, line, x, yy, Object.assign({ align: 'left' }, o)); yy += lh; line = ch === '\n' ? '' : ch; }
       else line += ch;
     }
     if (line) T(c, line, x, yy, Object.assign({ align: 'left' }, o));
@@ -241,15 +249,26 @@
       this.paused = false; this.cont = 0; this.contT = 0;
       BK.setTouchUI(true);
     },
-    exit() { BK.setTouchUI(false); },
+    exit() {
+      BK.setTouchUI(false);
+      if (this.paused && BK.audio.musBus) BK.audio.musBus.gain.value = BK.audio.musicVol; // ポーズ中に抜けても音量を戻す
+      this.paused = false;
+    },
     onHide() { if (!this.paused && !this.cont) this.pause(true); },
+    quitToTitle() {
+      BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 50000), this.game.score));
+      BK.audio.stopSong();
+      BK.setScene('title');
+    },
     pause(on) {
       this.paused = on;
+      this.psel = 0;
+      BK.input.consumeTap(); // プレイ中のクリックをメニューのボタンに持ち越さない
       BK.setTouchUI(!on);
       if (BK.audio.musBus) BK.audio.musBus.gain.value = BK.audio.musicVol * (on ? 0.3 : 1);
       BK.audio.sfx('select');
     },
-    onGameOver() { this.cont = 1; this.contT = 60 * 10 - 1; BK.setTouchUI(false); BK.audio.playSong('gameover'); },
+    onGameOver() { this.cont = 1; this.csel = 0; this.contT = 60 * 10 - 1; BK.input.consumeTap(); BK.setTouchUI(false); BK.audio.playSong('gameover'); },
     onStageClear() {
       if (this.leaving) return;
       this.leaving = true;
@@ -260,20 +279,28 @@
       this.leaving = false;
       if (this.cont) { this.updateContinue(); return; }
       if (this.paused) {
-        const tap = I.consumeTap(), z = hitZone(tap);
+        // タップ、または ↑↓ で選んで 斬/跳 で決定（キーボード・パッド）
+        const tap = I.consumeTap(), items = ['resume', 'sound', 'title'];
+        if (I.pressed.up) { this.psel = (this.psel + 2) % 3; BK.audio.sfx('select'); }
+        if (I.pressed.down) { this.psel = (this.psel + 1) % 3; BK.audio.sfx('select'); }
+        const z = hitZone(tap) || ((I.pressed.atk || I.pressed.jmp) ? items[this.psel] : null);
         if (z === 'resume' || I.pressed.pause || I.pressed.start) this.pause(false);
         else if (z === 'sound') BK.audio.toggleMute();
-        else if (z === 'title') { BK.audio.stopSong(); BK.setScene('title'); }
+        else if (z === 'title') this.quitToTitle();
         return;
       }
+      I.consumeTap(); // プレイ中のキャンバスクリックは溜めない
+      if (BK.rotateHintShown && BK.rotateHintShown()) { this.pause(true); return; }
       if (I.pressed.pause || I.pressed.start) { this.pause(true); return; }
       g.update();
     },
     updateContinue() {
       const I = BK.input;
       this.contT--;
-      const tap = I.consumeTap(), z = hitZone(tap);
-      if (z === 'yes' || I.pressed.atk || I.pressed.start) {
+      const tap = I.consumeTap();
+      if (I.pressed.left || I.pressed.right) { this.csel = this.csel ? 0 : 1; BK.audio.sfx('select'); }
+      const z = hitZone(tap) || ((I.pressed.atk || I.pressed.start || I.pressed.jmp) ? (this.csel ? 'no' : 'yes') : null);
+      if (z === 'yes') {
         this.cont = 0; this.game.continueGame(); BK.setTouchUI(true);
         BK.audio.playSong(this.game.boss && !this.game.bossDefeated ? (this.game.stage.bossBgm || 'boss') : this.game.stage.bgm);
         return;
@@ -297,11 +324,12 @@
   function drawPause(c) {
     c.fillStyle = 'rgba(0,0,0,0.65)'; c.fillRect(0, 0, BK.W, BK.H);
     T(c, 'PAUSE', BK.W / 2, 90, { size: 30, fam: BK.FONT_GOTH, weight: 400, color: INK });
-    button(c, 'resume', '再開する', BK.W / 2, 150, 180, 34, { sel: true });
-    button(c, 'sound', BK.audio.muted ? '音: OFF' : '音: ON', BK.W / 2, 196, 180, 30);
-    button(c, 'title', 'タイトルへ戻る', BK.W / 2, 238, 180, 30);
+    const ps = BK.scene.psel || 0;
+    button(c, 'resume', '再開する', BK.W / 2, 150, 180, 34, { sel: ps === 0 });
+    button(c, 'sound', BK.audio.muted ? '音: OFF' : '音: ON', BK.W / 2, 196, 180, 30, { sel: ps === 1 });
+    button(c, 'title', 'タイトルへ戻る', BK.W / 2, 238, 180, 30, { sel: ps === 2 });
     const help = BK.input.touchMode
-      ? ['左半分をドラッグ: 移動（2回倒すとダッシュ）', '斬: 攻撃（長押しで溜め）  跳: ジャンプ  射: 射撃', '必: 必殺（体力消費）  狂: 覚醒ゲージ満タンで発動', '敵に向かって歩き続けると掴み→斬で膝蹴り/投げ']
+      ? ['左半分をドラッグ: 移動（2回倒す／倒しっぱなしでダッシュ）', '斬: 攻撃（長押しで溜め）  跳: ジャンプ  射: 射撃', '必: 必殺（体力消費）  狂: 覚醒ゲージ満タンで発動', '敵に向かって進むと掴み → 斬で膝蹴り／後ろ＋斬で投げ']
       : ['矢印/WASD: 移動（2回押しでダッシュ）  Z: 攻撃（長押しで溜め）', 'X: ジャンプ  C: 射撃  V(Z+X): 必殺  B: 覚醒', '↓↑+Z: 昇り斬り  敵へ歩き続けて掴み  M: 音', 'ESC/P: ポーズ'];
     help.forEach((l, i) => T(c, l, BK.W / 2, 280 + i * 17, { size: 11, color: DIM }));
   }
@@ -309,8 +337,8 @@
     c.fillStyle = 'rgba(0,0,0,0.7)'; c.fillRect(0, 0, BK.W, BK.H);
     T(c, 'CONTINUE ?', BK.W / 2, 110, { size: 34, fam: BK.FONT_GOTH, weight: 400, color: INK, stroke: '#400', strokeW: 4 });
     T(c, String(Math.max(0, Math.floor(sc.contT / 60))), BK.W / 2, 170, { size: 54, color: RED, weight: 800, stroke: '#000' });
-    button(c, 'yes', 'まだ戦う', BK.W / 2 - 80, 238, 130, 34, { sel: true });
-    button(c, 'no', 'あきらめる', BK.W / 2 + 80, 238, 130, 34);
+    button(c, 'yes', 'まだ戦う', BK.W / 2 - 80, 238, 130, 34, { sel: !sc.csel });
+    button(c, 'no', 'あきらめる', BK.W / 2 + 80, 238, 130, 34, { sel: !!sc.csel });
   }
 
   // ================================================================ HUD
@@ -383,19 +411,19 @@
     // コンボ
     if (g.combo >= 3) {
       const k = Math.min(1, g.comboT / 20);
-      T(c, g.combo + ' HIT', 16, 82, { size: 18 + Math.min(10, g.combo / 3), color: '#ffd27a', align: 'left', weight: 800, stroke: '#400', strokeW: 4, alpha: k, fam: BK.FONT_JP });
+      T(c, g.combo + ' HIT', 16, 82, { size: 18 + Math.min(10, Math.floor(g.combo / 6) * 2), color: '#ffd27a', align: 'left', weight: 800, stroke: '#400', strokeW: 4, alpha: k, fam: BK.FONT_JP });
     }
     // GO
     if (g.goT > 0 && (g.goT >> 4) % 2 === 0) {
-      T(c, 'GO', W - 70, 92, { size: 26, color: '#ffe0b0', weight: 800, stroke: '#600', strokeW: 5, fam: BK.FONT_GOTH });
-      c.fillStyle = '#ffe0b0'; c.beginPath(); c.moveTo(W - 48, 82); c.lineTo(W - 34, 92); c.lineTo(W - 48, 102); c.fill();
+      T(c, 'GO', W - 90, 128, { size: 30, color: '#ffe0b0', weight: 800, stroke: '#600', strokeW: 5, fam: BK.FONT_GOTH });
+      c.fillStyle = '#ffe0b0'; c.beginPath(); c.moveTo(W - 64, 116); c.lineTo(W - 46, 128); c.lineTo(W - 64, 140); c.fill();
     }
     // バナー
-    for (const b of g.banners) {
-      const k = Math.min(1, b.t / 12, (b.dur - b.t) / 20);
-      T(c, b.text, W / 2, 140, { size: 30, color: b.col, weight: 800, stroke: '#000', strokeW: 6, alpha: k });
-      if (b.sub) T(c, b.sub, W / 2, 112, { size: 12, color: '#e9dccb', weight: 600, stroke: '#000', strokeW: 3, alpha: k });
-    }
+    g.banners.forEach((b, i) => { // 同時に出たバナーは縦に並べる
+      const k = Math.min(1, b.t / 12, (b.dur - b.t) / 20), by = 140 + i * 52;
+      T(c, b.text, W / 2, by, { size: 30, color: b.col, weight: 800, stroke: '#000', strokeW: 6, alpha: k });
+      if (b.sub) T(c, b.sub, W / 2, by - 28, { size: 12, color: '#e9dccb', weight: 600, stroke: '#000', strokeW: 3, alpha: k });
+    });
     if (BK.setAwakenReady) BK.setAwakenReady(h.awk >= 100);
   }
   BK.ui.drawHUD = drawHUD;
@@ -421,7 +449,7 @@
       const tap = BK.input.consumeTap();
       if ((this.t > 150 && (BK.input.confirm() || tap)) || this.t > 330) {
         if (!this.added) { this.added = true; this.game.addScore(this.total); }
-        BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 0), this.game.score));
+        BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 50000), this.game.score));
         const next = this.game.stageIdx + 1;
         if (next < BK.stages.length && BK.stages[next]) BK.setScene('intro', { game: this.game, stage: next });
         else BK.setScene('ending', { game: this.game });
@@ -451,7 +479,7 @@
     enter(arg) {
       this.game = arg.game; this.t = 0;
       BK.setTouchUI(false);
-      BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 0), this.game.score));
+      BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 50000), this.game.score));
     },
     update() {
       this.t++;
@@ -462,7 +490,7 @@
       c.fillStyle = '#000'; c.fillRect(0, 0, BK.W, BK.H);
       const a = Math.min(1, this.t / 60);
       T(c, 'GAME OVER', BK.W / 2, 140, { size: 44, fam: BK.FONT_GOTH, weight: 400, color: RED, alpha: a });
-      T(c, '剣士は闇に呑まれた……', BK.W / 2, 196, { size: 15, color: INK, alpha: a });
+      T(c, this.game.hero.def.name + 'は闇に呑まれた……', BK.W / 2, 196, { size: 15, color: INK, alpha: a });
       T(c, 'SCORE  ' + String(this.game.displayScore).padStart(8, '0'), BK.W / 2, 250, { size: 14, color: GOLD, alpha: a });
     },
   };
@@ -472,18 +500,25 @@
     enter(arg) {
       this.game = arg.game; this.t = 0;
       BK.setTouchUI(false);
-      BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 0), this.game.score));
+      BK.save.set('hiscore', Math.max(BK.save.get('hiscore', 50000), this.game.score));
       BK.save.set('cleared', true);
       BK.audio.playSong('ending');
       const h = this.game.hero.def;
+      const EPI = {
+        guts: ['ガッツは剣を背負い直し、', '朝霧の街道をひとり歩き出した。'],
+        casca: ['キャスカは剣を鞘に納め、', '朝霧の街道をひとり歩き出した。'],
+        skull: ['髑髏の騎士は馬首を巡らせ、', '朝霧の彼方へと消えていった。'],
+        schierke: ['シールケは杖を握り直し、', '朝霧の森へと歩き出した。'],
+      };
+      const ep = EPI[h.id] || [h.name + 'は武器を収め、', '朝霧の街道をひとり歩き出した。'];
       this.lines = [
         '蝕の夜は明けた。',
         '',
         '鷹は光の彼方へと去り、',
         '烙印は今も、闇の気配に疼き続ける。',
         '',
-        h.name + 'は剣を背負い直し、',
-        '朝霧の街道をひとり歩き出した。',
+        ep[0],
+        ep[1],
         '',
         '─ 戦いは、まだ終わらない ─',
         '', '', '',
