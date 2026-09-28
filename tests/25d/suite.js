@@ -198,4 +198,27 @@ test('phone portrait: hero stays on screen and the touch controls exist', async 
   assert(r.btns >= 4, 'touch buttons missing: ' + r.btns);
 });
 
+// slow: run with the filter "allstages"
+test('allstages: the bot can clear every stage on やさしい (no soft-locks)', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    const out = [];
+    for(let i=0;i<(G.stages||[]).length;i++){
+      G.debug.play(['inu','shima','nuko','guard8','watch','wanden','mack'][i%7], i, 'easy');
+      G.debug.autoplay(true);
+      let t = 0;
+      while(t < 60*60*8 && !G.stage.done){ G.step(60); t += 60; }
+      out.push({ stage:i, done:G.stage.done, sec:Math.round(t/60), revives:G.game.revives, x: G.player ? +G.player.x.toFixed(1) : null,
+        foes: G.foesAlive(), lock: G.cam.lockMin > -1e8 ? [+G.cam.lockMin.toFixed(1), +G.cam.lockMax.toFixed(1)] : null });
+    }
+    return out;
+  });
+  const errs = await g.errors(); await g.close();
+  console.log('       ' + JSON.stringify(r));
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.length === 7, 'stages: ' + r.length);
+  const stuck = r.filter(s => !s.done);
+  assert(stuck.length === 0, 'not cleared: ' + JSON.stringify(stuck));
+}, { slow:true });
+
 runAll(process.argv[2]);

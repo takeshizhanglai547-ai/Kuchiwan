@@ -49,6 +49,7 @@ async function runAll(filter){
   const t0 = Date.now();
   for(const t of tests){
     if(filter && !t.name.includes(filter)) continue;
+    if(!filter && t.opts.slow) continue;          // slow tests only run when asked for by name
     const s = Date.now();
     try { await t.fn(); pass++; console.log(`  ok   ${t.name} (${((Date.now()-s)/1000).toFixed(1)}s)`); }
     catch(err){ fail++; console.log(`  FAIL ${t.name}: ${String(err && err.message || err).split('\n').slice(0,6).join('\n       ')}`); }

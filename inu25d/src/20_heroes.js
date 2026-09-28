@@ -1,0 +1,822 @@
+// 20_heroes.js — 7人の なかま（プレイヤーキャラ）：データ・ちびキャラの立体モデル・手続きアニメ・顔アイコン。
+// 部品（腰・頭・腕・脚・しっぽ・武器・マント…）ごとに G.look.builder() で1メッシュへ結合し、
+// 目・表情だけ別メッシュ（まばたき／×目／にっこり目の切り替え）。材質はリグごとに1枚だけ複製して白フラッシュに使う。
+// 向き：左向きは鏡像（scale.x=-1）にして、武器の手がいつもカメラ側に来るようにする。回り込みの途中で正面を通る。
+(function(){ 'use strict';
+const G = window.G; const THREE = window.THREE; const U = G.U;
+const TAU = Math.PI*2, HP = Math.PI/2;
+
+// ---------------------------------------------------------------- hero data (select-screen order)
+const LIST = [
+  { id:'inu', name:'せいけんし イッヌ', nameKanji:'聖犬士イッヌ', short:'イッヌ', species:'クリームいろの こいぬ',
+    desc:'つきのけんで みんなを まもる、げんきな ゆうしゃ！', color:'#f2b632',
+    stats:{ hp:1.0, atk:1.0, spd:1.0, jump:1.0 }, weapon:'sword', range:'melee',
+    specials:{ n:'しんくうは', up:'てんしょうざん', fwd:'しっそういあい' }, ultName:'じげんざん',
+    voice:{ f0:300, type:'square' } },
+  { id:'shima', name:'けんせい シマダックス', nameKanji:'拳聖シマダックス', short:'シマ', species:'ダックスフント',
+    desc:'はやい パンチと キックで れんぞく こうげき！', color:'#3a8ee0',
+    stats:{ hp:0.95, atk:0.9, spd:1.12, jump:1.05 }, weapon:'fist', range:'melee',
+    specials:{ n:'はどうけん', up:'れっかしょうりゅうきゃく', fwd:'せんぷうきゃく' }, ultName:'ひゃくれつ にくきゅうパンチ',
+    voice:{ f0:186, type:'sawtooth' } },
+  { id:'nuko', name:'まほうつかい ヌコ', nameKanji:'魔法使いヌコ', short:'ヌコ', species:'マルチーズ',
+    desc:'ほしの つえで とおくから まほうを とばすよ！', color:'#b48ae0',
+    stats:{ hp:0.85, atk:1.05, spd:0.95, jump:1.0 }, weapon:'staff', range:'ranged',
+    specials:{ n:'ひょうけつまだん', up:'せいしんしょうか', fwd:'サンダーボルト' }, ultName:'ほしふるよる',
+    voice:{ f0:520, type:'triangle' } },
+  { id:'guard8', name:'ガードワン 8ごう', nameKanji:'ガードワン8号', short:'8ごう', species:'チャウチャウ',
+    desc:'おおきな ハンマーで どっかーん！ ちからもち', color:'#8a9bb5',
+    stats:{ hp:1.4, atk:1.35, spd:0.8, jump:0.85 }, weapon:'hammer', range:'melee', scale:1.25,
+    specials:{ n:'ハンマーしょうげきは', up:'てんしょうハンマー', fwd:'タックル' }, ultName:'メガトンクエイク',
+    voice:{ f0:148, type:'sawtooth' } },
+  { id:'watch', name:'かいとう ワッチ', nameKanji:'怪盗ワッチ', short:'ワッチ', species:'チワワ',
+    desc:'すばやく うごいて トランプを なげる かいとう！', color:'#5cc8e0',
+    stats:{ hp:0.8, atk:0.8, spd:1.25, jump:1.15 }, weapon:'cane', range:'mixed',
+    specials:{ n:'トランプなげ', up:'けむりだま', fwd:'スライディング' }, ultName:'かみふぶきロックンロール',
+    voice:{ f0:392, type:'sine' } },
+  { id:'wanden', name:'サムライ ワンデン', nameKanji:'サムライワンデン', short:'ワンデン', species:'プードル',
+    desc:'ながーい かたなで とおくまで スパッ！', color:'#c8463c',
+    stats:{ hp:0.95, atk:1.15, spd:1.0, jump:1.0 }, weapon:'katana', range:'melee',
+    specials:{ n:'やえがすみ', up:'つばめがえし', fwd:'しゅくち' }, ultName:'ひけん・めんきょかいでん',
+    voice:{ f0:228, type:'square' } },
+  { id:'mack', name:'ほあんかん マック', nameKanji:'保安官マック', short:'マック', species:'チャウチャウ',
+    desc:'コルクてっぽうで ポンポン うつ ほあんかん！', color:'#e8872e',
+    stats:{ hp:1.0, atk:0.95, spd:1.0, jump:1.0 }, weapon:'gun', range:'ranged',
+    specials:{ n:'スターばくだん', up:'ロケットはなび', fwd:'ドリルダッシュ' }, ultName:'はなびだいさくせん',
+    voice:{ f0:262, type:'triangle' } },
+];
+for(const h of LIST){ h.specialName = h.specials.n; if(!h.scale) h.scale = 1; }
+const BYID = {}; for(const h of LIST) BYID[h.id] = h;
+
+// ---------------------------------------------------------------- build-time helpers (allocation here is fine: runs once per hero)
+const _e = new THREE.Euler(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+function M(pos, rot, scl, order){
+  _e.set(rot?rot[0]:0, rot?rot[1]:0, rot?rot[2]:0, order||'XYZ'); _q.setFromEuler(_e);
+  if(scl==null) _s.set(1,1,1); else if(typeof scl==='number') _s.set(scl,scl,scl); else _s.set(scl[0],scl[1],scl[2]);
+  return new THREE.Matrix4().compose(_p.set(pos?pos[0]:0, pos?pos[1]:0, pos?pos[2]:0), _q, _s);
+}
+// thin wrapper over G.look.builder() that also accepts an Euler order and a pre-built matrix
+function B(){
+  const b = G.look.builder();
+  return {
+    b,
+    add(g, color, pos, rot, scl, order){ b.addMatrix(g, color, M(pos, rot, scl, order)); return this; },
+    addM(g, color, m){ b.addMatrix(g, color, m); return this; },
+    get empty(){ return b.empty; },
+    build(){ return b.build(); },
+  };
+}
+// merge geometries that already carry a colour attribute (G.look.eye) — keeps their colours
+function mergeColored(list){
+  let nv=0, ni=0;
+  for(const it of list){ nv += it.g.attributes.position.count; ni += it.g.index ? it.g.index.count : it.g.attributes.position.count; }
+  const pos = new Float32Array(nv*3), nor = new Float32Array(nv*3), col = new Float32Array(nv*3);
+  const idx = new Uint16Array(ni); const v = new THREE.Vector3(), n3 = new THREE.Matrix3(), c = new THREE.Color();
+  let vo=0, io=0;
+  for(const it of list){
+    const P = it.g.attributes.position, N = it.g.attributes.normal, C = it.g.attributes.color;
+    n3.getNormalMatrix(it.m); const flip = it.m.determinant()<0;
+    if(it.color!=null) c.set(it.color);
+    for(let i=0;i<P.count;i++){
+      v.fromBufferAttribute(P,i).applyMatrix4(it.m); pos.set([v.x,v.y,v.z], (vo+i)*3);
+      v.fromBufferAttribute(N,i).applyMatrix3(n3).normalize(); nor.set([v.x,v.y,v.z], (vo+i)*3);
+      if(it.color!=null) col.set([c.r,c.g,c.b], (vo+i)*3);
+      else if(it.recolor){ const r=C.getX(i), g=C.getY(i), bb=C.getZ(i); const dark = r+g+bb < 0.5; if(dark){ c.set(it.recolor); col.set([c.r,c.g,c.b],(vo+i)*3); } else col.set([r,g,bb],(vo+i)*3); }
+      else col.set([C.getX(i),C.getY(i),C.getZ(i)], (vo+i)*3);
+    }
+    const I = it.g.index.array;
+    for(let k=0;k<I.length;k+=3){ idx[io++]=I[k]+vo; idx[io++]=flip?I[k+2]+vo:I[k+1]+vo; idx[io++]=flip?I[k+1]+vo:I[k+2]+vo; }
+    vo += P.count;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor,3));
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  g.setIndex(new THREE.BufferAttribute(idx,1));
+  g.computeBoundingSphere();
+  return g;
+}
+
+// ---------------------------------------------------------------- body layout (units at scale 1; guard8 is scaled ×1.25 as a whole)
+const L = {
+  hipY: 0.21,            // leg + hips pivot height
+  bodyC: 0.15,           // body centre above hips pivot
+  neckY: 0.36,           // head pivot above hips pivot
+  headC: 0.30,           // head centre above neck
+  headR: 0.36,
+  headS: [1.0, 0.92, 1.06],
+  shoulder: [0.0, 0.27, 0.185],
+  legZ: 0.095,
+  hand: [0.012, -0.175, 0],
+};
+// point on the head ellipsoid (head-pivot space) + a rotation that points local +z along the surface normal
+function onHead(az, el, lift, R){
+  R = R || L.headR; const s = L.headS, k = 1 + (lift||0);
+  const ce = Math.cos(el);
+  return [ R*s[0]*ce*Math.cos(az)*k, L.headC + R*s[1]*Math.sin(el)*k, R*s[2]*ce*Math.sin(az)*k ];
+}
+function faceRot(az, el, spin){ return [ -el, HP - az, spin||0 ]; }   // use with order 'YXZ'
+
+// ---------------------------------------------------------------- model assembly
+// D = { <part>: B(), a:{anchors}, T:design }. Parts: body head face eyes eyesX eyesSq eyesHappy mouth
+//   armL armR legL legR tail earL earR cape weapon glasses gem (any subset)
+const MODEL = {};           // id -> { geos:{part:BufferGeometry (shared)}, a, T }
+function part(D, name){ return D[name] || (D[name] = B()); }
+
+function buildCommon(D, T){
+  const geo = G.look.geo;
+  // legs (pivot at hip joint)
+  for(const side of [-1,1]){
+    const b = part(D, side<0?'legL':'legR');
+    b.add(geo.capsule(0.072, 0.06, 4, 12), T.leg, [0,-0.085,0]);
+    b.add(geo.sphere(0.08, 14, 10), T.foot||T.leg, [0.03,-0.165,0], null, [1.35,0.72,1.08]);
+  }
+  // body bean (pivot = hips)
+  const bs = T.bodyScale || [0.95,1.08,0.98];
+  if(!T.noBean) part(D,'body').add(geo.sphere(0.215, 20, 14), T.body, [0, L.bodyC, 0], null, bs);
+  // arms (pivot at shoulder)
+  for(const side of [-1,1]){
+    const b = part(D, side<0?'armL':'armR');
+    b.add(geo.capsule(0.058, 0.07, 4, 10), T.sleeve||T.fur, [0,-0.07,0]);
+    b.add(geo.sphere(T.pawR||0.072, 14, 10), T.paw||T.fur, [0.012,-0.165,0]);
+  }
+  // head (pivot at neck)
+  const h = part(D,'head');
+  h.add(geo.sphere(L.headR, 24, 16), T.fur, [0, L.headC, 0], null, L.headS);
+  const mz = T.muzzleScale || [0.9,0.72,1.12];
+  const mp = onHead(0, -0.36, -0.2);
+  if(T.muzzleFwd) mp[0] += T.muzzleFwd;
+  h.add(geo.sphere(0.13, 16, 12), T.muzzle, mp, null, mz);
+  D.a.muzzle = mp; D.a.muzzleFront = mp[0] + 0.13*mz[0];
+  // face details without outline: nose, ω mouth, blush
+  const f = part(D,'face');
+  const nx = D.a.muzzleFront - 0.012, ny = mp[1] + 0.13*mz[1]*0.55;
+  f.add(geo.sphere(0.042, 12, 8), T.nose||'#2a1a14', [nx, ny, 0], null, [0.85,0.72,1.15]);
+  f.add(geo.sphere(0.012, 6, 4), '#ffffff', [nx+0.025, ny+0.02, 0.012]);     // nose shine
+  const my = mp[1] - 0.012;
+  for(const s of [-1,1]) f.add(G.look.geo.torus(0.02, 0.0065, 5, 10, Math.PI), T.mouthCol||'#4a2418',
+    [D.a.muzzleFront - 0.028, my, s*0.02], [0, HP, Math.PI]);
+  f.add(geo.cylinder(0.006,0.006,0.035,5), T.mouthCol||'#4a2418', [D.a.muzzleFront-0.02, my+0.028, 0]);
+  D.a.mouthPos = [D.a.muzzleFront - 0.03, my - 0.012, 0];
+  const bl = G.look.blush(0.072); const blGeo = bl.geometry;   // same shape/colour as G.look.blush, baked (no extra draw call)
+  for(const s of [-1,1]){
+    const az = s*(T.blushAz||0.98), el = T.blushEl==null ? -0.24 : T.blushEl;
+    f.add(blGeo, T.blush||'#ff9fb5', onHead(az, el, -0.012), faceRot(az, el), [1.25,0.62,0.3], 'YXZ');
+  }
+  // eye placement (used by the eye meshes built in buildEyes)
+  D.a.eyeAz = T.eyeAz || 0.40; D.a.eyeEl = T.eyeEl==null ? -0.02 : T.eyeEl; D.a.eyeSize = T.eye || 0.05;
+  D.a.eyeY = onHead(0, D.a.eyeEl, 0)[1];
+}
+
+// both eyes (+ expression variants) in one mesh each, pivot at eye height so scale.y blinks them
+function buildEyes(D, T){
+  const a = D.a, y0 = a.eyeY, sz = a.eyeSize, list = [];
+  const dark = T.lineCol || '#3a2418';
+  const eyeG = G.look.eye(sz).geometry;
+  const skip = T.patchEye;   // +1 / -1: that eye is covered (eyepatch)
+  const place = (s, extra)=>{
+    const az = s*a.eyeAz, el = a.eyeEl, p = onHead(az, el, extra==null?-0.02:extra);
+    p[1] -= y0; return M(p, faceRot(az, el), null, 'YXZ');
+  };
+  for(const s of [-1,1]){ if(s===skip) continue; list.push({ g:eyeG, m:place(s), recolor:T.eyeCol||null }); }
+  if(T.lashes){ for(const s of [-1,1]){ const m = place(s, 0.0).multiply(M([s*-sz*0.2, sz*0.95, 0],[0,0,s*-0.9],[1,1,1]));
+    list.push({ g:G.look.geo.capsule(0.009, sz*0.55, 2, 5), m, color:dark }); } }
+  D.eyesGeo = mergeColored(list);
+  eyeG.dispose();
+  // × eyes (dizzy / down / ko), > < squeezed (hurt / charge), ^ ^ happy
+  const cap = G.look.geo.capsule(0.011, sz*1.35, 2, 6), capS = G.look.geo.capsule(0.011, sz*1.05, 2, 6);
+  const arc = G.look.geo.torus(sz*0.85, 0.013, 5, 12, Math.PI);
+  const X = B(), S = B(), H = B();
+  for(const s of [-1,1]){
+    if(s===skip) continue;
+    const base = place(s, 0.005);
+    X.addM(cap, dark, base.clone().multiply(M([0,0,0],[0,0, 0.78])));
+    X.addM(cap, dark, base.clone().multiply(M([0,0,0],[0,0,-0.78])));
+    // chevrons point toward the middle of the face (eye local +x = viewer's right)
+    const dir = s>0 ? 1 : -1;
+    S.addM(capS, dark, base.clone().multiply(M([0, sz*0.36, 0],[0,0, dir*-0.62])));
+    S.addM(capS, dark, base.clone().multiply(M([0,-sz*0.36, 0],[0,0, dir* 0.62])));
+    H.addM(arc, dark, base.clone().multiply(M([0,-sz*0.35,0],[0,0,0])));
+  }
+  D.xGeo = X.build(); D.sqGeo = S.build(); D.happyGeo = H.build();
+  // open mouth (yell / hurt / cheer)
+  const mo = B(), mp = a.mouthPos;
+  mo.add(G.look.geo.sphere(0.05, 12, 8), '#6b1e24', [mp[0], mp[1], 0], [0,0,0], [0.45,0.62,0.8]);
+  mo.add(G.look.geo.sphere(0.03, 10, 6), '#ff7d8f', [mp[0]+0.01, mp[1]-0.018, 0], [0,0,0], [0.45,0.5,0.9]);
+  D.mouthGeo = mo.build();
+}
+
+// ---- shared accessory makers
+function earsOf(D, type, col, col2, opt){
+  const geo = G.look.geo; opt = opt || {};
+  for(const s of [-1,1]){
+    const b = part(D, s<0?'earL':'earR');
+    if(type==='flop'){          // fluffy floppy ears (poodle-ish)
+      b.add(geo.sphere(0.12, 16, 12), col, [0.0,-0.15, s*0.03], [s*-0.12,0,0], [0.62,1.45,0.5]);
+      b.add(geo.sphere(0.07, 10, 8), col2, [0.02,-0.27, s*0.04]);
+      b.add(geo.sphere(0.06, 10, 8), col2, [-0.05,-0.25, s*0.03]);
+    } else if(type==='long'){   // long flat dachshund ears
+      b.add(geo.sphere(0.11, 16, 12), col, [0.0,-0.18, s*0.02], [s*-0.08,0,0.1], [0.7,1.95,0.38]);
+    } else if(type==='hair'){   // long silky maltese hair
+      b.add(geo.sphere(0.13, 16, 12), col, [0.0,-0.19, s*0.03], [s*-0.1,0,0.05], [0.72,1.8,0.52]);
+      b.add(geo.sphere(0.075, 10, 8), col2, [0.01,-0.36, s*0.04]);
+    } else if(type==='curly'){  // poodle curls
+      const pts = [[0,-0.06],[0.02,-0.16],[-0.03,-0.2],[0.03,-0.27],[-0.02,-0.3]];
+      pts.forEach((q,i)=> b.add(geo.sphere(i?0.068:0.075, 12, 8), i%2?col2:col, [q[0], q[1], s*0.035]));
+    } else if(type==='up'){     // huge upright chihuahua ears
+      const len = opt.len || 0.42;
+      b.add(geo.cone(0.14, len, 14), col, [0, len*0.5, 0], [s*0.32, 0, 0], [0.42,1,1]);
+      b.add(geo.cone(0.1, len*0.78, 12), opt.inner||'#f4b0c4', [0.03, len*0.43, s*0.0], [s*0.32, 0, 0], [0.3,1,1]);
+    }
+  }
+  D.a.earType = type;
+  D.a.earPivot = opt.pivot || (type==='up' ? onHead(0.95, 0.72, -0.12) : onHead(1.3, 0.42, -0.04));
+}
+function tailOf(D, type, col, col2){
+  const geo = G.look.geo, b = part(D,'tail');
+  if(type==='fluff'){ b.add(geo.sphere(0.085, 14, 10), col, [-0.05,0.05,0]); b.add(geo.sphere(0.06,10,8), col2||col, [-0.1,0.1,0.02]); }
+  else if(type==='thin'){ b.add(geo.capsule(0.028, 0.2, 3, 8), col, [-0.1,0.09,0], [0,0,0.95]); b.add(geo.sphere(0.034,8,6), col2||col, [-0.19,0.16,0]); }
+  else if(type==='plume'){ b.add(geo.sphere(0.08, 14, 10), col, [-0.08,0.12,0], [0,0,0.9], [0.8,1.9,1]); }
+  else if(type==='curl'){ b.add(geo.torus(0.07, 0.042, 8, 16, Math.PI*1.6), col, [-0.03,0.13,0], [0,0,-0.6]); b.add(geo.sphere(0.05,10,8), col2||col, [0.02,0.2,0]); }
+  else if(type==='tiny'){ b.add(geo.capsule(0.024, 0.1, 3, 8), col, [-0.05,0.06,0], [0,0,0.8]); }
+  else if(type==='pom'){ b.add(geo.capsule(0.022, 0.08, 3, 6), col2||col, [-0.04,0.05,0], [0,0,0.9]); b.add(geo.sphere(0.075,12,10), col, [-0.1,0.1,0]); }
+  D.a.tailPivot = D.a.tailPivot || [-0.185, 0.08, 0];
+}
+// flared cape hanging from the back of the neck (flattened frustum)
+function capeOf(D, col, len, wide, lining){
+  const geo = G.look.geo, b = part(D,'cape');
+  b.add(geo.cylinder(0.12, wide||0.27, len, 18), col, [-0.075, -len/2, 0], [0,0,0.05], [0.34,1,1]);
+  if(lining) b.add(geo.cylinder(0.1, (wide||0.27)*0.9, len*0.92, 14), lining, [-0.055, -len/2, 0], [0,0,0.05], [0.26,1,1]);
+  D.a.capePivot = [-0.1, 0.33, 0];
+}
+
+// on-head accessory helper: matrix that sits on the head surface, local +z = outward normal
+function headM(az, el, lift, extraRot, scl){
+  const m = M(onHead(az, el, lift), faceRot(az, el), null, 'YXZ');
+  if(extraRot || scl) m.multiply(M([0,0,0], extraRot, scl));
+  return m;
+}
+const GOLD = '#ffcf4a';
+
+// ---------------------------------------------------------------- the seven designs
+// lightness is split into 3 steps per hero (dark cloth / mid / light) so parts never merge into one blob
+const DESIGN = {
+  inu: { fur:'#fff8e6', muzzle:'#fffdf6', body:'#6f9fe0', sleeve:'#6f9fe0', paw:'#fff8e6', leg:'#fff8e6', foot:'#8a5a2e',
+    weaponGlow:'#2d5c8a', halo:true,
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.torus(0.19, 0.03, 8, 28), '#7a5a2a', [0,0.055,0], [HP,0,0], [1,1.04,1]);
+      b.add(geo.rbox(0.03,0.075,0.09,0.012,2), GOLD, [0.19,0.055,0]);
+      b.add(geo.sphere(0.036,10,8), GOLD, [0.205,0.2,0], null, [0.45,0.95,1.05]);                 // paw emblem
+      for(const t of [-1,0,1]) b.add(geo.sphere(0.016,8,6), GOLD, [0.196, 0.25+(t?0:0.012), t*0.032], null, [0.5,1,1]);
+      b.add(geo.torus(0.12, 0.042, 8, 20), '#fff8e6', [0,0.325,0], [HP,0,0]);                       // fluffy collar
+      for(const s of [-1,1]) b.add(geo.sphere(0.028,8,6), GOLD, [0.08,0.33,s*0.1]);                  // cape clasps
+      for(const [az,el,r] of [[0,1.2,0.075],[0.9,1.02,0.07],[-0.9,1.02,0.07],[2.2,0.95,0.07],[-2.2,0.95,0.07],[Math.PI,1.1,0.075],[0.25,0.72,0.055],[-0.25,0.72,0.055]])
+        h.add(geo.sphere(r,12,8), '#fff4dc', onHead(az, el, 0.02));                                   // poodle curls
+      earsOf(D, 'flop', '#efe0b8', '#e6d3a4');
+      tailOf(D, 'fluff', '#fff8e6', '#f3e6c4');
+      capeOf(D, '#e0503e', 0.46, 0.27, '#b83a2c');
+      const w = part(D,'weapon');
+      w.add(geo.capsule(0.026, 0.09, 3, 8), '#3a5a9a', [0,0,0]);
+      w.add(geo.sphere(0.034, 10, 8), GOLD, [0,-0.08,0]);
+      w.add(geo.rbox(0.2, 0.045, 0.06, 0.018, 2), GOLD, [0,0.075,0]);
+      w.add(geo.torus(0.036, 0.011, 6, 12, Math.PI*1.3), '#ffe27a', [0,0.1,0.034], [0,0,-0.5]);     // crescent moon
+      w.add(geo.rbox(0.095, 0.46, 0.028, 0.012, 2), '#bfe8ff', [0,0.33,0]);
+      w.add(geo.cone(0.0475, 0.1, 4), '#bfe8ff', [0,0.61,0], null, [1,1,0.3]);
+      w.add(geo.box(0.014, 0.42, 0.032), '#f2fbff', [0.018,0.33,0]);
+      D.a.tip = [0,0.64,0]; D.a.wbase = [0,0.1,0];
+    } },
+  shima: { fur:'#b07a44', muzzle:'#d8a878', body:'#fbfbf5', sleeve:'#fbfbf5', paw:'#ffffff', pawR:0.094, leg:'#fbfbf5', foot:'#b07a44',
+    bodyScale:[1.18,1.02,0.98], muzzleScale:[1.55,0.7,0.95], muzzleFwd:0.03, glasses:true,
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.sphere(0.08,12,8), '#b07a44', [0.2,0.25,0], null, [0.3,0.9,0.62]);                  // fur in the gi's V-neck
+      for(const s of [-1,1]) b.add(geo.capsule(0.016,0.13,2,6), '#e4e2d8', [0.2,0.25,s*0.045], [s*0.5,0,0]);
+      b.add(geo.torus(0.215, 0.028, 8, 28), '#1e1a1c', [0,0.07,0], [HP,0,0], [1.14,1,1]);
+      b.add(geo.sphere(0.035,10,8), '#1e1a1c', [0.245,0.07,0.03]);
+      for(const s of [-1,1]) b.add(geo.capsule(0.018,0.08,2,6), '#1e1a1c', [0.245,0.0,0.03+s*0.03], [s*0.25,0,0]);
+      for(const [az,el] of [[Math.PI,1.05],[Math.PI,0.72],[Math.PI,0.4],[0,1.25]])
+        h.addM(geo.sphere(0.1,12,8), '#3a2210', headM(az, el, -0.012, null, [1.5,0.28,0.3]));       // dark stripes
+      earsOf(D, 'long', '#5e3c20');
+      tailOf(D, 'thin', '#b07a44', '#3a2210');
+      // round sunglasses (own mesh so they can slide up / get knocked askew)
+      const g = part(D,'glasses'), a = D.a, y0 = a.eyeY;
+      for(const s of [-1,1]){
+        const az = s*a.eyeAz, el = a.eyeEl, p = onHead(az, el, 0.07); p[1] -= y0;
+        const m = M(p, faceRot(az, el), null, 'YXZ');
+        g.addM(geo.cylinder(0.075,0.075,0.022,18), '#141418', m.clone().multiply(M([0,0,0],[HP,0,0])));
+        g.addM(geo.torus(0.075,0.012,6,20), '#3a3a44', m.clone());
+        g.addM(geo.sphere(0.02,8,6), '#ffffff', m.clone().multiply(M([-0.03,0.03,0.013],null,[1,1,0.3])));
+        g.addM(geo.capsule(0.01,0.2,2,5), '#2a2a30', M([-0.06, 0.02, s*0.3], [0,0,HP], null));   // temples to the ears
+      }
+      const pb = onHead(0, a.eyeEl+0.08, 0.14); pb[1] -= y0;
+      g.add(geo.capsule(0.011, 0.1, 2, 6), '#2a2a30', pb, [HP,0,0]);
+    } },
+  nuko: { fur:'#ffffff', muzzle:'#ffffff', body:'#b48ae0', sleeve:'#b48ae0', paw:'#ffffff', leg:'#6a4a9a', foot:'#6a4a9a',
+    eyeCol:'#4b2a7a', lashes:true, eye:0.054, noBean:true,
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.lathe('nukoRobe', [[0,0.36],[0.1,0.345],[0.16,0.27],[0.2,0.12],[0.26,-0.04],[0.3,-0.125],[0.29,-0.15],[0,-0.15]], 22), '#b48ae0');
+      b.add(geo.torus(0.295, 0.028, 8, 28), '#f1e6ff', [0,-0.13,0], [HP,0,0]);
+      b.add(geo.torus(0.105, 0.03, 8, 20), '#f1e6ff', [0,0.335,0], [HP,0,0]);
+      b.addM(geo.star(0.055,0.5,0.025), GOLD, M([0.2,0.2,0.0],[0,HP,0]).multiply(M([0,0,0],[0,0,0.2])));
+      earsOf(D, 'hair', '#f7f2fc', '#eee6f8');
+      tailOf(D, 'plume', '#ffffff');
+      // big pink bow on top (near side)
+      const bp = onHead(0.75, 1.0, 0.06);
+      for(const s of [-1,1]) h.add(geo.sphere(0.1,12,10), '#ff7ab8', [bp[0]-0.02, bp[1]+0.02, bp[2]+s*0.09], [s*0.5,0,0.3], [0.45,0.72,1.1]);
+      h.add(geo.sphere(0.045,10,8), '#ff5aa0', bp);
+      for(const s of [-1,1]) h.add(geo.capsule(0.02,0.08,2,6), '#ff7ab8', [bp[0]+0.02, bp[1]-0.07, bp[2]+s*0.04], [s*0.4,0,0]);
+      for(const [az,el] of [[0.3,0.7],[-0.3,0.7],[0,0.85]]) h.add(geo.sphere(0.065,10,8), '#fbf8ff', onHead(az, el, 0.02)); // bangs
+      // bell sleeves
+      for(const s of [-1,1]){ const a = part(D, s<0?'armL':'armR');
+        a.add(geo.cylinder(0.05, 0.095, 0.15, 12), '#b48ae0', [0,-0.09,0]); a.add(geo.torus(0.09,0.018,6,16), '#f1e6ff', [0,-0.165,0], [HP,0,0]); }
+      const w = part(D,'weapon');
+      w.add(geo.cylinder(0.022,0.022,0.8,8), '#a07ad0', [0,0.18,0]);
+      for(const y of [-0.2, 0.0, 0.5]) w.add(geo.cylinder(0.03,0.03,0.035,8), GOLD, [0,y,0]);
+      w.add(geo.torus(0.07,0.016,6,18), GOLD, [0,0.66,0]);
+      const gm = part(D,'gem');
+      gm.add(geo.star(0.11,0.48,0.05), '#ff8fcf');
+      gm.add(geo.star(0.055,0.48,0.03), '#ffffff', [0,0,0.028]);
+      gm.add(geo.star(0.055,0.48,0.03), '#ffffff', [0,0,-0.028]);
+      D.a.gemPos = [0,0.66,0]; D.a.tip = [0,0.7,0]; D.a.wbase = [0,0.45,0];
+    } },
+  guard8: { fur:'#cf8843', muzzle:'#f3cf98', body:'#cf8843', paw:'#eab676', leg:'#cf8843', foot:'#a8632a',
+    muzzleScale:[0.85,0.78,1.35], eye:0.036, eyeAz:0.36, blush:'#ff9aa8',
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      for(let i=0;i<7;i++){ const a = (i/7)*TAU; b.add(geo.sphere(0.085,10,8), '#e0a45f', [Math.cos(a)*0.15, 0.3, Math.sin(a)*0.16]); }
+      b.add(geo.torus(0.2, 0.034, 8, 28), '#34426e', [0,0.07,0], [HP,0,0], [1,1.04,1]);
+      b.add(geo.cylinder(0.05,0.05,0.02,16), GOLD, [0.2,0.15,0], [0,0,HP]);
+      b.add(geo.capsule(0.03,0.2,2,6), '#34426e', [0.16,0.16,0], [0.0,0,0]);
+      for(const [az,el] of [[1.35,0.1],[-1.35,0.1],[1.2,-0.35],[-1.2,-0.35],[1.45,0.45],[-1.45,0.45],[0.9,-0.65],[-0.9,-0.65]])
+        h.add(geo.sphere(0.11,12,8), '#dd9850', onHead(az, el, 0.0));                                // lion mane
+      h.add(geo.sphere(0.4,24,14), '#e2e6ee', [0, L.headC+0.17, 0], null, [1.0,0.62,1.05]);         // silver helmet
+      h.add(geo.torus(0.365,0.03,8,32), '#b8c0cc', [0, L.headC+0.12, 0], [HP,0,0], [1,1.06,1]);
+      for(const az of [0.5, -0.5, 2.3, -2.3]){ const c = Math.cos(az), s = Math.sin(az);
+        h.add(geo.sphere(0.048,10,8), '#f4f6fa', [c*0.25, L.headC+0.34, s*0.27]); }
+      for(const s of [-1,1]) h.add(geo.cone(0.065,0.1,10), '#b8733a', [0.0, L.headC+0.33, s*0.3], [s*0.5,0,0]);
+      part(D,'face').add(geo.sphere(0.03,8,6), '#5a5a8a', [D.a.mouthPos[0]+0.012, D.a.mouthPos[1]-0.008, 0.012], null, [0.55,0.9,0.9]);
+      tailOf(D, 'curl', '#dd9850', '#e0a45f');
+      const w = part(D,'weapon');
+      w.add(geo.cylinder(0.034,0.034,0.8,10), '#5a3a1c', [0,0.28,0]);
+      for(const y of [-0.06, 0.04]) w.add(geo.cylinder(0.042,0.042,0.05,10), '#34426e', [0,y,0]);
+      w.add(geo.rbox(0.36,0.25,0.25,0.06,3), '#d5d9e2', [0,0.72,0]);
+      for(const s of [-1,1]) w.add(geo.rbox(0.05,0.27,0.27,0.04,2), '#9aa3b5', [s*0.17,0.72,0]);
+      w.add(geo.box(0.12,0.26,0.26), GOLD, [0,0.72,0]);
+      D.a.tip = [0,0.72,0]; D.a.wbase = [0,0.45,0];
+    } },
+  watch: { fur:'#ffffff', muzzle:'#ffffff', body:'#3a3f58', sleeve:'#3a3f58', paw:'#ffffff', leg:'#3a3f58', foot:'#1f2130',
+    eyeCol:'#1d3f8f', eye:0.062, eyeAz:0.43, muzzleScale:[0.8,0.66,1.0],
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.sphere(0.12,12,10), '#f4f6fb', [0.15,0.2,0], null, [0.55,1.1,0.75]);                // shirt front
+      b.add(geo.sphere(0.035,10,8), '#e0263c', [0.2,0.32,0]);                                       // bow tie
+      for(const s of [-1,1]) b.add(geo.cone(0.05,0.08,10), '#e0263c', [0.19,0.32,s*0.055], [s*-HP,0,0], [0.7,1,1]);
+      earsOf(D, 'up', '#ffffff', null, { len:0.46, inner:'#f4b0c4' });
+      tailOf(D, 'tiny', '#ffffff');
+      capeOf(D, '#2a2d38', 0.34, 0.25, '#b01e30');
+      // black top hat, tipped to the front
+      const hp = [0.03, L.headC+0.37, 0.0];
+      h.add(geo.cylinder(0.2,0.2,0.025,22), '#2a2d38', [hp[0], hp[1]-0.02, hp[2]], [0,0,-0.12]);
+      h.add(geo.cylinder(0.135,0.145,0.22,18), '#2a2d38', [hp[0]-0.012, hp[1]+0.09, hp[2]], [0,0,-0.12]);
+      h.add(geo.cylinder(0.148,0.15,0.045,18), '#d8283c', [hp[0]-0.004, hp[1]+0.02, hp[2]], [0,0,-0.12]);
+      const w = part(D,'weapon');
+      w.add(geo.cylinder(0.02,0.02,0.52,8), '#22242e', [0,0.24,0]);
+      w.add(geo.sphere(0.028,8,6), '#f4f6fb', [0,0.5,0]);
+      w.add(geo.torus(0.05,0.018,6,12,Math.PI), '#dfe3ea', [-0.05,-0.02,0], [0,0,Math.PI]);
+      w.add(geo.sphere(0.024,8,6), '#dfe3ea', [-0.1,-0.02,0]);
+      D.a.tip = [0,0.52,0]; D.a.wbase = [0,0.05,0];
+    } },
+  wanden: { fur:'#f4e8c4', muzzle:'#fffaf0', body:'#c8463c', sleeve:'#c8463c', paw:'#f4e8c4', leg:'#33313d', foot:'#f4f0e6',
+    patchEye:1,
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.sphere(0.2,14,10), '#33313d', [0.12,0.15,0], null, [0.45,1.12,0.5]);                // kimono front
+      for(const s of [-1,1]) b.add(geo.capsule(0.017,0.15,2,6), '#f4f0e6', [0.2,0.26,s*0.045], [s*0.55,0,0]);
+      b.add(geo.torus(0.2, 0.045, 8, 28), '#9c8a5e', [0,0.06,0], [HP,0,0], [1,1.04,1]);
+      // long black scabbard at the left hip, pointing back-down
+      const dir = [-Math.sin(1.95), Math.cos(1.95)];
+      b.add(geo.rbox(0.05,0.86,0.036,0.016,2), '#1e1c24', [0.14+dir[0]*0.4, 0.07+dir[1]*0.4, -0.2], [0,0,1.95]);
+      b.add(geo.cylinder(0.032,0.032,0.04,10), GOLD, [0.14, 0.07, -0.2], [0,0,1.95]);
+      for(const s of [-1,1]){ const a = part(D, s<0?'armL':'armR');
+        a.add(geo.rbox(0.13,0.15,0.085,0.035,2), '#c8463c', [-0.01,-0.08,s*0.01]); }
+      for(const s of [-1,1]) part(D, s<0?'legL':'legR').add(geo.cylinder(0.078,0.1,0.13,12), '#33313d', [0,-0.07,0]);
+      h.add(geo.sphere(0.14,14,10), '#f4e8c4', [-0.02, L.headC+0.39, 0]);                          // topknot
+      for(let i=0;i<5;i++){ const a = i/5*TAU; h.add(geo.sphere(0.07,10,8), '#fff3d6', [-0.02+Math.cos(a)*0.1, L.headC+0.42, Math.sin(a)*0.1]); }
+      h.add(geo.torus(0.09,0.022,6,16), '#8c2a24', [-0.02, L.headC+0.3, 0], [HP,0,0]);
+      h.addM(geo.sphere(0.068,14,10), '#1a1a22', headM(D.a.eyeAz, D.a.eyeEl, 0.0, null, [1,0.9,0.3]));  // eyepatch
+      h.add(geo.torus(L.headR*1.01, 0.013, 5, 36), '#1a1a22', [0, L.headC, 0], [0.55,-0.4,0], [1.0,0.93,1.06]);
+      earsOf(D, 'curly', '#f4e8c4', '#e6d6a6');
+      tailOf(D, 'pom', '#f4e8c4', '#e6d6a6');
+      const w = part(D,'weapon');
+      w.add(geo.capsule(0.027,0.19,3,8), '#2a2430', [0,-0.01,0]);
+      for(const y of [-0.08,-0.02,0.04]) w.add(geo.box(0.03,0.03,0.058), '#f4f0e6', [0,y,0], [0,0,Math.PI/4]);
+      w.add(geo.sphere(0.03,8,6), GOLD, [0,-0.12,0]);
+      w.add(geo.cylinder(0.068,0.068,0.018,18), '#d4a84a', [0,0.1,0]);
+      w.add(geo.rbox(0.056,0.92,0.018,0.008,2), '#e4ebf4', [0,0.57,0]);
+      w.add(geo.box(0.012,0.88,0.02), '#ffffff', [0.022,0.56,0]);
+      w.add(geo.cone(0.028,0.1,4), '#e4ebf4', [0,1.08,0], null, [1,1,0.32]);
+      D.a.tip = [0,1.1,0]; D.a.wbase = [0,0.12,0];
+    } },
+  mack: { fur:'#f0bc62', muzzle:'#f8dca8', body:'#4a6fa8', paw:'#f8dca8', leg:'#4a6fa8', foot:'#6a4020',
+    build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
+      b.add(geo.lathe('mackPoncho', [[0,0.37],[0.11,0.35],[0.21,0.24],[0.27,0.1],[0.28,0.05],[0.25,0.035],[0,0.035]], 22), '#e0602c');
+      for(const y of [0.12, 0.08]) b.add(geo.torus(0.262-(y-0.08)*0.5, 0.012, 5, 28), '#f6d8a0', [0,y,0], [HP,0,0]);
+      b.add(geo.torus(0.115,0.035,8,20), '#b8241c', [0,0.33,0], [HP,0,0]);
+      b.add(geo.cone(0.085,0.13,3), '#b8241c', [0.15,0.27,0], [0,0,Math.PI+0.35], [0.5,1,1]);
+      b.addM(geo.star(0.05,0.5,0.02), GOLD, M([0.17,0.18,0.11],[0,HP-0.6,0]));
+      for(const [az,el] of [[1.3,0.2],[-1.3,0.2],[1.2,-0.3],[-1.2,-0.3],[0.85,-0.62],[-0.85,-0.62]])
+        h.add(geo.sphere(0.09,12,8), '#d89a3e', onHead(az, el, -0.02));                              // mane
+      for(const s of [-1,1]) h.add(geo.sphere(0.075,10,8), '#d89a3e', onHead(s*1.25, 0.62, 0.0), [s*-0.6,0,0.3], [0.9,0.6,1.1]);
+      // ten-gallon hat
+      const y = L.headC+0.25;
+      h.add(geo.sphere(0.36,24,8), '#5c3c1e', [0, y, 0], [0,0,-0.1], [1,0.07,0.95]);
+      h.add(geo.sphere(0.2,18,12), '#6e4a26', [-0.01, y+0.1, 0], [0,0,-0.1], [1,0.9,0.95]);
+      h.add(geo.cylinder(0.198,0.2,0.05,20), '#3a2410', [-0.005, y+0.05, 0], [0,0,-0.1]);
+      h.addM(geo.star(0.055,0.5,0.02), GOLD, M([0.2, y+0.1, 0],[0,HP,0]));
+      tailOf(D, 'curl', '#d89a3e', '#f0bc62');
+      for(const s of [-1,1]) part(D, s<0?'legL':'legR').add(geo.sphere(0.022,6,4), GOLD, [-0.07,-0.17,0]);
+      const w = part(D,'weapon');
+      w.add(geo.rbox(0.07,0.15,0.055,0.02,2), '#8a5a30', [0.02,-0.02,0], [0,0,-0.35]);
+      w.add(geo.cylinder(0.028,0.028,0.24,10), '#7fb0e0', [-0.07,0.13,0]);
+      w.add(geo.cylinder(0.05,0.05,0.075,10), '#e04848', [-0.07,0.04,0]);
+      w.add(geo.cylinder(0.034,0.034,0.03,10), GOLD, [-0.07,0.25,0]);
+      w.add(geo.cylinder(0.024,0.03,0.05,8), '#d8b080', [-0.07,0.285,0]);                            // cork
+      D.a.tip = [-0.07,0.31,0]; D.a.wbase = [-0.07,0.05,0];
+    } },
+};
+
+const PARTS = ['body','head','face','armL','armR','legL','legR','tail','earL','earR','cape','weapon','glasses','gem'];
+function getModel(id){
+  if(MODEL[id]) return MODEL[id];
+  const T = DESIGN[id], D = { a:{}, T };
+  buildCommon(D, T); T.build(D); buildEyes(D, T);
+  const geos = {};
+  for(const k of PARTS){ if(D[k] && !D[k].empty){ geos[k] = D[k].build(); } }
+  geos.eyes = D.eyesGeo; geos.eyesX = D.xGeo; geos.eyesSq = D.sqGeo; geos.eyesHappy = D.happyGeo; geos.mouth = D.mouthGeo;
+  for(const k in geos) geos[k].userData.shared = true;     // cached per hero, shared by every rig of that hero
+  return (MODEL[id] = { geos, a:D.a, T });
+}
+
+// ---------------------------------------------------------------- shared small meshes' geometry/materials (lazy)
+let SH = null;
+function shared(){
+  if(SH) return SH;
+  const geo = G.look.geo;
+  const sb = B();
+  for(let i=0;i<3;i++){ const a = i/3*TAU; sb.add(geo.star(0.075,0.5,0.03), i===1?'#ffffff':'#ffe14d', [Math.cos(a)*0.3, Math.sin(a*2)*0.03, Math.sin(a)*0.3], [0, -a, 0]); }
+  const starsGeo = sb.build(); starsGeo.userData.shared = true;
+  SH = {
+    starsGeo,
+    starsMat: G.look.mat('#ffffff', { vertexColors:true, emissive:'#ffb400', emissiveIntensity:0.55, rough:0.4 }),
+    haloGeo: geo.torus(0.17, 0.028, 8, 30),
+    haloMat: G.look.mat('#ffd54a', { emissive:'#ffb000', emissiveIntensity:0.9, rough:0.3, metal:0.2, rim:0.6 }),
+    gemMat: G.look.vmat({ emissive:'#ff5fb4', emissiveIntensity:0.55, rough:0.35 }),
+    eyeMat: G.look.vmat({ rough:0.25, rim:0.2 }),       // same shared material G.look.eye uses
+    faceMat: G.look.vmat({ rough:0.85, rim:0.15 }),
+    glassMat: G.look.vmat({ rough:0.2, metal:0.1, rim:0.5 }),
+  };
+  return SH;
+}
+const glowMats = {};
+function weaponGlowMat(col){ return glowMats[col] || (glowMats[col] = G.look.vmat({ emissive:col, emissiveIntensity:0.7, rough:0.35 })); }
+
+// ---------------------------------------------------------------- rig
+const COM = 0.55;          // roll pivot height (centre of mass), unscaled
+const TURN = 0.61;         // 35° toward the camera
+const HEADTURN = 0.3;      // the head looks a little more toward the camera
+function grp(parent, x, y, z){ const g = new THREE.Group(); g.position.set(x||0, y||0, z||0); if(parent) parent.add(g); return g; }
+
+function build(id, opts){
+  opts = opts || {};
+  const hero = BYID[id] || BYID.inu; id = hero.id;
+  const md = getModel(id), a = md.a, T = md.T, gs = md.geos, sh = shared();
+  const scale = hero.scale || 1;
+  const mat = G.look.vmat({ instance:true });                       // per-rig: hit flash, charge glow, fade
+  const mesh = (geoName, parent, material, outline, shadow)=>{
+    const m = new THREE.Mesh(gs[geoName], material || mat);
+    m.castShadow = !!shadow; m.receiveShadow = false;
+    if(outline) G.look.outline(m, outline);
+    parent.add(m); return m;
+  };
+  const root = new THREE.Group(); root.name = 'hero-'+id;
+  const mir = grp(root);  mir.scale.setScalar(scale);
+  const yaw = grp(mir);
+  const act = grp(yaw, 0, COM, 0);
+  const sq = grp(act, 0, -COM, 0);
+  const hips = grp(sq, 0, L.hipY, 0);
+  const body = mesh('body', hips, null, 0.022, true);
+  const legL = grp(sq, 0, L.hipY, -L.legZ), legR = grp(sq, 0, L.hipY, L.legZ);
+  mesh('legL', legL, null, 0.02, true); mesh('legR', legR, null, 0.02, true);
+  const neck = grp(hips, 0, L.neckY, 0);
+  const head = mesh('head', neck, null, 0.022, true);
+  mesh('face', neck, sh.faceMat, 0, false);
+  const eyeP = grp(neck, 0, a.eyeY, 0);
+  const eyes = mesh('eyes', eyeP, sh.eyeMat, 0, false);
+  const eyesX = mesh('eyesX', eyeP, sh.eyeMat, 0, false); eyesX.visible = false;
+  const eyesSq = mesh('eyesSq', eyeP, sh.eyeMat, 0, false); eyesSq.visible = false;
+  const eyesHappy = mesh('eyesHappy', eyeP, sh.eyeMat, 0, false); eyesHappy.visible = false;
+  const mouth = mesh('mouth', neck, sh.faceMat, 0, false); mouth.visible = false;
+  const mouthC = new THREE.Vector3(a.mouthPos[0], a.mouthPos[1], 0);
+  let glasses = null;
+  if(gs.glasses){ glasses = grp(eyeP); mesh('glasses', glasses, sh.glassMat, 0.012, false); }
+  const sp = L.shoulder;
+  const armL = grp(hips, sp[0], sp[1], -sp[2]), armR = grp(hips, sp[0], sp[1], sp[2]);
+  mesh('armL', armL, null, 0.02, true); mesh('armR', armR, null, 0.02, true);
+  const handR = grp(armR, L.hand[0], L.hand[1], L.hand[2]);
+  const tip = new THREE.Object3D(), base = new THREE.Object3D();
+  let wpn = null, gem = null;
+  if(gs.weapon){
+    wpn = grp(handR);
+    mesh('weapon', wpn, T.weaponGlow ? weaponGlowMat(T.weaponGlow) : mat, 0.013, true);
+    tip.position.fromArray(a.tip); base.position.fromArray(a.wbase);
+    wpn.add(tip); wpn.add(base);
+    if(gs.gem){ gem = grp(wpn, a.gemPos[0], a.gemPos[1], a.gemPos[2]); mesh('gem', gem, sh.gemMat, 0.01, false); }
+  } else {                                   // bare paws: trail from the paw centre to the knuckles
+    base.position.set(L.hand[0], L.hand[1]+0.03, 0); tip.position.set(L.hand[0]+0.02, L.hand[1]-0.07, 0);
+    armR.add(base); armR.add(tip);
+  }
+  let earL = null, earR = null;
+  if(gs.earL){ const p = a.earPivot;
+    earL = grp(neck, p[0], p[1], -p[2]); earR = grp(neck, p[0], p[1], p[2]);
+    mesh('earL', earL, null, 0.016, false); mesh('earR', earR, null, 0.016, false); }
+  let tail = null;
+  if(gs.tail){ const p = a.tailPivot; tail = grp(hips, p[0], p[1], p[2]); mesh('tail', tail, null, 0.016, false); }
+  let cape = null;
+  if(gs.cape){ const p = a.capePivot; cape = grp(hips, p[0], p[1], p[2]); mesh('cape', cape, null, 0.018, true); }
+  let halo = null;
+  if(T.halo){ halo = new THREE.Mesh(sh.haloGeo, sh.haloMat); halo.rotation.x = HP; halo.position.set(-0.02, L.headC+0.47, 0); halo.castShadow = false; neck.add(halo); }
+  const stars = new THREE.Mesh(sh.starsGeo, sh.starsMat); stars.position.set(0, L.headC+0.42, 0); stars.visible = false; neck.add(stars);
+
+  const rig = {
+    root, heroId:id, style:hero.weapon, height:1.25*scale + (T.halo?0.08:0), radius:0.42*scale, scale,
+    tip, base, mat,
+    n:{ mir, yaw, act, sq, hips, body, head, neck, legL, legR, armL, armR, handR, wpn, gem, eyeP, eyes, eyesX, eyesSq, eyesHappy,
+        mouth, glasses, earL, earR, tail, cape, halo, stars },
+    mouthC,
+    st: makeState(hero.weapon),
+    alpha: 1,
+    update(ent, dt){ updateRig(rig, ent, dt==null ? G.cfg.TICK : dt); },
+    setAlpha(v){ setAlpha(rig, v); },
+    dispose(){
+      if(root.parent) root.parent.remove(root);
+      mat.dispose();                                   // the only thing this rig created for itself (geometry is cached per hero)
+      rig.disposed = true;
+    },
+  };
+  // meshes on shared materials can't fade: they hide instead when the rig is mostly transparent
+  rig.outlines = []; rig.sharedMeshes = [];
+  root.traverse(o=>{ if(!o.isMesh) return; if(o.userData.isOutline) rig.outlines.push(o);
+    else if(o.material!==mat && o!==eyes && o!==eyesX && o!==eyesSq && o!==eyesHappy && o!==mouth && o!==stars) rig.sharedMeshes.push(o); });
+  // default fists: tip follows the paw; kicks move it to the foot (see updateRig)
+  rig.tipHome = tip.parent; rig.footR = grp(legR, 0.09, -0.17, 0);
+  // settle once so a freshly built rig already stands in its idle pose
+  updateRig(rig, { anim: opts.anim || (opts.menu ? 'pose' : 'idle'), animT:0, animLen:0, animHit:0.35, face:opts.face||1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 }, G.cfg.TICK, true);
+  return rig;
+}
+
+function setAlpha(rig, v){
+  v = U.clamp(v, 0, 1);
+  if(v===rig.alpha) return;
+  rig.alpha = v;
+  const m = rig.mat, fade = v < 0.999;
+  m.transparent = fade; m.opacity = v;
+  rig.hideShared = v < 0.45;
+  for(const o of rig.outlines) o.visible = !fade && G.quality.tier < 2;
+  for(const o of rig.sharedMeshes) o.visible = !rig.hideShared;
+}
+
+// ---------------------------------------------------------------- poses
+// channels (radians / units). Arms: z = raise forward, y = sweep inward (across the body), x = spread outward.
+// Legs: z = swing forward. Weapon: blade angle in the swing plane = arm z + wz (0 = forward when the arm hangs).
+const CH = ['y','sq','fx','lean','twist','side','nod','hy','tilt','aLz','aLy','aLx','aRz','aRy','aRx','lLz','lRz','lLx','lRx','wz','wy','wx','mouth','tail','ear'];
+const DIRECT = ['roll','spin','wspin'];        // not smoothed (they wrap / spin fully)
+const ALL = CH.concat(DIRECT);
+const REST0 = { y:0, sq:0, fx:0, lean:0.04, twist:0, side:0, nod:0.04, hy:0, tilt:0, aLz:0.15, aLy:0, aLx:0.32, aRz:0.35, aRy:0, aRx:0.32,
+  lLz:0, lRz:0, lLx:0.05, lRx:0.05, wz:0.95, wy:0, wx:0, mouth:0, tail:0, ear:0, roll:0, spin:0, wspin:0 };
+const REST = {};
+const RESTX = {
+  sword:  { aRz:0.5, wz:0.8 },
+  fist:   { aLz:1.0, aRz:0.75, aLx:0.18, aRx:0.24, aLy:0.3, aRy:0.22 },
+  staff:  { aRz:0.4, wz:1.1 },
+  hammer: { aRz:0.35, wz:1.2, aLz:0.55, aLy:0.45, aLx:0.2 },
+  cane:   { aRz:0.25, wz:-1.72 },
+  katana: { aRz:0.85, aRy:0.15, wz:-0.1, aLz:0.8, aLy:0.55, aLx:0.15 },
+  gun:    { aRz:0.3, wz:-1.0 },
+};
+for(const s in RESTX) REST[s] = Object.assign({}, REST0, RESTX[s]);
+const TWOHAND = { hammer:true, katana:true };
+
+function K(t, pose, ease){ return { t, pose, ease: ease||'io' }; }
+const W=[0,0.72], H=[0,1], F=[0.3,0.7], R=[0.72,0.28], RC=[0.12,0.88];
+const kt = (t,h)=> typeof t==='number' ? t : t[0]+t[1]*h;
+function ease(kind, x){
+  if(kind==='out') return 1-(1-x)*(1-x)*(1-x);
+  if(kind==='in') return x*x*x;
+  if(kind==='lin') return x;
+  return x*x*(3-2*x);
+}
+function sampleKeys(keys, p, h, Q, rest){
+  let i = 0; while(i < keys.length-2 && p >= kt(keys[i+1].t, h)) i++;
+  const k0 = keys[i], k1 = keys[i+1], t0 = kt(k0.t,h), t1 = kt(k1.t,h);
+  const x = ease(k1.ease, t1>t0 ? U.clamp((p-t0)/(t1-t0),0,1) : 1);
+  for(let c=0;c<ALL.length;c++){
+    const ch = ALL[c], a = k0.pose[ch], b = k1.pose[ch];
+    const va = a===undefined ? rest[ch] : a, vb = b===undefined ? rest[ch] : b;
+    Q[ch] = va + (vb-va)*x;
+  }
+}
+const Z = {};      // "rest" key
+// --- swing templates (absolute values; missing channels = the style's rest pose)
+const T8 = {
+  hslash: [K(0,Z),
+    K(W,{aRz:1.35, aRy:-1.35, aRx:0.55, wz:-1.25, twist:0.55, lean:-0.06, sq:-0.07, aLz:0.7, aLy:-0.3}),
+    K(H,{aRz:1.5, aRy:0.25, aRx:0.15, wz:-1.5, twist:-0.3, lean:0.18, fx:0.1, sq:0.06, mouth:1, aLz:0.2, aLy:0.2},'out'),
+    K(F,{aRz:1.35, aRy:1.25, aRx:0.1, wz:-1.4, twist:-0.6, lean:0.14, fx:0.1, mouth:0.6, aLz:0.1}),
+    K(1,Z)],
+  back: [K(0,Z),
+    K(W,{aRz:1.3, aRy:1.35, aRx:0.05, wz:-1.3, twist:-0.55, lean:-0.04, sq:-0.06, aLz:0.3}),
+    K(H,{aRz:1.5, aRy:-0.2, aRx:0.3, wz:-1.5, twist:0.25, lean:0.16, fx:0.1, sq:0.05, mouth:1, aLz:0.6, aLy:-0.2},'out'),
+    K(F,{aRz:1.35, aRy:-1.15, aRx:0.5, wz:-1.4, twist:0.5, lean:0.12, fx:0.1, mouth:0.6}),
+    K(1,Z)],
+  up: [K(0,Z),
+    K(W,{aRz:-0.55, aRy:-0.25, wz:0.15, lean:0.16, sq:-0.12, aLz:0.6}),
+    K(H,{aRz:2.05, aRy:0.1, wz:-0.9, lean:-0.08, sq:0.12, y:0.04, fx:0.06, nod:0.2, mouth:1, aLz:0.9},'out'),
+    K(F,{aRz:2.8, wz:-0.55, lean:-0.14, sq:0.06, nod:0.25, mouth:0.6}),
+    K(1,Z)],
+  diag: [K(0,Z),
+    K(W,{aRz:2.6, aRy:-0.8, wz:0.25, twist:0.45, lean:-0.12, sq:0.04, aLz:0.9}),
+    K(H,{aRz:0.85, aRy:0.5, wz:-0.8, twist:-0.35, lean:0.22, fx:0.09, sq:-0.05, mouth:1, aLz:0.3},'out'),
+    K(F,{aRz:0.15, aRy:1.0, wz:-0.4, twist:-0.5, lean:0.26, fx:0.1, mouth:0.6}),
+    K(1,Z)],
+  over: [K(0,Z),
+    K(W,{aRz:3.0, aRy:-0.15, wz:0.45, lean:-0.25, y:0.14, sq:0.12, nod:0.2, aLz:2.4, aLx:0.5}),
+    K(H,{aRz:0.55, wz:-0.3, lean:0.42, y:0, sq:-0.2, fx:0.14, mouth:1, aLz:0.5, nod:-0.1},'out'),
+    K(F,{aRz:0.4, wz:-0.45, lean:0.36, sq:-0.1, fx:0.13, mouth:0.8}),
+    K(1,Z)],
+  thrust: [K(0,Z),
+    K(W,{aRz:1.1, aRy:-0.25, wz:-1.1, fx:-0.07, lean:-0.1, twist:0.4, sq:-0.05, aLz:0.9, aLx:0.6}),
+    K(H,{aRz:1.55, aRy:0.1, wz:-1.55, fx:0.17, lean:0.26, twist:-0.3, sq:0.06, mouth:1, aLz:0.2, aLx:0.8},'out'),
+    K(F,{aRz:1.5, wz:-1.5, fx:0.15, lean:0.2, twist:-0.25, mouth:0.5}),
+    K(1,Z)],
+  jabL: [K(0,Z),
+    K(W,{aLz:0.75, twist:0.22, sq:-0.04}),
+    K(H,{aLz:1.62, aLy:0.38, aLx:0.04, twist:-0.38, fx:0.08, lean:0.12, mouth:1},'out'),
+    K(F,{aLz:1.55, aLy:0.32, twist:-0.32, fx:0.08, lean:0.1}),
+    K(1,Z)],
+  jabR: [K(0,Z),
+    K(W,{aRz:0.6, twist:-0.25, sq:-0.04}),
+    K(H,{aRz:1.62, aRy:0.38, aRx:0.04, twist:0.42, fx:0.1, lean:0.14, mouth:1},'out'),
+    K(F,{aRz:1.55, aRy:0.32, twist:0.36, fx:0.1, lean:0.12}),
+    K(1,Z)],
+  hook: [K(0,Z),
+    K(W,{aRz:1.3, aRy:-1.1, aRx:0.65, twist:0.55, sq:-0.08, lean:-0.05}),
+    K(H,{aRz:1.5, aRy:0.65, aRx:0.2, twist:-0.55, fx:0.1, lean:0.16, sq:0.05, mouth:1},'out'),
+    K(F,{aRz:1.4, aRy:1.05, twist:-0.65, fx:0.1, lean:0.14}),
+    K(1,Z)],
+  kick: [K(0,Z),
+    K(W,{lRz:-0.7, lean:-0.08, sq:-0.1, aLz:1.1, aRz:1.1}),
+    K(H,{lRz:1.75, lLz:-0.25, lean:-0.38, y:0.06, fx:0.08, aLz:0.5, aRz:0.4, aRx:0.9, aLx:0.7, mouth:1, tipFoot:1},'out'),
+    K(F,{lRz:1.35, lean:-0.3, y:0.03, fx:0.08, tipFoot:1}),
+    K(1,Z)],
+  cast: [K(0,Z),
+    K(W,{aRz:2.4, wz:-0.4, aLz:0.9, lean:-0.12, sq:0.05, nod:0.15}),
+    K(H,{aRz:1.45, wz:-1.45, aLz:1.35, aLy:0.45, fx:0.07, lean:0.16, mouth:1},'out'),
+    K(F,{aRz:1.45, wz:-1.45, aLz:1.25, aLy:0.4, fx:0.06, lean:0.12, mouth:0.5}),
+    K(1,Z)],
+  bigcast: [K(0,Z),
+    K(W,{aRz:3.0, wz:-0.1, aLz:2.8, aLx:0.6, y:0.08, sq:0.12, nod:0.35, lean:-0.2}),
+    K(H,{aRz:1.5, wz:-1.5, aLz:1.45, aLy:0.3, lean:0.22, sq:-0.12, fx:0.06, mouth:1},'out'),
+    K(F,{aRz:1.5, wz:-1.5, aLz:1.35, lean:0.18, sq:-0.05, mouth:0.8}),
+    K(1,Z)],
+  shoot: [K(0,Z),
+    K(W,{aRz:1.52, wz:-1.55, aLz:0.55, twist:-0.12, lean:0.05}),
+    K(H,{aRz:1.52, wz:-1.55, aLz:0.55, twist:-0.12, lean:0.05}),
+    K(RC,{aRz:2.05, wz:-1.35, aLz:0.7, lean:-0.14, fx:-0.05, twist:-0.05, mouth:1, sq:-0.05},'out'),
+    K(F,{aRz:1.6, wz:-1.5, lean:0.02, mouth:0.3}),
+    K(1,Z)],
+  twirl: [K(0,Z),
+    K(W,{aRz:1.25, wz:-1.25, twist:0.3, aLz:0.6}),
+    K(H,{aRz:1.4, wz:-1.4, twist:-0.2, fx:0.08, lean:0.12, mouth:1, wspin:-TAU*0.6},'out'),
+    K(F,{aRz:1.35, wz:-1.35, twist:-0.25, fx:0.06, wspin:-TAU},'out'),
+    K(1,{wspin:-TAU})],
+  spinslash: [K(0,Z),
+    K(W,{aRz:1.3, aRy:-1.0, wz:-1.3, sq:-0.12, twist:0.4, aLz:1.0, aLx:0.7}),
+    K(H,{aRz:1.5, aRy:0.1, wz:-1.5, sq:0.02, aLz:1.2, aLx:0.9, mouth:1, spin:-TAU*0.55},'out'),
+    K(F,{aRz:1.45, wz:-1.45, aLz:1.1, aLx:0.8, spin:-TAU, fx:0.06}),
+    K(1,{spin:-TAU})],
+  hadou: [K(0,Z),
+    K(W,{aLz:-0.35, aRz:-0.35, aLy:-0.2, aRy:-0.2, twist:0.6, sq:-0.12, lean:-0.08}),
+    K(H,{aLz:1.55, aRz:1.55, aLy:0.42, aRy:0.42, aLx:0.05, aRx:0.05, fx:0.1, lean:0.22, sq:0.06, mouth:1},'out'),
+    K(F,{aLz:1.5, aRz:1.5, aLy:0.4, aRy:0.4, fx:0.1, lean:0.18, mouth:0.8}),
+    K(1,Z)],
+  toss: [K(0,Z),
+    K(W,{aRz:1.35, aRy:1.4, wz:-1.35, twist:-0.5, sq:-0.05}),
+    K(H,{aRz:1.45, aRy:-0.9, wz:-1.45, twist:0.4, fx:0.06, lean:0.1, mouth:1},'out'),
+    K(F,{aRz:1.3, aRy:-1.2, wz:-1.3, twist:0.45}),
+    K(1,Z)],
+  lob: [K(0,Z),
+    K(W,{aLz:-0.9, aLx:0.3, lean:-0.2, twist:-0.35, sq:-0.06}),
+    K(H,{aLz:2.5, aLy:0.3, lean:0.15, twist:0.3, mouth:1, sq:0.06},'out'),
+    K(F,{aLz:1.7, lean:0.12, twist:0.25}),
+    K(1,Z)],
+  iai: [K(0,Z),
+    K(W,{aRz:0.55, aRy:1.25, wz:-2.55, aLz:0.35, aLy:0.2, twist:-0.35, lean:0.24, sq:-0.14}),
+    K(H,{aRz:1.5, aRy:-0.9, aRx:0.3, wz:-1.5, twist:0.4, lean:0.3, fx:0.16, sq:0.04, mouth:1},'out'),
+    K(F,{aRz:1.4, aRy:-1.2, aRx:0.4, wz:-1.4, twist:0.45, lean:0.24, fx:0.15}),
+    K(1,Z)],
+  rise: [K(0,Z),
+    K(W,{aRz:-0.4, wz:0.25, sq:-0.2, lean:0.18, aLz:-0.2}),
+    K(H,{aRz:2.95, wz:-0.55, sq:0.24, y:0.1, lean:-0.14, nod:0.35, mouth:1, lLz:0.55, lRz:-0.3, aLz:0.8},'out'),
+    K(F,{aRz:2.85, wz:-0.5, sq:0.12, y:0.06, lean:-0.1, nod:0.3, lLz:0.5, mouth:0.8}),
+    K(1,Z)],
+  riseKick: [K(0,Z),
+    K(W,{sq:-0.2, lean:0.2, aRz:0.2, lRz:-0.5}),
+    K(H,{lRz:2.5, lLz:-0.3, aRz:2.8, aRy:0.3, sq:0.22, y:0.1, lean:-0.35, nod:0.3, mouth:1, tipFoot:1},'out'),
+    K(F,{lRz:2.2, aRz:2.6, sq:0.12, y:0.08, lean:-0.3, nod:0.3, tipFoot:1}),
+    K(1,Z)],
+  smoke: [K(0,Z),
+    K(W,{aLz:2.4, aLx:0.3, sq:0.06, nod:0.2, lean:-0.1}),
+    K(H,{aLz:0.3, aLy:0.3, sq:-0.14, lean:0.25, nod:-0.2, mouth:1},'out'),
+    K(F,{aLz:0.3, sq:-0.05, lean:0.1}),
+    K(1,Z)],
+  rocket: [K(0,Z),
+    K(W,{aRz:2.9, wz:-1.45, aLz:1.0, lean:-0.2, nod:0.3}),
+    K(H,{aRz:2.95, wz:-1.45, aLz:1.0, lean:-0.2, nod:0.3}),
+    K(RC,{aRz:3.3, wz:-1.3, lean:-0.34, sq:-0.12, nod:0.45, mouth:1},'out'),
+    K(F,{aRz:3.0, wz:-1.45, lean:-0.2, nod:0.3}),
+    K(1,Z)],
+  dash: [K(0,Z),
+    K(W,{aRz:0.5, aRy:1.2, wz:-2.4, lean:0.5, sq:-0.16, aLz:-0.3, twist:-0.3}),
+    K(H,{aRz:1.5, aRy:-1.0, wz:-1.5, lean:0.45, fx:0.16, twist:0.35, mouth:1, aLz:-0.5},'out'),
+    K(F,{aRz:1.4, aRy:-1.2, wz:-1.4, lean:0.4, fx:0.14, twist:0.4, aLz:-0.5}),
+    K(1,Z)],
+  tackle: [K(0,Z),
+    K(W,{lean:0.25, sq:-0.18, aRz:-0.5, wz:1.9, aLz:0.9, aLy:0.2}),
+    K(H,{lean:0.65, fx:0.14, sq:0.05, aRz:-0.55, wz:1.9, aLz:1.45, aLx:0.3, mouth:1, nod:-0.2},'out'),
+    K(R,{lean:0.6, fx:0.12, aRz:-0.5, wz:1.9, aLz:1.4, nod:-0.2}),
+    K(1,Z)],
+  spinKick: [K(0,Z),
+    K(W,{sq:-0.12, lRz:-0.3, aLz:1.1, aRz:1.1}),
+    K(H,{lRz:1.6, lean:-0.2, aLx:1.1, aRx:1.1, aLz:0.6, aRz:0.6, y:0.06, mouth:1, spin:-TAU*0.5, tipFoot:1},'lin'),
+    K(R,{lRz:1.6, lean:-0.2, aLx:1.1, aRx:1.1, aLz:0.6, aRz:0.6, y:0.06, spin:-TAU*2, tipFoot:1},'lin'),
+    K(1,{spin:-TAU*2})],
+  slide: [K(0,Z),
+    K(W,{sq:-0.15, lean:0.2}),
+    K(H,{roll:1.0, y:-0.28, lLz:1.3, lRz:1.1, aRz:1.9, wz:-1.9, aLz:2.4, mouth:1, nod:-0.3},'out'),
+    K(R,{roll:0.95, y:-0.28, lLz:1.3, lRz:1.1, aRz:1.9, wz:-1.9, aLz:2.4, nod:-0.3}),
+    K(1,Z)],
+  drill: [K(0,Z),
+    K(W,{lean:0.3, sq:-0.12, aRz:1.5, wz:-1.5, aLz:1.5, aLy:0.3}),
+    K(H,{lean:0.85, fx:0.12, aRz:1.55, wz:-1.55, aLz:1.55, aLy:0.35, mouth:1, spin:0, wspin:0},'out'),
+    K(R,{lean:0.85, fx:0.12, aRz:1.55, wz:-1.55, aLz:1.55, aLy:0.35, wspin:TAU*4},'lin'),
+    K(1,{wspin:TAU*4})],
+  air: [K(0,Z),
+    K(W,{aRz:2.7, wz:0.3, lean:-0.15, sq:0.08, aLz:1.5, lLz:0.4, lRz:0.1}),
+    K(H,{aRz:0.7, wz:-0.6, lean:0.3, sq:-0.06, roll:-0.2, mouth:1, aLz:0.5, lLz:0.5, lRz:0.2},'out'),
+    K(F,{aRz:0.5, wz:-0.6, lean:0.25, roll:-0.15, lLz:0.4}),
+    K(1,Z)],
+  flip: [K(0,Z),
+    K(W,{aRz:1.5, wz:-1.5, sq:-0.12, lLz:0.9, lRz:0.9, aLz:1.2, roll:-0.4}),
+    K(H,{aRz:1.5, wz:-1.5, sq:-0.12, lLz:0.9, lRz:0.9, aLz:1.2, roll:-TAU*0.5, mouth:1},'lin'),
+    K(F,{aRz:1.4, wz:-1.4, sq:-0.05, lLz:0.5, lRz:0.5, roll:-TAU},'out'),
+    K(1,{roll:-TAU})],
+  chargeAtk: [K(0,Z),
+    K(W,{aRz:1.3, aRy:-1.1, wz:-1.3, sq:-0.14, twist:0.5, aLz:1.0, aLx:0.8}),
+    K(H,{aRz:1.5, wz:-1.5, aLz:1.2, aLx:0.95, sq:0.03, mouth:1, spin:-TAU*0.45},'lin'),
+    K([0.62,0.38],{aRz:1.5, wz:-1.5, aLz:1.2, aLx:0.95, spin:-TAU*1.25},'out'),
+    K(1,{spin:-TAU*1.25})],
+  ult: [K(0,Z),
+    K(0.18,{sq:-0.22, lean:0.22, aRz:-0.45, wz:0.5, aLz:-0.3, nod:-0.2}),
+    K(0.4,{y:0.22, sq:0.2, aRz:3.0, wz:-0.2, aLz:2.6, aLx:0.7, nod:0.4, mouth:1, lLz:0.6, lRz:-0.5},'out'),
+    K(0.62,{y:0.04, sq:-0.06, aRz:2.9, wz:-0.15, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.25, mouth:1, lean:-0.1, lLz:0.25, lRz:-0.2},'out'),
+    K(1,{y:0.02, aRz:2.9, wz:-0.15, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.22, mouth:0.8, lean:-0.1, lLz:0.25, lRz:-0.2})],
+  hurt: [K(0,Z),
+    K(0.14,{sq:-0.24, lean:-0.38, fx:-0.1, nod:0.35, aLz:1.9, aRz:1.7, aLx:0.9, aRx:0.9, mouth:1, lLz:0.35, lRz:0.2},'out'),
+    K(0.5,{sq:0.07, lean:-0.16, fx:-0.05, nod:0.15, aLz:1.0, aRz:1.0, aLx:0.6, aRx:0.6, mouth:0.6}),
+    K(1,Z)],
+  getup: [K(0,{roll:HP, y:-0.14, aLz:2.3, aRz:2.0, lLz:0.4, lRz:0.2}),
+    K(0.35,{roll:0.95, y:-0.1, aLz:0.4, aRz:0.4, lLz:0.9, lRz:0.9, sq:-0.1}),
+    K(0.62,{roll:-0.08, y:0.12, sq:0.16, aLz:2.3, aRz:2.2, aLx:0.6, aRx:0.6},'out'),
+    K(0.8,{sq:-0.16, y:0}),
+    K(1,Z)],
+  ko: [K(0,Z),
+    K(0.14,{sq:-0.22, lean:-0.3, nod:0.4, mouth:1, aLz:2.0, aRz:1.8}),
+    K(0.42,{roll:1.8, y:-0.06, aLz:2.6, aRz:2.4, lLz:0.8, lRz:0.6},'in'),
+    K(0.58,{roll:1.4, y:0.06, aLz:2.2, aRz:2.2, lLz:0.6, lRz:0.3},'out'),
+    K(0.74,{roll:HP+0.04, y:-0.15, sq:-0.08, aLz:2.5, aRz:2.3, lLz:0.4, lRz:0.2},'in'),
+    K(1,{roll:HP, y:-0.14, aLz:2.4, aRz:2.2, aLx:0.8, aRx:0.8, lLz:0.4, lRz:0.2})],
+  dodge: [K(0,Z),
+    K(0.12,{sq:-0.2, lean:0.3, aLz:1.6, aRz:1.4, aLx:0.1, aRx:0.1, lLz:0.9, lRz:0.9, y:-0.1}),
+    K(0.8,{sq:-0.2, lean:0.3, aLz:1.6, aRz:1.4, aLx:0.1, aRx:0.1, lLz:0.9, lRz:0.9, y:-0.1, roll:-TAU},'io'),
+    K(1,{roll:-TAU})],
+};
+// weapon style → which template each attack uses
+const MOVES = {
+  sword:  { atk1:'hslash', atk2:'up', atk3:'diag', atk4:'over', special:'hslash', specialUp:'rise', specialDash:'dash', airAtk:'air', airAtk2:'flip' },
+  fist:   { atk1:'jabL', atk2:'jabR', atk3:'hook', atk4:'kick', special:'hadou', specialUp:'riseKick', specialDash:'spinKick', airAtk:'kick', airAtk2:'flip', chargeAtk:'spinKick' },
+  staff:  { atk1:'diag', atk2:'up', atk3:'cast', atk4:'bigcast', special:'cast', specialUp:'bigcast', specialDash:'thrust', airAtk:'cast', airAtk2:'flip' },
+  hammer: { atk1:'hslash', atk2:'back', atk3:'up', atk4:'over', special:'over', specialUp:'rise', specialDash:'tackle', airAtk:'over', airAtk2:'flip' },
+  cane:   { atk1:'thrust', atk2:'thrust', atk3:'twirl', atk4:'up', special:'toss', specialUp:'smoke', specialDash:'slide', airAtk:'thrust', airAtk2:'flip' },
+  katana: { atk1:'iai', atk2:'over', atk3:'up', atk4:'spinslash', special:'iai', specialUp:'up', specialDash:'dash', airAtk:'air', airAtk2:'flip' },
+  gun:    { atk1:'shoot', atk2:'shoot', atk3:'shoot', atk4:'twirl', special:'lob', specialUp:'rocket', specialDash:'drill', airAtk:'shoot', airAtk2:'flip' },
+};
+const ONESHOT_LEN = { land:10, atk1:18, atk2:18, atk3:20, atk4:26, chargeAtk:30, airAtk:18, airAtk2:22, dodge:22, special:30,
+  specialUp:30, specialDash:28, ult:80, hurt:18, getup:30, ko:50 };
+
+//@@NEXT@@
+})();
