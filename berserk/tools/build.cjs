@@ -2,7 +2,7 @@
 // berserk/index.html + style.css + js/*.js を 1 ファイルにまとめる
 //   node berserk/tools/build.cjs                → リポジトリ直下 berserk_standalone.html（完全な HTML 文書）
 //   node berserk/tools/build.cjs --fragment=out.html
-//        → <html>/<head>/<body> を持たない断片版（HTML 骨格を外側で付与するホスティング用）
+//        → <html>/<head>/<body> を持たない断片版（HTML 骨格を外側で付与するホスティング用）。--title=名前 で題名を上書き
 const fs = require('fs');
 const path = require('path');
 
@@ -27,7 +27,7 @@ console.log(`wrote ${out} (${(html.length / 1024).toFixed(1)} KB, ${scripts.leng
 
 if (args.fragment) {
   // 骨格なし版: <title>, フォント, <style>, 本文, スクリプトだけを並べる
-  const title = /<title>[\s\S]*?<\/title>/.exec(html)[0];
+  const title = args.title ? `<title>${args.title}</title>` : /<title>[\s\S]*?<\/title>/.exec(html)[0];
   const links = (html.match(/<link [^>]*fonts\.g[^>]*>/g) || []).join('\n');
   const style = /<style>[\s\S]*?<\/style>/.exec(html)[0];
   const body = /<!--@BUILD-BODY-START-->([\s\S]*?)<!--@BUILD-BODY-END-->/.exec(html)[1];
