@@ -717,18 +717,74 @@ function blueprint(type){
   return BP[type];
 }
 
+// ================================================================ per-rig materials: recycled, never disposed
+// three.js deletes a shader program as soon as no material uses it any more. Disposing a KO'd foe's materials threw away
+// its program (and the see-through twin compiled for the fade-out), so the next spawn and the next KO fade compiled and
+// linked them again: a stall on phones whenever a wave arrived or a foe was beaten. A recycled material keeps its programs,
+// so after the first appearance of a type (and its first fade) spawning and fading link nothing new.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite, ei:m.emissiveIntensity };
+  return m;
+}
+function giveMat(m){
+  const s = m.userData.pool;
+  if(!s){ m.dispose(); return; }
+  if(s.free) return;                       // (a rig disposed twice)
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(s.ei!==undefined) m.emissiveIntensity = s.ei;
+  const u = m.userData;
+  if(u.uFlash) u.uFlash.value = 0;
+  if(u.uTint) u.uTint.value.setRGB(1, 1, 1);
+  s.list.push(m);
+}
+
 // ================================================================ rig assembly
-const POSE_KEYS = ['lean','sq','bob','px','lie','spin','roll','hx','hy','hz','aF','aB','aFx','aBx','lF','lB','lFy','lBy','q1','q2','q3','q4','tz','ty','eF','eB','sway','puff'];
+// Pose channels (targets T and damped values Cc). One fixed shape with named fields, cleared and damped field by field:
+// filling a {} through a string-keyed loop turns it into a dictionary, and every double stored there is a fresh heap
+// number (≈0.8 KB of garbage per foe per tick with 12 foes on screen).
+function Pose(){
+  this.lean = 0; this.sq = 0; this.bob = 0; this.px = 0; this.lie = 0; this.spin = 0; this.roll = 0;
+  this.hx = 0; this.hy = 0; this.hz = 0; this.aF = 0; this.aB = 0; this.aFx = 0; this.aBx = 0;
+  this.lF = 0; this.lB = 0; this.lFy = 0; this.lBy = 0; this.q1 = 0; this.q2 = 0; this.q3 = 0; this.q4 = 0;
+  this.tz = 0; this.ty = 0; this.eF = 0; this.eB = 0; this.sway = 0; this.puff = 0;
+}
+function poseZero(T){
+  T.lean = 0; T.sq = 0; T.bob = 0; T.px = 0; T.lie = 0; T.spin = 0; T.roll = 0;
+  T.hx = 0; T.hy = 0; T.hz = 0; T.aF = 0; T.aB = 0; T.aFx = 0; T.aBx = 0;
+  T.lF = 0; T.lB = 0; T.lFy = 0; T.lBy = 0; T.q1 = 0; T.q2 = 0; T.q3 = 0; T.q4 = 0;
+  T.tz = 0; T.ty = 0; T.eF = 0; T.eB = 0; T.sway = 0; T.puff = 0;
+}
+function poseDamp(C, T, K){
+  C.lean += (T.lean - C.lean)*K; C.sq += (T.sq - C.sq)*K; C.bob += (T.bob - C.bob)*K; C.px += (T.px - C.px)*K;
+  C.lie += (T.lie - C.lie)*K; C.spin += (T.spin - C.spin)*K; C.roll += (T.roll - C.roll)*K;
+  C.hx += (T.hx - C.hx)*K; C.hy += (T.hy - C.hy)*K; C.hz += (T.hz - C.hz)*K;
+  C.aF += (T.aF - C.aF)*K; C.aB += (T.aB - C.aB)*K; C.aFx += (T.aFx - C.aFx)*K; C.aBx += (T.aBx - C.aBx)*K;
+  C.lF += (T.lF - C.lF)*K; C.lB += (T.lB - C.lB)*K; C.lFy += (T.lFy - C.lFy)*K; C.lBy += (T.lBy - C.lBy)*K;
+  C.q1 += (T.q1 - C.q1)*K; C.q2 += (T.q2 - C.q2)*K; C.q3 += (T.q3 - C.q3)*K; C.q4 += (T.q4 - C.q4)*K;
+  C.tz += (T.tz - C.tz)*K; C.ty += (T.ty - C.ty)*K; C.eF += (T.eF - C.eF)*K; C.eB += (T.eB - C.eB)*K;
+  C.sway += (T.sway - C.sway)*K; C.puff += (T.puff - C.puff)*K;
+}
 function makeRig(type, ent){
   const bp = blueprint(type);
   if(!bp) return null;
-  const r = { type, bp, alpha:1, T:{}, Cc:{}, clock: Math.floor(Math.random()*400), phase:0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
-    sqv:0, sqp:0, prevFlash:0, wasGround:true, lastVy:0, headA:-TURN, fl:-1, mats:[], own:[], pupOn:false };
-  for(const k of POSE_KEYS){ r.T[k] = 0; r.Cc[k] = 0; }
+  // every field any type uses is declared here, so all 14 types share one object shape (the per-tick code stays monomorphic)
+  const r = { type, bp, alpha:1, T:new Pose(), Cc:new Pose(), clock: Math.floor(Math.random()*400), phase:0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
+    sqv:0, sqp:0, prevFlash:0, wasGround:true, lastVy:0, headA:-TURN, fl:-1, mats:[], own:[], pupOn:false,
+    K:0.4, shake:0, showStars:false,
+    lieLift: bp.lieLift || 0, lieShift: bp.lieShift || 0, headYaw: bp.headYaw==null ? HEAD_YAW : bp.headYaw,
+    root:null, turn:null, flip:null, mat:null, B:null, bones:null, mesh:null, skel:null, outlines:null, faceMat:null, face:null,
+    stars:null, tip:null, base:null, pup:null, spark:null, anger:null, aura:null, warn:null, mound:null };
   const root = r.root = new THREE.Group(); root.name = 'zako_'+type;
   const turn = r.turn = new THREE.Group(); root.add(turn);
   const flip = r.flip = new THREE.Group(); turn.add(flip);
-  const mat = r.mat = G.look.vmat({ instance:true, rough: bp.rough, metal: bp.metal||0 });
+  const mat = r.mat = takeMat('body|'+bp.rough+'|'+(bp.metal||0), ()=> G.look.vmat({ instance:true, rough: bp.rough, metal: bp.metal||0 }));
   r.mats.push(mat); r.own.push(mat);
   // bones
   const B = r.B = {}, list = r.bones = [];
@@ -755,7 +811,7 @@ function makeRig(type, ent){
   mesh.add(ol);
   r.outlines = [ol];
   // face
-  const fm = r.faceMat = bp.mecha ? glowMat(1.2) : G.look.vmat({ instance:true, rough:0.32, rim:0.25 });
+  const fm = r.faceMat = bp.mecha ? takeMat('glow1.2', ()=> glowMat(1.2)) : takeMat('face', ()=> G.look.vmat({ instance:true, rough:0.32, rim:0.25 }));
   r.mats.push(fm); r.own.push(fm);
   const face = r.face = new THREE.Mesh(bp.face.angry, fm);
   face.castShadow = false;
@@ -785,7 +841,7 @@ function makeRig(type, ent){
     root, height: bp.height, radius: bp.radius, tip: r.tip, base: r.base, _r: r,
     update(e, dt){ update(r, e); },
     setAlpha(a){ setAlpha(r, a); },
-    dispose(){ for(const m of r.own) m.dispose(); skel.dispose(); },
+    dispose(){ for(let i=0;i<r.own.length;i++) giveMat(r.own[i]); r.own.length = 0; skel.dispose(); },
   };
   return rig;
 }
@@ -824,7 +880,7 @@ function update(r, e){
   const k = r.clock;
   const A = e.anim || 'idle', t = e.animT || 0, len = e.animLen || 0;
   const p = len > 0 ? U.clamp(t/len, 0, 1) : 0, hit = U.clamp(e.animHit || 0.35, 0.05, 0.95);
-  for(let i=0;i<POSE_KEYS.length;i++) T[POSE_KEYS[i]] = 0;
+  poseZero(T);
   r.K = 0.4; r.shake = 0; r.showStars = false;
   let expr = exprFor(A, e, r);
   if(bp.kind==='quad') poseQuad(r, e, A, t, p, hit, k);
@@ -842,8 +898,8 @@ function update(r, e){
   r.wasGround = !!e.onGround; r.lastVy = e.vy || 0;
   r.sqv += -r.sqp*0.3 - r.sqv*0.24; r.sqp += r.sqv;
   // damp toward the targets
-  const C = r.Cc, K = r.K;
-  for(let i=0;i<POSE_KEYS.length;i++){ const key = POSE_KEYS[i]; C[key] += (T[key] - C[key])*K; }
+  const C = r.Cc;
+  poseDamp(C, T, r.K);
   // heading (turns through the front so the face stays visible) + z-mirror so held items stay on the camera side
   const want = (e.face||1) >= 0 ? -TURN : -(PI - TURN);
   r.headA += U.clamp((want - r.headA)*0.45, -0.34, 0.34);
@@ -851,13 +907,12 @@ function update(r, e){
   r.flip.scale.z = r.headA < -HP ? -1 : 1;
   const B = r.B, root = B.root;
   const sy = Math.max(0.5, 1 + C.sq + r.sqp), sxz = 1/Math.sqrt(sy), pf = 1 + C.puff;
-  root.position.set(C.px + r.shake, C.bob + C.lie*bp.lieLift, 0);
-  root.position.x += C.lie*bp.lieShift;
+  root.position.set(C.px + r.shake + C.lie*r.lieShift, C.bob + C.lie*r.lieLift, 0);
   if(bp.kind==='quad'){ root.rotation.set(-C.lie*HP, 0, C.spin); }
   else root.rotation.set(C.roll, 0, C.lie*HP + C.spin);
   root.scale.set(sxz*pf, sy*pf, sxz*pf);
   if(B.body) B.body.rotation.set(C.sway, 0, C.lean);
-  if(B.head) B.head.rotation.set(C.hx, (bp.headYaw==null ? HEAD_YAW : bp.headYaw) + C.hy, C.hz);
+  if(B.head) B.head.rotation.set(C.hx, r.headYaw + C.hy, C.hz);
   if(B.armF){ B.armF.rotation.set(C.aFx, 0, C.aF); B.armB.rotation.set(C.aBx, 0, C.aB); }
   if(B.legF){ B.legF.rotation.z = C.lF; B.legB.rotation.z = C.lB; B.legF.position.y = B.legF.userData.ry + C.lFy; B.legB.position.y = B.legB.userData.ry + C.lBy; }
   if(B.q1){ B.q1.rotation.z = C.q1; B.q2.rotation.z = C.q2; B.q3.rotation.z = C.q3; B.q4.rotation.z = C.q4; }
@@ -1145,10 +1200,10 @@ EXTRA.kire = {
 };
 EXTRA.oni = {
   build(r){
-    const aura = r.aura = new THREE.Mesh(G.look.geo.plane(4.8, 4.8), decalMat('aura', 0.75));
+    const aura = r.aura = new THREE.Mesh(G.look.geo.plane(4.8, 4.8), takeMat('decal|aura', ()=> decalMat('aura', 0.75)));
     aura.rotation.x = -HP; aura.position.y = 0.03; aura.renderOrder = -1;
     r.root.add(aura); r.own.push(aura.material);
-    const warn = r.warn = new THREE.Mesh(G.look.geo.plane(2.8, 2.8), decalMat('warn', 0.8));
+    const warn = r.warn = new THREE.Mesh(G.look.geo.plane(2.8, 2.8), takeMat('decal|warn', ()=> decalMat('warn', 0.8)));
     warn.rotation.x = -HP; warn.position.y = 0.04; warn.visible = false; warn.renderOrder = -1;
     r.root.add(warn); r.own.push(warn.material);
   },

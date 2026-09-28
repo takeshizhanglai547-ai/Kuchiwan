@@ -123,6 +123,30 @@ const FAST = { attack:1, attack2:1, attack3:1, shoot:1, dash:1, roar:1, special:
 const YAW = 0.61;
 const MAXM = 6;
 
+// per-rig materials are recycled, never disposed: three.js deletes a shader program as soon as no material uses it, so a
+// disposed boss / little slime / knight form threw its program (and the see-through twin compiled for a fade) away and
+// the next one compiled and linked it again. A recycled material keeps its programs.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite, ei:m.emissiveIntensity };
+  return m;
+}
+function giveMat(m){
+  const s = m && m.userData.pool;
+  if(!s){ if(m) m.dispose(); return; }
+  if(s.free) return;
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(s.ei!==undefined) m.emissiveIntensity = s.ei;
+  if(m.userData.uFlash) m.userData.uFlash.value = 0;
+  s.list.push(m);
+}
+
 function Kit(o){
   this.o = o;
   this.root = new THREE.Group(); this.root.name = 'bossB_'+o.type;
@@ -130,8 +154,9 @@ function Kit(o){
   this.yaw = new THREE.Group(); this.mir.add(this.yaw);           // turn toward the camera
   this.scl = new THREE.Group(); this.yaw.add(this.scl); if(o.scale) this.scl.scale.setScalar(o.scale);
   this.body = new THREE.Group(); this.scl.add(this.body);
-  this.mat = G.look.vmat({ instance:true, rough: o.rough==null ? 0.66 : o.rough });
-  this.gmat = G.look.vmat({ instance:true, rough:0.26, rim:0.35 });
+  const rough = o.rough==null ? 0.66 : o.rough;
+  this.mat = takeMat('body|'+rough, ()=> G.look.vmat({ instance:true, rough }));
+  this.gmat = takeMat('gloss', ()=> G.look.vmat({ instance:true, rough:0.26, rim:0.35 }));
   this.mats = [this.mat, this.gmat];          // opaque per-rig materials (flash + fade)
   this.tmats = [];                             // always-transparent per-rig materials { m, base }
   this.bmat = null; this.emat = null;          // glow materials (blade / orb, eyes)
@@ -146,7 +171,7 @@ function Kit(o){
 }
 Kit.prototype.grp = function(parent, pos){ const g = new THREE.Group(); if(pos) g.position.set(pos[0], pos[1], pos[2]); parent.add(g); return g; };
 Kit.prototype.glow = function(color, inten){
-  const m = G.look.vmat({ instance:true, rough:0.3, rim:0.8, emissive:color, emissiveIntensity: inten==null ? 0.7 : inten });
+  const m = takeMat('glow|'+color+'|'+inten, ()=> G.look.vmat({ instance:true, rough:0.3, rim:0.8, emissive:color, emissiveIntensity: inten==null ? 0.7 : inten }));
   m.userData.baseEmissive = inten==null ? 0.7 : inten;
   this.mats.push(m); return m;
 };
@@ -229,21 +254,21 @@ function laneTex(){
   return t;
 }
 Kit.prototype.makeMark = function(i){
-  const mat = new THREE.MeshBasicMaterial({ map:warnTex(), transparent:true, depthWrite:false, opacity:0.9, color:0xffc45a, toneMapped:false });
+  const mat = takeMat('mark', ()=> new THREE.MeshBasicMaterial({ map:warnTex(), transparent:true, depthWrite:false, opacity:0.9, color:0xffc45a, toneMapped:false }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), mat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false; m.name = 'bossB_mark';
   G.scene.add(m); this.mk[i] = m;
   return m;
 };
 Kit.prototype.makeLane = function(){
-  const mat = new THREE.MeshBasicMaterial({ map:laneTex(), transparent:true, depthWrite:false, opacity:0.8, color:0xffc45a, toneMapped:false, side:THREE.DoubleSide });
+  const mat = takeMat('lane', ()=> new THREE.MeshBasicMaterial({ map:laneTex(), transparent:true, depthWrite:false, opacity:0.8, color:0xffc45a, toneMapped:false, side:THREE.DoubleSide }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), mat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false; m.name = 'bossB_lane';
   G.scene.add(m); this.laneM = m;
 };
 Kit.prototype.makeBeam = function(){
   const col = this.o.beamCol || '#b060ff';
-  const add = (c, o)=> new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false });
+  const add = (c, o)=> takeMat('beam|'+c+'|'+o, ()=> new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false }));
   const mo = add(col, 0.55), mi = add(this.o.beamCore || '#fff0ff', 0.95), mc = add(col, 0.7);
   const g = new THREE.Group(); g.name = 'bossB_beam';
   const cg = G.look.geo.cylinder(1, 1, 1, 18, false);
@@ -296,6 +321,7 @@ Kit.prototype.updWorld = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
+  if(e.introLine) introLine(e);
   this.hitNow = fl > this.prevFlash;
   if(this.hitNow){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
@@ -337,13 +363,14 @@ Kit.prototype.update = function(e){
   this.updWorld(e, T);
 };
 Kit.prototype.dispose = function(){
-  for(let i=0;i<this.mats.length;i++) this.mats[i].dispose();
-  for(let i=0;i<this.tmats.length;i++) this.tmats[i].m.dispose();
-  for(let i=0;i<this.mk.length;i++){ const m = this.mk[i]; if(m){ if(m.parent) m.parent.remove(m); m.material.dispose(); } }
+  for(let i=0;i<this.mats.length;i++) giveMat(this.mats[i]);
+  for(let i=0;i<this.tmats.length;i++) giveMat(this.tmats[i].m);
+  this.mats.length = 0; this.tmats.length = 0;
+  for(let i=0;i<this.mk.length;i++){ const m = this.mk[i]; if(m){ if(m.parent) m.parent.remove(m); giveMat(m.material); } }
   this.mk.length = 0;
-  if(this.laneM){ if(this.laneM.parent) this.laneM.parent.remove(this.laneM); this.laneM.material.dispose(); this.laneM = null; }
+  if(this.laneM){ if(this.laneM.parent) this.laneM.parent.remove(this.laneM); giveMat(this.laneM.material); this.laneM = null; }
   if(this.beamG){ if(this.beamG.parent) this.beamG.parent.remove(this.beamG); if(this.chargeM.parent) this.chargeM.parent.remove(this.chargeM);
-    for(const m of this.beamMats) m.dispose(); this.beamG = null; this.chargeM = null; }
+    for(const m of this.beamMats) giveMat(m); this.beamG = null; this.chargeM = null; }
 };
 Kit.prototype.rig = function(height, radius){
   const k = this;
@@ -477,6 +504,17 @@ const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
 function sayLow(e, s){ if(G.fx && G.fx.text) G.fx.text(s, e.x + e.face*0.6, e.y + 1.3, e.z + 0.5, 'onoma'); else say(e, s); }
+// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
+// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
+// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
+const BANNER_T = 142;
+G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossB) b.bannerEnd = G.time.tick + BANNER_T; });
+function sayIntro(e, line){ e.introLine = line; introLine(e); }
+function introLine(e){                     // also called every tick from the rig update (it runs in every state)
+  if(e.dead){ e.introLine = null; return; }
+  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd) return;
+  say(e, e.introLine); e.introLine = null;
+}
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
 const O = {
@@ -634,7 +672,7 @@ function phaseCheck(e){
 function introRoar(len, line, extra){
   return { id:'bossB_intro', anim:'roar', len, hits:[], noAlert:true,
     fn(e, t){ if(t===0) G.setAnim(e, 'roar', len, 0.3);
-      if(t===6 && line) say(e, line);
+      if(t===6 && line) sayIntro(e, line);
       if(t===18){ sfx('bossRoar'); shake(3, 24); fx('shock', e.x, 0.02, e.z, O.shock1); }
       if(extra) extra(e, t); },
     onEnd(e){ e.cool = 30; } };
@@ -727,7 +765,7 @@ function buildSlime(small){
       for(const q of bub) feat(b, BS, q[0], q[1], -0.04, sph(q[2],10,8), SLM.BUB, [1,1,0.8]);
       b.add(sph(0.3,14,10), '#48c83a', [0.2,0.62,0.1], null, [1,0.8,1]);        // a darker "core" blob inside
     }, { outline:0, post:(g)=> gradY(g, SLM.G1, 0, 1.72, SLM_STOPS) });
-    k.shellMat = G.look.vmat({ instance:true, rough:0.1, rim:1.8, transparent:true, opacity:0.44, emissive:'#1f8a20', emissiveIntensity:0.12, depthWrite:false });
+    k.shellMat = takeMat('shell', ()=> G.look.vmat({ instance:true, rough:0.1, rim:1.8, transparent:true, opacity:0.44, emissive:'#1f8a20', emissiveIntensity:0.12, depthWrite:false }));
     k.tmats.push({ m:k.shellMat, base:0.44 });
     k.shell = k.part(k.jelly, 'shell', (b)=>{
       b.add(sph(1,24,16), SLM.SHELL, BS.c, null, BS.r);

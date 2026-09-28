@@ -99,13 +99,37 @@ function newPose(){ const o = { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1 }
 const FAST = { attack:1, attack2:1, attack3:1, shoot:1, dash:1, roar:1, special:1, hurt:1 };
 const YAW_R = -0.61, YAW_L = -(Math.PI - 0.61);
 
+// per-rig materials are recycled, never disposed: three.js deletes a shader program as soon as no material uses it, so a
+// disposed boss / ghost brother threw its program (and the see-through twin compiled for a fade) away and the next one
+// compiled and linked it again. A recycled material keeps its programs.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite };
+  return m;
+}
+function giveMat(m){
+  const s = m && m.userData.pool;
+  if(!s){ if(m) m.dispose(); return; }
+  if(s.free) return;
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(m.userData.uFlash) m.userData.uFlash.value = 0;
+  s.list.push(m);
+}
+
 function Kit(o){
   this.o = o;
   this.root = new THREE.Group(); this.root.name = 'boss_'+o.type;
   this.yaw = new THREE.Group(); this.root.add(this.yaw);
   this.body = new THREE.Group(); this.yaw.add(this.body);
-  this.mat = G.look.vmat({ instance:true, rough: o.rough==null ? 0.68 : o.rough });
-  this.gmat = G.look.vmat({ instance:true, rough:0.28, rim:0.35 });
+  const rough = o.rough==null ? 0.68 : o.rough;
+  this.mat = takeMat('body|'+rough, ()=> G.look.vmat({ instance:true, rough }));
+  this.gmat = takeMat('gloss', ()=> G.look.vmat({ instance:true, rough:0.28, rim:0.35 }));
   this.outlines = []; this.meshes = []; this.fsets = [];
   this.P = newPose(); this.C = newPose();
   this.seed = (Math.random()*997)|0; this.ph = 0; this.yawV = YAW_R - (o.yawOff||0); this.alpha = 1;
@@ -177,7 +201,7 @@ Kit.prototype.makeMarker = function(){
     x.beginPath(); x.arc(0, 14, 6, 0, TAU); x.fill(); x.stroke();
     x.restore();
   });
-  this.markMat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, opacity:0.9, color:0xffffff, toneMapped:false });
+  this.markMat = takeMat('mark', ()=> new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, opacity:0.9, color:0xffffff, toneMapped:false }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), this.markMat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false;
   G.scene.add(m);
@@ -197,6 +221,7 @@ Kit.prototype.updMarker = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
+  if(e.introLine) introLine(e);
   if(fl > this.prevFlash){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
   const fv = fl > 0 ? 0.62 : 0;
@@ -241,8 +266,8 @@ Kit.prototype.rig = function(height, radius){
     update(e){ k.update(e); },
     setAlpha(a){ k.setAlpha(a); },
     dispose(){
-      k.mat.dispose(); k.gmat.dispose();
-      if(k.marker){ if(k.marker.parent) k.marker.parent.remove(k.marker); k.markMat.dispose(); k.marker = null; }
+      giveMat(k.mat); giveMat(k.gmat);
+      if(k.marker){ if(k.marker.parent) k.marker.parent.remove(k.marker); giveMat(k.markMat); k.marker = null; }
     },
   };
 };
@@ -356,6 +381,17 @@ const O_TRAILDUST = { count:2, scale:0.7, dir:1 }, O_FINDUST = { count:2, scale:
   O_RUMBLE = { count:2, scale:0.8 }, O_SPARK = { count:2, scale:0.5, color:'#dff0ff' }, O_SPINDUST = { count:3, scale:0.8 };
 function dustBehind(e, o, back){ o.dir = -e.face; fx('dust', e.x - e.face*back, 0.05, e.z, o); }
 function say(e, s){ fh().say(e, s); }
+// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
+// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
+// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
+const BANNER_T = 142;
+G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossA) b.bannerEnd = G.time.tick + BANNER_T; });
+function sayIntro(e, line){ e.introLine = line; introLine(e); }
+function introLine(e){                     // also called every tick from the rig update (it runs in every state)
+  if(e.dead){ e.introLine = null; return; }
+  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd) return;
+  say(e, e.introLine); e.introLine = null;
+}
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 function rng(){ return G.rng(); }
 // horizontal limits the boss should stay within: the visible belt (the boss arena is camera-locked in stages)
@@ -465,7 +501,7 @@ function phaseCheck(e){
 }
 function introRoar(len, line, fn){
   return { id:'bossA_intro', anim:'roar', len, hits:[],
-    fn(e, t){ if(t===0){ G.setAnim(e, 'roar', len, 0.3); if(line) say(e, line); }
+    fn(e, t){ if(t===0){ G.setAnim(e, 'roar', len, 0.3); if(line) sayIntro(e, line); }
       if(t===18){ sfx('bossRoar'); shake(3, 24); fx('shock', e.x, 0.02, e.z, { scale:1.2 }); }
       if(fn) fn(e, t); },
     onEnd(e){ e.cool = 30; } };
@@ -784,7 +820,7 @@ const SHARK_M = {
       if(t===0){ G.setAnim(e, 'dash', 60); }
       if(t < 60 && p){ const tx = p.x + (e.x > p.x ? 4.2 : -4.2); e.vx = clamp((tx - e.x)*0.06, -0.12, 0.12); e.vz = clamp((p.z - e.z)*0.05, -0.06, 0.06); if(Math.abs(e.vx) > 0.01) e.face = e.vx > 0 ? 1 : -1; finDust(e, t); }
       if(t===60){ if(p) e.face = p.x > e.x ? 1 : -1; surface(e, 0.26, 'jump'); }
-      if(t===72) say(e, 'じめんの そこから がぶっ！');
+      if(t===72) sayIntro(e, 'じめんの そこから がぶっ！');
       if(t===92){ G.setAnim(e, 'roar', 38, 0.3); sfx('bossRoar'); shake(3, 20); } },
     onEnd(e){ cleanup(e); e.cool = 30; } },
   chomp: { id:'shark_chomp', anim:'attack', len:40, move:[{ at:5, vx:0.16 }],
@@ -1067,7 +1103,7 @@ function ghostIntro(line){
     fn(e, t){ if(t===0){ e.intangible = true; e.ghostA = 0; G.setAnim(e, 'special', 70); }
       if(t===6) e.ghostA = 1;
       gFloat(e, lerp(0.2, e.hoverY, Math.min(1, t/40)));
-      if(t===14 && line){ say(e, line); sfx('bossRoar'); }
+      if(t===14 && line){ sayIntro(e, line); sfx('bossRoar'); }
       if(t===20) fx('sparkle', e.x, e.y + 1.2, e.z, { count:8, color:'#dff0ff' });
       if(t===40){ e.intangible = false; G.setAnim(e, 'roar', 30, 0.3); } },
     onEnd(e){ e.intangible = false; e.ghostA = 1; e.cool = 40 + (e.slot||0)*30; } };
