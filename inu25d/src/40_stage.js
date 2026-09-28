@@ -1564,14 +1564,18 @@ function spawnQueued(item, a){
 }
 function startEvent(ev){
   const d = st.def, L = d.length;
+  // an arena never wider than what the camera can show (phones in portrait see ~8 units, 16:9 ~14)
+  const vw = Math.max(6, (G.cam.usableW ? G.cam.usableW() : 2*G.cam.halfW) - 0.6);
   if(ev.kind==='wave'){
-    let a = ev.at - ev.width*0.4; a = Math.max(-2, a); const b = Math.min(L + 4, a + ev.width);
+    const w = Math.min(ev.width, vw);
+    let a = ev.at - w*0.4; a = Math.max(-2, a); const b = Math.min(L + 4, a + w);
     lockTo(a, b);
     st.active = { kind:'wave', ev, t:0, qt:0, qi:0, q: makeQueue(ev.wave.foes, 16), then: ev.wave.then || null,
       thenAt: ev.wave.thenAt==null ? 1 : ev.wave.thenAt, spawned:0, lockA:a, lockB:b };
     G.bus.emit('wave', { index:ev.idx, total:d.waves.length, at:ev.at, lockA:a, lockB:b });
   } else {
-    const [a, b] = arenaRange(d, ev);
+    let [a, b] = arenaRange(d, ev);
+    if(b - a > vw){ const px = G.player ? G.player.x : a; a = U.clamp(px - 1, a, b - vw); b = a + vw; }
     lockTo(a, b);
     const bx = b - 4;
     const e = spawnFoe(ev.type, bx, -0.3, { boss:true, face:-1 });

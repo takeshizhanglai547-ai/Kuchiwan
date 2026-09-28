@@ -14,7 +14,7 @@ const AIR = { y0:-0.9, y1:1.4 };
 // every foe currently on screen (for ultimates)
 function foesInView(){
   const vr = G.cam.viewRange(), out = [];
-  for(const e of G.world.ents) if(e.team===1 && !e.dead && e.x > vr[0]-0.5 && e.x < vr[1]+0.5) out.push(e);
+  for(const e of G.world.ents) if(e.team===1 && !e.dead && !e.intangible && e.x > vr[0]-0.5 && e.x < vr[1]+0.5) out.push(e);
   return out;
 }
 function viewArea(e, o){
@@ -76,7 +76,7 @@ const MOVES = {
       if(t<72 && t%3===0){ const fs = foesInView(); const f = fs.length ? fs[Math.floor(G.rng()*fs.length)] : null; const vr = G.cam.viewRange();
         const nx = f ? f.x - p.face*0.9 : U.rand(vr[0]+1, vr[1]-1); p.x = U.clamp(nx, vr[0]+0.6, vr[1]-0.6); p.z = f ? f.z : U.rand(G.cfg.ZMIN, G.cfg.ZMAX);
         p.face = f ? U.sign(f.x - p.x) : p.face; G.setAnim(p, (t/3)%2 ? 'atk1':'atk2', 6, 0.4); fxb('stars', p.x, 0.8, p.z, { count:3, color:'#ffd24d' });
-        if(f) G.combat.damage(f, 3, { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
+        if(f && !f.intangible) G.combat.damage(f, 3, { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
       if(t===76){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 16, 0.3); viewArea(p, { dmg:28, power:3, kind:'blunt', up:0.28, kb:0.14 }); G.cam.shake(6,24); if(G.fx&&G.fx.flash) G.fx.flash('#fff0b0', 0.7, 10); }
     } }); } },
   },
@@ -169,7 +169,7 @@ const MOVES = {
     ult:{ name:'ひけん・めんきょかいでん', kind:'slash', build(e){ const home={x:0,z:0}; let list=[]; return A({ id:'wd_ult', anim:'ult', len:100, fn(p,t){
       if(t===0){ home.x=p.x; home.z=p.z; list = foesInView().slice(0, 10); }
       const k = Math.floor((t-4)/7);
-      if(t>=4 && (t-4)%7===0 && k < list.length){ const f = list[k]; if(!f.dead){ p.x = f.x - p.face*1.0; p.z = f.z; G.setAnim(p, 'atk2', 7, 0.3);
+      if(t>=4 && (t-4)%7===0 && k < list.length){ const f = list[k]; if(!f.dead && !f.intangible){ p.x = f.x - p.face*1.0; p.z = f.z; G.setAnim(p, 'atk2', 7, 0.3);
         G.combat.damage(f, 6, { src:p, kind:'slash', power:2, stun:60, dir:p.face, stop:2 }); fxb('slash', f.x, f.y+0.7, f.z, { color:'#ffffff' }); } }
       if(t===80){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 20, 0.5); if(G.fx&&G.fx.text) G.fx.text('…のうとう。', p.x, 2.2, p.z, 'info'); }
       if(t===92){ viewArea(p, { dmg:30, power:3, kind:'slash', up:0.28, kb:0.12 }); if(G.fx&&G.fx.flash) G.fx.flash('#ffffff', 0.8, 10); G.cam.shake(6,20); }
@@ -242,7 +242,7 @@ function placeholderRig(color){
   const mat = G.look.vmat({ instance:true }); const mesh = b.mesh({ material:mat }); const root = new THREE.Group(); root.add(mesh);
   const tip = new THREE.Object3D(); tip.position.set(0.9,0.7,0); root.add(tip); const base = new THREE.Object3D(); base.position.set(0.3,0.7,0); root.add(base);
   return { root, tip, base, height:1.3, radius:0.4, update(e){ mat.userData.uFlash.value = e.flashT>0?0.7:0; root.rotation.y = e.face>0 ? -0.5 : Math.PI+0.5; },
-    setAlpha(a){ mat.transparent=a<1; mat.opacity=a; }, dispose(){ mesh.geometry.dispose(); mat.dispose(); } };
+    setAlpha(a){ const tr=a<1; if(mat.transparent!==tr){ mat.transparent=tr; mat.needsUpdate=true; } mat.opacity=a; }, dispose(){ mesh.geometry.dispose(); mat.dispose(); } };
 }
 
 // ---------------------------------------------------------------- hit hook: dodge / just dodge

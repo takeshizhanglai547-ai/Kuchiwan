@@ -34,6 +34,7 @@ G.combat = {
     if(!ent || !def) return;
     const first = def.hits && def.hits.length ? def.hits[0].at : Math.round(def.len*0.35);
     ent.atk = { def, t:0, sets: (def.hits||[]).map(()=> new Set()), swung:false };
+    ent.lastAtk = def;
     G.setAnim(ent, def.anim || 'atk1', def.len, U.clamp(first/Math.max(1,def.len), 0.05, 0.95));
     if(def.inv) ent.invAtk = def.inv;
     if(def.armor) ent.atkArmor = true;
@@ -192,11 +193,14 @@ function damage(t, amount, info){
   if(src && src.team===0 && t.team===1 && G.game && G.game.onHeroHit) G.game.onHeroHit(src, t, dmg, info);
   if(info.coins && t.team===1 && G.pickups){ for(let i=0;i<info.coins;i++) G.pickups.spawn('coin', t.x, t.z, { burst:true }); }
 
+  if(t.def && t.def.onHurt && t.hp>0){ try { t.def.onHurt(t, info); } catch(err){ G.logError('onHurt '+t.type, err); } }
   if(t.hp<=0){ t.hp = 0; ko(t, dir, info); return true; }
 
   // bosses: poise instead of flinching on every hit
   const def = t.def;
   if(t.team===1 && def && def.boss){
+    // no poise build-up while already floored / getting up (otherwise the first hit after getup floors it again)
+    if(t.state==='down' || t.state==='getup'){ return true; }
     t.poiseDmg = (t.poiseDmg||0) + dmg;
     const need = (def.poise || 60) * (t.poiseMul||1);
     if(t.poiseDmg >= need && t.state!=='down' && !t.noStagger){
@@ -210,7 +214,7 @@ function damage(t, amount, info){
   }
   // super armour (heavy foes mid-attack, player during some moves)
   if(t.atkArmor && power<3){ t.vx += dir*0.02; return true; }
-  if(t.armor>0 && power<2){ t.armorHits = (t.armorHits||0)+1; if(t.armorHits < t.armor){ t.vx += dir*0.03; return true; } t.armorHits = 0; }
+  if(t.armor>0 && power<2){ t.armorHits = (t.armorHits||0)+1; if(t.armorHits <= t.armor){ t.vx += dir*0.03; return true; } t.armorHits = 0; }
 
   interrupt(t);
   const w = Math.max(0.5, t.weight||1);

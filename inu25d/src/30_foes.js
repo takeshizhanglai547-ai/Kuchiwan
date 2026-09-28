@@ -19,7 +19,7 @@ function fallbackRig(def){
   const root = new THREE.Group(); root.add(mesh);
   return { root, height:1.35*s, radius:0.4*s, tip:null, base:null,
     update(e){ mat.userData.uFlash.value = e.flashT>0 ? 0.7 : 0; root.rotation.z = e.state==='down' ? -1.2*e.face : 0; },
-    setAlpha(a){ mat.transparent = a<1; mat.opacity = a; },
+    setAlpha(a){ const tr = a<1; if(mat.transparent!==tr){ mat.transparent = tr; mat.needsUpdate = true; } mat.opacity = a; },
     dispose(){ mesh.geometry.dispose(); mat.dispose(); } };
 }
 
@@ -64,7 +64,7 @@ const h = {
     if(e.hasToken) return true;
     const max = diff().attackers || 2;
     // drop stale holders
-    for(const id of tokens){ const f = G.world.ents.find(x=>x.id===id); if(!f || f.dead || f.removed) tokens.delete(id); }
+    for(const id of tokens){ let f = null; const ents = G.world.ents; for(let i=0;i<ents.length;i++){ if(ents[i].id===id){ f = ents[i]; break; } } if(!f || f.dead || f.removed) tokens.delete(id); }
     if(tokens.size >= max) return false;
     tokens.add(e.id); e.hasToken = true; return true;
   },
@@ -147,7 +147,7 @@ G.foes = {
         if(e.onGround){ e.downT = (e.downT||0) + 1; if(e.downT > (e.def.boss ? 70 : 42)){ G.setState(e, 'getup'); G.setAnim(e, 'getup', 24); } }
         return;
       case 'getup':
-        if(e.stateT >= 24){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.inv = 16; e.cool = Math.max(e.cool, 12); }
+        if(e.stateT >= 24){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.inv = 16; e.cool = Math.max(e.cool, 12); e.poiseDmg = 0; }
         return;
       case 'dizzy':
         if(e.anim!=='dizzy') G.setAnim(e, 'dizzy');
@@ -161,7 +161,7 @@ G.foes = {
       return;
     }
     if(e.atk){ return; }
-    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.cool = Math.max(e.cool, e.def.recover || 16); }
+    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.cool = Math.max(e.cool, (e.lastAtk && e.lastAtk.recover) || e.def.recover || 16); }
     if(!e.entered && e.entrance==='walk'){
       // walk into view first
       const p = G.player; const tx = p ? p.x : e.x;

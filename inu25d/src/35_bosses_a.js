@@ -88,7 +88,6 @@ function mOpen(b, S, u, v, w, h, fangs){
   feat(b, S, u, v - h*0.42, 0.012, sph(w*0.6,8,6), TONGUE, [1, 0.5, 0.3]);
   if(fangs){ for(let k=-1;k<=1;k+=2) feat(b, S, u + k*w*0.58, v + h*0.62, 0.015, cone(w*0.16, w*0.4, 6), WHITE, [1,1,0.6], Math.PI); }
 }
-function mOmega(b, S, u, v, w){ for(let k=-1;k<=1;k+=2) feat(b, S, u + k*w*0.95, v, 0.01, tor(w, w*0.24, 5, 10, Math.PI), INK, [1,0.9,0.6], Math.PI); }
 function mWavy(b, S, u, v, w){ for(let k=-1;k<=1;k++) feat(b, S, u + k*w*0.62, v, 0.01, cap(w*0.12, w*0.55, 2, 5), INK, [1,1,0.6], HPI + (k&1 ? 0.6 : -0.6)); }
 function sweatFill(b){ b.add(sph(0.075,10,8), '#8fd8ff', [0,0,0]); b.add(cone(0.068,0.13,8), '#8fd8ff', [0,0.085,0]); b.add(sph(0.022,5,4), WHITE, [0.02,0.01,0.06]); }
 function starsFill(r, y){ return (b)=>{ for(let i=0;i<3;i++){ const a = i/3*TAU; b.add(star(0.12), '#ffe14d', [Math.cos(a)*r, y + (i===1?0.05:0), Math.sin(a)*r], [0, -a + HPI, 0.3*i]); } }; }
@@ -164,15 +163,19 @@ Kit.prototype.setAlpha = function(a){
   this.root.visible = a > 0.01;
 };
 Kit.prototype.makeMarker = function(){
-  const tex = G.look.canvasTex('bossA_warn', 128, 128, (x, w, h)=>{
+  const tex = G.look.canvasTex('bossA_warn2', 128, 128, (x, w, h)=>{
     const c = w/2;
     const g = x.createRadialGradient(c, c, 4, c, c, c);
     g.addColorStop(0, 'rgba(255,90,70,0.10)'); g.addColorStop(0.7, 'rgba(255,90,70,0.32)'); g.addColorStop(0.86, 'rgba(255,70,50,0.9)'); g.addColorStop(1, 'rgba(255,70,50,0)');
     x.fillStyle = g; x.beginPath(); x.arc(c, c, c-1, 0, TAU); x.fill();
     x.lineWidth = 7; x.strokeStyle = '#ffffff'; x.beginPath(); x.arc(c, c, c*0.78, 0, TAU); x.stroke();
     x.lineWidth = 5; x.setLineDash([10, 8]); x.strokeStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(c, c, c*0.5, 0, TAU); x.stroke(); x.setLineDash([]);
-    x.fillStyle = '#ffffff'; x.strokeStyle = '#c0281c'; x.lineWidth = 6; x.font = 'bold 54px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.strokeText('!', c, c+3); x.fillText('!', c, c+3);
+    // "!" drawn tall: the ground is seen at a grazing angle, so it reads upright on screen
+    x.save(); x.translate(c, c); x.scale(1, 2.2);
+    x.fillStyle = '#ffffff'; x.strokeStyle = '#c0281c'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(-7, -24); x.lineTo(7, -24); x.lineTo(4, 5); x.lineTo(-4, 5); x.closePath(); x.fill(); x.stroke();
+    x.beginPath(); x.arc(0, 14, 6, 0, TAU); x.fill(); x.stroke();
+    x.restore();
   });
   this.markMat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, opacity:0.9, color:0xffffff, toneMapped:false });
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), this.markMat);
@@ -349,6 +352,9 @@ function fh(){ return G.foes.h; }
 function diffK(){ return (G.game && G.game.diff) || { think:1, foeSpeed:1 }; }
 function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } catch(err){ G.logError('bossA sfx', err); } }
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o); }
+const O_TRAILDUST = { count:2, scale:0.7, dir:1 }, O_FINDUST = { count:2, scale:0.6, dir:1 }, O_SPRAY = { count:3, scale:0.8, dir:1 },
+  O_RUMBLE = { count:2, scale:0.8 }, O_SPARK = { count:2, scale:0.5, color:'#dff0ff' }, O_SPINDUST = { count:3, scale:0.8 };
+function dustBehind(e, o, back){ o.dir = -e.face; fx('dust', e.x - e.face*back, 0.05, e.z, o); }
 function say(e, s){ fh().say(e, s); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 function rng(){ return G.rng(); }
@@ -393,6 +399,19 @@ function giveUp(b, line){
   fh().release(b);
   if(line) say(b, line);
   G.bus.emit('ko', { ent:b, x:b.x, y:b.y + b.height*0.5, z:b.z });
+}
+// when a boss is purified its helpers stop at once (scared, not counted for the clear) and then pop one by one
+function scare(b){
+  if(!b || b.dead || b.removed || b.removeMe) return;
+  if(G.combat && G.combat.cancel) G.combat.cancel(b);
+  b.pending = null; cleanup(b); if(b.floaty) b.gravScale = 0;
+  b.scared = true; b.ignoreForClear = true; b.vx = 0; b.vz = 0;
+  if(b.state==='act' || b.state==='move') G.setState(b, 'idle');
+  fh().release(b);
+}
+function staggerGiveUp(e, list, lines){
+  if(!list) return;
+  for(let i=0;i<list.length;i++){ if(e.deadT === 18 + i*20) giveUp(list[i], lines[i % lines.length]); }
 }
 // weighted move choice (scratch arrays, no per-tick allocation)
 const _mn = [], _mw = [];
@@ -567,13 +586,13 @@ const GARM_M = {
   lunge: { id:'garm_lunge', anim:'dash', len:58,
     hits:[ H({ at:4, dur:17, x0:-0.3, x1:1.8, zr:0.5, dmg:14, kb:0.2, up:0.16, stun:22, power:2 }) ],
     fn(e, t){ if(t===0){ G.setAnim(e, 'dash', 58, 0.08); sfx('swing'); }
-      if(t>=3 && t<21){ e.vx = e.face*0.3; if(t%3===0) fx('dust', e.x - e.face*0.6, 0.05, e.z, { count:2, scale:0.7, dir:-e.face }); } },
+      if(t>=3 && t<21){ e.vx = e.face*0.3; if(t%3===0) dustBehind(e, O_TRAILDUST, 0.6); } },
     onEnd(e){ after(e, 88); } },
   lunge2: { id:'garm_lunge2', anim:'dash', len:118,
     hits:[ H({ at:4, dur:17, x0:-0.3, x1:1.8, zr:0.5, dmg:14, kb:0.2, up:0.16, stun:22, power:2 }), H({ at:68, dur:17, x0:-0.3, x1:1.8, zr:0.5, dmg:14, kb:0.2, up:0.16, stun:22, power:2 }) ],
     fn(e, t){
       if(t===0){ G.setAnim(e, 'dash', 44, 0.08); sfx('swing'); }
-      if((t>=3 && t<21) || (t>=67 && t<85)){ e.vx = e.face*0.3; if(t%3===0) fx('dust', e.x - e.face*0.6, 0.05, e.z, { count:2, scale:0.7, dir:-e.face }); }
+      if((t>=3 && t<21) || (t>=67 && t<85)){ e.vx = e.face*0.3; if(t%3===0) dustBehind(e, O_TRAILDUST, 0.6); }
       if(t===44){ const p = fh().target(e); if(p) fh().face(e, p); G.setAnim(e, 'windup', 22); if(G.fx && G.fx.alert) G.fx.alert(e); say(e, 'もういっちょ！'); }
       if(t>44 && t<66){ const p = fh().target(e); if(p) e.vz = clamp((p.z - e.z)*0.08, -0.05, 0.05); }
       if(t===66){ G.setAnim(e, 'dash', 52, 0.04); sfx('swing'); } },
@@ -599,11 +618,11 @@ function skyFn(e, t){
     e.warnX += (clampX(p.x, 0.9) - e.warnX)*0.18; e.warnZ += (clampZ(p.z) - e.warnZ)*0.18;
   }
   if(t===78){ e.warnLock = true; sfx('alert'); }
-  if(t===102){ e.x = e.px = e.warnX; e.z = e.pz = e.warnZ; e.y = e.py = 11; e.vy = -0.45; e.gravScale = 1; e.vx = 0; e.vz = 0;
+  if(t===102){ e.x = e.px = e.warnX; e.z = e.pz = e.warnZ; e.y = e.py = 11; e.vy = -0.36; e.gravScale = 0.7; e.vx = 0; e.vz = 0;
     if(p) e.face = p.x > e.x ? 1 : -1; G.setAnim(e, 'special', 70, 0.25); }
-  if(t > 102 && !e.skyLand && (e.onGround || t > 140)){
+  if(t > 102 && !e.skyLand && (e.onGround || t > 150)){
     if(!e.onGround){ e.y = 0; e.vy = 0; e.onGround = true; }
-    e.skyLand = true; e.intangible = false; e.warnOn = false;
+    e.skyLand = true; e.intangible = false; e.warnOn = false; e.gravScale = 1;
     G.combat.area({ owner:e, x:e.x, z:e.z, r:1.8, zr:1.1, y0:-0.5, y1:2.2, dmg:16, kb:0.16, up:0.24, stun:24, power:2, kind:'blunt', dur:3 });
     fx('shock', e.x, 0.02, e.z, { scale:1.5 }); fx('dust', e.x, 0.1, e.z, { count:12, scale:1.4 }); shake(5.5, 22); sfx('hitBig'); say(e, 'ドーン！');
   }
@@ -747,7 +766,12 @@ function sharkDive(e, t){
   if(t===14){ fx('dust', e.x, 0.1, e.z, { count:12, scale:1.4 }); sfx('dodge'); }
   if(t===18){ e.burrowed = true; e.intangible = true; e.shadowAlpha = 0.12; say(e, 'もぐった！'); }
 }
-function finDust(e, t){ if(t%5===0) fx('dust', e.x - 0.34*e.face, 0.05, e.z, { count:2, scale:0.6, dir:-U.sign(e.vx||e.face) }); }
+// after popping out of the ground the shark lands dizzy for a moment: a clear, safe chance to hit it
+function sharkTired(e, t, from){
+  if(t > from && e.onGround && !e.tired && (e.anim==='jump' || e.anim==='attack2')){ e.tired = true; G.setAnim(e, 'dizzy'); say(e, 'めがまわる〜'); }
+  if(t <= from) e.tired = false;
+}
+function finDust(e, t){ if(t%5===0){ O_FINDUST.dir = -U.sign(e.vx||e.face); fx('dust', e.x - 0.34*e.face, 0.05, e.z, O_FINDUST); } }
 function surface(e, vy, anim){
   e.burrowed = false; e.intangible = false; e.shadowAlpha = null;
   e.vy = vy; e.onGround = false;
@@ -772,40 +796,42 @@ const SHARK_M = {
     fn(e, t){ if(t===0) G.setAnim(e, 'attack', 30, 0.3); if(t===30){ const p = fh().target(e); if(p) fh().face(e, p); G.setAnim(e, 'attack', 40, 0.22); }
       if(t===9 || t===39){ sfx('slash'); say(e, t===9 ? 'ガブッ！' : 'ガブガブッ！'); } },
     onEnd(e){ after(e, 70); } },
-  fin: { id:'shark_fin', anim:'special', len:206,
-    hits:[ H({ at:104, dur:52, x0:-0.55, x1:1.0, zr:0.45, y0:0, y1:0.8, dmg:12, kb:0.16, up:0.2, stun:20, kind:'blunt', power:2 }) ],
+  // timeline: dive 0-20 · swim to the start side 20-60 · wiggle telegraph 60-90 · charge 90-136 · pop out · dizzy "chance" after landing
+  fin: { id:'shark_fin', anim:'special', len:212,
+    hits:[ H({ at:90, dur:46, x0:-0.55, x1:1.0, zr:0.45, y0:0, y1:0.8, dmg:12, kb:0.16, up:0.2, stun:20, kind:'blunt', power:2 }) ],
     fn(e, t){
       const p = fh().target(e);
       if(t < 20) sharkDive(e, t);
-      if(t===20){ const side = p ? (e.x >= p.x ? 1 : -1) : 1; e.finSide = side; G.setAnim(e, 'dash', 60); }
-      if(t>=20 && t<74){
-        let sx = p ? p.x + e.finSide*5.2 : e.x;
+      if(t===20){ const side = p ? (e.x >= p.x ? 1 : -1) : 1; e.finSide = side; G.setAnim(e, 'dash', 40); }
+      if(t>=20 && t<60){
+        let sx = p ? p.x + e.finSide*5.0 : e.x;
         const lo = xLo(1.0), hi = xHi(1.0);
-        if(sx < lo || sx > hi){ e.finSide = -e.finSide; sx = p ? p.x + e.finSide*5.2 : e.x; }
+        if(sx < lo || sx > hi){ e.finSide = -e.finSide; sx = p ? p.x + e.finSide*5.0 : e.x; }
         sx = clamp(sx, lo, hi);
-        e.vx = clamp((sx - e.x)*0.08, -0.17, 0.17); e.vz = p ? clamp((p.z - e.z)*0.08, -0.08, 0.08) : 0;
+        e.vx = clamp((sx - e.x)*0.1, -0.2, 0.2); e.vz = p ? clamp((p.z - e.z)*0.1, -0.09, 0.09) : 0;
         if(Math.abs(e.vx) > 0.01) e.face = e.vx > 0 ? 1 : -1; finDust(e, t);
       }
-      if(t===74){ e.vx = 0; e.vz = 0; e.face = -e.finSide; G.setAnim(e, 'windup', 30); if(G.fx && G.fx.alert) G.fx.alert(e); say(e, 'ザザザ…'); sfx('alert'); }
-      if(t>=104 && t<156){ const nx = e.x + e.face*0.26; if(nx > xLo(0.6) && nx < xHi(0.6)) e.vx = e.face*0.26; else e.vx = 0; e.vz = 0;
-        if(t===104) G.setAnim(e, 'dash', 52); if(t%3===0) fx('dust', e.x - e.face*0.4, 0.05, e.z, { count:3, scale:0.8, dir:-e.face }); }
-      if(t===156){ e.vx = 0; surface(e, 0.24, 'jump'); say(e, 'ぷはっ！'); }
-      if(t>=176 && e.onGround && e.anim==='jump') G.setAnim(e, 'idle'); },
-    onEnd(e){ cleanup(e); after(e, 80); } },
-  jump: { id:'shark_jump', anim:'special', len:204, hits:[],
+      if(t===60){ e.vx = 0; e.vz = 0; e.face = -e.finSide; G.setAnim(e, 'windup', 30); if(G.fx && G.fx.alert) G.fx.alert(e); say(e, 'ザザザ…'); sfx('alert'); }
+      if(t>=90 && t<136){ const nx = e.x + e.face*0.27; if(nx > xLo(0.6) && nx < xHi(0.6)) e.vx = e.face*0.27; else e.vx = 0; e.vz = 0;
+        if(t===90) G.setAnim(e, 'dash', 46); if(t%3===0) dustBehind(e, O_SPRAY, 0.4); }
+      if(t===136){ e.vx = 0; surface(e, 0.24, 'jump'); say(e, 'ぷはっ！'); }
+      sharkTired(e, t, 150); },
+    onEnd(e){ cleanup(e); after(e, 76); } },
+  // timeline: dive 0-20 · chase under the hero 20-66 · rumble + warning ring 66-102 · leap bite · dizzy "chance" after landing
+  jump: { id:'shark_jump', anim:'special', len:192, hits:[],
     fn(e, t){
       const p = fh().target(e);
       if(t < 20) sharkDive(e, t);
-      if(t===20) G.setAnim(e, 'dash', 64);
-      if(t>=20 && t<84 && p){ e.vx = clamp((p.x - e.x)*0.07, -0.14, 0.14); e.vz = clamp((p.z - e.z)*0.07, -0.08, 0.08); if(Math.abs(e.vx) > 0.01) e.face = e.vx > 0 ? 1 : -1; finDust(e, t); }
-      if(t===84){ e.vx = 0; e.vz = 0; e.warnOn = true; e.warnLock = true; e.warnX = e.x; e.warnZ = e.z; e.warnR = 1.4; G.setAnim(e, 'windup', 36);
+      if(t===20) G.setAnim(e, 'dash', 46);
+      if(t>=20 && t<66 && p){ e.vx = clamp((p.x - e.x)*0.08, -0.15, 0.15); e.vz = clamp((p.z - e.z)*0.08, -0.09, 0.09); if(Math.abs(e.vx) > 0.01) e.face = e.vx > 0 ? 1 : -1; finDust(e, t); }
+      if(t===66){ e.vx = 0; e.vz = 0; e.warnOn = true; e.warnLock = true; e.warnX = e.x; e.warnZ = e.z; e.warnR = 1.4; G.setAnim(e, 'windup', 36);
         shake(1.6, 36); say(e, 'ゴゴゴ…'); sfx('alert'); if(p) e.face = p.x > e.x ? 1 : -1; }
-      if(t>84 && t<120 && t%6===0) fx('dust', e.x + (rng()-0.5)*1.6, 0.05, e.z + (rng()-0.5)*0.9, { count:2, scale:0.8 });
-      if(t===120){ e.warnOn = false; surface(e, 0.27, 'attack2'); G.setAnim(e, 'attack2', 46, 0.1);
+      if(t>66 && t<102 && t%6===0) fx('dust', e.x + (Math.random()-0.5)*1.6, 0.05, e.z + (Math.random()-0.5)*0.9, O_RUMBLE);
+      if(t===102){ e.warnOn = false; surface(e, 0.27, 'attack2'); G.setAnim(e, 'attack2', 46, 0.1);
         G.combat.area({ owner:e, x:e.x, z:e.z, r:1.4, zr:0.9, y0:-0.5, y1:2.4, dmg:16, kb:0.1, up:0.3, stun:24, power:2, kind:'slash', dur:4 });
         fx('shock', e.x, 0.02, e.z, { scale:1.2 }); shake(4.5, 18); say(e, 'がぶっ！'); sfx('hitBig'); }
-      if(t>=168 && e.onGround && e.anim==='attack2') G.setAnim(e, 'idle'); },
-    onEnd(e){ cleanup(e); after(e, 84); } },
+      sharkTired(e, t, 112); },
+    onEnd(e){ cleanup(e); after(e, 80); } },
   spit: { id:'shark_spit', anim:'shoot', len:52, hits:[],
     fn(e, t){ if(t===0) G.setAnim(e, 'shoot', 52, 0.25);
       if(t===12 || t===20 || t===28){ const p = fh().target(e), i = (t-12)/8;
@@ -947,7 +973,7 @@ const GHOST_M = {
       if(t===0){ G.setAnim(e, 'attack', 64, 0.2); e.swZ = p ? p.z : e.z; say(e, 'ヒヒッ！'); }
       if(t < 10){ e.vx = -e.face*0.03; gFloat(e, 1.35); }
       else if(t < 34){ const q = (t - 10)/24; e.vx = e.face*0.22; e.vz = clamp((e.swZ - e.z)*0.15, -0.1, 0.1); gFloat(e, 0.3 + 1.0*Math.abs(q - 0.5)*2);
-        if(t%4===0) fx('sparkle', e.x, e.y + 0.4, e.z, { count:2, scale:0.5, color:'#dff0ff' }); if(t===12) sfx('swing'); }
+        if(t%4===0) fx('sparkle', e.x, e.y + 0.4, e.z, O_SPARK); if(t===12) sfx('swing'); }
       else { e.vx *= 0.88; gFloat(e); } },
     onEnd(e){ ghostAfter(e); } },
   spin: { id:'ghost_spin', anim:'attack2', len:76,
@@ -955,7 +981,7 @@ const GHOST_M = {
     fn(e, t){ const p = fh().target(e);
       if(t===0){ G.setAnim(e, 'attack2', 76, 0.13); say(e, 'くるくる〜！'); }
       gFloat(e, 0.75);
-      if(t>=10 && t<64){ e.vx = e.face*0.035; if(p) e.vz = clamp((p.z - e.z)*0.04, -0.03, 0.03); if(t%12===0){ sfx('swing'); fx('dust', e.x, 0.1, e.z, { count:3, scale:0.8 }); } } },
+      if(t>=10 && t<64){ e.vx = e.face*0.035; if(p) e.vz = clamp((p.z - e.z)*0.04, -0.03, 0.03); if(t%12===0){ sfx('swing'); fx('dust', e.x, 0.1, e.z, O_SPINDUST); } } },
     onEnd(e){ ghostAfter(e); } },
   wisp: { id:'ghost_wisp', anim:'shoot', len:54, hits:[],
     fn(e, t){ gFloat(e);
@@ -984,6 +1010,7 @@ function ghostAI(e){
   const h = fh(), t = h.target(e), g = e.grp;
   pre(e);
   if(!e.atk) gFloat(e);
+  if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
   if(e.intangible && !e.atk && !e.pending){ e.intangible = false; e.ghostA = 1; }     // safety
   if(!e.introDone){ e.introDone = true; h.attack(e, e.def.boss ? GHOST_INTRO_BOSS : GHOST_INTRO_BRO, 0); return; }
   if(!t){ h.stop(e); return; }
@@ -1046,10 +1073,13 @@ function ghostIntro(line){
     onEnd(e){ e.intangible = false; e.ghostA = 1; e.cool = 40 + (e.slot||0)*30; } };
 }
 const GHOST_INTRO_BOSS = ghostIntro('ヒヒヒ…3にんで あそんであげる〜');
+const GHOST_GIVEUP = ['にいちゃ〜ん！', 'まいった〜'], CERBE_GIVEUP = ['ボス〜！', 'まって〜'];
 const GHOST_RAGE = Object.assign({}, PHASE_ROAR, { id:'ghost_rage', fn(e, t){ gFloat(e, 1.2); PHASE_ROAR.fn(e, t); } });
 const GHOST_INTRO_BRO = ghostIntro(null);
 function ghostInit(e){
   common(e);
+  // the ghosts stage their own appearance (fade in while rising); 'drop' would wait forever for a floaty ghost to land
+  e.entrance = 'none'; e.intangible = false; e.burrowT = 0; e.vy = 0;
   e.floaty = true; e.gravScale = 0; e.hoverY = e.def.boss ? 0.95 : 0.85; e.y = 0.2; e.onGround = false; e.ghostA = 0;
   if(e.rig && e.rig.setAlpha) e.rig.setAlpha(0.01);
   if(!e.grp){ e.grp = { list:[e], i:0, cur:null, gap:60, tick:-1, fader:null, main:e }; e.slot = 0; }
@@ -1162,7 +1192,7 @@ const CERBE_M = {
   dash: { id:'cerbe_dash', anim:'dash', len:66,
     hits:[ H({ at:5, dur:21, x0:-0.3, x1:1.95, zr:0.6, dmg:15, kb:0.2, up:0.18, stun:22, power:2, kind:'blunt' }) ],
     fn(e, t){ if(t===0){ G.setAnim(e, 'dash', 66, 0.08); sfx('swing'); say(e, 'どすこーい！'); }
-      if(t>=4 && t<26){ e.vx = e.face*0.28; if(t%3===0) fx('dust', e.x - e.face*0.8, 0.05, e.z, { count:2, scale:0.9, dir:-e.face }); } },
+      if(t>=4 && t<26){ e.vx = e.face*0.28; if(t%3===0) dustBehind(e, O_TRAILDUST, 0.8); } },
     onEnd(e){ after(e, 90); } },
   hops: { id:'cerbe_hops', anim:'jump', len:136, hits:[], fn: hopsFn, onEnd(e){ cleanup(e); after(e, 84); } },
   hops2: { id:'cerbe_hops2', anim:'jump', len:124, hits:[], fn: hopsFn, onEnd(e){ cleanup(e); after(e, 70); } },
@@ -1177,7 +1207,7 @@ const CERBE_M = {
   summon: { id:'cerbe_summon', anim:'roar', len:70, hits:[],
     fn(e, t){ if(t===0){ G.setAnim(e, 'roar', 70, 0.3); say(e, 'でておいで、こぶんたち！'); }
       if(t===20){ sfx('bossRoar'); shake(2.5, 18); }
-      if(t===26){ e.minions = e.minions || [];
+      if(t===26){ e.minions = e.minions || []; e.summoned[e.phase|0] = true;
         for(let i=0;i<2;i++){
           const x = clampX(e.x + (i ? -2.6 : 2.6), 0.5), z = clampZ(e.z + (i ? 0.9 : -0.9));
           const m = fh().spawnMinion('wanhei', x, z);
@@ -1216,7 +1246,7 @@ function cerbeAI(e){
   h.face(e, t);
   e.summoned = e.summoned || [false, false];
   const canSummon = !!(G.foes.types.wanhei) && !e.summoned[e.phase|0] && (e.phase || e.hp < e.maxHp*0.8 || e.moves >= 3);
-  if(canSummon && e.cool <= 12){ if(h.attack(e, CERBE_M.summon, 30)){ e.summoned[e.phase|0] = true; } return; }
+  if(canSummon && e.cool <= 12){ h.attack(e, CERBE_M.summon, 30); return; }
   if(e.cool > 0){ hover(e, t, 3.4, 0.7); return; }
   const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z), sd = dx > 0 ? -1 : 1;
   if(!e.plan){
@@ -1248,7 +1278,10 @@ G.foes.define('shark', {
   name:'りくザメ リクザメ', title:'ワンワンていこく だい2のしょう', boss:true, bossA:true, phaseLine:'ぐぬぬ… ほんきの がぶがぶだ！',
   hp:520, poise:90, weight:3, radius:0.95, height:2.2, spd:0.045, score:3000, xp:120, entrance:'none', recover:30,
   build(){ return buildShark(); },
-  init(e){ common(e); e.burrowed = true; e.intangible = true; e.shadowAlpha = 0.12; },
+  init(e){ common(e);
+    // the shark stages its own entrance (fin under the ground → leap out); override 'drop'/'burrow'/'walk' set-up
+    e.entrance = 'none'; e.y = 0; e.vy = 0; e.onGround = true; e.entered = true; if(e.rig && e.rig.setAlpha) e.rig.setAlpha(1);
+    e.burrowed = true; e.intangible = true; e.shadowAlpha = 0.12; },
   ai: sharkAI,
   onKO: bossKO,
 });
@@ -1270,9 +1303,10 @@ G.foes.define('ghost', {
   onKO(e){
     cleanup(e); e.gravScale = 0.6; e.vy = Math.min(e.vy, 0.12);
     const g = e.grp;
-    if(g){ for(const b of g.list) if(b!==e) giveUp(b, 'にいちゃ〜ん、まいった〜'); g.cur = null; g.fader = null; }
+    if(g){ e.bros = g.list.filter(b=> b!==e); for(const b of e.bros) scare(b); g.cur = null; g.fader = null; }
     return false;
   },
+  onKOTick(e){ staggerGiveUp(e, e.bros, GHOST_GIVEUP); },
 });
 G.foes.define('ghostbro', {
   name:'おばけの きょうだい', boss:false,
@@ -1288,8 +1322,9 @@ G.foes.define('cerbe', {
   build(){ return buildCerbe(); },
   init(e){ common(e); e.summoned = [false, false]; e.minions = []; },
   ai: cerbeAI,
-  onKO(e){ cleanup(e); if(e.minions){ for(const m of e.minions) giveUp(m, 'ボス〜！ まって〜'); } return false; },
+  onKO(e){ cleanup(e); if(e.minions){ for(const m of e.minions) scare(m); } return false; },
+  onKOTick(e){ staggerGiveUp(e, e.minions, CERBE_GIVEUP); },
 });
 G.foes.types.ghost.rage = GHOST_RAGE;
-G.bossesA = { GEO, buildGarm, buildShark, buildGhost, buildCerbe, giveUp };
+G.bossesA = { GEO, buildGarm, buildShark, buildGhost, buildCerbe, giveUp, moves:{ garm:GARM_M, shark:SHARK_M, ghost:GHOST_M, cerbe:CERBE_M, ghostFadeSwoop:GHOST_FADE_SWOOP } };
 })();

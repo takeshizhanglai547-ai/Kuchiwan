@@ -227,7 +227,7 @@ function buildCSS(){
 #iu .bb .hpgl{top:.15em}
 
 /* ---- banner / go / hint ---- */
-#iu .ban{position:absolute;left:0;right:0;top:36%;z-index:45;text-align:center;visibility:hidden;will-change:transform,opacity;white-space:nowrap}
+#iu .ban{position:absolute;left:0;right:0;top:36%;z-index:45;text-align:center;will-change:transform,opacity;white-space:nowrap}
 #iu .bt{display:inline-block;font-weight:900;line-height:1.15;letter-spacing:.03em}
 #iu .bt span{position:relative;display:inline-block;color:var(--g2);text-shadow:${ring(0.045,'var(--gr)',12)},${ring(0.11,'#fff',20)},${ring(0.07,'#fff',14)},0 .17em .04em rgba(74,44,20,.35),0 .25em .5em rgba(74,44,20,.25);
   animation:iuHop .9s ease-in-out infinite;animation-delay:calc(var(--i)*.07s)}
@@ -243,7 +243,7 @@ function buildCSS(){
   text-shadow:${ring(0.045,'#248a5a',12)},${ring(0.1,'#fff',18)},0 .14em .3em rgba(74,44,20,.35);animation:iuGo .9s ease-in-out infinite}
 #iu .goa .ar{width:1.35em;height:1.35em;filter:drop-shadow(0 .06em 0 #248a5a) drop-shadow(0 .12em .2em rgba(74,44,20,.35))}
 #iu .hint{position:absolute;left:50%;bottom:calc(var(--pb) + .5em);z-index:32;width:min(36em,calc(100% - var(--pl) - var(--pr) - 2em));transform:translateX(-50%);
-  display:flex;align-items:flex-start;gap:.7em;padding:.55em 1em .65em .6em;border-radius:1.2em;background:#fff;visibility:hidden;will-change:opacity,transform;
+  display:flex;align-items:flex-start;gap:.7em;padding:.55em 1em .65em .6em;border-radius:1.2em;background:#fff;will-change:opacity,transform;
   box-shadow:0 0 0 .22em var(--avr,#ffd24d),0 .3em 0 .22em var(--avd,#e0a020),0 .6em 1.1em rgba(74,44,20,.28)}
 #iu .hb_{flex:1;min-width:0}
 #iu .hn{display:inline-block;font-size:.8em;font-weight:900;padding:.02em .75em .06em;border-radius:999px;background:var(--avr,#ffd24d);color:#fff;text-shadow:${ring(0.08,'var(--avd,#c07e10)',10)};margin-bottom:.2em}
@@ -296,6 +296,8 @@ function buildCSS(){
 #iu .tb.ult .glo{position:absolute;left:-.9em;top:-.9em;right:-.9em;bottom:-.9em;border-radius:50%;opacity:0;pointer-events:none;background:radial-gradient(circle,rgba(255,240,150,.9) 0%,rgba(255,190,230,.5) 45%,rgba(255,255,255,0) 70%)}
 #iu .tb.ult.ready .glo{animation:iuGlow .75s ease-in-out infinite}
 #iu .tb.on.ult.ready{animation:none}
+#iu .tc.see .tb{opacity:.38}
+#iu .tc.see .tb.on,#iu .tc.see .tb.ult.ready{opacity:.72}
 
 /* ---- pause / result / over / ending / loading ---- */
 #iu .pause .pn{min-width:min(22em,90%)}
@@ -321,7 +323,7 @@ function buildCSS(){
 #iu .cham .av{width:2.6em;height:2.6em;font-size:.95em}
 #iu .cham .bub{position:relative;font-size:.85em;padding:.35em .8em;border-radius:1em;background:#fff4e8;box-shadow:0 0 0 .12em #ffbd72;color:#8a4a10}
 #iu .rright .cb{margin-top:.35em;font-size:1.35em}
-#iu .over{background:radial-gradient(ellipse at 50% 40%,rgba(255,246,250,.72) 0%,rgba(236,220,255,.85) 70%,rgba(214,232,255,.92) 100%);pointer-events:auto}
+#iu .over{background:radial-gradient(ellipse at 50% 40%,rgba(255,246,250,.86) 0%,rgba(236,220,255,.92) 70%,rgba(214,232,255,.96) 100%);pointer-events:auto}
 #iu .over .pup{position:relative;width:9em;height:7em;animation:iuSway 2.4s ease-in-out infinite}
 #iu .over .orb{position:absolute;left:50%;top:18%;width:7em;height:2.2em;margin-left:-3.5em;animation:iuSpin 2.4s linear infinite;transform-origin:50% 50%}
 #iu .over .orb i{position:absolute;display:block;width:1em;height:1em;color:#ffd24d;filter:drop-shadow(0 .08em 0 #c89020)}
@@ -829,11 +831,11 @@ function hideFoeBars(){ for(const s of fbs){ s.ent = null; if(s.vis){ s.vis = fa
 
 // ================================================================ banner / GO / hint
 const ban = { el:null, t:0, life:0, on:false };
-function buildBanner(){ ban.el = el('div', 'ban', root); ban.bt = el('div', 'bt', ban.el); el('br', '', ban.el); ban.bs = el('div', 'bs', ban.el); }
+function buildBanner(){ ban.el = el('div', 'ban x', root); ban.bt = el('div', 'bt', ban.el); el('br', '', ban.el); ban.bs = el('div', 'bs', ban.el); }
 function banner(text, sub, frames){
   if(!ready) return;
   text = text==null ? '' : String(text); sub = sub==null ? '' : String(sub);
-  if(!text && !sub){ ban.on = false; ban.el.style.visibility = 'hidden'; return; }
+  if(!text && !sub){ ban.on = false; show(ban.el, false); return; }
   const bossName = boss.ent && ((boss.ent.def && boss.ent.def.name) || boss.ent.name);
   const v = /GO|ゴー|スタート/.test(text) ? 'v-go' : (/ボス|あらわれ/.test(text) || (bossName && text===bossName)) ? 'v-boss' :
             /クリア|やったね|おめでとう/.test(text) ? 'v-clear' : /がんばれ|チャンス|ナイス/.test(text) ? 'v-cheer' : 'v-stage';
@@ -847,13 +849,13 @@ function banner(text, sub, frames){
   ban.bs.textContent = sub; ban.bs.style.display = sub ? '' : 'none';
   ban.bs.style.fontSize = Math.min(emPx*1.35, w*0.8/Math.max(1, Array.from(sub).length*1.05 + 2.4)).toFixed(1)+'px';
   ban.t = 0; ban.life = Math.max(0.5, (frames||120)/60); ban.on = true;
-  ban.el.style.visibility = 'visible';
+  show(ban.el, true);
   bannerFrame(0);
 }
 function bannerFrame(dt){
   if(!ban.on) return;
   ban.t += dt; const t = ban.t, L = ban.life;
-  if(t >= L){ ban.on = false; ban.el.style.visibility = 'hidden'; return; }
+  if(t >= L){ ban.on = false; show(ban.el, false); return; }
   let s = 1, o = 1, r = 0;
   if(t < 0.42){ const k = t/0.42; s = reduced ? 1 : 0.25 + 0.75*U.easeOutBack(k); o = Math.min(1, k*3); r = reduced ? 0 : (1-k)*-6; }
   else if(t > L-0.3){ const k = (t-(L-0.3))/0.3; o = 1-k; s = 1 + (reduced ? 0 : k*0.15); }
@@ -866,13 +868,13 @@ function go(on){ goOn = !!on; if(ready) show(goEl, goOn); }
 
 const hint = { el:null, t:0, life:0, on:false, text:'', shown:-1 };
 function buildHint(){
-  const e = hint.el = el('div', 'hint', root);
+  const e = hint.el = el('div', 'hint x', root);
   hint.av = el('div', 'av', e, '<i class="e l"></i><i class="e r"></i><i class="bl l"></i><i class="bl r"></i><i class="mo"></i>');
   const b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
 }
 function hintShow(name, text, frames){
   if(!ready) return;
-  if(!text){ hint.on = false; hint.el.style.visibility = 'hidden'; return; }
+  if(!text){ hint.on = false; show(hint.el, false); return; }
   name = name==null ? '' : String(name);
   const who = /モフ/.test(name) ? 'mofu' : /チャム/.test(name) ? 'cham' : /ペロ/.test(name) ? 'pero' : /クロ/.test(name) ? 'kuro' : '';
   hint.av.className = 'av ' + who;
@@ -880,26 +882,26 @@ function hintShow(name, text, frames){
   hint.el.style.setProperty('--avd', ({ mofu:'#6f9a2a', cham:'#c0600c', pero:'#c8487e', kuro:'#6a3aa0' })[who] || '#c08a10');
   txt(hint.nm, name || 'ヒント'); show(hint.nm, !!name);
   hint.chars = Array.from(String(text)); hint.text = String(text); hint.shown = -1;
-  hint.t = 0; hint.life = Math.max(1, (frames||300)/60); hint.on = true;
-  hint.el.style.visibility = 'visible';
+  hint.t = 0; hint.life = Math.max(1, (frames||300)/60); hint.on = true; hint.os = ''; hint.tf = '';
+  show(hint.el, true);
   hintFrame(0);
 }
 function hintFrame(dt){
   if(!hint.on) return;
   hint.t += dt; const t = hint.t, L = hint.life;
-  if(t >= L){ hint.on = false; hint.el.style.visibility = 'hidden'; return; }
+  if(t >= L){ hint.on = false; show(hint.el, false); return; }
   const n = reduced ? hint.chars.length : Math.min(hint.chars.length, Math.floor(t*38)+1);
   if(n!==hint.shown){ hint.shown = n; hint.tx.textContent = n>=hint.chars.length ? hint.text : hint.chars.slice(0, n).join(''); }
   let o = 1, y = 0;
   if(t < 0.25){ o = t/0.25; y = reduced ? 0 : (1-o)*14; } else if(t > L-0.3){ o = (L-t)/0.3; }
-  hint.el.style.opacity = o.toFixed(3);
-  const port = root.classList.contains('port'), tcon = root.classList.contains('tcon');
-  const base = (tcon && !port) ? '' : 'translateX(-50%) ';
-  hint.el.style.transform = base + 'translateY(' + y.toFixed(1) + 'px)';
+  const os = o.toFixed(2);
+  if(os!==hint.os){ hint.os = os; hint.el.style.opacity = os; }
+  const tf = (T.visible && !root.classList.contains('port') ? '' : 'translateX(-50%) ') + 'translateY(' + y.toFixed(1) + 'px)';
+  if(tf!==hint.tf){ hint.tf = tf; hint.el.style.transform = tf; }
 }
 
 // ================================================================ touch controls
-const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, probe:null,
+const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, inR:10, probe:null, fade:false, cx0:1e9, cy0:1e9,
   stick:{ id:null, ox:0, oy:0 }, btns:[], zone:null, base:null, knob:null, spN:-1, spDim:null, ult:-1, ready:null };
 const TBTN = [
   { k:'attack',  t:'こうげき', ic:SVG.paw,   cls:'k-pink', s:1.0,  r:.2,   b:.2 },
@@ -1019,7 +1021,12 @@ function touchFrame(){
   const ub = T.btns[4], u = p ? U.clamp(+p.ult||0, 0, 100) : 0;
   if(Math.abs(u - T.ult) > 0.3){ T.ult = u; setVar(ub.el, '--u', u/100, 0.002); }
   const rdy = u>=100; if(rdy!==T.ready){ T.ready = rdy; ub.el.classList.toggle('ready', rdy); ub.el.classList.toggle('dim', !rdy); }
+  // see-through buttons while the hero stands behind the cluster (phones: the camera can put them there)
+  let fade = false;
+  if(p && p.rig && p.rig.root && G.toScreen){ const r = p.rig.root.position; G.toScreen(r.x, r.y + (p.height||1.2)*0.5, r.z, _tp); fade = _tp.visible && _tp.x > T.cx0 && _tp.y > T.cy0; }
+  if(fade!==T.fade){ T.fade = fade; T.el.classList.toggle('see', fade); }
 }
+const _tp = { x:0, y:0, visible:false };
 const touch = {
   show(on){ T.wanted = !!on; if(ready) touchApply(); },
   get mode(){ return T.mode; }, set mode(m){ T.mode = (m==='on'||m==='off') ? m : 'auto'; if(ready) touchApply(); },
@@ -1180,7 +1187,8 @@ function layout(){
   root.classList.toggle('short', h <= 480 && w > h);
   // resolved safe-area paddings (custom properties can't be read back as numbers, so measure a probe)
   if(!T.probe){ T.probe = el('div', '', root); T.probe.style.cssText = 'position:absolute;left:var(--pl);top:var(--pt);right:var(--pr);bottom:var(--pb);visibility:hidden;pointer-events:none'; }
-  const pr = T.probe.getBoundingClientRect(); T.inL = pr.left || 10; T.inB = (h - pr.bottom) || 8;
+  const pr = T.probe.getBoundingClientRect(); T.inL = pr.left || 10; T.inB = (h - pr.bottom) || 8; T.inR = (w - pr.right) || 10;
+  T.cx0 = w - T.inR - T.B*2.15; T.cy0 = h - T.inB - T.B*2.6;          // top-left corner of the button cluster
   emPx = parseFloat(getComputedStyle(root).fontSize) || 14;
   if(T.el) ghostPos();
   for(const s of fbs) s.vis && (s.w = s.el.offsetWidth || s.w);
@@ -1230,8 +1238,8 @@ function hideAll(){
   if(!ready) return;
   for(const n in S) closeScreen(n);
   uiHide('hud');
-  ban.on = false; ban.el.style.visibility = 'hidden';
-  hint.on = false; hint.el.style.visibility = 'hidden';
+  ban.on = false; show(ban.el, false);
+  hint.on = false; show(hint.el, false);
   go(false); bossBar(null);
   touch.show(false);
 }

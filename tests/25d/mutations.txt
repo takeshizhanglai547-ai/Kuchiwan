@@ -8,3 +8,5 @@
 カットイン中も世界が動く	    if(game.cutinT > 0){	    if(false){	special
 やっつけた敵が消えない	    if(a<=0) e.removeMe = true;	    if(a<=0) e.removeMe = false;	KO
 やっつけた敵が数に残る	if(e.team===1 && !e.dead && !e.ignoreForClear) n++;	if(e.team===1) n++;	KO
+装甲が1回少なく受ける（修正前の挙動）	if(t.armorHits <= t.armor){	if(t.armorHits < t.armor){	armour
+ダウン中もボスの崩しが溜まる（修正前の挙動）	    if(t.state==='down' || t.state==='getup'){ return true; }		stun-lock

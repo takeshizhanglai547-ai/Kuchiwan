@@ -107,6 +107,7 @@ function loadBackdrop(i){
     else if(G.stage && G.stage.load) G.stage.load(i||0);
   } catch(err){ G.logError('backdrop', err); }
 }
+function backdropUp(){ return !!(G.stage && G.stage.env && G.stage.env.root && G.stage.env.root.parent); }
 function unloadStage(){ try { if(G.stage && G.stage.unload) G.stage.unload(); } catch(err){ G.logError('stage.unload', err); } if(typeof ARENA!=='undefined') ARENA.unload(); }
 
 // ---------------------------------------------------------------- scene: title
@@ -142,6 +143,7 @@ function setSound(on){ game.soundOn = !!on; if(G.audio && G.audio.setMuted) try 
 G.scenes.select = {
   enter(){
     clearDeco();
+    if(!backdropUp()) { unloadStage(); loadBackdrop(null); }
     const list = heroList();
     let focus = Math.max(0, list.findIndex(h=>h.id===game.heroId));
     list.forEach((h, i)=> addDeco(h.id, (i-focus)*1.6, -0.6, 'pose', 1));
@@ -220,6 +222,7 @@ const play = G.scenes.play = {
   },
   tick(){
     const b = G.input.btn;
+    if(this.over) return;            // game-over screen owns input; Esc must not resume the world behind it
     if(b.pause.pressed && !this.cleared){ this.pause(!G.paused); return; }
     if(G.paused) return;
     const p = G.player;

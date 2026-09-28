@@ -129,6 +129,42 @@ test('combat: foe KO turns into a happy pup that leaves (no corpse stays)', asyn
   assert(!r.inWorld, 'KO\'d foe never left the world');
 });
 
+test('combat: an armoured foe shrugs off exactly its armour count of light hits', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.foes.define('t_arm', { name:'t', hp:500, armor:2, ai(e){ G.foes.h.stop(e); } });
+    G.debug.arena('inu', 'normal');
+    const f = G.foes.spawn('t_arm', 5, 0, { entrance:'none' }); G.step(2);
+    const states = [];
+    for(let i=0;i<3;i++){ G.combat.damage(f, 5, { src:G.player, kind:'slash', power:1, dir:1 }); states.push(f.state); G.hitStop = 0; }
+    return states;
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r[0] !== 'hurt' && r[1] !== 'hurt', 'flinched too early: ' + r.join(','));
+  assert(r[2] === 'hurt', 'third light hit should flinch: ' + r.join(','));
+});
+
+test('combat: a floored boss does not build stagger damage (no stun-lock after getting up)', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.foes.define('t_boss', { name:'t', hp:2000, boss:true, poise:50, weight:3, ai(e){ G.foes.h.stop(e); } });
+    G.debug.arena('inu', 'normal');
+    const f = G.foes.spawn('t_boss', 6, 0, { entrance:'none' }); G.step(2);
+    G.combat.damage(f, 60, { src:G.player, kind:'blunt', power:2, dir:1 });
+    const s1 = f.state;
+    for(let i=0;i<6;i++){ G.combat.damage(f, 20, { src:G.player, kind:'blunt', power:2, dir:1 }); G.step(3); }
+    let t = 0; while(f.state !== 'idle' && t < 400){ G.step(1); t++; }
+    G.combat.damage(f, 12, { src:G.player, kind:'blunt', power:2, dir:1 });
+    return { s1, back: t, after: f.state };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.s1 === 'down', 'poise break did not floor the boss: ' + JSON.stringify(r));
+  assert(r.back < 400, 'boss never got up: ' + JSON.stringify(r));
+  assert(r.after !== 'down', 'first hit after getting up floored it again (stun-lock): ' + JSON.stringify(r));
+});
+
 // ---------------------------------------------------------------- stages
 test('stage 1: the bot clears it (waves lock the camera, boss appears, stage done)', async () => {
   const g = await open();

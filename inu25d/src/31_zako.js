@@ -1,8 +1,11 @@
 // 31_zako.js — ざこ敵 14しゅ（ダークワンワンていこくの へいたい）：見た目（ちびキャラの立体モデル）・手続きアニメ・AI・攻撃。
-// 見た目：1体 = 1枚のスキンメッシュ（部品ごとに頂点カラーで結合、骨は剛体）＋輪郭線＋表情メッシュ（形を差し替える）。
-//   → 1体あたりの描画コールは 3〜4（影パス込みでも 5 前後）。形状は種類ごとに1回だけ作って全個体で共有する。
+// types: wanhei hyena boar shield pounce bomber thrower flyer kire pierrot balloon oni ari mecha
+// 見た目：1体 = 頂点カラーで部品を結合した1枚のスキンメッシュ（骨は剛体、骨ごとに部品を割り当て）＋同じ骨を使う輪郭線
+//   ＋表情メッシュ（怒り目/まばたき/×目/＞＜目/にっこり目/ぐるぐる目 の形状を差し替える）。
+//   → 1体あたり描画コール 5（本体・輪郭・表情・影パス・丸影）。形状は種類ごとに1回だけ作って全個体で共有し、
+//     個体ごとに作るのは材質（白フラッシュ・フェード用）と骨だけ。dispose はそれだけを捨てる。
 // 向き：体は進行方向から35°カメラへ、頭はさらに少しカメラへ。左向きは z を鏡像にして、持ち物がいつもカメラ側に来る。
-// やっつけると：×目→ぽんっ→（犬の兵隊はそのまま、犬でない子は子犬の姿になって）にこにこ走り去る。
+// やっつけると：×目→ぽんっ→（犬の兵隊はそのまま、犬でない子は子犬の姿になって）にこにこ走り去る。ふうせんは「パーン！」で消える。
 (function(){ 'use strict';
 const G = window.G; const THREE = window.THREE; const U = G.U;
 if(!G.foes || !G.foes.define){ if(G.logError) G.logError('31_zako', 'needs 30_foes'); return; }
@@ -82,13 +85,14 @@ function prim(){
   const g = G.look.geo;
   const dome = (ws, hs)=>{ const d = new THREE.SphereGeometry(1, ws, hs, 0, TAU, 0, HP); d.rotateX(HP); d.userData.shared = true; return d; };
   PR = {
-    s: g.sphere(1, 16, 12), sm: g.sphere(1, 12, 8), sl: g.sphere(1, 8, 6), st: g.sphere(1, 6, 4),
+    s: g.sphere(1, 15, 10), sm: g.sphere(1, 10, 8), sl: g.sphere(1, 8, 6), st: g.sphere(1, 6, 4),
     dome: dome(12, 5), domeS: dome(8, 4), domeT: dome(6, 3),       // front-facing half spheres for face features (+z = out)
     cyl: g.cylinder(1, 1, 1, 12), cyl8: g.cylinder(1, 1, 1, 8), cone: g.cone(1, 1, 10), cone6: g.cone(1, 1, 6), pyr: g.cone(1, 1, 4),
     hemi: (()=>{ const h = new THREE.SphereGeometry(1, 14, 6, 0, TAU, 0, HP); h.userData.shared = true; return h; })(),
     shell: (()=>{ const h = new THREE.SphereGeometry(1, 16, 5, 0, TAU, 0, 0.78); h.rotateX(HP); h.userData.shared = true; return h; })(),   // curved face patch, pole = +z
     rbox: g.rbox(1, 1, 1, 0.22, 2),
     cap: (r, l)=> g.capsule(r, l, 2, 8),
+    capL: (r, l)=> g.capsule(r, l, 1, 6),          // small decorations / face strokes
     tor: (r, t, arc, ts)=> g.torus(r, t, 5, ts||16, arc==null ? TAU : arc),
     star: g.star(0.1, 0.45, 0.05),
   };
@@ -106,7 +110,6 @@ function feat(p, g, color, F, az, el, d, spin, scl){ return p.addM(g, color, M(s
 
 // ================================================================ faces (expression sets: one small geometry each, swapped on one mesh)
 const C = { ink:'#2a1c16', rim:'#3b2417', eyeY:'#ffe04a', pupil:'#1d1410', white:'#ffffff', drop:'#8fd8ff', blush:'#ff9fb5', brow:'#2a1c16' };
-const EXPR = ['angry','blink','x','squeeze','happy','dizzy'];
 const faceCache = new Map();
 // F: { c, r, az (half eye spread), el, size, style:'yellow'|'dot', tilt, brow:true, mouthO:{el}, dropAz }
 function faceSet(key, F){
@@ -115,7 +118,7 @@ function faceSet(key, F){
   const sides = [1, -1];
   const brows = (p, lower)=>{
     if(F.brow===false) return;
-    const cap = R.cap(s*0.27, s*1.25);
+    const cap = R.capL(s*0.27, s*1.25);
     for(const i of sides){ const az = i*F.az;
       feat(p, cap, C.brow, F, az + i*0.02, F.el + (s*(lower?0.82:0.98))/F.r[1], s*0.34, HP - i*(F.tilt==null?0.5:F.tilt)); }
   };
@@ -147,21 +150,21 @@ function faceSet(key, F){
   };
   const mouth = (p, happy)=>{
     if(!F.mouth) return;
-    const el = F.mouthEl==null ? -0.2 : F.mouthEl, cap = R.cap(s*0.14, s*0.6);
+    const el = F.mouthEl==null ? -0.2 : F.mouthEl, cap = R.capL(s*0.14, s*0.6);
     if(happy){ feat(p, R.tor(s*0.42, s*0.13, PI, 10), '#5a1a1a', F, 0, el + 0.03, 0, PI, 1); return; }
-    if(F.mouth==='line'){ feat(p, R.cap(s*0.15, s*1.6), '#1e1a40', F, 0, el, 0, HP, 1); return; }
+    if(F.mouth==='line'){ feat(p, R.capL(s*0.15, s*1.6), '#1e1a40', F, 0, el, 0, HP, 1); return; }
     feat(p, cap, '#5a1a1a', F, 0.07, el, 0, HP + 0.55, 1); feat(p, cap, '#5a1a1a', F, -0.07, el, 0, HP - 0.55, 1);   // "へ"
   };
   const mouthO0 = mouthO;
   mouthO = (p)=>{ mouthO0(p); mouth(p, false); };
   out.angry = plain((p)=>{ eyesOpen(p); brows(p, true); mouthO(p); });
-  out.blink = plain((p)=>{ const cap = R.cap(s*0.17, s*0.9);
+  out.blink = plain((p)=>{ const cap = R.capL(s*0.17, s*0.9);
     for(const i of sides) feat(p, cap, C.ink, F, i*F.az, F.el - s*0.25/F.r[1], s*0.1, HP - i*0.18);
     brows(p, true); mouthO(p); });
-  out.x = plain((p)=>{ const cap = R.cap(s*0.16, s*1.15);
+  out.x = plain((p)=>{ const cap = R.capL(s*0.16, s*1.15);
     for(const i of sides){ feat(p, cap, C.ink, F, i*F.az, F.el, s*0.08, PI/4); feat(p, cap, C.ink, F, i*F.az, F.el, s*0.08, -PI/4); }
     drop(p); mouthO(p); });
-  out.squeeze = plain((p)=>{ const cap = R.cap(s*0.16, s*0.95);
+  out.squeeze = plain((p)=>{ const cap = R.capL(s*0.16, s*0.95);
     for(const i of sides){ const az = i*F.az, dy = s*0.3/F.r[1];
       // chevron pointing at the nose: "> <"
       feat(p, cap, C.ink, F, az, F.el + dy, s*0.08, HP - i*0.55);
@@ -189,9 +192,9 @@ function mechaFace(key, c, s){
   const rz = (a)=> [0, HP, a];
   const lid = (p)=> p.add(R.rbox, '#14161c', at(0, s*0.8, s*0.2), rz(0.32), [s*2.4, s*0.6, s*0.5], 'YXZ');
   out.angry = plain((p)=>{ p.add(R.dome, red, at(0,0), face, [s, s*1.05, s*0.4], 'YXZ'); p.add(R.domeS, core, at(-s*0.12, s*0.18, s*0.05), face, [s*0.38, s*0.38, s*0.4], 'YXZ'); lid(p); });
-  out.blink = plain((p)=>{ p.add(R.cap(s*0.16, s*1.2), red, at(0, -s*0.1), rz(HP), 1, 'YXZ'); lid(p); });
-  out.x = plain((p)=>{ const k = R.cap(s*0.17, s*1.3); p.add(k, red, at(0,0), rz(PI/4), 1, 'YXZ'); p.add(k, red, at(0,0), rz(-PI/4), 1, 'YXZ'); });
-  out.squeeze = plain((p)=>{ const k = R.cap(s*0.16, s*1.0); p.add(k, red, at(s*0.1, s*0.28), rz(HP+0.6), 1, 'YXZ'); p.add(k, red, at(s*0.1, -s*0.28), rz(HP-0.6), 1, 'YXZ'); });
+  out.blink = plain((p)=>{ p.add(R.capL(s*0.16, s*1.2), red, at(0, -s*0.1), rz(HP), 1, 'YXZ'); lid(p); });
+  out.x = plain((p)=>{ const k = R.capL(s*0.17, s*1.3); p.add(k, red, at(0,0), rz(PI/4), 1, 'YXZ'); p.add(k, red, at(0,0), rz(-PI/4), 1, 'YXZ'); });
+  out.squeeze = plain((p)=>{ const k = R.capL(s*0.16, s*1.0); p.add(k, red, at(s*0.1, s*0.28), rz(HP+0.6), 1, 'YXZ'); p.add(k, red, at(s*0.1, -s*0.28), rz(HP-0.6), 1, 'YXZ'); });
   out.happy = plain((p)=>{ p.add(R.tor(s*0.7, s*0.18, PI, 12), cyan, at(0, -s*0.2), face, 1, 'YXZ'); });
   out.dizzy = plain((p)=>{ p.add(R.tor(s*0.8, s*0.12, TAU, 16), red, at(0,0), face, 1, 'YXZ'); p.add(R.tor(s*0.36, s*0.11, TAU, 12), red, at(0,0), face, 1, 'YXZ'); });
   faceCache.set(key, out);
@@ -275,6 +278,7 @@ function dogBP(o){
     { n:'tail', p:1, at:[-bR[0]+0.05, hipY+0.12, 0] },
     { n:'earF', p:2, at:[0.02+eA[0], neckY+eA[1], eA[2]] }, { n:'earB', p:2, at:[0.02+eA[0], neckY+eA[1], -eA[2]] },
   ]);
+  if(o.held) BL.push({ n:'held', p:3, at:[0.07, shY - 0.25, shZ + 0.06] });
   const hb = boneAt(BL,'head');
   const HC = [hb[0]+hc[0], hb[1]+hc[1], hb[2]+hc[2]];      // head centre in model space
   const hs = (az, el, d)=>{ const q = surf(F, az, el, d); return [hb[0]+q[0], hb[1]+q[1], hb[2]+q[2]]; };
@@ -391,7 +395,7 @@ const LOOK = {
       const q = k.hs(0.2, 1.02, -0.02);
       p.add(R.cyl, '#5a3a8c', q, [0.35, 0, -0.25], [0.2, 0.09, 0.2]);
       p.add(R.cyl, '#6f4aa8', [q[0], q[1]+0.05, q[2]+0.02], [0.35, 0, -0.25], [0.17, 0.03, 0.17]);
-      const b = k.hs(0.05, 0.82, 0.03); p.add(R.cap(0.018, 0.06), '#ffcf3a', b, [0, 0, HP]); p.add(R.st, '#ffcf3a', [b[0], b[1]+0.02, b[2]+0.035], null, 0.026); p.add(R.st, '#ffcf3a', [b[0], b[1]+0.02, b[2]-0.035], null, 0.026); } }); },
+      const b = k.hs(0.05, 0.82, 0.03); p.add(R.capL(0.018, 0.06), '#ffcf3a', b, [0, 0, HP]); p.add(R.st, '#ffcf3a', [b[0], b[1]+0.02, b[2]+0.035], null, 0.026); p.add(R.st, '#ffcf3a', [b[0], b[1]+0.02, b[2]-0.035], null, 0.026); } }); },
   hyena(){ return dogBP({ id:'hyena', fur:'#b9824a', light:'#efd6ac', ear:'pointy', earIn:'#6e4526', earH:0.22, lanky:1, lean:1, tail:'up', tailCol:'#6e4526', eye:0.075,
     gear(p, k){ const R = k.R; p.on(k.bi(k.BL,'head'));
       // three spiky tufts on top + spots on the back
@@ -421,7 +425,7 @@ const LOOK = {
     } }); },
   pounce(){ return dogBP({ id:'pounce', fur:'#cf6a36', light:'#f8e2c4', ear:'pointy', earIn:'#f0b0a0', earH:0.3, lean:1, lanky:0.6, tail:'up',
     gear(p, k){ const R = k.R; p.on(k.bi(k.BL,'head'));
-      for(const [az, el] of [[0, 0.95], [0.28, 0.9], [-0.28, 0.9]]){ const q = k.hs(az, el, 0.0); p.add(R.cap(0.022, 0.08), '#6a2a12', q, srot(az, el, 0), null, 'YXZ'); }
+      for(const [az, el] of [[0, 0.95], [0.28, 0.9], [-0.28, 0.9]]){ const q = k.hs(az, el, 0.0); p.add(R.capL(0.022, 0.08), '#6a2a12', q, srot(az, el, 0), null, 'YXZ'); }
       p.on(k.bi(k.BL,'body'));
       for(const y of [0.1, 0.0]) p.add(R.tor(0.2, 0.02, 1.4, 8), '#8a3a18', [-0.08, k.bodyY + y, 0], [HP, 0, -2.4]); } }); },
   bomber(){ return dogBP({ id:'bomber', fur:'#f2dfb8', light:'#fff6e6', ear:'big', earIn:'#f4b0c4', eye:0.095, eyeAz:0.5, lanky:0, headR:[0.4, 0.36, 0.41], tail:'up', tailTip:'#f2dfb8',
@@ -432,19 +436,23 @@ const LOOK = {
       const top = [k.HC[0]-0.06, k.HC[1]+0.42, 0];
       p.add(R.cyl8, '#8a6a4a', [top[0], top[1]+0.04, 0], [0,0,0.2], [0.035, 0.1, 0.035]);
       p.add(R.cyl8, '#a07a52', [top[0]-0.03, top[1]+0.12, 0], [0,0,-0.4], [0.03, 0.09, 0.03]); } }); },
-  thrower(){ return dogBP({ id:'thrower', fur:'#c9c0b6', light:'#f4efe8', ear:'pointy', earCol:'#3a3446', earIn:'#6a6478', suit:'#3a3446', sleeve:'#3a3446', pants:'#3a3446',
+  thrower(){ return dogBP({ id:'thrower', held:true, fur:'#c9c0b6', light:'#f4efe8', ear:'pointy', earCol:'#3a3446', earIn:'#6a6478', suit:'#3a3446', sleeve:'#3a3446', pants:'#3a3446',
     paw:'#f4efe8', foot:'#f4efe8', tailCol:'#3a3446', tailTip:'#f4efe8', belly:'#3a3446', earH:0.22,
     gear(p, k){ const R = k.R; p.on(k.bi(k.BL,'body'));
       // bone ribs on the costume (lying on the chest surface)
-      const FB = { c:[0, k.bodyY, 0], r:k.bR }, rib = R.cap(0.02, 0.1);
+      const FB = { c:[0, k.bodyY, 0], r:k.bR }, rib = R.capL(0.02, 0.1);
       for(let i=0;i<3;i++){ const el = 0.35 - i*0.3; for(const zs of [1,-1]) feat(p, rib, '#f4efe8', FB, zs*0.42, el, 0, HP + zs*0.35); }
-      feat(p, R.cap(0.022, 0.2), '#f4efe8', FB, 0.02, 0.05, 0, 0);
+      feat(p, R.capL(0.022, 0.2), '#f4efe8', FB, 0.02, 0.05, 0, 0);
       // hood (dark) over the head, face stays visible
       p.on(k.bi(k.BL,'head'));
       p.add(R.hemi, '#3a3446', [k.HC[0]-0.05, k.HC[1]+0.0, 0], [0, 0, 0.62], [k.headR[0]*1.07, k.headR[1]*1.08, k.headR[2]*1.08]);
       // bone stripes on the legs / arms
-      for(const nm of ['legF','legB']){ const at = k.boneAt(k.BL, nm); p.on(k.bi(k.BL, nm)); p.add(R.cap(0.02, 0.06), '#f4efe8', [at[0]+0.07, at[1]*0.55, at[2]], null); }
-      for(const nm of ['armF','armB']){ const zs = nm==='armF'?1:-1, at = k.boneAt(k.BL, nm); p.on(k.bi(k.BL, nm)); p.add(R.cap(0.02, 0.06), '#f4efe8', [at[0]+0.07, at[1]-0.1, at[2]+zs*0.025], null); } } }); },
+      for(const nm of ['legF','legB']){ const at = k.boneAt(k.BL, nm); p.on(k.bi(k.BL, nm)); p.add(R.capL(0.02, 0.06), '#f4efe8', [at[0]+0.07, at[1]*0.55, at[2]], null); }
+      for(const nm of ['armF','armB']){ const zs = nm==='armF'?1:-1, at = k.boneAt(k.BL, nm); p.on(k.bi(k.BL, nm)); p.add(R.capL(0.02, 0.06), '#f4efe8', [at[0]+0.07, at[1]-0.1, at[2]+zs*0.025], null); }
+      // the bone it is about to throw (own bone → scaled to 0 right after the throw)
+      const hb2 = k.boneAt(k.BL, 'held'); p.on(k.bi(k.BL, 'held'));
+      p.add(R.cap(0.045, 0.24), '#fff4e0', hb2, [0, 0, 0.5]);
+      for(const a of [-1,1]) for(const b of [-1,1]){ const c = Math.cos(0.5), sn = Math.sin(0.5), lx = a*0.04, ly = b*0.16; p.add(R.sl, '#fff4e0', [hb2[0] + lx*c - ly*sn, hb2[1] + lx*sn + ly*c, hb2[2]], null, 0.055); } } }); },
   flyer(){ return dogBP({ id:'flyer', fur:'#c89a68', light:'#f6e6cc', ear:'pointy', earIn:'#f0b8a0', collar:'#e04a3a', studs:false, tail:'up', noArms:true,
     sleeve:'#7a5638', paw:'#f0dcb8',
     gear(p, k){ const R = k.R; p.on(k.bi(k.BL,'head'));
@@ -501,7 +509,7 @@ const LOOK = {
       // tiger-stripe waist cloth
       p.on(k.bi(k.BL,'body'));
       p.add(R.cyl, '#ffc23a', [0, k.cy - k.Rb*0.62, 0], null, [k.Rb*0.86, 0.24, k.Rb*0.84]);
-      for(let i=0;i<8;i++){ const a2 = i/8*TAU + 0.2; p.add(R.cap(0.022, 0.12), '#2a2230', [Math.cos(a2)*k.Rb*0.87, k.cy - k.Rb*0.62, Math.sin(a2)*k.Rb*0.85], [0, -a2, 0.35]); }
+      for(let i=0;i<8;i++){ const a2 = i/8*TAU + 0.2; p.add(R.capL(0.022, 0.12), '#2a2230', [Math.cos(a2)*k.Rb*0.87, k.cy - k.Rb*0.62, Math.sin(a2)*k.Rb*0.85], [0, -a2, 0.35]); }
       // wooden club with round knobs (front hand)
       const at = k.boneAt(k.BL,'armF');
       p.on(k.bi(k.BL,'armF'));
@@ -569,7 +577,7 @@ LOOK.ari = function(){
   const blk = '#34303c', blk2 = '#4a4454', p = Parts();
   p.on(bi(BL,'body'));
   p.add(R.s, blk, [0.03, 0.38, 0], null, [0.17, 0.2, 0.16]);
-  for(const zs of [1,-1]) p.add(R.cap(0.03, 0.14), blk2, [0.02, 0.33, zs*0.2], [zs*0.9, 0, 0.3]);
+  for(const zs of [1,-1]) p.add(R.capL(0.03, 0.14), blk2, [0.02, 0.33, zs*0.2], [zs*0.9, 0, 0.3]);
   p.add(R.tor(0.15, 0.045, TAU, 20), '#e24a3a', [0.04, 0.54, 0], [HP, 0, 0.1]);
   p.add(R.sm, '#e24a3a', [-0.13, 0.5, 0.05], [0.4, 0, 0.9], [0.1, 0.04, 0.07]);
   p.on(bi(BL,'tail'));
@@ -582,7 +590,7 @@ LOOK.ari = function(){
   p.add(R.sm, '#5a4a52', [0.36, 0.74, 0], null, [0.1, 0.08, 0.13]);
   for(const zs of [1,-1]) p.add(R.cone, '#a0683a', [0.43, 0.68, zs*0.05], [zs*0.4, 0, -2.2], [0.03, 0.09, 0.03]);
   for(const nm of ['earF','earB']){ const zs = nm==='earF'?1:-1, at = boneAt(BL, nm); p.on(bi(BL, nm));
-    p.add(R.cap(0.016, 0.2), blk, [at[0]+0.05, at[1]+0.11, at[2]+zs*0.03], [zs*0.3, 0, -0.45]);
+    p.add(R.capL(0.016, 0.2), blk, [at[0]+0.05, at[1]+0.11, at[2]+zs*0.03], [zs*0.3, 0, -0.45]);
     p.add(R.sm, '#e24a3a', [at[0]+0.12, at[1]+0.22, at[2]+zs*0.06], null, 0.045); }
   for(const nm of ['armF','armB']){ const zs = nm==='armF'?1:-1, at = boneAt(BL, nm); p.on(bi(BL, nm));
     p.add(R.cap(0.04, 0.14), blk2, [at[0]+0.01, at[1]-0.1, at[2]+zs*0.02], [zs*0.15, 0, 0]);
@@ -629,7 +637,7 @@ LOOK.mecha = function(){
   p.add(R.rbox, m1, hc, null, [0.64, 0.54, 0.66]);
   p.add(R.rbox, dk, [0.3, 0.92, 0], null, [0.14, 0.26, 0.5]);
   p.add(R.rbox, m2, [0.36, 0.74, 0], null, [0.12, 0.12, 0.26]);
-  for(let i=0;i<3;i++) p.add(R.cap(0.008, 0.08), dk, [0.425, 0.745, -0.05 + i*0.05], null);
+  for(let i=0;i<3;i++) p.add(R.capL(0.008, 0.08), dk, [0.425, 0.745, -0.05 + i*0.05], null);
   for(const zs of [1,-1]){ p.add(R.pyr, m2, [0.0, 1.2, zs*0.22], [zs*0.3, 0, 0.1], [0.13, 0.2, 0.08]); p.add(R.pyr, '#ff7a7a', [0.03, 1.18, zs*0.22], [zs*0.3, 0, 0.1], [0.07, 0.12, 0.05]); }
   p.add(R.cyl8, m3, [-0.08, 1.24, 0], null, [0.02, 0.16, 0.02]);
   p.add(R.sm, '#ff4a4a', [-0.08, 1.33, 0], null, 0.045);
@@ -663,8 +671,8 @@ LOOK.balloon = function(){
   p.add(R.cone, '#e0303e', [0, 0.12, 0], [PI, 0, 0], [0.06, 0.08, 0.06]);
   p.add(R.sm, '#e0303e', [0, 0.1, 0], null, [0.045, 0.03, 0.045]);
   p.on(bi(BL,'tail'));
-  p.add(R.cap(0.011, 0.36), '#f4efe8', [0.02, -0.12, 0], [0, 0, 0.12]);
-  p.add(R.cap(0.011, 0.2), '#f4efe8', [0.02, -0.42, 0], [0, 0, -0.25]);
+  p.add(R.capL(0.011, 0.36), '#f4efe8', [0.02, -0.12, 0], [0, 0, 0.12]);
+  p.add(R.capL(0.011, 0.2), '#f4efe8', [0.02, -0.42, 0], [0, 0, -0.25]);
   const geo = merge(p.list, true);
   const face = faceSet('balloon', { c:[0,0,0], r:[0.36, 0.41, 0.36], az:0.38, el:0.16, size:0.072, style:'dot', tilt:0.55, mouthO:{ el:-0.2 }, dropAz:1.0, dropEl:0.5 });
   return { id:'balloon', kind:'balloon', headYaw:-0.6, BL, geo, face, faceBone:'head', height:1.0, radius:0.36, outline:0.02, lieLift:0, lieShift:0, rough:0.25,
@@ -786,7 +794,7 @@ function setAlpha(r, a){
   if(a===r.alpha) return;
   r.alpha = a;
   const tr = a < 0.999;
-  for(const m of r.mats){ if(m.transparent!==tr){ m.transparent = tr; m.needsUpdate = true; } m.opacity = a; }
+  for(let i=0;i<r.mats.length;i++){ const m = r.mats[i]; if(m.transparent!==tr){ m.transparent = tr; m.needsUpdate = true; } m.opacity = a; }
   r.root.visible = a > 0.01;
   for(let i=0;i<r.outlines.length;i++) r.outlines[i].visible = !tr && G.quality.tier < 2;
   r.mesh.castShadow = a > 0.5;
@@ -1055,6 +1063,9 @@ function poseBalloon(r, e, A, t, p, hit, k){
 
 // ================================================================ per-type extras (meshes that are not part of the skinned body)
 const EXTRA = {};
+// their geometries are built once and shared by every instance (rig.dispose never touches them)
+const XGEO = {};
+function xgeo(key, fn){ return XGEO[key] || (XGEO[key] = plain(fn)); }
 EXTRA.shield = {
   pose(r, e, A, t, p, hit, k){
     const T = r.T;
@@ -1087,9 +1098,9 @@ EXTRA.flyer = {
 };
 EXTRA.bomber = {
   build(r, bp){
-    const sp = r.spark = new THREE.Mesh(plain((pp)=>{ const R = prim(); pp.add(R.star, '#fff6a0', [0,0,0], null, 1.2); pp.add(R.sm, '#ffb000', [0,0,0], null, 0.05); }),
+    const sp = r.spark = new THREE.Mesh(xgeo('spark', (pp)=>{ const R = prim(); pp.add(R.star, '#fff6a0', [0,0,0], null, 1.2); pp.add(R.sm, '#ffb000', [0,0,0], null, 0.05); }),
       G.look.mat('#fff3a0', { emissive:'#ffb000', emissiveIntensity:1.6, rough:0.4 }));
-    sp.geometry.userData.shared = true; sp.castShadow = false;
+    sp.castShadow = false;
     const hc = [0.03, 0.31, 0];
     sp.position.set(hc[0]-0.12, hc[1]+0.58, 0);
     r.B.head.add(sp);
@@ -1109,21 +1120,12 @@ EXTRA.bomber = {
   },
 };
 EXTRA.thrower = {
-  build(r, bp){
-    const R = prim();
-    const g = plain((pp)=>{ const c = '#fff4e0'; pp.add(R.cap(0.045, 0.24), c, [0,0,0]); for(const a of [-1,1]) for(const b of [-1,1]) pp.add(R.sm, c, [a*0.04, b*0.16, 0], null, 0.055); });
-    const m = r.heldBone = new THREE.Mesh(g, r.mat);
-    m.castShadow = true;
-    r.outlines.push(G.look.outline(m, 0.016));
-    m.position.set(0.05, -0.25, 0.06); m.rotation.set(0, 0, 0.5);
-    r.B.armF.add(m);
-  },
-  post(r, e, A, t, p, hit){ r.heldBone.visible = !(A==='shoot' && p >= hit && p < 0.9) && !e.happy; },
+  post(r, e, A, t, p, hit){ const on = !(A==='shoot' && p >= hit && p < 0.9) && !e.happy; const k = on ? 1 : 0.0001; r.B.held.scale.set(k, k, k); },
 };
 EXTRA.kire = {
   build(r){
     const R = prim();
-    const g = plain((pp)=>{ const c = '#ff2a3a', k = R.cap(0.03, 0.09);
+    const g = xgeo('anger', (pp)=>{ const c = '#ff2a3a', k = R.capL(0.03, 0.09);
       for(let i=0;i<4;i++){ const a = i*HP + PI/4; pp.add(k, c, [Math.cos(a)*0.06, Math.sin(a)*0.06, 0], [0, 0, a + 0.9]); } });
     const m = r.anger = new THREE.Mesh(g, G.look.mat('#ff4a5a', { emissive:'#ff2030', emissiveIntensity:0.5, rough:0.4 }));
     m.castShadow = false; m.visible = false;
@@ -1173,7 +1175,7 @@ EXTRA.oni = {
 EXTRA.ari = {
   build(r){
     const R = prim();
-    const g = plain((pp)=>{ pp.add(R.s, '#9a7a58', [0, 0.02, 0], null, [0.46, 0.2, 0.36]); pp.add(R.sm, '#b8966c', [0.05, 0.1, 0.05], null, [0.3, 0.13, 0.24]);
+    const g = xgeo('mound', (pp)=>{ pp.add(R.s, '#9a7a58', [0, 0.02, 0], null, [0.46, 0.2, 0.36]); pp.add(R.sm, '#b8966c', [0.05, 0.1, 0.05], null, [0.3, 0.13, 0.24]);
       for(let i=0;i<6;i++){ const a = i/6*TAU; pp.add(R.sl, i%2 ? '#7a5a3a' : '#c8a878', [Math.cos(a)*0.34, 0.07, Math.sin(a)*0.26], null, 0.07); } });
     const m = r.mound = new THREE.Mesh(g, G.look.mat('#ffffff', { vertexColors:true, rough:0.95 }));
     m.castShadow = false; m.visible = false;
@@ -1222,6 +1224,11 @@ function pre(e){
   if(e.oniBuff > 0){ e.oniBuff--; if(e.oniBuff % 40 === 39) fxb('magic', e.x, e.y + e.height*0.6, e.z + 0.2, FX_BUFF); }
   e.spdMul = (e.rageMul||1) * (e.oniBuff > 0 ? 1.25 : 1);
   if(e.modeT > 0) e.modeT--;
+  // stuck against a wall/edge while trying to walk somewhere → try the other side of the hero for a while
+  if(e.sideLock > 0) e.sideLock--;
+  if(e.state==='move' && Math.abs(e.x - (e.lastX==null ? e.x : e.lastX)) < 0.004 && Math.abs(e.vx) > 0.01){ if(++e.stuckT > 24){ e.stuckT = 0; e.sideVal = -sideOf(e); e.sideLock = 100; } }
+  else e.stuckT = 0;
+  e.lastX = e.x;
   const t = H.target(e);
   if(!t){ H.stop(e); return null; }
   return t;
@@ -1229,9 +1236,10 @@ function pre(e){
 const FX_BUFF = { count:4, scale:0.35, color:'#c58aff' };
 // spot beside the target on this foe's side (no allocation)
 let FX_ = 0, FZ_ = 0;
+function sideOf(e){ const t = H.target(e); return t && e.x < t.x ? -1 : 1; }
+function side(e, t){ return e.sideLock > 0 ? e.sideVal : (e.x < t.x ? -1 : 1); }
 function flank(e, t, dist, dzOff){
-  const side = e.x < t.x ? -1 : 1;
-  FX_ = t.x + side*dist;
+  FX_ = t.x + side(e, t)*dist;
   FZ_ = U.clamp(t.z + (dzOff!=null ? dzOff : ((e.id%3)-1)*0.28), ZMIN, ZMAX);
 }
 function A(o){ return Object.assign({ len:26, recover:44 }, o); }
@@ -1272,13 +1280,13 @@ function nearestBounds(){ return G.cam.viewRange(); }
 
 // ================================================================ attack definitions
 // wanhei — paw swipe / bite
-const WH_SWIPE = A({ id:'wh_swipe', anim:'attack', len:28, recover:48, move:[{ at:7, vx:0.09 }], hits:[HIT({ at:9, dmg:8 })] });
-const WH_BITE  = A({ id:'wh_bite', anim:'attack2', len:30, recover:56, move:[{ at:8, vx:0.15 }], hits:[HIT({ at:10, x0:0.2, x1:1.25, dmg:9, kb:0.11 })] });
+const WH_SWIPE = A({ id:'wh_swipe', anim:'attack', len:28, recover:60, move:[{ at:7, vx:0.09 }], hits:[HIT({ at:9, dmg:8 })] });
+const WH_BITE  = A({ id:'wh_bite', anim:'attack2', len:30, recover:66, move:[{ at:8, vx:0.15 }], hits:[HIT({ at:10, x0:0.2, x1:1.25, dmg:9, kb:0.11 })] });
 // hyena — quick swipe, then runs off
 const HY_SWIPE = A({ id:'hy_swipe', anim:'attack', len:22, recover:8, move:[{ at:5, vx:0.14 }], hits:[HIT({ at:7, dur:3, x1:1.1, dmg:6, stun:14 })],
   onEnd(e){ e.mode = 'run'; e.modeT = 50 + Math.floor(rnd()*25); } });
 // boar — long charge along x; tusk toss up close
-const BO_TOSS = A({ id:'bo_toss', anim:'attack', len:30, recover:50, move:[{ at:7, vx:0.1 }], hits:[HIT({ at:10, x0:0.3, x1:1.3, dmg:9, up:0.16, kb:0.1 })] });
+const BO_TOSS = A({ id:'bo_toss', anim:'attack', len:30, recover:60, move:[{ at:7, vx:0.1 }], hits:[HIT({ at:10, x0:0.3, x1:1.3, dmg:9, up:0.16, kb:0.1 })] });
 const BO_CHARGE = A({ id:'bo_charge', anim:'attack2', len:110, recover:34,
   hits:[HIT({ at:2, dur:100, x0:0, x1:1.05, zr:0.5, y1:1.1, dmg:12, kb:0.2, up:0.16, stun:22, power:2 })], fn: boarCharge });
 const FX_TRAIL = { count:2, scale:0.55, dir:0 };
@@ -1308,10 +1316,10 @@ function boarCharge(e, t){
 }
 const FX_STARS = { count:5, scale:0.8 };
 // shield — shield bash
-const SH_BASH = A({ id:'sh_bash', anim:'attack', len:30, recover:52, move:[{ at:8, vx:0.12 }], hits:[HIT({ at:10, x0:0.2, x1:1.25, dmg:9, kb:0.2, stun:20 })] });
+const SH_BASH = A({ id:'sh_bash', anim:'attack', len:30, recover:62, move:[{ at:8, vx:0.12 }], hits:[HIT({ at:10, x0:0.2, x1:1.25, dmg:9, kb:0.2, stun:20 })] });
 // pounce — leap arc / scratch
-const PO_LEAP = A({ id:'po_leap', anim:'attack', len:48, recover:46, hits:[HIT({ at:8, dur:28, x0:-0.25, x1:0.75, y0:-0.2, y1:1.1, dmg:10, kb:0.12, up:0.12, stun:20 })], fn: pounceLeap });
-const PO_SCRATCH = A({ id:'po_scr', anim:'attack2', len:26, recover:40, move:[{ at:6, vx:0.1 }], hits:[HIT({ at:8, dur:3, dmg:7, stun:14 })] });
+const PO_LEAP = A({ id:'po_leap', anim:'attack', len:48, recover:56, hits:[HIT({ at:8, dur:28, x0:-0.25, x1:0.75, y0:-0.2, y1:1.1, dmg:10, kb:0.12, up:0.12, stun:20 })], fn: pounceLeap });
+const PO_SCRATCH = A({ id:'po_scr', anim:'attack2', len:26, recover:52, move:[{ at:6, vx:0.1 }], hits:[HIT({ at:8, dur:3, dmg:7, stun:14 })] });
 function pounceLeap(e, t){
   if(t===0){
     const tg = H.target(e);
@@ -1324,7 +1332,7 @@ function pounceLeap(e, t){
   if(t > 6 && e.onGround && !e.leapLanded){ e.leapLanded = true; e.vx *= 0.3; e.vz = 0; fxb('dust', e.x, 0.05, e.z, FX_DUST_M); }
 }
 // bomber — fuse, then pops into confetti (hurts heroes AND foes)
-const BM_BOOM = A({ id:'bm_boom', anim:'attack', len:6, recover:0, noAlert:true, fn(e, t){ if(t===0) bomberPop(e); } });
+const BM_BOOM = A({ id:'bm_boom', anim:'attack', len:6, recover:0, fn(e, t){ if(t===0) bomberPop(e); } });
 const FX_CONF = { count:40, scale:1.1 }, FX_RING = { flat:true, scale:1.1, color:'#ffd23a' }, FX_FW = { count:1, scale:0.6 };
 function bomberPop(e){
   const x = e.x, z = e.z;
@@ -1341,7 +1349,7 @@ function bomberPop(e){
 }
 // thrower — lobbed bones
 const TH_THROW = A({ id:'th_throw', anim:'shoot', len:32, recover:80, fn(e, t){ if(t===11) throwBone(e); } });
-const TH_BONK = A({ id:'th_bonk', anim:'attack', len:28, recover:50, move:[{ at:7, vx:0.08 }], hits:[HIT({ at:9, dmg:7 })] });
+const TH_BONK = A({ id:'th_bonk', anim:'attack', len:28, recover:60, move:[{ at:7, vx:0.08 }], hits:[HIT({ at:9, dmg:7 })] });
 const FX_MARK = { flat:true, scale:0.4, color:'#ffe08a', life:40 };
 function throwBone(e){
   const tg = H.target(e); if(!tg) return;
@@ -1364,7 +1372,7 @@ function swoop(e, t){
   else { e.vx = e.face*0.05; e.vy = 0.045; e.vz = 0; }
 }
 // kire — slap / rage double slap
-const KI_SLAP = A({ id:'ki_slap', anim:'attack', len:28, recover:50, move:[{ at:7, vx:0.1 }], hits:[HIT({ at:9, dmg:8 })] });
+const KI_SLAP = A({ id:'ki_slap', anim:'attack', len:28, recover:58, move:[{ at:7, vx:0.1 }], hits:[HIT({ at:9, dmg:8 })] });
 const KI_DOUBLE = A({ id:'ki_double', anim:'attack2', len:32, recover:22, move:[{ at:6, vx:0.12 }, { at:14, vx:0.1 }], hits:[HIT({ at:8, dur:3, dmg:6, stun:14 }), HIT({ at:16, dur:3, dmg:6, kb:0.12 })] });
 // pierrot — summon balloons / honk bop
 const PI_SUMMON = A({ id:'pi_summon', anim:'shoot', len:40, recover:100, fn(e, t){ if(t===14) summonBalloons(e); } });
@@ -1379,7 +1387,7 @@ function summonBalloons(e){
   }
   H.say(e, 'ポポン！');
 }
-function balloonsOf(e){ let n = 0; for(const f of G.world.ents) if(f.type==='balloon' && f.parentId===e.id && !f.dead) n++; return n; }
+function balloonsOf(e){ let n = 0; const L = G.world.ents; for(let i=0;i<L.length;i++){ const f = L[i]; if(f.type==='balloon' && f.parentId===e.id && !f.dead) n++; } return n; }
 // balloon — dips down and bumps
 const BA_BUMP = A({ id:'ba_bump', anim:'attack', len:32, recover:70, hits:[HIT({ at:5, dur:9, x0:-0.2, x1:0.65, y0:-1.3, y1:0.8, dmg:6, kb:0.06, stun:14, kind:'pop' })],
   fn(e, t){ if(t < 9){ e.vx = e.face*0.075; e.vy = -0.05; } else if(t < 17){ e.vx = e.face*0.02; e.vy = 0; } else { e.vy = 0.045; e.vx = 0; } } });
@@ -1388,7 +1396,7 @@ const ON_SMASH = A({ id:'on_smash', anim:'attack', len:44, recover:80,
   areas:[{ at:15, ox:1.35, r:1.3, zr:0.85, y0:-0.3, y1:1.6, dmg:13, kind:'blunt', power:2, up:0.2, kb:0.12, stun:24, fx:'shock' }],
   fn(e, t){ if(t===15){ if(G.cam) G.cam.shake(3.5, 14); H.say(e, 'ドーン！'); } } });
 // ari — shovel swipe / pop-up uppercut from underground
-const AR_SWIPE = A({ id:'ar_swipe', anim:'attack', len:28, recover:46, move:[{ at:7, vx:0.08 }], hits:[HIT({ at:9, x1:1.3, dmg:8 })] });
+const AR_SWIPE = A({ id:'ar_swipe', anim:'attack', len:28, recover:58, move:[{ at:7, vx:0.08 }], hits:[HIT({ at:9, x1:1.3, dmg:8 })] });
 const AR_UPPER = A({ id:'ar_upper', anim:'attack2', len:34, recover:54, fn(e, t){ if(t===0) surface(e, true); },
   hits:[HIT({ at:1, dur:8, x0:-0.55, x1:0.65, zr:0.55, y1:1.6, dmg:10, up:0.26, kb:0.05, stun:22, power:2 })] });
 const FX_DIG = { count:10, scale:0.9 };
@@ -1408,7 +1416,7 @@ function surface(e, attack){
 }
 // mecha — slow red beam / claw punch
 const ME_BEAM = A({ id:'me_beam', anim:'shoot', len:30, recover:84, fn(e, t){ if(t===7) fireBeam(e); } });
-const ME_PUNCH = A({ id:'me_punch', anim:'attack', len:30, recover:52, move:[{ at:8, vx:0.08 }], hits:[HIT({ at:10, x1:1.2, dmg:9 })] });
+const ME_PUNCH = A({ id:'me_punch', anim:'attack', len:30, recover:60, move:[{ at:8, vx:0.08 }], hits:[HIT({ at:10, x1:1.2, dmg:9 })] });
 const FX_MUZZLE = { scale:0.6, color:'#ff5a6a' };
 function fireBeam(e){
   const tg = H.target(e);
@@ -1422,9 +1430,20 @@ function fireBeam(e){
 }
 
 // ================================================================ AI per type
+// brawl() options are module constants: ai() runs every tick and must not allocate
+const PK = { whS:[WH_SWIPE, 24], whB:[WH_BITE, 24], hy:[HY_SWIPE, 23], sh:[SH_BASH, 24], kiS:[KI_SLAP, 26], kiD:[KI_DOUBLE, 23], pi:[PI_HONK, 23], on:[ON_SMASH, 36], ar:[AR_SWIPE, 24] };
+const BR = {
+  wanhei:  { reach:1.3, zr:0.4, pick:()=> rnd() < 0.7 ? PK.whS : PK.whB },
+  hyena:   { reach:1.25, zr:0.4, stand:0.95, hold:2.8, pick:()=> PK.hy },
+  shield:  { reach:1.3, zr:0.4, stand:1.05, hold:1.6, pick:()=> PK.sh },
+  kire:    { reach:1.3, zr:0.4, pick:(e)=> e.rage > 0 ? PK.kiD : PK.kiS },
+  pierrot: { reach:1.3, zr:0.4, hold:2.2, pick:()=> PK.pi },
+  oni:     { reach:2.3, min:0.3, zr:0.55, stand:1.5, hold:2.6, pick:()=> PK.on },
+  ari:     { reach:1.4, zr:0.4, pick:()=> PK.ar },
+};
 const AI = {
   wanhei(e){ const t = pre(e); if(!t) return;
-    brawl(e, t, { reach:1.3, zr:0.4, pick:()=> rnd() < 0.7 ? [WH_SWIPE, 24] : [WH_BITE, 22] }); },
+    brawl(e, t, BR.wanhei); },
   hyena(e){ const t = pre(e); if(!t) return;
     if(e.mode==='run' && e.modeT > 0){
       const away = e.x < t.x ? -1 : 1;
@@ -1433,14 +1452,14 @@ const AI = {
       return;
     }
     e.mode = '';
-    brawl(e, t, { reach:1.25, zr:0.4, stand:0.95, hold:2.8, pick:()=> [HY_SWIPE, 18] }); },
+    brawl(e, t, BR.hyena); },
   boar(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-    const side = dx > 0 ? -1 : 1;
-    if(e.cool > 0){ if(H.walkTo(e, t.x + side*4.2, U.clamp(t.z, ZMIN, ZMAX), e.def.spd*0.7)) H.face(e, t); else if(adx < 5) H.face(e, t); return; }
+    const side_ = side(e, t);
+    if(e.cool > 0){ if(H.walkTo(e, t.x + side_*4.2, U.clamp(t.z, ZMIN, ZMAX), e.def.spd*0.7)) H.face(e, t); else if(adx < 5) H.face(e, t); return; }
     if(adx < 1.35 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, BO_TOSS, 24); return; } H.wait(e, 30); return; }
     if(adx > 2.2 && adx < 7.5 && adz < 0.35){ H.face(e, t); if(H.token(e)){ attack(e, BO_CHARGE, 36); return; } H.wait(e, 30); return; }
-    if(H.walkTo(e, t.x + side*4.2, U.clamp(t.z, ZMIN, ZMAX))) H.face(e, t); },
+    if(H.walkTo(e, t.x + side_*4.2, U.clamp(t.z, ZMIN, ZMAX))) H.face(e, t); },
   shield(e){ const t = pre(e); if(!t) return;
     if(e.blockT > 0) e.blockT--;
     if(e.blockReset > 0 && --e.blockReset === 0) e.blocks = 0;
@@ -1448,12 +1467,12 @@ const AI = {
     // turns around slowly: a chance to hit it from behind
     if(dx*e.face < -0.2){ e.turnT = (e.turnT||0) + 1; H.stop(e); if(e.turnT===16) H.say(e, 'あっ！'); if(e.turnT > 36){ e.face = -e.face; e.turnT = 0; } return; }
     e.turnT = 0;
-    if(e.counter){ e.counter = false; if(Math.abs(dx) < 1.6 && H.token(e)){ e.cool = 0; attack(e, SH_BASH, 18); return; } }
-    brawl(e, t, { reach:1.3, zr:0.4, stand:1.05, hold:1.6, pick:()=> [SH_BASH, 24] }); },
+    if(e.counter){ e.counter = false; if(Math.abs(dx) < 1.6 && H.token(e)){ e.cool = 0; attack(e, SH_BASH, 23); return; } }
+    brawl(e, t, BR.shield); },
   pounce(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
     if(e.cool <= 0 && adx > 2.2 && adx < 4.6 && adz < 1.0){ H.face(e, t); if(H.token(e)){ attack(e, PO_LEAP, 26); return; } }
-    if(e.cool <= 0 && adx < 1.3 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, PO_SCRATCH, 20); return; } }
+    if(e.cool <= 0 && adx < 1.3 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, PO_SCRATCH, 23); return; } }
     flank(e, t, 3.2); if(H.walkTo(e, FX_, FZ_)) H.face(e, t); else if(adx < 4) H.face(e, t); },
   bomber(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
@@ -1462,12 +1481,12 @@ const AI = {
     flank(e, t, 0.8, 0); H.walkTo(e, FX_, FZ_); },
   thrower(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-    const side = dx > 0 ? -1 : 1;
-    if(adx < 1.3 && adz < 0.4 && e.cool <= 0){ H.face(e, t); if(H.token(e)){ attack(e, TH_BONK, 20); return; } }
+    const side_ = side(e, t);
+    if(adx < 1.3 && adz < 0.4 && e.cool <= 0){ H.face(e, t); if(H.token(e)){ attack(e, TH_BONK, 23); return; } }
     if(adx >= 3.0 && adx < 7.5 && e.cool <= 0){ H.face(e, t); if(H.token(e)){ attack(e, TH_THROW, 24); return; } }
     // keep 4–6 away (back off when the hero comes close)
     const want = 5.0;
-    const tx = t.x + side*want, tz = U.clamp(t.z + ((e.id%3)-1)*0.5, ZMIN, ZMAX);
+    const tx = t.x + side_*want, tz = U.clamp(t.z + ((e.id%3)-1)*0.5, ZMIN, ZMAX);
     const vr = G.cam.viewRange();
     const cx = U.clamp(tx, vr[0] + 0.8, vr[1] - 0.8);
     if(Math.abs(e.x - cx) < 0.5 && Math.abs(e.z - tz) < 0.4){ H.stop(e); H.face(e, t); }
@@ -1489,52 +1508,52 @@ const AI = {
     flank(e, t, 3.0);
     if(H.walkTo(e, FX_, FZ_)) H.face(e, t); else if(adx < 4.5) H.face(e, t); },
   kire(e){ const t = pre(e); if(!t) return;
+    // rage cycle in absolute ticks (ai does not run during attacks / hurt, so a per-ai-tick counter would stretch)
+    const now = G.time.tick;
+    if(e.rageEnd == null){ e.rageEnd = 0; e.rageNext = now + 200 + Math.floor(rnd()*200); }
+    e.rage = now < e.rageEnd ? e.rageEnd - now : 0;
     if(e.rage > 0){
-      e.rage--;
       if(e.rage % 14 === 0) fxb('smoke', e.x, e.y + 1.15, e.z, FX_STEAM);
-      if(e.rage === 0){ e.rageMul = 1; H.say(e, 'ふぅ…'); e.tired = 50; }
-    } else {
-      if(e.rageCD == null) e.rageCD = 200 + Math.floor(rnd()*200);
-      if(--e.rageCD <= 0){ e.rage = 240; e.rageMul = 1.6; e.rageCD = 420 + Math.floor(rnd()*200); H.say(e, 'ぷんぷん！'); fxb('smoke', e.x, e.y + 1.2, e.z, FX_STEAM_BIG); }
-    }
+    } else if(e.rageMul > 1){ e.rageMul = 1; H.say(e, 'ふぅ…'); e.tired = 50; e.rageNext = now + 420 + Math.floor(rnd()*200); }
+    else if(now >= e.rageNext && e.state!=='act'){ e.rageEnd = now + 240; e.rage = 240; e.rageMul = 1.6; H.say(e, 'ぷんぷん！'); fxb('smoke', e.x, e.y + 1.2, e.z, FX_STEAM_BIG); }
     if(e.tired > 0){ e.tired--; H.stop(e); H.face(e, t); return; }
     if(e.rage > 0 && e.cool > 22) e.cool = 22;
-    brawl(e, t, { reach:1.3, zr:0.4, pick:()=> e.rage > 0 ? [KI_DOUBLE, 18] : [KI_SLAP, 24] }); },
+    brawl(e, t, BR.kire); },
   pierrot(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-    const side = dx > 0 ? -1 : 1;
+    const side_ = side(e, t);
     const left = 4 - (e.summoned||0);
-    if(e.mode==='hop' && e.modeT > 0){ H.walkTo(e, t.x + side*3.5, e.z, e.def.spd*1.3); H.face(e, t); return; }
+    if(e.mode==='hop' && e.modeT > 0){ H.walkTo(e, t.x + side_*3.5, e.z, e.def.spd*1.3); H.face(e, t); return; }
     if(e.cool <= 0 && left > 0 && adx > 2.4 && balloonsOf(e) < 2){ H.face(e, t); if(H.token(e)){ attack(e, PI_SUMMON, 26); return; } }
-    if(e.cool <= 0 && adx < 1.3 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, PI_HONK, 22); return; } }
+    if(e.cool <= 0 && adx < 1.3 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, PI_HONK, 23); return; } }
     if(left > 0){
       const vr = G.cam.viewRange();
-      const cx = U.clamp(t.x + side*5, vr[0] + 0.9, vr[1] - 0.9), cz = U.clamp(t.z - ((e.id%2)*2-1)*0.6, ZMIN, ZMAX);
+      const cx = U.clamp(t.x + side_*5, vr[0] + 0.9, vr[1] - 0.9), cz = U.clamp(t.z - ((e.id%2)*2-1)*0.6, ZMIN, ZMAX);
       if(Math.abs(e.x - cx) < 0.5 && Math.abs(e.z - cz) < 0.4){ H.stop(e); H.face(e, t); } else { H.walkTo(e, cx, cz); H.face(e, t); }
-    } else brawl(e, t, { reach:1.3, zr:0.4, hold:2.2, pick:()=> [PI_HONK, 22] }); },
+    } else brawl(e, t, BR.pierrot); },
   balloon(e){ const t = pre(e);
     const fy = (e.floatY || 1.4) + Math.sin((G.time.tick + e.id*37)*0.05)*0.12;
     e.gravScale = 0;
     e.vy = U.clamp((fy - e.y)*0.06, -0.03, 0.03);
     if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-    if(adx < 0.95 && adz < 0.4 && e.cool <= 0 && Math.abs(e.y - fy) < 0.4){ H.face(e, t); if(H.token(e)){ e.vy = 0; attack(e, BA_BUMP, 22); return; } }
+    if(adx < 0.95 && adz < 0.4 && e.cool <= 0 && Math.abs(e.y - fy) < 0.4){ H.face(e, t); if(H.token(e)){ e.vy = 0; attack(e, BA_BUMP, 24); return; } }
     flank(e, t, 0.7 + (e.id%2)*0.25);
     if(e.cool > 0) flank(e, t, 1.8);
     if(H.walkTo(e, FX_, FZ_, e.cool > 0 ? 0.02 : e.def.spd)) H.face(e, t); },
   oni(e){ const t = pre(e);
     // purple aura: nearby soldiers get faster
     if(G.time.tick % 6 === 0){
-      for(const f of G.world.ents){
+      const L = G.world.ents;
+      for(let i=0;i<L.length;i++){ const f = L[i];
         if(f===e || f.team!==1 || f.dead || !f.def || !f.def.zako || f.type==='oni') continue;
         if(Math.abs(f.x - e.x) < 2.3 && Math.abs(f.z - e.z) < 1.6) f.oniBuff = Math.max(f.oniBuff||0, 14);
       }
     }
     if(!t) return;
-    brawl(e, t, { reach:2.3, min:0.3, zr:0.55, stand:1.5, hold:2.6, pick:()=> [ON_SMASH, 36] }); },
+    brawl(e, t, BR.oni); },
   ari(e){ const t = pre(e); if(!t) return;
     if(e.burrowed){
-      if(G.player && G.player.state==='ultIntro'){ surface(e, false); return; }
       e.underT++;
       const dx = t.x - e.x, dz = t.z - e.z, d = Math.hypot(dx, dz);
       if(e.underT % 5 === 0) fxb('dust', e.x, 0.08, e.z, FX_DUST_S);
@@ -1551,13 +1570,13 @@ const AI = {
     }
     if(e.digCD > 0) e.digCD--;
     if(e.digCD <= 0 && e.onGround && H.dist(e, t) > 4){ dig(e); return; }
-    brawl(e, t, { reach:1.4, zr:0.4, pick:()=> [AR_SWIPE, 22] }); },
+    brawl(e, t, BR.ari); },
   mecha(e){ const t = pre(e); if(!t) return;
     const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-    const side = dx > 0 ? -1 : 1;
+    const side_ = side(e, t);
     if(e.cool <= 0 && adx < 1.3 && adz < 0.4){ H.face(e, t); if(H.token(e)){ attack(e, ME_PUNCH, 24); return; } }
     if(e.cool <= 0 && adx > 2.4 && adx < 7.5 && adz < 0.9){ H.face(e, t); if(H.token(e)){ attack(e, ME_BEAM, 32); return; } }
-    const tx = t.x + side*4.0, tz = U.clamp(t.z, ZMIN, ZMAX);
+    const tx = t.x + side_*4.0, tz = U.clamp(t.z, ZMIN, ZMAX);
     if(Math.abs(e.x - tx) < 0.5 && Math.abs(e.z - tz) < 0.35){ H.stop(e); H.face(e, t); } else { H.walkTo(e, tx, tz); if(adx < 6) H.face(e, t); } },
 };
 const FX_STEAM = { count:2, scale:0.35, color:'#ffffff' }, FX_STEAM_BIG = { count:6, scale:0.5, color:'#ffe0e0' };
@@ -1565,7 +1584,7 @@ const FX_STEAM = { count:2, scale:0.35, color:'#ffffff' }, FX_STEAM_BIG = { coun
 // ================================================================ type definitions
 // NOTE on armor: 50_combat absorbs a hit while (armorHits < armor), i.e. armor N absorbs N-1 hits before a flinch.
 // "armour 1 (flinches less)" therefore needs armor:2 here, "armor 2" needs 3.
-const ARMOR_MECHA = 2, ARMOR_ONI = 3;
+const ARMOR_MECHA = 1, ARMOR_ONI = 2;   // combat absorbs exactly N light hits (framework fixed to match the contract)
 function def(type, o){
   o.zako = true;
   o.build = (ent)=> makeRig(type, ent);
@@ -1618,7 +1637,13 @@ def('balloon', { name:'ふうせん', hp:10, spd:0.026, radius:0.36, height:1.0,
 const FX_POP = { count:16, scale:0.6 }, FX_POPRING = { scale:0.7, color:'#ff7a8a' };
 def('oni',     { name:'オニボウズ', hp:90, spd:0.028, radius:0.6, height:1.8, weight:2, armor:ARMOR_ONI, score:500, xp:30 });
 def('ari',     { name:'へいたいアリ', hp:32, spd:0.038, radius:0.4, height:1.28, weight:0.9, score:180, xp:14,
-  init(e){ e.digCD = 150 + Math.floor(rnd()*60); } });
+  init(e){
+    e.digCD = 150 + Math.floor(rnd()*60);
+    e.onBeforeHit = ()=> !e.burrowed;              // underground: nothing reaches it (ults call damage() directly)
+    if(!ultHooked){ ultHooked = true;             // an おうぎ pops every burrowed ant out so the big finish hits it too
+      G.bus.on('ult', ()=>{ const L = G.world.ents; for(let i=0;i<L.length;i++){ const f = L[i]; if(f.type==='ari' && f.burrowed && !f.dead){ G.combat.cancel(f); f.pending = null; surface(f, false); G.setState(f, 'idle'); G.setAnim(f, 'jump'); } } }); }
+  } });
+let ultHooked = false;
 def('mecha',   { name:'メカワンコ', hp:60, spd:0.026, radius:0.44, height:1.4, weight:1.6, armor:ARMOR_MECHA, score:400, xp:24 });
 
 })();

@@ -206,23 +206,31 @@ G.cam = {
   focus(x,y,z,frames,zoom){ this.fx=x; this.fy=y; this.fz=z; this.focusT=frames; this.focusZoom=zoom||0; },
   snap(){ this.frame(1, true); },
   // world x range currently visible at the belt plane (for spawns / locks)
-  viewRange(){ return [this.x - this.halfW, this.x + this.halfW]; },
+  // fraction of halfW hidden on the right by the touch buttons (phones in landscape)
+  rightCover(){ return (G.input && G.input.lastDevice==='touch' && !(G.view && G.view.portrait)) ? 0.5 : 0; },
+  // world width that is actually usable (not under the touch buttons)
+  usableW(){ return this.halfW * (2 - this.rightCover()); },
+  // reused array: read it right away, don't keep it
+  viewRange(){ const r = this._vr || (this._vr = [0,0]); r[0] = this.x - this.halfW; r[1] = this.x + this.halfW; return r; },
   frame(dt, snap){
     const e = this.followEnt;
     if(e){
-      const look = e.face*0.9;
+      const look = e.face*0.9 + this.halfW*this.rightCover()*0.5;
       this.tx = e.x + look; this.ty = 1.05 + Math.max(0, e.y*0.35); this.tz = U.lerp(-0.2, e.z, 0.35);
     }
-    // camera centre must keep the lock range fully on screen
-    const lo = this.lockMin + this.halfW, hi = this.lockMax - this.halfW;
-    if(lo<=hi) this.tx = U.clamp(this.tx, lo, hi); else this.tx = (this.lockMin+this.lockMax)/2;
+    // camera centre must keep the lock range fully on screen (and out from under the touch buttons)
+    const rc = this.rightCover();
+    const lo = this.lockMax - this.halfW*(1-rc), hi = this.lockMin + this.halfW;
+    if(this.lockMin > -1e8){ if(lo<=hi) this.tx = U.clamp(this.tx, lo, hi); else this.tx = (lo+hi)/2; }
     const stg = G.stage && G.stage.info;
     if(stg){ this.tx = U.clamp(this.tx, this.halfW-1, Math.max(this.halfW-1, stg.length - this.halfW + 1)); }
     let gx=this.tx, gy=this.ty, gz=this.tz, zoom=this.zoom;
     if(this.focusT>0){ this.focusT--; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
-    if(snap){ this.x=gx; this.y=gy; this.z=gz; }
-    else { this.x=U.damp(this.x,gx,5.5,dt); this.y=U.damp(this.y,gy,4,dt); this.z=U.damp(this.z,gz,3,dt); }
-    let d = (this.baseDist||16) - zoom;
+    if(snap){ this.x=gx; this.y=gy; this.z=gz; this.zc = zoom; }
+    else { this.x=U.damp(this.x,gx,5.5,dt); this.y=U.damp(this.y,gy,4,dt); this.z=U.damp(this.z,gz,3,dt); this.zc=U.damp(this.zc||0, zoom, 2.5, dt); }
+    let d = (this.baseDist||16) - this.zc;
+    // visible half-width at the belt plane follows the real distance (boss fights zoom out)
+    this.halfW = Math.tan(VFOV*Math.PI/360) * G.camera.aspect * d;
     if(this.punchT>0){ d -= this.punch*Math.sin(Math.PI*this.punchT/this.punchMax); this.punchT--; }
     let sx=0, sy=0;
     if(this.shakeT>0){
@@ -459,8 +467,8 @@ function frame(now){
   syncVisuals(G.hitStop>0 ? 1 : alpha);
   const sc = G.scenes[G.sceneName];
   try {
+    G.cam.frame(dt);                 // camera first so DOM popups / bars project with this frame's camera
     if(sc && sc.frame) sc.frame(dt);
-    G.cam.frame(dt);
     renderNow();
   } catch(err){ G.logError('frame '+G.sceneName, err); }
   governor(dt);
@@ -486,7 +494,7 @@ G.step = function(n){
   for(let i=0;i<(n||1);i++){
     tick();
     const sc=G.scenes[G.sceneName];
-    try { if(sc && sc.frame) sc.frame(G.cfg.TICK); G.cam.frame(G.cfg.TICK); } catch(err){ G.logError('step.frame', err); }
+    try { G.cam.frame(G.cfg.TICK); if(sc && sc.frame) sc.frame(G.cfg.TICK); } catch(err){ G.logError('step.frame', err); }
   }
   syncVisuals(1); renderNow();
 };
