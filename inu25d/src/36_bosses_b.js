@@ -217,13 +217,13 @@ function warnTex(){
   });
 }
 function laneTex(){
-  const t = G.look.canvasTex('bossB_lane', 128, 64, (x, w, h)=>{
-    const g = x.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.12, 'rgba(255,255,255,0.35)'); g.addColorStop(0.5, 'rgba(255,255,255,0.18)');
-    g.addColorStop(0.88, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0.95)');
-    x.fillStyle = g; x.fillRect(0, 0, w, h);
-    x.fillStyle = 'rgba(255,255,255,0.85)';
-    for(let i=0;i<2;i++){ const ox = i*64 + 14; x.beginPath(); x.moveTo(ox, 14); x.lineTo(ox+22, 32); x.lineTo(ox, 50); x.lineTo(ox+12, 50); x.lineTo(ox+34, 32); x.lineTo(ox+12, 14); x.closePath(); x.fill(); }
+  const t = G.look.canvasTex('bossB_lane2', 128, 64, (x, w, h)=>{
+    x.fillStyle = 'rgba(255,255,255,0.42)'; x.fillRect(0, 0, w, h);
+    x.fillStyle = 'rgba(255,255,255,1)'; x.fillRect(0, 0, w, 7); x.fillRect(0, h-7, w, 7);
+    x.fillStyle = 'rgba(40,10,10,0.55)'; x.fillRect(0, 7, w, 3); x.fillRect(0, h-10, w, 3);
+    for(let i=0;i<2;i++){ const ox = i*64 + 12;
+      x.fillStyle = 'rgba(40,10,10,0.6)'; x.beginPath(); x.moveTo(ox+3, 15); x.lineTo(ox+26, 32); x.lineTo(ox+3, 49); x.lineTo(ox+17, 49); x.lineTo(ox+40, 32); x.lineTo(ox+17, 15); x.closePath(); x.fill();
+      x.fillStyle = 'rgba(255,255,255,1)'; x.beginPath(); x.moveTo(ox, 16); x.lineTo(ox+22, 32); x.lineTo(ox, 48); x.lineTo(ox+12, 48); x.lineTo(ox+34, 32); x.lineTo(ox+12, 16); x.closePath(); x.fill(); }
   });
   if(t.wrapS !== THREE.RepeatWrapping){ t.wrapS = THREE.RepeatWrapping; t.needsUpdate = true; }
   return t;
@@ -276,7 +276,7 @@ Kit.prototype.updWorld = function(e, T){
     const l2 = len*grow;
     m.visible = true; m.position.set(L.x0 + dir*l2/2, 0.05, L.z); m.scale.set(l2*dir, L.w, 1);
     m.material.map.repeat.set(Math.max(1, len/1.6), 1); m.material.map.offset.x = -(T % 60)/60*(L.lock ? 2 : 1);
-    m.material.opacity = 0.45 + 0.45*pul; m.material.color.setHex(L.lock ? 0xff4a3a : 0xffc45a);
+    m.material.opacity = 0.62 + 0.36*pul; m.material.color.setHex(L.lock ? 0xff3a22 : 0xffe040);
   } else if(this.laneM) this.laneM.visible = false;
   const B = live ? e.beam : null;
   if(B && (B.on || B.charge > 0)){
@@ -476,6 +476,7 @@ function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } 
 const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
+function sayLow(e, s){ if(G.fx && G.fx.text) G.fx.text(s, e.x + e.face*0.6, e.y + 1.3, e.z + 0.5, 'onoma'); else say(e, s); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
 const O = {
@@ -493,6 +494,7 @@ function xHi(r){ return G.cam.x + G.cam.halfW - (r||0.8) - 0.4; }
 function clampX(x, r){ const a = xLo(r), b = xHi(r); return a < b ? clamp(x, a, b) : (a+b)/2; }
 function clampZ(z){ return clamp(z, G.cfg.ZMIN + 0.25, G.cfg.ZMAX - 0.25); }
 function H(o){ return Object.assign({ at:5, dur:4, x0:-0.2, x1:1.9, zr:0.6, y0:0, y1:2.2, dmg:10, kb:0.1, up:0, stun:18, kind:'slash', power:1 }, o); }
+const SFX_FLAP = { vol:0.4, pitch:0.7 }, SFX_FIRE = { pitch:0.7 };
 const LOG = [];
 function log(s){ LOG.push(G.time.sceneTick + ':' + s); if(LOG.length > 300) LOG.shift(); }
 // start a follow-up from inside an attack's onEnd (h.attack refuses while the state is 'act')
@@ -527,7 +529,7 @@ function cleanup(e){
   marksOff(e);
   if(e.rig && e.rig.setAlpha && !e.dead) e.rig.setAlpha(1);
 }
-function onInterruptFor(e){ return ()=>{ cleanup(e); e.plan = null; e.kseq = null; e.cool = Math.max(e.cool||0, 36); }; }
+function onInterruptFor(e){ return ()=>{ cleanup(e); e.plan = null; e.kseq = null; e.parryT = 0; e.counterDue = false; e.cool = Math.max(e.cool||0, 36); }; }
 // outside any move nothing may stay floating / see-through / telegraphed
 function safety(e){
   if(e.atk || e.pending) return;
@@ -662,7 +664,7 @@ function visMats(){
   VISP._m = {
     goo: G.look.mat('#8cff6a', { rough:0.18, emissive:'#2a9a20', emissiveIntensity:0.35 }),
     gooHi: G.look.mat('#ffffff', { rough:0.2 }),
-    waveO: add('#b46cff', 0.85), waveI: add('#fff0ff', 0.95),
+    waveO: add('#a050ff', 0.9), waveI: add('#f6e0ff', 0.85),
   };
   return VISP._m;
 }
@@ -679,8 +681,9 @@ function makeVis(kind){
     obj.add(m); v.m = m;
   } else {
     const g = G.look.geo.torus(0.62, 0.1, 6, 18, Math.PI);
-    const a = new THREE.Mesh(g, M_.waveO); a.rotation.set(0, HPI, -HPI); a.scale.set(1, 1, 1.6);
-    const b = new THREE.Mesh(g, M_.waveI); b.rotation.set(0, HPI, -HPI); b.scale.set(0.95, 0.95, 0.7);
+    // a flat ")" crescent in the screen plane (the x-y plane), bulging toward the travel direction
+    const a = new THREE.Mesh(g, M_.waveO); a.rotation.set(0, 0, -HPI); a.scale.set(0.7, 1.25, 1.6);
+    const b = new THREE.Mesh(g, M_.waveI); b.rotation.set(0, 0, -HPI); b.scale.set(0.62, 1.15, 0.7); b.position.x = -0.04;
     const w = new THREE.Group(); w.add(a); w.add(b); obj.add(w); v.m = w;
   }
   return v;
@@ -787,7 +790,7 @@ function buildSlime(small){
   k.extras(k.faceG, sp(BS, -0.62*s, 0.55*s, 0.1*s), small ? 0.3 : 0.62, small ? 0.95 : 2.15);
   if(small) k.stars.scale.setScalar(0.6);
   k.tip.position.set(1.1*s, 0.6*s, 0); k.body.add(k.tip); k.base.position.set(0.4*s, 0.8*s, 0); k.body.add(k.base);
-  return k.rig(small ? 0.78 : 2.35, small ? 0.4 : 1.15);
+  return k.rig(small ? 0.78 : 2.4, small ? 0.4 : 1.15);
 }
 function poseSlime(k, e, P, T){
   const an = e.anim, p = animP(e);
@@ -903,7 +906,7 @@ const SLIME_M = {
         const S = [[0,0],[1.7, -0.75*sd],[-1.7, 0.75*sd]];
         for(let i=0;i<3;i++) e.gooM[i] = markOn(e, clampX(px + S[i][0], 0.6), clampZ(pz + S[i][1]), 1.0, false); }
       if(t===16 || t===24 || t===32){ const i = (t - 16)/8, m = e.gooM && e.gooM[i];
-        if(m){ m.lock = true; const pr = lob(e, m, 42, { kind:'ball', vis:'goo', dmg:12, ox:1.0, oy:1.3,
+        if(m){ m.lock = true; const pr = lob(e, m, 36, { kind:'ball', vis:'goo', dmg:12, ox:1.0, oy:1.3,
           boom:{ r:1.0, zr:0.7, dmg:12, power:2, kind:'blunt', up:0.16, y0:-0.5, y1:1.5 } }); if(pr) pr.splash = 'ring'; }
         sfx('shoot'); } },
     onEnd(e){ after(e, 84); } },
@@ -944,10 +947,12 @@ function slimeletAI(e){
   if(!t){ h.stop(e); return; }
   h.face(e, t);
   const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z);
-  if(e.cool > 0){ const f = h.flank(e, t, 2.2); h.walkTo(e, f.x, f.z); h.face(e, t); return; }
+  // flank spot beside the hero (same rule as h.flank, without allocating)
+  const side = e.x < t.x ? -1 : 1, fz = clampZ(t.z + (e.id%3 - 1)*0.35);
+  if(e.cool > 0){ h.walkTo(e, t.x + side*2.2, fz); h.face(e, t); return; }
   if(adx < 2.2 && adx > 0.5 && adz < 0.45){
     if(h.token(e)) h.attack(e, SLIMELET_HOP, 20); else { h.stop(e); h.wait(e, 24); }
-  } else { const f = h.flank(e, t, 1.6); h.walkTo(e, f.x, f.z); }
+  } else h.walkTo(e, t.x + side*1.6, fz);
 }
 
 // ================================================================ 2) ひりゅう ヴォルカ — chubby baby dragon
@@ -1055,17 +1060,17 @@ function fireShot(e){
   G.combat.shoot({ owner:e, kind:'fire', x:x0, y:0.32, z:e.z, vx:e.face*0.15, vz:aim, vy:0, grav:0, onGround:'slide',
     dmg:12, r:0.42, life:110, power:1, kb:0.12, up:0.1, stun:18 });
   fx('flame', x0 - e.face*0.3, 0.4, e.z + 0.2, O.flameS);
-  sfx('shoot', { pitch:0.7 });
+  sfx('shoot', SFX_FIRE);
 }
 function diveFn(e, t){
-  const p = fh().target(e), HY = 2.6;
+  const p = fh().target(e), HY = 1.75;
   if(t===0){ G.setAnim(e, 'fly'); e.gravScale = 0; e.onGround = false; e.diveLand = false; e.diveMark = null; e.vy = 0.05;
     say(e, 'とんでやる〜！'); sfx('jump'); fx('dust', e.x, 0.05, e.z, O.dust8); G.bus.emit('jump', { ent:e }); }
   if(t < 122){ e.gravScale = 0; e.onGround = false; e.vy = (HY + 0.15*Math.sin(t*0.12) - e.y)*0.08;
     if(p && t < 100){ const sd = e.x < p.x ? -1 : 1; const tx = clampX(p.x + sd*2.4, e.radius);
       e.vx = clamp((tx - e.x)*0.04, -0.06, 0.06); e.vz = clamp((p.z - e.z)*0.04, -0.04, 0.04); if(Math.abs(p.x - e.x) > 0.1) e.face = p.x > e.x ? 1 : -1; }
     else { e.vx *= 0.8; e.vz *= 0.8; }
-    if(t%16===0) sfx('dodge', { vol:0.4, pitch:0.7 });
+    if(t%16===0) sfx('dodge', SFX_FLAP);
   }
   if(t>=56 && t<100 && p){
     if(!e.diveMark){ e.diveMark = markOn(e, clampX(p.x, 1), clampZ(p.z), 1.6, false); sfx('alert'); }
@@ -1109,7 +1114,7 @@ const DRAGON_M = {
         const S = [[0,0],[1.8, -0.8*sd],[-1.8, 0.8*sd]];
         for(let i=0;i<3;i++) e.gooM[i] = markOn(e, clampX(px + S[i][0], 0.6), clampZ(pz + S[i][1]), 1.1, false); }
       if(t===16 || t===24 || t===32){ const i = (t - 16)/8, m = e.gooM && e.gooM[i];
-        if(m){ m.lock = true; lob(e, m, 42, { kind:'fire', dmg:12, ox:1.2, oy:2.2, boom:{ r:1.1, zr:0.75, dmg:12, power:2, kind:'fire', up:0.16, y0:-0.5, y1:1.6, fx:'flame' } }); }
+        if(m){ m.lock = true; lob(e, m, 34, { kind:'fire', dmg:12, ox:1.2, oy:2.2, boom:{ r:1.1, zr:0.75, dmg:12, power:2, kind:'fire', up:0.16, y0:-0.5, y1:1.6, fx:'flame' } }); }
         sfx('shoot', { pitch:0.8 }); fx('flame', e.x + e.face*1.2, 2.2, e.z + 0.3, O.flameS); } },
     onEnd(e){ after(e, 84); } },
 };
@@ -1324,6 +1329,8 @@ function kuroBlock(e, info){
   if(!ready || (info.power||1) > 1) return false;
   const src = info.src; if(!src) return false;
   if(U.sign(src.x - e.x) !== e.face) return false;
+  if(e.parryT > 0){ e.flashT = 0; return true; }             // the guard holds for the whole stance
+
   if(G.time.tick < (e.parryUntil||0)) return false;
   if(rng() >= 0.25) return false;
   e.parryUntil = G.time.tick + 80;
@@ -1452,7 +1459,7 @@ function buildEmperor(){
   k.tail = k.grp(k.hips, [-1.0, 0.45, 0]);
   k.part(k.tail, 'tail', (b)=>{ b.add(sph(0.2,12,10), c.FUR, [-0.1,0.1,0]); b.add(sph(0.14,10,8), c.FUR_L, [-0.2,0.22,0]); });
   k.extras(k.head, [0.4, 1.35, 0.8], 0.9, 1.9);
-  return k.rig(3.9, 1.2);
+  return k.rig(3.3, 1.2);
 }
 function poseEmperor(k, e, P, T){
   const an = e.anim, p = animP(e), hit = e.animHit || 0.35;
@@ -1535,7 +1542,7 @@ function buildKnight(){
   k.tail = k.grp(k.hips, [-0.6, 0.28, 0]);
   k.part(k.tail, 'tail', (b)=>{ b.add(sph(0.14,10,8), c.FUR, [-0.06,0.06,0]); b.add(sph(0.1,8,6), '#4e4659', [-0.14,0.14,0]); });
   k.extras(k.head, [0.35, 1.25, 0.66], 0.8, 1.75);
-  return k.rig(3.3, 1.0);
+  return k.rig(3.0, 1.0);
 }
 function poseKnight(k, e, P, T){
   const an = e.anim, p = animP(e), hit = e.animHit || 0.35;
@@ -1609,7 +1616,7 @@ function summonFn(e, t){
 }
 function pressFn(e, t){
   if(t===0){
-    const p = fh().target(e), air = 50;
+    const p = fh().target(e), air = 44;
     const tx = p ? clampX(p.x, e.radius) : e.x, tz = p ? clampZ(p.z) : e.z;
     const dx = clamp(tx - e.x, -4.5, 4.5), dz = clamp(tz - e.z, -1.8, 1.8);
     e.pressVx = dx/air; e.pressVz = dz/air; e.pressLand = false; e.pressUp = 0;
@@ -1681,9 +1688,8 @@ const KN_M = {
     fn(e, t){ e.vx = 0; e.vz = 0;
       if(t===0) G.setAnim(e, 'rise', 52);
       if(t < 60 && t%6===0) fx('smoke', e.x + (rng()-0.5)*1.6, 0.4 + rng()*1.8, e.z + 0.3, O.smoke);
-      if(t===20) say(e, 'これが ほんとうの すがた…！');
       if(t===52){ G.setAnim(e, 'roar', 38, 0.3); shake(5, 30); sfx('bossRoar'); fx('shock', e.x, 0.02, e.z, O.shockR); } },
-    onEnd(e){ e.transforming = false; e.intangible = false; e.cool = 30; e.plan = null; } },
+    onEnd(e){ e.transforming = false; e.intangible = false; e.cool = 30; e.plan = null; knightIntro(e); } },
   spin: { id:'kn_spin', anim:'attack2', len:74,
     hits:[ H({ at:10, dur:52, rehit:14, x0:-2.1, x1:2.1, zr:0.9, y0:0, y1:2.4, dmg:12, kb:0.16, up:0.1, stun:20, power:1, kind:'slash' }) ],
     fn(e, t){ if(t===0){ G.setAnim(e, 'attack2', 74, 0.14); say(e, 'くるくる やみぎり！'); }
@@ -1750,6 +1756,11 @@ function swapRig(e, rig){
   e.rig = rig;
   if(rig && rig.root){ G.scene.add(rig.root); rig.root.position.set(e.x, e.y, e.z); }
 }
+function knightIntro(e){
+  if(!e.introDue) return;
+  e.introDue = false;
+  G.bus.emit('bossIntro', { boss:e, name:'あんこくナイト', title:'ダークワンワンたいてい しんのすがた', type:'emperor' });
+}
 function empTransform(e){
   cleanup(e);
   e.form = 2; e.transforming = true;
@@ -1768,9 +1779,10 @@ function empTransform(e){
   fx('smoke', e.x, 0.8, e.z, O.smokeBig); fx('poof', e.x, 1.6, e.z + 0.2, O.purify);
   if(G.fx && G.fx.flash) G.fx.flash('#3a1050', 0.5, 14);
   shake(6, 40);
-  say(e, 'これが ほんとうの すがた…！');
+  // the line is placed at mid-body height (same popup h.say uses) so the name banner above does not cover it
+  sayLow(e, 'これが ほんとうの すがた…！');
   G.bus.emit('bossPhase', { boss:e, phase:2 });
-  G.bus.emit('bossIntro', { boss:e, name:'あんこくナイト', title:'ダークワンワンたいてい しんのすがた', type:'emperor' });
+  e.introDue = true; knightIntro(e);
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;
   G.combat.start(e, KN_M.transform);
@@ -1783,7 +1795,7 @@ function bossKO(e){ cleanup(e); e.plan = null; e.kseq = null; if(e.minions){ for
 const HELP_GIVEUP = ['ボス〜！', 'まって〜'], SLIME_GIVEUP = ['ぷる〜ん…', 'まって〜'];
 G.foes.define('slime', {
   name:'キングスライム', title:'ワンワンていこく だい5のしょう', boss:true, bossB:true, phaseLine:'ぷるぷる〜っ！ おこったぞ〜！',
-  hp:700, poise:90, weight:3.5, radius:1.15, height:2.35, spd:0.04, score:3000, xp:130, entrance:'drop', recover:30,
+  hp:700, poise:90, weight:3.5, radius:1.15, height:2.4, spd:0.04, score:3000, xp:130, entrance:'drop', recover:30,
   build(){ return buildSlime(false); },
   init(e){ common(e); e.splitN = 0; e.splitDue = 0; e.minions = []; },
   ai: slimeAI,
