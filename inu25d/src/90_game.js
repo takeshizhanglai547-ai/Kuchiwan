@@ -176,7 +176,7 @@ function startRun(){
 const play = G.scenes.play = {
   enter(params){
     G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
-    G.hitStop = 0; G.paused = false;
+    G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
     game.cutinT = 0; game.clearT = 0; game.koT = 0; this.cleared = false; this.over = false;
@@ -204,6 +204,7 @@ const play = G.scenes.play = {
   pause(on){
     if(on===G.paused) return;
     G.paused = on;
+    if(G.fx) G.fx.worldFrozen = !!on;
     if(on){
       uiShow('pause', { soundOn:game.soundOn,
         onResume:()=> this.pause(false),
@@ -293,6 +294,7 @@ const play = G.scenes.play = {
   },
   gameOver(){
     this.over = true; touch(false);
+    if(G.fx) G.fx.worldFrozen = true;
     bgm('over');
     uiShow('over', { onRetry:()=>{ game.lives = game.diff.lives; G.go('play', { stage:game.stageIndex }); }, onTitle:()=> G.go('title') });
     G.paused = true;

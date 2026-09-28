@@ -481,7 +481,15 @@ G.start = function(){
 };
 G.stop = function(){ running = false; };
 // deterministic stepping for tests (no rAF): advance n ticks and render once
-G.step = function(n){ for(let i=0;i<(n||1);i++) tick(); syncVisuals(1); const sc=G.scenes[G.sceneName]; if(sc && sc.frame) sc.frame(G.cfg.TICK); G.cam.frame(G.cfg.TICK); renderNow(); };
+// every tick also runs the per-frame work (camera, fx, ui) exactly like 60 fps play; only the render is skipped
+G.step = function(n){
+  for(let i=0;i<(n||1);i++){
+    tick();
+    const sc=G.scenes[G.sceneName];
+    try { if(sc && sc.frame) sc.frame(G.cfg.TICK); G.cam.frame(G.cfg.TICK); } catch(err){ G.logError('step.frame', err); }
+  }
+  syncVisuals(1); renderNow();
+};
 // one frame's worth of rendering; renderer.info covers the whole frame (post passes included)
 function renderNow(){
   const r = G.renderer; if(!r) return;

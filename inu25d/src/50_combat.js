@@ -393,6 +393,7 @@ G.props = {
     e.dead = true; e.removeMe = true;
     if(G.fx && G.fx.burst){ G.fx.burst('poof', e.x, 0.5, e.z, { scale:1 }); G.fx.burst('stars', e.x, 0.6, e.z, { count:6 }); }
     G.bus.emit('propBreak', { ent:e, kind:e.type, x:e.x, z:e.z });
+    if(G.audio && G.audio.sfx) G.audio.sfx('pop');
     const drops = e.drop ? [].concat(e.drop) : [G.rng()<0.5 ? 'coin' : (G.rng()<0.5 ? 'bone' : 'star')];
     for(const d of drops){
       const n = d==='coin' ? 3 : 1;

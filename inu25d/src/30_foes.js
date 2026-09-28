@@ -54,6 +54,7 @@ const h = {
     if(w>0){
       G.setAnim(e, def.windupAnim || 'windup', w);
       if(G.fx && G.fx.alert && !def.noAlert) G.fx.alert(e);
+      if(G.audio && G.audio.sfx && !def.noAlert) G.audio.sfx('alert', { vol:0.6 });
       G.bus.emit('alert', { ent:e });
     }
     return true;

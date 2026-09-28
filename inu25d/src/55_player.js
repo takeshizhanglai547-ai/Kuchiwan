@@ -345,6 +345,7 @@ function checkStomp(p){
     p.vy = 0.2; p.djump = false; p.airCount = 0; p.stompUsed = true;
     G.setAnim(p, 'jump');
     G.bus.emit('stomp', { ent:p, target:f });
+    if(G.audio && G.audio.sfx) G.audio.sfx('boing');
     if(G.fx && G.fx.text) G.fx.text('ふみっ！', f.x, top + 0.3, f.z, 'onoma');
     break;
   }
