@@ -1,0 +1,106 @@
+/* BERSERK 黒い剣士 ─蝕の夜─  (fan-made belt action) */
+:root {
+  --bk-bg: #0b0708;
+  --bk-ink: #e9dccb;
+  --bk-blood: #b3121b;
+  --bk-ember: #e2672b;
+  --bk-iron: #8d8479;
+  --bk-font-jp: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; background: var(--bk-bg); overflow: hidden; }
+body {
+  color: var(--bk-ink);
+  font-family: var(--bk-font-jp);
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+#bk-root {
+  position: fixed; inset: 0;
+  background: var(--bk-bg);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+}
+#bk-canvas { display: block; background: #000; touch-action: none; }
+
+/* ── touch controls ── */
+#bk-touch { position: fixed; inset: 0; pointer-events: auto; touch-action: none; z-index: 5; }
+#bk-touch[hidden] { display: none !important; }
+.bk-btn {
+  position: absolute;
+  width: var(--sz); height: var(--sz);
+  border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 38%, rgba(70, 30, 26, .34), rgba(12, 6, 6, .30) 70%);
+  border: 2px solid rgba(190, 120, 90, .45);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset, 0 2px 10px rgba(0,0,0,.5);
+  color: rgba(245, 225, 205, .9);
+  pointer-events: none; /* hit-testing is done in JS for multi-touch sliding */
+  transition: transform .05s, background .05s;
+}
+.bk-btn b { font-weight: 800; font-size: calc(var(--sz) * .40); line-height: 1; text-shadow: 0 0 6px rgba(0,0,0,.9); }
+.bk-btn i { font-style: normal; font-size: calc(var(--sz) * .15); opacity: .75; margin-top: 2px; letter-spacing: .05em; }
+.bk-btn.on {
+  transform: scale(.92);
+  background: radial-gradient(circle at 50% 40%, rgba(200, 40, 30, .8), rgba(60, 8, 8, .75) 72%);
+  border-color: rgba(255, 170, 120, .9);
+}
+#bk-b-atk { --sz: min(82px, 22vh); right: calc(var(--sar) + min(100px, 26vh)); bottom: calc(var(--sab) + min(14px, 3.5vh)); }
+#bk-b-jmp { --sz: min(70px, 19vh); right: calc(var(--sar) + min(16px, 4vh)); bottom: calc(var(--sab) + min(68px, 18vh)); }
+#bk-b-sht { --sz: min(58px, 15.5vh); right: calc(var(--sar) + min(112px, 29vh)); bottom: calc(var(--sab) + min(112px, 29vh)); }
+#bk-b-sp  { --sz: min(52px, 14vh); right: calc(var(--sar) + min(26px, 7vh)); bottom: calc(var(--sab) + min(152px, 40vh)); }
+#bk-b-awk { --sz: min(50px, 13.5vh); right: calc(var(--sar) + min(180px, 47vh)); bottom: calc(var(--sab) + min(150px, 39vh)); opacity: .22; }
+#bk-b-awk.ready { opacity: 1; border-color: rgba(255, 60, 40, 1); animation: bk-pulse .6s ease-in-out infinite alternate; }
+#bk-b-pause { --sz: min(38px, 10vh); right: calc(var(--sar) + 8px); top: calc(var(--sat) + min(58px, 15vh)); opacity: .7; }
+#bk-b-pause b { font-size: calc(var(--sz) * .32); letter-spacing: -.1em; }
+.bk-btn.bk-hide { display: none; }
+@keyframes bk-pulse { from { box-shadow: 0 0 4px rgba(255, 40, 20, .6); } to { box-shadow: 0 0 22px rgba(255, 40, 20, 1); } }
+
+#bk-stick {
+  position: absolute; width: 128px; height: 128px; margin: -64px 0 0 -64px;
+  border-radius: 50%;
+  border: 2px solid rgba(190, 120, 90, .45);
+  background: radial-gradient(circle, rgba(40, 18, 16, .35), rgba(0,0,0,.25));
+  pointer-events: none;
+}
+#bk-stick[hidden] { display: none !important; }
+#bk-knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(230, 190, 160, .85), rgba(110, 50, 40, .85));
+  box-shadow: 0 0 10px rgba(0,0,0,.6);
+}
+
+/* ── rotate hint ── */
+#bk-rotate {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 4, 5, .92);
+  padding: 16px;
+}
+#bk-rotate[hidden] { display: none !important; }
+.bk-rot-card { text-align: center; max-width: 320px; }
+.bk-rot-card p { font-size: 18px; line-height: 1.7; margin: 18px 0; }
+.bk-rot-card strong { color: #ff6b4a; }
+.bk-rot-icon {
+  width: 64px; height: 104px; margin: 0 auto;
+  border: 3px solid var(--bk-ink); border-radius: 10px;
+  animation: bk-rot 1.6s ease-in-out infinite;
+}
+@keyframes bk-rot { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+#bk-rot-dismiss {
+  font: inherit; font-size: 15px; color: var(--bk-ink);
+  background: transparent; border: 1px solid var(--bk-iron); border-radius: 4px;
+  padding: 10px 18px; touch-action: manipulation;
+}
+#bk-rot-dismiss:focus-visible { outline: 2px solid var(--bk-ember); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .bk-rot-icon, #bk-b-awk.ready { animation: none; }
+}

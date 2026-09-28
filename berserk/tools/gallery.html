@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>BERSERK sprite gallery (dev tool)</title>
+<style>
+  body { margin: 0; background: #1a1414; color: #ddd; font: 12px sans-serif; }
+  #bk-root { display: none; }
+  canvas.g { display: block; }
+</style>
+</head>
+<body>
+<!-- ゲーム本体の DOM（core.js が参照する） -->
+<div id="bk-root"><canvas id="bk-canvas"></canvas><div id="bk-touch" hidden><div id="bk-stick"><div id="bk-knob"></div></div></div><div id="bk-rotate" hidden><button id="bk-rot-dismiss"></button></div></div>
+<canvas class="g" id="gal"></canvas>
+<script src="../js/core.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/audio_music.js"></script>
+<script src="../js/rig.js"></script>
+<script src="../js/combat.js"></script>
+<script src="../js/items.js"></script>
+<script src="../js/heroes.js"></script>
+<script src="../js/hero_guts.js"></script>
+<script src="../js/hero_casca.js"></script>
+<script src="../js/hero_skull.js"></script>
+<script src="../js/hero_schierke.js"></script>
+<script src="../js/enemies.js"></script>
+<script src="../js/enemies_roster.js"></script>
+<script src="../js/bosses_a.js"></script>
+<script src="../js/bosses_b.js"></script>
+<script src="../js/boss_final.js"></script>
+<script src="../js/stages.js"></script>
+<script src="../js/stage_1.js"></script>
+<script src="../js/stages_2to4.js"></script>
+<script src="../js/stages_5to6.js"></script>
+<script>
+/*
+ * スプライト・ギャラリー（開発用）
+ *   gallery.html?what=heroes | enemies | bosses | hero:guts | enemy:undead
+ *   各キャラの主要ポーズ / 技のキーフレームを拡大表示する。
+ */
+(function () {
+  const q = new URLSearchParams(location.search);
+  const what = q.get('what') || 'heroes';
+  const Z = parseFloat(q.get('zoom') || '2');
+  const cv = document.getElementById('gal'), c = cv.getContext('2d');
+  const R = BK.rig;
+  const cellW = 130, cellH = 150;
+  const rows = [];
+  function heroRow(def) {
+    const cells = [['idle', R.idle(def.stance, 0)], ['walk', R.walk(def.stance, 1.2, def.walkOpt)], ['run', R.run(def.stance, 1.2, def.runOpt)]];
+    for (const k of ['atk1', 'atk2', 'atk3', 'atk4', 'dash', 'jumpAtk', 'rising', 'charge', 'special', 'shoot', 'throw', 'awaken']) {
+      const m = def.moves[k];
+      if (!m) continue;
+      // 攻撃判定が出るフレーム付近
+      let f = m.hits && m.hits[0] ? m.hits[0].f[0] + 1 : Math.floor(m.dur / 3);
+      cells.push([k + '@' + f, R.sample(m.kf, f, def.stance), m, f]);
+    }
+    rows.push({ label: def.name + ' (' + def.id + ')', spec: def.spec, cells, colors: null });
+  }
+  function enemyRow(def) {
+    const cells = [];
+    if (def.spec) {
+      cells.push(['idle', R.idle(def.stance, 0)], ['walk', R.walk(def.stance, 1.2, def.walkOpt)]);
+      for (const k in def.moves || {}) {
+        const m = def.moves[k];
+        if (!m.kf) continue;
+        const f = m.hits && m.hits[0] ? m.hits[0].f[0] + 1 : Math.floor(m.dur / 2);
+        cells.push([k + '@' + f, R.sample(m.kf, f, def.stance), m, f]);
+      }
+    }
+    rows.push({ label: def.name + ' (' + def.id + ')' + (def.boss ? ' BOSS' : ''), spec: def.spec, cells, def });
+  }
+  if (what === 'heroes') BK.heroOrder.forEach(id => heroRow(BK.heroes[id]));
+  else if (what.startsWith('hero:')) heroRow(BK.heroes[what.slice(5)]);
+  else if (what === 'enemies' || what === 'bosses') Object.values(BK.enemyTypes).filter(d => !!d.boss === (what === 'bosses')).forEach(enemyRow);
+  else if (what.startsWith('enemy:')) enemyRow(BK.enemyTypes[what.slice(6)]);
+
+  // 1行が長すぎると見づらいので maxCols ごとに折り返す
+  const maxCols = parseInt(q.get('cols') || '6', 10);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.cells.length > maxCols) {
+      const rest = { label: r.label + ' (続き)', spec: r.spec, cells: r.cells.slice(maxCols), def: r.def };
+      r.cells = r.cells.slice(0, maxCols);
+      rows.splice(i + 1, 0, rest);
+    }
+  }
+  const cols = Math.min(maxCols, Math.max(4, ...rows.map(r => Math.max(1, r.cells.length))));
+  const bossScale = what === 'bosses' ? 2.2 : 1;
+  cv.width = cols * cellW * Z * bossScale; cv.height = rows.length * (cellH * bossScale + 20) * Z + 10;
+  c.scale(Z, Z);
+  c.fillStyle = '#2a2222'; c.fillRect(0, 0, cv.width, cv.height);
+  rows.forEach((row, ri) => {
+    const y0 = ri * (cellH * bossScale + 20);
+    c.fillStyle = '#ffd9a0'; c.font = '11px sans-serif'; c.fillText(row.label, 4, y0 + 12);
+    if (row.def && !row.def.spec && row.def.draw) {
+      // 自前描画の敵: ダミーの Enemy を作って描く
+      const poses = ['idle', 'walk'].concat(Object.keys(row.def.moves || {}));
+      poses.slice(0, cols).forEach((p, ci) => {
+        const e = new BK.Enemy(row.def, 0, 0, {});
+        e.entering = 0; e.intangible = false;
+        if (p !== 'idle' && p !== 'walk' && row.def.moves[p]) { e.move = row.def.moves[p]; e.mf = row.def.moves[p].hits && row.def.moves[p].hits[0] ? row.def.moves[p].hits[0].f[0] + 1 : 10; e.state = 'move'; }
+        if (p === 'walk') e.state = 'walk';
+        e.animT = 20;
+        const cx = ci * cellW * bossScale + cellW * bossScale / 2, cy = y0 + cellH * bossScale + 8;
+        BK.cam.x = 0;
+        e.x = cx; e.y = cy - BK.FLOOR_TOP; e.face = 1;
+        c.fillStyle = '#342a2a'; c.fillRect(ci * cellW * bossScale + 2, y0 + 16, cellW * bossScale - 4, cellH * bossScale - 4);
+        try { e.drawShadow(c); e.draw(c); } catch (err) { c.fillStyle = 'red'; c.fillText(String(err).slice(0, 30), cx - 50, cy - 40); }
+        c.fillStyle = '#aaa'; c.fillText(p, ci * cellW * bossScale + 6, y0 + 28);
+      });
+      return;
+    }
+    row.cells.forEach(([lab, pose, m, f], ci) => {
+      const cx = ci * cellW + cellW / 2, cy = y0 + cellH + 8;
+      c.fillStyle = '#342a2a'; c.fillRect(ci * cellW + 2, y0 + 16, cellW - 4, cellH - 4);
+      c.strokeStyle = '#554'; c.beginPath(); c.moveTo(ci * cellW + 4, cy); c.lineTo(ci * cellW + cellW - 4, cy); c.stroke();
+      c.save(); c.translate(cx - 20, cy); c.scale(row.spec.scale || 1, row.spec.scale || 1);
+      R.draw(c, pose, row.spec, { t: 10 });
+      c.restore();
+      // 攻撃判定の可視化
+      if (m && m.hits) for (const h of m.hits) if (f >= h.f[0] && f <= h.f[1]) {
+        c.strokeStyle = 'rgba(255,60,60,0.8)'; c.strokeRect(cx - 20 + h.x[0], cy - h.z[1], h.x[1] - h.x[0], h.z[1] - h.z[0]);
+      }
+      c.fillStyle = '#aaa'; c.fillText(lab, ci * cellW + 6, y0 + 28);
+    });
+  });
+  window.GALLERY_READY = true;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0708">
+<title>BERSERK 黒い剣士 ─蝕の夜─</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=UnifrakturMaguntia&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--@BUILD-BODY-START-->
+<div id="bk-root">
+  <canvas id="bk-canvas" aria-label="BERSERK ベルトアクションゲーム画面"></canvas>
+
+  <div id="bk-touch" hidden>
+    <div id="bk-stick" hidden><div id="bk-knob"></div></div>
+    <div class="bk-btn" data-btn="atk" id="bk-b-atk"><b>斬</b><i>攻撃</i></div>
+    <div class="bk-btn" data-btn="jmp" id="bk-b-jmp"><b>跳</b><i>ジャンプ</i></div>
+    <div class="bk-btn" data-btn="sht" id="bk-b-sht"><b>射</b><i>射撃</i></div>
+    <div class="bk-btn bk-sm" data-btn="sp" id="bk-b-sp"><b>必</b><i>必殺</i></div>
+    <div class="bk-btn bk-sm bk-awk" data-btn="awk" id="bk-b-awk"><b>狂</b><i>覚醒</i></div>
+    <div class="bk-btn bk-xs" data-btn="pause" id="bk-b-pause"><b>&#10074;&#10074;</b></div>
+  </div>
+
+  <div id="bk-rotate" hidden>
+    <div class="bk-rot-card">
+      <div class="bk-rot-icon"></div>
+      <p>スマホを<strong>横向き</strong>にして遊んでください</p>
+      <button type="button" id="bk-rot-dismiss">このまま遊ぶ</button>
+    </div>
+  </div>
+</div>
+<!--@BUILD-BODY-END-->
+
+<!--@BUILD-SCRIPTS-START-->
+<script src="js/core.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/audio_music.js"></script>
+<script src="js/rig.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/items.js"></script>
+<script src="js/heroes.js"></script>
+<script src="js/hero_guts.js"></script>
+<script src="js/hero_casca.js"></script>
+<script src="js/hero_skull.js"></script>
+<script src="js/hero_schierke.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/enemies_roster.js"></script>
+<script src="js/bosses_a.js"></script>
+<script src="js/bosses_b.js"></script>
+<script src="js/boss_final.js"></script>
+<script src="js/stages.js"></script>
+<script src="js/stage_1.js"></script>
+<script src="js/stages_2to4.js"></script>
+<script src="js/stages_5to6.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+<!--@BUILD-SCRIPTS-END-->
+</body>
+</html>
