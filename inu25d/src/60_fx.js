@@ -260,7 +260,7 @@ function updateParticles(k){
       if(qy[i] < 0.012){ qy[i]=0; qx[i]=0; qz[i]=0; grav[i]=0; spin[i]=0; flags[i] = f | F_REST; }
     }
     rot[i] += spin[i]*k;
-    if(f & F_TRAILER && ((ag/3)|0) !== ((Math.max(0,a0)/3)|0) && np < capP){
+    if(f & F_TRAILER && ((ag/3)|0) !== ((Math.max(0,a0)/3)|0) && np < capP*0.8){
       const x=px[i], y=py[i], z=pz[i], r=cr[i], g=cg[i], b=cb[i];
       sp(T.glow, x, y, z); S.s0=0.2; S.s1=0.05; S.life=16; S.add=0.6; S.a=0.8; S.fout=0.8; S.r=r; S.g=g; S.b=b; S.vy=-0.004; emit();
     }
@@ -550,7 +550,8 @@ function updateEmitters(k){
   for(let i=emitters.length-1;i>=0;i--){
     const e = emitters[i];
     e.acc += e.rate*k*fxs();
-    while(e.acc >= 1){ e.acc -= 1; try { e.fn(e); } catch(err){ G.logError('fx.emitter', err); } e.n++; }
+    while(e.acc >= 1){ e.acc -= 1; if(np > capP*0.75) continue;   // ambient emitters yield to hit effects
+      try { e.fn(e); } catch(err){ G.logError('fx.emitter', err); } e.n++; }
     e.t += k;
     if(e.t >= e.dur) emitters.splice(i,1);
   }
@@ -1408,12 +1409,12 @@ const HANDLERS = {
     ring(e.x, 0.05, e.z, { flat:true, scale:1.3, color:'#ffd0ea' }); sp(T.glow, e.x, (e.y||0)+1.0, e.z); S.s0 = 1.1; S.s1 = 1.3; S.asp = 2.6; S.life = 40; S.add = 1; S.a = 0.5; S.fin = 0.2; S.fout = 0.5; sc_('#fff0f8'); emit(); },
   bossDown(d){ const e = d.boss || {}; const x = e.x||G.cam.x, y = (e.y||0), z = (e.z||0)+0.3, h = (e.rig && e.rig.height) || e.height || 3;
     flash('#ffffff', 0.6, 16); purify(x, y, z, { scale: clamp(h/2.5, 1, 2) });
-    addEmitter(130, 1/22, ()=>{ const [a,b] = G.cam.viewRange(); fireworks(R(a+1.5, b-1.5), R(3.2, 5.2), R(-1.5,-0.5), { count:1, scale:1.2 }); }, x, y, z);
+    addEmitter(130, 1/22, ()=>{ const [a,b] = G.cam.viewRange(); fireworks(R(a+1.5, b-1.5), R(2.4, 3.8), R(-1.5,-0.5), { count:1, scale:1.2 }); }, x, y, z);
     fireworks(x, y + h + 1.2, z - 0.5, { count:1, scale:1.1 }); },
-  stageClear(){ addEmitter(180, 1.6, (em)=>{ const [a,b] = G.cam.viewRange(), topY = G.cam.y + (b-a)/2/Math.max(0.5, G.camera.aspect) + 1.2;
+  stageClear(){ addEmitter(170, 1.2, (em)=>{ const [a,b] = G.cam.viewRange(), topY = G.cam.y + (b-a)/2/Math.max(0.5, G.camera.aspect) + 1.2;
       sp(T.conf, R(a, b), topY, R(-1.2, 1.6)); S.vx = R(-0.02,0.02); S.vy = R(-0.05,-0.02); S.grav = -0.003; S.flags = F_FLUTTER|F_FLOOR|F_WOB; S.wob = 0.15;
-      S.s0 = S.s1 = R(0.16,0.24); S.asp = 0.6; S.rot = ang(); S.spin = R(-0.2,0.2); S.life = 240; S.fout = 0.15; sc_(PICK(CONFETTI)); emit(); }, 0, 0, 0);
-    addEmitter(120, 1/30, ()=>{ const [a,b] = G.cam.viewRange(); fireworks(R(a+1.5, b-1.5), R(3.2,5), R(-1.6,-0.6), { count:1 }); }, 0, 0, 0); },
+      S.s0 = S.s1 = R(0.2,0.3); S.asp = 0.6; S.rot = ang(); S.spin = R(-0.2,0.2); S.life = 170; S.fout = 0.15; sc_(PICK(CONFETTI)); emit(); }, 0, 0, 0);
+    addEmitter(120, 1/30, ()=>{ const [a,b] = G.cam.viewRange(); fireworks(R(a+1.5, b-1.5), R(2.4,3.6), R(-1.6,-0.6), { count:1 }); }, 0, 0, 0); },
   bossIntro(){ flash('#ffffff', 0.45, 14); },
   bossPhase(d){ const e = d.boss; flash('#ffe0f0', 0.35, 10); if(e){ shock(e.x, 0.02, e.z, { scale:1.3, color:'#ffd0f0' }); smoke(e.x, e.y||0, e.z+0.3, { count:6 }); } },
   shoot(d){ if(d.x==null) return; const k = d.kind;

@@ -200,8 +200,8 @@ function buildEyes(D, T){
   D.xGeo = X.build(); D.sqGeo = S.build(); D.happyGeo = H.build();
   // open mouth (yell / hurt / cheer)
   const mo = B(), mp = a.mouthPos;
-  mo.add(G.look.geo.sphere(0.05, 12, 8), '#6b1e24', [mp[0], mp[1], 0], [0,0,0], [0.45,0.62,0.8]);
-  mo.add(G.look.geo.sphere(0.03, 10, 6), '#ff7d8f', [mp[0]+0.01, mp[1]-0.018, 0], [0,0,0], [0.45,0.5,0.9]);
+  mo.add(G.look.geo.sphere(0.05, 12, 8), '#6b1e24', [0, 0, 0], [0,0,0], [0.45,0.62,0.8]);
+  mo.add(G.look.geo.sphere(0.03, 10, 6), '#ff7d8f', [0.01, -0.018, 0], [0,0,0], [0.45,0.5,0.9]);
   D.mouthGeo = mo.build();
 }
 
@@ -510,7 +510,7 @@ function build(id, opts){
   const eyesX = mesh('eyesX', eyeP, sh.eyeMat, 0, false); eyesX.visible = false;
   const eyesSq = mesh('eyesSq', eyeP, sh.eyeMat, 0, false); eyesSq.visible = false;
   const eyesHappy = mesh('eyesHappy', eyeP, sh.eyeMat, 0, false); eyesHappy.visible = false;
-  const mouth = mesh('mouth', neck, sh.faceMat, 0, false); mouth.visible = false;
+  const mouth = mesh('mouth', neck, sh.faceMat, 0, false); mouth.visible = false; mouth.position.set(a.mouthPos[0], a.mouthPos[1], 0);
   const mouthC = new THREE.Vector3(a.mouthPos[0], a.mouthPos[1], 0);
   let glasses = null;
   if(gs.glasses){ glasses = grp(eyeP); mesh('glasses', glasses, sh.glassMat, 0.012, false); }
@@ -563,7 +563,7 @@ function build(id, opts){
   root.traverse(o=>{ if(!o.isMesh) return; if(o.userData.isOutline) rig.outlines.push(o);
     else if(o.material!==mat && o!==eyes && o!==eyesX && o!==eyesSq && o!==eyesHappy && o!==mouth && o!==stars) rig.sharedMeshes.push(o); });
   // default fists: tip follows the paw; kicks move it to the foot (see updateRig)
-  rig.tipHome = tip.parent; rig.footR = grp(legR, 0.09, -0.17, 0);
+  rig.tipHome = tip.parent; rig.footTip = grp(legR, 0.1, -0.17, 0); rig.footBase = grp(legR, 0.0, -0.06, 0);
   // settle once so a freshly built rig already stands in its idle pose
   updateRig(rig, { anim: opts.anim || (opts.menu ? 'pose' : 'idle'), animT:0, animLen:0, animHit:0.35, face:opts.face||1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 }, G.cfg.TICK, true);
   return rig;
@@ -817,6 +817,160 @@ const MOVES = {
 };
 const ONESHOT_LEN = { land:10, atk1:18, atk2:18, atk3:20, atk4:26, chargeAtk:30, airAtk:18, airAtk2:22, dodge:22, special:30,
   specialUp:30, specialDash:28, ult:80, hurt:18, getup:30, ko:50 };
+
+const KICKS = { kick:1, riseKick:1, spinKick:1 };
+function makeState(style){
+  const P = {}, Q = {};
+  for(const k of ALL){ P[k] = REST[style][k]; Q[k] = P[k]; }
+  const spring = ()=>({ x:0, v:0 });
+  return { P, Q, init:false, tw:1, runPh:0, stepN:0, blinkT:0, blinkNext:90+Math.random()*120, t:0,
+    eBack:spring(), eFlap:spring(), tYaw:spring(), tLift:spring(), cSwing:spring(), cFlare:spring(),
+    prevHY:0, rollSign:-1, lastAnim:'', eyeMode:'open', tpl:null, gemSpin:0 };
+}
+// damped spring toward target, frame-rate independent (fixed 1/120 s substeps)
+function spring(s, target, k, c, dt){
+  let n = Math.max(1, Math.ceil(dt*120)); const h = dt/n;
+  while(n--){ s.v += (k*(target - s.x) - c*s.v)*h; s.x += s.v*h; }
+  if(s.x!==s.x){ s.x = 0; s.v = 0; }
+}
+const ANIMS = { idle:1, run:1, jump:1, fall:1, land:1, atk1:1, atk2:1, atk3:1, atk4:1, charge:1, chargeAtk:1, airAtk:1, airAtk2:1,
+  dive:1, dodge:1, special:1, specialUp:1, specialDash:1, ult:1, hurt:1, down:1, getup:1, dizzy:1, ko:1, victory:1, pose:1, cheer:1 };
+
+function updateRig(rig, e, dt, first){
+  const st = rig.st, style = rig.style, rest = REST[style], P = st.P, Q = st.Q, n = rig.n;
+  let anim = e.anim; if(!ANIMS[anim]) anim = 'idle';
+  const T = e.animT || 0;
+  const len = e.animLen > 0 ? e.animLen : (ONESHOT_LEN[anim] || 0);
+  const p = len > 0 ? U.clamp(T/len, 0, 1) : 0;
+  const h = U.clamp(e.animHit==null ? 0.35 : e.animHit, 0.05, 0.95);
+  st.t += dt*60;
+  if(anim!==st.lastAnim){
+    st.lastAnim = anim;
+    if(anim==='dodge') st.backRoll = (e.vx||0)*(e.face||1) < -0.01;   // backward roll when dodging backward
+  }
+  for(let i=0;i<ALL.length;i++) Q[ALL[i]] = rest[ALL[i]];
+  let eyes = 'open', stars = false, oneshot = false, tpl = null, glow = 0;
+  const moves = MOVES[style];
+
+  switch(anim){
+    case 'idle': {
+      const t = st.t;
+      Q.sq += 0.018*Math.sin(t*0.075); Q.nod += 0.03*Math.sin(t*0.037);
+      Q.aLz += 0.05*Math.sin(t*0.075+1); Q.aRz += 0.035*Math.sin(t*0.075+1.6);
+      if(style==='fist'){ Q.y += 0.022*Math.abs(Math.sin(t*0.12)); Q.aLz += 0.08*Math.sin(t*0.24); Q.aRz += 0.08*Math.sin(t*0.24+1.5); }
+      Q.tail += 0.35*Math.sin(t*0.09);
+      break; }
+    case 'run': {
+      const spd = Math.hypot(e.vx||0, e.vz||0);
+      st.runPh += (0.2 + Math.min(spd, 0.16)*2.6) * dt*60;
+      const s = Math.sin(st.runPh), as = Math.abs(s);
+      const stepN = Math.floor((st.runPh + HP)/Math.PI);
+      if(stepN!==st.stepN){ st.stepN = stepN; if(e.id && !first && G.bus) G.bus.emit('step', { ent:e }); }
+      Q.lLz = 0.95*s; Q.lRz = -0.95*s;
+      const armAmp = style==='fist' ? 0.7 : 0.45;
+      Q.aLz += -0.8*s; Q.aRz += armAmp*s;
+      Q.y = 0.075*(1-as); Q.sq = 0.06*(1-as) - 0.06*as*as;
+      Q.lean = 0.24; Q.nod = -0.1; Q.twist = 0.12*s; Q.hy = -0.06*s;
+      Q.tail = 0.7*Math.sin(st.runPh*2);
+      break; }
+    case 'jump': case 'fall': {
+      const vy = e.vy||0;
+      if(anim==='jump' && vy>0){ Q.sq = 0.1 + U.clamp(vy*1.6, 0, 0.12); Q.lLz = 0.6; Q.lRz = -0.2; Q.aLz = 2.2; Q.aRz = rest.aRz + 0.9; Q.lean = -0.05; Q.nod = 0.15; }
+      else { Q.sq = 0.05; Q.lLz = 0.3; Q.lRz = 0.45; Q.aLz = 2.3 + 0.2*Math.sin(st.t*0.45); Q.aRz = rest.aRz + 1.0 + 0.15*Math.sin(st.t*0.45+1); Q.nod = 0.12; Q.mouth = vy < -0.25 ? 0.6 : 0; }
+      Q.lLx = 0.15; Q.lRx = 0.15; Q.aLx = 0.55; Q.aRx = 0.5;
+      break; }
+    case 'land': {
+      oneshot = true;
+      Q.sq = -0.3*Math.exp(-4*p)*Math.cos(9*p); Q.aLx += 0.35*(1-p); Q.aRx += 0.3*(1-p); Q.lLx += 0.12*(1-p); Q.lRx += 0.12*(1-p);
+      break; }
+    case 'charge': {
+      const c = U.clamp(e.charge||0, 0, 1), t = st.t;
+      Q.sq = -0.12 - 0.06*c; Q.lean = -0.06; Q.y = -0.02;
+      if(style==='fist'){ Q.aLz = -0.25; Q.aRz = -0.25; Q.aLx = 0.5; Q.aRx = 0.5; }
+      else { Q.aRz = -0.35; Q.aRy = -0.4; Q.wz = 0.95; Q.aLz = 0.8; }
+      Q.fx += (Math.random()-0.5)*0.022*(0.35+c); Q.side += (Math.random()-0.5)*0.05*c;
+      Q.lLx = 0.18; Q.lRx = 0.18;
+      eyes = 'sq'; glow = c*(0.7+0.3*Math.sin(t*0.5));
+      break; }
+    case 'dive': {
+      Q.roll = style==='fist' ? -0.5 : -0.75; Q.sq = 0.14; Q.mouth = 1; Q.aLz = 1.9; Q.lLz = -0.5; Q.lRz = -0.3;
+      if(style==='fist'){ Q.lRz = 1.4; Q.aRz = 1.9; tpl = 'kick'; } else { Q.aRz = 0.35; Q.wz = -1.95; }
+      break; }
+    case 'down': {
+      Q.roll = HP; Q.y = -0.14; Q.aLz = 2.4; Q.aRz = 2.2; Q.aLx = 0.8; Q.aRx = 0.8; Q.lLz = 0.45; Q.lRz = 0.25;
+      Q.sq = 0.02*Math.sin(st.t*0.08); eyes = 'x';
+      break; }
+    case 'dizzy': {
+      const t = st.t;
+      Q.side = 0.16*Math.sin(t*0.1); Q.tilt = 0.25*Math.sin(t*0.1+0.8); Q.nod = 0.08 + 0.12*Math.cos(t*0.1);
+      Q.aLz = -0.05; Q.aRz = 0.15; Q.aLx = 0.55 + 0.15*Math.sin(t*0.1); Q.aRx = 0.5; Q.fx = 0.05*Math.sin(t*0.1);
+      Q.sq = -0.03 + 0.03*Math.sin(t*0.2); Q.mouth = 0.5; eyes = 'x'; stars = true;
+      break; }
+    case 'victory': case 'cheer': {
+      const ph = ((T % 56)/56), hop = U.bump(ph, 0, 0.5);
+      Q.y = 0.2*hop; Q.sq = hop>0 ? 0.1*hop : 0; if(ph>0.5 && ph<0.62) Q.sq = -0.14*U.bump(ph,0.5,0.62);
+      const w = Math.sin(st.t*0.22);
+      if(anim==='victory' && style!=='fist'){ Q.aRz = 2.9; Q.wz = style==='gun' ? -1.4 : -0.2; Q.aRx = 0.3; Q.aLz = 2.2 + 0.4*w; Q.aLx = 0.6; }
+      else { Q.aLz = 2.6 + 0.35*w; Q.aRz = 2.6 - 0.35*w; Q.aLx = 0.55; Q.aRx = 0.55; if(style!=='fist') Q.wz = -0.3; }
+      Q.nod = 0.25; Q.mouth = 1; Q.tail = 0.9*Math.sin(st.t*0.5); Q.lLz = 0.3*hop; Q.lRz = -0.3*hop;
+      eyes = 'happy';
+      break; }
+    case 'pose': {
+      posePersonality(rig, Q, rest, T, st.t);
+      eyes = Q._eyes || 'open';
+      break; }
+    case 'hurt': {
+      oneshot = true; sampleKeys(T8.hurt, p, h, Q, rest);
+      // hurtDir = world direction the hit pushes us; in model space that is hurtDir*face
+      const pushFwd = (e.hurtDir||-(e.face||1))*(e.face||1) > 0;
+      if(pushFwd){ Q.lean = -Q.lean*0.8; Q.fx = -Q.fx; Q.nod = -Q.nod*0.6; }
+      eyes = 'sq';
+      break; }
+    case 'dodge': {
+      oneshot = true; sampleKeys(T8.dodge, p, h, Q, rest);
+      if(st.backRoll){ Q.roll = -Q.roll; Q.lean = -Q.lean; }
+      break; }
+    case 'getup': oneshot = true; sampleKeys(T8.getup, p, h, Q, rest); if(p<0.4) eyes = 'x'; break;
+    case 'ko': oneshot = true; sampleKeys(T8.ko, p, h, Q, rest); eyes = p<0.14 ? 'sq' : 'x'; stars = p>0.6; break;
+    case 'ult': {
+      oneshot = true; tpl = 'ult'; sampleKeys(T8.ult, p, h, Q, rest);
+      if(style==='fist'){ Q.aLz = Q.aRz; Q.aLx = Q.aRx + 0.2; }
+      if(style==='gun'){ Q.wz = -1.45; }
+      if(p>0.55 && p<0.7) eyes = 'sq';
+      break; }
+    default: {   // attacks / specials / air
+      oneshot = true;
+      tpl = (moves && moves[anim]) || (anim==='chargeAtk' ? 'chargeAtk' : 'hslash');
+      if(anim==='chargeAtk' && style!=='fist') tpl = 'chargeAtk';
+      const keys = T8[tpl] || T8.hslash;
+      sampleKeys(keys, p, h, Q, rest);
+      if(anim==='chargeAtk' && style==='hammer'){ Q.spin *= 1.6; }
+      if(style==='hammer' && (tpl==='over')) Q.sq *= 1.3;
+      if(tpl==='hurt') eyes='sq';
+    }
+  }
+  st.tpl = tpl;
+  if(TWOHAND[style] && (oneshot && anim!=='hurt' && anim!=='ko' && anim!=='getup' && anim!=='dodge') || (TWOHAND[style] && anim==='charge')){
+    Q.aLz = Q.aRz*0.95; Q.aLy = U.clamp(0.5 - Q.aRy*1.1, -1.2, 1.0); Q.aLx = 0.12;
+  }
+
+  // ---- smooth toward the target pose
+  if(first || !st.init){ for(let i=0;i<ALL.length;i++) P[ALL[i]] = Q[ALL[i]]; st.init = true; st.tw = (e.face||1)>=0?1:-1; }
+  else {
+    const k = oneshot ? (T < 3 ? 26 : 70) : 13;
+    const a = 1 - Math.exp(-k*dt);
+    for(let i=0;i<CH.length;i++){ const c = CH[i]; P[c] += (Q[c]-P[c])*a; }
+    // direct channels: exact during one-shots (full turns), otherwise ease the short way round
+    const al = 1 - Math.exp(-11*dt);
+    for(let i=0;i<DIRECT.length;i++){
+      const c = DIRECT[i];
+      if(oneshot){ P[c] = Q[c]; continue; }
+      let d = (Q[c] - P[c]) % TAU; if(d > Math.PI) d -= TAU; if(d < -Math.PI) d += TAU;
+      P[c] = Q[c] - d + d*al; if(Math.abs(P[c]-Q[c])<1e-4) P[c] = Q[c];
+    }
+  }
+  applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p);
+}
 
 //@@NEXT@@
 })();
