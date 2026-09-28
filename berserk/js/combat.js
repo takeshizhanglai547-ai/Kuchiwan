@@ -75,7 +75,7 @@
       const m = this.move;
       this.move = null; this.trailOn = false;
       if (m && m.onEnd) m.onEnd(this);
-      if (this.state === 'move') this.state = this.z > 0 ? 'air' : 'idle';
+      if (this.state === 'move') this.state = (this.z > 0 && !this.flying) ? 'air' : 'idle';
     }
     /** 技の1フレーム処理（ポーズ・移動・判定・効果音） */
     updateMove() {
@@ -87,7 +87,7 @@
       if (m.movY) this.vy = sampleCurve(m.movY, f) || 0;
       if (m.sfx) for (const s of m.sfx) if (s[0] === f) BK.audio.sfx(s[1], s[2]);
       if (m.onFrame) m.onFrame(this, f);
-      if (!this.move) return; // onFrame で中断された
+      if (this.move !== m) return; // onFrame で中断 / 別の技へ移行した
       this.trailOn = !!(m.trail && f >= m.trail[0] && f <= m.trail[1]);
       if (m.invul && f >= m.invul[0] && f <= m.invul[1]) this.invul = Math.max(this.invul, 1);
       this.mf++;
@@ -115,7 +115,7 @@
       // 重力
       if (this.z > 0 || this.vz !== 0) {
         this.z += this.vz;
-        this.vz -= BK.GRAV * (this.gravMul || 1);
+        this.vz -= BK.GRAV * (this.gravMul != null ? this.gravMul : 1);
         if (this.z <= 0) {
           this.z = 0;
           const impact = this.vz;
@@ -148,7 +148,7 @@
         }
         this.state = 'down'; this.st = 0; this.vx = 0; this._bounced = false; this.juggle = 0;
         BK.fx.dust(this.x, this.y, 8); BK.audio.sfx('thud', { vol: 0.8 });
-        if (this.thrownBy) this.thrownBy = null;
+        if (this.thrownBy) { this.thrownBy = null; this._thrownHit = null; }
       } else if (this.move && this.move.air) {
         this.endMove();
         if (this.land) this.land();
@@ -162,7 +162,8 @@
      * dir: 吹っ飛ぶ向き (+1/-1)
      */
     takeHit(src, h, dir) {
-      if (!this.hurtable) return false;
+      const downHit = h.hitDown && (this.state === 'down' || this.state === 'getup') && !this.dead && !this.intangible;
+      if (!this.hurtable && !downHit) return false;
       if (this.onBeforeHit && this.onBeforeHit(src, h, dir) === false) return false;
       let dmg = h.dmg * (src && src.dmgMul || 1);
       if (this.dmgTakenMul) dmg *= this.dmgTakenMul;
@@ -195,7 +196,7 @@
       if (this.move) { this.endMove(); this.state = 'hurt'; }
       if (this.releaseToken) this.releaseToken();
       const w = this.weight || 1;
-      const airborne = this.z > 1 || this.state === 'fall';
+      const airborne = (this.z > 1 && !this.hover) || this.state === 'fall';
       if (heavyKb || airborne || this.hitCount >= (this.downAfter || 99)) {
         this.state = 'fall'; this.st = 0; this._bounced = false;
         const lift = (h.lift != null ? h.lift : (kb === 'launch' ? 8 : kb === 'spin' ? 6 : 5)) / Math.sqrt(w);
@@ -371,11 +372,12 @@
     // 投げられた敵が他の敵に当たる
     for (const a of actors) {
       if (!a.thrownBy || a.state !== 'fall') continue;
+      const seen = a._thrownHit || (a._thrownHit = new Set());
       for (const t of actors) {
-        if (t === a || t.team !== a.team || !t.hurtable || t.thrownBy) continue;
+        if (t === a || t.team !== a.team || !t.hurtable || t.thrownBy || seen.has(t)) continue;
         if (Math.abs(t.x - a.x) < (t.w + a.w) / 2 && Math.abs(t.y - a.y) < 18 && a.z < t.h) {
           const h = { dmg: 14, kb: 'down', push: 4, stop: 4, sfx: 'hitHeavy' };
-          if (t.takeHit(a.thrownBy, h, U.sign(a.vx || 1))) C.hitFx(a.thrownBy, t, h, t.x, U.sign(a.vx || 1));
+          if (t.takeHit(a.thrownBy, h, U.sign(a.vx || 1))) { seen.add(t); C.hitFx(a.thrownBy, t, h, t.x, U.sign(a.vx || 1)); }
         }
       }
     }
@@ -427,7 +429,7 @@
         if (t.team === this.team || !t.hurtable || this.hit.has(t)) continue;
         if (!C.overlap(hb, t)) continue;
         const dir = this.dirAway ? U.sign(t.x - this.x) : U.sign(this.vx || this.face);
-        const h = { dmg: this.dmg, kb: this.kb, push: this.push, lift: this.lift, stop: this.stop != null ? this.stop : 3, sfx: this.sfx, fx: this.fx, breakArmor: this.breakArmor };
+        const h = { dmg: this.dmg, kb: this.kb, push: this.push, lift: this.lift, stun: this.stun, stop: this.stop != null ? this.stop : 3, sfx: this.sfx, fx: this.fx, breakArmor: this.breakArmor, hitDown: this.hitDown };
         if (t.takeHit(this.owner || null, h, dir)) {
           this.hit.add(t);
           C.hitFx(this.owner || this, t, h, this.x, dir);
@@ -438,12 +440,14 @@
       // 画面外で消滅
       if (this.x < BK.cam.x - 120 || this.x > BK.cam.x + BK.W + 120) this.remove = true;
     }
-    draw(c) {
+    draw(c, groundPass) {
+      if (this.ground && !groundPass) return;
       const sx = BK.sx(this.x), sy = BK.sy(this.y, this.z);
       if (this.drawFn) { this.drawFn(c, sx, sy, this); return; }
       c.fillStyle = this.col || '#ffd'; c.fillRect(sx - this.w / 2, sy - 2, this.w, 4);
     }
     drawShadow(c) {
+      if (this.ground) { this.draw(c, true); return; } // 床に描くデカール（予告マーカー等）
       if (this.noShadow) return;
       c.fillStyle = 'rgba(0,0,0,0.3)';
       c.beginPath(); c.ellipse(BK.sx(this.x), BK.sy(this.y, 0), this.w * 0.5, 2.5, 0, 0, Math.PI * 2); c.fill();

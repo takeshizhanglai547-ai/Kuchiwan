@@ -368,9 +368,10 @@ window.BK = window.BK || {};
     parts: [], texts: [],
     shakeT: 0, shakeMag: 0, flashT: 0, flashMax: 1, flashCol: '#ffffff',
     hitstop: 0, slowmo: 0, darken: 0,
-    reset() { this.parts.length = 0; this.texts.length = 0; this.shakeT = 0; this.flashT = 0; this.hitstop = 0; this.slowmo = 0; this.darken = 0; },
+    screenFx: [],  // 暗転より手前に描く画面効果 (c) => {}  ※使い終わったら取り除くこと
+    reset() { this.parts.length = 0; this.texts.length = 0; this.shakeT = 0; this.flashT = 0; this.hitstop = 0; this.slowmo = 0; this.darken = 0; this.screenFx.length = 0; },
     add(p) {
-      if (this.parts.length > 420) this.parts.shift();
+      if (this.parts.length > 420) { const i = this.parts.findIndex(q => !q.keep); this.parts.splice(i < 0 ? 0 : i, 1); }
       p.life = p.life || 30; p.max = p.life; p.vx = p.vx || 0; p.vy = p.vy || 0; p.vz = p.vz || 0;
       p.g = p.g == null ? 0 : p.g; p.drag = p.drag == null ? 1 : p.drag; p.z = p.z || 0;
       this.parts.push(p); return p;

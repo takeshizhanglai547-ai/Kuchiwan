@@ -30,7 +30,10 @@
       const rs = Math.min(BK.renderScale, 2);
       const k = key + '@' + rs.toFixed(2);
       let cv = this._cache.get(k);
+      if (cv) { this._cache.delete(k); this._cache.set(k, cv); } // LRU: 最近使ったものを末尾へ
       if (!cv) {
+        // 解像度が変わったら古い倍率のキャッシュは捨てる
+        if (this._rs !== rs) { this._rs = rs; for (const key of Array.from(this._cache.keys())) if (!key.endsWith('@' + rs.toFixed(2))) this._cache.delete(key); }
         cv = document.createElement('canvas');
         cv.width = Math.ceil(w * rs); cv.height = Math.ceil(h * rs);
         const c = cv.getContext('2d');
@@ -38,7 +41,7 @@
         fn(c, w, h);
         cv.lw = w; cv.lh = h;
         this._cache.set(k, cv);
-        if (this._cache.size > 40) this._cache.delete(this._cache.keys().next().value);
+        if (this._cache.size > 48) this._cache.delete(this._cache.keys().next().value);
       }
       return cv;
     },
@@ -146,6 +149,8 @@
       const def = BK.heroes[this.heroId];
       if (!this.hero) this.hero = new BK.Hero(def, 90, BK.DEPTH * 0.55);
       const h = this.hero;
+      if (h.awkT > 0 && def.awaken && def.awaken.end) def.awaken.end(h);
+      if (h.move) h.endMove();
       h.x = 90; h.y = BK.DEPTH * 0.55; h.z = 0; h.vx = h.vy = h.vz = 0; h.state = 'idle'; h.move = null;
       h.face = 1; h.dead = false; h.invul = 60; h.grabbing = null; h.grabbedBy = null; h.hitCount = 0;
       h.awkT = 0; h.dmgMul = 1; h.speedMul = 1; h.superArmor = 0; h.dmgTakenMul = 1; h.reloading = 0; h.ammo = def.shot.max;
@@ -171,6 +176,7 @@
       if (o.hp) { e.hp = e.maxHp = o.hp; }
       this.actors.push(e);
       if (def.onSpawn) def.onSpawn(e, this);
+      if (this.stage && this.stage.onSpawn) this.stage.onSpawn(e, this);
       if (entry === 'rise') BK.audio.sfx('growl', { pitch: 0.6, vol: 0.5 });
       return e;
     }
@@ -271,8 +277,9 @@
       this.updateHeroLife();
       if (this.clearT > 0) {
         this.clearT++;
-        if (this.clearT === 60) { this.banner('STAGE CLEAR', '#ffd27a', null, 200); BK.audio.playSong('clear'); }
-        if (this.clearT > 230 && BK.scene && BK.scene.onStageClear) BK.scene.onStageClear();
+        const cd = (this.boss && this.boss.def && this.boss.def.clearDelay) || 60;
+        if (this.clearT === cd) { this.banner('STAGE CLEAR', '#ffd27a', null, 200); BK.audio.playSong('clear'); }
+        if (this.clearT > cd + 170 && BK.scene && BK.scene.onStageClear) BK.scene.onStageClear();
       }
     }
     updateCamera() {
@@ -322,7 +329,7 @@
         } else if (!L.ev.boss || this.bossDefeated) {
           this.lock = null;
           if (L.ev.onClear) L.ev.onClear(this);
-          if (!L.ev.boss && this.evIdx < this.events.length) { this.goT = 180; BK.audio.sfx('select', { pitch: 0.8 }); }
+          if (!L.ev.boss && !this.stage.noGo && this.evIdx < this.events.length) { this.goT = 180; BK.audio.sfx('select', { pitch: 0.8 }); }
         }
       } else if (L.ev.next != null && alive <= L.ev.next && pending === 0 && L.wave < L.ev.waves.length) {
         this.spawnWave(L);
@@ -390,8 +397,9 @@
       c.save();
       if (st.drawBg) st.drawBg(c, this); else { c.fillStyle = '#201818'; c.fillRect(0, 0, BK.W, BK.H); BG.cobbles(c); }
       // 影
-      for (const a of this.actors) if (!a.isProp || true) a.drawShadow(c);
+      for (const a of this.actors) a.drawShadow(c);
       for (const p of this.projectiles) p.drawShadow(c);
+      for (const a of this.actors) if (a.def && a.def.drawFloor && !a.remove) a.def.drawFloor(c, a);
       for (const it of this.items) it.draw(c);
       // 奥→手前の順に描く
       const list = this.actors.slice().sort((a, b) => (a.y - b.y) || ((a.drawLayer || 0) - (b.drawLayer || 0)));
@@ -401,6 +409,9 @@
       if (st.drawFg) st.drawFg(c, this);
       c.restore();
       BK.fx.drawScreen(c);
+      // 覚醒・変身演出中はその主役だけ暗転の上に描く
+      if (this.freezeT > 0 && this.freezer && !this.freezer.remove) { this.freezer.draw(c); if (this.freezer.drawTrail) this.freezer.drawTrail(c); }
+      if (BK.fx.screenFx) for (const f of BK.fx.screenFx) f(c);
     }
   }
   BK.Game = Game;

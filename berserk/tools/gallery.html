@@ -74,7 +74,11 @@
   if (what === 'heroes') BK.heroOrder.forEach(id => heroRow(BK.heroes[id]));
   else if (what.startsWith('hero:')) heroRow(BK.heroes[what.slice(5)]);
   else if (what === 'enemies' || what === 'bosses') Object.values(BK.enemyTypes).filter(d => !!d.boss === (what === 'bosses')).forEach(enemyRow);
-  else if (what.startsWith('enemy:')) enemyRow(BK.enemyTypes[what.slice(6)]);
+  else if (what.startsWith('enemy:')) {
+    const [, id, pal] = what.split(':');
+    enemyRow(BK.enemyTypes[id]);
+    if (pal) rows[rows.length - 1].colors = Object.assign({}, BK.enemyTypes[id].spec.colors, (BK.enemyTypes[id].palettes || {})[pal]);
+  }
 
   // 1行が長すぎると見づらいので maxCols ごとに折り返す
   const maxCols = parseInt(q.get('cols') || '6', 10);
@@ -86,7 +90,7 @@
       rows.splice(i + 1, 0, rest);
     }
   }
-  const cols = Math.min(maxCols, Math.max(4, ...rows.map(r => Math.max(1, r.cells.length))));
+  const cols = Math.min(maxCols, Math.max(4, ...rows.map(r => (r.def && !r.def.spec && r.def.draw) ? 2 + Object.keys(r.def.moves || {}).length : Math.max(1, r.cells.length))));
   const bossScale = what === 'bosses' ? 2.2 : 1;
   cv.width = cols * cellW * Z * bossScale; cv.height = rows.length * (cellH * bossScale + 20) * Z + 10;
   c.scale(Z, Z);
@@ -117,7 +121,7 @@
       c.fillStyle = '#342a2a'; c.fillRect(ci * cellW + 2, y0 + 16, cellW - 4, cellH - 4);
       c.strokeStyle = '#554'; c.beginPath(); c.moveTo(ci * cellW + 4, cy); c.lineTo(ci * cellW + cellW - 4, cy); c.stroke();
       c.save(); c.translate(cx - 20, cy); c.scale(row.spec.scale || 1, row.spec.scale || 1);
-      R.draw(c, pose, row.spec, { t: 10 });
+      R.draw(c, pose, row.spec, { t: 10, colors: row.colors || null });
       c.restore();
       // 攻撃判定の可視化
       if (m && m.hits) for (const h of m.hits) if (f >= h.f[0] && f <= h.f[1]) {

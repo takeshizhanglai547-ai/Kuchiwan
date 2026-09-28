@@ -54,19 +54,21 @@ const exe = fs.existsSync('/opt/pw-browsers/chromium') ? undefined : undefined;
   await page.evaluate(t => { BK.turbo = t; }, turbo);
   const t0 = Date.now();
   const log = [];
-  let n = 0, last = null;
+  let n = 0, last = null, cleared = null;
   while ((Date.now() - t0) / 1000 < seconds) {
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
     const st = await page.evaluate(() => BK.test.state());
-    log.push({ t: Math.round((Date.now() - t0) / 1000), scene: st.scene, stage: st.stage, camX: Math.round(st.camX), en: st.enemies, lock: st.lock, boss: st.boss && Math.round(st.boss.hp), hp: st.hero && st.hero.hp });
-    if (shots && n % 3 === 0) await page.screenshot({ path: path.join(shots, `play_${String(n).padStart(3, '0')}.png`) });
+    log.push({ t: Math.round((Date.now() - t0) / 1000), scene: st.scene, stage: st.stage, camX: Math.round(st.camX), en: st.enemies, lock: st.lock, boss: st.boss && Math.round(st.boss.hp), bossDown: st.bossDefeated, hp: st.hero && st.hero.hp, lives: st.hero && st.hero.lives });
+    if (st.bossDefeated && !cleared) cleared = { t: Math.round((Date.now() - t0) / 1000), gameFrames: st.time };
+    if (shots && n % 6 === 0) await page.screenshot({ path: path.join(shots, `play_${String(n).padStart(3, '0')}.png`) });
     n++;
     last = st;
     if (st.errors.length) break;
     if (st.scene === 'clear' || st.scene === 'ending' || st.scene === 'gameover') break;
+    if (st.stage != null && st.stage !== stage && !args.boss) break; // 次のステージへ進んだ
   }
   if (shots) await page.screenshot({ path: path.join(shots, 'final.png') });
   const final = await page.evaluate(() => BK.test.state());
-  console.log(JSON.stringify({ hero, stage, final, log: log.slice(-40), errors: errors.concat(final.errors).slice(0, 20) }, null, 1));
+  console.log(JSON.stringify({ hero, stage, boss: args.boss || null, cleared, final, log: log.slice(-40), errors: errors.concat(final.errors).slice(0, 20) }, null, 1));
   await browser.close();
 })().catch(e => { console.error('SMOKE FAILED', e); process.exit(1); });

@@ -37,6 +37,8 @@
         downAfter: def.downAfter || 99, boss: !!def.boss, armor: !!def.armor,
       });
       this.def = def; this.name = def.name;
+      if (def.flying) this.flying = true;
+      if (def.hover) this.hover = true;
       this.spec = def.spec; this.stance = def.stance;
       this.colors = def.palettes && opt.palette ? Object.assign({}, def.spec.colors, def.palettes[opt.palette]) : null;
       this.grabbable = def.grabbable !== false && !def.boss;
@@ -148,7 +150,7 @@
       if (this.remove) return;
       if (this.updateReactions()) { this.physics(); return; }
       if (this.move) { this.updateMove(); this.physics(); return; }
-      if (this.state === 'air') { this.physics(); return; }
+      if (this.state === 'air') { if (this.def.flying || this.flying) this.state = 'idle'; else { this.physics(); return; } }
       if (this.def.think) this.def.think(this, game);
       else this.thinkMelee(game);
       this.physics();
@@ -260,7 +262,7 @@
       return R.idle(st, this.animT + this.uid * 13);
     }
     draw(c) {
-      if (this.state === 'dead' && this.st > 20 && (this.st >> 2) % 2) return; // 点滅して消える
+      if (this.state === 'dead' && this.st > 20 && (this.st >> 2) % 2 && !this.def.customDeath) return; // 点滅して消える
       if (this.def.draw) { this.def.draw(c, this); return; }
       if (this.entry === 'rise' && this.entering > 0) {
         // 地面から這い出る

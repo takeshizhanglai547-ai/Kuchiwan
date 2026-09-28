@@ -5,7 +5,7 @@
  *
  *  効果音:  BK.audio.sfx('hit', {vol:1, pitch:1})
  *  BGM   :  BK.audio.playSong('stage1') / BK.audio.stopSong()
- *  曲定義 :  BK.audio.songs[id] = { bpm, steps(1小節の分割数=16), bars, tracks:[{inst, vol, seq:'記法文字列' | array}] }
+ *  曲定義 :  BK.audio.songs[id] = { bpm, steps(1小節の分割数=16), bars, tracks:[{inst, vol, oct(半音単位の移調: 12=1オクターブ), seq:'記法文字列' | array}] }
  *           記法: 1トークン=1ステップ, 空白区切り。 '.'=休符  '-'=前の音を伸ばす  'x'=打楽器ヒット
  *                 音名 'c3' 'd#3' 'eb2'（オクターブ付き）、和音 'c3+eb3+g3'、強弱 'c3!'(強) 'c3?'(弱)
  *           '|' は見やすさのための小節区切り（無視される）
@@ -101,6 +101,7 @@
     const c = A.ctx, t = o.t != null ? o.t : c.currentTime;
     const src = c.createBufferSource();
     src.buffer = A._noise;
+    src.loop = true;
     src.playbackRate.value = o.rate || 1;
     const f = c.createBiquadFilter();
     f.type = o.filter || 'bandpass';
@@ -205,6 +206,10 @@
       A.tone({ type: 'sawtooth', f0: 220 * p, dur: 0.5, vol: 0.18 * v, filter: 'lowpass', ff: 2000, ff1: 300, verb: true });
       A.noise({ filter: 'bandpass', f0: 2000 * p, f1: 300, dur: 0.35, vol: 0.3 * v });
       A.tone({ type: 'sine', f0: 110 * p, f1: 55, dur: 0.5, vol: 0.4 * v });
+    },
+    thunder(p, v) { // 雷鳴
+      A.noise({ filter: 'lowpass', f0: 520 * p, f1: 60, dur: 1.0, vol: 0.55 * v, attack: 0.03, rate: 0.5, verb: true });
+      A.tone({ type: 'sine', f0: 52 * p, f1: 28, dur: 1.2, vol: 0.35 * v });
     },
     bell(p, v) { // 鐘（ステージ開始など）
       [1, 2.0, 2.76, 4.07, 5.4].forEach((m, i) => A.tone({ type: 'sine', f0: 196 * p * m, dur: 2.2 - i * 0.3, vol: 0.2 * v / (i + 1), verb: true }));
@@ -365,7 +370,7 @@
         if (!ev || ev === '-') continue;
         // 音の長さ = 続く '-' の数
         let len = 1;
-        while (tr.seq[(s.step + len) % tr.len] === '-' && len < tr.len) len++;
+        while (s.step + len < s.steps && tr.seq[(s.step + len) % tr.len] === '-' && len < tr.len) len++;
         const dur = len * s.dt;
         for (const n of ev.n) {
           try { tr.inst(s.next, n + tr.oct, dur * 0.95, ev.v * tr.vol, s.bus); } catch (e) { /* ignore */ }

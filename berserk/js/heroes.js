@@ -19,6 +19,7 @@
  *    awaken: { name, type:'buff'|'screen', dur, start(h), update(h), end(h), colors? },
  *    drawBack(c,h), drawFront(c,h),           // 追加描画（オーラ等）
  *    init(h), update(h, game, input),        // 生成時 / 毎フレームの追加処理（重力倍率 h.gravMul など）
+ *    ※ awaken.type 'screen' でも start(h) 内で h.awkT を設定すれば余韻バフを表現できる（HUDゲージ・配色は awkT を見る）
  *    portrait(c, x, y, s),                    // 省略時はリグで描く
  *  }
  * ===================================================================== */
@@ -65,8 +66,9 @@
       BK.game.addProjectile(new BK.Projectile({
         x: m.x, y: m.y, z: m.z, vx: h.face * (o.spd || 10), w: 14, h: 8, team: 'hero', owner: h, dmg: o.dmg || 6, kb: 'light', push: 1.5, stop: 2, life: 55, sfx: 'slash',
         drawFn(c, sx, sy, p) {
+          c.strokeStyle = 'rgba(230,236,245,0.35)'; c.lineWidth = 1; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - p.vx * 2.5, sy); c.stroke();
           c.save(); c.translate(sx, sy); c.rotate(p.t * 0.9 * p.face);
-          c.fillStyle = '#d8dce2'; c.fillRect(-1, -7, 2, 9); c.fillStyle = '#3a2616'; c.fillRect(-1.5, 2, 3, 4);
+          c.fillStyle = '#e4e8ee'; c.fillRect(-1.5, -9, 3, 12); c.fillStyle = '#3a2616'; c.fillRect(-2, 3, 4, 5);
           c.restore();
         },
       }));
@@ -227,7 +229,7 @@
           this.bufA = 0; this.startCombo(m.comboIdx + 1);
         } else if (m.comboIdx != null && this.mf >= (m.cancel || m.dur) && this.chargeRel > 0 && d.moves.charge) {
           this.chargeRel = 0; this.startMove(d.moves.charge);
-        } else if (m.cancelShot && this.mf >= m.cancelShot && I.pressed.sht) {
+        } else if (m.cancelShot && this.mf >= m.cancelShot && I.pressed.sht && this.shotCd <= 0 && (this.sub || (this.ammo > 0 && !this.reloading))) {
           this.endMove(); this.shoot(I);
         }
         if (this.move) this.updateMove();
@@ -250,6 +252,12 @@
     // ------------------------------------------------------------ ground
     updateGround(I, game) {
       const d = this.def;
+      // リロード中は無防備（撃ち切った／被弾で中断された場合も再開）
+      if (this.reloading > 0 && d.shot.reloadLock && d.moves.reload && !this.sub) {
+        this.startMove(d.moves.reload);
+        this.mf = Math.max(0, d.moves.reload.dur - this.reloading);
+        return;
+      }
       if (I.pressed.sp && this.canSpecial()) { this.doSpecial(); return; }
       if (I.pressed.awk && this.awk >= 100) { this.doAwaken(); return; }
       if (I.pressed.jmp) {
@@ -259,7 +267,7 @@
         return;
       }
       if (I.pressed.atk) {
-        if (BK.frame - I.duFrame <= 12 && d.moves.rising) { this.startMove(d.moves.rising); return; }
+        if (BK.frame - I.duFrame <= 12 && d.moves.rising) { this.vy = 0; this.startMove(d.moves.rising); return; }
         if (this._wasRun && d.moves.dash) { this.startMove(d.moves.dash); this._wasRun = false; return; }
         const next = (BK.frame - this.lastAtkEnd < 26 && this.lastAtkHit && this.combo < 3) ? this.combo + 1 : 0;
         this.startCombo(next);
@@ -460,7 +468,7 @@
       if (e.hp <= 0) { e.hp = 0; e.die(this, { dmg }, dir); }
       e.state = 'fall'; e.st = 0; e._bounced = false; e.spinning = true;
       e.vx = dir * 6.5 / Math.sqrt(e.weight || 1); e.vz = 6.5; e.z = 24;
-      e.thrownBy = this;
+      e.thrownBy = this; e._thrownHit = null;
       BK.fx.shake(3, 8);
       BK.audio.sfx('swingHeavy');
     }
@@ -481,6 +489,7 @@
       if (g) {
         g.grabbing = null;
         if (g.onShakeOff) g.onShakeOff(this);
+        else if (g.def && g.def.onShakeOff) g.def.onShakeOff(g, this);
         else g.takeHit(this, { dmg: 4, kb: 'down', push: 4, lift: 4 }, U.sign(g.x - this.x || 1));
       }
       BK.fx.shake(3, 8);
@@ -507,6 +516,7 @@
       BK.fx.stop(18);
     }
     respawn(x) {
+      if (this.move) super.endMove();
       this.dead = false; this.hp = this.maxHp; this.state = 'air'; this.st = 0;
       this.x = x; this.y = BK.DEPTH * 0.5; this.z = 180; this.vz = -2; this.vx = 0; this.vy = 0;
       this.invul = 170; this.flash = 0; this.hitCount = 0; this.move = null; this.grabbedBy = null; this.grabbing = null;
