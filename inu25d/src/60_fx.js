@@ -330,8 +330,11 @@ const PVS = [
   '  vCol = aCol; vAdd = aSize.w;',
   '}'].join('\n');
 const PFS = [
-  'uniform sampler2D uMap;',
+  'uniform sampler2D uMap; uniform vec2 uHdr;',
   'varying vec2 vUv; varying vec4 vCol; varying float vAdd;',
+  // colours are authored in sRGB; convert to linear, then to whatever the target wants
+  // (screen → sRGB again = exact authored colour; 05_post HDR target → linear, tone-mapped in its composite)
+  'vec3 s2l(vec3 c){ return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(0.04045, c)); }',
   'void main(){',
   '  vec3 t = texture2D(uMap, vUv).rgb;',
   '  float m = max(t.r, t.b);',
@@ -341,7 +344,8 @@ const PFS = [
   '  vec3 rgb = t.g < 0.5 ? mix(c*0.72, c, t.g*2.0) : mix(c, vec3(1.0), (t.g-0.5)*1.8);',
   '  vec3 line = mix(c*0.34, vec3(0.23,0.14,0.09), 0.35);',
   '  rgb = mix(rgb, line, clamp(t.b / max(m, 0.001), 0.0, 1.0));',
-  '  gl_FragColor = vec4(rgb * a, a * (1.0 - vAdd));',   // premultiplied: add=1 → additive, add=0 → normal blend
+  '  vec3 o = linearToOutputTexel(vec4(s2l(max(rgb, vec3(0.0))) * mix(uHdr.x, uHdr.y, vAdd), 1.0)).rgb;',
+  '  gl_FragColor = vec4(o * a, a * (1.0 - vAdd));',   // premultiplied: add=1 → additive, add=0 → normal blend
   '}'].join('\n');
 
 function buildParticles(){
@@ -356,9 +360,9 @@ function buildParticles(){
   pGeo.setAttribute('aPos', attrP); pGeo.setAttribute('aSize', attrS); pGeo.setAttribute('aCol', attrC);
   pGeo.instanceCount = 0;
   pMat = new THREE.ShaderMaterial({
-    uniforms: { uMap:{ value: atlas.tex }, uBias:{ value: 0.45 } },
+    uniforms: { uMap:{ value: atlas.tex }, uBias:{ value: 0.45 }, uHdr:{ value: new THREE.Vector2(1,1) } },
     vertexShader: PVS, fragmentShader: PFS,
-    transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide,
+    transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide, toneMapped: false, fog: false,
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
     blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
@@ -869,14 +873,16 @@ function newTrail(){ return { ent:null, on:false, stopping:false, auto:false, at
   tx:new Float32Array(TR_S), ty:new Float32Array(TR_S), tz:new Float32Array(TR_S), bx:new Float32Array(TR_S), by:new Float32Array(TR_S), bz:new Float32Array(TR_S),
   r:1, g:1, b:1 }; }
 const TVS = ['attribute vec4 aCol; attribute float aEdge; varying vec4 vCol; varying float vEdge;',
-  'void main(){ vCol = aCol; vEdge = aEdge; vec4 mv = modelViewMatrix * vec4(position, 1.0); mv.z += 0.25; gl_Position = projectionMatrix * mv; }'].join('\n');
-const TFS = ['uniform float uAdd; varying vec4 vCol; varying float vEdge;',
+  'void main(){ vCol = aCol; vEdge = aEdge; vec4 mv = modelViewMatrix * vec4(position, 1.0); mv.z += 0.05; gl_Position = projectionMatrix * mv; }'].join('\n');
+const TFS = ['uniform float uAdd; uniform float uHdr; varying vec4 vCol; varying float vEdge;',
+  'vec3 s2l(vec3 c){ return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(0.04045, c)); }',
   'void main(){',
   '  float e = vEdge;',
-  '  vec3 rgb = mix(vCol.rgb*mix(0.8, 1.05, e), vec3(1.0), smoothstep(0.82, 1.0, e)*0.9);',
-  '  float a = vCol.a * (0.12 + 0.88*smoothstep(0.0, 0.7, e));',
+  '  vec3 rgb = mix(vCol.rgb*mix(0.85, 1.05, e), vec3(1.0), smoothstep(0.86, 1.0, e)*0.9);',
+  '  float a = vCol.a * (0.15 + 0.85*smoothstep(0.0, 0.6, e));',
   '  if(a < 0.003) discard;',
-  '  gl_FragColor = vec4(rgb*a, a*(1.0-uAdd));',
+  '  vec3 o = linearToOutputTexel(vec4(s2l(rgb)*uHdr, 1.0)).rgb;',
+  '  gl_FragColor = vec4(o*a, a*(1.0-uAdd));',
   '}'].join('\n');
 function buildTrails(){
   trGeo = new THREE.BufferGeometry();
@@ -887,8 +893,8 @@ function buildTrails(){
   trAttrI = new THREE.BufferAttribute(trIdx,1).setUsage(THREE.DynamicDrawUsage);
   trGeo.setAttribute('position', trAttrP); trGeo.setAttribute('aCol', trAttrC); trGeo.setAttribute('aEdge', trAttrE); trGeo.setIndex(trAttrI);
   trGeo.setDrawRange(0, 0);
-  const mat = new THREE.ShaderMaterial({ uniforms:{ uAdd:{ value:0.3 } }, vertexShader:TVS, fragmentShader:TFS,
-    transparent:true, depthWrite:false, depthTest:true, side:THREE.DoubleSide,
+  const mat = new THREE.ShaderMaterial({ uniforms:{ uAdd:{ value:0.2 }, uHdr:{ value:1 } }, vertexShader:TVS, fragmentShader:TFS,
+    transparent:true, depthWrite:false, depthTest:true, side:THREE.DoubleSide, toneMapped:false, fog:false,
     blending:THREE.CustomBlending, blendEquation:THREE.AddEquation, blendSrc:THREE.OneFactor, blendDst:THREE.OneMinusSrcAlphaFactor });
   trMesh = new THREE.Mesh(trGeo, mat); trMesh.frustumCulled = false; trMesh.renderOrder = 29; trMesh.visible = false; trMesh.name = 'fxTrails';
   for(let i=0;i<TR_MAX;i++) trails.push(newTrail());
@@ -951,10 +957,12 @@ function updateTrails(k){
       const i = Math.min(n-2, (m/TR_SUB)|0), tt = m===M-1 ? 1 : (m - i*TR_SUB)/TR_SUB;
       const X = cr1(t.tx,n,i,tt), Y = cr1(t.ty,n,i,tt), Z = cr1(t.tz,n,i,tt);
       const bxv = cr1(t.bx,n,i,tt), byv = cr1(t.by,n,i,tt), bzv = cr1(t.bz,n,i,tt);
-      const u = m/(M-1), w = 0.2 + 0.8*u, a = Math.pow(u, 1.25)*0.95;
-      let o = v*3; trPos[o]=X; trPos[o+1]=Y; trPos[o+2]=Z;
+      const u = m/(M-1), w = (0.25 + 0.75*u)*0.62, a = Math.pow(u, 0.85);   // outer ~60% of the blade only
+      // the ribbon reaches a little past the blade tip so thin weapons still leave a bold swoosh
+      const ex = X + (X-bxv)*0.15, ey = Y + (Y-byv)*0.15, ez = Z + (Z-bzv)*0.15;
+      let o = v*3; trPos[o]=ex; trPos[o+1]=ey; trPos[o+2]=ez;
       o = v*4; trCol[o]=t.r; trCol[o+1]=t.g; trCol[o+2]=t.b; trCol[o+3]=a; trEdge[v]=1; v++;
-      o = v*3; trPos[o]=X+(bxv-X)*w; trPos[o+1]=Y+(byv-Y)*w; trPos[o+2]=Z+(bzv-Z)*w;
+      o = v*3; trPos[o]=ex+(bxv-ex)*w; trPos[o+1]=ey+(byv-ey)*w; trPos[o+2]=ez+(bzv-ez)*w;
       o = v*4; trCol[o]=t.r; trCol[o+1]=t.g; trCol[o+2]=t.b; trCol[o+3]=a*0.9; trEdge[v]=0; v++;
     }
     for(let m=0;m<M-1;m++){ const a0 = v0 + m*2; trIdx[ii++]=a0; trIdx[ii++]=a0+1; trIdx[ii++]=a0+2; trIdx[ii++]=a0+1; trIdx[ii++]=a0+3; trIdx[ii++]=a0+2; }
@@ -1464,6 +1472,9 @@ function frame(dt){
   try {
     if(pMesh.parent !== G.scene) G.scene.add(pMesh);
     if(trMesh.parent !== G.scene) G.scene.add(trMesh);
+    // HDR post path (05_post): the composite tone-maps, so give effects headroom to stay bright and bloom
+    const hdr = !!(G.post && G.post.active);
+    pMat.uniforms.uHdr.value.set(hdr ? 1.35 : 1, hdr ? 1.9 : 1); trMesh.material.uniforms.uHdr.value = hdr ? 1.6 : 1;
     const e = G.camera.matrixWorld.elements; camRX=e[0]; camRY=e[1]; camRZ=e[2]; camUX=e[4]; camUY=e[5]; camUZ=e[6];
     if(kw > 0){ updateEmitters(kw); updateParticles(kw); }
     let j = writeParticles(0, 0); j = writeHalos(j, 0);

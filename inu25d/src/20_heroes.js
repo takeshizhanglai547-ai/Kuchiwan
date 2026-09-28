@@ -127,17 +127,17 @@ function buildCommon(D, T){
   // legs (pivot at hip joint)
   for(const side of [-1,1]){
     const b = part(D, side<0?'legL':'legR');
-    b.add(geo.capsule(0.072, 0.06, 4, 12), T.leg, [0,-0.085,0]);
-    b.add(geo.sphere(0.08, 14, 10), T.foot||T.leg, [0.03,-0.165,0], null, [1.35,0.72,1.08]);
+    b.add(geo.capsule(0.072, 0.06, 3, 10), T.leg, [0,-0.085,0]);
+    b.add(geo.sphere(0.08,10,7), T.foot||T.leg, [0.03,-0.165,0], null, [1.35,0.72,1.08]);
   }
   // body bean (pivot = hips)
   const bs = T.bodyScale || [0.95,1.08,0.98];
-  if(!T.noBean) part(D,'body').add(geo.sphere(0.215, 20, 14), T.body, [0, L.bodyC, 0], null, bs);
+  if(!T.noBean) part(D,'body').add(geo.sphere(0.215, 18, 12), T.body, [0, L.bodyC, 0], null, bs);
   // arms (pivot at shoulder)
   for(const side of [-1,1]){
     const b = part(D, side<0?'armL':'armR');
-    b.add(geo.capsule(0.058, 0.07, 4, 10), T.sleeve||T.fur, [0,-0.07,0]);
-    b.add(geo.sphere(T.pawR||0.072, 14, 10), T.paw||T.fur, [0.012,-0.165,0]);
+    b.add(geo.capsule(0.058, 0.07, 3, 8), T.sleeve||T.fur, [0,-0.07,0]);
+    b.add(geo.sphere(T.pawR||0.072,10,7), T.paw||T.fur, [0.012,-0.165,0]);
   }
   // head (pivot at neck)
   const h = part(D,'head');
@@ -145,12 +145,12 @@ function buildCommon(D, T){
   const mz = T.muzzleScale || [0.9,0.72,1.12];
   const mp = onHead(0, -0.36, -0.2);
   if(T.muzzleFwd) mp[0] += T.muzzleFwd;
-  h.add(geo.sphere(0.13, 16, 12), T.muzzle, mp, null, mz);
+  h.add(geo.sphere(0.13,10,7), T.muzzle, mp, null, mz);
   D.a.muzzle = mp; D.a.muzzleFront = mp[0] + 0.13*mz[0];
   // face details without outline: nose, ω mouth, blush
   const f = part(D,'face');
   const nx = D.a.muzzleFront - 0.012, ny = mp[1] + 0.13*mz[1]*0.55;
-  f.add(geo.sphere(0.042, 12, 8), T.nose||'#2a1a14', [nx, ny, 0], null, [0.85,0.72,1.15]);
+  f.add(geo.sphere(0.042, 10, 7), T.nose||'#2a1a14', [nx, ny, 0], null, [0.85,0.72,1.15]);
   f.add(geo.sphere(0.012, 6, 4), '#ffffff', [nx+0.025, ny+0.02, 0.012]);     // nose shine
   const my = mp[1] - 0.012;
   for(const s of [-1,1]) f.add(G.look.geo.torus(0.02, 0.0065, 5, 10, Math.PI), T.mouthCol||'#4a2418',
@@ -184,7 +184,7 @@ function buildEyes(D, T){
   eyeG.dispose();
   // × eyes (dizzy / down / ko), > < squeezed (hurt / charge), ^ ^ happy
   const cap = G.look.geo.capsule(0.011, sz*1.35, 2, 6), capS = G.look.geo.capsule(0.011, sz*1.05, 2, 6);
-  const arc = G.look.geo.torus(sz*0.85, 0.013, 5, 12, Math.PI);
+  const arc = G.look.geo.torus(sz*0.85, 0.013, 5, 10, Math.PI);
   const X = B(), S = B(), H = B();
   for(const s of [-1,1]){
     if(s===skip) continue;
@@ -200,7 +200,7 @@ function buildEyes(D, T){
   D.xGeo = X.build(); D.sqGeo = S.build(); D.happyGeo = H.build();
   // open mouth (yell / hurt / cheer)
   const mo = B(), mp = a.mouthPos;
-  mo.add(G.look.geo.sphere(0.05, 12, 8), '#6b1e24', [0, 0, 0], [0,0,0], [0.45,0.62,0.8]);
+  mo.add(G.look.geo.sphere(0.05, 10, 7), '#6b1e24', [0, 0, 0], [0,0,0], [0.45,0.62,0.8]);
   mo.add(G.look.geo.sphere(0.03, 10, 6), '#ff7d8f', [0.01, -0.018, 0], [0,0,0], [0.45,0.5,0.9]);
   D.mouthGeo = mo.build();
 }
@@ -211,17 +211,17 @@ function earsOf(D, type, col, col2, opt){
   for(const s of [-1,1]){
     const b = part(D, s<0?'earL':'earR');
     if(type==='flop'){          // fluffy floppy ears (poodle-ish)
-      b.add(geo.sphere(0.12, 16, 12), col, [0.0,-0.15, s*0.03], [s*-0.12,0,0], [0.62,1.45,0.5]);
-      b.add(geo.sphere(0.07, 10, 8), col2, [0.02,-0.27, s*0.04]);
-      b.add(geo.sphere(0.06, 10, 8), col2, [-0.05,-0.25, s*0.03]);
+      b.add(geo.sphere(0.12,10,7), col, [0.0,-0.15, s*0.03], [s*-0.12,0,0], [0.62,1.45,0.5]);
+      b.add(geo.sphere(0.07, 8, 6), col2, [0.02,-0.27, s*0.04]);
+      b.add(geo.sphere(0.06, 8, 6), col2, [-0.05,-0.25, s*0.03]);
     } else if(type==='long'){   // long flat dachshund ears
-      b.add(geo.sphere(0.11, 16, 12), col, [0.0,-0.18, s*0.02], [s*-0.08,0,0.1], [0.7,1.95,0.38]);
+      b.add(geo.sphere(0.11,10,7), col, [0.0,-0.18, s*0.02], [s*-0.08,0,0.1], [0.7,1.95,0.38]);
     } else if(type==='hair'){   // long silky maltese hair
-      b.add(geo.sphere(0.13, 16, 12), col, [0.0,-0.19, s*0.03], [s*-0.1,0,0.05], [0.72,1.8,0.52]);
-      b.add(geo.sphere(0.075, 10, 8), col2, [0.01,-0.36, s*0.04]);
+      b.add(geo.sphere(0.13,10,7), col, [0.0,-0.19, s*0.03], [s*-0.1,0,0.05], [0.72,1.8,0.52]);
+      b.add(geo.sphere(0.075, 8, 6), col2, [0.01,-0.36, s*0.04]);
     } else if(type==='curly'){  // poodle curls
       const pts = [[0,-0.06],[0.02,-0.16],[-0.03,-0.2],[0.03,-0.27],[-0.02,-0.3]];
-      pts.forEach((q,i)=> b.add(geo.sphere(i?0.068:0.075, 12, 8), i%2?col2:col, [q[0], q[1], s*0.035]));
+      pts.forEach((q,i)=> b.add(geo.sphere(i?0.068:0.075, 10, 7), i%2?col2:col, [q[0], q[1], s*0.035]));
     } else if(type==='up'){     // huge upright chihuahua ears
       const len = opt.len || 0.42;
       b.add(geo.cone(0.14, len, 14), col, [0, len*0.5, 0], [s*0.32, 0, 0], [0.42,1,1]);
@@ -233,12 +233,12 @@ function earsOf(D, type, col, col2, opt){
 }
 function tailOf(D, type, col, col2){
   const geo = G.look.geo, b = part(D,'tail');
-  if(type==='fluff'){ b.add(geo.sphere(0.085, 14, 10), col, [-0.05,0.05,0]); b.add(geo.sphere(0.06,10,8), col2||col, [-0.1,0.1,0.02]); }
+  if(type==='fluff'){ b.add(geo.sphere(0.085,10,7), col, [-0.05,0.05,0]); b.add(geo.sphere(0.06, 8, 6), col2||col, [-0.1,0.1,0.02]); }
   else if(type==='thin'){ b.add(geo.capsule(0.028, 0.2, 3, 8), col, [-0.1,0.09,0], [0,0,0.95]); b.add(geo.sphere(0.034,8,6), col2||col, [-0.19,0.16,0]); }
-  else if(type==='plume'){ b.add(geo.sphere(0.08, 14, 10), col, [-0.08,0.12,0], [0,0,0.9], [0.8,1.9,1]); }
-  else if(type==='curl'){ b.add(geo.torus(0.07, 0.042, 8, 16, Math.PI*1.6), col, [-0.03,0.13,0], [0,0,-0.6]); b.add(geo.sphere(0.05,10,8), col2||col, [0.02,0.2,0]); }
+  else if(type==='plume'){ b.add(geo.sphere(0.08,10,7), col, [-0.08,0.12,0], [0,0,0.9], [0.8,1.9,1]); }
+  else if(type==='curl'){ b.add(geo.torus(0.07, 0.042, 6, 12, Math.PI*1.6), col, [-0.03,0.13,0], [0,0,-0.6]); b.add(geo.sphere(0.05, 8, 6), col2||col, [0.02,0.2,0]); }
   else if(type==='tiny'){ b.add(geo.capsule(0.024, 0.1, 3, 8), col, [-0.05,0.06,0], [0,0,0.8]); }
-  else if(type==='pom'){ b.add(geo.capsule(0.022, 0.08, 3, 6), col2||col, [-0.04,0.05,0], [0,0,0.9]); b.add(geo.sphere(0.075,12,10), col, [-0.1,0.1,0]); }
+  else if(type==='pom'){ b.add(geo.capsule(0.022, 0.08, 3, 6), col2||col, [-0.04,0.05,0], [0,0,0.9]); b.add(geo.sphere(0.075,8,6), col, [-0.1,0.1,0]); }
   D.a.tailPivot = D.a.tailPivot || [-0.185, 0.08, 0];
 }
 // flared cape hanging from the back of the neck (flattened frustum)
@@ -263,22 +263,22 @@ const DESIGN = {
   inu: { fur:'#fff8e6', muzzle:'#fffdf6', body:'#6f9fe0', sleeve:'#6f9fe0', paw:'#fff8e6', leg:'#fff8e6', foot:'#8a5a2e',
     weaponGlow:'#2d5c8a', halo:true,
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.torus(0.19, 0.03, 8, 28), '#7a5a2a', [0,0.055,0], [HP,0,0], [1,1.04,1]);
+      b.add(geo.torus(0.19, 0.03, 6, 21), '#7a5a2a', [0,0.055,0], [HP,0,0], [1,1.04,1]);
       b.add(geo.rbox(0.03,0.075,0.09,0.012,2), GOLD, [0.19,0.055,0]);
-      b.add(geo.sphere(0.036,10,8), GOLD, [0.205,0.2,0], null, [0.45,0.95,1.05]);                 // paw emblem
+      b.add(geo.sphere(0.036, 8, 6), GOLD, [0.205,0.2,0], null, [0.45,0.95,1.05]);                 // paw emblem
       for(const t of [-1,0,1]) b.add(geo.sphere(0.016,8,6), GOLD, [0.196, 0.25+(t?0:0.012), t*0.032], null, [0.5,1,1]);
-      b.add(geo.torus(0.12, 0.042, 8, 20), '#fff8e6', [0,0.325,0], [HP,0,0]);                       // fluffy collar
+      b.add(geo.torus(0.12, 0.042, 6, 15), '#fff8e6', [0,0.325,0], [HP,0,0]);                       // fluffy collar
       for(const s of [-1,1]) b.add(geo.sphere(0.028,8,6), GOLD, [0.08,0.33,s*0.1]);                  // cape clasps
       for(const [az,el,r] of [[0,1.2,0.075],[0.9,1.02,0.07],[-0.9,1.02,0.07],[2.2,0.95,0.07],[-2.2,0.95,0.07],[Math.PI,1.1,0.075],[0.25,0.72,0.055],[-0.25,0.72,0.055]])
-        h.add(geo.sphere(r,12,8), '#fff4dc', onHead(az, el, 0.02));                                   // poodle curls
+        h.add(geo.sphere(r,10,7), '#fff4dc', onHead(az, el, 0.02));                                   // poodle curls
       earsOf(D, 'flop', '#efe0b8', '#e6d3a4');
       tailOf(D, 'fluff', '#fff8e6', '#f3e6c4');
       capeOf(D, '#e0503e', 0.46, 0.27, '#b83a2c');
       const w = part(D,'weapon');
       w.add(geo.capsule(0.026, 0.09, 3, 8), '#3a5a9a', [0,0,0]);
-      w.add(geo.sphere(0.034, 10, 8), GOLD, [0,-0.08,0]);
+      w.add(geo.sphere(0.034, 8, 6), GOLD, [0,-0.08,0]);
       w.add(geo.rbox(0.2, 0.045, 0.06, 0.018, 2), GOLD, [0,0.075,0]);
-      w.add(geo.torus(0.036, 0.011, 6, 12, Math.PI*1.3), '#ffe27a', [0,0.1,0.034], [0,0,-0.5]);     // crescent moon
+      w.add(geo.torus(0.036, 0.011, 6, 10, Math.PI*1.3), '#ffe27a', [0,0.1,0.034], [0,0,-0.5]);     // crescent moon
       w.add(geo.rbox(0.095, 0.46, 0.028, 0.012, 2), '#bfe8ff', [0,0.33,0]);
       w.add(geo.cone(0.0475, 0.1, 4), '#bfe8ff', [0,0.61,0], null, [1,1,0.3]);
       w.add(geo.box(0.014, 0.42, 0.032), '#f2fbff', [0.018,0.33,0]);
@@ -287,50 +287,49 @@ const DESIGN = {
   shima: { fur:'#b07a44', muzzle:'#d8a878', body:'#fbfbf5', sleeve:'#fbfbf5', paw:'#ffffff', pawR:0.094, leg:'#fbfbf5', foot:'#b07a44',
     bodyScale:[1.18,1.02,0.98], muzzleScale:[1.55,0.7,0.95], muzzleFwd:0.03, glasses:true,
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.sphere(0.08,12,8), '#b07a44', [0.2,0.25,0], null, [0.3,0.9,0.62]);                  // fur in the gi's V-neck
+      b.add(geo.sphere(0.08,10,7), '#b07a44', [0.2,0.25,0], null, [0.3,0.9,0.62]);                  // fur in the gi's V-neck
       for(const s of [-1,1]) b.add(geo.capsule(0.016,0.13,2,6), '#e4e2d8', [0.2,0.25,s*0.045], [s*0.5,0,0]);
-      b.add(geo.torus(0.215, 0.028, 8, 28), '#1e1a1c', [0,0.07,0], [HP,0,0], [1.14,1,1]);
-      b.add(geo.sphere(0.035,10,8), '#1e1a1c', [0.245,0.07,0.03]);
+      b.add(geo.torus(0.215, 0.028, 6, 21), '#1e1a1c', [0,0.07,0], [HP,0,0], [1.14,1,1]);
+      b.add(geo.sphere(0.035, 8, 6), '#1e1a1c', [0.245,0.07,0.03]);
       for(const s of [-1,1]) b.add(geo.capsule(0.018,0.08,2,6), '#1e1a1c', [0.245,0.0,0.03+s*0.03], [s*0.25,0,0]);
       for(const [az,el] of [[Math.PI,1.05],[Math.PI,0.72],[Math.PI,0.4],[0,1.25]])
-        h.addM(geo.sphere(0.1,12,8), '#3a2210', headM(az, el, -0.012, null, [1.5,0.28,0.3]));       // dark stripes
+        h.addM(geo.sphere(0.1,10,7), '#3a2210', headM(az, el, -0.012, null, [1.5,0.28,0.3]));       // dark stripes
       earsOf(D, 'long', '#5e3c20');
       tailOf(D, 'thin', '#b07a44', '#3a2210');
       // round sunglasses (own mesh so they can slide up / get knocked askew)
       const g = part(D,'glasses'), a = D.a, y0 = a.eyeY;
       for(const s of [-1,1]){
-        const az = s*a.eyeAz, el = a.eyeEl, p = onHead(az, el, 0.07); p[1] -= y0;
+        const az = s*(a.eyeAz+0.04), el = a.eyeEl+0.02, p = onHead(az, el, 0.05); p[1] -= y0;
         const m = M(p, faceRot(az, el), null, 'YXZ');
-        g.addM(geo.cylinder(0.075,0.075,0.022,18), '#141418', m.clone().multiply(M([0,0,0],[HP,0,0])));
-        g.addM(geo.torus(0.075,0.012,6,20), '#3a3a44', m.clone());
-        g.addM(geo.sphere(0.02,8,6), '#ffffff', m.clone().multiply(M([-0.03,0.03,0.013],null,[1,1,0.3])));
-        g.addM(geo.capsule(0.01,0.2,2,5), '#2a2a30', M([-0.06, 0.02, s*0.3], [0,0,HP], null));   // temples to the ears
+        g.addM(geo.cylinder(0.06,0.06,0.02,16), '#141418', m.clone().multiply(M([0,0,0],[HP,0,0])));
+        g.addM(geo.torus(0.06, 0.011, 6, 16), '#3a3a44', m.clone());
+        g.addM(geo.sphere(0.017,8,6), '#ffffff', m.clone().multiply(M([-0.024,0.024,0.012],null,[1,1,0.3])));
       }
-      const pb = onHead(0, a.eyeEl+0.08, 0.14); pb[1] -= y0;
-      g.add(geo.capsule(0.011, 0.1, 2, 6), '#2a2a30', pb, [HP,0,0]);
+      const pb = onHead(0, a.eyeEl+0.05, 0.1); pb[1] -= y0;
+      g.add(geo.capsule(0.011, 0.09, 2, 6), '#2a2a30', pb, [HP,0,0]);
     } },
   nuko: { fur:'#ffffff', muzzle:'#ffffff', body:'#b48ae0', sleeve:'#b48ae0', paw:'#ffffff', leg:'#6a4a9a', foot:'#6a4a9a',
     eyeCol:'#4b2a7a', lashes:true, eye:0.054, noBean:true,
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.lathe('nukoRobe', [[0,0.36],[0.1,0.345],[0.16,0.27],[0.2,0.12],[0.26,-0.04],[0.3,-0.125],[0.29,-0.15],[0,-0.15]], 22), '#b48ae0');
-      b.add(geo.torus(0.295, 0.028, 8, 28), '#f1e6ff', [0,-0.13,0], [HP,0,0]);
-      b.add(geo.torus(0.105, 0.03, 8, 20), '#f1e6ff', [0,0.335,0], [HP,0,0]);
+      b.add(geo.lathe('nukoRobe', [[0,-0.15],[0.29,-0.15],[0.3,-0.125],[0.26,-0.04],[0.2,0.12],[0.16,0.27],[0.1,0.345],[0,0.36]], 22), '#b48ae0');
+      b.add(geo.torus(0.295, 0.028, 6, 21), '#f1e6ff', [0,-0.13,0], [HP,0,0]);
+      b.add(geo.torus(0.105, 0.03, 6, 15), '#f1e6ff', [0,0.335,0], [HP,0,0]);
       b.addM(geo.star(0.055,0.5,0.025), GOLD, M([0.2,0.2,0.0],[0,HP,0]).multiply(M([0,0,0],[0,0,0.2])));
       earsOf(D, 'hair', '#f7f2fc', '#eee6f8');
       tailOf(D, 'plume', '#ffffff');
       // big pink bow on top (near side)
       const bp = onHead(0.75, 1.0, 0.06);
-      for(const s of [-1,1]) h.add(geo.sphere(0.1,12,10), '#ff7ab8', [bp[0]-0.02, bp[1]+0.02, bp[2]+s*0.09], [s*0.5,0,0.3], [0.45,0.72,1.1]);
-      h.add(geo.sphere(0.045,10,8), '#ff5aa0', bp);
+      for(const s of [-1,1]) h.add(geo.sphere(0.1,8,6), '#ff7ab8', [bp[0]-0.02, bp[1]+0.02, bp[2]+s*0.09], [s*0.5,0,0.3], [0.45,0.72,1.1]);
+      h.add(geo.sphere(0.045, 8, 6), '#ff5aa0', bp);
       for(const s of [-1,1]) h.add(geo.capsule(0.02,0.08,2,6), '#ff7ab8', [bp[0]+0.02, bp[1]-0.07, bp[2]+s*0.04], [s*0.4,0,0]);
-      for(const [az,el] of [[0.3,0.7],[-0.3,0.7],[0,0.85]]) h.add(geo.sphere(0.065,10,8), '#fbf8ff', onHead(az, el, 0.02)); // bangs
+      for(const [az,el] of [[0.3,0.7],[-0.3,0.7],[0,0.85]]) h.add(geo.sphere(0.065, 8, 6), '#fbf8ff', onHead(az, el, 0.02)); // bangs
       // bell sleeves
       for(const s of [-1,1]){ const a = part(D, s<0?'armL':'armR');
-        a.add(geo.cylinder(0.05, 0.095, 0.15, 12), '#b48ae0', [0,-0.09,0]); a.add(geo.torus(0.09,0.018,6,16), '#f1e6ff', [0,-0.165,0], [HP,0,0]); }
+        a.add(geo.cylinder(0.05, 0.095, 0.15, 12), '#b48ae0', [0,-0.09,0]); a.add(geo.torus(0.09, 0.018, 6, 12), '#f1e6ff', [0,-0.165,0], [HP,0,0]); }
       const w = part(D,'weapon');
       w.add(geo.cylinder(0.022,0.022,0.8,8), '#a07ad0', [0,0.18,0]);
       for(const y of [-0.2, 0.0, 0.5]) w.add(geo.cylinder(0.03,0.03,0.035,8), GOLD, [0,y,0]);
-      w.add(geo.torus(0.07,0.016,6,18), GOLD, [0,0.66,0]);
+      w.add(geo.torus(0.07, 0.016, 6, 14), GOLD, [0,0.66,0]);
       const gm = part(D,'gem');
       gm.add(geo.star(0.11,0.48,0.05), '#ff8fcf');
       gm.add(geo.star(0.055,0.48,0.03), '#ffffff', [0,0,0.028]);
@@ -340,17 +339,18 @@ const DESIGN = {
   guard8: { fur:'#cf8843', muzzle:'#f3cf98', body:'#cf8843', paw:'#eab676', leg:'#cf8843', foot:'#a8632a',
     muzzleScale:[0.85,0.78,1.35], eye:0.036, eyeAz:0.36, blush:'#ff9aa8',
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      for(let i=0;i<7;i++){ const a = (i/7)*TAU; b.add(geo.sphere(0.085,10,8), '#e0a45f', [Math.cos(a)*0.15, 0.3, Math.sin(a)*0.16]); }
-      b.add(geo.torus(0.2, 0.034, 8, 28), '#34426e', [0,0.07,0], [HP,0,0], [1,1.04,1]);
+      for(let i=0;i<7;i++){ const a = (i/7)*TAU; b.add(geo.sphere(0.085, 8, 6), '#e0a45f', [Math.cos(a)*0.15, 0.3, Math.sin(a)*0.16]); }
+      b.add(geo.torus(0.2, 0.034, 6, 21), '#34426e', [0,0.07,0], [HP,0,0], [1,1.04,1]);
       b.add(geo.cylinder(0.05,0.05,0.02,16), GOLD, [0.2,0.15,0], [0,0,HP]);
       b.add(geo.capsule(0.03,0.2,2,6), '#34426e', [0.16,0.16,0], [0.0,0,0]);
-      for(const [az,el] of [[1.35,0.1],[-1.35,0.1],[1.2,-0.35],[-1.2,-0.35],[1.45,0.45],[-1.45,0.45],[0.9,-0.65],[-0.9,-0.65]])
-        h.add(geo.sphere(0.11,12,8), '#dd9850', onHead(az, el, 0.0));                                // lion mane
-      h.add(geo.sphere(0.4,24,14), '#e2e6ee', [0, L.headC+0.17, 0], null, [1.0,0.62,1.05]);         // silver helmet
-      h.add(geo.torus(0.365,0.03,8,32), '#b8c0cc', [0, L.headC+0.12, 0], [HP,0,0], [1,1.06,1]);
-      for(const az of [0.5, -0.5, 2.3, -2.3]){ const c = Math.cos(az), s = Math.sin(az);
-        h.add(geo.sphere(0.048,10,8), '#f4f6fa', [c*0.25, L.headC+0.34, s*0.27]); }
-      for(const s of [-1,1]) h.add(geo.cone(0.065,0.1,10), '#b8733a', [0.0, L.headC+0.33, s*0.3], [s*0.5,0,0]);
+      for(const [az,el] of [[1.3,-0.05],[-1.3,-0.05],[0.95,-0.5],[-0.95,-0.5]])
+        h.addM(geo.sphere(0.13,10,7), '#dd9850', headM(az, el, -0.06, null, [1,1,0.55]));             // fluffy cheek mane
+      h.add(geo.sphere(0.37,22,12), '#e2e6ee', [0, L.headC+0.13, 0], null, [1.0,0.62,1.06]);        // silver helmet
+      h.add(geo.torus(0.345, 0.026, 6, 24), '#9aa6b8', [0, L.headC+0.1, 0], [HP,0,0], [1,1.08,1]);
+      for(const [az,y,r] of [[0.0,0.3,0.05],[1.2,0.27,0.045],[-1.2,0.27,0.045],[Math.PI,0.3,0.05]])
+        h.add(geo.sphere(r,8,6), '#b8c2d2', [Math.cos(az)*0.24, L.headC+y, Math.sin(az)*0.25]);    // 4 round knobs
+      h.add(geo.sphere(0.055,8,6), '#f4f6fa', [0, L.headC+0.36, 0]);
+      for(const s of [-1,1]) h.add(geo.cone(0.06,0.09,8), '#b8733a', [-0.05, L.headC+0.3, s*0.28], [s*0.6,0,0]);
       part(D,'face').add(geo.sphere(0.03,8,6), '#5a5a8a', [D.a.mouthPos[0]+0.012, D.a.mouthPos[1]-0.008, 0.012], null, [0.55,0.9,0.9]);
       tailOf(D, 'curl', '#dd9850', '#e0a45f');
       const w = part(D,'weapon');
@@ -364,8 +364,8 @@ const DESIGN = {
   watch: { fur:'#ffffff', muzzle:'#ffffff', body:'#3a3f58', sleeve:'#3a3f58', paw:'#ffffff', leg:'#3a3f58', foot:'#1f2130',
     eyeCol:'#1d3f8f', eye:0.062, eyeAz:0.43, muzzleScale:[0.8,0.66,1.0],
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.sphere(0.12,12,10), '#f4f6fb', [0.15,0.2,0], null, [0.55,1.1,0.75]);                // shirt front
-      b.add(geo.sphere(0.035,10,8), '#e0263c', [0.2,0.32,0]);                                       // bow tie
+      b.add(geo.sphere(0.12,8,6), '#f4f6fb', [0.15,0.2,0], null, [0.55,1.1,0.75]);                // shirt front
+      b.add(geo.sphere(0.035, 8, 6), '#e0263c', [0.2,0.32,0]);                                       // bow tie
       for(const s of [-1,1]) b.add(geo.cone(0.05,0.08,10), '#e0263c', [0.19,0.32,s*0.055], [s*-HP,0,0], [0.7,1,1]);
       earsOf(D, 'up', '#ffffff', null, { len:0.46, inner:'#f4b0c4' });
       tailOf(D, 'tiny', '#ffffff');
@@ -378,16 +378,16 @@ const DESIGN = {
       const w = part(D,'weapon');
       w.add(geo.cylinder(0.02,0.02,0.52,8), '#22242e', [0,0.24,0]);
       w.add(geo.sphere(0.028,8,6), '#f4f6fb', [0,0.5,0]);
-      w.add(geo.torus(0.05,0.018,6,12,Math.PI), '#dfe3ea', [-0.05,-0.02,0], [0,0,Math.PI]);
+      w.add(geo.torus(0.05, 0.018, 6, 10, Math.PI), '#dfe3ea', [-0.05,-0.02,0], [0,0,Math.PI]);
       w.add(geo.sphere(0.024,8,6), '#dfe3ea', [-0.1,-0.02,0]);
       D.a.tip = [0,0.52,0]; D.a.wbase = [0,0.05,0];
     } },
   wanden: { fur:'#f4e8c4', muzzle:'#fffaf0', body:'#c8463c', sleeve:'#c8463c', paw:'#f4e8c4', leg:'#33313d', foot:'#f4f0e6',
     patchEye:1,
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.sphere(0.2,14,10), '#33313d', [0.12,0.15,0], null, [0.45,1.12,0.5]);                // kimono front
+      b.add(geo.sphere(0.2,10,7), '#33313d', [0.12,0.15,0], null, [0.45,1.12,0.5]);                // kimono front
       for(const s of [-1,1]) b.add(geo.capsule(0.017,0.15,2,6), '#f4f0e6', [0.2,0.26,s*0.045], [s*0.55,0,0]);
-      b.add(geo.torus(0.2, 0.045, 8, 28), '#9c8a5e', [0,0.06,0], [HP,0,0], [1,1.04,1]);
+      b.add(geo.torus(0.2, 0.045, 6, 21), '#9c8a5e', [0,0.06,0], [HP,0,0], [1,1.04,1]);
       // long black scabbard at the left hip, pointing back-down
       const dir = [-Math.sin(1.95), Math.cos(1.95)];
       b.add(geo.rbox(0.05,0.86,0.036,0.016,2), '#1e1c24', [0.14+dir[0]*0.4, 0.07+dir[1]*0.4, -0.2], [0,0,1.95]);
@@ -395,11 +395,11 @@ const DESIGN = {
       for(const s of [-1,1]){ const a = part(D, s<0?'armL':'armR');
         a.add(geo.rbox(0.13,0.15,0.085,0.035,2), '#c8463c', [-0.01,-0.08,s*0.01]); }
       for(const s of [-1,1]) part(D, s<0?'legL':'legR').add(geo.cylinder(0.078,0.1,0.13,12), '#33313d', [0,-0.07,0]);
-      h.add(geo.sphere(0.14,14,10), '#f4e8c4', [-0.02, L.headC+0.39, 0]);                          // topknot
-      for(let i=0;i<5;i++){ const a = i/5*TAU; h.add(geo.sphere(0.07,10,8), '#fff3d6', [-0.02+Math.cos(a)*0.1, L.headC+0.42, Math.sin(a)*0.1]); }
-      h.add(geo.torus(0.09,0.022,6,16), '#8c2a24', [-0.02, L.headC+0.3, 0], [HP,0,0]);
-      h.addM(geo.sphere(0.068,14,10), '#1a1a22', headM(D.a.eyeAz, D.a.eyeEl, 0.0, null, [1,0.9,0.3]));  // eyepatch
-      h.add(geo.torus(L.headR*1.01, 0.013, 5, 36), '#1a1a22', [0, L.headC, 0], [0.55,-0.4,0], [1.0,0.93,1.06]);
+      h.add(geo.sphere(0.14,10,7), '#f4e8c4', [-0.02, L.headC+0.39, 0]);                          // topknot
+      for(let i=0;i<5;i++){ const a = i/5*TAU; h.add(geo.sphere(0.07, 8, 6), '#fff3d6', [-0.02+Math.cos(a)*0.1, L.headC+0.42, Math.sin(a)*0.1]); }
+      h.add(geo.torus(0.09, 0.022, 6, 12), '#8c2a24', [-0.02, L.headC+0.3, 0], [HP,0,0]);
+      h.addM(geo.sphere(0.068,10,7), '#1a1a22', headM(D.a.eyeAz, D.a.eyeEl, 0.0, null, [1,0.9,0.3]));  // eyepatch
+      h.add(geo.torus(L.headR*0.97, 0.014, 5, 30), '#1a1a22', [0, L.headC+0.09, 0], [HP+0.62,0,0], [1.03,1.08,1.0]);
       earsOf(D, 'curly', '#f4e8c4', '#e6d6a6');
       tailOf(D, 'pom', '#f4e8c4', '#e6d6a6');
       const w = part(D,'weapon');
@@ -414,14 +414,14 @@ const DESIGN = {
     } },
   mack: { fur:'#f0bc62', muzzle:'#f8dca8', body:'#4a6fa8', paw:'#f8dca8', leg:'#4a6fa8', foot:'#6a4020',
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      b.add(geo.lathe('mackPoncho', [[0,0.37],[0.11,0.35],[0.21,0.24],[0.27,0.1],[0.28,0.05],[0.25,0.035],[0,0.035]], 22), '#e0602c');
-      for(const y of [0.12, 0.08]) b.add(geo.torus(0.262-(y-0.08)*0.5, 0.012, 5, 28), '#f6d8a0', [0,y,0], [HP,0,0]);
-      b.add(geo.torus(0.115,0.035,8,20), '#b8241c', [0,0.33,0], [HP,0,0]);
+      b.add(geo.lathe('mackPoncho', [[0,0.035],[0.25,0.035],[0.28,0.05],[0.27,0.1],[0.21,0.24],[0.11,0.35],[0,0.37]], 22), '#e0602c');
+      for(const y of [0.12, 0.08]) b.add(geo.torus(0.262-(y-0.08)*0.5, 0.012, 5, 21), '#f6d8a0', [0,y,0], [HP,0,0]);
+      b.add(geo.torus(0.115, 0.035, 6, 15), '#b8241c', [0,0.33,0], [HP,0,0]);
       b.add(geo.cone(0.085,0.13,3), '#b8241c', [0.15,0.27,0], [0,0,Math.PI+0.35], [0.5,1,1]);
       b.addM(geo.star(0.05,0.5,0.02), GOLD, M([0.17,0.18,0.11],[0,HP-0.6,0]));
       for(const [az,el] of [[1.3,0.2],[-1.3,0.2],[1.2,-0.3],[-1.2,-0.3],[0.85,-0.62],[-0.85,-0.62]])
-        h.add(geo.sphere(0.09,12,8), '#d89a3e', onHead(az, el, -0.02));                              // mane
-      for(const s of [-1,1]) h.add(geo.sphere(0.075,10,8), '#d89a3e', onHead(s*1.25, 0.62, 0.0), [s*-0.6,0,0.3], [0.9,0.6,1.1]);
+        h.addM(geo.sphere(0.1,10,7), '#d89a3e', headM(az, el, -0.05, null, [1,1,0.55]));                              // mane
+      for(const s of [-1,1]) h.add(geo.sphere(0.075, 8, 6), '#d89a3e', onHead(s*1.25, 0.62, 0.0), [s*-0.6,0,0.3], [0.9,0.6,1.1]);
       // ten-gallon hat
       const y = L.headC+0.25;
       h.add(geo.sphere(0.36,24,8), '#5c3c1e', [0, y, 0], [0,0,-0.1], [1,0.07,0.95]);
@@ -463,7 +463,7 @@ function shared(){
   SH = {
     starsGeo,
     starsMat: G.look.mat('#ffffff', { vertexColors:true, emissive:'#ffb400', emissiveIntensity:0.55, rough:0.4 }),
-    haloGeo: geo.torus(0.17, 0.028, 8, 30),
+    haloGeo: geo.torus(0.17, 0.028, 6, 24),
     haloMat: G.look.mat('#ffd54a', { emissive:'#ffb000', emissiveIntensity:0.9, rough:0.3, metal:0.2, rim:0.6 }),
     gemMat: G.look.vmat({ emissive:'#ff5fb4', emissiveIntensity:0.55, rough:0.35 }),
     eyeMat: G.look.vmat({ rough:0.25, rim:0.2 }),       // same shared material G.look.eye uses
@@ -543,7 +543,7 @@ function build(id, opts){
   const stars = new THREE.Mesh(sh.starsGeo, sh.starsMat); stars.position.set(0, L.headC+0.42, 0); stars.visible = false; neck.add(stars);
 
   const rig = {
-    root, heroId:id, style:hero.weapon, height:1.25*scale + (T.halo?0.08:0), radius:0.42*scale, scale,
+    root, heroId:id, style:hero.weapon, earType:a.earType||null, height:1.25*scale + (T.halo?0.08:0), radius:0.42*scale, scale,
     tip, base, mat,
     n:{ mir, yaw, act, sq, hips, body, head, neck, legL, legR, armL, armR, handR, wpn, gem, eyeP, eyes, eyesX, eyesSq, eyesHappy,
         mouth, glasses, earL, earR, tail, cape, halo, stars },
@@ -593,7 +593,7 @@ const RESTX = {
   sword:  { aRz:0.5, wz:0.8 },
   fist:   { aLz:1.0, aRz:0.75, aLx:0.18, aRx:0.24, aLy:0.3, aRy:0.22 },
   staff:  { aRz:0.4, wz:1.1 },
-  hammer: { aRz:0.35, wz:1.2, aLz:0.55, aLy:0.45, aLx:0.2 },
+  hammer: { aRz:1.05, wz:1.65, aRx:0.25, aLz:0.75, aLy:0.45, aLx:0.2 },
   cane:   { aRz:0.25, wz:-1.72 },
   katana: { aRz:0.85, aRy:0.15, wz:-0.1, aLz:0.8, aLy:0.55, aLx:0.15 },
   gun:    { aRz:0.3, wz:-1.0 },
@@ -972,5 +972,216 @@ function updateRig(rig, e, dt, first){
   applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p);
 }
 
-//@@NEXT@@
+function applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p){
+  const st = rig.st, P = st.P, n = rig.n, sc = rig.scale;
+  // ---- facing: turn through "facing the camera", mirror when crossing it (weapon hand stays on the camera side)
+  const face = (e.face||1) >= 0 ? 1 : -1;
+  if(first) st.tw = face; else st.tw = U.approach(st.tw, face, 0.2*dt*60);
+  const aw = Math.abs(st.tw), sgn = st.tw >= 0 ? 1 : -1;
+  n.mir.scale.set(sgn*sc, sc, sc);
+  n.yaw.rotation.y = -(TURN + (1-aw)*(HP - TURN));
+  // ---- body
+  n.act.position.set(P.fx, COM + P.y, 0);
+  n.act.rotation.set(0, 0, P.roll);
+  const s = Math.max(0.4, 1 + P.sq), ss = 1/Math.sqrt(s);
+  n.sq.scale.set(ss, s, ss);
+  n.hips.rotation.set(P.side, P.twist + P.spin, -P.lean);
+  n.neck.rotation.set(P.tilt, P.hy - HEADTURN*aw, P.nod);
+  n.armL.rotation.set(P.aLx, -P.aLy, P.aLz);
+  n.armR.rotation.set(-P.aRx, P.aRy, P.aRz);
+  n.legL.rotation.set(P.lLx, 0, P.lLz);
+  n.legR.rotation.set(-P.lRx, 0, P.lRz);
+  if(n.wpn) n.wpn.rotation.set(P.wx, P.wy, -HP + P.wz + P.wspin);
+  // weapon trail anchor: kicks move tip/base to the right foot
+  const kick = rig.style==='fist' && st.tpl && KICKS[st.tpl];
+  const tipPar = kick ? rig.footTip : rig.tipHome;
+  if(rig.tip.parent !== tipPar){
+    if(kick){ rig.footTip.add(rig.tip); rig.tip.position.set(0,0,0); rig.footBase.add(rig.base); rig.base.position.set(0,0,0); }
+    else { rig.tipHome.add(rig.tip); rig.tipHome.add(rig.base);
+      rig.tip.position.set(L.hand[0]+0.02, L.hand[1]-0.07, 0); rig.base.position.set(L.hand[0], L.hand[1]+0.03, 0); }
+  }
+  // ---- secondary motion (springs)
+  const fwd = (e.vx||0)*face*60, up = (e.vy||0)*60;
+  const headY = P.y + P.sq*0.9;
+  const hv = first ? 0 : (headY - st.prevHY)/Math.max(dt,1e-4); st.prevHY = headY;
+  const happy = eyes==='happy';
+  const earType = rig.earType;
+  spring(st.eBack, U.clamp(fwd*0.12 + P.lean*0.9 + P.roll*0.15, -0.6, 1.1), 170, 9, dt);
+  spring(st.eFlap, U.clamp(-up*0.1 - hv*0.12 + (happy?0.15:0), -0.35, 1.0), 150, 8, dt);
+  const wag = (anim==='run'?0.55: happy?0.8 : 0.25) * Math.sin(st.t*(happy?0.45:anim==='run'?0.35:0.12));
+  spring(st.tYaw, P.tail*0.6 + wag, 120, 10, dt);
+  spring(st.tLift, U.clamp(-up*0.06 - hv*0.08 + (happy?0.3:0), -0.5, 0.8), 140, 9, dt);
+  spring(st.cSwing, -U.clamp(Math.abs(fwd)*0.22 + Math.max(0, up)*0.12 + P.lean*0.6, -0.4, 1.3) - U.clamp(-hv*0.1,-0.4,0.4), 90, 7, dt);
+  spring(st.cFlare, U.clamp(-up*0.05, -0.2, 0.3) + 0.05*Math.sin(st.t*0.07), 80, 7, dt);
+  if(first){ for(const k of ['eBack','eFlap','tYaw','tLift','cSwing','cFlare']){ const sp = st[k]; sp.v = 0; } }
+  if(n.earL){
+    const up_ = earType==='up';
+    const zb = up_ ? st.eBack.x*0.6 : -st.eBack.x, fl = st.eFlap.x*(up_?-0.4:1) + (up_?0.05:0.12);
+    n.earL.rotation.set(up_ ? -fl : fl, 0, zb);
+    n.earR.rotation.set(up_ ? fl : -fl, 0, zb);
+  }
+  if(n.tail) n.tail.rotation.set(0, st.tYaw.x, st.tLift.x);
+  if(n.cape) n.cape.rotation.set(st.cFlare.x*0.3, 0, st.cSwing.x);
+  // ---- expressions
+  let mode = eyes;
+  if(mode==='open'){
+    st.blinkT += dt*60;
+    const bt = st.blinkT - st.blinkNext;
+    if(bt > 0){ const k = U.bump(bt, 0, 8); n.eyes.scale.y = Math.max(0.12, 1 - k); if(bt > 8){ st.blinkT = 0; st.blinkNext = 100 + Math.random()*160; if(Math.random()<0.2) st.blinkNext = 12; } }
+    else n.eyes.scale.y = 1;
+  } else n.eyes.scale.y = 1;
+  const hide = !!rig.hideShared;
+  n.eyes.visible = mode==='open' && !hide;
+  n.eyesX.visible = mode==='x' && !hide;
+  n.eyesSq.visible = mode==='sq' && !hide;
+  n.eyesHappy.visible = mode==='happy' && !hide;
+  if(n.glasses){
+    // sunglasses: on the eyes normally; slide up for smiles, get knocked down the nose when hurt
+    const g = n.glasses;
+    if(mode==='happy'){ g.position.set(-0.01, 0.15, 0); g.rotation.set(0,0,0.25); }
+    else if(mode==='x' || mode==='sq'){ g.position.set(0.02, -0.075, 0); g.rotation.set(0.28, 0, -0.12); }
+    else { g.position.set(0,0,0); g.rotation.set(0,0,0); }
+    if(mode==='open') n.eyes.visible = false;                 // behind the dark lenses
+  }
+  const mo = P.mouth;
+  n.mouth.visible = mo > 0.3 && !hide;
+  if(n.mouth.visible){ const k = 0.55 + 0.55*mo; n.mouth.scale.set(1, k, k); }
+  n.stars.visible = stars && !hide;
+  if(stars){ n.stars.rotation.y += 0.09*dt*60; n.stars.position.y = L.headC + 0.42 + 0.02*Math.sin(st.t*0.2); }
+  // ---- halo / star staff idle motion
+  if(n.halo){ n.halo.position.y = L.headC + 0.47 + 0.018*Math.sin(st.t*0.06); n.halo.rotation.set(HP + 0.12*Math.sin(st.t*0.035), 0.1*Math.sin(st.t*0.05), 0); }
+  if(n.gem){ st.gemSpin += (0.035 + (st.tpl==='cast'||st.tpl==='bigcast'||anim==='ult' ? 0.2 : 0))*dt*60; n.gem.rotation.set(0, st.gemSpin, 0); }
+  // ---- hit flash + charge glow (per-rig material only)
+  const ud = rig.mat.userData;
+  ud.uFlash.value = (e.flashT||0) > 0 ? 0.85 : 0;
+  const g = glow > 0 ? glow : 0;
+  ud.uTint.value.setRGB(1 + 0.32*g, 1 + 0.26*g, 1 + 0.1*g);
+}
+
+// select-screen idle: each hero shows their personality (looping, frames T / free-running t)
+function posePersonality(rig, Q, rest, T, t){
+  Q._eyes = 'open';
+  Q.sq += 0.02*Math.sin(t*0.07);
+  switch(rig.heroId){
+    case 'inu': {                       // sword up in a salute, paw on the hip, a smile now and then
+      Q.aRz = 2.25; Q.wz = -0.85; Q.aRx = 0.22; Q.aLz = -0.35; Q.aLx = 0.95; Q.aLy = -0.25;
+      Q.lean = -0.08; Q.nod = 0.12 + 0.03*Math.sin(t*0.05); Q.tail = 0.5*Math.sin(t*0.2);
+      if((T % 200) > 140) Q._eyes = 'happy';
+      break; }
+    case 'shima': {                     // shadow boxing with a bounce
+      const c = T % 44;
+      Q.y = 0.03*Math.abs(Math.sin(t*0.14));
+      if(c < 12){ const k = U.bump(c,0,12); Q.aLz = U.lerp(rest.aLz, 1.62, k); Q.aLy = U.lerp(rest.aLy, 0.38, k); Q.twist = -0.35*k; Q.mouth = k; }
+      else if(c>=22 && c<34){ const k = U.bump(c,22,34); Q.aRz = U.lerp(rest.aRz, 1.62, k); Q.aRy = U.lerp(rest.aRy, 0.38, k); Q.twist = 0.4*k; Q.mouth = k; }
+      break; }
+    case 'nuko': {                      // twirls the star staff, sways, paw to the cheek
+      Q.aRz = 1.2; Q.wz = -0.4; Q.wspin = t*0.09; Q.side = 0.09*Math.sin(t*0.06); Q.tilt = 0.18*Math.sin(t*0.06+0.6);
+      Q.aLz = 2.1; Q.aLy = 0.7; Q.aLx = 0.1; Q._eyes = (T % 180) > 110 ? 'happy' : 'open';
+      break; }
+    case 'guard8': {                    // hammer on the shoulder, flexing
+      Q.aRz = 1.25; Q.wz = 1.75; Q.aLz = 2.35 + 0.12*Math.sin(t*0.1); Q.aLx = 1.0; Q.aLy = -0.25;
+      Q.nod = 0.2; Q.lean = -0.1; Q.y = 0.012*Math.abs(Math.sin(t*0.1));
+      if((T % 160) > 110){ Q._eyes = 'happy'; Q.mouth = 0.8; }
+      break; }
+    case 'watch': {                     // tips the hat with a bow, then twirls the cane
+      const c = (T % 160)/160;
+      if(c < 0.35){ const k = U.bump(c, 0, 0.35); Q.aLz = 2.9*k + rest.aLz*(1-k); Q.aLy = 0.55*k; Q.lean = 0.25*k; Q.nod = -0.25*k; Q._eyes = k>0.5?'happy':'open'; }
+      else { Q.aRz = 1.25; Q.wz = -1.25; Q.wspin = -t*0.3; Q.aLz = -0.2; Q.aLx = 0.9; }
+      break; }
+    case 'wanden': {                    // calm iai stance, eyes closed, opens them now and then
+      Q.aRz = 0.55; Q.aRy = 1.25; Q.wz = -2.55; Q.aLz = 0.3; Q.aLy = 0.35; Q.lean = 0.12; Q.sq -= 0.05;
+      Q.nod = -0.02 + 0.02*Math.sin(t*0.04); Q._eyes = (T % 220) < 150 ? 'happy' : 'open';
+      break; }
+    case 'mack': {                      // spins the cork gun on a finger, then points it up with a grin
+      const c = (T % 150)/150;
+      if(c < 0.6){ Q.aRz = 1.2; Q.wz = -1.2; Q.wspin = -t*0.35; Q.aLz = -0.3; Q.aLx = 0.9; }
+      else { Q.aRz = 2.9; Q.wz = -1.45; Q.nod = 0.2; Q._eyes = 'happy'; Q.mouth = 0.9; Q.aLz = -0.3; Q.aLx = 0.9; }
+      break; }
+  }
+}
+
+// ---------------------------------------------------------------- portraits (bust on a transparent background → PNG dataURL)
+const pCache = {};
+let pScene = null, pCam = null, pRT = null;
+const _hv = new THREE.Vector3(), _hf = new THREE.Vector3(), _cc = new THREE.Color();
+function portrait(id, opts){
+  opts = opts || {};
+  const hero = BYID[id]; if(!hero) return null;
+  const size = Math.max(32, Math.min(1024, opts.size|0 || 256)), expr = opts.expr || 'normal';
+  const key = hero.id+'|'+size+'|'+expr+'|'+(opts.bg||'');
+  if(pCache[key]) return pCache[key];
+  const R = G.renderer; if(!R) return null;
+  let url = null, rig = null;
+  const prevRT = R.getRenderTarget(), prevA = R.getClearAlpha(), prevAuto = R.autoClear; R.getClearColor(_cc);
+  try {
+    if(!pScene){
+      pScene = new THREE.Scene();
+      pScene.add(new THREE.HemisphereLight(0xdcefff, 0xf2d6b0, 1.3));
+      const key = new THREE.DirectionalLight(0xfff0d8, 2.3); key.position.set(-3, 5, 6); pScene.add(key);
+      const rim = new THREE.DirectionalLight(0xbfe0ff, 1.8); rim.position.set(4, 4, -6); pScene.add(rim);
+      const fill = new THREE.DirectionalLight(0xffe2f0, 0.5); fill.position.set(5, 1, 6); pScene.add(fill);
+      pCam = new THREE.PerspectiveCamera(22, 1, 0.05, 50);
+    }
+    const S = size*2;                                        // 2× supersampled, box-filtered by the 2D canvas
+    if(!pRT || pRT.width!==S){
+      if(pRT) pRT.dispose();
+      pRT = new THREE.WebGLRenderTarget(S, S, { depthBuffer:true });
+      pRT.texture.colorSpace = THREE.SRGBColorSpace; pRT.texture.internalFormat = 'RGBA8';
+      pRT.isXRRenderTarget = true;       // r160: makes three apply tone mapping + sRGB output like the screen does
+    }
+    rig = build(hero.id, { anim:'idle' });
+    const ent = { anim:'idle', animT:0, animLen:0, animHit:0.35, face:1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 };
+    rig.st.blinkNext = 1e9;
+    updateRig(rig, ent, G.cfg.TICK, true);
+    const n = rig.n;
+    if(expr==='happy'){ n.eyes.visible = false; n.eyesHappy.visible = true; n.mouth.visible = true; n.mouth.scale.set(1,1,1);
+      if(n.glasses){ n.glasses.position.set(-0.01,0.15,0); n.glasses.rotation.set(0,0,0.25); } }
+    else if(expr==='hurt'){ n.eyes.visible = false; n.eyesSq.visible = true; n.mouth.visible = true; }
+    else if(expr==='shout'){ n.mouth.visible = true; n.mouth.scale.set(1,1.1,1.1); }
+    pScene.add(rig.root);
+    rig.root.updateMatrixWorld(true);
+    // aim at the face from a 3/4 front view
+    n.neck.localToWorld(_hv.set(0, L.headC, 0));
+    _hf.set(1,0,0).transformDirection(n.neck.matrixWorld);
+    _hf.multiplyScalar(0.55).add(_p.set(0,0.12,0.75)).normalize();
+    const sc = rig.scale, dist = (0.95*sc) / Math.tan(pCam.fov*Math.PI/360) * 0.5 + 0.3*sc;
+    pCam.position.copy(_hv).addScaledVector(_hf, dist);
+    pCam.lookAt(_hv.x, _hv.y - 0.1*sc, _hv.z);
+    R.setRenderTarget(pRT);
+    if(opts.bg){ R.setClearColor(opts.bg, 1); } else R.setClearColor(0x000000, 0);
+    R.autoClear = true;
+    R.clear(true, true, true);
+    R.render(pScene, pCam);
+    const buf = new Uint8Array(S*S*4);
+    R.readRenderTargetPixels(pRT, 0, 0, S, S, buf);
+    const big = document.createElement('canvas'); big.width = big.height = S;
+    const bx = big.getContext('2d'), img = bx.createImageData(S, S);
+    for(let y=0;y<S;y++) img.data.set(buf.subarray((S-1-y)*S*4, (S-y)*S*4), y*S*4);   // flip rows
+    bx.putImageData(img, 0, 0);
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const cx = c.getContext('2d'); cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+    cx.drawImage(big, 0, 0, size, size);
+    url = c.toDataURL('image/png');
+    pCache[key] = url;
+  } catch(err){ G.logError && G.logError('heroes.portrait '+id, err); }
+  finally {
+    R.setRenderTarget(prevRT); R.setClearColor(_cc, prevA); R.autoClear = prevAuto;
+    if(rig){ pScene && pScene.remove(rig.root); rig.dispose(); }
+  }
+  return url;
+}
+
+// ---------------------------------------------------------------- export
+G.heroes = {
+  list: LIST,
+  ids: LIST.map(h=>h.id),
+  get(id){ return BYID[id] || null; },
+  init(){ for(const h of LIST){ try { getModel(h.id); } catch(err){ G.logError('heroes.model '+h.id, err); } } shared(); },
+  build,
+  portrait,
+  clearPortraits(){ for(const k in pCache) delete pCache[k]; },
+  // for tests / other modules: which swing template an anim uses for a hero (e.g. 'hslash')
+  moveOf(id, anim){ const h = BYID[id]; return h && MOVES[h.weapon] ? (MOVES[h.weapon][anim] || null) : null; },
+  layout: L,
+};
 })();

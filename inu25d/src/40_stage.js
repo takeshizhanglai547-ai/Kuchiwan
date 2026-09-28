@@ -148,7 +148,7 @@ G.stages = [
   { id:'s3', no:3, name:'月夜の森', kana:'つくよみの もり', length:102, bgm:'stage3', theme:THEMES.forest,
     waves:[
       { at:16, width:16, foes:[['pounce',2],['thrower',2]] },
-      { at:38, width:16, foes:[['flyer',2],['pounce',2]], then:[['thrower',1],['wanhei',1]], reward:'coin' },
+      { at:38, width:16, foes:[['flyer',2],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
       { at:62, width:17, foes:[['pierrot',1],['pounce',2],['flyer',1]], then:[['thrower',2]], reward:'bone' },
     ],
     boss:{ type:'ghost', at:86, x:86 },
@@ -162,7 +162,7 @@ G.stages = [
     waves:[
       { at:16, width:16, foes:[['ari',2],['shield',2]] },
       { at:38, width:16, foes:[['kire',2],['ari',2]], then:[['shield',1],['ari',1]], reward:'coin' },
-      { at:62, width:17, foes:[['oni',1],['shield',2],['kire',1]], then:[['ari',2],['wanhei',1]], reward:'bone' },
+      { at:62, width:17, foes:[['oni',1],['shield',2],['kire',1]], then:[['ari',2],['kire',1]], reward:'bone' },
     ],
     boss:{ type:'cerbe', at:88, x:88 },
     hints:[
@@ -1000,7 +1000,7 @@ const SKY_VS = `varying vec3 vDir;
 void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`;
 const SKY_FS = `uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBot; uniform float uH0; uniform float uH1;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uGlowCol; uniform float uSunR; uniform float uGlowR; uniform float uGlowStr;
-uniform float uMoon; uniform float uStars; uniform float uTime;
+uniform float uMoon; uniform float uStars; uniform float uTime; uniform float uHdr;
 varying vec3 vDir;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main(){
@@ -1032,7 +1032,7 @@ void main(){
     } else {
       dc = mix(dc, vec3(1.0), 0.5 * (1.0 - ang / uSunR));
     }
-    col = mix(col, dc, disc);
+    col = mix(col, dc * uHdr, disc);
   }
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -1151,7 +1151,7 @@ function buildSky(th){
     uH0:{ value:s.h0 }, uH1:{ value:s.h1 },
     uSunDir:{ value:dir }, uSunCol:{ value:new THREE.Color(sun.color) }, uGlowCol:{ value:new THREE.Color(sun.glow) },
     uSunR:{ value:sun.r }, uGlowR:{ value:sun.glowR }, uGlowStr:{ value:sun.glowStr }, uMoon:{ value:sun.moon||0 },
-    uStars:{ value:th.stars||0 }, uTime:{ value:0 },
+    uStars:{ value:th.stars||0 }, uTime:{ value:0 }, uHdr:{ value:1 },
   };
   const mat = own(new THREE.ShaderMaterial({ uniforms:env.skyU, vertexShader:SKY_VS, fragmentShader:SKY_FS, side:THREE.BackSide, depthWrite:false, fog:false }));
   const geo = own(new THREE.SphereGeometry(300, 40, 20));
@@ -1378,6 +1378,7 @@ function makeSwayMats(){
 }
 function buildChunks(c){
   const glowMat = own(new THREE.MeshBasicMaterial({ vertexColors:true, toneMapped:false }));
+  env.glowMat = glowMat; env.glowPost = null;
   const solidMat = G.look.vmat({ rough:0.85, rim:0.45 }), decoMat = G.look.vmat({ rough:0.9, rim:0.3 });
   makeSwayMats();
   let tris = 0, meshes = 0;
@@ -1498,7 +1499,7 @@ function disposeEnv(){
   if(env.root && env.root.parent) env.root.parent.remove(env.root);
   for(const x of env.own){ try { x.dispose(); } catch(err){ G.logError('stage.dispose', err); } }
   env.own = []; env.root = null; env.sky = null; env.far = null; env.clouds = null; env.cloudData = null;
-  env.parts = null; env.halos = null; env.spinners = []; env.partU = null; env.haloU = null; env.skyU = null;
+  env.parts = null; env.halos = null; env.spinners = []; env.partU = null; env.haloU = null; env.skyU = null; env.glowMat = null;
   swayMat = null; swayOutline = null;
   env.built = false; env.idx = -1;
   restoreDefaults();
@@ -1511,6 +1512,7 @@ const st = {
 };
 const B = { xmin:0, xmax:100, zmin:ZMIN, zmax:ZMAX };   // bounds() result (reused, never allocate per tick)
 const HINT_DELAY = 160, HINT_HOLD = 120;              // ticks: 90_game's stage banner runs 150
+const GLOW_HDR = 1.6;                                 // glow colour multiplier while 05_post's bloom is active
 
 function resetProgress(def){
   st.def = def; st.ptr = 0; st.active = null; st.locked = false; st.lockA = 0; st.lockB = 0; st.clearA = 0; st.maxX = 0;
@@ -1634,6 +1636,13 @@ function frameEnv(dt){
   env.time += dt;
   const t = env.time, cam = G.camera, cx = G.cam.x;
   if(env.sky){ env.sky.position.copy(cam.position); env.skyU.uTime.value = t; }
+  // 05_post (bloom) renders to an HDR target and tone-maps in its composite: push glowing things above 1.0 so
+  // they bloom there; without post they stay un-tone-mapped at their exact colours
+  const post = !!(G.post && G.post.active);
+  if(env.glowMat && env.glowPost !== post){
+    env.glowPost = post; env.glowMat.color.setScalar(post ? GLOW_HDR : 1);
+    if(env.skyU) env.skyU.uHdr.value = post ? 1.8 : 1;
+  }
   if(env.far) env.far.position.x = cx*env.farPar;
   env.swayU.uTime.value = t;
   let px = 360;
@@ -1666,7 +1675,7 @@ G.stage = {
   info:null, index:-1, done:false,
   env, st, THEMES,
   init(){ bindBus(); },
-  load(i, opts){
+  load(i){
     bindBus();
     i = U.clamp(i|0, 0, G.stages.length - 1);
     const def = G.stages[i];
