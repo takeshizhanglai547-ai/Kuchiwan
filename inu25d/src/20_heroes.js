@@ -145,7 +145,7 @@ function buildCommon(D, T){
   const mz = T.muzzleScale || [0.9,0.72,1.12];
   const mp = onHead(0, -0.36, -0.2);
   if(T.muzzleFwd) mp[0] += T.muzzleFwd;
-  h.add(geo.sphere(0.13,10,7), T.muzzle, mp, null, mz);
+  h.add(geo.sphere(0.13, 14, 10), T.muzzle, mp, null, mz);
   D.a.muzzle = mp; D.a.muzzleFront = mp[0] + 0.13*mz[0];
   // face details without outline: nose, ω mouth, blush
   const f = part(D,'face');
