@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>もふもふ聖犬士イッヌ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
+<meta name="theme-color" content="#7fc8ff">
+<!-- build: @@BUILD@@ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800;900&display=swap">
+<style>
+  :root { color-scheme: light; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#8fd0ff;
+    font-family:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','BIZ UDPGothic','Yu Gothic',sans-serif;
+    color:#4a2c14; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    touch-action:none; overscroll-behavior:none; }
+  #game { position:fixed; inset:0; display:block; width:100%; height:100%; outline:none; }
+  #ui { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #boot { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; background:radial-gradient(circle at 50% 40%, #fff6d8 0%, #ffd9a0 45%, #ffb36b 100%);
+    z-index:100; text-align:center; padding:24px; }
+  #boot .t { font-size:clamp(26px,7vw,46px); font-weight:900; color:#fff; letter-spacing:2px;
+    text-shadow:0 3px 0 #d9772b, 0 6px 16px rgba(160,70,0,.35); }
+  #boot .s { font-size:16px; font-weight:800; color:#8a4a1a; }
+  #boot .dots span { display:inline-block; width:12px; height:12px; margin:0 5px; border-radius:50%;
+    background:#fff; animation:bootdot 0.9s ease-in-out infinite; }
+  #boot .dots span:nth-child(2){ animation-delay:.15s } #boot .dots span:nth-child(3){ animation-delay:.3s }
+  @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
+  @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+<div id="ui"></div>
+<div id="boot">
+  <div class="t">もふもふ聖犬士イッヌ</div>
+  <div class="dots"><span></span><span></span><span></span></div>
+  <div class="s" id="bootmsg">じゅんびちゅう…</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+if(!window.THREE){
+  document.getElementById('bootmsg').textContent = 'インターネットにつないで、もういちど ひらいてね';
+} else {
+@@GAME@@
+}
+</script>
+</body>
+</html>
