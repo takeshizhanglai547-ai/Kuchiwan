@@ -468,7 +468,7 @@ G.debug = {
   anim(name, len, hitAt){ for(const e of showcase.ents) G.setAnim(e, name, len||0, hitAt); },
   ents: ()=> showcase.ents,
   // jump straight into a stage (tests): G.debug.play('inu', 0)
-  play(hero, stage, diff){ if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage: stage|0 }); return G.player; },
+  play(hero, stage, diff){ G._arena = false; if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage: stage|0 }); return G.player; },
   // flat arena run for testing foes/bosses: G.debug.arena('inu'); G.foes.spawn('wanhei', 8, 0)
   arena(hero, diff){ G._arena = true; if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage:0 }); return G.player; },
   // a simple bot drives the hero (walks to foes, attacks, jumps, uses specials / ult)
