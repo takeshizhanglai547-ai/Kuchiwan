@@ -9,7 +9,7 @@ G.THREE = THREE;
 // ---------------------------------------------------------------- config
 G.cfg = {
   TICK: 1/60,
-  GRAV: -0.028,            // units / frame^2
+  GRAV: -0.012,            // units / frame^2 (jump 0.22 → apex 2.0u, 37 frames airtime)
   ZMIN: -2.4, ZMAX: 2.0,   // walkable belt depth
   FRICTION_GROUND: 0.80,
   FRICTION_AIR: 0.985,
@@ -373,8 +373,8 @@ G.phys = function(e, bounds){
   if(e.y<=0){
     e.y = 0;
     if(!e.onGround){
-      const hard = e.vy < -0.32;
-      if(e.bounce>0 && e.vy < -0.18){
+      const hard = e.vy < -0.2;
+      if(e.bounce>0 && e.vy < -0.12){
         e.vy = -e.vy*0.42; e.bounce--; e.y=0.001;
         G.bus.emit('land', {ent:e, hard:true, bounce:true});
       } else {

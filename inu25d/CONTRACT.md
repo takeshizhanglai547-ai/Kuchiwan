@@ -72,7 +72,7 @@ as a **Pixar-style 3D, 2.5D belt-scroll action game** for **elementary-school ki
 ## 3. Core services (`00_core.js`, owned by the lead)
 
 ```
-G.cfg        { GRAV:-0.028, ZMIN, ZMAX, TICK:1/60, ... }
+G.cfg        { GRAV:-0.012, ZMIN, ZMAX, TICK:1/60, ... }
 G.U          utils: clamp, lerp, invLerp, damp(a,b,k), approach(v,t,step), rand(a,b), randi(a,b),
              pick(arr), chance(p), sign, easeOutBack, easeOutCubic, easeInOutSine, TAU, vec3 scratch
 G.rng()      seedable RNG in [0,1); G.seed(n)
