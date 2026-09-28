@@ -339,13 +339,14 @@ const DESIGN = {
   guard8: { fur:'#cf8843', muzzle:'#f3cf98', body:'#cf8843', paw:'#eab676', leg:'#cf8843', foot:'#a8632a',
     muzzleScale:[0.85,0.78,1.35], eye:0.036, eyeAz:0.36, blush:'#ff9aa8',
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
-      for(let i=0;i<7;i++){ const a = (i/7)*TAU; b.add(geo.sphere(0.085, 8, 6), '#e0a45f', [Math.cos(a)*0.15, 0.3, Math.sin(a)*0.16]); }
+      b.add(geo.sphere(0.17,14,10), '#f0c48a', [0.1,0.24,0], null, [0.55,0.8,0.95]);                         // cream chest ruff
+      for(const z of [-1,0,1]) b.add(geo.sphere(0.07,8,6), '#f0c48a', [0.15,0.13+Math.abs(z)*0.03,z*0.07]);
       b.add(geo.torus(0.2, 0.034, 6, 21), '#34426e', [0,0.07,0], [HP,0,0], [1,1.04,1]);
       b.add(geo.cylinder(0.05,0.05,0.02,16), GOLD, [0.2,0.15,0], [0,0,HP]);
       b.add(geo.capsule(0.03,0.2,2,6), '#34426e', [0.16,0.16,0], [0.0,0,0]);
       for(const [az,el] of [[1.3,-0.05],[-1.3,-0.05],[0.95,-0.5],[-0.95,-0.5]])
         h.addM(geo.sphere(0.13,10,7), '#dd9850', headM(az, el, -0.06, null, [1,1,0.55]));             // fluffy cheek mane
-      h.add(geo.sphere(0.37,22,12), '#e2e6ee', [0, L.headC+0.13, 0], null, [1.0,0.62,1.06]);        // silver helmet
+      h.add(geo.sphere(0.37,22,12), '#cfd6e2', [0, L.headC+0.13, 0], null, [1.0,0.6,1.06]);        // silver helmet
       h.add(geo.torus(0.345, 0.026, 6, 24), '#9aa6b8', [0, L.headC+0.1, 0], [HP,0,0], [1,1.08,1]);
       for(const [az,y,r] of [[0.0,0.3,0.05],[1.2,0.27,0.045],[-1.2,0.27,0.045],[Math.PI,0.3,0.05]])
         h.add(geo.sphere(r,8,6), '#b8c2d2', [Math.cos(az)*0.24, L.headC+y, Math.sin(az)*0.25]);    // 4 round knobs
@@ -399,7 +400,7 @@ const DESIGN = {
       for(let i=0;i<5;i++){ const a = i/5*TAU; h.add(geo.sphere(0.07, 8, 6), '#fff3d6', [-0.02+Math.cos(a)*0.1, L.headC+0.42, Math.sin(a)*0.1]); }
       h.add(geo.torus(0.09, 0.022, 6, 12), '#8c2a24', [-0.02, L.headC+0.3, 0], [HP,0,0]);
       h.addM(geo.sphere(0.068,10,7), '#1a1a22', headM(D.a.eyeAz, D.a.eyeEl, 0.0, null, [1,0.9,0.3]));  // eyepatch
-      h.add(geo.torus(L.headR*0.97, 0.014, 5, 30), '#1a1a22', [0, L.headC+0.09, 0], [HP+0.62,0,0], [1.03,1.08,1.0]);
+      h.add(geo.torus(L.headR*0.94, 0.014, 5, 30), '#1a1a22', [0, L.headC+0.07, 0], [HP+0.62,0,0], [1.03,1.08,1.0]);
       earsOf(D, 'curly', '#f4e8c4', '#e6d6a6');
       tailOf(D, 'pom', '#f4e8c4', '#e6d6a6');
       const w = part(D,'weapon');
@@ -478,7 +479,8 @@ function weaponGlowMat(col){ return glowMats[col] || (glowMats[col] = G.look.vma
 // ---------------------------------------------------------------- rig
 const COM = 0.55;          // roll pivot height (centre of mass), unscaled
 const TURN = 0.61;         // 35° toward the camera
-const HEADTURN = 0.3;      // the head looks a little more toward the camera
+const HEADTURN = 0.22;     // the head looks a little more toward the camera
+const AIMS = { atk1:1, atk2:1, atk3:1, atk4:1, chargeAtk:1, airAtk:1, airAtk2:1, dive:1, special:1, specialUp:0.6, specialDash:1, charge:0.6, run:0.45 };
 function grp(parent, x, y, z){ const g = new THREE.Group(); g.position.set(x||0, y||0, z||0); if(parent) parent.add(g); return g; }
 
 function build(id, opts){
@@ -825,7 +827,7 @@ function makeState(style){
   const spring = ()=>({ x:0, v:0 });
   return { P, Q, init:false, tw:1, runPh:0, stepN:0, blinkT:0, blinkNext:90+Math.random()*120, t:0,
     eBack:spring(), eFlap:spring(), tYaw:spring(), tLift:spring(), cSwing:spring(), cFlare:spring(),
-    prevHY:0, rollSign:-1, lastAnim:'', eyeMode:'open', tpl:null, gemSpin:0 };
+    prevHY:0, aim:0, lastAnim:'', eyeMode:'open', tpl:null, gemSpin:0 };
 }
 // damped spring toward target, frame-rate independent (fixed 1/120 s substeps)
 function spring(s, target, k, c, dt){
@@ -969,6 +971,9 @@ function updateRig(rig, e, dt, first){
       P[c] = Q[c] - d + d*al; if(Math.abs(P[c]-Q[c])<1e-4) P[c] = Q[c];
     }
   }
+  // attacks turn the body toward the target (more profile) so swings read left/right; the head keeps looking at us
+  const aimT = AIMS[anim] || 0;
+  st.aim = first ? aimT : st.aim + (aimT - st.aim)*(1 - Math.exp(-(aimT>st.aim?16:6)*dt));
   applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p);
 }
 
@@ -979,14 +984,15 @@ function applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p){
   if(first) st.tw = face; else st.tw = U.approach(st.tw, face, 0.2*dt*60);
   const aw = Math.abs(st.tw), sgn = st.tw >= 0 ? 1 : -1;
   n.mir.scale.set(sgn*sc, sc, sc);
-  n.yaw.rotation.y = -(TURN + (1-aw)*(HP - TURN));
+  const tb = TURN*(1 - 0.7*st.aim);
+  n.yaw.rotation.y = -(tb + (1-aw)*(HP - tb));
   // ---- body
   n.act.position.set(P.fx, COM + P.y, 0);
   n.act.rotation.set(0, 0, P.roll);
   const s = Math.max(0.4, 1 + P.sq), ss = 1/Math.sqrt(s);
   n.sq.scale.set(ss, s, ss);
   n.hips.rotation.set(P.side, P.twist + P.spin, -P.lean);
-  n.neck.rotation.set(P.tilt, P.hy - HEADTURN*aw, P.nod);
+  n.neck.rotation.set(P.tilt, P.hy - (HEADTURN + 0.28*st.aim)*aw, P.nod);
   n.armL.rotation.set(P.aLx, -P.aLy, P.aLz);
   n.armR.rotation.set(-P.aRx, P.aRy, P.aRz);
   n.legL.rotation.set(P.lLx, 0, P.lLz);
