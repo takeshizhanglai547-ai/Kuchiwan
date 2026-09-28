@@ -1,0 +1,10 @@
+# 説明<TAB>置換前<TAB>置換後<TAB>試験フィルタ（タブ区切り。JS の || と衝突しないように）
+近接の当たり範囲を後ろ向きにする	const xa = e.x + dir*h.x0, xb = e.x + dir*h.x1;	const xa = e.x - dir*h.x0, xb = e.x - dir*h.x1;	combo
+打ち上げを無効にする	const launchReq = (info.up||0) > 0	const launchReq = false && (info.up||0) > 0	combo
+ヒットストップを消す	G.hitStop = Math.max(G.hitStop, stop + (t.hp<=0 ? 3 : 0));	G.hitStop = 0;	combo
+よけ中の無敵を消す	  if(p.state==='dodge' && p.stateT < DODGE_INV){	  if(false){	rolling
+ジャストよけを発生させない	    if(p.stateT <= JUST_WIN && !p.justDone && info.src){	    if(false){	rolling
+ひっさつが✦を使わない	function spend(p){ if(p.sp < 1) return false; p.sp -= 1; return true; }	function spend(p){ return true; }	special
+カットイン中も世界が動く	    if(game.cutinT > 0){	    if(false){	special
+やっつけた敵が消えない	    if(a<=0) e.removeMe = true;	    if(a<=0) e.removeMe = false;	KO
+やっつけた敵が数に残る	if(e.team===1 && !e.dead && !e.ignoreForClear) n++;	if(e.team===1) n++;	KO
