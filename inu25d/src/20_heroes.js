@@ -192,7 +192,7 @@ function buildEyes(D, T){
     X.addM(cap, dark, base.clone().multiply(M([0,0,0],[0,0, 0.78])));
     X.addM(cap, dark, base.clone().multiply(M([0,0,0],[0,0,-0.78])));
     // chevrons point toward the middle of the face (eye local +x = viewer's right)
-    const dir = s>0 ? 1 : -1;
+    const dir = s>0 ? -1 : 1;
     S.addM(capS, dark, base.clone().multiply(M([0, sz*0.36, 0],[0,0, dir*-0.62])));
     S.addM(capS, dark, base.clone().multiply(M([0,-sz*0.36, 0],[0,0, dir* 0.62])));
     H.addM(arc, dark, base.clone().multiply(M([0,-sz*0.35,0],[0,0,0])));
@@ -269,7 +269,7 @@ const DESIGN = {
       for(const t of [-1,0,1]) b.add(geo.sphere(0.016,8,6), GOLD, [0.196, 0.25+(t?0:0.012), t*0.032], null, [0.5,1,1]);
       b.add(geo.torus(0.12, 0.042, 6, 15), '#fff8e6', [0,0.325,0], [HP,0,0]);                       // fluffy collar
       for(const s of [-1,1]) b.add(geo.sphere(0.028,8,6), GOLD, [0.08,0.33,s*0.1]);                  // cape clasps
-      for(const [az,el,r] of [[0,1.2,0.075],[0.9,1.02,0.07],[-0.9,1.02,0.07],[2.2,0.95,0.07],[-2.2,0.95,0.07],[Math.PI,1.1,0.075],[0.25,0.72,0.055],[-0.25,0.72,0.055]])
+      for(const [az,el,r] of [[0,1.2,0.075],[0.9,1.02,0.07],[-0.9,1.02,0.07],[2.2,0.95,0.07],[-2.2,0.95,0.07],[Math.PI,1.1,0.075]])
         h.add(geo.sphere(r,10,7), '#fff4dc', onHead(az, el, 0.02));                                   // poodle curls
       earsOf(D, 'flop', '#efe0b8', '#e6d3a4');
       tailOf(D, 'fluff', '#fff8e6', '#f3e6c4');
@@ -318,10 +318,10 @@ const DESIGN = {
       earsOf(D, 'hair', '#f7f2fc', '#eee6f8');
       tailOf(D, 'plume', '#ffffff');
       // big pink bow on top (near side)
-      const bp = onHead(0.75, 1.0, 0.06);
-      for(const s of [-1,1]) h.add(geo.sphere(0.1,8,6), '#ff7ab8', [bp[0]-0.02, bp[1]+0.02, bp[2]+s*0.09], [s*0.5,0,0.3], [0.45,0.72,1.1]);
-      h.add(geo.sphere(0.045, 8, 6), '#ff5aa0', bp);
-      for(const s of [-1,1]) h.add(geo.capsule(0.02,0.08,2,6), '#ff7ab8', [bp[0]+0.02, bp[1]-0.07, bp[2]+s*0.04], [s*0.4,0,0]);
+      const bp = onHead(0.55, 0.95, 0.1);
+      for(const sd of [-1,1]) h.add(geo.sphere(0.12,12,8), '#ff7ab8', [bp[0]-0.01, bp[1]+0.03, bp[2]+sd*0.12], [sd*0.35,0,0.15], [0.5,0.75,1.15]);
+      h.add(geo.sphere(0.055,10,7), '#ff4f9a', bp);
+      for(const sd of [-1,1]) h.add(geo.capsule(0.024,0.09,2,6), '#ff7ab8', [bp[0]+0.03, bp[1]-0.08, bp[2]+sd*0.05], [sd*0.45,0,0.2]);
       for(const [az,el] of [[0.3,0.7],[-0.3,0.7],[0,0.85]]) h.add(geo.sphere(0.065, 8, 6), '#fbf8ff', onHead(az, el, 0.02)); // bangs
       // bell sleeves
       for(const s of [-1,1]){ const a = part(D, s<0?'armL':'armR');
@@ -372,7 +372,7 @@ const DESIGN = {
       tailOf(D, 'tiny', '#ffffff');
       capeOf(D, '#2a2d38', 0.34, 0.25, '#b01e30');
       // black top hat, tipped to the front
-      const hp = [0.03, L.headC+0.37, 0.0];
+      const hp = [0.03, L.headC+0.33, 0.0];
       h.add(geo.cylinder(0.2,0.2,0.025,22), '#2a2d38', [hp[0], hp[1]-0.02, hp[2]], [0,0,-0.12]);
       h.add(geo.cylinder(0.135,0.145,0.22,18), '#2a2d38', [hp[0]-0.012, hp[1]+0.09, hp[2]], [0,0,-0.12]);
       h.add(geo.cylinder(0.148,0.15,0.045,18), '#d8283c', [hp[0]-0.004, hp[1]+0.02, hp[2]], [0,0,-0.12]);
@@ -464,7 +464,7 @@ function shared(){
   SH = {
     starsGeo,
     starsMat: G.look.mat('#ffffff', { vertexColors:true, emissive:'#ffb400', emissiveIntensity:0.55, rough:0.4 }),
-    haloGeo: geo.torus(0.17, 0.028, 6, 24),
+    haloGeo: geo.torus(0.17, 0.028, 6, 20),
     haloMat: G.look.mat('#ffd54a', { emissive:'#ffb000', emissiveIntensity:0.9, rough:0.3, metal:0.2, rim:0.6 }),
     gemMat: G.look.vmat({ emissive:'#ff5fb4', emissiveIntensity:0.55, rough:0.35 }),
     eyeMat: G.look.vmat({ rough:0.25, rim:0.2 }),       // same shared material G.look.eye uses
@@ -503,7 +503,7 @@ function build(id, opts){
   const hips = grp(sq, 0, L.hipY, 0);
   const body = mesh('body', hips, null, 0.022, true);
   const legL = grp(sq, 0, L.hipY, -L.legZ), legR = grp(sq, 0, L.hipY, L.legZ);
-  mesh('legL', legL, null, 0.02, true); mesh('legR', legR, null, 0.02, true);
+  mesh('legL', legL, null, 0.02, false); mesh('legR', legR, null, 0.02, false);
   const neck = grp(hips, 0, L.neckY, 0);
   const head = mesh('head', neck, null, 0.022, true);
   mesh('face', neck, sh.faceMat, 0, false);
@@ -518,7 +518,7 @@ function build(id, opts){
   if(gs.glasses){ glasses = grp(eyeP); mesh('glasses', glasses, sh.glassMat, 0.012, false); }
   const sp = L.shoulder;
   const armL = grp(hips, sp[0], sp[1], -sp[2]), armR = grp(hips, sp[0], sp[1], sp[2]);
-  mesh('armL', armL, null, 0.02, true); mesh('armR', armR, null, 0.02, true);
+  mesh('armL', armL, null, 0.02, false); mesh('armR', armR, null, 0.02, false);
   const handR = grp(armR, L.hand[0], L.hand[1], L.hand[2]);
   const tip = new THREE.Object3D(), base = new THREE.Object3D();
   let wpn = null, gem = null;
@@ -540,6 +540,7 @@ function build(id, opts){
   if(gs.tail){ const p = a.tailPivot; tail = grp(hips, p[0], p[1], p[2]); mesh('tail', tail, null, 0.016, false); }
   let cape = null;
   if(gs.cape){ const p = a.capePivot; cape = grp(hips, p[0], p[1], p[2]); mesh('cape', cape, null, 0.018, true); }
+  const n_ = (g)=> g ? g.children[0] : null;
   let halo = null;
   if(T.halo){ halo = new THREE.Mesh(sh.haloGeo, sh.haloMat); halo.rotation.x = HP; halo.position.set(-0.02, L.headC+0.47, 0); halo.castShadow = false; neck.add(halo); }
   const stars = new THREE.Mesh(sh.starsGeo, sh.starsMat); stars.position.set(0, L.headC+0.42, 0); stars.visible = false; neck.add(stars);
@@ -564,10 +565,17 @@ function build(id, opts){
   rig.outlines = []; rig.sharedMeshes = [];
   root.traverse(o=>{ if(!o.isMesh) return; if(o.userData.isOutline) rig.outlines.push(o);
     else if(o.material!==mat && o!==eyes && o!==eyesX && o!==eyesSq && o!==eyesHappy && o!==mouth && o!==stars) rig.sharedMeshes.push(o); });
+  // top of the head (incl. hat / ears / halo) in the idle pose, for HP bars and popups
+  rig._measure = [head, n_(earL), n_(earR), halo];
   // default fists: tip follows the paw; kicks move it to the foot (see updateRig)
   rig.tipHome = tip.parent; rig.footTip = grp(legR, 0.1, -0.17, 0); rig.footBase = grp(legR, 0.0, -0.06, 0);
   // settle once so a freshly built rig already stands in its idle pose
-  updateRig(rig, { anim: opts.anim || (opts.menu ? 'pose' : 'idle'), animT:0, animLen:0, animHit:0.35, face:opts.face||1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 }, G.cfg.TICK, true);
+  updateRig(rig, { anim:'idle', animT:0, animLen:0, animHit:0.35, face:1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 }, G.cfg.TICK, true);
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  for(const o of rig._measure) if(o) box.expandByObject(o);
+  rig.height = Math.round(box.max.y*100)/100; delete rig._measure;
+  if(opts.anim || opts.menu || opts.face) updateRig(rig, { anim: opts.anim || 'pose', animT:0, animLen:0, animHit:0.35, face:opts.face||1, vx:0, vy:0, vz:0, onGround:true, flashT:0, stun:0, charge:0 }, G.cfg.TICK, true);
   return rig;
 }
 
@@ -657,8 +665,8 @@ const T8 = {
     K(1,Z)],
   jabL: [K(0,Z),
     K(W,{aLz:0.75, twist:0.22, sq:-0.04}),
-    K(H,{aLz:1.62, aLy:0.38, aLx:0.04, twist:-0.38, fx:0.08, lean:0.12, mouth:1},'out'),
-    K(F,{aLz:1.55, aLy:0.32, twist:-0.32, fx:0.08, lean:0.1}),
+    K(H,{aLz:1.62, aLy:0.5, aLx:0.0, twist:-0.6, fx:0.12, lean:0.14, mouth:1, aRz:0.5},'out'),
+    K(F,{aLz:1.55, aLy:0.45, twist:-0.5, fx:0.11, lean:0.12}),
     K(1,Z)],
   jabR: [K(0,Z),
     K(W,{aRz:0.6, twist:-0.25, sq:-0.04}),
@@ -697,10 +705,17 @@ const T8 = {
     K(F,{aRz:1.35, wz:-1.35, twist:-0.25, fx:0.06, wspin:-TAU},'out'),
     K(1,{wspin:-TAU})],
   spinslash: [K(0,Z),
-    K(W,{aRz:1.3, aRy:-1.0, wz:-1.3, sq:-0.12, twist:0.4, aLz:1.0, aLx:0.7}),
-    K(H,{aRz:1.5, aRy:0.1, wz:-1.5, sq:0.02, aLz:1.2, aLx:0.9, mouth:1, spin:-TAU*0.55},'out'),
-    K(F,{aRz:1.45, wz:-1.45, aLz:1.1, aLx:0.8, spin:-TAU, fx:0.06}),
+    K(W,{aRz:1.3, aRy:-1.0, wz:-1.3, sq:-0.12, aLz:1.0, aLx:0.7, spin:0.4}),
+    K(H,{aRz:1.5, aRy:0.1, wz:-1.5, sq:0.02, aLz:1.2, aLx:0.9, mouth:1, spin:-TAU},'in'),
+    K(F,{aRz:1.45, aRy:0.6, wz:-1.45, aLz:1.1, aLx:0.8, spin:-TAU-0.45, fx:0.06},'out'),
     K(1,{spin:-TAU})],
+  spinShoot: [K(0,Z),
+    K([0,0.55],{aRz:1.2, wz:-1.2, wspin:-TAU, aLz:0.4},'lin'),
+    K(W,{aRz:1.52, wz:-1.55, wspin:-TAU, aLz:0.6, twist:-0.12}),
+    K(H,{aRz:1.52, wz:-1.55, wspin:-TAU, aLz:0.6, twist:-0.12}),
+    K(RC,{aRz:2.3, wz:-1.3, wspin:-TAU, lean:-0.26, fx:-0.08, sq:-0.1, mouth:1},'out'),
+    K(F,{aRz:1.7, wz:-1.5, wspin:-TAU}),
+    K(1,{wspin:-TAU})],
   hadou: [K(0,Z),
     K(W,{aLz:-0.35, aRz:-0.35, aLy:-0.2, aRy:-0.2, twist:0.6, sq:-0.12, lean:-0.08}),
     K(H,{aLz:1.55, aRz:1.55, aLy:0.42, aRy:0.42, aLx:0.05, aRx:0.05, fx:0.1, lean:0.22, sq:0.06, mouth:1},'out'),
@@ -723,8 +738,8 @@ const T8 = {
     K(1,Z)],
   rise: [K(0,Z),
     K(W,{aRz:-0.4, wz:0.25, sq:-0.2, lean:0.18, aLz:-0.2}),
-    K(H,{aRz:2.95, wz:-0.55, sq:0.24, y:0.1, lean:-0.14, nod:0.35, mouth:1, lLz:0.55, lRz:-0.3, aLz:0.8},'out'),
-    K(F,{aRz:2.85, wz:-0.5, sq:0.12, y:0.06, lean:-0.1, nod:0.3, lLz:0.5, mouth:0.8}),
+    K(H,{aRz:2.3, aRx:0.6, wz:-0.9, wx:0.5, sq:0.24, y:0.1, lean:-0.14, nod:0.35, mouth:1, lLz:0.55, lRz:-0.3, aLz:0.8},'out'),
+    K(F,{aRz:2.25, aRx:0.6, wz:-0.9, wx:0.5, sq:0.12, y:0.06, lean:-0.1, nod:0.3, lLz:0.5, mouth:0.8}),
     K(1,Z)],
   riseKick: [K(0,Z),
     K(W,{sq:-0.2, lean:0.2, aRz:0.2, lRz:-0.5}),
@@ -737,10 +752,10 @@ const T8 = {
     K(F,{aLz:0.3, sq:-0.05, lean:0.1}),
     K(1,Z)],
   rocket: [K(0,Z),
-    K(W,{aRz:2.9, wz:-1.45, aLz:1.0, lean:-0.2, nod:0.3}),
-    K(H,{aRz:2.95, wz:-1.45, aLz:1.0, lean:-0.2, nod:0.3}),
-    K(RC,{aRz:3.3, wz:-1.3, lean:-0.34, sq:-0.12, nod:0.45, mouth:1},'out'),
-    K(F,{aRz:3.0, wz:-1.45, lean:-0.2, nod:0.3}),
+    K(W,{aRz:2.3, aRx:0.7, wz:-1.0, wx:0.5, aLz:1.0, lean:-0.2, nod:0.3}),
+    K(H,{aRz:2.3, aRx:0.7, wz:-1.0, wx:0.5, aLz:1.0, lean:-0.2, nod:0.3}),
+    K(RC,{aRz:2.6, aRx:0.75, wz:-0.9, wx:0.5, lean:-0.34, sq:-0.12, nod:0.45, mouth:1},'out'),
+    K(F,{aRz:2.35, aRx:0.7, wz:-1.0, wx:0.5, lean:-0.2, nod:0.3}),
     K(1,Z)],
   dash: [K(0,Z),
     K(W,{aRz:0.5, aRy:1.2, wz:-2.4, lean:0.5, sq:-0.16, aLz:-0.3, twist:-0.3}),
@@ -780,13 +795,13 @@ const T8 = {
   chargeAtk: [K(0,Z),
     K(W,{aRz:1.3, aRy:-1.1, wz:-1.3, sq:-0.14, twist:0.5, aLz:1.0, aLx:0.8}),
     K(H,{aRz:1.5, wz:-1.5, aLz:1.2, aLx:0.95, sq:0.03, mouth:1, spin:-TAU*0.45},'lin'),
-    K([0.62,0.38],{aRz:1.5, wz:-1.5, aLz:1.2, aLx:0.95, spin:-TAU*1.25},'out'),
-    K(1,{spin:-TAU*1.25})],
+    K([0.62,0.38],{aRz:1.5, wz:-1.5, aLz:1.2, aLx:0.95, spin:-TAU},'out'),
+    K(1,{spin:-TAU})],
   ult: [K(0,Z),
     K(0.18,{sq:-0.22, lean:0.22, aRz:-0.45, wz:0.5, aLz:-0.3, nod:-0.2}),
-    K(0.4,{y:0.22, sq:0.2, aRz:3.0, wz:-0.2, aLz:2.6, aLx:0.7, nod:0.4, mouth:1, lLz:0.6, lRz:-0.5},'out'),
-    K(0.62,{y:0.04, sq:-0.06, aRz:2.9, wz:-0.15, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.25, mouth:1, lean:-0.1, lLz:0.25, lRz:-0.2},'out'),
-    K(1,{y:0.02, aRz:2.9, wz:-0.15, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.22, mouth:0.8, lean:-0.1, lLz:0.25, lRz:-0.2})],
+    K(0.4,{y:0.22, sq:0.2, aRz:2.3, aRx:0.7, wz:-0.95, wx:0.55, aLz:2.6, aLx:0.7, nod:0.4, mouth:1, lLz:0.6, lRz:-0.5},'out'),
+    K(0.62,{y:0.04, sq:-0.06, aRz:2.2, aRx:0.7, wz:-0.9, wx:0.55, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.25, mouth:1, lean:-0.1, lLz:0.25, lRz:-0.2},'out'),
+    K(1,{y:0.02, aRz:2.2, aRx:0.7, wz:-0.9, wx:0.55, aLz:0.95, aLy:0.4, aLx:0.3, nod:0.22, mouth:0.8, lean:-0.1, lLz:0.25, lRz:-0.2})],
   hurt: [K(0,Z),
     K(0.14,{sq:-0.24, lean:-0.38, fx:-0.1, nod:0.35, aLz:1.9, aRz:1.7, aLx:0.9, aRx:0.9, mouth:1, lLz:0.35, lRz:0.2},'out'),
     K(0.5,{sq:0.07, lean:-0.16, fx:-0.05, nod:0.15, aLz:1.0, aRz:1.0, aLx:0.6, aRx:0.6, mouth:0.6}),
@@ -810,12 +825,12 @@ const T8 = {
 // weapon style → which template each attack uses
 const MOVES = {
   sword:  { atk1:'hslash', atk2:'up', atk3:'diag', atk4:'over', special:'hslash', specialUp:'rise', specialDash:'dash', airAtk:'air', airAtk2:'flip' },
-  fist:   { atk1:'jabL', atk2:'jabR', atk3:'hook', atk4:'kick', special:'hadou', specialUp:'riseKick', specialDash:'spinKick', airAtk:'kick', airAtk2:'flip', chargeAtk:'spinKick' },
-  staff:  { atk1:'diag', atk2:'up', atk3:'cast', atk4:'bigcast', special:'cast', specialUp:'bigcast', specialDash:'thrust', airAtk:'cast', airAtk2:'flip' },
+  fist:   { atk1:'jabR', atk2:'jabL', atk3:'hook', atk4:'kick', special:'hadou', specialUp:'riseKick', specialDash:'spinKick', airAtk:'kick', airAtk2:'flip', chargeAtk:'spinKick' },
+  staff:  { atk1:'diag', atk2:'up', atk3:'cast', atk4:'bigcast', special:'cast', specialUp:'bigcast', specialDash:'thrust', airAtk:'cast', airAtk2:'flip', chargeAtk:'bigcast' },
   hammer: { atk1:'hslash', atk2:'back', atk3:'up', atk4:'over', special:'over', specialUp:'rise', specialDash:'tackle', airAtk:'over', airAtk2:'flip' },
   cane:   { atk1:'thrust', atk2:'thrust', atk3:'twirl', atk4:'up', special:'toss', specialUp:'smoke', specialDash:'slide', airAtk:'thrust', airAtk2:'flip' },
   katana: { atk1:'iai', atk2:'over', atk3:'up', atk4:'spinslash', special:'iai', specialUp:'up', specialDash:'dash', airAtk:'air', airAtk2:'flip' },
-  gun:    { atk1:'shoot', atk2:'shoot', atk3:'shoot', atk4:'twirl', special:'lob', specialUp:'rocket', specialDash:'drill', airAtk:'shoot', airAtk2:'flip' },
+  gun:    { atk1:'shoot', atk2:'shoot', atk3:'shoot', atk4:'spinShoot', special:'lob', specialUp:'rocket', specialDash:'drill', airAtk:'shoot', airAtk2:'flip', chargeAtk:'spinShoot' },
 };
 const ONESHOT_LEN = { land:10, atk1:18, atk2:18, atk3:20, atk4:26, chargeAtk:30, airAtk:18, airAtk2:22, dodge:22, special:30,
   specialUp:30, specialDash:28, ult:80, hurt:18, getup:30, ko:50 };
@@ -912,7 +927,7 @@ function updateRig(rig, e, dt, first){
       const ph = ((T % 56)/56), hop = U.bump(ph, 0, 0.5);
       Q.y = 0.2*hop; Q.sq = hop>0 ? 0.1*hop : 0; if(ph>0.5 && ph<0.62) Q.sq = -0.14*U.bump(ph,0.5,0.62);
       const w = Math.sin(st.t*0.22);
-      if(anim==='victory' && style!=='fist'){ Q.aRz = 2.9; Q.wz = style==='gun' ? -1.4 : -0.2; Q.aRx = 0.3; Q.aLz = 2.2 + 0.4*w; Q.aLx = 0.6; }
+      if(anim==='victory' && style!=='fist'){ Q.aRz = 2.25; Q.wz = style==='gun' ? -1.0 : -0.9; Q.wx = 0.55; Q.aRx = 0.7; Q.aLz = 2.2 + 0.4*w; Q.aLx = 0.6; }
       else { Q.aLz = 2.6 + 0.35*w; Q.aRz = 2.6 - 0.35*w; Q.aLx = 0.55; Q.aRx = 0.55; if(style!=='fist') Q.wz = -0.3; }
       Q.nod = 0.25; Q.mouth = 1; Q.tail = 0.9*Math.sin(st.t*0.5); Q.lLz = 0.3*hop; Q.lRz = -0.3*hop;
       eyes = 'happy';
@@ -937,16 +952,15 @@ function updateRig(rig, e, dt, first){
     case 'ult': {
       oneshot = true; tpl = 'ult'; sampleKeys(T8.ult, p, h, Q, rest);
       if(style==='fist'){ Q.aLz = Q.aRz; Q.aLx = Q.aRx + 0.2; }
-      if(style==='gun'){ Q.wz = -1.45; }
+      if(style==='gun'){ Q.wz = -0.95; }
       if(p>0.55 && p<0.7) eyes = 'sq';
       break; }
     default: {   // attacks / specials / air
       oneshot = true;
       tpl = (moves && moves[anim]) || (anim==='chargeAtk' ? 'chargeAtk' : 'hslash');
-      if(anim==='chargeAtk' && style!=='fist') tpl = 'chargeAtk';
       const keys = T8[tpl] || T8.hslash;
       sampleKeys(keys, p, h, Q, rest);
-      if(anim==='chargeAtk' && style==='hammer'){ Q.spin *= 1.6; }
+      if(anim==='chargeAtk' && style==='hammer'){ Q.spin *= 2; }
       if(style==='hammer' && (tpl==='over')) Q.sq *= 1.3;
       if(tpl==='hurt') eyes='sq';
     }
@@ -1012,12 +1026,12 @@ function applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p){
   const hv = first ? 0 : (headY - st.prevHY)/Math.max(dt,1e-4); st.prevHY = headY;
   const happy = eyes==='happy';
   const earType = rig.earType;
-  spring(st.eBack, U.clamp(fwd*0.12 + P.lean*0.9 + P.roll*0.15, -0.6, 1.1), 170, 9, dt);
+  spring(st.eBack, U.clamp(fwd*0.08 + P.lean*0.8 + P.roll*0.15, -0.6, 1.0), 170, 9, dt);
   spring(st.eFlap, U.clamp(-up*0.1 - hv*0.12 + (happy?0.15:0), -0.35, 1.0), 150, 8, dt);
   const wag = (anim==='run'?0.55: happy?0.8 : 0.25) * Math.sin(st.t*(happy?0.45:anim==='run'?0.35:0.12));
   spring(st.tYaw, P.tail*0.6 + wag, 120, 10, dt);
   spring(st.tLift, U.clamp(-up*0.06 - hv*0.08 + (happy?0.3:0), -0.5, 0.8), 140, 9, dt);
-  spring(st.cSwing, -U.clamp(Math.abs(fwd)*0.22 + Math.max(0, up)*0.12 + P.lean*0.6, -0.4, 1.3) - U.clamp(-hv*0.1,-0.4,0.4), 90, 7, dt);
+  spring(st.cSwing, -U.clamp(Math.abs(fwd)*0.16 + Math.max(0, up)*0.12 + P.lean*0.6, -0.4, 1.15) - U.clamp(-hv*0.1,-0.4,0.4), 90, 7, dt);
   spring(st.cFlare, U.clamp(-up*0.05, -0.2, 0.3) + 0.05*Math.sin(st.t*0.07), 80, 7, dt);
   if(first){ for(const k of ['eBack','eFlap','tYaw','tLift','cSwing','cFlare']){ const sp = st[k]; sp.v = 0; } }
   if(n.earL){
@@ -1070,7 +1084,7 @@ function posePersonality(rig, Q, rest, T, t){
   Q.sq += 0.02*Math.sin(t*0.07);
   switch(rig.heroId){
     case 'inu': {                       // sword up in a salute, paw on the hip, a smile now and then
-      Q.aRz = 2.25; Q.wz = -0.85; Q.aRx = 0.22; Q.aLz = -0.35; Q.aLx = 0.95; Q.aLy = -0.25;
+      Q.aRz = 2.1; Q.wz = -0.85; Q.wx = 0.5; Q.aRx = 0.55; Q.aLz = -0.35; Q.aLx = 0.95; Q.aLy = -0.25;
       Q.lean = -0.08; Q.nod = 0.12 + 0.03*Math.sin(t*0.05); Q.tail = 0.5*Math.sin(t*0.2);
       if((T % 200) > 140) Q._eyes = 'happy';
       break; }
@@ -1101,7 +1115,7 @@ function posePersonality(rig, Q, rest, T, t){
     case 'mack': {                      // spins the cork gun on a finger, then points it up with a grin
       const c = (T % 150)/150;
       if(c < 0.6){ Q.aRz = 1.2; Q.wz = -1.2; Q.wspin = -t*0.35; Q.aLz = -0.3; Q.aLx = 0.9; }
-      else { Q.aRz = 2.9; Q.wz = -1.45; Q.nod = 0.2; Q._eyes = 'happy'; Q.mouth = 0.9; Q.aLz = -0.3; Q.aLx = 0.9; }
+      else { Q.aRz = 2.3; Q.wz = -1.0; Q.wx = 0.5; Q.aRx = 0.7; Q.nod = 0.2; Q._eyes = 'happy'; Q.mouth = 0.9; Q.aLz = -0.3; Q.aLx = 0.9; }
       break; }
   }
 }
@@ -1150,9 +1164,10 @@ function portrait(id, opts){
     n.neck.localToWorld(_hv.set(0, L.headC, 0));
     _hf.set(1,0,0).transformDirection(n.neck.matrixWorld);
     _hf.multiplyScalar(0.55).add(_p.set(0,0.12,0.75)).normalize();
-    const sc = rig.scale, dist = (0.95*sc) / Math.tan(pCam.fov*Math.PI/360) * 0.5 + 0.3*sc;
+    const sc = rig.scale, dist = (1.3*sc*0.5) / Math.tan(pCam.fov*Math.PI/360);
+    _hv.y += 0.07*sc;
     pCam.position.copy(_hv).addScaledVector(_hf, dist);
-    pCam.lookAt(_hv.x, _hv.y - 0.1*sc, _hv.z);
+    pCam.lookAt(_hv);
     R.setRenderTarget(pRT);
     if(opts.bg){ R.setClearColor(opts.bg, 1); } else R.setClearColor(0x000000, 0);
     R.autoClear = true;
