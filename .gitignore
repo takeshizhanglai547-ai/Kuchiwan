@@ -1,0 +1,33 @@
+# =====================================================================
+# Git に入れない（バックアップの対象外にする）ファイル・フォルダ
+# ---------------------------------------------------------------------
+# パターンの先頭に「/」を付けていないため、リポジトリ直下だけでなく
+# ue5/AshlineUE/ や unreal/OverburstUE/ のように下の階層にある
+# UE5 プロジェクト（とその Plugins/ の中）にも同じように効きます。
+# =====================================================================
+
+# --- Unreal Engine 5 がエディタ起動・ビルドのたびに自動生成するフォルダ ---
+# 消しても UE5 が作り直すのでバックアップ不要。しかも数GBに膨らみがち。
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# --- Visual Studio などの開発ツールが自動生成するファイル ---
+# UE5 の「Generate Visual Studio project files」でいつでも作り直せます。
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.xcodeproj
+*.xcworkspace
+
+# --- OS が勝手に作るファイル ---
+.DS_Store
+Thumbs.db
+Desktop.ini
