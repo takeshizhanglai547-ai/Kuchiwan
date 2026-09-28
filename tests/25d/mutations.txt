@@ -10,3 +10,9 @@
 やっつけた敵が数に残る	if(e.team===1 && !e.dead && !e.ignoreForClear) n++;	if(e.team===1) n++;	KO
 装甲が1回少なく受ける（修正前の挙動）	if(t.armorHits <= t.armor){	if(t.armorHits < t.armor){	armour
 ダウン中もボスの崩しが溜まる（修正前の挙動）	    if(t.state==='down' || t.state==='getup'){ return true; }		stun-lock
+勝った後もやられてゲームオーバーになる（修正前）	        if(game.lives!==Infinity && game.lives<=0 && !this.cleared){ this.gameOver(); return; }	        if(game.lives!==Infinity && game.lives<=0){ this.gameOver(); return; }	win: a KO
+勝った後に無敵にならない（修正前）	      if(p) p.inv = Math.max(p.inv, 30);		win: a KO
+ボスの手下がおびえない（修正前）	    if(e.scared){ e.vx *= 0.8;	    if(false){ e.vx *= 0.8;	helpers
+手下が降参しない（安全網を外す）	      for(const e of G.world.ents){ if(e.team===1 && !e.dead && e!==b && !(e.def && e.def.boss)){ e.scared = true; e.ignoreForClear = true; e.giveUpT = 30 + (k++)*10; e.pending = null; e.atk = null; h.release(e); } }		helpers
+戦場が画面より広いとカメラが中央に固定（修正前）	this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : U.clamp(this.tx, hi, lo);	this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : (lo+hi)/2;	arena wider
+ステージ開始時のレベル補正が線形（修正前）	const lvlHp = Math.pow(1.08, lvl-1), lvlAtk = Math.pow(1.05, lvl-1);	const lvlHp = 1 + (lvl-1)*0.08, lvlAtk = 1 + (lvl-1)*0.05;	level-ups

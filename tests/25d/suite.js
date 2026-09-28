@@ -165,6 +165,75 @@ test('combat: a floored boss does not build stagger damage (no stun-lock after g
   assert(r.after !== 'down', 'first hit after getting up floored it again (stun-lock): ' + JSON.stringify(r));
 });
 
+// ---------------------------------------------------------------- review regressions (2026-09-28 adversarial review)
+test('win: a KO right after the boss is purified cannot cause game over or cost the result', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.debug.play('inu', 0, 'hard'); G.step(2);
+    const st = G.stage.st; st.ptr = st.seq.length-1; const p = G.player; p.x = 80; G.step(200);
+    const boss = G.world.ents.find(e => e.team===1 && e.def && e.def.boss);
+    G.game.lives = 1; p.hp = 1; p.inv = 0; G.game.xp = 0; G.game.xpNext = 1e9;
+    G.combat.shoot({ owner:boss, kind:'rock', x:p.x+2.5, y:0.8, z:p.z, vx:-0.08, dmg:10, r:0.5, life:90 });
+    G.combat.damage(boss, 99999, { src:p, kind:'slash', power:3 });
+    for(let i=0;i<60;i++) G.step(10);
+    return { result: G.ui.isShown('result'), over: G.ui.isShown('over'), unlocked: G.game.unlocked, coins: G.game.coins };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.result && !r.over, 'expected the result screen, got ' + JSON.stringify(r));
+  assert(r.unlocked >= 1, 'clear not recorded: ' + JSON.stringify(r));
+  assert(r.coins >= 10, 'boss reward coins were not collected: ' + JSON.stringify(r));
+});
+
+test('win: a purified boss\'s helpers stop attacking', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.debug.arena('inu', 'normal');
+    const boss = G.foes.spawn('garm', 9, 0, { entrance:'none', boss:true });
+    const helpers = [G.foes.spawn('wanhei', 4.2, 0.2, { entrance:'none' }), G.foes.spawn('wanhei', 1.8, -0.2, { entrance:'none' })];
+    G.player.x = 3; G.step(30);
+    G.combat.damage(boss, 99999, { src:G.player, kind:'slash', power:3 });
+    G.step(5);
+    G.player.hp = G.player.maxHp; G.player.inv = 0; const hp0 = G.player.hp; let hits = 0;
+    G.bus.on('hurt', d => { if(d.ent === G.player) hits++; });
+    G.step(400);
+    return { hits, hp0, hp: G.player.hp, left: helpers.filter(h => !h.removed && !h.dead).length };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.hits === 0, 'helpers kept hitting the hero after the boss was purified: ' + JSON.stringify(r));
+  assert(r.left === 0, 'helpers never gave up: ' + JSON.stringify(r));
+});
+
+test('camera: an arena wider than the screen still keeps the hero in view', async () => {
+  const g = await open({ size:'390x844', touch:true });
+  const r = await g.run(() => {
+    G.debug.arena('inu', 'normal'); G.step(2);
+    G.cam.lock(5, 35); const p = G.player; const out = [];
+    for(const x of [6, 20, 34]){ p.x = x; G.step(120); const s = G.toScreen(p.x, p.y+0.7, p.z); out.push([x, Math.round(s.x)]); }
+    return { out, w: innerWidth };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.out.every(([x, sx]) => sx > 0 && sx < r.w), 'hero left the screen: ' + JSON.stringify(r));
+});
+
+test('progress: level-ups carry over to the next stage unchanged', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.debug.play('inu', 0, 'normal'); G.step(2);
+    G.game.level = 1; G.game.xp = 0; G.game.xpNext = 60;
+    for(let i=0;i<5;i++) G.game.addXp(G.game.xpNext);
+    const a = { hp: G.player.maxHp, atk: G.player.atkMul };
+    G.go('play', { stage:1 }); G.step(2);
+    return { a, b: { hp: G.player.maxHp, atk: G.player.atkMul }, level: G.game.level };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.level === 6, 'setup: level ' + r.level);
+  assert(Math.abs(r.b.hp - r.a.hp) <= 1 && Math.abs(r.b.atk - r.a.atk) < 1e-6, 'stats changed between stages: ' + JSON.stringify(r));
+});
+
 // ---------------------------------------------------------------- stages
 test('stage 1: the bot clears it (waves lock the camera, boss appears, stage done)', async () => {
   const g = await open();

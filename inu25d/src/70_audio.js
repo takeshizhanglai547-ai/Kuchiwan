@@ -1256,11 +1256,9 @@ function subscribe(){
   on('go', ()=> sfx('go'));
   on('bossIntro', ()=> sfx('bossRoar'));
   on('bossPhase', ()=> sfx('bossRoar', { vol:0.8, pitch:1.1 }));
-  on('bossDown', ()=>{
-    sfx('hitBig'); sfx('star', { delay:0.3 });
-    // 90_game は約0.8秒後に bgm('clear') を鳴らす。ファンファーレが2つ重ならないよう、ジングルが来なかったときだけ鳴らす
-    setTimeout(()=>{ if(current!=='clear' && current!=='over') sfx('clear'); }, 1200);
-  });
+  on('bossDown', ()=>{ sfx('hitBig'); sfx('star', { delay:0.3 }); });
+  // 最終ボスのあとは 90_game が bgm('clear') のジングルを鳴らす。中ボス（ステージ7のクロイヌ）だけはここでファンファーレ
+  on('midClear', ()=> sfx('clear'));
   on('stageClear', ()=> sfx('star'));
   on('combo', (d)=>{
     const c = d.count|0;

@@ -79,7 +79,14 @@ const h = {
 
 G.foes = {
   types, h, tokens,
-  init(){ G.bus.on('scene', ()=> tokens.clear()); },
+  init(){
+    G.bus.on('scene', ()=> tokens.clear());
+    // when a boss is purified every helper still standing gives up (safety net for types that ignore e.scared)
+    G.bus.on('bossDown', (d)=>{
+      const b = d && d.boss; let k = 0;
+      for(const e of G.world.ents){ if(e.team===1 && !e.dead && e!==b && !(e.def && e.def.boss)){ e.scared = true; e.ignoreForClear = true; e.giveUpT = 30 + (k++)*10; e.pending = null; e.atk = null; h.release(e); } }
+    });
+  },
   define(type, def){
     def.type = type;
     def.name = def.name || type;
@@ -124,6 +131,7 @@ G.foes = {
   },
   // framework per tick: reactions + AI
   tick(e){
+    if(e.giveUpT>0 && !e.dead && --e.giveUpT===0){ e.dead = true; e.deadT = 0; e.gaveUp = true; e.atk = null; e.pending = null; G.setState(e, 'ko'); e.vy = 0.12; e.onGround = false; h.release(e); }
     if(e.flashT>0) e.flashT--;
     if(e.inv>0) e.inv--;
     if(e.hpShowT>0) e.hpShowT--;
@@ -155,6 +163,8 @@ G.foes = {
         return;
       case 'ko': return tickKO(e);
     }
+    // a scared helper drops whatever it was winding up
+    if(e.scared && (e.pending || e.atk)){ e.pending = null; e.atk = null; }
     // FREE: running a pending telegraph?
     if(e.pending){
       if(--e.pending.t <= 0){ const d = e.pending.def; e.pending = null; G.combat.start(e, d); }
@@ -169,6 +179,7 @@ G.foes = {
       return;
     }
     const def = e.def;
+    if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; const t = h.target(e); if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
     if(def.ai){ try { def.ai(e); } catch(err){ G.logError('ai '+e.type, err); e.cool = 30; } }
     else defaultAI(e);
   },
@@ -193,19 +204,18 @@ function tickKO(e){
   e.deadT = (e.deadT||0) + 1;
   if(e.def.onKOTick){ try { if(e.def.onKOTick(e)===true) return; } catch(err){ G.logError('onKOTick', err); } }
   const boss = e.def.boss;
-  const lie = boss ? 80 : 26;
+  const lie = boss ? 80 : (e.gaveUp ? 8 : 26);
   if(!e.onGround && e.deadT < 120){ if(e.anim!=='ko') G.setAnim(e, 'ko'); return; }
   if(e.koLand==null){ e.koLand = e.deadT; G.setAnim(e, 'ko'); e.vx = 0; }
   const t = e.deadT - e.koLand;
   if(t===lie){
     // ぽんっ — the grumpy soldier turns into a happy pup
-    if(G.fx && G.fx.burst){ G.fx.burst('poof', e.x, e.height*0.5, e.z, { scale: boss?2.2:1 }); G.fx.burst('hearts', e.x, e.height+0.2, e.z, { count: boss?8:3 }); }
     if(G.audio && G.audio.sfx) G.audio.sfx('poof');
     G.bus.emit('poof', { ent:e });
     G.setAnim(e, 'cheer');
     e.happy = true;
     // drops
-    if(!e.minion || G.rng()<0.3){
+    if(!e.gaveUp && (!e.minion || G.rng()<0.3)){
       const n = boss ? 12 : 2 + Math.floor(G.rng()*2);
       for(let i=0;i<n;i++) G.pickups.spawn('coin', e.x, e.z);
       const r = G.rng();

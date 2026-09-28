@@ -16,6 +16,7 @@ function hurtable(t, team){
   if(t.inv>0) return false;
   if(t.state==='spawn' && !t.hittableSpawn) return false;
   if(t.intangible) return false;               // ghosts phasing, burrowed ants...
+  const a = t.atk; if(a && a.def.inv && a.t >= a.def.inv[0] && a.t <= a.def.inv[1]) return false;   // i-frames of the move itself
   return true;
 }
 function eachTarget(team, fn){
@@ -36,7 +37,6 @@ G.combat = {
     ent.atk = { def, t:0, sets: (def.hits||[]).map(()=> new Set()), swung:false };
     ent.lastAtk = def;
     G.setAnim(ent, def.anim || 'atk1', def.len, U.clamp(first/Math.max(1,def.len), 0.05, 0.95));
-    if(def.inv) ent.invAtk = def.inv;
     if(def.armor) ent.atkArmor = true;
   },
   cancel(ent){ if(ent && ent.atk){ ent.atk = null; ent.atkArmor = false; } },
@@ -262,7 +262,8 @@ function killProj(p, silent){
   if(p.dead) return; p.dead = true;
   if(p.vis){ if(p.vis.obj && p.vis.obj.parent) p.vis.obj.parent.remove(p.vis.obj); try{ p.vis.dispose && p.vis.dispose(); }catch(err){ G.logError('proj.dispose', err); } }
   if(!silent){
-    if(p.boom) G.combat.area(Object.assign({ owner:p.owner, team:p.team, x:p.x, y:0, z:p.z, delay:0, dur:3 }, p.boom));
+    if(p.boom){ const ar = G.combat.area(Object.assign({ owner:p.owner, team:p.team, x:p.x, y:0, z:p.z, delay:0, dur:3 }, p.boom));
+      if(p.owner && p.owner.team===0 && p.owner.atkMul) ar.dmg *= p.owner.atkMul; }
     if(p.onEnd) try { p.onEnd(p); } catch(err){ G.logError('proj.onEnd', err); }
     if(G.fx && G.fx.burst) G.fx.burst(p.boom ? 'hitBig' : 'sparkle', p.x, p.y, p.z, { scale: p.boom ? 1.2 : 0.6 });
   }
@@ -360,8 +361,9 @@ G.pickups = {
     const p = G.player;
     if(!p || p.dead || e.delay>0) return;
     const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz);
-    const magnet = e.type==='coin' || e.type==='gem' || e.type==='star' ? 2.2 : 1.2;
-    if(d < magnet && e.onGround){ e.x += dx/d*Math.min(d, 0.12); e.z += dz/d*Math.min(d, 0.12); }
+    const won = G.scenes && G.scenes.play && G.scenes.play.cleared;
+    const magnet = won ? 1e9 : (e.type==='coin' || e.type==='gem' || e.type==='star' ? 2.2 : 1.2);
+    if(d < magnet && (e.onGround || won)){ const sp = won ? 0.3 : 0.12; e.x += dx/d*Math.min(d, sp); e.z += dz/d*Math.min(d, sp); }
     if(d < 0.55 && Math.abs(p.y - e.y) < 1.2) collect(e, p);
   },
 };

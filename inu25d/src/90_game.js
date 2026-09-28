@@ -153,7 +153,7 @@ G.scenes.select = {
     G.cam.followEnt = null; G.cam.zoom = 6; G.cam.tx = 0; G.cam.ty = 1.0; G.cam.tz = 0.4; G.cam.snap();
     uiShow('select', { heroes:list, selected:game.heroId,
       onFocus:(id)=> this.focus(id),
-      onPick:(id)=>{ if(id) game.heroId = id; persist(); sfx('ok'); startRun(); },
+      onPick:(id)=>{ if(id) game.heroId = id; persist(); sfx('ok'); chooseStage(); },
       onBack:()=>{ sfx('cancel'); G.go('title'); } });
     bgm('select');
   },
@@ -166,11 +166,21 @@ G.scenes.select = {
 };
 
 // ---------------------------------------------------------------- a run: several stages in a row
-function startRun(){
+// with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
+function chooseStage(){
+  const n = stages().length, open = U.clamp(game.unlocked|0, 0, Math.max(0, n-1));
+  if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
+    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < open }));
+    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
+  } else startRun(0);
+}
+function startRun(start){
   G._arena = false; G._autoplay = false;
-  game.level = 1; game.xp = 0; game.xpNext = 60; game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
+  start = start|0;
+  // starting later in the adventure: give the hero the level a player would roughly have by then
+  game.level = start > 0 ? 1 + start*2 : 1; game.xp = 0; game.xpNext = Math.round(60*Math.pow(1.32, game.level-1));
+  game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
   game.lives = game.diff.lives;
-  const start = 0;
   G.go('play', { stage:start });
 }
 
@@ -188,6 +198,7 @@ const play = G.scenes.play = {
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
     G.world.add(p);
+    if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
     touch(true);
@@ -208,6 +219,7 @@ const play = G.scenes.play = {
     G.paused = on;
     if(G.fx) G.fx.worldFrozen = !!on;
     if(on){
+      G.bus.emit('pause', {});
       uiShow('pause', { soundOn:game.soundOn,
         onResume:()=> this.pause(false),
         onRetry:()=>{ this.pause(false); G.go('play', { stage:game.stageIndex }); },
@@ -223,7 +235,7 @@ const play = G.scenes.play = {
   tick(){
     const b = G.input.btn;
     if(this.over) return;            // game-over screen owns input; Esc must not resume the world behind it
-    if(b.pause.pressed && !this.cleared){ this.pause(!G.paused); return; }
+    if(b.pause.pressed && !this.cleared && !(game.cutinT > 0)){ this.pause(!G.paused); return; }
     if(G.paused) return;
     const p = G.player;
 
@@ -266,8 +278,8 @@ const play = G.scenes.play = {
       if(game.koT===30) banner('がんばれ！', game.lives===Infinity ? '' : 'のこり ' + Math.max(0, game.lives-1), 90);
       if(game.koT >= 100){
         game.koT = 0;
-        if(game.lives!==Infinity){ game.lives--; }
-        if(game.lives!==Infinity && game.lives<=0){ this.gameOver(); return; }
+        if(game.lives!==Infinity && !this.cleared){ game.lives--; }
+        if(game.lives!==Infinity && game.lives<=0 && !this.cleared){ this.gameOver(); return; }
         p.dead = false; p.hp = p.maxHp; p.inv = 180; p.vy = 0.12; p.onGround = false; p.sp = 3;
         G.setState(p, 'air'); G.setAnim(p, 'jump');
         game.revives++;
@@ -275,15 +287,25 @@ const play = G.scenes.play = {
       }
     }
     // stage clear
-    if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; }
+    if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; game.victT = 0; this.winGuard(); }
     if(this.cleared){
       game.clearT++;
-      if(game.clearT===40 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); }
-      if(game.clearT===50){ banner('ステージクリア！', game.stageName, 150); bgm('clear'); }
-      if(game.clearT===210) this.showResult();
+      if(p) p.inv = Math.max(p.inv, 30);
+      const bossStill = G.world.ents.some(e=> e.def && e.def.boss && !e.removed);
+      if(!game.victT && ((!bossStill && game.clearT > 30) || game.clearT > 330)) game.victT = game.clearT;
+      const v = game.victT ? game.clearT - game.victT : -1;
+      if(v===0 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); }
+      if(v===10){ banner('ステージクリア！', game.stageName, 150); bgm('clear'); }
+      if(v===170) this.showResult();
     }
   },
   frame: frameCommon,
+  // the stage is won: nothing may hurt the hero any more, and the boss's drops fly to the hero
+  winGuard(){
+    for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
+    G.combat.areas.length = 0;
+    const p = G.player; if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+  },
   showResult(){
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
@@ -338,8 +360,13 @@ function separate(ents){
     for(let j=i+1;j<ents.length;j++){
       const c = ents[j]; if(!(c.team===0 || c.team===1) || c.dead || c.intangible || c.y > 0.6) continue;
       const dz = c.z - a.z; if(Math.abs(dz) > 0.42) continue;
-      const dx = c.x - a.x, min = (a.radius + c.radius)*0.8;
+      const bossPair = (a.def && a.def.boss) || (c.def && c.def.boss);
+      const dx = c.x - a.x, min = (a.radius + c.radius)*(bossPair ? 1 : 0.8);
       if(Math.abs(dx) >= min) continue;
+      if(bossPair && (a.team===0 || c.team===0)){
+        const hero = a.team===0 ? a : c, boss = hero===a ? c : a;
+        const s = hero.x >= boss.x ? 1 : -1; hero.x = boss.x + s*min; continue;
+      }
       const push = (min - Math.abs(dx)) * 0.25 * (dx===0 ? (a.id<c.id?1:-1) : Math.sign(dx));
       const wa = a.team===0 ? 0.25 : (a.def&&a.def.boss ? 0.1 : 1), wc = c.team===0 ? 0.25 : (c.def&&c.def.boss ? 0.1 : 1);
       a.x -= push*wa; c.x += push*wc;
@@ -359,6 +386,10 @@ G.bus.on('bossDown', (d)=>{
   if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
   G.cam.zoom = 0;
 });
+// the stage-7 mid-boss is purified: back to the stage's own music until the final boss
+G.bus.on('midClear', ()=>{ if(G.sceneName==='play'){ const st = S().info || {}; bgm(st.bgm || ('stage'+(game.stageIndex+1))); } });
+// phone switched apps / tab hidden: pause (kids come back to a pause menu, not a lost fight)
+G.bus.on('hidden', ()=>{ if(G.sceneName==='play' && !play.over && !play.cleared && !(game.cutinT>0)) play.pause(true); });
 
 // ---------------------------------------------------------------- scene: ending
 G.scenes.ending = {
@@ -374,7 +405,7 @@ G.scenes.ending = {
   tick(){
     stepRigs();
     const t = G.time.sceneTick;
-    if(t % 40 === 0 && G.fx && G.fx.burst) G.fx.burst('fireworks', U.rand(-6, 6), U.rand(4, 7), -4, { scale:1.4 });
+    if(t % 40 === 0 && G.fx && G.fx.burst){ const hw = G.cam.halfW; G.fx.burst('fireworks', U.rand(G.cam.x - hw*0.8, G.cam.x + hw*0.5), G.cam.y + U.rand(1.0, 2.3), -3, { scale:1.3 }); }
   },
   frame: frameCommon,
 };

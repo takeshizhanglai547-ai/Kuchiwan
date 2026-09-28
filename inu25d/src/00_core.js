@@ -97,7 +97,10 @@ function applyQuality(){
   }
   G.bus.emit('quality', q);
 }
-G.setQuality = (tier)=>{ G.quality.tier = U.clamp(tier|0,0,2); applyQuality(); };
+G.setQuality = (tier)=>{ G.quality.tier = U.clamp(tier|0,0,2); G.quality.pendingTier = null; applyQuality(); };
+// a deferred downgrade (shader recompiles) is applied at the next calm moment
+function applyPendingQuality(){ if(G.quality.pendingTier!=null) G.setQuality(G.quality.pendingTier); }
+G.bus.on('waveClear', applyPendingQuality); G.bus.on('scene', applyPendingQuality); G.bus.on('pause', applyPendingQuality);
 
 // ---------------------------------------------------------------- renderer / scene / lights
 G.initRenderer = function(canvas){
@@ -207,7 +210,14 @@ G.cam = {
   snap(){ this.frame(1, true); },
   // world x range currently visible at the belt plane (for spawns / locks)
   // fraction of halfW hidden on the right by the touch buttons (phones in landscape)
-  rightCover(){ return (G.input && G.input.lastDevice==='touch' && !(G.view && G.view.portrait)) ? 0.5 : 0; },
+  rightCover(){
+    if(G.view && G.view.portrait) return 0;
+    const t = G.ui && G.ui.touch;
+    const on = t && typeof t.visible==='boolean' ? t.visible : (G.input && G.input.lastDevice==='touch');
+    return on ? 0.5 : 0;
+  },
+  // clear transient effects (a new scene must not inherit a boss-intro focus, shake or punch)
+  reset(){ this.focusT = 0; this.focusZoom = 0; this.shakeT = 0; this.shakeP = 0; this.punchT = 0; this.zoom = 0; },
   // world width that is actually usable (not under the touch buttons)
   usableW(){ return this.halfW * (2 - this.rightCover()); },
   // reused array: read it right away, don't keep it
@@ -221,22 +231,23 @@ G.cam = {
     // camera centre must keep the lock range fully on screen (and out from under the touch buttons)
     const rc = this.rightCover();
     const lo = this.lockMax - this.halfW*(1-rc), hi = this.lockMin + this.halfW;
-    if(this.lockMin > -1e8){ if(lo<=hi) this.tx = U.clamp(this.tx, lo, hi); else this.tx = (lo+hi)/2; }
+    if(this.lockMin > -1e8){ this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : U.clamp(this.tx, hi, lo); }
     const stg = G.stage && G.stage.info;
     if(stg){ this.tx = U.clamp(this.tx, this.halfW-1, Math.max(this.halfW-1, stg.length - this.halfW + 1)); }
     let gx=this.tx, gy=this.ty, gz=this.tz, zoom=this.zoom;
-    if(this.focusT>0){ this.focusT--; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
+    const kf = snap ? 0 : dt*60;
+    if(this.focusT>0){ this.focusT -= kf; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
     if(snap){ this.x=gx; this.y=gy; this.z=gz; this.zc = zoom; }
     else { this.x=U.damp(this.x,gx,5.5,dt); this.y=U.damp(this.y,gy,4,dt); this.z=U.damp(this.z,gz,3,dt); this.zc=U.damp(this.zc||0, zoom, 2.5, dt); }
     let d = (this.baseDist||16) - this.zc;
     // visible half-width at the belt plane follows the real distance (boss fights zoom out)
     this.halfW = Math.tan(VFOV*Math.PI/360) * G.camera.aspect * d;
-    if(this.punchT>0){ d -= this.punch*Math.sin(Math.PI*this.punchT/this.punchMax); this.punchT--; }
+    if(this.punchT>0){ d -= this.punch*Math.sin(Math.PI*U.clamp(this.punchT/this.punchMax,0,1)); this.punchT -= kf; }
     let sx=0, sy=0;
     if(this.shakeT>0){
-      const k = this.shakeP*(this.shakeT/this.shakeMax);
+      const k = this.shakeP*U.clamp(this.shakeT/this.shakeMax,0,1);
       sx = (Math.random()*2-1)*k*0.12; sy = (Math.random()*2-1)*k*0.09;
-      this.shakeT--;
+      this.shakeT -= kf;
     }
     const cam = G.camera;
     cam.position.set(this.x + sx, this.y + Math.sin(PITCH)*d + sy, this.z + Math.cos(PITCH)*d);
@@ -425,7 +436,7 @@ G.go = function(name, params){
   const prev = G.scenes[G.sceneName];
   if(prev && prev.exit){ try{ prev.exit(); }catch(err){ G.logError('scene.exit '+G.sceneName, err); } }
   G.sceneName = name; G.time.sceneTick = 0;
-  G.hitStop = 0; G.timeScale = 1; slowT = 0;
+  G.hitStop = 0; G.timeScale = 1; slowT = 0; G.cam.reset();
   const sc = G.scenes[name];
   if(sc && sc.enter){ try{ sc.enter(params||{}); }catch(err){ G.logError('scene.enter '+name, err); } }
   G.bus.emit('scene', {name});
@@ -457,7 +468,7 @@ function frame(now){
   if(dt > 0.1) dt = 0.1;              // tab switch / hiccup: don't fast-forward the world
   // slow motion stretches ticks; counted in real frames
   let scale = 1;
-  if(slowT>0){ slowT--; scale = slowScale; }
+  if(slowT>0){ slowT -= dt*60; scale = slowScale; }
   G.timeScale = scale;
   acc += dt*scale;
   let steps = 0;
@@ -478,8 +489,10 @@ function governor(dt){
   G.time.fps = 1/emaDt;
   if(G.sceneName!=='play' || document.hidden) { slowFor=0; return; }
   if(emaDt > 1/42){ slowFor += dt; fastFor = 0; } else { slowFor = Math.max(0, slowFor - dt*0.5); fastFor += dt; }
-  if(slowFor > 2.5 && G.quality.tier < 2 && !G.quality.locked){
-    slowFor = 0; G.setQuality(G.quality.tier+1);
+  if(slowFor > 2.5 && G.quality.tier < 2 && !G.quality.locked && G.quality.pendingTier==null){
+    slowFor = 0;
+    if(G.quality.tier===1){ G.quality.pendingTier = 2; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1)); resize(); }
+    else G.setQuality(G.quality.tier+1);
   }
 }
 G.start = function(){

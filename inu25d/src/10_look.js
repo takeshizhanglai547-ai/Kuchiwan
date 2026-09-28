@@ -222,6 +222,7 @@ const PICK = {
   star:(b)=>{ b.add(geo.star(0.26,0.48,0.12), '#ffe14d'); },
   heart:(b)=>{ b.add(geo.heart(0.28,0.14), '#ff5f8f'); },
 };
+const pickCache = new Map();
 const PROP = {
   crate:(b)=>{ b.add(geo.rbox(0.9,0.8,0.8,0.08,3), '#d9a05b', [0,0.4,0]);
     b.add(geo.rbox(0.94,0.12,0.84,0.04,2), '#9c6230', [0,0.12,0]); b.add(geo.rbox(0.94,0.12,0.84,0.04,2), '#9c6230', [0,0.68,0]);
@@ -296,12 +297,21 @@ G.look = {
     return m;
   },
   canvasTex,
+  // pickups share one merged geometry + material per kind (a boss drops 12+ coins in one frame)
   pickupMesh(kind){
-    const f = PICK[kind] || PICK.coin;
-    const b = new PartBuilder(); f(b);
-    const mesh = b.mesh({ outline:0.018, rough: kind==='coin'||kind==='gem' ? 0.35 : 0.6, metal: kind==='coin' ? 0.2 : 0 });
+    if(!PICK[kind]) kind = 'coin';
+    let c = pickCache.get(kind);
+    if(!c){
+      const b = new PartBuilder(); PICK[kind](b);
+      const g = b.build(); g.userData.shared = true;
+      const mat = G.look.vmat({ rough: kind==='coin'||kind==='gem' ? 0.35 : 0.6, metal: kind==='coin' ? 0.2 : 0 });
+      c = { g, mat }; pickCache.set(kind, c);
+    }
+    const mesh = new THREE.Mesh(c.g, c.mat);
+    mesh.castShadow = false;            // pickups already have a blob shadow
+    G.look.outline(mesh, 0.018);
     const obj = new THREE.Group(); obj.add(mesh);
-    return { obj, mesh, dispose(){ mesh.geometry.dispose(); } };
+    return { obj, mesh, dispose(){} };
   },
   propMesh(kind){
     const f = PROP[kind] || PROP.crate;

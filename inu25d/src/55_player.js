@@ -19,15 +19,18 @@ function foesInView(){
 }
 function viewArea(e, o){
   const vr = G.cam.viewRange();
-  return G.combat.area(Object.assign({ owner:e, x:(vr[0]+vr[1])/2, y:0, z:(G.cfg.ZMIN+G.cfg.ZMAX)/2, r:(vr[1]-vr[0])/2+1.5,
+  const a = G.combat.area(Object.assign({ owner:e, x:(vr[0]+vr[1])/2, y:0, z:(G.cfg.ZMIN+G.cfg.ZMAX)/2, r:(vr[1]-vr[0])/2+1.5,
     zr:(G.cfg.ZMAX-G.cfg.ZMIN), y0:-1, y1:8, dur:2 }, o));
+  a.dmg *= (e.atkMul || 1);             // ults grow with level / hero strength like every other attack
+  return a;
 }
 function fxb(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o); }
 function rainFrom(e, kind, o){
   const vr = G.cam.viewRange();
   const x = U.rand(vr[0]+0.5, vr[1]-0.5), z = U.rand(G.cfg.ZMIN, G.cfg.ZMAX);
-  G.combat.shoot(Object.assign({ owner:e, kind, x: x - 1.2, y: 9, z, vx: 0.1, vy: -0.34, dmg: 7, r:0.5, power:2, up:0.12, life:60,
+  const p = G.combat.shoot(Object.assign({ owner:e, kind, x: x - 1.2, y: 9, z, vx: 0.1, vy: -0.34, dmg: 7, r:0.5, power:2, up:0.12, life:60,
     boom:{ r:1.1, dmg:5, power:1, kind:'star', up:0.1, fx:'ring' } }, o||{}));
+  p.dmg *= (e.atkMul || 1);             // (the boom is scaled by the owner's atkMul in 50_combat)
 }
 
 // ---------------------------------------------------------------- move tables
@@ -76,7 +79,7 @@ const MOVES = {
       if(t<72 && t%3===0){ const fs = foesInView(); const f = fs.length ? fs[Math.floor(G.rng()*fs.length)] : null; const vr = G.cam.viewRange();
         const nx = f ? f.x - p.face*0.9 : U.rand(vr[0]+1, vr[1]-1); p.x = U.clamp(nx, vr[0]+0.6, vr[1]-0.6); p.z = f ? f.z : U.rand(G.cfg.ZMIN, G.cfg.ZMAX);
         p.face = f ? U.sign(f.x - p.x) : p.face; G.setAnim(p, (t/3)%2 ? 'atk1':'atk2', 6, 0.4); fxb('stars', p.x, 0.8, p.z, { count:3, color:'#ffd24d' });
-        if(f && !f.intangible) G.combat.damage(f, 3, { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
+        if(f && !f.intangible) G.combat.damage(f, 3*(p.atkMul||1), { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
       if(t===76){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 16, 0.3); viewArea(p, { dmg:28, power:3, kind:'blunt', up:0.28, kb:0.14 }); G.cam.shake(6,24); if(G.fx&&G.fx.flash) G.fx.flash('#fff0b0', 0.7, 10); }
     } }); } },
   },
@@ -146,7 +149,7 @@ const MOVES = {
     },
     ult:{ name:'かみふぶきロックンロール', kind:'pop', build(e){ return A({ id:'wt_ult', anim:'ult', len:100, fn(p,t){
       if(t>10 && t<90 && t%2===0){ const ang = Math.sin(t*0.12)*0.9; G.combat.shoot({ owner:p, kind:'confetti', x:p.x+p.face*0.7, y:0.8, z:p.z,
-        vx:p.face*0.42, vz:ang*0.07, vy:0.01, dmg:3, r:0.45, pierce:3, life:40, power:1, stun:24 }); }
+        vx:p.face*0.42, vz:ang*0.07, vy:0.01, dmg:3*(p.atkMul||1), r:0.45, pierce:3, life:40, power:1, stun:24 }); }
       if(t===92){ viewArea(p, { dmg:22, power:3, kind:'pop', up:0.26 }); fxb('confetti', p.x+p.face*3, 2.5, p.z, { count:40 }); }
     } }); } },
   },
@@ -170,7 +173,7 @@ const MOVES = {
       if(t===0){ home.x=p.x; home.z=p.z; list = foesInView().slice(0, 10); }
       const k = Math.floor((t-4)/7);
       if(t>=4 && (t-4)%7===0 && k < list.length){ const f = list[k]; if(!f.dead && !f.intangible){ p.x = f.x - p.face*1.0; p.z = f.z; G.setAnim(p, 'atk2', 7, 0.3);
-        G.combat.damage(f, 6, { src:p, kind:'slash', power:2, stun:60, dir:p.face, stop:2 }); fxb('slash', f.x, f.y+0.7, f.z, { color:'#ffffff' }); } }
+        G.combat.damage(f, 6*(p.atkMul||1), { src:p, kind:'slash', power:2, stun:60, dir:p.face, stop:2 }); fxb('slash', f.x, f.y+0.7, f.z, { color:'#ffffff' }); } }
       if(t===80){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 20, 0.5); if(G.fx&&G.fx.text) G.fx.text('…のうとう。', p.x, 2.2, p.z, 'info'); }
       if(t===92){ viewArea(p, { dmg:30, power:3, kind:'slash', up:0.28, kb:0.12 }); if(G.fx&&G.fx.flash) G.fx.flash('#ffffff', 0.8, 10); G.cam.shake(6,20); }
     } }); } },
@@ -218,7 +221,7 @@ const P = G.playerCtl = {
     const mv = MOVES[heroId] || MOVES.inu;
     const st = mv.stats;
     const lvl = (G.game && G.game.level) || 1;
-    const lvlHp = 1 + (lvl-1)*0.08, lvlAtk = 1 + (lvl-1)*0.05;
+    const lvlHp = Math.pow(1.08, lvl-1), lvlAtk = Math.pow(1.05, lvl-1);   // same compounding as G.game.addXp
     const meta = heroMeta(heroId);
     let rig = null;
     try { rig = G.heroes && G.heroes.build ? G.heroes.build(heroId) : null; } catch(err){ G.logError('hero build', err); }
@@ -341,7 +344,7 @@ function checkStomp(p){
     const top = f.y + f.height;
     if(p.y < top - 0.35 || p.y > top + 0.3) continue;
     f.stompT = 30;
-    G.combat.damage(f, 6, { src:p, kind:'pop', power:1, stun: f.def && f.def.boss ? 0 : 26, dir:p.face, kb:0.02, noDown:true });
+    G.combat.damage(f, 6*(p.atkMul||1), { src:p, kind:'pop', power:1, stun: f.def && f.def.boss ? 0 : 26, dir:p.face, kb:0.02, noDown:true });
     p.vy = 0.2; p.djump = false; p.airCount = 0; p.stompUsed = true;
     G.setAnim(p, 'jump');
     G.bus.emit('stomp', { ent:p, target:f });
@@ -372,6 +375,7 @@ function tick(p){
   if(p.buffer>0) p.buffer--;
   if(p.comboT>0){ p.comboT--; if(p.comboT===0) p.comboStep = 0; }
   if(p.sp < SP_MAX && p.state!=='ult') p.sp = Math.min(SP_MAX, p.sp + SP_REGEN);
+  if(p.chargeSnd && p.state!=='charge'){ p.chargeSnd = false; if(G.audio && G.audio.sfx) G.audio.sfx('charge', { stop:true }); }
   for(const f of G.world.ents) if(f.stompT>0 && f.team===1) f.stompT--;
 
   // cut-in freeze is handled by the game loop; when it ends we start the ult attack
@@ -502,6 +506,7 @@ function tick(p){
     G.setState(p, 'charge'); p.chargeT = 0; p.charge = 0;
     G.bus.emit('chargeStart', { ent:p });
     if(G.audio && G.audio.sfx) G.audio.sfx('charge');
+    p.chargeSnd = true;
     return;
   }
   const mx = I.x, mz = I.z;
@@ -546,4 +551,6 @@ G.bus.on('hurt', (d)=>{
   if(G.audio && G.audio.voice) G.audio.voice(p.type, 'hurt');
 });
 G.bus.on('down', (d)=>{ const p = G.player; if(p && d.ent===p){ p.downT = 0; p.inv = Math.max(p.inv, 70); } });
+// one source of truth for hero stats: the select screen paws read G.heroes.list[].stats
+if(G.heroes && G.heroes.list){ for(const h of G.heroes.list){ const m = MOVES[h.id]; if(m) h.stats = Object.assign({}, m.stats); } }
 })();
