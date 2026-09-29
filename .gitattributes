@@ -2,19 +2,21 @@
 # ---------------------------------------------------------------------
 # ここに書いた種類のファイルは、Git 本体ではなく Git LFS に保存されます。
 # 使う側のパソコンで最初に一度だけ「git lfs install」を実行してください
-# （Windows 用の Git for Windows には Git LFS が同梱されています）。
+# （Windows 用の Git for Windows では、既定の設定で Git LFS も一緒に入ります）。
+# 拡張子は [uU] のように書き、大文字・小文字のどちらでも同じ扱いにしています
+# （Windows と Linux で判定がずれないようにするため）。
 #
 # 【公開リポジトリ Kuchiwan での注意】
-#   Kuchiwan は GitHub Pages で Web ゲームを公開しています。Pages は Git LFS の
-#   ファイルを配信できないため、Kuchiwan では画像・音声・動画・3Dモデルなど
-#   ブラウザが直接読み込む形式を LFS に入れていません（入れるとブラウザで
-#   画像や音が出なくなります）。
+#   Kuchiwan は GitHub Pages で Web ゲームを公開しています。公開するファイルを
+#   LFS に入れると、画像や音が出なくなったり、公開のたびに LFS の通信量枠を
+#   消費したりする恐れがあるため、画像・音声・動画・3Dモデルなどブラウザが
+#   直接読み込む形式は、Kuchiwan では LFS に入れていません。
 
 # --- Unreal Engine のアセット（ブラウザは読まない） ---
-*.uasset filter=lfs diff=lfs merge=lfs -text
-*.umap filter=lfs diff=lfs merge=lfs -text
+*.[uU][aA][sS][sS][eE][tT] filter=lfs diff=lfs merge=lfs -text
+*.[uU][mM][aA][pP] filter=lfs diff=lfs merge=lfs -text
 # --- 制作ツールの元データ（ブラウザは読まない） ---
-*.blend filter=lfs diff=lfs merge=lfs -text
-*.psd filter=lfs diff=lfs merge=lfs -text
-# --- 非公開バックアップ（Kuchiwan-backup）では、この下に画像・音声・動画・
-#     3Dモデルなどの行が自動で追記され、それらもすべて Git LFS で保管されます ---
+*.[bB][lL][eE][nN][dD] filter=lfs diff=lfs merge=lfs -text
+*.[pP][sS][dD] filter=lfs diff=lfs merge=lfs -text
+# --- 非公開バックアップでは、バックアップ作成時にこの下へ画像・音声・動画・
+#     3Dモデルなどの行を追記し、それらもすべて Git LFS で保管しています ---
