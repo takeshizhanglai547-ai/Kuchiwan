@@ -56,7 +56,7 @@ function buildCSS(){
 #iuFB .fbc{background:#fff08a}
 #iuFB .fbf{background:linear-gradient(180deg,#ffc4d4 0%,#ff7aa0 60%,#f25a86 100%)}
 #iu{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;font-family:${FONT};color:#4a2c14;font-weight:800;line-height:1.25;
-  font-size:clamp(13px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;--r:56px;--b:96px;--fm:13px;
+  font-size:clamp(13px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;line-break:strict;--r:56px;--b:96px;--fm:13px;
   --pl:max(10px,env(safe-area-inset-left,0px));--pr:max(10px,env(safe-area-inset-right,0px));
   --pt:max(8px,env(safe-area-inset-top,0px));--pb:max(8px,env(safe-area-inset-bottom,0px));
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:none;text-size-adjust:none}
@@ -374,7 +374,7 @@ function buildCSS(){
 
 /* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
 #iu .stages{z-index:61}
-#iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(54em,calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
+#iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(max(54em,820px),calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
 #iu .sthd{display:flex;align-items:center;gap:.8em}
 #iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
 #iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
@@ -384,7 +384,7 @@ function buildCSS(){
   transition:translate .18s cubic-bezier(.3,1.7,.5,1),scale .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(var(--i)*.05s)}
 #iu .stc .sn{width:2.4em;height:2.4em;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;line-height:1;color:#fff;
   background:radial-gradient(circle at 36% 30%,#d2ecff 0%,#6fbcf6 70%,#2f7fc4 120%);box-shadow:0 0 0 .16em #fff,0 .18em .3em rgba(74,44,20,.3);text-shadow:${ring(0.06,'#2f7fc4',10)}}
-#iu .stc .stn{font-size:max(var(--fm),.85em);line-height:1.3;letter-spacing:0;text-align:center;color:#6a3f1a;word-break:keep-all;overflow-wrap:anywhere}
+#iu .stc .stn{font-size:max(var(--fm),.85em);line-height:1.3;letter-spacing:0;text-align:center;color:#6a3f1a;word-break:keep-all;overflow-wrap:anywhere;line-break:strict}
 #iu .stc .sst{display:flex;align-items:center;gap:.15em;font-size:max(var(--fm),.8em);line-height:1.1;color:#c8840c;white-space:nowrap}
 #iu .stc .sst i{display:block;width:1.1em;height:1.1em;flex:none}
 #iu .stc.clr .sn{background:radial-gradient(circle at 36% 30%,#fff2b0 0%,#ffcc3a 70%,#cf8f16 120%);text-shadow:${ring(0.06,'#cf8f16',10)}}
@@ -396,6 +396,9 @@ function buildCSS(){
 #iu .stc.on{translate:0 -.35em;scale:1.08;z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
 #iu .stc.no{animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards,iuNo .36s ease-in-out}
 #iu .stgo{align-self:center;font-size:1.3em;animation:iuPulse 1.5s ease-in-out infinite}
+/* short landscape: every px of card width goes to the name (7 kana must fit on one line at 740 px) */
+#iu.short .strow{gap:.35em}
+#iu.short .stc{padding-left:.1em;padding-right:.1em}
 #iu.port .stp{padding:.7em .8em .9em}
 #iu.port .strow{flex-direction:column;gap:.5em;padding-top:0}
 #iu.port .strow::before{left:1.95em;right:auto;top:1.2em;bottom:1.2em;border-top:0;border-left:.24em dashed #f0c89a}
@@ -493,6 +496,19 @@ function lighten(hex, k){
   r = Math.round(r+(255-r)*k); g = Math.round(g+(255-g)*k); b = Math.round(b+(255-b)*k);
   return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
 }
+// Kana text has no spaces inside words, so a narrow box breaks it anywhere (「すいしょうど／う」). With word-break:keep-all
+// on the box it breaks only at the spaces and at the <wbr> put here where katakana meets hiragana (「ダークワンワン／じょう」).
+const KATA = /[゠-ヿ]/, HIRA = /[ぁ-ゟ]/;
+function wordWrap(e, s){
+  e.textContent = '';
+  let run = '', prev = '';
+  for(const ch of String(s)){
+    const k = KATA.test(ch) ? 'k' : HIRA.test(ch) ? 'h' : '';
+    if(run && k && prev && k!==prev){ e.appendChild(document.createTextNode(run)); e.appendChild(document.createElement('wbr')); run = ''; }
+    run += ch; if(k) prev = k; else prev = '';
+  }
+  if(run) e.appendChild(document.createTextNode(run));
+}
 function initialOf(h){ const s = String(h.short || h.name || h.id || '?'); return Array.from(s)[0] || '?'; }
 function soundState(v){ return v!=null ? v!==false : !(G.audio && G.audio.muted); }
 function fmtTime(sec){ sec = Math.max(0, Math.round(sec||0)); const m = Math.floor(sec/60), s = sec%60; return (m ? m+'ふん ' : '') + s + 'びょう'; }
@@ -555,16 +571,19 @@ const ORDER = ['loading','pause','over','result','ending','stages','select','tit
 // for 0.9 s (the second half of a double-tap on a slow phone lands there, a deliberate new tap rarely does).
 const OPEN_GUARD_MS = 400, DOUBLE_TAP_MS = 900, DOUBLE_TAP_PX = 48;
 let openedAt = -1e9, openX = NaN, openY = NaN;
+let uiClock = 0, openedUi = -1e9;                           // seconds of G.ui.frame time (G.step-driven tests advance it too)
 const lastDown = { x:NaN, y:NaN, t:-1e9 };
 // gamepad menu state (see padFrame): last seen buttons / direction, auto-repeat timer, armed once all is released
 const PAD = { c:true, b:true, dx:0, dz:0, rep:0, arm:false };
 const PADEV = { repeat:false, preventDefault(){} };
 function markOpen(){
-  openedAt = performance.now(); PAD.arm = false;
+  openedAt = performance.now(); openedUi = uiClock; PAD.arm = false;
   const fromTap = openedAt - lastDown.t < 1500;             // opened by a tap (not by the game on its own)
   openX = fromTap ? lastDown.x : NaN; openY = fromTap ? lastDown.y : NaN;
 }
-function justOpened(){ return performance.now() - openedAt < OPEN_GUARD_MS; }
+// keys / pad: still inside the guard only while BOTH clocks say so (live play: the same; a test that steps frames
+// quickly or waits in real time without frames: whichever clock moved lets the press through)
+function justOpened(){ return performance.now() - openedAt < OPEN_GUARD_MS && uiClock - openedUi < OPEN_GUARD_MS/1000; }
 // real (trusted) clicks only: el.click() from the keyboard / pad routing and from tests is never blocked here
 function tapBlocked(e){
   if(!(e && e.isTrusted)) return false;
@@ -795,7 +814,7 @@ function buildStages(s){
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
       el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
-      el('span', 'stn', c).textContent = st.kana || st.name || ('ステージ '+(i+1));
+      wordWrap(el('span', 'stn', c), st.kana || st.name || ('ステージ '+(i+1)));
       const ss = el('span', 'sst', c);
       if(st.locked) ss.textContent = 'まだ だよ';
       else if(st.cleared){ el('i', '', ss, SVG.star); el('span', '', ss).textContent = 'クリア'; }
@@ -1505,6 +1524,7 @@ function hideAll(){
 function frame(dt){
   if(!ready) return;
   dt = (dt>0 && dt<0.25) ? dt : 1/60;
+  uiClock += dt;
   try { portraitStep(); } catch(err){ G.logError('ui.portrait', err); }
   try { if(hud.on){ hudFrame(dt); foeBarsFrame(dt); } else if(fbAny) hideFoeBars(); } catch(err){ G.logError('ui.hud', err); }
   try { bossFrame(dt); } catch(err){ G.logError('ui.boss', err); }
