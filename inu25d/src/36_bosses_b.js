@@ -512,7 +512,6 @@ function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } 
 const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
-function sayLow(e, s){ if(G.fx && G.fx.text) G.fx.text(s, e.x + e.face*0.6, e.y + 1.3, e.z + 0.5, 'onoma'); else say(e, s); }
 // An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
 // (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
 // other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
@@ -1826,10 +1825,10 @@ function empTransform(e){
   fx('smoke', e.x, 0.8, e.z, O.smokeBig); fx('poof', e.x, 1.6, e.z + 0.2, O.purify);
   if(G.fx && G.fx.flash) G.fx.flash('#3a1050', 0.5, 14);
   shake(6, 40);
-  // the line is placed at mid-body height (same popup h.say uses) so the name banner above does not cover it
-  sayLow(e, 'これが ほんとうの すがた…！');
   G.bus.emit('bossPhase', { boss:e, phase:2 });
   e.introDue = true; knightIntro(e);
+  // after the new name's banner (a mid-body line still ran through it: 49% of the line's area under the banner)
+  sayIntro(e, 'これが ほんとうの すがた…！');
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;
   G.combat.start(e, KN_M.transform);
