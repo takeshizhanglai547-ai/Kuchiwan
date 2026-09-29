@@ -355,6 +355,7 @@ function buildCSS(){
 #iu .roll .who{display:block;font-size:max(var(--fm),.55em);color:#c8487e}
 #iu .roll .th{font-size:1.5em;font-weight:900;color:#3a8ad0;text-shadow:${STK_S}}
 #iu .roll .eh{font-size:2.3em;font-weight:900;color:#ffb42a;text-shadow:${STK};line-height:1.6}
+#iu .roll .eh .nw{white-space:nowrap}
 #iu .roll .eh rt{font-size:max(var(--fm),.3em);color:#e0662a;letter-spacing:.2em}
 #iu .roll .fin{font-size:2.1em;font-weight:900;color:#ff6fa4;text-shadow:${STK};line-height:1.35;padding:1em 0 2em}
 #iu .roll .eport{width:7em;height:7em;border-radius:50%;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 30%,#fff,#ffe6c0);box-shadow:0 0 0 .3em #fff,0 0 0 .55em #ffd24d,0 .6em 1em rgba(74,44,20,.25)}
@@ -1069,7 +1070,15 @@ function banner(text, sub, frames){
   ban.bt.innerHTML = '';
   const chars = Array.from(text);
   chars.forEach((ch, i)=>{ const s = el('span', ch===' '||ch==='　' ? 'sp' : '', ban.bt); if(ch!==' ' && ch!=='　'){ s.textContent = ch; s.setAttribute('data-t', ch); } s.style.setProperty('--i', i); });
-  const w = Math.max(200, (G.view && G.view.w) || innerWidth);
+  let w = Math.max(200, (G.view && G.view.w) || innerWidth), right = '';
+  // landscape with the touch pad: stay left of the button column (a boss's name used to cover the おうぎ button
+  // for the whole intro)
+  if(T.visible && !(G.view && G.view.portrait)){
+    const H = (G.view && G.view.h) || innerHeight; let lx = 1e9;
+    for(const o of T.btns) if(o.cr > 0 && o.cy - o.cr < H*0.62) lx = Math.min(lx, o.cx - o.cr);
+    if(lx < w && lx > w*0.45){ right = Math.round(w - lx + 6) + 'px'; w = lx - 6; }
+  }
+  ban.el.style.right = right;
   const n = Math.max(1, chars.length);
   ban.bt.style.fontSize = Math.min(emPx*4.3, w*0.9/(n*1.04)).toFixed(1)+'px';
   ban.bs.textContent = sub; ban.bs.style.display = sub ? '' : 'none';
@@ -1407,7 +1416,8 @@ function buildEnding(s){
     line('ln', 'おしろの かべから、みんなで はなびを どーん！ どーん！');
     const q = line('qt'); el('span', 'who', q).textContent = 'おうじょ ペロ'; q.appendChild(document.createTextNode('「このひかりは、あなたのものです」'));
     line('ln', 'つよさは、だれかを まもるために ある。');
-    const eh = line('eh'); eh.innerHTML = '★ もふもふ<ruby>聖犬士<rt>せいけんし</rt></ruby>でんせつ ★';
+    // a narrow portrait screen wraps it between the two words only (it used to break でんせ|つ)
+    const eh = line('eh'); eh.innerHTML = '<span class="nw">★&nbsp;もふもふ<ruby>聖犬士<rt>せいけんし</rt></ruby></span><wbr><span class="nw">でんせつ&nbsp;★</span>';
     line('th', 'なかまたち');
     const team = line('team');
     for(const h of heroList()){

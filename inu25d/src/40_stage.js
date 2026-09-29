@@ -1610,7 +1610,10 @@ function startEvent(ev){
     let [a, b] = arenaRange(d, ev);
     if(b - a > vw){ const px = G.player ? G.player.x : a; a = U.clamp(px - 1, a, b - vw); b = a + vw; }
     lockTo(a, b);
-    const bx = b - 4;
+    // 4 units in from the far edge (landscape: ~5.6 in front of the hero). A portrait arena is only ~6 wide and starts
+    // 1 behind the hero, so that put every boss ~1.1 from him, on top of him: keep at least 3.2 of room when it fits
+    const hx = G.player ? U.clamp(G.player.x, a, b) : a;
+    const bx = Math.max(b - 4, Math.min(hx + 3.2, b - 1.4));
     const e = spawnFoe(ev.type, bx, -0.3, { boss:true, face:-1 });
     const tdef = G.foes && G.foes.types ? G.foes.types[ev.type] : null;
     const nm = BOSS_NAMES[ev.type] || [ev.type, ''];

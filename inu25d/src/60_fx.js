@@ -1023,6 +1023,8 @@ let uiRoot=null, layer=null, top=null, flashEl=null, speedHost=null;
 const POP_MAX = 24, ALERT_MAX = 10;
 const pops = [], alerts = [];
 const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, pow:46, lvup:90, say:80 };
+// popups that are kept off the hero and off the HUD / touch controls
+const WORD = { pow:true, onoma:true, crit:true, say:true };
 const _sp = { x:0, y:0, visible:true };
 const _pv = new THREE.Vector3();
 function project(x, y, z){
@@ -1045,19 +1047,51 @@ function heroBoxUpdate(){
   hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
 }
 function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
-// the HUD's top boxes (boss bar block, hero panel): words never sit on them either (a tall boss's taunt used to
-// float over the boss bar's subtitle on phones). Read in the read phase while a word is up — when a word is born,
+// the HUD's boxes — boss bar block and hero panel at the top, touch buttons and stick at the bottom: words never sit
+// on them either (a tall boss's taunt used to float over the boss bar's subtitle on phones; the popup layer is under
+// the touch controls, so a word there is hidden). Read in the read phase while a word is up — when a word is born,
 // after a resize, and every 20 frames (the boss bar drops in / goes away) — not every frame: each read forces a style recalc
-const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
+const HUD_MAX = 9;
+const hud = []; for(let i=0;i<HUD_MAX;i++) hud.push({ on:false, l:0, r:0, t:0, b:0, top:true });
 let hudEls = null, hudAge = 99;
 function hudRead(){
-  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
-  for(let i=0;i<2;i++){
-    const e = hudEls[i], q = hud[i]; q.on = false;
-    if(!e || e.classList.contains('x') || !e.offsetParent) continue;
-    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
-    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.on = true;
+  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected){
+    hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl'), document.querySelector('#iu .stk')]
+      .concat(Array.from(document.querySelectorAll('#iu .tc .tb'))).slice(0, HUD_MAX);
   }
+  for(let i=0;i<HUD_MAX;i++){
+    const e = hudEls[i], q = hud[i]; q.on = false;
+    if(!e || e.classList.contains('x') || !e.offsetParent || !e.isConnected) continue;
+    if(i===2 && !(e.classList.contains('on') || e.classList.contains('ghost'))) continue;   // the stick ring only while shown
+    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
+    // boss bar and hero panel hang from the top; the stick and the buttons (a column up the right side) stand on the bottom
+    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.top = i < 2; q.on = true;
+  }
+}
+function hudOff(){ for(const q of hud) q.on = false; }
+// move a word (centre X,Y, half size hw,hh) off every HUD box. Two ways out, the smaller move that lands clear wins:
+// into the free band of its own columns (under the top boxes, over the bottom ones — the touch buttons stand in a
+// column, so stepping over one box at a time used to land on the next), or sideways past the boxes it touches
+const _kh = { x:0, y:0 };
+function keepOffHud(X, Y, hw, hh, W, H){
+  _kh.x = X; _kh.y = Y;
+  if(!overHud(X, Y, hw, hh)) return _kh;
+  let lo = hh, hi = Math.max(hh, H - hh), left = 1e9, right = -1e9;
+  for(const q of hud){
+    if(!q.on) continue;
+    if(q.r > X - hw && q.l < X + hw){ if(q.top) lo = Math.max(lo, q.b + 4 + hh); else hi = Math.min(hi, q.t - 4 - hh); }
+    if(X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b){ left = Math.min(left, q.l); right = Math.max(right, q.r); }
+  }
+  let best = 1e9, bx = X, by = lo <= hi ? clamp(Y, lo, hi) : lo;
+  const tryAt = (x, y)=>{
+    x = clamp(x, hw, Math.max(hw, W - hw)); y = clamp(y, hh, Math.max(hh, H - hh));
+    if(overHud(x, y, hw, hh)) return;
+    const c = Math.abs(x - X) + Math.abs(y - Y); if(c < best){ best = c; bx = x; by = y; }
+  };
+  if(lo <= hi) tryAt(X, clamp(Y, lo, hi));
+  tryAt(left - 4 - hw, Y); tryAt(right + 4 + hw, Y);
+  _kh.x = bx; _kh.y = by;
+  return _kh;
 }
 function overHud(X, Y, hw, hh){
   for(const q of hud) if(q.on && X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b) return q;
@@ -1130,7 +1164,7 @@ function popNew(str, x, y, z, style, opts){
   p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
   p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
   if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
-  if(style==='pow' || style==='onoma' || style==='crit') hudAge = 99;   // re-read the HUD boxes for the new word
+  if(WORD[style]) hudAge = 99;   // re-read the HUD boxes for the new word
   p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
@@ -1158,8 +1192,8 @@ function updatePops(k){
   const powCap = hb.on ? clamp(hb.h*2.1, 80, W*0.45) : H*0.34;
   // read phase: measure new popups (one layout for all of them)
   let words = false;
-  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
-  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hud[0].on = hud[1].on = false; }
+  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(WORD[p.style]) words = true; }
+  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hudOff(); }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -1213,9 +1247,9 @@ function updatePops(k){
     // a leaning word starts at its anchor and reads away from it (hit words: away from the attacker)
     let X = clamp(cx + p.ox + p.lean*(hw - 6)*0.85, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
     // words never sit on the hero
-    if(p.style==='pow' || p.style==='onoma' || p.style==='crit'){
-      // below a HUD box it would touch (twice: the boss bar and the hero panel can both be in the way)
-      for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }
+    if(WORD[p.style]){
+      // off the HUD (boss bar, hero panel, touch buttons), then off the hero (which also avoids the HUD)
+      keepOffHud(X, Y, hw, hh, W, H); X = _kh.x; Y = _kh.y;
       if(hb.on){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
     }
     el.style.transform = 'translate3d('+(X - p.w/2).toFixed(1)+'px,'+(Y - p.h/2).toFixed(1)+'px,0) scale('+Math.max(0.01,s).toFixed(3)+') rotate('+rot.toFixed(1)+'deg)'+extra;

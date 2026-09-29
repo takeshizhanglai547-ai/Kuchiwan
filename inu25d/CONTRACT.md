@@ -268,7 +268,8 @@ G.foes.h                     helpers for ai():
   h.token(e) / h.release(e)           request/free an attack slot (max 2 attackers at once; 3 on つよい)
   h.wait(e, frames)                   idle for n frames (e.cool)
   h.spawnMinion(type, x, z)           spawn a helper (counts toward wave clear)
-  h.say(e, text)                      speech bubble / onomatopoeia above the foe (G.fx.text 'onoma')
+  h.say(e, text)                      above the foe: up to 7 letters a comic word (G.fx.text 'onoma'), longer a speech
+                                      bubble ('say', shown 70 + 6/letter frames, max 210) so a child can read it
   h.rand()                            G.rng()
 ent fields the framework maintains: e.state ('spawn','idle','move','act','hurt','down','getup','dizzy','ko'),
   e.stateT, e.cool (frames until next decision), e.def, e.phase (bosses, 0-based), e.hpMul.
@@ -301,8 +302,8 @@ G.fx.trail(ent) / G.fx.trailStop(ent)   weapon ribbon trail from rig.base→rig.
 G.fx.text(str, x,y,z, style, opts)  onomatopoeia / damage number popups (DOM overlay), styles:
                                 'dmg','crit','onoma','pow','heal','info','big'; opts {rank, lean, ent, life, color}.
                                 'pow' = hit word: one per spot (a higher rank takes the slot over).
-                                pow/onoma/crit words never sit on the hero nor on the HUD's top boxes
-                                (boss bar block, hero panel): fx moves them off both
+                                pow/onoma/crit/say never sit on the hero nor on the HUD (boss bar block,
+                                hero panel, touch buttons, stick): fx moves them off all of them
 G.fx.alert(ent)                 "!" above a foe (telegraph)
 G.fx.flash(color, alpha, frames) full-screen flash
 G.fx.speedLines(frames)         anime speed lines overlay (ult, dash)

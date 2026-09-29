@@ -71,7 +71,14 @@ const h = {
   release(e){ if(e.hasToken){ tokens.delete(e.id); e.hasToken = false; } },
   wait(e, frames){ e.cool = Math.max(e.cool||0, frames|0); },
   spawnMinion(type, x, z, opts){ return G.foes.spawn(type, x, z, Object.assign({ entrance:'drop', minion:true }, opts||{})); },
-  say(e, text){ if(G.fx && G.fx.text) G.fx.text(text, e.x, e.y + (e.rig && e.rig.height || 1.3) + 0.35, e.z, 'onoma'); },
+  // a short shout (ガオーッ！) is a big comic word; a sentence is a speech bubble, small enough for a phone and up long
+  // enough for a child to read (a 20-letter line as a comic word was 500 px wide and pushed under the touch buttons)
+  say(e, text){
+    if(!(G.fx && G.fx.text)) return;
+    const s = String(text), y = e.y + (e.rig && e.rig.height || 1.3);
+    if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
+    else G.fx.text(s, e.x, y + 0.35, e.z, 'onoma');
+  },
   rand(){ return G.rng(); },
   // pick a spot beside the target on its belt line (for surrounding)
   flank(e, t, dist){ const side = e.x < t.x ? -1 : 1; return { x: t.x + side*(dist||1.1), z: U.clamp(t.z + (e.id%3-1)*0.35, G.cfg.ZMIN, G.cfg.ZMAX) }; },

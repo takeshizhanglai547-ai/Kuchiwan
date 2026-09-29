@@ -498,6 +498,130 @@ test('progress: after the last stage every stage shows as cleared on the stage m
   assert(r.cards.every(c => c.clr), 'after the ending, not every stage shows as cleared: ' + JSON.stringify(r.cards));
 });
 
+test('phone portrait: a boss appears with room in front of the hero (not on top of him)', async () => {
+  const g = await open({ size:'390x844', touch:true });
+  const r = await g.run(() => {
+    const R = G.renderer, real = R.render.bind(R); R.render = () => {};
+    const out = [];
+    for(const si of [0, 2, 6]){
+      G.debug.play('inu', si, 'normal'); G.step(200);
+      const s = G.stage.st, p = G.player; p.hp = p.maxHp = 1e9;
+      s.ptr = s.seq.findIndex(e => e.kind==='boss'); const at = s.seq[s.ptr].at;
+      p.x = at - 3; s.maxX = p.x; G.step(60);
+      G.input.touch.x = 1; let n = 0; while(!s.active && n < 400){ G.step(1); n++; } G.input.touch.x = 0;
+      const e = s.active && s.active.ent;
+      out.push({ stage: si+1, boss: e && e.type, gap: e ? +(e.x - p.x).toFixed(2) : null, room: e ? +(e.x - p.x - e.radius - p.radius).toFixed(2) : null });
+    }
+    R.render = real; G.step(1);
+    return out;
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.every(o => o.boss), 'setup: a boss did not appear: ' + JSON.stringify(r));
+  // the hero needs about one step of room between his body and the boss's
+  assert(r.every(o => o.room >= 1), 'a boss appeared on top of the hero: ' + JSON.stringify(r));
+});
+
+test('phone portrait: every hero of the title and ending line-up is on screen', async () => {
+  const g = await open({ size:'390x844', touch:true });
+  const r = await g.run(() => {
+    const W = innerWidth, out = {};
+    for(const sc of ['title', 'ending']){
+      G.go(sc); out[sc] = [];
+      // they cheer and bounce: look at several moments (the rig's own position, ±0.45 for the body)
+      for(const n of [60, 340, 400, 400]){
+        G.step(n);
+        for(const e of G.world.ents.filter(e => e.kind==='deco')){
+          const rp = e.rig && e.rig.root ? e.rig.root.position : e;
+          const a = G.toScreen(rp.x - 0.45, rp.y + 0.6, rp.z), b = G.toScreen(rp.x + 0.45, rp.y + 0.6, rp.z);
+          out[sc].push({ id: e.type, t: n, l: Math.round(a.x), r: Math.round(b.x) });
+        }
+      }
+    }
+    return { W, out };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  for(const sc of ['title', 'ending']){
+    assert(r.out[sc].length === 28, 'setup: ' + sc + ' has ' + r.out[sc].length/4 + ' heroes');
+    const off = r.out[sc].filter(h => h.l < 0 || h.r > r.W);
+    assert(off.length === 0, sc + ': heroes off screen: ' + JSON.stringify(off) + ' W=' + r.W);
+  }
+});
+
+test('phone portrait: the ending headline wraps between words, not inside one', async () => {
+  const g = await open({ size:'390x844', touch:true });
+  const r = await g.run(() => {
+    G.go('ending'); G.step(30);
+    const eh = document.querySelector('#iu .roll .eh');
+    const lines = []; const walker = document.createTreeWalker(eh, NodeFilter.SHOW_TEXT); let n;
+    while((n = walker.nextNode())){
+      if(n.parentElement.tagName==='RT') continue;
+      for(let i=0;i<n.length;i++){ const rg = document.createRange(); rg.setStart(n, i); rg.setEnd(n, i+1); const b = rg.getBoundingClientRect(); if(!b.width) continue;
+        const y = Math.round(b.top); let L = lines.find(l => Math.abs(l.y - y) < 8); if(!L){ L = { y, t:'' }; lines.push(L); } L.t += n.data[i]; }
+    }
+    lines.sort((a, b) => a.y - b.y);
+    return lines.map(l => l.t.replace(/\s/g, ''));
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.join('') === '★もふもふ聖犬士でんせつ★', 'setup: ' + JSON.stringify(r));
+  assert(r.some(l => l.indexOf('でんせつ') >= 0) && r.some(l => l.indexOf('もふもふ聖犬士') >= 0), 'a word was split across lines: ' + JSON.stringify(r));
+});
+
+test('phone: the boss name banner stays clear of the touch buttons', async () => {
+  const g = await open({ size:'667x375', touch:true });
+  const r = await g.run(() => {
+    G.debug.play('inu', 5, 'normal'); G.step(60);
+    G.ui.banner('ひりゅう ヴォルカ', 'ワンワンていこく だい6のしょう', 140); G.step(40);
+    const parts = Array.from(document.querySelectorAll('#iu .ban .bt span')).concat([document.querySelector('#iu .ban .bs')]).filter(Boolean);
+    const btns = Array.from(document.querySelectorAll('#iu .tc .tb')).filter(b => getComputedStyle(b).display!=='none');
+    let hit = 0, seen = 0;
+    for(const p of parts){ const a = p.getBoundingClientRect(); if(a.width < 1) continue; seen++;
+      for(const b of btns){ const q = b.getBoundingClientRect(); const w = Math.min(a.right, q.right) - Math.max(a.left, q.left), h = Math.min(a.bottom, q.bottom) - Math.max(a.top, q.top); if(w > 1 && h > 1) hit += w*h; } }
+    return { seen, btns: btns.length, hit: Math.round(hit) };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.seen > 5 && r.btns >= 4, 'setup: ' + JSON.stringify(r));
+  assert(r.hit === 0, 'the banner covers a touch button: ' + JSON.stringify(r));
+});
+
+test('phone: a boss\'s long line is a speech bubble, clear of the HUD and the touch buttons', async () => {
+  const g = await open({ size:'667x375', touch:true });
+  const r = await g.run(() => {
+    G.debug.play('inu', 6, 'normal'); G.step(30);
+    const p = G.player; p.inv = 1e9;
+    const e = G.foes.spawn('emperor', p.x + 4, -0.3, { boss:true, entrance:'none' }); e.ai = null; G.ui.bossBar(e); G.step(40);
+    G.foes.h.say(e, 'ワンワンていこくの ちからを おもいしれ！');
+    // and a comic word dropped right on the attack button
+    const atk = document.querySelector('#iu .tc .tb.attack');
+    const q = atk.getBoundingClientRect(), cx = (q.left + q.right)/2, cy = (q.top + q.bottom)/2;
+    let best = null, bd = 1e9;
+    for(let x = p.x - 2; x < p.x + 12; x += 0.25) for(let y = 0; y < 3; y += 0.25){ const s = G.toScreen(x, y, 1.6); const d = (s.x-cx)*(s.x-cx) + (s.y-cy)*(s.y-cy); if(d < bd){ bd = d; best = [x, y]; } }
+    G.fx.text('ドカーン！', best[0], best[1], 1.6, 'onoma');
+    const boxes = () => [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')].concat(Array.from(document.querySelectorAll('#iu .tc .tb'))).filter(b => b && getComputedStyle(b).display!=='none').map(b => b.getBoundingClientRect());
+    let worst = 0, bubble = 0, word = 0;
+    for(let k=0;k<40;k++){
+      G.step(1);
+      const bx = boxes();
+      for(const w of document.querySelectorAll('.fxp.say, .fxp.onoma')){
+        const cs = getComputedStyle(w); if(cs.visibility!=='visible' || +cs.opacity < 0.05) continue;
+        if(w.classList.contains('say') && w.textContent.indexOf('ちからを') >= 0) bubble++; if(w.textContent==='ドカーン！') word++;
+        const a = w.getBoundingClientRect(); let ov = 0;
+        for(const b of bx) ov += Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+        worst = Math.max(worst, ov / Math.max(1, a.width*a.height));
+      }
+    }
+    return { bubble, word, worst: +worst.toFixed(2), aim: bd < 2025 };   // within 45 px of the button's centre (its radius is ~44)
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.aim && r.word > 10, 'setup: ' + JSON.stringify(r));
+  assert(r.bubble > 10, 'the long line was not shown as a speech bubble: ' + JSON.stringify(r));
+  assert(r.worst === 0, 'a line or word sat on the HUD / touch buttons: ' + JSON.stringify(r));
+});
+
 // ---------------------------------------------------------------- pad
 test('pad: START opens the pause menu and START closes it again', async () => {
   const g = await open();

@@ -30,3 +30,9 @@
 全クリア後も最終面がクリア扱いにならない（修正前）	game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1));	game.unlocked = Math.max(game.unlocked, Math.min(stages().length-1, idx+1));	after the last stage
 押し合いの最後に主人公を戦闘範囲へ収めない	  if(B) for(const e of ents){ if(e.team===0 && e.entered !== false && !e.dead) e.x = U.clamp(e.x, B.xmin + e.radius, B.xmax - e.radius); }		arena wall
 ゲームループが1フレームで止まる	if(!running) return;	if(true) return;	boot: live
+縦画面でボスが主人公の真上に出る（修正前）	const bx = Math.max(b - 4, Math.min(hx + 3.2, b - 1.4));	const bx = b - 4;	a boss appears with room
+縦画面でタイトル/エンディングのカメラを引かない（修正前）	zm = Math.min(zoom, (G.cam.baseDist||16) - need/t);	zm = zoom;	line-up is on screen
+エンディング見出しの語をまとめない（修正前）	#iu .roll .eh .nw{white-space:nowrap}		ending headline
+ボス名の表示がタッチボタンを避けない（修正前）	if(lx < w && lx > w*0.45){ right = Math.round(w - lx + 6) + 'px'; w = lx - 6; }		banner stays clear
+ボスの長いセリフを吹き出しにしない（修正前）	if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });	if(false) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });	long line is a speech bubble
+文字がHUDやタッチボタンを避けない	      keepOffHud(X, Y, hw, hh, W, H); X = _kh.x; Y = _kh.y;		long line is a speech bubble

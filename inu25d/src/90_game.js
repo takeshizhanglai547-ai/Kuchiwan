@@ -101,6 +101,23 @@ function addDeco(id, x, z, anim, face){
   G.world.add(e); deco.push(e);
   return e;
 }
+// the 7-hero line-up of the title and the ending. A phone in portrait sees ~6.8 units and the line is ~9 wide, so
+// イッヌ and マック stood off screen: there the heroes stand closer and the camera pulls back until all fit.
+// Laid out again when the phone turns (deco in `deco` order = heroList order)
+function lineup(cx, spacing, zoom, zOf){
+  const n = deco.length; if(!n) return;
+  const port = !!(G.view && G.view.portrait);
+  const sp = port ? Math.min(spacing, 1.02) : spacing;
+  deco.forEach((e, i)=>{ const k = i-(n-1)/2; e.x = e.px = cx + k*sp; e.z = e.pz = zOf(k); });
+  let zm = zoom;
+  if(port && G.camera){
+    const t = Math.tan(G.camera.fov*Math.PI/360)*G.camera.aspect, need = (n-1)/2*sp + 1.15;   // + room for their cheering
+    zm = Math.min(zoom, (G.cam.baseDist||16) - need/t);
+  }
+  G.cam.zoom = zm;
+}
+let lineupNow = null;
+G.bus.on('resize', ()=>{ if(lineupNow && (G.sceneName==='title' || G.sceneName==='ending')){ lineupNow(); G.cam.snap(); } });
 function loadBackdrop(i){
   try {
     if(G.stage && G.stage.titleScene && i==null) G.stage.titleScene();
@@ -118,7 +135,8 @@ G.scenes.title = {
     G.player = null;
     const list = heroList();
     list.forEach((h, i)=> addDeco(h.id, 2.5 + (i-(list.length-1)/2)*1.35, 0.9 - Math.abs(i-(list.length-1)/2)*0.25, i%2 ? 'cheer' : 'pose', 1));
-    G.cam.followEnt = null; G.cam.unlock(); G.cam.zoom = 3.5;
+    G.cam.followEnt = null; G.cam.unlock();
+    lineupNow = ()=> lineup(2.5, 1.35, 3.5, (k)=> 0.9 - Math.abs(k)*0.25); lineupNow();
     G.cam.tx = 2.5; G.cam.ty = 1.25; G.cam.tz = 0.2; G.cam.snap();
     touch(false);
     uiHideAll();
@@ -406,7 +424,8 @@ G.scenes.ending = {
     G.world.clear(); clearDeco(); uiHideAll(); unloadStage(); loadBackdrop(null);
     const list = heroList();
     list.forEach((h, i)=> addDeco(h.id, (i-(list.length-1)/2)*1.3, 0.5, 'cheer', 1));
-    G.cam.followEnt = null; G.cam.zoom = 3; G.cam.tx = 0; G.cam.ty = 1.4; G.cam.tz = 0.2; G.cam.snap();
+    G.cam.followEnt = null; G.cam.tx = 0; G.cam.ty = 1.4; G.cam.tz = 0.2;
+    lineupNow = ()=> lineup(0, 1.3, 3, ()=> 0.5); lineupNow(); G.cam.snap();
     bgm('ending');
     uiShow('ending', { heroId:game.heroId, onTitle:()=> G.go('title') });
   },

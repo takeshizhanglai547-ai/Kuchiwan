@@ -2337,7 +2337,14 @@ const h = {
   release(e){ if(e.hasToken){ tokens.delete(e.id); e.hasToken = false; } },
   wait(e, frames){ e.cool = Math.max(e.cool||0, frames|0); },
   spawnMinion(type, x, z, opts){ return G.foes.spawn(type, x, z, Object.assign({ entrance:'drop', minion:true }, opts||{})); },
-  say(e, text){ if(G.fx && G.fx.text) G.fx.text(text, e.x, e.y + (e.rig && e.rig.height || 1.3) + 0.35, e.z, 'onoma'); },
+  // a short shout (ガオーッ！) is a big comic word; a sentence is a speech bubble, small enough for a phone and up long
+  // enough for a child to read (a 20-letter line as a comic word was 500 px wide and pushed under the touch buttons)
+  say(e, text){
+    if(!(G.fx && G.fx.text)) return;
+    const s = String(text), y = e.y + (e.rig && e.rig.height || 1.3);
+    if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
+    else G.fx.text(s, e.x, y + 0.35, e.z, 'onoma');
+  },
   rand(){ return G.rng(); },
   // pick a spot beside the target on its belt line (for surrounding)
   flank(e, t, dist){ const side = e.x < t.x ? -1 : 1; return { x: t.x + side*(dist||1.1), z: U.clamp(t.z + (e.id%3-1)*0.35, G.cfg.ZMIN, G.cfg.ZMAX) }; },
@@ -9125,7 +9132,10 @@ function startEvent(ev){
     let [a, b] = arenaRange(d, ev);
     if(b - a > vw){ const px = G.player ? G.player.x : a; a = U.clamp(px - 1, a, b - vw); b = a + vw; }
     lockTo(a, b);
-    const bx = b - 4;
+    // 4 units in from the far edge (landscape: ~5.6 in front of the hero). A portrait arena is only ~6 wide and starts
+    // 1 behind the hero, so that put every boss ~1.1 from him, on top of him: keep at least 3.2 of room when it fits
+    const hx = G.player ? U.clamp(G.player.x, a, b) : a;
+    const bx = Math.max(b - 4, Math.min(hx + 3.2, b - 1.4));
     const e = spawnFoe(ev.type, bx, -0.3, { boss:true, face:-1 });
     const tdef = G.foes && G.foes.types ? G.foes.types[ev.type] : null;
     const nm = BOSS_NAMES[ev.type] || [ev.type, ''];
@@ -11317,6 +11327,8 @@ let uiRoot=null, layer=null, top=null, flashEl=null, speedHost=null;
 const POP_MAX = 24, ALERT_MAX = 10;
 const pops = [], alerts = [];
 const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, pow:46, lvup:90, say:80 };
+// popups that are kept off the hero and off the HUD / touch controls
+const WORD = { pow:true, onoma:true, crit:true, say:true };
 const _sp = { x:0, y:0, visible:true };
 const _pv = new THREE.Vector3();
 function project(x, y, z){
@@ -11339,19 +11351,51 @@ function heroBoxUpdate(){
   hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
 }
 function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
-// the HUD's top boxes (boss bar block, hero panel): words never sit on them either (a tall boss's taunt used to
-// float over the boss bar's subtitle on phones). Read in the read phase while a word is up — when a word is born,
+// the HUD's boxes — boss bar block and hero panel at the top, touch buttons and stick at the bottom: words never sit
+// on them either (a tall boss's taunt used to float over the boss bar's subtitle on phones; the popup layer is under
+// the touch controls, so a word there is hidden). Read in the read phase while a word is up — when a word is born,
 // after a resize, and every 20 frames (the boss bar drops in / goes away) — not every frame: each read forces a style recalc
-const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
+const HUD_MAX = 9;
+const hud = []; for(let i=0;i<HUD_MAX;i++) hud.push({ on:false, l:0, r:0, t:0, b:0, top:true });
 let hudEls = null, hudAge = 99;
 function hudRead(){
-  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
-  for(let i=0;i<2;i++){
-    const e = hudEls[i], q = hud[i]; q.on = false;
-    if(!e || e.classList.contains('x') || !e.offsetParent) continue;
-    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
-    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.on = true;
+  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected){
+    hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl'), document.querySelector('#iu .stk')]
+      .concat(Array.from(document.querySelectorAll('#iu .tc .tb'))).slice(0, HUD_MAX);
   }
+  for(let i=0;i<HUD_MAX;i++){
+    const e = hudEls[i], q = hud[i]; q.on = false;
+    if(!e || e.classList.contains('x') || !e.offsetParent || !e.isConnected) continue;
+    if(i===2 && !(e.classList.contains('on') || e.classList.contains('ghost'))) continue;   // the stick ring only while shown
+    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
+    // boss bar and hero panel hang from the top; the stick and the buttons (a column up the right side) stand on the bottom
+    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.top = i < 2; q.on = true;
+  }
+}
+function hudOff(){ for(const q of hud) q.on = false; }
+// move a word (centre X,Y, half size hw,hh) off every HUD box. Two ways out, the smaller move that lands clear wins:
+// into the free band of its own columns (under the top boxes, over the bottom ones — the touch buttons stand in a
+// column, so stepping over one box at a time used to land on the next), or sideways past the boxes it touches
+const _kh = { x:0, y:0 };
+function keepOffHud(X, Y, hw, hh, W, H){
+  _kh.x = X; _kh.y = Y;
+  if(!overHud(X, Y, hw, hh)) return _kh;
+  let lo = hh, hi = Math.max(hh, H - hh), left = 1e9, right = -1e9;
+  for(const q of hud){
+    if(!q.on) continue;
+    if(q.r > X - hw && q.l < X + hw){ if(q.top) lo = Math.max(lo, q.b + 4 + hh); else hi = Math.min(hi, q.t - 4 - hh); }
+    if(X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b){ left = Math.min(left, q.l); right = Math.max(right, q.r); }
+  }
+  let best = 1e9, bx = X, by = lo <= hi ? clamp(Y, lo, hi) : lo;
+  const tryAt = (x, y)=>{
+    x = clamp(x, hw, Math.max(hw, W - hw)); y = clamp(y, hh, Math.max(hh, H - hh));
+    if(overHud(x, y, hw, hh)) return;
+    const c = Math.abs(x - X) + Math.abs(y - Y); if(c < best){ best = c; bx = x; by = y; }
+  };
+  if(lo <= hi) tryAt(X, clamp(Y, lo, hi));
+  tryAt(left - 4 - hw, Y); tryAt(right + 4 + hw, Y);
+  _kh.x = bx; _kh.y = by;
+  return _kh;
 }
 function overHud(X, Y, hw, hh){
   for(const q of hud) if(q.on && X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b) return q;
@@ -11424,7 +11468,7 @@ function popNew(str, x, y, z, style, opts){
   p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
   p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
   if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
-  if(style==='pow' || style==='onoma' || style==='crit') hudAge = 99;   // re-read the HUD boxes for the new word
+  if(WORD[style]) hudAge = 99;   // re-read the HUD boxes for the new word
   p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
@@ -11452,8 +11496,8 @@ function updatePops(k){
   const powCap = hb.on ? clamp(hb.h*2.1, 80, W*0.45) : H*0.34;
   // read phase: measure new popups (one layout for all of them)
   let words = false;
-  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
-  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hud[0].on = hud[1].on = false; }
+  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(WORD[p.style]) words = true; }
+  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hudOff(); }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -11507,9 +11551,9 @@ function updatePops(k){
     // a leaning word starts at its anchor and reads away from it (hit words: away from the attacker)
     let X = clamp(cx + p.ox + p.lean*(hw - 6)*0.85, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
     // words never sit on the hero
-    if(p.style==='pow' || p.style==='onoma' || p.style==='crit'){
-      // below a HUD box it would touch (twice: the boss bar and the hero panel can both be in the way)
-      for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }
+    if(WORD[p.style]){
+      // off the HUD (boss bar, hero panel, touch buttons), then off the hero (which also avoids the HUD)
+      keepOffHud(X, Y, hw, hh, W, H); X = _kh.x; Y = _kh.y;
       if(hb.on){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
     }
     el.style.transform = 'translate3d('+(X - p.w/2).toFixed(1)+'px,'+(Y - p.h/2).toFixed(1)+'px,0) scale('+Math.max(0.01,s).toFixed(3)+') rotate('+rot.toFixed(1)+'deg)'+extra;
@@ -13688,6 +13732,7 @@ function buildCSS(){
 #iu .roll .who{display:block;font-size:max(var(--fm),.55em);color:#c8487e}
 #iu .roll .th{font-size:1.5em;font-weight:900;color:#3a8ad0;text-shadow:${STK_S}}
 #iu .roll .eh{font-size:2.3em;font-weight:900;color:#ffb42a;text-shadow:${STK};line-height:1.6}
+#iu .roll .eh .nw{white-space:nowrap}
 #iu .roll .eh rt{font-size:max(var(--fm),.3em);color:#e0662a;letter-spacing:.2em}
 #iu .roll .fin{font-size:2.1em;font-weight:900;color:#ff6fa4;text-shadow:${STK};line-height:1.35;padding:1em 0 2em}
 #iu .roll .eport{width:7em;height:7em;border-radius:50%;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 30%,#fff,#ffe6c0);box-shadow:0 0 0 .3em #fff,0 0 0 .55em #ffd24d,0 .6em 1em rgba(74,44,20,.25)}
@@ -14402,7 +14447,15 @@ function banner(text, sub, frames){
   ban.bt.innerHTML = '';
   const chars = Array.from(text);
   chars.forEach((ch, i)=>{ const s = el('span', ch===' '||ch==='　' ? 'sp' : '', ban.bt); if(ch!==' ' && ch!=='　'){ s.textContent = ch; s.setAttribute('data-t', ch); } s.style.setProperty('--i', i); });
-  const w = Math.max(200, (G.view && G.view.w) || innerWidth);
+  let w = Math.max(200, (G.view && G.view.w) || innerWidth), right = '';
+  // landscape with the touch pad: stay left of the button column (a boss's name used to cover the おうぎ button
+  // for the whole intro)
+  if(T.visible && !(G.view && G.view.portrait)){
+    const H = (G.view && G.view.h) || innerHeight; let lx = 1e9;
+    for(const o of T.btns) if(o.cr > 0 && o.cy - o.cr < H*0.62) lx = Math.min(lx, o.cx - o.cr);
+    if(lx < w && lx > w*0.45){ right = Math.round(w - lx + 6) + 'px'; w = lx - 6; }
+  }
+  ban.el.style.right = right;
   const n = Math.max(1, chars.length);
   ban.bt.style.fontSize = Math.min(emPx*4.3, w*0.9/(n*1.04)).toFixed(1)+'px';
   ban.bs.textContent = sub; ban.bs.style.display = sub ? '' : 'none';
@@ -14740,7 +14793,8 @@ function buildEnding(s){
     line('ln', 'おしろの かべから、みんなで はなびを どーん！ どーん！');
     const q = line('qt'); el('span', 'who', q).textContent = 'おうじょ ペロ'; q.appendChild(document.createTextNode('「このひかりは、あなたのものです」'));
     line('ln', 'つよさは、だれかを まもるために ある。');
-    const eh = line('eh'); eh.innerHTML = '★ もふもふ<ruby>聖犬士<rt>せいけんし</rt></ruby>でんせつ ★';
+    // a narrow portrait screen wraps it between the two words only (it used to break でんせ|つ)
+    const eh = line('eh'); eh.innerHTML = '<span class="nw">★&nbsp;もふもふ<ruby>聖犬士<rt>せいけんし</rt></ruby></span><wbr><span class="nw">でんせつ&nbsp;★</span>';
     line('th', 'なかまたち');
     const team = line('team');
     for(const h of heroList()){
@@ -15025,6 +15079,23 @@ function addDeco(id, x, z, anim, face){
   G.world.add(e); deco.push(e);
   return e;
 }
+// the 7-hero line-up of the title and the ending. A phone in portrait sees ~6.8 units and the line is ~9 wide, so
+// イッヌ and マック stood off screen: there the heroes stand closer and the camera pulls back until all fit.
+// Laid out again when the phone turns (deco in `deco` order = heroList order)
+function lineup(cx, spacing, zoom, zOf){
+  const n = deco.length; if(!n) return;
+  const port = !!(G.view && G.view.portrait);
+  const sp = port ? Math.min(spacing, 1.02) : spacing;
+  deco.forEach((e, i)=>{ const k = i-(n-1)/2; e.x = e.px = cx + k*sp; e.z = e.pz = zOf(k); });
+  let zm = zoom;
+  if(port && G.camera){
+    const t = Math.tan(G.camera.fov*Math.PI/360)*G.camera.aspect, need = (n-1)/2*sp + 1.15;   // + room for their cheering
+    zm = Math.min(zoom, (G.cam.baseDist||16) - need/t);
+  }
+  G.cam.zoom = zm;
+}
+let lineupNow = null;
+G.bus.on('resize', ()=>{ if(lineupNow && (G.sceneName==='title' || G.sceneName==='ending')){ lineupNow(); G.cam.snap(); } });
 function loadBackdrop(i){
   try {
     if(G.stage && G.stage.titleScene && i==null) G.stage.titleScene();
@@ -15042,7 +15113,8 @@ G.scenes.title = {
     G.player = null;
     const list = heroList();
     list.forEach((h, i)=> addDeco(h.id, 2.5 + (i-(list.length-1)/2)*1.35, 0.9 - Math.abs(i-(list.length-1)/2)*0.25, i%2 ? 'cheer' : 'pose', 1));
-    G.cam.followEnt = null; G.cam.unlock(); G.cam.zoom = 3.5;
+    G.cam.followEnt = null; G.cam.unlock();
+    lineupNow = ()=> lineup(2.5, 1.35, 3.5, (k)=> 0.9 - Math.abs(k)*0.25); lineupNow();
     G.cam.tx = 2.5; G.cam.ty = 1.25; G.cam.tz = 0.2; G.cam.snap();
     touch(false);
     uiHideAll();
@@ -15330,7 +15402,8 @@ G.scenes.ending = {
     G.world.clear(); clearDeco(); uiHideAll(); unloadStage(); loadBackdrop(null);
     const list = heroList();
     list.forEach((h, i)=> addDeco(h.id, (i-(list.length-1)/2)*1.3, 0.5, 'cheer', 1));
-    G.cam.followEnt = null; G.cam.zoom = 3; G.cam.tx = 0; G.cam.ty = 1.4; G.cam.tz = 0.2; G.cam.snap();
+    G.cam.followEnt = null; G.cam.tx = 0; G.cam.ty = 1.4; G.cam.tz = 0.2;
+    lineupNow = ()=> lineup(0, 1.3, 3, ()=> 0.5); lineupNow(); G.cam.snap();
     bgm('ending');
     uiShow('ending', { heroId:game.heroId, onTitle:()=> G.go('title') });
   },
