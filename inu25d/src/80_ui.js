@@ -400,6 +400,7 @@ function buildCSS(){
 #iu.short .stp{padding:.6em .75em .85em}
 #iu.short .strow{gap:.3em}
 #iu.short .stc{padding-left:.1em;padding-right:.1em}
+#iu.short .stc.on{scale:1.04}                                   /* the gaps are thin: a bigger pop would cover the neighbours */
 /* narrow landscape (iPhone SE 667×375 …): one row would break the names mid-word, so two rows of 4 + 3; each name fits one line */
 #iu.tight:not(.mini) .strow{flex-wrap:wrap;row-gap:.6em}
 #iu.tight:not(.mini) .strow::before{display:none}

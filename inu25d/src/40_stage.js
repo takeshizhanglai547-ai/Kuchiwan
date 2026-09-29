@@ -3,7 +3,8 @@
 // 背景のつくり（描画コールと三角形を抑えるため）：
 //   ・空       … カメラに追従する球1枚（グラデーション＋太陽／月＋星のシェーダー）
 //   ・地面     … 歩ける帯（belt）1枚＋まわりの地面1枚（どちらも手描きのCanvasTexture＋頂点カラーのむら）
-//   ・近景     … x方向20単位の「チャンク」ごとに層（solid / sway / glow / deco）を頂点カラーで1メッシュへ結合。
+//   ・近景     … x方向16単位の「チャンク」×奥行き2帯ごとに、静止＋風で揺れる部品（solid / sway）を頂点カラーで1メッシュへ、
+//                輪郭線も帯ごとに1枚へ結合（glow / deco は別メッシュ）。
 //                視錐台カリングで、見えている2〜3チャンクだけが描かれる。
 //   ・遠景     … 視差で動く1グループ（far / farGlow）＋雲（InstancedMesh）
 //   ・粒       … テーマごとに THREE.Points 1つ（動きは頂点シェーダー、CPUは時刻を渡すだけ）
@@ -14,7 +15,8 @@ const G = window.G; const THREE = window.THREE; const U = G.U;
 const TAU = Math.PI*2, PI = Math.PI;
 const ZMIN = G.cfg.ZMIN, ZMAX = G.cfg.ZMAX;
 const BELT_Z0 = ZMIN - 0.6, BELT_Z1 = ZMAX + 0.8;   // walkable strip incl. a soft margin
-const CHUNK = 20;                                    // scenery chunk width (frustum-culling unit)
+const CHUNK = 16;                                    // scenery chunk width (frustum-culling unit; 16 balances draw calls
+                                                     // against triangles drawn outside the view: 20 → −2 calls, +3k tris)
 const SHADOW_Z = -10.5;                              // scenery behind this depth does not cast shadows
 
 // ================================================================ small helpers (build time only)
