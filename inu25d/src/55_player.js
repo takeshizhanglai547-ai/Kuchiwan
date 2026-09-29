@@ -431,6 +431,7 @@ function tick(p){
       if(b.dodge.pressed){ p.charge = 0; p.chargeFull = false; if(G.audio) G.audio.sfx('charge', { stop:true }); doDodge(p); }
       return;
     }
+    for(const k of ['jump','dodge','special']) if(b[k].pressed) p.q[k] = 14;
     const full = p.charge >= 0.45;
     p.charge = 0; p.chargeFull = false; p.chargeT = 0;
     if(G.audio && G.audio.sfx) G.audio.sfx('charge', { stop:true });
@@ -452,6 +453,7 @@ function tick(p){
     } else {
       const def = a.def;
       const pastCancel = a.t >= (def.cancel||def.len);
+      if(!pastCancel){ for(const k of ['jump','special']) if(b[k].pressed && !(p.q[k] > 0)) p.q[k] = 14; }
       if(p.state==='atk' && pastCancel){
         if(p.buffer>0 && p.comboStep>0 && p.comboStep < comboDefs(p).length){ nextCombo(p); return; }
         if(b.special.pressed && p.sp>=1){ doSpecial(p); return; }
