@@ -16,9 +16,9 @@
 ステージ開始時のレベル補正が線形（修正前）	const lvlHp = Math.pow(1.08, lvl-1), lvlAtk = Math.pow(1.05, lvl-1);	const lvlHp = 1 + (lvl-1)*0.08, lvlAtk = 1 + (lvl-1)*0.05;	level-ups
 パッドのSTARTでポーズを閉じるとすぐ再ポーズ（修正前）	s.down = !!inp.pad[b] || !!inp.touch[b];	s.down = false;	pad: START
 画面を回しても戦闘範囲を合わせ直さない（修正前）	  G.bus.on('resize', refitLock);		turning the phone
-長いボス名を短い呼び名に切り替えない（修正前）	if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);		boss name and title fits
-ボスの叫びが上部HUDを避けない（修正前）	for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }		shout
-ボスの肩書きが長くても頭の語を落とさない（修正前）	while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){	while(false){	boss name and title fits
+長いボス名を短い呼び名に切り替えない（修正前）	if(d.short && over(boss.nm)) txt(boss.nm, d.short);		boss name and title fits
+ボスの叫びが上部HUDを避けない（修正前）	      keepOffHud(X, Y, hw, hh, W, H); X = _kh.x; Y = _kh.y;		shout
+ボスの肩書きが長くても頭の語を落とさない（修正前）	while(over(boss.tl) && t.indexOf(' ') > 0){	while(false){	boss name and title fits
 勝った後にやられるとライフが減りゲームオーバーになる（修正前）	if(game.lives!==Infinity && !this.cleared){ game.lives--;	if(game.lives!==Infinity){ game.lives--;	win: once
 勝った後に主人公が無敵にならない	p.inv = Math.max(p.inv, 9999);		win: once
 勝った後も敵の弾が飛び続ける	for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;		win: once

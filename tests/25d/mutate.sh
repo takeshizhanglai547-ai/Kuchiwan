@@ -9,6 +9,7 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 BASE=$(realpath "${1:-$HERE/../../beltaction25d.html}")
+LIST=${MUTATIONS:-$HERE/mutations.txt}   # MUTATIONS=<file> runs only the lines in that file
 SP=${TMPDIR:-/tmp}/inu25d_mut; mkdir -p "$SP"
 export NODE_PATH=/opt/node22/lib/node_modules
 killed=0; survived=0; errors=0
@@ -23,10 +24,10 @@ while((m = re.exec(s))){ new vm.Script(m[1]); n++; }
 if(!n) throw new Error("no inline script");' "$1" 2>&1; }
 
 if ! syntax_ok "$BASE" >/dev/null; then echo "BASELINE does not compile"; exit 2; fi
-grep -v '^#' "$HERE/mutations.txt" | awk -F'\t' 'NF>0 && $4==""{print "  bad line (no filter): " $1; bad=1} END{exit bad}' || exit 2
+grep -v '^#' "$LIST" | awk -F'\t' 'NF>0 && $4==""{print "  bad line (no filter): " $1; bad=1} END{exit bad}' || exit 2
 # sanity: the unmutated build must pass every filter we use
 IFS=$'\n'
-for f in $(grep -v '^#' "$HERE/mutations.txt" | awk -F'\t' 'NF>=4{print $4}' | sort -u); do
+for f in $(grep -v '^#' "$LIST" | awk -F'\t' 'NF>=4{print $4}' | sort -u); do
   out=$(run_suite "$BASE" "$f")
   if ! echo "$out" | grep -q '^PASSED'; then echo "BASELINE FAILS for filter '$f' — fix that first"; echo "$out" | tail -5; exit 2; fi
 done
@@ -49,6 +50,6 @@ PY
   if echo "$out" | grep -q '^PASSED'; then echo "  SURVIVED $desc"; survived=$((survived+1));
   elif echo "$out" | grep -qE '^  FAIL '; then echo "  killed   $desc"; killed=$((killed+1));
   else echo "  ERROR    $desc (suite did not run)"; echo "$out" | tail -3; errors=$((errors+1)); fi
-done < <(tr '\t' '\037' < "$HERE/mutations.txt")
+done < <(tr '\t' '\037' < "$LIST")
 echo "$killed killed, $survived survived, $errors errors"
 [ $survived -eq 0 ] && [ $errors -eq 0 ]
