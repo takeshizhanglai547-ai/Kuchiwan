@@ -168,9 +168,10 @@ G.scenes.select = {
 // ---------------------------------------------------------------- a run: several stages in a row
 // with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
 function chooseStage(){
-  const n = stages().length, open = U.clamp(game.unlocked|0, 0, Math.max(0, n-1));
+  // game.unlocked = how many stages are cleared (all n after the ending); the stage after them is open
+  const n = stages().length, done = U.clamp(game.unlocked|0, 0, n), open = Math.min(done, Math.max(0, n-1));
   if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
-    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < open }));
+    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < done }));
     uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
   } else startRun(0);
 }
@@ -309,7 +310,7 @@ const play = G.scenes.play = {
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
     stars = U.clamp(stars, 1, 3);
-    game.unlocked = Math.max(game.unlocked, Math.min(stages().length-1, idx+1)); persist();
+    game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1)); persist();
     const p = G.player; if(p) game.ultCarry = p.ult;
     G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
     touch(false);
@@ -354,6 +355,7 @@ function autoDrive(p){
 
 // soft body separation so foes don't stack into one blob (heroes get pushed less)
 function separate(ents){
+  const B = G.stage && G.stage.bounds ? G.stage.bounds() : null;
   for(let i=0;i<ents.length;i++){
     const a = ents[i]; if(!(a.team===0 || a.team===1) || a.dead || a.intangible || a.y > 0.6) continue;
     for(let j=i+1;j<ents.length;j++){
@@ -364,13 +366,21 @@ function separate(ents){
       if(Math.abs(dx) >= min) continue;
       if(bossPair && (a.team===0 || c.team===0)){
         const hero = a.team===0 ? a : c, boss = hero===a ? c : a;
-        const s = hero.x >= boss.x ? 1 : -1; hero.x = boss.x + s*min; continue;
+        const s = hero.x >= boss.x ? 1 : -1; let hx = boss.x + s*min;
+        // pinned against the arena wall: the hero stays inside it and the boss is held off instead
+        if(B && hero.entered !== false){
+          const lo = B.xmin + hero.radius, hi = B.xmax - hero.radius;
+          if(hx < lo || hx > hi){ hx = U.clamp(hx, lo, hi); boss.x = U.clamp(hx - s*min, B.xmin + boss.radius, B.xmax - boss.radius); }
+        }
+        hero.x = hx; continue;
       }
       const push = (min - Math.abs(dx)) * 0.25 * (dx===0 ? (a.id<c.id?1:-1) : Math.sign(dx));
       const wa = a.team===0 ? 0.25 : (a.def&&a.def.boss ? 0.1 : 1), wc = c.team===0 ? 0.25 : (c.def&&c.def.boss ? 0.1 : 1);
       a.x -= push*wa; c.x += push*wc;
     }
   }
+  // runs after G.phys clamped everyone: pushes must not move a hero out of the fight either
+  if(B) for(const e of ents){ if(e.team===0 && e.entered !== false && !e.dead) e.x = U.clamp(e.x, B.xmin + e.radius, B.xmax - e.radius); }
 }
 G.bus.on('hurt', (d)=>{ if(d.ent===G.player) game.hurtCount++; });
 G.bus.on('ko', (d)=>{ const e = d.ent; if(e && e.def && G.player){ game.addXp(Math.round((e.def.xp||10) * (1 + Math.min(1, game.combo/40)))); } });

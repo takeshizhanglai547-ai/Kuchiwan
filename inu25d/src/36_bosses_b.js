@@ -1867,7 +1867,7 @@ G.foes.define('dragon', {
   onKOTick(e){ purifyTick(e, koT(e)); },
 });
 G.foes.define('kuroinu', {
-  name:'こくけんし クロイヌ', title:'もと おうこく いちの けんし', boss:true, bossB:true, phaseLine:'まだだ…！ ほんきを だす！',
+  name:'こくけんし クロイヌ', short:'クロイヌ', title:'もと おうこく いちの けんし', shortTitle:'もと いちの けんし', boss:true, bossB:true, phaseLine:'まだだ…！ ほんきを だす！',
   hp:560, poise:80, weight:3, radius:0.8, height:2.4, spd:0.05, score:3000, xp:150, entrance:'drop', recover:26,
   build(){ return buildKuro(); },
   init(e){ common(e); e.atkMul = KURO_ATK; e.trailColor = '#c07aff'; e.parryT = 0; e.counterDue = false; e.parries = 0; },

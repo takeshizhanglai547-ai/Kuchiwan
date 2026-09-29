@@ -1045,10 +1045,11 @@ function heroBoxUpdate(){
   hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
 }
 function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
-// the HUD's top boxes (boss bar block, hero panel): words never sit on them either. Read once per frame, in the
-// read phase, only while a word is up; a tall boss's taunt used to float over the boss bar's subtitle on phones
+// the HUD's top boxes (boss bar block, hero panel): words never sit on them either (a tall boss's taunt used to
+// float over the boss bar's subtitle on phones). Read in the read phase while a word is up — when a word is born,
+// after a resize, and every 20 frames (the boss bar drops in / goes away) — not every frame: each read forces a style recalc
 const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
-let hudEls = null;
+let hudEls = null, hudAge = 99;
 function hudRead(){
   if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
   for(let i=0;i<2;i++){
@@ -1129,6 +1130,7 @@ function popNew(str, x, y, z, style, opts){
   p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
   p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
   if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
+  if(style==='pow' || style==='onoma' || style==='crit') hudAge = 99;   // re-read the HUD boxes for the new word
   p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
@@ -1157,7 +1159,7 @@ function updatePops(k){
   // read phase: measure new popups (one layout for all of them)
   let words = false;
   for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
-  if(words) hudRead(); else { hud[0].on = hud[1].on = false; }
+  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hud[0].on = hud[1].on = false; }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -1561,6 +1563,7 @@ function init(){
   G.scene.add(pMesh); G.scene.add(trMesh);
   capP = Math.max(60, Math.round(MAXP * fxs()));
   for(const ev in HANDLERS) G.bus.on(ev, HANDLERS[ev]);
+  G.bus.on('resize', ()=>{ hudAge = 99; }); G.bus.on('cover', ()=>{ hudAge = 99; });
   ready = true;
 }
 function clear(){

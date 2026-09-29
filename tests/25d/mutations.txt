@@ -23,3 +23,10 @@
 勝った後に主人公が無敵にならない	p.inv = Math.max(p.inv, 9999);		win: once
 勝った後も敵の弾が飛び続ける	for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;		win: once
 奥義で無敵時間が短く上書きされる（修正前）	p.inv = Math.max(p.inv, def.len + 30);	p.inv = def.len + 30;	ult keeps
+ボス名の「…」判定に1pxの遊びを残す（修正前）	function over(e){ return e.scrollWidth > e.clientWidth; }	function over(e){ return e.scrollWidth > e.clientWidth + 1; }	boss name and title fits
+小さい画面でボス欄を主人公の体力欄からずらさない（修正前）	    bossPlace();		boss name and title fits
+タッチボタンの表示切替で戦闘範囲を合わせ直さない（修正前）	  G.bus.on('cover', refitLock);		showing the touch pad
+ボスに押された主人公が戦闘範囲の外へ出る（修正前）	          if(hx < lo || hx > hi){ hx = U.clamp(hx, lo, hi); boss.x = U.clamp(hx - s*min, B.xmin + boss.radius, B.xmax - boss.radius); }		arena wall
+全クリア後も最終面がクリア扱いにならない（修正前）	game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1));	game.unlocked = Math.max(game.unlocked, Math.min(stages().length-1, idx+1));	after the last stage
+押し合いの最後に主人公を戦闘範囲へ収めない	  if(B) for(const e of ents){ if(e.team===0 && e.entered !== false && !e.dead) e.x = U.clamp(e.x, B.xmin + e.radius, B.xmax - e.radius); }		arena wall
+ゲームループが1フレームで止まる	if(!running) return;	if(true) return;	boot: live

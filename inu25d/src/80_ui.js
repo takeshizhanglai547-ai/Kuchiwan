@@ -230,6 +230,8 @@ function buildCSS(){
   text-shadow:${ring(0.04,'#6a3a14',10)},${ring(0.11,'#fff',16)},0 .13em .25em rgba(74,44,20,.35)}
 #iu .boss{position:absolute;left:50%;top:var(--pt);z-index:20;width:clamp(12em,calc(100% - 2*(var(--pl) + 19.5em)),30em);transform:translateX(-50%);text-align:center}
 #iu .boss.in{animation:iuDrop .5s cubic-bezier(.3,1.6,.5,1)}
+#iu .boss.bshift{transform:none}
+#iu .boss.bshift.in{animation-name:iuDropL}
 #iu .bnm{display:inline-flex;align-items:center;gap:.35em;font-size:1.05em;font-weight:900;color:#8a3aa8;text-shadow:${STK_S};white-space:nowrap;max-width:100%}
 #iu .bnm .cr_{width:1.3em;height:1.3em;color:#ffcf3a;filter:drop-shadow(0 .08em 0 #c07e10)}
 #iu .bnm span{min-width:0;padding:0 .12em;overflow:hidden;text-overflow:ellipsis}
@@ -477,6 +479,7 @@ function buildCSS(){
 @keyframes iuPopX{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(1.5)}100%{transform:translateX(-50%) scale(1)}}
 @keyframes iuIn{0%{transform:scale(.55) translateY(.8em);opacity:0}65%{transform:scale(1.05);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes iuDrop{0%{transform:translate(-50%,-1.5em) scale(.8);opacity:0}100%{transform:translate(-50%,0) scale(1);opacity:1}}
+@keyframes iuDropL{0%{transform:translate(0,-1.5em) scale(.8);opacity:0}100%{transform:translate(0,0) scale(1);opacity:1}}
 @keyframes iuGo{0%,100%{transform:translateX(0);opacity:1}50%{transform:translateX(.3em);opacity:.45}}
 @keyframes iuSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
 @keyframes iuNo{0%,100%{translate:0 0}20%{translate:-.3em 0}45%{translate:.3em 0}70%{translate:-.15em 0}}
@@ -964,6 +967,23 @@ function buildBoss(){
   boss.c = el('div', 'bbc', bb); boss.f_ = el('div', 'bbf', bb); el('div', 'hpgl', bb);
   boss.tl = el('div', 'btl', e);                  // the title gets its own line: name + title never fit one line on a phone
 }
+// any overflow at all draws the "…" (a 1 px overflow used to slip through a +1 tolerance)
+function over(e){ return e.scrollWidth > e.clientWidth; }
+// on a narrow landscape phone the centred boss block lands on the hero's HP number and おうぎ gauge:
+// then it starts right of the hero panel instead, as wide as the room left before the coins / pause button
+function bossPlace(){
+  const e = boss.el; e.classList.remove('bshift'); e.style.left = ''; e.style.width = '';
+  if(!root || !hud.hl || !hud.el || hud.el.classList.contains('x')) return;
+  const R = root.getBoundingClientRect(), h = hud.hl.getBoundingClientRect();
+  // layout box (untransformed: the entrance animation scales and shifts it)
+  const w = e.offsetWidth, l = e.offsetLeft - w/2, t = e.offsetTop, b = t + e.offsetHeight;
+  const hr = h.right - R.left, ht = h.top - R.top, hb = h.bottom - R.top, gap = 6;
+  if(!(w > 0) || l >= hr + gap || t >= hb || b <= ht) return;
+  const rr = hud.coinsEl && hud.coinsEl.parentNode ? hud.coinsEl.parentNode.getBoundingClientRect().left - R.left : R.width;
+  const room = rr - gap - (hr + gap);
+  if(room < w*0.75) return;                       // no room either way: keep it centred
+  e.classList.add('bshift'); e.style.left = (hr + gap) + 'px'; e.style.width = Math.min(w, room) + 'px';
+}
 function bossBar(ent){
   boss.ent = ent || null;
   show(boss.el, !!ent); if(root) root.classList.toggle('bossOn', !!ent);
@@ -974,13 +994,17 @@ function bossFrame(dt){
   const d = e.def || {};
   // a long name that doesn't fit the bar on a small phone switches to the boss's short name (d.short)
   // instead of ending in "…"; measured only when the name or the screen width changes
-  // the title drops its leading words instead (「ワンワンていこく だい6のしょう」→「だい6のしょう」)
-  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = root ? root.clientWidth : 0;
+  // the title uses d.shortTitle, else drops its leading words (「ワンワンていこく だい6のしょう」→「だい6のしょう」).
+  // Width comes from G.view (kept by the core on resize): reading the DOM here every frame forced a style recalc
+  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = (G.view && G.view.w) || 0;
   if(boss.full!==full || boss.fullT!==title || boss.fitW!==vw){
-    boss.full = full; boss.fullT = title; boss.fitW = vw; txt(boss.nm, full);
-    if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);
+    boss.full = full; boss.fullT = title; boss.fitW = vw;
+    bossPlace();
+    txt(boss.nm, full);
+    if(d.short && over(boss.nm)) txt(boss.nm, d.short);
     let t = title; txt(boss.tl, t);
-    while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
+    if(d.shortTitle && over(boss.tl)){ t = d.shortTitle; txt(boss.tl, t); }
+    while(over(boss.tl) && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
   }
   const f = U.clamp((e.hp||0)/Math.max(1, e.maxHp||1), 0, 1);
   if(boss.f<0){ boss.f = f; boss.chip = f; clipR(boss.f_, f); clipR(boss.c, f); }
@@ -1259,6 +1283,7 @@ function touchApply(){
   if(vis!==T.visible){
     T.visible = vis; show(T.el, vis); root.classList.toggle('tcon', vis);
     if(!vis) touchReleaseAll(); else { ghostPos(); tbGeom(); }
+    G.bus.emit('cover', { touch:vis });           // cam.usableW() changed: a locked fight re-fits (40_stage)
   }
 }
 function touchFrame(){

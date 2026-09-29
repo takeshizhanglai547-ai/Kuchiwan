@@ -1682,6 +1682,7 @@ function bindBus(){
   });
   G.bus.on('quality', applyParticleQuality);
   G.bus.on('resize', refitLock);
+  G.bus.on('cover', refitLock);
 }
 
 // ================================================================ per-frame visuals

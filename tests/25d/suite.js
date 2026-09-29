@@ -10,14 +10,15 @@ test('boot: live mode reaches the title screen without errors', async () => {
   const g = await open({ hash:'' });
   await g.page.waitForTimeout(2500);
   const s = await g.run(() => ({ scene: G.sceneName, ui: document.getElementById('ui').children.length, ticks: G.time.tick }));
-  await g.page.waitForTimeout(1500);
-  const t2 = await g.run(() => G.time.tick);
+  // software WebGL on a loaded machine can take over a second per frame (measured: ticks come in bursts of 5 with
+  // 1-2 s gaps at load 10-15), so wait up to 12 s for the next frame; a stopped loop never advances
+  let t2 = s.ticks;
+  for(let i=0;i<24 && t2 <= s.ticks;i++){ await g.page.waitForTimeout(500); t2 = await g.run(() => G.time.tick); }
   const errs = await g.errors();
   await g.close();
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
   assert(s.scene === 'title', 'scene=' + s.scene);
   assert(s.ui > 0, 'title UI not built');
-  // software WebGL is slow here, so only require that the rAF loop keeps advancing
   assert(t2 > s.ticks, 'loop is not running: ticks ' + s.ticks + ' → ' + t2);
 });
 
@@ -384,10 +385,19 @@ test('phone: every boss name and title fits its HP bar on a small phone (no "…
     for(const t of ['garm','shark','ghost','cerbe','slime','dragon','kuroinu','emperor']){
       const e = G.foes.spawn(t, 3, 0, { boss:true }); G.ui.bossBar(e); G.step(30);
       const nm = document.querySelector('#iu .bnm span'), tl = document.querySelector('#iu .btl');
-      out.push({ t, text: nm.textContent, cut: nm.scrollWidth > nm.clientWidth + 1, title: tl.textContent, tcut: tl.scrollWidth > tl.clientWidth + 1 });
+      out.push({ t, text: nm.textContent, cut: nm.scrollWidth > nm.clientWidth, title: tl.textContent, tcut: tl.scrollWidth > tl.clientWidth });
       G.ui.bossBar(null); G.world.remove(e); G.step(2);
     }
     return out;
+  });
+  // the boss block, once it has dropped in, must not cover the hero's HP / おうぎ panel
+  await g.run(() => { const e = G.foes.spawn('emperor', 3, 0, { boss:true }); G.ui.bossBar(e); G.step(5); });
+  await g.page.waitForTimeout(900);
+  const ov = await g.run(() => {
+    G.step(1);
+    const b = document.querySelector('#iu .boss').getBoundingClientRect(), h = document.querySelector('#iu .hl').getBoundingClientRect();
+    const a = Math.max(0, Math.min(b.right, h.right) - Math.max(b.left, h.left)) * Math.max(0, Math.min(b.bottom, h.bottom) - Math.max(b.top, h.top));
+    return { area: Math.round(a), boss:[b.left, b.top, b.right, b.bottom].map(Math.round), hero:[h.left, h.top, h.right, h.bottom].map(Math.round), w: innerWidth };
   });
   const errs = await g.errors(); await g.close();
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
@@ -395,6 +405,8 @@ test('phone: every boss name and title fits its HP bar on a small phone (no "…
   assert(r.every(o => !o.cut), 'boss name cut off: ' + JSON.stringify(r.filter(o => o.cut)));
   assert(r.every(o => o.title.length >= 4), 'boss title missing: ' + JSON.stringify(r));
   assert(r.every(o => !o.tcut), 'boss title cut off: ' + JSON.stringify(r.filter(o => o.tcut)));
+  assert(ov.boss[2] > ov.boss[0] && ov.boss[2] <= ov.w, 'setup: boss bar not on screen: ' + JSON.stringify(ov));
+  assert(ov.area === 0, 'the boss bar covers the hero\'s HP panel: ' + JSON.stringify(ov));
 });
 
 test('phone: a boss\'s shout never covers the boss bar at the top', async () => {
@@ -422,6 +434,68 @@ test('phone: a boss\'s shout never covers the boss bar at the top', async () => 
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
   assert(r.wy > 0 && r.seen > 10, 'setup: ' + JSON.stringify(r));
   assert(r.worst === 0, 'the shout covered the boss bar: ' + JSON.stringify(r));
+});
+
+test('phone: showing the touch pad in the middle of a fight re-fits the fight to the smaller view', async () => {
+  const g = await open({ size:'844x390', touch:true });
+  await g.run(() => { G.seed(5); G.debug.play('inu', 0, 'normal'); G.step(5); const p = G.player; p.hp = p.maxHp = 1e9; p.inv = 1e9; });
+  await g.page.keyboard.press('KeyD');                        // a key hides the pad (touch laptop / tablet keyboard)
+  await g.run(() => { const p = G.player, s = G.stage.st; s.ptr = 0; p.x = s.seq[0].at; s.maxX = p.x; G.step(121); });
+  const a = await g.run(() => ({ touch: G.ui.touch.visible, lockW: G.stage.st.lockB - G.stage.st.lockA, usableW: G.cam.usableW(), locked: G.stage.progress().locked }));
+  await g.page.touchscreen.tap(420, 60); await g.run(() => G.step(10));
+  const b = await g.run(() => ({ touch: G.ui.touch.visible, lockW: G.stage.st.lockB - G.stage.st.lockA, usableW: G.cam.usableW(), locked: G.stage.progress().locked }));
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(a.locked && !a.touch && b.touch, 'setup: ' + JSON.stringify({ a, b }));
+  assert(b.usableW < a.usableW - 1, 'setup: the pad did not shrink the view: ' + JSON.stringify({ a, b }));
+  assert(b.lockW <= b.usableW + 0.01, 'the fight stayed wider than the view left by the pad: ' + JSON.stringify({ a, b }));
+});
+
+test('combat: a boss pushing the hero into the arena wall never shoves him out of the fight', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    const R = G.renderer, real = R.render.bind(R); R.render = () => {};
+    // stage 4: みつくびの ケルベ and its pups push the hero from both sides
+    G.seed(11); G.debug.play('inu', 3, 'normal'); G.step(5);
+    const p = G.player; p.hp = p.maxHp = 1e9;
+    const s = G.stage.st; s.ptr = s.seq.findIndex(e => e.kind==='boss'); p.x = s.seq[s.ptr].at; s.maxX = p.x; G.step(1);
+    const boss = s.active && s.active.ent; G.step(250);
+    let out = 0, near = 0, worst = 1e9, sink = 0;
+    for(let t=0;t<900;t++){
+      G.input.touch.x = -1; p.inv = 999; G.step(1);
+      const dx = p.x - (G.stage.st.lockA + p.radius);
+      if(dx < -0.01) out++; if(dx < worst) worst = dx;
+      if(boss && Math.abs(boss.x - p.x) < 2.5) near++;
+      // standing on the ground in the same lane: the hero and the boss must not sink into each other
+      if(boss && !boss.dead && boss.y < 0.6 && p.y < 0.6 && Math.abs(boss.z - p.z) < 0.42)
+        sink = Math.max(sink, (boss.radius + p.radius) - Math.abs(boss.x - p.x));
+    }
+    G.input.touch.x = 0; R.render = real; G.step(1);
+    return { boss: boss && boss.type, out, near, worst: +worst.toFixed(2), sink: +sink.toFixed(2) };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.boss && r.near > 50, 'setup: the boss never came to the hero: ' + JSON.stringify(r));
+  assert(r.out === 0, 'the hero was pushed outside the fight: ' + JSON.stringify(r));
+  assert(r.sink < 0.05, 'the boss sank into the hero at the wall: ' + JSON.stringify(r));
+});
+
+test('progress: after the last stage every stage shows as cleared on the stage map', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    try { localStorage.removeItem('inu25d_save'); } catch(_){}
+    G.game.unlocked = 0;
+    G.debug.play('inu', 6, 'normal'); G.step(5);
+    G.scenes.play.showResult();
+    G.go('select'); G.step(30);
+    document.querySelector('#iu .select .sgo').click(); G.step(10);
+    const cards = Array.from(document.querySelectorAll('#iu .stages .stc')).map(c => ({ clr: c.classList.contains('clr'), nxt: c.classList.contains('nxt'), lock: c.classList.contains('lock') }));
+    return { shown: G.ui.isShown('stages'), cards };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.shown && r.cards.length === 7, 'setup: stage map not shown: ' + JSON.stringify(r));
+  assert(r.cards.every(c => c.clr), 'after the ending, not every stage shows as cleared: ' + JSON.stringify(r.cards));
 });
 
 // ---------------------------------------------------------------- pad

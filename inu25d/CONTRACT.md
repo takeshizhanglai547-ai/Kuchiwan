@@ -212,6 +212,7 @@ Payloads are plain objects. Emitters are listed; fx/audio/ui subscribe.
 | `stageStart` | {index, stage} | game |
 | `stageClear` | {index, stars, time, coins} | game |
 | `scene` | {name} | core |
+| `cover` | {touch} | ui (the touch pad appeared / went away: `cam.usableW()` changed; a locked fight re-fits like on `resize`) |
 
 ## 8. Module APIs (implemented by module owners)
 
@@ -276,7 +277,9 @@ Foes attack through `G.combat.start` / `G.combat.shoot` / `G.combat.area` only. 
 (`windup` ≥ 18 frames for normal foes, ≥ 30 for big boss moves) — `h.attack` does it for you.
 Bosses: phases by HP (e.g. <50%): set `e.phase` and `G.bus.emit('bossPhase', {boss:e, phase})`.
 Boss defs: `name` (banner + HP bar), `title` (HP bar subtitle), optional `short` — shown on the HP bar
-instead of `name` when the full name would not fit (small phones), so a name is never cut to "…".
+instead of `name` when the full name would not fit (small phones), so a name is never cut to "…"; optional
+`shortTitle` likewise for the title (without it the title drops its leading words until it fits).
+Progress: `G.game.unlocked` = how many stages are cleared (0..7; 7 after the ending). The stage after them is open.
 
 ### 40_stage.js
 ```

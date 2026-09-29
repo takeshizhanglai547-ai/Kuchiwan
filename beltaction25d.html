@@ -7479,7 +7479,7 @@ G.foes.define('dragon', {
   onKOTick(e){ purifyTick(e, koT(e)); },
 });
 G.foes.define('kuroinu', {
-  name:'こくけんし クロイヌ', title:'もと おうこく いちの けんし', boss:true, bossB:true, phaseLine:'まだだ…！ ほんきを だす！',
+  name:'こくけんし クロイヌ', short:'クロイヌ', title:'もと おうこく いちの けんし', shortTitle:'もと いちの けんし', boss:true, bossB:true, phaseLine:'まだだ…！ ほんきを だす！',
   hp:560, poise:80, weight:3, radius:0.8, height:2.4, spd:0.05, score:3000, xp:150, entrance:'drop', recover:26,
   build(){ return buildKuro(); },
   init(e){ common(e); e.atkMul = KURO_ATK; e.trailColor = '#c07aff'; e.parryT = 0; e.counterDue = false; e.parries = 0; },
@@ -9197,6 +9197,7 @@ function bindBus(){
   });
   G.bus.on('quality', applyParticleQuality);
   G.bus.on('resize', refitLock);
+  G.bus.on('cover', refitLock);
 }
 
 // ================================================================ per-frame visuals
@@ -11338,10 +11339,11 @@ function heroBoxUpdate(){
   hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
 }
 function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
-// the HUD's top boxes (boss bar block, hero panel): words never sit on them either. Read once per frame, in the
-// read phase, only while a word is up; a tall boss's taunt used to float over the boss bar's subtitle on phones
+// the HUD's top boxes (boss bar block, hero panel): words never sit on them either (a tall boss's taunt used to
+// float over the boss bar's subtitle on phones). Read in the read phase while a word is up — when a word is born,
+// after a resize, and every 20 frames (the boss bar drops in / goes away) — not every frame: each read forces a style recalc
 const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
-let hudEls = null;
+let hudEls = null, hudAge = 99;
 function hudRead(){
   if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
   for(let i=0;i<2;i++){
@@ -11422,6 +11424,7 @@ function popNew(str, x, y, z, style, opts){
   p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
   p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
   if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
+  if(style==='pow' || style==='onoma' || style==='crit') hudAge = 99;   // re-read the HUD boxes for the new word
   p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
@@ -11450,7 +11453,7 @@ function updatePops(k){
   // read phase: measure new popups (one layout for all of them)
   let words = false;
   for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
-  if(words) hudRead(); else { hud[0].on = hud[1].on = false; }
+  if(words){ if(++hudAge >= 20){ hudAge = 0; hudRead(); } } else { hudAge = 99; hud[0].on = hud[1].on = false; }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -11854,6 +11857,7 @@ function init(){
   G.scene.add(pMesh); G.scene.add(trMesh);
   capP = Math.max(60, Math.round(MAXP * fxs()));
   for(const ev in HANDLERS) G.bus.on(ev, HANDLERS[ev]);
+  G.bus.on('resize', ()=>{ hudAge = 99; }); G.bus.on('cover', ()=>{ hudAge = 99; });
   ready = true;
 }
 function clear(){
@@ -13559,6 +13563,8 @@ function buildCSS(){
   text-shadow:${ring(0.04,'#6a3a14',10)},${ring(0.11,'#fff',16)},0 .13em .25em rgba(74,44,20,.35)}
 #iu .boss{position:absolute;left:50%;top:var(--pt);z-index:20;width:clamp(12em,calc(100% - 2*(var(--pl) + 19.5em)),30em);transform:translateX(-50%);text-align:center}
 #iu .boss.in{animation:iuDrop .5s cubic-bezier(.3,1.6,.5,1)}
+#iu .boss.bshift{transform:none}
+#iu .boss.bshift.in{animation-name:iuDropL}
 #iu .bnm{display:inline-flex;align-items:center;gap:.35em;font-size:1.05em;font-weight:900;color:#8a3aa8;text-shadow:${STK_S};white-space:nowrap;max-width:100%}
 #iu .bnm .cr_{width:1.3em;height:1.3em;color:#ffcf3a;filter:drop-shadow(0 .08em 0 #c07e10)}
 #iu .bnm span{min-width:0;padding:0 .12em;overflow:hidden;text-overflow:ellipsis}
@@ -13806,6 +13812,7 @@ function buildCSS(){
 @keyframes iuPopX{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(1.5)}100%{transform:translateX(-50%) scale(1)}}
 @keyframes iuIn{0%{transform:scale(.55) translateY(.8em);opacity:0}65%{transform:scale(1.05);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes iuDrop{0%{transform:translate(-50%,-1.5em) scale(.8);opacity:0}100%{transform:translate(-50%,0) scale(1);opacity:1}}
+@keyframes iuDropL{0%{transform:translate(0,-1.5em) scale(.8);opacity:0}100%{transform:translate(0,0) scale(1);opacity:1}}
 @keyframes iuGo{0%,100%{transform:translateX(0);opacity:1}50%{transform:translateX(.3em);opacity:.45}}
 @keyframes iuSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
 @keyframes iuNo{0%,100%{translate:0 0}20%{translate:-.3em 0}45%{translate:.3em 0}70%{translate:-.15em 0}}
@@ -14293,6 +14300,23 @@ function buildBoss(){
   boss.c = el('div', 'bbc', bb); boss.f_ = el('div', 'bbf', bb); el('div', 'hpgl', bb);
   boss.tl = el('div', 'btl', e);                  // the title gets its own line: name + title never fit one line on a phone
 }
+// any overflow at all draws the "…" (a 1 px overflow used to slip through a +1 tolerance)
+function over(e){ return e.scrollWidth > e.clientWidth; }
+// on a narrow landscape phone the centred boss block lands on the hero's HP number and おうぎ gauge:
+// then it starts right of the hero panel instead, as wide as the room left before the coins / pause button
+function bossPlace(){
+  const e = boss.el; e.classList.remove('bshift'); e.style.left = ''; e.style.width = '';
+  if(!root || !hud.hl || !hud.el || hud.el.classList.contains('x')) return;
+  const R = root.getBoundingClientRect(), h = hud.hl.getBoundingClientRect();
+  // layout box (untransformed: the entrance animation scales and shifts it)
+  const w = e.offsetWidth, l = e.offsetLeft - w/2, t = e.offsetTop, b = t + e.offsetHeight;
+  const hr = h.right - R.left, ht = h.top - R.top, hb = h.bottom - R.top, gap = 6;
+  if(!(w > 0) || l >= hr + gap || t >= hb || b <= ht) return;
+  const rr = hud.coinsEl && hud.coinsEl.parentNode ? hud.coinsEl.parentNode.getBoundingClientRect().left - R.left : R.width;
+  const room = rr - gap - (hr + gap);
+  if(room < w*0.75) return;                       // no room either way: keep it centred
+  e.classList.add('bshift'); e.style.left = (hr + gap) + 'px'; e.style.width = Math.min(w, room) + 'px';
+}
 function bossBar(ent){
   boss.ent = ent || null;
   show(boss.el, !!ent); if(root) root.classList.toggle('bossOn', !!ent);
@@ -14303,13 +14327,17 @@ function bossFrame(dt){
   const d = e.def || {};
   // a long name that doesn't fit the bar on a small phone switches to the boss's short name (d.short)
   // instead of ending in "…"; measured only when the name or the screen width changes
-  // the title drops its leading words instead (「ワンワンていこく だい6のしょう」→「だい6のしょう」)
-  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = root ? root.clientWidth : 0;
+  // the title uses d.shortTitle, else drops its leading words (「ワンワンていこく だい6のしょう」→「だい6のしょう」).
+  // Width comes from G.view (kept by the core on resize): reading the DOM here every frame forced a style recalc
+  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = (G.view && G.view.w) || 0;
   if(boss.full!==full || boss.fullT!==title || boss.fitW!==vw){
-    boss.full = full; boss.fullT = title; boss.fitW = vw; txt(boss.nm, full);
-    if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);
+    boss.full = full; boss.fullT = title; boss.fitW = vw;
+    bossPlace();
+    txt(boss.nm, full);
+    if(d.short && over(boss.nm)) txt(boss.nm, d.short);
     let t = title; txt(boss.tl, t);
-    while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
+    if(d.shortTitle && over(boss.tl)){ t = d.shortTitle; txt(boss.tl, t); }
+    while(over(boss.tl) && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
   }
   const f = U.clamp((e.hp||0)/Math.max(1, e.maxHp||1), 0, 1);
   if(boss.f<0){ boss.f = f; boss.chip = f; clipR(boss.f_, f); clipR(boss.c, f); }
@@ -14588,6 +14616,7 @@ function touchApply(){
   if(vis!==T.visible){
     T.visible = vis; show(T.el, vis); root.classList.toggle('tcon', vis);
     if(!vis) touchReleaseAll(); else { ghostPos(); tbGeom(); }
+    G.bus.emit('cover', { touch:vis });           // cam.usableW() changed: a locked fight re-fits (40_stage)
   }
 }
 function touchFrame(){
@@ -15063,9 +15092,10 @@ G.scenes.select = {
 // ---------------------------------------------------------------- a run: several stages in a row
 // with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
 function chooseStage(){
-  const n = stages().length, open = U.clamp(game.unlocked|0, 0, Math.max(0, n-1));
+  // game.unlocked = how many stages are cleared (all n after the ending); the stage after them is open
+  const n = stages().length, done = U.clamp(game.unlocked|0, 0, n), open = Math.min(done, Math.max(0, n-1));
   if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
-    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < open }));
+    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < done }));
     uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
   } else startRun(0);
 }
@@ -15204,7 +15234,7 @@ const play = G.scenes.play = {
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
     stars = U.clamp(stars, 1, 3);
-    game.unlocked = Math.max(game.unlocked, Math.min(stages().length-1, idx+1)); persist();
+    game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1)); persist();
     const p = G.player; if(p) game.ultCarry = p.ult;
     G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
     touch(false);
@@ -15249,6 +15279,7 @@ function autoDrive(p){
 
 // soft body separation so foes don't stack into one blob (heroes get pushed less)
 function separate(ents){
+  const B = G.stage && G.stage.bounds ? G.stage.bounds() : null;
   for(let i=0;i<ents.length;i++){
     const a = ents[i]; if(!(a.team===0 || a.team===1) || a.dead || a.intangible || a.y > 0.6) continue;
     for(let j=i+1;j<ents.length;j++){
@@ -15259,13 +15290,21 @@ function separate(ents){
       if(Math.abs(dx) >= min) continue;
       if(bossPair && (a.team===0 || c.team===0)){
         const hero = a.team===0 ? a : c, boss = hero===a ? c : a;
-        const s = hero.x >= boss.x ? 1 : -1; hero.x = boss.x + s*min; continue;
+        const s = hero.x >= boss.x ? 1 : -1; let hx = boss.x + s*min;
+        // pinned against the arena wall: the hero stays inside it and the boss is held off instead
+        if(B && hero.entered !== false){
+          const lo = B.xmin + hero.radius, hi = B.xmax - hero.radius;
+          if(hx < lo || hx > hi){ hx = U.clamp(hx, lo, hi); boss.x = U.clamp(hx - s*min, B.xmin + boss.radius, B.xmax - boss.radius); }
+        }
+        hero.x = hx; continue;
       }
       const push = (min - Math.abs(dx)) * 0.25 * (dx===0 ? (a.id<c.id?1:-1) : Math.sign(dx));
       const wa = a.team===0 ? 0.25 : (a.def&&a.def.boss ? 0.1 : 1), wc = c.team===0 ? 0.25 : (c.def&&c.def.boss ? 0.1 : 1);
       a.x -= push*wa; c.x += push*wc;
     }
   }
+  // runs after G.phys clamped everyone: pushes must not move a hero out of the fight either
+  if(B) for(const e of ents){ if(e.team===0 && e.entered !== false && !e.dead) e.x = U.clamp(e.x, B.xmin + e.radius, B.xmax - e.radius); }
 }
 G.bus.on('hurt', (d)=>{ if(d.ent===G.player) game.hurtCount++; });
 G.bus.on('ko', (d)=>{ const e = d.ent; if(e && e.def && G.player){ game.addXp(Math.round((e.def.xp||10) * (1 + Math.min(1, game.combo/40)))); } });
