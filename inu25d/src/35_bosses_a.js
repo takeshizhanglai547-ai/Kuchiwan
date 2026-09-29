@@ -1332,7 +1332,7 @@ G.foes.define('shark', {
   onKO: bossKO,
 });
 G.foes.define('ghost', {
-  name:'おばけの Tたろう', title:'ワンワンていこく だい3のしょう', boss:true, bossA:true, phaseLine:'もう おこったぞ〜！ ひとだまも つかっちゃう！',
+  name:'おばけの Tたろう 3きょうだい', short:'おばけ3きょうだい', title:'ワンワンていこく だい3のしょう', boss:true, bossA:true, phaseLine:'もう おこったぞ〜！ ひとだまも つかっちゃう！',
   hp:360, poise:70, weight:3, radius:0.72, height:2.0, spd:0.045, score:3000, xp:120, entrance:'none', recover:30,
   build(){ return buildGhost({ bro:false }); },
   rage: null,

@@ -1877,7 +1877,7 @@ G.foes.define('kuroinu', {
   onKOTick(e){ const t = koT(e); purifyTick(e, t); if(t===30) e.freed = true; if(t===84) say(e, 'やっと めがさめたよ…ありがとう'); },
 });
 const EMPEROR_DEF = G.foes.define('emperor', {
-  name:'ダークワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,
+  name:'ダークワンワンたいてい', short:'ワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,
   phaseLine:'ぐぬぬ… ほんきを みせてやる！', phaseLine2:'まだだ… まだ おわらんぞ！',
   hp:900, poise:120, weight:4, radius:1.2, height:3.9, spd:0.036, score:5000, xp:200, entrance:'drop', recover:30,
   build(){ return buildEmperor(); },
@@ -1890,7 +1890,7 @@ const EMPEROR_DEF = G.foes.define('emperor', {
 });
 // form 2 shares everything with form 1 except the name/title the boss bar shows (per-entity def swap, not a new type)
 const EMP2_DEF = Object.create(EMPEROR_DEF, {
-  name: { value:'あんこくナイト', enumerable:true }, title: { value:'ダークワンワンたいてい しんのすがた', enumerable:true },
+  name: { value:'あんこくナイト', enumerable:true }, short: { value:'あんこくナイト', enumerable:true }, title: { value:'ダークワンワンたいてい しんのすがた', enumerable:true },
   height: { value:3.3, enumerable:true }, radius: { value:1.0, enumerable:true }, spd: { value:0.042, enumerable:true },
 });
 // test / tooling access through the defs only

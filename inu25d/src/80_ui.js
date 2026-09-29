@@ -429,7 +429,7 @@ function buildCSS(){
 #iu.port.bossOn.hinton .combo{top:calc(var(--pt) + 10.8em + var(--hh,0px))}
 /* landscape tip at the top: under the HUD, clear of the combo / GO column on the right */
 #iu.htop .hint,#iu.htop.tcon .hint{left:calc(var(--pl) + .7em);right:calc(var(--pr) + 7.5em);top:calc(var(--pt) + 4.8em);bottom:auto;width:auto}
-#iu.htop.bossOn .hint,#iu.htop.bossOn.tcon .hint{top:calc(var(--pt) + 5.3em)}   /* clear of the boss bar's second line */
+#iu.htop.bossOn .btl{visibility:hidden}   /* the tip sits right under the boss bar: its subtitle line would touch the tip's rim */
 /* short landscape: the belt leaves only a thin band above and below it, so the tip is one flat strip —
    no face, the speaker's name in line with the words */
 #iu.short .hint{padding:.35em .9em .4em;gap:0}
@@ -955,7 +955,7 @@ function hudFrame(dt){
 }
 
 // ================================================================ boss bar
-const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'' };
+const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'', full:null, fitW:-1 };
 function buildBoss(){
   const e = boss.el = el('div', 'boss x', root);
   const nm = el('div', 'bnm', e);
@@ -972,7 +972,14 @@ function bossBar(ent){
 function bossFrame(dt){
   const e = boss.ent; if(!e) return;
   const d = e.def || {};
-  txt(boss.nm, d.name || e.name || 'ボス'); txt(boss.tl, d.title || e.title || '');
+  // a long name that doesn't fit the bar on a small phone switches to the boss's short name (d.short)
+  // instead of ending in "…"; measured only when the name or the screen width changes
+  const full = d.name || e.name || 'ボス', vw = root ? root.clientWidth : 0;
+  if(boss.full!==full || boss.fitW!==vw){
+    boss.full = full; boss.fitW = vw; txt(boss.nm, full);
+    if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);
+  }
+  txt(boss.tl, d.title || e.title || '');
   const f = U.clamp((e.hp||0)/Math.max(1, e.maxHp||1), 0, 1);
   if(boss.f<0){ boss.f = f; boss.chip = f; clipR(boss.f_, f); clipR(boss.c, f); }
   else if(f!==boss.f){ if(f<boss.f) boss.wait = 0.45; else { boss.chip = Math.max(boss.chip, f); clipR(boss.c, boss.chip); } boss.f = f; clipR(boss.f_, f); }
@@ -1367,7 +1374,7 @@ function buildEnding(s){
     const line = (cls, t)=>{ const e = el('div', cls, roll); if(t!=null) e.textContent = t; return e; };
     const ep = line('eport'); fillPortrait(ep, me, 'happy');
     line('ln', (me.short || me.name) + 'と なかまたちは、ダークワンワンていこくを やっつけた！');
-    line('ln', 'たいていの こころから くらやみが きえて、にっこり えがおに もどったよ。');
+    line('ln', 'ダークワンワンたいていの こころから くらやみが きえて、にっこり えがおに もどったよ。');
     line('ln', 'クロイヌ「やっと めがさめたよ…… ありがとう。」');
     line('ln', 'そらには おおきな にじ。おうさまも ぶじに かえってきた！');
     line('ln', 'おしろの かべから、みんなで はなびを どーん！ どーん！');
