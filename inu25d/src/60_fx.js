@@ -821,13 +821,15 @@ function hitSparks(kind, x,y,z, n, s, d, main){
 function impact(x,y,z,kind,power,o){
   o = o || {};
   const K = KIND[kind] || KIND.slash;
-  const s = (o.scale||1) * (power>=3 ? 1.65 : power>=2 ? 1.3 : 1);
-  const d = o.dir||0, main = o.color || K.main;
   const reduced = !!o.reduced;
+  // sizes stay near the hero's own size (~1.25 units): the hit must read without hiding who landed it.
+  // (was 1.65× at power 3 with a 1.4-wide opaque star: on a phone it swallowed the hero for ~8 frames)
+  const s = (o.scale||1) * (power>=3 ? 1.35 : power>=2 ? 1.18 : 1) * (reduced ? 0.75 : 1);
+  const d = o.dir||0, main = o.color || K.main;
   // 1 white core flash
-  sp(T.glow, x, y, z); S.s0 = 0.9*s; S.s1 = 1.3*s; S.curve = 2; S.life = power>=2 ? 9 : 7; S.fout = 1; S.add = 1; S.a = 0.85; sc_('#ffffff'); emit();
-  // 2 flat comic star that pops out fast and fades
-  sp(T.impact, x, y, z); S.s0 = 0.35*s; S.s1 = 1.4*s; S.curve = 2; S.life = 9 + 2*power; S.fout = 0.45; S.rot = R(-0.4,0.4); S.spin = R(-0.02,0.02); sc_(main); emit();
+  sp(T.glow, x, y, z); S.s0 = 0.8*s; S.s1 = 1.15*s; S.curve = 2; S.life = power>=2 ? 8 : 7; S.fout = 1; S.add = 1; S.a = 0.75; sc_('#ffffff'); emit();
+  // 2 flat comic star that pops out fast and fades (opaque, so small and short)
+  sp(T.impact, x, y, z); S.s0 = 0.35*s; S.s1 = 1.2*s; S.curve = 2; S.life = 7 + 2*power; S.fout = 0.55; S.rot = R(-0.4,0.4); S.spin = R(-0.02,0.02); sc_(main); emit();
   if(reduced) return;
   // 3 sparks by kind
   hitSparks(kind, x, y, z, cnt(o.count || (power>=3 ? 16 : power>=2 ? 10 : 6)), s, d, main);
@@ -835,15 +837,14 @@ function impact(x,y,z,kind,power,o){
   sp(T.ring, x, y, z); S.s0 = 0.3*s; S.s1 = 1.9*s; S.curve = 2; S.life = 12; S.add = 1; S.a = 0.9; S.fout = 0.8; sc_(main); emit();
   // 5 radial speed lines (power 2+)
   if(power >= 2){
-    const m = cnt(power>=3 ? 14 : 9);
+    const m = cnt(power>=3 ? 11 : 8);
     for(let i=0;i<m;i++){ const a = i/m*TAU + R(-0.15,0.15), c = Math.cos(a), si = Math.sin(a), spd = R(0.12,0.2)*s;
       sp(T.streak, x+c*0.35*s, y+si*0.35*s, z); S.vx = c*spd; S.vy = si*spd; S.drag = 0.12; S.flags = F_VALIGN; S.s0 = R(0.8,1.1)*s; S.s1 = 0.4*s; S.asp = 0.12;
       S.life = R(8,11); S.add = 0.85; S.fout = 0.6; sc_(i%3 ? '#ffffff' : main); emit(); }
   }
-  // 6 finisher: second ring + big twinkle
+  // 6 finisher: one big twinkle (the second ring was one layer too many over the hero)
   if(power >= 3){
-    sp(T.wave, x, y, z); S.s0 = 0.5*s; S.s1 = 2.6*s; S.curve = 2; S.life = 18; S.add = 0.7; S.fout = 0.8; S.delay = 3; sc_(main); emit();
-    sp(T.flare, x, y, z+0.05); S.s0 = 1.6*s; S.curve = 3; S.life = 16; S.add = 1; S.rot = R(-0.3,0.3); sc_('#ffffff'); emit();
+    sp(T.flare, x, y, z+0.05); S.s0 = 1.4*s; S.curve = 3; S.life = 14; S.add = 1; S.a = 0.85; S.rot = R(-0.3,0.3); sc_('#ffffff'); emit();
   }
 }
 
@@ -994,7 +995,8 @@ function buildCSS(){
   '.fxp.crit::after,.fxp.lvup::after{content:attr(data-t);position:absolute;left:0;top:0;text-shadow:none;-webkit-background-clip:text;background-clip:text;color:transparent;' +
     'background-image:linear-gradient(180deg,#fffbd0 0%,#ffd23a 42%,#ff8a1a 78%,#ff5a2a 100%)}',
   '.fxp.lvup::after{background-image:linear-gradient(180deg,#ffffff 0%,#fff27a 34%,#8dff7a 68%,#4ad0ff 100%)}',
-  '.fxp.onoma{font-size:clamp(26px,7vmin,54px);color:#fff;letter-spacing:-.03em;text-shadow:'+ringShadow(0.06,'var(--oc)',12)+','+ringShadow(0.13,'#3b2417',18)+','+ringShadow(0.095,'#3b2417',12)+',0 .17em 0 #3b2417}',
+  '.fxp.onoma,.fxp.pow{font-size:clamp(26px,7vmin,54px);color:#fff;letter-spacing:-.03em;text-shadow:'+ringShadow(0.06,'var(--oc)',12)+','+ringShadow(0.13,'#3b2417',18)+','+ringShadow(0.095,'#3b2417',12)+',0 .17em 0 #3b2417}',
+  '.fxp.pow{font-size:clamp(20px,5.4vmin,42px)}',   // hit words (ドカッ！ぽんっ！…): smaller, one per spot, never over the hero
   '.fxp.big{font-size:clamp(40px,13vmin,128px);color:#fff;text-shadow:'+ringShadow(0.05,'var(--oc)',12)+','+ringShadow(0.1,'#3b2417',18)+','+ringShadow(0.075,'#3b2417',12)+',0 .12em 0 #3b2417}',
   '.fxp.info{font-size:clamp(15px,3.6vmin,24px);color:#5a3418;background:#fffdf6;border-radius:999px;padding:.4em .9em .35em;box-shadow:0 0 0 .16em #ffcf6a,0 .22em 0 .16em #c98a2a}',
   '.fxp.say{font-size:clamp(15px,3.8vmin,26px);color:#4a2c14;background:#fff;border:.14em solid #3b2417;border-radius:1em;padding:.3em .7em;box-shadow:0 .15em 0 rgba(59,36,23,.35)}',
@@ -1020,7 +1022,7 @@ function buildCSS(){
 let uiRoot=null, layer=null, top=null, flashEl=null, speedHost=null;
 const POP_MAX = 24, ALERT_MAX = 10;
 const pops = [], alerts = [];
-const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, lvup:90, say:80 };
+const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, pow:46, lvup:90, say:80 };
 const _sp = { x:0, y:0, visible:true };
 const _pv = new THREE.Vector3();
 function project(x, y, z){
@@ -1029,6 +1031,41 @@ function project(x, y, z){
   _sp.visible = _pv.z < 1 && _pv.z > -1 && Math.abs(_pv.x) < 3 && Math.abs(_pv.y) < 3;
   return _sp;
 }
+// the hero's box on screen (feet → top of the head), refreshed once per frame. Words keep out of it:
+// on a phone the hero is only ~70 px tall and one ドッカーン！ used to hide him completely.
+const hb = { on:false, l:0, r:0, t:0, b:0, h:0 };
+function heroBoxUpdate(){
+  hb.on = false;
+  const e = G.player; if(!e || !e.rig || !e.rig.root || !e.rig.root.parent) return;
+  const rp = e.rig.root.position, hg = e.rig.height || e.height || 1.25;
+  project(rp.x, rp.y, rp.z); if(!_sp.visible) return;
+  const fx = _sp.x, fy = _sp.y;
+  project(rp.x, rp.y + hg, rp.z);
+  const h = fy - _sp.y; if(!(h > 4)) return;
+  hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
+}
+function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
+// move a popup (centre X,Y, half size hw,hh) off the hero: over his head, else beside him (its own side first),
+// else under his feet — the smallest move that stays on screen wins
+const _kp = { x:0, y:0 };
+function keepOffHero(X, Y, hw, hh, W, H){
+  _kp.x = X; _kp.y = Y;
+  if(!overHero(X, Y, hw, hh)) return _kp;
+  const m = 4, side = X >= (hb.l + hb.r)/2 ? 1 : -1;
+  let best = 1e9;
+  for(let c=0;c<4;c++){
+    let x = X, y = Y, w8 = 1;
+    if(c===0){ y = hb.t - m - hh; w8 = 0.8; }
+    else if(c===1){ x = side > 0 ? hb.r + m + hw : hb.l - m - hw; }
+    else if(c===2){ x = side > 0 ? hb.l - m - hw : hb.r + m + hw; w8 = 1.5; }
+    else { y = hb.b + m + hh; w8 = 2.5; }
+    x = clamp(x, hw, Math.max(hw, W-hw)); y = clamp(y, hh, Math.max(hh, H-hh));
+    if(overHero(x, y, hw, hh)) continue;
+    const cost = (Math.abs(x - X) + Math.abs(y - Y))*w8;
+    if(cost < best){ best = cost; _kp.x = x; _kp.y = y; }
+  }
+  return _kp;
+}
 function buildDOM(){
   uiRoot = document.getElementById('ui');
   if(!uiRoot){ uiRoot = document.createElement('div'); uiRoot.id = 'ui'; uiRoot.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10'; document.body.appendChild(uiRoot); }
@@ -1036,7 +1073,7 @@ function buildDOM(){
   layer = document.createElement('div'); layer.className = 'fxL'; uiRoot.insertBefore(layer, uiRoot.firstChild);   // under the HUD
   top = document.createElement('div'); top.className = 'fxT'; uiRoot.appendChild(top);                           // over the HUD
   for(let i=0;i<POP_MAX;i++){ const el = document.createElement('div'); el.className = 'fxp'; layer.appendChild(el);
-    pops.push({ el, on:false, style:'', t:0, life:1, x:0,y:0,z:0, ox:0, oy:0, vx:0, vy:0, rot0:0, w:0, h:0, ent:null, seed:0, shown:false }); }
+    pops.push({ el, on:false, style:'', t:0, life:1, x:0,y:0,z:0, ox:0, oy:0, vx:0, vy:0, rot0:0, w:0, h:0, ent:null, seed:0, shown:false, rank:1, val:0, lean:0, sx:-1e4, sy:-1e4 }); }
   for(let i=0;i<ALERT_MAX;i++){ const el = document.createElement('div'); el.className = 'fxa'; el.textContent = '!'; layer.appendChild(el);
     alerts.push({ el, on:false, ent:null, t:0, life:40, w:0, h:0, shown:false }); }
   // stacking inside the top layer: [cut-in dim] [speed lines] [cut-in band/name] [flash]
@@ -1045,32 +1082,61 @@ function buildDOM(){
 }
 function vs(){ return clamp((G.view && G.view.h || 720)/720, 0.55, 1.4); }
 
-function text(str, x, y, z, style, opts){
-  if(!ready || str==null) return false;
+// hit words ('pow'): one per spot. A new word within this radius of a live one takes over its slot; while the old
+// one is still young (< 24 frames) it only does so when it ranks higher, otherwise it is dropped
+function powNear(ax, ay){
+  const R = Math.max(90, 0.3*(G.view.h||720));
+  let best = null, bd = R*R;
+  for(const q of pops){ if(!q.on || q.style!=='pow') continue; const dx = q.sx - ax, dy = q.sy - ay, dd = dx*dx + dy*dy; if(dd < bd){ bd = dd; best = q; } }
+  return best;
+}
+function popNew(str, x, y, z, style, opts){
+  if(!ready || str==null) return null;
   style = STY[style] ? style : 'info';
   opts = opts || {};
+  x = +x||0; y = +y||0; z = +z||0;
+  let p = null;
+  const rank = opts.rank==null ? 1 : opts.rank;
+  if(style==='pow'){ project(x, y, z); const q = powNear(_sp.x, _sp.y); if(q){ if(q.t < 24 && rank <= q.rank) return null; p = q; } }
   // free slot, else recycle the oldest (never recycle a 'big' while another is available)
-  let p = null, best = null, bestK = -1;
-  for(const q of pops){ if(!q.on){ p = q; break; } const kq = q.t/q.life + (q.style==='big' ? -1 : 0); if(kq > bestK){ bestK = kq; best = q; } }
-  if(!p) p = best;
+  if(!p){
+    let best = null, bestK = -1;
+    for(const q of pops){ if(!q.on){ p = q; break; } const kq = q.t/q.life + (q.style==='big' ? -1 : 0); if(kq > bestK){ bestK = kq; best = q; } }
+    if(!p) p = best;
+  }
   const el = p.el;
   el.className = 'fxp ' + style;
   el.textContent = String(str);
   if(style==='crit' || style==='lvup') el.setAttribute('data-t', String(str)); else el.removeAttribute('data-t');
   const K = vs();
-  p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = +x||0; p.y = +y||0; p.z = +z||0; p.ent = opts.ent || null;
-  p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false;
-  p.rot0 = style==='onoma' ? R(-13,13) : style==='crit' ? -6 : 0;
+  p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
+  p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
+  if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
+  p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
   if(style==='onoma'){ p.ox = R(-26,26)*K; p.oy = R(-20,0)*K; }
+  else if(style==='pow'){ p.ox = R(-10,10)*K; p.oy = R(-8,0)*K; }
   const oc = opts.color || (style==='big' ? '#ff8a3a' : '#ff7a1a');
   el.style.setProperty('--oc', oc);
   el.style.opacity = '0';
-  return true;
+  return p;
+}
+function text(str, x, y, z, style, opts){ return !!popNew(str, x, y, z, style, opts); }
+// damage numbers of one frame on targets standing together become one number (a sweep over 3 foes used to
+// stack "4 4 4" on top of each other). Only popups born this frame (t==0) take part.
+function dmgNumber(dmg, x, y, z){
+  for(const q of pops){
+    if(!q.on || q.style!=='dmg' || q.t > 0 || Math.abs(q.x - x) > 1.3 || Math.abs(q.z - z) > 1.1) continue;
+    q.val += dmg; q.el.textContent = String(q.val); q.w = 0; q.y = Math.max(q.y, y); return;
+  }
+  const p = popNew(String(dmg), x, y, z, 'dmg'); if(p) p.val = dmg;
 }
 function updatePops(k){
   const W = G.view.w, H = G.view.h, K = vs();
+  heroBoxUpdate();
+  // hit words are at most ~2 hero heights wide (a phone hero is ~70 px tall)
+  const powCap = hb.on ? clamp(hb.h*2.1, 80, W*0.45) : H*0.34;
   // read phase: measure new popups (one layout for all of them)
   for(const p of pops) if(p.on && !p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; }
   for(const p of pops){
@@ -1083,7 +1149,7 @@ function updatePops(k){
     else {
       let X = p.x, Y = p.y, Z = p.z;
       if(p.ent){ const e = p.ent, rp = e.rig && e.rig.root ? e.rig.root.position : e; X += rp.x; Y += rp.y; Z += rp.z; if(e.removed) p.ent = null; }
-      project(X, Y, Z); cx = _sp.x; cy = _sp.y;
+      project(X, Y, Z); cx = _sp.x; cy = _sp.y; p.sx = cx; p.sy = cy;
       if(!_sp.visible){ el.style.visibility = 'hidden'; p.shown = false; continue; }
     }
     let s = 1, rot = p.rot0, a = 1, extra = '';
@@ -1097,10 +1163,12 @@ function updatePops(k){
         if(p.style==='crit' && t < 12){ p.ox += (rnd()*2-1)*2.5; }
         a = 1 - smooth(t, L-14, L); s *= 1 - 0.25*smooth(t, L-10, L);
         break; }
-      case 'onoma':
-        s = t < 10 ? 0.2 + 1.25*backOut(t/7) - 0.25*smooth(t,6,10) : 1 + 0.04*Math.sin(t*0.5);
-        rot = p.rot0 + Math.sin(t*0.8 + p.seed*6)*8*Math.max(0, 1 - t/26);
+      case 'onoma': case 'pow':
+        // quick pop (peak ≈1.13×, was ≈1.7×) then a gentle breathing
+        s = t < 8 ? 0.3 + 0.7*backOut(t/8) : 1 + 0.03*Math.sin((t-8)*0.5);
+        rot = p.rot0 + Math.sin(t*0.8 + p.seed*6)*(p.style==='pow' ? 5 : 8)*Math.max(0, 1 - t/26);
         p.oy -= 0.45*K*k; a = 1 - smooth(t, L-10, L); extra = ' skewX(-7deg)';
+        if(p.style==='pow' && p.w*s > powCap) s = powCap/p.w;
         break;
       case 'heal': case 'lvup':
         s = t < 8 ? 0.3 + 0.9*backOut(t/8) : 1; p.oy -= (p.style==='heal' ? 1.0 : 0.7)*K*k*Math.max(0.25, 1 - t/L);
@@ -1119,8 +1187,12 @@ function updatePops(k){
     }
     // keep inside the screen (never clipped by an edge)
     if(p.w*s > W-12) s = (W-12)/p.w;
-    const hw = p.w*s/2 + 6, hh = p.h*s/2 + 6;
-    const X = clamp(cx + p.ox, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
+    const ra = Math.abs(rot)*0.01745, rc = Math.cos(ra), rs = Math.sin(ra);
+    const hw = (p.w*rc + p.h*rs + (extra ? p.h*0.13 : 0))*s/2 + 6, hh = (p.w*rs + p.h*rc)*s/2 + 6;   // (+ skew)
+    // a leaning word starts at its anchor and reads away from it (hit words: away from the attacker)
+    let X = clamp(cx + p.ox + p.lean*(hw - 6)*0.85, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
+    // words never sit on the hero
+    if(hb.on && (p.style==='pow' || p.style==='onoma' || p.style==='crit')){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
     el.style.transform = 'translate3d('+(X - p.w/2).toFixed(1)+'px,'+(Y - p.h/2).toFixed(1)+'px,0) scale('+Math.max(0.01,s).toFixed(3)+') rotate('+rot.toFixed(1)+'deg)'+extra;
     el.style.opacity = a.toFixed(3);
     if(!p.shown){ el.style.visibility = 'visible'; p.shown = true; }
@@ -1361,33 +1433,49 @@ function onHit(d){
   if(x==null) return;
   const zr = tg ? Math.min(0.7, (tg.radius||0.4)*0.9) : 0.3;
   const onPlayer = !!(tg && tg.team===0);
-  const reduced = hitsThisFrame > 5;                        // budget: many hits in one frame → lighter effects
+  const dir = d.dir||0;
+  const reduced = hitsThisFrame > 2;                        // budget: several targets in one frame → lighter effects
   if(hitsThisFrame <= 14){
+    // the contact point sits between attacker and target: centre the burst a little into the target instead
+    const ix = onPlayer ? x : x + dir*0.2;
     if(d.blocked) guard(x, y, z+zr, { scale:1 });
-    else impact(x, y, z+zr, kind, onPlayer ? Math.min(power,2) : power, { dir:d.dir||0, reduced, scale: onPlayer ? 0.8 : 1 });
+    else impact(ix, y, z+zr, kind, onPlayer ? Math.min(power,2) : power, { dir, reduced, scale: onPlayer ? 0.8 : 1 });
   }
   if(d.dmg > 0){
-    const hx = tg ? tg.x : x, hz = tg ? tg.z : z, hy = tg ? headY(tg) + 0.15 : y + 0.6;
-    text(String(Math.max(1, Math.round(d.dmg))), hx + R(-0.2,0.2), hy, hz, onPlayer ? 'hurt' : (d.crit ? 'crit' : 'dmg'));
+    const hx = tg ? tg.x : x, hz = tg ? tg.z : z, hy = tg ? headY(tg) + 0.15 : y + 0.6, n = Math.max(1, Math.round(d.dmg));
+    if(onPlayer || d.crit) text(String(n), hx + R(-0.2,0.2), hy, hz, onPlayer ? 'hurt' : 'crit');
+    else dmgNumber(n, hx + R(-0.2,0.2), hy, hz);
   }
   if(!reduced){
     const K = KIND[kind];
-    // onomatopoeia beside the impact (the damage number sits above the head)
-    const ox = (d.dir||1)*0.6;
-    if(d.blocked) text('カキン！', x + ox, y + 0.05, z, 'onoma', { color:'#7fd0ff' });
-    else if(power >= 2) text(onPlayer ? 'いたっ！' : K.ono[power>=3 ? K.ono.length-1 : (rnd()*(K.ono.length-1))|0], x + ox, y + 0.05, z, 'onoma', { color: onPlayer ? '#ff5a8a' : K.oc });
+    // hit word over the target, on the side away from the attacker (the damage number sits on its head);
+    // 'pow' words keep off the hero, and only the strongest one shows in one spot
+    const wx = tg ? (onPlayer ? tg.x : tg.x + (dir||1)*(tg.radius||0.4)*0.5) : x + (dir||1)*0.3;
+    const wy = tg ? (onPlayer ? headY(tg) + 0.3 : (tg.y||0) + (tg.height||1.2)*0.62) : y + 0.1, wz = tg ? tg.z : z;
+    const lean = onPlayer ? 0 : (dir||1);
+    if(d.blocked) text('カキン！', wx, wy, wz, 'pow', { color:'#7fd0ff', rank:1, lean });
+    else if(power >= 2) text(onPlayer ? 'いたっ！' : K.ono[power>=3 ? K.ono.length-1 : (rnd()*(K.ono.length-1))|0], wx, wy, wz, 'pow', { color: onPlayer ? '#ff5a8a' : K.oc, rank: Math.min(power,3), lean });
     if(power >= 3 && d.src && d.src.team===0) speedLines(12);
   }
 }
+// KO hit: only the dizzy stars (the impact itself comes from 'hit'). The ぽんっ cloud, the heart and the
+// 「ぽんっ！」 wait for the transform into a happy pup ('poof', emitted by 30_foes once the foe has landed).
+function isBoss(e){ return !!(e.kind==='boss' || e.boss || (e.def && e.def.boss)); }
 function onKO(d){
   const e = d.ent || {};
   const x = d.x!=null ? d.x : e.x||0, y = d.y!=null ? d.y : (e.y||0) + 0.6, z = (d.z!=null ? d.z : e.z||0) + 0.3;
-  const s = (e.kind==='boss' || e.boss) ? 2 : 1;
+  const s = isBoss(e) ? 1.4 : 1;
+  stars(x, y, z, { count:4, scale:0.8*s });
+}
+function onPoof(d){
+  const e = d.ent; if(!e || e.x==null || e.removed) return;
+  const boss = isBoss(e), h = (e.rig && e.rig.height) || e.height || 1.2;
+  const s = boss ? clamp(h/2, 1.15, 1.4) : 1;             // bosses a little bigger, but the purified boss must stay visible
+  const x = e.x, y = (e.y||0) + clamp(h*0.4, 0.45, 1.1), z = (e.z||0) + 0.3;
   poof(x, y, z, { scale:s });
   sp(T.heart, x, y + 0.25*s, z + 0.15); S.s0 = 0.75*s; S.s1 = 0.6*s; S.curve = 1; S.vy = 0.03; S.life = 60; S.fout = 0.3; S.flags = F_WOB; S.wob = 0.1; S.delay = 6; sc_('#ff5a8a'); emit();
-  hearts(x, y, z, { count:3, scale:0.7*s });
-  stars(x, y, z, { count:5, scale:0.8*s });
-  text('ぽんっ！', x, y + 0.7*s, z, 'onoma', { color:'#ff8fc0' });
+  hearts(x, (e.y||0) + Math.min(h, 1.6), z, { count: boss ? 6 : 3, scale:0.7*s });
+  text('ぽんっ！', x, (e.y||0) + Math.min(h*0.9, 3.4) + 0.3, e.z||0, 'pow', { color:'#ff8fc0', rank:1 });   // over the (standing) pup's head
 }
 function onPickup(d){
   const e = d.ent || {};
@@ -1404,14 +1492,14 @@ function onPickup(d){
 }
 function entPos(d){ const e = d && d.ent; return e && e.x!=null ? e : null; }
 const HANDLERS = {
-  hit: onHit, ko: onKO, pickup: onPickup,
+  hit: onHit, ko: onKO, poof: onPoof, pickup: onPickup,
   levelUp(d){ const e = entPos(d); if(!e) return; levelup(e.x, e.y||0, e.z+0.1, {}); text('レベルアップ！', e.x, headY(e) + 0.45, e.z, 'lvup'); },
   land(d){ const e = entPos(d); if(!e || !d.hard) return;
     if((e.weight||1) >= 2.5 || e.kind==='boss') shock(e.x, 0.02, e.z, { scale: clamp((e.radius||1)*0.9, 0.8, 2) });
     else dustRing(e.x, 0.02, e.z, { scale:0.8 }); },
   jump(d){ const e = entPos(d); if(!e || !d.double) return; jumpPuff(e.x, e.y||0, e.z, {}); },
   dodge(d){ const e = entPos(d); if(!e || !d.just) return; kira(e.x, (e.y||0)+0.7, e.z+0.3, {}); sparkle(e.x, (e.y||0)+0.6, e.z+0.2, { count:8, color:'#bff0ff' });
-    text('ナイス！', e.x, headY(e) + 0.35, e.z, 'onoma', { color:'#2ab8ff' }); },
+    text('ナイス！', e.x, headY(e) + 0.35, e.z, 'pow', { color:'#2ab8ff', rank:3 }); },
   heroKO(d){ const e = entPos(d); if(!e) return; stars(e.x, (e.y||0)+0.8, e.z+0.2, { count:8 }); dust(e.x, 0.05, e.z, { count:6 }); },
   revive(d){ const e = entPos(d); if(!e) return; hearts(e.x, (e.y||0)+0.6, e.z+0.2, { count:7 }); sparkle(e.x, (e.y||0)+0.7, e.z+0.2, { count:12 });
     ring(e.x, 0.05, e.z, { flat:true, scale:1.3, color:'#ffd0ea' }); sp(T.glow, e.x, (e.y||0)+1.0, e.z); S.s0 = 1.1; S.s1 = 1.3; S.asp = 2.6; S.life = 40; S.add = 1; S.a = 0.5; S.fin = 0.2; S.fout = 0.5; sc_('#fff0f8'); emit(); },
@@ -1426,7 +1514,7 @@ const HANDLERS = {
   bossIntro(){ flash('#ffffff', 0.45, 14); },
   bossPhase(d){ const e = d.boss; flash('#ffe0f0', 0.35, 10); if(e){ shock(e.x, 0.02, e.z, { scale:1.3, color:'#ffd0f0' }); smoke(e.x, e.y||0, e.z+0.3, { count:6 }); } },
   shoot(d){ if(d.x==null) return; const k = d.kind;
-    if(k==='cork') { poof(d.x, d.y, d.z+0.1, { count:3, scale:0.4 }); text('ポン！', d.x, d.y+0.3, d.z, 'onoma', { color:'#ffb23a' }); }
+    if(k==='cork') { poof(d.x, d.y, d.z+0.1, { count:3, scale:0.4 }); text('ポン！', d.x, d.y+0.3, d.z, 'pow', { color:'#ffb23a', rank:0 }); }
     else ring(d.x, d.y, d.z+0.1, { scale:0.45, life:10, color: (PDEF[k] && PDEF[k].halos && PDEF[k].halos[0].color) || '#ffffff' }); },
   special(d){ const e = entPos(d); if(!e) return; ring(e.x, (e.y||0)+0.6, e.z+0.2, { scale:0.9, color:'#fff3a0' }); sparkle(e.x, (e.y||0)+0.6, e.z+0.2, { count:6, scale:0.8 }); },
   swing(d){ const e = d.ent; if(!G.fx.autoTrails || !e || !e.rig || !e.rig.tip || !e.rig.base) return;
@@ -1469,6 +1557,9 @@ function frame(dt){
   // world effects follow slow motion a little (but keep animating during hitstop)
   const kw = G.fx.worldFrozen ? 0 : kReal * Math.max(0.4, Math.min(1, G.timeScale || 1));
   fxT += kReal;
+  // the camera controller moved the camera this frame but its matrices update only at render time:
+  // refresh them so billboards and DOM popups use this frame's view (not last frame's, which lags under shake)
+  G.camera.updateMatrixWorld();
   try {
     if(pMesh.parent !== G.scene) G.scene.add(pMesh);
     if(trMesh.parent !== G.scene) G.scene.add(trMesh);

@@ -166,7 +166,7 @@ G.stages = [
     ],
     boss:{ type:'cerbe', at:88, x:88 },
     hints:[
-      { at:6, name:MOFU, text:'アリへいは じめんに もぐるぞ！ あしもとが もこもこしたら よけるのじゃ' },
+      { at:6, name:MOFU, text:'へいたいアリは じめんに もぐるぞ！ あしもとが もこもこしたら よけるのじゃ' },
       { at:56, name:MOFU, text:'オニボウズの むらさきの わの なかは てきが つよくなる。はやめに たおすのじゃ' },
     ],
     props:[ {kind:'crystal', x:10, z:-1.5, drop:'coin'}, {kind:'crystal', x:31, z:1.2, drop:'bone'}, {kind:'crystal', x:55, z:-0.9, drop:'star'}, {kind:'crystal', x:80, z:1.0, drop:'cake'} ],
@@ -1085,8 +1085,9 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c) * 2.0; float a = 
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
-const SWAY_GLSL = `{ float h_ = max(0.0, position.y - 0.7); float ph_ = position.x * 0.45 + position.z * 0.3;
-  transformed.x += sin(uTime * 1.6 + ph_) * uSway * h_; transformed.z += cos(uTime * 1.25 + ph_ * 1.3) * uSway * 0.5 * h_; }`;
+// wind sway (vertex shader); amp is the GLSL expression for the sway amount
+const swayGLSL = (amp)=> `{ float h_ = max(0.0, position.y - 0.7); float ph_ = position.x * 0.45 + position.z * 0.3;
+  transformed.x += sin(uTime * 1.6 + ph_) * ${amp} * h_; transformed.z += cos(uTime * 1.25 + ph_ * 1.3) * ${amp} * 0.5 * h_; }`;
 
 // ================================================================ environment state
 const env = {
@@ -1357,56 +1358,84 @@ function buildSpinners(c){
 }
 
 // ---------------------------------------------------------------- merged scenery meshes
-let swayMat = null, swayOutline = null;
+// Per chunk and depth band, the static and the wind-swayed parts are ONE mesh (aSway = 1 marks the swaying vertices)
+// and all outlined layers share ONE outline hull, so a chunk costs ~6 draw calls instead of 11:
+//   near band: solid+sway (casts shadow) · glow · deco · hull      far band (z < SHADOW_Z): solid+sway · hull
+let swayMat = null, hullMat = null;
 function makeSwayMats(){
   swayMat = own(G.look.matInstance(0xffffff, { vertexColors:true, rough:0.85, rim:0.45 }));
   const base = swayMat.onBeforeCompile;
   swayMat.onBeforeCompile = (sh, r)=>{
     base(sh, r);
     sh.uniforms.uTime = env.swayU.uTime; sh.uniforms.uSway = env.swayU.uSway;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + SWAY_GLSL);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway; attribute float aSway;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL('uSway * aSway'));
   };
-  swayMat.customProgramCacheKey = ()=> 'inuSoftSway1';
-  swayOutline = own(new THREE.MeshBasicMaterial({ color:new THREE.Color('#3b2417'), side:THREE.BackSide }));
-  swayOutline.onBeforeCompile = (sh)=>{
+  swayMat.customProgramCacheKey = ()=> 'inuSoftSway2';
+  // the outline hull is pushed out at build time, so this is a plain back-face fill that only adds the wind
+  hullMat = own(new THREE.MeshBasicMaterial({ color:new THREE.Color('#3b2417'), side:THREE.BackSide }));
+  hullMat.onBeforeCompile = (sh)=>{
     sh.uniforms.uTime = env.swayU.uTime; sh.uniforms.uSway = env.swayU.uSway;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * 0.032;\n' + SWAY_GLSL);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway; attribute float aSway;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL('uSway * aSway'));
   };
-  swayOutline.customProgramCacheKey = ()=> 'inuOutlineSway1';
+  hullMat.customProgramCacheKey = ()=> 'inuStageHull1';
 }
+// concatenate built geometries. list: [geometry, sway 0|1, line width]. Without `hull` the result keeps
+// position/normal/colour and gets aSway; with `hull` it is the outline hull: every vertex pushed out along its normal
+// by its part's line width (so the thinner glow line shares the geometry), position + aSway only.
+function joinGeo(list, hull){
+  let nv = 0, ni = 0;
+  for(const it of list){ nv += it[0].attributes.position.count; ni += it[0].index.count; }
+  const pos = new Float32Array(nv*3), nor = hull ? null : new Float32Array(nv*3), col = hull ? null : new Float32Array(nv*3);
+  const sw = new Float32Array(nv), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  let vo = 0, io = 0;
+  for(const [g, sway, t] of list){
+    const P = g.attributes.position.array, N = g.attributes.normal.array, I = g.index.array, n = g.attributes.position.count;
+    const S = g.attributes.aSway ? g.attributes.aSway.array : null;
+    if(hull){ for(let i=0;i<n*3;i++) pos[vo*3 + i] = P[i] + N[i]*t; }
+    else { pos.set(P, vo*3); nor.set(N, vo*3); col.set(g.attributes.color.array, vo*3); }
+    if(S) sw.set(S, vo); else if(sway) sw.fill(1, vo, vo + n);
+    for(let k=0;k<I.length;k++) idx[io++] = I[k] + vo;
+    vo += n;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  if(!hull){ g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); }
+  g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
+  g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere();
+  return g;
+}
+const LINE = 0.032, GLOW_LINE = 0.022;
 function buildChunks(c){
   const glowMat = own(new THREE.MeshBasicMaterial({ vertexColors:true, toneMapped:false }));
   env.glowMat = glowMat; env.glowPost = null;
-  const solidMat = G.look.vmat({ rough:0.85, rim:0.45 }), decoMat = G.look.vmat({ rough:0.9, rim:0.3 });
+  const decoMat = G.look.vmat({ rough:0.9, rim:0.3 });
   makeSwayMats();
   let tris = 0, meshes = 0;
   const count = (g)=>{ tris += (g.index ? g.index.count : g.attributes.position.count)/3; meshes++; };
+  const hullMesh = (list, name)=>{
+    const o = new THREE.Mesh(own(joinGeo(list, true)), hullMat); o.name = name;
+    o.userData.isOutline = true; o.castShadow = false; o.receiveShadow = false; o.visible = G.quality.tier < 2;
+    addObj(o);
+  };
   for(const ch of c.chunks){
-    if(ch.solid && !ch.solid.empty){
-      const g = own(ch.solid.build()); count(g);
-      const m = new THREE.Mesh(g, solidMat); m.castShadow = true; m.receiveShadow = true; m.name = 'solid';
-      G.look.outline(m, 0.032); addObj(m);
-    }
-    if(ch.sway && !ch.sway.empty){
-      const g = own(ch.sway.build()); count(g);
-      const m = new THREE.Mesh(g, swayMat); m.castShadow = true; m.receiveShadow = true; m.name = 'sway';
-      const o = new THREE.Mesh(g, swayOutline); o.userData.isOutline = true; o.castShadow = false; o.visible = G.quality.tier < 2; m.add(o);
-      addObj(m);
-    }
-    for(const k of ['solidB', 'swayB']){
-      const b = ch[k]; if(!b || b.empty) continue;
-      const g = own(b.build()); count(g);
-      const m = new THREE.Mesh(g, k==='solidB' ? solidMat : swayMat); m.castShadow = false; m.receiveShadow = true; m.name = k;
-      if(k==='solidB') G.look.outline(m, 0.032);
-      else { const o = new THREE.Mesh(g, swayOutline); o.userData.isOutline = true; o.castShadow = false; o.visible = G.quality.tier < 2; m.add(o); }
-      addObj(m);
-    }
-    if(ch.glow && !ch.glow.empty){
-      const g = own(ch.glow.build()); count(g);
-      const m = new THREE.Mesh(g, glowMat); m.castShadow = false; m.name = 'glow';
-      G.look.outline(m, 0.022); addObj(m);
+    for(const B of ['', 'B']){
+      const parts = [], hull = [];
+      if(ch['solid' + B] && !ch['solid' + B].empty) parts.push([ch['solid' + B].build(), 0]);
+      if(ch['sway' + B] && !ch['sway' + B].empty) parts.push([ch['sway' + B].build(), 1]);
+      if(parts.length){
+        const g = own(joinGeo(parts, false)); count(g);
+        for(const it of parts) it[0].dispose();
+        const m = new THREE.Mesh(g, swayMat); m.name = 'solid' + B; m.castShadow = !B; m.receiveShadow = true;
+        addObj(m); hull.push([g, 0, LINE]);
+      }
+      if(!B && ch.glow && !ch.glow.empty){
+        const g = own(ch.glow.build()); count(g);
+        const m = new THREE.Mesh(g, glowMat); m.castShadow = false; m.name = 'glow';
+        addObj(m); hull.push([g, 0, GLOW_LINE]);
+      }
+      if(hull.length) hullMesh(hull, 'hull' + B);
     }
     if(ch.deco && !ch.deco.empty){
       const g = own(ch.deco.build()); count(g);
@@ -1500,7 +1529,7 @@ function disposeEnv(){
   for(const x of env.own){ try { x.dispose(); } catch(err){ G.logError('stage.dispose', err); } }
   env.own = []; env.root = null; env.sky = null; env.far = null; env.clouds = null; env.cloudData = null;
   env.parts = null; env.halos = null; env.spinners = []; env.partU = null; env.haloU = null; env.skyU = null; env.glowMat = null;
-  swayMat = null; swayOutline = null;
+  swayMat = null; hullMat = null;
   env.built = false; env.idx = -1;
   restoreDefaults();
 }
@@ -1562,16 +1591,18 @@ function spawnQueued(item, a){
   if(e) a.spawned++;
   return e;
 }
+// an arena never wider than what the camera can show (phones in portrait see ~8 units, 16:9 ~14)
+function viewArenaW(){ return Math.max(6, (G.cam.usableW ? G.cam.usableW() : 2*G.cam.halfW) - 0.6); }
 function startEvent(ev){
   const d = st.def, L = d.length;
-  // an arena never wider than what the camera can show (phones in portrait see ~8 units, 16:9 ~14)
-  const vw = Math.max(6, (G.cam.usableW ? G.cam.usableW() : 2*G.cam.halfW) - 0.6);
+  const vw = viewArenaW();
+  // areaA/areaB: the lock this fight started with; a later refitLock (view resized) stays inside it
   if(ev.kind==='wave'){
     const w = Math.min(ev.width, vw);
     let a = ev.at - w*0.4; a = Math.max(-2, a); const b = Math.min(L + 4, a + w);
     lockTo(a, b);
     st.active = { kind:'wave', ev, t:0, qt:0, qi:0, q: makeQueue(ev.wave.foes, 16), then: ev.wave.then || null,
-      thenAt: ev.wave.thenAt==null ? 1 : ev.wave.thenAt, spawned:0, lockA:a, lockB:b };
+      thenAt: ev.wave.thenAt==null ? 1 : ev.wave.thenAt, spawned:0, lockA:a, lockB:b, areaA:a, areaB:b };
     G.bus.emit('wave', { index:ev.idx, total:d.waves.length, at:ev.at, lockA:a, lockB:b });
   } else {
     let [a, b] = arenaRange(d, ev);
@@ -1581,9 +1612,26 @@ function startEvent(ev){
     const e = spawnFoe(ev.type, bx, -0.3, { boss:true, face:-1 });
     const tdef = G.foes && G.foes.types ? G.foes.types[ev.type] : null;
     const nm = BOSS_NAMES[ev.type] || [ev.type, ''];
-    st.active = { kind:ev.kind, ev, t:0, ent:e, down:false, goneT:0, doneT:0, lockA:a, lockB:b };
+    st.active = { kind:ev.kind, ev, t:0, ent:e, down:false, goneT:0, doneT:0, lockA:a, lockB:b, areaA:a, areaB:b };
     G.bus.emit('bossIntro', { boss:e, name:(tdef && tdef.name) || nm[0], title:(tdef && tdef.title) || nm[1], mid: ev.kind==='mid', type:ev.type });
   }
+}
+// the view changed size mid-fight (a phone turned to portrait, a browser bar came in): re-fit the lock to the new
+// view width so the hero and every foe stay on screen. It shrinks/grows about its old centre, moves only as far as
+// needed to keep the hero (and, in a boss arena, the boss while it fits) inside, and never leaves the lock the
+// fight started with (turning back to landscape restores it).
+// core's belt clamp then pulls entered foes back inside the new bounds on their next tick.
+function refitLock(){
+  const a = st.active; if(!st.locked || !a || a.areaB==null) return;
+  const w = Math.min(a.areaB - a.areaA, viewArenaW());
+  if(Math.abs(w - (st.lockB - st.lockA)) < 0.01) return;
+  const p = G.player, e = a.ent, m = 1;
+  let lo = st.lockA + (st.lockB - st.lockA - w)*0.5;
+  if(e && !e.dead && !e.removed && !e.removeMe) lo = U.clamp(lo, e.x + m - w, e.x - m);
+  if(p) lo = U.clamp(lo, p.x + m - w, p.x - m);
+  lo = U.clamp(lo, a.areaA, a.areaB - w);
+  a.lockA = lo; a.lockB = lo + w;
+  lockTo(lo, lo + w);
 }
 function tickWave(a){
   a.qt++;
@@ -1631,6 +1679,7 @@ function bindBus(){
     if(!b || b===a.ent || isBossEnt(b)) a.down = true;
   });
   G.bus.on('quality', applyParticleQuality);
+  G.bus.on('resize', refitLock);
 }
 
 // ================================================================ per-frame visuals
