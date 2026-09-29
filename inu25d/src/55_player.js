@@ -309,7 +309,7 @@ function startUltAttack(p){
   const def = p.moves.ult.build(p);
   G.combat.start(p, def);
   G.setState(p, 'ult');
-  p.inv = def.len + 30;
+  p.inv = Math.max(p.inv, def.len + 30);   // never shortens a longer invulnerability (revive, stage won)
 }
 function doDodge(p){
   if(p.q) p.q.dodge = 0;

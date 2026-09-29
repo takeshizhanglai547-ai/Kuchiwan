@@ -278,8 +278,8 @@ const play = G.scenes.play = {
       if(game.koT===30) banner('がんばれ！', game.lives===Infinity ? '' : 'のこり ' + Math.max(0, game.lives-1), 90);
       if(game.koT >= 100){
         game.koT = 0;
-        if(game.lives!==Infinity && !this.cleared){ game.lives--; }
-        if(game.lives!==Infinity && game.lives<=0 && !this.cleared){ this.gameOver(); return; }
+        // once the stage is won, falling costs nothing (one guard for both the life and the game over)
+        if(game.lives!==Infinity && !this.cleared){ game.lives--; if(game.lives<=0){ this.gameOver(); return; } }
         p.dead = false; p.hp = p.maxHp; p.inv = 180; p.vy = 0.12; p.onGround = false; p.sp = 3;
         G.setState(p, 'air'); G.setAnim(p, 'jump');
         game.revives++;
@@ -290,7 +290,6 @@ const play = G.scenes.play = {
     if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; game.victT = 0; this.winGuard(); }
     if(this.cleared){
       game.clearT++;
-      if(p) p.inv = Math.max(p.inv, 30);
       const bossStill = G.world.ents.some(e=> e.def && e.def.boss && !e.removed);
       if(!game.victT && ((!bossStill && game.clearT > 30) || game.clearT > 330)) game.victT = game.clearT;
       const v = game.victT ? game.clearT - game.victT : -1;

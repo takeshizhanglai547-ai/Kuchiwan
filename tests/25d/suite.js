@@ -108,6 +108,23 @@ test('combat: special uses one ✦ and fires; ult freezes the world then hits ev
   assert(r.hit.every(h => h >= 20), 'ult missed a foe on screen: ' + JSON.stringify(r.hit));
 });
 
+test('combat: the ult keeps a longer invulnerability (a fresh revive stays safe)', async () => {
+  const g = await open();
+  const r = await g.run(() => {
+    G.debug.arena('inu', 'normal'); G.step(2);
+    const p = G.player; p.inv = 600; p.ult = 100;
+    G.input.latch('ult'); let sawUlt = false, t = 0;
+    while(t < 200 && !(sawUlt && p.state !== 'ult')){ G.step(1); t++; if(p.state === 'ult') sawUlt = true; if(sawUlt) break; }
+    G.step(2);
+    return { sawUlt, t, inv: p.inv };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.sawUlt, 'setup: the ult never started: ' + JSON.stringify(r));
+  // 600 frames of invulnerability, at most ~200 frames used up by the cut-in: well over 350 must be left
+  assert(r.inv > 350, 'the ult cut the invulnerability short: ' + JSON.stringify(r));
+});
+
 test('combat: foe KO turns into a happy pup that leaves (no corpse stays)', async () => {
   const g = await open();
   const r = await g.run(() => {
@@ -154,32 +171,56 @@ test('combat: a floored boss does not build stagger damage (no stun-lock after g
     G.combat.damage(f, 60, { src:G.player, kind:'blunt', power:2, dir:1 });
     const s1 = f.state;
     for(let i=0;i<6;i++){ G.combat.damage(f, 20, { src:G.player, kind:'blunt', power:2, dir:1 }); G.step(3); }
-    let t = 0; while(f.state !== 'idle' && t < 400){ G.step(1); t++; }
+    let t = 0; while(f.state !== 'getup' && t < 400){ G.step(1); t++; }
+    const sawGetup = f.state === 'getup';
     G.combat.damage(f, 12, { src:G.player, kind:'blunt', power:2, dir:1 });
-    return { s1, back: t, after: f.state };
+    const whileGetup = f.state;
+    while(f.state !== 'idle' && t < 800){ G.step(1); t++; }
+    G.combat.damage(f, 12, { src:G.player, kind:'blunt', power:2, dir:1 });
+    return { s1, sawGetup, whileGetup, back: t, after: f.state };
   });
   const errs = await g.errors(); await g.close();
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
   assert(r.s1 === 'down', 'poise break did not floor the boss: ' + JSON.stringify(r));
-  assert(r.back < 400, 'boss never got up: ' + JSON.stringify(r));
+  assert(r.sawGetup, 'setup: the boss never started getting up: ' + JSON.stringify(r));
+  assert(r.whileGetup !== 'down', 'a hit while getting up floored it again (stun-lock): ' + JSON.stringify(r));
+  assert(r.back < 800, 'boss never got up: ' + JSON.stringify(r));
   assert(r.after !== 'down', 'first hit after getting up floored it again (stun-lock): ' + JSON.stringify(r));
 });
 
 // ---------------------------------------------------------------- review regressions (2026-09-28 adversarial review)
-test('win: a KO right after the boss is purified cannot cause game over or cost the result', async () => {
+test('win: once the boss is purified nothing can hurt the hero, cost a life or cause game over', async () => {
   const g = await open();
   const r = await g.run(() => {
+    G.foes.define('t_far', { name:'t', hp:50, ai(e){ G.foes.h.stop(e); } });
     G.debug.play('inu', 0, 'hard'); G.step(2);
     const st = G.stage.st; st.ptr = st.seq.length-1; const p = G.player; p.x = 80; G.step(200);
     const boss = G.world.ents.find(e => e.team===1 && e.def && e.def.boss);
     G.game.lives = 1; p.hp = 1; p.inv = 0; G.game.xp = 0; G.game.xpNext = 1e9;
+    // a rock that hits right after the KO, and a slow one still in the air when the stage is won
     G.combat.shoot({ owner:boss, kind:'rock', x:p.x+2.5, y:0.8, z:p.z, vx:-0.08, dmg:10, r:0.5, life:90 });
+    const slow = G.combat.shoot({ owner:boss, kind:'rock', x:p.x+7, y:0.8, z:p.z, vx:-0.01, dmg:10, r:0.5, life:900 });
     G.combat.damage(boss, 99999, { src:p, kind:'slash', power:3 });
+    let t = 0; while(!G.scenes.play.cleared && t < 600){ G.step(1); t++; }
+    G.step(2);
+    const slowAlive = G.combat.projectiles.some(q => q.team===1 && q.life > 0 && (q===slow || Math.abs(q.vx + 0.01) < 1e-9));
+    // a foe's blast right on the hero after the win
+    const far = G.foes.spawn('t_far', p.x + 9, p.z, { entrance:'none' });
+    if(p.dead){ G.step(120); }
+    const hpA = p.hp; G.combat.area({ owner:far, x:p.x, z:p.z, r:1.5, y0:-1, y1:4, dmg:30 }); G.step(6); const hpB = p.hp;
+    // falling after the win (however it happens) costs nothing
+    const lives0 = G.game.lives; p.hp = 0; p.dead = true; G.step(110);
+    const lives1 = G.game.lives, overEarly = G.ui.isShown('over');
     for(let i=0;i<60;i++) G.step(10);
-    return { result: G.ui.isShown('result'), over: G.ui.isShown('over'), unlocked: G.game.unlocked, coins: G.game.coins };
+    return { t, cleared: G.scenes.play.cleared, slowAlive, hpA, hpB, lives0, lives1, overEarly,
+             result: G.ui.isShown('result'), over: G.ui.isShown('over'), unlocked: G.game.unlocked, coins: G.game.coins };
   });
   const errs = await g.errors(); await g.close();
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.cleared, 'setup: the stage was never won: ' + JSON.stringify(r));
+  assert(!r.slowAlive, 'a foe\'s rock stayed in the air after the win: ' + JSON.stringify(r));
+  assert(r.hpB === r.hpA && r.hpA > 0, 'the hero was hurt after the win: ' + JSON.stringify(r));
+  assert(r.lives1 === r.lives0 && !r.overEarly, 'falling after the win cost a life / game over: ' + JSON.stringify(r));
   assert(r.result && !r.over, 'expected the result screen, got ' + JSON.stringify(r));
   assert(r.unlocked >= 1, 'clear not recorded: ' + JSON.stringify(r));
   assert(r.coins >= 10, 'boss reward coins were not collected: ' + JSON.stringify(r));
@@ -194,14 +235,16 @@ test('win: a purified boss\'s helpers stop attacking', async () => {
     G.player.x = 3; G.step(30);
     G.combat.damage(boss, 99999, { src:G.player, kind:'slash', power:3 });
     G.step(5);
-    G.player.hp = G.player.maxHp; G.player.inv = 0; const hp0 = G.player.hp; let hits = 0;
+    G.player.hp = G.player.maxHp; G.player.inv = 0; const hp0 = G.player.hp; let hits = 0, winding = 0;
     G.bus.on('hurt', d => { if(d.ent === G.player) hits++; });
-    G.step(400);
-    return { hits, hp0, hp: G.player.hp, left: helpers.filter(h => !h.removed && !h.dead).length };
+    // the hero is safe anyway once the stage is won, so also count ticks where a helper winds up or swings
+    for(let i=0;i<400;i++){ G.step(1); for(const h of helpers) if(!h.dead && !h.removed && (h.pending || h.atk)) winding++; }
+    return { hits, winding, hp0, hp: G.player.hp, left: helpers.filter(h => !h.removed && !h.dead).length };
   });
   const errs = await g.errors(); await g.close();
   assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
   assert(r.hits === 0, 'helpers kept hitting the hero after the boss was purified: ' + JSON.stringify(r));
+  assert(r.winding === 0, 'helpers kept winding up attacks after the boss was purified: ' + JSON.stringify(r));
   assert(r.left === 0, 'helpers never gave up: ' + JSON.stringify(r));
 });
 
