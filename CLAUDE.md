@@ -224,6 +224,9 @@ cd /tmp && NODE_PATH=/opt/node22/lib/node_modules node /tmp/shotX.js
 - 試験: `cd /tmp && NODE_PATH=/opt/node22/lib/node_modules node /home/user/Kuchiwan/tests/25d/suite.js [filter]`、
   ミューテーション: `bash tests/25d/mutate.sh`（`tests/25d/mutations.txt` はタブ区切り。JS の `||` と衝突するので `|` 区切りにしない）。
   最初の mutate.sh は `cd` に失敗して試験が走らないのを「killed」と数えていた。**起動失敗を赤扱いしない**こと。
+  2度目の事故：置換後が空の行（コードを消す改変）で、bash の `read` がタブの空欄を詰めて列がずれ、
+  壊れたコード＋フィルタ無しで全試験が走り、boot の FAIL を「killed」と数えていた。
+  今は区切りを `\037` に変えて読み、フィルタ無しの行と構文エラーになる改変は ERROR にしている。
 - 押下はヒットストップ中も捨てない（`G.playerCtl.queue`）。捨てるとコンボの3段目以降が出なくなる。
 - ふみつけは1回の滞空で1度だけ。毎回許すと、敵の真上で永久に跳ね続けて降りられなくなる。
 - 描画コールは輪郭線（背面ポリゴン）で倍になる。部品は頂点カラーで結合（`G.look.builder()`）してから輪郭を付ける。
