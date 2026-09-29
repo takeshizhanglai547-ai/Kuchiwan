@@ -1,0 +1,4 @@
+node_modules/
+.shots/
+*.blend1
+__pycache__/
