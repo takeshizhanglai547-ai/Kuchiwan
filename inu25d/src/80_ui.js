@@ -551,15 +551,27 @@ const ORDER = ['loading','pause','over','result','ending','stages','select','tit
 
 // A tap / key that arrives right after a screen (or the help panel) appeared was meant for the screen before it:
 // a double-tap on 「あそぶ」 must not also press whatever the select screen put under the finger.
-const OPEN_GUARD_MS = 400;
-let openedAt = -1e9;
+// Any press in the first 0.4 s is dropped; a tap on the same spot as the tap that opened the screen is dropped
+// for 0.9 s (the second half of a double-tap on a slow phone lands there, a deliberate new tap rarely does).
+const OPEN_GUARD_MS = 400, DOUBLE_TAP_MS = 900, DOUBLE_TAP_PX = 48;
+let openedAt = -1e9, openX = NaN, openY = NaN;
+const lastDown = { x:NaN, y:NaN, t:-1e9 };
 // gamepad menu state (see padFrame): last seen buttons / direction, auto-repeat timer, armed once all is released
 const PAD = { c:true, b:true, dx:0, dz:0, rep:0, arm:false };
 const PADEV = { repeat:false, preventDefault(){} };
-function markOpen(){ openedAt = performance.now(); PAD.arm = false; }
+function markOpen(){
+  openedAt = performance.now(); PAD.arm = false;
+  const fromTap = openedAt - lastDown.t < 1500;             // opened by a tap (not by the game on its own)
+  openX = fromTap ? lastDown.x : NaN; openY = fromTap ? lastDown.y : NaN;
+}
 function justOpened(){ return performance.now() - openedAt < OPEN_GUARD_MS; }
 // real (trusted) clicks only: el.click() from the keyboard / pad routing and from tests is never blocked here
-function tapBlocked(e){ return !!(e && e.isTrusted) && justOpened(); }
+function tapBlocked(e){
+  if(!(e && e.isTrusted)) return false;
+  const dt = performance.now() - openedAt;
+  if(dt < OPEN_GUARD_MS) return true;
+  return dt < DOUBLE_TAP_MS && openX===openX && Math.abs(e.clientX - openX) < DOUBLE_TAP_PX && Math.abs(e.clientY - openY) < DOUBLE_TAP_PX;
+}
 
 function button(parent, cls, html, onTap, sound){
   const b = el('button', 'cb '+cls, parent, html);
@@ -1459,6 +1471,7 @@ function init(){
   screen('loading', 'loading', buildLoading);
   window.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e)=>{
+    lastDown.x = e.clientX; lastDown.y = e.clientY; lastDown.t = performance.now();
     if(kbMode){ kbMode = false; clearKF(); }
     if(e.pointerType==='touch' || e.pointerType==='pen'){ if(!T.saw || T.keyUsed){ T.saw = true; T.keyUsed = false; touchApply(); } }
   }, true);
