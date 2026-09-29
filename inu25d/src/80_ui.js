@@ -56,7 +56,7 @@ function buildCSS(){
 #iuFB .fbc{background:#fff08a}
 #iuFB .fbf{background:linear-gradient(180deg,#ffc4d4 0%,#ff7aa0 60%,#f25a86 100%)}
 #iu{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;font-family:${FONT};color:#4a2c14;font-weight:800;line-height:1.25;
-  font-size:clamp(11px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;--r:56px;--b:96px;
+  font-size:clamp(13px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;--r:56px;--b:96px;--fm:13px;
   --pl:max(10px,env(safe-area-inset-left,0px));--pr:max(10px,env(safe-area-inset-right,0px));
   --pt:max(8px,env(safe-area-inset-top,0px));--pb:max(8px,env(safe-area-inset-bottom,0px));
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:none;text-size-adjust:none}
@@ -67,7 +67,7 @@ function buildCSS(){
 #iu img{-webkit-user-drag:none;user-select:none}
 
 /* ---- candy buttons ---- */
-#iu .cb{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.4em;min-height:2.5em;padding:.4em 1.3em .45em;border-radius:999px;
+#iu .cb{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.4em;min-height:max(44px,2.5em);padding:.4em 1.3em .45em;border-radius:999px;
   font-weight:900;font-size:1.15em;color:#fff;white-space:nowrap;--c1:#ffc9dd;--c2:#ff8fb8;--cd:#d6558a;
   background:linear-gradient(180deg,var(--c1) 0%,var(--c2) 72%);
   box-shadow:0 0 0 .2em #fff,0 .3em 0 .2em var(--cd),0 .55em .9em .15em rgba(74,44,20,.26);
@@ -103,15 +103,15 @@ function buildCSS(){
 #iu .l1{font-size:2.3em;font-weight:900;letter-spacing:.08em;line-height:1.05;--lr:#e8508c;--lg:linear-gradient(180deg,#fff4f8 0%,#ffb3d0 50%,#ff7fb0 100%)}
 #iu .l2{font-size:4.6em;font-weight:900;letter-spacing:.02em;line-height:1.1;margin-top:.24em;--lr:#e0662a;--lg:linear-gradient(180deg,#fffbe0 0%,#ffe36a 40%,#ffae3a 100%)}
 #iu .rbw{position:relative;display:inline-block}
-#iu .rb{position:absolute;left:0;right:0;top:-.36em;text-align:center;font-style:normal;font-size:.21em;line-height:1;letter-spacing:.35em;color:#d0561a;text-shadow:${ring(0.14,'#fff',12)};z-index:1}
+#iu .rb{position:absolute;left:0;right:0;top:-.36em;text-align:center;font-style:normal;font-size:max(var(--fm),.21em);line-height:1;letter-spacing:.35em;color:#d0561a;text-shadow:${ring(0.14,'#fff',12)};z-index:1}
 #iu .l3{display:inline-block;margin-top:.45em;font-size:1.15em;font-weight:900;padding:.28em 1.3em .32em;border-radius:999px;background:#fff;color:#e0508a;
   box-shadow:0 0 0 .18em #ffc2d8,0 .3em 0 .18em #f09ab8,0 .5em .9em rgba(74,44,20,.2)}
 #iu .tw{position:absolute;width:1.4em;height:1.4em;color:#fff6a0;filter:drop-shadow(0 0 .2em #fff);animation:iuTw 2.2s ease-in-out infinite}
 #iu .tbot{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:.6em}
 #iu .tdiff{justify-self:start;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;pointer-events:auto}
-#iu .tlab{font-size:.85em;color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
+#iu .tlab{font-size:max(var(--fm),.85em);color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
 #iu .chips{display:flex;gap:.35em}
-#iu .chip{font-size:.95em;min-height:2.2em;padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
+#iu .chip{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
 #iu .chip .pw{display:flex;gap:.02em}
 #iu .chip .pw i{display:block;width:.7em;height:.7em}
 #iu .chip.sel{--c1:var(--s1);--c2:var(--s2);--cd:var(--s3);color:#fff;text-shadow:${ON_CANDY};transform:scale(1.1);opacity:1}
@@ -121,45 +121,58 @@ function buildCSS(){
 #iu .play{font-size:2.3em;padding:.3em 1.5em .36em;animation:iuPulse 1.5s ease-in-out infinite}
 #iu .play .ic{width:1em;height:1em}
 #iu .topts{justify-self:end;display:flex;gap:.4em;align-items:flex-end}
-#iu .topts .cb{font-size:.95em;min-height:2.3em;padding:.25em .9em .3em}
-#iu .thelp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(36em,calc(100% - 2em));max-height:calc(100% - 1em);overflow:auto;z-index:2}
+#iu .topts .cb{font-size:max(var(--fm),.95em);min-height:max(44px,2.3em);padding:.25em .9em .3em}
+#iu .topts .q{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.15em;line-height:1;filter:none}
+/* not enough room for the whole bottom row (measured in fitTitle): sound / help become round icon buttons, then move to the top-right corner */
+#iu .title.tq .topts .cb{width:max(44px,2.6em);min-width:0;padding:0;gap:0}
+#iu .title.tq .topts .tx{display:none}
+#iu .title.tq .topts .ic{width:1.35em;height:1.35em}
+#iu .title.tq2 .topts{position:absolute;right:calc(var(--pr) + .4em);top:calc(var(--pt) + .4em)}
+/* help: a centred overlay (flex centring, so the panel's pop-in animation can't knock it off-centre); tap outside to close */
+#iu .hov{position:absolute;left:0;top:0;right:0;bottom:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:.5em;pointer-events:auto;background:rgba(255,244,232,.5)}
+#iu .thelp{width:min(36em,100%);max-height:100%;overflow:auto}
 #iu .thelp .hc{display:flex;gap:1.2em;justify-content:center;flex-wrap:wrap;margin:.6em 0 .8em}
 #iu .thelp .hb{min-width:13em}
 #iu .thelp h4{margin:0 0 .3em;font-size:1em;color:#e0508a}
-#iu .thelp .hr_{display:flex;justify-content:space-between;gap:1em;font-size:.9em;padding:.12em 0;border-bottom:.08em dashed #f3d9b8}
+#iu .thelp .hr_{display:flex;justify-content:space-between;gap:1em;font-size:max(var(--fm),.9em);padding:.12em 0;border-bottom:.08em dashed #f3d9b8}
 #iu .thelp .hr_ b{color:#3a8ad0;font-weight:900}
 
 /* ---- select ---- */
 #iu .select{display:block}
 #iu .shead{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + .3em);top:calc(var(--pt) + .25em);display:flex;align-items:center;gap:.8em}
 #iu .shead .hd{font-size:1.8em;--tc:#ff6fa4}
-#iu .back{font-size:.95em;min-height:2.2em;padding:.2em .95em .25em}
+#iu .back{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.2em .95em .25em}
 #iu .back .ic{width:.9em;height:.9em}
 #iu .sinfo{position:absolute;right:calc(var(--pr) + .6em);top:calc(var(--pt) + 3.9em);width:min(20em,40vw);padding:.7em 1em .8em;animation-duration:.3s;font-size:1.08em}
 #iu .snm{font-size:1.45em;font-weight:900;color:var(--hc,#e0662a);text-shadow:${STK_S};line-height:1.15}
-#iu .ssp{font-size:.78em;color:#a07a50;margin:.1em 0 .25em}
-#iu .sds{font-size:.92em;line-height:1.4;color:#4a2c14;margin-bottom:.4em}
-#iu .srow{display:flex;align-items:center;justify-content:space-between;gap:.6em;font-size:.9em;padding:.06em 0}
+#iu .ssp{font-size:max(var(--fm),.78em);color:#a07a50;margin:.1em 0 .25em}
+#iu .sds{font-size:max(var(--fm),.92em);line-height:1.4;color:#4a2c14;margin-bottom:.4em}
+#iu .srow{display:flex;align-items:center;justify-content:space-between;gap:.6em;font-size:max(var(--fm),.9em);padding:.06em 0}
 #iu .srow .sl{color:#8a5a2e}
 #iu .pws{display:flex;gap:.12em}
 #iu .pws i{display:block;width:1.3em;height:1.3em;color:#efe0c8}
 #iu .pws i.f{color:var(--hc,#ff8fb8);filter:drop-shadow(0 .06em 0 rgba(74,44,20,.25))}
 #iu .smv{display:flex;flex-wrap:wrap;gap:.3em;margin-top:.45em}
-#iu .smv span{font-size:.78em;padding:.12em .6em;border-radius:999px;background:#fff;box-shadow:0 0 0 .12em #f3d9b8;white-space:nowrap}
+#iu .smv span{font-size:max(var(--fm),.78em);padding:.12em .6em;border-radius:999px;background:#fff;box-shadow:0 0 0 .12em #f3d9b8;white-space:nowrap}
 #iu .smv b{color:#b06ad0;margin-right:.3em}
-#iu .scards{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + 12.5em);bottom:calc(var(--pb) + .5em);display:flex;gap:.5em;justify-content:center;align-items:flex-end}
+/* cards and the GO button share one flex row, so the button can never sit on top of a card */
+#iu .sbot{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + .6em);bottom:calc(var(--pb) + .5em);display:flex;align-items:flex-end;gap:.9em}
+#iu .scards{flex:1 1 auto;min-width:0;display:flex;gap:.5em;justify-content:center;align-items:flex-end}
 #iu .card{position:relative;flex:0 1 5.4em;min-width:0;display:flex;flex-direction:column;align-items:center;gap:.1em;padding:.35em .2em .3em;border-radius:1.1em;
   background:linear-gradient(180deg,#fffef8,#fff1d8);box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #e8c89a,0 .45em .7em rgba(74,44,20,.22);
-  transition:transform .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i)*.04s)}
+  transition:translate .18s cubic-bezier(.3,1.7,.5,1),scale .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(var(--i)*.04s)}
 #iu .card .cp{position:relative;width:4em;height:4em;max-width:100%;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 50% 35%,#fff 0%,var(--hc2,#ffe8c8) 100%);box-shadow:inset 0 0 0 .16em var(--hc,#ffb070)}
 #iu .card .cp img{position:absolute;left:-8%;top:-6%;width:116%;height:116%}
 #iu .fbk{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:1.6em;font-weight:900;color:#fff;background:var(--hc,#ffb070);text-shadow:${ring(0.06,'rgba(74,44,20,.6)',10)}}
 #iu .card .fbk{font-size:1.8em}
 #iu .roll .eport .fbk{font-size:3em}
-#iu .card .cn{font-size:.8em;font-weight:900;white-space:nowrap;color:#6a3f1a}
-#iu .card.on{transform:translateY(-.55em) scale(1.14);z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
+#iu .card .cn{font-size:max(var(--fm),.8em);font-weight:900;white-space:nowrap;color:#6a3f1a;letter-spacing:0}
+#iu .card.on{translate:0 -.55em;scale:1.14;z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
 #iu .card.on::after{content:'';position:absolute;left:50%;top:-1.05em;width:.9em;height:.7em;margin-left:-.45em;background:#ff6fa4;clip-path:polygon(0 0,100% 0,50% 100%);animation:iuHop 1s ease-in-out infinite;--i:0}
-#iu .sgo{position:absolute;right:calc(var(--pr) + .7em);bottom:calc(var(--pb) + 1em);font-size:1.45em;animation:iuPulse 1.5s ease-in-out infinite}
+#iu .sgo{flex:none;margin-bottom:.35em;font-size:1.45em;animation:iuPulse 1.5s ease-in-out infinite}
+/* narrow landscape: the GO button becomes a tall card-sized button at the end of the row */
+#iu.tight .sgo{flex-direction:column;gap:.05em;margin-bottom:0;font-size:1.15em;line-height:1.15;padding:.45em .75em .5em;border-radius:1.1em}
+#iu.tight .sgo .ic{width:1.1em;height:1.1em}
 
 /* ---- HUD ---- */
 #iu .hud{position:absolute;left:0;top:0;right:0;bottom:0;z-index:20;font-size:1.06em}
@@ -168,7 +181,7 @@ function buildCSS(){
 #iu .pfr{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;background:conic-gradient(#ffcf3a calc(var(--xp,0)*1turn),rgba(255,255,255,.7) 0);box-shadow:0 .2em .45em rgba(74,44,20,.32)}
 #iu .pfi{position:absolute;left:.3em;top:.3em;right:.3em;bottom:.3em;border-radius:50%;overflow:hidden;border:.16em solid #fff;background:radial-gradient(circle at 50% 30%,#fffdf5 0%,var(--hc2,#ffe0b8) 100%)}
 #iu .pfi img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
-#iu .lv{position:absolute;left:50%;bottom:-.55em;transform:translateX(-50%);font-size:.82em;font-weight:900;padding:.02em .55em .06em;border-radius:999px;background:linear-gradient(180deg,#fff2a8,#ffcf3a);color:#7a4a10;white-space:nowrap;
+#iu .lv{position:absolute;left:50%;bottom:-.55em;transform:translateX(-50%);font-size:max(var(--fm),.82em);font-weight:900;padding:.02em .55em .06em;border-radius:999px;background:linear-gradient(180deg,#fff2a8,#ffcf3a);color:#7a4a10;white-space:nowrap;
   box-shadow:0 0 0 .16em #fff,0 .18em .3em rgba(74,44,20,.32)}
 #iu .lv.pop{animation:iuPopX .5s cubic-bezier(.3,1.8,.5,1)}
 #iu .bars{display:flex;flex-direction:column;gap:.38em;padding-top:.3em}
@@ -183,7 +196,7 @@ function buildCSS(){
 #iu .hpf.mid{background:linear-gradient(180deg,#fff3a8 0%,#ffcf3a 58%,#f0ac1c 100%)}
 #iu .hpf.low{background:linear-gradient(180deg,#ffc8d6 0%,#ff7096 58%,#ee4f7a 100%);animation:iuBlink .7s ease-in-out infinite}
 #iu .hpgl{position:absolute;left:.5em;right:.5em;top:.14em;height:.32em;border-radius:999px;background:rgba(255,255,255,.6)}
-#iu .hpn{position:absolute;right:.55em;top:0;bottom:0;display:flex;align-items:center;font-size:.86em;font-weight:900;color:#fff;text-shadow:${ON_BAR}}
+#iu .hpn{position:absolute;right:.55em;top:0;bottom:0;display:flex;align-items:center;font-size:max(var(--fm),.86em);font-weight:900;color:#fff;text-shadow:${ON_BAR}}
 #iu .hpw.heal .hpb{box-shadow:0 0 0 .2em #fff,0 0 .6em .25em #9dffb8,0 .24em .42em rgba(74,44,20,.32)}
 #iu .r2{display:flex;align-items:center;gap:.4em;padding-left:.95em}
 #iu .pips{display:flex;gap:.08em}
@@ -196,7 +209,7 @@ function buildCSS(){
 #iu .pip.full{animation:iuTwk 1.8s ease-in-out infinite;animation-delay:calc(var(--i)*.2s)}
 #iu .ug{position:relative;width:6.6em;height:1.3em;border-radius:999px;background:#ece0f4;box-shadow:0 0 0 .18em #fff,0 .2em .34em rgba(74,44,20,.3)}
 #iu .ugf{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:999px;background:linear-gradient(90deg,#ff9ad0,#c89bff 55%,#7fc8ff)}
-#iu .ugl{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:.8em;font-weight:900;color:#fff;text-shadow:${ring(0.1,'#8a5ac0',12)};white-space:nowrap}
+#iu .ugl{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:max(var(--fm),.8em);font-weight:900;color:#fff;text-shadow:${ring(0.1,'#8a5ac0',12)};white-space:nowrap}
 #iu .ugg{position:absolute;left:-.5em;top:-.5em;right:-.5em;bottom:-.5em;border-radius:999px;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(255,240,140,.95) 0%,rgba(255,170,220,.6) 45%,rgba(255,255,255,0) 72%);pointer-events:none}
 #iu .ug.full{animation:iuPulse .8s ease-in-out infinite}
 #iu .ug.full .ugg{animation:iuGlow .8s ease-in-out infinite}
@@ -207,7 +220,7 @@ function buildCSS(){
 #iu .coin{width:1.45em;height:1.45em;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#d8920e;
   background:radial-gradient(circle at 38% 32%,#fff8c0 0%,#ffd63a 45%,#eaa21a 100%);box-shadow:inset 0 0 0 .12em #f7c02a,0 .08em 0 #b8780c}
 #iu .coin svg{width:62%;height:62%}
-#iu .pz{width:2.75em;height:2.75em;min-height:0;padding:0;border-radius:50%;font-size:1em}
+#iu .pz{width:max(44px,2.75em);height:max(44px,2.75em);min-height:0;padding:0;border-radius:50%;font-size:1em}
 #iu .pz .ic{width:1.15em;height:1.15em}
 #iu .combo{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + 4.1em);text-align:right;transform-origin:100% 60%;opacity:0;will-change:transform,opacity}
 #iu .cn{display:inline-block;font-size:3.5em;font-weight:900;line-height:1;color:var(--rc,#ffd24d);letter-spacing:-.02em;
@@ -219,7 +232,8 @@ function buildCSS(){
 #iu .boss.in{animation:iuDrop .5s cubic-bezier(.3,1.6,.5,1)}
 #iu .bnm{display:inline-flex;align-items:center;gap:.35em;font-size:1.05em;font-weight:900;color:#8a3aa8;text-shadow:${STK_S};white-space:nowrap;max-width:100%}
 #iu .bnm .cr_{width:1.3em;height:1.3em;color:#ffcf3a;filter:drop-shadow(0 .08em 0 #c07e10)}
-#iu .btl{font-size:.72em;color:#b06aa8}
+#iu .bnm span{min-width:0;padding:0 .12em;overflow:hidden;text-overflow:ellipsis}
+#iu .btl{margin-top:.15em;padding:0 .12em;font-size:max(var(--fm),.72em);color:#b06aa8;text-shadow:${STK_S};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #iu .bb{position:relative;height:1.3em;margin-top:.15em;border-radius:999px;background:#ecdcf0;overflow:hidden;box-shadow:0 0 0 .2em #fff,0 .24em .42em rgba(74,44,20,.32),inset 0 .14em .2em rgba(74,44,20,.15)}
 #iu .bbc,#iu .bbf{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:999px}
 #iu .bbc{background:#fff08a}
@@ -246,8 +260,8 @@ function buildCSS(){
   display:flex;align-items:flex-start;gap:.7em;padding:.55em 1em .65em .6em;border-radius:1.2em;background:#fff;will-change:opacity,transform;
   box-shadow:0 0 0 .22em var(--avr,#ffd24d),0 .3em 0 .22em var(--avd,#e0a020),0 .6em 1.1em rgba(74,44,20,.28)}
 #iu .hb_{flex:1;min-width:0}
-#iu .hn{display:inline-block;font-size:.8em;font-weight:900;padding:.02em .75em .06em;border-radius:999px;background:var(--avr,#ffd24d);color:#fff;text-shadow:${ring(0.08,'var(--avd,#c07e10)',10)};margin-bottom:.2em}
-#iu .ht{font-size:1em;line-height:1.45;color:#4a2c14;min-height:1.45em;word-break:normal;overflow-wrap:anywhere}
+#iu .hn{display:inline-block;font-size:max(var(--fm),.8em);font-weight:900;padding:.02em .75em .06em;border-radius:999px;background:var(--avr,#ffd24d);color:#fff;text-shadow:${ring(0.08,'var(--avd,#c07e10)',10)};margin-bottom:.2em}
+#iu .ht{font-size:1.1em;line-height:1.45;color:#4a2c14;min-height:1.45em;word-break:normal;overflow-wrap:anywhere}
 #iu .av{position:relative;width:3.3em;height:3.3em;flex:none;border-radius:50%;background:var(--avc,#fff3d6);margin:.15em 0 0 .1em;
   box-shadow:0 0 0 .16em #fff,0 0 0 .3em var(--avr,#ffd24d),0 .25em .4em rgba(74,44,20,.3)}
 #iu .av i{position:absolute;display:block}
@@ -274,7 +288,8 @@ function buildCSS(){
 #iu .stk{position:absolute;left:0;top:0;width:calc(var(--r)*2);height:calc(var(--r)*2);margin:calc(var(--r)*-1) 0 0 calc(var(--r)*-1);border-radius:50%;pointer-events:none;opacity:0;will-change:transform;
   background:radial-gradient(circle,rgba(255,255,255,.12) 0%,rgba(255,255,255,.28) 64%,rgba(255,255,255,.55) 100%);box-shadow:0 0 0 .22em rgba(255,255,255,.9),0 .3em .8em rgba(74,44,20,.22)}
 #iu .stk.on{opacity:1}
-#iu .stk.ghost{opacity:.62}
+#iu .stk.ghost{opacity:.62;transition:opacity .25s}
+#iu .stk.ghost.near{opacity:.2}
 #iu .stk .ga{position:absolute;width:22%;height:22%;color:rgba(255,255,255,.95);filter:drop-shadow(0 .06em .08em rgba(74,44,20,.4))}
 #iu .knob{position:absolute;left:50%;top:50%;width:calc(var(--r)*.98);height:calc(var(--r)*.98);margin:calc(var(--r)*-.49) 0 0 calc(var(--r)*-.49);border-radius:50%;will-change:transform;
   background:radial-gradient(circle at 36% 30%,#ffffff 0%,#ffe2ee 38%,#ff9fc4 100%);box-shadow:0 0 0 .2em #fff,0 .28em .5em rgba(74,44,20,.35)}
@@ -283,10 +298,10 @@ function buildCSS(){
   background:radial-gradient(circle at 36% 28%,var(--c1,#ffd0e2) 0%,var(--c2,#ff8fb8) 60%,var(--cd,#d6558a) 115%);opacity:.93;
   box-shadow:0 0 0 .2em rgba(255,255,255,.95),0 .3em 0 .2em var(--cd),0 .5em 1em rgba(74,44,20,.3);transition:transform .07s ease-out,opacity .2s}
 #iu .tb .ti{width:44%;height:44%;margin-top:-.15em;filter:drop-shadow(0 .08em 0 var(--cd))}
-#iu .tb .tl{font-weight:900;line-height:1;margin-top:.12em;white-space:nowrap;text-shadow:${ON_CANDY}}
+#iu .tb .tl{font-size:max(var(--fm),1em);font-weight:900;line-height:1;margin-top:.12em;white-space:nowrap;letter-spacing:0;text-shadow:${ON_CANDY}}
 #iu .tb.on{transform:translateY(.16em) scale(.9,.84);filter:brightness(1.12)}
 #iu .tb.dim{opacity:.5;filter:saturate(.35) brightness(1.05)}
-#iu .tb .bdg{position:absolute;right:-.3em;top:-.35em;display:flex;align-items:center;gap:.05em;padding:.08em .4em .1em .25em;border-radius:999px;background:#fff;color:#8a5ad8;font-size:.95em;font-weight:900;
+#iu .tb .bdg{position:absolute;right:-.3em;top:-.35em;display:flex;align-items:center;gap:.05em;padding:.08em .4em .1em .25em;border-radius:999px;background:#fff;color:#8a5ad8;font-size:max(var(--fm),.95em);font-weight:900;
   box-shadow:0 0 0 .12em #b594f5,0 .12em .2em rgba(74,44,20,.3)}
 #iu .tb .bdg i{display:block;width:.9em;height:.9em}
 #iu .tb.ult::before{content:'';position:absolute;left:-.42em;top:-.42em;right:-.42em;bottom:-.42em;border-radius:50%;pointer-events:none;
@@ -321,7 +336,7 @@ function buildCSS(){
 #iu .rrow .rv{font-size:1.2em;font-weight:900;color:#e0662a}
 #iu .cham{display:flex;align-items:center;gap:.5em;margin-top:.1em}
 #iu .cham .av{width:2.6em;height:2.6em;font-size:.95em}
-#iu .cham .bub{position:relative;font-size:.85em;padding:.35em .8em;border-radius:1em;background:#fff4e8;box-shadow:0 0 0 .12em #ffbd72;color:#8a4a10}
+#iu .cham .bub{position:relative;font-size:max(var(--fm),.85em);padding:.35em .8em;border-radius:1em;background:#fff4e8;box-shadow:0 0 0 .12em #ffbd72;color:#8a4a10}
 #iu .rright .cb{margin-top:.35em;font-size:1.35em}
 #iu .over{background:radial-gradient(ellipse at 50% 40%,rgba(255,246,250,.86) 0%,rgba(236,220,255,.92) 70%,rgba(214,232,255,.96) 100%);pointer-events:auto}
 #iu .over .pup{position:relative;width:9em;height:7em;animation:iuSway 2.4s ease-in-out infinite}
@@ -335,25 +350,58 @@ function buildCSS(){
 #iu .roll{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;align-items:center;gap:1.4em;padding:0 1.2em;text-align:center;will-change:transform}
 #iu .roll .ln{font-size:1.3em;font-weight:900;color:#6a3f1a;line-height:1.5;max-width:30em;text-shadow:${STK_S}}
 #iu .roll .qt{font-size:1.9em;font-weight:900;color:#ff6fa4;line-height:1.4;text-shadow:${STK}}
-#iu .roll .who{display:block;font-size:.55em;color:#c8487e}
+#iu .roll .who{display:block;font-size:max(var(--fm),.55em);color:#c8487e}
 #iu .roll .th{font-size:1.5em;font-weight:900;color:#3a8ad0;text-shadow:${STK_S}}
 #iu .roll .eh{font-size:2.3em;font-weight:900;color:#ffb42a;text-shadow:${STK};line-height:1.6}
-#iu .roll .eh rt{font-size:.3em;color:#e0662a;letter-spacing:.2em}
+#iu .roll .eh rt{font-size:max(var(--fm),.3em);color:#e0662a;letter-spacing:.2em}
 #iu .roll .fin{font-size:2.1em;font-weight:900;color:#ff6fa4;text-shadow:${STK};line-height:1.35;padding:1em 0 2em}
 #iu .roll .eport{width:7em;height:7em;border-radius:50%;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 30%,#fff,#ffe6c0);box-shadow:0 0 0 .3em #fff,0 0 0 .55em #ffd24d,0 .6em 1em rgba(74,44,20,.25)}
 #iu .roll .eport img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
 #iu .roll .team{display:flex;flex-wrap:wrap;gap:.8em 1.1em;justify-content:center;max-width:34em}
-#iu .roll .mate{display:flex;flex-direction:column;align-items:center;gap:.2em;font-size:.9em;font-weight:900;color:#6a3f1a;text-shadow:${STK_S}}
+#iu .roll .mate{display:flex;flex-direction:column;align-items:center;gap:.2em;font-size:max(var(--fm),.9em);font-weight:900;color:#6a3f1a;text-shadow:${STK_S}}
 #iu .roll .mate .mp{width:3.6em;height:3.6em;border-radius:50%;overflow:hidden;position:relative;background:var(--hc,#ffd24d);box-shadow:0 0 0 .2em #fff,0 .25em .45em rgba(74,44,20,.25)}
 #iu .roll .mate .mp img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
 #iu .roll .mate .mp .fbk{font-size:1.5em}
-#iu .eskip{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + .4em);font-size:.9em;min-height:2.1em;padding:.2em .9em}
-#iu .etitle{position:absolute;left:50%;bottom:calc(var(--pb) + 1.2em);transform:translateX(-50%);font-size:1.5em}
+#iu .eskip{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + .4em);font-size:max(var(--fm),.9em);min-height:max(44px,2.1em);padding:.2em .9em}
+/* centred by a flex bar (not translateX), so the pop-in / press transforms can't push the button sideways */
+#iu .ebar{position:absolute;left:0;right:0;bottom:calc(var(--pb) + 1.2em);display:flex;justify-content:center;pointer-events:none}
+#iu .etitle{font-size:1.5em}
 #iu .etitle.show{animation:iuIn .5s cubic-bezier(.3,1.6,.5,1) both}
 #iu .loading{z-index:70;pointer-events:auto;flex-direction:column;gap:1em;background:radial-gradient(circle at 50% 42%,#fff8e4 0%,#ffe2c4 55%,#ffc9dc 100%)}
 #iu .lpaws{display:flex;gap:.8em}
 #iu .lpaws i{display:block;width:2.4em;height:2.4em;color:#ff8fb8;animation:iuHop .9s ease-in-out infinite;animation-delay:calc(var(--i)*.15s);filter:drop-shadow(0 .12em 0 #d6558a)}
 #iu .lpaws i:nth-child(2){color:#7fc8ff;filter:drop-shadow(0 .12em 0 #2f7fc4)}#iu .lpaws i:nth-child(3){color:#7fe0b0;filter:drop-shadow(0 .12em 0 #2f9e6c)}
+
+/* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
+#iu .stages{z-index:61}
+#iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(54em,calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
+#iu .sthd{display:flex;align-items:center;gap:.8em}
+#iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
+#iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
+#iu .strow::before{content:'';position:absolute;left:7%;right:7%;top:2.1em;border-top:.24em dashed #f0c89a;pointer-events:none}
+#iu .stc{position:relative;flex:1 1 0;min-width:0;max-width:8.5em;min-height:44px;display:flex;flex-direction:column;align-items:center;gap:.3em;padding:.45em .15em .55em;border-radius:1.1em;
+  background:linear-gradient(180deg,#fffef8,#fff1d8);box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #e8c89a,0 .45em .7em rgba(74,44,20,.2);
+  transition:translate .18s cubic-bezier(.3,1.7,.5,1),scale .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(var(--i)*.05s)}
+#iu .stc .sn{width:2.4em;height:2.4em;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;line-height:1;color:#fff;
+  background:radial-gradient(circle at 36% 30%,#d2ecff 0%,#6fbcf6 70%,#2f7fc4 120%);box-shadow:0 0 0 .16em #fff,0 .18em .3em rgba(74,44,20,.3);text-shadow:${ring(0.06,'#2f7fc4',10)}}
+#iu .stc .stn{font-size:max(var(--fm),.85em);line-height:1.3;letter-spacing:0;text-align:center;color:#6a3f1a;word-break:keep-all;overflow-wrap:anywhere}
+#iu .stc .sst{display:flex;align-items:center;gap:.15em;font-size:max(var(--fm),.8em);line-height:1.1;color:#c8840c;white-space:nowrap}
+#iu .stc .sst i{display:block;width:1.1em;height:1.1em;flex:none}
+#iu .stc.clr .sn{background:radial-gradient(circle at 36% 30%,#fff2b0 0%,#ffcc3a 70%,#cf8f16 120%);text-shadow:${ring(0.06,'#cf8f16',10)}}
+#iu .stc.nxt .sst{color:#e0508a}
+#iu .stc.lock{background:#eee6de;box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #d6ccc0;opacity:.8}
+#iu .stc.lock .sn{background:#b9ada2;text-shadow:none}
+#iu .stc.lock .sn i{display:block;width:1.05em;height:1.05em}
+#iu .stc.lock .stn,#iu .stc.lock .sst{color:#8a7a6a}
+#iu .stc.on{translate:0 -.35em;scale:1.08;z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
+#iu .stc.no{animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards,iuNo .36s ease-in-out}
+#iu .stgo{align-self:center;font-size:1.3em;animation:iuPulse 1.5s ease-in-out infinite}
+#iu.port .stp{padding:.7em .8em .9em}
+#iu.port .strow{flex-direction:column;gap:.5em;padding-top:0}
+#iu.port .strow::before{left:1.95em;right:auto;top:1.2em;bottom:1.2em;border-top:0;border-left:.24em dashed #f0c89a}
+#iu.port .stc{flex:none;max-width:none;flex-direction:row;gap:.7em;padding:.35em .9em .35em .45em}
+#iu.port .stc .stn{flex:1;text-align:left}
+#iu.port .stc.on{translate:none;scale:1.03}
 
 /* ---- layout variants ---- */
 #iu.tcon .goa{top:calc(var(--pt) + 4.4em)}
@@ -363,19 +411,32 @@ function buildCSS(){
 #iu.port .boss{top:calc(var(--pt) + 5.6em);width:calc(100% - var(--pl) - var(--pr) - 1.5em)}
 #iu.port .combo{top:calc(var(--pt) + 9.2em)}
 #iu.port .goa{top:44%}
-#iu.port.tcon .hint{left:50%;right:auto;width:calc(100% - var(--pl) - var(--pr) - 1.4em);transform:translateX(-50%);bottom:calc(var(--pb) + var(--b)*2.62)}
+/* portrait: the belt runs through the middle of the tall screen and the buttons sit under it, so a tip goes
+   to the top, under the HUD (and under the boss bar); the combo counter steps down below the tip */
+#iu.port .hint,#iu.port.tcon .hint{left:50%;right:auto;top:calc(var(--pt) + 5.9em);bottom:auto;width:calc(100% - var(--pl) - var(--pr) - 1.4em)}
+#iu.port.bossOn .hint,#iu.port.bossOn.tcon .hint{top:calc(var(--pt) + 10.2em)}
+#iu.port.bossOn .combo{top:calc(var(--pt) + 10.2em)}
+#iu.port.hinton .combo{top:calc(var(--pt) + 6.5em + var(--hh,0px))}
+#iu.port.bossOn.hinton .combo{top:calc(var(--pt) + 10.8em + var(--hh,0px))}
 #iu.port .l1{font-size:min(2.3em,8vw)}
 #iu.port .l2{font-size:min(4.6em,13.5vw)}
-#iu.port .tbot{grid-template-columns:1fr 1fr;grid-template-areas:"p p" "d o";row-gap:.9em}
-#iu.port .tbot .play{grid-area:p;justify-self:center}
-#iu.port .tbot .tdiff{grid-area:d}
-#iu.port .tbot .topts{grid-area:o;flex-direction:column;align-items:flex-end}
+#iu.port .tbot{grid-template-columns:1fr;grid-template-areas:"p" "d" "o";justify-items:center;row-gap:.8em}
+#iu.port .tbot .play{grid-area:p}
+#iu.port .tbot .tdiff{grid-area:d;justify-self:center;align-items:center}
+#iu.port .tbot .topts{grid-area:o;justify-self:center}
+#iu.port .tbot .tdiff{gap:.55em}
 #iu.port .shead .hd{font-size:1.5em}
-#iu.port .sinfo{left:calc(var(--pl) + .6em);right:calc(var(--pr) + .6em);width:auto;top:auto;bottom:calc(var(--pb) + 11em)}
-#iu.port .scards{right:calc(var(--pr) + .3em);gap:.3em}
-#iu.port .card{flex-basis:4.6em}
-#iu.port .card .cp{width:3.3em;height:3.3em}
-#iu.port .sgo{right:50%;transform:translateX(50%);bottom:calc(var(--pb) + 5em);animation:none}
+/* short landscape: the hero card goes up level with the header (the cards + GO row needs the height);
+   very small phones also shrink the header and drop the breed line so the card still clears the row */
+#iu.short .sinfo{top:calc(var(--pt) + .3em)}
+#iu.mini .shead .hd{font-size:1.4em}
+#iu.mini .ssp,#iu.mini .smv{display:none}
+#iu.port .sinfo{left:calc(var(--pl) + .6em);right:calc(var(--pr) + .6em);width:auto;top:calc(var(--pt) + 4.4em)}
+#iu.port .sbot{left:calc(var(--pl) + .4em);right:calc(var(--pr) + .4em);flex-direction:column;align-items:center;gap:.8em}
+#iu.port .scards{flex-wrap:wrap;width:100%;gap:.8em .45em}
+#iu.port .card{flex:0 0 calc(25% - .35em)}
+#iu.port .card .cp{width:3.6em;height:3.6em}
+#iu.port .sgo{margin-bottom:0}
 #iu.port .result .pn,#iu.short .result .pn{flex-direction:column;gap:.5em}
 #iu.short .result .pn{flex-direction:row;gap:1.2em}
 #iu.short .pn{padding:.7em 1.2em .9em}
@@ -400,6 +461,7 @@ function buildCSS(){
 @keyframes iuDrop{0%{transform:translate(-50%,-1.5em) scale(.8);opacity:0}100%{transform:translate(-50%,0) scale(1);opacity:1}}
 @keyframes iuGo{0%,100%{transform:translateX(0);opacity:1}50%{transform:translateX(.3em);opacity:.45}}
 @keyframes iuSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+@keyframes iuNo{0%,100%{translate:0 0}20%{translate:-.3em 0}45%{translate:.3em 0}70%{translate:-.15em 0}}
 @media (prefers-reduced-motion: reduce){
   #iu *,#iu *::before,#iu *::after{animation:none!important;transition:none!important}
   #iu .goa{opacity:1}
@@ -477,7 +539,19 @@ function setPortraitSrc(img, fb, id, expr){
 let ready = false, root = null, fbLayer = null, host = null;
 let reduced = false, kbMode = false, emPx = 14;
 const S = {};                // screens by name: { el, on, data, nav:[], ni, key(e,code), frame(dt), open(data), close() }
-const ORDER = ['loading','pause','over','result','ending','select','title'];   // key focus priority (top first)
+const ORDER = ['loading','pause','over','result','ending','stages','select','title'];   // key focus priority (top first)
+
+// A tap / key that arrives right after a screen (or the help panel) appeared was meant for the screen before it:
+// a double-tap on 「あそぶ」 must not also press whatever the select screen put under the finger.
+const OPEN_GUARD_MS = 400;
+let openedAt = -1e9;
+// gamepad menu state (see padFrame): last seen buttons / direction, auto-repeat timer, armed once all is released
+const PAD = { c:true, b:true, dx:0, dz:0, rep:0, arm:false };
+const PADEV = { repeat:false, preventDefault(){} };
+function markOpen(){ openedAt = performance.now(); PAD.arm = false; }
+function justOpened(){ return performance.now() - openedAt < OPEN_GUARD_MS; }
+// real (trusted) clicks only: el.click() from the keyboard / pad routing and from tests is never blocked here
+function tapBlocked(e){ return !!(e && e.isTrusted) && justOpened(); }
 
 function button(parent, cls, html, onTap, sound){
   const b = el('button', 'cb '+cls, parent, html);
@@ -485,7 +559,7 @@ function button(parent, cls, html, onTap, sound){
   b.addEventListener('pointerdown', ()=>{ b.classList.add('pr'); });
   const up = ()=> b.classList.remove('pr');
   b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up);
-  b.addEventListener('click', (e)=>{ e.preventDefault(); b.blur(); if(sound!==false) sfx(sound||'select'); if(onTap) onTap(e); });
+  b.addEventListener('click', (e)=>{ e.preventDefault(); b.blur(); if(tapBlocked(e)) return; if(sound!==false) sfx(sound||'select'); if(onTap) onTap(e); });
   return b;
 }
 function pressFx(b){ b.classList.add('pr'); setTimeout(()=> b.classList.remove('pr'), 110); }
@@ -510,7 +584,7 @@ function screen(name, cls, build){
 function openScreen(name, data){
   const s = S[name]; if(!s) return;
   s.data = data || {};
-  s.on = true; show(s.el, true);
+  s.on = true; show(s.el, true); markOpen();
   // restart entrance animations
   s.el.querySelectorAll('.pn').forEach(p=>{ p.style.animation = 'none'; void p.offsetWidth; p.style.animation = ''; });
   try { if(s.open) s.open(s.data); } catch(err){ G.logError('ui.open '+name, err); }
@@ -543,13 +617,17 @@ function buildTitle(s){
     b.dataset.k = d.k; return b;
   });
   const play = s.play = button(bot, 'play k-pink', '<span class="ic">'+SVG.paw+'</span><span>あそぶ</span>', ()=> call(s.data.onPlay, s.diff), false);
-  const opts = el('div', 'topts', bot);
+  const opts = s.opts = el('div', 'topts', bot);
   const snd = s.snd = button(opts, 'k-cream', '', ()=>{ s.sound = !s.sound; paintSound(); call(s.data.onSound, s.sound); });
-  const help = button(opts, 'k-cream', '<span>？ あそびかた</span>', ()=> toggleHelp(true));
+  const help = button(opts, 'k-cream', '<span class="ic q">？</span><span class="tx">あそびかた</span>', ()=> toggleHelp(true));
+  help.setAttribute('aria-label', 'あそびかた');
+  s.bot = bot; s.dcol = dcol;
   s.nav = [play, snd, help];
 
-  // controls help (keyboard + touch)
-  const hp = s.help = el('div', 'pn thelp x', e);
+  // controls help (keyboard + touch): a centred overlay; tapping the dimmed backdrop closes it too
+  const hov = s.hov = el('div', 'hov x', e);
+  hov.addEventListener('click', (ev)=>{ if(ev.target===hov && !tapBlocked(ev)){ sfx('select'); toggleHelp(false); } });
+  const hp = s.help = el('div', 'pn thelp', hov);
   el('div', 'hd', hp).textContent = 'あそびかた';
   hp.firstChild.style.cssText = 'font-size:1.6em;text-align:center;--tc:#3a8ad0';
   const hc = el('div', 'hc', hp);
@@ -565,10 +643,10 @@ function buildTitle(s){
   s.helpClose = close;
 
   function setDiff(k){ if(!DIFFS.some(d=>d.k===k)) k = 'normal'; s.diff = k; for(const c of s.chips) c.classList.toggle('sel', c.dataset.k===k); }
-  function paintSound(){ snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span>おと '+(s.sound ? 'オン' : 'オフ')+'</span>'; }
-  function toggleHelp(on){ s.helpOn = on; show(hp, on); s.nav = on ? [close] : [play, snd, help]; s.ni = 0; paintKF(s); }
+  function paintSound(){ const t = 'おと '+(s.sound ? 'オン' : 'オフ'); snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span class="tx">'+t+'</span>'; snd.setAttribute('aria-label', t); }
+  function toggleHelp(on){ s.helpOn = on; show(hov, on); if(on) markOpen(); s.nav = on ? [close] : [play, snd, help]; s.ni = 0; paintKF(s); }
   s.setDiff = setDiff;
-  s.open = (d)=>{ setDiff(d.difficulty || 'normal'); s.sound = soundState(d.soundOn); paintSound(); toggleHelp(false); s.ni = 0; };
+  s.open = (d)=>{ setDiff(d.difficulty || 'normal'); s.sound = soundState(d.soundOn); paintSound(); toggleHelp(false); s.ni = 0; fitTitle(); };
   s.key = (e, c)=>{
     if(s.helpOn){ if(c==='Escape'||c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ sfx('select'); toggleHelp(false); } return true; } return false; }
     if(c==='ArrowLeft'||c==='ArrowRight'||c==='KeyA'||c==='KeyD'){
@@ -577,6 +655,20 @@ function buildTitle(s){
     }
     return navKey(s, c, e);
   };
+}
+
+// The title's bottom row is むずかしさ | あそぶ | おと・あそびかた. Where it doesn't fit (small phones, and 4:3 tablets
+// with their bigger type) the two small buttons become round icons, then move up to the top-right corner.
+// Measured rather than guessed from the width (fonts and safe areas vary); only on open and on resize.
+function fitTitle(){
+  const s = S.title; if(!s || !s.on) return;
+  s.el.classList.remove('tq', 'tq2');
+  if(root.classList.contains('port')) return;
+  const room = s.bot.clientWidth, gap = emPx*0.6*2 + 4;
+  if(s.dcol.offsetWidth + s.play.offsetWidth + s.opts.offsetWidth + gap <= room) return;
+  s.el.classList.add('tq');
+  if(s.dcol.offsetWidth + s.play.offsetWidth + s.opts.offsetWidth + gap <= room) return;
+  s.el.classList.add('tq2');
 }
 
 // ================================================================ select
@@ -600,8 +692,9 @@ function buildSelect(s){
     return { key:r[0], cells };
   });
   s.mv = el('div', 'smv', info);
-  s.cards = el('div', 'scards', e);
-  s.go = button(e, 'sgo k-pink', '<span class="ic">'+SVG.paw+'</span><span>このこで いく！</span>', ()=> pick(), false);
+  const bot = el('div', 'sbot', e);
+  s.cards = el('div', 'scards', bot);
+  s.go = button(bot, 'sgo k-pink', '<span class="ic">'+SVG.paw+'</span><span>このこで</span><span>いく！</span>', ()=> pick(), false);
   s.back = back;
   s.list = []; s.focus = 0; s.cardEls = [];
 
@@ -638,7 +731,7 @@ function buildSelect(s){
       c.style.setProperty('--hc', h.color || '#ffb070');
       const cp = el('div', 'cp', c); fillPortrait(cp, h, 'normal');
       el('div', 'cn', c).textContent = h.short || h.name || h.id;
-      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(i===s.focus) pick(); else setFocus(i, true); });
+      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(tapBlocked(ev)) return; if(i===s.focus) pick(); else setFocus(i, true); });
       s.cardEls.push(c);
     });
     const i = Math.max(0, s.list.findIndex(h=> h.id===d.selected));
@@ -648,6 +741,59 @@ function buildSelect(s){
     if(c==='ArrowLeft'||c==='KeyA'){ setFocus(s.focus-1, true); return true; }
     if(c==='ArrowRight'||c==='KeyD'){ setFocus(s.focus+1, true); return true; }
     if(c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ pressFx(s.go); pick(); } return true; }
+    if(c==='Escape'||c==='Backspace'){ if(!e.repeat){ pressFx(back); call(s.data.onBack); } return true; }
+    return false;
+  };
+}
+
+// ================================================================ stages (where to start, when there is saved progress)
+// G.ui.show('stages', { stages:[{name, kana, locked, cleared}], onPick(index), onBack() }) — shown over the select screen.
+// A stop on the path per stage; tap once to choose, tap again (or 「しゅっぱつ」) to go. Locked stops only wiggle.
+function buildStages(s){
+  s.el.classList.add('dim');
+  const pn = el('div', 'pn stp', s.el);
+  const head = el('div', 'sthd', pn);
+  const back = s.back = button(head, 'back k-cream', '<span class="ic">'+SVG.left+'</span><span>もどる</span>', ()=> call(s.data.onBack), false);
+  el('div', 'hd', head).textContent = 'どこから はじめる？';
+  const row = el('div', 'strow', pn);
+  const go = s.go = button(pn, 'stgo k-pink', '', ()=> pick(), false);
+  s.list = []; s.els = []; s.focus = 0;
+  const lockSvg = '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="11" rx="2.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.8"/></svg>';
+  const usable = (i)=> !!s.list[i] && !s.list[i].locked;
+  function paint(){
+    s.els.forEach((c, i)=> c.classList.toggle('on', i===s.focus));
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' から しゅっぱつ！</span>';
+  }
+  function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
+  function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
+  function pick(){ if(usable(s.focus)) call(s.data.onPick, s.focus); }
+  function nope(c){ sfx('cancel'); c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); }
+  s.open = (d)=>{
+    s.list = Array.isArray(d.stages) ? d.stages.slice() : [];
+    row.innerHTML = ''; s.els = [];
+    s.list.forEach((st, i)=>{
+      st = st || {};
+      const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
+      el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
+      el('span', 'stn', c).textContent = st.kana || st.name || ('ステージ '+(i+1));
+      const ss = el('span', 'sst', c);
+      if(st.locked) ss.textContent = 'まだ だよ';
+      else if(st.cleared){ el('i', '', ss, SVG.star); el('span', '', ss).textContent = 'クリア'; }
+      else ss.textContent = 'つぎは ここ！';
+      c.setAttribute('aria-label', 'ステージ '+(i+1)+' '+(st.kana || st.name || ''));
+      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(tapBlocked(ev)) return; if(!usable(i)){ nope(c); return; } if(i===s.focus) pick(); else setFocus(i, true); });
+      s.els.push(c);
+    });
+    // start on the next stage to play (the first open one that isn't cleared), else the last open one
+    let f = -1;
+    for(let i=0;i<s.list.length;i++){ if(usable(i)){ f = i; if(!s.list[i].cleared) break; } }
+    s.focus = Math.max(0, f); paint();
+    touchReleaseAll();
+  };
+  s.key = (e, c)=>{
+    if(c==='ArrowLeft'||c==='KeyA'||c==='ArrowUp'||c==='KeyW'){ step(-1); return true; }
+    if(c==='ArrowRight'||c==='KeyD'||c==='ArrowDown'||c==='KeyS'){ step(1); return true; }
+    if(c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ pressFx(go); pick(); } return true; }
     if(c==='Escape'||c==='Backspace'){ if(!e.repeat){ pressFx(back); call(s.data.onBack); } return true; }
     return false;
   };
@@ -767,13 +913,14 @@ const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'' };
 function buildBoss(){
   const e = boss.el = el('div', 'boss x', root);
   const nm = el('div', 'bnm', e);
-  el('i', 'cr_', nm, SVG.crown); boss.nm = el('span', '', nm); boss.tl = el('span', 'btl', nm);
+  el('i', 'cr_', nm, SVG.crown); boss.nm = el('span', '', nm);
   const bb = el('div', 'bb', e);
   boss.c = el('div', 'bbc', bb); boss.f_ = el('div', 'bbf', bb); el('div', 'hpgl', bb);
+  boss.tl = el('div', 'btl', e);                  // the title gets its own line: name + title never fit one line on a phone
 }
 function bossBar(ent){
   boss.ent = ent || null;
-  show(boss.el, !!ent);
+  show(boss.el, !!ent); if(root) root.classList.toggle('bossOn', !!ent);
   if(ent){ boss.f = -1; boss.el.classList.remove('in'); void boss.el.offsetWidth; boss.el.classList.add('in'); bossFrame(0); }
 }
 function bossFrame(dt){
@@ -847,7 +994,7 @@ function banner(text, sub, frames){
   const n = Math.max(1, chars.length);
   ban.bt.style.fontSize = Math.min(emPx*4.3, w*0.9/(n*1.04)).toFixed(1)+'px';
   ban.bs.textContent = sub; ban.bs.style.display = sub ? '' : 'none';
-  ban.bs.style.fontSize = Math.min(emPx*1.35, w*0.8/Math.max(1, Array.from(sub).length*1.05 + 2.4)).toFixed(1)+'px';
+  ban.bs.style.fontSize = Math.max(13, Math.min(emPx*1.35, w*0.8/Math.max(1, Array.from(sub).length*1.05 + 2.4))).toFixed(1)+'px';
   ban.t = 0; ban.life = Math.max(0.5, (frames||120)/60); ban.on = true;
   show(ban.el, true);
   bannerFrame(0);
@@ -872,9 +1019,20 @@ function buildHint(){
   hint.av = el('div', 'av', e, '<i class="e l"></i><i class="e r"></i><i class="bl l"></i><i class="bl r"></i><i class="mo"></i>');
   const b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
 }
+function hintOff(){ hint.on = false; show(hint.el, false); if(root) root.classList.remove('hinton'); }
+// lay the box out with the whole message once, so it keeps its final size while the text types in,
+// and tell the CSS how tall it is (portrait moves the combo counter below it)
+function hintFit(){
+  if(!hint.on) return;
+  hint.tx.style.minHeight = '';
+  hint.tx.textContent = hint.text;
+  hint.tx.style.minHeight = hint.tx.offsetHeight + 'px';
+  root.style.setProperty('--hh', hint.el.offsetHeight + 'px');
+  hint.shown = -1;
+}
 function hintShow(name, text, frames){
   if(!ready) return;
-  if(!text){ hint.on = false; show(hint.el, false); return; }
+  if(!text){ hintOff(); return; }
   name = name==null ? '' : String(name);
   const who = /モフ/.test(name) ? 'mofu' : /チャム/.test(name) ? 'cham' : /ペロ/.test(name) ? 'pero' : /クロ/.test(name) ? 'kuro' : '';
   hint.av.className = 'av ' + who;
@@ -883,13 +1041,14 @@ function hintShow(name, text, frames){
   txt(hint.nm, name || 'ヒント'); show(hint.nm, !!name);
   hint.chars = Array.from(String(text)); hint.text = String(text); hint.shown = -1;
   hint.t = 0; hint.life = Math.max(1, (frames||300)/60); hint.on = true; hint.os = ''; hint.tf = '';
-  show(hint.el, true);
+  show(hint.el, true); root.classList.add('hinton');
+  hintFit();
   hintFrame(0);
 }
 function hintFrame(dt){
   if(!hint.on) return;
   hint.t += dt; const t = hint.t, L = hint.life;
-  if(t >= L){ hint.on = false; show(hint.el, false); return; }
+  if(t >= L){ hintOff(); return; }
   const n = reduced ? hint.chars.length : Math.min(hint.chars.length, Math.floor(t*38)+1);
   if(n!==hint.shown){ hint.shown = n; hint.tx.textContent = n>=hint.chars.length ? hint.text : hint.chars.slice(0, n).join(''); }
   let o = 1, y = 0;
@@ -901,7 +1060,7 @@ function hintFrame(dt){
 }
 
 // ================================================================ touch controls
-const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, inR:10, probe:null, fade:false, cx0:1e9, cy0:1e9,
+const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, inR:10, probe:null, fade:false, near:false, gx:0, gy:0, cx0:1e9, cy0:1e9,
   stick:{ id:null, ox:0, oy:0 }, btns:[], zone:null, base:null, knob:null, spN:-1, spDim:null, ult:-1, ready:null };
 const TBTN = [
   { k:'attack',  t:'こうげき', ic:SVG.paw,   cls:'k-pink', s:1.0,  r:.2,   b:.2 },
@@ -927,7 +1086,7 @@ function buildTouch(){
     b.style.cssText = 'right:calc(var(--pr) + var(--b)*'+d.r+');bottom:calc(var(--pb) + var(--b)*'+d.b+');width:calc(var(--b)*'+d.s+');height:calc(var(--b)*'+d.s+');font-size:calc(var(--b)*'+(0.155*Math.pow(d.s, 0.45)).toFixed(3)+')';
     if(d.k==='ult') el('i', 'glo', b);
     el('i', 'ti', b, d.ic); el('span', 'tl', b).textContent = d.t;
-    const o = { k:d.k, el:b, ids:[] , badge:null, bn:null };
+    const o = { k:d.k, el:b, ids:[] , badge:null, bn:null, cx:-1e4, cy:-1e4, cr:0 };
     if(d.k==='special'){ o.badge = el('span', 'bdg', b); el('i', '', o.badge, SVG.spark); o.bn = el('span', '', o.badge); }
     b.addEventListener('pointerdown', (ev)=> btnDown(o, ev), { passive:false });
     T.btns.push(o);
@@ -936,7 +1095,10 @@ function buildTouch(){
   const stop = (ev)=>{ if(ev.cancelable) ev.preventDefault(); };
   for(const t of ['touchstart','touchmove','touchend']) e.addEventListener(t, stop, { passive:false });
   e.addEventListener('contextmenu', stop);
-  window.addEventListener('pointermove', (ev)=>{ if(ev.pointerId===T.stick.id){ if(ev.cancelable) ev.preventDefault(); stickMove(ev.clientX, ev.clientY); } }, { passive:false });
+  window.addEventListener('pointermove', (ev)=>{
+    if(ev.pointerId===T.stick.id){ if(ev.cancelable) ev.preventDefault(); stickMove(ev.clientX, ev.clientY); }
+    else if(T.visible) btnSlide(ev.pointerId, ev.clientX, ev.clientY);
+  }, { passive:false });
   const up = (ev)=>{
     if(ev.pointerId===T.stick.id) stickEnd();
     for(const o of T.btns){ const i = o.ids.indexOf(ev.pointerId); if(i>=0){ o.ids.splice(i,1); if(!o.ids.length) btnOff(o); } }
@@ -989,13 +1151,34 @@ function btnDown(o, ev){
   if(ev.cancelable) ev.preventDefault();
   ev.stopPropagation();
   T.saw = ev.pointerType==='touch' || ev.pointerType==='pen' || T.saw;
-  if(o.ids.indexOf(ev.pointerId)<0) o.ids.push(ev.pointerId);
   try { o.el.setPointerCapture(ev.pointerId); } catch(_){}
+  btnPress(o, ev.pointerId);
+}
+function btnPress(o, id){
+  if(o.ids.indexOf(id)<0) o.ids.push(id);
   const ti = G.input && G.input.touch; if(ti) ti[o.k] = true;
   if(G.input && G.input.latch) G.input.latch(o.k);
   o.el.classList.add('on');
 }
 function btnOff(o){ o.ids.length = 0; const ti = G.input && G.input.touch; if(ti) ti[o.k] = false; o.el.classList.remove('on'); }
+// rolling a thumb from one button onto the next lets go of the first and presses the second (usual phone
+// action pads). Drifting off into empty space keeps the button held, so a charge isn't lost by a wobbly thumb.
+// Hit test against circles cached in tbGeom() — no layout reads while fingers move.
+function btnSlide(id, x, y){
+  let cur = null;
+  for(const o of T.btns){ if(o.ids.indexOf(id)>=0){ cur = o; break; } }
+  if(!cur) return;
+  let hit = null;
+  for(const o of T.btns){ const dx = x - o.cx, dy = y - o.cy; if(dx*dx + dy*dy <= o.cr*o.cr){ hit = o; break; } }
+  if(!hit || hit===cur) return;
+  cur.ids.splice(cur.ids.indexOf(id), 1); if(!cur.ids.length) btnOff(cur);
+  btnPress(hit, id);
+}
+function tbGeom(){
+  if(!T.visible) return;
+  const b = T.el.getBoundingClientRect();
+  for(const o of T.btns){ const e = o.el, w = e.offsetWidth; o.cr = w*0.5; o.cx = b.left + e.offsetLeft + w*0.5; o.cy = b.top + e.offsetTop + e.offsetHeight*0.5; }
+}
 function touchReleaseAll(){
   if(T.stick.id!==null) stickEnd();
   const ti = G.input && G.input.touch; if(ti){ ti.x = 0; ti.z = 0; }
@@ -1007,7 +1190,7 @@ function touchApply(){
   const vis = !!T.wanted && (T.mode==='on' || (T.mode!=='off' && auto));
   if(vis!==T.visible){
     T.visible = vis; show(T.el, vis); root.classList.toggle('tcon', vis);
-    if(!vis) touchReleaseAll(); else ghostPos();
+    if(!vis) touchReleaseAll(); else { ghostPos(); tbGeom(); }
   }
 }
 function touchFrame(){
@@ -1022,9 +1205,15 @@ function touchFrame(){
   if(Math.abs(u - T.ult) > 0.3){ T.ult = u; setVar(ub.el, '--u', u/100, 0.002); }
   const rdy = u>=100; if(rdy!==T.ready){ T.ready = rdy; ub.el.classList.toggle('ready', rdy); ub.el.classList.toggle('dim', !rdy); }
   // see-through buttons while the hero stands behind the cluster (phones: the camera can put them there)
-  let fade = false;
-  if(p && p.rig && p.rig.root && G.toScreen){ const r = p.rig.root.position; G.toScreen(r.x, r.y + (p.height||1.2)*0.5, r.z, _tp); fade = _tp.visible && _tp.x > T.cx0 && _tp.y > T.cy0; }
+  // …and the idle stick ring goes faint while the hero stands under it (e.g. at the left edge of a boss arena)
+  let fade = false, near = false;
+  if(p && p.rig && p.rig.root && G.toScreen){
+    const r = p.rig.root.position; G.toScreen(r.x, r.y + (p.height||1.2)*0.5, r.z, _tp);
+    fade = _tp.visible && _tp.x > T.cx0 && _tp.y > T.cy0;
+    near = _tp.visible && T.stick.id===null && Math.abs(_tp.x - T.gx) < T.R*1.45 && Math.abs(_tp.y - T.gy) < T.R*1.75;
+  }
   if(fade!==T.fade){ T.fade = fade; T.el.classList.toggle('see', fade); }
+  if(near!==T.near){ T.near = near; T.base.classList.toggle('near', near); }
 }
 const _tp = { x:0, y:0, visible:false };
 const touch = {
@@ -1110,7 +1299,8 @@ function buildOver(s){
 function buildEnding(s){
   const roll = s.roll = el('div', 'roll', s.el);
   s.skip = button(s.el, 'eskip k-cream', '<span>とばす</span><span class="ic">'+SVG.play+'</span>', ()=>{ s.y = s.stopY; }, 'select');
-  s.btn = button(s.el, 'etitle k-pink x', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'ok');
+  s.bar = el('div', 'ebar x', s.el);
+  s.btn = button(s.bar, 'etitle k-pink', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'ok');
   s.nav = [s.skip];
   s.open = (d)=>{
     roll.innerHTML = '';
@@ -1139,7 +1329,7 @@ function buildEnding(s){
     s.h = innerHeight; s.y = s.h; s.done = false; s.t = 0;
     s.stopY = 0; s.measured = false;
     roll.style.transform = 'translate3d(0,'+s.y+'px,0)';
-    show(s.btn, false); show(s.skip, true); s.btn.classList.remove('show');
+    show(s.bar, false); show(s.skip, true); s.btn.classList.remove('show');
     s.nav = [s.skip]; s.ni = 0;
   };
   s.frame = (dt)=>{
@@ -1148,7 +1338,7 @@ function buildEnding(s){
     s.t += dt;
     const v = Math.max(38, innerHeight*0.085);
     if(s.t > 0.4) s.y -= v*dt;
-    if(s.y <= s.stopY){ s.y = s.stopY; s.done = true; show(s.btn, true); s.btn.classList.add('show'); show(s.skip, false); s.nav = [s.btn]; s.ni = 0; paintKF(s); }
+    if(s.y <= s.stopY){ s.y = s.stopY; s.done = true; show(s.bar, true); s.btn.classList.add('show'); show(s.skip, false); s.nav = [s.btn]; s.ni = 0; paintKF(s); markOpen(); }
     roll.style.transform = 'translate3d(0,'+s.y.toFixed(1)+'px,0)';
   };
   s.key = (e, c)=>{
@@ -1165,16 +1355,47 @@ function buildLoading(s){
 
 // ================================================================ keyboard routing
 const GAMEKEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD','KeyJ','KeyZ','KeyK','Space','KeyL','ShiftLeft','ShiftRight','KeyI','KeyX','KeyU','KeyC']);
+function topScreen(){ for(const n of ORDER){ const s = S[n]; if(s && s.on) return s; } return null; }
+function isGo(c){ return c==='Enter' || c==='NumpadEnter' || c==='Space' || c==='Escape' || c==='Backspace'; }
+// send one menu key to the top-most open screen (keyboard and gamepad share this)
+function routeKey(e, c){
+  if(!kbMode){ kbMode = true; const s = topScreen(); if(s) paintKF(s); }
+  const s = topScreen(); if(!s) return false;
+  if(isGo(c) && justOpened()) return true;                 // the press that opened this screen, or a mash right after it
+  if(!s.key) return false;
+  try { return !!s.key(e, c); } catch(err){ G.logError('ui.key '+s.name, err); return false; }
+}
 function onKey(e){
   if(!ready) return;
   const c = e.code;
   if(GAMEKEYS.has(c) && (T.saw || !T.keyUsed)){ T.keyUsed = true; T.saw = false; touchApply(); }
-  if(!kbMode){ kbMode = true; for(const n of ORDER){ if(S[n] && S[n].on){ paintKF(S[n]); break; } } }
-  for(const n of ORDER){
-    const s = S[n];
-    if(s && s.on){ if(s.key){ try { if(s.key(e, c)) e.preventDefault(); } catch(err){ G.logError('ui.key '+n, err); } } return; }
-  }
+  if(routeKey(e, c)) e.preventDefault();
 }
+
+// ================================================================ gamepad menus
+// G.input.pad is polled by core every tick (A/START → confirm, B → dodge, stick / d-pad → x,z). Menus read it here,
+// once per render frame, with their own edges: A/START presses the focused button, B goes back, the stick moves
+// the focus (held: repeats). After a screen opens nothing counts until every pad input has been let go, so the
+// START that opened the pause menu can't also press 「つづける」.
+function padFrame(dt){
+  const p = G.input && G.input.pad; if(!p) return;
+  const c = !!p.confirm, b = !!p.dodge;
+  const ax = Math.abs(p.x||0), az = Math.abs(p.z||0);
+  let dx = 0, dz = 0;
+  if(ax >= az){ if(ax > 0.5) dx = p.x > 0 ? 1 : -1; } else if(az > 0.5) dz = p.z > 0 ? 1 : -1;
+  if(!PAD.arm){ PAD.arm = !c && !b && !dx && !dz; PAD.c = c; PAD.b = b; PAD.dx = dx; PAD.dz = dz; return; }
+  const any = topScreen();
+  if(any){
+    if(c && !PAD.c) routeKey(PADEV, 'Enter');
+    else if(b && !PAD.b) routeKey(PADEV, 'Escape');
+    if(dx || dz){
+      if(dx!==PAD.dx || dz!==PAD.dz){ PAD.rep = 0.42; routeKey(PADEV, padDir(dx, dz)); }
+      else if((PAD.rep -= dt) <= 0){ PAD.rep = 0.14; routeKey(PADEV, padDir(dx, dz)); }
+    }
+  }
+  PAD.c = c; PAD.b = b; PAD.dx = dx; PAD.dz = dz;
+}
+function padDir(dx, dz){ return dx<0 ? 'ArrowLeft' : dx>0 ? 'ArrowRight' : dz<0 ? 'ArrowUp' : 'ArrowDown'; }
 
 // ================================================================ layout
 function layout(){
@@ -1185,13 +1406,16 @@ function layout(){
   root.style.setProperty('--r', T.R+'px'); root.style.setProperty('--b', T.B+'px');
   root.classList.toggle('port', h > w);
   root.classList.toggle('short', h <= 480 && w > h);
+  root.classList.toggle('tight', w > h && w < 720);          // narrow landscape phones: compact select GO
+  root.classList.toggle('mini', w > h && (w < 620 || h < 340));
   // resolved safe-area paddings (custom properties can't be read back as numbers, so measure a probe)
   if(!T.probe){ T.probe = el('div', '', root); T.probe.style.cssText = 'position:absolute;left:var(--pl);top:var(--pt);right:var(--pr);bottom:var(--pb);visibility:hidden;pointer-events:none'; }
   const pr = T.probe.getBoundingClientRect(); T.inL = pr.left || 10; T.inB = (h - pr.bottom) || 8; T.inR = (w - pr.right) || 10;
   T.cx0 = w - T.inR - T.B*2.15; T.cy0 = h - T.inB - T.B*2.6;          // top-left corner of the button cluster
   emPx = parseFloat(getComputedStyle(root).fontSize) || 14;
-  if(T.el) ghostPos();
+  if(T.el){ ghostPos(); tbGeom(); }
   for(const s of fbs) s.vis && (s.w = s.el.offsetWidth || s.w);
+  fitTitle(); hintFit();
 }
 
 // ================================================================ public API
@@ -1206,6 +1430,7 @@ function init(){
   buildFoeBars(); buildHUD(); buildBoss(); buildGo(); buildHint(); buildTouch(); buildBanner();
   screen('title', 'title', buildTitle);
   screen('select', 'select', buildSelect);
+  screen('stages', 'stages', buildStages);
   screen('pause', 'pause', buildPause);
   screen('result', 'result', buildResult);
   screen('over', 'over', buildOver);
@@ -1239,7 +1464,7 @@ function hideAll(){
   for(const n in S) closeScreen(n);
   uiHide('hud');
   ban.on = false; show(ban.el, false);
-  hint.on = false; show(hint.el, false);
+  hintOff();
   go(false); bossBar(null);
   touch.show(false);
 }
@@ -1251,6 +1476,7 @@ function frame(dt){
   try { bossFrame(dt); } catch(err){ G.logError('ui.boss', err); }
   try { bannerFrame(dt); hintFrame(dt); } catch(err){ G.logError('ui.banner', err); }
   try { touchFrame(); } catch(err){ G.logError('ui.touch', err); }
+  try { padFrame(dt); } catch(err){ G.logError('ui.pad', err); }
   for(const n in S){ const s = S[n]; if(s.on && s.frame){ try { s.frame(dt); } catch(err){ G.logError('ui.frame '+n, err); } } }
 }
 
@@ -1260,6 +1486,7 @@ G.ui = {
   banner, bossBar, go, hint: hintShow,
   touch,
   isShown(name){ return name==='hud' ? hud.on : !!(S[name] && S[name].on); },
+  hasScreen(name){ return name==='hud' || ORDER.indexOf(name) >= 0; },
   // for tests: the screen's root element
   el(name){ return name==='hud' ? hud.el : name==='touch' ? T.el : S[name] ? S[name].el : null; },
 };

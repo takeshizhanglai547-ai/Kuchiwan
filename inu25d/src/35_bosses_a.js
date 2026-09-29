@@ -94,8 +94,16 @@ function starsFill(r, y){ return (b)=>{ for(let i=0;i<3;i++){ const a = i/3*TAU;
 
 // ================================================================ rig kit
 const FACE_KEYS = ['N','B','O','X','S','H'];
-const PK = ['bx','by','sx','sy','lean','twist','hx','hy','hz','aLz','aRz','aLx','aRx','lLz','lRz','roll','rz','jaw','wag','ex'];
-function newPose(){ const o = { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1 }; for(const k of PK) o[k] = 0; o.sx = o.sy = 1; return o; }
+// pose targets P and damped values C: one object literal with every channel, damped field by field (a string-keyed
+// loop over the channel names made them dictionaries, and every double stored there was a fresh heap number each tick)
+function newPose(){ return { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1, bx:0, by:0, sx:1, sy:1, lean:0, twist:0, hx:0, hy:0, hz:0, aLz:0, aRz:0, aLx:0, aRx:0, lLz:0, lRz:0, roll:0, rz:0, jaw:0, wag:0, ex:0 }; }
+function poseDamp(C, P, r){
+  C.bx += (P.bx - C.bx)*r; C.by += (P.by - C.by)*r; C.sx += (P.sx - C.sx)*r; C.sy += (P.sy - C.sy)*r;
+  C.lean += (P.lean - C.lean)*r; C.twist += (P.twist - C.twist)*r; C.hx += (P.hx - C.hx)*r; C.hy += (P.hy - C.hy)*r;
+  C.hz += (P.hz - C.hz)*r; C.aLz += (P.aLz - C.aLz)*r; C.aRz += (P.aRz - C.aRz)*r; C.aLx += (P.aLx - C.aLx)*r;
+  C.aRx += (P.aRx - C.aRx)*r; C.lLz += (P.lLz - C.lLz)*r; C.lRz += (P.lRz - C.lRz)*r; C.roll += (P.roll - C.roll)*r;
+  C.rz += (P.rz - C.rz)*r; C.jaw += (P.jaw - C.jaw)*r; C.wag += (P.wag - C.wag)*r; C.ex += (P.ex - C.ex)*r;
+}
 const FAST = { attack:1, attack2:1, attack3:1, shoot:1, dash:1, roar:1, special:1, hurt:1 };
 const YAW_R = -0.61, YAW_L = -(Math.PI - 0.61);
 
@@ -231,7 +239,7 @@ Kit.prototype.update = function(e){
   basePose(this, e, P, T);
   if(this.o.pose) this.o.pose(this, e, P, T);
   const r = FAST[e.anim] ? 0.42 : 0.24;
-  for(let i=0;i<PK.length;i++){ const k = PK[i]; C[k] += (P[k] - C[k])*r; }
+  poseDamp(C, P, r);
   const lw = this.land, ww = this.wob*Math.sin(T*1.3);
   this.sqy = -0.2*lw - 0.07*ww; this.sqx = 0.12*lw + 0.06*ww;
   this.land *= 0.8; this.wob *= 0.86; if(this.flinch>0) this.flinch--;

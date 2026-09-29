@@ -749,11 +749,13 @@ function giveMat(m){
 // Pose channels (targets T and damped values Cc). One fixed shape with named fields, cleared and damped field by field:
 // filling a {} through a string-keyed loop turns it into a dictionary, and every double stored there is a fresh heap
 // number (≈0.8 KB of garbage per foe per tick with 12 foes on screen).
+// Fields start at -0 (a double, unlike the small integer 0), so no field changes representation the first time a pose
+// writes a fraction — that would swap the object's hidden class and deopt the pose code again.
 function Pose(){
-  this.lean = 0; this.sq = 0; this.bob = 0; this.px = 0; this.lie = 0; this.spin = 0; this.roll = 0;
-  this.hx = 0; this.hy = 0; this.hz = 0; this.aF = 0; this.aB = 0; this.aFx = 0; this.aBx = 0;
-  this.lF = 0; this.lB = 0; this.lFy = 0; this.lBy = 0; this.q1 = 0; this.q2 = 0; this.q3 = 0; this.q4 = 0;
-  this.tz = 0; this.ty = 0; this.eF = 0; this.eB = 0; this.sway = 0; this.puff = 0;
+  this.lean = -0; this.sq = -0; this.bob = -0; this.px = -0; this.lie = -0; this.spin = -0; this.roll = -0;
+  this.hx = -0; this.hy = -0; this.hz = -0; this.aF = -0; this.aB = -0; this.aFx = -0; this.aBx = -0;
+  this.lF = -0; this.lB = -0; this.lFy = -0; this.lBy = -0; this.q1 = -0; this.q2 = -0; this.q3 = -0; this.q4 = -0;
+  this.tz = -0; this.ty = -0; this.eF = -0; this.eB = -0; this.sway = -0; this.puff = -0;
 }
 function poseZero(T){
   T.lean = 0; T.sq = 0; T.bob = 0; T.px = 0; T.lie = 0; T.spin = 0; T.roll = 0;
@@ -775,10 +777,10 @@ function makeRig(type, ent){
   const bp = blueprint(type);
   if(!bp) return null;
   // every field any type uses is declared here, so all 14 types share one object shape (the per-tick code stays monomorphic)
-  const r = { type, bp, alpha:1, T:new Pose(), Cc:new Pose(), clock: Math.floor(Math.random()*400), phase:0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
-    sqv:0, sqp:0, prevFlash:0, wasGround:true, lastVy:0, headA:-TURN, fl:-1, mats:[], own:[], pupOn:false,
-    K:0.4, shake:0, showStars:false,
-    lieLift: bp.lieLift || 0, lieShift: bp.lieShift || 0, headYaw: bp.headYaw==null ? HEAD_YAW : bp.headYaw,
+  const r = { type, bp, alpha:1, T:new Pose(), Cc:new Pose(), clock: Math.floor(Math.random()*400), phase:-0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
+    sqv:-0, sqp:-0, prevFlash:0, wasGround:true, lastVy:-0, headA:-TURN, fl:-0.5, mats:[], own:[], pupOn:false,
+    K:0.4, shake:-0, showStars:false,
+    lieLift: bp.lieLift || -0, lieShift: bp.lieShift || -0, headYaw: bp.headYaw==null ? HEAD_YAW : bp.headYaw,
     root:null, turn:null, flip:null, mat:null, B:null, bones:null, mesh:null, skel:null, outlines:null, faceMat:null, face:null,
     stars:null, tip:null, base:null, pup:null, spark:null, anger:null, aura:null, warn:null, mound:null };
   const root = r.root = new THREE.Group(); root.name = 'zako_'+type;
