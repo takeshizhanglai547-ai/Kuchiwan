@@ -397,8 +397,13 @@ function buildCSS(){
 #iu .stc.no{animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards,iuNo .36s ease-in-out}
 #iu .stgo{align-self:center;font-size:1.3em;animation:iuPulse 1.5s ease-in-out infinite}
 /* short landscape: every px of card width goes to the name (7 kana must fit on one line at 740 px) */
-#iu.short .strow{gap:.35em}
+#iu.short .stp{padding:.6em .75em .85em}
+#iu.short .strow{gap:.3em}
 #iu.short .stc{padding-left:.1em;padding-right:.1em}
+/* narrow landscape (iPhone SE 667×375 …): one row would break the names mid-word, so two rows of 4 + 3; each name fits one line */
+#iu.tight:not(.mini) .strow{flex-wrap:wrap;row-gap:.6em}
+#iu.tight:not(.mini) .strow::before{display:none}
+#iu.tight:not(.mini) .stc{flex:0 0 calc(25% - .25em);max-width:none}
 #iu.port .stp{padding:.7em .8em .9em}
 #iu.port .strow{flex-direction:column;gap:.5em;padding-top:0}
 #iu.port .strow::before{left:1.95em;right:auto;top:1.2em;bottom:1.2em;border-top:0;border-left:.24em dashed #f0c89a}
@@ -423,6 +428,7 @@ function buildCSS(){
 #iu.port.bossOn.hinton .combo{top:calc(var(--pt) + 10.8em + var(--hh,0px))}
 /* landscape tip at the top: under the HUD, clear of the combo / GO column on the right */
 #iu.htop .hint,#iu.htop.tcon .hint{left:calc(var(--pl) + .7em);right:calc(var(--pr) + 7.5em);top:calc(var(--pt) + 4.8em);bottom:auto;width:auto}
+#iu.htop.bossOn .hint,#iu.htop.bossOn.tcon .hint{top:calc(var(--pt) + 5.3em)}   /* clear of the boss bar's second line */
 /* short landscape: the belt leaves only a thin band above and below it, so the tip is one flat strip —
    no face, the speaker's name in line with the words */
 #iu.short .hint{padding:.35em .9em .4em;gap:0}
