@@ -279,7 +279,9 @@ const inp = G.input = {
   // UI calls this on touch/pointer down so a tap shorter than one tick still counts
   latch(btn){ latch[btn] = true; },
   anyPressed(){ for(const b of BTNS){ if(inp.btn[b].pressed) return true; } return false; },
-  clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down=s.pressed=s.released=false; s.held=0; latch[b]=false; }
+  // a pad/touch button still physically held stays "down", so letting go of it later
+  // is not mistaken for a new press (START on the pause menu used to re-pause at once)
+  clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down = !!inp.pad[b] || !!inp.touch[b]; s.pressed=s.released=false; s.held=0; latch[b]=false; }
            for(const k in keyDown) keyDown[k]=false; },
 };
 for(const b of BTNS){ inp.btn[b] = { down:false, pressed:false, released:false, held:0 }; inp.touch[b]=false; inp.pad[b]=false; }
