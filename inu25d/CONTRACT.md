@@ -275,6 +275,8 @@ ent fields the framework maintains: e.state ('spawn','idle','move','act','hurt',
 Foes attack through `G.combat.start` / `G.combat.shoot` / `G.combat.area` only. Telegraph every attack
 (`windup` ≥ 18 frames for normal foes, ≥ 30 for big boss moves) — `h.attack` does it for you.
 Bosses: phases by HP (e.g. <50%): set `e.phase` and `G.bus.emit('bossPhase', {boss:e, phase})`.
+Boss defs: `name` (banner + HP bar), `title` (HP bar subtitle), optional `short` — shown on the HP bar
+instead of `name` when the full name would not fit (small phones), so a name is never cut to "…".
 
 ### 40_stage.js
 ```
@@ -293,8 +295,11 @@ G.fx.init(); G.fx.frame(dtSec)  (runs every render frame, also during hitstop)
 G.fx.burst(kind, x,y,z, opts)   kinds: 'hit','hitBig','slash','sparkle','stars','hearts','dust',
                                 'poof','ring','confetti','fireworks','heal','levelup','shock','magic'
 G.fx.trail(ent) / G.fx.trailStop(ent)   weapon ribbon trail from rig.base→rig.tip while swinging
-G.fx.text(str, x,y,z, style)    onomatopoeia / damage number popups (DOM overlay), styles:
-                                'dmg','crit','onoma','heal','info','big'
+G.fx.text(str, x,y,z, style, opts)  onomatopoeia / damage number popups (DOM overlay), styles:
+                                'dmg','crit','onoma','pow','heal','info','big'; opts {rank, lean, ent, life, color}.
+                                'pow' = hit word: one per spot (a higher rank takes the slot over).
+                                pow/onoma/crit words never sit on the hero nor on the HUD's top boxes
+                                (boss bar block, hero panel): fx moves them off both
 G.fx.alert(ent)                 "!" above a foe (telegraph)
 G.fx.flash(color, alpha, frames) full-screen flash
 G.fx.speedLines(frames)         anime speed lines overlay (ult, dash)

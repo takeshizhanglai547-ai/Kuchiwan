@@ -16,3 +16,8 @@
 手下が降参しない（安全網を外す）	      for(const e of G.world.ents){ if(e.team===1 && !e.dead && e!==b && !(e.def && e.def.boss)){ e.scared = true; e.ignoreForClear = true; e.giveUpT = 30 + (k++)*10; e.pending = null; e.atk = null; h.release(e); } }		helpers
 戦場が画面より広いとカメラが中央に固定（修正前）	this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : U.clamp(this.tx, hi, lo);	this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : (lo+hi)/2;	arena wider
 ステージ開始時のレベル補正が線形（修正前）	const lvlHp = Math.pow(1.08, lvl-1), lvlAtk = Math.pow(1.05, lvl-1);	const lvlHp = 1 + (lvl-1)*0.08, lvlAtk = 1 + (lvl-1)*0.05;	level-ups
+パッドのSTARTでポーズを閉じるとすぐ再ポーズ（修正前）	s.down = !!inp.pad[b] || !!inp.touch[b];	s.down = false;	pad: START
+画面を回しても戦闘範囲を合わせ直さない（修正前）	  G.bus.on('resize', refitLock);		turning the phone
+長いボス名を短い呼び名に切り替えない（修正前）	if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);		boss name and title fits
+ボスの叫びが上部HUDを避けない（修正前）	for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }		shout
+ボスの肩書きが長くても頭の語を落とさない（修正前）	while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){	while(false){	boss name and title fits

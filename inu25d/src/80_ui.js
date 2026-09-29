@@ -955,7 +955,7 @@ function hudFrame(dt){
 }
 
 // ================================================================ boss bar
-const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'', full:null, fitW:-1 };
+const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'', full:null, fullT:null, fitW:-1 };
 function buildBoss(){
   const e = boss.el = el('div', 'boss x', root);
   const nm = el('div', 'bnm', e);
@@ -974,12 +974,14 @@ function bossFrame(dt){
   const d = e.def || {};
   // a long name that doesn't fit the bar on a small phone switches to the boss's short name (d.short)
   // instead of ending in "…"; measured only when the name or the screen width changes
-  const full = d.name || e.name || 'ボス', vw = root ? root.clientWidth : 0;
-  if(boss.full!==full || boss.fitW!==vw){
-    boss.full = full; boss.fitW = vw; txt(boss.nm, full);
+  // the title drops its leading words instead (「ワンワンていこく だい6のしょう」→「だい6のしょう」)
+  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = root ? root.clientWidth : 0;
+  if(boss.full!==full || boss.fullT!==title || boss.fitW!==vw){
+    boss.full = full; boss.fullT = title; boss.fitW = vw; txt(boss.nm, full);
     if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);
+    let t = title; txt(boss.tl, t);
+    while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
   }
-  txt(boss.tl, d.title || e.title || '');
   const f = U.clamp((e.hp||0)/Math.max(1, e.maxHp||1), 0, 1);
   if(boss.f<0){ boss.f = f; boss.chip = f; clipR(boss.f_, f); clipR(boss.c, f); }
   else if(f!==boss.f){ if(f<boss.f) boss.wait = 0.45; else { boss.chip = Math.max(boss.chip, f); clipR(boss.c, boss.chip); } boss.f = f; clipR(boss.f_, f); }

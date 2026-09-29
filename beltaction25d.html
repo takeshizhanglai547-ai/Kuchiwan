@@ -149,7 +149,10 @@ function applyQuality(){
   }
   G.bus.emit('quality', q);
 }
-G.setQuality = (tier)=>{ G.quality.tier = U.clamp(tier|0,0,2); applyQuality(); };
+G.setQuality = (tier)=>{ G.quality.tier = U.clamp(tier|0,0,2); G.quality.pendingTier = null; applyQuality(); };
+// a deferred downgrade (shader recompiles) is applied at the next calm moment
+function applyPendingQuality(){ if(G.quality.pendingTier!=null) G.setQuality(G.quality.pendingTier); }
+G.bus.on('waveClear', applyPendingQuality); G.bus.on('scene', applyPendingQuality); G.bus.on('pause', applyPendingQuality);
 
 // ---------------------------------------------------------------- renderer / scene / lights
 G.initRenderer = function(canvas){
@@ -259,7 +262,14 @@ G.cam = {
   snap(){ this.frame(1, true); },
   // world x range currently visible at the belt plane (for spawns / locks)
   // fraction of halfW hidden on the right by the touch buttons (phones in landscape)
-  rightCover(){ return (G.input && G.input.lastDevice==='touch' && !(G.view && G.view.portrait)) ? 0.5 : 0; },
+  rightCover(){
+    if(G.view && G.view.portrait) return 0;
+    const t = G.ui && G.ui.touch;
+    const on = t && typeof t.visible==='boolean' ? t.visible : (G.input && G.input.lastDevice==='touch');
+    return on ? 0.5 : 0;
+  },
+  // clear transient effects (a new scene must not inherit a boss-intro focus, shake or punch)
+  reset(){ this.focusT = 0; this.focusZoom = 0; this.shakeT = 0; this.shakeP = 0; this.punchT = 0; this.zoom = 0; },
   // world width that is actually usable (not under the touch buttons)
   usableW(){ return this.halfW * (2 - this.rightCover()); },
   // reused array: read it right away, don't keep it
@@ -273,22 +283,23 @@ G.cam = {
     // camera centre must keep the lock range fully on screen (and out from under the touch buttons)
     const rc = this.rightCover();
     const lo = this.lockMax - this.halfW*(1-rc), hi = this.lockMin + this.halfW;
-    if(this.lockMin > -1e8){ if(lo<=hi) this.tx = U.clamp(this.tx, lo, hi); else this.tx = (lo+hi)/2; }
+    if(this.lockMin > -1e8){ this.tx = lo<=hi ? U.clamp(this.tx, lo, hi) : U.clamp(this.tx, hi, lo); }
     const stg = G.stage && G.stage.info;
     if(stg){ this.tx = U.clamp(this.tx, this.halfW-1, Math.max(this.halfW-1, stg.length - this.halfW + 1)); }
     let gx=this.tx, gy=this.ty, gz=this.tz, zoom=this.zoom;
-    if(this.focusT>0){ this.focusT--; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
+    const kf = snap ? 0 : dt*60;
+    if(this.focusT>0){ this.focusT -= kf; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
     if(snap){ this.x=gx; this.y=gy; this.z=gz; this.zc = zoom; }
     else { this.x=U.damp(this.x,gx,5.5,dt); this.y=U.damp(this.y,gy,4,dt); this.z=U.damp(this.z,gz,3,dt); this.zc=U.damp(this.zc||0, zoom, 2.5, dt); }
     let d = (this.baseDist||16) - this.zc;
     // visible half-width at the belt plane follows the real distance (boss fights zoom out)
     this.halfW = Math.tan(VFOV*Math.PI/360) * G.camera.aspect * d;
-    if(this.punchT>0){ d -= this.punch*Math.sin(Math.PI*this.punchT/this.punchMax); this.punchT--; }
+    if(this.punchT>0){ d -= this.punch*Math.sin(Math.PI*U.clamp(this.punchT/this.punchMax,0,1)); this.punchT -= kf; }
     let sx=0, sy=0;
     if(this.shakeT>0){
-      const k = this.shakeP*(this.shakeT/this.shakeMax);
+      const k = this.shakeP*U.clamp(this.shakeT/this.shakeMax,0,1);
       sx = (Math.random()*2-1)*k*0.12; sy = (Math.random()*2-1)*k*0.09;
-      this.shakeT--;
+      this.shakeT -= kf;
     }
     const cam = G.camera;
     cam.position.set(this.x + sx, this.y + Math.sin(PITCH)*d + sy, this.z + Math.cos(PITCH)*d);
@@ -320,7 +331,9 @@ const inp = G.input = {
   // UI calls this on touch/pointer down so a tap shorter than one tick still counts
   latch(btn){ latch[btn] = true; },
   anyPressed(){ for(const b of BTNS){ if(inp.btn[b].pressed) return true; } return false; },
-  clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down=s.pressed=s.released=false; s.held=0; latch[b]=false; }
+  // a pad/touch button still physically held stays "down", so letting go of it later
+  // is not mistaken for a new press (START on the pause menu used to re-pause at once)
+  clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down = !!inp.pad[b] || !!inp.touch[b]; s.pressed=s.released=false; s.held=0; latch[b]=false; }
            for(const k in keyDown) keyDown[k]=false; },
 };
 for(const b of BTNS){ inp.btn[b] = { down:false, pressed:false, released:false, held:0 }; inp.touch[b]=false; inp.pad[b]=false; }
@@ -477,7 +490,7 @@ G.go = function(name, params){
   const prev = G.scenes[G.sceneName];
   if(prev && prev.exit){ try{ prev.exit(); }catch(err){ G.logError('scene.exit '+G.sceneName, err); } }
   G.sceneName = name; G.time.sceneTick = 0;
-  G.hitStop = 0; G.timeScale = 1; slowT = 0;
+  G.hitStop = 0; G.timeScale = 1; slowT = 0; G.cam.reset();
   const sc = G.scenes[name];
   if(sc && sc.enter){ try{ sc.enter(params||{}); }catch(err){ G.logError('scene.enter '+name, err); } }
   G.bus.emit('scene', {name});
@@ -509,7 +522,7 @@ function frame(now){
   if(dt > 0.1) dt = 0.1;              // tab switch / hiccup: don't fast-forward the world
   // slow motion stretches ticks; counted in real frames
   let scale = 1;
-  if(slowT>0){ slowT--; scale = slowScale; }
+  if(slowT>0){ slowT -= dt*60; scale = slowScale; }
   G.timeScale = scale;
   acc += dt*scale;
   let steps = 0;
@@ -530,8 +543,10 @@ function governor(dt){
   G.time.fps = 1/emaDt;
   if(G.sceneName!=='play' || document.hidden) { slowFor=0; return; }
   if(emaDt > 1/42){ slowFor += dt; fastFor = 0; } else { slowFor = Math.max(0, slowFor - dt*0.5); fastFor += dt; }
-  if(slowFor > 2.5 && G.quality.tier < 2 && !G.quality.locked){
-    slowFor = 0; G.setQuality(G.quality.tier+1);
+  if(slowFor > 2.5 && G.quality.tier < 2 && !G.quality.locked && G.quality.pendingTier==null){
+    slowFor = 0;
+    if(G.quality.tier===1){ G.quality.pendingTier = 2; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1)); resize(); }
+    else G.setQuality(G.quality.tier+1);
   }
 }
 G.start = function(){
@@ -906,6 +921,7 @@ const PICK = {
   star:(b)=>{ b.add(geo.star(0.26,0.48,0.12), '#ffe14d'); },
   heart:(b)=>{ b.add(geo.heart(0.28,0.14), '#ff5f8f'); },
 };
+const pickCache = new Map();
 const PROP = {
   crate:(b)=>{ b.add(geo.rbox(0.9,0.8,0.8,0.08,3), '#d9a05b', [0,0.4,0]);
     b.add(geo.rbox(0.94,0.12,0.84,0.04,2), '#9c6230', [0,0.12,0]); b.add(geo.rbox(0.94,0.12,0.84,0.04,2), '#9c6230', [0,0.68,0]);
@@ -980,12 +996,21 @@ G.look = {
     return m;
   },
   canvasTex,
+  // pickups share one merged geometry + material per kind (a boss drops 12+ coins in one frame)
   pickupMesh(kind){
-    const f = PICK[kind] || PICK.coin;
-    const b = new PartBuilder(); f(b);
-    const mesh = b.mesh({ outline:0.018, rough: kind==='coin'||kind==='gem' ? 0.35 : 0.6, metal: kind==='coin' ? 0.2 : 0 });
+    if(!PICK[kind]) kind = 'coin';
+    let c = pickCache.get(kind);
+    if(!c){
+      const b = new PartBuilder(); PICK[kind](b);
+      const g = b.build(); g.userData.shared = true;
+      const mat = G.look.vmat({ rough: kind==='coin'||kind==='gem' ? 0.35 : 0.6, metal: kind==='coin' ? 0.2 : 0 });
+      c = { g, mat }; pickCache.set(kind, c);
+    }
+    const mesh = new THREE.Mesh(c.g, c.mat);
+    mesh.castShadow = false;            // pickups already have a blob shadow
+    G.look.outline(mesh, 0.018);
     const obj = new THREE.Group(); obj.add(mesh);
-    return { obj, mesh, dispose(){ mesh.geometry.dispose(); } };
+    return { obj, mesh, dispose(){} };
   },
   propMesh(kind){
     const f = PROP[kind] || PROP.crate;
@@ -2320,7 +2345,14 @@ const h = {
 
 G.foes = {
   types, h, tokens,
-  init(){ G.bus.on('scene', ()=> tokens.clear()); },
+  init(){
+    G.bus.on('scene', ()=> tokens.clear());
+    // when a boss is purified every helper still standing gives up (safety net for types that ignore e.scared)
+    G.bus.on('bossDown', (d)=>{
+      const b = d && d.boss; let k = 0;
+      for(const e of G.world.ents){ if(e.team===1 && !e.dead && e!==b && !(e.def && e.def.boss)){ e.scared = true; e.ignoreForClear = true; e.giveUpT = 30 + (k++)*10; e.pending = null; e.atk = null; h.release(e); } }
+    });
+  },
   define(type, def){
     def.type = type;
     def.name = def.name || type;
@@ -2365,6 +2397,7 @@ G.foes = {
   },
   // framework per tick: reactions + AI
   tick(e){
+    if(e.giveUpT>0 && !e.dead && --e.giveUpT===0){ e.dead = true; e.deadT = 0; e.gaveUp = true; e.atk = null; e.pending = null; G.setState(e, 'ko'); e.vy = 0.12; e.onGround = false; h.release(e); }
     if(e.flashT>0) e.flashT--;
     if(e.inv>0) e.inv--;
     if(e.hpShowT>0) e.hpShowT--;
@@ -2396,6 +2429,8 @@ G.foes = {
         return;
       case 'ko': return tickKO(e);
     }
+    // a scared helper drops whatever it was winding up
+    if(e.scared && (e.pending || e.atk)){ e.pending = null; e.atk = null; }
     // FREE: running a pending telegraph?
     if(e.pending){
       if(--e.pending.t <= 0){ const d = e.pending.def; e.pending = null; G.combat.start(e, d); }
@@ -2410,6 +2445,7 @@ G.foes = {
       return;
     }
     const def = e.def;
+    if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; const t = h.target(e); if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
     if(def.ai){ try { def.ai(e); } catch(err){ G.logError('ai '+e.type, err); e.cool = 30; } }
     else defaultAI(e);
   },
@@ -2434,19 +2470,18 @@ function tickKO(e){
   e.deadT = (e.deadT||0) + 1;
   if(e.def.onKOTick){ try { if(e.def.onKOTick(e)===true) return; } catch(err){ G.logError('onKOTick', err); } }
   const boss = e.def.boss;
-  const lie = boss ? 80 : 26;
+  const lie = boss ? 80 : (e.gaveUp ? 8 : 26);
   if(!e.onGround && e.deadT < 120){ if(e.anim!=='ko') G.setAnim(e, 'ko'); return; }
   if(e.koLand==null){ e.koLand = e.deadT; G.setAnim(e, 'ko'); e.vx = 0; }
   const t = e.deadT - e.koLand;
   if(t===lie){
     // ぽんっ — the grumpy soldier turns into a happy pup
-    if(G.fx && G.fx.burst){ G.fx.burst('poof', e.x, e.height*0.5, e.z, { scale: boss?2.2:1 }); G.fx.burst('hearts', e.x, e.height+0.2, e.z, { count: boss?8:3 }); }
     if(G.audio && G.audio.sfx) G.audio.sfx('poof');
     G.bus.emit('poof', { ent:e });
     G.setAnim(e, 'cheer');
     e.happy = true;
     // drops
-    if(!e.minion || G.rng()<0.3){
+    if(!e.gaveUp && (!e.minion || G.rng()<0.3)){
       const n = boss ? 12 : 2 + Math.floor(G.rng()*2);
       for(let i=0;i<n;i++) G.pickups.spawn('coin', e.x, e.z);
       const r = G.rng();
@@ -3206,18 +3241,76 @@ function blueprint(type){
   return BP[type];
 }
 
+// ================================================================ per-rig materials: recycled, never disposed
+// three.js deletes a shader program as soon as no material uses it any more. Disposing a KO'd foe's materials threw away
+// its program (and the see-through twin compiled for the fade-out), so the next spawn and the next KO fade compiled and
+// linked them again: a stall on phones whenever a wave arrived or a foe was beaten. A recycled material keeps its programs,
+// so after the first appearance of a type (and its first fade) spawning and fading link nothing new.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite, ei:m.emissiveIntensity };
+  return m;
+}
+function giveMat(m){
+  const s = m.userData.pool;
+  if(!s){ m.dispose(); return; }
+  if(s.free) return;                       // (a rig disposed twice)
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(s.ei!==undefined) m.emissiveIntensity = s.ei;
+  const u = m.userData;
+  if(u.uFlash) u.uFlash.value = 0;
+  if(u.uTint) u.uTint.value.setRGB(1, 1, 1);
+  s.list.push(m);
+}
+
 // ================================================================ rig assembly
-const POSE_KEYS = ['lean','sq','bob','px','lie','spin','roll','hx','hy','hz','aF','aB','aFx','aBx','lF','lB','lFy','lBy','q1','q2','q3','q4','tz','ty','eF','eB','sway','puff'];
+// Pose channels (targets T and damped values Cc). One fixed shape with named fields, cleared and damped field by field:
+// filling a {} through a string-keyed loop turns it into a dictionary, and every double stored there is a fresh heap
+// number (≈0.8 KB of garbage per foe per tick with 12 foes on screen).
+// Fields start at -0 (a double, unlike the small integer 0), so no field changes representation the first time a pose
+// writes a fraction — that would swap the object's hidden class and deopt the pose code again.
+function Pose(){
+  this.lean = -0; this.sq = -0; this.bob = -0; this.px = -0; this.lie = -0; this.spin = -0; this.roll = -0;
+  this.hx = -0; this.hy = -0; this.hz = -0; this.aF = -0; this.aB = -0; this.aFx = -0; this.aBx = -0;
+  this.lF = -0; this.lB = -0; this.lFy = -0; this.lBy = -0; this.q1 = -0; this.q2 = -0; this.q3 = -0; this.q4 = -0;
+  this.tz = -0; this.ty = -0; this.eF = -0; this.eB = -0; this.sway = -0; this.puff = -0;
+}
+function poseZero(T){
+  T.lean = 0; T.sq = 0; T.bob = 0; T.px = 0; T.lie = 0; T.spin = 0; T.roll = 0;
+  T.hx = 0; T.hy = 0; T.hz = 0; T.aF = 0; T.aB = 0; T.aFx = 0; T.aBx = 0;
+  T.lF = 0; T.lB = 0; T.lFy = 0; T.lBy = 0; T.q1 = 0; T.q2 = 0; T.q3 = 0; T.q4 = 0;
+  T.tz = 0; T.ty = 0; T.eF = 0; T.eB = 0; T.sway = 0; T.puff = 0;
+}
+function poseDamp(C, T, K){
+  C.lean += (T.lean - C.lean)*K; C.sq += (T.sq - C.sq)*K; C.bob += (T.bob - C.bob)*K; C.px += (T.px - C.px)*K;
+  C.lie += (T.lie - C.lie)*K; C.spin += (T.spin - C.spin)*K; C.roll += (T.roll - C.roll)*K;
+  C.hx += (T.hx - C.hx)*K; C.hy += (T.hy - C.hy)*K; C.hz += (T.hz - C.hz)*K;
+  C.aF += (T.aF - C.aF)*K; C.aB += (T.aB - C.aB)*K; C.aFx += (T.aFx - C.aFx)*K; C.aBx += (T.aBx - C.aBx)*K;
+  C.lF += (T.lF - C.lF)*K; C.lB += (T.lB - C.lB)*K; C.lFy += (T.lFy - C.lFy)*K; C.lBy += (T.lBy - C.lBy)*K;
+  C.q1 += (T.q1 - C.q1)*K; C.q2 += (T.q2 - C.q2)*K; C.q3 += (T.q3 - C.q3)*K; C.q4 += (T.q4 - C.q4)*K;
+  C.tz += (T.tz - C.tz)*K; C.ty += (T.ty - C.ty)*K; C.eF += (T.eF - C.eF)*K; C.eB += (T.eB - C.eB)*K;
+  C.sway += (T.sway - C.sway)*K; C.puff += (T.puff - C.puff)*K;
+}
 function makeRig(type, ent){
   const bp = blueprint(type);
   if(!bp) return null;
-  const r = { type, bp, alpha:1, T:{}, Cc:{}, clock: Math.floor(Math.random()*400), phase:0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
-    sqv:0, sqp:0, prevFlash:0, wasGround:true, lastVy:0, headA:-TURN, fl:-1, mats:[], own:[], pupOn:false };
-  for(const k of POSE_KEYS){ r.T[k] = 0; r.Cc[k] = 0; }
+  // every field any type uses is declared here, so all 14 types share one object shape (the per-tick code stays monomorphic)
+  const r = { type, bp, alpha:1, T:new Pose(), Cc:new Pose(), clock: Math.floor(Math.random()*400), phase:-0, blinkT: 60 + Math.floor(Math.random()*120), expr:'angry',
+    sqv:-0, sqp:-0, prevFlash:0, wasGround:true, lastVy:-0, headA:-TURN, fl:-0.5, mats:[], own:[], pupOn:false,
+    K:0.4, shake:-0, showStars:false,
+    lieLift: bp.lieLift || -0, lieShift: bp.lieShift || -0, headYaw: bp.headYaw==null ? HEAD_YAW : bp.headYaw,
+    root:null, turn:null, flip:null, mat:null, B:null, bones:null, mesh:null, skel:null, outlines:null, faceMat:null, face:null,
+    stars:null, tip:null, base:null, pup:null, spark:null, anger:null, aura:null, warn:null, mound:null };
   const root = r.root = new THREE.Group(); root.name = 'zako_'+type;
   const turn = r.turn = new THREE.Group(); root.add(turn);
   const flip = r.flip = new THREE.Group(); turn.add(flip);
-  const mat = r.mat = G.look.vmat({ instance:true, rough: bp.rough, metal: bp.metal||0 });
+  const mat = r.mat = takeMat('body|'+bp.rough+'|'+(bp.metal||0), ()=> G.look.vmat({ instance:true, rough: bp.rough, metal: bp.metal||0 }));
   r.mats.push(mat); r.own.push(mat);
   // bones
   const B = r.B = {}, list = r.bones = [];
@@ -3244,7 +3337,7 @@ function makeRig(type, ent){
   mesh.add(ol);
   r.outlines = [ol];
   // face
-  const fm = r.faceMat = bp.mecha ? glowMat(1.2) : G.look.vmat({ instance:true, rough:0.32, rim:0.25 });
+  const fm = r.faceMat = bp.mecha ? takeMat('glow1.2', ()=> glowMat(1.2)) : takeMat('face', ()=> G.look.vmat({ instance:true, rough:0.32, rim:0.25 }));
   r.mats.push(fm); r.own.push(fm);
   const face = r.face = new THREE.Mesh(bp.face.angry, fm);
   face.castShadow = false;
@@ -3274,7 +3367,7 @@ function makeRig(type, ent){
     root, height: bp.height, radius: bp.radius, tip: r.tip, base: r.base, _r: r,
     update(e, dt){ update(r, e); },
     setAlpha(a){ setAlpha(r, a); },
-    dispose(){ for(const m of r.own) m.dispose(); skel.dispose(); },
+    dispose(){ for(let i=0;i<r.own.length;i++) giveMat(r.own[i]); r.own.length = 0; skel.dispose(); },
   };
   return rig;
 }
@@ -3313,7 +3406,7 @@ function update(r, e){
   const k = r.clock;
   const A = e.anim || 'idle', t = e.animT || 0, len = e.animLen || 0;
   const p = len > 0 ? U.clamp(t/len, 0, 1) : 0, hit = U.clamp(e.animHit || 0.35, 0.05, 0.95);
-  for(let i=0;i<POSE_KEYS.length;i++) T[POSE_KEYS[i]] = 0;
+  poseZero(T);
   r.K = 0.4; r.shake = 0; r.showStars = false;
   let expr = exprFor(A, e, r);
   if(bp.kind==='quad') poseQuad(r, e, A, t, p, hit, k);
@@ -3331,8 +3424,8 @@ function update(r, e){
   r.wasGround = !!e.onGround; r.lastVy = e.vy || 0;
   r.sqv += -r.sqp*0.3 - r.sqv*0.24; r.sqp += r.sqv;
   // damp toward the targets
-  const C = r.Cc, K = r.K;
-  for(let i=0;i<POSE_KEYS.length;i++){ const key = POSE_KEYS[i]; C[key] += (T[key] - C[key])*K; }
+  const C = r.Cc;
+  poseDamp(C, T, r.K);
   // heading (turns through the front so the face stays visible) + z-mirror so held items stay on the camera side
   const want = (e.face||1) >= 0 ? -TURN : -(PI - TURN);
   r.headA += U.clamp((want - r.headA)*0.45, -0.34, 0.34);
@@ -3340,13 +3433,12 @@ function update(r, e){
   r.flip.scale.z = r.headA < -HP ? -1 : 1;
   const B = r.B, root = B.root;
   const sy = Math.max(0.5, 1 + C.sq + r.sqp), sxz = 1/Math.sqrt(sy), pf = 1 + C.puff;
-  root.position.set(C.px + r.shake, C.bob + C.lie*bp.lieLift, 0);
-  root.position.x += C.lie*bp.lieShift;
+  root.position.set(C.px + r.shake + C.lie*r.lieShift, C.bob + C.lie*r.lieLift, 0);
   if(bp.kind==='quad'){ root.rotation.set(-C.lie*HP, 0, C.spin); }
   else root.rotation.set(C.roll, 0, C.lie*HP + C.spin);
   root.scale.set(sxz*pf, sy*pf, sxz*pf);
   if(B.body) B.body.rotation.set(C.sway, 0, C.lean);
-  if(B.head) B.head.rotation.set(C.hx, (bp.headYaw==null ? HEAD_YAW : bp.headYaw) + C.hy, C.hz);
+  if(B.head) B.head.rotation.set(C.hx, r.headYaw + C.hy, C.hz);
   if(B.armF){ B.armF.rotation.set(C.aFx, 0, C.aF); B.armB.rotation.set(C.aBx, 0, C.aB); }
   if(B.legF){ B.legF.rotation.z = C.lF; B.legB.rotation.z = C.lB; B.legF.position.y = B.legF.userData.ry + C.lFy; B.legB.position.y = B.legB.userData.ry + C.lBy; }
   if(B.q1){ B.q1.rotation.z = C.q1; B.q2.rotation.z = C.q2; B.q3.rotation.z = C.q3; B.q4.rotation.z = C.q4; }
@@ -3634,10 +3726,10 @@ EXTRA.kire = {
 };
 EXTRA.oni = {
   build(r){
-    const aura = r.aura = new THREE.Mesh(G.look.geo.plane(4.8, 4.8), decalMat('aura', 0.75));
+    const aura = r.aura = new THREE.Mesh(G.look.geo.plane(4.8, 4.8), takeMat('decal|aura', ()=> decalMat('aura', 0.75)));
     aura.rotation.x = -HP; aura.position.y = 0.03; aura.renderOrder = -1;
     r.root.add(aura); r.own.push(aura.material);
-    const warn = r.warn = new THREE.Mesh(G.look.geo.plane(2.8, 2.8), decalMat('warn', 0.8));
+    const warn = r.warn = new THREE.Mesh(G.look.geo.plane(2.8, 2.8), takeMat('decal|warn', ()=> decalMat('warn', 0.8)));
     warn.rotation.x = -HP; warn.position.y = 0.04; warn.visible = false; warn.renderOrder = -1;
     r.root.add(warn); r.own.push(warn.material);
   },
@@ -4235,18 +4327,50 @@ function starsFill(r, y){ return (b)=>{ for(let i=0;i<3;i++){ const a = i/3*TAU;
 
 // ================================================================ rig kit
 const FACE_KEYS = ['N','B','O','X','S','H'];
-const PK = ['bx','by','sx','sy','lean','twist','hx','hy','hz','aLz','aRz','aLx','aRx','lLz','lRz','roll','rz','jaw','wag','ex'];
-function newPose(){ const o = { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1 }; for(const k of PK) o[k] = 0; o.sx = o.sy = 1; return o; }
+// pose targets P and damped values C: one object literal with every channel, damped field by field (a string-keyed
+// loop over the channel names made them dictionaries, and every double stored there was a fresh heap number each tick)
+function newPose(){ return { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1, bx:0, by:0, sx:1, sy:1, lean:0, twist:0, hx:0, hy:0, hz:0, aLz:0, aRz:0, aLx:0, aRx:0, lLz:0, lRz:0, roll:0, rz:0, jaw:0, wag:0, ex:0 }; }
+function poseDamp(C, P, r){
+  C.bx += (P.bx - C.bx)*r; C.by += (P.by - C.by)*r; C.sx += (P.sx - C.sx)*r; C.sy += (P.sy - C.sy)*r;
+  C.lean += (P.lean - C.lean)*r; C.twist += (P.twist - C.twist)*r; C.hx += (P.hx - C.hx)*r; C.hy += (P.hy - C.hy)*r;
+  C.hz += (P.hz - C.hz)*r; C.aLz += (P.aLz - C.aLz)*r; C.aRz += (P.aRz - C.aRz)*r; C.aLx += (P.aLx - C.aLx)*r;
+  C.aRx += (P.aRx - C.aRx)*r; C.lLz += (P.lLz - C.lLz)*r; C.lRz += (P.lRz - C.lRz)*r; C.roll += (P.roll - C.roll)*r;
+  C.rz += (P.rz - C.rz)*r; C.jaw += (P.jaw - C.jaw)*r; C.wag += (P.wag - C.wag)*r; C.ex += (P.ex - C.ex)*r;
+}
 const FAST = { attack:1, attack2:1, attack3:1, shoot:1, dash:1, roar:1, special:1, hurt:1 };
 const YAW_R = -0.61, YAW_L = -(Math.PI - 0.61);
+
+// per-rig materials are recycled, never disposed: three.js deletes a shader program as soon as no material uses it, so a
+// disposed boss / ghost brother threw its program (and the see-through twin compiled for a fade) away and the next one
+// compiled and linked it again. A recycled material keeps its programs.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite };
+  return m;
+}
+function giveMat(m){
+  const s = m && m.userData.pool;
+  if(!s){ if(m) m.dispose(); return; }
+  if(s.free) return;
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(m.userData.uFlash) m.userData.uFlash.value = 0;
+  s.list.push(m);
+}
 
 function Kit(o){
   this.o = o;
   this.root = new THREE.Group(); this.root.name = 'boss_'+o.type;
   this.yaw = new THREE.Group(); this.root.add(this.yaw);
   this.body = new THREE.Group(); this.yaw.add(this.body);
-  this.mat = G.look.vmat({ instance:true, rough: o.rough==null ? 0.68 : o.rough });
-  this.gmat = G.look.vmat({ instance:true, rough:0.28, rim:0.35 });
+  const rough = o.rough==null ? 0.68 : o.rough;
+  this.mat = takeMat('body|'+rough, ()=> G.look.vmat({ instance:true, rough }));
+  this.gmat = takeMat('gloss', ()=> G.look.vmat({ instance:true, rough:0.28, rim:0.35 }));
   this.outlines = []; this.meshes = []; this.fsets = [];
   this.P = newPose(); this.C = newPose();
   this.seed = (Math.random()*997)|0; this.ph = 0; this.yawV = YAW_R - (o.yawOff||0); this.alpha = 1;
@@ -4318,7 +4442,7 @@ Kit.prototype.makeMarker = function(){
     x.beginPath(); x.arc(0, 14, 6, 0, TAU); x.fill(); x.stroke();
     x.restore();
   });
-  this.markMat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, opacity:0.9, color:0xffffff, toneMapped:false });
+  this.markMat = takeMat('mark', ()=> new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, opacity:0.9, color:0xffffff, toneMapped:false }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), this.markMat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false;
   G.scene.add(m);
@@ -4338,6 +4462,7 @@ Kit.prototype.updMarker = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
+  if(e.introLine) introLine(e);
   if(fl > this.prevFlash){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
   const fv = fl > 0 ? 0.62 : 0;
@@ -4347,7 +4472,7 @@ Kit.prototype.update = function(e){
   basePose(this, e, P, T);
   if(this.o.pose) this.o.pose(this, e, P, T);
   const r = FAST[e.anim] ? 0.42 : 0.24;
-  for(let i=0;i<PK.length;i++){ const k = PK[i]; C[k] += (P[k] - C[k])*r; }
+  poseDamp(C, P, r);
   const lw = this.land, ww = this.wob*Math.sin(T*1.3);
   this.sqy = -0.2*lw - 0.07*ww; this.sqx = 0.12*lw + 0.06*ww;
   this.land *= 0.8; this.wob *= 0.86; if(this.flinch>0) this.flinch--;
@@ -4382,8 +4507,8 @@ Kit.prototype.rig = function(height, radius){
     update(e){ k.update(e); },
     setAlpha(a){ k.setAlpha(a); },
     dispose(){
-      k.mat.dispose(); k.gmat.dispose();
-      if(k.marker){ if(k.marker.parent) k.marker.parent.remove(k.marker); k.markMat.dispose(); k.marker = null; }
+      giveMat(k.mat); giveMat(k.gmat);
+      if(k.marker){ if(k.marker.parent) k.marker.parent.remove(k.marker); giveMat(k.markMat); k.marker = null; }
     },
   };
 };
@@ -4497,6 +4622,19 @@ const O_TRAILDUST = { count:2, scale:0.7, dir:1 }, O_FINDUST = { count:2, scale:
   O_RUMBLE = { count:2, scale:0.8 }, O_SPARK = { count:2, scale:0.5, color:'#dff0ff' }, O_SPINDUST = { count:3, scale:0.8 };
 function dustBehind(e, o, back){ o.dir = -e.face; fx('dust', e.x - e.face*back, 0.05, e.z, o); }
 function say(e, s){ fh().say(e, s); }
+// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
+// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
+// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
+// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
+const BANNER_T = 142, LINE_T = 44;
+G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossA) b.bannerEnd = G.time.tick + BANNER_T; });
+function sayIntro(e, line){ e.introLine = line; introLine(e); }
+function introLine(e){                     // also called every tick from the rig update (it runs in every state)
+  if(e.dead){ e.introLine = null; return; }
+  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
+  say(e, e.introLine); e.introLine = null;
+  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
+}
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 function rng(){ return G.rng(); }
 // horizontal limits the boss should stay within: the visible belt (the boss arena is camera-locked in stages)
@@ -4606,7 +4744,7 @@ function phaseCheck(e){
 }
 function introRoar(len, line, fn){
   return { id:'bossA_intro', anim:'roar', len, hits:[],
-    fn(e, t){ if(t===0){ G.setAnim(e, 'roar', len, 0.3); if(line) say(e, line); }
+    fn(e, t){ if(t===0){ G.setAnim(e, 'roar', len, 0.3); if(line) sayIntro(e, line); }
       if(t===18){ sfx('bossRoar'); shake(3, 24); fx('shock', e.x, 0.02, e.z, { scale:1.2 }); }
       if(fn) fn(e, t); },
     onEnd(e){ e.cool = 30; } };
@@ -4925,7 +5063,7 @@ const SHARK_M = {
       if(t===0){ G.setAnim(e, 'dash', 60); }
       if(t < 60 && p){ const tx = p.x + (e.x > p.x ? 4.2 : -4.2); e.vx = clamp((tx - e.x)*0.06, -0.12, 0.12); e.vz = clamp((p.z - e.z)*0.05, -0.06, 0.06); if(Math.abs(e.vx) > 0.01) e.face = e.vx > 0 ? 1 : -1; finDust(e, t); }
       if(t===60){ if(p) e.face = p.x > e.x ? 1 : -1; surface(e, 0.26, 'jump'); }
-      if(t===72) say(e, 'じめんの そこから がぶっ！');
+      if(t===72) sayIntro(e, 'じめんの そこから がぶっ！');
       if(t===92){ G.setAnim(e, 'roar', 38, 0.3); sfx('bossRoar'); shake(3, 20); } },
     onEnd(e){ cleanup(e); e.cool = 30; } },
   chomp: { id:'shark_chomp', anim:'attack', len:40, move:[{ at:5, vx:0.16 }],
@@ -5208,7 +5346,7 @@ function ghostIntro(line){
     fn(e, t){ if(t===0){ e.intangible = true; e.ghostA = 0; G.setAnim(e, 'special', 70); }
       if(t===6) e.ghostA = 1;
       gFloat(e, lerp(0.2, e.hoverY, Math.min(1, t/40)));
-      if(t===14 && line){ say(e, line); sfx('bossRoar'); }
+      if(t===14 && line){ sayIntro(e, line); sfx('bossRoar'); }
       if(t===20) fx('sparkle', e.x, e.y + 1.2, e.z, { count:8, color:'#dff0ff' });
       if(t===40){ e.intangible = false; G.setAnim(e, 'roar', 30, 0.3); } },
     onEnd(e){ e.intangible = false; e.ghostA = 1; e.cool = 40 + (e.slot||0)*30; } };
@@ -5427,7 +5565,7 @@ G.foes.define('shark', {
   onKO: bossKO,
 });
 G.foes.define('ghost', {
-  name:'おばけの Tたろう', title:'ワンワンていこく だい3のしょう', boss:true, bossA:true, phaseLine:'もう おこったぞ〜！ ひとだまも つかっちゃう！',
+  name:'おばけの Tたろう 3きょうだい', short:'おばけ3きょうだい', title:'ワンワンていこく だい3のしょう', boss:true, bossA:true, phaseLine:'もう おこったぞ〜！ ひとだまも つかっちゃう！',
   hp:360, poise:70, weight:3, radius:0.72, height:2.0, spd:0.045, score:3000, xp:120, entrance:'none', recover:30,
   build(){ return buildGhost({ bro:false }); },
   rage: null,
@@ -5590,12 +5728,45 @@ function starsFill(r){ return (b)=>{ for(let i=0;i<3;i++){ const a = i/3*TAU; b.
 
 // ================================================================ rig kit
 const FACE_KEYS = ['N','B','O','X','S','H'];
-const PK = ['bx','by','sx','sy','lean','twist','hx','hy','hz','aLz','aRz','aLx','aRx','lLz','lRz','roll','rz','wag','wf','ex','tl'];
-function newPose(){ const o = { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1, flap:0 }; for(const k of PK) o[k] = 0; o.sx = o.sy = 1; return o; }
+// pose targets P and damped values C: one object literal with every channel, damped field by field (a string-keyed
+// loop over the channel names made them dictionaries, and every double stored there was a fresh heap number each tick)
+function newPose(){ return { face:'N', sweat:0, stars:0, spin:0, wagSpd:0.1, flap:0, bx:0, by:0, sx:1, sy:1, lean:0, twist:0, hx:0, hy:0, hz:0, aLz:0, aRz:0, aLx:0, aRx:0, lLz:0, lRz:0, roll:0, rz:0, wag:0, wf:0, ex:0, tl:0 }; }
+function poseDamp(C, P, r){
+  C.bx += (P.bx - C.bx)*r; C.by += (P.by - C.by)*r; C.sx += (P.sx - C.sx)*r; C.sy += (P.sy - C.sy)*r;
+  C.lean += (P.lean - C.lean)*r; C.twist += (P.twist - C.twist)*r; C.hx += (P.hx - C.hx)*r; C.hy += (P.hy - C.hy)*r;
+  C.hz += (P.hz - C.hz)*r; C.aLz += (P.aLz - C.aLz)*r; C.aRz += (P.aRz - C.aRz)*r; C.aLx += (P.aLx - C.aLx)*r;
+  C.aRx += (P.aRx - C.aRx)*r; C.lLz += (P.lLz - C.lLz)*r; C.lRz += (P.lRz - C.lRz)*r; C.roll += (P.roll - C.roll)*r;
+  C.rz += (P.rz - C.rz)*r; C.wag += (P.wag - C.wag)*r; C.wf += (P.wf - C.wf)*r; C.ex += (P.ex - C.ex)*r;
+  C.tl += (P.tl - C.tl)*r;
+}
 const FAST = { attack:1, attack2:1, attack3:1, shoot:1, dash:1, roar:1, special:1, hurt:1, parry:1,
   atk1:1, atk2:1, atk3:1, atk4:1, specialUp:1, specialDash:1 };
 const YAW = 0.61;
 const MAXM = 6;
+
+// per-rig materials are recycled, never disposed: three.js deletes a shader program as soon as no material uses it, so a
+// disposed boss / little slime / knight form threw its program (and the see-through twin compiled for a fade) away and
+// the next one compiled and linked it again. A recycled material keeps its programs.
+const MPOOL = new Map();
+function takeMat(key, make){
+  let list = MPOOL.get(key);
+  if(!list){ list = []; MPOOL.set(key, list); }
+  if(list.length){ const m = list.pop(); m.userData.pool.free = false; return m; }
+  const m = make();
+  m.userData.pool = { list, free:false, tr:m.transparent, op:m.opacity, dw:m.depthWrite, ei:m.emissiveIntensity };
+  return m;
+}
+function giveMat(m){
+  const s = m && m.userData.pool;
+  if(!s){ if(m) m.dispose(); return; }
+  if(s.free) return;
+  s.free = true;
+  if(m.transparent!==s.tr){ m.transparent = s.tr; m.needsUpdate = true; }
+  m.opacity = s.op; m.depthWrite = s.dw;
+  if(s.ei!==undefined) m.emissiveIntensity = s.ei;
+  if(m.userData.uFlash) m.userData.uFlash.value = 0;
+  s.list.push(m);
+}
 
 function Kit(o){
   this.o = o;
@@ -5604,8 +5775,9 @@ function Kit(o){
   this.yaw = new THREE.Group(); this.mir.add(this.yaw);           // turn toward the camera
   this.scl = new THREE.Group(); this.yaw.add(this.scl); if(o.scale) this.scl.scale.setScalar(o.scale);
   this.body = new THREE.Group(); this.scl.add(this.body);
-  this.mat = G.look.vmat({ instance:true, rough: o.rough==null ? 0.66 : o.rough });
-  this.gmat = G.look.vmat({ instance:true, rough:0.26, rim:0.35 });
+  const rough = o.rough==null ? 0.66 : o.rough;
+  this.mat = takeMat('body|'+rough, ()=> G.look.vmat({ instance:true, rough }));
+  this.gmat = takeMat('gloss', ()=> G.look.vmat({ instance:true, rough:0.26, rim:0.35 }));
   this.mats = [this.mat, this.gmat];          // opaque per-rig materials (flash + fade)
   this.tmats = [];                             // always-transparent per-rig materials { m, base }
   this.bmat = null; this.emat = null;          // glow materials (blade / orb, eyes)
@@ -5620,7 +5792,7 @@ function Kit(o){
 }
 Kit.prototype.grp = function(parent, pos){ const g = new THREE.Group(); if(pos) g.position.set(pos[0], pos[1], pos[2]); parent.add(g); return g; };
 Kit.prototype.glow = function(color, inten){
-  const m = G.look.vmat({ instance:true, rough:0.3, rim:0.8, emissive:color, emissiveIntensity: inten==null ? 0.7 : inten });
+  const m = takeMat('glow|'+color+'|'+inten, ()=> G.look.vmat({ instance:true, rough:0.3, rim:0.8, emissive:color, emissiveIntensity: inten==null ? 0.7 : inten }));
   m.userData.baseEmissive = inten==null ? 0.7 : inten;
   this.mats.push(m); return m;
 };
@@ -5703,21 +5875,21 @@ function laneTex(){
   return t;
 }
 Kit.prototype.makeMark = function(i){
-  const mat = new THREE.MeshBasicMaterial({ map:warnTex(), transparent:true, depthWrite:false, opacity:0.9, color:0xffc45a, toneMapped:false });
+  const mat = takeMat('mark', ()=> new THREE.MeshBasicMaterial({ map:warnTex(), transparent:true, depthWrite:false, opacity:0.9, color:0xffc45a, toneMapped:false }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), mat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false; m.name = 'bossB_mark';
   G.scene.add(m); this.mk[i] = m;
   return m;
 };
 Kit.prototype.makeLane = function(){
-  const mat = new THREE.MeshBasicMaterial({ map:laneTex(), transparent:true, depthWrite:false, opacity:0.8, color:0xffc45a, toneMapped:false, side:THREE.DoubleSide });
+  const mat = takeMat('lane', ()=> new THREE.MeshBasicMaterial({ map:laneTex(), transparent:true, depthWrite:false, opacity:0.8, color:0xffc45a, toneMapped:false, side:THREE.DoubleSide }));
   const m = new THREE.Mesh(G.look.geo.plane(1, 1), mat);
   m.rotation.x = -HPI; m.renderOrder = 3; m.visible = false; m.castShadow = false; m.name = 'bossB_lane';
   G.scene.add(m); this.laneM = m;
 };
 Kit.prototype.makeBeam = function(){
   const col = this.o.beamCol || '#b060ff';
-  const add = (c, o)=> new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false });
+  const add = (c, o)=> takeMat('beam|'+c+'|'+o, ()=> new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false }));
   const mo = add(col, 0.55), mi = add(this.o.beamCore || '#fff0ff', 0.95), mc = add(col, 0.7);
   const g = new THREE.Group(); g.name = 'bossB_beam';
   const cg = G.look.geo.cylinder(1, 1, 1, 18, false);
@@ -5770,6 +5942,7 @@ Kit.prototype.updWorld = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
+  if(e.introLine) introLine(e);
   this.hitNow = fl > this.prevFlash;
   if(this.hitNow){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
@@ -5782,7 +5955,7 @@ Kit.prototype.update = function(e){
   basePose(this, e, P, T);
   if(this.o.pose) this.o.pose(this, e, P, T);
   const r = FAST[e.anim] ? 0.42 : 0.24;
-  for(let i=0;i<PK.length;i++){ const k = PK[i]; C[k] += (P[k] - C[k])*r; }
+  poseDamp(C, P, r);
   const lw = this.land, ww = this.wob*Math.sin(T*1.3);
   this.sqy = -0.2*lw - 0.07*ww; this.sqx = 0.12*lw + 0.06*ww;
   this.o.apply(this, e, C, T, P);
@@ -5811,13 +5984,14 @@ Kit.prototype.update = function(e){
   this.updWorld(e, T);
 };
 Kit.prototype.dispose = function(){
-  for(let i=0;i<this.mats.length;i++) this.mats[i].dispose();
-  for(let i=0;i<this.tmats.length;i++) this.tmats[i].m.dispose();
-  for(let i=0;i<this.mk.length;i++){ const m = this.mk[i]; if(m){ if(m.parent) m.parent.remove(m); m.material.dispose(); } }
+  for(let i=0;i<this.mats.length;i++) giveMat(this.mats[i]);
+  for(let i=0;i<this.tmats.length;i++) giveMat(this.tmats[i].m);
+  this.mats.length = 0; this.tmats.length = 0;
+  for(let i=0;i<this.mk.length;i++){ const m = this.mk[i]; if(m){ if(m.parent) m.parent.remove(m); giveMat(m.material); } }
   this.mk.length = 0;
-  if(this.laneM){ if(this.laneM.parent) this.laneM.parent.remove(this.laneM); this.laneM.material.dispose(); this.laneM = null; }
+  if(this.laneM){ if(this.laneM.parent) this.laneM.parent.remove(this.laneM); giveMat(this.laneM.material); this.laneM = null; }
   if(this.beamG){ if(this.beamG.parent) this.beamG.parent.remove(this.beamG); if(this.chargeM.parent) this.chargeM.parent.remove(this.chargeM);
-    for(const m of this.beamMats) m.dispose(); this.beamG = null; this.chargeM = null; }
+    for(const m of this.beamMats) giveMat(m); this.beamG = null; this.chargeM = null; }
 };
 Kit.prototype.rig = function(height, radius){
   const k = this;
@@ -5950,7 +6124,19 @@ function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } 
 const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
-function sayLow(e, s){ if(G.fx && G.fx.text) G.fx.text(s, e.x + e.face*0.6, e.y + 1.3, e.z + 0.5, 'onoma'); else say(e, s); }
+// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
+// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
+// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
+// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
+const BANNER_T = 142, LINE_T = 44;
+G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossB) b.bannerEnd = G.time.tick + BANNER_T; });
+function sayIntro(e, line){ e.introLine = line; introLine(e); }
+function introLine(e){                     // also called every tick from the rig update (it runs in every state)
+  if(e.dead){ e.introLine = null; return; }
+  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
+  say(e, e.introLine); e.introLine = null;
+  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
+}
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
 const O = {
@@ -6108,7 +6294,7 @@ function phaseCheck(e){
 function introRoar(len, line, extra){
   return { id:'bossB_intro', anim:'roar', len, hits:[], noAlert:true,
     fn(e, t){ if(t===0) G.setAnim(e, 'roar', len, 0.3);
-      if(t===6 && line) say(e, line);
+      if(t===6 && line) sayIntro(e, line);
       if(t===18){ sfx('bossRoar'); shake(3, 24); fx('shock', e.x, 0.02, e.z, O.shock1); }
       if(extra) extra(e, t); },
     onEnd(e){ e.cool = 30; } };
@@ -6201,7 +6387,7 @@ function buildSlime(small){
       for(const q of bub) feat(b, BS, q[0], q[1], -0.04, sph(q[2],10,8), SLM.BUB, [1,1,0.8]);
       b.add(sph(0.3,14,10), '#48c83a', [0.2,0.62,0.1], null, [1,0.8,1]);        // a darker "core" blob inside
     }, { outline:0, post:(g)=> gradY(g, SLM.G1, 0, 1.72, SLM_STOPS) });
-    k.shellMat = G.look.vmat({ instance:true, rough:0.1, rim:1.8, transparent:true, opacity:0.44, emissive:'#1f8a20', emissiveIntensity:0.12, depthWrite:false });
+    k.shellMat = takeMat('shell', ()=> G.look.vmat({ instance:true, rough:0.1, rim:1.8, transparent:true, opacity:0.44, emissive:'#1f8a20', emissiveIntensity:0.12, depthWrite:false }));
     k.tmats.push({ m:k.shellMat, base:0.44 });
     k.shell = k.part(k.jelly, 'shell', (b)=>{
       b.add(sph(1,24,16), SLM.SHELL, BS.c, null, BS.r);
@@ -7253,10 +7439,10 @@ function empTransform(e){
   fx('smoke', e.x, 0.8, e.z, O.smokeBig); fx('poof', e.x, 1.6, e.z + 0.2, O.purify);
   if(G.fx && G.fx.flash) G.fx.flash('#3a1050', 0.5, 14);
   shake(6, 40);
-  // the line is placed at mid-body height (same popup h.say uses) so the name banner above does not cover it
-  sayLow(e, 'これが ほんとうの すがた…！');
   G.bus.emit('bossPhase', { boss:e, phase:2 });
   e.introDue = true; knightIntro(e);
+  // after the new name's banner (a mid-body line still ran through it: 49% of the line's area under the banner)
+  sayIntro(e, 'これが ほんとうの すがた…！');
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;
   G.combat.start(e, KN_M.transform);
@@ -7303,7 +7489,7 @@ G.foes.define('kuroinu', {
   onKOTick(e){ const t = koT(e); purifyTick(e, t); if(t===30) e.freed = true; if(t===84) say(e, 'やっと めがさめたよ…ありがとう'); },
 });
 const EMPEROR_DEF = G.foes.define('emperor', {
-  name:'ダークワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,
+  name:'ダークワンワンたいてい', short:'ワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,
   phaseLine:'ぐぬぬ… ほんきを みせてやる！', phaseLine2:'まだだ… まだ おわらんぞ！',
   hp:900, poise:120, weight:4, radius:1.2, height:3.9, spd:0.036, score:5000, xp:200, entrance:'drop', recover:30,
   build(){ return buildEmperor(); },
@@ -7316,7 +7502,7 @@ const EMPEROR_DEF = G.foes.define('emperor', {
 });
 // form 2 shares everything with form 1 except the name/title the boss bar shows (per-entity def swap, not a new type)
 const EMP2_DEF = Object.create(EMPEROR_DEF, {
-  name: { value:'あんこくナイト', enumerable:true }, title: { value:'ダークワンワンたいてい しんのすがた', enumerable:true },
+  name: { value:'あんこくナイト', enumerable:true }, short: { value:'あんこくナイト', enumerable:true }, title: { value:'ダークワンワンたいてい しんのすがた', enumerable:true },
   height: { value:3.3, enumerable:true }, radius: { value:1.0, enumerable:true }, spd: { value:0.042, enumerable:true },
 });
 // test / tooling access through the defs only
@@ -7332,7 +7518,8 @@ G.foes.types.kuroinu._defs = kuroDefs; G.foes.types.emperor._form2 = EMP2_DEF;
 // 背景のつくり（描画コールと三角形を抑えるため）：
 //   ・空       … カメラに追従する球1枚（グラデーション＋太陽／月＋星のシェーダー）
 //   ・地面     … 歩ける帯（belt）1枚＋まわりの地面1枚（どちらも手描きのCanvasTexture＋頂点カラーのむら）
-//   ・近景     … x方向20単位の「チャンク」ごとに層（solid / sway / glow / deco）を頂点カラーで1メッシュへ結合。
+//   ・近景     … x方向16単位の「チャンク」×奥行き2帯ごとに、静止＋風で揺れる部品（solid / sway）を頂点カラーで1メッシュへ、
+//                輪郭線も帯ごとに1枚へ結合（glow / deco は別メッシュ）。
 //                視錐台カリングで、見えている2〜3チャンクだけが描かれる。
 //   ・遠景     … 視差で動く1グループ（far / farGlow）＋雲（InstancedMesh）
 //   ・粒       … テーマごとに THREE.Points 1つ（動きは頂点シェーダー、CPUは時刻を渡すだけ）
@@ -7343,7 +7530,8 @@ const G = window.G; const THREE = window.THREE; const U = G.U;
 const TAU = Math.PI*2, PI = Math.PI;
 const ZMIN = G.cfg.ZMIN, ZMAX = G.cfg.ZMAX;
 const BELT_Z0 = ZMIN - 0.6, BELT_Z1 = ZMAX + 0.8;   // walkable strip incl. a soft margin
-const CHUNK = 20;                                    // scenery chunk width (frustum-culling unit)
+const CHUNK = 16;                                    // scenery chunk width (frustum-culling unit; 16 balances draw calls
+                                                     // against triangles drawn outside the view: 20 → −2 calls, +3k tris)
 const SHADOW_Z = -10.5;                              // scenery behind this depth does not cast shadows
 
 // ================================================================ small helpers (build time only)
@@ -7495,7 +7683,7 @@ G.stages = [
     ],
     boss:{ type:'cerbe', at:88, x:88 },
     hints:[
-      { at:6, name:MOFU, text:'アリへいは じめんに もぐるぞ！ あしもとが もこもこしたら よけるのじゃ' },
+      { at:6, name:MOFU, text:'へいたいアリは じめんに もぐるぞ！ あしもとが もこもこしたら よけるのじゃ' },
       { at:56, name:MOFU, text:'オニボウズの むらさきの わの なかは てきが つよくなる。はやめに たおすのじゃ' },
     ],
     props:[ {kind:'crystal', x:10, z:-1.5, drop:'coin'}, {kind:'crystal', x:31, z:1.2, drop:'bone'}, {kind:'crystal', x:55, z:-0.9, drop:'star'}, {kind:'crystal', x:80, z:1.0, drop:'cake'} ],
@@ -8414,8 +8602,9 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c) * 2.0; float a = 
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
-const SWAY_GLSL = `{ float h_ = max(0.0, position.y - 0.7); float ph_ = position.x * 0.45 + position.z * 0.3;
-  transformed.x += sin(uTime * 1.6 + ph_) * uSway * h_; transformed.z += cos(uTime * 1.25 + ph_ * 1.3) * uSway * 0.5 * h_; }`;
+// wind sway (vertex shader); amp is the GLSL expression for the sway amount
+const swayGLSL = (amp)=> `{ float h_ = max(0.0, position.y - 0.7); float ph_ = position.x * 0.45 + position.z * 0.3;
+  transformed.x += sin(uTime * 1.6 + ph_) * ${amp} * h_; transformed.z += cos(uTime * 1.25 + ph_ * 1.3) * ${amp} * 0.5 * h_; }`;
 
 // ================================================================ environment state
 const env = {
@@ -8686,56 +8875,84 @@ function buildSpinners(c){
 }
 
 // ---------------------------------------------------------------- merged scenery meshes
-let swayMat = null, swayOutline = null;
+// Per chunk and depth band, the static and the wind-swayed parts are ONE mesh (aSway = 1 marks the swaying vertices)
+// and all outlined layers share ONE outline hull, so a chunk costs ~6 draw calls instead of 11:
+//   near band: solid+sway (casts shadow) · glow · deco · hull      far band (z < SHADOW_Z): solid+sway · hull
+let swayMat = null, hullMat = null;
 function makeSwayMats(){
   swayMat = own(G.look.matInstance(0xffffff, { vertexColors:true, rough:0.85, rim:0.45 }));
   const base = swayMat.onBeforeCompile;
   swayMat.onBeforeCompile = (sh, r)=>{
     base(sh, r);
     sh.uniforms.uTime = env.swayU.uTime; sh.uniforms.uSway = env.swayU.uSway;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + SWAY_GLSL);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway; attribute float aSway;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL('uSway * aSway'));
   };
-  swayMat.customProgramCacheKey = ()=> 'inuSoftSway1';
-  swayOutline = own(new THREE.MeshBasicMaterial({ color:new THREE.Color('#3b2417'), side:THREE.BackSide }));
-  swayOutline.onBeforeCompile = (sh)=>{
+  swayMat.customProgramCacheKey = ()=> 'inuSoftSway2';
+  // the outline hull is pushed out at build time, so this is a plain back-face fill that only adds the wind
+  hullMat = own(new THREE.MeshBasicMaterial({ color:new THREE.Color('#3b2417'), side:THREE.BackSide }));
+  hullMat.onBeforeCompile = (sh)=>{
     sh.uniforms.uTime = env.swayU.uTime; sh.uniforms.uSway = env.swayU.uSway;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * 0.032;\n' + SWAY_GLSL);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uSway; attribute float aSway;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL('uSway * aSway'));
   };
-  swayOutline.customProgramCacheKey = ()=> 'inuOutlineSway1';
+  hullMat.customProgramCacheKey = ()=> 'inuStageHull1';
 }
+// concatenate built geometries. list: [geometry, sway 0|1, line width]. Without `hull` the result keeps
+// position/normal/colour and gets aSway; with `hull` it is the outline hull: every vertex pushed out along its normal
+// by its part's line width (so the thinner glow line shares the geometry), position + aSway only.
+function joinGeo(list, hull){
+  let nv = 0, ni = 0;
+  for(const it of list){ nv += it[0].attributes.position.count; ni += it[0].index.count; }
+  const pos = new Float32Array(nv*3), nor = hull ? null : new Float32Array(nv*3), col = hull ? null : new Float32Array(nv*3);
+  const sw = new Float32Array(nv), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  let vo = 0, io = 0;
+  for(const [g, sway, t] of list){
+    const P = g.attributes.position.array, N = g.attributes.normal.array, I = g.index.array, n = g.attributes.position.count;
+    const S = g.attributes.aSway ? g.attributes.aSway.array : null;
+    if(hull){ for(let i=0;i<n*3;i++) pos[vo*3 + i] = P[i] + N[i]*t; }
+    else { pos.set(P, vo*3); nor.set(N, vo*3); col.set(g.attributes.color.array, vo*3); }
+    if(S) sw.set(S, vo); else if(sway) sw.fill(1, vo, vo + n);
+    for(let k=0;k<I.length;k++) idx[io++] = I[k] + vo;
+    vo += n;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  if(!hull){ g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); }
+  g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
+  g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere();
+  return g;
+}
+const LINE = 0.032, GLOW_LINE = 0.022;
 function buildChunks(c){
   const glowMat = own(new THREE.MeshBasicMaterial({ vertexColors:true, toneMapped:false }));
   env.glowMat = glowMat; env.glowPost = null;
-  const solidMat = G.look.vmat({ rough:0.85, rim:0.45 }), decoMat = G.look.vmat({ rough:0.9, rim:0.3 });
+  const decoMat = G.look.vmat({ rough:0.9, rim:0.3 });
   makeSwayMats();
   let tris = 0, meshes = 0;
   const count = (g)=>{ tris += (g.index ? g.index.count : g.attributes.position.count)/3; meshes++; };
+  const hullMesh = (list, name)=>{
+    const o = new THREE.Mesh(own(joinGeo(list, true)), hullMat); o.name = name;
+    o.userData.isOutline = true; o.castShadow = false; o.receiveShadow = false; o.visible = G.quality.tier < 2;
+    addObj(o);
+  };
   for(const ch of c.chunks){
-    if(ch.solid && !ch.solid.empty){
-      const g = own(ch.solid.build()); count(g);
-      const m = new THREE.Mesh(g, solidMat); m.castShadow = true; m.receiveShadow = true; m.name = 'solid';
-      G.look.outline(m, 0.032); addObj(m);
-    }
-    if(ch.sway && !ch.sway.empty){
-      const g = own(ch.sway.build()); count(g);
-      const m = new THREE.Mesh(g, swayMat); m.castShadow = true; m.receiveShadow = true; m.name = 'sway';
-      const o = new THREE.Mesh(g, swayOutline); o.userData.isOutline = true; o.castShadow = false; o.visible = G.quality.tier < 2; m.add(o);
-      addObj(m);
-    }
-    for(const k of ['solidB', 'swayB']){
-      const b = ch[k]; if(!b || b.empty) continue;
-      const g = own(b.build()); count(g);
-      const m = new THREE.Mesh(g, k==='solidB' ? solidMat : swayMat); m.castShadow = false; m.receiveShadow = true; m.name = k;
-      if(k==='solidB') G.look.outline(m, 0.032);
-      else { const o = new THREE.Mesh(g, swayOutline); o.userData.isOutline = true; o.castShadow = false; o.visible = G.quality.tier < 2; m.add(o); }
-      addObj(m);
-    }
-    if(ch.glow && !ch.glow.empty){
-      const g = own(ch.glow.build()); count(g);
-      const m = new THREE.Mesh(g, glowMat); m.castShadow = false; m.name = 'glow';
-      G.look.outline(m, 0.022); addObj(m);
+    for(const B of ['', 'B']){
+      const parts = [], hull = [];
+      if(ch['solid' + B] && !ch['solid' + B].empty) parts.push([ch['solid' + B].build(), 0]);
+      if(ch['sway' + B] && !ch['sway' + B].empty) parts.push([ch['sway' + B].build(), 1]);
+      if(parts.length){
+        const g = own(joinGeo(parts, false)); count(g);
+        for(const it of parts) it[0].dispose();
+        const m = new THREE.Mesh(g, swayMat); m.name = 'solid' + B; m.castShadow = !B; m.receiveShadow = true;
+        addObj(m); hull.push([g, 0, LINE]);
+      }
+      if(!B && ch.glow && !ch.glow.empty){
+        const g = own(ch.glow.build()); count(g);
+        const m = new THREE.Mesh(g, glowMat); m.castShadow = false; m.name = 'glow';
+        addObj(m); hull.push([g, 0, GLOW_LINE]);
+      }
+      if(hull.length) hullMesh(hull, 'hull' + B);
     }
     if(ch.deco && !ch.deco.empty){
       const g = own(ch.deco.build()); count(g);
@@ -8829,7 +9046,7 @@ function disposeEnv(){
   for(const x of env.own){ try { x.dispose(); } catch(err){ G.logError('stage.dispose', err); } }
   env.own = []; env.root = null; env.sky = null; env.far = null; env.clouds = null; env.cloudData = null;
   env.parts = null; env.halos = null; env.spinners = []; env.partU = null; env.haloU = null; env.skyU = null; env.glowMat = null;
-  swayMat = null; swayOutline = null;
+  swayMat = null; hullMat = null;
   env.built = false; env.idx = -1;
   restoreDefaults();
 }
@@ -8891,16 +9108,18 @@ function spawnQueued(item, a){
   if(e) a.spawned++;
   return e;
 }
+// an arena never wider than what the camera can show (phones in portrait see ~8 units, 16:9 ~14)
+function viewArenaW(){ return Math.max(6, (G.cam.usableW ? G.cam.usableW() : 2*G.cam.halfW) - 0.6); }
 function startEvent(ev){
   const d = st.def, L = d.length;
-  // an arena never wider than what the camera can show (phones in portrait see ~8 units, 16:9 ~14)
-  const vw = Math.max(6, (G.cam.usableW ? G.cam.usableW() : 2*G.cam.halfW) - 0.6);
+  const vw = viewArenaW();
+  // areaA/areaB: the lock this fight started with; a later refitLock (view resized) stays inside it
   if(ev.kind==='wave'){
     const w = Math.min(ev.width, vw);
     let a = ev.at - w*0.4; a = Math.max(-2, a); const b = Math.min(L + 4, a + w);
     lockTo(a, b);
     st.active = { kind:'wave', ev, t:0, qt:0, qi:0, q: makeQueue(ev.wave.foes, 16), then: ev.wave.then || null,
-      thenAt: ev.wave.thenAt==null ? 1 : ev.wave.thenAt, spawned:0, lockA:a, lockB:b };
+      thenAt: ev.wave.thenAt==null ? 1 : ev.wave.thenAt, spawned:0, lockA:a, lockB:b, areaA:a, areaB:b };
     G.bus.emit('wave', { index:ev.idx, total:d.waves.length, at:ev.at, lockA:a, lockB:b });
   } else {
     let [a, b] = arenaRange(d, ev);
@@ -8910,9 +9129,26 @@ function startEvent(ev){
     const e = spawnFoe(ev.type, bx, -0.3, { boss:true, face:-1 });
     const tdef = G.foes && G.foes.types ? G.foes.types[ev.type] : null;
     const nm = BOSS_NAMES[ev.type] || [ev.type, ''];
-    st.active = { kind:ev.kind, ev, t:0, ent:e, down:false, goneT:0, doneT:0, lockA:a, lockB:b };
+    st.active = { kind:ev.kind, ev, t:0, ent:e, down:false, goneT:0, doneT:0, lockA:a, lockB:b, areaA:a, areaB:b };
     G.bus.emit('bossIntro', { boss:e, name:(tdef && tdef.name) || nm[0], title:(tdef && tdef.title) || nm[1], mid: ev.kind==='mid', type:ev.type });
   }
+}
+// the view changed size mid-fight (a phone turned to portrait, a browser bar came in): re-fit the lock to the new
+// view width so the hero and every foe stay on screen. It shrinks/grows about its old centre, moves only as far as
+// needed to keep the hero (and, in a boss arena, the boss while it fits) inside, and never leaves the lock the
+// fight started with (turning back to landscape restores it).
+// core's belt clamp then pulls entered foes back inside the new bounds on their next tick.
+function refitLock(){
+  const a = st.active; if(!st.locked || !a || a.areaB==null) return;
+  const w = Math.min(a.areaB - a.areaA, viewArenaW());
+  if(Math.abs(w - (st.lockB - st.lockA)) < 0.01) return;
+  const p = G.player, e = a.ent, m = 1;
+  let lo = st.lockA + (st.lockB - st.lockA - w)*0.5;
+  if(e && !e.dead && !e.removed && !e.removeMe) lo = U.clamp(lo, e.x + m - w, e.x - m);
+  if(p) lo = U.clamp(lo, p.x + m - w, p.x - m);
+  lo = U.clamp(lo, a.areaA, a.areaB - w);
+  a.lockA = lo; a.lockB = lo + w;
+  lockTo(lo, lo + w);
 }
 function tickWave(a){
   a.qt++;
@@ -8960,6 +9196,7 @@ function bindBus(){
     if(!b || b===a.ent || isBossEnt(b)) a.down = true;
   });
   G.bus.on('quality', applyParticleQuality);
+  G.bus.on('resize', refitLock);
 }
 
 // ================================================================ per-frame visuals
@@ -9097,6 +9334,7 @@ function hurtable(t, team){
   if(t.inv>0) return false;
   if(t.state==='spawn' && !t.hittableSpawn) return false;
   if(t.intangible) return false;               // ghosts phasing, burrowed ants...
+  const a = t.atk; if(a && a.def.inv && a.t >= a.def.inv[0] && a.t <= a.def.inv[1]) return false;   // i-frames of the move itself
   return true;
 }
 function eachTarget(team, fn){
@@ -9117,7 +9355,6 @@ G.combat = {
     ent.atk = { def, t:0, sets: (def.hits||[]).map(()=> new Set()), swung:false };
     ent.lastAtk = def;
     G.setAnim(ent, def.anim || 'atk1', def.len, U.clamp(first/Math.max(1,def.len), 0.05, 0.95));
-    if(def.inv) ent.invAtk = def.inv;
     if(def.armor) ent.atkArmor = true;
   },
   cancel(ent){ if(ent && ent.atk){ ent.atk = null; ent.atkArmor = false; } },
@@ -9343,7 +9580,8 @@ function killProj(p, silent){
   if(p.dead) return; p.dead = true;
   if(p.vis){ if(p.vis.obj && p.vis.obj.parent) p.vis.obj.parent.remove(p.vis.obj); try{ p.vis.dispose && p.vis.dispose(); }catch(err){ G.logError('proj.dispose', err); } }
   if(!silent){
-    if(p.boom) G.combat.area(Object.assign({ owner:p.owner, team:p.team, x:p.x, y:0, z:p.z, delay:0, dur:3 }, p.boom));
+    if(p.boom){ const ar = G.combat.area(Object.assign({ owner:p.owner, team:p.team, x:p.x, y:0, z:p.z, delay:0, dur:3 }, p.boom));
+      if(p.owner && p.owner.team===0 && p.owner.atkMul) ar.dmg *= p.owner.atkMul; }
     if(p.onEnd) try { p.onEnd(p); } catch(err){ G.logError('proj.onEnd', err); }
     if(G.fx && G.fx.burst) G.fx.burst(p.boom ? 'hitBig' : 'sparkle', p.x, p.y, p.z, { scale: p.boom ? 1.2 : 0.6 });
   }
@@ -9441,8 +9679,9 @@ G.pickups = {
     const p = G.player;
     if(!p || p.dead || e.delay>0) return;
     const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz);
-    const magnet = e.type==='coin' || e.type==='gem' || e.type==='star' ? 2.2 : 1.2;
-    if(d < magnet && e.onGround){ e.x += dx/d*Math.min(d, 0.12); e.z += dz/d*Math.min(d, 0.12); }
+    const won = G.scenes && G.scenes.play && G.scenes.play.cleared;
+    const magnet = won ? 1e9 : (e.type==='coin' || e.type==='gem' || e.type==='star' ? 2.2 : 1.2);
+    if(d < magnet && (e.onGround || won)){ const sp = won ? 0.3 : 0.12; e.x += dx/d*Math.min(d, sp); e.z += dz/d*Math.min(d, sp); }
     if(d < 0.55 && Math.abs(p.y - e.y) < 1.2) collect(e, p);
   },
 };
@@ -9512,15 +9751,18 @@ function foesInView(){
 }
 function viewArea(e, o){
   const vr = G.cam.viewRange();
-  return G.combat.area(Object.assign({ owner:e, x:(vr[0]+vr[1])/2, y:0, z:(G.cfg.ZMIN+G.cfg.ZMAX)/2, r:(vr[1]-vr[0])/2+1.5,
+  const a = G.combat.area(Object.assign({ owner:e, x:(vr[0]+vr[1])/2, y:0, z:(G.cfg.ZMIN+G.cfg.ZMAX)/2, r:(vr[1]-vr[0])/2+1.5,
     zr:(G.cfg.ZMAX-G.cfg.ZMIN), y0:-1, y1:8, dur:2 }, o));
+  a.dmg *= (e.atkMul || 1);             // ults grow with level / hero strength like every other attack
+  return a;
 }
 function fxb(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o); }
 function rainFrom(e, kind, o){
   const vr = G.cam.viewRange();
   const x = U.rand(vr[0]+0.5, vr[1]-0.5), z = U.rand(G.cfg.ZMIN, G.cfg.ZMAX);
-  G.combat.shoot(Object.assign({ owner:e, kind, x: x - 1.2, y: 9, z, vx: 0.1, vy: -0.34, dmg: 7, r:0.5, power:2, up:0.12, life:60,
+  const p = G.combat.shoot(Object.assign({ owner:e, kind, x: x - 1.2, y: 9, z, vx: 0.1, vy: -0.34, dmg: 7, r:0.5, power:2, up:0.12, life:60,
     boom:{ r:1.1, dmg:5, power:1, kind:'star', up:0.1, fx:'ring' } }, o||{}));
+  p.dmg *= (e.atkMul || 1);             // (the boom is scaled by the owner's atkMul in 50_combat)
 }
 
 // ---------------------------------------------------------------- move tables
@@ -9569,7 +9811,7 @@ const MOVES = {
       if(t<72 && t%3===0){ const fs = foesInView(); const f = fs.length ? fs[Math.floor(G.rng()*fs.length)] : null; const vr = G.cam.viewRange();
         const nx = f ? f.x - p.face*0.9 : U.rand(vr[0]+1, vr[1]-1); p.x = U.clamp(nx, vr[0]+0.6, vr[1]-0.6); p.z = f ? f.z : U.rand(G.cfg.ZMIN, G.cfg.ZMAX);
         p.face = f ? U.sign(f.x - p.x) : p.face; G.setAnim(p, (t/3)%2 ? 'atk1':'atk2', 6, 0.4); fxb('stars', p.x, 0.8, p.z, { count:3, color:'#ffd24d' });
-        if(f && !f.intangible) G.combat.damage(f, 3, { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
+        if(f && !f.intangible) G.combat.damage(f, 3*(p.atkMul||1), { src:p, kind:'blunt', power:1, stun:30, dir:p.face, stop:0 }); }
       if(t===76){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 16, 0.3); viewArea(p, { dmg:28, power:3, kind:'blunt', up:0.28, kb:0.14 }); G.cam.shake(6,24); if(G.fx&&G.fx.flash) G.fx.flash('#fff0b0', 0.7, 10); }
     } }); } },
   },
@@ -9639,7 +9881,7 @@ const MOVES = {
     },
     ult:{ name:'かみふぶきロックンロール', kind:'pop', build(e){ return A({ id:'wt_ult', anim:'ult', len:100, fn(p,t){
       if(t>10 && t<90 && t%2===0){ const ang = Math.sin(t*0.12)*0.9; G.combat.shoot({ owner:p, kind:'confetti', x:p.x+p.face*0.7, y:0.8, z:p.z,
-        vx:p.face*0.42, vz:ang*0.07, vy:0.01, dmg:3, r:0.45, pierce:3, life:40, power:1, stun:24 }); }
+        vx:p.face*0.42, vz:ang*0.07, vy:0.01, dmg:3*(p.atkMul||1), r:0.45, pierce:3, life:40, power:1, stun:24 }); }
       if(t===92){ viewArea(p, { dmg:22, power:3, kind:'pop', up:0.26 }); fxb('confetti', p.x+p.face*3, 2.5, p.z, { count:40 }); }
     } }); } },
   },
@@ -9663,7 +9905,7 @@ const MOVES = {
       if(t===0){ home.x=p.x; home.z=p.z; list = foesInView().slice(0, 10); }
       const k = Math.floor((t-4)/7);
       if(t>=4 && (t-4)%7===0 && k < list.length){ const f = list[k]; if(!f.dead && !f.intangible){ p.x = f.x - p.face*1.0; p.z = f.z; G.setAnim(p, 'atk2', 7, 0.3);
-        G.combat.damage(f, 6, { src:p, kind:'slash', power:2, stun:60, dir:p.face, stop:2 }); fxb('slash', f.x, f.y+0.7, f.z, { color:'#ffffff' }); } }
+        G.combat.damage(f, 6*(p.atkMul||1), { src:p, kind:'slash', power:2, stun:60, dir:p.face, stop:2 }); fxb('slash', f.x, f.y+0.7, f.z, { color:'#ffffff' }); } }
       if(t===80){ p.x = home.x; p.z = home.z; G.setAnim(p, 'ult', 20, 0.5); if(G.fx&&G.fx.text) G.fx.text('…のうとう。', p.x, 2.2, p.z, 'info'); }
       if(t===92){ viewArea(p, { dmg:30, power:3, kind:'slash', up:0.28, kb:0.12 }); if(G.fx&&G.fx.flash) G.fx.flash('#ffffff', 0.8, 10); G.cam.shake(6,20); }
     } }); } },
@@ -9711,7 +9953,7 @@ const P = G.playerCtl = {
     const mv = MOVES[heroId] || MOVES.inu;
     const st = mv.stats;
     const lvl = (G.game && G.game.level) || 1;
-    const lvlHp = 1 + (lvl-1)*0.08, lvlAtk = 1 + (lvl-1)*0.05;
+    const lvlHp = Math.pow(1.08, lvl-1), lvlAtk = Math.pow(1.05, lvl-1);   // same compounding as G.game.addXp
     const meta = heroMeta(heroId);
     let rig = null;
     try { rig = G.heroes && G.heroes.build ? G.heroes.build(heroId) : null; } catch(err){ G.logError('hero build', err); }
@@ -9834,7 +10076,7 @@ function checkStomp(p){
     const top = f.y + f.height;
     if(p.y < top - 0.35 || p.y > top + 0.3) continue;
     f.stompT = 30;
-    G.combat.damage(f, 6, { src:p, kind:'pop', power:1, stun: f.def && f.def.boss ? 0 : 26, dir:p.face, kb:0.02, noDown:true });
+    G.combat.damage(f, 6*(p.atkMul||1), { src:p, kind:'pop', power:1, stun: f.def && f.def.boss ? 0 : 26, dir:p.face, kb:0.02, noDown:true });
     p.vy = 0.2; p.djump = false; p.airCount = 0; p.stompUsed = true;
     G.setAnim(p, 'jump');
     G.bus.emit('stomp', { ent:p, target:f });
@@ -9865,6 +10107,7 @@ function tick(p){
   if(p.buffer>0) p.buffer--;
   if(p.comboT>0){ p.comboT--; if(p.comboT===0) p.comboStep = 0; }
   if(p.sp < SP_MAX && p.state!=='ult') p.sp = Math.min(SP_MAX, p.sp + SP_REGEN);
+  if(p.chargeSnd && p.state!=='charge'){ p.chargeSnd = false; if(G.audio && G.audio.sfx) G.audio.sfx('charge', { stop:true }); }
   for(const f of G.world.ents) if(f.stompT>0 && f.team===1) f.stompT--;
 
   // cut-in freeze is handled by the game loop; when it ends we start the ult attack
@@ -9920,6 +10163,7 @@ function tick(p){
       if(b.dodge.pressed){ p.charge = 0; p.chargeFull = false; if(G.audio) G.audio.sfx('charge', { stop:true }); doDodge(p); }
       return;
     }
+    for(const k of ['jump','dodge','special']) if(b[k].pressed) p.q[k] = 14;
     const full = p.charge >= 0.45;
     p.charge = 0; p.chargeFull = false; p.chargeT = 0;
     if(G.audio && G.audio.sfx) G.audio.sfx('charge', { stop:true });
@@ -9941,6 +10185,7 @@ function tick(p){
     } else {
       const def = a.def;
       const pastCancel = a.t >= (def.cancel||def.len);
+      if(!pastCancel){ for(const k of ['jump','special']) if(b[k].pressed && !(p.q[k] > 0)) p.q[k] = 14; }
       if(p.state==='atk' && pastCancel){
         if(p.buffer>0 && p.comboStep>0 && p.comboStep < comboDefs(p).length){ nextCombo(p); return; }
         if(b.special.pressed && p.sp>=1){ doSpecial(p); return; }
@@ -9995,6 +10240,7 @@ function tick(p){
     G.setState(p, 'charge'); p.chargeT = 0; p.charge = 0;
     G.bus.emit('chargeStart', { ent:p });
     if(G.audio && G.audio.sfx) G.audio.sfx('charge');
+    p.chargeSnd = true;
     return;
   }
   const mx = I.x, mz = I.z;
@@ -10039,6 +10285,8 @@ G.bus.on('hurt', (d)=>{
   if(G.audio && G.audio.voice) G.audio.voice(p.type, 'hurt');
 });
 G.bus.on('down', (d)=>{ const p = G.player; if(p && d.ent===p){ p.downT = 0; p.inv = Math.max(p.inv, 70); } });
+// one source of truth for hero stats: the select screen paws read G.heroes.list[].stats
+if(G.heroes && G.heroes.list){ for(const h of G.heroes.list){ const m = MOVES[h.id]; if(m) h.stats = Object.assign({}, m.stats); } }
 })();
 
 
@@ -10866,13 +11114,15 @@ function hitSparks(kind, x,y,z, n, s, d, main){
 function impact(x,y,z,kind,power,o){
   o = o || {};
   const K = KIND[kind] || KIND.slash;
-  const s = (o.scale||1) * (power>=3 ? 1.65 : power>=2 ? 1.3 : 1);
-  const d = o.dir||0, main = o.color || K.main;
   const reduced = !!o.reduced;
+  // sizes stay near the hero's own size (~1.25 units): the hit must read without hiding who landed it.
+  // (was 1.65× at power 3 with a 1.4-wide opaque star: on a phone it swallowed the hero for ~8 frames)
+  const s = (o.scale||1) * (power>=3 ? 1.35 : power>=2 ? 1.18 : 1) * (reduced ? 0.75 : 1);
+  const d = o.dir||0, main = o.color || K.main;
   // 1 white core flash
-  sp(T.glow, x, y, z); S.s0 = 0.9*s; S.s1 = 1.3*s; S.curve = 2; S.life = power>=2 ? 9 : 7; S.fout = 1; S.add = 1; S.a = 0.85; sc_('#ffffff'); emit();
-  // 2 flat comic star that pops out fast and fades
-  sp(T.impact, x, y, z); S.s0 = 0.35*s; S.s1 = 1.4*s; S.curve = 2; S.life = 9 + 2*power; S.fout = 0.45; S.rot = R(-0.4,0.4); S.spin = R(-0.02,0.02); sc_(main); emit();
+  sp(T.glow, x, y, z); S.s0 = 0.8*s; S.s1 = 1.15*s; S.curve = 2; S.life = power>=2 ? 8 : 7; S.fout = 1; S.add = 1; S.a = 0.75; sc_('#ffffff'); emit();
+  // 2 flat comic star that pops out fast and fades (opaque, so small and short)
+  sp(T.impact, x, y, z); S.s0 = 0.35*s; S.s1 = 1.2*s; S.curve = 2; S.life = 7 + 2*power; S.fout = 0.55; S.rot = R(-0.4,0.4); S.spin = R(-0.02,0.02); sc_(main); emit();
   if(reduced) return;
   // 3 sparks by kind
   hitSparks(kind, x, y, z, cnt(o.count || (power>=3 ? 16 : power>=2 ? 10 : 6)), s, d, main);
@@ -10880,15 +11130,14 @@ function impact(x,y,z,kind,power,o){
   sp(T.ring, x, y, z); S.s0 = 0.3*s; S.s1 = 1.9*s; S.curve = 2; S.life = 12; S.add = 1; S.a = 0.9; S.fout = 0.8; sc_(main); emit();
   // 5 radial speed lines (power 2+)
   if(power >= 2){
-    const m = cnt(power>=3 ? 14 : 9);
+    const m = cnt(power>=3 ? 11 : 8);
     for(let i=0;i<m;i++){ const a = i/m*TAU + R(-0.15,0.15), c = Math.cos(a), si = Math.sin(a), spd = R(0.12,0.2)*s;
       sp(T.streak, x+c*0.35*s, y+si*0.35*s, z); S.vx = c*spd; S.vy = si*spd; S.drag = 0.12; S.flags = F_VALIGN; S.s0 = R(0.8,1.1)*s; S.s1 = 0.4*s; S.asp = 0.12;
       S.life = R(8,11); S.add = 0.85; S.fout = 0.6; sc_(i%3 ? '#ffffff' : main); emit(); }
   }
-  // 6 finisher: second ring + big twinkle
+  // 6 finisher: one big twinkle (the second ring was one layer too many over the hero)
   if(power >= 3){
-    sp(T.wave, x, y, z); S.s0 = 0.5*s; S.s1 = 2.6*s; S.curve = 2; S.life = 18; S.add = 0.7; S.fout = 0.8; S.delay = 3; sc_(main); emit();
-    sp(T.flare, x, y, z+0.05); S.s0 = 1.6*s; S.curve = 3; S.life = 16; S.add = 1; S.rot = R(-0.3,0.3); sc_('#ffffff'); emit();
+    sp(T.flare, x, y, z+0.05); S.s0 = 1.4*s; S.curve = 3; S.life = 14; S.add = 1; S.a = 0.85; S.rot = R(-0.3,0.3); sc_('#ffffff'); emit();
   }
 }
 
@@ -11039,7 +11288,8 @@ function buildCSS(){
   '.fxp.crit::after,.fxp.lvup::after{content:attr(data-t);position:absolute;left:0;top:0;text-shadow:none;-webkit-background-clip:text;background-clip:text;color:transparent;' +
     'background-image:linear-gradient(180deg,#fffbd0 0%,#ffd23a 42%,#ff8a1a 78%,#ff5a2a 100%)}',
   '.fxp.lvup::after{background-image:linear-gradient(180deg,#ffffff 0%,#fff27a 34%,#8dff7a 68%,#4ad0ff 100%)}',
-  '.fxp.onoma{font-size:clamp(26px,7vmin,54px);color:#fff;letter-spacing:-.03em;text-shadow:'+ringShadow(0.06,'var(--oc)',12)+','+ringShadow(0.13,'#3b2417',18)+','+ringShadow(0.095,'#3b2417',12)+',0 .17em 0 #3b2417}',
+  '.fxp.onoma,.fxp.pow{font-size:clamp(26px,7vmin,54px);color:#fff;letter-spacing:-.03em;text-shadow:'+ringShadow(0.06,'var(--oc)',12)+','+ringShadow(0.13,'#3b2417',18)+','+ringShadow(0.095,'#3b2417',12)+',0 .17em 0 #3b2417}',
+  '.fxp.pow{font-size:clamp(20px,5.4vmin,42px)}',   // hit words (ドカッ！ぽんっ！…): smaller, one per spot, never over the hero
   '.fxp.big{font-size:clamp(40px,13vmin,128px);color:#fff;text-shadow:'+ringShadow(0.05,'var(--oc)',12)+','+ringShadow(0.1,'#3b2417',18)+','+ringShadow(0.075,'#3b2417',12)+',0 .12em 0 #3b2417}',
   '.fxp.info{font-size:clamp(15px,3.6vmin,24px);color:#5a3418;background:#fffdf6;border-radius:999px;padding:.4em .9em .35em;box-shadow:0 0 0 .16em #ffcf6a,0 .22em 0 .16em #c98a2a}',
   '.fxp.say{font-size:clamp(15px,3.8vmin,26px);color:#4a2c14;background:#fff;border:.14em solid #3b2417;border-radius:1em;padding:.3em .7em;box-shadow:0 .15em 0 rgba(59,36,23,.35)}',
@@ -11065,7 +11315,7 @@ function buildCSS(){
 let uiRoot=null, layer=null, top=null, flashEl=null, speedHost=null;
 const POP_MAX = 24, ALERT_MAX = 10;
 const pops = [], alerts = [];
-const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, lvup:90, say:80 };
+const STY = { dmg:52, hurt:48, crit:64, heal:56, info:80, big:100, onoma:46, pow:46, lvup:90, say:80 };
 const _sp = { x:0, y:0, visible:true };
 const _pv = new THREE.Vector3();
 function project(x, y, z){
@@ -11074,6 +11324,58 @@ function project(x, y, z){
   _sp.visible = _pv.z < 1 && _pv.z > -1 && Math.abs(_pv.x) < 3 && Math.abs(_pv.y) < 3;
   return _sp;
 }
+// the hero's box on screen (feet → top of the head), refreshed once per frame. Words keep out of it:
+// on a phone the hero is only ~70 px tall and one ドッカーン！ used to hide him completely.
+const hb = { on:false, l:0, r:0, t:0, b:0, h:0 };
+function heroBoxUpdate(){
+  hb.on = false;
+  const e = G.player; if(!e || !e.rig || !e.rig.root || !e.rig.root.parent) return;
+  const rp = e.rig.root.position, hg = e.rig.height || e.height || 1.25;
+  project(rp.x, rp.y, rp.z); if(!_sp.visible) return;
+  const fx = _sp.x, fy = _sp.y;
+  project(rp.x, rp.y + hg, rp.z);
+  const h = fy - _sp.y; if(!(h > 4)) return;
+  hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
+}
+function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
+// the HUD's top boxes (boss bar block, hero panel): words never sit on them either. Read once per frame, in the
+// read phase, only while a word is up; a tall boss's taunt used to float over the boss bar's subtitle on phones
+const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
+let hudEls = null;
+function hudRead(){
+  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
+  for(let i=0;i<2;i++){
+    const e = hudEls[i], q = hud[i]; q.on = false;
+    if(!e || e.classList.contains('x') || !e.offsetParent) continue;
+    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
+    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.on = true;
+  }
+}
+function overHud(X, Y, hw, hh){
+  for(const q of hud) if(q.on && X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b) return q;
+  return null;
+}
+// move a popup (centre X,Y, half size hw,hh) off the hero: over his head, else beside him (its own side first),
+// else under his feet — the smallest move that stays on screen wins
+const _kp = { x:0, y:0 };
+function keepOffHero(X, Y, hw, hh, W, H){
+  _kp.x = X; _kp.y = Y;
+  if(!overHero(X, Y, hw, hh)) return _kp;
+  const m = 4, side = X >= (hb.l + hb.r)/2 ? 1 : -1;
+  let best = 1e9;
+  for(let c=0;c<4;c++){
+    let x = X, y = Y, w8 = 1;
+    if(c===0){ y = hb.t - m - hh; w8 = 0.8; }
+    else if(c===1){ x = side > 0 ? hb.r + m + hw : hb.l - m - hw; }
+    else if(c===2){ x = side > 0 ? hb.l - m - hw : hb.r + m + hw; w8 = 1.5; }
+    else { y = hb.b + m + hh; w8 = 2.5; }
+    x = clamp(x, hw, Math.max(hw, W-hw)); y = clamp(y, hh, Math.max(hh, H-hh));
+    if(overHero(x, y, hw, hh) || overHud(x, y, hw, hh)) continue;
+    const cost = (Math.abs(x - X) + Math.abs(y - Y))*w8;
+    if(cost < best){ best = cost; _kp.x = x; _kp.y = y; }
+  }
+  return _kp;
+}
 function buildDOM(){
   uiRoot = document.getElementById('ui');
   if(!uiRoot){ uiRoot = document.createElement('div'); uiRoot.id = 'ui'; uiRoot.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10'; document.body.appendChild(uiRoot); }
@@ -11081,7 +11383,7 @@ function buildDOM(){
   layer = document.createElement('div'); layer.className = 'fxL'; uiRoot.insertBefore(layer, uiRoot.firstChild);   // under the HUD
   top = document.createElement('div'); top.className = 'fxT'; uiRoot.appendChild(top);                           // over the HUD
   for(let i=0;i<POP_MAX;i++){ const el = document.createElement('div'); el.className = 'fxp'; layer.appendChild(el);
-    pops.push({ el, on:false, style:'', t:0, life:1, x:0,y:0,z:0, ox:0, oy:0, vx:0, vy:0, rot0:0, w:0, h:0, ent:null, seed:0, shown:false }); }
+    pops.push({ el, on:false, style:'', t:0, life:1, x:0,y:0,z:0, ox:0, oy:0, vx:0, vy:0, rot0:0, w:0, h:0, ent:null, seed:0, shown:false, rank:1, val:0, lean:0, sx:-1e4, sy:-1e4 }); }
   for(let i=0;i<ALERT_MAX;i++){ const el = document.createElement('div'); el.className = 'fxa'; el.textContent = '!'; layer.appendChild(el);
     alerts.push({ el, on:false, ent:null, t:0, life:40, w:0, h:0, shown:false }); }
   // stacking inside the top layer: [cut-in dim] [speed lines] [cut-in band/name] [flash]
@@ -11090,34 +11392,65 @@ function buildDOM(){
 }
 function vs(){ return clamp((G.view && G.view.h || 720)/720, 0.55, 1.4); }
 
-function text(str, x, y, z, style, opts){
-  if(!ready || str==null) return false;
+// hit words ('pow'): one per spot. A new word within this radius of a live one takes over its slot; while the old
+// one is still young (< 24 frames) it only does so when it ranks higher, otherwise it is dropped
+function powNear(ax, ay){
+  const R = Math.max(90, 0.3*(G.view.h||720));
+  let best = null, bd = R*R;
+  for(const q of pops){ if(!q.on || q.style!=='pow') continue; const dx = q.sx - ax, dy = q.sy - ay, dd = dx*dx + dy*dy; if(dd < bd){ bd = dd; best = q; } }
+  return best;
+}
+function popNew(str, x, y, z, style, opts){
+  if(!ready || str==null) return null;
   style = STY[style] ? style : 'info';
   opts = opts || {};
+  x = +x||0; y = +y||0; z = +z||0;
+  let p = null;
+  const rank = opts.rank==null ? 1 : opts.rank;
+  if(style==='pow'){ project(x, y, z); const q = powNear(_sp.x, _sp.y); if(q){ if(q.t < 24 && rank <= q.rank) return null; p = q; } }
   // free slot, else recycle the oldest (never recycle a 'big' while another is available)
-  let p = null, best = null, bestK = -1;
-  for(const q of pops){ if(!q.on){ p = q; break; } const kq = q.t/q.life + (q.style==='big' ? -1 : 0); if(kq > bestK){ bestK = kq; best = q; } }
-  if(!p) p = best;
+  if(!p){
+    let best = null, bestK = -1;
+    for(const q of pops){ if(!q.on){ p = q; break; } const kq = q.t/q.life + (q.style==='big' ? -1 : 0); if(kq > bestK){ bestK = kq; best = q; } }
+    if(!p) p = best;
+  }
   const el = p.el;
   el.className = 'fxp ' + style;
   el.textContent = String(str);
   if(style==='crit' || style==='lvup') el.setAttribute('data-t', String(str)); else el.removeAttribute('data-t');
   const K = vs();
-  p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = +x||0; p.y = +y||0; p.z = +z||0; p.ent = opts.ent || null;
-  p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false;
-  p.rot0 = style==='onoma' ? R(-13,13) : style==='crit' ? -6 : 0;
+  p.on = true; p.style = style; p.t = 0; p.life = opts.life || STY[style]; p.x = x; p.y = y; p.z = z; p.ent = opts.ent || null;
+  p.w = 0; p.h = 0; p.seed = rnd(); p.ox = 0; p.oy = 0; p.shown = false; p.rank = rank; p.val = 0; p.lean = opts.lean||0;
+  if(style==='pow'){ p.sx = _sp.x; p.sy = _sp.y; } else { p.sx = p.sy = -1e4; }
+  p.rot0 = style==='onoma' ? R(-13,13) : style==='pow' ? R(-8,8) : style==='crit' ? -6 : 0;
   p.vx = (style==='dmg'||style==='hurt'||style==='crit') ? R(-1.1,1.1)*K : 0;
   p.vy = style==='dmg' ? -7.2*K : style==='hurt' ? -5.5*K : style==='crit' ? -8.5*K : 0;
   if(style==='onoma'){ p.ox = R(-26,26)*K; p.oy = R(-20,0)*K; }
+  else if(style==='pow'){ p.ox = R(-10,10)*K; p.oy = R(-8,0)*K; }
   const oc = opts.color || (style==='big' ? '#ff8a3a' : '#ff7a1a');
   el.style.setProperty('--oc', oc);
   el.style.opacity = '0';
-  return true;
+  return p;
+}
+function text(str, x, y, z, style, opts){ return !!popNew(str, x, y, z, style, opts); }
+// damage numbers of one frame on targets standing together become one number (a sweep over 3 foes used to
+// stack "4 4 4" on top of each other). Only popups born this frame (t==0) take part.
+function dmgNumber(dmg, x, y, z){
+  for(const q of pops){
+    if(!q.on || q.style!=='dmg' || q.t > 0 || Math.abs(q.x - x) > 1.3 || Math.abs(q.z - z) > 1.1) continue;
+    q.val += dmg; q.el.textContent = String(q.val); q.w = 0; q.y = Math.max(q.y, y); return;
+  }
+  const p = popNew(String(dmg), x, y, z, 'dmg'); if(p) p.val = dmg;
 }
 function updatePops(k){
   const W = G.view.w, H = G.view.h, K = vs();
+  heroBoxUpdate();
+  // hit words are at most ~2 hero heights wide (a phone hero is ~70 px tall)
+  const powCap = hb.on ? clamp(hb.h*2.1, 80, W*0.45) : H*0.34;
   // read phase: measure new popups (one layout for all of them)
-  for(const p of pops) if(p.on && !p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; }
+  let words = false;
+  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
+  if(words) hudRead(); else { hud[0].on = hud[1].on = false; }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -11128,7 +11461,7 @@ function updatePops(k){
     else {
       let X = p.x, Y = p.y, Z = p.z;
       if(p.ent){ const e = p.ent, rp = e.rig && e.rig.root ? e.rig.root.position : e; X += rp.x; Y += rp.y; Z += rp.z; if(e.removed) p.ent = null; }
-      project(X, Y, Z); cx = _sp.x; cy = _sp.y;
+      project(X, Y, Z); cx = _sp.x; cy = _sp.y; p.sx = cx; p.sy = cy;
       if(!_sp.visible){ el.style.visibility = 'hidden'; p.shown = false; continue; }
     }
     let s = 1, rot = p.rot0, a = 1, extra = '';
@@ -11142,10 +11475,12 @@ function updatePops(k){
         if(p.style==='crit' && t < 12){ p.ox += (rnd()*2-1)*2.5; }
         a = 1 - smooth(t, L-14, L); s *= 1 - 0.25*smooth(t, L-10, L);
         break; }
-      case 'onoma':
-        s = t < 10 ? 0.2 + 1.25*backOut(t/7) - 0.25*smooth(t,6,10) : 1 + 0.04*Math.sin(t*0.5);
-        rot = p.rot0 + Math.sin(t*0.8 + p.seed*6)*8*Math.max(0, 1 - t/26);
+      case 'onoma': case 'pow':
+        // quick pop (peak ≈1.13×, was ≈1.7×) then a gentle breathing
+        s = t < 8 ? 0.3 + 0.7*backOut(t/8) : 1 + 0.03*Math.sin((t-8)*0.5);
+        rot = p.rot0 + Math.sin(t*0.8 + p.seed*6)*(p.style==='pow' ? 5 : 8)*Math.max(0, 1 - t/26);
         p.oy -= 0.45*K*k; a = 1 - smooth(t, L-10, L); extra = ' skewX(-7deg)';
+        if(p.style==='pow' && p.w*s > powCap) s = powCap/p.w;
         break;
       case 'heal': case 'lvup':
         s = t < 8 ? 0.3 + 0.9*backOut(t/8) : 1; p.oy -= (p.style==='heal' ? 1.0 : 0.7)*K*k*Math.max(0.25, 1 - t/L);
@@ -11164,8 +11499,16 @@ function updatePops(k){
     }
     // keep inside the screen (never clipped by an edge)
     if(p.w*s > W-12) s = (W-12)/p.w;
-    const hw = p.w*s/2 + 6, hh = p.h*s/2 + 6;
-    const X = clamp(cx + p.ox, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
+    const ra = Math.abs(rot)*0.01745, rc = Math.cos(ra), rs = Math.sin(ra);
+    const hw = (p.w*rc + p.h*rs + (extra ? p.h*0.13 : 0))*s/2 + 6, hh = (p.w*rs + p.h*rc)*s/2 + 6;   // (+ skew)
+    // a leaning word starts at its anchor and reads away from it (hit words: away from the attacker)
+    let X = clamp(cx + p.ox + p.lean*(hw - 6)*0.85, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
+    // words never sit on the hero
+    if(p.style==='pow' || p.style==='onoma' || p.style==='crit'){
+      // below a HUD box it would touch (twice: the boss bar and the hero panel can both be in the way)
+      for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }
+      if(hb.on){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
+    }
     el.style.transform = 'translate3d('+(X - p.w/2).toFixed(1)+'px,'+(Y - p.h/2).toFixed(1)+'px,0) scale('+Math.max(0.01,s).toFixed(3)+') rotate('+rot.toFixed(1)+'deg)'+extra;
     el.style.opacity = a.toFixed(3);
     if(!p.shown){ el.style.visibility = 'visible'; p.shown = true; }
@@ -11406,33 +11749,49 @@ function onHit(d){
   if(x==null) return;
   const zr = tg ? Math.min(0.7, (tg.radius||0.4)*0.9) : 0.3;
   const onPlayer = !!(tg && tg.team===0);
-  const reduced = hitsThisFrame > 5;                        // budget: many hits in one frame → lighter effects
+  const dir = d.dir||0;
+  const reduced = hitsThisFrame > 2;                        // budget: several targets in one frame → lighter effects
   if(hitsThisFrame <= 14){
+    // the contact point sits between attacker and target: centre the burst a little into the target instead
+    const ix = onPlayer ? x : x + dir*0.2;
     if(d.blocked) guard(x, y, z+zr, { scale:1 });
-    else impact(x, y, z+zr, kind, onPlayer ? Math.min(power,2) : power, { dir:d.dir||0, reduced, scale: onPlayer ? 0.8 : 1 });
+    else impact(ix, y, z+zr, kind, onPlayer ? Math.min(power,2) : power, { dir, reduced, scale: onPlayer ? 0.8 : 1 });
   }
   if(d.dmg > 0){
-    const hx = tg ? tg.x : x, hz = tg ? tg.z : z, hy = tg ? headY(tg) + 0.15 : y + 0.6;
-    text(String(Math.max(1, Math.round(d.dmg))), hx + R(-0.2,0.2), hy, hz, onPlayer ? 'hurt' : (d.crit ? 'crit' : 'dmg'));
+    const hx = tg ? tg.x : x, hz = tg ? tg.z : z, hy = tg ? headY(tg) + 0.15 : y + 0.6, n = Math.max(1, Math.round(d.dmg));
+    if(onPlayer || d.crit) text(String(n), hx + R(-0.2,0.2), hy, hz, onPlayer ? 'hurt' : 'crit');
+    else dmgNumber(n, hx + R(-0.2,0.2), hy, hz);
   }
   if(!reduced){
     const K = KIND[kind];
-    // onomatopoeia beside the impact (the damage number sits above the head)
-    const ox = (d.dir||1)*0.6;
-    if(d.blocked) text('カキン！', x + ox, y + 0.05, z, 'onoma', { color:'#7fd0ff' });
-    else if(power >= 2) text(onPlayer ? 'いたっ！' : K.ono[power>=3 ? K.ono.length-1 : (rnd()*(K.ono.length-1))|0], x + ox, y + 0.05, z, 'onoma', { color: onPlayer ? '#ff5a8a' : K.oc });
+    // hit word over the target, on the side away from the attacker (the damage number sits on its head);
+    // 'pow' words keep off the hero, and only the strongest one shows in one spot
+    const wx = tg ? (onPlayer ? tg.x : tg.x + (dir||1)*(tg.radius||0.4)*0.5) : x + (dir||1)*0.3;
+    const wy = tg ? (onPlayer ? headY(tg) + 0.3 : (tg.y||0) + (tg.height||1.2)*0.62) : y + 0.1, wz = tg ? tg.z : z;
+    const lean = onPlayer ? 0 : (dir||1);
+    if(d.blocked) text('カキン！', wx, wy, wz, 'pow', { color:'#7fd0ff', rank:1, lean });
+    else if(power >= 2) text(onPlayer ? 'いたっ！' : K.ono[power>=3 ? K.ono.length-1 : (rnd()*(K.ono.length-1))|0], wx, wy, wz, 'pow', { color: onPlayer ? '#ff5a8a' : K.oc, rank: Math.min(power,3), lean });
     if(power >= 3 && d.src && d.src.team===0) speedLines(12);
   }
 }
+// KO hit: only the dizzy stars (the impact itself comes from 'hit'). The ぽんっ cloud, the heart and the
+// 「ぽんっ！」 wait for the transform into a happy pup ('poof', emitted by 30_foes once the foe has landed).
+function isBoss(e){ return !!(e.kind==='boss' || e.boss || (e.def && e.def.boss)); }
 function onKO(d){
   const e = d.ent || {};
   const x = d.x!=null ? d.x : e.x||0, y = d.y!=null ? d.y : (e.y||0) + 0.6, z = (d.z!=null ? d.z : e.z||0) + 0.3;
-  const s = (e.kind==='boss' || e.boss) ? 2 : 1;
+  const s = isBoss(e) ? 1.4 : 1;
+  stars(x, y, z, { count:4, scale:0.8*s });
+}
+function onPoof(d){
+  const e = d.ent; if(!e || e.x==null || e.removed) return;
+  const boss = isBoss(e), h = (e.rig && e.rig.height) || e.height || 1.2;
+  const s = boss ? clamp(h/2, 1.15, 1.4) : 1;             // bosses a little bigger, but the purified boss must stay visible
+  const x = e.x, y = (e.y||0) + clamp(h*0.4, 0.45, 1.1), z = (e.z||0) + 0.3;
   poof(x, y, z, { scale:s });
   sp(T.heart, x, y + 0.25*s, z + 0.15); S.s0 = 0.75*s; S.s1 = 0.6*s; S.curve = 1; S.vy = 0.03; S.life = 60; S.fout = 0.3; S.flags = F_WOB; S.wob = 0.1; S.delay = 6; sc_('#ff5a8a'); emit();
-  hearts(x, y, z, { count:3, scale:0.7*s });
-  stars(x, y, z, { count:5, scale:0.8*s });
-  text('ぽんっ！', x, y + 0.7*s, z, 'onoma', { color:'#ff8fc0' });
+  hearts(x, (e.y||0) + Math.min(h, 1.6), z, { count: boss ? 6 : 3, scale:0.7*s });
+  text('ぽんっ！', x, (e.y||0) + Math.min(h*0.9, 3.4) + 0.3, e.z||0, 'pow', { color:'#ff8fc0', rank:1 });   // over the (standing) pup's head
 }
 function onPickup(d){
   const e = d.ent || {};
@@ -11449,14 +11808,14 @@ function onPickup(d){
 }
 function entPos(d){ const e = d && d.ent; return e && e.x!=null ? e : null; }
 const HANDLERS = {
-  hit: onHit, ko: onKO, pickup: onPickup,
+  hit: onHit, ko: onKO, poof: onPoof, pickup: onPickup,
   levelUp(d){ const e = entPos(d); if(!e) return; levelup(e.x, e.y||0, e.z+0.1, {}); text('レベルアップ！', e.x, headY(e) + 0.45, e.z, 'lvup'); },
   land(d){ const e = entPos(d); if(!e || !d.hard) return;
     if((e.weight||1) >= 2.5 || e.kind==='boss') shock(e.x, 0.02, e.z, { scale: clamp((e.radius||1)*0.9, 0.8, 2) });
     else dustRing(e.x, 0.02, e.z, { scale:0.8 }); },
   jump(d){ const e = entPos(d); if(!e || !d.double) return; jumpPuff(e.x, e.y||0, e.z, {}); },
   dodge(d){ const e = entPos(d); if(!e || !d.just) return; kira(e.x, (e.y||0)+0.7, e.z+0.3, {}); sparkle(e.x, (e.y||0)+0.6, e.z+0.2, { count:8, color:'#bff0ff' });
-    text('ナイス！', e.x, headY(e) + 0.35, e.z, 'onoma', { color:'#2ab8ff' }); },
+    text('ナイス！', e.x, headY(e) + 0.35, e.z, 'pow', { color:'#2ab8ff', rank:3 }); },
   heroKO(d){ const e = entPos(d); if(!e) return; stars(e.x, (e.y||0)+0.8, e.z+0.2, { count:8 }); dust(e.x, 0.05, e.z, { count:6 }); },
   revive(d){ const e = entPos(d); if(!e) return; hearts(e.x, (e.y||0)+0.6, e.z+0.2, { count:7 }); sparkle(e.x, (e.y||0)+0.7, e.z+0.2, { count:12 });
     ring(e.x, 0.05, e.z, { flat:true, scale:1.3, color:'#ffd0ea' }); sp(T.glow, e.x, (e.y||0)+1.0, e.z); S.s0 = 1.1; S.s1 = 1.3; S.asp = 2.6; S.life = 40; S.add = 1; S.a = 0.5; S.fin = 0.2; S.fout = 0.5; sc_('#fff0f8'); emit(); },
@@ -11471,7 +11830,7 @@ const HANDLERS = {
   bossIntro(){ flash('#ffffff', 0.45, 14); },
   bossPhase(d){ const e = d.boss; flash('#ffe0f0', 0.35, 10); if(e){ shock(e.x, 0.02, e.z, { scale:1.3, color:'#ffd0f0' }); smoke(e.x, e.y||0, e.z+0.3, { count:6 }); } },
   shoot(d){ if(d.x==null) return; const k = d.kind;
-    if(k==='cork') { poof(d.x, d.y, d.z+0.1, { count:3, scale:0.4 }); text('ポン！', d.x, d.y+0.3, d.z, 'onoma', { color:'#ffb23a' }); }
+    if(k==='cork') { poof(d.x, d.y, d.z+0.1, { count:3, scale:0.4 }); text('ポン！', d.x, d.y+0.3, d.z, 'pow', { color:'#ffb23a', rank:0 }); }
     else ring(d.x, d.y, d.z+0.1, { scale:0.45, life:10, color: (PDEF[k] && PDEF[k].halos && PDEF[k].halos[0].color) || '#ffffff' }); },
   special(d){ const e = entPos(d); if(!e) return; ring(e.x, (e.y||0)+0.6, e.z+0.2, { scale:0.9, color:'#fff3a0' }); sparkle(e.x, (e.y||0)+0.6, e.z+0.2, { count:6, scale:0.8 }); },
   swing(d){ const e = d.ent; if(!G.fx.autoTrails || !e || !e.rig || !e.rig.tip || !e.rig.base) return;
@@ -11514,6 +11873,9 @@ function frame(dt){
   // world effects follow slow motion a little (but keep animating during hitstop)
   const kw = G.fx.worldFrozen ? 0 : kReal * Math.max(0.4, Math.min(1, G.timeScale || 1));
   fxT += kReal;
+  // the camera controller moved the camera this frame but its matrices update only at render time:
+  // refresh them so billboards and DOM popups use this frame's view (not last frame's, which lags under shake)
+  G.camera.updateMatrixWorld();
   try {
     if(pMesh.parent !== G.scene) G.scene.add(pMesh);
     if(trMesh.parent !== G.scene) G.scene.add(trMesh);
@@ -12811,11 +13173,9 @@ function subscribe(){
   on('go', ()=> sfx('go'));
   on('bossIntro', ()=> sfx('bossRoar'));
   on('bossPhase', ()=> sfx('bossRoar', { vol:0.8, pitch:1.1 }));
-  on('bossDown', ()=>{
-    sfx('hitBig'); sfx('star', { delay:0.3 });
-    // 90_game は約0.8秒後に bgm('clear') を鳴らす。ファンファーレが2つ重ならないよう、ジングルが来なかったときだけ鳴らす
-    setTimeout(()=>{ if(current!=='clear' && current!=='over') sfx('clear'); }, 1200);
-  });
+  on('bossDown', ()=>{ sfx('hitBig'); sfx('star', { delay:0.3 }); });
+  // 最終ボスのあとは 90_game が bgm('clear') のジングルを鳴らす。中ボス（ステージ7のクロイヌ）だけはここでファンファーレ
+  on('midClear', ()=> sfx('clear'));
   on('stageClear', ()=> sfx('star'));
   on('combo', (d)=>{
     const c = d.count|0;
@@ -13025,7 +13385,7 @@ function buildCSS(){
 #iuFB .fbc{background:#fff08a}
 #iuFB .fbf{background:linear-gradient(180deg,#ffc4d4 0%,#ff7aa0 60%,#f25a86 100%)}
 #iu{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;font-family:${FONT};color:#4a2c14;font-weight:800;line-height:1.25;
-  font-size:clamp(11px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;--r:56px;--b:96px;
+  font-size:clamp(13px,calc(2.1vmin + 3px),19px);letter-spacing:.02em;line-break:strict;--r:56px;--b:96px;--fm:13px;
   --pl:max(10px,env(safe-area-inset-left,0px));--pr:max(10px,env(safe-area-inset-right,0px));
   --pt:max(8px,env(safe-area-inset-top,0px));--pb:max(8px,env(safe-area-inset-bottom,0px));
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:none;text-size-adjust:none}
@@ -13036,7 +13396,7 @@ function buildCSS(){
 #iu img{-webkit-user-drag:none;user-select:none}
 
 /* ---- candy buttons ---- */
-#iu .cb{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.4em;min-height:2.5em;padding:.4em 1.3em .45em;border-radius:999px;
+#iu .cb{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.4em;min-height:max(44px,2.5em);padding:.4em 1.3em .45em;border-radius:999px;
   font-weight:900;font-size:1.15em;color:#fff;white-space:nowrap;--c1:#ffc9dd;--c2:#ff8fb8;--cd:#d6558a;
   background:linear-gradient(180deg,var(--c1) 0%,var(--c2) 72%);
   box-shadow:0 0 0 .2em #fff,0 .3em 0 .2em var(--cd),0 .55em .9em .15em rgba(74,44,20,.26);
@@ -13072,15 +13432,15 @@ function buildCSS(){
 #iu .l1{font-size:2.3em;font-weight:900;letter-spacing:.08em;line-height:1.05;--lr:#e8508c;--lg:linear-gradient(180deg,#fff4f8 0%,#ffb3d0 50%,#ff7fb0 100%)}
 #iu .l2{font-size:4.6em;font-weight:900;letter-spacing:.02em;line-height:1.1;margin-top:.24em;--lr:#e0662a;--lg:linear-gradient(180deg,#fffbe0 0%,#ffe36a 40%,#ffae3a 100%)}
 #iu .rbw{position:relative;display:inline-block}
-#iu .rb{position:absolute;left:0;right:0;top:-.36em;text-align:center;font-style:normal;font-size:.21em;line-height:1;letter-spacing:.35em;color:#d0561a;text-shadow:${ring(0.14,'#fff',12)};z-index:1}
+#iu .rb{position:absolute;left:0;right:0;top:-.36em;text-align:center;font-style:normal;font-size:max(var(--fm),.21em);line-height:1;letter-spacing:.35em;color:#d0561a;text-shadow:${ring(0.14,'#fff',12)};z-index:1}
 #iu .l3{display:inline-block;margin-top:.45em;font-size:1.15em;font-weight:900;padding:.28em 1.3em .32em;border-radius:999px;background:#fff;color:#e0508a;
   box-shadow:0 0 0 .18em #ffc2d8,0 .3em 0 .18em #f09ab8,0 .5em .9em rgba(74,44,20,.2)}
 #iu .tw{position:absolute;width:1.4em;height:1.4em;color:#fff6a0;filter:drop-shadow(0 0 .2em #fff);animation:iuTw 2.2s ease-in-out infinite}
 #iu .tbot{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:.6em}
 #iu .tdiff{justify-self:start;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;pointer-events:auto}
-#iu .tlab{font-size:.85em;color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
+#iu .tlab{font-size:max(var(--fm),.85em);color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
 #iu .chips{display:flex;gap:.35em}
-#iu .chip{font-size:.95em;min-height:2.2em;padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
+#iu .chip{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
 #iu .chip .pw{display:flex;gap:.02em}
 #iu .chip .pw i{display:block;width:.7em;height:.7em}
 #iu .chip.sel{--c1:var(--s1);--c2:var(--s2);--cd:var(--s3);color:#fff;text-shadow:${ON_CANDY};transform:scale(1.1);opacity:1}
@@ -13090,45 +13450,58 @@ function buildCSS(){
 #iu .play{font-size:2.3em;padding:.3em 1.5em .36em;animation:iuPulse 1.5s ease-in-out infinite}
 #iu .play .ic{width:1em;height:1em}
 #iu .topts{justify-self:end;display:flex;gap:.4em;align-items:flex-end}
-#iu .topts .cb{font-size:.95em;min-height:2.3em;padding:.25em .9em .3em}
-#iu .thelp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(36em,calc(100% - 2em));max-height:calc(100% - 1em);overflow:auto;z-index:2}
+#iu .topts .cb{font-size:max(var(--fm),.95em);min-height:max(44px,2.3em);padding:.25em .9em .3em}
+#iu .topts .q{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.15em;line-height:1;filter:none}
+/* not enough room for the whole bottom row (measured in fitTitle): sound / help become round icon buttons, then move to the top-right corner */
+#iu .title.tq .topts .cb{width:max(44px,2.6em);min-width:0;padding:0;gap:0}
+#iu .title.tq .topts .tx{display:none}
+#iu .title.tq .topts .ic{width:1.35em;height:1.35em}
+#iu .title.tq2 .topts{position:absolute;right:calc(var(--pr) + .4em);top:calc(var(--pt) + .4em)}
+/* help: a centred overlay (flex centring, so the panel's pop-in animation can't knock it off-centre); tap outside to close */
+#iu .hov{position:absolute;left:0;top:0;right:0;bottom:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:.5em;pointer-events:auto;background:rgba(255,244,232,.5)}
+#iu .thelp{width:min(36em,100%);max-height:100%;overflow:auto}
 #iu .thelp .hc{display:flex;gap:1.2em;justify-content:center;flex-wrap:wrap;margin:.6em 0 .8em}
 #iu .thelp .hb{min-width:13em}
 #iu .thelp h4{margin:0 0 .3em;font-size:1em;color:#e0508a}
-#iu .thelp .hr_{display:flex;justify-content:space-between;gap:1em;font-size:.9em;padding:.12em 0;border-bottom:.08em dashed #f3d9b8}
+#iu .thelp .hr_{display:flex;justify-content:space-between;gap:1em;font-size:max(var(--fm),.9em);padding:.12em 0;border-bottom:.08em dashed #f3d9b8}
 #iu .thelp .hr_ b{color:#3a8ad0;font-weight:900}
 
 /* ---- select ---- */
 #iu .select{display:block}
 #iu .shead{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + .3em);top:calc(var(--pt) + .25em);display:flex;align-items:center;gap:.8em}
 #iu .shead .hd{font-size:1.8em;--tc:#ff6fa4}
-#iu .back{font-size:.95em;min-height:2.2em;padding:.2em .95em .25em}
+#iu .back{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.2em .95em .25em}
 #iu .back .ic{width:.9em;height:.9em}
 #iu .sinfo{position:absolute;right:calc(var(--pr) + .6em);top:calc(var(--pt) + 3.9em);width:min(20em,40vw);padding:.7em 1em .8em;animation-duration:.3s;font-size:1.08em}
 #iu .snm{font-size:1.45em;font-weight:900;color:var(--hc,#e0662a);text-shadow:${STK_S};line-height:1.15}
-#iu .ssp{font-size:.78em;color:#a07a50;margin:.1em 0 .25em}
-#iu .sds{font-size:.92em;line-height:1.4;color:#4a2c14;margin-bottom:.4em}
-#iu .srow{display:flex;align-items:center;justify-content:space-between;gap:.6em;font-size:.9em;padding:.06em 0}
+#iu .ssp{font-size:max(var(--fm),.78em);color:#a07a50;margin:.1em 0 .25em}
+#iu .sds{font-size:max(var(--fm),.92em);line-height:1.4;color:#4a2c14;margin-bottom:.4em}
+#iu .srow{display:flex;align-items:center;justify-content:space-between;gap:.6em;font-size:max(var(--fm),.9em);padding:.06em 0}
 #iu .srow .sl{color:#8a5a2e}
 #iu .pws{display:flex;gap:.12em}
 #iu .pws i{display:block;width:1.3em;height:1.3em;color:#efe0c8}
 #iu .pws i.f{color:var(--hc,#ff8fb8);filter:drop-shadow(0 .06em 0 rgba(74,44,20,.25))}
 #iu .smv{display:flex;flex-wrap:wrap;gap:.3em;margin-top:.45em}
-#iu .smv span{font-size:.78em;padding:.12em .6em;border-radius:999px;background:#fff;box-shadow:0 0 0 .12em #f3d9b8;white-space:nowrap}
+#iu .smv span{font-size:max(var(--fm),.78em);padding:.12em .6em;border-radius:999px;background:#fff;box-shadow:0 0 0 .12em #f3d9b8;white-space:nowrap}
 #iu .smv b{color:#b06ad0;margin-right:.3em}
-#iu .scards{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + 12.5em);bottom:calc(var(--pb) + .5em);display:flex;gap:.5em;justify-content:center;align-items:flex-end}
+/* cards and the GO button share one flex row, so the button can never sit on top of a card */
+#iu .sbot{position:absolute;left:calc(var(--pl) + .3em);right:calc(var(--pr) + .6em);bottom:calc(var(--pb) + .5em);display:flex;align-items:flex-end;gap:.9em}
+#iu .scards{flex:1 1 auto;min-width:0;display:flex;gap:.5em;justify-content:center;align-items:flex-end}
 #iu .card{position:relative;flex:0 1 5.4em;min-width:0;display:flex;flex-direction:column;align-items:center;gap:.1em;padding:.35em .2em .3em;border-radius:1.1em;
   background:linear-gradient(180deg,#fffef8,#fff1d8);box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #e8c89a,0 .45em .7em rgba(74,44,20,.22);
-  transition:transform .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i)*.04s)}
+  transition:translate .18s cubic-bezier(.3,1.7,.5,1),scale .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(var(--i)*.04s)}
 #iu .card .cp{position:relative;width:4em;height:4em;max-width:100%;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 50% 35%,#fff 0%,var(--hc2,#ffe8c8) 100%);box-shadow:inset 0 0 0 .16em var(--hc,#ffb070)}
 #iu .card .cp img{position:absolute;left:-8%;top:-6%;width:116%;height:116%}
 #iu .fbk{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:1.6em;font-weight:900;color:#fff;background:var(--hc,#ffb070);text-shadow:${ring(0.06,'rgba(74,44,20,.6)',10)}}
 #iu .card .fbk{font-size:1.8em}
 #iu .roll .eport .fbk{font-size:3em}
-#iu .card .cn{font-size:.8em;font-weight:900;white-space:nowrap;color:#6a3f1a}
-#iu .card.on{transform:translateY(-.55em) scale(1.14);z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
+#iu .card .cn{font-size:max(var(--fm),.8em);font-weight:900;white-space:nowrap;color:#6a3f1a;letter-spacing:0}
+#iu .card.on{translate:0 -.55em;scale:1.14;z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
 #iu .card.on::after{content:'';position:absolute;left:50%;top:-1.05em;width:.9em;height:.7em;margin-left:-.45em;background:#ff6fa4;clip-path:polygon(0 0,100% 0,50% 100%);animation:iuHop 1s ease-in-out infinite;--i:0}
-#iu .sgo{position:absolute;right:calc(var(--pr) + .7em);bottom:calc(var(--pb) + 1em);font-size:1.45em;animation:iuPulse 1.5s ease-in-out infinite}
+#iu .sgo{flex:none;margin-bottom:.35em;font-size:1.45em;animation:iuPulse 1.5s ease-in-out infinite}
+/* narrow landscape: the GO button becomes a tall card-sized button at the end of the row */
+#iu.tight .sgo{flex-direction:column;gap:.05em;margin-bottom:0;font-size:1.15em;line-height:1.15;padding:.45em .75em .5em;border-radius:1.1em}
+#iu.tight .sgo .ic{width:1.1em;height:1.1em}
 
 /* ---- HUD ---- */
 #iu .hud{position:absolute;left:0;top:0;right:0;bottom:0;z-index:20;font-size:1.06em}
@@ -13137,7 +13510,7 @@ function buildCSS(){
 #iu .pfr{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;background:conic-gradient(#ffcf3a calc(var(--xp,0)*1turn),rgba(255,255,255,.7) 0);box-shadow:0 .2em .45em rgba(74,44,20,.32)}
 #iu .pfi{position:absolute;left:.3em;top:.3em;right:.3em;bottom:.3em;border-radius:50%;overflow:hidden;border:.16em solid #fff;background:radial-gradient(circle at 50% 30%,#fffdf5 0%,var(--hc2,#ffe0b8) 100%)}
 #iu .pfi img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
-#iu .lv{position:absolute;left:50%;bottom:-.55em;transform:translateX(-50%);font-size:.82em;font-weight:900;padding:.02em .55em .06em;border-radius:999px;background:linear-gradient(180deg,#fff2a8,#ffcf3a);color:#7a4a10;white-space:nowrap;
+#iu .lv{position:absolute;left:50%;bottom:-.55em;transform:translateX(-50%);font-size:max(var(--fm),.82em);font-weight:900;padding:.02em .55em .06em;border-radius:999px;background:linear-gradient(180deg,#fff2a8,#ffcf3a);color:#7a4a10;white-space:nowrap;
   box-shadow:0 0 0 .16em #fff,0 .18em .3em rgba(74,44,20,.32)}
 #iu .lv.pop{animation:iuPopX .5s cubic-bezier(.3,1.8,.5,1)}
 #iu .bars{display:flex;flex-direction:column;gap:.38em;padding-top:.3em}
@@ -13152,7 +13525,7 @@ function buildCSS(){
 #iu .hpf.mid{background:linear-gradient(180deg,#fff3a8 0%,#ffcf3a 58%,#f0ac1c 100%)}
 #iu .hpf.low{background:linear-gradient(180deg,#ffc8d6 0%,#ff7096 58%,#ee4f7a 100%);animation:iuBlink .7s ease-in-out infinite}
 #iu .hpgl{position:absolute;left:.5em;right:.5em;top:.14em;height:.32em;border-radius:999px;background:rgba(255,255,255,.6)}
-#iu .hpn{position:absolute;right:.55em;top:0;bottom:0;display:flex;align-items:center;font-size:.86em;font-weight:900;color:#fff;text-shadow:${ON_BAR}}
+#iu .hpn{position:absolute;right:.55em;top:0;bottom:0;display:flex;align-items:center;font-size:max(var(--fm),.86em);font-weight:900;color:#fff;text-shadow:${ON_BAR}}
 #iu .hpw.heal .hpb{box-shadow:0 0 0 .2em #fff,0 0 .6em .25em #9dffb8,0 .24em .42em rgba(74,44,20,.32)}
 #iu .r2{display:flex;align-items:center;gap:.4em;padding-left:.95em}
 #iu .pips{display:flex;gap:.08em}
@@ -13165,7 +13538,7 @@ function buildCSS(){
 #iu .pip.full{animation:iuTwk 1.8s ease-in-out infinite;animation-delay:calc(var(--i)*.2s)}
 #iu .ug{position:relative;width:6.6em;height:1.3em;border-radius:999px;background:#ece0f4;box-shadow:0 0 0 .18em #fff,0 .2em .34em rgba(74,44,20,.3)}
 #iu .ugf{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:999px;background:linear-gradient(90deg,#ff9ad0,#c89bff 55%,#7fc8ff)}
-#iu .ugl{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:.8em;font-weight:900;color:#fff;text-shadow:${ring(0.1,'#8a5ac0',12)};white-space:nowrap}
+#iu .ugl{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:max(var(--fm),.8em);font-weight:900;color:#fff;text-shadow:${ring(0.1,'#8a5ac0',12)};white-space:nowrap}
 #iu .ugg{position:absolute;left:-.5em;top:-.5em;right:-.5em;bottom:-.5em;border-radius:999px;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(255,240,140,.95) 0%,rgba(255,170,220,.6) 45%,rgba(255,255,255,0) 72%);pointer-events:none}
 #iu .ug.full{animation:iuPulse .8s ease-in-out infinite}
 #iu .ug.full .ugg{animation:iuGlow .8s ease-in-out infinite}
@@ -13176,7 +13549,7 @@ function buildCSS(){
 #iu .coin{width:1.45em;height:1.45em;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#d8920e;
   background:radial-gradient(circle at 38% 32%,#fff8c0 0%,#ffd63a 45%,#eaa21a 100%);box-shadow:inset 0 0 0 .12em #f7c02a,0 .08em 0 #b8780c}
 #iu .coin svg{width:62%;height:62%}
-#iu .pz{width:2.75em;height:2.75em;min-height:0;padding:0;border-radius:50%;font-size:1em}
+#iu .pz{width:max(44px,2.75em);height:max(44px,2.75em);min-height:0;padding:0;border-radius:50%;font-size:1em}
 #iu .pz .ic{width:1.15em;height:1.15em}
 #iu .combo{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + 4.1em);text-align:right;transform-origin:100% 60%;opacity:0;will-change:transform,opacity}
 #iu .cn{display:inline-block;font-size:3.5em;font-weight:900;line-height:1;color:var(--rc,#ffd24d);letter-spacing:-.02em;
@@ -13188,7 +13561,8 @@ function buildCSS(){
 #iu .boss.in{animation:iuDrop .5s cubic-bezier(.3,1.6,.5,1)}
 #iu .bnm{display:inline-flex;align-items:center;gap:.35em;font-size:1.05em;font-weight:900;color:#8a3aa8;text-shadow:${STK_S};white-space:nowrap;max-width:100%}
 #iu .bnm .cr_{width:1.3em;height:1.3em;color:#ffcf3a;filter:drop-shadow(0 .08em 0 #c07e10)}
-#iu .btl{font-size:.72em;color:#b06aa8}
+#iu .bnm span{min-width:0;padding:0 .12em;overflow:hidden;text-overflow:ellipsis}
+#iu .btl{margin-top:.15em;padding:0 .12em;font-size:max(var(--fm),.72em);color:#b06aa8;text-shadow:${STK_S};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #iu .bb{position:relative;height:1.3em;margin-top:.15em;border-radius:999px;background:#ecdcf0;overflow:hidden;box-shadow:0 0 0 .2em #fff,0 .24em .42em rgba(74,44,20,.32),inset 0 .14em .2em rgba(74,44,20,.15)}
 #iu .bbc,#iu .bbf{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:999px}
 #iu .bbc{background:#fff08a}
@@ -13215,8 +13589,8 @@ function buildCSS(){
   display:flex;align-items:flex-start;gap:.7em;padding:.55em 1em .65em .6em;border-radius:1.2em;background:#fff;will-change:opacity,transform;
   box-shadow:0 0 0 .22em var(--avr,#ffd24d),0 .3em 0 .22em var(--avd,#e0a020),0 .6em 1.1em rgba(74,44,20,.28)}
 #iu .hb_{flex:1;min-width:0}
-#iu .hn{display:inline-block;font-size:.8em;font-weight:900;padding:.02em .75em .06em;border-radius:999px;background:var(--avr,#ffd24d);color:#fff;text-shadow:${ring(0.08,'var(--avd,#c07e10)',10)};margin-bottom:.2em}
-#iu .ht{font-size:1em;line-height:1.45;color:#4a2c14;min-height:1.45em;word-break:normal;overflow-wrap:anywhere}
+#iu .hn{display:inline-block;font-size:max(var(--fm),.8em);font-weight:900;padding:.02em .75em .06em;border-radius:999px;background:var(--avr,#ffd24d);color:#fff;text-shadow:${ring(0.08,'var(--avd,#c07e10)',10)};margin-bottom:.2em}
+#iu .ht{font-size:1.1em;line-height:1.45;color:#4a2c14;min-height:1.45em;word-break:normal;overflow-wrap:anywhere}
 #iu .av{position:relative;width:3.3em;height:3.3em;flex:none;border-radius:50%;background:var(--avc,#fff3d6);margin:.15em 0 0 .1em;
   box-shadow:0 0 0 .16em #fff,0 0 0 .3em var(--avr,#ffd24d),0 .25em .4em rgba(74,44,20,.3)}
 #iu .av i{position:absolute;display:block}
@@ -13243,7 +13617,8 @@ function buildCSS(){
 #iu .stk{position:absolute;left:0;top:0;width:calc(var(--r)*2);height:calc(var(--r)*2);margin:calc(var(--r)*-1) 0 0 calc(var(--r)*-1);border-radius:50%;pointer-events:none;opacity:0;will-change:transform;
   background:radial-gradient(circle,rgba(255,255,255,.12) 0%,rgba(255,255,255,.28) 64%,rgba(255,255,255,.55) 100%);box-shadow:0 0 0 .22em rgba(255,255,255,.9),0 .3em .8em rgba(74,44,20,.22)}
 #iu .stk.on{opacity:1}
-#iu .stk.ghost{opacity:.62}
+#iu .stk.ghost{opacity:.62;transition:opacity .25s}
+#iu .stk.ghost.near{opacity:.2}
 #iu .stk .ga{position:absolute;width:22%;height:22%;color:rgba(255,255,255,.95);filter:drop-shadow(0 .06em .08em rgba(74,44,20,.4))}
 #iu .knob{position:absolute;left:50%;top:50%;width:calc(var(--r)*.98);height:calc(var(--r)*.98);margin:calc(var(--r)*-.49) 0 0 calc(var(--r)*-.49);border-radius:50%;will-change:transform;
   background:radial-gradient(circle at 36% 30%,#ffffff 0%,#ffe2ee 38%,#ff9fc4 100%);box-shadow:0 0 0 .2em #fff,0 .28em .5em rgba(74,44,20,.35)}
@@ -13252,10 +13627,10 @@ function buildCSS(){
   background:radial-gradient(circle at 36% 28%,var(--c1,#ffd0e2) 0%,var(--c2,#ff8fb8) 60%,var(--cd,#d6558a) 115%);opacity:.93;
   box-shadow:0 0 0 .2em rgba(255,255,255,.95),0 .3em 0 .2em var(--cd),0 .5em 1em rgba(74,44,20,.3);transition:transform .07s ease-out,opacity .2s}
 #iu .tb .ti{width:44%;height:44%;margin-top:-.15em;filter:drop-shadow(0 .08em 0 var(--cd))}
-#iu .tb .tl{font-weight:900;line-height:1;margin-top:.12em;white-space:nowrap;text-shadow:${ON_CANDY}}
+#iu .tb .tl{font-size:max(var(--fm),1em);font-weight:900;line-height:1;margin-top:.12em;white-space:nowrap;letter-spacing:0;text-shadow:${ON_CANDY}}
 #iu .tb.on{transform:translateY(.16em) scale(.9,.84);filter:brightness(1.12)}
 #iu .tb.dim{opacity:.5;filter:saturate(.35) brightness(1.05)}
-#iu .tb .bdg{position:absolute;right:-.3em;top:-.35em;display:flex;align-items:center;gap:.05em;padding:.08em .4em .1em .25em;border-radius:999px;background:#fff;color:#8a5ad8;font-size:.95em;font-weight:900;
+#iu .tb .bdg{position:absolute;right:-.3em;top:-.35em;display:flex;align-items:center;gap:.05em;padding:.08em .4em .1em .25em;border-radius:999px;background:#fff;color:#8a5ad8;font-size:max(var(--fm),.95em);font-weight:900;
   box-shadow:0 0 0 .12em #b594f5,0 .12em .2em rgba(74,44,20,.3)}
 #iu .tb .bdg i{display:block;width:.9em;height:.9em}
 #iu .tb.ult::before{content:'';position:absolute;left:-.42em;top:-.42em;right:-.42em;bottom:-.42em;border-radius:50%;pointer-events:none;
@@ -13290,7 +13665,7 @@ function buildCSS(){
 #iu .rrow .rv{font-size:1.2em;font-weight:900;color:#e0662a}
 #iu .cham{display:flex;align-items:center;gap:.5em;margin-top:.1em}
 #iu .cham .av{width:2.6em;height:2.6em;font-size:.95em}
-#iu .cham .bub{position:relative;font-size:.85em;padding:.35em .8em;border-radius:1em;background:#fff4e8;box-shadow:0 0 0 .12em #ffbd72;color:#8a4a10}
+#iu .cham .bub{position:relative;font-size:max(var(--fm),.85em);padding:.35em .8em;border-radius:1em;background:#fff4e8;box-shadow:0 0 0 .12em #ffbd72;color:#8a4a10}
 #iu .rright .cb{margin-top:.35em;font-size:1.35em}
 #iu .over{background:radial-gradient(ellipse at 50% 40%,rgba(255,246,250,.86) 0%,rgba(236,220,255,.92) 70%,rgba(214,232,255,.96) 100%);pointer-events:auto}
 #iu .over .pup{position:relative;width:9em;height:7em;animation:iuSway 2.4s ease-in-out infinite}
@@ -13304,25 +13679,67 @@ function buildCSS(){
 #iu .roll{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;align-items:center;gap:1.4em;padding:0 1.2em;text-align:center;will-change:transform}
 #iu .roll .ln{font-size:1.3em;font-weight:900;color:#6a3f1a;line-height:1.5;max-width:30em;text-shadow:${STK_S}}
 #iu .roll .qt{font-size:1.9em;font-weight:900;color:#ff6fa4;line-height:1.4;text-shadow:${STK}}
-#iu .roll .who{display:block;font-size:.55em;color:#c8487e}
+#iu .roll .who{display:block;font-size:max(var(--fm),.55em);color:#c8487e}
 #iu .roll .th{font-size:1.5em;font-weight:900;color:#3a8ad0;text-shadow:${STK_S}}
 #iu .roll .eh{font-size:2.3em;font-weight:900;color:#ffb42a;text-shadow:${STK};line-height:1.6}
-#iu .roll .eh rt{font-size:.3em;color:#e0662a;letter-spacing:.2em}
+#iu .roll .eh rt{font-size:max(var(--fm),.3em);color:#e0662a;letter-spacing:.2em}
 #iu .roll .fin{font-size:2.1em;font-weight:900;color:#ff6fa4;text-shadow:${STK};line-height:1.35;padding:1em 0 2em}
 #iu .roll .eport{width:7em;height:7em;border-radius:50%;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 30%,#fff,#ffe6c0);box-shadow:0 0 0 .3em #fff,0 0 0 .55em #ffd24d,0 .6em 1em rgba(74,44,20,.25)}
 #iu .roll .eport img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
 #iu .roll .team{display:flex;flex-wrap:wrap;gap:.8em 1.1em;justify-content:center;max-width:34em}
-#iu .roll .mate{display:flex;flex-direction:column;align-items:center;gap:.2em;font-size:.9em;font-weight:900;color:#6a3f1a;text-shadow:${STK_S}}
+#iu .roll .mate{display:flex;flex-direction:column;align-items:center;gap:.2em;font-size:max(var(--fm),.9em);font-weight:900;color:#6a3f1a;text-shadow:${STK_S}}
 #iu .roll .mate .mp{width:3.6em;height:3.6em;border-radius:50%;overflow:hidden;position:relative;background:var(--hc,#ffd24d);box-shadow:0 0 0 .2em #fff,0 .25em .45em rgba(74,44,20,.25)}
 #iu .roll .mate .mp img{position:absolute;left:-10%;top:-6%;width:120%;height:120%}
 #iu .roll .mate .mp .fbk{font-size:1.5em}
-#iu .eskip{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + .4em);font-size:.9em;min-height:2.1em;padding:.2em .9em}
-#iu .etitle{position:absolute;left:50%;bottom:calc(var(--pb) + 1.2em);transform:translateX(-50%);font-size:1.5em}
+#iu .eskip{position:absolute;right:calc(var(--pr) + .5em);top:calc(var(--pt) + .4em);font-size:max(var(--fm),.9em);min-height:max(44px,2.1em);padding:.2em .9em}
+/* centred by a flex bar (not translateX), so the pop-in / press transforms can't push the button sideways */
+#iu .ebar{position:absolute;left:0;right:0;bottom:calc(var(--pb) + 1.2em);display:flex;justify-content:center;pointer-events:none}
+#iu .etitle{font-size:1.5em}
 #iu .etitle.show{animation:iuIn .5s cubic-bezier(.3,1.6,.5,1) both}
 #iu .loading{z-index:70;pointer-events:auto;flex-direction:column;gap:1em;background:radial-gradient(circle at 50% 42%,#fff8e4 0%,#ffe2c4 55%,#ffc9dc 100%)}
 #iu .lpaws{display:flex;gap:.8em}
 #iu .lpaws i{display:block;width:2.4em;height:2.4em;color:#ff8fb8;animation:iuHop .9s ease-in-out infinite;animation-delay:calc(var(--i)*.15s);filter:drop-shadow(0 .12em 0 #d6558a)}
 #iu .lpaws i:nth-child(2){color:#7fc8ff;filter:drop-shadow(0 .12em 0 #2f7fc4)}#iu .lpaws i:nth-child(3){color:#7fe0b0;filter:drop-shadow(0 .12em 0 #2f9e6c)}
+
+/* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
+#iu .stages{z-index:61}
+#iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(max(54em,820px),calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
+#iu .sthd{display:flex;align-items:center;gap:.8em}
+#iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
+#iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
+#iu .strow::before{content:'';position:absolute;left:7%;right:7%;top:2.1em;border-top:.24em dashed #f0c89a;pointer-events:none}
+#iu .stc{position:relative;flex:1 1 0;min-width:0;max-width:8.5em;min-height:44px;display:flex;flex-direction:column;align-items:center;gap:.3em;padding:.45em .15em .55em;border-radius:1.1em;
+  background:linear-gradient(180deg,#fffef8,#fff1d8);box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #e8c89a,0 .45em .7em rgba(74,44,20,.2);
+  transition:translate .18s cubic-bezier(.3,1.7,.5,1),scale .18s cubic-bezier(.3,1.7,.5,1);animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(var(--i)*.05s)}
+#iu .stc .sn{width:2.4em;height:2.4em;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;line-height:1;color:#fff;
+  background:radial-gradient(circle at 36% 30%,#d2ecff 0%,#6fbcf6 70%,#2f7fc4 120%);box-shadow:0 0 0 .16em #fff,0 .18em .3em rgba(74,44,20,.3);text-shadow:${ring(0.06,'#2f7fc4',10)}}
+#iu .stc .stn{font-size:max(var(--fm),.85em);line-height:1.3;letter-spacing:0;text-align:center;color:#6a3f1a;word-break:keep-all;overflow-wrap:anywhere;line-break:strict}
+#iu .stc .sst{display:flex;align-items:center;gap:.15em;font-size:max(var(--fm),.8em);line-height:1.1;color:#c8840c;white-space:nowrap}
+#iu .stc .sst i{display:block;width:1.1em;height:1.1em;flex:none}
+#iu .stc.clr .sn{background:radial-gradient(circle at 36% 30%,#fff2b0 0%,#ffcc3a 70%,#cf8f16 120%);text-shadow:${ring(0.06,'#cf8f16',10)}}
+#iu .stc.nxt .sst{color:#e0508a}
+#iu .stc.lock{background:#eee6de;box-shadow:0 0 0 .18em #fff,0 .25em 0 .18em #d6ccc0;opacity:.8}
+#iu .stc.lock .sn{background:#b9ada2;text-shadow:none}
+#iu .stc.lock .sn i{display:block;width:1.05em;height:1.05em}
+#iu .stc.lock .stn,#iu .stc.lock .sst{color:#8a7a6a}
+#iu .stc.on{translate:0 -.35em;scale:1.08;z-index:2;box-shadow:0 0 0 .2em #fff,0 0 0 .42em #ffd24d,0 .3em 0 .42em #e0a020,0 .7em 1em rgba(74,44,20,.28)}
+#iu .stc.no{animation:iuIn .4s cubic-bezier(.3,1.5,.5,1) backwards,iuNo .36s ease-in-out}
+#iu .stgo{align-self:center;font-size:1.3em;animation:iuPulse 1.5s ease-in-out infinite}
+/* short landscape: every px of card width goes to the name (7 kana must fit on one line at 740 px) */
+#iu.short .stp{padding:.6em .75em .85em}
+#iu.short .strow{gap:.3em}
+#iu.short .stc{padding-left:.1em;padding-right:.1em}
+#iu.short .stc.on{scale:1.04}                                   /* the gaps are thin: a bigger pop would cover the neighbours */
+/* narrow landscape (iPhone SE 667×375 …): one row would break the names mid-word, so two rows of 4 + 3; each name fits one line */
+#iu.tight:not(.mini) .strow{flex-wrap:wrap;row-gap:.6em}
+#iu.tight:not(.mini) .strow::before{display:none}
+#iu.tight:not(.mini) .stc{flex:0 0 calc(25% - .25em);max-width:none}
+#iu.port .stp{padding:.7em .8em .9em}
+#iu.port .strow{flex-direction:column;gap:.5em;padding-top:0}
+#iu.port .strow::before{left:1.95em;right:auto;top:1.2em;bottom:1.2em;border-top:0;border-left:.24em dashed #f0c89a}
+#iu.port .stc{flex:none;max-width:none;flex-direction:row;gap:.7em;padding:.35em .9em .35em .45em}
+#iu.port .stc .stn{flex:1;text-align:left}
+#iu.port .stc.on{translate:none;scale:1.03}
 
 /* ---- layout variants ---- */
 #iu.tcon .goa{top:calc(var(--pt) + 4.4em)}
@@ -13332,19 +13749,41 @@ function buildCSS(){
 #iu.port .boss{top:calc(var(--pt) + 5.6em);width:calc(100% - var(--pl) - var(--pr) - 1.5em)}
 #iu.port .combo{top:calc(var(--pt) + 9.2em)}
 #iu.port .goa{top:44%}
-#iu.port.tcon .hint{left:50%;right:auto;width:calc(100% - var(--pl) - var(--pr) - 1.4em);transform:translateX(-50%);bottom:calc(var(--pb) + var(--b)*2.62)}
+/* portrait: the belt runs through the middle of the tall screen and the buttons sit under it, so a tip goes
+   to the top, under the HUD (and under the boss bar); the combo counter steps down below the tip */
+#iu.port .hint,#iu.port.tcon .hint{left:50%;right:auto;top:calc(var(--pt) + 5.9em);bottom:auto;width:calc(100% - var(--pl) - var(--pr) - 1.4em)}
+#iu.port.bossOn .hint,#iu.port.bossOn.tcon .hint{top:calc(var(--pt) + 10.2em)}
+#iu.port.bossOn .combo{top:calc(var(--pt) + 10.2em)}
+#iu.port.hinton .combo{top:calc(var(--pt) + 6.5em + var(--hh,0px))}
+#iu.port.bossOn.hinton .combo{top:calc(var(--pt) + 10.8em + var(--hh,0px))}
+/* landscape tip at the top: under the HUD, clear of the combo / GO column on the right */
+#iu.htop .hint,#iu.htop.tcon .hint{left:calc(var(--pl) + .7em);right:calc(var(--pr) + 7.5em);top:calc(var(--pt) + 4.8em);bottom:auto;width:auto}
+#iu.htop.bossOn .btl{visibility:hidden}   /* the tip sits right under the boss bar: its subtitle line would touch the tip's rim */
+/* short landscape: the belt leaves only a thin band above and below it, so the tip is one flat strip —
+   no face, the speaker's name in line with the words */
+#iu.short .hint{padding:.35em .9em .4em;gap:0}
+#iu.short .hint .av{display:none}
+#iu.short .hint .hn{margin:0 .45em .1em 0}
+#iu.short .hint .ht{display:inline;min-height:0}
 #iu.port .l1{font-size:min(2.3em,8vw)}
 #iu.port .l2{font-size:min(4.6em,13.5vw)}
-#iu.port .tbot{grid-template-columns:1fr 1fr;grid-template-areas:"p p" "d o";row-gap:.9em}
-#iu.port .tbot .play{grid-area:p;justify-self:center}
-#iu.port .tbot .tdiff{grid-area:d}
-#iu.port .tbot .topts{grid-area:o;flex-direction:column;align-items:flex-end}
+#iu.port .tbot{grid-template-columns:1fr;grid-template-areas:"p" "d" "o";justify-items:center;row-gap:.8em}
+#iu.port .tbot .play{grid-area:p}
+#iu.port .tbot .tdiff{grid-area:d;justify-self:center;align-items:center}
+#iu.port .tbot .topts{grid-area:o;justify-self:center}
+#iu.port .tbot .tdiff{gap:.55em}
 #iu.port .shead .hd{font-size:1.5em}
-#iu.port .sinfo{left:calc(var(--pl) + .6em);right:calc(var(--pr) + .6em);width:auto;top:auto;bottom:calc(var(--pb) + 11em)}
-#iu.port .scards{right:calc(var(--pr) + .3em);gap:.3em}
-#iu.port .card{flex-basis:4.6em}
-#iu.port .card .cp{width:3.3em;height:3.3em}
-#iu.port .sgo{right:50%;transform:translateX(50%);bottom:calc(var(--pb) + 5em);animation:none}
+/* short landscape: the hero card goes up level with the header (the cards + GO row needs the height);
+   very small phones also shrink the header and drop the breed line so the card still clears the row */
+#iu.short .sinfo{top:calc(var(--pt) + .3em)}
+#iu.mini .shead .hd{font-size:1.4em}
+#iu.mini .ssp,#iu.mini .smv{display:none}
+#iu.port .sinfo{left:calc(var(--pl) + .6em);right:calc(var(--pr) + .6em);width:auto;top:calc(var(--pt) + 4.4em)}
+#iu.port .sbot{left:calc(var(--pl) + .4em);right:calc(var(--pr) + .4em);flex-direction:column;align-items:center;gap:.8em}
+#iu.port .scards{flex-wrap:wrap;width:100%;gap:.8em .45em}
+#iu.port .card{flex:0 0 calc(25% - .35em)}
+#iu.port .card .cp{width:3.6em;height:3.6em}
+#iu.port .sgo{margin-bottom:0}
 #iu.port .result .pn,#iu.short .result .pn{flex-direction:column;gap:.5em}
 #iu.short .result .pn{flex-direction:row;gap:1.2em}
 #iu.short .pn{padding:.7em 1.2em .9em}
@@ -13369,6 +13808,7 @@ function buildCSS(){
 @keyframes iuDrop{0%{transform:translate(-50%,-1.5em) scale(.8);opacity:0}100%{transform:translate(-50%,0) scale(1);opacity:1}}
 @keyframes iuGo{0%,100%{transform:translateX(0);opacity:1}50%{transform:translateX(.3em);opacity:.45}}
 @keyframes iuSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+@keyframes iuNo{0%,100%{translate:0 0}20%{translate:-.3em 0}45%{translate:.3em 0}70%{translate:-.15em 0}}
 @media (prefers-reduced-motion: reduce){
   #iu *,#iu *::before,#iu *::after{animation:none!important;transition:none!important}
   #iu .goa{opacity:1}
@@ -13391,6 +13831,19 @@ function lighten(hex, k){
   const n = parseInt(m[1],16); let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
   r = Math.round(r+(255-r)*k); g = Math.round(g+(255-g)*k); b = Math.round(b+(255-b)*k);
   return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
+// Kana text has no spaces inside words, so a narrow box breaks it anywhere (「すいしょうど／う」). With word-break:keep-all
+// on the box it breaks only at the spaces and at the <wbr> put here where katakana meets hiragana (「ダークワンワン／じょう」).
+const KATA = /[゠-ヿ]/, HIRA = /[ぁ-ゟ]/;
+function wordWrap(e, s){
+  e.textContent = '';
+  let run = '', prev = '';
+  for(const ch of String(s)){
+    const k = KATA.test(ch) ? 'k' : HIRA.test(ch) ? 'h' : '';
+    if(run && k && prev && k!==prev){ e.appendChild(document.createTextNode(run)); e.appendChild(document.createElement('wbr')); run = ''; }
+    run += ch; if(k) prev = k; else prev = '';
+  }
+  if(run) e.appendChild(document.createTextNode(run));
 }
 function initialOf(h){ const s = String(h.short || h.name || h.id || '?'); return Array.from(s)[0] || '?'; }
 function soundState(v){ return v!=null ? v!==false : !(G.audio && G.audio.muted); }
@@ -13446,7 +13899,34 @@ function setPortraitSrc(img, fb, id, expr){
 let ready = false, root = null, fbLayer = null, host = null;
 let reduced = false, kbMode = false, emPx = 14;
 const S = {};                // screens by name: { el, on, data, nav:[], ni, key(e,code), frame(dt), open(data), close() }
-const ORDER = ['loading','pause','over','result','ending','select','title'];   // key focus priority (top first)
+const ORDER = ['loading','pause','over','result','ending','stages','select','title'];   // key focus priority (top first)
+
+// A tap / key that arrives right after a screen (or the help panel) appeared was meant for the screen before it:
+// a double-tap on 「あそぶ」 must not also press whatever the select screen put under the finger.
+// Any press in the first 0.4 s is dropped; a tap on the same spot as the tap that opened the screen is dropped
+// for 0.9 s (the second half of a double-tap on a slow phone lands there, a deliberate new tap rarely does).
+const OPEN_GUARD_MS = 400, DOUBLE_TAP_MS = 900, DOUBLE_TAP_PX = 48;
+let openedAt = -1e9, openX = NaN, openY = NaN;
+let uiClock = 0, openedUi = -1e9;                           // seconds of G.ui.frame time (G.step-driven tests advance it too)
+const lastDown = { x:NaN, y:NaN, t:-1e9 };
+// gamepad menu state (see padFrame): last seen buttons / direction, auto-repeat timer, armed once all is released
+const PAD = { c:true, b:true, dx:0, dz:0, rep:0, arm:false };
+const PADEV = { repeat:false, preventDefault(){} };
+function markOpen(){
+  openedAt = performance.now(); openedUi = uiClock; PAD.arm = false;
+  const fromTap = openedAt - lastDown.t < 1500;             // opened by a tap (not by the game on its own)
+  openX = fromTap ? lastDown.x : NaN; openY = fromTap ? lastDown.y : NaN;
+}
+// keys / pad: still inside the guard only while BOTH clocks say so (live play: the same; a test that steps frames
+// quickly or waits in real time without frames: whichever clock moved lets the press through)
+function justOpened(){ return performance.now() - openedAt < OPEN_GUARD_MS && uiClock - openedUi < OPEN_GUARD_MS/1000; }
+// real (trusted) clicks only: el.click() from the keyboard / pad routing and from tests is never blocked here
+function tapBlocked(e){
+  if(!(e && e.isTrusted)) return false;
+  const dt = performance.now() - openedAt;
+  if(dt < OPEN_GUARD_MS) return true;
+  return dt < DOUBLE_TAP_MS && openX===openX && Math.abs(e.clientX - openX) < DOUBLE_TAP_PX && Math.abs(e.clientY - openY) < DOUBLE_TAP_PX;
+}
 
 function button(parent, cls, html, onTap, sound){
   const b = el('button', 'cb '+cls, parent, html);
@@ -13454,7 +13934,7 @@ function button(parent, cls, html, onTap, sound){
   b.addEventListener('pointerdown', ()=>{ b.classList.add('pr'); });
   const up = ()=> b.classList.remove('pr');
   b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up);
-  b.addEventListener('click', (e)=>{ e.preventDefault(); b.blur(); if(sound!==false) sfx(sound||'select'); if(onTap) onTap(e); });
+  b.addEventListener('click', (e)=>{ e.preventDefault(); b.blur(); if(tapBlocked(e)) return; if(sound!==false) sfx(sound||'select'); if(onTap) onTap(e); });
   return b;
 }
 function pressFx(b){ b.classList.add('pr'); setTimeout(()=> b.classList.remove('pr'), 110); }
@@ -13479,7 +13959,7 @@ function screen(name, cls, build){
 function openScreen(name, data){
   const s = S[name]; if(!s) return;
   s.data = data || {};
-  s.on = true; show(s.el, true);
+  s.on = true; show(s.el, true); markOpen();
   // restart entrance animations
   s.el.querySelectorAll('.pn').forEach(p=>{ p.style.animation = 'none'; void p.offsetWidth; p.style.animation = ''; });
   try { if(s.open) s.open(s.data); } catch(err){ G.logError('ui.open '+name, err); }
@@ -13512,13 +13992,17 @@ function buildTitle(s){
     b.dataset.k = d.k; return b;
   });
   const play = s.play = button(bot, 'play k-pink', '<span class="ic">'+SVG.paw+'</span><span>あそぶ</span>', ()=> call(s.data.onPlay, s.diff), false);
-  const opts = el('div', 'topts', bot);
+  const opts = s.opts = el('div', 'topts', bot);
   const snd = s.snd = button(opts, 'k-cream', '', ()=>{ s.sound = !s.sound; paintSound(); call(s.data.onSound, s.sound); });
-  const help = button(opts, 'k-cream', '<span>？ あそびかた</span>', ()=> toggleHelp(true));
+  const help = button(opts, 'k-cream', '<span class="ic q">？</span><span class="tx">あそびかた</span>', ()=> toggleHelp(true));
+  help.setAttribute('aria-label', 'あそびかた');
+  s.bot = bot; s.dcol = dcol;
   s.nav = [play, snd, help];
 
-  // controls help (keyboard + touch)
-  const hp = s.help = el('div', 'pn thelp x', e);
+  // controls help (keyboard + touch): a centred overlay; tapping the dimmed backdrop closes it too
+  const hov = s.hov = el('div', 'hov x', e);
+  hov.addEventListener('click', (ev)=>{ if(ev.target===hov && !tapBlocked(ev)){ sfx('select'); toggleHelp(false); } });
+  const hp = s.help = el('div', 'pn thelp', hov);
   el('div', 'hd', hp).textContent = 'あそびかた';
   hp.firstChild.style.cssText = 'font-size:1.6em;text-align:center;--tc:#3a8ad0';
   const hc = el('div', 'hc', hp);
@@ -13534,10 +14018,10 @@ function buildTitle(s){
   s.helpClose = close;
 
   function setDiff(k){ if(!DIFFS.some(d=>d.k===k)) k = 'normal'; s.diff = k; for(const c of s.chips) c.classList.toggle('sel', c.dataset.k===k); }
-  function paintSound(){ snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span>おと '+(s.sound ? 'オン' : 'オフ')+'</span>'; }
-  function toggleHelp(on){ s.helpOn = on; show(hp, on); s.nav = on ? [close] : [play, snd, help]; s.ni = 0; paintKF(s); }
+  function paintSound(){ const t = 'おと '+(s.sound ? 'オン' : 'オフ'); snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span class="tx">'+t+'</span>'; snd.setAttribute('aria-label', t); }
+  function toggleHelp(on){ s.helpOn = on; show(hov, on); if(on) markOpen(); s.nav = on ? [close] : [play, snd, help]; s.ni = 0; paintKF(s); }
   s.setDiff = setDiff;
-  s.open = (d)=>{ setDiff(d.difficulty || 'normal'); s.sound = soundState(d.soundOn); paintSound(); toggleHelp(false); s.ni = 0; };
+  s.open = (d)=>{ setDiff(d.difficulty || 'normal'); s.sound = soundState(d.soundOn); paintSound(); toggleHelp(false); s.ni = 0; fitTitle(); };
   s.key = (e, c)=>{
     if(s.helpOn){ if(c==='Escape'||c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ sfx('select'); toggleHelp(false); } return true; } return false; }
     if(c==='ArrowLeft'||c==='ArrowRight'||c==='KeyA'||c==='KeyD'){
@@ -13546,6 +14030,20 @@ function buildTitle(s){
     }
     return navKey(s, c, e);
   };
+}
+
+// The title's bottom row is むずかしさ | あそぶ | おと・あそびかた. Where it doesn't fit (small phones, and 4:3 tablets
+// with their bigger type) the two small buttons become round icons, then move up to the top-right corner.
+// Measured rather than guessed from the width (fonts and safe areas vary); only on open and on resize.
+function fitTitle(){
+  const s = S.title; if(!s || !s.on) return;
+  s.el.classList.remove('tq', 'tq2');
+  if(root.classList.contains('port')) return;
+  const room = s.bot.clientWidth, gap = emPx*0.6*2 + 4;
+  if(s.dcol.offsetWidth + s.play.offsetWidth + s.opts.offsetWidth + gap <= room) return;
+  s.el.classList.add('tq');
+  if(s.dcol.offsetWidth + s.play.offsetWidth + s.opts.offsetWidth + gap <= room) return;
+  s.el.classList.add('tq2');
 }
 
 // ================================================================ select
@@ -13569,8 +14067,9 @@ function buildSelect(s){
     return { key:r[0], cells };
   });
   s.mv = el('div', 'smv', info);
-  s.cards = el('div', 'scards', e);
-  s.go = button(e, 'sgo k-pink', '<span class="ic">'+SVG.paw+'</span><span>このこで いく！</span>', ()=> pick(), false);
+  const bot = el('div', 'sbot', e);
+  s.cards = el('div', 'scards', bot);
+  s.go = button(bot, 'sgo k-pink', '<span class="ic">'+SVG.paw+'</span><span>このこで</span><span>いく！</span>', ()=> pick(), false);
   s.back = back;
   s.list = []; s.focus = 0; s.cardEls = [];
 
@@ -13607,7 +14106,7 @@ function buildSelect(s){
       c.style.setProperty('--hc', h.color || '#ffb070');
       const cp = el('div', 'cp', c); fillPortrait(cp, h, 'normal');
       el('div', 'cn', c).textContent = h.short || h.name || h.id;
-      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(i===s.focus) pick(); else setFocus(i, true); });
+      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(tapBlocked(ev)) return; if(i===s.focus) pick(); else setFocus(i, true); });
       s.cardEls.push(c);
     });
     const i = Math.max(0, s.list.findIndex(h=> h.id===d.selected));
@@ -13617,6 +14116,59 @@ function buildSelect(s){
     if(c==='ArrowLeft'||c==='KeyA'){ setFocus(s.focus-1, true); return true; }
     if(c==='ArrowRight'||c==='KeyD'){ setFocus(s.focus+1, true); return true; }
     if(c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ pressFx(s.go); pick(); } return true; }
+    if(c==='Escape'||c==='Backspace'){ if(!e.repeat){ pressFx(back); call(s.data.onBack); } return true; }
+    return false;
+  };
+}
+
+// ================================================================ stages (where to start, when there is saved progress)
+// G.ui.show('stages', { stages:[{name, kana, locked, cleared}], onPick(index), onBack() }) — shown over the select screen.
+// A stop on the path per stage; tap once to choose, tap again (or 「しゅっぱつ」) to go. Locked stops only wiggle.
+function buildStages(s){
+  s.el.classList.add('dim');
+  const pn = el('div', 'pn stp', s.el);
+  const head = el('div', 'sthd', pn);
+  const back = s.back = button(head, 'back k-cream', '<span class="ic">'+SVG.left+'</span><span>もどる</span>', ()=> call(s.data.onBack), false);
+  el('div', 'hd', head).textContent = 'どこから はじめる？';
+  const row = el('div', 'strow', pn);
+  const go = s.go = button(pn, 'stgo k-pink', '', ()=> pick(), false);
+  s.list = []; s.els = []; s.focus = 0;
+  const lockSvg = '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="11" rx="2.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.8"/></svg>';
+  const usable = (i)=> !!s.list[i] && !s.list[i].locked;
+  function paint(){
+    s.els.forEach((c, i)=> c.classList.toggle('on', i===s.focus));
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' から しゅっぱつ！</span>';
+  }
+  function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
+  function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
+  function pick(){ if(usable(s.focus)) call(s.data.onPick, s.focus); }
+  function nope(c){ sfx('cancel'); c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); }
+  s.open = (d)=>{
+    s.list = Array.isArray(d.stages) ? d.stages.slice() : [];
+    row.innerHTML = ''; s.els = [];
+    s.list.forEach((st, i)=>{
+      st = st || {};
+      const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
+      el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
+      wordWrap(el('span', 'stn', c), st.kana || st.name || ('ステージ '+(i+1)));
+      const ss = el('span', 'sst', c);
+      if(st.locked) ss.textContent = 'まだ だよ';
+      else if(st.cleared){ el('i', '', ss, SVG.star); el('span', '', ss).textContent = 'クリア'; }
+      else ss.textContent = 'つぎは ここ！';
+      c.setAttribute('aria-label', 'ステージ '+(i+1)+' '+(st.kana || st.name || ''));
+      c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(tapBlocked(ev)) return; if(!usable(i)){ nope(c); return; } if(i===s.focus) pick(); else setFocus(i, true); });
+      s.els.push(c);
+    });
+    // start on the next stage to play (the first open one that isn't cleared), else the last open one
+    let f = -1;
+    for(let i=0;i<s.list.length;i++){ if(usable(i)){ f = i; if(!s.list[i].cleared) break; } }
+    s.focus = Math.max(0, f); paint();
+    touchReleaseAll();
+  };
+  s.key = (e, c)=>{
+    if(c==='ArrowLeft'||c==='KeyA'||c==='ArrowUp'||c==='KeyW'){ step(-1); return true; }
+    if(c==='ArrowRight'||c==='KeyD'||c==='ArrowDown'||c==='KeyS'){ step(1); return true; }
+    if(c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ pressFx(go); pick(); } return true; }
     if(c==='Escape'||c==='Backspace'){ if(!e.repeat){ pressFx(back); call(s.data.onBack); } return true; }
     return false;
   };
@@ -13732,23 +14284,33 @@ function hudFrame(dt){
 }
 
 // ================================================================ boss bar
-const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'' };
+const boss = { ent:null, el:null, f:-1, chip:1, wait:0, name:'', title:'', full:null, fullT:null, fitW:-1 };
 function buildBoss(){
   const e = boss.el = el('div', 'boss x', root);
   const nm = el('div', 'bnm', e);
-  el('i', 'cr_', nm, SVG.crown); boss.nm = el('span', '', nm); boss.tl = el('span', 'btl', nm);
+  el('i', 'cr_', nm, SVG.crown); boss.nm = el('span', '', nm);
   const bb = el('div', 'bb', e);
   boss.c = el('div', 'bbc', bb); boss.f_ = el('div', 'bbf', bb); el('div', 'hpgl', bb);
+  boss.tl = el('div', 'btl', e);                  // the title gets its own line: name + title never fit one line on a phone
 }
 function bossBar(ent){
   boss.ent = ent || null;
-  show(boss.el, !!ent);
+  show(boss.el, !!ent); if(root) root.classList.toggle('bossOn', !!ent);
   if(ent){ boss.f = -1; boss.el.classList.remove('in'); void boss.el.offsetWidth; boss.el.classList.add('in'); bossFrame(0); }
 }
 function bossFrame(dt){
   const e = boss.ent; if(!e) return;
   const d = e.def || {};
-  txt(boss.nm, d.name || e.name || 'ボス'); txt(boss.tl, d.title || e.title || '');
+  // a long name that doesn't fit the bar on a small phone switches to the boss's short name (d.short)
+  // instead of ending in "…"; measured only when the name or the screen width changes
+  // the title drops its leading words instead (「ワンワンていこく だい6のしょう」→「だい6のしょう」)
+  const full = d.name || e.name || 'ボス', title = d.title || e.title || '', vw = root ? root.clientWidth : 0;
+  if(boss.full!==full || boss.fullT!==title || boss.fitW!==vw){
+    boss.full = full; boss.fullT = title; boss.fitW = vw; txt(boss.nm, full);
+    if(d.short && boss.nm.scrollWidth > boss.nm.clientWidth + 1) txt(boss.nm, d.short);
+    let t = title; txt(boss.tl, t);
+    while(boss.tl.scrollWidth > boss.tl.clientWidth + 1 && t.indexOf(' ') > 0){ t = t.slice(t.indexOf(' ') + 1); txt(boss.tl, t); }
+  }
   const f = U.clamp((e.hp||0)/Math.max(1, e.maxHp||1), 0, 1);
   if(boss.f<0){ boss.f = f; boss.chip = f; clipR(boss.f_, f); clipR(boss.c, f); }
   else if(f!==boss.f){ if(f<boss.f) boss.wait = 0.45; else { boss.chip = Math.max(boss.chip, f); clipR(boss.c, boss.chip); } boss.f = f; clipR(boss.f_, f); }
@@ -13816,7 +14378,7 @@ function banner(text, sub, frames){
   const n = Math.max(1, chars.length);
   ban.bt.style.fontSize = Math.min(emPx*4.3, w*0.9/(n*1.04)).toFixed(1)+'px';
   ban.bs.textContent = sub; ban.bs.style.display = sub ? '' : 'none';
-  ban.bs.style.fontSize = Math.min(emPx*1.35, w*0.8/Math.max(1, Array.from(sub).length*1.05 + 2.4)).toFixed(1)+'px';
+  ban.bs.style.fontSize = Math.max(13, Math.min(emPx*1.35, w*0.8/Math.max(1, Array.from(sub).length*1.05 + 2.4))).toFixed(1)+'px';
   ban.t = 0; ban.life = Math.max(0.5, (frames||120)/60); ban.on = true;
   show(ban.el, true);
   bannerFrame(0);
@@ -13839,11 +14401,34 @@ const hint = { el:null, t:0, life:0, on:false, text:'', shown:-1 };
 function buildHint(){
   const e = hint.el = el('div', 'hint x', root);
   hint.av = el('div', 'av', e, '<i class="e l"></i><i class="e r"></i><i class="bl l"></i><i class="bl r"></i><i class="mo"></i>');
-  const b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
+  const b = hint.b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
+}
+function hintOff(){ hint.on = false; show(hint.el, false); if(root) root.classList.remove('hinton', 'htop'); }
+// Lay the box out with the whole message once, so it keeps its final size while the text types in, and tell the
+// CSS how tall it is (the combo counter / GO arrow step down below a tip shown at the top).
+// Where it goes: portrait → top (the belt fills the middle). Landscape → bottom, unless the box would reach up
+// over the front edge of the belt (narrow phones: the gap between stick and buttons makes it 3–4 lines tall);
+// then it goes to the top, under the HUD, where it is one or two lines wide.
+const _hp = { x:0, y:0, visible:false };
+function hintLay(){
+  hint.b.style.minHeight = '';
+  hint.tx.textContent = hint.text;
+  hint.b.style.minHeight = hint.b.offsetHeight + 'px';
+  root.style.setProperty('--hh', hint.el.offsetHeight + 'px');
+}
+function hintFit(){
+  if(!hint.on) return;
+  root.classList.remove('htop');
+  hintLay();
+  if(!root.classList.contains('port') && G.player && G.toScreen && G.cfg){
+    const front = G.toScreen(G.player.x, 0, G.cfg.ZMAX, _hp).y;
+    if(hint.el.offsetTop < front + 2){ root.classList.add('htop'); hintLay(); }
+  }
+  hint.shown = -1;
 }
 function hintShow(name, text, frames){
   if(!ready) return;
-  if(!text){ hint.on = false; show(hint.el, false); return; }
+  if(!text){ hintOff(); return; }
   name = name==null ? '' : String(name);
   const who = /モフ/.test(name) ? 'mofu' : /チャム/.test(name) ? 'cham' : /ペロ/.test(name) ? 'pero' : /クロ/.test(name) ? 'kuro' : '';
   hint.av.className = 'av ' + who;
@@ -13852,25 +14437,27 @@ function hintShow(name, text, frames){
   txt(hint.nm, name || 'ヒント'); show(hint.nm, !!name);
   hint.chars = Array.from(String(text)); hint.text = String(text); hint.shown = -1;
   hint.t = 0; hint.life = Math.max(1, (frames||300)/60); hint.on = true; hint.os = ''; hint.tf = '';
-  show(hint.el, true);
+  show(hint.el, true); root.classList.add('hinton');
+  hintFit();
   hintFrame(0);
 }
 function hintFrame(dt){
   if(!hint.on) return;
   hint.t += dt; const t = hint.t, L = hint.life;
-  if(t >= L){ hint.on = false; show(hint.el, false); return; }
+  if(t >= L){ hintOff(); return; }
   const n = reduced ? hint.chars.length : Math.min(hint.chars.length, Math.floor(t*38)+1);
   if(n!==hint.shown){ hint.shown = n; hint.tx.textContent = n>=hint.chars.length ? hint.text : hint.chars.slice(0, n).join(''); }
   let o = 1, y = 0;
   if(t < 0.25){ o = t/0.25; y = reduced ? 0 : (1-o)*14; } else if(t > L-0.3){ o = (L-t)/0.3; }
   const os = o.toFixed(2);
   if(os!==hint.os){ hint.os = os; hint.el.style.opacity = os; }
-  const tf = (T.visible && !root.classList.contains('port') ? '' : 'translateX(-50%) ') + 'translateY(' + y.toFixed(1) + 'px)';
+  const mid = root.classList.contains('port') || (!T.visible && !root.classList.contains('htop'));
+  const tf = (mid ? 'translateX(-50%) ' : '') + 'translateY(' + y.toFixed(1) + 'px)';
   if(tf!==hint.tf){ hint.tf = tf; hint.el.style.transform = tf; }
 }
 
 // ================================================================ touch controls
-const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, inR:10, probe:null, fade:false, cx0:1e9, cy0:1e9,
+const T = { el:null, wanted:false, visible:false, mode:'auto', saw:false, keyUsed:false, R:56, B:96, inL:10, inB:8, inR:10, probe:null, fade:false, near:false, gx:0, gy:0, cx0:1e9, cy0:1e9,
   stick:{ id:null, ox:0, oy:0 }, btns:[], zone:null, base:null, knob:null, spN:-1, spDim:null, ult:-1, ready:null };
 const TBTN = [
   { k:'attack',  t:'こうげき', ic:SVG.paw,   cls:'k-pink', s:1.0,  r:.2,   b:.2 },
@@ -13896,7 +14483,7 @@ function buildTouch(){
     b.style.cssText = 'right:calc(var(--pr) + var(--b)*'+d.r+');bottom:calc(var(--pb) + var(--b)*'+d.b+');width:calc(var(--b)*'+d.s+');height:calc(var(--b)*'+d.s+');font-size:calc(var(--b)*'+(0.155*Math.pow(d.s, 0.45)).toFixed(3)+')';
     if(d.k==='ult') el('i', 'glo', b);
     el('i', 'ti', b, d.ic); el('span', 'tl', b).textContent = d.t;
-    const o = { k:d.k, el:b, ids:[] , badge:null, bn:null };
+    const o = { k:d.k, el:b, ids:[] , badge:null, bn:null, cx:-1e4, cy:-1e4, cr:0 };
     if(d.k==='special'){ o.badge = el('span', 'bdg', b); el('i', '', o.badge, SVG.spark); o.bn = el('span', '', o.badge); }
     b.addEventListener('pointerdown', (ev)=> btnDown(o, ev), { passive:false });
     T.btns.push(o);
@@ -13905,7 +14492,10 @@ function buildTouch(){
   const stop = (ev)=>{ if(ev.cancelable) ev.preventDefault(); };
   for(const t of ['touchstart','touchmove','touchend']) e.addEventListener(t, stop, { passive:false });
   e.addEventListener('contextmenu', stop);
-  window.addEventListener('pointermove', (ev)=>{ if(ev.pointerId===T.stick.id){ if(ev.cancelable) ev.preventDefault(); stickMove(ev.clientX, ev.clientY); } }, { passive:false });
+  window.addEventListener('pointermove', (ev)=>{
+    if(ev.pointerId===T.stick.id){ if(ev.cancelable) ev.preventDefault(); stickMove(ev.clientX, ev.clientY); }
+    else if(T.visible) btnSlide(ev.pointerId, ev.clientX, ev.clientY);
+  }, { passive:false });
   const up = (ev)=>{
     if(ev.pointerId===T.stick.id) stickEnd();
     for(const o of T.btns){ const i = o.ids.indexOf(ev.pointerId); if(i>=0){ o.ids.splice(i,1); if(!o.ids.length) btnOff(o); } }
@@ -13958,13 +14548,34 @@ function btnDown(o, ev){
   if(ev.cancelable) ev.preventDefault();
   ev.stopPropagation();
   T.saw = ev.pointerType==='touch' || ev.pointerType==='pen' || T.saw;
-  if(o.ids.indexOf(ev.pointerId)<0) o.ids.push(ev.pointerId);
   try { o.el.setPointerCapture(ev.pointerId); } catch(_){}
+  btnPress(o, ev.pointerId);
+}
+function btnPress(o, id){
+  if(o.ids.indexOf(id)<0) o.ids.push(id);
   const ti = G.input && G.input.touch; if(ti) ti[o.k] = true;
   if(G.input && G.input.latch) G.input.latch(o.k);
   o.el.classList.add('on');
 }
 function btnOff(o){ o.ids.length = 0; const ti = G.input && G.input.touch; if(ti) ti[o.k] = false; o.el.classList.remove('on'); }
+// rolling a thumb from one button onto the next lets go of the first and presses the second (usual phone
+// action pads). Drifting off into empty space keeps the button held, so a charge isn't lost by a wobbly thumb.
+// Hit test against circles cached in tbGeom() — no layout reads while fingers move.
+function btnSlide(id, x, y){
+  let cur = null;
+  for(const o of T.btns){ if(o.ids.indexOf(id)>=0){ cur = o; break; } }
+  if(!cur) return;
+  let hit = null;
+  for(const o of T.btns){ const dx = x - o.cx, dy = y - o.cy; if(dx*dx + dy*dy <= o.cr*o.cr){ hit = o; break; } }
+  if(!hit || hit===cur) return;
+  cur.ids.splice(cur.ids.indexOf(id), 1); if(!cur.ids.length) btnOff(cur);
+  btnPress(hit, id);
+}
+function tbGeom(){
+  if(!T.visible) return;
+  const b = T.el.getBoundingClientRect();
+  for(const o of T.btns){ const e = o.el, w = e.offsetWidth; o.cr = w*0.5; o.cx = b.left + e.offsetLeft + w*0.5; o.cy = b.top + e.offsetTop + e.offsetHeight*0.5; }
+}
 function touchReleaseAll(){
   if(T.stick.id!==null) stickEnd();
   const ti = G.input && G.input.touch; if(ti){ ti.x = 0; ti.z = 0; }
@@ -13976,7 +14587,7 @@ function touchApply(){
   const vis = !!T.wanted && (T.mode==='on' || (T.mode!=='off' && auto));
   if(vis!==T.visible){
     T.visible = vis; show(T.el, vis); root.classList.toggle('tcon', vis);
-    if(!vis) touchReleaseAll(); else ghostPos();
+    if(!vis) touchReleaseAll(); else { ghostPos(); tbGeom(); }
   }
 }
 function touchFrame(){
@@ -13991,9 +14602,15 @@ function touchFrame(){
   if(Math.abs(u - T.ult) > 0.3){ T.ult = u; setVar(ub.el, '--u', u/100, 0.002); }
   const rdy = u>=100; if(rdy!==T.ready){ T.ready = rdy; ub.el.classList.toggle('ready', rdy); ub.el.classList.toggle('dim', !rdy); }
   // see-through buttons while the hero stands behind the cluster (phones: the camera can put them there)
-  let fade = false;
-  if(p && p.rig && p.rig.root && G.toScreen){ const r = p.rig.root.position; G.toScreen(r.x, r.y + (p.height||1.2)*0.5, r.z, _tp); fade = _tp.visible && _tp.x > T.cx0 && _tp.y > T.cy0; }
+  // …and the idle stick ring goes faint while the hero stands under it (e.g. at the left edge of a boss arena)
+  let fade = false, near = false;
+  if(p && p.rig && p.rig.root && G.toScreen){
+    const r = p.rig.root.position; G.toScreen(r.x, r.y + (p.height||1.2)*0.5, r.z, _tp);
+    fade = _tp.visible && _tp.x > T.cx0 && _tp.y > T.cy0;
+    near = _tp.visible && T.stick.id===null && Math.abs(_tp.x - T.gx) < T.R*1.45 && Math.abs(_tp.y - T.gy) < T.R*1.75;
+  }
   if(fade!==T.fade){ T.fade = fade; T.el.classList.toggle('see', fade); }
+  if(near!==T.near){ T.near = near; T.base.classList.toggle('near', near); }
 }
 const _tp = { x:0, y:0, visible:false };
 const touch = {
@@ -14079,7 +14696,8 @@ function buildOver(s){
 function buildEnding(s){
   const roll = s.roll = el('div', 'roll', s.el);
   s.skip = button(s.el, 'eskip k-cream', '<span>とばす</span><span class="ic">'+SVG.play+'</span>', ()=>{ s.y = s.stopY; }, 'select');
-  s.btn = button(s.el, 'etitle k-pink x', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'ok');
+  s.bar = el('div', 'ebar x', s.el);
+  s.btn = button(s.bar, 'etitle k-pink', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'ok');
   s.nav = [s.skip];
   s.open = (d)=>{
     roll.innerHTML = '';
@@ -14087,7 +14705,7 @@ function buildEnding(s){
     const line = (cls, t)=>{ const e = el('div', cls, roll); if(t!=null) e.textContent = t; return e; };
     const ep = line('eport'); fillPortrait(ep, me, 'happy');
     line('ln', (me.short || me.name) + 'と なかまたちは、ダークワンワンていこくを やっつけた！');
-    line('ln', 'たいていの こころから くらやみが きえて、にっこり えがおに もどったよ。');
+    line('ln', 'ダークワンワンたいていの こころから くらやみが きえて、にっこり えがおに もどったよ。');
     line('ln', 'クロイヌ「やっと めがさめたよ…… ありがとう。」');
     line('ln', 'そらには おおきな にじ。おうさまも ぶじに かえってきた！');
     line('ln', 'おしろの かべから、みんなで はなびを どーん！ どーん！');
@@ -14108,7 +14726,7 @@ function buildEnding(s){
     s.h = innerHeight; s.y = s.h; s.done = false; s.t = 0;
     s.stopY = 0; s.measured = false;
     roll.style.transform = 'translate3d(0,'+s.y+'px,0)';
-    show(s.btn, false); show(s.skip, true); s.btn.classList.remove('show');
+    show(s.bar, false); show(s.skip, true); s.btn.classList.remove('show');
     s.nav = [s.skip]; s.ni = 0;
   };
   s.frame = (dt)=>{
@@ -14117,7 +14735,7 @@ function buildEnding(s){
     s.t += dt;
     const v = Math.max(38, innerHeight*0.085);
     if(s.t > 0.4) s.y -= v*dt;
-    if(s.y <= s.stopY){ s.y = s.stopY; s.done = true; show(s.btn, true); s.btn.classList.add('show'); show(s.skip, false); s.nav = [s.btn]; s.ni = 0; paintKF(s); }
+    if(s.y <= s.stopY){ s.y = s.stopY; s.done = true; show(s.bar, true); s.btn.classList.add('show'); show(s.skip, false); s.nav = [s.btn]; s.ni = 0; paintKF(s); markOpen(); }
     roll.style.transform = 'translate3d(0,'+s.y.toFixed(1)+'px,0)';
   };
   s.key = (e, c)=>{
@@ -14134,16 +14752,47 @@ function buildLoading(s){
 
 // ================================================================ keyboard routing
 const GAMEKEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD','KeyJ','KeyZ','KeyK','Space','KeyL','ShiftLeft','ShiftRight','KeyI','KeyX','KeyU','KeyC']);
+function topScreen(){ for(const n of ORDER){ const s = S[n]; if(s && s.on) return s; } return null; }
+function isGo(c){ return c==='Enter' || c==='NumpadEnter' || c==='Space' || c==='Escape' || c==='Backspace'; }
+// send one menu key to the top-most open screen (keyboard and gamepad share this)
+function routeKey(e, c){
+  if(!kbMode){ kbMode = true; const s = topScreen(); if(s) paintKF(s); }
+  const s = topScreen(); if(!s) return false;
+  if(isGo(c) && justOpened()) return true;                 // the press that opened this screen, or a mash right after it
+  if(!s.key) return false;
+  try { return !!s.key(e, c); } catch(err){ G.logError('ui.key '+s.name, err); return false; }
+}
 function onKey(e){
   if(!ready) return;
   const c = e.code;
   if(GAMEKEYS.has(c) && (T.saw || !T.keyUsed)){ T.keyUsed = true; T.saw = false; touchApply(); }
-  if(!kbMode){ kbMode = true; for(const n of ORDER){ if(S[n] && S[n].on){ paintKF(S[n]); break; } } }
-  for(const n of ORDER){
-    const s = S[n];
-    if(s && s.on){ if(s.key){ try { if(s.key(e, c)) e.preventDefault(); } catch(err){ G.logError('ui.key '+n, err); } } return; }
-  }
+  if(routeKey(e, c)) e.preventDefault();
 }
+
+// ================================================================ gamepad menus
+// G.input.pad is polled by core every tick (A/START → confirm, B → dodge, stick / d-pad → x,z). Menus read it here,
+// once per render frame, with their own edges: A/START presses the focused button, B goes back, the stick moves
+// the focus (held: repeats). After a screen opens nothing counts until every pad input has been let go, so the
+// START that opened the pause menu can't also press 「つづける」.
+function padFrame(dt){
+  const p = G.input && G.input.pad; if(!p) return;
+  const c = !!p.confirm, b = !!p.dodge;
+  const ax = Math.abs(p.x||0), az = Math.abs(p.z||0);
+  let dx = 0, dz = 0;
+  if(ax >= az){ if(ax > 0.5) dx = p.x > 0 ? 1 : -1; } else if(az > 0.5) dz = p.z > 0 ? 1 : -1;
+  if(!PAD.arm){ PAD.arm = !c && !b && !dx && !dz; PAD.c = c; PAD.b = b; PAD.dx = dx; PAD.dz = dz; return; }
+  const any = topScreen();
+  if(any){
+    if(c && !PAD.c) routeKey(PADEV, 'Enter');
+    else if(b && !PAD.b) routeKey(PADEV, 'Escape');
+    if(dx || dz){
+      if(dx!==PAD.dx || dz!==PAD.dz){ PAD.rep = 0.42; routeKey(PADEV, padDir(dx, dz)); }
+      else if((PAD.rep -= dt) <= 0){ PAD.rep = 0.14; routeKey(PADEV, padDir(dx, dz)); }
+    }
+  }
+  PAD.c = c; PAD.b = b; PAD.dx = dx; PAD.dz = dz;
+}
+function padDir(dx, dz){ return dx<0 ? 'ArrowLeft' : dx>0 ? 'ArrowRight' : dz<0 ? 'ArrowUp' : 'ArrowDown'; }
 
 // ================================================================ layout
 function layout(){
@@ -14154,13 +14803,16 @@ function layout(){
   root.style.setProperty('--r', T.R+'px'); root.style.setProperty('--b', T.B+'px');
   root.classList.toggle('port', h > w);
   root.classList.toggle('short', h <= 480 && w > h);
+  root.classList.toggle('tight', w > h && w < 720);          // narrow landscape phones: compact select GO
+  root.classList.toggle('mini', w > h && (w < 620 || h < 340));
   // resolved safe-area paddings (custom properties can't be read back as numbers, so measure a probe)
   if(!T.probe){ T.probe = el('div', '', root); T.probe.style.cssText = 'position:absolute;left:var(--pl);top:var(--pt);right:var(--pr);bottom:var(--pb);visibility:hidden;pointer-events:none'; }
   const pr = T.probe.getBoundingClientRect(); T.inL = pr.left || 10; T.inB = (h - pr.bottom) || 8; T.inR = (w - pr.right) || 10;
   T.cx0 = w - T.inR - T.B*2.15; T.cy0 = h - T.inB - T.B*2.6;          // top-left corner of the button cluster
   emPx = parseFloat(getComputedStyle(root).fontSize) || 14;
-  if(T.el) ghostPos();
+  if(T.el){ ghostPos(); tbGeom(); }
   for(const s of fbs) s.vis && (s.w = s.el.offsetWidth || s.w);
+  fitTitle(); hintFit();
 }
 
 // ================================================================ public API
@@ -14175,6 +14827,7 @@ function init(){
   buildFoeBars(); buildHUD(); buildBoss(); buildGo(); buildHint(); buildTouch(); buildBanner();
   screen('title', 'title', buildTitle);
   screen('select', 'select', buildSelect);
+  screen('stages', 'stages', buildStages);
   screen('pause', 'pause', buildPause);
   screen('result', 'result', buildResult);
   screen('over', 'over', buildOver);
@@ -14182,6 +14835,7 @@ function init(){
   screen('loading', 'loading', buildLoading);
   window.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e)=>{
+    lastDown.x = e.clientX; lastDown.y = e.clientY; lastDown.t = performance.now();
     if(kbMode){ kbMode = false; clearKF(); }
     if(e.pointerType==='touch' || e.pointerType==='pen'){ if(!T.saw || T.keyUsed){ T.saw = true; T.keyUsed = false; touchApply(); } }
   }, true);
@@ -14208,18 +14862,20 @@ function hideAll(){
   for(const n in S) closeScreen(n);
   uiHide('hud');
   ban.on = false; show(ban.el, false);
-  hint.on = false; show(hint.el, false);
+  hintOff();
   go(false); bossBar(null);
   touch.show(false);
 }
 function frame(dt){
   if(!ready) return;
   dt = (dt>0 && dt<0.25) ? dt : 1/60;
+  uiClock += dt;
   try { portraitStep(); } catch(err){ G.logError('ui.portrait', err); }
   try { if(hud.on){ hudFrame(dt); foeBarsFrame(dt); } else if(fbAny) hideFoeBars(); } catch(err){ G.logError('ui.hud', err); }
   try { bossFrame(dt); } catch(err){ G.logError('ui.boss', err); }
   try { bannerFrame(dt); hintFrame(dt); } catch(err){ G.logError('ui.banner', err); }
   try { touchFrame(); } catch(err){ G.logError('ui.touch', err); }
+  try { padFrame(dt); } catch(err){ G.logError('ui.pad', err); }
   for(const n in S){ const s = S[n]; if(s.on && s.frame){ try { s.frame(dt); } catch(err){ G.logError('ui.frame '+n, err); } } }
 }
 
@@ -14229,6 +14885,7 @@ G.ui = {
   banner, bossBar, go, hint: hintShow,
   touch,
   isShown(name){ return name==='hud' ? hud.on : !!(S[name] && S[name].on); },
+  hasScreen(name){ return name==='hud' || ORDER.indexOf(name) >= 0; },
   // for tests: the screen's root element
   el(name){ return name==='hud' ? hud.el : name==='touch' ? T.el : S[name] ? S[name].el : null; },
 };
@@ -14391,7 +15048,7 @@ G.scenes.select = {
     G.cam.followEnt = null; G.cam.zoom = 6; G.cam.tx = 0; G.cam.ty = 1.0; G.cam.tz = 0.4; G.cam.snap();
     uiShow('select', { heroes:list, selected:game.heroId,
       onFocus:(id)=> this.focus(id),
-      onPick:(id)=>{ if(id) game.heroId = id; persist(); sfx('ok'); startRun(); },
+      onPick:(id)=>{ if(id) game.heroId = id; persist(); sfx('ok'); chooseStage(); },
       onBack:()=>{ sfx('cancel'); G.go('title'); } });
     bgm('select');
   },
@@ -14404,11 +15061,21 @@ G.scenes.select = {
 };
 
 // ---------------------------------------------------------------- a run: several stages in a row
-function startRun(){
+// with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
+function chooseStage(){
+  const n = stages().length, open = U.clamp(game.unlocked|0, 0, Math.max(0, n-1));
+  if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
+    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < open }));
+    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
+  } else startRun(0);
+}
+function startRun(start){
   G._arena = false; G._autoplay = false;
-  game.level = 1; game.xp = 0; game.xpNext = 60; game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
+  start = start|0;
+  // starting later in the adventure: give the hero the level a player would roughly have by then
+  game.level = start > 0 ? 1 + start*2 : 1; game.xp = 0; game.xpNext = Math.round(60*Math.pow(1.32, game.level-1));
+  game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
   game.lives = game.diff.lives;
-  const start = 0;
   G.go('play', { stage:start });
 }
 
@@ -14426,6 +15093,7 @@ const play = G.scenes.play = {
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
     G.world.add(p);
+    if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
     touch(true);
@@ -14446,6 +15114,7 @@ const play = G.scenes.play = {
     G.paused = on;
     if(G.fx) G.fx.worldFrozen = !!on;
     if(on){
+      G.bus.emit('pause', {});
       uiShow('pause', { soundOn:game.soundOn,
         onResume:()=> this.pause(false),
         onRetry:()=>{ this.pause(false); G.go('play', { stage:game.stageIndex }); },
@@ -14461,7 +15130,7 @@ const play = G.scenes.play = {
   tick(){
     const b = G.input.btn;
     if(this.over) return;            // game-over screen owns input; Esc must not resume the world behind it
-    if(b.pause.pressed && !this.cleared){ this.pause(!G.paused); return; }
+    if(b.pause.pressed && !this.cleared && !(game.cutinT > 0)){ this.pause(!G.paused); return; }
     if(G.paused) return;
     const p = G.player;
 
@@ -14504,8 +15173,8 @@ const play = G.scenes.play = {
       if(game.koT===30) banner('がんばれ！', game.lives===Infinity ? '' : 'のこり ' + Math.max(0, game.lives-1), 90);
       if(game.koT >= 100){
         game.koT = 0;
-        if(game.lives!==Infinity){ game.lives--; }
-        if(game.lives!==Infinity && game.lives<=0){ this.gameOver(); return; }
+        if(game.lives!==Infinity && !this.cleared){ game.lives--; }
+        if(game.lives!==Infinity && game.lives<=0 && !this.cleared){ this.gameOver(); return; }
         p.dead = false; p.hp = p.maxHp; p.inv = 180; p.vy = 0.12; p.onGround = false; p.sp = 3;
         G.setState(p, 'air'); G.setAnim(p, 'jump');
         game.revives++;
@@ -14513,15 +15182,25 @@ const play = G.scenes.play = {
       }
     }
     // stage clear
-    if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; }
+    if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; game.victT = 0; this.winGuard(); }
     if(this.cleared){
       game.clearT++;
-      if(game.clearT===40 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); }
-      if(game.clearT===50){ banner('ステージクリア！', game.stageName, 150); bgm('clear'); }
-      if(game.clearT===210) this.showResult();
+      if(p) p.inv = Math.max(p.inv, 30);
+      const bossStill = G.world.ents.some(e=> e.def && e.def.boss && !e.removed);
+      if(!game.victT && ((!bossStill && game.clearT > 30) || game.clearT > 330)) game.victT = game.clearT;
+      const v = game.victT ? game.clearT - game.victT : -1;
+      if(v===0 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); }
+      if(v===10){ banner('ステージクリア！', game.stageName, 150); bgm('clear'); }
+      if(v===170) this.showResult();
     }
   },
   frame: frameCommon,
+  // the stage is won: nothing may hurt the hero any more, and the boss's drops fly to the hero
+  winGuard(){
+    for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
+    G.combat.areas.length = 0;
+    const p = G.player; if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+  },
   showResult(){
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
@@ -14576,8 +15255,13 @@ function separate(ents){
     for(let j=i+1;j<ents.length;j++){
       const c = ents[j]; if(!(c.team===0 || c.team===1) || c.dead || c.intangible || c.y > 0.6) continue;
       const dz = c.z - a.z; if(Math.abs(dz) > 0.42) continue;
-      const dx = c.x - a.x, min = (a.radius + c.radius)*0.8;
+      const bossPair = (a.def && a.def.boss) || (c.def && c.def.boss);
+      const dx = c.x - a.x, min = (a.radius + c.radius)*(bossPair ? 1 : 0.8);
       if(Math.abs(dx) >= min) continue;
+      if(bossPair && (a.team===0 || c.team===0)){
+        const hero = a.team===0 ? a : c, boss = hero===a ? c : a;
+        const s = hero.x >= boss.x ? 1 : -1; hero.x = boss.x + s*min; continue;
+      }
       const push = (min - Math.abs(dx)) * 0.25 * (dx===0 ? (a.id<c.id?1:-1) : Math.sign(dx));
       const wa = a.team===0 ? 0.25 : (a.def&&a.def.boss ? 0.1 : 1), wc = c.team===0 ? 0.25 : (c.def&&c.def.boss ? 0.1 : 1);
       a.x -= push*wa; c.x += push*wc;
@@ -14597,6 +15281,10 @@ G.bus.on('bossDown', (d)=>{
   if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
   G.cam.zoom = 0;
 });
+// the stage-7 mid-boss is purified: back to the stage's own music until the final boss
+G.bus.on('midClear', ()=>{ if(G.sceneName==='play'){ const st = S().info || {}; bgm(st.bgm || ('stage'+(game.stageIndex+1))); } });
+// phone switched apps / tab hidden: pause (kids come back to a pause menu, not a lost fight)
+G.bus.on('hidden', ()=>{ if(G.sceneName==='play' && !play.over && !play.cleared && !(game.cutinT>0)) play.pause(true); });
 
 // ---------------------------------------------------------------- scene: ending
 G.scenes.ending = {
@@ -14612,7 +15300,7 @@ G.scenes.ending = {
   tick(){
     stepRigs();
     const t = G.time.sceneTick;
-    if(t % 40 === 0 && G.fx && G.fx.burst) G.fx.burst('fireworks', U.rand(-6, 6), U.rand(4, 7), -4, { scale:1.4 });
+    if(t % 40 === 0 && G.fx && G.fx.burst){ const hw = G.cam.halfW; G.fx.burst('fireworks', U.rand(G.cam.x - hw*0.8, G.cam.x + hw*0.5), G.cam.y + U.rand(1.0, 2.3), -3, { scale:1.3 }); }
   },
   frame: frameCommon,
 };
@@ -14675,7 +15363,7 @@ G.debug = {
   anim(name, len, hitAt){ for(const e of showcase.ents) G.setAnim(e, name, len||0, hitAt); },
   ents: ()=> showcase.ents,
   // jump straight into a stage (tests): G.debug.play('inu', 0)
-  play(hero, stage, diff){ if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage: stage|0 }); return G.player; },
+  play(hero, stage, diff){ G._arena = false; if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage: stage|0 }); return G.player; },
   // flat arena run for testing foes/bosses: G.debug.arena('inu'); G.foes.spawn('wanhei', 8, 0)
   arena(hero, diff){ G._arena = true; if(hero) game.heroId = hero; if(diff) game.diffKey = diff; game.lives = game.diff.lives; G.go('play', { stage:0 }); return G.player; },
   // a simple bot drives the hero (walks to foes, attacks, jumps, uses specials / ult)

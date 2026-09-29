@@ -306,6 +306,102 @@ test('phone portrait: hero stays on screen and the touch controls exist', async 
   assert(r.btns >= 4, 'touch buttons missing: ' + r.btns);
 });
 
+test('phone: turning the phone during a locked wave keeps the hero and every foe on screen', async () => {
+  const g = await open({ size:'844x390', touch:true });
+  await g.run(() => { G.seed(7); G.debug.play('inu', 0, 'normal'); G.step(5); const p = G.player; p.hp = p.maxHp = 1e9; p.x = 16.5; G.step(60); });
+  await g.page.setViewportSize({ width:390, height:844 }); await g.page.waitForTimeout(300);
+  const r = await g.run(() => {
+    const W = innerWidth, p = G.player, bad = []; let checks = 0;
+    const check = (tag) => {
+      if(!G.stage.progress().locked) return; checks++;
+      const s = G.toScreen(p.x, p.y + 0.7, p.z); if(!(s.x > 0 && s.x < W)) bad.push([tag, 'hero', Math.round(s.x)]);
+      for(const e of G.world.ents){
+        if(e.team!==1 || e.dead || e.removed || !e.entered) continue;
+        const q = G.toScreen(e.x, e.y + 0.7, e.z); if(!(q.x > 0 && q.x < W)) bad.push([tag, e.type, Math.round(q.x)]);
+      }
+    };
+    G.step(30); check('settled');
+    const pr = G.stage.progress();
+    for(const [tag, x] of [['left', pr.lockA + 0.5], ['right', pr.lockB - 0.5]]){ p.x = x; p.vx = 0; G.step(90); check(tag); }
+    G.input.touch.x = 1; G.step(150); G.input.touch.x = 0; G.step(20); check('walkRight');
+    G.input.touch.x = -1; G.step(300); G.input.touch.x = 0; G.step(20); check('walkLeft');
+    return { W, checks, bad };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.checks >= 3, 'setup: the wave was not locked while checking: ' + JSON.stringify(r));
+  assert(r.bad.length === 0, 'off screen after turning the phone: ' + JSON.stringify(r));
+});
+
+test('phone: every boss name and title fits its HP bar on a small phone (no "…")', async () => {
+  const g = await open({ size:'568x320', touch:true });
+  const r = await g.run(() => {
+    G.debug.arena('inu'); G.step(5);
+    const out = [];
+    for(const t of ['garm','shark','ghost','cerbe','slime','dragon','kuroinu','emperor']){
+      const e = G.foes.spawn(t, 3, 0, { boss:true }); G.ui.bossBar(e); G.step(30);
+      const nm = document.querySelector('#iu .bnm span'), tl = document.querySelector('#iu .btl');
+      out.push({ t, text: nm.textContent, cut: nm.scrollWidth > nm.clientWidth + 1, title: tl.textContent, tcut: tl.scrollWidth > tl.clientWidth + 1 });
+      G.ui.bossBar(null); G.world.remove(e); G.step(2);
+    }
+    return out;
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.length === 8 && r.every(o => o.text.length >= 4), 'setup: ' + JSON.stringify(r));
+  assert(r.every(o => !o.cut), 'boss name cut off: ' + JSON.stringify(r.filter(o => o.cut)));
+  assert(r.every(o => o.title.length >= 4), 'boss title missing: ' + JSON.stringify(r));
+  assert(r.every(o => !o.tcut), 'boss title cut off: ' + JSON.stringify(r.filter(o => o.tcut)));
+});
+
+test('phone: a boss\'s shout never covers the boss bar at the top', async () => {
+  const g = await open({ size:'667x375', touch:true });
+  const r = await g.run(() => {
+    G.debug.arena('inu'); G.step(5);
+    const e = G.foes.spawn('emperor', G.player.x + 3, 0, { boss:true }); G.ui.bossBar(e); G.step(40);
+    const bar = document.querySelector('#iu .boss').getBoundingClientRect();
+    // a world height whose screen position is the middle of the boss bar
+    let wy = 0; for(let y=0; y<12; y+=0.05){ if(G.toScreen(e.x, y, e.z).y <= (bar.top + bar.bottom)/2){ wy = y; break; } }
+    G.fx.text('ガオーーッ！', e.x, wy, e.z, 'onoma');
+    let worst = 0, seen = 0;
+    for(let k=0;k<40;k++){
+      G.step(1);
+      for(const w of document.querySelectorAll('.fxp.onoma')){
+        const cs = getComputedStyle(w); if(cs.visibility!=='visible' || +cs.opacity < 0.05) continue; seen++;
+        const q = w.getBoundingClientRect();
+        const a = Math.max(0, Math.min(q.right, bar.right) - Math.max(q.left, bar.left)) * Math.max(0, Math.min(q.bottom, bar.bottom) - Math.max(q.top, bar.top));
+        worst = Math.max(worst, a / Math.max(1, q.width*q.height));
+      }
+    }
+    return { wy, seen, worst:+worst.toFixed(2), bar:[Math.round(bar.top), Math.round(bar.bottom)] };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.wy > 0 && r.seen > 10, 'setup: ' + JSON.stringify(r));
+  assert(r.worst === 0, 'the shout covered the boss bar: ' + JSON.stringify(r));
+});
+
+// ---------------------------------------------------------------- pad
+test('pad: START opens the pause menu and START closes it again', async () => {
+  const g = await open();
+  const r = await g.run(async () => {
+    const pad = { connected:true, axes:[0,0,0,0], buttons: Array.from({ length:17 }, () => ({ pressed:false, value:0 })) };
+    navigator.getGamepads = () => [pad];
+    const tap = (i) => { pad.buttons[i].pressed = true; G.step(6); pad.buttons[i].pressed = false; G.step(3); };
+    const wait = () => new Promise(res => setTimeout(res, 600));   // menus ignore presses in their first 0.4 s
+    G.debug.play('inu', 0, 'normal'); G.step(5);
+    tap(9); const opened = G.paused; await wait();
+    tap(9); const closed = !G.paused; await wait();
+    tap(9); const again = G.paused;
+    return { opened, closed, again };
+  });
+  const errs = await g.errors(); await g.close();
+  assert(errs.length === 0, 'errors: ' + errs.slice(0,3).join(' | '));
+  assert(r.opened, 'START did not open the pause menu: ' + JSON.stringify(r));
+  assert(r.closed, 'START did not close the pause menu (it paused again at once): ' + JSON.stringify(r));
+  assert(r.again, 'START did not open the pause menu a second time: ' + JSON.stringify(r));
+});
+
 // slow: run with the filter "allstages"
 test('allstages: the bot can clear every stage on やさしい (no soft-locks)', async () => {
   const g = await open();

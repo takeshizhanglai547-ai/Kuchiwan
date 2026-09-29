@@ -1045,6 +1045,23 @@ function heroBoxUpdate(){
   hb.l = fx - h*0.42; hb.r = fx + h*0.42; hb.t = _sp.y - h*0.06; hb.b = fy + 2; hb.h = h; hb.on = true;
 }
 function overHero(X, Y, hw, hh){ return X + hw > hb.l && X - hw < hb.r && Y + hh > hb.t && Y - hh < hb.b; }
+// the HUD's top boxes (boss bar block, hero panel): words never sit on them either. Read once per frame, in the
+// read phase, only while a word is up; a tall boss's taunt used to float over the boss bar's subtitle on phones
+const hud = [{ on:false, l:0, r:0, t:0, b:0 }, { on:false, l:0, r:0, t:0, b:0 }];
+let hudEls = null;
+function hudRead(){
+  if(!hudEls || !hudEls[0] || !hudEls[0].isConnected) hudEls = [document.querySelector('#iu .boss'), document.querySelector('#iu .hl')];
+  for(let i=0;i<2;i++){
+    const e = hudEls[i], q = hud[i]; q.on = false;
+    if(!e || e.classList.contains('x') || !e.offsetParent) continue;
+    const r = e.getBoundingClientRect(); if(!(r.width > 0)) continue;
+    q.l = r.left; q.r = r.right; q.t = r.top; q.b = r.bottom; q.on = true;
+  }
+}
+function overHud(X, Y, hw, hh){
+  for(const q of hud) if(q.on && X + hw > q.l && X - hw < q.r && Y + hh > q.t && Y - hh < q.b) return q;
+  return null;
+}
 // move a popup (centre X,Y, half size hw,hh) off the hero: over his head, else beside him (its own side first),
 // else under his feet — the smallest move that stays on screen wins
 const _kp = { x:0, y:0 };
@@ -1060,7 +1077,7 @@ function keepOffHero(X, Y, hw, hh, W, H){
     else if(c===2){ x = side > 0 ? hb.l - m - hw : hb.r + m + hw; w8 = 1.5; }
     else { y = hb.b + m + hh; w8 = 2.5; }
     x = clamp(x, hw, Math.max(hw, W-hw)); y = clamp(y, hh, Math.max(hh, H-hh));
-    if(overHero(x, y, hw, hh)) continue;
+    if(overHero(x, y, hw, hh) || overHud(x, y, hw, hh)) continue;
     const cost = (Math.abs(x - X) + Math.abs(y - Y))*w8;
     if(cost < best){ best = cost; _kp.x = x; _kp.y = y; }
   }
@@ -1138,7 +1155,9 @@ function updatePops(k){
   // hit words are at most ~2 hero heights wide (a phone hero is ~70 px tall)
   const powCap = hb.on ? clamp(hb.h*2.1, 80, W*0.45) : H*0.34;
   // read phase: measure new popups (one layout for all of them)
-  for(const p of pops) if(p.on && !p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; }
+  let words = false;
+  for(const p of pops) if(p.on){ if(!p.w){ p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 30; } if(p.style==='pow' || p.style==='onoma' || p.style==='crit') words = true; }
+  if(words) hudRead(); else { hud[0].on = hud[1].on = false; }
   for(const p of pops){
     if(!p.on) continue;
     p.t += k;
@@ -1192,7 +1211,11 @@ function updatePops(k){
     // a leaning word starts at its anchor and reads away from it (hit words: away from the attacker)
     let X = clamp(cx + p.ox + p.lean*(hw - 6)*0.85, hw, Math.max(hw, W-hw)), Y = clamp(cy + p.oy, hh, Math.max(hh, H-hh));
     // words never sit on the hero
-    if(hb.on && (p.style==='pow' || p.style==='onoma' || p.style==='crit')){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
+    if(p.style==='pow' || p.style==='onoma' || p.style==='crit'){
+      // below a HUD box it would touch (twice: the boss bar and the hero panel can both be in the way)
+      for(let n=0;n<2;n++){ const q = overHud(X, Y, hw, hh); if(!q) break; Y = Math.min(q.b + 4 + hh, Math.max(hh, H-hh)); }
+      if(hb.on){ keepOffHero(X, Y, hw, hh, W, H); X = _kp.x; Y = _kp.y; }
+    }
     el.style.transform = 'translate3d('+(X - p.w/2).toFixed(1)+'px,'+(Y - p.h/2).toFixed(1)+'px,0) scale('+Math.max(0.01,s).toFixed(3)+') rotate('+rot.toFixed(1)+'deg)'+extra;
     el.style.opacity = a.toFixed(3);
     if(!p.shown){ el.style.visibility = 'visible'; p.shown = true; }
