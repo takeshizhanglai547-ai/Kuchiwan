@@ -418,6 +418,14 @@ function buildCSS(){
 #iu.port.bossOn .combo{top:calc(var(--pt) + 10.2em)}
 #iu.port.hinton .combo{top:calc(var(--pt) + 6.5em + var(--hh,0px))}
 #iu.port.bossOn.hinton .combo{top:calc(var(--pt) + 10.8em + var(--hh,0px))}
+/* landscape tip at the top: under the HUD, clear of the combo / GO column on the right */
+#iu.htop .hint,#iu.htop.tcon .hint{left:calc(var(--pl) + .7em);right:calc(var(--pr) + 7.5em);top:calc(var(--pt) + 4.8em);bottom:auto;width:auto}
+/* short landscape: the belt leaves only a thin band above and below it, so the tip is one flat strip —
+   no face, the speaker's name in line with the words */
+#iu.short .hint{padding:.35em .9em .4em;gap:0}
+#iu.short .hint .av{display:none}
+#iu.short .hint .hn{margin:0 .45em .1em 0}
+#iu.short .hint .ht{display:inline;min-height:0}
 #iu.port .l1{font-size:min(2.3em,8vw)}
 #iu.port .l2{font-size:min(4.6em,13.5vw)}
 #iu.port .tbot{grid-template-columns:1fr;grid-template-areas:"p" "d" "o";justify-items:center;row-gap:.8em}
@@ -1017,17 +1025,29 @@ const hint = { el:null, t:0, life:0, on:false, text:'', shown:-1 };
 function buildHint(){
   const e = hint.el = el('div', 'hint x', root);
   hint.av = el('div', 'av', e, '<i class="e l"></i><i class="e r"></i><i class="bl l"></i><i class="bl r"></i><i class="mo"></i>');
-  const b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
+  const b = hint.b = el('div', 'hb_', e); hint.nm = el('div', 'hn', b); hint.tx = el('div', 'ht', b);
 }
-function hintOff(){ hint.on = false; show(hint.el, false); if(root) root.classList.remove('hinton'); }
-// lay the box out with the whole message once, so it keeps its final size while the text types in,
-// and tell the CSS how tall it is (portrait moves the combo counter below it)
+function hintOff(){ hint.on = false; show(hint.el, false); if(root) root.classList.remove('hinton', 'htop'); }
+// Lay the box out with the whole message once, so it keeps its final size while the text types in, and tell the
+// CSS how tall it is (the combo counter / GO arrow step down below a tip shown at the top).
+// Where it goes: portrait → top (the belt fills the middle). Landscape → bottom, unless the box would reach up
+// over the front edge of the belt (narrow phones: the gap between stick and buttons makes it 3–4 lines tall);
+// then it goes to the top, under the HUD, where it is one or two lines wide.
+const _hp = { x:0, y:0, visible:false };
+function hintLay(){
+  hint.b.style.minHeight = '';
+  hint.tx.textContent = hint.text;
+  hint.b.style.minHeight = hint.b.offsetHeight + 'px';
+  root.style.setProperty('--hh', hint.el.offsetHeight + 'px');
+}
 function hintFit(){
   if(!hint.on) return;
-  hint.tx.style.minHeight = '';
-  hint.tx.textContent = hint.text;
-  hint.tx.style.minHeight = hint.tx.offsetHeight + 'px';
-  root.style.setProperty('--hh', hint.el.offsetHeight + 'px');
+  root.classList.remove('htop');
+  hintLay();
+  if(!root.classList.contains('port') && G.player && G.toScreen && G.cfg){
+    const front = G.toScreen(G.player.x, 0, G.cfg.ZMAX, _hp).y;
+    if(hint.el.offsetTop < front + 2){ root.classList.add('htop'); hintLay(); }
+  }
   hint.shown = -1;
 }
 function hintShow(name, text, frames){
@@ -1055,7 +1075,8 @@ function hintFrame(dt){
   if(t < 0.25){ o = t/0.25; y = reduced ? 0 : (1-o)*14; } else if(t > L-0.3){ o = (L-t)/0.3; }
   const os = o.toFixed(2);
   if(os!==hint.os){ hint.os = os; hint.el.style.opacity = os; }
-  const tf = (T.visible && !root.classList.contains('port') ? '' : 'translateX(-50%) ') + 'translateY(' + y.toFixed(1) + 'px)';
+  const mid = root.classList.contains('port') || (!T.visible && !root.classList.contains('htop'));
+  const tf = (mid ? 'translateX(-50%) ' : '') + 'translateY(' + y.toFixed(1) + 'px)';
   if(tf!==hint.tf){ hint.tf = tf; hint.el.style.transform = tf; }
 }
 

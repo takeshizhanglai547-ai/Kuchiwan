@@ -515,13 +515,15 @@ function say(e, s){ fh().say(e, s); }
 // An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
 // (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
 // other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
-const BANNER_T = 142;
+// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
+const BANNER_T = 142, LINE_T = 44;
 G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossB) b.bannerEnd = G.time.tick + BANNER_T; });
 function sayIntro(e, line){ e.introLine = line; introLine(e); }
 function introLine(e){                     // also called every tick from the rig update (it runs in every state)
   if(e.dead){ e.introLine = null; return; }
-  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd) return;
+  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
   say(e, e.introLine); e.introLine = null;
+  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
 }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
