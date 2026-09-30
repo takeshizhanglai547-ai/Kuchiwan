@@ -2,3 +2,5 @@ node_modules/
 .shots/
 *.blend1
 __pycache__/
+# generated single-file build (release step: npm run build && git add -f dist/ironwake.html)
+dist/

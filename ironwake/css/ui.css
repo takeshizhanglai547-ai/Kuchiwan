@@ -1,0 +1,129 @@
+/* css/ui.css — HUD + menus (owner: mission/HUD designer). Class names are the contract
+   with src/ui/hud.js and src/ui/menus.js. PLACEHOLDER styling: thin lines, off-white,
+   amber accents, Japanese sub-labels. */
+
+/* ------------------------------------------------------------------ HUD */
+.hud { position: absolute; inset: 0; color: var(--iw-fg); font-family: var(--iw-font); text-shadow: 0 0 4px rgba(0,0,0,0.9); }
+.hud .bar { position: relative; height: 5px; background: rgba(232,228,218,0.14); outline: 1px solid rgba(232,228,218,0.35); }
+.hud .bar > i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: var(--iw-fg); }
+.hud .lbl { font-size: 11px; letter-spacing: 0.2em; color: var(--iw-dim); }
+
+.hud-objective { position: absolute; left: 32px; top: 26px; max-width: 42vw; }
+.hud-objective .obj-label { font-size: 11px; letter-spacing: 0.3em; color: var(--iw-accent); }
+.hud-objective .obj-label span { color: var(--iw-dim); letter-spacing: 0.1em; margin-left: 8px; }
+.hud-objective .obj-title { font-size: 17px; letter-spacing: 0.12em; margin-top: 4px; }
+.hud-objective .obj-jp { font-size: 12px; color: var(--iw-dim); margin-top: 2px; }
+.hud-objective .obj-count { font-size: 22px; margin-top: 4px; font-family: var(--iw-mono); }
+.hud-objective .obj-clock { font-size: 12px; margin-top: 6px; font-family: var(--iw-mono); color: var(--iw-dim); }
+
+.hud-target { position: absolute; left: 50%; top: 26px; width: 360px; margin-left: -180px; text-align: center; }
+.hud-target .tg-name { font-size: 13px; letter-spacing: 0.25em; margin-bottom: 6px; }
+.hud-target .tg-ap > i { background: var(--iw-warn); }
+.hud-target .tg-acs { margin-top: 4px; height: 4px; }
+.hud-target .tg-acs > i { background: var(--iw-accent); }
+.hud-target .tg-acs.stagger > i { background: #fff; animation: iw-blink 0.2s steps(2) infinite; }
+.hud-target .tg-apnum { font-family: var(--iw-mono); font-size: 12px; margin-top: 4px; color: var(--iw-dim); }
+
+.hud-center { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.hud-center .reticle { position: absolute; left: -34px; top: -34px; width: 68px; height: 68px; }
+.hud-center .reticle i { position: absolute; width: 14px; height: 14px; border: 0 solid var(--iw-fg); opacity: 0.9; }
+.hud-center .reticle .r-tl { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+.hud-center .reticle .r-tr { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+.hud-center .reticle .r-bl { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+.hud-center .reticle .r-br { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+.hud-center .reticle b { position: absolute; left: 32px; top: 32px; width: 4px; height: 4px; background: var(--iw-fg); }
+.hud-center .ap-block { position: absolute; left: -150px; top: 120px; width: 300px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.hud-center .ap-block .ap-num { font-family: var(--iw-mono); font-size: 24px; }
+.hud-center .ap-block .ap-bar { width: 300px; }
+.hud-center .ap-bar.low > i { background: var(--iw-warn); }
+.hud-center .en-block { position: absolute; left: -150px; top: 172px; width: 300px; }
+.hud-center .en-bar { width: 300px; height: 4px; }
+.hud-center .en-bar > i { background: #9fd7ff; }
+.hud-center .en-bar.redline > i { background: var(--iw-warn); animation: iw-blink 0.25s steps(2) infinite; }
+.hud-center .en-lbl { display: block; margin-top: 3px; }
+.hud-center .own-acs { position: absolute; left: -60px; top: 104px; width: 120px; height: 3px; }
+.hud-center .own-acs > i { background: var(--iw-accent); }
+.hud-center .own-acs.stagger > i { background: var(--iw-warn); }
+
+.hud-weapon { position: absolute; width: 190px; font-size: 11px; }
+.hud-weapon[data-slot="LB"] { left: calc(50% - 400px); top: calc(50% - 150px); text-align: right; }
+.hud-weapon[data-slot="RB"] { left: calc(50% + 210px); top: calc(50% - 150px); }
+.hud-weapon[data-slot="L"] { left: calc(50% - 400px); top: calc(50% + 70px); text-align: right; }
+.hud-weapon[data-slot="R"] { left: calc(50% + 210px); top: calc(50% + 70px); }
+.hud-weapon .w-label { color: var(--iw-accent); letter-spacing: 0.25em; }
+.hud-weapon .w-name { color: var(--iw-dim); letter-spacing: 0.08em; margin-top: 2px; }
+.hud-weapon .w-ammo { font-family: var(--iw-mono); font-size: 20px; margin-top: 2px; }
+.hud-weapon .w-bar { margin-top: 4px; height: 3px; }
+.hud-weapon.busy .w-ammo { color: var(--iw-dim); }
+.hud-weapon.empty .w-ammo { color: var(--iw-warn); }
+
+.hud-status { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; gap: 28px; font-size: 12px; letter-spacing: 0.2em; color: var(--iw-dim); }
+.hud-status .st-boost { color: var(--iw-accent); }
+.hud-kits { position: absolute; left: 32px; bottom: 32px; font-size: 12px; letter-spacing: 0.15em; color: var(--iw-dim); }
+
+.hud-markers { position: absolute; inset: 0; }
+.hud-markers .mk { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.hud-markers .mk::before { content: ""; position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border: 1px solid rgba(255,120,80,0.8); transform: rotate(45deg); }
+.hud-markers .mk.locked::before { left: -22px; top: -22px; width: 44px; height: 44px; transform: none; border: 2px solid var(--iw-warn); }
+.hud-markers .mk.missile::after { content: ""; position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border: 2px solid var(--iw-accent); border-radius: 50%; }
+.hud-markers .mk.boss::before { border-color: #ff2a1a; }
+
+.hud-damage { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.hud-damage .dmg { position: absolute; left: -110px; top: -110px; width: 220px; height: 220px; border-radius: 50%; border-top: 5px solid rgba(255,60,30,0.95); transition: none; }
+
+.hud-callout { position: absolute; left: 0; right: 0; top: 27%; text-align: center; font-size: 22px; letter-spacing: 0.35em; opacity: 0; }
+.hud-callout-jp { position: absolute; left: 0; right: 0; top: calc(27% + 32px); text-align: center; font-size: 13px; letter-spacing: 0.2em; color: var(--iw-dim); opacity: 0; }
+.hud-callout.warn, .hud-callout.bad { color: var(--iw-warn); }
+.hud-callout.good { color: var(--iw-good); }
+.hud-callout.info { color: var(--iw-accent); }
+.hud-missile-warning { position: absolute; left: 0; right: 0; top: calc(50% - 110px); text-align: center; color: var(--iw-warn); font-size: 15px; letter-spacing: 0.4em; animation: iw-blink 0.4s steps(2) infinite; }
+.hud-missile-warning span { font-size: 11px; letter-spacing: 0.1em; margin-left: 8px; }
+
+@keyframes iw-blink { 0% { opacity: 1; } 100% { opacity: 0.25; } }
+
+/* ------------------------------------------------------------------ MENUS */
+.menus { position: absolute; inset: 0; pointer-events: none; }
+.menu { position: absolute; inset: 0; padding: 7vh 7vw; background: linear-gradient(90deg, rgba(8,8,9,0.92) 0%, rgba(8,8,9,0.75) 45%, rgba(8,8,9,0.15) 100%); pointer-events: auto; overflow: auto; }
+.menu-btn { display: flex; align-items: baseline; gap: 14px; min-width: 280px; margin: 8px 0; padding: 12px 20px; background: rgba(232,228,218,0.06); color: var(--iw-fg);
+  border: 1px solid rgba(232,228,218,0.35); font: 16px var(--iw-font); letter-spacing: 0.3em; cursor: pointer; text-align: left; }
+.menu-btn .jp { font-size: 12px; letter-spacing: 0.1em; color: var(--iw-dim); }
+.menu-btn:hover, .menu-btn:focus { background: rgba(227,163,59,0.18); border-color: var(--iw-accent); outline: none; }
+.menu-btn.primary { border-color: var(--iw-accent); }
+.menu-actions { margin: 28px 0; }
+
+.menu-title .logo { font-size: 84px; font-weight: 800; letter-spacing: 0.22em; line-height: 1; }
+.menu-title .logo-jp { font-size: 18px; letter-spacing: 0.6em; color: var(--iw-accent); margin-top: 10px; }
+.menu-title .tagline { font-size: 12px; letter-spacing: 0.4em; color: var(--iw-dim); margin-top: 18px; }
+.controls-block { margin-top: 10px; max-width: 560px; }
+.controls-head { font-size: 12px; letter-spacing: 0.3em; color: var(--iw-accent); margin-bottom: 6px; }
+.controls-head span { color: var(--iw-dim); letter-spacing: 0.1em; margin-left: 8px; }
+.controls { border-collapse: collapse; font-size: 12px; }
+.controls td { padding: 3px 14px 3px 0; border-bottom: 1px solid rgba(232,228,218,0.08); }
+.controls .key { font-family: var(--iw-mono); color: var(--iw-fg); white-space: nowrap; }
+.controls .jp { color: var(--iw-fg); }
+.controls .en { color: var(--iw-dim); }
+.controls-note { font-size: 11px; color: var(--iw-dim); margin-top: 8px; }
+.controls-block.small { opacity: 0.8; }
+
+.menu-briefing .brief-head, .menu-pause .pause-head { font-size: 13px; letter-spacing: 0.35em; color: var(--iw-accent); }
+.menu-briefing .brief-head span, .menu-pause .pause-head span { color: var(--iw-dim); letter-spacing: 0.1em; margin-left: 10px; }
+.menu-briefing .brief-name { font-size: 30px; letter-spacing: 0.15em; margin: 14px 0; }
+.menu-briefing .brief-text { max-width: 640px; font-size: 14px; line-height: 1.7; color: #cfcac0; }
+.menu-briefing .brief-text .jp { color: var(--iw-dim); font-size: 13px; }
+.menu-briefing .brief-stages { list-style: none; padding: 0; margin: 18px 0; }
+.menu-briefing .brief-stages li { padding: 6px 0; letter-spacing: 0.12em; border-bottom: 1px solid rgba(232,228,218,0.1); max-width: 640px; }
+.menu-briefing .brief-stages li b { color: var(--iw-accent); margin-right: 10px; }
+.menu-briefing .brief-stages li span { display: block; font-size: 12px; color: var(--iw-dim); letter-spacing: 0.05em; }
+.menu-briefing .brief-frame { font-size: 11px; letter-spacing: 0.15em; color: var(--iw-dim); line-height: 1.8; }
+
+.menu-results .res-head { font-size: 44px; letter-spacing: 0.25em; }
+.menu-results.win .res-head { color: var(--iw-good); }
+.menu-results.lose .res-head { color: var(--iw-warn); }
+.menu-results .res-head-jp { font-size: 15px; letter-spacing: 0.4em; color: var(--iw-dim); margin-top: 6px; }
+.menu-results .res-body { display: flex; gap: 60px; align-items: center; margin-top: 30px; }
+.menu-results .rank-letter { font-size: 150px; font-weight: 800; line-height: 1; color: var(--iw-accent); text-align: center; min-width: 160px; }
+.menu-results .rank-label { text-align: center; letter-spacing: 0.3em; font-size: 12px; color: var(--iw-dim); }
+.menu-results .res-table { border-collapse: collapse; font-size: 14px; }
+.menu-results .res-table td { padding: 7px 22px 7px 0; border-bottom: 1px solid rgba(232,228,218,0.1); letter-spacing: 0.12em; }
+.menu-results .res-table .jp { color: var(--iw-dim); font-size: 12px; }
+.menu-results .res-table .v { font-family: var(--iw-mono); text-align: right; font-size: 17px; }

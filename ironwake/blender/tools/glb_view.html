@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLB Check</title>
+<style>
+  :root { --bg: #16181b; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  canvas { display: block; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<script type="module">
+// IRONWAKE pipeline check: loads a GLB exactly like the game does (GLTFLoader +
+// MeshoptDecoder), renders one frame under neutral studio IBL and reports the node
+// graph / materials / triangle count on window.__done.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const q = new URLSearchParams(location.search);
+const url = q.get('glb');
+const az = THREE.MathUtils.degToRad(parseFloat(q.get('az') ?? '-40'));
+const el = THREE.MathUtils.degToRad(parseFloat(q.get('el') ?? '16'));
+const fill = parseFloat(q.get('fill') ?? '0.9');
+const W = parseInt(q.get('w') ?? '1280'), H = parseInt(q.get('h') ?? '720');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1d2024);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const key = new THREE.DirectionalLight(0xffe2c4, 2.4);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0004;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xbcd4ff, 1.6);
+scene.add(rim);
+
+const report = { ok: false };
+try {
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.loadAsync(url);
+  const root = gltf.scene;
+  scene.add(root);
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  let tris = 0; const mats = new Set(); const names = [];
+  root.traverse((o) => {
+    if (o.name) names.push(o.name);
+    if (o.isMesh) {
+      o.castShadow = o.receiveShadow = true;
+      const g = o.geometry;
+      tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+      const m = o.material; mats.add(m.name);
+      report.hasTangents = report.hasTangents || !!g.attributes.tangent;
+      report.maps = { map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap,
+        metalnessMap: !!m.metalnessMap, aoMap: !!m.aoMap, emissiveMap: report.maps?.emissiveMap || !!m.emissiveMap };
+    }
+  });
+  // floor with contact shadow
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshStandardMaterial({ color: 0x2a2b2d, roughness: 0.85 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = box.min.y - 0.002; floor.receiveShadow = true;
+  scene.add(floor);
+  // camera: azimuth 0 = looking at the asset's front (+Z in glTF)
+  const cam = new THREE.PerspectiveCamera(36, W / H, 0.05, 500);
+  const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+  const corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  let lo = 0.1, hi = 500;
+  for (let i = 0; i < 50; i++) {
+    const d = (lo + hi) / 2;
+    cam.position.copy(c).addScaledVector(dir, d); cam.lookAt(c); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    let m = 0; for (const p of corners) { const v = p.clone().project(cam); m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); }
+    if (m > fill) lo = d; else hi = d;
+  }
+  cam.position.copy(c).addScaledVector(dir, hi); cam.lookAt(c);
+  const s = size.length();
+  key.position.copy(c).add(new THREE.Vector3(-1.2, 1.3, 1.1).multiplyScalar(s)); key.target.position.copy(c);
+  scene.add(key.target);
+  const sc = key.shadow.camera; sc.left = sc.bottom = -s; sc.right = sc.top = s; sc.near = 0.1; sc.far = 6 * s; sc.updateProjectionMatrix();
+  rim.position.copy(c).add(new THREE.Vector3(1.3, 0.9, -1.4).multiplyScalar(s));
+  renderer.render(scene, cam);
+  Object.assign(report, { ok: true, tris, nodes: names, materials: [...mats], size: size.toArray(),
+    extensions: gltf.parser.json.extensionsUsed || [] });
+} catch (e) {
+  report.error = String(e && e.stack || e);
+}
+window.__done = report;
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "iwkit-tools",
+  "private": true,
+  "description": "Node-side helpers for the IRONWAKE Blender pipeline (gltfpack = meshopt compression for GLB).",
+  "dependencies": {
+    "gltfpack": "1.3.0"
+  }
+}

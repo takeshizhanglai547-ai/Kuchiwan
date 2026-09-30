@@ -1,0 +1,34 @@
+/* css/main.css — base page styles (owner: lead engine). HUD & menus: css/ui.css. */
+:root {
+  --iw-font: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Meiryo", sans-serif;
+  --iw-mono: "Consolas", "SFMono-Regular", "Menlo", monospace;
+  /* HUD palette from docs/AC6_BENCHMARK.md §5 */
+  --iw-fg: rgba(230, 238, 240, 0.9);   /* #E6EEF0 @ ~85-90% */
+  --iw-dim: #9fb3ba;
+  --iw-accent: #ffb400;                /* caution */
+  --iw-warn: #ff4a3d;                  /* alert */
+  --iw-good: #8fe3b0;
+  --iw-bg: #0b0b0c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+  background: var(--iw-bg); color: var(--iw-fg); font-family: var(--iw-font);
+  user-select: none; -webkit-user-select: none;
+}
+#game-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; }
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui .menus, #ui .menu, #ui button { pointer-events: auto; }
+
+#boot {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--iw-bg); z-index: 100; letter-spacing: 0.3em;
+}
+#boot .boot-title { font-size: 42px; font-weight: 700; }
+#boot .boot-msg { margin-top: 12px; color: var(--iw-dim); font-size: 14px; }
+#boot.error pre { max-width: 80vw; white-space: pre-wrap; color: var(--iw-warn); font-size: 12px; letter-spacing: 0; }
+
+.debug-overlay {
+  position: fixed; left: 8px; bottom: 8px; padding: 6px 8px; background: rgba(0,0,0,0.55);
+  font: 11px/1.35 var(--iw-mono); color: #cfe; white-space: pre; z-index: 50; pointer-events: none;
+}
