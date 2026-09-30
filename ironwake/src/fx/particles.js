@@ -1,200 +1,179 @@
-// src/fx/particles.js — pooled GPU-instanced particle system (owner: weapons/VFX artist).
+// src/fx/particles.js — the VFX system (owner: weapons/VFX artist).
 //
 // API (game.fx):
-//   spawn(name, pos, dir?, opts?)   opts: number (scale) or { scale, normal, yaw, color }
-//   register(name, parts)           add/replace an effect definition (array of PART configs)
+//   spawn(name, pos, dir?, opts?)   opts: number (scale) or { scale, normal, yaw, vel, incoming }
+//                                   vel = owner velocity (parts with `inherit` ride along)
+//                                   incoming = projectile direction (ricochet sparks)
+//   register(name, parts)           add/replace an effect definition (see fx/library.js)
 //   clear()                         kill everything (restart)
 //   activeCount()
 //   freeze = true                   stop simulating (staged shots); rendering continues
+//   flash(pos, color, intensity, range, dur)   one of the constant flash lights
+//   trails / decals / debris / slashes / ghosts / distortion   sub-systems (see their files)
 //
-// Effect names used by gameplay (keep them; restyle freely):
+// Effect names used by gameplay (keep them; restyle freely in fx/library.js):
 //   muzzle, tracer, impact_sparks, explosion_small, explosion_large, smoke, boost_flame,
 //   qb_burst, ab_trail, dust_kick, blade_arc, missile_trail, shockwave, debris
+// plus muzzle_rifle/_cannon/_missile/_energy, impact_ground/_wall/_energy, blade_hit,
+// stagger_burst, arc_spark, fire_lick, shell_trail.
 //
-// PART config (all optional except count):
-//   blend 'add'|'alpha'  count [min,max]  life [min,max] s   speed [min,max] m/s
-//   dirMode 'dir' (cone around dir) | 'sphere' | 'ring' (horizontal) | 'up' | 'arc' (blade)
-//   cone deg (for 'dir'/'up')   size [start,end] m   color0/color1 [r,g,b] (HDR > 1 blooms)
-//   alpha [start,end]   drag (1/s)   gravity (m/s^2, + = down)   stretch (velocity streak factor)
-//   spin [min,max] rad/s   jitter (m, random start offset)   rise (m/s constant up drift)
-//   scaleCount bool (scale opt multiplies count; default true)
+// Rendering: ONE instanced, CPU-sorted (back-to-front), premultiplied-alpha batch (fx/shaders.js)
+// with lit billow puffs, fire temperature ramps, star flashes, spark streaks, rings and chunks.
+// Soft particles: the batch lives on the pipeline's SOFT layer and fades against the opaque
+// depth (game.pipeline.markSoft / depthUniforms). Fog uses the shared atmosphere chunks.
+// Two constant point lights serve every flash (no light-count changes => no recompiles).
 // All randomness uses game.rng.stream('fx') => deterministic for staged shots.
 import * as THREE from 'three';
-import { softDotTexture, smokeTexture } from '../render/proctex.js';
+import { PARTICLE_VERT, particleFrag, SHAPE } from './shaders.js';
+import { EFFECTS } from './library.js';
+import { loadFxTextures } from './textures.js';
+import { Trails } from './trails.js';
+import { Decals } from './decals.js';
+import { Debris } from './debris.js';
+import { Distortion } from './distort.js';
+import { Slashes } from './slash.js';
+import { Ghosts } from './ghost.js';
+import { Status } from './status.js';
 
-const MAX = 6000;
+export { EFFECTS };
 
-const VERT = /* glsl */`
-attribute vec3 iPos; attribute vec3 iVel; attribute vec4 iColor; attribute vec3 iMisc; // size, rot, stretch
-varying vec4 vColor; varying vec2 vUv;
-#include <fog_pars_vertex>
-void main() {
-  vUv = uv;
-  vColor = iColor;
-  vec4 mvPosition = modelViewMatrix * vec4(iPos, 1.0);
-  float size = iMisc.x; float rot = iMisc.y; float stretch = iMisc.z;
-  vec2 corner = position.xy;
-  vec3 vv = (modelViewMatrix * vec4(iVel, 0.0)).xyz;
-  float vl = length(vv.xy);
-  if (stretch > 0.0 && vl > 1e-3) {
-    vec2 ay = vv.xy / vl; vec2 ax = vec2(-ay.y, ay.x);
-    corner = ax * corner.x * size + ay * (corner.y - 0.5) * (size + vl * stretch);
-  } else {
-    float c = cos(rot), s = sin(rot);
-    corner = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
-  }
-  mvPosition.xy += corner;
-  gl_Position = projectionMatrix * mvPosition;
-  #include <fog_vertex>
-}`;
-const FRAG = /* glsl */`
-uniform sampler2D map;
-varying vec4 vColor; varying vec2 vUv;
-#include <fog_pars_fragment>
-void main() {
-  vec4 tex = texture2D(map, vUv);
-  vec4 col = vec4(vColor.rgb * tex.rgb, vColor.a * tex.a);
-  #ifdef USE_FOG
-    #ifdef FOG_EXP2
-      float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);
-    #else
-      float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-    #endif
-    #ifdef ADDITIVE
-      col.rgb *= (1.0 - fogFactor);
-    #else
-      col.rgb = mix(col.rgb, fogColor, fogFactor);
-    #endif
-  #endif
-  gl_FragColor = col;
-}`;
+const MAX = 8000;
+const BUSY = MAX * 0.75;   // above this, long-lived smoke thins out so flashes/sparks keep room
+const F_LIT = 1, F_FIXED = 2, F_COLLIDE = 4, F_NOSOFT = 8;
+const BUCKETS = 4096;
+const TAU = Math.PI * 2;
 
-/** Default effect library (placeholder look). */
-export const EFFECTS = {
-  muzzle: [
-    { blend: 'add', count: [5, 7], life: [0.04, 0.08], speed: [4, 28], dirMode: 'dir', cone: 14, size: [1.2, 0.3], color0: [4, 2.2, 0.8], color1: [1.5, 0.5, 0.1], alpha: [1, 0], stretch: 0.02 },
-    { blend: 'add', count: [1, 1], life: [0.05, 0.05], speed: [0, 0], size: [2.2, 1.0], color0: [2.5, 1.4, 0.5], color1: [0.6, 0.2, 0.05], alpha: [1, 0] },
-  ],
-  tracer: [
-    { blend: 'add', count: [1, 1], life: [0.08, 0.08], speed: [300, 300], dirMode: 'dir', cone: 0, size: [0.25, 0.25], color0: [4, 2.4, 1], color1: [4, 2.4, 1], alpha: [1, 1], stretch: 0.03 },
-  ],
-  impact_sparks: [
-    { blend: 'add', count: [10, 16], life: [0.12, 0.4], speed: [12, 48], dirMode: 'dir', cone: 75, size: [0.28, 0.06], color0: [5, 2.5, 0.8], color1: [1.5, 0.4, 0.1], alpha: [1, 0.2], gravity: 30, drag: 2, stretch: 0.035 },
-    { blend: 'add', count: [1, 1], life: [0.06, 0.06], speed: [0, 0], size: [1.8, 0.8], color0: [2.5, 1.4, 0.6], color1: [0.5, 0.2, 0.05], alpha: [1, 0] },
-    { blend: 'alpha', count: [1, 2], life: [0.5, 0.9], speed: [1, 4], dirMode: 'dir', cone: 40, size: [1.2, 3.5], color0: [0.35, 0.33, 0.3], color1: [0.3, 0.29, 0.27], alpha: [0.45, 0], drag: 2, rise: 1.5, spin: [-1, 1] },
-  ],
-  explosion_small: [
-    { blend: 'add', count: [5, 7], life: [0.12, 0.3], speed: [2, 8], dirMode: 'sphere', size: [2.5, 5], color0: [3.5, 1.6, 0.45], color1: [0.6, 0.12, 0.02], alpha: [0.9, 0], drag: 5, spin: [-2, 2], jitter: 0.8 },
-    { blend: 'alpha', count: [8, 10], life: [0.3, 0.6], speed: [3, 11], dirMode: 'sphere', size: [3, 7], color0: [1.6, 0.7, 0.22], color1: [0.14, 0.12, 0.1], alpha: [0.95, 0], drag: 4, spin: [-1.5, 1.5], jitter: 1 },
-    { blend: 'add', count: [10, 14], life: [0.2, 0.6], speed: [20, 55], dirMode: 'sphere', size: [0.3, 0.08], color0: [5, 2.5, 0.8], color1: [1.5, 0.35, 0.08], alpha: [1, 0.3], gravity: 25, drag: 1.5, stretch: 0.03 },
-    { blend: 'alpha', count: [6, 9], life: [1.2, 2.4], speed: [2, 8], dirMode: 'sphere', size: [3, 10], color0: [0.2, 0.18, 0.16], color1: [0.3, 0.29, 0.27], alpha: [0.7, 0], drag: 2.5, rise: 2.5, spin: [-0.6, 0.6], jitter: 1.5 },
-  ],
-  explosion_large: [
-    { blend: 'add', count: [8, 10], life: [0.2, 0.45], speed: [3, 14], dirMode: 'sphere', size: [6, 12], color0: [4, 1.8, 0.5], color1: [0.6, 0.12, 0.02], alpha: [0.9, 0], drag: 4, spin: [-1.5, 1.5], jitter: 2.5 },
-    { blend: 'alpha', count: [16, 20], life: [0.4, 0.9], speed: [5, 22], dirMode: 'sphere', size: [6, 15], color0: [1.8, 0.75, 0.22], color1: [0.12, 0.1, 0.09], alpha: [0.95, 0], drag: 3.5, spin: [-1, 1], jitter: 3 },
-    { blend: 'add', count: [20, 28], life: [0.4, 1.0], speed: [30, 80], dirMode: 'sphere', size: [0.45, 0.1], color0: [5, 2.5, 0.8], color1: [1.5, 0.35, 0.08], alpha: [1, 0.3], gravity: 28, drag: 1, stretch: 0.03 },
-    { blend: 'add', count: [28, 28], life: [0.3, 0.35], speed: [70, 80], dirMode: 'ring', size: [2.5, 0.8], color0: [1.6, 1.2, 0.8], color1: [0.2, 0.12, 0.08], alpha: [0.8, 0], drag: 3, stretch: 0.02, scaleCount: false },
-    { blend: 'alpha', count: [12, 16], life: [2, 4], speed: [3, 12], dirMode: 'sphere', size: [6, 20], color0: [0.2, 0.18, 0.16], color1: [0.32, 0.3, 0.28], alpha: [0.8, 0], drag: 2, rise: 3.5, spin: [-0.5, 0.5], jitter: 3 },
-    { blend: 'alpha', count: [8, 12], life: [1, 1.8], speed: [15, 35], dirMode: 'up', cone: 60, size: [0.8, 0.6], color0: [0.08, 0.07, 0.06], color1: [0.08, 0.07, 0.06], alpha: [1, 1], gravity: 32, drag: 0.5, spin: [-6, 6] },
-  ],
-  smoke: [
-    { blend: 'alpha', count: [1, 1], life: [0.8, 1.6], speed: [0.5, 2], dirMode: 'sphere', size: [1.5, 5], color0: [0.3, 0.28, 0.26], color1: [0.36, 0.34, 0.32], alpha: [0.55, 0], drag: 1.5, rise: 1.5, spin: [-0.8, 0.8] },
-  ],
-  boost_flame: [
-    { blend: 'add', count: [1, 2], life: [0.05, 0.09], speed: [18, 34], dirMode: 'dir', cone: 6, size: [0.8, 0.2], color0: [3, 1.4, 0.5], color1: [1, 0.3, 0.08], alpha: [1, 0], stretch: 0.012 },
-  ],
-  qb_burst: [
-    { blend: 'add', count: [18, 22], life: [0.08, 0.2], speed: [25, 75], dirMode: 'dir', cone: 30, size: [1.3, 0.3], color0: [2.8, 1.5, 0.6], color1: [0.8, 0.3, 0.08], alpha: [1, 0], stretch: 0.02, drag: 3, jitter: 1.0 },
-    { blend: 'alpha', count: [5, 7], life: [0.5, 0.9], speed: [4, 12], dirMode: 'dir', cone: 45, size: [2, 6], color0: [0.4, 0.38, 0.35], color1: [0.4, 0.38, 0.35], alpha: [0.45, 0], drag: 4, rise: 1, jitter: 1.5, spin: [-1, 1] },
-  ],
-  ab_trail: [
-    { blend: 'add', count: [2, 3], life: [0.08, 0.16], speed: [30, 55], dirMode: 'dir', cone: 5, size: [1.1, 0.3], color0: [3, 1.5, 0.55], color1: [1, 0.3, 0.08], alpha: [1, 0], stretch: 0.015 },
-  ],
-  dust_kick: [
-    { blend: 'alpha', count: [4, 7], life: [0.6, 1.3], speed: [4, 13], dirMode: 'ring', size: [1.5, 5.5], color0: [0.46, 0.42, 0.37], color1: [0.5, 0.47, 0.42], alpha: [0.5, 0], drag: 2.5, rise: 1.2, jitter: 1, spin: [-1, 1] },
-  ],
-  blade_arc: [
-    { blend: 'add', count: [40, 40], life: [0.16, 0.26], speed: [2, 6], dirMode: 'arc', size: [1.3, 0.3], color0: [0.8, 1.6, 3.6], color1: [0.2, 0.4, 1.2], alpha: [0.9, 0], scaleCount: false },
-    { blend: 'add', count: [14, 18], life: [0.12, 0.3], speed: [15, 40], dirMode: 'sphere', size: [0.28, 0.05], color0: [2.5, 3.5, 6], color1: [0.5, 1, 2.5], alpha: [1, 0], stretch: 0.03, drag: 2 },
-  ],
-  missile_trail: [
-    { blend: 'alpha', count: [1, 1], life: [0.5, 1.1], speed: [0.5, 2], dirMode: 'sphere', size: [0.7, 3], color0: [0.55, 0.53, 0.5], color1: [0.4, 0.39, 0.37], alpha: [0.55, 0], drag: 1, rise: 0.6, spin: [-1, 1] },
-    { blend: 'add', count: [1, 1], life: [0.04, 0.06], speed: [8, 14], dirMode: 'dir', cone: 8, size: [0.7, 0.2], color0: [3.5, 1.6, 0.5], color1: [1, 0.3, 0.06], alpha: [1, 0], stretch: 0.02 },
-  ],
-  shockwave: [
-    { blend: 'add', count: [32, 32], life: [0.25, 0.3], speed: [60, 70], dirMode: 'ring', size: [2, 0.6], color0: [1.6, 1.3, 1.0], color1: [0.2, 0.15, 0.1], alpha: [0.8, 0], drag: 3, stretch: 0.02, scaleCount: false },
-  ],
-  debris: [
-    { blend: 'alpha', count: [8, 12], life: [1, 1.8], speed: [12, 32], dirMode: 'up', cone: 55, size: [0.7, 0.5], color0: [0.07, 0.06, 0.05], color1: [0.07, 0.06, 0.05], alpha: [1, 1], gravity: 32, drag: 0.4, spin: [-6, 6] },
-  ],
-};
-
-// Flash lights (physically based point lights: intensity in candela, decay 2).
-const LIGHTS = {
-  muzzle: { color: [1, 0.6, 0.3], intensity: 8, range: 14, dur: 0.05 },
-  explosion_small: { color: [1, 0.55, 0.25], intensity: 45, range: 35, dur: 0.25 },
-  explosion_large: { color: [1, 0.5, 0.2], intensity: 180, range: 90, dur: 0.5 },
-  qb_burst: { color: [1, 0.6, 0.3], intensity: 12, range: 20, dur: 0.12 },
-  blade_arc: { color: [0.5, 0.7, 1], intensity: 35, range: 30, dur: 0.2 },
-};
+/** Lighting calibration for lit smoke (multiplies the environment's sun / hemisphere). */
+export const SMOKE_LIGHT = { sun: 0.4, ambTop: 0.7, ambBot: 0.7, ambFog: 0.35, fireGain: 0.75, fallbackSun: [2.4, 1.5, 0.95], fallbackTop: [0.5, 0.5, 0.55], fallbackBot: [0.4, 0.34, 0.3] };
 
 const _up = new THREE.Vector3(0, 1, 0), _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _d = new THREE.Vector3();
+const _side = new THREE.Vector3(), _camPos = new THREE.Vector3(), _camFwd = new THREE.Vector3(), _sv = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
-const _defaultOpts = { scale: 1, normal: null, yaw: 0 };
+const _defaultOpts = { scale: 1, normal: null, yaw: 0, vel: null, incoming: null };
+const _autoOpts = { scale: 1, normal: null, yaw: 0, vel: null, incoming: null };
+const INHERIT_PLAYER = { boost_flame: true, ab_trail: true, qb_burst: true };
+const _col = new THREE.Color(), _v2 = new THREE.Vector2(), _lp = new THREE.Vector3();
+/** Global flash-light calibration (library intensities are relative, candela x LIGHT_SCALE). */
+export const LIGHT_SCALE = 0.22;
 
 export default function particlesSystem(game) {
-  // Structure of arrays
+  // ---------------------------------------------------------------- particle state (SoA)
   const P = {
     n: 0,
-    pos: new Float32Array(MAX * 3), vel: new Float32Array(MAX * 3),
-    age: new Float32Array(MAX), life: new Float32Array(MAX),
-    s0: new Float32Array(MAX), s1: new Float32Array(MAX),
+    pos: new Float32Array(MAX * 3), vel: new Float32Array(MAX * 3), axis: new Float32Array(MAX * 3),
     c0: new Float32Array(MAX * 3), c1: new Float32Array(MAX * 3),
-    a0: new Float32Array(MAX), a1: new Float32Array(MAX),
-    drag: new Float32Array(MAX), grav: new Float32Array(MAX), rise: new Float32Array(MAX),
+    age: new Float32Array(MAX), life: new Float32Array(MAX),
+    s0: new Float32Array(MAX), s1: new Float32Array(MAX), sp: new Float32Array(MAX),
+    a0: new Float32Array(MAX), a1: new Float32Array(MAX), ap: new Float32Array(MAX), fin: new Float32Array(MAX),
+    h0: new Float32Array(MAX), h1: new Float32Array(MAX), k0: new Float32Array(MAX), k1: new Float32Array(MAX),
+    e0: new Float32Array(MAX), e1: new Float32Array(MAX), cp: new Float32Array(MAX),
+    drag: new Float32Array(MAX), grav: new Float32Array(MAX), rise: new Float32Array(MAX), turb: new Float32Array(MAX),
     rot: new Float32Array(MAX), spin: new Float32Array(MAX), stretch: new Float32Array(MAX),
-    add: new Uint8Array(MAX),
+    bounce: new Float32Array(MAX), seed: new Float32Array(MAX),
+    shape: new Uint8Array(MAX), variant: new Uint8Array(MAX), flags: new Uint8Array(MAX),
   };
+  const A3 = [P.pos, P.vel, P.axis, P.c0, P.c1];
+  const A1 = [P.age, P.life, P.s0, P.s1, P.sp, P.a0, P.a1, P.ap, P.fin, P.h0, P.h1, P.k0, P.k1, P.e0, P.e1, P.cp,
+    P.drag, P.grav, P.rise, P.turb, P.rot, P.spin, P.stretch, P.bounce, P.seed, P.shape, P.variant, P.flags];
   const effects = { ...EFFECTS };
-  let rng, batches = {}, lights = [];
+  const keys = new Float32Array(MAX), order = new Uint16Array(MAX), bucketCount = new Int32Array(BUCKETS + 1);
+  let rng, batch = null, lights = [], simTime = 0, softAttached = false, tex = null;
+  let trails, decals, debris, distortion, slashes, ghosts, status;
 
-  function makeBatch(additive, tex, cap) {
+  // ---------------------------------------------------------------- batch
+  function makeBatch(textures) {
     const base = new THREE.PlaneGeometry(1, 1);
     const g = new THREE.InstancedBufferGeometry();
     g.index = base.index;
     g.setAttribute('position', base.attributes.position);
     g.setAttribute('uv', base.attributes.uv);
-    const iPos = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage);
-    const iVel = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage);
-    const iColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
-    const iMisc = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage);
-    g.setAttribute('iPos', iPos); g.setAttribute('iVel', iVel); g.setAttribute('iColor', iColor); g.setAttribute('iMisc', iMisc);
+    const mk = (w) => new THREE.InstancedBufferAttribute(new Float32Array(MAX * w), w).setUsage(THREE.DynamicDrawUsage);
+    const iPos = mk(3), iAxis = mk(3), iColor = mk(4), iSize = mk(4), iExtra = mk(4);
+    g.setAttribute('iPos', iPos); g.setAttribute('iAxis', iAxis); g.setAttribute('iColor', iColor);
+    g.setAttribute('iSize', iSize); g.setAttribute('iExtra', iExtra);
     g.instanceCount = 0;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      tPuff: { value: null }, tMisc: { value: null },
+      uSunView: { value: new THREE.Vector3(0, 0.5, -0.5) }, uSunCol: { value: new THREE.Color() },
+      uAmbTop: { value: new THREE.Color() }, uAmbBot: { value: new THREE.Color() }, uFireGain: { value: SMOKE_LIGHT.fireGain },
+      uPixel: { value: 0.001 },
+    }]);
     const mat = new THREE.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { map: { value: null } }]),
-      transparent: true, depthWrite: false, fog: true,
-      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-      defines: additive ? { ADDITIVE: '' } : {},
+      name: 'iw_fx_particles',
+      vertexShader: PARTICLE_VERT, fragmentShader: particleFrag(''),
+      uniforms, transparent: true, depthWrite: false, depthTest: true, fog: true,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     });
-    mat.uniforms.map.value = tex;
+    mat.uniforms.tPuff.value = textures.puff; mat.uniforms.tMisc.value = textures.misc;
     const mesh = new THREE.Mesh(g, mat);
     mesh.frustumCulled = false;
-    mesh.renderOrder = additive ? 20 : 15;
-    mesh.name = additive ? 'fx_additive' : 'fx_alpha';
+    mesh.renderOrder = 20;
+    mesh.name = 'fx_particles';
+    mesh.onBeforeRender = (renderer, scene, camera) => {
+      // sun direction in view space (lit puffs) — exact for the camera being rendered
+      const env = game.env;
+      if (env && env.sunDir) _sv.copy(env.sunDir).transformDirection(camera.matrixWorldInverse);
+      else _sv.set(0.3, 0.6, -0.4).normalize();
+      mat.uniforms.uSunView.value.copy(_sv);
+      const h = renderer.getDrawingBufferSize(_v2).y || 900;
+      mat.uniforms.uPixel.value = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov || 50) * 0.5) / h;
+    };
     game.scene.add(mesh);
-    return { mesh, g, iPos, iVel, iColor, iMisc, cap, attrs: [[iPos, 3], [iVel, 3], [iColor, 4], [iMisc, 3]] };
+    return { mesh, g, mat, iPos, iAxis, iColor, iSize, iExtra, attrs: [[iPos, 3], [iAxis, 3], [iColor, 4], [iSize, 4], [iExtra, 4]] };
   }
 
-  function upload(bb, n) {
-    bb.g.instanceCount = n;
-    if (n) {
-      for (const [attr, w] of bb.attrs) {
-        attr.needsUpdate = true;
-        attr.clearUpdateRanges();
-        attr.addUpdateRange(0, n * w);
-      }
+  /** Lit-smoke light colours from the environment (sun + hemisphere), refreshed every frame. */
+  function updateLighting() {
+    const u = batch.mat.uniforms, env = game.env, L = SMOKE_LIGHT;
+    const sun = env && env.sun, hemi = env && env.hemi;
+    if (sun && sun.color) u.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity * L.sun / Math.PI);
+    else u.uSunCol.value.setRGB(...L.fallbackSun);
+    if (hemi && hemi.color) {
+      u.uAmbTop.value.copy(hemi.color).multiplyScalar(hemi.intensity * L.ambTop);
+      u.uAmbBot.value.copy(hemi.groundColor).multiplyScalar(hemi.intensity * L.ambBot);
+      // the ash-laden air itself fills the smoke with warm grey (keeps dust from reading blue)
+      const fog = game.scene.fog;
+      if (fog) { _col.copy(fog.color).multiplyScalar(L.ambFog); u.uAmbTop.value.add(_col); u.uAmbBot.value.add(_col); }
+    } else { u.uAmbTop.value.setRGB(...L.fallbackTop); u.uAmbBot.value.setRGB(...L.fallbackBot); }
+  }
+
+  /** Soft particles: once the pipeline exists, move the fx meshes to its SOFT layer. */
+  function attachSoft() {
+    const pl = game.pipeline;
+    if (softAttached || !pl || !pl.markSoft || !pl.depthUniforms || !pl.glsl) return;
+    softAttached = true;
+    const m = batch.mat;
+    Object.assign(m.uniforms, pl.depthUniforms);
+    m.fragmentShader = particleFrag(pl.glsl.softDepth);
+    m.defines = { ...m.defines, IW_SOFT: '' };
+    m.needsUpdate = true;
+    pl.markSoft(batch.mesh);
+    decals.attachSoft(pl);
+    trails.attachSoft(pl);
+    slashes.attachSoft(pl);
+    ghosts.attachSoft(pl);
+    if (game.projectiles && game.projectiles.attachSoft) game.projectiles.attachSoft(pl);
+    distortion.attach(pl);
+  }
+
+  /** Rig nozzle flames draw after the particles (soft layer), so smoke never paints over them. */
+  function attachRigFlames() {
+    const pl = game.pipeline;
+    if (!softAttached || !pl) return;
+    for (const a of game.actors) {
+      const rig = a.rig;
+      if (!rig || !rig.nozzles || rig.userData_iwSoft) continue;
+      rig.userData_iwSoft = true;
+      for (const nz of rig.nozzles) if (nz.flame) { pl.markSoft(nz.flame); nz.flame.traverse(setFlameOrder); }
     }
+  }
+
+  function upload(n) {
+    const bb = batch;
+    bb.g.instanceCount = n;
+    if (n) for (const [attr, w] of bb.attrs) { attr.needsUpdate = true; attr.clearUpdateRanges(); attr.addUpdateRange(0, n * w); }
     bb.mesh.visible = n > 0;
   }
 
@@ -202,177 +181,390 @@ export default function particlesSystem(game) {
     const last = --P.n;
     if (i === last) return;
     const i3 = i * 3, l3 = last * 3;
-    for (let k = 0; k < 3; k++) {
-      P.pos[i3 + k] = P.pos[l3 + k]; P.vel[i3 + k] = P.vel[l3 + k];
-      P.c0[i3 + k] = P.c0[l3 + k]; P.c1[i3 + k] = P.c1[l3 + k];
-    }
-    P.age[i] = P.age[last]; P.life[i] = P.life[last]; P.s0[i] = P.s0[last]; P.s1[i] = P.s1[last];
-    P.a0[i] = P.a0[last]; P.a1[i] = P.a1[last]; P.drag[i] = P.drag[last]; P.grav[i] = P.grav[last];
-    P.rise[i] = P.rise[last]; P.rot[i] = P.rot[last]; P.spin[i] = P.spin[last]; P.stretch[i] = P.stretch[last];
-    P.add[i] = P.add[last];
+    for (let a = 0; a < A3.length; a++) { const arr = A3[a]; arr[i3] = arr[l3]; arr[i3 + 1] = arr[l3 + 1]; arr[i3 + 2] = arr[l3 + 2]; }
+    for (let a = 0; a < A1.length; a++) { const arr = A1[a]; arr[i] = arr[last]; }
   }
 
-  /** Random direction for a part into _v. */
-  function pickDir(part, dir, opts, k, count) {
+  // ---------------------------------------------------------------- emission
+  /** Random direction for a part into _v (unit). dir = unit Vector3 or null. */
+  function pickDir(part, dir, o, k, count) {
     const mode = part.dirMode || 'sphere';
-    if (mode === 'sphere' || (!dir && (mode === 'dir'))) { rng.onSphere(_v); return; }
+    if (mode === 'sphere' || (!dir && (mode === 'dir' || mode === 'hemi' || mode === 'ringAxis' || mode === 'side' || mode === 'ricochet'))) { rng.onSphere(_v); return; }
     if (mode === 'ring') {
-      const a = rng.next() * Math.PI * 2;
+      const a = rng.next() * TAU;
       _v.x = Math.cos(a); _v.y = rng.sym(0.08); _v.z = Math.sin(a);
       return;
     }
     if (mode === 'arc') {
-      // Horizontal arc in front (yaw), sweeping 150 degrees.
-      const a = (opts.yaw || 0) + (k / Math.max(1, count - 1) - 0.5) * 2.6;
+      const a = (o.yaw || 0) + (rng.next() - 0.5) * 2.6;
       _v.x = Math.sin(a); _v.y = rng.sym(0.1); _v.z = Math.cos(a);
       return;
     }
-    const axis = mode === 'up' ? _up : dir;
-    const cone = THREE.MathUtils.degToRad(part.cone ?? 20);
-    // Uniform-ish in cone: random angle up to cone, random azimuth.
-    const ang = cone * Math.sqrt(rng.next());
-    const phi = rng.next() * Math.PI * 2;
+    let axis = mode === 'up' ? _up : dir;
+    let coneDeg = part.cone ?? 20;
+    if (mode === 'hemi') coneDeg = part.cone ?? 80;
+    if (mode === 'side') { _side.crossVectors(dir, _up); if (_side.lengthSq() < 1e-4) _side.set(1, 0, 0); _side.normalize().addScaledVector(_up, 0.7).normalize(); axis = _side; }
+    if (mode === 'ricochet') {
+      const inc = o.incoming;
+      if (inc) { const dn = inc.x * dir.x + inc.y * dir.y + inc.z * dir.z; _side.set(inc.x - 2 * dn * dir.x, inc.y - 2 * dn * dir.y, inc.z - 2 * dn * dir.z).normalize(); axis = _side; }
+    }
     _t1.set(Math.abs(axis.y) < 0.99 ? 0 : 1, Math.abs(axis.y) < 0.99 ? 1 : 0, 0).cross(axis).normalize();
     _t2.crossVectors(axis, _t1);
+    if (mode === 'ringAxis') {
+      const phi = rng.next() * TAU, tilt = rng.sym(0.12);
+      _v.x = _t1.x * Math.cos(phi) + _t2.x * Math.sin(phi) + axis.x * tilt;
+      _v.y = _t1.y * Math.cos(phi) + _t2.y * Math.sin(phi) + axis.y * tilt;
+      _v.z = _t1.z * Math.cos(phi) + _t2.z * Math.sin(phi) + axis.z * tilt;
+      return;
+    }
+    const cone = THREE.MathUtils.degToRad(coneDeg);
+    const ang = cone * Math.sqrt(rng.next());
+    const phi = rng.next() * TAU;
     const s = Math.sin(ang), c = Math.cos(ang);
     _v.x = axis.x * c + (_t1.x * Math.cos(phi) + _t2.x * Math.sin(phi)) * s;
     _v.y = axis.y * c + (_t1.y * Math.cos(phi) + _t2.y * Math.sin(phi)) * s;
     _v.z = axis.z * c + (_t1.z * Math.cos(phi) + _t2.z * Math.sin(phi)) * s;
   }
 
-  function flash(name, pos, scale) {
-    const L = LIGHTS[name];
-    if (!L || !lights.length) return;
-    // take the dimmest light
-    let best = lights[0];
-    for (const l of lights) if (l.t / l.dur < best.t / best.dur) best = l;
-    best.light.position.set(pos.x, pos.y + 1, pos.z);
-    best.light.color.setRGB(L.color[0], L.color[1], L.color[2]);
-    best.light.distance = L.range * Math.sqrt(scale);
-    best.peak = L.intensity * scale;
-    best.dur = L.dur; best.t = L.dur;
+  function shapeOf(part) {
+    if (part._shape !== undefined) return part._shape;
+    let s = part.shape ? SHAPE[part.shape] : undefined;
+    if (s === undefined) s = part.blend === 'alpha' ? SHAPE.puff : (part.stretch ? SHAPE.spark : SHAPE.glow);
+    part._shape = s;
+    return s;
   }
 
+  function emitPart(part, pos, dir, o, scale) {
+    let count = part.count[0] + Math.floor(rng.next() * (part.count[1] - part.count[0] + 1));
+    if (part.scaleCount !== false && scale > 1) count = Math.round(count * Math.min(3, scale));
+    if (P.n > BUSY && part.life[1] > 1.2) count = Math.ceil(count * (1 - (P.n - BUSY) / (MAX - BUSY)) * 0.5);
+    if (count <= 0) return;
+    const shape = shapeOf(part);
+    // ground-hugging layers (dust rings) only near the ground, emitted at ground level
+    let py = pos.y;
+    if (part.ground) {
+      const gy = game.physics.groundHeight(pos.x, pos.z);
+      if (pos.y - gy > part.ground * scale) return;
+      py = gy + 0.6;
+    }
+    let sizeMul = scale;
+    if (part.legible) {
+      const cd = game.camera.position.distanceTo(pos);
+      sizeMul *= Math.max(1, (cd / 45) * part.legible);
+    }
+    const inh = part.inherit || 0, ov = o.vel;
+    // default blend: puffs / chunks occlude (over), everything else is additive
+    const addDef = part.add || (shape === SHAPE.puff || shape === SHAPE.chunk ? ZERO2 : ONE2);
+    const collide = part.collide !== undefined ? part.collide : (part.gravity || 0) > 0;
+    let flags = (part.lit ? F_LIT : 0) | (collide ? F_COLLIDE : 0) | (part.nosoft ? F_NOSOFT : 0);
+    const orient = part.orient;
+    const vr = part.variant;
+    const spScale = scale > 1 ? Math.sqrt(scale) : scale;
+    for (let k = 0; k < count; k++) {
+      if (P.n >= MAX) return;
+      const i = P.n++, i3 = i * 3;
+      pickDir(part, dir, o, k, count);
+      const sp = rng.range(part.speed ? part.speed[0] : 0, part.speed ? part.speed[1] : 0) * spScale;
+      const j = (part.jitter || 0) * scale;
+      if (part.dirMode === 'arc') {
+        const r = 8 * scale;
+        P.pos[i3] = pos.x + _v.x * r; P.pos[i3 + 1] = py + _v.y * r; P.pos[i3 + 2] = pos.z + _v.z * r;
+      } else {
+        P.pos[i3] = pos.x + rng.sym(j); P.pos[i3 + 1] = py + rng.sym(j); P.pos[i3 + 2] = pos.z + rng.sym(j);
+      }
+      let vx = _v.x * sp, vy = _v.y * sp, vz = _v.z * sp;
+      if (inh && ov) { vx += ov.x * inh; vy += ov.y * inh; vz += ov.z * inh; }
+      P.vel[i3] = vx; P.vel[i3 + 1] = vy; P.vel[i3 + 2] = vz;
+      let fl = flags;
+      if (orient) {
+        const ax = orient === 'up' ? _up : (dir || _up);
+        P.axis[i3] = ax.x; P.axis[i3 + 1] = ax.y; P.axis[i3 + 2] = ax.z;
+        fl |= F_FIXED;
+        P.stretch[i] = -1;
+      } else {
+        P.stretch[i] = part.stretch || 0;
+      }
+      P.flags[i] = fl;
+      P.age[i] = part.delay ? -rng.range(part.delay[0], part.delay[1]) : 0;
+      P.life[i] = rng.range(part.life[0], part.life[1]);
+      P.s0[i] = part.size[0] * sizeMul; P.s1[i] = part.size[1] * sizeMul; P.sp[i] = part.sizePow || 1;
+      const c0 = part.color0 || WHITE, c1 = part.color1 || c0;
+      P.c0[i3] = c0[0]; P.c0[i3 + 1] = c0[1]; P.c0[i3 + 2] = c0[2];
+      P.c1[i3] = c1[0]; P.c1[i3 + 1] = c1[1]; P.c1[i3 + 2] = c1[2];
+      P.a0[i] = part.alpha ? part.alpha[0] : 1; P.a1[i] = part.alpha ? part.alpha[1] : (shape === SHAPE.spark || shape === SHAPE.chunk ? 1 : 0);
+      if (!part.alpha && shape === SHAPE.spark) P.a1[i] = 0.3;
+      P.ap[i] = part.alphaPow || 1; P.fin[i] = part.fadeIn || 0;
+      P.h0[i] = part.heat ? part.heat[0] : 0; P.h1[i] = part.heat ? part.heat[1] : 0;
+      P.k0[i] = addDef[0]; P.k1[i] = addDef[1]; P.cp[i] = part.coolPow || 1;
+      P.e0[i] = part.erode ? part.erode[0] : 0; P.e1[i] = part.erode ? part.erode[1] : (shape === SHAPE.puff ? 0.35 : 0);
+      P.drag[i] = part.drag || 0; P.grav[i] = part.gravity || 0; P.rise[i] = part.rise || 0; P.turb[i] = part.turb || 0;
+      P.bounce[i] = part.bounce ?? 0.3;
+      P.rot[i] = shape === SHAPE.flare ? 0 : rng.next() * TAU;   // anamorphic flares stay horizontal
+      P.spin[i] = part.spin ? rng.range(part.spin[0], part.spin[1]) : 0;
+      P.seed[i] = rng.next() * 100;
+      P.shape[i] = shape;
+      P.variant[i] = vr ? vr[0] + Math.floor(rng.next() * (vr[1] - vr[0] + 1)) : (shape === SHAPE.puff ? Math.floor(rng.next() * 8) : Math.floor(rng.next() * 4));
+    }
+  }
+
+  function special(part, pos, dir, o, scale) {
+    switch (part.kind) {
+      case 'light': {
+        // keep the light off the surface it was spawned on (a point light inside a wall blows out)
+        _lp.copy(pos); if (dir) _lp.addScaledVector(dir, 2.2);
+        api.flash(_lp, part.color, part.intensity * LIGHT_SCALE * scale, part.range * Math.sqrt(scale), part.dur, part.linger || 0);
+        break;
+      }
+      case 'decal': decals.fromEffect(part, pos, dir, o, scale); break;
+      case 'chunks': debris.burst(pos, dir, part, scale); break;
+      case 'distort': distortion.fromEffect(part, pos, dir, o, scale); break;
+      case 'shake': {
+        const cd = game.camera.position.distanceTo(pos);
+        const s = part.amount * Math.min(1.5, scale) * Math.max(0, 1 - cd / (part.range * Math.sqrt(Math.max(1, scale))));
+        if (s > 0.02 && game.cam && game.cam.shake) game.cam.shake(s);
+        break;
+      }
+      default: break;
+    }
+  }
+
+  // ---------------------------------------------------------------- API
   const api = {
     name: 'fx',
     order: 700,
     freeze: false,
     effects,
-    init(g) {
+    get trails() { return trails; },
+    get decals() { return decals; },
+    get debris() { return debris; },
+    get distortion() { return distortion; },
+    get slashes() { return slashes; },
+    get ghosts() { return ghosts; },
+    get textures() { return tex; },
+
+    async init(g) {
       rng = g.rng.stream('fx');
-      batches.add = makeBatch(true, softDotTexture(), 4096);
-      batches.alpha = makeBatch(false, smokeTexture(), 2048);
+      tex = await loadFxTextures(g);
+      batch = makeBatch(tex);
+      trails = new Trails(g, tex);
+      decals = new Decals(g, tex);
+      debris = new Debris(g, api);
+      distortion = new Distortion(g, tex);
+      slashes = new Slashes(g, tex, api);
+      ghosts = new Ghosts(g);
+      status = new Status(g, api);
       // Constant light count (avoids shader recompiles): intensity 0 when idle.
       for (let i = 0; i < 2; i++) {
         const light = new THREE.PointLight(0xffaa66, 0, 30, 2);
         light.name = 'fx_flash_' + i;
+        light.castShadow = false;
         g.scene.add(light);
-        lights.push({ light, t: 0, dur: 1, peak: 0 });
+        lights.push({ light, t: 0, dur: 1, peak: 0, linger: 0, age: 0 });
       }
       g.fx = api;
     },
-    reset() { api.clear(); api.freeze = false; },
+    reset() {
+      api.clear(); api.freeze = false;
+      status.reset();
+    },
     clear() {
       P.n = 0;
       for (const l of lights) { l.t = 0; l.light.intensity = 0; }
-      batches.add.g.instanceCount = 0; batches.alpha.g.instanceCount = 0;
+      if (batch) batch.g.instanceCount = 0;
+      trails.clear(); decals.clear(); debris.clear(); distortion.clear(); slashes.clear(); ghosts.clear();
     },
     activeCount() { return P.n; },
     register(name, parts) { effects[name] = parts; },
 
     spawn(name, pos, dir = null, opts = null) {
       const parts = effects[name];
-      if (!parts) { if (!api._warned) { api._warned = {}; } if (!api._warned[name]) { api._warned[name] = true; console.warn(`[fx] unknown effect "${name}"`); } return; }
-      let o = _defaultOpts;
-      let scale = 1;
+      if (!parts) { if (!api._warned) api._warned = {}; if (!api._warned[name]) { api._warned[name] = true; console.warn(`[fx] unknown effect "${name}"`); } return; }
+      let o = _defaultOpts, scale = 1;
       if (typeof opts === 'number') scale = opts;
       else if (opts) { o = opts; scale = opts.scale ?? 1; }
+      if (!(scale > 0)) return;
+      // exhaust effects emitted by the player rig without a velocity ride with the player
+      if (!o.vel && INHERIT_PLAYER[name]) {
+        const pl = game.player, v = pl && (pl.motor ? pl.motor.vel : pl.vel);
+        if (v && pl.pos.distanceToSquared(pos) < 400) { _autoOpts.scale = scale; _autoOpts.normal = o.normal; _autoOpts.yaw = o.yaw; _autoOpts.incoming = o.incoming; _autoOpts.vel = v; o = _autoOpts; }
+      }
       if (dir && name !== 'blade_arc') { _d.copy(dir); if (_d.lengthSq() < 1e-8) _d.set(0, 1, 0); else _d.normalize(); }
       else if (o.normal) _d.copy(o.normal).normalize();
       else _d.set(0, 1, 0);
       const useDir = dir || o.normal ? _d : null;
       for (let pi = 0; pi < parts.length; pi++) {
         const part = parts[pi];
-        let count = part.count[0] + Math.floor(rng.next() * (part.count[1] - part.count[0] + 1));
-        if (part.scaleCount !== false && scale > 1) count = Math.round(count * Math.min(3, scale));
-        const sizeScale = scale;
-        for (let k = 0; k < count; k++) {
-          if (P.n >= MAX) return;
-          const i = P.n++, i3 = i * 3;
-          pickDir(part, useDir, o, k, count);
-          const sp = rng.range(part.speed ? part.speed[0] : 0, part.speed ? part.speed[1] : 0) * (scale > 1 ? Math.sqrt(scale) : scale);
-          const j = (part.jitter || 0) * scale;
-          if (part.dirMode === 'arc') {
-            const r = 8 * scale;
-            P.pos[i3] = pos.x + _v.x * r; P.pos[i3 + 1] = pos.y + _v.y * r; P.pos[i3 + 2] = pos.z + _v.z * r;
-          } else {
-            P.pos[i3] = pos.x + rng.sym(j); P.pos[i3 + 1] = pos.y + rng.sym(j); P.pos[i3 + 2] = pos.z + rng.sym(j);
-          }
-          P.vel[i3] = _v.x * sp; P.vel[i3 + 1] = _v.y * sp; P.vel[i3 + 2] = _v.z * sp;
-          P.age[i] = 0;
-          P.life[i] = rng.range(part.life[0], part.life[1]);
-          P.s0[i] = part.size[0] * sizeScale; P.s1[i] = part.size[1] * sizeScale;
-          const c0 = part.color0 || [1, 1, 1], c1 = part.color1 || c0;
-          P.c0[i3] = c0[0]; P.c0[i3 + 1] = c0[1]; P.c0[i3 + 2] = c0[2];
-          P.c1[i3] = c1[0]; P.c1[i3 + 1] = c1[1]; P.c1[i3 + 2] = c1[2];
-          P.a0[i] = part.alpha ? part.alpha[0] : 1; P.a1[i] = part.alpha ? part.alpha[1] : 0;
-          P.drag[i] = part.drag || 0; P.grav[i] = part.gravity || 0; P.rise[i] = part.rise || 0;
-          P.rot[i] = rng.next() * Math.PI * 2;
-          P.spin[i] = part.spin ? rng.range(part.spin[0], part.spin[1]) : 0;
-          P.stretch[i] = part.stretch || 0;
-          P.add[i] = part.blend === 'alpha' ? 0 : 1;
-        }
+        if (part.kind) special(part, pos, useDir, o, scale);
+        else emitPart(part, pos, useDir, o, scale);
       }
-      flash(name, pos, scale);
+    },
+
+    /** Low-level: one bolt segment a->b (electric arcs), life s, HDR colour, width m. */
+    bolt(ax, ay, az, bx, by, bz, life, color, width) {
+      if (P.n >= MAX) return;
+      const i = P.n++, i3 = i * 3;
+      P.pos[i3] = bx; P.pos[i3 + 1] = by; P.pos[i3 + 2] = bz;
+      P.vel[i3] = 0; P.vel[i3 + 1] = 0; P.vel[i3 + 2] = 0;
+      P.axis[i3] = bx - ax; P.axis[i3 + 1] = by - ay; P.axis[i3 + 2] = bz - az;
+      P.flags[i] = F_FIXED | F_NOSOFT;
+      P.stretch[i] = 1; P.age[i] = 0; P.life[i] = life;
+      P.s0[i] = width; P.s1[i] = width * 0.6; P.sp[i] = 1;
+      P.c0[i3] = color[0]; P.c0[i3 + 1] = color[1]; P.c0[i3 + 2] = color[2];
+      P.c1[i3] = color[0] * 0.4; P.c1[i3 + 1] = color[1] * 0.4; P.c1[i3 + 2] = color[2] * 0.4;
+      P.a0[i] = 1; P.a1[i] = 0.2; P.ap[i] = 1; P.fin[i] = 0;
+      P.h0[i] = 1; P.h1[i] = 0.5; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
+      P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
+      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0;
+    },
+
+    /** Flash light: the constant light with the least remaining energy is re-aimed. */
+    flash(pos, color, intensity, range, dur, linger = 0) {
+      if (!lights.length) return;
+      let best = lights[0], bestE = Infinity;
+      for (const l of lights) {
+        const e = l.t > 0 ? l.peak * (l.t / l.dur) + l.linger * 0.3 : 0;
+        if (e < bestE) { bestE = e; best = l; }
+      }
+      if (bestE > intensity * 1.5) return; // a much brighter flash is still running
+      best.light.position.set(pos.x, pos.y + 1, pos.z);
+      best.light.color.setRGB(color[0], color[1], color[2]);
+      best.light.distance = range;
+      best.peak = intensity; best.dur = dur; best.t = dur * (1 + linger * 6); best.linger = linger; best.age = 0;
     },
 
     update(dt) {
+      if (!batch) return;
+      status.update(dt);
       if (api.freeze) return;
+      simTime += dt;
+      const phys = game.physics;
       for (let i = P.n - 1; i >= 0; i--) {
-        P.age[i] += dt;
-        if (P.age[i] >= P.life[i]) { kill(i); continue; }
+        let age = P.age[i];
+        if (age < 0) { P.age[i] = age + dt; continue; }
+        age += dt; P.age[i] = age;
+        if (age >= P.life[i]) { kill(i); continue; }
+        if (P.flags[i] & F_FIXED && P.stretch[i] > 0) continue; // bolts: static
         const i3 = i * 3;
         const dr = Math.exp(-P.drag[i] * dt);
-        P.vel[i3] *= dr; P.vel[i3 + 1] = P.vel[i3 + 1] * dr - P.grav[i] * dt; P.vel[i3 + 2] *= dr;
-        P.pos[i3] += P.vel[i3] * dt;
-        P.pos[i3 + 1] += (P.vel[i3 + 1] + P.rise[i]) * dt;
-        P.pos[i3 + 2] += P.vel[i3 + 2] * dt;
-        if (P.pos[i3 + 1] < 0.05 && P.grav[i] > 0) { P.pos[i3 + 1] = 0.05; P.vel[i3 + 1] *= -0.3; P.vel[i3] *= 0.6; P.vel[i3 + 2] *= 0.6; }
+        let vx = P.vel[i3] * dr, vy = P.vel[i3 + 1] * dr - P.grav[i] * dt, vz = P.vel[i3 + 2] * dr;
+        const tb = P.turb[i];
+        if (tb) {
+          // smooth, divergence-ish swirl from a few sines (deterministic, allocation-free)
+          const s = P.seed[i], x = P.pos[i3], y = P.pos[i3 + 1], z = P.pos[i3 + 2], tt = simTime * 0.7 + s;
+          vx += Math.sin(y * 0.21 + tt * 1.3 + s) * tb * dt * 2;
+          vz += Math.cos(x * 0.19 - tt * 1.1 + s * 1.7) * tb * dt * 2;
+          vy += Math.sin(z * 0.17 + tt * 0.9) * tb * dt;
+        }
+        P.vel[i3] = vx; P.vel[i3 + 1] = vy; P.vel[i3 + 2] = vz;
+        P.pos[i3] += vx * dt;
+        P.pos[i3 + 1] += (vy + P.rise[i]) * dt;
+        P.pos[i3 + 2] += vz * dt;
+        if (P.flags[i] & F_COLLIDE) {
+          const gy = phys.groundHeight(P.pos[i3], P.pos[i3 + 2]) + 0.06;
+          if (P.pos[i3 + 1] < gy) {
+            P.pos[i3 + 1] = gy;
+            const b = P.bounce[i];
+            if (P.vel[i3 + 1] < 0) P.vel[i3 + 1] *= -b;
+            P.vel[i3] *= 0.55 + b * 0.5; P.vel[i3 + 2] *= 0.55 + b * 0.5;
+            P.spin[i] *= 0.6;
+          }
+        }
         P.rot[i] += P.spin[i] * dt;
       }
+      trails.update(dt);
+      decals.update(dt);
+      debris.update(dt);
+      distortion.update(dt);
+      slashes.update(dt);
+      ghosts.update(dt);
       for (const l of lights) {
-        if (l.t > 0) { l.t -= dt; l.light.intensity = Math.max(0, l.peak * (l.t / l.dur)); }
-        else if (l.light.intensity !== 0) l.light.intensity = 0;
+        if (l.t > 0) {
+          l.t -= dt; l.age += dt;
+          const f = Math.max(0, 1 - l.age / l.dur);
+          let e = l.peak * f * f;
+          if (l.linger > 0) {
+            const lf = Math.max(0, 1 - l.age / (l.dur * (1 + l.linger * 6)));
+            e = Math.max(e, l.peak * l.linger * 0.25 * lf * (0.75 + 0.25 * Math.sin(l.age * 37) * Math.sin(l.age * 13)));
+          }
+          l.light.intensity = Math.max(0, e);
+        } else if (l.light.intensity !== 0) l.light.intensity = 0;
       }
     },
 
-    frame() {
-      const A = batches.add, B = batches.alpha;
-      let na = 0, nb = 0;
+    frame(alpha, realDt) {
+      if (!batch) return;
+      if (!softAttached) attachSoft();
+      attachRigFlames();
+      updateLighting();
+      const cam = game.camera;
+      cam.getWorldPosition(_camPos);
+      cam.getWorldDirection(_camFwd);
+      // ---- sort keys: log view depth, back-to-front counting sort
+      bucketCount.fill(0);
+      let nv = 0;
+      const cx = _camPos.x, cy = _camPos.y, cz = _camPos.z, fx = _camFwd.x, fy = _camFwd.y, fz = _camFwd.z;
       for (let i = 0; i < P.n; i++) {
-        const t = P.age[i] / P.life[i];
-        const b = P.add[i] ? A : B;
-        let j;
-        if (P.add[i]) { if (na >= A.cap) continue; j = na++; } else { if (nb >= B.cap) continue; j = nb++; }
-        const i3 = i * 3, j3 = j * 3, j4 = j * 4;
-        b.iPos.array[j3] = P.pos[i3]; b.iPos.array[j3 + 1] = P.pos[i3 + 1]; b.iPos.array[j3 + 2] = P.pos[i3 + 2];
-        b.iVel.array[j3] = P.vel[i3]; b.iVel.array[j3 + 1] = P.vel[i3 + 1]; b.iVel.array[j3 + 2] = P.vel[i3 + 2];
-        b.iColor.array[j4] = P.c0[i3] + (P.c1[i3] - P.c0[i3]) * t;
-        b.iColor.array[j4 + 1] = P.c0[i3 + 1] + (P.c1[i3 + 1] - P.c0[i3 + 1]) * t;
-        b.iColor.array[j4 + 2] = P.c0[i3 + 2] + (P.c1[i3 + 2] - P.c0[i3 + 2]) * t;
-        b.iColor.array[j4 + 3] = P.a0[i] + (P.a1[i] - P.a0[i]) * t;
-        b.iMisc.array[j3] = P.s0[i] + (P.s1[i] - P.s0[i]) * t;
-        b.iMisc.array[j3 + 1] = P.rot[i];
-        b.iMisc.array[j3 + 2] = P.stretch[i];
+        if (P.age[i] < 0) { keys[i] = -1; continue; }
+        const i3 = i * 3;
+        const d = (P.pos[i3] - cx) * fx + (P.pos[i3 + 1] - cy) * fy + (P.pos[i3 + 2] - cz) * fz;
+        const sz = Math.max(P.s0[i], P.s1[i]);
+        if (d < -sz - 2) { keys[i] = -1; continue; }
+        let b = Math.floor(Math.log2(2 + Math.max(0, d)) * 340);
+        if (b >= BUCKETS) b = BUCKETS - 1;
+        keys[i] = b;
+        bucketCount[BUCKETS - 1 - b]++; // far first
+        nv++;
       }
-      upload(A, na);
-      upload(B, nb);
+      let acc = 0;
+      for (let b = 0; b < BUCKETS; b++) { const c = bucketCount[b]; bucketCount[b] = acc; acc += c; }
+      for (let i = 0; i < P.n; i++) { const k = keys[i]; if (k < 0) continue; order[bucketCount[BUCKETS - 1 - k]++] = i; }
+      // ---- write instance data in sorted order
+      const B = batch, pa = B.iPos.array, xa = B.iAxis.array, ca = B.iColor.array, sa = B.iSize.array, ea = B.iExtra.array;
+      for (let j = 0; j < nv; j++) {
+        const i = order[j], i3 = i * 3, j3 = j * 3, j4 = j * 4;
+        const t = Math.min(1, P.age[i] / P.life[i]);
+        pa[j3] = P.pos[i3]; pa[j3 + 1] = P.pos[i3 + 1]; pa[j3 + 2] = P.pos[i3 + 2];
+        const fixed = P.flags[i] & F_FIXED;
+        const src = fixed ? P.axis : P.vel;
+        xa[j3] = src[i3]; xa[j3 + 1] = src[i3 + 1]; xa[j3 + 2] = src[i3 + 2];
+        ca[j4] = P.c0[i3] + (P.c1[i3] - P.c0[i3]) * t;
+        ca[j4 + 1] = P.c0[i3 + 1] + (P.c1[i3 + 1] - P.c0[i3 + 1]) * t;
+        ca[j4 + 2] = P.c0[i3 + 2] + (P.c1[i3 + 2] - P.c0[i3 + 2]) * t;
+        let al = P.a0[i] + (P.a1[i] - P.a0[i]) * (P.ap[i] === 1 ? t : Math.pow(t, P.ap[i]));
+        const fin = P.fin[i];
+        if (fin > 0 && t < fin) al *= t / fin;
+        ca[j4 + 3] = al;
+        const spw = P.sp[i];
+        const st = spw === 1 ? t : 1 - Math.pow(1 - t, spw);
+        sa[j4] = P.s0[i] + (P.s1[i] - P.s0[i]) * st;
+        sa[j4 + 1] = P.rot[i];
+        sa[j4 + 2] = P.stretch[i];
+        sa[j4 + 3] = P.shape[i];
+        // fire cools non-linearly (coolPow > 1: the flame collapses into smoke early)
+        const cw = P.cp[i] === 1 ? 1 - t : Math.pow(1 - t, P.cp[i]);
+        ea[j4] = P.h1[i] + (P.h0[i] - P.h1[i]) * cw;
+        ea[j4 + 1] = P.k1[i] + (P.k0[i] - P.k1[i]) * cw;
+        ea[j4 + 2] = P.e0[i] + (P.e1[i] - P.e0[i]) * t;
+        ea[j4 + 3] = P.variant[i] + ((P.flags[i] & F_LIT) ? 16 : 0) + ((P.flags[i] & F_NOSOFT) ? 32 : 0);
+      }
+      upload(nv);
+      trails.frame(alpha);
+      decals.frame(alpha);
+      debris.frame(alpha);
+      distortion.frame(alpha);
+      slashes.frame(alpha);
+      ghosts.frame(alpha);
     },
 
     dispose() {
-      for (const k in batches) { const b = batches[k]; b.g.dispose(); b.mesh.material.dispose(); game.scene.remove(b.mesh); }
+      if (batch) { batch.g.dispose(); batch.mat.dispose(); game.scene.remove(batch.mesh); }
       for (const l of lights) game.scene.remove(l.light);
+      trails.dispose(); decals.dispose(); debris.dispose(); distortion.dispose(); slashes.dispose(); ghosts.dispose(); status.dispose();
     },
   };
   return api;
 }
+
+const WHITE = [1, 1, 1], ZERO2 = [0, 0], ONE2 = [1, 1];
+/** Additive plumes draw after the sorted particle batch (renderOrder 20). */
+function setFlameOrder(o) { if (o.isMesh) o.renderOrder = 30; }

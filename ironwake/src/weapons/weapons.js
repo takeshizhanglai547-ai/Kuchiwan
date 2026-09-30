@@ -30,8 +30,8 @@ export const WEAPONS = {
     speed: 550, range: 360, spread: 0.35,              // spread: degrees (gaussian-ish cone)
     auto: true, fireInterval: 0.294, burst: 1, burstInterval: 0.05,
     magSize: 18, ammo: 540, reloadTime: 2.2,
-    projectile: 'bullet', tracerColor: [4.0, 2.8, 1.3], tracerWidth: 0.28, tracerLength: 22,
-    muzzleFx: 'muzzle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35, shake: 0.05,
+    projectile: 'bullet', tracerColor: [2.8, 1.6, 0.42], tracerWidth: 0.36, tracerLength: 24, // #FFD27A, HDR
+    muzzleFx: 'muzzle_rifle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35, shake: 0.06,
   },
   blade_pulse: {
     id: 'blade_pulse', name: 'PB-7 EMBERLINE', label: 'L-ARM', jp: '左腕 パルスブレード', type: 'blade',
@@ -45,42 +45,44 @@ export const WEAPONS = {
     count: 6, launchInterval: 0.07, maxTargets: 4,
     speed: 60, maxSpeed: 250, accel: 700, turnRate: 4.5, homingDelay: 0.15, life: 5,
     reloadTime: 4.2, ammo: 120, magSize: 6,
-    projectile: 'missile', bodyColor: [0.35, 0.35, 0.33], glowColor: [5, 2.4, 0.9],
-    muzzleFx: 'muzzle', impactFx: 'explosion_small', trailFx: 'missile_trail', sound: 'missile_launch', recoil: 0.2, shake: 0.05,
+    projectile: 'missile', bodyColor: [0.3, 0.3, 0.29], glowColor: [7, 3.6, 1.3],
+    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStyle: 'missile',
+    sound: 'missile_launch', recoil: 0.2, shake: 0.08,
   },
   cannon_heavy: {
     id: 'cannon_heavy', name: 'HC-90 SLEDGE', label: 'R-BACK', jp: '右背 ヘビーキャノン', type: 'grenade',
     damage: 1400, impact: 1500, directHitMul: 1.6, splashRadius: 18, splashMul: 1,
     speed: 360, gravity: 12, life: 4, reloadTime: 4.6, ammo: 24, magSize: 1,
-    projectile: 'grenade', bodyColor: [1, 0.5, 0.2], glowColor: [6, 2.6, 0.8],
-    muzzleFx: 'muzzle', impactFx: 'explosion_large', trailFx: 'smoke', sound: 'cannon', recoil: 1.2, shake: 0.45, hitstop: 0.05,
+    projectile: 'grenade', bodyColor: [1, 0.5, 0.2], glowColor: [8, 3.8, 1.1],
+    muzzleFx: 'muzzle_cannon', impactFx: 'explosion_large', trailFx: 'shell_trail', trailEvery: 0.025, trailStyle: 'shell',
+    sound: 'cannon', recoil: 1.2, shake: 0.6, fovKick: 3, hitstop: 0.07,
   },
 
   // --- enemy weapons -------------------------------------------------------
   mt_cannon: {
     id: 'mt_cannon', name: 'MT AUTOCANNON', type: 'ballistic', damage: 70, impact: 40,
     speed: 360, range: 380, spread: 1.6, auto: true, fireInterval: 2.6, burst: 5, burstInterval: 0.12,
-    ammo: Infinity, projectile: 'bullet', tracerColor: [4, 1.2, 0.5], tracerWidth: 0.3, tracerLength: 7,
-    muzzleFx: 'muzzle', impactFx: 'impact_sparks', sound: 'enemy_gun',
+    ammo: Infinity, projectile: 'bullet', tracerColor: [5, 1.5, 0.45], tracerWidth: 0.34, tracerLength: 12,
+    muzzleFx: 'muzzle', impactFx: 'impact_sparks', impactScale: 0.9, sound: 'enemy_gun',
   },
   drone_laser: {
     id: 'drone_laser', name: 'DRONE PULSE', type: 'ballistic', damage: 55, impact: 25,
     speed: 170, range: 300, spread: 1.0, auto: true, fireInterval: 2.8, burst: 2, burstInterval: 0.2,
-    ammo: Infinity, projectile: 'energy', tracerColor: [0.8, 2.5, 5], tracerWidth: 0.6, tracerLength: 4,
-    muzzleFx: 'muzzle', impactFx: 'impact_sparks', sound: 'enemy_laser',
+    ammo: Infinity, projectile: 'energy', tracerColor: [0.9, 2.8, 6], tracerWidth: 0.7, tracerLength: 5,
+    muzzleFx: 'muzzle_energy', impactFx: 'impact_energy', sound: 'enemy_laser',
   },
   turret_gun: {
     id: 'turret_gun', name: 'RELAY DEFENSE GUN', type: 'ballistic', damage: 80, impact: 50,
     speed: 420, range: 340, spread: 1.2, auto: true, fireInterval: 3.0, burst: 6, burstInterval: 0.1,
-    ammo: Infinity, projectile: 'bullet', tracerColor: [4, 1.5, 0.6], tracerWidth: 0.3, tracerLength: 7,
-    muzzleFx: 'muzzle', impactFx: 'impact_sparks', sound: 'enemy_gun',
+    ammo: Infinity, projectile: 'bullet', tracerColor: [5, 1.6, 0.5], tracerWidth: 0.34, tracerLength: 12,
+    muzzleFx: 'muzzle', impactFx: 'impact_sparks', impactScale: 0.9, sound: 'enemy_gun',
   },
   boss_rifle: {
     id: 'boss_rifle', name: 'BOSS RIFLE', type: 'ballistic', damage: 85, impact: 60, directHitMul: 1.4,
     speed: 560, range: 420, spread: 1.1, auto: true, fireInterval: 0.9, burst: 4, burstInterval: 0.08,
     magSize: 40, ammo: Infinity, reloadTime: 2.4,
-    projectile: 'bullet', tracerColor: [5, 1.0, 0.6], tracerWidth: 0.22, tracerLength: 9,
-    muzzleFx: 'muzzle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35,
+    projectile: 'bullet', tracerColor: [6, 1.4, 0.55], tracerWidth: 0.32, tracerLength: 20,
+    muzzleFx: 'muzzle_rifle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35,
   },
   boss_blade: {
     id: 'boss_blade', name: 'BOSS BLADE', type: 'blade', damage: 1400, impact: 900, directHitMul: 1.8,
@@ -91,8 +93,8 @@ export const WEAPONS = {
     id: 'boss_missile', name: 'BOSS MISSILES', type: 'missile', damage: 190, impact: 150, splashRadius: 5, splashMul: 0.5,
     count: 4, launchInterval: 0.1, maxTargets: 1, speed: 60, maxSpeed: 200, accel: 400, turnRate: 2.6,
     homingDelay: 0.25, life: 5, reloadTime: 7, ammo: Infinity, magSize: 4,
-    projectile: 'missile', bodyColor: [0.3, 0.3, 0.3], glowColor: [5, 1.2, 0.6],
-    muzzleFx: 'muzzle', impactFx: 'explosion_small', trailFx: 'missile_trail', sound: 'missile_launch',
+    projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
+    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStyle: 'missile', sound: 'missile_launch',
   },
 };
 
@@ -103,6 +105,8 @@ const _pos = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.V
 const _t = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3();
 const _firedEvt = { owner: null, slot: '', weapon: '' }; // reused payload (copy what you keep)
 const _bladeHit = { damage: 0, impact: 0, direct: true, directHitMul: 1, point: new THREE.Vector3(), dir: new THREE.Vector3(), source: null, weapon: '' };
+const _muzzleOpts = { scale: 1, vel: null, normal: null, yaw: 0, incoming: null };
+const _back = new THREE.Vector3();
 
 /** Perturb unit vector `dir` inside a cone of `deg` degrees using rng stream r. */
 export function applySpread(dir, deg, r) {
@@ -256,7 +260,13 @@ export class Loadout {
     s.shots++;
     if (s.mag !== Infinity) s.mag--;
     if (s.ammo !== Infinity) s.ammo--;
-    if (d.muzzleFx) game.fx.spawn(d.muzzleFx, _pos, _dir, { scale: d.type === 'grenade' ? 3 : d.type === 'missile' ? 1.2 : 1 });
+    if (d.muzzleFx) {
+      // muzzle VFX ride with the owner (a rig at boost speed must not outrun its own flash)
+      _muzzleOpts.scale = d.muzzleScale || 1;
+      _muzzleOpts.vel = owner.vel || (owner.motor && owner.motor.vel) || null;
+      game.fx.spawn(d.muzzleFx, _pos, _dir, _muzzleOpts);
+    }
+    if (d.fovKick && owner === game.player && game.cam.fovKick) game.cam.fovKick(d.fovKick, 0.28);
     if (d.sound) game.audio.play(d.sound, { pos: _pos });
     if (owner.onWeaponFired) owner.onWeaponFired(s.key, d);
     _firedEvt.owner = owner; _firedEvt.slot = s.key; _firedEvt.weapon = d.id;
@@ -317,7 +327,7 @@ export class Loadout {
     const d = s.def, owner = this.owner, game = this.game;
     owner.forward(_dir);
     owner.getMuzzle('L', _pos, null);
-    game.fx.spawn(d.fx, _pos, _dir, { scale: 1, yaw: owner.yaw });
+    game.fx.spawn(d.fx, _pos, _dir, { scale: 1, yaw: owner.yaw });  // spark sweep (the arc ribbon: fx/slash.js via weapon:blade)
     const cosHalf = Math.cos(THREE.MathUtils.degToRad(d.arcDeg * 0.5));
     let hits = 0;
     for (const a of game.actors) {
@@ -331,7 +341,8 @@ export class Loadout {
       _bladeHit.damage = d.damage; _bladeHit.impact = d.impact; _bladeHit.directHitMul = d.directHitMul;
       _bladeHit.point.copy(_t); _bladeHit.dir.copy(_dir); _bladeHit.source = owner; _bladeHit.weapon = d.id;
       dealDamage(game, a, _bladeHit);
-      game.fx.spawn('impact_sparks', _t, _dir, { scale: 3 });
+      _back.copy(_dir).negate();
+      game.fx.spawn('blade_hit', _t, _back, 1);
       hits++;
     }
     if (hits) {

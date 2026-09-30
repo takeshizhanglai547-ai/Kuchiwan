@@ -11,6 +11,7 @@ import { MechRig, makePose } from '../mech/rig.js';
 import { MechMotor } from '../mech/motor.js';
 import { MOVE, CAMERA } from './tuning.js';
 import { PlayerController } from './controller.js';
+import { MoveFx } from './movefx.js';
 import { Loadout, PLAYER_LOADOUT } from '../weapons/weapons.js';
 import { leadPoint } from '../weapons/lockon.js';
 import { makeHit } from '../core/physics.js';
@@ -39,6 +40,8 @@ export class PlayerMech extends Actor {
     this.controller = new PlayerController(game, this);
     this.loadout = new Loadout(game, this, PLAYER_LOADOUT);
     this.pose = makePose();
+    this.pose.accelLocal = new THREE.Vector3();
+    this.moveFx = new MoveFx(game);
     this.rig = null;
     this.repairKits = PLAYER_STATS.repairKits;
     this.repairCooldown = 0;
@@ -60,6 +63,9 @@ export class PlayerMech extends Actor {
     this.repairCooldown = 0;
     this.invulnerable = this.godmode;
     this.root.visible = true;
+    if (this.rig) this.rig.motion.reset();
+    this.moveFx.reset();
+    this.moveFx.register();
   }
 
   // ---- owner interface for weapons -------------------------------------------
@@ -126,20 +132,17 @@ export class PlayerMech extends Actor {
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
       // local: +x = mech left (cos, 0, -sin), +z = forward (sin, 0, cos)
       p.velLocal.set(m.vel.x * cy - m.vel.z * sy, m.vel.y, m.vel.x * sy + m.vel.z * cy);
+      p.accelLocal.set(m.accel.x * cy - m.accel.z * sy, m.accel.y, m.accel.x * sy + m.accel.z * cy);
       p.grounded = m.grounded;
+      p.airTime = m.airTime;
       p.mode = m.mode;
+      p.skid = m.skid;
+      p.abCharge = m.abActive ? m.abCharge : 0;
       p.aimPitch = ctl.aimPitch;
       let yawOff = ctl.aimYaw - this.yaw;
       yawOff = Math.atan2(Math.sin(yawOff), Math.cos(yawOff));
       p.aimYaw = yawOff;
-      // Thrusters: direction of travel (local), amount by mode.
-      let amt = 0;
-      _thrust.copy(p.velLocal);
-      if (m.mode === 'ab' || m.mode === 'qb' || m.mode === 'lunge') amt = 1;
-      else if (m.mode === 'boost') amt = 0.55;
-      else if (m.mode === 'hover') { amt = 0.8; _thrust.y = Math.max(_thrust.y, 12); }
-      else if (m.mode === 'air' && m.vel.y > 5) { amt = 0.5; _thrust.y = 12; }
-      this.rig.setThrust(_thrust, amt);
+      this.rig.setThrust(this._thrustVector(p, m, _thrust), this._thrustAmount(m));
       this.rig.update(dt, p);
     }
 
@@ -162,40 +165,75 @@ export class PlayerMech extends Actor {
     this._movementFeedback(dt);
   }
 
+  /**
+   * Local thrust direction for the nozzle flames: the direction the boosters PUSH. Mostly the
+   * travel direction, bent toward the acceleration (so braking fires the retro nozzles and a
+   * hard turn lights the outside ones); straight up while hovering / jumping.
+   */
+  _thrustVector(p, m, out) {
+    const v = p.velLocal, a = p.accelLocal;
+    const sp = Math.hypot(v.x, v.z);
+    if (m.mode === 'hover' || (m.mode === 'air' && m.vel.y > 5)) return out.set(v.x * 0.15, 12, v.z * 0.15);
+    if (m.mode === 'ab') return m.abCharging ? out.set(0, 0.15, 1) : out.set(v.x, v.y, v.z);
+    if (m.mode === 'qb' || m.mode === 'lunge') return out.set(v.x, 0, v.z);
+    // blend travel direction with horizontal acceleration (units: accel of 120 m/s^2 ~ 1)
+    const ax = a.x / 120, az = a.z / 120;
+    out.set(sp > 1 ? v.x / sp : 0, 0, sp > 1 ? v.z / sp : 0);
+    out.x += ax * 1.4; out.z += az * 1.4;
+    return out;
+  }
+
+  _thrustAmount(m) {
+    switch (m.mode) {
+      case 'qb': case 'lunge': return 1;
+      case 'ab': return m.abCharging ? 0.25 + 0.55 * m.abCharge : 1;
+      case 'boost': return m.skid > 0.2 ? 0.75 : 0.5;
+      case 'hover': return 0.85;
+      case 'air': return m.vel.y > 5 ? 0.55 : (m.boostOn && m.speedH > 40 ? 0.3 : 0);
+      case 'walk': case 'idle': return m.skid > 0.2 ? 0.6 : 0;
+      default: return 0;
+    }
+  }
+
   _movementFeedback(dt) {
-    const game = this.game, f = this.motor.flags, m = this.motor;
+    const game = this.game, f = this.motor.flags, m = this.motor, mfx = this.moveFx;
+    // Camera reactions (FOV punch, shake, dip) read the same motor flags in camera.js.
     if (f.qb) {
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
       if (this.rig) this.rig.qbTwitch(f.qb.x * cy - f.qb.z * sy, f.qb.x * sy + f.qb.z * cy);
-      _v.set(this.pos.x, this.pos.y + 5, this.pos.z);
+      _v.set(this.pos.x - f.qb.x * 2.5, this.pos.y + 6, this.pos.z - f.qb.z * 2.5);
       _d.copy(f.qb).negate();
       game.fx.spawn('qb_burst', _v, _d);
+      mfx.qb(this, f.qb);
       game.audio.play('qb', { pos: this.pos });
-      game.cam.fovKick(CAMERA.fovKickQB, 0.3);
-      game.cam.shake(0.12);
       game.events.emit('player:qb', f);
     }
-    if (f.jumped) { game.audio.play('jump', { pos: this.pos }); game.fx.spawn('dust_kick', this.pos, null, 1.2); }
-    if (f.landed > 4) {
-      if (this.rig) this.rig.landImpact(f.landed / 30);
-      game.fx.spawn('dust_kick', this.pos, null, Math.min(2.5, f.landed / 12));
-      game.audio.play('land', { pos: this.pos, volume: Math.min(1, f.landed / 30) });
-      if (f.hardLanding) game.cam.shake(0.3);
+    if (f.jumped) {
+      game.audio.play('jump', { pos: this.pos });
+      game.fx.spawn('dust_kick', this.pos, null, 1.2);
+      mfx.land(this, 10);
     }
-    if (f.abStart) { game.audio.play('ab_start', { pos: this.pos }); game.cam.fovKick(CAMERA.fovKickAB, 0.6); game.cam.shake(0.2); }
+    if (f.landed > 4) {
+      if (this.rig) this.rig.landImpact(f.landed / 32);
+      mfx.land(this, f.landed);
+      game.audio.play('land', { pos: this.pos, volume: Math.min(1, f.landed / 30) });
+    }
+    if (f.abStart) game.audio.play('ab_start', { pos: this.pos });
+    if (f.abLaunch) {
+      if (this.rig) this.rig.launchKick();
+      mfx.abLaunch(this, m.abDir);
+      game.audio.play('qb', { pos: this.pos, pitch: 0.7 });
+    }
     if (f.enDepleted) { game.audio.play('en_depleted'); game.hud.callout('EN DEPLETED', 'エネルギー切れ', 'warn'); }
 
-    // Continuous emitters (rate-limited)
+    mfx.step(dt, this);
+
+    // Nozzle exhaust particles (rate-limited)
     this.fxT -= dt;
     if (this.fxT <= 0 && this.rig) {
       this.fxT = 1 / 30;
-      if (m.mode === 'boost' && m.grounded) {
-        // skid dust from the feet
-        this.rig.getNodeWorld('foot_L', _v); game.fx.spawn('dust_kick', _v, null, 0.35);
-        this.rig.getNodeWorld('foot_R', _v); game.fx.spawn('dust_kick', _v, null, 0.35);
-      }
       if (m.mode === 'ab' || m.mode === 'qb' || m.mode === 'boost' || m.mode === 'hover') {
-        const name = m.mode === 'ab' ? 'ab_trail' : 'boost_flame';
+        const name = m.mode === 'ab' && !m.abCharging ? 'ab_trail' : 'boost_flame';
         for (const nz of this.rig.nozzles) {
           if (nz.level < 0.25) continue;
           nz.node.getWorldPosition(_v);

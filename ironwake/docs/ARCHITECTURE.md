@@ -299,16 +299,16 @@ The canonical list is in the header of `src/mech/rig.js`. Summary:
 
 ---
 
-## 9. FX (`src/fx/particles.js`)
+## 9. FX (`src/fx/particles.js`, VFX lane)
 
-`game.fx.spawn(name, pos, dir?, opts?)`. `opts` is either a number (scale) or `{scale, normal, yaw}`.
-- Rendering uses GPU-instanced billboards in 2 batches (additive and alpha), with stretched velocity streaks. Fog is applied.
-- The pool holds 6000 particles in SoA typed arrays and is deterministic (RNG stream `fx`).
-- Two constant flash point lights are used, so the light count never changes and no shader recompiles.
-- **Effect names** (keep them; restyle freely via `EFFECTS` or `game.fx.register(name, parts)`):
-  `muzzle, tracer, impact_sparks, explosion_small, explosion_large, smoke, boost_flame, qb_burst, ab_trail, dust_kick, blade_arc, missile_trail, shockwave, debris`.
+`game.fx.spawn(name, pos, dir?, opts?)`. `opts` is either a number (scale) or `{scale, normal, yaw, vel, incoming}`; `vel` = owner velocity (parts with `inherit` ride along), `incoming` = projectile direction (ricochet sparks).
+- Effects are data in `src/fx/library.js` (particle parts + `kind: light | decal | chunks | distort | shake` parts). Restyle there or via `game.fx.register(name, parts)`; the old part format (`blend: 'add'|'alpha'`) still works.
+- ONE instanced batch, CPU-sorted back-to-front, premultiplied alpha (fire inside smoke layers correctly). Shapes: lit billow puffs (baked atlas `assets/fx/*.png`, `assets/fx/bake_fx.py`), fire temperature ramp, star flashes, spark streaks, rings, chunks, flares, electric bolts. Soft particles via the pipeline SOFT layer (`markSoft` / `depthUniforms`). Pool 8000 (long-lived smoke thins out above 75%). Deterministic (RNG stream `fx`).
+- Sub-systems on `game.fx`: `trails` (persistent smoke ribbons: `begin(style)/push(h,pos)/end(h)`), `decals` (scorch marks on static geometry), `debris` (3D chunks with burning trails), `distortion` (heat haze / shockwave refraction pass in the pipeline `pre_bloom` slot), `slashes` (pulse-blade arc + beam), `ghosts` (QB afterimage). `fx/status.js` reacts to `actor:stagger`, `weapon:blade`, `player:qb` and low-AP enemies.
+- Two constant flash point lights (`game.fx.flash(...)`), so the light count never changes and no shader recompiles.
+- **Effect names** (keep them): `muzzle, tracer, impact_sparks, explosion_small, explosion_large, smoke, boost_flame, qb_burst, ab_trail, dust_kick, blade_arc, missile_trail, shockwave, debris`, plus `muzzle_rifle/_cannon/_missile/_energy, impact_ground/_wall/_energy, blade_hit, blade_glow, stagger_burst, arc_spark, fire_lick, shell_trail, nozzle_glow`.
 - `game.fx.freeze = true` stops the simulation (for staged shots). `clear()` and `activeCount()` are also available.
-- Rig nozzle flames are placeholder cone meshes in `rig.js`. The VFX artist may replace them.
+- Rig nozzle flames: geometry and levels in `rig.js`, plume shader in `src/fx/flame.js` (combustion ramp, turbulence, mach diamonds, ragged tip).
 
 ## 10. Audio (`src/audio/audio.js`)
 
@@ -374,10 +374,11 @@ The canonical list is in the header of `src/mech/rig.js`. Summary:
 
   Custom properties `iw_collider` and `iw_noshadow` are also read.
 - **Contract fixtures:** `python3 tools/make_contract_fixtures.py -- .shots/fixtures` writes a minimal mech GLB and a minimal arena GLB that follow the contracts. Preview them with `npm run shoot -- --shot gameplay_chase --params "asset.mech_player=.shots/fixtures/test_mech.glb&asset.arena=.shots/fixtures/test_arena.glb"`. This is the reference for the Blender→three axis mapping. The path was verified in the dev build and in the single-file build (embedded data URIs).
-- **Enemy GLBs** must name these nodes (see `src/enemies/models.js`):
-  - mt: `hull`, `turret`, `barrel`, `muzzle`
-  - drone: `body`, `rotor`, `muzzle`, `eye`
-  - turret: `base`, `core`, `head`, `barrel`, `muzzle`
+- **Enemy GLBs** (`enemy_mt`, `enemy_drone`, `enemy_relay`; built by `blender/enemies/build_*.py`) must name these nodes (full contract in the header of `src/enemies/models.js`):
+  - mt: `hull`, `turret`, `barrel`, `muzzle`, plus `eye`, `beacon`, `pelvis` and legs `thigh_L/R > shin_L/R > foot_L/R` (walk cycle) and `nozzle_back_*`
+  - drone: `body`, `rotor` (+ `rotor_1`…: every `rotor*` spins), `muzzle`, `eye`
+  - turret (relay generator): `base`, `core`, `head`, `barrel`, `muzzle`, plus `eye`, `beacon`
+  - Purely visual motion (gait IK, fan spin, recoil, stagger slump, death collapse, damage smoke) lives in `models.js` `makeAnimator()`; enemy classes call `this.anim.update(dt)`.
 
 ## 13. UI (`src/ui/`, `css/ui.css`)
 
@@ -465,7 +466,55 @@ my_shot: {
 | Render | No SSAO/GTAO yet (`pipeline.setSlot('ao', pass)` is ready). No volumetrics, motion blur or ash particles in the air. The sky is a gradient shader. |
 | Arena | Placeholder boxes. Replace with the `arena` GLB (COL_ and SPAWN_ conventions above). |
 | Mech | Box placeholder that follows the contract. The rig animation is procedural and simple (no foot IK). |
-| VFX | Flames are cones. Explosions are particle-only (no flipbooks or decals). |
+| VFX | No flipbook fire (fire is a temperature-ramped eroding puff). Decals are quads (no projection onto curved meshes). Afterimage/heat haze are screen-space approximations. |
 | Enemies | The MT is a tank placeholder (the benchmark suggests a 5 m walker). No hard-lock camera mode yet. |
 | Audio | Synth placeholders only. |
 | UI | System fonts. No compass tape or radio subtitles. |
+
+## 19. Render pipeline, atmosphere and depth access (`src/render/`)
+
+Owner: render engineer. This section supersedes the "Render" row of §18.
+
+**Files.** `atmosphere.js` (ATMOS art-direction data, shared fog/sky GLSL, global shader-chunk patches), `environment.js` (lights, shadow cascades, sky, IBL, weather; `game.env`), `sky.js` (procedural dusk ash-storm sky + shared 256² noise texture), `weather.js` (falling ash/embers), `postfx.js` (post shaders), `pipeline.js` (render graph; `game.pipeline`), `proctex.js` (placeholder canvas textures).
+
+**Frame graph** (`pipeline.render`): `env.preRender(camera)` (sky follow, near-cascade fit, one-time far-cascade bake, weather) → SCENE (camera layer 0, HalfFloat HDR + DepthTexture, MSAA ×4 on high) → SOFT (layer 1, see below) → stats snapshot → slots `ao`, `pre_bloom` → camera motion blur (reprojection from depth; the player rig's screen box stays sharp) → AO (½ res) → sun shafts (¼ res, only when the sun is ahead) → bloom (½…1/64 mip chain, soft-knee threshold ≈ emissives only) → slot `post_bloom` → COMPOSITE (AO, shafts, bloom, exposure, edge-only CA, AgX tone map + look, split-tone grade toward #1C2126 / #F2C79A, vignette, grain, sRGB) → SMAA (high/medium) or FXAA (low) → canvas. Tone mapping happens only in the composite: `renderer.toneMapping` is not applied to the HDR target.
+
+**Quality levels** (`&quality=`; costs are estimates at 1080p on a GTX 1660 / RX 6600 class GPU):
+
+| Pass | high | medium | low |
+|---|---|---|---|
+| Scene MSAA (hardware GPUs only; off on CPU rasterizers, where it would triple the frame time) | ×4 (+0.8 ms) | off | off |
+| Near shadow cascade (every frame, light-aligned box ~70 m, pushed ahead of the camera) | 4096² (~1.0 ms, draw-call bound) | 2048² | 2048² |
+| Far shadow cascade (static arena, baked ONCE, 0 ms/frame) | 4096² | 2048² | off |
+| AO (SAO-style, depth-reconstructed normals, 2 depth-aware blurs) | 12 taps @ ½ (~0.45 ms) | 8 taps | off |
+| Sun shafts (sky mask + 2 radial blurs) | 36 taps @ ¼ (~0.15 ms) | 24 taps | off |
+| Bloom (13-tap down / tent up) | 6 mips (~0.35 ms) | 6 mips | 5 mips |
+| Camera motion blur (full res) | 8 taps (~0.25 ms) | 6 taps | off |
+| Composite | ~0.25 ms | same | same |
+| AA | SMAA 'high' preset (~0.45 ms) | SMAA | FXAA |
+| Ash flakes (1 instanced draw) | 6000 | 3800 | 1800 |
+
+Software rasterizers (SwiftShader / llvmpipe, i.e. no GPU): outside the test harness and without an explicit `&quality=`, `environment.js` switches to `low` and pixel ratio 0.5 (the arena pass is fill-rate bound on a CPU). The harness (`?test=1`) always renders the requested level (minus MSAA on a CPU rasterizer). Boot warm-up: `pipeline.init` bakes the far cascade and compiles the scene's programs before `ready`; the first rendered frame compiles the actors' programs and waits for the GPU.
+
+Dev-only URL knobs (not for players): `&tonemap=aces|agx`, `&exposure=`, `&msaa=0|4`, `&ao=0`, `&shafts=0`, `&mblur=0`, `&aa=smaa|fxaa|none`, `&postdebug=ao|bloom`, `&look=grade.contrast:1.2,bloom.intensity:0.2` (any numeric `look` field).
+
+**Atmosphere (global).** `installAtmosphereChunks()` replaces the `fog_*` chunks and the directional-light block of `lights_fragment_begin` once at boot (environment init, before any material compiles):
+- *Height fog*: two exponential layers (dense ground ash + thin high haze), sun in-scattering (HG lobe + warm wash), near→far colour grading. Every built-in material and every `ShaderMaterial` with `fog: true` that includes `<fog_pars_fragment>` / `<fog_vertex>` gets it. Inside such fragment shaders `fogColor` is the in-scattered colour for the current fragment and `vFogDepth` an *equivalent exp2 depth*, so hand-written `1.0 - exp(-fogDensity*fogDensity*vFogDepth*vFogDepth)` code keeps working and matches. `scene.fog` (FogExp2) remains the runtime knob: `.density` = ground extinction (1/m), `.color` = far haze colour. The vertex side needs `mvPosition` in scope before `#include <fog_vertex>` (as in stock three).
+- *Sun cascades*: directional light 0 (`game.env.sun`) = key light + near cascade; light 1 (`game.env.sunFar`, colour 0) only lends its baked shadow map. The patched lighting lights the sun once with a blended two-cascade, 9-tap bilinear PCF term. Do not add shadow-casting directional lights. Non-shadow directional lights added later still work (stock path).
+- The static far cascade is baked from `game.arena.root` only (actors, particles hidden). Call `game.env.rebakeFarShadow()` if static arena geometry changes at runtime.
+- `scene.environmentIntensity` drives IBL for every standard material that has no own `envMap` (three.js ignores `material.envMapIntensity` then).
+- Weather: `game.env.weather.mesh` (hide with `.visible = false`). It replaces the arena's placeholder `game.arena.ash` flakes (hidden automatically).
+
+**Depth access for soft particles / refraction (`game.pipeline`).**
+
+| Member | Meaning |
+|---|---|
+| `SOFT_LAYER` (= 1) | Camera layer drawn AFTER the opaque pass, with the opaque depth available as a texture. |
+| `markSoft(object3d)` | Moves the object and its children to `SOFT_LAYER` and enables the depth copy (one full-screen pass per frame from then on). Objects on this layer must be unlit (they are drawn without the scene lights) and must not cast shadows. |
+| `depthUniforms` | `{ tIwDepth, uIwDepthParams }` — merge the SAME objects into your ShaderMaterial uniforms (`Object.assign(mat.uniforms, pl.depthUniforms)`); the pipeline updates them. |
+| `glsl.softDepth` | Prepend to a fragment shader: `float iwSceneDepth()` = linear view depth (m) of the opaque scene at this pixel; `float iwSoftFade(float fragViewDepth, float fadeMetres)` = 0 at contact → 1 when `fadeMetres` in front. `fragViewDepth` = `-mvPosition.z` from the vertex shader. |
+| `depthTexture` | Linear view depth (metres, R channel, Float/HalfFloat, nearest) of the opaque scene, drawing-buffer size. Valid during the SOFT pass and all post passes of the frame. `null` until something is marked soft. |
+| `sceneDepthTexture` | Raw non-linear DepthTexture of the scene pass (post passes only; never sample it while drawing the scene). |
+| `sceneTexture` | HDR scene colour of the current frame (post passes only). |
+| `setSlot('ao'\|'pre_bloom'\|'post_bloom', pass)` | Insert a THREE `Pass`-like object (`enabled`, `needsSwap`, `render(renderer, writeBuffer, readBuffer)`, `setSize`) into the HDR chain. |
+| `look` | Live art-direction tunables (exposure, bloom, ao, shafts, motionBlur, grade, vignette, ca, grain). |

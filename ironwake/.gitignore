@@ -5,3 +5,5 @@ __pycache__/
 # generated single-file build (release step: npm run build && git add -f dist/ironwake.html)
 dist/
 assets/_test/
+assets/*/preview/
+assets/ue5/

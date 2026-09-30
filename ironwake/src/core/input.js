@@ -24,6 +24,7 @@ export const ACTIONS = [
   'lock_switch', 'repair', 'pause', 'confirm',
   'look_left', 'look_right', 'look_up', 'look_down',
   'debug_overlay',
+  'hard_lock',            // TARGET ASSIST toggle (movement designer: src/player/controller.js)
 ];
 
 /** Keyboard `code` / mouse button -> action. */
@@ -37,13 +38,14 @@ export const DEFAULT_BINDINGS = {
   Escape: 'pause', KeyP: 'pause', Enter: 'confirm', NumpadEnter: 'confirm',
   ArrowLeft: 'look_left', ArrowRight: 'look_right', ArrowUp: 'look_up', ArrowDown: 'look_down',
   Backquote: 'debug_overlay',
+  KeyV: 'hard_lock',
 };
 
 /** Gamepad "standard" mapping button index -> action. */
 export const PAD_BINDINGS = {
   0: 'jump', 1: 'quick_boost', 2: 'repair', 3: 'lock_switch',
   4: 'fire_lb', 5: 'fire_rb', 6: 'fire_l', 7: 'fire_r',
-  8: 'boost_toggle', 9: 'pause', 10: 'assault_boost', 11: 'lock_switch',
+  8: 'boost_toggle', 9: 'pause', 10: 'assault_boost', 11: 'hard_lock',
 };
 
 const PAD_DEADZONE = 0.18;

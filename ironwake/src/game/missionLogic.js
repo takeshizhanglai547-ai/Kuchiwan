@@ -2,16 +2,24 @@
 // three.js); unit-tested in tests/mission.test.mjs. Owner: mission/HUD designer.
 //
 // Stage "OPERATION IRONWAKE" — Halvard Deep Foundry, Pier 7 (single stage):
-//   1) destroy the MT squad          (kill 5 'mt')
+//   1) destroy the PK-2 Picket squad  (kill 5 'mt' — internal type id of the Picket walker)
 //   2) destroy 3 relay generators     (kill 3 'turret')
-//   3) destroy the hostile frame      (kill 1 'boss')   -> MISSION COMPLETE
+//   3) destroy the rival rig          (kill 1 'boss')   -> MISSION COMPLETE
 //   Player AP 0 -> MISSION FAILED ('destroyed'); optional time limit -> FAILED ('timeout').
 
 export const STAGES = [
-  { id: 'mt_squad', title: 'DESTROY THE MT SQUAD', jp: 'MT部隊を撃破せよ', target: 'mt', count: 5 },
+  { id: 'mt_squad', title: 'DESTROY THE PICKET SQUAD', jp: 'ピケット部隊を撃破せよ', target: 'mt', count: 5 },
   { id: 'relays', title: 'DESTROY RELAY GENERATORS', jp: '中継ジェネレーターを破壊せよ', target: 'turret', count: 3 },
   { id: 'boss', title: 'DESTROY RIVAL RIG "CINDERHOUND"', jp: '敵リグ「シンダーハウンド」を撃破せよ', target: 'boss', count: 1 },
 ];
+
+/** Radio cue (src/ui/radio.js key) for an objective progress event, or null. */
+export function radioCueForProgress(ev) {
+  if (!ev || ev.type !== 'progress') return null;
+  if (ev.stage === 0 && ev.progress === 3) return 'mt_half';
+  if (ev.stage === 1 && ev.progress === ev.count - 1) return 'relay_last';
+  return null;
+}
 
 export const RANK_TABLE = [['S', 85], ['A', 70], ['B', 55], ['C', 40], ['D', 0]];
 
@@ -32,6 +40,18 @@ export function computeRank({ time, damageTaken, apMax, kitsUsed, parTime = 300 
   return { score, rank, timeScore, dmgScore, kitScore };
 }
 
+/** Contract economics shown on the results screen (credits, "CR"). */
+export const PAYOUT = { reward: 480000, repairPerAp: 12, ammo: { rifle_ar: 45, missile_pod: 380, cannon_heavy: 2600 } };
+
+/** Reward, repair cost (per AP of damage), ammo cost (per round fired) and the net payout. */
+export function computePayout({ complete, damageTaken = 0, shots = {} }) {
+  const reward = complete ? PAYOUT.reward : 0;
+  const repair = Math.round(damageTaken * PAYOUT.repairPerAp);
+  let ammo = 0;
+  for (const id in shots) ammo += (PAYOUT.ammo[id] || 0) * shots[id];
+  return { reward, repair, ammo, net: reward - repair - ammo };
+}
+
 export class MissionLogic {
   constructor({ stages = STAGES, timeLimit = 900, parTime = 300 } = {}) {
     this.stages = stages;
@@ -49,6 +69,7 @@ export class MissionLogic {
     this.damageTaken = 0;
     this.kitsUsed = 0;
     this.kills = {};
+    this.shots = {};
   }
 
   get current() { return this.stages[this.stage] || null; }
@@ -81,6 +102,7 @@ export class MissionLogic {
   onPlayerDestroyed() { return this.fail('destroyed'); }
   onDamageTaken(n) { if (this.active) this.damageTaken += n; }
   onRepairUsed() { if (this.active) this.kitsUsed++; }
+  onShot(weaponId) { if (this.active) this.shots[weaponId] = (this.shots[weaponId] || 0) + 1; }
 
   fail(reason) {
     if (!this.active) return null;
@@ -100,6 +122,9 @@ export class MissionLogic {
     return {
       status: this.status, reason: this.failReason, time: this.time, damageTaken: this.damageTaken,
       kitsUsed: this.kitsUsed, kills: { ...this.kills },
+      stage: this.stage, progress: this.progress, parTime: this.parTime, timeLimit: this.timeLimit,
+      shots: { ...this.shots },
+      payout: computePayout({ complete: this.status === 'complete', damageTaken: this.damageTaken, shots: this.shots }),
       score: this.status === 'complete' ? r.score : 0,
       rank: this.status === 'complete' ? r.rank : '-',
       breakdown: r,

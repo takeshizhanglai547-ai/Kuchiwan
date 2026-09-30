@@ -1,54 +1,170 @@
 // src/player/camera.js — third-person chase camera (owner: movement designer).
 //
-// Rigid orbit around a SMOOTHED pivot above the mech along the player's aim (so rotation
-// is 1:1 responsive while translation lags a little and sells speed). Collision: a ray
-// from the pivot to the desired position pulls the camera in front of static geometry.
+// Model: the camera ORBITS a point just above the rig's head along the player's aim (31 m back,
+// 2.2 m to the right so the right-arm rifle clears the torso), so the view axis (reticle) always
+// passes over the shoulders and the rig sits in the lower-centre third (22-30% of frame height,
+// see `npm run telemetry`). Rotation is 1:1 with the aim;
+// translation LAGS through critically damped springs per camera axis (side / up / forward),
+// so a quick boost darts the rig off-centre for a moment and the camera catches up.
+// Everything is computed at the fixed sim rate in lateUpdate (deterministic, shot-safe);
+// frame() only interpolates between the last two sim poses.
+//
+// Motor reactions (read from game.player.motor.flags every step, no calls needed):
+//   quick boost    FOV punch (+qbFovKick, instant attack, ease-out ~0.2 s), micro shake,
+//                  roll away from the burst
+//   AB wind-up     FOV narrows + camera creeps in while the boosters charge (telegraph)
+//   AB launch      big FOV kick on top of the sustained AB FOV + shake + flight rumble; in flight
+//                  the camera rises 1.6 m to look down onto the pitched torso and boosters
+//   landing        underdamped camera dip scaled by the impact speed (+ shake when hard)
+//   ground boost   sustained FOV widening (spring), looser follow = speed read
+// Collision: 5 rays (centre + near-plane corners) from the orbit point. A blocker that a lift of
+// up to 4.5 m clears (roof edges, container stacks skimming the line) raises the camera instead;
+// otherwise pull-in is instant (never clips) and eases back out slowly. The orbit point itself is kept out of geometry. Thin
+// props do not pull the camera in (no popping); instead they dissolve where they would cover
+// the rig (screen-door cutout on the arena materials, src/player/cutout.js).
 //
 // API (game.cam):
 //   shake(amount 0..1)                 trauma-based shake (adds up, decays)
-//   fovKick(deg, seconds)              temporary FOV widening (QB / AB)
+//   fovKick(deg, seconds)              temporary FOV widening
 //   setOverride({pos, look, fov})      free camera (staged shots, title, cutscenes)
 //   clearOverride()
 //   snap()                             drop smoothing (after teleports/restarts)
-//   pivot                              THREE.Vector3 smoothed pivot
+//   pivot                              THREE.Vector3 lagged orbit point
+//   metrics                            {fov, dist, lag, lagSide, rigFrac, rigTopNdc, rigMidNdc, shake, dip,
+//                                       kick (FOV punch deg), sustain (boost/AB FOV deg), lift (m)}
+//                                      (sim-rate telemetry, read by tools/telemetry.mjs)
 import * as THREE from 'three';
-import { CAMERA } from './tuning.js';
+import { CAMERA as C } from './tuning.js';
 import { makeHit } from '../core/physics.js';
+import { installCutout, updateCutout } from './cutout.js';
 
 const _desired = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.Vector3();
-const _right = new THREE.Vector3(), _target = new THREE.Vector3(), _m = new THREE.Matrix4();
+const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _target = new THREE.Vector3();
+const _m = new THREE.Matrix4(), _o = new THREE.Vector3(), _camUp = new THREE.Vector3(), _camRight = new THREE.Vector3();
 const _zero = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
-const _e = new THREE.Euler(0, 0, 0, 'YXZ');
-const _hit = makeHit();
+const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _qi = new THREE.Quaternion();
+const _hit = makeHit(), _o2 = new THREE.Vector3();
+const PROBES = [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+const ATTRACT_FOV = 50;   // title / briefing orbit keeps its own lens (independent of the gameplay FOV)
 
 /** Smooth deterministic noise in [-1,1] (sum of sines). */
 function noise(t, seed) {
   return (Math.sin(t * 1.7 + seed) * 0.5 + Math.sin(t * 3.1 + seed * 2.3) * 0.3 + Math.sin(t * 7.3 + seed * 4.1) * 0.2);
 }
+/** Poles, masts, beams, cables: at least two half-extents under 1 m. */
+function isThin(c) {
+  if (!c || !c.half) return false;
+  const h = c.half;
+  return (h.x < 1 ? 1 : 0) + (h.y < 1 ? 1 : 0) + (h.z < 1 ? 1 : 0) >= 2;
+}
+/**
+ * Blocking distance along a camera probe ray. Thin colliders (lamp masts, gantry legs) do not
+ * pull the camera in (no popping when a pole sweeps past) unless the camera itself would end
+ * up touching one.
+ */
+function probe(physics, origin, dir, want, pad) {
+  let start = 0;
+  _o2.copy(origin);
+  for (let k = 0; k < 4; k++) {
+    if (!physics.raycast(_o2, dir, want + pad - start, _hit, { ground: true })) return want;
+    const d = start + _hit.dist;
+    if (!isThin(_hit.collider)) return d - pad;
+    const thick = 2 * Math.max(_hit.collider.half.x, _hit.collider.half.z) + 0.2;
+    if (want > d - pad - 1 && want < d + thick + pad) return d - pad; // camera would touch it
+    start = d + thick;
+    _o2.copy(origin).addScaledVector(dir, start);
+  }
+  return want;
+}
+/** Rig height above its feet from the actual vertices (flames and FX excluded). */
+function measureRigHeight(p) {
+  const root = p.rig.root, v = new THREE.Vector3();
+  let top = -Infinity;
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const pa = o.isMesh && o.geometry && !o.name.startsWith('flame_') && o.geometry.attributes.position;
+    if (!pa) return;
+    for (let i = 0; i < pa.count; i++) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
+      if (v.y > top) top = v.y;
+    }
+  });
+  return top === -Infinity ? 10.5 : Math.max(4, top - root.getWorldPosition(v).y);
+}
+function damp(cur, target, lambda, dt) { return cur + (target - cur) * (1 - Math.exp(-lambda * dt)); }
+/** Exact critically damped spring toward 0: returns [x, v] through the out array. */
+function critToZero(x, v, omega, dt, out) {
+  const j1 = v + x * omega, e = Math.exp(-omega * dt);
+  out[0] = e * (x + j1 * dt);
+  out[1] = e * (v - j1 * omega * dt);
+  return out;
+}
 
 export default function cameraSystem(game) {
   const pivot = new THREE.Vector3();
+  const lagOff = new THREE.Vector3(), lagVel = new THREE.Vector3(), prevTarget = new THREE.Vector3();
   const prevPos = new THREE.Vector3(), curPos = new THREE.Vector3();
   const prevQuat = new THREE.Quaternion(), curQuat = new THREE.Quaternion();
-  let trauma = 0, shakeTime = 0;
-  let kick = 0, kickT = 0, kickDur = 0.3;
-  let dist = CAMERA.distance;
+  const sp = [0, 0];
+  let prevFov = C.fov, curFov = C.fov;
+  let trauma = 0, rumble = 0;
+  let kickDeg = 0, kickT = 1e3, kickHold = 0.04, kickDecay = 0.2;
+  let roll = 0, rollV = 0;
+  let dip = 0, dipV = 0;
+  let sustain = 0, pull = 0, bank = 0, prevYaw = 0;
+  let dist = C.distance;
   let needSnap = true;
   let override = null;
   let attractAngle = 0;
-  let abWide = 0; // smoothed extra FOV while assault boosting
+  let rigHeight = 0;
+  let cutK = 0;
+  let lift = 0, rise = 0;
+  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, dip: 0, kick: 0, sustain: 0, lift: 0 };
+
+  function kick(deg, hold, decay) {
+    // a new kick replaces a weaker, older one; never stacks past the larger
+    const cur = kickT < kickHold ? kickDeg : kickDeg * Math.exp(-Math.max(0, kickT - kickHold) * 3 / Math.max(0.01, kickDecay));
+    kickDeg = Math.max(deg, cur); kickT = 0; kickHold = hold; kickDecay = decay;
+  }
+
+  /** Collision probes for the desired camera at `lift` m above its normal height: sets _dir /
+   *  probeWant and returns the allowed distance along _dir from the pivot. */
+  let probeWant = 0;
+  function probeLift(D, h) {
+    _desired.copy(pivot).addScaledVector(_aim, -D);
+    _desired.y += C.heightOffset + h + rise;
+    _desired.addScaledVector(_right, C.shoulder);
+    _dir.subVectors(_desired, pivot);
+    probeWant = _dir.length();
+    _dir.multiplyScalar(1 / Math.max(probeWant, 1e-4));
+    // near-plane probe offsets in the camera's right/up plane
+    _camRight.crossVectors(_dir, _up); if (_camRight.lengthSq() < 1e-6) _camRight.set(1, 0, 0); _camRight.normalize();
+    _camUp.crossVectors(_camRight, _dir).normalize();
+    let a = probeWant;
+    for (let i = 0; i < PROBES.length; i++) {
+      _o.copy(pivot).addScaledVector(_camRight, PROBES[i][0] * C.probeRadius).addScaledVector(_camUp, PROBES[i][1] * C.probeRadius * 0.6);
+      a = Math.min(a, probe(game.physics, _o, _dir, a, C.collisionPadding));
+    }
+    return a;
+  }
 
   const api = {
     name: 'camera',
     order: 800,
     pivot,
+    metrics,
     get override() { return override; },
-    init(g) { g.cam = api; },
-    reset() { needSnap = true; trauma = 0; kick = 0; kickT = 0; abWide = 0; },
+    init(g) {
+      g.cam = api;
+      // before the pipeline warm-up compiles the arena programs (camera inits before pipeline)
+      if (g.arena && g.arena.root) api.cutoutMaterials = installCutout(g.arena.root);
+    },
+    cutoutMaterials: 0,
+    reset() { lift = 0; rise = 0; needSnap = true; trauma = 0; rumble = 0; kickT = 1e3; kickDeg = 0; roll = rollV = 0; dip = dipV = 0; sustain = 0; pull = 0; bank = 0; },
     shake(amount) { trauma = Math.min(1, trauma + amount); },
-    fovKick(deg, seconds = 0.3) { kick = Math.max(kick, deg); kickT = seconds; kickDur = seconds; },
+    fovKick(deg, seconds = 0.3) { kick(deg, 0.03, seconds); },
     setOverride(o) {
-      override = { pos: o.pos.clone(), look: o.look.clone(), fov: o.fov || CAMERA.fov };
+      override = { pos: o.pos.clone(), look: o.look.clone(), fov: o.fov || C.fov };
       api.applyOverride();
     },
     clearOverride() { override = null; needSnap = true; },
@@ -66,7 +182,9 @@ export default function cameraSystem(game) {
     estimateCameraPos(out) {
       const p = game.player;
       p.getAimDir(_aim);
-      out.set(p.pos.x, p.pos.y + CAMERA.pivotHeight + CAMERA.heightOffset, p.pos.z).addScaledVector(_aim, -CAMERA.distance);
+      out.set(p.pos.x, p.pos.y + C.pivotHeight + C.heightOffset, p.pos.z).addScaledVector(_aim, -C.distance);
+      const yaw = p.controller.aimYaw;
+      out.x += -Math.cos(yaw) * C.shoulder; out.z += Math.sin(yaw) * C.shoulder;
       return out;
     },
 
@@ -81,56 +199,148 @@ export default function cameraSystem(game) {
 
     lateUpdate(dt) {
       const p = game.player;
-      trauma = Math.max(0, trauma - dt * 1.6);
-      shakeTime += dt;
-      if (kickT > 0) kickT -= dt;
+      trauma = Math.max(0, trauma - dt * C.shakeDecay);
+      kickT += dt;
       if (!p || !p.spawned) return;
-
-      _target.set(p.pos.x, p.pos.y + CAMERA.pivotHeight, p.pos.z);
-      const m = p.motor;
-      const wideTarget = !m ? 0 : m.mode === 'ab' ? CAMERA.fovAB : (m.mode === 'boost' || m.mode === 'qb') && m.speedH > m.cfg.boostSpeed * 0.6 ? CAMERA.fovBoost : 0;
-      abWide += (wideTarget - abWide) * (1 - Math.exp(-CAMERA.fovLambda * dt));
-      const boosting = m && (m.mode === 'ab' || m.mode === 'qb' || m.mode === 'boost');
-      if (needSnap) {
-        pivot.copy(_target);
-      } else {
-        const lambda = boosting ? CAMERA.boostLagLambda : CAMERA.followLambda;
-        pivot.lerp(_target, 1 - Math.exp(-lambda * dt));
-        // never lag more than a few meters
-        _dir.subVectors(pivot, _target);
-        const lag = _dir.length();
-        if (lag > CAMERA.maxLag) pivot.copy(_target).addScaledVector(_dir, CAMERA.maxLag / lag);
-      }
-
+      const m = p.motor, f = m.flags;
+      // occlusion cutout strength (sim-rate ease; full at once after a snap)
+      const cutT = !override && p.root.visible ? 1 : 0;
+      cutK = needSnap ? cutT : damp(cutK, cutT, C.cutEase, dt);
       p.getAimDir(_aim);
-      _right.set(-Math.cos(p.controller.aimYaw), 0, Math.sin(p.controller.aimYaw));
-      _desired.copy(pivot).addScaledVector(_aim, -CAMERA.distance);
-      _desired.y += CAMERA.heightOffset;
-      _desired.addScaledVector(_right, CAMERA.shoulder);
+      const yaw = p.controller.aimYaw;
+      let yawRate = needSnap ? 0 : (yaw - prevYaw); yawRate = Math.atan2(Math.sin(yawRate), Math.cos(yawRate)) / Math.max(dt, 1e-4);
+      prevYaw = yaw;
+      _right.set(-Math.cos(yaw), 0, Math.sin(yaw));
+      _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
 
-      // Collision: pull in front of static geometry (smoothly back out).
-      _dir.subVectors(_desired, pivot);
-      const want = _dir.length();
-      _dir.multiplyScalar(1 / Math.max(want, 1e-4));
-      let allowed = want;
-      if (game.physics.raycast(pivot, _dir, want + CAMERA.collisionPadding, _hit, { ground: true })) {
-        allowed = Math.max(CAMERA.minDistance, _hit.dist - CAMERA.collisionPadding);
+      // --- one-step motor events
+      if (f.qb) {
+        kick(C.qbFovKick, C.qbFovHold, C.qbFovDecay);
+        trauma = Math.min(1, trauma + C.qbShake);
+        // roll away from the burst (camera banks against the jolt, then springs back)
+        const side = f.qb.x * _right.x + f.qb.z * _right.z;
+        rollV += -side * C.qbRoll * 40;
       }
-      dist = allowed < dist ? allowed : dist + (allowed - dist) * (1 - Math.exp(-6 * dt));
-      if (needSnap) dist = allowed;
+      if (f.abLaunch) {
+        sustain = C.fovAB; // the launch snaps wide, the kick overshoots on top of it
+        kick(C.abLaunchKick, 0.06, C.abLaunchDecay); trauma = Math.min(1, trauma + C.abLaunchShake);
+      }
+      if (f.landed > 4) {
+        dipV -= Math.min(C.landDipMax, f.landed * C.landDipPerMs) * 13;
+        if (f.landed > 14) trauma = Math.min(1, trauma + f.landed * C.landShakePerMs);
+      }
+      rumble = damp(rumble, m.mode === 'ab' && !m.abCharging ? C.abFlightShake : m.abCharging ? C.abFlightShake * m.abCharge : 0, 6, dt);
 
-      prevPos.copy(curPos); prevQuat.copy(curQuat);
+      // --- lagged orbit point (critically damped per camera axis)
+      _target.set(p.pos.x, p.pos.y + C.pivotHeight, p.pos.z);
+      if (needSnap) { lagOff.set(0, 0, 0); lagVel.set(0, 0, 0); }
+      else {
+        lagOff.x -= _target.x - prevTarget.x; lagOff.y -= _target.y - prevTarget.y; lagOff.z -= _target.z - prevTarget.z;
+        const sx = lagOff.dot(_right), sy = lagOff.y, sz = lagOff.dot(_fwd);
+        const vx = lagVel.dot(_right), vy = lagVel.y, vz = lagVel.dot(_fwd);
+        critToZero(sx, vx, C.lagOmegaSide, dt, sp); const nsx = sp[0], nvx = sp[1];
+        critToZero(sy, vy, C.lagOmegaUp, dt, sp); const nsy = sp[0], nvy = sp[1];
+        critToZero(sz, vz, C.lagOmegaFwd, dt, sp); const nsz = sp[0], nvz = sp[1];
+        lagOff.set(0, nsy, 0).addScaledVector(_right, nsx).addScaledVector(_fwd, nsz);
+        lagVel.set(0, nvy, 0).addScaledVector(_right, nvx).addScaledVector(_fwd, nvz);
+        if (lagOff.y > C.maxLagUp) lagOff.y = C.maxLagUp; else if (lagOff.y < -C.maxLagUp) lagOff.y = -C.maxLagUp;
+        const l = lagOff.length();
+        if (l > C.maxLag) lagOff.multiplyScalar(C.maxLag / l);
+      }
+      prevTarget.copy(_target);
+      pivot.copy(_target).add(lagOff);
+
+      // --- landing dip (underdamped) + roll kick spring
+      dipV += (-150 * dip - 2 * 0.45 * 12.2 * dipV) * dt; dip += dipV * dt;
+      rollV += (-220 * roll - 2 * 0.5 * 14.8 * rollV) * dt; roll += rollV * dt;
+      const fastK = Math.min(1, Math.max(0, (m.speedH - C.bankMinSpeed) / 40));
+      bank = damp(bank, Math.max(-C.bankMax, Math.min(C.bankMax, yawRate * C.bankPerRad)) * fastK, 5, dt);
+      pivot.y += dip;
+
+      // keep the orbit point out of geometry (e.g. under a conveyor): ray from the chest
+      _o.set(p.pos.x, p.pos.y + 5.5, p.pos.z);
+      _dir.subVectors(pivot, _o);
+      let pl = _dir.length();
+      if (pl > 1e-3) {
+        _dir.multiplyScalar(1 / pl);
+        if (game.physics.raycast(_o, _dir, pl + 0.6, _hit, { ground: true })) pivot.copy(_o).addScaledVector(_dir, Math.max(0, _hit.dist - 0.6));
+      }
+
+      // --- FOV: sustained (boost / AB / wind-up) + kick envelope
+      const speed = m.speedH;
+      let wide = 0;
+      if (m.mode === 'ab') wide = m.abCharging ? C.abChargeFov * m.abCharge : C.fovAB;
+      else if (m.mode === 'boost' || m.mode === 'qb' || (m.mode === 'air' && speed > 60)) wide = C.fovBoost * Math.min(1, Math.max(0, (speed - 35) / 45));
+      sustain = damp(sustain, wide, 1 / C.fovTau, dt);
+      const env = kickT < kickHold ? 1 : Math.exp(-(kickT - kickHold) * 3 / Math.max(0.01, kickDecay));
+      const fov = C.fov + sustain + kickDeg * env;
+      const pullT = m.mode === 'ab' ? (m.abCharging ? C.abChargePull * m.abCharge : C.abFlightPull) : 0;
+      pull = damp(pull, pullT, m.abCharging ? 4 : 3, dt);
+      rise = damp(rise, m.mode === 'ab' && !m.abCharging ? C.abFlightRise : 0, 3, dt);
+
+      // --- desired camera position + collision. Low blockers (a roof edge or container stack
+      // skimming the camera line) first LIFT the camera over them (keeps the distance and the
+      // framing); only what lifting cannot clear pulls the camera in.
+      const D = C.distance - pull;
+      let liftT = 0;
+      if (probeLift(D, lift) < probeWant - 0.3 || lift > 0.05) {
+        // smallest lift step that clears the whole line (none clears: stay low and pull in)
+        liftT = 0;
+        for (let k = 0; k <= C.liftSteps; k++) {
+          const h = (k / C.liftSteps) * C.liftMax;
+          if (probeLift(D, h) >= probeWant - 0.3) { liftT = h; break; }
+        }
+      }
+      lift = needSnap ? liftT : damp(lift, liftT, liftT > lift ? C.liftUpLambda : C.liftDownLambda, dt);
+      let allowed = probeLift(D, lift);
+      allowed = Math.max(C.minDistance, allowed);
+      if (needSnap || allowed < dist) dist = allowed;               // pull in instantly: never clip
+      else dist = damp(dist, allowed, C.pushOutLambda, dt);          // ease back out
+
+      prevPos.copy(curPos); prevQuat.copy(curQuat); prevFov = curFov;
       curPos.copy(pivot).addScaledVector(_dir, dist);
+      const gy = game.physics.groundHeight ? game.physics.groundHeight(curPos.x, curPos.z) : 0;
+      if (curPos.y < gy + 1.2) curPos.y = gy + 1.2;
+
+      // orientation: look down the aim + shake + roll kick (all sim-rate, deterministic)
       _m.lookAt(_zero, _aim, _up);
       curQuat.setFromRotationMatrix(_m);
-      if (needSnap) { prevPos.copy(curPos); prevQuat.copy(curQuat); needSnap = false; }
+      const tr = Math.min(1, trauma + rumble);
+      const amp = C.shakeMaxRot * Math.pow(tr, C.shakeExp);
+      const ts = game.time * C.shakeFreq;
+      _e.set(noise(ts, 1.3) * amp, noise(ts, 7.1) * amp, noise(ts, 3.7) * amp * 1.3 + roll + bank);
+      curQuat.multiply(_q.setFromEuler(_e));
+      curFov = fov;
+      if (needSnap) { prevPos.copy(curPos); prevQuat.copy(curQuat); prevFov = curFov; needSnap = false; }
       if (game.env) game.env.focus.copy(p.pos);
+
+      // --- metrics (telemetry): distance to the rig, lag, projected rig height
+      if (!rigHeight && p.rig) rigHeight = measureRigHeight(p);   // once (vertex-precise)
+      const H = rigHeight || 10;
+      const th = Math.tan(THREE.MathUtils.degToRad(fov) * 0.5);
+      _qi.copy(curQuat).invert();
+      _p.set(p.pos.x, p.pos.y + H, p.pos.z).sub(curPos).applyQuaternion(_qi);
+      const top = _p.y / (-_p.z * th);
+      _p.set(p.pos.x, p.pos.y, p.pos.z).sub(curPos).applyQuaternion(_qi);
+      const bot = _p.y / (-_p.z * th);
+      metrics.fov = fov;
+      metrics.dist = Math.hypot(curPos.x - p.pos.x, curPos.y - (p.pos.y + H * 0.5), curPos.z - p.pos.z);
+      metrics.lag = lagOff.length();
+      metrics.lagSide = lagOff.dot(_right);
+      metrics.rigFrac = (top - bot) * 0.5;
+      metrics.rigTopNdc = top;
+      metrics.rigMidNdc = (top + bot) * 0.5;
+      metrics.shake = amp;
+      metrics.dip = dip;
+      metrics.kick = kickDeg * env;
+      metrics.sustain = sustain;
+      metrics.lift = lift;
     },
 
     frame(alpha, realDt) {
       const cam = game.camera;
-      if (override) { api.applyOverride(); return; }
       const p = game.player;
+      if (override) { api.applyOverride(); cutK = 0; updateCutout(cam, _zero, 1, C, 0); return; }
       if ((game.state === 'title' || game.state === 'briefing') && p && p.spawned) {
         // Attract mode: slow orbit around the parked mech.
         attractAngle += realDt * 0.12;
@@ -139,21 +349,20 @@ export default function cameraSystem(game) {
         _target.set(p.pos.x, p.pos.y + 5.5, p.pos.z);
         cam.up.set(0, 1, 0);
         cam.lookAt(_target);
-        if (cam.fov !== CAMERA.fov) { cam.fov = CAMERA.fov; cam.updateProjectionMatrix(); }
+        if (cam.fov !== ATTRACT_FOV) { cam.fov = ATTRACT_FOV; cam.updateProjectionMatrix(); }
         if (game.env) game.env.focus.copy(p.pos);
+        cutK = 0; updateCutout(cam, _zero, 1, C, 0);
         return;
       }
       cam.position.lerpVectors(prevPos, curPos, alpha);
       cam.quaternion.slerpQuaternions(prevQuat, curQuat, alpha);
-      // Shake (rotation only, trauma^2 falloff)
-      const s = trauma * trauma;
-      if (s > 1e-4) {
-        _e.set(noise(shakeTime * 9, 1.3) * 0.035 * s, noise(shakeTime * 9, 7.1) * 0.035 * s, noise(shakeTime * 9, 3.7) * 0.05 * s);
-        cam.quaternion.multiply(_q.setFromEuler(_e));
-      }
-      const k = kickT > 0 ? kick * Math.sin(Math.min(1, kickT / kickDur) * Math.PI * 0.5) : 0;
-      const fov = CAMERA.fov + k + abWide;
+      const fov = prevFov + (curFov - prevFov) * alpha;
       if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+      // occlusion cutout around the rendered rig (only under the chase camera)
+      if (p && p.spawned) {
+        cam.updateMatrixWorld();
+        updateCutout(cam, p.root.position, rigHeight || 10.5, C, cutK);
+      }
     },
   };
   return api;

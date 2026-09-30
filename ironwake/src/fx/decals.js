@@ -1,0 +1,160 @@
+// src/fx/decals.js — scorch / impact decals on static geometry (owner: weapons/VFX artist).
+//
+//   fx.decals.add(pos, normal, size, life, glow)
+//   effect part { kind: 'decal', size: [min,max], life, glow 0..1, ground: maxHeight }
+//     ground => the decal is dropped onto the ground/static surface below (explosions);
+//     otherwise it is placed at the impact point on the impact normal (bullets).
+// Decals are instanced quads on the pipeline SOFT layer. They compare their depth with the
+// opaque scene depth and fade out where they are not ON a surface (collider boxes are only an
+// approximation of the render mesh), so a decal never floats in the air. Fresh scorches glow
+// like hot slag for a second, then cool to soot. Oldest decals are recycled.
+import * as THREE from 'three';
+import { makeHit } from '../core/physics.js';
+
+const MAXD = 160;
+
+const VERT = /* glsl */`
+attribute vec4 iDecal; // variant, age01, heat, alpha
+varying vec2 vUv; varying vec4 vDecal; varying float vViewZ;
+#include <fog_pars_vertex>
+void main() {
+  vUv = uv; vDecal = iDecal;
+  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  vViewZ = -mvPosition.z;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+
+function frag(soft) {
+  return /* glsl */`
+uniform sampler2D tMisc;
+varying vec2 vUv; varying vec4 vDecal; varying float vViewZ;
+${soft || ''}
+#include <fog_pars_fragment>
+void main() {
+  float v = vDecal.x;
+  vec2 c = vec2((mod(v, 2.0) + vUv.x) * 0.5, 1.0 - (floor(v / 2.0) + 1.0 - vUv.y) * 0.5);
+  vec4 t = texture2D(tMisc, c);
+  float burn = t.g;
+  float a = burn * vDecal.w * (1.0 - smoothstep(0.7, 1.0, vDecal.y));
+  // soot core, brown heat-tint rim
+  vec3 rgb = mix(vec3(0.07, 0.05, 0.035), vec3(0.012, 0.011, 0.01), smoothstep(0.25, 0.75, burn));
+  float hot = vDecal.z * smoothstep(0.7, 1.0, burn + (t.a * 2.0 - 1.0) * 0.3 - 0.1);
+  vec3 glow = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), hot) * hot * 1.4;
+  #ifdef IW_SOFT
+    // only where the decal lies ON the opaque surface
+    float sd = iwSceneDepth();
+    a *= 1.0 - smoothstep(0.25, 0.7, abs(sd - vViewZ));
+  #endif
+  if (a < 0.003) discard;
+  #ifdef USE_FOG
+    #ifdef FOG_EXP2
+      float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);
+    #else
+      float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
+    #endif
+    rgb = mix(rgb, fogColor, fogFactor);
+    glow *= 1.0 - fogFactor;
+  #endif
+  gl_FragColor = vec4(rgb * a + glow * a, a);
+}`;
+}
+
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
+const _n = new THREE.Vector3(), _z = new THREE.Vector3(0, 0, 1), _qr = new THREE.Quaternion();
+const _down = new THREE.Vector3(0, -1, 0), _o = new THREE.Vector3();
+const _hit = makeHit();
+
+export class Decals {
+  constructor(game, tex) {
+    this.game = game;
+    this.rng = game.rng.stream('fx_decal');
+    this.n = 0; this.next = 0;
+    this.age = new Float32Array(MAXD); this.life = new Float32Array(MAXD); this.heat = new Float32Array(MAXD);
+    this.variant = new Float32Array(MAXD); this.alpha = new Float32Array(MAXD); this.alive = new Uint8Array(MAXD);
+    this.mats = new Float32Array(MAXD * 16);
+    const g = new THREE.PlaneGeometry(1, 1);
+    this.iDecal = new THREE.InstancedBufferAttribute(new Float32Array(MAXD * 4), 4).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('iDecal', this.iDecal);
+    this.mat = new THREE.ShaderMaterial({
+      name: 'iw_fx_decals', vertexShader: VERT, fragmentShader: frag(''),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { tMisc: { value: tex.misc } }]),
+      transparent: true, depthWrite: false, fog: true,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+      blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+    });
+    this.mat.uniforms.tMisc.value = tex.misc;
+    this.mesh = new THREE.InstancedMesh(g, this.mat, MAXD);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.renderOrder = 4; this.mesh.name = 'fx_decals';
+    game.scene.add(this.mesh);
+  }
+
+  attachSoft(pl) {
+    Object.assign(this.mat.uniforms, pl.depthUniforms);
+    this.mat.fragmentShader = frag(pl.glsl.softDepth);
+    this.mat.defines = { IW_SOFT: '' };
+    this.mat.needsUpdate = true;
+    pl.markSoft(this.mesh);
+  }
+
+  /** Effect part dispatch (see header). */
+  fromEffect(part, pos, dir, o, scale) {
+    const r = this.rng;
+    const size = r.range(part.size[0], part.size[1]) * scale;
+    if (part.ground) {
+      _o.set(pos.x, pos.y + 0.5, pos.z);
+      const maxH = part.ground * scale + 0.5;
+      if (!this.game.physics.raycast(_o, _down, maxH, _hit, { ground: true })) return;
+      this.add(_hit.point, _hit.normal, size * (1 - 0.5 * (_hit.dist / maxH)), part.life || 20, part.glow || 0);
+    } else if (dir) {
+      this.add(pos, dir, size, part.life || 12, part.glow || 0);
+    }
+  }
+
+  add(pos, normal, size, life, glow) {
+    const i = this.next; this.next = (this.next + 1) % MAXD;
+    if (!this.alive[i]) this.n++;
+    this.alive[i] = 1;
+    this.age[i] = 0; this.life[i] = life; this.heat[i] = glow;
+    this.variant[i] = Math.floor(this.rng.next() * 4); this.alpha[i] = 0.92;
+    _n.copy(normal).normalize();
+    _q.setFromUnitVectors(_z, _n);
+    _qr.setFromAxisAngle(_z, this.rng.next() * Math.PI * 2);
+    _q.multiply(_qr);
+    _p.copy(pos).addScaledVector(_n, 0.04);
+    _s.set(size, size, 1);
+    _m.compose(_p, _q, _s);
+    _m.toArray(this.mats, i * 16);
+  }
+
+  clear() { this.alive.fill(0); this.n = 0; this.next = 0; this.mesh.count = 0; }
+
+  update(dt) {
+    for (let i = 0; i < MAXD; i++) {
+      if (!this.alive[i]) continue;
+      this.age[i] += dt;
+      this.heat[i] *= Math.exp(-dt * 1.6);
+      if (this.age[i] >= this.life[i]) { this.alive[i] = 0; this.n--; }
+    }
+  }
+
+  frame() {
+    let c = 0;
+    const im = this.mesh.instanceMatrix.array, a = this.iDecal.array;
+    for (let i = 0; i < MAXD; i++) {
+      if (!this.alive[i]) continue;
+      for (let k = 0; k < 16; k++) im[c * 16 + k] = this.mats[i * 16 + k];
+      a[c * 4] = this.variant[i]; a[c * 4 + 1] = this.age[i] / this.life[i]; a[c * 4 + 2] = this.heat[i]; a[c * 4 + 3] = this.alpha[i];
+      c++;
+    }
+    this.mesh.count = c;
+    if (c) {
+      this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceMatrix.clearUpdateRanges(); this.mesh.instanceMatrix.addUpdateRange(0, c * 16);
+      this.iDecal.needsUpdate = true; this.iDecal.clearUpdateRanges(); this.iDecal.addUpdateRange(0, c * 4);
+    }
+  }
+
+  dispose() { this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); this.game.scene.remove(this.mesh); }
+}

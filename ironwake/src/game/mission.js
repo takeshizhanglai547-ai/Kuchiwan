@@ -10,7 +10,7 @@
 // Events: 'mission:stage' {stage, def}, 'mission:progress', 'mission:complete' {result},
 //         'mission:failed' {result}, 'mission:end' {result} (after the outro delay).
 import * as THREE from 'three';
-import { MissionLogic, STAGES } from './missionLogic.js';
+import { MissionLogic, STAGES, radioCueForProgress } from './missionLogic.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
@@ -38,9 +38,13 @@ export function pickBossSpawn(game, candidates, ideal = 100) {
 const OUTRO_DELAY = 3.2; // seconds between the end event and the results screen
 
 export default function missionSystem(game) {
+  /** Call an optional HUD method (the HUD may be the engine's no-op stub if it failed to load). */
+  const hudCall = (name, a, b, c) => { const h = game.hud; if (h && typeof h[name] === 'function') h[name](a, b, c); };
   const logic = new MissionLogic({ stages: STAGES, timeLimit: 900, parTime: 300 });
   let endT = -1;
   let pendingStage = -1, pendingT = 0;
+  // Radio beats that fire once per session (see src/ui/radio.js for the lines).
+  const beats = { start: false, lowAp: false, bossHalf: false, bossStagger: false };
 
   function spawnStage(i) {
     const sp = game.arena.spawns;
@@ -62,25 +66,40 @@ export default function missionSystem(game) {
     if (ev.type === 'progress') {
       game.events.emit('mission:progress', ev);
       game.audio.play('objective_tick');
+      const cue = radioCueForProgress(ev);
+      if (cue) hudCall('radio', cue);
     } else if (ev.type === 'stage') {
       game.events.emit('mission:stage', ev);
-      game.hud.callout('OBJECTIVE UPDATED', '目標更新', 'info');
+      if (ev.stage === 2) {
+        game.hud.callout('WARNING: RIVAL RIG INBOUND', '警告：敵リグ接近', 'warn', 2.6);
+        game.audio.play('alarm');
+      }
+      hudCall('objectiveBanner', 'OBJECTIVE UPDATED', '目標更新', ev.def ? `${ev.def.title}  ·  ${ev.def.jp}` : '');
+      hudCall('radio', ev.stage === 1 ? 'relays' : 'boss');
       game.audio.play('objective');
       pendingStage = ev.stage; pendingT = ev.stage === 2 ? 2.5 : 1.0;
-      if (ev.stage === 2) { game.hud.callout('WARNING: RIVAL RIG INBOUND', '警告：敵リグ接近', 'warn'); game.audio.play('alarm'); }
     } else if (ev.type === 'complete') {
-      api.result = logic.result(game.player ? game.player.apMax : 1);
+      api.result = finalResult();
       game.events.emit('mission:complete', { result: api.result });
-      game.hud.callout('MISSION COMPLETE', '作戦完了', 'good', 4);
+      hudCall('endCard', 'complete', '作戦完了');
+      hudCall('radio', 'complete');
       game.audio.play('mission_complete');
       endT = OUTRO_DELAY;
     } else if (ev.type === 'failed') {
-      api.result = logic.result(game.player ? game.player.apMax : 1);
+      api.result = finalResult();
       game.events.emit('mission:failed', { result: api.result });
-      game.hud.callout('MISSION FAILED', '作戦失敗', 'bad', 4);
+      hudCall('endCard', 'failed', ev.reason === 'timeout' ? '作戦失敗 — 時間切れ' : '作戦失敗 — 機体大破');
+      hudCall('radio', ev.reason === 'timeout' ? 'timeout' : 'failed');
       game.audio.play('mission_failed');
       endT = OUTRO_DELAY;
     }
+  }
+
+  function finalResult() {
+    const p = game.player;
+    const r = logic.result(p ? p.apMax : 1);
+    r.apRemaining = p ? Math.max(0, Math.ceil(p.ap)) : 0;
+    return r;
   }
 
   const api = {
@@ -100,11 +119,16 @@ export default function missionSystem(game) {
         if (e.target === g.player && e.result.damage > 0) logic.onDamageTaken(e.result.damage);
       });
       g.events.on('player:repair', () => logic.onRepairUsed());
+      g.events.on('weapon:fired', (e) => { if (e.owner === g.player) logic.onShot(e.weapon); });
+      g.events.on('actor:stagger', (e) => {
+        if (e.target && e.target.type === 'boss' && !beats.bossStagger && logic.active) { beats.bossStagger = true; hudCall('radio', 'boss_stagger'); }
+      });
     },
     reset() {
       logic.reset();
       api.result = null;
       endT = -1; pendingStage = -1;
+      for (const k in beats) beats[k] = false;
       spawnStage(0);
       game.events.emit('mission:stage', { stage: 0, def: logic.current });
     },
@@ -113,10 +137,20 @@ export default function missionSystem(game) {
       logic.stage = i; logic.progress = 0; logic.status = 'active';
       spawnStage(i);
       game.events.emit('mission:stage', { stage: i, def: logic.current });
+      // keep the radio consistent with the forced phase (the phase-1 intro never plays later)
+      beats.start = true;
+      if (i > 0) hudCall('radio', i === 1 ? 'relays' : 'boss');
     },
     update(dt) {
       if (game.state !== 'playing' && game.state !== 'results') return;
       handle(logic.tick(game.rawDt));
+      if (logic.active) {
+        const p = game.player;
+        if (!beats.start && logic.time > 0.8) { beats.start = true; if (logic.stage === 0) hudCall('radio', 'start'); }
+        if (!beats.lowAp && p && p.alive && p.ap < p.apMax * 0.3) { beats.lowAp = true; hudCall('radio', 'low_ap'); }
+        const boss = game.enemies && game.enemies.boss;
+        if (!beats.bossHalf && logic.stage === 2 && boss && boss.alive && boss.ap < boss.apMax * 0.5) { beats.bossHalf = true; hudCall('radio', 'boss_half'); }
+      }
       if (pendingStage >= 0) {
         pendingT -= game.rawDt;
         if (pendingT <= 0) { spawnStage(pendingStage); pendingStage = -1; }

@@ -129,3 +129,89 @@ test('air boost glides with a capped sink speed', () => {
   run(m, it, 120);
   if (MOVE.airGlideSink > 0) assert.ok(m.vel.y >= -MOVE.airGlideSink - 1e-6, `sink ${m.vel.y}`);
 });
+
+// --- movement designer: feel contracts (docs/AC6_BENCHMARK.md §3.4 a2) -----------------------
+test('QB is an instant velocity SET on the press step, then decays sharply after the jet', () => {
+  const { m, it } = setup();
+  run(m, it, 5);
+  assert.ok(m.speedH < 1e-6);
+  it.move.set(1, 0, 0); it.qb = true; run(m, it, 1);
+  assert.ok(Math.abs(m.speedH - MOVE.qbSpeed) < 1e-6, 'full burst speed in the first step');
+  it.move.set(0, 0, 0);
+  run(m, it, Math.round(MOVE.qbDuration * 60));
+  const x0 = m.pos.x;
+  run(m, it, 30); // 0.5 s after the jet: the rig has dug in and stopped
+  assert.ok(m.speedH < 2, `post-QB stop ${m.speedH.toFixed(2)} m/s`);
+  const total = m.pos.x;
+  assert.ok(total > 35 && total < 50, `standstill QB total travel ${total.toFixed(1)} m`);
+  assert.ok(m.pos.x - x0 < 12, 'short slide after the jet');
+});
+
+test('chained QBs from full EN: 6, then REDLINE refuses the 7th; +20% restore after 2 s', () => {
+  const { m, it } = setup();
+  it.move.set(1, 0, 0);
+  let n = 0;
+  for (let k = 0; k < 7; k++) { it.qb = true; run(m, it, 1); if (m.flags.qb || m.mode === 'qb') n++; run(m, it, 35); }
+  assert.equal(n, 6);
+  assert.equal(m.en.redline, true);
+  run(m, it, Math.round((MOVE.en.redlineDelay + 0.1) * 60));
+  assert.ok(m.en.value >= MOVE.en.redlineRestore, `restored ${m.en.value}`);
+  assert.equal(m.en.redline, false);
+});
+
+test('ground boost: 90% of top speed in ~0.35 s; a 180 deg reversal scrubs speed (no FPS flip)', () => {
+  const { m, it } = setup();
+  it.move.set(0, 0, 1);
+  let t90 = null;
+  for (let i = 1; i <= 60; i++) { run(m, it, 1); if (t90 === null && m.speedH >= 0.9 * MOVE.boostSpeed) t90 = i / 60; }
+  assert.ok(t90 > 0.25 && t90 < 0.42, `t90 ${t90}`);
+  run(m, it, 30);
+  it.move.set(0, 0, -1);
+  run(m, it, 6); // 0.1 s into the reversal: still moving forward
+  assert.ok(m.vel.z > 30, `reversal is not instant (vz ${m.vel.z.toFixed(1)})`);
+  assert.ok(m.skid > 0.3, 'hard reversal skids');
+});
+
+test('assault boost: wind-up brakes, then the launch SETS the speed in one step', () => {
+  const { m, it } = setup();
+  it.move.set(0, 0, 1); run(m, it, 60);
+  it.move.set(0, 0, 0); it.aimDir.set(0, 0, 1); it.aimYaw = 0;
+  it.abToggle = true; run(m, it, 1);
+  assert.equal(m.abCharging, true);
+  const steps = Math.round(MOVE.abIgnition * 60);
+  let launchAt = -1;
+  for (let i = 0; i < steps + 2; i++) { run(m, it, 1); if (m.flags.abLaunch) launchAt = i; if (launchAt < 0) assert.ok(m.speedH < MOVE.boostSpeed, 'no thrust during the wind-up'); }
+  assert.ok(launchAt >= steps - 2, `launch after the wind-up (${launchAt})`);
+  assert.ok(Math.abs(m.speedH - MOVE.abLaunchSpeed) < 3, `launch speed ${m.speedH}`);
+});
+
+test('hover release stops the climb quickly (no long ballistic coast)', () => {
+  const { m, it } = setup();
+  it.jumpPressed = true; it.jump = true; run(m, it, 1);
+  run(m, it, 40); // climbing
+  assert.ok(m.vel.y > 40, `climb ${m.vel.y}`);
+  it.jump = false;
+  const y0 = m.pos.y;
+  let apex = y0;
+  for (let i = 0; i < 120; i++) { run(m, it, 1); apex = Math.max(apex, m.pos.y); }
+  assert.ok(apex - y0 < 25, `coast after release ${(apex - y0).toFixed(1)} m`);
+});
+
+test('edge contacts never launch the rig upward', () => {
+  const { phys, m, it } = setup();
+  phys.addBox(new THREE.Vector3(0, 0.4, 20), new THREE.Vector3(10, 0.4, 0.5)); // a curb
+  it.move.set(0, 0, 1);
+  let maxVy = 0;
+  for (let i = 0; i < 90; i++) { run(m, it, 1); maxVy = Math.max(maxVy, m.vel.y); }
+  assert.ok(maxVy < 1, `vy after hitting the curb ${maxVy.toFixed(2)}`);
+});
+
+test('QB spam (requested every step): bursts exactly every qbCooldown (0.55 s = 33 steps)', () => {
+  const { m, it } = setup();
+  it.move.set(1, 0, 0);
+  const at = [];
+  for (let i = 0; i < 120; i++) { it.qb = true; m.step(DT, it); if (m.flags.qb) at.push(i); }
+  assert.ok(at.length >= 4, `bursts ${at.length}`);
+  const steps = Math.round(MOVE.qbCooldown / DT);
+  for (let k = 1; k < at.length; k++) assert.equal(at[k] - at[k - 1], steps, `interval ${at[k] - at[k - 1]} steps`);
+});

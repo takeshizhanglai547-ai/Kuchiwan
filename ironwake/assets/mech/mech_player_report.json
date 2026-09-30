@@ -1,0 +1,87 @@
+{
+ "tris": 89222,
+ "parts": 35,
+ "colliders": 0,
+ "decals": 13,
+ "texel_density_px_per_m": 96.1,
+ "res": 2048,
+ "timings_s": {
+  "model": 3.9,
+  "bake.total": 3.1,
+  "composite": 27.2,
+  "export.glb": 2.2,
+  "export.gltfpack": 0.2,
+  "export.fbx": 0.6,
+  "render.mech_player_hero.png": 356.5,
+  "render.mech_player_front.png": 256.4,
+  "render.mech_player_back.png": 210.8,
+  "render.mech_player_close.png": 216.4
+ },
+ "elapsed_s": 1106.9,
+ "glb_bytes": 2434656,
+ "glb_breakdown": {
+  "bytes": 2434656,
+  "images": {
+   "mech_player_B_f_normal": 99560,
+   "mech_player_B_f_orm": 108852,
+   "mech_player_B_f_basecolor": 225132,
+   "mech_player_B_f_emissive": 5640,
+   "mech_player_decals": 240326,
+   "mech_player_A_f_normal": 247480,
+   "mech_player_A_f_orm": 276192,
+   "mech_player_A_f_basecolor": 224416,
+   "mech_player_A_f_emissive": 1864
+  },
+  "image_bytes": 1429462,
+  "geometry_bytes": 1005194
+ },
+ "missing_nodes": [],
+ "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_mech_player.fbx",
+ "previews": [
+  "/home/user/Kuchiwan/ironwake/assets/mech/preview/mech_player_hero.png",
+  "/home/user/Kuchiwan/ironwake/assets/mech/preview/mech_player_front.png",
+  "/home/user/Kuchiwan/ironwake/assets/mech/preview/mech_player_back.png",
+  "/home/user/Kuchiwan/ironwake/assets/mech/preview/mech_player_close.png"
+ ],
+ "parts_tris": {
+  "pelvis_geo": 3671,
+  "torso_geo": 12357,
+  "head_geo": 3436,
+  "eye_geo": 428,
+  "booster_back_geo": 4768,
+  "booster_L_geo": 162,
+  "booster_R_geo": 162,
+  "weapon_R_geo": 3803,
+  "weapon_L_geo": 1676,
+  "shoulder_L_geo": 3678,
+  "shoulder_R_geo": 3703,
+  "thigh_L_geo": 4628,
+  "shin_L_geo": 3328,
+  "foot_L_geo": 2086,
+  "arm_L_geo": 5186,
+  "forearm_L_geo": 2601,
+  "hand_L_geo": 1466,
+  "thigh_R_geo": 4631,
+  "shin_R_geo": 3327,
+  "foot_R_geo": 2086,
+  "arm_R_geo": 5149,
+  "forearm_R_geo": 3340,
+  "hand_R_geo": 1466
+ },
+ "texture_sets": {
+  "A": {
+   "texel_px_per_m": 96.1,
+   "coverage": 0.585,
+   "overlap": 0.0001,
+   "tris": 48289
+  },
+  "B": {
+   "texel_px_per_m": 102.8,
+   "coverage": 0.631,
+   "overlap": 0.0001,
+   "tris": 40933
+  }
+ },
+ "cards": 44,
+ "total_s": 1107.0
+}

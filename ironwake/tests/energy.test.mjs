@@ -56,3 +56,13 @@ test('redline restore grants EN instantly after the lockout and unlocks', () => 
   run(g, 0.2);
   assert.ok(g.value >= 20, `restored ${g.value}`); assert.equal(g.redline, false);
 });
+
+test('movement tuning: regen delay 1.3 s, then ~130%/s refill (full bar < 1 s)', async () => {
+  const { MOVE } = await import('../src/player/tuning.js');
+  const g = new EnergyGauge(MOVE.en);
+  g.spend(90);
+  run(g, 1.25);
+  assert.equal(g.value, 10, 'no regen inside the 1.3 s delay');
+  run(g, 0.1 + 0.75);
+  assert.equal(g.value, 100, `refilled ${g.value}`);
+});

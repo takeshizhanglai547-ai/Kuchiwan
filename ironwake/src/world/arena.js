@@ -1,6 +1,8 @@
 // src/world/arena.js — the stage geometry + static colliders (owner: arena artist).
 //
-// Loads manifest id 'arena' (GLB) if present, otherwise builds the PLACEHOLDER yard below.
+// HALVARD DEEP FOUNDRY — PIER 7. Loads manifest id 'arena' (GLB built by
+// blender/arena/build_arena.py) plus the tex_arena_* tiling sets; falls back to the
+// procedural placeholder yard (placeholder.js) when the GLB is missing.
 //
 // GLB CONVENTIONS (Blender -> glTF, +Y up, meters; Blender object names become node names):
 //   COL_<anything>     invisible box collider. Mesh: its local bounding box transformed by the
@@ -15,72 +17,102 @@
 //   OBJ_relay_<n>      relay generator (stage 2 objective) positions
 //   Any visible mesh with custom property  iw_collider = 1  ALSO becomes a box collider
 //   (visible). Custom property iw_noshadow = 1 disables shadow casting for that mesh.
-//   Meshes cast + receive shadows by default.
+//   Materials are named M_<base> and re-created at runtime (src/world/materials.js); the
+//   per-vertex COLOR_0 carries tint + a per-variant parameter. The GLB is baked into a few
+//   merged meshes per (material, 128 m cell) by merge.js.
 //
 // API (game.arena):
 //   root           THREE.Group added to the scene
 //   spawns         { player:{pos,yaw}, mt:[...], drone:[...], boss:[...candidates], relay:[...] }
 //   bounds         { minX, maxX, minZ, maxZ, maxY } (also pushed into physics)
 //   source         'asset' | 'placeholder'
+//   stats          { meshes, triangles } of the baked arena
+//   ash            ambient ash/ember flakes { mesh, uniforms } (hide: game.arena.ash.mesh.visible = false)
+//   water          the sea (src/world/water.js): Gerstner swell, Fresnel sky reflection, shore foam
+//                  from FX_shore_* empties (extras hx, hz, yaw, r, k = oriented box half extents)
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { concreteTexture, hazardTexture, metalTexture } from '../render/proctex.js';
+import { createArenaMaterials } from './materials.js';
+import { bucketize } from './merge.js';
+import { createAsh, createLightPools, createPlumes } from './fxworld.js';
+import { buildPlaceholder } from './placeholder.js';
+import { createWater } from './water.js';
 
 const HALF = 250;           // arena half size (500 m square)
-const WALL_H = 45;
 
 function spawn(x, y, z, yaw = 0) { return { pos: new THREE.Vector3(x, y, z), yaw }; }
 
-/** Scale BoxGeometry UVs so textures tile in world units (texel density ~ 1 repeat / texScale m). */
-function worldUVBox(geo, sx, sy, sz, texScale) {
-  const uv = geo.attributes.uv;
-  // BoxGeometry face order: +x, -x, +y, -y, +z, -z (4 verts each)
-  const dims = [[sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy]];
-  for (let f = 0; f < 6; f++) {
-    for (let v = 0; v < 4; v++) {
-      const i = f * 4 + v;
-      uv.setXY(i, uv.getX(i) * dims[f][0] / texScale, uv.getY(i) * dims[f][1] / texScale);
-    }
-  }
-  return geo;
-}
-
-function paint(geo, color) {
-  const n = geo.attributes.position.count;
-  const arr = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { arr[i * 3] = color.r; arr[i * 3 + 1] = color.g; arr[i * 3 + 2] = color.b; }
-  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  return geo;
-}
+// Texture sets of the arena (manifest ids tex_arena_<set>_<map>, see blender/arena/textures.py).
+const SETS = ['concrete', 'slab', 'ash', 'steel', 'corr', 'trim'];
+const SINGLES = ['detail', 'noise', 'decal', 'splat', 'water'];
+const SEA_LEVEL = -14;      // blender/arena/build_arena.py SEA
+const NO_SHADOW = new Set(['ground', 'sea', 'decal', 'far', 'glow', 'slag']);
+const NO_RECEIVE = new Set(['glow', 'far']);
 
 export default function arenaSystem(game) {
+  let mats = null, plumes = null, pools = null, ash = null, water = null;
   const api = {
     name: 'arena',
     order: 30,
     root: null,
     source: 'placeholder',
     spawns: null,
+    stats: { meshes: 0, triangles: 0 },
     bounds: { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, maxY: 160 },
     async init(g) {
       api.root = new THREE.Group();
       api.root.name = 'arena';
       g.scene.add(api.root);
-      const res = await g.assets.instantiate('arena', null);
-      if (res.source === 'asset') {
+      const gltf = await g.assets.gltf('arena');
+      if (gltf && gltf.scene) {
         api.source = 'asset';
-        processGLB(g, res.object);
+        const textures = await loadTextures(g);
+        mats = createArenaMaterials(textures);
+        processGLB(g, gltf.scene, textures);
       } else {
-        buildPlaceholder(g);
+        api.spawns = defaultSpawns();
+        buildPlaceholder(g, api);
       }
       g.physics.setBounds(api.bounds);
       g.arena = api;
     },
+    frame() {
+      if (mats) mats.uniforms.uTime.value = game.time;
+      if (plumes) plumes.uniforms.uTime.value = game.time;
+      if (pools) pools.uniforms.uTime.value = game.time;
+      if (ash) ash.uniforms.uTime.value = game.time;
+      if (water) water.uniforms.uTime.value = game.time;
+    },
     dispose() {
-      api.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.userData.shared) o.material.dispose(); });
+      api.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.userData.shared && !o.material.userData.iwArena) o.material.dispose(); });
+      if (mats) mats.dispose();
+      if (plumes) plumes.dispose();
+      if (pools) pools.dispose();
+      if (ash) ash.dispose();
+      if (water) water.dispose();
       game.scene.remove(api.root);
       game.physics.clearStatic();
     },
   };
+
+  async function loadTextures(g) {
+    const T = {};
+    const jobs = [];
+    for (const s of SETS) {
+      T[s] = {};
+      for (const k of ['a', 'n', 'd']) {
+        jobs.push(g.assets.texture(`tex_arena_${s}_${k}`, { linear: k !== 'a' }).then((t) => { T[s][k] = t; }));
+      }
+    }
+    for (const s of SINGLES) jobs.push(g.assets.texture(`tex_arena_${s}`, { linear: true }).then((t) => { T[s] = t; }));
+    await Promise.all(jobs);
+    if (T.splat) { T.splat.wrapS = T.splat.wrapT = THREE.ClampToEdgeWrapping; T.splat.needsUpdate = true; }
+    if (T.decal) { T.decal.wrapS = T.decal.wrapT = THREE.ClampToEdgeWrapping; T.decal.needsUpdate = true; }
+    // UV-mapped atlases: glTF UVs are top-left based (v_gltf = 1 - v_blender) -> no flipY.
+    for (const t of [T.decal, T.trim && T.trim.a, T.trim && T.trim.n, T.trim && T.trim.d]) {
+      if (t) { t.flipY = false; t.needsUpdate = true; }
+    }
+    return T;
+  }
 
   function defaultSpawns() {
     return {
@@ -93,17 +125,26 @@ export default function arenaSystem(game) {
   }
 
   // ---------------------------------------------------------------- GLB path
-  function processGLB(g, scene) {
+  function processGLB(g, scene, textures) {
     const spawns = defaultSpawns();
     const found = { mt: [], drone: [], relay: [], boss: [] };
-    const toRemove = [];
     const q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3();
+    const hidden = [];
+    const smoke = [], lights = [], shores = [];
     scene.updateMatrixWorld(true);
     scene.traverse((o) => {
       const name = o.name || '';
       if (name.startsWith('COL_')) {
-        g.physics.addFromObject(o, name);
-        toRemove.push(o);
+        g.physics.addFromObject(o, 'arena');
+        if (o.isMesh) hidden.push(o);
+        return;
+      }
+      if (name.startsWith('FX_')) {
+        o.getWorldPosition(p);
+        const u = o.userData || {};
+        if (name.startsWith('FX_smoke')) smoke.push({ pos: p.clone(), r: u.r || 3, h: u.h || 120, kind: u.kind || 0 });
+        else if (name.startsWith('FX_light')) lights.push({ pos: p.clone(), r: u.r || 12, color: u.c || [1, 0.6, 0.25], i: u.i ?? 0.3 });
+        else if (name.startsWith('FX_shore')) shores.push({ x: p.x, z: p.z, hx: u.hx || 5, hz: u.hz || 5, yaw: u.yaw || 0, r: u.r || 0, k: u.k || 1 });
         return;
       }
       if (name.startsWith('SPAWN_') || name.startsWith('OBJ_')) {
@@ -115,190 +156,50 @@ export default function arenaSystem(game) {
         else if (found[key]) found[key].push({ name, sp });
         return;
       }
-      if (o.isMesh) {
-        o.castShadow = !o.userData.iw_noshadow;
-        o.receiveShadow = true;
-        if (o.userData.iw_collider) g.physics.addFromObject(o, name);
-      }
+      if (o.isMesh && o.userData.iw_collider) g.physics.addFromObject(o, 'arena');
     });
-    for (const o of toRemove) o.parent && o.parent.remove(o);
     for (const k in found) {
-      if (found[k].length) spawns[k] = found[k].sort((a, b) => a.name.localeCompare(b.name)).map((f) => f.sp);
+      if (found[k].length) spawns[k] = found[k].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })).map((f) => f.sp);
     }
     api.spawns = spawns;
-    api.root.add(scene);
-  }
-
-  // ---------------------------------------------------------------- placeholder
-  function buildPlaceholder(g) {
-    api.spawns = defaultSpawns();
-    const groups = new Map(); // matKey -> geometries[]
-    const add = (key, geo) => { if (!groups.has(key)) groups.set(key, []); groups.get(key).push(geo); };
-    const col = (cx, cy, cz, hx, hy, hz, rotY = 0) => {
-      const quat = rotY ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY) : null;
-      g.physics.addBox(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(hx, hy, hz), quat, 'arena');
-    };
-    /** Box with its BOTTOM at y. */
-    const box = (key, x, y, z, sx, sy, sz, { color = null, rotY = 0, collide = true, tex = 8 } = {}) => {
-      const geo = worldUVBox(new THREE.BoxGeometry(sx, sy, sz), sx, sy, sz, tex);
-      if (color) paint(geo, color);
-      if (rotY) geo.rotateY(rotY);
-      geo.translate(x, y + sy / 2, z);
-      add(key, geo);
-      if (collide) col(x, y + sy / 2, z, sx / 2, sy / 2, sz / 2, rotY);
-    };
-    const cyl = (key, x, y, z, r, h, { collide = true, segs = 24, color = null } = {}) => {
-      const geo = new THREE.CylinderGeometry(r, r, h, segs, 1);
-      const uv = geo.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (Math.PI * 2 * r) / 8, uv.getY(i) * h / 8);
-      if (color) paint(geo, color);
-      geo.translate(x, y + h / 2, z);
-      add(key, geo);
-      if (collide) col(x, y + h / 2, z, r * 0.92, h / 2, r * 0.92);
-    };
-
-    // Ground
-    const ground = new THREE.PlaneGeometry(HALF * 2 + 120, HALF * 2 + 120, 1, 1);
-    ground.rotateX(-Math.PI / 2);
-    const guv = ground.attributes.uv;
-    for (let i = 0; i < guv.count; i++) guv.setXY(i, guv.getX(i) * (HALF * 2 + 120) / 16, guv.getY(i) * (HALF * 2 + 120) / 16);
-    add('ground', ground);
-
-    // Boundary walls + buttresses
-    const T = 8;
-    box('wall', 0, 0, HALF + T / 2, HALF * 2 + T * 2, WALL_H, T);
-    box('wall', 0, 0, -HALF - T / 2, HALF * 2 + T * 2, WALL_H, T);
-    box('wall', HALF + T / 2, 0, 0, T, WALL_H, HALF * 2);
-    box('wall', -HALF - T / 2, 0, 0, T, WALL_H, HALF * 2);
-    for (let i = -4; i <= 4; i++) {
-      const p = i * 55;
-      box('steel', p, 0, HALF - 3, 6, WALL_H + 6, 6, { collide: false });
-      box('steel', p, 0, -HALF + 3, 6, WALL_H + 6, 6, { collide: false });
-      box('steel', HALF - 3, 0, p, 6, WALL_H + 6, 6, { collide: false });
-      box('steel', -HALF + 3, 0, p, 6, WALL_H + 6, 6, { collide: false });
-    }
-    // Hazard band along the wall base
-    box('hazard', 0, 0, HALF - 0.3, HALF * 2, 3, 0.6, { collide: false, tex: 3 });
-    box('hazard', 0, 0, -HALF + 0.3, HALF * 2, 3, 0.6, { collide: false, tex: 3 });
-
-    // Player launch pad
-    box('steel', 0, 0, -205, 34, 0.6, 34, { tex: 6 });
-    box('hazard', 0, 0.6, -222, 34, 0.1, 2, { collide: false, tex: 2 });
-    box('hazard', 0, 0.6, -188, 34, 0.1, 2, { collide: false, tex: 2 });
-
-    // Container stacks (stage 1 cover)
-    const cc = [new THREE.Color(0.55, 0.28, 0.14), new THREE.Color(0.18, 0.3, 0.32), new THREE.Color(0.32, 0.33, 0.36), new THREE.Color(0.45, 0.4, 0.22)];
-    const stacks = [[-42, -62, 0.1], [36, -42, -0.25], [-8, -22, 0.4], [62, -92, 0], [-78, -104, -0.1], [95, -15, 0.2], [-110, -40, 0.05], [120, -80, -0.3]];
-    stacks.forEach(([x, z, r], i) => {
-      const levels = 1 + (i % 3);
-      for (let l = 0; l < levels; l++) {
-        box('painted', x, l * 6.2, z, 14, 6.2, 6.4, { color: cc[(i + l) % cc.length], rotY: r + l * 0.05 });
-      }
-      box('painted', x + Math.cos(r) * 2, 0, z + 8 + Math.sin(r) * 2, 14, 6.2, 6.4, { color: cc[(i + 2) % cc.length], rotY: r });
+    // Bake the visible meshes into merged buckets (the GLB template itself is never added).
+    for (const o of hidden) o.visible = false;
+    const buckets = bucketize(scene, {
+      cell: 160, farR: 300, big: 200, minTris: 4000,
+      matName: (m) => (m && m.name ? m.name : 'M_steel'),
+      skip: (o) => !o.visible,
+      single: new Set(['M_ground', 'M_sea', 'M_far']),
     });
-
-    // Central refinery block + chimney + roof hardware
-    box('concrete', 0, 0, 55, 64, 26, 40, { tex: 10 });
-    box('steel', 0, 26, 55, 50, 4, 30);
-    box('rust', 22, 0, 55, 10, 82, 10, { tex: 6 });
-    box('hazard', 22, 78, 55, 10.4, 2, 10.4, { collide: false, tex: 2 });
-    box('rust', -18, 30, 50, 8, 10, 8);
-
-    // Storage tanks
-    const tank = new THREE.Color(0.52, 0.5, 0.46);
-    for (const [x, z] of [[-122, 18], [-152, 52], [132, 8], [158, 46]]) {
-      cyl('painted', x, 0, z, 12, 26, { color: tank });
-      cyl('rust', x, 26, z, 12.4, 1.5, { collide: false });
-      box('steel', x, 0, z - 13, 3, 30, 1, { collide: false });
-    }
-
-    // Warehouses
-    box('wall', -165, 0, -125, 62, 22, 42, { tex: 10 });
-    box('rust', -165, 22, -125, 64, 3, 44);
-    box('wall', 172, 0, -140, 50, 24, 50, { tex: 10 });
-    box('rust', 172, 24, -140, 52, 3, 52);
-
-    // Elevated bridge with supports (walkable deck at y=20..23)
-    box('steel', 0, 20, 150, 210, 3, 14, { tex: 6 });
-    for (let x = -100; x <= 100; x += 50) box('rust', x, 0, 150, 4, 20, 4);
-    box('hazard', 0, 23, 143.2, 210, 1.2, 0.4, { collide: false, tex: 2 });
-    box('hazard', 0, 23, 156.8, 210, 1.2, 0.4, { collide: false, tex: 2 });
-
-    // Ramp (rotated OBB) up to a platform
-    {
-      const len = 44, rise = 12, ang = Math.atan2(rise, len);
-      const hyp = Math.hypot(len, rise);
-      const geo = worldUVBox(new THREE.BoxGeometry(14, 2, hyp), 14, 2, hyp, 6);
-      geo.rotateX(-ang);
-      geo.translate(-95, rise / 2, 95);
-      add('steel', geo);
-      const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang);
-      g.physics.addBox(new THREE.Vector3(-95, rise / 2, 95), new THREE.Vector3(7, 1, hyp / 2), quat, 'ramp');
-      box('concrete', -95, 0, 95 + len / 2 + 12, 30, rise + 1, 24, { tex: 8 });
-    }
-
-    // Lattice towers (solid placeholder)
-    for (const [x, z] of [[-205, 205], [205, 205], [-210, -30], [212, -20]]) {
-      box('steel', x, 0, z, 9, 58, 9, { tex: 6 });
-      box('hazard', x, 58, z, 10, 2, 10, { collide: false, tex: 2 });
-    }
-
-    // Crane gantry over the east yard
-    box('rust', 70, 0, 205, 5, 34, 5);
-    box('rust', 70, 0, 235, 5, 34, 5);
-    box('rust', 130, 0, 205, 5, 34, 5);
-    box('rust', 130, 0, 235, 5, 34, 5);
-    box('hazard', 100, 34, 205, 66, 4, 5, { tex: 3 });
-    box('hazard', 100, 34, 235, 66, 4, 5, { tex: 3 });
-
-    // Pipe racks (visual) with low colliders
-    for (let i = 0; i < 6; i++) {
-      const z = -150 + i * 22;
-      box('rust', -215, 0, z, 3, 10, 3);
-      box('rust', -195, 0, z, 3, 10, 3);
-    }
-    {
-      const geo = new THREE.CylinderGeometry(1.4, 1.4, 120, 12);
-      geo.rotateX(Math.PI / 2); geo.translate(-205, 11.4, -95);
-      add('steel', geo);
-      const geo2 = new THREE.CylinderGeometry(1.0, 1.0, 120, 12);
-      geo2.rotateX(Math.PI / 2); geo2.translate(-201, 11.0, -95);
-      add('rust', geo2);
-      col(-205, 11.2, -95, 5, 1.6, 60);
-    }
-
-    // Scatter: barriers & debris
-    for (let i = 0; i < 18; i++) {
-      const a = i * 2.39996, r = 60 + (i * 37) % 150;
-      const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.9 - 30;
-      if (Math.abs(x) < 40 && z > 30 && z < 80) continue;      // refinery
-      if (Math.abs(x) < 25 && z < -180) continue;               // launch pad
-      box('concrete', x, 0, z, 8, 2.6, 2.2, { rotY: a, tex: 4 });
-    }
-
-    // Materials
-    const concrete = concreteTexture();
-    const mats = {
-      ground: new THREE.MeshStandardMaterial({ map: concrete, color: 0xa39f97, roughness: 0.94, metalness: 0.0 }),
-      concrete: new THREE.MeshStandardMaterial({ map: concrete, color: 0xb2ada4, roughness: 0.92 }),
-      wall: new THREE.MeshStandardMaterial({ map: concrete, color: 0x8a8680, roughness: 0.95 }),
-      steel: new THREE.MeshStandardMaterial({ map: metalTexture('#4b4f53', 512, 11), roughness: 0.62, metalness: 0.75 }),
-      rust: new THREE.MeshStandardMaterial({ map: metalTexture('#6b4a37', 512, 12), roughness: 0.82, metalness: 0.45 }),
-      painted: new THREE.MeshStandardMaterial({ map: metalTexture('#b9b6b0', 512, 13), vertexColors: true, roughness: 0.7, metalness: 0.4 }),
-      hazard: new THREE.MeshStandardMaterial({ map: hazardTexture(), roughness: 0.7, metalness: 0.2 }),
-    };
-    for (const [key, geos] of groups) {
-      // Only merge geometries with identical attribute sets (painted ones carry 'color').
-      const merged = mergeGeometries(geos, false);
-      for (const gg of geos) gg.dispose();
-      const mesh = new THREE.Mesh(merged, mats[key]);
+    let tris = 0;
+    for (const [key, b] of buckets) {
+      const base = b.mat.replace(/^M_/, '');
+      const mat = mats.byName[b.mat] || mats.byName.M_steel;
+      const mesh = new THREE.Mesh(b.geometry, mat);
       mesh.name = 'arena_' + key;
-      mesh.castShadow = key !== 'ground';
-      mesh.receiveShadow = true;
+      mesh.castShadow = !b.far && !NO_SHADOW.has(base);
+      mesh.receiveShadow = !NO_RECEIVE.has(base);
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
+      if (base === 'decal') mesh.renderOrder = 2;
       api.root.add(mesh);
+      tris += b.tris;
     }
+    if (smoke.length) {
+      plumes = createPlumes(smoke, textures.noise, g.env && g.env.sunDir);
+      api.root.add(plumes.mesh);
+    }
+    if (lights.length) {
+      pools = createLightPools(lights);
+      api.root.add(pools.mesh);
+    }
+    water = createWater({ level: SEA_LEVEL, tex: textures.water, envMap: g.scene.environment, shores });
+    api.root.add(water.mesh);
+    api.water = water;
+    ash = createAsh(g.params.quality === 'low' ? 900 : 2600);
+    api.ash = ash;
+    api.root.add(ash.mesh);
+    api.stats.meshes = buckets.size;
+    api.stats.triangles = tris;
   }
 
   return api;

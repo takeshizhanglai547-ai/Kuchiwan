@@ -1,0 +1,46 @@
+{
+ "tris": 10400,
+ "parts": 4,
+ "colliders": 0,
+ "decals": 8,
+ "texel_density_px_per_m": 110.7,
+ "res": 768,
+ "timings_s": {
+  "model": 0.5,
+  "bake.albedo": 1.2,
+  "bake.matid": 0.6,
+  "bake.noise": 1.0,
+  "bake.wnormal": 1.1,
+  "bake.wpos": 1.0,
+  "bake.masks": 3.5,
+  "bake.ao": 2.4,
+  "bake.normal": 2.2,
+  "bake.total": 14.2,
+  "composite": 2.0,
+  "export.glb": 0.2,
+  "export.gltfpack": 0.1,
+  "export.fbx": 0.1,
+  "render.enemy_drone_hero.png": 50.3,
+  "render.enemy_drone_front.png": 90.5,
+  "render.enemy_drone_top.png": 97.2,
+  "render.enemy_drone_close.png": 93.2
+ },
+ "elapsed_s": 358.6,
+ "glb_bytes": 359964,
+ "missing_nodes": [],
+ "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_drone.fbx",
+ "previews": [
+  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_drone_hero.png",
+  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_drone_front.png",
+  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_drone_top.png",
+  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_drone_close.png"
+ ],
+ "parts_tris": {
+  "body_geo": 8748,
+  "eye_geo": 368,
+  "rotor_geo": 642,
+  "rotor_1_geo": 642
+ },
+ "uv_coverage": 0.376,
+ "total_s": 358.7
+}
