@@ -8,6 +8,7 @@ from mathutils import Matrix, Vector
 
 from akit import P, Geo, TAU
 from pieces import V, beacon, beam, bx, bxz, cheap_ladder, flood, merge, rail_line, tube, xbrace
+from megakit import side_decal, wall_decal
 
 
 def _noise(seed):
@@ -17,84 +18,208 @@ def _noise(seed):
 
 
 # ============================================================================ BRUTALIST BLOCK
-def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard=True, roof=True, band_h=2.6,
+def _facade(g, r, w, off, h, cv, k, floors, fh, z0f, pil, band_h, lit_cols, doors_here, rv=0.35,
+            windows=True, top=None, win_every=1):
+    """One board-formed concrete facade (authored along X, facing -Y at y=-off, then rotated to
+    face k): recessed window bands with 0.35 m reveals between full-height pilasters, precast
+    sills + head bands (spandrels), steel mullions, clustered lit panes, sill drip streaks,
+    rust runs from the coping, base soot/splash band. Doors are cut out of the ground floor."""
+    f = Geo()
+    top = h if top is None else top
+    n = max(1, int(round(w / pil)))
+    bay = w / n
+    xs = [-w / 2 + i * bay for i in range(n + 1)]
+    yf = -off                       # facade line (spandrels, pilasters)
+    yc = -off + rv                  # recessed core face (glazing)
+    for x in xs:                    # pilasters, projecting 0.45 m beyond the facade line
+        f.merge(bxz(1.1, rv + 0.45, top - 0.2, x, yf + (rv - 0.45) / 2, 0.0, mat=cv, bev=0.06))
+    zcov = z0f
+    for fl in range(floors):
+        zf = z0f + fl * fh
+        zs, zh = zf + 1.0, zf + 1.0 + band_h          # sill / head of the window band
+        if zh > top - 1.0:
+            break
+        door_floor = fl == 0 and doors_here
+        glazed = windows and (fl % win_every == win_every - 1 or fl == floors - 1)
+        if not glazed and not door_floor:
+            # blank machine / bin floor: full-height spandrel, rust + water runs from the joint
+            f.merge(bxz(w, rv, fh, 0, yf + rv / 2, zf, mat=cv))
+            zcov = zf + fh
+            for i in range(n):
+                if r.random() < 0.35:
+                    x0 = xs[i] + r.uniform(0.6, bay * 0.6)
+                    f.merge(wall_decal(x0, x0 + r.uniform(0.8, 1.6), yf - 0.02, zf + fh - r.uniform(1.5, 3.5), zf + fh - 0.1, 'streak', 'stain'))
+            continue
+        if windows and not door_floor:
+            # glazing strip on the recessed core face + mullions every ~2.3 m
+            f.merge(bxz(w - 0.2, 0.1, band_h, 0, yc - 0.05, zs, mat='trim:window'))
+            for i in range(n):
+                xa = xs[i] + 0.55
+                nm = max(1, int((bay - 1.1) / 2.3))
+                for m in range(1, nm):
+                    f.merge(bxz(0.14, 0.22, band_h, xa + m * (bay - 1.1) / nm, yc - 0.16, zs, mat='steel:dark'))
+                # lit panes: vertical clusters (a few bays light up on consecutive floors)
+                if i in lit_cols and r.random() < 0.7:
+                    lw = r.choice((1.2, 2.3, 2.3, 3.4))
+                    lx = xa + r.uniform(0.2, max(0.25, bay - 1.1 - lw - 0.2)) + lw / 2
+                    f.merge(bxz(lw, 0.12, band_h * 0.92, lx, yc - 0.12, zs + band_h * 0.04, mat='trim:window_lit'))
+                # drip streak from the sill (water + soot), every bay, random length
+                if r.random() < 0.85:
+                    x0 = xs[i] + 0.6 + r.uniform(0.0, bay * 0.5)
+                    L = r.uniform(1.4, min(3.6, zs - zf + 1.5))
+                    f.merge(wall_decal(x0, x0 + r.uniform(0.9, 1.8), yf - 0.02, zs - L, zs - 0.16, 'streak', r.choice(['stain', 'stain', 'rust'])))
+        # spandrels: sill band (floor .. sill) and head band (head .. next floor), flush with the facade
+        f.merge(bxz(w, rv, (zh if door_floor else zs) - zf, 0, yf + rv / 2, zf, mat=cv))
+        hb = (zf + fh) - zh if fl < floors - 1 else max(0.4, top - zh)
+        f.merge(bxz(w, rv, hb, 0, yf + rv / 2, zh, mat=cv))
+        zcov = zh + hb
+        # precast sill (projecting drip edge) + thin head reveal
+        if windows and not door_floor:
+            f.merge(bxz(w + 0.2, 0.42, 0.16, 0, yf - 0.12, zs - 0.16, mat='concrete:grey', bev=0.03))
+    if zcov < top - 0.05:
+        f.merge(bxz(w, rv, top - zcov, 0, yf + rv / 2, zcov, mat=cv))
+    # base: soot / splash curtain + rust runs from the coping, 20-40 % of the facade
+    for i in range(n):
+        if r.random() < 0.55:
+            x0 = xs[i] + r.uniform(0.6, bay * 0.6)
+            L = top * r.uniform(0.18, 0.45)
+            f.merge(wall_decal(x0, x0 + r.uniform(1.6, 3.2), yf - 0.03, top - L, top - 0.1, r.choice(['curtain', 'streak']),
+                               r.choice(['soot', 'stain', 'rust'])))
+    f.merge(wall_decal(-w / 2 + 0.6, w / 2 - 0.6, yf - 0.025, 1.4, 1.4 + min(2.4, top * 0.25), 'curtain', 'soot'))
+    f.transform(Matrix.Rotation(k * math.pi / 2, 4, 'Z'))
+    g.merge(f)
+
+
+def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard=True, roof=True, band_h=2.0,
                stair=False, core=True, pipes=True, cant=False):
-    """Board-formed concrete block: plinth, projecting pilasters, recessed window band,
-    heavy cornice, roller doors, downpipes, hazard base band and roof clutter."""
+    """Board-formed concrete block: plinth, full-height pilasters, recessed window bands with
+    reveals, mullions and clustered lit panes, precast sills, parapet + coping, downpipes every
+    ~6 m, roof plant (vent boxes, ducts, AC skid, hatch, mast), caged roof ladder, stair core,
+    roller doors, hazard base band, sill / coping streaks."""
     r = _noise(seed)
     g = Geo()
     cv = 'concrete' + (':' + var if var else '')
-    g.merge(bxz(sx + 1.0, sy + 1.0, 1.4, mat='concrete:dark', bev=0.1))
-    g.merge(bxz(sx, sy, h, z0=0.0, mat=cv, bev=0.12))
-    g.merge(bxz(sx + 1.4, sy + 1.4, 1.6, z0=h - 0.4, mat='concrete:grey', bev=0.1))
-    # pilasters on all 4 faces
-    for (L, axis) in ((sx, 'x'), (sy, 'y')):
-        n = max(1, int(L / pil))
-        for i in range(n + 1):
-            t = -L / 2 + i * L / n
-            for s in (-1, 1):
-                if axis == 'x':
-                    g.merge(bxz(1.3, 0.8, h - 1.0, t, s * (sy / 2 + 0.35), 0.0, mat=cv, bev=0.08))
-                else:
-                    g.merge(bxz(0.8, 1.3, h - 1.0, s * (sx / 2 + 0.35), t, 0.0, mat=cv, bev=0.08))
-    # window band (trim) between pilasters on the +/-Y faces
-    if windows and h > 9 and not (cant and h > 12):
-        zw = h - 2.2 - band_h
-        for s in (-1, 1):
-            g.merge(bxz(sx - 0.4, 0.12, band_h, 0, s * (sy / 2 + 0.02), zw, mat='trim:window'))
-            # a few lit bays (night shift): emissive panes of the same window trim
-            for k in range(int(sx / 7)):
-                if r.random() < 0.3:
-                    x = -sx / 2 + 3.5 + k * 7.0
-                    g.merge(bxz(5.0, 0.13, band_h, x, s * (sy / 2 + 0.025), zw, mat='trim:window_lit'))
-            g.merge(bxz(sx + 0.2, 0.9, 0.35, 0, s * (sy / 2 + 0.3), zw - 0.35, mat='concrete:grey'))
-        if sx > 20:
-            for s in (-1, 1):
-                g.merge(bxz(0.12, sy - 0.4, band_h * 0.8, s * (sx / 2 + 0.02), 0, zw, mat='trim:window'))
+    rv = 0.35
+    fh = 4.5
+    z0f = 1.4
+    floors = max(1, int((h - z0f - 0.6) / fh))
+    hc = h if not (cant and h > 12) else h * 0.6        # main volume top (below a cantilevered storey)
+    g.merge(bxz(sx + 1.0, sy + 1.0, 1.4, mat='concrete:dark', bev=0.1))            # plinth
+    g.merge(bxz(sx - 2 * rv, sy - 2 * rv, hc, z0=0.0, mat=cv))                     # recessed core
+    # facades (front -Y carries the doors)
+    nfl = floors if hc == h else max(1, int((hc - z0f) / fh))
+    for k, (w, off) in enumerate(((sx, sy / 2), (sy, sx / 2), (sx, sy / 2), (sy, sx / 2))):
+        n = max(1, int(round(w / pil)))
+        lit = set(r.sample(range(n), min(n, r.choice((1, 2, 2, 3)))))
+        _facade(g, r, w, off, hc, cv, k, nfl, fh, z0f, pil, band_h, lit, doors_here=(k == 0 and doors > 0),
+                rv=rv, windows=windows and h > 6, top=hc, win_every=1 if h <= 26 else 3)
+    # parapet upstand + coping (0.6 m, overhanging 0.3 m) on the main volume
+    if not (cant and h > 12):
+        for (w, d, x, y) in ((sx + 0.9, 0.5, 0, -sy / 2 - 0.2), (sx + 0.9, 0.5, 0, sy / 2 + 0.2), (0.5, sy, -sx / 2 - 0.2, 0), (0.5, sy, sx / 2 + 0.2, 0)):
+            g.merge(bxz(w, d, 0.9, x, y, h, mat=cv))
+        g.merge(bxz(sx + 1.6, 0.9, 0.35, 0, -sy / 2 - 0.15, h + 0.9, mat='concrete:grey', bev=0.05))
+        g.merge(bxz(sx + 1.6, 0.9, 0.35, 0, sy / 2 + 0.15, h + 0.9, mat='concrete:grey', bev=0.05))
+        g.merge(bxz(0.9, sy + 0.2, 0.35, -sx / 2 - 0.15, 0, h + 0.9, mat='concrete:grey', bev=0.05))
+        g.merge(bxz(0.9, sy + 0.2, 0.35, sx / 2 + 0.15, 0, h + 0.9, mat='concrete:grey', bev=0.05))
+        g.merge(bxz(sx - 1.0, sy - 1.0, 0.25, 0, 0, h, mat='concrete:soot'))       # roof membrane
+    zr = h if not (cant and h > 12) else h
     # hazard band at the base
     if hazard:
         for s in (-1, 1):
             g.merge(bxz(sx + 0.05, 0.06, 1.3, 0, s * (sy / 2 + 0.03), 1.4, mat='trim:hazard'))
-    # roller doors
+    # roller doors (front)
     for k in range(doors):
         dx = (k - (doors - 1) / 2) * min(14.0, sx / max(doors, 1))
-        dw, dh = min(8.0, sx / (doors + 1)), min(9.0, h * 0.55)
+        dw, dh = min(8.0, sx / (doors + 1)), min(9.0, h * 0.55, fh * 2 - 0.6)
         g.merge(bxz(dw + 1.2, 0.5, dh + 0.9, dx, -sy / 2 - 0.2, 0.0, mat='steel:dark'))
         g.merge(bxz(dw, 0.3, dh, dx, -sy / 2 - 0.3, 0.0, mat='corr:' + r.choice(['grey', 'oxide', 'blue'])))
         g.merge(bxz(dw + 1.6, 1.4, 0.5, dx, -sy / 2 - 0.8, dh + 0.9, mat='concrete:grey'))
         g.merge(flood(dx, -sy / 2 - 1.2, dh + 2.4, 0.0, 'sodium'))
-    # downpipes
+        for sxx in (-1, 1):
+            g.merge(bxz(0.45, 0.08, dh, dx + sxx * (dw / 2 + 0.35), -sy / 2 - 0.47, 0.0, mat='trim:hazard'))
+        g.merge(bxz(dw + 0.4, 0.05, 0.03, dx, -sy / 2 - 0.47, 0.02, mat='steel:yellow'))
+    # downpipes every ~6 m on the long faces (hopper head under the coping, shoe at the base)
     for s in (-1, 1):
-        x = s * (sx / 2 - 2.0)
-        g.merge(tube((x, -sy / 2 - 0.35, 0.3), (x, -sy / 2 - 0.35, h - 0.2), 0.18, 'steel:dark', 8))
-    # roof clutter
+        n = max(2, int(sx / 6.0))
+        for i in range(n):
+            x = -sx / 2 + (i + 0.5) * sx / n + 0.75
+            if s < 0 and any(abs(x - (k - (doors - 1) / 2) * min(14.0, sx / max(doors, 1))) < 6.0 for k in range(doors)):
+                continue
+            yy = s * (sy / 2 + 0.3)
+            g.merge(tube((x, yy, 0.3), (x, yy, hc - 0.3), 0.14, 'steel:dark', 8))
+            g.merge(bxz(0.5, 0.45, 0.5, x, yy, hc - 0.5, mat='steel:dark'))
+            g.merge(bxz(0.45, 0.6, 0.18, x, yy + s * 0.15, 0.1, mat='steel:dark'))
+    # roof plant
     if roof:
-        for i in range(r.randint(2, 4)):
-            w, d, hh = r.uniform(3, 7), r.uniform(2.5, 5), r.uniform(1.6, 3.2)
+        nb = r.randint(2, 4)
+        for i in range(nb):
+            w, d, hh = r.uniform(2.5, 5.5), r.uniform(2.0, 4.0), r.uniform(1.4, 2.6)
             x, y = r.uniform(-sx / 2 + w, sx / 2 - w), r.uniform(-sy / 2 + d, sy / 2 - d)
-            g.merge(bxz(w, d, hh, x, y, h + 1.2, mat='steel:galv'))
-            g.merge(bxz(w * 0.8, 0.1, hh * 0.5, x, y - d / 2 - 0.02, h + 1.4, mat='trim:louvre'))
+            g.merge(bxz(w, d, hh, x, y, zr + 0.25, mat='steel:galv'))
+            g.merge(bxz(w + 0.2, d + 0.2, 0.12, x, y, zr + 0.25 + hh, mat='steel:dark'))
+            g.merge(bxz(w * 0.8, 0.1, hh * 0.5, x, y - d / 2 - 0.02, zr + 0.45, mat='trim:louvre'))
+            # duct from the unit over the parapet (elbow run)
+            if i < 2:
+                ex = x + (w / 2 if x < 0 else -w / 2)
+                g.merge(P.pipe_run([V((x, y, zr + 0.25 + hh * 0.6)), V((x, -sy / 2 + 1.6, zr + 0.25 + hh * 0.6)),
+                                    V((x, -sy / 2 + 1.6, zr + 2.6))], r=0.45, bend=0.8, segs=10, mat='steel:galv', flanges=False))
+        # AC skid: frame + 3 fan stacks
+        ax, ay = r.uniform(-sx / 4, sx / 4), sy / 2 - 3.0
+        g.merge(bxz(7.0, 2.6, 0.3, ax, ay, zr + 0.25, mat='steel:yellow'))
+        g.merge(bxz(6.6, 2.2, 1.6, ax, ay, zr + 0.55, mat='steel:galv'))
+        for i in range(3):
+            g.merge(P.cylinder(0.85, 0.35, 12, bevel=0.0, mat='steel:dark', z0=zr + 2.15).move(ax - 2.2 + i * 2.2, ay, 0))
+        # stacks / vents, roof hatch, antenna mast with beacon
         for i in range(r.randint(1, 3)):
             x, y = r.uniform(-sx / 2 + 2, sx / 2 - 2), r.uniform(-sy / 2 + 2, sy / 2 - 2)
-            g.merge(P.cylinder(0.7, 3.5, 16, bevel=0.0, mat='steel:rust', z0=h + 1.2).move(x, y, 0))
+            g.merge(P.cylinder(0.5, 2.8, 12, bevel=0.0, mat='steel:rust', z0=zr + 0.25).move(x, y, 0))
+            g.merge(P.cone(0.8, 0.2, 0.6, 12, bevel=0.0, mat='steel:dark').move(x, y, zr + 3.05))
+        g.merge(bxz(1.6, 1.6, 0.8, -sx / 2 + 3.0, sy / 2 - 3.0, zr + 0.25, mat='steel:dark'))
+        g.merge(beam((sx / 2 - 1.5, -sy / 2 + 1.5, zr + 0.25), (sx / 2 - 1.5, -sy / 2 + 1.5, zr + 7.0), 0.18, 0.18, 'steel:galv'))
+        g.merge(beacon(sx / 2 - 1.5, -sy / 2 + 1.5, zr + 7.4, 0.45))
         if stair:
-            g.merge(bxz(5, 5, 4, sx / 2 - 4, sy / 2 - 4, h + 1.2, mat=cv, bev=0.08))
-        g.merge(rail_line([(-sx / 2 - 0.4, -sy / 2 - 0.4, h + 1.2), (sx / 2 + 0.4, -sy / 2 - 0.4, h + 1.2)], h=1.1, post=3.0, r=0.05))
-    cols = [((0, 0, (h + 1.2) / 2), (sx + 1.4, sy + 1.4, h + 1.2))]
+            g.merge(bxz(5, 5, 3.4, sx / 2 - 4, sy / 2 - 4, zr + 0.25, mat=cv, bev=0.08))
+            g.merge(bxz(5.6, 5.6, 0.3, sx / 2 - 4, sy / 2 - 4, zr + 3.65, mat='concrete:grey'))
+        # caged ladder up the -X gable to the roof
+        g.merge(cheap_ladder(hc + 1.0, -sx / 2 - 0.65, sy / 4, 0.0, facing=-math.pi / 2))
+    cols = [((0, 0, (h + 1.25) / 2), (sx + 1.4, sy + 1.4, h + 1.25))]
     # cantilevered upper storey (brutalist overhang) with its own window band + soffit beams
     if cant and h > 12:
-        z0c = h * 0.6
+        z0c = hc
         cy = sy / 2 + 2.6
         g.merge(bxz(sx + 2.6, sy + 5.2, h - z0c + 0.2, 0, 0, z0c, mat=cv, bev=0.12))
         for sgn in (-1, 1):
-            g.merge(bxz(sx + 1.6, 0.14, band_h, 0, sgn * (cy + 0.03), h - band_h - 1.6, mat='trim:window'))
-            g.merge(bxz(sx + 2.8, 1.0, 0.5, 0, sgn * (cy + 0.4), h - band_h - 2.1, mat='concrete:grey'))
+            fac = -1 if sgn < 0 else 1
+            g.merge(bxz(sx + 1.6, 0.14, band_h + 0.4, 0, sgn * (cy + 0.03), h - band_h - 1.8, mat='trim:window'))
+            g.merge(bxz(sx + 2.8, 1.0, 0.5, 0, sgn * (cy + 0.4), h - band_h - 2.3, mat='concrete:grey'))
+            for k in range(int((sx + 1.6) / 2.4)):
+                g.merge(bxz(0.16, 0.25, band_h + 0.4, -sx / 2 - 0.8 + (k + 0.5) * (sx + 1.6) / int((sx + 1.6) / 2.4), sgn * (cy + 0.14),
+                            h - band_h - 1.8, mat='steel:dark'))
             for k in range(int(sx / 7)):
                 if r.random() < 0.35:
-                    g.merge(bxz(5.0, 0.16, band_h, -sx / 2 + 3.5 + k * 7.0, sgn * (cy + 0.04), h - band_h - 1.6, mat='trim:window_lit'))
+                    g.merge(bxz(r.choice((2.3, 4.6)), 0.16, band_h, -sx / 2 + 3.5 + k * 7.0, sgn * (cy + 0.04), h - band_h - 1.6, mat='trim:window_lit'))
+            for k in range(int(sx / 5)):
+                x0 = -sx / 2 + k * 5 + r.uniform(0, 2)
+                g.merge(wall_decal(x0, x0 + r.uniform(1.0, 2.0), sgn * (cy + 0.02), h - band_h - 2.3 - r.uniform(1.5, 3.5), h - band_h - 2.3, 'streak', 'stain', fac))
+        cx_ = sx / 2 + 1.3
+        for sgn in (-1, 1):                       # end walls of the overhang: glazing + mullions + streaks
+            fac = 1 if sgn > 0 else -1
+            g.merge(bxz(0.14, sy + 3.6, band_h + 0.4, sgn * (cx_ + 0.03), 0, h - band_h - 1.8, mat='trim:window'))
+            g.merge(bxz(1.0, sy + 5.4, 0.5, sgn * (cx_ + 0.4), 0, h - band_h - 2.3, mat='concrete:grey'))
+            for k in range(int((sy + 3.6) / 2.4)):
+                g.merge(bxz(0.25, 0.16, band_h + 0.4, sgn * (cx_ + 0.14), -(sy + 3.6) / 2 + (k + 0.5) * (sy + 3.6) / int((sy + 3.6) / 2.4),
+                            h - band_h - 1.8, mat='steel:dark'))
+            if r.random() < 0.6:
+                g.merge(bxz(0.16, r.choice((2.3, 4.6)), band_h, sgn * (cx_ + 0.04), r.uniform(-sy / 3, sy / 3), h - band_h - 1.6, mat='trim:window_lit'))
+            for k in range(int(sy / 4)):
+                y0 = -sy / 2 + k * 4 + r.uniform(0, 1.5)
+                g.merge(side_decal(sgn * (cx_ + 0.02), y0, y0 + r.uniform(1.0, 2.0), h - band_h - 2.3 - r.uniform(1.5, 4.0), h - band_h - 2.3,
+                                   'streak', r.choice(['stain', 'rust']), fac))
         for k in range(int(sx / 5) + 1):
             x = -sx / 2 + k * sx / int(sx / 5)
             g.merge(bxz(0.8, sy + 5.0, 0.9, x, 0, z0c - 0.9, mat=cv, bev=0.05))
+        # parapet + coping on the overhang
+        g.merge(bxz(sx + 3.2, sy + 5.8, 0.35, 0, 0, h + 0.2, mat='concrete:grey', bev=0.05))
         cols = [((0, 0, z0c / 2), (sx + 1.4, sy + 1.4, z0c)), ((0, 0, (z0c + h + 1.2) / 2), (sx + 2.8, sy + 5.4, h + 1.2 - z0c))]
     # stair core with slit windows (brutalist signature) on the +X end
     if core and h > 11:
@@ -104,7 +229,10 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
         g.merge(bxz(cw + 0.8, cw + 0.8, 0.9, cx, cy, ch, mat='concrete:grey', bev=0.08))
         for k in range(int((ch - 4) / 4.0)):
             g.merge(bxz(0.12, 0.9, 2.6, cx + cw / 2 + 0.02, cy, 3.0 + k * 4.0, mat='trim:window'))
+            if k % 3 == 1:
+                g.merge(bxz(0.13, 0.7, 2.4, cx + cw / 2 + 0.03, cy, 3.1 + k * 4.0, mat='trim:window_lit'))
         g.merge(bxz(0.3, 2.0, 3.0, cx + cw / 2 + 0.1, cy - 1.8, 0.0, mat='steel:dark'))
+        g.merge(side_decal(cx + cw / 2 + 0.03, cy - cw / 2 + 0.3, cy + cw / 2 - 0.3, ch - ch * 0.4, ch, 'curtain', 'soot', 1))
         g.merge(beacon(cx, cy, ch + 1.3, 0.5))
         cols.append(((cx, cy, ch / 2), (cw + 0.4, cw + 0.4, ch + 0.9)))
     # facade services on +Y: risers, header, brackets, units at the base
@@ -112,9 +240,9 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
         ys = sy / 2 + 1.0
         xs = [-sx / 2 + 3.0 + i * 1.4 for i in range(3)]
         for i, x in enumerate(xs):
-            g.merge(tube((x, ys, 0.4), (x, ys, h - 2.5 - i * 0.9), 0.32 - i * 0.06, r.choice(['steel:galv', 'steel:rust', 'steel:bone']), 12))
-            g.merge(tube((x, ys, h - 2.5 - i * 0.9), (sx / 2 - 2.0, ys, h - 2.5 - i * 0.9), 0.32 - i * 0.06, 'steel:galv', 12))
-        for k in range(int(h / 3)):
+            g.merge(tube((x, ys, 0.4), (x, ys, hc - 2.5 - i * 0.9), 0.32 - i * 0.06, r.choice(['steel:galv', 'steel:rust', 'steel:bone']), 12))
+            g.merge(tube((x, ys, hc - 2.5 - i * 0.9), (sx / 2 - 2.0, ys, hc - 2.5 - i * 0.9), 0.32 - i * 0.06, 'steel:galv', 12))
+        for k in range(int(hc / 3)):
             g.merge(bxz(5.0, 1.2, 0.2, xs[1], ys - 0.4, 1.5 + k * 3.0, mat='steel:dark'))
         for x in (sx * 0.1, sx * 0.3):
             g.merge(bxz(3.6, 2.4, 2.6, x, sy / 2 + 1.6, 0.0, mat='steel:galv'))
@@ -125,7 +253,7 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
         key = r.choice(opts[:2]) if opts else 'hdf07'
         sh_ = 3.4 if opts else max(1.6, sx * 0.9 / ((STENCILS['hdf07'][1] - STENCILS['hdf07'][0]) * 16.0))
         sw_ = (STENCILS[key][1] - STENCILS[key][0]) * 16.0 * sh_
-        g.merge(bxz(sw_, 0.1, sh_, 0.0, -sy / 2 - 0.36, h - sh_ - 2.6, mat='trim:stencil@' + key))
+        g.merge(bxz(sw_, 0.1, sh_, 0.0, -sy / 2 - 0.36, hc - sh_ - 1.0, mat='trim:stencil@' + key))
     return g, cols
 
 
@@ -231,7 +359,7 @@ def retaining_wall_seg(L=20.0, h=10.0):
     return g, [((0, 0, (h + 1.2) / 2), (L, t + 1.0, h + 1.2))]
 
 
-def quay_seg(L=20.0):
+def quay_seg(L=20.0, lo=False):
     """Quay edge: coping beam at the arena edge, wall face down to the water (-Y side =
     the sea), fenders, bollard, ladder recess."""
     g = Geo()
@@ -242,7 +370,8 @@ def quay_seg(L=20.0):
     b = P.lathe([(0.0, 0.0), (0.7, 0.0), (0.55, 0.6), (0.5, 1.0), (0.85, 1.2), (0.85, 1.4), (0.0, 1.45)], 20, 'steel:dark')
     g.merge(b.move(0, 0.2, 1.0))
     g.merge(bxz(L + 0.01, 0.06, 0.9, 0, -1.53, 0.05, mat='trim:hazard2'))
-    g.merge(cheap_ladder(12.0, L / 2 - 1.5, -1.55, -12.0, facing=0.0, cage=False))
+    if not lo:
+        g.merge(cheap_ladder(12.0, L / 2 - 1.5, -1.55, -12.0, facing=0.0, cage=False))
     return g
 
 
@@ -329,38 +458,141 @@ def heap(rx, ry, h, var='ore', seed=1, rings=9, segs=40):
 
 
 # ============================================================================ SHIP / SEA
-def bulk_carrier(L=190.0, W=30.0, D=17.0):
-    """Derelict bulk carrier hull (bow toward local -Y), hatch covers, deck cranes, aft
-    accommodation block + funnel. Keel at z=0."""
+def bulk_carrier(L=180.0, W=30.0, D=17.0, seed=17):
+    """Derelict Cape-size bulk carrier (bow toward local -Y, keel at z=0): hull lofted with sheer
+    and bow flare, forecastle, raised strakes + frame seams on the parallel mid-body, boot-top
+    band, 7 hatch coamings (one cover missing, one knocked askew), 4 deck cranes with lattice-
+    look jibs, 5-deck aft accommodation with window rows + bridge wings, funnel, radar mast,
+    lifeboat davits, rudder + propeller hub (exposed when the wreck settles bow-down)."""
+    import random
+    r = random.Random(seed)
     g = Geo()
-    secs = []
-    for t, wmul, zb in ((-0.5, 0.05, 6.0), (-0.47, 0.35, 3.0), (-0.42, 0.75, 1.0), (-0.34, 1.0, 0.0), (0.38, 1.0, 0.0),
-                        (0.46, 0.85, 2.5), (0.5, 0.6, 7.0)):
-        w = W / 2 * wmul
-        secs.append(([(-w * 0.9, zb), (w * 0.9, zb), (w, zb + 1.5), (w, D), (-w, D), (-w, zb + 1.5)], t * L))
-    hull = P.loft(secs, bevel=0.0, segs=1, mat='steel:dark', axis='Y')
-    g.merge(hull)
-    # boot-top red band
-    g.merge(P.loft([([(-W / 2 - 0.05, 0.5), (W / 2 + 0.05, 0.5), (W / 2 + 0.05, 7.0), (-W / 2 - 0.05, 7.0)], -0.33 * L),
-                    ([(-W / 2 - 0.05, 0.5), (W / 2 + 0.05, 0.5), (W / 2 + 0.05, 7.0), (-W / 2 - 0.05, 7.0)], 0.37 * L)],
-                   bevel=0.0, segs=1, mat='steel:red', axis='Y'))
+    hw = W / 2
+
+    bil = min(3.0, D * 0.2)
+
+    def sec(t, wb, wm, wd, zb, sh, grow=0.0, ztop=None):
+        # (half-width at the keel, at the bilge, at the deck; keel rise; sheer) at station t
+        zt = D + sh if ztop is None else ztop
+        wt = wd if ztop is None else wm + (wd - wm) * (ztop - zb - bil) / max(D + sh - zb - bil, 1e-3)
+        e = grow
+        return ([(-wb - e, zb - e), (wb + e, zb - e), (wm + e, zb + bil), (wt + e, zt), (-wt - e, zt), (-wm - e, zb + bil)], t * L)
+    ST = [(-0.5, 0.25, 0.4, 0.9, 7.5, 3.4), (-0.485, 1.2, 2.6, 6.0, 4.0, 3.1), (-0.46, 3.0, 6.5, 10.5, 1.8, 2.7),
+          (-0.42, 6.5, 11.0, 13.6, 0.6, 2.1), (-0.36, 11.0, 14.2, 14.9, 0.0, 1.3), (-0.28, 13.2, hw, hw, 0.0, 0.7),
+          (0.30, 13.2, hw, hw, 0.0, 0.35), (0.40, 10.0, 14.6, hw, 0.8, 0.6), (0.46, 5.5, 12.4, 14.6, 3.2, 1.1),
+          (0.5, 2.5, 9.5, 13.2, 6.8, 1.5)]
+    g.merge(P.loft([sec(*p_) for p_ in ST], bevel=0.0, segs=1, mat='steel:dark', axis='Y'))
+    # boot-top / antifouling below the old load line (slightly proud of the hull)
+    g.merge(P.loft([sec(*p_, grow=0.05, ztop=7.0) for p_ in ST[2:-1]], bevel=0.0, segs=1, mat='steel:red', axis='Y'))
+    # raised strakes (plate laps) + frame seams on the parallel mid-body, sheer strake band
+    y0, y1 = -0.27 * L, 0.29 * L
+    for z in (9.5, 12.5, D - 0.6):
+        for sx in (-1, 1):
+            g.merge(bx(0.12, y1 - y0, 0.22 if z < D - 1 else 0.6, (sx * (hw + 0.05), (y0 + y1) / 2, z), mat='steel:dark' if z < D - 1 else 'steel:white'))
+    for k in range(int((y1 - y0) / 9.0) + 1):
+        y = y0 + k * 9.0
+        for sx in (-1, 1):
+            g.merge(bx(0.1, 0.16, D - 7.6, (sx * (hw + 0.04), y, 7.0 + (D - 7.6) / 2), mat='steel:dark'))
+    # bulwark + forecastle deck at the bow
+    g.merge(bxz(19.0, 22.0, 2.6, 0, -0.42 * L + 2, D + 1.6, mat='steel:dark'))
+    g.merge(bxz(19.4, 22.4, 0.3, 0, -0.42 * L + 2, D + 4.2, mat='steel:white'))
+    g.merge(P.cylinder(1.2, 1.4, 12, bevel=0.0, mat='steel:black', z0=D + 4.5).move(-4, -0.43 * L, 0))
+    g.merge(P.cylinder(1.2, 1.4, 12, bevel=0.0, mat='steel:black', z0=D + 4.5).move(4, -0.43 * L, 0))
+    g.merge(beam((0, -0.4 * L, D + 4.5), (0, -0.4 * L, D + 13.0), 0.5, 0.5, 'steel:white'))
+    g.merge(beacon(0, -0.4 * L, D + 13.4, 0.5))
+    for sx in (-1, 1):                                                        # hawse pipes
+        g.merge(tube((sx * 6.0, -0.47 * L, D - 1.0), (sx * 8.6, -0.452 * L, D - 4.0), 0.9, 'steel:rust', 10))
+    # 7 hatch coamings + pontoon covers (#3 missing: open hold; #5 knocked askew)
+    hy0, hstep = -0.335 * L, 0.0835 * L
     for k in range(7):
-        y = -0.3 * L + k * 0.085 * L
-        g.merge(bxz(W * 0.62, 14.0, 2.2, 0, y, D, mat='steel:oxide'))
-        g.merge(bxz(W * 0.66, 15.0, 0.6, 0, y, D - 0.2, mat='steel:dark'))
+        y = hy0 + k * hstep
+        g.merge(bxz(W * 0.62, 13.0, 1.9, 0, y, D, mat='steel:oxide'))
+        g.merge(bxz(W * 0.66, 13.6, 0.3, 0, y, D + 1.0, mat='steel:dark'))     # coaming flange
+        for sx in (-1, 1):                                                    # coaming stays
+            for j in range(4):
+                g.merge(bxz(0.25, 0.25 + 0.0, 1.6, sx * (W * 0.31 + 0.2), y - 5.0 + j * 3.3, D, mat='steel:dark'))
+        if k == 2:
+            g.merge(bxz(W * 0.56, 11.8, 0.2, 0, y, D + 1.75, mat='steel:black'))   # open hold (dark void)
+            continue
+        cov = Geo()
+        for sx in (-1, 1):
+            panel = bx(W * 0.31, 13.4, 0.9, (0, 0, 0), mat='steel:oxide')
+            panel.transform(Matrix.Translation(V((sx * W * 0.155, 0, 0))) @ Matrix.Rotation(-sx * 0.05, 4, 'Y'))
+            cov.merge(panel)
+            for j in range(5):
+                cov.merge(bx(W * 0.3, 0.25, 0.25, (sx * W * 0.155, -5.6 + j * 2.8, 0.5), mat='steel:dark'))
+        if k == 4:
+            cov.transform(Matrix.Translation(V((3.5, y + 1.5, D + 2.9))) @ Matrix.Rotation(0.22, 4, 'Z') @ Matrix.Rotation(0.12, 4, 'Y'))
+        else:
+            cov.transform(Matrix.Translation(V((0, y, D + 2.35))))
+        g.merge(cov)
+    # 4 deck cranes on pedestals between the hatches, jibs at varied luffing angles
     for k in range(4):
-        y = -0.26 * L + k * 0.17 * L
-        g.merge(P.cylinder(1.4, 10.0, 16, bevel=0.0, mat='steel:bone', z0=D).move(0, y + 7.0, 0))
-        g.merge(beam((0, y + 7.0, D + 9.5), (8.0, y - 14.0, D + 18.0), 1.0, 1.4, 'steel:bone'))
-    ay = 0.38 * L
-    for i, (w, d, h) in enumerate(((W - 2, 20, 4), (W - 4, 17, 4), (W - 6, 15, 4), (W - 8, 13, 4), (W - 6, 10, 3))):
-        g.merge(bxz(w, d, h, 0, ay - 4 + i * 0.5, D + i * 4.0, mat='steel:white'))
-        g.merge(bxz(w + 0.05, d * 0.9, 1.0, 0, ay - 4 + i * 0.5, D + i * 4.0 + 1.6, mat='trim:window'))
-    g.merge(bxz(W + 6, 5, 0.6, 0, ay - 13.0, D + 16.0, mat='steel:white'))
-    g.merge(bxz(7, 6, 12, 0, ay + 6, D + 18.0, mat='steel:dark'))
-    g.merge(bxz(7.2, 6.2, 2.0, 0, ay + 6, D + 26.0, mat='steel:orange'))
-    g.merge(beam((0, ay - 8, D + 20), (0, ay - 8, D + 32), 0.4, 0.4, 'steel:dark'))
-    g.merge(beacon(0, ay - 8, D + 32.5, 0.6))
+        y = hy0 + (k * 2 + 0.5) * hstep
+        g.merge(P.cylinder(1.9, 7.0, 16, bevel=0.0, mat='steel:bone', z0=D).move(-1.0, y, 0))
+        g.merge(bxz(4.6, 5.2, 3.8, -1.0, y, D + 7.0, mat='steel:bone'))
+        g.merge(bx(4.65, 0.1, 1.0, (-1.0, y - 2.62, D + 9.4), mat='trim:window'))
+        ang = math.radians(r.uniform(22, 62))
+        yaw = r.uniform(-2.2, 2.2)
+        dy, dz = math.cos(ang) * 26.0, math.sin(ang) * 26.0
+        dx, dyy = math.sin(yaw) * dy, -math.cos(yaw) * dy
+        base = V((-1.0, y, D + 8.0))
+        tip = base + V((dx, dyy, dz))
+        for off in (-0.9, 0.9):
+            o = V((math.cos(yaw) * off, math.sin(yaw) * off, 0))
+            g.merge(beam(base + o, tip + o * 0.3, 0.45, 0.6, 'steel:bone'))
+        for j in range(1, 6):
+            p0 = base + (tip - base) * (j / 6.0)
+            g.merge(beam(p0 + V((math.cos(yaw) * -0.9, math.sin(yaw) * -0.9, 0)) * (1 - 0.7 * j / 6),
+                         p0 + V((math.cos(yaw) * 0.9, math.sin(yaw) * 0.9, 0)) * (1 - 0.7 * j / 6), 0.2, 0.2, 'steel:bone'))
+        g.merge(beam((-1.0, y, D + 10.8), (-1.0, y, D + 14.5), 0.5, 0.5, 'steel:bone'))
+        g.merge(beam((-1.0, y, D + 14.5), tip, 0.08, 0.08, 'steel:black'))           # luffing wire
+        g.merge(beam(tip, tip + V((0, 0, -min(tip.z - D - 3.0, 12.0))), 0.06, 0.06, 'steel:black'))  # hoist wire
+    # aft accommodation: 5 decks stepping back, window rows, bridge wings, railings
+    ay = 0.385 * L
+    zd = D + 0.0
+    for i in range(5):
+        w, d = W - 3.0 - (i > 2) * 2.0, 16.0 - i * 0.9
+        g.merge(bxz(w, d, 2.8, 0, ay + i * 0.4, zd, mat='steel:white'))
+        g.merge(bxz(w + 0.6, d + 0.6, 0.2, 0, ay + i * 0.4, zd + 2.8, mat='steel:dark'))
+        for sgn in (-1, 1):
+            g.merge(bx(w * 0.86, 0.1, 1.0, (0, ay + i * 0.4 + sgn * (d / 2 + 0.03), zd + 1.5), mat='trim:window'))
+        g.merge(bx(0.1, d * 0.7, 1.0, (w / 2 + 0.03, ay + i * 0.4, zd + 1.5), mat='trim:window'))
+        g.merge(bx(0.1, d * 0.7, 1.0, (-w / 2 - 0.03, ay + i * 0.4, zd + 1.5), mat='trim:window'))
+        g.merge(rail_line([(-w / 2 - 0.3, ay + i * 0.4 - d / 2 - 0.3, zd + 3.0), (w / 2 + 0.3, ay + i * 0.4 - d / 2 - 0.3, zd + 3.0)],
+                          h=1.0, post=2.5, r=0.04, mat='steel:white', post_mat='steel:white'))
+        zd += 3.0
+    zb_ = zd
+    g.merge(bxz(W + 4.0, 7.0, 2.6, 0, ay - 4.0, zb_, mat='steel:white'))             # bridge deck + wings
+    g.merge(bx(W + 3.0, 0.12, 1.3, (0, ay - 7.55, zb_ + 1.5), mat='trim:window'))
+    g.merge(bxz(W + 4.6, 7.6, 0.3, 0, ay - 4.0, zb_ + 2.6, mat='steel:dark'))
+    g.merge(bxz(5.0, 4.0, 1.6, 0, ay - 3.0, zb_ + 2.9, mat='steel:white'))
+    g.merge(beam((0, ay - 3.0, zb_ + 4.5), (0, ay - 3.0, zb_ + 12.0), 0.35, 0.35, 'steel:white'))
+    g.merge(bx(5.0, 0.6, 0.25, (0, ay - 3.0, zb_ + 10.0), mat='steel:dark'))         # radar
+    g.merge(beacon(0, ay - 3.0, zb_ + 12.4, 0.5))
+    # funnel with a worn orange band, soot top
+    fy = ay + 9.0
+    g.merge(bxz(8.0, 7.0, 14.0, 0, fy, D + 12.0, mat='steel:dark', bev=0.3))
+    g.merge(bxz(8.08, 7.08, 2.2, 0, fy, D + 21.5, mat='steel:orange'))
+    g.merge(bxz(8.1, 7.1, 2.0, 0, fy, D + 24.0, mat='steel:black'))
+    for sx in (-1.6, 1.6):
+        g.merge(P.cylinder(0.6, 3.0, 10, bevel=0.0, mat='steel:black', z0=D + 26.0).move(sx, fy, 0))
+    # lifeboat davits on both sides of the house (one boat gone)
+    for sgn in (-1, 1):
+        g.merge(bxz(1.2, 8.0, 3.5, sgn * (W / 2 - 1.0), ay + 2.0, D + 6.0, mat='steel:dark'))
+        if sgn > 0:
+            g.merge(P.lathe([(0.0, -4.0), (1.3, -3.0), (1.5, 0.0), (1.3, 3.0), (0.0, 4.0)], 10, 'steel:orange')
+                    .rotate((90, 0, 0)).move(sgn * (W / 2 + 0.6), ay + 2.0, D + 8.0))
+    # main-deck railing + pipe runs along the deck
+    for sx in (-1, 1):
+        g.merge(rail_line([(sx * (hw - 0.4), -0.4 * L, D + 0.1), (sx * (hw - 0.4), 0.37 * L, D + 0.1)], h=1.1, post=3.0, r=0.05, mat='steel:white', post_mat='steel:white'))
+        g.merge(tube((sx * (hw - 2.0), -0.36 * L, D + 0.6), (sx * (hw - 2.0), 0.34 * L, D + 0.6), 0.35, 'steel:rust', 8))
+    # rudder + propeller hub at the stern
+    g.merge(bxz(1.2, 7.0, 10.0, 0, 0.5 * L + 2.0, 0.5, mat='steel:red'))
+    g.merge(P.cylinder(1.3, 3.0, 12, bevel=0.0, mat='steel:dark').rotate((90, 0, 0)).move(0, 0.5 * L - 2.0, 4.5))
+    for k in range(4):
+        a = k * math.pi / 2 + 0.4
+        g.merge(beam((0, 0.5 * L - 2.0, 4.5), (math.cos(a) * 3.6, 0.5 * L - 2.0, 4.5 + math.sin(a) * 3.6), 0.25, 1.6, 'steel:rust', up=(0, 1, 0)))
     return g
 
 
@@ -408,8 +640,8 @@ def far_block(sx, sy, h, seed=1):
 def far_stack(h, r0, r1, glow=True):
     g = Geo()
     g.merge(P.lathe([(0.0, 0.0), (r0, 0.0), (r1, h), (r1 * 0.8, h), (r1 * 0.8, h - 2), (0.0, h - 2)], 24, 'far'))
-    if glow:
-        g.merge(P.cylinder(r1 * 0.8, 0.2, 24, bevel=0.0, mat='glow:furnace', z0=h - 1.5))
+    if glow:   # sooted dark lip instead of an HDR lid (a lid outlives the fogged stack as a floating oval)
+        g.merge(P.ring(r1 * 1.05, r1 * 0.75, 2.0, 24, bevel=0.0, mat='far:dark', z0=h - 1.0))
     g.merge(beacon(r1 * 0.7, 0, h + 0.5, max(1.0, r1 * 0.25)))
     return g
 

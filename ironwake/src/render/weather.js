@@ -23,6 +23,8 @@ uniform float uShutter;
 uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform vec3 uAmb;
+uniform float uPxPerM;         // drawing-buffer pixels per metre at 1 m view depth
+uniform float uMaxPx;          // max flake radius on screen (px): ash never reads as lens dirt
 varying vec2 vUv;
 varying float vA;
 varying vec3 vCol;
@@ -44,9 +46,11 @@ void main() {
   vec3 e = abs(rel) / (box * 0.5);
   float edge = 1.0 - smoothstep(0.72, 1.0, max(max(e.x, e.y), e.z));
 
-  float size = nearL ? mix(0.025, 0.075, r3 * r3) : mix(0.08, 0.24, r3);
+  float size = nearL ? mix(0.02, 0.06, r3 * r3) : mix(0.07, 0.2, r3);
   if (ember) size *= 0.7;
   vec4 mv = viewMatrix * vec4(w, 1.0);
+  // screen-size cap: a flake is at most uMaxPx in radius (plus streak length) at any depth
+  size = min(size, uMaxPx * max(-mv.z, 0.1) / uPxPerM);
   // streak along the projected camera-relative velocity (shutter 1/60 s)
   vec3 vv = mat3(viewMatrix) * (vel - uCamVel) * uShutter;
   float depth = max(-mv.z, 0.1);
@@ -60,15 +64,17 @@ void main() {
   vUv = corner * 0.5 + 0.5;
 
   float d = length(w - cameraPosition);
-  float nearFade = smoothstep(1.6, 4.5, d);
+  float nearFade = smoothstep(3.0, 7.0, d);   // no flake right in front of the lens
   vA = edge * nearFade * vStretch;
   // lighting: dark ash, back-lit translucency toward the sun, cool sky fill
   vec3 vdir = (w - cameraPosition) / max(d, 1e-3);
   float mu = dot(vdir, uSunDir);
   float fwd = pow(max(mu, 0.0), 5.0);
-  vec3 ash = vec3(0.21, 0.2, 0.19) * (uAmb + uSunCol * (0.35 + 1.5 * fwd));
+  // dark grey-brown ash (#6E6660 .. #8A8580 lit), never near-white: sky fill + a modest
+  // forward-scatter glow when back-lit by the sun
+  vec3 ash = vec3(0.17, 0.16, 0.15) * (uAmb + uSunCol * (0.3 + 1.1 * fwd));
   vCol = ember ? vec3(5.5, 1.6, 0.35) * mix(0.5, 1.4, fract(r * 57.0 + uTime * 0.7)) : ash;
-  vA *= ember ? 1.0 : (nearL ? 0.7 : 0.42);
+  vA *= ember ? 1.0 : (nearL ? 0.9 : 0.5);
   gl_Position = projectionMatrix * mv;
   vec4 mvPosition = mv;
   #include <fog_vertex>
@@ -112,6 +118,8 @@ export function createWeather(count, { sunDir, sunColor, ambient }) {
     uSunDir: { value: new THREE.Vector3() },
     uSunCol: { value: new THREE.Color() },
     uAmb: { value: new THREE.Color() },
+    uPxPerM: { value: 600 },
+    uMaxPx: { value: 3.5 },
   }]);
   uniforms.uSunDir.value.copy(sunDir);
   uniforms.uSunCol.value.copy(sunColor);
@@ -130,8 +138,11 @@ export function createWeather(count, { sunDir, sunColor, ambient }) {
   return {
     mesh, uniforms,
     /** Per rendered frame: centre the boxes slightly ahead of the camera. */
-    update(camera, time, camVel) {
+    update(camera, time, camVel, viewHeightPx) {
       uniforms.uTime.value = time;
+      // pixels per metre at 1 m: P[1][1] * H / 2 (zoom/fov changes included)
+      if (viewHeightPx) uniforms.uPxPerM.value = camera.projectionMatrix.elements[5] * viewHeightPx * 0.5;
+      uniforms.uMaxPx.value = 4.0 * Math.max(0.6, (viewHeightPx || 1080) / 1080);
       camera.getWorldDirection(_f);
       uniforms.uCenter.value.copy(camera.position).addScaledVector(_f, 10);
       uniforms.uCamVel.value.copy(camVel);

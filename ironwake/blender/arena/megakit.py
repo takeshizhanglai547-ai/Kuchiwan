@@ -301,27 +301,46 @@ def far_complex(seed, sx, sy, h, stacks=True):
     for i, (tw, td, th, tx, ty) in enumerate(tiers):
         g.merge(bxz(tw, td, th, tx, ty, zc, mat=mats[i % 4]))
         g.merge(bxz(tw + 1.2, td + 1.2, 1.2, tx, ty, zc + th, mat='far:dark'))        # parapet lip / flashing
-        # vertical ribs every ~12 m on the front
-        nrib = int(tw / 12.0)
-        for k in range(1, nrib):
-            g.merge(bxz(1.2, 1.2, th, tx - tw / 2 + k * tw / nrib, ty - td / 2 - 0.5, zc, mat='far:dark'))
-        # lit window rows (2 x 3 m, ~30 % dark)
-        rows = max(1, int(th / 9.0))
-        for rw in range(rows):
-            zr = zc + 4.0 + rw * (th - 6.0) / max(1, rows)
-            nwin = int(tw / 5.0)
-            run = 0
-            for k in range(nwin):
-                if r.random() < 0.7:
-                    run += 1
-                    continue
-                if run:
-                    xe = tx - tw / 2 + k * 5.0
-                    g.merge(bxz(run * 5.0 - 3.0, 0.3, 2.2, xe - run * 2.5, ty - td / 2 - 0.2, zr, mat=r.choice(['glow:window', 'glow:window', 'glow:dim'])))
-                    run = 0
-            if run:
-                xe = tx - tw / 2 + nwin * 5.0
-                g.merge(bxz(run * 5.0 - 3.0, 0.3, 2.2, xe - run * 2.5, ty - td / 2 - 0.2, zr, mat='glow:window'))
+        # facade grid on the front (-Y) and both ends: piers every 7-11 m (0.9 m proud), floor
+        # slabs every 4-5 m (0.6 m proud) -> deep inset bays that read in raking light; dark glazing
+        # bands inside the bays; LIT windows only in vertical clusters (~12 % of the bays)
+        bw = r.uniform(7.0, 11.0)
+        fh = r.uniform(4.2, 5.2)
+        nfl = max(1, int((th - 2.0) / fh))
+        for face in range(3):
+            if face == 0:
+                W, y0, M = tw, ty - td / 2, None
+            else:
+                W, y0 = td, None
+            nb = max(1, int(W / bw))
+            bww = W / nb
+            lit_cols = [c for c in range(nb) if r.random() < 0.16]
+            for k in range(nb + 1):
+                u = -W / 2 + k * bww
+                if face == 0:
+                    g.merge(bxz(1.1, 0.9, th, tx + u, y0 - 0.45, zc, mat='far:dark'))
+                else:
+                    sx_ = 1 if face == 1 else -1
+                    g.merge(bxz(0.9, 1.1, th, tx + sx_ * (tw / 2 + 0.45), ty + u, zc, mat='far:dark'))
+            for f_ in range(nfl):
+                zf = zc + 1.5 + f_ * fh
+                if face == 0:
+                    g.merge(bxz(W, 0.6, 0.5, tx, y0 - 0.3, zf + fh - 0.5, mat='far'))
+                    g.merge(bxz(W - 0.4, 0.12, fh * 0.42, tx, y0 - 0.06, zf + fh * 0.22, mat='far:dark'))
+                else:
+                    sx_ = 1 if face == 1 else -1
+                    g.merge(bxz(0.6, W, 0.5, tx + sx_ * (tw / 2 + 0.3), ty, zf + fh - 0.5, mat='far'))
+                    g.merge(bxz(0.12, W - 0.4, fh * 0.42, tx + sx_ * (tw / 2 + 0.06), ty, zf + fh * 0.22, mat='far:dark'))
+                for c in lit_cols:
+                    if r.random() < 0.6:
+                        u = -W / 2 + (c + 0.5) * bww
+                        lw = bww * r.uniform(0.35, 0.8)
+                        gm = 'glow:window' if r.random() < 0.8 else 'glow:dim'
+                        if face == 0:
+                            g.merge(bxz(lw, 0.2, fh * 0.36, tx + u, y0 - 0.16, zf + fh * 0.25, mat=gm))
+                        else:
+                            sx_ = 1 if face == 1 else -1
+                            g.merge(bxz(0.2, lw, fh * 0.36, tx + sx_ * (tw / 2 + 0.16), ty + u, zf + fh * 0.25, mat=gm))
         zc += th
         tops.append((tw, td, tx, ty, zc))
     # rooftop clutter on every tier top: vents / boxes every 10-20 m
@@ -347,7 +366,7 @@ def far_complex(seed, sx, sy, h, stacks=True):
             hs = r.uniform(30, 90)
             rs = r.uniform(1.6, 3.4)
             g.merge(P.lathe([(0.0, 0.0), (rs * 1.4, 0.0), (rs, hs), (rs * 0.85, hs), (0.0, hs - 1)], 12, 'far').move(x, y, zt + 1.2))
-            g.merge(P.cylinder(rs * 0.85, 0.3, 12, bevel=0.0, mat='glow:furnace' if r.random() < 0.4 else 'far:dark', z0=zt + hs).move(x, y, 0))
+            g.merge(P.ring(rs * 1.0, rs * 0.7, 1.2, 12, bevel=0.0, mat='far:dark', z0=zt + hs - 0.6).move(x, y, 0))
             if hs > 50:
                 g.merge(beacon(x + rs * 0.6, y, zt + hs + 1.6, 1.0))
     # facade pipe rack across the front + lattice gantry tower
@@ -374,7 +393,7 @@ def far_complex(seed, sx, sy, h, stacks=True):
     return g
 
 
-def furnace_mega(h=300.0, seed=7):
+def furnace_mega(h=300.0, seed=7, stoves=4, mirror=False, skip=1.0):
     """Horizon-scale blast furnace (far material): braced tower, top house, downcomer,
     cowper stoves, glowing casthouse slot. ~70 x 50 m footprint."""
     r = random.Random(seed)
@@ -401,18 +420,26 @@ def furnace_mega(h=300.0, seed=7):
         g.merge(tube(p1, p1 + V((0, 0, 8 * s)), 0.9 * s, 'far:dark', 8))
     g.merge(tube((0, 0, 92 * s), (-30 * s, 0, 40 * s), 2.0 * s, 'far', 10))
     g.merge(P.lathe([(0.0, 20 * s), (2 * s, 20 * s), (8 * s, 28 * s), (8 * s, 40 * s), (0.0, 44 * s)], 14, 'far').move(-34 * s, 0, 0))
-    for k in range(4):                                                              # stoves
-        g.merge(P.lathe([(0.0, 0.0), (6 * s, 0.0), (6 * s, 44 * s), (4 * s, 49 * s), (0.0, 50 * s)], 14, 'far:dark').move((k - 1.5) * 14 * s, 34 * s, 0))
+    for k in range(stoves):                                                         # stoves (3-5)
+        hs_ = r.uniform(0.85, 1.1)
+        g.merge(P.lathe([(0.0, 0.0), (6 * s, 0.0), (6 * s, 44 * s * hs_), (4 * s, 49 * s * hs_), (0.0, 50 * s * hs_)], 14, 'far:dark').move((k - (stoves - 1) / 2) * 14 * s, 34 * s, 0))
+        g.merge(P.ring(6.3 * s, 5.9 * s, 0.8 * s, 14, bevel=0.0, mat='far', z0=40 * s * hs_).move((k - (stoves - 1) / 2) * 14 * s, 34 * s, 0))
+    g.merge(tube(V(((-(stoves - 1) / 2) * 14 * s, 34 * s - 7 * s, 30 * s)), V((((stoves - 1) / 2) * 14 * s, 34 * s - 7 * s, 30 * s)), 1.6 * s, 'far', 8))
     g.merge(bxz(46 * s, 30 * s, 22 * s, 0, -28 * s, 0.0, mat='far'))                  # casthouse
     g.merge(bxz(30 * s, 0.4, 3 * s, 0, -43 * s - 0.3, 1.0, mat='glow:furnace'))
     g.merge(bxz(26 * s, 0.4, 9 * s, 0, -43 * s - 0.25, 1.0, mat='glow:furnace_grad'))
     top = V((10 * s, 0, 70 * s))
-    foot = V((80 * s, 0, 0))
+    foot = V((80 * s * skip, 0, 0))
     g.merge(beam(top, foot, 5 * s, 4 * s, 'far:dark'))                              # skip incline
+    for t in (0.35, 0.65):
+        p_ = top + (foot - top) * t
+        g.merge(bxz(2.0 * s, 4.0 * s, p_.z, p_.x, 0, 0.0, mat='far:dark'))
     for z in (14, 30, 44, 58, 72):
         if r.random() < 0.7:
             g.merge(beacon(cw, -cw, z * s + 1.6, 1.2))
     g.merge(beacon(0, 0, 82 * s + 1.0, 1.6))
+    if mirror:
+        g.mirror('X')
     return g
 
 
@@ -594,3 +621,45 @@ def embers(seed=9, s=3.0):
         g.merge(b)
     g.merge(P.dome(s * 1.3, 0.3, segs=14, rings=3, mat='heap:coal'))
     return g
+
+
+def ground_cables(L=26.0, n=4, seed=3):
+    """Heavy power cables snaking across the deck (walk-through, < 0.25 m), a cable junction box
+    and a cable reel stand at the ends. Local run along X."""
+    r = random.Random(seed)
+    g = Geo()
+    for i in range(n):
+        y0 = (i - (n - 1) / 2) * 0.55 + r.uniform(-0.2, 0.2)
+        pts = []
+        for k in range(9):
+            x = -L / 2 + L * k / 8
+            pts.append(V((x, y0 + math.sin(k * 0.9 + i * 1.7 + r.uniform(0, 1)) * r.uniform(0.6, 2.2), 0.09 + 0.03 * i)))
+        g.merge(P.sweep(pts, r.uniform(0.07, 0.12), 6, mat=r.choice(['steel:black', 'steel:black', 'steel:dark']), smooth_path=True, subdiv=3))
+    g.merge(bxz(1.6, 1.2, 1.1, -L / 2 - 0.6, 0, 0.0, mat='steel:yellow'))
+    g.merge(bxz(1.62, 0.06, 0.3, -L / 2 - 0.6, -0.62, 0.6, mat='trim:hazard2'))
+    g.merge(bxz(1.4, 1.4, 0.15, L / 2 + 0.4, 0, 0.0, mat='steel:dark'))
+    return g
+
+
+def ash_patch(rx=6.0, ry=4.0, h=0.32, seed=1):
+    """Low wind-shaped ash / ore-dust mound on open ground (walk-through)."""
+    r = random.Random(seed)
+    verts, faces = [], []
+    rings, segs = 4, 18
+    ph = [r.uniform(0, TAU) for _ in range(3)]
+    for i in range(rings + 1):
+        t = i / rings
+        for j in range(segs):
+            a = TAU * j / segs
+            wob = 1 + 0.18 * math.sin(2 * a + ph[0]) + 0.1 * math.sin(5 * a + ph[1])
+            rr = (1 - t) * wob
+            z = h * (1 - (1 - t) ** 2) * (0.85 + 0.15 * math.sin(3 * a + ph[2])) if i > 0 else -0.04
+            verts.append((math.cos(a) * rx * rr, math.sin(a) * ry * rr, z))
+    top = len(verts)
+    verts.append((0.0, 0.0, h))
+    for i in range(rings):
+        for j in range(segs):
+            j2 = (j + 1) % segs
+            a_, b_, c_, d_ = i * segs + j, i * segs + j2, (i + 1) * segs + j2, (i + 1) * segs + j
+            faces.append((a_, b_, top) if i == rings - 1 else (a_, b_, c_, d_))
+    return Geo.from_pydata(verts, faces, 'heap:dust')

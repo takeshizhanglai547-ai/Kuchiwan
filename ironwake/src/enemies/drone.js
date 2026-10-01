@@ -30,9 +30,12 @@ export const DRONE_AI = {
     slot: 'R', group: 'drone', aimTime: 0.38, glintAt: 0.14, errStart: 6, errEnd: 2.2, errTau: 0.14,
     sight: false, glintFx: 'iw_glint', glintScale: 0.7, tell: 'drone', retry: 0.5, holdSight: 0, range: 240,
   },
-  trackTau: 0.4, lead: 0.9,
+  trackTau: 0.2, lead: 0.9,
   wreck: { gravity: 34, spin: 9, maxT: 2.2 },
+  swarm: { join: 140, trail: 0.22, wide: 9, high: 5 },
 };
+
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 const _want = new THREE.Vector3(), _goal = new THREE.Vector3(), _feet = new THREE.Vector3(), _to = new THREE.Vector3();
 const _sep = new THREE.Vector3(), _v = new THREE.Vector3();
@@ -69,6 +72,7 @@ export class Drone extends Enemy {
     this.dirSign = this.rng.chance(0.5) ? 1 : -1;
     this.diveT = this.rng.range(DRONE_AI.dive.every[0], DRONE_AI.dive.every[1]);
     this.diveTok = false; this.crashed = false;
+    this.lead = null; this.wingT = 0.5;
     this.root.visible = true;
     if (this.body3d) this.body3d.rotation.set(0, 0, 0);
     this.setState('orbit');
@@ -94,6 +98,18 @@ export class Drone extends Enemy {
     burnModel(this.root, burntMaterial());
   }
 
+  /** Nearest alive gnat spawned earlier (no cycles: leads always have a lower seq). */
+  _pickLead() {
+    const E = this.game.enemies;
+    let best = null, bd = DRONE_AI.swarm.join;
+    if (E) for (const o of E.list) {
+      if (o === this || o.type !== 'drone' || !o.alive || o.seq > this.seq) continue;
+      const d = this.pos.distanceTo(o.pos);
+      if (d < bd) { bd = d; best = o; }
+    }
+    if (best !== this.lead) { this.lead = best; const T = this.tele; if (T && best) T.joins++; }
+  }
+
   _giveDive() { if (this.diveTok) { const E = this.game.enemies; if (E && E.tokens) E.tokens.give('dive'); this.diveTok = false; } }
 
   update(dt) {
@@ -114,6 +130,19 @@ export class Drone extends Enemy {
         _want.copy(this.vel); _want.y -= 20 * dt;
         if (this.stateT > 0.9) this.setState('orbit');
       } else if (this.state === 'orbit' || this.state === 'climb') {
+        // SWARM: a gnat flies as the wingman of the nearest earlier gnat (same orbit direction,
+        // trailing a few degrees behind, stacked slightly higher / wider) -> pairs and strings
+        // instead of independent satellites; a lead that dies or dives frees its wingmen
+        this.wingT -= dt;
+        if (this.wingT <= 0) { this.wingT = 1; this._pickLead(); }
+        const L = this.lead;
+        if (L && L.state === 'orbit' && this.state === 'orbit') {
+          this.dirSign = L.dirSign;
+          const want = L.orbit - L.dirSign * A.swarm.trail;
+          this.orbit += wrap(want - this.orbit) * Math.min(1, dt * 1.5);
+          this.orbitR += (L.orbitR + A.swarm.wide - this.orbitR) * Math.min(1, dt * 0.8);
+          this.alt += (L.alt + A.swarm.high - this.alt) * Math.min(1, dt * 0.8);
+        }
         this.orbit += this.dirSign * dt * A.orbitRate;
         const r = this.state === 'climb' ? this.orbitR + 25 : this.orbitR;
         _goal.set(t.pos.x + Math.sin(this.orbit) * r, t.pos.y + this.alt + Math.sin(this.phase * A.bob[1]) * A.bob[0], t.pos.z + Math.cos(this.orbit) * r);

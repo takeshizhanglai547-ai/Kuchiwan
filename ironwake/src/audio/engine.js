@@ -6,7 +6,7 @@
 //
 // Mix graph
 //   voice -> [air-absorption LP -> Panner(equalpower, inverse)] -> bus ; send -> Convolver
-//   sfx bus + booster beds -------- duckWorld --\
+//   sfx bus + booster beds (HP 42 Hz, low shelf -3.5 dB: sub belongs to impacts) -- duckWorld --\
 //   impact bus + reverb return + ambience ------- worldSum -> pauseLP -> pre
 //   music -> EQ (sub shelf -3, 2.8 kHz -3.5 carve for UI chirps, top -3) -> duckMusic -> pre
 //   ui / stinger / voice (+ analyser) --------------------------------------------> pre
@@ -18,13 +18,14 @@ import { SFX, PRERENDER_ORDER, renderSfx } from './sfx.js';
 import { makeRng, hashStr, gain, filt, chain, shaper } from './dsp.js';
 import { makeFoundryIR } from './reverb.js';
 import { MusicPlayer } from './music.js';
-import { createJetBed, createServoBed, createAmbience, createEmitter } from './beds.js';
+import { createJetBed, createServoBed, createAmbience, createEmitter, createRocket } from './beds.js';
 import { speak } from './voice.js';
 
 /** Mixer tunables (linear gains unless noted). */
 export const MIXER = {
   master: 0.85,
-  bus: { sfx: 0.9, impact: 0.95, ui: 0.62, stinger: 0.85, voice: 0.8, music: 0.3, bed: 0.4, amb: 0.3 },
+  bus: { sfx: 0.9, impact: 0.95, ui: 0.62, stinger: 0.85, voice: 0.8, music: 0.3, bed: 0.34, amb: 0.3 },
+  bedEQ: { hp: 42, shelfF: 140, shelfDb: -3.5 }, // keep the sub octave for impacts: booster roar is low-mid
   reverbReturn: 0.62,
   maxVoices: 44,
   cull: 0.01,                 // drop voices quieter than this after distance attenuation
@@ -36,7 +37,17 @@ export const MIXER = {
   voiceDuck: 0.62,            // music level while the comm voice talks
   emitters: 4,                // spatial machinery loops for the nearest enemies
   emitRange: 160,             // m
+  rockets: 3,                 // spatial rocket-motor loops for the nearest missiles in flight
+  rocketRange: 170,           // m
+  occlusion: { cut: 0.22, gain: 0.55, send: 0.3 }, // fully occluded: LP x cut, gain x, + reverb send
 };
+
+/** Air-absorption low-pass cutoff (Hz) for a source `d` metres away (x occlusion factor). */
+export function airCutoff(d, occl = 0) {
+  const A = MIXER.air;
+  const f = Math.max(A.min, A.near / Math.pow(1 + d / A.d0, A.pow));
+  return occl > 0 ? Math.max(A.min * 0.5, f * (1 - (1 - MIXER.occlusion.cut) * occl)) : f;
+}
 
 const NO_OPTS = {};
 
@@ -53,6 +64,7 @@ export class AudioEngine {
     this.voiceEnd = 0;
     this.logIds = new Array(64).fill(''); this.logT = new Float32Array(64); this.logN = 0; // recent plays (debug)
     this.counts = {};
+    this.occluded = 0; // plays that were line-of-sight occluded (debug)
     this._build();
   }
 
@@ -76,7 +88,9 @@ export class AudioEngine {
       sfx: gain(c, B.sfx), impact: gain(c, B.impact), ui: gain(c, B.ui), stinger: gain(c, B.stinger),
       voice: gain(c, B.voice), bed: gain(c, B.bed), amb: gain(c, B.amb), music: gain(c, B.music * this.musicVolume),
     };
-    bus.sfx.connect(this.duckWorld); bus.bed.connect(this.duckWorld);
+    bus.sfx.connect(this.duckWorld);
+    const BE = MIXER.bedEQ;
+    chain(bus.bed, filt(c, 'highpass', BE.hp, 0.7), filt(c, 'lowshelf', BE.shelfF, 0.7, BE.shelfDb), this.duckWorld);
     bus.impact.connect(worldSum); bus.amb.connect(worldSum);
     bus.ui.connect(pre); bus.stinger.connect(pre);
     this.meter = c.createAnalyser(); this.meter.fftSize = 512;
@@ -91,14 +105,22 @@ export class AudioEngine {
     const r = makeRng(4242);
     this.jet = createJetBed(c, bus.bed, r);
     this.bossPan = this._panner(28);
-    this.bossPan.connect(bus.sfx);
-    this.bossJet = createJetBed(c, this.bossPan, r, 0.85);
+    this.bossLP = filt(c, 'lowpass', 18000, 0.5);
+    chain(this.bossLP, this.bossPan, bus.sfx);
+    this.bossJet = createJetBed(c, this.bossLP, r, 0.85);
     this.servo = createServoBed(c, bus.bed);
     // pooled spatial emitters for enemy machinery (nearest N enemies)
     this.emitters = [];
+    // (each: emitter -> air-absorption / occlusion LP -> panner -> sfx bus)
     for (let i = 0; i < MIXER.emitters; i++) {
-      const pan = this._panner(18); pan.connect(bus.sfx);
-      this.emitters.push({ pan, em: createEmitter(c, pan, r), actor: null });
+      const pan = this._panner(18), lp = filt(c, 'lowpass', 18000, 0.5); chain(lp, pan, bus.sfx);
+      this.emitters.push({ pan, lp, em: createEmitter(c, lp, r), actor: null, occl: 0 });
+    }
+    // pooled rocket-motor emitters for missiles in flight (Doppler-shifted)
+    this.rockets = [];
+    for (let i = 0; i < MIXER.rockets; i++) {
+      const pan = this._panner(10), lp = filt(c, 'lowpass', 18000, 0.5); chain(lp, pan, bus.sfx);
+      this.rockets.push({ pan, lp, rk: createRocket(c, lp, r), p: null });
     }
     this.amb = createAmbience(c, bus.amb, r);
     this.music = new MusicPlayer(c, bus.music);
@@ -192,6 +214,8 @@ export class AudioEngine {
     let vol = o.volume !== undefined ? o.volume : 1;
     if (vol <= 0) return false;
     const spatial = D.spatial !== false && !!o.pos;
+    const occl = spatial && o.occl ? o.occl : 0; // 0..1 line-of-sight occlusion (audio.js raycasts)
+    if (occl) { vol *= 1 - (1 - MIXER.occlusion.gain) * occl; this.occluded++; }
     const ref = D.ref || 20;
     let dist = 0, att = 1;
     if (spatial) {
@@ -212,15 +236,14 @@ export class AudioEngine {
     const nodes = [out];
     let tail = out, send = D.send || 0;
     if (spatial) {
-      const A = MIXER.air;
-      const lp = filt(ctx, 'lowpass', Math.max(A.min, A.near / Math.pow(1 + dist / A.d0, A.pow)), 0.5);
+      const lp = filt(ctx, 'lowpass', airCutoff(dist, occl), 0.5);
       const pan = this._panner(ref);
       AudioEngine.setPos(pan, o.pos.x, o.pos.y, o.pos.z);
       chain(out, lp, pan, this.bus[D.bus] || this.bus.sfx);
       nodes.push(lp, pan);
       tail = lp;
       const S = MIXER.distSend;
-      send = Math.min(1, send + Math.min(S.max, Math.max(0, dist - S.from) / 100 * S.per100));
+      send = Math.min(1, send + Math.min(S.max, Math.max(0, dist - S.from) / 100 * S.per100) + occl * MIXER.occlusion.send);
       send *= Math.sqrt(att); // far sounds are wetter than dry, never louder
     } else out.connect(this.bus[D.bus] || this.bus.sfx);
     if (send > 0.001) { const sg = gain(ctx, send); chain(tail, sg, this.reverbIn); nodes.push(sg); }
@@ -320,7 +343,8 @@ export class AudioEngine {
       state: this.ctx.state, sampleRate: this.ctx.sampleRate, voices: this.voices.length,
       bank: this.bank.size, bankTotal: PRERENDER_ORDER.length, musicLayers: this.music.ready,
       musicState: this.music.state, time: +this.ctx.currentTime.toFixed(2), counts: { ...this.counts },
-      radio: this.ctx.currentTime < this.voiceEnd,
+      radio: this.ctx.currentTime < this.voiceEnd, occluded: this.occluded,
+      rockets: this.rockets.reduce((n, s) => n + (s.p ? 1 : 0), 0), emitters: this.emitters.reduce((n, s) => n + (s.actor ? 1 : 0), 0),
       recent: Array.from({ length: Math.min(12, this.logN) }, (_, k) => { const i = (this.logN - 1 - k) & 63; return `${this.logIds[i]}@${this.logT[i].toFixed(2)}`; }),
     };
   }

@@ -15,11 +15,14 @@
 //   rebakeFarShadow()                re-render the static far cascade (after arena changes)
 //   preRender(camera)                called by the pipeline right before the scene pass
 //
-// Shadows: near cascade = 4096² (high) / 2048² (medium, low) box around focus, pushed ~R/2
-// ahead of the camera, light-aligned, texel-snapped, updated every frame. Far cascade = one
+// Shadows: near cascade = 4096² (high) / 2048² (medium, low) box around focus (or around the
+// camera when the focus is a far look-at point, e.g. free shot cameras), pushed ~R/2 ahead
+// along the view, light-aligned, texel-snapped, updated every frame. Far cascade = one
 // 4096²/2048² bake of the static arena (no per-frame cost); low quality skips it. Both are
 // blended in the lighting chunk (atmosphere.js). Light count is constant (2 directional +
-// 1 hemisphere) at every quality level.
+// 1 hemisphere) at every quality level. The IBL (PMREM of the sky dome) uses a warm
+// ground-bounce lower hemisphere (ATMOS.sky.bounce) so shaded rigs keep a readable fill.
+// Dev-only: &sun=azimuthDeg,elevationDeg overrides the art-directed sun.
 import * as THREE from 'three';
 import { ATMOS, sunDirection, installAtmosphereChunks, softwareRendererName } from './atmosphere.js';
 import { createNoiseTexture, createSky } from './sky.js';
@@ -52,8 +55,20 @@ function autoQuality(game) {
   } catch (e) { /* keep the requested quality */ }
 }
 
+/** Dev-only: &sun=azimuthDeg,elevationDeg overrides the art-directed sun (before any shader bakes it). */
+function devSun() {
+  try {
+    const v = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sun');
+    if (!v) return;
+    const [az, el] = v.split(',').map(Number);
+    if (Number.isFinite(az)) ATMOS.sun.azimuthDeg = az;
+    if (Number.isFinite(el)) ATMOS.sun.elevationDeg = el;
+  } catch (e) { /* keep defaults */ }
+}
+
 export default function environmentSystem(game) {
   autoQuality(game);
+  devSun();
   const palette = {
     zenith: new THREE.Color(ATMOS.sky.zenith),
     horizon: new THREE.Color(ATMOS.sky.horizon),
@@ -77,6 +92,7 @@ export default function environmentSystem(game) {
   const _c = new THREE.Vector3(), _f = new THREE.Vector3(), _v = new THREE.Vector3();
   const lastCam = new THREE.Vector3(); let lastTime = -1;
   const camVel = new THREE.Vector3();
+  const _db = new THREE.Vector2();
 
   /** Ortho extents (light space) of a light-aligned world box: half R across/along, hy up. */
   const _ext = { x: 0, y: 0 };
@@ -162,8 +178,10 @@ export default function environmentSystem(game) {
       sun.name = 'sun';
       sun.castShadow = true;
       sun.shadow.mapSize.set(Q.nearMap, Q.nearMap);
-      sun.shadow.bias = -0.00012;
-      sun.shadow.normalBias = 0.035;
+      // light-space depth spans ~1.7 km (tall stacks far up-sun still shade the box), so the
+      // depth bias is tiny (≈ 4 cm) and slope acne is handled by the normal offset instead
+      sun.shadow.bias = -0.000025;
+      sun.shadow.normalBias = 0.045;
       sun.shadow.radius = 1.0;
       scene.add(sun); scene.add(sun.target);
 
@@ -186,13 +204,18 @@ export default function environmentSystem(game) {
       const envSky = new THREE.Mesh(sky.mesh.geometry, sky.material);
       envSky.frustumCulled = false;
       envScene.add(envSky);
+      // the lower hemisphere stands in for the sun-lit yard (warm bounce), not the dark far ground
+      const g0 = sky.uniforms.uGround.value.clone();
+      sky.uniforms.uGround.value.set(ATMOS.sky.bounce);
       envRT = pmrem.fromScene(envScene, 0.03, 0.1, 2000);
+      sky.uniforms.uGround.value.copy(g0);
       scene.environment = envRT.texture;
       scene.environmentIntensity = ATMOS.envIntensity;
       pmrem.dispose();
 
       // Falling ash (replaces the arena's placeholder flakes, see preRender)
-      weather = createWeather(Q.flakes, { sunDir, sunColor: palette.sun.clone().multiplyScalar(ATMOS.sun.intensity * 0.35), ambient: new THREE.Color(A.sky).multiplyScalar(0.9) });
+      // flake lighting is art-directed (not tied to the key intensity): dark ash motes
+      weather = createWeather(Q.flakes, { sunDir, sunColor: palette.sun.clone().multiplyScalar(1.7), ambient: new THREE.Color('#4E555C').multiplyScalar(1.4) });
       scene.add(weather.mesh);
 
       g.env = api;
@@ -215,8 +238,14 @@ export default function environmentSystem(game) {
       camera.getWorldDirection(_f); _f.y = 0;
       if (_f.lengthSq() < 1e-6) _f.set(0, 0, 1);
       _f.normalize();
-      const hy = nearHY + 8 * Math.ceil(Math.max(focus.y - 16, 0) / 16);
-      _v.copy(focus).addScaledVector(_f, nearHalf * 0.5);
+      // anchor: the focus (player / subject) when it is near the camera, else the camera itself
+      // (free cameras looking at a far point must still get crisp foreground shadows)
+      const fx = focus.x - camera.position.x, fz = focus.z - camera.position.z;
+      const near = fx * fx + fz * fz < (nearHalf * 0.9) * (nearHalf * 0.9);
+      const anchorY = near ? focus.y : Math.min(camera.position.y, focus.y);
+      const hy = nearHY + 8 * Math.ceil(Math.max(anchorY - 16, 0) / 16);
+      if (near) _v.copy(focus).addScaledVector(_f, nearHalf * 0.5);
+      else _v.copy(camera.position).addScaledVector(_f, nearHalf * 0.62);
       _v.y = hy - 6;
       configureCascade(sun, _v, nearHalf, hy, sun.shadow.mapSize.x, 1500);
       if (farPending && !farBaked && g.arena && g.arena.root) bakeFar(g);
@@ -227,7 +256,8 @@ export default function environmentSystem(game) {
         if (camVel.lengthSq() > 190 * 190) camVel.set(0, 0, 0); // camera cut, not motion
       } else if (lastTime < 0 || t !== lastTime) camVel.set(0, 0, 0);
       lastCam.copy(camera.position); lastTime = t;
-      weather.update(camera, t, camVel);
+      g.renderer.getDrawingBufferSize(_db);
+      weather.update(camera, t, camVel, _db.y);
       // the environment owns the atmosphere: the arena's placeholder flakes are replaced
       const aash = g.arena && g.arena.ash;
       if (aash && aash.mesh && aash.mesh.visible && weather.mesh.visible) aash.mesh.visible = false;

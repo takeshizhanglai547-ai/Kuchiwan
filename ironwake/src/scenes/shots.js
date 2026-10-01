@@ -259,20 +259,29 @@ export const SHOTS = {
   },
 
   boss_fight: {
-    desc: 'Mid-fight with the boss (rifle + lock)',
+    desc: 'Mid-fight with the boss (rifle + lock): limiter released, CINDERHOUND closing in behind a telegraphed blade lunge',
     frames: [0, 10], hud: true,
     async setup(S) {
       S.begin();
       S.place(S.rel(40, 10), S.yaw);
       S.game.mission.forceStage(2);
       S.steps(300);
-      const boss = S.game.enemies.boss;
-      S.aimAt(boss.aimPoint(V(0, 0, 0)));
+      const boss = S.game.enemies.boss, aim = V(0, 0, 0);
+      // (enemies lane) the pilot keeps the rig in the reticle and fires; the drop-in plays out
       S.press('fire_r');
-      S.steps(40);
-      // (enemies lane) the rig lands and postures for ~1 s: fight on until it commits to a
-      // telegraphed attack (glint), so the capture shows the duel, not the entry
-      for (let i = 0; i < 900 && !(boss.state === 'fight' && boss.atk && boss.atk !== 'rifle' && boss.atk !== 'cover' && boss.atkT > 0.08 && boss.distanceToTarget() < 100); i++) S.steps(1);
+      const track = () => S.aimAt(boss.aimPoint(aim));
+      for (let i = 0; i < 600 && boss.state !== 'fight'; i++) { track(); S.steps(1); }
+      S.steps(60);
+      // mid-fight: knock it past 50 % AP -> LIMITER RELEASED (phase 2: close, aggressive)
+      dealDamage(S.game, boss, { damage: Math.ceil(boss.ap - boss.apMax * 0.46), impact: 0, direct: true, point: boss.pos.clone(), source: S.player, weapon: 'debug' });
+      // once the limiter is off and the rig is free at 40-60 m with a clear line, it commits to a
+      // blade lunge: the capture is the tell - squaring up and closing in, blade glint pulsing
+      const lane = () => boss.state === 'fight' && boss.phase === 1 && !boss.atk && boss.los && boss.motor.mode !== 'stagger' &&
+        boss.distanceToTarget() > 40 && boss.distanceToTarget() < 60 && boss.loadout.slots.L.ready;
+      for (let i = 0; i < 2400 && !lane(); i++) { track(); S.steps(1); }
+      if (lane()) boss._startAttack('blade');
+      for (let i = 0; i < 30 && boss.atk === 'blade' && boss.atkT < 0.17; i++) { track(); S.steps(1); }
+      track();
     },
   },
 

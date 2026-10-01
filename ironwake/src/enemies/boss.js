@@ -2,42 +2,60 @@
 // player, driven by a layered brain (owner: enemy AI designer).
 //
 // LAYERS (every fixed step, deterministic: rng stream 'ai')
+//   0. intro        drops in from 80 m on booster brakes (invulnerable, untargetable) under a
+//                   planted low "hero" camera picked for a 3/4 sun key light; lands, sensor flare,
+//                   then engages with a quick boost
 //   1. locomotion   circle-strafes at the phase's preferred range with ground boost, flips
-//                   direction (often with a quick boost), jumps / hovers, probes walls ahead
-//   2. quick boosts rhythm QBs, REACTIVE DODGES to the player's fire (cannon, missiles, blade
-//                   lunge, sustained rifle hits) after a human-like reaction delay — each gated
-//                   by a dodge cooldown and an EN reserve; escape QB after a stagger
-//   3. attacks      one at a time, picked by weighted choice (range, LOS, cooldowns, phase):
+//                   direction (often with a quick boost), JINKS the strafe heading every
+//                   0.3-0.65 s (breaks lock-on lead), jumps / hovers, probes walls ahead
+//   2. quick boosts rhythm QBs, REACTIVE DODGES to the player's fire (cannon: reads the muzzle
+//                   flash in 0.03-0.09 s; missiles: timed on the lead missile + a reversed
+//                   follow-up QB; blade lunge: backs out; sustained rifle hits) — each gated by a
+//                   dodge cooldown and an EN reserve; escape QB after a stagger
+//   3. attacks      one at a time, picked by weighted choice (range, LOS, EN, cooldowns, phase):
 //                     rifle     LR-3 laser rifle bursts            (tell 0.22 s: small glint)
 //                     missiles  4-cell salvo                        (tell 0.5 s: glint + beeps)
 //                     barrage   P2: 8 vertical cells from a hover   (tell 0.6 s: glint + alarm)
 //                     blade     lunge + slash up close              (tell 0.45 s: glint + hum)
-//                     charge    assault boost at the player (0.25 s glint + 0.6 s AB wind-up),
-//                               strafing fire, ends in a blade lunge (AB->blade combo) or a QB
+//                     charge    assault boost at the player (0.45 s glint + 0.6 s AB wind-up),
+//                               strafing fire; AB->blade combo gets its OWN 0.42 s tell while
+//                               closing, else it peels off with a QB
+//                     plunge    P2: climbs on the boosters, hangs + tells 0.5 s (glint, sensor
+//                               flare, alarm), assault-boosts DOWN at the player, blade lunge from
+//                               the air, landing shockwave
 //                     flank     P2: chained QBs around the player, then a burst from the side
-//                   Big attacks are TELEGRAPHED 0.4-0.6 s ahead (visual glint + tell sound), and
-//                   committed: no dodging during a blade tell/lunge or its recovery (punish window).
+//                     cover     breaks line of sight behind hard cover when it takes burst damage
+//                   Big attacks are TELEGRAPHED 0.4-0.6 s ahead (visual glint + tell sound; the
+//                   real lead is logged per attack) and committed: no dodging during a blade /
+//                   plunge / barrage or its recovery (the punish window).
 //   4. phases       P1 disciplined mid-range duelist; at 50 % AP the LIMITER RELEASE (vent burst,
-//                   radio callout via game.hud.callout) -> P2: closer range, faster motor
-//                   (BOSS_MOVE_P2), new patterns (barrage, flank, AB->blade), quicker dodges.
-//   5. poise        STAGGER windows (2 s, direct hits x1.85 via damage.js) — the gauge fills
-//                   slower right after a stagger (poise recovers over `poiseRecover` s), which
-//                   paces a fight to ~3-5 staggers.
-// TELEMETRY: this.log (dodges, QBs, attacks, tells, hits each way, staggers, distance
-// histogram, phase time) — read by tools/ai_log.mjs.
+//                   radio callout via game.hud.callout) -> P2: close range, faster motor
+//                   (BOSS_MOVE_P2), new patterns (barrage, flank, plunge, AB->blade), quicker
+//                   dodges, a braced stance (phasePoise).
+//   5. durability   AP 24,000 (benchmark) + per-type armour (BOSS_STATS.defense); STAGGER windows
+//                   (2 s, direct hits x1.85 via damage.js) — the gauge fills slower right after a
+//                   stagger (poise), which paces a fight to 3-5 staggers in 60-90 s for an
+//                   auto-aim bot (tools/ai_log.mjs --seeds).
+// TELEMETRY: this.log (dodges, QBs, attacks, real tell leads, hits each way, staggers, distance
+// histogram, per-phase split, timeline) — read by tools/ai_log.mjs.
 import * as THREE from 'three';
 import { Enemy } from './enemy.js';
 import { MechMotor, makeIntent } from '../mech/motor.js';
 import { makePose } from '../mech/rig.js';
 import { MOVE } from '../player/tuning.js';
 import { MoveFx } from '../player/movefx.js';
-import { Loadout } from '../weapons/weapons.js';
+import { Loadout, WEAPONS } from '../weapons/weapons.js';
 import { leadAim, playTell, wrapAngle, pointFree, losFrom, pathClear } from './ai.js';
 
 export const BOSS_STATS = {
   name: 'GC-X1 CINDERHOUND',         // rival rig (docs/AC6_BENCHMARK.md §5)
-  ap: 36000,                         // player loadout ~650-800 DPS with lock (rifle+missiles+cannon, homing missiles cannot be out-boosted) -> 60-150 s
-  acs: { max: 2000, decayDelay: 0.8, decayRate: 0.16, staggerTime: 2.0 },
+  ap: 24000,                         // benchmark §3.6 a2: rival rig 18-24k AP. Fight length (60-150 s) comes from evasion, cover and poise, not from padding AP
+  acs: { max: 2000, decayDelay: 0.8, decayRate: 0.16, staggerTime: 2.0 },   // stagger stability 2,000 (§3.6 a2)
+  // DEFENCE (genre-standard per-type armour: the AP number is the true HP, each hit is scaled by
+  // the rig's anti-kinetic / anti-energy / anti-explosive rating). CINDERHOUND is a foundry rig:
+  // heavy blast plating, so the player's missiles + cannon are blunted and the rifle and the
+  // blade are the real answers. Impact (stagger build-up) is NOT reduced.
+  defense: { kinetic: 0.78, energy: 0.78, explosive: 0.58, blade: 0.75 },
   aimHeight: 6.2,
   accuracy: 0.8,
   // legacy summary (other lanes may read these)
@@ -58,25 +76,29 @@ export const CINDERHOUND_LOADOUT = { R: 'boss_laser', L: 'boss_blade', LB: 'boss
 export const BOSS_AI = {
   phases: [
     { // P1 — disciplined mid-range duelist
-      range: [65, 120], strafeFlip: [2.0, 3.8], flipQB: 0.65, rhythmQB: [1.3, 2.6], jump: [8, 14], hover: [0.5, 1.2], alt: [9, 20],
-      dodge: { cannon: 0.7, missile: 0.6, blade: 0.6, rifle: 0.25 }, dodgeCd: 1.1, enReserve: 24,
+      range: [80, 140], strafeFlip: [1.7, 3.3], flipQB: 0.7, rhythmQB: [0.9, 1.7], jump: [7, 12], hover: [0.5, 1.2], alt: [9, 20],
+      dodge: { cannon: 0.8, missile: 0.8, blade: 0.75, rifle: 0.4 }, dodgeCd: 1.0, enReserve: 24,
       gap: [0.45, 1.1], rifleChain: [1, 2],
-      weights: { rifle: 5, missiles: 2.2, blade: 2.2, charge: 2, barrage: 0, flank: 0 },
-      cd: { missiles: 6.5, blade: 5, charge: 8, barrage: 99, flank: 99 },
-      chargeMin: 100, abBlade: 0.5,
+      weights: { rifle: 4.2, missiles: 2.4, blade: 2.2, charge: 2.2, barrage: 0, flank: 0, plunge: 0 },
+      cd: { missiles: 6.5, blade: 5, charge: 8, barrage: 99, flank: 99, plunge: 99 },
+      chargeMin: 100, abBlade: 0.55,
     },
-    { // P2 — limiter released: aggressive, close, air-mobile
-      range: [40, 90], strafeFlip: [1.6, 3.2], flipQB: 0.75, rhythmQB: [1.3, 2.6], jump: [5, 9], hover: [0.6, 1.6], alt: [12, 30],
-      dodge: { cannon: 0.75, missile: 0.75, blade: 0.7, rifle: 0.3 }, dodgeCd: 0.85, enReserve: 22,
-      gap: [0.3, 0.8], rifleChain: [2, 3],
-      weights: { rifle: 3.5, missiles: 0.8, blade: 2.8, charge: 2.6, barrage: 2, flank: 1.6 },
-      cd: { missiles: 6, blade: 3.8, charge: 7, barrage: 9, flank: 7 },
+    { // P2 — limiter released: aggressive, close, air-mobile (new: barrage, QB flank, plunge, AB->blade)
+      range: [32, 80], strafeFlip: [1.4, 2.8], flipQB: 0.8, rhythmQB: [0.8, 1.5], jump: [5, 9], hover: [0.6, 1.6], alt: [12, 30],
+      dodge: { cannon: 0.85, missile: 0.88, blade: 0.8, rifle: 0.45 }, dodgeCd: 0.8, enReserve: 22,
+      gap: [0.2, 0.55], rifleChain: [2, 3],
+      weights: { rifle: 3.4, missiles: 0.9, blade: 2.6, charge: 2.2, barrage: 2.2, flank: 2, plunge: 3.2 },
+      cd: { missiles: 6, blade: 3.8, charge: 7, barrage: 9, flank: 7, plunge: 9 },
       chargeMin: 80, abBlade: 0.85,
     },
   ],
-  tell: { rifle: 0.22, missiles: 0.5, barrage: 0.6, blade: 0.45, charge: 0.25, flank: 0, cover: 0 },
+  // Telegraph lead (s) between the tell (glint + sound) and the moment the attack can hurt.
+  // Big attacks sit in the fair 0.4-0.6 s window; the rifle burst is a small, fast tell.
+  tell: { rifle: 0.22, missiles: 0.5, barrage: 0.6, blade: 0.45, charge: 0.45, flank: 0, cover: 0, plunge: 0.5, abBlade: 0.42 },
+  combo: { missiles: 0.8, barrage: 0.8, blade: 0.5, flank: 0.4 },   // P2: chance the attack flows into a rifle burst
+  plunge: { alt: [24, 32], riseMax: 1.7, blade: 66, maxT: 2.6, slamR: 18 },
   reaction: [0.12, 0.24],       // s between seeing the shot and the dodge
-  missileLate: [0.06, 0.16],    // missiles: dodge this long BEFORE the estimated arrival (late = breaks homing)
+  missileLate: [-0.08, 0.02],   // missiles: dodge this long BEFORE the lead missile's estimated arrival (late = breaks homing of the middle of the salvo)
   bladeRange: 90,               // start a blade tell inside this (gap-close QB when beyond lungeReach)
   lungeReach: 76,               // boss_blade lungeRange + reach
   abBladeRange: 62,             // assault-boost -> blade combo trigger distance
@@ -86,12 +108,21 @@ export const BOSS_AI = {
   recover: [0.3, 0.55],         // after an attack before the next pick
   postBlade: 0.55,              // committed recovery after a slash (punish window)
   staggerEscape: 0.75,          // chance to QB out when a stagger ends
-  cover: { heat: [2600, 3400], heatTau: 3, cd: [11, 8], go: 3.2, hide: [0.7, 1.3], ring: [38, 62, 88], afterStagger: 0.4 },
-  poise: { min: 0.45, recover: 10, entry: 0.5, entryRecover: 10 },   // impact multiplier right after a stagger -> 1 over `recover` s
+  cover: { heat: [2100, 2700], heatTau: 3, cd: [11, 8], go: 3.2, hide: [0.7, 1.3], ring: [38, 62, 88], afterStagger: 0.4 },
+  poise: { min: 0.4, recover: 12, entry: 0.5, entryRecover: 10 },
+  phasePoise: [1, 0.8],          // limiter released: a braced stance, the gauge fills 20 % slower   // impact multiplier right after a stagger -> 1 over `recover` s
   rifleHits: { n: 4, window: 1.0 },   // "under sustained fire" trigger for the rifle dodge
-  intro: { height: 80, fallSpeed: 26, brakeAlt: 30, brakeSpeed: 24, posture: 1.1 },
-  // drop-in cinematic: telephoto from over the player's shoulder while the rig is invulnerable
-  cine: { back: 10, side: 9, up: 7, fov0: 32, fov1: 22, zoomT: 2.4 },
+  jink: { every: [0.3, 0.65], angle: 0.9 },
+  reactionCannon: [0.03, 0.09],
+  reactionBlade: [0.05, 0.12],   // the lunge wind-up flare  // the cannon's muzzle flash / recoil is the most readable tell there is
+  missileFollowUp: 0.55,         // chance of a second QB to shake the re-tracking missiles
+  intro: { height: 80, fallSpeed: 26, brakeAlt: 30, brakeSpeed: 24, posture: 1.1, glow: 36 },
+  // drop-in cinematic (rig invulnerable + untargetable): a low "hero" camera planted between the
+  // landing point and the player, looking up at the braking rig; slow push-in + zoom. The rig is
+  // framed off-centre (screen fractions sx, sy) so the HUD reticle never sits on it.
+  // Falls back to a telephoto over the player's shoulder when no clear spot exists.
+  cine: { near: [34, 26, 44], side: 14, up: 2.0, push: 5, fov0: 44, fov1: 34, zoomT: 3.2, sx: 0.2, sy: 0.3,
+    back: 10, sideFb: 9, upFb: 7, fovFb0: 30, fovFb1: 20 },
 };
 
 const _to = new THREE.Vector3(), _tan = new THREE.Vector3(), _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -99,20 +130,24 @@ const _aim = new THREE.Vector3(), _d = new THREE.Vector3(), _thrust = new THREE.
 const _hit = { hit: false, dist: 0, point: new THREE.Vector3(), normal: new THREE.Vector3(), collider: null, body: null, ground: false };
 const _glintOpts = { scale: 1, vel: null };
 const _tp = new THREE.Vector3();
-const ATTACKS = ['rifle', 'missiles', 'barrage', 'blade', 'charge', 'flank'];
+const ATTACKS = ['rifle', 'missiles', 'barrage', 'blade', 'charge', 'flank', 'plunge'];
 const COVER_DIRS = 12;
-const TELL_NODE = { rifle: 'R', missiles: 'LB', barrage: 'RB', blade: 'L', charge: 'booster_back' };
+const TELL_NODE = { rifle: 'R', missiles: 'LB', barrage: 'RB', blade: 'L', charge: 'booster_back', plunge: 'L', abBlade: 'L' };
 
+function newPhaseLog() {
+  return { time: 0, attacks: {}, dodges: 0, dodgeTriggers: 0, qb: 0, dmgTaken: 0, hitsOnPlayer: 0, dmgOnPlayer: 0, staggers: 0, distSum: 0, enSum: 0, steps: 0 };
+}
 function newLog() {
   return {
     engagedAt: -1, killedAt: -1, time: 0, phase2At: -1,
     dodges: { cannon: 0, missile: 0, blade: 0, rifle: 0 }, dodgeTriggers: { cannon: 0, missile: 0, blade: 0, rifle: 0 },
-    qb: { total: 0, rhythm: 0, flip: 0, dodge: 0, gap: 0, escape: 0, flank: 0, charge: 0, range: 0, cover: 0 },
-    attacks: { rifle: 0, missiles: 0, barrage: 0, blade: 0, charge: 0, flank: 0, cover: 0 },
-    tells: 0, tellLead: [], jumps: 0, ab: 0,
+    qb: { total: 0, rhythm: 0, flip: 0, dodge: 0, gap: 0, escape: 0, flank: 0, charge: 0, range: 0, cover: 0, plunge: 0 },
+    attacks: { rifle: 0, missiles: 0, barrage: 0, blade: 0, charge: 0, flank: 0, cover: 0, plunge: 0, ab_blade: 0 },
+    tells: 0, tellLead: [], tellBy: {}, jumps: 0, ab: 0, combos: 0,
     hitsOnPlayer: { boss_laser: 0, boss_missile: 0, boss_barrage: 0, boss_blade: 0, other: 0 }, dmgOnPlayer: 0,
     hitsTaken: 0, dmgTaken: 0, takenBy: {}, staggers: [], bladeSlashes: 0, bladeHits: 0,
     distHist: new Array(16).fill(0), distStep: 20, modeSteps: {}, steps: 0, ranges: BOSS_AI.phases.map((p) => p.range),
+    phases: [newPhaseLog(), newPhaseLog()],
     timeline: [],   // [t, dist, ap, event?] sampled at 5 Hz (+ events)
   };
 }
@@ -141,7 +176,7 @@ export class Boss extends Enemy {
     this.poise = 1;
     // poise: impact that reaches the ACS gauge is scaled (stagger pacing); per-instance wrap
     const acs = this.acs, base = acs.addImpact.bind(acs);
-    acs.addImpact = (imp) => base(imp * this.poise);
+    acs.addImpact = (imp) => base(imp * this.poise * BOSS_AI.phasePoise[this.phase]);
     this._resetBrain();
   }
 
@@ -153,11 +188,12 @@ export class Boss extends Enemy {
     this.qbT = 2; this.flipT = 3; this.jumpT = 6; this.hoverT = 0; this.airAlt = 12; this.strafe = 1; this.probeT = 0;
     this.dodge = null; this.dodgeT = 0; this.dodgeCd = 0;
     this.atk = null; this.atkT = 0; this.atkStage = ''; this.atkN = 0; this.gapT = 1.2;
-    this.cd = { rifle: 0, missiles: 3, barrage: 0, blade: 2, charge: 6, flank: 0 };
+    this.cd = { rifle: 0, missiles: 3, barrage: 0, blade: 2, charge: 6, flank: 0, plunge: 0 };
+    this._tellAt = -1; this._tellKind = ''; this._combo = null; this._plungeAlt = 26; this._slammed = false;
     this.wasStaggered = false; this.phase = 0; this.transT = 0; this.postureT = 0;
     this.deathStage = 0; this.smokeT = 0; this.fxT = 0; this.sampleT = 0;
     this.poise = 1; this.poiseT = 0; this.poise0 = 1; this.poiseDur = 1;
-    this.flipLock = 0; this.qbReason = '';
+    this.flipLock = 0; this.qbReason = ''; this.jinkT = 0; this.jinkA = 0; this._dodgeAgain = 0;
     this.heat = 0; this.coverCd = 6; this.coverPt = this.coverPt || new THREE.Vector3();
     this._lastSalvo = -9; this._pulseT = 0; this._gapQB = false; this._chain = 0; this._fromCover = false; this._hideT = 0; this._cineT = 0; this.aimPitch = 0;
   }
@@ -172,7 +208,8 @@ export class Boss extends Enemy {
     this.motor.disabled = false;
     this.loadout.reset();
     this.invulnerable = true;
-    this.targetable = true;
+    this.targetable = false;               // no lock box / marker over the rig during the drop-in cinematic
+    this._apSeen = this.ap;
     this._resetBrain();
     this.log = newLog();
     this._hitTimes.fill(-99);
@@ -195,7 +232,7 @@ export class Boss extends Enemy {
     if (!this.alive || this.state !== 'fight' || !this.target) return;
     const P = BOSS_AI.phases[this.phase];
     const lk = this.game.lockon;
-    if (slot === 'RB') { if (!lk || lk.target === this) this._wantDodge('cannon', P.dodge.cannon, this.rng.range(BOSS_AI.reaction[0], BOSS_AI.reaction[1])); }
+    if (slot === 'RB') { if (!lk || lk.target === this) this._wantDodge('cannon', P.dodge.cannon, this.rng.range(BOSS_AI.reactionCannon[0], BOSS_AI.reactionCannon[1])); }
     else if (slot === 'LB' && this.game.lockon && this.game.lockon.missileLocks && this.game.lockon.missileLocks.indexOf(this) >= 0) {
       if (this.game.time - (this._lastSalvo || -9) < 0.6) return;        // one decision per salvo
       this._lastSalvo = this.game.time;
@@ -208,10 +245,10 @@ export class Boss extends Enemy {
   playerBlade() {
     if (!this.alive || this.state !== 'fight' || !this.target) return;
     if (this.distanceToTarget() > 95) return;
-    this._wantDodge('blade', BOSS_AI.phases[this.phase].dodge.blade, this.rng.range(BOSS_AI.reaction[0], BOSS_AI.reaction[1]));
+    this._wantDodge('blade', BOSS_AI.phases[this.phase].dodge.blade, this.rng.range(BOSS_AI.reactionBlade[0], BOSS_AI.reactionBlade[1]));
   }
   _wantDodge(kind, chance, delay) {
-    this.log.dodgeTriggers[kind]++;
+    this.log.dodgeTriggers[kind]++; this.log.phases[this.phase].dodgeTriggers++;
     if (!this.rng.chance(chance)) return;
     if (this.dodge && this.dodgeT <= delay) return;                     // an earlier dodge already covers it
     this.dodge = kind;
@@ -219,6 +256,14 @@ export class Boss extends Enemy {
   }
 
   onHit(hit, res) {
+    if (res && res.damage > 0) {
+      // armour: re-apply the hit scaled by the rating before anyone (HUD, telemetry, kill check)
+      // reads the result. _apSeen = AP before this hit (applyHit clamps at 0, so it is tracked).
+      const mul = defenseMul(hit.weapon), before = this._apSeen;
+      const ap = Math.max(0, before - Math.round(res.damage * mul));
+      this.ap = ap; res.damage = before - ap; res.killed = ap <= 0;
+    }
+    this._apSeen = this.ap;
     super.onHit(hit, res);
     if (hit.source === this.game.player) {
       this._hitTimes[this._hitIdx] = this.game.time; this._hitIdx = (this._hitIdx + 1) % this._hitTimes.length;
@@ -242,7 +287,7 @@ export class Boss extends Enemy {
     this.game.audio.play('stagger', { pos: this.pos });
     this._endAttack(true);
     this.dodge = null;
-    this.log.staggers.push(+this.fightTime.toFixed(2));
+    this.log.staggers.push(+this.fightTime.toFixed(2)); this.log.phases[this.phase].staggers++;
     this._event('stagger');
   }
 
@@ -295,7 +340,7 @@ export class Boss extends Enemy {
     _tan.set(-_to.z * s, 0, _to.x * s);
     if (!this._clear(_tan.x, _tan.z, 30)) { s = -s; _tan.negate(); }
     out.copy(_tan);
-    if (kind === 'blade') out.addScaledVector(_to, -0.8);          // back out of the lunge
+    if (kind === 'blade') out.addScaledVector(_to, -1.6);          // back out of the lunge (a pursuing lunge out-turns a pure side-step)
     else if (kind === 'missile') out.addScaledVector(_to, 0.25);   // cut across the salvo
     this.strafe = s;
     return out;
@@ -309,28 +354,57 @@ export class Boss extends Enemy {
   }
 
   _startAttack(kind) {
-    this.atk = kind; this.atkT = 0; this.atkStage = 'tell'; this.atkN = 0;
+    this.atk = kind; this.atkT = 0; this.atkStage = kind === 'plunge' ? 'rise' : 'tell'; this.atkN = 0;
     this.log.attacks[kind]++;
+    this._countPhase(kind);
     if (kind === 'rifle') { const P = BOSS_AI.phases[this.phase]; this._chain = this.rng.int(P.rifleChain[0], P.rifleChain[1]); }
-    const tell = BOSS_AI.tell[kind];
-    if (tell > 0) {
-      this.log.tells++; this.log.tellLead.push(tell);
-      if (TELL_NODE[kind]) this._glint(TELL_NODE[kind], kind !== 'rifle', kind === 'rifle' ? 1.3 : 1);
-      if (kind === 'barrage') this._glint('LB', true);
-      playTell(this.game, 'boss_' + kind, this.pos);
-    }
+    if (kind !== 'plunge') this._tell(kind);
     this._event(kind);
   }
+  /** Telegraph: glint on the weapon about to fire + the tell sound; logs the scheduled lead. */
+  _tell(kind) {
+    const tell = BOSS_AI.tell[kind];
+    if (!(tell > 0)) return;
+    this._tellAt = this.game.time; this._tellKind = kind;
+    this.log.tells++;
+    if (TELL_NODE[kind]) this._glint(TELL_NODE[kind], kind !== 'rifle', kind === 'rifle' ? 1 : 0.8);
+    if (kind === 'barrage') this._glint('LB', true, 0.8);
+    if (kind === 'plunge' || kind === 'charge') { this.rig.getNodeWorld('eye', _v); this.game.fx.spawn('iw_eye_flare', _v, null, 1.1); }
+    playTell(this.game, 'boss_' + kind, this.pos);
+  }
+  /** The telegraphed attack is now able to hurt: record the real tell -> release lead. */
+  _released(kind) {
+    if (this._tellKind !== kind || this._tellAt < 0) return;
+    const lead = +(this.game.time - this._tellAt).toFixed(3), L = this.log;
+    L.tellLead.push(lead);
+    (L.tellBy[kind] || (L.tellBy[kind] = [])).push(lead);
+    this._tellAt = -1;
+  }
+  _countPhase(kind) { const a = this.log.phases[this.phase].attacks; a[kind] = (a[kind] || 0) + 1; }
   _endAttack(interrupted = false) {
     const t = this.triggers;
     t.R = t.L = t.LB = t.RB = false;
-    if (this.atk === 'charge' && this.motor.abActive) this.intent.abToggle = true;
+    if ((this.atk === 'charge' || this.atk === 'plunge') && this.motor.abActive) this.intent.abToggle = true;
     if (this.atk) this.gapT = interrupted ? 0.6 : this.rng.range(BOSS_AI.recover[0], BOSS_AI.recover[1]);
+    const C = BOSS_AI.combo[this.atk];
+    if (!interrupted && this.phase === 1 && C && this.rng.chance(C)) { this._combo = 'rifle'; this.gapT = 0.08; }
     this.atk = null; this.atkStage = '';
+    this._plunging = false; this._tellAt = -1;
+  }
+  /** Heavy landing at the end of a plunge: shockwave + dust + camera shake (visual only). */
+  _slam() {
+    const g = this.game, d = this.distanceToTarget();
+    g.fx.spawn('shockwave', this.pos, null, 1.1);
+    g.fx.spawn('dust_kick', this.pos, null, 2.2);
+    g.audio.play('land', { pos: this.pos, volume: 1, pitch: 0.7 });
+    if (g.cam.shake) g.cam.shake(Math.min(0.55, 22 / Math.max(22, d)));
+    this.rig.landImpact(0.9);
+    this._event('slam');
   }
   /** An attack that must not be broken by dodges (commitment = the player's punish window). */
   get committed() {
-    return this.atk === 'blade' || (this.atk === 'charge' && this.motor.abActive) || this.atk === 'barrage' || this.state === 'transition';
+    return this.atk === 'blade' || (this.atk === 'charge' && this.motor.abActive) || this.atk === 'barrage' || this.state === 'transition' ||
+      (this.atk === 'plunge' && this.atkStage !== 'rise');
   }
 
   /** Point 38-88 m away whose chest height is screened from the target (nearest wins). */
@@ -367,8 +441,9 @@ export class Boss extends Enemy {
         case 'missiles': if (dist < 45 || dist > 320 || !L.LB.ready) x = 0; else if (!los) x *= 1.6; break;
         case 'barrage': if (dist < 40 || dist > 300 || !L.RB.ready || m.en.frac < 0.45) x = 0; break;
         case 'blade': if (dist > BOSS_AI.bladeRange || !L.L.ready || !los) x = 0; else x *= dist < 35 ? 2.2 : 1.2; break;
-        case 'charge': if (dist < (this._fromCover ? 70 : P.chargeMin) || m.en.frac < 0.5 || !los) x = 0; else x *= (dist > 220 ? 3 : 1) * (this._fromCover ? 3 : 1); break;
-        case 'flank': if (dist > 130 || m.en.frac < 0.7 || !los) x = 0; break;
+        case 'charge': if (dist < (this._fromCover ? 70 : P.chargeMin) || m.en.frac < 0.4 || !los) x = 0; else x *= (dist > 220 ? 3 : 1) * (this._fromCover ? 3 : 1); break;
+        case 'flank': if (dist > 130 || m.en.frac < 0.55 || !los) x = 0; break;
+        case 'plunge': if (dist < 40 || dist > 170 || m.en.frac < 0.45 || !L.L.ready || !los) x = 0; break;
       }
       w[k] = x; total += x;
     }
@@ -400,6 +475,7 @@ export class Boss extends Enemy {
       it.aimDir.copy(_v).normalize();
     }
 
+    if (this.state !== 'intro' && this.alive && !this.targetable) this.targetable = true;   // staged shots may skip the intro
     if (this.state === 'intro' && this.alive && t) this._cineStep(dt);
     else if (this._cineObj) this._cineEnd();
     if (this.alive && t) {
@@ -411,7 +487,7 @@ export class Boss extends Enemy {
     m.step(dt, it);
     this.pos.copy(m.pos); this.vel.copy(m.vel); this.yaw = m.yaw;
     this.syncSim();
-    if (this.alive && m.flags.qb) { this.log.qb.total++; if (this.log.qb[this.qbReason] !== undefined) this.log.qb[this.qbReason]++; }
+    if (this.alive && m.flags.qb) { this.log.qb.total++; this.log.phases[this.phase].qb++; if (this.log.qb[this.qbReason] !== undefined) this.log.qb[this.qbReason]++; }
 
     this._rig(dt, it);
     this.loadout.update(dt, this.alive && !m.staggered ? trig : null);
@@ -426,6 +502,16 @@ export class Boss extends Enemy {
     const alt = this.pos.y - this.game.physics.groundHeight(this.pos.x, this.pos.z);
     if (!m.grounded || alt > 2) {
       it.jump = alt < I.brakeAlt && m.vel.y < -I.brakeSpeed;   // booster brake: a heavy, controlled landing
+      if (alt < I.brakeAlt + 8) {
+        // the brake plumes light the rig from below (warm bounce on legs / underside) and flare
+        this.rig.flare(0.55);
+        this._glowT = (this._glowT || 0) - dt;
+        if (this._glowT <= 0 && this.game.fx.flash) {
+          this._glowT = 0.1;
+          _v.set(this.pos.x, this.pos.y - 2, this.pos.z);
+          this.game.fx.flash(_v, BRAKE_GLOW, I.glow, 26, 0.16);
+        }
+      }
       return;
     }
     if (this.postureT === 0) {
@@ -438,6 +524,7 @@ export class Boss extends Enemy {
     this.postureT += dt;
     if (this.postureT > I.posture) {
       this.invulnerable = false;
+      this.targetable = true;
       this.setState('fight');
       this.log.engagedAt = this.game.time;
       this._setPoise(BOSS_AI.poise.entry, BOSS_AI.poise.entryRecover);   // comes in braced
@@ -448,19 +535,60 @@ export class Boss extends Enemy {
 
   /** Intro cinematic camera (game.cam override; yields to any other override, e.g. staged shots). */
   _cineStep(dt) {
-    const cam = this.game.cam, p = this.game.player, C = BOSS_AI.cine;
+    const cam = this.game.cam, p = this.game.player, C = BOSS_AI.cine, ph = this.game.physics;
     if (!cam || !cam.setOverride || !p) return;
     if (cam.override && cam.override !== this._cineObj) return;          // someone else owns the camera
-    this._cineT = (this._cineObj ? this._cineT : 0) + dt;
-    _d.set(this.pos.x - p.pos.x, 0, this.pos.z - p.pos.z).normalize();
-    _CINE.pos.set(p.pos.x - _d.x * C.back - _d.z * C.side, p.pos.y + C.up, p.pos.z - _d.z * C.back + _d.x * C.side);
-    if (!this.game.physics.lineOfSight(_CINE.pos, this.aimPoint(_v))) _CINE.pos.set(p.pos.x - _d.x * 6, p.pos.y + 22, p.pos.z - _d.z * 6);
-    this.aimPoint(_CINE.look);
-    _CINE.look.y -= 1.5;
+    const first = !this._cineObj;
+    this._cineT = (first ? 0 : this._cineT) + dt;
+    if (first) this._cineHero = this._pickCineSpot();
     const k = Math.min(1, this._cineT / C.zoomT), e = k * k * (3 - 2 * k);
-    _CINE.fov = C.fov0 + (C.fov1 - C.fov0) * e;
+    this.aimPoint(_v);
+    if (this._cineHero) {
+      // planted low camera with a slow push toward the rig
+      _CINE.pos.copy(_CINE_BASE).addScaledVector(_CINE_PUSH, e * C.push);
+      _CINE.fov = C.fov0 + (C.fov1 - C.fov0) * e;
+      cineLook(_CINE.pos, _v, _CINE.fov, C.sx, C.sy, _CINE.look);
+    } else {
+      _d.set(this.pos.x - p.pos.x, 0, this.pos.z - p.pos.z).normalize();
+      _CINE.pos.set(p.pos.x - _d.x * C.back - _d.z * C.sideFb, p.pos.y + C.upFb, p.pos.z - _d.z * C.back + _d.x * C.sideFb);
+      if (!ph.lineOfSight(_CINE.pos, _v)) _CINE.pos.set(p.pos.x - _d.x * 6, p.pos.y + 22, p.pos.z - _d.z * 6);
+      _CINE.fov = C.fovFb0 + (C.fovFb1 - C.fovFb0) * e;
+      cineLook(_CINE.pos, _v, _CINE.fov, C.sx, C.sy * 0.5, _CINE.look);
+    }
     cam.setOverride(_CINE);
     this._cineObj = cam.override;
+  }
+  /**
+   * Find a clear low camera spot around the landing point on the player's side (sets
+   * _CINE_BASE / _CINE_PUSH). Candidates are scored for a 3/4 key light: the dusk sun should sit
+   * behind / beside the camera so the rig is modelled, not a black cut-out against the glow.
+   */
+  _pickCineSpot() {
+    const p = this.game.player, C = BOSS_AI.cine, ph = this.game.physics, env = this.game.env;
+    const lx = this.pos.x, lz = this.pos.z, gy = ph.groundHeight(lx, lz);
+    const base = Math.atan2(p.pos.x - lx, p.pos.z - lz);
+    const sun = env && env.sunDir && env.sunDir.isVector3 ? env.sunDir : null;
+    let sx = 0, sz = 0;
+    if (sun) { const l = Math.hypot(sun.x, sun.z) || 1; sx = sun.x / l; sz = sun.z / l; }
+    _tp.set(lx, gy + 7, lz);                                        // the rig's chest once landed
+    _aim.set(lx, gy + 30, lz);                                      // ... and mid-brake
+    let best = Infinity;
+    for (const near of C.near) {
+      for (const deg of CINE_AZ) {
+        const a = base + deg * Math.PI / 180;
+        const x = lx + Math.sin(a) * near, z = lz + Math.cos(a) * near;
+        if (!pointFree(ph, x, z, 3, 12)) continue;
+        _v.set(x, ph.groundHeight(x, z) + C.up, z);
+        if (!ph.lineOfSight(_v, _tp) || !ph.lineOfSight(_v, _aim)) continue;
+        // view direction camera -> rig is -(sin a, cos a); want dot(view, sun) ~ -0.55 (sun over the shoulder)
+        const lit = sun ? Math.abs((-Math.sin(a) * sx - Math.cos(a) * sz) + 0.55) : 0;
+        const score = lit * 3 + Math.abs(deg) / 90 + Math.abs(near - C.near[0]) / 20;
+        if (score < best) { best = score; _CINE_BASE.copy(_v); }
+      }
+    }
+    if (best === Infinity) return false;
+    _CINE_PUSH.set(lx - _CINE_BASE.x, 0, lz - _CINE_BASE.z).normalize();
+    return true;
   }
   _cineEnd() {
     const cam = this.game.cam;
@@ -530,6 +658,14 @@ export class Boss extends Enemy {
     radial = Math.abs(radial) < 0.35 ? 0 : Math.max(-1, Math.min(1, radial));
     _tan.set(-_to.z * this.strafe, 0, _to.x * this.strafe);
     it.move.copy(_tan).addScaledVector(_to, radial * 0.9);
+    // jink: the strafe heading swings in/out every ~0.4-0.9 s so a lead-predicting gun keeps
+    // missing behind / ahead of the rig (constant-velocity strafing is what lock-on punishes)
+    this.jinkT -= dt;
+    if (this.jinkT <= 0) { this.jinkT = this.rng.range(S.jink.every[0], S.jink.every[1]); this.jinkA = this.rng.sym(S.jink.angle); }
+    if (!this.atk || this.atk === 'rifle' || this.atk === 'missiles') {
+      const ca = Math.cos(this.jinkA), sa = Math.sin(this.jinkA), mx = it.move.x, mz = it.move.z;
+      it.move.x = mx * ca + mz * sa; it.move.z = -mx * sa + mz * ca;
+    }
     // arena bounds: steer back toward the middle
     const B = this.game.physics.bounds;
     const bx = this.pos.x < B.minX + 40 ? 1 : this.pos.x > B.maxX - 40 ? -1 : 0;
@@ -546,7 +682,7 @@ export class Boss extends Enemy {
     if (m.contact.wall && this.flipLock <= 0) { this.strafe = -this.strafe; this.flipLock = 0.8; }
 
     // ---- 2. strafe flips / rhythm QBs / jumps (not while committed)
-    const busy = this.committed || this.atk === 'flank';
+    const busy = this.committed || this.atk === 'flank' || this.atk === 'plunge';
     if (!busy) {
       this.flipT -= dt;
       if (this.flipT <= 0) {
@@ -576,7 +712,7 @@ export class Boss extends Enemy {
     const alt = this.pos.y - this.game.physics.groundHeight(this.pos.x, this.pos.z);
     if (!m.grounded && this.hoverT > 0) { this.hoverT -= dt; it.jump = it.jump || (m.en.frac > 0.3 && alt < this.airAlt); }
     // boosters: glide (slow sink) only while climbing to the hop altitude, else drop back to the slab
-    const wantBoost = m.grounded || (this.hoverT > 0 && alt < this.airAlt) || this.atk === 'barrage' || m.abActive;
+    const wantBoost = m.grounded || (this.hoverT > 0 && alt < this.airAlt) || this.atk === 'barrage' || this.atk === 'plunge' || m.abActive;
     if (m.boostOn !== wantBoost && !m.staggered && m.lungeT <= 0) it.boostToggle = true;
 
     // ---- 3. reactive dodges
@@ -587,9 +723,21 @@ export class Boss extends Enemy {
         if (this.committed || this.dodgeCd > 0) this.dodge = null;
         else {
           this._dodgeDir(kind, _w);
-          if (this._qb(_w.x, _w.z, 'dodge')) { this.log.dodges[kind]++; this.dodgeCd = P.dodgeCd; this.dodge = null; this._event('dodge_' + kind); if (this.atk === 'rifle' || this.atk === 'missiles') this._endAttack(true); }
+          if (this._qb(_w.x, _w.z, 'dodge')) {
+            this.log.dodges[kind]++; this.log.phases[this.phase].dodges++; this.dodgeCd = P.dodgeCd; this.dodge = null; this._event('dodge_' + kind);
+            if (this.atk === 'rifle' || this.atk === 'missiles') this._endAttack(true);
+            // pure-pursuit missiles swing back: a second, reversed QB shakes the stragglers
+            if (kind === 'missile' && this.rng.chance(S.missileFollowUp)) this._dodgeAgain = m.cfg.qbCooldown + 0.03;
+          }
           else if (this.dodgeT < -0.2) this.dodge = null;     // could not (EN / cooldown): shot lands
         }
+      }
+    } else if (this._dodgeAgain > 0) {
+      this._dodgeAgain -= dt;
+      if (this._dodgeAgain <= 0 && !this.committed) {
+        this.strafe = -this.strafe;
+        _w.set(-_to.z * this.strafe, 0, _to.x * this.strafe).addScaledVector(_to, 0.3);
+        if (this._qb(_w.x, _w.z, 'dodge')) { this.log.dodges.missile++; this.log.phases[this.phase].dodges++; this._event('dodge_missile'); }
       }
     } else if (!this.committed && this.dodgeCd <= 0) {
       // under sustained rifle fire: break the player's tracking
@@ -605,7 +753,13 @@ export class Boss extends Enemy {
     if (!this.atk && this.coverCd <= 0 && this.heat > S.cover.heat[this.phase] && this._findCover()) this._startAttack('cover');
     if (!this.atk) {
       this.gapT -= dt;
-      if (this.gapT <= 0) { const k = this._pickAttack(dist, los); if (k) this._startAttack(k); else this.gapT = 0.25; }
+      if (this.gapT <= 0) {
+        // P2 combos: a heavy attack flows straight into a rifle burst (pressure while the player
+        // is still dodging the first); otherwise a weighted pick
+        const combo = this._combo; this._combo = null;
+        const k = combo && los && this.cd.rifle <= 0 ? combo : this._pickAttack(dist, los);
+        if (k) { this._startAttack(k); if (k === combo) { this.log.combos++; this._event('combo'); } } else this.gapT = 0.25;
+      }
     }
     if (this.atk) this._runAttack(dt, dist, los);
   }
@@ -615,13 +769,15 @@ export class Boss extends Enemy {
     this.atkT += dt;
     const tell = S.tell[this.atk];
     // big tells: the glint pulses and grows until the release (readable for the whole window)
-    if (this.atkStage === 'tell' && this.atk !== 'rifle' && TELL_NODE[this.atk] && tell > 0) {
+    const pulsing = (this.atkStage === 'tell' && this.atk !== 'rifle' && TELL_NODE[this.atk] && tell > 0) || this.atkStage === 'abBladeTell';
+    if (pulsing) {
       this._pulseT = (this._pulseT || 0) - dt;
       if (this._pulseT <= 0) {
         this._pulseT = 0.075;
-        const k = Math.min(1, this.atkT / tell);
-        this._glint(TELL_NODE[this.atk], true, 0.55 + 0.75 * k);
-        if (this.atk === 'barrage') this._glint('LB', true, 0.55 + 0.75 * k);
+        const k = this.atkStage === 'abBladeTell' ? Math.min(1, this._abTellT / S.tell.abBlade) : Math.min(1, this.atkT / tell);
+        const node = this.atkStage === 'abBladeTell' ? 'L' : TELL_NODE[this.atk];
+        this._glint(node, true, 0.45 + 0.5 * k);
+        if (this.atk === 'barrage') this._glint('LB', true, 0.45 + 0.5 * k);
       }
     }
     switch (this.atk) {
@@ -629,7 +785,7 @@ export class Boss extends Enemy {
         const facing = Math.abs(wrapAngle(it.aimYaw - m.yaw)) < 0.3;
         if (this.atkStage === 'tell') {
           if (!los) { this._endAttack(); return; }
-          if (this.atkT >= tell && facing && L.R.ready) { trig.R = true; this.atkStage = 'exec'; this.atkN++; }
+          if (this.atkT >= tell && facing && L.R.ready) { trig.R = true; this.atkStage = 'exec'; this.atkN++; this._released('rifle'); }
           else if (this.atkT > tell + 0.8) this._endAttack();
         } else if (this.atkStage === 'exec') {
           if (!L.R.busy && this.atkT > tell + 0.1) {
@@ -642,8 +798,7 @@ export class Boss extends Enemy {
       case 'missiles': {
         it.move.multiplyScalar(0.6);
         if (this.atkStage === 'tell') {
-          if (this.atkT > 0.25 && this.atkT - dt <= 0.25) this._glint('LB', true, 0.8);
-          if (this.atkT >= tell) { trig.LB = true; this.atkStage = 'exec'; this._event('missiles_fire'); }
+          if (this.atkT >= tell) { trig.LB = true; this.atkStage = 'exec'; this._event('missiles_fire'); this._released('missiles'); }
         } else if (!L.LB.busy && this.atkT > tell + 0.1) { this.cd.missiles = P.cd.missiles; this._endAttack(); }
         return;
       }
@@ -652,8 +807,7 @@ export class Boss extends Enemy {
         if (this.atkT < 0.05 && m.grounded) it.jumpPressed = true;
         it.move.multiplyScalar(0.5);
         if (this.atkStage === 'tell') {
-          if (this.atkT > 0.3 && this.atkT - dt <= 0.3) { this._glint('RB', true, 0.9); this._glint('LB', true, 0.9); }
-          if (this.atkT >= tell) { trig.RB = true; this.atkStage = 'exec'; this._event('barrage_fire'); }
+          if (this.atkT >= tell) { trig.RB = true; this.atkStage = 'exec'; this._event('barrage_fire'); this._released('barrage'); }
         } else if (this.atkStage === 'exec') {
           if (!L.RB.busy && L.LB.ready) { trig.LB = true; this.atkStage = 'exec2'; }
           else if (!L.RB.busy && this.atkT > tell + 1.5) this.atkStage = 'exec2';
@@ -665,17 +819,17 @@ export class Boss extends Enemy {
         if (this.atkStage === 'tell') {
           // square up and close in while the blade charges
           it.move.copy(_to).multiplyScalar(dist > 30 ? 1 : 0.2).addScaledVector(_tan, 0.25);
-          if (this.atkT > 0.25 && this.atkT - dt <= 0.25) this._glint('L', true, 1.1);
           if (this.atkT >= tell) {
             if (dist > S.lungeReach && !this._gapQB) { this._gapQB = true; this._qb(_to.x, _to.z, 'gap'); this.atkT = tell - 0.18; }
             else if (dist > S.lungeReach + 30) { this._gapQB = false; this.cd.blade = 1.5; this._endAttack(); }
-            else { this._gapQB = false; trig.L = true; this.atkStage = 'exec'; }
+            else { this._gapQB = false; trig.L = true; this.atkStage = 'exec'; this._released('blade'); }
           }
         } else if (this.atkStage === 'exec') {
           if (slot.bladePhase === null && this.atkT > tell + 0.1) { this.atkStage = 'recover'; this.atkT = 0; this.log.bladeSlashes++; }
           else if (slot.bladePhase === null) trig.L = true;          // keep the request until the windup starts
         } else if (this.atkStage === 'recover') {
           it.move.multiplyScalar(0.15);
+          if (this._plunging && m.grounded) { this._plunging = false; this._slam(); }
           if (this.atkT >= S.postBlade) {
             this.cd.blade = P.cd.blade; this._endAttack();
             if (this.rng.chance(0.6)) { this._dodgeDir('blade', _w); this._qb(_w.x, _w.z, 'escape'); }
@@ -691,20 +845,62 @@ export class Boss extends Enemy {
         it.aimDir.copy(_d);
         if (this.atkStage === 'tell') {
           it.move.multiplyScalar(0.4);
-          if (this.atkT >= tell) { it.abToggle = true; this.atkStage = 'exec'; this.atkT = 0; this.log.ab++; this._glint('booster_back', true, 1.2); }
-        } else if (this.atkStage === 'exec') {
+          if (this.atkT >= tell) { it.abToggle = true; this.atkStage = 'exec'; this.atkT = 0; this.log.ab++; this._glint('booster_back', true, 1); this._released('charge'); }
+        } else if (this.atkStage === 'exec' || this.atkStage === 'abBladeTell') {
           if (!m.abActive && this.atkT > 0.1) { this.cd.charge = P.cd.charge; this._endAttack(); return; }
-          if (m.abCharging) { this._fxCharge = true; return; }
+          if (m.abCharging) return;
           // strafing fire on the run (no tell: the charge itself is the telegraph)
-          if (L.R.ready && los && Math.abs(wrapAngle(it.aimYaw - m.yaw)) < 0.35) trig.R = true;
-          if (dist < S.abBladeRange && L.L.ready && this.rng.chance(P.abBlade)) {
-            this.atk = 'blade'; this.atkStage = 'exec'; this.atkT = S.tell.blade; this.log.attacks.blade++;
-            trig.L = true; this.cd.charge = P.cd.charge; this._event('ab_blade');
-            this._glint('L', true, 1.2); playTell(this.game, 'boss_blade', this.pos);
+          if (this.atkStage === 'exec' && L.R.ready && los && Math.abs(wrapAngle(it.aimYaw - m.yaw)) < 0.35) trig.R = true;
+          // AB -> blade: the slash gets its own 0.4 s tell, started while still closing in
+          const tellDist = S.abBladeRange + m.speedH * S.tell.abBlade * 0.6;
+          if (this.atkStage === 'exec' && dist < tellDist && L.L.ready && this.rng.chance(P.abBlade)) {
+            this.atkStage = 'abBladeTell'; this._abTellT = 0;
+            this.log.attacks.ab_blade++; this._countPhase('ab_blade');
+            this._tell('abBlade'); this._event('ab_blade');
+          } else if (this.atkStage === 'abBladeTell') {
+            this._abTellT += dt;
+            if (this._abTellT >= S.tell.abBlade) {
+              this.atk = 'blade'; this.atkStage = 'exec'; this.atkT = S.tell.blade; this.log.attacks.blade++;
+              trig.L = true; this.cd.charge = P.cd.charge; this._released('abBlade');
+            }
           } else if (dist < S.abBladeRange || this.atkT > S.chargeMaxT) {
             it.abToggle = true;
             this._dodgeDir('cannon', _w); this._qb(_w.x, _w.z, 'charge');
             this.cd.charge = P.cd.charge; this.atk = null; this.gapT = 0.35;
+          }
+        }
+        return;
+      }
+      case 'plunge': {
+        // P2: climb on the boosters, hang + tell, then assault-boost DOWN at the player and
+        // finish with a blade lunge from the air; the landing throws a shockwave
+        const PL = S.plunge, alt = this.pos.y - this.game.physics.groundHeight(this.pos.x, this.pos.z);
+        t_aim(this, _aim);
+        _d.subVectors(_aim, this.aimPoint(_w)).normalize();
+        it.aimDir.copy(_d);
+        if (this.atkStage === 'rise') {
+          if (this.atkT < 0.05 && m.grounded) { it.jumpPressed = true; this._plungeAlt = this.rng.range(PL.alt[0], PL.alt[1]); }
+          it.jump = alt < this._plungeAlt;
+          it.move.copy(_tan).multiplyScalar(0.5);
+          if ((alt >= this._plungeAlt - 2 && this.atkT > 0.4) || this.atkT > PL.riseMax) {
+            if (alt < 10 || !L.L.ready) { this.cd.plunge = 3; this._endAttack(); return; }
+            this.atkStage = 'tell'; this.atkT = 0; this._tell('plunge');
+          }
+        } else if (this.atkStage === 'tell') {
+          it.jump = alt < this._plungeAlt;               // hang on the boosters while the glint pulses
+          it.move.set(0, 0, 0);
+          if (this.atkT >= tell) { it.abToggle = true; this.atkStage = 'exec'; this.atkT = 0; this.log.ab++; this._released('plunge'); this._slammed = false; }
+        } else if (this.atkStage === 'exec') {
+          if (!m.abActive && this.atkT > 0.1) { this.cd.plunge = P.cd.plunge; this._endAttack(); return; }
+          if (m.abCharging) return;
+          if (_d.y > -0.15) it.aimDir.y = Math.min(it.aimDir.y, -0.15);   // keep diving
+          const d3 = this.pos.distanceTo(this.target.pos);
+          if (d3 < PL.blade && L.L.ready) {
+            this.atk = 'blade'; this.atkStage = 'exec'; this.atkT = S.tell.blade; this.log.attacks.blade++;
+            trig.L = true; this.cd.plunge = P.cd.plunge; this._plunging = true; this._event('plunge_slash');
+          } else if (m.grounded || this.atkT > PL.maxT) {
+            it.abToggle = true; this._slam();
+            this.cd.plunge = P.cd.plunge; this.atk = null; this.gapT = 0.4;
           }
         }
         return;
@@ -836,6 +1032,7 @@ export class Boss extends Enemy {
   _telemetry(dt, dist) {
     const L = this.log;
     L.steps++;
+    const PL = L.phases[this.phase]; PL.steps++; PL.time += dt; PL.distSum += dist; PL.enSum += this.motor.en.frac;
     const bin = Math.min(L.distHist.length - 1, Math.floor(dist / L.distStep));
     L.distHist[bin]++;
     L.modeSteps[this.motor.mode] = (L.modeSteps[this.motor.mode] || 0) + 1;
@@ -855,8 +1052,33 @@ export class Boss extends Enemy {
 }
 
 const _CINE = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 30 };
+const _CINE_BASE = new THREE.Vector3(), _CINE_PUSH = new THREE.Vector3();
+const BRAKE_GLOW = [1, 0.5, 0.2];
+const CINE_AZ = [-20, 20, -45, 45, -70, 70, -100, 100, 0];
+
+/**
+ * Look point that places world point `tgt` at screen fraction (sx, sy) (+x right, +y up, 1 = frame
+ * edge) for a camera at `pos` with vertical FOV `fovDeg` (16:9).
+ */
+function cineLook(pos, tgt, fovDeg, sx, sy, out) {
+  const dx = tgt.x - pos.x, dy = tgt.y - pos.y, dz = tgt.z - pos.z;
+  const th = Math.tan(THREE.MathUtils.degToRad(fovDeg) * 0.5);
+  const yaw = Math.atan2(dx, dz) + Math.atan(sx * th * 16 / 9);   // turn left => target sits right
+  const pitch = Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan(sy * th);
+  const cp = Math.cos(pitch);
+  return out.set(pos.x + Math.sin(yaw) * cp * 10, pos.y + Math.sin(pitch) * 10, pos.z + Math.cos(yaw) * cp * 10);
+}
 
 const NO_GROUND = { ground: false };
+
+/** Damage multiplier of the rig's armour for a weapon id (BOSS_STATS.defense). */
+function defenseMul(id) {
+  const d = id && WEAPONS[id], D = BOSS_STATS.defense;
+  if (!d) return 1;
+  if (d.type === 'blade') return D.blade;
+  if (d.type === 'missile' || d.type === 'grenade') return D.explosive;
+  return d.projectile === 'energy' ? D.energy : D.kinetic;
+}
 
 /** Aim point for the charge: lead with the perceived velocity (reuses the enemy lead model). */
 function t_aim(boss, out) {

@@ -65,6 +65,7 @@ export class Enemy extends Actor {
     this.fcErr = new THREE.Vector3();
     this.fcErrTarget = new THREE.Vector3();
     this.fcGlint = false;
+    this.fcBlockT = 0;
     this.aimPt = new THREE.Vector3();
     this.sight = -1;
     this.sightK = 0;
@@ -86,6 +87,7 @@ export class Enemy extends Actor {
     this.alerted = false; this.alertT = -1;
     this.fcPhase = 'idle'; this.fcT = 0; this.fcGlint = false;
     this.los = false; this.losT = 0;
+    this.firstHitT = -1;                      // telemetry: time-to-kill clock (enemies.js)
     this._releaseToken();
     const E = this.game.enemies;
     if (this.sight < 0 && E && E.sights && this.fcCfg.sight) this.sight = E.sights.acquire();
@@ -184,7 +186,7 @@ export class Enemy extends Actor {
     this.fcErr.lerp(this.fcErrTarget, ke);
     if (this.fcPhase === 'idle') {
       if (canEngage && slot.ready && this.fcRetry(dt) && this._takeToken(cfg.group)) {
-        this.fcPhase = 'aim'; this.fcT = 0; this.fcGlint = false;
+        this.fcPhase = 'aim'; this.fcT = 0; this.fcGlint = false; this.fcBlockT = 0;
         const dist = this.distanceToTarget();
         this._rollErr(this.fcErr, cfg.errStart * Math.max(0.5, dist / 100));
         this._rollErr(this.fcErrTarget, cfg.errEnd * Math.max(0.5, dist / 100));
@@ -192,9 +194,14 @@ export class Enemy extends Actor {
         const T = this.tele; if (T) T.tells++;
       }
     } else if (this.fcPhase === 'aim') {
-      this.fcT += dt;
-      if (!canEngage) { this.fcCancel(); this._retryT = cfg.retry; }
-      else {
+      // a brief break (target slips behind a pylon, turret lags a boosting target) HOLDS the
+      // telegraph instead of aborting it; only a sustained break cancels the burst
+      if (!canEngage) {
+        this.fcBlockT += dt;
+        if (this.fcBlockT > (cfg.grace ?? 0.3)) { this.fcCancel(); this._retryT = cfg.retry; }
+      } else {
+        this.fcBlockT = 0;
+        this.fcT += dt;
         if (!this.fcGlint && this.fcT >= cfg.aimTime - cfg.glintAt) {
           this.fcGlint = true;
           this.getMuzzle(cfg.slot, _v, _d);

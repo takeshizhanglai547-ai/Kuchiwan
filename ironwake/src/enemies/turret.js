@@ -42,7 +42,7 @@ const _c = new THREE.Vector3(), _h = new THREE.Vector3(5, 4, 5), _d = new THREE.
 export class Turret extends Enemy {
   constructor(game, template) {
     const S = TURRET_STATS;
-    super(game, { type: 'turret', name: 'RELAY GENERATOR', ap: S.ap, acs: S.acs, radius: S.radius, height: S.height, aimHeight: S.aimHeight, accuracy: S.accuracy, corpseTime: Infinity, trackTau: 0.5, leadFactor: 0.85 });
+    super(game, { type: 'turret', name: 'RELAY GENERATOR', ap: S.ap, acs: S.acs, radius: S.radius, height: S.height, aimHeight: S.aimHeight, accuracy: S.accuracy, corpseTime: Infinity, trackTau: 0.22, leadFactor: 0.9 });
     this.fcCfg = RELAY_AI.aimed;
     this.model = template.clone();
     this.root.add(this.model);
@@ -57,7 +57,44 @@ export class Turret extends Enemy {
     this.mode = 'aimed';
     this.suppressT = 0; this.callT = 0; this.calls = 0; this.engagedT = 0;
     this.sweepSide = 1;
+    this.kickP = 0; this.kickR = 0; this.kickVP = 0; this.kickVR = 0;
+    this.headRest = this.head.rotation.clone();          // kick / droop are offsets from the authored pose
     this.anim = makeAnimator('turret', this.model, this);
+  }
+
+  /** Hit reaction: the gun head rocks on its mount (spring); heavy hits arc off the core. */
+  onHit(hit, res) {
+    super.onHit(hit, res);
+    if (!this.alive || !(res && res.damage > 0)) return;
+    const imp = hit.impact * (hit.splashFrac === undefined ? 1 : hit.splashFrac);
+    const amt = Math.min(0.12, 0.01 + imp / 3000);
+    if (hit.dir) _d.copy(hit.dir); else if (hit.point) _d.subVectors(this.pos, hit.point); else _d.set(0, 0, 0);
+    _d.y = 0;
+    if (_d.lengthSq() > 1e-6) {
+      _d.normalize();
+      const yaw = this.yaw + this.head.rotation.y, s = Math.sin(yaw), c = Math.cos(yaw);
+      this.kickVP += (_d.x * s + _d.z * c) * amt * 24; this.kickVR -= (_d.x * c - _d.z * s) * amt * 24;
+    }
+    if (imp >= 280) { _c.set(this.pos.x, this.pos.y + 9.2, this.pos.z); this.game.fx.spawn('arc_spark', _c, null, 1.2); }
+  }
+
+  /** Stagger = generator overload: the head drops off target, sparks, the burst is lost. */
+  onStagger(src) {
+    super.onStagger(src);
+    this.kickVP -= 2.2;
+    _c.set(this.pos.x, this.pos.y + 9.2, this.pos.z);
+    this.game.fx.spawn('arc_spark', _c, null, 2.2);
+    this.game.audio.play('stagger', { pos: this.pos, pitch: 0.8 });
+  }
+
+  _kickStep(dt) {
+    this.kickVP += (-this.kickP * 120 - this.kickVP * 11) * dt;
+    this.kickVR += (-this.kickR * 120 - this.kickVR * 11) * dt;
+    this.kickP += this.kickVP * dt; this.kickR += this.kickVR * dt;
+    const droop = this.staggered ? 0.22 : 0;
+    const hx = this.headRest.x + this.kickP + droop;
+    this.head.rotation.x += (hx - this.head.rotation.x) * Math.min(1, dt * 20);
+    this.head.rotation.z = this.headRest.z + this.kickR;
   }
 
   spawn(pos, yaw) {
@@ -74,6 +111,8 @@ export class Turret extends Enemy {
     this.suppressT = this.rng.range(RELAY_AI.suppressEvery[0], RELAY_AI.suppressEvery[1]);
     this.callT = this.rng.range(RELAY_AI.reinforce.delay[0], RELAY_AI.reinforce.delay[1]);
     this.calls = 0; this.engagedT = 0;
+    this.kickP = this.kickR = this.kickVP = this.kickVR = 0;
+    this.head.rotation.x = this.headRest.x; this.head.rotation.z = this.headRest.z;
     this.setState('idle');
     return this;
   }
@@ -110,6 +149,7 @@ export class Turret extends Enemy {
     super.update(dt);
     if (this.anim) this.anim.update(dt);
     if (!this.alive) return;
+    this._kickStep(dt);
     const A = RELAY_AI, t = this.target;
     const T = this.tele;
     if (T) T.time++;
@@ -167,6 +207,6 @@ export class Turret extends Enemy {
     playTell(this.game, 'relay_call', this.pos);
     this.game.audio.play('missile_launch', { pos: this.pos, pitch: 0.7 });
     this.game.hud.callout('RELAY LAUNCHING DRONES', '中継機 ドローン射出', 'warn', 2.2);
-    const T = this.tele; if (T) T.calls++;
+    const T = this.tele; if (T) { T.calls++; T.launched += n; }
   }
 }

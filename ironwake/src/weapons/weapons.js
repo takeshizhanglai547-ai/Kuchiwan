@@ -105,7 +105,7 @@ const _pos = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.V
 const _t = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3();
 const _firedEvt = { owner: null, slot: '', weapon: '' }; // reused payload (copy what you keep)
 const _bladeHit = { damage: 0, impact: 0, direct: true, directHitMul: 1, point: new THREE.Vector3(), dir: new THREE.Vector3(), source: null, weapon: '' };
-const _muzzleOpts = { scale: 1, vel: null, normal: null, yaw: 0, incoming: null };
+const _muzzleOpts = { scale: 1, vel: null, normal: null, yaw: 0, incoming: null, anchor: 255 };
 const _back = new THREE.Vector3();
 
 /** Perturb unit vector `dir` inside a cone of `deg` degrees using rng stream r. */
@@ -264,6 +264,9 @@ export class Loadout {
       // muzzle VFX ride with the owner (a rig at boost speed must not outrun its own flash)
       _muzzleOpts.scale = d.muzzleScale || 1;
       _muzzleOpts.vel = owner.vel || (owner.motor && owner.motor.vel) || null;
+      // flash parts marked `attach` ride on the muzzle node (recoil / aim keep moving the barrel)
+      const mz = owner.rig && owner.rig.muzzles ? owner.rig.muzzles[s.key] : null;
+      _muzzleOpts.anchor = mz && game.fx.anchor ? game.fx.anchor(mz, _pos) : 255;
       game.fx.spawn(d.muzzleFx, _pos, _dir, _muzzleOpts);
     }
     if (d.fovKick && owner === game.player && game.cam.fovKick) game.cam.fovKick(d.fovKick, 0.28);

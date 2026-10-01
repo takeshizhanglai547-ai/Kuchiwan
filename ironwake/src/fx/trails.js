@@ -12,7 +12,7 @@ const MAXT = 40, CAP = 180;
 
 /** Trail styles (colours linear; widths m; life s). */
 export const TRAIL_STYLES = {
-  missile: { w0: 0.8, grow: 3.1, life: 3.4, alpha: 0.55, c0: [0.5, 0.48, 0.45], c1: [0.14, 0.13, 0.12], hot: 0.12, minStep: 1.2 },
+  missile: { w0: 0.9, grow: 3.0, life: 3.6, alpha: 0.8, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2 }, // #C8C4BE -> #6D6A66
   shell: { w0: 0.4, grow: 1.4, life: 1.1, alpha: 0.35, c0: [0.45, 0.43, 0.4], c1: [0.2, 0.19, 0.18], hot: 0.06, minStep: 2 },
   ab: { w0: 0.9, grow: 3.2, life: 0.9, alpha: 0.12, c0: [0.62, 0.58, 0.53], c1: [0.4, 0.38, 0.36], hot: 0.0, minStep: 2.5 },
 };
@@ -49,11 +49,12 @@ void main() {
   float n1 = texture2D(tNoise, vec2(vUv.x * 0.3 + u * 0.05, u * 0.11 - uTime * 0.012)).a * 2.0 - 1.0;
   float n2 = texture2D(tNoise, vec2(vUv.x * 0.8 - u * 0.13, u * 0.31 + uTime * 0.025)).a * 2.0 - 1.0;
   float n = n1 * 0.6 + n2 * 0.4;
-  float edge = 1.0 - smoothstep(0.15 + 0.55 * n, 1.0, across);
-  float dens = smoothstep(0.3, 0.72, n * (1.0 - across * 0.45)) * edge;
+  // dense, billowing body that frays at the rims (never a solid tube, never a dotted line)
+  float edge = 1.0 - smoothstep(0.35 + 0.45 * n, 1.0, across);
+  float dens = smoothstep(-0.45, 0.4, n - across * 0.55) * edge;
   float a = vCol.a * dens;
   // cheap volume shading: brighter core, darker rims (curved strip)
-  vec3 rgb = vCol.rgb * uLight * (0.6 + 0.55 * (1.0 - across * across)) * (0.7 + 0.5 * n2);
+  vec3 rgb = vCol.rgb * uLight * (0.55 + 0.6 * (1.0 - across * across)) * (0.75 + 0.45 * n2);
   rgb += vec3(1.0, 0.42, 0.08) * vHeat * 6.0 * (1.0 - across);
   a = max(a, vHeat * (1.0 - across) * 0.9);
   #ifdef IW_SOFT
@@ -236,8 +237,8 @@ export class Trails {
     // lighting: ambient + part of the sun (same environment as lit puffs)
     const env = this.game.env, L = this.mat.uniforms.uLight.value;
     if (env && env.sun && env.hemi) {
-      L.copy(env.hemi.color).multiplyScalar(env.hemi.intensity * 0.85);
-      _col.copy(env.sun.color).multiplyScalar(env.sun.intensity * 0.35 / Math.PI);
+      L.copy(env.hemi.color).multiplyScalar(env.hemi.intensity * 0.95);
+      _col.copy(env.sun.color).multiplyScalar(env.sun.intensity * 0.5 / Math.PI);
       L.add(_col);
     } else L.setRGB(1, 0.95, 0.9);
   }

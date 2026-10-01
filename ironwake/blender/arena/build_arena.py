@@ -16,8 +16,12 @@ lower foundry yard sits 9 m below (LOW) and the sea at -14 m (SEA).
   north  dock: container stacks, 3 rail-mounted STS gantry cranes, ore stocking bridge over the
          stockpile, quay edge; sea with the half-sunk bulk carrier, breakwater, far shore,
          east peninsula smelters (300 m stacks)
-  overhead ore conveyor galleries: dock -> transfer tower -> stockhouse -> furnace A top,
-         transfer tower -> south sinter bins
+  overhead ore conveyor galleries: dock -> transfer tower -> drive house (kink) -> stockhouse ->
+         furnace A top, transfer tower -> south sinter bins
+  HERO   Furnace No.6 on the reclaimed ore mole 220-380 m off the quay, on the +Z launch axis
+         (rises over the C2 gallery in every gameplay frame)
+Kits are hidden-face culled at build time (akit.cull_hidden); out-of-bounds copies of tracks,
+hoppers, masts and quay segments use '_lo' kits (place()).
 Contracts: COL_* colliders, SPAWN_player, SPAWN_mt_*, SPAWN_drone_*, SPAWN_boss_*, OBJ_relay_*.
 Extra (src/world/arena.js): FX_smoke_* (extras r, h, kind) plumes, FX_light_* (r, c, i) light pools.
 """
@@ -74,10 +78,16 @@ STACK_TOP = {'stack120': (121.4, 3.3), 'stack200': (201.4, 4.7), 'stack70': (71.
              'far_stack_b': (260.0, 5.2)}
 
 
-def stack(name, x, z, y=0.0, kind=0, hmul=1.0, collide=False, **kw):
+STACKN = [0]
+
+
+def stack(name, x, z, y=0.0, kind=None, hmul=1.0, collide=False, **kw):
     place(name, x, z, y=y, collide=collide, **kw)
     top, r = STACK_TOP[name]
-    fx_smoke(x, y + top, z, r, (130 + top * 0.6) * hmul, kind)
+    if kind is None:   # stacks: 60 % black smoke, 40 % steam (hot fume only over furnaces / fires)
+        kind = (0, 1, 0, 1, 0)[STACKN[0] % 5]
+        STACKN[0] += 1
+    fx_smoke(x, y + top, z, r, (130 + top * 0.6) * hmul * (1.15 if kind == 1 else 1.0), kind)
 
 
 def cols_m(M, cols):
@@ -92,9 +102,14 @@ def foot(kind, x, z, sx, sz, yaw=0.0):
     FOOT.append((kind, x, z, sx, sz, yaw))
 
 
+LO_KITS = {'track', 'hopper', 'mast', 'quay'}
+
+
 def place(name, x, z, yaw=0.0, y=0.0, fk=None, fs=None, **kw):
+    if name in LO_KITS and (y < -1.0 or max(abs(x), abs(z)) > 262.0):
+        name = name + '_lo'
     A.inst(name, (x, y, z), yaw=yaw, **kw)
-    if name == 'mast':
+    if name in ('mast', 'mast_lo'):
         fx_light(x, y, z, 17.0, SODIUM, 0.17)
     if fk:
         foot(fk, x, z, fs[0], fs[1], yaw)
@@ -111,6 +126,11 @@ def build_kit():
         g, cols = fn()
         A.kit(name, g, cols)
     A.kit('track', K.rail_track(12.0))
+    # LODs for the out-of-bounds copies (lower yard, mole, coast): same silhouette, fewer tris
+    A.kit('track_lo', K.rail_track(12.0, lo=True))
+    A.kit('hopper_lo', K.hopper_wagon(lo=True)[0])
+    A.kit('mast_lo', K.lamp_mast(lo=True)[0])
+    A.kit('quay_lo', B.quay_seg(20.0, lo=True))
     for i in range(3):
         g, cols = K.rubble(seed=11 + i, s=1.0 + 0.25 * i)
         A.kit(f'rubble{i}', g, [((0, 0, 0.4), (4.4, 4.4, 0.8))])
@@ -124,10 +144,11 @@ def build_kit():
         A.kit(name, g, cols)
     A.kit('jersey', K.jersey_row(5), [((0, 0, 0.55), (20.0, 0.8, 1.1))])
     for h in (24, 32, 40, 48, 56, 64):
-        g, cols = K.trestle(float(h))
-        A.kit(f'trestle{h}', g, cols)
+        for v, suf in ((0, ''), (1, 'p'), (2, 'c')):
+            g, cols = K.trestle(float(h), variant=v)
+            A.kit(f'trestle{h}{suf}', g, cols)
     g, cols = K.gallery(24.0)
-    A.kit('gallery', g, cols)
+    A.kit('gallery', g, cols, cull={'grounds': ()})     # elevated: keep the underside
     g, cols = K.pipe_bent()
     A.kit('pipebent', g, cols)
     g, cols = K.tank(14.0, 20.0, 'bone')
@@ -163,7 +184,8 @@ def build_kit():
     for i, (sx, sy, h) in enumerate(((120, 60, 46), (80, 50, 32), (64, 60, 62), (160, 44, 26), (230, 80, 95), (110, 90, 135))):
         A.kit(f'far_block{i}', MK.far_complex(i * 7 + 3, sx, sy, h))
     A.kit('furnace300', MK.furnace_mega(300.0))
-    A.kit('furnace220', MK.furnace_mega(220.0, seed=9))
+    A.kit('furnace300b', MK.furnace_mega(285.0, seed=13, stoves=3, mirror=True, skip=0.75))
+    A.kit('furnace220', MK.furnace_mega(220.0, seed=9, stoves=5, skip=1.2))
     A.kit('jetty', MK.jetty(62.0))
     A.kit('pontoon', MK.pontoon())
     A.kit('dolphin', MK.dolphin(SEA))
@@ -176,6 +198,10 @@ def build_kit():
         A.kit(f'litter{i}', MK.litter(seed=60 + i, s=3.0 + i * 0.8))
     A.kit('ctray', MK.cable_tray(24.0), [((0, 0, 1.75), (24.4, 1.4, 3.5))])
     A.kit('bollards', MK.bollards(6), [((0, 0, 0.65), (16.0, 0.8, 1.3))])
+    for i in range(2):
+        A.kit(f'cables{i}', MK.ground_cables(22.0 + 8 * i, 3 + i, seed=70 + i))
+    for i in range(3):
+        A.kit(f'ashpatch{i}', MK.ash_patch(5.0 + 2.5 * i, 3.2 + 1.2 * i, 0.26 + 0.07 * i, seed=80 + i))
     print(f'[arena] kit built in {time.time() - t0:.1f}s: ' + ', '.join(f'{k}={v["tris"]}' for k, v in A.KIT.items()))
 
 
@@ -205,8 +231,19 @@ def ground():
     fx_shore(1165.0, 675.0, 735.0, 425.0, k=1.6)
 
 
+TRENCH = []   # (x, z, half x, half z) grating trench footprints (decals never paint across them)
+
+
+def hits_trench(x, z, w, l):
+    r = 0.5 * math.hypot(w, l)
+    return any(abs(x - tx) < hx + r and abs(z - tz) < hz + r for (tx, tz, hx, hz) in TRENCH)
+
+
 def decal_quad(cell, color, x, z, w, l, yaw=0.0, y=0.03):
-    """Ground decal: w along the rotated game X, l along game Z."""
+    """Ground decal: w along the rotated game X, l along game Z. Ground-level decals that would
+    cross a grating trench are dropped (paint does not continue over the grate)."""
+    if y < 0.1 and hits_trench(x, z, w, l):
+        return A.Geo()
     c, s = math.cos(yaw), math.sin(yaw)
 
     def p(u, v):  # game coords
@@ -475,7 +512,7 @@ def west():
     place('far_block1', -520, -150, yaw=0.3 + PI / 2, y=LOW, collide=False)
     place('far_block3', -480, 200, yaw=-0.2 + PI / 2, y=LOW, collide=False)
     place('far_block4', -700, -380, yaw=PI / 2 + 0.2, y=LOW, collide=False)
-    place('furnace300', -720, 380, yaw=PI / 2 - 0.5, y=LOW, collide=False)
+    place('furnace300b', -720, 380, yaw=PI / 2 - 0.5, y=LOW, collide=False)
     fx_smoke(-720, LOW + 270.0, 380, 7.0, 220.0, 2)
     place('cooling', -760, 120, y=LOW, collide=False)
     fx_smoke(-760, LOW + 141.0, 120, 22.0, 120.0, 1)
@@ -510,7 +547,7 @@ def lower_yard_fill():
                 for k in range(n):
                     if zz + k * 15.2 < 205:
                         place('hopper', xt, zz + k * 15.2, PI / 2, y=y, collide=False)
-                zz += n * 15.2 + rs.uniform(40, 90)
+                zz += n * 15.2 + rs.uniform(70, 140)
         for z in (-200, -110, -20, 70, 160):
             place('mast', side * 312.0, z + rs.uniform(-8, 8), y=y, collide=False)
         # stockpiles + small sheds beyond the wagon yard
@@ -544,7 +581,7 @@ def edge_dressing():
             g.merge(K.beam(tuple(G(cx + side * 5.5, LOW + 1.0, z + dz)), tuple(G(x, -0.2, z + dz)), 0.4, 0.4, 'steel:dark'))
         g.merge(K.flood(0, 0, 0, 0.0).transform(A.xform((cx - side * 5.2, 6.4, z - 3.0), yaw=-side * PI / 2)) or A.Geo())
         g.merge(K.beacon(0, 0, 0, 0.5).transform(A.xform((cx + side * 4.5, 7.4, z + 5.0))) or A.Geo())
-        A.unique('edgehut', g)
+        A.unique('edgehut', g, cull={'grounds': (-9.0,)})
         A.collider((cx, 3.6, z), (12.0, 7.2, 14.0))
         foot('bld', cx, z, 14, 16)
         # stair tower down to the lower yard beside the hut
@@ -588,6 +625,9 @@ def edge_dressing():
     A.unique('farlamps', g, weighted=False, noshadow=True)
 
 
+TRN = [0]
+
+
 def conveyor(p0, p1, supports=None, step=24.0):
     """Gallery from p0 to p1 (game coords of the gallery BOTTOM centreline)."""
     a, b = Vector(p0), Vector(p1)
@@ -608,15 +648,87 @@ def conveyor(p0, p1, supports=None, step=24.0):
         k = max(1, int(L / 48))
         supports = [i / (k + 1) for i in range(1, k + 1)]
     if True:
-        for t in supports:
+        for i, t in enumerate(supports):
             p = a + d * t
             gy = 0.0 if max(abs(p.x), abs(p.z)) < EDGE else LOW
             h = p.y - 0.4 - gy
             hs = min((24, 32, 40, 48, 56, 64), key=lambda v: abs(v - h) if v >= h - 3 else 999)
-            A.inst(f'trestle{hs}', (p.x, p.y - hs - 0.3 + 0.0, p.z), yaw=yaw, collide=False)
+            suf = ('', 'p', 'c', 'p', '', 'c')[(TRN[0] + i) % 6]     # alternate service platforms / risers
+            A.inst(f'trestle{hs}{suf}', (p.x, p.y - hs - 0.3 + 0.0, p.z), yaw=yaw + (PI if (TRN[0] + i) % 2 else 0.0), collide=False)
             if gy == 0.0:
                 A.collider((p.x, (p.y - 0.3) / 2, p.z), (9.0, p.y - 0.3, 7.0), yaw=yaw)
             foot('trestle', p.x, p.z, 12, 10, yaw)
+        TRN[0] += len(supports)
+
+
+def mole(cx=10.0, cz=550.0, W=340.0, D=160.0):
+    """Reclaimed ore mole 220-380 m off the quay carrying the HERO blast furnace (No.6) on the
+    launch axis: quay walls with fenders, bollards + hazard band, foam line (FX_shore)."""
+    y = SEA + 4.0
+    g = A.Geo()
+    M0 = Matrix.Translation(G(cx, y, cz))
+    g.merge(K.bxz(W, D, 7.0, 0, 0, -7.0, mat='concrete:dark').transform(M0))
+    g.merge(K.bxz(W + 1.2, D + 1.2, 0.8, 0, 0, -0.4, mat='concrete:grey', bev=0.06).transform(M0))
+    for k in range(int(W / 12)):                      # fenders + bollards along the pier-side face
+        x = cx - W / 2 + 6 + k * 12
+        g.merge(K.bxz(2.0, 0.8, 4.0, 0, 0, -5.0, mat='steel:black').transform(Matrix.Translation(G(x, y, cz - D / 2 - 0.9))))
+        g.merge(K.bxz(0.9, 0.9, 1.0, 0, 0, 0.4, mat='steel:dark').transform(Matrix.Translation(G(x + 3, y, cz - D / 2 + 1.5))))
+    g.merge(K.bxz(W, 0.06, 0.8, 0, 0, -0.35, mat='trim:hazard2').transform(Matrix.Translation(G(cx, y, cz - D / 2 - 0.62))))
+    A.unique('mole', g)
+    fx_shore(cx, cz, W / 2 + 0.6, D / 2 + 0.6, r=2.0, k=1.4)
+    # furnace (mirrored near kit x2.6: skip incline runs west, dust catcher east), stoves behind
+    hx, hz = cx + 55.0, cz + 18.0
+    A.inst('furnace', (hx, y, hz), yaw=0.2, scale=(-2.6, 2.6, 2.6), collide=False)
+    for k in range(3):
+        A.inst('stove', (hx - 20 + k * 26, y, hz + 58 - k * 4), scale=(2.3, 2.3, 2.0 + 0.15 * k), collide=False)
+    # casthouse on the furnace's south-east, tap floor opening toward the WEST (seen obliquely)
+    gc, _ = B.casthouse()
+    gc.transform(A.xform((hx + 62, y, hz - 52), yaw=-PI / 2 + 0.35, scale=1.8))
+    A.unique('hero_casthouse', gc)
+    stack('stack200', cx - 120, cz + 45, y=y, kind=0)
+    stack('stack120', cx - 95, cz + 60, y=y, kind=1)
+    g2, _ = B.heap(30.0, 20.0, 14.0, 'ore', seed=55)
+    g2.transform(Matrix.Translation(G(cx - 60, y, cz - 45)))
+    A.unique('mole_ore', g2)
+    for (x, z) in ((cx - 140, cz - 62), (cx + 140, cz - 64), (cx - 10, cz - 70)):
+        place('mast', x, z, y=y, collide=False)
+    fx_smoke(hx - 6, y + 230.0, hz + 4, 7.5, 300.0, 2)
+    fx_smoke(hx + 62, y + 46.0, hz - 52, 9.0, 160.0, 1)
+    for k in range(2):
+        fx_light(hx + 40, y, hz - 52 + (k - 0.5) * 30, 20.0, FIRE, 0.5)
+
+
+def drive_house(x, y, z, yaw):
+    """Conveyor drive / transfer house at a gallery kink: clad box on its own tower with a
+    walkway, motor room windows, roof vents, beacon (breaks the conveyor's straight bar)."""
+    g = A.Geo()
+    w, d, hh = 13.0, 11.0, 10.0
+    g.merge(K.bxz(w + 2.0, d + 2.0, 0.6, 0, 0, -0.6, mat='steel:dark'))
+    g.merge(K.bxz(w, d, hh, 0, 0, 0.0, mat='corr:blue'))
+    g.merge(K.bxz(w + 0.6, d + 0.6, 0.5, 0, 0, hh, mat='steel:dark'))
+    for s_ in (-1, 1):
+        g.merge(K.bxz(w * 0.8, 0.12, 1.8, 0, s_ * (d / 2 + 0.03), hh - 3.2, mat='trim:window'))
+        g.merge(K.bxz(2.4, 0.13, 1.6, -2.0 * s_, s_ * (d / 2 + 0.05), hh - 3.1, mat='trim:window_lit'))
+        g.merge(K.bxz(0.12, d * 0.6, 1.4, s_ * (w / 2 + 0.03), 0, 2.0, mat='trim:louvre'))
+        for c in (-1, 1):
+            g.merge(K.bxz(0.5, 0.5, hh, c * (w / 2), s_ * (d / 2), 0.0, mat='steel:yellow'))
+    g.merge(MK.wall_decal(-w / 2, w / 2, -d / 2 - 0.05, hh * 0.35, hh, 'curtain', 'soot'))
+    g.merge(MK.wall_decal(-w / 2, w / 2, d / 2 + 0.05, hh * 0.4, hh, 'curtain', 'stain', facing=1))
+    for i in range(3):
+        g.merge(P.cylinder(0.6, 2.6, 12, bevel=0.0, mat='steel:galv', z0=hh + 0.5).move(-3.5 + i * 3.5, 1.5, 0))
+    g.merge(K.bxz(4.0, 3.0, 1.8, 3.0, -2.5, hh + 0.5, mat='steel:galv'))
+    g.merge(K.rail_line([(-w / 2 - 0.9, -d / 2 - 0.9, -0.0), (w / 2 + 0.9, -d / 2 - 0.9, 0.0), (w / 2 + 0.9, d / 2 + 0.9, 0.0)], h=1.1, post=2.5, r=0.05))
+    g.merge(K.beam((w / 2 - 1, d / 2 - 1, hh + 0.5), (w / 2 - 1, d / 2 - 1, hh + 7.0), 0.2, 0.2, 'steel:galv'))
+    g.merge(K.beacon(w / 2 - 1, d / 2 - 1, hh + 7.4, 0.6))
+    g.merge(K.flood(0, -d / 2 - 0.5, hh - 0.8, 0.0))
+    M = Matrix.Translation(G(x, y - 0.6 + 0.6, z)) @ Matrix.Rotation(yaw, 4, 'Z')
+    g.transform(M)
+    A.unique('drivehouse', g)
+    A.collider((x, y + hh / 2, z), (w + 2.0, hh + 1.2, d + 2.0), yaw=yaw)
+    hs = 32
+    A.inst('trestle32p', (x, y - hs - 0.6, z), yaw=yaw + PI / 2, scale=(1.4, 1.6, 1.0), collide=False)
+    A.collider((x, (y - 0.6) / 2, z), (12.0, y - 0.6, 10.5), yaw=yaw)
+    foot('trestle', x, z, 14, 13, yaw)
 
 
 def overhead():
@@ -640,7 +752,11 @@ def overhead():
     foot('bld', -100, 230, 22, 22)
     # galleries (bottom centreline)
     conveyor((-100, 30.0, 219), (-100, 38.0, 31))       # C1 dock -> transfer tower
-    conveyor((-89, 30.0, 24), (53, 48.0, 50))           # C2 transfer tower -> stockhouse (climbing)
+    # C2 transfer tower -> drive house (kink) -> stockhouse: two pitches, the house breaks the bar
+    kx, ky, kz = -16.0, 34.5, 37.0
+    conveyor((-89, 30.0, 24), (kx - 6.5, ky, kz - 1.2), supports=[0.5])
+    conveyor((kx + 6.5, ky + 1.2, kz + 1.2), (53, 48.0, 50), supports=[0.55])
+    drive_house(kx, ky, kz, math.atan2(53 - (-89), 50 - 24))
     c3a, c3b = (87, 48.0, 48), (290, 64.0, 31)          # C3 stockhouse -> furnace A top
     conveyor(c3a, c3b, supports=[(x - 87) / 203 for x in (130, 180, 246)])
     conveyor((-100, 34.0, 9), (-100, 37.0, -280), supports=[(9 - z) / 289 for z in (-35, -80, -150, -200, -264)])  # C5
@@ -703,10 +819,12 @@ def dock():
     A.unique('breakwater', g, noshadow=True)
     A.inst('light', (300, SEA + 9.5, 690), collide=False)
     g = B.bulk_carrier()
-    M = A.xform((150, SEA - 6.0, 345), yaw=2.5, pitch=0.08, roll=-0.17)
+    M = A.xform((150, SEA - 9.5, 345), yaw=2.5, pitch=-0.085, roll=-0.14)
     g.transform(M)
     A.unique('carrier', g, noshadow=True)
-    fx_shore(150.0, 345.0, 16.5, 86.0, yaw=2.5, r=10.0, k=1.5)
+    fx_shore(150.0, 345.0, 16.0, 84.0, yaw=2.5, r=10.0, k=1.6)
+    for t in (-0.42, -0.2, 0.05, 0.3):       # surf / spray where the swell breaks over the awash bow
+        fx_smoke(150 - math.sin(2.5) * 180 * t, SEA + 0.6, 345 - math.cos(2.5) * 180 * t, 2.6, 22.0, 3)
     # spray bursts where the swell breaks on the breakwater armour (every ~30 m)
     for i in range(24):
         x = -585.0 + i * 36.0 + RND.uniform(-8, 8)
@@ -730,15 +848,19 @@ def dock():
     for (x, z, k, yaw) in ((-520, 1010, 'far_block4', 0.05), (-10, 1040, 'far_block4', -0.04), (520, 990, 'far_block5', 0.1),
                            (-880, 980, 'far_block5', 0.2), (820, 1010, 'far_block4', -0.1)):
         A.inst(k, (x, SEA + 4.0, z), yaw=PI + yaw, collide=False)
-    for (x, z, k, yaw) in ((-250, 960, 'furnace300', 0.3), (270, 950, 'furnace300', -0.6), (-700, 940, 'furnace220', 0.9)):
+    for (x, z, k, yaw) in ((-250, 960, 'furnace300', 0.3), (290, 960, 'furnace300b', -0.9), (-700, 940, 'furnace220', 0.9)):
         A.inst(k, (x, SEA + 4.0, z), yaw=yaw, collide=False)
-        fx_smoke(x, SEA + 4.0 + (270.0 if k == 'furnace300' else 200.0), z, 7.0, 240.0, 2)
+        fx_smoke(x, SEA + 4.0 + {'furnace300': 270.0, 'furnace300b': 256.0}.get(k, 200.0), z, 7.0, 240.0, 2)
     g = A.Geo()
     for (x0, x1, z0, z1) in ((-1100, 1300, 760, 1400),):
         g.merge(A.Geo.from_pydata([tuple(G(x0, SEA + 4.0, z0)), tuple(G(x0, SEA + 4.0, z1)), tuple(G(x1, SEA + 4.0, z1)), tuple(G(x1, SEA + 4.0, z0))],
                                   [(0, 1, 2, 3)], 'far:dark'))
         g.merge(K.bx(x1 - x0, 4.0, 5.0, tuple(G((x0 + x1) / 2, SEA + 1.5, z0 + 2.0)), mat='far'))
     A.unique('farshore', g, weighted=False, noshadow=True)
+    # HERO landmark on the play axis (+Z from the launch pad, rising over the C2 gallery): Furnace
+    # No.6 on the reclaimed ore mole 250-330 m off the quay - the near-kit blast furnace at 2.6x
+    # (mirrored, own yaw), stoves, casthouse, a stack, ore pile, quay walls with fenders + foam
+    mole()
     # east peninsula (Pier 9 smelters): giant stacks + cooling towers read above the haze band
     g = A.Geo()
     g.merge(A.Geo.from_pydata([tuple(G(430, SEA + 4.0, 250)), tuple(G(430, SEA + 4.0, 1100)), tuple(G(1900, SEA + 4.0, 1100)),
@@ -755,6 +877,15 @@ def dock():
     fx_smoke(520, SEA + 94.0, 690, 2.4, 90.0, 2)
     for (x, z, k) in ((560, 300, 0), (760, 380, 2), (900, 700, 1)):
         A.inst(f'far_block{k}', (x, SEA + 4.0, z), yaw=-PI / 2 + 0.2, collide=False)
+
+
+def trench_plan():
+    for x in (-36.0, -12.0, 12.0, 36.0):
+        TRENCH.append((x, -152.0, 12.2, 1.6))
+    for x in (-84.0, -60.0, 60.0, 84.0, 108.0):
+        TRENCH.append((x, -84.0, 12.2, 1.6))
+    for z in (-212.0, -188.0, -164.0):
+        TRENCH.append((-64.0, z, 1.6, 12.2))
 
 
 def yard():
@@ -795,9 +926,9 @@ def yard():
         place('jersey', x, z, yaw)
     # buildings in the yard
     for (name, x, z, sx, sy, h, yaw, seed, var) in (('pumphouse', -40, 110, 30.0, 20.0, 14.0, 0.0, 61, ''),
-                                                   ('control', 140, -175, 28.0, 20.0, 22.0, 0.25, 62, 'warm'),
+                                                   ('control', 140, -175, 28.0, 20.0, 22.0, 0.25, 62, 'grey'),
                                                    ('substation', -195, -215, 22.0, 14.0, 10.0, 0.0, 63, 'dark'),
-                                                   ('workshop', 120, 150, 26.0, 18.0, 16.0, 0.0, 64, '')):
+                                                   ('workshop', 120, 150, 26.0, 18.0, 16.0, 0.0, 64, 'grey')):
         g, cols = B.brut_block(sx, sy, h, seed=seed, doors=1, var=var, stair=h > 15, cant=name in ('control', 'workshop'))
         M = Matrix.Translation(G(x, 0, z)) @ Matrix.Rotation(yaw, 4, 'Z')
         g.transform(M)
@@ -860,6 +991,14 @@ def clutter():
     """Foreground density: rubble, scrap, drums, cable drums, plate stacks, wrecks. Seeded
     rejection sampling against footprints, lanes, rails and spawn/objective clearances."""
     rs = random.Random(4242)
+    # toppled lamp mast lying on the west shoulder of the launch lane (low cover, collider)
+    my = -PI * 0.6
+    mx, mz = -20.0, -84.0
+    dx, dz = math.sin(my), math.cos(my)
+    A.inst('mast', (mx, 0.75, mz), yaw=my, pitch=-PI / 2 + 0.03, collide=False)
+    A.collider((mx + 16.0 * dx, 0.75, mz + 16.0 * dz), (1.6, 1.5, 32.0), yaw=my)
+    foot('clutter', mx + 16.0 * dx, mz + 16.0 * dz, 34.0, 5.0, my)
+    UNDER.append((mx + 14.0 * dx, mz + 14.0 * dz, 12.0, my))
     keep = [(0, -140, 36, 200), (0, -205, 50, 50)]          # launch lane + pad
     keep += [(0, -120, 520, 9), (114, 105, 260, 9), (200, 78, 160, 9)]   # rails
     clear = [(-40, -40), (-5, -22), (30, -58), (62, -18), (-72, -92), (0, -60), (90, -150), (-80, -150), (-20, 60),
@@ -901,6 +1040,15 @@ def clutter():
         place(name, x, z, yaw, fk='clutter', fs=(8, 8))
         if name.startswith(('rubble', 'scrap')):
             UNDER.append((x, z, 10.0, yaw))
+    # launch lane 0-60 m foreground: walk-through ash patches, cable runs, flat debris; a toppled
+    # lamp mast and a burnt-out hauler on the shoulders (with colliders), oil / soot under them
+    for (k, x, z, yaw) in ((0, -7, -186, 0.4), (1, 9, -160, 1.9), (2, -4, -128, 0.2), (0, 11, -104, 2.6), (1, -12, -78, 0.9),
+                           (2, 6, -58, 1.3), (0, -15, -150, 2.2)):
+        A.inst(f'ashpatch{k}', (x, 0.0, z), yaw=yaw, collide=False)
+    for (k, x, z, yaw) in ((0, 2, -170, 0.25), (1, -6, -112, -0.4), (0, 8, -88, 1.35), (1, -2, -142, 1.5)):
+        A.inst(f'cables{k}', (x, 0.0, z), yaw=yaw, collide=False)
+    place('wreck', 27.0, -122.0, 2.7, fk='clutter', fs=(10, 10))
+    UNDER.append((27.0, -122.0, 12.0, 2.7))
     d = A.Geo()
     for i, (x, z, sz, yaw) in enumerate(UNDER):
         d.merge(decal_quad('stain', 'stain', x, z, sz, sz * 0.85, yaw, 0.03 + i * 0.0003))
@@ -1087,9 +1235,11 @@ def main():
     dock()
     edge_dressing()
     lower_yard_fill()
+    trench_plan()
     yard()
     clutter()
     markers()
+    print(f'[arena] hidden-face cull: {A.CULL["killed"]} of {A.CULL["faces"]} faces')
     print(f'[arena] layout: {A.STATS["inst"]} objects, ~{A.STATS["tris"] / 1e3:.0f}k tris, {A.STATS["cols"]} colliders, '
           f'{time.time() - t0:.1f}s')
     A.export(out, pack='--no-pack' not in args)

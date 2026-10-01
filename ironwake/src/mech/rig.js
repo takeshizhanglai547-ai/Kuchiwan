@@ -216,6 +216,7 @@ export function makePose() {
 }
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _qArm = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 
 function damp(current, target, lambda, dt) { return current + (target - current) * (1 - Math.exp(-lambda * dt)); }
@@ -365,7 +366,18 @@ export class MechRig {
   kickRecoil(slot, amount = 1) {
     this.recoil[slot] = Math.min(1.5, (this.recoil[slot] || 0) + amount);
     const r = this.ready[slot];
-    if (r) r.fireT = this.time;
+    if (r) {
+      r.fireT = this.time;
+      if (slot === 'R' && r.droop && r.amt < 1) {
+        // (VFX lane) the gun snaps to the aim line on the shot, this very frame (getMuzzle
+        // already fired from the raised pose, so flash, tracer and barrel line up)
+        const arm = this.nodes.arm_R;
+        _e.set(-r.droop * (1 - r.amt), 0, 0);
+        arm.quaternion.multiply(_q.setFromEuler(_e));
+        arm.updateMatrixWorld(true);
+        r.amt = 1;
+      }
+    }
   }
   qbTwitch(localX, localZ) {
     this.qbFlash = 1; // visual: nozzle burst
@@ -466,7 +478,8 @@ export class MechRig {
       const r = nz.radius;
       const burst = 1 + FLAME.qbBurst * (this.qbFlash || 0) * L;
       const flick = 0.9 + 0.1 * Math.sin(this.time * 83 + i * 1.7) + 0.05 * Math.sin(this.time * 211 + i * 3.1);
-      const len = Math.max(r, FLAME.minLenRadius) * (FLAME.lenIdle + (FLAME.lenFull - FLAME.lenIdle) * L) * flick * burst;
+      // (VFX lane) sqrt: cruise-level thrust (ground boost ~0.5) already throws a readable jet
+      const len = Math.max(r, FLAME.minLenRadius) * (FLAME.lenIdle + (FLAME.lenFull - FLAME.lenIdle) * Math.sqrt(L)) * flick * burst;
       const w = r * (0.92 + 0.12 * L) * (1 + 0.25 * (burst - 1));
       nz.flameOuter.scale.set(w, w, len);
       nz.flameCore.scale.set(w * FLAME.coreRadius, w * FLAME.coreRadius, len * FLAME.coreLength);
@@ -485,8 +498,18 @@ export class MechRig {
   /** World-space muzzle position + direction for a weapon slot. */
   getMuzzle(slot, outPos, outDir) {
     const m = this.muzzles[slot] || this.root;
+    // (VFX lane) an arm still in its low-ready droop fires from the RAISED pose: the shot, the
+    // muzzle flash and the tracer start where the barrel will be (kickRecoil snaps the arm up).
+    const r = slot === 'R' ? this.ready.R : null, arm = r && r.droop && r.amt < 0.999 ? this.nodes['arm_' + slot] : null;
+    if (arm) {
+      _qArm.copy(arm.quaternion);
+      _e.set(-r.droop * (1 - r.amt), 0, 0);
+      arm.quaternion.multiply(_q.setFromEuler(_e));
+      arm.updateMatrixWorld(true);
+    }
     m.getWorldPosition(outPos);
     if (outDir) { m.getWorldQuaternion(_q); outDir.set(0, 0, 1).applyQuaternion(_q); }
+    if (arm) { arm.quaternion.copy(_qArm); arm.updateMatrixWorld(true); }
     return outPos;
   }
 

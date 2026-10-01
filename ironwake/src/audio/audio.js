@@ -6,9 +6,12 @@
 //                                       then play() is a silent no-op (browser autoplay policy).
 //   play(id, {pos?, volume?, pitch?})   one-shot. pos (any {x,y,z}) => 3D pan + distance model +
 //                                       air absorption + distance reverb (+ speed-of-sound delay
-//                                       for explosions). Ids: ARCHITECTURE §10 list + footstep,
-//                                       boost_ignite, missile_lock, missile_alert, ap_warning,
-//                                       kill_confirm, radio_open/close, distant_clang (sfx.js).
+//                                       for explosions) + line-of-sight OCCLUSION (raycast camera
+//                                       -> source past 18 m: darker, quieter, wetter).
+//                                       Ids: ARCHITECTURE §10 list + footstep, boost_ignite,
+//                                       missile_lock, missile_alert, ap_warning, kill_confirm,
+//                                       impact_metal/ground, ricochet, whiz, radio_open/close,
+//                                       distant_clang (sfx.js).
 //   loop(id, {volume?, pitch?})         looping variant -> {set({volume,pitch}), stop()}
 //   radio(seconds)                      handler LEDGER comm transmission (procedural voice)
 //   level()                             0..1 comm-voice level (for UI visualisers)
@@ -19,11 +22,16 @@
 // ignition, the rival rig's own spatial booster, incoming-missile alarm, missile-lock pips,
 // low-AP warning, Pier 7 ambience + distant foundry clangs, and the adaptive score (music.js:
 // layers by game state / mission stage / boss / recent combat activity).
+// From the projectile pool / events (no other lane has to call anything): bullet impacts on
+// armour / ground / walls (+ ricochet whines), supersonic WHIZ-BYS of enemy rounds that pass
+// the player's chest within 9 m, Doppler-shifted rocket-motor emitters on the nearest missiles,
+// Doppler + air absorption + occlusion on the rival rig's boosters and enemy machinery loops.
 // Mixer, voice limiting, ducking and reverb live in engine.js. Samples: a manifest entry
 // 'sfx_<id>' (decoded on unlock) replaces the synth for that id.
-import { AudioEngine, MIXER } from './engine.js';
+import { AudioEngine, MIXER, airCutoff } from './engine.js';
 import { makeRng } from './dsp.js';
-import { jetTargets, makeJetTargets } from './beds.js';
+import { jetTargets, makeJetTargets, dopplerRatio } from './beds.js';
+import { makeHit } from '../core/physics.js';
 
 /** Game-side tunables. */
 export const AUDIO_GAME = {
@@ -33,13 +41,25 @@ export const AUDIO_GAME = {
   lowAp: { frac: 0.25, every: 2.8 },
   clangEvery: [5, 12],        // s between distant foundry clangs
   aftermathAfter: 5.5,        // s after complete/failed before the bed returns
+  occlusion: { from: 18, lift: 1.5, stop: 3 }, // LOS test only past `from` m; target lifted / ray stopped short
+  whiz: { radius: 9, minDist: 0.9 },           // enemy rounds passing within radius of the player's chest
+  ricochetChance: 0.3,        // wall hits (not ground) that also whine off
+  bossDoppler: [0.8, 1.3],
 };
+const RAY_OPTS = { ground: true }; // terrain occludes too
 
 export default function audioSystem(game) {
   let ctx = null, E = null;
   const rng = makeRng(0x5EED);
   const jt = makeJetTargets(), bjt = makeJetTargets();
   const clangPos = { x: 0, y: 0, z: 0 };
+  // scratch (allocation-free per frame / per play)
+  const losHit = makeHit();
+  const losO = { x: 0, y: 0, z: 0 }, losD = { x: 0, y: 0, z: 0 }, whizP = { x: 0, y: 0, z: 0 };
+  const po = { pos: null, volume: undefined, pitch: undefined, occl: 0 }; // play() opts copy (callers reuse theirs)
+  const pRec = new Map(); // projectile pool item -> {x,y,z, ox,oz, done} (created once per pool item)
+  const nearR = new Array(MIXER.rockets).fill(null), nearRD = new Float32Array(MIXER.rockets);
+  let occlSlot = 0;
   const mview = { mode: 'idle', speedH: 0, vy: 0, abCharging: false, abCharge: 0, skid: 0 }; // reused motor view
   let st = null;
   let visHandler = null, resumeOnShow = false;
@@ -51,7 +71,7 @@ export default function audioSystem(game) {
   }
   function resetState() {
     st = {
-      lastAimYaw: null, slew: 0, stepIdx: null, lastMode: 'idle', missileNext: 0, lockCount: 0, apNext: 0,
+      lastAimYaw: null, slew: 0, stepIdx: null, lastMode: 'idle', missileNext: 0, lockCount: 0, apNext: 0, bossOccl: 0,
       activity: -99, stage: 0, ended: false, endT: 0, boss: null, clangNext: ctx ? ctx.currentTime + 3 : 0, paused: false,
     };
   }
@@ -108,11 +128,116 @@ export default function audioSystem(game) {
     if (m.mode === 'walk' && m.grounded !== false) {
       const ph = mo && typeof mo.walkPhase === 'number' ? mo.walkPhase : game.rawTime * (m.speedH || 0) * 0.9;
       const idx = Math.floor(ph / Math.PI);
-      if (st.stepIdx !== null && idx !== st.stepIdx) E.play('footstep', { pos: p.pos, volume: 0.65 + 0.35 * Math.min(1, (mo && mo.walkAmt) || 1) });
+      if (st.stepIdx !== null && idx !== st.stepIdx) {
+        po.pos = p.pos; po.occl = 0; po.pitch = undefined; po.volume = 0.65 + 0.35 * Math.min(1, (mo && mo.walkAmt) || 1);
+        E.play('footstep', po);
+      }
       st.stepIdx = idx;
     } else st.stepIdx = null;
-    if (m.mode === 'boost' && (st.lastMode === 'walk' || st.lastMode === 'idle')) E.play('boost_ignite', { pos: p.pos });
+    if (m.mode === 'boost' && (st.lastMode === 'walk' || st.lastMode === 'idle')) { po.pos = p.pos; po.occl = 0; po.volume = po.pitch = undefined; E.play('boost_ignite', po); }
     st.lastMode = m.mode;
+  }
+
+  // ---------------------------------------------------------------- occlusion
+  /** 1 if static geometry blocks the camera -> p line (past AUDIO_GAME.occlusion.from), else 0. */
+  function occlusionAt(p, d) {
+    const O = AUDIO_GAME.occlusion;
+    if (!game.physics || d < O.from) return 0;
+    losO.x = E.lx; losO.y = E.ly; losO.z = E.lz;
+    const dx = p.x - E.lx, dy = p.y + O.lift - E.ly, dz = p.z - E.lz;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    losD.x = dx / len; losD.y = dy / len; losD.z = dz / len;
+    return game.physics.raycast(losO, losD, Math.max(0, len - O.stop), losHit, RAY_OPTS) ? 1 : 0;
+  }
+  /** play() with line-of-sight occlusion; never mutates the caller's (often reused) opts. */
+  function playAt(id, opts) {
+    if (!opts || !opts.pos) return E.play(id, opts);
+    po.pos = opts.pos; po.volume = opts.volume; po.pitch = opts.pitch;
+    po.occl = occlusionAt(opts.pos, E.dist(opts.pos));
+    return E.play(id, po);
+  }
+  /** Distance + occlusion low-pass for a looping 3D emitter (occlusion re-tested round-robin). */
+  function emitterLP(slot, p, now, test) {
+    const d = E.dist(p);
+    if (test) slot.occl = occlusionAt(p, d);
+    slot.lp.frequency.setTargetAtTime(airCutoff(d, slot.occl || 0), now, 0.12);
+  }
+
+  // ---------------------------------------------------------------- bullet impacts
+  function onImpact(e) {
+    if (!running() || game.state !== 'playing') return;
+    const d = e.def;
+    if (!d || d.splashRadius) return;               // explosions are played by projectiles.js
+    const pt = e.point, energy = d.projectile === 'energy';
+    if (e.actor) {
+      const onPlayer = e.actor === game.player;      // damage_taken already plays (player.js)
+      po.pos = pt; po.occl = 0; po.volume = onPlayer ? 0.55 : 1; po.pitch = energy ? 0.62 : undefined;
+      E.play('impact_metal', po);
+    } else {
+      po.pos = pt; po.volume = 0.9; po.pitch = energy ? 1.35 : undefined;
+      po.occl = occlusionAt(pt, E.dist(pt));
+      E.play('impact_ground', po);
+      if (!energy && pt.y > 1.5 && rng() < AUDIO_GAME.ricochetChance) { po.volume = 1; po.pitch = undefined; E.play('ricochet', po); }
+    }
+  }
+
+  // ---------------------------------------------------------------- projectile scan
+  // One pass over the live projectile pool per frame (allocation-free after warm-up):
+  //  * enemy rounds crossing the plane through the player's chest within AUDIO_GAME.whiz.radius
+  //    -> 'whiz' at the crossing point (supersonic snap + air tear)
+  //  * the nearest missiles in flight -> pooled rocket emitters with Doppler
+  function scanProjectiles(now) {
+    const pr = game.projectiles, R = E.rockets, NR = R.length;
+    for (let i = 0; i < NR; i++) { nearR[i] = null; nearRD[i] = 1e9; }
+    const list = pr && pr.activeList && game.state === 'playing' ? pr.activeList() : null;
+    const n = list ? pr.activeCount() : 0;
+    const pl = game.player;
+    const cx = pl ? pl.pos.x : 0, cy = pl ? pl.pos.y + (pl.aimHeight || 5) * 0.8 : 0, cz = pl ? pl.pos.z : 0;
+    const W = AUDIO_GAME.whiz;
+    for (let k = 0; k < n; k++) {
+      const p = list[k];
+      if (p.kind === 'missile') {
+        const d = E.dist(p.pos);
+        if (d < MIXER.rocketRange && d < nearRD[NR - 1]) {
+          let j = NR - 1;
+          while (j > 0 && nearRD[j - 1] > d) { nearRD[j] = nearRD[j - 1]; nearR[j] = nearR[j - 1]; j--; }
+          nearRD[j] = d; nearR[j] = p;
+        }
+        continue;
+      }
+      if (!pl || !pl.alive || p.team === 'player' || (p.kind !== 'bullet' && p.kind !== 'energy')) continue;
+      let r = pRec.get(p);
+      if (!r) pRec.set(p, r = { x: 0, y: 0, z: 0, ox: NaN, oz: NaN, done: false }); // once per pool item
+      if (r.ox !== p.origin.x || r.oz !== p.origin.z) { // a new life of this pool item
+        r.ox = p.origin.x; r.oz = p.origin.z; r.done = false;
+        r.x = p.origin.x; r.y = p.origin.y; r.z = p.origin.z;
+      }
+      if (!r.done) {
+        const vx = p.vel.x, vy = p.vel.y, vz = p.vel.z, vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+        const a0 = ((r.x - cx) * vx + (r.y - cy) * vy + (r.z - cz) * vz) / vl;
+        const a1 = ((p.pos.x - cx) * vx + (p.pos.y - cy) * vy + (p.pos.z - cz) * vz) / vl;
+        if (a0 < 0 && a1 >= 0) { // crossed the chest plane since the last frame
+          const s = -a0 / (a1 - a0);
+          whizP.x = r.x + (p.pos.x - r.x) * s; whizP.y = r.y + (p.pos.y - r.y) * s; whizP.z = r.z + (p.pos.z - r.z) * s;
+          const dd = Math.hypot(whizP.x - cx, whizP.y - cy, whizP.z - cz);
+          if (dd < W.radius && dd > W.minDist) {
+            po.pos = whizP; po.occl = 0; po.volume = Math.sqrt(1 - dd / W.radius); po.pitch = p.kind === 'energy' ? 0.55 : undefined;
+            E.play('whiz', po);
+          }
+          r.done = true;
+        }
+      }
+      r.x = p.pos.x; r.y = p.pos.y; r.z = p.pos.z;
+    }
+    for (let i = 0; i < NR; i++) {
+      const slot = R[i], p = nearR[i];
+      if (!p) { if (slot.p) slot.rk.set(0, 1, now); slot.p = null; continue; }
+      const jump = slot.p !== p;
+      slot.p = p;
+      AudioEngine.setPos(slot.pan, p.pos.x, p.pos.y, p.pos.z, jump ? null : now, 0.02);
+      slot.rk.set(p.team === 'player' ? 0.8 : 1, dopplerRatio(p.pos.x, p.pos.y, p.pos.z, p.vel.x, p.vel.y, p.vel.z, E.lx, E.ly, E.lz), now);
+      emitterLP(slot, p.pos, now, false);
+    }
   }
 
   function updateBoss(now) {
@@ -120,8 +245,16 @@ export default function audioSystem(game) {
     if (!(b && b.alive && b.motor && game.state === 'playing')) { E.bossJet.set(silence(bjt), now, 0.2); return; }
     jetTargets(motorView(b.motor), bjt);
     bjt.wind = 0;
+    // Doppler on the rival rig's boosters (QB / AB passes), plus air absorption + occlusion
+    const v = b.vel || b.motor.vel;
+    if (v) {
+      const lo = AUDIO_GAME.bossDoppler[0], hi = AUDIO_GAME.bossDoppler[1];
+      const k = Math.min(hi, Math.max(lo, dopplerRatio(b.pos.x, b.pos.y, b.pos.z, v.x, v.y, v.z, E.lx, E.ly, E.lz)));
+      bjt.turbF *= k; bjt.whineF *= k; bjt.roarCut *= k;
+    }
     E.bossJet.set(bjt, now, 0.08);
     AudioEngine.setPos(E.bossPan, b.pos.x, b.pos.y + 5, b.pos.z, now);
+    E.bossLP.frequency.setTargetAtTime(airCutoff(E.dist(b.pos), st.bossOccl), now, 0.12);
   }
 
   // nearest-N enemy machinery loops + walker footfalls (allocation-free selection)
@@ -149,7 +282,7 @@ export default function audioSystem(game) {
           if (!w) stride.set(e, w = { acc: 0 }); // once per walker, updated in place
           const sp = Math.hypot(e.vel.x, e.vel.z);
           w.acc += sp * realDt;
-          if (w.acc > 3.2) { w.acc = 0; if (sp > 2 && d < 90) E.play('footstep', { pos: e.pos, pitch: 1.35, volume: 0.6 }); }
+          if (w.acc > 3.2) { w.acc = 0; if (sp > 2 && d < 90) { po.pos = e.pos; po.pitch = 1.35; po.volume = 0.6; po.occl = occlusionAt(e.pos, d); E.play('footstep', po); } }
         }
       }
     }
@@ -159,6 +292,7 @@ export default function audioSystem(game) {
       const jump = slot.actor !== e;
       slot.actor = e;
       AudioEngine.setPos(slot.pan, e.pos.x, e.pos.y + (e.type === 'drone' ? 0 : 3), e.pos.z, jump ? null : now);
+      emitterLP(slot, e.pos, now, jump || occlSlot % N === i);
       const sp = e.vel ? Math.hypot(e.vel.x, e.vel.y, e.vel.z) : 0;
       slot.em.set(e.type === 'drone' || e.type === 'mt' || e.type === 'turret' ? e.type : null, e.type === 'mt' ? Math.min(1, 0.45 + sp / 25) : 1, sp, now);
     }
@@ -187,7 +321,8 @@ export default function audioSystem(game) {
     const e = game.camera.matrixWorld.elements;
     const ang = rng() * Math.PI * 2, d = 160 + rng() * 220;
     clangPos.x = e[12] + Math.cos(ang) * d; clangPos.y = 20 + rng() * 40; clangPos.z = e[14] + Math.sin(ang) * d;
-    E.play('distant_clang', { pos: clangPos, volume: 0.8 });
+    po.pos = clangPos; po.volume = 0.8; po.pitch = undefined; po.occl = 0;
+    E.play('distant_clang', po);
   }
 
   // ---------------------------------------------------------------- system
@@ -206,8 +341,9 @@ export default function audioSystem(game) {
       g.events.on('actor:hit', () => { st.activity = game.rawTime; });
       g.events.on('enemy:spawned', (e) => { if (e && e.type === 'boss') st.boss = e.enemy; });
       g.events.on('boss:intro', (e) => { if (e && e.boss) st.boss = e.boss; if (running()) E.play('boss_stinger'); });
-      g.events.on('weapon:reloaded', (e) => { if (running() && e.owner === game.player && game.player) E.play('reload', { pos: game.player.pos }); });
+      g.events.on('weapon:reloaded', (e) => { if (running() && e.owner === game.player && game.player) { po.pos = game.player.pos; po.volume = po.pitch = undefined; po.occl = 0; E.play('reload', po); } });
       g.events.on('actor:killed', (e) => { if (running() && e.team === 'enemy' && e.by === game.player) E.play('kill_confirm'); });
+      g.events.on('projectile:impact', onImpact);
       visHandler = () => {
         if (!ctx) return;
         if (document.hidden) { resumeOnShow = ctx.state === 'running'; if (resumeOnShow) ctx.suspend(); }
@@ -244,7 +380,7 @@ export default function audioSystem(game) {
         console.warn('[audio] unavailable:', err && err.message);
       }
     },
-    play(id, opts) { if (running()) E.play(id, opts); },
+    play(id, opts) { if (running()) playAt(id, opts); },
     loop(id, opts) { return running() ? E.loop(id, opts) : { set() {}, stop() {} }; },
     radio(seconds = 3) { if (running()) E.radio(seconds * 0.85); },
     level() { return E ? E.level() : 0; },
@@ -257,10 +393,15 @@ export default function audioSystem(game) {
     frame(alpha, realDt) {
       if (!running()) return;
       const now = ctx.currentTime;
-      if (game.camera) E.setListenerMatrix(game.camera.matrixWorld.elements);
+      // the camera system placed the camera this frame but the renderer refreshes matrixWorld
+      // only after every system's frame(): refresh it so the listener is not a frame late
+      if (game.camera) { game.camera.updateMatrixWorld(); E.setListenerMatrix(game.camera.matrixWorld.elements); }
       updatePlayer(now, realDt || 1 / 60);
+      occlSlot++;
+      if (st.boss && st.boss.alive && occlSlot % 8 === 0) st.bossOccl = occlusionAt(st.boss.pos, E.dist(st.boss.pos));
       updateBoss(now);
       updateEnemies(now, realDt || 1 / 60);
+      scanProjectiles(now);
       updateAlerts(now);
       updateAmbience(now);
       syncMusic();
@@ -270,6 +411,7 @@ export default function audioSystem(game) {
       if (visHandler) document.removeEventListener('visibilitychange', visHandler);
       if (E) E.dispose();
       if (ctx) ctx.close();
+      pRec.clear();
       ctx = null; E = null;
     },
   };

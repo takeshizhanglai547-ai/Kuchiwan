@@ -16,7 +16,10 @@
 //                variant + 16*lit + 32*nosoft
 // Shapes: 0 glow  1 spark streak  2 puff (lit smoke / fire, atlas)  3 star flash (atlas)
 //         4 ring  5 chunk (atlas silhouette)  6 anamorphic flare  7 electric bolt segment
-export const SHAPE = { glow: 0, spark: 1, puff: 2, star: 3, ring: 4, chunk: 5, flare: 6, bolt: 7 };
+//         8 fire  volumetric FLIPBOOK (fx_fire.jpg, 8x8): iExtra.z = flipbook phase 0..1 (the
+//                 part's `erode` range), iExtra.x = temperature multiplier; frame-blended, lit
+//                 from above (sprites stay near-upright), odd variants mirror horizontally.
+export const SHAPE = { glow: 0, spark: 1, puff: 2, star: 3, ring: 4, chunk: 5, flare: 6, bolt: 7, fire: 8 };
 
 export const PARTICLE_VERT = /* glsl */`
 attribute vec3 iPos; attribute vec3 iAxis; attribute vec4 iColor; attribute vec4 iSize; attribute vec4 iExtra;
@@ -66,7 +69,7 @@ void main() {
 
 export function particleFrag(softGLSL) {
   return /* glsl */`
-uniform sampler2D tPuff; uniform sampler2D tMisc;
+uniform sampler2D tPuff; uniform sampler2D tMisc; uniform sampler2D tFire;
 uniform vec3 uSunView; uniform vec3 uSunCol; uniform vec3 uAmbTop; uniform vec3 uAmbBot;
 uniform float uFireGain;
 varying vec4 vColor; varying vec2 vUv; varying vec4 vExtra; varying vec2 vRot;
@@ -161,6 +164,22 @@ void main() {
     rgb *= 0.3 + 0.9 * shade;
     rgb += fireRamp(heat) * heat;
     a *= inside;
+  } else if (shape == 8) {                // volumetric fireball / smoke flipbook (64 frames, blended)
+    float ph = clamp(erode, 0.0, 1.0) * 63.0;
+    float f0 = floor(ph), f1 = min(f0 + 1.0, 63.0), fb = ph - f0;
+    vec2 fu = vec2(mod(variant, 2.0) > 0.5 ? 1.0 - vUv.x : vUv.x, vUv.y);
+    vec3 s = mix(texture2D(tFire, cell(f0, 8.0, 8.0, fu)).rgb, texture2D(tFire, cell(f1, 8.0, 8.0, fu)).rgb, fb);
+    a *= s.r;
+    float lt = s.b;
+    // baked light comes from the sprite's top: sun term follows the real sun's height
+    float sunUp = clamp(uSunView.y * 0.6 + 0.55, 0.25, 1.0);
+    vec3 amb = mix(uAmbBot, uAmbTop, 0.35 + 0.5 * lt);
+    vec3 litC = rgb * (amb * (0.4 + 0.6 * lt) + uSunCol * lt * lt * sunUp * 1.4);
+    rgb = mix(rgb * (0.35 + 0.8 * lt), litC, lit);
+    // pow > 1: most of the ball sits in the saturated orange band, white only in the hottest knots
+    float temp = clamp(pow(s.g, 1.3) * heat, 0.0, 1.0);
+    // folds between billows glow less than the faces turned to the eye/light (adds depth)
+    rgb += fireRamp(temp) * uFireGain * 1.6 * smoothstep(0.03, 0.32, temp) * (0.45 + 0.55 * lt);
   } else if (shape == 6) {                // anamorphic flare line (flash accent)
     float g = exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 2.2) + exp(-r2 * 30.0) * 0.6;
     a *= g;

@@ -80,6 +80,7 @@ function installHelpers() {
           tap('fire_rb', 211, dist < 260);
           tap('fire_l', 61, dist < 50 && best.type === 'boss');
           tap('quick_boost', 150, dist < 200);
+          tap('repair', 30, p.ap < p.apMax * 0.3 && p.repairKits > 0);   // (enemies lane) a competent player patches up
         } else {
           for (const a of ['move_forward', 'move_back', 'move_left', 'move_right', 'fire_r', 'jump']) want(a, false);
         }

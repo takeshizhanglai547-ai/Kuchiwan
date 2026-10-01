@@ -61,7 +61,8 @@ PREVIEW = {'concrete': '#8a857c', 'steel': '#6f5040', 'corr': '#6c6a64', 'heap':
 # concrete = stain amount, decal = opacity, glow = intensity/16.
 VARIANTS = {
     'concrete': {'': ('#f2f0ec', 0.45), 'dark': ('#a9a59e', 0.55), 'warm': ('#fff2de', 0.35), 'soot': ('#7a7672', 0.85),
-                 'pale': ('#ffffff', 0.25), 'grey': ('#d8d8d4', 0.45)},
+                 'pale': ('#ffffff', 0.25), 'grey': ('#d8d8d4', 0.45),
+                 'shell': ('#e6e4de', 0.97)},
     'steel': {'': ('#566064', 0.35), 'grey': ('#566064', 0.35), 'dark': ('#34383a', 0.3), 'yellow': ('#c28c1e', 0.24),
               'oxide': ('#6c3528', 0.4), 'bone': ('#948d7c', 0.34), 'green': ('#4b5a4f', 0.4), 'blue': ('#3d5563', 0.4),
               'rust': ('#6f7271', 1.0), 'galv': ('#8e9296', 0.12), 'crane': ('#9a7a44', 0.36), 'railing': ('#86692f', 0.42), 'black': ('#1f2020', 0.15), 'white': ('#c9c5bb', 0.3),
@@ -240,11 +241,94 @@ def init():
     KIT_COL.hide_render = True
 
 
-def finalize(geo, name, sharp_angle=40.0, weighted=True):
+CULL = {'faces': 0, 'killed': 0}
+
+
+def cull_hidden(geo, grounds=(0.0,), sea=None, eps=0.03):
+    """Delete faces nobody can see (fast, numpy): faces whose sample points (centre, near-corner,
+    mid and edge-midpoint samples, pushed eps along the normal) all lie inside BOX-LIKE islands
+    of the same Geo (abutting / embedded kit boxes: pilasters on walls, plates on plinths, frames
+    on cladding), down-facing faces lying on a ground level, and (world-space uniques) faces
+    entirely under the sea. Box-like = closed island whose volume is >= 92 % of its AABB
+    (cylinders, lathes, rotated beams never occlude); the AABB is shrunk by the bevel margin so
+    chamfers stay safe."""
+    import numpy as np
+    bm = geo.bm
+    bm.faces.ensure_lookup_table()
+    nf = len(bm.faces)
+    if nf < 8:
+        return 0
+    isl = geo.islands()
+    owner = np.zeros(nf, np.int32)
+    occ = []      # (island id, lo, hi)
+    for k, fl in enumerate(isl):
+        owner[fl] = k
+        if len(fl) < 6:
+            continue
+        vs = {v.index: v.co for i in fl for v in bm.faces[i].verts}
+        P_ = np.array([tuple(c) for c in vs.values()], np.float64)
+        lo, hi = P_.min(0), P_.max(0)
+        ext = hi - lo
+        if ext.min() < 0.04:
+            continue
+        vol = 0.0
+        for i in fl:
+            f = bm.faces[i]
+            c0 = f.verts[0].co
+            for j in range(1, len(f.verts) - 1):
+                vol += c0.dot(f.verts[j].co.cross(f.verts[j + 1].co)) / 6.0
+        if abs(vol) < 0.92 * float(ext.prod()):
+            continue
+        m = 0.012 if len(fl) <= 6 else min(0.16, 0.3 * float(ext.min()))
+        occ.append((k, lo + m, hi - m))
+    rows, fid = [], []
+    nrm = np.zeros((nf, 3), np.float64)
+    zmax = np.zeros(nf)
+    for f in bm.faces:
+        c = f.calc_center_median()
+        n = f.normal
+        vv = [v.co for v in f.verts]
+        pick = vv if len(vv) <= 8 else [vv[(i * len(vv)) // 8] for i in range(8)]
+        q = [c] + [v.lerp(c, 0.2) for v in pick] + [v.lerp(c, 0.6) for v in pick]
+        if len(vv) == 4:
+            q += [vv[i].lerp(vv[(i + 1) % 4], 0.5).lerp(c, 0.2) for i in range(4)]
+        for x in q:
+            rows.append(tuple(x + n * eps))
+            fid.append(f.index)
+        nrm[f.index] = tuple(n)
+        zmax[f.index] = max(v.z for v in vv)
+    kill = np.zeros(nf, bool)
+    if occ:
+        Pt = np.array(rows, np.float64)
+        fid = np.array(fid, np.int64)
+        own = owner[fid]
+        covered = np.zeros(len(Pt), bool)
+        for (k, lo, hi) in occ:
+            ins = (Pt[:, 0] > lo[0]) & (Pt[:, 0] < hi[0]) & (Pt[:, 1] > lo[1]) & (Pt[:, 1] < hi[1]) & (Pt[:, 2] > lo[2]) & (Pt[:, 2] < hi[2])
+            covered |= ins & (own != k)
+        notcov = np.zeros(nf, bool)
+        np.logical_or.at(notcov, fid, ~covered)
+        kill |= ~notcov
+    for gz in grounds:
+        kill |= (nrm[:, 2] < -0.98) & (np.abs(zmax - gz) < 0.03)
+    if sea is not None:
+        kill |= zmax < sea - 1.6
+    CULL['faces'] += nf
+    CULL['killed'] += int(kill.sum())
+    if kill.any():
+        dead = [bm.faces[i] for i in np.nonzero(kill)[0]]
+        bmesh.ops.delete(bm, geom=dead, context='FACES')
+        bm.normal_update()
+    return int(kill.sum())
+
+
+def finalize(geo, name, sharp_angle=40.0, weighted=True, cull=None):
     """Geo (Blender coords, semantic mats) -> bpy Mesh with M_<base> slots, COLOR_0, UVs."""
     bm = geo.bm
     bmesh.ops.dissolve_degenerate(bm, dist=1e-7, edges=list(bm.edges))
     bm.normal_update()
+    if cull is not None:
+        cull_hidden(geo, **cull)
     info = [resolve(s) for s in geo.mats] or [resolve('steel')]
     need_uv = any(r[2] and r[2][0] != 'grad' for r in info)
     col = bm.loops.layers.float_color.new('Col')
@@ -299,8 +383,9 @@ def finalize(geo, name, sharp_angle=40.0, weighted=True):
 def kit(name, geo, cols=(), **kw):
     """Register a kit piece. geo in Blender coords around its local origin; cols: list of
     (center, size) boxes in the same local Blender coords."""
-    ntri = sum(len(f.verts) - 2 for f in geo.bm.faces)
+    kw.setdefault('cull', {'grounds': (0.0,)})
     ob = finalize(geo, 'K_' + name, **kw)
+    ntri = sum(len(p.vertices) - 2 for p in ob.data.polygons)
     KIT[name] = {'mesh': ob.data, 'cols': list(cols), 'tris': ntri, 'n': 0}
     return KIT[name]
 
@@ -332,8 +417,9 @@ def inst(name, pos=(0, 0, 0), yaw=0.0, pitch=0.0, roll=0.0, scale=1.0, M=None, c
 
 def unique(name, geo, cols=(), noshadow=False, **kw):
     """One-off geometry already in world (Blender) coordinates."""
-    ntri = sum(len(f.verts) - 2 for f in geo.bm.faces)
+    kw.setdefault('cull', {'grounds': (0.0, -9.0), 'sea': -14.0})
     ob = finalize(geo, 'U_' + name, **kw)
+    ntri = sum(len(p.vertices) - 2 for p in ob.data.polygons)
     KIT_COL.objects.unlink(ob)
     OUT_COL.objects.link(ob)
     ob.name = f'u{STATS["inst"]}_{name}'
@@ -400,6 +486,33 @@ def _write_glb(path, js, rest):
         f.write(rest)
 
 
+def _round_nodes(path):
+    """Shrink the packed GLB's JSON: node transforms / extras printed with 9 significant digits
+    (0.800000012) -> 0.1 mm / 1e-6 precision. Binary chunk untouched."""
+    js, rest = _read_glb(path)
+    before = len(json.dumps(js, separators=(',', ':')))
+
+    def rd(v, nd):
+        if isinstance(v, float):
+            r = round(v, nd)
+            return int(r) if r == int(r) and abs(r) < 1e9 else r
+        if isinstance(v, list):
+            return [rd(x, nd) for x in v]
+        if isinstance(v, dict):
+            return {k: rd(x, nd) for k, x in v.items()}
+        return v
+    for n in js.get('nodes', []):
+        for k, nd in (('translation', 4), ('scale', 5), ('rotation', 6), ('extras', 4)):
+            if k in n:
+                n[k] = rd(n[k], nd)
+        if n.get('rotation') == [0, 0, 0, 1]:
+            n.pop('rotation')
+        if n.get('scale') == [1, 1, 1]:
+            n.pop('scale')
+    _write_glb(path, js, rest)
+    print(f'[arena] JSON {before / 1024:.0f} -> {len(json.dumps(js, separators=(",", ":"))) / 1024:.0f} KiB')
+
+
 def export(path, pack=True):
     """Positions stay FLOAT (-vpf): gltfpack's integer quantization shares ONE grid across the whole
     scene (7 km sea -> 10.7 cm steps), which collapsed thin parts and made overlays z-fight."""
@@ -438,6 +551,7 @@ def export(path, pack=True):
             shutil.copy(raw, path)
         else:
             os.remove(raw)
+            _round_nodes(path)
     else:
         shutil.move(raw, path)
     print(f'[arena] GLB -> {path} ({os.path.getsize(path) / 1024:.0f} KiB)')

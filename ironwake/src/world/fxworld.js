@@ -16,6 +16,7 @@ attribute vec3 aBase;
 attribute vec4 aSeed;     // x phase, y random, z plume radius, w plume height
 attribute vec2 aCorner;
 attribute float aKind;
+attribute vec4 aVar;      // per plume: wind multiplier, wind angle offset (rad), turbulence, lean phase
 uniform float uTime;
 uniform vec2 uWind;
 varying vec2 vUv;
@@ -36,10 +37,15 @@ void main() {
   vec3 c = aBase;
   c.y += life * H;
   float drift = pow(life, 1.35) * H * 0.9;
-  c.xz += uWind * drift;
+  // every column leans and spreads differently (per-plume wind gust / shear, no parallel ribbons)
+  float wa = aVar.y + sin(uTime * 0.03 + aVar.w) * 0.12 + life * 0.35 * (aVar.z - 0.5);
+  vec2 wind = mat2(cos(wa), sin(wa), -sin(wa), cos(wa)) * uWind * aVar.x;
+  c.xz += wind * drift;
   c.xz += vec2(cos(sp), sin(sp)) * R * (0.3 + 2.4 * life) * (0.5 + 0.5 * sin(life * 7.0 + sp));
-  c.xz += vec2(sin(uTime * 0.07 + aBase.x * 0.01), cos(uTime * 0.05 + aBase.z * 0.01)) * life * H * 0.12;
-  float size = R * (1.6 + pow(life, 0.8) * (aKind > 0.5 && aKind < 1.5 ? 3.2 : (spray > 0.5 ? 2.4 : 9.0))) * (0.75 + 0.5 * aSeed.y);
+  c.xz += vec2(sin(uTime * 0.07 + aBase.x * 0.01 + aVar.w), cos(uTime * 0.05 + aBase.z * 0.01 + aVar.w)) * life * H * (0.06 + 0.14 * aVar.z);
+  // steam from cooling towers (R ~ 20 m) grows slowly; stack steam / smoke billows out ~9x
+  float grow = aKind > 0.5 && aKind < 1.5 ? mix(9.0, 3.2, smoothstep(6.0, 16.0, R)) : (spray > 0.5 ? 2.4 : 9.0);
+  float size = R * (1.6 + pow(life, 0.8) * grow) * (0.75 + 0.5 * aSeed.y);
   if (spray > 0.5) c.y -= life * life * H * 0.8;   // spray falls back
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
@@ -89,35 +95,47 @@ void main() {
   vec3 smokeC = mix(vec3(0.020, 0.018, 0.016), vec3(0.055, 0.048, 0.042), n1) * (0.55 + 0.9 * sunL) + uSunCol * 0.025 * sunL * sunL;
   vec3 steamC = mix(vec3(0.20, 0.195, 0.185), vec3(0.42, 0.40, 0.37), sunL) * (0.85 + 0.3 * n1);
   vec3 col = mix(smokeC, steamC, steam);
-  // hot plumes: underlit by the furnace mouth near the base
-  col += hot * vec3(1.0, 0.32, 0.07) * (1.0 - smoothstep(0.0, 0.22, vLife)) * 1.6 * (0.6 + 0.4 * n2);
+  // hot plumes: underlit by the furnace mouth near the base (fades as T^2 with the fog, like the
+  // furnace glow it comes from: no glowing puffs floating over fogged-out stacks)
+  float fogT = 1.0;
+  #ifdef USE_FOG
+    fogT = exp(-fogDensity * fogDensity * vFogDepth * vFogDepth * vHF);
+  #endif
+  // (shaped like the puff: brightest in its lower core, broken by the noise -> no flat lit disc)
+  float under = (1.0 - smoothstep(0.0, 0.85, r)) * smoothstep(0.25, -0.35, q.y + (n1 - 0.5) * 0.5) * smoothstep(0.25, 0.7, n2 + n1 * 0.4);
+  col += hot * vec3(1.0, 0.32, 0.07) * (1.0 - smoothstep(0.0, 0.22, vLife)) * 2.2 * under * fogT * fogT;
   gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   #ifdef USE_FOG
-    float fogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth * vHF);
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, 1.0 - fogT);
   #endif
 }`;
 
 export function createPlumes(list, noiseTex, sunDir) {
   const PER = { 0: 44, 1: 26, 2: 44, 3: 10 };
   let n = 0;
-  for (const p of list) n += PER[p.kind] || 24;
+  for (const p of list) n += p.kind === 1 && p.r < 8 ? 40 : (PER[p.kind] || 24);
   const base = new Float32Array(n * 4 * 3), seed = new Float32Array(n * 4 * 4), corner = new Float32Array(n * 4 * 2), kind = new Float32Array(n * 4);
+  const vars = new Float32Array(n * 4 * 4);
   const index = new Uint32Array(n * 6);
   let q = 0;
   let h = 0x9e3779b9;
   const rnd = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 100000) / 100000; };
   for (const p of list) {
-    const m = PER[p.kind] || 24;
+    const m = p.kind === 1 && p.r < 8 ? 40 : (PER[p.kind] || 24);
+    // per-plume variation: wind multiplier 0.6-1.4, +-0.35 rad heading, turbulence, phase,
+    // radius +-40 % (sea spray stays as authored)
+    const pv = [0.6 + 0.8 * rnd(), (rnd() - 0.5) * 0.7, rnd(), rnd() * 6.283];
+    const rr0 = p.kind === 3 ? p.r : p.r * (0.6 + 0.8 * rnd());
     for (let i = 0; i < m; i++, q++) {
       const ph = (i + rnd() * 0.6) / m, rr = rnd();
       const C = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
       for (let v = 0; v < 4; v++) {
         const k = q * 4 + v;
         base[k * 3] = p.pos.x; base[k * 3 + 1] = p.pos.y; base[k * 3 + 2] = p.pos.z;
-        seed[k * 4] = ph; seed[k * 4 + 1] = rr; seed[k * 4 + 2] = p.r; seed[k * 4 + 3] = p.h;
+        seed[k * 4] = ph; seed[k * 4 + 1] = rr; seed[k * 4 + 2] = rr0; seed[k * 4 + 3] = p.h;
+        vars[k * 4] = pv[0]; vars[k * 4 + 1] = pv[1]; vars[k * 4 + 2] = pv[2]; vars[k * 4 + 3] = pv[3];
         corner[k * 2] = C[v][0]; corner[k * 2 + 1] = C[v][1];
         kind[k] = p.kind;
       }
@@ -130,6 +148,7 @@ export function createPlumes(list, noiseTex, sunDir) {
   g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
   g.setAttribute('aCorner', new THREE.BufferAttribute(corner, 2));
   g.setAttribute('aKind', new THREE.BufferAttribute(kind, 1));
+  g.setAttribute('aVar', new THREE.BufferAttribute(vars, 4));
   g.setIndex(new THREE.BufferAttribute(index, 1));
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uTime: { value: 0 }, uWind: { value: new THREE.Vector2(0.55, 0.32) }, uNoise: { value: null },

@@ -9,22 +9,33 @@
 //   MOTION BLUR full res             camera-motion reprojection from depth (high/medium); the
 //                                    player rig's projected box stays sharp
 //   AO         1/2 res               SAO-style obscurance from depth + 2 depth-aware blurs
+//   VOLUME     1/4 res               volumetric sun scattering: ray-march the height fog through
+//                                    both shadow cascades (shadow volumes of gantries, conveyors
+//                                    and rigs carve shafts into the lit ash at ANY sun angle)
+//                                    + 2 depth-aware blurs; bilateral upsample in the composite
 //   SHAFTS     1/4 res               sky mask near the sun + 2 radial blurs (only when the
 //                                    sun is in front of the camera)
-//   BLOOM      1/2 .. 1/64 res       soft-knee threshold (emissives only) + 13-tap down /
-//                                    tent up mip chain (tight: small mips weighted most)
-//   COMPOSITE  full res -> LDR       AO, shafts, bloom, exposure, edge-only CA, filmic tone map
-//                                    (AgX + look), split-tone grade, vignette, grain, sRGB
+//   EYE ADAPT  64x36 + 1x1           centre-weighted log-average luminance -> partial exposure
+//                                    compensation (into-sun frames come down ~0.5 EV)
+//   BLOOM      1/2 .. 1/64 res       soft-knee threshold (emissives only) + compressive source
+//                                    clamp + 13-tap down / tent up mip chain (tight)
+//   COMPOSITE  full res -> LDR       AO (floored), volume, shafts, bloom, exposure x adaptation,
+//                                    edge-only CA (<= 0.5 px), AgX + look (hue-preserving for
+//                                    near-primary emissives), split-tone grade (cool shadows,
+//                                    warm highlights), toe-protected contrast, vignette, black
+//                                    level lift (#1C2126: never #000), grain, sRGB
 //   AA         full res -> screen    SMAA (high/medium; high also has MSAA x4 on hardware GPUs)
 //                                    / FXAA (low)
 //
 // Per-pass cost estimate at 1920x1080 on a mid GPU (GTX 1660 / RX 6600 class), high:
 //   scene MSAA x4 +0.8 ms over no-MSAA | near shadow 4096² ~1.0 ms (draw-call bound; far
-//   cascade is a one-time bake) | AO 12 taps @ 1/2 ~0.45 ms | shafts @ 1/4 ~0.15 ms |
-//   motion blur 8 taps ~0.25 ms | bloom 11 passes ~0.35 ms | composite ~0.25 ms |
-//   SMAA ~0.45 ms  => post ≈ 2.0 ms.
-//   medium: no MSAA, near shadow 2048², AO 8 taps, shafts 24, blur 6 taps => post ≈ 1.4 ms.
-//   low: no AO / shafts / far cascade, FXAA, 1800 ash flakes => post ≈ 0.6 ms.
+//   cascade is a one-time bake) | AO 12 taps @ 1/2 ~0.45 ms | volume 24 steps @ 1/4
+//   (2 shadow taps/step worst case) ~0.35 ms | shafts @ 1/4 ~0.15 ms | motion blur 8 taps
+//   ~0.25 ms | bloom 11 passes ~0.35 ms | composite (+ bilateral volume upsample) ~0.3 ms |
+//   eye adaptation ~0.02 ms | SMAA ~0.45 ms  => post ≈ 2.4 ms.
+//   medium: no MSAA, near shadow 2048², AO 8 taps, volume 16 steps, shafts 24, blur 6 taps
+//   => post ≈ 1.7 ms.
+//   low: no AO / volume / shafts / far cascade, FXAA, 1800 ash flakes => post ≈ 0.6 ms.
 //
 // API (game.pipeline):
 //   render(realDt)            called by the engine once per frame
@@ -45,26 +56,33 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import * as P from './postfx.js';
-import { softwareRendererName } from './atmosphere.js';
+import { softwareRendererName, atmosGLSL } from './atmosphere.js';
 
 const QUALITY = {
-  low: { msaa: 0, aa: 'fxaa', ao: 0, shafts: 0, bloomMips: 5, mblur: 0 },
-  medium: { msaa: 0, aa: 'smaa', ao: 8, shafts: 24, bloomMips: 6, mblur: 6 },
-  high: { msaa: 4, aa: 'smaa', ao: 12, shafts: 36, bloomMips: 6, mblur: 8 },
+  low: { msaa: 0, aa: 'fxaa', ao: 0, shafts: 0, bloomMips: 5, mblur: 0, vol: 0 },
+  medium: { msaa: 0, aa: 'smaa', ao: 8, shafts: 24, bloomMips: 6, mblur: 6, vol: 16 },
+  high: { msaa: 4, aa: 'smaa', ao: 12, shafts: 36, bloomMips: 6, mblur: 8, vol: 24 },
 };
 
 /** Art-direction tunables (live: game.pipeline.look). */
 const LOOK = {
-  exposure: 1.12,
+  exposure: 1.3,
   tonemap: 'agx',
-  ao: { radius: 2.4, intensity: 1.15, bias: 0.03, strength: 0.95, fade: 240 },
-  bloom: { threshold: 1.35, knee: 0.55, intensity: 0.16, weights: [1.0, 0.9, 0.75, 0.6, 0.5, 0.4] },
+  ao: { radius: 2.8, intensity: 2.4, bias: 0.03, strength: 0.9, floor: 0.38, fade: 240 },
+  bloom: { threshold: 1.35, knee: 0.55, intensity: 0.2, clamp: 16, weights: [1.0, 0.72, 0.48, 0.3, 0.18, 0.1] }, // tight: small mips dominate
   shafts: { threshold: 0.45, radius: 0.5, length: 0.96, decay: 0.975, intensity: 1.6, tint: '#FFB27A' },
-  grade: { lift: '#1C2126', liftAmt: 0.6, shadowAmt: 0.35, gain: '#F2C79A', gainAmt: 0.22, sat: 0.86, contrast: 1.2 },
+  // volumetric sun scattering: lit = boost of sun-lit in-scatter, occ = removal in shadow
+  volume: { lit: 0.4, occ: 1.0, dust: 0.011, maxDist: 260 },
+  // lift = display-space black level (sRGB #1C2126 x liftAmt), shadowAmt/Desat = cool split tone
+  // below display-linear 0.3, gain = highlight hue at constant luminance
+  grade: { lift: '#1C2126', liftAmt: 0.72, shadowAmt: 0.45, shadowDesat: 0.35, gain: '#F2C79A', gainAmt: 0.16, sat: 0.95, contrast: 1.2 },
   motionBlur: { shutter: 0.5, maxPx: 30, chaseVel: 0.85 },
+  // eye adaptation: partial compensation of the centre-weighted log-average luminance toward
+  // 'key' (EV range -down..+up). Into-sun frames come down, the storm side stays dark-of-mid.
+  autoExposure: { enabled: 1, key: 0.077, strength: 0.65, down: 1.0, up: 0.15, speed: 1.6 },
   vignette: 0.26,
-  ca: 0.006,
-  grain: 0.032,
+  ca: 0.006,      // edge-only, capped at 0.5 px in the composite
+  grain: 0.02,
 };
 
 const SOFT_LAYER = 1;
@@ -90,7 +108,8 @@ export default function pipelineSystem(game) {
   const size = new THREE.Vector2(1, 1);
   const dev = devParams();
   let q = QUALITY.high, qName = 'high';
-  let sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, depthLinRT = null;
+  let sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT = null;
+  let aeLum = null, aeA = null, aeB = null, aeTime = -1e9, aeDebugN = 0;
   const bloomRT = [];
   let quad, smaa = null, fxaaMat, softEnabled = false;
   const M = {};
@@ -101,7 +120,7 @@ export default function pipelineSystem(game) {
   const _sun = new THREE.Vector3(), _fwd = new THREE.Vector3();
   const floatDepth = { type: THREE.HalfFloatType };
   let frameNo = 0;
-  const debugView = dev.get('postdebug') === 'ao' ? 1 : dev.get('postdebug') === 'bloom' ? 2 : 0; // dev only
+  const debugView = { ao: 1, bloom: 2, vol: 3 }[dev.get('postdebug')] || 0; // dev only
 
   function makeRT(w, h, opts = {}) {
     const rt = new THREE.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), {
@@ -127,11 +146,19 @@ export default function pipelineSystem(game) {
       aoB = makeRT(hw, hh, { type: THREE.UnsignedByteType });
     }
     if (q.mblur) mbRT = makeRT(W, H);
+    if (q.vol) {
+      volA = makeRT(Math.max(1, W >> 2), Math.max(1, H >> 2), { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+      volB = makeRT(Math.max(1, W >> 2), Math.max(1, H >> 2), { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+    }
     if (q.shafts) {
       shA = makeRT(Math.max(1, W >> 2), Math.max(1, H >> 2));
       shB = makeRT(Math.max(1, W >> 2), Math.max(1, H >> 2));
     }
     for (let i = 0; i < q.bloomMips; i++) bloomRT.push(makeRT(Math.max(1, W >> (i + 1)), Math.max(1, H >> (i + 1))));
+    aeLum = makeRT(64, 36, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    aeA = makeRT(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    aeB = makeRT(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    aeTime = -1e9;
     if (softEnabled) makeDepthLin();
     if (smaa) smaa.setSize(W, H);
     if (fxaaMat) fxaaMat.uniforms.resolution.value.set(1 / W, 1 / H);
@@ -144,8 +171,8 @@ export default function pipelineSystem(game) {
     depthUniforms.tIwDepth.value = depthLinRT.texture;
   }
   function disposeTargets() {
-    for (const rt of [sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, depthLinRT]) if (rt) { if (rt.depthTexture) rt.depthTexture.dispose(); rt.dispose(); }
-    sceneRT = hdrTmpA = hdrTmpB = ldrRT = aoA = aoB = shA = shB = mbRT = depthLinRT = null;
+    for (const rt of [sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT, aeLum, aeA, aeB]) if (rt) { if (rt.depthTexture) rt.depthTexture.dispose(); rt.dispose(); }
+    sceneRT = hdrTmpA = hdrTmpB = ldrRT = aoA = aoB = shA = shB = mbRT = volA = volB = depthLinRT = aeLum = aeA = aeB = null;
     for (const rt of bloomRT) rt.dispose();
     bloomRT.length = 0;
   }
@@ -187,6 +214,32 @@ export default function pipelineSystem(game) {
     return aoA.texture;
   }
 
+  /** Volumetric sun scattering through the shadow cascades (quarter res). Returns the texture or null. */
+  function renderVolume(cam) {
+    const env = game.env, sun = env && env.sun, far = env && env.sunFar;
+    const nearMap = sun && sun.castShadow && sun.shadow.map ? sun.shadow.map.depthTexture : null;
+    const farMap = far && far.castShadow && far.shadow.map ? far.shadow.map.depthTexture : null;
+    if (!nearMap && !farMap) return null;
+    const m = M.vol, u = m.uniforms, V = api.look.volume;
+    setDepthUniforms(m, cam);
+    u.tShNear.value = nearMap; u.uHasNear.value = nearMap ? 1 : 0;
+    u.tShFar.value = farMap; u.uHasFar.value = farMap ? 1 : 0;
+    if (nearMap) u.uShNear.value.copy(sun.shadow.matrix);
+    if (farMap) u.uShFar.value.copy(far.shadow.matrix);
+    u.uShBias.value.set(sun ? sun.shadow.bias : 0, far ? far.shadow.bias : 0);
+    u.uCamWorld.value.copy(cam.matrixWorld);
+    u.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
+    u.uFogD0.value = game.scene.fog ? game.scene.fog.density : 0.002;
+    u.uMaxDist.value = V.maxDist;
+    pass(m, volA);
+    const b = M.volBlur;
+    b.uniforms.tIn.value = volA.texture; b.uniforms.uStep.value.set(1 / volA.width, 0);
+    pass(b, volB);
+    b.uniforms.tIn.value = volB.texture; b.uniforms.uStep.value.set(0, 1 / volA.height);
+    pass(b, volA);
+    return volA.texture;
+  }
+
   /** Returns shaft intensity (0 = skipped). */
   function renderShafts(cam, hdrTex) {
     const env = game.env;
@@ -220,14 +273,48 @@ export default function pipelineSystem(game) {
     return vis * S.intensity;
   }
 
-  function renderBloom(hdrTex) {
+  /**
+   * Eye adaptation (64x36 log-luminance grid + 1x1 adapt, ~0.02 ms). Returns the 1x1 texture
+   * (R = EV offset) or null. Consecutive frames adapt over ~1/speed s (sim time); a time jump
+   * (camera cut, harness capture) snaps to the target so captures are deterministic.
+   */
+  function renderAE(hdrTex) {
+    const A = api.look.autoExposure;
+    if (!A.enabled || dev.get('ae') === '0') return null;
+    const lm = M.aeLum;
+    lm.uniforms.tIn.value = hdrTex;
+    lm.uniforms.uFoot.value.set(1 / 64, 1 / 36);
+    pass(lm, aeLum);
+    const t = game.time, dt = t - aeTime;
+    const blend = dt > 0 && dt < 0.25 ? 1 - Math.exp(-dt * A.speed) : (dt === 0 ? 0 : 1);
+    aeTime = t;
+    const ad = M.aeAdapt;
+    ad.uniforms.tLum.value = aeLum.texture;
+    ad.uniforms.tPrev.value = aeB.texture;
+    ad.uniforms.uBlend.value = blend;
+    ad.uniforms.uAE.value.set(Math.log2(A.key), A.strength, A.down, A.up);
+    pass(ad, aeA);
+    const tmp = aeA; aeA = aeB; aeB = tmp;     // aeB = this frame's value
+    if (dev.get('aedebug') === '1' && aeDebugN++ < 4) {
+      const px = new Uint16Array(4);
+      try {
+        game.renderer.readRenderTargetPixels(aeB, 0, 0, 1, 1, px);
+        console.warn(`[pipeline] auto exposure EV ${THREE.DataUtils.fromHalfFloat(px[0]).toFixed(3)} meanLog2 ${THREE.DataUtils.fromHalfFloat(px[1]).toFixed(3)}`);
+      } catch (e) { /* debug only */ }
+    }
+    return aeB.texture;
+  }
+
+  function renderBloom(hdrTex, aeTex) {
     const B = api.look.bloom;
     const pre = M.bloomPre;
     pre.uniforms.tIn.value = hdrTex;
     pre.uniforms.uTexel.value.set(1 / size.x, 1 / size.y);
     pre.uniforms.uExposure.value = api.look.exposure;
+    pre.uniforms.tAE.value = aeTex; pre.uniforms.uHasAE.value = aeTex ? 1 : 0;
     const k = Math.max(1e-4, B.threshold * B.knee);
     pre.uniforms.uThreshold.value.set(B.threshold, k, 2 * k, 0.25 / k);
+    pre.uniforms.uClamp.value = B.clamp;
     pass(pre, bloomRT[0]);
     const dn = M.bloomDown;
     for (let i = 1; i < bloomRT.length; i++) {
@@ -333,7 +420,10 @@ export default function pipelineSystem(game) {
       M.bloomPre = P.bloomPrefilterMaterial();
       M.bloomDown = P.bloomDownMaterial();
       M.bloomUp = P.bloomUpMaterial();
-      M.composite = P.compositeMaterial();
+      M.composite = P.compositeMaterial(atmosGLSL());
+      M.volBlur = P.volumeBlurMaterial();
+      M.aeLum = P.lumMaterial();
+      M.aeAdapt = P.adaptMaterial();
       fxaaMat = new THREE.ShaderMaterial({ ...FXAAShader, uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), depthTest: false, depthWrite: false });
       smaa = new SMAAPass();
       smaa.renderToScreen = true;
@@ -382,7 +472,9 @@ export default function pipelineSystem(game) {
       if (dev.get('ao') === '0') q.ao = 0;
       if (dev.get('aa')) q.aa = dev.get('aa');
       if (dev.get('shafts') === '0') q.shafts = 0;
-      for (const k of ['ao', 'shaftBlur', 'mblur']) if (M[k]) { M[k].dispose(); M[k] = null; }
+      if (dev.get('vol') === '0') q.vol = 0;
+      for (const k of ['ao', 'shaftBlur', 'mblur', 'vol']) if (M[k]) { M[k].dispose(); M[k] = null; }
+      M.vol = q.vol ? P.volumeMaterial(q.vol, atmosGLSL()) : null;
       M.ao = q.ao ? P.aoMaterial(q.ao) : null;
       M.shaftBlur = q.shafts ? P.shaftBlurMaterial(q.shafts) : null;
       if (dev.get('mblur') === '0') q.mblur = 0;
@@ -440,8 +532,10 @@ export default function pipelineSystem(game) {
       if (M.mblur) hdrRT = renderMotionBlur(cam, hdrRT);
       const L = api.look;
       const aoTex = M.ao ? renderAO(cam) : null;
+      const volTex = M.vol ? renderVolume(cam) : null;
       const shaftI = q.shafts ? renderShafts(cam, hdrRT.texture) : 0;
-      const bloomTex = L.bloom.intensity > 0 ? renderBloom(hdrRT.texture) : null;
+      const aeTex = renderAE(hdrRT.texture);
+      const bloomTex = L.bloom.intensity > 0 ? renderBloom(hdrRT.texture, aeTex) : null;
       hdrRT = runSlot('post_bloom', hdrRT);
 
       // ---- composite
@@ -452,26 +546,37 @@ export default function pipelineSystem(game) {
         c.needsUpdate = true;
       }
       u.tScene.value = hdrRT.texture;
-      u.tAO.value = aoTex; u.uHasAO.value = aoTex ? 1 : 0; u.uAO.value = L.ao.strength;
+      u.tAO.value = aoTex; u.uHasAO.value = aoTex ? 1 : 0; u.uAO.value = L.ao.strength; u.uAOFloor.value = L.ao.floor;
       u.tBloom.value = bloomTex; u.uHasBloom.value = bloomTex ? 1 : 0; u.uBloom.value = L.bloom.intensity;
       u.tShafts.value = shaftI > 0 ? shA.texture : null; u.uHasShafts.value = shaftI > 0 ? 1 : 0;
+      setDepthUniforms(c, cam);
+      u.tVol.value = volTex; u.uHasVol.value = volTex ? 1 : 0;
+      u.uVolLit.value = L.volume.lit; u.uVolOcc.value = L.volume.occ; u.uVolMaxZ.value = L.volume.maxDist * 4;
+      u.uVolDust.value = L.volume.dust;
+      if (game.env && game.env.sun) u.uSunCol.value.copy(game.env.sun.color).multiplyScalar(game.env.sun.intensity);
+      u.uCamWorld.value.copy(cam.matrixWorld);
+      if (game.scene.fog) u.uFogColor.value.copy(game.scene.fog.color);
       u.uShaftTint.value.copy(col(L.shafts.tint)).multiplyScalar(shaftI);
       u.tNoise.value = game.env ? game.env.noise : null;
       u.uExposure.value = L.exposure;
+      u.tAE.value = aeTex; u.uHasAE.value = aeTex ? 1 : 0;
       u.uCA.value = L.ca;
       u.uVignette.value = L.vignette;
       u.uGrain.value = u.tNoise.value ? L.grain : 0;
       // grain pattern changes per rendered frame but stays deterministic (frame counter)
       u.uGrainOffset.value.set((frameNo * 0.6180339) % 1, (frameNo * 0.7548776) % 1);
-      u.uLift.value.copy(col(L.grade.lift)).multiplyScalar(L.grade.liftAmt);
+      // lift in DISPLAY space (sRGB components of the hex) -> black level of the frame
+      u.uLift.value.copy(col(L.grade.lift)).convertLinearToSRGB().multiplyScalar(L.grade.liftAmt);
+      // highlight hue at unit luminance
       u.uGain.value.copy(col(L.grade.gain));
-      const gm = Math.max(u.uGain.value.r, u.uGain.value.g, u.uGain.value.b);
+      const gm = u.uGain.value.r * 0.2126 + u.uGain.value.g * 0.7152 + u.uGain.value.b * 0.0722;
       u.uGain.value.multiplyScalar(1 / gm);
       u.uGainAmt.value = L.grade.gainAmt;
       u.uShadowTint.value.copy(col(L.grade.lift));
       const sm = Math.max(u.uShadowTint.value.r, u.uShadowTint.value.g, u.uShadowTint.value.b);
       u.uShadowTint.value.multiplyScalar(1 / sm);
       u.uShadowAmt.value = L.grade.shadowAmt;
+      u.uShadowDesat.value = L.grade.shadowDesat;
       u.uSat.value = L.grade.sat;
       u.uContrast.value = L.grade.contrast;
       u.uRes.value.copy(size);

@@ -7,7 +7,7 @@
 // built lazily per rig root (skipping flames / skinned meshes) and reused.
 import * as THREE from 'three';
 
-const LIFE = 0.16;
+const LIFE = 0.13;
 const POOL = 2;
 
 const VERT = /* glsl */`
@@ -24,8 +24,9 @@ const FRAG = /* glsl */`
 uniform vec3 uColor; uniform float uFade;
 varying float vRim; varying float vViewZ;
 void main() {
-  float r = vRim * vRim;
-  float a = (0.05 + 0.6 * r) * uFade * smoothstep(0.6, 3.0, vViewZ);
+  // heat smear: only the silhouette rim glows (a filled translucent copy reads as a hologram)
+  float r = vRim * vRim * vRim;
+  float a = 0.85 * r * uFade * smoothstep(0.6, 3.0, vViewZ);
   gl_FragColor = vec4(uColor * a, 0.0);
 }`;
 
@@ -46,7 +47,7 @@ export class Ghosts {
     for (let k = 0; k < POOL; k++) {
       const mat = new THREE.ShaderMaterial({
         name: 'iw_fx_ghost', vertexShader: VERT, fragmentShader: FRAG,
-        uniforms: { uColor: { value: new THREE.Color(1.5, 0.62, 0.2) }, uFade: { value: 0 } },
+        uniforms: { uColor: { value: new THREE.Color(2.2, 0.75, 0.18) }, uFade: { value: 0 } },
         transparent: true, depthWrite: false, depthTest: true,
         blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
       });
@@ -101,7 +102,7 @@ export class Ghosts {
       // fades IN over two frames (the rig has not left its own silhouette yet), then out
       const f = 1 - s.t / LIFE;
       const fin = Math.min(1, Math.max(0, (s.t - 0.01) / 0.025));
-      s.mat.uniforms.uFade.value = fin * f * f * 0.7 * s.str;
+      s.mat.uniforms.uFade.value = fin * f * f * f * 0.8 * s.str;
     }
   }
 

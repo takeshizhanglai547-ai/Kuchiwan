@@ -63,4 +63,5 @@ export const MANIFEST = {
   // weapons/VFX lane (assets/fx/bake_fx.py; channel layout in src/fx/textures.js)
   tex_fx_puff: { url: 'assets/fx/fx_puff.webp', type: 'texture' },
   tex_fx_misc: { url: 'assets/fx/fx_misc.webp', type: 'texture' },
+  tex_fx_fire: { url: 'assets/fx/fx_fire.jpg', type: 'texture' },   // 8x8 fireball->smoke flipbook (assets/fx/bake_fire.py)
 };

@@ -23,7 +23,7 @@ export class Status {
     this.off = [
       ev.on('actor:stagger', (e) => this._onStagger(e)),
       ev.on('weapon:blade', (e) => this._onBlade(e)),
-      ev.on('player:qb', () => this._onQb()),
+      ev.on('player:qb', (f) => this._onQb(f)),
     ];
   }
 
@@ -49,11 +49,24 @@ export class Status {
     else if (e.phase === 'slash') { this.fx.slashes.slash(o); this.fx.slashes.ignite(o, 0.3); }
   }
 
-  _onQb() {
+  _onQb(f) {
     const p = this.game.player;
     if (!p || !p.rig) return;
     if (p.syncSim) p.syncSim();   // sim pose, not the last interpolated render pose
     this.fx.ghosts.trigger(p.rig.root, 1);
+    // jet flare out of every nozzle that faces away from the burst (located on the real
+    // nozzles, so it reads from any camera side instead of hiding behind the body)
+    const q = f && f.qb;
+    if (!q || !p.rig.nozzles) return;
+    const ql = Math.hypot(q.x, q.y, q.z) || 1;
+    for (const nz of p.rig.nozzles) {
+      if (!nz.node) continue;
+      nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();   // exhaust = -Z
+      const align = -(_d.x * q.x + _d.y * q.y + _d.z * q.z) / ql;
+      if (align < 0.45) continue;
+      _p.addScaledVector(_d, Math.max(0.25, (nz.radius || 0.3) * 0.6));
+      this.fx.spawn('qb_jet', _p, _d, (0.6 + 0.8 * align) * Math.min(1.3, Math.max(0.8, (nz.radius || 0.3) / 0.3)));
+    }
   }
 
   /** Jagged bolt from a to b (world), n segments, jitter m. */
@@ -79,13 +92,22 @@ export class Status {
       const s = this.stag[i], a = s.actor;
       s.t += dt;
       if (!a.alive || !a.staggered || s.t > 4) { this.stag.splice(i, 1); continue; }
-      if (s.burst) { s.burst = false; a.aimPoint(_p); fx.spawn('stagger_burst', _p, null, Math.max(0.8, (a.radius || 3) / 3.2)); }
+      if (s.burst) {
+        s.burst = false; a.aimPoint(_p);
+        fx.spawn('stagger_burst', _p, null, Math.max(0.8, (a.radius || 3) / 3.2));
+        // discharge: a crown of bolts leaping off the hull
+        const rb = Math.max(2.5, (a.radius || 2.5) * 1.6);
+        for (let k = 0; k < 7; k++) {
+          r.onSphere(_b); _b.y = Math.abs(_b.y) * 0.8; _b.multiplyScalar(rb * r.range(0.8, 1.4)).add(_p);
+          this._bolt(_p, _b, r.int(5, 8), 0.7, r.range(0.06, 0.12), r.range(0.12, 0.22));
+        }
+      }
       s.arcT -= dt;
       if (s.arcT > 0) continue;
-      s.arcT = r.range(0.04, 0.09);
+      s.arcT = r.range(0.03, 0.07);
       a.aimPoint(_c);
       const rad = Math.max(1.5, (a.radius || 2.5) * 0.9), hh = Math.max(1.5, (a.height || 5) * 0.45);
-      const nb = r.int(1, 2);
+      const nb = r.int(2, 3);
       for (let k = 0; k < nb; k++) {
         r.onSphere(_a); _a.x *= rad; _a.y *= hh; _a.z *= rad; _a.add(_c);
         r.onSphere(_b); _b.x *= rad * 1.2; _b.y *= hh * 1.1; _b.z *= rad * 1.2; _b.add(_c);
@@ -108,6 +130,10 @@ export class Status {
       }
       this.hurtT.set(a, t);
     }
+    // --- assault boost: the plumes run long and white-hot for the whole flight (rig.flare is
+    //     the rig's public burst knob; it decays on its own when the boost ends)
+    const plm = g.player && g.player.motor;
+    if (plm && plm.mode === 'ab' && g.player.rig && g.player.rig.flare) g.player.rig.flare(plm.abCharging ? 0.25 * (plm.abCharge || 0) : 0.6);
     // --- nozzle exit glows (the plume seen end-on still reads as a hot core + halo)
     for (const a of g.actors) {
       const rig = a.rig;
@@ -122,6 +148,10 @@ export class Status {
         const endOn = Math.max(0, -_c.dot(_d));
         const gs = Math.max(0.35, (nz.radius || 0.4) / 0.45) * Math.min(1.4, nz.level * (1 + (rig.qbFlash || 0))) * (1 + 1.3 * endOn * endOn);
         fx.spawn('nozzle_glow', _p, null, gs);
+        // assault boost: the main boosters wear a wide heat halo (reads from the chase camera)
+        if (a === g.player && nz.group === 'back' && a.motor && a.motor.mode === 'ab' && !a.motor.abCharging && nz.radius > 0.3) {
+          fx.spawn('ab_halo', _p, null, 0.8 + 0.6 * endOn);
+        }
       }
     }
     // --- assault boost wake: heated-air ribbons from the back boosters (off: seen end-on

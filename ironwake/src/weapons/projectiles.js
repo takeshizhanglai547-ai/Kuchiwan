@@ -163,6 +163,8 @@ export default function projectilesSystem(game) {
       pool.releaseAll(); streaks.geometry.instanceCount = 0; bodies.count = 0; api.incomingMissiles = 0;
     },
     activeCount() { return pool.count; },
+    /** Read-only view of live projectiles (indices < activeCount()); the audio lane scans it for flybys. */
+    activeList() { return pool.active; },
 
     spawn(def, owner, pos, dir, target = null) {
       const p = pool.acquire();

@@ -135,29 +135,43 @@ const FRAG_SURF = /* glsl */`
   {
     vec3 P = vWPos;
     float dist = length(cameraPosition - P);
-    // detail slopes: three scrolling layers of the wind-wave normal map (mip-filtered);
-    // flattened with distance so the far sea does not sparkle
+    // wind gust patches ("cat's paws", 60-200 m): roughened, ruffled water next to glassy slicks,
+    // so the sea never reads as one uniform ripple carpet
+    float gust = texture2D(tWater, P.xz / 610.0 + uTime * vec2(0.0011, -0.0023)).b;
+    float gust2 = texture2D(tWater, P.xz / 173.0 + uTime * vec2(-0.0019, -0.0031)).b;
+    float ruffle = smoothstep(0.25, 0.75, gust * 0.65 + gust2 * 0.45);
+    // detail slopes: three scrolling layers of the wind-wave normal map (mip-filtered) + a 1.5 m
+    // capillary layer near the camera; flattened with distance so the far sea does not sparkle
     vec4 wA = texture2D(tWater, P.xz / 37.0 + uTime * vec2(0.0045, -0.013));
     vec4 wB = texture2D(tWater, P.xz / 11.3 + uTime * vec2(-0.017, -0.028));
     vec4 wC = texture2D(tWater, P.xz / 131.0 + uTime * vec2(0.0021, -0.0042));
-    vec2 sl = (wA.rg - 0.5) * 1.1 + (wB.rg - 0.5) * 0.8 * (1.0 - smoothstep(40.0, 260.0, dist)) + (wC.rg - 0.5) * 0.9;
+    vec4 wD = texture2D(tWater, P.xz / 1.5 + uTime * vec2(0.031, -0.047));
+    float nearF = 1.0 - smoothstep(40.0, 260.0, dist);
+    vec2 sl = (wA.rg - 0.5) * (0.55 + 0.9 * ruffle) + (wB.rg - 0.5) * (0.35 + 0.75 * ruffle) * nearF
+            + (wC.rg - 0.5) * 0.9 + (wD.rg - 0.5) * 0.35 * (1.0 - smoothstep(6.0, 40.0, dist));
     sl *= 0.95 - 0.55 * smoothstep(80.0, 1100.0, dist);
     vec3 gn = normalize(vGN);
     iwWN = normalize(vec3(gn.x + sl.x, gn.y, gn.z + sl.y));
-    // foam: shore contact band + pulsing surge + turbid wash, whitecaps on pinched crests
+    // foam: shore contact band + pulsing surge + turbid wash, whitecaps on pinched crests,
+    // wind-aligned foam streaks (spindrift lanes) on the ruffled patches
     float sd = iwShore(P.xz);
     float fA = texture2D(tWater, P.xz / 15.0 + vec2(0.003, -uTime * 0.011)).b;
     float fB = texture2D(tWater, P.xz / 5.1 + vec2(-uTime * 0.017, uTime * 0.006)).b;
     float surge = 0.5 + 0.5 * sin(uTime * 0.85 + P.x * 0.09 + P.z * 0.05);
     float band = 1.0 - smoothstep(0.0, 2.2 + 4.0 * surge, sd + (fB - 0.5) * 3.0);
     float lace = (1.0 - smoothstep(0.0, 26.0, sd)) * smoothstep(0.5, 0.82, fA * 0.65 + fB * 0.45);
-    float cap = smoothstep(0.3, 0.62, vCrest + (fA - 0.5) * 0.35) * smoothstep(0.42, 0.78, fB * 0.5 + fA * 0.5);
-    float foam = clamp(band * (0.45 + 0.7 * fB) + lace * 0.75 + cap * 0.7, 0.0, 1.0);
+    float cap = smoothstep(0.3, 0.62, vCrest + (fA - 0.5) * 0.35) * smoothstep(0.42, 0.78, fB * 0.5 + fA * 0.5) * (0.4 + 0.6 * ruffle);
+    vec2 wd = vec2(0.24, -0.97);                                 // wind / swell heading (WAVES[0])
+    vec2 wq = vec2(dot(P.xz, wd), dot(P.xz, vec2(-wd.y, wd.x)));
+    float lanes = texture2D(tWater, vec2(wq.y / 9.0, wq.x / 140.0 + uTime * 0.004)).b;
+    float streak = smoothstep(0.66, 0.9, lanes) * smoothstep(0.55, 0.85, fA) * ruffle * 0.55;
+    float foam = clamp(band * (0.45 + 0.7 * fB) + lace * 0.75 + cap * 0.7 + streak, 0.0, 1.0);
     foam *= 1.0 - 0.8 * smoothstep(600.0, 1800.0, dist);
     float wash = (1.0 - smoothstep(0.0, 40.0, sd)) * 0.5;
-    vec3 body = uDeep * (1.0 + wash * 1.6 + vCrest * 0.8);
+    vec3 body = uDeep * (1.0 + wash * 1.6 + vCrest * 0.8) * (0.85 + 0.3 * gust2);
     diffuseColor.rgb = mix(body, uFoam, foam);
-    iwRgh = mix(0.06 + 0.12 * smoothstep(120.0, 900.0, dist), 0.75, foam);   // rougher far away: no sub-pixel glints
+    // glassy slicks vs ruffled water; rougher far away (no sub-pixel glints)
+    iwRgh = mix(mix(0.035, 0.11, ruffle) + 0.12 * smoothstep(120.0, 900.0, dist), 0.75, foam);
   }
 `;
 
@@ -171,7 +185,7 @@ export function createWater({ level = -14, tex = null, envMap = null, shores = [
     uShoreA: { value: Array.from({ length: MAX_SHORES }, () => new THREE.Vector4()) },
     uShoreB: { value: Array.from({ length: MAX_SHORES }, () => new THREE.Vector4(1, 0, 0, 1)) },
     uShoreN: { value: 0 },
-    uDeep: { value: new THREE.Color('#1E2A2E').multiplyScalar(0.55) },
+    uDeep: { value: new THREE.Color('#1E2A2E').multiplyScalar(0.7) },
     uFoam: { value: new THREE.Color('#9AA3A1') },
   };
   // Q_i = Q / (k A N): the crest pinch sum stays < 1 (no looping crests)
@@ -183,7 +197,8 @@ export function createWater({ level = -14, tex = null, envMap = null, shores = [
   uniforms.uShoreN.value = Math.min(MAX_SHORES, shores.length);
 
   const mat = new THREE.MeshPhysicalMaterial({ name: 'water', color: 0xffffff, roughness: 0.08, metalness: 0, ior: 1.333 });
-  if (envMap) { mat.envMap = envMap; mat.envMapIntensity = 1.0; }
+  // sky reflection at half strength: under an ash sky the sea must stay darker than the sky
+  if (envMap) { mat.envMap = envMap; mat.envMapIntensity = 0.5; }
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader

@@ -5,7 +5,8 @@
 //
 //  * EXPONENTIAL HEIGHT FOG (two layers: dense ground ash haze + thin high haze) with sun
 //    in-scattering (Henyey-Greenstein lobe around the sun) and distance-graded colour
-//    (near #6E6660 -> far #8A7A6C) = aerial perspective. Implemented by patching the
+//    (near #6E6660 -> far #8A7A6C) = aerial perspective. The sky-lit part is azimuth-dependent:
+//    warm grey in the sun sector, cool slate #4E555C on the storm side (§5 muted blues). Implemented by patching the
 //    THREE.ShaderChunk fog chunks, so every built-in material AND every ShaderMaterial with
 //    `fog: true` that includes <fog_pars_fragment> gets it automatically.
 //    Custom fog code in other lanes keeps working unchanged: inside fog-enabled fragment
@@ -28,40 +29,58 @@ const C = (hex) => new THREE.Color(hex); // sRGB hex -> linear working space
 /** Art-direction data (AC6_BENCHMARK §5 colour script). */
 export const ATMOS = {
   sun: {
-    azimuthDeg: -150,      // atan2(x, z) of the direction TOWARDS the sun (behind the spawn, title backlight)
-    elevationDeg: 17,      // low dusk sun smothered behind ash
-    light: '#FFC39A',      // key light colour (warm, ash-filtered)
-    intensity: 8.0,
+    // atan2(x, z) of the direction TOWARDS the sun. The mission is played facing +Z (spawn ->
+    // squad -> relays), so a sun 68° to the player's RIGHT and slightly ahead gives raking
+    // 3/4 back light in gameplay: long shadows across the yard toward the camera, warm rims,
+    // a glowing sun side of every wide frame and a cool storm side (AC6_BENCHMARK §3.3).
+    azimuthDeg: -68,
+    elevationDeg: 13,      // low dusk sun smothered behind ash
+    light: '#FFBE8C',      // key light colour (warm, ash-filtered)
+    intensity: 16.0,
     disc: '#D98A4E',       // visible disc / glow colour
   },
-  ambient: { sky: '#6D7F95', ground: '#3B332C', intensity: 0.6 }, // cool sky fill + warm bounce
-  envIntensity: 0.7,
+  ambient: { sky: '#5C6E84', ground: '#3B3530', intensity: 0.8 }, // cool sky fill + warm bounce
+  envIntensity: 1.15,    // IBL (sky dome PMREM): shadow sides read at ~sRGB 45-60, never crushed
   fog: {
-    density: 0.0022,       // ground-level extinction (1/m)  -> contrast halves every ~320 m
+    density: 0.0019,       // ground-level extinction (1/m)  -> contrast halves every ~370 m
     falloff: 1 / 60,       // dense layer height falloff (1/m)
     highFrac: 0.3,         // fraction of the density in the thin high layer
     highFalloff: 1 / 900,
     start: 4.0,            // metres of clear air around the camera
     near: '#6E6660',       // near haze (cooler, darker)
-    far: '#8A7A6C',        // far haze (warm grey ash)
-    anti: [0.74, 0.84, 1.0], // linear multiplier looking away from the sun (cool)
+    far: '#8A7A6C',        // far haze in the SUN sector (warm grey ash)
+    // STORM SIDE: away from the sun azimuth the sky-lit haze is a cool slate grey (§5 colour
+    // script: muted blues). The warm grey only survives within ~60 deg of the sun azimuth.
+    cool: '#4E555C',
+    sector: [-0.25, 0.92], // smoothstep range on cos(azimuth to the sun) for the warm sector
+    // light leaking under the storm deck: a burnt-orange band along the horizon of the sun
+    // sector (silhouettes on the sun side stand against it)
+    horizonGlow: '#D98A4E',
+    horizonGlowStrength: 1.5,
     scatter: '#E0874A',    // hot sun lobe tint
-    scatterStrength: 1.6,
-    scatterG: 0.82,        // HG anisotropy (forward-scattering ash)
-    wash: '#C9A07E',       // broad warm wash toward the sun (desaturated)
+    scatterStrength: 1.4,
+    scatterG: 0.8,         // HG anisotropy (forward-scattering ash)
+    wash: '#C9906A',       // broad warm wash toward the sun (desaturated)
     washStrength: 0.9,
-    skyHaze: 0.3,          // sky dome haze scale (horizon still converges to the fog colour)
+    ambient: 0.66,         // share of the base haze colour lit by the sky (sun sector)
+    sunIso: '#FFBE8C',     // near-isotropic sun scattering in the ash (lit at every angle) ...
+    sunIsoStrength: 0.26,  // ... so shadow volumes carve visible shafts (volumetric pass)
+    skyHaze: 0.2,          // sky dome haze scale above the horizon band (horizon = fog colour)
     patch: 0.5,            // patchy haze amplitude (0 = uniform)
+    farFade: [2600, 3900], // geometry fully dissolves into the sky haze before the far plane
   },
   sky: {
-    zenith: '#2B2F36',
-    mid: '#5A5550',
-    horizon: '#6E6660',
+    zenith: '#2B2F36',     // §5: slate zenith
+    mid: '#40454C',
+    horizon: '#575C61',    // storm side horizon (cool grey)
+    horizonSun: '#8E6A52', // sun side horizon under the deck
     glow: '#B0643A',
     glowHot: '#D98A4E',
     ground: '#2A2622',
-    cloudDark: '#1E1C1B',
-    cloudLit: '#7A6E64',
+    bounce: '#4F4A46',     // IBL lower hemisphere: sun-lit yard bounce (only slightly warm)
+    cloudDark: '#17191D',
+    cloudLit: '#585A5C',   // storm-side deck underside (cool); warmed toward the sun in sky.js
+    cloudWarm: '#6A5A4E',  // sun-side deck underside
   },
 };
 
@@ -95,8 +114,10 @@ const v3 = (v) => `vec3(${f(v.x ?? v.r)}, ${f(v.y ?? v.g)}, ${f(v.z ?? v.b)})`;
 export function atmosGLSL() {
   const F = ATMOS.fog;
   const sd = sunDirection();
-  const n = C(F.near), fa = C(F.far);
+  const n = C(F.near), fa = C(F.far), co = C(F.cool);
   const ratio = { x: n.r / Math.max(1e-4, fa.r), y: n.g / Math.max(1e-4, fa.g), z: n.b / Math.max(1e-4, fa.b) };
+  // storm-side haze as a multiplier of the base (far) colour, so scene.fog.color stays the knob
+  const cool = { x: co.r / Math.max(1e-4, fa.r), y: co.g / Math.max(1e-4, fa.g), z: co.b / Math.max(1e-4, fa.b) };
   return /* glsl */`
 #ifndef IW_ATMOS
 #define IW_ATMOS
@@ -106,10 +127,15 @@ export function atmosGLSL() {
 #define IW_FOG_HI ${f(F.highFrac)}
 #define IW_FOG_START ${f(F.start)}
 #define IW_FOG_NEAR_RATIO ${v3(ratio)}
-#define IW_FOG_ANTI ${v3({ x: F.anti[0], y: F.anti[1], z: F.anti[2] })}
+#define IW_FOG_COOL ${v3(cool)}
+#define IW_FOG_SECTOR vec2(${f(F.sector[0])}, ${f(F.sector[1])})
+#define IW_FOG_FARFADE vec2(${f(F.farFade[0])}, ${f(F.farFade[1])})
+#define IW_FOG_HGLOW ${v3(C(F.horizonGlow).multiplyScalar(F.horizonGlowStrength))}
 #define IW_FOG_SCATTER ${v3(C(F.scatter).multiplyScalar(F.scatterStrength))}
 #define IW_FOG_WASH ${v3(C(F.wash).multiplyScalar(F.washStrength))}
 #define IW_FOG_G ${f(F.scatterG)}
+#define IW_FOG_AMB ${f(F.ambient)}
+#define IW_FOG_ISO ${v3(C(F.sunIso).multiplyScalar(F.sunIsoStrength))}
 #define IW_SKY_HAZE ${f(F.skyHaze)}
 #define IW_FOG_PATCH ${f(F.patch)}
 float iwExpInt(float k, float dy) {
@@ -156,16 +182,36 @@ float iwHG(float mu, float g) {
   float g2 = g * g;
   return (1.0 - g2) / (12.566371 * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5));
 }
-// Haze radiance along dir at distance d; base = far haze colour (linear).
-vec3 iwFogInscatter(vec3 dir, float d, vec3 base) {
+// Warm-sector weight of a view direction: 1 within ~45 deg of the sun azimuth, 0 beyond ~105
+// deg (the storm side). Near-vertical rays (aerial views straight down) take a neutral 0.35.
+float iwSunSector(vec3 dir) {
+  float lh = length(dir.xz);
+  float az = dot(dir.xz, normalize(IW_SUN_DIR.xz)) / max(lh, 1e-4);
+  float s = smoothstep(IW_FOG_SECTOR.x, IW_FOG_SECTOR.y, az);
+  return mix(0.35, s * s, smoothstep(0.05, 0.4, lh));
+}
+// The SUN-LIT part of the haze radiance along dir (forward-scattering lobe = hot sun glow in
+// the ash + a broad, less saturated warm wash). The volumetric pass (postfx.js) removes it
+// where the sun is shadowed along the ray.
+vec3 iwFogSunPart(vec3 dir, vec3 base) {
   float mu = dot(dir, IW_SUN_DIR);
-  vec3 c = base * mix(IW_FOG_NEAR_RATIO, vec3(1.0), 1.0 - exp(-d * 0.0035));
-  c *= mix(IW_FOG_ANTI, vec3(1.0), smoothstep(-0.6, 0.7, mu));
-  // forward-scattering lobe (hot sun glow in the ash) + a broad, less saturated warm wash
   float ph = min(iwHG(mu, IW_FOG_G) * 12.566371, 40.0);
-  float wash = pow(max(mu, 0.0), 3.0);
-  c += base * (IW_FOG_SCATTER * ph * 0.11 + IW_FOG_WASH * wash);
-  return c;
+  float wash = pow(max(mu, 0.0), 6.0);
+  // near-isotropic term: strong toward the sun, a faint warm veil on the storm side
+  float iso = smoothstep(-0.35, 1.0, mu);
+  iso = 0.06 + 0.94 * iso * iso;
+  return base * (IW_FOG_SCATTER * ph * 0.11 + IW_FOG_WASH * wash + IW_FOG_ISO * iso);
+}
+// Haze radiance along dir at distance d; base = far haze colour (linear). Ambient (sky-lit)
+// part: warm grey in the sun sector, cool slate on the storm side; plus the sun-lit part.
+vec3 iwFogInscatter(vec3 dir, float d, vec3 base) {
+  float sec = iwSunSector(dir);
+  vec3 amb = base * mix(IW_FOG_COOL, vec3(IW_FOG_AMB), sec);
+  // horizon glow band of the sun sector (grows with distance: it is light from far away)
+  float hz = exp(-abs(dir.y) * 9.0);
+  amb += base * IW_FOG_HGLOW * (sec * sec * hz * (1.0 - exp(-d * 0.0012)));
+  amb *= mix(IW_FOG_NEAR_RATIO, vec3(1.0), 1.0 - exp(-d * 0.0035));
+  return amb + iwFogSunPart(dir, base);
 }
 #endif
 `;
@@ -199,7 +245,9 @@ function fogParsFragment() {
 	${atmosGLSL()}
 	#ifdef FOG_EXP2
 		float iwFogFactor() {
-			return 1.0 - exp( - iwFogOD( cameraPosition, vIwFogPos, fogDensity ) );
+			// geometry dissolves completely into the sky haze before the far plane (no horizon step)
+			float L = length( vIwFogPos - cameraPosition );
+			return max( 1.0 - exp( - iwFogOD( cameraPosition, vIwFogPos, fogDensity ) ), smoothstep( IW_FOG_FARFADE.x, IW_FOG_FARFADE.y, L ) );
 		}
 		vec3 iwFogColorAt() {
 			vec3 v = vIwFogPos - cameraPosition;
@@ -208,7 +256,7 @@ function fogParsFragment() {
 		}
 		// Equivalent exp2 depth: fogDensity^2 * D^2 == optical depth (see header).
 		float iwFogEqDepth() {
-			return sqrt( max( iwFogOD( cameraPosition, vIwFogPos, fogDensity ), 0.0 ) ) / max( fogDensity, 1e-6 );
+			return sqrt( max( - log( max( 1.0 - iwFogFactor(), 1e-6 ) ), 0.0 ) ) / max( fogDensity, 1e-6 );
 		}
 		#define fogColor iwFogColorAt()
 		#define vFogDepth iwFogEqDepth()

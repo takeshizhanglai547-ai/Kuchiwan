@@ -131,10 +131,36 @@ const SURF = {
     // ash dust settles on up-facing ledges
     float up = smoothstep(0.55, 0.95, n0.y) * (0.35 + 0.4 * m);
     alb = mix(alb, vec3(0.30, 0.285, 0.265), up * 0.45);
+    // tidal zone on quay walls, piles and the breakwater: wet dark band + green-brown algae
+    float tide = 1.0 - smoothstep(0.4, 2.6, abs(vWPos.y + 13.2));
+    alb = mix(alb, alb * vec3(0.42, 0.46, 0.4), tide * (0.6 + 0.3 * m));
+    if (vTint.a > 0.95) {
+      // SHELL mode (cooling towers, big slip-formed shells): no form-tie panel grid. Lift joints
+      // every 1.2 m (AA-faded when sub-pixel), long soot / drip streaks hanging from the lip
+      // (triplanar-in-xz noise, length varies), large weathering patches.
+      vec3 mean = textureLod(tA, vec2(0.5), 10.0).rgb;
+      vec3 a2 = mix(mean, triSample(tA, triSetup(vWPos, n0, 17.0, 4.0)).rgb, 0.35) * vTint.rgb * (0.78 + 0.44 * m);
+      float ly = vWPos.y / 1.2;
+      float fw = fwidth(ly);
+      float dj = min(fract(ly), 1.0 - fract(ly));
+      float joint = (1.0 - smoothstep(0.03, 0.03 + fw * 1.5, dj)) * (1.0 - smoothstep(0.15, 0.45, fw));
+      vec2 w2 = abs(n0.xz) / max(abs(n0.x) + abs(n0.z), 1e-3);
+      float sk = texture2D(tNoise, vec2(vWPos.x / 5.0, vWPos.y / 90.0)).b * w2.y + texture2D(tNoise, vec2(vWPos.z / 5.0, vWPos.y / 90.0)).b * w2.x;
+      float sk2 = texture2D(tNoise, vec2(vWPos.x / 13.0 + 0.3, vWPos.y / 160.0)).r * w2.y + texture2D(tNoise, vec2(vWPos.z / 13.0 + 0.3, vWPos.y / 160.0)).r * w2.x;
+      float fromTop = smoothstep(20.0, 125.0, vWPos.y);
+      float soot = smoothstep(0.75 - 0.35 * fromTop, 0.95 - 0.2 * fromTop, sk * 0.6 + sk2 * 0.5) * (0.35 + 0.65 * fromTop);
+      float patchy = smoothstep(0.45, 0.8, texture2D(tNoise, vWPos.xz / 97.0 + vWPos.y / 211.0).g);
+      a2 *= 1.0 - 0.18 * patchy;
+      a2 = mix(a2, a2 * vec3(0.36, 0.34, 0.32), soot * 0.85);
+      a2 = mix(a2, vec3(0.3, 0.29, 0.27), smoothstep(122.0, 130.0, vWPos.y) * 0.6);    // sooted lip
+      a2 *= 1.0 - 0.35 * joint;
+      alb = mix(a2, a2 * vec3(0.58, 0.54, 0.5), band * 0.75);
+      iwN = normalize(mix(iwN, n0, 0.7));
+    }
     diffuseColor.rgb = alb;
-    iwRough = clamp(dat.g + 0.04 * (m - 0.5) - st * 0.08, 0.5, 1.0);
+    iwRough = clamp(dat.g + 0.04 * (m - 0.5) - st * 0.08 - tide * 0.25, 0.4, 1.0);
     iwMetal = 0.0;
-    iwAO = mix(1.0, dat.r, 0.85);
+    iwAO = mix(1.0, dat.r, vTint.a > 0.95 ? 0.3 : 0.85);
   `,
   heap: /* glsl */`
     vec3 n0 = normalize(vWNrm);
@@ -173,7 +199,10 @@ const SURF = {
     float run = smoothstep(0.6 - 0.12 * runFade, 0.74, colA) * runFade * vert;
     // paint loss where physics puts it: splash zone, standing water on top faces, clustered
     // blotches (a few metres), around the run sources; low elsewhere (no uniform confetti)
-    float blot = smoothstep(0.62, 0.86, texture2D(tNoise, vWPos.xz / 17.0 + vWPos.y / 23.0).r);
+    // paint-loss patches: pooled on top faces, gravity-stretched (tall, narrow) on walls
+    vec2 w2 = abs(n0.xz) / max(abs(n0.x) + abs(n0.z), 1e-3);
+    float bv = texture2D(tNoise, vec2(vWPos.x / 6.0, vWPos.y / 29.0)).r * w2.y + texture2D(tNoise, vec2(vWPos.z / 6.0, vWPos.y / 29.0)).r * w2.x;
+    float blot = smoothstep(0.62, 0.86, mix(texture2D(tNoise, vWPos.xz / 17.0 + vWPos.y / 23.0).r, bv, vert));
     float wear = vTint.a * 0.5 + splash * 0.42 + smoothstep(0.75, 1.0, n0.y) * 0.14 + blot * 0.32
                + run * 0.18 + (m - 0.5) * 0.16;
     float paint = smoothstep(wear - 0.05, wear + 0.05, dat.r);
@@ -187,8 +216,15 @@ const SURF = {
     alb = mix(alb, alb * vec3(0.52, 0.48, 0.44), splash * 0.75);            // splash grime at the base
     float up = smoothstep(0.6, 0.95, n0.y);
     alb = mix(alb, vec3(0.19, 0.18, 0.17), up * (0.3 + 0.35 * m));           // soot / ash on top faces
+    // rust tones of the colour script (#6B3A22 / #8C4A26 / #A2562B) on bare metal, by patch
+    vec3 rt = mix(vec3(0.147, 0.042, 0.016), mix(vec3(0.262, 0.069, 0.019), vec3(0.366, 0.094, 0.025), smoothstep(0.5, 0.9, m)), smoothstep(0.2, 0.7, dat.g));
+    alb = mix(alb, rt * (0.8 + 0.4 * dot(rust, vec3(0.5))), (1.0 - paint) * 0.45);
+    // waterline: wet, algae-stained band on hulls, piles and pontoons; rust bloom just above
+    float tide = 1.0 - smoothstep(0.3, 1.9, abs(vWPos.y + 13.6));
+    alb = mix(alb, vec3(0.035, 0.042, 0.03), tide * 0.8);
+    alb = mix(alb, rt, (1.0 - smoothstep(0.0, 3.0, vWPos.y + 12.0)) * step(-13.6, vWPos.y) * 0.35 * vert);
     diffuseColor.rgb = alb;
-    iwRough = mix(dat.g, 0.48 + 0.34 * (1.0 - dat.b), paint);
+    iwRough = mix(mix(dat.g, 0.48 + 0.34 * (1.0 - dat.b), paint), 0.25, tide);
     iwMetal = mix(0.3, 0.05, paint);
     iwAO = 1.0;
   `,
@@ -457,6 +493,21 @@ export function createArenaMaterials(T) {
             I *= 0.8 + 0.12 * sin(uTime * 2.3 + sp) + 0.08 * sin(uTime * 5.1 + sp * 1.9);
           }
           else I *= 0.94 + 0.06 * sin(uTime * 13.0 + ph * 60.0) * step(0.97, fract(ph * 91.0 + uTime * 0.03));
+          // Far emitters fade WITH their (fogged) structure: the fog mix alone leaves an HDR lamp
+          // brighter than the haze long after its stack / block has dissolved (floating ovals).
+          // Extra transmittance factor (T^2 furnace / window glow, T for lamps; beacons keep T^0.5
+          // so they still prick the haze) and a hard cap of 2.0 beyond 300 m.
+          #ifdef USE_FOG
+          {
+            float iwT = exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
+            float iwD = length(vWPos - cameraPosition);
+            if (isRed) I *= sqrt(iwT);
+            else {
+              I *= (isFurnace || c.g < 0.4) ? iwT * iwT : iwT;    // furnace / window glow vs lamps
+              I = min(I, mix(64.0, 2.0, smoothstep(220.0, 300.0, iwD)));
+            }
+          }
+          #endif
           diffuseColor.rgb = c * I;
         `).replace('#include <fog_fragment>', FOG_H);
     };
@@ -476,10 +527,14 @@ export function createArenaMaterials(T) {
         float fine = texture2D(tNoise, vec2(q.x * 4.0 - t * 0.09, q.y * 3.1)).g;
         float edge = smoothstep(0.0, 0.28, q.y) * smoothstep(1.0, 0.72, q.y);
         float pv = plates + (det - 0.5) * 0.22;
+        // distance LOD: veins / fine flicker are sub-pixel far away -> they would alias into a
+        // sparkling dotted line; widen the seams with the pixel footprint, then settle to the mean
+        float lodf = smoothstep(0.04, 0.3, max(fwidth(q.x), fwidth(q.y) * 0.25));
         float open = smoothstep(0.47, 0.36, pv);                                  // open melt between crust plates
-        float vein = 1.0 - smoothstep(0.0, 0.035 + 0.02 * fine, abs(pv - 0.52)); // glowing plate seams
+        float vein = (1.0 - smoothstep(0.0, 0.035 + 0.02 * fine + fwidth(pv) * 1.5, abs(pv - 0.52))) * (1.0 - 0.7 * lodf); // glowing plate seams
         float heat = clamp(open * (0.35 + 0.65 * edge) + vein * 0.6 * (0.3 + 0.7 * edge), 0.0, 1.0);
-        heat *= 0.8 + 0.4 * fine;
+        heat *= mix(0.8 + 0.4 * fine, 1.0, lodf);
+        heat = mix(heat, 0.3 * (0.35 + 0.65 * edge), lodf);
         float n2 = det;
         vec3 crust = vec3(0.03, 0.026, 0.024) * (0.55 + 0.9 * det);
         diffuseColor.rgb = mix(crust, vec3(0.16, 0.06, 0.02), heat);

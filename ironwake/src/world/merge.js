@@ -96,6 +96,7 @@ export function bucketize(scene, { cell = 128, farR = 300, big = 200, matName = 
       _m.copy(mesh.matrixWorld);
       if (mesh.isInstancedMesh) { mesh.getMatrixAt(k, _im); _m.multiply(_im); }
       _nm.getNormalMatrix(_m);
+      const flip = _m.determinant() < 0;   // mirrored instance: keep the triangles front-facing
       let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
       for (let i = 0; i < src.count; i++) {
         _v.fromArray(src.p, i * 3).applyMatrix4(_m);
@@ -117,12 +118,17 @@ export function bucketize(scene, { cell = 128, farR = 300, big = 200, matName = 
         b.uv.a.set(src.u, b.uv.n); b.uv.n += src.count * 2;
         b.verts += src.count;
         b.idx.ensure(src.index.length);
-        for (let i = 0; i < src.index.length; i++) b.idx.a[b.idx.n++] = src.index[i] + base;
+        if (!flip) for (let i = 0; i < src.index.length; i++) b.idx.a[b.idx.n++] = src.index[i] + base;
+        else {
+          for (let i = 0; i + 2 < src.index.length; i += 3) {
+            b.idx.a[b.idx.n++] = src.index[i] + base; b.idx.a[b.idx.n++] = src.index[i + 2] + base; b.idx.a[b.idx.n++] = src.index[i + 1] + base;
+          }
+        }
       } else {
         // split per triangle by centroid
         const I = src.index;
         for (let f = 0; f + 2 < I.length; f += 3) {
-          const a = I[f], c = I[f + 1], d = I[f + 2];
+          const a = I[f], c = flip ? I[f + 2] : I[f + 1], d = flip ? I[f + 1] : I[f + 2];
           const cx = (SP[a * 3] + SP[c * 3] + SP[d * 3]) / 3, cz = (SP[a * 3 + 2] + SP[c * 3 + 2] + SP[d * 3 + 2]) / 3;
           const b = get(mat, cx, cz);
           if (b.stamp !== id) {

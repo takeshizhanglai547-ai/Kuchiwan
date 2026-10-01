@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 // tools/ai_log.mjs — AI behaviour log for critics (owner: enemy AI designer).
 //
-//   node tools/ai_log.mjs [--seed N] [--out .shots] [--boss-only] [--squad-only] [--nogod] [--no-png] [--dist]
+//   node tools/ai_log.mjs [--seed N] [--seeds 1,2,3 | --seeds none] [--out .shots] [--boss-only]
+//                         [--squad-only] [--nogod] [--no-balance] [--no-png] [--dist]
 //
 // Plays the real game headless through the TEST API with the same auto-aim bot as
-// tools/smoke.mjs (real weapons, lock-on lead, periodic quick boosts):
+// tools/smoke.mjs (real weapons, lock-on lead, periodic quick boosts, repair kits < 30 % AP):
 //   A) stage 1  — the PK-2 walker squad + GNAT drones: state-time split, time standing still,
-//                 telegraphed bursts, cover / flank plans, squad spacing, flank exposure
+//                 telegraphed bursts, % of rounds that hit the bot, cover / flank plans, squad
+//                 spacing, flank exposure, time-to-kill
+//   A2) stage 2 — relay generators: aimed bursts, suppressive sweeps, drone reinforcement calls
 //   B) stage 3  — bot vs. rival rig CINDERHOUND: fight time, dodges (per trigger), quick boosts
-//                 (per reason), attacks + telegraphs, hits each way, staggers, phase-2 time,
-//                 distance histogram, motor-mode split, a 5 Hz timeline
+//                 (per reason), attacks + real telegraph leads, hits each way, staggers, per-phase
+//                 split, distance histogram, motor-mode split, a 5 Hz timeline;
+//                 + the same fight WITHOUT godmode (balance: can the bot still win?)
+//                 + the fight over several seeds (default 1-6) with and without godmode
 // Writes <out>/ai_log.json and <out>/ai_log.png (chart rendered in the same headless browser).
 // The player is in godmode by default (the fight always runs to the end); --nogod disables it.
 import { chromium } from 'playwright';
@@ -26,6 +31,7 @@ const SEED = Number(arg('--seed', 1337)) || 1337;
 const OUT = path.resolve(arg('--out', path.join(ROOT, '.shots')));
 const BOSS_ONLY = argv.includes('--boss-only'), SQUAD_ONLY = argv.includes('--squad-only');
 const GOD = !argv.includes('--nogod'), PNG = !argv.includes('--no-png'), DIST = argv.includes('--dist');
+const SEEDS = String(arg('--seeds', '1,2,3,4,5,6')).split(',').filter((x) => x && x !== 'none').map(Number);
 
 // ------------------------------------------------------------------ in-page bot (mirrors tools/smoke.mjs)
 function installBot() {
@@ -68,6 +74,7 @@ function installBot() {
           tap('fire_rb', 211, dist < 260);
           tap('fire_l', 61, dist < 50 && best.type === 'boss');
           tap('quick_boost', 150, dist < 200);
+          tap('repair', 30, p.ap < p.apMax * 0.3 && p.repairKits > 0);   // a competent player patches up
         } else {
           for (const a of ['move_forward', 'move_back', 'move_left', 'move_right', 'fire_r', 'jump']) want(a, false);
         }
@@ -97,6 +104,19 @@ async function main() {
     await page.waitForFunction(() => window.__iw && window.__iw.ready === true, null, { timeout: 180000 });
     await page.evaluate(installBot);
 
+    // shared in-page summariser for the per-type telemetry (enemies.js newTelemetry)
+    await page.evaluate(() => {
+      const med = (a) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return +b[Math.floor(b.length / 2)].toFixed(2); };
+      window.__ai.unit = (u) => {
+        const steps = Object.values(u.stateSteps).reduce((a, b) => a + b, 0) || 1;
+        const split = {}; for (const k in u.stateSteps) split[k] = +(100 * u.stateSteps[k] / steps).toFixed(1);
+        return { unitSteps: u.time, stateSplitPct: split, stillPct: +(100 * u.stillSteps / Math.max(1, u.time)).toFixed(1), shots: u.shots, bursts: u.bursts, telegraphs: u.tells,
+          plans: u.plans, coverPlans: u.covers, flankPlans: u.flankPlans, evades: u.evades, dives: u.dives, suppressBursts: u.suppress, reinforcementCalls: u.calls, dronesLaunched: u.launched, swarmJoins: u.joins,
+          hitsOnPlayer: u.hitsOnPlayer, dmgOnPlayer: Math.round(u.dmgOnPlayer), playerHitPctOfShots: +(100 * u.hitsOnPlayer / Math.max(1, u.shots)).toFixed(1),
+          hitsTaken: u.hitsTaken, staggers: u.staggers, kills: u.kills, ttkS: u.ttk, ttkMedianS: med(u.ttk) };
+      };
+    });
+
     // ---------------------------------------------------------------- A) walker squad
     if (!BOSS_ONLY) {
       report.squad = await page.evaluate((god) => {
@@ -106,66 +126,110 @@ async function main() {
         const ap0 = g.player.ap;
         const used = ai.bot(60 * 120, 1);
         const T = g.enemies.telemetry, st = iw.getState();
-        const unit = (u) => {
-          const steps = Object.values(u.stateSteps).reduce((a, b) => a + b, 0) || 1;
-          const split = {}; for (const k in u.stateSteps) split[k] = +(100 * u.stateSteps[k] / steps).toFixed(1);
-          return { unitSteps: u.time, stateSplitPct: split, stillPct: +(100 * u.stillSteps / Math.max(1, u.time)).toFixed(1), shots: u.shots, bursts: u.bursts, telegraphs: u.tells,
-            plans: u.plans, coverPlans: u.covers, flankPlans: u.flankPlans, evades: u.evades, dives: u.dives, hitsOnPlayer: u.hitsOnPlayer, dmgOnPlayer: Math.round(u.dmgOnPlayer), hitsTaken: u.hitsTaken, staggers: u.staggers, kills: u.kills };
-        };
         return {
           simSeconds: +(used / 60).toFixed(1), cleared: st.mission.stage >= 1, playerDamageTaken: god ? 'godmode' : ap0 - g.player.ap,
-          mt: { ...unit(T.mt), meanNearestSpacingM: T.mt.spacing[1] ? +(T.mt.spacing[0] / T.mt.spacing[1]).toFixed(1) : 0, pctOutsidePlayerView: T.mt.flankSamples[1] ? +(100 * T.mt.flankSamples[0] / T.mt.flankSamples[1]).toFixed(1) : 0 },
-          drone: unit(T.drone),
+          mt: { ...ai.unit(T.mt), meanNearestSpacingM: T.mt.spacing[1] ? +(T.mt.spacing[0] / T.mt.spacing[1]).toFixed(1) : 0, pctOutsidePlayerView: T.mt.flankSamples[1] ? +(100 * T.mt.flankSamples[0] / T.mt.flankSamples[1]).toFixed(1) : 0 },
+          drone: ai.unit(T.drone),
           playerShots: { ...ai.shots },
         };
       }, GOD);
       console.log('squad:', JSON.stringify(report.squad));
+
+      // ---------------------------------------------------------------- A2) relay generators (stage 2)
+      report.relays = await page.evaluate((god) => {
+        const iw = window.__iw, g = iw.game, ai = window.__ai;
+        iw.restart(); iw.godmode(god); iw.step(2, { render: false });
+        g.mission.forceStage(1);
+        iw.step(2, { render: false });
+        for (const k in ai.shots) ai.shots[k] = 0;
+        const used = ai.bot(60 * 180, 2);
+        const T = g.enemies.telemetry, st = iw.getState();
+        return { simSeconds: +(used / 60).toFixed(1), cleared: st.mission.stage >= 2, relay: ai.unit(T.turret), drone: ai.unit(T.drone), playerShots: { ...ai.shots } };
+      }, GOD);
+      console.log('relays:', JSON.stringify(report.relays));
     }
 
     // ---------------------------------------------------------------- B) rival rig
+    const bossRun = (god, seed = SEED) => page.evaluate(([god, seed]) => {
+      const iw = window.__iw, g = iw.game, ai = window.__ai;
+      iw.startMission({ seed }); iw.godmode(god); iw.step(2, { render: false });
+      g.mission.forceStage(2);
+      for (const k in ai.shots) ai.shots[k] = 0;
+      const boss = g.enemies.boss;
+      // let the drop-in play (the bot waits), then fight
+      for (let i = 0; i < 900 && !(boss.spawned && boss.state === 'fight'); i++) g.advance(1, { render: false });
+      const ap0 = g.player.ap, kits0 = g.player.repairKits;
+      const used = ai.bot(60 * 300, 3);
+      const L = boss.log;
+      const st = iw.getState();
+      const modeTotal = Object.values(L.modeSteps).reduce((a, b) => a + b, 0) || 1;
+      const modes = {}; for (const k in L.modeSteps) modes[k] = +(100 * L.modeSteps[k] / modeTotal).toFixed(1);
+      const hist = L.distHist.map((n) => +(100 * n / Math.max(1, L.steps)).toFixed(1));
+      const hitsOn = Object.values(L.hitsOnPlayer).reduce((a, b) => a + b, 0);
+      const dodgeN = Object.values(L.dodges).reduce((a, b) => a + b, 0);
+      const stat = (a) => a.length ? { n: a.length, min: Math.min(...a), mean: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2), max: Math.max(...a) } : { n: 0 };
+      const tellBy = {}; for (const k in L.tellBy) tellBy[k] = stat(L.tellBy[k]);
+      const big = []; for (const k of ['missiles', 'barrage', 'blade', 'charge', 'plunge', 'abBlade']) if (L.tellBy[k]) big.push(...L.tellBy[k]);
+      const weaponOf = { R: 'rifle_ar', LB: 'missile_pod', RB: 'cannon_heavy', L: 'blade_pulse' };   // shots are counted per projectile (weapon:fired)
+      const hitRate = {};
+      for (const k in weaponOf) { const fired = ai.shots[k] || 0, tb = L.takenBy[weaponOf[k]]; hitRate[weaponOf[k]] = fired ? +(100 * (tb ? tb[0] : 0) / fired).toFixed(1) : 0; }
+      const phases = L.phases.map((P, i) => ({ phase: i + 1, seconds: +P.time.toFixed(1), attacks: P.attacks, dodges: P.dodges, dodgeTriggers: P.dodgeTriggers, quickBoosts: P.qb, staggers: P.staggers,
+        dmgTaken: Math.round(P.dmgTaken), dpsTaken: +(P.dmgTaken / Math.max(1, P.time)).toFixed(0), hitsOnPlayer: P.hitsOnPlayer, dmgOnPlayer: Math.round(P.dmgOnPlayer), meanDistM: +(P.distSum / Math.max(1, P.steps)).toFixed(1), meanEnPct: +(100 * P.enSum / Math.max(1, P.steps)).toFixed(0), preferredRange: L.ranges[i] }));
+      return {
+        godmode: god, won: !boss.alive, fightSeconds: +(boss.alive ? (g.time - L.engagedAt) : L.time).toFixed(1), botSteps: used,
+        bossAp: boss.apMax, bossApLeft: Math.round(boss.ap), phase2At: L.phase2At, staggers: L.staggers.length, staggerTimes: L.staggers,
+        dodges: { total: dodgeN, ...L.dodges }, dodgeTriggers: L.dodgeTriggers,
+        quickBoosts: L.qb, attacks: L.attacks, telegraphs: L.tells,
+        tellLeadByAttackS: tellBy, bigAttackTellLeadS: stat(big), meanTellLeadS: L.tellLead.length ? +(L.tellLead.reduce((a, b) => a + b, 0) / L.tellLead.length).toFixed(2) : 0,
+        jumps: L.jumps, assaultBoosts: L.ab, p2Combos: L.combos, bladeSlashes: L.bladeSlashes, bladeHits: L.bladeHits,
+        hitsOnPlayer: { total: hitsOn, ...L.hitsOnPlayer }, dmgOnPlayer: Math.round(L.dmgOnPlayer), playerDamageTaken: god ? 'godmode' : ap0 - g.player.ap,
+        playerApLeft: god ? 'godmode' : Math.round(g.player.ap), repairKitsUsed: kits0 - g.player.repairKits,
+        hitsTaken: L.hitsTaken, dmgTaken: Math.round(L.dmgTaken), takenByWeapon: Object.fromEntries(Object.entries(L.takenBy).map(([k, v]) => [k, { hits: v[0], dmg: Math.round(v[1]) }])),
+        playerShots: { ...ai.shots }, playerHitPctByWeapon: hitRate,
+        playerHitRatePct: +(100 * L.hitsTaken / Math.max(1, ai.shots.R + ai.shots.LB + ai.shots.RB + ai.shots.L)).toFixed(1),
+        phases,
+        distanceHistogramPct: { binM: L.distStep, pct: hist },
+        modeSplitPct: modes, preferredRanges: L.ranges,
+        timeline: L.timeline,
+        missionStatus: st.mission.status,
+      };
+    }, [god, seed]);
     if (!SQUAD_ONLY) {
-      report.boss = await page.evaluate((god) => {
-        const iw = window.__iw, g = iw.game, ai = window.__ai;
-        iw.restart(); iw.godmode(god); iw.step(2, { render: false });
-        g.mission.forceStage(2);
-        for (const k in ai.shots) ai.shots[k] = 0;
-        const boss = g.enemies.boss;
-        // let the drop-in play (the bot waits), then fight
-        for (let i = 0; i < 900 && !(boss.spawned && boss.state === 'fight'); i++) g.advance(1, { render: false });
-        const ap0 = g.player.ap;
-        const used = ai.bot(60 * 300, 3);
-        const L = boss.log;
-        const st = iw.getState();
-        const modeTotal = Object.values(L.modeSteps).reduce((a, b) => a + b, 0) || 1;
-        const modes = {}; for (const k in L.modeSteps) modes[k] = +(100 * L.modeSteps[k] / modeTotal).toFixed(1);
-        const hist = L.distHist.map((n) => +(100 * n / Math.max(1, L.steps)).toFixed(1));
-        const hitsOn = Object.values(L.hitsOnPlayer).reduce((a, b) => a + b, 0);
-        const dodgeN = Object.values(L.dodges).reduce((a, b) => a + b, 0);
-        return {
-          won: !boss.alive, fightSeconds: +(boss.alive ? (g.time - L.engagedAt) : L.time).toFixed(1), botSteps: used,
-          phase2At: L.phase2At, staggers: L.staggers.length, staggerTimes: L.staggers,
-          dodges: { total: dodgeN, ...L.dodges }, dodgeTriggers: L.dodgeTriggers,
-          quickBoosts: L.qb, attacks: L.attacks, telegraphs: L.tells,
-          meanTellLeadS: L.tellLead.length ? +(L.tellLead.reduce((a, b) => a + b, 0) / L.tellLead.length).toFixed(2) : 0,
-          jumps: L.jumps, assaultBoosts: L.ab, bladeSlashes: L.bladeSlashes, bladeHits: L.bladeHits,
-          hitsOnPlayer: { total: hitsOn, ...L.hitsOnPlayer }, dmgOnPlayer: Math.round(L.dmgOnPlayer), playerDamageTaken: god ? 'godmode' : ap0 - g.player.ap,
-          hitsTaken: L.hitsTaken, dmgTaken: Math.round(L.dmgTaken), takenByWeapon: Object.fromEntries(Object.entries(L.takenBy).map(([k, v]) => [k, { hits: v[0], dmg: Math.round(v[1]) }])),
-          playerShots: { ...ai.shots },
-          playerHitRatePct: +(100 * L.hitsTaken / Math.max(1, ai.shots.R + ai.shots.LB + ai.shots.RB + ai.shots.L)).toFixed(1),
-          distanceHistogramPct: { binM: L.distStep, pct: hist },
-          modeSplitPct: modes, preferredRanges: L.ranges,
-          timeline: L.timeline,
-          missionStatus: st.mission.status,
-        };
-      }, GOD);
+      report.boss = await bossRun(GOD);
       const b = { ...report.boss }; delete b.timeline;
       console.log('boss:', JSON.stringify(b));
+      // balance: the same bot WITHOUT godmode (starts the boss stage at full AP with 3 repair kits)
+      if (GOD && !argv.includes('--no-balance')) {
+        const r = await bossRun(false);
+        report.bossBalance = { won: r.won, fightSeconds: r.fightSeconds, playerApLeft: r.playerApLeft, playerDamageTaken: r.playerDamageTaken, repairKitsUsed: r.repairKitsUsed, staggers: r.staggers, dodges: r.dodges.total, bossApLeftPct: Math.round(100 * r.bossApLeft / r.bossAp), missionStatus: r.missionStatus };
+        console.log('boss balance (no godmode):', JSON.stringify(report.bossBalance));
+      }
+      // robustness: the same fight over several seeds (fight length / staggers vary with the dice)
+      if (SEEDS.length) {
+        const rows = [];
+        for (const sd of SEEDS) {
+          for (const god of [true, false]) {
+            const r = await bossRun(god, sd);
+            rows.push({ seed: sd, godmode: god, won: r.won, fightSeconds: r.fightSeconds, staggers: r.staggers, playerHitRatePct: r.playerHitRatePct, dodges: r.dodges.total,
+              dmgOnPlayer: r.dmgOnPlayer, playerApLeft: r.playerApLeft, repairKitsUsed: r.repairKitsUsed, attacks: r.attacks,
+              phaseSplit: r.phases.map((P) => ({ s: P.seconds, atk: Object.values(P.attacks).reduce((x, y) => x + y, 0), dmgOnPlayer: P.dmgOnPlayer, dodges: `${P.dodges}/${P.dodgeTriggers}` })),
+              hitPct: r.playerHitPctByWeapon, dmgBy: Object.fromEntries(Object.entries(r.takenByWeapon).map(([k, v]) => [k, v.dmg])), stagger: r.modeSplitPct.stagger });
+          }
+        }
+        const gm = rows.filter((r) => r.godmode), ng = rows.filter((r) => !r.godmode);
+        const agg = (a, k) => ({ min: Math.min(...a.map((r) => r[k])), mean: +(a.reduce((x, r) => x + r[k], 0) / a.length).toFixed(1), max: Math.max(...a.map((r) => r[k])) });
+        report.bossSeeds = { seeds: SEEDS, fightSeconds: agg(gm, 'fightSeconds'), staggers: agg(gm, 'staggers'), playerHitRatePct: agg(gm, 'playerHitRatePct'), dodges: agg(gm, 'dodges'),
+          noGodmodeWins: `${ng.filter((r) => r.won).length}/${ng.length}`, noGodmodeFightSeconds: agg(ng, 'fightSeconds'), rows };
+        for (const r of rows) console.log('seed', JSON.stringify(r));
+        const { rows: _r, ...sum } = report.bossSeeds;
+        console.log('seeds summary:', JSON.stringify(sum));
+      }
     }
 
     // ---------------------------------------------------------------- chart
     if (PNG && report.boss) {
-      const chart = await browser.newPage({ viewport: { width: 1600, height: 1180 }, deviceScaleFactor: 1 });
-      await chart.setContent('<html><body style="margin:0;background:#1a1a19"><canvas id="c" width="1600" height="1180"></canvas></body></html>');
+      const chart = await browser.newPage({ viewport: { width: 1600, height: 1385 }, deviceScaleFactor: 1 });
+      await chart.setContent('<html><body style="margin:0;background:#1a1a19"><canvas id="c" width="1600" height="1385"></canvas></body></html>');
       await chart.evaluate(drawChart, report);
       await chart.screenshot({ path: path.join(OUT, 'ai_log.png') });
       await chart.close();
@@ -193,7 +257,7 @@ function drawChart(R) {
   const txt = (s, x, y, col = C.text, px = 14, w = 400, al = 'left') => { g.font = `${w} ${px}px ui-sans-serif, system-ui, sans-serif`; g.fillStyle = col; g.textAlign = al; g.fillText(s, x, y); };
   const B = R.boss, T = B.timeline, tmax = Math.max(10, Math.ceil(B.fightSeconds / 10) * 10);
   txt('CINDERHOUND vs auto-aim bot (real weapons, lock-on) — AI behaviour log', 40, 42, C.text, 22, 600);
-  txt(`seed ${R.seed} · ${R.godmode ? 'player in godmode' : 'no godmode'} · fight ${B.fightSeconds} s · ${B.won ? 'rival rig destroyed' : 'rival rig survived'} · ${B.staggers} staggers · ${B.dodges.total} QB dodges · ${B.quickBoosts.total} quick boosts · limiter release at ${B.phase2At} s`, 40, 68, C.text2, 14);
+  txt(`seed ${R.seed} · ${R.godmode ? 'player in godmode' : 'no godmode'} · AP ${B.bossAp.toLocaleString('en')} · fight ${B.fightSeconds} s · ${B.won ? 'rival rig destroyed' : 'rival rig survived'} · ${B.staggers} staggers · ${B.dodges.total} QB dodges · ${B.quickBoosts.total} quick boosts · limiter release at ${B.phase2At} s`, 40, 68, C.text2, 14);
   const L = 110, Rr = W - 50, X = (t) => L + (t / tmax) * (Rr - L);
   const panel = (y, h, x = 20, w = W - 40) => { g.fillStyle = C.panel; g.fillRect(x, y, w, h); };
   const gridY = (y0, h, vmax, step, unit) => {
@@ -225,7 +289,7 @@ function drawChart(R) {
 
   // ---- event lanes (position + row label = identity; colour is secondary)
   const ey = ay + ah + 44, rowH = 26;
-  const lanes = [['attack start', C.orange, (e) => ['rifle', 'missiles', 'barrage', 'blade', 'charge', 'flank', 'cover', 'ab_blade'].includes(e)],
+  const lanes = [['attack start', C.orange, (e) => ['rifle', 'missiles', 'barrage', 'blade', 'charge', 'flank', 'cover', 'ab_blade', 'plunge'].includes(e)],
     ['QB dodge', C.aqua, (e) => e.startsWith('dodge')], ['stagger', C.red, (e) => e === 'stagger']];
   panel(ey - 18, rowH * lanes.length + 30);
   lanes.forEach(([name, col, test], k) => {
@@ -237,9 +301,9 @@ function drawChart(R) {
       g.fillStyle = col; g.fillRect(X(r[0]) - 1.5, y, 3, 17);
     }
   });
-  const atkShort = { rifle: 'r', missiles: 'M', barrage: 'B', blade: 'L', charge: 'C', flank: 'F', cover: 'c', ab_blade: 'L' };
+  const atkShort = { rifle: 'r', missiles: 'M', barrage: 'B', blade: 'L', charge: 'C', flank: 'F', cover: 'c', ab_blade: 'A', plunge: 'P' };
   for (const r of T) if (r.length > 3 && atkShort[r[3]] && r[3] !== 'rifle') txt(atkShort[r[3]], X(r[0]), ey - 3, C.text2, 10, 600, 'center');
-  txt('letters: M missiles · B barrage · L blade lunge · C assault-boost charge · F QB flank · c break line of sight (cover)', L, ey + rowH * lanes.length + 6, C.muted, 11);
+  txt('letters: M missiles · B barrage · L blade lunge · C assault-boost charge · A AB->blade combo · P plunge (P2) · F QB flank · c break line of sight (cover)', L, ey + rowH * lanes.length + 6, C.muted, 11);
 
   // ---- B: boss AP
   const by = ey + rowH * lanes.length + 50, bh = 120, apMax = Math.max(...T.filter((r) => r.length < 4).map((r) => r[2]), 1);
@@ -251,7 +315,7 @@ function drawChart(R) {
   for (let t = 0; t <= tmax; t += 10) txt(`${t} s`, X(t), by + bh + 18, C.muted, 11, 400, 'center');
 
   // ---- C: distance histogram
-  const hy = by + bh + 70, hh = H - hy - 70, hx = 110, hw = 560;
+  const hy = by + bh + 70, hh = 330, hx = 110, hw = 560;
   panel(hy - 24, hh + 64, 20, 700);
   txt('Time at distance (% of fight)', 40, hy - 6, C.text2, 13, 600);
   const Hs = B.distanceHistogramPct.pct.slice(0, 13), bin = B.distanceHistogramPct.binM, hmax = Math.max(10, ...Hs);
@@ -288,8 +352,33 @@ function drawChart(R) {
       x += cw;
     }
   });
-  const S = R.squad;
-  if (S) txt(`PK-2 walker squad (stage 1, ${S.simSeconds} s): standing still ${S.mt.stillPct}% of alive time · ${S.mt.bursts} bursts, ${S.mt.telegraphs} telegraphs · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · mean spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% of samples outside the player's aim cone · GNAT dives ${S.drone.dives}`, 40, H - 18, C.text2, 12);
+  // ---- E: benchmark check + phases + robustness + squad / relays (text table, tokens only)
+  const ty0 = hy + hh + 64;
+  panel(ty0 - 24, H - ty0 + 4);
+  const bt = B.bigAttackTellLeadS || {}, BS = R.bossSeeds, BB = R.bossBalance;
+  const mark = (ok) => (ok ? 'OK  ' : 'OFF ');
+  const rows = [
+    [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.78, explosive x0.58, blade x0.75)`],
+    [`${mark(B.fightSeconds >= 60 && B.fightSeconds <= 150)}fight ${B.fightSeconds} s (target 60-150 s)${BS ? ` · over seeds ${BS.seeds.join(',')}: ${BS.fightSeconds.min}-${BS.fightSeconds.max} s, mean ${BS.fightSeconds.mean}` : ''}`],
+    [`${mark(B.staggers >= 3 && B.staggers <= 5)}staggers ${B.staggers} (target 3-5)${BS ? ` · seeds ${BS.staggers.min}-${BS.staggers.max}` : ''} · 2.0 s windows, direct hits x1.85`],
+    [`${mark(bt.n && bt.min >= 0.4 && bt.max <= 0.7)}big-attack telegraph lead ${bt.n ? `${bt.min}-${bt.max} s, mean ${bt.mean} (n ${bt.n})` : 'n/a'} (target 0.4-0.6 s; glint + tell sound) · rifle bursts: small 0.22 s glint`],
+    [`player hit rate ${B.playerHitRatePct}% (rifle ${B.playerHitPctByWeapon.rifle_ar}%, missiles ${B.playerHitPctByWeapon.missile_pod}%, cannon ${B.playerHitPctByWeapon.cannon_heavy}%) · boss hits on player ${B.hitsOnPlayer.total} (${B.dmgOnPlayer} AP)`],
+    [BB ? `${mark(BB.won)}same bot WITHOUT godmode: ${BB.won ? 'wins' : 'loses'} in ${BB.fightSeconds} s, ${BB.playerApLeft} AP left, ${BB.repairKitsUsed} repair kit(s)${BS ? ` · seeds: ${BS.noGodmodeWins} wins` : ''}` : ''],
+  ];
+  rows.forEach((r, i) => txt(r[0], 40, ty0 + i * 20, i < 4 || r[0].startsWith('OK') || r[0].startsWith('OFF') ? C.text : C.text2, 13));
+  const py = ty0 + rows.length * 20 + 14;
+  txt('phase', 40, py, C.muted, 12, 600); txt('time', 140, py, C.muted, 12, 600); txt('mean dist', 220, py, C.muted, 12, 600); txt('dodges / triggers', 320, py, C.muted, 12, 600);
+  txt('DPS taken', 470, py, C.muted, 12, 600); txt('dmg on player', 570, py, C.muted, 12, 600); txt('attacks', 700, py, C.muted, 12, 600);
+  (B.phases || []).forEach((P, i) => {
+    const y = py + 20 + i * 20;
+    txt(i ? 'P2 limiter' : 'P1 duelist', 40, y, C.text2, 12); txt(`${P.seconds} s`, 140, y, C.text2, 12); txt(`${P.meanDistM} m`, 220, y, C.text2, 12);
+    txt(`${P.dodges} / ${P.dodgeTriggers}`, 320, y, C.text2, 12); txt(`${P.dpsTaken}`, 470, y, C.text2, 12); txt(`${P.dmgOnPlayer}`, 570, y, C.text2, 12);
+    txt(Object.entries(P.attacks).map(([k, v]) => `${k} ${v}`).join(' · '), 700, y, C.text2, 12);
+  });
+  const S = R.squad, RL = R.relays;
+  const sy = py + 70;
+  if (S) txt(`PK-2 walker squad (stage 1, ${S.simSeconds} s): still ${S.mt.stillPct}% of alive time · ${S.mt.bursts} telegraphed bursts, ${S.mt.playerHitPctOfShots}% of rounds hit · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% outside the aim cone · TTK median ${S.mt.ttkMedianS} s · GNAT dives ${S.drone.dives}`, 40, sy, C.text2, 12);
+  if (RL) txt(`Relay generators (stage 2, ${RL.simSeconds} s): ${RL.relay.bursts} telegraphed bursts + ${RL.relay.suppressBursts} suppressive sweep(s) · ${RL.relay.reinforcementCalls} reinforcement calls (${RL.relay.dronesLaunched} GNATs launched) · ${RL.relay.playerHitPctOfShots}% of rounds hit · GNAT dives ${RL.drone.dives}, swarm pairings ${RL.drone.swarmJoins}`, 40, sy + 20, C.text2, 12);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

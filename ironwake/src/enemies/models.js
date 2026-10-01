@@ -450,13 +450,15 @@ export const SIGNATURE = {
 
 // Effects owned by the enemy models (registered on the live fx system once).
 const MODEL_FX = {
+  // (render lane, WORLD r1 fix: tight HDR #FF2A2A cores, no 'legible' growth on top of the
+  // distance scale above; the pipeline bloom supplies the halo, so walkers stay readable at 60-200 m)
   iw_eye_far: [
-    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [5.0, 0.36, 0.22], alpha: [0.9, 0.9], nosoft: true, legible: true },
-    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [2.6, 2.6], color0: [1.2, 0.08, 0.04], alpha: [0.4, 0.4], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [6.0, 0.16, 0.12], alpha: [0.9, 0.9], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [0.8, 0.8], color0: [1.2, 0.04, 0.03], alpha: [0.15, 0.15], nosoft: true },
   ],
   iw_beacon_glow: [
-    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [6.0, 0.5, 0.3], alpha: [0.95, 0.95], nosoft: true, legible: true },
-    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [3.2, 3.2], color0: [1.4, 0.1, 0.05], alpha: [0.38, 0.38], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [6.0, 0.2, 0.12], alpha: [0.95, 0.95], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1.0, 1.0], color0: [1.4, 0.05, 0.03], alpha: [0.15, 0.15], nosoft: true },
   ],
   iw_mt_nozzle: [   // hot throat seen end-on (the plume shell fades out there)
     { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [0.55, 0.55], color0: [3.4, 1.8, 0.7], alpha: [0.8, 0.8], heat: [1, 1], nosoft: true },

@@ -29,11 +29,13 @@ export const AI_FX = {
     { shape: 'glow', count: [1, 1], life: [0.02, 0.02], size: [0.9, 0.9], color0: [6, 0.6, 0.35], alpha: [0.9, 0.9], nosoft: true, legible: true },
     { shape: 'glow', count: [1, 1], life: [0.02, 0.02], size: [2.6, 2.6], color0: [1.4, 0.1, 0.05], alpha: [0.5, 0.5], nosoft: true },
   ],
-  // big-attack tell on the rival rig (blade / missiles / charge): white-hot star + orange flare + halo
+  // big-attack tell on the rival rig (blade / missiles / charge / plunge): hot core star + orange
+  // anamorphic flare + red halo. Sized to mark the WEAPON, not to blank the silhouette: growth with
+  // camera distance is damped (legible < 1) so at 80 m it is still smaller than the torso.
   iw_glint_big: [
-    { shape: 'star', count: [1, 1], life: [0.1, 0.12], size: [3.6, 5.2], color0: WHITE_HOT, alpha: [1, 0.3], variant: [0, 3], inherit: 1, nosoft: true, legible: true },
-    { shape: 'flare', count: [1, 1], life: [0.1, 0.12], size: [13, 8], color0: ORANGE, alpha: [0.75, 0], inherit: 1, nosoft: true, legible: true },
-    { shape: 'glow', count: [1, 1], life: [0.1, 0.12], size: [2.6, 3.6], color0: [3.2, 1.2, 0.3], alpha: [0.8, 0], inherit: 1, nosoft: true },
+    { shape: 'star', count: [1, 1], life: [0.1, 0.12], size: [2.0, 2.9], color0: WHITE_HOT, alpha: [1, 0.3], variant: [0, 3], inherit: 1, nosoft: true, legible: 0.7 },
+    { shape: 'flare', count: [1, 1], life: [0.1, 0.12], size: [9, 4.5], color0: ORANGE, alpha: [0.7, 0], inherit: 1, nosoft: true, legible: 0.6 },
+    { shape: 'glow', count: [1, 1], life: [0.1, 0.12], size: [1.6, 2.4], color0: [3.4, 0.7, 0.25], alpha: [0.75, 0], inherit: 1, nosoft: true },
   ],
   // sensor flare when a rig commits (intro posture, phase change): tight red star + wide red flare
   iw_eye_flare: [
@@ -73,6 +75,8 @@ export const TELL_SFX = {
   boss_barrage: ['alarm', 1.6, 0.6],
   boss_blade: ['blade', 0.5, 1],
   boss_charge: ['ab_start', 1.15, 1],
+  boss_abBlade: ['blade', 0.62, 1],
+  boss_plunge: ['alarm', 0.85, 0.9],
   boss_posture: ['lock_switch', 0.6, 1],
 };
 
@@ -105,7 +109,7 @@ export const ENEMY_WEAPONS = {
   // CINDERHOUND phase-2 back unit: vertical missile barrage (8 cells)
   boss_barrage: {
     id: 'boss_barrage', name: 'VM-8 CINDERFALL', type: 'missile', damage: 170, impact: 140, splashRadius: 7, splashMul: 0.5,
-    count: 8, launchInterval: 0.06, maxTargets: 1, speed: 45, maxSpeed: 190, accel: 320, turnRate: 2.2,
+    count: 8, launchInterval: 0.06, maxTargets: 1, speed: 45, maxSpeed: 190, accel: 320, turnRate: 2.7,
     homingDelay: 0.45, life: 6, reloadTime: 6, ammo: Infinity, magSize: 8,
     projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
     muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.05, trailStyle: 'missile', sound: 'missile_launch',

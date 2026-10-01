@@ -2,6 +2,7 @@
 // Every factory returns a THREE.ShaderMaterial used with a FullScreenQuad. All inputs are
 // linear HDR unless stated. Depth = the scene pass DepthTexture (non-linear [0,1]).
 import * as THREE from 'three';
+import { atmosGLSL } from './atmosphere.js';
 
 const VS = /* glsl */`
 varying vec2 vUv;
@@ -168,6 +169,99 @@ void main() {
 }
 
 /**
+ * Volumetric sun scattering (quarter res): ray-march the height fog from the camera to the
+ * opaque surface (or uMaxDist), sampling the sun's two shadow cascades. Output:
+ *   R = ∫ σ T (1 - V) dt   (fog in-scatter that the analytic fog counts as sun-lit, but is in shadow)
+ *   G = ∫ σ T V dt         (sun-lit in-scatter inside the range; boosts the lit shafts)
+ *   B = view depth of the march end (metres, for the depth-aware upsample)
+ * The composite turns it into  col += iwFogSunPart(dir) * (k * G - R): shadow volumes of the
+ * gantries, conveyors and rigs carve dark shafts into the glowing ash, sun gaps glow.
+ * Squared step distribution (dense near the camera) with per-pixel IGN jitter.
+ */
+export function volumeMaterial(steps, glsl = atmosGLSL()) {
+  return mat('iw_volume', DEPTH_FNS + glsl + /* glsl */`
+uniform sampler2DShadow tShNear;
+uniform sampler2DShadow tShFar;
+uniform mat4 uShNear, uShFar;    // world -> shadow texture space
+uniform vec2 uShBias;            // depth bias near, far
+uniform float uHasNear, uHasFar;
+uniform mat4 uCamWorld;
+uniform vec3 uCamPos;
+uniform float uFogD0;
+uniform float uMaxDist;
+uniform float uJitter;
+varying vec2 vUv;
+float iwSunVis(vec3 X) {
+  if (uHasNear > 0.5) {
+    vec4 c = uShNear * vec4(X, 1.0);
+    vec3 p = c.xyz / c.w;
+    if (all(greaterThan(p, vec3(0.02, 0.02, 0.0))) && all(lessThan(p, vec3(0.98, 0.98, 1.0))))
+      return texture(tShNear, vec3(p.xy, p.z + uShBias.x));
+  }
+  if (uHasFar > 0.5) {
+    vec4 c = uShFar * vec4(X, 1.0);
+    vec3 p = c.xyz / c.w;
+    if (all(greaterThan(p, vec3(0.0))) && all(lessThan(p, vec3(1.0))))
+      return texture(tShFar, vec3(p.xy, p.z + uShBias.y));
+  }
+  return 1.0;
+}
+void main() {
+  float d = texture2D(tDepth, vUv).x;
+  float z = d >= 0.999999 ? -1.0e5 : iwViewZ(vUv);
+  vec3 vp = iwViewPos(vUv, z);
+  vec3 ray = (uCamWorld * vec4(vp, 1.0)).xyz - uCamPos;
+  float L = length(ray);
+  vec3 dir = ray / max(L, 1e-4);
+  float Lm = min(L, uMaxDist);
+  float j = fract(iwIGN(gl_FragCoord.xy) + uJitter);
+  float od = 0.0, occl = 0.0, lit = 0.0, tPrev = 0.0;
+  for (int i = 0; i < STEPS; i++) {
+    float f = (float(i) + j) / float(STEPS);
+    float t = Lm * f * f;
+    vec3 X = uCamPos + dir * t;
+    float y = max(X.y, -50.0);
+    float sig = uFogD0 * ((1.0 - IW_FOG_HI) * exp(-IW_FOG_K1 * y) + IW_FOG_HI * exp(-IW_FOG_K2 * y));
+    float dt = t - tPrev; tPrev = t;
+    float T = exp(-od);
+    od += sig * dt;
+    float V = iwSunVis(X);
+    occl += sig * T * (1.0 - V) * dt;
+    lit += sig * T * V * dt;
+  }
+  // last segment (end of the jittered march -> Lm) counts as lit/occluded like the last sample
+  gl_FragColor = vec4(occl, lit, min(-z, uMaxDist * 4.0), 1.0);
+}`, {
+    tDepth: { value: null }, uCam: { value: new THREE.Vector2() }, uTan: { value: new THREE.Vector2() },
+    tShNear: { value: null }, tShFar: { value: null },
+    uShNear: { value: new THREE.Matrix4() }, uShFar: { value: new THREE.Matrix4() }, uShBias: { value: new THREE.Vector2() },
+    uHasNear: { value: 0 }, uHasFar: { value: 0 },
+    uCamWorld: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
+    uFogD0: { value: 0.002 }, uMaxDist: { value: 260 }, uJitter: { value: 0 },
+  }, { STEPS: steps });
+}
+
+/** Depth-aware 5-tap blur of the volumetric buffer (B = view depth). */
+export function volumeBlurMaterial() {
+  return mat('iw_volume_blur', /* glsl */`
+uniform sampler2D tIn;
+uniform vec2 uStep;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(tIn, vUv);
+  vec3 acc = c.rgb * 0.4; float ws = 0.4;
+  for (int i = 1; i <= 2; i++) {
+    for (int s = -1; s <= 1; s += 2) {
+      vec4 q = texture2D(tIn, vUv + uStep * float(i * s));
+      float w = (i == 1 ? 0.22 : 0.08) * max(0.0, 1.0 - abs(q.b - c.b) / (c.b * 0.08 + 0.5));
+      acc += q.rgb * w; ws += w;
+    }
+  }
+  gl_FragColor = vec4(acc.rg / ws, c.b, 1.0);
+}`, { tIn: { value: null }, uStep: { value: new THREE.Vector2() } });
+}
+
+/**
  * Sun-shaft source (quarter res): unoccluded SKY near the sun, weighted by the sky's own
  * brightness above a threshold (so thick ash cloud blocks rays too). Scalar in R.
  */
@@ -222,6 +316,52 @@ void main() {
   }, { SAMPLES: samples });
 }
 
+/**
+ * Eye adaptation, step 1: log2 luminance of the HDR scene on a small grid (64x36). Each texel
+ * averages 4 bilinear taps over its footprint (= 16 scene samples).
+ */
+export function lumMaterial() {
+  return mat('iw_ae_lum', /* glsl */`
+uniform sampler2D tIn;
+uniform vec2 uFoot;        // half footprint of one output texel (uv)
+varying vec2 vUv;
+float ll(vec2 uv) { return log2(max(dot(texture2D(tIn, uv).rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-4)); }
+void main() {
+  float s = ll(vUv + uFoot * vec2(-0.5, -0.5)) + ll(vUv + uFoot * vec2(0.5, -0.5))
+          + ll(vUv + uFoot * vec2(-0.5, 0.5)) + ll(vUv + uFoot * vec2(0.5, 0.5));
+  gl_FragColor = vec4(s * 0.25, 0.0, 0.0, 1.0);
+}`, { tIn: { value: null }, uFoot: { value: new THREE.Vector2() } });
+}
+
+/**
+ * Eye adaptation, step 2 (1x1): centre-weighted mean log luminance -> exposure offset in EV,
+ * blended with the previous frame's value (uBlend = 1 snaps, e.g. after a camera cut).
+ *   ev = clamp(strength * (log2(key) - meanLog), -down, +up)
+ * Partial compensation (strength < 1): into-sun views still read brighter than the storm side.
+ */
+export function adaptMaterial() {
+  return mat('iw_ae_adapt', /* glsl */`
+uniform sampler2D tLum;
+uniform sampler2D tPrev;
+uniform float uBlend;
+uniform vec4 uAE;          // log2(key), strength, max EV down, max EV up
+varying vec2 vUv;
+void main() {
+  float sum = 0.0, ws = 0.0;
+  for (int y = 0; y < 9; y++) {
+    for (int x = 0; x < 16; x++) {
+      vec2 uv = (vec2(float(x), float(y)) + 0.5) / vec2(16.0, 9.0);
+      vec2 c = (uv - 0.5) * vec2(1.6, 1.8);
+      float w = exp(-dot(c, c) * 1.4);                // centre-weighted
+      sum += texture2D(tLum, uv).r * w; ws += w;
+    }
+  }
+  float ev = clamp(uAE.y * (uAE.x - sum / ws), -uAE.z, uAE.w);
+  float prev = texture2D(tPrev, vec2(0.5)).r;
+  gl_FragColor = vec4(mix(prev, ev, uBlend), sum / ws, 0.0, 1.0);
+}`, { tLum: { value: null }, tPrev: { value: null }, uBlend: { value: 1 }, uAE: { value: new THREE.Vector4(-2.5, 0.5, 1.0, 0.3) } });
+}
+
 /** Bloom prefilter: soft-knee threshold (after exposure) + Karis-weighted 4x4 downsample. */
 export function bloomPrefilterMaterial() {
   return mat('iw_bloom_pre', /* glsl */`
@@ -229,17 +369,24 @@ uniform sampler2D tIn;
 uniform vec2 uTexel;       // source texel size
 uniform float uExposure;
 uniform vec4 uThreshold;   // threshold, knee, knee*2, 0.25/knee
+uniform float uClamp;      // soft ceiling of the bloom source (after exposure)
+uniform sampler2D tAE;     // eye adaptation (1x1, R = EV offset)
+uniform float uHasAE;
 varying vec2 vUv;
+float iwAE = 1.0;
 vec3 pre(vec3 c) {
-  c *= uExposure;
+  c *= uExposure * iwAE;
   float br = max(c.r, max(c.g, c.b));
   float rq = clamp(br - uThreshold.x + uThreshold.y, 0.0, uThreshold.z);
   rq = uThreshold.w * rq * rq;
   float w = max(rq, br - uThreshold.x) / max(br, 1e-4);
-  return c * w;
+  // compressive clamp: tiny super-bright sources (sensor sprites, sparks) cannot flood the wide
+  // mips into big halos; broad sources (fireballs, slag) still bloom by area
+  return c * w * (uClamp / (uClamp + br * w));
 }
 vec3 karis(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
 void main() {
+  if (uHasAE > 0.5) iwAE = exp2(texture2D(tAE, vec2(0.5)).r);
   vec3 a = pre(texture2D(tIn, vUv + uTexel * vec2(-1.0, -1.0)).rgb);
   vec3 b = pre(texture2D(tIn, vUv + uTexel * vec2(1.0, -1.0)).rgb);
   vec3 c = pre(texture2D(tIn, vUv + uTexel * vec2(-1.0, 1.0)).rgb);
@@ -252,7 +399,7 @@ void main() {
   gl_FragColor = vec4(min(s, vec3(4000.0)), 1.0);
 }`, {
     tIn: { value: null }, uTexel: { value: new THREE.Vector2() }, uExposure: { value: 1 },
-    uThreshold: { value: new THREE.Vector4() },
+    uThreshold: { value: new THREE.Vector4() }, uClamp: { value: 16 }, tAE: { value: null }, uHasAE: { value: 0 },
   });
 }
 
@@ -296,15 +443,18 @@ void main() {
  * aberration, filmic tone map (AgX w/ look or ACES), split-tone grade (lift shadows toward
  * #1C2126, highlights toward #F2C79A), saturation/contrast, vignette, film grain, sRGB encode.
  */
-export function compositeMaterial() {
-  return mat('iw_composite', /* glsl */`
+export function compositeMaterial(atmos = atmosGLSL()) {
+  return mat('iw_composite', DEPTH_FNS + atmos + /* glsl */`
 uniform sampler2D tScene;
 uniform sampler2D tAO;
 uniform sampler2D tBloom;
 uniform sampler2D tShafts;
 uniform sampler2D tNoise;
 uniform float uExposure;
+uniform sampler2D tAE;    // eye adaptation (1x1, R = EV offset)
+uniform float uHasAE;
 uniform float uAO;
+uniform float uAOFloor;
 uniform float uBloom;
 uniform vec3 uShaftTint;
 uniform float uCA;
@@ -316,12 +466,38 @@ uniform vec3 uLift;       // shadow tint target (linear), pre-scaled by amount
 uniform vec3 uGain;       // highlight tint multiplier (linear)
 uniform vec3 uShadowTint; // shadow tint multiplier (linear, normalized)
 uniform float uShadowAmt;
+uniform float uShadowDesat;
 uniform float uGainAmt;
 uniform float uSat;
 uniform float uContrast;
 uniform float uHasAO, uHasBloom, uHasShafts;
 uniform float uDebug;
+uniform sampler2D tVol;   // volumetric sun scattering (quarter res, see volumeMaterial)
+uniform float uHasVol, uVolLit, uVolOcc, uVolMaxZ, uVolDust;
+uniform vec3 uSunCol;   // sun colour * intensity (linear)
+uniform mat4 uCamWorld;
+uniform vec3 uFogColor;
 varying vec2 vUv;
+// depth-aware (bilateral) 4-tap upsample of the quarter-res volumetric buffer
+vec2 iwVolume(vec2 uv) {
+  float d = texture2D(tDepth, uv).x;
+  float zf = min(d >= 0.999999 ? 1.0e5 : -iwViewZ(uv), uVolMaxZ);
+  vec2 sz = vec2(textureSize(tVol, 0));
+  vec2 tc = uv * sz - 0.5;
+  ivec2 i0 = ivec2(floor(tc));
+  vec2 f = tc - floor(tc);
+  ivec2 mx = ivec2(sz) - 1;
+  vec3 acc = vec3(0.0);
+  for (int k = 0; k < 4; k++) {
+    ivec2 o = ivec2(k & 1, k >> 1);
+    vec4 q = texelFetch(tVol, clamp(i0 + o, ivec2(0), mx), 0);
+    float wb = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
+    float wd = 1.0 / (0.02 + abs(q.b - zf) / max(zf, 1.0));
+    float w = wb * wd + 1e-5;
+    acc += vec3(q.rg * w, w);
+  }
+  return acc.xy / acc.z;
+}
 
 // ---- AgX (Troy Sobotka / Blender), three.js port + look
 const mat3 AGX_IN = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859);
@@ -363,58 +539,89 @@ vec3 toSRGB(vec3 c) {
 }
 void main() {
   vec2 uv = vUv;
+  if (uDebug > 2.5) { vec2 vv = iwVolume(uv); gl_FragColor = vec4(vv.x * 4.0, vv.y * 4.0, 0.0, 1.0); return; }
   if (uDebug > 0.5) { gl_FragColor = vec4(vec3(uDebug < 1.5 ? texture2D(tAO, uv).r : texture2D(tBloom, uv).r), 1.0); return; }
   vec2 cc = uv - 0.5;
   float r2 = dot(cc, cc);
   // edge-only chromatic aberration (zero in the centre, grows with r^2)
+  // (offset capped at 0.5 px; the shifted channels are clamped to 1.5x the centre colour so a
+  // thin hot rail never splits into a rainbow speckle)
   vec2 ca = cc * r2 * uCA;
-  vec3 col;
-  col.r = texture2D(tScene, uv - ca).r;
-  col.g = texture2D(tScene, uv).g;
-  col.b = texture2D(tScene, uv + ca).b;
+  float cal = length(ca * uRes);
+  if (cal > 0.5) ca *= 0.5 / cal;
+  vec3 col = texture2D(tScene, uv).rgb;
+  vec3 cmax = col * 1.5 + 0.02;
+  col.r = min(texture2D(tScene, uv - ca).r, cmax.r);
+  col.b = min(texture2D(tScene, uv + ca).b, cmax.b);
   float lum0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
   if (uHasAO > 0.5) {
-    float ao = texture2D(tAO, uv).r;
-    // AO darkens ambient-lit surfaces; directly lit / emissive pixels keep most of their light
-    float lit = smoothstep(0.08, 0.9, lum0 * uExposure);
-    col *= mix(1.0, ao, uAO * (1.0 - 0.6 * lit));
+    // AO darkens ambient-lit surfaces (floored: contact grounding, never black holes); directly
+    // lit / emissive pixels keep most of their light
+    float ao = max(texture2D(tAO, uv).r, uAOFloor);
+    float lit = smoothstep(0.06, 0.6, lum0 * uExposure);
+    col *= mix(1.0, ao, uAO * (1.0 - 0.7 * lit));
+  }
+  if (uHasVol > 0.5) {
+    // shadowed in-scattering: remove the analytic fog's sun light where the ray is in shadow,
+    // boost it where it is lit (light shafts through the ash, any sun angle)
+    vec2 vol = iwVolume(uv);
+    vec3 dv = normalize(vec3((uv * 2.0 - 1.0) * uTan, -1.0));
+    vec3 dw = normalize(mat3(uCamWorld) * dv);
+    col = max(col + iwFogSunPart(dw, uFogColor) * (uVolLit * vol.y - uVolOcc * vol.x), vec3(0.0));
+    // suspended dust lit by the sun (forward-scattering ash): bright beams between shadows
+    float mu = dot(dw, IW_SUN_DIR);
+    col += uSunCol * (uVolDust * (0.3 + 0.7 * min(iwHG(mu, 0.5) * 12.566371, 12.0))) * vol.y;
   }
   if (uHasShafts > 0.5) col += texture2D(tShafts, uv).r * uShaftTint;
-  col *= uExposure;
+  col *= uExposure * (uHasAE > 0.5 ? exp2(texture2D(tAE, vec2(0.5)).r) : 1.0);
   if (uHasBloom > 0.5) col += texture2D(tBloom, uv).rgb * uBloom;
   #ifdef TONEMAP_ACES
   vec3 t = aces(col);
   #else
   vec3 t = agx(col);
+  // near-primary HDR emissives (sensor eyes, aviation beacons) keep their hue: AgX alone bends
+  // a hot #FF2A2A toward salmon/pink. Blend toward a hue-preserving map of the peak channel.
+  float mxc = max(col.r, max(col.g, col.b)), mnc = min(col.r, min(col.g, col.b));
+  float khp = smoothstep(0.8, 0.96, (mxc - mnc) / max(mxc, 1e-5)) * smoothstep(0.4, 1.6, mxc);
+  if (khp > 0.0) t = mix(t, clamp(col / mxc * agx(vec3(mxc)).g, 0.0, 1.0), khp * 0.75);
   #endif
-  // grade (display-referred, linear): lift shadows toward the cool tint, warm the highlights
+  // grade (display-referred, linear): split tone — shadows desaturate and take the cool storm
+  // tint, highlights lean toward #F2C79A at constant luminance (no dimming of the whites)
   float l = dot(t, vec3(0.2126, 0.7152, 0.0722));
-  float sw = 1.0 - smoothstep(0.0, 0.32, l);
-  t *= mix(vec3(1.0), uShadowTint, sw * uShadowAmt);
-  t = t + uLift * (1.0 - t) * (1.0 - smoothstep(0.0, 0.45, l));
-  t *= mix(vec3(1.0), uGain, smoothstep(0.18, 0.95, l) * uGainAmt);
+  float sw = 1.0 - smoothstep(0.0, 0.3, l);
+  t = mix(t, vec3(l), sw * uShadowDesat);          // warm albedo in shade loses its orange ...
+  t *= mix(vec3(1.0), uShadowTint, sw * uShadowAmt); // ... and takes the cool sky tint
+  float hw = smoothstep(0.2, 0.9, l) * uGainAmt;
+  t = mix(t, l * uGain, hw);
   l = dot(t, vec3(0.2126, 0.7152, 0.0722));
   t = max(vec3(0.0), l + uSat * (t - l));
-  // contrast around display mid-grey (in perceptual space)
   vec3 s = toSRGB(t);
-  s = clamp((s - 0.45) * uContrast + 0.45, 0.0, 1.0);
+  // contrast around display mid-grey; the toe is protected (the S only acts above ~0.1, so dark
+  // values keep their separation instead of clipping to #000)
+  s = clamp(s + (s - 0.45) * (uContrast - 1.0) * smoothstep(0.02, 0.4, s), 0.0, 1.0);
   // vignette (display space, soft)
   float v = 1.0 - uVignette * smoothstep(0.18, 0.72, r2 * 1.6);
   s *= v;
+  // lift (after the vignette, so corners never crush either): black lands on the cool shadow
+  // colour (#1C2126 x amount, display space), never on #000
+  s = uLift + s * (1.0 - uLift);
   // film grain: luminance-weighted, strongest in the mid-tones
   float n = texture2D(tNoise, gl_FragCoord.xy / 256.0 + uGrainOffset).a - 0.5;
   n += texture2D(tNoise, gl_FragCoord.xy / 173.0 - uGrainOffset.yx).b - 0.5;
   float gl = dot(s, vec3(0.333));
-  s += n * uGrain * (0.35 + 0.65 * (1.0 - abs(gl * 2.0 - 0.9)));
+  s += n * uGrain * (0.45 + 0.55 * smoothstep(0.5, 0.05, gl));
   // dither against banding
   s += (iwDither(gl_FragCoord.xy) - 0.5) / 255.0;
   gl_FragColor = vec4(clamp(s, 0.0, 1.0), 1.0);
 }`.replace('varying vec2 vUv;', 'varying vec2 vUv;\nfloat iwDither(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }'), {
     tScene: { value: null }, tAO: { value: null }, tBloom: { value: null }, tShafts: { value: null }, tNoise: { value: null },
-    uExposure: { value: 1 }, uAO: { value: 1 }, uBloom: { value: 0.1 }, uShaftTint: { value: new THREE.Color() },
+    uExposure: { value: 1 }, tAE: { value: null }, uHasAE: { value: 0 }, uAO: { value: 1 }, uAOFloor: { value: 0.35 }, uBloom: { value: 0.1 }, uShaftTint: { value: new THREE.Color() },
     uCA: { value: 0.012 }, uVignette: { value: 0.3 }, uGrain: { value: 0.03 }, uGrainOffset: { value: new THREE.Vector2() },
     uRes: { value: new THREE.Vector2() }, uLift: { value: new THREE.Color() }, uGain: { value: new THREE.Color(1, 1, 1) },
-    uGainAmt: { value: 0.5 }, uShadowTint: { value: new THREE.Color(1, 1, 1) }, uShadowAmt: { value: 0.3 }, uSat: { value: 0.9 }, uContrast: { value: 1.05 },
+    uGainAmt: { value: 0.5 }, uShadowTint: { value: new THREE.Color(1, 1, 1) }, uShadowAmt: { value: 0.3 }, uShadowDesat: { value: 0.3 }, uSat: { value: 0.9 }, uContrast: { value: 1.05 },
     uHasAO: { value: 0 }, uHasBloom: { value: 0 }, uHasShafts: { value: 0 }, uDebug: { value: 0 },
-  }, { AGX_POWER: '1.08', AGX_SAT: '1.12' });
+    tDepth: { value: null }, uCam: { value: new THREE.Vector2() }, uTan: { value: new THREE.Vector2() },
+    tVol: { value: null }, uHasVol: { value: 0 }, uVolLit: { value: 0.5 }, uVolOcc: { value: 1 }, uVolMaxZ: { value: 1000 }, uVolDust: { value: 0.05 }, uSunCol: { value: new THREE.Color() },
+    uCamWorld: { value: new THREE.Matrix4() }, uFogColor: { value: new THREE.Color() },
+  }, { AGX_POWER: '1.15', AGX_SAT: '1.22' });
 }

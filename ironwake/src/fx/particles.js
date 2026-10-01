@@ -22,7 +22,9 @@
 // Soft particles: the batch lives on the pipeline's SOFT layer and fades against the opaque
 // depth (game.pipeline.markSoft / depthUniforms). Fog uses the shared atmosphere chunks.
 // Two constant point lights serve every flash (no light-count changes => no recompiles).
-// All randomness uses game.rng.stream('fx') => deterministic for staged shots.
+// Randomness is seeded PER SPAWN: hash(session seed, sim step, effect name, n-th spawn of that
+// name this step) seeds a private stream, so a spawn that happens in one run and not in another
+// (e.g. a cosmetic sprite gated on the render camera) never shifts the randomness of other effects.
 import * as THREE from 'three';
 import { PARTICLE_VERT, particleFrag, SHAPE } from './shaders.js';
 import { EFFECTS } from './library.js';
@@ -34,6 +36,7 @@ import { Distortion } from './distort.js';
 import { Slashes } from './slash.js';
 import { Ghosts } from './ghost.js';
 import { Status } from './status.js';
+import { RandomStream, hashString } from '../core/rng.js';
 
 export { EFFECTS };
 
@@ -52,6 +55,7 @@ const _v = { x: 0, y: 0, z: 0 };
 const _defaultOpts = { scale: 1, normal: null, yaw: 0, vel: null, incoming: null };
 const _autoOpts = { scale: 1, normal: null, yaw: 0, vel: null, incoming: null };
 const INHERIT_PLAYER = { boost_flame: true, ab_trail: true, qb_burst: true };
+const NANCHOR = 16, ANCHOR_LIFE = 0.4, NO_ANCHOR = 255;
 const _col = new THREE.Color(), _v2 = new THREE.Vector2(), _lp = new THREE.Vector3();
 /** Global flash-light calibration (library intensities are relative, candela x LIGHT_SCALE). */
 export const LIGHT_SCALE = 0.22;
@@ -71,14 +75,20 @@ export default function particlesSystem(game) {
     rot: new Float32Array(MAX), spin: new Float32Array(MAX), stretch: new Float32Array(MAX),
     bounce: new Float32Array(MAX), seed: new Float32Array(MAX),
     shape: new Uint8Array(MAX), variant: new Uint8Array(MAX), flags: new Uint8Array(MAX),
+    anc: new Uint8Array(MAX),   // anchor slot (255 = free-flying)
   };
   const A3 = [P.pos, P.vel, P.axis, P.c0, P.c1];
   const A1 = [P.age, P.life, P.s0, P.s1, P.sp, P.a0, P.a1, P.ap, P.fin, P.h0, P.h1, P.k0, P.k1, P.e0, P.e1, P.cp,
-    P.drag, P.grav, P.rise, P.turb, P.rot, P.spin, P.stretch, P.bounce, P.seed, P.shape, P.variant, P.flags];
+    P.drag, P.grav, P.rise, P.turb, P.rot, P.spin, P.stretch, P.bounce, P.seed, P.shape, P.variant, P.flags, P.anc];
   const effects = { ...EFFECTS };
   const keys = new Float32Array(MAX), order = new Uint16Array(MAX), bucketCount = new Int32Array(BUCKETS + 1);
-  let rng, batch = null, lights = [], simTime = 0, softAttached = false, tex = null;
+  let rng = null, baseSeed = 0, stepNo = 0, stepId = 0, batch = null, lights = [], simTime = 0, softAttached = false, tex = null;
   let trails, decals, debris, distortion, slashes, ghosts, status;
+  // ANCHORS: short-lived muzzle effects ride on a scene node (the barrel keeps moving with
+  // recoil / aim after the shot). Rendered position = sim position + (node now - node at spawn).
+  const anchors = [];
+  for (let k = 0; k < NANCHOR; k++) anchors.push({ node: null, t: 0, p0: new THREE.Vector3(), cur: new THREE.Vector3(), dx: 0, dy: 0, dz: 0 });
+  let nextAnchor = 0;
 
   // ---------------------------------------------------------------- batch
   function makeBatch(textures) {
@@ -93,7 +103,7 @@ export default function particlesSystem(game) {
     g.setAttribute('iSize', iSize); g.setAttribute('iExtra', iExtra);
     g.instanceCount = 0;
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-      tPuff: { value: null }, tMisc: { value: null },
+      tPuff: { value: null }, tMisc: { value: null }, tFire: { value: null },
       uSunView: { value: new THREE.Vector3(0, 0.5, -0.5) }, uSunCol: { value: new THREE.Color() },
       uAmbTop: { value: new THREE.Color() }, uAmbBot: { value: new THREE.Color() }, uFireGain: { value: SMOKE_LIGHT.fireGain },
       uPixel: { value: 0.001 },
@@ -106,7 +116,7 @@ export default function particlesSystem(game) {
       blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     });
-    mat.uniforms.tPuff.value = textures.puff; mat.uniforms.tMisc.value = textures.misc;
+    mat.uniforms.tPuff.value = textures.puff; mat.uniforms.tMisc.value = textures.misc; mat.uniforms.tFire.value = textures.fire;
     const mesh = new THREE.Mesh(g, mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 20;
@@ -236,7 +246,9 @@ export default function particlesSystem(game) {
 
   function emitPart(part, pos, dir, o, scale) {
     let count = part.count[0] + Math.floor(rng.next() * (part.count[1] - part.count[0] + 1));
-    if (part.scaleCount !== false && scale > 1) count = Math.round(count * Math.min(3, scale));
+    // bigger effects emit more particles — except single sprites (count [1,1]: flashes, glows,
+    // eye/beacon sprites), which only grow (stacking copies would just change their brightness)
+    if (part.scaleCount !== false && scale > 1 && part.count[1] > 1) count = Math.round(count * Math.min(3, scale));
     if (P.n > BUSY && part.life[1] > 1.2) count = Math.ceil(count * (1 - (P.n - BUSY) / (MAX - BUSY)) * 0.5);
     if (count <= 0) return;
     const shape = shapeOf(part);
@@ -254,7 +266,7 @@ export default function particlesSystem(game) {
     }
     const inh = part.inherit || 0, ov = o.vel;
     // default blend: puffs / chunks occlude (over), everything else is additive
-    const addDef = part.add || (shape === SHAPE.puff || shape === SHAPE.chunk ? ZERO2 : ONE2);
+    const addDef = part.add || (shape === SHAPE.puff || shape === SHAPE.chunk || shape === SHAPE.fire ? ZERO2 : ONE2);
     const collide = part.collide !== undefined ? part.collide : (part.gravity || 0) > 0;
     let flags = (part.lit ? F_LIT : 0) | (collide ? F_COLLIDE : 0) | (part.nosoft ? F_NOSOFT : 0);
     const orient = part.orient;
@@ -285,6 +297,7 @@ export default function particlesSystem(game) {
         P.stretch[i] = part.stretch || 0;
       }
       P.flags[i] = fl;
+      P.anc[i] = part.attach && o.anchor !== undefined && o.anchor !== NO_ANCHOR ? o.anchor : NO_ANCHOR;
       P.age[i] = part.delay ? -rng.range(part.delay[0], part.delay[1]) : 0;
       P.life[i] = rng.range(part.life[0], part.life[1]);
       P.s0[i] = part.size[0] * sizeMul; P.s1[i] = part.size[1] * sizeMul; P.sp[i] = part.sizePow || 1;
@@ -296,10 +309,11 @@ export default function particlesSystem(game) {
       P.ap[i] = part.alphaPow || 1; P.fin[i] = part.fadeIn || 0;
       P.h0[i] = part.heat ? part.heat[0] : 0; P.h1[i] = part.heat ? part.heat[1] : 0;
       P.k0[i] = addDef[0]; P.k1[i] = addDef[1]; P.cp[i] = part.coolPow || 1;
-      P.e0[i] = part.erode ? part.erode[0] : 0; P.e1[i] = part.erode ? part.erode[1] : (shape === SHAPE.puff ? 0.35 : 0);
+      P.e0[i] = part.erode ? part.erode[0] : 0; P.e1[i] = part.erode ? part.erode[1] : (shape === SHAPE.puff ? 0.35 : shape === SHAPE.fire ? 1 : 0);
       P.drag[i] = part.drag || 0; P.grav[i] = part.gravity || 0; P.rise[i] = part.rise || 0; P.turb[i] = part.turb || 0;
       P.bounce[i] = part.bounce ?? 0.3;
-      P.rot[i] = shape === SHAPE.flare ? 0 : rng.next() * TAU;   // anamorphic flares stay horizontal
+      // anamorphic flares stay horizontal; flipbook fire stays near-upright (its light is baked from above)
+      P.rot[i] = shape === SHAPE.flare ? 0 : shape === SHAPE.fire ? rng.sym(0.35) : rng.next() * TAU;
       P.spin[i] = part.spin ? rng.range(part.spin[0], part.spin[1]) : 0;
       P.seed[i] = rng.next() * 100;
       P.shape[i] = shape;
@@ -343,7 +357,7 @@ export default function particlesSystem(game) {
     get textures() { return tex; },
 
     async init(g) {
-      rng = g.rng.stream('fx');
+      rng = new RandomStream(1);
       tex = await loadFxTextures(g);
       batch = makeBatch(tex);
       trails = new Trails(g, tex);
@@ -365,10 +379,12 @@ export default function particlesSystem(game) {
     },
     reset() {
       api.clear(); api.freeze = false;
+      baseSeed = (hashString('fx') ^ (game.rng.masterSeed >>> 0)) >>> 0; stepNo = 0; stepId++; simTime = 0;
       status.reset();
     },
     clear() {
       P.n = 0;
+      for (const a of anchors) { a.t = 0; a.node = null; }
       for (const l of lights) { l.t = 0; l.light.intensity = 0; }
       if (batch) batch.g.instanceCount = 0;
       trails.clear(); decals.clear(); debris.clear(); distortion.clear(); slashes.clear(); ghosts.clear();
@@ -383,6 +399,11 @@ export default function particlesSystem(game) {
       if (typeof opts === 'number') scale = opts;
       else if (opts) { o = opts; scale = opts.scale ?? 1; }
       if (!(scale > 0)) return;
+      if (parts._h === undefined) { parts._h = hashString(name); parts._step = -1; parts._k = 0; }
+      if (parts._step !== stepId) { parts._step = stepId; parts._k = 0; }   // stepId never repeats (sessions too)
+      let h = (baseSeed ^ Math.imul(stepNo + 1, 0x9e3779b1) ^ parts._h) >>> 0;
+      h = Math.imul(h ^ parts._k++, 0x85ebca6b) >>> 0;
+      rng.seed(h);
       // exhaust effects emitted by the player rig without a velocity ride with the player
       if (!o.vel && INHERIT_PLAYER[name]) {
         const pl = game.player, v = pl && (pl.motor ? pl.motor.vel : pl.vel);
@@ -397,6 +418,19 @@ export default function particlesSystem(game) {
         if (part.kind) special(part, pos, useDir, o, scale);
         else emitPart(part, pos, useDir, o, scale);
       }
+    },
+
+    /** Anchor slot for effects that should follow `node` (world pos at spawn = `pos`). Pass the
+     *  returned index as opts.anchor; parts with `attach: true` then ride on the node for their
+     *  (short) life. Returns 255 (no anchor) when node is missing. */
+    anchor(node, pos) {
+      if (!node) return NO_ANCHOR;
+      let k = nextAnchor;
+      for (let n = 0; n < NANCHOR; n++) { const j = (nextAnchor + n) % NANCHOR; if (anchors[j].t <= 0) { k = j; break; } }
+      nextAnchor = (k + 1) % NANCHOR;
+      const a = anchors[k];
+      a.node = node; a.t = ANCHOR_LIFE; a.p0.copy(pos); a.cur.copy(pos); a.dx = a.dy = a.dz = 0;
+      return k;
     },
 
     /** Low-level: one bolt segment a->b (electric arcs), life s, HDR colour, width m. */
@@ -414,7 +448,7 @@ export default function particlesSystem(game) {
       P.a0[i] = 1; P.a1[i] = 0.2; P.ap[i] = 1; P.fin[i] = 0;
       P.h0[i] = 1; P.h1[i] = 0.5; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
       P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
-      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0;
+      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
     },
 
     /** Flash light: the constant light with the least remaining energy is re-aimed. */
@@ -434,9 +468,11 @@ export default function particlesSystem(game) {
 
     update(dt) {
       if (!batch) return;
+      stepNo++; stepId++;
       status.update(dt);
       if (api.freeze) return;
       simTime += dt;
+      for (const a of anchors) if (a.t > 0) { a.t -= dt; if (a.t <= 0) a.node = null; }
       const phys = game.physics;
       for (let i = P.n - 1; i >= 0; i--) {
         let age = P.age[i];
@@ -496,6 +532,12 @@ export default function particlesSystem(game) {
       if (!softAttached) attachSoft();
       attachRigFlames();
       updateLighting();
+      for (const a of anchors) {
+        if (!a.node) continue;
+        a.node.getWorldPosition(a.cur);
+        a.dx = a.cur.x - a.p0.x; a.dy = a.cur.y - a.p0.y; a.dz = a.cur.z - a.p0.z;
+        if (a.dx * a.dx + a.dy * a.dy + a.dz * a.dz > 400) a.dx = a.dy = a.dz = 0; // teleport guard
+      }
       const cam = game.camera;
       cam.getWorldPosition(_camPos);
       cam.getWorldDirection(_camFwd);
@@ -524,6 +566,8 @@ export default function particlesSystem(game) {
         const i = order[j], i3 = i * 3, j3 = j * 3, j4 = j * 4;
         const t = Math.min(1, P.age[i] / P.life[i]);
         pa[j3] = P.pos[i3]; pa[j3 + 1] = P.pos[i3 + 1]; pa[j3 + 2] = P.pos[i3 + 2];
+        const an = P.anc[i];
+        if (an !== NO_ANCHOR) { const A = anchors[an]; pa[j3] += A.dx; pa[j3 + 1] += A.dy; pa[j3 + 2] += A.dz; }
         const fixed = P.flags[i] & F_FIXED;
         const src = fixed ? P.axis : P.vel;
         xa[j3] = src[i3]; xa[j3 + 1] = src[i3 + 1]; xa[j3 + 2] = src[i3 + 2];

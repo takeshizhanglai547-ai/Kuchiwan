@@ -235,11 +235,75 @@ export function createEmitter(ac, dest, r = makeRng(3)) {
   };
 }
 
+/**
+ * Pooled 3D rocket-motor emitter for missiles in flight (nearest N to the listener):
+ * brown-noise roar + pink motor band + white hiss, AM'd by a random-ish flutter, every noise
+ * source pitched by the Doppler ratio (playbackRate) and the bands shifted with it.
+ *   .set(amount 0..1, doppler ratio, t)
+ */
+export const ROCKET = { roar: 0.5, band: 0.55, hiss: 0.16, bandF: 1500, roarF: 650, flutter: [23, 37], doppler: [0.6, 1.7] };
+export function createRocket(ac, dest, r = makeRng(17)) {
+  const t = ac.currentTime;
+  const out = gain(ac, 0); out.connect(dest);
+  const am = gain(ac, 0.75); am.connect(out);
+  const f1 = ac.createOscillator(); f1.type = 'square'; f1.frequency.value = ROCKET.flutter[0] * (0.9 + r() * 0.2);
+  const f2 = ac.createOscillator(); f2.frequency.value = ROCKET.flutter[1] * (0.9 + r() * 0.2);
+  const fg1 = gain(ac, 0.14), fg2 = gain(ac, 0.1);
+  chain(f1, fg1); fg1.connect(am.gain); chain(f2, fg2); fg2.connect(am.gain);
+  const srcs = [noiseSrc(ac, 'brown', t, 1e6, r), noiseSrc(ac, 'pink', t, 1e6, r), noiseSrc(ac, 'white', t, 1e6, r)];
+  const roarLP = filt(ac, 'lowpass', ROCKET.roarF, 0.8), bandBP = filt(ac, 'bandpass', ROCKET.bandF, 0.9), hissHP = filt(ac, 'highpass', 4200, 0.7);
+  chain(srcs[0], roarLP, gain(ac, ROCKET.roar), am);
+  chain(srcs[1], bandBP, gain(ac, ROCKET.band), am);
+  chain(srcs[2], hissHP, gain(ac, ROCKET.hiss), am);
+  f1.start(t); f2.start(t);
+  let lastA = -1, lastD = -1;
+  return {
+    set(amount, dop, tt) {
+      if (Math.abs(amount - lastA) > 0.003) { lastA = amount; out.gain.setTargetAtTime(amount, tt, 0.04); }
+      const d = Math.min(ROCKET.doppler[1], Math.max(ROCKET.doppler[0], dop || 1));
+      if (Math.abs(d - lastD) > 0.004) {
+        lastD = d;
+        for (const s of srcs) s.playbackRate.setTargetAtTime(d, tt, 0.03);
+        bandBP.frequency.setTargetAtTime(ROCKET.bandF * d, tt, 0.03); roarLP.frequency.setTargetAtTime(ROCKET.roarF * d, tt, 0.03);
+      }
+    },
+  };
+}
+
+/**
+ * Doppler ratio for a source at p moving with v, heard from l (listener, static).
+ * c is an "artistic" speed of sound (higher than 343 so a 250 m/s missile does not
+ * shift by an octave and a half); the result is clamped by the caller.
+ */
+export function dopplerRatio(px, py, pz, vx, vy, vz, lx, ly, lz, c = 520) {
+  const dx = lx - px, dy = ly - py, dz = lz - pz;
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+  const vr = (vx * dx + vy * dy + vz * dz) / d; // + = approaching
+  return c / Math.max(c * 0.3, c - vr);
+}
+
 // ------------------------------------------------------------------ offline demos (sheet)
 export const BED_DEMOS = ['booster: walk > boost ramp > QB > AB charge > AB flight > stop', 'ambience: Pier 7 wind / sea / drone',
-  'enemy machinery: Gnat drone fly-by 10 m (pooled 3D emitter, stereo L>R) then relay generator hum'];
+  'enemy machinery: Gnat drone fly-by 10 m (pooled 3D emitter, stereo L>R) then relay generator hum',
+  'missile fly-by: 230 m/s rocket passes 6 m from the listener (3D emitter + Doppler)'];
 
 export async function renderBedDemo(OAC, name, sr) {
+  if (name.startsWith('missile')) {
+    const T = 4, ac = new OAC(2, Math.ceil(sr * T), sr);
+    const pan = ac.createPanner(); pan.panningModel = 'equalpower'; pan.distanceModel = 'inverse'; pan.refDistance = 10;
+    const lp = filt(ac, 'lowpass', 18000, 0.5);
+    chain(lp, pan, ac.destination);
+    const rk = createRocket(ac, lp);
+    const V = 230, X0 = -400, Z = -6;
+    for (let i = 0; i <= T * 60; i++) {
+      const tt = i / 60, x = X0 + V * tt;
+      pan.positionX.setValueAtTime(x, tt); pan.positionZ.setValueAtTime(Z, tt); pan.positionY.setValueAtTime(2, tt);
+      const d = Math.hypot(x, Z);
+      lp.frequency.setValueAtTime(Math.max(900, 19000 / Math.pow(1 + d / 60, 1.1)), tt);
+      rk.set(Math.min(1, tt * 4), dopplerRatio(x, 2, Z, V, 0, 0, 0, 0, 0), tt);
+    }
+    return { buffer: await ac.startRendering(), marks: [[0.1, '400 m L, approaching (pitched up)'], [-X0 / V, 'passes 6 m'], [-X0 / V + 0.4, 'receding R (pitched down)']] };
+  }
   if (name.startsWith('enemy')) {
     const T = 8, ac = new OAC(2, Math.ceil(sr * T), sr);
     const pan = ac.createPanner(); pan.panningModel = 'equalpower'; pan.distanceModel = 'inverse'; pan.refDistance = 18;

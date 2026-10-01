@@ -44,7 +44,7 @@ export const MT_AI = {
     sight: true, sightColor: [7.5, 0.5, 0.3], sightWidth: 0.06, sightPx: 1.25, glintFx: 'iw_glint', glintScale: 1,
     tell: 'mt', retry: 0.4, holdSight: 0.15, range: 300, facing: 0.14,
   },
-  trackTau: 0.35, lead: 0.95,
+  trackTau: 0.08, lead: 1.0,                      // perceived-velocity lag: steady boosting is led, a QB breaks it (rounds fly 0.3-0.45 s)
   cookOff: 0.55,                                  // s after death: secondary blast
 };
 

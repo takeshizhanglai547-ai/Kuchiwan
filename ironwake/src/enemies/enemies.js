@@ -30,7 +30,7 @@ export const TOKENS = { mt: 2, drone: 2, turret: 2, dive: 1 };
 const ROLES = ['anchor', 'flank', 'anchor', 'flank', 'rush'];
 
 function newTelemetry() {
-  const unit = () => ({ time: 0, stateSteps: {}, stillSteps: 0, shots: 0, bursts: 0, tells: 0, plans: 0, covers: 0, flankPlans: 0, evades: 0, dives: 0, suppress: 0, calls: 0, hitsOnPlayer: 0, dmgOnPlayer: 0, hitsTaken: 0, staggers: 0, kills: 0, spacing: [0, 0], flankSamples: [0, 0] });
+  const unit = () => ({ time: 0, stateSteps: {}, stillSteps: 0, shots: 0, bursts: 0, tells: 0, plans: 0, covers: 0, flankPlans: 0, evades: 0, dives: 0, suppress: 0, calls: 0, launched: 0, joins: 0, hitsOnPlayer: 0, dmgOnPlayer: 0, hitsTaken: 0, staggers: 0, kills: 0, spacing: [0, 0], flankSamples: [0, 0], ttk: [] });
   return { mt: unit(), drone: unit(), turret: unit(), boss: unit() };
 }
 
@@ -74,19 +74,28 @@ export default function enemiesSystem(game) {
           if (src && src.kind && T[src.kind]) { T[src.kind].hitsOnPlayer++; T[src.kind].dmgOnPlayer += h.damage || 0; }
           if (src && src === api.boss) {
             const L = api.boss.log, k = h.weapon in L.hitsOnPlayer ? h.weapon : 'other';
-            L.hitsOnPlayer[k]++; L.dmgOnPlayer += (h.damage || 0) * (h.splashFrac === undefined ? 1 : h.splashFrac);
+            const dmg = (e.result && e.result.damage) || (h.damage || 0) * (h.splashFrac === undefined ? 1 : h.splashFrac);   // raw when the player is in godmode
+            L.hitsOnPlayer[k]++; L.dmgOnPlayer += dmg;
+            const PL = L.phases[api.boss.phase]; PL.hitsOnPlayer++; PL.dmgOnPlayer += dmg;
           }
         } else if (tgt && tgt.kind && T[tgt.kind]) {
           T[tgt.kind].hitsTaken++;
+          if (tgt.firstHitT === undefined || tgt.firstHitT < 0) tgt.firstHitT = game.time;   // TTK clock
           if (tgt === api.boss && tgt.state !== 'intro') {
             const L = tgt.log, dmg = e.result ? e.result.damage : 0, w = (h && h.weapon) || 'other';
-            L.hitsTaken++; L.dmgTaken += dmg;
+            L.hitsTaken++; L.dmgTaken += dmg; L.phases[tgt.phase].dmgTaken += dmg;
             const r = L.takenBy[w] || (L.takenBy[w] = [0, 0]); r[0]++; r[1] += dmg;
           }
         }
       });
       g.events.on('actor:stagger', (e) => { const k = e.target && e.target.kind; if (k && api.telemetry[k]) api.telemetry[k].staggers++; });
-      g.events.on('actor:killed', (e) => { const k = e.actor && e.actor.kind; if (k && api.telemetry[k]) api.telemetry[k].kills++; });
+      g.events.on('actor:killed', (e) => {
+        const a = e.actor, k = a && a.kind, T = k && api.telemetry[k];
+        if (!T) return;
+        T.kills++;
+        // time-to-kill: first damaging hit -> death (benchmark §3.6: light walkers 1-3 s under focus)
+        if (a.firstHitT >= 0 && T.ttk.length < 64) T.ttk.push(+(g.time - a.firstHitT).toFixed(2));
+      });
     },
     reset() {
       api.clear();

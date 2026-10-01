@@ -205,7 +205,7 @@ def pipe_spools():
     return g, [((0, 0, 2.6), (12.4, 6.2, 5.2))]
 
 
-def lamp_mast(h=32.0):
+def lamp_mast(h=32.0, lo=False):
     g = Geo()
     g.merge(P.lathe([(0.0, 0.0), (0.55, 0.0), (0.55, 0.5), (0.42, 0.6), (0.24, h), (0.0, h)], 16, 'steel:galv'))
     g.merge(bx(1.6, 1.6, 0.4, (0, 0, 0.2), mat='concrete:grey', bev=0.05))
@@ -215,33 +215,39 @@ def lamp_mast(h=32.0):
     for (x, y, yaw) in ((1.8, 0, math.pi / 2), (-1.8, 0, -math.pi / 2), (0, 1.8, math.pi), (0, -1.8, 0.0)):
         g.merge(flood(x, y, h - 0.9, yaw))
     g.merge(bx(3.8, 3.8, 0.12, (0, 0, h - 1.7), mat='trim:grating'))
-    g.merge(rail_line([(-1.9, -1.9, h - 1.7), (1.9, -1.9, h - 1.7), (1.9, 1.9, h - 1.7), (-1.9, 1.9, h - 1.7), (-1.9, -1.9, h - 1.7)],
-                      h=1.0, post=1.9, r=0.04, mat='steel:railing'))
-    g.merge(cheap_ladder(h - 2.0, 0, 0.6, 0.6, w=0.5, facing=math.pi))
+    if not lo:   # (lo: out-of-bounds copies seen from 20+ m: no railing / ladder)
+        g.merge(rail_line([(-1.9, -1.9, h - 1.7), (1.9, -1.9, h - 1.7), (1.9, 1.9, h - 1.7), (-1.9, 1.9, h - 1.7), (-1.9, -1.9, h - 1.7)],
+                          h=1.0, post=1.9, r=0.04, mat='steel:railing'))
+        g.merge(cheap_ladder(h - 2.0, 0, 0.6, 0.6, w=0.5, facing=math.pi))
     g.merge(beacon(0, 0, h + 0.1, 0.35))
     return g, [((0, 0, h / 2), (1.2, 1.2, h))]
 
 
-def rail_track(L=12.0):
-    """Standard-gauge track segment along X (ballast bed, sleepers, rails)."""
+def rail_track(L=12.0, lo=False):
+    """Standard-gauge track segment along X (ballast bed, sleepers, rails). lo: half the
+    sleepers and box rails (lower-yard copies seen from the deck)."""
     g = Geo()
     prof = [(-2.1, 0.0), (2.1, 0.0), (1.4, 0.32), (-1.4, 0.32)]
     g.merge(P.prism(prof, L, bevel=0.0, segs=1, mat='heap:dark', axis='X'))
-    n = int(L / 0.65)
+    n = int(L / (1.3 if lo else 0.65))
     for i in range(n):
         x = -L / 2 + (i + 0.5) * L / n
         g.merge(bx(0.26, 2.6, 0.18, (x, 0, 0.36), mat='concrete:dark'))
     rp = [(-0.075, 0), (0.075, 0), (0.075, 0.02), (0.012, 0.03), (0.012, 0.13), (0.036, 0.14), (0.036, 0.175),
           (-0.036, 0.175), (-0.036, 0.14), (-0.012, 0.13), (-0.012, 0.03), (-0.075, 0.02)]
     for y in (-0.72, 0.72):
+        if lo:
+            g.merge(bx(L, 0.08, 0.17, (0, y, 0.535), mat='steel:rail'))
+            continue
         r = P.prism(rp, L, bevel=0.0, segs=1, mat='steel:rail', axis='X')
         r.move(0, y, 0.45)
         g.merge(r)
     return g
 
 
-def hopper_wagon():
-    """Ore hopper wagon, 14 m, with an ore heap on top. Forward = X."""
+def hopper_wagon(lo=False):
+    """Ore hopper wagon, 14 m, with an ore heap on top. Forward = X. lo: 8-sided wheels, no
+    side stiffeners (lower-yard strings)."""
     g = Geo()
     L, W = 14.0, 3.2
     body = P.loft([([(-W / 2, 1.9), (W / 2, 1.9), (W / 2, 4.3), (-W / 2, 4.3)], -L / 2),
@@ -252,7 +258,7 @@ def hopper_wagon():
     for x in (-3.6, 0.0, 3.6):
         g.merge(P.frustum((3.0, 2.8), (1.2, 1.0), 1.2, bevel=0.0, segs=1, mat='steel:oxide').rotate((180, 0, 0)).move(x, 0, 1.95))
     # side stiffeners
-    for i in range(9):
+    for i in range(0 if lo else 9):
         x = -L / 2 + 0.6 + i * (L - 1.2) / 8
         for sy in (-1, 1):
             g.merge(bx(0.16, 0.14, 2.3, (x, sy * (W / 2 + 0.06), 3.1), mat='steel:oxide'))
@@ -262,7 +268,7 @@ def hopper_wagon():
         g.merge(bx(3.0, 2.4, 0.7, (x, 0, 0.9), mat='steel:dark'))
         for dx in (-0.9, 0.9):
             for sy in (-0.72, 0.72):
-                g.merge(P.cylinder(0.46, 0.14, 20, bevel=0.0, mat='steel:rail').rotate((90, 0, 0)).move(x + dx, sy, 0.46 + 0.45))
+                g.merge(P.cylinder(0.46, 0.14, 8 if lo else 20, bevel=0.0, mat='steel:rail').rotate((90, 0, 0)).move(x + dx, sy, 0.46 + 0.45))
     for x in (-L / 2 - 0.4, L / 2 + 0.4):
         g.merge(bx(0.8, 0.4, 0.4, (x, 0, 1.3), mat='steel:dark'))
     # ore
@@ -303,14 +309,20 @@ def jersey_row(n=5):
 
 
 # ============================================================================ STRUCTURAL KIT
-def trestle(h, w=8.0, d=6.0):
-    """Conveyor support tower (4 box columns, struts every ~8 m, X bracing), top at z = h."""
+def trestle(h, w=8.0, d=6.0, variant=0):
+    """Conveyor support tower (4 built-up columns with flange lips, struts every ~8 m, X bracing,
+    bolted gusset plates at every strut / column node), top at z = h.
+    variant 1: mid-height service platform (grating, railing, MCC cabinet, lamp);
+    variant 2: cable-tray riser + pipe riser on the outer face, junction boxes."""
     g = Geo()
     col = 'steel:slate'
     for sx in (-1, 1):
         for sy in (-1, 1):
             g.merge(bx(0.7, 0.7, h, (sx * w / 2, sy * d / 2, h / 2), mat=col))
+            for fy in (-1, 1):                                      # flange lips (I-section read)
+                g.merge(bx(1.05, 0.07, h, (sx * w / 2, sy * d / 2 + fy * 0.385, h / 2), mat=col))
             g.merge(bx(1.6, 1.6, 1.2, (sx * w / 2, sy * d / 2, 0.6), mat='concrete:grey', bev=0.08))
+            g.merge(bx(1.3, 1.3, 0.12, (sx * w / 2, sy * d / 2, 1.26), mat='trim:bolted'))   # base plate
     levels = max(2, int(round(h / 8.0)))
     zs = [h * i / levels for i in range(levels + 1)]
     for i, z in enumerate(zs[1:], 1):
@@ -318,6 +330,13 @@ def trestle(h, w=8.0, d=6.0):
             g.merge(bx(w, 0.45, 0.45, (0, sy * d / 2, z - 0.25), mat=col))
         for sx in (-1, 1):
             g.merge(bx(0.45, d, 0.45, (sx * w / 2, 0, z - 0.25), mat=col))
+    # gusset plates (bolted trim: 2 x 4 bolt group + seam) on both face planes of every node
+    for z in zs:
+        zz = max(1.9, min(z - 0.25, h - 0.9))
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                g.merge(bx(0.95, 0.05, 0.95, (sx * (w / 2 - 0.55), sy * (d / 2 + 0.43), zz), mat='trim:bolted'))
+                g.merge(bx(0.05, 0.95, 0.95, (sx * (w / 2 + 0.38), sy * (d / 2 - 0.55), zz), mat='trim:bolted'))
     for i in range(levels):
         z0, z1 = zs[i] + 0.3, zs[i + 1] - 0.3
         for sy in (-1, 1):
@@ -326,8 +345,30 @@ def trestle(h, w=8.0, d=6.0):
         for sx in (-1, 1):
             x = sx * w / 2
             g.merge(xbrace(V((x, -d / 2, z0)), V((x, d / 2, z0)), V((x, d / 2, z1)), V((x, -d / 2, z1)), 0.22, col))
+        # brace crossing plate
+        zc = (z0 + z1) / 2
+        for sy in (-1, 1):
+            g.merge(bx(0.6, 0.05, 0.6, (0, sy * (d / 2 + 0.14), zc), mat='trim:bolted'))
     g.merge(bx(w + 1.2, d + 1.2, 0.6, (0, 0, h - 0.3), mat='steel:dark'))
     g.merge(cheap_ladder(h - 1, w / 2 + 0.2, 0, 0, facing=-math.pi / 2))
+    if variant == 1:
+        zp = zs[max(1, levels // 2)] - 0.25
+        g.merge(bx(w + 1.0, 3.2, 0.25, (0, -d / 2 - 1.6, zp + 0.35), mat='trim:grating'))
+        for sx in (-1, 1):
+            g.merge(beam((sx * w / 2, -d / 2, zp - 2.2), (sx * w / 2, -d / 2 - 3.0, zp + 0.2), 0.25, 0.25, col))
+        g.merge(rail_line([(-w / 2 - 0.4, -d / 2, zp + 0.48), (-w / 2 - 0.4, -d / 2 - 3.1, zp + 0.48), (w / 2 + 0.4, -d / 2 - 3.1, zp + 0.48),
+                           (w / 2 + 0.4, -d / 2, zp + 0.48)], h=1.1, post=2.2, r=0.05))
+        g.merge(bx(2.6, 1.0, 2.2, (-1.2, -d / 2 - 0.9, zp + 1.58), mat='steel:green'))
+        g.merge(bx(2.62, 0.06, 0.4, (-1.2, -d / 2 - 1.42, zp + 2.3), mat='trim:hazard2'))
+        g.merge(flood(2.4, -d / 2 - 2.9, zp + 3.4, 0.0))
+        g.merge(bx(0.15, 0.15, 3.2, (2.4, -d / 2 - 2.9, zp + 2.0), mat='steel:galv'))
+    elif variant == 2:
+        g.merge(bx(0.9, 0.18, h - 2.0, (w / 2 + 0.2, d / 2 + 0.7, h / 2 + 0.5), mat='trim:grating'))
+        g.merge(bx(0.08, 0.3, h - 2.0, (w / 2 - 0.25, d / 2 + 0.75, h / 2 + 0.5), mat='steel:galv'))
+        g.merge(bx(0.08, 0.3, h - 2.0, (w / 2 + 0.65, d / 2 + 0.75, h / 2 + 0.5), mat='steel:galv'))
+        g.merge(tube((-w / 2 + 0.9, d / 2 + 0.9, 1.4), (-w / 2 + 0.9, d / 2 + 0.9, h - 0.6), 0.32, 'steel:rust', 10))
+        for z in zs[1:-1]:
+            g.merge(bx(1.0, 0.7, 1.2, (w / 2 + 0.2, d / 2 + 0.95, z + 1.0), mat='steel:galv'))
     return g, [((0, 0, h / 2), (w + 1.0, d + 1.0, h))]
 
 
@@ -459,7 +500,7 @@ def stack(h=120.0, r0=6.0, r1=3.6, var='dark', glow=True, beacons=True, segs=40)
     prof = [(0.0, 0.0), (r0 + 0.8, 0.0), (r0 + 0.8, 1.5), (r0, 2.0), (r1, h), (r1 + 0.35, h), (r1 + 0.35, h + 1.2),
             (r1 - 0.3, h + 1.2), (r1 - 0.3, h - 3.0)]
     g.merge(P.lathe(prof, segs, 'concrete:' + var))
-    g.merge(P.cylinder(r1 - 0.3, 0.2, segs, bevel=0.0, mat='glow:furnace' if glow else 'steel:black', z0=h - 3.0))
+    g.merge(P.cylinder(r1 - 0.3, 0.2, segs, bevel=0.0, mat='glow:dim' if glow else 'steel:black', z0=h - 3.0))   # dim flue ember (no HDR disc from above)
     nb = int(h / 15)
     for i in range(1, nb + 1):
         z = i * h / (nb + 1)
@@ -500,7 +541,13 @@ def cooling_tower(h=140.0, rb=55.0, rt=34.0, rw=30.0):
         prof_o.append((r, z))
         prof_i.append((r - 0.6, z))
     prof = prof_o + [(prof_o[-1][0] + 0.2, h + 0.6)] + list(reversed(prof_i))
-    g.merge(P.lathe(prof, 64, 'concrete:pale'))
+    g.merge(P.lathe(prof, 64, 'concrete:shell'))
+    # ring beam at the lip + inspection platform / ladder hint, aviation beacons on the lip
+    g.merge(P.ring(rt + 0.9, rt - 0.2, 1.4, 64, bevel=0.0, mat='concrete:soot', z0=h - 0.8))
+    for k in range(4):
+        a = k * math.pi / 2 + 0.3
+        g.merge(beacon(math.cos(a) * (rt + 0.4), math.sin(a) * (rt + 0.4), h + 1.4, 1.0))
+    g.merge(P.ring(rb + 0.6, rb - 0.4, 1.2, 64, bevel=0.0, mat='concrete:grey', z0=9.0))
     ncol = 40
     for i in range(ncol):
         a = TAU * i / ncol
@@ -620,6 +667,9 @@ def blast_furnace():
 
 
 def stove(h=42.0, r=5.5):
+    """Cowper hot-blast stove: banded shell (stiffener ring every 3 m), 8 vertical ribs, mid and
+    top platforms with railings, caged ladder, hot-blast valve + stub main, dome with a manhole
+    and top platform."""
     g = Geo()
     prof = [(0.0, 0.0), (r + 0.6, 0.0), (r + 0.6, 1.2), (r, 1.4), (r, h)]
     for i in range(1, 9):
@@ -627,14 +677,27 @@ def stove(h=42.0, r=5.5):
         prof.append((r * math.cos(a), h + r * 0.9 * math.sin(a)))
     prof[-1] = (0.0, h + r * 0.9)
     g.merge(P.lathe(prof, 40, 'steel:grey'))
-    for z in range(6, int(h), 6):
-        g.merge(P.ring(r + 0.15, r - 0.1, 0.35, 40, bevel=0.0, mat='steel:rust', z0=z))
-    g.merge(P.ring(r + 2.0, r - 0.1, 0.35, 40, bevel=0.0, mat='trim:grating', z0=h - 2.0))
-    n = 16
-    pts = [(math.cos(TAU * i / n) * (r + 1.8), math.sin(TAU * i / n) * (r + 1.8), h - 1.65) for i in range(n + 1)]
-    g.merge(rail_line(pts, h=1.1, post=3.0, r=0.06))
-    g.merge(tube((r - 0.3, 0, 14.0), (r + 4.0, 0, 14.0), 1.2, 'steel:rust', 20))
+    for z in range(3, int(h), 3):
+        g.merge(P.ring(r + 0.22, r - 0.1, 0.3 if z % 6 else 0.5, 40, bevel=0.0, mat='steel:rust' if z % 6 else 'steel:dark', z0=z))
+    for k in range(8):
+        a = TAU * k / 8 + 0.2
+        g.merge(bx(0.35, 0.35, h - 2.0, (math.cos(a) * (r + 0.12), math.sin(a) * (r + 0.12), 1.4 + (h - 2.0) / 2), mat='steel:dark'))
+    for zp in (h * 0.42, h - 2.0):
+        g.merge(P.ring(r + 2.0, r - 0.1, 0.35, 40, bevel=0.0, mat='trim:grating', z0=zp))
+        n = 16
+        pts = [(math.cos(TAU * i / n) * (r + 1.8), math.sin(TAU * i / n) * (r + 1.8), zp + 0.35) for i in range(n + 1)]
+        g.merge(rail_line(pts, h=1.1, post=3.0, r=0.06))
+        for k in range(6):
+            a = TAU * k / 6
+            g.merge(beam((math.cos(a) * r, math.sin(a) * r, zp - 1.6), (math.cos(a) * (r + 1.8), math.sin(a) * (r + 1.8), zp - 0.05), 0.2, 0.2, 'steel:dark'))
+    g.merge(tube((r - 0.3, 0, 14.0), (r + 5.5, 0, 14.0), 1.2, 'steel:rust', 20))
+    g.merge(P.ring(1.6, 1.0, 0.5, 20, bevel=0.0, mat='steel:dark').rotate((0, 90, 0)).move(r + 2.2, 0, 14.0))
+    g.merge(bxz(2.2, 2.6, 2.6, r + 3.6, 0, 15.0, mat='steel:dark'))                      # hot-blast valve
+    g.merge(tube((-r + 0.3, 0, 4.0), (-r - 3.0, 0, 4.0), 0.8, 'steel:rust', 14))
+    g.merge(P.cylinder(0.9, 0.6, 14, bevel=0.0, mat='steel:dark', z0=h + r * 0.9 - 0.3))  # dome manhole
+    g.merge(bx(3.0, 3.0, 0.2, (0, 0, h + r * 0.9 + 0.35), mat='trim:grating'))
     g.merge(cheap_ladder(h - 2.0, 0, -r - 0.3, 0, facing=0.0))
+    g.merge(cheap_ladder(r * 0.9 + 2.4, 0, -r * 0.55, h - 2.0, facing=0.0, cage=False))
     return g, cyl_cols(r + 0.3, 0.0, h + r * 0.9)
 
 
@@ -667,6 +730,20 @@ def sts_crane():
         g.merge(beam((sx * (lx - 2.5), 2.0, 81.0), (sx * lx, -76.0, zb + 3.0), 0.35, 0.35, 'steel:dark'))
         g.merge(beam((sx * (lx - 2.5), 2.0, 81.0), (sx * lx, -40.0, zb + 3.0), 0.35, 0.35, 'steel:dark'))
         g.merge(beam((sx * (lx - 2.5), 2.0, 81.0), (sx * lx, 26.0, zb + 3.0), 0.45, 0.45, 'steel:dark'))
+    # connection detail: bolted gusset plates where the legs meet the sill beam, the portal
+    # girder and the A-frame; stiffener ribs every 4 m up the legs (no members passing through
+    # each other unconnected)
+    for sx in (-1, 1):
+        for y in (y_l, y_w):
+            for (zz, sz) in ((7.0, 2.6), (zb - 1.6, 3.2), (zb + 3.4, 2.4)):
+                for f in (-1, 1):
+                    g.merge(bx(0.06, sz, sz, (sx * lx + f * 0.95, y - (1.4 if y > 0 else -1.4) * 0.0, zz), mat='trim:bolted'))
+            for k in range(1, int(zb / 4.0)):
+                g.merge(bx(2.1, 2.1, 0.18, (sx * lx, y, k * 4.0), mat=col))
+            g.merge(bx(2.3, 2.3, 0.5, (sx * lx, y, zb - 0.25), mat='steel:dark'))
+        for yy in (-60.0, -30.0, 0.0, 20.0):
+            g.merge(bx(0.06, 2.2, 2.4, (sx * (lx + 0.83), yy, zb + 1.5), mat='trim:bolted'))
+            g.merge(bx(0.06, 2.2, 2.4, (sx * (lx - 0.83), yy, zb + 1.5), mat='trim:bolted'))
     # cross beams (portal)
     for y in (y_l, y_w, 26.0, -76.0, -45.0):
         g.merge(bx(2 * lx + 1.6, 1.4, 1.8, (0, y, zb + 1.2), mat=col))
