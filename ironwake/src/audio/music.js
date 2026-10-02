@@ -7,10 +7,12 @@
 //   bed    drone D1/A1 + resonant pipe swells + distant anvils + sparse FM "lamp" motif
 //   pulse  16th-note saturated bass ostinato (octave jumps, phrygian b2 push), beat-pumped
 //   drums  industrial kit: distorted kick 4/4, clang snare, 16th hats, metal hits, tom fills
-//   drive  stage-2 layer: 16th square arp with dotted-8th echo, shaker, pistons, risers
-//   boss   CINDERHOUND layer: brass stabs, tritone string tremolo, war drums
+//   drive  stage-2 layer: 16th resonant saw sequencer (pedal pattern + FM machine ticks) with
+//          dotted-8th echo, shaker, pistons, risers
+//   boss   CINDERHOUND layer: FM brass section stabs (1:1 FM blat, formants, breath onsets),
+//          tritone string tremolo, war drums
 // MusicPlayer mixes them (MIX table) with a state low-pass (muffled title / pause).
-import { gain, filt, chain, shaper, noiseSrc, makeRng, midiHz, sweep, envAD } from './dsp.js';
+import { gain, filt, chain, shaper, noiseSrc, makeRng, midiHz, sweep, envAD, brass, brassBell } from './dsp.js';
 import { makeFoundryIR } from './reverb.js';
 
 export const BPM = 132;
@@ -171,32 +173,47 @@ function bellStream(ac, dest, send) {
     envAD(g.gain, t, v, 0.004, 2.8);
   };
 }
-/** Monophonic square arp with a per-note filter decay. */
+/**
+ * Industrial step sequencer voice (stage-2 drive): detuned saw + pulse through a resonant
+ * low-pass "pluck" and saturation, plus an inharmonic FM tick (ratio 2.71) per step so every
+ * note has a struck-machinery edge. Pedal-tone pattern, not a chord arpeggio.
+ */
 function arpStream(ac, dest) {
-  const o = ac.createOscillator(); o.type = 'square';
-  const lp = filt(ac, 'lowpass', 2600, 2), g = gain(ac, 0);
-  chain(o, lp, g, dest); startAll(o);
+  const lp = filt(ac, 'lowpass', 2000, 6.5), g = gain(ac, 0);
+  chain(lp, shaper(ac, 2.2, 0.08), g, dest);
+  const saws = [['sawtooth', 0], ['sawtooth', 11], ['square', -6]].map(([type, det]) => {
+    const o = ac.createOscillator(); o.type = type; o.detune.value = det;
+    const og = gain(ac, type === 'square' ? 0.45 : 0.7); chain(o, og, lp); startAll(o); return o;
+  });
+  const car = ac.createOscillator(), mod = ac.createOscillator(), mg = gain(ac, 0), tg = gain(ac, 0);
+  chain(mod, mg); mg.connect(car.frequency); chain(car, filt(ac, 'highpass', 600, 0.7), tg, dest); startAll(car, mod);
   return (t, dur, m, v) => {
-    o.frequency.setValueAtTime(midiHz(m), t);
-    lp.frequency.setValueAtTime(3400, t); lp.frequency.exponentialRampToValueAtTime(900, t + dur);
+    const f = midiHz(m);
+    for (const o of saws) o.frequency.setValueAtTime(f, t);
+    lp.frequency.setValueAtTime(2600 * (0.7 + v * 6), t); lp.frequency.exponentialRampToValueAtTime(260, t + dur * 0.9);
     envAD(g.gain, t, v, 0.002, dur);
+    car.frequency.setValueAtTime(f * 4, t); mod.frequency.setValueAtTime(f * 4 * 2.71, t);
+    mg.gain.setValueAtTime(f * 6, t); mg.gain.exponentialRampToValueAtTime(f * 0.2, t + 0.04);
+    envAD(tg.gain, t, v * 0.22, 0.001, 0.045);
   };
 }
-/** Brass section: 4 voices x 2 detuned saws, shared filter/amp envelope per stab. */
-function brassStream(ac, dest, send) {
-  const lp = filt(ac, 'lowpass', 300, 1.2), g = gain(ac, 0);
-  chain(lp, shaper(ac, 1.9), g, dest); g.connect(send);
-  const voices = [];
-  for (let k = 0; k < 4; k++) for (const det of [-9, 8]) {
-    const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
-    o.connect(lp); startAll(o); voices.push([o, k]);
-  }
+/**
+ * Brass section: one FM brass player per chord note (dsp.brass: 1:1 FM, index 0 -> 3.5 blat in
+ * 60 ms, 1.2 / 2.5 kHz formants, 30 ms breath onset, pitch scoop), players slightly late and
+ * detuned against each other like a real section. Low notes get a smaller index (horn, not
+ * buzz). Returns stab(t, dur, notes, v).
+ */
+function brassStream(ac, dest, send, r) {
+  const bus = gain(ac, 1); bus.connect(dest); bus.connect(send);
+  const bell = brassBell(ac, bus, r, null, 4200)[0]; // one shared bell per section (cheap offline)
   return (t, dur, notes, v) => {
-    for (const [o, k] of voices) o.frequency.setValueAtTime(midiHz(notes[k % notes.length]), t);
-    lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(2400 * (0.6 + v * 5), t + 0.05);
-    lp.frequency.exponentialRampToValueAtTime(650, t + Math.max(0.12, dur));
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.02);
-    g.gain.setTargetAtTime(v * 0.6, t + 0.05, 0.1); g.gain.setValueAtTime(v * 0.6, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.1);
+    for (let k = 0; k < notes.length; k++) {
+      const m = notes[k];
+      brass(ac, bell, t + r.range(0, 0.014), r, { raw: true,
+        f: midiHz(m) * Math.pow(2, r.range(-7, 7) / 1200), dur: Math.max(0.08, dur), release: 0.11,
+        gain: v * 0.3, idx: m < 48 ? 2.4 : 3.5, blat: 0.06, scoop: r.range(25, 50), breath: 0.3,
+      });
+    }
   };
 }
 function strings(ac, dest, send, t, dur, m, v, p, trem) {
@@ -294,10 +311,11 @@ const SCORES = {
     const wet = gain(ac, 0.45);
     chain(dry, dl, dlp, fb, dl); dlp.connect(wet); wet.connect(panned(ac, dest, 0.5));
     const arp = arpStream(ac, dry), sh = hatStream(ac, dest, r, 0.55), piston = tomStream(ac, dest, send, r, -0.5);
-    const ORDER = [0, 2, 1, 3, 2, 4, 3, 1, 0, 2, 1, 3, 4, 3, 2, 1];
+    // pedal-tone machine pattern: root hammering with fifth / octave / phrygian b2 pushes
+    const ORDER = [0, 0, 2, 0, 1, 0, 3, 0, 0, 2, 0, 4, 1, 0, 3, 2];
     for (let bar = 0; bar < BARS; bar++) {
-      const root = ROOTS[bar] + 24, q = QUAL[bar];
-      const tones = [root, root + third(q), root + 7, root + 12, root + 12 + third(q)];
+      const root = ROOTS[bar] + 12, q = QUAL[bar];
+      const tones = [root, root + 7, root + 12, root + (q === 'M' ? 10 : 1), root + 12 + third(q)];
       for (let s = 0; s < 16; s++) {
         const t = bar * BAR + s * S16;
         arp(t, S16 * 0.8, tones[ORDER[s]], s % 4 === 0 ? 0.07 : 0.05);
@@ -309,7 +327,7 @@ const SCORES = {
   },
   boss(ac, dest, send, r) {
     const HITS = [0, 3, 6, 10, 12];
-    const bL = brassStream(ac, panned(ac, dest, -0.3), send), bR = brassStream(ac, panned(ac, dest, 0.3), send);
+    const bL = brassStream(ac, panned(ac, dest, -0.3), send, r), bR = brassStream(ac, panned(ac, dest, 0.3), send, r);
     const war = warStream(ac, dest, send, r);
     for (let bar = 0; bar < BARS; bar++) {
       const t0 = bar * BAR, root = ROOTS[bar] + 12, q = QUAL[bar];

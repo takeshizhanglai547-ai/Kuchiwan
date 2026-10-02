@@ -15,8 +15,8 @@
 //     skidding to a stop. Foot targets are critically damped springs, so state changes blend.
 //   * CROUCH: underdamped spring; landings, quick boosts and the AB wind-up push it.
 //   * RUMBLE: high-frequency thrust vibration while boosting / charging.
-//   * POSE LAYERS (blended 0..1, eased): ASSAULT-BOOST FLIGHT (pelvis pitched ~14 deg, torso
-//     ~31 deg into the flight, head and weapons counter-pitched to keep the aim, arms swept back
+//   * POSE LAYERS (blended 0..1, eased): ASSAULT-BOOST FLIGHT (pelvis pitched ~17 deg, torso
+//     ~35 deg into the flight, head and weapons counter-pitched to keep the aim, arms swept back
 //     unless firing, thighs trailing 26-40 deg with bent knees, toes pointed) and GROUND-BOOST
 //     SKATE (the rig floats ~0.6 m over the slab on bent knees, lead / trailing foot scissor with
 //     the trailing toe pointed down, torso follows the strafe roll instead of countering it).
@@ -30,21 +30,25 @@ export const RIG_MOTION = {
   // (combat r1: the lean is driven by the smoothed LOCAL acceleration too, so it lags the thrust
   //  ~0.15 s, digs back on stops and overshoots when the thrust cuts)
   leanOmega: 8.5, leanZeta: 0.5,
-  pitchVel: 0.22, pitchAcc: 0.3, rollVel: 0.14, rollAcc: 0.22, accRef: 320, leanMax: 0.55,
-  abPitch: 0.24, abChargePitch: -0.16, abRollK: 0.9,
+  pitchVel: 0.22, pitchAcc: 0.3, rollVel: 0.17, rollAcc: 0.22, accRef: 320, leanMax: 0.55,
+  abPitch: 0.3, abChargePitch: -0.16, abRollK: 0.9,
   // assault-boost flight pose layer
-  abPoseIn: 5, abPoseOut: 4,       // 1/s blend in / out
-  abTorsoPitch: 0.32,   // rad of extra torso pitch on top of the pelvis (torso ~31 deg in the world)
+  abPoseIn: 7, abPoseOut: 4,       // 1/s blend in / out
+  abTorsoPitch: 0.32,   // rad of extra torso pitch on top of the pelvis (torso ~35 deg in the world)
   abHeadComp: 0.85,     // share of the torso pitch the head takes back (keeps looking ahead)
   abArmSweep: 0.3,      // rad arms swing back (not firing)
-  abLegs: { L: [0.32, 1.1], R: [0.78, 0.34] },   // [thigh back from vertical, knee bend] rad per leg:
-                                                 // L tucked, R trailing long (asymmetric silhouette)
-  abLegSpread: 1.3,     // m foot half spread
+  abLegs: { L: [0.5, 1.45], R: [0.8, 0.4] },    // [thigh back from vertical, knee bend] rad per leg:
+                                                 // L tucked high, R trailing long (asymmetric silhouette)
+  abLegSpread: { L: 1.9, R: 1.6 },               // m foot offset from the centre line: the legs splay
+                                                 // into a V, so the flight pose reads from the chase
+                                                 // camera too (trailing legs alone foreshorten away)
   abFootFollow: 0.85, abFootPoint: 0.42,          // foot follows the shin (0..1) + toe-down (rad)
   // ground-boost skate pose layer
-  skateHover: 0.6,      // m the rig floats over the slab at full boost
-  skateTrailPoint: 0.34, // rad toe-down of the trailing foot
-  skateTorsoRoll: 0.3,  // share of the pelvis roll the torso ADDS (instead of countering it)
+  skateHover: 0.8,      // m the rig floats over the slab at full boost
+  skateTrailPoint: 0.4, // rad toe-down of the trailing foot
+  skateTrailOut: 0.9,   // m the trailing foot (the one behind along the travel) is dragged further back
+  skateTrailLift: 0.35, // m it lifts off the slab (one-foot skate: the silhouette tilts with the lean)
+  skateTorsoRoll: 0.32, // share of the pelvis roll the torso ADDS (instead of countering it)
   skateArmSweep: 0.12,
   fireSplay: 0.2,       // rad the firing arm rolls OUTWARD (forearm counter-rolls, weapon stays level):
                         // elbow and gun move ~0.5 m clear of the torso so the chase camera sees the flash
@@ -65,7 +69,7 @@ export const RIG_MOTION = {
   footOmega: 24, footOmegaAir: 10,
   stanceW: 1.34, boostW: 1.5,
   boostLead: 0.55, boostTrailLift: 0.22,
-  trailPerMs: 0.008, trailMax: 1.1, airTrailPerMs: 0.011, airTrailMax: 1.5,
+  trailPerMs: 0.0105, trailMax: 1.3, airTrailPerMs: 0.011, airTrailMax: 1.5,
   skidBrace: 1.25,      // m the lead foot plants ahead when skidding
   walkCycle: 7,         // m of travel per full walk cycle
   walkStride: 1.0, walkLift: 0.75,
@@ -117,7 +121,7 @@ export class RigMotion {
     this.walkPhase = 0; this.walkAmt = 0;
     this.drop = 0;
     this.abAmt = 0; this.skate = 0;
-    this.footFollow = 0.55; this.footPoint = 0.25;
+    this.footFollow = 0.55; this.footPoint = 0.25; this.trailSide = -1;
     this.prevVel = new THREE.Vector3(); this.accS = new THREE.Vector3();
     this.time = 0;
     this.wasGrounded = true;
@@ -307,6 +311,10 @@ export class RigMotion {
     if (tl > trailMax) { trx *= trailMax / tl; trz *= trailMax / tl; }
     // skid: plant the feet ahead along the motion (brace), not behind
     const sdx = speedH > 1 ? v.x / speedH : 0, sdz = speedH > 1 ? v.z / speedH : 0;
+    // skate: the foot BEHIND along the travel direction trails (R going forward / left, L going
+    // right / back), so strafes to either side tilt the whole silhouette into the motion
+    const trailSide = sdx + sdz * 0.4 >= 0 ? -1 : 1;
+    this.trailSide = trailSide;
     for (const s of ['L', 'R']) {
       const leg = this.legs[s], o = s === 'L' ? 0 : 3, sg = leg.sign;
       let fx, fy, fz;
@@ -314,7 +322,8 @@ export class RigMotion {
         const W = M.stanceW + (M.boostW - M.stanceW) * b;
         // stance in the hip frame: lead (L) / trail (R) foot while boosting, walk cycle otherwise
         let lx = sg * W, lz = 0, lift = 0;
-        if (boosting) { lz = sg * M.boostLead * b; if (sg < 0) lift = M.boostTrailLift * b; }
+        const isTrail = sg === trailSide;
+        if (boosting) { lz = (isTrail ? -1 : 1) * M.boostLead * b; if (isTrail) lift = M.boostTrailLift * b; }
         else if (wa > 0.01) {
           const phs = ph + (sg > 0 ? 0 : Math.PI);
           lz = Math.cos(phs) * M.walkStride * wa;
@@ -326,8 +335,11 @@ export class RigMotion {
           // brace: both feet forward along the slide, the lead one far ahead
           const brace = skid * (sg > 0 ? M.skidBrace : 0.35);
           fx += sdx * brace; fz += sdz * brace;
-        } else { fx += trx; fz += trz; }
-        fy = this.ankleY + lift + hover + (sg < 0 ? sk * 0.25 : 0);
+        } else {
+          fx += trx; fz += trz;
+          if (isTrail) { fx -= sdx * sk * M.skateTrailOut; fz -= sdz * sk * M.skateTrailOut; }
+        }
+        fy = this.ankleY + lift + hover + (isTrail ? sk * M.skateTrailLift : 0);
       } else {
         // airborne poses relative to the pelvis: tucked / dangling / trailing
         let ax = sg * 1.25, ay = -3.7, az = sg * 0.35;
@@ -336,7 +348,7 @@ export class RigMotion {
         else if (mode === 'ab') {
           // flight: thighs trail, knees bent (per-leg angles -> ankle target below the hip)
           const [th, kn] = M.abLegs[s];
-          ax = sg * M.abLegSpread;
+          ax = sg * M.abLegSpread[s];
           ay = leg.hip.y - (leg.L1 * Math.cos(th) + leg.L2 * Math.cos(th + kn));
           az = leg.hip.z - (leg.L1 * Math.sin(th) + leg.L2 * Math.sin(th + kn));
         }
@@ -362,7 +374,7 @@ export class RigMotion {
     for (const s of ['L', 'R']) {
       const o = s === 'L' ? 0 : 3;
       _tgt.set(this.feetX[o], this.feetX[o + 1], this.feetX[o + 2]);
-      this._toe = !air && s === 'R' ? sk * M.skateTrailPoint : 0;
+      this._toe = !air && (s === 'L' ? 1 : -1) === this.trailSide ? sk * M.skateTrailPoint : 0;
       this._solveLeg(s, _tgt, _ppos, _qinv, air);
     }
   }

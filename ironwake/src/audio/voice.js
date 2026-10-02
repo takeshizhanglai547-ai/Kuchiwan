@@ -1,11 +1,16 @@
-// src/audio/voice.js — handler LEDGER's radio transmission (owner: audio designer).
+// src/audio/voice.js — handler LEDGER's radio transmissions (owner: audio designer).
 //
-// No recorded dialogue exists, so the comm is a procedural formant "voice" (glottal saw +
-// three vowel formants + fricative / plosive noise, natural ~5 syllables/s with phrase
-// declination) pushed through a hard radio chain: 380 Hz-3.1 kHz band limit, presence peak,
-// heavy saturation (= compression), static bed, squelch open / close. At subtitle level it
-// reads as "someone talking on a bad channel" — the subtitles carry the words.
+// RECORDED VOICE-OVER (the normal path): every LEDGER line (src/ui/radio.js RADIO + the briefing
+// intel) is spoken by an offline TTS and baked through a field-radio chain by
+// assets/audio/build_vo.py -> assets/audio/vo/radio_<key>.mp3 (manifest sfx_radio_<key>,
+// src/audio/vo_table.js). transmit() plays such a buffer as a live transmission: squelch open
+// click + static burst, a band-passed hiss + transmitter buzz bed with slow fading flutter and
+// random RF ticks under the words, squelch close + carrier tail; stop() cuts it cleanly.
+//   transmit(ac, dest, t, buffer, r, o = COMM) -> {end, stop(at)}     (COMM_BRIEF: quieter channel)
 //
+// FALLBACK (a line with no recording, e.g. text edited after the VO build): a procedural
+// formant "voice" (glottal saw + three vowel formants + fricative / plosive noise, ~5
+// syllables/s with phrase declination) through the same style of radio chain.
 //   speak(ac, dest, t, seconds, r, o) -> end time.  o: {f0, rate, level}
 import { gain, filt, chain, shaper, noiseSrc, makeRng } from './dsp.js';
 
@@ -98,9 +103,99 @@ export function speak(ac, dest, t, seconds, r = makeRng(5), o = VOICE) {
   return end + 0.2;
 }
 
-/** Offline 4.5 s demo for the sheet. */
+// ---------------------------------------------------------------- recorded VO transmission
+/** Live comm dressing around a voice-over buffer (the buffer is already band-limited). */
+export const COMM = {
+  level: 1.0,          // VO buffer gain into the voice bus (files sit at -16 dBFS speech RMS)
+  lead: 0.085,         // s from squelch open to the first word
+  static: 0.0105,      // carrier hiss under the voice (~-31 dB re speech)
+  staticBp: [2300, 0.5],
+  hum: 0.0022,         // 120 Hz transmitter buzz under the hiss (harmonics inside the radio band only)
+  crackleEvery: [0.35, 1.4], crackle: 0.05, // intermittent RF ticks
+  fade: 0.018,         // s voice fade when a transmission is cut off
+};
+
+/** The briefing is a recorded sortie message: same dressing, much quieter channel noise. */
+export const COMM_BRIEF = { ...COMM, static: 0.0035, crackle: 0.012, hum: 0.0008 };
+
+/**
+ * Play a pre-rendered VO buffer as a radio transmission: squelch open (click + static burst),
+ * the voice with a live static bed + RF crackle under it, squelch close + carrier tail.
+ * Returns {end, stop(at)}; stop() cuts the transmission at `at` with a proper squelch close.
+ */
+export function transmit(ac, dest, t, buffer, r = makeRng(9), o = COMM) {
+  const vEnd = t + o.lead + buffer.duration;
+  const out = gain(ac, 1); out.connect(dest);
+  // ---- voice
+  const src = ac.createBufferSource(); src.buffer = buffer;
+  const vg = gain(ac, o.level); chain(src, vg, out);
+  src.start(t + o.lead);
+  // ---- static bed: band-passed hiss + carrier hum, both with a slow fading flutter
+  const tail = 0.2;
+  const st = noiseSrc(ac, 'white', t, vEnd - t + tail + 0.1, r);
+  const stbp = filt(ac, 'bandpass', o.staticBp[0], o.staticBp[1]);
+  const stg = gain(ac, 0);
+  chain(st, stbp, stg, out);
+  const hum = ac.createOscillator(); hum.type = 'sawtooth'; hum.frequency.value = 120;
+  const humLp = filt(ac, 'bandpass', 600, 0.8), humG = gain(ac, 0); // the comm HP removes the 120 Hz fundamental
+  chain(hum, humLp, humG, out);
+  const flut = ac.createOscillator(); flut.frequency.value = r.range(0.7, 1.3);
+  const flutG = gain(ac, o.static * 0.35); chain(flut, flutG, stg.gain);
+  // ---- RF crackle ticks under the voice
+  const ck = noiseSrc(ac, 'crackle', t, vEnd - t + 0.05, r, r.range(0.8, 1.2));
+  const ckbp = filt(ac, 'bandpass', 3000, 0.9), ckg = gain(ac, 0);
+  chain(ck, ckbp, ckg, out);
+  for (let tt = t + o.lead + r.range(...o.crackleEvery); tt < vEnd - 0.1; tt += r.range(...o.crackleEvery)) {
+    ckg.gain.setValueAtTime(0, tt); ckg.gain.linearRampToValueAtTime(o.crackle * r.range(0.5, 1), tt + 0.004);
+    ckg.gain.linearRampToValueAtTime(0, tt + r.range(0.02, 0.06));
+  }
+  // squelch open: click + static burst that settles to the bed
+  const clickG = gain(ac, 0), clickO = ac.createOscillator(); clickO.type = 'square'; clickO.frequency.value = 1900;
+  chain(clickO, filt(ac, 'bandpass', 1900, 2), clickG, out);
+  clickG.gain.setValueAtTime(0.22, t); clickG.gain.exponentialRampToValueAtTime(0.001, t + 0.028); clickG.gain.setValueAtTime(0, t + 0.03);
+  stg.gain.setValueAtTime(0, t); stg.gain.linearRampToValueAtTime(o.static * 6, t + 0.008);
+  stg.gain.setTargetAtTime(o.static, t + 0.02, 0.025);
+  humG.gain.setValueAtTime(0, t); humG.gain.linearRampToValueAtTime(o.hum, t + 0.02);
+  const close = (tc) => {
+    // squelch close: static swell, carrier drop, a lower click
+    stg.gain.cancelScheduledValues(tc); humG.gain.cancelScheduledValues(tc); clickG.gain.cancelScheduledValues(tc);
+    stg.gain.setValueAtTime(o.static, tc); stg.gain.linearRampToValueAtTime(o.static * 5, tc + 0.02);
+    stg.gain.exponentialRampToValueAtTime(0.0003, tc + tail - 0.03); stg.gain.setValueAtTime(0, tc + tail - 0.02);
+    humG.gain.setValueAtTime(o.hum, tc); humG.gain.linearRampToValueAtTime(0, tc + 0.05);
+    clickO.frequency.setValueAtTime(1350, tc + tail - 0.05);
+    clickG.gain.setValueAtTime(0.2, tc + tail - 0.05); clickG.gain.exponentialRampToValueAtTime(0.001, tc + tail - 0.02); clickG.gain.setValueAtTime(0, tc + tail - 0.019);
+    for (const s of [st, hum, flut, clickO]) { try { s.stop(tc + tail + 0.05); } catch (e) { /* already stopped */ } }
+    try { ck.stop(tc + 0.01); } catch (e) { /* already stopped */ }
+  };
+  for (const s of [hum, flut, clickO]) s.start(t);
+  close(vEnd);
+  const h = {
+    end: vEnd + tail,
+    stop(at) {
+      if (at >= vEnd) return h.end;
+      vg.gain.cancelScheduledValues(at); vg.gain.setValueAtTime(o.level, at); vg.gain.linearRampToValueAtTime(0, at + o.fade);
+      try { src.stop(at + o.fade + 0.01); } catch (e) { /* not started */ }
+      ckg.gain.cancelScheduledValues(at); ckg.gain.setValueAtTime(0, at);
+      close(at + o.fade);
+      h.end = at + o.fade + tail;
+      return h.end;
+    },
+  };
+  // free the graph after the tail
+  clickO.onended = () => { for (const n of [out, vg, stbp, stg, humLp, humG, flutG, ckbp, ckg, clickG]) { try { n.disconnect(); } catch (e) { /* gone */ } } };
+  return h;
+}
+
+/** Offline 4.5 s demo for the sheet (procedural fallback voice). */
 export async function renderVoiceDemo(OAC, sr) {
   const ac = new OAC(1, Math.ceil(sr * 4.8), sr);
   speak(ac, ac.destination, 0.05, 4.3, makeRng(77));
+  return { buffer: await ac.startRendering() };
+}
+
+/** Offline render of one VO buffer through the live comm dressing (sheet). */
+export async function renderTransmission(OAC, sr, buffer, seed = 77, o = COMM) {
+  const ac = new OAC(1, Math.ceil(sr * (buffer.duration + o.lead + 0.5)), sr);
+  transmit(ac, ac.destination, 0.02, buffer, makeRng(seed), o);
   return { buffer: await ac.startRendering() };
 }

@@ -3,13 +3,20 @@
 //   actor:stagger   electric overload burst + crawling arcs over the target while it is staggered
 //   (poll)          low-AP enemies spit sparks (< 35% AP) and lick flames (< 18% AP)
 //   weapon:blade    blade beam ignition (windup) + swept slash arc (slash)
-//   player:qb       afterimage of the rig (fx/ghost.js)
-//   (poll)          assault-boost heated-air wake ribbon behind the player's back boosters
+//   player:qb       afterimage of the rig (fx/ghost.js) + per-nozzle fire tongues
+//   actor:hit       HULL FLASH: a brief white-orange flash over an enemy the player hits, sized to
+//                   the target and placed in front of it, so rifle hits read at 75-300 m even under
+//                   the lock marker (the impact light relights the hull at the same time)
+//   (poll)          per lit nozzle: exit glow; main bells also an end-on exhaust core (white core
+//                   + shock rings) and a tapered jet streak; assault boost adds a wide heat halo
+//   (poll)          assault-boost heated-air wake ribbon behind the player's back boosters (off)
+// update() runs AFTER the particle sim each step (fx/particles.js), so one-step sprites render.
 import * as THREE from 'three';
 
 const ARC = [2.6, 4.2, 7.5];
 const AB_WAKE = false;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3();
+const _jetOpts = { scale: 1, vel: null, normal: null, yaw: 0, incoming: null };
 
 export class Status {
   constructor(game, fx) {
@@ -24,12 +31,16 @@ export class Status {
       ev.on('actor:stagger', (e) => this._onStagger(e)),
       ev.on('weapon:blade', (e) => this._onBlade(e)),
       ev.on('player:qb', (f) => this._onQb(f)),
+      ev.on('actor:hit', (e) => this._onHit(e)),
     ];
+    this.flashT = new Map();   // target -> last hull-flash time (rate limit)
+    this.time = 0;
   }
 
   reset() {
     this.stag.length = 0;
     this.hurtT.clear();
+    this.flashT.clear(); this.time = 0;
     this.abTrail[0] = this.abTrail[1] = -1;
   }
 
@@ -40,6 +51,22 @@ export class Status {
     let s = this.stag.find((x) => x.actor === t);
     if (!s) { s = { actor: t, t: 0, arcT: 0, burst: true }; this.stag.push(s); }
     s.t = 0; s.arcT = 0.03; s.burst = true;
+  }
+
+  _onHit(e) {
+    const t = e && e.target, h = e && e.hit;
+    if (!t || !t.alive || t.team === 'player' || !h || !h.source || h.source.team !== 'player') return;
+    const last = this.flashT.get(t);
+    if (last !== undefined && this.time - last < 0.07) return;
+    this.flashT.set(t, this.time);
+    const cam = this.game.camera.position;
+    t.aimPoint(_p);
+    _c.copy(cam).sub(_p);
+    const dist = _c.length() || 1;
+    _p.addScaledVector(_c, Math.min(dist * 0.5, (t.radius || 2.5) * 1.1) / dist);
+    // the flash grows a little with distance (stays readable at range) and with the hit weight
+    const w = Math.min(1.6, 0.7 + (h.impact || 100) / 400);
+    this.fx.spawn('hull_flash', _p, null, Math.max(0.8, (t.radius || 2.5) / 2.6) * w * Math.max(1, dist / 90));
   }
 
   _onBlade(e) {
@@ -53,7 +80,8 @@ export class Status {
     const p = this.game.player;
     if (!p || !p.rig) return;
     if (p.syncSim) p.syncSim();   // sim pose, not the last interpolated render pose
-    this.fx.ghosts.trigger(p.rig.root, 1);
+    // afterimage: ONE faint heat-smear copy (combat r1: bright edge-lit copies read as a hologram)
+    this.fx.ghosts.trigger(p.rig.root, 0.16);
     // jet flare out of every nozzle that faces away from the burst (located on the real
     // nozzles, so it reads from any camera side instead of hiding behind the body)
     const q = f && f.qb;
@@ -84,6 +112,7 @@ export class Status {
 
   update(dt) {
     const g = this.game, fx = this.fx, r = this.rng;
+    this.time += dt;
     // eager afterimage build (keeps scene object counts constant across restarts)
     if (!this.prepared && g.player && g.player.rig) { this.prepared = g.player.rig.root; fx.ghosts.trigger(this.prepared, 0); fx.ghosts.clear(); }
     if (fx.freeze) return;
@@ -133,7 +162,7 @@ export class Status {
     // --- assault boost: the plumes run long and white-hot for the whole flight (rig.flare is
     //     the rig's public burst knob; it decays on its own when the boost ends)
     const plm = g.player && g.player.motor;
-    if (plm && plm.mode === 'ab' && g.player.rig && g.player.rig.flare) g.player.rig.flare(plm.abCharging ? 0.25 * (plm.abCharge || 0) : 0.6);
+    if (plm && plm.mode === 'ab' && g.player.rig && g.player.rig.flare) g.player.rig.flare(plm.abCharging ? 0.25 * (plm.abCharge || 0) : 0.85);
     // --- nozzle exit glows (the plume seen end-on still reads as a hot core + halo)
     for (const a of g.actors) {
       const rig = a.rig;
@@ -148,6 +177,22 @@ export class Status {
         const endOn = Math.max(0, -_c.dot(_d));
         const gs = Math.max(0.35, (nz.radius || 0.4) / 0.45) * Math.min(1.4, nz.level * (1 + (rig.qbFlash || 0))) * (1 + 1.3 * endOn * endOn);
         fx.spawn('nozzle_glow', _p, null, gs);
+        // main bells seen end-on (chase camera behind a boost): blinding core + shock-diamond rings,
+        // so the exhaust reads as a jet looking INTO the camera instead of collapsing to dots
+        if (nz.radius >= 0.3 && endOn > 0.25 && nz.level > 0.3) {
+          const ec = (0.2 + 0.9 * nz.level * nz.level) * (endOn - 0.25) / 0.75 * Math.max(0.7, nz.radius / 0.45) * (1 + 0.6 * (rig.qbFlash || 0));
+          _p.addScaledVector(_d, -Math.max(0.2, nz.radius * 0.6));
+          fx.spawn('exhaust_core', _p, null, ec);
+        }
+        // main bells in a strong burn: a tapered white-hot JET streak riding the rig (head at the
+        // exit, tail out along the exhaust; spawned with its velocity pointing INTO the bell so the
+        // streak's trailing tail is the jet). Long in AB, shorter in a ground boost.
+        if (nz.radius >= 0.3 && nz.level > 0.45) {
+          const ab = a.motor && a.motor.mode === 'ab' && !a.motor.abCharging;
+          _jetOpts.scale = nz.level * (ab ? 1.35 : 0.75) * Math.max(0.7, nz.radius / 0.44);
+          _b.copy(_d);   // +Z of the nozzle = into the bell
+          fx.spawn('exhaust_jet', _p, _b, _jetOpts);
+        }
         // assault boost: the main boosters wear a wide heat halo (reads from the chase camera)
         if (a === g.player && nz.group === 'back' && a.motor && a.motor.mode === 'ab' && !a.motor.abCharging && nz.radius > 0.3) {
           fx.spawn('ab_halo', _p, null, 0.8 + 0.6 * endOn);

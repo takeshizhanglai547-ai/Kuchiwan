@@ -30,9 +30,11 @@
 //     and settles at abSpeed.
 import * as THREE from 'three';
 import { EnergyGauge } from './energy.js';
-import { makeContact } from '../core/physics.js';
+import { makeContact, makeHit } from '../core/physics.js';
 
 const _t = new THREE.Vector3(), _h = new THREE.Vector3(), _d = new THREE.Vector3(), _pv = new THREE.Vector3();
+const _so = new THREE.Vector3(), _down = new THREE.Vector3(0, -1, 0), _sHit = makeHit();
+const SETTLE_MAX = 1.5;   // m: a spawn / teleport point up to this far above a floor settles onto it
 
 export function makeIntent() {
   return {
@@ -87,6 +89,13 @@ export class MechMotor {
 
   reset(pos, yaw) {
     this.pos.copy(pos);
+    // settle onto the floor right under the point: a spawn marker a few dm above the slab would
+    // otherwise drop the rig for ~8 steps and fire a landing (dust ring + crouch) on every
+    // restart / staged shot. Deliberate air spawns (more than SETTLE_MAX up) keep their height.
+    if (this.physics && this.physics.raycast) {
+      _so.set(pos.x, pos.y + 1, pos.z);
+      if (this.physics.raycast(_so, _down, 1 + SETTLE_MAX, _sHit, { ground: true })) this.pos.y = Math.min(pos.y, _so.y - _sHit.dist + 0.01);
+    }
     this.vel.set(0, 0, 0);
     this.accel.set(0, 0, 0);
     this.yaw = yaw;

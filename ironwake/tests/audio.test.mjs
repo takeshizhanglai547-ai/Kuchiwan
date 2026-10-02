@@ -72,3 +72,23 @@ test('rng is deterministic and seed-sensitive', () => {
   assert.deepEqual(sa, sb); assert.notDeepEqual(sa, sc);
   for (const v of sa) assert.ok(v >= 0 && v < 1);
 });
+
+// ---- handler LEDGER voice-over (assets/audio/build_vo.py)
+test('every LEDGER radio line has a recorded voice-over in the manifest', async () => {
+  const { VO_TABLE } = await import('../src/audio/vo_table.js');
+  const { RADIO } = await import('../src/ui/radio.js');
+  const { MANIFEST } = await import('../src/manifest.js');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  assert.ok(VO_TABLE.brief, 'briefing VO missing');
+  for (const key of Object.keys(RADIO)) assert.ok(VO_TABLE[key], `no VO for radio line "${key}" (run python3 assets/audio/build_vo.py)`);
+  for (const [key, v] of Object.entries(VO_TABLE)) {
+    const m = MANIFEST[`sfx_${v.id}`];
+    assert.ok(m, `manifest lacks sfx_${v.id}`);
+    assert.ok(fs.existsSync(path.join(root, m.url)), `missing ${m.url}`);
+    assert.ok(v.dur > 0.5 && v.dur < 40, `${key}: duration ${v.dur}`);
+    // edited subtitle text -> audio.js plays the most similar recording; flag it, do not fail
+    if (RADIO[key] && RADIO[key].en !== v.en) console.warn(`[vo] "${key}" subtitle changed since the VO build; re-run assets/audio/build_vo.py`);
+  }
+});

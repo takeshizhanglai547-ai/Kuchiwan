@@ -134,7 +134,10 @@ export const SHOTS = {
     frames: [0, 10, 20], hud: false,
     async setup(S) {
       S.begin({ clear: true });
-      S.place(S.rel(85, 20), S.yaw);
+      // (movement lane) a lane whose whole ~100 m strafe (and the chase camera's path) is free:
+      // arena swaps had put a container in the old fixed path, so the rig stalled against it
+      const L = S._lane = findClearLane(S, S.rel(85, 20), [[0, 4, 0, -110], [-30, 4, -30, -110]]);
+      S.place(L.pos, L.yaw);
       S.press('move_left'); S.steps(50);
     },
   },
@@ -280,7 +283,9 @@ export const SHOTS = {
         boss.distanceToTarget() > 40 && boss.distanceToTarget() < 60 && boss.loadout.slots.L.ready;
       for (let i = 0; i < 2400 && !lane(); i++) { track(); S.steps(1); }
       if (lane()) boss._startAttack('blade');
-      for (let i = 0; i < 30 && boss.atk === 'blade' && boss.atkT < 0.17; i++) { track(); S.steps(1); }
+      // (enemies lane r2) the blade now RUSHES in first (boost + gap-close QB) and tells only inside
+      // ~42 m: capture the tell itself (arm drawn back, glint pulsing), not the approach
+      for (let i = 0; i < 150 && boss.atk === 'blade' && (boss.atkStage !== 'tell' || boss.atkT < 0.17); i++) { track(); S.steps(1); }
       track();
     },
   },
@@ -467,11 +472,12 @@ export const SHOTS = {
       const mt = S.spawn('mt', st.pos, face);
       scriptWalk(mt, 2.4);
       S.steps(75);
+      settleShotCam(S, () => SHOTS.enemy_mt.camera(S));
     },
     camera(S) {
       const e = S.enemy('mt'); const st = S._stage;
       const p = e ? e.pos : st.pos;
-      S.orbit(V(p.x, p.y + 2.6, p.z), THREE.MathUtils.radToDeg(st.face) - 34, 12, 12, 40);
+      S.orbit(V(p.x, p.y + 2.5, p.z), THREE.MathUtils.radToDeg(st.face) - 34, 11, 10.2, 40);
     },
   },
 
@@ -496,7 +502,7 @@ export const SHOTS = {
   },
 
   enemy_drone: {
-    desc: 'GNAT ducted-fan drone hovering, sun-lit three-quarter view from slightly below (enemies lane)',
+    desc: 'GNAT ducted-fan drone hovering, sun-lit front three-quarter view from slightly above (enemies lane)',
     frames: [0, 6], hud: false,
     async setup(S) {
       S.begin({ clear: true });
@@ -507,11 +513,13 @@ export const SHOTS = {
       const d = S.spawn('drone', at, face);
       scriptHover(d, at);
       S.steps(40);
+      settleShotCam(S, () => SHOTS.enemy_drone.camera(S));
     },
     camera(S) {
       const e = S.enemy('drone'); const st = S._stage;
       const p = e ? e.pos : st.pos;
-      S.orbit(V(p.x, p.y - 0.1, p.z), THREE.MathUtils.radToDeg(st.face) - 28, -4, 5.0, 42);
+      const f = 0.45;   // aim between the body centre and the sensor nose
+      S.orbit(V(p.x + Math.sin(st.face) * f, p.y - 0.05, p.z + Math.cos(st.face) * f), THREE.MathUtils.radToDeg(st.face) - 14, 6, 3.9, 40);
     },
   },
 
@@ -537,7 +545,7 @@ export const SHOTS = {
           const dF = Math.abs(Math.atan2(Math.sin(cy - yaw - 0.5), Math.cos(cy - yaw - 0.5)));
           // open foreground: nothing within 12 m of the camera toward the relay at low height
           const lowOk = phys.lineOfSight(V(c.x, sp.pos.y + 2.5, c.z), V(sp.pos.x + toC.x * 5.6, sp.pos.y + 2.5, sp.pos.z + toC.z * 5.6));
-          const score = dS * 1.0 + dF * 0.8 + (dist - 25) * 0.02 + (lowOk ? 0 : 0.6);
+          const score = dS * 0.6 + dF * 1.4 + (dist - 25) * 0.02 + (lowOk ? 0 : 0.6);
           if (!best || score < best.score) best = { score, cy, dist, sp };
           break;
         }
@@ -549,6 +557,7 @@ export const SHOTS = {
       S.place(V(sp.pos.x + Math.sin(camYaw) * 90, sp.pos.y, sp.pos.z + Math.cos(camYaw) * 90), camYaw + Math.PI);
       S.spawn('turret', sp.pos, yaw);
       S.steps(45);
+      settleShotCam(S, () => SHOTS.enemy_relay.camera(S));
     },
     camera(S) {
       const r = S._relay;
@@ -804,8 +813,15 @@ export const SHOTS = {
       S._dk = d.pos.clone();
       dealDamage(S.game, d, { damage: 9999, impact: 0, direct: true, point: d.pos.clone(), dir: V(0, 0, 1), source: S.player });
       S.steps(8);
+      S._dkd = d;
     },
-    camera(S) { const p = S._dk; S.cam(V(p.x + 22, p.y - 6, p.z - 26), V(p.x, p.y - 9, p.z), 50); },
+    // (enemies lane r2) planted camera that PANS with the falling wreck (critic: the old fixed look
+    // point sat 9 m under the kill, so the pop and tumble happened at the frame edge)
+    camera(S) {
+      const p = S._dk, d = S._dkd, q = d && d.root.visible ? d.pos : (S._dkLast || p);
+      S._dkLast = q.clone();
+      S.cam(V(p.x + 15, p.y - 3, p.z - 18), V(q.x, q.y - 1.5, q.z), 44);
+    },
   },
 
   relay_reinforce: {
@@ -930,6 +946,50 @@ export const SHOTS = {
       S.orbit(V(p.x, p.y, p.z), THREE.MathUtils.radToDeg(st.face) - 140, -32, 5.2, 45);
     },
   },
+
+  // --- enemies AI lane (appended, r2) --------------------------------------------------------
+  boss_stagger_window: {
+    desc: 'CINDERHOUND stagger window: the frame slumps (rifle arm down, head down, knees give), arcs crawl over the joints, sensor dimmed (enemies AI lane r2)',
+    frames: [0, 24, 70], hud: false,
+    async setup(S) {
+      const boss = stageBoss(S, 100, 0, 60);
+      // the player on the sun side, so the rig faces into the low key light
+      const sy = sunYaw(S), pp = offsetYaw(boss.pos, sy, 60);
+      S.place(pp, sy + Math.PI);
+      boss.motor.reset(boss.pos, sy); boss.yaw = boss.prevYaw = sy;
+      S.aimAt(boss.aimPoint(V(0, 0, 0)));
+      S.steps(4);
+      boss.acs.value = boss.acs.cfg.max * 0.999;          // gauge at the brink: one cannon round overloads it
+      dealDamage(S.game, boss, { damage: 600, impact: 1500, direct: true, point: boss.aimPoint(V(0, 0, 0)), dir: V(-Math.sin(sy), 0, -Math.cos(sy)), source: S.player, weapon: 'cannon_heavy' });
+      S.steps(12);
+    },
+    camera(S) {
+      const b = S.game.enemies.boss;
+      S.orbit(V(b.pos.x, b.pos.y + 4.8, b.pos.z), THREE.MathUtils.radToDeg(sunYaw(S)) + 38, 5, 25, 40);
+    },
+  },
+
+  boss_qb_lean: {
+    desc: 'CINDERHOUND lateral quick boost: body whips against the burst then banks into it, legs trail, nozzles flare (enemies AI lane r2)',
+    frames: [0, 5, 10, 16], hud: false,
+    async setup(S) {
+      const boss = stageBoss(S, 100, 0, 70);
+      const sy = sunYaw(S), pp = offsetYaw(boss.pos, sy, 70);
+      S.place(pp, sy + Math.PI);
+      boss.motor.reset(boss.pos, sy); boss.yaw = boss.prevYaw = sy;
+      S.aimAt(boss.aimPoint(V(0, 0, 0)));
+      S.steps(20);
+      // a reactive dodge: the brain's own lateral quick boost (perpendicular to the player line)
+      boss.dodge = 'rifle'; boss.dodgeT = 0; boss.dodgeCd = 0;
+      for (let i = 0; i < 6 && !boss.motor.flags.qb; i++) S.steps(1);
+    },
+    camera(S) {
+      // planted camera on the lit side, panning with the rig (the burst crosses the frame)
+      const b = S.game.enemies.boss, a = sunYaw(S) + 0.35;
+      if (!S._qbc || S._qbcB !== b.log) { S._qbcB = b.log; S._qbc = V(b.pos.x + Math.sin(a) * 30, b.pos.y + 6, b.pos.z + Math.cos(a) * 30); }
+      S.cam(S._qbc, V(b.pos.x, b.pos.y + 5, b.pos.z), 38);
+    },
+  },
 };
 
 export const SHOT_NAMES = Object.keys(SHOTS);
@@ -1052,6 +1112,17 @@ function scriptHover(e, at) {
     if (this.body3d) { this.body3d.rotation.x = 0.08; this.body3d.rotation.z = -0.05; }
     if (this.anim) this.anim.update(dt);
   };
+}
+
+/**
+ * Enemies-lane close-ups: apply the shot camera and step a few frames, so the distance-scaled
+ * long-range signature sprites (models.js SIGNATURE: eye / beacon glows sized for the camera
+ * distance at spawn time) are re-spawned for THIS camera, not the chase camera 70-90 m away.
+ */
+function settleShotCam(S, applyCam) {
+  applyCam();
+  if (S.game.cam && S.game.cam.applyOverride && S.game.cam.override) S.game.cam.applyOverride();  // steps do not render
+  S.steps(3);
 }
 
 /** Yaw (radians, `forward = (sin, 0, cos)`) pointing toward the sun on the horizon. */

@@ -64,4 +64,17 @@ export const MANIFEST = {
   tex_fx_puff: { url: 'assets/fx/fx_puff.webp', type: 'texture' },
   tex_fx_misc: { url: 'assets/fx/fx_misc.webp', type: 'texture' },
   tex_fx_fire: { url: 'assets/fx/fx_fire.jpg', type: 'texture' },   // 8x8 fireball->smoke flipbook (assets/fx/bake_fire.py)
+  // audio lane: handler LEDGER voice-over (assets/audio/build_vo.py; played by src/audio/audio.js radio())
+  sfx_radio_brief: { url: 'assets/audio/vo/radio_brief.mp3', type: 'audio' },
+  sfx_radio_start: { url: 'assets/audio/vo/radio_start.mp3', type: 'audio' },
+  sfx_radio_mt_half: { url: 'assets/audio/vo/radio_mt_half.mp3', type: 'audio' },
+  sfx_radio_relays: { url: 'assets/audio/vo/radio_relays.mp3', type: 'audio' },
+  sfx_radio_relay_last: { url: 'assets/audio/vo/radio_relay_last.mp3', type: 'audio' },
+  sfx_radio_boss: { url: 'assets/audio/vo/radio_boss.mp3', type: 'audio' },
+  sfx_radio_boss_stagger: { url: 'assets/audio/vo/radio_boss_stagger.mp3', type: 'audio' },
+  sfx_radio_boss_half: { url: 'assets/audio/vo/radio_boss_half.mp3', type: 'audio' },
+  sfx_radio_low_ap: { url: 'assets/audio/vo/radio_low_ap.mp3', type: 'audio' },
+  sfx_radio_complete: { url: 'assets/audio/vo/radio_complete.mp3', type: 'audio' },
+  sfx_radio_failed: { url: 'assets/audio/vo/radio_failed.mp3', type: 'audio' },
+  sfx_radio_timeout: { url: 'assets/audio/vo/radio_timeout.mp3', type: 'audio' },
 };

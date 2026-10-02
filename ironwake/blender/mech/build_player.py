@@ -111,6 +111,30 @@ def pipe(points, r=0.045, segs=16, mat='steel'):
     return P.pipe_run(points, r, bend=0.12, segs=segs, mat=mat, flanges=False)
 
 
+def louvres_lite(w, h, count=5, depth=0.06, angle=28.0, thickness=0.018, mat='steel_dark', side_mat='paint_primary'):
+    """prims.louvres with single-segment bevels (same look at rig scale, ~40% of the triangles)."""
+    g = Geo()
+    pitch = h / count
+    for i in range(count):
+        y = -h / 2 + pitch * (i + 0.5)
+        g.merge(P.box((w, pitch * 1.25, thickness), bevel=0.004, segs=1, mat=mat).rotate((-angle, 0, 0)).move(0, y, depth))
+    for x in (-w / 2 - 0.012, w / 2 + 0.012):
+        g.merge(P.box((0.02, h + 0.02, depth * 1.7), bevel=0.004, segs=1, mat=side_mat).move(x, 0, depth * 0.85))
+    return g
+
+
+def hose_lite(points, r=0.032, fittings=True):
+    """Light hydraulic hose (8-sided sweep, few rings) with crimped end fittings; for the
+    bundles behind the joints, where the triangle budget is better spent on rams."""
+    g = P.sweep(points, r, 8, mat='rubber', subdiv=3)
+    if fittings:
+        pts = [V(q) for q in points]
+        for a0, b0 in ((pts[0], pts[1]), (pts[-1], pts[-2])):
+            g.merge(P.cylinder(r * 1.45, r * 3.0, 12, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
+                    .align((b0 - a0).normalized(), loc=a0))
+    return g
+
+
 # ============================================================================ chest geometry
 # (z, half width, front y, back y, prow depth, chamfer); the front has a 0.72 m flat centre strip
 UPPER = [(7.56, 1.40, -0.94, 0.92, 0.16, 0.18),
@@ -190,7 +214,7 @@ def build_pelvis():
         mid = (base + top) * 0.5 + V((sx * 0.22, sy * 0.16, -0.02))
         for k in (-0.5, 0.5):
             o = V((k * 0.09 * sy, k * 0.09 * sx, 0.0))
-            g.merge(P.sweep([base + o, mid + o * 1.4 + V((0, 0, -0.04 * k)), top + o], 0.04, 16, mat='rubber',
+            g.merge(P.sweep([base + o, mid + o * 1.4 + V((0, 0, -0.04 * k)), top + o], 0.04, 10, mat='rubber',
                             rib_amp=0.0, subdiv=2))
         g.merge(P.box((0.3, 0.3, 0.08), bevel=0.01, segs=1, mat='steel_dark').move(base.x, base.y, 5.93))
         g.merge(P.box((0.26, 0.2, 0.06), bevel=0.008, segs=1, mat='steel').move(top.x, top.y, 6.27))
@@ -298,7 +322,7 @@ def build_torso():
         g.merge(K.plate_world([(s * 0.835, -0.86, 8.94), (s * 0.835, 0.38, 9.06), (s * 0.835, 0.38, 9.34),
                                (s * 0.835, 0.0, 9.38), (s * 0.835, -0.66, 9.16)], 0.04, mat='paint_secondary',
                               normal_hint=(s, 0, 0), chamfer=0.04))
-        g.merge(K.shackle(0.09, bar=0.022).move(s * 1.12, 0.3, 9.02))
+        g.merge(K.shackle(0.09, bar=0.022, segs=(12, 6)).move(s * 1.12, 0.3, 9.02))
         g.merge(K.strip((s * 0.58, -0.92, 8.98), (s * 0.58, -0.62, 9.18), 0.05, 0.012, (s * 0.3, -0.3, 1),
                         mat='paint_accent'))
     cb = P.box((1.14, 0.42, 0.44), bevel=0.018, segs=1, chamfer=0.1, chamfer_axes='X', mat='paint_primary')
@@ -306,13 +330,13 @@ def build_torso():
     g.merge(P.ring(0.52, 0.34, 0.1, 40, bevel=0.01, mat='steel_dark', z0=8.97).move(0, HEAD.y + 0.04, 0))
     # shoulder sockets
     for s in (1, -1):
-        g.merge(P.ring(0.58, 0.36, 0.1, 48, bevel=0.01, mat='steel_dark', z0=0.0)
+        g.merge(P.ring(0.58, 0.36, 0.1, 32, bevel=0.01, bsegs=1, mat='steel_dark', z0=0.0)
                 .align((s, 0, 0), loc=(s * 1.96, SHOULDER.y, SHOULDER.z)))
         g.merge(P.bolt_circle((s * 2.06, SHOULDER.y, SHOULDER.z), (s, 0, 0), 0.47, 10, r=0.02))
     # back-weapon pylons: missile (L) cheeks, cannon (R) pylon block with a support ram
     bx, by, bz = MISSILE_MOUNT
     for cx, sg in ((bx - 0.32, -1), (bx + 0.32, 1)):
-        g.merge(K.cheek((cx, by, bz), sg, 0.26, 0.09, strap_to=(0.95, 8.7), strap_w=0.36, bolts=4))
+        g.merge(K.cheek((cx, by, bz), sg, 0.26, 0.09, strap_to=(0.95, 8.7), strap_w=0.36, bolts=4, lite=True))
     mxp, myp, mzp = CANNON_MOUNT
     py = K.shell([(8.5, mxp - 0.28, mxp + 0.28, 0.62, 1.66, 0.1), (9.0, mxp - 0.26, mxp + 0.26, 0.78, 1.6, 0.1),
                   (9.3, mxp - 0.22, mxp + 0.22, 1.0, 1.5, 0.08)], 'Z', bevel=0.016, mat='paint_dark')
@@ -320,7 +344,7 @@ def build_torso():
     g.merge(py)
     g.merge(K.ram((mxp, 0.72, 8.62), (mxp, 1.1, 9.34), r=0.07, frac=0.55, segs=24, up=(1, 0, 0)))
     for cx, sg in ((mxp - 0.28, -1), (mxp + 0.28, 1)):
-        g.merge(K.cheek((cx, myp, mzp), sg, 0.25, 0.09, strap_to=(myp, 9.2), strap_w=0.36, bolts=4))
+        g.merge(K.cheek((cx, myp, mzp), sg, 0.25, 0.09, strap_to=(myp, 9.2), strap_w=0.36, bolts=4, lite=True))
     # back mounting frame for the booster pack
     for z in (6.95, 8.3):
         g.merge(P.box((2.1, 0.14, 0.18), bevel=0.012, segs=1, mat='steel_dark').move(0, 1.0, z))
@@ -336,7 +360,8 @@ LENS_MAIN = (0.21, 9.20, 0.09)                               # x, z, r (the rig'
 LENS_CLUSTER = [(-0.30, 9.26, 0.03), (-0.30, 9.18, 0.03), (-0.30, 9.10, 0.03)]
 SLIT = (0.0, 9.36, 0.62, 0.05)                               # x, z, width, height
 FACE_Y = -1.18
-HEAD_OFS = V((0.0, -0.08, 0.08))    # head authored in place, then nudged up/forward
+HEAD_OFS = V((0.0, -0.12, -0.24))   # head authored in place, then sunk 0.32 m between the pauldrons (r2)
+FACE_RECESS = 0.12                  # visor recess under the brow (r2: was 0.06)
 
 
 def build_head():
@@ -349,11 +374,11 @@ def build_head():
     cab = K.loft_pts(secs, axis='X', bevel=0.016, mat='paint_primary')
     K.grooves(cab, [(0, 0, 1), (1, 0, 0), (-1, 0, 0)], (0, -0.3, 0), (0, 1, 0), gap=0.016, depth=0.014)
     # recessed sensor face (under the brow) + rear vent hatch
-    K.hatch_at(cab, (0, FACE_Y, 9.29), (0, -1, 0), (0.8, 0.44), u_axis=(1, 0, 0), recess=0.06, mat='steel_dark',
-               gap=0.014, angle=10)
+    K.hatch_at(cab, (0, FACE_Y, 9.29), (0, -1, 0), (0.8, 0.44), u_axis=(1, 0, 0), recess=FACE_RECESS,
+               mat='steel_dark', gap=0.014, angle=10)
     K.hatch_at(cab, (0, 0.09, 9.32), (0, 1, 0), (0.6, 0.26), u_axis=(1, 0, 0), recess=0.05, mat='steel_dark', angle=20)
     g.merge(cab)
-    fy = FACE_Y + 0.06
+    fy = FACE_Y + FACE_RECESS - 0.01
     # slit housing (narrow 4 cm slot in a steel bar)
     sx, sz, sw, sh = SLIT
     bar = P.box((sw + 0.1, 0.05, sh + 0.08), bevel=0.008, segs=1, mat='steel_dark').move(sx, fy - 0.02, sz)
@@ -369,6 +394,10 @@ def build_head():
         g.merge(P.ring(cr * 1.5, cr * 0.95, 0.04, 16, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
                 .align((0, -1, 0), loc=(cx, fy, cz)))
     g.merge(P.box((0.1, 0.03, 0.26), bevel=0.006, segs=1, mat='steel_dark').move(-0.3, fy + 0.012, 9.18))
+    # dark glass lens bodies (the glowing pupils + slit are the eye node's, see build_eye)
+    g.merge(P.dome(lr, lr * 0.45, 32, 4, mat='glass').align((0, -1, 0), loc=(lx, fy - 0.02, lz)))
+    for (cx, cz, cr) in LENS_CLUSTER:
+        g.merge(P.dome(cr, cr * 0.5, 16, 2, mat='glass').align((0, -1, 0), loc=(cx, fy - 0.01, cz)))
     # brow: bone plate over the top, ridged, overhanging the face by ~0.25 m
     g.merge(K.plate_world([(-0.5, -1.44, 9.66), (0.5, -1.44, 9.66), (0.46, -0.05, 9.72), (-0.46, -0.05, 9.72)], 0.05,
                           mat='paint_secondary', normal_hint=(0, 0, 1), chamfer=0.08, ridge=0.02, ridge_axis='Y'))
@@ -383,19 +412,23 @@ def build_head():
     g.merge(P.antenna(0.9, r=0.011, base_r=0.04, segs=12).move(0.32, -0.12, 9.72))
     g.merge(P.cylinder(0.08, 0.05, 24, bevel=0.0, mat='steel_dark', z0=9.72).move(-0.3, -0.2, 0))
     g.merge(P.dome(0.06, 0.07, 20, 3, mat='marker_amber').move(-0.3, -0.2, 9.77))
-    g.merge(K.shackle(0.06, bar=0.016).move(0.0, -0.3, 9.74))
+    g.merge(K.shackle(0.06, bar=0.016, segs=(12, 6)).move(0.0, -0.3, 9.74))
     return g.move(HEAD_OFS)
 
 
 def build_eye():
+    """Emissive parts only (rig.js lights everything under the eye node): the 3.8 cm sensor
+    slit and small pupils (<= 25% of each lens radius) sitting on the dark glass domes."""
     g = Geo()
-    fy = FACE_Y + 0.06
+    fy = FACE_Y + FACE_RECESS - 0.01
     sx, sz, sw, sh = SLIT
     g.merge(P.box((sw - 0.01, 0.02, sh - 0.012), bevel=0.003, segs=1, mat='lens').move(sx, fy - 0.01, sz))
     lx, lz, lr = LENS_MAIN
-    g.merge(P.dome(lr, lr * 0.45, 32, 4, mat='lens').align((0, -1, 0), loc=(lx, fy - 0.02, lz)))
-    for (cx, cz, cr) in LENS_CLUSTER:
-        g.merge(P.dome(cr, cr * 0.5, 16, 2, mat='lens').align((0, -1, 0), loc=(cx, fy - 0.01, cz)))
+    g.merge(P.cylinder(lr * 0.25, 0.006, 24, bevel=0.0, bsegs=1, mat='lens', z0=0.0)
+            .align((0, -1, 0), loc=(lx, fy - 0.02 - lr * 0.45 + 0.002, lz)))
+    for (cx, cz, cr) in LENS_CLUSTER[:1]:
+        g.merge(P.cylinder(cr * 0.3, 0.004, 12, bevel=0.0, bsegs=1, mat='lens', z0=0.0)
+                .align((0, -1, 0), loc=(cx, fy - 0.01 - cr * 0.5 + 0.001, cz)))
     return g.move(HEAD_OFS)
 
 
@@ -440,12 +473,18 @@ def build_arm(side):
     pa = K.loft_pts(secs, axis='X', bevel=0.018, mat='paint_primary')
     K.grooves(pa, [(1, 0, 0), (0, 0, 1), (0.5, 0, 1), (-0.5, 0, 1), (0, -1, 0.5), (0, 1, 0.5)], (0, 0.22, 0),
               (0, 1, 0), gap=0.018, depth=0.016)
+    K.grooves(pa, [(0, -1, 0), (0, -1, 0.5), (0, -1, -0.5), (0, 0, 1)], (2.92, 0, 0), (1, 0, 0), gap=0.026, depth=0.02)
     armour = []
     # bone top plates (top + front slope), primary outer face plate, orange lip strip
     armour.append(paul_plate(3, 4, 2.2, 3.26, 0.06, 'paint_secondary', chamfer=0.07, bolts=1, bolt_r=0.017,
                              bolt_spacing=0.3))
     armour.append(paul_plate(2, 3, 2.2, 3.26, 0.06, 'paint_secondary', chamfer=0.07))
     armour.append(paul_plate(4, 5, 2.2, 3.26, 0.05, 'paint_primary', chamfer=0.05))
+    # r2: layered front of the pauldron (it read as a flat flap): two inset tiers, bolted
+    armour.append(paul_plate(1, 2, 2.34, 3.36, 0.07, 'paint_primary', chamfer=0.07, bolts=1, bolt_r=0.017,
+                             bolt_spacing=0.24))
+    armour.append(paul_plate(0, 1, 2.4, 3.3, 0.05, 'paint_dark', chamfer=0.05, bolts=1, bolt_r=0.015,
+                             bolt_spacing=0.24))
     a0, a1, a2, a3 = paul_pt(1, PX[3], 0), paul_pt(6, PX[3], 0), paul_pt(6, PX[3]), paul_pt(1, PX[3])
     face = [V((PX[3] + 0.005, -0.84, 7.72)), V((PX[3] + 0.005, 0.84, 7.72)), V((PX[3] + 0.005, 0.84, 8.56)),
             V((PX[3] + 0.005, -0.1, 8.9)), V((PX[3] + 0.005, -0.84, 8.62))]
@@ -457,8 +496,8 @@ def build_arm(side):
                          paul_pt(5, PX[3] - 0.03, 0.0) + V((0.02, -0.06, -0.06)), 0.12, (1, 0, 0.25)))
     armour.append(marker((3.2, -0.99, 7.72), (0, -1, -0.3), 'cyan', 0.05))
     g.merge(pa, *armour)
-    g.merge(K.shackle(0.08, bar=0.02).move(2.66, 0.25, paul_pt(3, 2.66).z + 0.02))
-    lv = P.louvres(0.46, 0.4, count=4, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
+    g.merge(K.shackle(0.08, bar=0.02, segs=(12, 6)).move(2.66, 0.25, paul_pt(3, 2.66).z + 0.02))
+    lv = louvres_lite(0.46, 0.4, count=4, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
     g.merge(lv.rotate((0, 0, 90)).rotate((0, -32, 0)).move(2.96, 1.0, 8.72))
     # ---- open upper-arm frame (local frame along shoulder -> elbow)
     F = seg_frame(SHOULDER, ELBOW)
@@ -477,9 +516,8 @@ def build_arm(side):
         fr.merge(K.ram((0.02, yy, -0.3), (0.02, yy * 0.9, -(L - 0.1)), r=0.075, frac=0.52, segs=24, up=(1, 0, 0),
                        eyes=True))
     for cx, sg in ((-0.34, -1), (0.34, 1)):
-        fr.merge(K.cheek((cx, 0.0, -L), sg, 0.36, 0.08, strap_to=(0.0, -(L - 0.5)), strap_w=0.42, bolts=6))
-    fr.merge(P.hose([(-0.22, 0.22, -0.3), (-0.3, 0.3, -0.8), (-0.24, 0.2, -1.25)], 0.032, 12, rib_amp=0.004,
-                    rib_freq=30))
+        fr.merge(K.cheek((cx, 0.0, -L), sg, 0.36, 0.08, strap_to=(0.0, -(L - 0.5)), strap_w=0.42, bolts=4, lite=True))
+    fr.merge(hose_lite([(-0.22, 0.22, -0.3), (-0.3, 0.3, -0.8), (-0.24, 0.2, -1.25)], 0.032))
     fr.transform(F)
     g.merge(fr)
     if side == 'R':
@@ -507,8 +545,7 @@ def build_forearm_local(weapon_side_blade):
     g.merge(K.ram((0.0, -0.2, -0.54), (0.0, -1.62, -0.52), r=0.08, frac=0.55, segs=24, up=(1, 0, 0), eyes=True))
     for y in (-0.2, -1.62):
         g.merge(P.box((0.34, 0.16, 0.14), bevel=0.012, segs=1, mat='steel_dark').move(0, y, -0.46))
-    g.merge(P.hose([(-0.46, 0.0, -0.2), (-0.52, -0.6, -0.26), (-0.5, -1.3, -0.3), (-0.4, -1.72, -0.24)], 0.034, 12,
-                   rib_amp=0.004, rib_freq=30))
+    g.merge(hose_lite([(-0.46, 0.0, -0.2), (-0.52, -0.6, -0.26), (-0.5, -1.3, -0.3), (-0.4, -1.72, -0.24)], 0.034))
     cuff = K.shell([(-1.72, -0.36, 0.36, -0.34, 0.32, 0.1), (-1.9, -0.34, 0.34, -0.32, 0.3, 0.1)], 'Y', bevel=0.012,
                    mat='steel_dark')
     g.merge(cuff)
@@ -516,8 +553,7 @@ def build_forearm_local(weapon_side_blade):
         # right forearm: ammo feed box + armoured duct to the rifle
         g.merge(K.shell([(-0.5, 0.5, 0.72, -0.3, 0.2, 0.05), (-1.4, 0.5, 0.7, -0.28, 0.18, 0.05)], 'Y', bevel=0.012,
                         mat='paint_dark'))
-        g.merge(P.hose([(0.6, -1.4, -0.1), (0.56, -1.8, -0.2), (0.36, -2.1, -0.32)], 0.04, 12, rib_amp=0.005,
-                       rib_freq=26))
+        g.merge(hose_lite([(0.6, -1.4, -0.1), (0.56, -1.8, -0.2), (0.36, -2.1, -0.32)], 0.04))
     return g
 
 
@@ -598,7 +634,7 @@ def build_rifle_local():
     g.merge(P.cylinder(0.068, 0.62, 32, bevel=0.008, bsegs=1, mat='steel_dark', z0=0.0).align((0, -1, 0),
                                                                                            loc=(0, -2.2, 0.36)))
     for k in range(4):
-        g.merge(P.ring(0.11, 0.06, 0.018, 24, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
+        g.merge(P.ring(0.11, 0.06, 0.018, 20, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
                 .align((0, -1, 0), loc=(0, -2.28 - k * 0.055, 0.36)))
     g.merge(P.ring(0.088, 0.06, 0.09, 32, bevel=0.008, bsegs=1, mat='hazard', z0=0.0).align((0, -1, 0),
                                                                                          loc=(0, -2.6, 0.36)))
@@ -678,12 +714,12 @@ def build_missile():
     g.merge(cp)
     for (x, y, z) in cells:
         p = Mc @ V((x, y, -0.12))
-        g.merge(P.dome(0.075, 0.09, 16, 3, mat='paint_secondary').align((0, -1, 0), loc=p))
-        g.merge(P.ring(0.082, 0.064, 0.02, 16, bevel=0.0, mat='paint_accent', z0=0.0).align((0, 1, 0), loc=p))
+        g.merge(P.dome(0.075, 0.09, 16, 2, mat='paint_secondary').align((0, -1, 0), loc=p))
+        g.merge(P.ring(0.082, 0.064, 0.02, 12, bevel=0.0, mat='paint_accent', z0=0.0).align((0, 1, 0), loc=p))
     g.merge(K.strip((x0 + 0.04, -1.1, 10.07), (x1 - 0.04, -1.1, 10.07), 0.07, 0.014, (0, -1, 0), mat='hazard'))
     gr = P.grille(0.84, 0.54, bars=6, bar_r=0.016, frame=0.05, depth=0.05, mat='paint_primary', horizontal=True)
     g.merge(gr.rotate((-90, 0, 0)).move(bx, 1.32, 9.6))
-    g.merge(K.shackle(0.07, bar=0.018).move(bx, 0.3, 10.14))
+    g.merge(K.shackle(0.07, bar=0.018, segs=(12, 6)).move(bx, 0.3, 10.14))
     g.merge(rivets((x0 - 0.005, -0.7, 9.22), (x0 - 0.005, 1.0, 9.22), 0.12, (-1, 0, 0)))
     g.merge(rivets((x0 - 0.005, -0.7, 9.98), (x0 - 0.005, 1.0, 9.98), 0.12, (-1, 0, 0)))
     return g
@@ -760,15 +796,20 @@ def build_backpack():
     armour = [K.plate_world([(-1.02, 2.5, 7.22), (-0.46, 2.5, 7.22), (-0.46, 2.38, 8.2), (-1.0, 2.36, 8.2)], 0.07,
                             mat='paint_secondary', normal_hint=(0, 1, 0), chamfer=0.06, bolts=1, bolt_r=0.017,
                             bolt_spacing=0.28)]
+    # r2: bone cap plates on the upper back edges (value separation in the chase view)
+    for s in (1, -1):
+        armour.append(K.plate_world([(s * 0.52, 2.33, 8.44), (s * 1.18, 2.31, 8.44), (s * 1.02, 2.09, 8.8),
+                                     (s * 0.52, 2.1, 8.8)], 0.05, mat='paint_secondary', normal_hint=(0, 0.8, 0.6),
+                                    chamfer=0.05, bolts=1, bolt_r=0.016, bolt_spacing=0.24))
     g.merge(b, *armour)
-    hs = P.louvres(1.12, 1.0, count=8, depth=0.08, angle=30, thickness=0.02, mat='steel_dark', side_mat='paint_dark')
+    hs = louvres_lite(1.12, 1.0, count=8, depth=0.08, angle=30, thickness=0.02, mat='steel_dark', side_mat='paint_dark')
     g.merge(hs.rotate((-90, 0, 0)).rotate((0, 0, 0)).move(0.26, 2.44, 7.72))
     for s in (1, -1):
         # rectangular louvred flank intakes (no round ports)
         v = P.vent(0.9, 0.62, depth=0.1, slats=7, frame=0.05, angle=38, mat='paint_dark')
         v.align((s, 0, 0), up=(0, 0, 1), loc=(s * 1.37, 1.72, 7.68))
         g.merge(v)
-        g.merge(K.shackle(0.08, bar=0.02).move(s * 0.82, 2.0, 8.84))
+        g.merge(K.shackle(0.08, bar=0.02, segs=(12, 6)).move(s * 0.82, 2.0, 8.84))
         g.merge(P.box((0.9, 0.34, 0.74), bevel=0.02, segs=1, chamfer=0.1, chamfer_axes='Y', mat='paint_dark')
                 .move(s * 0.62, 2.28, 6.86))
         g.merge(P.box((0.5, 0.26, 0.48), bevel=0.02, segs=1, chamfer=0.07, chamfer_axes='Y', mat='paint_dark')
@@ -782,7 +823,7 @@ def build_backpack():
         g.merge(P.box((0.026, 0.2, 0.86), bevel=0.0, segs=1, mat='steel').move(-0.21 + i * 0.07, 2.72, 6.78))
     g.merge(P.box((0.62, 0.08, 0.06), bevel=0.006, segs=1, mat='steel_dark').move(0, 2.7, 7.24))
     g.merge(P.box((0.62, 0.08, 0.06), bevel=0.006, segs=1, mat='steel_dark').move(0, 2.74, 6.34))
-    top = P.louvres(1.7, 0.8, count=6, depth=0.06, angle=22, thickness=0.02, mat='steel_dark', side_mat='paint_dark')
+    top = louvres_lite(1.7, 0.8, count=6, depth=0.06, angle=22, thickness=0.02, mat='steel_dark', side_mat='paint_dark')
     g.merge(top.move(0, 1.52, 8.84))
     # side booster pods (booster_L / booster_R are separate pivots: built in build_sidepod)
     return g
@@ -800,108 +841,194 @@ def build_sidepod(s):
 
 
 # ============================================================================ legs (local frames)
+def keel_shell(sections, bevel=0.016, mat='paint_primary'):
+    """Limb armour lofted along local Z through keeled sections [(z, hw, yf, yb, prow, chamfer)]:
+    a V prow toward -Y (the limb's front), chamfered back corners. Never a constant box."""
+    return K.loft_pts([(K.prow(hw, yf, yb, pr, c), z) for (z, hw, yf, yb, pr, c) in sections], axis='Z',
+                      bevel=bevel, mat=mat)
+
+
 def build_thigh_local():
-    """Thigh authored vertical: hip at the origin, knee at (0, 0, -L_THIGH)."""
+    """Thigh authored vertical: hip at the origin, knee at (0, 0, -L_THIGH).
+    Layered: a dark actuator spine, a keeled front armour shell that swells below the hip and
+    tapers into the knee, a stood-off outer plate (the spine shows in the gap), rams in the open
+    rear bay and a hose bundle feeding the knee."""
     g = Geo()
     L = L_THIGH
-    g.merge(K.drum((0, 0, 0), (1, 0, 0), 0.44, 0.84, mat='paint_dark', hub=False))
-    h = K.shell([(-0.26, -0.56, 0.56, -0.56, 0.5, 0.16), (-0.62, -0.62, 0.62, -0.7, 0.56, 0.2),
-                 (-(L - 0.42), -0.52, 0.52, -0.6, 0.42, 0.16)], 'Z', bevel=0.016, mat='paint_primary')
-    K.grooves(h, [(0, -1, 0), (1, 0, 0), (-1, 0, 0), (0, 1, 0)], (0, 0, -0.95), (0, 0, 1), gap=0.018, depth=0.016)
-    armour = [K.plate_world([(-0.5, -0.72, -1.3), (0.5, -0.72, -1.3), (0.54, -0.74, -0.62), (0.0, -0.76, -0.4),
-                             (-0.54, -0.74, -0.62)], 0.09, mat='paint_primary', normal_hint=(0, -1, 0), ridge=0.035,
-                            ridge_axis='Y', chamfer=0.08, bolts=1, bolt_r=0.018, bolt_spacing=0.3),
-              K.plate_world([(0.635, -0.5, -1.28), (0.635, 0.36, -1.28), (0.635, 0.42, -0.7), (0.635, -0.56, -0.7)],
-                            0.06, mat='paint_secondary', normal_hint=(1, 0, 0), chamfer=0.06)]
-    g.merge(h, *armour)
-    g.merge(rivets((0.64, -0.5, -0.64), (0.64, 0.4, -0.64), 0.12, (1, 0, 0)))
-    # yoke cheeks at the hip + two rams per hip (chrome rods, 24 segments)
+    g.merge(K.drum((0, 0, 0), (1, 0, 0), 0.44, 0.84, mat='paint_dark', hub=False, segs=32))
+    # inner frame: spine block + twin struts down the rear bay
+    g.merge(P.box((0.5, 0.42, L - 0.62), bevel=0.012, segs=1, chamfer=0.06, chamfer_axes='Z', mat='paint_dark')
+            .move(0, 0.12, -L / 2))
+    for sx in (-0.34, 0.34):
+        g.merge(P.box((0.12, 0.16, L - 0.7), bevel=0.01, segs=1, mat='steel_dark').move(sx, 0.4, -L / 2))
+    # keeled armour shell: front + flanks, open at the back (rams and hoses stay exposed there)
+    secs = [(-(L - 0.46), 0.48, -0.5, 0.12, 0.12, 0.12), (-1.12, 0.6, -0.62, 0.22, 0.2, 0.16),
+            (-0.62, 0.62, -0.62, 0.26, 0.2, 0.16), (-0.3, 0.5, -0.46, 0.18, 0.1, 0.12)]
+    h = keel_shell(secs)
+    K.grooves(h, [(0, -1, 0), (1, -1, 0), (-1, -1, 0), (1, 0, 0), (-1, 0, 0)], (0, 0, -0.98), (0, 0, 1),
+              gap=0.02, depth=0.018)
+    g.merge(h)
+    # layered front plates following the keel facets: slate upper tier (bolted), bone knee guard
+    for s in (1, -1):
+        g.merge(K.prow_plate(secs, -0.94, -0.42, 0.0, 0.96, s, 0.07, 'paint_primary', chamfer=0.05, bolts=1,
+                             bolt_r=0.017, bolt_spacing=0.26))
+        g.merge(K.prow_plate(secs, -1.5, -1.04, 0.0, 0.9, s, 0.06, 'paint_dark', chamfer=0.04))
+    # stood-off outer side plate (8 cm gap over the shell flank) on two standoff blocks
+    g.merge(K.plate_world([(0.72, -0.5, -1.36), (0.72, 0.3, -1.36), (0.74, 0.36, -0.6), (0.74, -0.44, -0.46)], 0.06,
+                          mat='paint_primary', normal_hint=(1, 0, 0), chamfer=0.07, bolts=1, bolt_r=0.016,
+                          bolt_spacing=0.26))
+    for z in (-0.72, -1.18):
+        g.merge(P.box((0.14, 0.18, 0.14), bevel=0.01, segs=1, mat='steel_dark').move(0.66, -0.06, z))
+    # hip yoke cheeks + rams: outer (eyes) and two in the open rear bay
     for cx, sg in ((-0.47, -1), (0.47, 1)):
-        g.merge(K.cheek((cx, 0.0, 0.0), sg, 0.42, 0.08, strap_to=(0.0, -0.36), strap_w=0.5, bolts=6))
-    g.merge(K.ram((0.66, 0.24, -0.16), (0.66, 0.08, -1.22), r=0.085, frac=0.5, segs=20, eyes=True, up=(1, 0, 0)))
-    g.merge(K.ram((-0.34, 0.56, -0.2), (-0.34, 0.44, -1.2), r=0.075, frac=0.5, segs=20, eyes=False, up=(1, 0, 0)))
-    g.merge(P.box((0.16, 0.26, 0.24), bevel=0.012, segs=1, mat='steel_dark').move(0.6, 0.12, -1.26))
-    # knee clevis + drum + rear knee ram
+        g.merge(K.cheek((cx, 0.0, 0.0), sg, 0.42, 0.08, strap_to=(0.0, -0.36), strap_w=0.5, bolts=4, lite=True))
+    g.merge(K.ram((0.52, 0.42, -0.16), (0.5, 0.36, -1.22), r=0.085, frac=0.5, segs=20, eyes=True, up=(1, 0, 0)))
+    g.merge(K.ram((-0.06, 0.52, -0.26), (-0.06, 0.42, -(L - 0.14)), r=0.08, frac=0.5, segs=20, eyes=False,
+                  up=(1, 0, 0)))
+    # knee clevis + drum
     for cx, sg in ((-0.47, -1), (0.47, 1)):
-        g.merge(K.cheek((cx, 0.0, -L), sg, 0.44, 0.09, strap_to=(0.08, -(L - 0.5)), strap_w=0.52, bolts=6))
-    g.merge(K.drum((0, 0, -L), (1, 0, 0), 0.4, 0.84, mat='paint_dark', hub=False))
-    g.merge(K.ram((0.0, 0.5, -0.5), (0.0, 0.38, -(L - 0.08)), r=0.08, frac=0.5, segs=20, eyes=False, up=(1, 0, 0)))
-    g.merge(P.hose([(-0.5, 0.36, -0.3), (-0.62, 0.44, -0.8), (-0.54, 0.34, -1.3)], 0.035, 12, rib_amp=0.004,
-                   rib_freq=28))
+        g.merge(K.cheek((cx, 0.0, -L), sg, 0.44, 0.09, strap_to=(0.08, -(L - 0.5)), strap_w=0.52, bolts=4, lite=True))
+    g.merge(K.drum((0, 0, -L), (1, 0, 0), 0.4, 0.84, mat='paint_dark', hub=False, segs=32))
+    # hose bundle (3) down the inner rear bay into the knee drum
+    for k, x in enumerate((-0.42, -0.34, -0.26)):
+        g.merge(hose_lite([(x, 0.3, -0.3), (x - 0.06, 0.5 + 0.03 * k, -0.85), (x - 0.02, 0.44, -1.35),
+                           (x, 0.32, -(L - 0.36))], 0.03, fittings=(k == 1)))
+    g.merge(rivets((0.0, -0.66, -1.54), (0.0, -0.58, -(L - 0.5)), 0.1, (0, -1, 0)))
     return g
 
 
+# shin greave sections (ascending z, shin-local): 25% wider at the knee than at the ankle, keeled
+SHIN_SECS = [(-1.92, 0.46, -0.48, -0.06, 0.1, 0.1), (-1.2, 0.56, -0.6, -0.04, 0.16, 0.14),
+             (-0.52, 0.6, -0.6, -0.04, 0.17, 0.14), (-0.42, 0.53, -0.5, -0.06, 0.12, 0.12)]
+SHIN_SIDE_X = 0.68    # outer face line of the stood-off side plates
+CALF_NOZZLE = (V((0.0, 0.56, -1.74)), V((0.0, 0.5, -1.0)))   # exit, exhaust (shin-local)
+
+
 def build_shin_local():
-    """Shin authored vertical: knee at the origin, ankle at (0, 0, -L_SHIN)."""
+    """Shin authored vertical: knee at the origin, ankle at (0, 0, -L_SHIN).
+    Not a box: a keeled front greave (25% wider at the knee than the ankle), side plates stood
+    off ~10 cm behind it so the dark inner frame (twin struts + spine) shows through the gaps,
+    a calf housing with louvres, a bone reverse-angle knee plate driven by two exposed knee
+    rams, front / rear ankle rams and a 4-hose bundle looping from behind the knee."""
     g = Geo()
     L = L_SHIN
-    # reverse-angle knee plate: projects ~0.6 m forward and up in front of the knee
-    kp = P.prism([(-0.40, -0.46), (-0.64, -0.5), (-0.80, -0.12), (-1.0, 0.33), (-0.84, 0.40), (-0.62, 0.16),
-                  (-0.48, -0.1)], 0.94, bevel=0.018, segs=1, mat='paint_secondary', axis='X')
+    # --- inner frame: twin struts + spine + cross braces
+    for sx in (-0.3, 0.3):
+        g.merge(P.box((0.15, 0.22, L - 0.62), bevel=0.01, segs=1, chamfer=0.03, chamfer_axes='Z', mat='steel_dark')
+                .move(sx, 0.03, -L / 2 - 0.02))
+    g.merge(P.box((0.36, 0.3, L - 1.0), bevel=0.012, segs=1, chamfer=0.05, chamfer_axes='Z', mat='paint_dark')
+            .move(0, 0.16, -L / 2 + 0.05))
+    for z in (-0.64, -1.36, -2.02):
+        g.merge(P.box((0.66, 0.1, 0.09), bevel=0.008, segs=1, mat='steel_dark').move(0, 0.1, z))
+    # --- knee cheeks (shin side, outside the thigh clevis) strapped into the greave flanks
+    for cx, sg in ((-0.62, -1), (0.62, 1)):
+        g.merge(K.cheek((cx, 0.0, 0.0), sg, 0.44, 0.1, strap_to=(-0.22, -0.62), strap_w=0.42, bolts=4, lite=True))
+    # --- keeled front greave + panel seams + facet armour (bone shin guard below the knee rams)
+    h = keel_shell(SHIN_SECS)
+    K.grooves(h, [(0, -1, 0), (1, -1, 0), (-1, -1, 0), (1, 0, 0), (-1, 0, 0)], (0, 0, -1.34), (0, 0, 1),
+              gap=0.02, depth=0.018)
+    g.merge(h)
+    for s in (1, -1):
+        g.merge(K.prow_plate(SHIN_SECS, -1.26, -0.6, 0.0, 0.94, s, 0.07, 'paint_primary', chamfer=0.05, bolts=1,
+                             bolt_r=0.017, bolt_spacing=0.26))
+        g.merge(K.prow_plate(SHIN_SECS, -1.86, -1.44, 0.0, 0.9, s, 0.05, 'paint_secondary', chamfer=0.04))
+    # reverse-angle knee plate (bone, juts ~0.35 m forward and up) on a dark backing plate
+    kp = P.prism([(-0.40, -0.5), (-0.66, -0.54), (-0.82, -0.14), (-1.02, 0.32), (-0.86, 0.40), (-0.64, 0.16),
+                  (-0.48, -0.12)], 0.9, bevel=0.016, segs=1, mat='paint_secondary', axis='X')
+    K.grooves(kp, [(0, -0.9, 0.45), (1, 0, 0), (-1, 0, 0)], (0, -0.92, 0.09), (0, -0.4, 0.92), gap=0.022, depth=0.016)
     g.merge(kp)
-    g.merge(K.plate_world([(-0.4, -0.84, -0.08), (0.4, -0.84, -0.08), (0.34, -1.0, 0.28), (-0.34, -1.0, 0.28)], 0.05,
+    g.merge(rivets((-0.36, -0.752, -0.33), (0.36, -0.752, -0.33), 0.12, (0, -0.93, 0.37)))
+    g.merge(P.prism([(-0.36, -0.46), (-0.58, -0.5), (-0.7, -0.16), (-0.86, 0.22), (-0.6, 0.12), (-0.44, -0.12)],
+                    1.02, bevel=0.012, segs=1, mat='paint_dark', axis='X'))
+    g.merge(K.plate_world([(-0.38, -0.86, -0.1), (0.38, -0.86, -0.1), (0.32, -1.02, 0.26), (-0.32, -1.02, 0.26)], 0.04,
                           mat='paint_primary', normal_hint=(0, -1, 0.4), chamfer=0.05, bolts=1, bolt_r=0.016,
                           bolt_spacing=0.2))
-    h = K.shell([(-0.3, -0.55, 0.55, -0.56, 0.52, 0.16), (-0.9, -0.54, 0.54, -0.64, 0.58, 0.18),
-                 (-(L - 0.45), -0.36, 0.36, -0.44, 0.36, 0.12)], 'Z', bevel=0.016, mat='paint_primary')
-    K.grooves(h, [(1, 0, 0), (-1, 0, 0), (0, 1, 0)], (0, 0, -1.3), (0, 0, 1), gap=0.018, depth=0.016)
-    armour = [K.plate_world([(-0.5, -0.69, -0.5), (0.5, -0.69, -0.5), (0.44, -0.62, -1.3), (0.0, -0.58, -1.46),
-                             (-0.44, -0.62, -1.3)], 0.09, mat='paint_secondary', normal_hint=(0, -1, 0), chamfer=0.07,
-                            bolts=1, bolt_r=0.019, bolt_spacing=0.28),
-              K.plate_world([(-0.38, -0.52, -1.62), (0.38, -0.52, -1.62), (0.32, -0.47, -2.0), (-0.32, -0.47, -2.0)],
-                            0.06, mat='paint_primary', normal_hint=(0, -1, 0), chamfer=0.05),
-              K.plate_world([(0.555, -0.5, -0.5), (0.555, 0.46, -0.5), (0.48, 0.38, -1.6), (0.48, -0.44, -1.6)], 0.06,
-                            mat='paint_primary', normal_hint=(1, 0, 0), chamfer=0.07, bolts=1, bolt_r=0.016,
-                            bolt_spacing=0.3)]
-    g.merge(h, *armour)
-    g.merge(rivets((0.57, -0.52, -0.42), (0.57, 0.46, -0.42), 0.12, (1, 0, 0)))
-    # calf: louvre stack + hydraulic reservoir
-    lv = P.louvres(0.5, 0.62, count=5, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
-    g.merge(lv.rotate((-90, 0, 0)).move(0.0, 0.62, -0.62))
-    g.merge(P.banded_cylinder([(0.04, 0.1, 'steel_dark'), (0.6, 0.12), (0.04, 0.1, 'steel_dark')], segs=24, step=0.0,
-                              mat='paint_dark').move(-0.4, 0.5, -1.7))
-    # ankle clevis + front / back ankle rams (lower eyes on the ankle cheeks: nothing detaches)
+    # --- two exposed knee rams (outer + inner front corners): cheek eye -> greave lug
+    for sg in (1, -1):
+        x = sg * 0.73
+        g.merge(K.ram((x, -0.3, -0.04), (x * 0.97, -0.36, -1.14), r=0.11, rod=0.065, frac=0.42, segs=24, eyes=True,
+                      up=(1, 0, 0)))
+        g.merge(P.box((0.2, 0.2, 0.2), bevel=0.012, segs=1, chamfer=0.04, chamfer_axes='X', mat='steel_dark')
+                .move(x * 0.92, -0.36, -1.18))
+    # --- side plates stood off behind the greave (8-12 cm gap shows the struts), on standoffs
+    for sg in (1, -1):
+        x0, x1 = sg * SHIN_SIDE_X, sg * (SHIN_SIDE_X - 0.1)
+        g.merge(K.plate_world([(x0, 0.06, -0.52), (x0, 0.62, -0.6), (x1, 0.54, -1.72), (x1, 0.06, -1.64)], 0.06,
+                              mat='paint_primary', normal_hint=(sg, 0, 0), chamfer=0.08, bolts=1, bolt_r=0.016,
+                              bolt_spacing=0.26))
+        for z in (-0.8, -1.4):
+            g.merge(P.box((0.28, 0.16, 0.14), bevel=0.01, segs=1, mat='steel_dark').move(sg * 0.46, 0.2, z))
+    # --- calf housing (between the side plates) + bone calf plate + louvre stack
+    calf = K.shell([(-1.68, -0.36, 0.36, 0.12, 0.5, 0.1), (-0.92, -0.44, 0.44, 0.12, 0.6, 0.12),
+                    (-0.5, -0.4, 0.4, 0.12, 0.56, 0.12)], 'Z', bevel=0.014, mat='paint_primary')
+    g.merge(calf)
+    g.merge(K.plate_world([(-0.34, 0.615, -0.9), (0.34, 0.615, -0.9), (0.32, 0.585, -0.54), (-0.32, 0.585, -0.54)], 0.05,
+                          mat='paint_secondary', normal_hint=(0, 1, 0), chamfer=0.05, bolts=1, bolt_r=0.016,
+                          bolt_spacing=0.22))
+    lv = louvres_lite(0.5, 0.4, count=4, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
+    g.merge(lv.rotate((-90, 0, 0)).move(0.0, 0.6, -1.18))
+    g.merge(P.banded_cylinder([(0.04, 0.1, 'steel_dark'), (0.5, 0.12), (0.04, 0.1, 'steel_dark')], segs=24, step=0.0,
+                              mat='paint_dark').move(-0.46, 0.42, -1.86))
+    # --- hose bundle (4) looping from behind the knee drum down into the calf top
+    for k, x in enumerate((-0.18, 0.0, 0.18)):
+        bulge = 0.66 + 0.04 * (k % 2)
+        g.merge(hose_lite([(x, 0.4, 0.02), (x * 1.1, bulge, -0.2), (x, 0.58, -0.42), (x * 0.9, 0.44, -0.58)], 0.032,
+                          fittings=(k != 1)))
+    # --- ankle clevis + front / back ankle rams (lower eyes on the ankle cheeks: nothing detaches)
     for cx, sg in ((-0.42, -1), (0.42, 1)):
-        g.merge(K.cheek((cx, 0.0, -L), sg, 0.34, 0.09, strap_to=(0.0, -(L - 0.5)), strap_w=0.42, bolts=6))
-    g.merge(K.ram((0.0, -0.46, -1.52), (0.0, -0.26, -(L - 0.12)), r=0.07, frac=0.5, segs=20, eyes=True, up=(1, 0, 0)))
-    g.merge(K.ram((0.0, 0.42, -1.5), (0.0, 0.26, -(L - 0.1)), r=0.07, frac=0.5, segs=20, eyes=False, up=(1, 0, 0)))
+        g.merge(K.cheek((cx, 0.0, -L), sg, 0.34, 0.09, strap_to=(0.0, -(L - 0.5)), strap_w=0.42, bolts=4, lite=True))
+    g.merge(K.ram((0.0, -0.32, -1.72), (0.0, -0.24, -(L - 0.12)), r=0.085, rod=0.05, frac=0.45, segs=20, eyes=False,
+                  up=(1, 0, 0)))
+    g.merge(K.ram((0.0, 0.34, -1.6), (0.0, 0.26, -(L - 0.1)), r=0.07, frac=0.5, segs=20, eyes=False, up=(1, 0, 0)))
     return g
 
 
 def build_foot():
-    """Foot in world coordinates (L side): 2 m long pad, toe cap, heel plate, sole."""
+    """Foot in world coordinates (L side): ~2.3 m from toe to heel spur. A high instep body
+    with a bolted slate instep plate, a separate HINGED bone toe plate and a hinged heel plate
+    on visible hinge barrels, ankle cheeks strapped to the body, an outer ankle guard and a
+    ribbed sole (rubber tread bars on a steel plate) that reads when the feet lift."""
     g = Geo()
     ax, ay, az = ANKLE
-    g.merge(K.drum(ANKLE, (1, 0, 0), 0.3, 0.72, mat='paint_dark', hub=False))
-    blk = P.frustum((0.8, 1.0), (0.6, 0.64), 0.4, bevel=0.018, segs=1, chamfer=0.06, mat='paint_dark')
-    g.merge(blk.move(ax, ay + 0.05, 0.36))
-    c = (0.05, 0.05, 0.16, 0.16)
-    pad = K.shell([(ay + 0.72, ax - 0.46, ax + 0.46, 0.08, 0.36, c), (ay + 0.44, ax - 0.56, ax + 0.56, 0.08, 0.52, c),
-                   (ay - 0.6, ax - 0.58, ax + 0.58, 0.08, 0.5, c), (ay - 0.86, ax - 0.54, ax + 0.54, 0.08, 0.4, c)],
-                  'Y', bevel=0.016, mat='paint_primary')
-    K.grooves(pad, [(0, 0, 1), (1, 0, 0), (-1, 0, 0)], (0, ay - 0.3, 0), (0, 1, 0), gap=0.018, depth=0.016)
-    armour = [K.plate_at(pad, (ax, ay - 0.2, 0.52), (0, 0, 1), u_axis=(1, 0, 0), margin=0.06, thickness=0.05,
-                         chamfer=0.06, mat='paint_primary', bolts=1, bolt_r=0.016, bolt_spacing=0.3),
-              K.plate_world([(ax + 0.585, ay - 0.8, 0.12), (ax + 0.585, ay + 0.4, 0.12), (ax + 0.585, ay + 0.4, 0.46),
-                             (ax + 0.585, ay - 0.8, 0.42)], 0.05, mat='paint_secondary', normal_hint=(1, 0, 0),
-                            chamfer=0.06)]
-    g.merge(pad, *[x for x in armour if x is not None])
-    # toe cap (articulated look) + hazard plate
-    toe = P.prism([(ay - 0.84, 0.06), (ay - 1.22, 0.03), (ay - 1.3, 0.14), (ay - 1.12, 0.34), (ay - 0.84, 0.44)], 1.1,
-                  bevel=0.018, segs=1, mat='paint_secondary', axis='X')
-    g.merge(toe.move(ax, 0, 0))
-    g.merge(P.cylinder(0.05, 1.0, 16, bevel=0.006, bsegs=1, mat='steel').rotate((0, 90, 0)).move(ax, ay - 0.84, 0.3))
-    # heel plate + spur, sole with grooves, marker on the heel
-    heel = P.prism([(ay + 0.66, 0.05), (ay + 0.98, 0.08), (ay + 0.96, 0.42), (ay + 0.7, 0.6)], 0.78, bevel=0.016,
+    g.merge(K.drum(ANKLE, (1, 0, 0), 0.3, 0.72, mat='paint_dark', hub=False, segs=32))
+    for cx, sg in ((ax - 0.5, -1), (ax + 0.5, 1)):
+        g.merge(K.cheek((cx, ay, az), sg, 0.36, 0.08, strap_to=(ay + 0.08, 0.56), strap_w=0.5, bolts=3, lite=True))
+    c = (0.04, 0.04, 0.14, 0.14)
+    body = K.shell([(ay - 0.84, ax - 0.56, ax + 0.56, 0.12, 0.42, c), (ay - 0.4, ax - 0.6, ax + 0.6, 0.12, 0.58, c),
+                    (ay + 0.3, ax - 0.56, ax + 0.56, 0.12, 0.68, c), (ay + 0.7, ax - 0.48, ax + 0.48, 0.12, 0.5, c)],
+                   'Y', bevel=0.016, mat='paint_primary')
+    K.grooves(body, [(1, 0, 0), (-1, 0, 0)], (0, ay - 0.1, 0), (0, 1, 0), gap=0.02, depth=0.018)
+    g.merge(body)
+    # instep armour (slate, bolted) + outer ankle guard (bone)
+    g.merge(K.plate_world([(ax - 0.5, ay - 0.8, 0.45), (ax + 0.5, ay - 0.8, 0.45), (ax + 0.48, ay + 0.06, 0.72),
+                           (ax - 0.48, ay + 0.06, 0.72)], 0.07, mat='paint_primary', normal_hint=(0, -0.3, 1),
+                          chamfer=0.08, bolts=1, bolt_r=0.017, bolt_spacing=0.26))
+    g.merge(K.plate_world([(ax + 0.606, ay - 0.62, 0.16), (ax + 0.606, ay + 0.46, 0.16), (ax + 0.585, ay + 0.36, 0.56),
+                           (ax + 0.6, ay - 0.36, 0.54)], 0.05, mat='paint_secondary', normal_hint=(1, 0, 0),
+                          chamfer=0.07, bolts=1, bolt_r=0.015, bolt_spacing=0.24))
+    # hinged toe plate (bone) + hinge barrel with knuckles
+    for dx, w in ((-0.29, 0.54), (0.29, 0.54)):      # split toe: two plates, a hinge knuckle between
+        toe = P.prism([(ay - 0.89, 0.07), (ay - 1.36, 0.06), (ay - 1.42, 0.16), (ay - 1.28, 0.34), (ay - 0.89, 0.44)], w,
+                      bevel=0.018, segs=1, mat='paint_secondary', axis='X')
+        g.merge(toe.move(ax + dx, 0, 0))
+    g.merge(P.cylinder(0.065, 1.2, 20, bevel=0.008, bsegs=1, mat='steel').rotate((0, 90, 0)).move(ax, ay - 0.865, 0.22))
+    for dx in (-0.3, 0.3):
+        g.merge(P.box((0.16, 0.2, 0.18), bevel=0.01, segs=1, mat='steel_dark').move(ax + dx, ay - 0.8, 0.24))
+    # hinged heel plate + spur
+    heel = P.prism([(ay + 0.75, 0.07), (ay + 1.04, 0.08), (ay + 1.08, 0.34), (ay + 0.8, 0.56)], 0.9, bevel=0.016,
                    segs=1, mat='paint_primary', axis='X')
     g.merge(heel.move(ax, 0, 0))
-    sole = K.shell([(ay - 1.24, ax - 0.56, ax + 0.56, 0.0, 0.1, 0.03), (ay + 0.98, ax - 0.5, ax + 0.5, 0.0, 0.1, 0.03)],
-                   'Y', bevel=0.01, mat='steel_dark')
-    for y in (-0.9, -0.46, -0.02, 0.42):
-        K.grooves(sole, [(1, 0, 0), (-1, 0, 0), (0, 0, -1)], (0, ay + y, 0), (0, 1, 0), gap=0.05, depth=0.04)
+    g.merge(P.cylinder(0.06, 0.98, 20, bevel=0.008, bsegs=1, mat='steel').rotate((0, 90, 0)).move(ax, ay + 0.73, 0.26))
+    # ribbed sole: steel plate + rubber tread bars (the soles show when the feet lift in flight)
+    sole = K.shell([(ay - 1.4, ax - 0.56, ax + 0.56, 0.05, 0.12, 0.03), (ay + 1.06, ax - 0.5, ax + 0.5, 0.05, 0.12, 0.03)],
+                   'Y', bevel=0.008, mat='steel_dark')
     g.merge(sole)
-    g.merge(marker((ax + 0.3, ay + 0.98, 0.32), (0, 1, 0.1), 'amber', 0.045))
-    g.merge(K.shackle(0.06, bar=0.016).move(ax - 0.3, ay + 0.6, 0.5))
+    for i in range(8):
+        y = ay - 1.24 + i * 0.32
+        g.merge(P.box((1.0 - 0.06 * (i in (0, 7)), 0.16, 0.05), bevel=0.0, segs=1, mat='rubber')
+                .move(ax, y, 0.025))
+    g.merge(marker((ax + 0.3, ay + 1.06, 0.3), (0, 1, 0.1), 'amber', 0.045))
+    g.merge(K.shackle(0.06, bar=0.016, segs=(12, 6)).move(ax - 0.28, ay + 0.6, 0.52))
     return g
 
 
@@ -1000,8 +1127,8 @@ def build(a):
                           segs=24, ribs=0, bolts=0)
             K.nozzle_part(a, f'nozzle_front_{S}', (s * 1.26, -1.28, 7.34), (0, -1, -0.45), 'torso', 0.08, 0.14, 0.22,
                           segs=24, ribs=0, bolts=0)
-            calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ V((0.0, 0.66, -1.2))
-            ex = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)).to_3x3() @ V((0, 0.45, -1.0))
+            calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ CALF_NOZZLE[0]
+            ex = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)).to_3x3() @ CALF_NOZZLE[1]
             K.nozzle_part(a, f'nozzle_leg_{S}', tuple(calf), tuple(ex), f'shin_{S}', 0.12, 0.19, 0.26, segs=32,
                           ribs=0, bolts=0)
     return tris
@@ -1012,20 +1139,80 @@ def m_leg(p, s):
 
 
 # ============================================================================ decals
+def rust_drip(seed=1, w=64, h=288, drips=3):
+    """Rust run-off below a bolt / seam (RGBA, top = source): 2-4 thin, uneven brown-orange
+    drips that thin out and fade downward, with a small stain blob at the source."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+    rng = np.random.default_rng(seed)
+    a = np.zeros((h, w), np.float32)
+    col = np.zeros((h, w, 3), np.float32)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    for k in range(drips):
+        x0 = w * (0.5 + rng.uniform(-0.28, 0.28))
+        length = h * rng.uniform(0.45, 1.0)
+        wid = rng.uniform(1.4, 3.2) * (1.4 if k == 0 else 1.0)
+        wob = np.cumsum(rng.normal(0, 0.35, h)).astype(np.float32)
+        cx = x0 + wob[yy.astype(int)] * 0.6
+        t = np.clip(yy / length, 0, 1)
+        ww = wid * (1.0 - 0.7 * t) + 0.4
+        m = np.clip(1.0 - np.abs(xx - cx) / ww, 0, 1) * (yy < length) * (1.0 - t ** 1.6)
+        a = np.maximum(a, m * rng.uniform(0.7, 1.0))
+    blob = np.clip(1.0 - np.hypot((xx - w * 0.5) / (w * 0.32), (yy - h * 0.03) / (h * 0.05)), 0, 1) ** 1.2
+    a = np.clip(np.maximum(a, blob * 0.8) * (0.75 + 0.25 * rng.random((h, w))), 0, 1)
+    dark = np.array([96, 50, 26], np.float32)
+    lite = np.array([150, 78, 34], np.float32)
+    tt = np.clip(yy / h, 0, 1)[..., None]
+    col = dark * (1 - tt) + lite * tt
+    rgba = np.zeros((h, w, 4), np.uint8)
+    rgba[..., :3] = col.astype(np.uint8)
+    rgba[..., 3] = (a * 235).astype(np.uint8)
+    return Image.fromarray(rgba, 'RGBA').filter(ImageFilter.GaussianBlur(0.6))
+
+
 def soot_decals(a):
     """Baked into the albedo atlas: soot / heat scorch gradients around and below every
-    exhaust and gun muzzle (0.6-1.0 m)."""
+    exhaust and gun muzzle (0.6-1.0 m), and rust run-off below bolt rows and seams (r2)."""
+    rust_decals(a)
     for i, s in enumerate((1, -1)):
         a.decal(K.soot(256, 11 + i, elong=1.3), (s * 0.7, 2.46, 6.64), (0, 1, 0), size=(1.5, 1.6), depth=0.5, opacity=0.95)
         a.decal(K.soot(256, 21 + i), (s * 1.2, 2.3, 6.5), (s * 0.5, 1, 0), size=(0.9, 0.9), depth=0.35, opacity=0.85)
         a.decal(K.soot(256, 31 + i), (s * (SIDEBOOST.x + 0.3), 1.78, 6.98), (s, 0, 0), size=(0.9, 0.9), depth=0.4,
                 opacity=0.85)
         a.decal(K.soot(256, 71 + i), (s * 3.4, 1.0, 8.3), (s * 0.7, 1, 0), size=(0.7, 0.7), depth=0.3, opacity=0.8)
-        calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ V((0.0, 0.58, -1.2))
-        a.decal(K.soot(256, 41 + i, elong=1.5), tuple(calf), (0, 1, 0), size=(0.8, 1.0), depth=0.4, opacity=0.85)
+        calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ V((0.0, 0.5, -1.62))
+        a.decal(K.soot(256, 41 + i, elong=1.5), tuple(calf), (0, 1, -0.3), size=(0.8, 1.0), depth=0.4, opacity=0.85)
         a.decal(K.soot(256, 51 + i), (s * 1.26, -1.12, 7.36), (0, -1, -0.3), size=(0.6, 0.6), depth=0.3, opacity=0.7)
-    a.decal(K.soot(256, 61), cannon_pt((0, -3.7, 0.3)), (0, 0, 1), up=(0, -1, 0), size=(0.7, 0.9), depth=0.4,
-            opacity=0.75)
+    a.decal(K.soot(256, 61, elong=1.6), cannon_pt((0, -3.6, 0.3)), (0, 0, 1), up=(0, -1, 0), size=(0.9, 1.4),
+            depth=0.5, opacity=0.95)
+    a.decal(K.soot(256, 62, elong=1.6), cannon_pt((0, -3.6, -0.1)), (-1, 0, 0), up=(0, -1, 0), size=(0.8, 1.3),
+            depth=0.5, opacity=0.9)
+
+
+def rust_decals(a):
+    """Rust drips (20-40 cm) under bolt rows on the bone plates and below the main seams."""
+    n = 0
+
+    def drip(loc, normal, length=0.32, op=0.85):
+        nonlocal n
+        n += 1
+        a.decal(rust_drip(100 + n), V(loc) + V((0, 0, -length * 0.45)), normal, up=(0, 0, 1),
+                size=(length * 0.22, length), depth=0.12, opacity=op, name=f'rust_{n:02d}')
+    for t, ln in ((0.18, 0.34), (0.5, 0.26), (0.83, 0.4)):            # chest bone plate (L), lower bolt row
+        p, nn = facet(UPPER, 7.95, t, 1, lift=0.05)
+        drip(p, nn, ln)
+    for t, ln in ((0.4, 0.3), (0.75, 0.24)):                          # chest bone insert (R)
+        p, nn = facet(UPPER, 7.95, t, -1, lift=0.05)
+        drip(p, nn, ln)
+    for s in (1, -1):
+        drip((s * 0.74, 2.52, 7.2), (0, 1, 0), 0.36)                  # backpack plate / pack seams
+        drip((s * 0.9, 2.3, 8.4), (0, 1, 0.2), 0.3)
+        drip((s * (PX[3] + 0.08), -0.5, 7.7), (s, 0, 0), 0.34)        # pauldron outer face
+        drip((s * (PX[3] + 0.08), 0.42, 7.72), (s, 0, 0), 0.26)
+        for M, pt in ((seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)), (0.0, -0.66, -0.56)),
+                      (seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)), (0.3, -0.62, -1.3))):
+            q = M @ V((pt[0] * s, pt[1], pt[2]))
+            drip(q, (0, -1, 0), 0.32)                                 # under the knee plate / greave seam
 
 
 def cards(a):
@@ -1081,23 +1268,28 @@ def cards(a):
         def N(Rm, n):
             q = Rm @ V(n)
             return q if s > 0 else mx(q)
-        card(a, D.text_decal(S, px=260, color=KK, worn=0.3, seed=30 + s), T(th_f, (0.7, -0.08, -1.0)), N(rot_t, (1, 0, 0)),
-             up=N(rot_t, (0, 0, 1)), size=(0.22, None), parent='thigh_' + S)
+        card(a, D.text_decal(S, px=260, color=KK, worn=0.3, seed=30 + s), T(th_f, (0.795, -0.1, -0.92)),
+             N(rot_t, (1, 0, 0)), up=N(rot_t, (0, 0, 1)), size=(0.22, None), parent='thigh_' + S)
         card(a, D.serial_plate((f'RIG-07 LEG {S}', 'LOT 0417-C  HYD 35MPa'), w=640, seed=32 + s),
-             T(sh_f, (0.625, -0.02, -1.0)), N(rot_s, (1, 0, 0.06)), up=N(rot_s, (0, 0, 1)), size=(0.44, None),
-             parent='shin_' + S)
-        card(a, D.text_decal(['CAUTION', '挟まれ注意'], px=240, color=KK, worn=0.22, seed=34 + s),
-             T(sh_f, (0.0, -0.79, -0.98)), N(rot_s, (0, -1, -0.09)), up=N(rot_s, (0, 0, 1)), size=(0.56, None),
-             parent='shin_' + S)
-        card(a, D.hazard_decal(768, 128, seed=36 + s), T(sh_f, (0.0, -0.575, -1.82)), N(rot_s, (0, -1, -0.13)),
-             up=N(rot_s, (0, 0, 1)), size=(0.6, None), parent='shin_' + S, density=380)
-        card(a, D.text_decal('07', px=240, color=KK, worn=0.3, seed=38 + s), T(sh_f, (0.0, -0.93, 0.06)),
+             T(sh_f, (SHIN_SIDE_X + 0.012, 0.34, -1.0)), N(rot_s, (1, 0, 0.08)), up=N(rot_s, (0, 0, 1)),
+             size=(0.4, None), parent='shin_' + S)
+        # pinch warning + hazard band on the OUTER greave facet (cards lie flat on one facet)
+        p, n = K.prow_facet(SHIN_SECS, -0.94, 0.52, s, lift=0.085)
+        card(a, D.text_decal(['CAUTION', '挟まれ注意'], px=240, color=KK, worn=0.22, seed=34 + s), T(sh_f, p),
+             N(rot_s, n), up=N(rot_s, (0, 0, 1)), size=(0.4, None), parent='shin_' + S)
+        p, n = K.prow_facet(SHIN_SECS, -1.62, 0.5, s, lift=0.066)
+        card(a, D.hazard_decal(768, 128, seed=36 + s), T(sh_f, p), N(rot_s, n), up=N(rot_s, (0, 0, 1)),
+             size=(0.38, None), parent='shin_' + S, density=380)
+        card(a, D.text_decal('07', px=240, color=KK, worn=0.3, seed=38 + s), T(sh_f, (0.0, -0.95, 0.06)),
              N(rot_s, (0, -1, 0.42)), up=N(rot_s, (0, 0.42, 1)), size=(0.26, None), parent='shin_' + S)
+        card(a, D.text_decal(['MAX 40t'], px=160, color=KK, worn=0.3, seed=60 + s), T(sh_f, (0.0, 0.64, -0.72)),
+             N(rot_s, (0, 1, 0.05)), up=N(rot_s, (0, 0, 1)), size=(0.36, None), parent='shin_' + S)
         ax, ay, az = ANKLE
-        card(a, D.hazard_decal(768, 160, seed=40 + s), m_leg((ax, ay - 1.12, 0.38), s), (0, -0.62, 0.78),
-             up=(0, 0.78, 0.62), size=(0.8, None), parent='foot_' + S, density=360)
-        card(a, D.text_decal(['NO STEP', '踏むな'], px=180, color=B, worn=0.3, seed=42 + s), m_leg((ax, ay + 0.2, 0.585), s),
-             (0, 0, 1), up=(0, -1, 0), size=(0.44, None), parent='foot_' + S)
+        for k, dx in enumerate((-0.29, 0.29)):
+            card(a, D.hazard_decal(512, 160, seed=40 + s + 3 * k), m_leg((ax + dx, ay - 1.16, 0.3), s), (0, -0.79, 0.61),
+                 up=(0, 0.61, 0.79), size=(0.44, None), parent='foot_' + S, density=360)
+        card(a, D.text_decal(['NO STEP', '踏むな'], px=180, color=B, worn=0.3, seed=42 + s),
+             m_leg((ax, ay - 0.42, 0.68), s), (0, -0.3, 1), up=(0, -1, -0.3), size=(0.42, None), parent='foot_' + S)
     # back: HOT plate, IRONWAKE stencil, arrows
     card(a, D.warning_label('HOT', '高温注意', ('EXHAUST ZONE', '排気口付近立入禁止'), w=900, seed=44),
          (-0.74, 2.515, 7.74), (0, 1, 0.12), size=(0.5, None), parent='booster_back')
@@ -1160,6 +1352,10 @@ COLORS = {
                         emit='#8FF0FF', emit_strength=3.0, decals=False),
     'bell_heat': dict(color='#3A302A', metal=0.85, rough=0.38, wear=0.0, grime=0.5, rust=0.0, dust=0.0, var=0.06,
                       pattern='heat', decals=False),
+    'glass': dict(color='#0A0D10', metal=0.0, rough=0.05, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                  decals=False),
+    'glow_rim': dict(color='#1A1410', metal=0.0, rough=0.4, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                     emit='#7A2A10', emit_strength=6.0, decals=False),
 }
 OBJ_WEIGHT = {'head_geo': 2.0, 'eye_geo': 1.0, 'torso_geo': 1.5, 'weapon_R_geo': 1.1, 'arm_L_geo': 1.35,
               'arm_R_geo': 1.35, 'shoulder_L_geo': 1.1, 'shoulder_R_geo': 1.05, 'forearm_L_geo': 1.1,
@@ -1186,16 +1382,22 @@ CLAY = {
     'back': dict(azimuth=160, elevation=14, lens=50, distance=26, target=(0, 0.5, 5.3)),
     'back34': dict(azimuth=135, elevation=24, lens=50, distance=27, target=(0, 0.3, 5.3)),
     'close': dict(azimuth=-28, elevation=10, lens=70, fill=2.4, target=(0.0, -0.6, 8.6)),
+    'legs': dict(azimuth=-34, elevation=6, lens=50, distance=11, target=(0.0, -0.3, 2.6)),
+    'legs_back': dict(azimuth=150, elevation=14, lens=50, distance=11, target=(0.0, 0.3, 2.6)),
+    'head': dict(azimuth=-20, elevation=4, lens=70, distance=7, target=(0.0, -0.8, 8.9)),
 }
 POSE_VIEW = dict(azimuth=-58, elevation=10, lens=45, distance=27, target=(0, -0.3, 4.9))
 POSES = {'crouch': POSE_VIEW, 'walk': POSE_VIEW, 'boost': POSE_VIEW, 'aim_up': POSE_VIEW, 'twist': POSE_VIEW,
          'lunge': POSE_VIEW}
 
-WEATHER = iw.Weathering(edge_wear=1.45, grime=1.0, streaks=1.3, rust=0.55, dust=0.35, chip_threshold=0.52,
-                        flat_chips=0.5, macro=0.09, ground_dirt=0.45, ao_in_albedo=0.0, rough_breakup=0.18,
-                        edge_lo=0.08, edge_hi=0.36, bare_dark=(0.17, 0.175, 0.18), bare_light=(0.29, 0.30, 0.31))
-TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 2048, 'normal': 2048, 'emissive': 512},
-             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 512}}
+# r2: chips read as BARE STEEL (less lighter-paint polish, brighter bare metal, more chips),
+# stronger roughness break-up and run-off streaks
+WEATHER = iw.Weathering(edge_wear=1.6, grime=1.05, streaks=1.5, rust=0.7, dust=0.35, chip_threshold=0.5,
+                        flat_chips=0.6, macro=0.1, ground_dirt=0.5, ao_in_albedo=0.0, rough_breakup=0.3,
+                        edge_lo=0.08, edge_hi=0.34, edge_polish=0.07, bare_dark=(0.2, 0.205, 0.21),
+                        bare_light=(0.3, 0.31, 0.32))
+TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1024, 'normal': 2048, 'emissive': 1024},   # r2: ORM 1024 (GLB <= 2.43 MB)
+             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
 
 
 def main():

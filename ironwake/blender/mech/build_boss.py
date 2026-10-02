@@ -104,6 +104,29 @@ def rivets(p0, p1, pitch, normal, r=0.016, mat='steel'):
     return g
 
 
+def pad(corners, thick, mat='paint_secondary', normal_hint=None, inner=0.13, bolts=True, ridge=0.0, **kw):
+    """Hard-edged armour pad (r2: the cream pads read as pillows): near-vertical side walls
+    with a 2 cm chamfer, bolts along the edges, and a raised INSET PANEL on top (a thinner
+    plate shrunk toward the centre) so every pad has a seam line and a second value step."""
+    C = [Vector(c) for c in corners]
+    o = sum(C, Vector()) / len(C)
+    n = (C[1] - C[0]).cross(C[-1] - C[0]).normalized()
+    if normal_hint is not None and n.dot(Vector(normal_hint)) < 0:
+        n = -n
+    g = Geo()
+    g.merge(K.plate_world(C, thick, mat=mat, normal_hint=n, inset=0.02, bevel=0.006, chamfer=kw.pop('chamfer', 0.05),
+                          bolts=1 if bolts else 0, bolt_r=0.015, bolt_spacing=0.22, ridge=ridge, **kw))
+    Ci = [o + (c - o) * (1.0 - inner * 2.2) + n * (thick + 0.002) for c in C]
+    g.merge(K.plate_world(Ci, 0.02, mat=mat, normal_hint=n, inset=0.008, bevel=0.004, chamfer=0.03))
+    return g
+
+
+def seams(g, d, center, normals, ts, gap=0.022, depth=0.018):
+    """Panel-seam grooves across a limb shell at fractions ts along direction d from center."""
+    for t in ts:
+        K.grooves(g, normals, Vector(center) + Vector(d) * t, d, gap=gap, depth=depth)
+
+
 # ============================================================================ pelvis / torso
 def build_pelvis():
     g = Geo()
@@ -143,8 +166,14 @@ def build_torso():
     arm = []
     for s in (1, -1):
         # cream keel plates (the 'chest' of the hound) + oxide lower plates + ID stripe
-        arm.append(K.prow_plate(CHEST, 7.2, 8.36, 0.05, 0.86, s, 0.07, 'paint_secondary', chamfer=0.1, bolts=1,
-                                bolt_r=0.018, bolt_spacing=0.4))
+        arm.append(K.prow_plate(CHEST, 7.2, 8.36, 0.05, 0.86, s, 0.07, 'paint_secondary', chamfer=0.05, bolts=1,
+                                bolt_r=0.018, bolt_spacing=0.3, inset=0.02))
+        a_, n_ = K.prow_facet(CHEST, 7.42, 0.2, s, lift=0.084)
+        b_, _ = K.prow_facet(CHEST, 7.42, 0.72, s, lift=0.084)
+        c_, _ = K.prow_facet(CHEST, 8.12, 0.72, s, lift=0.084)
+        d_, _ = K.prow_facet(CHEST, 8.12, 0.2, s, lift=0.084)
+        arm.append(K.plate_world([a_, b_, c_, d_], 0.022, mat='paint_secondary', normal_hint=n_, inset=0.008,
+                                 chamfer=0.03))
         arm.append(K.prow_plate(CHEST, 6.66, 7.02, 0.12, 0.8, s, 0.05, 'paint_primary', chamfer=0.05))
         n = K.prow_facet(CHEST, 7.16, 0.5, s)[1]
         arm.append(K.strip(K.prow_facet(CHEST, 7.14, 0.08, s)[0], K.prow_facet(CHEST, 7.14, 0.86, s)[0], 0.07, 0.03, n))
@@ -215,7 +244,7 @@ def build_head():
     K.grooves(hd, [(0, 0, 1), (1, 0, 0), (-1, 0, 0), (1, 0, 1), (-1, 0, 1)], (0, -1.2, 0), (0, 1, 0))
     g.merge(hd)
     # slit recess across the brow (single eye) - glowing bar lives under 'eye'
-    g.merge(K.shell([(-1.86, -0.38, 0.38, 8.54, 8.68, 0.03), (-2.24, -0.3, 0.3, 8.5, 8.62, 0.03)], 'Y', mat='steel_dark'))
+    g.merge(K.shell([(-1.86, -0.4, 0.4, 8.53, 8.69, 0.03), (-2.24, -0.32, 0.32, 8.49, 8.63, 0.03)], 'Y', mat='steel_dark'))
     # crest fin (cream) with ID stripe, jaw guard, swept 'ear' antennas
     fin = P.prism(P.fillet([(-2.0, 8.66), (-1.2, 8.92), (-0.5, 9.2), (-0.62, 8.9)], 0.03, 1), 0.08, bevel=0.012, segs=1,
                   mat='paint_secondary', axis='X')
@@ -248,7 +277,7 @@ def _to_head(g):
 def build_eye():
     g = Geo()
     # single slit: a thin glowing bar standing proud of the visor band (front face + wrapped ends)
-    g.merge(K.shell([(-2.265, -0.32, 0.32, 8.535, 8.585, 0.01), (-1.88, -0.41, 0.41, 8.585, 8.635, 0.01)], 'Y',
+    g.merge(K.shell([(-2.265, -0.33, 0.33, 8.52, 8.6, 0.012), (-1.88, -0.42, 0.42, 8.57, 8.65, 0.012)], 'Y',
                     bevel=0.004, mat='lens'))
     return _to_head(g)
 
@@ -508,20 +537,23 @@ def build_thigh():
                             (0.8, 0.7, 1.42, -0.4, 0.44, 0.16), (0.95, 0.76, 1.36, -0.32, 0.36, 0.12)],
                 mat='paint_primary')
     th.transform(Matrix.Translation((-1.0, 0, 0)))   # sections are in absolute x: undo limb's p0.x offset
+    dth = (Vector(KNEE) - Vector(HIP)).normalized()
+    seams(th, dth, HIP, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.62, 1.32))
     g.merge(th)
-    g.merge(K.plate_world([(1.45, 0.1, 5.02), (1.45, -0.62, 4.1), (1.44, -0.3, 3.9), (1.45, 0.34, 4.7)], 0.05,
-                          mat='paint_secondary', normal_hint=(1, 0, 0), chamfer=0.06, bolts=1, bolt_r=0.016))
-    g.merge(K.plate_world([(1.46, -0.3, 5.52), (1.46, 0.62, 5.36), (1.46, 0.6, 4.98), (1.46, -0.22, 5.04)], 0.05,
-                          mat='paint_primary', normal_hint=(1, 0, 0), chamfer=0.05))
+    g.merge(pad([(1.45, 0.1, 5.02), (1.45, -0.62, 4.1), (1.44, -0.3, 3.9), (1.45, 0.34, 4.7)], 0.05,
+                normal_hint=(1, 0, 0), chamfer=0.05))
+    g.merge(pad([(1.46, -0.3, 5.52), (1.46, 0.62, 5.36), (1.46, 0.6, 4.98), (1.46, -0.22, 5.04)], 0.05,
+                mat='paint_primary', normal_hint=(1, 0, 0), chamfer=0.05, inner=0.16))
+    g.merge(rivets(Vector(HIP) + Vector((0.47, 0.3, -0.5)), Vector(KNEE) + Vector((0.4, 0.26, 0.5)), 0.12, (1, 0, 0)))
+    g.merge(rivets(Vector(HIP) + Vector((-0.31, 0.2, -0.45)), Vector(KNEE) + Vector((-0.37, 0.2, 0.5)), 0.12, (-1, 0, 0)))
     kx, ky, kz = KNEE
     d = (Vector(KNEE) - Vector(HIP)).normalized()
     fn = Vector((0, d.z, -d.y)).normalized()
     if fn.y > 0:
         fn = -fn
     q0, q1 = Vector(HIP).lerp(Vector(KNEE), 0.28) + fn * 0.55, Vector(HIP).lerp(Vector(KNEE), 0.82) + fn * 0.42
-    g.merge(K.plate_world([q0 + Vector((-0.34, 0, 0)), q0 + Vector((0.34, 0, 0)), q1 + Vector((0.28, 0, 0)),
-                           q1 + Vector((-0.28, 0, 0))], 0.06, mat='paint_secondary', normal_hint=fn, chamfer=0.08,
-                          ridge=0.03, ridge_axis='Y', bolts=1, bolt_r=0.016))
+    g.merge(pad([q0 + Vector((-0.34, 0, 0)), q0 + Vector((0.34, 0, 0)), q1 + Vector((0.28, 0, 0)),
+                 q1 + Vector((-0.28, 0, 0))], 0.06, normal_hint=fn, chamfer=0.06))
     g.merge(K.strip(q0 + Vector((-0.3, 0, 0)) + fn * 0.07, q0 + Vector((0.3, 0, 0)) + fn * 0.07, 0.08, 0.01, fn))
     for cx, sg in ((0.72, -1), (1.44, 1)):
         g.merge(K.cheek((cx, ky, kz), sg, 0.4, 0.08, strap_to=(ky + 0.3, kz + 0.42), strap_w=0.44))
@@ -558,16 +590,19 @@ def build_shin():
     up = K.limb(KNEE, HOCK, [(0.0, 0.8, 1.36, -0.34, 0.3, 0.12), (0.25, 0.7, 1.46, -0.5, 0.44, 0.18),
                              (0.75, 0.78, 1.42, -0.4, 0.36, 0.14), (1.0, 0.84, 1.36, -0.3, 0.3, 0.1)], mat='paint_primary')
     up.transform(Matrix.Translation((-kx, 0, 0)))
+    dsh = (Vector(HOCK) - Vector(KNEE)).normalized()
+    seams(up, dsh, KNEE, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.7, 1.45))
     g.merge(up)
+    g.merge(rivets(Vector(KNEE) + dsh * 0.5 + Vector((0.4, 0.3, 0)), Vector(KNEE) + dsh * 1.7 + Vector((0.34, 0.26, 0)),
+                   0.12, (1, 0, 0)))
     # cream greave on the upper shin (facing forward-down)
     d = (Vector(HOCK) - Vector(KNEE)).normalized()
     nrm = Vector((0, -d.z, d.y)).normalized()
     if nrm.y > 0:
         nrm = -nrm
     q = [Vector(KNEE) + d * t + nrm * 0.5 for t in (0.35, 1.45)]
-    g.merge(K.plate_world([q[0] + Vector((-0.34, 0, 0)), q[0] + Vector((0.34, 0, 0)), q[1] + Vector((0.28, 0, 0)),
-                           q[1] + Vector((-0.28, 0, 0))], 0.06, mat='paint_secondary', normal_hint=nrm, chamfer=0.08,
-                          ridge=0.03, ridge_axis='Y', bolts=1, bolt_r=0.016))
+    g.merge(pad([q[0] + Vector((-0.34, 0, 0)), q[0] + Vector((0.34, 0, 0)), q[1] + Vector((0.28, 0, 0)),
+                 q[1] + Vector((-0.28, 0, 0))], 0.06, normal_hint=nrm, chamfer=0.06))
     # hock joint (fixed) + rear spur
     g.merge(K.drum(HOCK, (1, 0, 0), 0.3, 0.62, mat='paint_dark', accent='paint_accent'))
     sp = P.prism(P.fillet([(hy - 0.1, hz + 0.3), (hy + 0.62, hz - 0.12), (hy + 0.2, hz - 0.2)], 0.03, 1), 0.2,
@@ -577,6 +612,8 @@ def build_shin():
     mt = K.limb(HOCK, ANKLE, [(0.0, 0.86, 1.34, -0.28, 0.26, 0.1), (0.5, 0.88, 1.36, -0.3, 0.28, 0.1),
                               (1.0, 0.9, 1.34, -0.24, 0.22, 0.08)], mat='paint_primary')
     mt.transform(Matrix.Translation((-hx, 0, 0)))
+    dmt = (Vector(ANKLE) - Vector(HOCK)).normalized()
+    seams(mt, dmt, HOCK, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.45, 0.95))
     g.merge(mt)
     # tendon rams: knee region -> hock (both inside the shin node, so they never detach)
     for x in (0.78, 1.42):
@@ -743,16 +780,21 @@ COLORS = {'paint_primary': {'color': '#5A3B33', 'rough': 0.54, 'metal': 0.25},
           'marker_amber': dict(color='#1A1208', metal=0.0, rough=0.25, wear=0.0, grime=0.0, rust=0.0, dust=0.0,
                                var=0.0, emit='#FFB347', emit_strength=3.0, decals=False),
           'bell_heat': dict(color='#3A302A', metal=0.85, rough=0.38, wear=0.0, grime=0.5, rust=0.0, dust=0.0, var=0.06,
-                            pattern='heat', decals=False)}
+                            pattern='heat', decals=False),
+          'glow_rim': dict(color='#1A1410', metal=0.0, rough=0.4, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                           emit='#7A2A10', emit_strength=6.0, decals=False)}
 OBJ_WEIGHT = {'head_geo': 1.8, 'torso_geo': 1.45, 'weapon_R_geo': 1.1, 'booster_back_geo': 1.1, 'foot_L_geo': 0.8,
               'foot_R_geo': 0.8, 'pelvis_geo': 0.8, 'hand_R_geo': 0.85, 'arm_L_geo': 1.3, 'arm_R_geo': 1.3,
               'weapon_L_geo': 1.15, 'shin_L_geo': 1.1, 'shin_R_geo': 1.1}
-WEATHER = iw.Weathering(edge_wear=1.4, grime=1.35, streaks=1.5, rust=0.9, dust=0.35, chip_threshold=0.52,
-                        flat_chips=0.5, macro=0.11, ground_dirt=0.55, ao_in_albedo=0.0, rough_breakup=0.18,
-                        edge_lo=0.08, edge_hi=0.36, bare_dark=(0.16, 0.16, 0.165), bare_light=(0.28, 0.285, 0.29))
+# r2: wear = crisp bare-steel chips on the EDGES (no white flat-panel dabs or pale ash smudges on the
+# oxide tops), more roughness break-up
+WEATHER = iw.Weathering(edge_wear=1.5, grime=1.35, streaks=1.6, rust=0.95, dust=0.15, chip_threshold=0.54,
+                        flat_chips=0.12, macro=0.11, ground_dirt=0.55, ao_in_albedo=0.0, rough_breakup=0.3,
+                        edge_lo=0.08, edge_hi=0.34, edge_polish=0.05, bare_dark=(0.19, 0.195, 0.2),
+                        bare_light=(0.28, 0.29, 0.3))
 SET_B = ('pelvis', 'thigh', 'shin', 'foot', 'booster', 'nozzle')
-TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 2048, 'normal': 2048, 'emissive': 512},
-             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 512}}
+TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1024, 'normal': 2048, 'emissive': 1024},   # r2: ORM 1024 (GLB budget)
+             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
 
 
 def set_of(name):

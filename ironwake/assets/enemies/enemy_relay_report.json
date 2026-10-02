@@ -1,48 +1,46 @@
 {
- "tris": 23133,
- "parts": 6,
+ "tris": 24712,
+ "parts": 8,
  "colliders": 0,
- "decals": 13,
- "texel_density_px_per_m": 19.6,
- "res": 1024,
+ "decals": 5,
+ "texel_density_px_per_m": 52.4,
+ "res": 2048,
  "timings_s": {
   "model": 1.0,
-  "bake.albedo": 4.2,
-  "bake.matid": 2.3,
-  "bake.noise": 3.2,
-  "bake.wnormal": 2.8,
-  "bake.wpos": 2.6,
-  "bake.masks": 6.8,
-  "bake.ao": 5.4,
-  "bake.normal": 5.0,
-  "bake.total": 34.8,
-  "composite": 3.2,
-  "export.glb": 0.3,
-  "export.gltfpack": 0.1,
-  "export.fbx": 0.1,
-  "render.enemy_relay_hero.png": 109.4,
-  "render.enemy_relay_front.png": 74.7,
-  "render.enemy_relay_back.png": 113.2,
-  "render.enemy_relay_close.png": 165.3
+  "bake.total": 2.2,
+  "composite": 15.2,
+  "export.glb": 0.7,
+  "export.gltfpack": 0.2,
+  "export.fbx": 0.1
  },
- "elapsed_s": 508.2,
- "glb_bytes": 721636,
+ "elapsed_s": 31.9,
+ "glb_bytes": 777148,
+ "glb_breakdown": {
+  "bytes": 777148,
+  "images": {
+   "enemy_relay_decals": 83976,
+   "enemy_relay_f_normal": 69200,
+   "enemy_relay_f_orm": 61164,
+   "enemy_relay_f_basecolor": 272544,
+   "enemy_relay_f_emissive": 1590
+  },
+  "image_bytes": 488474,
+  "geometry_bytes": 288674
+ },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_relay.fbx",
- "previews": [
-  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_relay_hero.png",
-  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_relay_front.png",
-  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_relay_back.png",
-  "/home/user/Kuchiwan/ironwake/assets/enemies/preview/enemy_relay_close.png"
- ],
+ "previews": [],
  "parts_tris": {
-  "base_geo": 16651,
+  "base_geo": 3687,
+  "door_geo": 3241,
+  "kit_geo": 11444,
   "beacon_geo": 243,
   "core_geo": 1398,
   "head_geo": 2206,
-  "eye_geo": 188,
-  "barrel_geo": 2447
+  "eye_geo": 356,
+  "barrel_geo": 2137
  },
- "uv_coverage": 0.368,
- "total_s": 508.2
+ "uv_coverage": 0.613,
+ "cards": 10,
+ "total_s": 32.0
 }

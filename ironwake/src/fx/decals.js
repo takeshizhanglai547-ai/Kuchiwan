@@ -1,7 +1,9 @@
 // src/fx/decals.js — scorch / impact decals on static geometry (owner: weapons/VFX artist).
 //
 //   fx.decals.add(pos, normal, size, life, glow)
+//   fx.decals.addPool(pos, normal, size, life, intensity)   brief additive warm LIGHT POOL
 //   effect part { kind: 'decal', size: [min,max], life, glow 0..1, ground: maxHeight }
+//   effect part { kind: 'pool', size, life, intensity, ground: maxHeight }  (explosion flash on the slab)
 //     ground => the decal is dropped onto the ground/static surface below (explosions);
 //     otherwise it is placed at the impact point on the impact normal (bullets).
 // Decals are instanced quads on the pipeline SOFT layer. They compare their depth with the
@@ -33,14 +35,31 @@ ${soft || ''}
 #include <fog_pars_fragment>
 void main() {
   float v = vDecal.x;
+  if (v > 3.5) {
+    // light pool: additive radial #FFB04A wash, sharp attack, fast decay (the flash lighting the slab)
+    vec2 q = vUv * 2.0 - 1.0;
+    float r2 = dot(q, q);
+    float fall = exp(-r2 * 3.2) * (1.0 - smoothstep(0.6, 1.0, r2));
+    float k = vDecal.z * pow(1.0 - vDecal.y, 2.0) * smoothstep(0.0, 0.06, vDecal.y + 0.02);
+    vec3 pc = vec3(1.0, 0.434, 0.068) * fall * k;
+    #ifdef IW_SOFT
+      pc *= 1.0 - smoothstep(0.35, 1.2, abs(iwSceneDepth() - vViewZ));
+    #endif
+    if (max(pc.r, pc.g) < 0.002) discard;
+    gl_FragColor = vec4(pc, 0.0);
+    return;
+  }
   vec2 c = vec2((mod(v, 2.0) + vUv.x) * 0.5, 1.0 - (floor(v / 2.0) + 1.0 - vUv.y) * 0.5);
   vec4 t = texture2D(tMisc, c);
   float burn = t.g;
   float a = burn * vDecal.w * (1.0 - smoothstep(0.7, 1.0, vDecal.y));
   // soot core, brown heat-tint rim
-  vec3 rgb = mix(vec3(0.07, 0.05, 0.035), vec3(0.012, 0.011, 0.01), smoothstep(0.25, 0.75, burn));
-  float hot = vDecal.z * smoothstep(0.7, 1.0, burn + (t.a * 2.0 - 1.0) * 0.3 - 0.1);
-  vec3 glow = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), hot) * hot * 1.4;
+  // neutral soot (a brown rim read as a rust-red pool under the wreck), ash-grey fringe
+  vec3 rgb = mix(vec3(0.05, 0.046, 0.042), vec3(0.011, 0.0105, 0.01), smoothstep(0.25, 0.75, burn));
+  // fresh scorch: only scattered EMBERS glow (noise-gated), never a uniformly hot disc
+  float emb = smoothstep(0.62, 0.8, (t.a * 2.0 - 1.0) + burn * 0.25);
+  float hot = vDecal.z * smoothstep(0.75, 1.0, burn) * emb;
+  vec3 glow = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), hot) * hot * 1.6;
   #ifdef IW_SOFT
     // only where the decal lies ON the opaque surface
     float sd = iwSceneDepth();
@@ -72,6 +91,7 @@ export class Decals {
     this.n = 0; this.next = 0;
     this.age = new Float32Array(MAXD); this.life = new Float32Array(MAXD); this.heat = new Float32Array(MAXD);
     this.variant = new Float32Array(MAXD); this.alpha = new Float32Array(MAXD); this.alive = new Uint8Array(MAXD);
+    this.heatFix = new Uint8Array(MAXD);   // pools: intensity does not cool (the shader fades by age)
     this.mats = new Float32Array(MAXD * 16);
     const g = new THREE.PlaneGeometry(1, 1);
     this.iDecal = new THREE.InstancedBufferAttribute(new Float32Array(MAXD * 4), 4).setUsage(THREE.DynamicDrawUsage);
@@ -99,6 +119,21 @@ export class Decals {
     pl.markSoft(this.mesh);
   }
 
+  /** Light-pool part (see header): dropped onto the static surface below the flash. */
+  poolFromEffect(part, pos, scale) {
+    _o.set(pos.x, pos.y + 0.5, pos.z);
+    const maxH = (part.ground || 10) * scale + 0.5;
+    if (!this.game.physics.raycast(_o, _down, maxH, _hit, { ground: true })) return;
+    const k = 1 - 0.6 * (_hit.dist / maxH);
+    this.addPool(_hit.point, _hit.normal, part.size * Math.sqrt(scale) * (0.7 + 0.3 * k), part.life || 0.35, (part.intensity || 1) * k);
+  }
+
+  addPool(pos, normal, size, life, intensity) {
+    this.add(pos, normal, size, life, intensity);
+    const i = (this.next + MAXD - 1) % MAXD;
+    this.variant[i] = 4; this.heatFix[i] = 1;
+  }
+
   /** Effect part dispatch (see header). */
   fromEffect(part, pos, dir, o, scale) {
     const r = this.rng;
@@ -117,7 +152,7 @@ export class Decals {
     const i = this.next; this.next = (this.next + 1) % MAXD;
     if (!this.alive[i]) this.n++;
     this.alive[i] = 1;
-    this.age[i] = 0; this.life[i] = life; this.heat[i] = glow;
+    this.age[i] = 0; this.life[i] = life; this.heat[i] = glow; this.heatFix[i] = 0;
     this.variant[i] = Math.floor(this.rng.next() * 4); this.alpha[i] = 0.92;
     _n.copy(normal).normalize();
     _q.setFromUnitVectors(_z, _n);
@@ -135,7 +170,7 @@ export class Decals {
     for (let i = 0; i < MAXD; i++) {
       if (!this.alive[i]) continue;
       this.age[i] += dt;
-      this.heat[i] *= Math.exp(-dt * 1.6);
+      if (!this.heatFix[i]) this.heat[i] *= Math.exp(-dt * 2.4);
       if (this.age[i] >= this.life[i]) { this.alive[i] = 0; this.n--; }
     }
   }

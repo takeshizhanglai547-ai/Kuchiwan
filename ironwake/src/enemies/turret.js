@@ -60,6 +60,7 @@ export class Turret extends Enemy {
     this.kickP = 0; this.kickR = 0; this.kickVP = 0; this.kickVR = 0;
     this.headRest = this.head.rotation.clone();          // kick / droop are offsets from the authored pose
     this.anim = makeAnimator('turret', this.model, this);
+    this.setupHitVolumes(this.model, ['base', 'core', 'head', 'barrel'], template);
   }
 
   /** Hit reaction: the gun head rocks on its mount (spring); heavy hits arc off the core. */

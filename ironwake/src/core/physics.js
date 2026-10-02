@@ -11,6 +11,9 @@
 //   body = { actor, kind: 'capsule'|'sphere', radius, height, offsetY, team, enabled }
 //   capsule axis runs from actor.pos.y + radius to actor.pos.y + height - radius
 //   (actor.pos is the FEET position). sphere center = actor.pos + (0, offsetY, 0).
+//   Optional NARROW PHASE (enemies lane): body.ray(origin, dir, maxT, pad, outNormal) -> t | -1.
+//   raycastBodies treats the capsule / sphere as the broadphase and, when it is crossed, asks
+//   body.ray for the exact surface hit (per-part hit volumes); its outNormal is the hit normal.
 //
 // QUERIES
 //   resolveCapsule(pos, radius, height, vel, contact)  push a capsule out of static geometry
@@ -31,6 +34,7 @@ const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _n = new THREE.Vector3
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _tmp = new THREE.Vector3();
 const _m4 = new THREE.Matrix4(), _box3 = new THREE.Box3();
 const _pos = new THREE.Vector3(), _quat = new THREE.Quaternion(), _scl = new THREE.Vector3();
+const _rn = new THREE.Vector3(), _rnBest = new THREE.Vector3();   // body.ray narrow-phase normals
 
 /** Oriented box collider. */
 export class BoxCollider {
@@ -455,6 +459,7 @@ export class Physics {
    */
   raycastBodies(origin, dir, maxDist, filter, hit, pad = 0) {
     hit.hit = false; hit.dist = maxDist; hit.body = null; hit.collider = null; hit.ground = false;
+    let fine = false;
     for (let i = 0; i < this.bodies.length; i++) {
       const b = this.bodies[i];
       if (!b.enabled || (filter && !filter(b))) continue;
@@ -469,11 +474,18 @@ export class Physics {
         const y0 = p.y + b.radius, y1 = p.y + Math.max(b.radius, b.height - b.radius);
         t = rayCapsuleY(origin, dir, hit.dist, p.x, y0, y1, p.z, r);
       }
+      if (t >= 0 && t < hit.dist && b.ray) {
+        // narrow phase: exact surface (the broadphase shell only says "close enough to test")
+        t = b.ray(origin, dir, hit.dist, pad, _rn);
+        if (t >= 0 && t < hit.dist) { hit.hit = true; hit.dist = t; hit.body = b; fine = true; _rnBest.copy(_rn); }
+        continue;
+      }
       if (t >= 0 && t < hit.dist) {
-        hit.hit = true; hit.dist = t; hit.body = b;
+        hit.hit = true; hit.dist = t; hit.body = b; fine = false;
       }
     }
-    if (hit.hit) {
+    if (hit.hit && fine) { hit.point.copy(origin).addScaledVector(dir, hit.dist); hit.normal.copy(_rnBest); }
+    else if (hit.hit) {
       hit.point.copy(origin).addScaledVector(dir, hit.dist);
       const b = hit.body, p = b.actor.pos;
       if (b.kind === 'sphere') _a.set(p.x, p.y + b.offsetY, p.z);

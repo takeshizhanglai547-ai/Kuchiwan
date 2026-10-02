@@ -24,17 +24,21 @@ varying vec2 vUv; varying float vViewZ;
 void main() {
   float x = vUv.x, y = vUv.y;               // x: along the sweep (0 start .. 1 end), y: radial (0 inner .. 1 tip)
   float behind = uHead - x;
-  if (behind < -0.02) discard;
-  float lead = smoothstep(-0.02, 0.03, behind);
-  float tail = exp(-max(behind, 0.0) * 3.2);
-  float blade = exp(-pow((y - 0.86) / 0.07, 2.0));             // the blade's cutting edge path
-  float body = smoothstep(0.0, 0.55, y) * (1.0 - smoothstep(0.93, 1.0, y));
-  float streak = texture2D(tNoise, vec2(x * 0.6 - uTime * 0.2, y * 3.5)).a * 2.0 - 1.0;
-  streak = smoothstep(0.35, 0.8, streak);
-  float head = exp(-max(behind, 0.0) * 30.0) * lead;          // bright leading edge
-  float a = lead * tail * (blade * 1.3 + body * (0.05 + 0.3 * streak) * (1.0 - behind)) + head * (0.3 + blade);
+  if (behind < -0.03) discard;
+  float lead = smoothstep(-0.03, 0.02, behind);
+  float tail = exp(-max(behind, 0.0) * 2.6);
+  // SMOOTH radial profile (combat r1: radially-varying noise printed concentric 'vinyl' bands):
+  // a white-hot cutting edge, a cyan rim around it and a faint inner wash that fades to the hub
+  float core = exp(-pow((y - 0.86) / 0.035, 2.0));
+  float rim = exp(-pow((y - 0.83) / 0.12, 2.0));
+  float inner = smoothstep(0.05, 0.85, y) * (1.0 - smoothstep(0.9, 1.0, y));
+  // the TRAILING part erodes away with noise that varies along the sweep only (radially ~constant)
+  float n = texture2D(tNoise, vec2(x * 1.25 - uTime * 0.5, 0.21 + y * 0.18)).a * 2.0 - 1.0;   // 0..1
+  float ero = smoothstep(0.0, 0.45, n + 0.3 - max(behind, 0.0) * 1.1);
+  float head = exp(-max(behind, 0.0) * 24.0) * lead;          // bright leading edge
+  float a = lead * tail * (core * 1.35 + (rim * 0.5 + inner * 0.12) * ero) + head * (0.18 + 0.8 * rim);
   a *= uFade;
-  vec3 col = mix(uRim, uCore, clamp(blade * 0.8 + head, 0.0, 1.0));
+  vec3 col = mix(uRim, uCore, clamp(core * 0.9 + head * 0.5, 0.0, 1.0));
   a *= smoothstep(0.6, 2.6, vViewZ);
   if (a < 0.003) discard;
   gl_FragColor = vec4(col * a, 0.0);

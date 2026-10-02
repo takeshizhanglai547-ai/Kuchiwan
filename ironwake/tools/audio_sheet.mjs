@@ -38,7 +38,7 @@ const WAV = argv.includes('--wav');
 const CATS = [
   ['WEAPONS', '#ff9a3c', ['rifle', 'cannon', 'missile_launch', 'blade', 'reload', 'enemy_gun', 'enemy_laser']],
   ['IMPACTS · FLYBYS · EXPLOSIONS', '#ff5a4a', ['impact_metal', 'impact_ground', 'ricochet', 'whiz', 'blade_hit', 'damage_taken', 'stagger', 'explosion_small', 'explosion_large']],
-  ['MOVEMENT · BOOSTERS', '#5ad1ff', ['qb', 'boost_ignite', 'ab_start', 'jump', 'land', 'footstep']],
+  ['MOVEMENT · BOOSTERS', '#5ad1ff', ['qb', 'boost_ignite', 'ab_start', 'jump', 'land', 'footstep', 'footstep_steel']],
   ['FCS · COCKPIT ALERTS (UI band)', '#8cff6a', ['hit_confirm', 'kill_confirm', 'lock', 'lock_switch', 'missile_lock', 'missile_alert', 'en_depleted', 'ap_warning', 'alarm', 'repair']],
   ['MISSION · MENUS · STINGERS', '#d68cff', ['objective', 'objective_tick', 'boss_stinger', 'mission_complete', 'mission_failed', 'ui_select', 'ui_confirm']],
   ['COMMS · AMBIENCE', '#c8c8c8', ['radio_open', 'radio_close', 'distant_clang']],
@@ -380,7 +380,7 @@ async function pageMain(opts) {
   }
 
   if (opts.only !== 'sfx') {
-    const secMusic = [], secBeds = [], secMix = [], secEngine = [];
+    const secMusic = [], secBeds = [], secMix = [], secEngine = [], secVo = [];
     let shared = null;
     try {
       const mus = await import(base + 'src/audio/music.js');
@@ -425,9 +425,32 @@ async function pageMain(opts) {
       const v = await import(base + 'src/audio/voice.js');
       const { buffer } = await v.renderVoiceDemo(OAC, SR);
       const vx = mono(buffer), vst = stats(vx);
-      secBeds.push({ x: vx, st: vst, accent: '#c8c8c8', title: 'comms: handler LEDGER radio voice (procedural)', sub: `formant babble -> 380-3100 Hz radio chain, saturation, static + squelch  pk ${vst.peakDb.toFixed(1)} dBFS` });
+      secBeds.push({ x: vx, st: vst, accent: '#c8c8c8', title: 'comms FALLBACK: procedural voice (only if a line has no recorded VO)', sub: `formant babble -> 380-3100 Hz radio chain, saturation, static + squelch  pk ${vst.peakDb.toFixed(1)} dBFS` });
       keep('voice_demo', buffer);
     } catch (e) { console.error('ir/voice render failed', e && e.stack || e); }
+    // ---- handler LEDGER voice-over: the shipped MP3 lines (assets/audio/build_vo.py) decoded and
+    // played through the live comm dressing (voice.js transmit: squelch, static bed, RF crackle)
+    try {
+      const v = await import(base + 'src/audio/voice.js');
+      const { VO_TABLE } = await import(base + 'src/audio/vo_table.js');
+      const SHOW = ['boss', 'start', 'boss_stagger', 'failed', 'brief'];
+      for (const key of SHOW) {
+        const L = VO_TABLE[key];
+        if (!L) continue;
+        const bytes = await (await fetch(base + `assets/audio/vo/${L.id}.mp3`)).arrayBuffer();
+        let vo = await new OAC(1, SR, SR).decodeAudioData(bytes);
+        if (key === 'brief') { // first 12 s of the 29 s briefing (the sheet column is fixed width)
+          const ac = new OAC(1, Math.ceil(12 * SR), SR); const s0 = ac.createBufferSource(); s0.buffer = vo; s0.connect(ac.destination); s0.start(0); vo = await ac.startRendering();
+        }
+        const { buffer } = await v.renderTransmission(OAC, SR, vo, 77, key === 'brief' ? v.COMM_BRIEF : v.COMM);
+        const x = mono(buffer), st = stats(x);
+        out.stats['vo_' + key] = st;
+        const txt = L.en.length > 118 ? L.en.slice(0, 115) + '...' : L.en;
+        const chainTxt = key === 'brief' ? 'TTS -> recorded-message chain HP 220 / +4 dB 1.65 kHz / AGC 3:1 / LP 5.2 kHz' : 'TTS -> field radio chain HP 380 / +6 dB 1.65 kHz / AGC 4:1 / tanh / LP 3.1 kHz';
+        secVo.push({ x, st, accent: '#e6eef0', title: `LEDGER VO "${key}" ${L.dur.toFixed(1)} s${key === 'brief' ? ' (first 12 s of the briefing)' : ''}`, sub: [`"${txt}"`, `${chainTxt}, MP3 16 kHz 24 kbps; live squelch + static + RF ticks  pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS`] });
+        keep('vo_' + key, buffer);
+      }
+    } catch (e) { console.error('vo render failed', e && e.stack || e); }
 
     // ---- a scripted combat scene through the REAL mixer (engine.js): spatialisation, air
     // absorption, distance delay, reverb, voice limiting and sidechain ducking all active.
@@ -439,7 +462,14 @@ async function pageMain(opts) {
       const T = 14;
       const IDM = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; // listener at origin, facing -Z
       const ALL = ['sfx', 'impact', 'ui', 'stinger', 'voice', 'bed', 'amb', 'music'];
-      const KEEP = { full: ALL, music: ['music'], beds: ['bed', 'amb'], sfx: ['sfx', 'impact', 'ui', 'stinger', 'voice'], probe: [] };
+      const KEEP = { full: ALL, music: ['music'], beds: ['bed', 'amb'], sfx: ['sfx', 'impact', 'ui', 'stinger'], voice: ['voice'], probe: [] };
+      // LEDGER line during the scene (the shipped VO through the live comm dressing)
+      let voLine = null;
+      try {
+        const { VO_TABLE } = await import(base + 'src/audio/vo_table.js');
+        const bytes = await (await fetch(base + `assets/audio/vo/${VO_TABLE.mt_half.id}.mp3`)).arrayBuffer();
+        voLine = await new OAC(1, SR, SR).decodeAudioData(bytes);
+      } catch (e) { console.error('scene VO load failed', e && e.stack || e); }
       const scene = async (mode) => {
         const ac = new OAC(2, Math.ceil(T * SR), SR);
         const E = new eng.AudioEngine(ac, { seed: 7 });
@@ -448,7 +478,7 @@ async function pageMain(opts) {
         E.setListenerMatrix(IDM);
         E.music.setState('combat2', 0.05);
         for (const k of ALL) if (!KEEP[mode].includes(k)) E.bus[k].gain.value = 0;
-        if (mode === 'music' || mode === 'beds') E.reverbRet.gain.value = 0;
+        if (mode === 'music' || mode === 'beds' || mode === 'voice') E.reverbRet.gain.value = 0;
         if (mode === 'probe') {
           // DC through the two duck gain stages -> L = music duck, R = world (sfx bus + beds) duck
           E.masterG.gain.value = 0;
@@ -483,6 +513,7 @@ async function pageMain(opts) {
         at(11.25, 'blade_hit', { pos: P(0, 5, -20) });
         at(11.6, 'explosion_large', { pos: P(250, 20, -260) }, 'expl 360m (+0.6 s)');
         at(12.6, 'alarm', null, 'alarm');
+        if (voLine) { E.radio(4, 7.6, voLine); marks.push([7.6, 'LEDGER VO']); }
         return { buffer: await ac.startRendering(), marks };
       };
       const full = await scene('full');
@@ -491,15 +522,16 @@ async function pageMain(opts) {
       if (opts.wav) out.wavs.scene_mix = Array.from(new Int16Array(x.map((v) => Math.max(-1, Math.min(1, v)) * 32767)));
       out.stats.scene_mix = st;
       const stems = {};
-      for (const k of ['music', 'beds', 'sfx']) stems[k] = mono((await scene(k)).buffer);
+      for (const k of ['music', 'beds', 'sfx', 'voice']) stems[k] = mono((await scene(k)).buffer);
       const probe = (await scene('probe')).buffer;
       const COLS = 940 - 42;
       secMix.push({
         x: stems.sfx, noWave: true, noSpec: true, accent: '#ffb400', marks: full.marks,
         title: 'MIX HIERARCHY: short-term loudness of each stem in the same scene',
-        sub: 'SFX transients stand clear above music and booster bed; ducking pulls music + beds down under cannon / explosions / blade hit / alarm',
+        sub: 'SFX transients stand clear above music and booster bed; ducking pulls music + beds down under cannon / explosions / blade hit / alarm; the LEDGER voice (white) sits above music + beds and ducks the music',
         curves: [
           { v: rmsCurve(stems.sfx, COLS), color: '#ffb400', label: 'SFX stem (dB)', lo: -54, hi: 0, width: 1.4 },
+          { v: rmsCurve(stems.voice, COLS), color: '#f4f7f8', label: 'LEDGER comm voice', lo: -54, hi: 0, width: 1.6 },
           { v: rmsCurve(stems.beds, COLS), color: '#5ad1ff', label: 'booster + ambience beds', lo: -54, hi: 0 },
           { v: rmsCurve(stems.music, COLS), color: '#d68cff', label: 'music stem', lo: -54, hi: 0 },
         ],
@@ -514,7 +546,7 @@ async function pageMain(opts) {
           { v: gainCurve(pw, COLS), color: '#5ad1ff', label: 'world duck gain', lo: -24, hi: 3, width: 1.6, dash: [5, 3] },
         ],
       });
-      out.stats.scene_stems = { music: stats(stems.music), beds: stats(stems.beds), sfx: stats(stems.sfx) };
+      out.stats.scene_stems = { music: stats(stems.music), beds: stats(stems.beds), sfx: stats(stems.sfx), voice: stats(stems.voice) };
 
       // ---- isolated engine demos (no music / beds): round-robin variance, distance, flybys, occlusion
       const demo = async (T2, script) => {
@@ -557,6 +589,7 @@ async function pageMain(opts) {
     } catch (e) { console.error('scene render failed', e && e.stack || e); }
     const sections = [
       { name: 'ADAPTIVE SCORE "WAKE PROTOCOL" — vertical layers crossfaded by game state / stage / boss / combat activity', color: '#d68cff', items: secMusic },
+      { name: 'COMMS — handler LEDGER voice-over (recorded lines, live radio dressing)', color: '#e6eef0', items: secVo },
       { name: 'CONTINUOUS BEDS · 3D EMITTERS · REVERB · COMMS', color: '#5ad1ff', items: secBeds },
       { name: 'MIX — the in-game engine.js mixer rendered offline', color: '#ffb400', items: secMix },
       { name: 'ENGINE DEMOS — variance, distance, flybys, occlusion', color: '#ff5a4a', items: secEngine },
@@ -602,10 +635,18 @@ async function live() {
     await page.waitForFunction(() => window.__game.audio.debug().musicState === 'briefing', null, { timeout: 30000 }).catch(() => {});
     const a3 = await page.evaluate(() => window.__game.audio.debug());
     rec('briefing: score crossfades + LEDGER comm voice', a3.musicState === 'briefing' && a3.radio, `music=${a3.musicState} radio=${a3.radio}`);
+    await page.waitForFunction(() => window.__game.audio.debug().comm === 'vo', null, { timeout: 8000 }).catch(() => {});
+    const a3b = await page.evaluate(() => window.__game.audio.debug());
+    rec('briefing: LEDGER recorded voice-over playing (not the synth fallback)', a3b.comm === 'vo', `comm=${a3b.comm} decoded VO lines=${a3b.vo}`);
     await page.click('.menu-briefing .menu-btn.primary', { timeout: 120000 });
     await page.waitForFunction(() => /explore|combat/.test(window.__game.audio.debug().musicState), null, { timeout: 30000 }).catch(() => {});
     const a4 = await page.evaluate(() => ({ d: window.__game.audio.debug(), s: window.__game.state }));
     rec('mission: combat score running', a4.s === 'playing' && /explore|combat/.test(a4.d.musicState), `state=${a4.s} music=${a4.d.musicState} plays=${JSON.stringify(a4.d.counts)}`);
+    rec('leaving the briefing cut its voice-over', a4.d.comm !== 'vo' || a4.d.radio, `comm=${a4.d.comm}`);
+    // the first radio beat fires 0.8 s of SIM time into the mission (slow on a CPU rasterizer)
+    await page.waitForFunction(() => ((document.querySelector('.rd-en') || {}).textContent || '').length > 0, null, { timeout: 120000 }).catch(() => {});
+    const a5 = await page.evaluate(() => ({ d: window.__game.audio.debug(), sub: (document.querySelector('.rd-en') || {}).textContent || '', t: window.__game.rawTime }));
+    rec('mission start: LEDGER VO plays with the HUD subtitle', a5.d.comm === 'vo', `comm=${a5.d.comm} sim t=${(+a5.t).toFixed(1)} s subtitle="${a5.sub.slice(0, 60)}"`);
     rec('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await browser.close(); await server.stop();

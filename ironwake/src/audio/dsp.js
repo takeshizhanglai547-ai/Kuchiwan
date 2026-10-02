@@ -181,15 +181,120 @@ export function modal(ac, out, t, r, o) {
   const g = gain(ac, o.gain ?? 1);
   g.connect(out);
   const dt = o.detune || 0;
+  // grit (0..1): part of each mode rings as a narrow noise band (Q gritQ) instead of a pure
+  // sine, so struck machinery reads as rough steel rather than a clean electronic ping
+  const grit = o.grit || 0;
+  let ns = null;
+  if (grit > 0) { let mx = 0; for (const p of o.partials) mx = Math.max(mx, p[2]); ns = noiseSrc(ac, 'white', t, mx + 0.03, r); }
   for (const [f, a, dec] of o.partials) {
     const osc = ac.createOscillator();
-    osc.frequency.value = f * (dt ? r.cents(dt) : 1);
+    const ff = f * (dt ? r.cents(dt) : 1);
+    osc.frequency.value = ff;
     const pg = gain(ac, 0);
-    envAD(pg.gain, t, a, 0.0008, dec);
+    envAD(pg.gain, t, a * (1 - grit * 0.6), 0.0008, dec);
     chain(osc, pg, g);
     osc.start(t); osc.stop(t + dec + 0.05);
+    if (ns && ff < ac.sampleRate * 0.45) {
+      const q = o.gritQ || 28;
+      const bp = filt(ac, 'bandpass', ff * r.range(0.985, 1.015), q), ng = gain(ac, 0);
+      envAD(ng.gain, t, a * grit * 0.6 * 0.21 * Math.sqrt((q * ac.sampleRate * 0.5) / ff) * 1.4, 0.0008, dec);
+      chain(ns, bp, ng, g);
+    }
   }
   if (o.click !== 0) noiseHit(ac, g, t, r, { kind: 'white', type: 'bandpass', f0: o.clickF || 3500, Q: 0.9, attack: 0.0004, decay: o.clickDecay || 0.006, gain: o.click ?? 0.6 });
+  return g;
+}
+
+/**
+ * Noise-excited resonator bank (struck scrap metal, not sine pings): a 2-5 ms white burst for
+ * the strike plus a band-noise "ring" per mode — white noise through a narrow bandpass
+ * (Q 12-30, so every mode is a ~f/Q wide noise band with a gritty, unstable pitch) under its
+ * own exponential decay (`decay` = time to -80 dB). o: {f, ratios, Q:[lo,hi], decay:[lo,hi],
+ * spread (±frac), burst (s), burstF, burstGain, ring (mode level), gain, tilt (per-mode amp
+ * falloff)}. Each mode's frequency, Q and decay are randomised per strike.
+ */
+export function resonator(ac, out, t, r, o) {
+  const g = gain(ac, o.gain ?? 1); g.connect(out);
+  const ratios = o.ratios || [1, 1.59, 2.14, 2.83, 3.9];
+  const [q0, q1] = o.Q || [12, 30], [d0, d1] = o.decay || [0.04, 0.25];
+  const spread = o.spread ?? 0.15, tilt = o.tilt ?? 0.72;
+  const longest = d1 * 1.1 + 0.02;
+  const src = noiseSrc(ac, 'white', t, longest, r);
+  let amp = 1;
+  for (let k = 0; k < ratios.length; k++) {
+    const f = o.f * ratios[k] * (1 + (r() * 2 - 1) * spread);
+    if (f > ac.sampleRate * 0.45) break;
+    const q = q0 + (q1 - q0) * r();
+    const bp = filt(ac, 'bandpass', f, q);
+    const mg = gain(ac, 0);
+    // low modes ring longest (as in real plates); randomised inside the range
+    const dec = d1 - (d1 - d0) * (k / Math.max(1, ratios.length - 1)) * r.range(0.6, 1.2);
+    // a bandpass of white noise keeps only ~f/Q of its bandwidth: normalise so every mode rings
+    // at ~0.12 x amp RMS whatever its frequency and Q (else low / narrow modes vanish)
+    const norm = 0.21 * Math.sqrt((q * ac.sampleRate * 0.5) / f);
+    envAD(mg.gain, t, amp * norm * (o.ring ?? 1), 0.0006, Math.max(d0, dec));
+    chain(src, bp, mg, g);
+    amp *= tilt;
+  }
+  // the strike itself: a short broadband burst (filtered so it is not a click)
+  const bd = o.burst ?? 0.003;
+  noiseHit(ac, g, t, r, { kind: 'white', type: 'bandpass', f0: o.burstF || o.f * 2.5, Q: 0.7, attack: 0.0003, decay: bd, gain: o.burstGain ?? 0.9 });
+  return g;
+}
+
+/**
+ * FM brass voice (1:1 carrier:modulator, index envelope 0 -> idx over `blat` s = the brass
+ * "blat" where brightness rises with loudness), 30 ms breath-noise onset, pitch scoop and
+ * delayed vibrato, parallel formant bandpasses at 1.2 / 2.5 kHz. o: {f, dur, gain, idx, blat,
+ * attack, release, scoop (cents), vib, formants: [[f, Q, gain], ...], breath}. Returns end time.
+ */
+export function brass(ac, out, t, r, o) {
+  const dur = o.dur, rel = o.release ?? 0.12, end = t + dur + rel;
+  const car = ac.createOscillator(), mod = ac.createOscillator();
+  const f = o.f;
+  const scoop = Math.pow(2, -(o.scoop ?? 35) / 1200);
+  car.frequency.setValueAtTime(f * scoop, t); car.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+  mod.frequency.setValueAtTime(f * scoop, t); mod.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+  // delayed vibrato on both (keeps the 1:1 ratio); short stabs have none (cheaper offline)
+  let vib = null;
+  if (dur > 0.3) {
+    vib = ac.createOscillator(); vib.frequency.value = (o.vib ?? 5.2) * r.range(0.93, 1.07);
+    const vg = gain(ac, 0); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.005, t + Math.min(dur, 0.35));
+    chain(vib, vg); vg.connect(car.frequency); vg.connect(mod.frequency);
+  }
+  const idx = o.idx ?? 3.5, blat = o.blat ?? 0.06;
+  const mg = gain(ac, 0);
+  mg.gain.setValueAtTime(0, t); mg.gain.linearRampToValueAtTime(f * idx, t + blat);
+  mg.gain.setTargetAtTime(f * idx * 0.62, t + blat, 0.12);
+  mg.gain.setValueAtTime(f * idx * 0.62, t + dur); mg.gain.linearRampToValueAtTime(0, end);
+  chain(mod, mg); mg.connect(car.frequency);
+  const amp = gain(ac, 0), A = o.gain ?? 1;
+  amp.gain.setValueAtTime(0, t); amp.gain.linearRampToValueAtTime(A, t + (o.attack ?? 0.04));
+  amp.gain.setTargetAtTime(A * 0.72, t + 0.08, 0.15); amp.gain.setValueAtTime(A * 0.72, t + dur); amp.gain.linearRampToValueAtTime(0, end);
+  chain(car, amp);
+  if (o.raw) amp.connect(out); // the caller shares the bell (brassBell) across a section
+  else brassBell(ac, out, r, o.formants, Math.min(9000, f * 9)).forEach((n) => amp.connect(n));
+  // breath / tongue onset
+  noiseHit(ac, out, t, r, { kind: 'pink', type: 'bandpass', f0: 1500, Q: 0.9, attack: 0.004, decay: 0.03, gain: (o.breath ?? 0.25) * A });
+  for (const s of [car, mod, vib]) if (s) { s.start(t); s.stop(end + 0.02); }
+  return end;
+}
+
+/** Brass "bell": saturation + body low-pass + formant bandpasses. Returns the input node(s). */
+export function brassBell(ac, out, r, formants, bodyHz = 4500) {
+  const sat = shaper(ac, 1.6, 0.05);
+  const body = filt(ac, 'lowpass', bodyHz, 0.6); chain(sat, body, out);
+  for (const [ff, q, fg] of formants || [[1200, 2.2, 0.55], [2500, 3, 0.3]]) {
+    const bp = filt(ac, 'bandpass', ff * r.range(0.96, 1.04), q), bg = gain(ac, fg); chain(sat, bp, bg, out);
+  }
+  return [sat];
+}
+
+/** Ring modulation: returns a gain node whose output = input x (osc at `f`, square/sine). */
+export function ringMod(ac, t, dur, f, type = 'square') {
+  const g = gain(ac, 0);
+  const o = ac.createOscillator(); o.type = type; o.frequency.value = f;
+  o.connect(g.gain); o.start(t); o.stop(t + dur + 0.05);
   return g;
 }
 

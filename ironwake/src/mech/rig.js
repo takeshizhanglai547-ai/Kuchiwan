@@ -42,12 +42,17 @@
 //   rig.landImpact(strength01)
 //   rig.setThrust(localDir, amount01)   drive nozzle flames (localDir = direction of travel)
 //   rig.getMuzzle(slot, outPos, outDir) world-space muzzle position/direction
+//   rig.onPose = (dt, pose) => {}   optional extra pose layer of the rig's owner (boss pilot poses),
+//                                called at the end of update() before the matrix update
 //   rig.nozzles                  [{node, group, exhaustLocal:Vector3, flame:Group, radius, level}]
 //   Visual extras read from the GLB (glTF node extras): nozzle_* iw_r (exit radius) sizes the
 //   flame; eye iw_eye_color / iw_eye_strength give the eye a flat emissive colour; arm_* iw_ready
 //   (rad) = how far the rest pose carries that arm's weapon below the aim line (low ready: firing
 //   raises it, see POSTURE). Meshes '*_decals' (material M_*_decal, alpha-blended decal cards a few
 //   mm over their plates) get a polygon offset and cast no shadow.
+//   Mech-lane extras (r2): a DROP / FALL pose layer after rigmotion.js (POSE_LAYERS), soft contact
+//   shadows under the feet (CONTACT; one 2-quad mesh on the actor root), a procedural micro-surface
+//   layer in the rig shader (RIG_DETAIL) and main-bell vs vernier plume lengths (FLAME.main*).
 //   rig.dispose()
 import * as THREE from 'three';
 import { buildPlaceholderMech } from './placeholder.js';
@@ -76,10 +81,15 @@ const MUZZLE_FALLBACK = { R: 'weapon_R', L: 'weapon_L', RB: 'shoulder_R', LB: 's
 // Nozzle nodes carry extras iw_r (exit radius, m) so each flame fits its bell.
 const FLAME = {
   core: new THREE.Color(1.0, 0.905, 0.672), mid: new THREE.Color(1.0, 0.434, 0.068), outer: new THREE.Color(1.0, 0.144, 0.01),
-  gainOuter: 3.0, gainCore: 5.5, coreRadius: 0.5, coreLength: 0.55,
-  lenIdle: 2.5, lenFull: 13.0,          // plume length in exit radii at level 0 / 1
+  gainOuter: 3.0, gainCore: 5.5, coreRadius: 0.5, coreLength: 0.42, // white-hot core = ~40% of the plume
+  lenIdle: 2.5, lenFull: 13.0,          // plume length in exit radii at level 0 / 1 (verniers: sqrt curve)
   minLenRadius: 0.24,                   // small verniers still throw a readable jet
-  glowIdle: 0.05, glowFull: 1.2,        // throat emissive multiplier at level 0 / 1 (idle = dull ember)
+  // (mech lane r2) MAIN bells (exit radius >= mainRadius) throw a sustained plume: ~1.9 m at
+  // ground-boost cruise, ~4 m in assault boost (level^mainPow curve); verniers / side / leg
+  // jets stay short (verLenMax m before the quick-boost burst) so the AB read is the main plume
+  mainRadius: 0.3, mainLenFull: 9.0, mainPow: 1.6, verLenMax: 0.85,
+  glowIdle: 0.15, glowFull: 1.2,        // throat emissive multiplier at level 0 / 1 (idle = pilot glow)
+  glowTintIdle: new THREE.Color(1.0, 0.42, 0.22), // idle pilot glow reads as a deep orange-red ember, not yellow
   qbBurst: 0.9,                         // extra plume length/brightness right after a quick boost
   qbDecay: 9.0,                         // 1/s: the burst is gone in ~3 frames (was a 0.3 s white bloom)
   levelMax: 1.3,                        // flame shader level clamp (burst included)
@@ -93,6 +103,17 @@ const POSTURE = {
   idleRoll: 0.008, idleRollHz: 0.13,
   lagK: 0.012, lagOmega: 9, lagZeta: 0.32, lagMax: 0.07, // back weapons: pitch lag from pelvis heave (rad per m/s)
 };
+// DROP / FALL pose layer (mech lane r2, applied after rigmotion.js; the boost-skate and
+// assault-boost flight poses are rigmotion.js's, movement lane): a rig dropping through the air
+// tucks its knees (one higher than the other), spreads its arms for balance and levels its feet,
+// then reaches for the ground in the last metres before touchdown. The layer is a spring-damped
+// weight (omega / zeta) that slerps the IK legs toward the tuck. Signs: + thigh = swings back,
+// + shin = knee bend, + toe = toes down (relative to the ground). Leg arrays are [L, R].
+const POSE_LAYERS = {
+  omega: 12, zeta: 0.7,
+  fall: { vy: -3, vyFull: -9, thigh: [-0.82, -0.46], shin: [1.1, 0.8], toe: [0.06, 0.14], armsOut: 0.3, spread: 0.1,
+    land0: 2.0, land1: 5.0 },   // m above ground: tucked above land1, legs reach down (rigmotion pose) below land0
+};
 // NaN-safe lit shading for GLB rigs: a smooth-shaded sliver whose vertex normals oppose each
 // other interpolates to a ~zero normal on some pixels at some angles; normalize() of it is NaN,
 // and one NaN pixel spreads through the HDR bloom chain into a black frame. Guard the normal
@@ -101,6 +122,37 @@ const POSTURE = {
 // the albedo, standing in for the ash-sky light that wraps a 10 m silhouette at dusk, so backlit
 // rigs keep their colour identity and plate read instead of crushing to black (RIG_SHADE).
 const RIG_SHADE = { rim: 0.42, rimPow: 2.6, rimColor: [0.46, 0.54, 0.66], lift: 0.035 };
+// MICRO SURFACE DETAIL (mech lane r2): the 2048 atlases hold ~100 px/m, so hero close-ups read as
+// uniform satin. A procedural object-space layer (no texture, no extra draw call) adds two
+// octaves of value noise: ~17 cm hammered-plate dents / paint mottling and ~4 cm orange-peel /
+// scuff break-up, driving roughness, a small albedo variation and a derivative bump. Each octave
+// fades out once a pixel covers a sizeable part of its feature (fwidth of the object position),
+// so distant rigs never shimmer.
+const RIG_DETAIL = { f1: 6.0, f2: 23.0, rough1: 0.2, rough2: 0.14, albedo1: 0.12, bump1: 0.007, bump2: 0.0014 };
+const DETAIL_PARS = `varying vec3 vIwOP;
+float iwHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
+float iwNoise( vec3 x ) {
+  vec3 i = floor( x ); vec3 f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( mix( iwHash( i ), iwHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( iwHash( i + vec3( 0, 1, 0 ) ), iwHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+              mix( mix( iwHash( i + vec3( 0, 0, 1 ) ), iwHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( iwHash( i + vec3( 0, 1, 1 ) ), iwHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
+}
+vec3 iwBump( vec3 p, vec3 n, float h ) {
+  vec3 sx = dFdx( p ), sy = dFdy( p );
+  vec3 r1 = cross( sy, n ), r2 = cross( n, sx );
+  float det = dot( sx, r1 );
+  vec3 g = sign( det ) * ( dFdx( h ) * r1 + dFdy( h ) * r2 );
+  vec3 b = abs( det ) * n - g;
+  float l = dot( b, b );
+  return l > 1e-20 ? b * inversesqrt( l ) : n;
+}
+`;
+const RD = RIG_DETAIL, f3 = (v) => v.toFixed(4);
+const DETAIL_MAIN = `float iwFp = length( fwidth( vIwOP ) );
+  float iwN1 = iwNoise( vIwOP * ${f3(RD.f1)} ) - 0.5, iwN2 = iwNoise( vIwOP * ${f3(RD.f2)} + 7.13 ) - 0.5;
+  float iwF1 = 1.0 - smoothstep( ${f3(0.12 / RD.f1)}, ${f3(0.45 / RD.f1)}, iwFp );
+  float iwF2 = 1.0 - smoothstep( ${f3(0.12 / RD.f2)}, ${f3(0.45 / RD.f2)}, iwFp );
+  float iwH = iwN1 * iwF1 * ${f3(RD.bump1)} + iwN2 * iwF2 * ${f3(RD.bump2)};
+`;
 function nanSafe(material) {
   if (material.userData.iwNanSafe) return;
   material.userData.iwNanSafe = true;
@@ -109,14 +161,51 @@ function nanSafe(material) {
     float iwR = pow( 1.0 - iwNdV, ${RIG_SHADE.rimPow.toFixed(2)} ) * ${RIG_SHADE.rim.toFixed(3)} + ${RIG_SHADE.lift.toFixed(3)};
     outgoingLight += diffuseColor.rgb * vec3( ${rc} ) * iwR; }\n`;
   material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'vec3 iwNormalize( vec3 v ) { float l = dot( v, v ); return l > 1e-20 ? v * inversesqrt( l ) : vec3( 0.0, 0.0, 1.0 ); }\nvoid main() {')
+    const detail = !material.transparent;   // decal cards keep their crisp print
+    if (detail) {
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying vec3 vIwOP;\nvoid main() {')
+        .replace('#include <project_vertex>', '#include <project_vertex>\n\tvIwOP = transformed;');
+    }
+    let fs = shader.fragmentShader
+      .replace('void main() {', 'vec3 iwNormalize( vec3 v ) { float l = dot( v, v ); return l > 1e-20 ? v * inversesqrt( l ) : vec3( 0.0, 0.0, 1.0 ); }\n'
+        + (detail ? DETAIL_PARS : '') + 'void main() {\n' + (detail ? DETAIL_MAIN : ''))
       .replace('#include <normal_fragment_begin>', '#define normalize( v ) iwNormalize( v )\n#include <normal_fragment_begin>')
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#undef normalize')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#undef normalize'
+        + (detail ? '\n\tnormal = iwBump( - vViewPosition, normal, iwH );' : ''))
       .replace('#include <opaque_fragment>', rim + 'if ( any( isnan( outgoingLight ) ) || any( isinf( outgoingLight ) ) ) outgoingLight = vec3( 0.0 );\noutgoingLight = min( outgoingLight, vec3( 512.0 ) );\n#include <opaque_fragment>');
+    if (detail) {
+      fs = fs
+        .replace('#include <map_fragment>', `#include <map_fragment>\n\tdiffuseColor.rgb *= 1.0 + iwN1 * iwF1 * ${f3(RD.albedo1)};`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n\troughnessFactor = clamp( roughnessFactor + iwN1 * iwF1 * ${f3(RD.rough1)} + iwN2 * iwF2 * ${f3(RD.rough2)}, 0.04, 1.0 );`);
+    }
+    shader.fragmentShader = fs;
   };
-  material.customProgramCacheKey = () => 'iw-rigshade';
+  material.customProgramCacheKey = () => (material.transparent ? 'iw-rigshade' : 'iw-rigshade-detail');
   material.needsUpdate = true;
+}
+
+// CONTACT SHADOWS (mech lane r2): a soft dark ellipse on the ground under each foot (1.3x the
+// footprint) grounds the rig where the shadow map's near cascade is soft or the sun is behind
+// it; it fades out as the foot lifts (fadeH m) and in the air. One 2-quad mesh per rig, parented
+// to the actor root (not the rig root: QB afterimages and the camera's rig measure skip it).
+const CONTACT = { width: 1.3, length: 1.3, opacity: 0.5, fadeH: 2.0, lift: 0.03 };
+let CONTACT_TEX = null;
+function contactTexture() {
+  if (CONTACT_TEX) return CONTACT_TEX;
+  const N = 64, data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const u = ((x + 0.5) / N) * 2 - 1, v = ((y + 0.5) / N) * 2 - 1;
+      const t = Math.max(0, 1 - Math.sqrt(u * u + v * v));
+      data[(y * N + x) * 4 + 3] = Math.round(255 * t * t * (3 - 2 * t));
+    }
+  }
+  CONTACT_TEX = new THREE.DataTexture(data, N, N);
+  CONTACT_TEX.magFilter = CONTACT_TEX.minFilter = THREE.LinearFilter;
+  CONTACT_TEX.needsUpdate = true;
+  CONTACT_TEX.userData.shared = true;
+  return CONTACT_TEX;
 }
 
 // Painted-steel image-based-light boost for GLB rigs, so shaded sides keep their panel
@@ -218,6 +307,13 @@ export function makePose() {
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const _qArm = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
+// pose-layer scratch (no per-step allocations)
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion();
+const _pa = new THREE.Vector3();
+const _eP = new THREE.Euler(0, 0, 0, 'YXZ');
+const _DOWN = new THREE.Vector3(0, -1, 0), _Y = new THREE.Vector3(0, 1, 0);
+let _layerHit = null;
+const _tint = new THREE.Color(), _WHITE = new THREE.Color(1, 1, 1);
 
 function damp(current, target, lambda, dt) { return current + (target - current) * (1 - Math.exp(-lambda * dt)); }
 
@@ -355,6 +451,10 @@ export class MechRig {
     }
     this.idleAmt = 0; this.lag = 0; this.lagV = 0;
     this.motion = new RigMotion(this);
+    // drop / fall pose layer (POSE_LAYERS): spring weight; ground clearance (m) this step
+    this.layer = { f: 0, fV: 0 };
+    this.groundH = 0;
+    this._buildContact();
     this.qbFlash = 0;
     this.stagger = 0;
     this.time = 0;
@@ -414,8 +514,11 @@ export class MechRig {
     this.time += dt;
     if (!this._envBound) this._bindEnv();
     const mode = pose.mode;
+    this.groundH = pose.grounded ? 0 : this._heightAboveGround();
     this.motion.apply(dt, pose); // pelvis/torso/arms/legs (rigmotion.js)
+    this._poseLayers(dt, pose);  // drop / fall body language (mech lane)
     this._posture(dt, pose);
+    if (this.onPose) this.onPose(dt, pose);   // optional owner layer (enemies lane: boss pilot poses), before the matrix update
 
     // --- eye flicker when staggered
     const eyeI = this.eyeBase * (mode === 'stagger' ? (Math.sin(this.time * 40) > 0 ? 0.3 : 1) : mode === 'dead' ? 0.02 : 1);
@@ -434,6 +537,119 @@ export class MechRig {
     }
 
     this.root.updateMatrixWorld(true);
+    this._updateContact();
+  }
+
+  /** Contact-shadow mesh (see CONTACT): 2 quads, positions / alphas rewritten each step. */
+  _buildContact() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1]), 2));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(32), 4).setUsage(THREE.DynamicDrawUsage));
+    g.setIndex([0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6]);
+    const m = new THREE.MeshBasicMaterial({ map: contactTexture(), color: 0x000000, vertexColors: true, transparent: true,
+      opacity: CONTACT.opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    const mesh = new THREE.Mesh(g, m);
+    mesh.name = 'contact_shadow';
+    mesh.frustumCulled = false; mesh.castShadow = false; mesh.receiveShadow = false; mesh.renderOrder = 1;
+    mesh.visible = false;
+    // footprint half extents from the rest pose (foot pivot -> sole box), x1.3
+    const box = new THREE.Box3(), inv = new THREE.Matrix4(), pf = new THREE.Vector3();
+    this.root.updateMatrixWorld(true);
+    inv.copy(this.root.matrixWorld).invert();
+    this.nodes.foot_L.traverse((o) => { if (o.isMesh && !isDecal(o)) box.expandByObject(o); });
+    this.nodes.foot_L.getWorldPosition(pf).applyMatrix4(inv);
+    if (box.isEmpty()) box.set(pf.clone().addScalar(-0.6), pf.clone().addScalar(0.6));
+    else box.applyMatrix4(inv);
+    this.contact = {
+      mesh, ankleY: pf.y,
+      hx: (box.max.x - box.min.x) * 0.5 * CONTACT.width, hz: (box.max.z - box.min.z) * 0.5 * CONTACT.length,
+      cz: (box.max.z + box.min.z) * 0.5 - pf.z,   // footprint centre ahead of the ankle
+    };
+  }
+
+  _updateContact() {
+    const C = this.contact;
+    if (!C) return;
+    if (C.mesh.parent !== this.root.parent) {
+      if (!this.root.parent) { C.mesh.visible = false; return; }
+      this.root.parent.add(C.mesh);
+    }
+    const pos = C.mesh.geometry.attributes.position, col = C.mesh.geometry.attributes.color;
+    const gy = -this.groundH + CONTACT.lift;
+    let any = false;
+    for (let i = 0; i < 2; i++) {
+      const foot = this.nodes[i === 0 ? 'foot_L' : 'foot_R'];
+      foot.getWorldPosition(_pa);
+      this.root.worldToLocal(_pa);
+      // heading of the foot on the ground plane (root space)
+      foot.getWorldQuaternion(_qa);
+      this.root.getWorldQuaternion(_qb).invert();
+      _qa.premultiply(_qb);
+      _v.set(0, 0, 1).applyQuaternion(_qa);
+      let fx = _v.x, fz = _v.z;
+      const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+      const h = _pa.y - C.ankleY - gy + CONTACT.lift;           // sole height above the ground
+      const a = Math.max(0, 1 - h / CONTACT.fadeH);
+      if (a > 0.01) any = true;
+      const cx = _pa.x + fx * C.cz, cz = _pa.z + fz * C.cz;
+      const rx = fz * C.hx, rz = -fx * C.hx, ux = fx * C.hz, uz = fz * C.hz; // side / forward half axes
+      const o = i * 4;
+      pos.setXYZ(o, cx - rx - ux, gy, cz - rz - uz);
+      pos.setXYZ(o + 1, cx + rx - ux, gy, cz + rz - uz);
+      pos.setXYZ(o + 2, cx + rx + ux, gy, cz + rz + uz);
+      pos.setXYZ(o + 3, cx - rx + ux, gy, cz - rz + uz);
+      for (let k = 0; k < 4; k++) col.setXYZW(o + k, 1, 1, 1, a);
+    }
+    pos.needsUpdate = true; col.needsUpdate = true;
+    C.mesh.visible = any && this.root.visible;
+  }
+
+  /** Height of the rig root above the ground / colliders below it (m). */
+  _heightAboveGround() {
+    const ph = this._game && this._game.physics;
+    const o = this.root.getWorldPosition(_pa);
+    if (!ph) return o.y;
+    if (!_layerHit) _layerHit = { hit: false, dist: 0, point: new THREE.Vector3(), normal: new THREE.Vector3(), collider: null, body: null, ground: false };
+    o.y += 0.5;
+    return ph.raycast(o, _DOWN, 60, _layerHit) ? Math.max(0, _layerHit.dist - 0.5) : 60;
+  }
+
+  /** DROP / FALL pose layer (POSE_LAYERS), after rigmotion: knee tuck, arms out, level feet. */
+  _poseLayers(dt, pose) {
+    const PL = POSE_LAYERS, F = PL.fall, N = this.nodes, S = this.layer, v = pose.velLocal, mode = pose.mode;
+    let target = 0;
+    if (!pose.grounded && (mode === 'air' || mode === 'hover') && v.y < F.vy) {
+      const h = this.groundH;
+      target = Math.min(1, Math.max(0, (h - F.land0) / (F.land1 - F.land0)))
+        * Math.min(1, Math.max(0, (F.vy - v.y) / (F.vy - F.vyFull)));
+    }
+    const w = PL.omega;
+    S.fV += (w * w * (target - S.f) - 2 * PL.zeta * w * S.fV) * dt;
+    S.f = Math.min(1.1, Math.max(-0.1, S.f + S.fV * dt));
+    const k = Math.min(1, Math.max(0, S.f));
+    if (k < 1e-3) return;
+    const pel = N.pelvis.quaternion;
+    for (let i = 0; i < 2; i++) {
+      const s = i === 0 ? 'L' : 'R', sg = i === 0 ? 1 : -1;
+      const thigh = N['thigh_' + s], shin = N['shin_' + s], foot = N['foot_' + s];
+      _eP.set(F.thigh[i], 0, sg * F.spread);
+      _qa.copy(this.rest['thigh_' + s].quat).multiply(_qb.setFromEuler(_eP));
+      thigh.quaternion.slerp(_qa, k);
+      _eP.set(F.shin[i], 0, 0);
+      _qa.copy(this.rest['shin_' + s].quat).multiply(_qb.setFromEuler(_eP));
+      shin.quaternion.slerp(_qa, k);
+      // feet level with the ground (toes slightly down), facing where the hips face
+      _qa.copy(pel).multiply(thigh.quaternion).multiply(shin.quaternion).invert();
+      _qa.multiply(_qb.setFromAxisAngle(_Y, this.motion.hipYaw || 0));
+      _eP.set(F.toe[i], 0, 0);
+      _qa.multiply(_qb.setFromEuler(_eP));
+      _qc.copy(this.rest['foot_' + s].quat).multiply(_qa);
+      foot.quaternion.slerp(_qc, k);
+      // arms out for balance (roll outward)
+      _eP.set(0, 0, sg * F.armsOut * k);
+      N['arm_' + s].quaternion.multiply(_qb.setFromEuler(_eP));
+    }
   }
 
   /** Visual posture layer (after rigmotion): low-ready arms, idle drift, back-weapon lag. */
@@ -479,7 +695,11 @@ export class MechRig {
       const burst = 1 + FLAME.qbBurst * (this.qbFlash || 0) * L;
       const flick = 0.9 + 0.1 * Math.sin(this.time * 83 + i * 1.7) + 0.05 * Math.sin(this.time * 211 + i * 3.1);
       // (VFX lane) sqrt: cruise-level thrust (ground boost ~0.5) already throws a readable jet
-      const len = Math.max(r, FLAME.minLenRadius) * (FLAME.lenIdle + (FLAME.lenFull - FLAME.lenIdle) * Math.sqrt(L)) * flick * burst;
+      const main = r >= FLAME.mainRadius;
+      let len = Math.max(r, FLAME.minLenRadius) * (FLAME.lenIdle + ((main ? FLAME.mainLenFull : FLAME.lenFull) - FLAME.lenIdle)
+        * (main ? Math.pow(L, FLAME.mainPow) : Math.sqrt(L)));
+      if (!main && len > FLAME.verLenMax) len = FLAME.verLenMax;
+      len *= flick * burst;
       const w = r * (0.92 + 0.12 * L) * (1 + 0.25 * (burst - 1));
       nz.flameOuter.scale.set(w, w, len);
       nz.flameCore.scale.set(w * FLAME.coreRadius, w * FLAME.coreRadius, len * FLAME.coreLength);
@@ -490,8 +710,12 @@ export class MechRig {
       nz.flameCore.material.uniforms.uTime.value = this.time;
     }
     if (nz.glow.length) {
-      const k = Math.min(nz.glowBase * (FLAME.glowIdle + (FLAME.glowFull - FLAME.glowIdle) * L), this.eyeBase * FLAME.glowMaxEye);
-      for (let j = 0; j < nz.glow.length; j++) nz.glow[j].emissiveIntensity = k;
+      // pilot glow only in the MAIN bells (verniers stay dark at idle: a lit ring on every small
+      // nozzle reads as a row of eyes); every throat heats up with its own thrust level
+      const idle = nz.radius >= FLAME.mainRadius ? FLAME.glowIdle : 0;
+      const k = Math.min(nz.glowBase * (idle + (FLAME.glowFull - idle) * L), this.eyeBase * FLAME.glowMaxEye);
+      _tint.copy(FLAME.glowTintIdle).lerp(_WHITE, Math.min(1, L * 1.6));
+      for (let j = 0; j < nz.glow.length; j++) { nz.glow[j].emissiveIntensity = k; nz.glow[j].emissive.copy(_tint); }
     }
   }
 
@@ -517,6 +741,12 @@ export class MechRig {
   getNodeWorld(name, out) { return (this.nodes[name] || this.root).getWorldPosition(out); }
 
   dispose() {
+    if (this.contact) {
+      const c = this.contact.mesh;
+      if (c.parent) c.parent.remove(c);
+      c.geometry.dispose(); c.material.dispose();
+      this.contact = null;
+    }
     const own = this.source !== 'asset'; // asset clones share geometry/materials with the cache
     this.root.traverse((o) => {
       if (o.name.startsWith('flame_')) { if (o.material) o.material.dispose(); return; }

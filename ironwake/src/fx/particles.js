@@ -8,7 +8,9 @@
 //   clear()                         kill everything (restart)
 //   activeCount()
 //   freeze = true                   stop simulating (staged shots); rendering continues
-//   flash(pos, color, intensity, range, dur)   one of the constant flash lights
+//   flash(pos, color, intensity, range, dur, linger?, decay?)   one of the constant flash lights
+//                                   (decay < 2: broad blast flash that relights the yard)
+//   dev URL knob &fxdebug=edges     magenta = a fragment non-zero at its quad border (shaders.js)
 //   trails / decals / debris / slashes / ghosts / distortion   sub-systems (see their files)
 //
 // Effect names used by gameplay (keep them; restyle freely in fx/library.js):
@@ -59,6 +61,8 @@ const NANCHOR = 16, ANCHOR_LIFE = 0.4, NO_ANCHOR = 255;
 const _col = new THREE.Color(), _v2 = new THREE.Vector2(), _lp = new THREE.Vector3();
 /** Global flash-light calibration (library intensities are relative, candela x LIGHT_SCALE). */
 export const LIGHT_SCALE = 0.22;
+/** Dev-only URL knob: &fxdebug=edges (see fx/shaders.js). */
+const FX_DEBUG = (() => { try { return new URLSearchParams(globalThis.location ? globalThis.location.search : '').get('fxdebug') || ''; } catch (e) { return ''; } })();
 
 export default function particlesSystem(game) {
   // ---------------------------------------------------------------- particle state (SoA)
@@ -117,6 +121,8 @@ export default function particlesSystem(game) {
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     });
     mat.uniforms.tPuff.value = textures.puff; mat.uniforms.tMisc.value = textures.misc; mat.uniforms.tFire.value = textures.fire;
+    // dev: &fxdebug=edges paints fragments that are not zero at their quad border (fx/shaders.js)
+    if (FX_DEBUG === 'edges') mat.defines = { ...mat.defines, IW_FX_DEBUG_EDGES: '' };
     const mesh = new THREE.Mesh(g, mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 20;
@@ -300,7 +306,9 @@ export default function particlesSystem(game) {
       P.anc[i] = part.attach && o.anchor !== undefined && o.anchor !== NO_ANCHOR ? o.anchor : NO_ANCHOR;
       P.age[i] = part.delay ? -rng.range(part.delay[0], part.delay[1]) : 0;
       P.life[i] = rng.range(part.life[0], part.life[1]);
-      P.s0[i] = part.size[0] * sizeMul; P.s1[i] = part.size[1] * sizeMul; P.sp[i] = part.sizePow || 1;
+      // sizeVar v: per-particle size multiplier in [1-v, 1+v] (sparks of mixed gauge, puffs of mixed scale)
+      const sv = part.sizeVar ? sizeMul * (1 + rng.sym(part.sizeVar)) : sizeMul;
+      P.s0[i] = part.size[0] * sv; P.s1[i] = part.size[1] * sv; P.sp[i] = part.sizePow || 1;
       const c0 = part.color0 || WHITE, c1 = part.color1 || c0;
       P.c0[i3] = c0[0]; P.c0[i3 + 1] = c0[1]; P.c0[i3 + 2] = c0[2];
       P.c1[i3] = c1[0]; P.c1[i3 + 1] = c1[1]; P.c1[i3 + 2] = c1[2];
@@ -326,10 +334,14 @@ export default function particlesSystem(game) {
       case 'light': {
         // keep the light off the surface it was spawned on (a point light inside a wall blows out)
         _lp.copy(pos); if (dir) _lp.addScaledVector(dir, 2.2);
-        api.flash(_lp, part.color, part.intensity * LIGHT_SCALE * scale, part.range * Math.sqrt(scale), part.dur, part.linger || 0);
+        // big flashes sit a few metres above the blast (inverse-square near field would blow the
+        // hull it detonated on out to flat white)
+        _lp.y += Math.min(6, part.range * 0.06);
+        api.flash(_lp, part.color, part.intensity * LIGHT_SCALE * scale, part.range * Math.sqrt(scale), part.dur, part.linger || 0, part.decay || 2);
         break;
       }
       case 'decal': decals.fromEffect(part, pos, dir, o, scale); break;
+      case 'pool': decals.poolFromEffect(part, pos, scale); break;
       case 'chunks': debris.burst(pos, dir, part, scale); break;
       case 'distort': distortion.fromEffect(part, pos, dir, o, scale); break;
       case 'shake': {
@@ -451,8 +463,10 @@ export default function particlesSystem(game) {
       P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
     },
 
-    /** Flash light: the constant light with the least remaining energy is re-aimed. */
-    flash(pos, color, intensity, range, dur, linger = 0) {
+    /** Flash light: the constant light with the least remaining energy is re-aimed. decay < 2
+     *  (explosions) flattens the falloff so a blast relights the yard, not just its own hull
+     *  (decay is a uniform: no recompile). */
+    flash(pos, color, intensity, range, dur, linger = 0, decay = 2) {
       if (!lights.length) return;
       let best = lights[0], bestE = Infinity;
       for (const l of lights) {
@@ -463,14 +477,14 @@ export default function particlesSystem(game) {
       best.light.position.set(pos.x, pos.y + 1, pos.z);
       best.light.color.setRGB(color[0], color[1], color[2]);
       best.light.distance = range;
+      best.light.decay = decay;
       best.peak = intensity; best.dur = dur; best.t = dur * (1 + linger * 6); best.linger = linger; best.age = 0;
     },
 
     update(dt) {
       if (!batch) return;
       stepNo++; stepId++;
-      status.update(dt);
-      if (api.freeze) return;
+      if (api.freeze) { status.update(dt); return; }
       simTime += dt;
       for (const a of anchors) if (a.t > 0) { a.t -= dt; if (a.t <= 0) a.node = null; }
       const phys = game.physics;
@@ -513,11 +527,15 @@ export default function particlesSystem(game) {
       distortion.update(dt);
       slashes.update(dt);
       ghosts.update(dt);
+      // status AFTER the particle sim: its one-step sprites (nozzle glows, exhaust cores, halos)
+      // must survive to this step's render (before, they aged past their 1-step life at once)
+      status.update(dt);
       for (const l of lights) {
         if (l.t > 0) {
           l.t -= dt; l.age += dt;
-          const f = Math.max(0, 1 - l.age / l.dur);
-          let e = l.peak * f * f;
+          // ~2-frame peak, then a fast (cubic) decay over dur
+          const f = l.age < 0.034 ? 1 : Math.max(0, 1 - (l.age - 0.034) / Math.max(0.016, l.dur - 0.034));
+          let e = l.peak * f * f * f;
           if (l.linger > 0) {
             const lf = Math.max(0, 1 - l.age / (l.dur * (1 + l.linger * 6)));
             e = Math.max(e, l.peak * l.linger * 0.25 * lf * (0.75 + 0.25 * Math.sin(l.age * 37) * Math.sin(l.age * 13)));
@@ -589,7 +607,7 @@ export default function particlesSystem(game) {
         ea[j4] = P.h1[i] + (P.h0[i] - P.h1[i]) * cw;
         ea[j4 + 1] = P.k1[i] + (P.k0[i] - P.k1[i]) * cw;
         ea[j4 + 2] = P.e0[i] + (P.e1[i] - P.e0[i]) * t;
-        ea[j4 + 3] = P.variant[i] + ((P.flags[i] & F_LIT) ? 16 : 0) + ((P.flags[i] & F_NOSOFT) ? 32 : 0);
+        ea[j4 + 3] = P.variant[i] + ((P.flags[i] & F_LIT) ? 16 : 0) + ((P.flags[i] & F_NOSOFT) ? 32 : 0) + 64 * ((P.seed[i] * 2.55) | 0);
       }
       upload(nv);
       trails.frame(alpha);

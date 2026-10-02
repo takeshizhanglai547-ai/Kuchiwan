@@ -337,6 +337,41 @@ def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=Tr
     return g
 
 
+def lens_dome(r, h, iris=0.33, ring=0.47, segs=32, rings=7, glass='glass', iris_mat='lens', ring_mat='steel_dark',
+              core=0.0, part='all', fr=None):
+    """Sensor lens as ONE open dome on z = 0 (+Z = view axis): black glass with the glowing
+    iris (`iris` x r, ~10 % of the lens area at 0.33) and a matte aperture ring (`ring` x r)
+    painted on its own faces, so nothing sits buried inside the glass (cull_inside-safe) and
+    only the iris carries the glow material (models.js gives it the flat iw_eye_color).
+    core > 0 splits the iris into a hot core (q < core) and a rim annulus: part='core' keeps
+    everything but the rim, part='rim' only the rim faces (put it under a child node with a
+    deeper, dimmer iw_eye_color: a hot centre in a saturated red halo instead of a flat disc)."""
+    if fr is None:   # ring radii (fractions of r); pass `fr` for a cheaper lens (small, distant sensors)
+        fr = sorted(set([1.0, 0.86, 0.7, 0.58] + ([ring] if ring > 0 else []) + [iris, iris * 0.55] +
+                        ([core, core * 0.5] if core > 0 else [])), reverse=True)
+        while len(fr) < rings:
+            fr.append(fr[-1] * 0.5)
+    prof = [(r * f, h * math.sqrt(max(0.0, 1.0 - f * f))) for f in fr] + [(0.0, h)]
+    g = P.lathe(prof, segs, glass)
+    li, lr = g.mi(iris_mat), g.mi(ring_mat)
+    drop = []
+    for f in g.bm.faces:
+        c = f.calc_center_median()
+        q = math.hypot(c.x, c.y) / r
+        rim = core > 0 and core <= q < iris
+        if (part == 'core' and rim) or (part == 'rim' and not rim):
+            drop.append(f)
+            continue
+        if q < iris:
+            f.material_index = li
+        elif ring > 0 and q < ring:
+            f.material_index = lr
+    if drop:
+        import bmesh
+        bmesh.ops.delete(g.bm, geom=drop, context='FACES')
+    return g
+
+
 def shackle(r=0.06, bar=0.016, mat='steel_dark', base_mat='paint_primary'):
     """Light lifting eye / tow shackle on a welded base plate (z=0 up)."""
     g = Geo()
@@ -581,6 +616,7 @@ def finalize_textures(a, sizes=None, quality=None):
 
 
 # ============================================================================ weighted atlas
+UP_WEIGHT = 1.0    # texel weight of up-facing faces (an asset seen mostly from the side can lower it)
 MAT_WEIGHT = {'steel': 0.7, 'steel_dark': 0.7, 'chrome': 0.6, 'rubber': 0.6, 'nozzle_inner': 0.5, 'glow': 0.4,
               'lens': 0.5, 'paint_dark': 0.85}
 
@@ -653,7 +689,7 @@ def weight_islands(objs, obj_weight=None, down=0.55):
         nrm /= np.maximum(1e-9, np.linalg.norm(nrm, axis=1))[:, None]
         mw = np.array([MAT_WEIGHT.get(me.materials[i].name if i < len(me.materials) else '', 1.0) for i in mi],
                       np.float32)
-        w = mw * np.where(nrm[:, 2] < -0.5, down, 1.0) * obj_weight.get(o.name, 1.0)
+        w = mw * np.where(nrm[:, 2] < -0.5, down, np.where(nrm[:, 2] > 0.9, UP_WEIGHT, 1.0)) * obj_weight.get(o.name, 1.0)
         roots, lp, uv = _uv_islands(me)
         uv2 = uv.copy()
         for r in np.unique(roots[sel]):
@@ -679,6 +715,131 @@ def unwrap(a, angle=66.0, margin_px=None, obj_weight=None, small=0.07, small_sca
 
 
 import iwkit.uv as U  # noqa: E402
+
+RING_FILL = 0.42   # islands filling less than this share of their UV bounding box may be straightened
+
+
+def _poly_area(p):
+    x, y = p[:, 0], p[:, 1]
+    return 0.5 * abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
+
+
+def straighten_rings(objs, fill=RING_FILL, min_faces=8):
+    """Annular / arc-shaped UV islands (lathe caps, flanges, slewing rings, duct lips) waste
+    most of their bounding box in the atlas. Re-map each one to polar coordinates around a
+    least-squares circle fit (u = angle x mean radius, v = radius: area-preserving for thin
+    rings), cutting the seam in the widest angular gap -> a straight strip that packs densely.
+    Only the selected (big, non-stacked) faces are touched. Returns the number of islands."""
+    done = 0
+    for o in objs:
+        me = o.data
+        npoly = len(me.polygons)
+        if npoly < min_faces:
+            continue
+        sel = np.empty(npoly, bool)
+        me.polygons.foreach_get('select', sel)
+        roots, lp, uv = _uv_islands(me)
+        ls = np.empty(npoly, np.int32)
+        me.polygons.foreach_get('loop_start', ls)
+        lt = np.empty(npoly, np.int32)
+        me.polygons.foreach_get('loop_total', lt)
+        uv2 = uv.copy()
+        changed = False
+        for r in np.unique(roots[sel]):
+            faces = np.nonzero((roots == r) & sel)[0]
+            if len(faces) < min_faces:
+                continue
+            loops = np.concatenate([np.arange(ls[f], ls[f] + lt[f]) for f in faces])
+            P2 = uv[loops].astype(np.float64)
+            lo, hi = P2.min(0), P2.max(0)
+            box = float(np.prod(np.maximum(hi - lo, 1e-9)))
+            area = sum(_poly_area(uv[ls[f]:ls[f] + lt[f]].astype(np.float64)) for f in faces)
+            if area <= 0 or area / box >= fill:
+                continue
+            # algebraic circle fit: x^2 + y^2 = a x + b y + c
+            A = np.column_stack([P2[:, 0], P2[:, 1], np.ones(len(P2))])
+            sol, *_ = np.linalg.lstsq(A, (P2 ** 2).sum(1), rcond=None)
+            c = np.array([sol[0] * 0.5, sol[1] * 0.5])
+            R0 = math.sqrt(max(1e-12, sol[2] + c @ c))
+            rho = np.linalg.norm(P2 - c, axis=1)
+            rmin, rmax = float(rho.min()), float(rho.max())
+            if rmin < 0.3 * R0 or rmax > 1.6 * R0 or (rmax - rmin) > 0.7 * rmax:
+                continue     # not ring-like (a disc or an irregular blob): leave it
+            # face centroid angles -> seam in the widest gap
+            fa = np.array([math.atan2(*(uv[ls[f]:ls[f] + lt[f]].mean(0) - c)[::-1]) for f in faces])
+            srt = np.sort(fa)
+            gaps = np.diff(np.concatenate([srt, srt[:1] + 2 * math.pi]))
+            k = int(np.argmax(gaps))
+            seam = srt[k] + gaps[k] * 0.5
+            rmean = float(rho.mean())
+            for f, af in zip(faces, fa):
+                af0 = (af - seam) % (2 * math.pi)
+                for li in range(ls[f], ls[f] + lt[f]):
+                    d = uv[li] - c
+                    a = math.atan2(d[1], d[0]) - seam
+                    a = af0 + math.atan2(math.sin(a - af0), math.cos(a - af0))
+                    uv2[li] = (a * rmean, math.hypot(d[0], d[1]))
+            changed = True
+            done += 1
+        if changed:
+            me.uv_layers[0].data.foreach_set('uv', uv2.ravel())
+    return done
+
+
+def split_long_islands(objs, frac=0.3, fill=0.6, gap=0.02):
+    """Islands much longer than the atlas side (unrolled octagon bands, straightened rings,
+    long rails) force the packer to shrink everything to fit them. Cut every island longer than
+    `frac` x the expected atlas side (sqrt(total area / fill)) into chunks along its principal
+    axis (whole faces per chunk, chunks offset apart so they become separate islands)."""
+    data, tot = [], 0.0
+    for o in objs:
+        me = o.data
+        npoly = len(me.polygons)
+        if npoly == 0:
+            continue
+        sel = np.empty(npoly, bool)
+        me.polygons.foreach_get('select', sel)
+        roots, lp, uv = _uv_islands(me)
+        ls = np.empty(npoly, np.int32)
+        me.polygons.foreach_get('loop_start', ls)
+        lt = np.empty(npoly, np.int32)
+        me.polygons.foreach_get('loop_total', lt)
+        fa = np.array([_poly_area(uv[ls[f]:ls[f] + lt[f]].astype(np.float64)) for f in range(npoly)])
+        tot += float(fa[sel].sum())
+        data.append((o, sel, roots, uv, ls, lt))
+    if tot <= 0:
+        return 0
+    Lmax = frac * math.sqrt(tot / fill)
+    done = 0
+    for o, sel, roots, uv, ls, lt in data:
+        uv2 = uv.copy()
+        changed = False
+        for r in np.unique(roots[sel]):
+            faces = np.nonzero((roots == r) & sel)[0]
+            loops = np.concatenate([np.arange(ls[f], ls[f] + lt[f]) for f in faces])
+            P2 = uv[loops].astype(np.float64)
+            c = P2.mean(0)
+            w, V = np.linalg.eigh(np.cov((P2 - c).T) + np.eye(2) * 1e-12)
+            ax, pe = V[:, 1], V[:, 0]               # principal / perpendicular axes
+            t = (P2 - c) @ ax
+            ext = float(t.max() - t.min())
+            if ext <= Lmax * 1.15:
+                continue
+            n = int(math.ceil(ext / Lmax))
+            L = ext / n
+            wid = float(((P2 - c) @ pe).max() - ((P2 - c) @ pe).min())
+            t0 = float(t.min())
+            for f in faces:
+                fl = np.arange(ls[f], ls[f] + lt[f])
+                tc = float(((uv[fl].mean(0) - c) @ ax))
+                k = min(n - 1, int((tc - t0) / L))
+                if k:
+                    uv2[fl] = uv[fl] - ax * (k * L) + pe * (k * (wid + gap))
+            changed = True
+            done += 1
+        if changed:
+            o.data.uv_layers[0].data.foreach_set('uv', uv2.ravel())
+    return done
 
 
 def _unwrap_weighted(objs, res=2048, margin_px=6, angle=62.0, rotate=True, shape='AABB', small=0.07, small_scale=0.5,
@@ -717,6 +878,10 @@ def _unwrap_weighted(objs, res=2048, margin_px=6, angle=62.0, rotate=True, shape
     bpy.ops.uv.average_islands_scale()
     bpy.ops.object.mode_set(mode='OBJECT')
     weight_islands(objs, obj_weight)
+    nr = straighten_rings(objs)
+    nl = split_long_islands(objs)
+    if nr or nl:
+        iw.log(f'uv: {nr} ring/arc islands straightened into strips, {nl} long islands cut into chunks')
     # UV units per metre of the big islands
     k = U.texel_density(objs, 1.0, only_selected=True) or 1.0
     # planar UVs for the small pieces, in a frame fixed by their own shape (u points at

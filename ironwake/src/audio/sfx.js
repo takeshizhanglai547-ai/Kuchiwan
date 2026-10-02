@@ -24,7 +24,7 @@
 //   layers  [[t, label], ...] documentation only: layer onsets, drawn on tools/audio_sheet.mjs
 import {
   gain, filt, chain, shaper, thump, noiseHit, modal, fm, crackle, whoosh, tone, tremolo, noiseSrc, sweep, points, nwave,
-  makeRng, hashStr, normalizeBuffer, midiHz,
+  resonator, brass, ringMod, makeRng, hashStr, normalizeBuffer, midiHz,
 } from './dsp.js';
 
 // Reusable metal part sets (Hz, amp, decay s) — tuned by ear to read as heavy steel.
@@ -34,15 +34,50 @@ const PLATE = [[421, 0.6, 0.22], [786, 0.45, 0.16], [1233, 0.3, 0.12], [1897, 0.
 
 function detuned(parts, r, cents) { return parts.map(([f, a, d]) => [f * r.cents(cents), a * r.range(0.8, 1.15), d * r.range(0.85, 1.15)]); }
 
-/** Scatter n debris clinks / clanks between t0 and t1. */
+const SCRAP = [1, 1.59, 2.14, 2.83, 3.9]; // inharmonic plate-mode ratios (each mode ±15 % per strike)
+
+/**
+ * Scatter n debris impacts between t0 and t1: torn plate and girder chunks (noise-excited
+ * resonators: gritty bands, never pure pings), concrete lumps (dull low thuds) and a grit
+ * crackle under each landing.
+ */
 function debris(ac, out, t, r, n, t0, t1, heavy, g) {
   for (let i = 0; i < n; i++) {
-    const tt = t + t0 + (t1 - t0) * Math.pow(r(), 1.4);
-    const big = heavy && r() < 0.4;
-    const base = big ? r.range(160, 520) : r.range(1400, 4200);
-    const parts = [[base, 0.6, big ? 0.25 : 0.07], [base * 2.31, 0.35, big ? 0.16 : 0.05], [base * 3.89, 0.2, big ? 0.1 : 0.03]];
-    modal(ac, out, tt, r, { partials: parts, gain: g * r.range(0.3, 1) * (big ? 1.3 : 0.7), click: 0.5, clickF: big ? 1800 : 5000 });
+    const u = Math.pow(r(), 1.4), tt = t + t0 + (t1 - t0) * u;
+    const kind = r();
+    const vol = g * r.range(0.25, 0.8) * (1 - 0.6 * u); // later pieces are smaller / farther
+    if (heavy && kind < 0.35) {        // girder / armour chunk: low, long, heavy
+      thump(ac, out, tt, { f0: r.range(110, 160), f1: 60, sweep: 0.04, dur: 0.12, gain: vol * 1.1 });
+      resonator(ac, out, tt, r, { f: r.range(170, 420), ratios: SCRAP, Q: [14, 30], decay: [0.08, 0.25], burstF: 1400, gain: vol * 1.2 });
+    } else if (kind < 0.62) {           // torn plate / bolt fragment: mid-high clank, short
+      resonator(ac, out, tt, r, { f: r.range(700, 1900), ratios: SCRAP, Q: [12, 24], decay: [0.04, 0.12], burstF: 3200, gain: vol * 0.75 });
+    } else {                           // concrete lump: dull thud + chip, no ring
+      thump(ac, out, tt, { f0: r.range(130, 200), f1: 70, sweep: 0.03, dur: 0.06, gain: vol * 0.7 });
+      noiseHit(ac, out, tt, r, { kind: 'pink', type: 'bandpass', f0: r.range(700, 1500), Q: 1.1, attack: 0.0005, decay: 0.05, gain: vol * 0.9 });
+    }
+    crackle(ac, out, tt + 0.002, r, { type: 'bandpass', f: r.range(2500, 4500), Q: 0.8, attack: 0.002, decay: r.range(0.05, 0.14), gain: vol * 0.45 }); // grit
   }
+}
+
+// foot plate modes (Hz 421/786/1233/1897 as ratios) and the leg frame
+const PLATE_R = [1, 1.867, 2.929, 4.506], FRAME_R = [1, 1.6, 2.56, 4.16, 6.66];
+const FOOT_MIX = { thud: 0.5, frame: 0.9, plate: 1.0, plateSteel: 1.1, clank: 2.4, clankRing: 1.9, deck: 0.9, servo: 0.2 };
+
+/** Rig footfall: shared by footstep (concrete) and footstep_steel (deck). */
+function footfall(ac, out, t, r, steel) {
+  const pre = gain(ac, 0.9); chain(pre, shaper(ac, 2.4), out);
+  thump(ac, pre, t, { f0: steel ? 82 : 70, f1: steel ? 46 : 36, sweep: 0.07, dur: steel ? 0.12 : 0.16, gain: steel ? 0.45 : FOOT_MIX.thud });
+  noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 1400, f1: 220, attack: 0.001, decay: steel ? 0.05 : 0.08, gain: steel ? 0.6 : 1.0 });
+  if (!steel) noiseHit(ac, pre, t, r, { kind: 'white', type: 'bandpass', f0: 820, f1: 380, Q: 0.8, attack: 0.0008, decay: 0.09, gain: 0.55 }); // concrete crunch
+  const M = FOOT_MIX;
+  resonator(ac, out, t + 0.003, r, { f: 150 * r.range(0.92, 1.08), ratios: FRAME_R, Q: [14, 30], decay: [0.08, 0.22], burstF: 900, gain: M.frame });              // leg frame
+  resonator(ac, out, t + 0.002, r, { f: 421 * r.range(0.94, 1.06), ratios: PLATE_R, Q: [16, 30], decay: steel ? [0.12, 0.38] : [0.05, 0.18], burstF: 1800, gain: steel ? M.plateSteel : M.plate }); // foot plate
+  noiseHit(ac, out, t + 0.001, r, { kind: 'white', type: 'bandpass', f0: 2000 * r.range(0.9, 1.1), Q: 1.1, attack: 0.0004, decay: 0.03, gain: M.clank });      // sole clank 1.1-3.6 kHz
+  resonator(ac, out, t + 0.001, r, { f: 1100 * r.range(0.95, 1.05), ratios: [1, 1.73, 2.42, 3.27], Q: [12, 22], decay: [0.03, 0.08], burstF: 2600, gain: M.clankRing });
+  if (steel) resonator(ac, out, t + 0.004, r, { f: 92 * r.range(0.9, 1.1), ratios: [1, 1.52, 2.27], Q: [18, 30], decay: [0.18, 0.42], burstF: 600, gain: M.deck }); // hollow deck
+  crackle(ac, out, t + 0.005, r, { type: 'lowpass', f: 2500, attack: 0.002, decay: steel ? 0.06 : 0.12, gain: steel ? 0.18 : 0.34 });                          // grit
+  tone(ac, out, t + 0.03, { type: 'sawtooth', f0: 900 * r.range(0.94, 1.06), f1: 700, fdur: 0.09, attack: 0.012, decay: r.range(0.06, 0.11), bp: [900, 760, 4], gain: M.servo }); // ankle servo
+  noiseHit(ac, out, t + 0.05, r, { kind: 'white', type: 'highpass', f0: 4200, attack: 0.02, decay: 0.1, gain: 0.06 });                                       // hydraulic hiss
 }
 
 export const SFX = {
@@ -115,7 +150,7 @@ export const SFX = {
       thump(ac, pre, t, { f0: 88, f1: 30, sweep: 0.2, dur: 0.45, gain: 0.7 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 7500, f1: 800, attack: 0.001, decay: 0.28, gain: 1.4 });
       fm(ac, out, t, { f: 1150 * r.range(0.95, 1.05), ratio: 1.414, idx0: 4, idx1: 0.4, decay: 0.7, gain: 0.36 });
-      modal(ac, out, t, r, { partials: [[640, 0.5, 0.5], [1370, 0.4, 0.4], [2210, 0.3, 0.3], [3480, 0.2, 0.22]], gain: 0.42, detune: 40 });
+      modal(ac, out, t, r, { partials: [[640, 0.5, 0.5], [1370, 0.4, 0.4], [2210, 0.3, 0.3], [3480, 0.2, 0.22]], gain: 0.42, detune: 40, grit: 0.45 });
       crackle(ac, out, t, r, { type: 'bandpass', f: 2100, Q: 0.8, attack: 0.003, decay: 0.65, gain: 0.75 });
       noiseHit(ac, out, t + 0.02, r, { kind: 'white', type: 'highpass', f0: 4800, attack: 0.02, decay: 0.7, gain: 0.18 });
     },
@@ -145,24 +180,27 @@ export const SFX = {
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 5600, f1: 220, Q: 0.8, attack: 0.001, decay: 0.6, gain: 2.0 }); // blast
       thump(ac, pre, t, { f0: 74, f1: 28, sweep: 0.25, dur: 0.7, gain: 0.9 });                                              // sub
       tone(ac, pre, t, { type: 'sawtooth', f0: 58, f1: 34, decay: 0.38, lp: [420, 160, 0.9], gain: 0.5 });                  // chest
-      modal(ac, out, t, r, { partials: [[311, 0.5, 0.7], [846, 0.35, 0.5], [1593, 0.2, 0.4]], gain: 0.07, click: 0 });       // barrel ring
+      modal(ac, out, t, r, { partials: [[311, 0.5, 0.7], [846, 0.35, 0.5], [1593, 0.2, 0.4]], gain: 0.07, click: 0, grit: 0.5 });       // barrel ring
       const tb = t + 0.16 + r.range(-0.01, 0.02);                                                                            // breech clank
       thump(ac, out, tb, { f0: 150, f1: 95, sweep: 0.03, dur: 0.06, gain: 0.35 });
-      modal(ac, out, tb, r, { partials: detuned([[720, 0.6, 0.14], [1183, 0.45, 0.12], [1962, 0.35, 0.09], [2871, 0.2, 0.06]], r, 40), gain: 0.3 });
+      modal(ac, out, tb, r, { partials: detuned([[720, 0.6, 0.14], [1183, 0.45, 0.12], [1962, 0.35, 0.09], [2871, 0.2, 0.06]], r, 40), gain: 0.3, grit: 0.7 });
       const te = t + 0.55 + r.range(0, 0.06);                                                                                // casing clinks
-      modal(ac, out, te, r, { partials: [[2950, 0.5, 0.3], [4420, 0.35, 0.24], [6610, 0.2, 0.16]], gain: 0.1, clickF: 6000 });
-      modal(ac, out, te + 0.16, r, { partials: [[3010, 0.5, 0.2], [4510, 0.3, 0.15]], gain: 0.05, clickF: 6000 });
+      modal(ac, out, te, r, { partials: detuned([[2950, 0.5, 0.3], [4420, 0.35, 0.24], [6610, 0.2, 0.16]], r, 50), gain: 0.1, clickF: 6000, grit: 0.45, gritQ: 45 });
+      modal(ac, out, te + 0.16, r, { partials: detuned([[3010, 0.5, 0.2], [4510, 0.3, 0.15]], r, 50), gain: 0.05, clickF: 6000, grit: 0.45, gritQ: 45 });
       noiseHit(ac, out, t + 0.02, r, { kind: 'brown', type: 'lowpass', f0: 320, f1: 60, attack: 0.05, decay: 1.7, gain: 0.8 }); // rumble
     },
   },
   reload: {
     bus: 'sfx', ref: 14, send: 0.15, prio: 3, max: 2, gap: 0.2, pv: 40, vv: 1, variants: 3, dur: 0.6, gain: 0.34,
+    layers: [[0, 'latch'], [0.05, 'mag slide'], [0.24, 'seat'], [0.35, 'bolt']],
     render(ac, out, t, r) {
-      modal(ac, out, t, r, { partials: detuned([[1620, 0.5, 0.05], [2710, 0.4, 0.04], [4130, 0.25, 0.03]], r, 50), gain: 0.4 });
-      tone(ac, out, t + 0.05, { type: 'sawtooth', f0: 380, f1: 620, decay: 0.16, bp: [900, 1400, 3], attack: 0.02, gain: 0.25 });
+      modal(ac, out, t, r, { partials: detuned([[1620, 0.5, 0.05], [2710, 0.4, 0.04], [4130, 0.25, 0.03]], r, 50), gain: 0.4, grit: 0.6 });
+      noiseHit(ac, out, t + 0.05, r, { kind: 'white', type: 'bandpass', f0: 900, f1: 1900, Q: 2.5, attack: 0.03, decay: 0.15, gain: 0.55 }); // magazine slides out/in
+      crackle(ac, out, t + 0.05, r, { type: 'bandpass', f: 2400, Q: 0.9, attack: 0.02, decay: 0.16, gain: 0.3 });                   // rail friction
+      tone(ac, out, t + 0.06, { type: 'sawtooth', f0: 300, f1: 420, decay: 0.14, bp: [700, 900, 4], attack: 0.02, gain: 0.06 });     // feed servo (faint)
       thump(ac, out, t + 0.24, { f0: 180, f1: 110, sweep: 0.03, dur: 0.05, gain: 0.5 });
-      modal(ac, out, t + 0.24, r, { partials: detuned([[980, 0.6, 0.08], [1720, 0.45, 0.06], [2960, 0.3, 0.04]], r, 50), gain: 0.5 });
-      modal(ac, out, t + 0.35, r, { partials: [[3300, 0.5, 0.03], [5100, 0.3, 0.02]], gain: 0.25 });
+      modal(ac, out, t + 0.24, r, { partials: detuned([[980, 0.6, 0.08], [1720, 0.45, 0.06], [2960, 0.3, 0.04]], r, 50), gain: 0.5, grit: 0.6 });
+      resonator(ac, out, t + 0.35, r, { f: 2300, ratios: [1, 1.43, 2.2], Q: [12, 22], decay: [0.02, 0.05], burstF: 4500, gain: 0.35 });
     },
   },
 
@@ -178,7 +216,7 @@ export const SFX = {
       noiseHit(ac, pre, t, r, { kind: 'white', type: 'bandpass', f0: 1300, f1: 500, Q: 0.7, attack: 0.001, decay: 0.2, gain: 1.1 });  // crunch
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 3800, f1: 300, attack: 0.002, decay: 0.62, gain: 1.5 });
       crackle(ac, out, t + 0.015, r, { type: 'highpass', f: 1300, attack: 0.02, decay: 0.95, gain: 0.62 });
-      debris(ac, out, t, r, 3 + Math.floor(r() * 3), 0.15, 1.0, false, 0.2);
+      debris(ac, out, t, r, 6 + Math.floor(r() * 4), 0.12, 0.9, false, 0.13);
       noiseHit(ac, out, t + 0.03, r, { kind: 'brown', type: 'lowpass', f0: 260, f1: 90, attack: 0.04, decay: 1.1, gain: 0.55 });
     },
   },
@@ -195,7 +233,7 @@ export const SFX = {
       noiseHit(ac, out, t + 0.01, r, { kind: 'brown', type: 'lowpass', f0: 760, f1: 80, attack: 0.03, decay: 2.7, gain: 0.6 });
       crackle(ac, out, t + 0.02, r, { type: 'highpass', f: 900, attack: 0.03, decay: 1.9, gain: 0.66 });
       crackle(ac, out, t + 0.1, r, { type: 'bandpass', f: 420, Q: 0.8, attack: 0.1, decay: 1.6, gain: 0.5, rate: 0.6 });
-      debris(ac, out, t, r, 9 + Math.floor(r() * 4), 0.2, 2.5, true, 0.22);
+      debris(ac, out, t, r, 15 + Math.floor(r() * 5), 0.18, 2.4, true, 0.15);
       noiseHit(ac, out, t + 0.35, r, { kind: 'brown', type: 'lowpass', f0: 170, f1: 70, attack: 0.45, decay: 2.9, gain: 0.7 }); // delayed rumble
     },
   },
@@ -210,7 +248,7 @@ export const SFX = {
       nwave(ac, out, t, 0.5, 0.5);                                                                                            // slug strike
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 3800, attack: 0.0003, decay: 0.008, gain: 0.8 });
       const b = r.range(1150, 1700);                                                                                          // inharmonic plate modes
-      modal(ac, out, t + 0.001, r, { partials: [[b, 0.55, 0.09], [b * 1.59, 0.4, 0.07], [b * 2.38, 0.3, 0.05], [b * 3.71, 0.18, 0.035]], gain: 0.7, clickF: 5200 });
+      modal(ac, out, t + 0.001, r, { partials: [[b, 0.55, 0.09], [b * 1.59, 0.4, 0.07], [b * 2.38, 0.3, 0.05], [b * 3.71, 0.18, 0.035]], gain: 0.7, clickF: 5200, grit: 0.35, gritQ: 40 });
       thump(ac, pre, t, { f0: 300, f1: 140, sweep: 0.02, dur: 0.045, gain: 0.35 });                                           // plate mass
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'bandpass', f0: 1400, f1: 600, Q: 1.1, attack: 0.0005, decay: 0.05, gain: 0.9 });
       crackle(ac, out, t + 0.008, r, { type: 'highpass', f: 3400, attack: 0.004, decay: 0.16, gain: 0.32 });                 // spark shower
@@ -259,11 +297,20 @@ export const SFX = {
     },
   },
   kill_confirm: {
-    bus: 'ui', spatial: false, prio: 5, max: 2, gap: 0.1, pv: 0, vv: 0.5, variants: 1, dur: 0.35, gain: 0.2,
+    // FCS "target destroyed": relay clack + two falling ring-modulated telemetry blips (cockpit
+    // electronics, not a chime), band-limited to the UI band
+    bus: 'ui', spatial: false, prio: 5, max: 2, gap: 0.1, pv: 0, vv: 0.5, variants: 1, dur: 0.35, gain: 0.22,
+    layers: [[0, 'relay clack'], [0.004, 'RM blip 1'], [0.072, 'RM blip 2']],
     render(ac, out, t, r) {
-      tone(ac, out, t, { f0: 1976, decay: 0.07, gain: 0.5, type: 'triangle' });
-      tone(ac, out, t + 0.075, { f0: 2637, decay: 0.16, gain: 0.5, type: 'triangle' });
-      tone(ac, out, t + 0.075, { f0: 5274, decay: 0.08, gain: 0.08 });
+      const rm = ringMod(ac, t, 0.3, 97, 'square');
+      const bp = filt(ac, 'bandpass', 1900, 1.1), lp = filt(ac, 'lowpass', 4200, 0.7);
+      const dry = gain(ac, 0.35);
+      chain(rm, bp, lp, out); chain(dry, lp);
+      const blip = (tt, f, d) => { const g = tone(ac, rm, tt, { type: 'square', f0: f, decay: d, attack: 0.002, gain: 0.55 }); g.connect(dry); };
+      blip(t + 0.004, 1760, 0.045);
+      blip(t + 0.072, 1318, 0.11);
+      noiseHit(ac, out, t, r, { kind: 'white', type: 'bandpass', f0: 4600, Q: 1.2, attack: 0.0003, decay: 0.004, gain: 0.35 });
+      resonator(ac, out, t, r, { f: 900, ratios: [1, 1.73, 2.6], Q: [14, 22], decay: [0.015, 0.035], burstF: 2600, gain: 0.35 }); // relay clack
     },
   },
   damage_taken: {
@@ -273,7 +320,7 @@ export const SFX = {
       const pre = gain(ac, 0.8); chain(pre, shaper(ac, 3), out);
       thump(ac, pre, t, { f0: 135, f1: 60, sweep: 0.05, dur: 0.11, gain: 0.6 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 4200, f1: 800, attack: 0.0006, decay: 0.08, gain: 0.9 });
-      modal(ac, out, t, r, { partials: detuned(PLATE, r, 70), gain: 0.8 });
+      modal(ac, out, t, r, { partials: detuned(PLATE, r, 70), gain: 0.8, grit: 0.55 });
       crackle(ac, out, t, r, { type: 'highpass', f: 2000, attack: 0.001, decay: 0.2, gain: 0.4 });
     },
   },
@@ -323,7 +370,7 @@ export const SFX = {
       const pre = gain(ac, 0.9); chain(pre, shaper(ac, 2.8, 0.1), out);
       thump(ac, pre, t, { f0: 78, f1: 30, sweep: 0.12, dur: 0.32, gain: 0.9 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 1600, f1: 200, attack: 0.001, decay: 0.13, gain: 1 });
-      modal(ac, out, t + 0.004, r, { partials: detuned(FRAME_STEEL, r, 60), gain: 0.7, clickF: 1600 });
+      modal(ac, out, t + 0.004, r, { partials: detuned(FRAME_STEEL, r, 60), gain: 0.7, clickF: 1600, grit: 0.6 });
       noiseHit(ac, pre, t, r, { kind: 'white', type: 'bandpass', f0: 800, f1: 400, Q: 0.7, attack: 0.001, decay: 0.12, gain: 0.7 }); // concrete crunch
       crackle(ac, out, t + 0.01, r, { type: 'lowpass', f: 3200, attack: 0.004, decay: 0.3, gain: 0.45 });                  // grit
       noiseHit(ac, out, t + 0.09, r, { kind: 'white', type: 'highpass', f0: 3600, attack: 0.05, decay: 0.5, gain: 0.1 });  // hydraulic bleed
@@ -331,18 +378,18 @@ export const SFX = {
     },
   },
   footstep: {
-    bus: 'sfx', ref: 14, send: 0.22, prio: 4, max: 3, gap: 0.12, pv: 70, vv: 1.5, variants: 5, dur: 0.6, gain: 0.46,
-    layers: [[0, 'thud'], [0.003, 'foot plate'], [0.02, 'actuator'], [0.04, 'hiss']],
-    render(ac, out, t, r) {
-      const pre = gain(ac, 0.9); chain(pre, shaper(ac, 2.4), out);
-      thump(ac, pre, t, { f0: 72, f1: 40, sweep: 0.07, dur: 0.14, gain: 0.55 });
-      noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 1400, f1: 220, attack: 0.001, decay: 0.07, gain: 1.0 });
-      modal(ac, out, t + 0.003, r, { partials: detuned([[152, 0.6, 0.2], [243, 0.45, 0.16], [409, 0.3, 0.12], [663, 0.18, 0.08]], r, 80), gain: 0.5, clickF: 1200 });
-      modal(ac, out, t + 0.002, r, { partials: detuned([[930, 0.5, 0.05], [1540, 0.35, 0.04], [2410, 0.2, 0.03]], r, 90), gain: 0.16, click: 0.3 }); // steel sole on concrete
-      crackle(ac, out, t + 0.005, r, { type: 'lowpass', f: 2500, attack: 0.002, decay: 0.12, gain: 0.36 });
-      noiseHit(ac, out, t + 0.04, r, { kind: 'white', type: 'highpass', f0: 4200, attack: 0.02, decay: 0.12, gain: 0.07 });
-      tone(ac, out, t + 0.02, { type: 'sawtooth', f0: 330 * r.range(0.9, 1.1), f1: 250, attack: 0.02, decay: 0.14, bp: [900, 700, 5], gain: 0.1 });
-    },
+    // 60 t rig foot on CONCRETE: sub thud + crunch, leg frame + foot plate ring (noise-excited,
+    // so the metal reads as mass, not pings), a 1.1-3.6 kHz sole clank and the ankle servo whine
+    bus: 'sfx', ref: 14, send: 0.22, prio: 4, max: 3, gap: 0.12, pv: 70, vv: 1.5, variants: 5, dur: 0.6, gain: 0.58,
+    layers: [[0, 'thud+crunch'], [0.002, 'sole clank'], [0.003, 'frame+plate'], [0.03, 'servo whine'], [0.05, 'hiss']],
+    render(ac, out, t, r) { footfall(ac, out, t, r, false); },
+  },
+  footstep_steel: {
+    // the same foot on a STEEL deck (containers, gantries, the carrier): less crunch, a hollow
+    // deck boom and a longer plate ring
+    bus: 'sfx', ref: 16, send: 0.28, prio: 4, max: 3, gap: 0.12, pv: 70, vv: 1.5, variants: 4, dur: 0.8, gain: 0.6,
+    layers: [[0, 'thud'], [0.002, 'sole clank'], [0.003, 'deck boom+plate'], [0.03, 'servo whine']],
+    render(ac, out, t, r) { footfall(ac, out, t, r, true); },
   },
   boost_ignite: {
     bus: 'sfx', ref: 20, send: 0.22, prio: 4, max: 2, gap: 0.2, pv: 60, vv: 1, variants: 3, dur: 0.6, gain: 0.42,
@@ -419,11 +466,22 @@ export const SFX = {
     },
   },
   repair: {
-    bus: 'ui', spatial: false, send: 0.2, prio: 6, max: 1, gap: 0.4, pv: 0, vv: 0, variants: 1, dur: 1.0, gain: 0.34,
+    // field repair kit: injector clamps on, hydraulic sealant bleeds off, ratchet x3, clamp seats,
+    // ONE low system confirm tone (machinery, not an arpeggio)
+    bus: 'ui', spatial: false, send: 0.2, prio: 6, max: 1, gap: 0.4, pv: 0, vv: 0, variants: 1, dur: 1.0, gain: 0.36,
+    layers: [[0, 'hydraulic bleed'], [0.06, 'ratchet x3'], [0.3, 'clamp seat'], [0.38, 'confirm tone']],
     render(ac, out, t, r) {
-      noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 2600, attack: 0.02, decay: 0.5, gain: 0.25 });
-      modal(ac, out, t, r, { partials: [[262, 0.6, 0.12], [523, 0.4, 0.1], [881, 0.25, 0.07]], gain: 0.35 });
-      [1047, 1319, 1568, 2093].forEach((f, i) => tone(ac, out, t + 0.1 + i * 0.07, { type: 'triangle', f0: f, decay: 0.42, attack: 0.004, gain: 0.22 }));
+      noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 2500, attack: 0.015, decay: 0.42, gain: 0.3 });              // bleed
+      noiseHit(ac, out, t, r, { kind: 'white', type: 'bandpass', f0: 5400, f1: 2600, Q: 1.4, attack: 0.02, decay: 0.36, gain: 0.22 }); // pressure falls
+      for (let i = 0; i < 3; i++) {
+        const tt = t + 0.06 + i * 0.075;
+        resonator(ac, out, tt, r, { f: 1650 * (1 + i * 0.04), ratios: [1, 1.62, 2.3, 3.1], Q: [14, 26], decay: [0.02, 0.06], burstF: 4200, gain: 0.5 });
+        thump(ac, out, tt, { f0: 240, f1: 150, sweep: 0.01, dur: 0.025, gain: 0.28 });
+      }
+      thump(ac, out, t + 0.3, { f0: 150, f1: 80, sweep: 0.03, dur: 0.08, gain: 0.5 });                                               // clamp seats
+      resonator(ac, out, t + 0.3, r, { f: 360, ratios: SCRAP, Q: [14, 24], decay: [0.06, 0.14], burstF: 1200, gain: 0.45 });
+      tone(ac, out, t + 0.38, { type: 'square', f0: 440, decay: 0.3, attack: 0.006, lp: [1500, 800, 0.8], gain: 0.2 });           // confirm
+      tone(ac, out, t + 0.38, { type: 'sine', f0: 880, decay: 0.16, attack: 0.006, gain: 0.05 });
     },
   },
   alarm: {
@@ -490,13 +548,12 @@ export const SFX = {
       const pre = gain(ac, 0.85); chain(pre, shaper(ac, 3), out);
       thump(ac, pre, h, { f0: 70, f1: 24, sweep: 0.35, dur: 1.4, gain: 1.2 });
       noiseHit(ac, pre, h, r, { kind: 'pink', type: 'lowpass', f0: 3000, f1: 120, attack: 0.002, decay: 1.2, gain: 0.8 });
-      // brass cluster stab D-Eb-A-D (phrygian), wide
+      // FM brass cluster stab D-Eb-A-D (phrygian), wide: 2 players per note (ensemble spread)
       [38, 50, 51, 57, 62].forEach((m, i) => {
         const pan = ac.createStereoPanner(); pan.pan.value = (i - 2) * 0.28; pan.connect(out);
-        const lp = filt(ac, 'lowpass', 300, 1.2); points(lp.frequency, h, [[0, 300, 's'], [0.05, 2600, 'e'], [2.2, 400, 'e']]);
-        const g = gain(ac, 0); g.gain.setValueAtTime(0, h); g.gain.linearRampToValueAtTime(0.16, h + 0.02); g.gain.setTargetAtTime(0, h + 0.5, 0.6);
-        chain(lp, shaper(ac, 1.8), g, pan);
-        for (const dt of [-10, 9]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m); o.detune.value = dt; o.connect(lp); o.start(h); o.stop(h + 3.4); }
+        for (const det of [-6, 7]) {
+          brass(ac, pan, h + r.range(0, 0.012), r, { f: midiHz(m) * Math.pow(2, det / 1200), dur: 1.5, release: 0.9, gain: 0.07, idx: m < 45 ? 2.6 : 3.5, blat: 0.06, scoop: 45 });
+        }
       });
       modal(ac, out, h, r, { partials: [[97, 0.6, 2.4], [232, 0.45, 1.8], [366, 0.3, 1.2], [591, 0.2, 0.8]], gain: 0.35, clickF: 1500 });
     },
@@ -561,7 +618,7 @@ export const SFX = {
     render(ac, out, t, r) {
       const base = r.range(95, 150);
       thump(ac, out, t, { f0: 90, f1: 45, sweep: 0.1, dur: 0.3, gain: 0.6 });
-      modal(ac, out, t, r, { partials: [[base, 0.6, 2.2], [base * 2.39, 0.45, 1.6], [base * 3.77, 0.3, 1.1], [base * 6.1, 0.2, 0.6]], gain: 0.4, clickF: 1200 });
+      modal(ac, out, t, r, { partials: [[base, 0.6, 2.2], [base * 2.39, 0.45, 1.6], [base * 3.77, 0.3, 1.1], [base * 6.1, 0.2, 0.6]], gain: 0.4, clickF: 1200, grit: 0.4, gritQ: 60 });
     },
   },
 };
@@ -570,7 +627,7 @@ export const SFX_IDS = Object.keys(SFX);
 
 /** Render order at unlock: what the player hears first renders first. */
 export const PRERENDER_ORDER = [
-  'ui_confirm', 'ui_select', 'rifle', 'qb', 'footstep', 'land', 'boost_ignite', 'jump', 'enemy_gun', 'hit_confirm',
+  'ui_confirm', 'ui_select', 'rifle', 'qb', 'footstep', 'footstep_steel', 'land', 'boost_ignite', 'jump', 'enemy_gun', 'hit_confirm',
   'impact_metal', 'impact_ground', 'whiz',
   'explosion_small', 'missile_launch', 'cannon', 'explosion_large', 'lock', 'lock_switch', 'missile_lock', 'damage_taken',
   'ricochet',

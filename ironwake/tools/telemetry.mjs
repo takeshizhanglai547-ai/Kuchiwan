@@ -277,13 +277,16 @@ function summarize(res, MOVE) {
     const tp = col(rows, 'torso_pitch_deg'), trl = col(rows, 'torso_roll_deg');
     S.boost_torso_pitch_deg = +((tp[85] + tp[90] + tp[95]) / 3).toFixed(1);              // forward run
     S.boost_turn_torso_roll_deg = +Math.max(...trl.slice(100, 160).map(Math.abs)).toFixed(1); // 90 deg turn
+    // steady ground-boost strafe (stick right, aim ahead, frames 140-158): roll into the strafe
+    S.boost_strafe_torso_roll_deg = +(trl.slice(140, 158).reduce((a, b) => a + Math.abs(b), 0) / 18).toFixed(1);
     S.stop_torso_pitch_min_deg = +Math.min(...tp.slice(235, 290)).toFixed(1);              // skid: digs back
   }
   // --- AB
   {
     const rows = res.ab_launch.rows, sp = col(rows, 'speed');
     const li = col(rows, 'ab_launch').indexOf(1);
-    S.ab_windup_s = li > 0 ? +((li - 10) / 60).toFixed(3) : null;
+    // steps from the AB press (frame 10, the wind-up's first step) through the launch step, inclusive
+    S.ab_windup_s = li > 0 ? +((li - 10 + 1) / 60).toFixed(3) : null;
     S.ab_launch_speed_ms = li > 0 ? +sp[li].toFixed(1) : null;
     S.ab_speed_ms = +Math.max(...sp).toFixed(1);
     const fov = col(rows, 'fov');
@@ -302,6 +305,7 @@ function summarize(res, MOVE) {
     S.jump_time_to_apex_s = +((ia - 10) / 60).toFixed(3);
     const vy = col(rows, 'vy');
     S.hover_climb_ms = +Math.max(...vy.slice(70, 100)).toFixed(1);
+    S.hover_fov_deg = +Math.max(...col(rows, 'fov').slice(70, 110)).toFixed(2);
     const en = col(rows, 'en');
     S.hover_en_drain_pct_s = +((en[75] - en[99]) / (24 / 60)).toFixed(2);
     const land = col(rows, 'landed');
@@ -398,10 +402,10 @@ try:
             if r == len(metrics) - 1: ax.set_xlabel('time (s)')
     keys = ['qb_peak_ms', 'qb_frames_to_peak', 'qb_jet_s', 'qb_cooldown_s', 'qb_spam_count_2s', 'qb_travel_jet_m', 'qb_travel_total_m', 'qb_en_cost_pct', 'qb_count_from_full', 'qb_fov_punch_deg', 'qb_fov_punch_half_s',
             'qb_cam_lag_peak_m', 'redline_s', 'redline_restore_pct', 'boost_90pct_s', 'stop_to_walk_s', 'turn90_min_speed_ms', 'ab_windup_s', 'ab_launch_speed_ms',
-            'ab_speed_ms', 'ab_fov_peak_deg', 'ab_en_drain_pct_s', 'jump_apex_m', 'jump_time_to_apex_s', 'hover_climb_ms', 'hover_en_drain_pct_s',
+            'ab_speed_ms', 'ab_fov_peak_deg', 'ab_en_drain_pct_s', 'jump_apex_m', 'jump_time_to_apex_s', 'hover_climb_ms', 'hover_fov_deg', 'hover_en_drain_pct_s',
             'rig_frame_pct_idle', 'rig_frame_pct_boost', 'cam_dist_idle_m', 'land_impact_ms', 'land_cam_dip_m',
             'lock_none_max_off_deg', 'lock_soft_max_off_deg', 'lock_hard_max_off_deg',
-            'boost_torso_pitch_deg', 'boost_turn_torso_roll_deg', 'stop_torso_pitch_min_deg', 'ab_torso_pitch_deg']
+            'boost_torso_pitch_deg', 'boost_turn_torso_roll_deg', 'boost_strafe_torso_roll_deg', 'stop_torso_pitch_min_deg', 'ab_torso_pitch_deg']
     txt = '   '.join('%s=%s' % (k, S.get(k)) for k in keys)
     import textwrap
     fig.suptitle('IRONWAKE movement / camera telemetry (60 Hz sim steps)   orange lines = QB, blue = AB launch, yellow = landing', color='#e6eef0', fontsize=10)
@@ -467,7 +471,7 @@ async function main() {
   const T = {
     qb_peak_ms: 'max(105, |v|+30)', qb_frames_to_peak: '1 (instant)', qb_jet_s: '0.35', qb_cooldown_s: '0.55', qb_en_cost_pct: '16-17',
     qb_count_from_full: '6', qb_fov_punch_deg: '4-8', qb_travel_jet_m: '35-45 (0.35 s jet)', qb_travel_total_m: '35-45 (+skid)',
-    boost_torso_pitch_deg: '8-12', boost_turn_torso_roll_deg: '6-10+', ab_torso_pitch_deg: '~30', ab_rig_frame_pct: '>=22',
+    boost_torso_pitch_deg: '8-12', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '~30', ab_rig_frame_pct: '>=22',
     cam_dist_idle_m: '26-32', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
     boost_90pct_s: '0.35', boost_top_ms: '85', stop_to_walk_s: '~0.5', ab_windup_s: '0.6', ab_speed_ms: '130', ab_en_drain_pct_s: '13',
     jump_apex_m: '15-20', hover_climb_ms: '55-70', hover_en_drain_pct_s: '~21', rig_frame_pct_idle: '22-30', rig_frame_pct_boost: '22-30',

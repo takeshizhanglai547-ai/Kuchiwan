@@ -29,6 +29,8 @@ from ekit import D, Geo, P, iw  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 NAME = 'enemy_relay'
+K.MAT_WEIGHT.update({'concrete': 0.4})   # plinth concrete: seen at grazing angles, low texel priority
+K.UP_WEIGHT = 0.6                        # deck / cap tops: mostly seen from the side at 30-150 m
 PLINTH_H = 0.7
 HW = 4.0                 # housing half width
 HOUSE_Z1 = 6.2           # housing top / deck
@@ -460,10 +462,17 @@ def build_barrels():
     return g
 
 
-def build_eye():
+EYE_LENS = (0.62, -1.47, HEAD[2] + 1.1)
+
+
+def build_eye(part='all'):
+    """Gun-head sensor: black-glass lens with a glowing iris on its own dome faces
+    (K.lens_dome; no separate halo node at this viewing range), plus a thin ranging slit."""
     g = Geo()
-    g.merge(P.dome(0.1, 0.05, 24, 3, mat='lens').align((0, -1, 0), loc=(0.62, -1.47, HEAD[2] + 1.1)))
-    g.merge(P.box((0.5, 0.03, 0.05), bevel=0.006, segs=1, mat='lens').move(0.62 + 0.0, -1.462, HEAD[2] + 0.98))
+    g.merge(K.lens_dome(0.11, 0.055, iris=0.38, ring=0.52, ring_mat='steel')
+            .align((0, -1, 0), loc=EYE_LENS))
+    if part != 'rim':
+        g.merge(P.box((0.5, 0.03, 0.035), bevel=0.006, segs=1, mat='lens').move(0.62 + 0.0, -1.462, HEAD[2] + 0.98))
     return g
 
 
@@ -473,7 +482,7 @@ def build(a):
     a.pivot('core', (0, 0, (CORE_Z0 + CORE_Z1) / 2), parent='base')
     a.pivot('beacon', (MAST[0], MAST[1], MAST_TOP), parent='base', iw_eye_color='#FF3B2F', iw_eye_strength=10.0)
     a.pivot('head', HEAD, parent='base')
-    a.pivot('eye', (0.62, -1.47, HEAD[2] + 1.05), parent='head', iw_eye_color='#FF2A2A', iw_eye_strength=4.0)
+    a.pivot('eye', (0.62, -1.47, HEAD[2] + 1.05), parent='head', iw_eye_color='#FF2A2A', iw_eye_strength=10.0)
     a.pivot('barrel', TRUNNION, parent='head')
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='barrel')
     tris = {}
@@ -537,8 +546,8 @@ CLAY = dict(VIEWS)
 COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.54}, 'paint_secondary': {'color': '#BDB39A', 'rough': 0.5},
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#2B2624'},
           'steel_dark': {'color': '#3A3836'}, 'glow': {'emit': '#7FE0FF', 'emit_strength': 6.5}}
-OBJ_WEIGHT = {'head_geo': 1.5, 'barrel_geo': 1.1, 'core_geo': 0.7, 'eye_geo': 1.0, 'base_geo': 1.0, 'door_geo': 1.9,
-              'kit_geo': 0.45}
+OBJ_WEIGHT = {'head_geo': 1.4, 'barrel_geo': 1.0, 'core_geo': 0.6, 'eye_geo': 1.0, 'base_geo': 1.0, 'door_geo': 1.8,
+              'kit_geo': 0.4}
 WEATHER = iw.Weathering(edge_wear=1.3, grime=1.4, streaks=1.7, rust=1.1, dust=0.55, chip_threshold=0.56,
                         flat_chips=0.55, macro=0.1, ground_dirt=0.7, ao_in_albedo=0.26)
 NEED = ['base', 'core', 'beacon', 'head', 'eye', 'barrel', 'muzzle']
@@ -547,7 +556,7 @@ NEED = ['base', 'core', 'beacon', 'head', 'eye', 'barrel', 'muzzle']
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=41, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, small=0.13,
-          sizes={'normal': 2048, 'orm': 768, 'emissive': 256}, card_atlas=1024,
+          sizes={'normal': 1536, 'orm': 768, 'emissive': 256}, card_atlas=1024,
           tex_quality={'basecolor': 78, 'normal': 72, 'orm': 62},
           bake_kw=dict(edge=0.05, cavity=0.12, ao_dist=1.6, bevel_radius=0.02))
 

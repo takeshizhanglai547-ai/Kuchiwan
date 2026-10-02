@@ -215,3 +215,15 @@ test('QB spam (requested every step): bursts exactly every qbCooldown (0.55 s = 
   const steps = Math.round(MOVE.qbCooldown / DT);
   for (let k = 1; k < at.length; k++) assert.equal(at[k] - at[k - 1], steps, `interval ${at[k] - at[k - 1]} steps`);
 });
+
+test('reset settles a spawn point just above the floor (no spurious landing); air spawns keep height', () => {
+  const { m, it } = setup();
+  m.reset(new THREE.Vector3(5, 0.3, 5), 0);
+  assert.ok(m.pos.y < 0.05, `settled y ${m.pos.y}`);
+  let landed = 0;
+  run(m, it, 20, () => { landed = Math.max(landed, m.flags.landed); });
+  assert.ok(landed <= 4, `no landing impact after a settled spawn (got ${landed} m/s)`);
+  assert.ok(m.grounded, 'grounded');
+  m.reset(new THREE.Vector3(0, 12, 0), 0);
+  assert.equal(m.pos.y, 12, 'a deliberate air spawn is not snapped down');
+});

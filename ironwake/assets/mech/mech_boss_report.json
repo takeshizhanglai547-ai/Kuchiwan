@@ -1,55 +1,39 @@
 {
- "tris": 60208,
+ "tris": 62459,
  "parts": 29,
  "colliders": 0,
  "decals": 7,
- "texel_density_px_per_m": 117.1,
+ "texel_density_px_per_m": 118.1,
  "res": 2048,
  "timings_s": {
-  "model": 2.8,
-  "bake.mech_boss_A.albedo": 44.0,
-  "bake.mech_boss_A.matid": 27.4,
-  "bake.mech_boss_A.noise": 30.7,
-  "bake.mech_boss_A.wnormal": 21.9,
-  "bake.mech_boss_A.wpos": 22.6,
-  "bake.mech_boss_A.masks": 99.3,
-  "bake.mech_boss_A.ao": 84.5,
-  "bake.mech_boss_A.normal": 79.5,
-  "bake.total": 902.2,
-  "composite": 25.8,
-  "bake.mech_boss_B.albedo": 54.7,
-  "bake.mech_boss_B.matid": 43.1,
-  "bake.mech_boss_B.noise": 48.2,
-  "bake.mech_boss_B.wnormal": 48.9,
-  "bake.mech_boss_B.wpos": 48.7,
-  "bake.mech_boss_B.masks": 85.7,
-  "bake.mech_boss_B.ao": 73.2,
-  "bake.mech_boss_B.normal": 80.0,
-  "export.glb": 1.9,
-  "export.gltfpack": 0.2,
+  "model": 2.2,
+  "bake.total": 2.3,
+  "composite": 22.5,
+  "export.glb": 1.5,
+  "export.gltfpack": 0.1,
   "export.fbx": 0.3,
-  "render.mech_boss_hero.png": 328.9,
-  "render.mech_boss_front.png": 291.1,
-  "render.mech_boss_back.png": 199.6,
-  "render.mech_boss_close.png": 242.8
+  "render.mech_boss_hero.png": 300.1,
+  "render.mech_boss_front.png": 130.9,
+  "render.mech_boss_back.png": 148.5,
+  "render.mech_boss_close.png": 182.2
  },
- "elapsed_s": 2023.0,
- "glb_bytes": 2176256,
+ "elapsed_s": 822.6,
+ "glb_bytes": 2066032,
  "glb_breakdown": {
-  "bytes": 2176256,
+  "bytes": 2066032,
   "images": {
-   "mech_boss_B_f_normal": 127090,
-   "mech_boss_B_f_orm": 125792,
-   "mech_boss_B_f_basecolor": 268850,
-   "mech_boss_B_f_emissive": 4200,
+   "mech_boss_B_f_normal": 131944,
+   "mech_boss_B_f_orm": 141782,
+   "mech_boss_B_f_basecolor": 290572,
+   "mech_boss_B_f_emissive": 10796,
    "mech_boss_decals": 82246,
-   "mech_boss_A_f_normal": 324014,
-   "mech_boss_A_f_orm": 294314,
-   "mech_boss_A_f_basecolor": 249906,
-   "mech_boss_A_f_emissive": 2380
+   "mech_boss_A_f_normal": 302418,
+   "mech_boss_A_f_orm": 128560,
+   "mech_boss_A_f_basecolor": 239402,
+   "mech_boss_A_f_emissive": 5886
   },
-  "image_bytes": 1478792,
-  "geometry_bytes": 697464
+  "image_bytes": 1333606,
+  "geometry_bytes": 732426
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_mech_boss.fbx",
@@ -61,8 +45,8 @@
  ],
  "parts_tris": {
   "pelvis_geo": 3118,
-  "torso_geo": 7607,
-  "head_geo": 3325,
+  "torso_geo": 7991,
+  "head_geo": 3320,
   "eye_geo": 92,
   "booster_back_geo": 4066,
   "weapon_R_geo": 2936,
@@ -71,29 +55,29 @@
   "shoulder_R_geo": 2007,
   "forearm_R_geo": 1446,
   "hand_R_geo": 917,
-  "thigh_L_geo": 2678,
-  "shin_L_geo": 3704,
+  "thigh_L_geo": 3401,
+  "shin_L_geo": 4302,
   "foot_L_geo": 928,
   "arm_L_geo": 3532,
-  "thigh_R_geo": 2684,
-  "shin_R_geo": 3705,
+  "thigh_R_geo": 3407,
+  "shin_R_geo": 4303,
   "foot_R_geo": 928,
   "arm_R_geo": 3480
  },
  "texture_sets": {
   "A": {
-   "texel_px_per_m": 117.1,
-   "coverage": 0.563,
+   "texel_px_per_m": 118.1,
+   "coverage": 0.575,
    "overlap": 0.0,
-   "tris": 28977
+   "tris": 29356
   },
   "B": {
-   "texel_px_per_m": 120.9,
-   "coverage": 0.602,
+   "texel_px_per_m": 118.1,
+   "coverage": 0.592,
    "overlap": 0.0001,
-   "tris": 31231
+   "tris": 33103
   }
  },
  "cards": 14,
- "total_s": 2023.1
+ "total_s": 822.6
 }

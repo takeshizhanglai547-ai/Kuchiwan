@@ -14,10 +14,11 @@
 //                   dodge cooldown and an EN reserve; escape QB after a stagger
 //   3. attacks      one at a time, picked by weighted choice (range, LOS, EN, cooldowns, phase):
 //                     rifle     LR-3 laser rifle bursts            (tell 0.22 s: small glint)
-//                     missiles  4-cell salvo                        (tell 0.5 s: glint + beeps)
-//                     barrage   P2: 8 vertical cells from a hover   (tell 0.6 s: glint + alarm)
-//                     blade     lunge + slash up close              (tell 0.45 s: glint + hum)
-//                     charge    assault boost at the player (0.45 s glint + 0.6 s AB wind-up),
+//                     missiles  4-cell salvo                        (tell 0.7 s: glint + beeps)
+//                     barrage   P2: 8 vertical cells from a hover   (tell 0.7 s: glint + alarm)
+//                     blade     RUSH in (boost + gap-close QBs, no tell) to <= 42 m, then the
+//                               0.55 s tell (arm drawn back, glint + hum), lunge + slash
+//                     charge    assault boost at the player (0.8 s glint + 0.6 s AB wind-up),
 //                               strafing fire; AB->blade combo gets its OWN 0.42 s tell while
 //                               closing, else it peels off with a QB
 //                     plunge    P2: climbs on the boosters, hangs + tells 0.5 s (glint, sensor
@@ -25,8 +26,8 @@
 //                               the air, landing shockwave
 //                     flank     P2: chained QBs around the player, then a burst from the side
 //                     cover     breaks line of sight behind hard cover when it takes burst damage
-//                   Big attacks are TELEGRAPHED 0.4-0.6 s ahead (visual glint + tell sound; the
-//                   real lead is logged per attack) and committed: no dodging during a blade /
+//                   Big attacks are TELEGRAPHED 0.5-0.8 s ahead (pulsing glint + tell sound + rising
+//                   warning ticks; the real lead is logged per attack) and committed: no dodging during a blade /
 //                   plunge / barrage or its recovery (the punish window).
 //   4. phases       P1 disciplined mid-range duelist; at 50 % AP the LIMITER RELEASE (vent burst,
 //                   radio callout via game.hud.callout) -> P2: close range, faster motor
@@ -36,6 +37,9 @@
 //                   (2 s, direct hits x1.85 via damage.js) — the gauge fills slower right after a
 //                   stagger (poise), which paces a fight to 3-5 staggers in 60-90 s for an
 //                   auto-aim bot (tools/ai_log.mjs --seeds).
+//   6. body       bosspose.js (rig.onPose): stagger SAG, blade DRAW, charge BRACE, braking ENTRY;
+//                 hitvol.js per-part hit boxes on the rig joints; stagger arcs on the joints,
+//                 sensor dimmed in the window; heavy intro landing (dust ring, knees, name card)
 // TELEMETRY: this.log (dodges, QBs, attacks, real tell leads, hits each way, staggers, distance
 // histogram, per-phase split, timeline) — read by tools/ai_log.mjs.
 import * as THREE from 'three';
@@ -46,6 +50,7 @@ import { MOVE } from '../player/tuning.js';
 import { MoveFx } from '../player/movefx.js';
 import { Loadout, WEAPONS } from '../weapons/weapons.js';
 import { leadAim, playTell, wrapAngle, pointFree, losFrom, pathClear } from './ai.js';
+import { BossPose } from './bosspose.js';
 
 export const BOSS_STATS = {
   name: 'GC-X1 CINDERHOUND',         // rival rig (docs/AC6_BENCHMARK.md §5)
@@ -81,7 +86,7 @@ export const BOSS_AI = {
       gap: [0.45, 1.1], rifleChain: [1, 2],
       weights: { rifle: 4.2, missiles: 2.4, blade: 2.2, charge: 2.2, barrage: 0, flank: 0, plunge: 0 },
       cd: { missiles: 6.5, blade: 5, charge: 8, barrage: 99, flank: 99, plunge: 99 },
-      chargeMin: 100, abBlade: 0.55,
+      chargeMin: 100, abBlade: 0.55, radialK: 0.9, rangeQB: 50,
     },
     { // P2 — limiter released: aggressive, close, air-mobile (new: barrage, QB flank, plunge, AB->blade)
       range: [32, 80], strafeFlip: [1.4, 2.8], flipQB: 0.8, rhythmQB: [0.8, 1.5], jump: [5, 9], hover: [0.6, 1.6], alt: [12, 30],
@@ -89,17 +94,22 @@ export const BOSS_AI = {
       gap: [0.2, 0.55], rifleChain: [2, 3],
       weights: { rifle: 3.4, missiles: 0.9, blade: 2.6, charge: 2.2, barrage: 2.2, flank: 2, plunge: 3.2 },
       cd: { missiles: 6, blade: 3.8, charge: 7, barrage: 9, flank: 7, plunge: 9 },
-      chargeMin: 80, abBlade: 0.85,
+      chargeMin: 80, abBlade: 0.85, radialK: 1.5, rangeQB: 12,   // P2 really presses in (range QBs at > 92 m)
     },
   ],
   // Telegraph lead (s) between the tell (glint + sound) and the moment the attack can hurt.
   // Big attacks sit in the fair 0.4-0.6 s window; the rifle burst is a small, fast tell.
-  tell: { rifle: 0.22, missiles: 0.5, barrage: 0.6, blade: 0.45, charge: 0.45, flank: 0, cover: 0, plunge: 0.5, abBlade: 0.42 },
+  // r2: big attacks 0.5-0.8 s (critic: mean 0.29 s was too tight), each with an audible ramp
+  tell: { rifle: 0.22, missiles: 0.7, barrage: 0.7, blade: 0.55, charge: 0.8, flank: 0, cover: 0, plunge: 0.6, abBlade: 0.5 },
+  // rising warning ticks during a big tell (sound id, pitch from -> to, volume from -> to, every s)
+  tellRamp: { id: 'lock', pitch: [0.85, 1.7], volume: [0.25, 0.7], every: 0.14 },
   combo: { missiles: 0.8, barrage: 0.8, blade: 0.5, flank: 0.4 },   // P2: chance the attack flows into a rifle burst
   plunge: { alt: [24, 32], riseMax: 1.7, blade: 66, maxT: 2.6, slamR: 18 },
   reaction: [0.12, 0.24],       // s between seeing the shot and the dodge
   missileLate: [-0.08, 0.02],   // missiles: dodge this long BEFORE the lead missile's estimated arrival (late = breaks homing of the middle of the salvo)
-  bladeRange: 90,               // start a blade tell inside this (gap-close QB when beyond lungeReach)
+  bladeRange: 90,               // pick the blade inside this; beyond bladeTellR it first CLOSES (boost + QBs, no tell)
+  bladeTellR: 42,               // the 0.55 s blade tell starts only inside this (the lunge then always reaches)
+  bladeCloseT: 1.6,             // s to get inside bladeTellR, else the rush is aborted
   lungeReach: 76,               // boss_blade lungeRange + reach
   abBladeRange: 62,             // assault-boost -> blade combo trigger distance
   chargeMaxT: 3.0,
@@ -108,7 +118,7 @@ export const BOSS_AI = {
   recover: [0.3, 0.55],         // after an attack before the next pick
   postBlade: 0.55,              // committed recovery after a slash (punish window)
   staggerEscape: 0.75,          // chance to QB out when a stagger ends
-  cover: { heat: [2100, 2700], heatTau: 3, cd: [11, 8], go: 3.2, hide: [0.7, 1.3], ring: [38, 62, 88], afterStagger: 0.4 },
+  cover: { heat: [2100, 3600], heatTau: 3, cd: [11, 15], go: 3.2, hide: [0.7, 1.3], ring: [38, 62, 88], afterStagger: [0.4, 0.15] },
   poise: { min: 0.4, recover: 12, entry: 0.5, entryRecover: 10 },
   phasePoise: [1, 0.8],          // limiter released: a braced stance, the gauge fills 20 % slower   // impact multiplier right after a stagger -> 1 over `recover` s
   rifleHits: { n: 4, window: 1.0 },   // "under sustained fire" trigger for the rifle dodge
@@ -129,8 +139,13 @@ const _to = new THREE.Vector3(), _tan = new THREE.Vector3(), _v = new THREE.Vect
 const _aim = new THREE.Vector3(), _d = new THREE.Vector3(), _thrust = new THREE.Vector3();
 const _hit = { hit: false, dist: 0, point: new THREE.Vector3(), normal: new THREE.Vector3(), collider: null, body: null, ground: false };
 const _glintOpts = { scale: 1, vel: null };
+const _rampOpts = { pos: null, pitch: 1, volume: 1 };
 const _tp = new THREE.Vector3();
 const ATTACKS = ['rifle', 'missiles', 'barrage', 'blade', 'charge', 'flank', 'plunge'];
+/** Hit-volume parts: rig joints that own plating (rig.js node contract). */
+const BOSS_PARTS = ['pelvis', 'torso', 'head', 'arm_L', 'arm_R', 'forearm_L', 'forearm_R', 'hand_L', 'hand_R',
+  'weapon_L', 'weapon_R', 'shoulder_L', 'shoulder_R', 'thigh_L', 'thigh_R', 'shin_L', 'shin_R', 'foot_L', 'foot_R',
+  'booster_back', 'booster_L', 'booster_R'];
 const COVER_DIRS = 12;
 const TELL_NODE = { rifle: 'R', missiles: 'LB', barrage: 'RB', blade: 'L', charge: 'booster_back', plunge: 'L', abBlade: 'L' };
 
@@ -162,6 +177,13 @@ export class Boss extends Enemy {
     this.fcCfg = { ...this.fcCfg, sight: false };
     this.rig = rig;
     this.root.add(rig.root);
+    // per-part hit boxes on the rig joints (rounds spark on the plating, not on the capsule);
+    // no material flash: the rig keeps its own shading (heavy hits rock it instead)
+    this.setupHitVolumes(rig.root, BOSS_PARTS, rig, null, false);
+    // pilot pose layer (stagger sag, blade draw, charge brace, braking descent): rig.onPose hook
+    this.bpose = new BossPose(this);
+    rig.onPose = this.bpose.apply;
+    this.fxRng = game.rng.stream('boss_fx');     // visual-only randomness (never shifts AI rolls)
     this.motor = new MechMotor(BOSS_MOVE, game.physics);
     this.intent = makeIntent();
     this.pose = makePose();
@@ -221,6 +243,8 @@ export class Boss extends Enemy {
     for (const k in rig.recoil) rig.recoil[k] = 0;
     for (const nz of rig.nozzles) { nz.level = 0; nz.target = 0; }
     this.rig.eyeBase = this._eyeBase0 || (this._eyeBase0 = this.rig.eyeBase);
+    this.bpose.reset();
+    this._arcT = 0; this._skidT = 0;
     this.setState('intro');
     this.game.events.emit('boss:intro', { boss: this });
     return this;
@@ -283,6 +307,10 @@ export class Boss extends Enemy {
 
   onStagger() {
     this.motor.stagger(this.acs.cfg.staggerTime);
+    // overload discharge sized to a 10 m frame (fx/status.js adds its own crawl arcs)
+    this.aimPoint(_v);
+    this.game.fx.spawn('stagger_burst', _v, null, BOSS_FX.staggerBurst);
+    this._arcT = 0;
     this.game.hud.callout('TARGET STAGGERED', '敵機 体勢崩壊', 'good');
     this.game.audio.play('stagger', { pos: this.pos });
     this._endAttack(true);
@@ -354,11 +382,14 @@ export class Boss extends Enemy {
   }
 
   _startAttack(kind) {
-    this.atk = kind; this.atkT = 0; this.atkStage = kind === 'plunge' ? 'rise' : 'tell'; this.atkN = 0;
+    this.atk = kind; this.atkT = 0; this.atkN = 0;
+    // the blade first rushes in (boost + gap-close QBs) and only tells once inside bladeTellR
+    this.atkStage = kind === 'plunge' ? 'rise' : kind === 'blade' && this.distanceToTarget() > BOSS_AI.bladeTellR ? 'close' : 'tell';
     this.log.attacks[kind]++;
     this._countPhase(kind);
     if (kind === 'rifle') { const P = BOSS_AI.phases[this.phase]; this._chain = this.rng.int(P.rifleChain[0], P.rifleChain[1]); }
-    if (kind !== 'plunge') this._tell(kind);
+    if (this.atkStage === 'tell') this._tell(kind);
+    this._rampT = 0; this._noLosT = 0;
     this._event(kind);
   }
   /** Telegraph: glint on the weapon about to fire + the tell sound; logs the scheduled lead. */
@@ -403,7 +434,7 @@ export class Boss extends Enemy {
   }
   /** An attack that must not be broken by dodges (commitment = the player's punish window). */
   get committed() {
-    return this.atk === 'blade' || (this.atk === 'charge' && this.motor.abActive) || this.atk === 'barrage' || this.state === 'transition' ||
+    return (this.atk === 'blade' && this.atkStage !== 'close') || (this.atk === 'charge' && this.motor.abActive) || this.atk === 'barrage' || this.state === 'transition' ||
       (this.atk === 'plunge' && this.atkStage !== 'rise');
   }
 
@@ -517,6 +548,9 @@ export class Boss extends Enemy {
     if (this.postureT === 0) {
       this.postureT = 1e-4;
       this.game.fx.spawn('shockwave', this.pos, null, 0.9);
+      this.game.fx.spawn('dust_kick', this.pos, null, BOSS_FX.landDust);   // dust ring off the slab
+      this.rig.landImpact(BOSS_FX.landKnees);                              // heavy knee compression
+      this.game.hud.callout('RIVAL RIG  GC-X1 CINDERHOUND', 'ライバル機 シンダーハウンド', 'warn', 2.8);   // name card
       this.game.cam.shake && this.game.cam.shake(Math.min(0.6, 30 / Math.max(30, dist)));
       this.rig.getNodeWorld('eye', _v); this.game.fx.spawn('iw_eye_flare', _v, null, 1.2);
       playTell(this.game, 'boss_posture', this.pos);
@@ -635,7 +669,7 @@ export class Boss extends Enemy {
     if (this.wasStaggered) {
       this.wasStaggered = false;
       this._setPoise(S.poise.min, S.poise.recover);
-      if (this.coverCd <= 0 && this.rng.chance(S.cover.afterStagger) && this._findCover()) this._startAttack('cover');
+      if (this.coverCd <= 0 && this.rng.chance(S.cover.afterStagger[this.phase]) && this._findCover()) this._startAttack('cover');
       else if (this.rng.chance(S.staggerEscape)) { this._dodgeDir('blade', _w); this._qb(_w.x, _w.z, 'escape'); }
     }
     // phase change at 50 % AP (not while committed to a blade lunge)
@@ -647,7 +681,6 @@ export class Boss extends Enemy {
       this.log.phase2At = +this.fightTime.toFixed(2);
       this.game.hud.callout('CINDERHOUND — LIMITER RELEASED', 'シンダーハウンド リミッター解除', 'warn', 3);
       this.game.audio.play('alarm', { pos: this.pos, pitch: 1.2 });
-      this.rig.eyeBase = this._eyeBase0 * 2.2;
       this._event('limiter');
       return;
     }
@@ -657,7 +690,7 @@ export class Boss extends Enemy {
     let radial = (dist - mid) / half;
     radial = Math.abs(radial) < 0.35 ? 0 : Math.max(-1, Math.min(1, radial));
     _tan.set(-_to.z * this.strafe, 0, _to.x * this.strafe);
-    it.move.copy(_tan).addScaledVector(_to, radial * 0.9);
+    it.move.copy(_tan).addScaledVector(_to, radial * P.radialK);
     // jink: the strafe heading swings in/out every ~0.4-0.9 s so a lead-predicting gun keeps
     // missing behind / ahead of the rig (constant-velocity strafing is what lock-on punishes)
     this.jinkT -= dt;
@@ -696,7 +729,7 @@ export class Boss extends Enemy {
       if (this.dodge && this.dodgeT < 0.8) this.qbT = Math.max(this.qbT, 0.3);   // keep the QB for the dodge
       if (this.qbT <= 0) {
         this.qbT = this.rng.range(P.rhythmQB[0], P.rhythmQB[1]);
-        if (dist > P.range[1] + 50) this._qb(_to.x + _tan.x * 0.5, _to.z + _tan.z * 0.5, 'range');
+        if (dist > P.range[1] + P.rangeQB) this._qb(_to.x + _tan.x * 0.5, _to.z + _tan.z * 0.5, 'range');
         else if (dist < P.range[0] - 20) this._qb(-_to.x + _tan.x * 0.6, -_to.z + _tan.z * 0.6, 'range');
         else this._qb(_tan.x + _to.x * radial * 0.5, _tan.z + _to.z * radial * 0.5, 'rhythm');
       }
@@ -779,6 +812,14 @@ export class Boss extends Enemy {
         this._glint(node, true, 0.45 + 0.5 * k);
         if (this.atk === 'barrage') this._glint('LB', true, 0.45 + 0.5 * k);
       }
+      // audible ramp: warning ticks rising in pitch / level until the release
+      this._rampT -= dt;
+      if (this._rampT <= 0) {
+        const R = S.tellRamp, k = this.atkStage === 'abBladeTell' ? Math.min(1, this._abTellT / S.tell.abBlade) : Math.min(1, this.atkT / tell);
+        this._rampT = R.every;
+        _rampOpts.pos = this.pos; _rampOpts.pitch = R.pitch[0] + (R.pitch[1] - R.pitch[0]) * k; _rampOpts.volume = R.volume[0] + (R.volume[1] - R.volume[0]) * k;
+        this.game.audio.play(R.id, _rampOpts);
+      }
     }
     switch (this.atk) {
       case 'rifle': {
@@ -816,13 +857,21 @@ export class Boss extends Enemy {
       }
       case 'blade': {
         const slot = L.L;
+        if (this.atkStage === 'close') {
+          // RUSH: boost straight in, cutting in with gap-close QBs (weaving slightly off the line)
+          it.move.copy(_to).addScaledVector(_tan, 0.18);
+          if (m.qbCooldown <= 0 && this.atkN < 2 && dist > S.bladeTellR + 12 && this._qb(_to.x + _tan.x * 0.25, _to.z + _tan.z * 0.25, 'gap')) this.atkN++;
+          this._noLosT = los ? 0 : (this._noLosT || 0) + dt;      // a pylon flicking past does not abort the rush
+          if (dist <= S.bladeTellR) { this.atkStage = 'tell'; this.atkT = 0; this._tell('blade'); this._event('blade_tell'); }
+          else if (this.atkT > S.bladeCloseT || this._noLosT > 0.5) { this.cd.blade = 1.5; this._event(los ? 'blade_abort_time' : 'blade_abort_los'); this._endAttack(); }
+          return;
+        }
         if (this.atkStage === 'tell') {
-          // square up and close in while the blade charges
-          it.move.copy(_to).multiplyScalar(dist > 30 ? 1 : 0.2).addScaledVector(_tan, 0.25);
+          // square up and keep closing (slower) while the blade charges
+          it.move.copy(_to).multiplyScalar(dist > 22 ? 0.7 : 0.15).addScaledVector(_tan, 0.2);
           if (this.atkT >= tell) {
-            if (dist > S.lungeReach && !this._gapQB) { this._gapQB = true; this._qb(_to.x, _to.z, 'gap'); this.atkT = tell - 0.18; }
-            else if (dist > S.lungeReach + 30) { this._gapQB = false; this.cd.blade = 1.5; this._endAttack(); }
-            else { this._gapQB = false; trig.L = true; this.atkStage = 'exec'; this._released('blade'); }
+            if (dist > S.lungeReach) { this.cd.blade = 1.5; this._event('blade_abort_far'); this._endAttack(); }
+            else { trig.L = true; this.atkStage = 'exec'; this._released('blade'); }
           }
         } else if (this.atkStage === 'exec') {
           if (slot.bladePhase === null && this.atkT > tell + 0.1) { this.atkStage = 'recover'; this.atkT = 0; this.log.bladeSlashes++; }
@@ -952,8 +1001,11 @@ export class Boss extends Enemy {
     p.grounded = m.grounded; p.mode = m.mode; p.aimPitch = this.aimPitch || 0; p.skid = m.skid;
     p.abCharge = m.abActive ? m.abCharge : 0;
     p.aimYaw = wrapAngle(it.aimYaw - this.yaw);
-    if (this.state === 'intro' && !m.grounded) this.rig.setThrust(_thrust.set(p.velLocal.x * 0.1, 12, p.velLocal.z * 0.1), m.hovering ? 1 : 0.55);
+    if (this.state === 'intro' && !m.grounded) this.rig.setThrust(_thrust.set(p.velLocal.x * 0.1, 12, p.velLocal.z * 0.1), m.hovering ? 1 : 0.8);
     else this.rig.setThrust(thrustVector(p, m, _thrust), thrustAmount(m));
+    // sensor: limiter release burns it brighter; a stagger window dims it to half (systems hit)
+    this.rig.eyeBase = this._eyeBase0 * (this.phase === 1 || this.state === 'transition' ? 2.2 : 1) * (m.staggered ? BOSS_FX.staggerEye : 1);
+    this.bpose.preStep(dt);
     this.rig.update(dt, p);
   }
 
@@ -975,6 +1027,27 @@ export class Boss extends Enemy {
       game.audio.play('land', { pos: this.pos, volume: Math.min(1, f.landed / 30) });
     }
     if (f.abStart) game.audio.play('ab_start', { pos: this.pos });
+    // stagger window: arcs crawl over the joints, feet scrape the slab while the slide dies
+    if (m.staggered && this.alive) {
+      this._arcT -= dt;
+      if (this._arcT <= 0) {
+        this._arcT = BOSS_FX.arcEvery;
+        const r = this.fxRng;
+        for (let k = 0; k < BOSS_FX.arcCount; k++) {
+          this.rig.getNodeWorld(ARC_NODES[r.int(0, ARC_NODES.length - 1)], _v);
+          game.fx.spawn('arc_spark', _v, null, BOSS_FX.arcScale * r.range(0.8, 1.25));
+        }
+      }
+      if (m.grounded && m.speedH > 6) {
+        this._skidT -= dt;
+        if (this._skidT <= 0) {
+          this._skidT = 0.06;
+          this.rig.getNodeWorld(this.fxRng.chance(0.5) ? 'foot_L' : 'foot_R', _v); _v.y = this.pos.y + 0.3;
+          game.fx.spawn('dust_kick', _v, null, 0.7);
+          game.fx.spawn('impact_sparks', _v, null, 0.6);
+        }
+      }
+    }
     if (f.abLaunch) { this.rig.launchKick(); this.moveFx.abLaunch(this, m.abDir); game.audio.play('qb', { pos: this.pos, pitch: 0.7 }); }
     // nozzle exhaust particles + ground wake (30 Hz)
     this.fxT -= dt;
@@ -1051,6 +1124,9 @@ export class Boss extends Enemy {
   }
 }
 
+/** Boss-only feedback tunables (visual). */
+export const BOSS_FX = { staggerBurst: 2, staggerEye: 0.5, arcEvery: 0.12, arcCount: 2, arcScale: 1.1, landDust: 2.6, landKnees: 0.9 };
+const ARC_NODES = ['shoulder_L', 'shoulder_R', 'shin_L', 'shin_R', 'hand_L', 'hand_R', 'thigh_L', 'thigh_R', 'booster_back', 'torso'];
 const _CINE = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 30 };
 const _CINE_BASE = new THREE.Vector3(), _CINE_PUSH = new THREE.Vector3();
 const BRAKE_GLOW = [1, 0.5, 0.2];

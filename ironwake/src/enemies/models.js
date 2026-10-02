@@ -11,8 +11,10 @@
 //              thigh_L > shin_L > foot_L,  thigh_R > shin_R > foot_R   (walk cycle, animator),
 //              nozzle_back_0/1 (booster glow + plume, animator; exhaust = local -Z) }
 //   drone  (enemy_drone, "GNAT" ducted-fan drone, ~2.5 m span; origin = body centre)
-//            body > { rotor (spins about +Y), rotor_1 ... (every node named rotor* spins),
-//                     eye (emissive), muzzle }
+//            body > { rotor (spins about its own +Y), rotor_1 ... (every node named rotor* spins;
+//                     a rotor may carry a REST rotation = fan tilt, the blur disc copies it),
+//                     eye (emissive iris core) > eye_rim (optional: iris halo, own flat colour),
+//                     beacon, muzzle }
 //   turret (enemy_relay, RELAY GENERATOR, stage-2 objective)
 //            base > { core (glowing column: rotates, hidden on death), beacon (blinking lamp),
 //                     head (yaw) > barrel (pitch) > muzzle }
@@ -29,7 +31,8 @@
 //           dust), body bob/lean, barrel recoil; death: collapse (pelvis drop, one leg buckles,
 //           hull tilt, turret slew, gun droop), authored armour shards (debris_<n> nodes under
 //           the GLB root, hidden until death) fly and settle, smoke column + engine fire;
-//       drone: fan spin (+ blur discs), beacon strobe; turret: core pulse, beacon blink, recoil.
+//       drone: fan spin (+ blur discs), beacon strobe; turret: core pulse, beacon blink, recoil,
+//       long-range cyan core glow (RELAY_FX) and live arc spits off the bushings.
 //       Every unit: long-range signature (sensor-iris + beacon glow sprites, sky-wrap rim).
 //   Wrecks: every template material maps to a scorched variant of ITSELF (BURNT_OF; not in
 //   userData: Object3D.clone() JSON-copies userData),
@@ -439,9 +442,18 @@ export const MT_FLAME = {
   hazeEvery: 0.09,                   // heat-haze puff cadence behind each nozzle (s)
 };
 
+/** Relay generator: long-range core glow + live high-voltage arcs between bushings and core. */
+export const RELAY_FX = {
+  coreNear: 40, coreFar: 120, coreSize: 0.022, coreMin: 1.6, coreMax: 5.5,   // sprite fade range (m) / size = d x coreSize
+  coreLead: 1.15,                    // m toward the camera (clears the 0.72 m glass + 0.9 m cage)
+  arcEvery: [0.7, 2.2],              // s between arc spits (fx RNG)
+  // bushing tops (model frame, glTF axes: x, up, forward) -- blender/enemies/build_relay.py build_deck()
+  bushings: [[1.9, 8.4, 1.9], [-1.9, 8.4, 1.9], [1.9, 8.4, -1.9], [-1.9, 8.4, -1.9]],
+};
+
 /** Long-range signature: sensor-iris and beacon glow sprites that keep the red point legible. */
 export const SIGNATURE = {
-  eyeNear: 22, eyeFar: 90,           // m: sprite fades in over this range (the lenses carry the close-up)
+  eyeNear: 40, eyeFar: 115,          // m: sprite fades in over this range (the lenses carry close-ups and mid range)
   eyeSize: 0.0095, eyeMin: 0.16, eyeMax: 1.7,   // sprite diameter = distance x eyeSize, clamped (m)
   eyeLead: 0.45,                                // m ahead of the lens along its axis (clears the brow)
   beaconSize: 0.012, beaconMin: 0.3, beaconMax: 2.4,
@@ -459,6 +471,10 @@ const MODEL_FX = {
   iw_beacon_glow: [
     { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [6.0, 0.2, 0.12], alpha: [0.95, 0.95], nosoft: true },
     { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1.0, 1.0], color0: [1.4, 0.05, 0.03], alpha: [0.15, 0.15], nosoft: true },
+  ],
+  iw_core_glow: [   // relay capacitor column seen from 40-250 m: a cyan objective point (THE target)
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [2.2, 5.0, 6.8], alpha: [0.9, 0.9], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [2.2, 2.2], color0: [0.3, 0.8, 1.2], alpha: [0.25, 0.25], nosoft: true },
   ],
   iw_mt_nozzle: [   // hot throat seen end-on (the plume shell fades out there)
     { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [0.55, 0.55], color0: [3.4, 1.8, 0.7], alpha: [0.8, 0.8], heat: [1, 1], nosoft: true },
@@ -623,7 +639,8 @@ class EyeCtl {
     n.getWorldQuaternion(_q);
     _d.set(0, 0, 1).applyQuaternion(_q);
     const facing = _d.dot(_c) / Math.max(d, 1e-3);
-    const f = smooth01((facing + 0.15) / 0.55);
+    // full from the front, ~60 % side-on (slit + glacis pods spill light sideways), 0 from behind
+    const f = smooth01((facing + 0.35) / 0.6);
     if (f <= 0.02) return;
     const flick = e.staggered ? (this.k < 1 ? 0.3 : 1.2) : 1;
     _sprite.scale = Math.min(S.eyeMax, Math.max(S.eyeMin, d * S.eyeSize)) * f * Math.sqrt(fade) * flick;
@@ -1025,7 +1042,9 @@ class DroneAnimator {
     model.traverse((o) => { if (/^rotor/.test(o.name)) this.rotors.push(o); });
     this.discs = this.rotors.map((r) => {
       const d = blurDisc(r.userData.iw_r || 0.4);
-      r.parent.add(d); d.position.copy(r.position); d.position.y += 0.02;
+      // the disc follows the rotor's rest tilt (fans pitched forward) and sits just above the blades
+      r.parent.add(d); d.quaternion.copy(r.quaternion);
+      d.position.copy(r.position).add(_v.set(0, 0.02, 0).applyQuaternion(r.quaternion));
       return d;
     });
     this.spin = 0;
@@ -1065,6 +1084,36 @@ class TurretAnimator {
     this.beacon = new Blinker(model, 'beacon', SIGNATURE.beaconPeriod, SIGNATURE.beaconOn, (enemy.id || 0) * 0.41);
     this.eye = new EyeCtl(model);
     this.recoil = 0; this.t = 0;
+    this.core = core || null;
+    this.model = model;
+    this.arcT = 0.4 + (enemy.id || 0) % 3 * 0.37;
+  }
+
+  /** Cyan core sprite (distance-scaled, fades in beyond coreNear) + occasional arc spits. */
+  _signature(dt) {
+    const e = this.enemy, game = e.game, R = RELAY_FX;
+    if (game.fx.freeze || !game.camera) return;
+    if (this.core) {
+      this.core.getWorldPosition(_v);
+      const d = _v.distanceTo(game.camera.position);
+      const fade = Math.min(1, Math.max(0, (d - R.coreNear) / (R.coreFar - R.coreNear)));
+      if (fade > 0.02) {
+        _sprite.scale = Math.min(R.coreMax, Math.max(R.coreMin, d * R.coreSize)) * Math.sqrt(fade);
+        // in front of the glass column + cage (depth-tested sprite), toward the camera
+        _c.copy(game.camera.position).sub(_v).multiplyScalar(R.coreLead / Math.max(d, 1e-3));
+        _v.add(_c);
+        game.fx.spawn('iw_core_glow', _v, null, _sprite);
+      }
+    }
+    this.arcT -= dt;
+    if (this.arcT <= 0) {
+      const rng = game.rng.stream('fx');
+      this.arcT = rng.range(R.arcEvery[0], R.arcEvery[1]);
+      const b = R.bushings[Math.floor(rng.range(0, R.bushings.length)) % R.bushings.length];
+      _v.set(b[0], b[1], b[2]);
+      this.model.localToWorld(_v);
+      game.fx.spawn('arc_spark', _v, null, 1.6);
+    }
   }
   fired() { this.recoil = 0.35; }
   dispose() { for (const m of this.coreMats) m.dispose(); this.beacon.dispose(); this.eye.dispose(); }
@@ -1083,7 +1132,7 @@ class TurretAnimator {
     const hit = e.hitFlash * 0.6;
     for (const m of this.coreMats) m.emissiveIntensity = m.userData.base * (pulse + hit);
     this.beacon.update(dt, e.alive);
-    if (e.alive) { this.eye.update(dt, e); e.syncSim(); this.eye.sprite(e.game, e); this.beacon.sprite(e.game); }
+    if (e.alive) { this.eye.update(dt, e); e.syncSim(); this.eye.sprite(e.game, e); this.beacon.sprite(e.game); this._signature(dt); }
     this.recoil = Math.max(0, this.recoil - dt * 2.2);
     if (this.barrel) this.barrel.position.z = this.barrelRest.z - this.recoil;
   }

@@ -23,7 +23,9 @@ import { pointFree, losFrom, pathClear, wrapAngle } from './ai.js';
 export const MT_STATS = {
   name: 'PK-2 PICKET',
   ap: 1000, acs: { max: 500, staggerTime: 2.0, decayRate: 0.3 },
-  radius: 4.2, height: 4.2, aimHeight: 2.6,
+  // radius / height = WALL collision (the 4 m-wide hull clears walls); HIT = broadphase body for
+  // rounds (the per-part boxes in MT_PARTS are the real hit volume: turret 4 x 3 x 4 m, legs)
+  radius: 2.3, height: 5.0, aimHeight: 3.5, hit: { radius: 2.4, height: 6.0 },
   speed: 10, accel: 14, turnRate: 1.6, engageMin: 70, engageMax: 150, fireRange: 320,
   accuracy: 0.72,
 };
@@ -48,16 +50,22 @@ export const MT_AI = {
   cookOff: 0.55,                                  // s after death: secondary blast
 };
 
+/** Hit-volume parts (models.js node contract): each owns the meshes below it up to the next part. */
+export const MT_PARTS = ['turret', 'barrel', 'pelvis', 'thigh_L', 'shin_L', 'foot_L', 'thigh_R', 'shin_R', 'foot_R'];
+/** Hull rock on hits (spring impulse): amt = min(cap, base + impact / per) rad. */
+export const MT_ROCK = { base: 0.03, per: 1800, cap: 0.25, gain: 26 };
+
 const _dir = new THREE.Vector3(), _tan = new THREE.Vector3(), _want = new THREE.Vector3(), _c = new THREE.Vector3();
 const _p = new THREE.Vector3(), _sep = new THREE.Vector3(), _kick = new THREE.Vector3();
 
 export class MT extends Enemy {
   constructor(game, template) {
     const S = MT_STATS;
-    super(game, { type: 'mt', name: S.name, ap: S.ap, acs: S.acs, radius: S.radius, height: S.height, aimHeight: S.aimHeight, accuracy: S.accuracy, corpseTime: Infinity, trackTau: MT_AI.trackTau, leadFactor: MT_AI.lead });
+    super(game, { type: 'mt', name: S.name, ap: S.ap, acs: S.acs, radius: S.radius, height: S.height, aimHeight: S.aimHeight, accuracy: S.accuracy, corpseTime: Infinity, trackTau: MT_AI.trackTau, leadFactor: MT_AI.lead, deathBig: true });
     this.fcCfg = MT_AI.fire;
     this.model = template.clone();
     this.root.add(this.model);
+    this.setupHitVolumes(this.model, MT_PARTS, template, S.hit);
     this.hull = node(this.model, 'hull');
     this.turret = node(this.model, 'turret');
     this.barrel = node(this.model, 'barrel');
@@ -314,14 +322,14 @@ export class MT extends Enemy {
     if (!this.alive || !(res && res.damage > 0)) return;
     // hit reaction: the hull rocks away from the hit (spring), heavy hits interrupt the aim
     const imp = hit.impact * (hit.splashFrac === undefined ? 1 : hit.splashFrac);
-    const amt = Math.min(0.16, 0.012 + imp / 2600);
+    const R = MT_ROCK, amt = Math.min(R.cap, R.base + imp / R.per);
     if (hit.dir) _kick.copy(hit.dir); else if (hit.point) _kick.subVectors(this.pos, hit.point); else _kick.set(0, 0, 0);
     _kick.y = 0;
     if (_kick.lengthSq() > 1e-6) {
       _kick.normalize();
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
       const fwd = _kick.x * s + _kick.z * c, side = _kick.x * c - _kick.z * s;
-      this.kickVP += fwd * amt * 26; this.kickVR -= side * amt * 26;
+      this.kickVP += fwd * amt * R.gain; this.kickVR -= side * amt * R.gain;
     }
     if (imp >= 280) { this.flinchT = Math.min(0.5, 0.2 + imp / 4000); this.fcCancel(); }
     if (this.state === 'hold' && this.ap < this.apMax * MT_AI.cover.hurtFrac && this.rng.chance(0.35)) this.plan();

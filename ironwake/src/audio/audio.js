@@ -8,12 +8,21 @@
 //                                       air absorption + distance reverb (+ speed-of-sound delay
 //                                       for explosions) + line-of-sight OCCLUSION (raycast camera
 //                                       -> source past 18 m: darker, quieter, wetter).
-//                                       Ids: ARCHITECTURE §10 list + footstep, boost_ignite,
+//                                       Ids: ARCHITECTURE §10 list + footstep(_steel), boost_ignite,
 //                                       missile_lock, missile_alert, ap_warning, kill_confirm,
 //                                       impact_metal/ground, ricochet, whiz, radio_open/close,
 //                                       distant_clang (sfx.js).
 //   loop(id, {volume?, pitch?})         looping variant -> {set({volume,pitch}), stop()}
-//   radio(seconds)                      handler LEDGER comm transmission (procedural voice)
+//   radio(seconds, line?)               handler LEDGER comm transmission. `line` = RADIO key, a
+//                                       line object {en} or its subtitle text; without it the line
+//                                       is the briefing intel (state 'briefing') or the HUD's
+//                                       current subtitle (.rd-en). Plays the recorded voice-over
+//                                       (assets/audio/vo/radio_<key>.mp3, built offline by
+//                                       assets/audio/build_vo.py: TTS + radio chain) through the
+//                                       live comm dressing (static, squelch, RF crackle); a new
+//                                       line cuts the previous one. Leaving the briefing / a
+//                                       restart cuts it too. Unknown text -> procedural voice.
+//   voDuration(line)                    seconds of the recorded line (0 if none) for subtitle sync
 //   level()                             0..1 comm-voice level (for UI visualisers)
 //   setVolume(0..1) / setMusicVolume(0..1) / stopAll()
 //   unlocked (getter), debug()          state for tests / the debug overlay
@@ -32,6 +41,30 @@ import { AudioEngine, MIXER, airCutoff } from './engine.js';
 import { makeRng } from './dsp.js';
 import { jetTargets, makeJetTargets, dopplerRatio } from './beds.js';
 import { makeHit } from '../core/physics.js';
+import { VO_TABLE } from './vo_table.js';
+import { COMM_BRIEF } from './voice.js';
+
+// subtitle text -> VO key (whitespace / case-insensitive, so a re-flowed line still matches)
+const normText = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const VO_BY_TEXT = new Map(Object.keys(VO_TABLE).map((k) => [normText(VO_TABLE[k].en), k]));
+const VO_WAIT_MS = 1500; // a line requested while its sample still decodes waits this long at most
+const words = (s) => new Set(normText(s).replace(/[^a-z0-9' ]/g, ' ').split(' ').filter(Boolean));
+const VO_WORDS = Object.keys(VO_TABLE).map((k) => [k, words(VO_TABLE[k].en)]);
+/** Exact subtitle match, else the most similar recorded line (word Jaccard >= 0.5; a lightly
+ *  edited subtitle keeps its voice until the VO is rebuilt), else null. */
+function voByText(text) {
+  const exact = VO_BY_TEXT.get(normText(text));
+  if (exact) return exact;
+  const w = words(text);
+  let best = null, bestJ = 0.5;
+  for (const [k, kw] of VO_WORDS) {
+    let inter = 0;
+    for (const x of w) if (kw.has(x)) inter++;
+    const j = inter / (w.size + kw.size - inter || 1);
+    if (j >= bestJ) { bestJ = j; best = k; }
+  }
+  return best;
+}
 
 /** Game-side tunables. */
 export const AUDIO_GAME = {
@@ -45,6 +78,7 @@ export const AUDIO_GAME = {
   whiz: { radius: 9, minDist: 0.9 },           // enemy rounds passing within radius of the player's chest
   ricochetChance: 0.3,        // wall hits (not ground) that also whine off
   bossDoppler: [0.8, 1.3],
+  steelAbove: 0.6,            // m: rig feet above the ground slab -> steel-deck footfalls
 };
 const RAY_OPTS = { ground: true }; // terrain occludes too
 
@@ -63,6 +97,8 @@ export default function audioSystem(game) {
   const mview = { mode: 'idle', speedH: 0, vy: 0, abCharging: false, abCharge: 0, skid: 0 }; // reused motor view
   let st = null;
   let visHandler = null, resumeOnShow = false;
+  const decoding = new Map(); // sample id -> decode promise (radio lines may arrive mid-decode)
+  let radioToken = 0;
 
   function motorView(m) {
     mview.mode = m.mode; mview.speedH = m.speedH; mview.vy = m.vel ? m.vel.y : 0;
@@ -130,7 +166,8 @@ export default function audioSystem(game) {
       const idx = Math.floor(ph / Math.PI);
       if (st.stepIdx !== null && idx !== st.stepIdx) {
         po.pos = p.pos; po.occl = 0; po.pitch = undefined; po.volume = 0.65 + 0.35 * Math.min(1, (mo && mo.walkAmt) || 1);
-        E.play('footstep', po);
+        // standing on a structure (container stacks, gantry decks, the carrier) = steel, else slab
+        E.play(p.pos.y > AUDIO_GAME.steelAbove ? 'footstep_steel' : 'footstep', po);
       }
       st.stepIdx = idx;
     } else st.stepIdx = null;
@@ -325,6 +362,22 @@ export default function audioSystem(game) {
     E.play('distant_clang', po);
   }
 
+  // ---------------------------------------------------------------- comm voice-over
+  /** VO_TABLE key for a radio request (see radio() in the header), or null. */
+  function voKey(line) {
+    if (line && typeof line === 'object') line = line.en;
+    if (typeof line === 'string') return VO_TABLE[line] ? line : voByText(line);
+    if (game.state === 'briefing') return VO_TABLE.brief ? 'brief' : null;
+    const root = game.hud && game.hud.root;
+    const el = root && root.querySelector ? root.querySelector('.rd-en') : null;
+    return el ? voByText(el.textContent) : null;
+  }
+  function transmit(seconds, key) {
+    const id = key ? VO_TABLE[key].id : null;
+    const buf = id ? E.samples.get(id) || null : null;
+    E.radio(seconds * 0.85, undefined, buf, key === 'brief' ? COMM_BRIEF : undefined);
+  }
+
   // ---------------------------------------------------------------- system
   const api = {
     name: 'audio',
@@ -332,7 +385,14 @@ export default function audioSystem(game) {
     get unlocked() { return running(); },
     init(g) {
       g.audio = api;
-      g.events.on('game:state', (e) => { st.paused = e.to === 'paused'; if (E) { E.setPaused(st.paused); syncMusic(); } });
+      g.events.on('game:state', (e) => {
+        st.paused = e.to === 'paused';
+        if (!E) return;
+        E.setPaused(st.paused);
+        // the briefing intel belongs to the briefing screen; title / menus end any transmission
+        if (e.from === 'briefing' || e.to === 'title' || e.to === 'briefing') { radioToken++; E.cutRadio(); }
+        syncMusic();
+      });
       g.events.on('session:start', () => resetState());
       g.events.on('mission:stage', (e) => { st.stage = e.stage; st.activity = game.rawTime; syncMusic(); });
       g.events.on('mission:complete', () => { st.ended = true; st.endT = ctx ? ctx.currentTime : 0; });
@@ -353,7 +413,8 @@ export default function audioSystem(game) {
     },
     reset() {
       resetState();
-      if (E) E.stopAll(10); // keep the stingers, cut everything else on restart
+      if (E) { E.stopAll(10); E.cutRadio(); } // keep the stingers, cut everything else on restart
+      radioToken++;
     },
     unlock() {
       try {
@@ -370,9 +431,11 @@ export default function audioSystem(game) {
           const man = game.assets && game.assets.manifest;
           if (man) for (const id in man) {
             if (!id.startsWith('sfx_')) continue;
-            game.assets.arrayBuffer(id).then((buf) => buf && ctx.decodeAudioData(buf.slice(0)))
-              .then((ab) => { if (ab) E.samples.set(id.slice(4), ab); })
-              .catch((e) => console.warn(`[audio] decode failed for ${id}`, e));
+            const sid = id.slice(4);
+            decoding.set(sid, game.assets.arrayBuffer(id).then((buf) => buf && ctx.decodeAudioData(buf.slice(0)))
+              .then((ab) => { if (ab && E) E.samples.set(sid, ab); })
+              .catch((e) => console.warn(`[audio] decode failed for ${id}`, e))
+              .finally(() => decoding.delete(sid)));
           }
         }
         if (ctx.state === 'suspended') ctx.resume();
@@ -382,7 +445,21 @@ export default function audioSystem(game) {
     },
     play(id, opts) { if (running()) playAt(id, opts); },
     loop(id, opts) { return running() ? E.loop(id, opts) : { set() {}, stop() {} }; },
-    radio(seconds = 3) { if (running()) E.radio(seconds * 0.85); },
+    radio(seconds = 3, line) {
+      if (!running()) return;
+      const key = voKey(line);
+      const id = key ? VO_TABLE[key].id : null;
+      const tok = ++radioToken;
+      if (id && !E.samples.has(id) && decoding.has(id)) {
+        // first gesture -> briefing opens within milliseconds of unlock(): wait for the decode
+        const st0 = game.state;
+        Promise.race([decoding.get(id), new Promise((res) => setTimeout(res, VO_WAIT_MS))])
+          .then(() => { if (tok === radioToken && E && running() && game.state === st0) transmit(seconds, key); });
+        return;
+      }
+      transmit(seconds, key);
+    },
+    voDuration(line) { const k = voKey(line); return k ? VO_TABLE[k].dur : 0; },
     level() { return E ? E.level() : 0; },
     setVolume(v) { if (E) E.setVolume(v); },
     setMusicVolume(v) { if (E) E.setMusicVolume(v); },

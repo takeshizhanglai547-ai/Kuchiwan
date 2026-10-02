@@ -27,6 +27,13 @@ from mathutils import Matrix, Vector  # noqa: E402
 
 NAME = 'enemy_drone'
 DUCT_X, DUCT_Y, DUCT_Z = 0.80, 0.02, 0.06
+DUCT_TILT = 12.0   # deg: both fans pitched forward (intakes face forward-up: attack posture)
+
+
+def tilted(g, s):
+    """Pitch duct/rotor geometry authored level about the duct centre on side s."""
+    c = (s * DUCT_X, DUCT_Y, DUCT_Z)
+    return g.move(-c[0], -c[1], -c[2]).rotate((DUCT_TILT, 0, 0)).move(*c)
 R_IN, R_OUT = 0.40, 0.49
 EYE = (0.0, -0.88, 0.0)
 MUZZLE = (0.0, -1.2, -0.37)
@@ -77,18 +84,20 @@ def build_body():
         # nose cheek chevrons (hazard) either side of the sensor hood
         g.merge(B.add('stripe', K.strip((s * 0.2, -0.82, -0.02), (s * 0.3, -0.62, 0.14), 0.06, 0.008,
                                         (s, -0.5, 0.3), mat='hazard')))
-    # nose bezel: armoured ring around the eye with a hood (the eye glass is the `eye` node)
+    # nose bezel: armoured ring around the eye (the lens is the `eye` node), recessed only
+    # 4 cm so the lens reads from 45 deg off-axis, under a cream sun hood with the ID stripe
     ex, ey, ez = EYE
-    bez = P.ring(0.17, 0.105, 0.16, 40, bevel=0.012, bsegs=1, mat='paint_dark', z0=0.0).align((0, -1, 0),
-                                                                                            loc=(ex, ey + 0.12, ez))
-    g.merge(B.add('bezel', bez))
-    g.merge(B.add('bezel', P.ring(0.112, 0.094, 0.03, 40, bevel=0.0, mat='steel', z0=0.0)
-                  .align((0, -1, 0), loc=(ex, ey + 0.06, ez))))
-    g.merge(B.add('bezel', P.cylinder(0.105, 0.03, 40, bevel=0.0, mat='steel_dark', z0=0.0)
-                  .align((0, -1, 0), loc=(ex, ey + 0.13, ez))))   # lens seat (the recess floor)
-    hood = P.prism([(-0.1, 0.13), (0.22, 0.2), (0.26, 0.27), (-0.14, 0.2)], 0.42, bevel=0.01, segs=1,
-                   mat='paint_primary', axis='X').move(0, ey - 0.02, ez)
+    bez = P.ring(0.165, 0.102, 0.1, 40, bevel=0.012, bsegs=1, mat='paint_dark', z0=0.0).align((0, -1, 0),
+                                                                                            loc=(ex, ey + 0.015, ez))
+    g.merge(B.add('bezel', bez))   # sits proud of the nose cap (y -0.86): the cap is the recess floor
+    g.merge(B.add('bezel', P.ring(0.112, 0.094, 0.025, 40, bevel=0.0, mat='steel', z0=0.0)
+                  .align((0, -1, 0), loc=(ex, ey + 0.005, ez))))   # bright machined inner lip
+    g.merge(B.add('bezel', P.bolt_circle((ex, ey - 0.085, ez), (0, -1, 0), 0.135, 6, r=0.011)))
+    hood = P.prism([(-0.12, 0.12), (0.22, 0.2), (0.26, 0.27), (-0.17, 0.205)], 0.44, bevel=0.012, segs=1,
+                   mat='paint_secondary', axis='X').move(0, ey - 0.02, ez)
     g.merge(B.add('bezel', hood))
+    g.merge(B.add('bezel', K.strip((-0.2, ey - 0.12, ez + 0.214), (0.2, ey - 0.12, ez + 0.214), 0.05, 0.006,
+                                   (0, -0.15, 1), mat='paint_accent')))
     for s in (1, -1):   # mandible guards flanking the eye (hornet read, protects the lens)
         md = P.prism([(0.3, 0.1), (-0.14, 0.02), (-0.2, -0.08), (-0.1, -0.16), (0.3, -0.12)], 0.05, bevel=0.008,
                      segs=1, mat='paint_dark', axis='X')
@@ -105,6 +114,12 @@ def build_body():
                                        (s * (DUCT_X - R_OUT + 0.02), DUCT_Y + 0.12, DUCT_Z + 0.06)], 0.018, 8,
                                       mat='rubber', subdiv=3)))
         g.merge(B.add('duct', build_duct(s)))
+        # tilt actuator: drum on the pylon root of the duct (the fan pitches about it) + a link arm
+        hx = s * (DUCT_X - R_OUT - 0.05)
+        g.merge(B.add('pylon', K.drum((hx, DUCT_Y, DUCT_Z - 0.01), (1, 0, 0), 0.085, 0.09, mat='paint_dark', hub=False,
+                                      segs=20, profile='ring', accent='paint_accent')))
+        g.merge(B.add('pylon', K.ram((s * 0.36, DUCT_Y + 0.16, DUCT_Z - 0.1), (hx - s * 0.02, DUCT_Y + 0.1, DUCT_Z - 0.06),
+                                     r=0.022, frac=0.55, segs=12)))
     # underslung pulse emitter (energy gun): capacitor rings + heat shroud + emitter nozzle
     mx_, my, mz = MUZZLE
     g.merge(B.add('gun', P.box((0.2, 0.44, 0.14), bevel=0.014, segs=1, chamfer=0.03, chamfer_axes='Y',
@@ -219,7 +234,7 @@ def build_duct(s):
     pod = P.banded_cylinder([(0.04, 0.07, 'steel_dark'), (0.03, 0.095, 'steel'), (0.03, 0.085), (0.03, 0.095, 'steel'),
                              (0.06, 0.085), (0.03, 0.06, 'hazard')], segs=24, step=0.0, mat='paint_dark')
     g.merge(pod.move(s * DUCT_X, DUCT_Y, DUCT_Z - 0.26))
-    return g
+    return tilted(g, s)
 
 
 def build_rotor(s):
@@ -236,7 +251,7 @@ def build_rotor(s):
         g.merge(bl.move(cx, cy, cz))
         cuff = P.box((0.05, 0.07, 0.03), bevel=0.006, segs=1, mat='steel_dark').move(0.085, 0, 0).rotate((0, 0, a))
         g.merge(cuff.move(cx, cy, cz))
-    return g
+    return tilted(g, s)
 
 
 def build_eye():
@@ -244,15 +259,19 @@ def build_eye():
     (about 10 % of the lens), an inner aperture ring, plus two small auxiliary lenses."""
     g = Geo()
     ex, ey, ez = EYE
-    L = Vector((ex, ey + 0.1, ez))
-    g.merge(P.dome(0.09, 0.05, 32, 4, mat='glass').align((0, -1, 0), loc=tuple(L)))
-    g.merge(P.ring(0.052, 0.034, 0.012, 32, bevel=0.0, mat='steel_dark', z0=0.0).align((0, -1, 0),
-                                                                                    loc=tuple(L + Vector((0, -0.036, 0))))
-            )
-    g.merge(P.dome(0.03, 0.02, 16, 2, mat='lens').align((0, -1, 0), loc=tuple(L + Vector((0, -0.04, 0)))))
+    g.merge(K.lens_dome(0.092, 0.055, iris=0.36, ring=0.5, core=0.17, part='core', ring_mat='steel')
+            .align((0, -1, 0), loc=(ex, ey + 0.015, ez)))
     for s in (1, -1):
-        g.merge(P.dome(0.028, 0.014, 16, 2, mat='lens').align((0, -1, 0), loc=(s * 0.22, ey + 0.2, ez - 0.1)))
+        g.merge(K.lens_dome(0.03, 0.016, iris=0.5, ring=0.0, segs=16, rings=3)
+                .align((0, -1, 0), loc=(s * 0.22, ey + 0.2, ez - 0.1)))
     return g
+
+
+def build_eye_rim():
+    """Saturated red iris halo around the hot core (own node: deeper, dimmer flat glow)."""
+    ex, ey, ez = EYE
+    return K.lens_dome(0.092, 0.055, iris=0.36, ring=0.5, core=0.17, part='rim').align((0, -1, 0),
+                                                                                       loc=(ex, ey + 0.015, ez))
 
 
 def build_beacon():
@@ -265,11 +284,14 @@ def build_beacon():
 
 def build(a):
     a.pivot('body', (0, 0, 0))
-    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF2A2A', iw_eye_strength=22.0)
+    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF2A2A', iw_eye_strength=14.0)
+    a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#B8120C', iw_eye_strength=1.9)
     a.pivot('beacon', (0.12, 0.3, 0.4), parent='body', iw_eye_color='#FF3B2F', iw_eye_strength=14.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='body')
-    a.pivot('rotor', (DUCT_X, DUCT_Y, DUCT_Z), parent='body', iw_r=R_IN - 0.01)
-    a.pivot('rotor_1', (-DUCT_X, DUCT_Y, DUCT_Z), parent='body', iw_r=R_IN - 0.01)
+    # rotor nodes carry the duct tilt as their rest rotation (they spin about their own +Y)
+    a.pivot('rotor', (DUCT_X, DUCT_Y, DUCT_Z), parent='body', rotation=(DUCT_TILT, 0, 0), iw_r=R_IN - 0.01)
+    a.pivot('rotor_1', (-DUCT_X, DUCT_Y, DUCT_Z), parent='body', rotation=(DUCT_TILT, 0, 0),
+            iw_r=R_IN - 0.01)
     tris = {}
 
     def put(name, g, parent):
@@ -282,6 +304,7 @@ def build(a):
     with iw.timed('model'):
         put('body_geo', build_body(), 'body')
         put('eye_geo', build_eye(), 'eye')
+        put('eye_rim_geo', build_eye_rim(), 'eye_rim')
         put('beacon_geo', build_beacon(), 'beacon')
         put('rotor_geo', build_rotor(1), 'rotor')
         put('rotor_1_geo', build_rotor(-1), 'rotor_1')
@@ -320,7 +343,7 @@ COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.52}, 'paint_secondary
           'steel_dark': {'color': '#3A3836'},
           'glass': {'color': '#06080A', 'metal': 0.0, 'rough': 0.05, 'wear': 0.0, 'grime': 0.1, 'rust': 0.0,
                     'dust': 0.05, 'var': 0.0, 'decals': False}}
-OBJ_WEIGHT = {'body_geo': 1.0, 'eye_geo': 1.3, 'beacon_geo': 0.6, 'rotor_geo': 0.6, 'rotor_1_geo': 0.6}
+OBJ_WEIGHT = {'body_geo': 1.0, 'eye_geo': 1.3, 'eye_rim_geo': 0.5, 'beacon_geo': 0.6, 'rotor_geo': 0.6, 'rotor_1_geo': 0.6}
 WEATHER = iw.Weathering(edge_wear=1.55, grime=1.55, streaks=1.6, rust=0.9, dust=0.45, chip_threshold=0.52,
                         flat_chips=0.5, macro=0.08, ground_dirt=0.25, ao_in_albedo=0.24)
 NEED = ['body', 'eye', 'beacon', 'muzzle', 'rotor', 'rotor_1']
@@ -330,7 +353,7 @@ def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=31, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=1024, sizes={'normal': 1024, 'orm': 512, 'emissive': 256},
           bake_kw=dict(edge=0.018, cavity=0.04, ao_dist=0.35, bevel_radius=0.006),
-          tex_quality={'basecolor': 84, 'normal': 84, 'orm': 74})
+          tex_quality={'basecolor': 80, 'normal': 78, 'orm': 70})
 
 
 if __name__ == '__main__':

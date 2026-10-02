@@ -19,7 +19,8 @@ export const DEBRIS_FX = {
 };
 
 function chunkGeometry() {
-  const g = new THREE.IcosahedronGeometry(1, 0);
+  // a torn plate fragment (flattened, jagged icosphere): reads as ripped armour / slab, not a pebble
+  const g = new THREE.IcosahedronGeometry(1, 1);
   const p = g.attributes.position;
   // deterministic jagged deformation (fixed pseudo-random table)
   let s = 12345;
@@ -28,8 +29,8 @@ function chunkGeometry() {
   for (let i = 0; i < p.count; i++) {
     const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
     let k = cache.get(key);
-    if (k === undefined) { k = 0.55 + rnd() * 0.75; cache.set(key, k); }
-    p.setXYZ(i, p.getX(i) * k * 1.2, p.getY(i) * k * 0.8, p.getZ(i) * k);
+    if (k === undefined) { k = 0.5 + rnd() * 0.85; cache.set(key, k); }
+    p.setXYZ(i, p.getX(i) * k * 1.25, p.getY(i) * k * 0.42, p.getZ(i) * k * 0.95);
   }
   g.computeVertexNormals();
   return g;
@@ -46,11 +47,17 @@ export class Debris {
     this.C = [];
     for (let i = 0; i < MAXC; i++) this.C.push({ alive: false, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), size: 1, age: 0, life: 1, hot: 0, trailT: 0, rest: false, tint: 0 });
     this.next = 0;
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.1, flatShading: true, envMapIntensity: 0.4 });
-    // instanceColor packs (heat, albedo, -): charred albedo + an ember emissive ramp for hot chunks
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.35, flatShading: true, envMapIntensity: 0.55 });
+    // instanceColor packs (heat, albedo, tint): charred albedo broken up by noise (soot / bare steel
+    // / paint flecks, fx_misc fBm) + an ember emissive ramp for hot chunks
+    const noise = fx.textures ? fx.textures.misc : null;
+    mat.defines = { USE_UV: '' };
     mat.onBeforeCompile = (sh) => {
+      sh.uniforms.iwNoise = { value: noise };
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <color_fragment>', '#include <color_fragment>\n  float iwHeat = vColor.r; diffuseColor.rgb = vec3(vColor.g, vColor.g * 0.95, vColor.g * 0.9);')
+        .replace('void main() {', 'uniform sampler2D iwNoise;\nvoid main() {')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  float iwHeat = vColor.r; float iwN = texture2D(iwNoise, vUv * 1.7 + vColor.b * 3.1).a * 2.0 - 1.0;\n  vec3 iwBase = mix(vec3(0.75, 0.72, 0.68), vec3(1.25, 1.0, 0.8), vColor.b);\n  diffuseColor.rgb = vColor.g * iwBase * (0.45 + 1.3 * smoothstep(0.3, 0.75, iwN));')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = clamp(0.95 - 0.5 * smoothstep(0.55, 0.8, iwN), 0.3, 1.0);')
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), clamp(iwHeat * 1.4 - 0.2, 0.0, 1.0)) * iwHeat * iwHeat * 2.5;');
     };
     mat.customProgramCacheKey = () => 'iw-debris';
@@ -129,7 +136,7 @@ export class Debris {
       _m.compose(_p, c.q, _s);
       this.mesh.setMatrixAt(n, _m);
       // (heat, albedo): charred steel/concrete, ember glow while hot
-      _col.setRGB(c.hot, 0.02 + c.tint * 0.035, 0);
+      _col.setRGB(c.hot, 0.03 + c.tint * 0.06, c.tint);
       this.mesh.setColorAt(n, _col);
       n++;
     }

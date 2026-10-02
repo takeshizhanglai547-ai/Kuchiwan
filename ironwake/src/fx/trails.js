@@ -12,8 +12,10 @@ const MAXT = 40, CAP = 180;
 
 /** Trail styles (colours linear; widths m; life s). */
 export const TRAIL_STYLES = {
-  missile: { w0: 0.9, grow: 3.0, life: 3.6, alpha: 0.8, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2 }, // #C8C4BE -> #6D6A66
-  shell: { w0: 0.4, grow: 1.4, life: 1.1, alpha: 0.35, c0: [0.45, 0.43, 0.4], c1: [0.2, 0.19, 0.18], hot: 0.06, minStep: 2 },
+  // drift: m/s the old smoke meanders (rises + snakes sideways) so the ribbon diffuses instead of
+  // hanging as a ruler-straight tube
+  missile: { w0: 1.0, grow: 3.4, life: 4.2, alpha: 0.85, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2, drift: 0.9 }, // #C8C4BE -> #6D6A66
+  shell: { w0: 0.4, grow: 1.4, life: 1.1, alpha: 0.35, c0: [0.45, 0.43, 0.4], c1: [0.2, 0.19, 0.18], hot: 0.06, minStep: 2, drift: 0.5 },
   ab: { w0: 0.9, grow: 3.2, life: 0.9, alpha: 0.12, c0: [0.62, 0.58, 0.53], c1: [0.4, 0.38, 0.36], hot: 0.0, minStep: 2.5 },
 };
 
@@ -48,10 +50,10 @@ void main() {
   // two noise layers: slow billows along the trail + finer breakup
   float n1 = texture2D(tNoise, vec2(vUv.x * 0.3 + u * 0.05, u * 0.11 - uTime * 0.012)).a * 2.0 - 1.0;
   float n2 = texture2D(tNoise, vec2(vUv.x * 0.8 - u * 0.13, u * 0.31 + uTime * 0.025)).a * 2.0 - 1.0;
-  float n = n1 * 0.6 + n2 * 0.4;
+  float n = n1 * 0.6 + n2 * 0.4 - 0.5;       // noise decodes to 0..1: centre it (was a solid core)
   // dense, billowing body that frays at the rims (never a solid tube, never a dotted line)
-  float edge = 1.0 - smoothstep(0.35 + 0.45 * n, 1.0, across);
-  float dens = smoothstep(-0.45, 0.4, n - across * 0.55) * edge;
+  float edge = 1.0 - smoothstep(0.3 + 0.55 * (n + 0.5), 1.0, across);
+  float dens = smoothstep(-0.28, 0.22, n * 1.6 + 0.12 - across * 0.45) * edge;
   float a = vCol.a * dens;
   // cheap volume shading: brighter core, darker rims (curved strip)
   vec3 rgb = vCol.rgb * uLight * (0.55 + 0.6 * (1.0 - across * across)) * (0.75 + 0.45 * n2);
@@ -211,9 +213,12 @@ export class Trails {
         const heat = st.hot > 0 && this.live[t] ? Math.max(0, 1 - (this.time - this.pt[q] + (headT === this.pt[q] ? 0 : 0)) / st.hot) * Math.max(0, 1 - fromHead / 8) : 0;
         const cr = st.c0[0] + (st.c1[0] - st.c0[0]) * f, cg = st.c0[1] + (st.c1[1] - st.c0[1]) * f, cb = st.c0[2] + (st.c1[2] - st.c0[2]) * f;
         const u = this.pd[q] * 0.5 + this.seed[t] * 37;
+        // diffusion drift: old smoke rises and snakes (smooth in distance-along, grows with age)
+        const dr = (st.drift || 0) * age, ph = this.pd[q] * 0.045 + this.seed[t] * 6.283;
+        const ox = Math.sin(ph) * dr * 0.8, oy = dr * (0.55 + 0.25 * Math.sin(ph * 1.7)), oz = Math.cos(ph * 1.3) * dr * 0.8;
         for (let side = -1; side <= 1; side += 2) {
           const v3 = v * 3, v4 = v * 4;
-          P[v3] = this.px[q]; P[v3 + 1] = this.py[q]; P[v3 + 2] = this.pz[q];
+          P[v3] = this.px[q] + ox; P[v3 + 1] = this.py[q] + oy; P[v3 + 2] = this.pz[q] + oz;
           T[v3] = tx; T[v3 + 1] = ty; T[v3 + 2] = tz;
           I[v4] = side; I[v4 + 1] = w; I[v4 + 2] = u; I[v4 + 3] = heat;
           C[v4] = cr; C[v4 + 1] = cg; C[v4 + 2] = cb; C[v4 + 3] = alpha;

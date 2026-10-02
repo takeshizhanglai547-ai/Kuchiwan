@@ -472,7 +472,7 @@ export default function hudSystem(game) {
     radio.line = line; radio.t = Math.min(now, Math.max(line._t, radioEnd));
     E.rdEn.textContent = line.en;
     E.rdJp.textContent = line.jp;
-    if (game.audio.radio) game.audio.radio(line.hold); // LEDGER comm voice (audio lane)
+    if (game.audio.radio) game.audio.radio(line.hold, line); // LEDGER comm voice-over (audio lane; matched by line.en)
   }
 
   const api = {

@@ -361,7 +361,7 @@ function drawChart(R) {
     [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.78, explosive x0.58, blade x0.75)`],
     [`${mark(B.fightSeconds >= 60 && B.fightSeconds <= 150)}fight ${B.fightSeconds} s (target 60-150 s)${BS ? ` · over seeds ${BS.seeds.join(',')}: ${BS.fightSeconds.min}-${BS.fightSeconds.max} s, mean ${BS.fightSeconds.mean}` : ''}`],
     [`${mark(B.staggers >= 3 && B.staggers <= 5)}staggers ${B.staggers} (target 3-5)${BS ? ` · seeds ${BS.staggers.min}-${BS.staggers.max}` : ''} · 2.0 s windows, direct hits x1.85`],
-    [`${mark(bt.n && bt.min >= 0.4 && bt.max <= 0.7)}big-attack telegraph lead ${bt.n ? `${bt.min}-${bt.max} s, mean ${bt.mean} (n ${bt.n})` : 'n/a'} (target 0.4-0.6 s; glint + tell sound) · rifle bursts: small 0.22 s glint`],
+    [`${mark(bt.n && bt.min >= 0.5 && bt.max <= 0.85)}big-attack telegraph lead ${bt.n ? `${bt.min}-${bt.max} s, mean ${bt.mean} (n ${bt.n})` : 'n/a'} (target 0.5-0.8 s; pulsing glint + rising warning ticks) · rifle bursts: small 0.22 s glint`],
     [`player hit rate ${B.playerHitRatePct}% (rifle ${B.playerHitPctByWeapon.rifle_ar}%, missiles ${B.playerHitPctByWeapon.missile_pod}%, cannon ${B.playerHitPctByWeapon.cannon_heavy}%) · boss hits on player ${B.hitsOnPlayer.total} (${B.dmgOnPlayer} AP)`],
     [BB ? `${mark(BB.won)}same bot WITHOUT godmode: ${BB.won ? 'wins' : 'loses'} in ${BB.fightSeconds} s, ${BB.playerApLeft} AP left, ${BB.repairKitsUsed} repair kit(s)${BS ? ` · seeds: ${BS.noGodmodeWins} wins` : ''}` : ''],
   ];

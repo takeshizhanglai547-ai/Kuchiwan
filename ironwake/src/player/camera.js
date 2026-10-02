@@ -17,6 +17,7 @@
 //                  the camera rises 1.6 m to look down onto the pitched torso and boosters
 //   landing        underdamped camera dip scaled by the impact speed (+ shake when hard)
 //   ground boost   sustained FOV widening (spring), looser follow = speed read
+//   hover / drops  a smaller sustained widening at fast vertical speed (fovClimb)
 // Collision: 5 rays (centre + near-plane corners) from the orbit point. A blocker that a lift of
 // up to 4.5 m clears (roof edges, container stacks skimming the line) raises the camera instead;
 // otherwise pull-in is instant (never clips) and eases back out slowly. The orbit point itself is kept out of geometry. Thin
@@ -271,6 +272,8 @@ export default function cameraSystem(game) {
       let wide = 0;
       if (m.mode === 'ab') wide = m.abCharging ? C.abChargeFov * m.abCharge : C.fovAB;
       else if (m.mode === 'boost' || m.mode === 'qb' || (m.mode === 'air' && speed > 60)) wide = C.fovBoost * Math.min(1, Math.max(0, (speed - 35) / 45));
+      // fast vertical travel (hover climb, long drops) widens a touch too: the climb has thrust
+      if (!m.grounded && m.mode !== 'ab') wide = Math.max(wide, C.fovClimb * Math.min(1, Math.max(0, (Math.abs(m.vel.y) - 20) / 35)));
       sustain = damp(sustain, wide, 1 / C.fovTau, dt);
       const env = kickT < kickHold ? 1 : Math.exp(-(kickT - kickHold) * 3 / Math.max(0.01, kickDecay));
       const fov = C.fov + sustain + kickDeg * env;

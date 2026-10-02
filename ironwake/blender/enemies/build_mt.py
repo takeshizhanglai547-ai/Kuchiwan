@@ -149,7 +149,7 @@ def build_cab():
     g.merge(B.add('stripe', K.strip((-1.0, 1.775, 3.95), (0.45, 1.775, 3.95), 0.2, 0.012, (0, 1, 0),
                                     mat='paint_accent')))
     # upper slewing-ring half (turns with the cab)
-    g.merge(B.add('ring', P.banded_cylinder([(0.05, 0.98, 'steel_dark'), (0.07, 1.04, 'paint_dark')], segs=40,
+    g.merge(B.add('ring', P.banded_cylinder([(0.05, 0.98, 'steel_dark'), (0.07, 1.04, 'paint_dark')], segs=32,
                                             step=0.0).move(0, 0, 2.66)))
     g.merge(B.add('ring', P.bolt_circle((0, 0, 2.78), (0, 0, 1), 1.0, 8, r=0.024)))
     # --- roof: lamp bar with two amber work lamps + a red strobe dome
@@ -219,7 +219,7 @@ def build_cab():
     for s in (1, -1):
         x = s * (CAB_HW + 0.07)
         g.merge(B.add('conduit', K.tube([(s * 1.1, -1.0, 3.9), (x, -0.3, 4.16), (x, 0.7, 4.16), (s * 1.2, 1.2, 4.05)],
-                                        0.035, 8, mat='steel', collar_mat='steel_dark', subdiv=2)))
+                                        0.035, 7, mat='steel', collar_mat='steel_dark', subdiv=2)))
         for y in (-0.1, 0.35):
             g.merge(B.add('conduit', P.box((0.06, 0.08, 0.1), bevel=0.01, segs=1, mat='steel_dark')
                           .move(x - s * 0.02, y, 4.16)))
@@ -230,31 +230,37 @@ def build_cab():
     return g
 
 
-def build_eye():
-    """Sensor array: a slim red slit over THREE round lenses (hooded bezel, black glass, small
-    hot iris) deep under the brow, plus two round lenses in armoured pods on the upper glacis
-    corners. The irises are the brightest point of the silhouette (iw_eye_strength)."""
+def build_eye(part='all'):
+    """Sensor array: a slim red slit over THREE round lenses (hooded bezel, black glass with a
+    glowing iris painted on the dome's own faces: K.lens_dome) deep under the brow, plus two
+    round lenses in armoured pods on the upper glacis corners. The irises are the brightest
+    point of the silhouette (iw_eye_strength). The lenses are too small for a separate iris halo
+    node (the drone's 0.18 m eye has one); `part` is kept for that option."""
     g = Geo()
     y = -1.50 + 0.1
-    g.merge(P.box((1.36, 0.03, 0.035), bevel=0.006, segs=1, mat='lens').move(0, y - 0.02, 3.515))
-    g.merge(P.box((1.46, 0.03, 0.24), bevel=0.006, segs=1, mat='steel_dark').move(0, y - 0.004, 3.42))
+    if part != 'rim':
+        g.merge(P.box((1.36, 0.03, 0.035), bevel=0.006, segs=1, mat='lens').move(0, y - 0.02, 3.515))
+        g.merge(P.box((1.46, 0.03, 0.24), bevel=0.006, segs=1, mat='steel_dark').move(0, y - 0.004, 3.42))
 
     def lens(r, loc, tilt=(0, 0, 0)):
         c = Geo()
-        c.merge(P.ring(r * 1.32, r * 0.98, r * 0.7, 14, bevel=0.0, bsegs=1, mat='steel', z0=0.0))
-        c.merge(P.dome(r, r * 0.42, 16, 2, mat='glass', base=False))
-        c.merge(P.dome(r * 0.36, r * 0.16, 12, 1, mat='lens', base=False).move(0, 0, r * 0.38))
+        if part != 'rim':
+            c.merge(P.ring(r * 1.32, r * 0.98, r * 0.7, 14, bevel=0.0, bsegs=1, mat='steel', z0=0.0))
+        c.merge(K.lens_dome(r, r * 0.5, iris=0.4, ring=0.0, core=0.2 if part != 'all' else 0.0, part=part, segs=14,
+                            fr=[1.0, 0.68, 0.4, 0.2]))
         c.rotate((90, 0, 0)).rotate(tilt).move(*loc)
         return c
     for x in (-0.3, 0.0, 0.3):
         g.merge(lens(0.068, (x, y - 0.03, 3.4)))
     for x, r in ((-0.86, 0.085), (0.9, 0.06)):
         p, n = glacis_point(x, 0.62, 0.0)
-        pod = P.box((r * 3.4, r * 2.6, r * 2.8), bevel=0.012, segs=1, chamfer=r * 0.5, chamfer_axes='Y',
-                    mat='paint_dark').move(0, r * 0.9, 0)
-        hood = P.box((r * 3.2, r * 1.6, 0.02), bevel=0.004, segs=1, mat='paint_dark').move(0, -r * 0.3, r * 1.45)
         comp = Geo()
-        comp.merge(pod, hood, lens(r, (0, -r * 0.4, 0)))
+        if part != 'rim':
+            pod = P.box((r * 3.4, r * 2.6, r * 2.8), bevel=0.012, segs=1, chamfer=r * 0.5, chamfer_axes='Y',
+                        mat='paint_dark').move(0, r * 0.9, 0)
+            hood = P.box((r * 3.2, r * 1.6, 0.02), bevel=0.004, segs=1, mat='paint_dark').move(0, -r * 0.3, r * 1.45)
+            comp.merge(pod, hood)
+        comp.merge(lens(r, (0, -r * 0.4, 0)))
         comp.rotate((-8, 0, 0)).move(p.x, p.y + 0.02, p.z + r * 1.2)
         g.merge(comp)
     return g
@@ -264,9 +270,9 @@ def build_beacon():
     """Mast-top strobe (blinks red at 0.6 Hz: long-range readability from every side)."""
     g = Geo()
     g.merge(P.dome(0.1, 0.15, 16, 3, mat='lens').move(0.9, 0.95, 5.26))
-    for k in range(3):   # wire guard
+    for k in range(2):   # wire guard
         g.merge(P.box((0.012, 0.012, 0.19), bevel=0.0, segs=1, mat='steel_dark')
-                .move(0.9 + 0.115 * math.cos(k * 2.1), 0.95 + 0.115 * math.sin(k * 2.1), 5.35))
+                .move(0.9 + 0.115 * math.cos(k * 3.14 + 0.6), 0.95 + 0.115 * math.sin(k * 3.14 + 0.6), 5.35))
     g.merge(P.ring(0.125, 0.105, 0.015, 20, bevel=0.0, bsegs=1, mat='steel_dark', z0=5.44).move(0.9, 0.95, 0))
     return g
 
@@ -343,7 +349,7 @@ def build_pelvis():
     g.merge(B.add('plates', K.plate_at(core, (0, 0.76, 2.12), (0, 1, 0), u_axis=(-1, 0, 0), margin=0.08,
                                        thickness=0.04, chamfer=0.07, mat='paint_primary')))
     # lower slewing ring (fixed) with bolts
-    g.merge(B.add('ring', P.banded_cylinder([(0.06, 0.9, 'steel_dark'), (0.08, 0.96, 'paint_dark')], segs=32,
+    g.merge(B.add('ring', P.banded_cylinder([(0.06, 0.9, 'steel_dark'), (0.08, 0.96, 'paint_dark')], segs=28,
                                             step=0.006).move(0, -0.05, 2.52)))
     g.merge(B.add('ring', P.bolt_circle((0, -0.05, 2.66), (0, 0, 1), 0.86, 8, r=0.02)))
     # hip actuator drums + hoses into the thigh roots
@@ -424,13 +430,13 @@ def build_thigh():
     ip = _side_plate(HIP, KNEE, 0.0, 0.8, 0.62, 0.52, 0.3, thick=0.04, bolts=0, segs=1)
     ip.mirror('X').move(2 * (hx + (KNEE[0] - hx) * 0.4), 0, 0)
     g.merge(B.add('plates', ip))
-    # front plates (oxide) with a ridge + a small dirty-cream knee cap (the only cream on the leg)
+    # front plates (oxide) with a ridge + an oxide knee cap (the cream lives on the cab: value read at range)
     g.merge(B.add('plates', _front_plate(HIP, KNEE, 0.02, 0.5, 0.56, 0.5, 0.36)))
     g.merge(B.add('plates', _front_plate(HIP, KNEE, 0.56, 0.84, 0.5, 0.44, 0.33, bolts=0)))
     kc = K.plate_world([Vector(KNEE) + Vector((-0.24, -0.33, 0.2)), Vector(KNEE) + Vector((0.24, -0.33, 0.2)),
                         Vector(KNEE) + Vector((0.2, -0.36, -0.1)), Vector(KNEE) + Vector((-0.2, -0.36, -0.1))],
-                       0.06, mat='paint_secondary', normal_hint=(0, -1, 0.2), chamfer=0.06, bevel=0.03, segs=1,
-                       ridge=0.025, ridge_axis='Y')
+                       0.06, mat='paint_primary', normal_hint=(0, -1, 0.2), chamfer=0.06, bevel=0.03, segs=1,
+                       ridge=0.025, ridge_axis='Y')   # oxide (a sun-facing cream cap blew out to a white pillow)
     g.merge(B.add('kneecap', kc))
     # outer hip fender (silhouette mass) with the yellow ID strip
     ox = hx + 0.36
@@ -592,8 +598,6 @@ def build_debris(k, rng):
         pts.append((math.cos(a) * rr, math.sin(a) * rr * rng.uniform(0.6, 0.9)))
     th = 0.05 + 0.03 * (k % 3)
     g = P.plate(pts, th, bevel=0.012, segs=1, mat=mat, inset=th * 0.5)
-    if k in (0, 6):   # bolt pair along the longest remaining edge
-        g.merge(P.bolt_row((-size * 0.2, -size * 0.12, th), (size * 0.2, -size * 0.12, th), 2, (0, 0, 1), r=0.022))
     if k in (1, 3):
         g.merge(K.strip((-size * 0.3, size * 0.05, th), (size * 0.3, size * 0.05, th), 0.1, 0.008, (0, 0, 1),
                         mat='paint_accent'))
@@ -616,7 +620,7 @@ def build(a):
     a.pivot('hull', (0, 0, 0))
     a.pivot('pelvis', PELVIS, parent='hull')
     a.pivot('turret', TURRET, parent='pelvis')
-    a.pivot('eye', EYE, parent='turret', iw_eye_color='#FF2A2A', iw_eye_strength=16.0)
+    a.pivot('eye', EYE, parent='turret', iw_eye_color='#FF2A2A', iw_eye_strength=14.0)
     a.pivot('barrel', TRUNNION, parent='turret')
     a.pivot('beacon', (0.9, 0.95, 5.3), parent='turret', iw_eye_color='#FF3B2F', iw_eye_strength=18.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='barrel')
@@ -761,8 +765,8 @@ NEED = ['hull', 'pelvis', 'turret', 'barrel', 'muzzle', 'eye', 'beacon', 'thigh_
 
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=21, obj_weight=OBJ_WEIGHT,
-          weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, sizes={'normal': 2048, 'orm': 768, 'emissive': 256},
-          tex_quality={'basecolor': 80, 'normal': 74, 'orm': 64}, post_bake=post_bake)
+          weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, sizes={'normal': 1536, 'orm': 768, 'emissive': 256},
+          tex_quality={'basecolor': 78, 'normal': 74, 'orm': 62}, post_bake=post_bake)
 
 
 if __name__ == '__main__':

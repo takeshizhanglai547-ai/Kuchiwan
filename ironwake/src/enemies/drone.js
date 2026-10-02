@@ -18,17 +18,21 @@ import { playTell } from './ai.js';
 export const DRONE_STATS = {
   name: 'GNAT',
   ap: 450, acs: { max: 240, staggerTime: 1.2, decayRate: 0.4 },
-  radius: 2.2, speed: 24, accel: 26, orbitMin: 60, orbitMax: 110, altMin: 22, altMax: 42,
+  radius: 1.8, hitRadius: 1.5, speed: 24,          // radius = wall collision; hitRadius = broadphase (part box 'body' is the hit volume) accel: 26, orbitMin: 60, orbitMax: 110, altMin: 22, altMax: 42,
   fireRange: 260, accuracy: 0.6,
 };
 
 export const DRONE_AI = {
   orbitR: [55, 100], alt: [18, 40], orbitRate: 0.32, weave: [9, 2.1], bob: [5, 1.4],
   speed: 30, accel: 34, sep: 11,
-  dive: { every: [5.5, 9.5], tell: 0.45, speed: 48, accel: 90, offset: 14, fireRange: 150, pullUp: 30, climb: [1.1, 1.6] },
+  // r2: HARASSMENT = strafing dives. A gnat only shoots on its dive (inside fireRange, after the
+  // 0.45 s nose-over tell + a 0.3 s aim glint), so every round it fires is telegraphed and close
+  // enough to land; it dives every 3.5-6 s (one diver at a time per swarm token)
+  dive: { every: [3.5, 6], tell: 0.45, speed: 48, accel: 90, offset: 12, fireRange: 85, pullUp: 26, climb: [0.9, 1.4] },
+  orbitFire: false,
   fire: {
-    slot: 'R', group: 'drone', aimTime: 0.38, glintAt: 0.14, errStart: 6, errEnd: 2.2, errTau: 0.14,
-    sight: false, glintFx: 'iw_glint', glintScale: 0.7, tell: 'drone', retry: 0.5, holdSight: 0, range: 240,
+    slot: 'R', group: 'drone', aimTime: 0.3, glintAt: 0.14, errStart: 4, errEnd: 1.2, errTau: 0.1,
+    sight: false, glintFx: 'iw_glint', glintScale: 0.7, tell: 'drone', retry: 0.3, holdSight: 0, range: 240, grace: 0.15,
   },
   trackTau: 0.2, lead: 0.9,
   wreck: { gravity: 34, spin: 9, maxT: 2.2 },
@@ -47,6 +51,7 @@ export class Drone extends Enemy {
     this.fcCfg = DRONE_AI.fire;
     this.model = template.clone();
     this.root.add(this.model);
+    this.setupHitVolumes(this.model, ['body'], template, { radius: S.hitRadius });
     this.body3d = node(this.model, 'body');
     this.rotor = node(this.model, 'rotor');
     this.muzzles.R = node(this.model, 'muzzle');
@@ -95,6 +100,7 @@ export class Drone extends Enemy {
     this.spin.set(this.rng.sym(DRONE_AI.wreck.spin), this.rng.sym(DRONE_AI.wreck.spin * 0.5), this.rng.sym(DRONE_AI.wreck.spin));
     this.vel.y = Math.max(this.vel.y, 4);
     this._smokeT = 0;
+    if (this.flash) this.flash.off();
     burnModel(this.root, burntMaterial());
   }
 
@@ -221,7 +227,7 @@ export class Drone extends Enemy {
       this.body3d.rotation.x += (vf * 0.012 + noseDown + this.hitFlash * 0.3 * Math.sin(this.stateT * 50) - this.body3d.rotation.x) * Math.min(1, dt * 8);
     }
 
-    const fire = !!t && !this.staggered && los && dist < A.fire.range && (this.state === 'orbit' || (this.state === 'dive' && dist < A.dive.fireRange));
+    const fire = !!t && !this.staggered && los && dist < A.fire.range && ((A.orbitFire && this.state === 'orbit') || (this.state === 'dive' && dist < A.dive.fireRange));
     this._trig.R = this.fireControl(dt, fire);
     this.loadout.update(dt, this._trig);
   }

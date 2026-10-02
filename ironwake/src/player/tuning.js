@@ -10,7 +10,7 @@
 //   AB: 0.6 s wind-up (brakes + charges), then launches at 110 and settles at 130 m/s;
 //       10% start cost + 13% EN/s
 //   EN: regen delay 1.3 s, redline lockout 2.0 s then +20% instantly, refill ~130%/s
-//   Camera: vertical FOV 61 (+6 boost, +10 AB, spring 0.25 s), orbit 31 m behind (+2.2 m to the
+//   Camera: vertical FOV 61 (+6 boost, +10 AB, +3.5 fast climb / drop, spring 0.25 s), orbit 31 m behind (+2.2 m to the
 //           right of) a point just above the head, so the rig sits in the lower-centre at 22-30%
 //           of frame height and the right-arm rifle clears the torso. Thin props between the
 //           camera and the rig dissolve (screen-door cutout, camera.js) instead of hiding it.
@@ -115,6 +115,7 @@ export const CAMERA = {
   fov: 61,                  // vertical FOV (see the framing note above)
   fovBoost: 6,              // sustained extra FOV while ground boosting fast (benchmark +6)
   fovAB: 10,                // sustained extra FOV during assault boost flight (benchmark +10)
+  fovClimb: 3.5,            // sustained extra FOV at fast vertical speed (hover climb ~60 m/s, drops)
   fovTau: 0.25,             // sustained-FOV spring (s)
   pivotHeight: 11.6,        // the camera ORBITS this point above the feet (~0.9 m over the head),
                             // so the reticle always sits just above the rig's shoulders

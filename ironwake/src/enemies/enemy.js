@@ -11,10 +11,13 @@
 //     group shoot at once. Loadout bullets use the fire-control aim point (getAimPoint).
 //   * weapon owner interface (muzzles), the shared death sequence (explosion, burnt wreck),
 //     corpse timing, telemetry hooks (game.enemies.telemetry).
+//   * HIT VOLUMES (hitvol.js): per-part boxes as the physics narrow phase (rounds land ON the
+//     armour, sparks along the real face normal) + a 0.06 s armour hit flash.
 import * as THREE from 'three';
 import { Actor, TEAM_ENEMY } from '../game/actor.js';
 import { burnModel } from './models.js';
 import { leadAim, playTell } from './ai.js';
+import { HitVolume, HitFlash } from './hitvol.js';
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Vector3(), _t = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -72,6 +75,24 @@ export class Enemy extends Actor {
     this.los = false; this.losT = 0;
     this.kind = opts.type;                    // telemetry bucket
     this.seq = 0;                             // per-session spawn index (set by the manager)
+    this.deathBig = opts.deathBig ?? this.radius > 3.5;   // large explosion + debris on death
+    this.hitVol = null;                       // per-part narrow phase (setupHitVolumes)
+    this.flash = null;                        // armour hit flash
+  }
+
+  /**
+   * Per-part hit volumes + hit flash for `model` (call once, after the model exists).
+   * `broad` = {radius, height, offsetY} of the broadphase body (defaults: the actor's own).
+   */
+  setupHitVolumes(model, parts, cacheKey, broad = null, flash = true) {
+    if (broad) {
+      if (broad.radius !== undefined) this.body.radius = broad.radius;
+      if (broad.height !== undefined) this.body.height = broad.height;
+      if (broad.offsetY !== undefined) this.body.offsetY = broad.offsetY;
+    }
+    this.hitVol = new HitVolume(this, model, parts, { cacheKey });
+    if (this.hitVol.parts.length) this.body.ray = this.hitVol.ray;
+    if (flash) this.flash = new HitFlash(model, parts);
   }
 
   get target() { const p = this.game.player; return p && p.alive ? p : null; }
@@ -165,6 +186,7 @@ export class Enemy extends Actor {
       this.trackVel.z += (t.vel.z - this.trackVel.z) * k;
     }
     if (this.alertT >= 0) { this.alertT -= dt; if (this.alertT < 0) { this.alerted = true; this.onAlert(); } }
+    if (this.flash) this.flash.update(dt);
     if (!this.alive && (this.fcToken || this.sightK > 0)) { this.fcCancel(); this.sightK = 0; this._drawSight(); }
   }
 
@@ -282,6 +304,7 @@ export class Enemy extends Actor {
   }
 
   dispose() {
+    if (this.flash) this.flash.off();
     if (this.anim) { this.anim.dispose(); this.anim = null; }
     super.dispose();
   }
@@ -289,14 +312,21 @@ export class Enemy extends Actor {
   onHit(hit, res) {
     super.onHit(hit, res);
     if (hit.source === this.game.player) this.alert(0.1);
+    // the round CONNECTED: armour flash (longer for heavy impacts; splash only when it hurts)
+    if (this.flash && this.alive && res && res.damage > 0) {
+      const imp = hit.impact * (hit.splashFrac === undefined ? 1 : hit.splashFrac);
+      const direct = hit.splashFrac === undefined;
+      if (direct || imp > 60) this.flash.hit(0.8 + imp / 600, direct && this.hitVol ? this.hitVol.partHit() : null);
+    }
     this.game.events.emit('enemy:hit', this);
   }
 
   /** Default death: explosion + burnt wreck. Override for special cases. */
   onDeath() {
     this.fcCancel();
+    if (this.flash) this.flash.off();          // before the scorched materials swap in
     this.aimPoint(_v);
-    const big = this.radius > 3.5;
+    const big = this.deathBig;
     this.game.fx.spawn(big ? 'explosion_large' : 'explosion_small', _v, null, big ? 1 : 1.4);
     if (!(this.anim && this.anim.ownDebris)) this.game.fx.spawn('debris', _v, null, big ? 1.5 : 1); // authored shards replace the generic chunks (models.js)
     this.game.audio.play(big ? 'explosion_large' : 'explosion_small', { pos: _v });

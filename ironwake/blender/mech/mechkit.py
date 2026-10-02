@@ -246,12 +246,13 @@ def drum(center, axis, r, w, mat='paint_dark', rim='steel_dark', accent=None, se
     return g
 
 
-def cheek(center, axis_x, r, t, strap_to=None, strap_w=None, mat='paint_dark', bolts=4):
+def cheek(center, axis_x, r, t, strap_to=None, strap_w=None, mat='paint_dark', bolts=4, lite=False):
     """Clevis cheek plate: a disc around a joint axis (along X at `center`), thickness t
-    along X, optionally strapped to a point `strap_to` (y, z) of the parent housing."""
+    along X, optionally strapped to a point `strap_to` (y, z) of the parent housing.
+    lite: 14-sided disc + plain 16-sided boss (~half the triangles; partly hidden joints)."""
     cx, cy, cz = center
     pts = []
-    n = 20
+    n = 14 if lite else 20
     for i in range(n):
         a = math.tau * i / n
         pts.append((cy + math.cos(a) * r, cz + math.sin(a) * r))
@@ -268,8 +269,8 @@ def cheek(center, axis_x, r, t, strap_to=None, strap_w=None, mat='paint_dark', b
     if bolts:
         nx = 1.0 if axis_x > 0 else -1.0
         g.merge(P.bolt_circle((cx + nx * t * 0.5, cy, cz), (nx, 0, 0), r * 0.72, bolts, r=0.016, washer=False))
-        g.merge(P.cylinder(r * 0.34, 0.05, 24, bevel=0.012, bsegs=1, mat='steel', z0=0.0)
-                .align((nx, 0, 0), loc=(cx + nx * t * 0.5, cy, cz)))
+        g.merge(P.cylinder(r * 0.34, 0.05, 16 if lite else 24, bevel=0.0 if lite else 0.012, bsegs=1, mat='steel',
+                           z0=0.0).align((nx, 0, 0), loc=(cx + nx * t * 0.5, cy, cz)))
     return g
 
 
@@ -310,12 +311,12 @@ def ram(p0, p1, r=0.09, rod=None, frac=0.55, up=(0, 0, 1), segs=20, eyes=False, 
 
 
 def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=True, bolts=6, ribs=1,
-         rib_mat='steel'):
+         rib_mat='steel', glow_rim='glow_rim'):
     """Light thruster bell (~700-1100 tris) pointing down -Z (exhaust through -Z);
     collar stack above z=0 (mounting face at z=+0.12)."""
     wall = wall or max(0.014, r_e * 0.07)
     g = Geo()
-    n = 4
+    n = 4 if r_t >= 0.15 else 3
     inner = [(r_t + (r_e - r_t) * ((i / n) ** 1.5), -L * i / n) for i in range(n + 1)]
     outer = [(r + wall * (1.0 + 0.8 * (1 - i / n)), z) for i, (r, z) in enumerate(inner)]
     lip = [(r_e + wall * 0.5, -L - wall * 0.45)]
@@ -332,9 +333,19 @@ def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=Tr
             f.material_index = b.mi('nozzle_inner')
     g.merge(b)
     if glow:
-        g.merge(P.cylinder(r_t * 1.02, 0.012, segs, bevel=0.0, bsegs=1, mat='glow', z0=-0.03))
-        g.merge(P.cone(r_t * 0.32, r_t * 0.06, L * 0.18, 12, bevel=0.0, bsegs=1, mat='steel_dark')
-                .rotate((180, 0, 0)).move(0, 0, -0.025))
+        # throat (r2): full 360-degree glow in two rings (hot core #FFB04A + dim rim #7A2A10 =
+        # a radial gradient once baked) behind a turbine / flame-holder: a 24-segment hub cone
+        # and 8 radial vanes, so the throat never reads as a flat disc or a black void
+        big = r_t >= 0.15
+        gs = 24 if big else 16
+        g.merge(P.lathe([(0.0, -0.03), (r_t * 0.55, -0.03)], gs, 'glow'))              # hot core disc (faces -Z)
+        g.merge(P.lathe([(r_t * 0.55, -0.03), (r_t * 1.02, -0.03)], gs, glow_rim))     # dim rim annulus
+        g.merge(P.cone(r_t * 0.3, r_t * 0.07, L * 0.22, 24 if r_t >= 0.15 else 12, bevel=0.0, bsegs=1,
+                       mat='steel_dark').rotate((180, 0, 0)).move(0, 0, -0.025))
+        for k in range(8 if r_t >= 0.15 else 0):
+            vane = P.box((r_t * 0.66, 0.008, L * 0.05), bevel=0.0, segs=1, mat='steel_dark')
+            vane.move(r_t * 0.63, 0, -0.025 - L * 0.025).rotate((0, 0, 22.5 + 45 * k))
+            g.merge(vane)
     if collar:
         ro = r_t + wall * 1.8
         g.merge(P.ring(ro + 0.05, r_t * 0.7, 0.07, segs, bevel=0.0, bsegs=1, mat='steel', z0=0.0))
@@ -349,7 +360,7 @@ def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=Tr
     return g
 
 
-def shackle(r=0.06, bar=0.016, mat='steel_dark', base_mat='paint_primary'):
+def shackle(r=0.06, bar=0.016, mat='steel_dark', base_mat='paint_primary', segs=(18, 8)):
     """Light lifting eye / tow shackle on a welded base plate (z=0 up)."""
     g = Geo()
     base = P.box((r * 2.6, r * 1.5, 0.02), bevel=0.004, segs=1, mat=base_mat).move(0, 0, 0.01)
@@ -357,7 +368,7 @@ def shackle(r=0.06, bar=0.016, mat='steel_dark', base_mat='paint_primary'):
                            r * 0.3, 2), 0.035, bevel=0.004, segs=1, mat=base_mat, axis='Y').move(0, 0, 0.02)
     lug.boolean(P.cylinder(r * 0.42, 0.1, 16, bevel=0.0, mat='steel_dark').rotate((90, 0, 0))
                 .move(0, 0, 0.02 + r * 1.1))
-    loop = P.torus(r * 0.75, bar, 18, 8, mat=mat)
+    loop = P.torus(r * 0.75, bar, segs[0], segs[1], mat=mat)
     loop.rotate((0, 90, 0)).move(0, 0, 0.02 + r * 1.1 + r * 0.65)
     g.merge(base, lug, loop)
     return g
@@ -594,8 +605,8 @@ def finalize_textures(a, sizes=None, quality=None):
 
 
 # ============================================================================ weighted atlas
-MAT_WEIGHT = {'steel': 0.7, 'steel_dark': 0.7, 'chrome': 0.6, 'rubber': 0.6, 'nozzle_inner': 0.5, 'glow': 0.4,
-              'lens': 0.5, 'paint_dark': 0.85}
+MAT_WEIGHT = {'steel': 0.7, 'steel_dark': 0.55, 'chrome': 0.5, 'rubber': 0.45, 'nozzle_inner': 0.5, 'glow': 2.4,
+              'glow_rim': 2.0, 'lens': 0.5, 'glass': 0.8, 'paint_dark': 0.65}
 
 
 def _uv_islands(me):
