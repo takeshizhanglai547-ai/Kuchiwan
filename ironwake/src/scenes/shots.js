@@ -181,6 +181,7 @@ export const SHOTS = {
     frames: [0, 6], hud: true,
     async setup(S) {
       S.begin({ clear: true });
+      quietStage(S, 0);   // (enemies lane r3) no stale mission-start radio subtitle over the staged fight
       S.place(S.rel(55), S.yaw);
       const mt = S.spawn('mt', S.rel(125, -8), S.yaw + Math.PI);
       S.aimAt(mt.aimPoint(V(0, 0, 0)));
@@ -433,7 +434,7 @@ export const SHOTS = {
   },
 
   cam_occlusion: {
-    desc: 'Gameplay camera with a lamp mast between camera and rig: the mast dissolves (screen-door cutout) instead of hiding the rig; walk strafe sweeps it across (movement lane)',
+    desc: 'Gameplay camera with a lamp mast between camera and rig: no slide can clear a mast this close to the rig, so it is cut out (clean hard-edged hole) instead of hiding the rig; walk strafe sweeps it across (movement lane)',
     frames: [0, 10, 20], hud: false,
     async setup(S) {
       S.begin({ clear: true });
@@ -442,6 +443,19 @@ export const SHOTS = {
       S.tap('boost_toggle');                    // walk (20 m/s) so the mast sweeps slowly
       S.steps(20);
       scheduleShot(S, { 0: () => S.press('move_left'), 19: () => S.release('move_left') });
+    },
+  },
+
+  cam_slide: {
+    desc: 'Gameplay camera with a lamp mast ~9 m in front of the camera: the camera SLIDES around it (occluder avoid, eased 0.2 s) instead of cutting it; walk strafe sweeps it across (movement lane r3)',
+    frames: [0, 8, 16, 24, 32], hud: false,
+    async setup(S) {
+      S.begin({ clear: true });
+      const L = S._lane = findOccluderLane(S, 26);
+      S.place(L.pos, L.yaw);
+      S.tap('boost_toggle');                    // walk (20 m/s) so the mast sweeps slowly
+      S.steps(20);
+      scheduleShot(S, { 0: () => S.press('move_left'), 31: () => S.release('move_left') });
     },
   },
 
@@ -629,6 +643,20 @@ export const SHOTS = {
     async setup(S) { S.begin({ state: 'title' }); S.game.menus.show('title'); S.game.menus.openOptions('title'); },
     camera(S) { if (S.game.menus.heroCamera) S.game.menus.heroCamera('title'); },
   },
+  hud_stagger: {
+    desc: 'HUD stagger states: locked PICKET staggered (readout STAGGER, red bracket), own STAGGER gauge at 62% (UI lane)',
+    frames: [0], hud: true,
+    async setup(S) {
+      S.begin({ godmode: true });
+      S.place(S.rel(85), S.yaw);
+      S.aimAt(S.rel(185, 0, 6));
+      S.steps(70);
+      const g = S.game, p = g.player, t = g.lockon && g.lockon.target;
+      if (t && t.alive) dealDamage(g, t, { damage: 40, impact: 1e6, direct: true, point: t.pos.clone(), source: p, weapon: 'debug' });
+      S.steps(4);
+      p.acs.value = p.acs.cfg.max * 0.62; p.acs.delay = 5;
+    },
+  },
 
   // --- weapons/VFX lane (appended): close inspection of weapon / explosion / booster VFX ------
   vfx_rifle: {
@@ -760,13 +788,20 @@ export const SHOTS = {
 
   boss_missiles: {
     desc: 'CINDERHOUND missile salvo: shoulder glint + tell, launch, MISSILE ALERT on the HUD (enemies AI lane)',
-    frames: [0, 30, 50], hud: true,
+    // r3: f0 = mid-tell (shoulder glint), f30 = the salvo leaving the cells, f54 = ~20 frames after
+    // the launch with the salvo homing (projectiles.incomingMissiles > 0 -> MISSILE ALERT). The rig
+    // stands at its new 55-100 m duel range (critic: 118 m read as a 3 px flare)
+    frames: [0, 30, 54], hud: true,
     async setup(S) {
-      const boss = stageBoss(S, 110, 20, 70);
+      const boss = stageBoss(S, 95, 14, 58);
       S.aimAt(boss.aimPoint(V(0, 0, 0)));
       S.steps(20);
       boss._startAttack('missiles');
-      S.steps(6);
+      S.steps(12);
+    },
+    camera(S) {
+      // the chase camera keeps the rig in view while the pilot tracks it (no free look)
+      const b = S.game.enemies.boss; if (b && b.alive) S.aimAt(b.aimPoint(V(0, 0, 0)));
     },
   },
 
@@ -791,6 +826,7 @@ export const SHOTS = {
     frames: [0, 12], hud: true,
     async setup(S) {
       S.begin({ clear: true });
+      quietStage(S, 0);
       S.place(S.rel(40), S.yaw);
       for (const [f, r] of [[130, -30], [150, 25], [110, 55]]) S.spawn('mt', S.rel(f, r), S.yaw + Math.PI);
       S.aimAt(S.rel(130, 10, 3));
@@ -829,8 +865,11 @@ export const SHOTS = {
     frames: [0, 20], hud: true,
     async setup(S) {
       S.begin({ clear: true });
+      // (enemies lane r3) the real stage-2 state (critic: the HUD read the stage-1 objective): the
+      // mission spawns the relay ring; the shot uses the first relay instead of adding its own
+      S.game.mission.forceStage(1);
       const sp = S.game.arena.spawns.relay[0];
-      const r = S.spawn('turret', sp.pos, sp.yaw || 0);
+      const r = S.game.enemies.list.find((e) => e.type === 'turret' && e.pos.distanceTo(sp.pos) < 2) || S.spawn('turret', sp.pos, sp.yaw || 0);
       // player out toward the open middle of the arena, with a clear view of the mast
       let pp = null;
       for (let k = 0; k < 16 && !pp; k++) {
@@ -990,6 +1029,32 @@ export const SHOTS = {
       S.cam(S._qbc, V(b.pos.x, b.pos.y + 5, b.pos.z), 38);
     },
   },
+
+  // --- enemies lane (models, fix round 3): close-ups of the r3 details --------------------------
+  enemy_relay_core: {
+    desc: 'RELAY GENERATOR capacitor column close-up: plasma bands climbing the glass, filament, enlarged gun head (enemies lane r3)',
+    frames: [0, 20], hud: false,
+    async setup(S) {
+      await SHOTS.enemy_relay.setup(S);
+    },
+    camera(S) {
+      const r = S._relay;
+      S.orbit(V(r.pos.x, r.pos.y + 9.2, r.pos.z), THREE.MathUtils.radToDeg(r.camYaw) + 8, 9, 12.5, 40);
+    },
+  },
+
+  enemy_mt_legs: {
+    desc: 'PK-2 PICKET legs close-up mid-stride: crisp armour pads with seams and bolts, knee rams, hoses, stencils (enemies lane r3)',
+    frames: [0, 12], hud: false,
+    async setup(S) {
+      await SHOTS.enemy_mt.setup(S);
+    },
+    camera(S) {
+      const e = S.enemy('mt'); const st = S._stage;
+      const p = e ? e.pos : st.pos;
+      S.orbit(V(p.x, p.y + 1.4, p.z), THREE.MathUtils.radToDeg(st.face) - 30, 6, 6.2, 40);
+    },
+  },
 };
 
 export const SHOT_NAMES = Object.keys(SHOTS);
@@ -1057,7 +1122,7 @@ function pickClearCam(S, cams, targets) {
  * Rig placement with a tall THIN collider (lamp mast, gantry leg) ~13 m behind it on the chase
  * camera's line, the rest of that line and the rig's surroundings clear. Deterministic.
  */
-function findOccluderLane(S) {
+function findOccluderLane(S, dist = 13) {
   const phys = S.game.physics, sp = S.game.arena.spawns.player.pos;
   const hit = { hit: false, dist: 0, point: V(0, 0, 0), normal: V(0, 0, 0), collider: null, body: null, ground: false };
   const thin = phys.colliders.filter((c) => c.half && c.half.y > 5 && [c.half.x, c.half.z].every((h) => h < 1.2))
@@ -1066,14 +1131,15 @@ function findOccluderLane(S) {
   for (const c of thin.slice(0, 60)) {
     for (let k = 0; k < 16; k++) {
       const yaw = (k / 16) * Math.PI * 2, fx = Math.sin(yaw), fz = Math.cos(yaw);
-      const pos = V(c.center.x + fx * 13, phys.groundHeight(c.center.x + fx * 13, c.center.z + fz * 13), c.center.z + fz * 13);
+      const pos = V(c.center.x + fx * dist, phys.groundHeight(c.center.x + fx * dist, c.center.z + fz * dist), c.center.z + fz * dist);
       if (Math.abs(pos.x) > 225 || Math.abs(pos.z) > 225) continue;
       // chest -> camera: the first thing hit must be this mast, nothing else up to 32 m
       o.set(pos.x, pos.y + 7, pos.z); d.set(-fx, 0.12, -fz).normalize();
-      if (!phys.raycast(o, d, 34, hit, { ground: true }) || hit.collider !== c) continue;
+      const reach = Math.max(34, dist + 12);
+      if (!phys.raycast(o, d, reach, hit, { ground: true }) || hit.collider !== c) continue;
       let ok = true;
       o.addScaledVector(d, hit.dist + 2 * Math.max(c.half.x, c.half.z) + 0.3);
-      if (phys.raycast(o, d, 32 - hit.dist, hit, { ground: true })) ok = false;
+      if (phys.raycast(o, d, reach - 2 - hit.dist, hit, { ground: true })) ok = false;
       // the rig's own spot and a 20 m walk to its left are clear
       for (const h of [1, 5, 9]) for (const [dx, dz] of [[fx, fz], [-fx, -fz], [fz, -fx], [-fz, fx]]) {
         if (!ok) break;
@@ -1191,6 +1257,16 @@ function sunlitVisual(S, pos, sunDir) {
 }
 
 /** (enemies AI lane) Rival rig already fighting: player at rel(fwdP), boss `dist` m ahead + right offset. */
+/**
+ * (enemies lane r3) Enter mission stage `i` the way forceStage does (so the stage's opening radio
+ * beat counts as played: no stale mission-start subtitle over a staged fight), then clear its
+ * spawns so the shot stages its own units.
+ */
+function quietStage(S, i) {
+  S.game.mission.forceStage(i);
+  S.clearEnemies();
+}
+
 function stageBoss(S, fwd, right, dist) {
   S.begin();
   S.place(S.rel(fwd - dist), S.yaw);

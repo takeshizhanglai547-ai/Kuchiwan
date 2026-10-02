@@ -11,12 +11,15 @@
 //              thigh_L > shin_L > foot_L,  thigh_R > shin_R > foot_R   (walk cycle, animator),
 //              nozzle_back_0/1 (booster glow + plume, animator; exhaust = local -Z) }
 //   drone  (enemy_drone, "GNAT" ducted-fan drone, ~2.5 m span; origin = body centre)
-//            body > { rotor (spins about its own +Y), rotor_1 ... (every node named rotor* spins;
-//                     a rotor may carry a REST rotation = fan tilt, the blur disc copies it),
+//            body > { rotor (spins about its own +Y), rotor_1 ... (every node named rotor / rotor_<n>
+//                     spins; a rotor may carry a REST rotation = fan tilt, the blur disc rides it;
+//                     r3: its blades are a separate mesh fanblades_<n>_geo under the rotor, swapped
+//                     at speed for translucent ghost copies + the streak disc, see ROTOR_FX),
 //                     eye (emissive iris core) > eye_rim (optional: iris halo, own flat colour),
 //                     beacon, muzzle }
 //   turret (enemy_relay, RELAY GENERATOR, stage-2 objective)
-//            base > { core (glowing column: rotates, hidden on death), beacon (blinking lamp),
+//            base > { core (glowing column: rotates, hidden on death; r3: a mesh named core_glass*
+//                     under it gets the plasma-glass shader RELAY_GLASS), beacon (blinking lamp),
 //                     head (yaw) > barrel (pitch) > muzzle }
 //   A node may carry glTF extras iw_eye_color / iw_eye_strength (flat emissive colour for crisp
 //   bloom, the same convention as src/mech/rig.js).
@@ -34,6 +37,8 @@
 //       drone: fan spin (+ blur discs), beacon strobe; turret: core pulse, beacon blink, recoil,
 //       long-range cyan core glow (RELAY_FX) and live arc spits off the bushings.
 //       Every unit: long-range signature (sensor-iris + beacon glow sprites, sky-wrap rim).
+//   MT debris_<n> nodes may carry extras iw_debris_speed (launch speed scale: <1 = big authored
+//   chunk that lands beside the wreck and keeps its paint) and iw_half (rest height, m).
 //   Wrecks: every template material maps to a scorched variant of ITSELF (BURNT_OF; not in
 //   userData: Object3D.clone() JSON-copies userData),
 //   material, so a wreck keeps its panel detail); Enemy.onDeath uses it.
@@ -202,12 +207,41 @@ function detailTexture() {
  * added to every lit enemy surface, so the units separate from dark walls and ash-grey concrete
  * at 60-150 m instead of melting into them (the same idea as the rigs' RIG_SHADE).
  */
-export const ENEMY_RIM = { strength: 0.34, pow: 3.0, color: [0.5, 0.54, 0.6], albedo: 0.6, lift: 0.07 };
+export const ENEMY_RIM = { strength: 0.34, pow: 3.0, color: [0.5, 0.54, 0.6], albedo: 0.6, lift: 0.07,
+  // r3 (critic: walkers at 77-110 m vanish under the HUD): the rim grows with view distance, so a
+  // 20-30 px unit keeps a cool outline against the ash-grey yard; close-ups are unchanged
+  near: 45, far: 140, farMul: 2.65, farPow: 2.2, farLift: 2.1 };   // r3 (enemy-ai): 0.34 -> 0.9 rim, lift 0.07 -> 0.15 at range
 const RIM_GLSL = (() => {
   const R = ENEMY_RIM, c = R.color.map((v) => v.toFixed(3)).join(', ');
   return `{ float iwNdV = clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
-    float iwR = pow( max( 1.0 - iwNdV, 1e-4 ), ${R.pow.toFixed(2)} ) * ${R.strength.toFixed(3)};
-    outgoingLight += ( diffuseColor.rgb * ${R.albedo.toFixed(3)} + ${R.lift.toFixed(3)} ) * vec3( ${c} ) * iwR; }\n`;
+    float iwFar = smoothstep( ${R.near.toFixed(1)}, ${R.far.toFixed(1)}, length( vViewPosition ) );
+    float iwR = pow( max( 1.0 - iwNdV, 1e-4 ), mix( ${R.pow.toFixed(2)}, ${R.farPow.toFixed(2)}, iwFar ) ) * ${R.strength.toFixed(3)} * mix( 1.0, ${R.farMul.toFixed(2)}, iwFar );
+    outgoingLight += ( diffuseColor.rgb * ${R.albedo.toFixed(3)} + ${R.lift.toFixed(3)} * mix( 1.0, ${R.farLift.toFixed(2)}, iwFar ) ) * vec3( ${c} ) * iwR; }\n`;
+})();
+
+/**
+ * HIT PULSE (r3, critic: the whole-unit material swap read as an arcade damage blink): a LOCAL
+ * emissive pulse around the impact point (world space, smoothstep falloff over iwHitR, hot core +
+ * #FFB060 halo; the albedo is untouched) and a 2-frame vertex kick (iwKick, world m) that dents
+ * the struck plating along the shot. Driven per unit by hitvol.js HitFlash; k = 0 costs nothing.
+ */
+export const HIT_PULSE = { color: [1.0, 0.25, 0.045], gain: 2.2, core: [1.0, 0.5, 0.16], coreGain: 3.5, coreFrac: 0.22 };
+function makeHitUniforms() {
+  const C = HIT_PULSE.color, g = HIT_PULSE.gain;
+  return { pos: { value: new THREE.Vector3(0, -1e4, 0) }, k: { value: 0 }, r: { value: 1.2 },
+    col: { value: new THREE.Vector3(C[0] * g, C[1] * g, C[2] * g) }, kick: { value: new THREE.Vector3() } };
+}
+const HIT_VERT_PARS = 'uniform vec3 iwHitPos;\nuniform float iwHitR;\nuniform vec3 iwKick;\nvarying vec3 vIwWP;\n';
+const HIT_VERT = `{ vec3 iwW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+    float iwKf = 1.0 - smoothstep( 0.0, iwHitR * 1.4, distance( iwW, iwHitPos ) );
+    transformed += ( transpose( mat3( modelMatrix ) ) * iwKick ) * ( iwKf / max( dot( modelMatrix[ 0 ].xyz, modelMatrix[ 0 ].xyz ), 1e-6 ) );
+    vIwWP = iwW; }`;
+const HIT_FRAG_PARS = 'uniform vec3 iwHitPos;\nuniform float iwHitK;\nuniform float iwHitR;\nuniform vec3 iwHitCol;\nvarying vec3 vIwWP;\n';
+const HIT_FRAG = (() => {
+  const c = HIT_PULSE.core.map((v) => (v * HIT_PULSE.coreGain).toFixed(3)).join(', ');
+  return `if ( iwHitK > 0.0 ) { float iwHd = distance( vIwWP, iwHitPos );
+    totalEmissiveRadiance += ( iwHitCol * ( 1.0 - smoothstep( 0.0, iwHitR, iwHd ) )
+      + vec3( ${c} ) * ( 1.0 - smoothstep( 0.0, iwHitR * ${HIT_PULSE.coreFrac.toFixed(2)}, iwHd ) ) ) * iwHitK; }`;
 })();
 
 /**
@@ -221,12 +255,23 @@ function enemyShading(material, detailScale = 0, detailStr = DETAIL.strength) {
   material.userData.iwDetailStr = detailStr;
   const useDetail = detailScale > 0 && !!material.normalMap;
   const tex = useDetail ? detailTexture() : null;
+  // per-material HIT PULSE uniforms (hitvol.js HitFlash points a unit's own variants at one shared
+  // set; template materials keep k = 0). Not in userData: Material.clone() JSON-copies that.
+  material.iwHit = makeHitUniforms();
   material.onBeforeCompile = (shader) => {
+    const H = material.iwHit || makeHitUniforms();
+    shader.uniforms.iwHitPos = H.pos; shader.uniforms.iwHitK = H.k; shader.uniforms.iwHitR = H.r;
+    shader.uniforms.iwHitCol = H.col; shader.uniforms.iwKick = H.kick;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', HIT_VERT_PARS + 'void main() {')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIT_VERT);
     let fs = shader.fragmentShader
       .replace('void main() {', 'vec3 iwNormalize( vec3 v ) { float l = dot( v, v ); return l > 1e-20 ? v * inversesqrt( l ) : vec3( 0.0, 0.0, 1.0 ); }\n' +
         (useDetail ? 'uniform sampler2D iwDetail;\nuniform float iwDetailScale;\nuniform float iwDetailStr;\n' : '') + 'void main() {')
       .replace('#include <normal_fragment_begin>', '#define normalize( v ) iwNormalize( v )\n#include <normal_fragment_begin>')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#undef normalize')
+      .replace('void main() {', HIT_FRAG_PARS + 'void main() {')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + HIT_FRAG)
       .replace('#include <opaque_fragment>', RIM_GLSL + 'if ( any( isnan( outgoingLight ) ) || any( isinf( outgoingLight ) ) ) outgoingLight = vec3( 0.0 );\noutgoingLight = min( outgoingLight, vec3( 512.0 ) );\n#include <opaque_fragment>');
     if (useDetail) {
       shader.uniforms.iwDetail = { value: tex };
@@ -239,7 +284,7 @@ function enemyShading(material, detailScale = 0, detailStr = DETAIL.strength) {
     }
     shader.fragmentShader = fs;
   };
-  material.customProgramCacheKey = () => (useDetail ? 'iw-enemy-detail-rim' : 'iw-enemy-nansafe-rim');
+  material.customProgramCacheKey = () => (useDetail ? 'iw-enemy-detail-rim-hit' : 'iw-enemy-nansafe-rim-hit');
   material.needsUpdate = true;
   return material;
 }
@@ -319,6 +364,82 @@ function isDecal(o) {
 }
 const DEBRIS_RE = /^debris_\d+$/;
 
+/**
+ * Relay capacitor glass (r3, critic: "flat uniform cyan tube"): a translucent envelope over the
+ * white-hot filament (filament_geo), with two octaves of plasma noise bands climbing the column
+ * at ~0.8 Hz and a fresnel-darkened rim (tinted glass seen edge-on), premultiplied so the
+ * emission adds while the rim darkens what is behind it. Fogged like every surface.
+ */
+export const RELAY_GLASS = {
+  color: [0.42, 1.55, 2.5], deep: [0.015, 0.09, 0.3], tint: [0.012, 0.022, 0.026],
+  bandHz: 0.8, alphaCentre: 0.2, alphaRim: 0.93, rimDark: 0.85,
+};
+const GLASS_VERT = /* glsl */`
+varying vec3 vW; varying vec3 vN;
+#include <fog_pars_vertex>
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vW = wp.xyz;
+  vN = mat3(modelMatrix) * normal;
+  vec4 mvPosition = viewMatrix * wp;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+const GLASS_FRAG = /* glsl */`
+uniform float uTime, uLevel, uBandHz, uAc, uAr, uRimDark;
+uniform vec3 uCenter, uCol, uDeep, uTint;
+varying vec3 vW; varying vec3 vN;
+#include <fog_pars_fragment>
+float gh(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
+float gn(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(gh(i), gh(i + vec3(1, 0, 0)), f.x), mix(gh(i + vec3(0, 1, 0)), gh(i + vec3(1, 1, 0)), f.x), f.y);
+  float b = mix(mix(gh(i + vec3(0, 0, 1)), gh(i + vec3(1, 0, 1)), f.x), mix(gh(i + vec3(0, 1, 1)), gh(i + vec3(1, 1, 1)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+void main() {
+  vec3 n = normalize(vN), v = normalize(cameraPosition - vW);
+  float fres = pow(1.0 - clamp(abs(dot(n, v)), 0.0, 1.0), 2.0);
+  vec3 r = vW - uCenter;
+  float t = mod(uTime, 500.0) * uBandHz;
+  // two octaves of plasma bands climbing the column (seamless: noise of the 3D position)
+  float b1 = gn(vec3(r.x * 1.7, r.y * 2.3 - t, r.z * 1.7));
+  float b2 = gn(vec3(r.x * 3.6 + 3.1, r.y * 5.4 - t * 1.7, r.z * 3.6 - 1.7));
+  float band = smoothstep(0.38, 0.78, b1 * 0.62 + b2 * 0.38);
+  vec3 E = mix(uDeep, uCol, band) * (0.12 + 1.7 * band * band) * (1.0 - fres * uRimDark) * uLevel;
+  float a = mix(uAc, uAr, fres);
+  vec3 fz, fo;
+  { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    #include <fog_fragment>
+    fz = gl_FragColor.rgb; }
+  { gl_FragColor = vec4(1.0);
+    #include <fog_fragment>
+    fo = gl_FragColor.rgb; }
+  vec3 keep = clamp(fo - fz, 0.0, 1.0);          // 1 - fog factor
+  gl_FragColor = vec4((uTint * keep + fz) * a + E * keep, a);
+}`;
+let GLASS_MAT = null;
+function glassMaterial() {
+  if (GLASS_MAT) return GLASS_MAT;
+  const G = RELAY_GLASS;
+  GLASS_MAT = new THREE.ShaderMaterial({
+    name: 'iw_relay_glass', vertexShader: GLASS_VERT, fragmentShader: GLASS_FRAG,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      uTime: { value: 0 }, uLevel: { value: 1 }, uBandHz: { value: G.bandHz }, uAc: { value: G.alphaCentre },
+      uAr: { value: G.alphaRim }, uRimDark: { value: G.rimDark }, uCenter: { value: new THREE.Vector3() },
+      uCol: { value: new THREE.Vector3(...G.color) }, uDeep: { value: new THREE.Vector3(...G.deep) },
+      uTint: { value: new THREE.Vector3(...G.tint) },
+    }]),
+    transparent: true, depthWrite: false, fog: true, side: THREE.FrontSide,
+    blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+  });
+  GLASS_MAT.userData.shared = true;
+  return GLASS_MAT;
+}
+const GLASS_RE = /core_glass/;
+
 function prepareGLB(root) {
   const burnt = new Map(), eyes = new Map();
   // detail tiling in atlas UV units: (atlas px) / (px per metre) / tile metres
@@ -351,8 +472,15 @@ function prepareGLB(root) {
       if (o.isMesh && isEmissive(o.material)) o.material = eyeMaterial(o.material, c, s, eyes);
     });
   }
+  // relay capacitor envelope: plasma-glass shader (no shadow, never burnt: the core hides on death)
   root.traverse((o) => {
-    if (!o.isMesh || !o.material) return;
+    if (o.isMesh && (GLASS_RE.test(o.name) || (o.parent && GLASS_RE.test(o.parent.name)))) {
+      o.material = glassMaterial(); o.userData.noBurn = true; o.userData.iwGlass = true;
+      o.castShadow = false; o.receiveShadow = false; o.renderOrder = 3;
+    }
+  });
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material || o.userData.iwGlass) return;
     const decal = isDecal(o);
     if (decal) {   // stencil cards: blended over the plate, never in the shadow map
       const m = o.material;
@@ -437,7 +565,12 @@ export const MT_DEATH = {
 export const MT_FLAME = {
   core: new THREE.Color(1.0, 0.905, 0.672), mid: new THREE.Color(1.0, 0.434, 0.068), outer: new THREE.Color(1.0, 0.144, 0.01),
   gainOuter: 3.0, gainCore: 5.5, coreRadius: 0.5, coreLength: 0.55,
-  lenIdle: 2.5, lenFull: 19.0,       // plume length in exit radii at boost 0 / 1
+  // r3: the bells grew to a 0.24 m exit (was 0.13), so 10 exit radii (~2.4 m) at full boost
+  // reads as a jet, not two 19-radii laser streaks
+  lenIdle: 2.0, lenFull: 10.0,       // plume length in exit radii at boost 0 / 1
+  width: 1.55,                       // shell radius / exit radius (the ray-marched jet fills ~0.62 of the shell)
+  spriteLead: 0.06,                  // m: throat sprite floats outside the exit plane ...
+  spriteToCam: 1.3,                  // ... and 1.3 exit radii toward the camera, so the bell lip never cuts it (r2: black crescent)
   flickHz: [31, 47], flick: 0.2,     // length flicker +-20 % at 25-40 Hz
   hazeEvery: 0.09,                   // heat-haze puff cadence behind each nozzle (s)
 };
@@ -454,9 +587,11 @@ export const RELAY_FX = {
 /** Long-range signature: sensor-iris and beacon glow sprites that keep the red point legible. */
 export const SIGNATURE = {
   eyeNear: 40, eyeFar: 115,          // m: sprite fades in over this range (the lenses carry close-ups and mid range)
-  eyeSize: 0.0095, eyeMin: 0.16, eyeMax: 1.7,   // sprite diameter = distance x eyeSize, clamped (m)
+  // (render r3: ~4-5 px at 150 m @720p instead of 7-8 px: the red point stays legible but no
+  // longer swallows a 25-30 px walker silhouette)
+  eyeSize: 0.0062, eyeMin: 0.35, eyeMax: 1.1,   // sprite diameter = distance x eyeSize, clamped (m) (r3: min 0.16 -> 0.35)
   eyeLead: 0.45,                                // m ahead of the lens along its axis (clears the brow)
-  beaconSize: 0.012, beaconMin: 0.3, beaconMax: 2.4,
+  beaconSize: 0.008, beaconMin: 0.3, beaconMax: 1.6,
   beaconPeriod: 1 / 0.6, beaconOn: 0.22,        // 0.6 Hz strobe
 };
 
@@ -726,7 +861,11 @@ class MTAnimator {
       if (!DEBRIS_RE.test(o.name)) return;
       const meshes = [];
       o.traverse((c) => { if (c.isMesh) meshes.push({ mesh: c, mat: c.material }); });
-      this.shards.push({ node: o, meshes, vel: new THREE.Vector3(), w: new THREE.Vector3(0, 1, 0), spin: 0, rest: false, t: 0, smokeT: 0, half: 0.06 });
+      const u = o.userData || {};
+      // extras (blender/enemies/build_mt.py debris_props): launch speed scale (the two big authored
+      // chunks land beside the wreck and stay) and the rest height (half the plate thickness)
+      this.shards.push({ node: o, meshes, vel: new THREE.Vector3(), w: new THREE.Vector3(0, 1, 0), spin: 0, rest: false, t: 0, smokeT: 0,
+        half: u.iw_half || 0.06, speedK: u.iw_debris_speed || 1 });
     });
     this.ownDebris = this.shards.length > 0;   // Enemy.onDeath then skips the generic fx chunks
     this.phase = 0; this.walk = 1; this.skate = 0;
@@ -770,16 +909,17 @@ class MTAnimator {
     for (let i = 0; i < this.shards.length; i++) {
       const s = this.shards[i], n = s.node;
       const a = (i / this.shards.length) * Math.PI * 2 + rng.sym(0.35);
-      const sp = rng.range(R.speed[0], R.speed[1]);
+      const sp = rng.range(R.speed[0], R.speed[1]) * s.speedK;
       n.position.set(_c.x + Math.sin(a) * 0.9, _c.y + rng.range(-0.4, 0.5), _c.z + Math.cos(a) * 0.9);
-      s.vel.set(Math.sin(a) * sp, rng.range(R.up[0], R.up[1]), Math.cos(a) * sp);
+      s.vel.set(Math.sin(a) * sp, rng.range(R.up[0], R.up[1]) * Math.sqrt(s.speedK), Math.cos(a) * sp);
       rng.onSphere(s.w);
-      s.spin = rng.range(R.spin[0], R.spin[1]);
+      s.spin = rng.range(R.spin[0], R.spin[1]) * (s.speedK < 1 ? 0.5 : 1);
       n.quaternion.set(rng.sym(1), rng.sym(1), rng.sym(1), 1).normalize();
       s.rest = false; s.t = 0; s.smokeT = 0;
       n.visible = true;
-      // half the shards keep the unit's fresh paint (blown clean off), half are scorched
-      if (i % 2 === 0) for (const m of s.meshes) m.mesh.material = m.mat;
+      // the two big authored chunks (debris_0/1) and a few fragments keep the unit's fresh paint
+      // (blown clean off); the rest stay scorched (BURNT_OF)
+      if (s.speedK < 1 || i % 3 === 0) for (const m of s.meshes) m.mesh.material = m.mat;
     }
   }
 
@@ -973,7 +1113,7 @@ class MTAnimator {
       if (!lit) continue;
       const flick = 1 + F.flick * (0.6 * Math.sin(t * F.flickHz[0] * 6.283 + i * 1.7) + 0.4 * Math.sin(t * F.flickHz[1] * 6.283 + i * 3.1));
       const len = f.r * (F.lenIdle + (F.lenFull - F.lenIdle) * L) * flick;
-      const w = f.r * (0.92 + 0.14 * L);
+      const w = f.r * F.width * (0.92 + 0.14 * L);
       f.outer.scale.set(w, w, len);
       f.core.scale.set(w * F.coreRadius, w * F.coreRadius, len * F.coreLength);
       const lv = Math.min(1.3, L * 1.2);
@@ -985,7 +1125,9 @@ class MTAnimator {
       n.getWorldPosition(_v); n.getWorldQuaternion(_q);
       _d.set(0, 0, -1).applyQuaternion(_q);        // exhaust direction
       _sprite.scale = 0.7 + 0.6 * L;
-      game.fx.spawn('iw_mt_nozzle', _v, null, _sprite);
+      if (game.camera) _c.copy(game.camera.position).sub(_v).normalize(); else _c.set(0, 0, 0);
+      _w.copy(_v).addScaledVector(_d, F.spriteLead).addScaledVector(_c, f.r * F.spriteToCam);
+      game.fx.spawn('iw_mt_nozzle', _w, null, _sprite);
       f.hazeT -= dt;
       const dist = game.fx.distortion;
       if (f.hazeT <= 0 && dist && dist.add && L > 0.35) {
@@ -998,14 +1140,30 @@ class MTAnimator {
 }
 const G_WRECK = () => MT_GAIT.wreckSmoke;
 
-// rotor blur disc (drone): a radial blade-streak texture on a flat disc
+/**
+ * GNAT fan visuals (r3). The fans really turn at ~60 rev/s, far above what 60 fps can show, so
+ * above `blurAbove` the solid blades are swapped for what a camera shutter records: a lit
+ * radial-streak blur disc (alpha ~0.35) plus three translucent ghost copies of the blades at
+ * -15/0/+15 deg that drift at a slow apparent (stroboscopic) rate. Below it (spin-down after
+ * death) the real blades show. Ghosts = ONE InstancedMesh per fan replacing the blade mesh,
+ * so the draw-call count is unchanged.
+ */
+export const ROTOR_FX = {
+  revHover: 62, revPerMps: 0.9, revMax: 80,   // true fan speed (rev/s)
+  blurAbove: 30,                              // rev/s
+  apparent: 1.7,                              // rev/s the ghosts appear to drift at
+  ghostAlpha: 0.32, ghostOffsets: [-15, 0, 15],
+  spinDown: 1.4,                              // s for a dead drone's fans to wind down
+};
+
+// rotor blur disc (drone): a lit, radial blade-streak texture on a flat disc
 let BLUR_GEO = null, BLUR_MAT = null;
 function blurDisc(r) {
   if (!BLUR_GEO) {
-    BLUR_GEO = new THREE.CircleGeometry(1, 32);
+    BLUR_GEO = new THREE.CircleGeometry(1, 40);
     BLUR_GEO.rotateX(-Math.PI / 2);
     BLUR_GEO.userData.shared = true;
-    const S = 128, cv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    const S = 256, cv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
     let tex = null;
     if (cv) {
       cv.width = cv.height = S;
@@ -1014,17 +1172,24 @@ function blurDisc(r) {
       for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
         const dx = (x + 0.5) / S * 2 - 1, dy = (y + 0.5) / S * 2 - 1, r2 = Math.sqrt(dx * dx + dy * dy);
         const a = Math.atan2(dy, dx);
-        const blade = 0.5 + 0.5 * Math.cos(a * 4);              // 4 soft blade streaks
-        const ring = r2 < 0.2 ? 0 : r2 > 0.97 ? 0 : 1;
-        const v = ring * (0.18 + 0.32 * blade * blade) * Math.min(1, (r2 - 0.2) * 4);
+        // 4 smeared blade lobes (leading edge sharp, trailing edge long) + fine radial streaks
+        const ph = ((a / (Math.PI / 2)) % 1 + 1) % 1;
+        const lobe = Math.exp(-ph * 3.2) * 0.75 + 0.25;
+        const fine = tileNoise(a / Math.PI * 64, r2 * 3, 128, 5) * 0.5 + tileNoise(a / Math.PI * 160, r2 * 2, 320, 9) * 0.5;
+        const hub = Math.min(1, Math.max(0, (r2 - 0.2) * 6)), rim = Math.min(1, Math.max(0, (0.985 - r2) * 40));
+        const tip = Math.max(0, (r2 - 0.75) / 0.25);           // blade tips sweep the brightest band
+        const al = hub * rim * (0.22 + 0.2 * lobe + 0.12 * (fine - 0.5)) * (0.85 + 0.3 * tip);
+        const v = 120 + 70 * fine + 40 * tip;
         const i = (y * S + x) * 4;
-        img.data[i] = 22; img.data[i + 1] = 21; img.data[i + 2] = 20; img.data[i + 3] = Math.round(v * 255);
+        img.data[i] = v; img.data[i + 1] = v * 0.98; img.data[i + 2] = v * 0.95; img.data[i + 3] = Math.round(Math.min(1, al) * 255);
       }
       g.putImageData(img, 0, 0);
       tex = new THREE.CanvasTexture(cv);
       tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
     }
-    BLUR_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff, map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true });
+    BLUR_MAT = new THREE.MeshStandardMaterial({ color: 0x9a9c9e, map: tex, transparent: true, depthWrite: false,
+      side: THREE.DoubleSide, roughness: 0.55, metalness: 0.45, envMapIntensity: ENV_INTENSITY });
     BLUR_MAT.userData.shared = true;
     if (tex) tex.userData = { shared: true };
   }
@@ -1032,33 +1197,81 @@ function blurDisc(r) {
   m.scale.setScalar(r);
   m.userData.noBurn = true;
   m.castShadow = false; m.receiveShadow = false;
+  m.renderOrder = 3;
   return m;
 }
+
+/** Translucent ghost material for a blade material (one per source material, shared). */
+const GHOST_OF = new Map();
+function ghostMaterial(m) {
+  let gm = GHOST_OF.get(m);
+  if (gm) return gm;
+  gm = cloneMaterial(m);
+  gm.transparent = true; gm.opacity = ROTOR_FX.ghostAlpha; gm.depthWrite = false;
+  gm.side = THREE.DoubleSide;
+  gm.userData.shared = true;
+  GHOST_OF.set(m, gm);
+  return gm;
+}
+const _m4 = new THREE.Matrix4(), _m4b = new THREE.Matrix4();
 
 class DroneAnimator {
   constructor(model, enemy) {
     this.enemy = enemy;
     this.rotors = [];
-    model.traverse((o) => { if (/^rotor/.test(o.name)) this.rotors.push(o); });
-    this.discs = this.rotors.map((r) => {
+    model.traverse((o) => { if (/^rotor(_\d+)?$/.test(o.name)) this.rotors.push(o); });
+    model.updateMatrixWorld(true);
+    this.fans = this.rotors.map((r) => {
       const d = blurDisc(r.userData.iw_r || 0.4);
-      // the disc follows the rotor's rest tilt (fans pitched forward) and sits just above the blades
-      r.parent.add(d); d.quaternion.copy(r.quaternion);
-      d.position.copy(r.position).add(_v.set(0, 0.02, 0).applyQuaternion(r.quaternion));
-      return d;
+      // the disc rides the rotor node (its rest tilt = the fan pitch), just above the blades
+      d.position.set(0, 0.02, 0);
+      r.add(d);
+      // blades: their own mesh under the rotor (build_drone.py fanblades_<i>_geo)
+      let blade = null;
+      r.traverse((o) => { if (!blade && o.isMesh && (/blades/.test(o.name) || (o.parent && /blades/.test(o.parent.name)))) blade = o; });
+      let ghost = null;
+      if (blade) {
+        _m4.copy(r.matrixWorld).invert().multiply(blade.matrixWorld);   // blade -> rotor space
+        const offs = ROTOR_FX.ghostOffsets;
+        ghost = new THREE.InstancedMesh(blade.geometry, ghostMaterial(blade.material), offs.length);
+        for (let k = 0; k < offs.length; k++) {
+          _q.setFromAxisAngle(_up, offs[k] * Math.PI / 180);
+          _m4b.makeRotationFromQuaternion(_q).multiply(_m4);
+          ghost.setMatrixAt(k, _m4b);
+        }
+        ghost.instanceMatrix.needsUpdate = true;
+        ghost.castShadow = false; ghost.receiveShadow = false;
+        ghost.userData.noBurn = true;
+        ghost.renderOrder = 4;
+        ghost.name = 'fan_ghost';
+        r.add(ghost);
+      }
+      return { rotor: r, disc: d, blade, ghost };
     });
-    this.spin = 0;
+    this.rev = 0;
     ensureFx(enemy.game);
     this.eye = new EyeCtl(model);
     this.beacon = new Blinker(model, 'beacon', SIGNATURE.beaconPeriod * 0.8, SIGNATURE.beaconOn * 0.8, (enemy.id || 0) * 0.29);
   }
   fired() {}
-  dispose() { this.eye.dispose(); this.beacon.dispose(); }
+  dispose() {
+    this.eye.dispose(); this.beacon.dispose();
+    for (const f of this.fans) if (f.ghost) { f.ghost.removeFromParent(); f.ghost.dispose(); }
+  }
   update(dt) {
-    const e = this.enemy;
-    const w = e.alive ? 34 + Math.min(20, Math.hypot(e.vel.x, e.vel.y, e.vel.z) * 0.6) : 0;
-    for (let i = 0; i < this.rotors.length; i++) this.rotors[i].rotation.y += dt * w * (i % 2 ? -1 : 1);
-    for (let i = 0; i < this.discs.length; i++) this.discs[i].visible = e.alive;
+    const e = this.enemy, R = ROTOR_FX;
+    const want = e.alive ? Math.min(R.revMax, R.revHover + Math.hypot(e.vel.x, e.vel.y, e.vel.z) * R.revPerMps) : 0;
+    // spin-up is instant (spawned running); a dead drone's fans wind down
+    this.rev = want >= this.rev ? want : Math.max(0, this.rev - dt * R.revHover / R.spinDown);
+    const blur = this.rev > R.blurAbove;
+    // shown angular rate: the real one while it can be resolved, a slow stroboscopic drift above
+    const shown = blur ? R.apparent * (0.85 + 0.15 * this.rev / R.revHover) : this.rev;
+    for (let i = 0; i < this.fans.length; i++) {
+      const f = this.fans[i];
+      f.rotor.rotation.y += dt * shown * 6.2832 * (i % 2 ? -1 : 1);
+      f.disc.visible = blur;
+      if (f.ghost) { f.ghost.visible = blur; if (f.blade) f.blade.visible = !blur; }
+    }
     this.beacon.update(dt, e.alive);
     if (e.alive) { this.eye.update(dt, e); e.syncSim(); this.eye.sprite(e.game, e); this.beacon.sprite(e.game); }
   }
@@ -1071,9 +1284,15 @@ class TurretAnimator {
     this.barrelRest = this.barrel ? this.barrel.position.clone() : null;
     this.coreMats = [];
     const core = model.getObjectByName('core');
+    this.glass = null;
     if (core) {   // one per-instance clone of the core glow, so the pulse / death never leaks
       const cache = new Map();
       core.traverse((o) => {
+        if (o.isMesh && o.userData.iwGlass) {
+          if (!this.glass) this.glass = o.material.clone();
+          o.material = this.glass;
+          return;
+        }
         if (!o.isMesh || !isEmissive(o.material)) return;
         let m = cache.get(o.material);
         if (!m) { m = cloneMaterial(o.material); m.userData.base = m.emissiveIntensity; cache.set(o.material, m); this.coreMats.push(m); }
@@ -1116,7 +1335,7 @@ class TurretAnimator {
     }
   }
   fired() { this.recoil = 0.35; }
-  dispose() { for (const m of this.coreMats) m.dispose(); this.beacon.dispose(); this.eye.dispose(); }
+  dispose() { for (const m of this.coreMats) m.dispose(); if (this.glass) this.glass.dispose(); this.beacon.dispose(); this.eye.dispose(); }
   update(dt) {
     const e = this.enemy;
     this.t += dt;
@@ -1131,6 +1350,11 @@ class TurretAnimator {
     const pulse = e.alive ? 0.82 + 0.18 * Math.sin(this.t * 3.1) + 0.1 * Math.sin(this.t * 17.3) : 0;
     const hit = e.hitFlash * 0.6;
     for (const m of this.coreMats) m.emissiveIntensity = m.userData.base * (pulse + hit);
+    if (this.glass && this.core) {
+      const u = this.glass.uniforms;
+      u.uTime.value = this.t; u.uLevel.value = pulse + hit;
+      this.core.getWorldPosition(u.uCenter.value);
+    }
     this.beacon.update(dt, e.alive);
     if (e.alive) { this.eye.update(dt, e); e.syncSim(); this.eye.sprite(e.game, e); this.beacon.sprite(e.game); this._signature(dt); }
     this.recoil = Math.max(0, this.recoil - dt * 2.2);

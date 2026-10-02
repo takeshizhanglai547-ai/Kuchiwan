@@ -48,8 +48,8 @@ ANKLE = V((1.21, 0.10, 0.95))
 SHOULDER = V((2.42, 0.15, 8.12))
 ELBOW = V((2.60, -0.30, 6.55))
 WRIST = V((2.60, -2.14, 6.02))
-HEAD = V((0.0, -0.66, 9.10))
-EYE = V((0.0, -1.22, 9.40))
+HEAD = V((0.0, -0.98, 8.80))      # r3: neck pivot under the sunk, forward cab
+EYE = V((0.0, -1.42, 8.86))
 MISSILE_MOUNT = V((1.40, 1.22, 9.02))
 CANNON_MOUNT = V((-1.90, 1.25, 9.40))
 BOOSTER = V((0.0, 1.60, 7.55))
@@ -81,7 +81,7 @@ def forearm_frame():
     return Matrix.Translation(ELBOW) @ Matrix.Rotation(math.radians(FA_PITCH), 4, 'X')
 
 
-def rivets(p0, p1, pitch, normal, r=0.016, mat='steel'):
+def rivets(p0, p1, pitch, normal, r=0.016, mat='paint_dark'):
     """Cheap rivet row (6-sided low caps, ~12 tris each after culling) at `pitch` spacing."""
     p0, p1 = V(p0), V(p1)
     n = max(2, int(round((p1 - p0).length / pitch)) + 1)
@@ -212,10 +212,7 @@ def build_pelvis():
         base = V((sx * 0.56, ty + sy * 0.46, 5.94))
         top = V((sx * 0.5, ty + sy * 0.5, 6.26))
         mid = (base + top) * 0.5 + V((sx * 0.22, sy * 0.16, -0.02))
-        for k in (-0.5, 0.5):
-            o = V((k * 0.09 * sy, k * 0.09 * sx, 0.0))
-            g.merge(P.sweep([base + o, mid + o * 1.4 + V((0, 0, -0.04 * k)), top + o], 0.04, 10, mat='rubber',
-                            rib_amp=0.0, subdiv=2))
+        g.merge(P.sweep([base, mid + V((0, 0, -0.02)), top], 0.055, 10, mat='rubber', rib_amp=0.0, subdiv=2))
         g.merge(P.box((0.3, 0.3, 0.08), bevel=0.01, segs=1, mat='steel_dark').move(base.x, base.y, 5.93))
         g.merge(P.box((0.26, 0.2, 0.06), bevel=0.008, segs=1, mat='steel').move(top.x, top.y, 6.27))
     # hip sockets + upper hip plates (skirt) + tassets
@@ -233,7 +230,8 @@ def build_pelvis():
                           bolts=1, bolt_r=0.018, bolt_spacing=0.3))
     g.merge(P.cylinder(0.075, 0.9, 24, bevel=0.01, mat='steel_dark').rotate((0, 90, 0)).move(0, -0.82, 5.76))
     g.merge(K.plate_world([(-0.46, 0.72, 5.68), (0.46, 0.72, 5.68), (0.36, 0.88, 4.86), (-0.36, 0.88, 4.86)], 0.07,
-                          mat='paint_primary', normal_hint=(0, 1, 0), chamfer=0.08))
+                          mat='paint_secondary', normal_hint=(0, 1, 0), chamfer=0.08, bolts=1, bolt_r=0.016,
+                          bolt_spacing=0.26))
     return g
 
 
@@ -282,7 +280,7 @@ def build_torso():
         # rivet rows along the upper chest plate edges (12 cm pitch)
         a0, nn = facet(UPPER, 8.62, 0.08, s, lift=0.004)
         a1, _ = facet(UPPER, 8.62, 0.94, s, lift=0.004)
-        armour.append(rivets(a0, a1, 0.12, nn))
+        armour.append(rivets(a0, a1, 0.16, nn))
         a0, nn = facet(UPPER, 7.84, 0.1, s, lift=0.004)
         # flank rivets on the side wall
         armour.append(rivets((s * 2.003, -0.8, 8.62), (s * 2.003, 0.9, 8.62), 0.2, (s, 0, 0)))
@@ -293,9 +291,6 @@ def build_torso():
             q = V((s * 1.52, -0.3, 7.62)).lerp(V((s * 1.28, 0.5, 6.92)), t)
             armour.append(P.box((0.12, 0.08, 0.08), bevel=0.008, segs=1, mat='steel_dark').move(q))
         # underside of the overhanging shelf: grille + amber marker + brake nozzle block
-        gr2 = P.grille(0.5, 0.2, bars=5, bar_r=0.012, frame=0.03, depth=0.04, mat='paint_dark')
-        gr2.align((0, -0.3, -1), up=(0, -1, 0), loc=(s * 0.8, -1.02, 7.63))
-        armour.append(gr2)
         armour.append(marker((s * 1.62, -1.02, 7.66), (0, -0.4, -1), 'amber', 0.05))
         hb = P.box((0.42, 0.42, 0.28), bevel=0.016, segs=1, chamfer=0.05, chamfer_axes='Y', mat='paint_dark')
         armour.append(hb.move(s * 1.26, -0.96, 7.5))
@@ -309,8 +304,8 @@ def build_torso():
     for x in (-0.22, 0.22):
         armour.append(P.pipe_run([(x, zf - 0.02, 8.02), (x, zf - 0.11, 8.04), (x, zf - 0.11, 8.16), (x, zf - 0.02, 8.18)],
                                  0.016, bend=0.03, segs=12, mat='steel', flanges=False))
-    armour.append(rivets((-0.3, zf - 0.005, 8.62), (0.3, zf - 0.005, 8.62), 0.12, (0, -1, 0)))
-    armour.append(rivets((-0.3, zf - 0.005, 7.84), (0.3, zf - 0.005, 7.84), 0.12, (0, -1, 0)))
+    armour.append(rivets((-0.3, zf - 0.005, 8.62), (0.3, zf - 0.005, 8.62), 0.15, (0, -1, 0)))
+    armour.append(rivets((-0.3, zf - 0.005, 7.84), (0.3, zf - 0.005, 7.84), 0.15, (0, -1, 0)))
     zfa = front_y(ABDO, 7.1)
     K.hatch_at(ab, (0, zfa, 7.1), (0, -1, 0), (0.4, 0.62), u_axis=(1, 0, 0), recess=0.05, mat='steel_dark', angle=15)
     g.merge(up, ab, *armour)
@@ -323,11 +318,19 @@ def build_torso():
                                (s * 0.835, 0.0, 9.38), (s * 0.835, -0.66, 9.16)], 0.04, mat='paint_secondary',
                               normal_hint=(s, 0, 0), chamfer=0.04))
         g.merge(K.shackle(0.09, bar=0.022, segs=(12, 6)).move(s * 1.12, 0.3, 9.02))
-        g.merge(K.strip((s * 0.58, -0.92, 8.98), (s * 0.58, -0.62, 9.18), 0.05, 0.012, (s * 0.3, -0.3, 1),
+        # r3 CHEEK GUARDS: 18 cm armour lips rising from the chest prow beside the sunk cab up to
+        # brow height, so the head is framed by the chest instead of perched on it
+        ck = P.prism([(-1.40, 8.54), (-1.52, 8.78), (-1.42, 9.12), (-1.16, 9.28), (-0.74, 9.32), (-0.58, 9.16),
+                      (-0.58, 8.96)], 0.18, bevel=0.016, segs=1, mat='paint_primary', axis='X')
+        g.merge(ck.move(s * 0.66, 0, 0))
+        g.merge(K.plate_world([(s * 0.752, -1.38, 8.72), (s * 0.752, -0.72, 9.0), (s * 0.752, -0.74, 9.24),
+                               (s * 0.752, -1.12, 9.2), (s * 0.752, -1.38, 9.06)], 0.035, mat='paint_secondary',
+                              normal_hint=(s, 0, 0), chamfer=0.035, bolts=1, bolt_r=0.014, bolt_spacing=0.2))
+        g.merge(K.strip((s * 0.66, -1.514, 8.8), (s * 0.66, -1.43, 9.086), 0.14, 0.014, (0, -0.96, 0.28),
                         mat='paint_accent'))
+        g.merge(K.strip((s * 0.66, -1.12, 9.284), (s * 0.66, -0.78, 9.316), 0.15, 0.012, (0, -0.1, 1), mat='hazard'))
     cb = P.box((1.14, 0.42, 0.44), bevel=0.018, segs=1, chamfer=0.1, chamfer_axes='X', mat='paint_primary')
     g.merge(cb.move(0, 0.36, 9.18))
-    g.merge(P.ring(0.52, 0.34, 0.1, 40, bevel=0.01, mat='steel_dark', z0=8.97).move(0, HEAD.y + 0.04, 0))
     # shoulder sockets
     for s in (1, -1):
         g.merge(P.ring(0.58, 0.36, 0.1, 32, bevel=0.01, bsegs=1, mat='steel_dark', z0=0.0)
@@ -353,51 +356,66 @@ def build_torso():
 
 # ============================================================================ head (crane cab)
 # side profile (y, z) of the cab, lofted along X; brow overhang in front of the recessed face
-HEAD_PROF = [(-1.12, 8.98), (-1.18, 9.06), (-1.18, 9.52), (-1.40, 9.66), (-1.36, 9.76), (-0.60, 9.82),
-             (0.02, 9.76), (0.10, 9.48), (0.06, 9.00)]
+HEAD_PROF = [(-1.10, 8.90), (-1.18, 8.96), (-1.18, 9.52), (-1.40, 9.66), (-1.36, 9.76), (-0.60, 9.82),
+             (0.02, 9.76), (0.10, 9.48), (0.06, 8.92)]
 HW = 0.47
-LENS_MAIN = (0.21, 9.20, 0.09)                               # x, z, r (the rig's LEFT side)
-LENS_CLUSTER = [(-0.30, 9.26, 0.03), (-0.30, 9.18, 0.03), (-0.30, 9.10, 0.03)]
-SLIT = (0.0, 9.36, 0.62, 0.05)                               # x, z, width, height
+LENS_MAIN = (0.20, 9.16, 0.115)                               # x, z, r (the rig's LEFT side): the brightest pixel
+LENS_2 = (-0.22, 9.15, 0.065)                                # second, smaller round lens (benchmark s5: 2 lenses)
+LENS_CLUSTER = [(-0.365, 9.29, 0.022), (-0.365, 9.225, 0.022)]  # dark aux pick-ups (no glow)
+SLIT = (0.0, 9.40, 0.66, 0.05)                               # x, z, width, height
 FACE_Y = -1.18
-HEAD_OFS = V((0.0, -0.12, -0.24))   # head authored in place, then sunk 0.32 m between the pauldrons (r2)
+# r3: the cab is moved 0.34 m forward over the chest prow and sunk 0.42 m (r2: 0.24), so it sits
+# LOW in front of the chest between raised cheek guards (build_torso) instead of perched on top
+HEAD_OFS = V((0.0, -0.34, -0.42))
 FACE_RECESS = 0.12                  # visor recess under the brow (r2: was 0.06)
+FACE_H = 0.52                       # visor recess height (r3: taller face, chin lowered)
+FACE_Z = 9.25
+
+
+def lens_body(g, x, z, r, fy, iris=True, outer=True):
+    """Camera lens in the visor (head part): stepped steel bezel, dark glass (rough 0.05 after the
+    finalize floor exception), a dark iris ring around where the glowing pupil sits (eye node)."""
+    g.merge(P.ring(r * 1.32, r * 0.98, 0.07, 32, bevel=0.006, bsegs=1, mat='steel', z0=0.0)
+            .align((0, -1, 0), loc=(x, fy + 0.01, z)))
+    if outer:
+        g.merge(P.ring(r * 1.52, r * 1.3, 0.035, 32, bevel=0.0, bsegs=1, mat='steel_dark', z0=0.0)
+                .align((0, -1, 0), loc=(x, fy + 0.02, z)))
+    g.merge(P.cylinder(r, 0.04, 32, bevel=0.0, bsegs=1, mat='glass', z0=0.0).align((0, -1, 0), loc=(x, fy + 0.03, z)))
+    if iris:
+        g.merge(P.ring(r * 0.74, r * 0.46, 0.012, 32, bevel=0.0, bsegs=1, mat='steel_dark', z0=0.0)
+                .align((0, -1, 0), loc=(x, fy - 0.006, z)))
 
 
 def build_head():
     g = Geo()
-    neck = P.banded_cylinder([(0.06, 0.3, 'steel_dark'), (0.2, 0.34, 'paint_dark'), (0.05, 0.31, 'steel_dark')],
-                             segs=32, step=0.0, mat='paint_dark')
-    g.merge(neck.move(0, -0.58, 8.78))
     secs = [(K.scale2(HEAD_PROF, 0.92), -HW), (HEAD_PROF, -HW + 0.07), (HEAD_PROF, HW - 0.07),
             (K.scale2(HEAD_PROF, 0.92), HW)]
     cab = K.loft_pts(secs, axis='X', bevel=0.016, mat='paint_primary')
     K.grooves(cab, [(0, 0, 1), (1, 0, 0), (-1, 0, 0)], (0, -0.3, 0), (0, 1, 0), gap=0.016, depth=0.014)
     # recessed sensor face (under the brow) + rear vent hatch
-    K.hatch_at(cab, (0, FACE_Y, 9.29), (0, -1, 0), (0.8, 0.44), u_axis=(1, 0, 0), recess=FACE_RECESS,
+    K.hatch_at(cab, (0, FACE_Y, FACE_Z), (0, -1, 0), (0.8, FACE_H), u_axis=(1, 0, 0), recess=FACE_RECESS,
                mat='steel_dark', gap=0.014, angle=10)
     K.hatch_at(cab, (0, 0.09, 9.32), (0, 1, 0), (0.6, 0.26), u_axis=(1, 0, 0), recess=0.05, mat='steel_dark', angle=20)
     g.merge(cab)
     fy = FACE_Y + FACE_RECESS - 0.01
-    # slit housing (narrow 4 cm slot in a steel bar)
+    # slit housing (narrow 5 cm slot in a steel bar) + 3 dark baffles across the slot (a scanning
+    # sensor window, not a tube light)
     sx, sz, sw, sh = SLIT
     bar = P.box((sw + 0.1, 0.05, sh + 0.08), bevel=0.008, segs=1, mat='steel_dark').move(sx, fy - 0.02, sz)
     bar.boolean(P.box((sw, 0.2, sh), bevel=0.0, segs=1, mat='steel_dark').move(sx, fy - 0.05, sz))
     g.merge(bar)
-    # main lens bezel (18 cm) + lens cluster bezels
-    lx, lz, lr = LENS_MAIN
-    g.merge(P.ring(lr * 1.4, lr * 0.98, 0.06, 32, bevel=0.006, bsegs=1, mat='steel', z0=0.0)
-            .align((0, -1, 0), loc=(lx, fy, lz)))
-    g.merge(P.ring(lr * 1.62, lr * 1.38, 0.03, 32, bevel=0.0, bsegs=1, mat='steel_dark', z0=0.0)
-            .align((0, -1, 0), loc=(lx, fy + 0.01, lz)))
+    for bxp in (-0.2, 0.02, 0.24):
+        g.merge(P.box((0.018, 0.03, sh + 0.01), bevel=0.0, segs=1, mat='steel_dark').move(bxp, fy - 0.035, sz))
+    # lenses: main 24 cm lens (brightest pixel of the rig) + second 13 cm lens; dark aux pick-ups
+    lens_body(g, LENS_MAIN[0], LENS_MAIN[1], LENS_MAIN[2], fy)
+    lens_body(g, LENS_2[0], LENS_2[1], LENS_2[2], fy, outer=False)
     for (cx, cz, cr) in LENS_CLUSTER:
         g.merge(P.ring(cr * 1.5, cr * 0.95, 0.04, 16, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
                 .align((0, -1, 0), loc=(cx, fy, cz)))
-    g.merge(P.box((0.1, 0.03, 0.26), bevel=0.006, segs=1, mat='steel_dark').move(-0.3, fy + 0.012, 9.18))
-    # dark glass lens bodies (the glowing pupils + slit are the eye node's, see build_eye)
-    g.merge(P.dome(lr, lr * 0.45, 32, 4, mat='glass').align((0, -1, 0), loc=(lx, fy - 0.02, lz)))
-    for (cx, cz, cr) in LENS_CLUSTER:
         g.merge(P.dome(cr, cr * 0.5, 16, 2, mat='glass').align((0, -1, 0), loc=(cx, fy - 0.01, cz)))
+    # chin guard: a bolted lip under the visor (the cab reads as a crane cab, not a box)
+    g.merge(K.plate_world([(-0.42, -1.2, 8.97), (0.42, -1.2, 8.97), (0.4, -1.3, 9.0), (-0.4, -1.3, 9.0)], 0.04,
+                          mat='paint_secondary', normal_hint=(0, -0.3, 1), chamfer=0.03))
     # brow: bone plate over the top, ridged, overhanging the face by ~0.25 m
     g.merge(K.plate_world([(-0.5, -1.44, 9.66), (0.5, -1.44, 9.66), (0.46, -0.05, 9.72), (-0.46, -0.05, 9.72)], 0.05,
                           mat='paint_secondary', normal_hint=(0, 0, 1), chamfer=0.08, ridge=0.02, ridge_axis='Y'))
@@ -417,18 +435,20 @@ def build_head():
 
 
 def build_eye():
-    """Emissive parts only (rig.js lights everything under the eye node): the 3.8 cm sensor
-    slit and small pupils (<= 25% of each lens radius) sitting on the dark glass domes."""
+    """Emissive parts only (rig.js tints everything under the eye node with iw_eye_color and keeps
+    the atlas emissive as the intensity map, iw_eye_map): the 5 cm sensor slit (lens_slit, ~1/3.5
+    of the main pupil, a hot core over the main lens written by rigpipe.eye_ramp) and the two
+    pupils on the dark glass (main = the rig's brightest pixel, second one dimmer)."""
     g = Geo()
     fy = FACE_Y + FACE_RECESS - 0.01
     sx, sz, sw, sh = SLIT
-    g.merge(P.box((sw - 0.01, 0.02, sh - 0.012), bevel=0.003, segs=1, mat='lens').move(sx, fy - 0.01, sz))
+    g.merge(P.box((sw - 0.01, 0.02, sh - 0.012), bevel=0.003, segs=1, mat='lens_slit').move(sx, fy - 0.01, sz))
     lx, lz, lr = LENS_MAIN
-    g.merge(P.cylinder(lr * 0.25, 0.006, 24, bevel=0.0, bsegs=1, mat='lens', z0=0.0)
-            .align((0, -1, 0), loc=(lx, fy - 0.02 - lr * 0.45 + 0.002, lz)))
-    for (cx, cz, cr) in LENS_CLUSTER[:1]:
-        g.merge(P.cylinder(cr * 0.3, 0.004, 12, bevel=0.0, bsegs=1, mat='lens', z0=0.0)
-                .align((0, -1, 0), loc=(cx, fy - 0.01 - cr * 0.5 + 0.001, cz)))
+    g.merge(P.cylinder(lr * 0.44, 0.006, 32, bevel=0.0, bsegs=1, mat='lens', z0=0.0)
+            .align((0, -1, 0), loc=(lx, fy - 0.012, lz)))
+    lx, lz, lr = LENS_2
+    g.merge(P.cylinder(lr * 0.42, 0.006, 24, bevel=0.0, bsegs=1, mat='lens_dim', z0=0.0)
+            .align((0, -1, 0), loc=(lx, fy - 0.012, lz)))
     return g.move(HEAD_OFS)
 
 
@@ -495,6 +515,9 @@ def build_arm(side):
     armour.append(rivets(paul_pt(2, PX[3] - 0.03, 0.0) + V((0.02, 0.06, -0.06)),
                          paul_pt(5, PX[3] - 0.03, 0.0) + V((0.02, -0.06, -0.06)), 0.12, (1, 0, 0.25)))
     armour.append(marker((3.2, -0.99, 7.72), (0, -1, -0.3), 'cyan', 0.05))
+    # r3: bone plate on the pauldron's rear face (the back view keeps a value break in shade)
+    armour.append(paul_plate(5, 6, 2.42, 3.3, 0.05, 'paint_secondary', chamfer=0.05, bolts=1, bolt_r=0.016,
+                             bolt_spacing=0.26))
     g.merge(pa, *armour)
     g.merge(K.shackle(0.08, bar=0.02, segs=(12, 6)).move(2.66, 0.25, paul_pt(3, 2.66).z + 0.02))
     lv = louvres_lite(0.46, 0.4, count=4, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
@@ -553,7 +576,9 @@ def build_forearm_local(weapon_side_blade):
         # right forearm: ammo feed box + armoured duct to the rifle
         g.merge(K.shell([(-0.5, 0.5, 0.72, -0.3, 0.2, 0.05), (-1.4, 0.5, 0.7, -0.28, 0.18, 0.05)], 'Y', bevel=0.012,
                         mat='paint_dark'))
-        g.merge(hose_lite([(0.6, -1.4, -0.1), (0.56, -1.8, -0.2), (0.36, -2.1, -0.32)], 0.04))
+        # armoured belt-feed duct from the feed box forward into the rifle's side drum (r3)
+        g.merge(P.hose([(0.6, -1.4, -0.1), (0.64, -1.9, -0.1), (0.54, -2.36, 0.04), (0.42, -2.6, 0.15)], 0.055, 12,
+                       rib_amp=0.008, rib_freq=14))
     return g
 
 
@@ -572,8 +597,6 @@ def build_hand_local():
     for i in range(4):
         x = -0.135 + i * 0.09
         g.merge(P.box((0.08, 0.2, 0.13), bevel=0.012, segs=1, mat='steel_dark').move(x, wy - 0.6, 0.02))
-        g.merge(P.cylinder(0.05, 0.085, 12, bevel=0.006, bsegs=1, mat='steel').rotate((0, 90, 0))
-                .move(x, wy - 0.68, -0.06))
         g.merge(P.box((0.08, 0.14, 0.2), bevel=0.012, segs=1, mat='paint_primary').move(x, wy - 0.7, -0.2))
         g.merge(P.box((0.075, 0.18, 0.1), bevel=0.01, segs=1, mat='steel_dark').move(x, wy - 0.6, -0.33))
     g.merge(P.box((0.12, 0.26, 0.12), bevel=0.012, segs=1, mat='steel_dark').rotate((0, 0, 25))
@@ -587,72 +610,81 @@ RIFLE_S = 1.2
 
 
 def build_rifle_local():
-    """RF-24 'BRASSWORK' assault rifle, authored in its own frame (grip at the origin,
-    barrel along -Y, x = 0), then placed in the fist along the forearm."""
+    """RF-24 'BRASSWORK' heavy rifle (r3: foundry machine-gun, not a scaled-up human rifle),
+    authored in its own frame (fist handle at the origin, barrel along -Y, x = 0), then placed
+    in the fist along the forearm. A cast receiver block with bolted cheek plates, a straight
+    control handle inside the fist (no pistol grip / trigger guard), a side ammo drum fed from
+    the forearm feed box, an armoured sensor block (no optic), a heat-sink fin shroud over the
+    barrel, a ported brake, and a hydraulic recoil buffer to a clamp on the forearm."""
     g = Geo()
-    # receiver side profile (y, z) around the grip at y 0
-    y0, y1 = 0.26, -1.12
-    rec = P.prism([(y0, 0.12), (y1, 0.12), (y1, 0.44), (y1 + 0.2, 0.58), (y0 - 0.2, 0.58), (y0, 0.4)], 0.34,
-                  bevel=0.016, segs=1, mat='paint_primary', axis='X')
-    for y in (-0.22, -0.72):
-        K.grooves(rec, [(1, 0, 0), (-1, 0, 0), (0, 0, 1)], (0, y, 0), (0, 1, 0), gap=0.014, depth=0.012)
-    K.hatch_at(rec, (-0.17, -0.47, 0.4), (-1, 0, 0), (0.36, 0.12), u_axis=(0, 1, 0), recess=0.04, mat='steel_dark')
+    # --- cast receiver: heavy chamfered block, grooves, recessed ejection hatch, cheek plates
+    c = (0.06, 0.06, 0.12, 0.12)
+    rec = K.shell([(0.46, -0.19, 0.19, 0.12, 0.6, c), (0.3, -0.22, 0.22, 0.08, 0.68, c),
+                   (-0.95, -0.22, 0.22, 0.08, 0.68, c), (-1.2, -0.18, 0.18, 0.14, 0.6, c)], 'Y', bevel=0.016,
+                  mat='paint_primary')
+    for y in (-0.18, -0.66):
+        K.grooves(rec, [(1, 0, 0), (-1, 0, 0), (0, 0, 1)], (0, y, 0), (0, 1, 0), gap=0.016, depth=0.014)
+    K.hatch_at(rec, (-0.22, -0.42, 0.42), (-1, 0, 0), (0.42, 0.16), u_axis=(0, 1, 0), recess=0.045, mat='steel_dark')
     arm = []
     for n in ((-1, 0, 0), (1, 0, 0)):
-        arm.append(K.plate_at(rec, (n[0] * 0.17, -0.9, 0.36), n, u_axis=(0, -1, 0), margin=0.03, thickness=0.035,
-                              chamfer=0.04, mat='paint_primary', bolts=1, bolt_r=0.012, bolt_spacing=0.16))
+        arm.append(K.plate_at(rec, (n[0] * 0.22, -0.86, 0.38), n, u_axis=(0, -1, 0), margin=0.035, thickness=0.04,
+                              chamfer=0.045, mat='paint_secondary' if n[0] < 0 else 'paint_primary', bolts=1,
+                              bolt_r=0.013, bolt_spacing=0.16))
     g.merge(rec, *[x for x in arm if x is not None])
-    g.merge(P.box((0.3, 0.72, 0.1), bevel=0.012, segs=1, mat='steel_dark').move(0, -0.22, 0.06))
-    g.merge(P.box((0.15, 0.18, 0.5), bevel=0.02, segs=1, chamfer=0.03, chamfer_axes='Z', mat='rubber')
-            .rotate((-10, 0, 0)).move(0, 0.06, -0.08))
-    mag = P.prism([(-0.44, 0.12), (-0.86, 0.12), (-0.94, -0.44), (-0.56, -0.44)], 0.26, bevel=0.014, segs=1,
-                  mat='paint_dark', axis='X')
-    for y in (-0.64, -0.74):
-        K.grooves(mag, [(1, 0, 0), (-1, 0, 0)], (0, y, 0), (0, 1, 0.14), gap=0.012, depth=0.01)
-    g.merge(mag)
-    g.merge(P.box((0.3, 0.42, 0.05), bevel=0.01, segs=1, mat='paint_accent').move(0, -0.75, -0.47))
-    g.merge(P.box((0.15, 1.0, 0.04), bevel=0.008, segs=1, mat='steel_dark').move(0, -0.52, 0.6))
-    for i in range(7):
-        g.merge(P.box((0.17, 0.035, 0.026), bevel=0.005, segs=1, mat='steel_dark').move(0, -0.14 - i * 0.12, 0.635))
-    g.merge(K.shell([(-0.1, -0.13, 0.13, 0.66, 0.84, 0.04), (-0.4, -0.15, 0.15, 0.66, 0.86, 0.05)], 'Y', bevel=0.01,
-                    mat='paint_dark'))
-    g.merge(P.ring(0.06, 0.04, 0.03, 24, bevel=0.0, mat='steel', z0=0.0).align((0, -1, 0), loc=(0.04, -0.4, 0.76)))
-    g.merge(P.dome(0.045, 0.02, 24, 2, mat='lens').align((0, -1, 0), loc=(0.04, -0.41, 0.76)))
-    oc = [(math.cos(a) * 0.17, math.sin(a) * 0.17 + 0.36) for a in [math.pi / 8 + i * math.pi / 4 for i in range(8)]]
-    sh = P.loft([(oc, y1 + 0.02), (oc, -2.22)], bevel=0.012, segs=1, mat='paint_primary')
-    for sgn in (-1, 1):
-        for k in range(3):
-            K.hatch_at(sh, (sgn * 0.16, -1.42 - k * 0.24, 0.36), (sgn, 0, 0), (0.15, 0.08), u_axis=(0, 1, 0),
-                       recess=0.035, mat='steel_dark', gap=0.01)
-    g.merge(sh)
-    oc2 = [(x * 1.14, (z - 0.36) * 1.14 + 0.36) for x, z in oc]
-    for y in (-1.22, -2.16):
-        g.merge(P.loft([(oc2, y + 0.035), (oc2, y - 0.035)], bevel=0.006, segs=1, mat='steel_dark'))
-    hs = P.plate(P.fillet([(-0.11, -0.46), (0.11, -0.46), (0.11, 0.46), (-0.11, 0.46)], 0.03, 1), 0.035,
-                 ridge=0.02, ridge_axis='Y', bevel=0.006, segs=1, mat='paint_secondary')
-    g.merge(hs.move(0, -1.68, 0.52))
-    g.merge(P.cylinder(0.068, 0.62, 32, bevel=0.008, bsegs=1, mat='steel_dark', z0=0.0).align((0, -1, 0),
-                                                                                           loc=(0, -2.2, 0.36)))
-    for k in range(4):
-        g.merge(P.ring(0.11, 0.06, 0.018, 20, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
-                .align((0, -1, 0), loc=(0, -2.28 - k * 0.055, 0.36)))
-    g.merge(P.ring(0.088, 0.06, 0.09, 32, bevel=0.008, bsegs=1, mat='hazard', z0=0.0).align((0, -1, 0),
-                                                                                         loc=(0, -2.6, 0.36)))
-    mb = P.box((0.24, 0.36, 0.2), bevel=0.014, segs=1, chamfer=0.035, chamfer_axes='Y', mat='steel_dark')
-    mb.move(0, -3.0, 0.36)
-    for k in range(2):
-        mb.boolean(P.box((0.5, 0.06, 0.1), bevel=0.0, segs=1, mat='steel_dark').move(0, -2.92 - k * 0.1, 0.36))
-    mb.boolean(P.cylinder(0.045, 0.5, 24, bevel=0.0, mat='steel_dark').align((0, -1, 0), loc=(0, -2.9, 0.36)))
+    # cooling fins on the receiver top (cast ribs)
+    for i in range(4):
+        g.merge(P.box((0.36, 0.035, 0.05), bevel=0.0, segs=1, mat='steel_dark').move(0, -0.06 - i * 0.16, 0.705))
+    # --- straight control handle (the fist closes around it) + rubber grip bands
+    g.merge(P.box((0.15, 0.2, 0.42), bevel=0.016, segs=1, chamfer=0.03, chamfer_axes='Z', mat='steel_dark')
+            .move(0, 0.02, -0.08))
+    for z in (-0.18, -0.04):
+        g.merge(P.box((0.17, 0.22, 0.05), bevel=0.006, segs=1, mat='rubber').move(0, 0.02, z))
+    # --- side ammo drum on the outer (+x) side, fed by the forearm duct; feed throat into the block
+    drum = P.banded_cylinder([(0.03, 0.25, 'steel_dark'), (0.12, 0.27), (0.03, 0.25, 'steel_dark')], segs=40,
+                             step=0.0, mat='paint_dark')
+    g.merge(drum.align((1, 0, 0), loc=(0.23, -0.34, 0.3)))
+    g.merge(P.bolt_circle((0.41, -0.34, 0.3), (1, 0, 0), 0.19, 8, r=0.014))
+    g.merge(P.cylinder(0.07, 0.04, 24, bevel=0.006, bsegs=1, mat='steel', z0=0.0).align((1, 0, 0), loc=(0.41, -0.34, 0.3)))
+    g.merge(P.box((0.1, 0.22, 0.16), bevel=0.01, segs=1, mat='steel_dark').move(0.25, -0.62, 0.42))
+    g.merge(P.box((0.3, 0.06, 0.05), bevel=0.006, segs=1, mat='paint_accent').move(0.3, -0.34, 0.585))
+    # --- armoured sensor block on top (no optic): steel box, side guards, recessed dark lens
+    sb = P.box((0.22, 0.34, 0.15), bevel=0.012, segs=1, chamfer=0.03, chamfer_axes='Y', mat='paint_dark')
+    g.merge(sb.move(0.0, -0.98, 0.76))
+    for x in (-0.12, 0.12):
+        g.merge(P.box((0.025, 0.4, 0.18), bevel=0.004, segs=1, mat='paint_primary').move(x, -1.0, 0.77))
+    g.merge(P.ring(0.05, 0.035, 0.03, 24, bevel=0.0, mat='steel', z0=0.0).align((0, -1, 0), loc=(0.0, -1.15, 0.77)))
+    g.merge(P.cylinder(0.036, 0.02, 24, bevel=0.0, bsegs=1, mat='glass', z0=0.0).align((0, -1, 0), loc=(0.0, -1.14, 0.77)))
+    # --- heat-sink fin shroud over the barrel (cast fins) + spine rail + clamp bands
+    zb = 0.36
+    bands = [(0.05, 0.2, 'steel_dark')]
+    for i in range(6):
+        bands += [(0.04, 0.19), (0.12, 0.14, 'steel_dark')]
+    bands += [(0.05, 0.2, 'steel_dark')]
+    sh = P.banded_cylinder(bands, segs=24, step=0.0, mat='paint_primary')
+    g.merge(sh.align((0, -1, 0), loc=(0, -1.18, zb)))
+    g.merge(P.box((0.1, 1.04, 0.07), bevel=0.008, segs=1, mat='steel_dark').move(0, -1.7, zb + 0.2))
+    g.merge(P.cylinder(0.075, 0.66, 32, bevel=0.008, bsegs=1, mat='steel_dark', z0=0.0).align((0, -1, 0),
+                                                                                           loc=(0, -2.2, zb)))
+    g.merge(P.ring(0.095, 0.07, 0.1, 32, bevel=0.008, bsegs=1, mat='hazard', z0=0.0).align((0, -1, 0),
+                                                                                         loc=(0, -2.5, zb)))
+    # --- ported muzzle brake
+    mb = P.box((0.26, 0.38, 0.22), bevel=0.014, segs=1, chamfer=0.04, chamfer_axes='Y', mat='steel_dark')
+    mb.move(0, -3.0, zb)
+    for k in range(3):
+        mb.boolean(P.box((0.5, 0.055, 0.11), bevel=0.0, segs=1, mat='steel_dark').move(0, -2.9 - k * 0.1, zb))
+    mb.boolean(P.cylinder(0.05, 0.5, 24, bevel=0.0, mat='steel_dark').align((0, -1, 0), loc=(0, -2.9, zb)))
     g.merge(mb)
-    cell = P.banded_cylinder([(0.03, 0.07, 'steel_dark'), (0.3, 0.085), (0.02, 0.078, 'steel_dark'),
-                              (0.07, 0.085, 'hazard'), (0.03, 0.065, 'steel')], segs=24, step=0.0, mat='paint_dark')
-    g.merge(cell.align((0, -1, 0), loc=(0.25, -0.05, 0.24)))
-    g.merge(P.box((0.08, 0.36, 0.05), bevel=0.008, segs=1, mat='steel_dark').move(0.19, -0.25, 0.18))
-    g.merge(P.bolt_row((-0.172, 0.1, 0.2), (-0.172, -1.0, 0.2), 5, (-1, 0, 0), r=0.013))
+    # --- hydraulic recoil buffer from the receiver rear to a bolted clamp on the forearm top
+    g.merge(K.ram((0.0, 0.42, 0.5), (0.0, 1.28, 0.62), r=0.06, frac=0.55, segs=24, up=(1, 0, 0), eyes=True))
+    g.merge(P.box((0.34, 0.26, 0.1), bevel=0.012, segs=1, mat='steel_dark').move(0, 1.32, 0.6))
+    for x in (-0.15, 0.15):
+        g.merge(P.box((0.04, 0.2, 0.2), bevel=0.006, segs=1, mat='steel_dark').move(x, 1.32, 0.56))
+    g.merge(P.bolt_row((-0.12, 1.24, 0.65), (0.12, 1.24, 0.65), 3, (0, 0, 1), r=0.014))
+    g.merge(P.bolt_row((-0.12, 1.4, 0.65), (0.12, 1.4, 0.65), 3, (0, 0, 1), r=0.014))
     return g.scale(RIFLE_S)
 
 
-RIFLE_MUZZLE_LOCAL = V((0.0, -3.18, 0.36)) * RIFLE_S
+RIFLE_MUZZLE_LOCAL = V((0.0, -3.2, 0.36)) * RIFLE_S
 
 
 def rifle_matrix():
@@ -678,7 +710,7 @@ def build_blade_local():
         pr = P.prism(P.fillet([(-2.1, z - 0.04), (-2.66, z - 0.02), (-2.7, z + 0.06), (-2.1, z + 0.08)], 0.03, 1), 0.1,
                      bevel=0.01, segs=1, mat='steel_dark', axis='X')
         g.merge(pr.move(0.68, 0, 0))
-    g.merge(P.box((0.2, 0.03, 0.24), bevel=0.004, segs=1, mat='lens').move(0.68, -2.62, -0.03))
+    g.merge(P.box((0.2, 0.03, 0.24), bevel=0.004, segs=1, mat='blade_lens').move(0.68, -2.62, -0.03))
     g.merge(P.box((0.26, 0.1, 0.32), bevel=0.01, segs=1, mat='steel_dark').move(0.68, -2.44, -0.03))
     cap = P.banded_cylinder([(0.03, 0.065, 'steel_dark'), (0.5, 0.075), (0.03, 0.065, 'steel_dark')], segs=24,
                             step=0.0, mat='paint_dark')
@@ -812,8 +844,9 @@ def build_backpack():
         g.merge(K.shackle(0.08, bar=0.02, segs=(12, 6)).move(s * 0.82, 2.0, 8.84))
         g.merge(P.box((0.9, 0.34, 0.74), bevel=0.02, segs=1, chamfer=0.1, chamfer_axes='Y', mat='paint_dark')
                 .move(s * 0.62, 2.28, 6.86))
-        g.merge(P.box((0.5, 0.26, 0.48), bevel=0.02, segs=1, chamfer=0.07, chamfer_axes='Y', mat='paint_dark')
-                .move(s * 0.94, 2.38, 7.72))
+        # r3: the rig-left box is bone (asymmetric value break-up in the back view)
+        g.merge(P.box((0.5, 0.26, 0.48), bevel=0.02, segs=1, chamfer=0.07, chamfer_axes='Y',
+                      mat='paint_secondary' if s > 0 else 'paint_dark').move(s * 0.94, 2.38, 7.72))
         g.merge(marker((s * 1.2, 2.42, 8.48), (0, 1, 0.2), 'amber', 0.05))
     # heat-shield louvre bank between the two main bells (vertical fins)
     shield = K.shell([(6.28, -0.3, 0.3, 2.2, 2.66, 0.06), (7.24, -0.3, 0.3, 2.3, 2.56, 0.06)], 'Z', bevel=0.012,
@@ -890,15 +923,22 @@ def build_thigh_local():
         g.merge(K.cheek((cx, 0.0, -L), sg, 0.44, 0.09, strap_to=(0.08, -(L - 0.5)), strap_w=0.52, bolts=4, lite=True))
     g.merge(K.drum((0, 0, -L), (1, 0, 0), 0.4, 0.84, mat='paint_dark', hub=False, segs=32))
     # hose bundle (3) down the inner rear bay into the knee drum
-    for k, x in enumerate((-0.42, -0.34, -0.26)):
+    for k, x in enumerate((-0.42, -0.3)):
         g.merge(hose_lite([(x, 0.3, -0.3), (x - 0.06, 0.5 + 0.03 * k, -0.85), (x - 0.02, 0.44, -1.35),
                            (x, 0.32, -(L - 0.36))], 0.03, fittings=(k == 1)))
     g.merge(rivets((0.0, -0.66, -1.54), (0.0, -0.58, -(L - 0.5)), 0.1, (0, -1, 0)))
+    # r3: bone hamstring guard over the upper rear bay on two standoffs (value break-up from behind;
+    # the lower rams and hoses stay exposed under it)
+    g.merge(K.plate_world([(-0.44, 0.68, -0.34), (0.44, 0.68, -0.34), (0.4, 0.64, -0.86), (-0.4, 0.64, -0.86)], 0.05,
+                          mat='paint_secondary', normal_hint=(0, 1, 0), chamfer=0.07, bolts=1, bolt_r=0.016,
+                          bolt_spacing=0.24))
+    for sx in (-0.3, 0.3):
+        g.merge(P.box((0.1, 0.24, 0.12), bevel=0.008, segs=1, mat='steel_dark').move(sx, 0.55, -0.6))
     return g
 
 
 # shin greave sections (ascending z, shin-local): 25% wider at the knee than at the ankle, keeled
-SHIN_SECS = [(-1.92, 0.46, -0.48, -0.06, 0.1, 0.1), (-1.2, 0.56, -0.6, -0.04, 0.16, 0.14),
+SHIN_SECS = [(-1.92, 0.42, -0.46, -0.06, 0.1, 0.1), (-1.2, 0.54, -0.6, -0.04, 0.16, 0.14),
              (-0.52, 0.6, -0.6, -0.04, 0.17, 0.14), (-0.42, 0.53, -0.5, -0.06, 0.12, 0.12)]
 SHIN_SIDE_X = 0.68    # outer face line of the stood-off side plates
 CALF_NOZZLE = (V((0.0, 0.56, -1.74)), V((0.0, 0.5, -1.0)))   # exit, exhaust (shin-local)
@@ -918,8 +958,8 @@ def build_shin_local():
                 .move(sx, 0.03, -L / 2 - 0.02))
     g.merge(P.box((0.36, 0.3, L - 1.0), bevel=0.012, segs=1, chamfer=0.05, chamfer_axes='Z', mat='paint_dark')
             .move(0, 0.16, -L / 2 + 0.05))
-    for z in (-0.64, -1.36, -2.02):
-        g.merge(P.box((0.66, 0.1, 0.09), bevel=0.008, segs=1, mat='steel_dark').move(0, 0.1, z))
+    for z in (-0.64, -2.02):
+        g.merge(P.box((0.66, 0.1, 0.09), bevel=0.0, segs=1, mat='steel_dark').move(0, 0.1, z))
     # --- knee cheeks (shin side, outside the thigh clevis) strapped into the greave flanks
     for cx, sg in ((-0.62, -1), (0.62, 1)):
         g.merge(K.cheek((cx, 0.0, 0.0), sg, 0.44, 0.1, strap_to=(-0.22, -0.62), strap_w=0.42, bolts=4, lite=True))
@@ -943,16 +983,16 @@ def build_shin_local():
     g.merge(K.plate_world([(-0.38, -0.86, -0.1), (0.38, -0.86, -0.1), (0.32, -1.02, 0.26), (-0.32, -1.02, 0.26)], 0.04,
                           mat='paint_primary', normal_hint=(0, -1, 0.4), chamfer=0.05, bolts=1, bolt_r=0.016,
                           bolt_spacing=0.2))
-    # --- two exposed knee rams (outer + inner front corners): cheek eye -> greave lug
+    # --- two exposed knee rams (outer + inner front corners): r3 1.8 m long, 18 cm barrels, black
+    #     bellows dust boots, cheek eye -> a lug on the lower greave (they converge with the taper)
     for sg in (1, -1):
-        x = sg * 0.73
-        g.merge(K.ram((x, -0.3, -0.04), (x * 0.97, -0.36, -1.14), r=0.11, rod=0.065, frac=0.42, segs=24, eyes=True,
-                      up=(1, 0, 0)))
-        g.merge(P.box((0.2, 0.2, 0.2), bevel=0.012, segs=1, chamfer=0.04, chamfer_axes='X', mat='steel_dark')
-                .move(x * 0.92, -0.36, -1.18))
+        g.merge(K.ram((sg * 0.75, -0.3, -0.02), (sg * 0.6, -0.44, -1.84), r=0.09, rod=0.05, frac=0.4, segs=36,
+                      eyes=True, up=(1, 0, 0), bellows=0.55))
+        g.merge(P.box((0.26, 0.22, 0.22), bevel=0.012, segs=1, chamfer=0.04, chamfer_axes='X', mat='steel_dark')
+                .move(sg * 0.5, -0.44, -1.86))
     # --- side plates stood off behind the greave (8-12 cm gap shows the struts), on standoffs
     for sg in (1, -1):
-        x0, x1 = sg * SHIN_SIDE_X, sg * (SHIN_SIDE_X - 0.1)
+        x0, x1 = sg * (SHIN_SIDE_X + 0.02), sg * (SHIN_SIDE_X - 0.14)
         g.merge(K.plate_world([(x0, 0.06, -0.52), (x0, 0.62, -0.6), (x1, 0.54, -1.72), (x1, 0.06, -1.64)], 0.06,
                               mat='paint_primary', normal_hint=(sg, 0, 0), chamfer=0.08, bolts=1, bolt_r=0.016,
                               bolt_spacing=0.26))
@@ -969,66 +1009,94 @@ def build_shin_local():
     g.merge(lv.rotate((-90, 0, 0)).move(0.0, 0.6, -1.18))
     g.merge(P.banded_cylinder([(0.04, 0.1, 'steel_dark'), (0.5, 0.12), (0.04, 0.1, 'steel_dark')], segs=24, step=0.0,
                               mat='paint_dark').move(-0.46, 0.42, -1.86))
-    # --- hose bundle (4) looping from behind the knee drum down into the calf top
-    for k, x in enumerate((-0.18, 0.0, 0.18)):
-        bulge = 0.66 + 0.04 * (k % 2)
-        g.merge(hose_lite([(x, 0.4, 0.02), (x * 1.1, bulge, -0.2), (x, 0.58, -0.42), (x * 0.9, 0.44, -0.58)], 0.032,
-                          fittings=(k != 1)))
     # --- ankle clevis + front / back ankle rams (lower eyes on the ankle cheeks: nothing detaches)
     for cx, sg in ((-0.42, -1), (0.42, 1)):
         g.merge(K.cheek((cx, 0.0, -L), sg, 0.34, 0.09, strap_to=(0.0, -(L - 0.5)), strap_w=0.42, bolts=4, lite=True))
-    g.merge(K.ram((0.0, -0.32, -1.72), (0.0, -0.24, -(L - 0.12)), r=0.085, rod=0.05, frac=0.45, segs=20, eyes=False,
-                  up=(1, 0, 0)))
-    g.merge(K.ram((0.0, 0.34, -1.6), (0.0, 0.26, -(L - 0.1)), r=0.07, frac=0.5, segs=20, eyes=False, up=(1, 0, 0)))
+    # r3 ankle rams: one per side, 1.2 m, 14 cm barrel, clevis eyes; the lower eye rides an axle stub
+    # ON the ankle axis (valid for any ankle angle), the upper one a lug on the tapered side plate
+    for sg in (1, -1):
+        g.merge(K.ram((sg * 0.64, 0.16, -(L - 1.22)), (sg * 0.64, 0.0, -L), r=0.07, rod=0.042, frac=0.5, segs=24,
+                      eyes=True, up=(1, 0, 0)))
+        g.merge(P.cylinder(0.05, 0.26, 16, bevel=0.0, bsegs=1, mat='steel', z0=0.0).align((sg, 0, 0),
+                                                                                      loc=(sg * 0.46, 0.0, -L)))
+        g.merge(P.box((0.16, 0.2, 0.2), bevel=0.01, segs=1, mat='steel_dark').move(sg * 0.58, 0.16, -(L - 1.22)))
     return g
 
 
+TOE = V((ANKLE.x, ANKLE.y - 0.84, 0.2))   # toe hinge (ball of the foot): optional toe_L / toe_R pivots (r3)
+
+
 def build_foot():
-    """Foot in world coordinates (L side): ~2.3 m from toe to heel spur. A high instep body
-    with a bolted slate instep plate, a separate HINGED bone toe plate and a hinged heel plate
-    on visible hinge barrels, ankle cheeks strapped to the body, an outer ankle guard and a
-    ribbed sole (rubber tread bars on a steel plate) that reads when the feet lift."""
+    """Foot (L side, world coordinates) r3: NOT a box sled. A heel / instep block that tapers ~15%
+    toward the ball, a ripper-tooth heel spur, a high bolted instep plate, ankle cheeks strapped to
+    the body, an outer ankle guard, hinge knuckles at the ball for the separate TOE plate (its own
+    pivot, see build_toe) and a ribbed sole."""
     g = Geo()
     ax, ay, az = ANKLE
     g.merge(K.drum(ANKLE, (1, 0, 0), 0.3, 0.72, mat='paint_dark', hub=False, segs=32))
     for cx, sg in ((ax - 0.5, -1), (ax + 0.5, 1)):
         g.merge(K.cheek((cx, ay, az), sg, 0.36, 0.08, strap_to=(ay + 0.08, 0.56), strap_w=0.5, bolts=3, lite=True))
-    c = (0.04, 0.04, 0.14, 0.14)
-    body = K.shell([(ay - 0.84, ax - 0.56, ax + 0.56, 0.12, 0.42, c), (ay - 0.4, ax - 0.6, ax + 0.6, 0.12, 0.58, c),
-                    (ay + 0.3, ax - 0.56, ax + 0.56, 0.12, 0.68, c), (ay + 0.7, ax - 0.48, ax + 0.48, 0.12, 0.5, c)],
-                   'Y', bevel=0.016, mat='paint_primary')
+    c = (0.04, 0.04, 0.16, 0.16)
+    body = K.shell([(ay - 0.80, ax - 0.47, ax + 0.47, 0.1, 0.36, (0.04, 0.04, 0.1, 0.1)),
+                    (ay - 0.42, ax - 0.53, ax + 0.53, 0.1, 0.6, c), (ay + 0.3, ax - 0.57, ax + 0.57, 0.1, 0.7, c),
+                    (ay + 0.74, ax - 0.55, ax + 0.55, 0.1, 0.52, c)], 'Y', bevel=0.016, mat='paint_primary')
     K.grooves(body, [(1, 0, 0), (-1, 0, 0)], (0, ay - 0.1, 0), (0, 1, 0), gap=0.02, depth=0.018)
+    K.grooves(body, [(1, 0, 0), (-1, 0, 0), (0, 0, 1)], (0, ay + 0.48, 0), (0, 1, 0), gap=0.018, depth=0.016)
     g.merge(body)
-    # instep armour (slate, bolted) + outer ankle guard (bone)
-    g.merge(K.plate_world([(ax - 0.5, ay - 0.8, 0.45), (ax + 0.5, ay - 0.8, 0.45), (ax + 0.48, ay + 0.06, 0.72),
-                           (ax - 0.48, ay + 0.06, 0.72)], 0.07, mat='paint_primary', normal_hint=(0, -0.3, 1),
-                          chamfer=0.08, bolts=1, bolt_r=0.017, bolt_spacing=0.26))
-    g.merge(K.plate_world([(ax + 0.606, ay - 0.62, 0.16), (ax + 0.606, ay + 0.46, 0.16), (ax + 0.585, ay + 0.36, 0.56),
-                           (ax + 0.6, ay - 0.36, 0.54)], 0.05, mat='paint_secondary', normal_hint=(1, 0, 0),
+    # instep armour (slate, bolted, ridged) + outer ankle guard (bone) + inner guard (dark)
+    g.merge(K.plate_world([(ax - 0.44, ay - 0.78, 0.4), (ax + 0.44, ay - 0.78, 0.4), (ax + 0.5, ay + 0.06, 0.72),
+                           (ax - 0.5, ay + 0.06, 0.72)], 0.07, mat='paint_primary', normal_hint=(0, -0.3, 1),
+                          chamfer=0.08, ridge=0.02, ridge_axis='Y', bolts=1, bolt_r=0.017, bolt_spacing=0.26))
+    g.merge(K.plate_world([(ax + 0.576, ay - 0.5, 0.16), (ax + 0.576, ay + 0.6, 0.16), (ax + 0.57, ay + 0.46, 0.6),
+                           (ax + 0.566, ay - 0.3, 0.56)], 0.05, mat='paint_secondary', normal_hint=(1, 0, 0),
                           chamfer=0.07, bolts=1, bolt_r=0.015, bolt_spacing=0.24))
-    # hinged toe plate (bone) + hinge barrel with knuckles
-    for dx, w in ((-0.29, 0.54), (0.29, 0.54)):      # split toe: two plates, a hinge knuckle between
-        toe = P.prism([(ay - 0.89, 0.07), (ay - 1.36, 0.06), (ay - 1.42, 0.16), (ay - 1.28, 0.34), (ay - 0.89, 0.44)], w,
-                      bevel=0.018, segs=1, mat='paint_secondary', axis='X')
-        g.merge(toe.move(ax + dx, 0, 0))
-    g.merge(P.cylinder(0.065, 1.2, 20, bevel=0.008, bsegs=1, mat='steel').rotate((0, 90, 0)).move(ax, ay - 0.865, 0.22))
-    for dx in (-0.3, 0.3):
-        g.merge(P.box((0.16, 0.2, 0.18), bevel=0.01, segs=1, mat='steel_dark').move(ax + dx, ay - 0.8, 0.24))
-    # hinged heel plate + spur
-    heel = P.prism([(ay + 0.75, 0.07), (ay + 1.04, 0.08), (ay + 1.08, 0.34), (ay + 0.8, 0.56)], 0.9, bevel=0.016,
-                   segs=1, mat='paint_primary', axis='X')
-    g.merge(heel.move(ax, 0, 0))
-    g.merge(P.cylinder(0.06, 0.98, 20, bevel=0.008, bsegs=1, mat='steel').rotate((0, 90, 0)).move(ax, ay + 0.73, 0.26))
-    # ribbed sole: steel plate + rubber tread bars (the soles show when the feet lift in flight)
-    sole = K.shell([(ay - 1.4, ax - 0.56, ax + 0.56, 0.05, 0.12, 0.03), (ay + 1.06, ax - 0.5, ax + 0.5, 0.05, 0.12, 0.03)],
+    g.merge(K.plate_world([(ax - 0.576, ay - 0.36, 0.16), (ax - 0.576, ay + 0.6, 0.16), (ax - 0.57, ay + 0.46, 0.56),
+                           (ax - 0.566, ay - 0.2, 0.5)], 0.04, mat='paint_dark', normal_hint=(-1, 0, 0), chamfer=0.06))
+    # heel block + ripper-tooth spur (projects back and down: the foot never reads as a sled)
+    hb = K.shell([(ay + 0.7, ax - 0.5, ax + 0.5, 0.04, 0.5, (0.03, 0.03, 0.12, 0.12)),
+                  (ay + 1.0, ax - 0.44, ax + 0.44, 0.04, 0.36, (0.03, 0.03, 0.1, 0.1))], 'Y', bevel=0.014,
+                 mat='paint_dark')
+    g.merge(hb)
+    spur = P.prism([(ay + 0.86, 0.44), (ay + 1.06, 0.36), (ay + 1.36, 0.1), (ay + 1.34, 0.02), (ay + 0.96, 0.02)],
+                   0.28, bevel=0.014, segs=1, mat='paint_secondary', axis='X')
+    g.merge(spur.move(ax, 0, 0))
+    g.merge(P.box((0.32, 0.06, 0.05), bevel=0.006, segs=1, mat='hazard').rotate((-40, 0, 0)).move(ax, ay + 1.2, 0.24))
+    # ball hinge knuckles (foot side; the toe carries the centre knuckle + barrel)
+    for dx in (-0.36, 0.36):
+        g.merge(P.box((0.2, 0.2, 0.2), bevel=0.012, segs=1, chamfer=0.03, chamfer_axes='X', mat='steel_dark')
+                .move(ax + dx, ay - 0.8, 0.22))
+        g.merge(P.cylinder(0.085, 0.2, 24, bevel=0.008, bsegs=1, mat='steel_dark').rotate((0, 90, 0))
+                .move(ax + dx, TOE.y, TOE.z))
+    # ribbed sole: steel plate + rubber tread bars (shows when the feet lift)
+    sole = K.shell([(ay - 0.8, ax - 0.48, ax + 0.48, 0.04, 0.12, 0.03), (ay + 1.0, ax - 0.5, ax + 0.5, 0.04, 0.12, 0.03)],
                    'Y', bevel=0.008, mat='steel_dark')
     g.merge(sole)
-    for i in range(8):
-        y = ay - 1.24 + i * 0.32
-        g.merge(P.box((1.0 - 0.06 * (i in (0, 7)), 0.16, 0.05), bevel=0.0, segs=1, mat='rubber')
-                .move(ax, y, 0.025))
-    g.merge(marker((ax + 0.3, ay + 1.06, 0.3), (0, 1, 0.1), 'amber', 0.045))
+    for i in range(6):
+        y = ay - 0.66 + i * 0.3
+        g.merge(P.box(((0.9 + 0.012 * i), 0.14, 0.04), bevel=0.0, segs=1, mat='rubber').move(ax, y, 0.02))
+    g.merge(marker((ax + 0.3, ay + 1.01, 0.3), (0, 1, 0.1), 'amber', 0.045))
     g.merge(K.shackle(0.06, bar=0.016, segs=(12, 6)).move(ax - 0.28, ay + 0.6, 0.52))
+    return g
+
+
+def build_toe():
+    """Hinged toe plate (L side, world coordinates; parented to toe_L at TOE): tapers to the tip,
+    bone top plate with a centre rib, hinge barrel on the ball axis, its own tread."""
+    g = Geo()
+    tx, ty, tz = TOE
+    g.merge(P.cylinder(0.07, 0.5, 16, bevel=0.0, bsegs=1, mat='steel').rotate((0, 90, 0)).move(tx, ty, tz))
+    t = K.shell([(ty - 0.02, tx - 0.47, tx + 0.47, 0.02, 0.36, (0.03, 0.03, 0.1, 0.1)),
+                 (ty - 0.44, tx - 0.43, tx + 0.43, 0.02, 0.28, (0.03, 0.03, 0.09, 0.09)),
+                 (ty - 0.62, tx - 0.36, tx + 0.36, 0.04, 0.15, (0.02, 0.02, 0.05, 0.05))], 'Y', bevel=0.014,
+                mat='paint_primary')
+    K.grooves(t, [(1, 0, 0), (-1, 0, 0), (0, 0, 1)], (0, ty - 0.3, 0), (0, 1, 0), gap=0.016, depth=0.014)
+    g.merge(t)
+    g.merge(K.plate_world([(tx - 0.4, ty - 0.06, 0.37), (tx + 0.4, ty - 0.06, 0.37), (tx + 0.34, ty - 0.5, 0.27),
+                           (tx - 0.34, ty - 0.5, 0.27)], 0.05, mat='paint_secondary', normal_hint=(0, -0.2, 1),
+                          chamfer=0.06, ridge=0.02, ridge_axis='Y', bolts=1, bolt_r=0.015, bolt_spacing=0.24))
+    g.merge(K.strip((tx, ty - 0.04, 0.43), (tx, ty - 0.52, 0.33), 0.08, 0.03, (0, -0.2, 1), mat='steel_dark'))
+    for i in range(2):
+        g.merge(P.box((0.78 - 0.08 * i, 0.12, 0.04), bevel=0.0, segs=1, mat='rubber').move(tx, ty - 0.18 - i * 0.26, 0.02))
     return g
 
 
@@ -1037,13 +1105,14 @@ def build(a):
     a.pivot('pelvis', PELVIS)
     a.pivot('torso', TORSO, parent='pelvis')
     a.pivot('head', HEAD, parent='torso')
-    a.pivot('eye', EYE, parent='head', iw_eye_color='#8FF0FF', iw_eye_strength=5.0)
+    a.pivot('eye', EYE, parent='head', iw_eye_color='#8FF0FF', iw_eye_strength=9.0, iw_eye_map=1)
     fa = forearm_frame()
     wrist_w = fa @ V((0, -L_FARM, 0))
     for S, m in (('L', lambda p: V(p)), ('R', mx)):
         a.pivot('thigh_' + S, m(HIP), parent='pelvis')
         a.pivot('shin_' + S, m(KNEE), parent='thigh_' + S)
         a.pivot('foot_' + S, m(ANKLE), parent='shin_' + S)
+        a.pivot('toe_' + S, m(TOE), parent='foot_' + S)     # r3: optional hinged toe (rig.js pose layer)
         a.pivot('arm_' + S, m(SHOULDER), parent='torso', iw_ready=round(math.radians(FA_PITCH), 3))
         a.pivot('forearm_' + S, m(ELBOW), parent='arm_' + S)
         a.pivot('hand_' + S, m(wrist_w), parent='forearm_' + S)
@@ -1089,18 +1158,20 @@ def build(a):
         put('weapon_L_geo', blade, 'weapon_L')
         put('shoulder_L_geo', build_missile(), 'shoulder_L')
         put('shoulder_R_geo', build_cannon(), 'shoulder_R')
-        th, sh, ft = build_thigh_local(), build_shin_local(), build_foot()
+        th, sh, ft, tt = build_thigh_local(), build_shin_local(), build_foot(), build_toe()
         th.transform(seg_frame(HIP, KNEE))
         sh.transform(seg_frame(KNEE, ANKLE))
         for S in ('L', 'R'):
-            gth, gsh, gft = th.copy(), sh.copy(), ft.copy()
+            gth, gsh, gft, gtt = th.copy(), sh.copy(), ft.copy(), tt.copy()
             if S == 'R':
                 gth.mirror('X')
                 gsh.mirror('X')
                 gft.mirror('X')
+                gtt.mirror('X')
             put(f'thigh_{S}_geo', gth, f'thigh_{S}')
             put(f'shin_{S}_geo', gsh, f'shin_{S}')
             put(f'foot_{S}_geo', gft, f'foot_{S}')
+            put(f'toe_{S}_geo', gtt, f'toe_{S}')
             put(f'arm_{S}_geo', build_arm(S), f'arm_{S}')
             f = build_forearm_local(S == 'L')
             f.transform(fa)
@@ -1114,19 +1185,20 @@ def build(a):
         th.free()
         sh.free()
         ft.free()
+        tt.free()
         # thrusters: 2 big + 2 small main bells, side pods, shoulder verniers, brakes, calves
         for i, s in enumerate((1, -1)):
             S = 'L' if s > 0 else 'R'
             K.nozzle_part(a, f'nozzle_back_{i}', (s * 0.72, 2.96, 6.62), (s * 0.3, 1, -0.4), 'booster_back', 0.25, 0.44,
-                          0.58, segs=48, ribs=2, collar=2)
+                          0.58, segs=40, ribs=2, collar=2)
             K.nozzle_part(a, f'nozzle_back_{i + 2}', (s * 1.3, 2.5, 6.46), (s * 0.55, 1, -0.3), 'booster_back', 0.13,
-                          0.22, 0.32, segs=32, ribs=1, bolts=0)
+                          0.22, 0.32, segs=32, ribs=0, bolts=0)
             K.nozzle_part(a, f'nozzle_{S}_0', (s * (SIDEBOOST.x + 0.3), 1.78, 6.98), (s, 0.25, -0.15), f'booster_{S}',
-                          0.15, 0.26, 0.3, segs=32, ribs=1, bolts=0)
+                          0.15, 0.26, 0.3, segs=32, ribs=0, bolts=0)
             K.nozzle_part(a, f'nozzle_sh_{S}', (s * 3.46, 1.14, 8.3), (s * 0.7, 1.0, 0.0), f'arm_{S}', 0.11, 0.18, 0.22,
-                          segs=24, ribs=0, bolts=0)
+                          segs=24, ribs=0, bolts=0, collar=False)
             K.nozzle_part(a, f'nozzle_front_{S}', (s * 1.26, -1.28, 7.34), (0, -1, -0.45), 'torso', 0.08, 0.14, 0.22,
-                          segs=24, ribs=0, bolts=0)
+                          segs=24, ribs=0, bolts=0, collar=False)
             calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ CALF_NOZZLE[0]
             ex = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)).to_3x3() @ CALF_NOZZLE[1]
             K.nozzle_part(a, f'nozzle_leg_{S}', tuple(calf), tuple(ex), f'shin_{S}', 0.12, 0.19, 0.26, segs=32,
@@ -1151,7 +1223,7 @@ def rust_drip(seed=1, w=64, h=288, drips=3):
     for k in range(drips):
         x0 = w * (0.5 + rng.uniform(-0.28, 0.28))
         length = h * rng.uniform(0.45, 1.0)
-        wid = rng.uniform(1.4, 3.2) * (1.4 if k == 0 else 1.0)
+        wid = rng.uniform(3.5, 7.5) * (1.3 if k == 0 else 1.0)    # r3: 6-14 mm drips (r2: 2-4 mm, invisible)
         wob = np.cumsum(rng.normal(0, 0.35, h)).astype(np.float32)
         cx = x0 + wob[yy.astype(int)] * 0.6
         t = np.clip(yy / length, 0, 1)
@@ -1183,6 +1255,11 @@ def soot_decals(a):
         calf = seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)) @ V((0.0, 0.5, -1.62))
         a.decal(K.soot(256, 41 + i, elong=1.5), tuple(calf), (0, 1, -0.3), size=(0.8, 1.0), depth=0.4, opacity=0.85)
         a.decal(K.soot(256, 51 + i), (s * 1.26, -1.12, 7.36), (0, -1, -0.3), size=(0.6, 0.6), depth=0.3, opacity=0.7)
+    rm = rifle_matrix()
+    for k, nn in enumerate(((0, 0, 1), (1, 0, 0), (-1, 0, 0))):
+        q = mx(rm @ (V((0.0, -2.62 * RIFLE_S, 0.36 * RIFLE_S)) + V(nn) * 0.2))
+        a.decal(K.soot(256, 64 + k, elong=1.8), q, mx(rm.to_3x3() @ V(nn)), up=mx(rm.to_3x3() @ V((0, -1, 0))),
+                size=(0.5, 1.0), depth=0.35, opacity=0.95)
     a.decal(K.soot(256, 61, elong=1.6), cannon_pt((0, -3.6, 0.3)), (0, 0, 1), up=(0, -1, 0), size=(0.9, 1.4),
             depth=0.5, opacity=0.95)
     a.decal(K.soot(256, 62, elong=1.6), cannon_pt((0, -3.6, -0.1)), (-1, 0, 0), up=(0, -1, 0), size=(0.8, 1.3),
@@ -1197,7 +1274,7 @@ def rust_decals(a):
         nonlocal n
         n += 1
         a.decal(rust_drip(100 + n), V(loc) + V((0, 0, -length * 0.45)), normal, up=(0, 0, 1),
-                size=(length * 0.22, length), depth=0.12, opacity=op, name=f'rust_{n:02d}')
+                size=(length * 0.32, length), depth=0.12, opacity=op, name=f'rust_{n:02d}')
     for t, ln in ((0.18, 0.34), (0.5, 0.26), (0.83, 0.4)):            # chest bone plate (L), lower bolt row
         p, nn = facet(UPPER, 7.95, t, 1, lift=0.05)
         drip(p, nn, ln)
@@ -1213,6 +1290,14 @@ def rust_decals(a):
                       (seg_frame(m_leg(KNEE, s), m_leg(ANKLE, s)), (0.3, -0.62, -1.3))):
             q = M @ V((pt[0] * s, pt[1], pt[2]))
             drip(q, (0, -1, 0), 0.32)                                 # under the knee plate / greave seam
+        # r3: more run-off: under the pauldron front rivets, the thigh plates, the forearm and the hip skirt
+        for x0 in (2.7, 3.05):
+            drip((s * x0, -0.95, 8.2), (0, -1, 0), 0.4)
+        thf = seg_frame(m_leg(HIP, s), m_leg(KNEE, s))
+        for pt in ((0.25, -0.7, -0.5), (-0.25, -0.7, -0.6)):
+            drip(thf @ V((pt[0] * s, pt[1], pt[2])), (0, -1, 0), 0.34)
+        drip((s * 1.3, -0.6, 5.55), (0, -1, 0), 0.28)
+        drip((s * 1.66, 0.0, 5.5), (s, 0, 0), 0.3)
 
 
 def cards(a):
@@ -1271,7 +1356,7 @@ def cards(a):
         card(a, D.text_decal(S, px=260, color=KK, worn=0.3, seed=30 + s), T(th_f, (0.795, -0.1, -0.92)),
              N(rot_t, (1, 0, 0)), up=N(rot_t, (0, 0, 1)), size=(0.22, None), parent='thigh_' + S)
         card(a, D.serial_plate((f'RIG-07 LEG {S}', 'LOT 0417-C  HYD 35MPa'), w=640, seed=32 + s),
-             T(sh_f, (SHIN_SIDE_X + 0.012, 0.34, -1.0)), N(rot_s, (1, 0, 0.08)), up=N(rot_s, (0, 0, 1)),
+             T(sh_f, (SHIN_SIDE_X + 0.0, 0.34, -1.0)), N(rot_s, (1, 0, 0.14)), up=N(rot_s, (0, 0, 1)),
              size=(0.4, None), parent='shin_' + S)
         # pinch warning + hazard band on the OUTER greave facet (cards lie flat on one facet)
         p, n = K.prow_facet(SHIN_SECS, -0.94, 0.52, s, lift=0.085)
@@ -1285,9 +1370,9 @@ def cards(a):
         card(a, D.text_decal(['MAX 40t'], px=160, color=KK, worn=0.3, seed=60 + s), T(sh_f, (0.0, 0.64, -0.72)),
              N(rot_s, (0, 1, 0.05)), up=N(rot_s, (0, 0, 1)), size=(0.36, None), parent='shin_' + S)
         ax, ay, az = ANKLE
-        for k, dx in enumerate((-0.29, 0.29)):
-            card(a, D.hazard_decal(512, 160, seed=40 + s + 3 * k), m_leg((ax + dx, ay - 1.16, 0.3), s), (0, -0.79, 0.61),
-                 up=(0, 0.61, 0.79), size=(0.44, None), parent='foot_' + S, density=360)
+        # toe hazard band: BAKED into the albedo (the toe is its own pivot; no extra decal mesh)
+        a.decal(D.hazard_decal(512, 128, seed=40 + s), m_leg((ax, TOE.y - 0.54, 0.22), s), (0, -0.6, 0.8),
+                up=(0, 0.8, 0.6), size=(0.66, 0.16), depth=0.12, opacity=0.95)
         card(a, D.text_decal(['NO STEP', '踏むな'], px=180, color=B, worn=0.3, seed=42 + s),
              m_leg((ax, ay - 0.42, 0.68), s), (0, -0.3, 1), up=(0, -1, -0.3), size=(0.42, None), parent='foot_' + S)
     # back: HOT plate, IRONWAKE stencil, arrows
@@ -1314,10 +1399,15 @@ def cards(a):
 
     def rn(n):
         return mx(rrot @ V(n))
-    card(a, D.text_decal(['RF-24', 'BRASSWORK'], px=160, color=B, worn=0.3, seed=51), rp((0.215, -0.75, 0.3)),
-         rn((1, 0, 0)), up=rn((0, 0, 1)), size=(0.5, None), parent='weapon_R')
-    card(a, D.hazard_decal(512, 96, seed=52), rp((0.215, -0.1, 0.48)), rn((1, 0, 0)), up=rn((0, 0, 1)),
-         size=(0.4, None), parent='weapon_R', density=380)
+    S_ = RIFLE_S
+    card(a, D.text_decal(['RF-24', 'BRASSWORK'], px=160, color=B, worn=0.3, seed=51), rp((0.3, -1.04 * S_, 0.4 * S_)),
+         rn((1, 0, 0)), up=rn((0, 0, 1)), size=(0.4, None), parent='weapon_R')
+    card(a, D.hazard_decal(512, 96, seed=52), rp((0.29, 0.3 * S_, 0.5 * S_)), rn((1, 0, 0)), up=rn((0, 0, 1)),
+         size=(0.26, None), parent='weapon_R', density=380)
+    card(a, D.serial_plate(('RF-24  BRASSWORK', 'LOAD 2.4t  CAL 40'), w=640, seed=57), rp((-0.32, -0.86 * S_, 0.38 * S_)),
+         rn((-1, 0, 0)), up=rn((0, 0, 1)), size=(0.44, None), parent='weapon_R')
+    card(a, D.text_decal(['MAX 40t'], px=160, color=KK, worn=0.3, seed=58), rp((0.0, -1.7 * S_, (0.36 + 0.235) * S_)),
+         rn((0, 0, 1)), up=rn((0, -1, 0)), size=(0.24, None), parent='weapon_R')
     bx = MISSILE_MOUNT.x + 0.58 + 0.075
     card(a, D.text_decal(['ML-6', 'HAILSTORM'], px=180, color=KK, worn=0.3, seed=53), (bx, -0.1, 9.6), (1, 0, 0),
          size=(0.76, None), parent='shoulder_L')
@@ -1335,6 +1425,9 @@ def cards(a):
 def add_decals(a):
     soot_decals(a)
     cards(a)
+    # r3 soot sources for rigpipe.post_weather (besides every nozzle exit): gun muzzles
+    rm = rifle_matrix()
+    a.soot_points = [(tuple(cannon_pt((0, -3.95, 0.3))), 0.25), (tuple(mx(rm @ RIFLE_MUZZLE_LOCAL)), 0.1)]
 
 
 # ============================================================================ main
@@ -1356,13 +1449,26 @@ COLORS = {
                   decals=False),
     'glow_rim': dict(color='#1A1410', metal=0.0, rough=0.4, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
                      emit='#7A2A10', emit_strength=6.0, decals=False),
+    # r3 eye: WHITE emissive = an intensity map (rig.js tints it with iw_eye_color): main pupil 1.0,
+    # second pupil ~0.5, slit ~0.3 (+ hot core ramp, rigpipe.post_weather)
+    'lens': dict(color='#05080A', metal=0.0, rough=0.06, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                 emit='#FFFFFF', emit_strength=5.0, decals=False),
+    'lens_slit': dict(color='#05080A', metal=0.0, rough=0.06, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                      emit='#FFFFFF', emit_strength=1.6, decals=False),
+    'lens_dim': dict(color='#05080A', metal=0.0, rough=0.06, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                     emit='#FFFFFF', emit_strength=2.6, decals=False),
+    'blade_lens': dict(color='#081014', metal=0.0, rough=0.1, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
+                       emit='#7FD8FF', emit_strength=4.0, decals=False),
+    # r3 bell liner: dark, rough heat-tinted metal (bronze / blue temper bands from the 'heat' pattern)
+    'nozzle_inner': dict(color='#2A2420', metal=0.6, rough=0.8, wear=0.0, grime=0.4, rust=0.0, dust=0.0, var=0.06,
+                         pattern='heat', decals=False),
 }
 OBJ_WEIGHT = {'head_geo': 2.0, 'eye_geo': 1.0, 'torso_geo': 1.5, 'weapon_R_geo': 1.1, 'arm_L_geo': 1.35,
               'arm_R_geo': 1.35, 'shoulder_L_geo': 1.1, 'shoulder_R_geo': 1.05, 'forearm_L_geo': 1.1,
               'forearm_R_geo': 1.1, 'weapon_L_geo': 1.0, 'hand_L_geo': 0.75, 'hand_R_geo': 0.75,
               'booster_back_geo': 1.0, 'thigh_L_geo': 1.0, 'thigh_R_geo': 1.0, 'shin_L_geo': 1.2, 'shin_R_geo': 1.2,
-              'foot_L_geo': 0.8, 'foot_R_geo': 0.8, 'pelvis_geo': 0.75}
-SET_B = ('pelvis', 'thigh', 'shin', 'foot', 'booster', 'nozzle')
+              'foot_L_geo': 0.8, 'foot_R_geo': 0.8, 'toe_L_geo': 0.8, 'toe_R_geo': 0.8, 'pelvis_geo': 0.75}
+SET_B = ('pelvis', 'thigh', 'shin', 'foot', 'toe', 'booster', 'nozzle')
 
 
 def set_of(name):
@@ -1385,6 +1491,8 @@ CLAY = {
     'legs': dict(azimuth=-34, elevation=6, lens=50, distance=11, target=(0.0, -0.3, 2.6)),
     'legs_back': dict(azimuth=150, elevation=14, lens=50, distance=11, target=(0.0, 0.3, 2.6)),
     'head': dict(azimuth=-20, elevation=4, lens=70, distance=7, target=(0.0, -0.8, 8.9)),
+    'rifle': dict(azimuth=-120, elevation=10, lens=60, distance=9, target=(-2.6, -3.0, 5.6)),
+    'feet': dict(azimuth=-40, elevation=12, lens=55, distance=8, target=(0.0, -0.4, 0.6)),
 }
 POSE_VIEW = dict(azimuth=-58, elevation=10, lens=45, distance=27, target=(0, -0.3, 4.9))
 POSES = {'crouch': POSE_VIEW, 'walk': POSE_VIEW, 'boost': POSE_VIEW, 'aim_up': POSE_VIEW, 'twist': POSE_VIEW,
@@ -1392,17 +1500,25 @@ POSES = {'crouch': POSE_VIEW, 'walk': POSE_VIEW, 'boost': POSE_VIEW, 'aim_up': P
 
 # r2: chips read as BARE STEEL (less lighter-paint polish, brighter bare metal, more chips),
 # stronger roughness break-up and run-off streaks
-WEATHER = iw.Weathering(edge_wear=1.6, grime=1.05, streaks=1.5, rust=0.7, dust=0.35, chip_threshold=0.5,
-                        flat_chips=0.6, macro=0.1, ground_dirt=0.5, ao_in_albedo=0.0, rough_breakup=0.3,
-                        edge_lo=0.08, edge_hi=0.34, edge_polish=0.07, bare_dark=(0.2, 0.205, 0.21),
-                        bare_light=(0.3, 0.31, 0.32))
-TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1024, 'normal': 2048, 'emissive': 1024},   # r2: ORM 1024 (GLB <= 2.43 MB)
-             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
+# r3: wider chip bands (edge_lo 0.06, plates no longer suppressed as 'thin'), more streaks / rust;
+# rigpipe.post_weather then grows the chips to >= 4 cm bare steel and adds the grime gradient
+# ground_dirt=0: iwkit's ground-dirt gradient uses a descending smoothstep that inverts (dirt on TOP);
+# rigpipe.post_weather does the per-part bottom grime instead
+WEATHER = iw.Weathering(edge_wear=1.5, grime=1.05, streaks=1.5, rust=0.55, dust=0.35, chip_threshold=0.6,
+                        flat_chips=0.5, macro=0.12, ground_dirt=0.0, ao_in_albedo=0.0, rough_breakup=0.32,
+                        edge_lo=0.1, edge_hi=0.4, edge_polish=0.05, thin_suppress=0.5,
+                        bare_dark=(0.22, 0.23, 0.24), bare_light=(0.31, 0.32, 0.33))
+BAKE_KW = {'edge': 0.035}
+# r3: ORM A 1536 (r2: 1024), basecolor B 1536 (r2: 2048); WebP qualities keep the GLB under r2's 2.42 MB
+TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1536, 'normal': 2048, 'emissive': 1024},
+             'B': {'basecolor': 1536, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
+TEX_QUALITY = {'basecolor': 76, 'orm': 66, 'normal': 72, 'emissive': 88, 'decals': 74}
 
 
 def main():
     R.run(NAME, build, add_decals, set_of, scheme='player', colors=COLORS, seed=7, obj_weight=OBJ_WEIGHT,
-          weathering=WEATHER, views=VIEWS, clay=CLAY, tex_sizes=TEX_SIZES, poses=POSES)
+          weathering=WEATHER, views=VIEWS, clay=CLAY, tex_sizes=TEX_SIZES, poses=POSES, bake_kw=BAKE_KW,
+          tex_quality=TEX_QUALITY)
 
 
 if __name__ == '__main__':

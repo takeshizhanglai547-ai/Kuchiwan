@@ -36,8 +36,10 @@ TURRET = (0.0, 0.0, 2.7)          # slewing-ring centre (turret yaw pivot)
 HIP = (1.16, 0.05, 2.15)
 KNEE = (1.30, -0.54, 1.32)
 ANKLE = (1.40, 0.05, 0.52)
-TRUNNION = (-1.78, -0.30, 3.72)   # autocannon pitch pivot (RIGHT shoulder = -X)
-MUZZLE = (-1.78, -3.22, 3.72)
+# fix round 3: the gun rides 0.22 m further outboard on a wider yoke, so its muzzle brake no
+# longer covers the sensor slit in front three-quarter views from the unit's left
+TRUNNION = (-2.0, -0.30, 3.72)    # autocannon pitch pivot (RIGHT shoulder = -X)
+MUZZLE = (-2.0, -3.22, 3.72)
 EYE = (0.0, -1.46, 3.45)
 
 # cab: armoured wedge lofted along Y (front = -y). (y, x0, x1, z0, z1, corner chamfers
@@ -71,6 +73,69 @@ def glacis_point(x, t, lift=0.0):
     z = cab_section(y)[3]
     n = Vector((0, -(4.32 - 3.72), (y1 - y0))).normalized()
     return Vector((x, y, z)) + n * lift, n
+
+
+def cheap_bolt(r=0.021, mat='steel'):
+    """Hex bolt head without a geometric bevel (16 tris once the hidden base is dropped);
+    the bake's bevel normal rounds its edges."""
+    b = P.cylinder(r, r * 0.8, 6, bevel=0.0, bsegs=1, mat=mat, z0=0.0)
+    K.mark_hidden(b, (0, 0, -1))
+    return b
+
+
+def pad(corners, thick=0.055, mat='paint_primary', normal_hint=None, chamfer=0.035, inset=0.02, seam=0.5,
+        bolts=4, bolt_r=0.021, bolt_in=0.045, ridge=0.0, ridge_axis='Y', hatch=None):
+    """Hard-surface armour pad (fix round 3, replaces the pillow plates): flat face, crisp
+    ~70 deg draft edges with NO geometric round-over (the bake's bevel normal gives the
+    highlight line), clipped corners, one panel seam groove across the long axis
+    (`seam` = fraction, 0 = none), hex bolts inside the 4 corners and an optional
+    recessed inspection panel (`hatch` = (w, h) in metres, centred on the far half).
+    Corners: 3+ roughly coplanar WORLD points, CCW seen from outside."""
+    C = [Vector(c) for c in corners]
+    o = sum(C, Vector()) / len(C)
+    n = (C[1] - C[0]).cross(C[-1] - C[0]).normalized()
+    if normal_hint is not None and n.dot(Vector(normal_hint)) < 0:
+        n = -n
+    u = C[1] - C[0]
+    u = (u - n * u.dot(n)).normalized()
+    v = n.cross(u).normalized()
+    pts = [((c - o).dot(u), (c - o).dot(v)) for c in C]
+    if P.poly_area(pts) < 0:
+        pts = list(reversed(pts))
+    base = P.simplify(pts)
+    outline = P.fillet(base, chamfer, 1) if chamfer > 0 else base
+    g = P.plate(outline, thick, ridge=ridge, ridge_axis=ridge_axis, bevel=0.0, segs=1, mat=mat, inset=inset)
+    K.mark_hidden(g, (0, 0, -1))
+    xs, ys = [p[0] for p in base], [p[1] for p in base]
+    long_v = (max(ys) - min(ys)) >= (max(xs) - min(xs))
+    if hatch:
+        f = g.largest_face((0, 0, 1), 25)
+        if f is not None:
+            hc = (0.0, min(ys) + (max(ys) - min(ys)) * 0.72, thick) if long_v else \
+                (min(xs) + (max(xs) - min(xs)) * 0.72, 0.0, thick)
+            g.hatch(f, hc, hatch, u_axis=(1, 0, 0), gap=0.012, recess=0.012, mat='paint_dark')
+    if seam:
+        top = g.faces_facing((0, 0, 1), 22)
+        if long_v:
+            co, no = (0, min(ys) + (max(ys) - min(ys)) * seam * (0.8 if hatch else 1.0), 0), (0, 1, 0)
+        else:
+            co, no = (min(xs) + (max(xs) - min(xs)) * seam * (0.8 if hatch else 1.0), 0, 0), (1, 0, 0)
+        if top:
+            g.groove_cut(top, co, no, gap=0.018, depth=0.014)
+    if bolts:
+        q = P.offset_poly(base, inset + bolt_in)
+        bx = [(min(xs), min(ys)), (max(xs), min(ys)), (max(xs), max(ys)), (min(xs), max(ys))]
+        used = []
+        for c in bx[:bolts]:
+            best = min(q, key=lambda p: (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2)
+            if best in used:
+                continue
+            used.append(best)
+            z = thick + (ridge * 0.25 if ridge else 0.0) - 0.002
+            g.merge(cheap_bolt(bolt_r).move(best[0], best[1], z))
+    M = Matrix(((u.x, v.x, n.x, o.x), (u.y, v.y, n.y, o.y), (u.z, v.z, n.z, o.z), (0, 0, 0, 1)))
+    g.transform(M)
+    return g
 
 
 def build_cab():
@@ -160,7 +225,7 @@ def build_cab():
     for x in (-0.58, 0.58):
         lamp = P.box((0.34, 0.2, 0.2), bevel=0.02, segs=1, chamfer=0.03, chamfer_axes='Y', mat='paint_dark')
         g.merge(B.add('lamps', lamp.move(x, -0.16, 4.62)))
-        g.merge(B.add('lamps', P.cylinder(0.072, 0.02, 14, bevel=0.0, mat='glow', z0=0.0)
+        g.merge(B.add('lamps', P.cylinder(0.072, 0.02, 14, bevel=0.0, mat='lamp', z0=0.0)
                       .align((0, -1, 0), loc=(x, -0.25, 4.62))))
         g.merge(B.add('lamps', P.box((0.3, 0.02, 0.018), bevel=0.004, segs=1, mat='steel_dark').move(x, -0.3, 4.62)))
     g.merge(B.add('mast', P.box((0.26, 0.26, 0.05), bevel=0.01, segs=1, mat='steel_dark').move(0.9, 0.95, 4.345)))
@@ -197,14 +262,18 @@ def build_cab():
         g.merge(B.add('rungs', K.rung((1.1, 1.26, z), (1.1, 1.62, z), 0.08, (1, 0, 0), r=0.018)))
     # --- RIGHT shoulder: gun pylon + trunnion yoke (the gun itself is the barrel node)
     tx, ty, tz = TRUNNION
-    pyl = P.box((0.3, 0.9, 0.5), bevel=0.02, segs=1, chamfer=0.06, chamfer_axes='X', mat='paint_primary')
-    g.merge(B.add('pylon', pyl.move(-1.48, ty + 0.05, tz)))
-    g.merge(B.add('pylon', K.drum((-1.58, ty, tz), (1, 0, 0), 0.26, 0.16, mat='paint_dark', hub=False, segs=20,
+    # yoke arm: a stepped box bridging the cab side to the trunnion drum (bolted cheek on top)
+    pyl = P.box((0.38, 0.9, 0.5), bevel=0.02, segs=1, chamfer=0.06, chamfer_axes='X', mat='paint_primary')
+    g.merge(B.add('pylon', pyl.move(-1.53, ty + 0.05, tz)))
+    g.merge(B.add('pylon', pad([(-1.38, ty - 0.34, tz + 0.255), (-1.69, ty - 0.34, tz + 0.255),
+                                (-1.69, ty + 0.44, tz + 0.255), (-1.38, ty + 0.44, tz + 0.255)], 0.035,
+                               mat='paint_secondary', normal_hint=(0, 0, 1), chamfer=0.04, seam=0, bolt_r=0.018)))
+    g.merge(B.add('pylon', K.drum((tx + 0.29, ty, tz), (1, 0, 0), 0.26, 0.16, mat='paint_dark', hub=False, segs=20,
                                   profile='ring')))
-    g.merge(B.add('pylon', K.ram((-1.52, ty + 0.46, tz - 0.62), (-1.52, ty + 0.1, tz - 0.2), r=0.05, frac=0.55,
+    g.merge(B.add('pylon', K.ram((-1.62, ty + 0.46, tz - 0.62), (-1.62, ty + 0.1, tz - 0.2), r=0.05, frac=0.55,
                                  segs=12)))
-    g.merge(B.add('pylon', P.box((0.22, 0.3, 0.2), bevel=0.012, segs=1, mat='steel_dark')
-                  .move(-1.45, ty + 0.5, tz - 0.66)))
+    g.merge(B.add('pylon', P.box((0.32, 0.3, 0.2), bevel=0.012, segs=1, mat='steel_dark')
+                  .move(-1.52, ty + 0.5, tz - 0.66)))
     # --- LEFT shoulder: smoke-discharger block (2 x 3 tubes, angled forward-up)
     sd = Geo()
     sd.merge(P.box((0.5, 0.56, 0.42), bevel=0.02, segs=1, chamfer=0.05, chamfer_axes='Y', mat='paint_primary'))
@@ -239,7 +308,7 @@ def build_eye(part='all'):
     g = Geo()
     y = -1.50 + 0.1
     if part != 'rim':
-        g.merge(P.box((1.36, 0.03, 0.035), bevel=0.006, segs=1, mat='lens').move(0, y - 0.02, 3.515))
+        g.merge(P.box((1.36, 0.03, 0.05), bevel=0.006, segs=1, mat='lens').move(0, y - 0.02, 3.522))
         g.merge(P.box((1.46, 0.03, 0.24), bevel=0.006, segs=1, mat='steel_dark').move(0, y - 0.004, 3.42))
 
     def lens(r, loc, tilt=(0, 0, 0)):
@@ -250,8 +319,8 @@ def build_eye(part='all'):
                             fr=[1.0, 0.68, 0.4, 0.2]))
         c.rotate((90, 0, 0)).rotate(tilt).move(*loc)
         return c
-    for x in (-0.3, 0.0, 0.3):
-        g.merge(lens(0.068, (x, y - 0.03, 3.4)))
+    for x in (-0.25, 0.25):   # design language: slit + TWO round lenses
+        g.merge(lens(0.074, (x, y - 0.03, 3.4)))
     for x, r in ((-0.86, 0.085), (0.9, 0.06)):
         p, n = glacis_point(x, 0.62, 0.0)
         comp = Geo()
@@ -391,27 +460,28 @@ def _leg_frame(p0, p1):
     return d, back, Vector((1.0, 0.0, 0.0))
 
 
-def _side_plate(p0, p1, t0, t1, w0, w1, off, thick=0.06, mat='paint_primary', bolts=1, fwd=0.0, segs=2):
-    """Armour plate on the OUTER (+X) face of a leg segment between fractions t0..t1, widths
-    w0/w1 across the sagittal plane, `off` metres out from the axis."""
+def _side_plate(p0, p1, t0, t1, w0, w1, off, thick=0.06, mat='paint_primary', bolts=4, fwd=0.0, seam=0.5,
+                hatch=None):
+    """Armour pad on the OUTER (+X) face of a leg segment between fractions t0..t1, widths
+    w0/w1 across the sagittal plane, `off` metres out from the axis (crisp `pad`)."""
     d, back, out = _leg_frame(p0, p1)
     a, b = Vector(p0).lerp(Vector(p1), t0), Vector(p0).lerp(Vector(p1), t1)
     f = -back
     c = [a + out * off + f * (w0 * 0.5 + fwd), a + out * off + back * (w0 * 0.5 - fwd),
          b + out * off + back * (w1 * 0.5 - fwd), b + out * off + f * (w1 * 0.5 + fwd)]
-    return K.plate_world(c, thick, mat=mat, normal_hint=(1, 0, 0), chamfer=0.07, bevel=0.015, segs=segs,
-                         bolts=bolts, bolt_r=0.017, bolt_spacing=0.22, inset=thick * 0.45)
+    return pad(c, thick, mat=mat, normal_hint=(1, 0, 0), chamfer=0.045, inset=0.022, seam=seam, bolts=bolts,
+               hatch=hatch)
 
 
-def _front_plate(p0, p1, t0, t1, w0, w1, off, thick=0.055, mat='paint_primary', ridge=0.03, bolts=1):
-    """Armour plate on the FRONT (knee-side, -back) face of a leg segment."""
+def _front_plate(p0, p1, t0, t1, w0, w1, off, thick=0.055, mat='paint_primary', ridge=0.03, bolts=4, seam=0.55):
+    """Armour pad on the FRONT (knee-side, -back) face of a leg segment."""
     d, back, out = _leg_frame(p0, p1)
     a, b = Vector(p0).lerp(Vector(p1), t0), Vector(p0).lerp(Vector(p1), t1)
     f = -back
     c = [a + f * off - out * w0 * 0.5, a + f * off + out * w0 * 0.5, b + f * off + out * w1 * 0.5,
          b + f * off - out * w1 * 0.5]
-    return K.plate_world(c, thick, mat=mat, normal_hint=tuple(f), chamfer=0.07, bevel=0.015, segs=2, ridge=ridge,
-                         ridge_axis='Y', bolts=bolts, bolt_r=0.016, bolt_spacing=0.24, inset=thick * 0.45)
+    return pad(c, thick, mat=mat, normal_hint=tuple(f), chamfer=0.04, inset=0.02, ridge=ridge, ridge_axis='Y',
+               seam=seam, bolts=bolts)
 
 
 def build_thigh():
@@ -423,34 +493,44 @@ def build_thigh():
     fr = K.limb(HIP, KNEE, [(0.0, -0.26, 0.26, -0.3, 0.3, 0.1), (0.5, -0.28, 0.28, -0.34, 0.34, 0.11),
                             (1.0, -0.22, 0.22, -0.26, 0.26, 0.08)], mat='paint_dark')
     g.merge(B.add('frame', fr))
-    # outer armour: two plates with a 5 cm panel gap, bolt rows
-    g.merge(B.add('plates', _side_plate(HIP, KNEE, -0.12, 0.44, 0.78, 0.72, 0.31)))
+    # outer armour: two crisp pads with a 5 cm panel gap, corner bolts, a seam each and a
+    # recessed inspection panel on the upper one (fix round 3: no pillow bevels)
+    g.merge(B.add('plates', _side_plate(HIP, KNEE, -0.12, 0.44, 0.78, 0.72, 0.31, hatch=(0.3, 0.16))))
     g.merge(B.add('plates', _side_plate(HIP, KNEE, 0.5, 0.86, 0.7, 0.58, 0.31)))
     # inner (body-side) plate: plain, no bolts
-    ip = _side_plate(HIP, KNEE, 0.0, 0.8, 0.62, 0.52, 0.3, thick=0.04, bolts=0, segs=1)
+    ip = _side_plate(HIP, KNEE, 0.0, 0.8, 0.62, 0.52, 0.3, thick=0.04, bolts=0, seam=0)
     ip.mirror('X').move(2 * (hx + (KNEE[0] - hx) * 0.4), 0, 0)
     g.merge(B.add('plates', ip))
     # front plates (oxide) with a ridge + an oxide knee cap (the cream lives on the cab: value read at range)
     g.merge(B.add('plates', _front_plate(HIP, KNEE, 0.02, 0.5, 0.56, 0.5, 0.36)))
-    g.merge(B.add('plates', _front_plate(HIP, KNEE, 0.56, 0.84, 0.5, 0.44, 0.33, bolts=0)))
-    kc = K.plate_world([Vector(KNEE) + Vector((-0.24, -0.33, 0.2)), Vector(KNEE) + Vector((0.24, -0.33, 0.2)),
-                        Vector(KNEE) + Vector((0.2, -0.36, -0.1)), Vector(KNEE) + Vector((-0.2, -0.36, -0.1))],
-                       0.06, mat='paint_primary', normal_hint=(0, -1, 0.2), chamfer=0.06, bevel=0.03, segs=1,
-                       ridge=0.025, ridge_axis='Y')   # oxide (a sun-facing cream cap blew out to a white pillow)
+    g.merge(B.add('plates', _front_plate(HIP, KNEE, 0.56, 0.84, 0.5, 0.44, 0.33, bolts=2, seam=0)))
+    kc = pad([Vector(KNEE) + Vector((-0.24, -0.33, 0.2)), Vector(KNEE) + Vector((0.24, -0.33, 0.2)),
+              Vector(KNEE) + Vector((0.2, -0.36, -0.1)), Vector(KNEE) + Vector((-0.2, -0.36, -0.1))],
+             0.06, mat='paint_primary', normal_hint=(0, -1, 0.2), chamfer=0.05, inset=0.024, ridge=0.025,
+             ridge_axis='Y', seam=0, bolts=4, bolt_r=0.018)   # oxide (a sun-facing cream cap blew out)
     g.merge(B.add('kneecap', kc))
     # outer hip fender (silhouette mass) with the yellow ID strip
     ox = hx + 0.36
-    g.merge(B.add('fender', K.plate_world([(ox, hy + 0.44, hz + 0.3), (ox, hy - 0.52, hz + 0.26),
-                                           (ox, hy - 0.5, hz - 0.36), (ox, hy + 0.1, hz - 0.5),
-                                           (ox, hy + 0.46, hz - 0.2)], 0.06, mat='paint_primary',
-                                          normal_hint=(1, 0, 0), chamfer=0.08, bevel=0.03, segs=1, bolts=1,
-                                          bolt_r=0.02, bolt_spacing=0.3)))
+    g.merge(B.add('fender', pad([(ox, hy + 0.44, hz + 0.3), (ox, hy - 0.52, hz + 0.26),
+                                 (ox, hy - 0.5, hz - 0.36), (ox, hy + 0.1, hz - 0.5),
+                                 (ox, hy + 0.46, hz - 0.2)], 0.06, mat='paint_primary',
+                                normal_hint=(1, 0, 0), chamfer=0.05, inset=0.022, seam=0.36, bolts=4)))
     g.merge(B.add('fender', K.strip((ox + 0.06, hy - 0.44, hz + 0.16), (ox + 0.06, hy + 0.36, hz + 0.18), 0.12,
                                     0.012, (1, 0, 0), mat='paint_accent')))
     # ram anchor lugs on the thigh (the rams themselves are separate two-part nodes)
     for (ax_, ab, at) in RAM_A:
         p = Vector(HIP).lerp(Vector(KNEE), at) + back * ab + out * ax_
         g.merge(B.add('lugs', P.box((0.1, 0.16, 0.16), bevel=0.012, segs=1, mat='steel_dark').move(*p)))
+    # hydraulic feed: twin hoses from the hip drum down the back edge of the thigh into the knee
+    # (exposed inner-frame plumbing, tertiary detail), held by two clamps
+    for j, (xo, r) in enumerate(((0.12, 0.028), (0.2, 0.022))):
+        pts = [Vector(HIP) + back * 0.3 + out * xo + Vector((0, 0, -0.1)),
+               Vector(HIP).lerp(Vector(KNEE), 0.45) + back * (0.4 + 0.02 * j) + out * xo,
+               Vector(KNEE) + back * 0.36 + out * xo + Vector((0, 0, 0.12))]
+        g.merge(B.add('hoses', K.tube([tuple(p) for p in pts], r, 6, mat='rubber', collars=False, subdiv=2)))
+    for t in (0.25, 0.68):
+        p = Vector(HIP).lerp(Vector(KNEE), t) + back * 0.39 + out * 0.16
+        g.merge(B.add('hoses', P.box((0.16, 0.06, 0.05), bevel=0.0, segs=1, mat='steel_dark').move(*p)))
     # knee drum (joint housing) + cable bundle wrapped around its back
     g.merge(B.add('knee', K.drum(KNEE, (1, 0, 0), 0.28, 0.56, mat='paint_dark', hub=False, segs=24,
                                  profile='ring', accent='paint_dark')))
@@ -477,8 +557,8 @@ def build_shin():
                               (1.0, -0.2, 0.2, -0.24, 0.24, 0.08)], mat='paint_dark')
     g.merge(B.add('frame', fr))
     g.merge(B.add('plates', _side_plate(KNEE, ANKLE, 0.12, 0.5, 0.66, 0.62, 0.29)))
-    g.merge(B.add('plates', _side_plate(KNEE, ANKLE, 0.56, 0.84, 0.6, 0.5, 0.29, bolts=0)))
-    ip = _side_plate(KNEE, ANKLE, 0.15, 0.8, 0.55, 0.45, 0.28, thick=0.04, bolts=0, segs=1)
+    g.merge(B.add('plates', _side_plate(KNEE, ANKLE, 0.56, 0.84, 0.6, 0.5, 0.29, seam=0)))
+    ip = _side_plate(KNEE, ANKLE, 0.15, 0.8, 0.55, 0.45, 0.28, thick=0.04, bolts=0, seam=0)
     ip.mirror('X').move(2 * kx + (ax - kx) * 0.47, 0, 0)
     g.merge(B.add('plates', ip))
     # shin guard: front plate with ridge + worn hazard band
@@ -584,25 +664,105 @@ def build_ram_half(i, half):
 
 
 # ============================================================================ debris (death)
-def build_debris(k, rng):
-    """Armour shard k: a broken, bevelled plate fragment (0.4-1.2 m) in the unit's own paint,
-    authored at the origin (models.js launches them from the hull on death)."""
-    size = [1.1, 0.9, 0.75, 0.62, 0.55, 0.48, 0.8, 0.42][k]
-    mat = ['paint_primary', 'paint_secondary', 'paint_primary', 'paint_primary', 'paint_secondary', 'paint_dark',
-           'paint_primary', 'steel_dark'][k]
-    n = 5 + (k % 2)
+def _bend(g, angle_deg, at_x=0.0):
+    """Fold a plate along the line x = at_x (crease added by a bisect): torn, buckled armour."""
+    import bmesh
+    bm = g.bm
+    bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces), dist=1e-6,
+                           plane_co=(at_x, 0, 0), plane_no=(1, 0, 0))
+    R = Matrix.Rotation(math.radians(angle_deg), 4, 'Y')
+    o = Vector((at_x, 0, 0))
+    for v in bm.verts:
+        if v.co.x > at_x + 1e-5:
+            v.co = R @ (v.co - o) + o
+    bm.normal_update()
+    return g
+
+
+def _bare_edges(g, mat='steel_dark'):
+    """Torn / cut plate edges show bare dark steel (a thick armour chunk, not a painted card)."""
+    g.bm.normal_update()
+    mi = g.mi(mat)
+    for f in g.bm.faces:
+        if abs(f.normal.z) < 0.5:
+            f.material_index = mi
+    return g
+
+
+def _torn(rng, w, h, n=8, jag=0.22):
+    """Irregular torn outline around a w x h rectangle (CCW)."""
     pts = []
     for j in range(n):
-        a = math.tau * j / n + rng.uniform(-0.25, 0.25)
-        rr = size * 0.5 * rng.uniform(0.55, 1.0) * (1.0 if j % 2 == 0 else rng.uniform(0.6, 0.9))
-        pts.append((math.cos(a) * rr, math.sin(a) * rr * rng.uniform(0.6, 0.9)))
-    th = 0.05 + 0.03 * (k % 3)
-    g = P.plate(pts, th, bevel=0.012, segs=1, mat=mat, inset=th * 0.5)
-    if k in (1, 3):
-        g.merge(K.strip((-size * 0.3, size * 0.05, th), (size * 0.3, size * 0.05, th), 0.1, 0.008, (0, 0, 1),
+        a = math.tau * (j + rng.uniform(-0.2, 0.2)) / n
+        cx, cy = math.cos(a), math.sin(a)
+        k = 1.0 / max(abs(cx), abs(cy))          # rectangle-ish (not an ellipse)
+        r = (1.0 - jag * rng.random()) * k
+        pts.append((cx * r * w * 0.5, cy * r * h * 0.5))
+    return pts
+
+
+# (w, h, thickness, paint, bend deg) of the 8 armour fragments; 0 and 1 are the two LARGE
+# authored chunks that land beside the wreck and stay: a cab side-skirt (cream, unit number)
+# and a leg armour pad (oxide, seam, bolts, hazard band)
+DEBRIS = [(1.15, 0.86, 0.07, 'paint_secondary', 0), (0.74, 0.58, 0.065, 'paint_primary', 0),
+          (0.7, 0.46, 0.06, 'paint_primary', 28), (0.58, 0.42, 0.06, 'paint_secondary', -22),
+          (0.52, 0.4, 0.055, 'paint_primary', 34), (0.46, 0.34, 0.05, 'paint_dark', 18),
+          (0.62, 0.38, 0.06, 'paint_primary', -30), (0.4, 0.3, 0.08, 'steel_dark', 0)]
+
+
+def build_debris(k, rng):
+    """Armour fragment k (fix round 3): 6-8 cm thick chunky plates with a crisp draft edge,
+    torn outlines, a buckled fold, bolts / stiffener and paint trim, in the unit's own atlas
+    (baked in a 'debris yard', so they carry oxide / cream paint with edge wear and get the
+    scorched BURNT_OF variant). Authored at the origin; models.js launches them on death."""
+    w, h, th, mat, bend = DEBRIS[k]
+    g = Geo()
+    if k == 0:      # cab side skirt: straight factory edges on two sides, torn on the others
+        pts = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h * 0.18), (w * 0.3, h / 2), (-w * 0.05, h * 0.36),
+               (-w * 0.3, h / 2), (-w / 2, h * 0.3)]
+        g.merge(P.plate(pts, th, bevel=0.0, segs=1, mat=mat, inset=0.02))
+        for x, y in ((-w / 2 + 0.07, -h / 2 + 0.07), (w / 2 - 0.07, -h / 2 + 0.07), (w / 2 - 0.07, h * 0.1)):
+            g.merge(cheap_bolt(0.024).move(x, y, th - 0.002))
+        g.merge(P.box((w * 0.9, 0.06, 0.05), bevel=0.0, segs=1, mat='steel_dark').move(0, -h * 0.1, -0.025))
+        g.merge(K.strip((-w / 2 + 0.02, -h / 2 + 0.12, th), (w / 2 - 0.02, -h / 2 + 0.12, th), 0.1, 0.008, (0, 0, 1),
                         mat='paint_accent'))
-    g.rotate((rng.uniform(-20, 20), rng.uniform(-20, 20), rng.uniform(0, 180)))
+        _bare_edges(g)
+    elif k == 1:    # leg armour pad: seam, 4 bolts, hazard band
+        pts = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h * 0.3), (w * 0.2, h / 2), (-w / 2, h / 2)]
+        pl = P.plate(P.fillet(pts, 0.04, 1), th, bevel=0.0, segs=1, mat=mat, inset=0.022)
+        top = pl.faces_facing((0, 0, 1), 22)
+        if top:
+            pl.groove_cut(top, (0.05, 0, 0), (1, 0, 0), gap=0.018, depth=0.014)
+        g.merge(pl)
+        for x, y in ((-w / 2 + 0.07, -h / 2 + 0.07), (w / 2 - 0.07, -h / 2 + 0.07), (-w / 2 + 0.07, h / 2 - 0.07),
+                     (w / 2 - 0.08, h * 0.2)):
+            g.merge(cheap_bolt(0.022).move(x, y, th - 0.002))
+        g.merge(K.strip((-w / 2 + 0.03, -h * 0.18, th), (-w * 0.05, -h * 0.18, th), 0.09, 0.008, (0, 0, 1),
+                        mat='hazard'))
+        _bare_edges(g)
+    else:
+        g.merge(P.plate(_torn(rng, w, h, n=7 + (k % 2)), th, bevel=0.0, segs=1, mat=mat, inset=0.018))
+        if k in (2, 4, 6):
+            g.merge(cheap_bolt(0.022).move(-w * 0.28, -h * 0.18, th - 0.002))
+            g.merge(cheap_bolt(0.022).move(-w * 0.28, h * 0.16, th - 0.002))
+        if k in (3, 6):
+            g.merge(K.strip((-w * 0.4, h * 0.05, th), (w * 0.25, h * 0.05, th), 0.08, 0.008, (0, 0, 1),
+                            mat='paint_accent'))
+        if k == 7:      # chunk of the gun cradle: a stubby steel block with a bore
+            g.merge(P.cylinder(0.09, 0.22, 12, bevel=0.0, bsegs=1, mat='steel', z0=th))
+        _bare_edges(g)
+        if bend:
+            _bend(g, bend, at_x=w * 0.12)
+    if k >= 2:
+        g.rotate((0, 0, rng.uniform(0, 180)))
     return g
+
+
+def debris_props(k):
+    """glTF extras for shard k: launch speed scale (the big chunks land beside the wreck)
+    and the rest height (half the thickness, model units)."""
+    w, h, th, mat, bend = DEBRIS[k]
+    return dict(iw_debris=1, iw_debris_speed=(0.32 if k < 2 else 1.0), iw_half=round(th * 0.5 + 0.005, 3))
 
 
 # ============================================================================ assembly
@@ -612,7 +772,7 @@ DEBRIS_N = 8
 def debris_home(k):
     """Bake position of shard k: a 'debris yard' beside the unit (no occlusion from the body,
     same height range, so the bake gradients are unchanged). models.js launches them."""
-    return (5.5 + (k % 4) * 1.6, -1.5 + (k // 4) * 2.4, 1.2 + (k % 3) * 1.1)
+    return (6.0 + (k % 4) * 1.7, -1.6 + (k // 4) * 2.6, 1.2 + (k % 3) * 1.1)
 
 
 def build(a):
@@ -620,7 +780,9 @@ def build(a):
     a.pivot('hull', (0, 0, 0))
     a.pivot('pelvis', PELVIS, parent='hull')
     a.pivot('turret', TURRET, parent='pelvis')
-    a.pivot('eye', EYE, parent='turret', iw_eye_color='#FF2A2A', iw_eye_strength=14.0)
+    # strength 6 (r3): 14 clipped the AgX shoulder to orange/salmon; #FF2A2A must stay Grauwerk red
+    # (the distance boost in models.js EyeCtl + the far glow sprite carry it at range)
+    a.pivot('eye', EYE, parent='turret', iw_eye_color='#FF2A2A', iw_eye_strength=6.0)
     a.pivot('barrel', TRUNNION, parent='turret')
     a.pivot('beacon', (0.9, 0.95, 5.3), parent='turret', iw_eye_color='#FF3B2F', iw_eye_strength=18.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='barrel')
@@ -633,7 +795,7 @@ def build(a):
             a.pivot(f'ram_{S}_{i}a', m(tuple(A)), parent='thigh_' + S, iw_ram_to=f'ram_{S}_{i}b')
             a.pivot(f'ram_{S}_{i}b', m(tuple(Bp)), parent='shin_' + S, iw_ram_to=f'ram_{S}_{i}a')
     for k in range(DEBRIS_N):
-        a.pivot(f'debris_{k}', debris_home(k), iw_debris=1)
+        a.pivot(f'debris_{k}', debris_home(k), **debris_props(k))
     tris = {}
 
     def put(name, g, parent):
@@ -673,9 +835,10 @@ def build(a):
         rng = random.Random(4077)
         for k in range(DEBRIS_N):
             put(f'debris_{k}_geo', build_debris(k, rng).move(*debris_home(k)), f'debris_{k}')
-        for i, x in enumerate((0.36, -0.36)):
-            K.nozzle_part(a, f'nozzle_back_{i}', (x, 1.28, 2.0), (0, 1, -0.3), 'pelvis', 0.08, 0.13, 0.22, segs=24,
-                          ribs=0, bolts=0)
+        # boost-skate thrusters (r3: 0.24 m exit, was 0.13: the plume reads as a jet, not a beam)
+        for i, x in enumerate((0.38, -0.38)):
+            K.nozzle_part(a, f'nozzle_back_{i}', (x, 1.34, 1.98), (0, 1, -0.3), 'pelvis', 0.14, 0.24, 0.3, segs=24,
+                          ribs=1, bolts=0)
     return tris
 
 
@@ -731,14 +894,49 @@ def add_decals(a):
     a.decal(K.soot(256, 20, 0.85, 1.4), (0.77, 1.35, 4.33), (0, 0, 1), up=(0, 1, 0), size=(0.9, 0.7), depth=0.3)
     a.decal(K.soot(256, 23, 0.8, 1.0), (0.0, 1.08, 2.0), (0, 1, -0.3), size=(1.0, 0.5), depth=0.3)
     K.card(a, D.warning_label('DANGER', '射線注意', ('LINE OF FIRE', '砲口前方立入禁止'), w=720, colors=(D.YELLOW, BK)),
-           (-2.1, 0.22, 3.74), (-1, 0, 0), up=(0, 0, 1), size=(0.3, None), parent='barrel')
-    K.card(a, D.text_decal(['GK-40', '40x180 HE'], px=140, color=C, worn=0.3), (-1.78, -0.62, 4.1), (0, 0, 1),
+           (TRUNNION[0] - 0.32, 0.22, 3.74), (-1, 0, 0), up=(0, 0, 1), size=(0.3, None), parent='barrel')
+    K.card(a, D.text_decal(['GK-40', '40x180 HE'], px=140, color=C, worn=0.3), (TRUNNION[0], -0.62, 4.1), (0, 0, 1),
            up=(0, -1, 0), size=(0.26, None), parent='barrel')
     K.card(a, D.warning_label('HOT', '高温注意', ('EXHAUST', '排気口 接触厳禁'), w=720), (0.75, 1.78, 3.3), (0, 1, 0),
            up=(0, 0, 1), size=(0.34, None))
     K.card(a, D.text_decal(['MAX 12t', '荷重注意'], px=140, color=BK, worn=0.3), (1.0, 0.25, 4.33), (0, 0, 1),
            up=(0, -1, 0), size=(0.28, None))
     K.card(a, D.arrow_decal(text='LIFT'), (-1.0, 0.2, 4.33), (0, 0, 1), up=(0, -1, 0), size=(0.2, None))
+    # legs (fix round 3): load / service stencils on the outer pads (same manufacturing logic as the rigs)
+    for s in (1, -1):
+        a.decal(D.text_decal(['MAX 6t', '荷重注意'], px=160, color=BK, worn=0.35), (s * 1.69, -0.36, 1.12), (s, 0, 0),
+                up=(0, 0.6, 1), size=(0.2, None), depth=0.1)
+        a.decal(D.text_decal('PK-2', px=180, color=C, worn=0.35), (s * 1.6, -0.02, 1.86), (s, 0, 0),
+                up=(0, -0.2, 1), size=(0.2, None), depth=0.1)
+    # r3 detail density (critic: 10 decals vs the player's 31): hazard chevrons on the knee caps,
+    # unit number on the thigh guards, roof NO STEP, lifting-point arrows, a serial plate on the
+    # engine pack, pinch-point labels on the hip drums' fenders
+    _, bk, _ = _leg_frame(HIP, KNEE)
+    fth = -bk
+    for s in (1, -1):
+        kc = Vector(KNEE) + Vector((0, -0.37, 0.16))
+        a.decal(D.hazard_decal(256, 64, worn=0.4, seed=12 + s), (s * kc.x, kc.y, kc.z), (0, -1, 0.2), up=(0, 0.2, 1),
+                size=(0.34, 0.085), depth=0.12)
+        tp = Vector(HIP).lerp(Vector(KNEE), 0.22) + fth * 0.42
+        a.decal(D.text_decal('27', px=200, color=C, worn=0.35), (s * tp.x, tp.y, tp.z), tuple(fth), up=(0, 0.6, 0.8),
+                size=(0.17, None), depth=0.12)
+        a.decal(D.warning_label('CAUTION', '挟まれ注意', ('PINCH POINT', '関節部'), w=480, colors=(D.YELLOW, BK)),
+                (s * (HIP[0] + 0.43), HIP[1] - 0.1, HIP[2] - 0.12), (s, 0, 0), up=(0, 0, 1), size=(0.2, None), depth=0.08)
+        a.decal(D.arrow_decal(text='JACK'), (s * 1.46, ANKLE[1] - 0.3, 0.2), (s, 0, 0), up=(0, 0, 1), size=(0.14, None),
+                depth=0.08)
+    a.decal(D.text_decal(['NO STEP', '踏むな'], px=150, color=BK, worn=0.35), (0.42, 0.05, 4.33), (0, 0, 1),
+            up=(0, -1, 0), size=(0.3, None), depth=0.1)
+    a.decal(D.serial_plate(('GC-SEC PK-2  SN 27-3310', 'ENGINE PACK  MAX 2.1t')), (-0.62, 1.78, 3.05), (0, 1, 0),
+            up=(0, 0, 1), size=(0.34, None), depth=0.08)
+    a.decal(D.hazard_decal(384, 64, worn=0.35, seed=19), (0.0, -0.75, 1.72), (0, -1, -0.2), up=(0, 0, 1),
+            size=(0.7, 0.08), depth=0.1)
+    # the large authored chunks keep their markings when they land beside the wreck
+    hx, hy, hz = debris_home(0)
+    a.decal(D.text_decal('P-27', px=320, color=BK, worn=0.35), (hx - 0.05, hy + 0.05, hz + DEBRIS[0][2]),
+            (0, 0, 1), up=(0, 1, 0), size=(0.5, None), depth=0.08)
+    hx, hy, hz = debris_home(1)
+    a.decal(D.text_decal('MAX 6t', px=160, color=BK, worn=0.35), (hx + 0.2, hy + 0.12, hz + DEBRIS[1][2]),
+            (0, 0, 1), up=(0, 1, 0), size=(0.18, None), depth=0.08)
 
 
 VIEWS = {
@@ -747,18 +945,26 @@ VIEWS = {
     'back': dict(azimuth=150, elevation=18, lens=50, distance=14, target=(0, 0.3, 2.7)),
     'close': dict(azimuth=-28, elevation=8, lens=70, distance=7.5, target=(-0.4, -1.0, 3.6)),
 }
-CLAY = dict(VIEWS, side=dict(azimuth=-90, elevation=4, lens=50, distance=15, target=(0, -0.6, 2.6)))
-COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.52},
+CLAY = dict(VIEWS, side=dict(azimuth=-90, elevation=4, lens=50, distance=15, target=(0, -0.6, 2.6)),
+            legs=dict(azimuth=-30, elevation=8, lens=60, distance=7.5, target=(0.2, -0.3, 1.3)),
+            yard=dict(azimuth=0, elevation=60, lens=50, distance=9, target=(8.5, -0.3, 1.5)))
+# oxide a touch deeper than the #5C2E24 swatch: under the 13 deg dusk key the sun-lit leg pads
+# washed out to salmon (r2 critic: lit 206,123,95); roughness breakup comes from the weathering
+COLORS = {'paint_primary': {'color': '#55291F', 'rough': 0.56},
           'paint_secondary': {'color': '#B8AE95', 'rough': 0.58, 'grime': 1.5, 'dust': 1.0},
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#2B2624'},
           'steel_dark': {'color': '#3A3836'}, 'glow': '#FFB347',
+          # roof work lamps at ~10 % of the glow preset (30 % still rendered near-white): the red
+          # sensor stays the brightest point of the silhouette
+          'lamp': {'color': '#1A1410', 'metal': 0.0, 'rough': 0.4, 'wear': 0.0, 'grime': 0.0, 'rust': 0.0, 'dust': 0.0,
+                   'var': 0.0, 'emit': '#FFB347', 'emit_strength': 0.8, 'decals': False},
           'glass': {'color': '#07090B', 'metal': 0.0, 'rough': 0.05, 'wear': 0.0, 'grime': 0.15, 'rust': 0.0,
                     'dust': 0.1, 'var': 0.0, 'decals': False}}
 OBJ_WEIGHT = {'turret_geo': 1.3, 'eye_geo': 1.2, 'barrel_geo': 1.1, 'pelvis_geo': 0.75, 'foot_L_geo': 0.8,
               'foot_R_geo': 0.8, **{f'debris_{k}_geo': 0.45 for k in range(8)},
               **{f'ram_{S}_{i}{h}_geo': 0.6 for S in 'LR' for i in range(2) for h in 'ab'}}
 WEATHER = iw.Weathering(edge_wear=1.45, grime=1.6, streaks=1.6, rust=1.0, dust=0.7, chip_threshold=0.54,
-                        flat_chips=0.55, macro=0.1, ground_dirt=0.95, ao_in_albedo=0.26)
+                        flat_chips=0.55, macro=0.1, ground_dirt=0.95, ao_in_albedo=0.26, rough_breakup=0.22)
 NEED = ['hull', 'pelvis', 'turret', 'barrel', 'muzzle', 'eye', 'beacon', 'thigh_L', 'shin_L', 'foot_L', 'thigh_R', 'shin_R',
         'foot_R', 'ram_L_0a', 'ram_L_0b', 'ram_R_1a', 'debris_0', 'debris_7']
 

@@ -59,10 +59,22 @@ function autoQuality(game) {
 function devSun() {
   try {
     const v = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sun');
-    if (!v) return;
-    const [az, el] = v.split(',').map(Number);
-    if (Number.isFinite(az)) ATMOS.sun.azimuthDeg = az;
-    if (Number.isFinite(el)) ATMOS.sun.elevationDeg = el;
+    if (v) {
+      const [az, el] = v.split(',').map(Number);
+      if (Number.isFinite(az)) ATMOS.sun.azimuthDeg = az;
+      if (Number.isFinite(el)) ATMOS.sun.elevationDeg = el;
+    }
+  } catch (e) { /* keep defaults */ }
+  // dev: &atmos=fog.sunStart:500,fog.cap:0.8 (any numeric ATMOS field, before the shaders bake it)
+  try {
+    const a = typeof location !== 'undefined' && new URLSearchParams(location.search).get('atmos');
+    for (const kv of (a || '').split(',').filter(Boolean)) {
+      const [path, val] = kv.split(':');
+      const keys = path.split('.'), last = keys.pop();
+      let o = ATMOS;
+      for (const k of keys) o = o && o[k];
+      if (o && typeof o[last] === 'number' && Number.isFinite(Number(val))) o[last] = Number(val);
+    }
   } catch (e) { /* keep defaults */ }
 }
 
@@ -217,6 +229,7 @@ export default function environmentSystem(game) {
       // flake lighting is art-directed (not tied to the key intensity): dark ash motes
       weather = createWeather(Q.flakes, { sunDir, sunColor: palette.sun.clone().multiplyScalar(1.7), ambient: new THREE.Color('#4E555C').multiplyScalar(1.4) });
       scene.add(weather.mesh);
+      try { if (new URLSearchParams(location.search).get('weather') === '0') weather.mesh.visible = false; } catch (e) { /* dev only */ }
 
       g.env = api;
     },

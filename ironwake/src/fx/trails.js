@@ -14,7 +14,7 @@ const MAXT = 40, CAP = 180;
 export const TRAIL_STYLES = {
   // drift: m/s the old smoke meanders (rises + snakes sideways) so the ribbon diffuses instead of
   // hanging as a ruler-straight tube
-  missile: { w0: 1.0, grow: 3.4, life: 4.2, alpha: 0.85, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2, drift: 0.9 }, // #C8C4BE -> #6D6A66
+  missile: { w0: 1.0, grow: 3.4, life: 4.2, alpha: 0.5, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2, drift: 0.9 }, // #C8C4BE -> #6D6A66
   shell: { w0: 0.4, grow: 1.4, life: 1.1, alpha: 0.35, c0: [0.45, 0.43, 0.4], c1: [0.2, 0.19, 0.18], hot: 0.06, minStep: 2, drift: 0.5 },
   ab: { w0: 0.9, grow: 3.2, life: 0.9, alpha: 0.12, c0: [0.62, 0.58, 0.53], c1: [0.4, 0.38, 0.36], hot: 0.0, minStep: 2.5 },
 };

@@ -3,7 +3,8 @@
 //   fx.slashes.slash(owner, opts?)     swept energy arc in front of the owner (on the slash step)
 //   fx.slashes.ignite(owner, seconds)  the blade beam on the left arm (windup -> lunge -> recover)
 // The arc is a ring-sector mesh (additive, soft layer) whose sweep head races across it in a
-// few frames: white-hot leading edge, cyan rim #7FD8FF, a motion-streaked tail that decays.
+// few frames: white-hot leading edge, cyan rim #7FD8FF, a broad crescent band behind the head,
+// a motion-streaked tail that decays.
 // The beam is drawn each step with fx.bolt() from the L muzzle along its forward axis.
 import * as THREE from 'three';
 
@@ -36,9 +37,14 @@ void main() {
   float n = texture2D(tNoise, vec2(x * 1.25 - uTime * 0.5, 0.21 + y * 0.18)).a * 2.0 - 1.0;   // 0..1
   float ero = smoothstep(0.0, 0.45, n + 0.3 - max(behind, 0.0) * 1.1);
   float head = exp(-max(behind, 0.0) * 24.0) * lead;          // bright leading edge
-  float a = lead * tail * (core * 1.35 + (rim * 0.5 + inner * 0.12) * ero) + head * (0.18 + 0.8 * rim);
+  // broad swept CRESCENT (combat r2: thin parallel lines): a ~2.5 m band inside the cutting edge,
+  // white at the edge -> #7FD8FF inward, that dies off quickly behind the sweep head (~0.12 s)
+  float cres = smoothstep(0.52, 0.8, y) * (1.0 - smoothstep(0.87, 0.96, y));
+  float cresT = exp(-max(behind, 0.0) * 4.5) * (0.75 + 0.25 * ero);
+  float a = lead * tail * (core * 1.35 + (rim * 0.5 + inner * 0.12) * ero) + head * (0.18 + 0.8 * rim)
+          + lead * cres * cresT * 0.55;
   a *= uFade;
-  vec3 col = mix(uRim, uCore, clamp(core * 0.9 + head * 0.5, 0.0, 1.0));
+  vec3 col = mix(uRim, uCore, clamp(core * 0.9 + head * 0.5 + smoothstep(0.7, 0.86, y) * cres * 0.45, 0.0, 1.0));
   a *= smoothstep(0.6, 2.6, vViewZ);
   if (a < 0.003) discard;
   gl_FragColor = vec4(col * a, 0.0);

@@ -7,8 +7,8 @@
 //   actor:hit       HULL FLASH: a brief white-orange flash over an enemy the player hits, sized to
 //                   the target and placed in front of it, so rifle hits read at 75-300 m even under
 //                   the lock marker (the impact light relights the hull at the same time)
-//   (poll)          per lit nozzle: exit glow; main bells also an end-on exhaust core (white core
-//                   + shock rings) and a tapered jet streak; assault boost adds a wide heat halo
+//   (poll)          per lit nozzle: a small exit glow + an exhaust JET (fx.jet: core cone -> orange
+//                   flame, min on-screen length, so the chase camera always sees the plume)
 //   (poll)          assault-boost heated-air wake ribbon behind the player's back boosters (off)
 // update() runs AFTER the particle sim each step (fx/particles.js), so one-step sprites render.
 import * as THREE from 'three';
@@ -16,7 +16,11 @@ import * as THREE from 'three';
 const ARC = [2.6, 4.2, 7.5];
 const AB_WAKE = false;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3();
-const _jetOpts = { scale: 1, vel: null, normal: null, yaw: 0, incoming: null };
+/** Exhaust-jet tuning (m; main = bells with exit radius >= mainRadius). */
+export const JET = { mainRadius: 0.3, exitOffset: 0.35, lenIdle: 0.8, lenBoost: 4.4, abMul: 1.4, qbMul: 0.5, width: 1.2, widthAB: 1.7, verMax: 1.2, verGain: 0.6,
+  hazeRate: 15, hazeLife: 0.25, hazeBoost: 0.35, hazeAB: 0.55 };
+/** Quick-boost jet: length len0 + len1 x align^2 (m), life s, half width (x exit radius), flash. */
+export const QB_JET = { life: 0.07, len0: 2.0, len1: 5.5, width: 1.5, minHalfWidth: 0.3, gain: 1.35, flash: 70, flashColor: [1, 0.62, 0.3] };
 
 export class Status {
   constructor(game, fx) {
@@ -35,12 +39,15 @@ export class Status {
     ];
     this.flashT = new Map();   // target -> last hull-flash time (rate limit)
     this.time = 0;
+    this.hazeT = 0;
+    this.qbJets = [];          // active quick-boost jets {nz, t, life, align, seed}
   }
 
   reset() {
     this.stag.length = 0;
     this.hurtT.clear();
-    this.flashT.clear(); this.time = 0;
+    this.flashT.clear(); this.time = 0; this.hazeT = 0;
+    for (const j of this.qbJets) j.t = j.life = 0;
     this.abTrail[0] = this.abTrail[1] = -1;
   }
 
@@ -63,6 +70,11 @@ export class Status {
     t.aimPoint(_p);
     _c.copy(cam).sub(_p);
     const dist = _c.length() || 1;
+    // (enemy-ai r3, critic: "HitFlash turns the whole unit milky cream") inside ~60 m the local
+    // hit pulse on the struck plating (src/enemies/hitvol.js) + the sparks carry the hit; the
+    // hull-sized glow is only needed where those shrink below a few pixels (the rival rig opts out
+    // too: a 6 m cream glow per round washed its whole torso out under sustained rifle fire)
+    if (dist < 60 && (t.flash || t.ownHitFx)) return;
     _p.addScaledVector(_c, Math.min(dist * 0.5, (t.radius || 2.5) * 1.1) / dist);
     // the flash grows a little with distance (stays readable at range) and with the hit weight
     const w = Math.min(1.6, 0.7 + (h.impact || 100) / 400);
@@ -82,19 +94,29 @@ export class Status {
     if (p.syncSim) p.syncSim();   // sim pose, not the last interpolated render pose
     // afterimage: ONE faint heat-smear copy (combat r1: bright edge-lit copies read as a hologram)
     this.fx.ghosts.trigger(p.rig.root, 0.16);
-    // jet flare out of every nozzle that faces away from the burst (located on the real
-    // nozzles, so it reads from any camera side instead of hiding behind the body)
     const q = f && f.qb;
     if (!q || !p.rig.nozzles) return;
     const ql = Math.hypot(q.x, q.y, q.z) || 1;
+    // ground pressure ring at the feet when the burst fires near the slab
+    const gh = this.game.physics.groundHeight(p.pos.x, p.pos.z);
+    if (p.pos.y - gh < 4) this.fx.spawn('qb_ground_ring', _c.set(p.pos.x, gh + 0.5, p.pos.z), null, 1);
+    // white-hot DIRECTIONAL JET out of every nozzle that faces away from the burst (combat r2: the
+    // burst read as a beige cloud): a 3-4 frame fx.jet streak, 5-8 m for a fully opposed bell,
+    // re-emitted on the live nozzle every step (see update), + an exit flash and an ash wisp
+    _a.set(0, 0, 0); let nf = 0;
     for (const nz of p.rig.nozzles) {
       if (!nz.node) continue;
       nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();   // exhaust = -Z
       const align = -(_d.x * q.x + _d.y * q.y + _d.z * q.z) / ql;
       if (align < 0.45) continue;
       _p.addScaledVector(_d, Math.max(0.25, (nz.radius || 0.3) * 0.6));
-      this.fx.spawn('qb_jet', _p, _d, (0.6 + 0.8 * align) * Math.min(1.3, Math.max(0.8, (nz.radius || 0.3) / 0.3)));
+      this.fx.spawn('qb_jet', _p, _d, (0.6 + 0.6 * align) * Math.min(1.3, Math.max(0.8, (nz.radius || 0.3) / 0.3)));
+      const j = this.qbJets.find((x) => x.t >= x.life) || (this.qbJets.length < 16 ? this.qbJets[this.qbJets.push({}) - 1] : null);
+      if (j) { j.nz = nz; j.t = 0; j.life = QB_JET.life; j.align = align; j.seed = this.rng.next(); }
+      _a.add(_p); nf++;
     }
+    // a short warm flash on the firing side (lights the rig flank, not the whole yard)
+    if (nf) { _a.multiplyScalar(1 / nf); this.fx.flash(_a, QB_JET.flashColor, QB_JET.flash, 22, 0.08); }
   }
 
   /** Jagged bolt from a to b (world), n segments, jitter m. */
@@ -134,6 +156,7 @@ export class Status {
       s.arcT -= dt;
       if (s.arcT > 0) continue;
       s.arcT = r.range(0.03, 0.07);
+      if (a.ownArcs) continue;   // (enemy-ai r3) the rival rig draws its own branching joint-to-joint bolts (boss.js _bolts)
       a.aimPoint(_c);
       const rad = Math.max(1.5, (a.radius || 2.5) * 0.9), hh = Math.max(1.5, (a.height || 5) * 0.45);
       const nb = r.int(2, 3);
@@ -163,39 +186,58 @@ export class Status {
     //     the rig's public burst knob; it decays on its own when the boost ends)
     const plm = g.player && g.player.motor;
     if (plm && plm.mode === 'ab' && g.player.rig && g.player.rig.flare) g.player.rig.flare(plm.abCharging ? 0.25 * (plm.abCharge || 0) : 0.85);
-    // --- nozzle exit glows (the plume seen end-on still reads as a hot core + halo)
+    // --- quick-boost jets: 3-4 frames, long white-hot streak collapsing back into the bell
+    for (const j of this.qbJets) {
+      if (j.t >= j.life || !j.nz || !j.nz.node) continue;
+      const k = 1 - j.t / j.life; j.t += dt;
+      const nz = j.nz, r = nz.radius || 0.3;
+      nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();
+      _p.addScaledVector(_d, r * JET.exitOffset);
+      const len = (QB_JET.len0 + QB_JET.len1 * j.align * j.align) * Math.min(1.25, Math.max(0.8, r / 0.3)) * (0.55 + 0.45 * k);
+      fx.jet(_p, _d.x, _d.y, _d.z, len, Math.max(QB_JET.minHalfWidth, r * QB_JET.width) * (0.8 + 0.2 * k), 1.3, QB_JET.gain * k * k, j.seed);
+    }
+    // --- booster exhaust (combat r3): per lit nozzle a small exit glow (clamped to ~1.3x the bell
+    //     diameter: no glare ball) + an EXHAUST JET (fx.jet, shaders.js shape 9): white-hot core
+    //     cone -> orange flame, length from thrust (idle ~0.8 m, boost 2-4 m, AB 6-10 m), never
+    //     shorter than ~28 px on screen, so it still reads from the chase camera looking straight
+    //     down the jet. The ray-marched lathe plume (fx/flame.js) adds the volumetric outer flame.
+    const t = this.time;
+    this.hazeT -= dt;
+    const hazeTick = this.hazeT <= 0;
+    if (hazeTick) this.hazeT += 1 / JET.hazeRate;
     for (const a of g.actors) {
       const rig = a.rig;
       if (!a.alive || !rig || !rig.nozzles) continue;
+      const m = a.motor, ab = m && m.mode === 'ab' && !m.abCharging;
+      const qf = rig.qbFlash || 0;
       for (let k = 0; k < rig.nozzles.length; k++) {
         const nz = rig.nozzles[k];
-        if (nz.level < 0.2 || !nz.node) continue;
-        nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d);
-        _p.addScaledVector(_d, -Math.max(0.3, (nz.radius || 0.4) * 0.8));
-        // seen end-on the plume shell vanishes (fresnel), so the exit glow grows to carry it
-        _c.copy(g.camera.position).sub(_p).normalize();
-        const endOn = Math.max(0, -_c.dot(_d));
-        const gs = Math.max(0.35, (nz.radius || 0.4) / 0.45) * Math.min(1.4, nz.level * (1 + (rig.qbFlash || 0))) * (1 + 1.3 * endOn * endOn);
-        fx.spawn('nozzle_glow', _p, null, gs);
-        // main bells seen end-on (chase camera behind a boost): blinding core + shock-diamond rings,
-        // so the exhaust reads as a jet looking INTO the camera instead of collapsing to dots
-        if (nz.radius >= 0.3 && endOn > 0.25 && nz.level > 0.3) {
-          const ec = (0.2 + 0.9 * nz.level * nz.level) * (endOn - 0.25) / 0.75 * Math.max(0.7, nz.radius / 0.45) * (1 + 0.6 * (rig.qbFlash || 0));
-          _p.addScaledVector(_d, -Math.max(0.2, nz.radius * 0.6));
-          fx.spawn('exhaust_core', _p, null, ec);
+        const L = nz.level;
+        if (L < 0.12 || !nz.node) continue;
+        const r = nz.radius || 0.4, main = r >= JET.mainRadius;
+        nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();   // exhaust = -Z
+        _p.addScaledVector(_d, r * JET.exitOffset);
+        const rs = r / 0.45;
+        const gl = Math.min(1, L * 1.4) * (1 + 0.35 * qf);
+        if (L > 0.2) fx.spawn('nozzle_glow', _p, null, Math.max(0.3, rs) * gl);
+        const flick = 0.9 + 0.07 * Math.sin(t * 53 + k * 1.9) + 0.05 * Math.sin(t * 131 + k * 4.1);
+        let len, hw, gain;
+        if (main) {
+          len = rs * (JET.lenIdle + JET.lenBoost * Math.pow(L, 1.2)) * (ab ? JET.abMul : 1) * (1 + JET.qbMul * qf);
+          hw = r * (ab ? JET.widthAB : JET.width) * (1 + 0.15 * qf); gain = 1;
+        } else {
+          len = Math.min(JET.verMax, 0.25 + 1.0 * L) * (1 + 0.6 * qf);
+          hw = Math.max(0.1, r * 1.1); gain = JET.verGain;
         }
-        // main bells in a strong burn: a tapered white-hot JET streak riding the rig (head at the
-        // exit, tail out along the exhaust; spawned with its velocity pointing INTO the bell so the
-        // streak's trailing tail is the jet). Long in AB, shorter in a ground boost.
-        if (nz.radius >= 0.3 && nz.level > 0.45) {
-          const ab = a.motor && a.motor.mode === 'ab' && !a.motor.abCharging;
-          _jetOpts.scale = nz.level * (ab ? 1.35 : 0.75) * Math.max(0.7, nz.radius / 0.44);
-          _b.copy(_d);   // +Z of the nozzle = into the bell
-          fx.spawn('exhaust_jet', _p, _b, _jetOpts);
-        }
-        // assault boost: the main boosters wear a wide heat halo (reads from the chase camera)
-        if (a === g.player && nz.group === 'back' && a.motor && a.motor.mode === 'ab' && !a.motor.abCharging && nz.radius > 0.3) {
-          fx.spawn('ab_halo', _p, null, 0.8 + 0.6 * endOn);
+        fx.jet(_p, _d.x, _d.y, _d.z, len * flick, hw, Math.min(1.3, L * (1 + 0.4 * qf) + (ab ? 0.25 : 0)), gain, k * 0.137 + (a === g.player ? 0 : 0.5));
+        // heat haze: main bells only, ~15 sprites/s each, riding with the rig a third of the way down
+        // the jet and drifting slowly out along it (refraction of the background through the plume)
+        if (main && L > 0.35 && hazeTick) {
+          const v = m ? m.vel : null;
+          _a.copy(_p).addScaledVector(_d, len * 0.35);
+          const hs = r * (ab ? 3.4 : 2.6);
+          fx.distortion.add(0, _a, hs * 0.6, hs * 1.4, JET.hazeLife, (ab ? JET.hazeAB : JET.hazeBoost) * Math.min(1, L),
+            (v ? v.x * 0.97 : 0) + _d.x * 9, (v ? v.y * 0.97 : 0) + _d.y * 9, (v ? v.z * 0.97 : 0) + _d.z * 9);
         }
       }
     }

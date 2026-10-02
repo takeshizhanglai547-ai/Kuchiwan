@@ -60,11 +60,12 @@ export const BOSS_STATS = {
   // the rig's anti-kinetic / anti-energy / anti-explosive rating). CINDERHOUND is a foundry rig:
   // heavy blast plating, so the player's missiles + cannon are blunted and the rifle and the
   // blade are the real answers. Impact (stagger build-up) is NOT reduced.
-  defense: { kinetic: 0.78, energy: 0.78, explosive: 0.58, blade: 0.75 },
+  // r3: the duel moved in to 45-85 m, where the bot lands ~60 % of its rounds: plating up a notch
+  defense: { kinetic: 0.72, energy: 0.72, explosive: 0.54, blade: 0.72 },
   aimHeight: 6.2,
   accuracy: 0.8,
   // legacy summary (other lanes may read these)
-  rangeMin: 65, rangeMax: 120, abRange: 100, bladeRange: 90,
+  rangeMin: 45, rangeMax: 85, abRange: 75, bladeRange: 90,
 };
 
 export const BOSS_MOVE = {
@@ -81,20 +82,22 @@ export const CINDERHOUND_LOADOUT = { R: 'boss_laser', L: 'boss_blade', LB: 'boss
 export const BOSS_AI = {
   phases: [
     { // P1 — disciplined mid-range duelist
-      range: [80, 140], strafeFlip: [1.7, 3.3], flipQB: 0.7, rhythmQB: [0.9, 1.7], jump: [7, 12], hover: [0.5, 1.2], alt: [9, 20],
-      dodge: { cannon: 0.8, missile: 0.8, blade: 0.75, rifle: 0.4 }, dodgeCd: 1.0, enReserve: 24,
+      // r3 (critic: at 80-140 m the 10 m rig was ~40 px under the reticle): a 45-85 m duel. The chase
+      // camera sits ~35 m behind the player, so this is 80-120 m from the lens: ~75-110 px tall @900p
+      range: [45, 85], strafeFlip: [1.7, 3.3], flipQB: 0.7, rhythmQB: [0.75, 1.5], jump: [7, 12], hover: [0.5, 1.2], alt: [9, 20],
+      dodge: { cannon: 0.8, missile: 0.8, blade: 0.75, rifle: 0.55 }, dodgeCd: 0.9, enReserve: 24,
       gap: [0.45, 1.1], rifleChain: [1, 2],
       weights: { rifle: 4.2, missiles: 2.4, blade: 2.2, charge: 2.2, barrage: 0, flank: 0, plunge: 0 },
       cd: { missiles: 6.5, blade: 5, charge: 8, barrage: 99, flank: 99, plunge: 99 },
-      chargeMin: 100, abBlade: 0.55, radialK: 0.9, rangeQB: 50,
+      chargeMin: 75, abBlade: 0.55, radialK: 1.2, rangeQB: 35,
     },
     { // P2 — limiter released: aggressive, close, air-mobile (new: barrage, QB flank, plunge, AB->blade)
-      range: [32, 80], strafeFlip: [1.4, 2.8], flipQB: 0.8, rhythmQB: [0.8, 1.5], jump: [5, 9], hover: [0.6, 1.6], alt: [12, 30],
-      dodge: { cannon: 0.85, missile: 0.88, blade: 0.8, rifle: 0.45 }, dodgeCd: 0.8, enReserve: 22,
+      range: [25, 60], strafeFlip: [1.4, 2.8], flipQB: 0.8, rhythmQB: [0.65, 1.3], jump: [5, 9], hover: [0.6, 1.6], alt: [12, 30],
+      dodge: { cannon: 0.85, missile: 0.88, blade: 0.8, rifle: 0.6 }, dodgeCd: 0.75, enReserve: 22,
       gap: [0.2, 0.55], rifleChain: [2, 3],
       weights: { rifle: 3.4, missiles: 0.9, blade: 2.6, charge: 2.2, barrage: 2.2, flank: 2, plunge: 3.2 },
       cd: { missiles: 6, blade: 3.8, charge: 7, barrage: 9, flank: 7, plunge: 9 },
-      chargeMin: 80, abBlade: 0.85, radialK: 1.5, rangeQB: 12,   // P2 really presses in (range QBs at > 92 m)
+      chargeMin: 62, abBlade: 0.85, radialK: 1.5, rangeQB: 12,   // P2 really presses in (range QBs at > 72 m)
     },
   ],
   // Telegraph lead (s) between the tell (glint + sound) and the moment the attack can hurt.
@@ -175,6 +178,8 @@ export class Boss extends Enemy {
       aimHeight: S.aimHeight, accuracy: S.accuracy, corpseTime: Infinity, trackTau: 0.22, leadFactor: 0.92,
     });
     this.fcCfg = { ...this.fcCfg, sight: false };
+    this.ownArcs = true;                         // fx/status.js: skip its generic crawl arcs (see _bolts)
+    this.ownHitFx = true;                        // fx/status.js: no hull-sized hit glow inside 60 m (sparks + rock carry it)
     this.rig = rig;
     this.root.add(rig.root);
     // per-part hit boxes on the rig joints (rounds spark on the plating, not on the capsule);
@@ -244,7 +249,7 @@ export class Boss extends Enemy {
     for (const nz of rig.nozzles) { nz.level = 0; nz.target = 0; }
     this.rig.eyeBase = this._eyeBase0 || (this._eyeBase0 = this.rig.eyeBase);
     this.bpose.reset();
-    this._arcT = 0; this._skidT = 0;
+    this._arcT = 0; this._skidT = 0; this._boltT = 0;
     this.setState('intro');
     this.game.events.emit('boss:intro', { boss: this });
     return this;
@@ -307,10 +312,15 @@ export class Boss extends Enemy {
 
   onStagger() {
     this.motor.stagger(this.acs.cfg.staggerTime);
-    // overload discharge sized to a 10 m frame (fx/status.js adds its own crawl arcs)
+    // overload discharge sized to a 10 m frame (fx/status.js adds its own crawl arcs). r3 (critic:
+    // the flat 'up' ring at chest height read edge-on as a screen-wide band): the discharge core
+    // (flash, star, camera-facing ring, sparks) at the chest, the shock ring + dust on the SLAB
     this.aimPoint(_v);
-    this.game.fx.spawn('stagger_burst', _v, null, BOSS_FX.staggerBurst);
-    this._arcT = 0;
+    this.game.fx.spawn('iw_boss_overload', _v, null, BOSS_FX.staggerBurst);
+    _w.set(this.pos.x, this.game.physics.groundHeight(this.pos.x, this.pos.z) + 0.3, this.pos.z);
+    this.game.fx.spawn('iw_ground_shock', _w, null, BOSS_FX.groundShock);
+    this.game.fx.spawn('dust_kick', _w, null, 1.6);
+    this._arcT = 0; this._boltT = 0;
     this.game.hud.callout('TARGET STAGGERED', '敵機 体勢崩壊', 'good');
     this.game.audio.play('stagger', { pos: this.pos });
     this._endAttack(true);
@@ -449,9 +459,9 @@ export class Boss extends Enemy {
         const a = (k / COVER_DIRS) * Math.PI * 2 + ri * 0.26;
         const x = this.pos.x + Math.sin(a) * R[ri], z = this.pos.z + Math.cos(a) * R[ri];
         const dp = Math.hypot(t.pos.x - x, t.pos.z - z);
-        if (dp < 60 || dp > 220 || !pointFree(ph, x, z, 5, 30)) continue;
+        if (dp < 45 || dp > 200 || !pointFree(ph, x, z, 5, 30)) continue;
         if (losFrom(ph, x, z, 6.5, _aim)) continue;
-        const score = R[ri] + (pathClear(ph, this.pos.x, this.pos.z, x, z, 3) ? 0 : 45) + Math.abs(dp - 120) * 0.2;
+        const score = R[ri] + (pathClear(ph, this.pos.x, this.pos.z, x, z, 3) ? 0 : 45) + Math.abs(dp - 85) * 0.2;
         if (score < best) { best = score; this.coverPt.set(x, 0, z); }
       }
     }
@@ -688,7 +698,7 @@ export class Boss extends Enemy {
     // ---- 1. locomotion (attacks may override below)
     const mid = (P.range[0] + P.range[1]) * 0.5, half = (P.range[1] - P.range[0]) * 0.5;
     let radial = (dist - mid) / half;
-    radial = Math.abs(radial) < 0.35 ? 0 : Math.max(-1, Math.min(1, radial));
+    radial = Math.abs(radial) < 0.25 ? 0 : Math.max(-1, Math.min(1, radial));   // r3: 0.35 -> 0.25 (circle-strafing drifts outward; hold the band's middle)
     _tan.set(-_to.z * this.strafe, 0, _to.x * this.strafe);
     it.move.copy(_tan).addScaledVector(_to, radial * P.radialK);
     // jink: the strafe heading swings in/out every ~0.4-0.9 s so a lead-predicting gun keeps
@@ -1038,6 +1048,9 @@ export class Boss extends Enemy {
           game.fx.spawn('arc_spark', _v, null, BOSS_FX.arcScale * r.range(0.8, 1.25));
         }
       }
+      // overload bolts jumping between the joints: branching, re-seeded every 2 frames (flicker)
+      this._boltT -= dt;
+      if (this._boltT <= 0 && game.fx.bolt && !game.fx.freeze) { this._boltT = BOLT.every; this._bolts(); }
       if (m.grounded && m.speedH > 6) {
         this._skidT -= dt;
         if (this._skidT <= 0) {
@@ -1049,6 +1062,7 @@ export class Boss extends Enemy {
       }
     }
     if (f.abLaunch) { this.rig.launchKick(); this.moveFx.abLaunch(this, m.abDir); game.audio.play('qb', { pos: this.pos, pitch: 0.7 }); }
+    if (this.alive && this.state !== 'intro') this._eyeSprite();
     // nozzle exhaust particles + ground wake (30 Hz)
     this.fxT -= dt;
     if (this.fxT <= 0 && this.alive) {
@@ -1073,6 +1087,77 @@ export class Boss extends Enemy {
         _d.set(-Math.sin(this.yaw), 0.1, -Math.cos(this.yaw));
         game.fx.spawn('mv_ab_charge', _v, _d, 0.6 + m.abCharge);
       }
+    }
+  }
+
+  /**
+   * Long-range sensor signature (r3, critic: the rig sat ~40 px under the reticle with no readable
+   * eye): a distance-scaled red glow sprite on the sensor, never smaller than BOSS_EYE.min m (~4 px
+   * at 120 m @900p with bloom), faded in from 35 m (the emissive slit carries close-ups), full
+   * from the front, ~half side-on, none from behind. Spawned per step (life 0.025 s).
+   */
+  _eyeSprite() {
+    const g = this.game, cam = g.camera;
+    if (!cam || g.fx.freeze) return;
+    this.rig.getNodeWorld('eye', _v);
+    _d.copy(cam.position).sub(_v);
+    const d = _d.length(), E = BOSS_EYE;
+    const fade = Math.min(1, Math.max(0, (d - E.near) / (E.far - E.near)));
+    if (fade <= 0.02) return;
+    const facing = (_d.x * Math.sin(this.yaw) + _d.z * Math.cos(this.yaw)) / Math.max(d, 1e-3);
+    let f = Math.min(1, Math.max(0, (facing + 0.35) / 0.6)); f = f * f * (3 - 2 * f);
+    if (f <= 0.02) return;
+    const stag = this.motor.staggered ? (Math.sin(this.rig.time * 40) > 0 ? 0.35 : 1.1) : 1;
+    _eyeOpts.scale = Math.min(E.max, Math.max(E.min, d * E.size)) * f * Math.sqrt(fade) * stag * (this.phase === 1 ? 1.15 : 1);
+    _v.addScaledVector(_d, E.lead / Math.max(d, 1e-3));
+    g.fx.spawn('iw_boss_eye', _v, null, _eyeOpts);
+  }
+
+  /**
+   * Stagger overload (r3, critic: "straight 3-4 segment polylines, wire not electricity"): BOLT.n
+   * bolts between random joint pairs, each a 12-segment midpoint-displacement path (displacement
+   * 0.45 x length, halved per level) with 1-2 forks, tapered along the bolt (BOLT.w0 -> w1 in
+   * screen px of the bolt shader's width; its bright core is ~1/3 of that), hot contact glows at
+   * both ends, life = the re-seed period so the whole set flickers; a short blue flash light per
+   * re-seed. fx/status.js skips its generic crawl arcs for this rig (ownArcs).
+   */
+  _bolts() {
+    const g = this.game, r = this.fxRng, cam = g.camera;
+    const H = (g.renderer && g.renderer.domElement && g.renderer.domElement.height) || 720;
+    const pxK = cam ? 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) * 0.5) / H : 0.0016;
+    _bc.set(0, 0, 0);
+    for (let b = 0; b < BOLT.n; b++) {
+      const pair = BOLT_PAIRS[r.int(0, BOLT_PAIRS.length - 1)];
+      this.rig.getNodeWorld(pair[0], _ba); this.rig.getNodeWorld(pair[1], _bb);
+      if (r.chance(0.35)) { _bb.x += r.sym(2.5); _bb.y += r.sym(1.5); _bb.z += r.sym(2.5); }   // leaps off into the air
+      const dCam = cam ? cam.position.distanceTo(_ba) : 60, mpp = dCam * pxK;
+      const len = boltPath(_ba, _bb, BOLT.seg, r, BOLT_P, 0);
+      this._emitBolt(BOLT_P, BOLT.seg, BOLT.w0 * mpp, BOLT.w1 * mpp, BOLT.color);
+      _bc.add(_ba).add(_bb);
+      // hot contact points where the arc grounds on the plating
+      _contactOpts.scale = BOLT.contact * Math.max(1, mpp / 0.05);
+      g.fx.spawn('iw_arc_contact', _ba, null, _contactOpts);
+      g.fx.spawn('iw_arc_contact', _bb, null, _contactOpts);
+      // forks: branch off a point in the middle half, shorter, thinner, dimmer
+      const nf = r.int(BOLT.forks[0], BOLT.forks[1]);
+      for (let k = 0; k < nf; k++) {
+        const i = r.int(Math.floor(BOLT.seg / 4), Math.floor(BOLT.seg * 3 / 4));
+        _fa.set(BOLT_P[i * 3], BOLT_P[i * 3 + 1], BOLT_P[i * 3 + 2]);
+        _fb.subVectors(_bb, _ba).normalize();
+        r.onSphere(_fd); _fb.addScaledVector(_fd, 0.9).normalize();
+        _fb.multiplyScalar(len * r.range(0.25, 0.45)).add(_fa);
+        boltPath(_fa, _fb, BOLT.forkSeg, r, BOLT_F, 0);
+        this._emitBolt(BOLT_F, BOLT.forkSeg, BOLT.w0 * 0.6 * mpp, BOLT.w1 * mpp, BOLT.forkColor);
+      }
+    }
+    _bc.multiplyScalar(0.5 / BOLT.n);
+    if (g.fx.flash) g.fx.flash(_bc, BOLT.lightColor, BOLT.light, BOLT.lightRange, BOLT.every * 1.4);
+  }
+  _emitBolt(P, n, w0, w1, color) {
+    const fx = this.game.fx;
+    for (let i = 0; i < n; i++) {
+      const t = i / Math.max(1, n - 1), w = w0 + (w1 - w0) * t, j = i * 3;
+      fx.bolt(P[j], P[j + 1], P[j + 2], P[j + 3], P[j + 4], P[j + 5], BOLT.life, color, w);
     }
   }
 
@@ -1125,7 +1210,45 @@ export class Boss extends Enemy {
 }
 
 /** Boss-only feedback tunables (visual). */
-export const BOSS_FX = { staggerBurst: 2, staggerEye: 0.5, arcEvery: 0.12, arcCount: 2, arcScale: 1.1, landDust: 2.6, landKnees: 0.9 };
+export const BOSS_FX = { staggerBurst: 1, groundShock: 1.5, staggerEye: 0.5, arcEvery: 0.16, arcCount: 1, arcScale: 1.1, landDust: 2.6, landKnees: 0.9 };
+/** Sensor signature sprite (see Boss._eyeSprite): size = distance x size, clamped [min, max] m. */
+export const BOSS_EYE = { near: 35, far: 100, size: 0.0062, min: 0.35, max: 1.2, lead: 0.5 };
+/** Stagger overload bolts (Boss._bolts): widths in screen px, light in fx.flash units. */
+export const BOLT = { every: 2 / 60, life: 2.2 / 60, n: 3, seg: 12, forkSeg: 6, forks: [1, 2], disp: 0.45,
+  w0: 14, w1: 4, color: [7, 9.5, 16], forkColor: [3.4, 5, 10], light: 55, lightRange: 18, lightColor: [0.5, 0.72, 1], contact: 0.5 };
+const BOLT_PAIRS = [['shoulder_L', 'hand_L'], ['shoulder_R', 'hand_R'], ['thigh_L', 'foot_L'], ['thigh_R', 'foot_R'], ['torso', 'booster_back'],
+  ['shoulder_L', 'shoulder_R'], ['torso', 'thigh_L'], ['torso', 'thigh_R'], ['head', 'shoulder_L'], ['head', 'shoulder_R'], ['booster_L', 'booster_R']];
+const BOLT_P = new Float32Array((BOLT.seg + 1) * 3), BOLT_F = new Float32Array((BOLT.forkSeg + 1) * 3);
+const _ba = new THREE.Vector3(), _bb = new THREE.Vector3(), _bc = new THREE.Vector3(), _fa = new THREE.Vector3(), _fb = new THREE.Vector3(), _fd = new THREE.Vector3();
+const _bd = new THREE.Vector3(), _bp = new THREE.Vector3();
+const _eyeOpts = { scale: 1 }, _contactOpts = { scale: 1 };
+
+/**
+ * Midpoint-displacement bolt a -> b into P (n+1 points, xyz): each level displaces the midpoint
+ * of every span perpendicular to the bolt by up to disp x span length (halving per level).
+ * Works for any n (uneven spans). Returns the straight length.
+ */
+function boltPath(a, b, n, r, P, _lvl) {
+  P[0] = a.x; P[1] = a.y; P[2] = a.z;
+  const e = n * 3; P[e] = b.x; P[e + 1] = b.y; P[e + 2] = b.z;
+  _bd.subVectors(b, a);
+  const len = _bd.length();
+  _bd.multiplyScalar(1 / Math.max(len, 1e-4));
+  subdiv(P, 0, n, len * BOLT.disp, r);
+  return len;
+}
+function subdiv(P, i0, i1, amp, r) {
+  if (i1 - i0 < 2) return;
+  const m = (i0 + i1) >> 1, f = (m - i0) / (i1 - i0), a = i0 * 3, b = i1 * 3;
+  // random direction perpendicular to the bolt axis (_bd)
+  r.onSphere(_bp); _bp.addScaledVector(_bd, -_bp.dot(_bd));
+  const l = _bp.length() || 1, k = r.range(0.35, 1) * amp / l;
+  P[m * 3] = P[a] + (P[b] - P[a]) * f + _bp.x * k;
+  P[m * 3 + 1] = P[a + 1] + (P[b + 1] - P[a + 1]) * f + _bp.y * k;
+  P[m * 3 + 2] = P[a + 2] + (P[b + 2] - P[a + 2]) * f + _bp.z * k;
+  subdiv(P, i0, m, amp * 0.5, r);
+  subdiv(P, m, i1, amp * 0.5, r);
+}
 const ARC_NODES = ['shoulder_L', 'shoulder_R', 'shin_L', 'shin_R', 'hand_L', 'hand_R', 'thigh_L', 'thigh_R', 'booster_back', 'torso'];
 const _CINE = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 30 };
 const _CINE_BASE = new THREE.Vector3(), _CINE_PUSH = new THREE.Vector3();

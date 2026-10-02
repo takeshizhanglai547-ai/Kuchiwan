@@ -1,8 +1,9 @@
 // src/audio/voice.js — handler LEDGER's radio transmissions (owner: audio designer).
 //
 // RECORDED VOICE-OVER (the normal path): every LEDGER line (src/ui/radio.js RADIO + the briefing
-// intel) is spoken by an offline TTS and baked through a field-radio chain by
-// assets/audio/build_vo.py -> assets/audio/vo/radio_<key>.mp3 (manifest sfx_radio_<key>,
+// intel) is spoken by an offline TTS, re-performed (authored pitch contour, timing, breaths,
+// lower formants: assets/audio/vo_prosody.py, WORLD vocoder) and baked through a field-radio
+// chain by assets/audio/build_vo.py -> assets/audio/vo/radio_<key>.mp3 (manifest sfx_radio_<key>,
 // src/audio/vo_table.js). transmit() plays such a buffer as a live transmission: squelch open
 // click + static burst, a band-passed hiss + transmitter buzz bed with slow fading flutter and
 // random RF ticks under the words, squelch close + carrier tail; stop() cuts it cleanly.
@@ -108,10 +109,10 @@ export function speak(ac, dest, t, seconds, r = makeRng(5), o = VOICE) {
 export const COMM = {
   level: 1.0,          // VO buffer gain into the voice bus (files sit at -16 dBFS speech RMS)
   lead: 0.085,         // s from squelch open to the first word
-  static: 0.0105,      // carrier hiss under the voice (~-31 dB re speech)
+  static: 0.0085,      // carrier hiss under the voice (~-33 dB re speech)
   staticBp: [2300, 0.5],
   hum: 0.0022,         // 120 Hz transmitter buzz under the hiss (harmonics inside the radio band only)
-  crackleEvery: [0.35, 1.4], crackle: 0.05, // intermittent RF ticks
+  crackleEvery: [0.45, 1.6], crackle: 0.04, // intermittent RF ticks
   fade: 0.018,         // s voice fade when a transmission is cut off
 };
 

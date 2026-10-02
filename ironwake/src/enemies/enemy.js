@@ -12,7 +12,8 @@
 //   * weapon owner interface (muzzles), the shared death sequence (explosion, burnt wreck),
 //     corpse timing, telemetry hooks (game.enemies.telemetry).
 //   * HIT VOLUMES (hitvol.js): per-part boxes as the physics narrow phase (rounds land ON the
-//     armour, sparks along the real face normal) + a 0.06 s armour hit flash.
+//     armour, sparks along the real face normal) + a local hit pulse (emissive glow around the
+//     impact point + a 2-frame plating kick; r3: no more whole-unit material blink).
 import * as THREE from 'three';
 import { Actor, TEAM_ENEMY } from '../game/actor.js';
 import { burnModel } from './models.js';
@@ -26,6 +27,7 @@ const _glintOpts = { scale: 1, vel: null };
 const _bHit = { hit: false, dist: 0, point: new THREE.Vector3(), normal: new THREE.Vector3(), collider: null, body: null, ground: false };
 const hitsPlayerBody = (b) => b.team === 'player' && b.actor.alive;
 const _dotOpts = { scale: 1, vel: null };
+const ACC_CLAMP = 45;                       // m/s^2 per axis fed into the perceived acceleration
 let BURNT = null;
 export function burntMaterial() {
   if (!BURNT) {
@@ -58,6 +60,10 @@ export class Enemy extends Actor {
     this.trackTau = opts.trackTau ?? 0.45;
     this.leadFactor = opts.leadFactor ?? 0.85;
     this.trackVel = new THREE.Vector3();
+    this.trackAcc = new THREE.Vector3();      // smoothed perceived acceleration (second-order lead)
+    this.accLead = opts.accLead ?? 0;         // 0 = first-order lead only
+    this.accTau = opts.accTau ?? 0.3;
+    this._tPrevVel = new THREE.Vector3();
     this.alerted = false;
     this.alertT = -1;                         // reaction delay countdown once something was noticed
     // fire control
@@ -104,7 +110,7 @@ export class Enemy extends Actor {
 
   spawn(pos, yaw) {
     super.spawn(pos, yaw);
-    this.trackVel.set(0, 0, 0);
+    this.trackVel.set(0, 0, 0); this.trackAcc.set(0, 0, 0); this._tPrevVel.set(0, 0, 0); this._tAccOk = false;
     this.alerted = false; this.alertT = -1;
     this.fcPhase = 'idle'; this.fcT = 0; this.fcGlint = false;
     this.los = false; this.losT = 0;
@@ -142,7 +148,7 @@ export class Enemy extends Actor {
     if (!t) return out;
     this.getMuzzle(key, _m, null);
     t.aimPoint(_t);
-    leadAim(_m, _t, this.trackVel, speed, this.leadFactor, out);
+    leadAim(_m, _t, this.trackVel, speed, this.leadFactor, out, this.trackAcc, this.accLead);
     return out.add(this.fcErr);
   }
   /** Loadout hook: barrel recoil etc. on the visual animator. */
@@ -184,6 +190,17 @@ export class Enemy extends Actor {
       this.trackVel.x += (t.vel.x - this.trackVel.x) * k;
       this.trackVel.y += (t.vel.y - this.trackVel.y) * k;
       this.trackVel.z += (t.vel.z - this.trackVel.z) * k;
+      if (this.accLead > 0) {
+        // perceived acceleration: clamped finite difference (a QB impulse is not a trend), smoothed
+        const ka = 1 - Math.exp(-dt / Math.max(0.02, this.accTau)), inv = 1 / Math.max(dt, 1e-4), C = ACC_CLAMP;
+        if (this._tAccOk) {
+          const ax = Math.max(-C, Math.min(C, (t.vel.x - this._tPrevVel.x) * inv));
+          const ay = Math.max(-C, Math.min(C, (t.vel.y - this._tPrevVel.y) * inv));
+          const az = Math.max(-C, Math.min(C, (t.vel.z - this._tPrevVel.z) * inv));
+          this.trackAcc.x += (ax - this.trackAcc.x) * ka; this.trackAcc.y += (ay - this.trackAcc.y) * ka; this.trackAcc.z += (az - this.trackAcc.z) * ka;
+        }
+        this._tPrevVel.copy(t.vel); this._tAccOk = true;
+      }
     }
     if (this.alertT >= 0) { this.alertT -= dt; if (this.alertT < 0) { this.alerted = true; this.onAlert(); } }
     if (this.flash) this.flash.update(dt);
@@ -304,7 +321,7 @@ export class Enemy extends Actor {
   }
 
   dispose() {
-    if (this.flash) this.flash.off();
+    if (this.flash) { this.flash.dispose(); this.flash = null; }
     if (this.anim) { this.anim.dispose(); this.anim = null; }
     super.dispose();
   }
@@ -312,11 +329,12 @@ export class Enemy extends Actor {
   onHit(hit, res) {
     super.onHit(hit, res);
     if (hit.source === this.game.player) this.alert(0.1);
-    // the round CONNECTED: armour flash (longer for heavy impacts; splash only when it hurts)
+    // the round CONNECTED: a local hit pulse on the struck plating (longer for heavy impacts;
+    // splash = a wider, dimmer heat flash facing the blast, only when it hurts)
     if (this.flash && this.alive && res && res.damage > 0) {
       const imp = hit.impact * (hit.splashFrac === undefined ? 1 : hit.splashFrac);
       const direct = hit.splashFrac === undefined;
-      if (direct || imp > 60) this.flash.hit(0.8 + imp / 600, direct && this.hitVol ? this.hitVol.partHit() : null);
+      if ((direct || imp > 60) && hit.point) this.flash.hit(0.8 + imp / 600, null, hit.point, direct ? hit.dir : null, !direct);
     }
     this.game.events.emit('enemy:hit', this);
   }

@@ -369,7 +369,8 @@ try:
                 if any(red): ax.legend(loc='lower right', fontsize=6, facecolor='#15191c', edgecolor='#56606a')
             elif k == 'fov':
                 ax.plot(t, series(m, 'fov'), color='#e6eef0', lw=1.4)
-                ax.axhline(61, color='#56606a', lw=0.7, ls='--')
+                for y, l in ((54, 'base 54'), (66, 'cap 66')):
+                    ax.axhline(y, color='#56606a', lw=0.7, ls='--'); ax.text(t[-1], y, ' ' + l, va='center', fontsize=6, color='#9fb3ba')
             elif k == 'cam_dist':
                 ax.plot(t, series(m, 'cam_dist'), color='#c9c2b4', lw=1.4, label='cam to rig')
                 ax.plot(t, series(m, 'lag'), color='#ffb400', lw=1.0, label='follow lag')
@@ -462,8 +463,9 @@ async function main() {
   const summary = summarize(results, MOVE);
   const sumPath = path.join(OUT, 'telemetry.json');
   const notes = {
-    camera_fov: 'Benchmark FOV 50 + 26-32 m + rig 22-30% of frame cannot all hold for a 10.7 m rig (FOV 50 needs a 40-55 m camera). '
-      + 'Distance (cam_dist_idle_m) and framing (rig_frame_pct_*) are kept; the base vertical FOV is 61 with the benchmark increments (+6 boost, +10 AB).',
+    camera_fov: 'Benchmark FOV 50 + 26-32 m + rig 22-30% of frame cannot all hold for a 10.7 m rig (FOV 50 needs a 37-50 m camera). '
+      + 'Combat r2: the lens is narrowed to a vertical FOV of 54 (+4 boost, +6 AB, AB launch peak 63) and the orbit moved out to ~35 m, '
+      + 'so the framing (rig_frame_pct_*) stays inside 22-30%.',
     qb_cooldown: 'qb_cooldown_s comes from qb_spam (a QB requested on every step); qb_chain_interval_s is only the chain script tap rhythm.',
   };
   fs.writeFileSync(sumPath, JSON.stringify({ seed: SEED, summary, notes, areas: Object.fromEntries(Object.entries(results).map(([k, v]) => [k, v.area])) }, null, 2));
@@ -471,11 +473,11 @@ async function main() {
   const T = {
     qb_peak_ms: 'max(105, |v|+30)', qb_frames_to_peak: '1 (instant)', qb_jet_s: '0.35', qb_cooldown_s: '0.55', qb_en_cost_pct: '16-17',
     qb_count_from_full: '6', qb_fov_punch_deg: '4-8', qb_travel_jet_m: '35-45 (0.35 s jet)', qb_travel_total_m: '35-45 (+skid)',
-    boost_torso_pitch_deg: '8-12', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '~30', ab_rig_frame_pct: '>=22',
-    cam_dist_idle_m: '26-32', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
+    boost_torso_pitch_deg: '15-22 (skate crouch)', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '35-45', ab_rig_frame_pct: '>=22',
+    cam_dist_idle_m: '~35 (r2 critic)', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
     boost_90pct_s: '0.35', boost_top_ms: '85', stop_to_walk_s: '~0.5', ab_windup_s: '0.6', ab_speed_ms: '130', ab_en_drain_pct_s: '13',
     jump_apex_m: '15-20', hover_climb_ms: '55-70', hover_en_drain_pct_s: '~21', rig_frame_pct_idle: '22-30', rig_frame_pct_boost: '22-30',
-    boost_fov_deg: 'base+6', ab_fov_peak_deg: 'base+10 (+kick)',
+    boost_fov_deg: 'base+4', ab_fov_peak_deg: '<=66 (base+6+kick)',
   };
   for (const [k, v] of Object.entries(summary)) console.log(`  ${k.padEnd(24)} ${String(v).padEnd(10)} ${T[k] ? '[' + T[k] + ']' : ''}`);
   if (PLOT) {

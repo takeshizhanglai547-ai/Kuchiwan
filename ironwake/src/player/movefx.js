@@ -56,7 +56,9 @@ export const MOVE_FX = {
   mv_ab_ring: [
     // assault-boost launch blast on the slab: FLAT sheets + low streaks racing outward (the chase
     // camera passes right over this spot a moment later, so nothing billows up into its path)
-    { shape: 'puff', count: [10, 10], life: [0.35, 0.7], speed: [30, 55], dirMode: 'ring', size: [1.5, 7.5], sizePow: 1.8, color0: DUST, alphaPow: 0.7, alpha: [0.26, 0], fadeIn: 0.04, erode: [0.12, 0.6], drag: 4.5, orient: 'up', lit: true, spin: [-1, 1], scaleCount: false },
+    // (VFX lane r3: camera-facing torn dust instead of world-aligned sheets, which printed a lobed
+    //  'flower' on the slab from the chase camera)
+    { shape: 'puff', count: [9, 9], life: [0.4, 0.75], speed: [26, 50], dirMode: 'ring', size: [1.4, 6.5], sizePow: 1.8, sizeVar: 0.5, color0: DUST, alphaPow: 0.7, alpha: [0.2, 0], fadeIn: 0.05, erode: [0.12, 0.6], drag: 4.5, rise: 0.4, lit: true, spin: [-1, 1], jitter: 0.8, variant: [4, 7], scaleCount: false },
     { shape: 'puff', count: [8, 8], life: [0.25, 0.45], speed: [44, 66], dirMode: 'ring', size: [0.5, 2.2], sizePow: 2, stretch: 0.06, color0: DUST_L, alphaPow: 0.7, alpha: [0.22, 0], erode: [0.18, 0.6], drag: 5, rise: 0.3, lit: true, scaleCount: false },
   ],
   mv_land: [

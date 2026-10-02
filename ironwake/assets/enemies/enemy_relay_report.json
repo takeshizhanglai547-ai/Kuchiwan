@@ -1,46 +1,47 @@
 {
- "tris": 24712,
- "parts": 8,
+ "tris": 24729,
+ "parts": 9,
  "colliders": 0,
  "decals": 5,
- "texel_density_px_per_m": 52.4,
+ "texel_density_px_per_m": 49.4,
  "res": 2048,
  "timings_s": {
-  "model": 1.0,
-  "bake.total": 2.2,
-  "composite": 15.2,
+  "model": 0.9,
+  "bake.total": 2.0,
+  "composite": 13.0,
   "export.glb": 0.7,
-  "export.gltfpack": 0.2,
+  "export.gltfpack": 0.1,
   "export.fbx": 0.1
  },
- "elapsed_s": 31.9,
- "glb_bytes": 777148,
+ "elapsed_s": 27.7,
+ "glb_bytes": 733236,
  "glb_breakdown": {
-  "bytes": 777148,
+  "bytes": 733236,
   "images": {
-   "enemy_relay_decals": 83976,
-   "enemy_relay_f_normal": 69200,
-   "enemy_relay_f_orm": 61164,
-   "enemy_relay_f_basecolor": 272544,
-   "enemy_relay_f_emissive": 1590
+   "enemy_relay_decals": 82814,
+   "enemy_relay_f_normal": 62902,
+   "enemy_relay_f_orm": 60684,
+   "enemy_relay_f_basecolor": 226816,
+   "enemy_relay_f_emissive": 2636
   },
-  "image_bytes": 488474,
-  "geometry_bytes": 288674
+  "image_bytes": 435852,
+  "geometry_bytes": 297384
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_relay.fbx",
  "previews": [],
  "parts_tris": {
-  "base_geo": 3687,
+  "base_geo": 3690,
   "door_geo": 3241,
-  "kit_geo": 11444,
+  "kit_geo": 10777,
   "beacon_geo": 243,
-  "core_geo": 1398,
-  "head_geo": 2206,
+  "core_geo": 1800,
+  "core_glass_geo": 52,
+  "head_geo": 2671,
   "eye_geo": 356,
-  "barrel_geo": 2137
+  "barrel_geo": 1899
  },
- "uv_coverage": 0.613,
+ "uv_coverage": 0.607,
  "cards": 10,
- "total_s": 32.0
+ "total_s": 27.8
 }

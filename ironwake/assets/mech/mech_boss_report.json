@@ -1,39 +1,35 @@
 {
- "tris": 62459,
+ "tris": 68976,
  "parts": 29,
  "colliders": 0,
  "decals": 7,
- "texel_density_px_per_m": 118.1,
+ "texel_density_px_per_m": 114.3,
  "res": 2048,
  "timings_s": {
-  "model": 2.2,
-  "bake.total": 2.3,
-  "composite": 22.5,
-  "export.glb": 1.5,
-  "export.gltfpack": 0.1,
-  "export.fbx": 0.3,
-  "render.mech_boss_hero.png": 300.1,
-  "render.mech_boss_front.png": 130.9,
-  "render.mech_boss_back.png": 148.5,
-  "render.mech_boss_close.png": 182.2
+  "model": 2.8,
+  "bake.total": 1.5,
+  "composite": 24.4,
+  "export.glb": 1.2,
+  "export.gltfpack": 0.2,
+  "export.fbx": 0.2
  },
- "elapsed_s": 822.6,
- "glb_bytes": 2066032,
+ "elapsed_s": 84.9,
+ "glb_bytes": 1917308,
  "glb_breakdown": {
-  "bytes": 2066032,
+  "bytes": 1917308,
   "images": {
-   "mech_boss_B_f_normal": 131944,
-   "mech_boss_B_f_orm": 141782,
-   "mech_boss_B_f_basecolor": 290572,
-   "mech_boss_B_f_emissive": 10796,
-   "mech_boss_decals": 82246,
-   "mech_boss_A_f_normal": 302418,
-   "mech_boss_A_f_orm": 128560,
-   "mech_boss_A_f_basecolor": 239402,
-   "mech_boss_A_f_emissive": 5886
+   "mech_boss_B_f_emissive": 12798,
+   "mech_boss_B_f_normal": 68980,
+   "mech_boss_B_f_orm": 134106,
+   "mech_boss_B_f_basecolor": 159934,
+   "mech_boss_decals": 88436,
+   "mech_boss_A_f_emissive": 5486,
+   "mech_boss_A_f_normal": 171616,
+   "mech_boss_A_f_orm": 229160,
+   "mech_boss_A_f_basecolor": 248394
   },
-  "image_bytes": 1333606,
-  "geometry_bytes": 732426
+  "image_bytes": 1118910,
+  "geometry_bytes": 798398
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_mech_boss.fbx",
@@ -45,8 +41,8 @@
  ],
  "parts_tris": {
   "pelvis_geo": 3118,
-  "torso_geo": 7991,
-  "head_geo": 3320,
+  "torso_geo": 10011,
+  "head_geo": 4430,
   "eye_geo": 92,
   "booster_back_geo": 4066,
   "weapon_R_geo": 2936,
@@ -58,26 +54,27 @@
   "thigh_L_geo": 3401,
   "shin_L_geo": 4302,
   "foot_L_geo": 928,
-  "arm_L_geo": 3532,
+  "arm_L_geo": 5290,
   "thigh_R_geo": 3407,
   "shin_R_geo": 4303,
   "foot_R_geo": 928,
-  "arm_R_geo": 3480
+  "arm_R_geo": 5165
  },
  "texture_sets": {
   "A": {
-   "texel_px_per_m": 118.1,
-   "coverage": 0.575,
+   "texel_px_per_m": 114.3,
+   "coverage": 0.573,
    "overlap": 0.0,
-   "tris": 29356
+   "tris": 35929
   },
   "B": {
-   "texel_px_per_m": 118.1,
-   "coverage": 0.592,
-   "overlap": 0.0001,
-   "tris": 33103
+   "texel_px_per_m": 116.2,
+   "coverage": 0.596,
+   "overlap": 0.0002,
+   "tris": 33047
   }
  },
- "cards": 14,
- "total_s": 822.6
+ "cards": 17,
+ "total_s": 85.0,
+ "texture_note": "r3: GLB at the budget texture sizes/qualities (ORM A 1536, B 1024; basecolor B 1536), lighter chips on the cream pads; hero/close previews re-rendered with the final maps, front/back from the full build"
 }

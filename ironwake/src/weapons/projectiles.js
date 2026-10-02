@@ -35,18 +35,24 @@ const STREAK_VERT = /* glsl */`
 attribute vec3 iHead; attribute vec3 iTail; attribute vec4 iColor; attribute vec4 iShape; // width, kind, headGlow, minPx
 uniform float uPixel;   // view-space metres per pixel at 1 m
 varying vec2 vUv; varying vec4 vColor; varying vec4 vShape; varying float vViewZ;
+const float MIN_LEN_PX = 20.0;
 void main() {
   vec4 h = modelViewMatrix * vec4(iHead, 1.0);
   vec4 t = modelViewMatrix * vec4(iTail, 1.0);
   // keep both ends in front of the near plane
   if (t.z > -0.3) t.xyz = mix(h.xyz, t.xyz, clamp((h.z + 0.3) / min(h.z - t.z, -1e-4), 0.0, 1.0));
-  vec2 d = h.xy / max(-h.z, 0.1) - t.xy / max(-t.z, 0.1);
+  float hz = max(-h.z, 0.1), tz = max(-t.z, 0.1);
+  vec2 hs = h.xy / hz, ts = t.xy / tz;
+  vec2 d = hs - ts;
   float dl = length(d);
   vec2 dir = dl > 1e-6 ? d / dl : vec2(0.0, 1.0);
+  // minimum on-screen LENGTH (combat r2: a tracer flying away from the chase camera collapsed to
+  // a dot under the reticle): the tail is pushed back along the screen path to >= MIN_LEN_PX
+  if (dl < MIN_LEN_PX * uPixel) ts = hs - dir * (MIN_LEN_PX * uPixel);
   vec2 side = vec2(-dir.y, dir.x);
   float along = position.y + 0.5;                 // 0 tail .. 1 head
-  vec4 p = mix(t, h, along);
-  float z = max(-p.z, 0.1);
+  float z = mix(tz, hz, along);
+  vec4 p = vec4(mix(ts, hs, along) * z, -z, 1.0);
   float w = max(iShape.x, iShape.w * uPixel * z);
   // screen-facing strip + rounded caps (head pushed forward, tail back by 0.6 w)
   p.xy += side * position.x * w + dir * (along - 0.5) * w * 1.2;
@@ -79,7 +85,7 @@ const _hit = { damage: 0, impact: 0, direct: true, directHitMul: 1, point: new T
 const _splash = { damage: 0, impact: 0, source: null, weapon: '' };
 const _fxOpts = { scale: 1, normal: new THREE.Vector3(), incoming: new THREE.Vector3(), vel: null, yaw: 0 };
 const _impactEvt = { def: null, actor: null, point: new THREE.Vector3(), team: '' };
-const _v2 = new THREE.Vector2();
+const _v2 = new THREE.Vector2(), _tp = new THREE.Vector3(), _nd = new THREE.Vector3();
 
 const hitsEnemies = (b) => b.team !== TEAM_PLAYER && b.actor.alive;
 const hitsPlayer = (b) => b.team === TEAM_PLAYER && b.actor.alive;
@@ -212,8 +218,22 @@ export default function projectilesSystem(game) {
             _dir.copy(p.vel).normalize();
             p.vel.copy(_dir).multiplyScalar(p.speed);
           }
-          p.trailT -= dt;
-          if (p.trailT <= 0 && d.trailFx) { p.trailT = d.trailEvery || 0.05; game.fx.spawn(d.trailFx, p.pos, _dir.copy(p.vel).normalize().negate()); }
+          if (d.trailFx && d.trailStep) {
+            // smoke puffs by DISTANCE (combat r2: time-based puffs 11 m apart at cruise read as a
+            // beaded chain): one every trailStep m along this step's segment (max 6 per step)
+            const seg = p.speed * dt;
+            _dir.copy(p.vel).normalize(); _nd.copy(_dir).negate();
+            p.trailT += seg;
+            for (let k = 0; k < 6 && p.trailT >= d.trailStep; k++) {
+              p.trailT -= d.trailStep;
+              _tp.copy(p.pos).addScaledVector(_dir, seg - p.trailT);
+              game.fx.spawn(d.trailFx, _tp, _nd);
+            }
+            if (p.trailT > d.trailStep) p.trailT = 0;
+          } else {
+            p.trailT -= dt;
+            if (p.trailT <= 0 && d.trailFx) { p.trailT = d.trailEvery || 0.05; game.fx.spawn(d.trailFx, p.pos, _dir.copy(p.vel).normalize().negate()); }
+          }
         } else if (p.kind === 'grenade') {
           p.vel.y -= (d.gravity || 0) * dt;
           p.trailT -= dt;

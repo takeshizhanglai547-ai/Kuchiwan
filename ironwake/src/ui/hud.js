@@ -16,27 +16,35 @@
 //                    4 amber corner ticks that fill clockwise (.mk-lk.n0..n4) + lock order
 //                    digit; FCS target = white corner brackets only, whose corners turn amber
 //                    clockwise with the missile lock (.mk-brk.n0..n4) instead of extra ticks.
-//   .hud-target      readout beside the lock (name, range, AP, STAGGER). Placed by a collision
-//                    test against every other marker, the reticle and the fixed HUD blocks
-//                    (candidates right / left / below / above, 4% safe margin, hysteresis).
+//   .hud-target      readout beside the lock (name, range, AP bar, STAGGER bar). Placed by a
+//                    collision test against every other marker, the reticle, the player's own
+//                    rig (projected bounding box) and the fixed HUD blocks (layout.js: right /
+//                    left / above-right / above-left / above / below, 4% safe margin, hysteresis);
+//                    when every slot collides it docks in a fixed slot under the compass (.dock).
+//                    Markers that fall inside a fixed HUD block fade to 35% (.mk.occl).
 //   .hud-arrows      off-screen threat arrows
-//   .hud-warnings    persistent alerts: [EN DEPLETED, STAGGERED] [MISSILE ALERT] [AP CRITICAL]
-//                    (the missile alert always owns the centre slot)
-//   .hud-banner      callouts (objective updates, warnings from other systems)
+//   .hud-warnings    persistent alerts in 3 FIXED slots (never re-centre): left = STAGGERED /
+//                    EN DEPLETED, centre = MISSILE ALERT (any enemy missile homing on the player,
+//                    from launch) / LOCK WARNING (boss missile tell), right = AP CRITICAL.
+//                    Chips fade in 80 ms / out 150 ms on the sim clock; only frames and chevrons blink.
+//   .hud-banner      callouts (objective updates, warnings from other systems); warn/bad kinds sit
+//                    on a 50% plate between hazard-stripe rules, only the rules blink
 //   .hud-end         MISSION COMPLETE / FAILED end card
 //   .hud-radio       handler LEDGER subtitles (EN + JP)
 //   .hud-kits / .hud-sys   repair kits (bottom left) / FCS + boost mode (bottom right)
 //
 // API (game.hud): setVisible(bool|null), callout(text, jp, kind = 'info'|'warn'|'good'|'bad',
-//   seconds), damageFrom(worldPoint), radio(key | {en, jp, hold}), endCard(status, jp).
+//   seconds), damageFrom(worldPoint), radio(key | {en, jp, hold}), endCard(status, jp),
+//   setOpacity(0.5..1) (OPTIONS: HUD opacity), setSubtitles('off'|'s'|'m'|'l') (OPTIONS).
 // All animation is driven by the sim clock (game.rawTime) in frame(), never by CSS keyframes,
 // so staged captures are deterministic. DOM writes happen only when a value changes.
 import * as THREE from 'three';
 import { RADIO, SPEAKER } from './radio.js';
 import { loadFonts } from './fonts.js';
-import { placeReadout } from './layout.js';
+import { placeReadout, overlap, READOUT_DOCK } from './layout.js';
 
-const _v = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3();
+const _v = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3(), _hd = new THREE.Vector3();
+const _rv = new THREE.Vector3();
 const SLOTS = ['LB', 'RB', 'L', 'R'];
 const DEG = 180 / Math.PI;
 const CMP = { ppd: 3.1, half: 210, span: 64 }; // compass: design px per degree, half width
@@ -49,32 +57,38 @@ const BRK_CLS = ['mk-brk n0', 'mk-brk n1', 'mk-brk n2', 'mk-brk n3', 'mk-brk n4'
 // Target readout placement (design px = rem * 10). Marker keep-out half size, readout size,
 // candidate offsets from the target centre, fixed HUD blocks (centre-relative rects).
 const TG = {
-  w: 172, h: 64, hBoss: 34,       // readout box
+  w: 124, h: 50,                  // readout box (css .hud-target: 12.4rem x 5rem, border-box)
+  wBoss: 60, hBoss: 20,           // boss: range tag only (name + bars live in the boss panel)
   keep: 24,                       // half size of any other marker's keep-out box
-  gap: 46,                        // min distance from the target centre (clears brackets/ticks)
+  gap: 40,                        // min distance from the target centre (clears brackets/ticks)
   reticle: 34,                    // reticle + ticks keep-out half size (screen centre)
   margin: 0.04,                   // safe area
   snap: 0.05,                     // dt above which the readout snaps instead of gliding
+  rigPad: 8,                      // keep-out padding around the player's projected rig box
+  dockY: 92, dockW: 276,          // docked slot under the compass (60% of the boss panel width)
+  dockYBoss: 140,                 // ...below the boss panel while it is shown
 };
 // [x0, y0, x1, y1] relative to the screen centre, in design px (see css/ui.css).
 const TG_STATIC = [
   [-366, -115, -206, -55], [206, -115, 366, -55],   // L-BACK / R-BACK blocks
   [-366, 60, -206, 115], [206, 60, 366, 115],       // L-ARM / R-ARM blocks
   [-280, -22, -206, 22], [206, -22, 280, 22],       // SPD / ALT
-  [-230, 128, 230, 190],                            // vitals
-  [-320, -168, 320, -134],                          // warnings row (only while a warning shows)
-  [-240, -226, 240, -160],                          // callout banner (only while shown)
+  [-268, 122, 176, 212],                            // vitals (label column hangs left of the bars)
+  [-372, -164, 372, -136],                          // warnings row (only while a warning shows)
+  [-260, -224, 260, -164],                          // callout banner (only while shown)
 ];
 const TG_STATIC_FIXED = 7;
+const NAME_SHOW = 2.0;            // weapon model names: seconds shown after a reload / at sortie
+const WN_FADE = { in: 0.08, out: 0.15 };
 const RADIO_BARS = 7;
 const BOOT = { delay: 0.15, step: 0.06, fade: 0.28, total: 1.2 }; // sortie boot-in (s of mission time)
 // Callouts replaced by a persistent warning chip (their state is shown continuously).
 const PERSISTENT = new Set(['EN DEPLETED', 'STAGGERED']);
-const MK_MODS = ['locked', 'locking', 'missile', 'obj', 'boss', 'far', 'stagger'];
-const W_MODS = ['busy', 'empty', 'fire', 'locked'];
+const MK_MODS = ['locked', 'locking', 'missile', 'obj', 'boss', 'far', 'stagger', 'occl'];
+const W_MODS = ['busy', 'empty', 'fire', 'locked', 'named'];
 const BLIP_MODS = ['boss', 'obj'];
 const ARW_MODS = ['boss', 'near'];
-const TG_MODS = ['side-l', 'stagger', 'boss'];
+const TG_MODS = ['side-l', 'stagger', 'boss', 'dock'];
 
 function el(tag, cls, parent, html) {
   const e = document.createElement(tag);
@@ -144,6 +158,8 @@ export default function hudSystem(game) {
   const end = { status: '', t: -9, jp: '' };
   const objFx = { t: -9, stage: -1 };
   const wpnFlash = { LB: -9, RB: -9, L: -9, R: -9 };
+  const nameT = { LB: -9, RB: -9, L: -9, R: -9 };  // weapon model name shown until nameT + NAME_SHOW
+  const rig = { x0: 0, y0: 0, x1: 0, y1: 0, on: false }; // player's projected rig box (px)
   // target readout placement (see layout.js); obstacle rects are rebuilt every frame
   const tgRects = new Float32Array(4 * (MARKERS + TG_STATIC.length + 2));
   const tgView = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -252,16 +268,19 @@ export default function hudSystem(game) {
     E.cmpHead = el('div', 'cmp-heading', cmp);
 
     // boss
+    // hierarchy: [name  JP ........ AP value] / AP bar / [STAGGER label ... state] / STAGGER bar;
+    // both bars span the same width (shared edges), the stagger bar is 60% of the AP thickness
     E.boss = el('div', 'hud-boss', root);
     const bh = el('div', 'bs-head', E.boss);
     E.bsName = el('span', 'bs-name', bh);
     E.bsJp = el('span', 'bs-jp', bh);
-    E.bsState = el('span', 'bs-state', bh, 'STAGGERED <em>姿勢崩壊</em>');
+    const bn = el('span', 'bs-ap-val', bh, '<b class="lbl">AP</b>');
+    E.bsApNum = el('span', 'bs-apnum', bn);
     E.bsAp = makeBar(E.boss, 'bs-ap', 10);
-    const bf = el('div', 'bs-foot', E.boss);
+    const bf = el('div', 'bs-sub', E.boss);
     el('span', 'bs-lbl', bf, 'STAGGER<em>姿勢</em>');
-    E.bsAcs = makeBar(bf, 'bs-acs', 0, false);
-    E.bsApNum = el('span', 'bs-apnum', bf);
+    E.bsState = el('span', 'bs-state', bf, 'STAGGERED<em>姿勢崩壊</em>');
+    E.bsAcs = makeBar(E.boss, 'bs-acs', 0, false);
     E.boss.style.display = 'none';
 
     // objective + kill log share one top-left column (the log always sits under the plate)
@@ -297,18 +316,17 @@ export default function hudSystem(game) {
         '<i class="mk-dia"></i><div class="mk-lk n0"><i></i><i></i><i></i><i></i></div>' +
         '<div class="mk-brk"><i></i><i></i><i></i><i></i></div><b class="mk-idx"></b><span class="mk-dist"></span>');
       m.style.display = 'none';
-      markers.push({ el: m, lk: m.querySelector('.mk-lk'), brk: m.querySelector('.mk-brk'), idx: m.querySelector('.mk-idx'), dist: m.querySelector('.mk-dist') });
+      markers.push({ el: m, dia: m.querySelector('.mk-dia'), lk: m.querySelector('.mk-lk'), brk: m.querySelector('.mk-brk'), idx: m.querySelector('.mk-idx'), dist: m.querySelector('.mk-dist') });
     }
+    // readout: [name .... range] / AP bar + value / STAGGER bar (60% thickness, same edges) + state
     E.target = el('div', 'hud-target', root);
     const th = el('div', 'tg-head', E.target);
     E.tgName = el('span', 'tg-name', th);
     E.tgDist = el('span', 'tg-dist', th);
     const ta = el('div', 'tg-row', E.target);
-    el('span', 'lbl', ta, 'AP');
     E.tgAp = makeBar(ta, 'tg-ap');
     E.tgApNum = el('span', 'tg-apnum', ta);
     const ts = el('div', 'tg-row acs', E.target);
-    el('span', 'lbl jp', ts, '姿勢');
     E.tgAcs = makeBar(ts, 'tg-acs', 0, false);
     E.tgState = el('span', 'tg-state', ts, 'STAGGER');
     E.target.style.display = 'none';
@@ -366,17 +384,18 @@ export default function hudSystem(game) {
     el('span', 'unit', alt, 'm');
     el('span', 'lbl', alt, 'ALT');
 
-    // vitals: ONE grid (label | number | bar); every bar sits in column 3, so AP, STAGGER and
-    // EN share both edges. The STAGGER row is invisible until the gauge has something in it.
+    // vitals: ONE grid [label | bar]. One right-aligned label column (AP, STAGGER, EN) ending
+    // 1.2rem left of the bars; every bar sits in column 2, so AP, STAGGER and EN share both
+    // edges; the large AP number sits above the AP bar's left end. The STAGGER row is invisible
+    // until the gauge has something in it.
     const vt = el('div', 'hud-vitals', root);
     E.vitals = vt;
-    el('span', 'lbl v-l-ap', vt, 'AP');
     E.apNum = el('span', 'ap-num', vt);
+    el('span', 'lbl v-l-ap', vt, 'AP');
     E.apBar = makeBar(vt, 'ap-bar', 10);
     E.acsLbl = el('span', 'lbl v-l-acs', vt, 'STAGGER<em>姿勢</em>');
     E.acsBar = makeBar(vt, 'acs-bar', 0, false);
     E.enLbl = el('span', 'lbl v-l-en', vt, 'EN');
-    E.enState = el('span', 'en-state', vt, 'REDLINE');
     E.enBar = makeBar(vt, 'en-bar', 20, false);
     const chips = el('div', 'v-chips', vt);
     E.chipQB = el('span', 'chip', chips, '<i></i>QB');
@@ -386,23 +405,25 @@ export default function hudSystem(game) {
     E.chipMode = el('span', 'chip mode', chips);
 
     // warnings
+    // three FIXED slots (each 24rem; an empty slot keeps its width), chips centred in their slot
     E.warn = el('div', 'hud-warnings', root);
-    const wl = el('div', 'wn-side l', E.warn), wm = el('div', 'wn-mid', E.warn), wr = el('div', 'wn-side r', E.warn);
-    const W_DEF = [ // [key, EN, JP, cell]; the missile alert always owns the centre cell
-      ['stagger', 'STAGGERED', '体勢崩壊', wl],
+    const wl = el('div', 'wn-slot l', E.warn), wm = el('div', 'wn-slot m', E.warn), wr = el('div', 'wn-slot r', E.warn);
+    const W_DEF = [ // [key, EN, JP, slot]; within a slot the later entry has priority
       ['en', 'EN DEPLETED', 'エネルギー切れ', wl],
+      ['stagger', 'STAGGERED', '体勢崩壊', wl],
+      ['lockwarn', 'LOCK WARNING', '被ロック警報', wm],
       ['missile', 'MISSILE ALERT', 'ミサイル接近', wm],
       ['ap', 'AP CRITICAL', '機体損傷', wr],
     ];
     E.wn = {};
     for (const [k, en, jp, cell] of W_DEF) {
       const w = el('div', `wn wn-${k}`, cell, `<i class="l"></i><b>${en}</b><em>${jp}</em><span class="n"></span><i class="r"></i>`);
-      w.style.display = 'none';
-      E.wn[k] = { el: w, n: w.querySelector('.n') };
+      w.style.visibility = 'hidden'; w.style.opacity = '0';
+      E.wn[k] = { el: w, n: w.querySelector('.n'), a: 0, on: false };
     }
 
     // callout banner + end card
-    E.banner = el('div', 'hud-banner', root, '<div class="bn-rule"></div><div class="bn-text"></div><div class="bn-jp"></div><div class="bn-sub"></div><div class="bn-rule"></div>');
+    E.banner = el('div', 'hud-banner', root, '<div class="bn-rule"></div><div class="bn-plate"><i class="bn-chev l"></i><div class="bn-text"></div><div class="bn-jp"></div><div class="bn-sub"></div><i class="bn-chev r"></i></div><div class="bn-rule"></div>');
     E.bnText = E.banner.querySelector('.bn-text');
     E.bnJp = E.banner.querySelector('.bn-jp');
     E.bnSub = E.banner.querySelector('.bn-sub');
@@ -444,6 +465,35 @@ export default function hudSystem(game) {
     slot.name.textContent = `${a.name} DESTROYED`;
     slot.jp.textContent = `${KIND_JP[a.type] || ''}撃破`;
     slot.el.style.order = String(Math.round(-slot.t * 100));
+  }
+
+  /** Alert chip in its fixed slot: fade in 80 ms / out 150 ms on the sim clock (snaps after a
+   *  frame gap, so captures are exact); `dim` = blink phase (frame + chevrons only). */
+  function warnChip(w, on, dim, dt) {
+    if (dt >= TG.snap) w.a = on ? 1 : 0;
+    else w.a = on ? Math.min(1, w.a + dt / WN_FADE.in) : Math.max(0, w.a - dt / WN_FADE.out);
+    const q = Math.round(w.a * 20) / 20;
+    set(w.el, 'opacity', q >= 1 ? '1' : q.toFixed(2));
+    set(w.el, 'visibility', q > 0 ? 'visible' : 'hidden');
+    flag(w.el, 'dim', on && dim);
+  }
+
+  /** Player rig's projected screen box (px) into `rig`, padded; false when off-screen/behind. */
+  function projectRig(p, cam) {
+    rig.on = false;
+    if (!p || !p.alive || !p.root || !p.root.visible) return false;
+    const o = p.root.position, r = Math.max(2.6, (p.radius || 2) * 1.5), h = p.height || 10;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      _rv.set(o.x + (i & 1 ? r : -r), o.y + (i & 2 ? h : 0), o.z + (i & 4 ? r : -r)).applyMatrix4(cam.matrixWorldInverse);
+      if (_rv.z > -0.5) return false;
+      _rv.applyMatrix4(cam.projectionMatrix);
+      const x = (_rv.x * 0.5 + 0.5) * W, y = (-_rv.y * 0.5 + 0.5) * H;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    const pad = TG.rigPad * U;
+    rig.x0 = x0 - pad; rig.y0 = y0 - pad; rig.x1 = x1 + pad; rig.y1 = y1 + pad; rig.on = true;
+    return true;
   }
 
   function radioBars(barEls, lv, talking, now, dt) {
@@ -499,6 +549,8 @@ export default function hudSystem(game) {
       });
       g.events.on('actor:killed', (e) => { if (e.team === 'enemy' && e.actor) logKill(e.actor); });
       g.events.on('weapon:fired', (e) => { if (e.owner === g.player && wpnFlash[e.slot] !== undefined) wpnFlash[e.slot] = g.rawTime; });
+      // the weapon's model name only shows briefly after a reload (combat view: slot + ammo + bar)
+      g.events.on('weapon:reloaded', (e) => { if (e.owner === g.player && nameT[e.slot] !== undefined) nameT[e.slot] = g.rawTime; });
       g.events.on('mission:stage', (e) => {
         objFx.t = g.rawTime; objFx.stage = e.stage;
         // A new phase supersedes older radio traffic (the mission queues the phase's own line
@@ -515,6 +567,10 @@ export default function hudSystem(game) {
       end.status = ''; end.t = -9;
       hitFx.t = -9; hurt.t = -9; objFx.t = -9; lastNow = 0;
       for (const k in wpnFlash) wpnFlash[k] = -9;
+      // live sortie: names show during the boot-in; staged captures show the settled combat HUD
+      for (const k in nameT) nameT[k] = game.manual ? -9 : game.rawTime + 0.6;
+      for (const k in E.wn) { const w = E.wn[k]; w.a = 0; w.on = false; w.el.style.opacity = '0'; w.el.style.visibility = 'hidden'; }
+      rig.on = false;
       for (const l of logs) { l.t = -9; l.el.style.display = 'none'; }
       for (const d of dmg) { d.t = -9; d.el.style.opacity = '0'; }
       for (const b of bars) { b.g = -1; b.v = 1; b.drop = -9; }
@@ -524,6 +580,10 @@ export default function hudSystem(game) {
       E.banner.style.opacity = '0'; E.radio.style.opacity = '0'; E.end.style.display = 'none';
     },
     setVisible(v) { forced = v; api._applyVisibility(); },
+    /** OPTIONS: overall HUD opacity (0.5..1). */
+    setOpacity(v) { if (root) root.style.opacity = v >= 0.999 ? '' : String(Math.max(0.5, Math.min(1, v))); },
+    /** OPTIONS: radio subtitles 'off' | 's' | 'm' | 'l' (the speaker tag + visualiser stay). */
+    setSubtitles(mode) { if (E.radio) E.radio.className = `hud-radio sub-${mode === 'off' || mode === 's' || mode === 'l' ? mode : 'm'}`; },
     _applyVisibility() {
       const st = game.state;
       const auto = st === 'playing'; // pause / results screens cover the view
@@ -542,7 +602,9 @@ export default function hudSystem(game) {
     radio(key) {
       const line = typeof key === 'string' ? RADIO[key] : key;
       if (!line) return;
-      radio.queue.push({ en: line.en, jp: line.jp, hold: line.hold, _t: game.rawTime });
+      // (audio lane) hold the subtitle at least as long as LEDGER's recorded line + squelch tail
+      const vo = game.audio.voDuration ? game.audio.voDuration(line) : 0;
+      radio.queue.push({ en: line.en, jp: line.jp, hold: Math.max(line.hold, vo ? vo + 0.35 : 0), _t: game.rawTime });
       if (radio.queue.length > 3) radio.queue.shift();
     },
     endCard(status, jp) { end.status = status; end.jp = jp; end.t = game.rawTime; },
@@ -645,7 +707,7 @@ export default function hudSystem(game) {
         flag(E.chipQB, 'cd', mo.qbCooldown > 0);
         flag(E.chipAB, 'on', mo.abActive);
         flag(E.chipBoost, 'on', mo.boostOn);
-        set(E.chipMode, 'text', mo.abActive ? 'ASSAULT' : mo.mode === 'qb' ? 'QUICK BOOST' : mo.hovering ? 'HOVER' : !mo.grounded ? 'AIRBORNE' : mo.mode === 'boost' ? 'GROUND BOOST' : mo.mode === 'walk' ? 'WALK' : 'STANDBY');
+        set(E.chipMode, 'text', mo.en.redline ? 'EN REDLINE' : mo.abActive ? 'ASSAULT' : mo.mode === 'qb' ? 'QUICK BOOST' : mo.hovering ? 'HOVER' : !mo.grounded ? 'AIRBORNE' : mo.mode === 'boost' ? 'GROUND BOOST' : mo.mode === 'walk' ? 'WALK' : 'STANDBY');
         // speed / altitude
         num(E.spd, Math.round(Math.hypot(mo.vel.x, mo.vel.y, mo.vel.z) * 3.6), F.pad3);
         num(E.alt, Math.max(0, Math.round(p.pos.y - g.physics.groundHeight(p.pos.x, p.pos.z))), F.pad3);
@@ -679,21 +741,33 @@ export default function hudSystem(game) {
             for (let i = 0; i < 4; i++) flag(o.pips[i], 'on', i < locks);
             num(o.lockTxt, locks, F.lock);
           }
-          mods(o.box, 'hud-weapon', W_MODS, wmask | (now - wpnFlash[s] < 0.09 ? 4 : 0) | (locks ? 8 : 0));
+          const named = now - nameT[s] < NAME_SHOW && now >= nameT[s];
+          mods(o.box, 'hud-weapon', W_MODS, wmask | (now - wpnFlash[s] < 0.09 ? 4 : 0) | (locks ? 8 : 0) | (named ? 16 : 0));
         }
 
-        // ---- warnings
-        // (blink phases only flash the chevrons / frame; the text itself never drops below 0.8)
-        const inc = g.projectiles ? g.projectiles.incomingMissiles : 0;
-        show(E.wn.missile.el, inc > 0);
-        if (inc > 0) { num(E.wn.missile.n, inc, F.times); flag(E.wn.missile.el, 'dim', !fast); }
-        show(E.wn.stagger.el, p.acs.staggered);
-        flag(E.wn.stagger.el, 'dim', !blink);
-        show(E.wn.en.el, mo.en.redline);
-        flag(E.wn.en.el, 'dim', !blink);
-        show(E.wn.ap.el, p.alive && apF < 0.25);
-        warnOn = inc > 0 || p.acs.staggered || mo.en.redline || (p.alive && apF < 0.25);
-        flag(E.wn.ap.el, 'dim', !blink);
+        // ---- warnings (fixed slots; only frames / chevrons blink, the text never dims)
+        // Missile alert from LAUNCH at any range: every enemy missile whose target is the player
+        // (projectiles.incomingMissiles only counts them after the homing delay within 260 m).
+        let inc = 0;
+        const pr = g.projectiles;
+        if (pr) {
+          if (pr.activeList && pr.activeCount) {
+            const L = pr.activeList(), nP = pr.activeCount();
+            for (let i = 0; i < nP; i++) { const q = L[i]; if (q.kind === 'missile' && q.target === p && q.team !== 'player') inc++; }
+          }
+          if (pr.incomingMissiles > inc) inc = pr.incomingMissiles;
+        }
+        // pre-alert during the rival rig's missile tell (shoulder glint, ~0.7 s before the salvo)
+        const bs = g.enemies && g.enemies.boss;
+        const lockWarn = inc === 0 && !!(bs && bs.alive && bs.atk === 'missiles' && bs.atkStage === 'tell');
+        const apCrit = p.alive && apF < 0.25;
+        if (inc > 0) num(E.wn.missile.n, inc, F.times);
+        warnChip(E.wn.missile, inc > 0, !fast, dt);
+        warnChip(E.wn.lockwarn, lockWarn, !fast, dt);
+        warnChip(E.wn.stagger, p.acs.staggered, !blink, dt);
+        warnChip(E.wn.en, mo.en.redline && !p.acs.staggered, !blink, dt);
+        warnChip(E.wn.ap, apCrit, !blink, dt);
+        warnOn = inc > 0 || lockWarn || p.acs.staggered || mo.en.redline || apCrit;
 
         // ---- kits / system
         { let c = cache.get(E.kitPips); if (!c) { c = {}; cache.set(E.kitPips, c); }
@@ -772,15 +846,31 @@ export default function hudSystem(game) {
           const lp = a.lockProgress || 0;
           const mIdx = lock ? lock.missileLocks.indexOf(a) : -1;
           const far = dist > 360;
-          mods(mk.el, 'mk', MK_MODS, (a === tgt ? 1 : 0) | (lp > 0.01 ? 2 : 0) | (mIdx >= 0 ? 4 : 0) | (isObj ? 8 : 0) | (a.type === 'boss' ? 16 : 0) | (far ? 32 : 0) | (a.acs && a.acs.staggered ? 64 : 0));
+          let occl = false;
+          if (a === tgt) { tgtOn = true; tgtX = x; tgtY = y; }
+          else {
+            // (enemy-ai r3, critic S: diamonds centred on 15-30 px walkers hid them) the non-locked
+            // chevron floats ~8 px above the unit's screen-space head, never on the body
+            _hd.set(a.pos.x, a.pos.y + (a.markerTop !== undefined ? a.markerTop : (a.height || 4)), a.pos.z).project(cam);
+            const hy = (-_hd.y * 0.5 + 0.5) * H;
+            const mt = Math.max(-140, Math.min(-6, hy - y - 8 * U));
+            set(mk.dia, 'marginTop', `${mt.toFixed(0)}px`);
+            // a marker inside a fixed HUD block (weapon plates, SPD/ALT, vitals) fades to 35% and
+            // drops its range text, so it never fights the block's own text
+            const lockR = lp > 0.01 || mIdx >= 0 ? 14 * U : 0, my = lockR ? y : y + mt, r = lockR || 6 * U;
+            for (let j = 0; j < TG_STATIC_FIXED && !occl; j++) {
+              const s = TG_STATIC[j];
+              occl = overlap(x - r, my - r, x + r, my + r, cx + s[0] * U, cy + s[1] * U, cx + s[2] * U, cy + s[3] * U) > 0;
+            }
+          }
+          mods(mk.el, 'mk', MK_MODS, (a === tgt ? 1 : 0) | (lp > 0.01 ? 2 : 0) | (mIdx >= 0 ? 4 : 0) | (isObj ? 8 : 0) | (a.type === 'boss' ? 16 : 0) | (far ? 32 : 0) | (a.acs && a.acs.staggered ? 64 : 0) | (occl ? 128 : 0));
           // missile lock: 4 corner ticks light up clockwise with the lock progress
           // (on the FCS target the bracket corners carry the same count instead: one symbol)
           const lkN = mIdx >= 0 ? 4 : Math.min(4, Math.floor(lp * 4 + 1e-3));
           if (a === tgt) set(mk.brk, 'class', BRK_CLS[lkN]);
           else set(mk.lk, 'class', LK_CLS[lkN]);
           num(mk.idx, mIdx + 1, F.idx);
-          num(mk.dist, a === tgt ? -1 : Math.round(dist), F.dist);
-          if (a === tgt) { tgtOn = true; tgtX = x; tgtY = y; }
+          num(mk.dist, a === tgt || occl ? -1 : Math.round(dist), F.dist);
         } else if (ai < ARROWS && dist < THREAT_RANGE) {
           // off-screen threat arrow on an ellipse around the reticle
           _v.copy(_p).applyMatrix4(cam.matrixWorldInverse);
@@ -809,11 +899,13 @@ export default function hudSystem(game) {
       } else show(E.cmpObj, false);
 
       // target readout beside the lock brackets: collision-tested placement (layout.js)
-      show(E.target, tgtOn);
+      let tgShow = tgtOn;
       if (tgtOn) {
         const isBoss = tgt.type === 'boss';
-        const tw = TG.w * U, th = (isBoss ? TG.hBoss : TG.h) * U, keep = TG.keep * U;
+        const tw = (isBoss ? TG.wBoss : TG.w) * U, th = (isBoss ? TG.hBoss : TG.h) * U, keep = TG.keep * U;
         let n = 0;
+        // the player's own rig is an obstacle (the readout must never park on it)
+        if (projectRig(p, cam)) { const k = n * 4; tgRects[k] = rig.x0; tgRects[k + 1] = rig.y0; tgRects[k + 2] = rig.x1; tgRects[k + 3] = rig.y1; n++; }
         for (let i = 0; i < mi; i++) {
           if (i === tgtIdx) continue;
           const k = n * 4, x = mkXY[i * 2], y = mkXY[i * 2 + 1];
@@ -829,12 +921,20 @@ export default function hudSystem(game) {
         tgView.x0 = W * TG.margin; tgView.y0 = H * TG.margin; tgView.x1 = W * (1 - TG.margin); tgView.y1 = H * (1 - TG.margin);
         const bossScale = isBoss ? 1.35 : 1; // boss brackets are drawn larger
         placeReadout(tgtX, tgtY, tw, th, TG.gap * U * bossScale, keep * bossScale, tgRects, n, tgView, tgPos.actor === tgt ? tgPos.side : -1, tgOut);
-        // glide to a new side (60 ms) in live play; snap on a new target or after a gap
-        if (!tgPos.shown || tgPos.actor !== tgt || dt >= TG.snap) { tgPos.x = tgOut.x; tgPos.y = tgOut.y; }
+        const dock = tgOut.side === READOUT_DOCK;
+        if (dock) {
+          // every slot beside the brackets collides: fixed slot under the compass (the boss panel
+          // owns that slot during the duel, so the boss range tag just hides instead)
+          if (isBoss) tgShow = false;
+          tgOut.x = cx - TG.dockW * 0.5 * U; tgOut.y = (bossOn ? TG.dockYBoss : TG.dockY) * U;
+        }
+        // glide to a new side (60 ms) in live play; snap on a new target, dock change or after a gap
+        if (!tgPos.shown || tgPos.actor !== tgt || dt >= TG.snap || dock !== (tgPos.side === READOUT_DOCK)) { tgPos.x = tgOut.x; tgPos.y = tgOut.y; }
         else { const k = 1 - Math.exp(-dt / 0.06); tgPos.x += (tgOut.x - tgPos.x) * k; tgPos.y += (tgOut.y - tgPos.y) * k; }
         tgPos.side = tgOut.side; tgPos.actor = tgt; tgPos.shown = true;
         set(E.target, 'transform', `translate3d(${tgPos.x.toFixed(1)}px,${tgPos.y.toFixed(1)}px,0)`);
-        mods(E.target, 'hud-target', TG_MODS, (tgOut.side === 1 ? 1 : 0) | (tgt.acs.staggered ? 2 : 0) | (isBoss ? 4 : 0));
+        const sideL = tgOut.side === 1 || tgOut.side === 3;
+        mods(E.target, 'hud-target', TG_MODS, (sideL ? 1 : 0) | (tgt.acs.staggered ? 2 : 0) | (isBoss ? 4 : 0) | (dock ? 8 : 0));
         set(E.tgName, 'text', tgt.name);
         num(E.tgDist, Math.round(Math.hypot(tgt.pos.x - ppx, tgt.pos.z - ppz)), F.m2);
         barSet(E.tgAp, tgt.ap / tgt.apMax, now, dt);
@@ -842,7 +942,11 @@ export default function hudSystem(game) {
         barSet(E.tgAcs, tgt.acs.frac, now, dt);
         flag(E.tgState, 'dim', !fast);
       } else tgPos.shown = false;
+      show(E.target, tgShow);
       flag(E.reticle, 'locked', !!tgt);
+      // lock bracket on the aim point: the bracket frames it, so the reticle ring steps aside and
+      // the unit inside stays visible (ticks + dot remain)
+      flag(E.reticle, 'merged', tgtOn && Math.abs(tgtX - cx) < 26 * U && Math.abs(tgtY - cy) < 26 * U);
 
       // ---- hit marker
       const hA = now - hitFx.t;
@@ -864,8 +968,9 @@ export default function hudSystem(game) {
       if (banner) {
         const age = now - bannerT;
         const a = age < 0.15 ? age / 0.15 : age > banner.seconds ? 1 - (age - banner.seconds) / 0.35 : 1;
-        const warnBlink = (banner.kind === 'warn' || banner.kind === 'bad') && age < banner.seconds && !blink ? 0.55 : 1;
-        set(E.banner, 'opacity', (clamp01(a) * warnBlink).toFixed(2));
+        // warn/bad: the text holds full opacity; only the hazard rules + chevrons blink (css .blink)
+        flag(E.banner, 'blink', (banner.kind === 'warn' || banner.kind === 'bad') && age < banner.seconds && !blink);
+        set(E.banner, 'opacity', clamp01(a).toFixed(2));
         set(E.banner, 'transform', `translateX(-50%) translateY(${((1 - clamp01(a)) * -6 * U).toFixed(1)}px)`);
       } else set(E.banner, 'opacity', '0');
 

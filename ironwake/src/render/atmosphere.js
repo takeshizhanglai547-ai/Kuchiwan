@@ -53,21 +53,47 @@ export const ATMOS = {
     // script: muted blues). The warm grey only survives within ~60 deg of the sun azimuth.
     cool: '#4E555C',
     sector: [-0.25, 0.92], // smoothstep range on cos(azimuth to the sun) for the warm sector
+    // the ash storm is THICKER on the storm side (extinction multiplier away from the sun azimuth):
+    // the far kit there layers into slate haze instead of standing crisp against a clear horizon
+    stormDensity: 1.25,
     // light leaking under the storm deck: a burnt-orange band along the horizon of the sun
     // sector (silhouettes on the sun side stand against it)
     horizonGlow: '#D98A4E',
     horizonGlowStrength: 1.5,
+    horizonGlowSector: [0.35, 1.0], // narrower than the warm sector: the burnt-orange band hugs the sun azimuth
     scatter: '#E0874A',    // hot sun lobe tint
     scatterStrength: 1.4,
     scatterG: 0.8,         // HG anisotropy (forward-scattering ash)
     wash: '#C9906A',       // broad warm wash toward the sun (desaturated)
     washStrength: 0.9,
-    ambient: 0.66,         // share of the base haze colour lit by the sky (sun sector)
+    ambient: 0.62,         // share of the base haze colour lit by the sky (sun sector)
     sunIso: '#FFBE8C',     // near-isotropic sun scattering in the ash (lit at every angle) ...
-    sunIsoStrength: 0.26,  // ... so shadow volumes carve visible shafts (volumetric pass)
+    sunIsoStrength: 0.14,  // ... so shadow volumes carve visible shafts (volumetric pass)
     skyHaze: 0.2,          // sky dome haze scale above the horizon band (horizon = fog colour)
     patch: 0.5,            // patchy haze amplitude (0 = uniform)
     farFade: [2600, 3900], // geometry fully dissolves into the sky haze before the far plane
+    // SUN IN-SCATTER START DISTANCE (cf. UE 'directional inscattering start distance'): the
+    // sun-lit share of the haze only builds up with distance, i.e. each metre of fog along the
+    // ray scatters sunlight with weight sunFloor + (1 - sunFloor)(1 - e^{-t/sunStart}). The
+    // analytic fog uses the ray average of that weight, the VOLUME pass integrates it per step,
+    // so both agree. Fog within ~400 m adds <= ~30 % of the old sun wash: sun-side structures
+    // at 100-300 m keep their lit/shadow separation instead of merging into one peach band,
+    // while the horizon / sky glow (normalised at 4 km) is unchanged.
+    sunStart: 700,
+    sunFloor: 0.12,
+    // SUN TRANSMITTANCE INTO THE GROUND LAYER: the low sun reaches the dense ash layer through a
+    // long slant path, so the haze hugging the ground is less sun-lit than the haze aloft
+    // (x art scale). Far tower bases sit in a darker ground band instead of a uniform glowing bank.
+    sunGroundShadow: 1.6,
+    // opacity cap of the height fog below ~2 km: tower bases and the far shore line survive
+    // as a faint silhouette instead of dissolving into a uniform bank (sky haze takes over at farFade)
+    cap: 0.8,
+    capRange: [1700, 2600],
+    // WATER (materials that define IW_FOG_WATER, i.e. the sea): the in-scatter over the sea is
+    // clamped toward the cool storm haze x water (the warm sun wash would turn the dark sea into
+    // beige 'sand dunes'); it blends back to the normal haze toward the horizon (no seam with the sky)
+    water: 0.8,
+    waterRange: [1000, 3000],
   },
   sky: {
     zenith: '#2B2F36',     // §5: slate zenith
@@ -80,7 +106,7 @@ export const ATMOS = {
     bounce: '#4F4A46',     // IBL lower hemisphere: sun-lit yard bounce (only slightly warm)
     cloudDark: '#17191D',
     cloudLit: '#585A5C',   // storm-side deck underside (cool); warmed toward the sun in sky.js
-    cloudWarm: '#6A5A4E',  // sun-side deck underside
+    cloudWarm: '#5E5046',  // sun-side deck underside
   },
 };
 
@@ -103,6 +129,8 @@ export function sunDirection(out = new THREE.Vector3()) {
 }
 
 const f = (x) => (Number.isFinite(x) ? x : 0).toFixed(6);
+/** 1 - (1 - e^-x)/x : ray average of (1 - e^{-t/D}) over [0, d], x = d/D. */
+function sunRampRaw(x) { return x > 1e-3 ? 1 - (1 - Math.exp(-x)) / x : 0.5 * x; }
 const v3 = (v) => `vec3(${f(v.x ?? v.r)}, ${f(v.y ?? v.g)}, ${f(v.z ?? v.b)})`;
 
 /**
@@ -131,6 +159,7 @@ export function atmosGLSL() {
 #define IW_FOG_SECTOR vec2(${f(F.sector[0])}, ${f(F.sector[1])})
 #define IW_FOG_FARFADE vec2(${f(F.farFade[0])}, ${f(F.farFade[1])})
 #define IW_FOG_HGLOW ${v3(C(F.horizonGlow).multiplyScalar(F.horizonGlowStrength))}
+#define IW_FOG_HGSECTOR vec2(${f(F.horizonGlowSector[0])}, ${f(F.horizonGlowSector[1])})
 #define IW_FOG_SCATTER ${v3(C(F.scatter).multiplyScalar(F.scatterStrength))}
 #define IW_FOG_WASH ${v3(C(F.wash).multiplyScalar(F.washStrength))}
 #define IW_FOG_G ${f(F.scatterG)}
@@ -138,6 +167,13 @@ export function atmosGLSL() {
 #define IW_FOG_ISO ${v3(C(F.sunIso).multiplyScalar(F.sunIsoStrength))}
 #define IW_SKY_HAZE ${f(F.skyHaze)}
 #define IW_FOG_PATCH ${f(F.patch)}
+#define IW_FOG_STORM ${f(F.stormDensity)}
+#define IW_FOG_SUNK ${f(1 / F.sunStart)}
+#define IW_FOG_SUNN ${f(1 / sunRampRaw(4000 / F.sunStart))}
+#define IW_FOG_SUNFLOOR ${f(F.sunFloor)}
+#define IW_FOG_SUNGT ${f(F.sunGroundShadow * (1 - F.highFrac) / (F.falloff * Math.max(0.05, Math.sin(ATMOS.sun.elevationDeg * Math.PI / 180))))}
+#define IW_FOG_CAP vec3(${f(F.cap)}, ${f(F.capRange[0])}, ${f(F.capRange[1])})
+#define IW_FOG_WATER_K vec3(${f(F.water)}, ${f(F.waterRange[0])}, ${f(F.waterRange[1])})
 float iwExpInt(float k, float dy) {
   float x = k * dy;
   return abs(x) > 1e-3 ? (1.0 - exp(-x)) / x : 1.0 - 0.5 * x;
@@ -160,6 +196,14 @@ float iwFogPatch(vec3 cam, vec3 v, float L) {
   n *= 1.0 / 3.0;
   return 1.0 + IW_FOG_PATCH * (n - 0.5) * 2.0 * (1.0 - smoothstep(500.0, 1500.0, L));
 }
+// Extinction multiplier of a view direction: IW_FOG_STORM on the storm side, 1 in the sun sector
+// (same azimuth weight as iwSunSector, without its vertical-ray blend).
+float iwStormMul(vec3 v) {
+  float lh = length(v.xz);
+  float az = dot(v.xz, normalize(IW_SUN_DIR.xz)) / max(lh, 1e-4);
+  float s = smoothstep(IW_FOG_SECTOR.x, IW_FOG_SECTOR.y, az);
+  return mix(IW_FOG_STORM, 1.0, s);
+}
 // Optical depth between the camera and a point; density(y) = d0*((1-h)e^{-k1 y} + h e^{-k2 y}).
 float iwFogOD(vec3 cam, vec3 pos, float d0) {
   vec3 v = pos - cam;
@@ -168,7 +212,7 @@ float iwFogOD(vec3 cam, vec3 pos, float d0) {
   float h = max(cam.y, -50.0);
   float a1 = (1.0 - IW_FOG_HI) * exp(-IW_FOG_K1 * h) * iwExpInt(IW_FOG_K1, v.y);
   float a2 = IW_FOG_HI * exp(-IW_FOG_K2 * h) * iwExpInt(IW_FOG_K2, v.y);
-  return d0 * (a1 + a2) * Ls * iwFogPatch(cam, v, L);
+  return d0 * (a1 + a2) * Ls * iwFogPatch(cam, v, L) * iwStormMul(v);
 }
 // Optical depth to infinity along a unit direction (sky dome).
 float iwFogODRay(vec3 cam, vec3 dir, float d0) {
@@ -177,6 +221,21 @@ float iwFogODRay(vec3 cam, vec3 dir, float d0) {
   float L1 = 1.0 / max(IW_FOG_K1 * dy, 1e-4);
   float L2 = 1.0 / max(IW_FOG_K2 * dy, 1e-4);
   return d0 * ((1.0 - IW_FOG_HI) * exp(-IW_FOG_K1 * h) * min(L1, 2.0e5) + IW_FOG_HI * exp(-IW_FOG_K2 * h) * min(L2, 2.0e5));
+}
+// Ray-average of the sun in-scatter weight over [0, d] (see ATMOS.fog.sunStart); 1 at 4 km.
+float iwSunRamp(float d) {
+  float x = IW_FOG_SUNK * d;
+  float r = x > 1e-3 ? 1.0 - (1.0 - exp(-x)) / x : 0.5 * x;
+  return IW_FOG_SUNFLOOR + (1.0 - IW_FOG_SUNFLOOR) * min(r * IW_FOG_SUNN, 1.0);
+}
+// Per-metre weight at distance t (the VOLUME pass integrates it; its ray average = iwSunRamp).
+float iwSunWeight(float t) {
+  return IW_FOG_SUNFLOOR + (1.0 - IW_FOG_SUNFLOOR) * min((1.0 - exp(-IW_FOG_SUNK * t)) * IW_FOG_SUNN, 1.0);
+}
+// Sun transmittance through the dense ground layer down to height y (d0 = ground extinction):
+// exp(-d0 (1-h) e^{-k1 y} / (k1 sin(el))) x art scale. ~0.6 at the ground, ~1 above 150 m.
+float iwSunT(float y, float d0) {
+  return exp(-d0 * IW_FOG_SUNGT * exp(-IW_FOG_K1 * max(y, 0.0)));
 }
 float iwHG(float mu, float g) {
   float g2 = g * g;
@@ -207,11 +266,13 @@ vec3 iwFogSunPart(vec3 dir, vec3 base) {
 vec3 iwFogInscatter(vec3 dir, float d, vec3 base) {
   float sec = iwSunSector(dir);
   vec3 amb = base * mix(IW_FOG_COOL, vec3(IW_FOG_AMB), sec);
-  // horizon glow band of the sun sector (grows with distance: it is light from far away)
+  // horizon glow band around the sun azimuth (grows with distance: it is light from far away)
   float hz = exp(-abs(dir.y) * 9.0);
-  amb += base * IW_FOG_HGLOW * (sec * sec * hz * (1.0 - exp(-d * 0.0012)));
+  float lh = length(dir.xz);
+  float hg = smoothstep(IW_FOG_HGSECTOR.x, IW_FOG_HGSECTOR.y, dot(dir.xz, normalize(IW_SUN_DIR.xz)) / max(lh, 1e-4));
+  amb += base * IW_FOG_HGLOW * (hg * hg * hz * (1.0 - exp(-d * 0.0012)));
   amb *= mix(IW_FOG_NEAR_RATIO, vec3(1.0), 1.0 - exp(-d * 0.0035));
-  return amb + iwFogSunPart(dir, base);
+  return amb + iwFogSunPart(dir, base) * iwSunRamp(d);
 }
 #endif
 `;
@@ -245,14 +306,28 @@ function fogParsFragment() {
 	${atmosGLSL()}
 	#ifdef FOG_EXP2
 		float iwFogFactor() {
-			// geometry dissolves completely into the sky haze before the far plane (no horizon step)
+			// geometry dissolves completely into the sky haze before the far plane (no horizon step);
+			// below ~2 km the height fog is capped so far silhouettes keep a faint ground contact
 			float L = length( vIwFogPos - cameraPosition );
-			return max( 1.0 - exp( - iwFogOD( cameraPosition, vIwFogPos, fogDensity ) ), smoothstep( IW_FOG_FARFADE.x, IW_FOG_FARFADE.y, L ) );
+			float cap = mix( IW_FOG_CAP.x, 1.0, smoothstep( IW_FOG_CAP.y, IW_FOG_CAP.z, L ) );
+			return max( min( 1.0 - exp( - iwFogOD( cameraPosition, vIwFogPos, fogDensity ) ), cap ), smoothstep( IW_FOG_FARFADE.x, IW_FOG_FARFADE.y, L ) );
 		}
 		vec3 iwFogColorAt() {
 			vec3 v = vIwFogPos - cameraPosition;
 			float d = length( v );
-			return iwFogInscatter( v / max( d, 1e-3 ), d, fogColor );
+			vec3 dir = v / max( d, 1e-3 );
+			// the sun-lit share is weighted by the sun's transmittance into the layer the ray crosses
+			// (its lower end dominates the dense ground layer's in-scatter)
+			float yEff = min( cameraPosition.y, vIwFogPos.y ) + 8.0;
+			// (faded out toward farFade so the far geometry still meets the sky haze with no horizon step)
+			float gs = ( 1.0 - iwSunT( yEff, fogDensity ) ) * ( 1.0 - smoothstep( IW_FOG_FARFADE.x * 0.55, IW_FOG_FARFADE.x, d ) );
+			vec3 c = iwFogInscatter( dir, d, fogColor ) - iwFogSunPart( dir, fogColor ) * iwSunRamp( d ) * gs;
+			#ifdef IW_FOG_WATER
+			// sea: cool slate haze near the pier (no warm sun wash over the water), normal haze at the horizon
+			vec3 cw = fogColor * IW_FOG_COOL * IW_FOG_WATER_K.x;
+			c = mix( min( c, cw * ( 1.0 + 0.35 * iwSunRamp( d ) ) ), c, smoothstep( IW_FOG_WATER_K.y, IW_FOG_WATER_K.z, d ) );
+			#endif
+			return c;
 		}
 		// Equivalent exp2 depth: fogDensity^2 * D^2 == optical depth (see header).
 		float iwFogEqDepth() {

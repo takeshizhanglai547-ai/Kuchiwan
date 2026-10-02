@@ -1,8 +1,9 @@
 // src/fx/debris.js — tumbling 3D debris chunks with smoke/fire trails (owner: weapons/VFX artist).
 //
 //   fx.debris.burst(pos, dir, { count, speed: [min,max], size: [min,max], hot 0..1 }, scale)
-// Chunks are an InstancedMesh (one draw call) of jagged, flat-shaded rock/steel shards lit by
-// the scene. They fly ballistically, spin, bounce on the ground and settle. Hot chunks leave a
+// Chunks are an InstancedMesh (one draw call) of 5 distinct faceted shapes (torn plate, bevelled
+// block, angle iron, concrete lump, pipe stub) in soot albedo, lit by the scene, with an ember
+// rim while hot. They fly ballistically, spin, bounce on the ground and settle. Hot chunks leave a
 // burning smoke trail (particles 'debris_fire' / 'debris_smoke') while they cool.
 import * as THREE from 'three';
 
@@ -18,22 +19,61 @@ export const DEBRIS_FX = {
   ],
 };
 
-function chunkGeometry() {
-  // a torn plate fragment (flattened, jagged icosphere): reads as ripped armour / slab, not a pebble
-  const g = new THREE.IcosahedronGeometry(1, 1);
+// FIVE distinct chunk shapes merged into ONE geometry (one draw call): each vertex carries its
+// shape id (attribute iwShape); an instance shows only its own shape (the others collapse to a
+// point in the vertex shader). Combat r2 tell: every chunk was the same flat, unlit-looking shard.
+const NSHAPES = 5;
+function jagged(g, sx, sy, sz, amt, seed) {
+  // deterministic per-position jitter (shared vertices stay welded -> no cracks), then scale
   const p = g.attributes.position;
-  // deterministic jagged deformation (fixed pseudo-random table)
-  let s = 12345;
+  let s = seed;
   const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   const cache = new Map();
   for (let i = 0; i < p.count; i++) {
     const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
     let k = cache.get(key);
-    if (k === undefined) { k = 0.5 + rnd() * 0.85; cache.set(key, k); }
-    p.setXYZ(i, p.getX(i) * k * 1.25, p.getY(i) * k * 0.42, p.getZ(i) * k * 0.95);
+    if (k === undefined) { k = [1 + (rnd() - 0.5) * amt, 1 + (rnd() - 0.5) * amt, 1 + (rnd() - 0.5) * amt]; cache.set(key, k); }
+    p.setXYZ(i, p.getX(i) * k[0] * sx, p.getY(i) * k[1] * sy, p.getZ(i) * k[2] * sz);
   }
-  g.computeVertexNormals();
   return g;
+}
+function chunkGeometry() {
+  const parts = [
+    // 0 torn armour plate: flat, jagged outline
+    jagged(new THREE.IcosahedronGeometry(1, 1), 1.25, 0.32, 0.95, 0.75, 12345),
+    // 1 chamfered block (concrete / casting): a box with bevelled edges, slightly skewed
+    jagged(new THREE.BoxGeometry(1.3, 0.8, 0.9, 2, 2, 2), 1, 1, 1, 0.35, 777),
+    // 2 bent angle iron: an L-profile beam stub
+    (() => {
+      const sh = new THREE.Shape();
+      sh.moveTo(-0.5, -0.5); sh.lineTo(0.5, -0.5); sh.lineTo(0.5, -0.32); sh.lineTo(-0.32, -0.32); sh.lineTo(-0.32, 0.5); sh.lineTo(-0.5, 0.5);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 1.6, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 1, steps: 2 });
+      g.translate(0, 0, -0.8);
+      return jagged(g, 0.9, 0.9, 1, 0.3, 4242);
+    })(),
+    // 3 concrete lump: rounder, knobbly
+    jagged(new THREE.IcosahedronGeometry(0.85, 1), 1.1, 0.85, 1, 0.55, 999),
+    // 4 pipe stub with torn ends
+    jagged(new THREE.CylinderGeometry(0.42, 0.42, 1.6, 9, 2, true), 1, 1, 1, 0.3, 31337),
+  ];
+  const pos = [], nrm = [], uv = [], sid = [];
+  parts.forEach((g, k) => {
+    const ng = g.index ? g.toNonIndexed() : g;
+    ng.computeVertexNormals();   // non-indexed => faceted: crisp lit facets, chamfers catch light
+    const P = ng.attributes.position, N = ng.attributes.normal, U = ng.attributes.uv;
+    for (let i = 0; i < P.count; i++) {
+      pos.push(P.getX(i), P.getY(i), P.getZ(i)); nrm.push(N.getX(i), N.getY(i), N.getZ(i));
+      uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0); sid.push(k);
+    }
+    if (ng !== g) ng.dispose();
+    g.dispose();
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  out.setAttribute('iwShape', new THREE.Float32BufferAttribute(sid, 1));
+  return out;
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
@@ -45,23 +85,30 @@ export class Debris {
     this.rng = game.rng.stream('fx_debris');
     for (const k in DEBRIS_FX) fx.register(k, DEBRIS_FX[k]);
     this.C = [];
-    for (let i = 0; i < MAXC; i++) this.C.push({ alive: false, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), size: 1, age: 0, life: 1, hot: 0, trailT: 0, rest: false, tint: 0 });
+    for (let i = 0; i < MAXC; i++) this.C.push({ alive: false, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), size: 1, age: 0, life: 1, hot: 0, trailT: 0, rest: false, tint: 0, glow: 0, shape: 0 });
     this.next = 0;
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.35, flatShading: true, envMapIntensity: 0.55 });
-    // instanceColor packs (heat, albedo, tint): charred albedo broken up by noise (soot / bare steel
-    // / paint flecks, fx_misc fBm) + an ember emissive ramp for hot chunks
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0.25, flatShading: false, envMapIntensity: 0.55 });
+    // instanceColor packs (glow, albedo, tint); per-instance attribute iwPick = shape id. Soot
+    // albedo #2A2420 broken up by bare-steel / paint flecks (fx_misc fBm); while hot an EMBER RIM
+    // (#FF7A1A x3 at grazing angles + glowing cracks) that cools within ~0.5 s
     const noise = fx.textures ? fx.textures.misc : null;
     mat.defines = { USE_UV: '' };
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.iwNoise = { value: noise };
+      sh.vertexShader = sh.vertexShader
+        .replace('void main() {', 'attribute float iwShape; attribute float iwPick;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed *= step(abs(iwShape - iwPick), 0.5);');
       sh.fragmentShader = sh.fragmentShader
         .replace('void main() {', 'uniform sampler2D iwNoise;\nvoid main() {')
-        .replace('#include <color_fragment>', '#include <color_fragment>\n  float iwHeat = vColor.r; float iwN = texture2D(iwNoise, vUv * 1.7 + vColor.b * 3.1).a * 2.0 - 1.0;\n  vec3 iwBase = mix(vec3(0.75, 0.72, 0.68), vec3(1.25, 1.0, 0.8), vColor.b);\n  diffuseColor.rgb = vColor.g * iwBase * (0.45 + 1.3 * smoothstep(0.3, 0.75, iwN));')
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = clamp(0.95 - 0.5 * smoothstep(0.55, 0.8, iwN), 0.3, 1.0);')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), clamp(iwHeat * 1.4 - 0.2, 0.0, 1.0)) * iwHeat * iwHeat * 2.5;');
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  float iwHeat = vColor.r; float iwN = texture2D(iwNoise, vUv * 1.7 + vColor.b * 3.1).a * 2.0 - 1.0;\n  vec3 iwBase = mix(vec3(0.023, 0.018, 0.016), vec3(0.09, 0.085, 0.08), smoothstep(0.35, 0.8, iwN) * (0.4 + 0.6 * vColor.b));\n  diffuseColor.rgb = iwBase * (0.7 + 6.0 * vColor.g);')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = clamp(0.85 - 0.4 * smoothstep(0.55, 0.85, iwN), 0.35, 1.0);')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  float iwRim = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 2.0);\n  float iwCrack = smoothstep(0.55, 0.85, 1.0 - abs(iwN * 2.0 - 0.3));\n  totalEmissiveRadiance = vec3(1.0, 0.195, 0.01) * 3.0 * iwHeat * iwHeat * (0.12 + 0.88 * max(iwRim, iwCrack * 0.6));');
     };
     mat.customProgramCacheKey = () => 'iw-debris';
-    this.mesh = new THREE.InstancedMesh(chunkGeometry(), mat, MAXC);
+    const geo = chunkGeometry();
+    this.pick = new THREE.InstancedBufferAttribute(new Float32Array(MAXC), 1).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('iwPick', this.pick);
+    this.mesh = new THREE.InstancedMesh(geo, mat, MAXC);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.setColorAt(0, _col.setRGB(1, 1, 1));
     this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -116,6 +163,7 @@ export class Debris {
         if (wl > 1e-3) { _ax.copy(c.w).multiplyScalar(1 / wl); _dq.setFromAxisAngle(_ax, wl * dt); c.q.premultiply(_dq); }
       }
       c.hot *= Math.exp(-dt * 1.1);
+      c.glow *= Math.exp(-dt * 4.5);   // the ember rim cools in ~0.5 s; the smoke trail keeps going
       // burning trail while hot and airborne (or smouldering on the ground)
       c.trailT -= dt;
       if (c.hot > 0.12 && c.trailT <= 0) {
@@ -135,13 +183,15 @@ export class Debris {
       _s.set(c.size, c.size, c.size).multiplyScalar(shrink);
       _m.compose(_p, c.q, _s);
       this.mesh.setMatrixAt(n, _m);
-      // (heat, albedo): charred steel/concrete, ember glow while hot
-      _col.setRGB(c.hot, 0.03 + c.tint * 0.06, c.tint);
+      // (glow, albedo variation, tint): soot-black steel / concrete, ember rim while hot
+      _col.setRGB(c.glow, c.tint * 0.12, c.tint);
       this.mesh.setColorAt(n, _col);
+      this.pick.array[n] = c.shape;
       n++;
     }
     this.mesh.count = n;
-    if (n) { this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true; }
+    if (n) { this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true; this.pick.needsUpdate = true; }
+    this.mesh.visible = n > 0;
   }
 
   dispose() { this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.mesh.dispose(); this.game.scene.remove(this.mesh); }

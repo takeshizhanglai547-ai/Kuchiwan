@@ -101,16 +101,16 @@ def rail_line(pts, h=1.1, post=2.4, r=0.06, mat='steel:railing', post_mat='steel
     return g
 
 
-def cheap_ladder(h, x=0.0, y=0.0, z0=0.0, w=0.6, mat='steel:railing', facing=0.0, cage=True):
+def cheap_ladder(h, x=0.0, y=0.0, z0=0.0, w=0.6, mat='steel:railing', facing=0.0, cage=True, rung=0.45, hoop=1.5):
     g = Geo()
     for sx in (-w / 2, w / 2):
         g.merge(bx(0.08, 0.08, h, (sx, 0, z0 + h / 2), mat=mat))
-    n = int(h / 0.45)
+    n = int(h / rung)
     for i in range(1, n):
-        g.merge(bx(w, 0.05, 0.05, (0, 0, z0 + i * 0.45), mat='steel:galv'))
+        g.merge(bx(w, 0.05, 0.05, (0, 0, z0 + i * rung), mat='steel:galv'))
     if cage and h > 4:
-        for i in range(int((h - 3) / 1.5)):
-            z = z0 + 3 + i * 1.5
+        for i in range(int((h - 3) / hoop)):
+            z = z0 + 3 + i * hoop
             g.merge(bx(w + 0.5, 0.06, 0.06, (0, -0.8, z), mat=mat))
             g.merge(bx(0.06, 0.8, 0.06, (-w / 2 - 0.25, -0.4, z), mat=mat))
             g.merge(bx(0.06, 0.8, 0.06, (w / 2 + 0.25, -0.4, z), mat=mat))
@@ -494,27 +494,65 @@ def sphere_tank(r=9.0, legs=8):
     return g, cyl_cols(r * 0.98, 6.0 - r * 0.2, 2 * r + 6.0) + [((math.cos(TAU * i / legs) * r * 0.92, math.sin(TAU * i / legs) * r * 0.92, 3.5), (1.0, 1.0, 7.0)) for i in range(legs)]
 
 
-def stack(h=120.0, r0=6.0, r1=3.6, var='dark', glow=True, beacons=True, segs=40):
-    """Concrete chimney with steel bands, platforms, beacons and a hot glowing mouth."""
+def band(r_lo, r_hi, z, h, out, segs, mat):
+    """Raised band on a (tapering) shell: outer face + top / bottom lips only (no hidden inner
+    wall): 6 tris per segment."""
+    return P.lathe([(r_lo - 0.02, z), (r_lo + out, z), (r_hi + out, z + h), (r_hi - 0.02, z + h)], segs, mat)
+
+
+def _ring_rail(g, rr, z, segs, posts=12, h=1.1):
+    """Cheap circular guard rail: top + mid rail rings and posts (out-of-bounds stacks)."""
+    g.merge(P.ring(rr + 0.05, rr - 0.05, 0.1, segs, bevel=0.0, mat='steel:railing', z0=z + h - 0.1))
+    g.merge(P.ring(rr + 0.04, rr - 0.04, 0.08, segs, bevel=0.0, mat='steel:railing', z0=z + h * 0.5))
+    for i in range(posts):
+        a = TAU * i / posts
+        g.merge(bx(0.09, 0.09, h, (math.cos(a) * rr, math.sin(a) * rr, z + h / 2), mat='steel:railing'))
+
+
+def stack(h=120.0, r0=6.0, r1=3.6, var='dark', glow=True, beacons=True, segs=40, band_step=15.0, band_mat='steel:rust',
+          paint=None, plats=(0.45, 0.82), seed=0, cheap_rail=False):
+    """Concrete chimney: steel bands (spacing band_step), optional painted day-mark bands in the top
+    third (paint = (mat_a, mat_b), random 6-14 m spacing from seed), platforms, beacons, sooted lip."""
+    import random as _r
+    rnd = _r.Random(seed)
     g = Geo()
     prof = [(0.0, 0.0), (r0 + 0.8, 0.0), (r0 + 0.8, 1.5), (r0, 2.0), (r1, h), (r1 + 0.35, h), (r1 + 0.35, h + 1.2),
             (r1 - 0.3, h + 1.2), (r1 - 0.3, h - 3.0)]
     g.merge(P.lathe(prof, segs, 'concrete:' + var))
     g.merge(P.cylinder(r1 - 0.3, 0.2, segs, bevel=0.0, mat='glow:dim' if glow else 'steel:black', z0=h - 3.0))   # dim flue ember (no HDR disc from above)
-    nb = int(h / 15)
-    for i in range(1, nb + 1):
-        z = i * h / (nb + 1)
-        rr = r0 + (r1 - r0) * (z / h)
-        g.merge(P.ring(rr + 0.25, rr - 0.1, 0.6, segs, bevel=0.0, mat='steel:rust', z0=z))
+
+    def rad(z):
+        return r0 + (r1 - r0) * (z / h)
+    if band_step:
+        z = band_step * rnd.uniform(0.6, 1.0)
+        top = h * (0.6 if paint else 0.97)
+        while z < top - 4.0:
+            g.merge(band(rad(z), rad(z + 0.6), z, 0.6, 0.25, segs, band_mat))
+            z += band_step * rnd.uniform(0.75, 1.25)
+    if paint:
+        step = rnd.uniform(6.0, 14.0)
+        z = h - 14.0
+        k = 0
+        while z > h * 0.62:
+            z0 = z - step * 0.5
+            g.merge(P.lathe([(rad(z0) + 0.06, z0), (rad(z) + 0.06, z)], segs, paint[k % 2]))
+            z -= step
+            k += 1
     # soot band at the top
     g.merge(P.lathe([(r1 + 0.36, h - 14.0), (r1 + 0.36, h + 0.02)], segs, 'concrete:soot'))
-    for zf in (0.45, 0.82):
+    for zf in plats:
         z = h * zf
-        rr = r0 + (r1 - r0) * zf
+        rr = rad(z)
         g.merge(P.ring(rr + 1.8, rr - 0.05, 0.3, segs, bevel=0.0, mat='trim:grating', z0=z))
-        n = 16
-        pts = [(math.cos(TAU * i / n) * (rr + 1.7), math.sin(TAU * i / n) * (rr + 1.7), z + 0.3) for i in range(n + 1)]
-        g.merge(rail_line(pts, h=1.2, post=3.0, r=0.06))
+        if cheap_rail:
+            _ring_rail(g, rr + 1.7, z + 0.3, segs)
+        else:
+            n = 16
+            pts = [(math.cos(TAU * i / n) * (rr + 1.7), math.sin(TAU * i / n) * (rr + 1.7), z + 0.3) for i in range(n + 1)]
+            g.merge(rail_line(pts, h=1.2, post=3.0, r=0.06))
+        for k in range(6):
+            a = TAU * k / 6 + 0.3
+            g.merge(beam((math.cos(a) * rr, math.sin(a) * rr, z - 1.6), (math.cos(a) * (rr + 1.6), math.sin(a) * (rr + 1.6), z - 0.05), 0.2, 0.2, 'steel:dark'))
         if beacons:
             for a in (0.0, math.pi):
                 g.merge(beacon(math.cos(a) * (rr + 1.2), math.sin(a) * (rr + 1.2), z + 1.8, 0.8))
@@ -522,6 +560,76 @@ def stack(h=120.0, r0=6.0, r1=3.6, var='dark', glow=True, beacons=True, segs=40)
         for a in (0.5, 0.5 + math.pi):
             g.merge(beacon(math.cos(a) * (r1 + 0.1), math.sin(a) * (r1 + 0.1), h + 1.6, 0.9))
     return g, cyl_cols(r0 + 0.8, 0.0, h * 0.5) + cyl_cols((r0 + r1) / 2, h * 0.5, h)
+
+
+def steel_stack(h=140.0, r=4.2, seed=5, segs=28):
+    """Plated steel flue: flanged courses every 7-10 m, three platforms, guy wires to anchor
+    blocks, rust-bled shell, sooted lip."""
+    import random as _r
+    rnd = _r.Random(seed)
+    g = Geo()
+    prof = [(0.0, 0.0), (r + 1.6, 0.0), (r + 1.6, 1.2), (r + 0.6, 1.6), (r + 0.6, 4.0), (r, 5.0), (r, h), (r + 0.3, h),
+            (r + 0.3, h + 0.9), (r - 0.25, h + 0.9), (r - 0.25, h - 3.0)]
+    g.merge(P.lathe(prof, segs, 'steel:rust'))
+    g.merge(P.cylinder(r - 0.25, 0.2, segs, bevel=0.0, mat='glow:dim', z0=h - 3.0))
+    z = 8.0
+    while z < h - 3.0:
+        g.merge(band(r, r, z, 0.45, 0.22, segs, 'steel:dark'))
+        z += rnd.uniform(9.0, 13.0)
+    g.merge(P.lathe([(r + 0.32, h - 9.0), (r + 0.32, h + 0.02)], segs, 'concrete:soot'))
+    for zf in (0.32, 0.6, 0.9):
+        zz = h * zf
+        g.merge(P.ring(r + 1.9, r - 0.05, 0.3, segs, bevel=0.0, mat='trim:grating', z0=zz))
+        _ring_rail(g, r + 1.8, zz + 0.3, segs, posts=10)
+        for k in range(5):
+            a = TAU * k / 5 + 0.4
+            g.merge(beam((math.cos(a) * r, math.sin(a) * r, zz - 1.5), (math.cos(a) * (r + 1.7), math.sin(a) * (r + 1.7), zz - 0.05), 0.18, 0.18, 'steel:dark'))
+    for sx in (-0.3, 0.3):     # ladder stiles (rungs are sub-pixel from the deck)
+        g.merge(bx(0.08, 0.08, h * 0.9, (sx, -r - 0.35, h * 0.45), mat='steel:railing'))
+    for k in range(3):
+        a = TAU * k / 3 + 0.5
+        c, si = math.cos(a), math.sin(a)
+        for zf in (0.6, 0.9):
+            g.merge(beam((c * (r + 0.2), si * (r + 0.2), h * zf), (c * h * 0.4, si * h * 0.4, 1.0), 0.09, 0.09, 'steel:black'))
+        g.merge(bxz(3.0, 3.0, 1.6, c * h * 0.4, si * h * 0.4, 0.0, mat='concrete:grey', bev=0.06))
+    g.merge(beacon(r * 0.7, 0, h + 1.5, 0.8))
+    g.merge(beacon(-r - 1.2, 0, h * 0.6 + 2.0, 0.7))
+    return g
+
+
+def twin_flue(h=160.0, rf=2.6, seed=6, segs=20):
+    """Two steel flues inside a tapering 4-leg lattice tower with platforms every bay."""
+    g = Geo()
+    tw0, tw1 = 7.0, 4.2
+    for sx in (-1, 1):
+        x = sx * (rf + 0.6)
+        g.merge(P.lathe([(0.0, 0.0), (rf, 0.0), (rf, h + 8.0), (rf + 0.25, h + 8.0), (rf + 0.25, h + 8.8), (rf - 0.2, h + 8.8),
+                         (rf - 0.2, h + 6.0)], segs, 'steel:grey').move(x, 0, 0))
+        g.merge(P.lathe([(rf + 0.26, h - 2.0), (rf + 0.26, h + 8.02)], segs, 'concrete:soot').move(x, 0, 0))
+        g.merge(P.cylinder(rf - 0.2, 0.2, segs, bevel=0.0, mat='glow:dim', z0=h + 6.0).move(x, 0, 0))
+    nb = int(h / 16)
+    for i in range(nb + 1):
+        z = h * i / nb
+        a = tw0 + (tw1 - tw0) * i / nb
+        for k in range(4):
+            c0 = [(-1, -1), (1, -1), (1, 1), (-1, 1)][k]
+            c1 = [(-1, -1), (1, -1), (1, 1), (-1, 1)][(k + 1) % 4]
+            g.merge(beam((c0[0] * a, c0[1] * a, z), (c1[0] * a, c1[1] * a, z), 0.35, 0.35, 'steel:slate'))
+            if i < nb:
+                a2 = tw0 + (tw1 - tw0) * (i + 1) / nb
+                z2 = h * (i + 1) / nb
+                g.merge(beam((c0[0] * a, c0[1] * a, z), (c0[0] * a2, c0[1] * a2, z2), 0.6, 0.6, 'steel:slate'))
+                if i % 2 == k % 2:
+                    g.merge(beam((c0[0] * a, c0[1] * a, z), (c1[0] * a2, c1[1] * a2, z2), 0.28, 0.28, 'steel:slate'))
+                else:
+                    g.merge(beam((c1[0] * a, c1[1] * a, z), (c0[0] * a2, c0[1] * a2, z2), 0.28, 0.28, 'steel:slate'))
+        if i % 3 == 2:
+            g.merge(bxz(2 * a + 1.2, 2 * a + 1.2, 0.25, 0, 0, z, mat='trim:grating'))
+    g.merge(bxz(2 * tw0 + 2.0, 2 * tw0 + 2.0, 1.2, 0, 0, 0.0, mat='concrete:grey', bev=0.08))
+    g.merge(beacon(tw1, tw1, h + 0.8, 0.8))
+    g.merge(beacon(-tw1, -tw1, h + 0.8, 0.8))
+    g.merge(beacon(tw0 * 0.8, -tw0 * 0.8, h * 0.5, 0.7))
+    return g
 
 
 def cooling_tower(h=140.0, rb=55.0, rt=34.0, rw=30.0):
@@ -541,7 +649,7 @@ def cooling_tower(h=140.0, rb=55.0, rt=34.0, rw=30.0):
         prof_o.append((r, z))
         prof_i.append((r - 0.6, z))
     prof = prof_o + [(prof_o[-1][0] + 0.2, h + 0.6)] + list(reversed(prof_i))
-    g.merge(P.lathe(prof, 64, 'concrete:shell'))
+    g.merge(P.lathe(prof, 48, 'concrete:shell'))
     # ring beam at the lip + inspection platform / ladder hint, aviation beacons on the lip
     g.merge(P.ring(rt + 0.9, rt - 0.2, 1.4, 64, bevel=0.0, mat='concrete:soot', z0=h - 0.8))
     for k in range(4):
@@ -577,11 +685,12 @@ def blast_furnace():
     for z in range(22, 46, 3):
         t = (z - 20.0) / 26.0
         r = 10.2 + (7.2 - 10.2) * t
-        g.merge(P.ring(r + 0.25, r - 0.2, 0.5, 48, bevel=0.0, mat='steel:rust', z0=z))
+        r2 = 10.2 + (7.2 - 10.2) * ((z + 0.5 - 20.0) / 26.0)
+        g.merge(band(r, r2, z, 0.5, 0.25, 48, 'steel:rust'))
     for z in (2.0, 5.0, 8.0, 11.0):
-        g.merge(P.ring(9.35, 8.9, 0.8, 48, bevel=0.0, mat='steel:rust', z0=z))
+        g.merge(band(9.0, 9.0, z, 0.8, 0.35, 48, 'steel:rust'))
     # bustle main + tuyere stocks
-    g.merge(P.torus(12.5, 1.3, 48, 12, mat='steel:rust').move(0, 0, 19.5))
+    g.merge(P.torus(12.5, 1.3, 40, 8, mat='steel:rust').move(0, 0, 19.5))
     for i in range(16):
         a = TAU * i / 16
         c, s = math.cos(a), math.sin(a)
@@ -648,10 +757,8 @@ def blast_furnace():
     top = V((10.0, 0.0, 66.0))
     foot = V((72.0, 0.0, 0.0))
     d = foot - top
-    tr = P.truss(d.length, height=4.0, depth=6.0, bays=16, chord=0.6, member=0.35, mat='steel:slate')
-    ang = math.atan2(d.z, d.x)
-    tr.transform(Matrix.Translation(top) @ Matrix.Rotation(-ang, 4, 'Y'))
-    g.merge(tr)
+    from farkit import _truss2        # plain-box truss (iwkit's bevelled one cost ~5k tris here)
+    _truss2(g, top, foot, 4.0, 6.0, 16, 0.6, 0.35, mat='steel:slate')
     for t in (0.3, 0.55, 0.8):
         p = top + d * t
         g.merge(bx(1.2, 6.0, p.z, (p.x, 0, p.z / 2), mat='steel:slate'))
@@ -676,14 +783,15 @@ def stove(h=42.0, r=5.5):
         a = (math.pi / 2) * i / 8
         prof.append((r * math.cos(a), h + r * 0.9 * math.sin(a)))
     prof[-1] = (0.0, h + r * 0.9)
-    g.merge(P.lathe(prof, 40, 'steel:grey'))
+    g.merge(P.lathe(prof, 32, 'steel:grey'))
     for z in range(3, int(h), 3):
-        g.merge(P.ring(r + 0.22, r - 0.1, 0.3 if z % 6 else 0.5, 40, bevel=0.0, mat='steel:rust' if z % 6 else 'steel:dark', z0=z))
+        hh = 0.3 if z % 6 else 0.5
+        g.merge(band(r, r, z, hh, 0.22, 32, 'steel:rust' if z % 6 else 'steel:dark'))
     for k in range(8):
         a = TAU * k / 8 + 0.2
         g.merge(bx(0.35, 0.35, h - 2.0, (math.cos(a) * (r + 0.12), math.sin(a) * (r + 0.12), 1.4 + (h - 2.0) / 2), mat='steel:dark'))
     for zp in (h * 0.42, h - 2.0):
-        g.merge(P.ring(r + 2.0, r - 0.1, 0.35, 40, bevel=0.0, mat='trim:grating', z0=zp))
+        g.merge(P.ring(r + 2.0, r - 0.1, 0.35, 32, bevel=0.0, mat='trim:grating', z0=zp))
         n = 16
         pts = [(math.cos(TAU * i / n) * (r + 1.8), math.sin(TAU * i / n) * (r + 1.8), zp + 0.35) for i in range(n + 1)]
         g.merge(rail_line(pts, h=1.1, post=3.0, r=0.06))
@@ -696,8 +804,8 @@ def stove(h=42.0, r=5.5):
     g.merge(tube((-r + 0.3, 0, 4.0), (-r - 3.0, 0, 4.0), 0.8, 'steel:rust', 14))
     g.merge(P.cylinder(0.9, 0.6, 14, bevel=0.0, mat='steel:dark', z0=h + r * 0.9 - 0.3))  # dome manhole
     g.merge(bx(3.0, 3.0, 0.2, (0, 0, h + r * 0.9 + 0.35), mat='trim:grating'))
-    g.merge(cheap_ladder(h - 2.0, 0, -r - 0.3, 0, facing=0.0))
-    g.merge(cheap_ladder(r * 0.9 + 2.4, 0, -r * 0.55, h - 2.0, facing=0.0, cage=False))
+    g.merge(cheap_ladder(h - 2.0, 0, -r - 0.3, 0, facing=0.0, rung=0.9, hoop=3.0))
+    g.merge(cheap_ladder(r * 0.9 + 2.4, 0, -r * 0.55, h - 2.0, facing=0.0, cage=False, rung=0.9))
     return g, cyl_cols(r + 0.3, 0.0, h + r * 0.9)
 
 
@@ -920,10 +1028,9 @@ def ore_bridge(span=128.0, h=40.0):
     col = 'steel:crane'
     L = span + 28.0
     x0 = -L / 2
+    from farkit import _truss2        # plain-box truss: the bevelled iwkit truss cost ~16k tris here
     for y in (-4.5, 4.5):
-        tr = P.truss(L, height=7.0, depth=1.6, bays=int(L / 6), chord=0.7, member=0.4, mat=col)
-        tr.move(x0, y, h + 3.5)
-        g.merge(tr)
+        _truss2(g, (x0, y, h + 3.5), (x0 + L, y, h + 3.5), 7.0, 1.6, int(L / 6), 0.7, 0.4, mat=col)
     for x in [x0 + i * L / 12 for i in range(13)]:
         g.merge(bx(0.8, 10.6, 0.8, (x, 0, h + 0.3), mat=col))
         g.merge(bx(0.8, 10.6, 0.8, (x, 0, h + 6.8), mat=col))

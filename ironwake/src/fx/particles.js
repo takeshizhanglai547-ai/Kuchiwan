@@ -96,7 +96,8 @@ export default function particlesSystem(game) {
 
   // ---------------------------------------------------------------- batch
   function makeBatch(textures) {
-    const base = new THREE.PlaneGeometry(1, 1);
+    // 1 x 4 segments: curved spark trails bend along their length (other shapes stay planar)
+    const base = new THREE.PlaneGeometry(1, 1, 1, 4);
     const g = new THREE.InstancedBufferGeometry();
     g.index = base.index;
     g.setAttribute('position', base.attributes.position);
@@ -110,7 +111,7 @@ export default function particlesSystem(game) {
       tPuff: { value: null }, tMisc: { value: null }, tFire: { value: null },
       uSunView: { value: new THREE.Vector3(0, 0.5, -0.5) }, uSunCol: { value: new THREE.Color() },
       uAmbTop: { value: new THREE.Color() }, uAmbBot: { value: new THREE.Color() }, uFireGain: { value: SMOKE_LIGHT.fireGain },
-      uPixel: { value: 0.001 },
+      uPixel: { value: 0.001 }, uTime: { value: 0 },
     }]);
     const mat = new THREE.ShaderMaterial({
       name: 'iw_fx_particles',
@@ -258,8 +259,11 @@ export default function particlesSystem(game) {
     if (P.n > BUSY && part.life[1] > 1.2) count = Math.ceil(count * (1 - (P.n - BUSY) / (MAX - BUSY)) * 0.5);
     if (count <= 0) return;
     const shape = shapeOf(part);
-    // ground-hugging layers (dust rings) only near the ground, emitted at ground level
+    // offset: m along dir (e.g. a muzzle side-flash that pokes past the rig silhouette)
+    let px0 = pos.x, pz0 = pos.z;
     let py = pos.y;
+    if (part.offset && dir) { px0 += dir.x * part.offset * scale; py += dir.y * part.offset * scale; pz0 += dir.z * part.offset * scale; }
+    // ground-hugging layers (dust rings) only near the ground, emitted at ground level
     if (part.ground) {
       const gy = game.physics.groundHeight(pos.x, pos.z);
       if (pos.y - gy > part.ground * scale) return;
@@ -286,9 +290,9 @@ export default function particlesSystem(game) {
       const j = (part.jitter || 0) * scale;
       if (part.dirMode === 'arc') {
         const r = 8 * scale;
-        P.pos[i3] = pos.x + _v.x * r; P.pos[i3 + 1] = py + _v.y * r; P.pos[i3 + 2] = pos.z + _v.z * r;
+        P.pos[i3] = px0 + _v.x * r; P.pos[i3 + 1] = py + _v.y * r; P.pos[i3 + 2] = pz0 + _v.z * r;
       } else {
-        P.pos[i3] = pos.x + rng.sym(j); P.pos[i3 + 1] = py + rng.sym(j); P.pos[i3 + 2] = pos.z + rng.sym(j);
+        P.pos[i3] = px0 + rng.sym(j); P.pos[i3 + 1] = py + rng.sym(j); P.pos[i3 + 2] = pz0 + rng.sym(j);
       }
       let vx = _v.x * sp, vy = _v.y * sp, vz = _v.z * sp;
       if (inh && ov) { vx += ov.x * inh; vy += ov.y * inh; vz += ov.z * inh; }
@@ -318,6 +322,8 @@ export default function particlesSystem(game) {
       P.h0[i] = part.heat ? part.heat[0] : 0; P.h1[i] = part.heat ? part.heat[1] : 0;
       P.k0[i] = addDef[0]; P.k1[i] = addDef[1]; P.cp[i] = part.coolPow || 1;
       P.e0[i] = part.erode ? part.erode[0] : 0; P.e1[i] = part.erode ? part.erode[1] : (shape === SHAPE.puff ? 0.35 : shape === SHAPE.fire ? 1 : 0);
+      // sparks: iExtra.z carries gravity / 100 (the vertex shader bends the trail along its path)
+      if (shape === SHAPE.spark) P.e0[i] = P.e1[i] = (part.gravity || 0) * 0.01;
       P.drag[i] = part.drag || 0; P.grav[i] = part.gravity || 0; P.rise[i] = part.rise || 0; P.turb[i] = part.turb || 0;
       P.bounce[i] = part.bounce ?? 0.3;
       // anamorphic flares stay horizontal; flipbook fire stays near-upright (its light is baked from above)
@@ -463,6 +469,26 @@ export default function particlesSystem(game) {
       P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
     },
 
+    /** Low-level: one booster EXHAUST JET for this step (shaders.js shape 9). pos = nozzle exit,
+     *  (dx,dy,dz) = unit exhaust direction, len = jet length (m), halfWidth (m), level = thrust
+     *  (0..~1.3: heat, diamonds), gain = brightness multiplier, seed = noise offset (0..1). */
+    jet(pos, dx, dy, dz, len, halfWidth, level, gain, seed) {
+      if (P.n >= MAX) return;
+      const i = P.n++, i3 = i * 3;
+      P.pos[i3] = pos.x; P.pos[i3 + 1] = pos.y; P.pos[i3 + 2] = pos.z;
+      P.vel[i3] = 0; P.vel[i3 + 1] = 0; P.vel[i3 + 2] = 0;
+      P.axis[i3] = dx * len; P.axis[i3 + 1] = dy * len; P.axis[i3 + 2] = dz * len;
+      P.flags[i] = F_FIXED | F_NOSOFT;
+      P.stretch[i] = 1; P.age[i] = 0; P.life[i] = 0.016;
+      P.s0[i] = halfWidth; P.s1[i] = halfWidth; P.sp[i] = 1;
+      P.c0[i3] = gain; P.c0[i3 + 1] = gain; P.c0[i3 + 2] = gain;
+      P.c1[i3] = gain; P.c1[i3 + 1] = gain; P.c1[i3 + 2] = gain;
+      P.a0[i] = 1; P.a1[i] = 1; P.ap[i] = 1; P.fin[i] = 0;
+      P.h0[i] = level; P.h1[i] = level; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
+      P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
+      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = (seed || 0) * 99; P.shape[i] = SHAPE.jet; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
+    },
+
     /** Flash light: the constant light with the least remaining energy is re-aimed. decay < 2
      *  (explosions) flattens the falloff so a blast relights the yard, not just its own hull
      *  (decay is a uniform: no recompile). */
@@ -550,6 +576,7 @@ export default function particlesSystem(game) {
       if (!softAttached) attachSoft();
       attachRigFlames();
       updateLighting();
+      batch.mat.uniforms.uTime.value = simTime;
       for (const a of anchors) {
         if (!a.node) continue;
         a.node.getWorldPosition(a.cur);
@@ -599,7 +626,7 @@ export default function particlesSystem(game) {
         const spw = P.sp[i];
         const st = spw === 1 ? t : 1 - Math.pow(1 - t, spw);
         sa[j4] = P.s0[i] + (P.s1[i] - P.s0[i]) * st;
-        sa[j4 + 1] = P.rot[i];
+        sa[j4 + 1] = P.shape[i] === SHAPE.spark ? P.age[i] : P.rot[i];   // sparks: age (trail length)
         sa[j4 + 2] = P.stretch[i];
         sa[j4 + 3] = P.shape[i];
         // fire cools non-linearly (coolPow > 1: the flame collapses into smoke early)

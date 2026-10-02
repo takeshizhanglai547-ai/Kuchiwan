@@ -4,8 +4,8 @@
     python3 assets/fx/bake_fx.py            -> assets/fx/fx_puff.webp, assets/fx/fx_misc.webp (lossless)
 
 fx_puff.webp 1024x512 RGBA (linear data), 4x2 cells of 256 px = 8 TORN puff variants
-    (0-3 thick billows that fray at the rim, 4-7 wispy dust / ash; `python3 bake_fx.py --puff`)
-    R  density (0 at the cell border, ragged warped-fBm silhouette, holes, soft ramp)
+    (0-3 soft cauliflower billows, 4-7 flattened streaky dust / ash; `python3 bake_fx.py --puff`)
+    R  density (0 well inside the cell border, gaussian billows x turbulence, WIDE soft ramp)
     G  normal x (0.5 = flat), B  normal y (+up in UV space, i.e. after three's flipY)
     A  0.5 + 0.5 * detail noise (erosion / fire temperature breakup). Alpha is kept >= 0.5 so the
        browser's premultiply/unpremultiply round trip on image upload cannot quantise RGB.
@@ -75,57 +75,63 @@ def turbo(n, rng, freqs, gain=0.55):
     return t / tot
 
 
-def puff(n=256, seed=0, wispy=False):
-    """One TORN puff. Combat r1 tell: the old cells had a clean round silhouette, so overlapping
-    puffs read as discs. Now the density is a FIELD (billowy turbulence + large lobes - an
-    irregular, off-centre, domain-warped envelope) pushed through a wide ramp: crinkled
-    cauliflower billows that fray (cells 0-3, smoke) or streaky, wispy, broken dust / ash
-    (cells 4-7). The interior keeps thick and thin parts, so the runtime erosion (fx/shaders.js,
-    per-particle noise) opens it up from the inside as well as the rim."""
-    rng = np.random.default_rng(1000 + seed)
+def puff_field(n, seed, wispy):
+    """One SOFT volumetric puff (combat r3: the r2 cells were a near-binary plateau with a 10 px
+    rim, which the runtime erosion cut into cookie-cutter / torn-paper silhouettes). The density
+    is now a sum of gaussian billows inside a domain-warped cloud, modulated by billowy
+    turbulence and pushed through a WIDE ramp: it rises smoothly from 0 at the rim to the core,
+    with thick and thin lumps inside (no flat interior, no threshold edge). Cells 0-3 are round
+    cauliflower billows, 4-7 flattened, streaky torn dust / ash."""
+    rng = np.random.default_rng(9000 + seed)
     yy, xx = np.mgrid[0:n, 0:n] / (n - 1.0)
     wx = fbm((n, n), 3, 4, rng) - 0.5
     wy = fbm((n, n), 3, 4, rng) - 0.5
-    ws = 0.22 if wispy else 0.14
+    ws = 0.16 if wispy else 0.10
     X = xx + wx * ws; Y = yy + wy * ws
-    oc = (rng.uniform(-0.04, 0.04), rng.uniform(-0.04, 0.04))
-    # large lobes (soft-max of spherical caps)
-    acc = np.zeros((n, n)); k = 26.0
-    for i in range(int(rng.integers(8, 14))):
+    acc = np.zeros((n, n))
+    sq = 0.55 if wispy else 0.85      # vertical squash of the blob cloud
+    for i in range(int(rng.integers(9, 15))):
         ang = rng.random() * 2 * np.pi
-        rr = 0.25 * np.sqrt(rng.random())
-        r = rng.uniform(0.08, 0.17) * (1.1 - rr * 1.2)
-        cx = 0.5 + oc[0] + np.cos(ang) * rr; cy = 0.5 + oc[1] + np.sin(ang) * rr * (0.7 if wispy else 0.9)
-        h = np.sqrt(np.clip(r * r - ((X - cx) ** 2 + (Y - cy) ** 2), 0, None))
-        acc += np.exp(k * h) * (h > 0)
-    H = blur(np.log1p(acc) / k, 2.0)
-    Hn = H / (H.max() + 1e-6)
-    bil = 1.0 - turbo(n, rng, (4, 8, 16, 32))
-    fine = fbm((n, n), 14, 2, rng)
-    ex = (X - 0.5 - oc[0]) / (0.5 if wispy else 0.46)
-    ey = (Y - 0.5 - oc[1]) / (0.38 if wispy else 0.43)
-    rr2 = ex * ex + ey * ey
+        rr = 0.27 * np.sqrt(rng.random())
+        s = rng.uniform(0.06, 0.115) * (1.2 - rr * 1.4)
+        cx = 0.5 + np.cos(ang) * rr * (1.25 if wispy else 1.0); cy = 0.5 + np.sin(ang) * rr * sq
+        sx = s * (1.6 if wispy else 1.0); sy = s * (0.75 if wispy else 1.0)
+        acc += rng.uniform(0.6, 1.0) * np.exp(-((X - cx) ** 2 / (2 * sx * sx) + (Y - cy) ** 2 / (2 * sy * sy)))
+    env = acc / acc.max()
+    bil = 1.0 - turbo(n, rng, (5, 10, 20, 40))
+    fine = fbm((n, n), 16, 2, rng)
     if wispy:
-        str_ = 1.0 - turbo(n, rng, (3, 6, 12), 0.6)
-        field = 0.6 * str_ + 0.45 * bil + 0.2 * Hn - rr2 * 0.75 - 0.25 + (fine - 0.5) * 0.15
-        dens = smoothstep(0.0, 0.62, field) ** 1.3 * (0.45 + 0.55 * str_)
+        strk = 1.0 - turbo(n, rng, (3, 7, 14), 0.6)
+        field = env * (0.25 + 0.85 * strk) * (0.55 + 0.7 * bil) + (fine - 0.5) * 0.05
+        dens = smoothstep(0.05, 1.0, field) ** 1.3
     else:
-        field = 0.62 * bil + 0.42 * Hn - rr2 * 0.7 - 0.12 + (fine - 0.5) * 0.08
-        dens = smoothstep(0.0, 0.6, field) * (0.55 + 0.45 * bil)
-    # cell safety: exactly 0 near the cell border
-    radial = np.maximum(np.abs(xx - 0.5), np.abs(yy - 0.5))
-    dens = blur(np.clip(dens, 0, None), 0.7) * smoothstep(0.49, 0.42, radial)
-    # normals: large billows + billow ridges (image rows go DOWN; UV v goes UP after flipY)
-    hgt = blur(Hn * 0.9 + bil * np.exp(-rr2) * 0.3, 1.6)
-    gy, gx = np.gradient(hgt * n * 0.12)
+        field = env * (0.3 + 0.95 * bil) + (fine - 0.5) * 0.04
+        dens = smoothstep(0.05, 1.05, field) ** 1.1
+    # cell safety: exactly 0 well inside the cell border (round window: the cloud is irregular)
+    rad = np.hypot(xx - 0.5, yy - 0.5)
+    dens = blur(dens, 1.0) * smoothstep(0.5, 0.42, rad)
+    dens = np.clip(dens / max(np.percentile(dens, 99.7), 1e-6), 0, 1)
+    # normals: billow domes + turbulence ridges (image rows go DOWN; UV v goes UP after flipY)
+    hgt = blur(env * 0.85 + bil * env * 0.35, 2.0)
+    gy, gx = np.gradient(hgt * n * 0.1)
     nx = -gx; ny = gy; nz = np.ones_like(nx)
-    ln = np.sqrt(nx * nx + ny * ny + nz * nz)
-    nx /= ln; ny /= ln
-    m = smoothstep(0.0, 0.08, dens)
-    nx *= m; ny *= m
+    ln = np.sqrt(nx * nx + ny * ny + nz * nz); nx /= ln; ny /= ln
+    m = smoothstep(0.0, 0.1, dens); nx *= m; ny *= m
     detail = 0.55 * bil + 0.45 * fbm((n, n), 9, 4, rng, gain=0.55)
     detail = (detail - detail.min()) / (detail.max() - detail.min() + 1e-6)
     return dens, nx, ny, detail
+
+
+def puff(n=256, seed=0, wispy=False):
+    """Best of 6 candidate seeds: the one whose coverage is closest to the target (every cell
+    fills a similar share of its quad, so library sizes mean the same thing for every variant)."""
+    target = 0.17 if wispy else 0.2
+    best = None
+    for t in range(6):
+        cand = puff_field(n, seed + t * 17, wispy)
+        err = abs((cand[0] > 0.12).mean() - target)
+        if best is None or err < best[0]: best = (err, cand)
+    return best[1]
 
 
 def bake_puffs():

@@ -40,7 +40,7 @@ const CATS = [
   ['IMPACTS · FLYBYS · EXPLOSIONS', '#ff5a4a', ['impact_metal', 'impact_ground', 'ricochet', 'whiz', 'blade_hit', 'damage_taken', 'stagger', 'explosion_small', 'explosion_large']],
   ['MOVEMENT · BOOSTERS', '#5ad1ff', ['qb', 'boost_ignite', 'ab_start', 'jump', 'land', 'footstep', 'footstep_steel']],
   ['FCS · COCKPIT ALERTS (UI band)', '#8cff6a', ['hit_confirm', 'kill_confirm', 'lock', 'lock_switch', 'missile_lock', 'missile_alert', 'en_depleted', 'ap_warning', 'alarm', 'repair']],
-  ['MISSION · MENUS · STINGERS', '#d68cff', ['objective', 'objective_tick', 'boss_stinger', 'mission_complete', 'mission_failed', 'ui_select', 'ui_confirm']],
+  ['MISSION · MENUS · STINGERS', '#d68cff', ['objective', 'objective_tick', 'stage_stinger', 'boss_stinger', 'mission_complete', 'mission_failed', 'ui_select', 'ui_confirm']],
   ['COMMS · AMBIENCE', '#c8c8c8', ['radio_open', 'radio_close', 'distant_clang']],
 ];
 
@@ -385,24 +385,35 @@ async function pageMain(opts) {
     try {
       const mus = await import(base + 'src/audio/music.js');
       const eng0 = await import(base + 'src/audio/engine.js');
-      const layers = {};
+      // every layer: its three 16-bar sections A | B | C side by side (rendered at the sheet rate)
+      const secs = {}, SEGN = Math.round(mus.SEG * SR);
       for (const name of mus.LAYER_NAMES) {
         const tt0 = performance.now();
-        const buf = await mus.renderLayer(OAC, name, SR);
-        console.log(`music layer ${name}: ${((performance.now() - tt0) / 1000).toFixed(2)} s render`);
-        layers[name] = buf;
-        const x = mono(buf), st = stats(x);
+        secs[name] = [];
+        for (let k = 0; k < 3; k++) secs[name].push(await mus.renderSection(OAC, name, k, SR));
+        console.log(`music layer ${name}: 3 sections ${((performance.now() - tt0) / 1000).toFixed(2)} s render`);
+        const x = new Float32Array(SEGN * 3);
+        for (let k = 0; k < 3; k++) x.set(mono(secs[name][k]).subarray(0, SEGN), k * SEGN);
+        const st = stats(x);
         out.stats['music_' + name] = st;
         const states = Object.entries(mus.MIX).filter(([, m]) => (m[name] || 0) > 0).map(([k, m]) => `${k} ${m[name]}`).join(' · ');
-        secMusic.push({ x, st, accent: '#d68cff', title: `music layer: ${name}`, sub: [`${(x.length / SR).toFixed(1)} s seamless loop (reverb tail folded onto the start), ${mus.BPM} BPM · pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS · sub/lo/mid/hi ${st.bands.join('/')} %`, `layer gain by music state: ${states}`] });
+        secMusic.push({ x, st, accent: '#d68cff', marks: [[0, 'A'], [mus.SEG, 'B'], [mus.SEG * 2, 'C']], title: `music layer: ${name} - sections A | B | C (16 bars each)`, sub: [`${mus.SEG.toFixed(1)} s per section, ${mus.BPM} BPM, rendered at ${mus.LAYER_SR[name] / 1000} kHz in game · pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS · sub/lo/mid/hi ${st.bands.join('/')} %`, `layer gain by music state: ${states}`] });
       }
-      // full boss-intensity mix (what stage 3 sounds like)
-      const n = layers[mus.LAYER_NAMES[0]].length, mix = new Float32Array(n);
+      // a BOSS-state run of the form the player sequences (the hit of the boss stinger jumps to C,
+      // then the music RNG picks): C -> B -> A, every layer at boss gain, tails overlapping
+      const FORM = [2, 1, 0], n = SEGN * FORM.length + Math.round(3.5 * SR), mix = new Float32Array(n);
       const busG = eng0.MIXER.bus.music;
-      for (const name of mus.LAYER_NAMES) { const x = mono(layers[name]); const g = (mus.MIX.boss[name] ?? 0) * busG; for (let i = 0; i < n; i++) mix[i] += x[i] * g; }
+      for (const name of mus.LAYER_NAMES) {
+        const g = (mus.MIX.boss[name] ?? 0) * busG;
+        FORM.forEach((k, j) => { const x = mono(secs[name][k]); for (let i = 0; i < x.length && j * SEGN + i < n; i++) mix[j * SEGN + i] += x[i] * g; });
+      }
       const st = stats(mix);
-      secMusic.push({ x: mix, st, accent: '#d68cff', title: 'music: BOSS state (all 5 layers at music-bus gain)', sub: `pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS  sub/lo/mid/hi ${st.bands.join('/')}%` });
+      secMusic.push({ x: mix, st, accent: '#d68cff', marks: [[0, 'C'], [mus.SEG, 'B'], [mus.SEG * 2, 'A']], title: 'music: BOSS state, sequenced form C -> B -> A (all 5 layers at music-bus gain)', sub: `no section repeats inside 87 s; next sections are drawn by the music RNG (weights A/B/C .20/.35/.45 at boss intensity, never 3x the same)  pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS  sub/lo/mid/hi ${st.bands.join('/')}%` });
       if (opts.wav) out.wavs.music_boss_mix = Array.from(new Int16Array(mix.map((v) => Math.max(-1, Math.min(1, v)) * 32767)));
+      // the boss layer alone (bowed KS low strings + brass + war drums) for its spectrum
+      const bx = new Float32Array(SEGN * 3);
+      for (let k = 0; k < 3; k++) bx.set(mono(secs.boss[k]).subarray(0, SEGN), k * SEGN);
+      if (opts.wav) out.wavs.music_boss_layer = Array.from(new Int16Array(bx.map((v) => Math.max(-1, Math.min(1, v)) * 32767)));
     } catch (e) { console.error('music render failed', e && e.stack || e); }
     try {
       const beds = await import(base + 'src/audio/beds.js');
@@ -446,7 +457,7 @@ async function pageMain(opts) {
         const x = mono(buffer), st = stats(x);
         out.stats['vo_' + key] = st;
         const txt = L.en.length > 118 ? L.en.slice(0, 115) + '...' : L.en;
-        const chainTxt = key === 'brief' ? 'TTS -> recorded-message chain HP 220 / +4 dB 1.65 kHz / AGC 3:1 / LP 5.2 kHz' : 'TTS -> field radio chain HP 380 / +6 dB 1.65 kHz / AGC 4:1 / tanh / LP 3.1 kHz';
+        const chainTxt = (key === 'brief' ? 'Pico TTS -> WORLD re-performance (authored F0, timing, formants x0.88) -> recorded-message chain HP 200 / AGC 3:1 / LP 5.2 kHz' : 'Pico TTS -> WORLD re-performance (authored F0, timing, formants x0.88) -> radio chain HP 300 / +4 dB 2.4 kHz / AGC 4:1 / tanh / LP 4.2 kHz');
         secVo.push({ x, st, accent: '#e6eef0', title: `LEDGER VO "${key}" ${L.dur.toFixed(1)} s${key === 'brief' ? ' (first 12 s of the briefing)' : ''}`, sub: [`"${txt}"`, `${chainTxt}, MP3 16 kHz 24 kbps; live squelch + static + RF ticks  pk ${st.peakDb.toFixed(1)} rms ${st.rmsDb.toFixed(1)} dBFS`] });
         keep('vo_' + key, buffer);
       }
@@ -473,8 +484,8 @@ async function pageMain(opts) {
       const scene = async (mode) => {
         const ac = new OAC(2, Math.ceil(T * SR), SR);
         const E = new eng.AudioEngine(ac, { seed: 7 });
-        if (!shared) { await E.renderAll(OAC); shared = { bank: E.bank, norm: E.norm, music: E.music.buffers }; }
-        else { for (const [k, v] of shared.bank) E.bank.set(k, v); for (const k in shared.music) E.music.add(k, shared.music[k]); }
+        if (!shared) { await E.renderAll(OAC, undefined, 1); shared = { bank: E.bank, norm: E.norm, music: E.music.buffers }; }
+        else { for (const [k, v] of shared.bank) E.bank.set(k, v); for (const k in shared.music) shared.music[k].forEach((b, sec) => b && E.music.add(k, b, sec)); }
         E.setListenerMatrix(IDM);
         E.music.setState('combat2', 0.05);
         for (const k of ALL) if (!KEEP[mode].includes(k)) E.bus[k].gain.value = 0;
@@ -647,6 +658,15 @@ async function live() {
     await page.waitForFunction(() => ((document.querySelector('.rd-en') || {}).textContent || '').length > 0, null, { timeout: 120000 }).catch(() => {});
     const a5 = await page.evaluate(() => ({ d: window.__game.audio.debug(), sub: (document.querySelector('.rd-en') || {}).textContent || '', t: window.__game.rawTime }));
     rec('mission start: LEDGER VO plays with the HUD subtitle', a5.d.comm === 'vo', `comm=${a5.d.comm} sim t=${(+a5.t).toFixed(1)} s subtitle="${a5.sub.slice(0, 60)}"`);
+    // the B / C score sections render in the background; then a stage change jumps the score
+    const t6 = Date.now();
+    await page.waitForFunction(() => window.__game.audio.debug().musicSections >= 3, null, { timeout: 300000 }).catch(() => {});
+    const a6 = await page.evaluate(() => window.__game.audio.debug());
+    rec('music sections A/B/C rendered for all layers', a6.musicSections >= 3, `${a6.musicSections}/3 sections, +${((Date.now() - t6) / 1000).toFixed(1)} s, form so far "${a6.musicForm}"`);
+    await page.evaluate(() => { const m = window.__game.mission; if (m && m.forceStage) m.forceStage(1); });
+    await page.waitForFunction(() => /B$/.test(window.__game.audio.debug().musicForm), null, { timeout: 20000 }).catch(() => {});
+    const a7 = await page.evaluate(() => window.__game.audio.debug());
+    rec('stage 1: stinger + score jumps to section B on its hit', /B$/.test(a7.musicForm) && a7.counts && a7.counts.stage_stinger > 0, `form "${a7.musicForm}" music=${a7.musicState} stinger plays=${a7.counts && a7.counts.stage_stinger}`);
     rec('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await browser.close(); await server.stop();

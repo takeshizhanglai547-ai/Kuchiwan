@@ -19,6 +19,13 @@
 //         8 fire  volumetric FLIPBOOK (fx_fire.jpg, 8x8): iExtra.z = flipbook phase 0..1 (the
 //                 part's `erode` range), iExtra.x = temperature multiplier; frame-blended, lit
 //                 from above (sprites stay near-upright), odd variants mirror horizontally.
+//         9 jet   booster EXHAUST CORE (combat r3): iPos = nozzle exit, iAxis = exhaust vector whose
+//                 length is the jet length (m), size = half width (m), heat = thrust level. The quad
+//                 is built in view space from the exit to the tail projected onto the exit's depth
+//                 plane and never shorter than JET_MIN_PX on screen, so a jet pointing (almost) at
+//                 the camera still reads as a flame (down-screen) instead of collapsing into a
+//                 glare disc. White-hot core cone -> #FFB04A -> #FF6A1A -> #7A2A10, scrolling
+//                 turbulence, ragged tip, faint shock diamonds at high thrust.
 //
 // Sprite-edge guarantees (combat r1 tells: visible quad borders, round discs):
 //   * every shape is multiplied by a border WINDOW that is exactly 0 at the quad edge
@@ -30,13 +37,15 @@
 //     (no beaded / stippled sub-pixel sparks)
 //   * dev flag &fxdebug=edges (IW_FX_DEBUG_EDGES) paints magenta any fragment with
 //     max(|p.x|,|p.y|) > 0.97 and alpha > 0.01, i.e. a shape that is not zero at its border.
-export const SHAPE = { glow: 0, spark: 1, puff: 2, star: 3, ring: 4, chunk: 5, flare: 6, bolt: 7, fire: 8 };
+export const SHAPE = { glow: 0, spark: 1, puff: 2, star: 3, ring: 4, chunk: 5, flare: 6, bolt: 7, fire: 8, jet: 9 };
 
 export const PARTICLE_VERT = /* glsl */`
 attribute vec3 iPos; attribute vec3 iAxis; attribute vec4 iColor; attribute vec4 iSize; attribute vec4 iExtra;
 varying vec4 vColor; varying vec2 vUv; varying vec4 vExtra; varying vec2 vRot;
-varying float vShape; varying float vViewZ; varying float vSoft; varying float vHalf;
+varying float vShape; varying float vViewZ; varying float vSoft; varying float vHalf; varying float vSheet;
 uniform float uPixel;   // view-space metres per pixel at 1 m (min on-screen size of small sparks)
+const float JET_MIN_PX = 28.0;   // exhaust jets are never shorter than this on screen
+const float SPARK_LMAX = 2.2;    // m of path a slow spark trail keeps (curves under gravity)
 #include <fog_pars_vertex>
 void main() {
   vUv = uv;
@@ -47,8 +56,30 @@ void main() {
   vec2 corner = position.xy;
   vec4 mvPosition;
   vRot = vec2(1.0, 0.0);
+  vSheet = stretch < 0.0 ? 1.0 : 0.0;
   float c = cos(rot), s = sin(rot);
-  if (stretch < 0.0) {
+  if (iSize.w > 8.5) {
+    // exhaust jet: exit -> tail, the tail projected onto the exit's depth plane
+    vec4 H = modelViewMatrix * vec4(iPos, 1.0);
+    vec4 T = modelViewMatrix * vec4(iPos + iAxis, 1.0);
+    float hz = max(-H.z, 0.1), tz = max(-T.z, 0.1);
+    vec2 d = T.xy * (hz / tz) - H.xy;
+    float Ls = length(d), L = max(length(iAxis), 1e-3);
+    vec2 dir = Ls > 1e-4 ? d / Ls : vec2(0.0, -1.0);
+    float endOn = 1.0 - clamp(Ls / L, 0.0, 1.0);
+    float px = uPixel * hz;
+    float Lu = max(Ls, JET_MIN_PX * px);
+    float w = max(size * (1.0 + 0.35 * endOn), 2.5 * px);   // looking down the jet: the near part is fatter
+    float back = w * 0.8;                                    // hot rounded cap just behind the exit
+    vec2 perp = vec2(dir.y, -dir.x);                         // (perp, dir) keeps the quad front-facing
+    float t = corner.y + 0.5;                                // 0 exit .. 1 tail
+    mvPosition = H;
+    mvPosition.xy += dir * (t * (Lu + back) - back) + perp * corner.x * 2.0 * w;
+    mvPosition.z += min(1.0, hz * 0.03);                     // a hair toward the camera: clears the bell lip
+    vRot = vec2(back / (Lu + back), endOn);
+    vSoft = 0.15;
+    size = w * 2.0;
+  } else if (stretch < 0.0) {
     // world-oriented quad (ground rings, shock discs): plane perpendicular to iAxis
     vec3 n = normalize(iAxis + vec3(0.0, 1e-5, 0.0));
     vec3 t = abs(n.y) < 0.99 ? normalize(cross(n, vec3(0.0, 1.0, 0.0))) : normalize(cross(n, vec3(1.0, 0.0, 0.0)));
@@ -69,7 +100,30 @@ void main() {
     }
     vec3 vv = (modelViewMatrix * vec4(iAxis, 0.0)).xyz;
     float vl = length(vv.xy);
-    if (stretch > 0.0 && vl > 1e-4) {
+    float sp = length(iAxis);
+    if (stretch > 0.0 && iSize.w > 0.5 && iSize.w < 1.5 && sp > 1e-3) {
+      // SPARK: a curved, tapered trail (combat r2: straight constant-width rods). The strip
+      // (subdivided along its length) follows the spark's ballistic path BACK in time over the
+      // shutter "stretch" (s): p(-tau) = p - v tau - g tau^2 / 2 (g = iExtra.z * 100 m/s^2), so
+      // falling sparks bend; the width tapers from the head to ~0 at the tail.
+      // trail time: the shutter for fast sparks; slow ones (after drag) keep up to SPARK_LMAX m of
+      // their path, which is where gravity visibly bends it; never longer than the spark's age
+      // (iSize.y carries the age for sparks)
+      float g = iExtra.z * 100.0;
+      float f = 0.5 - corner.y;                       // 0 head .. 1 tail
+      float T = min(max(stretch, min(SPARK_LMAX / sp, 0.3)), rot + 0.02) + 0.6 * size / sp;
+      float tau = f * T;
+      vec3 pw = iPos - iAxis * tau - vec3(0.0, 0.5 * g * tau * tau, 0.0);
+      mvPosition = modelViewMatrix * vec4(pw, 1.0);
+      vec3 tv = (modelViewMatrix * vec4(iAxis + vec3(0.0, g * tau, 0.0), 0.0)).xyz;   // toward the head
+      float tl = length(tv.xy);
+      vec2 hy = tl > 1e-5 ? tv.xy / tl : vec2(0.0, 1.0);
+      vec2 hx = vec2(hy.y, -hy.x);
+      float wv = size * (1.0 - 0.8 * f), wmin = 1.6 * uPixel * max(-mvPosition.z, 0.1);
+      if (wv < wmin) { vColor.a *= wv / wmin; wv = wmin; }   // thin tail: fade, never sub-pixel beads
+      mvPosition.xy += hx * corner.x * wv;
+      vSoft = 0.15;
+    } else if (stretch > 0.0 && vl > 1e-4) {
       // head at iPos, tail trails back along -velocity (length grows with speed)
       vec2 ay = vv.xy / vl; vec2 ax = vec2(ay.y, -ay.x);
       mvPosition.xy += ax * corner.x * size + ay * (corner.y - 0.5) * (size + vl * stretch);
@@ -79,6 +133,14 @@ void main() {
       vRot = vec2(c, s);
       vSoft = iSize.w > 7.5 ? clamp(size * 0.15, 0.25, 3.0) : clamp(size * 0.3, 0.25, 5.0);
     }
+  }
+  // flashes (glow / star / flare, nosoft) are pulled toward the eye along the view ray by half their
+  // size: same screen footprint, but a muzzle / exit / impact flash is never half-buried in the
+  // hull it fires from (combat r2: the QB flare hid behind the arm)
+  float fv = iExtra.w + 0.25; fv -= floor(fv / 64.0) * 64.0;
+  if (fv > 31.5 && (iSize.w < 0.5 || (iSize.w > 2.5 && iSize.w < 3.5) || (iSize.w > 5.5 && iSize.w < 6.5))) {
+    float dl = length(mvPosition.xyz);
+    mvPosition.xyz *= 1.0 - min(size * 0.5, dl * 0.4) / max(dl, 1e-3);
   }
   vHalf = size * 0.5;
   vViewZ = -mvPosition.z;
@@ -90,9 +152,9 @@ export function particleFrag(softGLSL) {
   return /* glsl */`
 uniform sampler2D tPuff; uniform sampler2D tMisc; uniform sampler2D tFire;
 uniform vec3 uSunView; uniform vec3 uSunCol; uniform vec3 uAmbTop; uniform vec3 uAmbBot;
-uniform float uFireGain;
+uniform float uFireGain; uniform float uTime;
 varying vec4 vColor; varying vec2 vUv; varying vec4 vExtra; varying vec2 vRot;
-varying float vShape; varying float vViewZ; varying float vSoft; varying float vHalf;
+varying float vShape; varying float vViewZ; varying float vSoft; varying float vHalf; varying float vSheet;
 ${softGLSL || ''}
 #include <fog_pars_fragment>
 
@@ -115,11 +177,11 @@ vec3 fireRampHdr(float t) {
   vec3 c0 = vec3(0.194, 0.023, 0.005);   // #7A2A10
   vec3 c1 = vec3(1.0, 0.144, 0.010);     // #FF6A1A
   vec3 c2 = vec3(1.0, 0.434, 0.068);     // #FFB04A
-  vec3 c3 = vec3(1.0, 0.905, 0.672);     // #FFF4D6
+  vec3 c3 = vec3(1.0, 0.63, 0.254);      // #FFD08A (r3: a near-white hot band went cyan-white under AgX)
   vec3 c = mix(c0, c1, smoothstep(0.05, 0.42, t));
   c = mix(c, c2, smoothstep(0.58, 0.86, t));
   c = mix(c, c3, smoothstep(0.9, 1.0, t));
-  return c * (0.08 + 0.5 * t + 2.8 * t * t * t);
+  return c * (0.08 + 0.5 * t + 2.4 * t * t * t);
 }
 
 vec2 cell(float v, float cols, float rows, vec2 uv) {
@@ -157,7 +219,7 @@ void main() {
     float g = exp(-across * across * w) * (1.0 - smoothstep(0.6, 1.0, across));
     // brightness falls off toward the tail (a cooling streak), the head itself is rounded off
     float taper = shape == 7 ? smoothstep(0.0, 0.08, along) * smoothstep(1.0, 0.92, along)
-                             : smoothstep(0.0, 0.9, along) * (0.35 + 0.65 * along * along) * smoothstep(1.0, 0.96, along);
+                             : smoothstep(0.0, 0.75, along) * (0.3 + 0.7 * along * along) * smoothstep(1.0, 0.9, along);
     rgb += vec3(1.0, 0.9, 0.7) * heat * 1.1 * exp(-across * across * 40.0) * taper;
     a *= g * taper;
   } else if (shape == 2) {                // lit billow puff / fire
@@ -167,9 +229,17 @@ void main() {
     // eat into the density, so the silhouette tears into wisps and every puff has its own outline
     float n2 = pnoise(vUv, sOff, 0.55);
     float nz = clamp(0.55 * det + 0.45 * n2, 0.0, 1.0);
-    float dd = d * (0.3 + 1.4 * nz) - heat * 0.16 * (1.0 - nz);
-    float m = smoothstep(erode, erode + 0.24, dd);
-    a *= m * (0.35 + 0.65 * smoothstep(0.0, 0.6, d));
+    // SOFT-BAND erosion (combat r3: a narrow threshold printed cookie-cutter / torn-paper
+    // silhouettes): the threshold opens the noise-modulated density over a wide band that widens
+    // as the puff ages, times a radial (1-r^2)^1.5 falloff, so no part of the outline is a step
+    float dd = d * (0.45 + 1.1 * nz) - heat * 0.12 * (1.0 - nz);
+    float band = 0.2 + 0.3 * erode;
+    float m = smoothstep(max(erode - 0.4 * band, 0.0), erode + band, dd);
+    float rad = clamp(1.0 - r2, 0.0, 1.0);
+    a *= min(1.0, m * (0.3 + 0.7 * smoothstep(0.0, 0.75, d)) * rad * sqrt(rad) * (0.85 + 0.5 * nz) * 1.3);
+    // world-aligned sheets (ground dust, stretch < 0) stay faint: a sheet seen at a grazing
+    // angle compresses its whole alpha profile into a few rows
+    a = mix(a, min(a, 0.3 * smoothstep(0.0, 0.5, d)), vSheet);
     vec2 nt = t.gb * 2.0 - 1.0;
     vec2 nv = vec2(vRot.x * nt.x - vRot.y * nt.y, vRot.y * nt.x + vRot.x * nt.y);
     vec3 n = vec3(nv, sqrt(max(0.08, 1.0 - dot(nv, nv))));
@@ -216,7 +286,8 @@ void main() {
     vec2 fu = vec2(mod(variant, 2.0) > 0.5 ? 1.0 - vUv.x : vUv.x, vUv.y);
     vec3 s = mix(texture2D(tFire, cell(f0, 8.0, 8.0, fu)).rgb, texture2D(tFire, cell(f1, 8.0, 8.0, fu)).rgb, fb);
     // per-particle breakup: two octaves of fBm at this sprite's own offset
-    float nA = pnoise(fu, sOff, 0.7), nB = pnoise(fu, sOff + 0.37, 1.9), nC = pnoise(fu, sOff + 0.71, 4.6);
+    // (r3: lower frequencies -> a few large hot lobes and soot lanes instead of popcorn knots)
+    float nA = pnoise(fu, sOff, 0.42), nB = pnoise(fu, sOff + 0.37, 1.15), nC = pnoise(fu, sOff + 0.71, 2.6);
     float nz = 0.64 * nA + 0.36 * nB;                          // ~0..1, mean 0.5
     // ragged rim: thin outer opacity is eaten by noise (no clean pyroclastic disc edge)
     float op = s.r;
@@ -231,13 +302,40 @@ void main() {
     // temperature: contrast-stretched and interleaved with soot lanes (no uniform peach ball)
     float temp = clamp(pow(s.g, 1.5) * heat, 0.0, 1.0);
     float sootLane = smoothstep(0.2, 0.74, nz + (temp - 0.5) * 0.6);
-    temp = clamp(temp * mix(0.22, 1.08, sootLane) * (0.82 + 0.36 * nC), 0.0, 1.0);
+    temp = clamp(temp * mix(0.25, 1.06, sootLane) * (0.88 + 0.24 * nC), 0.0, 1.0);
     // hot gas barely scatters sunlight compared with its own emission: no grey veil over the fire
     rgb *= 1.0 - 0.75 * smoothstep(0.15, 0.55, temp);
     // folds between billows glow less than the faces turned to the eye/light (adds depth)
     // (moderate HDR: saturated orange under AgX; only small knots reach white)
     rgb += fireRampHdr(temp) * uFireGain * 1.5 * smoothstep(0.04, 0.4, temp) * (0.55 + 0.45 * lt);
     hotFloor = 0.3 * smoothstep(0.3, 0.7, temp);
+  } else if (shape == 9) {                // booster exhaust jet (see header)
+    float u = (vUv.y - vRot.x) / max(1.0 - vRot.x, 1e-3);   // 0 exit .. 1 tail, < 0 = cap
+    float uc = max(u, 0.0), x = p.x, lvl = heat, endOn = vRot.y;
+    float tm = mod(uTime, 100.0);
+    // turbulence streaming out of the bell (two scrolling octaves of the tileable fBm)
+    float n1 = texture2D(tMisc, vec2(x * 0.16 + sOff.x, uc * 0.42 - tm * 2.3 + sOff.y)).a * 2.0 - 1.0;
+    float n2 = texture2D(tMisc, vec2(x * 0.45 + sOff.y, uc * 1.25 - tm * 4.1 + sOff.x)).a * 2.0 - 1.0;
+    float nn = clamp(0.5 + (0.65 * n1 + 0.35 * n2 - 0.5) * 2.4, 0.0, 1.0);   // ~0..1
+    // outer flame: swells just past the exit, necks and frays toward a ragged, flickering tip
+    float ro = (0.42 + 0.4 * sin(min(uc * 2.6, 1.5708))) * (1.0 - 0.35 * smoothstep(0.45, 1.0, uc)) * (0.75 + 0.5 * nn);
+    float tip = 1.0 - smoothstep(0.22 + 0.4 * nn, 0.98, uc);
+    float outer = exp(-(x * x) / (ro * ro) * 2.6) * tip * (0.3 + 0.85 * nn);
+    // white-hot core cone (first ~50%), and stationary shock diamonds at high thrust
+    float rc = 0.24 * pow(max(1.0 - uc * 1.9, 0.0), 0.8) + 0.015;
+    float core = exp(-(x * x) / (rc * rc) * 2.0) * (1.0 - smoothstep(0.2, 0.52, uc)) * (0.85 + 0.3 * nn);
+    float dia = pow(0.5 + 0.5 * cos(uc * 31.4 - 1.2), 10.0) * exp(-x * x * 40.0) * smoothstep(0.03, 0.1, uc)
+              * (1.0 - smoothstep(0.3, 0.55, uc)) * smoothstep(0.55, 0.95, lvl);
+    float cap = smoothstep(-1.0, 0.0, u * (1.0 - vRot.x) / max(vRot.x, 1e-3)) * exp(-x * x * 5.0);
+    float temp = clamp(core + outer * (0.5 - 0.38 * uc) + dia * 0.5 + cap * 0.45, 0.0, 1.0);
+    // combustion ramp #7A2A10 -> #FF6A1A -> #FFB04A -> #FFF4D6; the outer flame stays at low HDR
+    // (saturated orange under AgX), only the core climbs to white (bloom source <= ~8)
+    vec3 c = mix(vec3(0.194, 0.023, 0.005), vec3(1.0, 0.144, 0.01), smoothstep(0.0, 0.28, temp));
+    c = mix(c, vec3(1.0, 0.434, 0.068), smoothstep(0.3, 0.7, temp));
+    c = mix(c, vec3(1.0, 0.905, 0.672), smoothstep(0.75, 0.98, temp));
+    float inten = (0.45 + 8.0 * temp * temp * temp) * (0.55 + 0.45 * min(lvl, 1.2)) * (1.0 - 0.25 * endOn);
+    rgb = c * inten * vColor.rgb;
+    a *= clamp(max(outer, core) * (u < 0.0 ? cap : 1.0) + dia * 0.6, 0.0, 1.0);
   } else if (shape == 6) {                // anamorphic flare line (flash accent): windowed to 0 at the border
     float wx = 1.0 - smoothstep(0.35, 0.95, abs(p.x));
     float wy = 1.0 - smoothstep(0.5, 0.95, abs(p.y));
@@ -246,11 +344,11 @@ void main() {
   }
   #ifdef IW_FX_DEBUG_EDGES
     // dev: a shape that is not zero at its border shows magenta (before the safety window)
-    if (max(abs(p.x), abs(p.y)) > 0.97 && a > 0.01 && shape != 1 && shape != 7) { gl_FragColor = vec4(4.0, 0.0, 4.0, 1.0); return; }
+    if (max(abs(p.x), abs(p.y)) > 0.97 && a > 0.01 && shape != 1 && shape != 7 && shape != 9) { gl_FragColor = vec4(4.0, 0.0, 4.0, 1.0); return; }
   #endif
   // safety window: every quad is exactly 0 at its border (streaks: across only; they taper along)
   vec2 bw = 1.0 - smoothstep(vec2(0.9), vec2(1.0), abs(p));
-  a *= (shape == 1 || shape == 7) ? bw.x : bw.x * bw.y;
+  a *= (shape == 1 || shape == 7 || shape == 9) ? bw.x : bw.x * bw.y;
   if (a < 0.002) discard;
   // soft particles (scene depth): 5-tap cross average (a depth step becomes a ~4 px ramp)
   #ifdef IW_SOFT

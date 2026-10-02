@@ -89,17 +89,19 @@ uniform float uSunCos, uSunIntensity, uCloudCover;
 uniform vec2 uWind;
 varying vec3 vDir;
 ${atmosGLSL()}
-float fbm(vec2 p) {          // ~8 octaves from three fetches (each channel already holds 3)
-  return texture2D(tNoise, p).r * 0.62 + texture2D(tNoise, mat2(0.8, -0.6, 0.6, 0.8) * p * 2.9 + vec2(0.17, 0.61)).g * 0.27
-       + texture2D(tNoise, mat2(0.6, 0.8, -0.8, 0.6) * p * 7.7 + vec2(0.53, 0.29)).b * 0.11;
+float fbm(vec2 p) {          // ~10 octaves from four rotated fetches (each channel already holds 3)
+  return texture2D(tNoise, p).r * 0.58 + texture2D(tNoise, mat2(0.8, -0.6, 0.6, 0.8) * p * 2.9 + vec2(0.17, 0.61)).g * 0.26
+       + texture2D(tNoise, mat2(0.6, 0.8, -0.8, 0.6) * p * 7.7 + vec2(0.53, 0.29)).b * 0.11
+       + texture2D(tNoise, mat2(-0.28, 0.96, -0.96, -0.28) * p * 15.3 + vec2(0.71, 0.13)).a * 0.05;
 }
-float fbm2(vec2 p) { // cheap streaky version (scud / veil)
-  return texture2D(tNoise, p).g * 0.65 + texture2D(tNoise, p * 2.7 + vec2(0.31, 0.77)).b * 0.35;
+float fbm2(vec2 p) { // cheap version (scud / veil); rotated second octave breaks the axis alignment
+  return texture2D(tNoise, p).g * 0.6 + texture2D(tNoise, mat2(0.8, 0.6, -0.6, 0.8) * p * 2.7 + vec2(0.31, 0.77)).b * 0.4;
 }
 // Storm-deck density at plane coordinates q (texture units), 0..1.
 float deck(vec2 q, vec2 w) {
-  float warp = texture2D(tNoise, q * 0.31 + w * 0.5 + 0.37).r - 0.5;
-  vec2 p = q + vec2(warp, -warp * 0.7) * 0.18 + w;
+  // 2D domain warp (two decorrelated channels): billows and rolls instead of stretched strands
+  vec2 warp = texture2D(tNoise, q * 0.31 + w * 0.5 + 0.37).rg - 0.5;
+  vec2 p = q + warp * 0.24 + w;
   float n = fbm(p);
   float a = 0.5 - uCloudCover * 0.22;
   float x = clamp((n - a) / 0.3, 0.0, 1.0);
@@ -116,13 +118,13 @@ void main() {
 
   // --- clear-sky gradient behind the ash: cool slate overhead and away from the sun, a broad
   //     warm horizon glow under the sun (the light that leaks under the storm deck)
-  vec3 hor = mix(uHorizon, uHorizonSun, smoothstep(0.3, 1.0, sunSide));
+  vec3 hor = mix(uHorizon, uHorizonSun, smoothstep(0.55, 1.0, sunSide));
   vec3 sky = mix(hor, uMid, smoothstep(0.0, 0.2, hp));
   sky = mix(sky, uZenith, smoothstep(0.1, 0.8, hp));
-  float band = pow(sunSide, 6.0) * exp(-hp * 7.0);
+  float band = pow(sunSide, 12.0) * exp(-hp * 7.0);
   sky = mix(sky, uGlow, band * 0.85);
   float mup = max(mu, 0.0);
-  sky += uGlowHot * (0.5 * pow(mup, 6.0) + 1.3 * pow(mup, 36.0) + 4.0 * pow(mup, 420.0));
+  sky += uGlowHot * (0.3 * pow(mup, 10.0) + 1.5 * pow(mup, 40.0) + 4.0 * pow(mup, 420.0));
 
   // --- storm deck (two parallax planes, wind-sheared), transmittance + forward scatter
   float T = 1.0;          // transmittance of the cloud layers along this ray
@@ -131,37 +133,39 @@ void main() {
     vec2 wd = normalize(uWind + 1e-6);
     mat2 toWind = mat2(wd.x, -wd.y, wd.y, wd.x);        // world xz -> (along, across) the wind
     vec2 w = uWind * uTime;
-    vec2 pl = toWind * (d.xz / (hp + 0.05));           // deck plane (units of deck height)
-    vec2 pl2 = toWind * (d.xz / (hp * 0.62 + 0.05));   // upper plane: slower parallax
-    vec2 q = vec2(pl.x * 0.7, pl.y) * 0.075;
+    // curved deck (the +0.25 bends the plane down toward the horizon): caps the perspective
+    // squeeze of the noise at ~3:1 (it read as fine horizontal scratches near the horizon)
+    vec2 pl = toWind * (d.xz / (hp + 0.25));           // deck plane (units of deck height)
+    vec2 pl2 = toWind * (d.xz / (hp * 0.62 + 0.25));   // upper plane: slower parallax
+    vec2 q = vec2(pl.x * 0.8, pl.y) * 0.1;
     // near the horizon the plane projection squeezes the noise into streaks: fade to the mean
     float hzk = smoothstep(0.015, 0.16, hp);
     float D = mix(0.5, deck(q, w), hzk);
-    float D2 = mix(0.45, deck(vec2(pl2.x * 0.7, pl2.y) * 0.052 + 3.7, w * 0.7), hzk);
+    float D2 = mix(0.45, deck(vec2(pl2.x * 0.8, pl2.y) * 0.07 + 3.7, w * 0.7), hzk);
     // light probe toward the sun: thinner up-sun => lit underside edge
     vec2 ts = normalize(toWind * IW_SUN_DIR.xz + 1e-5) * 0.028;
     float Ds = mix(0.5, deck(q + ts, w), hzk);
     float lit = clamp(0.5 + (D - Ds) * 1.3, 0.0, 1.0);
     // low scud: dark wind-torn streaks hugging the horizon (silhouettes against the glow)
-    vec2 uv2 = vec2(pl.x * 0.03, pl.y * 0.09) + w * 1.6;
+    vec2 uv2 = vec2(pl.x * 0.06, pl.y * 0.11) + w * 1.6;
     float scud = smoothstep(0.52, 0.8, fbm2(uv2 + 0.13)) * smoothstep(0.03, 0.08, hp) * (1.0 - smoothstep(0.08, 0.3, hp));
     float od = D * 3.0 + D2 * 1.4 + scud * 1.4;
     float horizonFade = smoothstep(-0.03, 0.07, h);
     T = exp(-od * horizonFade);
     // radiance of the ash itself: cool storm grey, warm only toward the sun
-    float fwd = iwHG(mu, 0.6) * 12.566371;              // 10 at the sun, 0.4 at 90 deg
+    float fwd = iwHG(mu, 0.74) * 12.566371;             // tight forward lobe: bright core, dark flanks
     float thick = clamp(D * 0.75 + D2 * 0.35, 0.0, 1.0);
     // underside of a low ceiling: brighter at grazing angles near the horizon (light leaking
     // under the deck), dark and heavy overhead; thick rolls darker still
     // storm-side underside is cool slate, warmed only in the sun sector
-    vec3 under = mix(uCloudLit, uCloudWarm, smoothstep(0.1, 0.95, azc));
+    vec3 under = mix(uCloudLit, uCloudWarm, smoothstep(0.35, 0.97, azc));
     vec3 ceil = mix(under, uCloudDark, smoothstep(0.03, 0.55, hp));
-    vec3 amb = ceil * (1.25 - 0.75 * thick);
+    vec3 amb = ceil * (1.2 - 0.9 * thick);
     float sw = smoothstep(-0.2, 1.0, azc);
     float thin = (1.0 - thick) * (1.0 - thick);
-    vec3 sunlit = uGlowHot * (0.05 + 0.1 * fwd) * (0.3 + 0.7 * lit) * thin * (0.3 + 0.7 * sw);
+    vec3 sunlit = uGlowHot * (0.03 + 0.075 * fwd) * (0.25 + 0.75 * lit) * thin * (0.3 + 0.7 * sw);
     float silver = D * (1.0 - D) * 4.0 * (1.0 - D2 * 0.6);   // thin edges glow when back-lit
-    vec3 rad = amb + sunlit + uGlowHot * silver * fwd * 0.1;
+    vec3 rad = amb + sunlit + uGlowHot * silver * fwd * 0.085;
     rad = mix(rad, uGlow * 0.5, band * 0.5 * (1.0 - thick));
     cloudCol = rad;
   }
@@ -178,7 +182,7 @@ void main() {
   // --- aerial perspective to infinity: identical model to the geometry fog
   // (the haze scale reaches 1 at the horizon, so the sky meets fully fogged far geometry with
   // no step; below the horizon it IS the fog colour at infinity)
-  float odh = iwFogODRay(cameraPosition, d, uFogDensity) * mix(1.0, IW_SKY_HAZE, smoothstep(0.0, 0.12, h));
+  float odh = iwFogODRay(cameraPosition, d, uFogDensity) * mix(1.0, IW_SKY_HAZE, smoothstep(0.0, 0.07, h));
   vec3 haze = iwFogInscatter(d, 4000.0, uFogColor);
   sky = mix(sky, haze, max(1.0 - exp(-odh), smoothstep(0.004, -0.02, h)));
   gl_FragColor = vec4(sky, 1.0);

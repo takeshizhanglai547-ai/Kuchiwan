@@ -172,6 +172,24 @@ def build_body():
                       .rotate((0, s * 18, 0)).move(s * 0.24, 0.12, -0.36)))
         g.merge(B.add('skids', P.box((0.05, 0.5, 0.035), bevel=0.01, segs=1, mat='rubber')
                       .move(s * 0.28, 0.12, -0.46)))
+    # --- r3 secondary detail (critic: smudgy body, no vents): louvred flank vents, a steel trim
+    # rail along each lower flank, heat-shield louvres over the battery pack, belly service panels
+    for s in (1, -1):
+        # side face normal of the tapered nose loft (x 0.33 -> 0.42 over y -0.62 -> -0.12)
+        nrm = Vector((s * 1.0, -0.18, 0.0)).normalized()
+        vt = P.vent(0.26, 0.13, depth=0.025, slats=4, angle=38, frame=0.022, mat='paint_dark', bevel=0.004)
+        g.merge(B.add('vents', vt.align(tuple(nrm), up=(0, 0, 1), loc=(s * 0.384, -0.36, -0.01))))
+        for y0, y1, x0, x1 in ((-0.52, -0.13, 0.352, 0.418), (-0.1, 0.4, 0.42, 0.385)):
+            g.merge(B.add('trim', K.strip((s * (x0 + 0.004), y0, -0.175), (s * (x1 + 0.004), y1, -0.175), 0.028, 0.012,
+                                          (s, 0, -0.25), mat='steel_dark')))
+        g.merge(B.add('trim', P.bolt_row((s * 0.36, -0.46, -0.13), (s * 0.41, -0.18, -0.13), 3, (s, -0.18, 0), r=0.011)))
+    lv = P.louvres(0.3, 0.24, count=4, depth=0.025, angle=30, thickness=0.01, mat='steel_dark', side_mat='paint_dark')
+    g.merge(B.add('louvres', lv.move(0, 0.72, 0.2)))
+    sh_belly = K.shell([(-0.5, -0.17, 0.17, -0.02, 0.0, 0.03), (-0.14, -0.17, 0.17, -0.02, 0.0, 0.03)], 'Y',
+                       bevel=0.004, mat='paint_secondary')
+    g.merge(B.add('belly', sh_belly.move(0, 0, -0.262)))
+    g.merge(B.add('belly', P.bolt_row((-0.13, -0.47, -0.285), (-0.13, -0.17, -0.285), 3, (0, 0, -1), r=0.01)))
+    g.merge(B.add('belly', P.bolt_row((0.13, -0.47, -0.285), (0.13, -0.17, -0.285), 3, (0, 0, -1), r=0.01)))
     B.report()
     return g
 
@@ -237,12 +255,16 @@ def build_duct(s):
     return tilted(g, s)
 
 
-def build_rotor(s):
-    """4-blade rotor (wide cambered blades with a root cuff) + spinner at the fan hub."""
+def build_rotor(s, part='hub'):
+    """Fan hub (spinner + hub drum) or its 4 blades (wide cambered blades with a root cuff).
+    r3: the blades are their own mesh (fanblades_<i>_geo under the rotor node) so models.js can
+    swap them for translucent ghost copies + the streak disc at speed."""
     g = Geo()
     cx, cy, cz = s * DUCT_X, DUCT_Y, DUCT_Z + 0.0
-    g.merge(P.cylinder(0.08, 0.06, 24, bevel=0.01, bsegs=1, mat='steel_dark').move(cx, cy, cz))
-    g.merge(P.cone(0.075, 0.015, 0.08, 24, bevel=0.004, mat='paint_accent').move(cx, cy, cz + 0.03))
+    if part == 'hub':
+        g.merge(P.cylinder(0.08, 0.06, 24, bevel=0.01, bsegs=1, mat='steel_dark').move(cx, cy, cz))
+        g.merge(P.cone(0.075, 0.015, 0.08, 24, bevel=0.004, mat='paint_accent').move(cx, cy, cz + 0.03))
+        return tilted(g, s)
     for k in range(4):
         a = k * 90.0 + (0 if s > 0 else 45)
         bl = P.prism([(0.07, -0.05), (0.2, -0.065), (R_IN - 0.02, -0.045), (R_IN - 0.01, 0.03), (0.2, 0.06),
@@ -284,7 +306,8 @@ def build_beacon():
 
 def build(a):
     a.pivot('body', (0, 0, 0))
-    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF2A2A', iw_eye_strength=14.0)
+    # strength 9 (r3): 14 clipped the AgX shoulder to a flat salmon disc
+    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF2A2A', iw_eye_strength=9.0)
     a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#B8120C', iw_eye_strength=1.9)
     a.pivot('beacon', (0.12, 0.3, 0.4), parent='body', iw_eye_color='#FF3B2F', iw_eye_strength=14.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='body')
@@ -308,6 +331,8 @@ def build(a):
         put('beacon_geo', build_beacon(), 'beacon')
         put('rotor_geo', build_rotor(1), 'rotor')
         put('rotor_1_geo', build_rotor(-1), 'rotor_1')
+        put('fanblades_0_geo', build_rotor(1, 'blades'), 'rotor')
+        put('fanblades_1_geo', build_rotor(-1, 'blades'), 'rotor_1')
     return tris
 
 
@@ -343,16 +368,18 @@ COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.52}, 'paint_secondary
           'steel_dark': {'color': '#3A3836'},
           'glass': {'color': '#06080A', 'metal': 0.0, 'rough': 0.05, 'wear': 0.0, 'grime': 0.1, 'rust': 0.0,
                     'dust': 0.05, 'var': 0.0, 'decals': False}}
-OBJ_WEIGHT = {'body_geo': 1.0, 'eye_geo': 1.3, 'eye_rim_geo': 0.5, 'beacon_geo': 0.6, 'rotor_geo': 0.6, 'rotor_1_geo': 0.6}
-WEATHER = iw.Weathering(edge_wear=1.55, grime=1.55, streaks=1.6, rust=0.9, dust=0.45, chip_threshold=0.52,
-                        flat_chips=0.5, macro=0.08, ground_dirt=0.25, ao_in_albedo=0.24)
-NEED = ['body', 'eye', 'beacon', 'muzzle', 'rotor', 'rotor_1']
+OBJ_WEIGHT = {'body_geo': 1.0, 'eye_geo': 1.3, 'eye_rim_geo': 0.5, 'beacon_geo': 0.6, 'rotor_geo': 0.6, 'rotor_1_geo': 0.6,
+              'fanblades_0_geo': 0.5, 'fanblades_1_geo': 0.5}
+# r3: stronger curvature-driven chipping (critic: smudgy, low-contrast body bake)
+WEATHER = iw.Weathering(edge_wear=1.8, grime=1.6, streaks=1.6, rust=0.9, dust=0.45, chip_threshold=0.5,
+                        flat_chips=0.45, macro=0.08, ground_dirt=0.25, ao_in_albedo=0.3, rough_breakup=0.2)
+NEED = ['body', 'eye', 'beacon', 'muzzle', 'rotor', 'rotor_1', 'fanblades_0_geo', 'fanblades_1_geo']
 
 
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=31, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=1024, sizes={'normal': 1024, 'orm': 512, 'emissive': 256},
-          bake_kw=dict(edge=0.018, cavity=0.04, ao_dist=0.35, bevel_radius=0.006),
+          bake_kw=dict(edge=0.024, cavity=0.05, ao_dist=0.35, bevel_radius=0.006),
           tex_quality={'basecolor': 80, 'normal': 78, 'orm': 70})
 
 

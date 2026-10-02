@@ -15,9 +15,10 @@
 //     skidding to a stop. Foot targets are critically damped springs, so state changes blend.
 //   * CROUCH: underdamped spring; landings, quick boosts and the AB wind-up push it.
 //   * RUMBLE: high-frequency thrust vibration while boosting / charging.
-//   * POSE LAYERS (blended 0..1, eased): ASSAULT-BOOST FLIGHT (pelvis pitched ~17 deg, torso
-//     ~35 deg into the flight, head and weapons counter-pitched to keep the aim, arms swept back
-//     unless firing, thighs trailing 26-40 deg with bent knees, toes pointed) and GROUND-BOOST
+//   * POSE LAYERS (blended 0..1, eased): ASSAULT-BOOST FLIGHT (pelvis pitched ~27 deg, torso
+//     ~42 deg into the flight, head and weapons counter-pitched to keep the aim, arms swept back
+//     unless firing, thighs trailing ~25 deg behind the pelvis with ~35 deg knees, feet pointed
+//     ~40 deg: combat r2 critic saw legs hanging vertical from behind) and GROUND-BOOST
 //     SKATE (the rig floats ~0.6 m over the slab on bent knees, lead / trailing foot scissor with
 //     the trailing toe pointed down, torso follows the strafe roll instead of countering it).
 // Pose fields read (see rig.js makePose): velLocal, grounded, mode, aimPitch, aimYaw and the
@@ -31,18 +32,21 @@ export const RIG_MOTION = {
   //  ~0.15 s, digs back on stops and overshoots when the thrust cuts)
   leanOmega: 8.5, leanZeta: 0.5,
   pitchVel: 0.22, pitchAcc: 0.3, rollVel: 0.17, rollAcc: 0.22, accRef: 320, leanMax: 0.55,
-  abPitch: 0.3, abChargePitch: -0.16, abRollK: 0.9,
+  abPitch: 0.47, abChargePitch: -0.16, abRollK: 0.9,
   // assault-boost flight pose layer
   abPoseIn: 7, abPoseOut: 4,       // 1/s blend in / out
-  abTorsoPitch: 0.32,   // rad of extra torso pitch on top of the pelvis (torso ~35 deg in the world)
+  abTorsoPitch: 0.26,   // rad of extra torso pitch on top of the pelvis (torso ~42 deg in the world)
   abHeadComp: 0.85,     // share of the torso pitch the head takes back (keeps looking ahead)
   abArmSweep: 0.3,      // rad arms swing back (not firing)
-  abLegs: { L: [0.5, 1.45], R: [0.8, 0.4] },    // [thigh back from vertical, knee bend] rad per leg:
-                                                 // L tucked high, R trailing long (asymmetric silhouette)
-  abLegSpread: { L: 1.9, R: 1.6 },               // m foot offset from the centre line: the legs splay
+  abLegs: { L: [0.72, 1.45], R: [0.95, 0.95] }, // [thigh back from vertical (world), knee bend] rad per leg:
+                                                 // thighs ~15-27 deg behind the 27 deg pelvis, knees folded
+                                                 // so the SHINS point back-and-UP: from the high chase camera
+                                                 // a straight trailing leg projects DOWN the screen (reads as
+                                                 // hanging), a folded one shows its sole (reads as flying)
+  abLegSpread: { L: 2.3, R: 1.9 },               // m foot offset from the centre line: the legs splay
                                                  // into a V, so the flight pose reads from the chase
                                                  // camera too (trailing legs alone foreshorten away)
-  abFootFollow: 0.85, abFootPoint: 0.42,          // foot follows the shin (0..1) + toe-down (rad)
+  abFootFollow: 0.85, abFootPoint: 0.7,           // foot follows the shin (0..1) + toe-down (rad, ~40 deg)
   // ground-boost skate pose layer
   skateHover: 0.8,      // m the rig floats over the slab at full boost
   skateTrailPoint: 0.4, // rad toe-down of the trailing foot

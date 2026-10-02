@@ -275,10 +275,11 @@ def cheek(center, axis_x, r, t, strap_to=None, strap_w=None, mat='paint_dark', b
 
 
 def ram(p0, p1, r=0.09, rod=None, frac=0.55, up=(0, 0, 1), segs=20, eyes=False, boot=True,
-        sleeve_mat='steel_dark', rod_mat='chrome', eye_mat='steel_dark'):
+        sleeve_mat='steel_dark', rod_mat='chrome', eye_mat='steel_dark', bellows=0.0):
     """Light hydraulic ram (~450-700 tris): stepped barrel, gland, chrome rod (24-seg look
     at >= 20 segments), rubber boot, port, optional clevis eyes with pins at both ends.
-    Pins lie along `up` x (p1 - p0)."""
+    Pins lie along `up` x (p1 - p0). bellows > 0: a ribbed black rubber dust boot covering
+    that fraction of the exposed rod (from the gland), instead of the plain wiper ring."""
     p0, p1 = Vector(p0), Vector(p1)
     d = p1 - p0
     L = d.length
@@ -293,25 +294,38 @@ def ram(p0, p1, r=0.09, rod=None, frac=0.55, up=(0, 0, 1), segs=20, eyes=False, 
     g.merge(P.lathe(prof, segs, sleeve_mat))
     g.merge(P.cylinder(rod, (L - eo) - (za + ls) + rod * 0.4, segs, bevel=rod * 0.2, bsegs=1, mat=rod_mat,
                        z0=za + ls))
-    if boot:
+    if bellows > 0:
+        z0b = za + ls + r * 0.2
+        lb = ((L - eo) - z0b) * bellows
+        n = 4
+        bands = []
+        for k in range(n):
+            bands.append((lb / n * 0.5, rod * 1.9))
+            bands.append((lb / n * 0.5, rod * 1.45))
+        # 16-sided ribs (the convolutions hide faceting; budget)
+        g.merge(P.banded_cylinder(bands, segs=16, step=0.0, mat='rubber', cap=False).move(0, 0, z0b))
+    elif boot:
         g.merge(P.ring(rod * 1.42, rod * 0.96, r * 0.2, segs, bevel=0.0, bsegs=1, mat='rubber', z0=za + ls + r * 0.2))
     port = P.cylinder(r * 0.26, r * 0.5, 8, bevel=0.0, bsegs=1, mat='steel', z0=0.0)
     port.rotate((90, 0, 0)).move(0, -r * 0.8, za + r * 1.0)
     g.merge(port)
     if eyes:
         for z in (0.0, L):
-            e = P.cylinder(er, er * 1.15, 16, bevel=0.0, bsegs=1, mat=eye_mat).rotate((0, 90, 0))
+            e = P.cylinder(er, er * 1.15, 12, bevel=0.0, bsegs=1, mat=eye_mat).rotate((0, 90, 0))
             nk = P.box((er * 1.1, er * 1.15, eo), bevel=0.0, segs=1, mat=eye_mat)
             nk.move(0, 0, eo * 0.5 if z == 0.0 else -eo * 0.5)
-            pin = P.cylinder(er * 0.45, er * 1.5, 8, bevel=0.0, bsegs=1, mat='steel').rotate((0, 90, 0))
+            pin = P.cylinder(er * 0.45, er * 1.5, 6, bevel=0.0, bsegs=1, mat='steel').rotate((0, 90, 0))
             g.merge(merged(e, nk, pin).move(0, 0, z))
     R = look_rotation(d, up).to_4x4()
     g.transform(Matrix.Translation(p0) @ R)
     return g
 
 
+THROAT_SET = 0.1     # m the glowing throat disc sits behind the liner's top edge
+
+
 def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=True, bolts=6, ribs=1,
-         rib_mat='steel', glow_rim='glow_rim'):
+         rib_mat='steel', glow_rim='glow_rim', throat_set=None, mount=0.0):
     """Light thruster bell (~700-1100 tris) pointing down -Z (exhaust through -Z);
     collar stack above z=0 (mounting face at z=+0.12)."""
     wall = wall or max(0.014, r_e * 0.07)
@@ -333,24 +347,25 @@ def bell(r_t, r_e, L, segs=32, wall=None, mat='steel_dark', glow=True, collar=Tr
             f.material_index = b.mi('nozzle_inner')
     g.merge(b)
     if glow:
-        # throat (r2): full 360-degree glow in two rings (hot core #FFB04A + dim rim #7A2A10 =
-        # a radial gradient once baked) behind a turbine / flame-holder: a 24-segment hub cone
-        # and 8 radial vanes, so the throat never reads as a flat disc or a black void
-        big = r_t >= 0.15
-        gs = 24 if big else 16
-        g.merge(P.lathe([(0.0, -0.03), (r_t * 0.55, -0.03)], gs, 'glow'))              # hot core disc (faces -Z)
-        g.merge(P.lathe([(r_t * 0.55, -0.03), (r_t * 1.02, -0.03)], gs, glow_rim))     # dim rim annulus
-        g.merge(P.cone(r_t * 0.3, r_t * 0.07, L * 0.22, 24 if r_t >= 0.15 else 12, bevel=0.0, bsegs=1,
-                       mat='steel_dark').rotate((180, 0, 0)).move(0, 0, -0.025))
-        for k in range(8 if r_t >= 0.15 else 0):
-            vane = P.box((r_t * 0.66, 0.008, L * 0.05), bevel=0.0, segs=1, mat='steel_dark')
-            vane.move(r_t * 0.63, 0, -0.025 - L * 0.025).rotate((0, 0, 22.5 + 45 * k))
-            g.merge(vane)
+        # throat (r3): ONE closed 32-segment disc seated at the bottom of a short throat neck,
+        # set back THROAT_SET metres behind the liner (no hub, vanes or partial rings in front
+        # of it: nothing occludes part of it). Its emissive is a radial ramp written by the
+        # rig texture pipeline (rigpipe.throat_ramp: #FFF4D6 centre -> #FFB04A at 40% ->
+        # #7A2A10 at the rim); the neck wall is a dim ember band, the liner below dark metal.
+        sb = THROAT_SET if throat_set is None else throat_set
+        g.merge(P.lathe([(0.0, sb), (r_t, sb)], 32, 'glow'))                       # disc, faces -Z
+        if sb > 1e-3:
+            g.merge(P.lathe([(r_t, sb), (r_t, 0.0)], 32, glow_rim))                # neck wall (inward)
     if collar:
         ro = r_t + wall * 1.8
-        g.merge(P.ring(ro + 0.05, r_t * 0.7, 0.07, segs, bevel=0.0, bsegs=1, mat='steel', z0=0.0))
+        # collar washers start OUTSIDE the throat radius (an inner lip used to hide the throat rim)
+        # `mount`: the last collar ring is that much taller, bridging a bell that stands off its mount
+        # plane (so the recessed throat disc sits in FRONT of the housing skin, never behind it)
+        g.merge(P.ring(ro + 0.05, r_t + wall * 0.6, 0.07 + (mount if collar != 2 else 0.0), segs, bevel=0.0,
+                       bsegs=1, mat='steel', z0=0.0))
         if collar == 2:
-            g.merge(P.ring(ro + 0.025, r_t * 0.7, 0.06, segs, bevel=0.0, bsegs=1, mat='steel_dark', z0=0.07))
+            g.merge(P.ring(ro + 0.025, r_t + wall * 0.6, 0.06 + mount, segs, bevel=0.0, bsegs=1, mat='steel_dark',
+                           z0=0.07))
         if bolts:
             g.merge(P.bolt_circle((0, 0, 0.07), (0, 0, 1), ro + 0.036, bolts, r=0.013))
     for k in range(ribs):
@@ -374,10 +389,21 @@ def shackle(r=0.06, bar=0.016, mat='steel_dark', base_mat='paint_primary', segs=
     return g
 
 
-def nozzle_part(a, name, exit_loc, exhaust, parent, r_t, r_e, L, segs=32, **kw):
+def nozzle_part(a, name, exit_loc, exhaust, parent, r_t, r_e, L, segs=32, standoff=None, **kw):
     """nozzle_<group>_<n> node at the exit centre + its bell geometry (child of the node).
-    The node carries iw_r (exit radius) so rig.js can size the flame."""
+    The node carries iw_r (exit radius) so rig.js can size the flame. r3: bells with a collar stand
+    off their mount plane by `standoff` (default throat set-back + 0.16 m, bridged by the collar) so
+    the recessed throat disc is never hidden behind the housing skin; collar-less verniers keep the
+    disc 1 cm inside the throat instead."""
     d = Vector(exhaust).normalized()
+    if kw.get('collar', True):
+        standoff = (THROAT_SET + 0.16) if standoff is None else standoff
+        kw['mount'] = standoff
+    else:
+        standoff = 0.0
+        kw.setdefault('throat_set', -0.01)
+    exit_loc = Vector(exit_loc) + d * standoff
+    sb = kw.get('throat_set', THROAT_SET)
     node = a.nozzle(name, tuple(exit_loc), exhaust=tuple(d), parent=parent)
     node['iw_r'] = round(r_e, 3)
     node['iw_len'] = round(L, 3)
@@ -387,6 +413,11 @@ def nozzle_part(a, name, exit_loc, exhaust, parent, r_t, r_e, L, segs=32, **kw):
     g.align(-d, up=up, loc=Vector(exit_loc) - d * L)
     g.cull_inside()
     a.part(name + '_geo', g, parent=node)
+    # throat registry for the radial emissive ramp (rigpipe.throat_ramp): disc centre, exhaust
+    # axis and throat radius in WORLD space (rest pose)
+    if not hasattr(a, 'throats'):
+        a.throats = []
+    a.throats.append((Vector(exit_loc) - d * (L + sb), d.copy(), float(r_t), Vector(exit_loc), float(r_e)))
     return node
 
 

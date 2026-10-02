@@ -90,6 +90,88 @@ def _facade(g, r, w, off, h, cv, k, floors, fh, z0f, pil, band_h, lit_cols, door
     g.merge(f)
 
 
+ROOF_AC = [0.0, 0.0]
+
+
+def _roof_kit(g, r, sx, sy, zr, parapet=True, stair=False):
+    """r3 roof-dressing kit (the verticality pillar sends rigs onto every roof): 1.1 m handrail
+    with posts every 2 m on the coping, 2-4 hatches, 3-6 mushroom / gooseneck vents, a cable tray
+    from the AC skid to the parapet, roof drains, ash drifts banked in the corners and along the
+    windward parapet. Positions avoid the stair penthouse and the AC skid."""
+    from megakit import ash_drift
+    zc = zr + 1.0 if parapet else zr + 0.3          # coping top (parapet) / cantilever slab top
+    e, f = (sx / 2 + 0.15, sy / 2 + 0.15) if parapet else (sx / 2 + 1.4, sy / 2 + 2.7)
+    g.merge(rail_line([(-e, -f, zc), (e, -f, zc), (e, f, zc), (-e, f, zc), (-e, -f, zc)], h=1.1, post=2.0, r=0.05, mat='steel:yellow',
+                      post_mat='steel:yellow'))
+    busy = [(ROOF_AC[0], ROOF_AC[1], 4.6, 2.4)]
+    if stair:
+        busy.append((sx / 2 - 4, sy / 2 - 4, 3.6, 3.6))
+
+    def free(x, y, rad):
+        if abs(x) > sx / 2 - 1.2 - rad or abs(y) > sy / 2 - 1.2 - rad:
+            return False
+        return all(abs(x - bx_) > hw + rad or abs(y - by_) > hd + rad for (bx_, by_, hw, hd) in busy)
+    nh = r.randint(2, 4)
+    for i in range(nh * 6):
+        if nh <= 0:
+            break
+        x, y = r.uniform(-sx / 2, sx / 2), r.uniform(-sy / 2, sy / 2)
+        if not free(x, y, 1.2):
+            continue
+        g.merge(bxz(1.6, 1.6, 0.6, x, y, zr, mat='concrete:grey', bev=0.04))
+        g.merge(bxz(1.5, 1.5, 0.12, x, y, zr + 0.6, mat='steel:yellow'))
+        g.merge(bxz(1.5, 0.12, 0.1, x, y + 0.72, zr + 0.62, mat='steel:dark'))
+        busy.append((x, y, 1.0, 1.0))
+        nh -= 1
+    nv = r.randint(3, 6)
+    for i in range(nv * 6):
+        if nv <= 0:
+            break
+        x, y = r.uniform(-sx / 2, sx / 2), r.uniform(-sy / 2, sy / 2)
+        if not free(x, y, 0.9):
+            continue
+        rr = r.uniform(0.25, 0.55)
+        hh = r.uniform(0.9, 2.6)
+        if r.random() < 0.7:     # mushroom vent
+            g.merge(P.cylinder(rr, hh, 10, bevel=0.0, mat=r.choice(['steel:galv', 'steel:rust', 'steel:dark']), z0=zr).move(x, y, 0))
+            g.merge(P.cylinder(rr * 1.9, 0.18, 10, bevel=0.0, mat='steel:dark', z0=zr + hh + 0.25).move(x, y, 0))
+            for k in range(3):
+                a = TAU * k / 3
+                g.merge(bxz(0.05, 0.05, 0.3, x + math.cos(a) * rr * 0.8, y + math.sin(a) * rr * 0.8, zr + hh - 0.02, mat='steel:dark'))
+        else:                    # gooseneck
+            g.merge(P.pipe_run([V((x, y, zr)), V((x, y, zr + hh)), V((x + 0.9, y, zr + hh)), V((x + 0.9, y, zr + hh - 0.6))], r=rr * 0.7,
+                               bend=0.35, segs=8, mat='steel:galv', flanges=False))
+        busy.append((x, y, 0.8, 0.8))
+        nv -= 1
+    # cable tray from the AC skid to the nearest long parapet, then down the facade
+    ax, ay = ROOF_AC
+    ty = -sy / 2 + 1.0 if ay < 0 else sy / 2 - 1.0
+    y0 = ay - 1.6 if ay > 0 else ay + 1.6
+    tx = ax + 4.2
+    L = abs(ty - y0)
+    if L > 2.0:
+        cy_ = (ty + y0) / 2
+        g.merge(bxz(0.9, L, 0.1, tx, cy_, zr + 0.55, mat='trim:grating'))
+        for sgn in (-1, 1):
+            g.merge(bxz(0.05, L, 0.18, tx + sgn * 0.45, cy_, zr + 0.55, mat='steel:galv'))
+        for k in range(int(L / 2.5) + 1):
+            g.merge(bxz(0.12, 0.12, 0.55, tx, y0 + (ty - y0) * k / max(1, int(L / 2.5)), zr, mat='steel:galv'))
+        g.merge(P.cable((tx - 0.2, y0, zr + 0.72), (tx - 0.2, ty, zr + 0.72), sag=0.0, radius=0.08, segs=4, mat='steel:black', n=3))
+    # roof drains (dark gratings by the corners)
+    for (cx_, cy_) in ((-sx / 2 + 1.4, -sy / 2 + 1.4), (sx / 2 - 1.4, -sy / 2 + 1.4)):
+        g.merge(bxz(0.7, 0.7, 0.05, cx_, cy_, zr, mat='steel:black'))
+    # ash: drifts banked along the windward (+Y, north sea wind) parapet and in the corners
+    if parapet:
+        dL = sx * r.uniform(0.45, 0.7)
+        d = ash_drift(dL, 2.2, 0.34, seed=r.randint(0, 99))
+        d.move(r.uniform(-(sx - dL) / 2, (sx - dL) / 2) * 0.8, sy / 2 - 1.1, zr)
+        g.merge(d)
+        for (cx_, cy_, rot) in ((-sx / 2, -sy / 2, 0.0), (sx / 2, -sy / 2, 0.5 * math.pi), (-sx / 2, sy / 2, -0.5 * math.pi)):
+            m = P.dome(r.uniform(1.6, 2.6), r.uniform(0.18, 0.32), segs=10, rings=3, mat='heap:dust')
+            m.move(cx_ + (0.9 if cx_ < 0 else -0.9), cy_ + (0.9 if cy_ < 0 else -0.9), zr - 0.04)
+            g.merge(m)
+
+
 def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard=True, roof=True, band_h=2.0,
                stair=False, core=True, pipes=True, cant=False):
     """Board-formed concrete block: plinth, full-height pilasters, recessed window bands with
@@ -165,6 +247,7 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
                                     V((x, -sy / 2 + 1.6, zr + 2.6))], r=0.45, bend=0.8, segs=10, mat='steel:galv', flanges=False))
         # AC skid: frame + 3 fan stacks
         ax, ay = r.uniform(-sx / 4, sx / 4), sy / 2 - 3.0
+        ROOF_AC[0], ROOF_AC[1] = ax, ay
         g.merge(bxz(7.0, 2.6, 0.3, ax, ay, zr + 0.25, mat='steel:yellow'))
         g.merge(bxz(6.6, 2.2, 1.6, ax, ay, zr + 0.55, mat='steel:galv'))
         for i in range(3):
@@ -177,12 +260,47 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
         g.merge(bxz(1.6, 1.6, 0.8, -sx / 2 + 3.0, sy / 2 - 3.0, zr + 0.25, mat='steel:dark'))
         g.merge(beam((sx / 2 - 1.5, -sy / 2 + 1.5, zr + 0.25), (sx / 2 - 1.5, -sy / 2 + 1.5, zr + 7.0), 0.18, 0.18, 'steel:galv'))
         g.merge(beacon(sx / 2 - 1.5, -sy / 2 + 1.5, zr + 7.4, 0.45))
-        if stair:
-            g.merge(bxz(5, 5, 3.4, sx / 2 - 4, sy / 2 - 4, zr + 0.25, mat=cv, bev=0.08))
-            g.merge(bxz(5.6, 5.6, 0.3, sx / 2 - 4, sy / 2 - 4, zr + 3.65, mat='concrete:grey'))
+        if stair:      # stair penthouse: door, lamp, louvre, roof drain spout
+            px, py = sx / 2 - 4, sy / 2 - 4
+            g.merge(bxz(5, 5, 3.4, px, py, zr + 0.25, mat=cv, bev=0.08))
+            g.merge(bxz(5.6, 5.6, 0.3, px, py, zr + 3.65, mat='concrete:grey'))
+            g.merge(bxz(1.3, 0.12, 2.3, px - 0.8, py - 2.53, zr + 0.25, mat='steel:dark'))
+            g.merge(bxz(1.5, 0.08, 0.06, px - 0.8, py - 2.57, zr + 2.6, mat='steel:yellow'))
+            g.merge(bx(0.4, 0.25, 0.25, (px - 0.8, py - 2.7, zr + 2.95), mat='glow:sodium'))
+            g.merge(bxz(1.6, 0.1, 0.9, px + 1.2, py - 2.52, zr + 1.4, mat='trim:louvre'))
+            g.merge(wall_decal(px - 2.5, px + 2.5, py - 2.56, zr + 1.0, zr + 3.6, 'curtain', 'soot'))
+            # the other faces + roof: louvre + conduits + junction box (+X), split HVAC unit (+Y),
+            # vents / antenna / drip lip on the penthouse roof
+            g.merge(bxz(0.1, 2.2, 1.0, px + 2.53, py + 0.6, zr + 1.6, mat='trim:louvre'))
+            for k, zz in enumerate((zr + 0.6, zr + 2.9)):
+                g.merge(bxz(0.16, 4.4, 0.16, px + 2.62, py, zz, mat='steel:galv'))
+            g.merge(bxz(0.35, 0.8, 1.0, px + 2.7, py - 1.4, zr + 1.2, mat='steel:dark'))
+            g.merge(bxz(0.16, 0.16, 2.6, px + 2.62, py - 1.4, zr + 0.3, mat='steel:galv'))
+            g.merge(side_decal(px + 2.56, py - 2.3, py + 2.3, zr + 1.2, zr + 3.6, 'curtain', 'stain', 1))
+            g.merge(bxz(2.6, 1.0, 1.4, px - 0.6, py + 3.0, zr + 0.6, mat='steel:galv'))
+            g.merge(bxz(2.3, 0.08, 1.0, px - 0.6, py + 3.52, zr + 0.8, mat='trim:louvre'))
+            g.merge(beam((px - 1.8, py + 2.5, zr + 0.6), (px - 1.8, py + 3.3, zr + 0.25), 0.12, 0.12, 'steel:dark'))
+            g.merge(beam((px + 0.6, py + 2.5, zr + 0.6), (px + 0.6, py + 3.3, zr + 0.25), 0.12, 0.12, 'steel:dark'))
+            zt = zr + 3.95
+            for (vx, vy, vr) in ((px - 1.4, py + 1.2, 0.35), (px + 1.3, py - 1.1, 0.25)):
+                g.merge(P.cylinder(vr, 1.0, 10, bevel=0.0, mat='steel:galv', z0=zt).move(vx, vy, 0))
+                g.merge(P.cylinder(vr * 1.8, 0.15, 10, bevel=0.0, mat='steel:dark', z0=zt + 1.2).move(vx, vy, 0))
+            g.merge(beam((px + 1.6, py + 1.6, zt), (px + 1.6, py + 1.6, zt + 4.0), 0.1, 0.1, 'steel:galv'))
+            g.merge(bxz(0.6, 0.06, 0.6, px + 1.6, py + 1.6, zt + 3.0, mat='steel:dark'))
+            g.merge(bxz(1.6, 1.0, 0.4, px - 0.6, py - 1.4, zt, mat='steel:dark'))
+            g.merge(P.dome(1.6, 0.12, segs=8, rings=2, mat='heap:dust').move(px - 1.6, py + 1.8, zt - 0.02))
+        _roof_kit(g, r, sx, sy, zr + 0.25, parapet=not (cant and h > 12), stair=stair)
         # caged ladder up the -X gable to the roof
         g.merge(cheap_ladder(hc + 1.0, -sx / 2 - 0.65, sy / 4, 0.0, facing=-math.pi / 2))
-    cols = [((0, 0, (h + 1.25) / 2), (sx + 1.4, sy + 1.4, h + 1.25))]
+    cols = [((0, 0, (h + 0.25) / 2), (sx + 1.4, sy + 1.4, h + 0.25))]
+    if not (cant and h > 12):
+        for (cx_, cy_, w_, d_) in ((0, -sy / 2 - 0.15, sx + 1.6, 0.9), (0, sy / 2 + 0.15, sx + 1.6, 0.9), (-sx / 2 - 0.15, 0, 0.9, sy + 0.2),
+                                   (sx / 2 + 0.15, 0, 0.9, sy + 0.2)):
+            cols.append(((cx_, cy_, h + 0.62), (w_, d_, 1.25)))
+    if roof and stair:
+        cols.append(((sx / 2 - 4, sy / 2 - 4, h + 0.25 + 1.85), (5.6, 5.6, 3.7)))
+    if roof:
+        cols.append(((ROOF_AC[0], ROOF_AC[1], h + 0.25 + 1.0), (7.0, 2.6, 2.0)))
     # cantilevered upper storey (brutalist overhang) with its own window band + soffit beams
     if cant and h > 12:
         z0c = hc
@@ -220,7 +338,8 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
             g.merge(bxz(0.8, sy + 5.0, 0.9, x, 0, z0c - 0.9, mat=cv, bev=0.05))
         # parapet + coping on the overhang
         g.merge(bxz(sx + 3.2, sy + 5.8, 0.35, 0, 0, h + 0.2, mat='concrete:grey', bev=0.05))
-        cols = [((0, 0, z0c / 2), (sx + 1.4, sy + 1.4, z0c)), ((0, 0, (z0c + h + 1.2) / 2), (sx + 2.8, sy + 5.4, h + 1.2 - z0c))]
+        cols[0] = ((0, 0, z0c / 2), (sx + 1.4, sy + 1.4, z0c))
+        cols.insert(1, ((0, 0, (z0c + h + 0.55) / 2), (sx + 3.2, sy + 5.8, h + 0.55 - z0c)))
     # stair core with slit windows (brutalist signature) on the +X end
     if core and h > 11:
         cw, ch = 6.5, h + 5.0
@@ -234,6 +353,13 @@ def brut_block(sx, sy, h, seed=1, windows=True, doors=1, pil=7.0, var='', hazard
         g.merge(bxz(0.3, 2.0, 3.0, cx + cw / 2 + 0.1, cy - 1.8, 0.0, mat='steel:dark'))
         g.merge(side_decal(cx + cw / 2 + 0.03, cy - cw / 2 + 0.3, cy + cw / 2 - 0.3, ch - ch * 0.4, ch, 'curtain', 'soot', 1))
         g.merge(beacon(cx, cy, ch + 1.3, 0.5))
+        e_ = cw / 2 + 0.25
+        g.merge(rail_line([(cx - e_, cy - e_, ch + 0.9), (cx + e_, cy - e_, ch + 0.9), (cx + e_, cy + e_, ch + 0.9), (cx - e_, cy + e_, ch + 0.9),
+                           (cx - e_, cy - e_, ch + 0.9)], h=1.1, post=2.0, r=0.05, mat='steel:yellow', post_mat='steel:yellow'))
+        g.merge(bxz(1.4, 1.4, 0.6, cx - 1.4, cy + 1.2, ch + 0.9, mat='concrete:grey', bev=0.04))
+        g.merge(bxz(1.3, 1.3, 0.12, cx - 1.4, cy + 1.2, ch + 1.5, mat='steel:yellow'))
+        g.merge(P.cylinder(0.3, 1.6, 10, bevel=0.0, mat='steel:rust', z0=ch + 0.9).move(cx + 1.6, cy - 1.5, 0))
+        g.merge(P.cylinder(0.55, 0.14, 10, bevel=0.0, mat='steel:dark', z0=ch + 2.6).move(cx + 1.6, cy - 1.5, 0))
         cols.append(((cx, cy, ch / 2), (cw + 0.4, cw + 0.4, ch + 0.9)))
     # facade services on +Y: risers, header, brackets, units at the base
     if pipes and h > 8:
@@ -310,9 +436,53 @@ def casthouse():
     runner hood, fume ducts. Opening faces local -Y."""
     g, cols = shed(46.0, 34.0, 24.0, var='oxide', monitor=True, doors=2, glow_doors=True, seed=7)
     for x in (-12.0, 12.0):
-        g.merge(tube((x, 10.0, 28.0), (x, 10.0, 44.0), 1.4, 'steel:rust', 20))
-        g.merge(tube((x, 10.0, 44.0), (x + 8.0 * (1 if x > 0 else -1), 30.0, 44.0), 1.4, 'steel:rust', 20))
+        g.merge(tube((x, 10.0, 28.0), (x, 10.0, 44.0), 1.4, 'steel:rust', 16))
+        g.merge(tube((x, 10.0, 44.0), (x + 8.0 * (1 if x > 0 else -1), 30.0, 44.0), 1.4, 'steel:rust', 16))
     g.merge(bxz(30.0, 6.0, 5.0, 0, -17.0 - 3.0, 18.0, mat='steel:dark'))
+    # (r3) roofscape so it never reads as a plain box from above: fume-extraction main along the
+    # ridge on saddles, roof ventilators on both slopes, skylight strips, ridge walkway + rail,
+    # a baghouse with hoppers on the +X gable, lean-to annex + stair tower on -X, downpipes
+    zr = 24.0 + 1.0 + 34.0 * 0.12 * 0.9 + 4.5
+    g.merge(tube((-20.0, 0.0, zr + 2.2), (26.0, 0.0, zr + 2.2), 1.6, 'steel:rust', 14))
+    for x in (-16.0, -4.0, 8.0, 20.0):
+        g.merge(bxz(1.0, 3.2, 1.6, x, 0, zr - 0.2, mat='steel:dark'))
+    for s_ in (-1, 1):
+        for k in range(5):
+            x = -18.0 + k * 9.0
+            y = s_ * 10.5
+            z = 25.0 + 34.0 * 0.12 * (1 - 10.5 / 17.0) + 0.6
+            g.merge(P.cylinder(1.1, 1.8, 12, bevel=0.0, mat='steel:galv', z0=z).move(x, y, 0))
+            g.merge(P.cylinder(1.6, 0.35, 12, bevel=0.0, mat='steel:dark', z0=z + 2.2).move(x, y, 0))
+        sk = bx(40.0, 1.6, 0.12, (0, 0, 0), mat='trim:window')
+        sk.transform(Matrix.Translation(V((0, s_ * 5.2, 25.0 + 34.0 * 0.12 * (1 - 5.2 / 17.0) + 0.42))) @ Matrix.Rotation(s_ * math.atan2(34.0 * 0.12, 17.0), 4, 'X'))
+        g.merge(sk)
+    g.merge(rail_line([(-17.0, -4.2, zr), (17.0, -4.2, zr)], h=1.1, post=3.0, r=0.06, mat='steel:yellow', post_mat='steel:yellow'))
+    # baghouse (+X gable): 3 hoppered cells on legs + duct from the fume main
+    bxx = 23.0 + 7.0
+    for k in range(3):
+        y = -9.0 + k * 9.0
+        g.merge(bxz(7.0, 7.4, 9.0, bxx, y, 12.0, mat='steel:grey'))
+        g.merge(bxz(7.4, 7.8, 0.5, bxx, y, 21.0, mat='steel:dark'))
+        g.merge(P.frustum((6.6, 7.0), (1.2, 1.2), 4.0, bevel=0.0, segs=1, mat='steel:grey').rotate((180, 0, 0)).move(bxx, y, 12.0))
+        for sx in (-1, 1):
+            g.merge(bxz(0.5, 0.5, 12.0, bxx + sx * 3.2, y - 3.4, 0.0, mat='steel:dark'))
+    g.merge(tube((26.0, 0.0, zr + 2.2), (bxx, 0.0, zr + 2.2), 1.6, 'steel:rust', 14))
+    g.merge(tube((bxx, 0.0, zr + 2.2), (bxx, 0.0, 21.5), 1.6, 'steel:rust', 14))
+    g.merge(P.cylinder(1.1, 14.0, 12, bevel=0.0, mat='steel:rust', z0=21.5).move(bxx + 2.0, 9.0, 0))
+    g.merge(beacon(bxx + 2.0, 9.0, 36.2, 0.6))
+    # lean-to annex + stair tower on the -X gable
+    g.merge(bxz(10.0, 26.0, 11.0, -23.0 - 5.0, 2.0, 0.0, mat='corr:blue'))
+    lr = bx(11.0, 27.0, 0.3, (0, 0, 0), mat='corr:dark')
+    lr.transform(Matrix.Translation(V((-28.0, 2.0, 11.6))) @ Matrix.Rotation(0.12, 4, 'Y'))
+    g.merge(lr)
+    g.merge(bxz(9.0, 0.12, 1.6, -28.0, 2.0 - 13.06, 7.0, mat='trim:window'))
+    g.merge(bxz(6.0, 6.0, 30.0, -27.0, 18.5, 0.0, mat='concrete:grey', bev=0.08))
+    for k in range(6):
+        g.merge(bxz(0.12, 1.0, 2.2, -30.06, 18.5, 3.0 + k * 4.5, mat='trim:window'))
+    g.merge(beacon(-27.0, 18.5, 31.0, 0.6))
+    for x in (-15.0, 0.0, 15.0):
+        g.merge(tube((x + 1.5, 17.6, 1.2), (x + 1.5, 17.6, 24.6), 0.25, 'steel:dark', 8))
+        g.merge(wall_decal(x - 2.5, x + 2.5, 17.08, 14.0, 24.6, 'curtain', 'soot', facing=1))
     return g, cols
 
 

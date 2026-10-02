@@ -14,7 +14,8 @@
 //   squadCentroid(e, out), crowded(e, x, z, r), separation(e, r, out), alertSquad(pos, r)
 //   telemetry                           per-type behaviour counters (tools/ai_log.mjs, smoke)
 // Player-fire reactions: 'weapon:fired' / 'weapon:blade' from the player are forwarded to the
-// boss (reactive quick-boost dodges) and to the locked walker (evasive skate).
+// boss (reactive quick-boost dodges) and to the locked walker (evasive skate; r3: missile salvos
+// warn every missile-locked walker too).
 import * as THREE from 'three';
 import { loadTemplates } from './models.js';
 import { MT } from './mt.js';
@@ -61,6 +62,11 @@ export default function enemiesSystem(game) {
         if (!e || e.owner !== g.player) return;
         if (api.boss && api.boss.alive) api.boss.playerFired(e.slot);
         if (e.slot === 'RB') { const t = g.lockon && g.lockon.target; if (t && t.threatened && t.alive) t.threatened('cannon'); }
+        // r3: a missile salvo also warns every walker it is locked on (each decides once per window)
+        else if (e.slot === 'LB' && g.lockon && g.lockon.missileLocks) {
+          const L = g.lockon.missileLocks;
+          for (let i = 0; i < L.length; i++) { const t = L[i]; if (t && t.threatened && t.alive) t.threatened('missile'); }
+        }
       });
       g.events.on('weapon:blade', (e) => {
         if (!e) return;

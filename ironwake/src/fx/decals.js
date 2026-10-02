@@ -50,7 +50,10 @@ void main() {
     return;
   }
   vec2 c = vec2((mod(v, 2.0) + vUv.x) * 0.5, 1.0 - (floor(v / 2.0) + 1.0 - vUv.y) * 0.5);
-  vec4 t = texture2D(tMisc, c);
+  // (enemy-ai r3, critic: the wreck scorch read as 1 px dithered stipple) explicit LOD 0: the implicit
+  // mip choice after the pool branch above sampled garbage per 2x2 quad (SwiftShader); decals are
+  // ~1:1 or magnified on screen and the scorch atlas is soft, so the base level never aliases
+  vec4 t = textureLod(tMisc, c, 0.0);
   float burn = t.g;
   float a = burn * vDecal.w * (1.0 - smoothstep(0.7, 1.0, vDecal.y));
   // soot core, brown heat-tint rim

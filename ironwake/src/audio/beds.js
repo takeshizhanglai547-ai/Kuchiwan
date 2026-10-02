@@ -84,19 +84,21 @@ export function createJetBed(ac, dest, r = makeRng(99), scale = 1) {
   const o3 = ac.createOscillator(); o3.type = 'square'; o3.frequency.value = 35;
   const o3g = gain(ac, 0.35);
   o1.connect(turbBP); o2.connect(turbBP); chain(o3, o3g, turbBP);
-  // compressor whine (sine with slight vibrato)
-  const wh = ac.createOscillator(); wh.frequency.value = 1150;
+  // compressor whine: a narrow NOISE band (Q 30, slight vibrato) tracking whineF - a rough,
+  // breathy turbine whine instead of a pure sine line
+  const whSrc = noiseSrc(ac, 'white', t, 1e6, r);
+  const wh = filt(ac, 'bandpass', 1150, 30);
   const vib = ac.createOscillator(); vib.frequency.value = 5.3;
   const vibG = gain(ac, 6);
   chain(vib, vibG); vibG.connect(wh.frequency);
-  const whG = gain(ac, 0);
-  chain(wh, whG, bus);
+  const whN = gain(ac, 26), whG = gain(ac, 0); // band-noise make-up gain (~sine level at 1.1 kHz)
+  chain(whSrc, wh, whN, whG, bus);
   // air rush
   const windSrc = noiseSrc(ac, 'pink', t, 1e6, r);
   const windBP = filt(ac, 'bandpass', 500, 0.55);
   const windG = gain(ac, 0);
   chain(windSrc, windBP, windG, out); // after the shaper: clean air
-  for (const o of [lfo, o1, o2, o3, wh, vib]) o.start(t);
+  for (const o of [lfo, o1, o2, o3, vib]) o.start(t);
 
   const P = [roarG.gain, roarLP.frequency, hissG.gain, turbG.gain, o1.frequency, o2.frequency, o3.frequency, turbBP.frequency, whG.gain, wh.frequency, lfo.frequency, lfoG.gain, windG.gain, windBP.frequency];
   const last = new Float32Array(P.length).fill(-1);
@@ -114,7 +116,7 @@ export function createJetBed(ac, dest, r = makeRng(99), scale = 1) {
       put(7, x.turbF * 2.2, tt, tau * 2.5); put(8, x.whine, tt, tau * 2); put(9, x.whineF, tt, tau * 3);
       put(10, x.rumbleF, tt, tau); put(11, x.rumble, tt, tau); put(12, x.wind, tt, tau * 2); put(13, x.windF, tt, tau * 2);
     },
-    stop(tt) { for (const s of [roarSrc, hissSrc, windSrc, lfo, o1, o2, o3, wh, vib]) { try { s.stop(tt); } catch (e) { /* already stopped */ } } },
+    stop(tt) { for (const s of [roarSrc, hissSrc, windSrc, whSrc, lfo, o1, o2, o3, vib]) { try { s.stop(tt); } catch (e) { /* already stopped */ } } },
   };
 }
 

@@ -146,10 +146,14 @@ const FRAG_SURF = /* glsl */`
     vec4 wB = texture2D(tWater, P.xz / 11.3 + uTime * vec2(-0.017, -0.028));
     vec4 wC = texture2D(tWater, P.xz / 131.0 + uTime * vec2(0.0021, -0.0042));
     vec4 wD = texture2D(tWater, P.xz / 1.5 + uTime * vec2(0.031, -0.047));
+    vec4 wE = texture2D(tWater, mat2(0.8, 0.6, -0.6, 0.8) * P.xz / 0.62 + uTime * vec2(-0.05, -0.071)); // (render r3) 0.6 m capillaries
     float nearF = 1.0 - smoothstep(40.0, 260.0, dist);
     vec2 sl = (wA.rg - 0.5) * (0.55 + 0.9 * ruffle) + (wB.rg - 0.5) * (0.35 + 0.75 * ruffle) * nearF
-            + (wC.rg - 0.5) * 0.9 + (wD.rg - 0.5) * 0.35 * (1.0 - smoothstep(6.0, 40.0, dist));
-    sl *= 0.95 - 0.55 * smoothstep(80.0, 1100.0, dist);
+            + (wC.rg - 0.5) * 0.9 + (wD.rg - 0.5) * 0.35 * (1.0 - smoothstep(6.0, 40.0, dist))
+            + (wE.rg - 0.5) * 0.22 * (1.0 - smoothstep(4.0, 24.0, dist));
+    // (render r3) far ripples flattened harder: beyond ~300 m the slope field halves, so the
+    // grazing-angle sea no longer reads as wind-blown sand dunes
+    sl *= 0.95 - 0.6 * smoothstep(80.0, 600.0, dist);
     vec3 gn = normalize(vGN);
     iwWN = normalize(vec3(gn.x + sl.x, gn.y, gn.z + sl.y));
     // foam: shore contact band + pulsing surge + turbid wash, whitecaps on pinched crests,
@@ -185,7 +189,7 @@ export function createWater({ level = -14, tex = null, envMap = null, shores = [
     uShoreA: { value: Array.from({ length: MAX_SHORES }, () => new THREE.Vector4()) },
     uShoreB: { value: Array.from({ length: MAX_SHORES }, () => new THREE.Vector4(1, 0, 0, 1)) },
     uShoreN: { value: 0 },
-    uDeep: { value: new THREE.Color('#1E2A2E').multiplyScalar(0.7) },
+    uDeep: { value: new THREE.Color('#141C1F') },   // (render r3) darker slate-teal body
     uFoam: { value: new THREE.Color('#9AA3A1') },
   };
   // Q_i = Q / (k A N): the crest pinch sum stays < 1 (no looping crests)
@@ -213,6 +217,7 @@ export function createWater({ level = -14, tex = null, envMap = null, shores = [
       .replace('#include <normal_fragment_maps>', 'normal = normalize((viewMatrix * vec4(iwWN, 0.0)).xyz);');
   };
   mat.customProgramCacheKey = () => 'iw_water';
+  mat.defines = { ...(mat.defines || {}), IW_FOG_WATER: '' }; // atmosphere.js: cool haze over the sea (render r3)
   mat.userData.iwArena = true;
 
   const mesh = new THREE.Mesh(geometry, mat);

@@ -20,9 +20,12 @@
 //   hover / drops  a smaller sustained widening at fast vertical speed (fovClimb)
 // Collision: 5 rays (centre + near-plane corners) from the orbit point. A blocker that a lift of
 // up to 4.5 m clears (roof edges, container stacks skimming the line) raises the camera instead;
-// otherwise pull-in is instant (never clips) and eases back out slowly. The orbit point itself is kept out of geometry. Thin
-// props do not pull the camera in (no popping); instead they dissolve where they would cover
-// the rig (screen-door cutout on the arena materials, src/player/cutout.js).
+// otherwise pull-in is instant (never clips) and eases back out slowly. The orbit point itself is
+// kept out of geometry. Thin props do not pull the camera in (no popping).
+// Occluder avoid: 26 rays from the camera to the rig's silhouette; a prop on them makes the
+// camera SLIDE (smallest clear offset, up to 4 m sideways / 2.5 m up, critically damped ~0.2 s).
+// Whatever no slide clears is cut out (clean hard-edged hole on the arena materials, cutout.js).
+// Thin props the camera itself skims past (within ~7 m) are cut near the eye too (cutout.js).
 //
 // API (game.cam):
 //   shake(amount 0..1)                 trauma-based shake (adds up, decays)
@@ -37,7 +40,7 @@
 import * as THREE from 'three';
 import { CAMERA as C } from './tuning.js';
 import { makeHit } from '../core/physics.js';
-import { installCutout, updateCutout } from './cutout.js';
+import { installCutout, updateCutout, updateNearCut } from './cutout.js';
 
 const _desired = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.Vector3();
 const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _target = new THREE.Vector3();
@@ -45,6 +48,8 @@ const _m = new THREE.Matrix4(), _o = new THREE.Vector3(), _camUp = new THREE.Vec
 const _zero = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _qi = new THREE.Quaternion();
 const _hit = makeHit(), _o2 = new THREE.Vector3();
+const _base = new THREE.Vector3(), _c0 = new THREE.Vector3(), _t0 = new THREE.Vector3(), _d0 = new THREE.Vector3();
+const NO_GROUND = { ground: false };
 const PROBES = [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const ATTRACT_FOV = 50;   // title / briefing orbit keeps its own lens (independent of the gameplay FOV)
 
@@ -120,7 +125,20 @@ export default function cameraSystem(game) {
   let rigHeight = 0;
   let cutK = 0;
   let lift = 0, rise = 0;
-  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, dip: 0, kick: 0, sustain: 0, lift: 0 };
+  // occluder-avoid slide: current offset + velocity (spring), target, timers
+  let slideX = 0, slideY = 0, slideVX = 0, slideVY = 0, slideTX = 0, slideTY = 0;
+  let blockT = 0, homeT = 0, searchCd = 0;
+  const CANDS = [];   // [side, up] offsets, cheapest first
+  for (let iu = 0; iu <= C.slideStepsUp; iu++) {
+    for (let is = -C.slideStepsSide; is <= C.slideStepsSide; is++) {
+      CANDS.push([(is / C.slideStepsSide) * C.slideMaxSide, (iu / C.slideStepsUp) * C.slideMaxUp]);
+    }
+  }
+  const CCOST = new Float64Array(CANDS.length), CDONE = new Uint8Array(CANDS.length);
+  // rig silhouette samples [right m, up m] from the feet (C.slideRows)
+  const SAMPLES = [];
+  for (const [y, hw, n] of C.slideRows) for (let i = 0; i < n; i++) SAMPLES.push([n > 1 ? -hw + (2 * hw * i) / (n - 1) : 0, y]);
+  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, dip: 0, kick: 0, sustain: 0, lift: 0, slide: 0, occluded: 0, nearCut: 0 };
 
   function kick(deg, hold, decay) {
     // a new kick replaces a weaker, older one; never stacks past the larger
@@ -133,8 +151,8 @@ export default function cameraSystem(game) {
   let probeWant = 0;
   function probeLift(D, h) {
     _desired.copy(pivot).addScaledVector(_aim, -D);
-    _desired.y += C.heightOffset + h + rise;
-    _desired.addScaledVector(_right, C.shoulder);
+    _desired.y += C.heightOffset + h + rise + slideY;
+    _desired.addScaledVector(_right, C.shoulder + slideX);
     _dir.subVectors(_desired, pivot);
     probeWant = _dir.length();
     _dir.multiplyScalar(1 / Math.max(probeWant, 1e-4));
@@ -149,6 +167,63 @@ export default function cameraSystem(game) {
     return a;
   }
 
+  /** Rig silhouette rays a camera at `base` + right*ox + up*oy has blocked (stops at `limit`).
+   *  `lead` s: camera and rig both advanced along the rig's velocity (predicted occlusion). */
+  function blocked(base, feet, vel, lead, ox, oy, limit) {
+    _c0.copy(base).addScaledVector(_right, ox).addScaledVector(vel, lead); _c0.y += oy;
+    let n = 0;
+    for (let i = 0; i < SAMPLES.length; i++) {
+      _t0.set(feet.x, feet.y + SAMPLES[i][1], feet.z).addScaledVector(_right, SAMPLES[i][0]).addScaledVector(vel, lead);
+      _d0.subVectors(_t0, _c0);
+      const len = _d0.length();
+      if (len < 3) continue;
+      _d0.multiplyScalar(1 / len);
+      if (game.physics.raycast(_c0, _d0, len - 1.2, _hit, NO_GROUND) && ++n >= limit) return n;
+    }
+    return n;
+  }
+  /** Clear now AND at the predicted pose slideLead s ahead (a sweeping mast is passed in ONE move). */
+  function clearAt(base, feet, vel, ox, oy) {
+    return blocked(base, feet, vel, 0, ox, oy, 1) === 0 && blocked(base, feet, vel, C.slideLead, ox, oy, 1) === 0;
+  }
+  /** Occluder avoid: pick the slide target, then spring toward it (sim rate, deterministic). Only a
+   *  FULLY clear offset is taken (a partial dodge would swing the camera and still need the cut). */
+  function updateSlide(dt, base, feet, vel) {
+    const n = clearAt(base, feet, vel, slideTX, slideTY) ? 0 : 1;
+    metrics.occluded = n;
+    if (n === 0) {
+      blockT = 0;
+      if (slideTX !== 0 || slideTY !== 0) {
+        if (clearAt(base, feet, vel, 0, 0)) {
+          homeT += dt;
+          if (homeT >= C.slideHome) { slideTX = 0; slideTY = 0; homeT = 0; }
+        } else homeT = 0;
+      }
+    } else {
+      homeT = 0; blockT += dt; searchCd -= dt;
+      if (blockT >= C.slidePersist && searchCd <= 0) {
+        // cheapest clear candidate: distance from the current target, then size
+        for (let i = 0; i < CANDS.length; i++) {
+          const c = CANDS[i];
+          CCOST[i] = (Math.abs(c[0] - slideTX) + Math.abs(c[1] - slideTY)) * 0.4 + (Math.abs(c[0]) + Math.abs(c[1])) * 0.2;
+          CDONE[i] = c[0] === slideTX && c[1] === slideTY ? 1 : 0;
+        }
+        let found = -1;
+        for (let k = 0; k < CANDS.length && found < 0; k++) {
+          let bi = -1;
+          for (let i = 0; i < CANDS.length; i++) if (!CDONE[i] && (bi < 0 || CCOST[i] < CCOST[bi])) bi = i;
+          if (bi < 0) break;
+          CDONE[bi] = 1;
+          if (clearAt(base, feet, vel, CANDS[bi][0], CANDS[bi][1])) found = bi;
+        }
+        if (found >= 0) { slideTX = CANDS[found][0]; slideTY = CANDS[found][1]; blockT = 0; }
+        else { slideTX = 0; slideTY = 0; searchCd = C.slideRetry; }   // no slide clears it: the cutout does
+      }
+    }
+    critToZero(slideX - slideTX, slideVX, C.slideOmega, dt, sp); slideX = sp[0] + slideTX; slideVX = sp[1];
+    critToZero(slideY - slideTY, slideVY, C.slideOmega, dt, sp); slideY = sp[0] + slideTY; slideVY = sp[1];
+  }
+
   const api = {
     name: 'camera',
     order: 800,
@@ -161,7 +236,7 @@ export default function cameraSystem(game) {
       if (g.arena && g.arena.root) api.cutoutMaterials = installCutout(g.arena.root);
     },
     cutoutMaterials: 0,
-    reset() { lift = 0; rise = 0; needSnap = true; trauma = 0; rumble = 0; kickT = 1e3; kickDeg = 0; roll = rollV = 0; dip = dipV = 0; sustain = 0; pull = 0; bank = 0; },
+    reset() { lift = 0; rise = 0; needSnap = true; slideX = slideY = slideVX = slideVY = slideTX = slideTY = 0; blockT = homeT = searchCd = 0; trauma = 0; rumble = 0; kickT = 1e3; kickDeg = 0; roll = rollV = 0; dip = dipV = 0; sustain = 0; pull = 0; bank = 0; },
     shake(amount) { trauma = Math.min(1, trauma + amount); },
     fovKick(deg, seconds = 0.3) { kick(deg, 0.03, seconds); },
     setOverride(o) {
@@ -285,6 +360,13 @@ export default function cameraSystem(game) {
       // skimming the camera line) first LIFT the camera over them (keeps the distance and the
       // framing); only what lifting cannot clear pulls the camera in.
       const D = C.distance - pull;
+      // occluder avoid (before the collision probes, so a slide never pushes into geometry)
+      _base.copy(pivot).addScaledVector(_aim, -D);
+      _base.y += C.heightOffset + lift + rise;
+      _base.addScaledVector(_right, C.shoulder);
+      if (needSnap) { slideX = slideY = slideVX = slideVY = slideTX = slideTY = 0; homeT = searchCd = 0; blockT = C.slidePersist; }
+      updateSlide(dt, _base, p.pos, m.vel);
+      if (needSnap) { slideX = slideTX; slideY = slideTY; }
       let liftT = 0;
       if (probeLift(D, lift) < probeWant - 0.3 || lift > 0.05) {
         // smallest lift step that clears the whole line (none clears: stay low and pull in)
@@ -338,12 +420,13 @@ export default function cameraSystem(game) {
       metrics.kick = kickDeg * env;
       metrics.sustain = sustain;
       metrics.lift = lift;
+      metrics.slide = Math.hypot(slideX, slideY);
     },
 
     frame(alpha, realDt) {
       const cam = game.camera;
       const p = game.player;
-      if (override) { api.applyOverride(); cutK = 0; updateCutout(cam, _zero, 1, C, 0); return; }
+      if (override) { api.applyOverride(); cutK = 0; updateCutout(cam, _zero, 1, C, 0); updateNearCut(cam, null, C, isThin, false); return; }
       if ((game.state === 'title' || game.state === 'briefing') && p && p.spawned) {
         // Attract mode: slow orbit around the parked mech.
         attractAngle += realDt * 0.12;
@@ -354,7 +437,7 @@ export default function cameraSystem(game) {
         cam.lookAt(_target);
         if (cam.fov !== ATTRACT_FOV) { cam.fov = ATTRACT_FOV; cam.updateProjectionMatrix(); }
         if (game.env) game.env.focus.copy(p.pos);
-        cutK = 0; updateCutout(cam, _zero, 1, C, 0);
+        cutK = 0; updateCutout(cam, _zero, 1, C, 0); updateNearCut(cam, null, C, isThin, false);
         return;
       }
       cam.position.lerpVectors(prevPos, curPos, alpha);
@@ -365,6 +448,7 @@ export default function cameraSystem(game) {
       if (p && p.spawned) {
         cam.updateMatrixWorld();
         updateCutout(cam, p.root.position, rigHeight || 10.5, C, cutK);
+        metrics.nearCut = updateNearCut(cam, game.physics, C, isThin, cutK > 0.5);
       }
     },
   };

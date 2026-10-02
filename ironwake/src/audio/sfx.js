@@ -60,6 +60,33 @@ function debris(ac, out, t, r, n, t0, t1, heavy, g) {
 }
 
 // foot plate modes (Hz 421/786/1233/1897 as ratios) and the leg frame
+/**
+ * Modal plate bank driven by an excitation signal (true struck-plate physics: every impulse
+ * of the exciter rings each mode as a damped sinusoid). Modes are high-Q bandpasses whose Q is
+ * set from the wanted decay: Q = t60 * pi * f / 6.91 (t60 falls from t60[0] on the lowest
+ * mode to t60[1] on the highest). Returns the input node to feed (crackle / noise bursts).
+ * o: {f, ratios, t60: [lo, hi], spread, tilt, gain}
+ */
+function plateBank(ac, out, r, o) {
+  const inp = gain(ac, 1), g = gain(ac, o.gain ?? 1); g.connect(out);
+  const R = o.ratios, n = R.length, spread = o.spread ?? 0.012, tilt = o.tilt ?? 0.82;
+  let amp = 1;
+  for (let k = 0; k < n; k++) {
+    const f = o.f * R[k] * (1 + (r() * 2 - 1) * spread);
+    if (f > ac.sampleRate * 0.45) break;
+    const t60 = o.t60[0] + (o.t60[1] - o.t60[0]) * (k / Math.max(1, n - 1));
+    const q = Math.max(4, t60 * Math.PI * f / 6.91);
+    const bp = filt(ac, 'bandpass', f, q), mg = gain(ac, amp * Math.sqrt(q) * r.range(0.75, 1.2));
+    chain(inp, bp, mg, g);
+    amp *= tilt;
+  }
+  return inp;
+}
+// inharmonic plate-mode ratios (Chladni-like free plate), ten modes
+const PLATE_MODES = [1, 1.59, 2.14, 2.30, 2.65, 2.92, 3.50, 4.15, 4.80, 5.65];
+/** Pre-roll of stage_stinger: its hit lands STAGE_PRE s after the play (audio.js syncs the score). */
+export const STAGE_PRE = 0.6;
+
 const PLATE_R = [1, 1.867, 2.929, 4.506], FRAME_R = [1, 1.6, 2.56, 4.16, 6.66];
 const FOOT_MIX = { thud: 0.5, frame: 0.9, plate: 1.0, plateSteel: 1.1, clank: 2.4, clankRing: 1.9, deck: 0.9, servo: 0.2 };
 
@@ -112,33 +139,53 @@ export const SFX = {
     },
   },
   enemy_laser: {
-    bus: 'sfx', ref: 24, send: 0.3, prio: 4, max: 6, gap: 0.04, pv: 110, vv: 2, variants: 3, dur: 0.5, gain: 0.34,
+    // capacitor-bank pulse gun: arc crack + a swept noise "zap" + three inharmonic noise-excited
+    // ring modes (no oscillator, so no integer-harmonic ladder) + arc sizzle + discharge body
+    bus: 'sfx', ref: 24, send: 0.3, prio: 4, max: 6, gap: 0.04, pv: 110, vv: 2, variants: 3, dur: 0.5, gain: 0.36,
+    layers: [[0, 'arc crack'], [0.001, 'swept BPF zap'], [0.002, 'modes 1/1.47/2.31'], [0.004, 'sizzle']],
     render(ac, out, t, r) {
-      fm(ac, out, t, { f: 2300 * r.range(0.95, 1.05), f1: 380, fdur: 0.16, ratio: 1.5, idx0: 2.5, idx1: 0.2, decay: 0.2, gain: 0.45, type: 'sawtooth' });
-      tone(ac, out, t, { type: 'sine', f0: 5200, f1: 2900, decay: 0.05, gain: 0.12 });
-      crackle(ac, out, t, r, { type: 'bandpass', f: 3400, Q: 0.9, attack: 0.002, decay: 0.22, gain: 0.5 });
-      thump(ac, out, t, { f0: 280, f1: 90, sweep: 0.06, dur: 0.12, gain: 0.5 });
+      const k = r.range(0.97, 1.03); // per-variant detune +-3 %
+      noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 2400, attack: 0.0003, decay: 0.006, gain: 0.9 });
+      noiseHit(ac, out, t + 0.001, r, { kind: 'white', type: 'bandpass', f0: 5600 * k, f1: 820 * k, fdur: 0.15, Q: 5, attack: 0.002, decay: 0.17, gain: 2.4 });
+      resonator(ac, out, t + 0.002, r, { f: 1180 * k, ratios: [1, 1.47, 2.31], spread: 0.008, Q: [18, 28], decay: [0.1, 0.24], tilt: 0.85, burstF: 3800, burstGain: 0.35, gain: 0.75 });
+      const am = tremolo(ac, t, 0.3, r.range(70, 95), 0.7, 'square'); am.connect(out);
+      crackle(ac, am, t + 0.004, r, { type: 'bandpass', f: 3600, Q: 0.9, attack: 0.002, decay: 0.2, gain: 0.55, rate: 1.3 });
+      thump(ac, out, t, { f0: 260 * k, f1: 85, sweep: 0.06, dur: 0.12, gain: 0.5 });
     },
   },
   blade: {
     bus: 'sfx', ref: 20, send: 0.25, prio: 7, max: 2, gap: 0.1, pv: 50, vv: 1, variants: 3, dur: 0.95, gain: 0.62,
     layers: [[0, 'plasma ignition'], [0.12, 'arc whoosh'], [0.4, 'hum decay']],
     render(ac, out, t, r) {
-      // plasma ignition hum: two detuned saws + sub-octave square, filter opens then settles
+      // plasma hum: two saws detuned +-7 cents (slow beating) whose pitch rides the swing
+      // (Doppler-like rise through the arc, sag as it slows), 18 Hz AM wobble, filter opens then
+      // settles; plus band-passed plasma hiss 2-6 kHz and arc crackle
       const g = gain(ac, 0);
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.7, t + 0.03);
       g.gain.setTargetAtTime(0.45, t + 0.1, 0.1); g.gain.setTargetAtTime(0, t + 0.42, 0.09);
-      const f = filt(ac, 'lowpass', 400, 4);
-      f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(4200, t + 0.12); f.frequency.exponentialRampToValueAtTime(900, t + 0.6);
+      const f = filt(ac, 'lowpass', 400, 3);
+      f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(3800, t + 0.12); f.frequency.exponentialRampToValueAtTime(850, t + 0.6);
       const hp = filt(ac, 'highpass', 90, 0.7);
-      chain(f, shaper(ac, 2.6), hp, g, out);
-      for (const [type, fr, dt, a] of [['sawtooth', 110, 0, 1], ['sawtooth', 110, 14, 1], ['square', 55, 0, 0.35]]) {
-        const o = ac.createOscillator(); o.type = type; o.frequency.value = fr * r.cents(15); o.detune.value = dt;
-        const og = gain(ac, a); chain(o, og, f); o.start(t); o.stop(t + 0.95);
+      const wob = tremolo(ac, t, 0.95, 18 * r.range(0.92, 1.08), 0.38);
+      chain(f, shaper(ac, 2.4), hp, wob, g, out);
+      const f0 = 98 * r.cents(25);
+      // unstable plasma: low-passed noise jitters both saws' pitch (+-12 cents), smearing the
+      // upper harmonics into a rough band instead of a fixed comb
+      const jit = noiseSrc(ac, 'white', t, 0.95, r), jl = filt(ac, 'lowpass', 70, 0.7), jg = gain(ac, 12 * 2.2);
+      chain(jit, jl, jg);
+      for (const dt of [-7, 7]) {
+        const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = dt;
+        points(o.frequency, t, [[0, f0 * 0.97], [0.14, f0 * 1.05, 'e'], [0.5, f0 * 0.93, 'e'], [0.9, f0 * 0.9, 'e']]);
+        jg.connect(o.detune);
+        chain(o, f); o.start(t); o.stop(t + 0.95);
       }
+      // plasma hiss: band-limited noise 2-6 kHz following the hum envelope
+      const hiss = noiseSrc(ac, 'white', t, 0.9, r), hb = filt(ac, 'highpass', 2000, 0.7), hl = filt(ac, 'lowpass', 6000, 0.7), hg = gain(ac, 0);
+      hg.gain.setValueAtTime(0, t); hg.gain.linearRampToValueAtTime(0.5, t + 0.05);
+      hg.gain.setTargetAtTime(0.26, t + 0.14, 0.08); hg.gain.setTargetAtTime(0, t + 0.42, 0.1);
+      chain(hiss, hb, hl, hg, out);
       whoosh(ac, out, t, r, { f0: 450, f1: 3400, f2: 800, Q: 1.3, attack: 0.12, decay: 0.38, gain: 0.8 });
       crackle(ac, out, t + 0.02, r, { type: 'highpass', f: 3000, attack: 0.03, decay: 0.45, gain: 0.35 });
-      tone(ac, out, t, { type: 'sine', f0: 880, f1: 1750, fdur: 0.3, attack: 0.05, decay: 0.35, gain: 0.08 });
     },
   },
   blade_hit: {
@@ -270,10 +317,17 @@ export const SFX = {
     bus: 'sfx', ref: 14, send: 0.35, prio: 3, max: 2, gap: 0.12, pv: 200, vv: 2, variants: 4, dur: 0.7, gain: 0.3,
     layers: [[0, 'strike'], [0.005, 'tumbling-slug whine']],
     render(ac, out, t, r) {
+      // strike + a tumbling slug: inharmonic FM whose index decays 8 -> 1 (buzzy, broadband
+      // tear settling into a rougher whine), chopped by the tumble rate, Doppler-falling with a
+      // closing low-pass as it leaves; a narrow noise band rides the same glide
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 3000, attack: 0.0003, decay: 0.006, gain: 0.8 });
-      const f0 = r.range(3600, 5200), f1 = f0 * r.range(0.35, 0.5);
-      fm(ac, out, t + 0.004, { f: f0, f1, fdur: 0.42, ratio: 1.41, idx0: 0.35, idx1: 0.08, decay: 0.45, attack: 0.01, gain: 0.35 });
-      whoosh(ac, out, t, r, { f0: f0 * 0.9, f1, Q: 6, attack: 0.01, decay: 0.4, gain: 0.25, kind: 'white' });
+      resonator(ac, out, t, r, { f: r.range(1500, 2300), ratios: [1, 1.71, 2.53], Q: [14, 22], decay: [0.02, 0.05], burstF: 4200, gain: 0.35 });
+      const f0 = r.range(2400, 3400), f1 = f0 * r.range(0.5, 0.64), dur = r.range(0.38, 0.48);
+      const tumble = tremolo(ac, t, dur + 0.05, r.range(26, 44), 0.55);
+      const lp = filt(ac, 'lowpass', 9000, 0.7); sweep(lp.frequency, t, 9000, 2600, dur);
+      chain(tumble, lp, out);
+      fm(ac, tumble, t + 0.004, { f: f0, f1, fdur: dur, ratio: 1.37, idx0: 8, idx1: 1, idur: dur, decay: dur, attack: 0.006, gain: 0.75 });
+      whoosh(ac, tumble, t, r, { f0: f0 * 0.95, f1, Q: 7, attack: 0.008, decay: dur, gain: 0.9, kind: 'white' });
     },
   },
   whiz: {
@@ -283,7 +337,7 @@ export const SFX = {
       nwave(ac, out, t, 0.45, 0.55);                                                                                          // supersonic snap
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 5000, attack: 0.0003, decay: 0.005, gain: 0.7 });
       whoosh(ac, out, t, r, { f0: 4200, f1: 3400 * r.range(0.9, 1.1), f2: 800, Q: 2.2, attack: 0.03, decay: 0.18, gain: 0.9, kind: 'white' });
-      tone(ac, out, t + 0.01, { type: 'sine', f0: 3100, f1: 1300, fdur: 0.14, attack: 0.01, decay: 0.15, gain: 0.08 });
+      whoosh(ac, out, t + 0.01, r, { f0: 3100, f1: 2600, f2: 1300, Q: 9, attack: 0.012, decay: 0.15, gain: 0.35, kind: 'white' }); // slug whistle (noise band, not a sine)
     },
   },
 
@@ -328,14 +382,25 @@ export const SFX = {
     bus: 'impact', ref: 30, send: 0.35, prio: 8, max: 2, gap: 0.2, pv: 30, vv: 1, variants: 2, dur: 1.3, gain: 0.7,
     duck: [0.6, 0.1, 0.5],
     render(ac, out, t, r) {
+      // posture break: hull thump, then the frame's armour plate is hammered by a burst of
+      // electrical-overload crackle (a 10-mode inharmonic plate bank, 0.45 s modal decay, so
+      // every crackle impulse rings real plate modes), a sputtering power-down sweep of noise
+      // (no oscillator partials) and the overload chatter
       const pre = gain(ac, 0.8); chain(pre, shaper(ac, 3), out);
       thump(ac, pre, t, { f0: 92, f1: 36, sweep: 0.15, dur: 0.28, gain: 0.55 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 5000, f1: 600, attack: 0.001, decay: 0.15, gain: 1.1 });
+      const k = r.range(0.95, 1.05);
+      const plate = plateBank(ac, out, r, { f: 188 * k, ratios: PLATE_MODES, t60: [0.45, 0.14], gain: 0.05 });
+      const ex = noiseSrc(ac, 'crackle', t, 0.5, r, 1.6), exg = gain(ac, 0);
+      const hits = [[0, 1], [r.range(0.05, 0.07), 0.55], [r.range(0.11, 0.14), 0.4], [r.range(0.19, 0.24), 0.28]];
+      exg.gain.setValueAtTime(0, t);
+      for (const [dt, a] of hits) { exg.gain.setValueAtTime(a, t + dt); exg.gain.setTargetAtTime(0, t + dt + 0.004, 0.012); }
+      chain(ex, exg, plate);
+      noiseHit(ac, plate, t, r, { kind: 'white', type: 'lowpass', f0: 3000, attack: 0.0004, decay: 0.008, gain: 1.5 }); // the strike
       const am = tremolo(ac, t, 1.2, 17, 0.9, 'square'); am.connect(out);
       crackle(ac, am, t, r, { type: 'bandpass', f: 1500, Q: 0.8, attack: 0.005, decay: 0.7, gain: 0.7 });
       const am2 = tremolo(ac, t, 1.2, 23, 0.8); am2.connect(pre);
-      tone(ac, am2, t + 0.02, { type: 'sawtooth', f0: 1100, f1: 140, fdur: 0.75, decay: 0.8, bp: [1200, 300, 2.5], gain: 0.35 });
-      tone(ac, out, t + 0.05, { type: 'triangle', f0: 640, f1: 210, decay: 0.55, gain: 0.1 });
+      noiseHit(ac, am2, t + 0.02, r, { kind: 'pink', type: 'bandpass', f0: 1500, f1: 170, fdur: 0.75, Q: 4.5, attack: 0.01, decay: 0.8, gain: 1.6 });
     },
   },
 
@@ -404,14 +469,17 @@ export const SFX = {
     layers: [[0, 'turbine spool-up'], [0.58, 'ignition boom']],
     render(ac, out, t, r) {
       const W = 0.58; // matches MOVE.abIgnition wind-up
+      // turbine spool-up WITHOUT oscillators: three narrow noise bands at inharmonic blade-pass
+      // ratios (1 : 1.73 : 2.41) rising together, each band unstable (Q ~20 = rough, breathy
+      // whine), through the compressor-stage saturation; a broad roar rises under them
       const g = gain(ac, 0);
       g.gain.setValueAtTime(0.02, t); g.gain.exponentialRampToValueAtTime(0.5, t + W); g.gain.setTargetAtTime(0, t + W, 0.12);
-      const bp = filt(ac, 'bandpass', 500, 3);
-      sweep(bp.frequency, t, 500, 2600, W);
-      chain(bp, shaper(ac, 2), g, out);
-      for (const dt of [0, 9, -7]) {
-        const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = dt;
-        sweep(o.frequency, t, 150, 860, W); o.connect(bp); o.start(t); o.stop(t + W + 0.6);
+      chain(g, shaper(ac, 1.8), out);
+      const spool = noiseSrc(ac, 'white', t, W + 0.6, r);
+      for (const [ratio, a, q] of [[1, 1, 13], [1.73, 0.6, 15], [2.41, 0.38, 17]]) {
+        const bp = filt(ac, 'bandpass', 180 * ratio, q), bg = gain(ac, a * 0.21 * Math.sqrt(q * ac.sampleRate * 0.5 / (700 * ratio)));
+        points(bp.frequency, t, [[0, 180 * ratio * r.range(0.97, 1.03)], [W * 0.55, 520 * ratio, 'e'], [W, 980 * ratio * r.range(0.98, 1.02), 'e']]);
+        chain(spool, bp, bg, g);
       }
       const ng = gain(ac, 0);
       ng.gain.setValueAtTime(0.02, t); ng.gain.exponentialRampToValueAtTime(0.7, t + W); ng.gain.setTargetAtTime(0, t + W, 0.08);
@@ -453,10 +521,23 @@ export const SFX = {
   },
   en_depleted: {
     bus: 'ui', spatial: false, prio: 8, max: 1, gap: 0.5, pv: 0, vv: 0, variants: 1, dur: 0.9, gain: 0.34,
+    // generator brown-out: two falling FCS warning blips (UI band, the readable cue) over the
+    // generator spinning down - three inharmonic noise bands (1 : 1.62 : 2.37) sweeping down
+    // with a stuttering relay chatter, then the breaker clunk; no oscillator ladder
+    layers: [[0, 'warn blip 1'], [0, 'generator spin-down'], [0.17, 'warn blip 2'], [0.48, 'breaker clunk']],
     render(ac, out, t, r) {
-      tone(ac, out, t, { type: 'sawtooth', f0: 520, f1: 85, fdur: 0.55, decay: 0.6, lp: [1800, 300, 1], gain: 0.4 });
       for (const [dt, f] of [[0, 466], [0.17, 370]]) tone(ac, out, t + dt, { type: 'square', f0: f, decay: 0.1, attack: 0.004, bp: [1200, 1200, 1.2], gain: 0.5 });
-      noiseHit(ac, out, t + 0.3, r, { kind: 'white', type: 'highpass', f0: 3000, attack: 0.05, decay: 0.4, gain: 0.08 });
+      const spin = noiseSrc(ac, 'white', t, 0.75, r), sg = gain(ac, 0);
+      sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(0.5, t + 0.02); sg.gain.setTargetAtTime(0, t + 0.3, 0.12);
+      const chop = tremolo(ac, t, 0.7, 23, 0.6, 'square');
+      chain(sg, chop, out);
+      for (const [ratio, a, q] of [[1, 1, 18], [1.62, 0.6, 22], [2.37, 0.4, 26]]) {
+        const bp = filt(ac, 'bandpass', 520 * ratio, q), bg = gain(ac, a * 0.21 * Math.sqrt(q * ac.sampleRate * 0.5 / (300 * ratio)));
+        sweep(bp.frequency, t, 520 * ratio, 90 * ratio, 0.55);
+        chain(spin, bp, bg, sg);
+      }
+      resonator(ac, out, t + 0.48, r, { f: 310, ratios: [1, 1.71, 2.6], Q: [10, 18], decay: [0.03, 0.08], burstF: 1800, gain: 0.45 });
+      noiseHit(ac, out, t + 0.3, r, { kind: 'white', type: 'highpass', f0: 3000, attack: 0.05, decay: 0.4, gain: 0.06 });
     },
   },
   ap_warning: {
@@ -556,6 +637,33 @@ export const SFX = {
         }
       });
       modal(ac, out, h, r, { partials: [[97, 0.6, 2.4], [232, 0.45, 1.8], [366, 0.3, 1.2], [591, 0.2, 0.8]], gain: 0.35, clickF: 1500 });
+    },
+  },
+  stage_stinger: {
+    // mission:stage transition: a 0.6 s reverse swell whose hit IS the downbeat of the next music
+    // section (audio.js jumps the score onto it): sub + taiko skin + low brass + struck steel
+    bus: 'stinger', spatial: false, stereo: true, send: 0.45, prio: 10, max: 1, gap: 3, pv: 0, vv: 0, variants: 1, dur: 3.2, gain: 0.55,
+    layers: [[0, 'reverse swell'], [0.6, 'downbeat: sub + taiko + low brass + steel']],
+    duck: [0.55, 0.5, 0.9],
+    render(ac, out, t, r) {
+      const S = STAGE_PRE;
+      const sw = noiseSrc(ac, 'pink', t, S + 0.05, r), bp = filt(ac, 'bandpass', 250, 1.4);
+      sweep(bp.frequency, t, 250, 4200, S);
+      const sg = gain(ac, 0); sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(0.18, t + S * 0.6); sg.gain.linearRampToValueAtTime(0.55, t + S - 0.01); sg.gain.setValueAtTime(0, t + S);
+      chain(sw, bp, sg, out);
+      // reversed steel: a plate ring whose envelope GROWS into the hit
+      const rv = noiseSrc(ac, 'white', t, S + 0.05, r), rg = gain(ac, 0);
+      rg.gain.setValueAtTime(0, t); rg.gain.linearRampToValueAtTime(0.02, t + S * 0.5); rg.gain.exponentialRampToValueAtTime(0.4, t + S - 0.005); rg.gain.setValueAtTime(0, t + S);
+      chain(rv, rg, plateBank(ac, out, r, { f: 150, ratios: PLATE_MODES, t60: [0.25, 0.08], gain: 0.06 }));
+      const h = t + S;
+      const pre = gain(ac, 0.85); chain(pre, shaper(ac, 2.6), out);
+      thump(ac, pre, h, { f0: 64, f1: 30, sweep: 0.3, dur: 1.1, gain: 1.1 });
+      noiseHit(ac, pre, h, r, { kind: 'pink', type: 'lowpass', f0: 2400, f1: 150, attack: 0.002, decay: 0.7, gain: 0.7 });
+      [38, 45, 50].forEach((m, i) => {
+        const pan = ac.createStereoPanner(); pan.pan.value = (i - 1) * 0.35; pan.connect(out);
+        for (const det of [-5, 6]) brass(ac, pan, h + r.range(0, 0.01), r, { f: midiHz(m) * Math.pow(2, det / 1200), dur: 0.9, release: 0.7, gain: 0.08, idx: m < 45 ? 2.4 : 3.2, blat: 0.05, scoop: 30 });
+      });
+      resonator(ac, out, h, r, { f: 140, ratios: PLATE_MODES.slice(0, 6), Q: [16, 30], decay: [0.6, 1.4], burstF: 1200, gain: 0.5 });
     },
   },
   mission_failed: {

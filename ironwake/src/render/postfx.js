@@ -171,9 +171,12 @@ void main() {
 /**
  * Volumetric sun scattering (quarter res): ray-march the height fog from the camera to the
  * opaque surface (or uMaxDist), sampling the sun's two shadow cascades. Output:
- *   R = ∫ σ T (1 - V) dt   (fog in-scatter that the analytic fog counts as sun-lit, but is in shadow)
- *   G = ∫ σ T V dt         (sun-lit in-scatter inside the range; boosts the lit shafts)
+ *   R = ∫ σ T w (1 - V) dt (fog in-scatter that the analytic fog counts as sun-lit, but is in shadow)
+ *   G = ∫ σ T w V dt       (sun-lit in-scatter inside the range; boosts the lit shafts)
  *   B = view depth of the march end (metres, for the depth-aware upsample)
+ *   A = ∫ σ T V e^{-t/dustRange} dt (near-field lit dust: beams between shadows)
+ * w = iwSunWeight(t) * iwSunT(y): the same sun in-scatter start distance and ground-layer sun
+ * transmittance the analytic fog uses (atmosphere.js), so removal/boost match it exactly.
  * The composite turns it into  col += iwFogSunPart(dir) * (k * G - R): shadow volumes of the
  * gantries, conveyors and rigs carve dark shafts into the glowing ash, sun gaps glow.
  * Squared step distribution (dense near the camera) with per-pixel IGN jitter.
@@ -190,6 +193,7 @@ uniform vec3 uCamPos;
 uniform float uFogD0;
 uniform float uMaxDist;
 uniform float uJitter;
+uniform float uDustK;            // 1 / near-dust range (m)
 varying vec2 vUv;
 float iwSunVis(vec3 X) {
   if (uHasNear > 0.5) {
@@ -215,29 +219,33 @@ void main() {
   vec3 dir = ray / max(L, 1e-4);
   float Lm = min(L, uMaxDist);
   float j = fract(iwIGN(gl_FragCoord.xy) + uJitter);
-  float od = 0.0, occl = 0.0, lit = 0.0, tPrev = 0.0;
+  float stormK = iwStormMul(dir);
+  float od = 0.0, occl = 0.0, lit = 0.0, litRaw = 0.0, tPrev = 0.0;
   for (int i = 0; i < STEPS; i++) {
     float f = (float(i) + j) / float(STEPS);
     float t = Lm * f * f;
     vec3 X = uCamPos + dir * t;
     float y = max(X.y, -50.0);
-    float sig = uFogD0 * ((1.0 - IW_FOG_HI) * exp(-IW_FOG_K1 * y) + IW_FOG_HI * exp(-IW_FOG_K2 * y));
+    float sig = uFogD0 * stormK * ((1.0 - IW_FOG_HI) * exp(-IW_FOG_K1 * y) + IW_FOG_HI * exp(-IW_FOG_K2 * y));
     float dt = t - tPrev; tPrev = t;
     float T = exp(-od);
     od += sig * dt;
     float V = iwSunVis(X);
-    occl += sig * T * (1.0 - V) * dt;
-    lit += sig * T * V * dt;
+    // the analytic fog's sun share builds up with distance (iwSunWeight, ATMOS.fog.sunStart):
+    // remove / boost exactly that share; the raw lit integral (A) drives the dust beams
+    float wS = iwSunWeight(t) * iwSunT(y, uFogD0);
+    occl += sig * T * (1.0 - V) * dt * wS;
+    lit += sig * T * V * dt * wS;
+    litRaw += sig * T * V * dt * exp(-t * uDustK);   // near-field dust only (beams are resolvable there)
   }
-  // last segment (end of the jittered march -> Lm) counts as lit/occluded like the last sample
-  gl_FragColor = vec4(occl, lit, min(-z, uMaxDist * 4.0), 1.0);
+  gl_FragColor = vec4(occl, lit, min(-z, uMaxDist * 4.0), litRaw);
 }`, {
     tDepth: { value: null }, uCam: { value: new THREE.Vector2() }, uTan: { value: new THREE.Vector2() },
     tShNear: { value: null }, tShFar: { value: null },
     uShNear: { value: new THREE.Matrix4() }, uShFar: { value: new THREE.Matrix4() }, uShBias: { value: new THREE.Vector2() },
     uHasNear: { value: 0 }, uHasFar: { value: 0 },
     uCamWorld: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
-    uFogD0: { value: 0.002 }, uMaxDist: { value: 260 }, uJitter: { value: 0 },
+    uFogD0: { value: 0.002 }, uMaxDist: { value: 260 }, uJitter: { value: 0 }, uDustK: { value: 1 / 120 },
   }, { STEPS: steps });
 }
 
@@ -249,15 +257,16 @@ uniform vec2 uStep;
 varying vec2 vUv;
 void main() {
   vec4 c = texture2D(tIn, vUv);
-  vec3 acc = c.rgb * 0.4; float ws = 0.4;
+  vec3 acc = c.rga * 0.4; float ws = 0.4;
   for (int i = 1; i <= 2; i++) {
     for (int s = -1; s <= 1; s += 2) {
       vec4 q = texture2D(tIn, vUv + uStep * float(i * s));
       float w = (i == 1 ? 0.22 : 0.08) * max(0.0, 1.0 - abs(q.b - c.b) / (c.b * 0.08 + 0.5));
-      acc += q.rgb * w; ws += w;
+      acc += q.rga * w; ws += w;
     }
   }
-  gl_FragColor = vec4(acc.rg / ws, c.b, 1.0);
+  acc /= ws;
+  gl_FragColor = vec4(acc.xy, c.b, acc.z);
 }`, { tIn: { value: null }, uStep: { value: new THREE.Vector2() } });
 }
 
@@ -470,16 +479,19 @@ uniform float uShadowDesat;
 uniform float uGainAmt;
 uniform float uSat;
 uniform float uContrast;
+uniform float uHiLift;
 uniform float uHasAO, uHasBloom, uHasShafts;
 uniform float uDebug;
 uniform sampler2D tVol;   // volumetric sun scattering (quarter res, see volumeMaterial)
-uniform float uHasVol, uVolLit, uVolOcc, uVolMaxZ, uVolDust;
+uniform float uHasVol, uVolLit, uVolOcc, uVolMaxZ, uVolDust, uDustIso;
 uniform vec3 uSunCol;   // sun colour * intensity (linear)
 uniform mat4 uCamWorld;
 uniform vec3 uFogColor;
+uniform float uFogD0;     // scene.fog.density (ground extinction, 1/m)
+uniform float uAerial;    // aerial-perspective chroma shift amount (0 = off)
 varying vec2 vUv;
 // depth-aware (bilateral) 4-tap upsample of the quarter-res volumetric buffer
-vec2 iwVolume(vec2 uv) {
+vec3 iwVolume(vec2 uv) {
   float d = texture2D(tDepth, uv).x;
   float zf = min(d >= 0.999999 ? 1.0e5 : -iwViewZ(uv), uVolMaxZ);
   vec2 sz = vec2(textureSize(tVol, 0));
@@ -487,16 +499,16 @@ vec2 iwVolume(vec2 uv) {
   ivec2 i0 = ivec2(floor(tc));
   vec2 f = tc - floor(tc);
   ivec2 mx = ivec2(sz) - 1;
-  vec3 acc = vec3(0.0);
+  vec4 acc = vec4(0.0);
   for (int k = 0; k < 4; k++) {
     ivec2 o = ivec2(k & 1, k >> 1);
     vec4 q = texelFetch(tVol, clamp(i0 + o, ivec2(0), mx), 0);
     float wb = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
     float wd = 1.0 / (0.02 + abs(q.b - zf) / max(zf, 1.0));
     float w = wb * wd + 1e-5;
-    acc += vec3(q.rg * w, w);
+    acc += vec4(q.rga * w, w);
   }
-  return acc.xy / acc.z;
+  return acc.xyz / acc.w;
 }
 
 // ---- AgX (Troy Sobotka / Blender), three.js port + look
@@ -539,7 +551,8 @@ vec3 toSRGB(vec3 c) {
 }
 void main() {
   vec2 uv = vUv;
-  if (uDebug > 2.5) { vec2 vv = iwVolume(uv); gl_FragColor = vec4(vv.x * 4.0, vv.y * 4.0, 0.0, 1.0); return; }
+  if (uDebug > 3.5) { float dz = texture2D(tDepth, uv).x; float zz = dz >= 0.999999 ? 0.0 : log2(-iwViewZ(uv)) / 12.0; gl_FragColor = vec4(vec3(zz), 1.0); return; }
+  if (uDebug > 2.5) { vec3 vv = iwVolume(uv); gl_FragColor = vec4(vv.x * 4.0, vv.y * 4.0, vv.z * 4.0, 1.0); return; }
   if (uDebug > 0.5) { gl_FragColor = vec4(vec3(uDebug < 1.5 ? texture2D(tAO, uv).r : texture2D(tBloom, uv).r), 1.0); return; }
   vec2 cc = uv - 0.5;
   float r2 = dot(cc, cc);
@@ -564,13 +577,29 @@ void main() {
   if (uHasVol > 0.5) {
     // shadowed in-scattering: remove the analytic fog's sun light where the ray is in shadow,
     // boost it where it is lit (light shafts through the ash, any sun angle)
-    vec2 vol = iwVolume(uv);
+    vec3 vol = iwVolume(uv);
     vec3 dv = normalize(vec3((uv * 2.0 - 1.0) * uTan, -1.0));
     vec3 dw = normalize(mat3(uCamWorld) * dv);
     col = max(col + iwFogSunPart(dw, uFogColor) * (uVolLit * vol.y - uVolOcc * vol.x), vec3(0.0));
     // suspended dust lit by the sun (forward-scattering ash): bright beams between shadows
     float mu = dot(dw, IW_SUN_DIR);
-    col += uSunCol * (uVolDust * (0.3 + 0.7 * min(iwHG(mu, 0.5) * 12.566371, 12.0))) * vol.y;
+    col += uSunCol * (uVolDust * (uDustIso + (1.0 - uDustIso) * min(iwHG(mu, IW_DUST_G) * 12.566371, 14.0))) * vol.z;
+  }
+  if (uAerial > 0.0) {
+    // aerial perspective (chroma): with distance a surface's hue shifts toward the haze hue at
+    // CONSTANT luminance, on top of the fog mix -> far rust/paint loses saturation without the
+    // haze having to brighten it (the analytic fog does the luminance part)
+    float dz = texture2D(tDepth, uv).x;
+    if (dz < 0.999999) {
+      vec3 vp = iwViewPos(uv, iwViewZ(uv));
+      vec3 cp = uCamWorld[3].xyz;
+      vec3 wv = mat3(uCamWorld) * vp;
+      float L = length(wv);
+      float F = 1.0 - exp(-iwFogOD(cp, cp + wv, uFogD0));
+      vec3 hz = iwFogInscatter(wv / max(L, 1e-3), L, uFogColor);
+      const vec3 LW = vec3(0.2126, 0.7152, 0.0722);
+      col = mix(col, hz * (dot(col, LW) / max(dot(hz, LW), 1e-5)), uAerial * F);
+    }
   }
   if (uHasShafts > 0.5) col += texture2D(tShafts, uv).r * uShaftTint;
   col *= uExposure * (uHasAE > 0.5 ? exp2(texture2D(tAE, vec2(0.5)).r) : 1.0);
@@ -599,6 +628,13 @@ void main() {
   // contrast around display mid-grey; the toe is protected (the S only acts above ~0.1, so dark
   // values keep their separation instead of clipping to #000)
   s = clamp(s + (s - 0.45) * (uContrast - 1.0) * smoothstep(0.02, 0.4, s), 0.0, 1.0);
+  // highlight shoulder lift (display luma 0.5..1): sun-lit faces, sky glow and emissives get
+  // their sparkle back without touching the mids/shadows (value budget ~10 % highlights, §5)
+  {
+    float y = dot(s, vec3(0.2126, 0.7152, 0.0722));
+    float k = uHiLift * smoothstep(0.5, 0.78, y) * (1.0 - y);
+    s = clamp(s * (1.0 + k / max(y, 0.05)), 0.0, 1.0);
+  }
   // vignette (display space, soft)
   float v = 1.0 - uVignette * smoothstep(0.18, 0.72, r2 * 1.6);
   s *= v;
@@ -618,10 +654,10 @@ void main() {
     uExposure: { value: 1 }, tAE: { value: null }, uHasAE: { value: 0 }, uAO: { value: 1 }, uAOFloor: { value: 0.35 }, uBloom: { value: 0.1 }, uShaftTint: { value: new THREE.Color() },
     uCA: { value: 0.012 }, uVignette: { value: 0.3 }, uGrain: { value: 0.03 }, uGrainOffset: { value: new THREE.Vector2() },
     uRes: { value: new THREE.Vector2() }, uLift: { value: new THREE.Color() }, uGain: { value: new THREE.Color(1, 1, 1) },
-    uGainAmt: { value: 0.5 }, uShadowTint: { value: new THREE.Color(1, 1, 1) }, uShadowAmt: { value: 0.3 }, uShadowDesat: { value: 0.3 }, uSat: { value: 0.9 }, uContrast: { value: 1.05 },
+    uGainAmt: { value: 0.5 }, uShadowTint: { value: new THREE.Color(1, 1, 1) }, uShadowAmt: { value: 0.3 }, uShadowDesat: { value: 0.3 }, uSat: { value: 0.9 }, uContrast: { value: 1.05 }, uHiLift: { value: 0 },
     uHasAO: { value: 0 }, uHasBloom: { value: 0 }, uHasShafts: { value: 0 }, uDebug: { value: 0 },
     tDepth: { value: null }, uCam: { value: new THREE.Vector2() }, uTan: { value: new THREE.Vector2() },
-    tVol: { value: null }, uHasVol: { value: 0 }, uVolLit: { value: 0.5 }, uVolOcc: { value: 1 }, uVolMaxZ: { value: 1000 }, uVolDust: { value: 0.05 }, uSunCol: { value: new THREE.Color() },
-    uCamWorld: { value: new THREE.Matrix4() }, uFogColor: { value: new THREE.Color() },
-  }, { AGX_POWER: '1.15', AGX_SAT: '1.22' });
+    tVol: { value: null }, uHasVol: { value: 0 }, uVolLit: { value: 0.5 }, uVolOcc: { value: 1 }, uVolMaxZ: { value: 1000 }, uVolDust: { value: 0.05 }, uDustIso: { value: 0.12 }, uSunCol: { value: new THREE.Color() },
+    uCamWorld: { value: new THREE.Matrix4() }, uFogColor: { value: new THREE.Color() }, uFogD0: { value: 0.002 }, uAerial: { value: 0 },
+  }, { AGX_POWER: '1.15', AGX_SAT: '1.22', IW_DUST_G: '0.72' });
 }

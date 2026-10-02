@@ -38,8 +38,24 @@ DECK_Z = 6.45
 CORE_Z0, CORE_Z1 = 6.55, 9.65
 CAP_Z = 9.7
 HEAD = (0.0, 0.0, 10.25)
-TRUNNION = (0.0, -0.95, 10.95)
-MUZZLE = (0.0, -3.95, 10.95)
+# r3: the gun head is authored at its old size and scaled 1.6x about the turntable pivot
+# (critic: toy-scale for an emplacement); the turntable ring only grows 1.25x (it sits on the cap)
+HEAD_SCALE = 1.6
+TRUNNION0 = (0.0, -0.95, 10.95)
+MUZZLE0 = (0.0, -3.95, 10.95)
+
+
+def hs_pt(p):
+    return tuple(HEAD[i] + (p[i] - HEAD[i]) * HEAD_SCALE for i in range(3))
+
+
+def head_scaled(g):
+    hx, hy, hz = HEAD
+    return g.move(-hx, -hy, -hz).scale(HEAD_SCALE).move(hx, hy, hz)
+
+
+TRUNNION = hs_pt(TRUNNION0)
+MUZZLE = hs_pt(MUZZLE0)
 MAST = (-3.1, 3.1)       # back-right corner of the deck
 MAST_TOP = 15.6
 
@@ -225,7 +241,7 @@ def build_housing(B):
     g.merge(B.add('vent', lv))
     for i, x in enumerate((-1.2, 0.0, 1.2)):
         g.merge(B.add('conduit', K.tube([(x, HW, 1.6), (x, HW + 0.55, 1.35), (x * 1.1, HW + 0.8, 0.9),
-                                         (x * 1.2, HW + 0.9, PLINTH_H - 0.05)], 0.14, 12, mat='steel',
+                                         (x * 1.2, HW + 0.9, PLINTH_H - 0.05)], 0.14, 10, mat='steel',
                                         collar_mat='steel_dark', subdiv=3)))
         g.merge(B.add('conduit', P.box((0.42, 0.3, 0.42), bevel=0.02, segs=1, mat='steel_dark').move(x, HW + 0.12, 1.6)))
     # ladder up the front-left chamfer to the deck
@@ -275,7 +291,7 @@ def build_deck(B):
             prof += [(0.38, z + 0.06), (0.38, z + 0.11), (0.2, z + 0.22)]
             z += 0.32
         prof += [(0.14, z + 0.05), (0.14, z + 0.3), (0.0, z + 0.3)]
-        bu = P.lathe(prof, 16, 'paint_secondary')
+        bu = P.lathe(prof, 12, 'paint_secondary')
         g.merge(B.add('bushing', bu.move(x, y, DECK_Z)))
         g.merge(B.add('bushing', P.box((0.24, 0.24, 0.12), bevel=0.02, segs=1, mat='steel').move(x, y, DECK_Z + z + 0.36)))
         top = Vector((x, y, DECK_Z + z + 0.38))
@@ -296,12 +312,12 @@ def build_deck(B):
     g.merge(B.add('socket', P.banded_cylinder([(0.06, 0.95, 'steel'), (0.18, 1.05), (0.12, 1.2, 'steel_dark')], segs=40,
                                               step=0.0, mat='paint_dark').move(0, 0, CORE_Z1 - 0.36)))
     # top cap: octagonal armoured plate with a bolt ring (the gun head's turntable sits on it)
-    cap = P.loft([(octa(1.7, 0.55), CAP_Z - 0.05), (octa(1.75, 0.57), CAP_Z + 0.3), (octa(1.55, 0.5), CAP_Z + 0.5)],
+    cap = P.loft([(octa(1.95, 0.62), CAP_Z - 0.05), (octa(2.0, 0.64), CAP_Z + 0.3), (octa(1.85, 0.58), CAP_Z + 0.5)],
                  bevel=0.02, segs=1, mat='paint_primary', axis='Z')
     g.merge(B.add('cap', cap))
-    g.merge(B.add('cap', P.bolt_circle((0, 0, CAP_Z + 0.5), (0, 0, 1), 1.25, 12, r=0.05)))
+    g.merge(B.add('cap', P.bolt_circle((0, 0, CAP_Z + 0.5), (0, 0, 1), 1.68, 12, r=0.05)))
     for s in (1, -1):
-        g.merge(B.add('cap', K.strip((-1.1, s * 1.72, CAP_Z + 0.15), (1.1, s * 1.72, CAP_Z + 0.15), 0.16, 0.02,
+        g.merge(B.add('cap', K.strip((-1.25, s * 1.97, CAP_Z + 0.15), (1.25, s * 1.97, CAP_Z + 0.15), 0.16, 0.02,
                                      (0, s, 0), mat='hazard')))
     return g
 
@@ -373,24 +389,57 @@ def build_beacon():
 
 
 # ============================================================================ core (rotating glow column)
+CORE_H = CORE_Z1 - CORE_Z0 - 0.5
+CORE_ZB = CORE_Z0 + 0.25
+
+
 def build_core():
+    """Cage, field-emitter rings (glow) and end sockets of the capacitor column (core_geo)."""
     B = K.Budget('core')
     g = Geo()
-    h = CORE_Z1 - CORE_Z0 - 0.5
-    z0 = CORE_Z0 + 0.25
-    g.merge(B.add('glass', P.cylinder(0.72, h, 40, bevel=0.03, bsegs=1, mat='glow').move(0, 0, z0 + h / 2)))
-    # rotating cage: 6 bars + 3 rings + spiral coil
+    h, z0 = CORE_H, CORE_ZB
+    # rotating cage: 6 bars + 3 rings
     for k in range(6):
         a = math.radians(k * 60)
         g.merge(B.add('bars', P.box((0.1, 0.07, h + 0.1), bevel=0.012, segs=1, mat='steel_dark')
                       .rotate((0, 0, k * 60)).move(math.cos(a) * 0.8, math.sin(a) * 0.8, z0 + h / 2)))
     for z in (z0 + 0.25, z0 + h / 2, z0 + h - 0.25):
-        g.merge(B.add('rings', P.ring(0.9, 0.78, 0.1, 40, bevel=0.0, mat='steel', z0=z - 0.05)))
+        g.merge(B.add('rings', P.ring(0.9, 0.78, 0.1, 32, bevel=0.0, mat='steel', z0=z - 0.05)))
     # bright field emitters top & bottom (hot spots in the glow)
     for z in (z0 + 0.05, z0 + h - 0.05):
-        g.merge(B.add('emit', P.ring(0.76, 0.5, 0.06, 40, bevel=0.0, mat='glow', z0=z - 0.03)))
+        g.merge(B.add('emit', P.ring(0.76, 0.5, 0.06, 32, bevel=0.0, mat='glow', z0=z - 0.03)))
     B.report()
     return g
+
+
+def build_filament():
+    """r3: what the plasma glass shows inside: a steel electrode rod with insulator collars and
+    a white-hot helical filament wound round it (merged into core_geo; glows through the glass)."""
+    B = K.Budget('filament')
+    g = Geo()
+    h, z0 = CORE_H, CORE_ZB
+    g.merge(B.add('rod', P.cylinder(0.075, h - 0.1, 12, bevel=0.0, bsegs=1, mat='steel', z0=z0 + 0.05)))
+    for z in (z0 + 0.3, z0 + h - 0.3):
+        g.merge(B.add('rod', P.cylinder(0.16, 0.12, 12, bevel=0.0, bsegs=1, mat='paint_secondary', z0=z - 0.06)))
+    pts = []
+    turns, n = 6.5, 42
+    for i in range(n + 1):
+        t = i / n
+        a = t * turns * math.tau
+        r = 0.3 + 0.04 * math.sin(t * math.pi * 5)
+        pts.append((math.cos(a) * r, math.sin(a) * r, z0 + 0.42 + t * (h - 0.84)))
+    g.merge(B.add('coil', K.tube(pts, 0.03, 5, mat='filament', collars=False, subdiv=1)))
+    for z in (z0 + 0.42, z0 + h - 0.42):   # coil feeds into the electrode collars
+        g.merge(B.add('coil', P.box((0.3, 0.05, 0.05), bevel=0.0, segs=1, mat='filament').move(0.15, 0, z)))
+    B.report()
+    return g
+
+
+def build_glass():
+    """Capacitor glass envelope (core_glass_geo): models.js renders it with the plasma-glass
+    shader (scrolling noise bands, fresnel-darkened rim, translucent onto the filament)."""
+    h, z0 = CORE_H, CORE_ZB
+    return P.cylinder(0.72, h, 40, bevel=0.0, bsegs=1, mat='glass', cap=False).move(0, 0, z0 + h / 2)
 
 
 # ============================================================================ gun head
@@ -398,7 +447,9 @@ def build_head():
     B = K.Budget('head')
     g = Geo()
     hx, hy, hz = HEAD
-    g.merge(B.add('ring', P.banded_cylinder([(0.1, 1.2, 'steel_dark'), (0.14, 1.12)], segs=40, step=0.0,
+    # turntable ring: 1.25x radius / 1.6x height (scaled about the pivot with the rest below)
+    k = 1.25 / HEAD_SCALE
+    g.merge(B.add('ring', P.banded_cylinder([(0.1, 1.2 * k, 'steel_dark'), (0.14, 1.12 * k)], segs=40, step=0.0,
                                             mat='paint_dark').move(hx, hy, hz)))
     # housing: angular wedge (front at -y), lofted along Y
     secs = [(-1.35, -0.8, 0.8, hz + 0.36, hz + 0.95, (0.06, 0.06, 0.12, 0.12)),
@@ -407,6 +458,7 @@ def build_head():
             (1.3, -0.95, 0.95, hz + 0.32, hz + 1.2, (0.1, 0.1, 0.2, 0.2))]
     hs = K.shell(secs, 'Y', bevel=0.02, mat='paint_primary')
     K.grooves(hs, [(1, 0, 0), (-1, 0, 0), (0, 0, 1)], (0, 0.2, 0), (0, 1, 0), gap=0.02, depth=0.018, angle=25)
+    K.grooves(hs, [(1, 0, 0), (-1, 0, 0)], (0, 0, hz + 0.62), (0, 0, 1), gap=0.016, depth=0.014, angle=25)
     K.hatch_at(hs, (0, 0.6, hz + 1.36), (0, 0, 1), (0.9, 0.6), u_axis=(1, 0, 0), gap=0.016, raised=0.03,
                mat='paint_primary')
     g.merge(B.add('shell', hs))
@@ -426,31 +478,49 @@ def build_head():
     for s in (1, -1):
         dr = P.banded_cylinder([(0.06, 0.4, 'steel_dark'), (0.5, 0.44), (0.06, 0.4, 'steel_dark')], segs=32, step=0.0,
                                mat='paint_dark')
-        g.merge(B.add('drums', dr.rotate((0, 90, 0)).move(s * 0.2 - (0.31 if s > 0 else -0.31) * 0 + s * 0.12, 1.45,
-                                                            hz + 0.72)))
+        g.merge(B.add('drums', dr.rotate((0, 90, 0)).move(s * 0.12, 1.45, hz + 0.72)))
+    # power + data cables from the drum bay down into the turntable (slip ring), with clamps
+    for x, r in ((-0.62, 0.06), (-0.42, 0.045)):
+        g.merge(B.add('cables', K.tube([(x, 1.2, hz + 0.62), (x - 0.04, 1.62, hz + 0.42), (x, 1.5, hz + 0.16),
+                                        (x * 0.9, 1.05, hz + 0.08)], r, 8, mat='rubber', collar_mat='steel',
+                                       subdiv=3)))
+    g.merge(B.add('cables', P.box((0.36, 0.1, 0.1), bevel=0.0, segs=1, mat='steel_dark').move(-0.52, 1.56, hz + 0.32)))
     g.merge(B.add('lug', K.lug(0.12).move(-0.6, 0.3, hz + 1.36)))
     g.merge(B.add('antenna', K.whip(1.0, r=0.01, base_r=0.04).move(-0.8, 0.9, hz + 1.3)))
     B.report()
-    return g
+    return head_scaled(g)
 
 
 def build_barrels():
     B = K.Budget('barrels')
     g = Geo()
-    tx, ty, tz = TRUNNION
+    tx, ty, tz = TRUNNION0
     # mantlet: armoured block on the trunnion
     mt = P.box((1.3, 0.6, 0.72), bevel=0.02, segs=1, chamfer=0.1, chamfer_axes='X', mat='paint_primary')
     g.merge(B.add('mantlet', mt.move(tx, ty - 0.12, tz)))
     g.merge(B.add('mantlet', P.cylinder(0.14, 1.5, 24, bevel=0.02, bsegs=1, mat='steel').rotate((0, 90, 0))
                   .move(tx, ty + 0.1, tz)))
+    y0 = ty - 0.42
+    # r3: armoured barrel shroud over both jackets: cooling slots, hazard band, bolted top plate
+    shr = P.box((1.12, 0.92, 0.44), bevel=0.016, segs=1, chamfer=0.07, chamfer_axes='Y', mat='paint_primary')
+    shr.move(tx, y0 - 0.44, tz)
+    for s in (1, -1):
+        for k in range(3):
+            K.hatch_at(shr, (tx + s * 0.56, y0 - 0.2 - k * 0.24, tz), (s, 0, 0), (0.16, 0.2), u_axis=(0, 1, 0),
+                       gap=0.008, recess=0.03, mat='steel_dark')
+    g.merge(B.add('shroud', shr))
+    g.merge(B.add('shroud', K.plate_world([(tx - 0.42, y0 - 0.05, tz + 0.22), (tx + 0.42, y0 - 0.05, tz + 0.22),
+                                           (tx + 0.42, y0 - 0.84, tz + 0.22), (tx - 0.42, y0 - 0.84, tz + 0.22)][::-1],
+                                          0.03, mat='paint_secondary', normal_hint=(0, 0, 1), chamfer=0.04)))
+    g.merge(B.add('shroud', K.strip((tx - 0.565, y0 - 0.86, tz - 0.1), (tx - 0.565, y0 - 0.86, tz + 0.1), 0.1, 0.01,
+                                    (-1, 0, 0), mat='hazard')))
+    g.merge(B.add('shroud', K.strip((tx + 0.565, y0 - 0.86, tz + 0.1), (tx + 0.565, y0 - 0.86, tz - 0.1), 0.1, 0.01,
+                                    (1, 0, 0), mat='hazard')))
     for s in (1, -1):
         x = tx + s * 0.34
-        y0 = ty - 0.42
-        g.merge(B.add('jacket', P.cylinder(0.15, 0.9, 32, bevel=0.015, bsegs=1, mat='steel_dark', z0=0.0)
-                      .align((0, -1, 0), loc=(x, y0, tz))))
-        for k in range(2):
-            g.merge(B.add('jacket', P.ring(0.17, 0.14, 0.06, 32, bevel=0.0, mat='steel', z0=0.0)
-                          .align((0, -1, 0), loc=(x, y0 - 0.2 - k * 0.4, tz))))
+        # (the old exposed jackets now live inside the shroud: only a cooling ring shows ahead of it)
+        g.merge(B.add('jacket', P.ring(0.15, 0.09, 0.08, 32, bevel=0.0, mat='steel', z0=0.0)
+                      .align((0, -1, 0), loc=(x, y0 - 0.9, tz))))
         g.merge(B.add('barrel', P.cylinder(0.085, 1.9, 32, bevel=0.01, bsegs=1, mat='steel_dark', z0=0.0)
                       .align((0, -1, 0), loc=(x, y0 - 0.9, tz))))
         g.merge(B.add('barrel', P.ring(0.12, 0.08, 0.14, 32, bevel=0.0, mat='hazard', z0=0.0)
@@ -459,21 +529,23 @@ def build_barrels():
                                                                                           loc=(x, y0 - 2.75, tz))
         g.merge(B.add('brake', mb))
     B.report()
-    return g
+    return head_scaled(g)
 
 
-EYE_LENS = (0.62, -1.47, HEAD[2] + 1.1)
+EYE_LENS = hs_pt((0.62, -1.47, HEAD[2] + 1.1))
+EYE_PIVOT = hs_pt((0.62, -1.47, HEAD[2] + 1.05))
 
 
 def build_eye(part='all'):
     """Gun-head sensor: black-glass lens with a glowing iris on its own dome faces
     (K.lens_dome; no separate halo node at this viewing range), plus a thin ranging slit."""
     g = Geo()
+    lens0 = (0.62, -1.47, HEAD[2] + 1.1)
     g.merge(K.lens_dome(0.11, 0.055, iris=0.38, ring=0.52, ring_mat='steel')
-            .align((0, -1, 0), loc=EYE_LENS))
+            .align((0, -1, 0), loc=lens0))
     if part != 'rim':
         g.merge(P.box((0.5, 0.03, 0.035), bevel=0.006, segs=1, mat='lens').move(0.62 + 0.0, -1.462, HEAD[2] + 0.98))
-    return g
+    return head_scaled(g)
 
 
 # ============================================================================ assembly
@@ -482,7 +554,7 @@ def build(a):
     a.pivot('core', (0, 0, (CORE_Z0 + CORE_Z1) / 2), parent='base')
     a.pivot('beacon', (MAST[0], MAST[1], MAST_TOP), parent='base', iw_eye_color='#FF3B2F', iw_eye_strength=10.0)
     a.pivot('head', HEAD, parent='base')
-    a.pivot('eye', (0.62, -1.47, HEAD[2] + 1.05), parent='head', iw_eye_color='#FF2A2A', iw_eye_strength=10.0)
+    a.pivot('eye', EYE_PIVOT, parent='head', iw_eye_color='#FF2A2A', iw_eye_strength=9.0)
     a.pivot('barrel', TRUNNION, parent='head')
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='barrel')
     tris = {}
@@ -503,7 +575,10 @@ def build(a):
         put('door_geo', B.cats['door'], 'base')
         put('kit_geo', B.cats['kit'], 'base')
         put('beacon_geo', build_beacon(), 'beacon')
-        put('core_geo', build_core(), 'core')
+        cg = build_core()
+        cg.merge(build_filament())     # one mesh (no extra draw call): cage + emitters + filament
+        put('core_geo', cg, 'core')
+        put('core_glass_geo', build_glass(), 'core')
         put('head_geo', build_head(), 'head')
         put('eye_geo', build_eye(), 'eye')
         put('barrel_geo', build_barrels(), 'barrel')
@@ -523,15 +598,15 @@ def add_decals(a):
     K.card(a, D.warning_label('DANGER', '高電圧', ('HIGH VOLTAGE', '開扉厳禁'), w=640, colors=(Y, BK)),
            (-0.7, -HW + 0.06, 1.6), (0, -1, 0), up=(0, 0, 1), size=(0.5, None), parent='base', density=420)
     for s in (1, -1):
-        K.card(a, D.text_decal('R-03', px=220, color=C, worn=0.3), (s * 1.16, -0.1, HEAD[2] + 0.85), (s, 0, 0),
-               up=(0, 0, 1), size=(0.7, None), parent='head', density=360)
+        K.card(a, D.text_decal('R-03', px=220, color=C, worn=0.3), hs_pt((s * 1.16, -0.1, HEAD[2] + 0.85)), (s, 0, 0),
+               up=(0, 0, 1), size=(0.7 * HEAD_SCALE, None), parent='head', density=300)
         K.card(a, D.text_decal(['GRAUWERK GRID DIV.', 'PIER 7 SUBSTATION'], px=110, color=C, worn=0.3),
                (s * (HW + 0.01), -3.1 * s, 5.6), (s, 0, 0), up=(0, 0, 1), size=(1.4, None), parent='base', density=240)
         a.decal(D.serial_plate(('GC-RLY 3  66kV / 2.4MVA', 'LOT 0719  HALVARD DEEP')), (s * 2.9, s * 2.9, 1.3),
                 (s, s, 0), up=(0, 0, 1), size=(0.9, None))
         a.decal(K.soot(256, 40 + s, 0.8, 1.8), (s * (HW + 0.02), 0.0, 5.6), (s, 0, 0), size=(3.2, 1.6), depth=0.6,
                 opacity=0.7)
-    K.card(a, D.warning_label('CAUTION', '回転注意', ('ROTATING CAGE', '接近禁止'), w=640), (1.72, 0.0, CAP_Z + 0.2),
+    K.card(a, D.warning_label('CAUTION', '回転注意', ('ROTATING CAGE', '接近禁止'), w=640), (2.01, 0.0, CAP_Z + 0.2),
            (1, 0, 0), up=(0, 0, 1), size=(0.7, None), parent='base', density=300)
     a.decal(D.arrow_decal(text='66kV'), (0.0, HW + 0.01, 4.6), (0, 1, 0), up=(0, 0, 1), size=(0.9, None))
 
@@ -545,9 +620,14 @@ VIEWS = {
 CLAY = dict(VIEWS)
 COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.54}, 'paint_secondary': {'color': '#BDB39A', 'rough': 0.5},
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#2B2624'},
-          'steel_dark': {'color': '#3A3836'}, 'glow': {'emit': '#7FE0FF', 'emit_strength': 6.5}}
-OBJ_WEIGHT = {'head_geo': 1.4, 'barrel_geo': 1.0, 'core_geo': 0.6, 'eye_geo': 1.0, 'base_geo': 1.0, 'door_geo': 1.8,
-              'kit_geo': 0.4}
+          'steel_dark': {'color': '#3A3836'}, 'glow': {'emit': '#7FE0FF', 'emit_strength': 6.5},
+          # r3 core: white-hot filament inside a plasma-glass envelope (the glass shader lives in models.js)
+          'filament': {'color': '#101414', 'metal': 0.0, 'rough': 0.4, 'wear': 0.0, 'grime': 0.0, 'rust': 0.0,
+                       'dust': 0.0, 'var': 0.0, 'emit': '#D8FAFF', 'emit_strength': 6.5, 'decals': False},
+          'glass': {'color': '#06080A', 'metal': 0.0, 'rough': 0.05, 'wear': 0.0, 'grime': 0.1, 'rust': 0.0,
+                    'dust': 0.05, 'var': 0.0, 'decals': False}}
+OBJ_WEIGHT = {'head_geo': 1.0, 'barrel_geo': 0.8, 'core_geo': 0.6, 'eye_geo': 1.0, 'base_geo': 1.0, 'door_geo': 1.8,
+              'kit_geo': 0.4, 'core_glass_geo': 0.05}
 WEATHER = iw.Weathering(edge_wear=1.3, grime=1.4, streaks=1.7, rust=1.1, dust=0.55, chip_threshold=0.56,
                         flat_chips=0.55, macro=0.1, ground_dirt=0.7, ao_in_albedo=0.26)
 NEED = ['base', 'core', 'beacon', 'head', 'eye', 'barrel', 'muzzle']
@@ -557,7 +637,7 @@ def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=41, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, small=0.13,
           sizes={'normal': 1536, 'orm': 768, 'emissive': 256}, card_atlas=1024,
-          tex_quality={'basecolor': 78, 'normal': 72, 'orm': 62},
+          tex_quality={'basecolor': 73, 'normal': 70, 'orm': 60},   # r3: -45 KB (single-file build budget)
           bake_kw=dict(edge=0.05, cavity=0.12, ao_dist=1.6, bevel_radius=0.02))
 
 

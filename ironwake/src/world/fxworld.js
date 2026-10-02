@@ -17,6 +17,8 @@ attribute vec4 aSeed;     // x phase, y random, z plume radius, w plume height
 attribute vec2 aCorner;
 attribute float aKind;
 attribute vec4 aVar;      // per plume: wind multiplier, wind angle offset (rad), turbulence, lean phase
+attribute vec4 aVar2;     // per plume (r3): rise-rate mult, density mult, lean exponent, height mult
+varying float vDens;
 uniform float uTime;
 uniform vec2 uWind;
 varying vec2 vUv;
@@ -29,14 +31,15 @@ varying vec3 vFwd;
 varying float vHF;
 #include <fog_pars_vertex>
 void main() {
-  float H = aSeed.w, R = aSeed.z;
+  float H = aSeed.w * aVar2.w, R = aSeed.z;
+  vDens = aVar2.y;
   float spray = step(2.5, aKind);
   float speed = aKind > 0.5 && aKind < 1.5 ? 0.055 : (spray > 0.5 ? 0.16 : 0.04);
-  float life = fract(aSeed.x + uTime * speed);
+  float life = fract(aSeed.x + uTime * speed * aVar2.x);
   float sp = aSeed.y * 6.2831;
   vec3 c = aBase;
   c.y += life * H;
-  float drift = pow(life, 1.35) * H * 0.9;
+  float drift = pow(life, aVar2.z) * H * 0.9;
   // every column leans and spreads differently (per-plume wind gust / shear, no parallel ribbons)
   float wa = aVar.y + sin(uTime * 0.03 + aVar.w) * 0.12 + life * 0.35 * (aVar.z - 0.5);
   vec2 wind = mat2(cos(wa), sin(wa), -sin(wa), cos(wa)) * uWind * aVar.x;
@@ -74,6 +77,7 @@ varying vec3 vRight;
 varying vec3 vUp;
 varying vec3 vFwd;
 varying float vHF;
+varying float vDens;
 #include <fog_pars_fragment>
 void main() {
   vec2 q = vUv - 0.5;
@@ -86,7 +90,7 @@ void main() {
   float spray = step(2.5, vKind);
   float steam = step(0.5, vKind) * step(vKind, 1.5) + spray;
   float hot = step(1.5, vKind) * (1.0 - spray);
-  float a = shape * fadeIn * fadeOut * mix(0.72, 0.5, steam);
+  float a = shape * fadeIn * fadeOut * mix(0.72, 0.5, steam) * vDens;
   a *= 1.0 - spray * (0.45 + 0.4 * smoothstep(0.2, 0.9, vLife));
   if (a < 0.004) discard;
   // puff lighting: pseudo sphere normal, wrapped sun + dark core
@@ -117,7 +121,7 @@ export function createPlumes(list, noiseTex, sunDir) {
   let n = 0;
   for (const p of list) n += p.kind === 1 && p.r < 8 ? 40 : (PER[p.kind] || 24);
   const base = new Float32Array(n * 4 * 3), seed = new Float32Array(n * 4 * 4), corner = new Float32Array(n * 4 * 2), kind = new Float32Array(n * 4);
-  const vars = new Float32Array(n * 4 * 4);
+  const vars = new Float32Array(n * 4 * 4), vars2 = new Float32Array(n * 4 * 4);
   const index = new Uint32Array(n * 6);
   let q = 0;
   let h = 0x9e3779b9;
@@ -126,8 +130,12 @@ export function createPlumes(list, noiseTex, sunDir) {
     const m = p.kind === 1 && p.r < 8 ? 40 : (PER[p.kind] || 24);
     // per-plume variation: wind multiplier 0.6-1.4, +-0.35 rad heading, turbulence, phase,
     // radius +-40 % (sea spray stays as authored)
-    const pv = [0.6 + 0.8 * rnd(), (rnd() - 0.5) * 0.7, rnd(), rnd() * 6.283];
-    const rr0 = p.kind === 3 ? p.r : p.r * (0.6 + 0.8 * rnd());
+    const pv = [0.45 + 1.1 * rnd(), (rnd() - 0.5) * 0.8, rnd(), rnd() * 6.283];
+    const rr0 = p.kind === 3 ? p.r : p.r * (0.55 + 0.9 * rnd());
+    // (r3) no parallel copy-paste columns: rise rate +-30 %, density, shear (lean curvature),
+    // column height +-25 %
+    const spray = p.kind === 3;
+    const pv2 = spray ? [1, 1, 1.35, 1] : [0.7 + 0.6 * rnd(), 0.7 + 0.45 * rnd(), 1.05 + 0.7 * rnd(), 0.75 + 0.5 * rnd()];
     for (let i = 0; i < m; i++, q++) {
       const ph = (i + rnd() * 0.6) / m, rr = rnd();
       const C = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -136,6 +144,7 @@ export function createPlumes(list, noiseTex, sunDir) {
         base[k * 3] = p.pos.x; base[k * 3 + 1] = p.pos.y; base[k * 3 + 2] = p.pos.z;
         seed[k * 4] = ph; seed[k * 4 + 1] = rr; seed[k * 4 + 2] = rr0; seed[k * 4 + 3] = p.h;
         vars[k * 4] = pv[0]; vars[k * 4 + 1] = pv[1]; vars[k * 4 + 2] = pv[2]; vars[k * 4 + 3] = pv[3];
+        vars2[k * 4] = pv2[0]; vars2[k * 4 + 1] = pv2[1]; vars2[k * 4 + 2] = pv2[2]; vars2[k * 4 + 3] = pv2[3];
         corner[k * 2] = C[v][0]; corner[k * 2 + 1] = C[v][1];
         kind[k] = p.kind;
       }
@@ -149,6 +158,7 @@ export function createPlumes(list, noiseTex, sunDir) {
   g.setAttribute('aCorner', new THREE.BufferAttribute(corner, 2));
   g.setAttribute('aKind', new THREE.BufferAttribute(kind, 1));
   g.setAttribute('aVar', new THREE.BufferAttribute(vars, 4));
+  g.setAttribute('aVar2', new THREE.BufferAttribute(vars2, 4));
   g.setIndex(new THREE.BufferAttribute(index, 1));
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uTime: { value: 0 }, uWind: { value: new THREE.Vector2(0.55, 0.32) }, uNoise: { value: null },

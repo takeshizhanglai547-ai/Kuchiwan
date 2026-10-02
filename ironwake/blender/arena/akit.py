@@ -74,7 +74,12 @@ VARIANTS = {
     'heap': {'': ('#ffffff', 0.0), 'ore': ('#a8785e', 0.0), 'slag': ('#7a7672', 0.0), 'coal': ('#5a5856', 0.0),
              'dark': ('#8c8c8a', 0.0), 'dust': ('#c9c6c0', 0.0)},
     'ground': {'': ('#ffffff', 0.0)},
-    'far': {'': ('#ffffff', 0.0), 'dark': ('#9a9a9a', 0.0), 'rust': ('#c09080', 0.0)},
+    # far: alpha = surface class for materials.js SURF.far (0 concrete, 0.3 plated steel,
+    # 0.6 slip-formed shell, 0.9 plain: lattice members, pipes, soot)
+    'far': {'': ('#ffffff', 0.0), 'dark': ('#9a9a9a', 0.0), 'rust': ('#c09080', 0.3), 'steel': ('#8c8a86', 0.3),
+            'sdark': ('#666462', 0.3), 'shell': ('#f2eee8', 0.6), 'red': ('#c0604c', 0.6), 'white': ('#ffffff', 0.6),
+            'frame': ('#8a8784', 0.9), 'fdark': ('#5c5a58', 0.9), 'soot': ('#3c3a38', 0.9), 'pale': ('#d6d2ca', 0.0),
+            'oxide': ('#b07a62', 0.3)},
     'trim': {},
     'decal': {'yellow': ('#c8961c', 0.8), 'white': ('#aca69a', 0.72), 'black': ('#1a1a1a', 0.7), 'stain': ('#2a2622', 0.55),
               'rust': ('#6b3a22', 0.5), 'soot': ('#141210', 0.75), 'red': ('#a8321f', 0.75)},
@@ -501,6 +506,13 @@ def _round_nodes(path):
         if isinstance(v, dict):
             return {k: rd(x, nd) for k, x in v.items()}
         return v
+    # accessors: drop default byteOffset 0, bounds rounded OUTWARD to 1 mm (still valid bounds)
+    for acc in js.get('accessors', []):
+        if acc.get('byteOffset', None) == 0:
+            acc.pop('byteOffset')
+        if 'min' in acc and acc.get('componentType') == 5126:
+            acc['min'] = [int(v) if math.floor(v * 1000) / 1000 == int(v) else math.floor(v * 1000) / 1000 for v in acc['min']]
+            acc['max'] = [int(v) if math.ceil(v * 1000) / 1000 == int(v) else math.ceil(v * 1000) / 1000 for v in acc['max']]
     for n in js.get('nodes', []):
         for k, nd in (('translation', 4), ('scale', 5), ('rotation', 6), ('extras', 4)):
             if k in n:

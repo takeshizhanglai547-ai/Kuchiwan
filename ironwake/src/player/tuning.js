@@ -10,10 +10,12 @@
 //   AB: 0.6 s wind-up (brakes + charges), then launches at 110 and settles at 130 m/s;
 //       10% start cost + 13% EN/s
 //   EN: regen delay 1.3 s, redline lockout 2.0 s then +20% instantly, refill ~130%/s
-//   Camera: vertical FOV 61 (+6 boost, +10 AB, +3.5 fast climb / drop, spring 0.25 s), orbit 31 m behind (+2.2 m to the
-//           right of) a point just above the head, so the rig sits in the lower-centre at 22-30%
-//           of frame height and the right-arm rifle clears the torso. Thin props between the
-//           camera and the rig dissolve (screen-door cutout, camera.js) instead of hiding it.
+//   Camera: vertical FOV 54 (+4 boost, +6 AB, +3 fast climb / drop, spring 0.25 s; AB launch peak 63),
+//           orbit ~35 m behind (+2.2 m to the right of) a point just above the head, so the rig
+//           sits in the lower-centre at 22-30% of frame height and the right-arm rifle clears the
+//           torso. Thin props between the camera and the rig: the camera first SLIDES around them
+//           (up to 4 m sideways / 2.5 m up, eased 0.2 s); only what a slide cannot clear is cut
+//           out (clean hard-edged hole, cutout.js) instead of hiding the rig.
 // Every curve is plotted by `npm run telemetry` (.shots/telemetry.png).
 // EN is expressed in % (max 100).
 import { DEFAULT_EN } from '../mech/energy.js';
@@ -106,20 +108,20 @@ export const MOVE = {
 };
 
 // Framing note: the benchmark's three camera numbers (FOV 50, 26-32 m, rig 22-30% of frame
-// height) cannot all hold for a 10.7 m rig: at FOV 50 a 22-30% rig needs a 40-55 m camera.
-// Combat r1 critic: the 41 m camera hid the rifle behind the torso and let props cover the rig.
-// So the DISTANCE (31.6 m to the rig centre) and the FRAMING (~29%) are kept and the vertical FOV
-// is widened to 61 (a common third-person value; it also doubles the optic flow of the ground
-// near the camera = more speed read). Boost / AB widen it by the benchmark's increments.
+// height) cannot all hold for a 10.7 m rig: at FOV 50 a 22-30% rig needs a 37-50 m camera.
+// Combat r2 critic: FOV 61 (78 at the AB peak) shrank the rig against a fish-eyed world and lost
+// the reference's telephoto heft. So the lens is narrowed to 54 (AB peak 63) and the orbit moves
+// out to ~35 m from the rig centre, which keeps the rig at ~29% idle / ~27% boosting / >= 23% in
+// AB flight (npm run telemetry: rig_frame_pct_*).
 export const CAMERA = {
-  fov: 61,                  // vertical FOV (see the framing note above)
-  fovBoost: 6,              // sustained extra FOV while ground boosting fast (benchmark +6)
-  fovAB: 10,                // sustained extra FOV during assault boost flight (benchmark +10)
-  fovClimb: 3.5,            // sustained extra FOV at fast vertical speed (hover climb ~60 m/s, drops)
+  fov: 54,                  // vertical FOV (see the framing note above)
+  fovBoost: 4,              // sustained extra FOV while ground boosting fast
+  fovAB: 6,                 // sustained extra FOV during assault boost flight
+  fovClimb: 3,              // sustained extra FOV at fast vertical speed (hover climb ~60 m/s, drops)
   fovTau: 0.25,             // sustained-FOV spring (s)
   pivotHeight: 11.6,        // the camera ORBITS this point above the feet (~0.9 m over the head),
                             // so the reticle always sits just above the rig's shoulders
-  distance: 30.6,           // behind the orbit point (31.7 m to the rig centre)
+  distance: 34.2,           // behind the orbit point (~35 m to the rig centre)
   shoulder: 2.2,            // lateral offset (+ = camera to the mech's right): the right-arm rifle and
                             // its muzzle flash clear the torso silhouette; the rig sits a touch left
   heightOffset: 0.4,        // extra lift of the camera (keeps the rig low in frame when aiming up)
@@ -133,17 +135,38 @@ export const CAMERA = {
   maxLag: 9,                // hard cap (m)
   maxLagUp: 4.5,            // vertical cap (m): the rig never leaves the lower half on a climb
 
-  // Occlusion cutout: arena surfaces that sit between the camera and the rig (lamp masts, gantry
-  // legs, pipes, container stacks) dissolve with a screen-door dither inside a feathered box around
-  // the rig's projected silhouette, so thin props never hide it and the camera never has to pop.
-  // Floors / lids (up-facing surfaces) are never cut.
-  cutPad: 1.0,              // m of clearance around the rig's box
-  cutFeather: 2.6,          // m of dither ramp outside that box
+  // Occluder avoid (combat r2: a mast in front of the rig printed a stipple band, and a mast filled
+  // the frame during the QB chain): rays from the camera to points on the rig's silhouette (a
+  // padded outline, see slideRows); when props block any of them for slidePersist s, the camera
+  // slides to the cheapest FULLY clear offset (sideways up to slideMaxSide,
+  // up to slideMaxUp), eased by a critically damped spring (~0.2 s), and returns home once the home
+  // position has been clear for slideHome s. Only what no slide clears is cut out (below).
+  slideMaxSide: 4, slideMaxUp: 2.5, slideStepsSide: 3, slideStepsUp: 2,
+  slideOmega: 22,           // rad/s (95% settled in ~0.21 s)
+  slidePersist: 0.05,       // s: a mast sweeping past a fast strafe is left to the cutout
+  slideHome: 0.2,
+  slideRetry: 0.1,          // s between searches while nothing better is found
+  slideLead: 0.35,          // s of predicted motion a slide target must also stay clear for (no hunting)
+  // rig silhouette sample rows [height m, half width m, count]: legs, hips, arms + back weapons, head.
+  // Dense enough (~1.1 m apart) that a 0.6 m mast or beam cannot slip between two rays.
+  slideRows: [[1.6, 2.2, 5], [3.7, 1.65, 3], [5.5, 4.4, 9], [7.4, 4.4, 5], [9.4, 3.3, 5], [11.0, 1.6, 3]],
+
+  // Occlusion cutout (fallback): arena surfaces that sit between the camera and the rig and that no
+  // slide clears (a gantry leg right beside the rig, container stacks) are cut out with a HARD,
+  // clean-edged rounded box around the rig's projected silhouette (no dither stipple), irising
+  // open over cutEase. Floors / lids (up-facing surfaces) are never cut.
+  cutPad: 0.6,              // m of clearance around the rig's box
+  cutRound: 0.6,            // corner radius as a share of the box's smaller half size
   cutDepthMargin: 1.5,      // only surfaces at least this far in FRONT of the rig's near side
   cutHalfDepth: 3.0,        // m, half depth of the rig (backpack to gun muzzle)
-  cutStrength: 1.0,         // share of occluder pixels removed inside the box (the feather dithers)
-  cutHalfWidth: 4.4,        // m, half width of the rig's silhouette (arms + back weapons)
-  cutEase: 6,               // 1/s fade of the whole effect when it switches on/off
+  cutStrength: 1.0,         // 0..1 scale of the hole
+  cutHalfWidth: 3.9,        // m, half width of the rig's silhouette (arms + back weapons; ~3.7 measured)
+  cutEase: 6,               // 1/s iris of the whole effect when it switches on/off
+  // Near-prop cut: THIN props (masts, poles, legs) within nearRadius of the camera are cut near the
+  // eye (from their nearest point outward), so a mast skimming the lens never fills the frame.
+  nearRadius: 7,            // m
+  nearInflate: 0.9,         // m the collider box is grown sideways to cover the visual mesh (ladder cages)
+  nearInflateY: 2,          // m ... and vertically (base plates, lamp heads)
 
   // Collision: rays from the orbit point (centre + 4 near-plane corners). A blocker that a small
   // LIFT clears (roof edges, container stacks under the camera line) raises the camera instead of
@@ -157,7 +180,7 @@ export const CAMERA = {
   pushOutLambda: 5,
 
   // Quick boost: FOV punch (instant attack, ease-out decay) + micro shake + jolt
-  qbFovKick: 6,             // degrees
+  qbFovKick: 5,             // degrees
   qbFovHold: 0.06,          // s at full punch (covers the first frames of the jet)
   qbFovDecay: 0.45,         // then eases out (half at ~0.16 s, gone by the end of the 0.35 s jet)
   qbShake: 0.3,             // trauma
@@ -166,9 +189,9 @@ export const CAMERA = {
   // Assault boost: wind-up narrows the view a touch, launch punches it wide
   abChargeFov: -3,
   abChargePull: 2.5,        // m the camera creeps in during the wind-up
-  abFlightPull: 3.5,        // m closer during AB flight (keeps the rig >= 22% of frame at +10 FOV)
-  abFlightRise: 1.6,        // m higher during AB flight: looks down onto the pitched torso + boosters
-  abLaunchKick: 7,          // degrees on top of the sustained fovAB
+  abFlightPull: 2,          // m closer during AB flight (keeps the rig >= 22% of frame at +6 FOV)
+  abFlightRise: 1.2,        // m higher during AB flight: looks down onto the pitched torso + boosters
+  abLaunchKick: 3,          // degrees on top of the sustained fovAB (peak 63)
   abLaunchDecay: 0.55,
   abLaunchShake: 0.45,
   abFlightShake: 0.08,      // continuous rumble while flying

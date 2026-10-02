@@ -663,3 +663,86 @@ def ash_patch(rx=6.0, ry=4.0, h=0.32, seed=1):
             a_, b_, c_, d_ = i * segs + j, i * segs + j2, (i + 1) * segs + j2, (i + 1) * segs + j
             faces.append((a_, b_, top) if i == rings - 1 else (a_, b_, c_, d_))
     return Geo.from_pydata(verts, faces, 'heap:dust')
+
+
+# ============================================================================ MID-GROUND MASSES (r3)
+def slag_pots(seed=12):
+    """Three cast-steel slag pots on heavy cradles (one tipped, its crust spilled), ~6 m tall:
+    a mid-ground mass that blocks a lane without walling the yard. Local X = row."""
+    r = random.Random(seed)
+    g = Geo()
+    prof = [(0.0, 0.0), (1.5, 0.0), (1.7, 0.25), (2.4, 3.2), (2.65, 3.45), (2.65, 3.75), (2.3, 3.75), (2.15, 3.5), (0.0, 3.4)]
+    cradle = []
+    for k, x in enumerate((-6.5, 0.0, 6.5)):
+        if k == 2:
+            continue
+        g.merge(bxz(5.6, 4.6, 1.2, x, 0, 0.0, mat='steel:dark'))                       # cradle
+        for sy in (-1, 1):
+            g.merge(bxz(5.6, 0.5, 2.2, x, sy * 2.1, 1.2, mat='steel:dark'))
+        pot = P.lathe(prof, 24, 'steel:rust')
+        pot.move(x, 0, 1.4)
+        g.merge(pot)
+        for sy in (-1, 1):                                                               # trunnions + lifting lugs
+            g.merge(P.cylinder(0.5, 0.7, 12, bevel=0.0, mat='steel:dark').rotate((90, 0, 0)).move(x, sy * 2.75, 4.3))
+            g.merge(bxz(0.8, 0.3, 1.0, x, sy * 2.62, 3.8, mat='steel:dark'))
+        g.merge(P.dome(2.25, 0.5, segs=16, rings=3, mat='heap:slag').move(x, 0, 4.6))      # cooled slag crust
+        cradle.append(x)
+    # tipped pot lying on its side, crust spilled out in a frozen tongue
+    tp = P.lathe(prof, 24, 'steel:rust')
+    tp.transform(Matrix.Translation(V((8.6, 0.6, 2.65))) @ Matrix.Rotation(math.radians(-96), 4, 'Y') @ Matrix.Translation(V((0, 0, -1.9))))
+    g.merge(tp)
+    sp = P.dome(3.4, 0.55, segs=16, rings=3, mat='heap:slag')
+    sp.transform(Matrix.Translation(V((12.6, 0.4, -0.05))) @ Matrix.Diagonal((1.3, 0.8, 1.0, 1.0)))
+    g.merge(sp)
+    g.merge(bx(0.06, 3.2, 1.0, (-9.42, 0, 1.0), mat='trim:hazard2'))
+    g.merge(bxz(0.9, 0.6, 0.35, -2.9, -2.6, 0.0, mat='steel:yellow'))
+    cols = [((x, 0, 2.6), (5.6, 5.2, 5.2)) for x in cradle] + [((9.5, 0.4, 2.0), (7.2, 5.0, 4.0))]
+    return g, cols
+
+
+def crane_bogie(seed=13):
+    """Fallen gantry-crane leg: rail bogie with 4 wheels + sill beam, a 15 m leg stub snapped at
+    the top (torn plates), and the broken-off upper leg lying alongside. Mid-ground mass."""
+    g = Geo()
+    m = 'steel:crane'
+    g.merge(bxz(11.0, 3.4, 1.6, 0, 0, 0.9, mat='steel:dark'))
+    for x in (-3.6, -1.2, 1.2, 3.6):
+        for sy in (-1, 1):
+            g.merge(P.cylinder(0.75, 0.35, 16, bevel=0.0, mat='steel:rail').rotate((90, 0, 0)).move(x, sy * 1.2, 0.8))
+    g.merge(bxz(12.0, 2.4, 1.6, 0, 0, 2.5, mat=m))                                       # sill beam
+    g.merge(bxz(3.4, 3.4, 15.0, 0.5, 0, 4.1, mat=m))                                       # leg stub
+    for k in range(4):                                                                       # stiffeners
+        g.merge(bxz(3.6, 3.6, 0.3, 0.5, 0, 6.0 + k * 3.2, mat='steel:dark'))
+    for (dx, dy, a) in ((-1.0, -1.4, 0.3), (1.2, 1.3, -0.4), (1.9, -1.2, 0.6)):             # torn top plates
+        p = bx(1.6, 0.12, 2.2, (0, 0, 0), mat=m)
+        p.transform(Matrix.Translation(V((0.5 + dx, dy, 19.6))) @ Matrix.Rotation(a, 4, 'Y'))
+        g.merge(p)
+    g.merge(bxz(3.6, 0.1, 1.6, 0.5, -1.75, 6.5, mat='trim:hazard2'))
+    g.merge(bxz(0.1, 2.0, 1.2, 2.25, 0, 9.0, mat='trim:stencil@max40'))
+    # broken upper leg lying on the slab beside it (a lattice of plates)
+    up = Geo()
+    up.merge(bxz(18.0, 3.0, 3.0, 0, 0, 0.0, mat=m))
+    for k in range(5):
+        up.merge(bxz(0.3, 3.2, 3.2, -8 + k * 4.0, 0, -0.1, mat='steel:dark'))
+    up.transform(Matrix.Translation(V((2.0, 5.6, 0.0))) @ Matrix.Rotation(0.12, 4, 'Z') @ Matrix.Rotation(0.05, 4, 'X'))
+    g.merge(up)
+    g.merge(beacon(0.5, 0, 19.3, 0.5))
+    cols = [((0, 0, 1.7), (12.0, 3.6, 3.4)), ((0.5, 0, 11.6), (3.6, 3.6, 15.0)), ((2.0, 5.6, 1.5), (18.4, 3.6, 3.0), 0.12)]
+    return g, cols
+
+
+def billets_tall(L=9.0, layers=7):
+    """6 m crib-stacked steel billets (layers alternate direction, spacer bars), rust-bloomed."""
+    g = Geo()
+    for k in range(layers):
+        z = k * 0.88
+        n = 5
+        for i in range(n):
+            o = (i - (n - 1) / 2) * 1.8
+            if k % 2 == 0:
+                g.merge(bx(L, 0.82, 0.82, (0, o, z + 0.41), mat='steel:rust'))
+            else:
+                g.merge(bx(0.82, L, 0.82, (o, 0, z + 0.41), mat='steel:rust'))
+    g.merge(bxz(L + 0.6, L + 0.6, 0.18, 0, 0, -0.1, mat='steel:dark'))
+    g.merge(bx(0.05, 2.6, 0.8, (L / 2 + 0.03, 0, 1.0), mat='trim:stencil@max40'))
+    return g, [((0, 0, layers * 0.44), (L, L, layers * 0.88))]

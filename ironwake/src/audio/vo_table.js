@@ -4,73 +4,73 @@ export const VO_TABLE = {
  "start": {
   "id": "radio_start",
   "en": "WAKE-01, you are on the pier. Picket squad dead ahead: five walkers. Take them apart.",
-  "dur": 6.673,
-  "rate": 120
+  "dur": 7.575,
+  "rate": 104
  },
  "mt_half": {
   "id": "radio_mt_half",
   "en": "Three down. Watch your EN. Do not let it hit the red.",
-  "dur": 4.167,
-  "rate": 115
+  "dur": 3.88,
+  "rate": 106
  },
  "relays": {
   "id": "radio_relays",
   "en": "Squad is scrap. Three relay generators feed the port grid. Cut them.",
-  "dur": 5.575,
-  "rate": 107
+  "dur": 5.4,
+  "rate": 104
  },
  "relay_last": {
   "id": "radio_relay_last",
   "en": "One relay left. Grauwerk will not ignore this.",
-  "dur": 3.529,
-  "rate": 102
+  "dur": 3.645,
+  "rate": 100
  },
  "boss": {
   "id": "radio_boss",
   "en": "Fast heat signature inbound. That is Grauwerk's rig, CINDERHOUND. Do not let it corner you.",
-  "dur": 6.363,
-  "rate": 120
+  "dur": 6.865,
+  "rate": 108
  },
  "boss_stagger": {
   "id": "radio_boss_stagger",
   "en": "It is reeling. Hit it now!",
-  "dur": 2.161,
-  "rate": 118
+  "dur": 1.97,
+  "rate": 112
  },
  "boss_half": {
   "id": "radio_boss_half",
   "en": "It is bleeding coolant. Stay on it.",
-  "dur": 3.356,
-  "rate": 108
+  "dur": 2.935,
+  "rate": 104
  },
  "low_ap": {
   "id": "radio_low_ap",
   "en": "Your frame is coming apart, WAKE-01. Use a repair kit.",
-  "dur": 4.354,
-  "rate": 120
+  "dur": 4.68,
+  "rate": 106
  },
  "complete": {
   "id": "radio_complete",
   "en": "Target down. Pier 7 is quiet. Good work. Payment is cleared.",
-  "dur": 5.709,
-  "rate": 107
+  "dur": 6.06,
+  "rate": 98
  },
  "failed": {
   "id": "radio_failed",
   "en": "WAKE-01, respond... Signal lost. Contract void.",
-  "dur": 6.023,
-  "rate": 115
+  "dur": 6.3,
+  "rate": 96
  },
  "timeout": {
   "id": "radio_timeout",
   "en": "Out of time. Grauwerk reinforcements are on the pier. Pull out.",
-  "dur": 5.016,
+  "dur": 4.79,
   "rate": 104
  },
  "brief": {
   "id": "radio_brief",
   "en": "LEDGER here. Grauwerk Consolidated Security still holds Pier 7 of the Halvard Deep Foundry. A PK-2 Picket walker squad patrols the ore yard with Gnat drones in support. Three relay generators on the far quay feed the port's defense grid. Break the squad, cut the relays, and deal with whatever answers the alarm. Intercepts mention a rival rig on standby. Payment on completion, WAKE-01.",
-  "dur": 29.346,
+  "dur": 27.335,
   "rate": 100
  }
 };

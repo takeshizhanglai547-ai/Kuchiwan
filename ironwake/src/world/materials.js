@@ -245,6 +245,18 @@ const SURF = {
     vec3 aS = textureGrad(tA, uvS, dx, dy).rgb;
     vec3 dS = textureGrad(tD, uvS, dx, dy).rgb;
     vec3 nS = textureGrad(tN, uvS, dx, dy).xyz * 2.0 - 1.0;
+    // (r3) the 4 source slabs differ in mean roughness -> neighbouring 6 m cells alternated
+    // bright / dark in the wet sheen (checkerboard). Re-centre each source on the common mean;
+    // the slab-scale roughness variation now comes from a continuous field (below).
+    dS.g += textureLod(tD, vec2(0.5), 12.0).g - textureLod(tD, (src + 0.5) * 0.5, 8.0).g;
+    nS.xy *= 0.5;                                   // aggregate relief at half strength (no sandpaper)
+    // trowelled vs worn: the exposed-aggregate texture only shows in worn patches (traffic lanes,
+    // around structures, 5-20 m blotches); elsewhere a smooth float finish (the same slab seen
+    // through a wide filter) with faint relief -> two surface scales instead of one
+    float worn = smoothstep(0.38, 0.72, texture2D(tNoise, p / 19.0 + 0.61).g * 0.65 + texture2D(tNoise, p / 5.3 + 0.17).r * 0.35);
+    vec3 aSm = textureGrad(tA, uvS, dx * 9.0, dy * 9.0).rgb;
+    aS = mix(aSm * (0.97 + 0.06 * texture2D(tNoise, p / 2.1).b), aS, 0.25 + 0.75 * worn);
+    nS.xy *= 0.3 + 0.7 * worn;
     // un-rotate the tangent normal for the chosen orientation
     if (fract(hsh2 * 13.0) > 0.5) nS.y = -nS.y;
     if (fract(hsh2 * 7.0) > 0.5) nS.x = -nS.x;
@@ -254,6 +266,14 @@ const SURF = {
     vec3 aA = texture2D(tA2, uvA).rgb;
     vec3 dA = texture2D(tD2, uvA).rgb;
     vec3 nA = texture2D(tN2, uvA).xyz * 2.0 - 1.0;
+    // (r3) two surface scales on the ash / ballast too: wind-blown fine ash settles in soft drifts
+    // over the coarse ballast (smooth, slightly paler, little relief), anti-tiled by a second,
+    // rotated read of the ballast at 0.37x
+    float aDrift = smoothstep(0.32, 0.68, texture2D(tNoise, p / 13.0 + 0.29).r * 0.6 + texture2D(tNoise, p / 4.1 + 0.83).g * 0.4);
+    vec3 aA2 = texture2D(tA2, mat2(0.6, -0.8, 0.8, 0.6) * p / 21.6 + 0.4).rgb;
+    aA = mix(aA, aA2, 0.35);
+    aA = mix(aA, texture2D(tA2, uvA, 3.5).rgb * 1.07, aDrift * 0.8);
+    nA.xy *= 1.0 - 0.75 * aDrift;
     // --- splat (1 px = 1 m inside +/-256 m); beyond: dusty ash plain
     vec2 su = (p + 256.0) / 512.0;
     vec3 spl = texture2D(tSplat, su).rgb;
@@ -280,32 +300,102 @@ const SURF = {
     vec3 tn = normalize(mix(nS, nA, bl));
     alb *= (0.5 + 0.8 * m) * 0.8;
     alb *= mix(vec3(1.0), vec3(1.06, 0.98, 0.9), texture2D(tNoise, p / 151.0).b);
-    // detail overlay near the camera
+    // detail overlay near the camera: two octaves (1.3 m, and 0.6 m rotated 37 deg) at reduced
+    // strength -> fine grit instead of a single-scale orange-peel
     vec3 det = texture2D(tDetail, p / 1.3).rgb;
+    vec3 det2 = texture2D(tDetail, mat2(0.799, 0.602, -0.602, 0.799) * p / 0.6 + 0.37).rgb;
     float dfade = 1.0 - smoothstep(12.0, 60.0, camD);
-    alb *= mix(1.0, 0.72 + 0.56 * det.r, dfade);
-    tn.xy += (det.gb * 2.0 - 1.0) * 0.6 * dfade;
+    alb *= mix(1.0, (0.8 + 0.4 * det.r) * (0.9 + 0.2 * det2.r), dfade);
+    tn.xy += ((det.gb * 2.0 - 1.0) * 0.26 + (det2.gb * 2.0 - 1.0) * 0.14) * dfade;
     // soot / contact darkening around structures
     alb *= 1.0 - 0.55 * spl.b;
+    // stains that break the slab field: oil blooms (dark, satin), rust bleed around the contact
+    // soot of structures, pale ash-dust fans
+    float fbm = texture2D(tNoise, p / 23.0).r * 0.6 + texture2D(tNoise, p / 7.3 + 0.21).g * 0.4;
+    float oil = smoothstep(0.66, 0.8, texture2D(tNoise, p / 17.0 + 0.53).b) * (1.0 - spl.r) * smoothstep(0.35, 0.6, fbm);
+    float rustS = smoothstep(0.15, 0.5, spl.b) * smoothstep(0.5, 0.75, texture2D(tNoise, p / 9.0 + 0.7).r);
+    float dustF = smoothstep(0.62, 0.85, texture2D(tNoise, p / 41.0 + 0.11).g) * (1.0 - spl.b);
+    alb = mix(alb, alb * vec3(0.42, 0.4, 0.38), oil * 0.75);
+    alb = mix(alb, alb * vec3(1.05, 0.72, 0.52), rustS * 0.5);
+    alb = mix(alb, mix(alb, vec3(0.2, 0.19, 0.18), 0.5), dustF * 0.45);
     // puddles: height-aware threshold of the wet mask, glossy dark water, flat normal
-    float wetN = spl.g + (texture2D(tNoise, p / 23.0).r - 0.5) * 0.35 - dat.b * 0.25;
+    float wetN = spl.g + (fbm - 0.5) * 0.35 - dat.b * 0.25;
     float pud = smoothstep(0.42, 0.47, wetN);
     float damp = smoothstep(0.25, 0.42, wetN);
     alb *= mix(1.0, 0.7, damp);
     alb = mix(alb, alb * 0.5 + vec3(0.006, 0.008, 0.009), pud);
     tn = normalize(mix(tn, vec3(0.0, 0.0, 1.0), pud * 0.92));
     diffuseColor.rgb = alb;
-    iwRough = mix(mix(dat.g, dat.g * 0.62, damp), 0.04, pud);
+    // roughness: texture micro-variation + a continuous (non-periodic per cell) field, so the wet
+    // sheen breaks up in soft patches, never cell by cell
+    float rField = (fbm - 0.5) * 0.18 + (texture2D(tNoise, p / 61.0 + 0.4).b - 0.5) * 0.12;
+    float rBase = clamp(dat.g + rField - oil * 0.25 + dustF * 0.08, 0.08, 1.0);
+    iwRough = mix(mix(rBase, rBase * 0.62, damp), 0.04, pud);
     iwPud = pud;
     iwMetal = 0.0;
     iwAO = mix(dat.r, 1.0, pud) * (1.0 - 0.35 * spl.b);
     iwN = normalize(vec3(tn.x, tn.z, tn.y));    // tangent (u=+x, v=+z) -> world
   `,
+  // FAR KIT (400 m - 3 km): no texture fetch per map, everything procedural at the scale that
+  // still reads at 0.3-1.2 m/px: course joints / band rings every 6-8 m (per-structure period),
+  // plate or form-panel patchwork (per-panel tone + facet tilt so lathes stop reading as smooth
+  // tubes), hanging soot / rain streaks (5 x 90 m + 13 x 160 m octaves), rust bleed below the
+  // joints on steel, a darker 15 m splash / soot band at the base, ash on top faces.
+  // vTint.a = surface class (akit.VARIANTS['far']): 0 concrete, 0.3 plated steel, 0.6 slip-formed
+  // shell (stacks), 0.9 lattice / soot (no panelling).
   far: /* glsl */`
     vec3 n0 = normalize(vWNrm);
-    float m = macro(vWPos * 0.25);
-    diffuseColor.rgb = vec3(0.23, 0.215, 0.2) * vTint.rgb * (0.75 + 0.5 * m) * (0.8 + 0.2 * n0.y);
-    iwRough = 0.9; iwMetal = 0.0; iwAO = 1.0; iwN = n0;
+    vec3 p = vWPos;
+    float m = macro(p * 0.25);
+    float cls = vTint.a;
+    float steelC = step(0.15, cls) * step(cls, 0.45);
+    float shellC = step(0.45, cls) * step(cls, 0.75);
+    float plain = step(0.75, cls);
+    float conc = 1.0 - steelC - shellC - plain;
+    float vert = 1.0 - abs(n0.y);
+    vec2 w2 = abs(n0.xz) / max(abs(n0.x) + abs(n0.z), 1e-3);
+    float hu = p.x * w2.y + p.z * w2.x;                    // horizontal coordinate along the face
+    float sid = h12(floor(p.xz / 70.0) + 0.37);            // per-structure seed (70 m cells)
+    // courses: stiffener bands on steel shells (6-8 m), lift joints on concrete (5-7 m),
+    // faint lifts on slip-formed shells; AA-faded once sub-pixel
+    float per = mix(mix(5.0, 7.0, sid), mix(6.0, 8.0, sid), steelC);
+    float yy = (p.y + 10.0) / per;
+    float fy = fract(yy);
+    float fwy = fwidth(yy);
+    float aaY = 1.0 - smoothstep(0.1, 0.35, fwy);
+    float jY = (1.0 - smoothstep(0.04, 0.04 + fwy * 1.5, min(fy, 1.0 - fy))) * aaY * vert * (1.0 - plain);
+    float jAmt = steelC * 0.4 + conc * 0.16 + shellC * 0.1;
+    // weathering blotches (10-40 m), hanging soot (5 x 90 m + 13 x 160 m), rain wash
+    float blot = smoothstep(0.5, 0.8, texture2D(tNoise, vec2(hu / 23.0, p.y / 31.0) + sid).g);
+    float sk = texture2D(tNoise, vec2(p.x / 5.0, p.y / 90.0)).b * w2.y + texture2D(tNoise, vec2(p.z / 5.0, p.y / 90.0)).b * w2.x;
+    float sk2 = texture2D(tNoise, vec2(p.x / 13.0 + 0.3, p.y / 160.0)).r * w2.y + texture2D(tNoise, vec2(p.z / 13.0 + 0.3, p.y / 160.0)).r * w2.x;
+    float soot = smoothstep(0.6, 0.88, sk * 0.6 + sk2 * 0.5) * vert;
+    float wash = smoothstep(0.66, 0.92, 1.0 - sk) * smoothstep(0.45, 0.7, sk2) * vert * conc;
+    // rust bleed hanging below the rings on steel, rust patches on steel
+    float colA = texture2D(tNoise, vec2(hu / 7.0, floor(yy) * 0.173 + 0.31)).b;
+    float run = smoothstep(0.62, 0.8, colA) * smoothstep(0.2, 1.0, fy) * vert * steelC;
+    float rustP = blot * steelC;
+    vec3 alb = vec3(0.23, 0.215, 0.2) * vTint.rgb * (0.74 + 0.5 * m) * (0.88 + 0.24 * sid);
+    alb *= 1.0 - 0.12 * blot * (1.0 - steelC);
+    alb = mix(alb, vec3(0.12, 0.05, 0.022) * (0.8 + 0.5 * m), rustP * 0.45 + run * 0.4);
+    alb = mix(alb, alb * vec3(0.36, 0.34, 0.32), soot * (0.62 + 0.3 * shellC));
+    alb = mix(alb, alb * 1.16, wash * 0.5);
+    alb *= 1.0 - jAmt * jY;
+    // base splash / soot band (far kit stands on the lower yard / mole at ~ -10 m)
+    float band = 1.0 - smoothstep(-10.0, 5.0 + 10.0 * m, p.y);
+    alb = mix(alb, alb * vec3(0.5, 0.47, 0.44), band * vert);
+    // ash on top faces
+    float up = smoothstep(0.6, 0.95, n0.y);
+    alb = mix(alb, vec3(0.2, 0.19, 0.18), up * 0.5);
+    diffuseColor.rgb = alb;
+    // shading: rings / lips catch the low sun (normal tilted up just above each joint); plates
+    // of a steel shell are faintly faceted so lathes stop reading as smooth tubes
+    vec3 tng = normalize(vec3(-n0.z, 0.0, n0.x) + vec3(1e-4, 0.0, 0.0));
+    float lip = (1.0 - smoothstep(0.0, 0.12 + fwy * 1.5, fy)) * aaY * vert * (steelC + 0.5 * conc);
+    float facet = (h12(vec2(floor(hu / 3.4), floor(yy)) + 2.1) - 0.5) * steelC * 0.16 * vert;
+    iwN = normalize(n0 + tng * facet + vec3(0.0, 1.0, 0.0) * lip * 0.5);
+    iwRough = clamp(0.88 - 0.22 * steelC - 0.12 * wash + 0.06 * soot, 0.5, 1.0);
+    iwMetal = 0.0; iwAO = 1.0 - 0.35 * jY * jAmt * 2.0;
   `,
   trim: /* glsl */`
     vec4 tA0 = texture2D(tA, vUvI);
@@ -466,7 +556,7 @@ export function createArenaMaterials(T) {
         float m = macro(vWPos);
         diffuseColor.rgb = vTint.rgb * (0.85 + 0.3 * m);
         diffuseColor.a = cov * vTint.a * (0.75 + 0.5 * texture2D(tNoise, vWPos.xz / 9.0).g);
-        iwRough = mix(0.8, 0.45, step(0.3, 1.0 - max(max(vTint.r, vTint.g), vTint.b))); iwMetal = 0.0;
+        iwRough = mix(0.82, 0.6, step(0.3, 1.0 - max(max(vTint.r, vTint.g), vTint.b))); iwMetal = 0.0;   // satin, never a mirror pattern
         iwAO = 0.72;   // same cavity/contact occlusion the slab under the paint gets (no glowing paint in shadow)
         iwN = normalize(vWNrm);   // ground markings AND wall runs (soot curtains, rust streaks)
       `,
@@ -487,6 +577,7 @@ export function createArenaMaterials(T) {
           float ph = h1(floor(vWPos / 3.0));
           bool isRed = c.r > 0.8 && c.g < 0.1;
           bool isFurnace = c.r > 0.8 && c.g > 0.05 && c.g < 0.3 && c.b < 0.1;   // furnace / ember / haze / dim
+          I *= isRed ? 1.0 : (isFurnace ? 1.9 : 1.7);   // (render r3: highlight budget) brighter sodium heads / furnace mouths
           if (isRed) I *= 0.12 + 0.88 * step(0.62, fract(uTime * 0.55 + ph));          // aviation beacons blink
           else if (isFurnace) {                                                         // furnace flicker
             float sp = sin(vWPos.x * 0.11 + vWPos.z * 0.07) * 1.7 + sin(vWPos.y * 0.23 - vWPos.x * 0.05) * 1.3;
@@ -545,7 +636,7 @@ export function createArenaMaterials(T) {
       fragExtra: 'float iwSlagHeat = 0.0;\n',
       emissive: /* glsl */`
         vec3 hot = mix(vec3(1.0, 0.15, 0.01), vec3(1.0, 0.55, 0.2), smoothstep(0.55, 1.0, iwSlagHeat));
-        totalEmissiveRadiance = hot * pow(iwSlagHeat, 1.4) * (3.2 * (0.85 + 0.15 * sin(uTime * 1.7 + vWPos.x * 0.21)));
+        totalEmissiveRadiance = hot * pow(iwSlagHeat, 1.4) * (5.4 * (0.85 + 0.15 * sin(uTime * 1.7 + vWPos.x * 0.21)));   // (render r3: +0.75 EV, tight bloom)
       `,
     });
     mats.M_slag = m;

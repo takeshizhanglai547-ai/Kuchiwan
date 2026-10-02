@@ -313,6 +313,192 @@ def clean_normal(nrm, flat=0.012):
     return out
 
 
+# ============================================================================ r3 weathering post-pass
+# Runs on each set's composite (a.maps) with the raw bake passes still in memory. It pushes the
+# look-dev wear so it SURVIVES the engine (critic r2: in-engine slate read as clean satin):
+#   * chips grown to >= ~4 cm and written as BARE STEEL (#8E9296, metal 1, rough 0.28-0.35)
+#   * per-part grime gradient (albedo x0.75 over the lower 30% of every part) + AO/cavity grime
+#   * paint roughness floor 0.5 (no broad specular sheet on the sun side), glass 0.06
+#   * soot (#1A1A1A) within 0.6 m of every nozzle exit and gun muzzle
+#   * radial throat ramp (#FFF4D6 -> #FFB04A @40% -> #7A2A10 rim) on every thruster throat disc,
+#     a dim ember on the throat neck, and the eye slit's hot core
+POST = dict(chip_grow=2.0, chip_lo=0.28, chip_hi=0.55, bare=((0.22, 0.23, 0.24), (0.31, 0.32, 0.33)),
+            grime_bottom=0.75, grime_frac=0.30, ao_grime=0.45, cav_grime=0.3, paint_rough_min=0.5,
+            soot_r=0.6, soot_amt=0.5, soot_col=(0.010, 0.010, 0.010), glass_rough=0.06,
+            slit_core_x=0.15, slit_core_w=0.2, slit_min=0.32)
+PAINTS = ('paint_primary', 'paint_secondary', 'paint_dark', 'paint_accent', 'hazard')
+
+
+def _s2l(x):
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+def object_id_map(objs, W, H, grow=4):
+    """Rasterise each object's UV triangles (image order) -> int32 map, -1 = empty; grown by `grow`
+    px so the bake margins inherit their island's object."""
+    from PIL import ImageDraw
+    im = Image.new('I', (W, H), 0)
+    d = ImageDraw.Draw(im)
+    for k, o in enumerate(objs):
+        me = o.data
+        me.calc_loop_triangles()
+        nl = len(me.loops)
+        uv = np.empty(nl * 2, np.float32)
+        me.uv_layers[0].data.foreach_get('uv', uv)
+        uv = uv.reshape(-1, 2)
+        tl = np.empty(len(me.loop_triangles) * 3, np.int32)
+        me.loop_triangles.foreach_get('loops', tl)
+        P_ = uv[tl.reshape(-1, 3)]
+        xs = P_[..., 0] * W
+        ys = (1.0 - P_[..., 1]) * H
+        for i in range(len(xs)):
+            d.polygon([(xs[i, 0], ys[i, 0]), (xs[i, 1], ys[i, 1]), (xs[i, 2], ys[i, 2])], fill=k + 1)
+    arr = np.array(im, np.int32)
+    for _ in range(grow):     # 3x3 max dilation into the empty texels only
+        p = np.pad(arr, 1, mode='edge')
+        m = np.maximum.reduce([p[1:-1, 1:-1], p[:-2, 1:-1], p[2:, 1:-1], p[1:-1, :-2], p[1:-1, 2:]])
+        arr = np.where(arr > 0, arr, m)
+    return arr - 1
+
+
+def post_weather(a, tag, objs, lo, hi, P=None):
+    """r3 post-pass on a.maps (uint8, image order) using a.raw (float, Blender order)."""
+    from iwkit import texcomp as TC
+    P = dict(POST, **(P or {}), **getattr(a, 'post', {}))
+    raw = a.raw
+    maps = a.maps
+    H, W = maps['basecolor'].shape[:2]
+    flip = (lambda x: x[::-1])
+    pal = {m.name: i for i, m in enumerate(a.palette)}
+    mid = np.rint(flip(raw['matid'])[..., 0] * 255.0).astype(np.int32)
+
+    def is_(*names):
+        ids = [pal[n] for n in names if n in pal]
+        return np.isin(mid, ids) if ids else np.zeros(mid.shape, bool)
+    valid = flip(raw['albedo'])[..., 3] > 0.5
+    paint = is_(*PAINTS) & valid
+    base = _s2l(maps['basecolor'].astype(np.float32) / 255.0)
+    orm = maps['orm'].astype(np.float32) / 255.0
+    emis = _s2l(maps['emissive'].astype(np.float32) / 255.0)
+    lo_, hi_ = np.array(lo, np.float32), np.array(hi, np.float32)
+    wp = lo_ + flip(raw['wpos'])[..., :3].astype(np.float32) * (hi_ - lo_)
+    ao = TC.blur(flip(raw['ao'])[..., 0], 2) if 'ao' in raw else np.ones((H, W), np.float32)
+    cav = TC.blur(flip(raw['masks'])[..., 1], 1)
+    nz = flip(raw['noise']).astype(np.float32)
+    n1 = TC._uniform(nz[..., 0], valid)
+    n3 = TC._uniform(nz[..., 2], valid)
+    wear0 = maps['_masks']['wear'].astype(np.float32) / 255.0 if '_masks' in maps else np.zeros((H, W), np.float32)
+    # --- 1. chips grown (~2 px each way = 4 cm bands at ~95 px/m) and forced to bare steel
+    rad = max(1, int(round(P['chip_grow'] * W / 2048.0)))           # ~2 cm at any atlas size
+    grown = TC.smoothstep(P['chip_lo'], P['chip_hi'], TC.blur(wear0, rad))
+    chip = np.clip(np.maximum(wear0, grown * (0.55 + 0.45 * n3)), 0, 1) * paint
+    chip = np.where(chip > 0.35, np.maximum(chip, 0.9), chip * 0.6)
+    # per-preset 'wear' factor (e.g. a softer chip level on pale pads)
+    wtab = np.array([float(a.presets.get(m.name, {}).get('wear', 1.0)) for m in a.palette], np.float32)
+    chip = chip * np.clip(wtab[np.clip(mid, 0, len(wtab) - 1)], 0, 1)
+    bare = TC.lerp(np.asarray(P['bare'][0], np.float32), np.asarray(P['bare'][1], np.float32), n1 * 0.6 + n3 * 0.4)
+    base = TC.lerp(base, bare, chip)
+    orm[..., 2] = np.where(paint, TC.lerp(orm[..., 2], 1.0, chip), orm[..., 2])
+    orm[..., 1] = np.where(paint, TC.lerp(orm[..., 1], 0.28 + 0.07 * n1, chip), orm[..., 1])
+    # --- 2. per-part grime gradient (lower 30% of every part) + AO / cavity grime on paint
+    oid = object_id_map(objs, W, H)
+    tpart = np.ones((H, W), np.float32)
+    for k, o in enumerate(objs):
+        zs = [(o.matrix_world @ Vector(c)).z for c in o.bound_box]
+        z0, z1 = min(zs), max(zs)
+        m = oid == k
+        if z1 - z0 > 1e-3 and m.any():
+            tpart[m] = (wp[..., 2][m] - z0) / (z1 - z0)
+    if os.environ.get('IW_POST_DEBUG'):
+        vv = valid & (oid >= 0)
+        log(f'post-debug {tag}: oid coverage {np.mean(oid[valid] >= 0):.3f}, tpart p10/50/90 '
+            f'{np.percentile(tpart[vv], [10, 50, 90]).round(3).tolist()}, wp z p10/50/90 '
+            f'{np.percentile(wp[..., 2][vv], [10, 50, 90]).round(2).tolist()}, wear0 mean {wear0[paint].mean():.3f}')
+        Image.fromarray((np.clip(tpart, 0, 1) * 255).astype(np.uint8)).save(os.path.join(a.work, f'dbg_tpart_{tag}.png'))
+        Image.fromarray((np.clip(wear0, 0, 1) * 255).astype(np.uint8)).save(os.path.join(a.work, f'dbg_wear0_{tag}.png'))
+    # NB texcomp.smoothstep only works with ascending edges (a descending pair clamps the divisor to 1e-6
+    # and inverts into a step), hence 1 - smoothstep(0, f, t)
+    gb = (1.0 - TC.smoothstep(0.0, P['grime_frac'], np.clip(tpart, 0, 1))) * (0.75 + 0.25 * n1)
+    gfac = 1.0 - (1.0 - P['grime_bottom']) * gb
+    gfac *= TC.lerp(np.ones_like(ao), ao, P['ao_grime']) * (1.0 - P['cav_grime'] * cav)
+    keep = valid & ~is_('glow', 'glow_rim', 'lens', 'lens_slit', 'lens_dim', 'blade_lens', 'marker_amber',
+                        'marker_cyan', 'marker_red', 'glass', 'chrome')
+    base = np.where(keep[..., None], base * gfac[..., None], base)
+    orm[..., 1] = np.where(keep & paint, np.clip(orm[..., 1] + 0.18 * gb, 0, 1), orm[..., 1])
+    # --- 3. roughness floors: painted (unchipped) >= 0.5; glass 0.06
+    orm[..., 1] = np.where(paint & (chip < 0.5), np.maximum(orm[..., 1], P['paint_rough_min']), orm[..., 1])
+    gl = is_('glass')
+    orm[..., 1] = np.where(gl, P['glass_rough'], orm[..., 1])
+    a._glass_mask = gl   # finalize_set skips the global roughness floor there
+    # --- 4. soot around every nozzle exit / muzzle (world distance)
+    srcs = [(t[3], t[4]) for t in getattr(a, 'throats', []) if len(t) > 3] + list(getattr(a, 'soot_points', []))
+    if srcs:
+        soot = np.zeros((H, W), np.float32)
+        for c, rr in srcs:
+            R_ = P['soot_r'] + rr
+            dd = np.linalg.norm(wp - np.asarray(c, np.float32), axis=-1)
+            soot = np.maximum(soot, np.clip(1.0 - dd / R_, 0, 1) ** 1.4)
+        soot *= (0.6 + 0.4 * n1) * valid * keep
+        base = TC.lerp(base, np.asarray(P['soot_col'], np.float32), soot * P['soot_amt'])
+        orm[..., 1] = TC.lerp(orm[..., 1], 0.85, soot * 0.5)
+    # --- 5. throat ramp (radial) + neck ember
+    glow, rim = is_('glow') & valid, is_('glow_rim') & valid
+    if getattr(a, 'throats', None) and (glow.any() or rim.any()):
+        ramp_p = np.array([0.0, 0.4, 0.85, 1.0], np.float32)
+        ramp_c = _s2l(np.array([[255, 244, 214], [255, 176, 74], [122, 42, 16], [40, 12, 4]], np.float32) / 255.0)
+        best = np.full((H, W), 1e9, np.float32)
+        rho = np.zeros((H, W), np.float32)
+        depth = np.zeros((H, W), np.float32)
+        for t in a.throats:
+            c, dvec, r_t = np.asarray(t[0], np.float32), np.asarray(t[1], np.float32), t[2]
+            v = wp - c
+            ax_ = v @ dvec
+            rad = np.linalg.norm(v - ax_[..., None] * dvec, axis=-1)
+            dist = np.abs(ax_) + np.maximum(rad - r_t, 0)
+            m = dist < best
+            best = np.where(m, dist, best)
+            rho = np.where(m, rad / max(r_t, 1e-4), rho)
+            depth = np.where(m, np.clip(ax_ / 0.1, 0, 1), depth)     # 0 at the disc .. 1 at the liner edge
+        col = np.stack([np.interp(np.clip(rho, 0, 1), ramp_p, ramp_c[:, k]) for k in range(3)], -1)
+        emis = np.where(glow[..., None], col, emis)
+        ember = _s2l(np.array([122, 42, 16], np.float32) / 255.0) * (1.0 - 0.8 * depth)[..., None] * 0.7
+        emis = np.where(rim[..., None], ember, emis)
+    # --- 6. eye slit: hot core over the main lens, dimmer toward the far end
+    sl = is_('lens_slit') & valid
+    if sl.any():
+        x = wp[..., 0]
+        f = P['slit_min'] + (1.0 - P['slit_min']) * np.exp(-((x - P['slit_core_x']) / P['slit_core_w']) ** 2)
+        emis = np.where(sl[..., None], emis * f[..., None], emis)
+    maps['basecolor'] = (np.clip(TC.lin_to_srgb(base), 0, 1) * 255 + 0.5).astype(np.uint8)
+    maps['orm'] = (np.clip(orm, 0, 1) * 255 + 0.5).astype(np.uint8)
+    maps['emissive'] = (np.clip(TC.lin_to_srgb(emis), 0, 1) * 255 + 0.5).astype(np.uint8)
+    log(f'post-weather {tag}: chips {chip[paint].mean():.3f}, grime-gradient {gb[keep].mean():.3f}, '
+        f'soot sources {len(srcs)}, throats {len(getattr(a, "throats", []))}')
+
+
+def merge_glow_materials(a):
+    """One material per texture set (r3: saves ~1 draw call per part): every face uses the set's
+    *_glow atlas material (the emissive map is black outside the glow texels)."""
+    n = 0
+    for o in a.bake_objects():
+        mats = [s.material for s in o.material_slots]
+        if not mats:
+            continue
+        glow = next((m for m in mats if m and m.name.endswith('_glow')), None)
+        if glow is None:
+            base = mats[0]
+            glow = bpy.data.materials.get(base.name + '_glow') if base else None
+        if glow is None:
+            continue
+        me = o.data
+        me.polygons.foreach_set('material_index', [0] * len(me.polygons))
+        me.materials.clear()
+        me.materials.append(glow)
+        me.update()
+        n += 1
+    log(f'materials: {n} meshes now use one atlas material per set')
+
+
 def bake_sets(a, sets, weathering=None, reuse=False, sizes=None, **bake_kw):
     """Bake each texture set {tag: [objs]} into its own atlas + material M_<asset>_<tag>.
     Returns {tag: {'paths': final map paths}}."""
@@ -328,6 +514,7 @@ def bake_sets(a, sets, weathering=None, reuse=False, sizes=None, **bake_kw):
             a.bake_objects = (lambda objs=objs: list(objs))
             a.name = f'{name0}_{tag}'
             a.bake(weathering=weathering, reuse=reuse, **bake_kw)
+            post_weather(a, tag, objs, lo, hi)
             a.raw = None
             a.maps.pop('_masks', None)
             paths = finalize_set(a, (sizes or {}).get(tag, {}))
@@ -343,7 +530,11 @@ def finalize_set(a, sizes):
     sizes and point this set's atlas material images at them."""
     old = {k: os.path.abspath(v) for k, v in a.map_paths.items()}
     orm = a.maps['orm']
+    gl = getattr(a, '_glass_mask', None)
+    keep = orm[..., 1].copy() if gl is not None else None
     np.maximum(orm[..., 1], np.uint8(round(K.ROUGH_FLOOR * 255)), out=orm[..., 1])
+    if gl is not None:
+        orm[..., 1] = np.where(gl, keep, orm[..., 1])   # dark lens glass keeps its gloss (nanSafe guards HDR)
     a.maps['normal'] = clean_normal(a.maps['normal'])
     out = os.path.join(a.work, 'final')
     paths = T.save_maps(a.maps, out, a.name + '_f', sizes=sizes)
@@ -642,6 +833,7 @@ def run(name, build_fn, decal_fn, set_of, scheme='player', colors=None, seed=7, 
         sizes[tag] = sz
     bake_sets(a, sets, weathering=weathering, reuse=args.reuse_bakes, sizes=sizes, **kw)
     build_cards(a)
+    merge_glow_materials(a)
     # Blender -> GLB (placeholder JPEGs) -> gltfpack (meshopt) -> WebP from the lossless sources
     a.cleanup_decals()
     a.root['iw_tris'] = iw.tri_count(a.parts)

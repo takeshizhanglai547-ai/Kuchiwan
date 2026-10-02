@@ -1,44 +1,54 @@
 {
- "tris": 13346,
- "parts": 6,
+ "tris": 14842,
+ "parts": 8,
  "colliders": 0,
  "decals": 5,
- "texel_density_px_per_m": 159.6,
+ "texel_density_px_per_m": 154.3,
  "res": 1024,
  "timings_s": {
   "model": 0.8,
-  "bake.total": 0.5,
-  "composite": 3.4,
+  "bake.albedo": 5.7,
+  "bake.matid": 3.4,
+  "bake.noise": 4.7,
+  "bake.wnormal": 4.5,
+  "bake.wpos": 5.0,
+  "bake.masks": 21.4,
+  "bake.ao": 12.6,
+  "bake.normal": 7.6,
+  "bake.total": 66.3,
+  "composite": 3.3,
   "export.glb": 0.3,
   "export.gltfpack": 0.1,
   "export.fbx": 0.1
  },
- "elapsed_s": 18.1,
- "glb_bytes": 351300,
+ "elapsed_s": 85.0,
+ "glb_bytes": 371492,
  "glb_breakdown": {
-  "bytes": 351300,
+  "bytes": 371492,
   "images": {
-   "enemy_drone_f_normal": 50540,
-   "enemy_drone_f_orm": 37636,
-   "enemy_drone_f_basecolor": 88344,
-   "enemy_drone_f_emissive": 1202,
+   "enemy_drone_f_normal": 51122,
+   "enemy_drone_f_orm": 38520,
+   "enemy_drone_f_basecolor": 87644,
+   "enemy_drone_f_emissive": 1066,
    "enemy_drone_decals": 22638
   },
-  "image_bytes": 200360,
-  "geometry_bytes": 150940
+  "image_bytes": 200990,
+  "geometry_bytes": 170502
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_drone.fbx",
  "previews": [],
  "parts_tris": {
-  "body_geo": 10892,
+  "body_geo": 12210,
   "eye_geo": 664,
   "eye_rim_geo": 96,
   "beacon_geo": 192,
-  "rotor_geo": 752,
-  "rotor_1_geo": 750
+  "rotor_geo": 432,
+  "rotor_1_geo": 432,
+  "fanblades_0_geo": 408,
+  "fanblades_1_geo": 408
  },
- "uv_coverage": 0.471,
+ "uv_coverage": 0.464,
  "cards": 7,
- "total_s": 18.2
+ "total_s": 85.1
 }

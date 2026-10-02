@@ -5,7 +5,8 @@
 //   ENEMY_WEAPONS    enemy-only weapon defs added to WEAPONS (guarded: an entry the weapons
 //                    lane already defines wins)
 //   leadAim()        imperfect lead: uses the SMOOTHED target velocity the shooter perceived
-//                    (a quick boost breaks the prediction, which is what rewards evasion)
+//                    (a quick boost breaks the prediction, which is what rewards evasion) and
+//                    optionally its smoothed acceleration (second-order lead, walkers)
 //   Tokens           attack tokens: caps how many units of a group may fire at once
 //   pointFree()      clearance test for a candidate ground position
 //   losFrom()        line of sight from a ground point at a given height to a world point
@@ -32,10 +33,11 @@ export const AI_FX = {
   // big-attack tell on the rival rig (blade / missiles / charge / plunge): hot core star + orange
   // anamorphic flare + red halo. Sized to mark the WEAPON, not to blank the silhouette: growth with
   // camera distance is damped (legible < 1) so at 80 m it is still smaller than the torso.
+  // r3: ~30 % tighter (critic: at 50-60 m the pulsing tell + hit sparks blanked the whole torso)
   iw_glint_big: [
-    { shape: 'star', count: [1, 1], life: [0.1, 0.12], size: [2.0, 2.9], color0: WHITE_HOT, alpha: [1, 0.3], variant: [0, 3], inherit: 1, nosoft: true, legible: 0.7 },
-    { shape: 'flare', count: [1, 1], life: [0.1, 0.12], size: [9, 4.5], color0: ORANGE, alpha: [0.7, 0], inherit: 1, nosoft: true, legible: 0.6 },
-    { shape: 'glow', count: [1, 1], life: [0.1, 0.12], size: [1.6, 2.4], color0: [3.4, 0.7, 0.25], alpha: [0.75, 0], inherit: 1, nosoft: true },
+    { shape: 'star', count: [1, 1], life: [0.1, 0.12], size: [1.4, 2.1], color0: WHITE_HOT, alpha: [1, 0.3], variant: [0, 3], inherit: 1, nosoft: true, legible: 0.75 },
+    { shape: 'flare', count: [1, 1], life: [0.1, 0.12], size: [7, 3.2], color0: ORANGE, alpha: [0.7, 0], inherit: 1, nosoft: true, legible: 0.65 },
+    { shape: 'glow', count: [1, 1], life: [0.1, 0.12], size: [1.0, 1.6], color0: [3.4, 0.7, 0.25], alpha: [0.7, 0], inherit: 1, nosoft: true },
   ],
   // sensor flare when a rig commits (intro posture, phase change): tight red star + wide red flare
   iw_eye_flare: [
@@ -56,6 +58,35 @@ export const AI_FX = {
     { shape: 'puff', count: [4, 6], life: [0.9, 1.6], speed: [6, 16], dirMode: 'up', cone: 35, size: [1, 4.2], sizePow: 2.2, color0: [0.46, 0.44, 0.41], alpha: [0.45, 0], fadeIn: 0.05, erode: [0.02, 0.62], drag: 2.6, rise: 1.4, turb: 1.2, lit: true, spin: [-1, 1] },
     { shape: 'ring', count: [1, 1], life: [0.16, 0.16], size: [1, 7], sizePow: 2, color0: [1.4, 1.0, 0.7], alpha: [0.45, 0], add: [1, 1], orient: 'up', erode: [0.5, 0.5], scaleCount: false },
     { kind: 'light', color: [1, 0.6, 0.3], intensity: 80, range: 20, dur: 0.1 },
+  ],
+  // rival-rig STAGGER discharge at the chest (r3: no flat ring here; the ground ring is separate).
+  // Sized for a 10 m frame at scale 1: a tight blue-white flash that does not blank the torso, a
+  // camera-facing shock ring (reads round from any angle), electric + hot spark sprays, haze.
+  iw_boss_overload: [
+    { shape: 'glow', count: [1, 1], life: [0.06, 0.08], size: [4.5, 2.6], color0: [1.5, 2.4, 4.2], alpha: [0.7, 0], heat: [0.8, 0.8], nosoft: true },
+    { shape: 'star', count: [1, 1], life: [0.035, 0.045], size: [5, 6.5], color0: [2.0, 2.8, 4.4], variant: [0, 3], nosoft: true },
+    { shape: 'ring', count: [1, 1], life: [0.22, 0.22], size: [2.5, 8], sizePow: 1.6, color0: [0.7, 1.5, 3.0], alpha: [0.13, 0], add: [1, 1], erode: [0.75, 0.75], scaleCount: false, nosoft: true },
+    { shape: 'spark', count: [20, 26], life: [0.14, 0.5], speed: [14, 50], dirMode: 'sphere', size: [0.16, 0.05], sizeVar: 0.5, stretch: 0.022, color0: [4, 5.5, 8], color1: [0.7, 1.4, 3], heat: [1, 0.3], gravity: 22, drag: 2.2, collide: true, bounce: 0.35 },
+    { shape: 'spark', count: [8, 11], life: [0.3, 0.7], speed: [10, 30], dirMode: 'hemi', size: [0.18, 0.06], stretch: 0.025, color0: [5.4, 3.0, 1.1], color1: [1.4, 0.35, 0.06], heat: [1, 0.3], gravity: 26, drag: 1.5, collide: true, bounce: 0.35 },
+    { shape: 'puff', count: [3, 4], life: [0.9, 1.5], speed: [2, 6], dirMode: 'up', cone: 60, size: [1.5, 5], sizePow: 2, color0: [0.18, 0.18, 0.19], alpha: [0.24, 0], fadeIn: 0.1, erode: [0.12, 0.7], drag: 2, rise: 1.5, turb: 1.4, lit: true, spin: [-1, 1] },
+    { kind: 'distort', shape: 'ring', size: [2, 12], life: 0.3, strength: 0.45 },
+    { kind: 'light', color: [0.5, 0.75, 1], intensity: 380, range: 30, dur: 0.26 },
+  ],
+  // ground shock under a staggered rig: a flat ring ON the slab (an ellipse from any chase angle,
+  // never an edge-on band) + a low dust skirt. Spawn at feet height + 0.3 m.
+  iw_ground_shock: [
+    { shape: 'ring', count: [1, 1], life: [0.3, 0.3], size: [1.5, 6], sizePow: 1.5, color0: [0.75, 1.3, 2.4], alpha: [0.12, 0], add: [1, 1], orient: 'up', erode: [0.7, 0.7], scaleCount: false },
+    { shape: 'puff', count: [6, 8], life: [0.7, 1.3], speed: [10, 20], dirMode: 'ring', size: [1.2, 3.6], sizePow: 1.6, color0: [0.42, 0.4, 0.37], alpha: [0.32, 0], fadeIn: 0.05, erode: [0.08, 0.66], drag: 3.2, rise: 0.6, turb: 1.2, lit: true, spin: [-1, 1], variant: [4, 7] },
+  ],
+  // stagger overload: the hot point where an arc grounds on the plating (one re-seed long)
+  iw_arc_contact: [
+    { shape: 'glow', count: [1, 1], life: [0.036, 0.036], size: [0.8, 0.8], color0: [1.8, 2.8, 5.5], alpha: [0.85, 0.4], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.036, 0.036], size: [2.2, 2.2], color0: [0.35, 0.6, 1.4], alpha: [0.3, 0], nosoft: true },
+  ],
+  // rival-rig sensor seen from 35-150 m (Boss._eyeSprite: distance-scaled, min ~0.35 m)
+  iw_boss_eye: [
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [1, 1], color0: [6.5, 0.18, 0.12], alpha: [0.95, 0.95], nosoft: true },
+    { shape: 'glow', count: [1, 1], life: [0.025, 0.025], size: [2.2, 1.1], color0: [1.2, 0.05, 0.03], alpha: [0.2, 0.2], nosoft: true },
   ],
   // falling drone: oily smoke + cinders streaming off the wreck
   iw_wreck_smoke: [
@@ -114,6 +145,16 @@ export const ENEMY_WEAPONS = {
     projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
     muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.05, trailStyle: 'missile', sound: 'missile_launch',
   },
+  // PK-2 PICKET autocannon (r3, critic: "the squad lost its bite": 1 hit in 21 rounds). Same round
+  // as the generic MT cannon but a tighter group (spread 1.0 deg) and slightly faster rounds; the
+  // walker brackets the predicted point across the burst (MT.getAimPoint), so a steadily boosting
+  // target is caught while a quick boost at the right moment still slips the burst.
+  pk2_autocannon: {
+    id: 'pk2_autocannon', name: 'PK-2 AUTOCANNON', type: 'ballistic', damage: 70, impact: 40,
+    speed: 600, range: 380, spread: 1.0, auto: true, fireInterval: 2.6, burst: 5, burstInterval: 0.12,
+    ammo: Infinity, projectile: 'bullet', tracerColor: [5, 1.5, 0.45], tracerWidth: 0.34, tracerLength: 12,
+    muzzleFx: 'muzzle', impactFx: 'impact_sparks', impactScale: 0.9, sound: 'enemy_gun',
+  },
   // relay suppressor: long, wide, walking burst (area denial, not precision)
   relay_suppressor: {
     id: 'relay_suppressor', name: 'RELAY SUPPRESSOR', type: 'ballistic', damage: 45, impact: 28,
@@ -129,12 +170,15 @@ for (const k in ENEMY_WEAPONS) if (!WEAPONS[k]) WEAPONS[k] = ENEMY_WEAPONS[k];
  * Lead the target imperfectly: `vel` is the velocity the shooter PERCEIVES (smoothed), scaled
  * by `leadFactor` (< 1 under-leads). Two fixed-point iterations of the intercept time.
  */
-export function leadAim(from, aimPt, vel, speed, leadFactor, out) {
+export function leadAim(from, aimPt, vel, speed, leadFactor, out, acc = null, accK = 0) {
   out.copy(aimPt);
   if (!(speed > 0)) return out;
   let t = from.distanceTo(aimPt) / speed;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     out.copy(aimPt).addScaledVector(vel, t * leadFactor);
+    // second-order lead (r3): the perceived ACCELERATION too (a hop's gravity arc, a boost
+    // ramping up), so an airborne / accelerating target is not always missed behind its curve
+    if (acc && accK) out.addScaledVector(acc, 0.5 * t * t * accK);
     t = from.distanceTo(out) / speed;
   }
   if (t > 3) out.copy(aimPt).addScaledVector(vel, 3 * leadFactor);

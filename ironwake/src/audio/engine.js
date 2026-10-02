@@ -17,7 +17,7 @@
 import { SFX, PRERENDER_ORDER, renderSfx } from './sfx.js';
 import { makeRng, hashStr, gain, filt, chain, shaper } from './dsp.js';
 import { makeFoundryIR } from './reverb.js';
-import { MusicPlayer } from './music.js';
+import { MusicPlayer, LAYER_NAMES } from './music.js';
 import { createJetBed, createServoBed, createAmbience, createEmitter, createRocket } from './beds.js';
 import { speak, transmit } from './voice.js';
 
@@ -332,6 +332,11 @@ export class AudioEngine {
   }
   setVolume(v) { this.volume = v; this.masterG.gain.setTargetAtTime(v * MIXER.master, this.ctx.currentTime, 0.03); }
   setMusicVolume(v, factor = 1) { this.musicVolume = v; this.bus.music.gain.setTargetAtTime(MIXER.bus.music * v * factor, this.ctx.currentTime, 0.2); }
+  /** (UI lane, OPTIONS) per-category user volume 0..1: 'sfx' = sfx + impact + beds + ambience buses, 'voice' = comm voice bus. */
+  setBusVolume(kind, v) {
+    const names = kind === 'voice' ? ['voice'] : kind === 'sfx' ? ['sfx', 'impact', 'bed', 'amb'] : [];
+    for (const n of names) this.bus[n].gain.setTargetAtTime(MIXER.bus[n] * v, this.ctx.currentTime, 0.05);
+  }
   setPaused(on) {
     this.pauseLP.frequency.setTargetAtTime(on ? 700 : 20000, this.ctx.currentTime, 0.08);
     this.setMusicVolume(this.musicVolume, on ? 0.5 : 1);
@@ -341,7 +346,7 @@ export class AudioEngine {
 
   // ---------------------------------------------------------------- async rendering
   /** Pre-render every SFX variant + the music layers, most urgent first. */
-  async renderAll(OAC, yieldFn = () => Promise.resolve()) {
+  async renderAll(OAC, yieldFn = () => Promise.resolve(), sections = 3) {
     const sr = this.ctx.sampleRate;
     const renderIds = async (ids) => {
       for (const id of ids) {
@@ -362,11 +367,13 @@ export class AudioEngine {
     await this.music.renderAll(OAC, ['pulse', 'drums'], yieldFn);
     await renderIds(P.slice(18));
     await this.music.renderAll(OAC, ['drive', 'boss'], yieldFn);
+    // the B / C sections render last; the form stays on A until a section exists for all layers
+    for (let sec = 1; sec < sections; sec++) await this.music.renderAll(OAC, LAYER_NAMES, yieldFn, sec);
   }
   debug() {
     return {
       state: this.ctx.state, sampleRate: this.ctx.sampleRate, voices: this.voices.length,
-      bank: this.bank.size, bankTotal: PRERENDER_ORDER.length, musicLayers: this.music.ready,
+      bank: this.bank.size, bankTotal: PRERENDER_ORDER.length, musicLayers: this.music.ready, musicSections: this.music.sectionsReady, musicForm: this.music.form.join(''),
       musicState: this.music.state, time: +this.ctx.currentTime.toFixed(2), counts: { ...this.counts },
       radio: this.ctx.currentTime < this.voiceEnd, comm: this.ctx.currentTime < this.voiceEnd ? (this.comm ? 'vo' : 'synth') : 'off', occluded: this.occluded,
       vo: [...this.samples.keys()].filter((k) => k.startsWith('radio_')).length,

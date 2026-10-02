@@ -600,13 +600,20 @@ def _decal_bottom(n=1024, seed=93):
     cur *= sstep(0.0, 0.04, t) * 0.6 + 0.4
     out[:, 256:512] = np.clip(cur * 1.15, 0, 1)
     # tracks: two crawler treads along the strip, patchy
+    # (r3) irregular: wandering tread edges, warped + chevroned lug spacing (different phase per
+    # tread), soft lugs, heavy patchy drop-out -> no regular bar pattern (it read as a checkerboard)
     tr = np.zeros((n, 256), np.float32)
-    for cxt in (64.0, 192.0):
-        band = sstep(44, 36, np.abs(x - cxt))
-        lug = (np.sin(y * 2 * math.pi / 22.0) > -0.2).astype(np.float32) * 0.55 + 0.45
+    warp = spectral(n, seed + 5, beta=2.6, fmin=1, fmax=5, m=256) * 9.0
+    for k, cxt in enumerate((64.0, 192.0)):
+        edge = np.sin(t * (9 + 5 * k) + k * 1.7) * 5.0
+        band = sstep(46, 30, np.abs(x - cxt - edge))
+        yy = y + warp + (x - cxt) * (0.35 if k == 0 else -0.35) + k * 9.0
+        lug = 0.5 + 0.5 * np.sin(yy * 2 * math.pi / (21.0 + 3.0 * k))
+        lug = 0.55 + 0.45 * sstep(0.35, 0.8, lug)
         tr = np.maximum(tr, band * lug)
-    patch = sstep(0.3, 0.7, norm01(spectral(n, seed + 4, beta=2.0, fmin=2, aniso=(1.0, 6.0), m=256)))
-    out[:, 512:768] = tr * (0.35 + 0.65 * patch)
+    patch = sstep(0.25, 0.75, norm01(spectral(n, seed + 4, beta=2.0, fmin=2, aniso=(1.0, 6.0), m=256)))
+    grit = norm01(spectral(n, seed + 6, beta=0.9, fmin=16, m=256))
+    out[:, 512:768] = tr * (0.2 + 0.8 * patch) * (0.75 + 0.25 * grit) * 0.85
     # digits (stencil font, bridged)
     im = Image.fromarray((out * 255).astype(np.uint8), 'L')
     d = ImageDraw.Draw(im)

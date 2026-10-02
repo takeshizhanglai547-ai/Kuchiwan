@@ -92,7 +92,7 @@ test('radio cues fire at the scripted progress beats only', () => {
 });
 
 // ---- HUD layout + naming (src/ui/layout.js, pure) ----------------------------------------
-import { placeReadout, overlap } from '../src/ui/layout.js';
+import { placeReadout, overlap, briefMapLayout, READOUT_DOCK, READOUT_SIDES } from '../src/ui/layout.js';
 
 test('objective text uses our own unit names (no reference-game class acronyms)', () => {
   for (const s of STAGES) {
@@ -101,28 +101,71 @@ test('objective text uses our own unit names (no reference-game class acronyms)'
   assert.match(STAGES[0].title, /PICKET/);
 });
 
-test('target readout avoids other markers and the reticle, keeps its side while clear', () => {
+test('target readout avoids other markers, the reticle and the own rig; keeps its side; docks when boxed in', () => {
   const view = { x0: 51, y0: 29, x1: 1229, y1: 691 };
   const out = { x: 0, y: 0, side: -1, score: 0 };
+  const W = 124, H = 50, GAP = 40, KEEP = 24;
   const rects = new Float32Array(64);
   const put = (i, x, y, r) => { rects.set([x - r, y - r, x + r, y + r], i * 4); };
+  const clear = (n) => { for (let i = 0; i < n; i++) assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, rects[i * 4], rects[i * 4 + 1], rects[i * 4 + 2], rects[i * 4 + 3]), 0, `obstacle ${i}`); };
   // free space: goes right of the brackets, >= gap away from the centre
-  placeReadout(700, 300, 172, 64, 46, 24, rects, 0, view, -1, out);
-  assert.equal(out.side, 0); assert.equal(out.score, 0); assert.ok(out.x >= 700 + 46);
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 0, view, -1, out);
+  assert.equal(READOUT_SIDES[out.side], 'right'); assert.equal(out.score, 0); assert.ok(out.x >= 700 + GAP);
   // a neighbour on the right pushes it left
   put(0, 780, 300, 24);
-  placeReadout(700, 300, 172, 64, 46, 24, rects, 1, view, -1, out);
-  assert.equal(out.side, 1); assert.equal(out.score, 0);
-  assert.equal(overlap(out.x, out.y, out.x + 172, out.y + 64, 756, 276, 804, 324), 0);
-  // neighbours left and right: goes above
-  put(1, 560, 300, 24);
-  placeReadout(700, 300, 172, 64, 46, 24, rects, 2, view, -1, out);
-  assert.equal(out.side, 2); assert.equal(out.score, 0);
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 1, view, -1, out);
+  assert.equal(READOUT_SIDES[out.side], 'left'); clear(1);
+  // neighbours left and right: a diagonal slot above the bracket corner
+  put(1, 600, 300, 24);
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 2, view, -1, out);
+  assert.equal(READOUT_SIDES[out.side], 'above-right'); clear(2);
+  assert.ok(out.y + H <= 300 - KEEP, 'diagonal sits above the bracket');
+  // the player's rig right below / beside the lock (chase view): never parks on it
+  rects.set([560, 330, 840, 520], 2 * 4);             // rig box under the target
+  put(3, 840, 250, 30);                               // marker above-right
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 4, view, -1, out);
+  assert.notEqual(out.side, READOUT_DOCK); clear(4);
+  assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, 560, 330, 840, 520), 0, 'not on the rig');
+  // boxed in on every side: docks (the caller puts it in the fixed slot) instead of overlapping
+  rects.set([0, 0, 1280, 290], 4 * 4); rects.set([0, 310, 1280, 720], 5 * 4);
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 6, view, -1, out);
+  assert.equal(out.side, READOUT_DOCK); assert.ok(out.score > 0);
   // near the right screen edge the clamped box never covers the target's own brackets
-  placeReadout(1200, 300, 172, 64, 46, 24, rects, 0, view, -1, out);
-  assert.ok(out.x + 172 <= view.x1 + 1e-3);
-  assert.equal(overlap(out.x, out.y, out.x + 172, out.y + 64, 1176, 276, 1224, 324), 0);
-  // hysteresis: a previous side that is still clear is kept
-  placeReadout(700, 500, 172, 64, 46, 24, rects, 0, view, 3, out);
-  assert.equal(out.side, 3);
+  placeReadout(1200, 300, W, H, GAP, KEEP, rects, 0, view, -1, out);
+  assert.ok(out.x + W <= view.x1 + 1e-3);
+  assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, 1176, 276, 1224, 324), 0);
+  // hysteresis: a previous side that is still clear is kept (below, although right is free)
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 0, view, 5, out);
+  assert.equal(READOUT_SIDES[out.side], 'below');
+  // ...and dropped for the earliest clear side once it collides
+  put(0, 700, 300 + GAP + 20, 20);
+  placeReadout(700, 300, W, H, GAP, KEEP, rects, 1, view, 5, out);
+  assert.equal(READOUT_SIDES[out.side], 'right');
+});
+
+test('briefing map: no label touches a frame line, the scale bar or the other corner furniture', () => {
+  for (const M of [44, 40, 48]) {
+    const L = briefMapLayout(M);
+    const labels = [...L.cols, ...L.rows];
+    const furniture = [L.north, L.aoLabel, L.scale];
+    const ov = (a, b) => overlap(a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
+    // column / row labels: outside the frame (gutters), clear of every frame + AO line
+    for (const r of labels) {
+      for (const ln of L.lines) assert.equal(ov(r, ln), 0, `label ${r} vs line ${ln}`);
+      for (const f of furniture) assert.equal(ov(r, f), 0, `label ${r} vs furniture ${f}`);
+    }
+    for (const c of L.cols) assert.ok(c[3] <= 0 && c[1] >= -L.G, 'column letters in the top gutter');
+    for (const r of L.rows) assert.ok(r[2] <= 0 && r[0] >= -L.G, 'row numbers in the left gutter');
+    // labels never touch each other (A..J, 1..10, and the corner where both gutters meet)
+    for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) assert.equal(ov(labels[i], labels[j]), 0);
+    // corner furniture: inside the AO frame, clear of its lines and of each other (one corner each)
+    for (const f of furniture) {
+      assert.ok(f[0] > L.ao && f[1] > L.ao && f[2] < M - L.ao && f[3] < M - L.ao, `furniture ${f} inside the AO frame`);
+      for (const ln of L.lines) assert.equal(ov(f, ln), 0);
+    }
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) assert.equal(ov(furniture[i], furniture[j]), 0);
+    assert.ok(L.scale[0] > M / 2 && L.scale[1] > M / 2, 'scale bar bottom-right');
+    assert.ok(L.aoLabel[0] > M / 2 && L.aoLabel[3] < M / 2, 'AO label top-right');
+    assert.ok(L.north[2] < M / 2 && L.north[3] < M / 2, 'north arrow top-left');
+  }
 });

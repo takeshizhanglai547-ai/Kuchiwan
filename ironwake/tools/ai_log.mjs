@@ -358,7 +358,7 @@ function drawChart(R) {
   const bt = B.bigAttackTellLeadS || {}, BS = R.bossSeeds, BB = R.bossBalance;
   const mark = (ok) => (ok ? 'OK  ' : 'OFF ');
   const rows = [
-    [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.78, explosive x0.58, blade x0.75)`],
+    [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.72, explosive x0.54, blade x0.72)`],
     [`${mark(B.fightSeconds >= 60 && B.fightSeconds <= 150)}fight ${B.fightSeconds} s (target 60-150 s)${BS ? ` · over seeds ${BS.seeds.join(',')}: ${BS.fightSeconds.min}-${BS.fightSeconds.max} s, mean ${BS.fightSeconds.mean}` : ''}`],
     [`${mark(B.staggers >= 3 && B.staggers <= 5)}staggers ${B.staggers} (target 3-5)${BS ? ` · seeds ${BS.staggers.min}-${BS.staggers.max}` : ''} · 2.0 s windows, direct hits x1.85`],
     [`${mark(bt.n && bt.min >= 0.5 && bt.max <= 0.85)}big-attack telegraph lead ${bt.n ? `${bt.min}-${bt.max} s, mean ${bt.mean} (n ${bt.n})` : 'n/a'} (target 0.5-0.8 s; pulsing glint + rising warning ticks) · rifle bursts: small 0.22 s glint`],
@@ -377,7 +377,7 @@ function drawChart(R) {
   });
   const S = R.squad, RL = R.relays;
   const sy = py + 70;
-  if (S) txt(`PK-2 walker squad (stage 1, ${S.simSeconds} s): still ${S.mt.stillPct}% of alive time · ${S.mt.bursts} telegraphed bursts, ${S.mt.playerHitPctOfShots}% of rounds hit · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% outside the aim cone · TTK median ${S.mt.ttkMedianS} s · GNAT dives ${S.drone.dives}`, 40, sy, C.text2, 12);
+  if (S) txt(`${mark(S.mt.playerHitPctOfShots >= 15 && S.mt.evades >= 2)}PK-2 walker squad (stage 1, ${S.simSeconds} s): still ${S.mt.stillPct}% · ${S.mt.bursts} telegraphed bursts, ${S.mt.playerHitPctOfShots}% of rounds hit (target >= 15) · ${S.mt.evades} evasive skates (>= 2) · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% outside the aim cone · TTK median ${S.mt.ttkMedianS} s · GNAT dives ${S.drone.dives}`, 40, sy, C.text2, 12);
   if (RL) txt(`Relay generators (stage 2, ${RL.simSeconds} s): ${RL.relay.bursts} telegraphed bursts + ${RL.relay.suppressBursts} suppressive sweep(s) · ${RL.relay.reinforcementCalls} reinforcement calls (${RL.relay.dronesLaunched} GNATs launched) · ${RL.relay.playerHitPctOfShots}% of rounds hit · GNAT dives ${RL.drone.dives}, swarm pairings ${RL.drone.swarmJoins}`, 40, sy + 20, C.text2, 12);
 }
 

@@ -19,7 +19,8 @@
 //                                    compensation (into-sun frames come down ~0.5 EV)
 //   BLOOM      1/2 .. 1/64 res       soft-knee threshold (emissives only) + compressive source
 //                                    clamp + 13-tap down / tent up mip chain (tight)
-//   COMPOSITE  full res -> LDR       AO (floored), volume, shafts, bloom, exposure x adaptation,
+//   COMPOSITE  full res -> LDR       AO (floored), volume, aerial-perspective chroma shift (hue
+//                                    toward the haze hue x fog opacity), shafts, bloom, exposure x adaptation,
 //                                    edge-only CA (<= 0.5 px), AgX + look (hue-preserving for
 //                                    near-primary emissives), split-tone grade (cool shadows,
 //                                    warm highlights), toe-protected contrast, vignette, black
@@ -31,10 +32,11 @@
 //   scene MSAA x4 +0.8 ms over no-MSAA | near shadow 4096² ~1.0 ms (draw-call bound; far
 //   cascade is a one-time bake) | AO 12 taps @ 1/2 ~0.45 ms | volume 24 steps @ 1/4
 //   (2 shadow taps/step worst case) ~0.35 ms | shafts @ 1/4 ~0.15 ms | motion blur 8 taps
-//   ~0.25 ms | bloom 11 passes ~0.35 ms | composite (+ bilateral volume upsample) ~0.3 ms |
-//   eye adaptation ~0.02 ms | SMAA ~0.45 ms  => post ≈ 2.4 ms.
+//   ~0.25 ms | bloom 11 passes ~0.35 ms | composite (+ bilateral volume upsample + per-pixel
+//   aerial fog evaluation) ~0.45 ms |
+//   eye adaptation ~0.02 ms | SMAA ~0.45 ms  => post ≈ 2.6 ms.
 //   medium: no MSAA, near shadow 2048², AO 8 taps, volume 16 steps, shafts 24, blur 6 taps
-//   => post ≈ 1.7 ms.
+//   => post ≈ 1.9 ms.
 //   low: no AO / volume / shafts / far cascade, FXAA, 1800 ash flakes => post ≈ 0.6 ms.
 //
 // API (game.pipeline):
@@ -69,17 +71,20 @@ const LOOK = {
   exposure: 1.3,
   tonemap: 'agx',
   ao: { radius: 2.8, intensity: 2.4, bias: 0.03, strength: 0.9, floor: 0.38, fade: 240 },
-  bloom: { threshold: 1.35, knee: 0.55, intensity: 0.2, clamp: 16, weights: [1.0, 0.72, 0.48, 0.3, 0.18, 0.1] }, // tight: small mips dominate
+  bloom: { threshold: 1.35, knee: 0.55, intensity: 0.24, clamp: 16, weights: [1.0, 0.72, 0.48, 0.3, 0.18, 0.1] }, // tight: small mips dominate
   shafts: { threshold: 0.45, radius: 0.5, length: 0.96, decay: 0.975, intensity: 1.6, tint: '#FFB27A' },
   // volumetric sun scattering: lit = boost of sun-lit in-scatter, occ = removal in shadow
-  volume: { lit: 0.4, occ: 1.0, dust: 0.011, maxDist: 260 },
+  // dust = extra forward-scattering ash lit by the sun within ~dustRange m (tight HG lobe, so
+  // it makes beams between shadows instead of a veil over the whole sun side)
+  volume: { lit: 0.25, occ: 1.0, dust: 0.0085, dustIso: 0.22, dustRange: 160, maxDist: 260 },
   // lift = display-space black level (sRGB #1C2126 x liftAmt), shadowAmt/Desat = cool split tone
   // below display-linear 0.3, gain = highlight hue at constant luminance
-  grade: { lift: '#1C2126', liftAmt: 0.72, shadowAmt: 0.45, shadowDesat: 0.35, gain: '#F2C79A', gainAmt: 0.16, sat: 0.95, contrast: 1.2 },
+  grade: { lift: '#1C2126', liftAmt: 0.72, shadowAmt: 0.45, shadowDesat: 0.35, gain: '#F2C79A', gainAmt: 0.16, sat: 0.95, contrast: 1.2, hiLift: 0.3 },
   motionBlur: { shutter: 0.5, maxPx: 30, chaseVel: 0.85 },
   // eye adaptation: partial compensation of the centre-weighted log-average luminance toward
   // 'key' (EV range -down..+up). Into-sun frames come down, the storm side stays dark-of-mid.
   autoExposure: { enabled: 1, key: 0.077, strength: 0.65, down: 1.0, up: 0.15, speed: 1.6 },
+  aerial: 0.25,   // aerial-perspective chroma shift toward the haze hue (x fog opacity)
   vignette: 0.26,
   ca: 0.006,      // edge-only, capped at 0.5 px in the composite
   grain: 0.02,
@@ -120,7 +125,7 @@ export default function pipelineSystem(game) {
   const _sun = new THREE.Vector3(), _fwd = new THREE.Vector3();
   const floatDepth = { type: THREE.HalfFloatType };
   let frameNo = 0;
-  const debugView = { ao: 1, bloom: 2, vol: 3 }[dev.get('postdebug')] || 0; // dev only
+  const debugView = { ao: 1, bloom: 2, vol: 3, depth: 4 }[dev.get('postdebug')] || 0; // dev only (depth: log2(m)/12, sky = 0)
 
   function makeRT(w, h, opts = {}) {
     const rt = new THREE.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), {
@@ -231,6 +236,7 @@ export default function pipelineSystem(game) {
     u.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
     u.uFogD0.value = game.scene.fog ? game.scene.fog.density : 0.002;
     u.uMaxDist.value = V.maxDist;
+    u.uDustK.value = 1 / Math.max(1, V.dustRange);
     pass(m, volA);
     const b = M.volBlur;
     b.uniforms.tIn.value = volA.texture; b.uniforms.uStep.value.set(1 / volA.width, 0);
@@ -552,10 +558,11 @@ export default function pipelineSystem(game) {
       setDepthUniforms(c, cam);
       u.tVol.value = volTex; u.uHasVol.value = volTex ? 1 : 0;
       u.uVolLit.value = L.volume.lit; u.uVolOcc.value = L.volume.occ; u.uVolMaxZ.value = L.volume.maxDist * 4;
-      u.uVolDust.value = L.volume.dust;
+      u.uVolDust.value = L.volume.dust; u.uDustIso.value = L.volume.dustIso;
       if (game.env && game.env.sun) u.uSunCol.value.copy(game.env.sun.color).multiplyScalar(game.env.sun.intensity);
       u.uCamWorld.value.copy(cam.matrixWorld);
-      if (game.scene.fog) u.uFogColor.value.copy(game.scene.fog.color);
+      if (game.scene.fog) { u.uFogColor.value.copy(game.scene.fog.color); u.uFogD0.value = game.scene.fog.density; }
+      u.uAerial.value = game.scene.fog && q.vol ? L.aerial : 0; // (medium/high; low skips the per-pixel fog evaluation)
       u.uShaftTint.value.copy(col(L.shafts.tint)).multiplyScalar(shaftI);
       u.tNoise.value = game.env ? game.env.noise : null;
       u.uExposure.value = L.exposure;
@@ -579,6 +586,7 @@ export default function pipelineSystem(game) {
       u.uShadowDesat.value = L.grade.shadowDesat;
       u.uSat.value = L.grade.sat;
       u.uContrast.value = L.grade.contrast;
+      u.uHiLift.value = L.grade.hiLift;
       u.uRes.value.copy(size);
       u.uDebug.value = debugView;
       const aa = q.aa;

@@ -94,6 +94,7 @@ const FLAME = {
   qbDecay: 9.0,                         // 1/s: the burst is gone in ~3 frames (was a 0.3 s white bloom)
   levelMax: 1.3,                        // flame shader level clamp (burst included)
   glowMaxEye: 3.0,                      // throat emissive never exceeds 3x the eye strength
+  mainFloor: 0.75,                      // (VFX lane r3) main-bell level floor while thrusting (x thrust amount)
 };
 // Visual posture layer on top of rigmotion.js (mech lane): low-ready arms that snap up to the aim
 // line when their weapon fires, slow idle torso drift, spring lag on the back weapons.
@@ -114,6 +115,26 @@ const POSE_LAYERS = {
   fall: { vy: -3, vyFull: -9, thigh: [-0.82, -0.46], shin: [1.1, 0.8], toe: [0.06, 0.14], armsOut: 0.3, spread: 0.1,
     land0: 2.0, land1: 5.0 },   // m above ground: tucked above land1, legs reach down (rigmotion pose) below land0
 };
+// GROUND-BOOST / QUICK-BOOST BODY layer (mech lane r3, after rigmotion + the fall layer): critic r2 saw a
+// standing, straight-legged rig at 279 km/h from the chase camera. Ramps in from v0 to v1 m/s on the ground:
+// pelvis + torso pitch into the run, head / back weapons / raised arms take it back (aim stays level), idle
+// arms lag, the LEAD leg reaches (thigh fwd, knee bent) and the TRAILING leg sweeps back with a deep knee
+// bend, toe pointed (hinged toe node), splitting the silhouette from behind. A slow skate sway breathes the
+// split. A quick boost adds a short push-off pose: the leg opposite the burst extends out and back, the
+// other one tucks. Signs: + pitch = forward / thigh back / knee bend / toe down; legs are [L, R].
+const BOOST_LAYER = {
+  v0: 40, v1: 75, rateIn: 9, rateOut: 5,
+  // (movement lane r3: pitch eased so the forward run reads ~20 deg, not 28, on top of the rigmotion lean;
+  //  the layer yields to a skid so a stop digs back instead of diving forward)
+  pelvisPitch: 0.1, torsoPitch: 0.04, headComp: 0.85, backComp: 0.9, armLag: 0.14,
+  lead: { thigh: -0.21, shin: 0.35, foot: -0.06, roll: 0.0 },
+  trail: { thigh: 0.31, shin: 0.61, foot: 0.0, roll: 0.07, toe: 0.35 },
+  swayHz: 0.8, sway: 0.15,
+  qb: { rateIn: 30, rateOut: 6, minSpeed: 20,
+    trail: { thigh: 0.14, shin: 0.16, roll: 0.26, toe: 0.4 }, lead: { thigh: -0.34, shin: 0.55, roll: -0.05 } },
+  toeAb: 0.3, toeFall: 0.12,
+};
+
 // NaN-safe lit shading for GLB rigs: a smooth-shaded sliver whose vertex normals oppose each
 // other interpolates to a ~zero normal on some pixels at some angles; normalize() of it is NaN,
 // and one NaN pixel spreads through the HDR bloom chain into a black frame. Guard the normal
@@ -121,14 +142,18 @@ const POSE_LAYERS = {
 // Also adds the rigs' SKY WRAP (mech lane art direction): a soft cool grazing-angle term scaled by
 // the albedo, standing in for the ash-sky light that wraps a 10 m silhouette at dusk, so backlit
 // rigs keep their colour identity and plate read instead of crushing to black (RIG_SHADE).
-const RIG_SHADE = { rim: 0.42, rimPow: 2.6, rimColor: [0.46, 0.54, 0.66], lift: 0.035 };
+// r3: the extra wrap / lift is GATED by the sun term (shadeHi..shadeLo of N.L), so the shade side keeps a plate
+// read (critic r2: back view crushed to black) while sunlit faces do not gain. specCap: painted (non-metal)
+// texels get at most 60% of the Fresnel / F0 gain (critic r2: sunlit paint bleached to chalky grey).
+const RIG_SHADE = { rim: 0.42, rimShade: 0.7, rimPow: 2.6, rimColor: [0.5, 0.55, 0.62], lift: 0.035, liftShade: 1.25,
+  shadeHi: 0.15, shadeLo: -0.25, specCap: 0.6, paintRoughMin: 0.45 };
 // MICRO SURFACE DETAIL (mech lane r2): the 2048 atlases hold ~100 px/m, so hero close-ups read as
 // uniform satin. A procedural object-space layer (no texture, no extra draw call) adds two
 // octaves of value noise: ~17 cm hammered-plate dents / paint mottling and ~4 cm orange-peel /
 // scuff break-up, driving roughness, a small albedo variation and a derivative bump. Each octave
 // fades out once a pixel covers a sizeable part of its feature (fwidth of the object position),
 // so distant rigs never shimmer.
-const RIG_DETAIL = { f1: 6.0, f2: 23.0, rough1: 0.2, rough2: 0.14, albedo1: 0.12, bump1: 0.007, bump2: 0.0014 };
+const RIG_DETAIL = { f1: 6.0, f2: 23.0, rough1: 0.3, rough2: 0.14, albedo1: 0.12, bump1: 0.007, bump2: 0.0014 };
 const DETAIL_PARS = `varying vec3 vIwOP;
 float iwHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
 float iwNoise( vec3 x ) {
@@ -157,9 +182,16 @@ function nanSafe(material) {
   if (material.userData.iwNanSafe) return;
   material.userData.iwNanSafe = true;
   const rc = RIG_SHADE.rimColor.map((v) => v.toFixed(3)).join(', ');
+  const RS = RIG_SHADE, f = (v) => v.toFixed(3);
   const rim = `{ float iwNdV = clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
-    float iwR = pow( 1.0 - iwNdV, ${RIG_SHADE.rimPow.toFixed(2)} ) * ${RIG_SHADE.rim.toFixed(3)} + ${RIG_SHADE.lift.toFixed(3)};
+    float iwSh = 0.0;
+    #if NUM_DIR_LIGHTS > 0
+    iwSh = smoothstep( ${f(RS.shadeHi)}, ${f(RS.shadeLo)}, dot( normalize( normal ), directionalLights[ 0 ].direction ) );
+    #endif
+    float iwR = pow( 1.0 - iwNdV, ${RS.rimPow.toFixed(2)} ) * ( ${f(RS.rim)} + ${f(RS.rimShade)} * iwSh ) + ${f(RS.lift)} + ${f(RS.liftShade)} * iwSh;
     outgoingLight += diffuseColor.rgb * vec3( ${rc} ) * iwR; }\n`;
+  const specCap = `#include <lights_physical_fragment>
+  { float iwCap = mix( ${f(RS.specCap)}, 1.0, metalnessFactor ); material.specularColorBlended *= iwCap; material.specularF90 *= iwCap; }`;
   material.onBeforeCompile = (shader) => {
     const detail = !material.transparent;   // decal cards keep their crisp print
     if (detail) {
@@ -173,11 +205,14 @@ function nanSafe(material) {
       .replace('#include <normal_fragment_begin>', '#define normalize( v ) iwNormalize( v )\n#include <normal_fragment_begin>')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#undef normalize'
         + (detail ? '\n\tnormal = iwBump( - vViewPosition, normal, iwH );' : ''))
+      .replace('#include <lights_physical_fragment>', specCap)
       .replace('#include <opaque_fragment>', rim + 'if ( any( isnan( outgoingLight ) ) || any( isinf( outgoingLight ) ) ) outgoingLight = vec3( 0.0 );\noutgoingLight = min( outgoingLight, vec3( 512.0 ) );\n#include <opaque_fragment>');
     if (detail) {
       fs = fs
         .replace('#include <map_fragment>', `#include <map_fragment>\n\tdiffuseColor.rgb *= 1.0 + iwN1 * iwF1 * ${f3(RD.albedo1)};`)
-        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n\troughnessFactor = clamp( roughnessFactor + iwN1 * iwF1 * ${f3(RD.rough1)} + iwN2 * iwF2 * ${f3(RD.rough2)}, 0.04, 1.0 );`);
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n\troughnessFactor = clamp( roughnessFactor + iwN1 * iwF1 * ${f3(RD.rough1)} + iwN2 * iwF2 * ${f3(RD.rough2)}, 0.04, 1.0 );`)
+        // painted texels keep a satin floor after the micro break-up (metal chips / steel stay glossy)
+        .replace('#include <lights_physical_fragment>', `roughnessFactor = max( roughnessFactor, ${f3(RIG_SHADE.paintRoughMin)} * ( 1.0 - metalnessFactor ) );\n#include <lights_physical_fragment>`);
     }
     shader.fragmentShader = fs;
   };
@@ -311,8 +346,9 @@ const _m = new THREE.Matrix4();
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion();
 const _pa = new THREE.Vector3();
 const _eP = new THREE.Euler(0, 0, 0, 'YXZ');
-const _DOWN = new THREE.Vector3(0, -1, 0), _Y = new THREE.Vector3(0, 1, 0);
+const _DOWN = new THREE.Vector3(0, -1, 0), _Y = new THREE.Vector3(0, 1, 0), _X = new THREE.Vector3(1, 0, 0);
 let _layerHit = null;
+const _toeT = new Float64Array(2);
 const _tint = new THREE.Color(), _WHITE = new THREE.Color(1, 1, 1);
 
 function damp(current, target, lambda, dt) { return current + (target - current) * (1 - Math.exp(-lambda * dt)); }
@@ -381,7 +417,9 @@ export class MechRig {
       const m = source === 'asset' ? own(o, 'eye') : o.material;
       if (source === 'asset' && eyeUD.iw_eye_color) {
         m.emissive = new THREE.Color(eyeUD.iw_eye_color);
-        m.emissiveMap = null;
+        // r3: iw_eye_map = the atlas emissive is a WHITE intensity map (bright main pupil, dimmer second
+        // lens, slit with a hot core); without it the eye glows one flat colour (crisp bloom)
+        if (!eyeUD.iw_eye_map) m.emissiveMap = null;
         m.emissiveIntensity = eyeUD.iw_eye_strength || 6;
         m.color.setScalar(0.02);
       }
@@ -452,7 +490,13 @@ export class MechRig {
     this.idleAmt = 0; this.lag = 0; this.lagV = 0;
     this.motion = new RigMotion(this);
     // drop / fall pose layer (POSE_LAYERS): spring weight; ground clearance (m) this step
-    this.layer = { f: 0, fV: 0 };
+    this.layer = { f: 0, fV: 0, b: 0, q: 0, qTrail: 1 };
+    // optional hinged toes (r3 GLBs): toe_L / toe_R under the feet (not in the required contract)
+    this.toes = {};
+    for (const s of ['L', 'R']) {
+      const t = this.root.getObjectByName('toe_' + s);
+      if (t) this.toes[s] = { node: t, rest: t.quaternion.clone() };
+    }
     this.groundH = 0;
     this._buildContact();
     this.qbFlash = 0;
@@ -517,6 +561,7 @@ export class MechRig {
     this.groundH = pose.grounded ? 0 : this._heightAboveGround();
     this.motion.apply(dt, pose); // pelvis/torso/arms/legs (rigmotion.js)
     this._poseLayers(dt, pose);  // drop / fall body language (mech lane)
+    this._boostLayer(dt, pose);  // ground-boost skate split + quick-boost push-off (mech lane r3)
     this._posture(dt, pose);
     if (this.onPose) this.onPose(dt, pose);   // optional owner layer (enemies lane: boss pilot poses), before the matrix update
 
@@ -531,7 +576,9 @@ export class MechRig {
       const nz = this.nozzles[i];
       // exhaust opposite to travel => thrust
       const align = -(nz.exhaustLocal.x * td.x + nz.exhaustLocal.y * td.y + nz.exhaustLocal.z * td.z);
-      nz.target = ta > 0 ? Math.max(0, align) * ta : 0;
+      // (VFX lane r3) main bells never go dark while boosting: they idle at mainFloor x thrust
+      // whatever the direction (a strafe still reads as a boost from the chase camera)
+      nz.target = ta > 0 ? Math.max(Math.max(0, align) * ta, nz.radius >= FLAME.mainRadius ? FLAME.mainFloor * ta : 0) : 0;
       nz.level = damp(nz.level, nz.target, nz.target > nz.level ? 40 : 12, dt);
       this._updateFlame(nz, i);
     }
@@ -649,6 +696,56 @@ export class MechRig {
       // arms out for balance (roll outward)
       _eP.set(0, 0, sg * F.armsOut * k);
       N['arm_' + s].quaternion.multiply(_qb.setFromEuler(_eP));
+    }
+  }
+
+  /** Ground-boost / quick-boost body layer (BOOST_LAYER) + hinged toes. Allocation-free. */
+  _boostLayer(dt, pose) {
+    const B = BOOST_LAYER, N = this.nodes, S = this.layer, v = pose.velLocal, mode = pose.mode;
+    const sp = Math.hypot(v.x, v.z);
+    const ground = pose.grounded || (pose.airTime !== undefined && pose.airTime < 0.25 && v.y < 6);
+    let tb = 0;
+    if (ground && (mode === 'boost' || mode === 'qb')) {
+      const t = Math.min(1, Math.max(0, (sp - B.v0) / (B.v1 - B.v0)));
+      tb = t * t * (3 - 2 * t) * (1 - Math.min(1, (pose.skid || 0) * 2.5));
+    }
+    S.b = damp(S.b, tb, tb > S.b ? B.rateIn : (pose.skid || 0) > 0.2 ? 14 : B.rateOut, dt);   // a skid drops it fast (dig back)
+    const tq = mode === 'qb' && sp > B.qb.minSpeed ? 1 : 0;
+    S.q = damp(S.q, tq, tq > S.q ? B.qb.rateIn : B.qb.rateOut, dt);
+    if (tq && Math.abs(v.x) > 0.4 * sp) S.qTrail = v.x < 0 ? 1 : -1;   // burst to the right: the LEFT leg pushes off
+    const free = 1 - Math.min(1, Math.max(0, S.f));                    // the fall layer has priority
+    const b = S.b * free, q = S.q * free;
+    const ab = this.motion.abAmt || 0;
+    const toeT = _toeT;
+    toeT[0] = toeT[1] = B.toeFall * Math.max(0, S.f) + B.toeAb * ab;
+    if (b > 1e-3 || q > 1e-3) {
+      const pp = B.pelvisPitch * b, tp = B.torsoPitch * b;
+      N.pelvis.quaternion.multiply(_qb.setFromAxisAngle(_X, pp));
+      N.torso.quaternion.multiply(_qb.setFromAxisAngle(_X, tp));
+      N.head.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.headComp));
+      N.shoulder_L.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.backComp));
+      N.shoulder_R.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.backComp));
+      for (let i = 0; i < 2; i++) {
+        const s = i === 0 ? 'L' : 'R', sg = i === 0 ? 1 : -1;
+        const r = this.ready[s], up = r ? Math.max(r.amt, (this.time - r.fireT) < POSTURE.readyHold ? 1 : 0) : 0;
+        N['arm_' + s].quaternion.multiply(_qb.setFromAxisAngle(_X, B.armLag * b * (1 - up) - (pp + tp) * B.backComp * up));
+        // legs: skate split (boost) + push-off (QB)
+        const trailB = sg === this.motion.trailSide, trailQ = sg === S.qTrail;
+        const sway = 1 + B.sway * Math.sin(this.time * Math.PI * 2 * B.swayHz + (trailB ? 0 : Math.PI));
+        const LB = trailB ? B.trail : B.lead, LQ = trailQ ? B.qb.trail : B.qb.lead;
+        const th = (LB.thigh * b * sway + LQ.thigh * q), sh = (LB.shin * b * sway + LQ.shin * q);
+        const rl = sg * (LB.roll * b + LQ.roll * q);
+        _eP.set(th, 0, rl);
+        N['thigh_' + s].quaternion.multiply(_qb.setFromEuler(_eP));
+        N['shin_' + s].quaternion.multiply(_qb.setFromAxisAngle(_X, sh));
+        // the foot keeps the IK orientation (minus the added leg pitch) + a small per-leg offset
+        N['foot_' + s].quaternion.multiply(_qb.setFromAxisAngle(_X, -(th + sh) + LB.foot * b));
+        toeT[i] += (trailB ? B.trail.toe * b : 0) + (trailQ ? B.qb.trail.toe * q : 0);
+      }
+    }
+    for (let i = 0; i < 2; i++) {
+      const t = this.toes[i === 0 ? 'L' : 'R'];
+      if (t) t.node.quaternion.copy(t.rest).multiply(_qb.setFromAxisAngle(_X, Math.min(0.7, toeT[i])));
     }
   }
 

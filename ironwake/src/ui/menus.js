@@ -21,7 +21,13 @@ import { STAGES } from '../game/missionLogic.js';
 import { renderTacMap, createTacMapJob, tacMapCanvas, mapProject, mapNorthAngle } from './tacmap.js';
 import { fmtClock, voiceLevels } from './hud.js';
 import { stencilSVG } from './glyphs.js';
+import { briefMapLayout } from './layout.js';
 import { CAMERA } from '../player/tuning.js';
+
+// Briefing tactical map (rem): labels in gutters outside the frame, corner furniture inside the
+// AO frame (layout.js; tests/mission.test.mjs proves no label touches a frame line).
+const ML = briefMapLayout(44);
+const remBox = (r) => `left:${r[0].toFixed(3)}rem;top:${r[1].toFixed(3)}rem;width:${(r[2] - r[0]).toFixed(3)}rem;height:${(r[3] - r[1]).toFixed(3)}rem`;
 
 const CONTROLS = [
   // [keyboard / mouse, gamepad, JP, EN]
@@ -58,7 +64,9 @@ const THREATS = [
 
 // ---- options (persisted per browser; see header)
 const OPT_KEY = 'ironwake.options.v1';
-const OPT_DEFAULT = { sens: 1, invert: false, master: 80, music: 100, quality: '' }; // quality '' = automatic
+// quality '' = automatic; subs = subtitle mode; shake / hud in percent
+const OPT_DEFAULT = { sens: 1, invert: false, master: 80, music: 100, sfx: 100, voice: 100, subs: 'm', shake: 100, hud: 100, quality: '' };
+const pct = (v) => `${Math.round(v)}%`;
 const OPTIONS = [
   { k: 'sens', en: 'LOOK SENSITIVITY', jp: '視点感度', min: 0.2, max: 3, step: 0.1, fmt: (v) => v.toFixed(1),
     help: ['Camera turn speed for the mouse and the right stick. 1.0 is the default.', 'マウスと右スティックの視点移動の速さ。標準は1.0。'] },
@@ -68,9 +76,20 @@ const OPTIONS = [
     help: ['Overall loudness of the game: effects, radio and music.', '効果音・通信・音楽を含む全体の音量。'] },
   { k: 'music', en: 'MUSIC VOLUME', jp: '音楽音量', min: 0, max: 100, step: 10, fmt: (v) => String(Math.round(v)),
     help: ['Loudness of the score, relative to the master volume.', '全体音量に対する音楽の音量。'] },
+  { k: 'sfx', en: 'EFFECTS VOLUME', jp: '効果音量', min: 0, max: 100, step: 10, fmt: (v) => String(Math.round(v)),
+    help: ['Weapons, boosters, impacts and the foundry, relative to the master volume.', '武器・ブースター・着弾・環境音の音量。'] },
+  { k: 'voice', en: 'VOICE VOLUME', jp: '音声音量', min: 0, max: 100, step: 10, fmt: (v) => String(Math.round(v)),
+    help: ['Handler LEDGER\'s radio voice, relative to the master volume.', 'オペレーター「レジャー」の通信音声の音量。'] },
+  { k: 'subs', en: 'SUBTITLES', jp: '字幕', list: ['off', 's', 'm', 'l'], names: ['OFF', 'S', 'M', 'L'],
+    help: ['Radio subtitles (English + Japanese) and their size. The preview shows the selected size.', '通信字幕（英語・日本語）の表示とサイズ。プレビューに反映されます。'] },
+  { k: 'shake', en: 'CAMERA SHAKE', jp: 'カメラの揺れ', min: 0, max: 100, step: 10, fmt: pct,
+    help: ['Strength of the camera shake from impacts, boosts and landings.', '被弾・ブースト・着地によるカメラの揺れの強さ。'] },
+  { k: 'hud', en: 'HUD OPACITY', jp: 'HUD透明度', min: 50, max: 100, step: 10, fmt: pct,
+    help: ['Opacity of the combat HUD. The preview shows the selected opacity.', '戦闘HUDの不透明度。プレビューに反映されます。'] },
   { k: 'quality', en: 'GRAPHICS QUALITY', jp: '画質', list: ['low', 'medium', 'high'], names: ['LOW', 'MEDIUM', 'HIGH'],
     help: ['Lower it if the game stutters. HIGH adds anti-aliasing, ambient occlusion, light shafts and motion blur.', '動作が重い場合は下げてください。HIGHではAA・AO・光条・モーションブラーが有効。'] },
 ];
+const OPT_BY_KEY = Object.fromEntries(OPTIONS.map((d) => [d.k, d]));
 function loadOptions(game) {
   const o = { ...OPT_DEFAULT };
   if (game.params.test) return o; // captures and the smoke test never depend on saved settings
@@ -78,13 +97,14 @@ function loadOptions(game) {
     const raw = window.localStorage.getItem(OPT_KEY);
     if (raw) Object.assign(o, JSON.parse(raw));
   } catch (e) { /* storage blocked: defaults */ }
-  o.sens = Math.min(3, Math.max(0.2, Number(o.sens) || 1));
-  o.master = Math.min(100, Math.max(0, Number(o.master)));
-  o.music = Math.min(100, Math.max(0, Number(o.music)));
-  if (!Number.isFinite(o.master)) o.master = OPT_DEFAULT.master;
-  if (!Number.isFinite(o.music)) o.music = OPT_DEFAULT.music;
-  o.invert = !!o.invert;
-  if (!OPTIONS[4].list.includes(o.quality)) o.quality = '';
+  for (const d of OPTIONS) {
+    if (d.bool) o[d.k] = !!o[d.k];
+    else if (d.list) { if (!d.list.includes(o[d.k])) o[d.k] = OPT_DEFAULT[d.k]; }
+    else {
+      const v = Number(o[d.k]);
+      o[d.k] = Number.isFinite(v) ? Math.min(d.max, Math.max(d.min, v)) : OPT_DEFAULT[d.k];
+    }
+  }
   return o;
 }
 function saveOptions(game, o) {
@@ -113,7 +133,7 @@ export default function menusSystem(game) {
   let mapBuilt = false;
   let opts = { ...OPT_DEFAULT }, optFrom = 'title';
   let sortieT = 99, fadeEl = null;
-  let sensBase = 0, padBase = 0;
+  let sensBase = 0, padBase = 0, shakeBase = 0;
   const vizLv = new Float32Array(VIZ_BARS);    // briefing comm visualiser levels
   const vizQ = new Int16Array(VIZ_BARS).fill(-1);
   let vizBars = null;
@@ -168,7 +188,9 @@ export default function menusSystem(game) {
   // ------------------------------------------------------------------------------ build
   function build(parent) {
     root = document.createElement('div');
-    root.className = 'menus';
+    // .capture: staged captures / tests (CSS-animated decoration such as the map sweep is hidden,
+    // so stills never show a half-way animation frame)
+    root.className = game.manual || game.params.test ? 'menus capture' : 'menus';
     root.id = 'menus';
     parent.appendChild(root);
     fadeEl = document.createElement('div');
@@ -176,19 +198,20 @@ export default function menusSystem(game) {
     root.appendChild(fadeEl);
 
     // ---- title
+    // 2.35:1 letterbox; the status line, footer and key hints sit centred in the bars, every
+    // text element >= 5% (title-safe) from the frame edges
     const t = screen('title', `
-      <div class="lbox top"></div><div class="lbox bottom"></div>
       <div class="menu-grain"></div>
-      <div class="title-status"><span class="dot"></span>LEDGER UPLINK<em>回線確立</em><span class="sep"></span>CONTRACT 07</div>
+      <div class="lbox top"><div class="title-status"><span class="dot"></span>LEDGER UPLINK<em>回線確立</em><span class="sep"></span>CONTRACT 07</div></div>
+      <div class="lbox bottom"><div class="title-foot">WAKE-01 <span>// INDEPENDENT CONTRACTOR</span><em>独立傭兵</em></div>
+        ${hints([['↑↓', 'SELECT', '選択'], ['ENTER', 'CONFIRM', '決定'], ['MOUSE', 'CLICK', 'クリック']])}</div>
       <div class="title-block">
         <div class="kicker"><i></i>HALVARD DEEP FOUNDRY <span>/</span> PIER 7<em>ハルヴァルド深層鋳造港 第7埠頭</em></div>
         <div class="logo">${stencilSVG('IRONWAKE', { cls: 'logo-svg', title: 'IRONWAKE' })}</div>
         <div class="logo-sub"><span class="jp">アイアンウェイク</span><span class="rig">RIG-07 <em>ASSAULT RIG 強襲リグ</em></span></div>
         <div class="tagline">ONE RIG. ONE PIER. NO EXTRACTION UNTIL THE WORK IS DONE.</div>
       </div>
-      <div class="menu-actions"></div>
-      ${hints([['↑↓', 'SELECT', '選択'], ['ENTER', 'CONFIRM', '決定'], ['MOUSE', 'CLICK', 'クリック']])}
-      <div class="title-foot">WAKE-01 <span>// INDEPENDENT CONTRACTOR</span><em>独立傭兵</em></div>`);
+      <div class="menu-actions"></div>`);
     const ta = t.querySelector('.menu-actions');
     btn('title', ta, 'START MISSION', '出撃準備', () => api.show('briefing'), true, '01');
     btn('title', ta, 'OPTIONS', '設定', () => api.openOptions('title'), false, '02');
@@ -200,7 +223,17 @@ export default function menusSystem(game) {
       <div class="scr-head"><span class="bar"></span>OPTIONS<em>設定</em><span class="scr-code">SYS-03 · SAVED LOCALLY</span></div>
       <div class="opt-block"><div class="sub-head">SETTINGS<em>各種設定</em></div><div class="opt-list"></div><div class="menu-actions opt-actions"></div></div>
       <div class="opt-help"><div class="sub-head">DETAIL<em>詳細</em></div><div class="oh-title"></div><div class="oh-en"></div><div class="oh-jp"></div>
-</div>
+        <div class="sub-head pv-head">PREVIEW<em>プレビュー</em></div>
+        <div class="opt-preview">
+          <div class="pv-hud"><div class="pv-num">8,400</div>
+            <div class="pv-row"><span class="lbl">AP</span><i class="pv-bar"><b style="transform:scaleX(0.84)"></b></i></div>
+            <div class="pv-row"><span class="lbl">EN</span><i class="pv-bar en"><b style="transform:scaleX(0.62)"></b></i></div>
+            <div class="pv-wpn"><span>R-ARM</span><b>17</b><small>539</small></div></div>
+          <div class="pv-radio"><div class="pv-who"><i></i>LEDGER<em>レジャー</em></div>
+            <div class="pv-en">Relays are down. Something heavy just lit up the far quay.</div>
+            <div class="pv-jp">中継の停止を確認。奥の岸壁で大型の反応だ。</div></div>
+        </div>
+      </div>
       ${hints([['← →', 'ADJUST', '変更'], ['↑↓', 'SELECT', '選択'], ['ESC', 'BACK', '戻る']])}`);
     const ol = o.querySelector('.opt-list');
     OPTIONS.forEach((d, i) => {
@@ -221,8 +254,8 @@ export default function menusSystem(game) {
       });
     });
     const oa = o.querySelector('.opt-actions');
-    btn('options', oa, 'RESET DEFAULTS', '初期設定に戻す', () => api.resetOptions(), false, '06');
-    btn('options', oa, 'BACK', '戻る', () => api.closeOptions(), true, '07');
+    btn('options', oa, 'RESET DEFAULTS', '初期設定に戻す', () => api.resetOptions(), false, String(OPTIONS.length + 1).padStart(2, '0'));
+    btn('options', oa, 'BACK', '戻る', () => api.closeOptions(), true, String(OPTIONS.length + 2).padStart(2, '0'));
 
     // ---- controls
     const c = screen('controls', `
@@ -250,10 +283,13 @@ export default function menusSystem(game) {
       <div class="brief-grid">
         <div class="brief-map">
           <div class="map-head"><span>TACTICAL MAP</span><em>戦域図</em><span class="map-code">PIER 7 · 500 × 500 m</span></div>
-          <div class="map-view"><div class="map-img"></div><div class="map-wait">ACQUIRING SURVEY IMAGE<em>戦域図 取得中</em></div><div class="map-grid"></div><div class="map-sweep"></div><div class="map-marks"></div>
-            <div class="map-coords">${'ABCDEFGHIJ'.split('').map((c, i) => `<b style="left:${i * 10 + 5}%">${c}</b>`).join('')}${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n, i) => `<i style="top:${i * 10 + 5}%">${n}</i>`).join('')}</div>
-            <div class="map-north"><i></i><span>N</span></div>
-            <div class="map-scale"><i></i><span>100 m</span></div>
+          <div class="map-wrap" style="width:${ML.M}rem;height:${ML.M}rem;margin:${ML.G}rem 0 0 ${ML.G}rem">
+            <div class="map-view"><div class="map-img"></div><div class="map-wait">ACQUIRING SURVEY IMAGE<em>戦域図 取得中</em></div><div class="map-grid"></div><div class="map-sweep"></div><div class="map-marks"></div>
+              <div class="map-north" style="${remBox(ML.north)}"><i></i><span>N</span></div>
+              <div class="map-aolbl" style="${remBox(ML.aoLabel)}">AO LIMIT<em>作戦領域</em></div>
+              <div class="map-scale" style="${remBox(ML.scale)}"><span>100 m</span><i></i></div>
+            </div>
+            <div class="map-coords">${'ABCDEFGHIJ'.split('').map((c, i) => `<b style="${remBox(ML.cols[i])}">${c}</b>`).join('')}${ML.rows.map((r, i) => `<i style="${remBox(r)}">${i + 1}</i>`).join('')}</div>
           </div>
           <div class="map-legend">
             <span><i class="ico lz"></i>LZ<em>降下地点</em></span><span><i class="ico mt"></i>PICKET<em>警備機</em></span>
@@ -277,9 +313,9 @@ export default function menusSystem(game) {
             <div><div class="sub-head">OBJECTIVES<em>作戦目標</em></div><ol class="brief-stages">${stagesHtml}</ol></div>
             <div><div class="sub-head">THREAT ASSESSMENT<em>脅威評価</em></div><ul class="threats">${threatHtml}</ul></div>
           </div>
-          <div class="loadout"><span class="sub-head">RIG-07 IRONWAKE<em>固定装備</em></span>
+          <div class="loadout"><div class="sub-head">RIG-07 IRONWAKE · FIXED LOADOUT<em>固定装備</em></div><div class="lo-grid">
             <span><b>R-ARM</b>RF-24 BRASSWORK</span><span><b>L-ARM</b>PB-7 EMBERLINE</span>
-            <span><b>L-BACK</b>ML-6 HAILSTORM</span><span><b>R-BACK</b>HC-90 SLEDGE</span></div>
+            <span><b>L-BACK</b>ML-6 HAILSTORM</span><span><b>R-BACK</b>HC-90 SLEDGE</span></div></div>
         </div>
       </div>
       <div class="menu-actions"></div>
@@ -387,7 +423,8 @@ export default function menusSystem(game) {
         mapProject(game, c.set(x, 0, z), _o);
         x0 = Math.min(x0, _o.x); y0 = Math.min(y0, _o.y); x1 = Math.max(x1, _o.x); y1 = Math.max(y1, _o.y);
       }
-      html += `<div class="mm-ao" style="left:${(x0 * 100).toFixed(2)}%;top:${(y0 * 100).toFixed(2)}%;width:${((x1 - x0) * 100).toFixed(2)}%;height:${((y1 - y0) * 100).toFixed(2)}%"><span>AO LIMIT<em>作戦領域</em></span></div>`;
+      // the AO-LIMIT label is static corner furniture (.map-aolbl), never on the frame line
+      html += `<div class="mm-ao" style="left:${(x0 * 100).toFixed(2)}%;top:${(y0 * 100).toFixed(2)}%;width:${((x1 - x0) * 100).toFixed(2)}%;height:${((y1 - y0) * 100).toFixed(2)}%"></div>`;
     }
     const mark = (pos, cls, label, jp) => {
       if (!mapProject(game, pos, _o)) return;
@@ -517,7 +554,8 @@ export default function menusSystem(game) {
   // ------------------------------------------------------------------------------ cameras
   const HERO = {
     // Title key art: low 3/4 front, rig on the right third, long lens.
-    title: { yaw: 0.55, dist: 27, camUp: 1.0, lookUp: 8.2, shift: 6.6, fov: 36 },
+    // (r3) the 2.35:1 letterbox crops 12% top + bottom: the whole rig (feet included) sits in the band
+    title: { yaw: 0.55, dist: 32, camUp: 1.2, lookUp: 6.6, shift: 7.8, fov: 36 },
     // Briefing: behind the rig's shoulder, looking down the yard.
     briefing: { yaw: Math.PI + 0.42, dist: 17, camUp: 8.5, lookUp: 5.5, shift: -9, fov: 46 },
   };
@@ -546,10 +584,13 @@ export default function menusSystem(game) {
   /** Push the current options into the game (camera tuning, audio mixer, render quality). */
   function applyOptions(withQuality) {
     if (sensBase) { CAMERA.lookSensitivity = sensBase * opts.sens; CAMERA.padLookSpeed = padBase * opts.sens; }
+    if (shakeBase) CAMERA.shakeMaxRot = shakeBase * (opts.shake / 100);
     CAMERA.invertY = opts.invert;
     const au = game.audio;
     if (au && au.setVolume) au.setVolume(opts.master / 100);
     if (au && au.setMusicVolume) au.setMusicVolume(opts.music / 100);
+    if (au && au.setBusVolume) { au.setBusVolume('sfx', opts.sfx / 100); au.setBusVolume('voice', opts.voice / 100); }
+    if (game.hud && game.hud.setOpacity) { game.hud.setOpacity(opts.hud / 100); game.hud.setSubtitles(opts.subs); }
     if (withQuality && opts.quality && game.pipeline && game.pipeline.setQuality && game.pipeline.quality !== opts.quality) game.pipeline.setQuality(opts.quality);
   }
   function optValue(d) {
@@ -570,7 +611,13 @@ export default function menusSystem(game) {
         b.querySelector('.v').textContent = d.fmt(v);
       }
     });
+    // live preview: HUD sample at the chosen opacity, subtitle sample at the chosen size
+    const pv = s.querySelector('.opt-preview');
+    pv.querySelector('.pv-hud').style.opacity = String(opts.hud / 100);
+    pv.querySelector('.pv-radio').className = `pv-radio sub-${opts.subs}`;
     const i = sel.options || 0, d = OPTIONS[i];
+    pv.classList.toggle('focus-hud', !!d && d.k === 'hud');
+    pv.classList.toggle('focus-subs', !!d && d.k === 'subs');
     s.querySelector('.oh-title').innerHTML = d ? `${d.en}<em>${d.jp}</em>` : (i === OPTIONS.length ? 'RESET DEFAULTS<em>初期設定に戻す</em>' : 'BACK<em>戻る</em>');
     s.querySelector('.oh-en').textContent = d ? d.help[0] : (i === OPTIONS.length ? 'Restore every setting on this screen to its default value.' : 'Return to the previous screen. Settings are saved automatically.');
     s.querySelector('.oh-jp').textContent = d ? d.help[1] : (i === OPTIONS.length ? 'この画面の設定をすべて初期値に戻す。' : '前の画面に戻る。設定は自動で保存されます。');
@@ -586,7 +633,7 @@ export default function menusSystem(game) {
       build(g.overlay);
       g.menus = api;
       api.revealInstant = !!g.manual;
-      sensBase = CAMERA.lookSensitivity; padBase = CAMERA.padLookSpeed;
+      sensBase = CAMERA.lookSensitivity; padBase = CAMERA.padLookSpeed; shakeBase = CAMERA.shakeMaxRot || 0;
       opts = loadOptions(g);
       // saved quality only when the URL does not force one (and never in test mode)
       applyOptions(!g.params.test && !new URLSearchParams(location.search).has('quality'));
@@ -670,7 +717,7 @@ export default function menusSystem(game) {
         const n = d.list.length, cur = d.list.indexOf(optValue(d));
         let k = cur + dir;
         k = cycle ? (k + n) % n : Math.max(0, Math.min(n - 1, k));
-        opts.quality = d.list[k];
+        opts[d.k] = d.list[k];
       } else {
         const v = Math.round((opts[d.k] + dir * d.step) / d.step) * d.step;
         opts[d.k] = Math.max(d.min, Math.min(d.max, cycle && v > d.max ? d.min : v));

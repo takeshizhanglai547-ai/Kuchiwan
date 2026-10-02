@@ -36,6 +36,7 @@ import akit as A  # noqa: E402
 from akit import G, P  # noqa: E402
 import buildings as B  # noqa: E402
 import megakit as MK  # noqa: E402
+import farkit as FK  # noqa: E402
 import pieces as K  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
@@ -74,16 +75,20 @@ def fx_light(x, y, z, r, color=SODIUM, i=0.35):
     e['c'] = [float(c) for c in color]
 
 
-STACK_TOP = {'stack120': (121.4, 3.3), 'stack200': (201.4, 4.7), 'stack70': (71.4, 2.0), 'far_stack': (180.0, 3.4),
-             'far_stack_b': (260.0, 5.2)}
+STACK_TOP = {'stack120': (121.4, 3.3), 'stack120p': (125.4, 3.1), 'stack200': (201.4, 4.7), 'stack200p': (206.4, 4.3),
+             'stack70': (71.4, 2.0), 'stack_steel': (141.0, 3.9), 'twinflue': (168.8, 2.4),
+             'fstack0': (191.4, 4.4), 'fstack1': (241.4, 5.6), 'fstack2': (171.0, 5.5), 'fstack3': (216.0, 3.4)}
 
 
 STACKN = [0]
 
 
-def stack(name, x, z, y=0.0, kind=None, hmul=1.0, collide=False, **kw):
+def stack(name, x, z, y=0.0, kind=None, hmul=1.0, collide=False, zs=1.0, **kw):
+    if zs != 1.0:
+        kw['scale'] = (1.0, 1.0, zs)
     place(name, x, z, y=y, collide=collide, **kw)
     top, r = STACK_TOP[name]
+    top *= zs
     if kind is None:   # stacks: 60 % black smoke, 40 % steam (hot fume only over furnaces / fires)
         kind = (0, 1, 0, 1, 0)[STACKN[0] % 5]
         STACKN[0] += 1
@@ -165,27 +170,37 @@ def build_kit():
     A.kit('crane', g, cols)
     g, cols = K.ore_bridge()
     A.kit('orebridge', g, cols)
-    g, cols = K.stack(120.0, 6.0, 3.6, 'dark')
+    # stack profiles (r3: no copy-paste skyline): banded concrete, painted day-mark concrete,
+    # plated steel flue with guy wires, twin flues in a lattice tower; random band spacing
+    g, cols = K.stack(120.0, 6.0, 3.6, 'dark', segs=28, band_step=11.0, seed=3, cheap_rail=True)
     A.kit('stack120', g, cols)
-    g, cols = K.stack(200.0, 9.0, 5.0, 'grey', segs=48)
+    g, cols = K.stack(124.0, 6.2, 3.4, 'grey', segs=28, band_step=None, paint=('steel:white', 'steel:red'), plats=(0.55,), seed=4,
+                      cheap_rail=True)
+    A.kit('stack120p', g, cols)
+    g, cols = K.stack(200.0, 9.0, 5.0, 'grey', segs=32, band_step=15.0, seed=1, cheap_rail=True)
     A.kit('stack200', g, cols)
+    g, cols = K.stack(205.0, 9.5, 4.6, 'dark', segs=32, band_step=26.0, paint=('steel:red', 'steel:white'), plats=(0.7,), seed=2,
+                      cheap_rail=True)
+    A.kit('stack200p', g, cols)
+    A.kit('stack_steel', K.steel_stack(140.0, 4.2, seed=5))
+    A.kit('twinflue', K.twin_flue(160.0, 2.6, seed=6))
     g, cols = K.stack(70.0, 3.2, 2.2, 'dark', segs=32)
     A.kit('stack70', g, cols)
+    for i, (st, hh, rr, sd) in enumerate((('taper', 190.0, 8.0, 11), ('taper', 240.0, 10.0, 12), ('steel', 170.0, 6.0, 13),
+                                          ('twin', 210.0, 8.0, 14))):
+        A.kit(f'fstack{i}', FK.stack_far(st, hh, rr, sd))
     A.kit('cooling', K.cooling_tower())
     g, cols = B.deck_edge(2 * EDGE / 26, -LOW)
     A.kit('edge', g, cols)
     A.kit('quay', B.quay_seg(20.0))
     A.kit('crail', B.crane_rail(20.0))
     A.kit('far_crane', B.far_crane())
-    A.kit('far_stack', B.far_stack(180.0, 7.0, 4.0))
-    A.kit('far_stack_b', B.far_stack(260.0, 10.0, 6.0))
+    A.kit('casthouse', B.casthouse()[0])
     A.kit('light', B.light_tower())
     # far kit: every block has setbacks, rooftop stacks/vents, pipe racks, a gantry and window rows
     for i, (sx, sy, h) in enumerate(((120, 60, 46), (80, 50, 32), (64, 60, 62), (160, 44, 26), (230, 80, 95), (110, 90, 135))):
-        A.kit(f'far_block{i}', MK.far_complex(i * 7 + 3, sx, sy, h))
-    A.kit('furnace300', MK.furnace_mega(300.0))
-    A.kit('furnace300b', MK.furnace_mega(285.0, seed=13, stoves=3, mirror=True, skip=0.75))
-    A.kit('furnace220', MK.furnace_mega(220.0, seed=9, stoves=5, skip=1.2))
+        A.kit(f'far_block{i}', FK.works_far(i * 7 + 3, sx, sy, h))
+    A.kit('furnace_far', FK.furnace_far(300.0))      # one horizon furnace kit, varied per instance by scale / mirror / yaw
     A.kit('jetty', MK.jetty(62.0))
     A.kit('pontoon', MK.pontoon())
     A.kit('dolphin', MK.dolphin(SEA))
@@ -202,6 +217,9 @@ def build_kit():
         A.kit(f'cables{i}', MK.ground_cables(22.0 + 8 * i, 3 + i, seed=70 + i))
     for i in range(3):
         A.kit(f'ashpatch{i}', MK.ash_patch(5.0 + 2.5 * i, 3.2 + 1.2 * i, 0.26 + 0.07 * i, seed=80 + i))
+    for name, fn in (('slagpots', MK.slag_pots), ('bogie', MK.crane_bogie), ('billets6', MK.billets_tall)):
+        g, cols = fn()
+        A.kit(name, g, cols)
     print(f'[arena] kit built in {time.time() - t0:.1f}s: ' + ', '.join(f'{k}={v["tris"]}' for k, v in A.KIT.items()))
 
 
@@ -358,9 +376,7 @@ def south():
     fx_smoke(-178, y + 90.0, -352, 2.4, 90.0, 2)
     for k in range(3):
         place('stove', -236 + k * 16, -404, y=y, collide=False)
-    g, cols = B.casthouse()
-    g.transform(A.xform((-150, y, -300), yaw=PI * 0.5 + 0.3))
-    A.unique('casthouse_b', g)
+    A.inst('casthouse', (-150, y, -300), yaw=PI * 0.5 + 0.3, collide=False)
     pts = [G(-128, y, -272), G(-70, y, -262), G(40, y, -262), G(130, y, -266)]
     g, cols = B.slag_channel(pts, width=4.0)
     A.unique('runner_s', g)
@@ -382,16 +398,16 @@ def south():
         place('mast', x, z, y=y, collide=False)
     # stacks, cooling towers, far industry
     stack('stack200', 70, -380, y=y)
-    stack('stack120', -70, -352, y=y)
-    stack('stack120', 238, -300, y=y)
+    stack('stack_steel', -70, -352, y=y)
+    stack('stack120p', 238, -300, y=y)
     place('cooling', -470, -640, y=y, collide=False)
     fx_smoke(-470, LOW + 141.0, -640, 22.0, 120.0, 1)
     place('cooling', -250, -830, yaw=0.5, y=y, collide=False)
     fx_smoke(-250, LOW + 141.0, -830, 22.0, 120.0, 1)
-    stack('far_stack_b', -330, -520, y=y)
-    stack('far_stack', 280, -700, y=y)
-    stack('far_stack_b', 480, -900, y=y)
-    place('furnace300', 150, -680, yaw=0.8 + PI, y=y, collide=False)
+    stack('fstack1', -330, -520, y=y)
+    stack('fstack2', 280, -700, y=y)
+    stack('fstack3', 480, -900, y=y)
+    place('furnace_far', 150, -680, yaw=0.8 + PI, y=y, collide=False)
     fx_smoke(150, y + 270.0, -680, 7.0, 220.0, 2)
     place('far_block0', 200, -480, yaw=0.2, y=y, collide=False)
     place('far_block4', -60, -600, yaw=0.1, y=y, collide=False)
@@ -402,29 +418,27 @@ def south():
 
 def east():
     # casthouse (opening to the west), furnace A outside, stoves, stacks
-    g, cols = B.casthouse()
-    M = A.xform((226, 0, 40), yaw=-PI / 2)
-    A.unique('casthouse', g.transform(M) or g, cols=[])
+    A.inst('casthouse', (226, 0, 40), yaw=-PI / 2, collide=False)
     A.collider((226, 13.0, 40), (36.0, 26.0, 48.0))
     foot('bld', 226, 40, 38, 50)
     place('furnace', 300, 30, yaw=PI / 2, y=LOW, scale=1.35, collide=False)
     fx_smoke(300, LOW + 121.0, 30, 3.2, 120.0, 2)
-    fx_smoke(226, 30.0, 40, 5.0, 70.0, 0)
+    fx_smoke(226, 30.0, 40, 4.0, 80.0, 1)      # quench steam off the casthouse roof (keeps furnace A readable)
     for dz in (-11.5, 11.5):
         fx_light(204, 0, 40 + dz, 13.0, FIRE, 0.55)
     for k in range(4):
         place('stove', 332 + k * 15, 105 - k * 4, y=LOW, collide=False)
-    stack('stack120', 380, -40, y=LOW)
-    stack('stack200', 330, -150, y=LOW)
+    stack('twinflue', 380, -40, y=LOW)
+    stack('stack200p', 330, -150, y=LOW)
     stack('stack70', 236, 100, collide=True)
-    stack('stack200', 520, 180, y=LOW)
+    stack('stack200', 520, 180, y=LOW, zs=1.2)
     place('cooling', 640, -160, y=LOW, collide=False)
     fx_smoke(640, LOW + 141.0, -160, 22.0, 120.0, 1)
     place('far_block1', 460, 20, yaw=0.4 - PI / 2, y=LOW, collide=False)
     place('far_block4', 640, 160, yaw=-PI / 2 - 0.15, y=SEA + 4.0, collide=False)
-    place('furnace220', 560, -300, yaw=-PI / 2 + 0.4, y=LOW, collide=False)
+    place('furnace_far', 560, -300, yaw=-PI / 2 + 0.4, y=LOW, scale=0.73, collide=False)
     fx_smoke(560, LOW + 200.0, -300, 5.0, 180.0, 2)
-    stack('far_stack', 700, 240, y=LOW)
+    stack('fstack0', 700, 240, y=LOW)
     # slag runner from the casthouse west door to the pit, pit + slag heap
     pts = [G(206, 0, 50), G(150, 0, 50), G(128, 0, 28), G(128, 0, -22)]
     g, cols = B.slag_channel(pts, width=5.0)
@@ -490,9 +504,9 @@ def west():
     for (dx, y, r, m) in ((-4.0, 12.8, 0.8, 'steel:galv'), (-2.2, 12.6, 0.55, 'steel:rust'), (-0.6, 12.9, 0.9, 'steel:bone'),
                           (1.3, 12.6, 0.5, 'steel:oxide'), (3.0, 12.7, 0.65, 'steel:galv'), (-3.2, 17.7, 1.2, 'steel:bone'),
                           (0.2, 17.5, 0.6, 'steel:rust'), (2.6, 17.9, 1.4, 'steel:grey')):
-        g.merge(K.tube(G(-150 + dx, y, z0 - 4), G(-150 + dx, y, z1 + 4), r, m, 20))
-        for zz in range(z0, z1, 40):
-            g.merge(P.ring(r + 0.25, r - 0.05, 0.5, 20, bevel=0.0, mat='steel:dark').rotate((90, 0, 0)).move(G(-150 + dx, y, zz)))
+        g.merge(K.tube(G(-150 + dx, y, z0 - 4), G(-150 + dx, y, z1 + 4), r, m, 16))
+        for zz in range(z0 + 20, z1, 60):      # flange collars (outer face + lips only)
+            g.merge(K.band(r, r, -0.25, 0.5, 0.25, 12, 'steel:dark').rotate((90, 0, 0)).move(G(-150 + dx, y, zz)))
     # branch loops to the tanks
     for zz in (-135, -20, 80):
         g.merge(P.pipe_run([G(-154, 12.8, zz), G(-170, 12.8, zz), G(-170, 3.0, zz), G(-190, 3.0, zz)], r=0.7, bend=1.6, segs=16,
@@ -508,11 +522,11 @@ def west():
     for (x, z) in ((-300, -120), (-300, -60), (-330, 20), (-290, 90), (-360, 150)):
         place('tank_big', x, z, yaw=RND.uniform(0, 6), y=LOW, collide=False)
     stack('stack120', -320, -200, y=LOW)
-    stack('far_stack', -600, 80, y=LOW)
+    stack('fstack3', -600, 80, y=LOW, zs=0.85)
     place('far_block1', -520, -150, yaw=0.3 + PI / 2, y=LOW, collide=False)
     place('far_block3', -480, 200, yaw=-0.2 + PI / 2, y=LOW, collide=False)
     place('far_block4', -700, -380, yaw=PI / 2 + 0.2, y=LOW, collide=False)
-    place('furnace300b', -720, 380, yaw=PI / 2 - 0.5, y=LOW, collide=False)
+    place('furnace_far', -720, 380, yaw=PI / 2 - 0.5, y=LOW, scale=(-0.95, 0.95, 0.95), collide=False)
     fx_smoke(-720, LOW + 270.0, 380, 7.0, 220.0, 2)
     place('cooling', -760, 120, y=LOW, collide=False)
     fx_smoke(-760, LOW + 141.0, 120, 22.0, 120.0, 1)
@@ -532,9 +546,7 @@ def lower_yard_fill():
         for (dx, yy, r, m) in ((-4.0, 12.8, 0.8, 'steel:galv'), (-2.1, 12.6, 0.5, 'steel:rust'), (-0.4, 12.9, 0.95, 'steel:bone'),
                                (1.6, 12.7, 0.6, 'steel:oxide'), (3.3, 12.6, 0.5, 'steel:galv'), (-2.8, 17.8, 1.3, 'steel:grey'),
                                (0.6, 17.6, 0.7, 'steel:rust'), (3.0, 17.9, 1.1, 'steel:bone')):
-            g.merge(K.tube(G(xr + dx, y + yy, z0 - 4), G(xr + dx, y + yy, z1 + 4), r, m, 10))
-            for zz in range(z0, z1, 60):
-                g.merge(P.ring(r + 0.25, r - 0.05, 0.5, 10, bevel=0.0, mat='steel:dark').rotate((90, 0, 0)).move(G(xr + dx, y + yy, zz + 30)))
+            g.merge(K.tube(G(xr + dx, y + yy, z0 - 4), G(xr + dx, y + yy, z1 + 4), r, m, 8))
         A.unique('rack_low', g)
         # wagon yard: 4 tracks with hopper / ladle strings
         for t in range(3):
@@ -682,11 +694,9 @@ def mole(cx=10.0, cz=550.0, W=340.0, D=160.0):
     for k in range(3):
         A.inst('stove', (hx - 20 + k * 26, y, hz + 58 - k * 4), scale=(2.3, 2.3, 2.0 + 0.15 * k), collide=False)
     # casthouse on the furnace's south-east, tap floor opening toward the WEST (seen obliquely)
-    gc, _ = B.casthouse()
-    gc.transform(A.xform((hx + 62, y, hz - 52), yaw=-PI / 2 + 0.35, scale=1.8))
-    A.unique('hero_casthouse', gc)
-    stack('stack200', cx - 120, cz + 45, y=y, kind=0)
-    stack('stack120', cx - 95, cz + 60, y=y, kind=1)
+    A.inst('casthouse', (hx + 62, y, hz - 52), yaw=-PI / 2 + 0.35, scale=1.8, collide=False)
+    stack('stack200p', cx - 120, cz + 45, y=y, kind=0, zs=1.1)
+    stack('stack_steel', cx - 95, cz + 60, y=y, kind=1)
     g2, _ = B.heap(30.0, 20.0, 14.0, 'ore', seed=55)
     g2.transform(Matrix.Translation(G(cx - 60, y, cz - 45)))
     A.unique('mole_ore', g2)
@@ -833,14 +843,14 @@ def dock():
         A.inst('far_crane', (x, 0.0, z), yaw=yaw, collide=False)
     for (x, z, n) in ((-700, 1700, 0), (-100, 1750, 2), (300, 1650, 1), (800, 1800, 3), (1200, 1500, 0)):
         A.inst(f'far_block{n}', (x, 0.0, z), yaw=PI + RND.uniform(-0.3, 0.3), collide=False)
-    for (x, z, k) in ((-550, 1800, 'far_stack_b'), (50, 1900, 'far_stack'), (650, 1750, 'far_stack_b'), (1100, 1650, 'far_stack')):
+    for (x, z, k) in ((-550, 1800, 'fstack1'), (50, 1900, 'fstack0'), (650, 1750, 'fstack3'), (1100, 1650, 'fstack2')):
         A.inst(k, (x, 0.0, z), collide=False)
     # across the bay: pier 5/6 silhouettes at 650-1100 m
     for (x, z, yaw) in ((-620, 820, 0.0), (-470, 830, 0.0), (520, 760, 0.1), (660, 770, 0.1), (820, 790, 0.1)):
         A.inst('crane', (x, SEA + 4.0, z), yaw=yaw, collide=False)
     for (x, z, k, yaw) in ((-760, 880, 0, 0.1), (-300, 900, 2, 0.0), (420, 860, 1, 0.1), (700, 900, 3, 0.0), (1000, 820, 0, 0.3)):
         A.inst(f'far_block{k}', (x, SEA + 4.0, z), yaw=PI + yaw, collide=False)
-    for (x, z, k) in ((-560, 930, 'far_stack_b'), (-200, 980, 'far_stack'), (600, 940, 'far_stack_b'), (900, 900, 'far_stack')):
+    for (x, z, k) in ((-560, 930, 'fstack1'), (-200, 980, 'fstack2'), (600, 940, 'fstack0'), (900, 900, 'fstack3')):
         stack(k, x, z, y=SEA + 4.0)
     for (x, z) in ((-380, 900), (320, 880)):
         A.inst('tank_big', (x, SEA + 4.0, z), yaw=0.3, collide=False)
@@ -849,7 +859,8 @@ def dock():
                            (-880, 980, 'far_block5', 0.2), (820, 1010, 'far_block4', -0.1)):
         A.inst(k, (x, SEA + 4.0, z), yaw=PI + yaw, collide=False)
     for (x, z, k, yaw) in ((-250, 960, 'furnace300', 0.3), (290, 960, 'furnace300b', -0.9), (-700, 940, 'furnace220', 0.9)):
-        A.inst(k, (x, SEA + 4.0, z), yaw=yaw, collide=False)
+        sc = {'furnace300': 1.0, 'furnace300b': (-0.95, 0.95, 0.95)}.get(k, 0.73)
+        A.inst('furnace_far', (x, SEA + 4.0, z), yaw=yaw, scale=sc, collide=False)
         fx_smoke(x, SEA + 4.0 + {'furnace300': 270.0, 'furnace300b': 256.0}.get(k, 200.0), z, 7.0, 240.0, 2)
     g = A.Geo()
     for (x0, x1, z0, z1) in ((-1100, 1300, 760, 1400),):
@@ -867,9 +878,9 @@ def dock():
                                tuple(G(1900, SEA + 4.0, 250))], [(0, 1, 2, 3)], 'far:dark'))
     g.merge(K.bx(6.0, 850.0, 5.0, tuple(G(432, SEA + 1.5, 675)), mat='far'))
     A.unique('peninsula', g, weighted=False, noshadow=True)
-    for (x, z, sc) in ((470, 520, 1.5), (600, 450, 1.35), (720, 640, 1.55), (-360, 790, 1.45)):
-        A.inst('stack200', (x, SEA + 4.0, z), scale=sc, collide=False)
-        fx_smoke(x, SEA + 4.0 + 201.4 * sc, z, 4.7 * sc, 260.0, 0)
+    for (x, z, k, sc) in ((470, 520, 'fstack1', 1.25), (600, 450, 'fstack0', 1.4), (720, 640, 'fstack3', 1.3), (-360, 790, 'fstack2', 1.6)):
+        A.inst(k, (x, SEA + 4.0, z), scale=sc, collide=False)
+        fx_smoke(x, SEA + 4.0 + STACK_TOP[k][0] * sc, z, STACK_TOP[k][1] * sc, 260.0, 0 if k != 'fstack0' else 1)
     for (x, z) in ((640, 760), (840, 560)):
         A.inst('cooling', (x, SEA + 4.0, z), collide=False)
         fx_smoke(x, SEA + 145.0, z, 22.0, 130.0, 1)
@@ -985,6 +996,19 @@ def yard():
                                          (-100, 200, PI, 'noentry', 'yellow', 14, 7), (-20, -40, 0.3, 'ring', 'white', 18, 18)):
         d.merge(decal_quad(cell, colr, x, z, w, l, yaw, 0.035))
     A.unique('decals', d, weighted=False, noshadow=True)
+
+
+def mid_masses():
+    """r3: 60-200 m mid-ground masses on the play axis that keep the LOS lanes to the MT squad
+    open: a crib of 6 m billets, a row of slag pots (one tipped), a fallen gantry-crane bogie with
+    its snapped leg, a torpedo car derailed beside the yard track. Dust / soot decals under each."""
+    for (name, x, z, yaw, sz) in (('billets6', 26.0, 14.0, 0.2, 13.0), ('slagpots', 10.0, 80.0, -0.15, 26.0),
+                                  ('bogie', -52.0, 0.0, 0.4, 24.0), ('slagpots', 46.0, -92.0, 0.35, 26.0)):
+        place(name, x, z, yaw, fk='clutter', fs=(sz, sz * 0.7))
+        UNDER.append((x, z, sz, yaw))
+    A.inst('ladle', (50.0, 0.35, -128.5), yaw=0.12, roll=0.3, collide=True)
+    foot('clutter', 50.0, -128.5, 26.0, 8.0, 0.12)
+    UNDER.append((50.0, -129.5, 24.0, 0.12))
 
 
 def clutter():
@@ -1166,6 +1190,7 @@ def splat(path, n=512):
     S = np.zeros((n, n), np.float32)
     Bm = np.zeros((n, n), np.float32)
     hard = np.zeros((n, n), np.float32)
+    Sr = np.zeros((n, n), np.float32)      # footprints that bank ash around them (not the open quay apron)
     for (kind, fx, fz, sx, sz, yaw) in FOOT:
         c, s = math.cos(yaw), math.sin(yaw)
         lx = (gx - fx) * c - (gz - fz) * s
@@ -1177,6 +1202,8 @@ def splat(path, n=512):
             hard = np.maximum(hard, m)
         else:
             S = np.maximum(S, m)
+            if kind != 'quay':
+                Sr = np.maximum(Sr, m)
         if kind in ('slag', 'heap'):
             Bm = np.maximum(Bm, m)
     macro = norm01(spectral(n, 5, beta=2.6, fmin=2, fmax=40))
@@ -1193,7 +1220,7 @@ def splat(path, n=512):
         spill = np.maximum(spill, 1 - sstep(3.0, 9.0, seg_dist(ax, az, bx_, bz) + (mid - 0.5) * 8.0))
     # wind-blown ash banked against the parapets (south / east / west)
     edge = np.maximum(sstep(238.0, 249.0, np.abs(gx)), sstep(-238.0, -249.0, gz))
-    R = np.clip(blur(Rm, 3.0) * 1.5 + fields * 0.85 + blur(S, 7.0) * 0.5 + spill * 0.8 + edge * (0.5 + 0.5 * mid), 0, 1) * (1 - hard)
+    R = np.clip(blur(Rm, 3.0) * 1.5 + fields * 0.85 + blur(Sr, 7.0) * 0.5 + spill * 0.8 + edge * (0.5 + 0.5 * mid), 0, 1) * (1 - hard)
     wet = sstep(0.64, 0.74, norm01(spectral(n, 7, beta=2.4, fmin=3, fmax=90))) * (1 - blur(np.maximum(S, Bm), 2.0))
     wet = np.maximum(wet, sstep(0.74, 0.82, mid) * 0.85 * (1 - S))
     # hand-placed standing water beside the launch lane / MT yard (camera foregrounds)
@@ -1237,6 +1264,7 @@ def main():
     lower_yard_fill()
     trench_plan()
     yard()
+    mid_masses()
     clutter()
     markers()
     print(f'[arena] hidden-face cull: {A.CULL["killed"]} of {A.CULL["faces"]} faces')

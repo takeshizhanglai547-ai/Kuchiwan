@@ -14,9 +14,9 @@
 //   hv.lastPart / hv.lastFrame                part name + game.frame of the last accepted ray hit
 //   hv.partHit()                              that part if it was struck THIS step (else null)
 //
-// HitFlash = 0.06 s hot flash of a unit's lit armour when a round connects: every lit mesh
-// swaps to a shared bright variant of ITS OWN material (models.js cloneMaterial keeps the
-// detail shader and the scorched-wreck mapping), so it costs no draw call and no new program.
+// HitFlash = LOCAL hit pulse (r3): a short emissive glow around the impact point + a 2-frame
+// plating kick, on per-unit clones of the unit's own materials (see below); no draw call, no
+// new program, albedo untouched.
 import * as THREE from 'three';
 import { cloneMaterial } from './models.js';
 
@@ -200,74 +200,76 @@ function gridRay(g, o, d, maxT) {
 }
 
 // ------------------------------------------------------------------------------------------
-// HIT FLASH
-const FLASH_OF = new WeakMap();     // base material -> bright variant (shared by every unit)
-export const HIT_FLASH = { time: 0.06, color: [1.0, 0.7, 0.42], intensity: 0.25 };
-
-function flashVariant(m) {
-  let v = FLASH_OF.get(m);
-  if (v !== undefined) return v;
-  v = null;
-  // emissive-textured materials (sensor, lamps) keep their own glow
-  if (m.isMeshStandardMaterial && !m.emissiveMap && m.emissive && m.emissive.getHex() === 0) {
-    v = cloneMaterial(m);
-    v.emissive.setRGB(HIT_FLASH.color[0], HIT_FLASH.color[1], HIT_FLASH.color[2]);
-    v.emissiveIntensity = HIT_FLASH.intensity;
-    v.userData.shared = true;
-    FLASH_OF.set(v, null);
-  }
-  FLASH_OF.set(m, v);
-  return v;
-}
+// HIT FLASH -> LOCAL HIT PULSE (r3)
+// r2 swapped every lit mesh to a bright cream variant for 0.06 s: the whole walker washed out
+// (critic: "arcade damage blink"). Now each unit owns per-unit clones of its lit materials
+// (cloneMaterial keeps the detail shader + the scorched-wreck mapping; same program, no draw call,
+// no recompile), all pointing at ONE shared uniform set (models.js HIT_PULSE): an emissive pulse
+// around the impact point (#FFB060 x 3 halo over 1.2 m + a hot core, fading over ~0.08 s, albedo
+// untouched) and a 1.5 cm, 2-frame vertex kick of the plating along the shot.
+export const HIT_FLASH = {
+  time: 0.09, radius: 1.0, splashRadius: 2.4, splashGain: 0.5, kick: 0.015, kickFrames: 2, fadePow: 2.0,
+};
 
 export class HitFlash {
-  /** root: the unit's model; parts (optional): part names, so a direct hit flashes only the plate it struck. */
+  /** root: the unit's model. `parts` is kept for API compatibility (the pulse is spatial). */
   constructor(root, parts = null) {
-    this.meshes = [];
-    this.base = [];
-    this.group = [];                     // part index per mesh (-1: none)
     this.parts = parts || [];
+    this.u = null;                       // shared uniform set of this unit's variants
+    this.variants = new Map();           // template material -> this unit's clone
+    this.meshes = [];
     root.traverse((o) => {
       if (!solidMesh(o) || Array.isArray(o.material) || o.userData.keepMaterial) return;
-      let g = -1;
-      for (let p = o; p && g < 0; p = p.parent) g = this.parts.indexOf(p.name);
-      this.meshes.push(o); this.group.push(g);
+      const base = o.material;
+      if (!base.iwHit) return;           // not an enemy-shaded material (no pulse uniforms)
+      let v = this.variants.get(base);
+      if (!v) {
+        v = cloneMaterial(base);
+        if (!this.u) this.u = v.iwHit;
+        v.iwHit = this.u;                // every variant of the unit reads the same uniforms
+        v.userData.iwHitVariant = true;
+        this.variants.set(base, v);
+      }
+      o.material = v;
+      this.meshes.push(o);
     });
-    this.base.length = this.meshes.length;
-    this.t = 0;
+    this.t = 0; this.T = 1; this.k0 = 0; this.kickN = 0;
     this.on = false;
   }
   /**
-   * A round connected: flash for HIT_FLASH.time (k scales the duration a little). `part` = the
-   * struck part name (direct hits) or null / unknown -> the whole unit (splash heat).
+   * A round connected at world `point` (direction `dir` of the shot, optional). k scales the
+   * duration (heavy impacts linger). splash = true: a wider, dimmer heat flash (explosions).
    */
-  hit(k = 1, part = null) {
-    this.t = HIT_FLASH.time * Math.min(2, Math.max(0.6, k));
-    const gi = part ? this.parts.indexOf(part) : -1;
-    for (let i = 0; i < this.meshes.length; i++) {
-      if (gi >= 0 && this.group[i] !== gi) continue;
-      const o = this.meshes[i];
-      if (this.base[i]) continue;                    // already lit
-      const v = flashVariant(o.material);
-      if (!v) continue;
-      this.base[i] = o.material;
-      o.material = v;
-    }
+  hit(k = 1, part = null, point = null, dir = null, splash = false) {
+    const u = this.u, H = HIT_FLASH;
+    if (!u || !point) return;
+    u.pos.value.copy(point);
+    u.r.value = splash ? H.splashRadius : H.radius;
+    this.T = this.t = H.time * Math.min(2, Math.max(0.6, k));
+    this.k0 = splash ? H.splashGain : 1;
+    u.k.value = this.k0;
+    if (dir && !splash) { u.kick.value.copy(dir).multiplyScalar(H.kick); this.kickN = H.kickFrames; }
     this.on = true;
   }
   update(dt) {
     if (!this.on) return;
+    const u = this.u;
+    if (this.kickN > 0 && --this.kickN === 0) u.kick.value.set(0, 0, 0);
     this.t -= dt;
-    if (this.t <= 0) this.off();
+    if (this.t <= 0) { this.off(); return; }
+    u.k.value = this.k0 * Math.pow(this.t / this.T, HIT_FLASH.fadePow);
   }
-  /** Restore (also before a death swaps in the scorched materials). */
+  /** Stop the pulse (also before a death swaps in the scorched materials). */
   off() {
     if (!this.on) return;
-    this.on = false; this.t = 0;
-    for (let i = 0; i < this.meshes.length; i++) {
-      const o = this.meshes[i], b = this.base[i];
-      if (b && FLASH_OF.get(b) === o.material) o.material = b;
-      this.base[i] = null;
-    }
+    this.on = false; this.t = 0; this.kickN = 0;
+    if (this.u) { this.u.k.value = 0; this.u.kick.value.set(0, 0, 0); }
+  }
+  /** Release this unit's material clones (the scorched / template materials are shared). */
+  dispose() {
+    this.off();
+    for (const v of this.variants.values()) v.dispose();
+    this.variants.clear();
+    this.meshes.length = 0;
   }
 }

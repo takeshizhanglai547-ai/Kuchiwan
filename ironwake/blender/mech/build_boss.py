@@ -216,6 +216,30 @@ def build_torso():
         arm.append(marker(c, n2 + Vector((0, 0, -0.6)), 'red', 0.045))
         hw, yf, yb, pr, c_ = K.sec_interp(CHEST, 7.95)
         arm.append(rivets((s_ * (hw + 0.004), yf + 0.3, 7.95), (s_ * (hw + 0.004), yb - 0.3, 7.95), 0.12, (s_, 0, 0)))
+    # r3: secondary density on the big chest planes: a bolted access hatch low on each flank and a
+    # heat-sink louvre bank either side of the neck on the chest top
+    for s in (1, -1):
+        hw_, yf_, yb_, pr_, c_ = K.sec_interp(CHEST, 6.98)
+        K.hatch_at(ch, (s * hw_, (yf_ + yb_) * 0.5 + 0.05, 6.98), (s, 0, 0), (0.5, 0.26), u_axis=(0, 1, 0),
+                   recess=0.04, mat='steel_dark', angle=40)
+        lv = P.louvres(0.42, 0.5, count=5, depth=0.05, angle=26, thickness=0.016, mat='steel_dark', side_mat='paint_dark')
+        lv.align((0, 0, 1), up=(0, 1, 0), loc=(s * 0.62, -0.62, 8.805))
+        arm.append(lv)
+        arm.append(rivets((s * 0.35, -1.3, 8.81), (s * 0.35, -0.3, 8.81), 0.12, (0, 0, 1)))
+        # corner chamfer facets (the big oxide planes beside the keel): a recessed hatch + a bolted
+        # cream service panel with a vent slot
+        for zc, sz in ((7.45, (0.34, 0.42)),):
+            hw_, yf_, yb_, pr_, c_ = K.sec_interp(CHEST, zc)
+            K.hatch_at(ch, (s * (hw_ - c_ * 0.5), yf_ + c_ * 0.5, zc), (s, -1, 0), sz, u_axis=(0, 0, 1), recess=0.035,
+                       mat='steel_dark', angle=30)
+        hw_, yf_, yb_, pr_, c_ = K.sec_interp(CHEST, 8.15)
+        cn = Vector((s, -1, 0)).normalized()
+        cc = Vector((s * (hw_ - c_ * 0.5), yf_ + c_ * 0.5, 8.15)) + cn * 0.005
+        tv = Vector((-1, -s, 0)).normalized() * s
+        arm.append(K.plate_world([cc + tv * 0.14 + Vector((0, 0, -0.16)), cc - tv * 0.14 + Vector((0, 0, -0.16)),
+                                  cc - tv * 0.12 + Vector((0, 0, 0.16)), cc + tv * 0.12 + Vector((0, 0, 0.16))], 0.03,
+                                 mat='paint_secondary', normal_hint=cn, chamfer=0.03, bolts=1, bolt_r=0.013,
+                                 bolt_spacing=0.14))
     g.merge(ch, *arm)
     # neck cradle at the front top (the head juts forward from it)
     nk = K.limb((0, -1.0, 8.66), (0, HEAD[1] + 0.05, HEAD[2] + 0.02), [(0, -0.42, 0.42, -0.34, 0.34, 0.1),
@@ -242,6 +266,9 @@ def build_head():
                   (-2.18, -0.30, 0.30, 8.34, 8.66, c),
                   (-2.48, -0.14, 0.14, 8.40, 8.52, (0.04, 0.04, 0.05, 0.05))], 'Y', bevel=0.02, mat='paint_primary')
     K.grooves(hd, [(0, 0, 1), (1, 0, 0), (-1, 0, 0), (1, 0, 1), (-1, 0, 1)], (0, -1.2, 0), (0, 1, 0))
+    for s in (1, -1):   # r3: bolted access hatch on each flank of the wedge
+        K.hatch_at(hd, (s * 0.44, -1.98, 8.5), (s, 0, 0), (0.26, 0.15), u_axis=(0, 1, 0), recess=0.03,
+                   mat='steel_dark', angle=35)
     g.merge(hd)
     # slit recess across the brow (single eye) - glowing bar lives under 'eye'
     g.merge(K.shell([(-1.86, -0.4, 0.4, 8.53, 8.69, 0.03), (-2.24, -0.32, 0.32, 8.49, 8.63, 0.03)], 'Y', mat='steel_dark'))
@@ -265,6 +292,19 @@ def build_head():
         g.merge(ant)
         g.merge(P.cylinder(0.075, 0.1, 24, bevel=0.01, bsegs=1, mat='steel_dark', z0=0.0)
                 .align((s, 0, 0), loc=(s * 0.46, -1.05, 8.62)))
+    # r3 secondary / tertiary density on the big head wedge (critic r2: flat planes with seams only):
+    # recessed vent grilles either side of the crest, a bolted access hatch on each flank, rivet rows
+    # along the top edges, a bolted sensor brow ridge and a raised bone panel on the snout
+    for s in (1, -1):
+        v = P.vent(0.17, 0.5, depth=0.04, slats=5, frame=0.022, mat='paint_dark')
+        v.align((0, 0.05, 1), up=(0, -1, 0), loc=(s * 0.19, -1.18, 8.905))
+        g.merge(v)
+        g.merge(rivets((s * 0.3, -0.8, 8.922), (s * 0.3, -1.5, 8.892), 0.1, (0, 0, 1)))
+        g.merge(P.box((0.06, 0.16, 0.05), bevel=0.006, segs=1, mat='steel_dark').move(s * 0.33, -1.62, 8.88))
+    g.merge(K.plate_world([(-0.2, -1.62, 8.86), (0.2, -1.62, 8.86), (0.14, -2.14, 8.68), (-0.14, -2.14, 8.68)], 0.035,
+                          mat='paint_secondary', normal_hint=(0, -0.3, 1), chamfer=0.04, bolts=1, bolt_r=0.012,
+                          bolt_spacing=0.16))
+    g.merge(K.strip((-0.36, -1.84, 8.7), (0.36, -1.84, 8.7), 0.05, 0.03, (0, -0.4, 1), mat='steel_dark'))
     # neck joint drum (pitch pivot)
     g.merge(K.drum(OLD_HEAD, (1, 0, 0), 0.26, 0.6, mat='paint_dark', hub=True, bolts=4))
     return _to_head(g)
@@ -295,6 +335,8 @@ def build_arm(side):
             ([(x, z + 0.32) for x, z in K.scale2(PAUL, 0.34, (2.3, 8.7))], 2.1 + DY)]
     pa = K.loft_pts(secs, axis='Y', bevel=0.02, mat='paint_primary')
     K.grooves(pa, [(1, 0, 0), (0, 0, 1), (1, 0, 1), (-1, 0, 1)], (0, 0.1, 0), (0, 1, 0))
+    K.hatch_at(pa, (2.62, 1.3 + DY, 8.24), (1, 0, 0), (0.5, 0.34), u_axis=(0, 1, 0), recess=0.04, mat='steel_dark',
+               angle=35)
     g.merge(pa)
     g.merge(K.plate_world([(2.3, -0.62 + DY, 8.8), (2.3, 0.9 + DY, 8.78), (2.52, 1.2 + DY, 8.58), (2.56, -0.5 + DY, 8.54)],
                           0.04, mat='paint_secondary', normal_hint=(0.6, 0, 1), chamfer=0.05))
@@ -304,6 +346,18 @@ def build_arm(side):
     g.merge(K.plate_world([(2.645, -0.36 + DY, 8.0), (2.645, 0.46 + DY, 8.0), (2.62, 0.46 + DY, 8.36),
                            (2.62, -0.36 + DY, 8.36)], 0.03, mat='paint_accent', normal_hint=(1, 0, 0), chamfer=0.04))
     g.merge(marker((2.3, -1.12 + DY, 8.3), (0, -1, -0.2), 'red', 0.045))
+    # r3: >= 3 secondary features on the slab (critic r2: under-detailed large plates)
+    n_in = Vector((-0.34, 0, 0.94)).normalized()
+    lv = P.louvres(0.34, 0.9, count=6, depth=0.05, angle=26, thickness=0.016, mat='steel_dark', side_mat='paint_dark')
+    lv.align(n_in, up=(0, 1, 0), loc=(1.99, 0.1 + DY, 8.79))
+    g.merge(lv)
+    g.merge(rivets((2.31, -0.5 + DY, 8.9), (2.31, 1.6 + DY, 8.9), 0.14, (0.4, 0, 1)))
+    g.merge(rivets((2.66, -0.3 + DY, 8.52), (2.66, 1.7 + DY, 8.52), 0.14, (1, 0, 0.4)))
+    g.merge(K.shackle(0.07, bar=0.018, segs=(12, 6)).move(2.2, 1.55 + DY, 8.86))
+    if side == 'L':
+        # Grauwerk ID stripe (#D8A31A) across the slab
+        g.merge(K.strip((2.0, 1.36 + DY, 8.79), (2.6, 1.36 + DY, 8.6), 0.16, 0.012, (0.3, 0, 1), mat='paint_accent'))
+        g.merge(K.strip((2.0, 1.12 + DY, 8.79), (2.6, 1.12 + DY, 8.6), 0.05, 0.012, (0.3, 0, 1), mat='paint_accent'))
     u = Geo()
     ua = K.shell([(7.56, 1.76, 2.26, -0.5 + DY, 0.2 + DY, 0.1), (6.9, 1.8, 2.34, -0.52 + DY, 0.24 + DY, 0.12),
                   (6.5, 1.84, 2.3, -0.42 + DY, 0.2 + DY, 0.1)], 'Z', mat='paint_primary')
@@ -754,6 +808,16 @@ def add_decals(a):
          fwd((2.705, -1.2 + DY, 6.1)), (1, 0, 0), size=(0.8, None), parent='weapon_L')
     card(a, D.text_decal(['GLR-3', 'LASER'], px=170, color=C, worn=0.3, seed=76), fwd((-2.265, -2.9 + DY, 6.3)),
          (-1, 0, 0), size=(0.34, None), parent='weapon_R')
+    # r3: load-rating stencils on the slabs, the unit number on the head flank, gun soot sources
+    nt = Vector((0.33, 0, 0.38)).normalized()
+    for s_, S in ((1, 'L'), (-1, 'R')):
+        card(a, D.text_decal(['MAX 32t', '荷重注意'], px=170, color=K_, worn=0.25, seed=81 + s_),
+             (s_ * 2.47, 0.55 + DY, 8.72), (s_ * nt.x, 0, nt.z), up=(0, -1, 0), size=(0.36, None), parent='arm_' + S)
+    hp = Matrix.Translation(HEAD) @ Matrix.Scale(HEAD_S, 4) @ Matrix.Translation(-Vector(OLD_HEAD))
+    card(a, D.text_decal('GC-X1', px=200, color=C, worn=0.3, seed=83), tuple(hp @ Vector((0.49, -1.2, 8.6))), (1, 0, 0),
+         size=(0.36, None), parent='head')
+    a.soot_points = [(fwd(MUZ_R), 0.12), (fwd(MUZ_L), 0.15)]
+    a.post = dict(chip_grow=1.0, chip_lo=0.35, chip_hi=0.62)   # lighter chip growth (cream pads read blotchy)
     for s_, S in ((1, 'L'), (-1, 'R')):
         card(a, D.serial_plate(('GC-X1 CINDERHOUND', 'GRAUWERK PIER DIV.  LOT 12'), w=720, seed=77 + s_),
              (s_ * 1.51, -0.3, 4.62), (s_, 0, 0), size=(0.4, None), parent='thigh_' + S)
@@ -772,7 +836,7 @@ VIEWS = {
 CLAY = dict(VIEWS, side=dict(azimuth=-90, elevation=4, lens=50, distance=26, target=(0, -0.8, 4.9)))
 # Grauwerk scheme (benchmark s5), oxide desaturated ~30% (it read as a red toy under the warm grade)
 COLORS = {'paint_primary': {'color': '#5A3B33', 'rough': 0.54, 'metal': 0.25},
-          'paint_secondary': {'color': '#BDB39A', 'rough': 0.58, 'metal': 0.08, 'grime': 1.2},
+          'paint_secondary': {'color': '#BDB39A', 'rough': 0.58, 'metal': 0.08, 'grime': 1.2, 'wear': 0.35},
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#33302E', 'rough': 0.52, 'metal': 0.3},
           'steel_dark': {'color': '#45423F'}, 'chrome': {'color': '#D9DBDD', 'rough': 0.2},
           'marker_red': dict(color='#180806', metal=0.0, rough=0.25, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
@@ -788,13 +852,18 @@ OBJ_WEIGHT = {'head_geo': 1.8, 'torso_geo': 1.45, 'weapon_R_geo': 1.1, 'booster_
               'weapon_L_geo': 1.15, 'shin_L_geo': 1.1, 'shin_R_geo': 1.1}
 # r2: wear = crisp bare-steel chips on the EDGES (no white flat-panel dabs or pale ash smudges on the
 # oxide tops), more roughness break-up
-WEATHER = iw.Weathering(edge_wear=1.5, grime=1.35, streaks=1.6, rust=0.95, dust=0.15, chip_threshold=0.54,
-                        flat_chips=0.12, macro=0.11, ground_dirt=0.55, ao_in_albedo=0.0, rough_breakup=0.3,
-                        edge_lo=0.08, edge_hi=0.34, edge_polish=0.05, bare_dark=(0.19, 0.195, 0.2),
-                        bare_light=(0.28, 0.29, 0.3))
+# r3: the player's wear recipe (wider chips to bare steel, plates not suppressed as 'thin'); the rig
+# texture post-pass (rigpipe.post_weather) adds the per-part grime gradient, soot and throat ramps
+# ground_dirt=0: iwkit's ground-dirt gradient inverts (see build_player.py); rigpipe does it per part
+WEATHER = iw.Weathering(edge_wear=1.4, grime=1.35, streaks=1.6, rust=0.8, dust=0.15, chip_threshold=0.62,
+                        flat_chips=0.08, macro=0.12, ground_dirt=0.0, ao_in_albedo=0.0, rough_breakup=0.32,
+                        edge_lo=0.1, edge_hi=0.4, edge_polish=0.05, thin_suppress=0.5,
+                        bare_dark=(0.22, 0.23, 0.24), bare_light=(0.31, 0.32, 0.33))
 SET_B = ('pelvis', 'thigh', 'shin', 'foot', 'booster', 'nozzle')
-TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1024, 'normal': 2048, 'emissive': 1024},   # r2: ORM 1024 (GLB budget)
-             'B': {'basecolor': 2048, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
+BAKE_KW = {'edge': 0.035}
+# r3: ORM A 1536 (r2: 1024), basecolor B 1536 (r2: 2048); WebP qualities keep the GLB at r2's ~2.07 MB
+TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1536, 'normal': 2048, 'emissive': 1024},
+             'B': {'basecolor': 1536, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
 
 
 def set_of(name):
@@ -803,8 +872,8 @@ def set_of(name):
 
 def main():
     R.run(NAME, build, add_decals, set_of, scheme='grauwerk', colors=COLORS, seed=13, obj_weight=OBJ_WEIGHT,
-          weathering=WEATHER, views=VIEWS, clay=CLAY, tex_sizes=TEX_SIZES,
-          tex_quality={'basecolor': 84, 'orm': 78, 'normal': 88, 'decals': 85})
+          weathering=WEATHER, views=VIEWS, clay=CLAY, tex_sizes=TEX_SIZES, bake_kw=BAKE_KW,
+          tex_quality={'basecolor': 76, 'orm': 66, 'normal': 72, 'decals': 80})
 
 
 if __name__ == '__main__':

@@ -39,9 +39,11 @@ void main() {
     off = (p / max(r, 1e-3)) * front * (1.0 - t) * str * 0.011;
   } else {
     // heat shimmer: animated noise gradient, soft round mask
-    vec2 q = vUv * 1.7 + vec2(0.0, -uTime * 1.9) + vData.x * 0.13;
+    // (combat r3: the old '- 0.5' bias turned overlapping shimmer sprites into a constant image
+    //  shove; the noise is zero-mean now, and finer, so it reads as boiling hot air)
+    vec2 q = vUv * 2.6 + vec2(0.0, -uTime * 2.4) + vData.x * 0.13;
     float n1 = texture2D(tNoise, q).a * 2.0 - 1.0, n2 = texture2D(tNoise, q + vec2(0.37, 0.11)).a * 2.0 - 1.0;
-    off = (vec2(n1, n2) - 0.5) * (1.0 - smoothstep(0.2, 1.0, r)) * sin(t * 3.14159) * str * 0.012;
+    off = vec2(n1, n2) * 1.6 * (1.0 - smoothstep(0.15, 1.0, r)) * sin(t * 3.14159) * str * 0.012;
   }
   if (uHasDepth > 0.5) {
     float sd = texture2D(tDepth, gl_FragCoord.xy / uRes).r;

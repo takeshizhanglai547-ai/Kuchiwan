@@ -24,7 +24,7 @@
 //                                       restart cuts it too. Unknown text -> procedural voice.
 //   voDuration(line)                    seconds of the recorded line (0 if none) for subtitle sync
 //   level()                             0..1 comm-voice level (for UI visualisers)
-//   setVolume(0..1) / setMusicVolume(0..1) / stopAll()
+//   setVolume(0..1) / setMusicVolume(0..1) / setBusVolume("sfx"|"voice", 0..1) / stopAll()
 //   unlocked (getter), debug()          state for tests / the debug overlay
 // Driven automatically every frame (allocation-free): booster roar bed (pitch/filter by speed,
 // AB flutter), servo whine from aim slew, footfalls on the rig's walk-cycle plants, boost
@@ -43,6 +43,7 @@ import { jetTargets, makeJetTargets, dopplerRatio } from './beds.js';
 import { makeHit } from '../core/physics.js';
 import { VO_TABLE } from './vo_table.js';
 import { COMM_BRIEF } from './voice.js';
+import { STAGE_PRE } from './sfx.js';
 
 // subtitle text -> VO key (whitespace / case-insensitive, so a re-flowed line still matches)
 const normText = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -394,13 +395,21 @@ export default function audioSystem(game) {
         syncMusic();
       });
       g.events.on('session:start', () => resetState());
-      g.events.on('mission:stage', (e) => { st.stage = e.stage; st.activity = game.rawTime; syncMusic(); });
+      g.events.on('mission:stage', (e) => {
+        st.stage = e.stage; st.activity = game.rawTime; syncMusic();
+        // stage 1: transition stinger whose hit is the downbeat of section B of the score
+        if (running() && e.stage === 1) { const now = ctx.currentTime; E.play('stage_stinger', null, now); E.music.jump(1, now + STAGE_PRE + 0.004); }
+      });
       g.events.on('mission:complete', () => { st.ended = true; st.endT = ctx ? ctx.currentTime : 0; });
       g.events.on('mission:failed', () => { st.ended = true; st.endT = ctx ? ctx.currentTime : 0; });
       g.events.on('weapon:fired', () => { st.activity = game.rawTime; });
       g.events.on('actor:hit', () => { st.activity = game.rawTime; });
       g.events.on('enemy:spawned', (e) => { if (e && e.type === 'boss') st.boss = e.enemy; });
-      g.events.on('boss:intro', (e) => { if (e && e.boss) st.boss = e.boss; if (running()) E.play('boss_stinger'); });
+      g.events.on('boss:intro', (e) => {
+        if (e && e.boss) st.boss = e.boss;
+        // the boss stinger's hit (0.85 s) is the downbeat of section C (half-time drop, then the build)
+        if (running()) { const now = ctx.currentTime; E.play('boss_stinger', null, now); E.music.jump(2, now + 0.85 + 0.004); }
+      });
       g.events.on('weapon:reloaded', (e) => { if (running() && e.owner === game.player && game.player) { po.pos = game.player.pos; po.volume = po.pitch = undefined; po.occl = 0; E.play('reload', po); } });
       g.events.on('actor:killed', (e) => { if (running() && e.team === 'enemy' && e.by === game.player) E.play('kill_confirm'); });
       g.events.on('projectile:impact', onImpact);
@@ -463,6 +472,8 @@ export default function audioSystem(game) {
     level() { return E ? E.level() : 0; },
     setVolume(v) { if (E) E.setVolume(v); },
     setMusicVolume(v) { if (E) E.setMusicVolume(v); },
+    /** (UI lane, OPTIONS) 'sfx' | 'voice' user volume 0..1. */
+    setBusVolume(kind, v) { if (E && E.setBusVolume) E.setBusVolume(kind, v); },
     setListener() { if (E && game.camera) E.setListenerMatrix(game.camera.matrixWorld.elements); },
     stopAll() { if (E) E.stopAll(); },
     debug() { return E ? E.debug() : { state: 'locked', voices: 0, bank: 0, musicLayers: 0 }; },

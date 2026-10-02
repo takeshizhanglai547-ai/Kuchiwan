@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SFX, PRERENDER_ORDER } from '../src/audio/sfx.js';
 import { jetTargets, makeJetTargets } from '../src/audio/beds.js';
-import { MIX, LAYER_NAMES, LOOP, BPM, BARS, LAYER_RMS } from '../src/audio/music.js';
+import { MIX, LAYER_NAMES, LOOP, BPM, BARS, LAYER_RMS, MusicPlayer, SEG, BAR_S, bowedKS } from '../src/audio/music.js';
 import { makeRng, hashStr } from '../src/audio/dsp.js';
 
 // ARCHITECTURE §10 sound ids used by gameplay code
@@ -91,4 +91,40 @@ test('every LEDGER radio line has a recorded voice-over in the manifest', async 
     // edited subtitle text -> audio.js plays the most similar recording; flag it, do not fail
     if (RADIO[key] && RADIO[key].en !== v.en) console.warn(`[vo] "${key}" subtitle changed since the VO build; re-run assets/audio/build_vo.py`);
   }
+});
+
+test('bowed KS string is stable, pitched and decays after the bow lifts', () => {
+  const sr = 16000, n = sr * 2, f = 110;
+  const y = bowedKS(sr, n, [[0.05, 0.8, 45, 0.8]], makeRng(3), { ring: 4 });
+  let pk = 0, tail = 0;
+  for (let i = 0; i < n; i++) { const a = Math.abs(y[i]); assert.ok(Number.isFinite(y[i])); if (a > pk) pk = a; if (i > sr * 1.6) tail = Math.max(tail, a); }
+  assert.ok(pk > 0.05 && pk < 50, `peak ${pk}`);
+  assert.ok(tail < pk * 0.05, 'damped once the bow lifts');
+  // autocorrelation peak at the string period (A2 = 110 Hz)
+  const seg = y.subarray(Math.round(sr * 0.4), Math.round(sr * 0.8)), P = Math.round(sr / f);
+  const ac = (lag) => { let s = 0; for (let i = 0; i + lag < seg.length; i++) s += seg[i] * seg[i + lag]; return s; };
+  assert.ok(ac(P) > 0.5 * ac(0), 'periodic at the played pitch');
+  assert.ok(ac(P) > ac(Math.round(P * 1.5)), 'not periodic at 1.5x the period');
+});
+
+test('music player sequences sections on the grid and never repeats a section 3x', () => {
+  // a minimal fake AudioContext (graph calls are no-ops; the player only needs timing)
+  const node = () => ({ connect() {}, disconnect() {}, gain: param(), frequency: param(), Q: param(), detune: param(), start() {}, stop() {}, buffer: null, onended: null });
+  function param() { return { value: 0, setValueAtTime() {}, setTargetAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, exponentialRampToValueAtTime() {} }; }
+  const ctx = { currentTime: 0, startRendering() {}, createGain: node, createBiquadFilter: node, createBufferSource: node };
+  const m = new MusicPlayer(ctx, node());
+  m.setState('boss', 0.1);
+  for (const l of LAYER_NAMES) for (let s = 0; s < 3; s++) m.add(l, { duration: SEG + 3.5 }, s);
+  assert.equal(m.ready, 5); assert.equal(m.sectionsReady, 3);
+  const t0 = m.segT;
+  for (let k = 0; k < 40; k++) { ctx.currentTime = m.nextT - 1.0; m.tick(); }
+  const f = m.form.join('');
+  assert.ok(!/(A{3}|B{3}|C{3})/.test(f), `form ${f}`);
+  assert.ok(new Set(m.form).size === 3, `uses every section: ${f}`);
+  assert.ok(Math.abs(((m.segT - t0) / SEG) - Math.round((m.segT - t0) / SEG)) < 1e-6, 'sections start on the section grid');
+  // a jump lands on the given bar line and restarts the grid there
+  const at = m.nextBar(ctx.currentTime + 0.3);
+  assert.ok(Math.abs(((at - m.segT) / BAR_S) - Math.round((at - m.segT) / BAR_S)) < 1e-6, 'nextBar is on a bar line');
+  m.jump(1, at); assert.equal(m.segT, at); assert.equal(m.form[m.form.length - 1], 'B');
+  m.dispose();
 });

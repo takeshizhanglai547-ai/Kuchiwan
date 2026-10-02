@@ -55,7 +55,9 @@ void main() {
   vec3 vv = mat3(viewMatrix) * (vel - uCamVel) * uShutter;
   float depth = max(-mv.z, 0.1);
   vec2 s = vv.xy;
-  float sl = min(length(s), depth * 0.08);
+  // dead zone: the wind drift alone (~5 m/s -> 9 cm per 1/60 s) keeps the flakes round motes
+  // (horizontal dashes on the sky read as scratch noise); camera boosts still streak them
+  float sl = min(max(length(s) - 0.14, 0.0), depth * 0.08);
   vec2 ay = sl > 1e-5 ? s / length(s) : vec2(0.0, 1.0);
   vec2 ax = vec2(ay.y, -ay.x);
   float halfLen = size + sl * 0.5;
@@ -72,9 +74,10 @@ void main() {
   float fwd = pow(max(mu, 0.0), 5.0);
   // dark grey-brown ash (#6E6660 .. #8A8580 lit), never near-white: sky fill + a modest
   // forward-scatter glow when back-lit by the sun
-  vec3 ash = vec3(0.17, 0.16, 0.15) * (uAmb + uSunCol * (0.3 + 1.1 * fwd));
+  // (side-lit flakes stay darker than the storm sky: dark motes, not light scratches)
+  vec3 ash = vec3(0.17, 0.16, 0.15) * (uAmb * 0.8 + uSunCol * (0.12 + 1.2 * fwd));
   vCol = ember ? vec3(5.5, 1.6, 0.35) * mix(0.5, 1.4, fract(r * 57.0 + uTime * 0.7)) : ash;
-  vA *= ember ? 1.0 : (nearL ? 0.9 : 0.5);
+  vA *= ember ? 1.0 : (nearL ? 0.9 : 0.38);
   gl_Position = projectionMatrix * mv;
   vec4 mvPosition = mv;
   #include <fog_vertex>

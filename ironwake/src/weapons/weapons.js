@@ -30,8 +30,9 @@ export const WEAPONS = {
     speed: 550, range: 360, spread: 0.35,              // spread: degrees (gaussian-ish cone)
     auto: true, fireInterval: 0.294, burst: 1, burstInterval: 0.05,
     magSize: 18, ammo: 540, reloadTime: 2.2,
-    projectile: 'bullet', tracerColor: [2.8, 1.6, 0.42], tracerWidth: 0.36, tracerLength: 24, // #FFD27A, HDR
+    projectile: 'bullet', tracerColor: [2.8, 1.6, 0.42], tracerWidth: 0.42, tracerLength: 24, // #FFD27A, HDR
     muzzleFx: 'muzzle_rifle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35, shake: 0.06,
+    rigFlash: { node: 'shoulder_R', back: 1.6, up: 0.6, color: [1, 0.66, 0.34], intensity: 26, range: 12, dur: 0.05 },
   },
   blade_pulse: {
     id: 'blade_pulse', name: 'PB-7 EMBERLINE', label: 'L-ARM', jp: '左腕 パルスブレード', type: 'blade',
@@ -46,7 +47,7 @@ export const WEAPONS = {
     speed: 60, maxSpeed: 250, accel: 700, turnRate: 4.5, homingDelay: 0.15, life: 5,
     reloadTime: 4.2, ammo: 120, magSize: 6,
     projectile: 'missile', bodyColor: [0.3, 0.3, 0.29], glowColor: [7, 3.6, 1.3],
-    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStyle: 'missile',
+    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStep: 1.8, trailStyle: 'missile',
     sound: 'missile_launch', recoil: 0.2, shake: 0.08,
   },
   cannon_heavy: {
@@ -94,7 +95,7 @@ export const WEAPONS = {
     count: 4, launchInterval: 0.1, maxTargets: 1, speed: 60, maxSpeed: 200, accel: 400, turnRate: 2.6,
     homingDelay: 0.25, life: 5, reloadTime: 7, ammo: Infinity, magSize: 4,
     projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
-    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStyle: 'missile', sound: 'missile_launch',
+    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStep: 1.8, trailStyle: 'missile', sound: 'missile_launch',
   },
 };
 
@@ -268,6 +269,14 @@ export class Loadout {
       const mz = owner.rig && owner.rig.muzzles ? owner.rig.muzzles[s.key] : null;
       _muzzleOpts.anchor = mz && game.fx.anchor ? game.fx.anchor(mz, _pos) : 255;
       game.fx.spawn(d.muzzleFx, _pos, _dir, _muzzleOpts);
+      // rig flash: a brief warm light behind the firing shoulder, so a shot reads on the rig's
+      // BACK from the chase camera (the muzzle light only reaches the front)
+      const rf = d.rigFlash;
+      if (rf && owner.rig && owner.rig.getNodeWorld && game.fx.flash) {
+        owner.rig.getNodeWorld(rf.node, _t);
+        owner.forward(_u); _t.addScaledVector(_u, -rf.back); _t.y += rf.up;
+        game.fx.flash(_t, rf.color, rf.intensity, rf.range, rf.dur);
+      }
     }
     if (d.fovKick && owner === game.player && game.cam.fovKick) game.cam.fovKick(d.fovKick, 0.28);
     if (d.sound) game.audio.play(d.sound, { pos: _pos });

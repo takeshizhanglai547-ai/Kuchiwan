@@ -18,7 +18,7 @@
 import * as THREE from 'three';
 
 /** Art-direction knobs (per world metre emission, steps). */
-export const PLUME = { steps: 12, density: 7.0, coreBoost: 2.4, diamonds: 1.4, softCap: 0.04 };
+export const PLUME = { steps: 12, density: 10.0, coreBoost: 2.4, diamonds: 1.4, softCap: 0.12 };   // r3: denser mantle, harder highlight cap (no end-on glare)
 
 const VERT = /* glsl */`
 varying vec3 vObj; varying vec3 vCamObj; varying vec2 vScale;
