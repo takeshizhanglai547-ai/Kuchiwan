@@ -24,7 +24,7 @@
 //   layers  [[t, label], ...] documentation only: layer onsets, drawn on tools/audio_sheet.mjs
 import {
   gain, filt, chain, shaper, thump, noiseHit, modal, fm, crackle, whoosh, tone, tremolo, noiseSrc, sweep, points, nwave,
-  resonator, brass, ringMod, makeRng, hashStr, normalizeBuffer, midiHz,
+  resonator, brass, ringMod, makeRng, hashStr, normalizeBuffer, midiHz, noiseBank, smoothNoise, curveParam,
 } from './dsp.js';
 
 // Reusable metal part sets (Hz, amp, decay s) — tuned by ear to read as heavy steel.
@@ -57,6 +57,43 @@ function debris(ac, out, t, r, n, t0, t1, heavy, g) {
     }
     crackle(ac, out, tt + 0.002, r, { type: 'bandpass', f: r.range(2500, 4500), Q: 0.8, attack: 0.002, decay: r.range(0.05, 0.14), gain: vol * 0.45 }); // grit
   }
+}
+
+/**
+ * Environmental slap-back for gunfire (the dock's container walls and the foundry facade throw
+ * the shot back): three delayed copies of the dry signal, band-passed 300 Hz-2 kHz (each later
+ * one darker), at 90-260 ms (randomised per variant) and -14 / -20 / -26 dB, the first two
+ * panned +-40 deg to opposite sides, each smeared by a second tap 6-16 ms later (a facade is a
+ * rough reflector, not a mirror). `out` must be a stereo destination.
+ */
+function slapEcho(ac, src, out, r, g = 1, hpF = 300, lpF = 2000) {
+  const hp = filt(ac, 'highpass', hpF, 0.7); src.connect(hp);
+  const side = r.sign(), P = 40 / 90;
+  const taps = [[r.range(0.09, 0.125), -14, side * P], [r.range(0.15, 0.2), -20, -side * P], [r.range(0.21, 0.26), -26, r.range(-0.5, 0.5) * P]];
+  taps.forEach(([d, db, pan], i) => {
+    const lp = filt(ac, 'lowpass', lpF * (1 - i * 0.19), 0.7), sp = ac.createStereoPanner(), a = Math.pow(10, (db + 4) / 20) * g; // +4: in-band level re the dry shot
+    sp.pan.value = pan;
+    chain(lp, sp, out);
+    for (const [dd, aa] of [[0, 1], [r.range(0.006, 0.016), 0.45]]) {
+      const dl = ac.createDelay(1); dl.delayTime.value = d + dd;
+      chain(hp, dl, gain(ac, a * aa), lp);
+    }
+  });
+  // far-wall roll: after the discrete slaps the shot keeps rolling around the dock - a sparse
+  // stereo echo field (reflections from 0.27 s on, density rising, -30 dB over ~0.9 s, each
+  // reflection a 1-4 ms smeared burst), darker than the slaps
+  const sr = ac.sampleRate, n = Math.ceil(sr * 1.15), ir = ac.createBuffer(2, n, sr);
+  const L = ir.getChannelData(0), R = ir.getChannelData(1);
+  for (let k = 0; k < 46; k++) {
+    const u = Math.sqrt(r()), tt = 0.27 + u * 0.82, a = Math.pow(10, (-30 * (tt - 0.27) / 0.9) / 20) * r.range(0.3, 1);
+    const i0 = Math.floor(tt * sr), len = Math.floor(sr * r.range(0.001, 0.004)), w = r(), d = r() < 0.5 ? L : R;
+    for (let j = 0; j < len && i0 + j < n; j++) {
+      const v = a * Math.exp(-j / (len * 0.35)) * (r() * 2 - 1);
+      d[i0 + j] += v * (0.55 + 0.45 * w); (d === L ? R : L)[i0 + j] += v * 0.45 * (1 - w);
+    }
+  }
+  const conv = ac.createConvolver(); conv.normalize = false; conv.buffer = ir;
+  chain(hp, filt(ac, 'lowpass', lpF * 0.65, 0.7), conv, filt(ac, 'lowpass', lpF * 0.8, 0.6), gain(ac, 0.1 * g), out);
 }
 
 // foot plate modes (Hz 421/786/1233/1897 as ratios) and the leg frame
@@ -110,9 +147,13 @@ function footfall(ac, out, t, r, steel) {
 export const SFX = {
   // ------------------------------------------------------------------ player weapons
   rifle: {
-    bus: 'sfx', ref: 22, send: 0.3, prio: 6, max: 6, gap: 0.03, pv: 70, vv: 1.5, variants: 4, dur: 0.8, gain: 0.62,
-    layers: [[0, 'N-wave+crack'], [0.001, 'sub punch'], [0.034, 'bolt clack'], [0.12, 'air tail']],
+    // stereo: the dry shot is centred, its environmental slap-backs come back from the sides
+    bus: 'sfx', ref: 22, send: 0.42, stereo: true, prio: 6, max: 6, gap: 0.03, pv: 70, vv: 1.5, variants: 4, dur: 1.35, gain: 0.62,
+    layers: [[0, 'N-wave+crack'], [0.001, 'sub punch'], [0.034, 'bolt clack'], [0.09, 'slap echoes x3 (+-40 deg)'], [0.12, 'air tail'], [0.3, 'far-wall roll']],
     render(ac, out, t, r) {
+      const dry = gain(ac, 1); dry.connect(out);
+      slapEcho(ac, dry, out, r);
+      out = dry;
       const dr = shaper(ac, 2.4, 0.08); const pre = gain(ac, 0.8); chain(pre, dr, out);
       nwave(ac, out, t, 1.3 * r.range(0.9, 1.1), 0.75);                                                                           // shock front
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 2600, Q: 0.7, attack: 0.0004, decay: 0.02, gain: 1.1 });     // crack
@@ -126,8 +167,12 @@ export const SFX = {
     },
   },
   enemy_gun: {
-    bus: 'sfx', ref: 26, send: 0.35, prio: 4, max: 8, gap: 0.035, pv: 90, vv: 2, variants: 4, dur: 0.6, gain: 0.5,
+    bus: 'sfx', ref: 26, send: 0.35, stereo: true, prio: 4, max: 8, gap: 0.035, pv: 90, vv: 2, variants: 4, dur: 1.3, gain: 0.5,
+    layers: [[0, 'N-wave+crack+blast'], [0.02, 'action clack'], [0.09, 'slap echoes'], [0.3, 'far-wall roll']],
     render(ac, out, t, r) {
+      const dry = gain(ac, 1); dry.connect(out);
+      slapEcho(ac, dry, out, r, 0.75); // the same dock walls answer the enemy's fire
+      out = dry;
       const pre = gain(ac, 0.8); chain(pre, shaper(ac, 2), out);
       nwave(ac, out, t, 0.9 * r.range(0.9, 1.1), 0.6);
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 3200, attack: 0.0004, decay: 0.012, gain: 0.8 });
@@ -155,51 +200,56 @@ export const SFX = {
   },
   blade: {
     bus: 'sfx', ref: 20, send: 0.25, prio: 7, max: 2, gap: 0.1, pv: 50, vv: 1, variants: 3, dur: 0.95, gain: 0.62,
-    layers: [[0, 'plasma ignition'], [0.12, 'arc whoosh'], [0.4, 'hum decay']],
+    layers: [[0, 'arc ignition'], [0.004, 'plasma body (inharmonic noise banks)'], [0.12, 'arc whoosh'], [0.4, 'decay']],
     render(ac, out, t, r) {
-      // plasma hum: two saws detuned +-7 cents (slow beating) whose pitch rides the swing
-      // (Doppler-like rise through the arc, sag as it slows), 18 Hz AM wobble, filter opens then
-      // settles; plus band-passed plasma hiss 2-6 kHz and arc crackle
-      const g = gain(ac, 0);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.7, t + 0.03);
-      g.gain.setTargetAtTime(0.45, t + 0.1, 0.1); g.gain.setTargetAtTime(0, t + 0.42, 0.09);
-      const f = filt(ac, 'lowpass', 400, 3);
-      f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(3800, t + 0.12); f.frequency.exponentialRampToValueAtTime(850, t + 0.6);
-      const hp = filt(ac, 'highpass', 90, 0.7);
-      const wob = tremolo(ac, t, 0.95, 18 * r.range(0.92, 1.08), 0.38);
-      chain(f, shaper(ac, 2.4), hp, wob, g, out);
-      const f0 = 98 * r.cents(25);
-      // unstable plasma: low-passed noise jitters both saws' pitch (+-12 cents), smearing the
-      // upper harmonics into a rough band instead of a fixed comb
-      const jit = noiseSrc(ac, 'white', t, 0.95, r), jl = filt(ac, 'lowpass', 70, 0.7), jg = gain(ac, 12 * 2.2);
-      chain(jit, jl, jg);
-      for (const dt of [-7, 7]) {
-        const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = dt;
-        points(o.frequency, t, [[0, f0 * 0.97], [0.14, f0 * 1.05, 'e'], [0.5, f0 * 0.93, 'e'], [0.9, f0 * 0.9, 'e']]);
-        jg.connect(o.detune);
-        chain(o, f); o.start(t); o.stop(t + 0.95);
-      }
-      // plasma hiss: band-limited noise 2-6 kHz following the hum envelope
-      const hiss = noiseSrc(ac, 'white', t, 0.9, r), hb = filt(ac, 'highpass', 2000, 0.7), hl = filt(ac, 'lowpass', 6000, 0.7), hg = gain(ac, 0);
-      hg.gain.setValueAtTime(0, t); hg.gain.linearRampToValueAtTime(0.5, t + 0.05);
-      hg.gain.setTargetAtTime(0.26, t + 0.14, 0.08); hg.gain.setTargetAtTime(0, t + 0.42, 0.1);
-      chain(hiss, hb, hl, hg, out);
+      // plasma body WITHOUT oscillators: two sustained noise-excited resonator banks on
+      // inharmonic ratios (Q 12-30 low body, Q 8-16 upper rasp), so there is no evenly spaced
+      // harmonic comb. The whole bank rides the swing (rises through the arc, sags as it slows)
+      // plus a 3 % smoothed-random pitch drift; amplitude flutter is smoothed noise (no sine LFO,
+      // no periodic striation); saturation turns the narrow bands into a dirty roar
+      const D = 0.92, k = r.range(0.95, 1.05);
+      const env = gain(ac, 0);
+      env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.8, t + 0.025);
+      env.gain.setTargetAtTime(0.5, t + 0.1, 0.1); env.gain.setTargetAtTime(0, t + 0.42, 0.09);
+      const flut = gain(ac, 1); curveParam(flut.gain, t, D, smoothNoise(r, D, 13), 0.78, 0.22);
+      const lp = filt(ac, 'lowpass', 520, 0.9);
+      points(lp.frequency, t, [[0, 520], [0.12, 4400, 'e'], [0.6, 1100, 'e']]);
+      const body = gain(ac, 2.6);
+      chain(body, shaper(ac, 2.2, 0.06), lp, filt(ac, 'highpass', 55, 0.7), flut, env, out);
+      const contour = [[0, 0.96], [0.14, 1.06, 'e'], [0.5, 0.93, 'e'], [0.9, 0.9, 'e']];
+      noiseBank(ac, body, t, r, { f: 84 * k, ratios: [1, 1.41, 2.13, 2.87, 3.62, 4.93, 6.41], Q: [12, 30], spread: 0.03, tilt: 0.8, dur: D, contour, drift: 52, driftRate: 4, jitter: 16 });
+      noiseBank(ac, body, t, r, { f: 640 * k, ratios: SCRAP, Q: [8, 16], spread: 0.06, tilt: 0.7, dur: D, contour, drift: 70, driftRate: 6, gain: 0.5 });
+      // arc ignition: crack + low 'vwomp' (a 60 t rig's arm commits to the swing)
+      noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 2600, attack: 0.0004, decay: 0.01, gain: 0.7 });
+      thump(ac, out, t, { f0: 74 * k, f1: 40, sweep: 0.12, dur: 0.24, gain: 0.32 });
+      // plasma crackle, band-limited 2.5-6 kHz, following the body envelope
+      const cg = gain(ac, 0); cg.connect(out);
+      cg.gain.setValueAtTime(0, t); cg.gain.linearRampToValueAtTime(1, t + 0.03); cg.gain.setTargetAtTime(0.5, t + 0.14, 0.08); cg.gain.setTargetAtTime(0, t + 0.42, 0.1);
+      noiseHit(ac, cg, t + 0.004, r, { kind: 'crackle', type: 'highpass', f0: 2500, f2: 6000, type2: 'lowpass', attack: 0.004, decay: 0.8, gain: 0.55 });
+      noiseHit(ac, cg, t + 0.004, r, { kind: 'white', type: 'highpass', f0: 2500, f2: 6000, type2: 'lowpass', attack: 0.02, decay: 0.8, gain: 0.22 }); // hiss
       whoosh(ac, out, t, r, { f0: 450, f1: 3400, f2: 800, Q: 1.3, attack: 0.12, decay: 0.38, gain: 0.8 });
-      crackle(ac, out, t + 0.02, r, { type: 'highpass', f: 3000, attack: 0.03, decay: 0.45, gain: 0.35 });
     },
   },
   blade_hit: {
-    bus: 'impact', ref: 30, send: 0.4, prio: 9, max: 2, gap: 0.08, pv: 40, vv: 1, variants: 3, dur: 1.6, gain: 0.85,
-    layers: [[0, 'sub thump+burn'], [0, 'FM metal shear'], [0.02, 'plasma sizzle']],
+    bus: 'impact', ref: 30, send: 0.4, prio: 9, max: 2, gap: 0.08, pv: 40, vv: 1, variants: 3, dur: 1.1, gain: 0.85,
+    layers: [[0, 'sub thump+burn'], [0, 'armour modes x8 (noise-excited)'], [0.004, 'shear scrape'], [0.01, 'plasma sizzle']],
     duck: [0.38, 0.2, 0.8],
     render(ac, out, t, r) {
       const pre = gain(ac, 0.9); chain(pre, shaper(ac, 3.2, 0.1), out);
-      thump(ac, pre, t, { f0: 88, f1: 30, sweep: 0.2, dur: 0.45, gain: 0.7 });
+      thump(ac, pre, t, { f0: 88, f1: 32, sweep: 0.18, dur: 0.38, gain: 0.55 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 7500, f1: 800, attack: 0.001, decay: 0.28, gain: 1.4 });
-      fm(ac, out, t, { f: 1150 * r.range(0.95, 1.05), ratio: 1.414, idx0: 4, idx1: 0.4, decay: 0.7, gain: 0.36 });
-      modal(ac, out, t, r, { partials: [[640, 0.5, 0.5], [1370, 0.4, 0.4], [2210, 0.3, 0.3], [3480, 0.2, 0.22]], gain: 0.42, detune: 40, grit: 0.45 });
-      crackle(ac, out, t, r, { type: 'bandpass', f: 2100, Q: 0.8, attack: 0.003, decay: 0.65, gain: 0.75 });
-      noiseHit(ac, out, t + 0.02, r, { kind: 'white', type: 'highpass', f0: 4800, attack: 0.02, decay: 0.7, gain: 0.18 });
+      // struck armour: 8 noise-excited inharmonic modes, each +-15 % per variant, decays 0.1-0.6 s
+      // (no FM / sine partials: rough steel bands, never a comb or a bell)
+      resonator(ac, out, t, r, { f: 410 * r.range(0.9, 1.1), ratios: [1, 1.52, 2.21, 2.94, 3.71, 4.62, 5.83, 7.1], Q: [14, 30], spread: 0.15, decay: [0.1, 0.6], tilt: 0.84, burstF: 2600, burstGain: 0.5, gain: 1.7 });
+      // the second, thinner plate layer the blade tears through
+      resonator(ac, out, t + 0.006, r, { f: 1250 * r.range(0.88, 1.12), ratios: SCRAP, Q: [12, 24], spread: 0.15, decay: [0.08, 0.3], burstF: 4200, gain: 0.8 });
+      // shear: the blade dragging through plate - a falling noise band with random flutter
+      const sh = gain(ac, 1); curveParam(sh.gain, t, 0.5, smoothNoise(r, 0.5, 28), 0.6, 0.4); sh.connect(out);
+      noiseHit(ac, sh, t + 0.004, r, { kind: 'white', type: 'bandpass', f0: 5200 * r.range(0.9, 1.1), f1: 1300, fdur: 0.32, Q: 3.5, attack: 0.01, decay: 0.38, gain: 1.0 });
+      // plasma sizzle: crackle band-limited 2.5-6 kHz + a burning low crackle + melt hiss
+      noiseHit(ac, out, t + 0.01, r, { kind: 'crackle', type: 'highpass', f0: 2500, f2: 6000, type2: 'lowpass', attack: 0.004, decay: 0.7, gain: 0.7 });
+      crackle(ac, out, t, r, { type: 'bandpass', f: 1600, Q: 0.8, attack: 0.003, decay: 0.55, gain: 0.45 });
+      noiseHit(ac, out, t + 0.02, r, { kind: 'white', type: 'highpass', f0: 4800, attack: 0.02, decay: 0.7, gain: 0.14 });
     },
   },
   missile_launch: {
@@ -216,10 +266,13 @@ export const SFX = {
     },
   },
   cannon: {
-    bus: 'impact', ref: 32, send: 0.45, prio: 9, max: 2, gap: 0.2, pv: 40, vv: 1, variants: 3, dur: 2.6, gain: 0.95,
+    bus: 'impact', ref: 32, send: 0.45, stereo: true, prio: 9, max: 2, gap: 0.2, pv: 40, vv: 1, variants: 3, dur: 2.6, gain: 0.95,
     duck: [0.42, 0.22, 0.9],
-    layers: [[0, 'shock+sub boom'], [0.16, 'breech clank'], [0.55, 'casing clinks'], [1.0, 'rumble']],
+    layers: [[0, 'shock+sub boom'], [0.09, 'slap echoes (+-40 deg)'], [0.16, 'breech clank'], [0.55, 'casing clinks'], [1.0, 'rumble']],
     render(ac, out, t, r) {
+      const dry = gain(ac, 1); dry.connect(out);
+      slapEcho(ac, dry, out, r, 0.9, 150, 1500); // a darker, lower slap for the big gun
+      out = dry;
       const pre = gain(ac, 0.85); chain(pre, shaper(ac, 3, 0.1), out);
       nwave(ac, out, t, 2.6, 0.9);                                                                                         // shock front
       noiseHit(ac, out, t, r, { kind: 'white', type: 'highpass', f0: 1900, attack: 0.0004, decay: 0.03, gain: 1.2 });           // crack
@@ -385,22 +438,35 @@ export const SFX = {
       // posture break: hull thump, then the frame's armour plate is hammered by a burst of
       // electrical-overload crackle (a 10-mode inharmonic plate bank, 0.45 s modal decay, so
       // every crackle impulse rings real plate modes), a sputtering power-down sweep of noise
-      // (no oscillator partials) and the overload chatter
+      // (no oscillator partials) and the overload chatter; every modulation is a random burst
+      // train or smoothed noise (round 4: the fixed 17 / 23 Hz AM read as periodic striations)
       const pre = gain(ac, 0.8); chain(pre, shaper(ac, 3), out);
       thump(ac, pre, t, { f0: 92, f1: 36, sweep: 0.15, dur: 0.28, gain: 0.55 });
       noiseHit(ac, pre, t, r, { kind: 'pink', type: 'lowpass', f0: 5000, f1: 600, attack: 0.001, decay: 0.15, gain: 1.1 });
       const k = r.range(0.95, 1.05);
       const plate = plateBank(ac, out, r, { f: 188 * k, ratios: PLATE_MODES, t60: [0.45, 0.14], gain: 0.05 });
-      const ex = noiseSrc(ac, 'crackle', t, 0.5, r, 1.6), exg = gain(ac, 0);
-      const hits = [[0, 1], [r.range(0.05, 0.07), 0.55], [r.range(0.11, 0.14), 0.4], [r.range(0.19, 0.24), 0.28]];
+      // plate excitation: the strike + an IRREGULAR train of overload arcs (random gaps that
+      // widen as the frame discharges, random levels) - no fixed-rate gating, so no striations
+      const ex = noiseSrc(ac, 'crackle', t, 0.6, r, 1.6), exg = gain(ac, 0);
       exg.gain.setValueAtTime(0, t);
-      for (const [dt, a] of hits) { exg.gain.setValueAtTime(a, t + dt); exg.gain.setTargetAtTime(0, t + dt + 0.004, 0.012); }
+      for (let dt = 0, a = 1; dt < 0.42; dt += r.range(0.022, 0.1) * (1 + dt * 3), a *= r.range(0.62, 0.88)) {
+        exg.gain.setTargetAtTime(a * r.range(0.6, 1), t + dt, 0.0008); exg.gain.setTargetAtTime(0, t + dt + r.range(0.003, 0.009), r.range(0.006, 0.02));
+      }
       chain(ex, exg, plate);
       noiseHit(ac, plate, t, r, { kind: 'white', type: 'lowpass', f0: 3000, attack: 0.0004, decay: 0.008, gain: 1.5 }); // the strike
-      const am = tremolo(ac, t, 1.2, 17, 0.9, 'square'); am.connect(out);
-      crackle(ac, am, t, r, { type: 'bandpass', f: 1500, Q: 0.8, attack: 0.005, decay: 0.7, gain: 0.7 });
-      const am2 = tremolo(ac, t, 1.2, 23, 0.8); am2.connect(pre);
-      noiseHit(ac, am2, t + 0.02, r, { kind: 'pink', type: 'bandpass', f0: 1500, f1: 170, fdur: 0.75, Q: 4.5, attack: 0.01, decay: 0.8, gain: 1.6 });
+      // overload chatter: crackle (1.5 kHz body + 2.5-6 kHz sparks) gated by a random burst train
+      const ch = gain(ac, 0); ch.connect(out);
+      ch.gain.setValueAtTime(0, t);
+      for (let dt = 0.004; dt < 0.78;) {
+        const len = r.range(0.008, 0.05);
+        ch.gain.setTargetAtTime(r.range(0.45, 1) * (1 - dt / 0.9), t + dt, 0.002); ch.gain.setTargetAtTime(0, t + dt + len, 0.004);
+        dt += len + r.range(0.006, 0.06) * (1 + dt * 2.5);
+      }
+      crackle(ac, ch, t, r, { type: 'bandpass', f: 1500, Q: 0.8, attack: 0.005, decay: 0.75, gain: 0.7 });
+      noiseHit(ac, ch, t, r, { kind: 'crackle', type: 'highpass', f0: 2500, f2: 6000, type2: 'lowpass', attack: 0.004, decay: 0.75, gain: 0.45 });
+      // sputtering power-down: a falling noise band whose level flutters (smoothed random, not an LFO)
+      const fl = gain(ac, 1); curveParam(fl.gain, t, 1.0, smoothNoise(r, 1.0, 20), 0.5, 0.5); fl.connect(pre);
+      noiseHit(ac, fl, t + 0.02, r, { kind: 'pink', type: 'bandpass', f0: 1500, f1: 170, fdur: 0.75, Q: 4.5, attack: 0.01, decay: 0.8, gain: 1.6 });
     },
   },
 

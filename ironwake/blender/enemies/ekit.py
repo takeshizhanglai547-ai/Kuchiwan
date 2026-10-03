@@ -1488,6 +1488,11 @@ def glb_breakdown(path):
             'geometry_bytes': os.path.getsize(path) - sum(imgs.values())}
 
 
+# r4b: 12-bit positions / UVs (<= 3 mm on a 12 m relay, half a texel at 2048): ~5-8% smaller GLBs, the
+# single-file build must shrink
+GLTFPACK_EXTRA = ['-vp', '12', '-vt', '12']
+
+
 def export_glb_lean(root, path, strip_tangents=True, vn=8):
     """Blender glTF export (placeholder JPEGs, replaced by WebP later) without tangents ->
     gltfpack meshopt + quantisation."""
@@ -1512,7 +1517,7 @@ def export_glb_lean(root, path, strip_tangents=True, vn=8):
                 check_existing=False)
     if X.gltfpack_available():
         args = [X._node(), X.GLTFPACK, '-i', raw, '-o', path, '-cc', '-ce', 'ext', '-kn', '-km', '-ke',
-                '-vn', str(vn), '-vt', '14']
+                '-vn', str(vn), '-vt', '14'] + list(GLTFPACK_EXTRA)
         with iw.timed('export.gltfpack'):
             r = subprocess.run(args, capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(path):

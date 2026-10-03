@@ -196,7 +196,9 @@ export const CAMERA = {
   // Assault boost: wind-up narrows the view a touch, launch punches it wide
   abChargeFov: -3,
   abChargePull: 2.5,        // m the camera creeps in during the wind-up
-  abFlightPull: 4,          // m closer during AB flight (keeps the rig >= 22% of frame at +10 FOV)
+  abFlightPull: 6.5,        // m closer during AB flight: the pitched torso + trailing legs shrink the
+                            // rig's SILHOUETTE (~7.8 m tall vs 10.7 standing) and the 130 m/s follow lag
+                            // adds ~6 m, so r4 pulls in further (silhouette ~20% of frame, telemetry ab_rig_sil_pct)
   abFlightRise: 1.2,        // m higher during AB flight: looks down onto the pitched torso + boosters
   abLaunchKick: 3,          // degrees on top of the sustained fovAB (peak 63)
   abLaunchDecay: 0.55,

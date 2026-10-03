@@ -74,10 +74,13 @@ def build_body():
             return True                                   # cheek plates
         if n.z > 0.7 and abs(c.x) < 0.26 and -0.56 < c.y < 0.5:
             return True                                   # dorsal armour spine
+        if n.z < -0.55 and c.y < -0.1:
+            return True                                   # front belly (under the cream belly shell)
         return abs(n.x) > 0.7 and -0.56 < c.y < -0.16     # nose-flank vents
+    # r4b: the underside too (down_ok) - a GNAT hovers above the player, its belly is what combat shows
     g.merge(B.add('panels', K.panelize(sh, 41, min_area=0.012, max_side=0.24, min_side=0.06, gap=0.008,
                                        raise_h=0.012, recess=0.018, groove=0.01, bolt_r=0.0085,
-                                       skip=skip_b, stats=PSTATS)))
+                                       skip=skip_b, stats=PSTATS, down_ok=True)))
     g.merge(B.add('shell', sh))
     # dorsal spine armour (cream, ridged) and side cheek plates (oxide)
     z_a, _ = body_z1(-0.5)
@@ -385,8 +388,10 @@ def build_beacon():
 def build(a):
     a.pivot('body', (0, 0, 0))
     # strength 9 (r3): 14 clipped the AgX shoulder to a flat salmon disc
-    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF3A2E', iw_eye_strength=4.5)
-    a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#FF2A2A', iw_eye_strength=0.85)
+    # r4b: rim/core at 2.2 so the pipeline's hue-preserving branch (near-primary HDR emissives) keeps them a
+    # deep #FF2A2A instead of AgX salmon (0.85 read (206, 82, 79) in-engine)
+    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF3A2E', iw_eye_strength=5.0)
+    a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#FF2A2A', iw_eye_strength=2.2)
     a.pivot('beacon', (0.12, 0.3, 0.4), parent='body', iw_eye_color='#FF3B2F', iw_eye_strength=14.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='body')
     # rotor nodes carry the duct tilt as their rest rotation (they spin about their own +Y)
@@ -429,6 +434,15 @@ def add_decals(a):
                DUCT_Z + 0.13), (0, -1, 0), up=(0, 0, 1), size=(0.16, None), parent='body', density=800)
         a.decal(D.text_decal('GNAT', px=120, color=C, worn=0.3), (s * 0.43, 0.62, 0.1), (s, 0, 0), up=(0, 0, 1),
                 size=(0.16, None))
+    # r4b: the belly is what combat shows (a GNAT hovers above the player): unit number, a hazard band on the
+    # cream belly plate and ARMED stencils either side of the gun receiver
+    a.decal(D.text_decal('G-14', px=260, color=C, worn=0.35), (0.0, -0.005, -0.3), (0, 0, -1), up=(0, -1, 0),
+            size=(0.22, None), depth=0.08)
+    a.decal(D.hazard_decal(384, 64, worn=0.35, seed=23), (0.0, -0.33, -0.29), (0, 0, -1), up=(0, -1, 0),
+            size=(0.28, 0.05), depth=0.06)
+    for s in (1, -1):
+        a.decal(D.text_decal(['ARMED', '武装'], px=120, color=D.YELLOW, worn=0.3), (s * 0.105, -0.42, -0.3), (s, 0, 0),
+                up=(0, 0, 1), size=(0.14, None), depth=0.03)
     a.decal(K.soot(256, 7, 0.8, 1.0), (0, -1.1, -0.37), (0, -1, 0), size=(0.24, 0.24), depth=0.2)
     for s in (1, -1):   # exhaust soot under the manoeuvre jets
         a.decal(K.soot(256, 9 + s, 0.7, 1.4), (s * 0.12, 0.9, 0.0), (0, 1, 0), size=(0.2, 0.3), depth=0.2)
@@ -459,9 +473,9 @@ NEED = ['body', 'eye', 'beacon', 'muzzle', 'rotor', 'rotor_1', 'fanblades_0_geo'
 
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=31, obj_weight=OBJ_WEIGHT,
-          weathering=WEATHER, views=VIEWS, clay=CLAY, res=1536, sizes={'normal': 1536, 'orm': 512, 'emissive': 256},
+          weathering=WEATHER, views=VIEWS, clay=CLAY, res=1536, sizes={'basecolor': 1280, 'normal': 1280, 'orm': 512, 'emissive': 256},
           bake_kw=dict(edge=0.024, cavity=0.05, ao_dist=0.35, bevel_radius=0.006),
-          tex_quality={'basecolor': 80, 'normal': 78, 'orm': 70})
+          tex_quality={'basecolor': 73, 'normal': 66, 'orm': 64})   # r4b: 1280 maps, GLB budget
 
 
 if __name__ == '__main__':

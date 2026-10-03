@@ -35,7 +35,7 @@
 //   clearOverride()
 //   snap()                             drop smoothing (after teleports/restarts)
 //   pivot                              THREE.Vector3 lagged orbit point
-//   metrics                            {fov, dist, lag, lagSide, rigFrac, rigTopNdc, rigMidNdc, shake, dip,
+//   metrics                            {fov, dist, lag, lagSide, rigFrac, rigSil, rigTopNdc, rigMidNdc, shake, dip,
 //                                       kick (FOV punch deg), sustain (boost/AB FOV deg), lift (m)}
 //                                      (sim-rate telemetry, read by tools/telemetry.mjs)
 import * as THREE from 'three';
@@ -43,6 +43,7 @@ import { CAMERA as C } from './tuning.js';
 import { makeHit } from '../core/physics.js';
 import { installCutout, updateCutout, updateNearCut } from './cutout.js';
 
+const HFOV_CAP_TAN = Math.tan(Math.PI / 3); // tan(120 deg / 2): chase-camera horizontal FOV cap
 const _desired = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.Vector3();
 const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _target = new THREE.Vector3();
 const _m = new THREE.Matrix4(), _o = new THREE.Vector3(), _camUp = new THREE.Vector3(), _camRight = new THREE.Vector3();
@@ -98,6 +99,33 @@ function measureRigHeight(p) {
   });
   return top === -Infinity ? 10.5 : Math.max(4, top - root.getWorldPosition(v).y);
 }
+/**
+ * Pose-aware framing probe (movement r4): per rig mesh, the 14 vertices that are extreme along the
+ * 6 axes and 8 diagonals (local space). Projected every step they bound the rig's real silhouette
+ * height (a pitched AB pose, trailing legs, a crouch), not an upright H-tall box. Flames excluded.
+ */
+const EXT_DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+  [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1], [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1]];
+function collectRigExtremes(p) {
+  const out = [], v = new THREE.Vector3();
+  p.rig.root.traverse((o) => {
+    const pa = o.isMesh && o.geometry && !o.name.startsWith('flame_') && o.name !== 'contact_shadow' && o.geometry.attributes.position;
+    if (!pa || !pa.count) return;
+    const pts = [];
+    for (const d of EXT_DIRS) {
+      let best = -Infinity, bi = 0;
+      for (let i = 0; i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i);
+        const s = v.x * d[0] + v.y * d[1] + v.z * d[2];
+        if (s > best) { best = s; bi = i; }
+      }
+      const q = new THREE.Vector3().fromBufferAttribute(pa, bi);
+      if (!pts.some((e) => e.distanceToSquared(q) < 1e-6)) pts.push(q);
+    }
+    out.push({ o, pts });
+  });
+  return out;
+}
 function damp(cur, target, lambda, dt) { return cur + (target - cur) * (1 - Math.exp(-lambda * dt)); }
 /** Exact critically damped spring toward 0: returns [x, v] through the out array. */
 function critToZero(x, v, omega, dt, out) {
@@ -124,7 +152,7 @@ export default function cameraSystem(game) {
   let needSnap = true;
   let override = null;
   let attractAngle = 0;
-  let rigHeight = 0;
+  let rigHeight = 0, rigExt = null, rigExtOf = null;
   let cutK = 0;
   let lift = 0, rise = 0;
   // occluder-avoid slide: current offset + velocity (spring), target, timers
@@ -140,7 +168,7 @@ export default function cameraSystem(game) {
   // rig silhouette samples [right m, up m] from the feet (C.slideRows)
   const SAMPLES = [];
   for (const [y, hw, n] of C.slideRows) for (let i = 0; i < n; i++) SAMPLES.push([n > 1 ? -hw + (2 * hw * i) / (n - 1) : 0, y]);
-  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, kickCam: 0, dip: 0, kick: 0, sustain: 0, lift: 0, slide: 0, occluded: 0, nearCut: 0 };
+  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigSil: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, kickCam: 0, dip: 0, kick: 0, sustain: 0, lift: 0, slide: 0, occluded: 0, nearCut: 0 };
 
   function kick(deg, hold, decay) {
     // a new kick replaces a weaker, older one; never stacks past the larger
@@ -426,13 +454,31 @@ export default function cameraSystem(game) {
 
       // --- metrics (telemetry): distance to the rig, lag, projected rig height
       if (!rigHeight && p.rig) rigHeight = measureRigHeight(p);   // once (vertex-precise)
+      if (p.rig && rigExtOf !== p.rig) { rigExtOf = p.rig; rigExt = collectRigExtremes(p); }   // once per rig
       const H = rigHeight || 10;
       const th = Math.tan(THREE.MathUtils.degToRad(fov) * 0.5);
       _qi.copy(curQuat).invert();
+      // rig HEIGHT in frame (the benchmark's "mech fills 22-30% of frame height": the 10.7 m
+      // upright rig from feet to head top, at the rig's own position)
       _p.set(p.pos.x, p.pos.y + H, p.pos.z).sub(curPos).applyQuaternion(_qi);
       const top = _p.y / (-_p.z * th);
       _p.set(p.pos.x, p.pos.y, p.pos.z).sub(curPos).applyQuaternion(_qi);
       const bot = _p.y / (-_p.z * th);
+      // rig SILHOUETTE in frame (pose-aware: back weapons, pitched AB torso, trailing legs, crouch)
+      let sTop = -Infinity, sBot = Infinity;
+      if (rigExt) {
+        for (let i = 0; i < rigExt.length; i++) {
+          const e = rigExt[i], mw = e.o.matrixWorld;
+          for (let j = 0; j < e.pts.length; j++) {
+            _p.copy(e.pts[j]).applyMatrix4(mw).sub(curPos).applyQuaternion(_qi);
+            if (_p.z > -0.5) continue;
+            const y = _p.y / (-_p.z * th);
+            if (y > sTop) sTop = y;
+            if (y < sBot) sBot = y;
+          }
+        }
+      }
+      metrics.rigSil = sTop > sBot ? (sTop - sBot) * 0.5 : 0;
       metrics.fov = fov;
       metrics.dist = Math.hypot(curPos.x - p.pos.x, curPos.y - (p.pos.y + H * 0.5), curPos.z - p.pos.z);
       metrics.lag = lagOff.length();
@@ -468,7 +514,10 @@ export default function cameraSystem(game) {
       }
       cam.position.lerpVectors(prevPos, curPos, alpha);
       cam.quaternion.slerpQuaternions(prevQuat, curQuat, alpha);
-      const fov = prevFov + (curFov - prevFov) * alpha;
+      // ultrawide windows (wider than ~21:9): cap the horizontal FOV at 120 deg (lead engine,
+      // QA r1), a fixed vertical FOV would otherwise fisheye the edges; 16:9-21:9 never hit it
+      const fovCap = 2 * Math.atan(HFOV_CAP_TAN / Math.max(1e-3, cam.aspect)) * (180 / Math.PI);
+      const fov = Math.min(prevFov + (curFov - prevFov) * alpha, fovCap);
       if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
       // occlusion cutout around the rendered rig (only under the chase camera)
       if (p && p.spawned) {

@@ -760,7 +760,7 @@ def _torn_plate(rng, w, h):
 # (w, h, thickness, paint, bend deg) of the 8 armour fragments; 0 and 1 are the two LARGE
 # authored chunks that land beside the wreck and stay: a cab side-skirt (cream, unit number)
 # and a leg armour pad (oxide, seam, bolts, hazard band)
-DEBRIS = [(1.15, 0.86, 0.07, 'paint_secondary', 0), (0.74, 0.58, 0.065, 'paint_primary', 0),
+DEBRIS = [(1.15, 0.86, 0.09, 'paint_secondary', 0), (0.74, 0.58, 0.065, 'paint_primary', 0),
           (0.7, 0.46, 0.06, 'paint_primary', 28), (0.58, 0.42, 0.06, 'paint_secondary', -22),
           (0.52, 0.4, 0.055, 'paint_primary', 34), (0.46, 0.34, 0.05, 'hazard', 18),
           (0.62, 0.38, 0.06, 'paint_primary', -30), (0.4, 0.3, 0.08, 'steel_dark', 0)]
@@ -994,8 +994,10 @@ def add_decals(a):
     a.decal(D.text_decal('P-27', px=320, color=BK, worn=0.35), (hx - 0.05, hy + 0.05, hz + DEBRIS[0][2]),
             (0, 0, 1), up=(0, 1, 0), size=(0.5, None), depth=0.08)
     # r4: a scorch gradient across the torn end of the skirt (it was a clean white card on the wreck)
-    a.decal(K.soot(256, 51, 0.95, 1.5), (hx + 0.4, hy + 0.1, hz + DEBRIS[0][2]), (0, 0, 1), up=(1, 0, 0),
-            size=(0.85, 0.95), depth=0.25, opacity=0.95)
+    a.decal(K.soot(256, 51, 0.95, 1.5), (hx + 0.36, hy + 0.1, hz + DEBRIS[0][2]), (0, 0, 1), up=(1, 0, 0),
+            size=(1.05, 1.1), depth=0.25, opacity=1.0)
+    a.decal(K.soot(256, 54, 0.9, 1.0), (hx + 0.5, hy + 0.2, hz + DEBRIS[0][2]), (0, 0, 1), up=(0, 1, 0),
+            size=(0.55, 0.6), depth=0.25, opacity=0.95)   # r4b: charred torn corner (critic: 'flat white card')
     a.decal(K.soot(256, 52, 0.7, 1.0), (hx - 0.45, hy - 0.3, hz + DEBRIS[0][2]), (0, 0, 1), up=(0, 1, 0),
             size=(0.45, 0.4), depth=0.15, opacity=0.8)
     hx, hy, hz = debris_home(1)
@@ -1042,7 +1044,7 @@ NEED = ['hull', 'pelvis', 'turret', 'barrel', 'muzzle', 'eye', 'beacon', 'thigh_
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=21, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, sizes={'normal': 1536, 'orm': 768, 'emissive': 256},
-          tex_quality={'basecolor': 78, 'normal': 74, 'orm': 62}, post_bake=post_bake)
+          tex_quality={'basecolor': 75, 'normal': 72, 'orm': 62, 'decals': 76}, post_bake=post_bake)   # r4b: GLB must not grow
 
 
 if __name__ == '__main__':

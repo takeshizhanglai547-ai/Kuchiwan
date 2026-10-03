@@ -1,0 +1,166 @@
+{
+ "note": "QA round 1 report (before qa:fix:r1). Fix report summary in HANDOFF.md. QA round 2 was interrupted (not run to completion).",
+ "qa_round1": {
+  "verdict": "FIX_REQUIRED",
+  "executed": [
+   "npm run check -> ALL CHECKS PASSED (esbuild bundle 86 modules / 0 warnings, manifest 51 entries, no Math.random in src, 73/73 unit tests)",
+   "npm run smoke (dev server) -> ALL PASSED, 22 rows, 158.6 s, 0 console errors (log /tmp/claude-0/qa/r1/smoke_dev.log)",
+   "npm run smoke -- --dist -> ALL PASSED, 22 rows, 269.3 s, 0 console errors (log /tmp/claude-0/qa/r1/smoke_dist.log). Note: its real-time row does not assert that mouse aim/fire works",
+   "/tmp/claude-0/qa/r1/realplay.mjs: dist/ironwake.html via file://, 1280x720, NO test API, NO autoplay flag, real Playwright mouse/keyboard: title -> START click -> briefing -> ENTER -> play; W, C, Shift(QB), Space(hover), F/F(AB), LMB, mouse look, RMB, Q, Tab, MMB, R, Esc/Esc, P/P, pause->RESUME click all checked (log /tmp/claude-0/qa/r1/real/log.txt). Run hit its 50-min timeout at 19 s sim (SwiftShader real time too slow at 1280x720), so the minute of play was redone in realplay2",
+   "/tmp/claude-0/qa/r1/realplay2.mjs: same file:// build, 480x270 ?quality=low, real input only: title/briefing/LAUNCH by mouse clicks, E cannon, 62.1 s sim of free play (rifle 118, missiles 18, cannon 3, QB 20, AB, hover, 3 kills), killed by enemy fire -> MISSION FAILED -> ENTER retry (fresh AP 10000, kits 3, stage 0), debug win -> MISSION COMPLETE rank S -> RETRY click, 5x pause->RESTART clicks, pause->RETURN TO TITLE->START->LAUNCH(Enter), 0 console errors (log /tmp/claude-0/qa/r1/real2/log.txt)",
+   "/tmp/claude-0/qa/r1/edge.mjs (dist ?test=1): boss intro invulnerable + kill during intro, same-frame player/boss deaths (both orders), player death during the win outro, pause during the stage 1->2 transition, pause during boss pending + intro cinematic, RESTART from pause during the cinematic, pause-menu key latch, 600x QB spam at 0 EN, lock-on target death with missiles in flight, fake standard gamepad + absent pad, 6 restarts with leak counters incl. DOM listeners via CDP, render cadence never/1/2/4, synthetic RAF at 60/30/15/8 fps, resize 9:16 / 32:9 / 320x240 / 300x1000, menus at 9:16 and 32:9 (logs /tmp/claude-0/qa/r1/edge/)",
+   "/tmp/claude-0/qa/r1/tunnel.mjs: AB / QB-chain / boost+jump into three 1.6 m thick walls and one 31 m block at 105-128 m/s with a per-step point-in-OBB check; camera with the rig's back 3 m and 15 m from a block",
+   "/tmp/claude-0/qa/r1/long.mjs: 11 min sim (39,600 steps), auto-aim bot, 4 full missions (3 complete S, 1 failed), samples every 30 s of heap (after gc), scene objects, actors, bodies, listeners, geometries, textures, programs, DOM, fx, projectiles, audio voices (log /tmp/claude-0/qa/r1/long/log.txt)",
+   "/tmp/claude-0/qa/r1/misc.mjs: OPTIONS graphics quality cycled 7x (GPU resource counts); live mode pointer-lock / Esc event order; window blur while playing",
+   "/tmp/claude-0/qa/r1/probe.mjs + probe2.mjs: elementFromPoint during play, real mouse down on the game screen, drag-look fallback, and the same with an injected CSS fix",
+   "/tmp/claude-0/qa/r1/probe3.mjs: 15:00 time limit -> FAILED (time limit) results",
+   "/tmp/claude-0/qa/r1/probe4.mjs: briefing menu visibility in live mode (ruled out a capture artifact)",
+   "/tmp/claude-0/qa/r1/probe5.mjs: pause-menu key latch with and without the proposed fix",
+   "/tmp/claude-0/qa/r1/qbdist.mjs (node, real motor + physics): QB distance, chained QBs before redline, redline duration",
+   "grep of src for Math.random / Date.now / performance.now / new Date; grep of shipped text for reference-game names",
+   "git ls-files / git log / git check-ignore on ironwake/dist/ironwake.html",
+   "UE5 hand-off: python3 -m py_compile ue5/import_ironwake.py; MANIFEST.json 41 entries checked for existence and size; SM_enemy_drone, SM_mech_player, SM_Arena_Kit and SM_Arena_Unique FBX imported in Blender 4.2 (object, triangle and UV counts)"
+  ],
+  "issues": [
+   {
+    "severity": "A",
+    "area": "input / UI layer (mouse)",
+    "file": "ironwake/css/main.css",
+    "problem": "The rule `#ui .menus, #ui .menu, #ui button { pointer-events: auto; }` (line 21) turns the full-screen #menus container into an invisible click-catcher above the canvas, even when every menu screen is hidden. Input only listens for mousedown on the canvas. So whenever pointer lock is NOT held, no mouse button reaches the game: the rifle (LMB), blade (RMB) and lock switch (MMB) do nothing, clicking the screen never re-captures the mouse, and the documented drag-look fallback cannot work. While pointer lock is held (the normal LAUNCH-click path) the problem is hidden, because locked mouse events go straight to the canvas.",
+    "repro": "Executed on dist/ironwake.html?test=1, start a mission: document.elementFromPoint(screen centre) returns #menus, computed pointer-events is 'auto'. A real Playwright mouse down/up at the centre gives 0 canvas mousedowns and 0 shots. In drag-look mode (input.dragLook=true) a held drag gives 0 shots and no aim change. With an injected `#ui .menus{pointer-events:none}`: the canvas gets the mousedown, the rifle fires 2 rounds, the drag turns aim by 0.187 rad, and pause -> RESUME is still clickable (probe.mjs, probe2.mjs). Likely real-user trigger (Chrome's lock policy cannot be reproduced headless): Esc to pause, Esc again to resume. The relock request comes from a key event without a user gesture (or within Chrome's ~1 s re-lock cooldown), so it is refused, and from then on the mouse can neither aim nor fire until the player pauses and clicks RESUME. Same in any iframe or browser that denies pointer lock.",
+    "fix": "In css/main.css line 21 drop `#ui .menus`: use `#ui .menu, #ui button { pointer-events: auto; }` so the hidden container stays click-through (ui.css already declares `.menus { pointer-events: none }`). Harden input.js `_onMouseButton` so a canvas mousedown retries requestPointerLock while playing even when dragLook is on (skip only for a sandboxed iframe). Add a HUD hint 'CLICK TO AIM / クリックで照準操作' while state==='playing' && !pointerLocked. Add a smoke assertion: during play, elementFromPoint(centre) === canvas, and with dragLook on a real mouse drag fires the rifle and changes aimYaw."
+   },
+   {
+    "severity": "A",
+    "area": "release packaging",
+    "file": "ironwake/.gitignore",
+    "problem": "dist/ironwake.html, the only file the end user can play, is ignored by `.gitignore` line 6 (`dist/`) and has never been committed (`git log -- ironwake/dist/ironwake.html` is empty, `git ls-files ironwake/dist` is empty). README_JA step 1 tells the user to double-click dist/ironwake.html. A repository download or clone therefore contains no playable file, and the user cannot run npm to build one.",
+    "repro": "git -C /home/user/Kuchiwan ls-files ironwake/dist -> nothing. git check-ignore -v ironwake/dist/ironwake.html -> ironwake/.gitignore:6:dist/.",
+    "fix": "At release (orchestrator), run `npm run build && git add -f ironwake/dist/ironwake.html`, as the .gitignore comment says, or replace `dist/` with `dist/*` plus `!dist/ironwake.html`. Then confirm with `git ls-files ironwake/dist` and that the file is under 16 MB (it is 12.09 MB today)."
+   },
+   {
+    "severity": "B",
+    "area": "input (pause)",
+    "file": "ironwake/src/core/input.js",
+    "problem": "Key, mouse and pad presses set `latch[]` even while input is disabled (lines 116, 134 and 224). Gameplay keys pressed in the pause menu therefore all fire on the first step after resume. This wastes finite resources: missiles, cannon rounds, and repair kits, which also cost 7 rank points each.",
+    "repro": "Executed (probe5.mjs / edge.mjs): play -> Esc -> press Q, Space, R in the pause menu -> Esc. On resume, 5 missiles launch, the rig jumps 8.8 m, and 1 repair kit is consumed. With the fix below: 0 / 0 m / 0.",
+    "fix": "Clear edge state whenever play resumes: in Game.setState when next==='playing', run `this.input.latch.fill(0); this.input.lookAccum.x = this.input.lookAccum.y = 0;`. Alternatively, in _onKey / _onMouseButton / pollGamepad, only latch when `this.enabled`, and keep emitting input:action for the menus."
+   },
+   {
+    "severity": "B",
+    "area": "options / performance",
+    "file": "ironwake/src/render/environment.js",
+    "problem": "OPTIONS -> GRAPHICS QUALITY only calls pipeline.setQuality, which changes post effects only. The shadow cascade sizes and the far cascade (environment.js QUALITY, read once at boot), the ash/weather particle counts (arena.js:250, weather) and the pixel ratio are fixed at boot from the URL or auto-detect. README_JA's advice ('動きが重いときは LOW') is therefore only partly effective on weak GPUs.",
+    "repro": "Code-verified: environment.js computes `Q = QUALITY[game.params.quality]` once in the factory and exposes no setQuality; menus.applyOptions only calls game.pipeline.setQuality. The 7x OPTIONS cycle (misc.mjs) changed only the post-chain textures (78/86). The frame-time impact was not measured (no GPU).",
+    "fix": "Add env.setQuality(name), which resizes the near shadow map, enables or disables the far cascade, and calls rebakeFarShadow, plus a weather/ash count update. Call it from menus.applyOptions, or simply reload with `?quality=` after the option changes, with a short 'applies after restart / 再起動後に反映' note."
+   },
+   {
+    "severity": "B",
+    "area": "game state / focus",
+    "file": "ironwake/src/core/engine.js",
+    "problem": "There is no auto-pause on window blur or tab hide. Only pointer-lock loss pauses the game, so when the mouse is not captured (keyboard play, after the A-level mouse issue, drag-look) alt-tabbing leaves the sim running and enemies keep shooting.",
+    "repro": "Executed (misc.mjs): in live mode, dispatch a window 'blur' while playing -> state stays 'playing' and the sim keeps stepping.",
+    "fix": "In Game.init, add window 'blur' and document 'visibilitychange' (hidden) listeners: `if (this.state==='playing') this.setState('paused')`."
+   },
+   {
+    "severity": "B",
+    "area": "gamepad / menus",
+    "file": "ironwake/src/core/input.js",
+    "problem": "Menus cannot be navigated with a gamepad. PAD_BINDINGS has no D-pad (buttons 12-15), and stick axes never emit input:action. Only A (confirm the highlighted item) and START work, so OPTIONS and RETURN TO TITLE are unreachable with a pad. The menus.js header comment ('d-pad/stick via the same actions') is false.",
+    "repro": "Code-verified: pollGamepad emits input:action only for bound buttons 0-11, and menus._onAction needs move_forward/back or look_up/down to change the selection. (The fake-pad test confirmed stick, RT, right stick and START work in game.)",
+    "fix": "In pollGamepad, when !this.enabled, emit menu actions for D-pad 12/13 ('look_up'/'look_down'), 14/15 ('look_left'/'look_right') and for a left-stick edge past 0.6, plus B (Pad1) as 'pause' = back. Keep these out of the in-game latch."
+   },
+   {
+    "severity": "B",
+    "area": "frame pacing",
+    "file": "ironwake/src/core/engine.js",
+    "problem": "Below about 12 fps the game runs in slow motion instead of keeping real time: realDt is clamped to 0.1 and MAX_STEPS_PER_FRAME is 5. At 8 fps the sim advanced 2.67 s per 4 s of wall time (67% speed). README_JA says GPU-less PCs 'work but are heavy'; on such PCs the whole mission plays slowed.",
+    "repro": "Executed: synthetic RAF timestamps through Game._loop: 60/30/15 fps -> 239/240/239 steps and identical distance; 8 fps -> 160 steps.",
+    "fix": "Acceptable by design. Optionally raise MAX_STEPS_PER_FRAME to 8, and/or show a one-time 'LOW PERFORMANCE: set GRAPHICS QUALITY to LOW / 画質をLOWに' callout when the measured fps stays under 20 for 5 s."
+   },
+   {
+    "severity": "B",
+    "area": "docs (user-facing)",
+    "file": "ironwake/README_JA.md",
+    "problem": "README_JA ('はじめかた' step 4 and '困ったときは > マウスで視点が動かない') and README.md:154 promise two things that do not work in the current build, because of the A-level mouse issue: clicking the game screen re-captures the mouse, and an automatic hold-and-drag look fallback.",
+    "repro": "See the A-level mouse issue: clicking the screen and drag-look were executed and did nothing.",
+    "fix": "No text change is needed once the CSS fix lands. Re-run probe2-style checks after the fix and keep the wording."
+   },
+   {
+    "severity": "B",
+    "area": "UX / HUD",
+    "file": "ironwake/src/ui/hud.js",
+    "problem": "There is no on-screen indication when the mouse is not captured, or when drag-look mode is active. input.js reports drag-look only via console.warn, which a zero-knowledge user never sees.",
+    "repro": "Code-verified: the only consumers of pointerLocked/dragLook are input.js and engine.js. No HUD element references them.",
+    "fix": "Show a small HUD chip 'CLICK TO AIM / クリックで照準' (not locked) or 'DRAG TO AIM / ドラッグで照準' (dragLook) while playing."
+   },
+   {
+    "severity": "B",
+    "area": "results",
+    "file": "ironwake/src/game/mission.js",
+    "problem": "If the boss dies first and the player dies in the same step, results show MISSION COMPLETE, rank S and 'AP REMAINING 10,000' while the rig is exploding on screen.",
+    "repro": "Executed (edge.mjs): stage(2) -> wait for the fight -> killAll('boss') then damagePlayer(999999) in the same step -> results: COMPLETE, S, apRemaining 10000. The other order gives MISSION FAILED. Both are consistent and nothing crashes.",
+    "fix": "Optional polish: recompute apRemaining in finalResult from the live player when the mission:end event fires (it would read 0), or treat a player death inside the outro as 'complete, rig lost'."
+   },
+   {
+    "severity": "B",
+    "area": "resize / aspect",
+    "file": "ironwake/css/ui.css",
+    "problem": "In portrait or tiny windows (405x720, 320x240) the HUD scales down until its text is unreadable. At 32:9 the fixed vertical FOV of 50 gives a very wide horizontal FOV. Canvas size and camera aspect follow every resize correctly, with no errors.",
+    "repro": "Executed: resize screenshots /tmp/claude-0/qa/r1/edge/resize_*.png.",
+    "fix": "Low priority (PC keyboard/mouse game). Clamp the --u HUD scale to a minimum readable size, and cap horizontal FOV around 120 degrees for aspect ratios above 21:9."
+   },
+   {
+    "severity": "B",
+    "area": "test coverage",
+    "file": "ironwake/tools/smoke.mjs",
+    "problem": "The smoke real-time row only checks state changes. It would pass with mouse aim and fire completely dead (it passed on this build). Its 'aimYaw 1.68' value is the spawn yaw, not evidence that mouse look works.",
+    "repro": "Both smoke runs PASSED while probe.mjs shows canvas mousedown = 0.",
+    "fix": "In the real-time check, assert elementFromPoint(centre) is the canvas after LAUNCH, that aimYaw changes by more than 0.05 after a drag, and that weapon:fired from the player increases after a mouse down."
+   },
+   {
+    "severity": "B",
+    "area": "UE5 hand-off",
+    "file": "ironwake/ue5/assets/Arena/SM_Arena_Kit.fbx",
+    "problem": "62 of 114 arena kit meshes and 20 of 64 unique arena meshes have no UV channel. M_IW_Arena is vertex-colour only, so this is fine for shading, but Unreal's lightmap UV generation and some import options may warn or fail. Not testable here.",
+    "repro": "Executed: Blender 4.2 FBX import counts (fbxuv.py).",
+    "fix": "In tools/ue5_package.py or the arena export, add a simple box-projected UV0 to meshes without one, or document in ue5/README_JA.md that 'Generate Lightmap UVs' warnings on arena kit pieces are expected."
+   }
+  ],
+  "verified_ok": [
+   "Boot of dist/ironwake.html from file:// with no test API: title in ~13 s under heavy CPU load, 0 console errors across all real-mode runs",
+   "First-gesture audio unlock: AudioContext absent/locked on the title, 'running' right after the START click (no autoplay flag)",
+   "Title -> briefing -> mission by mouse clicks and by ENTER; RETURN TO TITLE -> START -> LAUNCH again",
+   "Real keyboard/mouse controls (pointer lock held): W ground boost (106 m in 1.42 s), C walk toggle, Shift QB, Space jump/hover, F AB on/off (108-128 m/s), LMB rifle, mouse look, RMB pulse blade, Q missiles, E cannon, Tab and MMB lock switch, R repair (+3800 AP, kit 3->2, cooldown blocks spam), Esc/Esc and P/P pause-resume, pause->RESUME click",
+   "62 s of real-input free play with no NaN and EN never negative; killed by enemy fire -> MISSION FAILED end card -> results -> ENTER RETRY gives a fresh mission (AP 10000, 3 kits, stage 0)",
+   "Debug win -> MISSION COMPLETE rank S -> RETRY click; 15:00 time limit -> MISSION FAILED 'TIME LIMIT / 時間切れ'",
+   "Boss: invulnerable and untargetable during the drop-in (cannon + rifle did 0 damage); killing it during the intro releases the cinematic camera and completes the mission",
+   "Same-frame player/boss deaths in both orders give consistent results; a player death during the win outro keeps MISSION COMPLETE; no double end",
+   "Pause during the stage 1->2 transition freezes the relay spawn until resume; pause during the boss pending/intro works; RESTART from pause during the intro cinematic releases the camera (camera 39 m from the rig, stage 0)",
+   "QB spammed 600x at 0 EN: EN never below 0, no NaN, only 18 QBs (redline works), arena bounds hold (stopped at x=-247.4 for wall -250, radius 2.6). Node motor: QB tap ~45 m total, 6 chained QBs before redline, redline 2.0 s then +20 EN (README_JA numbers correct)",
+   "No tunnelling: AB/QB at 105-128 m/s into 1.6 m walls and a 31 m block always stop at 3.4 m (half thickness + capsule radius); the only crossings are legitimate jumps over the wall; never inside a collider",
+   "Camera never ends inside geometry: with the rig's back 3 m or 15 m from a block, the camera pulls in to 14-23 m and stays outside every collider",
+   "Lock-on target death: the lock moves to another walker, the dead actor leaves missileLocks, in-flight missiles expire (~5 s) without NaN",
+   "Frame-rate independence: render every 0/1/2/4 steps gives bit-identical player, enemy, projectile and ammo state after 480 scripted steps; synthetic RAF at 60/30/15 fps gives the same distance (1-step float rounding)",
+   "Determinism: no Math.random / Date.now / new Date in src; performance.now only in the engine RAF loop (wall clock, not sim)",
+   "Leaks: 6 restarts after combat give stable scene objects, actors, bodies, colliders, event listeners, geometries, textures, programs, DOM nodes and DOM event listeners on window/document (CDP); heap 191.9->193.3 MB after gc. 5 real-click pause->RESTART cycles also stable (heap ~328 MB, 1 audio voice)",
+   "Long session, 11 min sim, 4 full missions: listeners 39 constant, geometries 242 flat, textures 83-96 and programs 94-96 cycling with stage, DOM 1674-1685, heap 216-230 MB flat, audio voices <=22 and bounded, fx and projectiles return to low counts, 0 errors",
+   "OPTIONS graphics quality cycled 7x: no GPU texture/geometry growth for the same level",
+   "Resize 9:16, 32:9, 320x240, 300x1000: canvas size and camera aspect follow, no errors; title and briefing buttons stay inside the window",
+   "Gamepad (fake standard pad): left stick moves, RT fires, right stick turns, START pauses/resumes; absent pad (null/[]) is harmless",
+   "Briefing and pause menus render correctly in live mode once the 0.32 s enter animation runs (the blank captures were low-fps artifacts, ruled out by probe4)",
+   "README_JA numbers match the code (ammo 540/120/24, repair 38%, rank formula and thresholds, 2 s redline, gamepad mapping, loader error messages); no reference-game names in shipped text",
+   "UE5 docs (ue5/README_JA.md, CLAUDE.md, GAME_SPEC.md, PROMPTS_JA.md, README.md) state clearly that they are UNVERIFIED in Unreal: no false claim of a tested import. import_ironwake.py compiles; MANIFEST 41/41 files present with matching sizes; drone, player and arena FBX import in Blender 4.2"
+  ],
+  "unverified": [
+   "実機GPUでのフレームレート（この環境はGPUなし）: dist フォルダの ironwake.html を Chrome で開く → アドレス欄の末尾に ?debug=1 を付けて Enter → START MISSION → LAUNCH → 画面左下に「FPS」の数字が出ます。1分ほど走り回って撃ち合い、数字がおおむね50以上なら合格です。30未満が続くときは Esc → OPTIONS → GRAPHICS QUALITY を LOW にして、もう一度数字を見て教えてください。",
+   "Chrome 実機でのマウス固定（ポインターロック）の動き（ヘッドレス環境では Chrome の制限を再現できないため未確認。今回の A 判定の不具合に関係）: LAUNCH をクリック → マウスの矢印が消え、マウスで視点が回り、左クリックで撃てることを確認 → Esc で一時停止 → もう一度 Esc で再開 → マウスで視点が回るか、左クリックで撃てるか確認。回らない・撃てない場合は、画面を1回クリックして直るか確認（修正前の版では直らない見込みです）。最後に Esc → RESUME（再開）をクリックして直るかも確認し、それぞれの結果を教えてください。",
+   "音を耳で確認（この環境では聞けません）: タイトルで START MISSION をクリック → 音楽が鳴る → 作戦概要でオペレーター「レジャー」の声が聞こえる → 出撃後、左クリックで銃声、Shift でブースト音、敵を倒すと爆発音 → Esc で一時停止すると音が止まるか小さくなる → 結果画面で効果音。鳴らない・音割れ・鳴りっぱなしがあれば、どの操作の直後かを教えてください。",
+   "本物のゲームパッド（今回は疑似パッドで確認）: Xbox 配置のパッドをつないでボタンを1つ押す → タイトルで A ボタン → もう一度 A で出撃 → 左スティックで移動、右スティックで視点、RT で射撃、B でクイックブースト、メニュー（START）ボタンで一時停止できれば合格。なお現状は、十字キーでメニュー項目を選べません（改善点として報告済み）。",
+   "長時間プレイ時の実機メモリ: ゲーム中に Shift+Esc で Chrome のタスクマネージャーを開き、このタブの「メモリ使用量」を見ます → 15分プレイ（途中で数回リトライ）して、数値が増え続けず上下するだけなら合格です。",
+   "Unreal Engine 5 への引き継ぎ（UE が入っていないため一切未確認）: ue5/README_JA.md の手順1〜6のとおり進め、Tools → Execute Python Script で import_ironwake.py を実行 → 画面下の Output Log に赤いエラーが出ず、L_Pier7 に舞台と機体が並べば成功です。エラーが出たら、赤い行が写ったスクリーンショットを送ってください（舞台部品の一部に UV が無いため、ライトマップ関連の警告は出るかもしれません）。",
+   "OPTIONS の画質 LOW の実際の軽さ（GPU がないため計測不可）: ?debug=1 で FPS を表示 → OPTIONS で HIGH と LOW を切り替えて、それぞれの FPS を教えてください（現状 LOW は影などが変わらず、効果が小さい見込みです）。"
+  ],
+  "summary": "I followed the Fable gamedev review protocol (phases 0–3) on the current dist/ironwake.html build of 08:34; no source file has changed since. Verdict: FIX_REQUIRED. There are 2 A defects and no S. Everything below was executed in headless Chromium (SwiftShader).\n\nWhat passed:\n- npm run check passes, and npm run smoke passes on both the dev server and dist.\n- A real-input game played from file:// with no TEST API works: title -> briefing -> mission, every control, 62 s of free play, death -> results -> retry, win -> results -> retry, 5 restart clicks.\n- The mission state machine holds up under every edge case tried: boss killed during its intro, same-frame deaths, pause during transitions, restart during the boss cinematic.\n- QB spam at 0 EN, assault/quick boost into thin walls (no tunnelling), the camera never inside geometry, and lock-on target death all behave.\n- The sim is identical across render cadences, and there is no Math.random/Date.now in the sim.\n- An 11 min session and repeated restarts show no leaks.\n\nDefects:\n- A1 (mouse): css/main.css line 21 gives the hidden full-screen #menus layer pointer-events:auto, so without pointer lock every click lands on it instead of the canvas. Mouse fire, click-to-recapture and the drag-look fallback are all dead (probe evidence; an injected CSS fix restores them). In real Chrome this most likely happens after pausing with Esc and resuming with Esc — not reproducible headless.\n- A2 (packaging): the playable dist/ironwake.html is gitignored and was never committed. It must be force-added at release.\n\nThere are 11 B items. The main ones:\n- Keys pressed in the pause menu fire on resume and can waste a repair kit; a one-line latch clear fixes it.\n- The OPTIONS quality setting only changes post-effects.\n- No auto-pause when the window loses focus while the mouse is not captured.\n- No gamepad menu navigation.\n- Slow motion below 12 fps.\n- The README's mouse-capture and drag-look promises fail until A1 is fixed.\n- No on-screen hint when the mouse is not captured.\n- The smoke test cannot catch A1.\n- Minor results, aspect-ratio and UE5-UV polish.\n\nNot verifiable here: frame rate on a real GPU, audio by ear, Chrome's real pointer-lock policy, a real gamepad, the UE5 import."
+ }
+}

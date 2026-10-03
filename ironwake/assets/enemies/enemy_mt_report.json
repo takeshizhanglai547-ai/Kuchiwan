@@ -2,40 +2,41 @@
  "tris": 24997,
  "parts": 33,
  "colliders": 0,
- "decals": 34,
- "texel_density_px_per_m": 117.8,
+ "decals": 35,
+ "texel_density_px_per_m": 117.3,
  "res": 2048,
  "timings_s": {
-  "model": 1.0,
-  "bake.albedo": 89.5,
-  "bake.matid": 54.8,
-  "bake.noise": 57.9,
-  "bake.wnormal": 61.2,
-  "bake.wpos": 61.1,
-  "bake.masks": 135.4,
-  "bake.ao": 105.1,
-  "bake.normal": 96.2,
-  "bake.total": 674.1,
+  "model": 1.1,
+  "bake.albedo": 121.9,
+  "bake.matid": 58.1,
+  "bake.noise": 59.9,
+  "bake.wnormal": 57.7,
+  "bake.wpos": 65.2,
+  "bake.masks": 156.2,
+  "bake.ao": 120.8,
+  "bake.normal": 99.1,
+  "bake.total": 752.0,
   "composite": 11.7,
-  "export.glb": 0.5,
-  "export.gltfpack": 0.1
+  "export.glb": 0.6,
+  "export.gltfpack": 0.1,
+  "export.fbx": 0.3
  },
- "elapsed_s": 697.8,
- "glb_bytes": 784528,
+ "elapsed_s": 776.3,
+ "glb_bytes": 713884,
  "glb_breakdown": {
-  "bytes": 784528,
+  "bytes": 713884,
   "images": {
-   "enemy_mt_f_normal": 105122,
-   "enemy_mt_f_orm": 70902,
-   "enemy_mt_f_basecolor": 218136,
-   "enemy_mt_f_emissive": 706,
-   "enemy_mt_decals": 67756
+   "enemy_mt_f_normal": 98144,
+   "enemy_mt_f_orm": 70712,
+   "enemy_mt_f_basecolor": 191546,
+   "enemy_mt_f_emissive": 730,
+   "enemy_mt_decals": 63124
   },
-  "image_bytes": 462622,
-  "geometry_bytes": 321906
+  "image_bytes": 424256,
+  "geometry_bytes": 289628
  },
  "missing_nodes": [],
- "fbx": null,
+ "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_mt.fbx",
  "previews": [],
  "parts_tris": {
   "turret_geo": 6334,
@@ -70,7 +71,7 @@
   "debris_6_geo": 116,
   "debris_7_geo": 48
  },
- "uv_coverage": 0.621,
+ "uv_coverage": 0.613,
  "cards": 14,
- "total_s": 697.8
+ "total_s": 776.4
 }

@@ -7,10 +7,12 @@
 //        title | pause --(OPTIONS)--> options --(BACK / Esc)--> title | pause
 // OPTIONS: look sensitivity, invert Y, master / music volume, graphics quality. Saved to
 // localStorage (try/catch; ignored in test mode so captures stay deterministic) and applied to
-// CAMERA (player/tuning.js), game.audio.setVolume / setMusicVolume and game.pipeline.setQuality.
+// CAMERA (player/tuning.js), game.audio.setVolume / setMusicVolume and game.setQuality (post chain,
+// shadows, ash, pixel ratio; a saved level is applied at boot before the pipeline warms up).
 //        playing --(mission:end)--> results --(RETRY)--> playing | --(TITLE)--> title
 // Input: mouse hover/click, arrow keys or W/S to move the selection, Enter to confirm,
-//        Esc to go back / resume. Gamepad: d-pad/stick via the same actions, A = confirm.
+//        Esc to go back / resume. Gamepad (core/input.js, menus up): d-pad / left stick emit the
+//        look_* actions, A = confirm, B = back / resume (as Esc), START = pause / resume.
 // The title and briefing frame the live stage with a hero camera (game.cam.setOverride).
 // The briefing shows a top-down tactical map of the arena rendered in-engine (tacmap.js).
 // Results reveal row by row on the sim clock (deterministic; instant in test mode unless
@@ -134,6 +136,7 @@ export default function menusSystem(game) {
   let opts = { ...OPT_DEFAULT }, optFrom = 'title';
   let sortieT = 99, fadeEl = null;
   let sensBase = 0, padBase = 0, shakeBase = 0;
+  let autoQuality = '';  // the URL / auto-detected level (RESET DEFAULTS returns to it)
   const vizLv = new Float32Array(VIZ_BARS);    // briefing comm visualiser levels
   const vizQ = new Int16Array(VIZ_BARS).fill(-1);
   let vizBars = null;
@@ -596,7 +599,7 @@ export default function menusSystem(game) {
     if (au && au.setMusicVolume) au.setMusicVolume(opts.music / 100);
     if (au && au.setBusVolume) { au.setBusVolume('sfx', opts.sfx / 100); au.setBusVolume('voice', opts.voice / 100); }
     if (game.hud && game.hud.setOpacity) { game.hud.setOpacity(opts.hud / 100); game.hud.setSubtitles(opts.subs); }
-    if (withQuality && opts.quality && game.pipeline && game.pipeline.setQuality && game.pipeline.quality !== opts.quality) game.pipeline.setQuality(opts.quality);
+    if (withQuality && opts.quality) game.setQuality(opts.quality);
   }
   function optValue(d) {
     if (d.k === 'quality') return opts.quality || (game.pipeline && game.pipeline.quality) || game.params.quality || 'high';
@@ -639,6 +642,7 @@ export default function menusSystem(game) {
       g.menus = api;
       api.revealInstant = !!g.manual;
       sensBase = CAMERA.lookSensitivity; padBase = CAMERA.padLookSpeed; shakeBase = CAMERA.shakeMaxRot || 0;
+      autoQuality = g.params.quality;
       opts = loadOptions(g);
       // saved quality only when the URL does not force one (and never in test mode)
       applyOptions(!g.params.test && !new URLSearchParams(location.search).has('quality'));
@@ -736,7 +740,7 @@ export default function menusSystem(game) {
     },
     resetOptions() {
       opts = { ...OPT_DEFAULT };
-      if (game.pipeline && game.pipeline.setQuality && game.params.quality && game.pipeline.quality !== game.params.quality) game.pipeline.setQuality(game.params.quality);
+      if (autoQuality && game.params.quality !== autoQuality) game.setQuality(autoQuality);
       applyOptions(false);
       saveOptions(game, opts);
       refreshOptions();

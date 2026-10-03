@@ -17,6 +17,7 @@ export const SYSTEM_MODULES = [
   { name: 'fx', order: 700, load: () => import('./fx/particles.js') },
   { name: 'camera', order: 800, load: () => import('./player/camera.js') },
   { name: 'hud', order: 900, load: () => import('./ui/hud.js') },
+  { name: 'hints', order: 905, load: () => import('./core/hints.js') },
   { name: 'menus', order: 910, load: () => import('./ui/menus.js') },
   { name: 'audio', order: 950, load: () => import('./audio/audio.js') },
   { name: 'pipeline', order: 1000, load: () => import('./render/pipeline.js') },

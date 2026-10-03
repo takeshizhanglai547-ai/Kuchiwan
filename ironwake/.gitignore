@@ -2,8 +2,10 @@ node_modules/
 .shots/
 *.blend1
 __pycache__/
-# generated single-file build (release step: npm run build && git add -f dist/ironwake.html)
-dist/
+# generated build output; the single-file game dist/ironwake.html IS committed (it is the only
+# file the end user plays: README_JA step 1). Rebuild it with npm run build before committing.
+dist/*
+!dist/ironwake.html
 assets/_test/
 assets/*/preview/
 assets/ue5/

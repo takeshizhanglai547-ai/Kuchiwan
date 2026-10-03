@@ -243,6 +243,69 @@ export function resonator(ac, out, t, r, o) {
 }
 
 /**
+ * Smoothed random curve in [-1, 1]: value noise with cosine-interpolated knots at jittered
+ * spacing (mean `rate` Hz), sampled at `sr` points/s. A NON-periodic LFO for pitch drift and
+ * amplitude flutter (no sine, no fixed period, so no comb / striation in the spectrum).
+ * Render-time only (allocates).
+ */
+export function smoothNoise(r, dur, rate, sr = 240) {
+  const n = Math.max(2, Math.ceil(dur * sr));
+  const kt = [0], kv = [r() * 2 - 1];
+  while (kt[kt.length - 1] < dur) { kt.push(kt[kt.length - 1] + r.range(0.55, 1.45) / rate); kv.push(r() * 2 - 1); }
+  const out = new Float32Array(n);
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * dur;
+    while (j < kt.length - 2 && kt[j + 1] < x) j++;
+    const f = Math.min(1, Math.max(0, (x - kt[j]) / (kt[j + 1] - kt[j])));
+    const w = (1 - Math.cos(Math.PI * f)) * 0.5;
+    out[i] = kv[j] * (1 - w) + kv[j + 1] * w;
+  }
+  return out;
+}
+/** Write `base + depth * curve` onto an AudioParam over [t, t+dur] (copies the curve). */
+export function curveParam(p, t, dur, curve, base = 0, depth = 1) {
+  const c = new Float32Array(curve.length);
+  for (let i = 0; i < c.length; i++) c[i] = base + depth * curve[i];
+  p.setValueCurveAtTime(c, t, dur);
+}
+
+/**
+ * SUSTAINED noise-excited resonator bank (plasma / turbine / arc bodies): one noise source
+ * through narrow bandpasses (Q in [lo, hi]) at INHARMONIC ratios, so the body is a set of
+ * rough, unstable noise bands instead of an oscillator's evenly spaced harmonic comb.
+ * o: {f, ratios, Q:[lo,hi], spread (±frac per mode), tilt, dur, kind, gain,
+ *     contour: [[dt, mult, 'e'|'l'], ...] (pitch path of the whole bank, relative to t),
+ *     drift (cents, smoothed random pitch drift shared by all modes), driftRate (Hz),
+ *     jitter (cents, extra per-mode drift)}. Returns the output gain (caller envelopes it).
+ */
+export function noiseBank(ac, out, t, r, o) {
+  const g = gain(ac, o.gain ?? 1); g.connect(out);
+  const R = o.ratios || [1, 1.59, 2.14, 2.83, 3.9];
+  const [q0, q1] = o.Q || [12, 30], spread = o.spread ?? 0.04, tilt = o.tilt ?? 0.75;
+  const src = noiseSrc(ac, o.kind || 'white', t, o.dur, r);
+  const drift = o.drift ? smoothNoise(r, o.dur, o.driftRate || 3) : null;
+  let amp = 1;
+  for (let k = 0; k < R.length; k++) {
+    const f = o.f * R[k] * (1 + (r() * 2 - 1) * spread);
+    if (f > ac.sampleRate * 0.45) break;
+    const q = q0 + (q1 - q0) * r();
+    const bp = filt(ac, 'bandpass', f, q);
+    if (o.contour) points(bp.frequency, t, o.contour.map(([dt, m, kk]) => [dt, f * m, kk]));
+    if (drift) {
+      const c = new Float32Array(drift.length);
+      if (o.jitter) { const own = smoothNoise(r, o.dur, (o.driftRate || 3) * 1.7); for (let i = 0; i < c.length; i++) c[i] = o.drift * drift[i] + o.jitter * own[i]; }
+      else for (let i = 0; i < c.length; i++) c[i] = o.drift * drift[i];
+      bp.detune.setValueCurveAtTime(c, t, o.dur);
+    }
+    const norm = 0.21 * Math.sqrt((q * ac.sampleRate * 0.5) / f);
+    chain(src, bp, gain(ac, amp * norm * r.range(0.8, 1.15)), g);
+    amp *= tilt;
+  }
+  return g;
+}
+
+/**
  * FM brass voice (1:1 carrier:modulator, index envelope 0 -> idx over `blat` s = the brass
  * "blat" where brightness rises with loudness), 30 ms breath-noise onset, pitch scoop and
  * delayed vibrato, parallel formant bandpasses at 1.2 / 2.5 kHz. o: {f, dur, gain, idx, blat,

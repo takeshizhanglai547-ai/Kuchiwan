@@ -11,12 +11,15 @@
 //   zero console errors.
 // Prints a PASS/FAIL table; exits non-zero on any failure.
 //   --dist   run against dist/ironwake.html (file://) instead of the dev server
+// Robustness under CPU load: every Playwright wait uses PAGE_TIMEOUT_MS (tools/shoot.mjs, 180 s)
+// instead of the 30 s default, and the timing-based real-time check (RAF loop, clicks, keys) is
+// retried ONCE with longer waits when it fails without console errors (a slow frame, not a bug).
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { start as startServer } from './serve.mjs';
-import { CHROMIUM_ARGS } from './shoot.mjs';
+import { CHROMIUM_ARGS, PAGE_TIMEOUT_MS, isHarnessError } from './shoot.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -109,6 +112,7 @@ async function main() {
   }
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  page.setDefaultTimeout(PAGE_TIMEOUT_MS);
   const errors = [], warnings = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.type() === 'warning') warnings.push(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + (e.stack || e.message)));
@@ -117,8 +121,8 @@ async function main() {
 
   try {
     // ---------------------------------------------------------------- boot
-    await page.goto(url, { waitUntil: 'load', timeout: 120000 });
-    await page.waitForFunction(() => window.__iw && window.__iw.ready === true, null, { timeout: 180000 });
+    await page.goto(url, { waitUntil: 'load', timeout: PAGE_TIMEOUT_MS });
+    await page.waitForFunction(() => window.__iw && window.__iw.ready === true, null, { timeout: PAGE_TIMEOUT_MS + 60000 });
     const boot = await ev(() => ({ systems: window.__iw.systems(), state: window.__iw.getState() }));
     const faulted = boot.systems.filter((s) => s.faulted).map((s) => s.name);
     record('boot + all systems loaded', boot.state.failedSystems.length === 0 && faulted.length === 0 && boot.state.state === 'title',
@@ -302,30 +306,95 @@ async function main() {
     record('render budget (gameplay_chase)', s.sceneCalls > 0 && s.sceneCalls <= 600 && s.sceneTriangles <= 3e6, `scene draw calls ${s.sceneCalls}, triangles ${s.sceneTriangles}`);
     if (VERBOSE) console.log((await ev(() => window.__smoke.trace)).join('\n'));
     // ---------------------------------------------------------------- real-time mode (no test API)
-    // The actual player flow: RAF loop, menu clicks, keyboard. Pointer Lock is unavailable
-    // headless, so this also exercises the drag-look fallback.
+    // The actual player flow: RAF loop, menu clicks, keyboard, real mouse. Headless Chromium grants
+    // Pointer Lock on the LAUNCH click; the check then REFUSES it (requestPointerLock stubbed to
+    // reject, as Chrome does after Esc/Esc or in a sandboxed iframe) and asserts that the game
+    // screen still takes the mouse: nothing covers the canvas, the 'CLICK TO AIM' chip shows, a
+    // click fires the rifle and falls back to drag-look, a drag turns the aim; a later click
+    // re-captures the mouse. Esc and a window blur both pause.
     {
-      const p2 = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-      const errs2 = [];
-      p2.on('console', (m) => { if (m.type() === 'error') errs2.push(m.text()); });
-      p2.on('pageerror', (e) => errs2.push('pageerror: ' + e.message));
-      await p2.goto(url.replace('test=1', 'test=0'), { waitUntil: 'load' });
-      await p2.waitForSelector('.menu-title .menu-btn.primary', { state: 'visible', timeout: 120000 });
-      await p2.click('.menu-title .menu-btn.primary');
-      await p2.waitForSelector('.menu-briefing .menu-btn.primary', { state: 'visible' });
-      await p2.click('.menu-briefing .menu-btn.primary');
-      await p2.waitForTimeout(500);
-      const st0 = await p2.evaluate(() => ({ state: window.__game.state, frame: window.__game.frame }));
-      await p2.keyboard.down('KeyW'); await p2.mouse.move(640, 360); await p2.mouse.down();
-      await p2.mouse.move(700, 350, { steps: 5 }); await p2.waitForTimeout(1500);
-      await p2.mouse.up(); await p2.keyboard.up('KeyW');
-      await p2.keyboard.press('ShiftLeft'); await p2.waitForTimeout(300);
-      await p2.setViewportSize({ width: 1000, height: 640 }); await p2.waitForTimeout(300); // resize path
-      await p2.keyboard.press('Escape'); await p2.waitForTimeout(200);
-      const st1 = await p2.evaluate(() => ({ state: window.__game.state, frame: window.__game.frame, z: window.__game.player.pos.z, drag: window.__game.input.dragLook, yaw: window.__game.player.controller.aimYaw }));
-      await p2.close();
-      record('real-time mode: menus -> play -> pause (RAF, clicks, keys)', st0.state === 'playing' && st1.frame > st0.frame + 10 && st1.state === 'paused' && errs2.length === 0,
-        `state ${st0.state}->${st1.state}, ${st1.frame - st0.frame} steps simulated, drag-look fallback=${st1.drag}, aimYaw ${st1.yaw.toFixed(2)}${errs2.length ? ' ERR ' + errs2.join(' | ').slice(0, 300) : ''}`);
+      // slow = 1 on the first try, 2.5 on the automatic retry (longer waits for a loaded CPU)
+      const realtime = async (slow) => {
+        const p2 = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+        p2.setDefaultTimeout(PAGE_TIMEOUT_MS);
+        const errs2 = [];
+        p2.on('console', (m) => { if (m.type() === 'error') errs2.push(m.text()); });
+        p2.on('pageerror', (e) => errs2.push('pageerror: ' + e.message));
+        try {
+          await p2.goto(url.replace('test=1', 'test=0'), { waitUntil: 'load', timeout: PAGE_TIMEOUT_MS });
+          await p2.waitForSelector('.menu-title .menu-btn.primary', { state: 'visible', timeout: PAGE_TIMEOUT_MS });
+          await p2.click('.menu-title .menu-btn.primary');
+          await p2.waitForSelector('.menu-briefing .menu-btn.primary', { state: 'visible' });
+          await p2.click('.menu-briefing .menu-btn.primary');
+          await p2.waitForTimeout(500 * slow);
+          const st0 = await p2.evaluate(() => {
+            const g = window.__game, c = { fired: 0, md: 0 };
+            window.__rt = c;
+            g.events.on('weapon:fired', (e) => { if (e.owner === g.player && e.slot === 'R') c.fired++; });
+            g.canvas.addEventListener('mousedown', () => { c.md++; });
+            const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+            return { state: g.state, frame: g.frame, top: el === g.canvas ? 'canvas' : (el ? el.id || el.className : 'none') };
+          });
+          await p2.keyboard.down('KeyW'); await p2.mouse.move(640, 360); await p2.mouse.down();
+          await p2.mouse.move(700, 350, { steps: 5 }); await p2.waitForTimeout(1500 * slow);
+          await p2.mouse.up(); await p2.keyboard.up('KeyW');
+          await p2.keyboard.press('ShiftLeft'); await p2.waitForTimeout(300 * slow);
+          await p2.setViewportSize({ width: 1000, height: 640 }); await p2.waitForTimeout(300 * slow); // resize path
+          await p2.keyboard.press('Escape'); await p2.waitForTimeout(200 * slow);
+          const st1 = await p2.evaluate(() => ({ state: window.__game.state, frame: window.__game.frame, fired: window.__rt.fired }));
+          // pointer lock refused on resume (Esc/Esc in Chrome, sandboxed iframe): the mouse must still work
+          const st2 = await p2.evaluate(() => {
+            const g = window.__game, c = g.canvas;
+            window.__rlock = c.requestPointerLock;
+            c.requestPointerLock = () => Promise.reject(new DOMException('refused (smoke)', 'SecurityError'));
+            g.menus.resume();
+            return { state: g.state, locked: g.input.pointerLocked };
+          });
+          // the chip appears after 0.6 s of wall time, at the next rendered frame (slow under SwiftShader)
+          const waitFor = (fn, ms) => p2.waitForFunction(fn, null, { timeout: ms, polling: 100 }).then(() => true, () => false);
+          await waitFor(() => window.__game.systems.get('hints').chip === 'click', 20000 * slow);
+          const st3 = await p2.evaluate(() => {
+            const g = window.__game, el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+            return { chip: g.systems.get('hints').chip, top: el === g.canvas ? 'canvas' : (el ? el.id || el.className : 'none'), fired: window.__rt.fired, md: window.__rt.md, yaw: g.player.controller.aimYaw };
+          });
+          await p2.mouse.move(500, 320); await p2.mouse.down();
+          await p2.mouse.move(640, 320, { steps: 8 }); await p2.waitForTimeout(1200 * slow);
+          await p2.mouse.up();
+          await waitFor(() => window.__game.systems.get('hints').chip === 'drag', 20000 * slow);
+          const st4 = await p2.evaluate(() => {
+            const g = window.__game;
+            return { state: g.state, chip: g.systems.get('hints').chip, drag: g.input.dragLook, fired: window.__rt.fired, md: window.__rt.md, yaw: g.player.controller.aimYaw };
+          });
+          // the lock is available again: one click re-captures the mouse
+          await p2.evaluate(() => { window.__game.canvas.requestPointerLock = window.__rlock; });
+          await p2.mouse.click(500, 320);
+          await waitFor(() => window.__game.input.pointerLocked && window.__game.systems.get('hints').chip === '', 20000 * slow);
+          const st5 = await p2.evaluate(() => ({ locked: window.__game.input.pointerLocked, drag: window.__game.input.dragLook, chip: window.__game.systems.get('hints').chip }));
+          // focus loss pauses (alt-tab while the mouse is not captured)
+          await p2.evaluate(() => { if (document.pointerLockElement) document.exitPointerLock(); });
+          await waitFor(() => window.__game.state === 'paused', 10000 * slow); // lock lost -> paused
+          await p2.evaluate(() => { const g = window.__game; if (g.state === 'paused') { g.canvas.requestPointerLock = () => Promise.reject(new DOMException('refused (smoke)', 'SecurityError')); g.menus.resume(); } });
+          await p2.waitForTimeout(300 * slow);
+          const st6 = await p2.evaluate(() => { const g = window.__game, before = g.state; window.dispatchEvent(new Event('blur')); return { before, after: g.state }; });
+          const mouseOk = st0.top === 'canvas' && st3.top === 'canvas' && st2.state === 'playing' && !st2.locked && st3.chip === 'click'
+            && st4.md > st3.md && st4.fired > st3.fired && st4.drag && st4.chip === 'drag' && Math.abs(st4.yaw - st3.yaw) > 0.05 && st4.state === 'playing';
+          const pass = st0.state === 'playing' && st1.frame > st0.frame + 10 && st1.state === 'paused' && st1.fired > 0 && mouseOk
+            && st5.locked && st5.chip === '' && st6.before === 'playing' && st6.after === 'paused' && errs2.length === 0;
+          return { pass, errs2, detail: `state ${st0.state}->${st1.state}, ${st1.frame - st0.frame} steps, rifle ${st1.fired} rds (locked); lock refused: top=${st3.top}, chip ${st3.chip}->${st4.chip}, click+drag: canvas mousedown ${st4.md - st3.md}, rifle +${st4.fired - st3.fired}, aimYaw ${(st4.yaw - st3.yaw).toFixed(2)} rad; re-click locked=${st5.locked}; blur ${st6.before}->${st6.after}${errs2.length ? ' ERR ' + errs2.join(' | ').slice(0, 300) : ''}` };
+        } catch (e) {
+          if (!isHarnessError(e)) throw e;
+          return { pass: false, errs2, detail: 'harness: ' + String(e.message).split('\n')[0].slice(0, 200) };
+        } finally {
+          await p2.close().catch(() => {});
+        }
+      };
+      let rt = await realtime(1);
+      if (!rt.pass && rt.errs2.length === 0) {
+        console.log(`[smoke] real-time check failed (${rt.detail}); retrying once with longer waits`);
+        rt = await realtime(2.5);
+        rt.detail += rt.pass ? ' (passed on the automatic retry)' : ' (failed twice)';
+      }
+      record('real-time mode: menus -> play -> mouse (locked / refused / drag) -> pause (RAF, clicks, keys)', rt.pass, rt.detail);
     }
   } catch (e) {
     record('smoke harness', false, e.stack || e.message);

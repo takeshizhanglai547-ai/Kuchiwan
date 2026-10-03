@@ -7,25 +7,25 @@
  "res": 2048,
  "timings_s": {
   "model": 0.9,
-  "bake.total": 2.0,
-  "composite": 13.0,
-  "export.glb": 0.7,
+  "bake.total": 2.1,
+  "composite": 13.1,
+  "export.glb": 0.6,
   "export.gltfpack": 0.1,
   "export.fbx": 0.1
  },
- "elapsed_s": 27.7,
- "glb_bytes": 733236,
+ "elapsed_s": 25.5,
+ "glb_bytes": 681272,
  "glb_breakdown": {
-  "bytes": 733236,
+  "bytes": 681272,
   "images": {
-   "enemy_relay_decals": 82814,
+   "enemy_relay_decals": 76208,
    "enemy_relay_f_normal": 62902,
    "enemy_relay_f_orm": 60684,
-   "enemy_relay_f_basecolor": 226816,
+   "enemy_relay_f_basecolor": 221722,
    "enemy_relay_f_emissive": 2636
   },
-  "image_bytes": 435852,
-  "geometry_bytes": 297384
+  "image_bytes": 424152,
+  "geometry_bytes": 257120
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_enemy_relay.fbx",
@@ -43,5 +43,5 @@
  },
  "uv_coverage": 0.607,
  "cards": 10,
- "total_s": 27.8
+ "total_s": 25.6
 }

@@ -295,6 +295,11 @@ a.bake(weathering=iw.Weathering(edge_wear=1.4, grime=1.5, dust=0.2), edge=0.025)
   animations or skins. Then `gltfpack -cc -ce ext -kn -km -ke -vn 10 -vt 14`. This applies
   `EXT_meshopt_compression`, `KHR_mesh_quantization` and `KHR_texture_transform`. All of them
   are supported by the game's loader (`src/core/assets.js`). **No Draco, no KTX2.**
+  - r4 (enemy modeler): extra gltfpack args are opt-in per pipeline. `blender/enemies/ekit.py`
+    `GLTFPACK_EXTRA` defaults to `['-vp', '12', '-vt', '12']` for every enemy GLB, and
+    `blender/mech/rigpipe.py` `GLTFPACK_EXTRA` (default `[]`) is set by `build_boss.py` only.
+    12-bit positions are a 2.4 mm grid on a 10 m rig and 12-bit UVs are half a texel at 2048.
+    Together they cut 5-8% off each GLB, so the single-file build shrinks.
 - **FBX (UE5)**: `apply_scale_options='FBX_SCALE_UNITS'`, so metres import as centimetres at
   the right size. The axes are −Z forward / Y up; UE's importer converts them. Other settings:
   face smoothing groups plus custom normals, tangent space, custom properties, embedded

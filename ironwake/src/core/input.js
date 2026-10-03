@@ -10,10 +10,16 @@
 //
 // Mouse look uses Pointer Lock. When Pointer Lock is unavailable (sandboxed iframe,
 // denied, or unsupported) the input falls back to DRAG-LOOK: moving the mouse while any
-// button is held turns the camera (arrow keys always work too).
+// button is held turns the camera (arrow keys always work too). While playing without the
+// lock (refused after Esc/Esc, lost on alt-tab, denied twice) every mouse button press on the
+// game screen retries it, so one click re-captures the mouse; only an iframe that refused it
+// or a browser without the API stops retrying. (The HUD-side hint lives in core/hints.js.)
 //
 // UI code (menus) listens to game.events 'input:action' {action, code, source}, which is
-// emitted immediately on key/button down (not tied to fixed steps).
+// emitted immediately on key/button down (not tied to fixed steps). While input is disabled
+// (menus up), the gamepad also emits menu navigation: d-pad / left stick -> look_up/down/left/
+// right, B -> pause (= back). resume() (engine, on every switch to 'playing') drops presses
+// latched while the menus were up, so keys pressed in the pause menu never fire on resume.
 //
 // Test API: input.setOverride(action, bool) forces an action (used by window.__iw.press()).
 
@@ -48,6 +54,10 @@ export const PAD_BINDINGS = {
   8: 'boost_toggle', 9: 'pause', 10: 'assault_boost', 11: 'hard_lock',
 };
 
+/** Gamepad buttons that only navigate menus (emitted while input is disabled). */
+const PAD_MENU = { 12: 'look_up', 13: 'look_down', 14: 'look_left', 15: 'look_right', 1: 'pause' };
+const STICK_NAV = ['look_up', 'look_down', 'look_left', 'look_right'];
+
 const PAD_DEADZONE = 0.18;
 const PREVENT_DEFAULT = new Set(['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backquote']);
 
@@ -76,6 +86,8 @@ export class Input {
     this.mouseButtonsDown = 0;
     this.canvas = null;
     this._requestedLock = false;
+    this._lockUnavailable = false;     // no API, or an iframe refused it: stop retrying
+    this._padNav = 15;                 // left-stick menu navigation edge state (bit per direction; set = held)
     this._handlers = [];
   }
 
@@ -122,7 +134,9 @@ export class Input {
     const code = 'Mouse' + e.button;
     if (down) {
       this.mouseButtonsDown |= (1 << e.button);
-      if (this.wantPointerLock && !this.pointerLocked && !this.dragLook) this.requestPointerLock();
+      // Retry the lock on every press on the game screen while playing (also in drag-look
+      // mode: a refusal can be a temporary browser cooldown, e.g. right after Esc).
+      if (this.wantPointerLock && !this.pointerLocked && !this._lockUnavailable) this.requestPointerLock();
     } else {
       this.mouseButtonsDown &= ~(1 << e.button);
     }
@@ -148,7 +162,7 @@ export class Input {
 
   requestPointerLock() {
     const c = this.canvas;
-    if (!c || !c.requestPointerLock) { this._enableDragLook('unsupported'); return; }
+    if (!c || !c.requestPointerLock) { this._lockUnavailable = true; this._enableDragLook('unsupported'); return; }
     this._requestedLock = true;
     try {
       const p = c.requestPointerLock();
@@ -166,6 +180,7 @@ export class Input {
     this._lockFailures = (this._lockFailures || 0) + 1;
     let inIframe = false;
     try { inIframe = window.self !== window.top; } catch (e) { inIframe = true; }
+    if (inIframe) this._lockUnavailable = true; // sandboxed iframes refuse every request
     if (inIframe || this._lockFailures >= 2) this._enableDragLook(reason);
   }
 
@@ -224,12 +239,30 @@ export class Input {
           this.latch[this.index[action]] = 1;
           this.events.emit('input:action', { action, code: 'Pad' + b, source: 'gamepad' });
         }
+        // menus: d-pad moves the selection, B goes back (never latched for gameplay)
+        if (!this.enabled) {
+          const nav = PAD_MENU[b];
+          if (nav) this.events.emit('input:action', { action: nav, code: 'Pad' + b, source: 'gamepad' });
+        }
       }
     }
+    // menus: left stick past 0.6 = one selection step (re-armed below 0.3)
+    let nav = this._padNav;
+    if (!this.enabled) {
+      const ax = this.padAxes[0], ay = this.padAxes[1];
+      for (let k = 0; k < 4; k++) {
+        const v = k === 0 ? -ay : k === 1 ? ay : k === 2 ? -ax : ax; // up, down, left, right
+        const bit = 1 << k;
+        if (v > 0.6 && !(nav & bit)) { nav |= bit; this.events.emit('input:action', { action: STICK_NAV[k], code: 'PadStick', source: 'gamepad' }); }
+        else if (v < 0.3) nav &= ~bit;
+      }
+    } else nav = 15; // while playing: re-arm only after the stick returns to centre (a stick held
+    // forward when the pause menu opens must not move its selection)
+    this._padNav = nav;
   }
 
-  /** Sample actions for this fixed step (engine calls before systems update). */
-  beginStep() {
+  /** Physical state (keys, mouse buttons, pad buttons) -> this.raw. */
+  _sampleRaw() {
     const raw = this.raw;
     raw.fill(0);
     for (const code in this.keys) {
@@ -242,6 +275,12 @@ export class Input {
       const a = this.padBindings[b];
       if (a) raw[this.index[a]] = 1;
     }
+    return raw;
+  }
+
+  /** Sample actions for this fixed step (engine calls before systems update). */
+  beginStep() {
+    const raw = this._sampleRaw();
     for (let i = 0; i < raw.length; i++) {
       let v = (this.enabled && (raw[i] || this.latch[i])) ? 1 : 0;
       if (this.override[i] >= 0) v = this.override[i];
@@ -296,6 +335,19 @@ export class Input {
     this.override[i] = value === null || value === undefined ? -1 : (value ? 1 : 0);
   }
   clearOverrides() { this.override.fill(-1); }
+
+  /**
+   * Play (re)starts (engine: every switch to 'playing'). Presses latched while the menus were
+   * up are dropped (Q / Space / R in the pause menu must not fire on resume), and buttons still
+   * held from the menu (pad A on RESUME, B = back) count as already held: no rising edge, so no
+   * jump / quick boost / missile volley on the first step. Held state (W, triggers) still works.
+   */
+  resume() {
+    this.latch.fill(0);
+    this.lookAccum.x = this.lookAccum.y = 0;
+    const raw = this._sampleRaw();
+    for (let i = 0; i < raw.length; i++) if (raw[i]) this.prev[i] = 1;
+  }
 
   /** Reset per-session edge state (called on restart). */
   reset() {

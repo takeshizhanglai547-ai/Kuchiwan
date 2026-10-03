@@ -10,7 +10,8 @@ here on first use), RE-PERFORMED by vo_prosody.py, then turned into a comm trans
     Pico 16 kHz, clause-level <speed> direction (SCRIPT)
       ->  vo_prosody.perform(): forced alignment, authored F0 contour (declination 135->100 Hz,
           +20-30 % accents on the ACCENTS words, boundary tones, creak), pause re-cut, pre-boundary
-          lengthening, jitter/shimmer, formants x0.88, inhales  (WORLD vocoder, pyworld)
+          lengthening, +-15 % per-syllable timing, 0.6 % jitter / 3 % shimmer, 1-2 Hz wobble on
+          phrase-final vowels, formants x0.88, pink inhales at phrase starts  (WORLD vocoder, pyworld)
       ->  HP 300 Hz (24 dB/oct)  ->  +4 dB presence peak 2.4 kHz
       ->  AGC/compressor (4:1, 3 ms / 90 ms)  ->  tanh drive 1.0 (asymmetric, even harmonics;
           a narrower band / harder drive measurably costs intelligibility, see --check)
@@ -285,7 +286,7 @@ def main():
         if hold and info['dur'] > hold + MAX_OVER:   # too long for the beat: tighten the read
             dry, info = perform(x, SR, strip_tags(script), ACCENTS.get(key, []), perf, hold + MAX_OVER - 0.1, seed)
         y = radio_chain(dry, SR, {**CHAIN, **CHAIN_KEY.get(key, {})})
-        y = np.concatenate([np.zeros(int(0.03 * SR)), y, np.zeros(int(0.05 * SR))])
+        y = np.concatenate([np.zeros(int(0.03 * SR)), y, np.zeros(int(0.01 * SR))])
         if check or '--wav' in sys.argv:
             import soundfile as sf
             sf.write(os.path.join(WAV_DIR, f'radio_{key}.wav'), y, SR)

@@ -268,14 +268,16 @@ export class MoveFx {
       while (this.speedT <= 0) {
         this.speedT += 1;
         // a point ahead of the camera, off the view axis (never in the rig's face)
-        const ahead = rng.range(18, 60), side = rng.sym(1), up = rng.sym(1);
+        const ahead = rng.range(18, 60), side = rng.sym(1);
         _v.copy(_c).addScaledVector(_r, ahead);
         const sgn = side < 0 ? -1 : 1, lat = sgn * (7 + ahead * 0.22 + Math.abs(side) * ahead * 0.35);
         _v.x += (-_r.z) * lat + rng.sym(2);
         _v.z += (_r.x) * lat + rng.sym(2);
-        _v.y += up * (4 + ahead * 0.3);
+        // (movement r4: crisp motes high in the frame read as orange dashes floating in the SKY)
+        // ash and grit stream past LOW: from just over the slab up to ~1 m over the camera's eye
+        // height, so against the ground they read as kicked-up dust rushing by, never as sky lines
         const gy = game.physics.groundHeight(_v.x, _v.z);
-        if (_v.y < gy + 0.5) _v.y = gy + 0.5 + rng.range(0, 2);
+        _v.y = gy + 0.5 + rng.next() * rng.next() * Math.max(2, _c.y - gy + 1);
         // motes stream radially out of the view centre (the focus of expansion) and back past
         // the camera, so the billboard stretch draws classic speed lines
         _d.copy(_v).sub(_c).addScaledVector(_r, -ahead);            // radial offset from the view axis

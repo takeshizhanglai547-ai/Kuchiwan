@@ -1,7 +1,8 @@
 // src/render/weather.js — wind-driven falling ash + embers around the camera
 // (owner: render engineer). ONE instanced draw call, animated entirely in the vertex shader.
 //
-//   createWeather(count, noiseTex) -> { mesh, uniforms, update(camera, time, camVel), dispose() }
+//   createWeather(count, noiseTex) -> { mesh, uniforms, update(camera, time, camVel), setCount(n), dispose() }
+//   (setCount draws the first n <= count flakes: quality changes at runtime, same seeds)
 //
 // Two nested camera-relative wrap boxes (dense near layer 44x26x44 m, sparse far layer
 // 150x70x150 m). Each flake is a billboard stretched along its velocity RELATIVE to the camera
@@ -150,6 +151,7 @@ export function createWeather(count, { sunDir, sunColor, ambient }) {
       uniforms.uCenter.value.copy(camera.position).addScaledVector(_f, 10);
       uniforms.uCamVel.value.copy(camVel);
     },
+    setCount(n) { g.instanceCount = Math.max(0, Math.min(count, Math.round(n))); },
     dispose() { g.dispose(); mat.dispose(); },
   };
 }

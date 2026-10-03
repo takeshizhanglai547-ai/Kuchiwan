@@ -158,6 +158,10 @@ export default function missionSystem(game) {
       if (endT >= 0) {
         endT -= game.rawDt;
         if (endT < 0) {
+          // the rig can still be destroyed after the win (same step as the boss kill, or a stray
+          // round during the outro): the mission stays complete, but AP REMAINING shows the truth
+          const p = game.player;
+          if (api.result && p) api.result.apRemaining = p.alive ? Math.max(0, Math.ceil(p.ap)) : 0;
           game.setState('results');
           game.events.emit('mission:end', { result: api.result });
         }

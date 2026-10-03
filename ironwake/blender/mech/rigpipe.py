@@ -758,6 +758,9 @@ def export_fbx_sets(a, path=None):
 DEFAULT_QUALITY = {'basecolor': 80, 'orm': 72, 'normal': 82, 'emissive': 88, 'decals': 80}
 
 
+GLTFPACK_EXTRA = []   # r4 (enemy modeler, opt-in per build script): extra gltfpack args, e.g. ['-vp', '12']
+
+
 def export_glb_lean(root, path, strip_tangents=True, quality=60):
     """Blender glTF export (placeholder JPEGs, replaced by WebP later) -> optional TANGENT
     strip (three.js then builds the tangent frame per pixel from UV derivatives; ~15% less
@@ -781,7 +784,7 @@ def export_glb_lean(root, path, strip_tangents=True, quality=60):
                 export_vertex_color='NONE', export_attributes=False, check_existing=False)
     if X.gltfpack_available():
         args = [X._node(), X.GLTFPACK, '-i', raw, '-o', path, '-cc', '-ce', 'ext', '-kn', '-km', '-ke',
-                '-vn', '8', '-vt', '14']
+                '-vn', '8', '-vt', '14'] + list(GLTFPACK_EXTRA)
         with timed('export.gltfpack'):
             r = subprocess.run(args, capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(path):

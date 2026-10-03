@@ -1080,6 +1080,30 @@ export const SHOTS = {
       S.orbit(V(p.x, p.y + 1.4, p.z), THREE.MathUtils.radToDeg(st.face) - 30, 6, 6.2, 40);
     },
   },
+
+  // --- enemies lane (models, r4): CINDERHOUND detail crops --------------------------------
+  enemy_boss_torso: {
+    desc: 'GC-X1 CINDERHOUND chest, pauldrons and back unit at 11 m: inset panels, louvres, stencils, wear (enemies lane r4)',
+    frames: [0], hud: false,
+    async setup(S) { await SHOTS.boss_closeup.setup(S); },
+    camera(S) {
+      const b = S.enemy('boss');
+      const p = b ? b.pos : S.rel(45);
+      const yaw = THREE.MathUtils.radToDeg(b ? b.yaw : S.yaw + Math.PI);
+      S.orbit(V(p.x, p.y + 7.0, p.z), yaw + 34, 4, 10.5, 40);
+    },
+  },
+  enemy_boss_legs: {
+    desc: 'GC-X1 CINDERHOUND legs at 9 m: hip/ankle rams, shin plates, chamfered toe claws (enemies lane r4)',
+    frames: [0], hud: false,
+    async setup(S) { await SHOTS.boss_closeup.setup(S); },
+    camera(S) {
+      const b = S.enemy('boss');
+      const p = b ? b.pos : S.rel(45);
+      const yaw = THREE.MathUtils.radToDeg(b ? b.yaw : S.yaw + Math.PI);
+      S.orbit(V(p.x, p.y + 2.6, p.z), yaw + 40, 2, 9.0, 40);
+    },
+  },
 };
 
 export const SHOT_NAMES = Object.keys(SHOTS);

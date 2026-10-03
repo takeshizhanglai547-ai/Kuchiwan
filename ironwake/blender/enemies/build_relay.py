@@ -637,7 +637,7 @@ def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=41, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, res=2048, small=0.13,
           sizes={'normal': 1536, 'orm': 768, 'emissive': 256}, card_atlas=1024,
-          tex_quality={'basecolor': 73, 'normal': 70, 'orm': 60},   # r3: -45 KB (single-file build budget)
+          tex_quality={'basecolor': 70, 'normal': 70, 'orm': 60, 'decals': 76},   # r3: -45 KB, r4b: -30 KB (build budget)
           bake_kw=dict(edge=0.05, cavity=0.12, ao_dist=1.6, bevel_radius=0.02))
 
 

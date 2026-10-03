@@ -13,7 +13,8 @@
 //
 // STATES: 'boot' -> 'title' -> 'briefing' -> 'playing' <-> 'paused' -> 'results'
 //   The sim only steps in 'playing' and 'results' (results keeps explosions alive).
-//   Emits 'game:state' {from, to}.
+//   Emits 'game:state' {from, to}. Live play (not the test harness) auto-pauses when the window
+//   loses focus or the tab is hidden, also when the mouse was not captured.
 //
 // SERVICES: systems publish themselves on the game object in init(), e.g. game.fx,
 // game.audio, game.hud. Until then (or if the system failed to load) they are no-op stubs
@@ -27,7 +28,10 @@ import { Assets } from './assets.js';
 import { SystemRegistry } from './systems.js';
 
 export const FIXED_DT = 1 / 60;
-const MAX_STEPS_PER_FRAME = 5; // spiral-of-death guard (drops time instead)
+// Spiral-of-death guard (drops time instead). 8 steps (and a real-dt clamp of the same 8/60 s)
+// keep the game in real time down to 7.5 rendered fps (GPU-less PCs); below that it slows down.
+const MAX_STEPS_PER_FRAME = 8;
+const MAX_REAL_DT = MAX_STEPS_PER_FRAME * FIXED_DT;
 
 // ---- no-op service stubs ------------------------------------------------------
 const NOOP = () => {};
@@ -120,7 +124,8 @@ export class Game {
       stencil: false,
       preserveDrawingBuffer: this.params.test, // harness screenshots
     });
-    r.setPixelRatio(this.params.test ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+    this.pixelRatioCap = 1.5; // environment.js lowers it to 0.5 on software rasterizers
+    r.setPixelRatio(this.params.test ? 1 : Math.min(window.devicePixelRatio || 1, this.pixelRatioCap));
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.AgXToneMapping;
     r.toneMappingExposure = 1.0;
@@ -142,6 +147,14 @@ export class Game {
 
     // Pause when pointer lock is lost mid-game (Esc).
     this.events.on('input:pointerlock-lost', () => { if (this.state === 'playing') this.setState('paused'); });
+    // ...and when the window loses focus / the tab is hidden (alt-tab while the mouse is not
+    // captured: keyboard play, drag-look). Not in the test harness (it drives the state itself).
+    if (!this.params.test) {
+      this._onBlur = () => { if (this.state === 'playing') this.setState('paused'); };
+      this._onVisibility = () => { if (document.visibilityState === 'hidden') this._onBlur(); };
+      window.addEventListener('blur', this._onBlur);
+      document.addEventListener('visibilitychange', this._onVisibility);
+    }
 
     await this.systems.loadAll(systemModules);
     this.resize();
@@ -166,11 +179,28 @@ export class Game {
     const playing = next === 'playing';
     this.input.enabled = playing;
     this.input.wantPointerLock = playing && !this.params.test;
-    if (!playing) this.input.exitPointerLock();
+    if (playing) this.input.resume(); // drop presses made in the menus (no missiles on resume)
+    else this.input.exitPointerLock();
     this.events.emit('game:state', { from: prev, to: next });
   }
 
   get simRunning() { return this.state === 'playing' || this.state === 'results'; }
+
+  /**
+   * GRAPHICS QUALITY at runtime (OPTIONS) or at boot (saved option, before the pipeline init):
+   * post chain (pipeline), shadow cascades + ash count (environment) and, in live play, the
+   * pixel ratio (LOW caps it at 1.0 on high-DPI screens). game.params.quality follows it.
+   */
+  setQuality(name) {
+    if (!['low', 'medium', 'high'].includes(name)) return;
+    this.params.quality = name;
+    if (this.env && this.env.setQuality) this.env.setQuality(name);
+    if (this.pipeline && this.pipeline.setQuality && this.pipeline.quality !== name) this.pipeline.setQuality(name);
+    if (!this.params.test && this.renderer) {
+      const pr = Math.min(window.devicePixelRatio || 1, this.pixelRatioCap, name === 'low' ? 1 : 1.5);
+      if (Math.abs(pr - this.renderer.getPixelRatio()) > 1e-3) { this.renderer.setPixelRatio(pr); this.resize(); }
+    }
+  }
 
   /** Begin (or restart) the mission. Every system's reset() runs; state -> 'playing'. */
   startSession({ seed = this.params.seed, state = 'playing' } = {}) {
@@ -231,7 +261,7 @@ export class Game {
   _loop(now) {
     if (!this._running) return;
     this._raf = requestAnimationFrame(this._loop);
-    const realDt = Math.min(0.1, Math.max(0, (now - this._last) / 1000));
+    const realDt = Math.min(MAX_REAL_DT, Math.max(0, (now - this._last) / 1000));
     this._last = now;
     this.input.pollGamepad();
     if (this.simRunning) {
@@ -288,6 +318,8 @@ export class Game {
     this.systems.dispose();
     this.input.detach();
     window.removeEventListener('resize', this._onResize);
+    if (this._onBlur) window.removeEventListener('blur', this._onBlur);
+    if (this._onVisibility) document.removeEventListener('visibilitychange', this._onVisibility);
     this.renderer.dispose();
   }
 }

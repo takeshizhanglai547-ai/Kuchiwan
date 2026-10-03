@@ -2,50 +2,34 @@
  "tris": 89252,
  "parts": 29,
  "colliders": 0,
- "decals": 33,
+ "decals": 39,
  "texel_density_px_per_m": 106.6,
  "res": 2048,
  "timings_s": {
-  "model": 4.1,
-  "bake.mech_boss_A.albedo": 38.2,
-  "bake.mech_boss_A.matid": 17.6,
-  "bake.mech_boss_A.noise": 20.5,
-  "bake.mech_boss_A.wnormal": 21.4,
-  "bake.mech_boss_A.wpos": 21.3,
-  "bake.mech_boss_A.masks": 67.0,
-  "bake.mech_boss_A.ao": 53.9,
-  "bake.mech_boss_A.normal": 64.3,
-  "bake.total": 753.5,
-  "composite": 24.6,
-  "bake.mech_boss_B.albedo": 79.5,
-  "bake.mech_boss_B.matid": 34.2,
-  "bake.mech_boss_B.noise": 41.3,
-  "bake.mech_boss_B.wnormal": 42.1,
-  "bake.mech_boss_B.wpos": 42.4,
-  "bake.mech_boss_B.masks": 83.9,
-  "bake.mech_boss_B.ao": 56.7,
-  "bake.mech_boss_B.normal": 45.8,
+  "model": 3.6,
+  "bake.total": 2.2,
+  "composite": 21.9,
   "export.glb": 0.9,
   "export.gltfpack": 0.1,
-  "export.fbx": 0.2
+  "export.fbx": 0.3
  },
- "elapsed_s": 835.3,
- "glb_bytes": 2066040,
+ "elapsed_s": 83.3,
+ "glb_bytes": 1852136,
  "glb_breakdown": {
-  "bytes": 2066040,
+  "bytes": 1852136,
   "images": {
    "mech_boss_B_f_emissive": 12542,
-   "mech_boss_B_f_normal": 74538,
-   "mech_boss_B_f_orm": 88098,
-   "mech_boss_B_f_basecolor": 136968,
-   "mech_boss_decals": 145220,
+   "mech_boss_B_f_normal": 68832,
+   "mech_boss_B_f_orm": 93228,
+   "mech_boss_B_f_basecolor": 113872,
+   "mech_boss_decals": 132638,
    "mech_boss_A_f_emissive": 4776,
-   "mech_boss_A_f_normal": 210242,
-   "mech_boss_A_f_orm": 131378,
-   "mech_boss_A_f_basecolor": 234860
+   "mech_boss_A_f_normal": 190396,
+   "mech_boss_A_f_orm": 140188,
+   "mech_boss_A_f_basecolor": 195584
   },
-  "image_bytes": 1038622,
-  "geometry_bytes": 1027418
+  "image_bytes": 952056,
+  "geometry_bytes": 900080
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_mech_boss.fbx",
@@ -86,5 +70,5 @@
   }
  },
  "cards": 42,
- "total_s": 835.4
+ "total_s": 83.4
 }

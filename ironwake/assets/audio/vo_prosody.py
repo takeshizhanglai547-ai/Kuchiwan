@@ -6,15 +6,17 @@ them with an authored performance, then resynthesises with the WORLD vocoder (py
     Pico 16 kHz  ->  forced word/phone alignment (pocketsphinx, CMU dict stress for the accent vowel)
                  ->  WORLD analysis (harvest F0, cheaptrick envelope, d4c aperiodicity, 5 ms frames)
                  ->  TIME: pauses re-cut per punctuation, 60-120 ms pre-boundary lengthening on the
-                     last syllable of every phrase, global rate fitted to the subtitle hold
+                     last syllable of every phrase, every syllable stretched by its own +-15 % (no
+                     TTS metronome), global rate fitted to the subtitle hold
                  ->  F0: authored contour - phrase declination (top -> base, partial reset after a
                      comma, sentence-level downtrend), +20-30 % pitch accents on the stressed vowel of
                      each listed content word (peak delay, downstep), continuation rise on commas,
                      final fall + creak (vocal fry) on full stops, Pico's own segmental micro-prosody
-                     kept at reduced depth, 0.6 % jitter, slow 1/f drift
+                     kept at reduced depth, 0.6 % jitter, slow 1/f drift, a 1-2 Hz wobble on
+                     phrase-final vowels only
                  ->  VOICE: spectral envelope warped down (formants x0.88 = a lower, heavier speaker),
                      3 % shimmer, breathier creak frames
-                 ->  WORLD synthesis  +  a quiet inhale in the longer pauses
+                 ->  WORLD synthesis  +  a 120 ms pink-noise inhale (-30 dB) before every phrase
 The result goes through build_vo.py's radio chain.  Deterministic (seeded per line).
 """
 import re
@@ -22,7 +24,7 @@ import re
 import numpy as np
 import pyworld as pw
 from pocketsphinx import Decoder
-from scipy.signal import butter, sosfilt
+from scipy.signal import butter, sosfilt, lfilter
 
 FRAME_MS = 5.0
 FPS = 1000.0 / FRAME_MS
@@ -39,12 +41,14 @@ PERF = dict(
     rise_w=0.075, fall_w=0.11, peak_delay=0.025,
     cont_rise=0.07, final_fall=0.86, sent_down=0.965, comma_reset=0.55,
     creak=0.095, creak_f=0.60, creak_jit=0.07,
-    micro=0.55, jitter=0.006, shimmer=0.03, drift=0.010,
+    micro=0.55, jitter=0.006, shimmer=0.03, drift=0.013, drift_w=0.28,
+    syl_var=0.15,                   # +-15 % per-syllable duration variation (no metronome timing)
+    fin_vib=0.012, fin_vib_hz=(1.0, 2.0),   # slow 1-2 Hz wobble, ONLY on phrase-final vowels
     formant=0.88,                   # envelope frequency warp (<1 = lower formants)
     acc_db=2.5, effort_db=1.8, final_db=2.5,   # accent loudness, accent brightness (dB/oct > 1 kHz), trail-off
     pause={',': 0.13, ':': 0.20, ';': 0.18, '.': 0.27, '!': 0.24, '?': 0.26, '...': 0.55},
     lengthen={',': 0.065, ':': 0.085, ';': 0.08, '.': 0.11, '!': 0.09, '?': 0.10, '...': 0.12},
-    breath=0.2, breath_db=-34.0, lead_breath=True,
+    breath=0.15, breath_db=-30.0, breath_len=0.12, lead_breath=True,   # pink inhale at phrase starts
     speed=1.0, max_speed=1.2,
 )
 
@@ -215,7 +219,7 @@ def perform(x, sr, text, accents, perf=None, budget=None, seed=1):
         if prev is None:
             it['out'] = 0.03
         elif nxt is None:
-            it['out'] = 0.05
+            it['out'] = 0.035
         else:
             it['out'] = P['pause'].get(prev['bnd'], 0.06 if (it['t1'] - it['t0']) > 0.08 else 0.0)
             pauses.append(it)
@@ -234,8 +238,24 @@ def perform(x, sr, text, accents, perf=None, budget=None, seed=1):
             k = max(0.55, 1 - over / max(1e-6, ps))
             for it in pauses:
                 it['out'] *= k
-    # segments: (in_t0, in_t1, out_dur)
+    # segments: (in_t0, in_t1, out_dur). Every syllable gets its own +-syl_var stretch, so the
+    # read never falls into the TTS engine's metronome (uniform syllable lengths)
     segs = []
+
+    def syl_k():
+        return float(np.clip(1 + rng.normal(0, 0.6) * P['syl_var'], 1 - P['syl_var'], 1 + P['syl_var']))
+
+    def syllables(phones, a, b, kind):
+        vows = [p for p in phones if p[0] in VOWELS and p[1] >= a - 1e-6 and p[2] <= b + 1e-6]
+        cuts = [a]
+        for v0, v1 in zip(vows, vows[1:]):
+            m = 0.5 * (v0[2] + v1[1])
+            if cuts[-1] + 0.025 < m < b - 0.025:
+                cuts.append(m)
+        cuts.append(b)
+        for u, v in zip(cuts, cuts[1:]):
+            segs.append((u, v, (v - u) / speed * syl_k(), kind))
+
     if lead:
         segs.append((None, None, lead, 'lead'))
     for i, it in enumerate(seq):
@@ -248,10 +268,10 @@ def perform(x, sr, text, accents, perf=None, budget=None, seed=1):
         it['bnd'] = bnd
         if L > 0 and it['lv'][0] is not None:
             a, b, c = it['t0'], it['lv'][1], it['t1']
-            segs.append((a, b, (b - a) / speed, 'word'))
-            segs.append((b, c, (c - b) / speed + L, 'final'))
+            syllables(it['phones'], a, b, 'word')
+            segs.append((b, c, ((c - b) / speed + L) * syl_k(), 'final'))
         else:
-            segs.append((it['t0'], it['t1'], (it['t1'] - it['t0']) / speed, 'word'))
+            syllables(it['phones'], it['t0'], it['t1'], 'word')
     # output-frame -> input-frame map, and in->out time map for the plan
     src = []
     kinds = []
@@ -382,9 +402,17 @@ def perform(x, sr, text, accents, perf=None, budget=None, seed=1):
     base = np.interp(t, t[good], base[good]) if good.any() else np.full(n_out, lb)
     contour = smooth(base, int(0.04 * FPS)) + acc_c
     # slow 1/f drift + per-frame jitter
-    drift = smooth(rng.standard_normal(n_out), int(0.35 * FPS))
+    drift = smooth(rng.standard_normal(n_out), int(P['drift_w'] * FPS))
     drift *= P['drift'] / (np.std(drift) + 1e-9)
     lf = contour + P['micro'] * micro + drift + rng.standard_normal(n_out) * P['jitter']
+    # phrase-final vowels only: a slow 1-2 Hz wobble (random rate / phase, faded in)
+    kinds_a = np.array(kinds)
+    fin = np.nonzero(kinds_a == 'final')[0]
+    if len(fin) and P['fin_vib'] > 0:
+        for run in np.split(fin, np.nonzero(np.diff(fin) > 1)[0] + 1):
+            tt = np.arange(len(run)) / FPS
+            hz = rng.uniform(*P['fin_vib_hz'])
+            lf[run] += P['fin_vib'] * np.sin(2 * np.pi * hz * tt + rng.uniform(0, 2 * np.pi)) * np.minimum(1, tt / 0.06)
     f0n = np.exp(lf)
     # creak: glide down + heavy jitter + breathier excitation
     if creak_mask.any():
@@ -417,23 +445,35 @@ def perform(x, sr, text, accents, perf=None, budget=None, seed=1):
     spo *= np.where(voiced, sh, 1.0)[:, None] ** 2
     y = pw.synthesize(np.ascontiguousarray(f0o), np.ascontiguousarray(spo), np.ascontiguousarray(apo), sr, FRAME_MS)
 
-    # ---- breaths in the long pauses (inhale noise: band-limited, soft swell)
+    # ---- breaths: a short pink-noise inhale (breath_len, breath_db re the speech RMS) before every
+    # phrase that starts after a sentence-level boundary (and after commas with room for it)
     rms = np.sqrt(np.mean(y[np.abs(y) > 0.02 * np.max(np.abs(y))] ** 2)) + 1e-9
     bl = 10 ** (P['breath_db'] / 20) * rms
-    sos = butter(2, [550, 2600], 'bandpass', fs=sr, output='sos')
+    sos = butter(2, [220, 5200], 'bandpass', fs=sr, output='sos')
     spots = []
-    for a, b, o0, o1, kind in seg_out:
-        if (kind == 'lead') or (kind == 'sil' and (o1 - o0) >= P['breath'] and o0 > 0.1):
+    for k, (a, b, o0, o1, kind) in enumerate(seg_out):
+        nxt = next((s for s in seg_out[k + 1:] if s[4] != 'sil'), None)
+        if nxt is None:
+            continue
+        if kind == 'lead':
             spots.append((o0, o1))
+        elif kind == 'sil' and o0 > 0.1:
+            prev = next((w for w in reversed(words_out) if w['o1'] <= o0 + 0.02), None)
+            bnd = prev['bnd'] if prev else ''
+            if (bnd and bnd != ',' and (o1 - o0) >= 0.1) or (o1 - o0) >= P['breath']:
+                spots.append((o0, o1))
     for o0, o1 in spots:
-        dur = min(0.26, (o1 - o0) * 0.75)
+        dur = min(P['breath_len'] * rng.uniform(0.85, 1.15), (o1 - o0) * 0.85)
         n = int(dur * sr)
         if n < 64:
             continue
-        nz = sosfilt(sos, rng.standard_normal(n + 400))[400:]
-        env = np.sin(np.linspace(0, np.pi, n)) ** 1.6 * np.linspace(0.6, 1, n)
+        w = rng.standard_normal(n + 800)
+        pink = lfilter([0.049922035, -0.095993537, 0.050612699, -0.004408786], [1, -2.494956002, 2.017265875, -0.522189400], w)
+        nz = sosfilt(sos, pink)[800:]
+        x_ = np.linspace(0, 1, n)
+        env = np.sin(np.pi * x_ ** 0.8) ** 1.3          # inhale: swells, then cut by the onset
         nz = nz / (np.std(nz) + 1e-9) * bl * env
-        s0 = int((o1 - dur - 0.02) * sr)
+        s0 = int((o1 - dur - 0.015) * sr)
         s0 = max(0, min(len(y) - n, s0))
         y[s0:s0 + n] += nz
     info = dict(speed=round(speed, 3), dur=round(len(y) / sr, 3), words=len(words_out), aligned=wi,

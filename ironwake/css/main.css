@@ -18,7 +18,10 @@ html, body {
 }
 #game-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
-#ui .menus, #ui .menu, #ui button { pointer-events: auto; }
+/* Only the visible menu screens and buttons catch the mouse. The full-screen #menus container
+   must stay click-through (ui.css: .menus { pointer-events: none }), otherwise it swallows every
+   click on the game screen whenever the pointer is not locked (fire, re-capture, drag-look). */
+#ui .menu, #ui button { pointer-events: auto; }
 
 #boot {
   position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -31,4 +34,29 @@ html, body {
 .debug-overlay {
   position: fixed; left: 8px; bottom: 8px; padding: 6px 8px; background: rgba(0,0,0,0.55);
   font: 11px/1.35 var(--iw-mono); color: #cfe; white-space: pre; z-index: 50; pointer-events: none;
+}
+
+/* Live-play mouse capture hint (src/core/hints.js): bottom centre, between the repair-kit and
+   FCS rows; HUD scale (rem) and fonts; never catches the mouse (#ui is pointer-events: none). */
+.iw-aimhint {
+  position: absolute; left: 50%; bottom: 3.6rem; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 0.9rem; padding: 0.55rem 1.6rem 0.55rem 1.2rem;
+  background: linear-gradient(90deg, rgba(11, 15, 18, 0), rgba(11, 15, 18, 0.62) 12% 88%, rgba(11, 15, 18, 0));
+  border-top: max(1px, 0.1rem) solid rgba(255, 180, 0, 0.75); border-bottom: max(1px, 0.1rem) solid rgba(255, 180, 0, 0.75);
+  color: rgba(240, 245, 246, 0.97); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 0.1rem rgba(0, 0, 0, 0.95), 0 0 0.25rem rgba(0, 0, 0, 0.75);
+}
+.iw-aimhint .en { font-family: var(--f-label, var(--iw-font)); font-weight: 600; font-size: 1.5rem; letter-spacing: 0.3em; }
+.iw-aimhint .jp { font-style: normal; font-family: var(--f-jp, var(--iw-font)); font-size: 1.25rem; letter-spacing: 0.12em; color: rgb(191, 205, 210); }
+/* stylised mouse: body outline + amber left button; drag mode adds a horizontal motion bar */
+.iw-aimhint .iw-mouse {
+  position: relative; width: 1.3rem; height: 2rem; border: max(1px, 0.15rem) solid rgba(240, 245, 246, 0.9);
+  border-radius: 0.65rem; box-sizing: border-box; flex: none;
+}
+.iw-aimhint .iw-mouse::before {
+  content: ""; position: absolute; left: 0; top: 0; width: 50%; height: 45%; background: #ffb400; border-top-left-radius: 0.5rem;
+}
+.iw-aimhint.drag .iw-mouse::after {
+  content: ""; position: absolute; left: -1.1rem; top: 50%; width: 3.1rem; height: max(1px, 0.15rem); margin-top: -0.075rem;
+  background: linear-gradient(90deg, #ffb400 0 22%, transparent 22% 78%, #ffb400 78%);
 }

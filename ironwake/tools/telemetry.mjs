@@ -192,6 +192,7 @@ function pageRun(man) {
       m.flags.qb ? 1 : 0, +m.flags.landed.toFixed(2), m.flags.abLaunch ? 1 : 0, +m.skid.toFixed(3),
       +(cm.dip || 0).toFixed(3), +off.toFixed(3),
       +m.pos.x.toFixed(3), +m.pos.z.toFixed(3), +leanP.toFixed(2), +leanR.toFixed(2), +(cm.kick || 0).toFixed(3), +(cm.kickCam || 0).toFixed(3),
+      +((cm.rigSil || 0) * 100).toFixed(2),
     ]);
   }
   if (man.spamQb) { ctl.update = origUpdate; delete ctl._spamFrame; }
@@ -201,7 +202,7 @@ function pageRun(man) {
   return { rows, area: pick, cfg: { move: m.cfg } };
 }
 
-const COLS = ['t', 'speed', 'vy', 'alt', 'en', 'redline', 'mode', 'fov', 'cam_dist', 'lag', 'lag_side', 'rig_frame_pct', 'rig_top_ndc', 'shake', 'qb', 'landed', 'ab_launch', 'skid', 'cam_dip', 'target_off_deg', 'x', 'z', 'torso_pitch_deg', 'torso_roll_deg', 'fov_kick', 'cam_kick'];
+const COLS = ['t', 'speed', 'vy', 'alt', 'en', 'redline', 'mode', 'fov', 'cam_dist', 'lag', 'lag_side', 'rig_frame_pct', 'rig_top_ndc', 'shake', 'qb', 'landed', 'ab_launch', 'skid', 'cam_dip', 'target_off_deg', 'x', 'z', 'torso_pitch_deg', 'torso_roll_deg', 'fov_kick', 'cam_kick', 'rig_sil_pct'];
 
 function summarize(res, MOVE) {
   const S = {};
@@ -278,6 +279,7 @@ function summarize(res, MOVE) {
     const fr = col(rows, 'rig_frame_pct');
     S.rig_frame_pct_idle = fr[5];
     S.rig_frame_pct_boost = +((fr[95] + fr[90] + fr[85]) / 3).toFixed(2);
+    S.rig_sil_pct_idle = col(rows, 'rig_sil_pct')[5];
     S.rig_top_ndc_idle = col(rows, 'rig_top_ndc')[5];
     S.cam_dist_idle_m = col(rows, 'cam_dist')[5];
     const tp = col(rows, 'torso_pitch_deg'), trl = col(rows, 'torso_roll_deg');
@@ -301,6 +303,9 @@ function summarize(res, MOVE) {
     const en = col(rows, 'en');
     S.ab_en_drain_pct_s = li > 0 ? +((en[li + 20] - en[li + 80]) / 1).toFixed(2) : null;
     S.ab_rig_frame_pct = col(rows, 'rig_frame_pct')[li + 90];
+    // pose-aware silhouette (pitched torso + trailing legs), mean over steady flight
+    const sil = col(rows, 'rig_sil_pct').slice(li + 40, li + 90);
+    S.ab_rig_sil_pct = sil.length ? +(sil.reduce((a, b) => a + b, 0) / sil.length).toFixed(2) : null;
     S.ab_torso_pitch_deg = li > 0 ? col(rows, 'torso_pitch_deg')[li + 60] : null;
   }
   // --- jump
@@ -398,7 +403,8 @@ try:
                 ax.legend(loc='upper right', fontsize=6, facecolor='#15191c', edgecolor='#56606a')
             elif k == 'rig_frame_pct':
                 ax.axhspan(22, 30, color='#3e7a4a', alpha=0.35, lw=0, label='target 22-30%')
-                ax.plot(t, series(m, 'rig_frame_pct'), color='#9fdc8f', lw=1.4)
+                ax.plot(t, series(m, 'rig_frame_pct'), color='#9fdc8f', lw=1.4, label='rig height')
+                if 'rig_sil_pct' in rows[0]: ax.plot(t, series(m, 'rig_sil_pct'), color='#e6eef0', lw=0.9, ls='--', label='silhouette (pose)')
                 ax.set_ylim(10, 40)
                 ax.legend(loc='upper right', fontsize=6, facecolor='#15191c', edgecolor='#56606a')
             for x in ev(m, 'qb'): ax.axvline(x, color='#ff6a1a', lw=0.6, alpha=0.6)
@@ -479,7 +485,7 @@ async function main() {
   const T = {
     qb_peak_ms: 'max(105, |v|+30)', qb_frames_to_peak: '1 (instant)', qb_jet_s: '0.35', qb_cooldown_s: '0.55', qb_en_cost_pct: '16-17',
     qb_count_from_full: '6', qb_fov_punch_deg: '4-8', qb_travel_jet_m: '35-45 (0.35 s jet)', qb_travel_total_m: '35-45 (+skid)',
-    boost_torso_pitch_deg: '15-22 (skate crouch)', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '35-45', ab_rig_frame_pct: '>=22',
+    boost_torso_pitch_deg: '15-22 (skate crouch)', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '35-45', ab_rig_frame_pct: '>=22', ab_rig_sil_pct: '>=20 (real silhouette)', rig_sil_pct_idle: 'silhouette incl. back weapons',
     cam_dist_idle_m: '26-32 spec; ~37 = closest with rig <= 30% at FOV 50', qb_shake_peak_rad: '~0.012', qb_shake_dur_s: '~0.15', qb_cam_kick_peak_m: '~0.4', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
     boost_90pct_s: '0.35', boost_top_ms: '85', stop_to_walk_s: '~0.5', ab_windup_s: '0.6', ab_speed_ms: '130', ab_en_drain_pct_s: '13',
     jump_apex_m: '15-20', hover_climb_ms: '55-70', hover_en_drain_pct_s: '~21', rig_frame_pct_idle: '22-30', rig_frame_pct_boost: '22-30',

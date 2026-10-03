@@ -627,7 +627,8 @@ async function live() {
   try {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
     const errors = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    const warns = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.type() === 'warning') warns.push(m.text()); });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(server.url + 'index.html?quality=low', { waitUntil: 'load' });
     await page.waitForSelector('.menu-title .menu-btn.primary', { state: 'visible', timeout: 180000 });
@@ -667,7 +668,7 @@ async function live() {
     await page.waitForFunction(() => /B$/.test(window.__game.audio.debug().musicForm), null, { timeout: 20000 }).catch(() => {});
     const a7 = await page.evaluate(() => window.__game.audio.debug());
     rec('stage 1: stinger + score jumps to section B on its hit', /B$/.test(a7.musicForm) && a7.counts && a7.counts.stage_stinger > 0, `form "${a7.musicForm}" music=${a7.musicState} stinger plays=${a7.counts && a7.counts.stage_stinger}`);
-    rec('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    rec('no console errors', errors.length === 0, errors.slice(0, 3).join(' | ') || `${warns.length} warning(s)${warns.length ? ': ' + warns.slice(0, 3).map((w) => w.slice(0, 160)).join(' | ') : ''}`);
   } finally {
     await browser.close(); await server.stop();
   }

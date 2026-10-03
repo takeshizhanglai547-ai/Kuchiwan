@@ -11,6 +11,9 @@ const { RADIO } = await import(path.join(ROOT, 'src/ui/radio.js'));
 const menus = fs.readFileSync(path.join(ROOT, 'src/ui/menus.js'), 'utf8');
 const m = menus.match(/const INTEL_EN\s*=\s*([\s\S]*?);\s*\n/);
 const lines = {};
-for (const [key, l] of Object.entries(RADIO)) lines[key] = { en: l.en, hold: l.hold };
-if (m) lines.brief = { en: Function(`return (${m[1]});`)(), hold: 0 };
+// plain text for the TTS: the HUD lane's line-break helpers (jpWrap: zero-width spaces / word
+// joiners) are display-only, so they evaluate to identity here and any stray marks are stripped
+const plain = (s) => String(s || '').replace(/[\u200B\u2060\u00AD]/g, '');
+for (const [key, l] of Object.entries(RADIO)) lines[key] = { en: plain(l.en), hold: l.hold };
+if (m) lines.brief = { en: plain(Function('jpWrap', `return (${m[1]});`)((s) => s)), hold: 0 };
 process.stdout.write(JSON.stringify(lines, null, 1));

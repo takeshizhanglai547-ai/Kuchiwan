@@ -95,6 +95,12 @@ const FLAME = {
   levelMax: 1.3,                        // flame shader level clamp (burst included)
   glowMaxEye: 3.0,                      // throat emissive never exceeds 3x the eye strength
   mainFloor: 0.75,                      // (VFX lane r3) main-bell level floor while thrusting (x thrust amount)
+  // (movement lane r4) quick-boost nozzle read: during a QB the verniers that face AWAY from the
+  // burst (side / shoulder / leg jets) throw a real jet (cap verLenQB m instead of verLenMax) and
+  // the main bells' floor drops by qbMainCut, so a sideways QB is a sideways jet. (It used to be
+  // a 5.5 m BACKWARD main plume next to a 0.85 m side flicker: from a 3/4-front camera the only
+  // big jet pointed along the travel.) qbHold eases out over ~0.12 s after the jet ends.
+  verLenQB: 3.0, qbMainCut: 0.6, qbHoldDecay: 8,
 };
 // Visual posture layer on top of rigmotion.js (mech lane): low-ready arms that snap up to the aim
 // line when their weapon fires, slow idle torso drift, spring lag on the back weapons.
@@ -588,14 +594,15 @@ export class MechRig {
 
     // --- nozzle flames from the thrust vector
     this.qbFlash = Math.max(0, (this.qbFlash || 0) - dt * FLAME.qbDecay);
-    const td = this.thrustDir, ta = this.thrustAmount;
+    this.qbHold = mode === 'qb' ? 1 : Math.max(0, (this.qbHold || 0) - dt * FLAME.qbHoldDecay);
+    const td = this.thrustDir, ta = this.thrustAmount, mainFloor = FLAME.mainFloor * (1 - FLAME.qbMainCut * this.qbHold);
     for (let i = 0; i < this.nozzles.length; i++) {
       const nz = this.nozzles[i];
       // exhaust opposite to travel => thrust
       const align = -(nz.exhaustLocal.x * td.x + nz.exhaustLocal.y * td.y + nz.exhaustLocal.z * td.z);
       // (VFX lane r3) main bells never go dark while boosting: they idle at mainFloor x thrust
       // whatever the direction (a strafe still reads as a boost from the chase camera)
-      nz.target = ta > 0 ? Math.max(Math.max(0, align) * ta, nz.radius >= FLAME.mainRadius ? FLAME.mainFloor * ta : 0) : 0;
+      nz.target = ta > 0 ? Math.max(Math.max(0, align) * ta, nz.radius >= FLAME.mainRadius ? mainFloor * ta : 0) : 0;
       nz.level = damp(nz.level, nz.target, nz.target > nz.level ? 40 : 12, dt);
       this._updateFlame(nz, i);
     }
@@ -834,7 +841,8 @@ export class MechRig {
       const main = r >= FLAME.mainRadius;
       let len = Math.max(r, FLAME.minLenRadius) * (FLAME.lenIdle + ((main ? FLAME.mainLenFull : FLAME.lenFull) - FLAME.lenIdle)
         * (main ? Math.pow(L, FLAME.mainPow) : Math.sqrt(L)));
-      if (!main && len > FLAME.verLenMax) len = FLAME.verLenMax;
+      const cap = FLAME.verLenMax + (FLAME.verLenQB - FLAME.verLenMax) * (this.qbHold || 0);
+      if (!main && len > cap) len = cap;
       len *= flick * burst;
       const w = r * (0.92 + 0.12 * L) * (1 + 0.25 * (burst - 1));
       nz.flameOuter.scale.set(w, w, len);

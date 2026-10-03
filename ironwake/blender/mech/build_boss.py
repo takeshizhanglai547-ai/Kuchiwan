@@ -1196,6 +1196,11 @@ def r4_decals(a):
         drip((s * (hw2 + 0.04), (yf2 + yb2) * 0.5, 7.86), (s, 0, 0), 0.4)   # flank armour -> vent
         p0, p1, dp, nb = _pod(s)
         drip(p0.lerp(p1, 0.82) + nb * 0.38, nb, 0.4)                  # below the pod back plate
+        # r4b: more run-off under the pauldron front bolts, the hip fender and the shin greave bolts
+        drip((s * 2.3, -1.12 + DY - 0.02, 8.2), (0, -1, 0), 0.5)
+        drip((s * 1.52, 0.6, 5.35), (s, 0, 0), 0.38)
+        q = Vector(KNEE) + d_sh * 0.7 + ng * 0.6
+        drip(mx(q) if s < 0 else q, mx(ng) if s < 0 else ng, 0.32)
         # soot: chest verniers, pauldron verniers, pod louvres
         a.decal(K.soot(256, 140 + s), (s * 1.0, -1.08, 6.72), (0, -1, -0.3), size=(0.55, 0.55), depth=0.35,
                 opacity=0.85)
@@ -1248,6 +1253,12 @@ def add_decals(a):
     # gradient up the legs, and a linear albedo pull on the cream (#BDB39A authored reads near-white in the sun)
     a.post.update(bone_grime=0.26, bone_cav=0.42, low_z=3.4, low_mul=0.58)
     a.post_tint = {'paint_secondary': (0.78, 0.77, 0.74)}
+    # r4b (critic r3 S: 'large flat oxide planes', 'near-white bone shin cards'): stronger 0.3-1 m dirty /
+    # sun-faded mottling, darker crevice + cavity grime, a taller yard-dirt gradient, and the cream pulled to
+    # a dirty #BDB39A in-engine (x0.66 linear) instead of a sun-blown card; oxide slightly darker / less pink
+    a.post.update(mottle_lo=0.66, ao_grime=1.0, cav_grime=0.5, bone_grime=0.38, bone_cav=0.6, low_z=4.2,
+                  low_mul=0.5)
+    a.post_tint = {'paint_secondary': (0.66, 0.65, 0.62), 'paint_primary': (0.88, 0.85, 0.85)}
     for s_, S in ((1, 'L'), (-1, 'R')):
         card(a, D.serial_plate(('GC-X1 CINDERHOUND', 'GRAUWERK PIER DIV.  LOT 12'), w=720, seed=77 + s_),
              (s_ * 1.51, -0.3, 4.62), (s_, 0, 0), size=(0.4, None), parent='thigh_' + S)
@@ -1301,10 +1312,82 @@ def set_of(name):
     return 'B' if name.split('_')[0] in SET_B else 'A'
 
 
+def _vnoise(p, seed=0):
+    """3D value noise (smooth trilinear over hashed lattice values in 0..1) for N x 3 float32 points."""
+    import numpy as np
+    i0 = np.floor(p).astype(np.int64)
+    f = (p - i0).astype(np.float32)
+    f = f * f * (3.0 - 2.0 * f)
+
+    def h(ix, iy, iz):
+        x = (ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791) ^ (seed * 2654435761)
+        x = (x ^ (x >> 13)) * 1274126177
+        return ((x ^ (x >> 16)) & 0xFFFF).astype(np.float32) / 65535.0
+    x0, y0, z0 = i0[:, 0], i0[:, 1], i0[:, 2]
+    out = np.zeros(len(p), np.float32)
+    for dx in (0, 1):
+        wx = f[:, 0] if dx else 1.0 - f[:, 0]
+        for dy in (0, 1):
+            wy = f[:, 1] if dy else 1.0 - f[:, 1]
+            for dz in (0, 1):
+                wz = f[:, 2] if dz else 1.0 - f[:, 2]
+                out += wx * wy * wz * h(x0 + dx, y0 + dy, z0 + dz)
+    return out
+
+
+def post_paint_breakup(a, tag, objs, lo, hi):
+    """r4b (critic r3 S: 'large flat oxide planes'; in-engine the r4 oxide still read as a uniform terracotta
+    sheet): world-space paint break-up on top of rigpipe.post_weather - vertical grime / rain streaks
+    (~7 cm wide, ~0.8 m long), faded-paint patches (~0.6 m) and a fine 12 cm mottle, on every painted
+    texel that is not a bare-steel chip; the streaks also roughen the paint (matte grime) so the sun sheet
+    on the big pauldron / chest planes breaks up."""
+    import numpy as np
+    from iwkit import texcomp as TC
+    raw, maps = a.raw, a.maps
+    flip = (lambda x: x[::-1])
+    pal = {m.name: i for i, m in enumerate(a.palette)}
+    mid = np.rint(flip(raw['matid'])[..., 0] * 255.0).astype(np.int32)
+    valid = flip(raw['albedo'])[..., 3] > 0.5
+    ids = [pal[n] for n in ('paint_primary', 'paint_secondary', 'paint_dark') if n in pal]
+    paint = np.isin(mid, ids) & valid
+    orm = maps['orm'].astype(np.float32) / 255.0
+    paint &= orm[..., 2] < 0.6                      # not the bare-steel chips
+    if not paint.any():
+        return
+    lo_, hi_ = np.array(lo, np.float32), np.array(hi, np.float32)
+    wp = (lo_ + flip(raw['wpos'])[..., :3].astype(np.float32) * (hi_ - lo_))[paint]
+    streak = _vnoise(wp * np.array([14.0, 14.0, 1.25], np.float32), 3)
+    streak = TC.smoothstep(0.42, 0.72, streak) * (0.35 + 0.65 * TC.smoothstep(0.3, 0.65, _vnoise(wp * 2.2, 5)))
+    patch = TC.smoothstep(0.2, 0.8, _vnoise(wp * 1.7, 7))
+    fine = _vnoise(wp * 8.0, 11)
+    mult = (1.0 - 0.42 * streak) * (0.7 + 0.42 * patch) * (0.86 + 0.2 * fine)
+    base = R._s2l(maps['basecolor'].astype(np.float32) / 255.0)
+    bp = base[paint] * mult[:, None]
+    # faded patches drift the oxide slightly toward a dusty grey-brown (sun-bleached paint)
+    fade = TC.smoothstep(0.62, 0.95, patch)[:, None] * 0.22
+    bp = bp * (1.0 - fade) + np.array([0.11, 0.085, 0.07], np.float32) * fade
+    base[paint] = bp
+    rgh = orm[..., 1]
+    rgh[paint] = np.clip(rgh[paint] + 0.14 * streak - 0.05 * TC.smoothstep(0.6, 0.9, patch), 0, 1)
+    orm[..., 1] = rgh
+    maps['basecolor'] = (np.clip(TC.lin_to_srgb(base), 0, 1) * 255 + 0.5).astype(np.uint8)
+    maps['orm'] = (np.clip(orm, 0, 1) * 255 + 0.5).astype(np.uint8)
+    iw.log(f'r4b paint break-up {tag}: {int(paint.sum())} texels, streak mean {float(streak.mean()):.3f}')
+
+
 def main():
+    _pw = R.post_weather
+
+    def post_weather(a, tag, objs, lo, hi, P=None):
+        _pw(a, tag, objs, lo, hi, P)
+        post_paint_breakup(a, tag, objs, lo, hi)
+    R.post_weather = post_weather
+    # r4b: 12-bit positions / UVs (2.4 mm on a 10 m rig, half a texel at 2048) pay for the panel detail;
+    # GLB must not grow past r3's 1.86 MB
+    R.GLTFPACK_EXTRA = ['-vp', '12', '-vt', '12']
     R.run(NAME, build, add_decals, set_of, scheme='grauwerk', colors=COLORS, seed=13, obj_weight=OBJ_WEIGHT,
           weathering=WEATHER, views=VIEWS, clay=CLAY, tex_sizes=TEX_SIZES, bake_kw=BAKE_KW,
-          tex_quality={'basecolor': 76, 'orm': 66, 'normal': 72, 'decals': 80})
+          tex_quality={'basecolor': 71, 'orm': 64, 'normal': 66, 'decals': 70})
 
 
 if __name__ == '__main__':

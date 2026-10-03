@@ -98,6 +98,7 @@ export class AudioEngine {
     this.voiceHold = gain(c, 1);
     bus.voice.connect(this.meter); chain(bus.voice, this.voiceHold, pre);
     this.comm = null;
+    this.commKind = 'off'; // 'vo' | 'synth' | 'squelch' (a cut line's closing squelch tail) - debug()
     chain(bus.music, filt(c, 'lowshelf', 90, 0.7, -3), filt(c, 'peaking', 2800, 1.1, -3.5), filt(c, 'highshelf', 6000, 0.7, -3), this.duckMusic, pre);
     this.reverbIn = gain(c, 1);
     const conv = c.createConvolver(); conv.normalize = true; conv.buffer = makeFoundryIR(c);
@@ -303,10 +304,12 @@ export class AudioEngine {
     if (buffer) {
       if (at < this.voiceEnd && this.comm) at = Math.max(at, this.cutRadio(at) - 0.12); // new squelch opens on the old tail
       this.comm = transmit(this.ctx, this.bus.voice, at, buffer, makeRng((this.rng() * 1e9) >>> 0), comm);
+      this.commKind = 'vo';
       this.voiceEnd = this.comm.end;
     } else {
       if (at < this.voiceEnd) return false;
       this.comm = null;
+      this.commKind = 'synth';
       this.voiceEnd = speak(this.ctx, this.bus.voice, at, Math.min(8, Math.max(0.8, seconds)), makeRng((this.rng() * 1e9) >>> 0));
     }
     const p = this.duckMusic.gain;
@@ -318,6 +321,7 @@ export class AudioEngine {
     if (!this.comm || at >= this.voiceEnd) return at;
     this.voiceEnd = this.comm.stop(at);
     this.comm = null;
+    this.commKind = 'squelch';
     const p = this.duckMusic.gain;
     p.setTargetAtTime(1, this.voiceEnd, 0.4);
     return this.voiceEnd;
@@ -375,7 +379,7 @@ export class AudioEngine {
       state: this.ctx.state, sampleRate: this.ctx.sampleRate, voices: this.voices.length,
       bank: this.bank.size, bankTotal: PRERENDER_ORDER.length, musicLayers: this.music.ready, musicSections: this.music.sectionsReady, musicForm: this.music.form.join(''),
       musicState: this.music.state, time: +this.ctx.currentTime.toFixed(2), counts: { ...this.counts },
-      radio: this.ctx.currentTime < this.voiceEnd, comm: this.ctx.currentTime < this.voiceEnd ? (this.comm ? 'vo' : 'synth') : 'off', occluded: this.occluded,
+      radio: this.ctx.currentTime < this.voiceEnd, comm: this.ctx.currentTime < this.voiceEnd ? this.commKind : 'off', occluded: this.occluded,
       vo: [...this.samples.keys()].filter((k) => k.startsWith('radio_')).length,
       rockets: this.rockets.reduce((n, s) => n + (s.p ? 1 : 0), 0), emitters: this.emitters.reduce((n, s) => n + (s.actor ? 1 : 0), 0),
       recent: Array.from({ length: Math.min(12, this.logN) }, (_, k) => { const i = (this.logN - 1 - k) & 63; return `${this.logIds[i]}@${this.logT[i].toFixed(2)}`; }),

@@ -13,6 +13,8 @@
 //   envMap         PMREM texture used as scene.environment
 //   setShadowRange(halfSizeMeters)   near cascade half size (default by quality)
 //   rebakeFarShadow()                re-render the static far cascade (after arena changes)
+//   setQuality('low'|'medium'|'high') runtime switch (OPTIONS, via game.setQuality): near map
+//                                    size + box, far cascade on/off/size (re-baked), ash count
 //   preRender(camera)                called by the pipeline right before the scene pass
 //
 // Shadows: near cascade = 4096² (high) / 2048² (medium, low) box around focus (or around the
@@ -50,6 +52,7 @@ function autoQuality(game) {
       game.params.quality = 'low';
       // CPU rasterizers: half resolution is ~2x faster. The canvas is upscaled by the browser.
       game.renderer.setPixelRatio(0.5);
+      game.pixelRatioCap = 0.5; // game.setQuality keeps it (fill rate, whatever the level)
       console.info(`[environment] software renderer (${name}) -> quality=low, pixel ratio 0.5`);
     }
   } catch (e) { /* keep the requested quality */ }
@@ -90,7 +93,7 @@ export default function environmentSystem(game) {
   };
   const sunDir = sunDirection();
   const focus = new THREE.Vector3();
-  const Q = QUALITY[game.params.quality] || QUALITY.high;
+  let Q = QUALITY[game.params.quality] || QUALITY.high;
   let sun, sunFar, hemi, sky, weather, envRT = null, noise;
   let nearHalf = Q.nearHalf;
   let farBaked = false, farPending = Q.far;
@@ -227,7 +230,9 @@ export default function environmentSystem(game) {
 
       // Falling ash (replaces the arena's placeholder flakes, see preRender)
       // flake lighting is art-directed (not tied to the key intensity): dark ash motes
-      weather = createWeather(Q.flakes, { sunDir, sunColor: palette.sun.clone().multiplyScalar(1.7), ambient: new THREE.Color('#4E555C').multiplyScalar(1.4) });
+      // (allocated for the highest level; setQuality changes only the drawn count)
+      weather = createWeather(QUALITY.high.flakes, { sunDir, sunColor: palette.sun.clone().multiplyScalar(1.7), ambient: new THREE.Color('#4E555C').multiplyScalar(1.4) });
+      weather.setCount(Q.flakes);
       scene.add(weather.mesh);
       try { if (new URLSearchParams(location.search).get('weather') === '0') weather.mesh.visible = false; } catch (e) { /* dev only */ }
 
@@ -238,6 +243,27 @@ export default function environmentSystem(game) {
       configureCascade(sun, focus, nearHalf, nearHY, sun.shadow.mapSize.x, 1500);
     },
     rebakeFarShadow() { farPending = sunFar.castShadow; farBaked = false; },
+    /** Runtime quality switch (OPTIONS -> GRAPHICS QUALITY; call through game.setQuality). */
+    setQuality(name) {
+      const nq = QUALITY[name];
+      if (!nq || nq === Q || !sun) return;
+      Q = nq;
+      const drop = (light) => { // three re-creates a null shadow map at the new size
+        const m = light.shadow.map;
+        if (!m) return;
+        if (m.depthTexture) { m.depthTexture.dispose(); m.depthTexture = null; }
+        m.dispose();
+        light.shadow.map = null;
+      };
+      if (sun.shadow.mapSize.x !== Q.nearMap) { drop(sun); sun.shadow.mapSize.set(Q.nearMap, Q.nearMap); }
+      nearHalf = Q.nearHalf;
+      if (sunFar.shadow.mapSize.x !== Q.farMap || !Q.far) { drop(sunFar); sunFar.shadow.mapSize.set(Q.farMap, Q.farMap); }
+      if (sunFar.castShadow !== Q.far) sunFar.castShadow = Q.far; // light count unchanged; programs re-key once
+      farPending = Q.far; farBaked = false;   // (re)baked in the next preRender
+      configureCascade(sun, focus, nearHalf, nearHY, Q.nearMap, 1500);
+      weather.setCount(Q.flakes);
+    },
+    get quality() { return Object.keys(QUALITY).find((k) => QUALITY[k] === Q); },
     frame() { /* camera-dependent work happens in preRender (after the camera system) */ },
     /** Called by the pipeline after every system's frame(), right before the scene pass. */
     preRender(camera) {

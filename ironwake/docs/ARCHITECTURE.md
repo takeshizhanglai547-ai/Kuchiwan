@@ -55,7 +55,7 @@ Each agent owns its files and only edits others' files through the documented AP
 
 | Owner | Files |
 |---|---|
-| **Lead engine** | `src/main.js`, `src/core/*` (engine, input, rng, events, assets, physics, pool, systems, debug), `index.html`, `css/main.css`, `tools/*`, `package.json`, `docs/ARCHITECTURE.md`, `tests/{rng,physics}.test.mjs` |
+| **Lead engine** | `src/main.js`, `src/core/*` (engine, input, rng, events, assets, physics, pool, systems, debug, hints), `index.html`, `css/main.css`, `tools/*`, `package.json`, `docs/ARCHITECTURE.md`, `tests/{rng,physics,input}.test.mjs` |
 | **Lead gameplay** (ask first) | `src/game/actor.js`, `src/game/combat.js`, `src/game/damage.js`, `tests/damage.test.mjs` |
 | **Render engineer** | `src/render/*`: `pipeline.js` (post chain), `environment.js` (sky, fog, sun, shadows, env map), `proctex.js` (procedural placeholder textures) |
 | **Arena artist** | `src/world/*`, `blender/arena/*`, `assets/arena/*` |
@@ -111,13 +111,14 @@ Register it in `SYSTEM_MODULES` in `src/main.js` (ask the lead engine to add it)
 | 700 | fx | Particles |
 | 800 | camera | Uses `lateUpdate` |
 | 900 | hud | Uses `frame` only |
+| 905 | hints | `frame` only: live-play CLICK / DRAG TO AIM chip, one-time LOW FRAME RATE callout (`src/core/hints.js`) |
 | 910 | menus | |
 | 950 | audio | |
 | 1000 | pipeline | Render |
 | 2000 | debug | |
 
 ### 3.3 Clock
-- Fixed step `FIXED_DT = 1/60`, run from an accumulator, with at most 5 steps per frame (excess time is dropped).
+- Fixed step `FIXED_DT = 1/60`, run from an accumulator, with at most 8 steps per frame and a real-dt clamp of 8/60 s (excess time is dropped), so the game keeps real time down to 7.5 rendered fps.
 - Each step runs `input.beginStep()`, then `systems.update(dt)`, then `systems.lateUpdate(dt)`, then `input.endStep()`.
 - `dt = FIXED_DT * game.currentScale()`:
   - `game.hitstop(duration, scale)` gives an impact freeze.
@@ -137,6 +138,9 @@ boot → title → briefing → playing ⇄ paused
 ```
 
 - `game.setState(s)` emits `game:state {from,to}`. The sim steps only in `playing` and `results`. Input is enabled only in `playing`.
+  - Every switch to `playing` calls `input.resume()`: presses latched while the menus were up are dropped (keys pressed in the pause menu never fire on resume) and buttons still held from the menu count as already held (no rising edge: pad A on RESUME does not jump).
+  - Live play (not `?test=1`) auto-pauses on `input:pointerlock-lost`, window `blur` and `visibilitychange` (hidden).
+- `game.setQuality('low'|'medium'|'high')` switches GRAPHICS QUALITY at runtime (OPTIONS) and at boot (saved option, applied before the pipeline warms up): `pipeline.setQuality` (post chain), `env.setQuality` (near shadow map size, far cascade on/off + re-bake, ash flake count) and, in live play, the pixel ratio (LOW caps it at 1.0; `game.pixelRatioCap` = 0.5 on software rasterizers). `game.params.quality` follows it.
 - `game.startSession({seed, state})` starts a new session. It:
   - re-seeds every RNG stream,
   - clears input overrides,
@@ -269,7 +273,7 @@ The canonical list is in the header of `src/mech/rig.js`. Summary:
 - Input goes in through an **intent** (`makeIntent()`). Outputs are `pos`, `vel`, `yaw`, `grounded`, `mode` and the one-step `flags` (`qb`, `jumped`, `landed`, `abStart`, `abEnd`, `enDepleted`).
 - `EnergyGauge` (in `energy.js`) handles EN: regen delay, redline lockout and the instant restore.
 - **Every movement, camera and aim tunable lives in `src/player/tuning.js`** (`MOVE`, `CAMERA`, `AIM`). The values follow the benchmark's §3.4 (a2) "[ADAPTED]" targets. The boss uses `BOSS_MOVE = {...MOVE, overrides}`.
-- Chase camera (movement lane r4, `src/player/camera.js`): vertical FOV 50 (+6 boost, +10 AB, AB launch peak 63, as benchmark §3.4), orbit ~37.7 m from the rig centre (the closest that keeps the rig at 23-30% of frame height at FOV 50, `npm run telemetry`). QB: FOV punch +5, a 0.012 rad directional jolt gone in 0.15 s, and a 0.4 m camera kick opposite to the burst. Ground dust (`src/player/movefx.js`): the drag streak is emitted by distance (every 0.6 m), and lit dust in the shade of a static collider uses a darker `_sh` twin. Occluders: the camera first SLIDES (26 rays to the rig silhouette, cheapest fully clear offset up to 4 m sideways / 2.5 m up, also clear 0.35 s ahead, critically damped ~0.2 s); what no slide clears is cut out by `src/player/cutout.js` (hard, clean-edged rounded hole on the arena materials, no dither). Shots `cam_slide` / `cam_occlusion` show both cases.
+- Chase camera (movement lane r4, `src/player/camera.js`): vertical FOV 50 (+6 boost, +10 AB, AB launch peak 63, as benchmark §3.4), orbit ~37.7 m from the rig centre (the closest that keeps the rig at 23-30% of frame height at FOV 50, `npm run telemetry`). QB: FOV punch +5, a 0.012 rad directional jolt gone in 0.15 s, and a 0.4 m camera kick opposite to the burst. Ground dust (`src/player/movefx.js`): the drag streak is emitted by distance (every 0.6 m), and lit dust in the shade of a static collider uses a darker `_sh` twin. Occluders: the camera first SLIDES (26 rays to the rig silhouette, cheapest fully clear offset up to 4 m sideways / 2.5 m up, also clear 0.35 s ahead, critically damped ~0.2 s); what no slide clears is cut out by `src/player/cutout.js` (hard, clean-edged rounded hole on the arena materials, no dither). Shots `cam_slide` / `cam_occlusion` show both cases. Movement r4b: during a QB the verniers facing away from the burst throw a real jet (cap `FLAME.verLenQB` 3 m) and the main bells' floor drops 60% (`rig.js` `qbHold`), so a sideways QB reads as a sideways jet; AB flight pulls the camera 6.5 m in; speed motes stream LOW (slab to eye height), never across the sky; `cam.metrics.rigSil` / telemetry `rig_sil_pct` report the pose-aware silhouette next to the upright `rig_frame_pct`.
 
 ---
 
@@ -391,7 +395,8 @@ The canonical list is in the header of `src/mech/rig.js`. Summary:
 The HUD is an HTML overlay under `#ui > #hud`. The class names listed in the header of `hud.js` are the styling contract. DOM writes happen only when values change.
 - API: `game.hud.callout(text, jp, kind, seconds)`, `damageFrom(worldPoint)`, `setVisible(bool|null)`.
 - Menus (`#menus`) provide the title (with controls in JP and EN), briefing, pause and results (rank) screens.
-  - Enter confirms and Esc toggles pause.
+  - Enter confirms and Esc toggles pause. Gamepad (menus up, `core/input.js`): d-pad / left stick emit `look_*` (selection), A confirms, B = `pause` (back / resume), START = pause.
+  - **Mouse contract:** the `#menus` container is click-through (`pointer-events: none`); only visible `.menu` screens and buttons catch the mouse, so during play every click reaches the canvas (fire, Pointer Lock re-capture, drag-look). The smoke real-time row asserts it (lock refused → chip, click fires, drag turns the aim, re-click locks).
   - `game.menus.show(name)`, `hideAll()`, `showResults(result)`.
 - Fonts are system fallbacks for now. The benchmark §5 suggests vendoring `@fontsource/*` from npm.
 
@@ -551,3 +556,48 @@ Dev-only URL knobs (not for players): `&tonemap=aces|agx`, `&exposure=`, `&msaa=
 | `look` | Live art-direction tunables (exposure, bloom, ao, volume, shafts, motionBlur, grade, vignette, ca, grain). |
 
 **Volumetric sun scattering (VOLUME pass).** Quarter-res ray-march (squared step distribution, per-pixel IGN jitter, max 260 m) of the same height-fog density, sampling the near cascade (rigs, actors) and the far cascade (static arena) with hardware PCF compare. Output R = ∫σT(1−V)dt (in-shadow share of the fog's sun light), G = ∫σT·V dt (lit share), B = march-end view depth for the bilateral upsample. The composite applies `col += iwFogSunPart(dir)·(look.volume.lit·G − look.volume.occ·R) + sunColour·phase·look.volume.dust·G`. It reads `game.env.sun/sunFar.shadow.map.depthTexture` and `.shadow.matrix` — keep them PCF (`renderer.shadowMap.type`).
+
+## 20. Release build, harness robustness and the Unreal hand-off (release engineer)
+
+**Single-file build (`tools/build.mjs`).** `dist/ironwake.html` is the only file the end user plays, so it is **tracked in git**
+(`.gitignore`: `dist/*` + `!dist/ironwake.html`); run `npm run build` before every commit that changes `src/`, `css/` or assets.
+`dist/ironwake.html` = `css/main.css` inline (styles the boot screen at once) + ONE
+base64 `<script type="application/octet-stream" id="iw-pack">` holding a gzip stream `[u32 header length][header JSON][payload]`
+(payload = the esbuild bundle, the other stylesheets and every `src/manifest.js` file) + a ~2 KB ES5 boot loader. The loader
+decodes the base64 (`Uint8Array.fromBase64` or `atob`), inflates with `DecompressionStream('gzip')`, injects the CSS, sets
+`globalThis.__IW_EMBEDDED_ASSETS = {id: 'data:<mime>;base64,…'}` (via `FileReader.readAsDataURL`, so `src/core/assets.js` is
+unchanged) and runs the bundle as an inline module script. No `DecompressionStream` (pre-2020 Chrome/Edge, pre-2023 Firefox,
+pre-16.4 Safari) → a JP/EN "use the latest Chrome or Edge" screen. The build checks the round-trip (gunzip + byte compare) and
+prints per-type ratios: meshopt GLBs deflate to ~70 % (the arena to ~30 %), JS to ~32 %; webp/jpg/mp3/woff2 stay ~100 %.
+Budget (decimal MB): **warn > 14 MB, exit 1 > 15.5 MB** (16 MB hosting limit). 2026-10-03: 16.59 MB uncompressed → **12.09 MB**
+(51 assets, 11.21 MB raw). Frames from the packed and the old layout are pixel-identical (PIL diff, 3 shots). `--no-compress`
+writes the old layout for debugging. Assets are embedded byte-for-byte: no texture or audio was recompressed.
+
+**Harness timeouts (`tools/shoot.mjs`, `tools/smoke.mjs`).** Exports `SHOT_TIMEOUT_MS` (120 s, env `IW_SHOT_TIMEOUT_MS`),
+`PAGE_TIMEOUT_MS` (180 s, env `IW_PAGE_TIMEOUT_MS`), `isHarnessError(e)` and `screenshotWithRetry(page, opts)`.
+`shoot`: every screenshot gets 120 s and one retry at 240 s; a shot whose capture still fails on a HARNESS error (timeout,
+crashed/closed page, destroyed context) is retried once on a freshly loaded page; page boots are retried once. Console errors,
+exceptions thrown by a shot and unknown shots are never retried and still exit 1. `smoke`: `page.setDefaultTimeout(180 s)` on
+every page; the timing-based real-time check (RAF loop, clicks, keys) is retried once with 2.5x longer waits when it fails
+without console errors.
+
+**Unreal Engine 5 hand-off (`ue5/`, UNVERIFIED in Unreal: no UE in the build container).**
+
+| Path | Content |
+|---|---|
+| `ue5/README_JA.md` | Non-programmer guide: install the latest UE 5.x + VS 2022, C++ Third Person project, import, basic third-person setup, Claude Code + VibeUE / UnrealClaude |
+| `ue5/CLAUDE.md` | Design doc for Claude Code in the UE project (setting, specs, controls, naming BP_/M_/T_/SM_, do-not-do list) |
+| `ue5/GAME_SPEC.md` | Every gameplay number of the web build with Unreal conversions (cm, Gravity Scale 3.263, horizontal FOV) |
+| `ue5/PROMPTS_JA.md` | Copy-paste prompts, one small step each (rig → boosts/EN → camera → lock-on → weapons → AI → boss → HUD → mission → results) |
+| `ue5/import_ironwake.py` | Unreal Editor Python: imports `ue5/assets` into `/Game/Ironwake`, builds M_IW_Rig / M_IW_Decal / M_IW_Arena + instances, places the arena (1,737 kit instances + 64 structures), markers, a PlayerStart and model previews in the open level. Dry-run tested against a fake `unreal` module only |
+| `ue5/assets/` | ≤ 40 MB, regenerated by `tools/ue5_package.py`: `Player/ Rival/ Enemies/` FBX + `T_*_{BC.jpg,N,ORM,E}.png` + decal atlases, `Arena/` kit FBX + one-off FBX + `arena_layout.json`, `MANIFEST.json` |
+
+Regeneration: the rig/enemy FBX come from each owner's full Blender build (`blender/mech/build_*.py`, `blender/enemies/build_*.py`
+write `assets/ue5/`, gitignored); `python3 tools/ue5_export_arena.py` re-runs `blender/arena/build_arena.py` in-process (its GLB
+export and splat write are stubbed, so no game file changes) and writes `assets/ue5/arena/`; `python3 tools/ue5_package.py`
+then strips the FBX tangent/binormal layers (55 % of each file; Unreal recomputes MikkTSpace), re-deflates the FBX arrays at
+zlib 9, relinks texture paths to bare file names, writes BC as JPEG q85 4:4:4 (PSNR ≥ 38 dB) and N/ORM/E/decals as lossless
+PNG (oxipng when installed), and fails above 40 MB. Its binary FBX writer re-encodes an unmodified file byte-identically
+(checked on every run); stripped files re-import in Blender with identical objects, triangles, UVs, custom normals and node
+positions. `--arena-textures` additionally writes the arena tiling sets (`T_Arena_<Set>_{BC,N,ORM,H,M}`, ~11 MB; not
+committed because of the 40 MB cap). Axes: Blender (x, y, z) m → Unreal (x, −y, z) cm; imported models face +Y.

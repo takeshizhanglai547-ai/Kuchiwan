@@ -4,73 +4,73 @@ export const VO_TABLE = {
  "start": {
   "id": "radio_start",
   "en": "WAKE-01, you are on the pier. Picket squad dead ahead: five walkers. Take them apart.",
-  "dur": 7.575,
+  "dur": 7.705,
   "rate": 104
  },
  "mt_half": {
   "id": "radio_mt_half",
   "en": "Three down. Watch your EN. Do not let it hit the red.",
-  "dur": 3.88,
+  "dur": 3.74,
   "rate": 106
  },
  "relays": {
   "id": "radio_relays",
   "en": "Squad is scrap. Three relay generators feed the port grid. Cut them.",
-  "dur": 5.4,
+  "dur": 5.255,
   "rate": 104
  },
  "relay_last": {
   "id": "radio_relay_last",
   "en": "One relay left. Grauwerk will not ignore this.",
-  "dur": 3.645,
+  "dur": 3.76,
   "rate": 100
  },
  "boss": {
   "id": "radio_boss",
   "en": "Fast heat signature inbound. That is Grauwerk's rig, CINDERHOUND. Do not let it corner you.",
-  "dur": 6.865,
+  "dur": 6.905,
   "rate": 108
  },
  "boss_stagger": {
   "id": "radio_boss_stagger",
   "en": "It is reeling. Hit it now!",
-  "dur": 1.97,
+  "dur": 1.905,
   "rate": 112
  },
  "boss_half": {
   "id": "radio_boss_half",
   "en": "It is bleeding coolant. Stay on it.",
-  "dur": 2.935,
+  "dur": 2.965,
   "rate": 104
  },
  "low_ap": {
   "id": "radio_low_ap",
   "en": "Your frame is coming apart, WAKE-01. Use a repair kit.",
-  "dur": 4.68,
+  "dur": 4.58,
   "rate": 106
  },
  "complete": {
   "id": "radio_complete",
   "en": "Target down. Pier 7 is quiet. Good work. Payment is cleared.",
-  "dur": 6.06,
+  "dur": 6.095,
   "rate": 98
  },
  "failed": {
   "id": "radio_failed",
   "en": "WAKE-01, respond... Signal lost. Contract void.",
-  "dur": 6.3,
+  "dur": 6.2,
   "rate": 96
  },
  "timeout": {
   "id": "radio_timeout",
   "en": "Out of time. Grauwerk reinforcements are on the pier. Pull out.",
-  "dur": 4.79,
+  "dur": 4.85,
   "rate": 104
  },
  "brief": {
   "id": "radio_brief",
   "en": "LEDGER here. Grauwerk Consolidated Security still holds Pier 7 of the Halvard Deep Foundry. A PK-2 Picket walker squad patrols the ore yard with Gnat drones in support. Three relay generators on the far quay feed the port's defense grid. Break the squad, cut the relays, and deal with whatever answers the alarm. Intercepts mention a rival rig on standby. Payment on completion, WAKE-01.",
-  "dur": 27.335,
+  "dur": 27.395,
   "rate": 100
  }
 };
