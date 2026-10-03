@@ -52,6 +52,21 @@ export const AI_FX = {
     { kind: 'distort', shape: 'puff', size: [3, 9], life: 0.6, strength: 0.35, speed: 16, offset: 2 },
     { kind: 'light', color: [1, 0.55, 0.28], intensity: 70, range: 22, dur: 0.2 },
   ],
+  // r4 LIMITER RELEASE (critic: "a ~450x350 px pink-white starburst blanks the boss"): the sensor
+  // flare WITHOUT distance growth (Boss._eyeFlare scales it to a fixed 60-90 px screen radius) ...
+  iw_eye_flare_c: [
+    { shape: 'star', count: [1, 1], life: [0.22, 0.28], size: [3, 4.2], color0: RED, alpha: [1, 0], variant: [0, 3], inherit: 1, nosoft: true },
+    { shape: 'flare', count: [1, 1], life: [0.2, 0.26], size: [7, 4.5], color0: [2.6, 0.32, 0.16], alpha: [0.45, 0], inherit: 1, nosoft: true },
+  ],
+  // ... and world-scaled COOLANT JETS from the booster nozzles (Boss._coolant, per step for 1.2 s):
+  // a tight white core streaming 6-9 m out of each bell, cooling to #9FB3BA steam that billows up.
+  // Lit puffs (alpha-blended): they never add light over the rig, so the silhouette + red sensor stay.
+  iw_coolant: [
+    { shape: 'puff', count: [1, 1], life: [0.24, 0.32], speed: [26, 32], dirMode: 'dir', cone: 3, size: [0.45, 1.7], sizePow: 1, stretch: 0.07, color0: [0.95, 0.97, 1.0], color1: [0.62, 0.7, 0.73], alpha: [0.5, 0], fadeIn: 0.02, erode: [0.0, 0.22], drag: 0.8, rise: 0.3, turb: 0.3, lit: true, inherit: 0.4 },
+  ],
+  iw_coolant_billow: [
+    { shape: 'puff', count: [1, 1], life: [1.0, 1.6], speed: [4, 9], dirMode: 'dir', cone: 18, size: [1.4, 4.6], sizePow: 1.8, color0: [0.72, 0.79, 0.82], color1: [0.5, 0.57, 0.6], alpha: [0.24, 0], fadeIn: 0.06, erode: [0.04, 0.5], drag: 2.4, rise: 2.2, turb: 1.0, lit: true, offset: 5, spin: [-0.8, 0.8] },
+  ],
   // relay launch tube: drone kicked out of the mast (hot puff + ring)
   iw_launch: [
     { shape: 'glow', count: [1, 1], life: [0.08, 0.1], size: [3, 1.5], color0: [4, 2, 0.6], alpha: [1, 0], heat: [1, 1], nosoft: true },
@@ -64,13 +79,22 @@ export const AI_FX = {
   // camera-facing shock ring (reads round from any angle), electric + hot spark sprays, haze.
   iw_boss_overload: [
     { shape: 'glow', count: [1, 1], life: [0.06, 0.08], size: [4.5, 2.6], color0: [1.5, 2.4, 4.2], alpha: [0.7, 0], heat: [0.8, 0.8], nosoft: true },
-    { shape: 'star', count: [1, 1], life: [0.035, 0.045], size: [5, 6.5], color0: [2.0, 2.8, 4.4], variant: [0, 3], nosoft: true },
+    // r4 (critic: "the stagger burst is a uniform starburst of straight needles"): no needle star;
+    // electric sparks with streak length varied 0.4-1.6x (speed / shutter / size spread) and ~30 %
+    // heavy molten sparks on gravity arcs; the branching bolts (Boss._bolts) carry the read
     { shape: 'ring', count: [1, 1], life: [0.22, 0.22], size: [2.5, 8], sizePow: 1.6, color0: [0.7, 1.5, 3.0], alpha: [0.13, 0], add: [1, 1], erode: [0.75, 0.75], scaleCount: false, nosoft: true },
-    { shape: 'spark', count: [20, 26], life: [0.14, 0.5], speed: [14, 50], dirMode: 'sphere', size: [0.16, 0.05], sizeVar: 0.5, stretch: 0.022, color0: [4, 5.5, 8], color1: [0.7, 1.4, 3], heat: [1, 0.3], gravity: 22, drag: 2.2, collide: true, bounce: 0.35 },
-    { shape: 'spark', count: [8, 11], life: [0.3, 0.7], speed: [10, 30], dirMode: 'hemi', size: [0.18, 0.06], stretch: 0.025, color0: [5.4, 3.0, 1.1], color1: [1.4, 0.35, 0.06], heat: [1, 0.3], gravity: 26, drag: 1.5, collide: true, bounce: 0.35 },
+    { shape: 'spark', count: [9, 12], life: [0.1, 0.32], speed: [8, 26], dirMode: 'sphere', size: [0.13, 0.04], sizeVar: 0.6, stretch: 0.012, color0: [4, 5.5, 8], color1: [0.7, 1.4, 3], heat: [1, 0.3], gravity: 18, drag: 2.6, collide: true, bounce: 0.35 },
+    { shape: 'spark', count: [7, 9], life: [0.18, 0.5], speed: [16, 42], dirMode: 'sphere', size: [0.18, 0.05], sizeVar: 0.5, stretch: 0.018, color0: [4, 5.5, 8], color1: [0.7, 1.4, 3], heat: [1, 0.3], gravity: 22, drag: 1.8, collide: true, bounce: 0.35 },
+    { shape: 'spark', count: [7, 9], life: [0.5, 0.95], speed: [9, 22], dirMode: 'hemi', size: [0.2, 0.07], sizeVar: 0.4, stretch: 0.04, color0: [5.4, 3.0, 1.1], color1: [1.4, 0.35, 0.06], heat: [1, 0.3], gravity: 34, drag: 0.6, collide: true, bounce: 0.35 },
     { shape: 'puff', count: [3, 4], life: [0.9, 1.5], speed: [2, 6], dirMode: 'up', cone: 60, size: [1.5, 5], sizePow: 2, color0: [0.18, 0.18, 0.19], alpha: [0.24, 0], fadeIn: 0.1, erode: [0.12, 0.7], drag: 2, rise: 1.5, turb: 1.4, lit: true, spin: [-1, 1] },
     { kind: 'distort', shape: 'ring', size: [2, 12], life: 0.3, strength: 0.45 },
     { kind: 'light', color: [0.5, 0.75, 1], intensity: 380, range: 30, dur: 0.26 },
+  ],
+  // r4: feet scraping the slab while a staggered rig slides (Boss._feedback): short molten sparks on
+  // gravity arcs + a little grit (the generic impact_sparks ricochet needles read as a starburst)
+  iw_skid: [
+    { shape: 'spark', count: [3, 5], life: [0.15, 0.4], speed: [8, 22], dirMode: 'hemi', cone: 50, size: [0.13, 0.04], sizeVar: 0.5, stretch: 0.018, color0: [5, 2.6, 0.8], color1: [1.4, 0.3, 0.05], heat: [1, 0.3], gravity: 30, drag: 1.2, collide: true, bounce: 0.3 },
+    { shape: 'chunk', count: [1, 2], life: [0.4, 0.7], speed: [4, 10], dirMode: 'hemi', size: [0.16, 0.12], color0: [0.2, 0.19, 0.17], variant: [0, 11], gravity: 30, collide: true, bounce: 0.3, spin: [-15, 15] },
   ],
   // ground shock under a staggered rig: a flat ring ON the slab (an ellipse from any chase angle,
   // never an edge-on band) + a low dust skirt. Spawn at feet height + 0.3 m.
@@ -132,18 +156,38 @@ export function registerAiFx(game) {
 export const ENEMY_WEAPONS = {
   // CINDERHOUND right arm: laser rifle, 3-shot bursts
   boss_laser: {
-    id: 'boss_laser', name: 'LR-3 SCORCHLINE', type: 'ballistic', damage: 120, impact: 85, directHitMul: 1.5,
-    speed: 640, range: 460, spread: 0.55, auto: true, fireInterval: 0.95, burst: 3, burstInterval: 0.11,
+    id: 'boss_laser', name: 'LR-3 SCORCHLINE', type: 'ballistic', damage: 175, impact: 85, directHitMul: 1.5,
+    speed: 640, range: 460, spread: 0.55, auto: true, fireInterval: 0.9, burst: 3, burstInterval: 0.11,
     ammo: Infinity, projectile: 'energy', tracerColor: [2.2, 3.8, 7], tracerWidth: 0.6, tracerLength: 22,
     muzzleFx: 'muzzle_energy', muzzleScale: 1.5, impactFx: 'impact_energy', sound: 'enemy_laser', recoil: 0.4,
   },
   // CINDERHOUND phase-2 back unit: vertical missile barrage (8 cells)
   boss_barrage: {
     id: 'boss_barrage', name: 'VM-8 CINDERFALL', type: 'missile', damage: 170, impact: 140, splashRadius: 7, splashMul: 0.5,
-    count: 8, launchInterval: 0.06, maxTargets: 1, speed: 45, maxSpeed: 190, accel: 320, turnRate: 2.7,
+    count: 8, launchInterval: 0.06, maxTargets: 1, speed: 45, maxSpeed: 200, accel: 340, turnRate: 3.4,   // r4: 2.7 -> 3.4 (0 hits)
     homingDelay: 0.45, life: 6, reloadTime: 6, ammo: Infinity, magSize: 8,
     projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
     muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.05, trailStyle: 'missile', sound: 'missile_launch',
+  },
+  // CINDERHOUND shoulder pods (r4, critic: "boss missiles never connect: 0 hits over 6 salvos"):
+  // the stock 'boss_missile' (turn 2.6 rad/s = a 77 m turning circle at 200 m/s) could not follow
+  // a strafing rig at all. Tighter airframe (turn 3.9 rad/s), a slightly wider blast, 8 cells
+  // fired as TWO 4-cell salvos (left pod, then the right pod 0.4 s later with a 25 deg fan, see
+  // Boss._runAttack 'missiles'), so a single sidestep no longer shakes the whole volley.
+  cinder_missile: {
+    id: 'cinder_missile', name: 'SM-4 EMBERLINE', type: 'missile', damage: 240, impact: 150, splashRadius: 6.5, splashMul: 0.5,
+    count: 4, launchInterval: 0.08, maxTargets: 1, speed: 70, maxSpeed: 215, accel: 460, turnRate: 3.9,
+    homingDelay: 0.2, life: 4.5, reloadTime: 6, ammo: Infinity, magSize: 8,
+    projectile: 'missile', bodyColor: [0.26, 0.24, 0.23], glowColor: [7, 2.2, 0.9],
+    muzzleFx: 'muzzle_missile', impactFx: 'explosion_small', trailFx: 'missile_trail', trailEvery: 0.045, trailStep: 1.8, trailStyle: 'missile', sound: 'missile_launch',
+  },
+  // GNAT pulse gun (r4, critic: "GNATs fire 2 shots in the whole squad stage"): a 6-round burst
+  // from the orbit every ~2.5 s, behind a 0.5 s laser-sight tell (DRONE_AI.fire)
+  gnat_pulse: {
+    id: 'gnat_pulse', name: 'GNAT PULSE', type: 'ballistic', damage: 34, impact: 16,
+    speed: 190, range: 300, spread: 0.9, auto: true, fireInterval: 2.0, burst: 6, burstInterval: 0.085,
+    ammo: Infinity, projectile: 'energy', tracerColor: [0.9, 2.8, 6], tracerWidth: 0.6, tracerLength: 5,
+    muzzleFx: 'muzzle_energy', impactFx: 'impact_energy', sound: 'enemy_laser',
   },
   // PK-2 PICKET autocannon (r3, critic: "the squad lost its bite": 1 hit in 21 rounds). Same round
   // as the generic MT cannon but a tighter group (spread 1.0 deg) and slightly faster rounds; the

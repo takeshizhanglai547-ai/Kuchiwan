@@ -1,34 +1,39 @@
 {
- "tris": 89762,
- "parts": 37,
+ "tris": 89774,
+ "parts": 38,
  "colliders": 0,
  "decals": 48,
- "texel_density_px_per_m": 87.0,
+ "texel_density_px_per_m": 88.2,
  "res": 2048,
  "timings_s": {
-  "model": 3.8,
+  "model": 3.4,
   "bake.total": 2.5,
-  "composite": 27.3,
-  "export.glb": 1.4,
-  "export.gltfpack": 0.2
+  "composite": 21.2,
+  "export.glb": 1.1,
+  "export.gltfpack": 0.3,
+  "export.fbx": 0.5,
+  "render.mech_player_hero.png": 412.6,
+  "render.mech_player_front.png": 361.2,
+  "render.mech_player_back.png": 276.3,
+  "render.mech_player_close.png": 144.4
  },
- "elapsed_s": 83.6,
- "glb_bytes": 2352420,
+ "elapsed_s": 1282.0,
+ "glb_bytes": 2223180,
  "glb_breakdown": {
-  "bytes": 2352420,
+  "bytes": 2223180,
   "images": {
-   "mech_player_B_f_emissive": 16208,
-   "mech_player_B_f_normal": 71410,
-   "mech_player_B_f_orm": 144232,
-   "mech_player_B_f_basecolor": 162742,
+   "mech_player_B_f_emissive": 14882,
+   "mech_player_B_f_normal": 70796,
+   "mech_player_B_f_orm": 125742,
+   "mech_player_B_f_basecolor": 118510,
    "mech_player_decals": 214566,
-   "mech_player_A_f_emissive": 4324,
-   "mech_player_A_f_normal": 178546,
-   "mech_player_A_f_orm": 247222,
-   "mech_player_A_f_basecolor": 252510
+   "mech_player_A_f_emissive": 3788,
+   "mech_player_A_f_normal": 188768,
+   "mech_player_A_f_orm": 215308,
+   "mech_player_A_f_basecolor": 210816
   },
-  "image_bytes": 1291760,
-  "geometry_bytes": 1060660
+  "image_bytes": 1163176,
+  "geometry_bytes": 1060004
  },
  "missing_nodes": [],
  "fbx": "/home/user/Kuchiwan/ironwake/assets/ue5/SM_mech_player.fbx",
@@ -39,48 +44,47 @@
   "/home/user/Kuchiwan/ironwake/assets/mech/preview/mech_player_close.png"
  ],
  "parts_tris": {
-  "pelvis_geo": 3224,
-  "torso_geo": 10688,
-  "head_geo": 3936,
-  "eye_geo": 236,
-  "booster_back_geo": 3602,
+  "pelvis_geo": 3017,
+  "torso_geo": 11094,
+  "head_geo": 3760,
+  "eye_geo": 192,
+  "eye_slit_geo": 44,
+  "booster_back_geo": 3494,
   "booster_L_geo": 162,
   "booster_R_geo": 162,
-  "weapon_R_geo": 4832,
+  "weapon_R_geo": 4536,
   "weapon_L_geo": 1676,
-  "shoulder_L_geo": 3259,
-  "shoulder_R_geo": 3703,
-  "thigh_L_geo": 4517,
-  "shin_L_geo": 6913,
-  "foot_L_geo": 2857,
+  "shoulder_L_geo": 3169,
+  "shoulder_R_geo": 3664,
+  "thigh_L_geo": 4403,
+  "shin_L_geo": 6312,
+  "foot_L_geo": 2767,
   "toe_L_geo": 456,
-  "arm_L_geo": 4241,
-  "forearm_L_geo": 2116,
-  "hand_L_geo": 1130,
-  "thigh_R_geo": 4525,
-  "shin_R_geo": 6905,
-  "foot_R_geo": 2863,
+  "arm_L_geo": 4838,
+  "forearm_L_geo": 2083,
+  "hand_L_geo": 1720,
+  "thigh_R_geo": 4411,
+  "shin_R_geo": 6310,
+  "foot_R_geo": 2773,
   "toe_R_geo": 456,
-  "arm_R_geo": 4190,
-  "forearm_R_geo": 2899,
-  "hand_R_geo": 1130
+  "arm_R_geo": 4789,
+  "forearm_R_geo": 2866,
+  "hand_R_geo": 1720
  },
  "texture_sets": {
   "A": {
-   "texel_px_per_m": 93.8,
-   "coverage": 0.571,
+   "texel_px_per_m": 93.1,
+   "coverage": 0.573,
    "overlap": 0.0001,
-   "tris": 44036
+   "tris": 46151
   },
   "B": {
-   "texel_px_per_m": 87.0,
-   "coverage": 0.592,
+   "texel_px_per_m": 88.2,
+   "coverage": 0.616,
    "overlap": 0.0001,
-   "tris": 45726
+   "tris": 43623
   }
  },
  "cards": 46,
- "total_s": 83.6,
- "texture_note": "r3: GLB re-exported with --reuse-bakes at the budget texture sizes/qualities (ORM A 1536, B 1024; basecolor B 1536); previews + FBX (2048 ORM A) from the full build",
- "full_build_s": 2415.5
+ "total_s": 1282.1
 }

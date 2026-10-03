@@ -53,13 +53,13 @@ export const MANIFEST = {
   enemy_relay: { url: 'assets/enemies/enemy_relay.glb', type: 'gltf' },
   // UI fonts (owner: mission/HUD designer; OFL, built by assets/fonts/build_fonts.py;
   // registered with the FontFace API by src/ui/fonts.js)
-  font_label_400: { url: 'assets/fonts/barlow-condensed-400.woff2', type: 'binary' },
   font_label_500: { url: 'assets/fonts/barlow-condensed-500.woff2', type: 'binary' },
   font_label_600: { url: 'assets/fonts/barlow-condensed-600.woff2', type: 'binary' },
   font_label_700: { url: 'assets/fonts/barlow-condensed-700.woff2', type: 'binary' },
   font_mono_400: { url: 'assets/fonts/share-tech-mono-400.woff2', type: 'binary' },
   font_jp_400: { url: 'assets/fonts/noto-sans-jp-400-subset.woff2', type: 'binary' },
   font_jp_700: { url: 'assets/fonts/noto-sans-jp-700-subset.woff2', type: 'binary' },
+  font_num_500: { url: 'assets/fonts/barlow-semi-condensed-500-num.woff2', type: 'binary' }, // large numerals (tabular)
   // weapons/VFX lane (assets/fx/bake_fx.py; channel layout in src/fx/textures.js)
   tex_fx_puff: { url: 'assets/fx/fx_puff.webp', type: 'texture' },
   tex_fx_misc: { url: 'assets/fx/fx_misc.webp', type: 'texture' },

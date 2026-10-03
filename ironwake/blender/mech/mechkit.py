@@ -49,7 +49,7 @@ P.bolt_row.__defaults__ = ((0, 0, 1), 0.018, 'hex', 'steel', False, 0.0)
 P.bolt_circle.__defaults__ = (0.018, 'hex', 'steel', 0.0, False)
 
 ROUGH_FLOOR = 0.22   # minimum baked roughness (HDR overflow guard, see finalize_textures)
-BOLT_SPACING = 1.6   # global multiplier on armour-plate bolt spacing (triangle budget)
+BOLT_SPACING = 2.0   # global multiplier on armour-plate bolt spacing (triangle budget; r4: 1.6 -> 2.0)
 
 IRONWAKE = os.path.dirname(BLENDER)
 ASSETS = os.path.join(IRONWAKE, 'assets', 'mech')
@@ -297,7 +297,7 @@ def ram(p0, p1, r=0.09, rod=None, frac=0.55, up=(0, 0, 1), segs=20, eyes=False, 
     if bellows > 0:
         z0b = za + ls + r * 0.2
         lb = ((L - eo) - z0b) * bellows
-        n = 4
+        n = 3     # r4: 3 convolutions (budget)
         bands = []
         for k in range(n):
             bands.append((lb / n * 0.5, rod * 1.9))

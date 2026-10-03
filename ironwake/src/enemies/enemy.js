@@ -19,6 +19,7 @@ import { Actor, TEAM_ENEMY } from '../game/actor.js';
 import { burnModel } from './models.js';
 import { leadAim, playTell } from './ai.js';
 import { HitVolume, HitFlash } from './hitvol.js';
+import { makeOutline, disposeOutline } from './outline.js';
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Vector3(), _t = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -36,6 +37,10 @@ export function burntMaterial() {
   }
   return BURNT;
 }
+
+/** Impact-spark cap (Enemy.impactFxScale): glow = the preset's main glow size (m, fx/library.js
+ *  impact_sparks), legible = its distance growth; frac = max glow size / unit height. */
+export const IMPACT_CAP = { glow: 3.2, legible: 1.4, frac: 0.7 };
 
 /** Default fire-control telegraph (per class overrides via this.fcCfg). */
 export const FC_DEFAULT = {
@@ -84,6 +89,27 @@ export class Enemy extends Actor {
     this.deathBig = opts.deathBig ?? this.radius > 3.5;   // large explosion + debris on death
     this.hitVol = null;                       // per-part narrow phase (setupHitVolumes)
     this.flash = null;                        // armour hit flash
+    this.outline = null;                      // far-range silhouette outline (outline.js; enemies.js fades it)
+  }
+
+  /** Far-range outline hull for `model` (one draw call; cacheKey = the template, shares geometry). */
+  setupOutline(model, cacheKey = null) {
+    this.outline = makeOutline(model, cacheKey);
+    if (this.outline) this.root.add(this.outline);
+  }
+
+  /**
+   * Impact-FX scale for a round landing on this unit (weapons/projectiles.js hook, r4: critic
+   * "the impact spark buries the whole MT at 74 m"). The spark preset grows with camera distance
+   * (legible) so hits read at 300 m; here its hot core is capped to ~IMPACT_CAP.frac of the unit's
+   * height on screen, so the silhouette survives a sustained burst.
+   */
+  impactFxScale(point) {
+    const cam = this.game.camera;
+    if (!cam || !point) return 1;
+    const C = IMPACT_CAP, cd = cam.position.distanceTo(point);
+    const legible = Math.max(1, (cd / 45) * C.legible);
+    return Math.min(1, (C.frac * this.height) / (C.glow * legible));
   }
 
   /**
@@ -321,6 +347,7 @@ export class Enemy extends Actor {
   }
 
   dispose() {
+    if (this.outline) { disposeOutline(this.outline); this.outline = null; }
     if (this.flash) { this.flash.dispose(); this.flash = null; }
     if (this.anim) { this.anim.dispose(); this.anim = null; }
     super.dispose();

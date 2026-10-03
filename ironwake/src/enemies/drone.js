@@ -29,10 +29,13 @@ export const DRONE_AI = {
   // 0.45 s nose-over tell + a 0.3 s aim glint), so every round it fires is telegraphed and close
   // enough to land; it dives every 3.5-6 s (one diver at a time per swarm token)
   dive: { every: [3.5, 6], tell: 0.45, speed: 48, accel: 90, offset: 12, fireRange: 85, pullUp: 26, climb: [0.9, 1.4] },
-  orbitFire: false,
+  // r4 (critic: "GNATs fire 2 shots in the whole squad stage"): the orbit is a firing position
+  // again. One 6-round pulse burst (gnat_pulse, cooldown 2 s) behind a 0.5 s cyan laser-sight
+  // tell + eye glint, so a gnat pair keeps the player moving between dives; still telegraphed
+  orbitFire: true,
   fire: {
-    slot: 'R', group: 'drone', aimTime: 0.3, glintAt: 0.14, errStart: 4, errEnd: 1.2, errTau: 0.1,
-    sight: false, glintFx: 'iw_glint', glintScale: 0.7, tell: 'drone', retry: 0.3, holdSight: 0, range: 240, grace: 0.15,
+    slot: 'R', group: 'drone', aimTime: 0.5, glintAt: 0.15, errStart: 5, errEnd: 1.4, errTau: 0.14,
+    sight: true, sightColor: [0.7, 2.6, 6.5], sightWidth: 0.05, sightPx: 1.1, glintFx: 'iw_glint', glintScale: 0.7, tell: 'drone', retry: 0.3, holdSight: 0.1, range: 240, grace: 0.2,
   },
   trackTau: 0.2, lead: 0.9,
   wreck: { gravity: 34, spin: 9, maxT: 2.2 },
@@ -52,10 +55,11 @@ export class Drone extends Enemy {
     this.model = template.clone();
     this.root.add(this.model);
     this.setupHitVolumes(this.model, ['body'], template, { radius: S.hitRadius });
+    this.setupOutline(this.model, template);
     this.body3d = node(this.model, 'body');
     this.rotor = node(this.model, 'rotor');
     this.muzzles.R = node(this.model, 'muzzle');
-    this.loadout = new Loadout(game, this, { R: 'drone_laser' });
+    this.loadout = new Loadout(game, this, { R: 'gnat_pulse' });
     this.contact = makeContact();
     this._trig = { R: false };
     this.phase = 0; this.orbit = 0; this.orbitR = 80; this.alt = 30; this.dirSign = 1;

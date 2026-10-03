@@ -149,10 +149,30 @@ export const SHOTS = {
       S.begin({ clear: true });
       // movement lane: pick an obstacle-free lane near the usual spot so the burst is not
       // interrupted by debris (arena swaps move props around)
+      // (r4: + the camera's sight line to the lane's middle, so no debris pile fills the foreground)
       const L = S._lane = findClearLane(S, S.rel(55), [[0, -5, 0, 60]]);
       // camera perpendicular to the lane (front, else behind) with a clear view of the path
-      S._qbCam = pickClearCam(S, [laneRel(L, 34, 21, 4.2), laneRel(L, -34, 21, 4.2), laneRel(L, 40, 21, 6), laneRel(L, -40, 21, 6)],
-        [laneRel(L, 0, 0, 5), laneRel(L, 0, 23, 5), laneRel(L, 0, 46, 5)]);
+      // (r4: and no collider-less dressing, e.g. a debris pile, across the lower frame)
+      const cams = [laneRel(L, 34, 21, 4.2), laneRel(L, -34, 21, 4.2), laneRel(L, 40, 21, 6), laneRel(L, -40, 21, 6)];
+      S._qbCam = pickClearCam(S, cams, [laneRel(L, 0, 0, 5), laneRel(L, 0, 23, 5), laneRel(L, 0, 46, 5)]);
+      // foreground fan: points 0.2 m over the ground 22-42% of the way to the lane's middle, +-6 m
+      // sideways (a knee-high debris pile 10 m from this low camera fills the lower third)
+      const fan = (c) => {
+        const tg = laneRel(L, 0, 23, 0), out = [laneRel(L, 0, 4, 0.8), laneRel(L, 0, 23, 0.8), laneRel(L, 0, 42, 0.8)];
+        const dx = tg.x - c.x, dz = tg.z - c.z, dl = Math.hypot(dx, dz);
+        for (const t of [0.22, 0.32, 0.42]) for (const lat of [-6, 0, 6]) {
+          const q = V(c.x + dx * t - (dz / dl) * lat, 0, c.z + dz * t + (dx / dl) * lat);
+          q.y = S.game.physics.groundHeight(q.x, q.z) + 0.2; out.push(q);
+        }
+        return out;
+      };
+      const more = [laneRel(L, 34, 11, 4.2), laneRel(L, 34, 31, 4.2), laneRel(L, -34, 11, 4.2), laneRel(L, -34, 31, 4.2), laneRel(L, 38, 21, 8), laneRel(L, -38, 21, 8)];
+      // sun-side views first (an into-sun view washes the rig and the dust out)
+      const sd = S.game.env && S.game.env.sunDir, look = laneRel(L, 0, 23, 5.2);
+      const into = (c) => (sd ? ((look.x - c.x) * sd.x + (look.z - c.z) * sd.z) / Math.hypot(look.x - c.x, look.z - c.z) : 0) > 0.2 ? 1 : 0;
+      const ok = (c) => targetsVisible(S, c, [laneRel(L, 0, 0, 5), laneRel(L, 0, 23, 5), laneRel(L, 0, 46, 5)]) && viewClearVisual(S, c, fan(c));
+      const all = cams.concat(more).map((c, i) => [c, into(c) * 100 + i]).sort((a, b) => a[1] - b[1]).map((e) => e[0]);
+      S._qbCam = all.find(ok) || S._qbCam;
       S.place(L.pos, L.yaw);
       S.steps(10);
       S.press('move_right'); S.press('quick_boost'); S.steps(1);
@@ -280,8 +300,12 @@ export const SHOTS = {
       dealDamage(S.game, boss, { damage: Math.ceil(boss.ap - boss.apMax * 0.46), impact: 0, direct: true, point: boss.pos.clone(), source: S.player, weapon: 'debug' });
       // once the limiter is off and the rig is free at 40-60 m with a clear line, it commits to a
       // blade lunge: the capture is the tell - squaring up and closing in, blade glint pulsing
+      // (enemies lane r4) ... and the chase camera is not staring into the low dusk sun (a backlit
+      // 64 m silhouette against the glare is a real moment, but not the one this shot documents)
+      const sd = S.game.env && S.game.env.sunDir, p = S.player;
+      const lit = () => { if (!sd) return true; const dx = boss.pos.x - p.pos.x, dz = boss.pos.z - p.pos.z, l = Math.hypot(dx, dz) || 1, sl = Math.hypot(sd.x, sd.z) || 1; return (dx * sd.x + dz * sd.z) / (l * sl) < 0; };
       const lane = () => boss.state === 'fight' && boss.phase === 1 && !boss.atk && boss.los && boss.motor.mode !== 'stagger' &&
-        boss.distanceToTarget() > 40 && boss.distanceToTarget() < 60 && boss.loadout.slots.L.ready;
+        boss.distanceToTarget() > 40 && boss.distanceToTarget() < 60 && boss.loadout.slots.L.ready && lit();
       for (let i = 0; i < 2400 && !lane(); i++) { track(); S.steps(1); }
       if (lane()) boss._startAttack('blade');
       // (enemies lane r2) the blade now RUSHES in first (boost + gap-close QB) and tells only inside
@@ -323,7 +347,8 @@ export const SHOTS = {
       for (let i = 0; i < 400 && g.state !== 'results'; i++) S.steps(1);
       if (g.state !== 'results') g.menus.showResults(g.mission.result || g.mission.logic.result(g.player.apMax));
     },
-    camera(S) { const p = S.player.pos; S.cam(V(p.x + 16, p.y + 4, p.z + 16), V(p.x, p.y + 6, p.z), 45); },
+    // UI lane (r4): the results hero camera frames the rig behind the rank box (menus.js HERO.results)
+    camera(S) { if (S.game.menus.heroCamera && S.game.menus.heroCamera('results')) return; const p = S.player.pos; S.cam(V(p.x + 16, p.y + 4, p.z + 16), V(p.x, p.y + 6, p.z), 45); },
   },
 
   results_lose: {
@@ -340,7 +365,7 @@ export const SHOTS = {
       dealDamage(g, g.player, hit);
       for (let i = 0; i < 400 && g.state !== 'results'; i++) S.steps(1);
     },
-    camera(S) { const p = S.player.pos; S.cam(V(p.x - 18, p.y + 6, p.z + 20), V(p.x, p.y + 4, p.z), 45); },
+    camera(S) { if (S.game.menus.heroCamera && S.game.menus.heroCamera('results')) return; const p = S.player.pos; S.cam(V(p.x - 18, p.y + 6, p.z + 20), V(p.x, p.y + 4, p.z), 45); },
   },
 
   // --- mech lane (appended): close looks at the rival rig and the player's left side
@@ -612,7 +637,7 @@ export const SHOTS = {
       for (let i = 0; i < 400 && g.state !== 'results'; i++) S.steps(1);
       if (g.state !== 'results') g.menus.showResults(g.mission.result || g.mission.logic.result(g.player.apMax));
     },
-    camera(S) { const p = S.player.pos; S.cam(V(p.x + 16, p.y + 4, p.z + 16), V(p.x, p.y + 6, p.z), 45); },
+    camera(S) { if (S.game.menus.heroCamera && S.game.menus.heroCamera('results')) return; const p = S.player.pos; S.cam(V(p.x + 16, p.y + 4, p.z + 16), V(p.x, p.y + 6, p.z), 45); },
   },
   hud_alerts: {
     desc: 'HUD alert states: missile alert, EN redline, AP critical, warning banner, damage arc (UI lane)',
@@ -1292,3 +1317,21 @@ function scriptSkate(e, speed, off = 0) {
     if (this.anim) this.anim.update(dt);
   };
 }
+
+/** (movement lane r4) True when rays from the camera to the points hit no visible static mesh
+ *  (render geometry: dressing such as debris piles has no colliders). */
+function viewClearVisual(S, cam, pts) {
+  const rc = new THREE.Raycaster(), dir = V(0, 0, 0);
+  const skip = new Set();
+  for (const a of S.game.actors || []) if (a.root) skip.add(a.root);
+  if (S.player && S.player.root) skip.add(S.player.root);
+  const targets = S.game.scene.children.filter((c) => !skip.has(c) && c.visible && !c.isLight);
+  for (const p of pts) {
+    dir.subVectors(p, cam); const len = dir.length(); dir.multiplyScalar(1 / len);
+    rc.set(cam, dir); rc.far = len - 0.3;
+    const hits = rc.intersectObjects(targets, true);
+    if (hits.some((h) => h.object.isMesh && !h.object.material.transparent)) return false;
+  }
+  return true;
+}
+function targetsVisible(S, c, pts) { return pts.every((t) => S.game.physics.lineOfSight(c, t)); }

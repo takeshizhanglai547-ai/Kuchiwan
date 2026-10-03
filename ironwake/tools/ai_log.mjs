@@ -173,7 +173,8 @@ async function main() {
       const weaponOf = { R: 'rifle_ar', LB: 'missile_pod', RB: 'cannon_heavy', L: 'blade_pulse' };   // shots are counted per projectile (weapon:fired)
       const hitRate = {};
       for (const k in weaponOf) { const fired = ai.shots[k] || 0, tb = L.takenBy[weaponOf[k]]; hitRate[weaponOf[k]] = fired ? +(100 * (tb ? tb[0] : 0) / fired).toFixed(1) : 0; }
-      const phases = L.phases.map((P, i) => ({ phase: i + 1, seconds: +P.time.toFixed(1), attacks: P.attacks, dodges: P.dodges, dodgeTriggers: P.dodgeTriggers, quickBoosts: P.qb, staggers: P.staggers,
+      const medOf = (a) => { if (!a || !a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+      const phases = L.phases.map((P, i) => ({ phase: i + 1, seconds: +P.time.toFixed(1), inBandPct: +(100 * (P.inBand || 0) / Math.max(1, P.steps)).toFixed(1), medianDistM: medOf(P.dists), attacks: P.attacks, dodges: P.dodges, dodgeTriggers: P.dodgeTriggers, quickBoosts: P.qb, staggers: P.staggers,
         dmgTaken: Math.round(P.dmgTaken), dpsTaken: +(P.dmgTaken / Math.max(1, P.time)).toFixed(0), hitsOnPlayer: P.hitsOnPlayer, dmgOnPlayer: Math.round(P.dmgOnPlayer), meanDistM: +(P.distSum / Math.max(1, P.steps)).toFixed(1), meanEnPct: +(100 * P.enSum / Math.max(1, P.steps)).toFixed(0), preferredRange: L.ranges[i] }));
       return {
         godmode: god, won: !boss.alive, fightSeconds: +(boss.alive ? (g.time - L.engagedAt) : L.time).toFixed(1), botSteps: used,
@@ -182,6 +183,9 @@ async function main() {
         quickBoosts: L.qb, attacks: L.attacks, telegraphs: L.tells,
         tellLeadByAttackS: tellBy, bigAttackTellLeadS: stat(big), meanTellLeadS: L.tellLead.length ? +(L.tellLead.reduce((a, b) => a + b, 0) / L.tellLead.length).toFixed(2) : 0,
         jumps: L.jumps, assaultBoosts: L.ab, p2Combos: L.combos, bladeSlashes: L.bladeSlashes, bladeHits: L.bladeHits,
+        missileSalvos: { salvos: L.salvos || 0, secondSalvos: L.salvo2 || 0, releasedOnPlayerQb: L.salvoTimed || 0 },
+        cameraLos: { samples: L.camSamples || 0, thinOccluderPct: +(100 * (L.camBlocked || 0) / Math.max(1, L.camSamples || 0)).toFixed(1), strafeClears: L.camClears || 0 },
+        bandFixedQbs: L.bandFixes || 0,
         hitsOnPlayer: { total: hitsOn, ...L.hitsOnPlayer }, dmgOnPlayer: Math.round(L.dmgOnPlayer), playerDamageTaken: god ? 'godmode' : ap0 - g.player.ap,
         playerApLeft: god ? 'godmode' : Math.round(g.player.ap), repairKitsUsed: kits0 - g.player.repairKits,
         hitsTaken: L.hitsTaken, dmgTaken: Math.round(L.dmgTaken), takenByWeapon: Object.fromEntries(Object.entries(L.takenBy).map(([k, v]) => [k, { hits: v[0], dmg: Math.round(v[1]) }])),
@@ -211,6 +215,7 @@ async function main() {
           for (const god of [true, false]) {
             const r = await bossRun(god, sd);
             rows.push({ seed: sd, godmode: god, won: r.won, fightSeconds: r.fightSeconds, staggers: r.staggers, playerHitRatePct: r.playerHitRatePct, dodges: r.dodges.total,
+              p2InBandPct: r.phases[1] ? r.phases[1].inBandPct : 0, missileHits: r.hitsOnPlayer.cinder_missile || 0,
               dmgOnPlayer: r.dmgOnPlayer, playerApLeft: r.playerApLeft, repairKitsUsed: r.repairKitsUsed, attacks: r.attacks,
               phaseSplit: r.phases.map((P) => ({ s: P.seconds, atk: Object.values(P.attacks).reduce((x, y) => x + y, 0), dmgOnPlayer: P.dmgOnPlayer, dodges: `${P.dodges}/${P.dodgeTriggers}` })),
               hitPct: r.playerHitPctByWeapon, dmgBy: Object.fromEntries(Object.entries(r.takenByWeapon).map(([k, v]) => [k, v.dmg])), stagger: r.modeSplitPct.stagger });
@@ -219,7 +224,8 @@ async function main() {
         const gm = rows.filter((r) => r.godmode), ng = rows.filter((r) => !r.godmode);
         const agg = (a, k) => ({ min: Math.min(...a.map((r) => r[k])), mean: +(a.reduce((x, r) => x + r[k], 0) / a.length).toFixed(1), max: Math.max(...a.map((r) => r[k])) });
         report.bossSeeds = { seeds: SEEDS, fightSeconds: agg(gm, 'fightSeconds'), staggers: agg(gm, 'staggers'), playerHitRatePct: agg(gm, 'playerHitRatePct'), dodges: agg(gm, 'dodges'),
-          noGodmodeWins: `${ng.filter((r) => r.won).length}/${ng.length}`, noGodmodeFightSeconds: agg(ng, 'fightSeconds'), rows };
+          noGodmodeWins: `${ng.filter((r) => r.won).length}/${ng.length}`, noGodmodeFightSeconds: agg(ng, 'fightSeconds'),
+          noGodmodeApLeft: ng.map((r) => r.playerApLeft), p2InBandPct: agg(rows, 'p2InBandPct'), missileHits: agg(rows, 'missileHits'), rows };
         for (const r of rows) console.log('seed', JSON.stringify(r));
         const { rows: _r, ...sum } = report.bossSeeds;
         console.log('seeds summary:', JSON.stringify(sum));
@@ -358,26 +364,28 @@ function drawChart(R) {
   const bt = B.bigAttackTellLeadS || {}, BS = R.bossSeeds, BB = R.bossBalance;
   const mark = (ok) => (ok ? 'OK  ' : 'OFF ');
   const rows = [
-    [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.72, explosive x0.54, blade x0.72)`],
+    [`${mark(B.bossAp >= 18000 && B.bossAp <= 24000)}rival rig AP ${B.bossAp.toLocaleString('en')} (benchmark 18,000-24,000; per-type armour: kinetic x0.52, energy x0.54, explosive x0.41, blade x0.54)`],
     [`${mark(B.fightSeconds >= 60 && B.fightSeconds <= 150)}fight ${B.fightSeconds} s (target 60-150 s)${BS ? ` · over seeds ${BS.seeds.join(',')}: ${BS.fightSeconds.min}-${BS.fightSeconds.max} s, mean ${BS.fightSeconds.mean}` : ''}`],
     [`${mark(B.staggers >= 3 && B.staggers <= 5)}staggers ${B.staggers} (target 3-5)${BS ? ` · seeds ${BS.staggers.min}-${BS.staggers.max}` : ''} · 2.0 s windows, direct hits x1.85`],
     [`${mark(bt.n && bt.min >= 0.5 && bt.max <= 0.85)}big-attack telegraph lead ${bt.n ? `${bt.min}-${bt.max} s, mean ${bt.mean} (n ${bt.n})` : 'n/a'} (target 0.5-0.8 s; pulsing glint + rising warning ticks) · rifle bursts: small 0.22 s glint`],
     [`player hit rate ${B.playerHitRatePct}% (rifle ${B.playerHitPctByWeapon.rifle_ar}%, missiles ${B.playerHitPctByWeapon.missile_pod}%, cannon ${B.playerHitPctByWeapon.cannon_heavy}%) · boss hits on player ${B.hitsOnPlayer.total} (${B.dmgOnPlayer} AP)`],
-    [BB ? `${mark(BB.won)}same bot WITHOUT godmode: ${BB.won ? 'wins' : 'loses'} in ${BB.fightSeconds} s, ${BB.playerApLeft} AP left, ${BB.repairKitsUsed} repair kit(s)${BS ? ` · seeds: ${BS.noGodmodeWins} wins` : ''}` : ''],
+    [BB ? `${mark(BB.won)}same bot WITHOUT godmode: ${BB.won ? 'wins' : 'loses'} in ${BB.fightSeconds} s, ${BB.playerApLeft} AP left, ${BB.repairKitsUsed} repair kit(s)${BS ? ` · seeds: ${BS.noGodmodeWins} wins, AP left ${BS.noGodmodeApLeft.join(' / ')}` : ''}` : ''],
+    [`missiles: ${B.missileSalvos.salvos} salvos (+${B.missileSalvos.secondSalvos} right-pod follow-ups, ${B.missileSalvos.releasedOnPlayerQb} released on a spent player QB) · ${B.hitsOnPlayer.cinder_missile || 0} missile hits on the player · chase-camera view blocked by a thin mast ${B.cameraLos.thinOccluderPct}% of samples (${B.cameraLos.strafeClears} strafe clears)`],
   ];
   rows.forEach((r, i) => txt(r[0], 40, ty0 + i * 20, i < 4 || r[0].startsWith('OK') || r[0].startsWith('OFF') ? C.text : C.text2, 13));
   const py = ty0 + rows.length * 20 + 14;
-  txt('phase', 40, py, C.muted, 12, 600); txt('time', 140, py, C.muted, 12, 600); txt('mean dist', 220, py, C.muted, 12, 600); txt('dodges / triggers', 320, py, C.muted, 12, 600);
-  txt('DPS taken', 470, py, C.muted, 12, 600); txt('dmg on player', 570, py, C.muted, 12, 600); txt('attacks', 700, py, C.muted, 12, 600);
+  txt('phase', 40, py, C.muted, 12, 600); txt('time', 140, py, C.muted, 12, 600); txt('mean dist', 220, py, C.muted, 12, 600);
+  txt('dodges / triggers', 470, py, C.muted, 12, 600); txt('DPS taken', 590, py, C.muted, 12, 600); txt('dmg on player', 680, py, C.muted, 12, 600); txt('attacks', 800, py, C.muted, 12, 600);
   (B.phases || []).forEach((P, i) => {
     const y = py + 20 + i * 20;
-    txt(i ? 'P2 limiter' : 'P1 duelist', 40, y, C.text2, 12); txt(`${P.seconds} s`, 140, y, C.text2, 12); txt(`${P.meanDistM} m`, 220, y, C.text2, 12);
-    txt(`${P.dodges} / ${P.dodgeTriggers}`, 320, y, C.text2, 12); txt(`${P.dpsTaken}`, 470, y, C.text2, 12); txt(`${P.dmgOnPlayer}`, 570, y, C.text2, 12);
-    txt(Object.entries(P.attacks).map(([k, v]) => `${k} ${v}`).join(' · '), 700, y, C.text2, 12);
+    txt(i ? 'P2 limiter' : 'P1 duelist', 40, y, C.text2, 12); txt(`${P.seconds} s`, 140, y, C.text2, 12);
+    txt(`${P.meanDistM} m (median ${P.medianDistM}, ${P.inBandPct}% in band)`, 220, y, C.text2, 12);
+    txt(`${P.dodges} / ${P.dodgeTriggers}`, 470, y, C.text2, 12); txt(`${P.dpsTaken}`, 590, y, C.text2, 12); txt(`${P.dmgOnPlayer}`, 680, y, C.text2, 12);
+    txt(Object.entries(P.attacks).map(([k, v]) => `${k} ${v}`).join(' · '), 800, y, C.text2, 12);
   });
   const S = R.squad, RL = R.relays;
   const sy = py + 70;
-  if (S) txt(`${mark(S.mt.playerHitPctOfShots >= 15 && S.mt.evades >= 2)}PK-2 walker squad (stage 1, ${S.simSeconds} s): still ${S.mt.stillPct}% · ${S.mt.bursts} telegraphed bursts, ${S.mt.playerHitPctOfShots}% of rounds hit (target >= 15) · ${S.mt.evades} evasive skates (>= 2) · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% outside the aim cone · TTK median ${S.mt.ttkMedianS} s · GNAT dives ${S.drone.dives}`, 40, sy, C.text2, 12);
+  if (S) txt(`${mark(S.mt.playerHitPctOfShots >= 15 && S.mt.evades >= 2)}PK-2 walker squad (stage 1, ${S.simSeconds} s): still ${S.mt.stillPct}% · ${S.mt.bursts} telegraphed bursts, ${S.mt.playerHitPctOfShots}% of rounds hit (target >= 15) · ${S.mt.evades} evasive skates (>= 2) · ${S.mt.coverPlans} cover / ${S.mt.flankPlans} flank plans · spacing ${S.mt.meanNearestSpacingM} m · ${S.mt.pctOutsidePlayerView}% outside the aim cone · TTK median ${S.mt.ttkMedianS} s · GNAT dives ${S.drone.dives}, ${S.drone.bursts} orbit/dive bursts (${S.drone.shots} rounds, ${S.drone.playerHitPctOfShots}% hit)`, 40, sy, C.text2, 12);
   if (RL) txt(`Relay generators (stage 2, ${RL.simSeconds} s): ${RL.relay.bursts} telegraphed bursts + ${RL.relay.suppressBursts} suppressive sweep(s) · ${RL.relay.reinforcementCalls} reinforcement calls (${RL.relay.dronesLaunched} GNATs launched) · ${RL.relay.playerHitPctOfShots}% of rounds hit · GNAT dives ${RL.drone.dives}, swarm pairings ${RL.drone.swarmJoins}`, 40, sy + 20, C.text2, 12);
 }
 

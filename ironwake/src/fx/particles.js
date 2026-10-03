@@ -51,6 +51,8 @@ const TAU = Math.PI * 2;
 /** Lighting calibration for lit smoke (multiplies the environment's sun / hemisphere). */
 export const SMOKE_LIGHT = { sun: 0.4, ambTop: 0.7, ambBot: 0.7, ambFog: 0.35, fireGain: 0.75, fallbackSun: [2.4, 1.5, 0.95], fallbackTop: [0.5, 0.5, 0.55], fallbackBot: [0.4, 0.34, 0.3] };
 
+/** Ambient wind for parts with `wind` (m/s): matches the falling-ash drift (render/weather.js). */
+const WIND_X = 0.862, WIND_Z = 0.506;
 const _up = new THREE.Vector3(0, 1, 0), _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _d = new THREE.Vector3();
 const _side = new THREE.Vector3(), _camPos = new THREE.Vector3(), _camFwd = new THREE.Vector3(), _sv = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
@@ -61,6 +63,8 @@ const NANCHOR = 16, ANCHOR_LIFE = 0.4, NO_ANCHOR = 255;
 const _col = new THREE.Color(), _v2 = new THREE.Vector2(), _lp = new THREE.Vector3();
 /** Global flash-light calibration (library intensities are relative, candela x LIGHT_SCALE). */
 export const LIGHT_SCALE = 0.22;
+/** Max irradiance an effect flash puts on its own spawn point (sun key ~16, AgX-relative units). */
+export const FLASH_CAP = 10;
 /** Dev-only URL knob: &fxdebug=edges (see fx/shaders.js). */
 const FX_DEBUG = (() => { try { return new URLSearchParams(globalThis.location ? globalThis.location.search : '').get('fxdebug') || ''; } catch (e) { return ''; } })();
 
@@ -77,13 +81,13 @@ export default function particlesSystem(game) {
     e0: new Float32Array(MAX), e1: new Float32Array(MAX), cp: new Float32Array(MAX),
     drag: new Float32Array(MAX), grav: new Float32Array(MAX), rise: new Float32Array(MAX), turb: new Float32Array(MAX),
     rot: new Float32Array(MAX), spin: new Float32Array(MAX), stretch: new Float32Array(MAX),
-    bounce: new Float32Array(MAX), seed: new Float32Array(MAX),
+    bounce: new Float32Array(MAX), seed: new Float32Array(MAX), colp: new Float32Array(MAX), wind: new Float32Array(MAX),
     shape: new Uint8Array(MAX), variant: new Uint8Array(MAX), flags: new Uint8Array(MAX),
     anc: new Uint8Array(MAX),   // anchor slot (255 = free-flying)
   };
   const A3 = [P.pos, P.vel, P.axis, P.c0, P.c1];
   const A1 = [P.age, P.life, P.s0, P.s1, P.sp, P.a0, P.a1, P.ap, P.fin, P.h0, P.h1, P.k0, P.k1, P.e0, P.e1, P.cp,
-    P.drag, P.grav, P.rise, P.turb, P.rot, P.spin, P.stretch, P.bounce, P.seed, P.shape, P.variant, P.flags, P.anc];
+    P.drag, P.grav, P.rise, P.turb, P.rot, P.spin, P.stretch, P.bounce, P.seed, P.shape, P.variant, P.flags, P.anc, P.colp, P.wind];
   const effects = { ...EFFECTS };
   const keys = new Float32Array(MAX), order = new Uint16Array(MAX), bucketCount = new Int32Array(BUCKETS + 1);
   let rng = null, baseSeed = 0, stepNo = 0, stepId = 0, batch = null, lights = [], simTime = 0, softAttached = false, tex = null;
@@ -322,6 +326,9 @@ export default function particlesSystem(game) {
       P.h0[i] = part.heat ? part.heat[0] : 0; P.h1[i] = part.heat ? part.heat[1] : 0;
       P.k0[i] = addDef[0]; P.k1[i] = addDef[1]; P.cp[i] = part.coolPow || 1;
       P.e0[i] = part.erode ? part.erode[0] : 0; P.e1[i] = part.erode ? part.erode[1] : (shape === SHAPE.puff ? 0.35 : shape === SHAPE.fire ? 1 : 0);
+      // erodeVar: per-particle phase offset (overlapping flipbook billows at staggered stages)
+      if (part.erodeVar) { const ev = rng.next() * part.erodeVar; P.e0[i] += ev; P.e1[i] = Math.min(1, P.e1[i] + ev * 0.5); }
+      P.colp[i] = part.colPow || 1; P.wind[i] = part.wind || 0;
       // sparks: iExtra.z carries gravity / 100 (the vertex shader bends the trail along its path)
       if (shape === SHAPE.spark) P.e0[i] = P.e1[i] = (part.gravity || 0) * 0.01;
       P.drag[i] = part.drag || 0; P.grav[i] = part.gravity || 0; P.rise[i] = part.rise || 0; P.turb[i] = part.turb || 0;
@@ -343,7 +350,11 @@ export default function particlesSystem(game) {
         // big flashes sit a few metres above the blast (inverse-square near field would blow the
         // hull it detonated on out to flat white)
         _lp.y += Math.min(6, part.range * 0.06);
-        api.flash(_lp, part.color, part.intensity * LIGHT_SCALE * scale, part.range * Math.sqrt(scale), part.dur, part.linger || 0, part.decay || 2);
+        // (combat r4: a blade kill blew the target hull out to flat white) the flash never lights
+        // the surface it was spawned on above FLASH_CAP: intensity <= CAP x (d^decay + 4)
+        const dc = part.decay || 2, dl = Math.max(0.5, _lp.distanceTo(pos));
+        const li = Math.min(part.intensity * LIGHT_SCALE * scale, FLASH_CAP * (Math.pow(dl, dc) + 4));
+        api.flash(_lp, part.color, li, part.range * Math.sqrt(scale), part.dur, part.linger || 0, dc);
         break;
       }
       case 'decal': decals.fromEffect(part, pos, dir, o, scale); break;
@@ -466,27 +477,32 @@ export default function particlesSystem(game) {
       P.a0[i] = 1; P.a1[i] = 0.2; P.ap[i] = 1; P.fin[i] = 0;
       P.h0[i] = 1; P.h1[i] = 0.5; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
       P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
-      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
+      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = 0; P.shape[i] = SHAPE.bolt; P.variant[i] = 0; P.anc[i] = NO_ANCHOR; P.colp[i] = 1; P.wind[i] = 0;
     },
 
     /** Low-level: one booster EXHAUST JET for this step (shaders.js shape 9). pos = nozzle exit,
      *  (dx,dy,dz) = unit exhaust direction, len = jet length (m), halfWidth (m), level = thrust
      *  (0..~1.3: heat, diamonds), gain = brightness multiplier, seed = noise offset (0..1). */
-    jet(pos, dx, dy, dz, len, halfWidth, level, gain, seed) {
-      if (P.n >= MAX) return;
-      const i = P.n++, i3 = i * 3;
-      P.pos[i3] = pos.x; P.pos[i3 + 1] = pos.y; P.pos[i3 + 2] = pos.z;
-      P.vel[i3] = 0; P.vel[i3 + 1] = 0; P.vel[i3 + 2] = 0;
-      P.axis[i3] = dx * len; P.axis[i3 + 1] = dy * len; P.axis[i3 + 2] = dz * len;
-      P.flags[i] = F_FIXED | F_NOSOFT;
-      P.stretch[i] = 1; P.age[i] = 0; P.life[i] = 0.016;
-      P.s0[i] = halfWidth; P.s1[i] = halfWidth; P.sp[i] = 1;
-      P.c0[i3] = gain; P.c0[i3 + 1] = gain; P.c0[i3 + 2] = gain;
-      P.c1[i3] = gain; P.c1[i3 + 1] = gain; P.c1[i3 + 2] = gain;
-      P.a0[i] = 1; P.a1[i] = 1; P.ap[i] = 1; P.fin[i] = 0;
-      P.h0[i] = level; P.h1[i] = level; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
-      P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
-      P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = (seed || 0) * 99; P.shape[i] = SHAPE.jet; P.variant[i] = 0; P.anc[i] = NO_ANCHOR;
+    jet(pos, dx, dy, dz, len, halfWidth, level, gain, seed, discR = 0) {
+      // two sprites: the side-on flame BLADE (variant 0) and the end-on exit DISC (variant 1,
+      // radius discR, ~1.2x the bell radius; the vertex shader fades each by the view angle)
+      for (let v = 0; v < (discR > 0 ? 2 : 1); v++) {
+        if (P.n >= MAX) return;
+        const i = P.n++, i3 = i * 3;
+        P.pos[i3] = pos.x; P.pos[i3 + 1] = pos.y; P.pos[i3 + 2] = pos.z;
+        P.vel[i3] = 0; P.vel[i3 + 1] = 0; P.vel[i3 + 2] = 0;
+        P.axis[i3] = dx * len; P.axis[i3 + 1] = dy * len; P.axis[i3 + 2] = dz * len;
+        P.flags[i] = F_FIXED | F_NOSOFT;
+        P.stretch[i] = 1; P.age[i] = 0; P.life[i] = 0.016;
+        const w = v ? discR : halfWidth;
+        P.s0[i] = w; P.s1[i] = w; P.sp[i] = 1;
+        P.c0[i3] = gain; P.c0[i3 + 1] = gain; P.c0[i3 + 2] = gain;
+        P.c1[i3] = gain; P.c1[i3 + 1] = gain; P.c1[i3 + 2] = gain;
+        P.a0[i] = 1; P.a1[i] = 1; P.ap[i] = 1; P.fin[i] = 0;
+        P.h0[i] = level; P.h1[i] = level; P.k0[i] = 1; P.k1[i] = 1; P.e0[i] = 0; P.e1[i] = 0; P.cp[i] = 1;
+        P.drag[i] = 0; P.grav[i] = 0; P.rise[i] = 0; P.turb[i] = 0; P.bounce[i] = 0;
+        P.rot[i] = 0; P.spin[i] = 0; P.seed[i] = (seed || 0) * 99; P.shape[i] = SHAPE.jet; P.variant[i] = v; P.anc[i] = NO_ANCHOR; P.colp[i] = 1; P.wind[i] = 0;
+      }
     },
 
     /** Flash light: the constant light with the least remaining energy is re-aimed. decay < 2
@@ -532,9 +548,10 @@ export default function particlesSystem(game) {
           vy += Math.sin(z * 0.17 + tt * 0.9) * tb * dt;
         }
         P.vel[i3] = vx; P.vel[i3 + 1] = vy; P.vel[i3 + 2] = vz;
-        P.pos[i3] += vx * dt;
+        const wd = P.wind[i];
+        P.pos[i3] += (vx + WIND_X * wd) * dt;
         P.pos[i3 + 1] += (vy + P.rise[i]) * dt;
-        P.pos[i3 + 2] += vz * dt;
+        P.pos[i3 + 2] += (vz + WIND_Z * wd) * dt;
         if (P.flags[i] & F_COLLIDE) {
           const gy = phys.groundHeight(P.pos[i3], P.pos[i3 + 2]) + 0.06;
           if (P.pos[i3 + 1] < gy) {
@@ -616,9 +633,10 @@ export default function particlesSystem(game) {
         const fixed = P.flags[i] & F_FIXED;
         const src = fixed ? P.axis : P.vel;
         xa[j3] = src[i3]; xa[j3 + 1] = src[i3 + 1]; xa[j3 + 2] = src[i3 + 2];
-        ca[j4] = P.c0[i3] + (P.c1[i3] - P.c0[i3]) * t;
-        ca[j4 + 1] = P.c0[i3 + 1] + (P.c1[i3 + 1] - P.c0[i3 + 1]) * t;
-        ca[j4 + 2] = P.c0[i3 + 2] + (P.c1[i3 + 2] - P.c0[i3 + 2]) * t;
+        const tc = P.colp[i] === 1 ? t : Math.pow(t, P.colp[i]);   // colPow < 1: colour shifts early
+        ca[j4] = P.c0[i3] + (P.c1[i3] - P.c0[i3]) * tc;
+        ca[j4 + 1] = P.c0[i3 + 1] + (P.c1[i3 + 1] - P.c0[i3 + 1]) * tc;
+        ca[j4 + 2] = P.c0[i3 + 2] + (P.c1[i3 + 2] - P.c0[i3 + 2]) * tc;
         let al = P.a0[i] + (P.a1[i] - P.a0[i]) * (P.ap[i] === 1 ? t : Math.pow(t, P.ap[i]));
         const fin = P.fin[i];
         if (fin > 0 && t < fin) al *= t / fin;

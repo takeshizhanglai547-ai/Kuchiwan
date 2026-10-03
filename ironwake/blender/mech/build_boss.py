@@ -127,13 +127,216 @@ def seams(g, d, center, normals, ts, gap=0.022, depth=0.018):
         K.grooves(g, normals, Vector(center) + Vector(d) * t, d, gap=gap, depth=depth)
 
 
+# ============================================================================ r4 (enemy modeler): secondary frequency
+PANEL_MATS = ('paint_primary', 'paint_dark', 'paint_secondary')
+PANEL_STATS = {'faces': 0, 'panels': 0, 'bolts': 0}
+
+
+def _pip(pt, poly):
+    """2D point-in-polygon (even-odd)."""
+    x, y = pt
+    inside = False
+    n = len(poly)
+    for i in range(n):
+        x0, y0 = poly[i]
+        x1, y1 = poly[(i + 1) % n]
+        if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0 + 1e-12) + x0:
+            inside = not inside
+    return inside
+
+
+def panelize(g, seed, min_area=0.1, frac=0.66, max_side=0.62, min_side=0.16, skip=None, mats=PANEL_MATS,
+             weights=(0.4, 0.38, 0.22), bolt_r=0.014, down_ok=False):
+    """r4 (critic r3: 'large flat oxide planes'): breaks every big planar paint face of a shell into
+    inset panels - a seam-loop panel, a raised 2 cm plate with corner bolts or a 2.5 cm recessed
+    panel - 0.16-0.62 m wide, centred in the face and kept inside its outline (so they never run off
+    an edge). skip(centre, normal) -> True leaves a face alone (the faces under layered plates /
+    vents). Returns the bolt geometry (merge it with the part)."""
+    import random
+    rng = random.Random(seed)
+    g.bm.normal_update()
+    mids = [g.mats.index(m) for m in mats if m in g.mats]
+    cands = []
+    for f in g.bm.faces:
+        if f.material_index not in mids or len(f.verts) < 3:
+            continue
+        if not down_ok and f.normal.z < -0.55:
+            continue
+        a_ = f.calc_area()
+        if a_ < min_area:
+            continue
+        c = f.calc_center_median()
+        if skip is not None and skip(c, f.normal):
+            continue
+        if _keeps_card(g, f, c):
+            continue
+        cands.append((round(-a_, 5), round(c.x, 4), round(c.y, 4), round(c.z, 4), f))
+    cands.sort(key=lambda t: t[:4])
+    bolts = Geo()
+    for _, cx, cy, cz, f in cands:
+        if not f.is_valid:
+            continue
+        PANEL_STATS['faces'] += 1
+        o, u, v, n, pts = g.face_frame(f)
+        us = [p[0] for p in pts]
+        vs = [p[1] for p in pts]
+        ccu = sum(us) / len(us)
+        ccv = sum(vs) / len(vs)
+        w = min(max_side, (max(us) - min(us)) * frac)
+        h = min(max_side, (max(vs) - min(vs)) * frac)
+        ok = False
+        for _k in range(5):
+            corners = [(ccu + sx * w * 0.5, ccv + sy * h * 0.5) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            if all(_pip(q, pts) for q in corners):
+                ok = True
+                break
+            w *= 0.82
+            h *= 0.82
+        if not ok or w < min_side or h < min_side:
+            continue
+        # long faces get two panels side by side (keeps every panel in the 0.2-0.6 m band)
+        L = max(max(us) - min(us), max(vs) - min(vs))
+        splits = [(0.0, 0.0)]
+        alongu = (max(us) - min(us)) >= (max(vs) - min(vs))
+        big = (w >= max_side * 0.95) if alongu else (h >= max_side * 0.95)
+        if L > 1.15 and big:
+            off = min(L * 0.24, max_side * 0.62)
+            splits = [(-off, 0.0), (off, 0.0)] if alongu else [(0.0, -off), (0.0, off)]
+            if alongu:
+                w = min(w, off * 1.6)
+            else:
+                h = min(h, off * 1.6)
+        for k, (du, dv) in enumerate(splits):
+            ctr = o + u * (ccu + du) + v * (ccv + dv)
+            # the first panel splits the face: find the sub-face under the next centre
+            face = f if (k == 0 and f.is_valid) else K.face_at(g, ctr, n, angle=8.0)
+            if face is None or not face.is_valid:
+                continue
+            r_ = rng.random()
+            mode = 0 if r_ < weights[0] else (1 if r_ < weights[0] + weights[1] else 2)
+            gp = 0.012
+            fm = g.mats[face.material_index]
+            # value steps that read at 20-60 m: recessed panels floor in dark oxide, every fourth raised
+            # plate on an oxide facet is a cream service plate (the player's bone-on-slate logic)
+            cap = 'paint_secondary' if (fm == 'paint_primary' and rng.random() < 0.25) else None
+            if mode == 0:     # low seam plate (8 mm): reads as a panel outline in the bevel-baked normal
+                res, sl = g.hatch(face, ctr, (w, h), gap=gp, raised=0.008, u_axis=u), 0.008
+            elif mode == 1:
+                res, sl = g.hatch(face, ctr, (w, h), gap=gp, raised=0.02, u_axis=u, mat=cap), 0.02
+            else:
+                res, sl = g.hatch(face, ctr, (w, h), gap=gp, recess=0.025, u_axis=u,
+                                  mat='paint_dark' if fm != 'paint_dark' else 'steel_dark'), 0.025
+            if res is None:
+                continue
+            _slope_walls(res, ctr, u, v, w - 2 * gp, h - 2 * gp, sl)
+            PANEL_STATS['panels'] += 1
+            if mode == 1 and bolt_r > 0:
+                lift = n * 0.02
+                for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                    p = ctr + u * su * (w * 0.5 - 0.06) + v * sv * (h * 0.5 - 0.06) + lift
+                    bolts.merge(_bolt_at(p, n, bolt_r, cap or fm))
+                    PANEL_STATS['bolts'] += 1
+    return bolts
+
+
+# decal-card keep-out points (L-side build coordinates; mirrored parts are built on +X): a face that a
+# card lies on gets no panel step under it (a flat card over a 2 cm step would float or clip)
+CARD_KEEP = []
+
+
+def keep(*pts):
+    for p in pts:
+        CARD_KEEP.append(Vector(p))
+        CARD_KEEP.append(Vector((-p[0], p[1], p[2])))
+
+
+def _keeps_card(g, f, c):
+    n = f.normal
+    for p in CARD_KEEP:
+        if abs((p - c).dot(n)) > 0.14 or (p - c).length > 1.6:
+            continue
+        o, u, v, n_, pts = g.face_frame(f)
+        q = p - o
+        if _pip((q.dot(u), q.dot(v)), pts):
+            return True
+    return False
+
+
+
+def _slope_walls(faces, ctr, u, v, w, h, s):
+    """r4: pull the boundary verts of a raised cap / recess floor `s` toward the centre so the panel walls
+    slope 45 deg: they stay in the same UV island as the face (90 deg walls became hundreds of thin
+    islands and halved the atlas coverage)."""
+    vs = {vv for f in faces if f.is_valid for vv in f.verts}
+    for vv in vs:
+        d = vv.co - ctr
+        du, dv = d.dot(u), d.dot(v)
+        if abs(du) > w * 0.5 - 2e-3:
+            vv.co -= u * (s if du > 0 else -s)
+        if abs(dv) > h * 0.5 - 2e-3:
+            vv.co -= v * (s if dv > 0 else -s)
+
+def _bolt_at(p, n, r, mat='steel'):
+    """One hex bolt standing on a surface point p with normal n (identical copies UV-stack). Panel bolts
+    are painted over with their plate (bare steel heads were sub-pixel specular sparkle at 20 m)."""
+    b = P.bolt(r, 'hex', mat)
+    n = Vector(n).normalized()
+    b.align(n, up=(0, 0, 1) if abs(n.z) < 0.9 else (0, 1, 0), loc=p)
+    return b
+
+
+def rust_drip(seed=1, w=64, h=288, drips=3):
+    """Rust run-off below a bolt / seam (RGBA, top = source; same recipe as the player rig)."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+    rng = np.random.default_rng(seed)
+    a = np.zeros((h, w), np.float32)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    for k in range(drips):
+        x0 = w * (0.5 + rng.uniform(-0.28, 0.28))
+        length = h * rng.uniform(0.45, 1.0)
+        wid = rng.uniform(3.5, 7.5) * (1.3 if k == 0 else 1.0)
+        wob = np.cumsum(rng.normal(0, 0.35, h)).astype(np.float32)
+        cx = x0 + wob[yy.astype(int)] * 0.6
+        t = np.clip(yy / max(length, 1.0), 0, 1)
+        ww = wid * (1.0 - 0.7 * t)
+        m = np.clip(1.0 - np.abs(xx - cx) / ww, 0, 1) * (yy < length) * (1.0 - t ** 1.6)
+        a = np.maximum(a, m * rng.uniform(0.7, 1.0))
+    blob = np.clip(1.0 - np.hypot((xx - w * 0.5) / (w * 0.32), (yy - h * 0.03) / (h * 0.05)), 0, 1) ** 1.2
+    tw = np.clip(yy / (h * rng.uniform(0.7, 0.95)), 0, 1)
+    wash = np.exp(-((xx - w * 0.5) / (w * (0.2 + 0.08 * tw))) ** 2) * (1.0 - tw) ** 1.3 * 0.55
+    a = np.clip(np.maximum(np.maximum(a, blob * 0.8), wash) * (0.75 + 0.25 * rng.random((h, w))), 0, 1)
+    dark = np.array([96, 50, 30], np.float32)
+    lite = np.array([140, 72, 32], np.float32)
+    tt = np.clip(yy / h, 0, 1)[..., None]
+    col = dark * (1 - tt) + lite * tt
+    rgba = np.zeros((h, w, 4), np.uint8)
+    rgba[..., :3] = col.astype(np.uint8)
+    rgba[..., 3] = (a * 235).astype(np.uint8)
+    return Image.fromarray(rgba, 'RGBA').filter(ImageFilter.GaussianBlur(0.6))
+
+
+def claw(p0, p1, w0, w1, h0, h1, mat='paint_primary'):
+    """r4 hard claw (critic r3: 'smooth blob toe claws'): a faceted wedge with a hard three-edge
+    chamfered top (two flat bevel facets + a crest), flat sides and a flat sole, tapering to a
+    blunt chisel tip; bevel 6 mm so every edge is a crisp highlight, not a soft blob."""
+    p0, p1 = Vector(p0), Vector(p1)
+    secs = []
+    for t, wd, ht in ((0.0, w0, h0), (0.55, (w0 + w1) * 0.55, (h0 + h1) * 0.6), (1.0, w1, h1)):
+        c = min(wd * 0.42, ht * 0.5)
+        secs.append((t, -wd * 0.5, wd * 0.5, -ht * 0.35, ht * 0.65, (0.008, 0.008, c, c)))
+    return K.limb(p0, p1, secs, mat=mat, bevel=0.006)
+
+
 # ============================================================================ pelvis / torso
 def build_pelvis():
     g = Geo()
     core = K.shell([(4.86, -0.46, 0.46, -0.08, 0.66, 0.14), (5.3, -0.66, 0.66, -0.26, 0.86, 0.2),
                     (5.8, -0.66, 0.66, -0.2, 0.82, 0.2), (6.1, -0.56, 0.56, -0.1, 0.7, 0.18)], 'Z', mat='paint_dark')
     K.grooves(core, [(0, -1, 0), (1, 0, 0), (-1, 0, 0), (0, 1, 0)], (0, 0, 5.5), (0, 0, 1))
+    g.merge(panelize(core, 501, min_area=0.06, max_side=0.4))
     g.merge(core)
+    g.merge(K.shackle(0.07, bar=0.018, segs=(12, 6)).align((0, -1, 0), up=(0, 0, 1), loc=(0, -0.67, 5.45)))
     g.merge(P.banded_cylinder([(0.05, 0.5, 'steel_dark'), (0.12, 0.58), (0.03, 0.55, 'paint_accent'),
                                (0.06, 0.56, 'steel')], segs=40, step=0.0, mat='paint_dark').move(0, 0.28, 6.06))
     for s in (1, -1):
@@ -163,6 +366,17 @@ def build_torso():
     ch = K.loft_pts([(K.prow(hw, yf, yb, pr, c), z) for (z, hw, yf, yb, pr, c) in CHEST], axis='Z', bevel=0.028,
                     mat='paint_primary')
     K.grooves(ch, [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (1, 1, 0), (-1, 1, 0)], (0, 0, 7.45), (0, 0, 1))
+    # r4 (critic r3: the torso read as one smooth dome): two fore-aft seam gaps split the upper shell into three
+    # armour segments (centre spine + two shoulder segments) and a second horizontal seam rings the flanks/back
+    for sx in (-0.56, 0.56):
+        K.grooves(ch, [(0, 0, 1), (0, -1, 0.6), (0, -1, 0.3), (0, 1, 0.4), (0, 1, 0), (0, -1, 1), (0, 1, 1)],
+                  (sx, 0, 0), (1, 0, 0), gap=0.03, depth=0.026)
+    K.grooves(ch, [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (1, 1, 0), (-1, 1, 0), (0, -1, 0.4), (1, -1, 0.3), (-1, -1, 0.3)],
+              (0, 0, 8.46), (0, 0, 1), gap=0.026, depth=0.022)
+    # r4: outer seams down the front-flank facets (the big oxide cheeks beside the keel plates)
+    for sx in (-1.02, 1.02):
+        K.grooves(ch, [(1, -1, 0), (-1, -1, 0), (0.7, -1, 0.3), (-0.7, -1, 0.3), (0, 0, 1), (0.5, 0, 1), (-0.5, 0, 1)],
+                  (sx, 0, 0), (1, 0, 0), gap=0.026, depth=0.022)
     arm = []
     for s in (1, -1):
         # cream keel plates (the 'chest' of the hound) + oxide lower plates + ID stripe
@@ -226,6 +440,11 @@ def build_torso():
         lv.align((0, 0, 1), up=(0, 1, 0), loc=(s * 0.62, -0.62, 8.805))
         arm.append(lv)
         arm.append(rivets((s * 0.35, -1.3, 8.81), (s * 0.35, -0.3, 8.81), 0.12, (0, 0, 1)))
+        # r4: a vent grille on each rear shoulder segment of the dome (heat exhaust over the back)
+        hwv, yfv, ybv, prv, cv = K.sec_interp(CHEST, 8.62)
+        vg = P.vent(0.5, 0.36, depth=0.06, slats=5, frame=0.035, angle=34, mat='paint_dark')
+        vg.align((s * 0.25, 0.35, 1.0), up=(0, -1, 0), loc=(s * 0.92, ybv - 0.42, 8.66))
+        arm.append(vg)
         # corner chamfer facets (the big oxide planes beside the keel): a recessed hatch + a bolted
         # cream service panel with a vent slot
         for zc, sz in ((7.45, (0.34, 0.42)),):
@@ -240,7 +459,22 @@ def build_torso():
                                   cc - tv * 0.12 + Vector((0, 0, 0.16)), cc + tv * 0.12 + Vector((0, 0, 0.16))], 0.03,
                                  mat='paint_secondary', normal_hint=cn, chamfer=0.03, bolts=1, bolt_r=0.013,
                                  bolt_spacing=0.14))
+    # r4 (enemy modeler; critic r3 S 'flat oxide torso planes'): inset panels on every remaining big facet
+    # (not the front V facets under the keel plates, nor the flank faces under the armour + vent stack)
+    def skip_t(c, n):
+        if n.y < -0.55 and abs(n.x) < 0.75 and 7.15 < c.z < 8.4:
+            return True                                    # keel plates
+        if abs(n.x) > 0.85 and 7.35 < c.z < 8.3:
+            return True                                    # flank vent + armour plate
+        return n.z > 0.85 and c.y < -0.25                  # chest-top louvres / rivets ahead of the neck
+    arm.append(panelize(ch, 101, min_area=0.1, skip=skip_t))
     g.merge(ch, *arm)
+    # r4: lifting eyes on the rear dome segments and a tow shackle under each keel corner
+    for s in (1, -1):
+        hwv, yfv, ybv, prv, cv = K.sec_interp(CHEST, 8.62)
+        g.merge(K.shackle(0.08, bar=0.02).move(s * 0.4, ybv - 0.3, 8.83))
+        c_, n_ = K.prow_facet(CHEST, 6.72, 0.62, s, lift=0.0)
+        g.merge(K.shackle(0.06, bar=0.016).align(n_ + Vector((0, 0, -0.5)), up=(0, 0, 1), loc=c_ + n_ * 0.01))
     # neck cradle at the front top (the head juts forward from it)
     nk = K.limb((0, -1.0, 8.66), (0, HEAD[1] + 0.05, HEAD[2] + 0.02), [(0, -0.42, 0.42, -0.34, 0.34, 0.1),
                                                                      (1, -0.34, 0.34, -0.3, 0.3, 0.1)], mat='paint_dark')
@@ -337,7 +571,22 @@ def build_arm(side):
     K.grooves(pa, [(1, 0, 0), (0, 0, 1), (1, 0, 1), (-1, 0, 1)], (0, 0.1, 0), (0, 1, 0))
     K.hatch_at(pa, (2.62, 1.3 + DY, 8.24), (1, 0, 0), (0.5, 0.34), u_axis=(0, 1, 0), recess=0.04, mat='steel_dark',
                angle=35)
+    # r4 (critic r3 S 'flat pauldron planes'): extra seam rings split the slab into 4 armour segments, then
+    # inset panels on every remaining big facet (not under the outer plate stack / top cream plate / louvres)
+    for y in (-0.62 + DY, 0.95 + DY):
+        K.grooves(pa, [(1, 0, 0), (0, 0, 1), (1, 0, 1), (-1, 0, 1), (0, 0, -1), (-1, 0, 0)], (0, y, 0), (0, 1, 0),
+                  gap=0.022, depth=0.02)
+
+    def skip_p(c, n):
+        if n.x > 0.8 and 7.86 < c.z < 8.5 and -0.46 + DY < c.y < 0.56 + DY:
+            return True                                    # outer plate + accent plate
+        if n.z > 0.55 and c.x > 2.2:
+            return True                                    # top cream plate + stripe
+        return n.z > 0.55 and c.x < 2.16 and -0.4 + DY < c.y < 0.62 + DY   # louvre bank
+    g.merge(panelize(pa, 201, min_area=0.08, skip=skip_p))
     g.merge(pa)
+    # r4: front face of the slab: a bolted hatch + a lifting eye on the leading edge
+    g.merge(K.shackle(0.07, bar=0.018, segs=(12, 6)).move(2.42, -0.9 + DY, 8.74))
     g.merge(K.plate_world([(2.3, -0.62 + DY, 8.8), (2.3, 0.9 + DY, 8.78), (2.52, 1.2 + DY, 8.58), (2.56, -0.5 + DY, 8.54)],
                           0.04, mat='paint_secondary', normal_hint=(0.6, 0, 1), chamfer=0.05))
     g.merge(K.strip((2.4, -0.76 + DY, 8.76), (2.34, 1.1 + DY, 8.72), 0.06, 0.05, (0.2, 0, 1)))
@@ -362,6 +611,7 @@ def build_arm(side):
     ua = K.shell([(7.56, 1.76, 2.26, -0.5 + DY, 0.2 + DY, 0.1), (6.9, 1.8, 2.34, -0.52 + DY, 0.24 + DY, 0.12),
                   (6.5, 1.84, 2.3, -0.42 + DY, 0.2 + DY, 0.1)], 'Z', mat='paint_primary')
     K.hatch_at(ua, (2.06, -0.53 + DY, 7.0), (0, -1, 0), (0.3, 0.4), u_axis=(1, 0, 0), recess=0.03, mat='steel_dark')
+    u.merge(panelize(ua, 211, min_area=0.06, max_side=0.4, skip=lambda c, n: n.y < -0.8))
     u.merge(ua)
     ex, ey, ez = ELBOW
     for cx, sg in ((1.78, -1), (2.38, 1)):
@@ -388,6 +638,7 @@ def build_forearm_R():
         K.grooves(fa, [(1, 0, 0), (-1, 0, 0), (0, 0, 1), (1, 0, 1)], (0, y, 0), (0, 1, 0))
     arm = [K.plate_at(fa, (2.49, -0.9, 6.1), (1, 0, 0), u_axis=(0, -1, 0), margin=0.05, thickness=0.045, chamfer=0.06,
                       mat='paint_secondary', bolts=1, bolt_r=0.014, bolt_spacing=0.34)]
+    arm.append(panelize(fa, 301, min_area=0.07, max_side=0.42, skip=lambda c, n: n.x > 0.8))
     g.merge(fa, *[x for x in arm if x is not None])
     g.merge(K.ram((2.08, -0.06, 5.64), (2.08, -1.72, 5.7), r=0.06, frac=0.55, segs=16))
     g.merge(P.hose([(1.74, 0.0, 6.2), (1.7, -0.9, 6.1), (1.8, -1.8, 6.1)], 0.03, 8, rib_amp=0.004, rib_freq=30))
@@ -423,6 +674,9 @@ def build_plasma_arm():
         K.grooves(body, [(1, 0, 0), (-1, 0, 0), (0, 0, 1), (1, 0, 1), (0, 0, -1)], (0, y, 0), (0, 1, 0))
     arm = [K.plate_at(body, (2.65, -1.0, 6.1), (1, 0, 0), u_axis=(0, -1, 0), margin=0.06, thickness=0.05,
                       chamfer=0.08, mat='paint_secondary', bolts=1, bolt_r=0.016, bolt_spacing=0.36)]
+    # r4: inset panels on the inner flank / belly / nose of the lance housing (outer plate + cells excluded)
+    arm.append(panelize(body, 311, min_area=0.07, max_side=0.5, down_ok=True,
+                        skip=lambda c, n: n.x > 0.8 or (n.z > 0.8 and -1.5 < c.y < -0.5)))
     g.merge(body, *[x for x in arm if x is not None])
     # micro-missile cells on top
     cp, cells = K.cell_panel(0.7, 0.9, 2, 3, 0.05, 0.04, 0.08, t=0.1, mat='paint_primary')
@@ -531,7 +785,12 @@ def build_back():
     sp = K.limb((0, 0.78, 6.55), (0, -0.12, 8.7), [(0, -0.46, 0.46, -0.36, 0.3, 0.12), (0.5, -0.56, 0.56, -0.46, 0.34, 0.14),
                                                   (1, -0.44, 0.44, -0.36, 0.28, 0.12)], mat='paint_dark')
     K.hatch_at(sp, (0, 0.75, 7.2), (0, 1, 0.4), (0.4, 0.5), u_axis=(1, 0, 0), recess=0.05, mat='steel_dark', angle=35)
+    g.merge(panelize(sp, 401, min_area=0.08, max_side=0.42, skip=lambda c, n: n.z > 0.7))
     g.merge(sp)
+    # r4: lifting eyes either side of the spine (crane points for the pier gantry)
+    for s in (1, -1):
+        g.merge(K.shackle(0.07, bar=0.018, segs=(12, 6)).align((s * 0.7, 0.3, 0.65), up=(0, 1, 0),
+                                                               loc=(s * 0.4, 0.62, 7.85)))
     # radiator hackles: four short raked heat-sink blocks along the spine (dark oxide with
     # steel fin stacks and a glowing core slot): a jagged dorsal read without a pale slab
     hs = [0.62, 0.86, 0.8, 0.56]
@@ -556,7 +815,17 @@ def build_back():
         pod = K.limb(p0, p1, [(0, -0.3, 0.3, -0.3, 0.3, 0.1), (0.2, -0.36, 0.36, -0.36, 0.36, 0.12),
                               (0.85, -0.34, 0.34, -0.34, 0.34, 0.12), (1, -0.3, 0.3, -0.3, 0.3, 0.1)], mat='paint_primary')
         K.grooves(pod, [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1)], (p0 + p1) * 0.5, (p1 - p0).normalized())
+        nb = Vector((0, (p1 - p0).normalized().z, -(p1 - p0).normalized().y)).normalized()
+        nb = -nb if nb.y < 0 else nb
+        g.merge(panelize(pod, 411 + (s > 0), min_area=0.06, max_side=0.42,
+                         skip=lambda c, n, s=s, nb=nb: n.x * s > 0.8 or n.dot(nb) > 0.8))
         g.merge(pod)
+        # r4 (critic r3): heat-shield louvre bank over each booster pod (the face toward the spine/top)
+        hl = P.louvres(0.3, 0.46, count=6, depth=0.04, angle=28, thickness=0.014, mat='steel_dark',
+                       side_mat='paint_dark')
+        dpod = (p1 - p0).normalized()
+        hl.align(nb, up=dpod, loc=p0.lerp(p1, 0.56) + nb * 0.424)
+        g.merge(hl)
         lv = P.louvres(0.5, 0.9, count=5, depth=0.05, angle=24, thickness=0.018, mat='steel_dark', side_mat='paint_dark')
         M, L = K.frame_along(p0, p1)
         lv.transform(Matrix.Translation(p0.lerp(p1, 0.5) + Vector((s * 0.36, 0, 0))) @
@@ -593,7 +862,17 @@ def build_thigh():
     th.transform(Matrix.Translation((-1.0, 0, 0)))   # sections are in absolute x: undo limb's p0.x offset
     dth = (Vector(KNEE) - Vector(HIP)).normalized()
     seams(th, dth, HIP, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.62, 1.32))
+    fn0 = Vector((0, dth.z, -dth.y)).normalized()
+    fn0 = -fn0 if fn0.y > 0 else fn0
+    g.merge(panelize(th, 601, min_area=0.06, max_side=0.44, skip=lambda c, n: n.x > 0.8 or n.dot(fn0) > 0.8))
     g.merge(th)
+    # r4 (critic r3: 'exposed hip hydraulic rams'): a 32-segment chrome hip ram down the back of the thigh
+    bn = -fn0
+    g.merge(K.ram(Vector(HIP) + bn * 0.62 + Vector((0.0, 0, -0.3)) + dth * 0.1,
+                  Vector(HIP).lerp(Vector(KNEE), 0.78) + bn * 0.56, r=0.07, frac=0.5, segs=32))
+    for t in (0.06, 0.8):
+        g.merge(P.box((0.2, 0.16, 0.18), bevel=0.012, segs=1, mat='steel_dark')
+                .move(*(Vector(HIP).lerp(Vector(KNEE), t) + bn * 0.5 + Vector((0, 0, 0.0)))))
     g.merge(pad([(1.45, 0.1, 5.02), (1.45, -0.62, 4.1), (1.44, -0.3, 3.9), (1.45, 0.34, 4.7)], 0.05,
                 normal_hint=(1, 0, 0), chamfer=0.05))
     g.merge(pad([(1.46, -0.3, 5.52), (1.46, 0.62, 5.36), (1.46, 0.6, 4.98), (1.46, -0.22, 5.04)], 0.05,
@@ -611,8 +890,8 @@ def build_thigh():
     g.merge(K.strip(q0 + Vector((-0.3, 0, 0)) + fn * 0.07, q0 + Vector((0.3, 0, 0)) + fn * 0.07, 0.08, 0.01, fn))
     for cx, sg in ((0.72, -1), (1.44, 1)):
         g.merge(K.cheek((cx, ky, kz), sg, 0.4, 0.08, strap_to=(ky + 0.3, kz + 0.42), strap_w=0.44))
-    g.merge(K.ram((1.58, 0.55, 4.9), (1.58, ky, kz), r=0.075, frac=0.5, segs=20))
-    g.merge(K.ram((0.66, 0.5, 5.0), (0.66, ky + 0.2, kz + 0.1), r=0.065, frac=0.5, segs=20))
+    g.merge(K.ram((1.58, 0.55, 4.9), (1.58, ky, kz), r=0.075, frac=0.5, segs=32))
+    g.merge(K.ram((0.66, 0.5, 5.0), (0.66, ky + 0.2, kz + 0.1), r=0.065, frac=0.5, segs=32))
     g.merge(P.box((0.22, 0.2, 0.2), bevel=0.012, segs=1, mat='steel_dark').move(1.47, 0.55, 4.9))
     g.merge(P.cylinder(0.06, 0.18, 16, bevel=0.008, mat='steel').rotate((0, 90, 0)).move(1.52, ky, kz))
     return g
@@ -646,6 +925,9 @@ def build_shin():
     up.transform(Matrix.Translation((-kx, 0, 0)))
     dsh = (Vector(HOCK) - Vector(KNEE)).normalized()
     seams(up, dsh, KNEE, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.7, 1.45))
+    ng0 = Vector((0, -dsh.z, dsh.y)).normalized()
+    ng0 = -ng0 if ng0.y > 0 else ng0
+    g.merge(panelize(up, 701, min_area=0.06, max_side=0.42, skip=lambda c, n: n.dot(ng0) > 0.8))
     g.merge(up)
     g.merge(rivets(Vector(KNEE) + dsh * 0.5 + Vector((0.4, 0.3, 0)), Vector(KNEE) + dsh * 1.7 + Vector((0.34, 0.26, 0)),
                    0.12, (1, 0, 0)))
@@ -668,11 +950,14 @@ def build_shin():
     mt.transform(Matrix.Translation((-hx, 0, 0)))
     dmt = (Vector(ANKLE) - Vector(HOCK)).normalized()
     seams(mt, dmt, HOCK, [(1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)], (0.45, 0.95))
+    g.merge(panelize(mt, 711, min_area=0.05, max_side=0.36, skip=lambda c, n: n.dot(n_mt) > 0.8))
     g.merge(mt)
     # tendon rams: knee region -> hock (both inside the shin node, so they never detach)
     for x in (0.78, 1.42):
-        g.merge(K.ram((x, -0.62, 3.2), (x, hy - 0.05, hz + 0.1), r=0.065, frac=0.5, segs=16))
-    g.merge(K.ram((1.46, hy, hz), (1.46, ay + 0.12, az + 0.1), r=0.055, frac=0.55, segs=16))
+        g.merge(K.ram((x, -0.62, 3.2), (x, hy - 0.05, hz + 0.1), r=0.065, frac=0.5, segs=32))
+    # r4 (critic r3: 'exposed ankle rams'): twin 32-segment chrome ankle rams (outer + inner)
+    for x in (1.46, 0.76):
+        g.merge(K.ram((x, hy, hz), (x, ay + 0.12, az + 0.1), r=0.058, frac=0.55, segs=32))
     # ankle cheeks
     for cx, sg in ((0.84, -1), (1.4, 1)):
         g.merge(K.cheek((cx, ay, az), sg, 0.26, 0.07, strap_to=(ay + 0.2, az + 0.42), strap_w=0.3))
@@ -690,12 +975,19 @@ def build_foot():
             .move(ax, ay + 0.02, 0.34))
     # three forward claws + rear spur
     for dx, ln, sc in ((-0.34, 1.2, 0.85), (0.0, 1.5, 1.0), (0.34, 1.2, 0.85)):
-        cl = K.limb((ax + dx * 0.6, ay - 0.1, 0.42), (ax + dx, ay - ln, 0.1),
-                    [(0, -0.16 * sc, 0.16 * sc, -0.14, 0.2, 0.05), (0.6, -0.15 * sc, 0.15 * sc, -0.12, 0.16, 0.05),
-                     (1, -0.06, 0.06, -0.05, 0.08, 0.02)], mat='paint_primary')
-        g.merge(cl)
+        # r4 (critic r3: 'smooth blob toe claws'): hard chamfered wedge + a separate dark steel chisel tip,
+        # a hinge knuckle at the root and a bolted wear strip on top
+        r0 = Vector((ax + dx * 0.6, ay - 0.1, 0.42))
         tip = Vector((ax + dx, ay - ln, 0.1))
-        g.merge(K.strip(tip + Vector((-0.07, 0.34, 0.08)), tip + Vector((0.07, 0.34, 0.08)), 0.14, 0.012, (0, -0.3, 1),
+        mid = r0.lerp(tip, 0.78)
+        g.merge(claw(r0, mid, 0.32 * sc, 0.24 * sc, 0.34, 0.2))
+        g.merge(claw(mid - (tip - r0).normalized() * 0.02, tip, 0.22 * sc, 0.07, 0.19, 0.06, mat='steel_dark'))
+        g.merge(K.drum(r0 + Vector((0, -0.02, -0.04)), (1, 0, 0), 0.14, 0.36 * sc, mat='paint_dark', hub=False, segs=24,
+                       profile='ring'))
+        d_ = (tip - r0).normalized()
+        nt_ = Vector((0, -d_.z, d_.y)).normalized()
+        nt_ = -nt_ if nt_.z < 0 else nt_
+        g.merge(K.strip(r0.lerp(tip, 0.3) + nt_ * 0.2, r0.lerp(tip, 0.6) + nt_ * 0.16, 0.12 * sc, 0.012, nt_,
                         mat='hazard'))
     g.merge(K.limb((ax, ay + 0.1, 0.36), (ax, ay + 0.95, 0.06), [(0, -0.18, 0.18, -0.12, 0.16, 0.05),
                                                                  (1, -0.07, 0.07, -0.04, 0.06, 0.02)],
@@ -707,6 +999,8 @@ def build_foot():
 
 # ============================================================================ assembly
 def build(a):
+    K.BOLT_SPACING = 1.4      # r4: denser bolt rows on the boss plates (r3 1.6; global default is now 2.0)
+    r4_keep()
     a.pivot('pelvis', PELVIS)
     a.pivot('torso', TORSO, parent='pelvis')
     a.pivot('head', HEAD, parent='torso')
@@ -777,11 +1071,143 @@ def build(a):
                           0.09, 0.15, 0.22, segs=24, ribs=0, bolts=0)
             K.nozzle_part(a, f'nozzle_sh_{S}', (s * 2.42, 1.4 + DY, 8.62), (s * 0.4, 1, 0.2), f'arm_{S}', 0.08, 0.13,
                           0.18, segs=24, ribs=0, bolts=0)
+    iw.log('r4 panelize:', PANEL_STATS, 'card keep-outs', len(CARD_KEEP))
     return tris
+
+
+def _leg_frames():
+    d_th = (Vector(KNEE) - Vector(HIP)).normalized()
+    fn = Vector((0, d_th.z, -d_th.y)).normalized()
+    fn = -fn if fn.y > 0 else fn
+    d_sh = (Vector(HOCK) - Vector(KNEE)).normalized()
+    ng = Vector((0, -d_sh.z, d_sh.y)).normalized()
+    ng = -ng if ng.y > 0 else ng
+    d_mt = (Vector(ANKLE) - Vector(HOCK)).normalized()
+    n_mt = Vector((0, d_mt.z, -d_mt.y)).normalized()
+    n_mt = -n_mt if n_mt.y > 0 else n_mt
+    return d_th, fn, d_sh, ng, d_mt, n_mt
+
+
+def _pod(s):
+    p0, p1 = Vector((s * 0.82, 0.5, 7.9)), Vector((s * 0.92, 1.72, 6.42))
+    d = (p1 - p0).normalized()
+    nb = Vector((0, d.z, -d.y)).normalized()
+    return p0, p1, d, (-nb if nb.y < 0 else nb)
+
+
+def r4_card_specs():
+    """r4 (critic r3 S: 7 decals vs the player's 48): the extra stencil / warning / serial / hazard cards,
+    as (image_fn, loc, normal, up, width, parent, density, both_sides). Locations are L-side (+X) for
+    the mirrored parts; both_sides mirrors them onto the R part."""
+    BK, CR, Y = D.BLACK, (189, 179, 154), D.YELLOW
+    d_th, fn, d_sh, ng, d_mt, n_mt = _leg_frames()
+    K0, H0, A0, HP = Vector(KNEE), Vector(HOCK), Vector(ANKLE), Vector(HIP)
+    sp = []
+    # torso: LIFT arrows by the dome lifting eyes, NO STEP on the spine segment, serial plates on the flanks
+    hwv, yfv, ybv, prv, cv = K.sec_interp(CHEST, 8.62)
+    for s in (1, -1):
+        sp.append((lambda s=s: D.arrow_decal(text='LIFT', seed=120 + s), (s * 0.4, ybv - 0.62, 8.805), (0, 0, 1),
+                   (0, 1, 0), 0.26, 'torso', 460, False))
+        hw_, yf_, yb_, pr_, c_ = K.sec_interp(CHEST, 7.27)
+        sp.append((lambda s=s: D.serial_plate(('GC-X1  HULL ' + ('L' if s > 0 else 'R'), 'GRAUWERK PIER DIV.  42MPa'),
+                                              w=640, seed=122 + s),
+                   (s * (hw_ + 0.01), (yf_ + yb_) * 0.5 + 0.05, 7.27), (s, 0, 0), (0, 0, 1), 0.36, 'torso', 520,
+                   False))
+    sp.append((lambda: D.text_decal(['NO STEP', '踏むな'], px=160, color=BK, worn=0.3, seed=124), (0.0, 0.25, 8.805),
+               (0, 0, 1), (0, -1, 0), 0.3, 'torso', 460, False))
+    # pauldrons: Grauwerk emblem on the L slab (the R slab carries it already), hazard band along the lower
+    # outer edge, a data plate on the front face
+    sp.append((lambda: K.grauwerk_mark(512, seed=125), (2.64, 0.52, 8.22), (1, 0, 0), (0, 0, 1), 0.4, 'arm_L', 440,
+               False))
+    sp.append((lambda: D.hazard_decal(768, 110, seed=126), (2.62, 1.0 + DY, 7.99), (1, 0, 0), (0, 0, 1), 0.62, 'arm_',
+               360, True))
+    sp.append((lambda: D.serial_plate(('ARM  GC-X1', 'HYD 42MPa  LOT 12-C'), w=560, seed=127),
+               (2.05, -1.12 + DY - 0.02, 8.44), (0, -1, 0), (0, 0, 1), 0.3, 'arm_', 520, True))
+    # R forearm cream plate: load stencil; back pods: HOT plate near the nozzle end
+    sp.append((lambda: D.text_decal(['MAX 18t', '荷重注意'], px=160, color=BK, worn=0.3, seed=128),
+               fwd((-2.54, -0.9 + DY, 6.1)), (-1, 0, 0), (0, 0, 1), 0.3, 'forearm_R', 460, False))
+    for s in (1, -1):
+        p0, p1, dp, nb = _pod(s)
+        sp.append((lambda s=s: D.warning_label('HOT', '高温注意', ('EXHAUST', '排気口 接近禁止'), w=640, seed=129 + s),
+                   p0.lerp(p1, 0.76) + nb * 0.43, nb, -dp, 0.24, 'booster_back', 520, False))
+    # legs: thigh front-pad load stencil, greave unit number + hazard band, shin serial plate,
+    # metatarsus load stencil, knee-cap number
+    sp.append((lambda: D.text_decal(['MAX 28t'], px=170, color=BK, worn=0.3, seed=131), HP.lerp(K0, 0.55) + fn * 0.6,
+               fn, -d_th, 0.34, 'thigh_', 460, True))
+    sp.append((lambda: D.text_decal('01', px=240, color=BK, worn=0.3, seed=132), K0 + d_sh * 0.62 + ng * 0.58, ng,
+               -d_sh, 0.26, 'shin_', 460, True))
+    sp.append((lambda: D.hazard_decal(768, 128, seed=133), K0 + d_sh * 1.3 + ng * 0.58, ng, -d_sh, 0.42, 'shin_',
+               360, True))
+    sp.append((lambda: D.serial_plate(('GC-X1 LEG', 'LOT 12-C  HYD 42MPa'), w=560, seed=134),
+               K0.lerp(H0, 0.42) + Vector((0.39, -0.16, 0.0)), (1, 0, 0), (0, 0, 1), 0.36, 'shin_', 520, True))
+    sp.append((lambda: D.text_decal(['MAX 34t', '荷重注意'], px=160, color=CR, worn=0.3, seed=135),
+               H0.lerp(A0, 0.52) + Vector((0.27, -0.02, 0.0)), (1, 0, 0), -d_mt, 0.26, 'shin_', 460, True))
+    sp.append((lambda: D.text_decal('X1', px=220, color=BK, worn=0.3, seed=136),
+               Vector((KNEE[0], KNEE[1] - 0.6, KNEE[2] + 0.04)), (0, -0.92, 0.38), (0, 0.38, 0.92), 0.22, 'shin_', 460,
+               True))
+    return sp
+
+
+def r4_keep():
+    """Register the card points (existing + r4) so panelize leaves those faces flat."""
+    CARD_KEEP.clear()
+    keep((0.0, 1.36, 7.1), (0.0, 0.64, 6.62), (1.0, -1.02, 7.02), (2.665, -0.3, 8.2), (2.47, 0.55 + DY, 8.72))
+    for (fn_, loc, n, up, w, parent, dens, both) in r4_card_specs():
+        p = Vector(loc)
+        keep(tuple(p))
+        n = Vector(n).normalized()
+        x = Vector(up).cross(n).normalized()
+        for k in (-0.45, 0.45):
+            keep(tuple(p + x * w * k))
+
+
+def r4_decals(a):
+    card = R.card
+    for (fn_, loc, n, up, w, parent, dens, both) in r4_card_specs():
+        img = fn_()
+        if parent.endswith('_'):
+            card(a, img, loc, n, up=up, size=(w, None), parent=parent + 'L', density=dens)
+            if both:
+                card(a, img.copy(), mx(loc), mx(n), up=mx(up), size=(w, None), parent=parent + 'R', density=dens)
+        else:
+            card(a, img, loc, n, up=up, size=(w, None), parent=parent, density=dens)
+    # baked rust run-off below the bolt rows / plate edges (0.4-0.8 m) and soot at every vernier
+    nrust = 0
+    d_th, fn, d_sh, ng, d_mt, n_mt = _leg_frames()
+
+    def drip(loc, normal, length):
+        nonlocal nrust
+        nrust += 1
+        a.decal(rust_drip(300 + nrust), Vector(loc) + Vector((0, 0, -length * 0.45)), normal, up=(0, 0, 1),
+                size=(length * 0.26, length), depth=0.12, opacity=0.9)
+    for s in (1, -1):
+        for t, ln in ((0.3, 0.5), (0.68, 0.42)):                      # under the keel plates
+            p, n = K.prow_facet(CHEST, 7.16, t, s, lift=0.05)
+            drip(p, n, ln)
+        for y, ln in ((-0.45, 0.42), (0.05, 0.5)):                    # pauldron outer plate lower bolts
+            drip((s * 2.67, y, 7.93), (s, 0, 0), ln)
+        drip((s * 1.47, 0.32, 4.98), (s, 0, 0), 0.5)                  # thigh oxide pad -> cream pad
+        drip((s * 1.47, -0.2, 4.1), (s, 0, 0), 0.4)
+        q = Vector(KNEE) + d_sh * 1.45 + ng * 0.56                    # under the greave
+        drip(mx(q) if s < 0 else q, mx(ng) if s < 0 else ng, 0.45)
+        q = Vector(HOCK) + d_mt * 1.05 + n_mt * 0.3                   # under the metatarsus plate
+        drip(mx(q) if s < 0 else q, mx(n_mt) if s < 0 else n_mt, 0.36)
+        hw2, yf2, yb2, pr2, c2 = K.sec_interp(CHEST, 8.05)
+        drip((s * (hw2 + 0.04), (yf2 + yb2) * 0.5, 7.86), (s, 0, 0), 0.4)   # flank armour -> vent
+        p0, p1, dp, nb = _pod(s)
+        drip(p0.lerp(p1, 0.82) + nb * 0.38, nb, 0.4)                  # below the pod back plate
+        # soot: chest verniers, pauldron verniers, pod louvres
+        a.decal(K.soot(256, 140 + s), (s * 1.0, -1.08, 6.72), (0, -1, -0.3), size=(0.55, 0.55), depth=0.35,
+                opacity=0.85)
+        a.decal(K.soot(256, 142 + s), (s * 2.4, 1.32 + DY, 8.6), (0, 1, 0.2), size=(0.5, 0.5), depth=0.3, opacity=0.8)
+        a.decal(K.soot(256, 144 + s, elong=1.4), p0.lerp(p1, 0.56) + nb * 0.42, nb, up=-dp, size=(0.4, 0.6),
+                depth=0.25, opacity=0.7)
+    iw.log(f'r4 decals: {len(r4_card_specs())} card specs, {nrust} rust drips')
 
 
 def add_decals(a):
     """Soot is baked into the albedo; every stencil / mark / stripe is a decal card."""
+    r4_decals(a)
     C, K_, Y = (189, 179, 154), D.BLACK, D.YELLOW
     for s_ in (1, -1):
         a.decal(K.soot(256, 60 + s_, elong=1.3), (s_ * 0.9, 1.7, 6.6), (0, 1, -0.6), size=(1.3, 1.3), depth=0.6,
@@ -818,6 +1244,10 @@ def add_decals(a):
          size=(0.36, None), parent='head')
     a.soot_points = [(fwd(MUZ_R), 0.12), (fwd(MUZ_L), 0.15)]
     a.post = dict(chip_grow=1.0, chip_lo=0.35, chip_hi=0.62)   # lighter chip growth (cream pads read blotchy)
+    # r4 (critic r3: 'near-white bone shin cards'): dirtier cream - mottled grime + cavity dirt, a taller yard-dirt
+    # gradient up the legs, and a linear albedo pull on the cream (#BDB39A authored reads near-white in the sun)
+    a.post.update(bone_grime=0.26, bone_cav=0.42, low_z=3.4, low_mul=0.58)
+    a.post_tint = {'paint_secondary': (0.78, 0.77, 0.74)}
     for s_, S in ((1, 'L'), (-1, 'R')):
         card(a, D.serial_plate(('GC-X1 CINDERHOUND', 'GRAUWERK PIER DIV.  LOT 12'), w=720, seed=77 + s_),
              (s_ * 1.51, -0.3, 4.62), (s_, 0, 0), size=(0.4, None), parent='thigh_' + S)
@@ -838,7 +1268,7 @@ CLAY = dict(VIEWS, side=dict(azimuth=-90, elevation=4, lens=50, distance=26, tar
 COLORS = {'paint_primary': {'color': '#5A3B33', 'rough': 0.54, 'metal': 0.25},
           'paint_secondary': {'color': '#BDB39A', 'rough': 0.58, 'metal': 0.08, 'grime': 1.2, 'wear': 0.35},
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#33302E', 'rough': 0.52, 'metal': 0.3},
-          'steel_dark': {'color': '#45423F'}, 'chrome': {'color': '#D9DBDD', 'rough': 0.2},
+          'steel_dark': {'color': '#45423F'}, 'chrome': {'color': '#D9DBDD', 'rough': 0.25},
           'marker_red': dict(color='#180806', metal=0.0, rough=0.25, wear=0.0, grime=0.0, rust=0.0, dust=0.0, var=0.0,
                              emit='#FF3B2F', emit_strength=3.5, decals=False),
           'marker_amber': dict(color='#1A1208', metal=0.0, rough=0.25, wear=0.0, grime=0.0, rust=0.0, dust=0.0,
@@ -862,8 +1292,9 @@ WEATHER = iw.Weathering(edge_wear=1.4, grime=1.35, streaks=1.6, rust=0.8, dust=0
 SET_B = ('pelvis', 'thigh', 'shin', 'foot', 'booster', 'nozzle')
 BAKE_KW = {'edge': 0.035}
 # r3: ORM A 1536 (r2: 1024), basecolor B 1536 (r2: 2048); WebP qualities keep the GLB at r2's ~2.07 MB
-TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1536, 'normal': 2048, 'emissive': 1024},
-             'B': {'basecolor': 1536, 'orm': 1024, 'normal': 1024, 'emissive': 1024}}
+# r4 (enemy modeler): ORM A 1024 / B 768 pays for the +20k tris of panel detail (GLB must not grow)
+TEX_SIZES = {'A': {'basecolor': 2048, 'orm': 1024, 'normal': 2048, 'emissive': 1024},
+             'B': {'basecolor': 1536, 'orm': 768, 'normal': 1024, 'emissive': 1024}}
 
 
 def set_of(name):

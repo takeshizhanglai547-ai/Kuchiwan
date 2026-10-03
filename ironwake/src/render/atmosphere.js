@@ -56,6 +56,10 @@ export const ATMOS = {
     // the ash storm is THICKER on the storm side (extinction multiplier away from the sun azimuth):
     // the far kit there layers into slate haze instead of standing crisp against a clear horizon
     stormDensity: 1.25,
+    // ... and THINNER toward the sun (r4): light breaks through where the deck thins, and the
+    // into-sun silhouettes at 100-500 m must layer (dark near, lighter far) instead of washing
+    // into the glow within 200 m. Extinction multiplier inside the warm sector.
+    sunDensity: 0.58,
     // light leaking under the storm deck: a burnt-orange band along the horizon of the sun
     // sector (silhouettes on the sun side stand against it)
     horizonGlow: '#D98A4E',
@@ -79,8 +83,8 @@ export const ATMOS = {
     // so both agree. Fog within ~400 m adds <= ~30 % of the old sun wash: sun-side structures
     // at 100-300 m keep their lit/shadow separation instead of merging into one peach band,
     // while the horizon / sky glow (normalised at 4 km) is unchanged.
-    sunStart: 700,
-    sunFloor: 0.12,
+    sunStart: 1400,        // (r4: 700 -> 1400, floor 0.12 -> 0.05: sun-side structures at 150-300 m keep their contrast)
+    sunFloor: 0.05,
     // SUN TRANSMITTANCE INTO THE GROUND LAYER: the low sun reaches the dense ash layer through a
     // long slant path, so the haze hugging the ground is less sun-lit than the haze aloft
     // (x art scale). Far tower bases sit in a darker ground band instead of a uniform glowing bank.
@@ -168,6 +172,7 @@ export function atmosGLSL() {
 #define IW_SKY_HAZE ${f(F.skyHaze)}
 #define IW_FOG_PATCH ${f(F.patch)}
 #define IW_FOG_STORM ${f(F.stormDensity)}
+#define IW_FOG_SUNDENS ${f(F.sunDensity)}
 #define IW_FOG_SUNK ${f(1 / F.sunStart)}
 #define IW_FOG_SUNN ${f(1 / sunRampRaw(4000 / F.sunStart))}
 #define IW_FOG_SUNFLOOR ${f(F.sunFloor)}
@@ -196,13 +201,13 @@ float iwFogPatch(vec3 cam, vec3 v, float L) {
   n *= 1.0 / 3.0;
   return 1.0 + IW_FOG_PATCH * (n - 0.5) * 2.0 * (1.0 - smoothstep(500.0, 1500.0, L));
 }
-// Extinction multiplier of a view direction: IW_FOG_STORM on the storm side, 1 in the sun sector
-// (same azimuth weight as iwSunSector, without its vertical-ray blend).
+// Extinction multiplier of a view direction: IW_FOG_STORM on the storm side, IW_FOG_SUNDENS in
+// the sun sector (same azimuth weight as iwSunSector, without its vertical-ray blend).
 float iwStormMul(vec3 v) {
   float lh = length(v.xz);
   float az = dot(v.xz, normalize(IW_SUN_DIR.xz)) / max(lh, 1e-4);
   float s = smoothstep(IW_FOG_SECTOR.x, IW_FOG_SECTOR.y, az);
-  return mix(IW_FOG_STORM, 1.0, s);
+  return mix(IW_FOG_STORM, IW_FOG_SUNDENS, s * s);
 }
 // Optical depth between the camera and a point; density(y) = d0*((1-h)e^{-k1 y} + h e^{-k2 y}).
 float iwFogOD(vec3 cam, vec3 pos, float d0) {

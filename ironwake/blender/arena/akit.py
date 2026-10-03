@@ -469,6 +469,36 @@ def marker(name, pos, yaw=0.0):
 # ------------------------------------------------------------------------------ export
 GLTFPACK = os.path.join(BLENDER_DIR, 'tools', 'node_modules', 'gltfpack', 'cli.js')
 KEEP = ('COL_', 'SPAWN_', 'OBJ_', 'FX_')
+FOOTPRINTS = []   # [x, z, half x, half z, yaw, base y] (game coords) of out-of-bounds structures (runtime terrain)
+
+
+def compute_footprints(skip=(), inner=258.0, min_size=5.0, min_y=-12.5):
+    """World AABB footprints of every placed object outside the pier deck that stands on land
+    (base above min_y); src/world/terrain.js flattens the outer terrain under them and lays a
+    concrete apron + soot band around each one."""
+    import numpy as np
+    out = []
+    for ob in OUT_COL.objects:
+        if ob.type != 'MESH' or any(s in ob.name for s in skip):
+            continue
+        mw = ob.matrix_world
+        bb = np.array([tuple(mw @ Vector(c)) for c in ob.bound_box])
+        lo = bb.min(0)
+        loc_lo = np.array([min(c[i] for c in ob.bound_box) for i in range(3)])
+        loc_hi = np.array([max(c[i] for c in ob.bound_box) for i in range(3)])
+        _, rot, sca = mw.decompose()
+        cw = mw @ Vector(tuple((loc_lo + loc_hi) / 2))
+        cx, cz = cw.x, -cw.y
+        if max(abs(cx), abs(cz)) < inner or lo[2] < min_y:
+            continue
+        hx = abs(sca.x) * (loc_hi[0] - loc_lo[0]) / 2
+        hz = abs(sca.y) * (loc_hi[1] - loc_lo[1]) / 2
+        if max(hx, hz) * 2 < min_size:
+            continue
+        yaw = rot.to_euler('XYZ').z
+        out.append([float(cx), float(cz), float(hx), float(hz), float(yaw), float(lo[2])])
+    FOOTPRINTS[:] = out
+    return out
 
 
 def _read_glb(path):
@@ -506,7 +536,13 @@ def _round_nodes(path):
         if isinstance(v, dict):
             return {k: rd(x, nd) for k, x in v.items()}
         return v
-    # accessors: drop default byteOffset 0, bounds rounded OUTWARD to 1 mm (still valid bounds)
+    # accessors: drop default byteOffset 0, bounds rounded OUTWARD to 1 mm (still valid bounds);
+    # min/max are only required on POSITION accessors -> dropped elsewhere (r4)
+    pos_acc = {p['attributes']['POSITION'] for m in js.get('meshes', []) for p in m.get('primitives', []) if 'POSITION' in p.get('attributes', {})}
+    for i, acc in enumerate(js.get('accessors', [])):
+        if i not in pos_acc:
+            acc.pop('min', None)
+            acc.pop('max', None)
     for acc in js.get('accessors', []):
         if acc.get('byteOffset', None) == 0:
             acc.pop('byteOffset')
@@ -521,6 +557,13 @@ def _round_nodes(path):
             n.pop('rotation')
         if n.get('scale') == [1, 1, 1]:
             n.pop('scale')
+    for sc in js.get('scenes', []):     # marker table: positions 1 mm, quaternions / scales 1e-5
+        iw = sc.get('extras', {}).get('iw')
+        if iw:
+            iw['col'] = [rd(c[:3], 3) + rd(c[3:7], 5) + rd(c[7:], 3) for c in iw['col']]
+            iw['mark'] = [[m[0]] + rd(m[1:4], 3) + rd(m[4:], 5) for m in iw['mark']]
+            iw['fx'] = [[f[0]] + rd(f[1:4], 2) + [rd(f[4], 3)] for f in iw['fx']]
+            iw['foot'] = [rd(f[:4], 1) + [rd(f[4], 3), rd(f[5], 1)] for f in iw['foot']]
     _write_glb(path, js, rest)
     print(f'[arena] JSON {before / 1024:.0f} -> {len(json.dumps(js, separators=(",", ":"))) / 1024:.0f} KiB')
 
@@ -545,17 +588,38 @@ def export(path, pack=True):
         bpy.ops.export_scene.gltf(**kw, export_colors=True)
     js, rest = _read_glb(raw)
     stripped = 0
-    for n in js.get('nodes', []):
+    # r4: the named markers (COL_ / SPAWN_ / OBJ_ / FX_ empties) move into ONE compact table in the
+    # scene extras ('iw', read by src/world/arena.js). With no named nodes left, gltfpack can drop
+    # -kn and emit EXT_mesh_gpu_instancing: ~2.5k mesh nodes collapse into ~200 instanced meshes
+    # (JSON ~390 -> ~200 KiB). Root-level nodes only, so node TRS = world TRS.
+    meta = {'col': [], 'mark': [], 'fx': [], 'foot': FOOTPRINTS}
+    keep_nodes = set()
+    for i, n in enumerate(js.get('nodes', [])):
         nm = n.get('name', '')
         if not nm.startswith(KEEP):
             n.pop('name', None)
             stripped += 1
+            continue
+        keep_nodes.add(i)
+        t = n.get('translation', [0, 0, 0])
+        q = n.get('rotation', [0, 0, 0, 1])
+        s = n.get('scale', [1, 1, 1])
+        if nm.startswith('COL_'):
+            meta['col'].append(list(t) + list(q) + list(s))
+        elif nm.startswith('FX_'):
+            meta['fx'].append([nm] + list(t) + [n.get('extras', {})])
+        else:
+            meta['mark'].append([nm] + list(t) + list(q))
+    for sc in js.get('scenes', []):
+        sc['nodes'] = [k for k in sc.get('nodes', []) if k not in keep_nodes]
+        sc['extras'] = {'iw': meta}
     for m in js.get('meshes', []):
         m.pop('name', None)
     _write_glb(raw, js, rest)
-    print(f'[arena] raw GLB {os.path.getsize(raw) / 1024:.0f} KiB, {len(js.get("nodes", []))} nodes ({stripped} unnamed)')
+    print(f'[arena] raw GLB {os.path.getsize(raw) / 1024:.0f} KiB, {len(js.get("nodes", []))} nodes ({stripped} unnamed), '
+          f'meta: {len(meta["col"])} colliders, {len(meta["mark"])} markers, {len(meta["fx"])} fx, {len(meta["foot"])} footprints')
     if pack and os.path.exists(GLTFPACK):
-        args = ['/opt/node22/bin/node', GLTFPACK, '-i', raw, '-o', path, '-cc', '-ce', 'ext', '-kn', '-km', '-ke',
+        args = ['/opt/node22/bin/node', GLTFPACK, '-i', raw, '-o', path, '-cc', '-ce', 'ext', '-km', '-ke',
                 '-mi', '-kv', '-vpf', '-vn', '8', '-vtf', '-vc', '8']
         r = subprocess.run(args, capture_output=True, text=True)
         if r.returncode != 0:

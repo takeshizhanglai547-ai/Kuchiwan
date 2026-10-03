@@ -92,7 +92,7 @@ test('radio cues fire at the scripted progress beats only', () => {
 });
 
 // ---- HUD layout + naming (src/ui/layout.js, pure) ----------------------------------------
-import { placeReadout, overlap, briefMapLayout, READOUT_DOCK, READOUT_SIDES } from '../src/ui/layout.js';
+import { placeReadout, readoutHold, readoutCandidate, readoutLeader, overlap, briefMapLayout, READOUT_DOCK, READOUT_SIDES } from '../src/ui/layout.js';
 
 test('objective text uses our own unit names (no reference-game class acronyms)', () => {
   for (const s of STAGES) {
@@ -101,46 +101,105 @@ test('objective text uses our own unit names (no reference-game class acronyms)'
   assert.match(STAGES[0].title, /PICKET/);
 });
 
-test('target readout avoids other markers, the reticle and the own rig; keeps its side; docks when boxed in', () => {
-  const view = { x0: 51, y0: 29, x1: 1229, y1: 691 };
-  const out = { x: 0, y: 0, side: -1, score: 0 };
-  const W = 124, H = 50, GAP = 40, KEEP = 24;
-  const rects = new Float32Array(64);
-  const put = (i, x, y, r) => { rects.set([x - r, y - r, x + r, y + r], i * 4); };
-  const clear = (n) => { for (let i = 0; i < n; i++) assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, rects[i * 4], rects[i * 4 + 1], rects[i * 4 + 2], rects[i * 4 + 3]), 0, `obstacle ${i}`); };
-  // free space: goes right of the brackets, >= gap away from the centre
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 0, view, -1, out);
-  assert.equal(READOUT_SIDES[out.side], 'right'); assert.equal(out.score, 0); assert.ok(out.x >= 700 + GAP);
-  // a neighbour on the right pushes it left
-  put(0, 780, 300, 24);
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 1, view, -1, out);
-  assert.equal(READOUT_SIDES[out.side], 'left'); clear(1);
-  // neighbours left and right: a diagonal slot above the bracket corner
-  put(1, 600, 300, 24);
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 2, view, -1, out);
-  assert.equal(READOUT_SIDES[out.side], 'above-right'); clear(2);
-  assert.ok(out.y + H <= 300 - KEEP, 'diagonal sits above the bracket');
-  // the player's rig right below / beside the lock (chase view): never parks on it
-  rects.set([560, 330, 840, 520], 2 * 4);             // rig box under the target
-  put(3, 840, 250, 30);                               // marker above-right
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 4, view, -1, out);
-  assert.notEqual(out.side, READOUT_DOCK); clear(4);
-  assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, 560, 330, 840, 520), 0, 'not on the rig');
-  // boxed in on every side: docks (the caller puts it in the fixed slot) instead of overlapping
-  rects.set([0, 0, 1280, 290], 4 * 4); rects.set([0, 310, 1280, 720], 5 * 4);
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 6, view, -1, out);
-  assert.equal(out.side, READOUT_DOCK); assert.ok(out.score > 0);
-  // near the right screen edge the clamped box never covers the target's own brackets
-  placeReadout(1200, 300, W, H, GAP, KEEP, rects, 0, view, -1, out);
-  assert.ok(out.x + W <= view.x1 + 1e-3);
-  assert.equal(overlap(out.x, out.y, out.x + W, out.y + H, 1176, 276, 1224, 324), 0);
-  // hysteresis: a previous side that is still clear is kept (below, although right is free)
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 0, view, 5, out);
-  assert.equal(READOUT_SIDES[out.side], 'below');
-  // ...and dropped for the earliest clear side once it collides
-  put(0, 700, 300 + GAP + 20, 20);
-  placeReadout(700, 300, W, H, GAP, KEEP, rects, 1, view, 5, out);
+// geometry as hud.js uses it at 1280x720 (U = 1)
+const RG = { k: 24, d: 10, e: 12, far: 160, step: 6 };
+const RW = 124, RH = 50, RPAD = 6, RKEEP = 24;
+const RVIEW = { x0: 51, y0: 29, x1: 1229, y1: 691 };
+/** Obstacles exactly as hud.js builds them: [own bracket + pad, own digit, other markers..., reticle] (hard) + soft. */
+function readoutScene(tx, ty, others, soft = [], digit = true) {
+  const rects = new Float32Array(4 * 64), pts = new Float32Array(2 * 32);
+  let n = 0;
+  const R = (x0, y0, x1, y1) => { rects.set([x0, y0, x1, y1], n * 4); n++; };
+  R(tx - RG.k - RPAD, ty - RG.k - RPAD, tx + RG.k + RPAD, ty + RG.k + RPAD);
+  if (digit) R(tx + 26, ty + 10, tx + 36, ty + 27);
+  others.forEach(([x, y], i) => { R(x - RKEEP, y - RKEEP, x + RKEEP, y + RKEEP); pts.set([x, y], i * 2); });
+  R(640 - 17, 360 - 17, 640 + 17, 360 + 17); R(640 - 31, 358, 640 + 31, 362); R(638, 360, 642, 388);
+  const nHard = n;
+  for (const r of soft) R(...r);
+  return { rects, n, nHard, pts, nO: others.length };
+}
+const ov4 = (out, r, i) => overlap(out.x, out.y, out.x + RW, out.y + RH, r[i * 4], r[i * 4 + 1], r[i * 4 + 2], r[i * 4 + 3]);
+
+test('target readout: never on its own bracket, its lock digit, another marker or the reticle (sweep)', () => {
+  const out = {};
+  let placed = 0, docked = 0;
+  for (let tx = 70; tx <= 1210; tx += 38) {
+    for (let ty = 50; ty <= 670; ty += 31) {
+      for (const [ox, oy] of [[60, 0], [-60, 0], [45, 40], [-45, -40], [0, 70], [90, -10], [30, -55]]) {
+        const sc = readoutScene(tx, ty, [[tx + ox, ty + oy], [tx - ox * 1.7, ty + oy * 0.5]]);
+        placeReadout(tx, ty, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, -1, out);
+        if (out.side === READOUT_DOCK) { docked++; continue; }
+        placed++;
+        for (let i = 0; i < sc.n; i++) assert.equal(ov4(out, sc.rects, i), 0, `t(${tx},${ty}) o(${ox},${oy}) side ${READOUT_SIDES[out.side]} hits obstacle ${i}`);
+        assert.ok(out.x >= RVIEW.x0 - 1e-3 && out.x + RW <= RVIEW.x1 + 1e-3 && out.y >= RVIEW.y0 - 1e-3 && out.y + RH <= RVIEW.y1 + 1e-3, 'inside the safe area');
+      }
+    }
+  }
+  assert.ok(placed > docked * 6, `mostly placed beside the lock (placed ${placed}, docked ${docked})`);
+});
+
+test('target readout: prefers the side away from a neighbour, leader is a short 45-degree dog-leg', () => {
+  const out = {}, ld = {};
+  // free space: right of the brackets
+  let sc = readoutScene(700, 300, []);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, -1, out);
   assert.equal(READOUT_SIDES[out.side], 'right');
+  // a second target close on the right (the hud_full case): the readout goes LEFT, away from it
+  sc = readoutScene(700, 300, [[790, 305]]);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, -1, out);
+  assert.ok(['left', 'above-left', 'below-left'].includes(READOUT_SIDES[out.side]), READOUT_SIDES[out.side]);
+  assert.ok(out.x + RW <= 700 - RG.k, 'whole box left of the own bracket');
+  // leader for every side: starts on a bracket corner / edge, ends on the box, <= 60 px, 45 deg + straight
+  for (let c = 0; c < READOUT_SIDES.length; c++) {
+    const pos = readoutCandidate(c, 700, 300, RW, RH, RG.k, RG.d, RG.e, {});
+    readoutLeader(c, 700, 300, RG.k, pos.x, pos.y, RW, RH, ld);
+    assert.ok(ld.len > 0 && ld.len <= 60, `side ${READOUT_SIDES[c]} leader ${ld.len}`);
+    assert.ok(Math.abs(ld.x0 - 700) <= RG.k + 1e-6 && Math.abs(ld.y0 - 300) === RG.k, 'starts on the bracket');
+    const dx1 = Math.abs(ld.x1 - ld.x0), dy1 = Math.abs(ld.y1 - ld.y0);
+    assert.ok(Math.abs(dx1 - dy1) < 1e-6, 'first leg at 45 degrees');
+    assert.ok(Math.abs(ld.x2 - ld.x1) < 1e-6 || Math.abs(ld.y2 - ld.y1) < 1e-6, 'second leg straight');
+    assert.ok(ld.x2 >= pos.x - 1e-6 && ld.x2 <= pos.x + RW + 1e-6 && ld.y2 >= pos.y - 1e-6 && ld.y2 <= pos.y + RH + 1e-6, 'ends on the box');
+  }
+  // boxed in on every side: docks instead of overlapping
+  sc = readoutScene(700, 300, [], [[0, 0, 1280, 290], [0, 310, 1280, 720]]);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, -1, out);
+  assert.equal(out.side, READOUT_DOCK);
+  // the player's rig under the lock (chase view): never parks on it
+  const rig = [560, 330, 840, 520];
+  sc = readoutScene(700, 300, [[840, 250]], [rig]);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, -1, out);
+  assert.notEqual(out.side, READOUT_DOCK);
+  assert.equal(overlap(out.x, out.y, out.x + RW, out.y + RH, ...rig), 0, 'not on the rig');
+});
+
+test('target readout hysteresis: soft blocks hold the slot 0.35 s, hard blocks switch at once', () => {
+  const out = {}, st = { side: -1, t: 0 };
+  let sc = readoutScene(700, 300, []);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, st.side, out);
+  assert.equal(READOUT_SIDES[readoutHold(st, out, 1 / 60, 0.35)], 'right');
+  // a HUD block (soft) now covers the right slot: kept for 0.35 s of sim time, then it moves
+  const block = [740, 260, 900, 330];
+  sc = readoutScene(700, 300, [], [block]);
+  let t = 0, side = st.side;
+  while (t < 0.6 && READOUT_SIDES[side] === 'right') {
+    placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, st.side, out);
+    assert.equal(out.prevSoft, true);
+    side = readoutHold(st, out, 1 / 60, 0.35);
+    t += 1 / 60;
+  }
+  assert.ok(t >= 0.34 && t < 0.4, `held ${t.toFixed(3)} s`);
+  assert.notEqual(READOUT_SIDES[side], 'right');
+  // while the new slot stays clear it is kept, even though 'right' becomes free again
+  const kept = side;
+  sc = readoutScene(700, 300, []);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, st.side, out);
+  assert.equal(readoutHold(st, out, 1 / 60, 0.35), kept);
+  // another marker (hard) moves onto the current slot: switches on the same frame
+  readoutCandidate(kept, 700, 300, RW, RH, RG.k, RG.d, RG.e, out);
+  sc = readoutScene(700, 300, [[out.x + RW / 2, out.y + RH / 2]]);
+  placeReadout(700, 300, RW, RH, RG, sc.rects, sc.n, sc.nHard, sc.pts, sc.nO, RVIEW, st.side, out);
+  assert.equal(out.prevHard, true);
+  assert.notEqual(readoutHold(st, out, 1 / 60, 0.35), kept);
 });
 
 test('briefing map: no label touches a frame line, the scale bar or the other corner furniture', () => {
@@ -168,4 +227,18 @@ test('briefing map: no label touches a frame line, the scale bar or the other co
     assert.ok(L.aoLabel[0] > M / 2 && L.aoLabel[3] < M / 2, 'AO label top-right');
     assert.ok(L.north[2] < M / 2 && L.north[3] < M / 2, 'north arrow top-left');
   }
+});
+
+test('Japanese wrap: break points at phrase boundaries, never inside katakana words or after a line-start mark', async () => {
+  const { jpWrap } = await import('../src/ui/layout.js');
+  const z = '​';
+  const a = jpWrap('照準枠に捉え続けると角の表示が琥珀色に変わり、ミサイルがロック（最大4）。');
+  assert.ok(a.includes('ミサイル') && a.includes('ポーズ') === false);
+  assert.ok(!a.split(z).some((p) => p.endsWith('ミサ')), 'ミサイル never split');
+  assert.ok(a.includes(`照準枠に${z}捉え`) && a.includes(`変わり、${z}ミサイルが`) && a.includes(`ロック${z}（最大4）`), a);
+  const b = jpWrap('視点感度・上下反転・音量・画質はタイトルまたはポーズ画面の「設定」から。');
+  assert.ok(b.includes('ポーズ画面の') && b.includes(`または${z}ポーズ`), b);
+  for (const s of [a, b]) for (const part of s.split(z).slice(1)) assert.ok(!/^[、。ー）」]/.test(part), `line may not start with ${part[0]}`);
+  assert.equal(jpWrap('ABC 123'), 'ABC 123');
+  assert.equal(jpWrap('鉱石ヤードにはPK-2ピケット'), `鉱石ヤードには${z}PK-\u20602ピケット`);
 });

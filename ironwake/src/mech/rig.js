@@ -126,14 +126,26 @@ const BOOST_LAYER = {
   v0: 40, v1: 75, rateIn: 9, rateOut: 5,
   // (movement lane r3: pitch eased so the forward run reads ~20 deg, not 28, on top of the rigmotion lean;
   //  the layer yields to a skid so a stop digs back instead of diving forward)
-  pelvisPitch: 0.1, torsoPitch: 0.04, headComp: 0.85, backComp: 0.9, armLag: 0.14,
+  // (mech lane r4: critic r3 saw an upright rig from the chase camera) the trailing heel rides ~0.6 m up with the
+  // foot pitched toes-down so the sole + heel block catch light from behind, the torso banks into the strafe,
+  // idle arms swing ~15 deg back
+  pelvisPitch: 0.1, torsoPitch: 0.04, headComp: 0.85, backComp: 0.9, armLag: 0.26,
   lead: { thigh: -0.21, shin: 0.35, foot: -0.06, roll: 0.0 },
-  trail: { thigh: 0.31, shin: 0.61, foot: 0.0, roll: 0.07, toe: 0.35 },
+  trail: { thigh: 0.36, shin: 0.92, foot: 0.42, roll: 0.07, toe: 0.4 },
+  bank: 0.13,           // rad torso roll into the lateral component of the travel
   swayHz: 0.8, sway: 0.15,
-  qb: { rateIn: 30, rateOut: 6, minSpeed: 20,
-    trail: { thigh: 0.14, shin: 0.16, roll: 0.26, toe: 0.4 }, lead: { thigh: -0.34, shin: 0.55, roll: -0.05 } },
+  // r4 quick boost = a jet-propelled lateral SLIDE, not a hop: the lead thigh barely lifts (the knee stays
+  // well below the hip), both hips abduct ~16 deg away from the travel, the trailing shin bends ~25 deg with
+  // the toe pointed down, and the torso rolls ~9 deg away from the burst
+  qb: { rateIn: 30, rateOut: 6, minSpeed: 20, torsoRoll: 0.16,
+    trail: { thigh: 0.1, shin: 0.44, roll: 0.3, toe: 0.44 }, lead: { thigh: -0.08, shin: 0.22, roll: -0.28 } },
   toeAb: 0.3, toeFall: 0.12,
 };
+// IDLE STANCE layer (mech lane r4; critic r3: symmetric straight-legged stance, rifle held rigidly level):
+// one foot ~0.4 m ahead of the other (thigh pitch, foot counter-rotated), feet toed out ~5 deg, the rifle arm
+// relaxed lower with a bent elbow, a slow 1.6 s breathing pitch on the torso. Fades out when moving / firing.
+const IDLE_LAYER = { stagger: [-0.05, 0.03], toeOut: 0.09, armR: 0.2, forearmR: -0.07, armL: 0.07,
+  breathe: 0.009, breatheHz: 0.625 };
 
 // NaN-safe lit shading for GLB rigs: a smooth-shaded sliver whose vertex normals oppose each
 // other interpolates to a ~zero normal on some pixels at some angles; normalize() of it is NaN,
@@ -145,7 +157,7 @@ const BOOST_LAYER = {
 // r3: the extra wrap / lift is GATED by the sun term (shadeHi..shadeLo of N.L), so the shade side keeps a plate
 // read (critic r2: back view crushed to black) while sunlit faces do not gain. specCap: painted (non-metal)
 // texels get at most 60% of the Fresnel / F0 gain (critic r2: sunlit paint bleached to chalky grey).
-const RIG_SHADE = { rim: 0.42, rimShade: 0.7, rimPow: 2.6, rimColor: [0.5, 0.55, 0.62], lift: 0.035, liftShade: 1.25,
+const RIG_SHADE = { rim: 0.42, rimShade: 0.7, rimPow: 2.6, rimColor: [0.56, 0.56, 0.56], lift: 0.035, liftShade: 1.25,
   shadeHi: 0.15, shadeLo: -0.25, specCap: 0.6, paintRoughMin: 0.45 };
 // MICRO SURFACE DETAIL (mech lane r2): the 2048 atlases hold ~100 px/m, so hero close-ups read as
 // uniform satin. A procedural object-space layer (no texture, no extra draw call) adds two
@@ -347,6 +359,7 @@ const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THRE
 const _pa = new THREE.Vector3();
 const _eP = new THREE.Euler(0, 0, 0, 'YXZ');
 const _DOWN = new THREE.Vector3(0, -1, 0), _Y = new THREE.Vector3(0, 1, 0), _X = new THREE.Vector3(1, 0, 0);
+const _Z = new THREE.Vector3(0, 0, 1);
 let _layerHit = null;
 const _toeT = new Float64Array(2);
 const _tint = new THREE.Color(), _WHITE = new THREE.Color(1, 1, 1);
@@ -414,13 +427,17 @@ export class MechRig {
     const eyeUD = this.nodes.eye.userData || {};
     this.nodes.eye.traverse((o) => {
       if (!o.isMesh || !o.material || !o.material.emissive) return;
-      const m = source === 'asset' ? own(o, 'eye') : o.material;
+      // r4: a mesh under the eye whose name (or parent's) contains 'slit' is the dimmer sensor-slit core
+      // (iw_eye_slit x the eye strength, default 0.5): the round pupils stay the brightest pixels of the rig
+      const slit = /slit/.test(o.name) || (o.parent && /slit/.test(o.parent.name));
+      const m = source === 'asset' ? own(o, slit ? 'eye_slit' : 'eye') : o.material;
+      m.userData.iwEyeK = slit ? (eyeUD.iw_eye_slit || 0.5) : 1;
       if (source === 'asset' && eyeUD.iw_eye_color) {
         m.emissive = new THREE.Color(eyeUD.iw_eye_color);
-        // r3: iw_eye_map = the atlas emissive is a WHITE intensity map (bright main pupil, dimmer second
-        // lens, slit with a hot core); without it the eye glows one flat colour (crisp bloom)
+        // r3: iw_eye_map = the atlas emissive is a WHITE intensity map; r4 assets omit it: the eye glows
+        // one flat colour (crisp, compression-proof bloom)
         if (!eyeUD.iw_eye_map) m.emissiveMap = null;
-        m.emissiveIntensity = eyeUD.iw_eye_strength || 6;
+        m.emissiveIntensity = (eyeUD.iw_eye_strength || 6) * m.userData.iwEyeK;
         m.color.setScalar(0.02);
       }
       if (!this.eyeMats.includes(m)) this.eyeMats.push(m);
@@ -502,7 +519,7 @@ export class MechRig {
     this.qbFlash = 0;
     this.stagger = 0;
     this.time = 0;
-    this.eyeBase = this.eyeMats.length ? this.eyeMats[0].emissiveIntensity : 1;
+    this.eyeBase = this.eyeMats.length ? this.eyeMats[0].emissiveIntensity / (this.eyeMats[0].userData.iwEyeK || 1) : 1;
     this.thrustDir = new THREE.Vector3();
     this.thrustAmount = 0;
   }
@@ -567,7 +584,7 @@ export class MechRig {
 
     // --- eye flicker when staggered
     const eyeI = this.eyeBase * (mode === 'stagger' ? (Math.sin(this.time * 40) > 0 ? 0.3 : 1) : mode === 'dead' ? 0.02 : 1);
-    for (const m of this.eyeMats) m.emissiveIntensity = eyeI;
+    for (const m of this.eyeMats) m.emissiveIntensity = eyeI * (m.userData.iwEyeK || 1);
 
     // --- nozzle flames from the thrust vector
     this.qbFlash = Math.max(0, (this.qbFlash || 0) - dt * FLAME.qbDecay);
@@ -722,6 +739,10 @@ export class MechRig {
       const pp = B.pelvisPitch * b, tp = B.torsoPitch * b;
       N.pelvis.quaternion.multiply(_qb.setFromAxisAngle(_X, pp));
       N.torso.quaternion.multiply(_qb.setFromAxisAngle(_X, tp));
+      // r4: bank into the strafe (+Z roll tips the torso toward -X = the rig's right) + roll away from a QB burst
+      const lat = sp > 1 ? v.x / sp : 0;
+      const roll = -lat * B.bank * b - S.qTrail * B.qb.torsoRoll * q;
+      if (Math.abs(roll) > 1e-4) N.torso.quaternion.multiply(_qb.setFromAxisAngle(_Z, roll));
       N.head.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.headComp));
       N.shoulder_L.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.backComp));
       N.shoulder_R.quaternion.multiply(_qb.setFromAxisAngle(_X, -(pp + tp) * B.backComp));
@@ -765,10 +786,28 @@ export class MechRig {
     const idle = pose.grounded && (pose.mode === 'idle' || pose.mode === 'walk');
     this.idleAmt = damp(this.idleAmt, idle ? 1 : 0, 3, dt);
     if (this.idleAmt > 1e-3) {
-      const k = this.idleAmt;
-      _e.set(0, P.idleYaw * k * Math.sin(t * Math.PI * 2 * P.idleYawHz),
+      const k = this.idleAmt, I = IDLE_LAYER;
+      _e.set(I.breathe * k * Math.sin(t * Math.PI * 2 * I.breatheHz), P.idleYaw * k * Math.sin(t * Math.PI * 2 * P.idleYawHz),
         P.idleRoll * k * Math.sin(t * Math.PI * 2 * P.idleRollHz + 1.1));
       N.torso.quaternion.multiply(_q.setFromEuler(_e));
+      // r4 stance (standing still only: a walk cycle owns the legs): staggered feet, toes out
+      const st = pose.mode === 'idle' ? k * Math.max(0, 1 - Math.hypot(pose.velLocal.x, pose.velLocal.z) / 4) : 0;
+      if (st > 1e-3) {
+        for (let i = 0; i < 2; i++) {
+          const s = i === 0 ? 'L' : 'R', sg = i === 0 ? 1 : -1, th = I.stagger[i] * st;
+          N['thigh_' + s].quaternion.multiply(_q.setFromAxisAngle(_X, th));
+          N['foot_' + s].quaternion.multiply(_q.setFromAxisAngle(_X, -th));
+          N['foot_' + s].quaternion.multiply(_q.setFromAxisAngle(_Y, sg * I.toeOut * st));
+        }
+      }
+      // relaxed arms: rifle arm lower with a bent elbow, blade arm a touch back (gone the moment they fire)
+      const rR = this.ready.R, rL = this.ready.L;
+      const kR = k * (1 - (rR ? rR.amt : 0)), kL = k * (1 - (rL ? rL.amt : 0));
+      if (kR > 1e-3) {
+        N.arm_R.quaternion.multiply(_q.setFromAxisAngle(_X, I.armR * kR));
+        N.forearm_R.quaternion.multiply(_q.setFromAxisAngle(_X, I.forearmR * kR));
+      }
+      if (kL > 1e-3) N.arm_L.quaternion.multiply(_q.setFromAxisAngle(_X, I.armL * kL));
     }
     // back weapons lag behind the pelvis heave (landing / QB dip): damped spring on pitch
     const cv = this.motion.crouchV || 0;

@@ -191,7 +191,7 @@ function pageRun(man) {
       +((cm.rigFrac || 0) * 100).toFixed(2), +(cm.rigTopNdc || 0).toFixed(4), +(cm.shake || 0).toFixed(5),
       m.flags.qb ? 1 : 0, +m.flags.landed.toFixed(2), m.flags.abLaunch ? 1 : 0, +m.skid.toFixed(3),
       +(cm.dip || 0).toFixed(3), +off.toFixed(3),
-      +m.pos.x.toFixed(3), +m.pos.z.toFixed(3), +leanP.toFixed(2), +leanR.toFixed(2), +(cm.kick || 0).toFixed(3),
+      +m.pos.x.toFixed(3), +m.pos.z.toFixed(3), +leanP.toFixed(2), +leanR.toFixed(2), +(cm.kick || 0).toFixed(3), +(cm.kickCam || 0).toFixed(3),
     ]);
   }
   if (man.spamQb) { ctl.update = origUpdate; delete ctl._spamFrame; }
@@ -201,7 +201,7 @@ function pageRun(man) {
   return { rows, area: pick, cfg: { move: m.cfg } };
 }
 
-const COLS = ['t', 'speed', 'vy', 'alt', 'en', 'redline', 'mode', 'fov', 'cam_dist', 'lag', 'lag_side', 'rig_frame_pct', 'rig_top_ndc', 'shake', 'qb', 'landed', 'ab_launch', 'skid', 'cam_dip', 'target_off_deg', 'x', 'z', 'torso_pitch_deg', 'torso_roll_deg', 'fov_kick'];
+const COLS = ['t', 'speed', 'vy', 'alt', 'en', 'redline', 'mode', 'fov', 'cam_dist', 'lag', 'lag_side', 'rig_frame_pct', 'rig_top_ndc', 'shake', 'qb', 'landed', 'ab_launch', 'skid', 'cam_dip', 'target_off_deg', 'x', 'z', 'torso_pitch_deg', 'torso_roll_deg', 'fov_kick', 'cam_kick'];
 
 function summarize(res, MOVE) {
   const S = {};
@@ -238,6 +238,12 @@ function summarize(res, MOVE) {
     S.qb_fov_kick_deg = +kp.toFixed(2);
     S.qb_fov_punch_half_s = +((k - first) / 60).toFixed(3);
     S.qb_cam_lag_peak_m = +Math.max(...col(rows, 'lag').slice(first, first + 40)).toFixed(2);
+    // camera impulse of the burst: jolt amplitude (rad) + its duration, and the body kick (m)
+    const sh = col(rows, 'shake'), shp = Math.max(...sh.slice(first, first + 20));
+    let ks = first; while (ks < sh.length && sh[ks] > shp * 0.05) ks++;
+    S.qb_shake_peak_rad = +shp.toFixed(4);
+    S.qb_shake_dur_s = +((ks - first) / 60).toFixed(3);
+    S.qb_cam_kick_peak_m = +Math.max(...col(rows, 'cam_kick').slice(first, first + 20)).toFixed(2);
     const red = col(rows, 'redline');
     const r0 = red.indexOf(1), r1 = red.indexOf(0, r0);
     S.redline_s = r0 >= 0 && r1 > r0 ? +((r1 - r0) / 60).toFixed(3) : null;
@@ -369,7 +375,7 @@ try:
                 if any(red): ax.legend(loc='lower right', fontsize=6, facecolor='#15191c', edgecolor='#56606a')
             elif k == 'fov':
                 ax.plot(t, series(m, 'fov'), color='#e6eef0', lw=1.4)
-                for y, l in ((54, 'base 54'), (66, 'cap 66')):
+                for y, l in ((50, 'base 50'), (56, 'boost 56'), (60, 'AB 60'), (66, 'cap 66')):
                     ax.axhline(y, color='#56606a', lw=0.7, ls='--'); ax.text(t[-1], y, ' ' + l, va='center', fontsize=6, color='#9fb3ba')
             elif k == 'cam_dist':
                 ax.plot(t, series(m, 'cam_dist'), color='#c9c2b4', lw=1.4, label='cam to rig')
@@ -402,7 +408,7 @@ try:
             if r == 0: ax.set_title(titles.get(m, m), fontsize=9, color='#ffd27a')
             if r == len(metrics) - 1: ax.set_xlabel('time (s)')
     keys = ['qb_peak_ms', 'qb_frames_to_peak', 'qb_jet_s', 'qb_cooldown_s', 'qb_spam_count_2s', 'qb_travel_jet_m', 'qb_travel_total_m', 'qb_en_cost_pct', 'qb_count_from_full', 'qb_fov_punch_deg', 'qb_fov_punch_half_s',
-            'qb_cam_lag_peak_m', 'redline_s', 'redline_restore_pct', 'boost_90pct_s', 'stop_to_walk_s', 'turn90_min_speed_ms', 'ab_windup_s', 'ab_launch_speed_ms',
+            'qb_cam_lag_peak_m', 'qb_shake_peak_rad', 'qb_shake_dur_s', 'qb_cam_kick_peak_m', 'redline_s', 'redline_restore_pct', 'boost_90pct_s', 'stop_to_walk_s', 'turn90_min_speed_ms', 'ab_windup_s', 'ab_launch_speed_ms',
             'ab_speed_ms', 'ab_fov_peak_deg', 'ab_en_drain_pct_s', 'jump_apex_m', 'jump_time_to_apex_s', 'hover_climb_ms', 'hover_fov_deg', 'hover_en_drain_pct_s',
             'rig_frame_pct_idle', 'rig_frame_pct_boost', 'cam_dist_idle_m', 'land_impact_ms', 'land_cam_dip_m',
             'lock_none_max_off_deg', 'lock_soft_max_off_deg', 'lock_hard_max_off_deg',
@@ -463,9 +469,9 @@ async function main() {
   const summary = summarize(results, MOVE);
   const sumPath = path.join(OUT, 'telemetry.json');
   const notes = {
-    camera_fov: 'Benchmark FOV 50 + 26-32 m + rig 22-30% of frame cannot all hold for a 10.7 m rig (FOV 50 needs a 37-50 m camera). '
-      + 'Combat r2: the lens is narrowed to a vertical FOV of 54 (+4 boost, +6 AB, AB launch peak 63) and the orbit moved out to ~35 m, '
-      + 'so the framing (rig_frame_pct_*) stays inside 22-30%.',
+    camera_fov: 'Benchmark FOV 50 + 26-32 m + rig 22-30% of frame cannot all hold for a 10.7 m rig (FOV 50 needs a 37-50 m camera; '
+      + 'at 26-32 m the rig fills ~34-40% of the frame). Combat r4: the FOV numbers match the spec (50 base, +6 boost, +10 AB, launch peak 63) '
+      + 'and the orbit sits at the closest distance (~37 m to the rig centre) that keeps rig_frame_pct_* inside 22-30%.',
     qb_cooldown: 'qb_cooldown_s comes from qb_spam (a QB requested on every step); qb_chain_interval_s is only the chain script tap rhythm.',
   };
   fs.writeFileSync(sumPath, JSON.stringify({ seed: SEED, summary, notes, areas: Object.fromEntries(Object.entries(results).map(([k, v]) => [k, v.area])) }, null, 2));
@@ -474,10 +480,10 @@ async function main() {
     qb_peak_ms: 'max(105, |v|+30)', qb_frames_to_peak: '1 (instant)', qb_jet_s: '0.35', qb_cooldown_s: '0.55', qb_en_cost_pct: '16-17',
     qb_count_from_full: '6', qb_fov_punch_deg: '4-8', qb_travel_jet_m: '35-45 (0.35 s jet)', qb_travel_total_m: '35-45 (+skid)',
     boost_torso_pitch_deg: '15-22 (skate crouch)', boost_turn_torso_roll_deg: '6-10+', boost_strafe_torso_roll_deg: '6-12', hover_fov_deg: 'base+3..4', ab_torso_pitch_deg: '35-45', ab_rig_frame_pct: '>=22',
-    cam_dist_idle_m: '~35 (r2 critic)', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
+    cam_dist_idle_m: '26-32 spec; ~37 = closest with rig <= 30% at FOV 50', qb_shake_peak_rad: '~0.012', qb_shake_dur_s: '~0.15', qb_cam_kick_peak_m: '~0.4', qb_fov_punch_half_s: '~0.2', redline_s: '2.0', redline_restore_pct: '20',
     boost_90pct_s: '0.35', boost_top_ms: '85', stop_to_walk_s: '~0.5', ab_windup_s: '0.6', ab_speed_ms: '130', ab_en_drain_pct_s: '13',
     jump_apex_m: '15-20', hover_climb_ms: '55-70', hover_en_drain_pct_s: '~21', rig_frame_pct_idle: '22-30', rig_frame_pct_boost: '22-30',
-    boost_fov_deg: 'base+4', ab_fov_peak_deg: '<=66 (base+6+kick)',
+    boost_fov_deg: '56 (base 50 +6)', ab_fov_peak_deg: '<=66 (base 50 +10 +kick)',
   };
   for (const [k, v] of Object.entries(summary)) console.log(`  ${k.padEnd(24)} ${String(v).padEnd(10)} ${T[k] ? '[' + T[k] + ']' : ''}`);
   if (PLOT) {

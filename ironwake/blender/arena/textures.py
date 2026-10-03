@@ -665,7 +665,7 @@ SETS = {
     'concrete': (concrete, {'d': 512}),
     'slab': (slab, {'d': 512}),
     'ash': (ash, {'a': 512, 'n': 512, 'd': 512}),
-    'steel': (steel, {'d': 512}),
+    'steel': (steel, {'a': 512, 'd': 512}),     # r4: the rust albedo only modulates value now (-165 KB)
     'corr': (corrugated, {}),
     'trim': (trim, {'d': 512}),
 }

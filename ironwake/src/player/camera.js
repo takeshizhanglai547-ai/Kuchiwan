@@ -1,6 +1,6 @@
 // src/player/camera.js — third-person chase camera (owner: movement designer).
 //
-// Model: the camera ORBITS a point just above the rig's head along the player's aim (31 m back,
+// Model: the camera ORBITS a point just above the rig's head along the player's aim (~37 m back,
 // 2.2 m to the right so the right-arm rifle clears the torso), so the view axis (reticle) always
 // passes over the shoulders and the rig sits in the lower-centre third (22-30% of frame height,
 // see `npm run telemetry`). Rotation is 1:1 with the aim;
@@ -10,8 +10,9 @@
 // frame() only interpolates between the last two sim poses.
 //
 // Motor reactions (read from game.player.motor.flags every step, no calls needed):
-//   quick boost    FOV punch (+qbFovKick, instant attack, ease-out ~0.2 s), micro shake,
-//                  roll away from the burst
+//   quick boost    FOV punch (+qbFovKick, instant attack, ease-out ~0.2 s), a directional jolt
+//                  (0.012 rad, gone in 0.15 s), a 0.4 m camera kick opposite to the burst, roll
+//                  away from the burst
 //   AB wind-up     FOV narrows + camera creeps in while the boosters charge (telegraph)
 //   AB launch      big FOV kick on top of the sustained AB FOV + shake + flight rumble; in flight
 //                  the camera rises 1.6 m to look down onto the pitched torso and boosters
@@ -116,6 +117,7 @@ export default function cameraSystem(game) {
   let trauma = 0, rumble = 0;
   let kickDeg = 0, kickT = 1e3, kickHold = 0.04, kickDecay = 0.2;
   let roll = 0, rollV = 0;
+  let joltT = 1e3, joltSide = 0, joltFwd = 0, kickR = 0, kickRV = 0, kickF = 0, kickFV = 0;
   let dip = 0, dipV = 0;
   let sustain = 0, pull = 0, bank = 0, prevYaw = 0;
   let dist = C.distance;
@@ -138,7 +140,7 @@ export default function cameraSystem(game) {
   // rig silhouette samples [right m, up m] from the feet (C.slideRows)
   const SAMPLES = [];
   for (const [y, hw, n] of C.slideRows) for (let i = 0; i < n; i++) SAMPLES.push([n > 1 ? -hw + (2 * hw * i) / (n - 1) : 0, y]);
-  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, dip: 0, kick: 0, sustain: 0, lift: 0, slide: 0, occluded: 0, nearCut: 0 };
+  const metrics = { fov: C.fov, dist: C.distance, lag: 0, lagSide: 0, rigFrac: 0, rigTopNdc: 0, rigMidNdc: 0, shake: 0, kickCam: 0, dip: 0, kick: 0, sustain: 0, lift: 0, slide: 0, occluded: 0, nearCut: 0 };
 
   function kick(deg, hold, decay) {
     // a new kick replaces a weaker, older one; never stacks past the larger
@@ -236,7 +238,7 @@ export default function cameraSystem(game) {
       if (g.arena && g.arena.root) api.cutoutMaterials = installCutout(g.arena.root);
     },
     cutoutMaterials: 0,
-    reset() { lift = 0; rise = 0; needSnap = true; slideX = slideY = slideVX = slideVY = slideTX = slideTY = 0; blockT = homeT = searchCd = 0; trauma = 0; rumble = 0; kickT = 1e3; kickDeg = 0; roll = rollV = 0; dip = dipV = 0; sustain = 0; pull = 0; bank = 0; },
+    reset() { lift = 0; rise = 0; needSnap = true; slideX = slideY = slideVX = slideVY = slideTX = slideTY = 0; blockT = homeT = searchCd = 0; trauma = 0; rumble = 0; kickT = 1e3; kickDeg = 0; joltT = 1e3; kickR = kickRV = kickF = kickFV = 0; roll = rollV = 0; dip = dipV = 0; sustain = 0; pull = 0; bank = 0; },
     shake(amount) { trauma = Math.min(1, trauma + amount); },
     fovKick(deg, seconds = 0.3) { kick(deg, 0.03, seconds); },
     setOverride(o) {
@@ -290,13 +292,21 @@ export default function cameraSystem(game) {
       _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
 
       // --- one-step motor events
+      joltT += dt;
       if (f.qb) {
         kick(C.qbFovKick, C.qbFovHold, C.qbFovDecay);
         trauma = Math.min(1, trauma + C.qbShake);
         // roll away from the burst (camera banks against the jolt, then springs back)
         const side = f.qb.x * _right.x + f.qb.z * _right.z;
         rollV += -side * C.qbRoll * 40;
+        // jolt: the view yaws against the burst for a few frames (impulse, not a wobble), and the
+        // camera body is kicked OPPOSITE to it (critically damped: peak qbKickDist at 1/omega)
+        joltT = 0; joltSide = side; joltFwd = f.qb.x * _fwd.x + f.qb.z * _fwd.z;
+        const v0 = C.qbKickDist * C.qbKickOmega * Math.E;
+        kickRV -= side * v0; kickFV -= joltFwd * v0;
       }
+      critToZero(kickR, kickRV, C.qbKickOmega, dt, sp); kickR = sp[0]; kickRV = sp[1];
+      critToZero(kickF, kickFV, C.qbKickOmega, dt, sp); kickF = sp[0]; kickFV = sp[1];
       if (f.abLaunch) {
         sustain = C.fovAB; // the launch snaps wide, the kick overshoots on top of it
         kick(C.abLaunchKick, 0.06, C.abLaunchDecay); trauma = Math.min(1, trauma + C.abLaunchShake);
@@ -384,6 +394,16 @@ export default function cameraSystem(game) {
 
       prevPos.copy(curPos); prevQuat.copy(curQuat); prevFov = curFov;
       curPos.copy(pivot).addScaledVector(_dir, dist);
+      // QB kick (after the collision probes: a few dm, pulled toward the pivot when it would clip)
+      if (kickR !== 0 || kickF !== 0) {
+        _o.copy(_right).multiplyScalar(kickR).addScaledVector(_fwd, kickF);
+        const kl = _o.length();
+        if (kl > 1e-4) {
+          _o.multiplyScalar(1 / kl);
+          const room = game.physics.raycast(curPos, _o, kl + C.collisionPadding, _hit, { ground: true }) ? Math.max(0, _hit.dist - C.collisionPadding) : kl;
+          curPos.addScaledVector(_o, Math.min(kl, room));
+        }
+      }
       const gy = game.physics.groundHeight ? game.physics.groundHeight(curPos.x, curPos.z) : 0;
       if (curPos.y < gy + 1.2) curPos.y = gy + 1.2;
 
@@ -393,7 +413,12 @@ export default function cameraSystem(game) {
       const tr = Math.min(1, trauma + rumble);
       const amp = C.shakeMaxRot * Math.pow(tr, C.shakeExp);
       const ts = game.time * C.shakeFreq;
-      _e.set(noise(ts, 1.3) * amp, noise(ts, 7.1) * amp, noise(ts, 3.7) * amp * 1.3 + roll + bank);
+      // QB jolt: (1 - t/T)^2 envelope; yaw starts AGAINST the burst at full amplitude (frame 1)
+      const jk = joltT < C.qbJoltDur ? (1 - joltT / C.qbJoltDur) * (1 - joltT / C.qbJoltDur) : 0;
+      const ja = C.qbJoltRot * jk, jph = Math.cos(joltT * C.qbJoltFreq * Math.PI * 2);
+      const jy = ja * (joltSide * jph * 0.85 + noise(ts * 1.3, 9.1) * 0.3);
+      const jp = ja * (joltFwd * jph * 0.6 + noise(ts * 1.3, 5.3) * 0.6);
+      _e.set(noise(ts, 1.3) * amp + jp, noise(ts, 7.1) * amp + jy, noise(ts, 3.7) * amp * 1.3 + roll + bank);
       curQuat.multiply(_q.setFromEuler(_e));
       curFov = fov;
       if (needSnap) { prevPos.copy(curPos); prevQuat.copy(curQuat); prevFov = curFov; needSnap = false; }
@@ -415,7 +440,8 @@ export default function cameraSystem(game) {
       metrics.rigFrac = (top - bot) * 0.5;
       metrics.rigTopNdc = top;
       metrics.rigMidNdc = (top + bot) * 0.5;
-      metrics.shake = amp;
+      metrics.shake = amp + ja;
+      metrics.kickCam = Math.hypot(kickR, kickF);
       metrics.dip = dip;
       metrics.kick = kickDeg * env;
       metrics.sustain = sustain;

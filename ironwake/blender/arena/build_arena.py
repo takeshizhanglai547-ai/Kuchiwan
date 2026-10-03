@@ -21,7 +21,12 @@ lower foundry yard sits 9 m below (LOW) and the sea at -14 m (SEA).
   HERO   Furnace No.6 on the reclaimed ore mole 220-380 m off the quay, on the +Z launch axis
          (rises over the C2 gallery in every gameplay frame)
 Kits are hidden-face culled at build time (akit.cull_hidden); out-of-bounds copies of tracks,
-hoppers, masts and quay segments use '_lo' kits (place()).
+hoppers, masts, quay segments, ladle cars and pipe bents use '_lo' kits (place()).
+r4: the ground outside the pier deck is the runtime terrain (src/world/terrain.js; terrain_h() here
+mirrors its height function); far_districts() fills the hinterland (0.5-2.8 km) with rail yards, shed
+rows, tank farms and crane runways; every blast furnace is a COMBINATION of kit parts (furnace(),
+furnace_far()) so no two read the same; the marker / collider / footprint table rides in the scene
+extras (akit.export).
 Contracts: COL_* colliders, SPAWN_player, SPAWN_mt_*, SPAWN_drone_*, SPAWN_boss_*, OBJ_relay_*.
 Extra (src/world/arena.js): FX_smoke_* (extras r, h, kind) plumes, FX_light_* (r, c, i) light pools.
 """
@@ -53,6 +58,45 @@ FXN = [0]
 UNDER = []   # (x, z, size, yaw) dust/soot decals under clutter piles
 SODIUM = (1.0, 0.6, 0.24)
 FIRE = (1.0, 0.33, 0.08)
+
+
+def relief(x, z):
+    """Mirror of src/world/terrain.js reliefNoise()."""
+    return (4.2 * math.sin(x * 0.0057 + 1.3) * math.sin(z * 0.0049 + 0.4)
+            + 2.6 * math.sin((0.8 * x + 0.6 * z) * 0.0121 + 2.1)
+            + 1.7 * math.sin((-0.5 * x + 0.87 * z) * 0.0197 + 0.7)
+            + 1.0 * math.sin((0.31 * x - 0.95 * z) * 0.0313 + 4.2) * math.sin(x * 0.0089 - 1.1))
+
+
+def _ss(a, b, x):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def land_sd(x, z):
+    """Mirror of terrain.js landInfo(): (signed distance to land, walled coast?, base level)."""
+    sd, walled = z - 250.5, abs(x) < 905
+    d_far = max(759.75 - z, -1100.0 - x, x - 1300.0)
+    d_pen = max(431.25 - x, x - 1900.0, 250.0 - z, z - 1100.0)
+    if d_far < sd:
+        sd, walled = d_far, (759.75 - z) >= max(-1100.0 - x, x - 1300.0)
+    if d_pen < sd:
+        sd, walled = d_pen, (431.25 - x) >= max(x - 1900.0, z - 1100.0) and z > 250
+    return sd, walled, LOW - _ss(200.0, 320.0, z)
+
+
+def terrain_h(x, z):
+    """Mirror of terrain.js terrainHeight() (ground height before footprint flattening)."""
+    sd, walled, base = land_sd(x, z)
+    amp = 0.85 * _ss(460.0, 950.0, max(abs(x), abs(z)))
+    if walled:
+        amp *= _ss(0.0, 140.0, -sd)
+    h = base + amp * relief(x, z)
+    if sd >= 0:
+        return SEA - 8.0
+    if walled:
+        return h
+    return SEA - 3.0 + (h - SEA + 3.0) * _ss(0.0, 30.0, -sd)
 
 
 def fx_smoke(x, y, z, r, h, kind=0):
@@ -107,7 +151,27 @@ def foot(kind, x, z, sx, sz, yaw=0.0):
     FOOT.append((kind, x, z, sx, sz, yaw))
 
 
-LO_KITS = {'track', 'hopper', 'mast', 'quay'}
+LO_KITS = {'track', 'hopper', 'mast', 'quay', 'ladle', 'pipebent'}
+
+
+def furnace(x, y, z, yaw=0.0, scale=1.0, top='A', dc='A', skip=True):
+    """Near-kit blast furnace as a part combination (pieces.blast_furnace_parts)."""
+    M = A.xform((x, y, z), yaw=yaw, scale=scale)
+    for part in ['core', 'top' + top, 'dc' + dc] + (['skip'] if skip else []):
+        A.inst('bf_' + part, M=M, collide=False)
+
+
+def furnace_far(x, y, z, yaw=0.0, scale=1.0, dc='A', stoves=4, turn=False, skip=True, s=3.0):
+    """Horizon furnace as a part combination (farkit.furnace_far_parts): curved / straight
+    downcomer, 3 or 4 stoves, casthouse in front or turned 90 deg beside the tower."""
+    M = A.xform((x, y, z), yaw=yaw, scale=scale)
+    for part in ['core', 'dc' + dc, 'st%d' % stoves] + (['skip'] if skip else []):
+        A.inst('ff_' + part, M=M, collide=False)
+    if turn:
+        Mc = M @ Matrix.Translation(Vector((-32 * s, -30 * s, 0))) @ Matrix.Rotation(PI / 2, 4, 'Z')
+    else:
+        Mc = M @ Matrix.Translation(Vector((0, -30 * s, 0)))
+    A.inst('ff_cast', M=Mc, collide=False)
 
 
 def place(name, x, z, yaw=0.0, y=0.0, fk=None, fs=None, **kw):
@@ -136,6 +200,8 @@ def build_kit():
     A.kit('hopper_lo', K.hopper_wagon(lo=True)[0])
     A.kit('mast_lo', K.lamp_mast(lo=True)[0])
     A.kit('quay_lo', B.quay_seg(20.0, lo=True))
+    A.kit('ladle_lo', K.ladle_car(lo=True)[0])
+    A.kit('pipebent_lo', K.pipe_bent(lo=True)[0])
     for i in range(3):
         g, cols = K.rubble(seed=11 + i, s=1.0 + 0.25 * i)
         A.kit(f'rubble{i}', g, [((0, 0, 0.4), (4.4, 4.4, 0.8))])
@@ -164,8 +230,8 @@ def build_kit():
     A.kit('sphere', g, cols)
     g, cols = K.stove()
     A.kit('stove', g, cols)
-    g, cols = K.blast_furnace()
-    A.kit('furnace', g, cols)
+    for name, (g, cols) in K.blast_furnace_parts().items():     # r4: furnaces are part combinations
+        A.kit('bf_' + name, g, cols)
     g, cols = K.sts_crane()
     A.kit('crane', g, cols)
     g, cols = K.ore_bridge()
@@ -200,7 +266,14 @@ def build_kit():
     # far kit: every block has setbacks, rooftop stacks/vents, pipe racks, a gantry and window rows
     for i, (sx, sy, h) in enumerate(((120, 60, 46), (80, 50, 32), (64, 60, 62), (160, 44, 26), (230, 80, 95), (110, 90, 135))):
         A.kit(f'far_block{i}', FK.works_far(i * 7 + 3, sx, sy, h))
-    A.kit('furnace_far', FK.furnace_far(300.0))      # one horizon furnace kit, varied per instance by scale / mirror / yaw
+    for name, g in FK.furnace_far_parts(300.0).items():          # r4: horizon furnaces = part combinations
+        A.kit('ff_' + name, g)
+    # r4 hinterland districts (0.5-3 km): rail yards, shed rows, tank farms, crane runways
+    for i in range(2):
+        A.kit(f'fd_rail{i}', FK.district_railyard(seed=101 + i, L=130.0 + 40 * i))
+        A.kit(f'fd_sheds{i}', FK.district_sheds(seed=111 + i))
+        A.kit(f'fd_tanks{i}', FK.district_tanks(seed=121 + i))
+        A.kit(f'fd_runway{i}', FK.district_runway(seed=131 + i))
     A.kit('jetty', MK.jetty(62.0))
     A.kit('pontoon', MK.pontoon())
     A.kit('dolphin', MK.dolphin(SEA))
@@ -236,9 +309,8 @@ def ground():
                 g.merge(A.Geo.from_pydata([tuple(G(a0, y, b0)), tuple(G(a0, y, b1)), tuple(G(a1, y, b1)), tuple(G(a1, y, b0))],
                                           [(0, 1, 2, 3)], 'ground'))
     tiles(-EDGE, EDGE, -EDGE, 250.0, 0.0, 64.0)                  # pier deck
-    tiles(-1600, 1600, -1600, -EDGE - 1.0, LOW, 160.0)           # lower yard south
-    tiles(-1600, -EDGE - 1.0, -EDGE - 1.0, 250.0, LOW, 160.0)    # west
-    tiles(EDGE + 1.0, 1600, -EDGE - 1.0, 250.0, LOW, 160.0)      # east
+    # r4: the lower yard, hinterland, far shore and peninsula ground is the runtime terrain
+    # (src/world/terrain.js, mirrored by terrain_h() below), built from the footprint table
     A.unique('ground', g, weighted=False)
     # the sea itself is generated at runtime (src/world/water.js); here only its waterline
     # obstacles: quay front, breakwater, far shore, east peninsula
@@ -372,7 +444,7 @@ def south():
     g.transform(Matrix.Translation(G(-100, y, -293)))
     A.unique('bins_s', g)
     # blast furnace B with stoves, casthouse glow, runners toward the pier
-    place('furnace', -178, -352, yaw=-PI / 2 + 0.3, y=y, collide=False)
+    furnace(-178, y, -352, yaw=-PI / 2 + 0.38, scale=0.92, top='B', dc='B')
     fx_smoke(-178, y + 90.0, -352, 2.4, 90.0, 2)
     for k in range(3):
         place('stove', -236 + k * 16, -404, y=y, collide=False)
@@ -407,7 +479,7 @@ def south():
     stack('fstack1', -330, -520, y=y)
     stack('fstack2', 280, -700, y=y)
     stack('fstack3', 480, -900, y=y)
-    place('furnace_far', 150, -680, yaw=0.8 + PI, y=y, collide=False)
+    furnace_far(150, y, -680, yaw=0.8 + PI, dc='A', stoves=4)
     fx_smoke(150, y + 270.0, -680, 7.0, 220.0, 2)
     place('far_block0', 200, -480, yaw=0.2, y=y, collide=False)
     place('far_block4', -60, -600, yaw=0.1, y=y, collide=False)
@@ -421,7 +493,7 @@ def east():
     A.inst('casthouse', (226, 0, 40), yaw=-PI / 2, collide=False)
     A.collider((226, 13.0, 40), (36.0, 26.0, 48.0))
     foot('bld', 226, 40, 38, 50)
-    place('furnace', 300, 30, yaw=PI / 2, y=LOW, scale=1.35, collide=False)
+    furnace(300, LOW, 30, yaw=PI / 2 - 0.12, scale=1.35, top='A', dc='B')
     fx_smoke(300, LOW + 121.0, 30, 3.2, 120.0, 2)
     fx_smoke(226, 30.0, 40, 4.0, 80.0, 1)      # quench steam off the casthouse roof (keeps furnace A readable)
     for dz in (-11.5, 11.5):
@@ -436,7 +508,7 @@ def east():
     fx_smoke(640, LOW + 141.0, -160, 22.0, 120.0, 1)
     place('far_block1', 460, 20, yaw=0.4 - PI / 2, y=LOW, collide=False)
     place('far_block4', 640, 160, yaw=-PI / 2 - 0.15, y=SEA + 4.0, collide=False)
-    place('furnace_far', 560, -300, yaw=-PI / 2 + 0.4, y=LOW, scale=0.73, collide=False)
+    furnace_far(560, LOW, -300, yaw=-PI / 2 + 0.4, scale=0.73, dc='B', stoves=3, turn=True)
     fx_smoke(560, LOW + 200.0, -300, 5.0, 180.0, 2)
     stack('fstack0', 700, 240, y=LOW)
     # slag runner from the casthouse west door to the pit, pit + slag heap
@@ -526,7 +598,7 @@ def west():
     place('far_block1', -520, -150, yaw=0.3 + PI / 2, y=LOW, collide=False)
     place('far_block3', -480, 200, yaw=-0.2 + PI / 2, y=LOW, collide=False)
     place('far_block4', -700, -380, yaw=PI / 2 + 0.2, y=LOW, collide=False)
-    place('furnace_far', -720, 380, yaw=PI / 2 - 0.5, y=LOW, scale=(-0.95, 0.95, 0.95), collide=False)
+    furnace_far(-720, LOW, 380, yaw=PI / 2 - 0.5, scale=(-0.95, 0.95, 0.95), dc='B', stoves=4)
     fx_smoke(-720, LOW + 270.0, 380, 7.0, 220.0, 2)
     place('cooling', -760, 120, y=LOW, collide=False)
     fx_smoke(-760, LOW + 141.0, 120, 22.0, 120.0, 1)
@@ -690,7 +762,7 @@ def mole(cx=10.0, cz=550.0, W=340.0, D=160.0):
     fx_shore(cx, cz, W / 2 + 0.6, D / 2 + 0.6, r=2.0, k=1.4)
     # furnace (mirrored near kit x2.6: skip incline runs west, dust catcher east), stoves behind
     hx, hz = cx + 55.0, cz + 18.0
-    A.inst('furnace', (hx, y, hz), yaw=0.2, scale=(-2.6, 2.6, 2.6), collide=False)
+    furnace(hx, y, hz, yaw=0.2, scale=(-2.6, 2.6, 2.6), top='A', dc='A')
     for k in range(3):
         A.inst('stove', (hx - 20 + k * 26, y, hz + 58 - k * 4), scale=(2.3, 2.3, 2.0 + 0.15 * k), collide=False)
     # casthouse on the furnace's south-east, tap floor opening toward the WEST (seen obliquely)
@@ -839,12 +911,13 @@ def dock():
     for i in range(24):
         x = -585.0 + i * 36.0 + RND.uniform(-8, 8)
         fx_smoke(x, SEA + 1.0, 693.0 + RND.uniform(-2, 3), 3.0, 30.0, 3)
+    # (r4) the far-shore hinterland stands ON the far-shore terrain (it floated 10 m above it)
     for (x, z, yaw) in ((-400, 1500, 0.1), (-250, 1520, 0.0), (150, 1480, -0.1), (500, 1550, 0.2), (900, 1400, 0.3)):
-        A.inst('far_crane', (x, 0.0, z), yaw=yaw, collide=False)
+        A.inst('far_crane', (x, terrain_h(x, z), z), yaw=yaw, collide=False)
     for (x, z, n) in ((-700, 1700, 0), (-100, 1750, 2), (300, 1650, 1), (800, 1800, 3), (1200, 1500, 0)):
-        A.inst(f'far_block{n}', (x, 0.0, z), yaw=PI + RND.uniform(-0.3, 0.3), collide=False)
+        A.inst(f'far_block{n}', (x, terrain_h(x, z), z), yaw=PI + RND.uniform(-0.3, 0.3), collide=False)
     for (x, z, k) in ((-550, 1800, 'fstack1'), (50, 1900, 'fstack0'), (650, 1750, 'fstack3'), (1100, 1650, 'fstack2')):
-        A.inst(k, (x, 0.0, z), collide=False)
+        A.inst(k, (x, terrain_h(x, z), z), collide=False)
     # across the bay: pier 5/6 silhouettes at 650-1100 m
     for (x, z, yaw) in ((-620, 820, 0.0), (-470, 830, 0.0), (520, 760, 0.1), (660, 770, 0.1), (820, 790, 0.1)):
         A.inst('crane', (x, SEA + 4.0, z), yaw=yaw, collide=False)
@@ -860,12 +933,11 @@ def dock():
         A.inst(k, (x, SEA + 4.0, z), yaw=PI + yaw, collide=False)
     for (x, z, k, yaw) in ((-250, 960, 'furnace300', 0.3), (290, 960, 'furnace300b', -0.9), (-700, 940, 'furnace220', 0.9)):
         sc = {'furnace300': 1.0, 'furnace300b': (-0.95, 0.95, 0.95)}.get(k, 0.73)
-        A.inst('furnace_far', (x, SEA + 4.0, z), yaw=yaw, scale=sc, collide=False)
+        var = {'furnace300': ('A', 3, True, True), 'furnace300b': ('B', 4, False, True)}.get(k, ('A', 3, True, False))
+        furnace_far(x, SEA + 4.0, z, yaw=yaw, scale=sc, dc=var[0], stoves=var[1], turn=var[2], skip=var[3])
         fx_smoke(x, SEA + 4.0 + {'furnace300': 270.0, 'furnace300b': 256.0}.get(k, 200.0), z, 7.0, 240.0, 2)
     g = A.Geo()
-    for (x0, x1, z0, z1) in ((-1100, 1300, 760, 1400),):
-        g.merge(A.Geo.from_pydata([tuple(G(x0, SEA + 4.0, z0)), tuple(G(x0, SEA + 4.0, z1)), tuple(G(x1, SEA + 4.0, z1)), tuple(G(x1, SEA + 4.0, z0))],
-                                  [(0, 1, 2, 3)], 'far:dark'))
+    for (x0, x1, z0, z1) in ((-1100, 1300, 760, 1400),):     # quay wall of the far shore (ground = runtime terrain)
         g.merge(K.bx(x1 - x0, 4.0, 5.0, tuple(G((x0 + x1) / 2, SEA + 1.5, z0 + 2.0)), mat='far'))
     A.unique('farshore', g, weighted=False, noshadow=True)
     # HERO landmark on the play axis (+Z from the launch pad, rising over the C2 gallery): Furnace
@@ -874,8 +946,6 @@ def dock():
     mole()
     # east peninsula (Pier 9 smelters): giant stacks + cooling towers read above the haze band
     g = A.Geo()
-    g.merge(A.Geo.from_pydata([tuple(G(430, SEA + 4.0, 250)), tuple(G(430, SEA + 4.0, 1100)), tuple(G(1900, SEA + 4.0, 1100)),
-                               tuple(G(1900, SEA + 4.0, 250))], [(0, 1, 2, 3)], 'far:dark'))
     g.merge(K.bx(6.0, 850.0, 5.0, tuple(G(432, SEA + 1.5, 675)), mat='far'))
     A.unique('peninsula', g, weighted=False, noshadow=True)
     for (x, z, k, sc) in ((470, 520, 'fstack1', 1.25), (600, 450, 'fstack0', 1.4), (720, 640, 'fstack3', 1.3), (-360, 790, 'fstack2', 1.6)):
@@ -884,7 +954,7 @@ def dock():
     for (x, z) in ((640, 760), (840, 560)):
         A.inst('cooling', (x, SEA + 4.0, z), collide=False)
         fx_smoke(x, SEA + 145.0, z, 22.0, 130.0, 1)
-    A.inst('furnace', (520, SEA + 4.0, 690), yaw=1.2, collide=False)
+    furnace(520, SEA + 4.0, 690, yaw=1.9, scale=1.12, top='B', dc='A', skip=False)
     fx_smoke(520, SEA + 94.0, 690, 2.4, 90.0, 2)
     for (x, z, k) in ((560, 300, 0), (760, 380, 2), (900, 700, 1)):
         A.inst(f'far_block{k}', (x, SEA + 4.0, z), yaw=-PI / 2 + 0.2, collide=False)
@@ -1165,6 +1235,54 @@ def dressing(free, rs):
     A.unique('decals_tracks', d, weighted=False, noshadow=True)
 
 
+def far_districts():
+    """r4: hinterland clusters on the runtime terrain (WORLD S 'void periphery'): jittered rings
+    from 0.5 to 3 km, >= 1 cluster per ~150-300 m of horizon over land, clear of every existing
+    footprint, on a district grid (yaw 0 / 90 deg + jitter), placed at the terrain height."""
+    rs = random.Random(909)
+    existing = A.compute_footprints(skip=('_ground', 'farshore', 'peninsula', 'farlamps', 'decals', 'breakwater', 'carrier', '_mole'))
+    placed = []
+    kits = {'near': ['fd_sheds0', 'fd_sheds1', 'fd_tanks0', 'fd_rail0', 'fd_runway0', 'fd_sheds0', 'fd_tanks1', 'fd_rail1'],
+            'far': ['fd_sheds1', 'fd_rail1', 'fd_tanks1', 'fd_runway1', 'far_block0', 'far_block2', 'far_block3', 'fd_sheds0',
+                    'far_block1', 'fd_runway0']}
+    RAD = {'fd_rail0': 80, 'fd_rail1': 100, 'fd_sheds0': 75, 'fd_sheds1': 75, 'fd_tanks0': 85, 'fd_tanks1': 85,
+           'fd_runway0': 110, 'fd_runway1': 110, 'far_block0': 75, 'far_block1': 55, 'far_block2': 50, 'far_block3': 90}
+    n = 0
+    for (r0, step) in ((480, 150), (600, 160), (730, 170), (870, 185), (1020, 200), (1200, 220), (1400, 240), (1650, 270),
+                       (1950, 310), (2300, 360), (2750, 440)):
+        k = int(2 * PI * r0 / step)
+        ph = rs.uniform(0, 2 * PI)
+        for i in range(k):
+            a = ph + 2 * PI * i / k + rs.uniform(-0.25, 0.25) * step / r0
+            rr = r0 + rs.uniform(-0.18, 0.18) * step
+            x, z = rr * math.sin(a), rr * math.cos(a)
+            sd, walled, base = land_sd(x, z)
+            name = rs.choice(kits['near' if r0 < 900 else 'far'])
+            R = RAD[name]
+            if sd > -R * 0.8:              # keep the whole cluster on land
+                continue
+            if max(abs(x), abs(z)) < 330 + R:
+                continue
+            clash = False
+            for (fx, fz, hx, hz, yaw, y0) in existing:
+                if math.hypot(fx - x, fz - z) < R + 0.8 * math.hypot(hx, hz) + 12:
+                    clash = True
+                    break
+            if not clash:
+                for (px, pz, pr) in placed:
+                    if math.hypot(px - x, pz - z) < 0.85 * (R + pr) + 6:
+                        clash = True
+                        break
+            if clash:
+                continue
+            yaw = rs.choice((0.0, PI / 2, PI, -PI / 2)) + rs.uniform(-0.08, 0.08)
+            sc = rs.uniform(0.85, 1.15) * (1.0 + 0.35 * _ss(1200.0, 3000.0, rr))   # bigger far out (still reads in the haze)
+            A.inst(name, (x, terrain_h(x, z), z), yaw=yaw, scale=sc, collide=False)
+            placed.append((x, z, R * sc))
+            n += 1
+    print(f'[arena] far districts: {n} clusters')
+
+
 def markers():
     A.marker('SPAWN_player', (0, 0.4, -205), 0.0)
     for i, (x, z) in enumerate(((-40, -40), (-5, -22), (30, -58), (62, -18), (-72, -92))):
@@ -1225,7 +1343,10 @@ def splat(path, n=512):
     wet = np.maximum(wet, sstep(0.74, 0.82, mid) * 0.85 * (1 - S))
     # hand-placed standing water beside the launch lane / MT yard (camera foregrounds)
     for (px, pz, rx, rz, a) in ((-26, -118, 9, 5, 0.3), (22, -150, 7, 4, -0.2), (-34, -60, 11, 6, 0.8), (10, -95, 5, 3, 0.0),
-                                (40, -20, 9, 5, 1.2), (-8, -176, 4, 2.5, 0.0), (60, -120, 8, 3, 0.1), (-60, -180, 10, 5, 0.5)):
+                                (40, -20, 9, 5, 1.2), (-8, -176, 4, 2.5, 0.0), (60, -120, 8, 3, 0.1), (-60, -180, 10, 5, 0.5),
+                                # r4: standing water in the open foregrounds (west yard, control block, south lane)
+                                (42, -64, 7, 3.5, 0.4), (30, -48, 4, 2.2, 1.1), (122, -203, 5, 2.6, 0.5), (130, -192, 3, 1.8, 0.2),
+                                (-14, -163, 4, 2.0, 0.6), (14, -183, 3.5, 2.0, 0.3), (-120, -40, 8, 4, 0.9), (150, 30, 7, 3, 0.2)):
         c, s_ = math.cos(a), math.sin(a)
         lx, lz = (gx - px) * c - (gz - pz) * s_, (gx - px) * s_ + (gz - pz) * c
         wet = np.maximum(wet, 1 - sstep(0.7, 1.15, np.sqrt((lx / rx) ** 2 + (lz / rz) ** 2)))
@@ -1266,7 +1387,10 @@ def main():
     yard()
     mid_masses()
     clutter()
+    far_districts()
     markers()
+    fp = A.compute_footprints(skip=('_ground', 'farshore', 'peninsula', 'farlamps', 'decals', 'breakwater', 'carrier', '_mole'))
+    print(f'[arena] terrain footprints: {len(fp)}')
     print(f'[arena] hidden-face cull: {A.CULL["killed"]} of {A.CULL["faces"]} faces')
     print(f'[arena] layout: {A.STATS["inst"]} objects, ~{A.STATS["tris"] / 1e3:.0f}k tris, {A.STATS["cols"]} colliders, '
           f'{time.time() - t0:.1f}s')

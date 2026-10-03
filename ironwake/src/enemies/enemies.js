@@ -25,6 +25,7 @@ import { Boss } from './boss.js';
 import { MechRig } from '../mech/rig.js';
 import { Tokens, registerAiFx } from './ai.js';
 import { LaserSights } from './sights.js';
+import { updateOutline, setOutlineRes } from './outline.js';
 
 /** Max simultaneous telegraph+fire cycles per group (the rest reposition meanwhile). */
 export const TOKENS = { mt: 2, drone: 2, turret: 2, dive: 1 };
@@ -41,7 +42,7 @@ export default function enemiesSystem(game) {
   const roleCount = { mt: 0 };
   let seq = 0;                      // per-session spawn index (actor ids grow across sessions)
   let sampleT = 0;
-  const _c = new THREE.Vector3(), _f = new THREE.Vector3();
+  const _c = new THREE.Vector3(), _f = new THREE.Vector3(), _rs = new THREE.Vector2();
   const api = {
     name: 'enemies',
     order: 200,
@@ -219,7 +220,14 @@ export default function enemiesSystem(game) {
     },
 
     frame(alpha) {
-      for (let i = 0; i < list.length; i++) list[i].syncVisual(alpha);
+      // far-range outlines (outline.js): fade by camera distance, width by drawing-buffer height
+      const cam = game.camera, r = game.renderer;
+      if (r && r.getDrawingBufferSize) { r.getDrawingBufferSize(_rs); setOutlineRes(_rs.x, _rs.y); }
+      for (let i = 0; i < list.length; i++) {
+        const e = list[i];
+        e.syncVisual(alpha);
+        if (e.outline && cam) { _c.copy(e.root.position); _c.y += e.aimHeight; updateOutline(e.outline, cam, _c, _rs.y || 900, e.alive && e.root.visible); }
+      }
       if (api.sights) api.sights.frame();
     },
 

@@ -1,8 +1,10 @@
 // src/player/movefx.js — movement feedback particles for the player rig (owner: movement
 // designer). Registers a few MOVEMENT-specific effects on game.fx (names prefixed `mv_`, so they
 // never collide with the VFX artist's library) and emits them from motor state:
+//   mv_trail     CONTINUOUS ground drag streak: one low, velocity-stretched puff every 0.6 m of
+//                travel (QB, boost, skid), so overlapping puffs read as one unbroken rooster tail
 //   mv_skid      directional ground spray + foot-pad sparks (hard turns, braking skids)
-//   mv_wake      low rooster-tail dust behind the feet while ground boosting
+//   mv_wake      kicked grit + low fast streaks from the feet while ground boosting
 //   mv_wash      thruster downwash under low flight (AB / QB / hover): flattened dust sheets
 //   mv_qb_ring   ground pressure ring under a quick boost near the ground
 //   mv_land      landing dust ring + grit, scaled by impact speed
@@ -12,6 +14,7 @@
 //   mv_speed     faint streaks passing the camera at high speed (speed read)
 // All positional randomness uses the RNG stream 'movefx' (deterministic, independent).
 import * as THREE from 'three';
+import { makeHit } from '../core/physics.js';
 
 // Parts use the VFX lane's particle format (src/fx/library.js header): lit, noise-ERODED billow
 // puffs (never flat discs: combat r1 tell), low alpha, strongly varied sizes, fade-in, swirl, so
@@ -21,20 +24,28 @@ const DUST = [0.3, 0.27, 0.235], DUST_D = [0.24, 0.22, 0.2], DUST_L = [0.36, 0.3
 const DUST_W = [0.44, 0.4, 0.35];   // fresh, fine dust thrown up by the boost: lighter than the slab
 const GRIT = [0.12, 0.11, 0.1];      // chunks are unlit sprites: keep them dark (light ones read as white pellets)
 const HOT = [3.8, 1.6, 0.38], HOT_D = [1.3, 0.24, 0.03];
+// combat r4 (B: the QB / skid wake read as a dotted line of isolated dust pillars): the trail is
+// emitted by DISTANCE (every TRAIL_STEP m, +-TRAIL_JIT m lateral jitter), each puff thrown slowly
+// along the ground path and smeared along its own velocity (stretch: ~2.5x as long as tall), low
+// alpha (0.15-0.25) and long-lived (1.2-2 s), so the overlap is one continuous drag streak
+const TRAIL_STEP = 0.6, TRAIL_JIT = 0.5;
+// (alpha is the PARAMETER: the streak shader's filament / radial window and the ground soft-fade
+//  take it down to ~0.15-0.25 on screen)
+const TRAIL = { shape: 'puff', count: [1, 1], life: [1.2, 2.0], speed: [4, 8], dirMode: 'dir', cone: 8, size: [2.2, 5.6], sizePow: 1.7, sizeVar: 0.3, stretch: 0.75, color0: DUST, alpha: [0.9, 0], alphaPow: 0.8, fadeIn: 0.03, erode: [0.08, 0.5], drag: 0.55, rise: 0.15, turb: 0.3, lit: true, scaleCount: false };
 export const MOVE_FX = {
+  mv_trail: [TRAIL],
+  mv_trail_f: [{ ...TRAIL, alpha: [0.6, 0], color0: DUST_L }],
   mv_skid: [
-    { shape: 'puff', count: [2, 3], life: [0.7, 1.5], speed: [8, 24], dirMode: 'dir', cone: 34, size: [0.9, 6.5], sizePow: 2.4, stretch: 0.08, color0: DUST, alphaPow: 0.7, alpha: [0.34, 0], fadeIn: 0.06, erode: [0.08, 0.6], drag: 2.8, rise: 1.0, turb: 1.6, lit: true, jitter: 1.0 },
-    { shape: 'puff', count: [0, 1], life: [0.35, 0.6], speed: [16, 30], dirMode: 'dir', cone: 22, size: [0.5, 2.4], sizePow: 2, color0: DUST_D, alphaPow: 0.7, alpha: [0.4, 0], erode: [0.12, 0.6], drag: 4, lit: true, spin: [-2, 2] },
+    // braking spray thrown forward-out along the slide: low and streaked (the drag streak itself is mv_trail)
+    { shape: 'puff', count: [1, 2], life: [0.6, 1.2], speed: [10, 24], dirMode: 'dir', cone: 26, size: [0.9, 4.8], sizePow: 2.2, stretch: 0.1, color0: DUST, alphaPow: 0.7, alpha: [0.28, 0], fadeIn: 0.06, erode: [0.08, 0.55], drag: 2.8, rise: 0.35, turb: 0.8, lit: true, jitter: 0.8 },
+    { shape: 'puff', count: [0, 1], life: [0.35, 0.6], speed: [16, 30], dirMode: 'dir', cone: 22, size: [0.5, 2.4], sizePow: 2, stretch: 0.06, color0: DUST_D, alphaPow: 0.7, alpha: [0.34, 0], erode: [0.12, 0.6], drag: 4, lit: true },
     { shape: 'chunk', count: [1, 2], life: [0.3, 0.6], speed: [12, 26], dirMode: 'dir', cone: 30, size: [0.2, 0.16], color0: GRIT, variant: [0, 11], gravity: 30, collide: true, bounce: 0.3, spin: [-15, 15] },
     { shape: 'spark', count: [2, 4], life: [0.1, 0.28], speed: [16, 42], dirMode: 'dir', cone: 40, size: [0.14, 0.05], stretch: 0.035, color0: HOT, color1: HOT_D, heat: [1, 0.3], gravity: 26, drag: 1.2, collide: true, bounce: 0.3 },
   ],
   mv_wake: [
-    // rooster tail (combat r2: a CONTINUOUS low spray, not a breadcrumb of round puffs): emitted
-    // every step from the feet, thrown back + up and smeared along its own velocity (stretch), so
-    // overlapping low-alpha billows read as one ragged, streaming sheet
-    { shape: 'puff', count: [1, 1], life: [0.8, 1.6], speed: [12, 26], dirMode: 'dir', cone: 22, size: [1.0, 6.0], sizePow: 2.3, stretch: 0.11, color0: DUST_W, alpha: [0.4, 0], alphaPow: 0.7, fadeIn: 0.05, erode: [0.08, 0.6], drag: 3.2, rise: 1.5, turb: 1.8, lit: true, jitter: 0.9 },
-    // ground-hugging wash: flat eroded sheets sliding out behind the feet
-    { shape: 'puff', count: [0, 1], life: [0.6, 1.2], speed: [6, 14], dirMode: 'dir', cone: 26, size: [1.8, 8], sizePow: 1.8, color0: DUST, alphaPow: 0.7, alpha: [0.3, 0], fadeIn: 0.08, erode: [0.12, 0.6], drag: 3, orient: 'up', lit: true, spin: [-0.4, 0.4] },
+    // (the continuous body of the tail is mv_trail, emitted by distance) a low, fast spray thrown
+    // back from the feet and smeared flat along its velocity (no rise: nothing stands up as a pillar)
+    { shape: 'puff', count: [0, 1], life: [0.5, 0.9], speed: [14, 26], dirMode: 'dir', cone: 14, size: [0.8, 3.4], sizePow: 2.0, stretch: 0.1, color0: DUST_W, alpha: [0.24, 0], alphaPow: 0.7, fadeIn: 0.05, erode: [0.1, 0.55], drag: 3.0, rise: 0.2, turb: 0.6, lit: true, jitter: 0.5 },
     // kicked grit streaks + the odd chip
     { shape: 'puff', count: [0, 1], life: [0.25, 0.45], speed: [22, 36], dirMode: 'dir', cone: 16, size: [0.3, 1.4], sizePow: 2, stretch: 0.06, color0: DUST_L, alphaPow: 0.7, alpha: [0.3, 0], erode: [0.2, 0.6], drag: 4, lit: true },
     { shape: 'chunk', count: [0, 1], life: [0.3, 0.55], speed: [10, 20], dirMode: 'dir', cone: 25, size: [0.16, 0.14], color0: GRIT, variant: [0, 11], gravity: 30, collide: true, bounce: 0.3, spin: [-15, 15] },
@@ -44,7 +55,8 @@ export const MOVE_FX = {
     // sideways (ground-oriented eroded sheets + low streaks). Nothing billows up into the chase
     // camera's path (combat r2: a rising puff column read as a stack of cotton balls)
     { shape: 'puff', count: [1, 1], life: [0.4, 0.8], speed: [14, 28], dirMode: 'dir', cone: 55, size: [2.0, 9], sizePow: 1.6, color0: DUST, alphaPow: 0.7, alpha: [0.22, 0], fadeIn: 0.06, erode: [0.14, 0.6], drag: 3.5, orient: 'up', lit: true, spin: [-0.6, 0.6] },
-    { shape: 'puff', count: [0, 1], life: [0.3, 0.55], speed: [24, 44], dirMode: 'dir', cone: 65, size: [0.6, 2.6], sizePow: 2, stretch: 0.08, color0: DUST_W, alphaPow: 0.7, alpha: [0.24, 0], erode: [0.16, 0.6], drag: 4, rise: 0.3, lit: true },
+    // (r4: DUST, fainter: lit dust is not shadowed, so a pale streak printed on a shadowed slab)
+    { shape: 'puff', count: [0, 1], life: [0.3, 0.55], speed: [24, 44], dirMode: 'dir', cone: 65, size: [0.6, 2.6], sizePow: 2, stretch: 0.08, color0: DUST, alphaPow: 0.7, alpha: [0.16, 0], erode: [0.16, 0.6], drag: 4, rise: 0.3, lit: true },
   ],
   mv_qb_ring: [
     // pressure blast flattening the dust outward: radial streaks (stretched by their speed) + a
@@ -59,7 +71,7 @@ export const MOVE_FX = {
     // (VFX lane r3: camera-facing torn dust instead of world-aligned sheets, which printed a lobed
     //  'flower' on the slab from the chase camera)
     { shape: 'puff', count: [9, 9], life: [0.4, 0.75], speed: [26, 50], dirMode: 'ring', size: [1.4, 6.5], sizePow: 1.8, sizeVar: 0.5, color0: DUST, alphaPow: 0.7, alpha: [0.2, 0], fadeIn: 0.05, erode: [0.12, 0.6], drag: 4.5, rise: 0.4, lit: true, spin: [-1, 1], jitter: 0.8, variant: [4, 7], scaleCount: false },
-    { shape: 'puff', count: [8, 8], life: [0.25, 0.45], speed: [44, 66], dirMode: 'ring', size: [0.5, 2.2], sizePow: 2, stretch: 0.06, color0: DUST_L, alphaPow: 0.7, alpha: [0.22, 0], erode: [0.18, 0.6], drag: 5, rise: 0.3, lit: true, scaleCount: false },
+    { shape: 'puff', count: [8, 8], life: [0.25, 0.45], speed: [44, 66], dirMode: 'ring', size: [0.5, 2.2], sizePow: 2, stretch: 0.06, color0: DUST, alphaPow: 0.7, alpha: [0.16, 0], erode: [0.18, 0.6], drag: 5, rise: 0.3, lit: true, scaleCount: false },
   ],
   mv_land: [
     // landing: radial streaked billows + flat sheets hugging the slab (no translucent dome), dark grit
@@ -93,13 +105,40 @@ export const MOVE_FX = {
 };
 
 const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _c = new THREE.Vector3(), _r = new THREE.Vector3();
+const _fl = new THREE.Vector3(), _fr = new THREE.Vector3(), _so = new THREE.Vector3();
+const _sh = makeHit();
+
+// combat r4 (pale dust on a shadowed slab): lit puffs are not shadowed by the sun's shadow map, so
+// dust kicked up in the shade of a building printed light shapes on the dark ground. Every lit dust
+// effect gets a '<name>_sh' twin with a darker albedo (sky light only), picked when a ray from the
+// emission point toward the sun hits a static collider.
+const SHADE = 0.42;
+const SHADED = ['mv_trail', 'mv_trail_f', 'mv_wake', 'mv_skid', 'mv_wash', 'mv_qb_ring', 'mv_ab_ring', 'mv_land'];
+for (const k of SHADED) {
+  MOVE_FX[k + '_sh'] = MOVE_FX[k].map((p) => (p.lit && p.shape === 'puff' && p.color0
+    ? { ...p, color0: p.color0.map((c) => c * SHADE), ...(p.color1 ? { color1: p.color1.map((c) => c * SHADE) } : null) }
+    : p));
+}
 
 export class MoveFx {
   constructor(game) {
     this.game = game;
     this.rng = game.rng.stream('movefx');
     this.t = 0; this.speedT = 0; this.wakeT = 0; this.chargeT = 0; this.washT = 0;
+    // distance-emitted trail: previous foot positions (left / right), metres since the last puff
+    this.pL = new THREE.Vector3(); this.pR = new THREE.Vector3(); this.trailOn = false; this.trailAcc = 0;
+    this.shadeT = 0; this.shaded = false;
   }
+
+  /** True when the ground point (x, z) is in the shade of a static collider (one ray to the sun). */
+  inShade(x, z) {
+    const g = this.game, sd = g.env && g.env.sunDir;
+    if (!sd || !g.physics.raycast) return false;
+    _so.set(x, g.physics.groundHeight(x, z) + 1.0, z);
+    return g.physics.raycast(_so, sd, 260, _sh, { ground: false });
+  }
+  /** Effect name for dust emitted at (x, z): the shaded twin in the shade. */
+  dust(name, x, z) { return this.inShade(x, z) ? name + '_sh' : name; }
 
   /** Register the effects (call when game.fx is live; idempotent). */
   register() {
@@ -108,19 +147,20 @@ export class MoveFx {
     for (const k in MOVE_FX) fx.register(k, MOVE_FX[k]);
   }
 
-  reset() { this.t = 0; this.speedT = 0; this.wakeT = 0; this.chargeT = 0; this.washT = 0; }
+  reset() { this.t = 0; this.speedT = 0; this.wakeT = 0; this.chargeT = 0; this.washT = 0; this.trailOn = false; this.trailAcc = 0; this.shadeT = 0; this.shaded = false; }
 
   /** One-shot: quick boost onset. dir = world burst direction. */
   qb(player, dir) {
     const fx = this.game.fx, p = player.pos;
     const h = p.y - this.game.physics.groundHeight(p.x, p.z);
-    if (h < 6) fx.spawn('mv_qb_ring', _v.set(p.x, p.y + 0.4, p.z), null, 1 - h / 12);
-    if (player.motor.grounded) fx.spawn('mv_skid', _v.set(p.x, p.y + 0.5, p.z), _d.set(-dir.x, 0.25, -dir.z), 1.6);
+    const sh = h < 6 && this.inShade(p.x, p.z) ? '_sh' : '';
+    if (h < 6) fx.spawn('mv_qb_ring' + sh, _v.set(p.x, p.y + 0.4, p.z), null, 1 - h / 12);
+    if (player.motor.grounded) fx.spawn('mv_skid' + sh, _v.set(p.x, p.y + 0.5, p.z), _d.set(-dir.x, 0.25, -dir.z), 1.6);
   }
 
   land(player, speed) {
     const p = player.pos, s = Math.min(2.2, 0.5 + speed / 25);
-    this.game.fx.spawn('mv_land', _v.set(p.x, p.y + 0.3, p.z), null, s);
+    this.game.fx.spawn(this.dust('mv_land', p.x, p.z), _v.set(p.x, p.y + 0.3, p.z), null, s);
   }
 
   abLaunch(player, dir) {
@@ -128,7 +168,7 @@ export class MoveFx {
     _v.set(p.x - dir.x * 3, p.y + 6.5, p.z - dir.z * 3);
     this.game.fx.spawn('mv_ab_launch', _v, _d.set(-dir.x, -dir.y - 0.1, -dir.z), 1);
     const h = p.y - this.game.physics.groundHeight(p.x, p.z);
-    if (h < 8) this.game.fx.spawn('mv_ab_ring', _v.set(p.x, p.y + 0.4, p.z), null, 1.2);
+    if (h < 8) this.game.fx.spawn(this.dust('mv_ab_ring', p.x, p.z), _v.set(p.x, p.y + 0.4, p.z), null, 1.2);
   }
 
   /** Continuous emitters, once per fixed step. */
@@ -138,11 +178,44 @@ export class MoveFx {
     this.t += dt;
     const sp = m.speedH;
     const v = m.vel;
-    // ground wake + skid from the feet
-    if (m.grounded && (m.mode === 'boost' || m.mode === 'qb' || m.skid > 0.05) && sp > 20) {
-      // one spray per step at full speed (spacing ~1.4 m at 85 m/s, so the billows overlap
-      // into one continuous tail); mostly from the trailing foot (rigmotion.trailSide)
-      const rate = m.skid > 0.3 ? 50 : m.mode === 'qb' ? 60 : 58 * Math.min(1, sp / 85);
+    // sun shade under the rig (re-tested every 4 steps while dust is being kicked up)
+    const dusty = sp > 18 || (!m.grounded && m.mode !== 'air');
+    if (dusty && (this.shadeT -= 1) <= 0) { this.shadeT = 4; this.shaded = this.inShade(player.pos.x, player.pos.z); }
+    const SH = this.shaded ? '_sh' : '';
+    // ground drag streak, emitted by DISTANCE travelled by the feet (continuous at any speed)
+    const onGround = m.grounded && (m.mode === 'boost' || m.mode === 'qb' || m.skid > 0.05);
+    if (onGround && sp > 18) {
+      rig.getNodeWorld('foot_L', _fl); rig.getNodeWorld('foot_R', _fr);
+      const dl = Math.hypot(_fl.x - this.pL.x, _fl.z - this.pL.z), dr = Math.hypot(_fr.x - this.pR.x, _fr.z - this.pR.z);
+      const d = Math.max(dl, dr);
+      if (!this.trailOn || d > 12) { this.trailOn = true; this.trailAcc = 0; }
+      else {
+        this.trailAcc += d;
+        const k = 1 / Math.max(1, sp), skid = m.skid > 0.3;
+        const lx = -v.z * k, lz = v.x * k;                     // lateral (ground) unit vector
+        const trailL = rig.motion && rig.motion.trailSide > 0;
+        const gy = player.pos.y;
+        let n = 0;
+        while (this.trailAcc >= TRAIL_STEP && n < 8) {
+          this.trailAcc -= TRAIL_STEP; n++;
+          const f = 1 - this.trailAcc / Math.max(d, 1e-3);     // where along this step's segment
+          const useL = rng.chance(0.65) === trailL;
+          const a = useL ? this.pL : this.pR, b = useL ? _fl : _fr;
+          const j = rng.sym(TRAIL_JIT);
+          _v.set(a.x + (b.x - a.x) * f + lx * j, gy + 0.9, a.z + (b.z - a.z) * f + lz * j);
+          // boost / QB: blown back along the path by the jets; skid: carried forward with the slide.
+          // A little lateral spread so the chase camera (looking along the path) sees it low and wide
+          const fw = skid ? 0.8 : -1, ls = rng.sym(0.4);
+          _d.set(v.x * k * fw + lx * ls, 0.03, v.z * k * fw + lz * ls);
+          const sc = skid ? 0.9 + 0.4 * m.skid : 0.8 + 0.35 * Math.min(1, sp / 85);
+          fx.spawn((rng.chance(0.5) ? 'mv_trail' : 'mv_trail_f') + SH, _v, _d, sc);
+        }
+      }
+      this.pL.copy(_fl); this.pR.copy(_fr);
+    } else this.trailOn = false;
+    // ground spray + skid from the feet (on top of the trail: energy, grit, sparks)
+    if (onGround && sp > 20) {
+      const rate = m.skid > 0.3 ? 30 : m.mode === 'qb' ? 40 : 30 * Math.min(1, sp / 85);
       this.wakeT -= dt * rate;
       const trailL = rig.motion && rig.motion.trailSide > 0;
       while (this.wakeT <= 0) {
@@ -152,11 +225,11 @@ export class MoveFx {
         const k = 1 / Math.max(1, sp);
         if (m.skid > 0.3) {
           // spray forward-out along the slide (the feet are braking against it)
-          _d.set(v.x * k + rng.sym(0.3), 0.35, v.z * k + rng.sym(0.3));
-          fx.spawn('mv_skid', _v, _d, 0.8 + m.skid * 0.7);
+          _d.set(v.x * k + rng.sym(0.3), 0.16, v.z * k + rng.sym(0.3));
+          fx.spawn('mv_skid' + SH, _v, _d, 0.8 + m.skid * 0.7);
         } else {
-          _d.set(-v.x * k + rng.sym(0.12), 0.32, -v.z * k + rng.sym(0.12));
-          fx.spawn('mv_wake', _v, _d, 0.7 + 0.5 * Math.min(1, sp / 85));
+          _d.set(-v.x * k + rng.sym(0.12), 0.12, -v.z * k + rng.sym(0.12));
+          fx.spawn('mv_wake' + SH, _v, _d, 0.7 + 0.5 * Math.min(1, sp / 85));
         }
       }
     }
@@ -169,7 +242,7 @@ export class MoveFx {
         _v.set(player.pos.x - v.x * 0.03 + rng.sym(3), game.physics.groundHeight(player.pos.x, player.pos.z) + 0.4, player.pos.z - v.z * 0.03 + rng.sym(3));
         const k = 1 / Math.max(1, sp);
         _d.set(-v.x * k * 0.8 + rng.sym(0.5), 0.06, -v.z * k * 0.8 + rng.sym(0.5));
-        fx.spawn('mv_wash', _v, _d, 1.3 - alt / 20);
+        fx.spawn('mv_wash' + SH, _v, _d, 1.3 - alt / 20);
       }
     }
     // AB wind-up: sparks from the rear nozzles, growing with the charge

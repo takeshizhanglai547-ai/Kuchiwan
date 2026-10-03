@@ -10,10 +10,11 @@
 //   AB: 0.6 s wind-up (brakes + charges), then launches at 110 and settles at 130 m/s;
 //       10% start cost + 13% EN/s
 //   EN: regen delay 1.3 s, redline lockout 2.0 s then +20% instantly, refill ~130%/s
-//   Camera: vertical FOV 54 (+4 boost, +6 AB, +3 fast climb / drop, spring 0.25 s; AB launch peak 63),
-//           orbit ~35 m behind (+2.2 m to the right of) a point just above the head, so the rig
+//   Camera: vertical FOV 50 (+6 boost, +10 AB, +3 fast climb / drop, spring 0.25 s; AB launch peak 63),
+//           orbit ~37 m behind (+2.2 m to the right of) a point just above the head, so the rig
 //           sits in the lower-centre at 22-30% of frame height and the right-arm rifle clears the
-//           torso. Thin props between the camera and the rig: the camera first SLIDES around them
+//           torso. QB: FOV punch +5, a 0.012 rad jolt decaying over 0.15 s and a 0.4 m camera
+//           kick opposite to the burst. Thin props between the camera and the rig: the camera first SLIDES around them
 //           (up to 4 m sideways / 2.5 m up, eased 0.2 s); only what a slide cannot clear is cut
 //           out (clean hard-edged hole, cutout.js) instead of hiding the rig.
 // Every curve is plotted by `npm run telemetry` (.shots/telemetry.png).
@@ -110,18 +111,19 @@ export const MOVE = {
 // Framing note: the benchmark's three camera numbers (FOV 50, 26-32 m, rig 22-30% of frame
 // height) cannot all hold for a 10.7 m rig: at FOV 50 a 22-30% rig needs a 37-50 m camera.
 // Combat r2 critic: FOV 61 (78 at the AB peak) shrank the rig against a fish-eyed world and lost
-// the reference's telephoto heft. So the lens is narrowed to 54 (AB peak 63) and the orbit moves
-// out to ~35 m from the rig centre, which keeps the rig at ~29% idle / ~27% boosting / >= 23% in
-// AB flight (npm run telemetry: rig_frame_pct_*).
+// the reference's telephoto heft; r3 narrowed the lens to 54. Combat r4 (final): the FOV numbers now
+// match the spec exactly (50 base, +6 boost, +10 AB, launch peak 63) and the orbit sits ~37 m from
+// the rig centre, the closest distance that keeps the rig inside 22-30% of frame height at FOV 50
+// (npm run telemetry: rig_frame_pct_*). The 26-32 m spec distance would make the rig ~34% of frame.
 export const CAMERA = {
-  fov: 54,                  // vertical FOV (see the framing note above)
-  fovBoost: 4,              // sustained extra FOV while ground boosting fast
-  fovAB: 6,                 // sustained extra FOV during assault boost flight
+  fov: 50,                  // vertical FOV (see the framing note above)
+  fovBoost: 6,              // sustained extra FOV while ground boosting fast
+  fovAB: 10,                // sustained extra FOV during assault boost flight
   fovClimb: 3,              // sustained extra FOV at fast vertical speed (hover climb ~60 m/s, drops)
   fovTau: 0.25,             // sustained-FOV spring (s)
   pivotHeight: 11.6,        // the camera ORBITS this point above the feet (~0.9 m over the head),
                             // so the reticle always sits just above the rig's shoulders
-  distance: 34.2,           // behind the orbit point (~35 m to the rig centre)
+  distance: 36.8,           // behind the orbit point (~37.6 m to the rig centre)
   shoulder: 2.2,            // lateral offset (+ = camera to the mech's right): the right-arm rifle and
                             // its muzzle flash clear the torso silhouette; the rig sits a touch left
   heightOffset: 0.4,        // extra lift of the camera (keeps the rig low in frame when aiming up)
@@ -183,13 +185,18 @@ export const CAMERA = {
   qbFovKick: 5,             // degrees
   qbFovHold: 0.06,          // s at full punch (covers the first frames of the jet)
   qbFovDecay: 0.45,         // then eases out (half at ~0.16 s, gone by the end of the 0.35 s jet)
-  qbShake: 0.3,             // trauma
+  qbShake: 0.1,             // trauma (a little shared rumble; the burst's own impulse is the jolt below)
+  qbJoltRot: 0.012,         // rad: directional camera jolt at the burst (yaw kicks against it, pitch jitters)
+  qbJoltDur: 0.15,          // s: the jolt decays to 0 over this time ((1 - t/T)^2)
+  qbJoltFreq: 16,           // Hz of the jolt's oscillation
+  qbKickDist: 0.4,          // m: camera kicked OPPOSITE to the burst (critically damped, peak at 1/omega)
+  qbKickOmega: 24,          // rad/s (peak ~0.04 s after the burst, gone by ~0.25 s)
   qbRoll: 0.02,             // rad of camera roll away from the QB direction (decays with the kick)
 
   // Assault boost: wind-up narrows the view a touch, launch punches it wide
   abChargeFov: -3,
   abChargePull: 2.5,        // m the camera creeps in during the wind-up
-  abFlightPull: 2,          // m closer during AB flight (keeps the rig >= 22% of frame at +6 FOV)
+  abFlightPull: 4,          // m closer during AB flight (keeps the rig >= 22% of frame at +10 FOV)
   abFlightRise: 1.2,        // m higher during AB flight: looks down onto the pitched torso + boosters
   abLaunchKick: 3,          // degrees on top of the sustained fovAB (peak 63)
   abLaunchDecay: 0.55,

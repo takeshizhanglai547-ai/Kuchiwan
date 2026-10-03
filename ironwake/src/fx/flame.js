@@ -18,7 +18,11 @@
 import * as THREE from 'three';
 
 /** Art-direction knobs (per world metre emission, steps). */
-export const PLUME = { steps: 12, density: 10.0, coreBoost: 2.4, diamonds: 1.4, softCap: 0.12 };   // r3: denser mantle, harder highlight cap (no end-on glare)
+// r3: denser mantle, harder highlight cap (no end-on glare). r4: levelMax 1.15 + softCap 0.2 (the
+// HDR peak tops out near ~4-5 before tone mapping: a quick-boost burst no longer saturates the
+// shell into a flat white 'megaphone'), mantle windowed to 0 before the bounding shell (soft
+// silhouette instead of the shell's hard cone edge)
+export const PLUME = { steps: 12, density: 10.0, coreBoost: 2.4, diamonds: 1.4, softCap: 0.2, levelMax: 1.15 };
 
 const VERT = /* glsl */`
 varying vec3 vObj; varying vec3 vCamObj; varying vec2 vScale;
@@ -47,7 +51,7 @@ vec3 ramp(float h) {
   return mix(c, uCore, smoothstep(0.6, 0.95, h));
 }
 void main() {
-  float lvl = clamp(uLevel, 0.0, 2.0);
+  float lvl = clamp(uLevel, 0.0, ${PLUME.levelMax.toFixed(2)});
   float tm = mod(uTime, 200.0);
   vec3 ro = vObj, rd = vObj - vCamObj;
   float rl = length(rd);
@@ -80,7 +84,7 @@ void main() {
     float fil = vnoise(vec3(p.xy * 6.0, s * 1.6 - flow * 1.4 + uSeed * 2.1));
     // ragged tip: the jet dissolves into turbulence before the shell ends
     float tip = 1.0 - smoothstep(reachN - 0.35 + 0.2 * n, reachN + 0.12 * n, s);
-    float d = exp(-q * q * 2.6) * tip * (0.35 + 0.9 * n) * (0.75 + 0.5 * fil);
+    float d = exp(-q * q * 2.6) * (1.0 - smoothstep(1.1, 1.55, q)) * tip * (0.35 + 0.9 * n) * (0.75 + 0.5 * fil);
     // temperature: axis + exit hottest; diamonds are stationary knots on the axis
     float heat = exp(-q * q * 4.0) * pow(max(1.0 - s, 1e-3), 1.1) * (0.6 + 0.4 * min(lvl, 1.3)) * (0.8 + 0.4 * n);
     float dia = pow(max(0.5 + 0.5 * cos(s * 28.0 - 1.0), 1e-4), 10.0) * exp(-q * q * 16.0)
@@ -88,7 +92,7 @@ void main() {
     heat = clamp(heat + dia * 0.6, 0.0, 1.0);
     float e = d * (0.35 + ${PLUME.coreBoost.toFixed(2)} * heat * heat) + dia * ${PLUME.diamonds.toFixed(2)};
     // faint glowing mantle of hot gas around the jet (keeps a thin jet from reading as a wire)
-    float mant = exp(-q * q * 1.15) * tip * (0.6 + 0.6 * n) * 0.16;
+    float mant = exp(-q * q * 1.6) * (1.0 - smoothstep(0.95, 1.5, q)) * tip * (0.6 + 0.6 * n) * 0.16;
     acc += ramp(heat) * e + uOuter * mant * (0.5 + 0.5 * (1.0 - s));
   }
   acc *= dt * wl * ${PLUME.density.toFixed(2)} * uGain * min(lvl, 1.6);

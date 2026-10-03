@@ -3,10 +3,12 @@
 
     python3 assets/fonts/build_fonts.py <path-to>/node_modules/@fontsource
 
-Inputs are the OFL fonts from npm (@fontsource/barlow-condensed, @fontsource/share-tech-mono,
-@fontsource/noto-sans-jp). Outputs (woff2, next to this script):
-    barlow-condensed-{400,500,600,700}.woff2   labels / headings (latin only)
-    share-tech-mono-400.woff2                  tabular numbers
+Inputs are the OFL fonts from npm (@fontsource/barlow-condensed, @fontsource/barlow-semi-condensed,
+@fontsource/share-tech-mono, @fontsource/noto-sans-jp). `--num` rebuilds only the numeral face. Outputs (woff2, next to this script):
+    barlow-condensed-{500,600,700}.woff2       labels / headings (latin only; 400 requests use 500)
+    barlow-semi-condensed-500-num.woff2        large numerals: digits + number punctuation only,
+                                               TABULAR figures baked into the cmap (no 'tnum' needed)
+    share-tech-mono-400.woff2                  small telemetry numbers (range, reserve, tape)
     noto-sans-jp-{400,700}-subset.woff2        ONLY the Japanese glyphs the game uses
 
 The Japanese subset scans every .js/.css file under src/ and css/ for kana, kanji and
@@ -28,10 +30,10 @@ from fontTools.ttLib import TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'node_modules', '@fontsource')
+SRC = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(ROOT, 'node_modules', '@fontsource')
 
 LATIN = [
-    ('barlow-condensed/files/barlow-condensed-latin-{w}-normal.woff2', 'barlow-condensed-{w}.woff2', (400, 500, 600, 700)),
+    ('barlow-condensed/files/barlow-condensed-latin-{w}-normal.woff2', 'barlow-condensed-{w}.woff2', (500, 600, 700)),
     ('share-tech-mono/files/share-tech-mono-latin-{w}-normal.woff2', 'share-tech-mono-{w}.woff2', (400,)),
 ]
 JP_WEIGHTS = (400, 700)
@@ -67,8 +69,48 @@ def subset_font(path, text, keep_palt=True):
     return font, present
 
 
+NUM_SRC = 'barlow-semi-condensed/files/barlow-semi-condensed-latin-500-normal.woff2'
+NUM_DST = 'barlow-semi-condensed-500-num.woff2'
+NUM_TEXT = '0123456789,.:/+-%\u00d7\u2212 '
+
+
+def build_num(src_root):
+    """Digits + number punctuation of Barlow Semi Condensed 500 with the tabular figures
+    (GSUB 'tnum') swapped into the cmap, so every numeral has one advance width by default."""
+    font = TTFont(os.path.join(src_root, NUM_SRC))
+    tnum = {}
+    gsub = font['GSUB'].table
+    for fr in gsub.FeatureList.FeatureRecord:
+        if fr.FeatureTag != 'tnum':
+            continue
+        for li in fr.Feature.LookupListIndex:
+            for st in gsub.LookupList.Lookup[li].SubTable:
+                st = getattr(st, 'ExtSubTable', st)
+                if hasattr(st, 'mapping'):
+                    tnum.update(st.mapping)
+    for table in font['cmap'].tables:
+        for cp, g in list(table.cmap.items()):
+            if g in tnum:
+                table.cmap[cp] = tnum[g]
+    opts = subset.Options()
+    opts.layout_features = ['kern']
+    opts.name_IDs = ['*']
+    opts.notdef_outline = True
+    s = subset.Subsetter(opts)
+    s.populate(text=NUM_TEXT)
+    s.subset(font)
+    font.flavor = 'woff2'
+    out = os.path.join(HERE, NUM_DST)
+    font.save(out)
+    widths = {font['hmtx'][font.getBestCmap()[ord(c)]][0] for c in '0123456789'}
+    print(f'[fonts] {NUM_DST}: {len(tnum)} tnum swaps, digit advances {sorted(widths)}, {os.path.getsize(out)} B')
+
+
 def main():
     os.makedirs(HERE, exist_ok=True)
+    build_num(SRC)
+    if '--num' in sys.argv:
+        return
     for src, dst, weights in LATIN:
         for w in weights:
             shutil.copyfile(os.path.join(SRC, src.format(w=w)), os.path.join(HERE, dst.format(w=w)))

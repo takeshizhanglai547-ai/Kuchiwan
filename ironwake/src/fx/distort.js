@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 const MAXS = 160;
-const _at = new THREE.Vector3();
+const _at = new THREE.Vector3(), _bv = new THREE.Vector3();
 
 const SPRITE_VERT = /* glsl */`
 attribute vec3 iPos; attribute vec4 iData; // size, age01, strength, shape
@@ -25,7 +25,7 @@ void main() {
 }`;
 
 const SPRITE_FRAG = /* glsl */`
-uniform sampler2D tNoise; uniform sampler2D tDepth; uniform vec2 uRes; uniform float uTime; uniform float uHasDepth;
+uniform sampler2D tNoise; uniform sampler2D tDepth; uniform vec2 uRes; uniform float uTime; uniform float uHasDepth; uniform vec4 uBox;
 varying vec2 vUv; varying vec4 vData; varying float vViewZ;
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
@@ -47,24 +47,40 @@ void main() {
   }
   if (uHasDepth > 0.5) {
     float sd = texture2D(tDepth, gl_FragCoord.xy / uRes).r;
-    off *= clamp((sd - vViewZ) / 1.5 + 1.0, 0.0, 1.0);   // occluded => no refraction
+    if (vData.w > 0.5) off *= clamp((sd - vViewZ) / 1.5 + 1.0, 0.0, 1.0);   // ring: occluded => no refraction
+    // heat shimmer (combat r4: it refracted the player rig itself, smearing legs and armour): only
+    // background at least ~2 m BEHIND the haze sprite refracts, never the hull it rides on
+    else off *= smoothstep(2.0, 4.5, sd - vViewZ);
+    // inside the player rig's screen box the shimmer is damped further (box: uv min.xy, max.zw)
+    if (uBox.x < uBox.z) {
+      vec2 suv = gl_FragCoord.xy / uRes;
+      vec2 bm = smoothstep(uBox.xy - 0.02, uBox.xy + 0.01, suv) * (1.0 - smoothstep(uBox.zw - 0.01, uBox.zw + 0.02, suv));
+      if (vData.w < 0.5) off *= 1.0 - 0.75 * bm.x * bm.y;
+    }
   }
   gl_FragColor = vec4(off, 0.0, 1.0);
 }`;
 
 const APPLY_FRAG = /* glsl */`
-uniform sampler2D tScene; uniform sampler2D tOff; uniform vec2 uAspect;
+uniform sampler2D tScene; uniform sampler2D tOff; uniform sampler2D tDepth; uniform vec2 uAspect; uniform float uHasDepth;
 varying vec2 vUv;
 void main() {
   vec2 off = texture2D(tOff, vUv).rg;
   float ol = length(off);
-  if (ol > 0.007) off *= 0.007 / ol;   // overlapping sprites never tear the image
+  // (combat r4: 0.007 bent the background lattice ~10 px) overlapping sprites never tear the image
+  if (ol > 0.0025) off *= 0.0025 / ol;
   off *= uAspect;
-  // subtle chromatic split along the refraction (reads as hot air, not a lens)
+  if (uHasDepth > 0.5) {
+    // never pull a NEARER surface (the rig, a crate) into this pixel: refraction only samples
+    // background that lies at least as far as the pixel itself (minus 1.5 m)
+    float z0 = texture2D(tDepth, vUv).r, z1 = texture2D(tDepth, vUv + off).r;
+    off *= smoothstep(-3.0, -1.5, z1 - z0);
+  }
+  // faint chromatic split along the refraction (reads as hot air, not a lens)
   vec3 c;
-  c.r = texture2D(tScene, vUv + off * 1.06).r;
+  c.r = texture2D(tScene, vUv + off * 1.015).r;
   c.g = texture2D(tScene, vUv + off).g;
-  c.b = texture2D(tScene, vUv + off * 0.94).b;
+  c.b = texture2D(tScene, vUv + off * 0.985).b;
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -90,7 +106,7 @@ export class Distortion {
     this.geo = g;
     this.spriteMat = new THREE.ShaderMaterial({
       name: 'iw_fx_distort_sprite', vertexShader: SPRITE_VERT, fragmentShader: SPRITE_FRAG,
-      uniforms: { tNoise: { value: tex.misc }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uHasDepth: { value: 0 } },
+      uniforms: { tNoise: { value: tex.misc }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uHasDepth: { value: 0 }, uBox: { value: new THREE.Vector4(1, 1, 0, 0) } },
       transparent: true, depthTest: false, depthWrite: false,
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
     });
@@ -101,7 +117,7 @@ export class Distortion {
     this.scene.add(this.sprites);
     this.applyMat = new THREE.ShaderMaterial({
       name: 'iw_fx_distort_apply', vertexShader: APPLY_VERT, fragmentShader: APPLY_FRAG,
-      uniforms: { tScene: { value: null }, tOff: { value: null }, uAspect: { value: new THREE.Vector2(1, 1) } },
+      uniforms: { tScene: { value: null }, tOff: { value: null }, tDepth: { value: null }, uAspect: { value: new THREE.Vector2(1, 1) }, uHasDepth: { value: 0 } },
       depthTest: false, depthWrite: false, toneMapped: false,
     });
     this.quad = new FullScreenQuad(this.applyMat);
@@ -188,6 +204,9 @@ export class Distortion {
     const dt = pl && pl.depthTexture;
     this.spriteMat.uniforms.tDepth.value = dt || null;
     this.spriteMat.uniforms.uHasDepth.value = dt ? 1 : 0;
+    this.applyMat.uniforms.tDepth.value = dt || null;
+    this.applyMat.uniforms.uHasDepth.value = dt ? 1 : 0;
+    this._rigBox(cam, this.spriteMat.uniforms.uBox.value);
     const ac = renderer.autoClear, su = renderer.shadowMap.autoUpdate;
     const cc = renderer.getClearColor(this._cc || (this._cc = new THREE.Color())), ca = renderer.getClearAlpha();
     renderer.shadowMap.autoUpdate = false;
@@ -204,6 +223,23 @@ export class Distortion {
     u.uAspect.value.set(1, cam.aspect || 1);
     renderer.setRenderTarget(writeBuffer);
     this.quad.render(renderer);
+  }
+
+  /** Screen-uv box of the player rig (same 12 x 13 m volume the motion-blur pass keeps sharp). */
+  _rigBox(cam, out) {
+    out.set(1, 1, 0, 0);
+    const pl = this.game.player;
+    if (!pl || !pl.pos || pl.alive === false || pl.spawned === false) return;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (let i = 0; i < 8; i++) {
+      _at.set(pl.pos.x + ((i & 1) ? 6 : -6), pl.pos.y + ((i & 2) ? 12.5 : -0.5), pl.pos.z + ((i & 4) ? 6 : -6));
+      _bv.copy(_at).applyMatrix4(cam.matrixWorldInverse);
+      if (_bv.z > -0.5) return;
+      _at.project(cam);
+      const u = _at.x * 0.5 + 0.5, v = _at.y * 0.5 + 0.5;
+      if (u < x0) x0 = u; if (u > x1) x1 = u; if (v < y0) y0 = v; if (v > y1) y1 = v;
+    }
+    out.set(x0, y0, x1, y1);
   }
 
   dispose() {

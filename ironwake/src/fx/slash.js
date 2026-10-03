@@ -28,20 +28,25 @@ void main() {
   if (behind < -0.03) discard;
   float lead = smoothstep(-0.03, 0.02, behind);
   float tail = exp(-max(behind, 0.0) * 2.6);
+  // (combat r4: a uniform-width tube) the crescent TAPERS 0 -> 1 -> 0 along the sweep: every
+  // radial band is scaled by env (thin at both horns, full in the middle of the cut)
+  float env = pow(clamp(sin(x * 3.14159), 0.0, 1.0), 0.75);
+  float ew = 0.15 + 0.85 * env;
   // SMOOTH radial profile (combat r1: radially-varying noise printed concentric 'vinyl' bands):
   // a white-hot cutting edge, a cyan rim around it and a faint inner wash that fades to the hub
-  float core = exp(-pow((y - 0.86) / 0.035, 2.0));
-  float rim = exp(-pow((y - 0.83) / 0.12, 2.0));
-  float inner = smoothstep(0.05, 0.85, y) * (1.0 - smoothstep(0.9, 1.0, y));
-  // the TRAILING part erodes away with noise that varies along the sweep only (radially ~constant)
-  float n = texture2D(tNoise, vec2(x * 1.25 - uTime * 0.5, 0.21 + y * 0.18)).a * 2.0 - 1.0;   // 0..1
-  float ero = smoothstep(0.0, 0.45, n + 0.3 - max(behind, 0.0) * 1.1);
-  float head = exp(-max(behind, 0.0) * 24.0) * lead;          // bright leading edge
-  // broad swept CRESCENT (combat r2: thin parallel lines): a ~2.5 m band inside the cutting edge,
-  // white at the edge -> #7FD8FF inward, that dies off quickly behind the sweep head (~0.12 s)
-  float cres = smoothstep(0.52, 0.8, y) * (1.0 - smoothstep(0.87, 0.96, y));
-  float cresT = exp(-max(behind, 0.0) * 4.5) * (0.75 + 0.25 * ero);
-  float a = lead * tail * (core * 1.35 + (rim * 0.5 + inner * 0.12) * ero) + head * (0.18 + 0.8 * rim)
+  float core = exp(-pow((y - 0.86) / (0.035 * ew + 0.004), 2.0)) * (0.35 + 0.65 * env);
+  float rim = exp(-pow((y - 0.84) / (0.12 * ew + 0.01), 2.0)) * env;
+  float inner = smoothstep(0.86 - 0.8 * ew, 0.85, y) * (1.0 - smoothstep(0.9, 1.0, y)) * env;
+  // erosion mask SCROLLING along the arc (the cut tears apart as it decays, never a solid band)
+  float n = texture2D(tNoise, vec2(x * 2.2 - uTime * 7.0, 0.21 + y * 0.35)).a * 2.0 - 1.0;   // 0..1
+  float n2 = texture2D(tNoise, vec2(x * 5.1 - uTime * 11.0 + 0.37, 0.61 + y * 0.9)).a * 2.0 - 1.0;
+  float ero = smoothstep(0.0, 0.4, n * 0.7 + n2 * 0.3 + 0.35 - max(behind, 0.0) * 1.3 - (1.0 - uFade) * 0.5);
+  float head = exp(-max(behind, 0.0) * 24.0) * lead * (0.3 + 0.7 * env);   // bright leading edge
+  // broad swept CRESCENT (combat r2: thin parallel lines): a band inside the cutting edge,
+  // white at the edge -> #7FD8FF inward, that dies off quickly behind the sweep head
+  float cres = smoothstep(0.86 - 0.36 * ew, 0.8, y) * (1.0 - smoothstep(0.87, 0.96, y)) * env;
+  float cresT = exp(-max(behind, 0.0) * 4.5) * (0.35 + 0.65 * ero);
+  float a = lead * tail * (core * 1.35 * (0.55 + 0.45 * ero) + (rim * 0.5 + inner * 0.12) * ero) + head * (0.18 + 0.8 * rim)
           + lead * cres * cresT * 0.55;
   a *= uFade;
   vec3 col = mix(uRim, uCore, clamp(core * 0.9 + head * 0.5 + smoothstep(0.7, 0.86, y) * cres * 0.45, 0.0, 1.0));
@@ -77,12 +82,16 @@ function sectorGeometry(r0, r1, arc, seg = 48, rows = 4) {
 }
 
 const _p = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3();
+/** Slash timing (s): sweep head across the arc, visible life, afterglow. */
+export const SLASH = { sweep: 0.05, life: 0.12, glow: 0.034 };
 const CORE = [4.5, 5.5, 7.0];
 
 export class Slashes {
   constructor(game, tex, fx) {
     this.game = game; this.fx = fx;
-    this.geo = sectorGeometry(4.5, 13.5, THREE.MathUtils.degToRad(165));
+    // (combat r4: a ~30 m tube far past the blade) the arc stays inside the blade's reach: cutting
+    // edge at ~11.7 m (reach 14 m to the hull centre), 125 deg sweep
+    this.geo = sectorGeometry(4.0, 13.0, THREE.MathUtils.degToRad(125));
     this.items = [];
     this.beams = [];
     for (let i = 0; i < POOL; i++) {
@@ -108,7 +117,7 @@ export class Slashes {
   /** Swept arc in front of `owner` (pos/yaw/aimHeight). */
   slash(owner, opts = {}) {
     let it = this.items.find((x) => !x.alive) || this.items[0];
-    it.alive = true; it.t = opts.start ?? 0.035; it.life = 0.32;
+    it.alive = true; it.t = opts.start ?? 0.017; it.life = SLASH.life + SLASH.glow;
     const m = it.mesh;
     const h = (owner.aimHeight || 5) * 0.78;
     m.position.set(owner.pos.x, owner.pos.y + h, owner.pos.z);
@@ -160,8 +169,9 @@ export class Slashes {
       if (!it.alive) continue;
       const t = it.t;
       const u = it.mat.uniforms;
-      u.uHead.value = Math.min(1.25, t / 0.07);
-      u.uFade.value = t < 0.07 ? 1 : Math.max(0, 1 - (t - 0.07) / (it.life - 0.07));
+      // sweep in ~3 frames, full until SLASH.life (0.12 s), then a 2-frame afterglow
+      u.uHead.value = Math.min(1.25, t / SLASH.sweep);
+      u.uFade.value = t < SLASH.sweep ? 1 : t < SLASH.life ? 1 - 0.55 * (t - SLASH.sweep) / (SLASH.life - SLASH.sweep) : Math.max(0, 0.45 * (1 - (t - SLASH.life) / SLASH.glow));
       u.uTime.value = t;
     }
   }

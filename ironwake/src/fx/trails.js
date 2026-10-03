@@ -14,7 +14,9 @@ const MAXT = 40, CAP = 180;
 export const TRAIL_STYLES = {
   // drift: m/s the old smoke meanders (rises + snakes sideways) so the ribbon diffuses instead of
   // hanging as a ruler-straight tube
-  missile: { w0: 1.0, grow: 3.4, life: 4.2, alpha: 0.5, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], hot: 0.12, minStep: 1.2, drift: 0.9 }, // #C8C4BE -> #6D6A66
+  // (combat r4: the ribbon stayed cream at constant density) colour reaches #6D6A66 by colT s,
+  // width ~3x by ~2 s, alpha gone by ~3.6 s; wind m/s carries old smoke downwind (ash drift)
+  missile: { w0: 1.0, grow: 3.4, life: 3.6, alpha: 0.5, c0: [0.578, 0.552, 0.515], c1: [0.153, 0.144, 0.133], colT: 2.0, hot: 0.12, minStep: 1.2, drift: 1.1, wind: 2.0 }, // #C8C4BE -> #6D6A66
   shell: { w0: 0.4, grow: 1.4, life: 1.1, alpha: 0.35, c0: [0.45, 0.43, 0.4], c1: [0.2, 0.19, 0.18], hot: 0.06, minStep: 2, drift: 0.5 },
   ab: { w0: 0.9, grow: 3.2, life: 0.9, alpha: 0.12, c0: [0.62, 0.58, 0.53], c1: [0.4, 0.38, 0.36], hot: 0.0, minStep: 2.5 },
 };
@@ -211,11 +213,14 @@ export class Trails {
         const fromHead = headD - this.pd[q];
         const alpha = st.alpha * Math.pow(1 - f, 1.6) * Math.min(1, 0.25 + fromHead / 6);
         const heat = st.hot > 0 && this.live[t] ? Math.max(0, 1 - (this.time - this.pt[q] + (headT === this.pt[q] ? 0 : 0)) / st.hot) * Math.max(0, 1 - fromHead / 8) : 0;
-        const cr = st.c0[0] + (st.c1[0] - st.c0[0]) * f, cg = st.c0[1] + (st.c1[1] - st.c0[1]) * f, cb = st.c0[2] + (st.c1[2] - st.c0[2]) * f;
+        const fc = st.colT ? Math.min(1, age / st.colT) : f;
+        const cr = st.c0[0] + (st.c1[0] - st.c0[0]) * fc, cg = st.c0[1] + (st.c1[1] - st.c0[1]) * fc, cb = st.c0[2] + (st.c1[2] - st.c0[2]) * fc;
         const u = this.pd[q] * 0.5 + this.seed[t] * 37;
         // diffusion drift: old smoke rises and snakes (smooth in distance-along, grows with age)
         const dr = (st.drift || 0) * age, ph = this.pd[q] * 0.045 + this.seed[t] * 6.283;
-        const ox = Math.sin(ph) * dr * 0.8, oy = dr * (0.55 + 0.25 * Math.sin(ph * 1.7)), oz = Math.cos(ph * 1.3) * dr * 0.8;
+        // + lateral fBm-ish wander (two incommensurate sines in distance-along) + a steady wind
+        const wn = (st.wind || 0) * age, wv = dr * 0.6 * Math.sin(ph * 2.9 + 1.3);
+        const ox = Math.sin(ph) * dr * 0.8 + wv + wn * 0.862, oy = dr * (0.55 + 0.25 * Math.sin(ph * 1.7)), oz = Math.cos(ph * 1.3) * dr * 0.8 + wn * 0.506;
         for (let side = -1; side <= 1; side += 2) {
           const v3 = v * 3, v4 = v * 4;
           P[v3] = this.px[q] + ox; P[v3 + 1] = this.py[q] + oy; P[v3 + 2] = this.pz[q] + oz;

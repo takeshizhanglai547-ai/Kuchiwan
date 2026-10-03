@@ -21,7 +21,7 @@ import { STAGES } from '../game/missionLogic.js';
 import { renderTacMap, createTacMapJob, tacMapCanvas, mapProject, mapNorthAngle } from './tacmap.js';
 import { fmtClock, voiceLevels } from './hud.js';
 import { stencilSVG } from './glyphs.js';
-import { briefMapLayout } from './layout.js';
+import { briefMapLayout, jpWrap } from './layout.js';
 import { CAMERA } from '../player/tuning.js';
 
 // Briefing tactical map (rem): labels in gutters outside the frame, corner furniture inside the
@@ -47,13 +47,13 @@ const CONTROLS = [
   ['ESC', 'START', 'ポーズ', 'Pause'],
 ];
 
-const INTEL_EN = 'LEDGER here. Grauwerk Consolidated Security still holds Pier 7 of the Halvard Deep Foundry. ' +
+const INTEL_EN = jpWrap('LEDGER here. Grauwerk Consolidated Security still holds Pier 7 of the Halvard Deep Foundry. ' +
   'A PK-2 Picket walker squad patrols the ore yard with Gnat drones in support. Three relay generators on the far quay ' +
   'feed the port\'s defense grid. Break the squad, cut the relays, and deal with whatever answers the alarm. ' +
-  'Intercepts mention a rival rig on standby. Payment on completion, WAKE-01.';
-const INTEL_JP = 'こちらレジャー。ハルヴァルド深層鋳造港・第7埠頭は依然グラウヴェルク統合保安部の管理下にある。' +
+  'Intercepts mention a rival rig on standby. Payment on completion, WAKE-01.');
+const INTEL_JP = jpWrap('こちらレジャー。ハルヴァルド深層鋳造港・第7埠頭は依然グラウヴェルク統合保安部の管理下にある。' +
   '鉱石ヤードにはPK-2ピケット部隊と無人機ナット。奥の岸壁にある中継ジェネレーター三基が港の防衛網を支えている。' +
-  '警備部隊を撃破し、中継を断ち、警報に応じて現れるものを片付けろ。敵リグの待機情報もある。以上だ、ウェイク01。';
+  '警備部隊を撃破し、中継を断ち、警報に応じて現れるものを片付けろ。敵リグの待機情報もある。以上だ、ウェイク01。');
 
 const THREATS = [
   ['mt', 'PK-2 "PICKET"', 'ピケット 警備歩行機', '×5', 2],
@@ -198,8 +198,8 @@ export default function menusSystem(game) {
     root.appendChild(fadeEl);
 
     // ---- title
-    // 2.35:1 letterbox; the status line, footer and key hints sit centred in the bars, every
-    // text element >= 5% (title-safe) from the frame edges
+    // full-bleed key art: dark edge gradients (no letterbox bars) carry the status line, footer and
+    // key hints on 35% plates; every text element >= 5% (title-safe) from the frame edges
     const t = screen('title', `
       <div class="menu-grain"></div>
       <div class="lbox top"><div class="title-status"><span class="dot"></span>LEDGER UPLINK<em>回線確立</em><span class="sep"></span>CONTRACT 07</div></div>
@@ -314,8 +314,8 @@ export default function menusSystem(game) {
             <div><div class="sub-head">THREAT ASSESSMENT<em>脅威評価</em></div><ul class="threats">${threatHtml}</ul></div>
           </div>
           <div class="loadout"><div class="sub-head">RIG-07 IRONWAKE · FIXED LOADOUT<em>固定装備</em></div><div class="lo-grid">
-            <span><b>R-ARM</b>RF-24 BRASSWORK</span><span><b>L-ARM</b>PB-7 EMBERLINE</span>
-            <span><b>L-BACK</b>ML-6 HAILSTORM</span><span><b>R-BACK</b>HC-90 SLEDGE</span></div></div>
+            <span><b>L-BACK</b>ML-6 HAILSTORM</span><span><b>L-ARM</b>PB-7 EMBERLINE</span>
+            <span class="r"><b>R-ARM</b>RF-24 BRASSWORK</span><span><b>R-BACK</b>HC-90 SLEDGE</span></div></div>
         </div>
       </div>
       <div class="menu-actions"></div>
@@ -381,6 +381,8 @@ export default function menusSystem(game) {
     btn('results', ra, 'RETRY', '再出撃', () => startMission(), true, '01');
     btn('results', ra, 'RETURN TO TITLE', 'タイトルへ', () => api.toTitle(), false, '02');
 
+    // Japanese body text: phrase-level break points (layout.js jpWrap; css keep-all)
+    for (const e of root.querySelectorAll('.tips li em, .controls-note em, .pv-jp')) e.textContent = jpWrap(e.textContent);
     for (const k in lists) select(k, 0, false);
   }
 
@@ -554,8 +556,10 @@ export default function menusSystem(game) {
   // ------------------------------------------------------------------------------ cameras
   const HERO = {
     // Title key art: low 3/4 front, rig on the right third, long lens.
-    // (r3) the 2.35:1 letterbox crops 12% top + bottom: the whole rig (feet included) sits in the band
-    title: { yaw: 0.55, dist: 32, camUp: 1.2, lookUp: 6.6, shift: 7.8, fov: 36 },
+    // (r4) full-bleed frame: the rig fills ~60% of the frame height, feet clear of the hints row
+    title: { yaw: 0.55, dist: 25, camUp: 2.2, lookUp: 5.4, shift: 6.6, fov: 36 },
+    // Results: front 3/4 from the rig's left, rig on the right third behind the rank box.
+    results: { yaw: -0.62, dist: 27, camUp: 3.0, lookUp: 5.6, shift: 11.4, fov: 40 },
     // Briefing: behind the rig's shoulder, looking down the yard.
     briefing: { yaw: Math.PI + 0.42, dist: 17, camUp: 8.5, lookUp: 5.5, shift: -9, fov: 46 },
   };
@@ -563,13 +567,14 @@ export default function menusSystem(game) {
   function heroCamera(name = 'title') {
     const h = HERO[name];
     const sp = game.player && game.player.spawned ? { pos: game.player.pos, yaw: game.player.yaw } : game.arena && game.arena.spawns && game.arena.spawns.player;
-    if (!h || !sp) return;
+    if (!h || !sp) return false;
     const a = sp.yaw + h.yaw;
     _c.set(sp.pos.x + Math.sin(a) * h.dist, sp.pos.y + h.camUp, sp.pos.z + Math.cos(a) * h.dist);
     // shift the look point sideways (camera-right) so the rig sits off-centre
     const rx = -Math.cos(a), rz = Math.sin(a);
     _l.set(sp.pos.x + rx * h.shift, sp.pos.y + h.lookUp, sp.pos.z + rz * h.shift);
     game.cam.setOverride({ pos: _c, look: _l, fov: h.fov });
+    return true;
   }
 
   /** Screen transition: a short fade/slide-in (CSS; live play only, so captures stay exact). */
@@ -620,7 +625,7 @@ export default function menusSystem(game) {
     pv.classList.toggle('focus-subs', !!d && d.k === 'subs');
     s.querySelector('.oh-title').innerHTML = d ? `${d.en}<em>${d.jp}</em>` : (i === OPTIONS.length ? 'RESET DEFAULTS<em>初期設定に戻す</em>' : 'BACK<em>戻る</em>');
     s.querySelector('.oh-en').textContent = d ? d.help[0] : (i === OPTIONS.length ? 'Restore every setting on this screen to its default value.' : 'Return to the previous screen. Settings are saved automatically.');
-    s.querySelector('.oh-jp').textContent = d ? d.help[1] : (i === OPTIONS.length ? 'この画面の設定をすべて初期値に戻す。' : '前の画面に戻る。設定は自動で保存されます。');
+    s.querySelector('.oh-jp').textContent = jpWrap(d ? d.help[1] : (i === OPTIONS.length ? 'この画面の設定をすべて初期値に戻す。' : '前の画面に戻る。設定は自動で保存されます。'));
   }
 
   const api = {
@@ -643,7 +648,7 @@ export default function menusSystem(game) {
       g.events.on('game:state', (e) => {
         if (e.to === 'playing') {
           api.hideAll();
-          if (e.from === 'title' || e.from === 'briefing') g.cam.clearOverride();
+          if (e.from === 'title' || e.from === 'briefing' || e.from === 'results') g.cam.clearOverride();
         }
         if (e.to === 'paused') api.show('pause');
       });
@@ -682,12 +687,13 @@ export default function menusSystem(game) {
         if (m) {
           const o = m.logic.objective();
           s.querySelector('.po-title').textContent = o.title || '';
-          s.querySelector('.po-jp').textContent = o.jp || '';
+          s.querySelector('.po-jp').textContent = jpWrap(o.jp || '');
           s.querySelector('.po-time').textContent = `${fmtClock(m.logic.time)}  ·  PHASE ${m.logic.stage + 1} / ${m.logic.stages.length}${o.count > 1 ? `  ·  ${o.progress} / ${o.count}` : ''}`;
         }
       }
       if (name === 'results') {
         if (game.state !== 'results') game.setState('results');
+        heroCamera('results');
         const res = game.mission && game.mission.result;
         if (res && res !== rev.result) fillResults(res);
       }

@@ -282,6 +282,8 @@ uniform vec2 uSun;        // sun position (uv)
 uniform float uAspect;
 uniform float uThreshold;
 uniform float uRadius;
+uniform sampler2D tLum;   // 64x36 log2 luminance (eye adaptation grid) = local mean
+uniform float uGap;       // 0..1: weight the source by cloud gaps (brighter than the local mean)
 varying vec2 vUv;
 void main() {
   float d = texture2D(tDepth, vUv).x;
@@ -291,10 +293,15 @@ void main() {
   vec2 dv = (vUv - uSun) * vec2(uAspect, 1.0);
   float fall = pow(max(1.0 - length(dv) / uRadius, 0.0), 2.5);
   float k = smoothstep(uThreshold, uThreshold * 3.0, l);
-  gl_FragColor = vec4(sky * fall * k, 0.0, 0.0, 1.0);
+  // (r4) crepuscular source: thin spots of the ash deck (brighter than the local mean) feed the
+  // rays, thick rolls block them -> the radial blur turns the deck structure around the sun into
+  // distinct shafts instead of one uniform glow
+  float gap = uGap > 0.0 ? smoothstep(0.8, 1.35, l / max(exp2(texture2D(tLum, vUv).r), 1e-4)) : 1.0;
+  gl_FragColor = vec4(sky * fall * k * mix(1.0, gap, uGap), 0.0, 0.0, 1.0);
 }`, {
     tScene: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) },
     uAspect: { value: 1.78 }, uThreshold: { value: 0.35 }, uRadius: { value: 0.75 },
+    tLum: { value: null }, uGap: { value: 0 },
   });
 }
 
@@ -452,6 +459,68 @@ void main() {
  * aberration, filmic tone map (AgX w/ look or ACES), split-tone grade (lift shadows toward
  * #1C2126, highlights toward #F2C79A), saturation/contrast, vignette, film grain, sRGB encode.
  */
+/**
+ * SUB-PIXEL RESOLVE, step 1 (r4, display-referred, full res, 9 taps): sub-pixel features (far
+ * lattice members, rails, stays, sun glints on thin edges, wet-slab glitter) rasterize with one
+ * sample per pixel as ISOLATED pixels: dotted lines, crawling sparkles. Without MSAA/TAA the
+ * missing coverage is unrecoverable, but its energy is not: an outlier is a pixel outside the
+ * [2nd-lowest, 2nd-highest] range of its 8 neighbours (per channel, in linear light ~ s^2).
+ * R/G/B = signed excess (linear) of that outlier, 0 elsewhere. A continuous 1-px line (two
+ * neighbours along it) and every larger shape are left alone (SMAA handles their edges).
+ * Input alpha = 1 - emissive protection (written by the composite).
+ */
+export function speckleExcessMaterial() {
+  return mat('iw_speckle_excess', /* glsl */`
+uniform sampler2D tIn;
+uniform vec2 uTexel;
+uniform vec2 uGate;     // |excess| luminance (linear) where the resolve starts / is full
+varying vec2 vUv;
+vec3 lin(vec3 s) { return s * s; }
+void main() {
+  vec4 c0 = texture2D(tIn, vUv);
+  vec3 c = lin(c0.rgb);
+  vec3 mx1 = vec3(-1.0), mx2 = vec3(-1.0), mn1 = vec3(2.0), mn2 = vec3(2.0);
+  for (int k = 0; k < 9; k++) {
+    if (k == 4) continue;
+    vec2 o = vec2(float(k - (k / 3) * 3) - 1.0, float(k / 3) - 1.0);
+    vec3 q = lin(texture2D(tIn, vUv + o * uTexel).rgb);
+    mx2 = max(mx2, min(mx1, q)); mx1 = max(mx1, q);
+    mn2 = min(mn2, max(mn1, q)); mn1 = min(mn1, q);
+  }
+  vec3 e = c - clamp(c, mn2, mx2);
+  float el = abs(dot(e, vec3(0.2126, 0.7152, 0.0722)));
+  e *= smoothstep(uGate.x, uGate.y, el) * c0.a;
+  gl_FragColor = vec4(e, 1.0);
+}`, { tIn: { value: null }, uTexel: { value: new THREE.Vector2() }, uGate: { value: new THREE.Vector2(0.015, 0.05) } });
+}
+
+/**
+ * SUB-PIXEL RESOLVE, step 2: every outlier's excess is redistributed over a 3x3 tent around it
+ * (energy-preserving in linear light), i.e. a sub-pixel feature is drawn with its COVERAGE
+ * instead of as full-intensity dots: a dotted wire becomes a continuous faint line, a glint a
+ * soft point. Output alpha = 1 (the canvas is composited with alpha).
+ */
+export function speckleSpreadMaterial() {
+  return mat('iw_speckle_spread', /* glsl */`
+uniform sampler2D tIn;
+uniform sampler2D tE;
+uniform vec2 uTexel;
+uniform float uAmount;  // 0 = off, 1 = full resolve
+varying vec2 vUv;
+void main() {
+  vec3 s = texture2D(tIn, vUv).rgb;
+  vec3 c = s * s;
+  vec3 e0 = texture2D(tE, vUv).rgb;
+  vec3 acc = e0 * 0.25;
+  acc += (texture2D(tE, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tE, vUv - vec2(uTexel.x, 0.0)).rgb
+        + texture2D(tE, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tE, vUv - vec2(0.0, uTexel.y)).rgb) * 0.125;
+  acc += (texture2D(tE, vUv + uTexel).rgb + texture2D(tE, vUv - uTexel).rgb
+        + texture2D(tE, vUv + vec2(uTexel.x, -uTexel.y)).rgb + texture2D(tE, vUv + vec2(-uTexel.x, uTexel.y)).rgb) * 0.0625;
+  vec3 r = max(c + (acc - e0) * uAmount, vec3(0.0));
+  gl_FragColor = vec4(sqrt(r), 1.0);
+}`, { tIn: { value: null }, tE: { value: null }, uTexel: { value: new THREE.Vector2() }, uAmount: { value: 1 } });
+}
+
 export function compositeMaterial(atmos = atmosGLSL()) {
   return mat('iw_composite', DEPTH_FNS + atmos + /* glsl */`
 uniform sampler2D tScene;
@@ -489,6 +558,7 @@ uniform mat4 uCamWorld;
 uniform vec3 uFogColor;
 uniform float uFogD0;     // scene.fog.density (ground extinction, 1/m)
 uniform float uAerial;    // aerial-perspective chroma shift amount (0 = off)
+uniform vec2 uProtect;    // HDR luminance range -> alpha 1..0 (sub-pixel resolve protection); y = 0: alpha 1
 varying vec2 vUv;
 // depth-aware (bilateral) 4-tap upsample of the quarter-res volumetric buffer
 vec3 iwVolume(vec2 uv) {
@@ -603,6 +673,8 @@ void main() {
   }
   if (uHasShafts > 0.5) col += texture2D(tShafts, uv).r * uShaftTint;
   col *= uExposure * (uHasAE > 0.5 ? exp2(texture2D(tAE, vec2(0.5)).r) : 1.0);
+  // alpha for the sub-pixel resolve: hot emissive cores (lamps, beacons, muzzle cores) stay crisp
+  float outA = uProtect.y > 0.0 ? 1.0 - smoothstep(uProtect.x, uProtect.y, dot(col, vec3(0.2126, 0.7152, 0.0722))) : 1.0;
   if (uHasBloom > 0.5) col += texture2D(tBloom, uv).rgb * uBloom;
   #ifdef TONEMAP_ACES
   vec3 t = aces(col);
@@ -648,7 +720,7 @@ void main() {
   s += n * uGrain * (0.45 + 0.55 * smoothstep(0.5, 0.05, gl));
   // dither against banding
   s += (iwDither(gl_FragCoord.xy) - 0.5) / 255.0;
-  gl_FragColor = vec4(clamp(s, 0.0, 1.0), 1.0);
+  gl_FragColor = vec4(clamp(s, 0.0, 1.0), outA);
 }`.replace('varying vec2 vUv;', 'varying vec2 vUv;\nfloat iwDither(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }'), {
     tScene: { value: null }, tAO: { value: null }, tBloom: { value: null }, tShafts: { value: null }, tNoise: { value: null },
     uExposure: { value: 1 }, tAE: { value: null }, uHasAE: { value: 0 }, uAO: { value: 1 }, uAOFloor: { value: 0.35 }, uBloom: { value: 0.1 }, uShaftTint: { value: new THREE.Color() },
@@ -659,5 +731,6 @@ void main() {
     tDepth: { value: null }, uCam: { value: new THREE.Vector2() }, uTan: { value: new THREE.Vector2() },
     tVol: { value: null }, uHasVol: { value: 0 }, uVolLit: { value: 0.5 }, uVolOcc: { value: 1 }, uVolMaxZ: { value: 1000 }, uVolDust: { value: 0.05 }, uDustIso: { value: 0.12 }, uSunCol: { value: new THREE.Color() },
     uCamWorld: { value: new THREE.Matrix4() }, uFogColor: { value: new THREE.Color() }, uFogD0: { value: 0.002 }, uAerial: { value: 0 },
+    uProtect: { value: new THREE.Vector2(0, 0) },
   }, { AGX_POWER: '1.15', AGX_SAT: '1.22', IW_DUST_G: '0.72' });
 }

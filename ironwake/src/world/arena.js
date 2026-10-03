@@ -17,6 +17,10 @@
 //   OBJ_relay_<n>      relay generator (stage 2 objective) positions
 //   Any visible mesh with custom property  iw_collider = 1  ALSO becomes a box collider
 //   (visible). Custom property iw_noshadow = 1 disables shadow casting for that mesh.
+//   r4 GLBs (blender/arena/akit.py export) move every COL_ / SPAWN_ / OBJ_ / FX_ node into ONE table
+//   in the scene extras (gltf scene.userData.iw = {col, mark, fx, foot}) so gltfpack can instance
+//   the kit (EXT_mesh_gpu_instancing, ~200 KB smaller); both forms are read here. `foot` lists the
+//   oriented footprints of the out-of-bounds structures for the runtime terrain.
 //   Materials are named M_<base> and re-created at runtime (src/world/materials.js); the
 //   per-vertex COLOR_0 carries tint + a per-variant parameter. The GLB is baked into a few
 //   merged meshes per (material, 128 m cell) by merge.js.
@@ -28,6 +32,8 @@
 //   source         'asset' | 'placeholder'
 //   stats          { meshes, triangles } of the baked arena
 //   ash            ambient ash/ember flakes { mesh, uniforms } (hide: game.arena.ash.mesh.visible = false)
+//   terrain        r4 outer landmass + hinterland scatter (src/world/terrain.js; built at load, no asset bytes)
+//   (dressing)     r4 deck ground dressing: decals, walk-through debris, ash drifts (src/world/dressing.js)
 //   water          the sea (src/world/water.js): Gerstner swell, Fresnel sky reflection, shore foam
 //                  from FX_shore_* empties (extras hx, hz, yaw, r, k = oriented box half extents)
 import * as THREE from 'three';
@@ -36,6 +42,8 @@ import { bucketize } from './merge.js';
 import { createAsh, createLightPools, createPlumes } from './fxworld.js';
 import { buildPlaceholder } from './placeholder.js';
 import { createWater } from './water.js';
+import { createTerrain } from './terrain.js';
+import { createDressing } from './dressing.js';
 
 const HALF = 250;           // arena half size (500 m square)
 
@@ -49,7 +57,7 @@ const NO_SHADOW = new Set(['ground', 'sea', 'decal', 'far', 'glow', 'slag']);
 const NO_RECEIVE = new Set(['glow', 'far']);
 
 export default function arenaSystem(game) {
-  let mats = null, plumes = null, pools = null, ash = null, water = null;
+  let mats = null, plumes = null, pools = null, ash = null, water = null, terrain = null, dressing = null;
   const api = {
     name: 'arena',
     order: 30,
@@ -89,6 +97,8 @@ export default function arenaSystem(game) {
       if (pools) pools.dispose();
       if (ash) ash.dispose();
       if (water) water.dispose();
+      if (terrain) terrain.dispose();
+      if (dressing) dressing.dispose();
       game.scene.remove(api.root);
       game.physics.clearStatic();
     },
@@ -126,6 +136,7 @@ export default function arenaSystem(game) {
 
   // ---------------------------------------------------------------- GLB path
   function processGLB(g, scene, textures) {
+    let footprints = [];
     const spawns = defaultSpawns();
     const found = { mt: [], drone: [], relay: [], boss: [] };
     const q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3();
@@ -158,6 +169,34 @@ export default function arenaSystem(game) {
       }
       if (o.isMesh && o.userData.iw_collider) g.physics.addFromObject(o, 'arena');
     });
+    // r4 GLBs carry the markers as ONE table in the scene extras (no named nodes -> gltfpack can
+    // instance every kit piece): col = [tx,ty,tz, qx,qy,qz,qw, sx,sy,sz] (scale = half extents),
+    // mark = [name, tx,ty,tz, qx,qy,qz,qw], fx = [name, x,y,z, extras], foot = terrain footprints.
+    const meta = scene.userData && scene.userData.iw;
+    if (meta) {
+      const hx = new THREE.Vector3();
+      for (const c of meta.col || []) {
+        p.set(c[0], c[1], c[2]); q.set(c[3], c[4], c[5], c[6]); hx.set(Math.abs(c[7]), Math.abs(c[8]), Math.abs(c[9]));
+        g.physics.addBox(p, hx, q, 'arena', null);
+      }
+      for (const f of meta.fx || []) {
+        const name = f[0], u = f[4] || {};
+        const pos = new THREE.Vector3(f[1], f[2], f[3]);
+        if (name.startsWith('FX_smoke')) smoke.push({ pos, r: u.r || 3, h: u.h || 120, kind: u.kind || 0 });
+        else if (name.startsWith('FX_light')) lights.push({ pos, r: u.r || 12, color: u.c || [1, 0.6, 0.25], i: u.i ?? 0.3 });
+        else if (name.startsWith('FX_shore')) shores.push({ x: pos.x, z: pos.z, hx: u.hx || 5, hz: u.hz || 5, yaw: u.yaw || 0, r: u.r || 0, k: u.k || 1 });
+      }
+      for (const m of meta.mark || []) {
+        const name = m[0];
+        q.set(m[4], m[5], m[6], m[7]);
+        e.setFromQuaternion(q, 'YXZ');
+        const sp = spawn(m[1], m[2], m[3], e.y);
+        const key = name.replace(/^SPAWN_|^OBJ_/, '').replace(/_\d+$/, '').replace(/\.\d+$/, '');
+        if (key === 'player') spawns.player = sp;
+        else if (found[key]) found[key].push({ name, sp });
+      }
+      footprints = meta.foot || [];
+    }
     for (const k in found) {
       if (found[k].length) spawns[k] = found[k].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })).map((f) => f.sp);
     }
@@ -191,6 +230,19 @@ export default function arenaSystem(game) {
     if (lights.length) {
       pools = createLightPools(lights);
       api.root.add(pools.mesh);
+    }
+    // r4: the outer landmass (lower yard, hinterland, far shore, peninsula) is generated here from
+    // the footprint table of the r4 GLB (older GLBs still carry their own flat outer tiles)
+    if (meta) {
+      terrain = createTerrain({ footprints, material: mats.byName.M_terrain, farMaterial: mats.byName.M_far });
+      mats.setContact(terrain.contact);
+      api.root.add(terrain.mesh);
+      if (terrain.scatter) api.root.add(terrain.scatter);
+      dressing = createDressing({ colliders: meta.col, mats: mats.byName });
+      for (const m of dressing.meshes) api.root.add(m);
+      tris += dressing.stats.tris;
+      api.terrain = terrain;
+      tris += terrain.stats.tris;
     }
     water = createWater({ level: SEA_LEVEL, tex: textures.water, envMap: g.scene.environment, shores });
     api.root.add(water.mesh);

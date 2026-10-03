@@ -55,6 +55,9 @@ def body_z1(y):
     return BODY[-1][4], BODY[-1][2]
 
 
+PSTATS = {}
+
+
 def build_body():
     B = K.Budget('body')
     g = Geo()
@@ -63,6 +66,18 @@ def build_body():
               depth=0.01, angle=35)
     K.grooves(sh, [(1, 0, 0), (-1, 0, 0), (0, 0, -1)], (0, -0.4, 0), (0, 1, 0.2), gap=0.012, depth=0.01, angle=35)
     K.hatch_at(sh, (0.0, 0.3, -0.26), (0, 0, -1), (0.3, 0.3), u_axis=(1, 0, 0), gap=0.01, recess=0.02, mat='steel_dark')
+    # r4 (critic r3 A: 'smudgy flat body'): 2-3 cm bevelled panel insets on every free facet of the hull
+    # (not under the cheek plates, the dorsal armour or the nose-flank vents)
+
+    def skip_b(c, n):
+        if abs(n.x) > 0.75 and -0.12 < c.y < 0.4:
+            return True                                   # cheek plates
+        if n.z > 0.7 and abs(c.x) < 0.26 and -0.56 < c.y < 0.5:
+            return True                                   # dorsal armour spine
+        return abs(n.x) > 0.7 and -0.56 < c.y < -0.16     # nose-flank vents
+    g.merge(B.add('panels', K.panelize(sh, 41, min_area=0.012, max_side=0.24, min_side=0.06, gap=0.008,
+                                       raise_h=0.012, recess=0.018, groove=0.01, bolt_r=0.0085,
+                                       skip=skip_b, stats=PSTATS)))
     g.merge(B.add('shell', sh))
     # dorsal spine armour (cream, ridged) and side cheek plates (oxide)
     z_a, _ = body_z1(-0.5)
@@ -93,11 +108,26 @@ def build_body():
     g.merge(B.add('bezel', P.ring(0.112, 0.094, 0.025, 40, bevel=0.0, mat='steel', z0=0.0)
                   .align((0, -1, 0), loc=(ex, ey + 0.005, ez))))   # bright machined inner lip
     g.merge(B.add('bezel', P.bolt_circle((ex, ey - 0.085, ez), (0, -1, 0), 0.135, 6, r=0.011)))
-    hood = P.prism([(-0.12, 0.12), (0.22, 0.2), (0.26, 0.27), (-0.17, 0.205)], 0.44, bevel=0.012, segs=1,
-                   mat='paint_secondary', axis='X').move(0, ey - 0.02, ez)
+    # r4 (critic r3 A: 'a plain visor slab'): the sun hood is a dark framed housing; the cream visor plate
+    # sits recessed 1.6 cm inside the frame, with bolts down both frame rails and a hazard lip on the brow
+    hood = P.prism([(-0.12, 0.12), (0.22, 0.2), (0.26, 0.27), (-0.17, 0.205)], 0.44, bevel=0.01, segs=1,
+                   mat='paint_dark', axis='X').move(0, ey - 0.02, ez)
+    hn = Vector((0, -0.065, 0.43)).normalized()
+    hc = Vector((0, ey - 0.02 + 0.045, ez + 0.2375))
+    K.hatch_at(hood, tuple(hc), tuple(hn), (0.34, 0.33), u_axis=(1, 0, 0), angle=12, gap=0.012, recess=0.016,
+               mat='paint_secondary')
     g.merge(B.add('bezel', hood))
-    g.merge(B.add('bezel', K.strip((-0.2, ey - 0.12, ez + 0.214), (0.2, ey - 0.12, ez + 0.214), 0.05, 0.006,
-                                   (0, -0.15, 1), mat='paint_accent')))
+    vdir = Vector((0, 0.43, 0.065)).normalized()
+    for sx in (-1, 1):
+        g.merge(B.add('bezel', P.bolt_row(hc + Vector((sx * 0.197, 0, 0)) - vdir * 0.16 + hn * 0.002,
+                                          hc + Vector((sx * 0.197, 0, 0)) + vdir * 0.16 + hn * 0.002, 4, tuple(hn),
+                                          r=0.0095)))
+    g.merge(B.add('bezel', K.strip((-0.2, ey - 0.155, ez + 0.2055), (0.2, ey - 0.155, ez + 0.2055), 0.026, 0.006,
+                                   (0, -0.15, 1), mat='hazard')))
+    # visor slit lamps under the brow (two small amber markers either side of the bezel)
+    for sx in (-1, 1):
+        g.merge(B.add('bezel', P.box((0.08, 0.02, 0.022), bevel=0.004, segs=1, mat='steel_dark')
+                      .move(sx * 0.15, ey - 0.13, ez + 0.13)))
     for s in (1, -1):   # mandible guards flanking the eye (hornet read, protects the lens)
         md = P.prism([(0.3, 0.1), (-0.14, 0.02), (-0.2, -0.08), (-0.1, -0.16), (0.3, -0.12)], 0.05, bevel=0.008,
                      segs=1, mat='paint_dark', axis='X')
@@ -124,17 +154,31 @@ def build_body():
     mx_, my, mz = MUZZLE
     g.merge(B.add('gun', P.box((0.2, 0.44, 0.14), bevel=0.014, segs=1, chamfer=0.03, chamfer_axes='Y',
                                mat='paint_dark').move(0, -0.42, -0.3)))
-    g.merge(B.add('gun', P.cylinder(0.07, 0.5, 32, bevel=0.01, bsegs=1, mat='steel_dark', z0=0.0)
+    # r4 (critic r3 A: 'toy candy-striped gatling'): a dark gunmetal barrel with a machined cooling-fin
+    # stack (24-seg discs, 1.4 cm pitch), a clamp collar and a slotted muzzle brake; no white bands
+    g.merge(B.add('gun', P.cylinder(0.052, 0.56, 32, bevel=0.006, bsegs=1, mat='gunmetal', z0=0.0)
+                  .align((0, -1, 0), loc=(0, -0.6, mz))))
+    g.merge(B.add('gun', P.cylinder(0.078, 0.06, 32, bevel=0.008, bsegs=1, mat='steel_dark', z0=0.0)
                   .align((0, -1, 0), loc=(0, -0.62, mz))))
-    for k in range(3):
-        g.merge(B.add('gun', P.ring(0.09, 0.068, 0.04, 32, bevel=0.0, mat='steel', z0=0.0)
-                      .align((0, -1, 0), loc=(0, -0.7 - k * 0.1, mz))))
-    g.merge(B.add('gun', P.cone(0.075, 0.05, 0.1, 32, bevel=0.006, mat='steel_dark').align((0, -1, 0),
-                                                                                       loc=(0, -1.1, mz))))
-    g.merge(B.add('gun', P.ring(0.055, 0.035, 0.03, 32, bevel=0.0, mat='hazard', z0=0.0)
-                  .align((0, -1, 0), loc=(0, -1.18, mz))))
-    g.merge(B.add('gun', P.cylinder(0.036, 0.02, 16, bevel=0.0, mat='lens', z0=0.0).align((0, -1, 0),
-                                                                                       loc=(0, -1.165, mz))))
+    g.merge(B.add('gun', P.bolt_circle((0, -0.68, mz), (0, -1, 0), 0.062, 6, r=0.008)))
+    for k in range(14):
+        g.merge(B.add('gun', P.ring(0.074 if k % 4 else 0.08, 0.05, 0.007, 24, bevel=0.0, mat='gunmetal', z0=0.0)
+                      .align((0, -1, 0), loc=(0, -0.7 - k * 0.0175, mz))))
+    g.merge(B.add('gun', P.cylinder(0.044, 0.14, 24, bevel=0.004, bsegs=1, mat='gunmetal', z0=0.0)
+                  .align((0, -1, 0), loc=(0, -0.95, mz))))
+    brake = P.cylinder(0.06, 0.13, 32, bevel=0.008, bsegs=1, mat='steel_dark', z0=0.0)
+    for zz in (0.032, 0.07):
+        for ang in (0, 90):
+            cut = P.box((0.2, 0.026, 0.024), bevel=0.0, segs=1, mat='nozzle_inner').move(0, 0, zz).rotate((0, 0, ang))
+            brake.boolean(cut)
+    bore = P.cylinder(0.026, 0.3, 16, bevel=0.0, bsegs=1, mat='nozzle_inner', z0=-0.1)
+    brake.boolean(bore)
+    g.merge(B.add('gun', brake.align((0, -1, 0), loc=(0, -1.07, mz))))
+    g.merge(B.add('gun', P.cylinder(0.024, 0.01, 16, bevel=0.0, mat='lens', z0=0.0).align((0, -1, 0),
+                                                                                       loc=(0, -1.12, mz))))
+    # feed hose from the body into the receiver
+    g.merge(B.add('gun', K.tube([(0.07, -0.25, -0.3), (0.1, -0.4, -0.38), (0.06, -0.58, mz + 0.01)], 0.014, 8,
+                                mat='rubber', subdiv=3)))
     # back: battery pack with hazard band, V-tail stabilisers, antenna
     g.merge(B.add('pack', P.box((0.36, 0.3, 0.2), bevel=0.014, segs=1, chamfer=0.04, chamfer_axes='Y',
                                 mat='paint_dark').move(0, 0.72, 0.1)))
@@ -185,12 +229,20 @@ def build_body():
         g.merge(B.add('trim', P.bolt_row((s * 0.36, -0.46, -0.13), (s * 0.41, -0.18, -0.13), 3, (s, -0.18, 0), r=0.011)))
     lv = P.louvres(0.3, 0.24, count=4, depth=0.025, angle=30, thickness=0.01, mat='steel_dark', side_mat='paint_dark')
     g.merge(B.add('louvres', lv.move(0, 0.72, 0.2)))
+    # r4: louvre banks on the tapering rear flanks (motor-controller exhaust) + a bolted service hatch frame
+    for s in (1, -1):
+        nr = Vector((s * 0.94, 0.35, 0.0)).normalized()
+        lb = P.louvres(0.2, 0.15, count=4, depth=0.02, angle=32, thickness=0.008, mat='steel_dark',
+                       side_mat='paint_dark')
+        g.merge(B.add('louvres', lb.align(tuple(nr), up=(0, 0, 1), loc=(s * 0.318, 0.6, 0.03))))
+        g.merge(B.add('louvres', P.bolt_row((s * 0.36, 0.5, 0.115), (s * 0.29, 0.69, 0.115), 3, tuple(nr), r=0.008)))
     sh_belly = K.shell([(-0.5, -0.17, 0.17, -0.02, 0.0, 0.03), (-0.14, -0.17, 0.17, -0.02, 0.0, 0.03)], 'Y',
                        bevel=0.004, mat='paint_secondary')
     g.merge(B.add('belly', sh_belly.move(0, 0, -0.262)))
     g.merge(B.add('belly', P.bolt_row((-0.13, -0.47, -0.285), (-0.13, -0.17, -0.285), 3, (0, 0, -1), r=0.01)))
     g.merge(B.add('belly', P.bolt_row((0.13, -0.47, -0.285), (0.13, -0.17, -0.285), 3, (0, 0, -1), r=0.01)))
     B.report()
+    iw.log('r4 drone panels:', PSTATS)
     return g
 
 
@@ -276,13 +328,40 @@ def build_rotor(s, part='hub'):
     return tilted(g, s)
 
 
+# r4 (critic r3 A: 'a salmon disc eye'): the lens is banded like a camera optic - a tiny hot pupil
+# (eye node), a deep #FF2A2A core and a thin bright outer ring (eye_rim node: low strength so the AgX
+# shoulder keeps the red saturated), separated by a black glass gap and a matte dark iris ring
+LENS_BANDS = [(0.0, 0.11, 'pupil'), (0.11, 0.34, 'core'), (0.34, 0.42, 'glass'), (0.42, 0.56, 'steel_dark'),
+              (0.56, 0.8, 'glass'), (0.8, 0.88, 'rim'), (0.88, 1.0, 'steel')]
+
+
+def lens_banded(r, h, part, segs=40):
+    """Open lens dome on z = 0 (+Z = view axis) with LENS_BANDS; part 'eye' keeps everything but the
+    glowing core / rim bands, 'rim' keeps only them (both glow bands use the 'lens' material)."""
+    fr = sorted(set([b[0] for b in LENS_BANDS[1:]] + [1.0, 0.95, 0.68, 0.22, 0.06]), reverse=True)
+    prof = [(r * f, h * math.sqrt(max(0.0, 1.0 - f * f))) for f in fr] + [(0.0, h)]
+    g = P.lathe(prof, segs, 'glass')
+    import bmesh
+    drop = []
+    for f in g.bm.faces:
+        c = f.calc_center_median()
+        q = math.hypot(c.x, c.y) / r
+        band = next((b for b in LENS_BANDS if b[0] <= q < b[1]), LENS_BANDS[-1])[2]
+        glow = band in ('core', 'rim')
+        if (part == 'rim') != glow:
+            drop.append(f)
+            continue
+        f.material_index = g.mi('lens' if band in ('pupil', 'core', 'rim') else band)
+    bmesh.ops.delete(g.bm, geom=drop, context='FACES')
+    return g
+
+
 def build_eye():
-    """0.18 m sensor lens recessed in the nose bezel: black glass dome with a small hot red iris
-    (about 10 % of the lens), an inner aperture ring, plus two small auxiliary lenses."""
+    """0.18 m sensor lens recessed in the nose bezel (pupil + glass + iris ring + lip), plus two small
+    auxiliary lenses."""
     g = Geo()
     ex, ey, ez = EYE
-    g.merge(K.lens_dome(0.092, 0.055, iris=0.36, ring=0.5, core=0.17, part='core', ring_mat='steel')
-            .align((0, -1, 0), loc=(ex, ey + 0.015, ez)))
+    g.merge(lens_banded(0.092, 0.05, 'eye').align((0, -1, 0), loc=(ex, ey + 0.015, ez)))
     for s in (1, -1):
         g.merge(K.lens_dome(0.03, 0.016, iris=0.5, ring=0.0, segs=16, rings=3)
                 .align((0, -1, 0), loc=(s * 0.22, ey + 0.2, ez - 0.1)))
@@ -290,10 +369,9 @@ def build_eye():
 
 
 def build_eye_rim():
-    """Saturated red iris halo around the hot core (own node: deeper, dimmer flat glow)."""
+    """Deep red core disc + thin bright outer ring (own node: one saturated flat glow)."""
     ex, ey, ez = EYE
-    return K.lens_dome(0.092, 0.055, iris=0.36, ring=0.5, core=0.17, part='rim').align((0, -1, 0),
-                                                                                       loc=(ex, ey + 0.015, ez))
+    return lens_banded(0.092, 0.05, 'rim').align((0, -1, 0), loc=(ex, ey + 0.015, ez))
 
 
 def build_beacon():
@@ -307,8 +385,8 @@ def build_beacon():
 def build(a):
     a.pivot('body', (0, 0, 0))
     # strength 9 (r3): 14 clipped the AgX shoulder to a flat salmon disc
-    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF2A2A', iw_eye_strength=9.0)
-    a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#B8120C', iw_eye_strength=1.9)
+    a.pivot('eye', EYE, parent='body', iw_eye_color='#FF3A2E', iw_eye_strength=4.5)
+    a.pivot('eye_rim', EYE, parent='eye', iw_eye_color='#FF2A2A', iw_eye_strength=0.85)
     a.pivot('beacon', (0.12, 0.3, 0.4), parent='body', iw_eye_color='#FF3B2F', iw_eye_strength=14.0)
     a.muzzle('muzzle', MUZZLE, fire=(0, -1, 0), parent='body')
     # rotor nodes carry the duct tilt as their rest rotation (they spin about their own +Y)
@@ -367,7 +445,10 @@ COLORS = {'paint_primary': {'color': '#5C2E24', 'rough': 0.52}, 'paint_secondary
           'paint_accent': {'color': '#D8A31A'}, 'paint_dark': {'color': '#2B2624'},
           'steel_dark': {'color': '#3A3836'},
           'glass': {'color': '#06080A', 'metal': 0.0, 'rough': 0.05, 'wear': 0.0, 'grime': 0.1, 'rust': 0.0,
-                    'dust': 0.05, 'var': 0.0, 'decals': False}}
+                    'dust': 0.05, 'var': 0.0, 'decals': False},
+          # r4: machined gunmetal for the gun barrel / cooling fins (dark, metallic, satin)
+          'gunmetal': {'color': '#2A2C2E', 'metal': 0.9, 'rough': 0.36, 'wear': 0.35, 'grime': 0.7, 'rust': 0.15,
+                       'dust': 0.25, 'var': 0.04, 'decals': False}}
 OBJ_WEIGHT = {'body_geo': 1.0, 'eye_geo': 1.3, 'eye_rim_geo': 0.5, 'beacon_geo': 0.6, 'rotor_geo': 0.6, 'rotor_1_geo': 0.6,
               'fanblades_0_geo': 0.5, 'fanblades_1_geo': 0.5}
 # r3: stronger curvature-driven chipping (critic: smudgy, low-contrast body bake)
@@ -378,7 +459,7 @@ NEED = ['body', 'eye', 'beacon', 'muzzle', 'rotor', 'rotor_1', 'fanblades_0_geo'
 
 def main():
     K.run(NAME, build, add_decals, NEED, scheme='grauwerk', colors=COLORS, seed=31, obj_weight=OBJ_WEIGHT,
-          weathering=WEATHER, views=VIEWS, clay=CLAY, res=1024, sizes={'normal': 1024, 'orm': 512, 'emissive': 256},
+          weathering=WEATHER, views=VIEWS, clay=CLAY, res=1536, sizes={'normal': 1536, 'orm': 512, 'emissive': 256},
           bake_kw=dict(edge=0.024, cavity=0.05, ao_dist=0.35, bevel_radius=0.006),
           tex_quality={'basecolor': 80, 'normal': 78, 'orm': 70})
 

@@ -53,13 +53,16 @@ Tri triSetup(vec3 p, vec3 n, float scale, float sharp) {
   t.uz = vec2(-p.x * t.s.z, p.y) / scale;
   return t;
 }
+// iwBias: extra mip bias (r4: corrugated cladding raises it with the pixel footprint so the 19 cm
+// ribs settle to their mean before they beat with the pixel grid -> no diagonal moire)
+float iwBias = 0.0;
 vec4 triSample(sampler2D tex, Tri t) {
-  return texture2D(tex, t.ux) * t.w.x + texture2D(tex, t.uy) * t.w.y + texture2D(tex, t.uz) * t.w.z;
+  return texture2D(tex, t.ux, iwBias) * t.w.x + texture2D(tex, t.uy, iwBias) * t.w.y + texture2D(tex, t.uz, iwBias) * t.w.z;
 }
 vec3 triNormal(sampler2D tex, Tri t, vec3 n, float strength) {
-  vec3 tx = texture2D(tex, t.ux).xyz * 2.0 - 1.0;
-  vec3 ty = texture2D(tex, t.uy).xyz * 2.0 - 1.0;
-  vec3 tz = texture2D(tex, t.uz).xyz * 2.0 - 1.0;
+  vec3 tx = texture2D(tex, t.ux, iwBias).xyz * 2.0 - 1.0;
+  vec3 ty = texture2D(tex, t.uy, iwBias).xyz * 2.0 - 1.0;
+  vec3 tz = texture2D(tex, t.uz, iwBias).xyz * 2.0 - 1.0;
   tx.xy *= strength; ty.xy *= strength; tz.xy *= strength;
   tx.x *= t.s.x; ty.x *= t.s.y; tz.x *= -t.s.z;
   return blendWhiteout(n, t.w, tx, ty, tz);
@@ -178,9 +181,34 @@ const SURF = {
   steel: /* glsl */`
     vec3 n0 = normalize(vWNrm);
     Tri T = triSetup(vWPos, n0, SCALE, 6.0);
+    float iwPx = length(fwidth(vWPos));     // world size of one pixel here
+    float iwFar = 0.0;
+    #ifdef IW_CORR
+      // ribs are 0.19 m: fade them (and their lighting) to the mean once a pixel spans ~1/4 rib
+      iwFar = smoothstep(0.035, 0.11, iwPx);
+      iwBias = iwFar * 4.0;
+    #endif
     vec3 rust = triSample(tA, T).rgb;
     vec3 dat = triSample(tD, T).rgb;       // r paint coverage (chip field), g rust roughness, b paint grime
-    iwN = triNormal(tN, T, n0, NSTR);
+    iwN = triNormal(tN, T, n0, NSTR * (1.0 - 0.85 * iwFar));
+    iwBias = 0.0;
+    // r4 RUST (colour script #6B3A22 / #8C4A26 / #A2562B): three oxide tones mixed by a low-frequency
+    // patch field, the texture only modulates value; dark scale #3A2418 in pits / crevices, worn
+    // galvanised steel #8E9296 on convex edges; -20 % value / -25 % saturation vs. the r3 salmon
+    float rl = dot(rust, vec3(0.2126, 0.7152, 0.0722));
+    float rMean = dot(textureLod(tA, vec2(0.5), 10.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+    float rdv = clamp(rl / max(rMean, 1e-3), 0.0, 2.2);
+    float pn = texture2D(tNoise, vWPos.xz / 4.3 + vWPos.y / 6.1 + 0.37).r * 0.55 + texture2D(tNoise, vWPos.xz / 29.0 - vWPos.y / 41.0).g * 0.45;
+    vec3 ox = mix(vec3(0.147, 0.042, 0.016), vec3(0.262, 0.069, 0.019), smoothstep(0.3, 0.55, pn));
+    ox = mix(ox, vec3(0.366, 0.094, 0.024), smoothstep(0.58, 0.8, pn));
+    ox = mix(vec3(dot(ox, vec3(0.2126, 0.7152, 0.0722))), ox, 0.75) * 0.8;
+    ox *= 0.72 + 0.34 * rdv;
+    float pit = 1.0 - smoothstep(0.45, 0.95, rdv);
+    ox = mix(ox, vec3(0.042, 0.017, 0.009), pit * 0.75);
+    float cvx = smoothstep(0.12, 0.45, length(fwidth(n0))) * (1.0 - smoothstep(0.05, 0.25, iwPx));
+    ox = mix(ox, vec3(0.27, 0.29, 0.3) * (0.55 + 0.3 * rdv), cvx * 0.55);
+    float oxRough = clamp(0.78 + 0.17 * (pn - 0.5) * 2.0 * 0.6 + 0.08 * (dat.g - 0.5) - 0.12 * cvx, 0.62, 0.95);
+    rust = ox / 0.79;    // the blocks below scale the bare metal by (0.72 + 0.35 m)
     float m = macro(vWPos);
     float vert = 1.0 - abs(n0.y);
     // height above the local ground (pier deck 0 m or the lower yard -9 m)
@@ -215,16 +243,18 @@ const SURF = {
     vec3 alb = mix(rust * (0.72 + 0.35 * m), pc, paint);
     alb = mix(alb, alb * vec3(0.52, 0.48, 0.44), splash * 0.75);            // splash grime at the base
     float up = smoothstep(0.6, 0.95, n0.y);
-    alb = mix(alb, vec3(0.19, 0.18, 0.17), up * (0.3 + 0.35 * m));           // soot / ash on top faces
-    // rust tones of the colour script (#6B3A22 / #8C4A26 / #A2562B) on bare metal, by patch
-    vec3 rt = mix(vec3(0.147, 0.042, 0.016), mix(vec3(0.262, 0.069, 0.019), vec3(0.366, 0.094, 0.025), smoothstep(0.5, 0.9, m)), smoothstep(0.2, 0.7, dat.g));
-    alb = mix(alb, rt * (0.8 + 0.4 * dot(rust, vec3(0.5))), (1.0 - paint) * 0.45);
+    // soot / ash on top faces; lighter on bare rust (grey ash over orange oxide read as salmon pink)
+    alb = mix(alb, vec3(0.165, 0.155, 0.138), up * (0.3 + 0.35 * m) * mix(0.5, 1.0, paint));
     // waterline: wet, algae-stained band on hulls, piles and pontoons; rust bloom just above
     float tide = 1.0 - smoothstep(0.3, 1.9, abs(vWPos.y + 13.6));
     alb = mix(alb, vec3(0.035, 0.042, 0.03), tide * 0.8);
-    alb = mix(alb, rt, (1.0 - smoothstep(0.0, 3.0, vWPos.y + 12.0)) * step(-13.6, vWPos.y) * 0.35 * vert);
+    alb = mix(alb, ox, (1.0 - smoothstep(0.0, 3.0, vWPos.y + 12.0)) * step(-13.6, vWPos.y) * 0.35 * vert);
+    #ifdef IW_CORR
+      alb *= 1.0 - 0.06 * iwFar;    // unresolved rib valleys still darken the sheet a little
+    #endif
     diffuseColor.rgb = alb;
-    iwRough = mix(mix(dat.g, 0.48 + 0.34 * (1.0 - dat.b), paint), 0.25, tide);
+    iwRough = mix(mix(oxRough, 0.48 + 0.34 * (1.0 - dat.b), paint), 0.25, tide);
+    iwRough = mix(iwRough, max(iwRough, 0.7), iwFar);
     iwMetal = mix(0.3, 0.05, paint);
     iwAO = 1.0;
   `,
@@ -326,10 +356,18 @@ const SURF = {
     alb = mix(alb, alb * 0.5 + vec3(0.006, 0.008, 0.009), pud);
     tn = normalize(mix(tn, vec3(0.0, 0.0, 1.0), pud * 0.92));
     diffuseColor.rgb = alb;
+    // (r4) specular AA: once a pixel covers more than a few cm the aggregate / ballast relief can
+    // no longer be resolved -> its normals flatten and the micro-roughness rises instead of
+    // sparkling (the into-sun wet slab glitter)
+    float gPx = length(fwidth(vWPos));
+    float gAA = smoothstep(0.015, 0.09, gPx);
+    tn.xy *= 1.0 - 0.8 * gAA;
+    tn = normalize(tn);
     // roughness: texture micro-variation + a continuous (non-periodic per cell) field, so the wet
     // sheen breaks up in soft patches, never cell by cell
     float rField = (fbm - 0.5) * 0.18 + (texture2D(tNoise, p / 61.0 + 0.4).b - 0.5) * 0.12;
     float rBase = clamp(dat.g + rField - oil * 0.25 + dustF * 0.08, 0.08, 1.0);
+    rBase = mix(rBase, max(rBase, 0.62), gAA);
     iwRough = mix(mix(rBase, rBase * 0.62, damp), 0.04, pud);
     iwPud = pud;
     iwMetal = 0.0;
@@ -384,9 +422,9 @@ const SURF = {
     // base splash / soot band (far kit stands on the lower yard / mole at ~ -10 m)
     float band = 1.0 - smoothstep(-10.0, 5.0 + 10.0 * m, p.y);
     alb = mix(alb, alb * vec3(0.5, 0.47, 0.44), band * vert);
-    // ash on top faces
-    float up = smoothstep(0.6, 0.95, n0.y);
-    alb = mix(alb, vec3(0.2, 0.19, 0.18), up * 0.5);
+    // ash on (flat) top faces; heaps / sloped roofs keep their own colour
+    float up = smoothstep(0.88, 0.98, n0.y);
+    alb = mix(alb, vec3(0.2, 0.19, 0.18), up * 0.42);
     diffuseColor.rgb = alb;
     // shading: rings / lips catch the low sun (normal tilted up just above each joint); plates
     // of a steel shell are faintly faceted so lathes stop reading as smooth tubes
@@ -396,6 +434,85 @@ const SURF = {
     iwN = normalize(n0 + tng * facet + vec3(0.0, 1.0, 0.0) * lip * 0.5);
     iwRough = clamp(0.88 - 0.22 * steelC - 0.12 * wash + 0.06 * soot, 0.5, 1.0);
     iwMetal = 0.0; iwAO = 1.0 - 0.35 * jY * jAmt * 2.0;
+  `,
+  // r4 OUTER TERRAIN (src/world/terrain.js): 0.25-6 km of hinterland. Macro ground classes at
+  // 60 m - 1.5 km (ash plain, coal / coke fields, ore stain, slag, pale ash drifts), the ash /
+  // ballast texture as near detail, district infrastructure (rail-yard ballast beds, service
+  // roads), soot bands + trampled hard-standing around every structure (contact map), wet dark
+  // hollows, darker slopes; vTint.a = 1 marks the concrete aprons / plinths under the far kit.
+  terrain: /* glsl */`
+    vec2 p = vWPos.xz;
+    vec3 n0 = normalize(vWNrm);
+    float camD = length(vWPos - cameraPosition);
+    float apron = step(0.5, vTint.a);
+    vec4 ct = texture2D(tContact, (p + 3072.0) / 6144.0);
+    float soot = ct.r, trod = ct.g;
+    float f1 = texture2D(tNoise, p / 1450.0 + 0.13).r;
+    float f2 = texture2D(tNoise, p / 530.0 + 0.71).g;
+    float f3 = texture2D(tNoise, p / 173.0 + 0.37).b;
+    float f4 = texture2D(tNoise, p / 61.0 + 0.53).r;
+    float f5 = texture2D(tNoise, p / 23.0 + 0.19).g;
+    vec3 alb = vec3(0.1, 0.093, 0.086) * (0.82 + 0.3 * f4 + 0.12 * f5);                       // ash plain
+    alb = mix(alb, vec3(0.03, 0.029, 0.028) * (0.8 + 0.4 * f5), smoothstep(0.5, 0.58, f1 * 0.55 + f3 * 0.45));  // coal / coke / black slag fields
+    alb = mix(alb, vec3(0.12, 0.062, 0.038) * (0.8 + 0.4 * f4), smoothstep(0.56, 0.64, f2 * 0.7 + f4 * 0.3) * 0.85); // ore stain
+    alb = mix(alb, vec3(0.062, 0.067, 0.073) * (0.85 + 0.3 * f5), smoothstep(0.58, 0.66, f3 * 0.6 + f1 * 0.4) * 0.85);  // grey slag
+    alb = mix(alb, vec3(0.175, 0.165, 0.152), smoothstep(0.42, 0.34, f2 * 0.5 + f1 * 0.5) * 0.6);              // pale ash
+    // near detail: the ash / ballast set at 8 m and 37 m, settling to its mean with distance
+    float meanA = dot(textureLod(tA2, vec2(0.5), 10.0).rgb, vec3(0.333));
+    vec3 aA = texture2D(tA2, p / 8.0).rgb, aB = texture2D(tA2, p / 37.0 + 0.3).rgb;
+    float dl = dot(mix(aA, aB, 0.45), vec3(0.333)) / max(meanA, 1e-3);
+    float nearF = 1.0 - smoothstep(120.0, 600.0, camD);
+    alb *= mix(1.0, clamp(dl, 0.5, 1.6), 0.35 + 0.65 * nearF);
+    // district infrastructure beyond the lower yard: rail-yard ballast beds (E-W) and service
+    // roads (N-S), interrupted by a coarse noise so they read as yards, not a grid
+    float hinter = smoothstep(420.0, 560.0, max(abs(p.x), abs(p.y)));
+    float qz = (p.y + 137.0) / 430.0;
+    float dz = abs(fract(qz) - 0.5) * 430.0;
+    float yardOn = smoothstep(0.38, 0.5, texture2D(tNoise, vec2(p.x / 2300.0, floor(qz) * 0.31 + 0.2)).r);
+    float pxw = max(fwidth(p.y), 0.05);
+    float bedW = 7.0 + 6.0 * texture2D(tNoise, vec2(floor(qz) * 0.17, 0.4)).g;
+    float bed = (1.0 - smoothstep(bedW - pxw, bedW + pxw, dz)) * yardOn * hinter;
+    float sleepers = smoothstep(0.3, 0.7, abs(fract(dz / 3.6) - 0.5) * 2.0) * nearF;
+    alb = mix(alb, vec3(0.045, 0.04, 0.036) * (0.85 + 0.3 * f5) * (1.0 + 0.25 * sleepers), bed * 0.9);
+    float qx = (p.x + 61.0) / 510.0;
+    float dx = abs(fract(qx) - 0.5) * 510.0;
+    float roadOn = smoothstep(0.42, 0.55, texture2D(tNoise, vec2(floor(qx) * 0.23 + 0.6, p.y / 1900.0)).b);
+    float pxx = max(fwidth(p.x), 0.05);
+    float road = (1.0 - smoothstep(5.0 - pxx, 5.0 + pxx, dx)) * roadOn * hinter * (1.0 - bed);
+    alb = mix(alb, vec3(0.13, 0.124, 0.115) * (0.9 + 0.2 * f5) * (1.0 - 0.3 * (1.0 - smoothstep(0.6, 2.2, dx))), road * 0.85);
+    // contact: soot bands hug every structure, trampled hard-standing around them
+    alb = mix(alb, alb * 0.85 + vec3(0.012), trod * 0.35);
+    alb = mix(alb, alb * 0.38 + vec3(0.004), soot * 0.9);
+    // wet hollows (water / sludge in the low ground) and darker slopes
+    float hollow = smoothstep(-12.5, -15.5, vWPos.y) * (1.0 - apron);
+    float slope = 1.0 - n0.y;
+    alb *= 1.0 - 0.45 * smoothstep(0.04, 0.25, slope);
+    alb = mix(alb, alb * 0.45, hollow);
+    float rough = clamp(0.9 + 0.08 * (f5 - 0.5) - 0.12 * soot, 0.6, 1.0);
+    rough = mix(rough, 0.18, hollow * 0.85);
+    // concrete aprons / plinths: board-formed joints every 6 m, soot hugging the structure, a dark
+    // splash band on the plinth sides
+    if (apron > 0.5) {
+      vec3 cc = vec3(0.15, 0.137, 0.122) * (0.78 + 0.3 * f4 + 0.12 * f5);
+      vec2 jg = abs(fract(p / 6.0) - 0.5) * 6.0;
+      vec2 fwj = max(fwidth(p), vec2(0.02));
+      float joint = max(1.0 - smoothstep(0.08 - fwj.x, 0.08 + fwj.x, 3.0 - jg.x), 1.0 - smoothstep(0.08 - fwj.y, 0.08 + fwj.y, 3.0 - jg.y));
+      joint *= 1.0 - smoothstep(0.15, 0.5, max(fwj.x, fwj.y));
+      cc *= 1.0 - 0.3 * joint;
+      cc = mix(cc, cc * 0.42, soot * 0.75);
+      float side = 1.0 - smoothstep(0.4, 0.8, n0.y);
+      cc = mix(cc, cc * vec3(0.55, 0.52, 0.5), side);
+      alb = cc;
+      rough = 0.88;
+    }
+    diffuseColor.rgb = alb;
+    // normal: the ash relief near the camera only
+    vec3 tnA = texture2D(tN2, p / 8.0).xyz * 2.0 - 1.0;
+    tnA.xy *= 0.6 * nearF * (1.0 - apron) * (1.0 - hollow);
+    vec3 tw = normalize(vec3(tnA.x, tnA.z, tnA.y));
+    iwN = normalize(n0 + vec3(tw.x, 0.0, tw.z));
+    iwRough = rough; iwMetal = 0.0;
+    iwAO = 1.0 - 0.35 * soot;
   `,
   trim: /* glsl */`
     vec4 tA0 = texture2D(tA, vUvI);
@@ -411,8 +528,20 @@ const SURF = {
     // window row far away: the small-pane pattern (glossy panes vs sooted ones) would alias into
     // pale glyph noise -> settle to an even, dark, semi-glossy glazing band
     float iwWin = step(0.25, vUvI.y) * step(vUvI.y, 0.5);
+    // (r4) per-pane variation: pane id from the atlas layout (4 bays x 6 x 4 panes per tile),
+    // value +-30 %, a grime gradient rising from the sill, and unlit panes reflect the sky
+    float bayU = vUvI.x * 4.0;
+    vec2 pl = vec2(fract(bayU) * 256.0 - 14.0, (vUvI.y - 0.25) * 1024.0 - 14.0);
+    vec2 pid = floor(pl / vec2(38.0, 57.0));
+    float ph = h12(pid + vec2(floor(bayU) * 7.0, 3.0) + floor(vWPos.xz / 7.0) * 1.37 + floor(vWPos.y / 2.7) * 0.71);
+    float sillG = smoothstep(120.0, 228.0, pl.y);
+    float iwGlass = iwWin * (1.0 - smoothstep(0.25, 0.4, dat.g));
+    alb = mix(alb, alb * (0.7 + 0.6 * ph) * (1.0 - 0.35 * sillG) + vec3(0.03, 0.027, 0.022) * sillG, iwGlass);
+    iwPane = ph;
+    iwSill = sillG;
     float iwFarW = iwWin * smoothstep(40.0, 120.0, length(vWPos - cameraPosition));
     alb = mix(alb, vec3(0.055, 0.06, 0.065) * (0.8 + 0.4 * m), iwFarW);
+    iwGlassR = max(iwGlass, iwFarW * 0.7);
     diffuseColor.rgb = alb;
     iwRough = mix(dat.g, 0.62, iwFarW); iwMetal = mix(dat.b, 0.0, iwFarW); iwAO = mix(dat.r, 0.6, iwFarW);
     iwTan = normalize(mix(tn, vec3(0.0, 0.0, 1.0), iwFarW));
@@ -422,6 +551,8 @@ const SURF = {
           + 0.85 * smoothstep(0.85, 0.95, dat.g) * (1.0 - smoothstep(0.03, 0.06, iwLum)));
     // far away the small-pane pattern would alias into glyph noise: a lit bay reads as one warm strip
     iwLit = mix(iwLit, step(vTint.a, 0.75) * 0.5, smoothstep(45.0, 130.0, length(vWPos - cameraPosition)));
+    // per-pane lamp value / a few dead panes in a lit bay, darker toward the grimy sill
+    iwLit *= mix(1.0, (0.7 + 0.6 * iwPane) * step(0.1, fract(iwPane * 13.7)) * (1.0 - 0.3 * iwSill), iwWin * (1.0 - iwFarW));
   `,
 };
 
@@ -506,7 +637,7 @@ export function createArenaMaterials(T) {
   mats.M_concrete = tri('concrete', conc, SURF.concrete);
   mats.M_heap = tri('heap', ash, SURF.heap);
   mats.M_steel = tri('steel', steel, SURF.steel.replace('SCALE', '3.0').replace('NSTR', '1.0'));
-  mats.M_corr = tri('corr', corr, SURF.steel.replace('SCALE', '3.0').replace('NSTR', '1.3'));
+  mats.M_corr = tri('corr', corr, SURF.steel.replace('SCALE', '3.0').replace('NSTR', '1.3'), { IW_CORR: '' });
   mats.M_belt = tri('belt', steel, SURF.steel.replace('SCALE', '2.0').replace('NSTR', '0.5'));
   {
     const m = new THREE.MeshStandardMaterial({ name: 'ground', roughness: 0.9 });
@@ -537,12 +668,30 @@ export function createArenaMaterials(T) {
     patchStandard(m, { uniforms: { ...common }, surf: SURF.far });
     mats.M_far = m;
   }
+  const contactU = { value: fb([0, 0, 0], 'contact') };
+  {
+    const m = new THREE.MeshStandardMaterial({ name: 'terrain', roughness: 0.9 });
+    patchStandard(m, {
+      uniforms: { ...common, tA2: { value: ash.a }, tN2: { value: ash.n }, tContact: contactU },
+      surf: SURF.terrain,
+    });
+    mats.M_terrain = m;
+  }
   {
     const m = new THREE.MeshStandardMaterial({ name: 'trim', roughness: 0.7 });
     patchStandard(m, {
       uniforms: { ...common, tA: { value: trim.a }, tN: { value: trim.n }, tD: { value: trim.d } }, surf: SURF.trim, uv: true, tangentNormal: true,
-      fragExtra: 'float iwLit = 0.0;\n',
-      emissive: 'totalEmissiveRadiance = vec3(1.0, 0.5, 0.18) * iwLit * (0.75 + 0.45 * texture2D(tNoise, vWPos.xz / 13.0 + vWPos.y / 7.0).r);',
+      fragExtra: 'float iwLit = 0.0, iwPane = 0.5, iwSill = 0.0, iwGlassR = 0.0;\n',
+      emissive: /* glsl */`
+        totalEmissiveRadiance = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.62, 0.3), iwPane) * iwLit * (0.75 + 0.45 * texture2D(tNoise, vWPos.xz / 13.0 + vWPos.y / 7.0).r);
+        #ifdef USE_ENVMAP
+        if (iwGlassR > 0.01) {          // unlit glazing: a dull sky reflection instead of a black void
+          vec3 iwV = normalize(vViewPosition);
+          float iwF = pow(1.0 - saturate(dot(normal, iwV)), 5.0);
+          totalEmissiveRadiance += iwGlassR * (1.0 - min(iwLit, 1.0)) * (0.06 + 0.5 * iwF) * (0.7 + 0.6 * iwPane) * (1.0 - 0.5 * iwSill)
+                                 * getIBLRadiance(iwV, normal, 0.12);
+        }
+        #endif`,
     });
     mats.M_trim = m;
   }
@@ -667,6 +816,8 @@ export function createArenaMaterials(T) {
   return {
     byName: mats,
     uniforms,
+    /** Contact map of the outer terrain (src/world/terrain.js); owned by the terrain. */
+    setContact(tex) { contactU.value = tex; },
     dispose() {
       for (const k in mats) mats[k].dispose();
       for (const t of own) t.dispose();

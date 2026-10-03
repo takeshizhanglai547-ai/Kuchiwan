@@ -1526,3 +1526,112 @@ def export_glb_lean(root, path, strip_tangents=True, vn=8):
 
 
 DEFAULT_QUALITY = {'basecolor': 80, 'orm': 72, 'normal': 82, 'emissive': 88, 'decals': 82}
+
+
+# ============================================================================ r4: secondary frequency
+def _pip(pt, poly):
+    """2D point-in-polygon (even-odd)."""
+    x, y = pt
+    inside = False
+    n = len(poly)
+    for i in range(n):
+        x0, y0 = poly[i]
+        x1, y1 = poly[(i + 1) % n]
+        if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0 + 1e-12) + x0:
+            inside = not inside
+    return inside
+
+
+def bolt_at(p, n, r, mat='steel'):
+    """One cheap hex bolt standing on surface point p with normal n (identical copies UV-stack)."""
+    b = P.bolt(r, 'hex', mat)
+    n = Vector(n).normalized()
+    b.align(n, up=(0, 0, 1) if abs(n.z) < 0.9 else (0, 1, 0), loc=p)
+    return b
+
+
+
+def _slope_walls(faces, ctr, u, v, w, h, s):
+    """r4: pull the boundary verts of a raised cap / recess floor `s` toward the centre so the panel walls
+    slope 45 deg: they stay in the same UV island as the face (90 deg walls became hundreds of thin
+    islands and halved the atlas coverage)."""
+    vs = {vv for f in faces if f.is_valid for vv in f.verts}
+    for vv in vs:
+        d = vv.co - ctr
+        du, dv = d.dot(u), d.dot(v)
+        if abs(du) > w * 0.5 - 2e-3:
+            vv.co -= u * (s if du > 0 else -s)
+        if abs(dv) > h * 0.5 - 2e-3:
+            vv.co -= v * (s if dv > 0 else -s)
+
+def panelize(g, seed, min_area=0.02, frac=0.66, max_side=0.4, min_side=0.06, skip=None,
+             mats=('paint_primary', 'paint_dark', 'paint_secondary'), weights=(0.4, 0.38, 0.22), bolt_r=0.01,
+             down_ok=False, gap=0.008, raise_h=0.012, recess=0.015, groove=0.01, keep=(), stats=None):
+    """r4 (critic r3: flat body planes): break every big planar paint face of a shell into an inset
+    panel - a seam-loop panel, a raised plate with corner bolts or a recessed panel - centred in the
+    face and kept inside its outline. skip(centre, normal) -> True leaves a face alone; faces that
+    contain a `keep` point (decal cards) stay flat. Returns the bolt geometry to merge with the part."""
+    import random
+    rng = random.Random(seed)
+    g.bm.normal_update()
+    mids = [g.mats.index(m) for m in mats if m in g.mats]
+    keep = [Vector(p) for p in keep]
+    cands = []
+    for f in g.bm.faces:
+        if f.material_index not in mids or len(f.verts) < 3:
+            continue
+        if not down_ok and f.normal.z < -0.55:
+            continue
+        a_ = f.calc_area()
+        if a_ < min_area:
+            continue
+        c = f.calc_center_median()
+        if skip is not None and skip(c, f.normal):
+            continue
+        cands.append((round(-a_, 6), round(c.x, 4), round(c.y, 4), round(c.z, 4), f))
+    cands.sort(key=lambda t: t[:4])
+    bolts = Geo()
+    st = stats if stats is not None else {}
+    for _, cx, cy, cz, f in cands:
+        if not f.is_valid:
+            continue
+        o, u, v, n, pts = g.face_frame(f)
+        if any(abs((p - o).dot(n)) < 0.1 and _pip(((p - o).dot(u), (p - o).dot(v)), pts) for p in keep):
+            continue
+        us = [p[0] for p in pts]
+        vs = [p[1] for p in pts]
+        ccu, ccv = sum(us) / len(us), sum(vs) / len(vs)
+        w = min(max_side, (max(us) - min(us)) * frac)
+        h = min(max_side, (max(vs) - min(vs)) * frac)
+        ok = False
+        for _k in range(5):
+            corners = [(ccu + sx * w * 0.5, ccv + sy * h * 0.5) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            if all(_pip(q, pts) for q in corners):
+                ok = True
+                break
+            w *= 0.82
+            h *= 0.82
+        if not ok or w < min_side or h < min_side:
+            continue
+        ctr = o + u * ccu + v * ccv
+        r_ = rng.random()
+        mode = 0 if r_ < weights[0] else (1 if r_ < weights[0] + weights[1] else 2)
+        fm = g.mats[f.material_index]
+        if mode == 0:     # low seam plate: reads as a panel outline in the bevel-baked normal
+            res, sl = g.hatch(f, ctr, (w, h), gap=gap, raised=groove, u_axis=u), groove
+        elif mode == 1:
+            res, sl = g.hatch(f, ctr, (w, h), gap=gap, raised=raise_h, u_axis=u), raise_h
+        else:             # recessed panels floor in a darker paint (a value step that reads at range)
+            res, sl = g.hatch(f, ctr, (w, h), gap=gap, recess=recess, u_axis=u,
+                              mat='paint_dark' if fm != 'paint_dark' else 'steel_dark'), recess
+        if res is None:
+            continue
+        _slope_walls(res, ctr, u, v, w - 2 * gap, h - 2 * gap, sl)
+        st['panels'] = st.get('panels', 0) + 1
+        if mode == 1 and bolt_r > 0 and min(w, h) > bolt_r * 8:
+            ins = bolt_r * 3.2 + raise_h
+            for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                p = ctr + u * su * (w * 0.5 - ins) + v * sv * (h * 0.5 - ins) + n * raise_h
+                bolts.merge(bolt_at(p, n, bolt_r, fm))
+                st['bolts'] = st.get('bolts', 0) + 1
+    return bolts

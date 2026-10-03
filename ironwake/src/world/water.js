@@ -162,14 +162,16 @@ const FRAG_SURF = /* glsl */`
     float fA = texture2D(tWater, P.xz / 15.0 + vec2(0.003, -uTime * 0.011)).b;
     float fB = texture2D(tWater, P.xz / 5.1 + vec2(-uTime * 0.017, uTime * 0.006)).b;
     float surge = 0.5 + 0.5 * sin(uTime * 0.85 + P.x * 0.09 + P.z * 0.05);
-    float band = 1.0 - smoothstep(0.0, 2.2 + 4.0 * surge, sd + (fB - 0.5) * 3.0);
-    float lace = (1.0 - smoothstep(0.0, 26.0, sd)) * smoothstep(0.5, 0.82, fA * 0.65 + fB * 0.45);
+    // (r4) wider contact band + denser lace: from a quay or a deck 15 m above the water the first
+    // metres at the wall foot are hidden behind the coping, so the visible foam must reach out
+    float band = 1.0 - smoothstep(0.0, 3.4 + 5.0 * surge, sd + (fB - 0.5) * 3.0);
+    float lace = (1.0 - smoothstep(0.0, 30.0, sd)) * smoothstep(0.42, 0.76, fA * 0.65 + fB * 0.45) * (1.0 - 0.5 * smoothstep(8.0, 30.0, sd));
     float cap = smoothstep(0.3, 0.62, vCrest + (fA - 0.5) * 0.35) * smoothstep(0.42, 0.78, fB * 0.5 + fA * 0.5) * (0.4 + 0.6 * ruffle);
     vec2 wd = vec2(0.24, -0.97);                                 // wind / swell heading (WAVES[0])
     vec2 wq = vec2(dot(P.xz, wd), dot(P.xz, vec2(-wd.y, wd.x)));
     float lanes = texture2D(tWater, vec2(wq.y / 9.0, wq.x / 140.0 + uTime * 0.004)).b;
     float streak = smoothstep(0.66, 0.9, lanes) * smoothstep(0.55, 0.85, fA) * ruffle * 0.55;
-    float foam = clamp(band * (0.45 + 0.7 * fB) + lace * 0.75 + cap * 0.7 + streak, 0.0, 1.0);
+    float foam = clamp(band * (0.55 + 0.7 * fB) + lace * 0.85 + cap * 0.7 + streak, 0.0, 1.0);
     foam *= 1.0 - 0.8 * smoothstep(600.0, 1800.0, dist);
     float wash = (1.0 - smoothstep(0.0, 40.0, sd)) * 0.5;
     vec3 body = uDeep * (1.0 + wash * 1.6 + vCrest * 0.8) * (0.85 + 0.3 * gust2);

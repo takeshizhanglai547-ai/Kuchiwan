@@ -63,22 +63,42 @@ void main() {
     vec4 H = modelViewMatrix * vec4(iPos, 1.0);
     vec4 T = modelViewMatrix * vec4(iPos + iAxis, 1.0);
     float hz = max(-H.z, 0.1), tz = max(-T.z, 0.1);
-    vec2 d = T.xy * (hz / tz) - H.xy;
-    float Ls = length(d), L = max(length(iAxis), 1e-3);
-    vec2 dir = Ls > 1e-4 ? d / Ls : vec2(0.0, -1.0);
-    float endOn = 1.0 - clamp(Ls / L, 0.0, 1.0);
+    float L = max(length(iAxis), 1e-3);
+    // combat r4: view alignment of the jet axis (1 = looking straight down / up the jet). A side-on
+    // jet is the flat blade below; end-on it fades out (it would only be a flat 2D sliver
+    // splayed by the min-length rule: 'antlers'; fade (1-|cos|)^1.1) and the soft EXIT DISC (variant 1) takes over
+    // when the jet points at the lens; the ray-marched lathe plume (fx/flame.js) carries the volume
+    vec3 jdv = (modelViewMatrix * vec4(iAxis, 0.0)).xyz / L;
+    float cosV = dot(jdv, normalize(H.xyz));                 // < 0: the jet points toward the camera
     float px = uPixel * hz;
-    float Lu = max(Ls, JET_MIN_PX * px);
-    float w = max(size * (1.0 + 0.35 * endOn), 2.5 * px);   // looking down the jet: the near part is fatter
-    float back = w * 0.8;                                    // hot rounded cap just behind the exit
-    vec2 perp = vec2(dir.y, -dir.x);                         // (perp, dir) keeps the quad front-facing
-    float t = corner.y + 0.5;                                // 0 exit .. 1 tail
-    mvPosition = H;
-    mvPosition.xy += dir * (t * (Lu + back) - back) + perp * corner.x * 2.0 * w;
-    mvPosition.z += min(1.0, hz * 0.03);                     // a hair toward the camera: clears the bell lip
-    vRot = vec2(back / (Lu + back), endOn);
-    vSoft = 0.15;
-    size = w * 2.0;
+    if (mod(floor(iExtra.w + 0.25), 16.0) > 0.5) {
+      // nozzle-exit disc: radius = size, pulled 0.6 m toward the eye (clears the bell lip)
+      float hl = length(H.xyz);
+      mvPosition = H;
+      mvPosition.xyz *= 1.0 - min(0.6, hl * 0.3) / max(hl, 1e-3);
+      float R = max(size * 1.5, 3.0 * px);
+      mvPosition.xy += corner * 2.0 * R;
+      vColor.a *= smoothstep(0.4, 0.9, -cosV);
+      vRot = vec2(-1.0, -cosV);
+      size = R * 2.0;
+    } else {
+      vec2 d = T.xy * (hz / tz) - H.xy;
+      float Ls = length(d);
+      vec2 dir = Ls > 1e-4 ? d / Ls : vec2(0.0, -1.0);
+      float endOn = 1.0 - clamp(Ls / L, 0.0, 1.0);
+      float Lu = max(Ls, JET_MIN_PX * px);
+      float w = max(size * (1.0 + 0.35 * endOn), 2.5 * px);   // looking down the jet: the near part is fatter
+      float back = w * 0.8;                                    // hot rounded cap just behind the exit
+      vec2 perp = vec2(dir.y, -dir.x);                         // (perp, dir) keeps the quad front-facing
+      float t = corner.y + 0.5;                                // 0 exit .. 1 tail
+      mvPosition = H;
+      mvPosition.xy += dir * (t * (Lu + back) - back) + perp * corner.x * 2.0 * w;
+      mvPosition.z += min(1.0, hz * 0.03);                     // a hair toward the camera: clears the bell lip
+      vRot = vec2(back / (Lu + back), endOn);
+      vColor.a *= pow(max(1.0 - abs(cosV), 0.0), 1.1);
+      size = w * 2.0;
+    }
+    vSoft = L;   // jets are nosoft: vSoft carries the jet length (m) for the shock-diamond spacing
   } else if (stretch < 0.0) {
     // world-oriented quad (ground rings, shock discs): plane perpendicular to iAxis
     vec3 n = normalize(iAxis + vec3(0.0, 1e-5, 0.0));
@@ -88,6 +108,10 @@ void main() {
     mvPosition = modelViewMatrix * vec4(iPos + off, 1.0);
     vRot = vec2(c, s);
     vSoft = clamp(size * 0.06, 0.12, 1.5);
+    // combat r4: sheets vanish at grazing angles (a ground sheet seen from a low chase camera
+    // squeezed its atlas silhouette into a paper cutout); vSheet = 1 + facing
+    vec3 nv = normalize((modelViewMatrix * vec4(n, 0.0)).xyz);
+    vSheet = 1.0 + smoothstep(0.2, 0.6, abs(dot(nv, normalize(mvPosition.xyz))));
   } else {
     mvPosition = modelViewMatrix * vec4(iPos, 1.0);
     float px = uPixel * max(-mvPosition.z, 0.1);
@@ -128,6 +152,7 @@ void main() {
       vec2 ay = vv.xy / vl; vec2 ax = vec2(ay.y, -ay.x);
       mvPosition.xy += ax * corner.x * size + ay * (corner.y - 0.5) * (size + vl * stretch);
       vSoft = iSize.w > 1.5 && iSize.w < 2.5 ? clamp(size * 0.3, 0.25, 4.0) : 0.15;
+      vSheet = 3.0;   // velocity-streaked puff: soft elliptical outline (no stretched atlas arrowheads)
     } else {
       mvPosition.xy += vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
       vRot = vec2(c, s);
@@ -237,9 +262,23 @@ void main() {
     float m = smoothstep(max(erode - 0.4 * band, 0.0), erode + band, dd);
     float rad = clamp(1.0 - r2, 0.0, 1.0);
     a *= min(1.0, m * (0.3 + 0.7 * smoothstep(0.0, 0.75, d)) * rad * sqrt(rad) * (0.85 + 0.5 * nz) * 1.3);
-    // world-aligned sheets (ground dust, stretch < 0) stay faint: a sheet seen at a grazing
-    // angle compresses its whole alpha profile into a few rows
-    a = mix(a, min(a, 0.3 * smoothstep(0.0, 0.5, d)), vSheet);
+    // combat r4 (S tell: torn-atlas 'bird' silhouettes lying on the slab): world-aligned sheets
+    // (vSheet 1..2) and velocity-streaked puffs (vSheet 3) never show the atlas cell outline. Their
+    // silhouette is a radial (1-r^2)^1.5 window whose radius wobbles with a low-frequency
+    // per-particle fBm (>= r, so still 0 at the quad border); the atlas only modulates the inside.
+    // Sheets also fade out at grazing view angles and stay faint (<= 0.3).
+    if (vSheet > 0.5) {
+      float wob = pnoise(vUv, sOff + 0.43, 0.3);
+      float rw = clamp(1.0 - r2 * (1.0 + 1.1 * wob), 0.0, 1.0);
+      float body = rw * sqrt(rw) * (0.6 + 0.4 * nz) * mix(1.0, 0.45 + 0.55 * m, 0.6) * (1.0 - 0.45 * erode);
+      if (vSheet < 2.5) a = vColor.a * min(0.3, body * 1.15) * clamp(vSheet - 1.0, 0.0, 1.0);
+      else {
+        // streaked dust: filaments ALONG the motion (x across, y along the streak), so a fast
+        // puff reads as torn spray, never as one smooth petal
+        float fil = pnoise(vec2(vUv.x * 2.6, vUv.y * 0.45), sOff + 0.17, 1.0);
+        a = vColor.a * min(1.0, body * (0.25 + 1.3 * fil * fil) * 0.9);
+      }
+    }
     vec2 nt = t.gb * 2.0 - 1.0;
     vec2 nv = vec2(vRot.x * nt.x - vRot.y * nt.y, vRot.y * nt.x + vRot.x * nt.y);
     vec3 n = vec3(nv, sqrt(max(0.08, 1.0 - dot(nv, nv))));
@@ -309,6 +348,17 @@ void main() {
     // (moderate HDR: saturated orange under AgX; only small knots reach white)
     rgb += fireRampHdr(temp) * uFireGain * 1.5 * smoothstep(0.04, 0.4, temp) * (0.55 + 0.45 * lt);
     hotFloor = 0.3 * smoothstep(0.3, 0.7, temp);
+  } else if (shape == 9 && vRot.x < -0.5) {   // jet exit DISC (looking into the nozzle, combat r4)
+    float tm = mod(uTime, 100.0), lvl = heat;
+    // stepped 30 Hz flicker (two noise taps per step), per nozzle
+    float st = floor(tm * 30.0);
+    float fl = 0.78 + 0.22 * texture2D(tMisc, vec2(st * 0.1373 + sOff.x, sOff.y + st * 0.0391)).a
+                    + 0.12 * (texture2D(tMisc, vec2(sOff.y + st * 0.219, sOff.x)).a - 0.5);
+    float tmp = exp(-r2 * 6.5);
+    vec3 c = mix(vec3(1.0, 0.144, 0.01), vec3(1.0, 0.434, 0.068), smoothstep(0.12, 0.5, tmp));   // #FF6A1A -> #FFB04A
+    c = mix(c, vec3(1.0, 0.905, 0.672), smoothstep(0.55, 0.95, tmp));                        // -> #FFF4D6 core
+    rgb = c * (0.35 + 3.2 * tmp * tmp) * (0.55 + 0.45 * min(lvl, 1.2)) * vColor.rgb * fl;
+    a *= exp(-r2 * 3.2) * (1.0 - smoothstep(0.5, 1.0, sqrt(r2)));
   } else if (shape == 9) {                // booster exhaust jet (see header)
     float u = (vUv.y - vRot.x) / max(1.0 - vRot.x, 1e-3);   // 0 exit .. 1 tail, < 0 = cap
     float uc = max(u, 0.0), x = p.x, lvl = heat, endOn = vRot.y;
@@ -321,19 +371,24 @@ void main() {
     float ro = (0.42 + 0.4 * sin(min(uc * 2.6, 1.5708))) * (1.0 - 0.35 * smoothstep(0.45, 1.0, uc)) * (0.75 + 0.5 * nn);
     float tip = 1.0 - smoothstep(0.22 + 0.4 * nn, 0.98, uc);
     float outer = exp(-(x * x) / (ro * ro) * 2.6) * tip * (0.3 + 0.85 * nn);
-    // white-hot core cone (first ~50%), and stationary shock diamonds at high thrust
-    float rc = 0.24 * pow(max(1.0 - uc * 1.9, 0.0), 0.8) + 0.015;
-    float core = exp(-(x * x) / (rc * rc) * 2.0) * (1.0 - smoothstep(0.2, 0.52, uc)) * (0.85 + 0.3 * nn);
-    float dia = pow(0.5 + 0.5 * cos(uc * 31.4 - 1.2), 10.0) * exp(-x * x * 40.0) * smoothstep(0.03, 0.1, uc)
-              * (1.0 - smoothstep(0.3, 0.55, uc)) * smoothstep(0.55, 0.95, lvl);
+    // white-hot core cone (first ~2/3: 2.5-3 m in a ground boost), and THREE stationary shock
+    // diamonds at 0.3 / 0.6 / 0.9 of the core length, 0.25 m long, 1.6x brighter (combat r4: the
+    // old periodic ripple was lost inside the saturated core); between the knots the core sits
+    // just below white so the knots read
+    const float CL = 0.72;
+    float rc = 0.22 * pow(max(1.0 - uc / (CL * 1.05), 0.0), 0.7) + 0.02;
+    float core = exp(-(x * x) / (rc * rc) * 2.0) * (1.0 - smoothstep(CL * 0.55, CL, uc)) * (0.85 + 0.3 * nn);
+    float wd = 0.125 / max(vSoft, 0.3);
+    float kn = exp(-pow((uc - CL * 0.3) / wd, 2.0)) + exp(-pow((uc - CL * 0.6) / wd, 2.0)) + 0.7 * exp(-pow((uc - CL * 0.9) / wd, 2.0));
+    float dia = kn * exp(-(x * x) / (rc * rc + 0.004) * 1.4) * smoothstep(0.3, 0.65, lvl);
     float cap = smoothstep(-1.0, 0.0, u * (1.0 - vRot.x) / max(vRot.x, 1e-3)) * exp(-x * x * 5.0);
-    float temp = clamp(core + outer * (0.5 - 0.38 * uc) + dia * 0.5 + cap * 0.45, 0.0, 1.0);
+    float temp = clamp(core * mix(1.0, 0.8, smoothstep(0.3, 0.65, lvl)) + outer * (0.6 - 0.44 * uc) + dia * 0.45 + cap * 0.45, 0.0, 1.0);
     // combustion ramp #7A2A10 -> #FF6A1A -> #FFB04A -> #FFF4D6; the outer flame stays at low HDR
     // (saturated orange under AgX), only the core climbs to white (bloom source <= ~8)
     vec3 c = mix(vec3(0.194, 0.023, 0.005), vec3(1.0, 0.144, 0.01), smoothstep(0.0, 0.28, temp));
     c = mix(c, vec3(1.0, 0.434, 0.068), smoothstep(0.3, 0.7, temp));
     c = mix(c, vec3(1.0, 0.905, 0.672), smoothstep(0.75, 0.98, temp));
-    float inten = (0.45 + 8.0 * temp * temp * temp) * (0.55 + 0.45 * min(lvl, 1.2)) * (1.0 - 0.25 * endOn);
+    float inten = (0.45 + 8.0 * temp * temp * temp) * (0.55 + 0.45 * min(lvl, 1.2)) * (1.0 - 0.25 * endOn) * (1.0 + 0.6 * min(dia, 1.0));
     rgb = c * inten * vColor.rgb;
     a *= clamp(max(outer, core) * (u < 0.0 ? cap : 1.0) + dia * 0.6, 0.0, 1.0);
   } else if (shape == 6) {                // anamorphic flare line (flash accent): windowed to 0 at the border

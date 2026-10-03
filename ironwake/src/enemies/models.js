@@ -211,13 +211,50 @@ export const ENEMY_RIM = { strength: 0.34, pow: 3.0, color: [0.5, 0.54, 0.6], al
   // r3 (critic: walkers at 77-110 m vanish under the HUD): the rim grows with view distance, so a
   // 20-30 px unit keeps a cool outline against the ash-grey yard; close-ups are unchanged
   near: 45, far: 140, farMul: 2.65, farPow: 2.2, farLift: 2.1 };   // r3 (enemy-ai): 0.34 -> 0.9 rim, lift 0.07 -> 0.15 at range
+/** Specular anti-sparkle (see SPEC_AA_GLSL below): kernel roughness gain / cap, grazing rim cap. */
+export const SPEC_AA = { kernel: 2.0, max: 0.2, rimCap: 0.5 };
 const RIM_GLSL = (() => {
   const R = ENEMY_RIM, c = R.color.map((v) => v.toFixed(3)).join(', ');
   return `{ float iwNdV = clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
     float iwFar = smoothstep( ${R.near.toFixed(1)}, ${R.far.toFixed(1)}, length( vViewPosition ) );
-    float iwR = pow( max( 1.0 - iwNdV, 1e-4 ), mix( ${R.pow.toFixed(2)}, ${R.farPow.toFixed(2)}, iwFar ) ) * ${R.strength.toFixed(3)} * mix( 1.0, ${R.farMul.toFixed(2)}, iwFar );
+    float iwR = min( pow( max( 1.0 - iwNdV, 1e-4 ), mix( ${R.pow.toFixed(2)}, ${R.farPow.toFixed(2)}, iwFar ) ) * ${R.strength.toFixed(3)} * mix( 1.0, ${R.farMul.toFixed(2)}, iwFar ), ${SPEC_AA.rimCap.toFixed(2)} );
     outgoingLight += ( diffuseColor.rgb * ${R.albedo.toFixed(3)} + ${R.lift.toFixed(3)} * mix( 1.0, ${R.farLift.toFixed(2)}, iwFar ) ) * vec3( ${c} ) * iwR; }\n`;
 })();
+
+/**
+ * SPECULAR ANTI-SPARKLE (r4, critic: "at 21 m the boss is covered in single-pixel orange / white
+ * speckles along every edge"): Kaplanyan-style kernel roughness. The screen-space variance of the
+ * final (normal-mapped) normal widens the GGX lobe where a pixel covers more normal variation than
+ * the BRDF can represent (sub-pixel chamfers, the tiling micro-detail, panel lines at range), so a
+ * highlight averages over the pixel instead of crawling as isolated hot texels. The grazing rim is
+ * capped (rimCap). Used by enemyShading() and, wrapped around the rig shading, by the boss rig.
+ */
+const SPEC_AA_GLSL = `{ vec3 iwNdx = dFdx( normal ), iwNdy = dFdy( normal );
+  float iwVar = 0.25 * ( dot( iwNdx, iwNdx ) + dot( iwNdy, iwNdy ) );
+  float iwA = roughnessFactor * roughnessFactor + min( ${SPEC_AA.kernel.toFixed(2)} * iwVar, ${SPEC_AA.max.toFixed(3)} );
+  roughnessFactor = sqrt( min( iwA, 1.0 ) ); }
+#include <lights_physical_fragment>`;
+/** Insert the kernel-roughness widening into a (patched) lit fragment shader string. */
+export function specAAShader(fs) { return fs.indexOf('#include <lights_physical_fragment>') >= 0 ? fs.replace('#include <lights_physical_fragment>', SPEC_AA_GLSL) : fs; }
+/**
+ * Wrap an existing onBeforeCompile (e.g. the rig shading of src/mech/rig.js) with SPEC_AA: kernel
+ * roughness + the rig rim's fresnel part capped at rimCap beyond rimFar m. Own cache key suffix.
+ */
+export function addSpecAA(material, rimNear = 35, rimFar = 80) {
+  if (!material || !material.isMeshStandardMaterial || material.transparent || material.userData.iwSpecAA) return;
+  material.userData.iwSpecAA = true;
+  const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey;
+  material.onBeforeCompile = function (sh, r) {
+    if (prev) prev.call(this, sh, r);
+    let fs = specAAShader(sh.fragmentShader);
+    // rig rim (rig.js nanSafe): float iwR = pow( 1.0 - iwNdV, P ) * ( A + B * iwSh ) + C + D * iwSh;
+    fs = fs.replace(/float iwR = pow\( 1\.0 - iwNdV, ([0-9.]+) \) \* \(([^;]*?)\) \+ ([^;]*);/,
+      (m0, pw, k, rest) => `float iwR = min( pow( 1.0 - iwNdV, ${pw} ) * (${k}), mix( 8.0, ${SPEC_AA.rimCap.toFixed(2)}, smoothstep( ${rimNear.toFixed(1)}, ${rimFar.toFixed(1)}, length( vViewPosition ) ) ) ) + ${rest};`);
+    sh.fragmentShader = fs;
+  };
+  material.customProgramCacheKey = function () { return (prevKey ? prevKey.call(this) : '') + '-specaa'; };
+  material.needsUpdate = true;
+}
 
 /**
  * HIT PULSE (r3, critic: the whole-unit material swap read as an arcade damage blink): a LOCAL
@@ -273,6 +310,7 @@ function enemyShading(material, detailScale = 0, detailStr = DETAIL.strength) {
       .replace('void main() {', HIT_FRAG_PARS + 'void main() {')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + HIT_FRAG)
       .replace('#include <opaque_fragment>', RIM_GLSL + 'if ( any( isnan( outgoingLight ) ) || any( isinf( outgoingLight ) ) ) outgoingLight = vec3( 0.0 );\noutgoingLight = min( outgoingLight, vec3( 512.0 ) );\n#include <opaque_fragment>');
+    if (material.isMeshStandardMaterial) fs = specAAShader(fs);   // r4: kernel roughness (SPEC_AA)
     if (useDetail) {
       shader.uniforms.iwDetail = { value: tex };
       shader.uniforms.iwDetailScale = { value: detailScale };
@@ -284,7 +322,7 @@ function enemyShading(material, detailScale = 0, detailStr = DETAIL.strength) {
     }
     shader.fragmentShader = fs;
   };
-  material.customProgramCacheKey = () => (useDetail ? 'iw-enemy-detail-rim-hit' : 'iw-enemy-nansafe-rim-hit');
+  material.customProgramCacheKey = () => (useDetail ? 'iw-enemy-detail-rim-hit-aa' : 'iw-enemy-nansafe-rim-hit-aa');
   material.needsUpdate = true;
   return material;
 }
@@ -357,6 +395,29 @@ function eyeMaterial(m, color, strength, cache) {
 }
 
 function isEmissive(m) { return !!m && !!m.emissive && (!!m.emissiveMap || m.emissive.getHex() !== 0); }
+
+/**
+ * Armour-shard paint (r4, enemy modeler; critic r3: "death debris reads as grey concrete rocks"):
+ * the full scorched variant (BURNT_OF, albedo x0.2) erased the baked oxide / cream / hazard paint of
+ * the debris_<n> plates, so the tumbling chunks read as stones. Shards keep their bake under a soot
+ * tint instead: heavy on most fragments, light on the big authored chunks (P-27 skirt, leg pad).
+ */
+export const SHARD_SCORCH = { heavy: [0.56, 0.5, 0.45], light: [0.78, 0.73, 0.66], rough: 0.12 };
+const SHARD_OF = new WeakMap();
+function shardMaterial(m, heavy) {
+  let e = SHARD_OF.get(m);
+  if (!e) { e = {}; SHARD_OF.set(m, e); }
+  const k = heavy ? 'h' : 'l';
+  if (e[k]) return e[k];
+  const c = m.clone(), t = heavy ? SHARD_SCORCH.heavy : SHARD_SCORCH.light;
+  c.name = (m.name || 'mat') + '_shard_' + k;
+  if (c.color) c.color.setRGB(t[0], t[1], t[2]);
+  c.roughness = Math.min(1, (c.roughness ?? 0.6) + SHARD_SCORCH.rough);
+  enemyShading(c, m.userData.iwDetailScale || 0, m.userData.iwDetailStr ?? DETAIL.strength);
+  c.userData.shared = true;
+  e[k] = c;
+  return c;
+}
 
 /** Decal-card mesh (alpha-blended stencil quads a few mm over their plate; blender/enemies/ekit.py). */
 function isDecal(o) {
@@ -540,6 +601,11 @@ export const MT_GAIT = {
   staggerDrop: 0.32,   // pelvis drop while staggered (m)
   wreckSmoke: 22,      // seconds a wreck keeps smouldering (thin smoke after the column)
 };
+
+/** MT hit flinch (MTAnimator.hit): spring k / c (1/s^2, 1/s), kick = angular velocity (rad/s) per
+ *  unit hit (dmg / ref, clamped [min, max]) ~ 3-5 deg peak, yaw = turret knock (rad), hitch = stride
+ *  hold (s) on hits of >= hitchDmg AP. */
+export const MT_HIT = { k: 500, c: 22, kick: 4.1, ref: 100, min: 0.6, max: 1.25, yaw: 0.035, hitch: 0.06, hitchDmg: 80 };
 
 /**
  * Death collapse of the PK-2 wreck (MTAnimator): the pelvis drops, one leg buckles, the hull
@@ -880,9 +946,25 @@ class MTAnimator {
     this.deadSide = this.buckle ? -1 : 1;
     this.turretYaw0 = 0; this.barrelPitch0 = 0;
     this.time = 0;
+    this.hp = 0; this.hr = 0; this.hpV = 0; this.hrV = 0; this.hitchT = 0;   // hit flinch spring (hit())
+    this._hitRng = game.rng.stream('fx_mt_hit');                            // visual-only randomness
   }
 
   fired() { this.recoilV -= MT_GAIT.recoil * MT_GAIT.recoilDecay; }
+  /**
+   * HIT FLINCH (r4, critic: "AP drops 790 -> 685 yet the stride and turret pose are unchanged"):
+   * the body (pelvis, above the planted legs) pitches / rolls 3-5 deg AWAY from the impact on a
+   * stiff spring (~0.15 s settle), the turret is knocked ~2 deg off its bearing (the AI's rate-
+   * limited aim then visibly hauls it back) and a heavy hit (>= MT_HIT.hitchDmg) holds the gait
+   * phase for MT_HIT.hitch s (a stumble). fwd / side = unit hit direction in the model frame
+   * (+Z forward, +X left), dmg = AP taken.
+   */
+  hit(fwd, side, dmg) {
+    const H = MT_HIT, k = Math.min(H.max, Math.max(H.min, dmg / H.ref)) * H.kick;
+    this.hpV += fwd * k; this.hrV -= side * k;
+    if (this.turret) this.turret.rotation.y += (this._hitRng.next() * 2 - 1) * H.yaw;
+    if (dmg >= H.hitchDmg) this.hitchT = H.hitch;
+  }
   dispose() {
     if (this.glowMat) this.glowMat.dispose();
     for (const f of this.flames) { f.outer.material.dispose(); f.core.material.dispose(); }
@@ -919,7 +1001,9 @@ class MTAnimator {
       n.visible = true;
       // the two big authored chunks (debris_0/1) and a few fragments keep the unit's fresh paint
       // (blown clean off); the rest stay scorched (BURNT_OF)
-      if (s.speedK < 1 || i % 3 === 0) for (const m of s.meshes) m.mesh.material = m.mat;
+      // r4: every shard keeps its baked paint under a soot tint (shardMaterial), never the near-black wreck variant
+      const fresh = s.speedK < 1 || i % 3 === 0;
+      for (const m of s.meshes) m.mesh.material = shardMaterial(m.mat, !fresh);
     }
   }
 
@@ -1013,7 +1097,12 @@ class MTAnimator {
     const walkAmt = alive ? smooth01(speed / 0.6) * (1 - this.skate) : 0;
     const turnShuffle = alive ? Math.min(1, Math.abs(yawRate) * 0.8) * (1 - this.skate) : 0;
     const freq = Math.min(G.freqMax, G.freqMin + G.freqPerMps * Math.min(speed, G.walkMax));
-    if (walkAmt > 0.02 || turnShuffle > 0.05) this.phase = (this.phase + dt * freq) % 1;
+    if (this.hitchT > 0) this.hitchT -= dt;                    // hit stumble: the stride holds
+    else if (walkAmt > 0.02 || turnShuffle > 0.05) this.phase = (this.phase + dt * freq) % 1;
+    // hit flinch spring (stiff, ~0.15 s settle)
+    const HS = MT_HIT;
+    this.hpV += (-this.hp * HS.k - this.hpV * HS.c) * dt; this.hp += this.hpV * dt;
+    this.hrV += (-this.hr * HS.k - this.hrV * HS.c) * dt; this.hr += this.hrV * dt;
     const stride = Math.min(G.strideMax, Math.min(speed, G.walkMax) * G.duty / freq);
     // body lean from acceleration + turning; recoil spring
     const tp = alive ? Math.max(-G.leanMax, Math.min(G.leanMax, ax * G.leanAccel)) : 0;
@@ -1068,8 +1157,8 @@ class MTAnimator {
     for (let i = 0; i < this.rams.length; i++) this.rams[i].update();
     this.pelvis.position.set(this.pelvisRest.x, this.pelvisRest.y - crouch + bobY, this.pelvisRest.z);
     const wob = this.stag * Math.sin(e.stateT * 23) * 0.035;
-    this.pelvis.rotation.set(this.pitch + this.skate * 0.05 + this.stag * 0.11 + D.pitch * dk, 0,
-      this.roll + wob + this.deadSide * D.tilt * dk);
+    this.pelvis.rotation.set(this.pitch + this.hp + this.skate * 0.05 + this.stag * 0.11 + D.pitch * dk, 0,
+      this.roll + this.hr + wob + this.deadSide * D.tilt * dk);
     if (this.dead) {
       if (this.turret) this.turret.rotation.y = this.turretYaw0 + this.deadSide * D.turretYaw * smooth01(this.deadT / (D.fall * 1.6));
       if (this.barrel) this.barrel.rotation.x = this.barrelPitch0 + (D.barrelDroop - this.barrelPitch0) * smooth01(this.deadT / (D.fall * 2));

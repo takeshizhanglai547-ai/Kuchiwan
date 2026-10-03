@@ -16,11 +16,16 @@ import * as THREE from 'three';
 const ARC = [2.6, 4.2, 7.5];
 const AB_WAKE = false;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3();
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qI = new THREE.Quaternion(), _NZ = new THREE.Vector3(0, 0, -1);
 /** Exhaust-jet tuning (m; main = bells with exit radius >= mainRadius). */
-export const JET = { mainRadius: 0.3, exitOffset: 0.35, lenIdle: 0.8, lenBoost: 4.4, abMul: 1.4, qbMul: 0.5, width: 1.2, widthAB: 1.7, verMax: 1.2, verGain: 0.6,
-  hazeRate: 15, hazeLife: 0.25, hazeBoost: 0.35, hazeAB: 0.55 };
+// (combat r4) lenBoost 4.4 -> 6.0, L^0.8 (main bells cruise at L ~0.45-0.6): the white core
+// (~0.6 of the jet) reaches ~2.5 m in a ground boost; disc = end-on exit disc radius (x bell radius); haze 0.35/0.55 -> 0.18/0.25 (it bent the
+// background lattice into S-curves)
+export const JET = { mainRadius: 0.3, exitOffset: 0.35, lenIdle: 0.8, lenBoost: 6.0, lenPow: 0.8, abMul: 1.3, qbMul: 0.5, width: 1.6, widthAB: 1.8, verMax: 1.2, verGain: 0.6,
+  mainGain: 1.25, disc: 1.2, abSweep: 1.5, hazeRate: 15, hazeLife: 0.25, hazeBoost: 0.18, hazeAB: 0.25 };
 /** Quick-boost jet: length len0 + len1 x align^2 (m), life s, half width (x exit radius), flash. */
-export const QB_JET = { life: 0.07, len0: 2.0, len1: 5.5, width: 1.5, minHalfWidth: 0.3, gain: 1.35, flash: 70, flashColor: [1, 0.62, 0.3] };
+// (combat r4: 5-8 m thin white lines read as tracers) shorter, fatter burst
+export const QB_JET = { life: 0.07, len0: 1.6, len1: 3.6, width: 2.2, minHalfWidth: 0.42, gain: 1.25, flash: 70, flashColor: [1, 0.62, 0.3] };
 
 export class Status {
   constructor(game, fx) {
@@ -49,6 +54,10 @@ export class Status {
     this.flashT.clear(); this.time = 0; this.hazeT = 0;
     for (const j of this.qbJets) j.t = j.life = 0;
     this.abTrail[0] = this.abTrail[1] = -1;
+    for (const a of this.game.actors || []) {
+      const nzs = a.rig && a.rig.nozzles;
+      if (nzs) for (const nz of nzs) if (nz.flame) nz.flame.quaternion.identity();
+    }
   }
 
   _onStagger(e) {
@@ -143,6 +152,7 @@ export class Status {
       const s = this.stag[i], a = s.actor;
       s.t += dt;
       if (!a.alive || !a.staggered || s.t > 4) { this.stag.splice(i, 1); continue; }
+      if (s.burst && a.ownStaggerBurst) s.burst = false;   // (enemy-ai r4) the rival rig spawns its own overload (boss.js onStagger: no needle star / radial crown)
       if (s.burst) {
         s.burst = false; a.aimPoint(_p);
         fx.spawn('stagger_burst', _p, null, Math.max(0.8, (a.radius || 3) / 3.2));
@@ -194,7 +204,7 @@ export class Status {
       nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();
       _p.addScaledVector(_d, r * JET.exitOffset);
       const len = (QB_JET.len0 + QB_JET.len1 * j.align * j.align) * Math.min(1.25, Math.max(0.8, r / 0.3)) * (0.55 + 0.45 * k);
-      fx.jet(_p, _d.x, _d.y, _d.z, len, Math.max(QB_JET.minHalfWidth, r * QB_JET.width) * (0.8 + 0.2 * k), 1.3, QB_JET.gain * k * k, j.seed);
+      fx.jet(_p, _d.x, _d.y, _d.z, len, Math.max(QB_JET.minHalfWidth, r * QB_JET.width) * (0.8 + 0.2 * k), 1.3, QB_JET.gain * k * k, j.seed, r * JET.disc * (0.9 + 0.3 * k));
     }
     // --- booster exhaust (combat r3): per lit nozzle a small exit glow (clamped to ~1.3x the bell
     //     diameter: no glare ball) + an EXHAUST JET (fx.jet, shaders.js shape 9): white-hot core
@@ -213,23 +223,42 @@ export class Status {
       for (let k = 0; k < rig.nozzles.length; k++) {
         const nz = rig.nozzles[k];
         const L = nz.level;
+        // swept plume (see below) relaxes back onto the bell axis once the assault boost ends
+        if (!ab && nz.flame && nz.flame.quaternion.w < 0.99999) nz.flame.quaternion.slerp(_qI, 0.35);
         if (L < 0.12 || !nz.node) continue;
         const r = nz.radius || 0.4, main = r >= JET.mainRadius;
         nz.node.getWorldPosition(_p); nz.node.getWorldDirection(_d); _d.negate();   // exhaust = -Z
         _p.addScaledVector(_d, r * JET.exitOffset);
+        // (combat r4: splayed back verniers drew a V of 'antlers' behind an assault boost) at AB
+        // speed the visible exhaust is swept back along -velocity (art direction: the wake trails)
+        if (ab && m.vel) {
+          const vl = Math.hypot(m.vel.x, m.vel.y, m.vel.z);
+          if (vl > 20) {
+            _d.addScaledVector(m.vel, -JET.abSweep * Math.min(1, vl / 120) / vl).normalize();
+            // the rig's ray-marched lathe plume (rig.nozzles[].flame, a child of the nozzle node)
+            // follows the same swept direction (rotation in the node frame; rig.js only scales it)
+            if (nz.flame) {
+              nz.node.getWorldQuaternion(_qa).invert();
+              _c.copy(_d).applyQuaternion(_qa);
+              _qb.setFromUnitVectors(_NZ, _c);
+              nz.flame.quaternion.slerp(_qb, 0.5);
+            }
+          }
+        }
         const rs = r / 0.45;
         const gl = Math.min(1, L * 1.4) * (1 + 0.35 * qf);
         if (L > 0.2) fx.spawn('nozzle_glow', _p, null, Math.max(0.3, rs) * gl);
         const flick = 0.9 + 0.07 * Math.sin(t * 53 + k * 1.9) + 0.05 * Math.sin(t * 131 + k * 4.1);
         let len, hw, gain;
         if (main) {
-          len = rs * (JET.lenIdle + JET.lenBoost * Math.pow(L, 1.2)) * (ab ? JET.abMul : 1) * (1 + JET.qbMul * qf);
-          hw = r * (ab ? JET.widthAB : JET.width) * (1 + 0.15 * qf); gain = 1;
+          len = rs * (JET.lenIdle + JET.lenBoost * Math.pow(L, JET.lenPow)) * (ab ? JET.abMul : 1) * (1 + JET.qbMul * qf);
+          hw = r * (ab ? JET.widthAB : JET.width) * (1 + 0.15 * qf); gain = JET.mainGain;
         } else {
           len = Math.min(JET.verMax, 0.25 + 1.0 * L) * (1 + 0.6 * qf);
           hw = Math.max(0.1, r * 1.1); gain = JET.verGain;
         }
-        fx.jet(_p, _d.x, _d.y, _d.z, len * flick, hw, Math.min(1.3, L * (1 + 0.4 * qf) + (ab ? 0.25 : 0)), gain, k * 0.137 + (a === g.player ? 0 : 0.5));
+        fx.jet(_p, _d.x, _d.y, _d.z, len * flick, hw, Math.min(1.3, L * (1 + 0.4 * qf) + (ab ? 0.25 : 0)), gain, k * 0.137 + (a === g.player ? 0 : 0.5),
+          Math.max(0.12, r * JET.disc * (0.75 + 0.25 * Math.min(1, L)) * (ab ? 1.15 : 1)));
         // heat haze: main bells only, ~15 sprites/s each, riding with the rig a third of the way down
         // the jet and drifting slowly out along it (refraction of the background through the plume)
         if (main && L > 0.35 && hazeTick) {

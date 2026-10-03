@@ -80,6 +80,7 @@ export class MT extends Enemy {
     this.model = template.clone();
     this.root.add(this.model);
     this.setupHitVolumes(this.model, MT_PARTS, template, S.hit);
+    this.setupOutline(this.model, template);   // r4: far-range contour (outline.js)
     this.hull = node(this.model, 'hull');
     this.turret = node(this.model, 'turret');
     this.barrel = node(this.model, 'barrel');
@@ -368,6 +369,7 @@ export class MT extends Enemy {
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
       const fwd = _kick.x * s + _kick.z * c, side = _kick.x * c - _kick.z * s;
       this.kickVP += fwd * amt * R.gain; this.kickVR -= side * amt * R.gain;
+      if (this.anim && this.anim.hit) this.anim.hit(fwd, side, res.damage);   // r4: body flinch + turret knock + stride hitch
     }
     if (imp >= 280) { this.flinchT = Math.min(0.5, 0.2 + imp / 4000); this.fcCancel(); }
     // under sustained fire while the player's FCS is locked on: skate out of the stream

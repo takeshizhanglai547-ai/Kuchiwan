@@ -322,9 +322,17 @@ def clean_normal(nrm, flat=0.012):
 #   * soot (#1A1A1A) within 0.6 m of every nozzle exit and gun muzzle
 #   * radial throat ramp (#FFF4D6 -> #FFB04A @40% -> #7A2A10 rim) on every thruster throat disc,
 #     a dim ember on the throat neck, and the eye slit's hot core
-POST = dict(chip_grow=2.0, chip_lo=0.28, chip_hi=0.55, bare=((0.22, 0.23, 0.24), (0.31, 0.32, 0.33)),
-            grime_bottom=0.75, grime_frac=0.30, ao_grime=0.45, cav_grime=0.3, paint_rough_min=0.5,
-            soot_r=0.6, soot_amt=0.5, soot_col=(0.010, 0.010, 0.010), glass_rough=0.06,
+# r4 (critic r3: in-engine wear read as pale mid-panel blotches, no rust / grime gradient / soot, spotless bone):
+#   * chips come from the baked CONVEX EDGE mask only (dilated ~3 cm x noise), never mid-panel; written as bare
+#     steel #8E9296, metal 1, rough ~0.35 (a real metallic glint)
+#   * rig-wide grime: albedo x0.65 over the lowest 2 m (feet / shins), x AO^1.5 in crevices
+#   * bone plates get grime (x0.84..1 mottle, cavity dirt) and chipping too
+#   * roughness mottling 0.45-0.75 at ~0.3-1 m on paint (breaks up the key-light sheen)
+#   * soot ring (albedo x~0.3, rough 0.9) ~0.45 m around every bell exit, muzzle and louvre bank
+POST = dict(chip_grow=2.0, chip_lo=0.68, chip_hi=0.77, bare=((0.235, 0.25, 0.26), (0.30, 0.315, 0.325)),
+            grime_bottom=0.86, grime_frac=0.30, ao_grime=0.85, ao_pow=1.5, cav_grime=0.3, paint_rough_min=0.45,
+            rough_mottle=(0.45, 0.75), mottle_lo=0.82, low_z=2.0, low_mul=0.65, bone_grime=0.14, bone_cav=0.28,
+            soot_r=0.45, soot_amt=0.72, soot_col=(0.010, 0.010, 0.010), glass_rough=0.06,
             slit_core_x=0.15, slit_core_w=0.2, slit_min=0.32)
 PAINTS = ('paint_primary', 'paint_secondary', 'paint_dark', 'paint_accent', 'hazard')
 
@@ -380,6 +388,11 @@ def post_weather(a, tag, objs, lo, hi, P=None):
     base = _s2l(maps['basecolor'].astype(np.float32) / 255.0)
     orm = maps['orm'].astype(np.float32) / 255.0
     emis = _s2l(maps['emissive'].astype(np.float32) / 255.0)
+    # r4: optional per-material linear albedo tint (a.post_tint = {preset: (r, g, b)}): neutralises the paint
+    # against the cool sky fill without a rebake (the albedo pass caches the authored colours)
+    for nm, mult in (getattr(a, 'post_tint', None) or {}).items():
+        mm = is_(nm) & valid
+        base[mm] = base[mm] * np.asarray(mult, np.float32)
     lo_, hi_ = np.array(lo, np.float32), np.array(hi, np.float32)
     wp = lo_ + flip(raw['wpos'])[..., :3].astype(np.float32) * (hi_ - lo_)
     ao = TC.blur(flip(raw['ao'])[..., 0], 2) if 'ao' in raw else np.ones((H, W), np.float32)
@@ -388,18 +401,29 @@ def post_weather(a, tag, objs, lo, hi, P=None):
     n1 = TC._uniform(nz[..., 0], valid)
     n3 = TC._uniform(nz[..., 2], valid)
     wear0 = maps['_masks']['wear'].astype(np.float32) / 255.0 if '_masks' in maps else np.zeros((H, W), np.float32)
-    # --- 1. chips grown (~2 px each way = 4 cm bands at ~95 px/m) and forced to bare steel
-    rad = max(1, int(round(P['chip_grow'] * W / 2048.0)))           # ~2 cm at any atlas size
-    grown = TC.smoothstep(P['chip_lo'], P['chip_hi'], TC.blur(wear0, rad))
-    chip = np.clip(np.maximum(wear0, grown * (0.55 + 0.45 * n3)), 0, 1) * paint
-    chip = np.where(chip > 0.35, np.maximum(chip, 0.9), chip * 0.6)
+    edge0 = maps['_masks']['edge'].astype(np.float32) / 255.0 if '_masks' in maps else wear0
+    # --- 1. r4 chips: convex edges only, broken by two noise octaves into irregular 2-5 cm bites -> bare
+    #     steel; no mid-panel blotches, no continuous outline (r4 first pass: a uniform 10 cm silver outline)
+    rad = max(1, int(round(P['chip_grow'] * W / 2048.0)))
+    nhf = TC._uniform(nz[..., 1], valid)
+    brk = np.clip(0.55 * n3 + 0.45 * nhf, 0, 1)
+    seed = TC.smoothstep(P['chip_lo'], P['chip_hi'], edge0 * (0.15 + 1.05 * brk))     # sparse bites on the edges
+    grown = TC.smoothstep(0.18, 0.4, TC.blur(seed, rad)) * TC.smoothstep(0.05, 0.25, TC.blur(edge0, rad))
+    chip = np.clip(np.maximum(seed, grown * TC.smoothstep(0.3, 0.6, brk)), 0, 1) * paint
+    chip = np.where(chip > 0.5, np.maximum(chip, 0.92), chip * 0.3)
     # per-preset 'wear' factor (e.g. a softer chip level on pale pads)
     wtab = np.array([float(a.presets.get(m.name, {}).get('wear', 1.0)) for m in a.palette], np.float32)
     chip = chip * np.clip(wtab[np.clip(mid, 0, len(wtab) - 1)], 0, 1)
     bare = TC.lerp(np.asarray(P['bare'][0], np.float32), np.asarray(P['bare'][1], np.float32), n1 * 0.6 + n3 * 0.4)
     base = TC.lerp(base, bare, chip)
     orm[..., 2] = np.where(paint, TC.lerp(orm[..., 2], 1.0, chip), orm[..., 2])
-    orm[..., 1] = np.where(paint, TC.lerp(orm[..., 1], 0.28 + 0.07 * n1, chip), orm[..., 1])
+    nlow = TC._uniform(TC.blur(n1, max(2, int(round(10 * W / 2048.0)))), valid)
+    rm0, rm1 = P['rough_mottle']
+    # r4: large-scale (0.3-1 m) albedo mottling on the unchipped paint (dirty / sun-faded patches)
+    mot = TC.lerp(P['mottle_lo'] + (1.0 - P['mottle_lo'] + 0.08) * nlow, np.ones_like(nlow), chip)
+    base = np.where(paint[..., None], base * mot[..., None], base)
+    orm[..., 1] = np.where(paint, np.maximum(orm[..., 1] * 0.35 + 0.65 * (rm0 + (rm1 - rm0) * nlow), rm0), orm[..., 1])
+    orm[..., 1] = np.where(paint, TC.lerp(orm[..., 1], 0.3 + 0.08 * n1, chip), orm[..., 1])
     # --- 2. per-part grime gradient (lower 30% of every part) + AO / cavity grime on paint
     oid = object_id_map(objs, W, H)
     tpart = np.ones((H, W), np.float32)
@@ -420,7 +444,13 @@ def post_weather(a, tag, objs, lo, hi, P=None):
     # and inverts into a step), hence 1 - smoothstep(0, f, t)
     gb = (1.0 - TC.smoothstep(0.0, P['grime_frac'], np.clip(tpart, 0, 1))) * (0.75 + 0.25 * n1)
     gfac = 1.0 - (1.0 - P['grime_bottom']) * gb
-    gfac *= TC.lerp(np.ones_like(ao), ao, P['ao_grime']) * (1.0 - P['cav_grime'] * cav)
+    gfac *= TC.lerp(np.ones_like(ao), np.clip(ao, 0, 1) ** P['ao_pow'], P['ao_grime']) * (1.0 - P['cav_grime'] * cav)
+    # r4 rig-wide grime gradient: x low_mul at the floor -> x1 at low_z m (feet / shins carry the yard dirt)
+    zlow = TC.smoothstep(0.0, P['low_z'], np.clip(wp[..., 2], 0, P['low_z']))
+    gfac *= P['low_mul'] + (1.0 - P['low_mul']) * (zlow * (0.85 + 0.15 * n1))
+    # r4 bone plates are not spotless: mottled grime + cavity dirt (chips already include them)
+    bone = is_('paint_secondary') & valid
+    gfac = np.where(bone, gfac * (1.0 - P['bone_grime'] * (1.0 - n1) - P['bone_cav'] * cav), gfac)
     keep = valid & ~is_('glow', 'glow_rim', 'lens', 'lens_slit', 'lens_dim', 'blade_lens', 'marker_amber',
                         'marker_cyan', 'marker_red', 'glass', 'chrome')
     base = np.where(keep[..., None], base * gfac[..., None], base)
@@ -431,16 +461,19 @@ def post_weather(a, tag, objs, lo, hi, P=None):
     orm[..., 1] = np.where(gl, P['glass_rough'], orm[..., 1])
     a._glass_mask = gl   # finalize_set skips the global roughness floor there
     # --- 4. soot around every nozzle exit / muzzle (world distance)
-    srcs = [(t[3], t[4]) for t in getattr(a, 'throats', []) if len(t) > 3] + list(getattr(a, 'soot_points', []))
+    # r4: soot at every bell exit AND its root on the housing (the ring around the bell), muzzles, louvres
+    srcs = [(t[3], t[4]) for t in getattr(a, 'throats', []) if len(t) > 3] \
+        + [(t[0], t[4] * 0.8) for t in getattr(a, 'throats', []) if len(t) > 3] + list(getattr(a, 'soot_points', []))
     if srcs:
         soot = np.zeros((H, W), np.float32)
         for c, rr in srcs:
             R_ = P['soot_r'] + rr
             dd = np.linalg.norm(wp - np.asarray(c, np.float32), axis=-1)
-            soot = np.maximum(soot, np.clip(1.0 - dd / R_, 0, 1) ** 1.4)
-        soot *= (0.6 + 0.4 * n1) * valid * keep
+            soot = np.maximum(soot, TC.smoothstep(0.0, 1.0, np.clip(1.0 - dd / R_, 0, 1) * 1.6))
+        soot *= (0.7 + 0.3 * n1) * valid * keep
         base = TC.lerp(base, np.asarray(P['soot_col'], np.float32), soot * P['soot_amt'])
-        orm[..., 1] = TC.lerp(orm[..., 1], 0.85, soot * 0.5)
+        orm[..., 1] = TC.lerp(orm[..., 1], 0.9, soot * 0.8)
+        orm[..., 2] = orm[..., 2] * (1.0 - 0.6 * soot)
     # --- 5. throat ramp (radial) + neck ember
     glow, rim = is_('glow') & valid, is_('glow_rim') & valid
     if getattr(a, 'throats', None) and (glow.any() or rim.any()):

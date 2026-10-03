@@ -24,7 +24,11 @@
 //                                    edge-only CA (<= 0.5 px), AgX + look (hue-preserving for
 //                                    near-primary emissives), split-tone grade (cool shadows,
 //                                    warm highlights), toe-protected contrast, vignette, black
-//                                    level lift (#1C2126: never #000), grain, sRGB
+//                                    level lift (#1C2126: never #000), grain, sRGB; alpha =
+//                                    emissive protection for the resolve
+//   SUB-PIXEL RESOLVE full res (r4)  isolated outlier pixels (dotted far lattice / stays, glints,
+//                                    glitter) -> their coverage: excess spread over a 3x3 tent
+//                                    (2 x 9 taps, high/medium)
 //   AA         full res -> screen    SMAA (high/medium; high also has MSAA x4 on hardware GPUs)
 //                                    / FXAA (low)
 //
@@ -34,9 +38,9 @@
 //   (2 shadow taps/step worst case) ~0.35 ms | shafts @ 1/4 ~0.15 ms | motion blur 8 taps
 //   ~0.25 ms | bloom 11 passes ~0.35 ms | composite (+ bilateral volume upsample + per-pixel
 //   aerial fog evaluation) ~0.45 ms |
-//   eye adaptation ~0.02 ms | SMAA ~0.45 ms  => post ≈ 2.6 ms.
+//   eye adaptation ~0.02 ms | sub-pixel resolve ~0.15 ms | SMAA ~0.45 ms  => post ≈ 2.75 ms.
 //   medium: no MSAA, near shadow 2048², AO 8 taps, volume 16 steps, shafts 24, blur 6 taps
-//   => post ≈ 1.9 ms.
+//   => post ≈ 2.05 ms.
 //   low: no AO / volume / shafts / far cascade, FXAA, 1800 ash flakes => post ≈ 0.6 ms.
 //
 // API (game.pipeline):
@@ -61,9 +65,9 @@ import * as P from './postfx.js';
 import { softwareRendererName, atmosGLSL } from './atmosphere.js';
 
 const QUALITY = {
-  low: { msaa: 0, aa: 'fxaa', ao: 0, shafts: 0, bloomMips: 5, mblur: 0, vol: 0 },
-  medium: { msaa: 0, aa: 'smaa', ao: 8, shafts: 24, bloomMips: 6, mblur: 6, vol: 16 },
-  high: { msaa: 4, aa: 'smaa', ao: 12, shafts: 36, bloomMips: 6, mblur: 8, vol: 24 },
+  low: { msaa: 0, aa: 'fxaa', ao: 0, shafts: 0, bloomMips: 5, mblur: 0, vol: 0, speckle: 0 },
+  medium: { msaa: 0, aa: 'smaa', ao: 8, shafts: 24, bloomMips: 6, mblur: 6, vol: 16, speckle: 1 },
+  high: { msaa: 4, aa: 'smaa', ao: 12, shafts: 36, bloomMips: 6, mblur: 8, vol: 24, speckle: 1 },
 };
 
 /** Art-direction tunables (live: game.pipeline.look). */
@@ -72,14 +76,17 @@ const LOOK = {
   tonemap: 'agx',
   ao: { radius: 2.8, intensity: 2.4, bias: 0.03, strength: 0.9, floor: 0.38, fade: 240 },
   bloom: { threshold: 1.35, knee: 0.55, intensity: 0.24, clamp: 16, weights: [1.0, 0.72, 0.48, 0.3, 0.18, 0.1] }, // tight: small mips dominate
-  shafts: { threshold: 0.45, radius: 0.5, length: 0.96, decay: 0.975, intensity: 1.6, tint: '#FFB27A' },
+  // gap = share of the source taken from ash-deck gaps (crepuscular rays, r4)
+  shafts: { threshold: 0.45, radius: 0.5, length: 0.96, decay: 0.975, intensity: 2.4, tint: '#FFB27A', gap: 0.8 },
   // volumetric sun scattering: lit = boost of sun-lit in-scatter, occ = removal in shadow
   // dust = extra forward-scattering ash lit by the sun within ~dustRange m (tight HG lobe, so
-  // it makes beams between shadows instead of a veil over the whole sun side)
-  volume: { lit: 0.25, occ: 1.0, dust: 0.0085, dustIso: 0.22, dustRange: 160, maxDist: 260 },
+  // it makes beams between shadows instead of a veil over the whole sun side). r4: the sun sector
+  // is thinner (ATMOS.fog.sunDensity 0.58 also scales the dust), so the dust doubles and reaches
+  // further (280 m / march 400 m): tower and furnace shadows carve beams in into-sun views
+  volume: { lit: 0.25, occ: 1.0, dust: 0.016, dustIso: 0.2, dustRange: 280, maxDist: 400 },
   // lift = display-space black level (sRGB #1C2126 x liftAmt), shadowAmt/Desat = cool split tone
   // below display-linear 0.3, gain = highlight hue at constant luminance
-  grade: { lift: '#1C2126', liftAmt: 0.72, shadowAmt: 0.45, shadowDesat: 0.35, gain: '#F2C79A', gainAmt: 0.16, sat: 0.95, contrast: 1.2, hiLift: 0.3 },
+  grade: { lift: '#1C2126', liftAmt: 0.72, shadowAmt: 0.45, shadowDesat: 0.35, gain: '#F2C79A', gainAmt: 0.16, sat: 0.95, contrast: 1.2, hiLift: 0.45 },
   motionBlur: { shutter: 0.5, maxPx: 30, chaseVel: 0.85 },
   // eye adaptation: partial compensation of the centre-weighted log-average luminance toward
   // 'key' (EV range -down..+up). Into-sun frames come down, the storm side stays dark-of-mid.
@@ -88,6 +95,9 @@ const LOOK = {
   vignette: 0.26,
   ca: 0.006,      // edge-only, capped at 0.5 px in the composite
   grain: 0.02,
+  // sub-pixel resolve (before SMAA): gate = |outlier excess| (linear) where it starts / is full,
+  // protect = HDR luminance (after exposure) above which emissive cores are left crisp
+  speckle: { amount: 1.0, gate: [0.015, 0.05], protect: [3.0, 8.0] },
 };
 
 const SOFT_LAYER = 1;
@@ -113,8 +123,8 @@ export default function pipelineSystem(game) {
   const size = new THREE.Vector2(1, 1);
   const dev = devParams();
   let q = QUALITY.high, qName = 'high';
-  let sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT = null;
-  let aeLum = null, aeA = null, aeB = null, aeTime = -1e9, aeDebugN = 0;
+  let sceneRT, hdrTmpA, hdrTmpB, ldrRT, ldrB = null, spkE = null, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT = null;
+  let aeLum = null, aeA = null, aeB = null, aeTime = -1e9, aeDebugN = 0, aeLumValid = false;
   const bloomRT = [];
   let quad, smaa = null, fxaaMat, softEnabled = false;
   const M = {};
@@ -125,6 +135,7 @@ export default function pipelineSystem(game) {
   const _sun = new THREE.Vector3(), _fwd = new THREE.Vector3();
   const floatDepth = { type: THREE.HalfFloatType };
   let frameNo = 0;
+  const syncPx = new Uint8Array(4);
   const debugView = { ao: 1, bloom: 2, vol: 3, depth: 4 }[dev.get('postdebug')] || 0; // dev only (depth: log2(m)/12, sky = 0)
 
   function makeRT(w, h, opts = {}) {
@@ -145,6 +156,10 @@ export default function pipelineSystem(game) {
     sceneRT.texture.name = 'iw_scene_hdr';
     hdrTmpA = null; hdrTmpB = null; // created on demand by slots
     ldrRT = makeRT(W, H, { type: THREE.UnsignedByteType });
+    if (q.speckle) {
+      ldrB = makeRT(W, H, { type: THREE.UnsignedByteType });
+      spkE = makeRT(W, H, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    }
     const hw = Math.max(1, W >> 1), hh = Math.max(1, H >> 1);
     if (q.ao) {
       aoA = makeRT(hw, hh, { type: THREE.UnsignedByteType });
@@ -160,7 +175,7 @@ export default function pipelineSystem(game) {
       shB = makeRT(Math.max(1, W >> 2), Math.max(1, H >> 2));
     }
     for (let i = 0; i < q.bloomMips; i++) bloomRT.push(makeRT(Math.max(1, W >> (i + 1)), Math.max(1, H >> (i + 1))));
-    aeLum = makeRT(64, 36, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    aeLum = makeRT(64, 36);   // linear: the shaft mask reads it as a smooth local mean
     aeA = makeRT(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     aeB = makeRT(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     aeTime = -1e9;
@@ -176,8 +191,8 @@ export default function pipelineSystem(game) {
     depthUniforms.tIwDepth.value = depthLinRT.texture;
   }
   function disposeTargets() {
-    for (const rt of [sceneRT, hdrTmpA, hdrTmpB, ldrRT, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT, aeLum, aeA, aeB]) if (rt) { if (rt.depthTexture) rt.depthTexture.dispose(); rt.dispose(); }
-    sceneRT = hdrTmpA = hdrTmpB = ldrRT = aoA = aoB = shA = shB = mbRT = volA = volB = depthLinRT = aeLum = aeA = aeB = null;
+    for (const rt of [sceneRT, hdrTmpA, hdrTmpB, ldrRT, ldrB, spkE, aoA, aoB, shA, shB, mbRT, volA, volB, depthLinRT, aeLum, aeA, aeB]) if (rt) { if (rt.depthTexture) rt.depthTexture.dispose(); rt.dispose(); }
+    sceneRT = hdrTmpA = hdrTmpB = ldrRT = ldrB = spkE = aoA = aoB = shA = shB = mbRT = volA = volB = depthLinRT = aeLum = aeA = aeB = null;
     for (const rt of bloomRT) rt.dispose();
     bloomRT.length = 0;
   }
@@ -266,6 +281,8 @@ export default function pipelineSystem(game) {
     mk.uniforms.uAspect.value = cam.aspect;
     mk.uniforms.uThreshold.value = S.threshold;
     mk.uniforms.uRadius.value = S.radius;
+    mk.uniforms.tLum.value = aeLumValid ? aeLum.texture : null;
+    mk.uniforms.uGap.value = aeLumValid ? S.gap : 0;
     pass(mk, shA);
     const bl = M.shaftBlur;
     bl.uniforms.uSun.value.set(sx, sy);
@@ -430,6 +447,8 @@ export default function pipelineSystem(game) {
       M.volBlur = P.volumeBlurMaterial();
       M.aeLum = P.lumMaterial();
       M.aeAdapt = P.adaptMaterial();
+      M.spkE = P.speckleExcessMaterial();
+      M.spkS = P.speckleSpreadMaterial();
       fxaaMat = new THREE.ShaderMaterial({ ...FXAAShader, uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), depthTest: false, depthWrite: false });
       smaa = new SMAAPass();
       smaa.renderToScreen = true;
@@ -479,6 +498,7 @@ export default function pipelineSystem(game) {
       if (dev.get('aa')) q.aa = dev.get('aa');
       if (dev.get('shafts') === '0') q.shafts = 0;
       if (dev.get('vol') === '0') q.vol = 0;
+      if (dev.get('speckle') === '0') q.speckle = 0;
       for (const k of ['ao', 'shaftBlur', 'mblur', 'vol']) if (M[k]) { M[k].dispose(); M[k] = null; }
       M.vol = q.vol ? P.volumeMaterial(q.vol, atmosGLSL()) : null;
       M.ao = q.ao ? P.aoMaterial(q.ao) : null;
@@ -539,8 +559,9 @@ export default function pipelineSystem(game) {
       const L = api.look;
       const aoTex = M.ao ? renderAO(cam) : null;
       const volTex = M.vol ? renderVolume(cam) : null;
+      const aeTex = renderAE(hdrRT.texture);     // (before the shafts: its grid = local mean)
+      aeLumValid = !!aeTex;
       const shaftI = q.shafts ? renderShafts(cam, hdrRT.texture) : 0;
-      const aeTex = renderAE(hdrRT.texture);
       const bloomTex = L.bloom.intensity > 0 ? renderBloom(hdrRT.texture, aeTex) : null;
       hdrRT = runSlot('post_bloom', hdrRT);
 
@@ -590,13 +611,34 @@ export default function pipelineSystem(game) {
       u.uRes.value.copy(size);
       u.uDebug.value = debugView;
       const aa = q.aa;
-      pass(c, aa === 'smaa' || aa === 'fxaa' ? ldrRT : null);
-      if (aa === 'smaa') smaa.render(r, null, ldrRT);
-      else if (aa === 'fxaa') { fxaaMat.uniforms.tDiffuse.value = ldrRT.texture; pass(fxaaMat, null); }
+      const toLdr = aa === 'smaa' || aa === 'fxaa';
+      const spk = toLdr && q.speckle && ldrB && L.speckle.amount > 0;
+      u.uProtect.value.set(L.speckle.protect[0], spk ? L.speckle.protect[1] : 0);
+      pass(c, toLdr ? ldrRT : null);
+      let ldrOut = ldrRT;
+      if (spk) {
+        // sub-pixel resolve: isolated outliers -> their coverage (see postfx.js)
+        const e = M.spkE.uniforms, sp = M.spkS.uniforms;
+        e.tIn.value = ldrRT.texture; e.uTexel.value.set(1 / size.x, 1 / size.y);
+        e.uGate.value.set(L.speckle.gate[0], L.speckle.gate[1]);
+        pass(M.spkE, spkE);
+        sp.tIn.value = ldrRT.texture; sp.tE.value = spkE.texture; sp.uTexel.value.set(1 / size.x, 1 / size.y);
+        sp.uAmount.value = L.speckle.amount;
+        pass(M.spkS, ldrB);
+        ldrOut = ldrB;
+      }
+      if (aa === 'smaa') smaa.render(r, null, ldrOut);
+      else if (aa === 'fxaa') { fxaaMat.uniforms.tDiffuse.value = ldrOut.texture; pass(fxaaMat, null); }
       r.setRenderTarget(null);
       // the very first frame compiles the actors' programs and uploads their textures: wait
       // for it here (boot screen still up) instead of stalling the first gameplay frame later
       if (frameNo === 1) r.getContext().finish();
+      // harness (manual stepping): finish the frame HERE (1-px read-back = fence) so a capture's
+      // GPU work is spent inside the step/render call, not inside page.screenshot's 30 s budget
+      // (SwiftShader under shared CPU load). Never in play / RAF mode.
+      if (game.manual) {
+        try { const gl = r.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPx); } catch (e) { /* optional */ }
+      }
     },
     dispose() {
       disposeTargets();

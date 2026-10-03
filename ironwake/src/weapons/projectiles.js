@@ -32,10 +32,11 @@ const MAX_STREAKS = 768, MAX_BODIES = 192;
 const KIND_RADIUS = { bullet: 0.25, energy: 0.6, missile: 0.5, grenade: 0.8 };
 
 const STREAK_VERT = /* glsl */`
-attribute vec3 iHead; attribute vec3 iTail; attribute vec4 iColor; attribute vec4 iShape; // width, kind, headGlow, minPx
+attribute vec3 iHead; attribute vec3 iTail; attribute vec4 iColor; attribute vec4 iShape; // width, kind (+2 = player round), headGlow, minPx
 uniform float uPixel;   // view-space metres per pixel at 1 m
 varying vec2 vUv; varying vec4 vColor; varying vec4 vShape; varying float vViewZ;
 const float MIN_LEN_PX = 20.0;
+const float MIN_LEN_PX_PLAYER = 45.0;   // combat r4: the player's own rounds read from the chase camera
 void main() {
   vec4 h = modelViewMatrix * vec4(iHead, 1.0);
   vec4 t = modelViewMatrix * vec4(iTail, 1.0);
@@ -48,7 +49,8 @@ void main() {
   vec2 dir = dl > 1e-6 ? d / dl : vec2(0.0, 1.0);
   // minimum on-screen LENGTH (combat r2: a tracer flying away from the chase camera collapsed to
   // a dot under the reticle): the tail is pushed back along the screen path to >= MIN_LEN_PX
-  if (dl < MIN_LEN_PX * uPixel) ts = hs - dir * (MIN_LEN_PX * uPixel);
+  float minLen = (iShape.y > 1.5 ? MIN_LEN_PX_PLAYER : MIN_LEN_PX) * uPixel;
+  if (dl < minLen) ts = hs - dir * minLen;
   vec2 side = vec2(-dir.y, dir.x);
   float along = position.y + 0.5;                 // 0 tail .. 1 head
   float z = mix(tz, hz, along);
@@ -65,7 +67,7 @@ varying vec2 vUv; varying vec4 vColor; varying vec4 vShape; varying float vViewZ
 void main() {
   float across = abs(vUv.x);
   float along = clamp(vUv.y, 0.0, 1.0);
-  float kind = vShape.y;
+  float kind = mod(vShape.y, 2.0);
   float core = exp(-across * across * 26.0);
   float halo = exp(-across * across * 4.5);
   float taper = kind > 0.5 ? smoothstep(0.0, 0.5, along) : pow(along, 1.6);
@@ -105,8 +107,24 @@ function missileGeometry() {
   return g;
 }
 
+/** Player-tracer afterglow (combat r4: a round was on screen for only ~2 frames): after impact the
+ *  streak stays GHOST_FRAMES rendered frames, its tail collapsing into the impact point. */
+const GHOST_FRAMES = 3, MAX_GHOSTS = 32;
+
 export default function projectilesSystem(game) {
   let pool, streaks, bodies;
+  const ghosts = [];
+  for (let i = 0; i < MAX_GHOSTS; i++) ghosts.push({ n: 0, hx: 0, hy: 0, hz: 0, dx: 0, dy: 0, dz: 1, len: 0, def: null });
+  let nextGhost = 0;
+  function addGhost(p, point) {
+    const d = p.def;
+    if (!d || p.kind !== 'bullet' || p.team !== TEAM_PLAYER) return;
+    const g = ghosts[nextGhost]; nextGhost = (nextGhost + 1) % MAX_GHOSTS;
+    const v = p.vel, vl = v.length() || 1;
+    g.n = GHOST_FRAMES; g.hx = point.x; g.hy = point.y; g.hz = point.z;
+    g.dx = v.x / vl; g.dy = v.y / vl; g.dz = v.z / vl;
+    g.len = Math.max(0.5, Math.min(d.tracerLength || 6, point.distanceTo(p.origin))); g.def = d;
+  }
   const S = {}; // streak attribute arrays
   let ns = 0;
   function putStreak(hx, hy, hz, tx, ty, tz, r, g, b, a, w, kind, headGlow, minPx) {
@@ -167,6 +185,7 @@ export default function projectilesSystem(game) {
     clear() {
       for (let i = pool.count - 1; i >= 0; i--) { const p = pool.active[i]; if (p.trail >= 0) { game.fx.trails && game.fx.trails.end(p.trail); p.trail = -1; } }
       pool.releaseAll(); streaks.geometry.instanceCount = 0; bodies.count = 0; api.incomingMissiles = 0;
+      for (const g of ghosts) g.n = 0;
     },
     activeCount() { return pool.count; },
     /** Read-only view of live projectiles (indices < activeCount()); the audio lane scans it for flybys. */
@@ -305,9 +324,11 @@ export default function projectilesSystem(game) {
         if (p.kind === 'energy') fx = 'impact_energy';
         else if (!actor) fx = ground || normal.y > 0.8 ? 'impact_ground' : 'impact_wall';
         _fxOpts.scale = d.impactScale || 1;
+        if (actor && actor.impactFxScale) _fxOpts.scale *= actor.impactFxScale(point);   // (enemy-ai r4) spark core capped to the unit's screen size
         game.fx.spawn(fx, point, _fxOpts.normal, _fxOpts);
         if (actor && p.team === TEAM_PLAYER) game.audio.play('hit_confirm', { pos: point });
       }
+      addGhost(p, point);
       _impactEvt.def = d; _impactEvt.actor = actor; _impactEvt.point.copy(point); _impactEvt.team = p.team;
       game.events.emit('projectile:impact', _impactEvt);
       api._release(p);
@@ -342,7 +363,8 @@ export default function projectilesSystem(game) {
           const len = Math.max(0.5, Math.min(d.tracerLength || 6, traveled));
           _tail.copy(_p).addScaledVector(_dir, -len);
           const c = d.tracerColor;
-          putStreak(_p.x, _p.y, _p.z, _tail.x, _tail.y, _tail.z, c[0], c[1], c[2], 1, d.tracerWidth || 0.3, p.kind === 'energy' ? 1 : 0, p.kind === 'energy' ? 1.2 : 0.7, 2.2);
+          const mine = p.team === TEAM_PLAYER && p.kind === 'bullet';
+          putStreak(_p.x, _p.y, _p.z, _tail.x, _tail.y, _tail.z, c[0], c[1], c[2], 1, d.tracerWidth || 0.3, (p.kind === 'energy' ? 1 : 0) + (mine ? 2 : 0), p.kind === 'energy' ? 1.2 : 0.7, mine ? 3 : 2.2);
         } else if (p.kind === 'grenade') {
           // glowing slug: short, fat, very hot
           const g = d.glowColor;
@@ -365,6 +387,13 @@ export default function projectilesSystem(game) {
           _tail.copy(_p).addScaledVector(_dir, -2.8 * fl);
           putStreak(_p.x, _p.y, _p.z, _tail.x, _tail.y, _tail.z, g[0], g[1], g[2], 1, 0.7 * fl, 1, 2.2, 3);
         }
+      }
+      // afterglow of the player's rounds that just hit (tail collapses into the impact point)
+      for (const g of ghosts) {
+        if (g.n <= 0) continue;
+        const k = g.n / (GHOST_FRAMES + 1); g.n--;
+        const c = g.def.tracerColor, L = g.len * k;
+        putStreak(g.hx, g.hy, g.hz, g.hx - g.dx * L, g.hy - g.dy * L, g.hz - g.dz * L, c[0], c[1], c[2], 0.35 + 0.65 * k, g.def.tracerWidth || 0.3, 2, 0.7 + 0.6 * k, 3);
       }
       streaks.geometry.instanceCount = ns;
       if (ns) for (let k = 0; k < S.list.length; k++) { const at = S.list[k][0]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, ns * S.list[k][1]); }

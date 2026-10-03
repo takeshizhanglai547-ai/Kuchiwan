@@ -32,7 +32,8 @@ export const WEAPONS = {
     magSize: 18, ammo: 540, reloadTime: 2.2,
     projectile: 'bullet', tracerColor: [2.8, 1.6, 0.42], tracerWidth: 0.42, tracerLength: 24, // #FFD27A, HDR
     muzzleFx: 'muzzle_rifle', impactFx: 'impact_sparks', sound: 'rifle', recoil: 0.35, shake: 0.06,
-    rigFlash: { node: 'shoulder_R', back: 1.6, up: 0.6, color: [1, 0.66, 0.34], intensity: 26, range: 12, dur: 0.05 },
+    rigFlash: { node: 'shoulder_R', back: 1.6, up: 0.6, color: [1, 0.66, 0.34], intensity: 40, range: 16, dur: 0.05 },
+    casingFx: 'casing_rifle', casingBack: 1.9,          // spent case thrown from the receiver, behind the muzzle
   },
   blade_pulse: {
     id: 'blade_pulse', name: 'PB-7 EMBERLINE', label: 'L-ARM', jp: '左腕 パルスブレード', type: 'blade',
@@ -269,6 +270,8 @@ export class Loadout {
       const mz = owner.rig && owner.rig.muzzles ? owner.rig.muzzles[s.key] : null;
       _muzzleOpts.anchor = mz && game.fx.anchor ? game.fx.anchor(mz, _pos) : 255;
       game.fx.spawn(d.muzzleFx, _pos, _dir, _muzzleOpts);
+      // spent casing out of the ejection port (behind the muzzle, so the forearm does not hide it)
+      if (d.casingFx) { _w.copy(_pos).addScaledVector(_dir, -(d.casingBack || 1.5)); game.fx.spawn(d.casingFx, _w, _dir, _muzzleOpts); }
       // rig flash: a brief warm light behind the firing shoulder, so a shot reads on the rig's
       // BACK from the chase camera (the muzzle light only reaches the front)
       const rf = d.rigFlash;
@@ -355,6 +358,14 @@ export class Loadout {
       dealDamage(game, a, _bladeHit);
       _back.copy(_dir).negate();
       game.fx.spawn('blade_hit', _t, _back, 1);
+      // spark fans thrown along the CUTTING EDGE: the cut runs to the owner's right and down
+      // (fx/slash.js roll), sparks leave along the sweep and off the hull
+      _u.set(-_dir.z, -0.33, _dir.x).normalize();
+      _w.copy(_u).multiplyScalar(0.8).addScaledVector(_back, 0.6).normalize();
+      for (let k = 0; k < 5; k++) {
+        _aim.copy(_t).addScaledVector(_u, (k - 2) * 1.3);
+        game.fx.spawn('blade_edge', _aim, _w, 1);
+      }
       hits++;
     }
     if (hits) {
