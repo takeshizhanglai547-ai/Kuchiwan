@@ -141,6 +141,24 @@ SAC はマシン単位で効く。そのため、誰が・どのシェルから�
 - **CodeIntegrityログ（要確認）。** 60日分を検索しても、BuildRules を含むイベントが見つからない。ログが上書きされて消えた可能性があるため、追加の確認（`Collect-SACTimeline.ps1`）で確かめる。
 - **Defenderのリアルタイム保護が False（参考情報）。** 原因ではないが、他社製ウイルス対策ソフトの有無と合わせて、ユーザーに確認してもらう事項。
 
+### 追加確認（`Collect-SACTimeline.ps1` の結果）
+
+- **CodeIntegrityログ。** ログは1MBの循環方式で、最古のイベントは 2026-10-11 11:07:20Z だった。08:39Z の拒否イベントは、すでに上書きされて消えている。11:07Z 以降は 3077（拒否）も 3076（監査）も0件。158・159ではビルドを試していないので、記録がないのは整合的である。
+- **レジストリ。** `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy` に `SAC_PreviousState=2`（評価モード）、`VerifiedAndReputablePolicyState=1`（On）、`SAC_EnforcementReason=1` があった。
+  SACが評価モードから強制(On)へ移ったことは、**レジストリ上で確認できた**。`SAC_EnforcementReason` の値の意味は、Microsoftが公開していないため解釈しない。
+- **ウイルス対策。** 主のウイルス対策は McAfee で、Defender はパッシブモードだった。リアルタイム保護が False なのはこのためで、異常ではない。今回の拒否は CodeIntegrity（SACのポリシー名つき）によるもので、McAfeeによるものではない。
+
+### 最終判定
+
+| 事項 | 判定 |
+|---|---|
+| 直接の原因 | Smart App Control が評価モードから強制(On)へ移り、未署名・評判なしの UBT ルールDLL の読み込みを拒否するようになった。**確定**（ただし移行時刻は、ログの上書きにより 06:33〜08:39Z の範囲までしか絞れない。この範囲は155／157のログからの推定） |
+| 前任の「makefile再利用説」 | **誤り**。155はmakefileを新規作成・再生成した回でも成功している |
+| Fabプラグインの依存関係 | 無関係。エンジンのMarketplaceフォルダにある限り、必ず構築される（UBT 5.7.4 の実ソースで確認） |
+| IOException | 拒否に伴う二次的な現象。独立した障害ではない |
+| SACをOnのままビルドする正規の手順 | 見当たらない。新規ファイルを含む159は、makefileの再生成が必須である。他のフォルダのmakefileやDLLを流用するのは回避策にあたる |
+| 残る選択肢 | (1) ユーザー本人が SAC を Off にする、(2) 別の環境でビルドする（ユーザーの明示的な承認が必要）、(3) Epic／Microsoft の対応を待つ |
+
 ## 3. 参照した公開情報
 
 - [Open3DBroadcast PR #300 — UBTのModuleRules.dllが0x800711C7で拒否された事例](https://github.com/lifelike-and-believable/Open3DBroadcast/pull/300)
