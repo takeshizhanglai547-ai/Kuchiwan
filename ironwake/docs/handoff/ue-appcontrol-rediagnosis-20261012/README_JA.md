@@ -159,6 +159,21 @@ SAC はマシン単位で効く。そのため、誰が・どのシェルから�
 | SACをOnのままビルドする正規の手順 | 見当たらない。新規ファイルを含む159は、makefileの再生成が必須である。他のフォルダのmakefileやDLLを流用するのは回避策にあたる |
 | 残る選択肢 | (1) ユーザー本人が SAC を Off にする、(2) 別の環境でビルドする（ユーザーの明示的な承認が必要）、(3) Epic／Microsoft の対応を待つ |
 
+### SAC Off 後の候補159ビルド（2026-10-12、`Build-Candidate159.ps1`）
+
+SACをOffにする操作は、ユーザー本人が行った（レジストリ値 `VerifiedAndReputablePolicyState=0` を確認済み）。
+
+| 項目 | 結果 |
+|---|---|
+| 1回目（09:05Z） | `Creating makefile (no existing makefile)` → ルールの段階を通過し、`[1/161]` まで進んだ時点でユーザーの Ctrl+C により中断 |
+| 2回目（09:09Z） | Build.bat 終了コード 0、`Result: Succeeded`、110.63秒 |
+| 新しい成果物 | `Candidate159\Project\Binaries\Win64\UnrealEditor-InnuUnreal.dll` 3,619,840 bytes、09:11:50Z、SHA256 `7E031B20…26CB9F9A83`。ほかに `.target`、`.modules` |
+| 154本体 | エディタ用DLL `735EBDED…` と出荷版exe `9909C2D3…` は、ビルド前後で**変化なし** |
+| MarketplaceRules.dll | 変化なし（`8170ED1F…`）。今回は拒否されずに読み込まれた |
+| ビルド中のCodeIntegrity 3076/3077 | 0件 |
+
+→ 157で起きた停止は、SACをOffにすることで解消した。159のC++は新しいDLLとしてビルドされた。**新機能の動作確認（自動テストと実機での試遊）は未実施。**
+
 ## 3. 参照した公開情報
 
 - [Open3DBroadcast PR #300 — UBTのModuleRules.dllが0x800711C7で拒否された事例](https://github.com/lifelike-and-believable/Open3DBroadcast/pull/300)
