@@ -105,7 +105,7 @@ Out-Line '  Other *ModuleRules*.dll / *Rules.dll under Work155-159 (candidate co
 foreach ($n in 155..159) {
     $w = Join-Path $WorkRoot "Work$n"
     if (Test-Path -LiteralPath $w) {
-        Get-ChildItem -LiteralPath $w -Recurse -File -Include '*Rules.dll' -ErrorAction SilentlyContinue | ForEach-Object { Describe-File $_.FullName }
+        Get-ChildItem -LiteralPath $w -Recurse -File -Filter '*Rules.dll' -ErrorAction SilentlyContinue | ForEach-Object { Describe-File $_.FullName }
     }
 }
 
@@ -127,7 +127,7 @@ $pat = 'Creating makefile|no existing makefile|Makefile|BuildRules|MarketplaceRu
 foreach ($n in 155..159) {
     $w = Join-Path $WorkRoot "Work$n"
     if (-not (Test-Path -LiteralPath $w)) { continue }
-    Get-ChildItem -LiteralPath $w -Recurse -File -Include '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-ChildItem -LiteralPath $w -Recurse -File -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
         $hits = Select-String -LiteralPath $_.FullName -Pattern $pat -ErrorAction SilentlyContinue | Select-Object -First 40
         if ($hits) {
             Out-Line "  --- $($_.FullName)  (modified $($_.LastWriteTimeUtc.ToString('u')))"

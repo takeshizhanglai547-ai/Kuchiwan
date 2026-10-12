@@ -105,6 +105,42 @@ SAC はマシン単位で効く。そのため、誰が・どのシェルから�
    - ビルド後、`Binaries\Win64\UnrealEditor-InnuUnreal*.dll` などのタイムスタンプとハッシュが新しくなったことを確認する。
    - 159の新しい攻撃ロジックが実際に動くことを、試遊で1本だけ確認する。
 
+## 2.5 PC実測結果（2026-10-12 14:14 UTC 収集、`ue_appcontrol_diag_20261012-141404.txt`）
+
+### 実測された事実
+
+| 項目 | 実測値 |
+|---|---|
+| OS／SAC | Windows 25H2 build 26200.9457。`VerifiedAndReputablePolicyState=1`（**On・強制**）。Defender `SmartAppControlState=On`、`RealTimeProtectionEnabled=False` |
+| エンジン | UE 5.7.4（CL 51494982）。`Engine\Plugins\Marketplace` 配下は FabLauncher、TemperedGlass の2つ |
+| MarketplaceRules.dll | 6144 bytes。作成 2026-05-21、**最終更新 2026-09-30 11:44:32Z**、SHA256 `8170ED1F…7489688`、未署名。それ以降は書き換えられていない |
+| 本体プロジェクトのルールDLL | `InnuUnrealModuleRules.dll`。2026-10-10 07:25Z に作成、未署名 |
+| Work155候補のルールDLL | 2026-10-11 **06:08:07Z** に新規作成（SHA256 `0B737D01…`）、未署名 |
+| Work157候補のルールDLL | **存在しない**（Marketplaceの段階で止まり、プロジェクトのルールDLLの作成まで進まなかったことと整合する） |
+| UBT 5.7.4 実ソース | `RulesCompiler.cs` L98-117：`Engine/Plugins/Marketplace` 配下の全プラグインを集め、1つ以上あれば `CreateMarketplaceRulesAssembly` を親として必ず構築する。`DynamicCompilation.cs` L305/L340：`Assembly.LoadFile` でファイルから読み込む |
+| 実行中プロセス | UE・UBT・dotnet・ゲームは**なし**。Codex 関連（sandbox-service、computer-use など）が常駐 |
+
+### 155と157のログの比較（ここが決定的）
+
+| 時刻 (UTC, 10/11) | ログ | makefile | 結果 |
+|---|---|---|---|
+| 06:08 | Work155 build155-editor.log | **Creating makefile (no existing makefile)** | ルール段階を通過し、C++のエラーで失敗（141秒） |
+| 06:11 | 同上 | 再利用 | 成功 |
+| 06:22 | 同上 | **Invalidating makefile (source file added)** → 再生成 | 成功（100秒） |
+| 06:33 | 同上 | 再利用 | 成功 |
+| 08:39 | Work157 build-editor.log | **Creating makefile (no existing makefile)** | MarketplaceRules.dll の LoadFile が 0x800711C7 で拒否 → 再コンパイルの書き込みで IOException → 失敗（2.10秒） |
+
+### 判定
+
+- **前任の診断の誤り（確定）。** 「155はmakefileの再利用でDLLの読み込みを通らなかったから成功した」という説明は誤り。
+  155は 06:08 と 06:22 の2回、makefileを新規作成・再生成している。どちらの回も、UBT 5.7.4 の構造上は必ず Marketplace ルールアセンブリを読み込む。しかも 06:08 には、作成直後の新しい未署名DLL（Work155の `InnuUnrealModuleRules.dll`）まで読み込めている。
+- **変わったのはファイルではない（確定）。** MarketplaceRules.dll は 9/30 から一度も書き換えられていない。155と157は**同じバイト列**を読み込んでおり、06:33〜08:39 UTC の間にこのファイルに対するOSの判定だけが変わった。
+- **最有力の原因（未確定、次の確認で判定）。** 06:33〜08:39 UTC の間に Smart App Control が「評価モード → 強制(On)」へ移行した。作成されたばかりのDLLにクラウド上の評判があるはずはないので、06:08 に新規DLLが読み込めた事実は、その時点でSACが強制していなかったことを強く示している。
+- **B1・B2 の予測。** B2（プロジェクトの依存関係とは無関係に Marketplace ルールが構築される）は、実ソースで**確定**した。B1（Fabプラグインを外しても、次はプロジェクトのルールDLLで拒否される）は、上の判定と整合し、確度が上がった。
+- **IOException（ほぼ確定）。** 他のプロセスが原因である可能性は低い。読み込みに失敗した同じUBTプロセスが、そのDLLを開いたまま同じパスへ書き込もうとした、自分自身によるロックと見られる。全体で2.10秒しかかかっておらず、待機した形跡がない。独立した障害ではない。
+- **CodeIntegrityログ（要確認）。** 60日分を検索しても、BuildRules を含むイベントが見つからない。ログが上書きされて消えた可能性があるため、追加の確認（`Collect-SACTimeline.ps1`）で確かめる。
+- **Defenderのリアルタイム保護が False（参考情報）。** 原因ではないが、他社製ウイルス対策ソフトの有無と合わせて、ユーザーに確認してもらう事項。
+
 ## 3. 参照した公開情報
 
 - [Open3DBroadcast PR #300 — UBTのModuleRules.dllが0x800711C7で拒否された事例](https://github.com/lifelike-and-believable/Open3DBroadcast/pull/300)
