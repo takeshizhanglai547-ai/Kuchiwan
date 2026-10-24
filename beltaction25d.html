@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
 <meta name="theme-color" content="#7fc8ff">
-<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,90_game -->
+<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,90_game,91_same_screen_coop -->
 
 
 
@@ -327,6 +327,7 @@ G.cam = {
 };
 
 // ---------------------------------------------------------------- input
+function createInputChannel(options={}){
 const BTNS = ['attack','jump','dodge','grab','special','ult','pause','confirm'];
 const KEYS = {
   attack:['KeyJ','KeyZ'], jump:['Space','KeyI'], dodge:['KeyK','KeyX'],
@@ -337,7 +338,7 @@ const KEYS = {
 const MOVE = { left:['ArrowLeft'], right:['ArrowRight'], up:['ArrowUp'], down:['ArrowDown'] };
 const keyDown = Object.create(null);
 const latch = Object.create(null);
-const inp = G.input = {
+const inp = {
   x:0, z:0, btn:{}, touch:{ x:0, z:0 }, pad:{ x:0, z:0 }, lastDevice: isTouch ? 'touch' : 'key',
   // UI calls this on touch/pointer down so a tap shorter than one tick still counts
   latch(btn){ latch[btn] = true; },
@@ -345,7 +346,7 @@ const inp = G.input = {
   // a pad/touch button still physically held stays "down", so letting go of it later
   // is not mistaken for a new press (START on the pause menu used to re-pause at once)
   clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down = !!inp.pad[b] || !!inp.touch[b]; s.pressed=s.released=false; s.held=0; latch[b]=false; }
-           for(const k in keyDown) keyDown[k]=false; commands.reset(); G.bus.emit('inputReset',{reason:'clear'}); },
+           for(const k in keyDown) keyDown[k]=false; commands.reset(); G.bus.emit('inputReset',{reason:'clear',input:inp}); },
   clearEdges(syncHeld=false){for(const b of BTNS){latch[b]=false;const s=inp.btn[b];s.pressed=s.released=false;
     if(syncHeld)s.down=kd(KEYS[b])||!!inp.touch[b]||!!inp.pad[b];}commands.consume();},
 };
@@ -354,10 +355,10 @@ for(const b of BTNS){ inp.btn[b] = { down:false, pressed:false, released:false, 
 // Reference: beltaction.html, main b5c01428 (blob f8de624f).
 // Keep event-time cardinal history, including taps shorter than a simulation tick.
 // Four cardinals: up=0, right=1, down=2, left=3. Times are fixed 60 Hz ticks.
-const commands = G.commands = {
+const commands = {
   cardSeq:[], dirTaps:[], downTaps:[], stickRot:-999,
   touchState:{ lastTapDir:0, lastCard:-1, angPrev:null, accum:0 },
-  now(){ return G.player?.published&&G.sceneName==='play' ? G.published.clock() : G.time ? G.time.tick : 0; },
+  now(){ const p=inp.player||G.player; return p?.published&&G.sceneName==='play' ? G.published.native(p).clock : G.time ? G.time.tick : 0; },
   pushTap(d){ this.dirTaps.push({d,f:this.now()}); if(this.dirTaps.length>6) this.dirTaps.shift(); },
   pushCard(c){ const r=this.cardSeq, L=r[r.length-1];
     if(L&&L.c===c){ L.f=this.now(); return; } r.push({c,f:this.now()}); if(r.length>8) r.shift(); },
@@ -439,7 +440,8 @@ const codeToBtn = {};
 for(const b in KEYS) for(const c of KEYS[b]) codeToBtn[c]=b;
 const moveCodes = new Set([].concat(MOVE.left,MOVE.right,MOVE.up,MOVE.down));
 window.addEventListener('keydown', (e)=>{
-  const c = e.code;
+  if(options.active&&!options.active())return;
+  const c = options.keys ? options.keys[e.code] : e.code;if(!c)return;
   if(codeToBtn[c] || moveCodes.has(c)){
     // keep the page from scrolling / buttons from being "clicked" by space
     if(!(e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA'))) e.preventDefault();
@@ -450,8 +452,8 @@ window.addEventListener('keydown', (e)=>{
   commands.key8?.(c,true,!!e.repeat);
   if(G.audio && G.audio.unlock) G.audio.unlock();
 }, {passive:false});
-window.addEventListener('keyup', (e)=>{ keyDown[e.code] = false;commands.key8?.(e.code,false,false); });
-window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS){ inp.touch[b]=false; latch[b]=false; } commands.reset();G.bus.emit('inputReset',{reason:'blur'}); });
+window.addEventListener('keyup', (e)=>{ const c=options.keys?options.keys[e.code]:e.code;if(!c)return;keyDown[c] = false;commands.key8?.(c,false,false); });
+window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS){ inp.touch[b]=false; latch[b]=false; } commands.reset();G.bus.emit('inputReset',{reason:'blur',input:inp}); });
 const kd = (list)=> list.some(c=>keyDown[c]);
 
 function pollPad(){
@@ -459,7 +461,8 @@ function pollPad(){
   if(!navigator.getGamepads) return;
   let pads; try { pads = navigator.getGamepads(); } catch(_){ return; }
   if(!pads) return;
-  for(const gp of pads){
+  for(let pi=0;pi<pads.length;pi++){
+    const wanted=options.padIndex??(G.coop?.enabled?0:null);if(wanted!==null&&pi!==wanted)continue;const gp=pads[pi];
     if(!gp || !gp.connected) continue;
     const ax = gp.axes[0]||0, az = gp.axes[1]||0;
     if(Math.abs(ax)>0.2) p.x = ax;
@@ -475,6 +478,7 @@ function pollPad(){
 }
 
 function updateInput(){
+  if(options.active&&!options.active())return;
   pollPad();
   let x = 0, z = 0;
   if(kd(MOVE.left)) x -= 1; if(kd(MOVE.right)) x += 1;
@@ -491,6 +495,12 @@ function updateInput(){
     latch[b] = false;
   }
 }
+
+return {input:inp,commands,update:updateInput};
+}
+G.createInputChannel=createInputChannel;
+const primaryInput=createInputChannel();G.input=primaryInput.input;G.commands=primaryInput.commands;
+function updateInput(){primaryInput.update();G.coop?.updateInputs();}
 
 // ---------------------------------------------------------------- entities & world
 let _id = 1;
@@ -802,7 +812,7 @@ G.bus.on('quality', ()=>{ if(G.post && G.quality.tier>=2) G.post.dispose(); });
 // ===== 06_motion_inputs.js =====
 // Eight-way extensions feed the unchanged native command branches. Original
 // cardinal shortcuts remain valid. 236 = quarter-circle, 623 = dragon punch.
-(function(){'use strict';const G=window.G,C=G.commands,keys=new Set(),history=[];let last=5;
+(function(){'use strict';const G=window.G;G.extendMotionCommands=function(C){const keys=new Set(),history=[];let last=5;
 function record(x,y){const d=y>0?(x>0?3:x<0?1:2):y<0?(x>0?9:x<0?7:8):x>0?6:x<0?4:5;
  if(d===last)return;last=d;history.push({d,f:C.now()});if(history.length>20)history.shift();}
 C.motion8=history;
@@ -820,7 +830,7 @@ C.routeMotion=(face)=>{const m=C.preciseMotion(face);if(!m)return null;const f=f
  // The native simulation still selects, cancels, damages and animates the move.
  const cards=m.slot==='dp'?[f,2,f]:[2,f],times=m.slot==='dp'?m.events:m.events.slice(0,1).concat(m.events.slice(-1));
  C.cardSeq.splice(0,C.cardSeq.length,...cards.map((c,i)=>({c,f:times[i].f})));C.stickRot=-999;return m.slot;};
-})();
+};G.extendMotionCommands(G.commands);})();
 
 
 // ===== 10_look.js =====
@@ -38602,17 +38612,17 @@ if(G.publishedFactory){
     if(r.level>oldLevel)G.bus.emit('levelUp',{ent:p,level:r.level,hpUp:p.maxHp-(p._lastMaxHp||p.maxHp)});
     p._lastMaxHp=p.maxHp;
   }
-  function sourceEnemy(p,ctx,t){let e=ctx.foes.get(t);
+  function sourceEnemy(p,ctx,t){let e=ctx.foes.get(t);if(G.coop?.enabled&&e&&t._publishedOwner!==p)e.controlled=false;
     if(!e){const proto=t.publishedType||({cerbe:'cerberus',slime:'slimeboss',emperor:'boss'}[t.type]||t.type);
       e=ctx.ref.enemy(proto,pixel(t.x*S),0,{key:t.id,def:{boss:!!t.def?.boss,w:t.radius*2*S,h:t.height*S,score:(t.def?.xp||0)*10,
         evolveTo:null,slimey:false,bomber:false,zombie:false,t1000:false},values:{hp:t.hp,maxHp:t.maxHp}});
       e.target=t;ctx.foes.set(t,e);}
     if(!e.controlled){e.x=pixel(t.x*S,e.x);e.y=pixel(ctx.lane+(t.z-p.z)*S,e.y);e.z=pixel(t.y*S,e.z);e.vz=pixel(-t.vy*S,e.vz);e.vx=pixel(t.vx*S,e.vx);e.facing=t.face;e.hp=t.hp;e.maxHp=t.maxHp;
       e.dead=!!t.dead;e.state='walk';
-      e.protected=t.intangible||t.inv>0||(t.state==='spawn'&&!t.hittableSpawn);e.transform=e.protected?2:0;e.grabbedBy=e.protected?-1:0;}
+      e.protected=t.intangible||t.inv>0||(t.state==='spawn'&&!t.hittableSpawn)||(G.coop?.enabled&&t._publishedOwner&&t._publishedOwner!==p&&t.grabbedBy>0);e.transform=e.protected?2:0;e.grabbedBy=e.protected?-1:0;}
     return e;
   }
-  function syncFoe(p,e){const t=e.target;if(!t||t.removed)return;
+  function syncFoe(p,e){const t=e.target;if(!t||t.removed)return;if(G.coop?.enabled){if(e.controlled)t._publishedOwner=p;else if(t._publishedOwner&&t._publishedOwner!==p)return;}
     // Existing 3D bosses may replace their phase from onKO; preserve the new living phase.
     if(e.dead&&!t.dead&&t.hp>0){e.hp=t.hp;e.maxHp=t.maxHp;e.dead=false;e.state='walk';e.controlled=false;t.publishedReactive=false;return;}
     t.hp=Math.max(0,e.hp);if(!e.controlled){if(!e.protected)t.x=e.x/S;return;}
@@ -38632,9 +38642,9 @@ if(G.publishedFactory){
   }
   function effects(p,ctx){const active=new Set(ctx.ref.projectiles);
     G.publishedSwords?.tick(ctx.ref.clock);
-    for(const [pr,v]of visuals)if(!active.has(pr)){v.obj.parent?.remove(v.obj);v.dispose?.();visuals.delete(pr);}
+    for(const [pr,v]of visuals)if(v._owner===ctx&&!active.has(pr)){v.obj.parent?.remove(v.obj);v.dispose?.();visuals.delete(pr);}
     for(const pr of active){let v=visuals.get(pr);if(!v){v=G.fx?.makeProjectile?.(pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball');
-      if(!v)continue;visuals.set(pr,v);G.scene.add(v.obj);}
+      if(!v)continue;v._owner=ctx;visuals.set(pr,v);G.scene.add(v.obj);}
       const x=pr.x/S,y=Math.max(0,pr.zz)/S,z=p.z+(pr.y-ctx.lane)/S;
       v.obj.position.set(x,y,z);v.update?.({...pr,x,y,z,r:pr.r/S,age:pr.age||0,vx:pr.vx/S,vy:pr.vzz/S,spin:pr.spin});}
     const particles=ctx.ref.drainParticles();let n=0;
@@ -38661,9 +38671,10 @@ if(G.publishedFactory){
         damageScale(){return G.game?.diff?.heroDmg||1;},
         projectile(pr){G.bus.emit('shoot',{ent:p,kind:pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball',x:pr.x/S,y:pr.zz/S,z:p.z+(pr.y-ctx.lane)/S});},
         beforeHit(e,args){if(!e.target)return true;const d=ctx.ref.player.atk?.def;
+          if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
           return !G.combat.publishedBlock(e.target,{src:p,dir:Math.sign(args[1]||p.face),power:args[2]||d?.special||d?.finisher||d?.knock?2:1});},
         hit(e,dmg,args){ctx.trace.hits.push({tick:ctx.ref.clock,target:e.target?.id,damage:dmg,requested:args[0]});
-          if(e.target&&!e.protected){e.controlled=true;if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,stop:ctx.ref.freeze});}},
+          if(e.target&&!e.protected){if(G.coop?.enabled)e.target._publishedOwner=p;e.controlled=true;if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,stop:ctx.ref.freeze});}},
         ult(r,name){G.bus.emit('ult',{ent:p,id:r.kind+'_ult',name,heroId:r.kind});G.fx?.cutin?.(r.kind,name,()=>{});},
         action(a){ctx.trace.actions.push({tick:ctx.ref.clock,...a});}
       });
@@ -38696,7 +38707,7 @@ if(G.publishedFactory){
     },
     queue(p){const ctx=engines.get(p);if(ctx)input(p,ctx);},
     resetInput(p=G.player){const ctx=engines.get(p);ctx?.ref.clearInput();if(ctx)G.commandInputs?.reset(ctx);},
-    clock(){return current?.ref.clock??G.time.tick;},
+    clock(){return G.player?._publishedCtx?.ref.clock??current?.ref.clock??G.time.tick;},
     trace(p=G.player){return engines.get(p)?.trace;},
     native(p=G.player){return engines.get(p)?.ref;},
     receiveDamage(p,amount,info){const ctx=engines.get(p);if(!ctx)return false;const r=ctx.ref.player,before=r.hp;
@@ -38712,7 +38723,7 @@ if(G.publishedFactory){
     },
     clearVisuals(){for(const v of visuals.values()){v.obj.parent?.remove(v.obj);v.dispose?.();}visuals.clear();},
   };
-  G.bus.on('inputReset',()=>P.resetInput());G.bus.on('hidden',()=>{G.input.clear();P.resetInput();G.commands.reset();});
+  G.bus.on('inputReset',d=>P.resetInput(d.input?.player||G.player));G.bus.on('hidden',()=>{G.input.clear();P.resetInput();G.commands.reset();});
   G.bus.on('scene',d=>{if(d.name!=='play'){P.clearVisuals();P.resetInput();}});
   G.commandMoves={ground:{},air:{},missing:[],get(hero,slot,air,level){const n=current?.ref;if(!n)return null;return n.catalog(hero,slot,air,level);}};
   for(const hero of ['inu','shima','nuko','guard8','watch','wanden','mack']){
@@ -44169,7 +44180,7 @@ const HEROES={
 };
 const BOSSES={garm:['鋼の爪、解放！','連続つっこみと空からの急降下。着地のすきをねらおう。'],shark:['ほんきの がぶがぶ！','連続かみつきに遠くへの水玉。予告の線からよけよう。'],ghost:['三兄弟の ひとだま祭り！','消える突進とひとだま。姿が見えたら反撃しよう。'],cerbe:['三つの声が ひびく！','連続ジャンプと三方向のほえ声。着地を見て動こう。'],slime:['ぷるぷる大あばれ！','ねばねば弾と小さな仲間。着地後のすきがチャンス。'],dragon:['炎のつばさ、全開！','炎の玉と二連の息。予告を見て、着地後をねらおう。'],kuroinu:['こくけんしの 本気！','斬撃と連続の居合い。光る道から外れて反撃しよう。'],emperor:['王の力を 見せよう！','光の柱と包囲弾。足もとの予告を見て動こう。']};
 const queue=[],seen=new Set(),history=[];let active=null,run=0,stage=0,hero='inu',panel=null,parts=null,focus=null,paused=false;
-function clearInput(){G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
+function clearInput(){G.coop?.clearInputs();G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
 function valid(e){return !e.boss||(!e.boss.dead&&!e.boss.removed&&e.boss.hp>0&&!e.boss.transforming&&(e.boss.form||1)===e.form);}
 function releaseHold(e){if(e?.boss)e.boss._phaseEventHold=false;}
 function hide(){if(panel){panel.remove();panel=null;parts=null;}focus?.focus?.();focus=null;}
@@ -44178,7 +44189,7 @@ function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.ol
  if(G.fx)G.fx.worldFrozen=!!G.paused;
  releaseHold(e);
  if(completed&&G.player&&!G.player.dead){G.player.inv=Math.max(G.player.inv,24);const n=G.published?.native?.();if(n)n.player.invuln=Math.max(n.player.invuln,24);}
- if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
+ if(completed){G.coop?.restoreCamera();G.coop?.grace();}if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
 function reset(){if(active)restore(active,false);active=null;paused=false;for(const e of queue)releaseHold(e);queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
@@ -44197,7 +44208,7 @@ function render(){if(!document.createElement||!document.body)return;
 function paint(){if(!parts||!active)return;parts.line.textContent=active.lines[active.age<75?0:1];parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
  parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(active.age/active.duration*100)+'%';}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
-function begin(e){active=e;e.age=0;e.duration=e.kind==='boss'?170:185;e.actor=e.boss||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
+function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=e.kind==='boss'?170:185;e.actor=e.boss||e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;
  if(e.boss){const b=e.boss;b.pending=null;G.combat.cancel(b);b.onInterrupt?.();b.plan=null;b.gplan=null;b.vx=b.vz=0;G.setAnim(b,'roar',170);
   for(const pr of G.combat.projectiles||[])if(pr.owner===b)pr.life=0;}
@@ -44208,8 +44219,8 @@ const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aL
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
-  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue});},
- clearStage(){const h=HEROES[hero];if(!h)return false;return enqueue({kind:'clear',key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===6?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});},
+  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
+ clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===6?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
  bossPhase(boss,phase){if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||!(boss.hp<boss.maxHp*.5))return false;
   const form=boss.form||1,key='boss:'+boss.id+':'+form,info=BOSSES[boss.type]||['後半戦、開始！','予告を見て、攻撃の後をねらおう。'];
   const accepted=enqueue({kind:'boss',key,boss,form,title:boss.type==='emperor'&&form===2?'暗黒の剣、覚醒！':info[0],lines:[(boss.form===2?boss.def.phaseLine2:boss.def.phaseLine)||'ここからが、ほんばんだ！',info[1]],cue:(boss.def.short||boss.def.name||boss.type)+(boss.type==='emperor'?' · 第'+form+'形態':'')+' · 後半戦'});
@@ -44221,7 +44232,7 @@ G.story={heroes:HEROES,bosses:BOSSES,history,
   if(active.age>=active.duration){finish();return;}paint();},
  skip(){if(!active||paused||active.age<30)return false;finish();return true;},
  pause(on){if(!active)return false;paused=!!on;clearInput();paint();return true;},reset,
- pose(rig,e,Q,rest){if(!active||active.kind==='boss'||e!==G.player)return null;const def=(active.kind==='intro'?START_POSE:CLEAR_POSE)[hero];if(!def)return null;
+ pose(rig,e,Q,rest){if(!active||active.kind==='boss'||e!==active.actor)return null;const def=(active.kind==='intro'?START_POSE:CLEAR_POSE)[hero];if(!def)return null;
   const blend=Math.min(1,active.age/28),sway=Math.sin(active.age*.06)*.035;
   for(const k of Object.keys(Q))if(typeof Q[k]==='number')Q[k]=(rest[k]||0)*(1-blend)+(def[k]??rest[k]??0)*blend;
   Q.nod=(Q.nod||0)+sway;Q.sq=Q.y=Q.fx=0;if(hero==='shima'){Q.lLz=.25*Math.sin(active.age*.12);Q.lRz=-Q.lLz;}if(hero==='nuko')Q.twist=.25*Math.sin(active.age*.035);if(hero==='mack')Q.wz+=(active.age>75?Math.sin(Math.min(1,(active.age-75)/40)*Math.PI*2):0);
@@ -44483,7 +44494,7 @@ const play = G.scenes.play = {
     const st = S().info || stages()[game.stageIndex] || { name:'', kana:'' };
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
-    G.world.add(p);
+    G.world.add(p);G.coop?.enter(p);
     if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
@@ -44499,7 +44510,7 @@ const play = G.scenes.play = {
     uiHide('hud'); uiHide('pause'); touch(false);
     if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
     if(G.ui && G.ui.go) try { G.ui.go(false); } catch(_){}
-    G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
+    G.coop?.exit();G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
   },
   pause(on){
     if(on===G.paused) return;
@@ -44528,11 +44539,11 @@ const play = G.scenes.play = {
     if(!G._arena&&G.story?.flush())return;
 
     // ult cut-in: the world holds still while the cut-in plays
-    if(p && (game.cutinT > 0 || G.hitStop > 0)) G.playerCtl.queue(p);
+    if(p && (game.cutinT > 0 || G.hitStop > 0)) {if(!G.coop?.queueHeroes())G.playerCtl.queue(p);}
     if(game.cutinT > 0){
       game.cutinT--;
       if(p){ p.animT++; if(p.rig && p.rig.update) p.rig.update(p, G.cfg.TICK); }
-      if(game.cutinT===0 && p) G.playerCtl.tick(p);
+      if(game.cutinT===0 && p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
       return;
     }
     if(G.hitStop > 0){ G.hitStop--; return; }
@@ -44542,11 +44553,11 @@ const play = G.scenes.play = {
 
     try { S().tick(); } catch(err){ G.logError('stage.tick', err); }
     if(p && G._autoplay) autoDrive(p);
-    if(p) G.playerCtl.tick(p);
+    if(p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
     const ents = G.world.ents;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
-      if(e.team===1&&!e.publishedReactive){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}
+      if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
     G.combat.tick();
@@ -44557,7 +44568,7 @@ const play = G.scenes.play = {
       if(e.flashT>0 && e.team!==1 && e!==p) e.flashT--;
       G.phys(e, (e.team===1 && !e.entered) ? null : bounds);
     }
-    separate(ents);
+    separate(ents);G.coop?.afterCombat(this);if(this.over)return;
     stepRigs();
 
     // A completed stage wins simultaneous KO: revive safely before charging a
@@ -44595,7 +44606,7 @@ const play = G.scenes.play = {
   winGuard(){
     for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
     G.combat.areas.length = 0;
-    const p = G.player; if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+    const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
     const idx = game.stageIndex, last = idx >= stages().length-1;
@@ -44808,6 +44819,88 @@ G.boot = function(){
   G.start();
 };
 G.boot();
+})();
+
+
+// ===== 91_same_screen_coop.js =====
+// Same-screen cooperation. Each hero has a real native fighter and input channel.
+(function(){'use strict';const G=window.G,players=[],primary={input:G.input,commands:G.commands};
+let enabled=false,ids=['inu','shima'],carry=null,lastStage=-1,controls=null,menu=null,launch=null,inside=false;
+const secondary=G.createInputChannel({padIndex:1,active:()=>enabled,keys:{KeyW:'ArrowUp',KeyA:'ArrowLeft',KeyS:'ArrowDown',KeyD:'ArrowRight',KeyF:'KeyJ',KeyR:'Space',KeyG:'KeyK',KeyT:'KeyL',KeyY:'KeyH',KeyB:'KeyO'}});
+G.extendMotionCommands(secondary.commands);
+const channels=[primary,secondary],mid={x:3,y:0,z:0,face:0,type:'coop-camera'};
+const pointers=new Map(),buttonOwners=[new Map(),new Map()],sticks=[null,null];let status=[],markers=[];
+function scoped(p,fn){const slot=players.indexOf(p),ch=channels[Math.max(0,slot)];
+ const old={player:G.player,input:G.input,commands:G.commands};const stats={};
+ if(slot===1&&G.game)for(const k of ['level','xp','xpNext','publishedCarry']){stats[k]=G.game[k];G.game[k]=k==='publishedCarry'?carry:(p[k]??G.game[k]);}
+ G.player=p;G.input=ch.input;G.commands=ch.commands;try{return fn();}finally{Object.assign(G,old);if(slot===1&&G.game)Object.assign(G.game,stats);}}
+function clearInputs(){for(let i=0;i<2;i++){const ch=channels[i];for(const k in ch.input.touch)ch.input.touch[k]=typeof ch.input.touch[k]==='boolean'?false:0;ch.input.clear();ch.commands.reset();if(players[i])G.published.resetInput(players[i]);buttonOwners[i].clear();sticks[i]=null;}pointers.clear();}
+function blocked(){return !enabled||G.sceneName!=='play'||G.paused||G.story?.blocked||G.scenes.play?.over||G.scenes.play?.cleared;}
+function press(side,key,pid){if(blocked()||pointers.has(pid))return false;const set=buttonOwners[side].get(key)||new Set();buttonOwners[side].set(key,set);if(!set.size)channels[side].input.latch(key);set.add(pid);channels[side].input.touch[key]=true;pointers.set(pid,{side,key});return true;}
+function release(pid){const own=pointers.get(pid);if(!own)return false;const ch=channels[own.side];if(own.key){const set=buttonOwners[own.side].get(own.key);set?.delete(pid);ch.input.touch[own.key]=!!set?.size;}else{sticks[own.side]=null;ch.commands.touchEnd();}pointers.delete(pid);return true;}
+function stick(side,pid,x,y){if(blocked())return false;const own=pointers.get(pid);if(own&&(own.side!==side||own.key))return false;if(sticks[side]!==null&&sticks[side]!==pid)return false;sticks[side]=pid;pointers.set(pid,{side});channels[side].commands.touchMove(x,y);return true;}
+function nearest(e){let best=players[0],dist=Infinity;for(const p of players){if(p.dead||p.removed)continue;const d=(p.x-e.x)**2+(p.z-e.z)**2;if(d<dist){best=p;dist=d;}}return best;}
+function restoreCamera(){if(!enabled||!players.length)return;mid.x=(players[0].x+players[1].x)/2;mid.y=Math.max(players[0].y,players[1].y);mid.z=(players[0].z+players[1].z)/2;G.cam.follow(mid);}
+function grace(){for(const p of players)if(!p.dead){p.inv=Math.max(24,p.inv);const n=G.published.native(p);if(n)n.player.invuln=Math.max(24,n.player.invuln);}}
+function paint(){if(!enabled||!controls)return;controls.hidden=G.sceneName!=='play'||G.paused||!!G.story?.blocked||G.scenes.play?.over||G.scenes.play?.cleared;
+ for(let i=0;i<players.length;i++){const p=players[i];if(markers[i]&&G.camera){const at=G.toScreen(p.x,p.y+p.height+.25,p.z);markers[i].hidden=!at.visible;markers[i].style.left=at.x+'px';markers[i].style.top=at.y+'px';}if(status[i])status[i].textContent='P'+(i+1)+' '+(p.meta?.name||p.type)+'  HP '+Math.ceil(p.hp)+'/'+p.maxHp+'  ◆'+p.dim+(p.dead?'  ふっかつ待ち':p.publishedVictim?'  つかみ中':'');}}
+const api=G.coop={get enabled(){return enabled;},players,channels,press,release,stick,clearInputs,scoped,restoreCamera,grace,
+ enable(a,b){clearInputs();ids=[a,b];enabled=true;carry=null;lastStage=-1;if(G.game)Object.assign(G.game,{level:1,xp:0,xpNext:60,coins:0,bestCombo:0,ultCarry:0,publishedCarry:null});},
+ disable(){clearInputs();enabled=false;players.length=0;carry=null;primary.input.player=null;secondary.input.player=null;if(controls)controls.hidden=true;},
+ updateInputs(){secondary.update();},
+ enter(p){if(!enabled)return;players.length=0;players.push(p);p.coopSlot=0;primary.input.player=p;
+  if(G.game.stageIndex<=lastStage)carry=null;const previous={level:G.game.level,xp:G.game.xp,xpNext:G.game.xpNext,publishedCarry:G.game.publishedCarry};G.game.publishedCarry=carry;if(carry)for(const k of ['level','xp','xpNext'])G.game[k]=carry[k]??G.game[k];let q;try{q=G.playerCtl.create(ids[1],p.x+1.1,.35);}finally{Object.assign(G.game,previous);}
+  q.coopSlot=1;players.push(q);secondary.input.player=q;G.world.add(q);clearInputs();buildControls();restoreCamera();},
+ exit(){if(!enabled)return;lastStage=G.game.stageIndex;carry=players[1]?G.published.native(players[1]).carry():null;clearInputs();players.length=0;if(controls)controls.hidden=true;},
+ tickHeroes(){if(!enabled||players.length!==2)return false;if(inside)return false;inside=true;try{for(const p of players)scoped(p,()=>G.playerCtl.tick(p));}finally{inside=false;}return true;},
+ queueHeroes(){if(!enabled)return false;for(const p of players)scoped(p,()=>G.playerCtl.queue(p));return true;},
+ tickFoe(e){if(!enabled||!players.length)return false;scoped(nearest(e),()=>{G.foes.tick(e);G.foes.h.alignPublishedLane(e);});return true;},
+ afterCombat(scene){if(!enabled||players.length!==2)return;const q=players[1];if(G.stage.done)api.winGuard();
+  if(q.dead){q.coopKo=(q.coopKo||0)+1;if(q.coopKo>=100){q.coopKo=0;if(G.game.lives!==Infinity&&!G.stage.done){G.game.lives--;if(G.game.lives<=0){scene.gameOver();return;}}q.dead=false;q.hp=q.maxHp;q.inv=180;q.vy=.12;q.onGround=false;G.game.revives++;G.bus.emit('revive',{ent:q});}}
+  else q.coopKo=0;
+  // Shared-screen tether is symmetric: neither player can drag the other offscreen.
+  const half=Math.max(1.2,(G.cam.halfW||5)-1.2),cx=(players[0].x+q.x)/2;
+  for(const p of players){p.x=G.U.clamp(p.x,cx-half,cx+half);const n=G.published.native(p);n.player.x=p.x*60;}
+  restoreCamera();paint();},
+ winGuard(){if(!enabled)return;for(const p of players){p.inv=Math.max(p.inv,9999);if(p.dead){p.dead=false;p.hp=Math.max(1,Math.ceil(p.maxHp*.5));p.coopKo=0;}}},
+ enqueueStories(kind,run,stage,enqueue,heroes){if(!enabled||!players[1])return;const p=players[1],h=heroes[p.type];if(!h)return;enqueue({kind,hero:p.type,player:p,key:kind+':'+run+':p2',title:'P2 '+h.name+(kind==='intro'?'、出発！':'の ステージクリア！'),lines:[(kind==='intro'?h.start:h.clear)[stage],kind==='intro'?h.cue:h.win],cue:kind==='intro'?h.cue:h.win});},
+ openMenu,
+};
+// Damage and pickup callbacks must read the affected hero's channel, never P1's.
+const receive=G.published.receiveDamage;G.published.receiveDamage=(p,...args)=>enabled&&players.includes(p)?scoped(p,()=>receive(p,...args)):receive(p,...args);
+const pickup=G.pickups.tick;G.pickups.tick=e=>enabled&&players.length?scoped(nearest(e),()=>pickup(e)):pickup(e);
+const frame=G.cam.frame.bind(G.cam);G.cam.frame=(...args)=>{if(enabled&&!G.story?.blocked)restoreCamera();return frame(...args);};
+const cover=G.cam.rightCover.bind(G.cam);G.cam.rightCover=()=>enabled?0:cover();
+function node(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(parent)parent.append(e);return e;}
+function prevent(e){e.preventDefault();e.stopPropagation();}
+function buildControls(){if(!document.body)return;if(controls)controls.remove();controls=node('div',document.body);controls.id='inuCoopControls';status=[];markers=[];
+ const style=node('style',controls);style.textContent='#inuCoopControls{position:fixed;inset:0;pointer-events:none;z-index:35;font:600 12px system-ui;color:white;touch-action:none}#inuCoopControls .coop-pad{position:absolute;bottom:max(6px,env(safe-area-inset-bottom));width:49%;height:156px;display:flex;align-items:flex-end;justify-content:space-around;background:linear-gradient(0deg,#071b3877,transparent);border-radius:18px;pointer-events:none}#inuCoopControls .coop-stick{box-sizing:border-box;width:clamp(64px,13vw,108px);height:clamp(64px,13vw,108px);border:3px solid var(--pc);border-radius:50%;background:#102d4588;pointer-events:auto;touch-action:none;display:grid;place-items:center;user-select:none}#inuCoopControls .coop-grid{display:grid;grid-template-columns:repeat(2,minmax(44px,1fr));gap:4px;pointer-events:auto}#inuCoopControls button{box-sizing:border-box;min-width:44px;min-height:44px;font:700 clamp(10px,1.7vw,14px) system-ui;border:2px solid var(--pc);border-radius:12px;color:white;background:#16314ed9;padding:4px;touch-action:none;user-select:none}#inuCoopControls .coop-status{position:absolute;top:max(6px,env(safe-area-inset-top));max-width:46%;background:#102438cf;padding:5px 8px;border-radius:10px;border:2px solid var(--pc);font-size:clamp(10px,1.7vw,15px)}#inuCoopControls .coop-notice{position:absolute;top:50px;left:50%;transform:translateX(-50%);font-size:11px;background:#102438aa;white-space:nowrap;padding:3px 8px;border-radius:8px}@media(min-width:900px){#inuCoopControls .coop-pad{height:190px}#inuCoopControls button{min-height:54px;min-width:60px}}';
+ for(let i=0;i<2;i++){const color=i?'#ffb361':'#70d8ff',pad=node('section',controls);pad.className='coop-pad';pad.style.setProperty('--pc',color);pad.style[i?'right':'left']='0';pad.setAttribute('aria-label','P'+(i+1)+' controls');
+  const joy=node('div',pad,'P'+(i+1)+' 移動');joy.className='coop-stick';joy.setAttribute('role','application');joy.setAttribute('aria-label','P'+(i+1)+' joystick');
+  function move(e){const r=joy.getBoundingClientRect();return stick(i,e.pointerId,(e.clientX-r.left-r.width/2)*100/r.width,(e.clientY-r.top-r.height/2)*100/r.height);}
+  joy.addEventListener('pointerdown',e=>{prevent(e);if(move(e))joy.setPointerCapture(e.pointerId);},{passive:false});joy.addEventListener('pointermove',e=>{if(sticks[i]!==e.pointerId)return;prevent(e);move(e);},{passive:false});
+  for(const ev of ['pointerup','pointercancel','lostpointercapture'])joy.addEventListener(ev,e=>{prevent(e);release(e.pointerId);},{passive:false});
+  const grid=node('div',pad);grid.className='coop-grid';for(const [key,label]of [['attack','攻撃'],['jump','ジャンプ'],['grab','つかむ'],['dodge','よける'],['special','必殺'],['ult','奥義']]){const b=node('button',grid,label);b.type='button';b.setAttribute('aria-label','P'+(i+1)+' '+label);b.dataset.coopAction=key;b.dataset.coopPlayer=String(i);
+   b.addEventListener('pointerdown',e=>{prevent(e);if(press(i,key,e.pointerId)){b.setPointerCapture(e.pointerId);G.audio?.unlock?.();}},{passive:false});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,e=>{prevent(e);release(e.pointerId);},{passive:false});}
+  const marker=node('span',controls,'P'+(i+1));marker.style.cssText='position:absolute;transform:translate(-50%,-100%);font:800 14px system-ui;background:#102438cc;border:2px solid '+color+';border-radius:8px;padding:2px 6px';markers.push(marker);
+  const label=node('div',controls);label.className='coop-status';label.style.setProperty('--pc',color);label.style[i?'right':'left']='6px';status.push(label);
+ }
+ const pause=node('button',controls,'II');pause.type='button';pause.setAttribute('aria-label','Pause cooperative game');pause.style.cssText='position:absolute;top:48px;right:8px;pointer-events:auto;--pc:#fff0b0';pause.onclick=e=>{prevent(e);G.scenes.play.pause(!G.paused);};
+ const guide=node('button',controls,'技一覧');guide.type='button';guide.style.cssText='position:absolute;top:48px;left:8px;pointer-events:auto;--pc:#fff0b0';guide.onclick=e=>{prevent(e);clearInputs();G.scenes.play.pause(true);G.commandGuide?.open();};
+ const note=node('div',controls,'1台で2人協力・横向きがおすすめ');note.className='coop-notice';paint();}
+function openMenu(){if(menu)menu.remove();menu=node('section',document.body);menu.setAttribute('role','dialog');menu.setAttribute('aria-modal','true');menu.style.cssText='position:fixed;inset:0;z-index:13000;background:#10243bf5;color:#fff8dd;font:18px system-ui;padding:20px;box-sizing:border-box;overflow:auto;touch-action:manipulation';
+ node('h2',menu,'1台の画面で 2人協力');node('p',menu,'スマホ・iPadは横向きがおすすめ。2つの移動スティックと、それぞれの攻撃ボタンを同時に使います。オンライン対戦ではありません。');
+ const row=node('div',menu);row.style.cssText='display:flex;gap:18px;flex-wrap:wrap';const selects=[];
+ for(let i=0;i<2;i++){const col=node('div',row);col.style.cssText='flex:1;min-width:130px';node('label',col,'P'+(i+1)+' キャラクター');const img=node('img',col);img.style.cssText='display:block;width:90px;height:90px;object-fit:contain';const select=node('select',col);select.style.cssText='font:inherit;min-height:44px;max-width:100%';
+  for(const id of G.heroes.ids){const opt=node('option',select,G.heroes.get(id)?.name||G.story.heroes[id]?.name||id);opt.value=id;}select.value=ids[i];const refresh=()=>{img.src=G.heroes.portrait(select.value,{size:160})||'';img.alt=G.story.heroes[select.value]?.name||select.value;};select.onchange=refresh;refresh();selects.push(select);}
+ const difficulty=node('select',menu);difficulty.style.cssText='font:inherit;min-height:44px;margin:14px';for(const [key,label]of [['easy','やさしい'],['normal','ふつう'],['hard','つよい']]){const o=node('option',difficulty,label);o.value=key;}difficulty.value=G.game.diffKey;
+ const start=node('button',menu,'2人で 出発！');start.style.cssText='font:inherit;min-height:48px;padding:10px 20px';start.onclick=()=>{api.enable(selects[0].value,selects[1].value);menu.remove();menu=null;G.debug.play(selects[0].value,0,difficulty.value);G.ui?.touch?.show(false);};
+ const back=node('button',menu,'もどる');back.style.cssText='font:inherit;min-height:44px;margin:10px';back.onclick=()=>{menu.remove();menu=null;};node('p',menu,'キーボード：P1 矢印 / J攻撃 Iジャンプ Kよけ Lつかむ H必殺 O奥義。P2 WASD / F攻撃 Rジャンプ Gよけ Tつかむ Y必殺 B奥義。残機は共有、各自のHPと奥義は別です。');}
+function showLaunch(){if(!document.body)return;if(!launch){launch=node('button',document.body,'1台で2人協力');launch.type='button';launch.style.cssText='position:fixed;left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);z-index:1000;min-height:44px;border:3px solid #fff0bc;border-radius:14px;background:#234a72;color:white;font:700 16px system-ui;padding:8px 20px;touch-action:manipulation';launch.onclick=openMenu;}launch.hidden=!['title','select'].includes(G.sceneName);}
+G.bus.on('scene',d=>{if(d.name==='title')api.disable();showLaunch();paint();});
+G.bus.on('storyStart',clearInputs);G.bus.on('pause',clearInputs);G.bus.on('hidden',clearInputs);window.addEventListener('blur',clearInputs);
+const releaseTouch=G.ui.touch.release?.bind(G.ui.touch),showTouch=G.ui.touch.show.bind(G.ui.touch);G.ui.touch.release=()=>{releaseTouch?.();if(enabled)clearInputs();};G.ui.touch.show=on=>showTouch(enabled?false:on);
+const uiFrame=G.ui.frame.bind(G.ui);G.ui.frame=(...args)=>{const r=uiFrame(...args);paint();return r;};showLaunch();
 })();
 
 

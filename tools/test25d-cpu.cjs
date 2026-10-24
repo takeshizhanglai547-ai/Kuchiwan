@@ -1,0 +1,12 @@
+'use strict';
+// CPU and synthetic DOM verification only; this does not launch a browser.
+const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'..');process.chdir(root);
+for(const dir of ['commands-20261024','input-controls-20261024','phase-events-20261024','coop-20261024'])fs.mkdirSync(path.join(root,'evidence',dir),{recursive:true});
+const all=['published_cpu','resume_parity','controls_cpu','controls_ui_cpu','controls_mutations','story_cpu','story_mutations','boss_patterns_cpu','boss_portraits_cpu','input_cpu','published_edges','published_mutations','touch_handlers_cpu','sword_visual_cpu','death_cpu','tactics_cpu','tactics_mutations','coop_cpu','coop_mutations'];
+const requested=process.argv.slice(2),suites=requested.length?requested:all;
+if(suites.some(s=>!all.includes(s)))throw Error('Unknown CPU suite');
+const results=[];
+for(const suite of suites){console.log('START '+suite);const env={...process.env};if(['published_cpu','resume_parity'].includes(suite))env.INU25D_WITH_STORY='1';else delete env.INU25D_WITH_STORY;
+ const run=spawnSync(process.execPath,[path.join(root,'tests/25d',suite+'.cjs')],{env,stdio:'inherit',timeout:300000});results.push({suite,exit:run.status,error:run.error?.message});fs.writeFileSync(path.join(root,'evidence/cpu-regressions.json'),JSON.stringify({limits:'CPU and synthetic DOM only; no browser/trusted touch/real device/human difficulty acceptance',results},null,2));if(run.status!==0)process.exit(1);}
+console.log('PASS '+results.length+' CPU suites');

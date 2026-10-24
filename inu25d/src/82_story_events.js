@@ -26,7 +26,7 @@ const HEROES={
 };
 const BOSSES={garm:['鋼の爪、解放！','連続つっこみと空からの急降下。着地のすきをねらおう。'],shark:['ほんきの がぶがぶ！','連続かみつきに遠くへの水玉。予告の線からよけよう。'],ghost:['三兄弟の ひとだま祭り！','消える突進とひとだま。姿が見えたら反撃しよう。'],cerbe:['三つの声が ひびく！','連続ジャンプと三方向のほえ声。着地を見て動こう。'],slime:['ぷるぷる大あばれ！','ねばねば弾と小さな仲間。着地後のすきがチャンス。'],dragon:['炎のつばさ、全開！','炎の玉と二連の息。予告を見て、着地後をねらおう。'],kuroinu:['こくけんしの 本気！','斬撃と連続の居合い。光る道から外れて反撃しよう。'],emperor:['王の力を 見せよう！','光の柱と包囲弾。足もとの予告を見て動こう。']};
 const queue=[],seen=new Set(),history=[];let active=null,run=0,stage=0,hero='inu',panel=null,parts=null,focus=null,paused=false;
-function clearInput(){G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
+function clearInput(){G.coop?.clearInputs();G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
 function valid(e){return !e.boss||(!e.boss.dead&&!e.boss.removed&&e.boss.hp>0&&!e.boss.transforming&&(e.boss.form||1)===e.form);}
 function releaseHold(e){if(e?.boss)e.boss._phaseEventHold=false;}
 function hide(){if(panel){panel.remove();panel=null;parts=null;}focus?.focus?.();focus=null;}
@@ -35,7 +35,7 @@ function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.ol
  if(G.fx)G.fx.worldFrozen=!!G.paused;
  releaseHold(e);
  if(completed&&G.player&&!G.player.dead){G.player.inv=Math.max(G.player.inv,24);const n=G.published?.native?.();if(n)n.player.invuln=Math.max(n.player.invuln,24);}
- if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
+ if(completed){G.coop?.restoreCamera();G.coop?.grace();}if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
 function reset(){if(active)restore(active,false);active=null;paused=false;for(const e of queue)releaseHold(e);queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
@@ -54,7 +54,7 @@ function render(){if(!document.createElement||!document.body)return;
 function paint(){if(!parts||!active)return;parts.line.textContent=active.lines[active.age<75?0:1];parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
  parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(active.age/active.duration*100)+'%';}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
-function begin(e){active=e;e.age=0;e.duration=e.kind==='boss'?170:185;e.actor=e.boss||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
+function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=e.kind==='boss'?170:185;e.actor=e.boss||e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;
  if(e.boss){const b=e.boss;b.pending=null;G.combat.cancel(b);b.onInterrupt?.();b.plan=null;b.gplan=null;b.vx=b.vz=0;G.setAnim(b,'roar',170);
   for(const pr of G.combat.projectiles||[])if(pr.owner===b)pr.life=0;}
@@ -65,8 +65,8 @@ const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aL
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
-  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue});},
- clearStage(){const h=HEROES[hero];if(!h)return false;return enqueue({kind:'clear',key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===6?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});},
+  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
+ clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===6?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
  bossPhase(boss,phase){if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||!(boss.hp<boss.maxHp*.5))return false;
   const form=boss.form||1,key='boss:'+boss.id+':'+form,info=BOSSES[boss.type]||['後半戦、開始！','予告を見て、攻撃の後をねらおう。'];
   const accepted=enqueue({kind:'boss',key,boss,form,title:boss.type==='emperor'&&form===2?'暗黒の剣、覚醒！':info[0],lines:[(boss.form===2?boss.def.phaseLine2:boss.def.phaseLine)||'ここからが、ほんばんだ！',info[1]],cue:(boss.def.short||boss.def.name||boss.type)+(boss.type==='emperor'?' · 第'+form+'形態':'')+' · 後半戦'});
@@ -78,7 +78,7 @@ G.story={heroes:HEROES,bosses:BOSSES,history,
   if(active.age>=active.duration){finish();return;}paint();},
  skip(){if(!active||paused||active.age<30)return false;finish();return true;},
  pause(on){if(!active)return false;paused=!!on;clearInput();paint();return true;},reset,
- pose(rig,e,Q,rest){if(!active||active.kind==='boss'||e!==G.player)return null;const def=(active.kind==='intro'?START_POSE:CLEAR_POSE)[hero];if(!def)return null;
+ pose(rig,e,Q,rest){if(!active||active.kind==='boss'||e!==active.actor)return null;const def=(active.kind==='intro'?START_POSE:CLEAR_POSE)[hero];if(!def)return null;
   const blend=Math.min(1,active.age/28),sway=Math.sin(active.age*.06)*.035;
   for(const k of Object.keys(Q))if(typeof Q[k]==='number')Q[k]=(rest[k]||0)*(1-blend)+(def[k]??rest[k]??0)*blend;
   Q.nod=(Q.nod||0)+sway;Q.sq=Q.y=Q.fx=0;if(hero==='shima'){Q.lLz=.25*Math.sin(active.age*.12);Q.lRz=-Q.lLz;}if(hero==='nuko')Q.twist=.25*Math.sin(active.age*.035);if(hero==='mack')Q.wz+=(active.age>75?Math.sin(Math.min(1,(active.age-75)/40)*Math.PI*2):0);

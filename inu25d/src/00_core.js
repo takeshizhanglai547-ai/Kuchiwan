@@ -268,6 +268,7 @@ G.cam = {
 };
 
 // ---------------------------------------------------------------- input
+function createInputChannel(options={}){
 const BTNS = ['attack','jump','dodge','grab','special','ult','pause','confirm'];
 const KEYS = {
   attack:['KeyJ','KeyZ'], jump:['Space','KeyI'], dodge:['KeyK','KeyX'],
@@ -278,7 +279,7 @@ const KEYS = {
 const MOVE = { left:['ArrowLeft'], right:['ArrowRight'], up:['ArrowUp'], down:['ArrowDown'] };
 const keyDown = Object.create(null);
 const latch = Object.create(null);
-const inp = G.input = {
+const inp = {
   x:0, z:0, btn:{}, touch:{ x:0, z:0 }, pad:{ x:0, z:0 }, lastDevice: isTouch ? 'touch' : 'key',
   // UI calls this on touch/pointer down so a tap shorter than one tick still counts
   latch(btn){ latch[btn] = true; },
@@ -286,7 +287,7 @@ const inp = G.input = {
   // a pad/touch button still physically held stays "down", so letting go of it later
   // is not mistaken for a new press (START on the pause menu used to re-pause at once)
   clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down = !!inp.pad[b] || !!inp.touch[b]; s.pressed=s.released=false; s.held=0; latch[b]=false; }
-           for(const k in keyDown) keyDown[k]=false; commands.reset(); G.bus.emit('inputReset',{reason:'clear'}); },
+           for(const k in keyDown) keyDown[k]=false; commands.reset(); G.bus.emit('inputReset',{reason:'clear',input:inp}); },
   clearEdges(syncHeld=false){for(const b of BTNS){latch[b]=false;const s=inp.btn[b];s.pressed=s.released=false;
     if(syncHeld)s.down=kd(KEYS[b])||!!inp.touch[b]||!!inp.pad[b];}commands.consume();},
 };
@@ -295,10 +296,10 @@ for(const b of BTNS){ inp.btn[b] = { down:false, pressed:false, released:false, 
 // Reference: beltaction.html, main b5c01428 (blob f8de624f).
 // Keep event-time cardinal history, including taps shorter than a simulation tick.
 // Four cardinals: up=0, right=1, down=2, left=3. Times are fixed 60 Hz ticks.
-const commands = G.commands = {
+const commands = {
   cardSeq:[], dirTaps:[], downTaps:[], stickRot:-999,
   touchState:{ lastTapDir:0, lastCard:-1, angPrev:null, accum:0 },
-  now(){ return G.player?.published&&G.sceneName==='play' ? G.published.clock() : G.time ? G.time.tick : 0; },
+  now(){ const p=inp.player||G.player; return p?.published&&G.sceneName==='play' ? G.published.native(p).clock : G.time ? G.time.tick : 0; },
   pushTap(d){ this.dirTaps.push({d,f:this.now()}); if(this.dirTaps.length>6) this.dirTaps.shift(); },
   pushCard(c){ const r=this.cardSeq, L=r[r.length-1];
     if(L&&L.c===c){ L.f=this.now(); return; } r.push({c,f:this.now()}); if(r.length>8) r.shift(); },
@@ -380,7 +381,8 @@ const codeToBtn = {};
 for(const b in KEYS) for(const c of KEYS[b]) codeToBtn[c]=b;
 const moveCodes = new Set([].concat(MOVE.left,MOVE.right,MOVE.up,MOVE.down));
 window.addEventListener('keydown', (e)=>{
-  const c = e.code;
+  if(options.active&&!options.active())return;
+  const c = options.keys ? options.keys[e.code] : e.code;if(!c)return;
   if(codeToBtn[c] || moveCodes.has(c)){
     // keep the page from scrolling / buttons from being "clicked" by space
     if(!(e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA'))) e.preventDefault();
@@ -391,8 +393,8 @@ window.addEventListener('keydown', (e)=>{
   commands.key8?.(c,true,!!e.repeat);
   if(G.audio && G.audio.unlock) G.audio.unlock();
 }, {passive:false});
-window.addEventListener('keyup', (e)=>{ keyDown[e.code] = false;commands.key8?.(e.code,false,false); });
-window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS){ inp.touch[b]=false; latch[b]=false; } commands.reset();G.bus.emit('inputReset',{reason:'blur'}); });
+window.addEventListener('keyup', (e)=>{ const c=options.keys?options.keys[e.code]:e.code;if(!c)return;keyDown[c] = false;commands.key8?.(c,false,false); });
+window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS){ inp.touch[b]=false; latch[b]=false; } commands.reset();G.bus.emit('inputReset',{reason:'blur',input:inp}); });
 const kd = (list)=> list.some(c=>keyDown[c]);
 
 function pollPad(){
@@ -400,7 +402,8 @@ function pollPad(){
   if(!navigator.getGamepads) return;
   let pads; try { pads = navigator.getGamepads(); } catch(_){ return; }
   if(!pads) return;
-  for(const gp of pads){
+  for(let pi=0;pi<pads.length;pi++){
+    const wanted=options.padIndex??(G.coop?.enabled?0:null);if(wanted!==null&&pi!==wanted)continue;const gp=pads[pi];
     if(!gp || !gp.connected) continue;
     const ax = gp.axes[0]||0, az = gp.axes[1]||0;
     if(Math.abs(ax)>0.2) p.x = ax;
@@ -416,6 +419,7 @@ function pollPad(){
 }
 
 function updateInput(){
+  if(options.active&&!options.active())return;
   pollPad();
   let x = 0, z = 0;
   if(kd(MOVE.left)) x -= 1; if(kd(MOVE.right)) x += 1;
@@ -432,6 +436,12 @@ function updateInput(){
     latch[b] = false;
   }
 }
+
+return {input:inp,commands,update:updateInput};
+}
+G.createInputChannel=createInputChannel;
+const primaryInput=createInputChannel();G.input=primaryInput.input;G.commands=primaryInput.commands;
+function updateInput(){primaryInput.update();G.coop?.updateInputs();}
 
 // ---------------------------------------------------------------- entities & world
 let _id = 1;

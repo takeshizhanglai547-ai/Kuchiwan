@@ -219,7 +219,7 @@ const play = G.scenes.play = {
     const st = S().info || stages()[game.stageIndex] || { name:'', kana:'' };
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
-    G.world.add(p);
+    G.world.add(p);G.coop?.enter(p);
     if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
@@ -235,7 +235,7 @@ const play = G.scenes.play = {
     uiHide('hud'); uiHide('pause'); touch(false);
     if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
     if(G.ui && G.ui.go) try { G.ui.go(false); } catch(_){}
-    G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
+    G.coop?.exit();G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
   },
   pause(on){
     if(on===G.paused) return;
@@ -264,11 +264,11 @@ const play = G.scenes.play = {
     if(!G._arena&&G.story?.flush())return;
 
     // ult cut-in: the world holds still while the cut-in plays
-    if(p && (game.cutinT > 0 || G.hitStop > 0)) G.playerCtl.queue(p);
+    if(p && (game.cutinT > 0 || G.hitStop > 0)) {if(!G.coop?.queueHeroes())G.playerCtl.queue(p);}
     if(game.cutinT > 0){
       game.cutinT--;
       if(p){ p.animT++; if(p.rig && p.rig.update) p.rig.update(p, G.cfg.TICK); }
-      if(game.cutinT===0 && p) G.playerCtl.tick(p);
+      if(game.cutinT===0 && p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
       return;
     }
     if(G.hitStop > 0){ G.hitStop--; return; }
@@ -278,11 +278,11 @@ const play = G.scenes.play = {
 
     try { S().tick(); } catch(err){ G.logError('stage.tick', err); }
     if(p && G._autoplay) autoDrive(p);
-    if(p) G.playerCtl.tick(p);
+    if(p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
     const ents = G.world.ents;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
-      if(e.team===1&&!e.publishedReactive){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}
+      if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
     G.combat.tick();
@@ -293,7 +293,7 @@ const play = G.scenes.play = {
       if(e.flashT>0 && e.team!==1 && e!==p) e.flashT--;
       G.phys(e, (e.team===1 && !e.entered) ? null : bounds);
     }
-    separate(ents);
+    separate(ents);G.coop?.afterCombat(this);if(this.over)return;
     stepRigs();
 
     // A completed stage wins simultaneous KO: revive safely before charging a
@@ -331,7 +331,7 @@ const play = G.scenes.play = {
   winGuard(){
     for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
     G.combat.areas.length = 0;
-    const p = G.player; if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+    const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
     const idx = game.stageIndex, last = idx >= stages().length-1;

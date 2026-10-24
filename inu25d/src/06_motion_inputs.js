@@ -1,6 +1,6 @@
 // Eight-way extensions feed the unchanged native command branches. Original
 // cardinal shortcuts remain valid. 236 = quarter-circle, 623 = dragon punch.
-(function(){'use strict';const G=window.G,C=G.commands,keys=new Set(),history=[];let last=5;
+(function(){'use strict';const G=window.G;G.extendMotionCommands=function(C){const keys=new Set(),history=[];let last=5;
 function record(x,y){const d=y>0?(x>0?3:x<0?1:2):y<0?(x>0?9:x<0?7:8):x>0?6:x<0?4:5;
  if(d===last)return;last=d;history.push({d,f:C.now()});if(history.length>20)history.shift();}
 C.motion8=history;
@@ -18,4 +18,4 @@ C.routeMotion=(face)=>{const m=C.preciseMotion(face);if(!m)return null;const f=f
  // The native simulation still selects, cancels, damages and animates the move.
  const cards=m.slot==='dp'?[f,2,f]:[2,f],times=m.slot==='dp'?m.events:m.events.slice(0,1).concat(m.events.slice(-1));
  C.cardSeq.splice(0,C.cardSeq.length,...cards.map((c,i)=>({c,f:times[i].f})));C.stickRot=-999;return m.slot;};
-})();
+};G.extendMotionCommands(G.commands);})();

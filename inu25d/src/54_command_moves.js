@@ -37,17 +37,17 @@ if(G.publishedFactory){
     if(r.level>oldLevel)G.bus.emit('levelUp',{ent:p,level:r.level,hpUp:p.maxHp-(p._lastMaxHp||p.maxHp)});
     p._lastMaxHp=p.maxHp;
   }
-  function sourceEnemy(p,ctx,t){let e=ctx.foes.get(t);
+  function sourceEnemy(p,ctx,t){let e=ctx.foes.get(t);if(G.coop?.enabled&&e&&t._publishedOwner!==p)e.controlled=false;
     if(!e){const proto=t.publishedType||({cerbe:'cerberus',slime:'slimeboss',emperor:'boss'}[t.type]||t.type);
       e=ctx.ref.enemy(proto,pixel(t.x*S),0,{key:t.id,def:{boss:!!t.def?.boss,w:t.radius*2*S,h:t.height*S,score:(t.def?.xp||0)*10,
         evolveTo:null,slimey:false,bomber:false,zombie:false,t1000:false},values:{hp:t.hp,maxHp:t.maxHp}});
       e.target=t;ctx.foes.set(t,e);}
     if(!e.controlled){e.x=pixel(t.x*S,e.x);e.y=pixel(ctx.lane+(t.z-p.z)*S,e.y);e.z=pixel(t.y*S,e.z);e.vz=pixel(-t.vy*S,e.vz);e.vx=pixel(t.vx*S,e.vx);e.facing=t.face;e.hp=t.hp;e.maxHp=t.maxHp;
       e.dead=!!t.dead;e.state='walk';
-      e.protected=t.intangible||t.inv>0||(t.state==='spawn'&&!t.hittableSpawn);e.transform=e.protected?2:0;e.grabbedBy=e.protected?-1:0;}
+      e.protected=t.intangible||t.inv>0||(t.state==='spawn'&&!t.hittableSpawn)||(G.coop?.enabled&&t._publishedOwner&&t._publishedOwner!==p&&t.grabbedBy>0);e.transform=e.protected?2:0;e.grabbedBy=e.protected?-1:0;}
     return e;
   }
-  function syncFoe(p,e){const t=e.target;if(!t||t.removed)return;
+  function syncFoe(p,e){const t=e.target;if(!t||t.removed)return;if(G.coop?.enabled){if(e.controlled)t._publishedOwner=p;else if(t._publishedOwner&&t._publishedOwner!==p)return;}
     // Existing 3D bosses may replace their phase from onKO; preserve the new living phase.
     if(e.dead&&!t.dead&&t.hp>0){e.hp=t.hp;e.maxHp=t.maxHp;e.dead=false;e.state='walk';e.controlled=false;t.publishedReactive=false;return;}
     t.hp=Math.max(0,e.hp);if(!e.controlled){if(!e.protected)t.x=e.x/S;return;}
@@ -67,9 +67,9 @@ if(G.publishedFactory){
   }
   function effects(p,ctx){const active=new Set(ctx.ref.projectiles);
     G.publishedSwords?.tick(ctx.ref.clock);
-    for(const [pr,v]of visuals)if(!active.has(pr)){v.obj.parent?.remove(v.obj);v.dispose?.();visuals.delete(pr);}
+    for(const [pr,v]of visuals)if(v._owner===ctx&&!active.has(pr)){v.obj.parent?.remove(v.obj);v.dispose?.();visuals.delete(pr);}
     for(const pr of active){let v=visuals.get(pr);if(!v){v=G.fx?.makeProjectile?.(pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball');
-      if(!v)continue;visuals.set(pr,v);G.scene.add(v.obj);}
+      if(!v)continue;v._owner=ctx;visuals.set(pr,v);G.scene.add(v.obj);}
       const x=pr.x/S,y=Math.max(0,pr.zz)/S,z=p.z+(pr.y-ctx.lane)/S;
       v.obj.position.set(x,y,z);v.update?.({...pr,x,y,z,r:pr.r/S,age:pr.age||0,vx:pr.vx/S,vy:pr.vzz/S,spin:pr.spin});}
     const particles=ctx.ref.drainParticles();let n=0;
@@ -96,9 +96,10 @@ if(G.publishedFactory){
         damageScale(){return G.game?.diff?.heroDmg||1;},
         projectile(pr){G.bus.emit('shoot',{ent:p,kind:pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball',x:pr.x/S,y:pr.zz/S,z:p.z+(pr.y-ctx.lane)/S});},
         beforeHit(e,args){if(!e.target)return true;const d=ctx.ref.player.atk?.def;
+          if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
           return !G.combat.publishedBlock(e.target,{src:p,dir:Math.sign(args[1]||p.face),power:args[2]||d?.special||d?.finisher||d?.knock?2:1});},
         hit(e,dmg,args){ctx.trace.hits.push({tick:ctx.ref.clock,target:e.target?.id,damage:dmg,requested:args[0]});
-          if(e.target&&!e.protected){e.controlled=true;if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,stop:ctx.ref.freeze});}},
+          if(e.target&&!e.protected){if(G.coop?.enabled)e.target._publishedOwner=p;e.controlled=true;if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,stop:ctx.ref.freeze});}},
         ult(r,name){G.bus.emit('ult',{ent:p,id:r.kind+'_ult',name,heroId:r.kind});G.fx?.cutin?.(r.kind,name,()=>{});},
         action(a){ctx.trace.actions.push({tick:ctx.ref.clock,...a});}
       });
@@ -131,7 +132,7 @@ if(G.publishedFactory){
     },
     queue(p){const ctx=engines.get(p);if(ctx)input(p,ctx);},
     resetInput(p=G.player){const ctx=engines.get(p);ctx?.ref.clearInput();if(ctx)G.commandInputs?.reset(ctx);},
-    clock(){return current?.ref.clock??G.time.tick;},
+    clock(){return G.player?._publishedCtx?.ref.clock??current?.ref.clock??G.time.tick;},
     trace(p=G.player){return engines.get(p)?.trace;},
     native(p=G.player){return engines.get(p)?.ref;},
     receiveDamage(p,amount,info){const ctx=engines.get(p);if(!ctx)return false;const r=ctx.ref.player,before=r.hp;
@@ -147,7 +148,7 @@ if(G.publishedFactory){
     },
     clearVisuals(){for(const v of visuals.values()){v.obj.parent?.remove(v.obj);v.dispose?.();}visuals.clear();},
   };
-  G.bus.on('inputReset',()=>P.resetInput());G.bus.on('hidden',()=>{G.input.clear();P.resetInput();G.commands.reset();});
+  G.bus.on('inputReset',d=>P.resetInput(d.input?.player||G.player));G.bus.on('hidden',()=>{G.input.clear();P.resetInput();G.commands.reset();});
   G.bus.on('scene',d=>{if(d.name!=='play'){P.clearVisuals();P.resetInput();}});
   G.commandMoves={ground:{},air:{},missing:[],get(hero,slot,air,level){const n=current?.ref;if(!n)return null;return n.catalog(hero,slot,air,level);}};
   for(const hero of ['inu','shima','nuko','guard8','watch','wanden','mack']){
