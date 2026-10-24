@@ -29,7 +29,13 @@ for (const f of files) {
 }
 if (bad) process.exit(1);
 const stamp = files.map(f => f.replace(/\.js$/, '')).join(',');
-const html = shell.replace('@@BUILD@@', stamp).replace('@@GAME@@', () => game);
+let html = shell.replace('@@BUILD@@', stamp).replace('@@GAME@@', () => game);
+if(process.argv.includes('--offline')){
+  const vendor=fs.readFileSync(path.join(root,'tests/vendor/three-0.160.0.min.js'),'utf8');
+  if(/<\/script/i.test(vendor))throw Error('vendor contains script terminator');
+  html=html.replace('<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>',()=>'<script>'+vendor+'</script>')
+    .replace(/<link[^>]+href="https:\/\/fonts\.(?:googleapis|gstatic)\.com[^>]*>/g,'');
+}
 const out = arg('--out') || path.join(root, 'beltaction25d.html');
 fs.writeFileSync(out, html);
 console.log(`wrote ${out} (${(html.length/1024).toFixed(1)} KB, ${files.length} modules: ${stamp})`);

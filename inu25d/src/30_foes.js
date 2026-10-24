@@ -5,6 +5,7 @@ const G = window.G; const THREE = window.THREE; const U = G.U;
 
 const types = {};
 const tokens = new Set();
+let nextSquadAttack = -1;
 
 function diff(){ return (G.game && G.game.diff) || { foeHp:1, attackers:2, foeSpeed:1, think:1 }; }
 
@@ -47,9 +48,18 @@ const h = {
   // telegraphed attack: windup frames of 'windup' + alert, then G.combat.start
   attack(e, def, windup){
     if(e.state==='act' || e.atk || e.pending) return false;
+    const d=diff(), tactical=d.tactics&&!e.def.boss;
+    // Stagger commitments instead of hiding several simultaneous strikes under
+    // one warning. A rejected slot releases its token, so ranged units cannot
+    // starve the rest of the squad while waiting.
+    if(tactical&&G.time.tick<nextSquadAttack){h.release(e);h.wait(e,6);return false;}
     G.setState(e, 'act');
     e.vx = 0; e.vz = 0;
-    const w = Math.max(0, Math.round((windup==null ? 20 : windup) * (diff().think||1)));
+    const bossFloor=e.def.boss&&(windup==null||windup>0)?18:0;
+    const w = Math.max(tactical?d.minWindup:bossFloor, Math.round((windup==null ? 20 : windup) * (d.think||1)));
+    if(tactical)nextSquadAttack=G.time.tick+d.attackSpacing;
+    e.committedFace=e.face;
+    e.punishUntil=0;
     e.pending = { def, t:w };
     if(w>0){
       G.setAnim(e, def.windupAnim || 'windup', w);
@@ -71,6 +81,11 @@ const h = {
   release(e){ if(e.hasToken){ tokens.delete(e.id); e.hasToken = false; } },
   wait(e, frames){ e.cool = Math.max(e.cool||0, frames|0); },
   spawnMinion(type, x, z, opts){ return G.foes.spawn(type, x, z, Object.assign({ entrance:'drop', minion:true }, opts||{})); },
+  // Published controls have no depth movement. An idle ranged foe must not keep
+  // an unreachable lane forever; use the existing walk speed/steering to rejoin.
+  alignPublishedLane(e){const p=G.player;if(!p?.published||e.dead||e.intangible||e.scared||e.pending||e.atk||e.state!=='idle'||Math.abs(e.z-p.z)<=.3)return;
+    h.walkTo(e,e.x,p.z);
+  },
   // a short shout (ガオーッ！) is a big comic word; a sentence is a speech bubble, small enough for a phone and up long
   // enough for a child to read (a 20-letter line as a comic word was 500 px wide and pushed under the touch buttons)
   say(e, text){
@@ -87,7 +102,7 @@ const h = {
 G.foes = {
   types, h, tokens,
   init(){
-    G.bus.on('scene', ()=> tokens.clear());
+    G.bus.on('scene', ()=> {tokens.clear();nextSquadAttack=-1;});
     // when a boss is purified every helper still standing gives up (safety net for types that ignore e.scared)
     G.bus.on('bossDown', (d)=>{
       const b = d && d.boss; let k = 0;
@@ -178,7 +193,11 @@ G.foes = {
       return;
     }
     if(e.atk){ return; }
-    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.cool = Math.max(e.cool, (e.lastAtk && e.lastAtk.recover) || e.def.recover || 16); }
+    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.cool = Math.max(e.cool, (e.lastAtk && e.lastAtk.recover) || e.def.recover || 16);
+      if(diff().tactics&&!e.def.boss){e.punishUntil=G.time.tick+diff().punishWindow;e.cool=Math.max(e.cool,diff().punishWindow);}}
+    // A committed attack leaves a guaranteed stationary punish opportunity.
+    // The native player moves/cancels/resources remain identical to the 2D game.
+    if(e.punishUntil>G.time.tick){h.stop(e);return;}
     if(!e.entered && e.entrance==='walk'){
       // walk into view first
       const p = G.player; const tx = p ? p.x : e.x;

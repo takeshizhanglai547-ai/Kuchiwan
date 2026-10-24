@@ -232,14 +232,15 @@ function prims(){
   if(P) return P;
   const g = G.look.geo;
   P = {
-    sph: g.sphere(1, 12, 9), lo: g.sphere(1, 8, 6), dot: g.sphere(1, 6, 4),
+    // Decorative background curvature only; hero/foe/weapon geometry is unchanged.
+    sph: g.sphere(1, 10, 7), lo: g.sphere(1, 8, 6), dot: g.sphere(1, 6, 4),
     hemi: new THREE.SphereGeometry(1, 14, 6, 0, TAU, 0, PI/2),
     cyl: g.cylinder(1, 1, 1, 10), cyl6: g.cylinder(1, 1, 1, 6), cylHi: g.cylinder(1, 1, 1, 16),
     cone: g.cone(1, 1, 10), cone6: g.cone(1, 1, 6),
     box: g.box(1, 1, 1), rbox: g.rbox(1, 1, 1, 0.2, 3), rbox2: g.rbox(1, 1, 1, 0.12, 2),
     oct: new THREE.OctahedronGeometry(1, 0),
-    pyr: new THREE.ConeGeometry(1, 1, 4, 1).rotateY(PI/4), mid: g.sphere(1, 10, 8),
-    torus: g.torus(1, 0.22, 5, 14), ring: g.torus(1, 0.08, 4, 12), can: g.sphere(1, 14, 10),
+    pyr: new THREE.ConeGeometry(1, 1, 4, 1).rotateY(PI/4), mid: g.sphere(1, 8, 6),
+    torus: g.torus(1, 0.22, 5, 14), ring: g.torus(1, 0.08, 4, 12), can: g.sphere(1, 12, 8),
     heart: g.heart(0.5, 0.25), star: g.star(0.5, 0.48, 0.2),
     lathePot: g.lathe('stgPot', [[0,0],[0.7,0],[1,0.4],[0.95,0.8],[0.55,1],[0,1]], 12),
   };
@@ -1157,7 +1158,7 @@ function buildSky(th){
     uStars:{ value:th.stars||0 }, uTime:{ value:0 }, uHdr:{ value:1 },
   };
   const mat = own(new THREE.ShaderMaterial({ uniforms:env.skyU, vertexShader:SKY_VS, fragmentShader:SKY_FS, side:THREE.BackSide, depthWrite:false, fog:false }));
-  const geo = own(new THREE.SphereGeometry(300, 40, 20));
+  const geo = own(new THREE.SphereGeometry(300, 24, 12));
   const m = new THREE.Mesh(geo, mat);
   m.frustumCulled = false; m.renderOrder = -1000; m.name = 'sky';
   env.sky = addObj(m);
@@ -1311,12 +1312,12 @@ const FARS = {
 // ---------------------------------------------------------------- clouds (instanced puffs)
 function buildClouds(th){
   const cl = th.clouds; if(!cl) return;
-  const p = prims(), b = G.look.builder();
-  b.add(p.lo, cl.color, [0, 0, 0], null, [1.0, 0.72, 0.7]);
-  b.add(p.lo, cl.color, [-0.85, -0.14, 0.05], null, [0.66, 0.52, 0.55]);
-  b.add(p.lo, cl.color, [0.9, -0.12, 0.02], null, [0.7, 0.5, 0.55]);
-  b.add(p.lo, cl.color, [0.35, 0.34, -0.05], null, [0.58, 0.5, 0.5]);
-  b.add(p.lo, cl.shade, [0, -0.36, 0], null, [1.55, 0.26, 0.6]);
+  const puff = G.look.geo.sphere(1, 6, 5), b = G.look.builder();
+  b.add(puff, cl.color, [0, 0, 0], null, [1.0, 0.72, 0.7]);
+  b.add(puff, cl.color, [-0.85, -0.14, 0.05], null, [0.66, 0.52, 0.55]);
+  b.add(puff, cl.color, [0.9, -0.12, 0.02], null, [0.7, 0.5, 0.55]);
+  b.add(puff, cl.color, [0.35, 0.34, -0.05], null, [0.58, 0.5, 0.5]);
+  b.add(puff, cl.shade, [0, -0.36, 0], null, [1.55, 0.26, 0.6]);
   const geo = own(b.build());
   const mat = own(G.look.matInstance(0xffffff, { vertexColors:true, rough:1, rim:0.8 }));
   const R = mulberry(77 + cl.n), n = cl.n;

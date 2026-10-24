@@ -209,7 +209,7 @@ G.MOVES = MOVES;
 const BASE_HP = 100, BASE_SPD = 0.078, JUMP_V = 0.22, DJUMP_V = 0.17;
 const SP_MAX = 3, SP_REGEN = 1/260, ULT_MAX = 100;
 const DODGE_LEN = 24, DODGE_INV = 18, JUST_WIN = 9;
-const CHARGE_START = 12, CHARGE_FULL = 42;
+const CHARGE_START = 8, CHARGE_GAIN = 0.022; // published free-control hold/release rule
 const AIR_MAX = 3;
 
 function heroMeta(id){ return (G.heroes && G.heroes.get && G.heroes.get(id)) || { id, name:id, color:'#ffd24d' }; }
@@ -233,6 +233,7 @@ const P = G.playerCtl = {
       sp:SP_MAX, ult: (G.game && G.game.ultCarry) || 0, comboStep:0, comboT:0, buffer:0, airCount:0, djump:false,
       charge:0, chargeT:0, trailColor: mv.trail, moves:mv, lives: 3, meta });
     p.onBeforeHit = (info)=> beforeHit(p, info);
+    if(G.published)G.published.attach(p);
     return p;
   },
   tick, queue,
@@ -355,19 +356,21 @@ function checkStomp(p){
 }
 
 // ---------------------------------------------------------------- tick
-const QBTN = ['attack','jump','dodge','special','ult'];
+const QBTN = ['attack','jump','dodge','grab','special','ult'];
 // presses that happen while the world is frozen (hitstop) are kept for a few ticks
 function queue(p){
+  if(p.published)return G.published.queue(p);
   const b = G.input.btn; p.q = p.q || {};
   for(const k of QBTN) if(b[k].pressed) p.q[k] = 12;
 }
 function tick(p){
+  if(p.published)return G.published.tick(p);
   const I = G.input, b0 = I.btn;
   p.q = p.q || {};
   const pb = {};
   for(const k of QBTN){ pb[k] = b0[k].pressed || p.q[k]>0; if(p.q[k]>0) p.q[k]--; }
   const b = { attack:{ pressed:pb.attack, down:b0.attack.down, held:b0.attack.held }, jump:{ pressed:pb.jump, down:b0.jump.down },
-    dodge:{ pressed:pb.dodge }, special:{ pressed:pb.special }, ult:{ pressed:pb.ult } };
+    dodge:{ pressed:pb.dodge }, grab:{pressed:pb.grab,down:b0.grab.down}, special:{ pressed:pb.special }, ult:{ pressed:pb.ult } };
   const used = (k)=>{ p.q[k] = 0; };
   if(p.flashT>0) p.flashT--;
   if(p.inv>0) p.inv--;
@@ -424,8 +427,8 @@ function tick(p){
   if(p.state==='charge'){
     p.vx = 0; p.vz = 0;
     if(b.attack.down){
-      p.chargeT++;
-      p.charge = U.clamp((p.chargeT)/(CHARGE_FULL-CHARGE_START), 0, 1);
+      p.atkHoldF++;
+      p.charge = U.clamp(p.charge+CHARGE_GAIN, 0, 1);
       if(p.anim!=='charge') G.setAnim(p, 'charge');
       if(p.charge>=1 && !p.chargeFull){ p.chargeFull = true; G.bus.emit('chargeFull', { ent:p }); if(G.fx && G.fx.burst) G.fx.burst('sparkle', p.x, p.height*0.6, p.z, { count:8 }); }
       if(b.dodge.pressed){ p.charge = 0; p.chargeFull = false; if(G.audio) G.audio.sfx('charge', { stop:true }); doDodge(p); }
@@ -436,12 +439,30 @@ function tick(p){
     p.charge = 0; p.chargeFull = false; p.chargeT = 0;
     if(G.audio && G.audio.sfx) G.audio.sfx('charge', { stop:true });
     if(full){ startAtk(p, p.moves.charge, 'atk'); p.comboStep = 0; G.bus.emit('chargeRelease', { ent:p }); }
-    else { startAtk(p, comboDefs(p)[0], 'atk'); p.comboStep = 1; p.comboT = 40; }
+    else { setFree(p); }
+    p.atkHeld=false;
     return;
   }
 
   // ---- attacking (ground combo / special / ult / air attack)
   if(p.state==='atk' || p.state==='special' || p.state==='ult' || p.state==='airAtk'){
+    const a0=p.atk, d0=a0&&a0.def, C=G.commands;
+    if(d0 && p.state!=='ult' && b.attack.pressed){
+      if(C.rotationReady() || (!p.onGround && (b.grab.down||b.grab.pressed))){
+        used('attack');used('grab');C.consume();
+        if(p.ult>=ULT_MAX){G.combat.cancel(p);doUlt(p);} return;
+      }
+      if(!p.onGround && (d0.airCommand||d0.rise)){
+        const slot=C.motion(p.face);
+        if(slot && !p.airChain?.[slot] && slot!==d0.commandSlot){used('attack');doCommand(p,slot,true);return;}
+      }
+      if(p.onGround && (d0.commandSlot||comboDefs(p).includes(d0)) && a0.t>=(d0.activeStart??d0.hits?.[0]?.at??d0.len)){
+        const current=d0.commandSlot, slot=current?C.cancelTarget(p.face):C.motion(p.face);
+        const chain=p.cxSlots?.length?p.cxSlots:current?[current]:[];
+        if(slot && !chain.includes(slot) && chain.length<3){used('attack');doCommand(p,slot,false,chain.concat(slot));return;}
+      }
+    }
+    if(d0?.commandSlot && p.onGround && b.jump.pressed){G.combat.cancel(p);doJump(p,false);p.cxSlots=[];return;}
     if(b.attack.pressed){ p.buffer = 14; used('attack'); }
     const a = p.atk;
     if(!a){ // finished
@@ -473,10 +494,15 @@ function tick(p){
   if(!canAct(p)) return;
   const grounded = p.onGround;
   if(grounded && p.state==='air'){ G.setState(p, 'idle'); G.setAnim(p, 'land', 8); p.airCount = 0; p.djump = false; }
-  if(grounded) p.stompUsed = false;
+  if(grounded){ p.stompUsed = false; p.airChain={}; }
   if(!grounded && p.state!=='air') G.setState(p, 'air');
 
   if(b.ult.pressed && p.ult >= ULT_MAX){ doUlt(p); return; }
+  if(b.attack.pressed){
+    const C=G.commands, slot=p.onGround?C.ground(p.face):C.rotationReady()?'ult':C.motion(p.face);
+    if(slot==='ult'||(!p.onGround&&(b.grab.down||b.grab.pressed))){used('attack');used('grab');C.consume();if(p.ult>=ULT_MAX)doUlt(p);return;}
+    if(slot){used('attack');doCommand(p,slot,!p.onGround);return;}
+  }
   if(b.special.pressed){ if(doSpecial(p)) return; }
   if(b.dodge.pressed && grounded){ doDodge(p); return; }
   if(b.jump.pressed){
@@ -504,12 +530,15 @@ function tick(p){
     p.comboStep = 0; nextCombo(p);
     return;
   }
-  if(b.attack.down && b.attack.held > CHARGE_START && p.stateT >= 0){
-    G.setState(p, 'charge'); p.chargeT = 0; p.charge = 0;
-    G.bus.emit('chargeStart', { ent:p });
-    if(G.audio && G.audio.sfx) G.audio.sfx('charge');
-    p.chargeSnd = true;
-    return;
+  if(p.atkHeld&&!b.attack.down){p.atkHeld=false;p.charge=0;p.atkHoldF=0;}
+  if(b.attack.down && p.atkHeld){
+    p.atkHoldF=(p.atkHoldF||0)+1;
+    if(p.atkHoldF>CHARGE_START){
+      G.setState(p, 'charge'); p.charge=CHARGE_GAIN;
+      G.bus.emit('chargeStart', { ent:p });
+      if(G.audio && G.audio.sfx) G.audio.sfx('charge');
+      p.chargeSnd = true;return;
+    }
   }
   const mx = I.x, mz = I.z;
   const mag = Math.min(1, Math.hypot(mx, mz));
@@ -524,6 +553,17 @@ function tick(p){
     if(p.anim!=='idle' && !(p.anim==='land' && p.animT<8)) G.setAnim(p, 'idle');
   }
 }
+function doCommand(p,slot,air,chain){
+  const def=G.commandMoves.get(p.type,slot,air);
+  G.commands.consume();p.q.attack=0;p.buffer=0;p.charge=0;
+  if(!def){G.bus.emit('commandUnavailable',{hero:p.type,slot,air});return false;}
+  G.combat.cancel(p);p.comboStep=0;p.comboT=0;p.atkHeld=true;p.atkHoldF=0;
+  startAtk(p,def,air?'airAtk':'special');
+  p.cxSlots=chain||[slot];
+  if(air){p.airChain=p.airChain||{};p.airChain[slot]=true;}
+  G.bus.emit('command',{ent:p,slot,id:def.id,air,tick:G.time.tick});
+  return true;
+}
 function nextCombo(p){
   if(p.q) p.q.attack = 0;
   const defs = comboDefs(p);
@@ -531,6 +571,7 @@ function nextCombo(p){
   // face the stick direction when starting a string
   if(Math.abs(G.input.x) > 0.3) p.face = G.input.x > 0 ? 1 : -1;
   p.vx = 0; p.vz = 0;
+  p.atkHeld=true;p.atkHoldF=0;
   startAtk(p, defs[i], 'atk');
   p.comboStep = i + 1; p.comboT = 36; p.buffer = 0;
   if(i===defs.length-1){ p.comboStep = 0; p.comboT = 0; if(G.audio && G.audio.voice && G.rng()<0.6) G.audio.voice(p.type, 'atk'); }
@@ -539,6 +580,7 @@ function nextCombo(p){
 // gains from dealing damage / getting hurt
 G.bus.on('hit', (d)=>{
   const p = G.player; if(!p) return;
+  if(p.published)return;
   if(d.src===p && d.target && d.target.team===1 && d.dmg>0){
     if(p.state!=='ult') p.ult = Math.min(ULT_MAX, p.ult + d.dmg*0.55);
     p.sp = Math.min(SP_MAX, p.sp + 0.035);
@@ -546,6 +588,7 @@ G.bus.on('hit', (d)=>{
 });
 G.bus.on('hurt', (d)=>{
   const p = G.player; if(!p || d.ent!==p) return;
+  if(p.published)return;
   p.inv = Math.max(p.inv, 40);
   p.comboStep = 0; p.charge = 0; p.chargeFull = false;
   if(G.fx && G.fx.trailStop) G.fx.trailStop(p);
