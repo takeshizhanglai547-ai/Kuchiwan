@@ -4,6 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:
 const root=path.resolve(__dirname,'..');process.chdir(root);
 for(const dir of ['commands-20261024','input-controls-20261024','phase-events-20261024','coop-20261024'])fs.mkdirSync(path.join(root,'evidence',dir),{recursive:true});
 const all=['published_cpu','resume_parity','controls_cpu','controls_ui_cpu','controls_mutations','story_cpu','story_mutations','boss_patterns_cpu','boss_portraits_cpu','input_cpu','published_edges','published_mutations','touch_handlers_cpu','sword_visual_cpu','death_cpu','tactics_cpu','tactics_mutations','coop_cpu','coop_mutations'];
+if(!fs.existsSync(path.join(root,'evidence/commands-20261024/coverage-source.json'))){const inventory=spawnSync(process.execPath,[path.join(root,'tools/resume25d-inventory.cjs')],{stdio:'inherit'});if(inventory.status!==0)process.exit(1);}
 const requested=process.argv.slice(2),suites=requested.length?requested:all;
 if(suites.some(s=>!all.includes(s)))throw Error('Unknown CPU suite');
 const results=[];

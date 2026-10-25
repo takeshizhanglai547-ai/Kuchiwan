@@ -1,0 +1,23 @@
+{
+  "name": "もふもふ聖犬士イッヌ 2.5D",
+  "short_name": "もふもふイッヌ",
+  "description": "コマンド技・つかみ・ボス後半戦と、1台で2人協力が遊べるアクションゲーム。",
+  "lang": "ja",
+  "start_url": "./game.html?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#15374f",
+  "theme_color": "#7fc8ff",
+  "categories": ["games"],
+  "prefer_related_applications": false,
+  "icons": [
+    {"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"./icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ],
+  "shortcuts": [
+    {"name":"あそぶ","url":"./game.html?app=1"},
+    {"name":"ホーム画面への追加方法","url":"./install.html"}
+  ]
+}
