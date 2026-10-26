@@ -15,15 +15,14 @@ function writeSave(s){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); 
 const DIFFS = {
   easy:   { name:'やさしい', heroDmg:1.3, foeDmg:0.5, foeHp:0.8,  attackers:1, foeSpeed:0.85, think:1.35, heroHp:1.2, lives:Infinity },
   normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.8, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
-  hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.1, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
-    tactics:true, attackSpacing:12, minWindup:18, punishWindow:28 },
+  hard:   { name:'つよい',   heroDmg:0.9, foeDmg:1.2, foeHp:1.25, attackers:3, foeSpeed:1.12, think:0.8,  heroHp:1.0, lives:3 },
 };
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
 
 const save = loadSave();
 const game = G.game = {
   DIFFS, RANKS,
-  diffKey: save.diff && DIFFS[save.diff] ? save.diff : 'hard',
+  diffKey: save.diff && DIFFS[save.diff] ? save.diff : 'normal',
   get diff(){ return DIFFS[this.diffKey]; },
   heroId: save.hero || 'inu',
   stageIndex: 0, unlocked: save.unlocked|0,
@@ -40,7 +39,6 @@ const game = G.game = {
     else G.bus.emit('combo', { count:this.combo, rank, color:col });
   },
   addXp(n){
-    if(G.player?.published)return;
     this.xp += n;
     while(this.xp >= this.xpNext){
       this.xp -= this.xpNext; this.level++; this.xpNext = Math.round(60*Math.pow(1.32, this.level-1));
@@ -201,7 +199,6 @@ function startRun(start){
   // starting later in the adventure: give the hero the level a player would roughly have by then
   game.level = start > 0 ? 1 + start*2 : 1; game.xp = 0; game.xpNext = Math.round(60*Math.pow(1.32, game.level-1));
   game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
-  game.publishedCarry=null;
   game.lives = game.diff.lives;
   G.go('play', { stage:start });
 }
@@ -219,7 +216,7 @@ const play = G.scenes.play = {
     const st = S().info || stages()[game.stageIndex] || { name:'', kana:'' };
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
-    G.world.add(p);G.coop?.enter(p);
+    G.world.add(p);
     if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
@@ -231,11 +228,10 @@ const play = G.scenes.play = {
   },
   exit(){
     ARENA.unload();
-    G.story?.reset();
     uiHide('hud'); uiHide('pause'); touch(false);
     if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
     if(G.ui && G.ui.go) try { G.ui.go(false); } catch(_){}
-    G.coop?.exit();G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
+    G.combat.clear(); G.world.clear(); G.player = null; G.paused = false;
   },
   pause(on){
     if(on===G.paused) return;
@@ -261,14 +257,13 @@ const play = G.scenes.play = {
     if(b.pause.pressed && !this.cleared && !(game.cutinT > 0)){ this.pause(!G.paused); return; }
     if(G.paused) return;
     const p = G.player;
-    if(!G._arena&&G.story?.flush())return;
 
     // ult cut-in: the world holds still while the cut-in plays
-    if(p && (game.cutinT > 0 || G.hitStop > 0)) {if(!G.coop?.queueHeroes())G.playerCtl.queue(p);}
+    if(p && (game.cutinT > 0 || G.hitStop > 0)) G.playerCtl.queue(p);
     if(game.cutinT > 0){
       game.cutinT--;
       if(p){ p.animT++; if(p.rig && p.rig.update) p.rig.update(p, G.cfg.TICK); }
-      if(game.cutinT===0 && p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
+      if(game.cutinT===0 && p) G.playerCtl.tick(p);
       return;
     }
     if(G.hitStop > 0){ G.hitStop--; return; }
@@ -278,27 +273,24 @@ const play = G.scenes.play = {
 
     try { S().tick(); } catch(err){ G.logError('stage.tick', err); }
     if(p && G._autoplay) autoDrive(p);
-    if(p){if(!G.coop?.tickHeroes())G.playerCtl.tick(p);}
+    if(p) G.playerCtl.tick(p);
     const ents = G.world.ents;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
-      if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
+      if(e.team===1) G.foes.tick(e);
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
     G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
-      if(e.kind==='prop' || e.kind==='deco' || e.published || e.publishedReactive) continue;
+      if(e.kind==='prop' || e.kind==='deco') continue;
       if(e.flashT>0 && e.team!==1 && e!==p) e.flashT--;
       G.phys(e, (e.team===1 && !e.entered) ? null : bounds);
     }
-    separate(ents);G.coop?.afterCombat(this);if(this.over)return;
+    separate(ents);
     stepRigs();
 
-    // A completed stage wins simultaneous KO: revive safely before charging a
-    // life. The final boss's first-form transformation is not stage completion.
-    if(S().done && !this.cleared){ this.cleared = true; game.clearT = 0; game.victT = 0; this.winGuard(); }
     // hero knocked out → cheer up and revive (or lose a life on つよい)
     if(p && p.dead){
       game.koT++;
@@ -320,18 +312,17 @@ const play = G.scenes.play = {
       const bossStill = G.world.ents.some(e=> e.def && e.def.boss && !e.removed);
       if(!game.victT && ((!bossStill && game.clearT > 30) || game.clearT > 330)) game.victT = game.clearT;
       const v = game.victT ? game.clearT - game.victT : -1;
-      if(v===0 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); if(!G._arena)G.story?.clearStage(); }
+      if(v===0 && p && !p.dead){ G.combat.cancel(p); G.setState(p, 'victory'); G.setAnim(p, 'victory'); if(G.audio && G.audio.voice) G.audio.voice(p.type, 'win'); }
       if(v===10){ banner('ステージクリア！', game.stageName, 150); bgm('clear'); }
       if(v===170) this.showResult();
     }
-    if(!G._arena)G.story?.flush();
   },
   frame: frameCommon,
   // the stage is won: nothing may hurt the hero any more, and the boss's drops fly to the hero
   winGuard(){
     for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
     G.combat.areas.length = 0;
-    const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+    const p = G.player; if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
     const idx = game.stageIndex, last = idx >= stages().length-1;
@@ -341,14 +332,11 @@ const play = G.scenes.play = {
     const p = G.player; if(p) game.ultCarry = p.ult;
     G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
     touch(false);
-    G.input.clear();
     uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:game.coins, bestCombo:game.bestCombo, last,
       onNext:()=>{ sfx('ok'); if(last) G.go('ending'); else G.go('play', { stage: idx+1 }); } });
   },
   gameOver(){
-    G.story?.reset();
     this.over = true; touch(false);
-    G.input.clear();
     if(G.fx) G.fx.worldFrozen = true;
     bgm('over');
     uiShow('over', { onRetry:()=>{ game.lives = game.diff.lives; G.go('play', { stage:game.stageIndex }); }, onTitle:()=> G.go('title') });
@@ -358,7 +346,7 @@ const play = G.scenes.play = {
 // test bot: pushes G.input.touch like a (clumsy) kid would
 function autoDrive(p){
   const T = G.input.touch;
-  for(const k of ['attack','jump','dodge','grab','special','ult']) T[k] = false;
+  for(const k of ['attack','jump','dodge','special','ult']) T[k] = false;
   T.x = 0; T.z = 0;
   if(p.dead || p.state==='victory') return;
   let best = null, bd = 1e9;
@@ -376,9 +364,9 @@ function autoDrive(p){
   else if(Math.abs(dx) < 0.5) T.x = -Math.sign(dx || 1);
   else if(Math.sign(dx)!==p.face) T.x = Math.sign(dx)*0.3;
   const close = Math.abs(dx) < want + 0.5 && Math.abs(dz) < 0.45;
-  if(p.ult >= 100 && close && t%97===0){ for(const c of [0,1,2,3])G.commands.pushCard(c);T.attack=true;G.input.latch('attack');return; }
+  if(p.ult >= 100 && close){ T.ult = true; G.input.latch('ult'); return; }
   if(close && t % 7 === 0){ T.attack = true; G.input.latch('attack'); }
-  if(close && t % 97 === 0){G.commands.pushCard(2);G.commands.pushCard(p.face>0?1:3);T.attack=true;G.input.latch('attack');}
+  if(close && p.sp >= 2 && t % 97 === 0){ T.special = true; G.input.latch('special'); }
   if(best.atk || best.pending){ if(t % 23 === 0){ T.dodge = true; G.input.latch('dodge'); } }
   if(t % 181 === 0){ T.jump = true; G.input.latch('jump'); }
 }
@@ -390,10 +378,8 @@ function separate(ents){
     const a = ents[i]; if(!(a.team===0 || a.team===1) || a.dead || a.intangible || a.y > 0.6) continue;
     for(let j=i+1;j<ents.length;j++){
       const c = ents[j]; if(!(c.team===0 || c.team===1) || c.dead || c.intangible || c.y > 0.6) continue;
-      if(a.publishedReactive||c.publishedReactive)continue;
       const dz = c.z - a.z; if(Math.abs(dz) > 0.42) continue;
       const bossPair = (a.def && a.def.boss) || (c.def && c.def.boss);
-      if(a.published||c.published){const hero=a.published?a:c;if(!bossPair||!['idle','walk','hurt','land'].includes(hero.publishedState))continue;}
       const dx = c.x - a.x, min = (a.radius + c.radius)*(bossPair ? 1 : 0.8);
       if(Math.abs(dx) >= min) continue;
       if(bossPair && (a.team===0 || c.team===0)){
@@ -404,7 +390,7 @@ function separate(ents){
           const lo = B.xmin + hero.radius, hi = B.xmax - hero.radius;
           if(hx < lo || hx > hi){ hx = U.clamp(hx, lo, hi); boss.x = U.clamp(hx - s*min, B.xmin + boss.radius, B.xmax - boss.radius); }
         }
-        hero.x = hx;if(hero.published)G.published.native(hero).player.x=hx*60;continue;
+        hero.x = hx; continue;
       }
       const push = (min - Math.abs(dx)) * 0.25 * (dx===0 ? (a.id<c.id?1:-1) : Math.sign(dx));
       const wa = a.team===0 ? 0.25 : (a.def&&a.def.boss ? 0.1 : 1), wc = c.team===0 ? 0.25 : (c.def&&c.def.boss ? 0.1 : 1);
@@ -430,7 +416,7 @@ G.bus.on('bossDown', (d)=>{
 // the stage-7 mid-boss is purified: back to the stage's own music until the final boss
 G.bus.on('midClear', ()=>{ if(G.sceneName==='play'){ const st = S().info || {}; bgm(st.bgm || ('stage'+(game.stageIndex+1))); } });
 // phone switched apps / tab hidden: pause (kids come back to a pause menu, not a lost fight)
-G.bus.on('hidden', ()=>{ if(G.sceneName==='play' && !G.story?.blocked && !play.over && !play.cleared && !(game.cutinT>0)) play.pause(true); });
+G.bus.on('hidden', ()=>{ if(G.sceneName==='play' && !play.over && !play.cleared && !(game.cutinT>0)) play.pause(true); });
 
 // ---------------------------------------------------------------- scene: ending
 G.scenes.ending = {

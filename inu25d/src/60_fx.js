@@ -1650,7 +1650,6 @@ G.fx = {
   init, frame, clear, stats,
   burst, impact: (x,y,z,kind,power,opts)=>{ if(ready) impact(+x||0,+y||0,+z||0, KIND[kind]?kind:'slash', power||1, opts||{}); },
   trail, trailStop, text, alert, alertClear, flash, speedLines, cutin, makeProjectile,
-  get cutinActive(){return cut.on;},
   autoTrails: true,           // start/stop a trail automatically on the 'swing' event for heroes
   worldFrozen: false,         // true = particles/trails/popups stop advancing (e.g. pause menu); cut-in & flash keep going
   KINDS: Object.keys(B), PROJ_KINDS, HIT_KINDS: Object.keys(KIND), T,

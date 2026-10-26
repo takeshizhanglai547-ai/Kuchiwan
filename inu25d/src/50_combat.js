@@ -13,7 +13,7 @@ function hurtable(t, team){
   if(t.team===team) return false;
   if(t.team===2) return team===0;             // props: only heroes break them
   if(t.team===3) return false;                // pickups
-  if(t.inv>0 && !(t.published && t.publishedState==='roll')) return false;
+  if(t.inv>0) return false;
   if(t.state==='spawn' && !t.hittableSpawn) return false;
   if(t.intangible) return false;               // ghosts phasing, burrowed ants...
   const a = t.atk; if(a && a.def.inv && a.t >= a.def.inv[0] && a.t <= a.def.inv[1]) return false;   // i-frames of the move itself
@@ -34,7 +34,7 @@ G.combat = {
   start(ent, def){
     if(!ent || !def) return;
     const first = def.hits && def.hits.length ? def.hits[0].at : Math.round(def.len*0.35);
-    ent.atk = { def, t:0, hold:def.hold||0, sets: (def.hits||[]).map(()=> new Set()), swung:false, landed:false };
+    ent.atk = { def, t:0, sets: (def.hits||[]).map(()=> new Set()), swung:false };
     ent.lastAtk = def;
     G.setAnim(ent, def.anim || 'atk1', def.len, U.clamp(first/Math.max(1,def.len), 0.05, 0.95));
     if(def.armor) ent.atkArmor = true;
@@ -53,25 +53,6 @@ G.combat = {
   },
   // central damage entry — returns true if it landed
   damage,
-  publishedBlock(t,info){
-    if(!hurtable(t,0))return true;
-    if(t.onBeforeHit&&t.onBeforeHit(info)===false)return true;
-    if(t.def?.block?.(t,info)){t.flashT=2;G.hitStop=Math.max(G.hitStop,3);
-      G.bus.emit('hit',{src:info.src,target:t,x:t.x,y:t.y+t.height*.55,z:t.z,dmg:0,kind:'block',power:1,dir:info.dir,blocked:true});return true;}
-    return false;
-  },
-  publishedHit(t,amount,info){
-    if(G.story?.blocked)return;
-    const e=info.native,src=info.src;t.hp=Math.max(0,e.hp);t.hpShowT=180;t.flashT=t.def?.boss?2:6;
-    const d={src,target:t,x:t.x,y:t.y+t.height*.55,z:t.z,dmg:amount,kind:info.knock?'blunt':'slash',power:info.knock?2:1,dir:info.dir};
-    G.bus.emit('hit',d);G.game?.onHeroHit?.(src,t,amount,info);
-    if(t.hp>0&&t.def?.onHurt)t.def.onHurt(t,d);
-    // The reference can intentionally replace hitStop later in the same action.
-    // Commit its final value once at the end of published.tick, not a transient hit-hook value.
-    G.cam?.shake?.(Math.min(6,1+amount*.1),10);
-    if(t.hp<=0&&!t.dead)ko(t,info.dir,d);
-  },
-  publishedDefeat(t,info){if(t.dead)return;t.hp=0;ko(t,info.dir,{src:info.src,kind:'slash',power:3});},
   shoot(o){
     const owner = o.owner || null;
     const p = {
@@ -108,8 +89,6 @@ function kindOf(k){ return ({ wave:'slash', star:'star', ball:'magic', fire:'fir
 
 function stepAttack(e){
   const a = e.atk, d = a.def, t = a.t;
-  if(a.hold>0){ a.hold--; return; }
-  if(d.onLand && e.onGround && t>4 && !a.landed){ a.landed=true; d.onLand(e); }
   if(d.move) for(const m of d.move){
     if(m.at===t){
       if(m.vx!=null) e.vx = (m.add? e.vx:0) + e.face*m.vx;
@@ -176,10 +155,8 @@ function meleeHit(e, h, set){
 
 // ---------------------------------------------------------------- damage & reactions
 function damage(t, amount, info){
-  if(G.story?.blocked)return false;
   info = info || {};
   if(!t || t.dead) return false;
-  if(t.published)return G.published.receiveDamage(t,amount,info);
   const src = info.src || null;
   const dir = info.dir || (src ? U.sign(t.x - src.x) : 1);
   // hooks: dodge (just dodge), block (shields), phasing — return false to cancel
@@ -263,7 +240,6 @@ function interrupt(t){
 }
 function ko(t, dir, info){
   interrupt(t);
-  t.publishedReactive=false;t.grabbedBy=0;
   t.dead = true; t.deadT = 0;
   G.setState(t, 'ko');
   t.vy = 0.22; t.vx = dir*0.12/Math.max(1, (t.weight||1)*0.7); t.onGround = false; t.bounce = 1;
@@ -319,7 +295,7 @@ function stepProjectiles(){
         if(Math.abs(t.x - p.x) > p.r + t.radius) return;
         if(p.y < t.y - p.r || p.y > t.y + t.height + p.r) return;
         p.sets.add(t.id);
-        const landed = damage(t, p.dmg, { src:p.owner, kind:p.hitKind, power:p.power, kb:p.kb, up:p.up, stun:p.stun, dir:U.sign(p.vx||t.x-p.x),projectile:p });
+        const landed = damage(t, p.dmg, { src:p.owner, kind:p.hitKind, power:p.power, kb:p.kb, up:p.up, stun:p.stun, dir:U.sign(p.vx||t.x-p.x) });
         if(p.onHit) try { p.onHit(p, t, landed); } catch(err){ G.logError('proj.onHit', err); }
         if(landed){ if(p.pierce>0) p.pierce--; else end = true; }
         if(end){ killProj(p); }
@@ -394,9 +370,9 @@ G.pickups = {
 function collect(e, p){
   const k = PICK[e.type] || {};
   let value = 0;
-  if(k.heal){ const before = p.hp; p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp*k.heal)); value = p.hp - before;if(p.published)G.published.native(p).player.hp=p.hp; }
+  if(k.heal){ const before = p.hp; p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp*k.heal)); value = p.hp - before; }
   if(k.coins && G.game){ G.game.coins += k.coins; value = k.coins; }
-  if(k.sp){ if(p.published){const r=G.published.native(p).player;r.dim=Math.min(r.dimMax,r.dim+k.sp);p.dim=r.dim;p.sp=r.dim;}else p.sp = Math.min(3, (p.sp||0) + k.sp); value = k.sp; }
+  if(k.sp){ p.sp = Math.min(3, (p.sp||0) + k.sp); value = k.sp; }
   G.bus.emit('pickup', { ent:p, kind:e.type, x:e.x, y:e.y+0.3, z:e.z, value });
   e.removeMe = true;
 }

@@ -20,7 +20,6 @@ const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,
 const DIFFS = [ { k:'easy', t:'やさしい', cls:'k-mint', n:1 }, { k:'normal', t:'ふつう', cls:'k-sky', n:2 }, { k:'hard', t:'つよい', cls:'k-pink', n:3 } ];
 
 const SVG = {
-  grip:'<svg viewBox="0 0 24 24"><path d="M7 12V5a2 2 0 0 1 4 0v6-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v8l-2 7H9l-6-7a2 2 0 0 1 3-2l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   paw:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="15.8" rx="5.4" ry="4.6"/><ellipse cx="4.9" cy="10.2" rx="2.3" ry="2.9" transform="rotate(-18 4.9 10.2)"/><ellipse cx="9.2" cy="5.6" rx="2.3" ry="3"/><ellipse cx="14.8" cy="5.6" rx="2.3" ry="3"/><ellipse cx="19.1" cy="10.2" rx="2.3" ry="2.9" transform="rotate(18 19.1 10.2)"/></svg>',
   up:'<svg viewBox="0 0 24 24"><path d="M12 2.8l9 9.6h-5.4v8.2H8.4v-8.2H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
   roll:'<svg viewBox="0 0 24 24"><path d="M19.2 13.8A7.4 7.4 0 1 1 16.2 6.1" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M20.6 3.2v6.9h-6.9z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
@@ -684,13 +683,11 @@ function buildTitle(s){
   const hc = el('div', 'hc', hp);
   const row = (box, a, b)=>{ const r = el('div', 'hr_', box); el('span', '', r).textContent = a; el('b', '', r).textContent = b; };
   const kb = el('div', 'hb', hc); el('h4', '', kb).textContent = 'キーボード';
-  row(kb, 'いどう／技', '← → いどう・↑ ↓ は技'); row(kb, 'こうげき', 'J / Z'); row(kb, 'ジャンプ', 'スペース / I'); row(kb, 'よける', 'K / X');
-  row(kb, 'つかむ／はなす', 'L / U / シフト');row(kb,'ひっさつ','H / C（地上・待ち時間あり）');row(kb,'おうぎ','O / V（ストックが必要）'); row(kb, 'ひとやすみ', 'P / Esc');
+  row(kb, 'いどう', '← → ↑ ↓ / WASD'); row(kb, 'こうげき', 'J / Z'); row(kb, 'ジャンプ', 'K / スペース'); row(kb, 'よける', 'L / シフト');
+  row(kb, 'ひっさつ', 'I / X'); row(kb, 'おうぎ', 'U / C'); row(kb, 'ひとやすみ', 'P / Esc');
   const tb = el('div', 'hb', hc); el('h4', '', tb).textContent = 'スマホ・タブレット';
   row(tb, 'いどう', 'ひだりがわを なぞる'); row(tb, 'こうげき', 'ピンクの ボタン'); row(tb, 'ジャンプ', 'みずいろ'); row(tb, 'よける', 'みどり');
-  row(tb, 'つかむ', '手のマークの むらさきボタン');row(tb,'ひっさつ','黄色のボタン'); row(tb, 'おうぎ', '王冠ボタン（回転＋攻撃も可）'); row(tb, 'ひとやすみ', 'みぎうえの Ⅱ');
-  row(tb, '必殺コマンド', '↓→ / →↓→ / ↓↑ ＋こうげき');row(tb,'ダッシュ攻撃','後ろ→前 ＋こうげき');
-  button(hc,'k-sky','キャラごとの わざ・つかみ・おうぎ一覧',()=>G.commandGuide.open());
+  row(tb, 'ひっさつ', 'むらさき（✦を つかう）'); row(tb, 'おうぎ', 'ひかったら おしてね！'); row(tb, 'ひとやすみ', 'みぎうえの Ⅱ');
   const close = button(hp, 'k-sky', 'とじる', ()=> toggleHelp(false));
   close.style.cssText = 'display:flex;margin:0 auto';
   s.helpClose = close;
@@ -916,7 +913,7 @@ function hudFrame(dt){
     const u = U.clamp(+p.ult||0, 0, 100);
     if(Math.abs(u-hud.ult) > 0.05){ hud.ult = u; clipR(hud.ugf, u/100); }
     const full = u>=100;
-    if(full!==hud.full||p.published){ hud.full = full; hud.ug.classList.toggle('full', full); txt(hud.ugl, p.published?'おうぎ '+p.dim+'/'+p.dimMax:(full ? 'おうぎ OK！' : 'おうぎ')); }
+    if(full!==hud.full){ hud.full = full; hud.ug.classList.toggle('full', full); txt(hud.ugl, full ? 'おうぎ OK！' : 'おうぎ'); }
     // expression: hurt > happy (ult ready / big combo) > normal
     const expr = hud.hurtT>0 || p.dead ? 'hurt' : (full || (g.combo|0)>=8) ? 'happy' : 'normal';
     if(expr!==hud.expr){ hud.expr = expr; setPortraitSrc(hud.img, hud.fb, p.type, expr); }
@@ -1170,9 +1167,8 @@ const TBTN = [
   { k:'attack',  t:'こうげき', ic:SVG.paw,   cls:'k-pink', s:1.0,  r:.2,   b:.2 },
   { k:'jump',    t:'ジャンプ', ic:SVG.up,    cls:'k-sky',  s:.74,  r:1.34, b:.08 },
   { k:'dodge',   t:'よける',   ic:SVG.roll,  cls:'k-mint', s:.64,  r:1.38, b:.98 },
-  { k:'grab', t:'つかむ', ic:SVG.grip, cls:'k-lav', s:.78, r:.25, b:1.4 },
-  { k:'special',t:'ひっさつ',ic:SVG.spark,cls:'k-sun',s:.64,r:1.2,b:1.9 },
-  { k:'ult',t:'おうぎ',ic:SVG.crown,cls:'k-pink',s:.66,r:.15,b:2.4 },
+  { k:'special', t:'ひっさつ', ic:SVG.spark, cls:'k-lav',  s:.7,   r:.34,  b:1.36 },
+  { k:'ult',     t:'おうぎ',   ic:SVG.star,  cls:'k-sun',  s:.76,  r:1.24, b:1.76 },
 ];
 function buildTouch(){
   const e = T.el = el('div', 'tc x', root);
@@ -1188,11 +1184,11 @@ function buildTouch(){
   for(const d of TBTN){
     const b = el('div', 'tb '+d.cls+' '+d.k, e);
     b.dataset.btn = d.k;
-    b.setAttribute('role','button');b.setAttribute('aria-label',d.t);
     b.style.cssText = 'right:calc(var(--pr) + var(--b)*'+d.r+');bottom:calc(var(--pb) + var(--b)*'+d.b+');width:calc(var(--b)*'+d.s+');height:calc(var(--b)*'+d.s+');font-size:calc(var(--b)*'+(0.155*Math.pow(d.s, 0.45)).toFixed(3)+')';
-    b.style.minWidth=b.style.minHeight='44px';
+    if(d.k==='ult') el('i', 'glo', b);
     el('i', 'ti', b, d.ic); el('span', 'tl', b).textContent = d.t;
     const o = { k:d.k, el:b, ids:[] , badge:null, bn:null, cx:-1e4, cy:-1e4, cr:0 };
+    if(d.k==='special'){ o.badge = el('span', 'bdg', b); el('i', '', o.badge, SVG.spark); o.bn = el('span', '', o.badge); }
     b.addEventListener('pointerdown', (ev)=> btnDown(o, ev), { passive:false });
     T.btns.push(o);
   }
@@ -1207,7 +1203,6 @@ function buildTouch(){
   const up = (ev)=>{
     if(ev.pointerId===T.stick.id) stickEnd();
     for(const o of T.btns){ const i = o.ids.indexOf(ev.pointerId); if(i>=0){ o.ids.splice(i,1); if(!o.ids.length) btnOff(o); } }
-    if(ev.type==='pointercancel'){G.input.clearEdges(true);G.published?.resetInput();G.commands.consume();}
   };
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   zone.addEventListener('lostpointercapture', (ev)=>{ if(ev.pointerId===T.stick.id) stickEnd(); });
@@ -1227,8 +1222,8 @@ function stickDown(ev){
   T.saw = ev.pointerType==='touch' || ev.pointerType==='pen' || T.saw;
   const s = T.stick; if(s.id!==null) return;          // one finger drives the stick; others are ignored here
   s.id = ev.pointerId;
-  // Use the visible idle ring as a fixed origin, like the published game.
-  s.ox = T.gx; s.oy = T.gy;
+  const R = T.R, m = 6;
+  s.ox = U.clamp(ev.clientX, R+m, innerWidth - R - m); s.oy = U.clamp(ev.clientY, R+m, innerHeight - R - m);
   try { T.zone.setPointerCapture(ev.pointerId); } catch(_){}
   T.base.classList.remove('ghost'); T.base.classList.add('on');
   stickMove(ev.clientX, ev.clientY);
@@ -1236,15 +1231,19 @@ function stickDown(ev){
 function stickMove(cx, cy){
   const s = T.stick, R = T.R;
   let dx = cx - s.ox, dy = cy - s.oy, d = Math.hypot(dx, dy);
+  const follow = R*1.3;
+  if(d > follow){ const k = (d-follow)/d; s.ox += dx*k; s.oy += dy*k; dx = cx - s.ox; dy = cy - s.oy; d = follow; }
   const kx = d>0 ? dx/d : 0, ky = d>0 ? dy/d : 0, m = Math.min(1, d/R);
-  if(G.commands) G.commands.touchMove(dx*50/R, dy*50/R);
+  const a = m < 0.12 ? 0 : (m-0.12)/0.88;                       // 12% dead zone, rescaled so the edge is still 1
+  const ti = G.input && G.input.touch;
+  if(ti){ ti.x = +(kx*a).toFixed(3); ti.z = +(ky*a).toFixed(3); }  // screen up (dy<0) → z<0 (away from camera)
   const kd = Math.min(d, R);
   T.base.style.transform = 'translate3d('+s.ox.toFixed(1)+'px,'+s.oy.toFixed(1)+'px,0)';
   T.knob.style.transform = 'translate3d('+(kx*kd).toFixed(1)+'px,'+(ky*kd).toFixed(1)+'px,0)';
 }
 function stickEnd(){
   const s = T.stick; s.id = null;
-  if(G.commands) G.commands.touchEnd();
+  const ti = G.input && G.input.touch; if(ti){ ti.x = 0; ti.z = 0; }
   T.base.classList.remove('on'); T.base.classList.add('ghost');
   ghostPos();
 }
@@ -1272,7 +1271,7 @@ function btnSlide(id, x, y){
   if(!cur) return;
   let hit = null;
   for(const o of T.btns){ const dx = x - o.cx, dy = y - o.cy; if(dx*dx + dy*dy <= o.cr*o.cr){ hit = o; break; } }
-  if(!hit || hit===cur || ['special','ult'].includes(hit.k)||['special','ult'].includes(cur.k)) return;
+  if(!hit || hit===cur) return;
   cur.ids.splice(cur.ids.indexOf(id), 1); if(!cur.ids.length) btnOff(cur);
   btnPress(hit, id);
 }
@@ -1300,6 +1299,13 @@ function touchFrame(){
   touchApply();
   if(!T.visible) return;
   const p = G.player;
+  const sp = p ? Math.floor((+p.sp||0) + 1e-6) : 0;
+  const sb = T.btns[3];
+  if(sp!==T.spN){ T.spN = sp; txt(sb.bn, sp); }
+  const dim = sp < 1; if(dim!==T.spDim){ T.spDim = dim; sb.el.classList.toggle('dim', dim); }
+  const ub = T.btns[4], u = p ? U.clamp(+p.ult||0, 0, 100) : 0;
+  if(Math.abs(u - T.ult) > 0.3){ T.ult = u; setVar(ub.el, '--u', u/100, 0.002); }
+  const rdy = u>=100; if(rdy!==T.ready){ T.ready = rdy; ub.el.classList.toggle('ready', rdy); ub.el.classList.toggle('dim', !rdy); }
   // see-through buttons while the hero stands behind the cluster (phones: the camera can put them there)
   // …and the idle stick ring goes faint while the hero stands under it (e.g. at the left edge of a boss arena)
   let fade = false, near = false;
@@ -1332,7 +1338,6 @@ function buildPause(s){
   home.style.gridColumn = '1 / -1'; home.style.justifySelf = 'center';
   function paint(){ snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span>おと '+(s.sound ? 'オン' : 'オフ')+'</span>'; }
   s.nav = [res, retry, snd, home];
-  const guide=button(pn,'k-sky','わざと コマンド',()=>G.commandGuide.open());s.nav.push(guide);
   s.el.classList.add('dim');
   s.open = (d)=>{ s.sound = soundState(d.soundOn); paint(); s.ni = 0; touchReleaseAll(); };
   s.key = (e, c)=> navKey(s, c, e);
@@ -1452,7 +1457,7 @@ function buildLoading(s){
 }
 
 // ================================================================ keyboard routing
-const GAMEKEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD','KeyJ','KeyZ','KeyK','Space','KeyL','ShiftLeft','ShiftRight','KeyI','KeyX','KeyU','KeyC','KeyH','KeyO','KeyV']);
+const GAMEKEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD','KeyJ','KeyZ','KeyK','Space','KeyL','ShiftLeft','ShiftRight','KeyI','KeyX','KeyU','KeyC']);
 function topScreen(){ for(const n of ORDER){ const s = S[n]; if(s && s.on) return s; } return null; }
 function isGo(c){ return c==='Enter' || c==='NumpadEnter' || c==='Space' || c==='Escape' || c==='Backspace'; }
 // send one menu key to the top-most open screen (keyboard and gamepad share this)

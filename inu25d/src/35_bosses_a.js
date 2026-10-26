@@ -424,7 +424,7 @@ function clawFx(e, big){
   sfx('swing');
 }
 function clawHitFx(e, big){ fx('slash', e.x + e.face*(big?1.5:1.3), big ? 1.1 : 1.3, e.z + 0.35, { dir:e.face, scale: big ? 1.5 : 1.15, color:'#fff1a0' }); }
-function after(e, base){ e.cool = Math.max(24,Math.round(base * (e.phase ? (G.game?.diff?.tactics?0.6:0.7) : 1) * (0.85 + rng()*0.3))); e.plan = null; }
+function after(e, base){ e.cool = Math.round(base * (e.phase ? 0.7 : 1) * (0.85 + rng()*0.3)); e.plan = null; }
 // every custom state a move can leave behind is reset here (interrupt / KO / move end)
 function cleanup(e){
   e.intangible = false; e.warnOn = false; e.warnLock = false;
@@ -495,11 +495,10 @@ const PHASE_ROAR = { id:'bossA_rage', anim:'roar', len:72, hits:[],
   fn(e, t){ if(t===0) G.setAnim(e, 'roar', 72, 0.3);
     if(t===16){ shake(4, 30); fx('shock', e.x, 0.02, e.z, { scale:1.3, color:'#ffd0f0' }); fx('ring', e.x, e.height*0.7, e.z + 0.3, { scale:1.8, color:'#ff9ad0' }); sfx('bossRoar'); } },
   onEnd(e){ e.cool = 24; } };
-// Phase 2 strictly below 50% HP. The hit hook also observes knockdowns; the
-// story coordinator presents its cut-in before releasing the rage action.
+// phase 2 at ≤50% HP. Decided on the hit itself (a boss can drop past 50% while knocked down, when ai() is not called);
 // the rage roar plays on the next free tick.
 function enterPhase(e){
-  if(e.phase!==0 || e.dead || !(e.hp < e.maxHp*0.5) || e.hp <= 0) return;
+  if(e.phase!==0 || e.dead || !(e.hp <= e.maxHp*0.5) || e.hp <= 0) return;
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.gplan = null; e.rageDue = true;
   G.bus.emit('bossPhase', { boss:e, phase:1 });
   if(e.def.phaseLine) say(e, e.def.phaseLine);
@@ -507,7 +506,6 @@ function enterPhase(e){
 G.bus.on('hit', (d)=>{ const t = d && d.target; if(t && t.def && t.def.bossA && t.def.boss && t.team===1) enterPhase(t); });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, e.def.rage || PHASE_ROAR, 0); return true; }
   return false;
 }

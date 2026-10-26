@@ -552,7 +552,7 @@ function chain(e, def, windup, alert){
   G.setAnim(e, def.windupAnim || 'windup', w);
   if(alert && G.fx && G.fx.alert) G.fx.alert(e);
 }
-function after(e, base){ e.cool = Math.max(24,Math.round(base * (e.phase ? (G.game?.diff?.tactics?0.6:0.7) : 1) * (0.85 + rng()*0.3))); e.plan = null; }
+function after(e, base){ e.cool = Math.round(base * (e.phase ? 0.7 : 1) * (0.85 + rng()*0.3)); e.plan = null; }
 // ground telegraphs (pools on the entity; the rig draws them)
 function telegraphInit(e){
   e.marks = []; for(let i=0;i<MAXM;i++) e.marks.push({ on:false, x:0, z:0, r:1, lock:false, age:0, gen:0, at:0 });
@@ -657,10 +657,9 @@ const PHASE_ROAR = { id:'bossB_rage', anim:'roar', len:70, hits:[], noAlert:true
   fn(e, t){ if(t===0) G.setAnim(e, 'roar', 70, 0.3);
     if(t===16){ shake(4, 30); fx('shock', e.x, 0.02, e.z, O.rage); fx('ring', e.x, e.height*0.6, e.z + 0.3, O.rageR); sfx('bossRoar'); } },
   onEnd(e){ e.cool = 24; } };
-// Phase 2 strictly below 50% HP per health bar. The story coordinator holds the
-// rage action until its once-per-form cut-in has completed.
+// phase 2 at ≤50% HP (per form). Decided on the hit itself; the rage roar plays on the next free tick.
 function enterPhase(e){
-  if(e.phase!==0 || e.dead || e.transforming || !(e.hp < e.maxHp*0.5) || e.hp <= 0) return;
+  if(e.phase!==0 || e.dead || e.transforming || !(e.hp <= e.maxHp*0.5) || e.hp <= 0) return;
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.rageDue = true;
   G.bus.emit('bossPhase', { boss:e, phase: e.form===2 ? 3 : 1 });
   const line = e.form===2 ? e.def.phaseLine2 : e.def.phaseLine;
@@ -677,7 +676,6 @@ G.bus.on('hit', (d)=>{
 });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, PHASE_ROAR, 0); return true; }
   return false;
 }

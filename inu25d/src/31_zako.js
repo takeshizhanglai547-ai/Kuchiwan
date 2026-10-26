@@ -1294,15 +1294,7 @@ const FX_BUFF = { count:4, scale:0.35, color:'#c58aff' };
 // spot beside the target on this foe's side (no allocation)
 let FX_ = 0, FZ_ = 0;
 function sideOf(e){ const t = H.target(e); return t && e.x < t.x ? -1 : 1; }
-function side(e, t){
-  if(e.sideLock>0)return e.sideVal;
-  if(D().tactics&&!e.def.boss){
-    // Preserve the side after commitment. Before committing, alternating melee
-    // units cross around the hero rather than queuing on the same side.
-    return e.id%2?-1:1;
-  }
-  return e.x<t.x?-1:1;
-}
+function side(e, t){ return e.sideLock > 0 ? e.sideVal : (e.x < t.x ? -1 : 1); }
 function flank(e, t, dist, dzOff){
   FX_ = t.x + side(e, t)*dist;
   FZ_ = U.clamp(t.z + (dzOff!=null ? dzOff : ((e.id%3)-1)*0.28), ZMIN, ZMAX);

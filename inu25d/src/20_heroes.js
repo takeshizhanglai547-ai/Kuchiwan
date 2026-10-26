@@ -965,14 +965,7 @@ function updateRig(rig, e, dt, first){
       if(tpl==='hurt') eyes='sq';
     }
   }
-  const inuDedicated=rig.heroId==='inu'&&G.inuGroundMotion?G.inuGroundMotion.pose(rig,e,Q,rest):null;
-  const publishedDedicated=!inuDedicated&&G.publishedMotion?G.publishedMotion.pose(rig,e,Q,rest):null;
-  const dedicated=inuDedicated||publishedDedicated;
-  st.inuPose=inuDedicated||null;st.pubPose=publishedDedicated||null;
-  if(dedicated){oneshot=true;tpl=dedicated.id;eyes=dedicated.eyes||'open';glow=dedicated.glow||0;}
   st.tpl = tpl;
-  const storyPose=G.story?.pose?.(rig,e,Q,rest);
-  if(storyPose){oneshot=true;tpl=storyPose.id;st.tpl=tpl;eyes=storyPose.eyes;glow=.1;}
   if(TWOHAND[style] && (oneshot && anim!=='hurt' && anim!=='ko' && anim!=='getup' && anim!=='dodge') || (TWOHAND[style] && anim==='charge')){
     Q.aLz = Q.aRz*0.95; Q.aLy = U.clamp(0.5 - Q.aRy*1.1, -1.2, 1.0); Q.aLx = 0.12;
   }
@@ -993,14 +986,9 @@ function updateRig(rig, e, dt, first){
     }
   }
   // attacks turn the body toward the target (more profile) so swings read left/right; the head keeps looking at us
-  if(dedicated)P.sq=0; // rigid proportions; weight comes from stance, not stretch
-  const aimT = dedicated?dedicated.aim:(AIMS[anim]||0);
+  const aimT = AIMS[anim] || 0;
   st.aim = first ? aimT : st.aim + (aimT - st.aim)*(1 - Math.exp(-(aimT>st.aim?16:6)*dt));
-  if(rig.heroId==='inu'&&G.inuGroundMotion)G.inuGroundMotion.prepare(rig);
-  if(G.publishedMotion)G.publishedMotion.prepare(rig);
   applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p);
-  if(rig.heroId==='inu'&&G.inuGroundMotion)G.inuGroundMotion.settle(rig,e,inuDedicated);
-  if(G.publishedMotion)G.publishedMotion.settle(rig,e,publishedDedicated);
 }
 
 function applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p){
