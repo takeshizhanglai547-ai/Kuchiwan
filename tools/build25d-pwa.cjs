@@ -16,4 +16,4 @@ const files=['game.html','index.html','install.html','offline.html','app.webmani
 fs.writeFileSync(path.join(out,'version.json'),JSON.stringify({version,game:files.find(f=>f.path==='game.html').sha256},null,2)+'\n');
 const worker=read('sw.template.js').replace('@@VERSION@@',JSON.stringify(version)).replace('@@FILES@@',JSON.stringify(files));new (require('node:vm').Script)(worker);fs.writeFileSync(path.join(out,'sw.js'),worker);
 fs.writeFileSync(path.join(out,'.gitattributes'),'* text eol=lf\n*.png binary\n');
-console.log(JSON.stringify({version,assets:files.length,gameBytes:Buffer.byteLength(game),output:'inu25d/app/',base:'original 2.5D 040cf980; compatibility PWA shell only'},null,2));
+console.log(JSON.stringify({version,assets:files.length,gameBytes:Buffer.byteLength(game),output:'inu25d/app/',base:'expansion candidate based on public914, old-speed/depth and same-screen co-op; no online backend'},null,2));

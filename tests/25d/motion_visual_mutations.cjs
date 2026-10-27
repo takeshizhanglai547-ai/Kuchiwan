@@ -1,0 +1,9 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'../..'),mutations=[
+ {name:'Inu actor-relative shoe anchors omit forward root translation',file:'21_inu_choreography.js',from:'for(const f of state.feet){f.x+=dx;f.z+=dz;}',to:'for(const f of state.feet){f.x+=0;f.z+=dz;}'},
+ {name:'other heroes retain world-pinned shoes during native dash',file:'23_published_motion.js',from:'for(const f of state.feet){f.x+=dx;f.z+=dz;}',to:'for(const f of state.feet){f.x+=0;f.z+=dz;}'},
+ {name:'native active command cue becomes effectively transparent',file:'60_fx.js',from:'v.mat.opacity=active?.82',to:'v.mat.opacity=active?.03'}
+],results=[];
+for(const m of mutations){const code=fs.readFileSync(path.join(root,'inu25d/src',m.file),'utf8');assert(code.includes(m.from),'missing production target '+m.name);new vm.Script(code.replace(m.from,m.to));const r=spawnSync(process.execPath,[path.join(__dirname,'motion_visual_cpu.cjs')],{cwd:root,encoding:'utf8',env:{...process.env,INU25D_CPU_MUTATION:JSON.stringify(m)},timeout:180000});const killed=r.status===1&&r.stderr.includes('AssertionError')&&!r.stderr.includes('mutation target missing')&&!r.stderr.includes('const dx=');assert(killed,m.name+' not behaviorally detected: '+r.stderr.slice(-700));results.push({name:m.name,killed,status:r.status,assertion:r.stderr.split('\n').find(s=>s.includes('AssertionError'))});console.log('PASS detected '+m.name);}
+const out=path.join(root,'evidence/expansion-20261026');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'motion-visual-mutations.json'),JSON.stringify({status:'PASS_BEHAVIOR_MUTATIONS',results,limits:'Syntax-checked in-memory source mutants killed by world-transform/active-opacity assertions; no browser/device claim'},null,2));

@@ -1,19 +1,25 @@
 // Private-scope adapter API. Every named combat action uses the original implementation above.
 sndOn=false;gimOn=false;attractOn=false;state='play';hardMode=false;lap=1;
 const _pubDamage=damageEnemy, _pubUlt=beginUlt, _pubSteal=bossSteal, _pubSourceTypes=new Map();
+let _pubGrabDepth=0;
+// Shima's grab rune detonates long after release; retain its grab provenance
+// without changing the reference detonation, splash damage or visual clock.
+const _pubZankai=zankaiBoom;
+zankaiBoom=function(...args){_pubGrabDepth++;try{return _pubZankai.apply(this,args);}finally{_pubGrabDepth--;}};
 bossSteal=function(type){return _pubSteal(_pubSourceTypes.get(type)||type);};
 damageEnemy=function(e,...args){const scale=_pubHooks.damageScale?.()??1;if(scale!==1)args[0]=Math.round(args[0]*scale);
-  const before=e.hp;if(_pubHooks.beforeHit?.(e,args)===false)return;_pubDamage(e,...args);
-  if(_pubHooks.hit)_pubHooks.hit(e,before-e.hp,args);};
+  const before=e.hp,context={grab:_pubGrabDepth>0||!!_pubActiveProjectile?._pubGrab,projectile:!!_pubActiveProjectile};if(_pubHooks.beforeHit?.(e,args,context)===false)return;_pubDamage(e,...args);
+  if(_pubHooks.hit)_pubHooks.hit(e,before-e.hp,args,context);};
 beginUlt=function(p,name){_pubUlt(p,name);if(_pubHooks.ult)_pubHooks.ult(p,name||ULT_NAME[p.kind]);};
 const _pubCarryKeys=['level','xp','xpNext','maxHp','atkMul','defMul','spdMul','dim','dimMax','weapon','heldWeapon','stolen','ammo'];
 // Display events observe real throw entry functions, including instantaneous throws.
 // The wrapper calls the unchanged function with the same this/arguments and return value.
 let _pubDisplay=null,_pubDisplaySerial=0;
 const _pubPunch=punchImpact;
-punchImpact=function(e){const before=e.hp;_pubPunch(e);_pubHooks.hit?.(e,before-e.hp,[6,0,false]);};
-function _pubObserve(id,fn){return function(...args){const result=fn.apply(this,args);
-  _pubDisplay={id,at:gf,serial:++_pubDisplaySerial,target:args[0]||null};return result;};}
+punchImpact=function(e){const before=e.hp;_pubPunch(e);_pubHooks.hit?.(e,before-e.hp,[6,0,false],{grab:true,projectile:false});};
+function _pubObserve(id,fn){return function(...args){const prior=new Set(projectiles);_pubGrabDepth++;_pubHooks.grabStart?.(id);
+  try{const result=fn.apply(this,args);_pubDisplay={id,at:gf,serial:++_pubDisplaySerial,target:args[0]||null};return result;}
+  finally{for(const pr of projectiles)if(!prior.has(pr))pr._pubGrab=true;_pubGrabDepth--;_pubHooks.grabEnd?.(id);}};}
 /*@@DISPLAY_WRAPPERS@@*/
 return {
   reset(kind,seed,carry){
@@ -46,10 +52,10 @@ return {
       player.grabSub='punch';player.grabAnim=0;_pubDisplay={id:'grabStrike',at:gf,serial:++_pubDisplaySerial,target:player.grabEnemy};return true;}
     return false;
   },
-  step(){gf++;const before={state:player.state,id:player.atk?.type,dim:player.dim},previousProjectiles=new Set(projectiles);
+  step(){gf++;const before={state:player.state,id:player.atk?.type,dim:player.dim},previousProjectiles=new Set(projectiles),grabbing=player.state==='grab'||!!player.grabEnemy;
     updatePlayer();saveInput(player.in);_pubReactions();
-    for(const pr of projectiles)if(!previousProjectiles.has(pr))_pubHooks.projectile?.(pr);
-    updateProjectiles();updateHazards();updateCombo();
+    for(const pr of projectiles)if(!previousProjectiles.has(pr)){if(grabbing)pr._pubGrab=true;_pubHooks.projectile?.(pr);}
+    try{updateProjectiles();}finally{_pubActiveProjectile=null;}updateHazards();updateCombo();
     const after={state:player.state,id:player.atk?.type,dim:player.dim};
     if((before.state!==after.state||before.id!==after.id)&&_pubHooks.action)_pubHooks.action(after,before);
     return after;

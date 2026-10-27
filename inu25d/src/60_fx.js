@@ -1600,7 +1600,30 @@ function init(){
   G.bus.on('resize', ()=>{ hudAge = 99; }); G.bus.on('cover', ()=>{ hudAge = 99; });
   ready = true;
 }
+// Native-clock command silhouettes: visible even when a move misses. These are
+// read-only stage objects; collision/costs remain exclusively in the native fighter.
+const commandCues=new Map(),cueArc=new THREE.TorusGeometry(.72,.037,5,28,Math.PI*1.62),cueRing=new THREE.TorusGeometry(.7,.035,5,32),cueBeam=new THREE.BoxGeometry(1.6,.065,.055),cueFlash=new THREE.IcosahedronGeometry(.14,0),cueFlame=new THREE.ConeGeometry(.34,1.9,10);
+const cuePalette={inu:'#74dcff',shima:'#ffad37',nuko:'#ef81ff',guard8:'#ffd85a',watch:'#a4ffe0',wanden:'#ff648f',mack:'#a8d7ff'};
+const cueRows=new Map();for(const r of G.publishedCatalog?.rows||[])if(!cueRows.has(r.hero+':'+r.id))cueRows.set(r.hero+':'+r.id,r);
+function disposeCue(v){v.root.parent?.remove(v.root);v.mat.dispose();v.white.dispose();}
+function clearCommandCues(){for(const v of commandCues.values())disposeCue(v);commandCues.clear();}
+function commandCue(ent,m){
+ if(!G.scene||!ent||ent.dead||!m||m.id==='grab'){const old=commandCues.get(ent);if(old){disposeCue(old);commandCues.delete(ent);}return;}
+ let v=commandCues.get(ent);if(!v){const root=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color:cuePalette[ent.type]||'#9fe0ff',transparent:true,opacity:.7,depthWrite:false,depthTest:false,side:THREE.DoubleSide}),white=new THREE.MeshBasicMaterial({color:'#fff7da',transparent:true,opacity:.8,depthWrite:false,depthTest:false});
+  const add=(g,material)=>{const q=new THREE.Mesh(g,material);q.renderOrder=24;root.add(q);return q;};
+  v={root,mat,white,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
+ v.m=m;const row=cueRows.get(ent.type+':'+m.id),slot=row?.slot||(/dash|iai/.test(m.id)?'dash':m.air?'up':'fwd');v.profile=m.id==='nrailfire'?'rail':m.id==='mkflame'||m.def?.flame?'flame':ent.type==='mack'?'shot':ent.type==='nuko'?'sigil':slot==='down'?'sweep':slot==='up'||slot==='dp'?'rise':slot==='du'?'summon':slot==='dash'?'dash':'slash';
+ const active=m.t>=m.act[0]&&m.t<=m.act[1],phase=active?'active':m.t<m.act[0]?'wind':'follow',age=Math.max(0,m.t-m.act[1]);v.phase=phase;v.root.visible=phase!=='follow'||age<9;v.root.userData.profile=v.profile;v.root.userData.move=m.id;v.root.userData.phase=phase;
+ v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.9:v.mat.opacity*.5;
+ v.arc.visible=['slash','rise','dash','sweep'].includes(v.profile);v.ring.visible=['summon','sigil','sweep'].includes(v.profile);v.beam.visible=['shot','dash','rail'].includes(v.profile);v.flash.visible=active;v.flame.visible=v.profile==='flame';v.flame.rotation.z=Math.PI/2;v.flame.position.set(1,0,0);v.mat.color.set(v.profile==='flame'?'#ff8a2a':cuePalette[ent.type]||'#9fe0ff');
+ v.arc.rotation.set(0,0,v.profile==='rise'?-1.3:v.profile==='sweep'?.1:-.3);v.arc.scale.set(v.profile==='dash'?1.35:1,1,1);v.arc.position.set(.35,v.profile==='rise'?.25:0,.02);
+ v.ring.rotation.set(v.profile==='sweep'?Math.PI/2:0,0,0);v.ring.scale.setScalar(v.profile==='summon'?1.35:1);v.ring.position.set(v.profile==='sigil'?.7:.1,v.profile==='sweep'?-.6:.05,0);
+ v.beam.position.set(v.profile==='rail'?4.8:1.05,0,0);v.beam.scale.set(v.profile==='rail'?5:v.profile==='dash'?1.6:1,1,1);v.flash.position.set(v.profile==='shot'?1.9:.95,v.profile==='rise'?.65:0,.06);
+ const pulse=active?1+.08*Math.sin(m.t*1.1):.72;v.flash.scale.setScalar(pulse);v.root.scale.set(ent.face||1,1,1);v.root.position.set(ent.x,ent.y+.78,ent.z+.12);
+}
+function frameCommandCues(){for(const [e,v]of commandCues){if(e.removed||e.dead||e.rig?.disposed){disposeCue(v);commandCues.delete(e);continue;}const p=e.rig?.root.position||e;v.root.position.set(p.x,p.y+.78,p.z+.12);v.root.scale.x=e.face||1;}}
 function clear(){
+  clearCommandCues();
   if(!ready) return;
   np = 0; emitters.length = 0;
   for(const t of trails){ t.on = false; t.ent = null; t.n = 0; }
@@ -1612,6 +1635,7 @@ function clear(){
 }
 let lastCount = 0;
 function frame(dt){
+  frameCommandCues();
   if(!ready) return;
   const kReal = clamp((dt>0 ? dt : 1/60)*60, 0, 4);
   // world effects follow slow motion a little (but keep animating during hitstop)
@@ -1643,16 +1667,18 @@ function frame(dt){
 function stats(){
   let tr = 0, po = 0, al = 0; for(const t of trails) if(t.on) tr++; for(const p of pops) if(p.on) po++; for(const a of alerts) if(a.on) al++;
   return { particles: np, cap: capP, instances: lastCount, halos: liveProj.length, projectiles: liveProj.length, trails: tr, texts: po, alerts: al,
-    emitters: emitters.length, cutin: cut.on, flash: fl.on, speedLines: sl.on };
+    emitters: emitters.length, commandCues:commandCues.size, cutin: cut.on, flash: fl.on, speedLines: sl.on };
 }
 
+G.bus.on('scene',clearCommandCues);
 G.fx = {
-  init, frame, clear, stats,
+  init, frame, clear, stats, commandCue,
   burst, impact: (x,y,z,kind,power,opts)=>{ if(ready) impact(+x||0,+y||0,+z||0, KIND[kind]?kind:'slash', power||1, opts||{}); },
   trail, trailStop, text, alert, alertClear, flash, speedLines, cutin, makeProjectile,
+  get cutinActive(){return cut.on;},
   autoTrails: true,           // start/stop a trail automatically on the 'swing' event for heroes
   worldFrozen: false,         // true = particles/trails/popups stop advancing (e.g. pause menu); cut-in & flash keep going
   KINDS: Object.keys(B), PROJ_KINDS, HIT_KINDS: Object.keys(KIND), T,
-  _debug: { atlas: ()=> atlas && atlas.canvas },
+  _debug: { atlas: ()=> atlas && atlas.canvas, commandCues:()=>Array.from(commandCues.values()) },
 };
 })();

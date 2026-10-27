@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const heroes=['inu','shima','nuko','guard8','watch','wanden','mack'],cases=[],extras=[];
 const clean=x=>JSON.parse(JSON.stringify(x));
 function result(g){const t=g.trace();return {hits:t.hits.map(({tick,damage,requested})=>({tick,damage,requested})),actions:t.actions,dim:g.p.dim,combo:g.n.combo.count,damage:t.hits.reduce((n,h)=>n+h.damage,0),alive:g.foes.filter(e=>!e.dead).length,state:g.n.player.state,clock:g.n.clock};}
-function motion(hero,slot,face,air){const g=game(hero,{face,air,foes:[face*60]}),f=face>0?'ArrowRight':'ArrowLeft';
+function motion(hero,slot,face,air){const g=game(hero,{face,air,foes:[face*60],referenceMovement:true}),f=face>0?'ArrowRight':'ArrowLeft';
  const events=slot==='dp'?[{frame:1,code:f,down:true},{frame:2,code:f,down:false},{frame:2,code:'ArrowDown',down:true},{frame:3,code:f,down:true}]:[{frame:1,code:'ArrowDown',down:true},{frame:2,code:f,down:true},{frame:3,code:'ArrowDown',down:false}];
  events.push({frame:4,code:'KeyJ',down:true},{frame:5,code:'KeyJ',down:false});
  const vectors=slot==='dp'?[[face*50,0],[0,50],[face*35,35]]:[[0,50],[face*35,35],[face*50,0]];let id;

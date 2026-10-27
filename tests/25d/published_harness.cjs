@@ -19,6 +19,9 @@ function game(hero='inu',opts={}){
     vm.runInContext(readModule(name),c);
   if(opts.story||process.env.INU25D_WITH_STORY==='1')vm.runInContext(readModule('82_story_events.js'),c);
   const p=G.player=G.playerCtl.create(hero,4,0);G.world.add(p);const n=G.published.native(p);
+  // Explicit oracle-only coordinate profile: original 2D displacement/flat lane.
+  // Production tests use the default restored 2.5D walking and depth movement.
+  p._publishedCtx.referenceMovement=!!opts.referenceMovement;
   n.randomTo(()=>.5);n.reset(hero,opts.seed||1337);n.player.x=240;n.player.facing=opts.face||1;n.player.level=opts.level||1;n.player.dim=opts.dim??3;n.player.dimMax=8;
   p.face=n.player.facing;p.inv=0;p.hp=n.player.hp;p.dead=false;
   if(opts.air){n.player.state='jump';n.player.z=120;n.player.vz=0;p.onGround=false;p.y=2;}

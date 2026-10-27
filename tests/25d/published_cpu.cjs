@@ -25,7 +25,7 @@ function oracle(hero,events,opts={}){
     }
     global.result={hits,actions,dim:player.dim,combo:combo.count,damage:hits.reduce((n,h)=>n+h.damage,0),alive:enemies.filter(e=>!e.dead).length,state:player.state,clock:gf,...(${!!filter}?{positions}:{})};`);
 }
-function candidate(hero,events,opts={}){const g=game(hero,opts),positions=[];let old=-1;
+function candidate(hero,events,opts={}){const g=game(hero,{...opts,referenceMovement:true}),positions=[];let old=-1;
   for(let frame=1;frame<=(opts.frames||180);frame++){for(const e of events)if(e.frame===frame)g.key(e.code,e.down);g.step();
     if(filter&&g.n.clock!==old){old=g.n.clock;positions.push({gf:old,enemies:g.n.enemies.map(e=>({x:e.x,y:e.y,z:e.z,vx:e.vx,vz:e.vz,state:e.state,h:e.h})),shots:g.n.projectiles.map(p=>({x:p.x,y:p.y,z:p.zz,r:p.r}))});}}
   const t=g.trace();return {g,result:{hits:t.hits.map(({tick,damage,requested})=>({tick,damage,requested})),actions:t.actions,

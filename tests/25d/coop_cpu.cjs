@@ -51,12 +51,12 @@ function record(s){report.cases.push(s);console.log('PASS '+s);}
  const g=fixture(),{G}=g,[a,b]=G.coop.players;const x=[a.x,b.x];g.key('ArrowRight');g.key('KeyA');g.step(8);assert(a.x>x[0]);assert(b.x<x[1]);g.key('ArrowRight',false);g.key('KeyA',false);g.key('KeyF');g.step();assert.equal(G.published.native(b).player.state,'attack');assert.notEqual(G.published.native(a).player.state,'attack');g.key('KeyF',false);record('independent P1 and P2 keyboard bindings dispatch simultaneously');
 }
 for(const hero of ['inu','shima','nuko','guard8','watch','wanden','mack']){
- const g=fixture('inu',hero),{G}=g;for(let stage=0;stage<7;stage++){
+ const g=fixture('inu',hero),{G}=g;for(let stage=0;stage<G.stages.length;stage++){
   assert.equal(G.game.stageIndex,stage);assert.equal(G.coop.players[1].type,hero);
   const intros=G.story.history.filter(e=>e.run===G.story.run&&e.kind==='intro'&&e.completed);assert.equal(intros.length,2);assert.equal(intros[1].hero,hero);
   G.stage.done=true;G.hitStop=0;g.step(40);g.skip();const clears=G.story.history.filter(e=>e.run===G.story.run&&e.kind==='clear'&&e.completed);assert.equal(clears.length,2);assert.equal(clears[1].hero,hero);
-  G.scenes.play.showResult();G._shown.result.onNext();if(stage<6){g.step();g.skip();}
- }assert.equal(G.sceneName,'ending');record('both heroes receive intro/clear events and progress all seven stages: P2 '+hero);
+  G.scenes.play.showResult();G._shown.result.onNext();if(stage<G.stages.length-1){g.step();g.skip();}
+ }assert.equal(G.sceneName,'ending');record('both heroes receive intro/clear events and progress all nine stages: P2 '+hero);
 }
 {
  const {game}=require('./published_harness.cjs');

@@ -552,7 +552,7 @@ function chain(e, def, windup, alert){
   G.setAnim(e, def.windupAnim || 'windup', w);
   if(alert && G.fx && G.fx.alert) G.fx.alert(e);
 }
-function after(e, base){ e.cool = Math.round(base * (e.phase ? 0.7 : 1) * (0.85 + rng()*0.3)); e.plan = null; }
+function after(e, base){ e.cool = Math.max(24,Math.round(base * (e.phase ? (G.game?.diff?.tactics?0.6:0.7) : 1) * (0.85 + rng()*0.3))); e.plan = null; }
 // ground telegraphs (pools on the entity; the rig draws them)
 function telegraphInit(e){
   e.marks = []; for(let i=0;i<MAXM;i++) e.marks.push({ on:false, x:0, z:0, r:1, lock:false, age:0, gen:0, at:0 });
@@ -657,11 +657,13 @@ const PHASE_ROAR = { id:'bossB_rage', anim:'roar', len:70, hits:[], noAlert:true
   fn(e, t){ if(t===0) G.setAnim(e, 'roar', 70, 0.3);
     if(t===16){ shake(4, 30); fx('shock', e.x, 0.02, e.z, O.rage); fx('ring', e.x, e.height*0.6, e.z + 0.3, O.rageR); sfx('bossRoar'); } },
   onEnd(e){ e.cool = 24; } };
-// phase 2 at ≤50% HP (per form). Decided on the hit itself; the rage roar plays on the next free tick.
+// Phase 2 strictly below 50% HP per health bar. The story coordinator holds the
+// rage action until its once-per-form cut-in has completed.
 function enterPhase(e){
-  if(e.phase!==0 || e.dead || e.transforming || !(e.hp <= e.maxHp*0.5) || e.hp <= 0) return;
+  if(e.phase!==0 || e.dead || e.transforming || !(e.hp < e.maxHp*0.5) || e.hp <= 0) return;
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.rageDue = true;
-  G.bus.emit('bossPhase', { boss:e, phase: e.form===2 ? 3 : 1 });
+  G.bossPhaseVisual?.(e);
+  G.bus.emit('bossPhase', { boss:e, phase: e.form===3 ? 5 : e.form===2 ? 3 : 1 });
   const line = e.form===2 ? e.def.phaseLine2 : e.def.phaseLine;
   if(line) say(e, line);
   log(e.type + ':phase' + (e.form===2 ? 3 : 1));
@@ -676,6 +678,7 @@ G.bus.on('hit', (d)=>{
 });
 function phaseCheck(e){
   enterPhase(e);
+  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, PHASE_ROAR, 0); return true; }
   return false;
 }
@@ -1752,6 +1755,29 @@ const KN_M = {
       H({ at:70, dur:16, x0:-0.6, x1:2.0, zr:0.6, y0:0, y1:2.4, dmg:16, kb:0.2, up:0.18, stun:22, power:2 }) ],
     fn: knDash(true), onEnd(e){ if(e.lane) e.lane.on = false; after(e, 90); } },
 };
+// Third form: independent silhouette, still rooted to the same boss entity.
+function buildSovereign(){const rig=buildKnight(),T=THREE,root=new T.Group();root.name='emperor-form3-wings-crown';(rig.kit?.body||rig.root).add(root);
+ const second=rig.kit.sword.clone(true);second.name='sovereign-second-blade';second.rotation.z=1.9;rig.kit.armL.add(second);
+ const mat=new T.MeshStandardMaterial({color:'#e6be68',emissive:'#b856ff',emissiveIntensity:.5,metalness:.75,roughness:.32}),dark=new T.MeshStandardMaterial({color:'#27164d',emissive:'#6a32a4',emissiveIntensity:.35,roughness:.6}),geos=[];
+ const add=(geo,material,x,y,z,rz=0)=>{geos.push(geo);const m=new T.Mesh(geo,material);m.position.set(x,y,z);m.rotation.z=rz;root.add(m);return m;};
+ for(const side of [-1,1])for(let i=0;i<5;i++){const feather=add(new T.ConeGeometry(.17,1.5-i*.13,5),i%2?mat:dark,-.45-i*.18,1.85+i*.08,side*(.65+i*.28),-.8);feather.rotation.x=side*(.6+i*.08);}
+ for(let i=0;i<7;i++)add(new T.ConeGeometry(.075,.5+(i%2)*.18,6),mat,.02,3.0+Math.sin(i/6*Math.PI)*.18,(i-3)*.15);
+ const halo=add(new T.TorusGeometry(.68,.04,7,36),mat,-.45,2.65,0);halo.rotation.y=Math.PI/2;
+ rig.formSilhouette='sovereign-winged-twinblade';const dispose=rig.dispose.bind(rig);let done=false;rig.dispose=()=>{if(done)return;done=true;root.removeFromParent();for(const g of geos)g.dispose();mat.dispose();dark.dispose();dispose();};return rig;}
+const EMP3_M={
+ cross:{id:'emp3_crossfall',anim:'special',len:112,hits:[],
+  fn(e,t){if(t===0){G.setAnim(e,'special',112);say(e,'交差する天雷！');const p=fh().target(e);e.finalCross=[];if(p)for(const d of [-1,0,1]){const x=clampX(p.x+d*.85,.5),z=clampZ(p.z+d*.9);e.finalCross.push({x,z});markOn(e,x,z,.58,true);}}
+   if(t===42||e.phase&&t===65){for(const q of e.finalCross||[]){G.combat.area({owner:e,x:q.x,y:0,z:q.z,r:.58,zr:.4,y0:0,y1:3.2,dmg:18,power:2,stun:20,up:.12,dur:4});fx('shock',q.x,.05,q.z,{scale:.9,color:'#e4b0ff'});}if(t===42&&!e.phase)marksOff(e);}if(t===70)marksOff(e);},
+  onEnd(e){marksOff(e);after(e,74);}},
+ wings:{id:'emp3_wing_volley',anim:'shoot',len:112,hits:[],
+  fn(e,t){if(t===0){G.setAnim(e,'shoot',112);say(e,'天魔の翼よ！');laneOn(e,e.x+e.face*.8,e.x+e.face*9,e.z,1.2);}if(t===30||t===52||e.phase&&t===74){for(const vz of [-.045,0,.045])G.combat.shoot({owner:e,kind:'ball',x:e.x+e.face*.7,y:1.1,z:e.z,vx:e.face*.16,vy:0,vz,r:.24,dmg:11,life:100,power:1,onGround:'die'});sfx('special');}if(t===82)marksOff(e);},onEnd(e){marksOff(e);after(e,68);}},
+ dualblade:Object.assign({},KN_M.dash2,{id:'emp3_dualblade',len:126,onEnd(e){marksOff(e);after(e,68);}})
+};
+function sovereignAI(e,t){const h=fh(),dx=t.x-e.x,adx=Math.abs(dx),adz=Math.abs(t.z-e.z),sd=dx>0?-1:1;
+ if(e.cool>0){hover(e,t,3.8,.75);return;}if(!e.plan){_mn.length=0;_mw.length=0;opt('cross',e.phase?5:3);opt('wings',adx>2.5?4:1);opt('dualblade',adx>3?3:0);e.plan=pick(e);e.planT=0;}
+ if(++e.planT>180){e.plan=null;e.cool=28;return;}h.face(e,t);
+ if(e.plan==='cross')go(e,EMP3_M.cross,28);else if(e.plan==='wings')go(e,EMP3_M.wings,26);else if(e.plan==='dualblade'){const end=e.x+e.face*6.4;if(adx>3&&adx<6.8&&adz<.3&&end>xLo(e.radius)&&end<xHi(e.radius)){if(go(e,EMP3_M.dualblade,30))laneOn(e,e.x+e.face*.8,end,e.z,1.1);}else approach(e,t.x+sd*4.8,t.z);}else e.plan=null;
+}
 function empAI(e){
   const h = fh(), t = h.target(e);
   pre(e); safety(e);
@@ -1759,6 +1785,7 @@ function empAI(e){
   if(!t){ h.stop(e); return; }
   if(phaseCheck(e)) return;
   h.face(e, t);
+  if(e.form===3){sovereignAI(e,t);return;}
   if(e.cool > 0){ hover(e, t, e.form===2 ? 3.2 : 3.8, 0.7); return; }
   const dx = t.x - e.x, adx = Math.abs(dx), adz = Math.abs(t.z - e.z), sd = dx > 0 ? -1 : 1;
   if(e.form!==2){
@@ -1805,36 +1832,36 @@ function swapRig(e, rig){
   if(rig && rig.root){ G.scene.add(rig.root); rig.root.position.set(e.x, e.y, e.z); }
 }
 function knightIntro(e){
-  if(!e.introDue) return;
-  e.introDue = false;
-  G.bus.emit('bossIntro', { boss:e, name:'あんこくナイト', title:'ダークワンワンたいてい しんのすがた', type:'emperor' });
+  if(!e.introDue) return;e.introDue=false;
+  G.bus.emit('bossIntro',{boss:e,name:e.form===3?'天魔王・ダークわんわん大帝':'わんこくナイト',title:e.form===3?'天魔の翼と双剣・最後の姿':'ダークわんわん大帝 真のちから',type:'emperor'});
 }
 function empTransform(e){
   cleanup(e);
-  e.form = 2; e.transforming = true;
+  e.form = (e.form||1)+1; e.transforming = true;
   e.dead = false; e.deadT = 0; e.koLand = null; e.ignoreForClear = false; e.happy = false;
-  const hp = Math.max(1, Math.round(EMP_HP2 * (e.hpMul || 1)));
+  const hp = Math.max(1, Math.round((e.form===3?EMP_HP2*1.05:EMP_HP2) * (e.hpMul || 1)));
   e.maxHp = hp; e.hp = hp;
   e.phase = 0; e.spdMul = 1; e.rageDue = false; e.plan = null; e.lastMove = null; e.moves = 0;
   e.poiseDmg = 0; e.noStagger = true; e.graceUntil = G.time.tick + 180;
   e.vx = 0; e.vz = 0; e.vy = Math.max(0, (e.vy||0)*0.3); e.bounce = 0; e.gravScale = 1;
   e.inv = 90; e.flashT = 0;
-  e.def = EMP2_DEF;
+  e.def = e.form===3?EMP3_DEF:EMP2_DEF;
   let rig = null;
-  try { rig = buildKnight(); } catch(err){ G.logError('bossB knight build', err); }
-  if(rig){ swapRig(e, rig); e.height = 3.3; e.radius = 1.0; }
+  try { rig = e.form===3?buildSovereign():buildKnight(); } catch(err){ G.logError('bossB knight build', err); }
+  if(rig){ swapRig(e, rig); e.height = e.form===3?3.5:3.3; e.radius = e.form===3?1.05:1.0; }
   e.transforms = (e.transforms|0) + 1;
   fx('smoke', e.x, 0.8, e.z, O.smokeBig); fx('poof', e.x, 1.6, e.z + 0.2, O.purify);
   if(G.fx && G.fx.flash) G.fx.flash('#3a1050', 0.5, 14);
   shake(6, 40);
-  G.bus.emit('bossPhase', { boss:e, phase:2 });
+  G.bus.emit('bossPhase', { boss:e, phase:2,formTransition:true });
   e.introDue = true; knightIntro(e);
   // after the new name's banner (a mid-body line still ran through it: 49% of the line's area under the banner)
-  sayIntro(e, 'これが ほんとうの すがた…！');
+  sayIntro(e,e.form===3?'天魔王、降臨！ 最後の翼を見よ！':'これが ほんとうの すがた…！');
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;
   G.combat.start(e, KN_M.transform);
   e.introDone = true;
+  G.bus.emit('bossForm',{boss:e,form:e.form});
   log('emperor:transform hp=' + hp);
 }
 
@@ -1880,12 +1907,13 @@ const EMPEROR_DEF = G.foes.define('emperor', {
   name:'ダークワンワンたいてい', short:'ワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,
   phaseLine:'ぐぬぬ… ほんきを みせてやる！', phaseLine2:'まだだ… まだ おわらんぞ！',
   hp:900, poise:120, weight:4, radius:1.2, height:3.9, spd:0.036, score:5000, xp:200, entrance:'drop', recover:30,
-  build(){ return buildEmperor(); },
+  build(e){ return e?.form===3?buildSovereign():e?.form===2?buildKnight():buildEmperor(); },
   buildForm2(){ return buildKnight(); },
+  buildForm3(){ return buildSovereign(); },
   init(e){ common(e); e.minions = []; e.summons = 0; },
   ai: empAI,
   // form 1 → the same entity changes into あんこくナイト; the second KO is the real one (default KO → purified)
-  onKO(e){ if(e.form!==2){ empTransform(e); return true; } return bossKO(e); },
+  onKO(e){ if((e.form||1)<3){ empTransform(e); return true; } return bossKO(e); },
   onKOTick(e){ staggerGiveUp(e, e.minions, HELP_GIVEUP); purifyTick(e, koT(e)); },
 });
 // form 2 shares everything with form 1 except the name/title the boss bar shows (per-entity def swap, not a new type)
@@ -1893,8 +1921,13 @@ const EMP2_DEF = Object.create(EMPEROR_DEF, {
   name: { value:'あんこくナイト', enumerable:true }, short: { value:'あんこくナイト', enumerable:true }, title: { value:'ダークワンワンたいてい しんのすがた', enumerable:true },
   height: { value:3.3, enumerable:true }, radius: { value:1.0, enumerable:true }, spd: { value:0.042, enumerable:true },
 });
+const EMP3_DEF=Object.create(EMPEROR_DEF,{
+ name:{value:'天魔王・ダークわんわん大帝',enumerable:true},short:{value:'天魔王',enumerable:true},title:{value:'最後の翼と双剣',enumerable:true},
+ height:{value:3.5,enumerable:true},radius:{value:1.05,enumerable:true},spd:{value:.044,enumerable:true},phaseLine:{value:'天雷よ、さらに轟け！',enumerable:true}
+});
 // test / tooling access through the defs only
 for(const id of ['slime','slimelet','dragon','kuroinu','emperor']){ const d = G.foes.types[id]; d._log = LOG; }
 G.foes.types.slime._moves = SLIME_M; G.foes.types.dragon._moves = DRAGON_M; G.foes.types.emperor._moves = EMP_M; G.foes.types.emperor._moves2 = KN_M;
+G.foes.types.emperor._moves3=EMP3_M;G.foes.types.emperor._form3=EMP3_DEF;
 G.foes.types.kuroinu._defs = kuroDefs; G.foes.types.emperor._form2 = EMP2_DEF;
 })();

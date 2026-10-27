@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'../..'),out=path.join(root,'evidence/commands-20261013/stage2');
 const mutations=[
-  {name:'reported applied damage doubled',file:'52_published_fighter.js',from:'_pubHooks.hit(e,before-e.hp,args)',to:'_pubHooks.hit(e,(before-e.hp)*2,args)',suite:'published_cpu.cjs',filter:'inu.air.hadou.1'},
+  {name:'reported applied damage doubled',file:'52_published_fighter.js',from:'_pubHooks.hit(e,before-e.hp,args,context)',to:'_pubHooks.hit(e,(before-e.hp)*2,args,context)',suite:'published_cpu.cjs',filter:'inu.air.hadou.1'},
   {name:'enemy reaction progression omitted',file:'52_published_fighter.js',from:'saveInput(player.in);_pubReactions();',to:'saveInput(player.in);',suite:'published_edges.cjs'},
   {name:'stock HUD disconnected from actual stock',file:'54_command_moves.js',from:'p.dim=r.dim;',to:'p.dim=0;',suite:'published_cpu.cjs',filter:'inu.ult.1.2.false'},
   {name:'grab hold fails to suspend target AI',file:'54_command_moves.js',from:'if(!e.protected&&e.grabbedBy>0)e.controlled=true;',to:'if(false)e.controlled=true;',suite:'published_edges.cjs'},

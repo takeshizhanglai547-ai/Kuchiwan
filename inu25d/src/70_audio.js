@@ -19,6 +19,7 @@ const TICK_MS = 25;
 const XFADE = 0.4;
 const MUSIC_GAIN = 0.55, SFX_GAIN = 0.85;
 const MAX_SFX_VOICES = 48;
+const MAX_MUSIC_VOICES = 72; // bounded even when forms/themes are changed rapidly
 
 const mtof = (m)=> 440*Math.pow(2,(m-69)/12);
 const clamp = (v,a,b)=> v<a?a:(v>b?b:v);
@@ -126,6 +127,7 @@ const SAMPLED = {
   celesta:{ bases:[67,79,91], dur:1.1, gain:0.7,  ring:0.7,  parts:[[1,1,0.55],[2,0.24,0.28],[3,0.07,0.12],[4.07,0.06,0.06]], click:0.01 },
   pizz:   { bases:[50,62,74], dur:0.5, gain:0.95, ring:0.18, ks:[0.35,0.3,0.2] },   // [減衰秒, 明るさ, 追加減衰秒]
   uke:    { bases:[57,69],    dur:1.2, gain:0.75, ring:0.14, ks:[0.9,0.55,0] },
+  koto:   { bases:[50,62,74], dur:1.0, gain:0.65, ring:0.25, ks:[0.7,0.62,0.35] },
 };
 // 焼く作業は小さな仕事に分けて、ひまなときに少しずつ進める（1回の長い停止を作らない）。
 // 順番は固定なので、分け方に関係なく同じ乱数列＝同じ波形になる。
@@ -301,6 +303,7 @@ function playBrass(E, dest, ms, t, dur, v, sfx){
 }
 // 曲のイベントを鳴らす（楽器名 → 実装）。オフラインでは実際に渡った音を E.log に記録する（検証用）
 function play(E, dest, c, inst, m, t, dur, v, P){
+  if(!E.offline && P && E.liveMusic>=MAX_MUSIC_VOICES) return;
   if(E.log && inst!=='drum'){
     if(Array.isArray(m)){ for(const x of m) E.log.push({ c, m:x, d:dur }); } else E.log.push({ c, m, d:dur });
   }
@@ -325,7 +328,7 @@ function play(E, dest, c, inst, m, t, dur, v, P){
 //   メロディ：音階の度数。1..7（8=1', 9=2'）、' で1オクターブ上、, で下、b/# で半音。 - = のばす、. = 休み
 //   コード：ローマ数字（大文字=長三和音、小文字=短三和音、o=減、7/M7/sus/add9、b で半音下げ）。1小節に "IV/V" で2つ
 // =====================================================================================
-const MODES = { major:[0,2,4,5,7,9,11], lydian:[0,2,4,6,7,9,11], mixo:[0,2,4,5,7,9,10] };
+const MODES = { major:[0,2,4,5,7,9,11], lydian:[0,2,4,6,7,9,11], mixo:[0,2,4,5,7,9,10], minor:[0,2,3,5,7,8,10] };
 const ROMAN = ['i','ii','iii','iv','v','vi','vii'];
 function parseDeg(tok){
   let i=0, acc=0;
@@ -621,6 +624,58 @@ const SONGS = {
       B2:{ from:'B', lead:'flute', m2:'fill:glock', gl:'up' } },
     order:['A','B','A2','B2'] },
 };
+
+// Original expansion themes. These are scores, not streamed/third-party audio.
+// Sengoku uses a five-note melodic vocabulary, a plucked-string bank and taiko;
+// Oni uses a minor brass call/response with tom/cowbell accents.
+DRUMS.sengoku={tk:'X.......X.......',wb:'..x...x...x...x.',sh:'o.o.o.o.o.o.o.o.',fill:{tk:'X...x...X.x.x...',sn:'........ooooXXXX'}};
+DRUMS.oni={tk:'X..x..X.X..x..X.',tm:'....X.......X...',cb:'x.....x.....x...',sh:'..o...o...o...o.',fill:{tk:'X.x.X.x.X.x.X.x.',tm:'....x.x.x.x.XXXX'}};
+SONGS.stage8={bpm:112,key:62,mode:'mixo',room:{beats:.5,fb:.21,wet:.23},
+ ph:{a1:"1 - 2 4 5 - 4 2 | 1 - 2 - 6, - 5, -",a2:"4 - 5 6 1' - 6 5 | 4 - 2 - 1 - - -",
+ a3:"1 - 2 4 5 - 6 1' | 2' - 1' 6 5 - 4 2",a4:"6, - 1 2 4 - 2 - | 1 - - - . . 5, -",
+ b1:"5 - 6 1' 2' - 1' 6 | 5 - 4 2 4 - 5 -",b2:"6 - 1' 2' 4' - 2' 1' | 6 - 5 - 4 - - -",
+ b3:"4 - 5 6 1' - 2' 4' | 2' - 1' 6 5 - 4 -",b4:"2 - 4 5 6 - 5 2 | 1 - - - . . . ."},
+ sec:{A:{ch:'I IV I V I IV V I',mel:'a1 a2 a3 a4',lead:'koto',m2:'fill:koto',comp:'off:koto',bass:'two',drum:'sengoku'},
+ B:{ch:'IV I IV V vi IV V I',mel:'b1 b2 b3 b4',lead:'flute',m2:'double:koto',comp:'pizz8:koto',bass:'march',drum:'sengoku'},
+ A2:{from:'A',m2:'third:koto'},B2:{from:'B',lead:'koto',gl:'up'}},order:['A','B','A2','B2']};
+SONGS.stage9={bpm:126,key:57,mode:'minor',room:{beats:.5,fb:.18,wet:.2},
+ ph:{a1:"1 - 1 . 5, - 1 - | 3 - 2 1 7, - 5, -",a2:"4 - 4 . 1 - 4 - | 6 - 5 4 3 - 2 -",
+ a3:"1 - 3 5 1' - 7 5 | 6 - 5 3 4 - 2 -",a4:"7, - 2 - 5 - 7 - | 1' - - - . . . .",
+ b1:"1' . 1' 7 6 - 5 - | 4 . 4 5 6 - 1' -",b2:"2' - 1' 7 5 - 3 - | 4 - 2 - 7, - - -",
+ b3:"6 - 1' 3' - 2' - 1' | 7 - 5 2' - 7 - 5",b4:"4 - 6 - 2' - 7 - | 1' - - - . . 5 -"},
+ sec:{A:{ch:'i i iv V i VI iv V',mel:'a1 a2 a3 a4',lead:'brass',m2:'arp:marimba',comp:'stab:brass',bass:'drive',drum:'oni'},
+ B:{ch:'VI iv i V VI iv V i',mel:'b1 b2 b3 b4',lead:'pulse',m2:'third:xylo',comp:'push:brass',bass:'boss',drum:'oni'},
+ A2:{from:'A',lead:'pulse',m2:'double:xylo'},B2:{from:'B',lead:'brass',gl:'up'}},order:['A','B','A2','B2']};
+const cloneScore=s=>JSON.parse(JSON.stringify(s));
+// Boss arrangements retain the local melodic identity but change counterpoint,
+// percussion, register, articulation and tempo. Phase two adds denser responses.
+function battleArrangement(source,index,rage){
+ const s=cloneScore(source),compound=s.spb===3;s.bpm=Math.min(184,source.bpm+(rage?32:18));
+ s.room={beats:compound?.5:.75,fb:.18,wet:.19};s.leadLP=rage?4100:3600;
+ for(const [name,sec]of Object.entries(s.sec)){
+  const resolved=Object.assign({},resolveSec(source,name));delete resolved.from;
+  resolved.lead=index===7?'koto':index===4?'flute':rage?'brass':'pulse';
+  resolved.m2=compound?'third:xylo':rage?'arp:xylo:16':index===7?'double:koto':'third:marimba';
+  resolved.comp=compound?'jig:brass':rage?'push:brass':'stab:brass';resolved.bass=compound?'jig':'boss';
+  resolved.drum=compound?'jig2':index===7?'sengoku':index===8?'oni':rage?'final2':'boss2';resolved.gl=rage?'up':resolved.gl;
+  s.sec[name]=resolved;
+ }
+ return s;
+}
+for(let i=1;i<=9;i++){SONGS['boss'+i]=battleArrangement(SONGS['stage'+i],i-1,false);SONGS['boss'+i+'_phase2']=battleArrangement(SONGS['stage'+i],i-1,true);}
+SONGS.final_phase2=battleArrangement(SONGS.final,6,true);
+SONGS.final2=battleArrangement(SONGS.final,6,false);SONGS.final2.bpm=164;SONGS.final2.key=65;
+SONGS.final2_phase2=battleArrangement(SONGS.final2,6,true);
+SONGS.final3=battleArrangement(SONGS.stage9,8,true);SONGS.final3.bpm=178;SONGS.final3.key=60;
+SONGS.final3.ph.a1="1 . 5 1' 3' - 2' 1' | 7 . 5 7 2' - 1' 7";
+SONGS.final3.ph.a2="6 . 3 6 1' - 7 6 | 5 . 2 5 7 - 5 2";
+SONGS.final3.ph.a3="1' - 3' 5' 3' - 1' 7 | 6 - 1' 4' 2' - 7 5";
+SONGS.final3.ph.a4="4 - 6 - 7 - 2' - | 1' - - - . . 5, -";
+SONGS.final3_phase2=battleArrangement(SONGS.final3,8,true);SONGS.final3_phase2.bpm=184;
+function bossTrack(stageIndex,bossType,form,rage){
+ const n=clamp((stageIndex|0)+1,1,9),base=bossType==='emperor'?(form>=3?'final3':form===2?'final2':'final'):'boss'+n;
+ return base+(rage?'_phase2':'');
+}
 
 function resolveSec(S, name, depth){
   const s = S.sec[name]; if(!s) return null;
@@ -1078,6 +1133,9 @@ function startSong(name){
   want = false;
   if(!E) return;
   const t = ctx.currentTime, S = name && SONGS[name], jingle = !!(S && S.loop===false);
+  // Only the outgoing/current pair is retained. Repeated stage/form changes
+  // cannot accumulate silent channel graphs until the fade timeout expires.
+  for(const P of E.players.slice()) if(P.stopping) disposePlayer(P);
   let had = false;
   for(const P of E.players) if(!P.stopping){ fadeOutPlayer(P, jingle ? 0.12 : XFADE); had = true; }
   if(!S) return;
@@ -1255,7 +1313,8 @@ function subscribe(){
   on('hurt', (d)=>{ if(isHero(d.ent) && d.ent.type) voice(d.ent.type, 'hurt'); });
   on('go', ()=> sfx('go'));
   on('bossIntro', ()=> sfx('bossRoar'));
-  on('bossPhase', ()=> sfx('bossRoar', { vol:0.8, pitch:1.1 }));
+  on('bossPhase', (d)=>{sfx('bossRoar', { vol:0.8, pitch:1.1 });const b=d.boss;if(G.sceneName==='play'&&b&&!b.dead&&b.hp>0)bgm(bossTrack(G.game?.stageIndex||0,b.type,b.form||1,!d.formTransition));});
+  on('bossForm', (d)=>{const b=d.boss;if(G.sceneName==='play'&&b&&!b.dead&&b.hp>0)bgm(bossTrack(G.game?.stageIndex||0,b.type,b.form||d.form||1,false));});
   on('bossDown', ()=>{ sfx('hitBig'); sfx('star', { delay:0.3 }); });
   // 最終ボスのあとは 90_game が bgm('clear') のジングルを鳴らす。中ボス（ステージ7のクロイヌ）だけはここでファンファーレ
   on('midClear', ()=> sfx('clear'));
@@ -1389,7 +1448,7 @@ function stats(){
 }
 
 G.audio = {
-  init, unlock, bgm, sfx, voice, setMuted, setVolume, pause,
+  init, unlock, bgm, bossTrack, sfx, voice, setMuted, setVolume, pause,
   get paused(){ return musicPaused; },
   toggleMute(){ setMuted(!muted); return muted; },
   get muted(){ return muted; }, set muted(v){ setMuted(v); },
@@ -1401,6 +1460,7 @@ G.audio = {
   renderOffline, renderSfxOffline, stats,
   debug: {
     compile: (n)=>{ const s = compileSong(n); return s ? { name:n, bars:s.bars, steps:s.L, loopSec:+(s.L*s.stepDur).toFixed(2), warn:s.warn } : null; },
+    score: (n)=>{const s=compileSong(n);return s?JSON.parse(JSON.stringify({name:n,bpm:s.S.bpm,key:s.S.key,mode:s.S.mode,stepDur:s.stepDur,steps:s.steps,warn:s.warn})):null;},
     renderVoice: (heroId, kind)=> renderSfxOffline(kind, { voice:heroId }),
     buildBank: ()=>{ buildBank(); return +bankMs.toFixed(1); },
     bankProfile: ()=>{ const W = bankJobs(), out = []; for(const j of W.jobs){ const t = nowMs(); j(); out.push(+(nowMs()-t).toFixed(1)); } return out; },

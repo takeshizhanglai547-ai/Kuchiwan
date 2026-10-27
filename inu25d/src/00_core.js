@@ -226,8 +226,10 @@ G.cam = {
     const e = this.followEnt;
     if(e){
       const look = e.face*0.9 + this.halfW*this.rightCover()*0.5;
-      this.tx = e.x + look; this.ty = 1.05 + Math.max(0, e.y*0.35); this.tz = U.lerp(-0.2, e.z, 0.35);
-    }
+      const visual=G.inuGroundMotion?.cameraFocus(e)||G.publishedMotion?.cameraFocus(e);
+      this.tx=e.x+look;this.ty=visual?visual.y:1.05+Math.max(0,e.y*.35);this.tz=U.lerp(-.2,e.z,.35);
+      this.visualFollow=!!visual;
+    }else this.visualFollow=false;
     // camera centre must keep the lock range fully on screen (and out from under the touch buttons)
     const rc = this.rightCover();
     const lo = this.lockMax - this.halfW*(1-rc), hi = this.lockMin + this.halfW;
@@ -236,9 +238,9 @@ G.cam = {
     if(stg){ this.tx = U.clamp(this.tx, this.halfW-1, Math.max(this.halfW-1, stg.length - this.halfW + 1)); }
     let gx=this.tx, gy=this.ty, gz=this.tz, zoom=this.zoom;
     const kf = snap ? 0 : dt*60;
-    if(this.focusT>0){ this.focusT -= kf; gx=this.fx; gy=this.fy; gz=this.fz; zoom += this.focusZoom; }
+    if(this.focusT>0){this.focusT-=kf;gx=this.fx;gy=this.visualFollow?this.ty:this.fy;gz=this.fz;zoom+=this.focusZoom;}
     if(snap){ this.x=gx; this.y=gy; this.z=gz; this.zc = zoom; }
-    else { this.x=U.damp(this.x,gx,5.5,dt); this.y=U.damp(this.y,gy,4,dt); this.z=U.damp(this.z,gz,3,dt); this.zc=U.damp(this.zc||0, zoom, 2.5, dt); }
+    else { this.x=U.damp(this.x,gx,5.5,dt);this.y=U.damp(this.y,gy,this.visualFollow?18:4,dt);this.z=U.damp(this.z,gz,3,dt);this.zc=U.damp(this.zc||0,zoom,2.5,dt); }
     let d = (this.baseDist||16) - this.zc;
     // visible half-width at the belt plane follows the real distance (boss fights zoom out)
     this.halfW = Math.tan(VFOV*Math.PI/360) * G.camera.aspect * d;
@@ -266,15 +268,18 @@ G.cam = {
 };
 
 // ---------------------------------------------------------------- input
-const BTNS = ['attack','jump','dodge','special','ult','pause','confirm'];
+function createInputChannel(options={}){
+const BTNS = ['attack','jump','dodge','grab','special','ult','pause','confirm'];
 const KEYS = {
-  attack:['KeyJ','KeyZ'], jump:['KeyK','Space'], dodge:['KeyL','ShiftLeft','ShiftRight'],
-  special:['KeyI','KeyX'], ult:['KeyU','KeyC'], pause:['KeyP','Escape'], confirm:['Enter','NumpadEnter'],
+  attack:['KeyJ','KeyZ'], jump:['Space','KeyI'], dodge:['KeyK','KeyX'],
+  grab:['KeyL','KeyU','ShiftLeft','ShiftRight'],
+  // Dedicated actions stay separate from directional Attack inputs.
+  special:['KeyH','KeyC'], ult:['KeyO','KeyV'], pause:['KeyP','Escape'], confirm:['Enter','NumpadEnter'],
 };
-const MOVE = { left:['ArrowLeft','KeyA'], right:['ArrowRight','KeyD'], up:['ArrowUp','KeyW'], down:['ArrowDown','KeyS'] };
+const MOVE = { left:['ArrowLeft'], right:['ArrowRight'], up:['ArrowUp'], down:['ArrowDown'] };
 const keyDown = Object.create(null);
 const latch = Object.create(null);
-const inp = G.input = {
+const inp = {
   x:0, z:0, btn:{}, touch:{ x:0, z:0 }, pad:{ x:0, z:0 }, lastDevice: isTouch ? 'touch' : 'key',
   // UI calls this on touch/pointer down so a tap shorter than one tick still counts
   latch(btn){ latch[btn] = true; },
@@ -282,25 +287,114 @@ const inp = G.input = {
   // a pad/touch button still physically held stays "down", so letting go of it later
   // is not mistaken for a new press (START on the pause menu used to re-pause at once)
   clear(){ for(const b of BTNS){ const s=inp.btn[b]; s.down = !!inp.pad[b] || !!inp.touch[b]; s.pressed=s.released=false; s.held=0; latch[b]=false; }
-           for(const k in keyDown) keyDown[k]=false; },
+           for(const k in keyDown) keyDown[k]=false; commands.reset(); G.bus.emit('inputReset',{reason:'clear',input:inp}); },
+  clearEdges(syncHeld=false){for(const b of BTNS){latch[b]=false;const s=inp.btn[b];s.pressed=s.released=false;
+    if(syncHeld)s.down=kd(KEYS[b])||!!inp.touch[b]||!!inp.pad[b];}commands.consume();},
 };
 for(const b of BTNS){ inp.btn[b] = { down:false, pressed:false, released:false, held:0 }; inp.touch[b]=false; inp.pad[b]=false; }
+
+// Reference: beltaction.html, main b5c01428 (blob f8de624f).
+// Keep event-time cardinal history, including taps shorter than a simulation tick.
+// Four cardinals: up=0, right=1, down=2, left=3. Times are fixed 60 Hz ticks.
+const commands = {
+  cardSeq:[], dirTaps:[], downTaps:[], stickRot:-999,
+  touchState:{ lastTapDir:0, lastCard:-1, angPrev:null, accum:0 },
+  now(){ const p=inp.player||G.player; return p?.published&&G.sceneName==='play' ? G.published.native(p).clock : G.time ? G.time.tick : 0; },
+  pushTap(d){ this.dirTaps.push({d,f:this.now()}); if(this.dirTaps.length>6) this.dirTaps.shift(); },
+  pushCard(c){ const r=this.cardSeq, L=r[r.length-1];
+    if(L&&L.c===c){ L.f=this.now(); return; } r.push({c,f:this.now()}); if(r.length>8) r.shift(); },
+  key(code){
+    if(code==='ArrowUp') this.pushCard(0);
+    else if(code==='ArrowRight'){ this.pushTap(1); this.pushCard(1); }
+    else if(code==='ArrowDown'){ this.pushCard(2); this.downTaps.push(this.now()); if(this.downTaps.length>4) this.downTaps.shift(); }
+    else if(code==='ArrowLeft'){ this.pushTap(-1); this.pushCard(3); }
+  },
+  // Public stick geometry: radius 50, digital movement threshold 16,
+  // command/cardinal threshold 55% and rotation travel 1.7*pi.
+  // UI passes displacement in those units while retaining its existing screen layout.
+  touchMove(dx,dy){
+    const s=this.touchState, m=Math.hypot(dx,dy)||1, max=50, cl=Math.min(m,max);
+    dx=dx/m*cl; dy=dy/m*cl;
+    this.touch8?.(dx,dy,m>max*.55);
+    const nl=dx < -16, nr=dx > 16;
+    if(nl&&s.lastTapDir!==-1){ this.pushTap(-1); s.lastTapDir=-1; }
+    if(nr&&s.lastTapDir!==1){ this.pushTap(1); s.lastTapDir=1; }
+    if(!nl&&!nr) s.lastTapDir=0;
+    if(m>max*0.55){
+      const ang=Math.atan2(dy,dx), card=[1,2,3,0][(Math.round(ang/(Math.PI/2))+4)%4];
+      if(card!==s.lastCard){ this.pushCard(card); s.lastCard=card; }
+      if(s.angPrev!==null){ let d=ang-s.angPrev; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; s.accum+=d; }
+      s.angPrev=ang; if(Math.abs(s.accum)>=Math.PI*1.7){ this.stickRot=this.now(); s.accum=0; }
+    } else { s.lastCard=-1; s.angPrev=null; s.accum=0; }
+    inp.touch.x=(nr?1:0)-(nl?1:0); inp.touch.z=(dy>16?1:0)-(dy < -16?1:0);
+  },
+  touchEnd(){ inp.touch.x=inp.touch.z=0; Object.assign(this.touchState,{lastTapDir:0,lastCard:-1,angPrev:null,accum:0});this.neutral8?.(); },
+  consume(){ this.cardSeq.length=this.dirTaps.length=this.downTaps.length=0; this.stickRot=-999;this.consume8?.(); },
+  reset(){ this.consume(); this.touchEnd();this.reset8?.(); },
+  up(){ return kd(MOVE.up)||inp.touch.z<0||inp.pad.z<0; },
+  down(){ return kd(MOVE.down)||inp.touch.z>0||inp.pad.z>0; },
+  forward(face){ return face>0 ? kd(MOVE.right)||inp.touch.x>0||inp.pad.x>0 : kd(MOVE.left)||inp.touch.x<0||inp.pad.x<0; },
+  dashReady(face){
+    const want=face>0?1:3, back=face>0?3:1, f=this.now(), r=this.cardSeq.filter(t=>f-t.f<=18);
+    for(let i=r.length-1;i>=1;i--) if(r[i].c===want&&f-r[i].f<=10)
+      for(let j=i-1;j>=0;j--) if(r[j].c===back) return true;
+    return false;
+  },
+  rotationReady(){
+    const f=this.now(); if(f-this.stickRot<=12) return true;
+    const r=this.cardSeq.filter(t=>f-t.f<=44); if(r.length<4) return false;
+    for(let i=r.length-1;i>=3;i--){ const a=r[i-3].c,b=r[i-2].c,c=r[i-1].c,d=r[i].c;
+      if((b===(a+1)%4&&c===(b+1)%4&&d===(c+1)%4)||(b===(a+3)%4&&c===(b+3)%4&&d===(c+3)%4)) return true;
+    } return false;
+  },
+  duReady(){
+    if(!this.up()) return false;
+    const r=this.cardSeq, f=this.now(); let i=-1;
+    for(let k=r.length-1;k>=0;k--) if(r[k].c===0){ i=k; break; }
+    if(i<0||f-r[i].f>34) return false;
+    for(let j=i-1;j>=0;j--) if(r[j].c===2&&r[i].f-r[j].f<=30) return true;
+    return false;
+  },
+  hadouReady(face){
+    const want=face>0?1:3, f=this.now(), r=this.cardSeq.filter(t=>f-t.f<=28);
+    for(let i=r.length-1;i>=1;i--) if(r[i].c===want&&f-r[i].f<=9)
+      for(let j=i-1;j>=0;j--) if(r[j].c===2&&r[i].f-r[j].f<=20) return true;
+    return false;
+  },
+  dpReady(face){
+    const want=face>0?1:3, f=this.now(), r=this.cardSeq.filter(t=>f-t.f<=40);
+    for(let i=r.length-1;i>=2;i--) if(r[i].c===want&&f-r[i].f<=9)
+      for(let j=i-1;j>=1;j--) if(r[j].c===2&&r[i].f-r[j].f<=20)
+        for(let k=j-1;k>=0;k--) if(r[k].c===want&&r[j].f-r[k].f<=20) return true;
+    return false;
+  },
+  motion(face){ return this.dpReady(face)?'dp':this.hadouReady(face)?'hadou':this.duReady()?'du':null; },
+  ground(face){
+    if(this.rotationReady()) return 'ult';
+    const motion=this.motion(face); if(motion) return motion;
+    return this.down()?'down':this.up()?'up':this.dashReady(face)?'dash':this.forward(face)?'fwd':null;
+  },
+  cancelTarget(face){ return this.motion(face)||(this.up()?'up':this.down()?'down':this.forward(face)?'fwd':null); },
+};
 
 const codeToBtn = {};
 for(const b in KEYS) for(const c of KEYS[b]) codeToBtn[c]=b;
 const moveCodes = new Set([].concat(MOVE.left,MOVE.right,MOVE.up,MOVE.down));
 window.addEventListener('keydown', (e)=>{
-  const c = e.code;
+  if(options.active&&!options.active())return;
+  const c = options.keys ? options.keys[e.code] : e.code;if(!c)return;
   if(codeToBtn[c] || moveCodes.has(c)){
     // keep the page from scrolling / buttons from being "clicked" by space
     if(!(e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA'))) e.preventDefault();
   }
-  if(!e.repeat && codeToBtn[c]) latch[codeToBtn[c]] = true;
+  if(!keyDown[c]&&!e.repeat){ commands.key(c); if(codeToBtn[c]) latch[codeToBtn[c]] = true; }
+  if(e.repeat&&!keyDown[c]&&codeToBtn[c])inp.btn[codeToBtn[c]].down=true;
   keyDown[c] = true; inp.lastDevice = 'key';
+  commands.key8?.(c,true,!!e.repeat);
   if(G.audio && G.audio.unlock) G.audio.unlock();
 }, {passive:false});
-window.addEventListener('keyup', (e)=>{ keyDown[e.code] = false; });
-window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS) inp.touch[b]=false; inp.touch.x=0; inp.touch.z=0; });
+window.addEventListener('keyup', (e)=>{ const c=options.keys?options.keys[e.code]:e.code;if(!c)return;keyDown[c] = false;commands.key8?.(c,false,false); });
+window.addEventListener('blur', ()=>{ for(const k in keyDown) keyDown[k]=false; for(const b of BTNS){ inp.touch[b]=false; latch[b]=false; } commands.reset();G.bus.emit('inputReset',{reason:'blur',input:inp}); });
 const kd = (list)=> list.some(c=>keyDown[c]);
 
 function pollPad(){
@@ -308,21 +402,24 @@ function pollPad(){
   if(!navigator.getGamepads) return;
   let pads; try { pads = navigator.getGamepads(); } catch(_){ return; }
   if(!pads) return;
-  for(const gp of pads){
+  for(let pi=0;pi<pads.length;pi++){
+    const wanted=options.padIndex??(G.coop?.enabled?0:null);if(wanted!==null&&pi!==wanted)continue;const gp=pads[pi];
     if(!gp || !gp.connected) continue;
     const ax = gp.axes[0]||0, az = gp.axes[1]||0;
     if(Math.abs(ax)>0.2) p.x = ax;
     if(Math.abs(az)>0.2) p.z = az;
     const b = (i)=> gp.buttons[i] && gp.buttons[i].pressed;
     if(b(14)) p.x=-1; if(b(15)) p.x=1; if(b(12)) p.z=-1; if(b(13)) p.z=1;
-    p.attack = b(2); p.jump = b(0); p.dodge = b(1) || b(4); p.special = b(3);
-    p.ult = b(5) || b(7); p.pause = b(9); p.confirm = b(0) || b(9);
+    p.attack = b(2); p.jump = b(0); p.dodge = b(1) || b(4); p.grab = b(3);
+    p.special=b(5);p.ult=b(7);
+    p.pause = b(9); p.confirm = b(0) || b(9);
     if(p.attack||p.jump||p.x||p.z) inp.lastDevice='pad';
     break;
   }
 }
 
 function updateInput(){
+  if(options.active&&!options.active())return;
   pollPad();
   let x = 0, z = 0;
   if(kd(MOVE.left)) x -= 1; if(kd(MOVE.right)) x += 1;
@@ -339,6 +436,12 @@ function updateInput(){
     latch[b] = false;
   }
 }
+
+return {input:inp,commands,update:updateInput};
+}
+G.createInputChannel=createInputChannel;
+const primaryInput=createInputChannel();G.input=primaryInput.input;G.commands=primaryInput.commands;
+function updateInput(){primaryInput.update();G.coop?.updateInputs();}
 
 // ---------------------------------------------------------------- entities & world
 let _id = 1;
@@ -419,6 +522,8 @@ function syncVisuals(alpha){
   for(const e of G.world.ents){
     const x = U.lerp(e.px, e.x, alpha), y = U.lerp(e.py, e.y, alpha), z = U.lerp(e.pz, e.z, alpha);
     if(e.rig && e.rig.root) e.rig.root.position.set(x, y, z);
+    if(e.rig?.heroId==='inu'&&G.inuGroundMotion)G.inuGroundMotion.renderFeet(e.rig,e);
+    if(e.rig?.heroId&&G.publishedMotion)G.publishedMotion.renderFeet(e.rig,e);
     if(e.shadow){
       e.shadow.position.set(x, 0.015, z);
       const h = Math.max(0, y), s = 1/(1+h*0.35);
@@ -455,6 +560,7 @@ G.paused = false;
 let acc = 0, last = 0, running = false;
 let emaDt = 1/60, slowFor = 0, fastFor = 0;
 function tick(){
+  if(G.sceneName==='play'&&G.story?.blocked){updateInput();try{G.story.tick();}catch(err){G.logError('story.tick',err);G.story.reset();}return;}
   G.time.tick++; G.time.sceneTick++;
   updateInput();
   storePrev();
@@ -470,7 +576,7 @@ function frame(now){
   if(dt > 0.1) dt = 0.1;              // tab switch / hiccup: don't fast-forward the world
   // slow motion stretches ticks; counted in real frames
   let scale = 1;
-  if(slowT>0){ slowT -= dt*60; scale = slowScale; }
+  if(slowT>0&&!G.story?.blocked){ slowT -= dt*60; scale = slowScale; }
   G.timeScale = scale;
   acc += dt*scale;
   let steps = 0;

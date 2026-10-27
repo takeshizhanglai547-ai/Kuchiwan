@@ -3,8 +3,8 @@ const {setup,root}=require('./story_harness.cjs'),assert=require('node:assert/st
 const report={kind:'Actual boss modules, cinematic coordinator, core stepping and play scene; CPU/DOM fixture only',bosses:[],characterEvents:[],lifecycle:[]};
 const types=['garm','shark','ghost','cerbe','slime','dragon','kuroinu','emperor'];
 {const {G}=setup();assert.deepEqual(Object.entries(G.foes.types).filter(([id,d])=>d.boss).map(([id])=>id).sort(),types.slice().sort(),'all actual registered bosses covered');assert.deepEqual(Array.from(G.heroes.ids).sort(),Object.keys(G.story.heroes).sort(),'all playable characters covered');}
-for(const type of types)for(const form of (type==='emperor'?[1,2]:[1])){
- const g=setup(),{G,n,p}=g,b=g.spawn(type);if(form===2){b.form=2;b.phase=0;}
+for(const type of types)for(const form of (type==='emperor'?[1,2,3]:[1])){
+ const g=setup(),{G,n,p}=g,b=g.spawn(type);if(form>1){b.form=form;b.def=G.foes.types.emperor['_form'+form];b.phase=0;}
  const full=b.maxHp;b.hp=full*.5;G.bus.emit('hit',{target:b,dmg:1});assert.equal(b.phase,0,type+' exactly half');assert.equal(G.story.pending,0);
  b.hp=full*.5-1;G.bus.emit('hit',{target:b,dmg:1});assert.equal(b.phase,1);assert.equal(G.story.pending,1);assert.equal(b._phaseEventHold,true);
  G.foes.tick(b);assert.equal(b.rageDue,true,'rage must wait until cinematic finishes');
@@ -21,7 +21,7 @@ for(const type of types)for(const form of (type==='emperor'?[1,2]:[1])){
 for(const type of types){
  const large=setup(),lb=large.spawn(type),amount=Math.floor(lb.maxHp*.72);large.G.combat.damage(lb,amount,{dir:1,power:2});assert.equal(lb.phase,1,type+' large nonlethal crosses threshold');assert.equal(large.G.story.pending,1);assert(lb.hp<lb.maxHp*.5&&lb.hp>0,'damage is not clamped to threshold');
  const g=setup(),{G}=g,b=g.spawn(type);G.combat.damage(b,b.maxHp*4,{dir:1,power:3});G.hitStop=0;
- assert.equal(G.story.pending,0,'lethal bypasses half-health cinematic '+type);
+ assert.equal(G.story.pending,type==='emperor'?1:0,'lethal skips half-health but emperor queues form cinematic '+type);
  assert(type==='emperor'?b.form===2&&!b.dead:b.dead,type+' actual lethal/transform');
  // If a later hit kills a boss in the same tick as the threshold, defeat wins.
  const g2=setup(),boss=g2.spawn(type);boss.hp=boss.maxHp*.4;g2.G.bus.emit('hit',{target:boss,dmg:1});assert.equal(g2.G.story.pending,1);
@@ -29,13 +29,13 @@ for(const type of types){
 }
 const heroes=['inu','shima','nuko','guard8','watch','wanden','mack'],signatures=new Set();
 {const g=setup(),{G}=g,b=g.spawn('emperor');b.x=g.p.x+.6;b.hp=1;g.key('KeyJ');g.step();g.key('KeyJ',false);g.step(200);
- assert.equal(b.form,2,'native player hit preserves actual emperor transformation');assert.equal(b.dead,false);assert.equal(G.story.pending,0,'lethal first bar has no obsolete cinematic');
+ assert.equal(b.form,2,'native player hit preserves actual emperor transformation');assert.equal(b.dead,false);assert.equal(G.story.pending,1,'lethal first bar queues its form cinematic');G.hitStop=0;G.story.flush();assert.equal(G.story.active.kind,'form');g.step(31);assert(G.story.skip());
  // This combat-only fixture does not tick foe AI/cooldowns. End the authored
  // transform grace before testing a fresh, hittable second health bar.
  b.inv=0;b.state='idle';b.hp=b.maxHp*.5;g.key('KeyJ');g.step();g.key('KeyJ',false);g.step(20);assert.equal(b.phase,1,'native player hit triggers second-bar half-health hook');assert.equal(G.story.pending,1);G.hitStop=0;G.story.flush();assert.equal(G.story.active.form,2);g.step(30);G.story.skip();report.lifecycle.push('native command damage preserves emperor form change and triggers second-bar cinematic');}
 {const g=setup(),{G,n}=g;G.story.beginStage('inu',0);G.story.flush();const t=G.time.tick,c=n.clock;g.step(184);assert(G.story.blocked);g.step();assert.equal(G.story.blocked,false);assert.equal(G.time.tick,t);g.step();assert.equal(G.time.tick,t+1);assert.equal(n.clock,c+1);assert.equal(G.cam.focusT,0);report.lifecycle.push('automatic completion resumes combat and restores camera');}
 for(const hero of heroes){const g=setup(hero),{G,p}=g;
- assert.equal(G.stages.length,7);const spec=G.story.heroes[hero];assert.equal(spec.start.length,7);assert.equal(spec.clear.length,7);
+ assert.equal(G.stages.length,9);const spec=G.story.heroes[hero];assert.equal(spec.start.length,9);assert.equal(spec.clear.length,9);
  for(let stage=0;stage<G.stages.length;stage++){
   G.game.stageName=G.stages[stage].kana;G.story.beginStage(hero,stage);assert.equal(G.story.pending,1);G.story.flush();
   const before=G.time.tick;g.step(80);assert.equal(G.time.tick,before);assert.equal(p.rig.st.storyPose.hero,hero);assert.equal(p.rig.st.storyPose.kind,'intro');
@@ -69,12 +69,12 @@ report.status='PASS_CPU';report.limits='No browser, GPU, DOM layout, trusted poi
  g.step(30);G.story.skip();g.step();assert.equal(G.published.trace().actions.filter(a=>a.state==='attack').length,0);report.lifecycle.push('actual final-life game-over clears queued boss; UI retry creates clean intro without stale commands');}
 {const g=setup(),{G}=g;for(const type of ['garm','shark']){const b=g.spawn(type);b.hp=b.maxHp*.4;G.bus.emit('hit',{target:b,dmg:1});}assert.equal(G.story.pending,2);G.story.flush();assert.equal(G.story.active.boss.type,'garm');g.step(30);G.story.skip();G.story.flush();assert.equal(G.story.active.boss.type,'shark');g.step(30);G.story.skip();assert.equal(G.story.pending,0);report.lifecycle.push('two overlapping boss requests play in order');}
 for(const hero of heroes){const g=setup(hero,true),{G}=g;
- for(let stage=0;stage<7;stage++){
+ for(let stage=0;stage<G.stages.length;stage++){
   assert.equal(G.game.stageIndex,stage);g.step();assert.equal(G.story.active.kind,'intro');g.step(30);G.story.skip();
   G.stage.done=true;G.hitStop=0;g.step(40);assert.equal(G.story.active.kind,'clear');g.step(30);G.story.skip();G.scenes.play.showResult();
-  assert.equal(typeof G._shown.result.onNext,'function');G._shown.result.onNext();assert.equal(G.sceneName,stage===6?'ending':'play');
+  assert.equal(typeof G._shown.result.onNext,'function');G._shown.result.onNext();assert.equal(G.sceneName,stage===G.stages.length-1?'ending':'play');
  }
- assert.deepEqual(Array.from(G.errors),[]);report.lifecycle.push('actual result-next progression all seven stages: '+hero);
+ assert.deepEqual(Array.from(G.errors),[]);report.lifecycle.push('actual result-next progression all nine stages: '+hero);
 }
 fs.writeFileSync(path.join(root,'evidence/phase-events-20261024/story-cpu.json'),JSON.stringify(report,null,2));
-console.log('PASS nine boss/form thresholds; lethal and queued death; 49 character/stage pairs; actual play lifecycle / pause / skip / clocks');
+console.log('PASS ten boss/form thresholds; lethal and queued death; 63 character/stage pairs; actual play lifecycle / pause / skip / clocks');

@@ -6,16 +6,25 @@ const root=path.resolve(__dirname,'..');
 const raw=Buffer.from(fs.readFileSync(path.join(root,'beltaction.html'),'utf8').replace(/\r\n/g,'\n'));
 const hash=crypto.createHash('sha1').update(Buffer.from(`blob ${raw.length}\0`)).update(raw).digest('hex');
 if(hash!=='f8de624f45b07f9a4961a365f0274066f92b20ff')throw Error('published reference changed');
-const body=raw.toString('utf8').match(/<script>([\s\S]*)<\/script>/)[1];
+let body=raw.toString('utf8').match(/<script>([\s\S]*)<\/script>/)[1];
+// Adapt only ordinary input locomotion. Attack lunges, recoil, throws and dive
+// trajectories retain the pinned reference's distances and timing.
+for(const [from,to] of [
+ ['p.x+=mx*SPEED*slow*gmul*(p.spdMul||1);', 'p.x+=_pubHooks.walkX?_pubHooks.walkX(p,mx,slow,gmul):mx*SPEED*slow*gmul*(p.spdMul||1); _pubHooks.laneMove?.(p,false);'],
+ ['p.x+=mx*SPEED*(p.jDown?0.3:1.0);', 'p.x+=_pubHooks.airX?_pubHooks.airX(p,mx):mx*SPEED*(p.jDown?0.3:1.0); _pubHooks.laneMove?.(p,true);'],
+ ['pr.y=clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4);', 'pr.y=_pubHooks.laneClamp?.(pr.y+pr.vy)??clamp(pr.y+pr.vy,GROUND_TOP-4,GROUND_BOT+4);'],
+ ['for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i];', 'for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i]; _pubActiveProjectile=pr;']
+]){if(body.split(from).length!==2)throw Error('locomotion boundary changed: '+from);body=body.replace(from,to);}
 const at=body.indexOf('function updateEnemies(){'),end=body.indexOf('    if(t.boss){ bossTick',at);
 if(at<0||end<0)throw Error('reaction boundary not found');
 const separationStart=body.indexOf('  // separation',end),separationEnd=body.indexOf('  updateGait();',separationStart);
 if(separationStart<0||separationEnd<0)throw Error('reaction separation boundary not found');
-const reactions=body.slice(at,end).replace('function updateEnemies(){','function _pubReactions(){')+'    continue;\n  }\n'+body.slice(separationStart,separationEnd)+'}\n';
+const reactions=(body.slice(at,end).replace('function updateEnemies(){','function _pubReactions(){')+'    continue;\n  }\n'+body.slice(separationStart,separationEnd)+'}\n').replace('e.y=clamp(e.y,GROUND_TOP,GROUND_BOT);','e.y=_pubHooks.laneClamp?.(e.y)??clamp(e.y,GROUND_TOP,GROUND_BOT);');
 const pre=`// Published fighter: generated from main b5c01428, blob ${hash}.
 // Regenerate with node tools/published-fighter.cjs. Never edit this generated module.
 (function(){'use strict'; const G=window.G;
 G.publishedFactory=function(_pubHooks={}){
+  let _pubActiveProjectile=null;
   let _pubSeed=1; const Math=Object.create(globalThis.Math);
   const _pubSeedTo=n=>{_pubSeed=(n>>>0)||1;};
   Math.random=()=>{_pubSeed=(_pubSeed+0x6D2B79F5)|0;let t=Math.imul(_pubSeed^(_pubSeed>>>15),1|_pubSeed);t=(t+Math.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296;};

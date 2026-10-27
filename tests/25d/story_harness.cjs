@@ -9,7 +9,7 @@ function dom(c){
  c.document.body=new Element('body');c.document.createElement=tag=>tag==='canvas'?canvas(tag):new Element(tag);return Element;
 }
 function setup(hero='inu',play=false){const g=game(hero,{foes:[],actualRig:true}),{G,env}=g,c=env.c;dom(c);
- for(const f of ['30_foes.js','31_zako.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','82_story_events.js']){if(f==='82_story_events.js'&&G.story)continue;vm.runInContext(readModule(f),c,{filename:f});}
+ for(const f of ['30_foes.js','31_zako.js','32_expansion_foes.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','82_story_events.js']){if(f==='82_story_events.js'&&G.story)continue;if(f==='32_expansion_foes.js'&&!require('node:fs').existsSync(require('node:path').join(root,'inu25d/src',f)))continue;vm.runInContext(readModule(f),c,{filename:f});}
  G.foes.init();G.foes.build=()=>({root:new c.THREE.Group(),height:2,update(){},setAlpha(){}});
  G.game.diff={heroDmg:1,heroHp:1,foeDmg:1.1,foeHp:1,foeSpeed:1.08,attackers:3,think:.9,tactics:true,minWindup:18,attackSpacing:12,punishWindow:28,lives:3};
  G.game.heroId=hero;G.story.beginStage(hero,0,true);

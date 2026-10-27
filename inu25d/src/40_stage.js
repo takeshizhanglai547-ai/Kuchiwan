@@ -114,6 +114,8 @@ const THEMES = {
   },
 };
 
+THEMES.sengoku=Object.assign({},THEMES.dusk,{scenery:'sengoku',sky:{top:'#54415f',mid:'#d68b68',bot:'#f9ddba',h0:-.2,h1:.02},fog:{color:'#dbb49b',near:30,far:120},particles:Object.assign({},THEMES.town.particles,{a:'#f8dfbd',b:'#ad554e',n:55})});
+THEMES.onibattle=Object.assign({},THEMES.cave,{scenery:'onibattle',sky:{top:'#220c2e',mid:'#702738',bot:'#c96940',h0:-.2,h1:.02},fog:{color:'#8c4a49',near:28,far:115},light:Object.assign({},THEMES.cave.light,{key:'#ffe1b9',rim:'#ff7f65',fill:'#bc73df'}),particles:Object.assign({},THEMES.castle.particles,{a:'#ffb95c',b:'#ff7154',n:65})});
 // ================================================================ stage data (CONCEPT.md §Stages)
 const MOFU = 'モフじい';
 G.stages = [
@@ -215,6 +217,30 @@ G.stages = [
     props:[ {kind:'barrel', x:10, z:-1.4, drop:'coin'}, {kind:'pumpkin', x:28, z:1.2, drop:'bone'}, {kind:'crystal', x:46, z:-1.2, drop:'star'}, {kind:'pumpkin', x:64, z:1.0, drop:'cake'}, {kind:'crystal', x:86, z:-1.0, drop:'star'}, {kind:'barrel', x:90, z:1.3, drop:'cake'} ],
   },
 ];
+// Bonus campaigns follow the original seven stages without changing their saved
+// indices. Stage selection and ordinary stage advance both consume this array.
+G.stages.push(
+ {id:'s8',no:8,name:'戦国和風・わんこ合戦',kana:'せんごく わふう わんこがっせん',length:116,bgm:'stage8',theme:THEMES.sengoku,
+  waves:[
+   {at:16,width:17,foes:[['ashigaru',3],['naginata',1]]},
+   {at:38,width:17,foes:[['shinobi',2],['ashigaru',2],['sniper',1]],then:[['naginata',2]],reward:'bone'},
+   {at:62,width:18,foes:[['naginata',2],['shinobi',2],['skyarmor',1]],then:[['ashigaru',3],['sniper',1]],reward:'cake'},
+  ],boss:{type:'kuroinu',at:98,x:98},
+  hints:[{at:5,name:MOFU,text:'足軽はまっすぐ、薙刀は横に広い！ 上下のラインを使い分けるのじゃ。'},{at:32,name:MOFU,text:'狙いイヌの赤い線は撃つ場所の予告。ねらいが決まったらラインを変えるのじゃ！'},{at:57,name:MOFU,text:'スカイアーマーは着地後がつかむチャンス。装甲には方向＋つかみ攻撃じゃ！'}],
+  props:[{kind:'crate',x:9,z:-1.3,drop:'coin'},{kind:'pot',x:29,z:1.1,drop:'bone'},{kind:'crate',x:55,z:-1.5,drop:'star'},{kind:'pot',x:87,z:1.0,drop:'cake'}]},
+ {id:'s9',no:9,name:'鬼合戦・紅蓮の門',kana:'おにがっせん ぐれんのもん',length:120,bgm:'stage9',theme:THEMES.onibattle,
+  waves:[
+   {at:16,width:17,foes:[['akoni',2],['ao_oni',2]]},
+   {at:40,width:18,foes:[['taiko_oni',1],['akoni',2],['ao_oni',1]],then:[['sniper',1],['ao_oni',2]],reward:'bone'},
+   {at:66,width:18,foes:[['taiko_oni',2],['skyarmor',1],['ao_oni',2]],then:[['akoni',2],['taiko_oni',1]],reward:'cake'},
+  ],boss:{type:'cerbe',at:102,x:102},
+  hints:[{at:5,name:MOFU,text:'赤鬼の金棒は重いがすきも大きい。青鬼の氷玉はラインを変えてよけるのじゃ！'},{at:34,name:MOFU,text:'太鼓鬼は二度たたく！ 輪の外へ動くかジャンプして、二度目の後に反撃じゃ。'}],
+  props:[{kind:'crystal',x:9,z:-1.3,drop:'coin'},{kind:'pot',x:31,z:1.2,drop:'bone'},{kind:'crystal',x:58,z:-1.4,drop:'star'},{kind:'pot',x:92,z:1.1,drop:'cake'}]}
+);
+// Introduce the two specialists in the original late campaign as well.
+G.stages[4].waves[2].foes.push(['sniper',1]);
+G.stages[5].waves[0].foes.push(['skyarmor',1]);
+G.stages[6].waves[1].then.push(['sniper',1],['skyarmor',1]);
 // fallback names for the boss intro when the boss module has no name/title
 const BOSS_NAMES = {
   garm:['てつづめの ガルム','わが てつづめ、うけてみよ！'], shark:['りくザメ リクザメ','じめんの そこから がぶっ！'],
@@ -232,14 +258,15 @@ function prims(){
   if(P) return P;
   const g = G.look.geo;
   P = {
-    sph: g.sphere(1, 12, 9), lo: g.sphere(1, 8, 6), dot: g.sphere(1, 6, 4),
+    // Decorative background curvature only; hero/foe/weapon geometry is unchanged.
+    sph: g.sphere(1, 10, 7), lo: g.sphere(1, 8, 6), dot: g.sphere(1, 6, 4),
     hemi: new THREE.SphereGeometry(1, 14, 6, 0, TAU, 0, PI/2),
     cyl: g.cylinder(1, 1, 1, 10), cyl6: g.cylinder(1, 1, 1, 6), cylHi: g.cylinder(1, 1, 1, 16),
     cone: g.cone(1, 1, 10), cone6: g.cone(1, 1, 6),
     box: g.box(1, 1, 1), rbox: g.rbox(1, 1, 1, 0.2, 3), rbox2: g.rbox(1, 1, 1, 0.12, 2),
     oct: new THREE.OctahedronGeometry(1, 0),
-    pyr: new THREE.ConeGeometry(1, 1, 4, 1).rotateY(PI/4), mid: g.sphere(1, 10, 8),
-    torus: g.torus(1, 0.22, 5, 14), ring: g.torus(1, 0.08, 4, 12), can: g.sphere(1, 14, 10),
+    pyr: new THREE.ConeGeometry(1, 1, 4, 1).rotateY(PI/4), mid: g.sphere(1, 8, 6),
+    torus: g.torus(1, 0.22, 5, 14), ring: g.torus(1, 0.08, 4, 12), can: g.sphere(1, 12, 8),
     heart: g.heart(0.5, 0.25), star: g.star(0.5, 0.48, 0.2),
     lathePot: g.lathe('stgPot', [[0,0],[0.7,0],[1,0.4],[0.95,0.8],[0.55,1],[0,1]], 12),
   };
@@ -452,6 +479,18 @@ const KIT = {
 
 // ================================================================ per-theme scenery layouts
 const SCENERY = {
+  // Layered tiled roofs, red torii, wooden palisades and war banners.
+  sengoku(c){const {L}=c,p=prims();
+    for(let x=-18;x<L+22;x+=10){c.at(x);const z=-6.5,y=c.h(x,z);for(const dx of [-1.35,1.35])c.S(p.cyl6,'#af3c31',[x+dx,y+1.65,z],null,[.16,3.3,.16]);c.S(p.rbox2,'#8c2c2d',[x,y+3.2,z],null,[3.8,.25,.3]);c.S(p.rbox2,'#c44f3d',[x,y+2.8,z],null,[3.2,.2,.2]);
+      KIT.flag(c,x+3,y+1.8,z,.9,'#b9433e','#6e4d39');for(let k=0;k<4;k++)c.S(p.cyl6,'#8b6748',[x+4+k*.5,y+.8,z+.6],[0,0,.06],[.09,1.6,.09]);}
+    for(let x=-12;x<L+22;x+=22){c.at(x);const z=-11,y=c.h(x,z);c.S(p.rbox,'#b4a28b',[x,y+1.2,z],null,[5,2.4,3.3]);for(let k=0;k<3;k++){c.S(p.rbox2,'#efe6d5',[x,y+3+k*1.4,z],null,[3.8-k*.85,1.2,2.5-k*.5]);c.S(p.pyr,'#354958',[x,y+3.8+k*1.4,z],[0,Math.PI/4,0],[3.7-k*.7,.7,2.7-k*.45]);}KIT.tree(c,x+7,z+1,1.4,'#d49289','#755741');}
+  },
+  // Horned gates and festival drums make the Oni campaign a separate silhouette.
+  onibattle(c){const {L}=c,p=prims();
+    for(let x=-18;x<L+22;x+=13){c.at(x);const z=-6.5,y=c.h(x,z);for(const dx of [-1.4,1.4]){c.S(p.rbox,'#45394d',[x+dx,y+1.6,z],null,[.8,3.2,.8]);c.S(p.cone6,'#ffcf78',[x+dx,y+3.85,z],[0,0,dx<0?-.4:.4],[.26,1.4,.26]);}c.S(p.rbox,'#a94b45',[x,y+3,z],null,[4.2,.55,.9]);c.GL(p.sph,'#ffac55',[x,y+3,z+.51],null,[.45,.35,.1]);c.halo(x,y+3,z+.65,'#ff7d4e',2.5);
+      c.S(p.cyl,'#55352f',[x+4,y+1,z],[Math.PI/2,0,0],[.7,.7,.75]);c.S(p.cyl,'#f3ddb3',[x+4,y+1,z+.4],[Math.PI/2,0,0],[.68,.025,.68]);KIT.flag(c,x+6,y+1,z,.8,'#be6854','#6a3c47');}
+    for(let x=-15;x<L+25;x+=18){c.at(x);const z=-12,y=c.h(x,z);c.S(p.lo,'#5a4561',[x,y+1.5,z],null,[2,3,1.4]);c.S(p.sph,'#986657',[x,y+4.1,z],null,[1.5,1.2,1]);for(const dx of [-.8,.8])c.S(p.cone,'#e9b467',[x+dx,y+5.35,z],[0,0,dx<0?-.3:.3],[.2,1.2,.2]);for(const dx of [-.5,.5])c.GL(p.dot,'#ffcf72',[x+dx,y+4.25,z+.95],null,.16);}
+  },
   // ---- stage 1: sunny outskirts of the capital
   town(c){
     const { L, R } = c, p = prims();
@@ -1157,7 +1196,7 @@ function buildSky(th){
     uStars:{ value:th.stars||0 }, uTime:{ value:0 }, uHdr:{ value:1 },
   };
   const mat = own(new THREE.ShaderMaterial({ uniforms:env.skyU, vertexShader:SKY_VS, fragmentShader:SKY_FS, side:THREE.BackSide, depthWrite:false, fog:false }));
-  const geo = own(new THREE.SphereGeometry(300, 40, 20));
+  const geo = own(new THREE.SphereGeometry(300, 24, 12));
   const m = new THREE.Mesh(geo, mat);
   m.frustumCulled = false; m.renderOrder = -1000; m.name = 'sky';
   env.sky = addObj(m);
@@ -1311,12 +1350,12 @@ const FARS = {
 // ---------------------------------------------------------------- clouds (instanced puffs)
 function buildClouds(th){
   const cl = th.clouds; if(!cl) return;
-  const p = prims(), b = G.look.builder();
-  b.add(p.lo, cl.color, [0, 0, 0], null, [1.0, 0.72, 0.7]);
-  b.add(p.lo, cl.color, [-0.85, -0.14, 0.05], null, [0.66, 0.52, 0.55]);
-  b.add(p.lo, cl.color, [0.9, -0.12, 0.02], null, [0.7, 0.5, 0.55]);
-  b.add(p.lo, cl.color, [0.35, 0.34, -0.05], null, [0.58, 0.5, 0.5]);
-  b.add(p.lo, cl.shade, [0, -0.36, 0], null, [1.55, 0.26, 0.6]);
+  const puff = G.look.geo.sphere(1, 6, 5), b = G.look.builder();
+  b.add(puff, cl.color, [0, 0, 0], null, [1.0, 0.72, 0.7]);
+  b.add(puff, cl.color, [-0.85, -0.14, 0.05], null, [0.66, 0.52, 0.55]);
+  b.add(puff, cl.color, [0.9, -0.12, 0.02], null, [0.7, 0.5, 0.55]);
+  b.add(puff, cl.color, [0.35, 0.34, -0.05], null, [0.58, 0.5, 0.5]);
+  b.add(puff, cl.shade, [0, -0.36, 0], null, [1.55, 0.26, 0.6]);
   const geo = own(b.build());
   const mat = own(G.look.matInstance(0xffffff, { vertexColors:true, rough:1, rim:0.8 }));
   const R = mulberry(77 + cl.n), n = cl.n;
