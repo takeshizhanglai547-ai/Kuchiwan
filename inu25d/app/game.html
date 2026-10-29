@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="5b88a1a16dc7714df11b365c3c004b997b0a51f8814c2fca6be85b5ebfe48e98"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="abbeee5580121eb5da81e139fdfb508bdb6d6233bb49debc1f06fec46ce8633e"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -4856,6 +4856,7 @@ function rig(type){if(type!=='sniper'&&type!=='skyarmor')return simpleRig(type);
    else{const spread=e.skyPhase==='dive'?.4:e.skyPhase==='aim'?.20:flight?.30:-.20;nodes.wingF.rotation.x=spread;nodes.wingB.rotation.x=-spread;nodes.wingF.rotation.z=nodes.wingB.rotation.z=flight?-.05:.16;
     nodes.body.rotation.z=e.skyPhase==='dive'?-.42:recover?.15:0;nodes.armF.rotation.z=nodes.armB.rotation.z=flight?-.38:.12;nodes.legF.rotation.z=nodes.legB.rotation.z=flight?.43:recover?-.12:0;nodes.head.rotation.z=e.skyPhase==='dive'?.15:recover?-.10:0;}
    if(e.state==='down'||e.dead){turn.rotation.z=-1.2*(e.face||1);nodes.wingF.rotation.x=.1;nodes.wingB.rotation.x=-.1;}
+   const hurtPose=!e.dead&&e.flashT>0?Math.min(1,e.flashT/8):0;if(hurtPose){nodes.body.rotation.z+=.16*hurtPose;nodes.head.rotation.z-=.18*hurtPose;nodes.armF.rotation.z+=.13*hurtPose;nodes.armB.rotation.z+=.09*hurtPose;}
    face.geometry=bp.faces[e.dead?'happy':e.flashT>0?'hurt':aiming||flight?'aim':'open'];mat.userData.uFlash.value=faceMat.userData.uFlash.value=e.flashT>0?.75:0;outline.visible=alpha>.99&&G.quality.tier<2;
    root.updateMatrixWorld(true);if(type==='sniper'&&aim&&(aiming||recoil)){point.set(aim.x,.66,aim.z);nodes.rifle.parent.worldToLocal(point);point.sub(nodes.rifle.position);nodes.rifle.rotation.y=Math.atan2(-point.z,point.x);nodes.rifle.rotation.z=Math.atan2(point.y,Math.hypot(point.x,point.z));root.updateMatrixWorld(true);}beam.visible=!!aim&&aiming;ring.visible=!e.dead&&(recover||!!aim&&e.skyPhase==='aim');
    if(aim){muzzle.getWorldPosition(tip);root.worldToLocal(tip);point.set(aim.x,.66,aim.z);root.worldToLocal(point);const a=beamGeo.attributes.position;a.setXYZ(0,tip.x,tip.y,tip.z);a.setXYZ(1,point.x,point.y,point.z);a.needsUpdate=true;beamGeo.computeBoundingSphere();ring.position.set(aim.x-e.x,.035-e.y,aim.z-e.z);}
@@ -45651,7 +45652,7 @@ const uiFrame=G.ui.frame.bind(G.ui);G.ui.frame=(...args)=>{const r=uiFrame(...ar
 
 }
 </script>
-<script>(function(){'use strict';const BUILD="5b88a1a16dc7714df11b365c3c004b997b0a51f8814c2fca6be85b5ebfe48e98",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="abbeee5580121eb5da81e139fdfb508bdb6d6233bb49debc1f06fec46ce8633e",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}
