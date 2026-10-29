@@ -1,0 +1,6 @@
+'use strict';
+const {spawnSync}=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');const root=path.resolve(__dirname,'../..'),faults=[
+ {name:'companions absent on stage enter',file:'90_game.js',from:'G.companions?.enter();',to:'void 0;'},
+ {name:'result bypasses shop',file:'90_game.js',from:'if(G.cham)G.cham.open({onDone:advance});else advance();',to:'advance();'},
+ {name:'original save unknown fields discarded',file:'90_game.js',from:'...save, ...loadSave(), ',to:''}
+];for(const m of faults){const s=fs.readFileSync(path.join(root,'inu25d/src',m.file),'utf8');assert(s.includes(m.from),m.name+' target');new vm.Script(s.replace(m.from,m.to));const r=spawnSync(process.execPath,[path.join(__dirname,'camp_progression_cpu.cjs')],{cwd:root,encoding:'utf8',maxBuffer:4*1024*1024,timeout:60000,env:{...process.env,INU25D_CPU_MUTATION:JSON.stringify(m)}});assert.equal(r.status,1,m.name+' status '+r.error?.message);assert(r.stderr.includes('AssertionError')&&!r.stderr.includes('mutation target missing'),m.name+' must fail behavior');m.detected=true;console.log('PASS detected '+m.name);}fs.writeFileSync(path.join(root,'evidence/polish-shop-20261028/camp-progression-mutations.json'),JSON.stringify({status:'PASS',faults},null,2));

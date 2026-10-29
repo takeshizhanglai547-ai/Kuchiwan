@@ -1,0 +1,6 @@
+{
+  "commit": "7520d7c5e947a38a5b5dc133d8f009a9badbd85f",
+  "sourceSha256": "2f009d181da10f143a9ae75b5de7946318faf2dd59981fc0ad52d9aedacd2b0c",
+  "theme": "THEMES.sengoku=Object.assign({},THEMES.dusk,{scenery:'sengoku',sky:{top:'#54415f',mid:'#d68b68',bot:'#f9ddba',h0:-.2,h1:.02},fog:{color:'#dbb49b',near:30,far:120},particles:Object.assign({},THEMES.town.particles,{a:'#f8dfbd',b:'#ad554e',n:55})});",
+  "scenery": "  sengoku(c){const {L}=c,p=prims();\n    for(let x=-18;x<L+22;x+=10){c.at(x);const z=-6.5,y=c.h(x,z);for(const dx of [-1.35,1.35])c.S(p.cyl6,'#af3c31',[x+dx,y+1.65,z],null,[.16,3.3,.16]);c.S(p.rbox2,'#8c2c2d',[x,y+3.2,z],null,[3.8,.25,.3]);c.S(p.rbox2,'#c44f3d',[x,y+2.8,z],null,[3.2,.2,.2]);\n      KIT.flag(c,x+3,y+1.8,z,.9,'#b9433e','#6e4d39');for(let k=0;k<4;k++)c.S(p.cyl6,'#8b6748',[x+4+k*.5,y+.8,z+.6],[0,0,.06],[.09,1.6,.09]);}\n    for(let x=-12;x<L+22;x+=22){c.at(x);const z=-11,y=c.h(x,z);c.S(p.rbox,'#b4a28b',[x,y+1.2,z],null,[5,2.4,3.3]);for(let k=0;k<3;k++){c.S(p.rbox2,'#efe6d5',[x,y+3+k*1.4,z],null,[3.8-k*.85,1.2,2.5-k*.5]);c.S(p.pyr,'#354958',[x,y+3.8+k*1.4,z],[0,Math.PI/4,0],[3.7-k*.7,.7,2.7-k*.45]);}KIT.tree(c,x+7,z+1,1.4,'#d49289','#755741');}\n  },\n"
+}

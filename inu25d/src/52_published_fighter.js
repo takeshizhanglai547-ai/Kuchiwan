@@ -26529,7 +26529,7 @@ damageEnemy=function(e,...args){const scale=_pubHooks.damageScale?.()??1;if(scal
   const before=e.hp,context={grab:_pubGrabDepth>0||!!_pubActiveProjectile?._pubGrab,projectile:!!_pubActiveProjectile};if(_pubHooks.beforeHit?.(e,args,context)===false)return;_pubDamage(e,...args);
   if(_pubHooks.hit)_pubHooks.hit(e,before-e.hp,args,context);};
 beginUlt=function(p,name){_pubUlt(p,name);if(_pubHooks.ult)_pubHooks.ult(p,name||ULT_NAME[p.kind]);};
-const _pubCarryKeys=['level','xp','xpNext','maxHp','atkMul','defMul','spdMul','dim','dimMax','weapon','heldWeapon','stolen','ammo'];
+const _pubCarryKeys=['level','xp','xpNext','maxHp','atkMul','defMul','spdMul','dim','dimMax','weapon','heldWeapon','stolen','ammo','armory','permWeapon','coinMul'];
 // Display events observe real throw entry functions, including instantaneous throws.
 // The wrapper calls the unchanged function with the same this/arguments and return value.
 let _pubDisplay=null,_pubDisplaySerial=0;
@@ -26568,7 +26568,7 @@ return {
     _pubSeedTo(seed||1);gf=0;setupRoster(kind);player=players[0];resetPlayer(player,true);player.invuln=0;
     player.x=240;player.y=LANE;player.z=0;player.vz=0;players[1].active=false;state='play';
     enemies=[];projectiles=[];particles=[];hazards=[];items=[];vehicles=[];npcs=[];hitStop=0;slowmo=0;resetCombo();_pubDisplay=null;
-    if(carry)for(const k of _pubCarryKeys)if(carry[k]!=null)player[k]=carry[k];player.hp=player.maxHp;
+    if(carry)for(const k of _pubCarryKeys)if(carry[k]!=null)player[k]=Array.isArray(carry[k])?carry[k].slice():carry[k];player.hp=player.maxHp;
     useInput(player.in);this.clearInput();return player;
   },
   clearInput(){const i=player.in;for(const k in i.keys)i.keys[k]=false;
@@ -26617,7 +26617,11 @@ return {
   takeSlow(){const r={frames:slowmo,scale:slowStr};slowmo=0;slowMax=0;return r;},
   drainParticles(){const from=Math.max(0,particles.length-48),r=particles.filter((p,i)=>i>=from||p.k==='fsword'||p.k==='hsword');particles.length=0;return r;},
   groundHeight(x){return groundLift(x);},
-  carry(){return Object.fromEntries(_pubCarryKeys.map(k=>[k,player[k]]));},
+  carry(){return Object.fromEntries(_pubCarryKeys.map(k=>[k,Array.isArray(player[k])?player[k].slice():player[k]]));},
+  equipmentCatalog(){const d=defaultWeaponFor(player.kind);return Object.entries(WEAPONS).filter(([id,w])=>w.who||id===d).map(([id,w])=>({id,name:w.name,cost:id===d?0:weaponPrice(id),owner:w.who||player.kind,eligible:id===d||canPick(player,id),default:id===d,col:w.col,dmg:w.dmg||1,reach:w.reach||1,kb:w.kb||1,combo:(WEAPON_COMBO[id]||[]).slice(),ultName:ATK[WEAPON_SPECIAL[id]?.ult]?.name||'',airName:ATK[WEAPON_SPECIAL[id]?.air]?.name||''}));},
+  equipmentSnapshot(){return {weapon:player.weapon,weaponT:player.weaponT,heldWeapon:player.heldWeapon,armory:(player.armory||[]).slice(),permWeapon:player.permWeapon};},
+  restoreEquipment(s){for(const k of ['weapon','weaponT','heldWeapon','permWeapon'])player[k]=s[k];player.armory=s.armory.slice();},
+  equipStock(id,grant=false){const d=defaultWeaponFor(player.kind);if(typeof id!=='string'||!Object.prototype.hasOwnProperty.call(WEAPONS,id)||!(id===d||canPick(player,id))||!(grant||id===d||(player.armory||[]).includes(id)))return false;if(grant)gainWeaponStock(player,id);else giveWeapon(player,id);return true;},
   cost(air){return ultCost(player,air);},
   setBounds(left,end){camX=Math.max(0,left);if(Number.isFinite(end))WORLD_END=end;},
   catalog(hero,slot,air,level){const p={kind:hero,level:level||1};

@@ -20,8 +20,9 @@ function open(){if(panel)return;priorFocus=document.activeElement;G.input.clear(
   node('p',n,'おうぎストック：地上 '+cost.ground+' ／空中 '+cost.air+' 必要。ストック不足では発動しません。');
   node('p',n,'つよい：敵の体力はふつうと同じ。最大3体が左右から包囲し、攻撃開始は12Fずつずれます。雑魚の予告は最低18F、攻撃を避けた後は28Fの反撃機会。残機は3。奥義ストックを温存し、つかみ・投げで集団を崩しましょう。');
   node('p',n,'イベント：ボスの体力が半分未満で後半戦のカットイン。演出中は戦闘と時計が停止します。30F後から「つづける」／Enter／Spaceでスキップ、P／Escで演出だけ一時停止。演出中の攻撃入力は持ち越しません。キャラごとの開始・クリア演出もあります。');
-  node('p',n,'追加の敵：狙いイヌの赤い照準は撃つ場所の予告。照準が止まったら上下のラインを変えて回避。スカイアーマーわんこは普通の攻撃を大きく軽減します。空襲後の着地中につかみ、方向＋攻撃で鎧ごと投げましょう。');
+  node('p',n,'追加の敵：狙い撃ちわんこの赤い照準は撃つ場所の予告。照準が止まったら上下のラインを変えて回避。スカイアーマーわんこは普通の攻撃を大きく軽減します。空襲後の着地中につかみ、方向＋攻撃で鎧ごと投げましょう。');
   node('p',n,'全9ステージ：戦国和風の足軽・薙刀・忍び、鬼合戦の赤鬼・青鬼・太鼓鬼が登場。ボスは体力半分未満で姿と攻撃が変化。ダークわんわん大帝は第3形態まで、変身ごとにカットシーンが入ります。');
+  node('p',n,'クリア後はチャムのお店へ。専用武器は原2Dと同じ効果で、持っている武器の切り替えは無料です。オトモは人間2人とは別にチームで3体まで。ガチャはゲーム内90コイン、全7種が各1/7、重複30コイン返還。課金はありません。');
   for(const [group,title]of Object.entries(groups)){let rows=all.filter(r=>r.group===group&&r.level<=lv);
    if(group==='charge')rows=rows.filter(r=>r.level===Math.max(...rows.map(r=>r.level)));
    if(!rows.length)continue;node('h3',body,title);const table=node('table',body),thead=node('thead',table),tr=node('tr',thead);for(const x of ['入力／段','技','発生・持続／備考'])node('th',tr,x);const tb=node('tbody',table);

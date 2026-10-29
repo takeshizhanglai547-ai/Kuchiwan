@@ -114,7 +114,10 @@ const THEMES = {
   },
 };
 
-THEMES.sengoku=Object.assign({},THEMES.dusk,{scenery:'sengoku',sky:{top:'#54415f',mid:'#d68b68',bot:'#f9ddba',h0:-.2,h1:.02},fog:{color:'#dbb49b',near:30,far:120},particles:Object.assign({},THEMES.town.particles,{a:'#f8dfbd',b:'#ad554e',n:55})});
+THEMES.sengoku=Object.assign({},THEMES.dusk,{ground:'sengoku',scenery:'sengoku',
+  sky:{top:'#514965',mid:'#d99473',bot:'#fbe3be',h0:-.2,h1:.02},fog:{color:'#d7b4a3',near:27,far:122},
+  light:Object.assign({},THEMES.dusk.light,{hemiSky:'#e1d8ed',hemiGround:'#95895d',key:'#ffe7bc',keyI:2.45,rim:'#b8d6eb',rimI:1.8,fill:'#f8b5a3',fillI:.55}),
+  rimLook:['#ffe5b8',.44,'#8b98bc',.12],particles:Object.assign({},THEMES.town.particles,{a:'#f7d3b5',b:'#cb8688',n:55})});
 THEMES.onibattle=Object.assign({},THEMES.cave,{scenery:'onibattle',sky:{top:'#220c2e',mid:'#702738',bot:'#c96940',h0:-.2,h1:.02},fog:{color:'#8c4a49',near:28,far:115},light:Object.assign({},THEMES.cave.light,{key:'#ffe1b9',rim:'#ff7f65',fill:'#bc73df'}),particles:Object.assign({},THEMES.castle.particles,{a:'#ffb95c',b:'#ff7154',n:65})});
 // ================================================================ stage data (CONCEPT.md §Stages)
 const MOFU = 'モフじい';
@@ -254,6 +257,23 @@ const ENTRANCE = { ari:'burrow' };
 // ================================================================ primitives (CPU-only sources for the part builder;
 // never rendered themselves, so they cost no GPU memory)
 let P = null;
+// A closed curved tile-roof shell, not a scaled pyramid. Shared source geometry
+// is merged into the same static chunk meshes as the original stage kit.
+function sengokuRoof(){
+  const nx=8,nz=10,pos=[],idx=[];
+  for(let side=0;side<2;side++)for(let iz=0;iz<=nz;iz++)for(let ix=0;ix<=nx;ix++){
+    const x=ix/nx*2-1,z=iz/nz*2-1,a=Math.abs(z);
+    pos.push(x,.6*(1-a)+.18*Math.pow(a,6)+.09*Math.pow(Math.abs(x),6)-side*.09,z);
+  }
+  const row=nx+1,layer=row*(nz+1);
+  for(let side=0;side<2;side++)for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){
+    const a=side*layer+z*row+x,b=a+1,c=a+row,d=c+1;
+    if(side)idx.push(a,b,c,b,d,c);else idx.push(a,c,b,b,c,d);
+  }
+  const edge=[];for(let x=0;x<=nx;x++)edge.push(x);for(let z=1;z<=nz;z++)edge.push(z*row+nx);for(let x=nx-1;x>=0;x--)edge.push(nz*row+x);for(let z=nz-1;z>0;z--)edge.push(z*row);
+  for(let i=0;i<edge.length;i++){const a=edge[i],b=edge[(i+1)%edge.length];idx.push(a,a+layer,b,b,a+layer,b+layer);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();g.userData.shared=true;g.userData.feature='sengoku-curved-roof';return g;
+}
 function prims(){
   if(P) return P;
   const g = G.look.geo;
@@ -267,7 +287,7 @@ function prims(){
     oct: new THREE.OctahedronGeometry(1, 0),
     pyr: new THREE.ConeGeometry(1, 1, 4, 1).rotateY(PI/4), mid: g.sphere(1, 8, 6),
     torus: g.torus(1, 0.22, 5, 14), ring: g.torus(1, 0.08, 4, 12), can: g.sphere(1, 12, 8),
-    heart: g.heart(0.5, 0.25), star: g.star(0.5, 0.48, 0.2),
+    heart: g.heart(0.5, 0.25), star: g.star(0.5, 0.48, 0.2), sengokuRoof:sengokuRoof(),
     lathePot: g.lathe('stgPot', [[0,0],[0.7,0],[1,0.4],[0.95,0.8],[0.55,1],[0,1]], 12),
   };
   return P;
@@ -480,10 +500,65 @@ const KIT = {
 // ================================================================ per-theme scenery layouts
 const SCENERY = {
   // Layered tiled roofs, red torii, wooden palisades and war banners.
-  sengoku(c){const {L}=c,p=prims();
-    for(let x=-18;x<L+22;x+=10){c.at(x);const z=-6.5,y=c.h(x,z);for(const dx of [-1.35,1.35])c.S(p.cyl6,'#af3c31',[x+dx,y+1.65,z],null,[.16,3.3,.16]);c.S(p.rbox2,'#8c2c2d',[x,y+3.2,z],null,[3.8,.25,.3]);c.S(p.rbox2,'#c44f3d',[x,y+2.8,z],null,[3.2,.2,.2]);
-      KIT.flag(c,x+3,y+1.8,z,.9,'#b9433e','#6e4d39');for(let k=0;k<4;k++)c.S(p.cyl6,'#8b6748',[x+4+k*.5,y+.8,z+.6],[0,0,.06],[.09,1.6,.09]);}
-    for(let x=-12;x<L+22;x+=22){c.at(x);const z=-11,y=c.h(x,z);c.S(p.rbox,'#b4a28b',[x,y+1.2,z],null,[5,2.4,3.3]);for(let k=0;k<3;k++){c.S(p.rbox2,'#efe6d5',[x,y+3+k*1.4,z],null,[3.8-k*.85,1.2,2.5-k*.5]);c.S(p.pyr,'#354958',[x,y+3.8+k*1.4,z],[0,Math.PI/4,0],[3.7-k*.7,.7,2.7-k*.45]);}KIT.tree(c,x+7,z+1,1.4,'#d49289','#755741');}
+  sengoku(c){const {L,R}=c,p=prims(),wood='#765445',dark='#3c424e',paper='#f4e7d0';
+    // Near band: low camp details frame the road without hiding the belt lanes.
+    for(let x=-18;x<L+22;x+=4.5+R()*2){
+      KIT.bush(c,x,BELT_Z1+1.4,.36+R()*.12,pickR(R,['#6e865d','#8b9b6a','#a3aa7a']),null);
+      c.at(x+.9);for(let k=0;k<3;k++)c.S(p.dot,['#f1d2aa','#c98787','#ede4ba'][k],[x+.65+k*.18,.18,BELT_Z1+1.15],null,[.1,.05,.1]);
+    }
+    for(let x=-16;x<L+20;x+=15){
+      const z=-4.55,y=c.h(x,z);c.at(x);
+      // A joined wooden spear rack, lashed handles, and a stacked rice bale.
+      for(const dx of [-.65,.65])c.S(p.cyl6,wood,[x+dx,y+.66,z],[0,0,dx*.12],[.055,1.32,.055]);
+      c.S(p.box,wood,[x,y+.96,z],null,[1.55,.11,.12]);
+      for(let k=0;k<3;k++){c.S(p.cyl6,'#a68a5b',[x-.38+k*.38,y+.96,z+.11],[0,0,-.08],[.026,1.75,.026]);c.S(p.cone6,'#c9d0cc',[x-.31+k*.38,y+1.9,z+.11],[0,0,-.08],[.075,.28,.04]);}
+      for(let k=0;k<2;k++){c.S(p.cyl,'#c5ab74',[x+2.1+k*.6,y+.28,z],[0,0,Math.PI/2],[.28,.55,.28]);for(const dx of [-.15,.15])c.S(p.torus,'#837352',[x+2.1+k*.6+dx,y+.28,z],[0,Math.PI/2,0],[.28,.28,.23]);}
+    }
+    // Middle band: gates have capstones, rope, joinery, hanging lanterns and
+    // wind-driven war banners. Glow remains one merged layer per chunk.
+    for(let x=-16;x<L+22;x+=18){const z=-6.2,y=c.h(x,z);c.at(x);
+      for(const dx of [-1.35,1.35]){c.S(p.cyl6,'#ad5142',[x+dx,y+1.6,z],null,[.15,3.2,.15]);c.S(p.rbox,'#807d74',[x+dx,y+.12,z],null,[.44,.24,.44]);c.S(p.cyl6,'#ddd0a8',[x+dx,y+1.3,z],null,[.17,.12,.17]);}
+      c.S(p.rbox2,'#713c39',[x,y+3.04,z],null,[3.75,.27,.32]);c.S(p.sengokuRoof,dark,[x,y+3.22,z],null,[2.05,.46,.44]);c.S(p.rbox2,'#ba6651',[x,y+2.68,z],null,[3.05,.15,.18]);
+      c.S(p.cyl6,'#a59168',[x,y+2.38,z+.12],[0,0,Math.PI/2],[.035,2.65,.035]);
+      for(const dx of [-.64,0,.64])c.W(p.rbox2,paper,[x+dx,y+2.17,z+.13],[0,0,.15],[.14,.33,.025]);
+      KIT.lantern(c,x-1.95,y+2.25,z+.15,'#ffd48a',1.3);KIT.lantern(c,x+1.95,y+2.25,z+.15,'#ffcf9a',1.3);
+      KIT.flag(c,x+3.1,y+.25,z+.2,1.15,'#9c4b4c',wood);KIT.flag(c,x+4.15,y+.25,z+.2,.9,'#e1c895',wood);
+      for(let k=0;k<5;k++)c.S(p.cyl6,'#8c7658',[x+5.2+k*.5,y+.68,z+.25],null,[.08,1.36,.08]);
+      c.S(p.box,wood,[x+6.2,y+.9,z+.25],null,[2.7,.09,.09]);
+      // A lower war-storehouse breaks the repeated gate/castle rhythm. Its open
+      // veranda, timber lattice, tied supplies and fabric awning provide the
+      // same hand-built toy detail as the original dusk town's stalls.
+      const hx=x+8.4,hz=-7.75,hy=c.h(hx,hz);c.at(hx);
+      c.S(p.rbox,'#8f9282',[hx,hy+.17,hz],null,[3.55,.34,2.1]);
+      c.S(p.rbox2,'#dcccb0',[hx,hy+1.14,hz-.3],null,[3,1.65,1.4]);
+      for(const dx of [-1.5,-.5,.5,1.5])c.S(p.cyl6,wood,[hx+dx,hy+1.08,hz+.62],null,[.065,1.78,.065]);
+      for(const yy of [.47,1.82])c.S(p.box,wood,[hx,hy+yy,hz+.68],null,[3.2,.13,.12]);
+      c.S(p.sengokuRoof,'#5f6b70',[hx,hy+1.92,hz-.12],null,[1.98,.69,1.28]);
+      c.S(p.rbox2,'#7b6852',[hx,hy+.39,hz+.88],null,[3.55,.14,1.1]);
+      for(let k=0;k<8;k++)c.S(p.rbox2,'#a68b65',[hx-1.5+k*.43,hy+.49,hz+.92],null,[.38,.05,.94]);
+      c.W(p.rbox2,'#a85651',[hx,hy+1.65,hz+1.05],[.12,0,0],[2.9,.36,.04]);
+      for(const dx of [-1,0,1]){c.S(p.rbox2,'#eedcb3',[hx+dx,hy+1.13,hz+.43],null,[.68,.78,.04]);for(const q of [-.22,0,.22])c.S(p.box,wood,[hx+dx+q,hy+1.13,hz+.47],null,[.03,.8,.025]);}
+      KIT.lantern(c,hx-1.65,hy+1.3,hz+.93,'#ffd7a1',1.0);
+      for(let k=0;k<3;k++){const px=hx-.9+k*.78;c.S(p.cyl,k===1?'#9b8056':'#b6a06a',[px,hy+.73,hz+1.0],[0,0,Math.PI/2],[.21,.58,.21]);for(const dx of [-.16,.16])c.S(p.torus,'#79654b',[px+dx,hy+.73,hz+1.0],[0,Math.PI/2,0],[.21,.21,.2]);}
+    }
+    // Rear band: irregular stone coursing, white plaster and exposed timber,
+    // layered curved roofs and narrow glowing shoji windows replace plain boxes.
+    for(let x=-12,n=0;x<L+24;x+=27,n++){const z=-10.3-(n%2)*1.3,y=c.h(x,z);c.at(x);
+      const floors=n%2?2:3;
+      for(let row=0;row<3;row++)for(let k=0;k<5;k++)c.S(p.rbox,pickR(R,['#8b918b','#a4a69a','#727f80']),[x+(k-2)*.87+(row%2)*.16,y+.25+row*.42,z],null,[.84,.4,3.05-row*.13]);
+      for(let k=0;k<floors;k++){const w=3.85-k*.76,d=2.45-k*.38,yy=y+1.55+k*1.48;
+        c.S(p.rbox2,paper,[x,yy+.43,z],null,[w,.99,d]);
+        for(const dx of [-w*.46,w*.46])c.S(p.box,wood,[x+dx,yy+.43,z+d*.51],null,[.1,.99,.08]);
+        c.S(p.box,wood,[x,yy+.08,z+d*.51],null,[w,.11,.09]);c.S(p.box,wood,[x,yy+.93,z+d*.51],null,[w,.1,.09]);
+        for(const dx of [-w*.23,w*.23]){c.GL(p.rbox2,'#eac38b',[x+dx,yy+.48,z+d*.51],null,[.48,.48,.04]);for(const a of [-.18,0,.18])c.S(p.box,wood,[x+dx+a,yy+.48,z+d*.54],null,[.025,.5,.025]);c.S(p.box,wood,[x+dx,yy+.48,z+d*.54],null,[.5,.025,.025]);}
+        c.S(p.sengokuRoof,k%2?'#465664':dark,[x,yy+1.01,z],null,[w*.66,.85,d*.75]);
+        c.S(p.cyl6,'#7f8e96',[x,yy+1.57,z],[0,0,Math.PI/2],[.065,w*1.24,.065]);
+      }
+      KIT.tree(c,x+6.3,z+1,1.25,pickR(R,['#c78c8c','#d9a59a','#b97b85']),'#795c4e');KIT.bush(c,x-4,z+.8,.72,'#6b825f',null);
+    }
+    // Small garden stones and wind-bent grass create parallax between buildings
+    // and the distant original castle skyline, without extra draw objects.
+    for(let x=-20;x<L+20;x+=5.8){KIT.rock(c,x,-8.1,.5+R()*.22,'#92968c');KIT.bush(c,x+1.1,-8.8,.5,'#81916a',null);}
   },
   // Horned gates and festival drums make the Oni campaign a separate silhouette.
   onibattle(c){const {L}=c,p=prims();
@@ -908,6 +983,18 @@ function fillPath(g, W, H, top, bot, col){
   g.closePath(); g.fill();
 }
 const GROUND = {
+  sengoku:{
+    base:'#b7ac87',
+    surround(g,W,H,R){g.fillStyle=this.base;g.fillRect(0,0,W,H);speckle(g,W,H,R,55,['#9ca47c','#c3b68c','#a6a47d'],5,18,null,true);tufts(g,W,H,R,55,['#828e63','#a7ad7e'],null,true);},
+    belt(g,W,H,R){
+      g.fillStyle='#b9ad8c';g.fillRect(0,0,W,H);speckle(g,W,H,R,110,['#afa080','#c7b99a','#a9a083'],1.5,7);
+      // Twin cart ruts and staggered stone edges add surface structure while the
+      // middle of the play lane remains quiet enough to read feet and hit cues.
+      for(const f of [.32,.67]){g.strokeStyle='#9d9072';g.lineWidth=5;g.beginPath();g.moveTo(0,H*f);g.bezierCurveTo(W*.33,H*f+7,W*.65,H*f-5,W,H*f);g.stroke();g.strokeStyle='#cfc1a1';g.lineWidth=1.5;g.stroke();}
+      for(const f of [.08,.86])for(let x=-6;x<W;x+=38){g.fillStyle=pickR(R,['#8f9485','#a2a698','#b5b5a0']);roundRect(g,x,H*f,32,19,5);g.fill();g.strokeStyle='#7c8276';g.lineWidth=1;g.stroke();}
+      tufts(g,W,H,R,18,['#85916b','#a1aa7b'],[0,.08]);tufts(g,W,H,R,18,['#85916b','#a1aa7b'],[.94,1]);
+    },
+  },
   meadow:{
     base:'#78c656',
     surround(g, W, H, R){ g.fillStyle = this.base; g.fillRect(0,0,W,H); speckle(g, W, H, R, 40, ['#70be50', '#84d062'], 8, 18, null, true); tufts(g, W, H, R, 70, ['#5eae44', '#98d86e', '#56a43e'], null, true); flowerDots(g, W, H, R, 7, ['#ffffff', '#ffb0d0', '#fff08a']); },

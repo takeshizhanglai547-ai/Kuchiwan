@@ -1366,7 +1366,7 @@ function buildResult(s){
     s.t = 0; s.tv = Math.max(0, d.time||0); s.cv = Math.max(0, d.coins|0); s.bv = Math.max(0, d.bestCombo|0);
     txt(s.vt, fmtTime(0)); txt(s.vc, 0); txt(s.vb, 0);
     txt(s.bub, CHAM_LINES[Math.floor(Math.random()*CHAM_LINES.length)]);
-    s.next.innerHTML = '<span>'+(d.last ? 'エンディングへ' : 'つぎへ')+'</span><span class="ic">'+SVG.play+'</span>';
+    s.next.innerHTML = '<span></span><span class="ic">'+SVG.play+'</span>';txt(s.next.querySelector('span'),d.nextLabel||(d.last?'エンディングへ':'つぎへ'));
     s.ni = 0; touchReleaseAll();
   };
   s.frame = (dt)=>{

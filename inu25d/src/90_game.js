@@ -156,7 +156,7 @@ G.scenes.title = {
   },
   frame: frameCommon,
 };
-function persist(){ writeSave({ diff:game.diffKey, hero:game.heroId, unlocked:game.unlocked, sound:game.soundOn }); }
+function persist(){ writeSave({ ...save, ...loadSave(), diff:game.diffKey, hero:game.heroId, unlocked:game.unlocked, sound:game.soundOn }); }
 function setSound(on){ game.soundOn = !!on; if(G.audio && G.audio.setMuted) try { G.audio.setMuted(!game.soundOn); } catch(_){} persist(); }
 
 // ---------------------------------------------------------------- scene: select
@@ -202,6 +202,7 @@ function startRun(start){
   game.level = start > 0 ? 1 + start*2 : 1; game.xp = 0; game.xpNext = Math.round(60*Math.pow(1.32, game.level-1));
   game.coins = 0; game.bestCombo = 0; game.ultCarry = 0;
   game.publishedCarry=null;
+  G.camp?.beginRun();
   game.lives = game.diff.lives;
   G.go('play', { stage:start });
 }
@@ -209,7 +210,7 @@ function startRun(start){
 // ---------------------------------------------------------------- scene: play
 const play = G.scenes.play = {
   enter(params){
-    G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
+    G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
     G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
@@ -220,6 +221,7 @@ const play = G.scenes.play = {
     game.stageName = st.kana || st.name || '';
     const p = G.player = G.playerCtl.create(game.heroId, 2.5, 0);
     G.world.add(p);G.coop?.enter(p);
+    for(const hero of G.camp?.players()||[p])G.camp?.apply(hero);G.companions?.enter();
     if(G.heroes && G.heroes.portrait){ try { for(const ex of ['normal','hurt','happy']) G.heroes.portrait(game.heroId, { size:160, expr:ex }); G.heroes.portrait(game.heroId); } catch(err){ G.logError('portrait prewarm', err); } }
     G.cam.follow(p); G.cam.unlock(); G.cam.zoom = 0; G.cam.snap();
     uiShow('hud', {});
@@ -231,6 +233,8 @@ const play = G.scenes.play = {
   },
   exit(){
     ARENA.unload();
+    G.cham?.close();G.companions?.clear();
+    for(const hero of G.camp?.players()||[G.player])if(hero)G.equipmentVisual?.clear(hero);
     G.story?.reset();
     uiHide('hud'); uiHide('pause'); touch(false);
     if(G.ui && G.ui.bossBar) try { G.ui.bossBar(null); } catch(_){}
@@ -285,7 +289,7 @@ const play = G.scenes.play = {
       if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
-    G.combat.tick();
+    G.companions?.tick();G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
@@ -340,10 +344,12 @@ const play = G.scenes.play = {
     game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1)); persist();
     const p = G.player; if(p) game.ultCarry = p.ult;
     G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
+    G.camp?.creditAtClear();
     touch(false);
     G.input.clear();
     uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:game.coins, bestCombo:game.bestCombo, last,
-      onNext:()=>{ sfx('ok'); if(last) G.go('ending'); else G.go('play', { stage: idx+1 }); } });
+      nextLabel:G.cham?'チャムのお店へ':null,
+      onNext:()=>{const advance=()=>{sfx('ok');if(last)G.go('ending');else G.go('play',{stage:idx+1});};if(G.cham)G.cham.open({onDone:advance});else advance();} });
   },
   gameOver(){
     G.story?.reset();
@@ -387,9 +393,9 @@ function autoDrive(p){
 function separate(ents){
   const B = G.stage && G.stage.bounds ? G.stage.bounds() : null;
   for(let i=0;i<ents.length;i++){
-    const a = ents[i]; if(!(a.team===0 || a.team===1) || a.dead || a.intangible || a.y > 0.6) continue;
+    const a = ents[i]; if(!(a.team===0 || a.team===1) || a.dead || a.intangible || a.noSeparation || a.y > 0.6) continue;
     for(let j=i+1;j<ents.length;j++){
-      const c = ents[j]; if(!(c.team===0 || c.team===1) || c.dead || c.intangible || c.y > 0.6) continue;
+      const c = ents[j]; if(!(c.team===0 || c.team===1) || c.dead || c.intangible || c.noSeparation || c.y > 0.6) continue;
       if(a.publishedReactive||c.publishedReactive)continue;
       const dz = c.z - a.z; if(Math.abs(dz) > 0.42) continue;
       const bossPair = (a.def && a.def.boss) || (c.def && c.def.boss);

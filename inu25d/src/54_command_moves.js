@@ -28,6 +28,7 @@ if(G.publishedFactory){
     p.inv=r.invuln;p.charge=r.charge;p.atkMul=r.atkMul;p.publishedState=r.state;p.refAttack=r.state==='attack'?r.atk:null;
     p.state=r.state==='dead'?'ko':r.state==='jump'?'air':r.state==='roll'||r.state==='jdodge'?'dodge':r.state==='attack'?'atk':r.state;
     p.dead=r.hp<=0;p.atk=null;
+    G.equipmentVisual?.sync(p);
     // Read-only display clock. It never selects a move or advances the simulation.
     const pa=r.state==='attack'?r.atk:null;
     p.publishedMotion=pa?{id:pa.type,t:pa.t,hold:pa.hold,holdMax:pa.def.hold||0,air:!!pa.air,def:pa.def,tier:pa.tier||0,

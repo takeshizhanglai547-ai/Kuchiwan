@@ -1,0 +1,7 @@
+'use strict';const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process'),root=path.resolve(__dirname,'../..'),file='88_equipment_visuals.js',code=fs.readFileSync(path.join(root,'inu25d/src',file),'utf8'),results=[];
+for(const [name,from,to]of [
+ ['equipped mesh must remain under actor wrist root','parent.add(root);','G.scene.add(root);'],
+ ['original weapon must be hidden for equipped stock','for(const [o]of v.hidden)o.visible=false;','for(const [o]of v.hidden)o.visible=true;'],
+ ['removed equipment must leave actor hierarchy','v.root.parent?.remove(v.root);','/* old equipment accidentally retained */'],
+ ['grimoire page must sit in front of robe',"w.id==='grimoire'?.22:0",'0']
+]){assert(code.includes(from),'missing target '+name);new vm.Script(code.replace(from,to));const r=spawnSync(process.execPath,[path.join(__dirname,'equipment_visual_cpu.cjs')],{cwd:root,encoding:'utf8',env:{...process.env,INU25D_CPU_MUTATION:JSON.stringify({file,from,to})},timeout:60000});const killed=r.status===1&&r.stderr.includes('AssertionError')&&r.stderr.includes(name)&&!r.stderr.includes('mutation target missing');assert(killed,name+' not detected: '+r.stderr.slice(-600));results.push({name,killed});console.log('PASS detected '+name);}const out=path.join(root,'evidence/equipment-visual-20261028');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'equipment-visual-mutations.json'),JSON.stringify({status:'PASS_BEHAVIOR_MUTATIONS',results},null,2));
