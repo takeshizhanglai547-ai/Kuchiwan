@@ -240,6 +240,9 @@ G.stages.push(
   hints:[{at:5,name:MOFU,text:'赤鬼の金棒は重いがすきも大きい。青鬼の氷玉はラインを変えてよけるのじゃ！'},{at:34,name:MOFU,text:'太鼓鬼は二度たたく！ 輪の外へ動くかジャンプして、二度目の後に反撃じゃ。'}],
   props:[{kind:'crystal',x:9,z:-1.3,drop:'coin'},{kind:'pot',x:31,z:1.2,drop:'bone'},{kind:'crystal',x:58,z:-1.4,drop:'star'},{kind:'pot',x:92,z:1.1,drop:'cake'}]}
 );
+// Two deliberate midboss encounters, separate from the existing stage7 midboss.
+G.stages[1].mid={type:'kosodoro',at:72,width:14};
+G.stages[7].mid={type:'kosodoro',at:82,width:14};
 // Introduce the two specialists in the original late campaign as well.
 G.stages[4].waves[2].foes.push(['sniper',1]);
 G.stages[5].waves[0].foes.push(['skyarmor',1]);

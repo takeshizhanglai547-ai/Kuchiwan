@@ -210,7 +210,7 @@ function startRun(start){
 // ---------------------------------------------------------------- scene: play
 const play = G.scenes.play = {
   enter(params){
-    G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
+    G.kosodoro?.clear();G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
     G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
@@ -233,7 +233,7 @@ const play = G.scenes.play = {
   },
   exit(){
     ARENA.unload();
-    G.cham?.close();G.companions?.clear();
+    G.cham?.close();G.kosodoro?.clear();G.companions?.clear();
     for(const hero of G.camp?.players()||[G.player])if(hero)G.equipmentVisual?.clear(hero);
     G.story?.reset();
     uiHide('hud'); uiHide('pause'); touch(false);
@@ -249,6 +249,7 @@ const play = G.scenes.play = {
       G.bus.emit('pause', {});
       uiShow('pause', { soundOn:game.soundOn,
         onResume:()=> this.pause(false),
+        onTools:()=>G.cham?.openTools(),
         onRetry:()=>{ this.pause(false); G.go('play', { stage:game.stageIndex }); },
         onTitle:()=>{ this.pause(false); G.go('title'); },
         onSound:(v)=> setSound(v) });
@@ -289,7 +290,7 @@ const play = G.scenes.play = {
       if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
-    G.companions?.tick();G.combat.tick();
+    G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];

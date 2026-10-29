@@ -41,7 +41,7 @@ if(G.publishedFactory){
     if(p.anim!==anim)G.setAnim(p,anim,len);
     p.animT=r.state==='attack'?r.atk.t+r.atk.chg:p.animT+1;
     if(G.game){G.game.level=r.level;G.game.xp=r.xp;G.game.xpNext=r.xpNext;G.game.combo=ctx.ref.combo.count;
-      G.game.publishedCarry=ctx.ref.carry();}
+      G.game.publishedCarry=G.kosodoro?.cleanCarry(p,ctx.ref.carry())||ctx.ref.carry();}
     if(r.level>oldLevel)G.bus.emit('levelUp',{ent:p,level:r.level,hpUp:p.maxHp-(p._lastMaxHp||p.maxHp)});
     p._lastMaxHp=p.maxHp;
   }
@@ -170,7 +170,7 @@ if(G.publishedFactory){
       if(info.projectile){const q=info.projectile;const pr={x:q.x*S,y:ctx.lane+(q.z-p.z)*S,zz:q.y*S,r:q.r*S,vx:q.vx*S,vy:q.vz*S,vzz:q.vy*S,dmg:amount*(G.game?.diff?.foeDmg||1)/2,color:'#bfe9ff',owner:'enemy'};
         const res=ctx.ref.incomingProjectile(pr);if(res==='reflect'){q.owner=p;q.team=0;q.vx=pr.vx/S;q.vz=pr.vy/S;q.vy=pr.vzz/S;q.dmg=pr.dmg;syncHero(p,ctx);return false;}}
       else ctx.ref.receive(e,amount*(G.game?.diff?.foeDmg||1),{direct:!e,knock:info.power>=3,dir:info.dir,unblock:info.unblockable,zmax:100000});
-      syncHero(p,ctx);const dmg=before-r.hp;ctx.trace.hurt.push({tick:ctx.ref.clock,damage:dmg});G.hitStop=Math.max(G.hitStop,ctx.ref.freeze);
+      const dmg=before-r.hp;if(dmg>0)G.kosodoro?.acceptedHit(p,dmg,{...info,src:info.src||info.projectile?.owner});syncHero(p,ctx);ctx.trace.hurt.push({tick:ctx.ref.clock,damage:dmg});G.hitStop=Math.max(G.hitStop,ctx.ref.freeze);
       if(r.state==='jdodge')G.bus.emit('dodge',{ent:p,just:true});
       if(dmg>0){G.input.clearEdges(true);ctx.ref.clearEdges();G.commandInputs?.reset(ctx);G.bus.emit('hurt',{ent:p,dmg});if(p.dead)G.bus.emit('heroKO',{ent:p});}
       return dmg>0||r.state==='jdodge'||r.state==='guard'||r.state==='iparry';

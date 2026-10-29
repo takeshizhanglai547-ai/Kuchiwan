@@ -23,6 +23,7 @@ function open(){if(panel)return;priorFocus=document.activeElement;G.input.clear(
   node('p',n,'追加の敵：狙い撃ちわんこの赤い照準は撃つ場所の予告。照準が止まったら上下のラインを変えて回避。スカイアーマーわんこは普通の攻撃を大きく軽減します。空襲後の着地中につかみ、方向＋攻撃で鎧ごと投げましょう。');
   node('p',n,'全9ステージ：戦国和風の足軽・薙刀・忍び、鬼合戦の赤鬼・青鬼・太鼓鬼が登場。ボスは体力半分未満で姿と攻撃が変化。ダークわんわん大帝は第3形態まで、変身ごとにカットシーンが入ります。');
   node('p',n,'クリア後はチャムのお店へ。専用武器は原2Dと同じ効果で、持っている武器の切り替えは無料です。オトモは人間2人とは別にチームで3体まで。ガチャはゲーム内90コイン、全7種が各1/7、重複30コイン返還。課金はありません。');
+  node('p',n,'道具はチャムのお店で購入し、一時停止の「道具を使う」からP1・P2を選んで使えます。各9個まで共有。コソドロわんこは命中で攻撃力と最大HPを奪う中ボス。倒せば能力が戻ります。リトライ・退出でも安全に戻り、永久セーブには残りません。');
   for(const [group,title]of Object.entries(groups)){let rows=all.filter(r=>r.group===group&&r.level<=lv);
    if(group==='charge')rows=rows.filter(r=>r.level===Math.max(...rows.map(r=>r.level)));
    if(!rows.length)continue;node('h3',body,title);const table=node('table',body),thead=node('thead',table),tr=node('tr',thead);for(const x of ['入力／段','技','発生・持続／備考'])node('th',tr,x);const tb=node('tbody',table);

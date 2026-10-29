@@ -1,3 +1,5 @@
+> Earlier checkpoint before the confirmed tool/midboss extension. See `CAMP_MIDBOSS_BALANCE_20261029.md` and final verification evidence for the latest candidate.
+
 # Local quality/shop candidate — 2026-10-29
 
 Base: public `7520d7c5e947a38a5b5dc133d8f009a9badbd85f`. This candidate is not published.

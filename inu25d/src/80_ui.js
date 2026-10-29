@@ -1331,7 +1331,8 @@ function buildPause(s){
   const home = button(g, 'k-pink', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'cancel');
   home.style.gridColumn = '1 / -1'; home.style.justifySelf = 'center';
   function paint(){ snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span>おと '+(s.sound ? 'オン' : 'オフ')+'</span>'; }
-  s.nav = [res, retry, snd, home];
+  const tools=button(g,'k-cream','<span>道具を使う</span>',()=>call(s.data.onTools));
+  s.nav = [res, retry, snd, tools, home];
   const guide=button(pn,'k-sky','わざと コマンド',()=>G.commandGuide.open());s.nav.push(guide);
   s.el.classList.add('dim');
   s.open = (d)=>{ s.sound = soundState(d.soundOn); paint(); s.ni = 0; touchReleaseAll(); };

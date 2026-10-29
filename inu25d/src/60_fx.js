@@ -1602,19 +1602,25 @@ function init(){
 }
 // Native-clock command silhouettes: visible even when a move misses. These are
 // read-only stage objects; collision/costs remain exclusively in the native fighter.
-const commandCues=new Map(),cueArc=new THREE.TorusGeometry(.72,.037,5,28,Math.PI*1.62),cueRing=new THREE.TorusGeometry(.7,.035,5,32),cueBeam=new THREE.BoxGeometry(1.6,.065,.055),cueFlash=new THREE.IcosahedronGeometry(.14,0),cueFlame=new THREE.ConeGeometry(.34,1.9,10);
+const commandCues=new Map(),cueArc=new THREE.TorusGeometry(.72,.061,6,32,Math.PI*1.62),cueRing=new THREE.TorusGeometry(.7,.058,6,36),cueBeam=new THREE.BoxGeometry(1.6,.105,.055),cueFlash=new THREE.IcosahedronGeometry(.14,0),cueFlame=new THREE.ConeGeometry(.34,1.9,10);
 const cuePalette={inu:'#74dcff',shima:'#ffad37',nuko:'#ef81ff',guard8:'#ffd85a',watch:'#a4ffe0',wanden:'#ff648f',mack:'#a8d7ff'};
 const cueRows=new Map();for(const r of G.publishedCatalog?.rows||[])if(!cueRows.has(r.hero+':'+r.id))cueRows.set(r.hero+':'+r.id,r);
-function disposeCue(v){v.root.parent?.remove(v.root);v.mat.dispose();v.white.dispose();}
+// Shared silhouette geometry: dark contour, hero hue and a narrow ivory core.
+// These open strokes improve small-screen contrast without filling enemy telegraphs.
+const cueInk=[new THREE.TorusGeometry(.72,.086,6,32,Math.PI*1.62),new THREE.TorusGeometry(.7,.082,6,36),new THREE.BoxGeometry(1.6,.15,.055)],cueCore=[new THREE.TorusGeometry(.72,.018,5,32,Math.PI*1.62),new THREE.TorusGeometry(.7,.017,5,36),new THREE.BoxGeometry(1.6,.032,.055)];
+function disposeCue(v){v.root.parent?.remove(v.root);v.mat.dispose();v.white.dispose();v.ink.dispose();}
 function clearCommandCues(){for(const v of commandCues.values())disposeCue(v);commandCues.clear();}
 function commandCue(ent,m){
  if(!G.scene||!ent||ent.dead||!m||m.id==='grab'){const old=commandCues.get(ent);if(old){disposeCue(old);commandCues.delete(ent);}return;}
  let v=commandCues.get(ent);if(!v){const root=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color:cuePalette[ent.type]||'#9fe0ff',transparent:true,opacity:.7,depthWrite:false,depthTest:false,side:THREE.DoubleSide}),white=new THREE.MeshBasicMaterial({color:'#fff7da',transparent:true,opacity:.8,depthWrite:false,depthTest:false});
   const add=(g,material)=>{const q=new THREE.Mesh(g,material);q.renderOrder=24;root.add(q);return q;};
-  v={root,mat,white,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
+  const ink=new THREE.MeshBasicMaterial({color:'#12223c',transparent:true,opacity:.8,depthWrite:false,depthTest:false,side:THREE.DoubleSide});
+  v={root,mat,white,ink,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};for(const [i,part]of [v.arc,v.ring,v.beam].entries()){const rim=new THREE.Mesh(cueInk[i],ink),core=new THREE.Mesh(cueCore[i],white);rim.position.z=-.009;core.position.z=.009;rim.renderOrder=23;core.renderOrder=26;rim.name='cue-contrast-rim';core.name='cue-light-core';part.add(rim,core);}
+  const flameCore=new THREE.Mesh(cueFlame,white);flameCore.scale.set(.46,.96,.46);flameCore.position.z=.04;flameCore.renderOrder=26;flameCore.name='cue-flame-core';v.flame.add(flameCore);
+  root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
  v.m=m;const row=cueRows.get(ent.type+':'+m.id),slot=row?.slot||(/dash|iai/.test(m.id)?'dash':m.air?'up':'fwd');v.profile=m.id==='nrailfire'?'rail':m.id==='mkflame'||m.def?.flame?'flame':ent.type==='mack'?'shot':ent.type==='nuko'?'sigil':slot==='down'?'sweep':slot==='up'||slot==='dp'?'rise':slot==='du'?'summon':slot==='dash'?'dash':'slash';
  const active=m.t>=m.act[0]&&m.t<=m.act[1],phase=active?'active':m.t<m.act[0]?'wind':'follow',age=Math.max(0,m.t-m.act[1]);v.phase=phase;v.root.visible=phase!=='follow'||age<9;v.root.userData.profile=v.profile;v.root.userData.move=m.id;v.root.userData.phase=phase;
- v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.9:v.mat.opacity*.5;
+ v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.94:v.mat.opacity*.5;v.ink.opacity=active?.88:v.mat.opacity*.7;
  v.arc.visible=['slash','rise','dash','sweep'].includes(v.profile);v.ring.visible=['summon','sigil','sweep'].includes(v.profile);v.beam.visible=['shot','dash','rail'].includes(v.profile);v.flash.visible=active;v.flame.visible=v.profile==='flame';v.flame.rotation.z=Math.PI/2;v.flame.position.set(1,0,0);v.mat.color.set(v.profile==='flame'?'#ff8a2a':cuePalette[ent.type]||'#9fe0ff');
  v.arc.rotation.set(0,0,v.profile==='rise'?-1.3:v.profile==='sweep'?.1:-.3);v.arc.scale.set(v.profile==='dash'?1.35:1,1,1);v.arc.position.set(.35,v.profile==='rise'?.25:0,.02);
  v.ring.rotation.set(v.profile==='sweep'?Math.PI/2:0,0,0);v.ring.scale.setScalar(v.profile==='summon'?1.35:1);v.ring.position.set(v.profile==='sigil'?.7:.1,v.profile==='sweep'?-.6:.05,0);

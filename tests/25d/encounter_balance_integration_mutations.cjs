@@ -1,0 +1,1 @@
+'use strict';const {spawnSync}=require('child_process'),path=require('path'),assert=require('assert/strict');const r=spawnSync(process.execPath,[path.join(__dirname,'encounter_balance_integration.cjs'),'--mutations'],{stdio:'inherit'});assert.equal(r.status,0);

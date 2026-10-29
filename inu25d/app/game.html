@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
 <meta name="theme-color" content="#7fc8ff">
-<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,90_game,91_same_screen_coop -->
+<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance -->
 
 
 
@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="abbeee5580121eb5da81e139fdfb508bdb6d6233bb49debc1f06fec46ce8633e"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="2594adafff1bf3926ef39fcd3005a401a53bf6a9b2bf5ffbad4945e5e8548cef"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -2718,6 +2718,7 @@ function open(){if(panel)return;priorFocus=document.activeElement;G.input.clear(
   node('p',n,'追加の敵：狙い撃ちわんこの赤い照準は撃つ場所の予告。照準が止まったら上下のラインを変えて回避。スカイアーマーわんこは普通の攻撃を大きく軽減します。空襲後の着地中につかみ、方向＋攻撃で鎧ごと投げましょう。');
   node('p',n,'全9ステージ：戦国和風の足軽・薙刀・忍び、鬼合戦の赤鬼・青鬼・太鼓鬼が登場。ボスは体力半分未満で姿と攻撃が変化。ダークわんわん大帝は第3形態まで、変身ごとにカットシーンが入ります。');
   node('p',n,'クリア後はチャムのお店へ。専用武器は原2Dと同じ効果で、持っている武器の切り替えは無料です。オトモは人間2人とは別にチームで3体まで。ガチャはゲーム内90コイン、全7種が各1/7、重複30コイン返還。課金はありません。');
+  node('p',n,'道具はチャムのお店で購入し、一時停止の「道具を使う」からP1・P2を選んで使えます。各9個まで共有。コソドロわんこは命中で攻撃力と最大HPを奪う中ボス。倒せば能力が戻ります。リトライ・退出でも安全に戻り、永久セーブには残りません。');
   for(const [group,title]of Object.entries(groups)){let rows=all.filter(r=>r.group===group&&r.level<=lv);
    if(group==='charge')rows=rows.filter(r=>r.level===Math.max(...rows.map(r=>r.level)));
    if(!rows.length)continue;node('h3',body,title);const table=node('table',body),thead=node('thead',table),tr=node('tr',thead);for(const x of ['入力／段','技','発生・持続／備考'])node('th',tr,x);const tb=node('tbody',table);
@@ -8455,6 +8456,9 @@ G.stages.push(
   hints:[{at:5,name:MOFU,text:'赤鬼の金棒は重いがすきも大きい。青鬼の氷玉はラインを変えてよけるのじゃ！'},{at:34,name:MOFU,text:'太鼓鬼は二度たたく！ 輪の外へ動くかジャンプして、二度目の後に反撃じゃ。'}],
   props:[{kind:'crystal',x:9,z:-1.3,drop:'coin'},{kind:'pot',x:31,z:1.2,drop:'bone'},{kind:'crystal',x:58,z:-1.4,drop:'star'},{kind:'pot',x:92,z:1.1,drop:'cake'}]}
 );
+// Two deliberate midboss encounters, separate from the existing stage7 midboss.
+G.stages[1].mid={type:'kosodoro',at:72,width:14};
+G.stages[7].mid={type:'kosodoro',at:82,width:14};
 // Introduce the two specialists in the original late campaign as well.
 G.stages[4].waves[2].foes.push(['sniper',1]);
 G.stages[5].waves[0].foes.push(['skyarmor',1]);
@@ -37222,6 +37226,10 @@ return {
   equipmentSnapshot(){return {weapon:player.weapon,weaponT:player.weaponT,heldWeapon:player.heldWeapon,armory:(player.armory||[]).slice(),permWeapon:player.permWeapon};},
   restoreEquipment(s){for(const k of ['weapon','weaponT','heldWeapon','permWeapon'])player[k]=s[k];player.armory=s.armory.slice();},
   equipStock(id,grant=false){const d=defaultWeaponFor(player.kind);if(typeof id!=='string'||!Object.prototype.hasOwnProperty.call(WEAPONS,id)||!(id===d||canPick(player,id))||!(grant||id===d||(player.armory||[]).includes(id)))return false;if(grant)gainWeaponStock(player,id);else giveWeapon(player,id);return true;},
+  toolCatalog(){return ['potion','fullPotion','energy','manju'].map((id,i)=>({id,name:SHOP_ITEMS[i].name,cost:SHOP_ITEMS[i].cost,description:i===3?'HPと奥義ストックを全回復':SHOP_ITEMS[i].desc}));},
+  toolSnapshot(){return {hp:player.hp,dim:player.dim};},
+  restoreTool(s){player.hp=s.hp;player.dim=s.dim;},
+  applyTool(id){const i=['potion','fullPotion','energy','manju'].indexOf(id);if(i<0||player.hp<=0||player.state==='dead')return false;const before={hp:player.hp,dim:player.dim},flags=players.map(p=>p.active);try{players.forEach(p=>p.active=p===player);SHOP_ITEMS[i].buy();}finally{players.forEach((p,j)=>p.active=flags[j]);}return before.hp!==player.hp||before.dim!==player.dim;},
   cost(air){return ultCost(player,air);},
   setBounds(left,end){camX=Math.max(0,left);if(Number.isFinite(end))WORLD_END=end;},
   catalog(hero,slot,air,level){const p={kind:hero,level:level||1};
@@ -38969,7 +38977,7 @@ if(G.publishedFactory){
     if(p.anim!==anim)G.setAnim(p,anim,len);
     p.animT=r.state==='attack'?r.atk.t+r.atk.chg:p.animT+1;
     if(G.game){G.game.level=r.level;G.game.xp=r.xp;G.game.xpNext=r.xpNext;G.game.combo=ctx.ref.combo.count;
-      G.game.publishedCarry=ctx.ref.carry();}
+      G.game.publishedCarry=G.kosodoro?.cleanCarry(p,ctx.ref.carry())||ctx.ref.carry();}
     if(r.level>oldLevel)G.bus.emit('levelUp',{ent:p,level:r.level,hpUp:p.maxHp-(p._lastMaxHp||p.maxHp)});
     p._lastMaxHp=p.maxHp;
   }
@@ -39098,7 +39106,7 @@ if(G.publishedFactory){
       if(info.projectile){const q=info.projectile;const pr={x:q.x*S,y:ctx.lane+(q.z-p.z)*S,zz:q.y*S,r:q.r*S,vx:q.vx*S,vy:q.vz*S,vzz:q.vy*S,dmg:amount*(G.game?.diff?.foeDmg||1)/2,color:'#bfe9ff',owner:'enemy'};
         const res=ctx.ref.incomingProjectile(pr);if(res==='reflect'){q.owner=p;q.team=0;q.vx=pr.vx/S;q.vz=pr.vy/S;q.vy=pr.vzz/S;q.dmg=pr.dmg;syncHero(p,ctx);return false;}}
       else ctx.ref.receive(e,amount*(G.game?.diff?.foeDmg||1),{direct:!e,knock:info.power>=3,dir:info.dir,unblock:info.unblockable,zmax:100000});
-      syncHero(p,ctx);const dmg=before-r.hp;ctx.trace.hurt.push({tick:ctx.ref.clock,damage:dmg});G.hitStop=Math.max(G.hitStop,ctx.ref.freeze);
+      const dmg=before-r.hp;if(dmg>0)G.kosodoro?.acceptedHit(p,dmg,{...info,src:info.src||info.projectile?.owner});syncHero(p,ctx);ctx.trace.hurt.push({tick:ctx.ref.clock,damage:dmg});G.hitStop=Math.max(G.hitStop,ctx.ref.freeze);
       if(r.state==='jdodge')G.bus.emit('dodge',{ent:p,just:true});
       if(dmg>0){G.input.clearEdges(true);ctx.ref.clearEdges();G.commandInputs?.reset(ctx);G.bus.emit('hurt',{ent:p,dmg});if(p.dead)G.bus.emit('heroKO',{ent:p});}
       return dmg>0||r.state==='jdodge'||r.state==='guard'||r.state==='iparry';
@@ -41419,19 +41427,25 @@ function init(){
 }
 // Native-clock command silhouettes: visible even when a move misses. These are
 // read-only stage objects; collision/costs remain exclusively in the native fighter.
-const commandCues=new Map(),cueArc=new THREE.TorusGeometry(.72,.037,5,28,Math.PI*1.62),cueRing=new THREE.TorusGeometry(.7,.035,5,32),cueBeam=new THREE.BoxGeometry(1.6,.065,.055),cueFlash=new THREE.IcosahedronGeometry(.14,0),cueFlame=new THREE.ConeGeometry(.34,1.9,10);
+const commandCues=new Map(),cueArc=new THREE.TorusGeometry(.72,.061,6,32,Math.PI*1.62),cueRing=new THREE.TorusGeometry(.7,.058,6,36),cueBeam=new THREE.BoxGeometry(1.6,.105,.055),cueFlash=new THREE.IcosahedronGeometry(.14,0),cueFlame=new THREE.ConeGeometry(.34,1.9,10);
 const cuePalette={inu:'#74dcff',shima:'#ffad37',nuko:'#ef81ff',guard8:'#ffd85a',watch:'#a4ffe0',wanden:'#ff648f',mack:'#a8d7ff'};
 const cueRows=new Map();for(const r of G.publishedCatalog?.rows||[])if(!cueRows.has(r.hero+':'+r.id))cueRows.set(r.hero+':'+r.id,r);
-function disposeCue(v){v.root.parent?.remove(v.root);v.mat.dispose();v.white.dispose();}
+// Shared silhouette geometry: dark contour, hero hue and a narrow ivory core.
+// These open strokes improve small-screen contrast without filling enemy telegraphs.
+const cueInk=[new THREE.TorusGeometry(.72,.086,6,32,Math.PI*1.62),new THREE.TorusGeometry(.7,.082,6,36),new THREE.BoxGeometry(1.6,.15,.055)],cueCore=[new THREE.TorusGeometry(.72,.018,5,32,Math.PI*1.62),new THREE.TorusGeometry(.7,.017,5,36),new THREE.BoxGeometry(1.6,.032,.055)];
+function disposeCue(v){v.root.parent?.remove(v.root);v.mat.dispose();v.white.dispose();v.ink.dispose();}
 function clearCommandCues(){for(const v of commandCues.values())disposeCue(v);commandCues.clear();}
 function commandCue(ent,m){
  if(!G.scene||!ent||ent.dead||!m||m.id==='grab'){const old=commandCues.get(ent);if(old){disposeCue(old);commandCues.delete(ent);}return;}
  let v=commandCues.get(ent);if(!v){const root=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color:cuePalette[ent.type]||'#9fe0ff',transparent:true,opacity:.7,depthWrite:false,depthTest:false,side:THREE.DoubleSide}),white=new THREE.MeshBasicMaterial({color:'#fff7da',transparent:true,opacity:.8,depthWrite:false,depthTest:false});
   const add=(g,material)=>{const q=new THREE.Mesh(g,material);q.renderOrder=24;root.add(q);return q;};
-  v={root,mat,white,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
+  const ink=new THREE.MeshBasicMaterial({color:'#12223c',transparent:true,opacity:.8,depthWrite:false,depthTest:false,side:THREE.DoubleSide});
+  v={root,mat,white,ink,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};for(const [i,part]of [v.arc,v.ring,v.beam].entries()){const rim=new THREE.Mesh(cueInk[i],ink),core=new THREE.Mesh(cueCore[i],white);rim.position.z=-.009;core.position.z=.009;rim.renderOrder=23;core.renderOrder=26;rim.name='cue-contrast-rim';core.name='cue-light-core';part.add(rim,core);}
+  const flameCore=new THREE.Mesh(cueFlame,white);flameCore.scale.set(.46,.96,.46);flameCore.position.z=.04;flameCore.renderOrder=26;flameCore.name='cue-flame-core';v.flame.add(flameCore);
+  root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
  v.m=m;const row=cueRows.get(ent.type+':'+m.id),slot=row?.slot||(/dash|iai/.test(m.id)?'dash':m.air?'up':'fwd');v.profile=m.id==='nrailfire'?'rail':m.id==='mkflame'||m.def?.flame?'flame':ent.type==='mack'?'shot':ent.type==='nuko'?'sigil':slot==='down'?'sweep':slot==='up'||slot==='dp'?'rise':slot==='du'?'summon':slot==='dash'?'dash':'slash';
  const active=m.t>=m.act[0]&&m.t<=m.act[1],phase=active?'active':m.t<m.act[0]?'wind':'follow',age=Math.max(0,m.t-m.act[1]);v.phase=phase;v.root.visible=phase!=='follow'||age<9;v.root.userData.profile=v.profile;v.root.userData.move=m.id;v.root.userData.phase=phase;
- v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.9:v.mat.opacity*.5;
+ v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.94:v.mat.opacity*.5;v.ink.opacity=active?.88:v.mat.opacity*.7;
  v.arc.visible=['slash','rise','dash','sweep'].includes(v.profile);v.ring.visible=['summon','sigil','sweep'].includes(v.profile);v.beam.visible=['shot','dash','rail'].includes(v.profile);v.flash.visible=active;v.flame.visible=v.profile==='flame';v.flame.rotation.z=Math.PI/2;v.flame.position.set(1,0,0);v.mat.color.set(v.profile==='flame'?'#ff8a2a':cuePalette[ent.type]||'#9fe0ff');
  v.arc.rotation.set(0,0,v.profile==='rise'?-1.3:v.profile==='sweep'?.1:-.3);v.arc.scale.set(v.profile==='dash'?1.35:1,1,1);v.arc.position.set(.35,v.profile==='rise'?.25:0,.02);
  v.ring.rotation.set(v.profile==='sweep'?Math.PI/2:0,0,0);v.ring.scale.setScalar(v.profile==='summon'?1.35:1);v.ring.position.set(v.profile==='sigil'?.7:.1,v.profile==='sweep'?-.6:.05,0);
@@ -41505,7 +41519,8 @@ G.fx = {
 // Display-only holy sword rain. Native fsword/hsword events own position,
 // height, fall time and lifetime; collision remains in the original 2D fighter.
 (function(){'use strict';const G=window.G,T=window.THREE,live=[];
-const blade=new T.BoxGeometry(.075,1,.035),tip=new T.ConeGeometry(.064,.18,4),guard=new T.BoxGeometry(.43,.085,.07),grip=new T.BoxGeometry(.06,.27,.06);
+const blade=new T.BoxGeometry(.11,1,.045),tip=new T.ConeGeometry(.083,.18,4),guard=new T.BoxGeometry(.46,.11,.08),grip=new T.BoxGeometry(.06,.27,.06);
+const edge=new T.BoxGeometry(.16,1,.04),core=new T.BoxGeometry(.032,1,.05),ink=new T.MeshBasicMaterial({color:0x263954}),ivory=new T.MeshBasicMaterial({color:0xffffff});
 const silver=new T.MeshBasicMaterial({color:0xfff6d0}),gold=new T.MeshBasicMaterial({color:0xffcc48});
 function mesh(geo,mat,parent,y){const m=new T.Mesh(geo,mat);m.position.y=y;parent.add(m);return m;}
 function clear(){for(const v of live)v.obj.parent?.remove(v.obj);live.length=0;}
@@ -41514,7 +41529,7 @@ G.publishedSwords={
   const x=f.x/60,z=p.z+(f.y+groundHeight-lane)/60;
   if(f.k==='hsword')for(let i=live.length-1;i>=0;i--)if(Math.abs(live[i].x-x)<.001&&Math.abs(live[i].z-z)<.001){live[i].obj.parent?.remove(live[i].obj);live.splice(i,1);}
   const h=(f.h||118)/60,obj=new T.Group(),len=Math.max(.2,h-.5);
-  mesh(blade,silver,obj,.18+len/2).scale.y=len;
+  const b=mesh(blade,silver,obj,.18+len/2);b.scale.y=len;const rim=new T.Mesh(edge,ink),shine=new T.Mesh(core,ivory);rim.position.z=-.025;shine.position.z=.025;b.add(rim,shine);
   mesh(tip,silver,obj,.09).rotation.z=Math.PI;
   mesh(guard,gold,obj,h-.28);mesh(grip,gold,obj,h-.11);
   G.scene.add(obj);const v={obj,x,z,clock,fall:f.k==='fsword'?f.fall||9:0,drop:(f.drop||430)/60,life:f.life||20};
@@ -44336,7 +44351,8 @@ function buildPause(s){
   const home = button(g, 'k-pink', '<span class="ic">'+SVG.home+'</span><span>タイトルへ</span>', ()=> call(s.data.onTitle), 'cancel');
   home.style.gridColumn = '1 / -1'; home.style.justifySelf = 'center';
   function paint(){ snd.innerHTML = '<span class="ic">'+(s.sound ? SVG.sndOn : SVG.sndOff)+'</span><span>おと '+(s.sound ? 'オン' : 'オフ')+'</span>'; }
-  s.nav = [res, retry, snd, home];
+  const tools=button(g,'k-cream','<span>道具を使う</span>',()=>call(s.data.onTools));
+  s.nav = [res, retry, snd, tools, home];
   const guide=button(pn,'k-sky','わざと コマンド',()=>G.commandGuide.open());s.nav.push(guide);
   s.el.classList.add('dim');
   s.open = (d)=>{ s.sound = soundState(d.soundOn); paint(); s.ni = 0; touchReleaseAll(); };
@@ -44771,7 +44787,7 @@ G.bossPortrait=function(boss,opts={}){const R=G.renderer;if(!R||!boss)return nul
 // Local, versioned shop/companion profile. Never modifies the original save key.
 (function(){'use strict';const G=window.G,KEY='inu25d_camp_v1',MAX=999999,ids=['inu','shima','nuko','guard8','watch','wanden','mack'];let state=null,runId='',nonce=0,busy=false,error='',unsupported=false;
 const copy=x=>JSON.parse(JSON.stringify(x)),integer=x=>Number.isFinite(x)?Math.max(0,Math.min(MAX,Math.floor(x))):0;
-function clean(s){const out={v:1,coins:integer(s?.coins),weapons:{},equipped:{},companions:s?.companions||{owned:[],party:[]},receipt:{run:typeof s?.receipt?.run==='string'?s.receipt.run.slice(0,100):'',credited:integer(s?.receipt?.credited)},drawSeq:integer(s?.drawSeq),lastDraw:s?.lastDraw||null};
+function clean(s){const out={v:1,coins:integer(s?.coins),weapons:{},equipped:{},tools:Object.fromEntries(['potion','fullPotion','energy','manju'].map(id=>[id,Math.min(9,integer(s?.tools?.[id]))])),companions:s?.companions||{owned:[],party:[]},receipt:{run:typeof s?.receipt?.run==='string'?s.receipt.run.slice(0,100):'',credited:integer(s?.receipt?.credited)},drawSeq:integer(s?.drawSeq),lastDraw:s?.lastDraw||null};
  for(const h of ids){out.weapons[h]=Array.isArray(s?.weapons?.[h])?[...new Set(s.weapons[h].filter(x=>typeof x==='string'&&x.length<70&&/^[a-zA-Z0-9_]+$/.test(x)&&!['__proto__','constructor','prototype'].includes(x)))].slice(0,128):[];for(const slot of [0,1]){const k=slot+':'+h,v=s?.equipped?.[k]??(slot===0?s?.equipped?.[h]:null);if(typeof v==='string'&&v.length<70&&/^[a-zA-Z0-9_]+$/.test(v)&&!['__proto__','constructor','prototype'].includes(v))out.equipped[k]=v;}}
  if(G.companions?.normalize)out.companions=G.companions.normalize(out.companions);const d=s?.lastDraw;out.lastDraw=d&&ids.includes(d.hero)?{hero:d.hero,duplicate:!!d.duplicate,refund:Math.min(90,integer(d.refund)),seq:integer(d.seq)}:null;return out;}
 function load(){if(state)return state;try{const raw=JSON.parse(localStorage.getItem(KEY)||'null');unsupported=Number(raw?.v)>1;state=clean(raw);}catch(_){state=clean(null);}return state;}
@@ -44782,7 +44798,11 @@ function catalog(p){const n=G.published?.native(p);if(!n)return [];const s=load(
 function change(p,id,buy){if(busy)return {ok:false,reason:'処理中です'};if(!permitted(p))return {ok:false,reason:'買い物はステージクリア後にできます'};const r=catalog(p).find(r=>r.id===id);if(!r)return {ok:false,reason:'このキャラでは使えません'};
  const s=load();if(!r.owned&&!buy)return {ok:false,reason:'まだ持っていません'};const cost=r.owned?0:r.cost;if(s.coins<cost)return {ok:false,reason:'コインが足りません'};const n=G.published.native(p),before=n.equipmentSnapshot(),next=copy(s);next.coins-=cost;if(!next.weapons[p.type].includes(id))next.weapons[p.type].push(id);next.equipped[(p.coopSlot===1?1:0)+':'+p.type]=id;busy=true;
  try{if(!n.equipStock(id,true))return {ok:false,reason:'装備できません'};if(!store(next)){n.restoreEquipment(before);return {ok:false,reason:error};}try{G.game.publishedCarry=G.published.native(G.player).carry();G.equipmentVisual?.sync(p);}catch(err){G.logError?.('camp visual refresh',err);}return {ok:true,cost,wallet:next.coins,owned:true};}catch(_){n.restoreEquipment(before);return {ok:false,reason:'購入を完了できませんでした。コインは消費していません'};}finally{busy=false;}}
-const api=G.camp={key:KEY,players,wallet:()=>load().coins,profile:()=>copy(clean(load())),catalog,purchase:(p,id)=>change(p,id,true),equip:(p,id)=>change(p,id,false),get error(){return error;},
+function toolUseAllowed(p){return G.sceneName==='play'&&!G.scenes.play?.over&&!G.story?.blocked&&(G.scenes.play?.cleared||G.paused)&&players().includes(p);}
+function toolCatalog(p){const n=G.published?.native(p);if(!n)return [];const s=load(),r=n.player;return n.toolCatalog().map(t=>{const count=s.tools[t.id]||0,canUse=toolUseAllowed(p)&&!p.dead&&r.hp>0&&((t.id==='potion'||t.id==='fullPotion')?r.hp<r.maxHp:t.id==='energy'?r.dim<r.dimMax:r.hp<r.maxHp||r.dim<r.dimMax);return {...t,count,cap:9,canUse,reason:canUse?'':'回復不要、または今は使用できません'};});}
+function purchaseTool(id){if(busy||G.sceneName!=='play'||!G.scenes.play?.cleared)return {ok:false,reason:'道具はクリア後のお店で購入できます'};const p=players()[0],row=toolCatalog(p).find(t=>t.id===id);if(!row)return {ok:false,reason:'不明な道具です'};const s=load();if((s.tools[id]||0)>=9)return {ok:false,reason:'この道具は9個までです'};if(s.coins<row.cost)return {ok:false,reason:'コインが足りません'};busy=true;try{const next=copy(s);next.coins-=row.cost;next.tools[id]=(next.tools[id]||0)+1;if(!store(next))return {ok:false,reason:error};return {ok:true,cost:row.cost,wallet:next.coins,count:next.tools[id]};}finally{busy=false;}}
+function useTool(p,id){if(busy||!toolUseAllowed(p)||p.dead)return {ok:false,reason:'今は使用できません'};const row=toolCatalog(p).find(t=>t.id===id);if(!row||!row.canUse||row.count<=0)return {ok:false,reason:row?.reason||'道具を持っていません'};const n=G.published.native(p),before=n.toolSnapshot(),next=copy(load());busy=true;try{if(!n.applyTool(id))return {ok:false,reason:'回復不要です'};next.tools[id]--;if(!store(next)){n.restoreTool(before);return {ok:false,reason:error};}p.hp=n.player.hp;p.maxHp=n.player.maxHp;p.sp=n.player.dim;try{if(G.game)G.game.publishedCarry=G.published.native(G.player).carry();}catch(err){G.logError?.('camp tool refresh',err);}return {ok:true,count:next.tools[id],hp:p.hp,dim:n.player.dim};}catch(_){n.restoreTool(before);return {ok:false,reason:'使用を完了できませんでした'};}finally{busy=false;}}
+const api=G.camp={key:KEY,players,toolCatalog,purchaseTool,useTool,wallet:()=>load().coins,profile:()=>copy(clean(load())),catalog,purchase:(p,id)=>change(p,id,true),equip:(p,id)=>change(p,id,false),get error(){return error;},
  beginRun(){runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10)+'-'+(++nonce);},
  creditAtClear(){if(!G.scenes.play?.cleared)return false;if(!runId)this.beginRun();const s=load(),earned=integer(G.game?.coins),credited=s.receipt.run===runId?s.receipt.credited:0,delta=Math.max(0,earned-credited);if(!delta)return true;const next=copy(s);next.coins=integer(next.coins+delta);next.receipt={run:runId,credited:earned};return store(next);},
  apply(p){const s=load(),id=s.equipped[(p.coopSlot===1?1:0)+':'+p.type];if(id&&(s.weapons[p.type]||[]).includes(id)){const row=catalog(p).find(r=>r.id===id);if(row)G.published.native(p).equipStock(id,true);}G.equipmentVisual?.sync(p);},
@@ -44807,16 +44827,16 @@ function catalog(p){return Array.from(G.camp?.catalog?.(p)||[],r=>({...r}));}
 function wallet(){const n=G.camp?.wallet?.();return Number.isSafeInteger(n)&&n>=0?n:0;}
 function focusables(root){return Array.from(root.querySelectorAll('button,select')).filter(e=>{if(e.disabled)return false;for(let n=e;n&&n!==root;n=n.parentElement||n.parent)if(n.hidden)return false;return true;});}
 function message(text){if(active){active.message.textContent=text;active.message.setAttribute('role','status');}}
-function setBusy(on){if(!active)return;active.busy=on;for(const e of active.root.querySelectorAll('button,select'))e.disabled=on||e.dataset.chamEquipped==='1';}
+function setBusy(on){if(!active)return;active.busy=on;for(const e of active.root.querySelectorAll('button,select'))e.disabled=on||e.dataset.chamEquipped==='1'||e.dataset.chamBlocked==='1';}
 function close(finished,force){const s=active;if(!s||s.busy&&!force)return false;active=null;s.root.remove();clearControls();
  if(G.sceneName===s.scene){if(G.sceneName==='play'&&G.scenes.play?.pause)G.scenes.play.pause(s.priorPaused);else G.paused=s.priorPaused;}
  if(s.focus?.isConnected!==false)s.focus?.focus?.();if(finished&&!s.done){s.done=true;try{G.camp?.save?.();}catch(e){G.logError?.('cham.save',e);}try{s.onDone?.();}catch(e){G.logError?.('cham.onDone',e);}}
  return true;}
-async function transact(row){const s=active;if(!s||s.busy)return;const p=s.players[s.index];if(!p)return;setBusy(true);G.audio?.unlock?.();
+async function transact(row){if(active?.inventory)return;const s=active;if(!s||s.busy)return;const p=s.players[s.index];if(!p)return;setBusy(true);G.audio?.unlock?.();
  try{const result=await Promise.resolve(row.owned?G.camp.equip(p,row.id):G.camp.purchase(p,row.id));if(active!==s)return;
   setBusy(false);renderRows();message(result?.ok?(row.owned?'武器庫から「'+row.name+'」に持ち替えたニャ。':'「'+row.name+'」を手に入れたニャ！'):(result?.message||REASON[result?.reason]||result?.reason||'購入できなかったニャ。コインと装備条件を確認してね。'));
  }catch(e){if(active===s){setBusy(false);renderRows();message('購入処理を完了できなかったニャ。所持品とコインを確認してね。');}G.logError?.('cham.purchase',e);}}
-function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wallet.textContent='みんなのコイン '+wallet()+' ¢';for(const e of s.weaponTools)e.hidden=s.tab!=='weapons';for(const [tab,e]of Object.entries(s.tabs))e.setAttribute('aria-pressed',String(tab===s.tab));if(s.tab==='companions')return renderCompanions(s);const p=s.players[s.index];
+function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wallet.textContent='みんなのコイン '+wallet()+' ¢';for(const e of s.playerTools)e.hidden=s.tab==='companions';for(const e of s.weaponTools)e.hidden=s.tab!=='weapons';for(const [tab,e]of Object.entries(s.tabs))e.setAttribute('aria-pressed',String(tab===s.tab));if(s.tab==='companions')return renderCompanions(s);if(s.tab==='tools')return renderTools(s);const p=s.players[s.index];
  if(!p){element('p',s.list,'仲間の情報を確認できません。買い物をせずに次へ進めます。');return;}
  const all=catalog(p).filter(r=>r.eligible!==false),kind=p.type||p.kind;
  const rows=all.filter(r=>s.filter==='owned'?r.owned:s.filter==='own'?(r.owner||r.who)===kind:true).sort((a,b)=>((a.owner||a.who)!==kind)-((b.owner||b.who)!==kind)||(a.cost||0)-(b.cost||0)||String(a.id).localeCompare(String(b.id)));
@@ -44829,8 +44849,19 @@ function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wal
   const buy=button(card,row.equipped?'装備中':row.owned?'無料で持ち替える':'購入して装備',row.owned?'equip':'buy',()=>transact(row));buy.dataset.weaponId=row.id;buy.dataset.chamEquipped=row.equipped?'1':'0';buy.disabled=!!row.equipped;
  }
 }
+function toolCatalog(p){return Array.from(G.camp?.toolCatalog?.(p)||[],r=>({...r}));}
+async function toolAction(action,row){if(active?.inventory&&action!=='use')return;const s=active;if(!s||s.busy)return;const p=s.players[s.index];if(action==='use'&&!p)return;const target=s.index;setBusy(true);G.audio?.unlock?.();try{const result=await Promise.resolve(action==='buy'?G.camp.purchaseTool(row.id):G.camp.useTool(p,row.id));if(active!==s)return;setBusy(false);renderRows();message(result?.ok?(action==='buy'?'「'+row.name+'」を1個しまったニャ。回復するときは対象を選んで使ってね。':'P'+(target+1)+'の'+(HERO[p.type||p.kind]||p.type||p.kind)+'に「'+row.name+'」を使ったニャ。'):(result?.message||REASON[result?.reason]||result?.reason||'道具を使えなかったニャ。対象と所持数を確認してね。'));}catch(e){if(active===s){setBusy(false);renderRows();message('道具の処理を完了できなかったニャ。保存状態と所持数を確認してね。');}G.logError?.('cham.tool',e);}}
+function renderTools(s){const p=s.players[s.index],rows=toolCatalog(p);s.count.textContent=s.inventory?'一時停止中の道具袋。「使う」で共有在庫を1個消費します。':'道具はみんなの共有在庫。購入しただけでは回復せず、「使う」で1個消費します。';
+ const info=element('article',s.list);info.className='cham-item cham-gacha';element('h3',info,'回復の道具');element('p',info,s.inventory?'使う対象は上のP1／P2で選べます。満タンなど効果がないときは消費しません。道具の購入・武器の持替え・仲間の編成はクリア後のチャムのお店でできます。閉じると一時停止画面へ戻ります。':'元の2D版の価格・実効果を使い、購入後に保管できるようにしました。使う対象は上のP1／P2で選べます。各道具は9個まで。満タンなど効果がないときは消費しません。');
+ if(p){const r=G.published?.native?.(p)?.player||p;const status=element('p',info,'対象：P'+(s.index+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind)+'　体力 '+Math.max(0,Number(r.hp)||0)+' / '+(Number(r.maxHp)||0)+'　奥義 '+Math.max(0,Number(r.dim??p.dim)||0)+' / '+(Number(r.dimMax??p.dimMax)||0));status.dataset.chamToolTarget='1';}
+ if(!rows.length){element('p',info,'道具の情報を確認できません。武器や仲間のタブをご利用ください。');return;}
+ for(const row of rows){const count=Math.max(0,Number(row.count)||0),cap=Math.max(1,Number(row.cap)||9),card=element('article',s.list);card.className='cham-item';card.dataset.toolId=row.id;const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);if(!s.inventory){const price=element('strong',top,row.cost+' ¢');price.className='cham-price';}element('p',card,row.description||'');const stock=element('p',card,'共有の所持数 '+count+' / '+cap);stock.dataset.chamToolStock=row.id;
+  if(!s.inventory){const buy=button(card,count>=cap?'所持上限です':'1個購入（'+row.cost+' ¢）','tool-buy',()=>toolAction('buy',row));buy.dataset.toolId=row.id;buy.dataset.chamBlocked=count>=cap?'1':'0';buy.disabled=count>=cap;}
+  const usable=!!p&&count>0&&row.canUse===true,use=button(card,p?'P'+(s.index+1)+'に使う':'使用対象がいません','tool-use',()=>toolAction('use',row));use.dataset.toolId=row.id;use.dataset.chamBlocked=usable?'0':'1';use.disabled=!usable;if(!usable){const reason=count===0?'まだ所持していません。':!p?'対象を選んでください。':REASON[row.reason]||row.reason||'今は効果がありません。';element('p',card,reason);}
+ }
+}
 function drawDescription(r,prefix){return (prefix||'')+(HERO[r.hero]||r.hero)+(r.duplicate?'はすでに仲間。'+(r.refund||0)+'コイン戻ったニャ。':'と出会ったニャ！');}
-async function companionAction(action,hero,slot){const s=active;if(!s||s.busy)return;setBusy(true);G.audio?.unlock?.();try{const result=await Promise.resolve(action==='draw'?G.camp.draw():action==='party'?G.camp.party(hero,slot):G.camp.unparty(hero));if(active!==s)return;setBusy(false);renderRows();message(result?.ok?(action==='draw'?drawDescription(result):action==='party'?(HERO[hero]||hero)+'をP'+(slot+1)+'の同行仲間にしたニャ。':(HERO[hero]||hero)+'は武器屋で待機するニャ。'):(result?.message||REASON[result?.reason]||result?.reason||'編成を変更できなかったニャ。'));}catch(e){if(active===s){setBusy(false);renderRows();message('処理を完了できなかったニャ。保存状態とコインを確認してね。');}G.logError?.('cham.companion',e);}}
+async function companionAction(action,hero,slot){if(active?.inventory)return;const s=active;if(!s||s.busy)return;setBusy(true);G.audio?.unlock?.();try{const result=await Promise.resolve(action==='draw'?G.camp.draw():action==='party'?G.camp.party(hero,slot):G.camp.unparty(hero));if(active!==s)return;setBusy(false);renderRows();message(result?.ok?(action==='draw'?drawDescription(result):action==='party'?(HERO[hero]||hero)+'をP'+(slot+1)+'の同行仲間にしたニャ。':(HERO[hero]||hero)+'は武器屋で待機するニャ。'):(result?.message||REASON[result?.reason]||result?.reason||'編成を変更できなかったニャ。'));}catch(e){if(active===s){setBusy(false);renderRows();message('処理を完了できなかったニャ。保存状態とコインを確認してね。');}G.logError?.('cham.companion',e);}}
 function renderCompanions(s){const data=G.camp.profile?.()||{},owned=data.companions?.owned||[],party=data.companions?.party||[],pool=Array.from(G.companions?.pool||[]),cost=G.companions?.cost||90,refund=G.companions?.duplicateRefund||30,max=G.companions?.maxActive||3;
  s.count.textContent='出会った仲間 '+owned.length+' / '+pool.length+' 匹　同行 '+party.length+' / '+max+' 匹（P1・P2合計）';
  const offer=element('article',s.list);offer.className='cham-item cham-gacha';element('h3',offer,'仲間ガチャ');element('p',offer,'1回 '+cost+' ゲーム内コイン。全'+pool.length+'種が同じ確率、各1/'+pool.length+'（約'+(100/Math.max(1,pool.length)).toFixed(2)+'％）。重複した仲間は増えず、'+refund+'コインが戻ります。');element('p',offer,'初めての仲間は、空きがあればP1に同行します。同行できるのはP1・P2を合わせて'+max+'匹まで。入替えと同行先の変更は無料です。');button(offer,cost+'コインで1回引く','draw',()=>companionAction('draw'));
@@ -44842,25 +44873,29 @@ function renderCompanions(s){const data=G.camp.profile?.()||{},owned=data.compan
   const add=button(card,member?'同行先を変更':'同行する','party',()=>companionAction('party',hero,Number(select.value)||0));add.dataset.companionId=hero;if(member){const remove=button(card,'待機させる','unparty',()=>companionAction('unparty',hero));remove.dataset.companionId=hero;}
  }
 }
-function open(options){if(active||G.sceneName!=='play'||!G.scenes.play?.cleared||!G.camp?.players||!G.camp?.catalog||!G.camp?.purchase||!G.camp?.equip||!document.body)return false;const opt=options||{},priorPaused=!!G.paused,scene=G.sceneName,focus=document.activeElement;clearControls();
+function open(options,inventory=false){
+ if(!inventory&&(G.sceneName!=='play'||!G.scenes.play?.cleared))return false;
+ if(inventory&&(G.sceneName!=='play'||!G.paused||G.scenes.play?.cleared||G.scenes.play?.over||G.story?.blocked))return false;
+ if(active||!G.camp?.players||!document.body||(inventory?(!G.camp.toolCatalog||!G.camp.useTool):(!G.camp.catalog||!G.camp.purchase||!G.camp.equip)))return false;
+ const opt=inventory?{}:options||{},priorPaused=!!G.paused,scene=G.sceneName,focus=document.activeElement;clearControls();
  if(scene==='play'&&G.scenes.play?.pause)G.scenes.play.pause(true);else G.paused=true;
- const root=element('section',document.body);root.className='cham-shop';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','アイテムショップ チャム');
+ const root=element('section',document.body);root.className='cham-shop';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',inventory?'一時停止中の道具袋':'アイテムショップ チャム');
  const css=element('style',root);css.textContent='.cham-shop{position:fixed;inset:0;z-index:12500;display:grid;place-items:center;background:#142838e8;color:#243a4a;font:15px/1.45 system-ui,sans-serif;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;touch-action:pan-y}.cham-shop *{box-sizing:border-box}.cham-shop .cham-card{width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;border:3px solid #d9b26b;border-radius:22px;background:#fff8e9;box-shadow:0 15px 70px #0007}.cham-shop header,.cham-shop footer{padding:12px 18px;background:#f2dfb8}.cham-shop h2{font-size:clamp(20px,3vmin,28px);margin:0}.cham-shop header p{margin:4px 0 8px}.cham-shop .cham-toolbar,.cham-shop footer{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.cham-shop label{display:flex;gap:6px;align-items:center}.cham-shop button,.cham-shop select{font:inherit;color:#1d3748;min-height:44px;border:2px solid #b8985e;border-radius:10px;padding:7px 12px;background:#fff;touch-action:manipulation}.cham-shop button{cursor:pointer;font-weight:700}.cham-shop button:disabled{opacity:.62;cursor:default}.cham-shop button:focus-visible,.cham-shop select:focus-visible{outline:4px solid #398faa;outline-offset:1px}.cham-shop .cham-wallet{margin-left:auto;font-weight:800;color:#775016;white-space:nowrap}.cham-shop .cham-count{margin:0;padding:7px 18px;background:#fff1d4;font-size:13px}.cham-shop .cham-list{overflow:auto;overscroll-behavior:contain;padding:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-height:70px;touch-action:pan-y}.cham-shop .cham-gacha{grid-column:1/-1}.cham-shop .cham-item{border:1px solid #d7c59f;border-radius:13px;padding:12px;background:#fffdfa;min-width:0}.cham-shop .cham-item-top{display:flex;gap:8px;align-items:start;justify-content:space-between}.cham-shop h3{margin:0;font-size:17px}.cham-shop .cham-price{white-space:nowrap;color:#885b13;font-size:13px}.cham-shop .cham-item p{font-size:12px;margin:7px 0;overflow-wrap:anywhere}.cham-shop .cham-moves{color:#526579}.cham-shop .cham-item button{width:100%}.cham-shop .cham-message{flex:1 1 180px;margin:0;font-size:13px}.cham-shop .cham-finish{background:#245b63;color:white;border-color:#245b63}@media(max-width:620px){.cham-shop .cham-list{grid-template-columns:1fr}.cham-shop header,.cham-shop footer{padding:9px 11px}.cham-shop .cham-wallet{margin-left:0}.cham-shop .cham-card{border-radius:14px}}@media(max-height:470px){.cham-shop{padding:4px 8px}.cham-shop header{padding:5px 10px}.cham-shop header p{display:none}.cham-shop h2{font-size:20px}.cham-shop footer{padding:5px 10px}.cham-shop .cham-count{padding:3px 10px}.cham-shop .cham-list{padding:7px;gap:7px}.cham-shop .cham-item{padding:8px}.cham-shop .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}';
- const card=element('div',root);card.className='cham-card';const header=element('header',card);element('h2',header,'🐱 アイテムショップ「チャム」');element('p',header,'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
- const tabs=element('div',header);tabs.className='cham-toolbar';const weaponTab=button(tabs,'武器と武器庫','tab-weapons',()=>{if(active&&!active.busy){active.tab='weapons';renderRows();}});const tabButtons={weapons:weaponTab};if(G.camp.draw&&G.companions?.pool){tabButtons.companions=button(tabs,'仲間ガチャ・編成','tab-companions',()=>{if(active&&!active.busy){active.tab='companions';renderRows();}});}
- const tools=element('div',header);tools.className='cham-toolbar';const plabel=element('label',tools,'仲間 '),players=roster(),pick=element('select',plabel);pick.dataset.chamPlayer='1';pick.setAttribute('aria-label','装備する仲間');
+ const card=element('div',root);card.className='cham-card';const header=element('header',card);element('h2',header,inventory?'道具袋 — 一時停止中':'🐱 アイテムショップ「チャム」');element('p',header,inventory?'所持している道具を使えます。閉じると一時停止画面に戻ります。':'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
+ const tabs=element('div',header);tabs.className='cham-toolbar';const tabButtons={};if(!inventory){tabButtons.weapons=button(tabs,'武器と武器庫','tab-weapons',()=>{if(active&&!active.busy){active.tab='weapons';renderRows();}});if(G.camp.toolCatalog&&G.camp.purchaseTool&&G.camp.useTool){tabButtons.tools=button(tabs,'道具を買う・使う','tab-tools',()=>{if(active&&!active.busy){active.tab='tools';renderRows();}});}if(G.camp.draw&&G.companions?.pool){tabButtons.companions=button(tabs,'仲間ガチャ・編成','tab-companions',()=>{if(active&&!active.busy){active.tab='companions';renderRows();}});}}
+ const tools=element('div',header);tools.className='cham-toolbar';const plabel=element('label',tools,'対象 '),players=roster(),pick=element('select',plabel);pick.dataset.chamPlayer='1';pick.setAttribute('aria-label','装備・道具を使う仲間');
  players.forEach((p,i)=>{const option=element('option',pick,'P'+(i+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind));option.value=String(i);});
- const flabel=element('label',tools,'表示 '),filter=element('select',flabel);filter.dataset.chamFilter='1';filter.setAttribute('aria-label','武器の分類');for(const [value,label]of [['own','専用の武器'],['all','装備できるすべて'],['owned','武器庫']]){const option=element('option',filter,label);option.value=value;}
- const coin=element('strong',tools);coin.className='cham-wallet';const count=element('p',card);count.className='cham-count';const list=element('div',card);list.className='cham-list';list.setAttribute('aria-label','武器の品ぞろえ');
- const footer=element('footer',card),msg=element('p',footer,'武器の奥義も見比べて、仲間に合うものを選んでニャ。');msg.className='cham-message';msg.setAttribute('aria-live','polite');button(footer,'結果に戻る','cancel',()=>close(false));const finish=button(footer,'買い物を終えて次へ','finish',()=>close(true));finish.className='cham-finish';
- active={root,card,message:msg,list,count,wallet:coin,players,index:0,filter:'own',tab:'weapons',tabs:tabButtons,weaponTools:[plabel,flabel],busy:false,priorPaused,scene,focus,onDone:typeof opt.onDone==='function'?opt.onDone:null,done:false};
- pick.onchange=()=>{if(!active||active.busy)return;active.index=Math.max(0,Math.min(players.length-1,Number(pick.value)||0));renderRows();message('選んだ仲間の装備を見ているニャ。');};
- filter.onchange=()=>{if(!active||active.busy)return;active.filter=['own','all','owned'].includes(filter.value)?filter.value:'own';renderRows();};
- root.addEventListener('pointerdown',e=>e.stopPropagation(),{passive:true});root.addEventListener('click',e=>e.stopPropagation());renderRows();(players.length?pick:finish).focus();return true;
+ let flabel=null,filter=null;if(!inventory){flabel=element('label',tools,'表示 ');filter=element('select',flabel);filter.dataset.chamFilter='1';filter.setAttribute('aria-label','武器の分類');for(const [value,label]of [['own','専用の武器'],['all','装備できるすべて'],['owned','武器庫']]){const option=element('option',filter,label);option.value=value;}}
+ const coin=element('strong',tools);coin.className='cham-wallet';coin.hidden=inventory;const count=element('p',card);count.className='cham-count';const list=element('div',card);list.className='cham-list';list.setAttribute('aria-label','武器の品ぞろえ');
+ const footer=element('footer',card),msg=element('p',footer,inventory?'使う相手と道具を選んでください。操作中も戦闘は一時停止しています。':'武器の奥義も見比べて、仲間に合うものを選んでニャ。');msg.className='cham-message';msg.setAttribute('aria-live','polite');const cancel=button(footer,inventory?'道具袋を閉じる':'結果に戻る','cancel',()=>close(false));let finish=null;if(!inventory){finish=button(footer,'買い物を終えて次へ','finish',()=>close(true));finish.className='cham-finish';}
+ active={root,card,message:msg,list,count,wallet:coin,players,index:0,filter:'own',tab:inventory?'tools':'weapons',inventory,tabs:tabButtons,playerTools:[plabel],weaponTools:flabel?[flabel]:[],busy:false,priorPaused,scene,focus,onDone:typeof opt.onDone==='function'?opt.onDone:null,done:false};
+ pick.onchange=()=>{if(!active||active.busy)return;active.index=Math.max(0,Math.min(players.length-1,Number(pick.value)||0));renderRows();message(active.tab==='tools'?'選んだプレイヤーが道具の使用対象だニャ。':'選んだ仲間の装備を見ているニャ。');};
+ if(filter)filter.onchange=()=>{if(!active||active.busy)return;active.filter=['own','all','owned'].includes(filter.value)?filter.value:'own';renderRows();};
+ root.addEventListener('pointerdown',e=>e.stopPropagation(),{passive:true});root.addEventListener('click',e=>e.stopPropagation());renderRows();(players.length?pick:finish||cancel).focus();return true;
 }
 window.addEventListener('keydown',e=>{if(!active)return;e.stopImmediatePropagation();if(e.code==='Escape'){e.preventDefault();if(!active.busy)close(false);return;}if(e.code==='Tab'){e.preventDefault();const focusable=focusables(active.root),i=focusable.indexOf(document.activeElement);if(focusable.length)focusable[(i+(e.shiftKey?-1:1)+focusable.length)%focusable.length].focus();return;}if(e.target?.tagName==='SELECT')return;if(['Enter','Space'].includes(e.code)&&e.target?.tagName==='BUTTON')return;e.preventDefault();},true);
 G.bus?.on('scene',()=>{if(active)close(false,true);});
-G.cham={open,close:()=>close(false),catalog,get isOpen(){return !!active;},get busy(){return !!active?.busy;},refresh(){if(active&&!active.busy)renderRows();}};
+G.cham={open:options=>open(options,false),openTools:()=>open(null,true),close:()=>close(false),catalog,toolCatalog,get isOpen(){return !!active;},get busy(){return !!active?.busy;},refresh(){if(active&&!active.busy)renderRows();}};
 })();
 
 
@@ -45009,6 +45044,66 @@ function sync(p){const rig=p?.rig,ref=p&&G.published?.native?.(p);if(!rig||rig.d
  for(const [o]of v.hidden)o.visible=false;const alpha=rig.alpha??1;v.mat.opacity=alpha;v.mat.transparent=alpha<.999;v.mat.userData.uFlash.value=p.flashT>0?.7:0;v.outline.visible=alpha>.999&&G.quality.tier<2;return v.root;
 }
 G.equipmentVisual={sync,clear,clearAll(){for(const p of Array.from(live.keys()))clear(p);},family,stats(){return {live:live.size,cached:assets.size,max:MAX};},inspect:p=>live.get(p)||null};G.bus.on('scene',()=>G.equipmentVisual.clearAll());
+})();
+
+
+// ===== 89_kosodoro.js =====
+// Kosodoro midboss. Theft is a temporary, exact additive debit ledger, not a
+// snapshot rollback. Native level/equipment gains made meanwhile remain intact.
+(function(){'use strict';const G=window.G,T=window.THREE,H=G.foes.h;
+const ledgers=new Map(),tokenIds=new WeakMap();let tokenSerial=0;
+const EPS=1e-8,round=n=>Math.round(n*1e6)/1e6,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const humans=()=>G.coop?.enabled?G.coop.players.filter(Boolean):G.player?[G.player]:[];
+const native=p=>G.published?.native?.(p)?.player;
+function debt(p){let atk=0,maxHp=0;for(const l of ledgers.values()){const v=l.victims.get(p);if(v){atk+=v.atk;maxHp+=v.maxHp;}}return {atk:round(atk),maxHp};}
+function mirror(p,r){if(!r)return;p.hp=r.hp;p.maxHp=r.maxHp;p.atkMul=r.atkMul;}
+function reconcile(e){for(const p of humans()){const r=p._publishedCtx?.foes?.get(e);if(r){r.hp=Math.max(0,e.hp);r.maxHp=e.maxHp;r.dead=!!e.dead;}}}
+function ensure(e){let l=ledgers.get(e);if(!l){l={enemy:e,baseAtk:e.atkMul||1,baseMaxHp:e.maxHp,atkCredit:0,hpCredit:0,victims:new Map(),seen:new Set()};ledgers.set(e,l);}return l;}
+function token(e,p,info){const object=info.projectile||info.attackToken||e.atk;if(object&&typeof object==='object'){if(!tokenIds.has(object))tokenIds.set(object,++tokenSerial);return tokenIds.get(object)+':'+p.id;}return String(info.attackToken??('tick-'+(G.published?.native?.(p)?.clock??G.time.tick)))+':'+p.id;}
+function feedback(e,p,atk,hp,returning=false){const text=returning?'奪われた力が戻った！':'攻撃力と最大HPを盗まれた！';G.fx?.text?.(text,p.x,p.y+p.height+.35,p.z,'say',{life:100});G.fx?.burst?.('sparkle',p.x,p.y+.8,p.z,{count:6,color:returning?'#baffc0':'#ffd36e'});if(!returning){e.stealFlashUntil=G.time.tick+32;H.say(e,'いただきっ！ 倒せば返るぞ！');}G.bus.emit(returning?'kosodoroReturn':'kosodoroSteal',{enemy:e,victim:p,atk,maxHp:hp});}
+function acceptedHit(p,amount,info={}){const e=info.src||info.projectile?.owner,r=native(p);if(!r||![r.atkMul,r.maxHp,r.hp].every(Number.isFinite)||r.atkMul<=0||r.maxHp<1)return false;if(!(amount>0)||!humans().includes(p)||p.kind==='companion'||!r||r.hp<=0||p.dead||!e||e.type!=='kosodoro'||e.dead||e.removed||e.hp<=0||G.sceneName!=='play'||G.paused||G.story?.blocked)return false;
+ const l=ensure(e),key=token(e,p,info);if(l.seen.has(key))return false;
+ const owed=debt(p),cleanAtk=r.atkMul+owed.atk,cleanHp=r.maxHp+owed.maxHp;
+ // Provisional limits: 10%ATK/5%maxHP per accepted attack, all thieves combined
+ // at most40%ATK/30%maxHP, and no thief grows beyond1.5x its initial stats.
+ const atkRoom=Math.max(0,l.baseAtk*.5-l.atkCredit),hpRoom=Math.max(0,Math.floor(l.baseMaxHp*.5)-l.hpCredit);
+ const wantAtk=Math.min(cleanAtk*.1,Math.max(0,cleanAtk*.4-owed.atk),cleanAtk*atkRoom/l.baseAtk),takeAtk=round(Math.max(0,Math.min(wantAtk,r.atkMul-cleanAtk*.6)));
+ const hpFloor=Math.min(cleanHp,Math.max(10,Math.ceil(cleanHp*.7))),takeHp=Math.max(0,Math.min(Math.max(1,Math.floor(cleanHp*.05)),Math.floor(r.maxHp-hpFloor),hpRoom));
+ if(!(takeAtk>EPS||takeHp>0))return false;l.seen.add(key);let v=l.victims.get(p);if(!v){v={atk:0,maxHp:0};l.victims.set(p,v);}
+ const beforeAtk=r.atkMul;r.atkMul=round(Math.max(cleanAtk*.6,r.atkMul-takeAtk));const actualAtk=round(beforeAtk-r.atkMul);r.maxHp-=takeHp;r.hp=Math.min(r.hp,r.maxHp);v.atk=round(v.atk+actualAtk);v.maxHp+=takeHp;
+ const credit=actualAtk/cleanAtk*l.baseAtk;l.atkCredit=round(l.atkCredit+credit);l.hpCredit+=takeHp;e.atkMul=round((e.atkMul||1)+credit);e.maxHp+=takeHp;e.hp=Math.min(e.maxHp,e.hp+takeHp);e.stolenPower={atk:l.atkCredit,maxHp:l.hpCredit};mirror(p,r);reconcile(e);feedback(e,p,actualAtk,takeHp);return true;
+}
+function settle(e,reason='defeat'){const l=ledgers.get(e);if(!l)return false;ledgers.delete(e);for(const [p,v]of l.victims){const r=native(p);if(!r)continue;r.atkMul=round(r.atkMul+v.atk);r.maxHp+=v.maxHp;r.hp=Math.min(r.hp,r.maxHp);mirror(p,r);if(reason==='defeat'&&!p.removed)feedback(e,p,v.atk,v.maxHp,true);}
+ e.atkMul=round(Math.max(EPS,(e.atkMul||1)-l.atkCredit));e.maxHp=Math.max(1,e.maxHp-l.hpCredit);e.hp=Math.min(e.hp,e.maxHp);e.stolenPower={atk:0,maxHp:0};reconcile(e);return true;
+}
+function clear(reason='stage-exit'){for(const e of [...ledgers.keys()])settle(e,reason);}
+function cleanCarry(p,carry){const out={...carry},v=debt(p);if(Number.isFinite(out.atkMul))out.atkMul=round(out.atkMul+v.atk);if(Number.isFinite(out.maxHp))out.maxHp+=v.maxHp;return out;}
+function snapshot(){return [...ledgers.values()].map(l=>({enemyId:l.enemy.id,baseAtk:l.baseAtk,baseMaxHp:l.baseMaxHp,atkCredit:l.atkCredit,hpCredit:l.hpCredit,victims:[...l.victims].map(([p,v])=>({victimId:p.id,slot:p.coopSlot||0,atk:v.atk,maxHp:v.maxHp}))}));}
+function tick(){for(const e of [...ledgers.keys()])if(e.removed||e.dead)settle(e,e.dead?'defeat':'despawn');}
+G.kosodoro={acceptedHit,settle,clear,cleanCarry,snapshot,tick,limits:{atkPerAttack:.1,maxHpPerAttack:.05,totalAtk:.4,totalMaxHp:.3,enemyGrowth:.5}};
+
+function rig(){const root=new T.Group(),body=new T.Group(),hips=new T.Group(),head=new T.Group(),armL=new T.Group(),armR=new T.Group(),legL=new T.Group(),legR=new T.Group(),bag=new T.Group();root.add(body);body.add(hips);hips.add(head,armL,armR,legL,legR,bag);head.position.set(.03,1.25,0);armL.position.set(0,1.02,-.43);armR.position.set(0,1.02,.43);legL.position.set(0,.42,-.23);legR.position.set(0,.42,.23);bag.position.set(-.48,.8,0);
+ const mats=new Map(),geo=G.look.geo;function mesh(parent,g,color,pos,scale){let m=mats.get(color);if(!m){m=new T.MeshStandardMaterial({color,roughness:.72});mats.set(color,m);}const o=new T.Mesh(g,m);o.position.set(...pos);if(scale)o.scale.set(...scale);parent.add(o);o.castShadow=true;G.look.outline(o,.018,'#2a302d');return o;}
+ mesh(hips,geo.sphere(.48,20,14),'#4e7054',[0,.76,0],[.94,1.2,.95]);mesh(hips,geo.sphere(.32,16,12),'#c7b892',[.25,.75,0],[.7,1.05,.85]);
+ for(const [leg,z]of [[legL,-.23],[legR,.23]]){mesh(leg,geo.capsule(.11,.25,3,10),'#536c4e',[0,-.1,0]);mesh(leg,geo.sphere(.17,12,8),'#e2d8bd',[.1,-.29,0],[1.35,.7,1]);}
+ for(const arm of [armL,armR]){mesh(arm,geo.capsule(.11,.29,3,10),'#44694e',[0,-.2,0]);mesh(arm,geo.sphere(.16,12,8),'#e6ddc6',[.03,-.43,0],[1,1.1,.85]);mesh(arm,geo.torus(.12,.025,5,18),'#d9ceac',[0,-.31,0]).rotation.x=Math.PI/2;}
+ mesh(head,geo.sphere(.43,20,14),'#4d7154',[0,.08,0],[1.1,1.03,1]);mesh(head,geo.sphere(.34,18,12),'#e8ddc7',[.23,-.02,0],[.82,.86,1.35]);mesh(head,geo.sphere(.25,14,10),'#202d2a',[.37,.10,0],[.8,.5,1.8]);
+ for(const z of [-.26,.26]){mesh(head,geo.sphere(.14,12,8),'#45674c',[-.07,.39,z],[.7,1.7,.75]);mesh(head,geo.sphere(.085,10,8),'#fff4c5',[.50,.13,z*1.2],[.72,1,.92]);mesh(head,geo.sphere(.035,8,6),'#252b27',[.558,.13,z*1.2],[.55,.9,.8]);mesh(head,geo.sphere(.085,10,6),'#34352b',[.49,.245,z*1.2],[.9,.18,1.15]);mesh(head,geo.sphere(.085,10,8),'#d3bca0',[.01,.42,Math.sign(z)*.34],[.5,1.35,.35]);}
+ mesh(head,geo.sphere(.15,14,10),'#f5e7ca',[.51,-.12,0],[1,.8,1.1]);mesh(head,geo.sphere(.065,10,8),'#282f2b',[.65,-.065,0]);mesh(bag,geo.sphere(.43,18,12),'#a78b60',[0,0,0],[.8,1.15,1]);mesh(bag,geo.torus(.26,.035,6,24),'#665437',[0,.38,0],[.85,1,1.1]).rotation.x=Math.PI/2;mesh(bag,geo.torus(.36,.018,5,32),'#d3b78a',[0,.02,.40],[.86,1.1,1]);for(const x of [-.12,.12])mesh(bag,geo.box(.016,.5,.02),'#6b573b',[x,.02,.425]);mesh(bag,geo.sphere(.075,8,6),'#665437',[0,.48,.12],[1.5,.7,.7]);
+ const warningGeo=new T.RingGeometry(.57,.68,36),warningMat=new T.MeshBasicMaterial({color:'#ffc66c',side:T.DoubleSide,transparent:true,opacity:.8,depthWrite:false}),warning=new T.Mesh(warningGeo,warningMat);warning.rotation.x=-Math.PI/2;warning.position.y=.035;root.add(warning);warning.visible=false;let done=false;
+ return {root,height:1.95,radius:.57,kit:{body},nodes:{body,hips,head,armL,armR,legL,legR,bag,warning},update(e){const t=e.animT||0,walk=e.state==='move'||e.anim==='walk',a=walk?Math.sin(t*.2)*.45:Math.sin(t*.07)*.035;body.rotation.y=e.face<0?Math.PI:0;body.position.y=walk?Math.abs(Math.sin(t*.2))*.045:0;legL.rotation.z=a;legR.rotation.z=-a;armL.rotation.z=-a*.7;armR.rotation.z=a*.7;const attack=e.atk?.t||0;if(e.pending){armL.rotation.z=-.65;armR.rotation.z=-.9;}if(e.atk){armL.rotation.z=.7+Math.sin(attack*.16);armR.rotation.z=1.15+Math.sin(attack*.2)*.6;}if(e.dead){body.rotation.z=-1.35;body.position.y=.35;}else body.rotation.z=e.state==='hurt'?-.12:0;const power=e.stolenPower||{},scale=1+Math.min(.4,(power.maxHp||0)/Math.max(1,e.maxHp)+power.atk*.3);bag.scale.setScalar(scale);head.rotation.z=Math.sin(t*.06)*.025;warning.visible=!!e.pending&&!e.dead;warning.scale.setScalar(1+Math.sin(t*.3)*.05);for(const m of mats.values()){m.emissive.set(e.stealFlashUntil>G.time.tick?'#806321':e.flashT>0?'#ffffff':'#000000');m.emissiveIntensity=e.stealFlashUntil>G.time.tick?.55:e.flashT>0?.6:0;}},setAlpha(a){root.visible=a>.01;for(const m of mats.values()){m.transparent=a<1;m.opacity=a;}},dispose(){if(done)return;done=true;for(const m of mats.values())m.dispose();warningGeo.dispose();warningMat.dispose();}};
+}
+function phase(e){if(e.phase||e.dead||e.hp<=0||!(e.hp<e.maxHp*.5))return;e.phase=1;e.rageDue=true;e.cool=Math.max(e.cool||0,30);G.bossPhaseVisual?.(e);G.bus.emit('bossPhase',{boss:e,phase:1});}
+const SNATCH={id:'kosodoro_snatch',anim:'attack',len:44,hits:[{at:12,dur:3,x0:0,x1:1.5,zr:.55,y0:0,y1:1.8,dmg:9,power:1,stun:18,kb:.05,noDown:true}],onEnd(e){e.cool=48;H.release(e);}};
+const DASH={id:'kosodoro_dashsnatch',anim:'dash',len:58,move:[{at:5,until:16,vx:.12}],hits:[{at:8,dur:8,x0:0,x1:1.5,zr:.5,y0:0,y1:1.8,dmg:10,power:1,stun:18,kb:.05,noDown:true}],onEnd(e){e.vx=e.vz=0;e.cool=54;H.release(e);}};
+const TOSS={id:'kosodoro_purse_toss',anim:'shoot',len:45,fn(e,t){if(t===12&&e.aimPoint){const x=e.x+e.face*.6,dx=e.aimPoint.x-x,dz=e.aimPoint.z-e.z,m=Math.max(.01,Math.hypot(dx,dz));H.shoot(e,{kind:'ball',x,y:e.y+.95,z:e.z,vx:dx/m*.16,vz:dz/m*.16,vy:0,r:.23,dmg:8*(e.atkMul||1),life:90,power:1});}},onEnd(e){e.cool=52;H.release(e);}};
+const RAGE={id:'kosodoro_rage',anim:'roar',len:54,hits:[],noAlert:true,fn(e,t){if(t===16)G.fx?.burst?.('ring',e.x,.1,e.z,{count:4,color:'#ffd06e'});},onEnd(e){e.cool=30;H.release(e);}};
+function ai(e){phase(e);const p=H.target(e);if(!p){H.stop(e);return;}if(!e.introDone){e.introDone=true;G.bus.emit('bossIntro',{boss:e,name:'コソドロわんこ',title:'力を奪う中ボス・倒して取り返せ！',type:'kosodoro'});}if(e._phaseEventHold){H.stop(e);return;}if(e.rageDue){e.rageDue=false;H.attack(e,RAGE,0);return;}if(e.cool>0){H.stop(e);return;}H.face(e,p);const dx=Math.abs(p.x-e.x),dz=Math.abs(p.z-e.z);if(dx<1.8&&dz<.5){if(H.token(e)){H.say(e,'その力、いただくぞ！');H.attack(e,SNATCH,36);}}else if(e.phase&&dx>3&&dx<5.5&&dz<.3){if(H.token(e)){H.say(e,'一直線に、いただきっ！');H.attack(e,DASH,42);}}else if(e.phase&&dx>2&&dx<7&&G.rng()<.35){if(H.token(e)){e.aimPoint={x:p.x,z:p.z};H.say(e,'袋にご注意！');H.attack(e,TOSS,44);}}else H.walkTo(e,p.x+(e.x<p.x?-1.1:1.1),p.z,e.def.spd);}
+G.foes.define('kosodoro',{name:'コソドロわんこ',short:'コソドロ',title:'奪った力は倒すまで返さない！',boss:true,midboss:true,hp:180,poise:55,weight:2,height:1.95,radius:.57,spd:.045,score:900,xp:55,entrance:'walk',recover:46,phaseLine:'袋はまだまだ入るぞ！',build:rig,
+ init(e){e.atkMul=1;e.stolenPower={atk:0,maxHp:0};e.introDone=false;e.onInterrupt=()=>{e.aimPoint=null;e.cool=Math.max(e.cool||0,28);H.release(e);};},ai,onHurt:phase,onKO(e){settle(e,'defeat');return false;}});
+if(G.story?.bosses)G.story.bosses.kosodoro=['コソドロの大仕事！','突進と袋投げが追加。予告をよけて、攻撃後に力を取り返そう！'];
+G.bus.on('bossIntro',d=>{if(d.boss?.type==='kosodoro')d.boss.introDone=true;});
+G.bus.on('hit',d=>{if(d.target?.type==='kosodoro')phase(d.target);});G.bus.on('ko',d=>{if(d.ent?.type==='kosodoro')settle(d.ent,'defeat');});G.bus.on('scene',d=>{if(d.name!=='play')clear('scene-exit');});
 })();
 
 
@@ -45225,7 +45320,7 @@ function startRun(start){
 // ---------------------------------------------------------------- scene: play
 const play = G.scenes.play = {
   enter(params){
-    G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
+    G.kosodoro?.clear();G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
     G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
@@ -45248,7 +45343,7 @@ const play = G.scenes.play = {
   },
   exit(){
     ARENA.unload();
-    G.cham?.close();G.companions?.clear();
+    G.cham?.close();G.kosodoro?.clear();G.companions?.clear();
     for(const hero of G.camp?.players()||[G.player])if(hero)G.equipmentVisual?.clear(hero);
     G.story?.reset();
     uiHide('hud'); uiHide('pause'); touch(false);
@@ -45264,6 +45359,7 @@ const play = G.scenes.play = {
       G.bus.emit('pause', {});
       uiShow('pause', { soundOn:game.soundOn,
         onResume:()=> this.pause(false),
+        onTools:()=>G.cham?.openTools(),
         onRetry:()=>{ this.pause(false); G.go('play', { stage:game.stageIndex }); },
         onTitle:()=>{ this.pause(false); G.go('title'); },
         onSound:(v)=> setSound(v) });
@@ -45304,7 +45400,7 @@ const play = G.scenes.play = {
       if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
-    G.companions?.tick();G.combat.tick();
+    G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
@@ -45650,9 +45746,22 @@ const uiFrame=G.ui.frame.bind(G.ui);G.ui.frame=(...args)=>{const r=uiFrame(...ar
 })();
 
 
+// ===== 92_encounter_balance.js =====
+// Camp equipment/three helpers increase team damage. Scale durability once per
+// spawn, and shorten only discretionary idle/reposition cooldown, never attack telegraphs.
+(function(){'use strict';const G=window.G,F=G.foes;if(!F)return;
+const spawn=F.spawn,tick=F.tick;
+function profile(e){const coop=!!G.coop?.enabled,boss=!!e.def?.boss;return {hp:(boss?1.18:1.25)*(coop?(boss?1.4:1.35):1),cool:coop?(boss?.82:.78):(boss?.88:.84),floor:boss?18:12};}
+function apply(e){if(!e||e._campBalance)return e;const b=profile(e);e._campBalance=b;e.hp=Math.max(1,Math.round(e.hp*b.hp));e.maxHp=Math.max(e.hp,Math.round(e.maxHp*b.hp));e.hpMul*=b.hp;return e;}
+F.spawn=function(...args){return apply(spawn.apply(this,args));};
+F.tick=function(e){const b=e?._campBalance;if(b&&e.cool>b.floor&&!e.dead&&!e.removed&&e.entered!==false&&(e.state==='idle'||e.state==='move')&&!e.pending&&!e.atk&&!e.stun&&!e.grabbedBy&&!(e.punishUntil>G.time.tick)&&!(e.def?.flightAI&&e.skyPhase==='recover')&&!e._phaseEventHold&&!(G.hitStop>0)&&!G.paused&&!G.story?.blocked){e._campCoolCredit=(e._campCoolCredit||0)+(1/b.cool-1);const extra=Math.floor(e._campCoolCredit);if(extra){e.cool=Math.max(b.floor+1,e.cool-extra);e._campCoolCredit-=extra;}}return tick.call(this,e);};
+G.encounterBalance={profile,apply};
+})();
+
+
 }
 </script>
-<script>(function(){'use strict';const BUILD="abbeee5580121eb5da81e139fdfb508bdb6d6233bb49debc1f06fec46ce8633e",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="2594adafff1bf3926ef39fcd3005a401a53bf6a9b2bf5ffbad4945e5e8548cef",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}

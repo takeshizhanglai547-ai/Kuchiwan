@@ -1,3 +1,5 @@
+> Historical 2026-10-28 checkpoint. The tool/midboss questions below were subsequently answered. Current integrated specification: `CAMP_MIDBOSS_BALANCE_20261029.md`.
+
 # 品質改善・チャム店・オトモ候補の仕様台帳
 
 公開752を保全した別候補です。現在の公開版や過去候補・既存セーブを直接書き換えていません。

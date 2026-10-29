@@ -80,6 +80,10 @@ return {
   equipmentSnapshot(){return {weapon:player.weapon,weaponT:player.weaponT,heldWeapon:player.heldWeapon,armory:(player.armory||[]).slice(),permWeapon:player.permWeapon};},
   restoreEquipment(s){for(const k of ['weapon','weaponT','heldWeapon','permWeapon'])player[k]=s[k];player.armory=s.armory.slice();},
   equipStock(id,grant=false){const d=defaultWeaponFor(player.kind);if(typeof id!=='string'||!Object.prototype.hasOwnProperty.call(WEAPONS,id)||!(id===d||canPick(player,id))||!(grant||id===d||(player.armory||[]).includes(id)))return false;if(grant)gainWeaponStock(player,id);else giveWeapon(player,id);return true;},
+  toolCatalog(){return ['potion','fullPotion','energy','manju'].map((id,i)=>({id,name:SHOP_ITEMS[i].name,cost:SHOP_ITEMS[i].cost,description:i===3?'HPと奥義ストックを全回復':SHOP_ITEMS[i].desc}));},
+  toolSnapshot(){return {hp:player.hp,dim:player.dim};},
+  restoreTool(s){player.hp=s.hp;player.dim=s.dim;},
+  applyTool(id){const i=['potion','fullPotion','energy','manju'].indexOf(id);if(i<0||player.hp<=0||player.state==='dead')return false;const before={hp:player.hp,dim:player.dim},flags=players.map(p=>p.active);try{players.forEach(p=>p.active=p===player);SHOP_ITEMS[i].buy();}finally{players.forEach((p,j)=>p.active=flags[j]);}return before.hp!==player.hp||before.dim!==player.dim;},
   cost(air){return ultCost(player,air);},
   setBounds(left,end){camX=Math.max(0,left);if(Number.isFinite(end))WORLD_END=end;},
   catalog(hero,slot,air,level){const p={kind:hero,level:level||1};
