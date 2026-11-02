@@ -1,0 +1,8 @@
+# Unreal Engine 生成物（Phase 0 指定）。これらは再生成できるので git に入れない。
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+*.VC.db
