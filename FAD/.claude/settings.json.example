@@ -1,0 +1,11 @@
+{
+  "_comment": "Phase 0 手順8の提案。PC 側の ~/.claude/settings.json（ユーザー全体）または C:\\Dev\\FAD\\.claude\\settings.json（このプロジェクトだけ）に写す。mcp__unreal の 'unreal' は .mcp.json に書かれた実際のサーバー名に置き換える（ModelContextProtocol.GenerateClientConfig ClaudeCode が生成した .mcp.json の mcpServers 直下のキー名）。",
+  "permissions": {
+    "allow": [
+      "mcp__unreal",
+      "Edit",
+      "Write",
+      "Bash(*)"
+    ]
+  }
+}
