@@ -72,7 +72,10 @@ const a=new T.Vector3(),b=new T.Vector3(),target=new T.Vector3(),box=new T.Box3(
 function foot(leg,out){const mesh=leg.children[0];if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();const q=mesh.geometry.boundingBox;out.set((q.min.x+q.max.x)/2,q.min.y,(q.min.z+q.max.z)/2);return mesh.localToWorld(out);}
 function fill(Q,rest,W,S,F,t,start,end,duration){let u,v,k;if(t<start){u=rest;v=W;k=ease(t/Math.max(1,start));}else if(t<=end){u=S;v=F;k=ease((t-start)/Math.max(1,end-start));}else{u=F;v=rest;k=ease((t-end)/Math.max(1,duration-end));}
  for(const key of Object.keys(Q))if(typeof Q[key]==='number')Q[key]=mix(u[key]??rest[key]??0,v[key]??rest[key]??0,k);Q.sq=0;Q.y=Q.fx=0;}
-function groundAction(e,m,row){if(throwAction[m.id])return throwAction[m.id];if(row&&['ground','upgrade'].includes(row.group))return slotActions[e.type][row.slot];
+function armoryFamily(m){return m.armory&&G.equipmentVisual?.family?.(m.armory);}
+function groundAction(e,m,row){
+ const stock=armoryFamily(m);
+ if(stock)return {gun:'sniper',magic:'thunderCall',chain:'doubleCut',pole:'stinger',fist:'barrage',fan:'waveCut',heavy:'hammerSmash',gadget:'grenadeLob',katana:'mistDraw',cane:'heist'}[stock]||'cleave';if(throwAction[m.id])return throwAction[m.id];if(row&&['ground','upgrade'].includes(row.group))return slotActions[e.type][row.slot];
  if(m.id==='grabStrike')return {inu:'inchPunch',shima:'barrage',nuko:'firePalm',guard8:'headbutt',watch:'heist',wanden:'inchPunch',mack:'barrage'}[e.type];
  if(row?.group==='charge')return e.type==='shima'?'firePalm':e.type==='nuko'?'railAim':e.type==='mack'?'pileBrace':e.type==='guard8'?'heavySmash':'cleave';
  const d=m.def||{};if(d.charged)return e.type==='mack'?'pileBrace':e.type==='nuko'?'railAim':e.type==='guard8'?'heavySmash':'cleave';
@@ -147,6 +150,13 @@ G.publishedMotion={
    if(m.id==='grabMackGun'){Q.aRz=1.6;Q.wz=-1.6;Q.lean=.12+.07*Math.sin(t*Math.PI/2);}
    if(m.id==='grabSteal'){Q.aLz=1.5;Q.aLy=-.8+.8*ease(k);Q.aRz=.7;Q.lean=.2;}
    if(m.id==='grabTenNagashi')Q.aRz=1.5+Math.sin(t*.63)*1.1;
+  }
+  if(m.armory){
+   const sweep=(d.from||0)+((d.to||0)-(d.from||0))*progress;
+   const pulse=Math.sin(progress*Math.PI);
+   Q.aRy+=Math.sin(sweep)*.58;Q.twist+=Math.sin(sweep)*.31;
+   Q.wz+=Math.cos(sweep)*.47;Q.aRz+=(d.len||36)*.003*pulse;
+   if(m.armory.ultimate){Q.lean+=(d.move||0)*.022*pulse;Q.aLz+=.7*pulse;Q.lLz+=.35*pulse;}
   }
   Q.sq=Q.y=Q.fx=0;
   if(!rig._pubRest){rig._pubRest={hipY:rig._inuRest?.hipY??rig.n.hips.position.y,legs:rig._inuRest?.legs||[rig.n.legL.position.clone(),rig.n.legR.position.clone()],meshes:[]};rig.root.traverse(o=>{if(o.isMesh&&!o.userData.isOutline)rig._pubRest.meshes.push(o);});}

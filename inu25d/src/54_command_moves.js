@@ -32,7 +32,7 @@ if(G.publishedFactory){
     // Read-only display clock. It never selects a move or advances the simulation.
     const pa=r.state==='attack'?r.atk:null;
     p.publishedMotion=pa?{id:pa.type,t:pa.t,hold:pa.hold,holdMax:pa.def.hold||0,air:!!pa.air,def:pa.def,tier:pa.tier||0,
-      chargeTicks:pa.chg,time:pa.t+Math.min(pa.chg,pa.def.hold||0),duration:pa.def.dur,act:pa.def.act}:
+      armory:pa.armory,chargeTicks:pa.chg,time:pa.t+Math.min(pa.chg,pa.def.hold||0),duration:pa.def.dur,act:pa.def.act}:
       r.state==='slide'?{id:'slide',t:r.slideT,time:r.slideT,duration:22,act:[1,15]}:
       r.state==='iaidash'?{id:'iaidash',t:r.iaiT,time:r.iaiT,duration:r.iaiMax,act:[1,r.iaiMax-3]}:
       G.publishedMotion?.describe(r,ctx.ref)||null;
@@ -80,6 +80,7 @@ if(G.publishedFactory){
       if(!v)continue;v._owner=ctx;visuals.set(pr,v);G.scene.add(v.obj);}
       const x=pr.x/S,y=Math.max(0,pr.zz)/S,z=p.z+(pr.y-ctx.lane)/S;
       v.obj.position.set(x,y,z);v.update?.({...pr,x,y,z,r:pr.r/S,age:pr.age||0,vx:pr.vx/S,vy:pr.vzz/S,spin:pr.spin});}
+    G.heroCombatFx?.hazards(p,ctx.ref.hazards,ctx.lane,S);
     const particles=ctx.ref.drainParticles();let n=0;
     for(const f of particles){if(G.publishedSwords?.particle(f,p,ctx.lane,ctx.ref.clock,ctx.ref.groundHeight?.(f.x)||0))continue;if(n++>=6)continue;const kind=/holy|slash|cres|blade/.test(f.k)?'slash':/ring|shock/.test(f.k)?'ring':/dust/.test(f.k)?'dust':'sparkle';
       G.fx?.burst?.(kind,(f.x||ctx.ref.player.x)/S,Math.max(0,(ctx.lane-(f.y||ctx.lane))/S),p.z,{count:3,color:f.color||f.col});}
@@ -121,6 +122,14 @@ if(G.publishedFactory){
         },
         damageScale(){return G.game?.diff?.heroDmg||1;},
         grabStart(id){ctx.grabAction=id;},grabEnd(){ctx.grabAction=null;},
+        armoryFinish(weapon,x,y,span,color){
+          const family=G.equipmentVisual?.family?.(weapon);
+          const effect={gun:'smoke',magic:'magic',fist:'shock',heavy:'shock',chain:'ring',fan:'windRibbon'}[family]||'slash';
+          G.fx?.burst?.(effect,x/S,.55,p.z+(y-ctx.lane)/S,{scale:Math.max(.8,span/S),angle:0,color,dir:p.face,count:7});
+          G.fx?.burst?.('ring',x/S,.3,p.z+(y-ctx.lane)/S,{scale:1.25,color});
+        },
+        bomb(x,y){G.heroCombatFx?.firePillar(x/S,p.z+(y-ctx.lane)/S);},
+        explosion(x,y,r,color,pr){G.heroCombatFx?.explosion(x/S,p.z+(y-ctx.lane)/S,r/S,color,pr?.glKind);},
         projectile(pr){G.bus.emit('shoot',{ent:p,kind:pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball',x:pr.x/S,y:pr.zz/S,z:p.z+(pr.y-ctx.lane)/S});},
         beforeHit(e,args,source){if(!e.target)return true;const d=ctx.ref.player.atk?.def;
           if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
@@ -149,8 +158,10 @@ if(G.publishedFactory){
       const living=new Set(G.world.ents.filter(t=>t.team===1&&!t.removed&&!t.dead));
       for(const t of living)sourceEnemy(p,ctx,t);for(const [t,e]of ctx.foes)if(!living.has(t)){ctx.ref.forget(e);ctx.foes.delete(t);}
       G.commandInputs?.before(p,ctx);ctx.ref.step();G.commands.stickRot=ctx.ref.player.in.stickRot;
+      const grip=r.grabbedByEnemy;
+      if(grip?.owner&&grip.escapeMash>=5)ctx.ref.releaseEnemyHold(grip.owner);
       const a=r.state==='attack'?r.atk:null;
-      if(a&&a.t>=a.def.act[0]&&!ctx.swung.has(a)){ctx.swung.add(a);G.bus.emit('swing',{ent:p,def:a.def,kind:a.def.fist?'blunt':'slash',power:a.def.finisher?3:2});G.fx?.trail?.(p);}
+      if(a&&a.t>=a.def.act[0]&&!ctx.swung.has(a)){ctx.swung.add(a);G.heroCombatFx?.swing(p,a);G.bus.emit('swing',{ent:p,def:a.def,kind:a.def.fist?'blunt':'slash',power:a.def.finisher?3:2});G.fx?.trail?.(p);}
       if(!a)G.fx?.trailStop?.(p);
       // Up/down also move the belt lane while ordinary locomotion is allowed.
       syncHero(p,ctx);G.fx?.commandCue?.(p,p.publishedMotion);props(p,ctx,a);for(const [t,e]of ctx.foes){
@@ -164,6 +175,8 @@ if(G.publishedFactory){
     clock(){return G.player?._publishedCtx?.ref.clock??current?.ref.clock??G.time.tick;},
     trace(p=G.player){return engines.get(p)?.trace;},
     native(p=G.player){return engines.get(p)?.ref;},
+    holdByEnemy(p,owner){const ctx=engines.get(p);if(!ctx?.ref.holdByEnemy(owner))return false;syncHero(p,ctx);return true;},
+    releaseEnemyHold(p,owner){return engines.get(p)?.ref.releaseEnemyHold(owner)||false;},
     receiveDamage(p,amount,info){const ctx=engines.get(p);if(!ctx)return false;const r=ctx.ref.player,before=r.hp;
       if(G.story?.blocked)return false;
       const e=info.src?sourceEnemy(p,ctx,info.src):null;

@@ -27,6 +27,23 @@ function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wal
  s.count.textContent=(HERO[kind]||kind)+'の '+rows.length+' 品 / 装備できる武器 '+all.length+' 品';
  if(!rows.length){element('p',s.list,s.filter==='owned'?'武器庫はまだ空だニャ。専用の武器から選んでね。':'この分類には武器がないニャ。');return;}
  for(const row of rows){const card=element('article',s.list);card.className='cham-item';card.dataset.weaponId=row.id;
+  const art=element('div',card);art.className='cham-display';art.setAttribute('aria-hidden','true');
+  const family=G.equipmentVisual?.family?.(row)||'sword';
+  const artPaths={
+    sword:'M33 82l16-16 11 11-16 16zm10-25 17 17 6-6-17-17zm9-4 11 11 46-46 5-14-14 5z',
+    katana:'M26 83l25-22 10 11-25 22zm22-32 19 21 6-5-19-22zm13 0 10 12q31-22 48-52-24 20-58 40z',
+    pole:'M27 91l64-65 5 5-64 65zm63-68 9 9 19-27z',
+    gun:'M29 42h29v-7h42v5h23v12h-19l-10 14H67l-7 20H45l6-22H29z',
+    heavy:'M33 87l43-47 8 8-43 47zm36-52 21-24 28 26-21 24z',
+    magic:'M42 91l36-49 7 5-35 50zm32-57 5-20 15-9 16 10 2 19-17 15z',
+    fist:'M41 80l-9-22 8-22 13-7 12 5 9-7 9 4 10-4 10 7 6 19-11 25z',
+    chain:'M34 76l14-14 9 9-14 14zm20-17 10-10 8 8-10 10zm16-14 10-10 8 8-10 10zm12-12 13-18 17 3 6 13-11 15-14-1z',
+    fan:'M69 85L33 38Q72 9 112 35L77 85zm2-17 3-32 3 32z',
+    gadget:'M45 83L34 56l12-22h17l3-13h19l3 13h17l12 22-11 27z'
+  };
+  art.innerHTML='<svg viewBox="0 0 145 100" aria-hidden="true"><path d="'+(artPaths[family]||artPaths.sword)+'" /></svg>';
+  art.style.setProperty?.('--metal',/^#[0-9a-f]{3,8}$/i.test(row.col||'')?row.col:'#f3ca83');
+  element('small',art,row.owned?'ARMORY':'CHAM SELECT');
   const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);const price=element('strong',top,row.equipped?'装備中':row.owned?'武器庫・持替え無料':row.cost+' ¢');price.className='cham-price';
   element('p',card,(HERO[row.owner||row.who]||row.owner||row.who||'専用')+' / 攻撃 ×'+Number(row.dmg||1).toFixed(2)+'　間合い ×'+Number(row.reach||1).toFixed(2)+'　吹き飛ばし ×'+Number(row.kb||1).toFixed(2));
   const moves=element('p',card);moves.className='cham-moves';moves.textContent='地上奥義：'+(row.ultName||'キャラ本来の技')+' / 空中奥義：'+(row.airName||'キャラ本来の技');
@@ -63,9 +80,31 @@ function open(options,inventory=false){
  if(active||!G.camp?.players||!document.body||(inventory?(!G.camp.toolCatalog||!G.camp.useTool):(!G.camp.catalog||!G.camp.purchase||!G.camp.equip)))return false;
  const opt=inventory?{}:options||{},priorPaused=!!G.paused,scene=G.sceneName,focus=document.activeElement;clearControls();
  if(scene==='play'&&G.scenes.play?.pause)G.scenes.play.pause(true);else G.paused=true;
- const root=element('section',document.body);root.className='cham-shop';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',inventory?'一時停止中の道具袋':'アイテムショップ チャム');
+ const root=element('section',document.body);root.className=inventory?'cham-shop':'cham-shop cham-market';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',inventory?'一時停止中の道具袋':'アイテムショップ チャム');
  const css=element('style',root);css.textContent='.cham-shop{position:fixed;inset:0;z-index:12500;display:grid;place-items:center;background:#142838e8;color:#243a4a;font:15px/1.45 system-ui,sans-serif;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;touch-action:pan-y}.cham-shop *{box-sizing:border-box}.cham-shop .cham-card{width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;border:3px solid #d9b26b;border-radius:22px;background:#fff8e9;box-shadow:0 15px 70px #0007}.cham-shop header,.cham-shop footer{padding:12px 18px;background:#f2dfb8}.cham-shop h2{font-size:clamp(20px,3vmin,28px);margin:0}.cham-shop header p{margin:4px 0 8px}.cham-shop .cham-toolbar,.cham-shop footer{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.cham-shop label{display:flex;gap:6px;align-items:center}.cham-shop button,.cham-shop select{font:inherit;color:#1d3748;min-height:44px;border:2px solid #b8985e;border-radius:10px;padding:7px 12px;background:#fff;touch-action:manipulation}.cham-shop button{cursor:pointer;font-weight:700}.cham-shop button:disabled{opacity:.62;cursor:default}.cham-shop button:focus-visible,.cham-shop select:focus-visible{outline:4px solid #398faa;outline-offset:1px}.cham-shop .cham-wallet{margin-left:auto;font-weight:800;color:#775016;white-space:nowrap}.cham-shop .cham-count{margin:0;padding:7px 18px;background:#fff1d4;font-size:13px}.cham-shop .cham-list{overflow:auto;overscroll-behavior:contain;padding:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-height:70px;touch-action:pan-y}.cham-shop .cham-gacha{grid-column:1/-1}.cham-shop .cham-item{border:1px solid #d7c59f;border-radius:13px;padding:12px;background:#fffdfa;min-width:0}.cham-shop .cham-item-top{display:flex;gap:8px;align-items:start;justify-content:space-between}.cham-shop h3{margin:0;font-size:17px}.cham-shop .cham-price{white-space:nowrap;color:#885b13;font-size:13px}.cham-shop .cham-item p{font-size:12px;margin:7px 0;overflow-wrap:anywhere}.cham-shop .cham-moves{color:#526579}.cham-shop .cham-item button{width:100%}.cham-shop .cham-message{flex:1 1 180px;margin:0;font-size:13px}.cham-shop .cham-finish{background:#245b63;color:white;border-color:#245b63}@media(max-width:620px){.cham-shop .cham-list{grid-template-columns:1fr}.cham-shop header,.cham-shop footer{padding:9px 11px}.cham-shop .cham-wallet{margin-left:0}.cham-shop .cham-card{border-radius:14px}}@media(max-height:470px){.cham-shop{padding:4px 8px}.cham-shop header{padding:5px 10px}.cham-shop header p{display:none}.cham-shop h2{font-size:20px}.cham-shop footer{padding:5px 10px}.cham-shop .cham-count{padding:3px 10px}.cham-shop .cham-list{padding:7px;gap:7px}.cham-shop .cham-item{padding:8px}.cham-shop .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}';
- const card=element('div',root);card.className='cham-card';const header=element('header',card);element('h2',header,inventory?'道具袋 — 一時停止中':'🐱 アイテムショップ「チャム」');element('p',header,inventory?'所持している道具を使えます。閉じると一時停止画面に戻ります。':'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
+ if(!inventory)css.textContent+=`
+ .cham-market{background:radial-gradient(ellipse at 15% 0%,#60402a 0%,transparent 58%),radial-gradient(ellipse at 88% 12%,#244a4a 0%,transparent 57%),#0e1519;color:#f5eee1}
+ .cham-market .cham-card{width:min(1400px,100%);height:100%;max-height:100%;border:1px solid #806849;border-radius:15px;background:#121c21;box-shadow:0 20px 90px #000c}
+ .cham-market header{background:linear-gradient(105deg,#24232a,#13272c);border-bottom:1px solid #735c3a}
+ .cham-market header p{color:#d1cdc1}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#ffe2ac}
+ .cham-market .cham-kicker,.cham-market .cham-display small{font-size:10px;letter-spacing:.24em;font-weight:800;color:#e1bb7e}
+ .cham-market .cham-toolbar{margin-top:6px}.cham-market button,.cham-market select{background:#243238;color:#f8edda;border:1px solid #596163;border-radius:7px}
+ .cham-market button[aria-pressed=true],.cham-market button[data-cham-action=buy],.cham-market .cham-finish{background:linear-gradient(110deg,#ffe0a2,#c79a55);color:#221a10;border-color:#e6c58a}
+ .cham-market .cham-wallet{color:#ffe0a2;background:#211d17;padding:.45em .8em;border:1px solid #8f7144;border-radius:999px}
+ .cham-market .cham-count{background:#18272d;color:#ddd4c3;border-bottom:1px solid #3d4a50}
+ .cham-market .cham-list{flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+ .cham-market .cham-item{background:linear-gradient(150deg,#243137,#192328);border:1px solid #45565d;border-radius:10px;padding:10px}
+ .cham-market .cham-price,.cham-market .cham-moves{color:#f2ca86}.cham-market footer{background:#162229;border-top:1px solid #4a565a}
+ .cham-display{position:relative;display:grid;place-items:center;min-height:80px;margin-bottom:8px;border:1px solid #ffffff26;border-radius:7px;overflow:hidden;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--metal) 33%,#20272c),#11191f 78%)}
+ .cham-display svg{width:110px;height:68px;fill:var(--metal);stroke:#fff0cc;stroke-width:1.2;filter:drop-shadow(0 0 7px var(--metal))}
+ .cham-display small{position:absolute;bottom:5px;left:7px;color:#fff3dc}
+ @media(max-width:720px){.cham-market .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:390px){.cham-market .cham-list{grid-template-columns:1fr}}
+ @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display span{font-size:32px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
+ `;
+ const card=element('div',root);card.className='cham-card';const header=element('header',card);
+ if(!inventory)element('div',header,'CHAM’S ARMORY  /  王国公認商店').className='cham-kicker';
+ element('h2',header,inventory?'道具袋 — 一時停止中':'ちゃむのアイテムショップ');element('p',header,inventory?'所持している道具を使えます。閉じると一時停止画面に戻ります。':'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
  const tabs=element('div',header);tabs.className='cham-toolbar';const tabButtons={};if(!inventory){tabButtons.weapons=button(tabs,'武器と武器庫','tab-weapons',()=>{if(active&&!active.busy){active.tab='weapons';renderRows();}});if(G.camp.toolCatalog&&G.camp.purchaseTool&&G.camp.useTool){tabButtons.tools=button(tabs,'道具を買う・使う','tab-tools',()=>{if(active&&!active.busy){active.tab='tools';renderRows();}});}if(G.camp.draw&&G.companions?.pool){tabButtons.companions=button(tabs,'仲間ガチャ・編成','tab-companions',()=>{if(active&&!active.busy){active.tab='companions';renderRows();}});}}
  const tools=element('div',header);tools.className='cham-toolbar';const plabel=element('label',tools,'対象 '),players=roster(),pick=element('select',plabel);pick.dataset.chamPlayer='1';pick.setAttribute('aria-label','装備・道具を使う仲間');
  players.forEach((p,i)=>{const option=element('option',pick,'P'+(i+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind));option.value=String(i);});

@@ -414,6 +414,12 @@ const PDEF = {
       G.look.vmat({rough:0.18, flat:true, emissive:'#1f8fd0', emissiveIntensity:0.35}), 0.015),
     halos:[ HL(T.glow,1.0,'#5fd8ff',0.6,0.5) ],
     tick(h,p,f){ h.mesh.rotation.x += 0.3; h.mesh.scale.x = f; if(h.age%2===0){ sp(T.spark, p.x - f*R(0.1,0.3), p.y + R(-0.1,0.1), p.z); S.s0=R(0.12,0.24); S.curve=3; S.life=18; S.add=1; S.vy=-0.004; sc_(PICK(['#ffffff','#bff6ff'])); emit(); } } },
+  arrow: { mesh:()=> toyMesh(built('arrow',(b,g)=>{
+      b.add(g.box(.52,.035,.035),'#dbb478',[0,0,0]);
+      b.add(g.cone(.067,.18,5),'#e7efff',[.30,0,0],[0,0,-Math.PI/2]);
+      b.add(g.box(.15,.13,.025),'#d97945',[-.22,0,0]);
+    }),G.look.vmat({rough:.6}),.012),
+    halos:null,tick(h,p,f){h.mesh.scale.x=f;} },
   bolt: { mesh:()=> toyMesh(G.look.geo.sphere(0.1,10,8), basicMat('bolt','#ffffff')),
     halos:[ HL(T.glow,1.2,'#ffe23a',0.75,1,{pulse:0.15}), HL(T.bolt,0.8,'#ffe23a',1,0,{jitter:0.5,flick:0.2}), HL(T.flare,0.8,'#ffffff',0.8,1,{jitter:0.3}) ],
     tick(h,p,f){ sp(T.spark, p.x + R(-0.2,0.2), p.y + R(-0.2,0.2), p.z); S.s0=R(0.14,0.24); S.curve=3; S.life=10; S.add=1; S.vx=R(-0.03,0.03); S.vy=R(-0.03,0.03); sc_(PICK(['#fff6a0','#ffffff'])); emit(); } },
@@ -855,6 +861,12 @@ const B = {
     for(let i=0;i<cnt(o.count||4);i++){ sp(T.crescent, x + d*i*0.12*s, y + R(-0.2,0.2)*s, z); S.s0 = R(0.9,1.3)*s; S.s1 = S.s0*1.3; S.asp = R(1,1.4); S.curve = 2; S.rot = R(-0.5,0.5);
       S.vx = d*0.05*s; S.life = R(10,14); S.add = 0.8; S.fout = 0.7; S.delay = i*2; S.flags = d<0 ? F_FLIP : 0; sc_(i&1 ? '#ffffff' : (o.color||'#fff1a0')); emit(); }
     sparkle(x + d*0.3*s, y, z, { count:5, scale:0.7*s, color:o.color||'#fff6c0' }); },
+  windRibbon(x,y,z,o){
+    sp(T.crescent,x,y,z);
+    S.s0=o.scale;S.s1=o.scale*1.2;S.asp=1.9;S.rot=Math.sin(o.angle)*.22;
+    S.vx=-Math.sin(o.angle)*.075;S.vy=.027;S.vz=Math.cos(o.angle)*.075;
+    S.life=13;S.add=.8;S.a=.78;S.fout=.75;sc_(o.color);emit();
+  },
   sparkle, stars, hearts, dust, dustRing, poof, ring, confetti, fireworks, heal, levelup, shock, magic,
   notes, paws, smoke, purify, flame: flames, ice: iceBurst, thunder, coin, petals, kira, guard, jump: jumpPuff,
 };
@@ -1147,7 +1159,7 @@ function popNew(str, x, y, z, style, opts){
   style = STY[style] ? style : 'info';
   opts = opts || {};
   x = +x||0; y = +y||0; z = +z||0;
-  let p = null;
+  let p = style==='say'&&opts.ent?pops.find(q=>q.on&&q.style===style&&q.ent===opts.ent):null;
   const rank = opts.rank==null ? 1 : opts.rank;
   if(style==='pow'){ project(x, y, z); const q = powNear(_sp.x, _sp.y); if(q){ if(q.t < 24 && rank <= q.rank) return null; p = q; } }
   // free slot, else recycle the oldest (never recycle a 'big' while another is available)

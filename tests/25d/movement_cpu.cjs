@@ -44,6 +44,9 @@ function coop(){const g=setup('inu',true),{G}=g,c=g.env.c,create=c.document.crea
  G.hitStop=5;G.coop.stick(0,301,0,40);const t=G.published.native(a).clock;g.step(5);near(a.z,z,'hitstop');assert.equal(G.published.native(a).clock,t);G.coop.release(301);G.paused=true;const x=a.x;g.key('ArrowRight');g.step(3);near(a.x,x,'pause');}
 record('two simultaneous fighters: opposing X/depth, isolated release, no speed multiplier/double integration, hitstop/pause');
 {const g=coop(),{G}=g,[a,b]=G.coop.players,za=a.z,zb=b.z;g.key('ArrowUp');g.key('KeyS');g.step(10);near(a.z,za-10*.078*.72,'P1 keyboard depth');near(b.z,zb+10*.078*.72,'P2 keyboard depth');g.key('ArrowUp',false);g.key('KeyS',false);
- const boss=g.spawn('garm');boss.hp=boss.maxHp*.4;G.bus.emit('hit',{target:boss,dmg:1});G.hitStop=0;g.step();assert(G.story.blocked);const before=G.coop.players.map(p=>({z:p.z,t:G.published.native(p).clock}));g.env.event('keydown',{code:'ArrowDown',stopImmediatePropagation(){}});g.env.event('keydown',{code:'KeyW',stopImmediatePropagation(){}});g.step(10);for(const [i,p]of G.coop.players.entries()){near(p.z,before[i].z,'cinematic lane freeze');assert.equal(G.published.native(p).clock,before[i].t);}assert.equal(G.coop.channels[0].input.touch.z,0);}
-record('P1/P2 keyboard depth channels remain independent; shared boss cinematic freezes both lanes and native clocks');
+ const boss=g.spawn('garm');boss.hp=boss.maxHp*.4;G.bus.emit('hit',{target:boss,dmg:1});G.hitStop=0;
+ const before=G.coop.players.map(p=>({z:p.z,t:G.published.native(p).clock}));
+ g.env.event('keydown',{code:'ArrowDown',stopImmediatePropagation(){}});g.env.event('keydown',{code:'KeyW',stopImmediatePropagation(){}});g.step(10);
+ assert(!G.story.blocked);for(const [i,p]of G.coop.players.entries()){assert.notEqual(p.z,before[i].z);assert(G.published.native(p).clock>before[i].t);}}
+record('P1/P2 keyboard depth channels remain independent; boss speech leaves both lanes and clocks active');
 fs.mkdirSync(path.join(root,'evidence/movement-20261025'),{recursive:true});fs.writeFileSync(path.join(root,'evidence/movement-20261025/movement-cpu.json'),JSON.stringify({status:'PASS_CPU',cases,limits:'Production controller/input/fixed loop in Node VM; no browser rendering or trusted iPad touch'},null,2));

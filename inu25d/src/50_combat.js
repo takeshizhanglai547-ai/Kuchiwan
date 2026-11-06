@@ -409,7 +409,7 @@ function collect(e, p){
   const k = PICK[e.type] || {};
   let value = 0;
   if(k.heal){ const before = p.hp; p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp*k.heal)); value = p.hp - before;if(p.published)G.published.native(p).player.hp=p.hp; }
-  if(k.coins && G.game){ G.game.coins += k.coins; value = k.coins; }
+  if(k.coins && G.game){ value = k.coins*3; G.game.coins += value; }
   if(k.sp){ if(p.published){const r=G.published.native(p).player;r.dim=Math.min(r.dimMax,r.dim+k.sp);p.dim=r.dim;p.sp=r.dim;}else p.sp = Math.min(3, (p.sp||0) + k.sp); value = k.sp; }
   G.bus.emit('pickup', { ent:p, kind:e.type, x:e.x, y:e.y+0.3, z:e.z, value });
   e.removeMe = true;

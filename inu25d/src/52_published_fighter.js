@@ -4534,6 +4534,10 @@ function beginAttack(type){
   const _isSp=!!(def.charged || def.dimBlade || def.ultMove || slotOfMove(p,type));
   p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{},
          evo:_isSp?evoMul(p):1, tier:_isSp?evoTier(p):0};
+  const stock=WEAPONS[p.weapon],stockMoves=WEAPON_SPECIAL[p.weapon];
+  if(stock?.who&&(type===stockMoves?.ult||type===stockMoves?.fwd||WEAPON_COMBO[p.weapon]?.includes(type))){
+    p.atk.armory={id:p.weapon,owner:stock.who,color:stock.col,ultimate:type===stockMoves?.ult};
+  }
   p.cxSlots=[];   // キャンセルの連鎖。ここで切れる（繋いだ側が呼んだ直後に入れ直す）
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
@@ -5650,6 +5654,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='bomb'){
     if(h.t>=h.life){
+      _pubHooks.bomb?.(h.x,h.y);
       ring(h.x,LANE-10,'#ffae42'); ring(h.x,LANE-10,'#fff'); spark(h.x,LANE-20,'#ffae42',30,13); dust(h.x,LANE,14);
       impactBurst(h.x,LANE-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.blast(h.x);
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
@@ -6955,6 +6960,18 @@ function updatePlayer(){
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
     // ヌコの魔法は〈詠唱＝光が集まる／術式＝魔法陣が展開する／放出〉の3段に割る。
     // 1フレームで撃つだけでは「魔法を使った」感じが出ない
+    if(a.armory?.ultimate&&a.t===def.act[1]){
+      const radial=!!(def.omni||def.aoe||def.bighammer);
+      const span=clamp((def.reach||80)*.48,38,124);
+      const x=p.x+(radial?0:p.facing*span),color=def.trail||a.armory.color;
+      const power=Math.round(clamp((def.dmg||1)*.21+(def.pshot?.dmg||0)*.07,8,38)*(p.atkMul||1));
+      for(const e of enemies){
+        if(e.dead||e.grabbedBy||Math.abs(e.x-x)>span||Math.abs(e.y-p.y)>48||e.z>115)continue;
+        damageEnemy(e,power,(e.x<x?-1:1)*(radial?9:5),radial);
+      }
+      ring(x,p.y-18,color);
+      _pubHooks.armoryFinish?.(a.armory,x,p.y,span,color);
+    }
     if(def.cast){
       if(a.t===def.act[0]-10) nukoGather(p, def.trail||'#ffd0f0');
       if(a.t===def.act[0]-4)  nukoSigil(p, def.trail||'#c46bff', 76);
@@ -13472,6 +13489,7 @@ function bigExplosion(x,y,R,col){
 }
 // 爆発（バズーカ弾など）：着弾点周囲に範囲ダメージ
 function projExplode(x,y,R,dmg,color){ color=color||'#ffae42';
+  _pubHooks.explosion?.(x,y,R,color,_pubActiveProjectile);
   bigExplosion(x,y,R,color);
   shake=Math.max(shake,10+Math.round(clamp(R/40,0,8))); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8);
   sfx.blast(x, clamp(R/150,0.7,1.5));
@@ -26605,6 +26623,18 @@ return {
   revive(){resetPlayer(player,false);player.active=true;state='play';},
   gainXp(amount){gainXp(amount*10);},
   incomingProjectile(pr){return projVsPlayer(pr,player);},
+  holdByEnemy(owner){
+    if(!canGrabPlayer(player))return false;
+    startEnemyGrab({owner},player);
+    return true;
+  },
+  releaseEnemyHold(owner){
+    const grip=player.grabbedByEnemy;
+    if(grip?.owner!==owner)return false;
+    const held=grip.escapeMash<5;
+    releaseEnemyGrab(grip);
+    return held;
+  },
   receive(e,dmg,info){
     if(info?.direct){hurtPlayer(player,dmg,info.dir||1,!!info.knock, null,info.inv,info.launch);}
     else {const mult=foeAtkMul(e)*(ETYPE[e.type].boss?2:1);hitOnePlayer(player,e,dmg/mult,!!info?.knock,-100000,100000,!!info?.unblock,info?.zmax??100000,info?.inv,info?.launch);}

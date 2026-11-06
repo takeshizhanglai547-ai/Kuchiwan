@@ -6,6 +6,7 @@ const G = window.G; const THREE = window.THREE; const U = G.U;
 const types = {};
 const tokens = new Set();
 let nextSquadAttack = -1;
+let lastSquadAttacker = null;
 
 function diff(){ return (G.game && G.game.diff) || { foeHp:1, attackers:2, foeSpeed:1, think:1 }; }
 
@@ -58,7 +59,10 @@ const h = {
     e.vx = 0; e.vz = 0;
     const bossFloor=e.def.boss&&(windup==null||windup>0)?18:0;
     const w = Math.max(tactical?d.minWindup:bossFloor, Math.round((windup==null ? 20 : windup) * (d.think||1)));
-    if(tactical)nextSquadAttack=G.time.tick+d.attackSpacing;
+    if(tactical){
+      nextSquadAttack=G.time.tick+d.attackSpacing;
+      lastSquadAttacker=e;
+    }
     e.committedFace=e.face;
     e.punishUntil=0;
     e.pending = { def, t:w };
@@ -77,6 +81,14 @@ const h = {
     // drop stale holders
     for(const id of tokens){ let f = null; const ents = G.world.ents; for(let i=0;i<ents.length;i++){ if(ents[i].id===id){ f = ents[i]; break; } } if(!f || f.dead || f.removed) tokens.delete(id); }
     if(tokens.size >= max) return false;
+    if(diff().frenzy&&!e.def.boss&&e===lastSquadAttacker){
+      const target=h.target(e);
+      if(target&&G.world.ents.some(a=>a!==e&&a.team===1&&!a.def?.boss&&!a.dead&&!a.scared&&a.entered&&a.cool<=0&&
+        (a.state==='idle'||a.state==='move')&&h.dist(a,target)<2.4&&(a.x-target.x)*(e.x-target.x)<0)){
+        h.wait(e,8);
+        return false;
+      }
+    }
     tokens.add(e.id); e.hasToken = true; return true;
   },
   release(e){ if(e.hasToken){ tokens.delete(e.id); e.hasToken = false; } },
@@ -92,7 +104,8 @@ const h = {
   say(e, text){
     if(!(G.fx && G.fx.text)) return;
     const s = String(text), y = e.y + (e.rig && e.rig.height || 1.3);
-    if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
+    if(e.def?.boss)G.fx.text(s,0,(e.rig?.height||e.height||1.3)+.32,0,'say',{ent:e,life:Math.min(160,78+s.length*3)});
+    else if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
     else G.fx.text(s, e.x, y + 0.35, e.z, 'onoma');
   },
   rand(){ return G.rng(); },
@@ -103,7 +116,7 @@ const h = {
 G.foes = {
   types, h, tokens,
   init(){
-    G.bus.on('scene', ()=> {tokens.clear();nextSquadAttack=-1;});
+    G.bus.on('scene', ()=> {tokens.clear();nextSquadAttack=-1;lastSquadAttacker=null;});
     // when a boss is purified every helper still standing gives up (safety net for types that ignore e.scared)
     G.bus.on('bossDown', (d)=>{
       const b = d && d.boss; let k = 0;
@@ -206,6 +219,7 @@ G.foes = {
       return;
     }
     const def = e.def;
+    if(G.frenzy?.attack(e))return;
     if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; const t = h.target(e); if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
     if(def.ai){ try { def.ai(e); } catch(err){ G.logError('ai '+e.type, err); e.cool = 30; } }
     else defaultAI(e);

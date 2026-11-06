@@ -330,7 +330,6 @@ Kit.prototype.updWorld = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
-  if(e.introLine) introLine(e);
   this.hitNow = fl > this.prevFlash;
   if(this.hitNow){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
@@ -512,19 +511,7 @@ function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } 
 const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
-// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
-// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
-// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
-// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
-const BANNER_T = 142, LINE_T = 44;
-G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossB) b.bannerEnd = G.time.tick + BANNER_T; });
-function sayIntro(e, line){ e.introLine = line; introLine(e); }
-function introLine(e){                     // also called every tick from the rig update (it runs in every state)
-  if(e.dead){ e.introLine = null; return; }
-  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
-  say(e, e.introLine); e.introLine = null;
-  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
-}
+function sayIntro(e, line){ if(!e.dead) say(e,line); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
 const O = {
@@ -657,15 +644,14 @@ const PHASE_ROAR = { id:'bossB_rage', anim:'roar', len:70, hits:[], noAlert:true
   fn(e, t){ if(t===0) G.setAnim(e, 'roar', 70, 0.3);
     if(t===16){ shake(4, 30); fx('shock', e.x, 0.02, e.z, O.rage); fx('ring', e.x, e.height*0.6, e.z + 0.3, O.rageR); sfx('bossRoar'); } },
   onEnd(e){ e.cool = 24; } };
-// Phase 2 strictly below 50% HP per health bar. The story coordinator holds the
-// rage action until its once-per-form cut-in has completed.
+// Phase 2 strictly below 50% HP per health bar. The roar and battle continue while the dialogue is visible.
 function enterPhase(e){
   if(e.phase!==0 || e.dead || e.transforming || !(e.hp < e.maxHp*0.5) || e.hp <= 0) return;
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.rageDue = true;
   G.bossPhaseVisual?.(e);
   G.bus.emit('bossPhase', { boss:e, phase: e.form===3 ? 5 : e.form===2 ? 3 : 1 });
   const line = e.form===2 ? e.def.phaseLine2 : e.def.phaseLine;
-  if(line) say(e, line);
+  if(line&&!G.game?.diff?.frenzy) say(e, line);
   log(e.type + ':phase' + (e.form===2 ? 3 : 1));
 }
 G.bus.on('hit', (d)=>{
@@ -678,7 +664,6 @@ G.bus.on('hit', (d)=>{
 });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, PHASE_ROAR, 0); return true; }
   return false;
 }
@@ -1633,7 +1618,7 @@ function beamStart(e, line){
   const far = dir > 0 ? xHi(0) + 3 : xLo(0) - 3;
   B.x1 = dir > 0 ? Math.max(B.x0 + 6, far) : Math.min(B.x0 - 6, far);
   laneOn(e, B.x0, B.x1, e.z, 1.15);
-  if(line) say(e, line);
+  if(line&&!G.game?.diff?.frenzy) say(e, line);
   sfx('charge');
 }
 function beamHit(e){
@@ -1855,7 +1840,6 @@ function empTransform(e){
   shake(6, 40);
   G.bus.emit('bossPhase', { boss:e, phase:2,formTransition:true });
   e.introDue = true; knightIntro(e);
-  // after the new name's banner (a mid-body line still ran through it: 49% of the line's area under the banner)
   sayIntro(e,e.form===3?'天魔王、降臨！ 最後の翼を見よ！':'これが ほんとうの すがた…！');
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;

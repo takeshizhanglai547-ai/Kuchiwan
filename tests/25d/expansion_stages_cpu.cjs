@@ -1,6 +1,6 @@
 'use strict';
 const {game,root}=require('./published_harness.cjs'),{readModule}=require('./input_cpu.cjs'),vm=require('node:vm'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-function fixture(){const g=game('inu',{foes:[],actualRig:true}),{G}=g;G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);G.game.diff={heroDmg:1,heroHp:1,foeHp:1,foeDmg:1,foeSpeed:1,think:1,attackers:3};for(const f of ['30_foes.js','31_zako.js','32_expansion_foes.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','89_kosodoro.js'])vm.runInContext(readModule(f),g.env.c,{filename:f});G.foes.init();return g;}
+function fixture(){const g=game('inu',{foes:[],actualRig:true}),{G}=g;G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);G.game.diff={heroDmg:1,heroHp:1,foeHp:1,foeDmg:1,foeSpeed:1,think:1,attackers:3};for(const f of ['30_foes.js','31_zako.js','32_expansion_foes.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','89_kosodoro.js','93_frenzy.js'])vm.runInContext(readModule(f),g.env.c,{filename:f});G.foes.init();return g;}
 const cases=[],builds=[];
 {
  const g=fixture(),{G}=g;assert.equal(G.stages.length,9);assert.deepEqual(Array.from(G.stages,s=>s.id),['s1','s2','s3','s4','s5','s6','s7','s8','s9']);for(const s of G.stages){for(const w of s.waves)for(const [id,n]of [...w.foes,...(w.then||[])]){assert(G.foes.types[id],s.id+' unknown '+id);assert(n>0);}assert(G.foes.types[s.boss.type]);}

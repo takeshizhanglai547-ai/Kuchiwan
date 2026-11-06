@@ -17,7 +17,7 @@ const ON_CANDY = ring(0.065,'var(--cd)',12)+',0 .1em 0 var(--cd)';              
 const ON_BAR = ring(0.07,'rgba(74,44,20,.78)',10);                                        // white number on a bar
 // rank colours from the original table (fallback when G.game has none)
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
-const DIFFS = [ { k:'easy', t:'やさしい', cls:'k-mint', n:1 }, { k:'normal', t:'ふつう', cls:'k-sky', n:2 }, { k:'hard', t:'つよい', cls:'k-pink', n:3 } ];
+const DIFFS = [ { k:'easy', t:'やさしい', cls:'k-mint', n:1 }, { k:'normal', t:'ふつう', cls:'k-sky', n:2 }, { k:'hard', t:'つよい', cls:'k-pink', n:3 }, { k:'frenzy', t:'狂乱', cls:'k-frenzy', n:4 } ];
 
 const SVG = {
   grip:'<svg viewBox="0 0 24 24"><path d="M7 12V5a2 2 0 0 1 4 0v6-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v8l-2 7H9l-6-7a2 2 0 0 1 3-2l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -111,13 +111,14 @@ function buildCSS(){
 #iu .tbot{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:.6em}
 #iu .tdiff{justify-self:start;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;pointer-events:auto}
 #iu .tlab{font-size:max(var(--fm),.85em);color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
-#iu .chips{display:flex;gap:.35em}
+#iu .chips{display:flex;flex-wrap:wrap;gap:.35em}
 #iu .chip{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
 #iu .chip .pw{display:flex;gap:.02em}
 #iu .chip .pw i{display:block;width:.7em;height:.7em}
 #iu .chip.sel{--c1:var(--s1);--c2:var(--s2);--cd:var(--s3);color:#fff;text-shadow:${ON_CANDY};transform:scale(1.1);opacity:1}
 #iu .chip.k-mint{--s1:#c8f8e0;--s2:#6fdca8;--s3:#2f9e6c;--cd:#9fd8bc}
 #iu .chip.k-sky{--s1:#d2ecff;--s2:#6fbcf6;--s3:#2f7fc4;--cd:#9cc8ea}
+#iu .chip.k-frenzy{--s1:#edccff;--s2:#c794f6;--s3:#843bc4;--cd:#cf9ced}
 #iu .chip.k-pink{--s1:#ffc9dd;--s2:#ff8fb8;--s3:#d6558a;--cd:#eeb0c8}
 #iu .play{font-size:2.3em;padding:.3em 1.5em .36em;animation:iuPulse 1.5s ease-in-out infinite}
 #iu .play .ic{width:1em;height:1em}
@@ -377,8 +378,18 @@ function buildCSS(){
 #iu .lpaws i:nth-child(2){color:#7fc8ff;filter:drop-shadow(0 .12em 0 #2f7fc4)}#iu .lpaws i:nth-child(3){color:#7fe0b0;filter:drop-shadow(0 .12em 0 #2f9e6c)}
 
 /* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
-#iu .stages{z-index:61}
+#iu .stages{z-index:99}
 #iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(max(54em,820px),calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
+#iu .strow.world-route{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7em;padding:1.1em;background:radial-gradient(ellipse at 70% 20%,#edf1bb,transparent 60%),repeating-linear-gradient(27deg,#9cbd8b 0px,#9cbd8b 2px,#adc998 3px,#adc998 24px);border:2px solid #8b9d6f;border-radius:1em}
+#iu .world-route::before{display:none}
+#iu .world-path{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#iu .world-path path{fill:none;stroke:#f8e6ac;stroke-width:6;stroke-dasharray:8 4;stroke-linecap:round}
+#iu .world-route .stc{max-width:none;display:grid;grid-template-columns:auto auto 1fr;gap:.32em;justify-items:center;padding:.4em}
+#iu .world-route .sst{grid-column:1/-1}
+#iu .world-route .world-landmark{font-size:1.5em;line-height:1}
+#iu .world-route .stc .sn{width:1.5em;height:1.5em}
+#iu .world-detail{margin:0;color:#543e26;text-align:center;font-weight:900}
+@media(max-width:520px){#iu .world-route .stc{grid-template-columns:1fr 1fr}#iu .world-route .stn{grid-column:1/-1}}
 #iu .sthd{display:flex;align-items:center;gap:.8em}
 #iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
 #iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
@@ -575,7 +586,7 @@ function setPortraitSrc(img, fb, id, expr){
 let ready = false, root = null, fbLayer = null, host = null;
 let reduced = false, kbMode = false, emPx = 14;
 const S = {};                // screens by name: { el, on, data, nav:[], ni, key(e,code), frame(dt), open(data), close() }
-const ORDER = ['loading','pause','over','result','ending','stages','select','title'];   // key focus priority (top first)
+const ORDER = ['loading','pause','over','stages','result','ending','select','title'];   // key focus priority (top first)
 
 // A tap / key that arrives right after a screen (or the help panel) appeared was meant for the screen before it:
 // a double-tap on 「あそぶ」 must not also press whatever the select screen put under the finger.
@@ -807,15 +818,20 @@ function buildStages(s){
   const pn = el('div', 'pn stp', s.el);
   const head = el('div', 'sthd', pn);
   const back = s.back = button(head, 'back k-cream', '<span class="ic">'+SVG.left+'</span><span>もどる</span>', ()=> call(s.data.onBack), false);
-  el('div', 'hd', head).textContent = 'どこから はじめる？';
-  const row = el('div', 'strow', pn);
+  el('div', 'hd', head).textContent = '王国のワールドマップ';
+  const row = el('div', 'strow world-route', pn);
+  const detail = el('p','world-detail',pn);
+  const route='<svg class="world-path" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true"><path d="M50 50H250Q282 52 282 100T250 150H50Q18 152 18 200T50 250H250"/></svg>';
   const go = s.go = button(pn, 'stgo k-pink', '', ()=> pick(), false);
   s.list = []; s.els = []; s.focus = 0;
+  const landmarks=['🏘','🏮','🌲','💎','⛵','🏔','🏰','⛩','🌋'];
   const lockSvg = '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="11" rx="2.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.8"/></svg>';
   const usable = (i)=> !!s.list[i] && !s.list[i].locked;
   function paint(){
     s.els.forEach((c, i)=> c.classList.toggle('on', i===s.focus));
-    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' から しゅっぱつ！</span>';
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' へ出発</span>';
+    const stop=s.list[s.focus];
+    detail.textContent=stop?(stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
   }
   function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
   function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
@@ -823,10 +839,12 @@ function buildStages(s){
   function nope(c){ sfx('cancel'); c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); }
   s.open = (d)=>{
     s.list = Array.isArray(d.stages) ? d.stages.slice() : [];
-    row.innerHTML = ''; s.els = [];
+    row.innerHTML = route; s.els = [];
     s.list.forEach((st, i)=>{
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
+      c.style.gridColumn=String(Math.floor(i/3)%2===0?i%3+1:3-i%3);c.style.gridRow=String(Math.floor(i/3)+1);
+      el('span', 'world-landmark', c).textContent=landmarks[i]||'◆';
       el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
       wordWrap(el('span', 'stn', c), st.kana || st.name || ('ステージ '+(i+1)));
       const ss = el('span', 'sst', c);

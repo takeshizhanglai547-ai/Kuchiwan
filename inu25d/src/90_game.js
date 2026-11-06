@@ -17,6 +17,8 @@ const DIFFS = {
   normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.8, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
   hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.1, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
     tactics:true, attackSpacing:12, minWindup:18, punishWindow:28 },
+  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.48, foeHp:1.55, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
+    tactics:true, attackSpacing:8, minWindup:16, punishWindow:19, frenzy:true },
 };
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
 
@@ -187,14 +189,15 @@ G.scenes.select = {
 
 // ---------------------------------------------------------------- a run: several stages in a row
 // with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
-function chooseStage(){
+function chooseStage(continueRun=false){
   // game.unlocked = how many stages are cleared (all n after the ending); the stage after them is open
   const n = stages().length, done = U.clamp(game.unlocked|0, 0, n), open = Math.min(done, Math.max(0, n-1));
-  if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
+  if(G.ui?.hasScreen?.('stages')){
     const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < done }));
-    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
-  } else startRun(0);
+    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); const stage=U.clamp(i|0,0,open); if(continueRun)G.go('play',{stage});else startRun(stage); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
+  } else if(continueRun)G.go('play',{stage:open});else startRun(0);
 }
+G.chooseStage=chooseStage;
 function startRun(start){
   G._arena = false; G._autoplay = false;
   start = start|0;
@@ -213,6 +216,8 @@ const play = G.scenes.play = {
     G.kosodoro?.clear();G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
     G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
+    this.startCoins = game.coins;
+    this.resultShown = false;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
     game.cutinT = 0; game.clearT = 0; game.koT = 0; this.cleared = false; this.over = false;
     unloadStage(); ARENA.unload();
@@ -290,7 +295,7 @@ const play = G.scenes.play = {
       if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
-    G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
+    G.frenzy?.tick(); G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
@@ -339,18 +344,25 @@ const play = G.scenes.play = {
     const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
+    if(this.resultShown)return;
+    this.resultShown=true;
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
     stars = U.clamp(stars, 1, 3);
     game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1)); persist();
     const p = G.player; if(p) game.ultCarry = p.ult;
-    G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
+    const earned=game.coins-this.startCoins;
+    const armoryBudget=(G.camp?.players?.()||[]).reduce((sum,hero)=>
+      sum+Math.max(0,...G.camp.catalog(hero).filter(w=>w.owner===hero.type&&!w.owned).map(w=>w.cost)),0);
+    const clearReward=Math.max(80+idx*15,armoryBudget-earned);
+    game.coins+=clearReward;
+    G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:earned+clearReward });
     G.camp?.creditAtClear();
     touch(false);
     G.input.clear();
-    uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:game.coins, bestCombo:game.bestCombo, last,
+    uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:earned+clearReward, bestCombo:game.bestCombo, last,
       nextLabel:G.cham?'チャムのお店へ':null,
-      onNext:()=>{const advance=()=>{sfx('ok');if(last)G.go('ending');else G.go('play',{stage:idx+1});};if(G.cham)G.cham.open({onDone:advance});else advance();} });
+      onNext:()=>{const advance=()=>{sfx('ok');if(last)G.go('ending');else{game.publishedCarry=G.published?.native(G.player)?.carry()||null;chooseStage(true);}};if(G.cham)G.cham.open({onDone:advance});else advance();} });
   },
   gameOver(){
     G.story?.reset();

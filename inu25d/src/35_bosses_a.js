@@ -229,7 +229,6 @@ Kit.prototype.updMarker = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
-  if(e.introLine) introLine(e);
   if(fl > this.prevFlash){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
   const fv = fl > 0 ? 0.62 : 0;
@@ -389,19 +388,7 @@ const O_TRAILDUST = { count:2, scale:0.7, dir:1 }, O_FINDUST = { count:2, scale:
   O_RUMBLE = { count:2, scale:0.8 }, O_SPARK = { count:2, scale:0.5, color:'#dff0ff' }, O_SPINDUST = { count:3, scale:0.8 };
 function dustBehind(e, o, back){ o.dir = -e.face; fx('dust', e.x - e.face*back, 0.05, e.z, o); }
 function say(e, s){ fh().say(e, s); }
-// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
-// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
-// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
-// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
-const BANNER_T = 142, LINE_T = 44;
-G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossA) b.bannerEnd = G.time.tick + BANNER_T; });
-function sayIntro(e, line){ e.introLine = line; introLine(e); }
-function introLine(e){                     // also called every tick from the rig update (it runs in every state)
-  if(e.dead){ e.introLine = null; return; }
-  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
-  say(e, e.introLine); e.introLine = null;
-  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
-}
+function sayIntro(e, line){ if(!e.dead) say(e,line); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 function rng(){ return G.rng(); }
 // horizontal limits the boss should stay within: the visible belt (the boss arena is camera-locked in stages)
@@ -503,12 +490,11 @@ function enterPhase(e){
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.gplan = null; e.rageDue = true;
   G.bossPhaseVisual?.(e);
   G.bus.emit('bossPhase', { boss:e, phase:1 });
-  if(e.def.phaseLine) say(e, e.def.phaseLine);
+  if(e.def.phaseLine&&!G.game?.diff?.frenzy) say(e, e.def.phaseLine);
 }
 G.bus.on('hit', (d)=>{ const t = d && d.target; if(t && t.def && t.def.bossA && t.def.boss && t.team===1) enterPhase(t); });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, e.def.rage || PHASE_ROAR, 0); return true; }
   return false;
 }

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
 <meta name="theme-color" content="#7fc8ff">
-<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance -->
+<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance,93_frenzy,94_hero_combat_fx -->
 
 
 
@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="2594adafff1bf3926ef39fcd3005a401a53bf6a9b2bf5ffbad4945e5e8548cef"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="c17be9b60c7fd40b859c76cb74fa2f0f3e826bed33406e8c47e4c4042857e5ce"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -2596,7 +2596,10 @@ const a=new T.Vector3(),b=new T.Vector3(),target=new T.Vector3(),box=new T.Box3(
 function foot(leg,out){const mesh=leg.children[0];if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();const q=mesh.geometry.boundingBox;out.set((q.min.x+q.max.x)/2,q.min.y,(q.min.z+q.max.z)/2);return mesh.localToWorld(out);}
 function fill(Q,rest,W,S,F,t,start,end,duration){let u,v,k;if(t<start){u=rest;v=W;k=ease(t/Math.max(1,start));}else if(t<=end){u=S;v=F;k=ease((t-start)/Math.max(1,end-start));}else{u=F;v=rest;k=ease((t-end)/Math.max(1,duration-end));}
  for(const key of Object.keys(Q))if(typeof Q[key]==='number')Q[key]=mix(u[key]??rest[key]??0,v[key]??rest[key]??0,k);Q.sq=0;Q.y=Q.fx=0;}
-function groundAction(e,m,row){if(throwAction[m.id])return throwAction[m.id];if(row&&['ground','upgrade'].includes(row.group))return slotActions[e.type][row.slot];
+function armoryFamily(m){return m.armory&&G.equipmentVisual?.family?.(m.armory);}
+function groundAction(e,m,row){
+ const stock=armoryFamily(m);
+ if(stock)return {gun:'sniper',magic:'thunderCall',chain:'doubleCut',pole:'stinger',fist:'barrage',fan:'waveCut',heavy:'hammerSmash',gadget:'grenadeLob',katana:'mistDraw',cane:'heist'}[stock]||'cleave';if(throwAction[m.id])return throwAction[m.id];if(row&&['ground','upgrade'].includes(row.group))return slotActions[e.type][row.slot];
  if(m.id==='grabStrike')return {inu:'inchPunch',shima:'barrage',nuko:'firePalm',guard8:'headbutt',watch:'heist',wanden:'inchPunch',mack:'barrage'}[e.type];
  if(row?.group==='charge')return e.type==='shima'?'firePalm':e.type==='nuko'?'railAim':e.type==='mack'?'pileBrace':e.type==='guard8'?'heavySmash':'cleave';
  const d=m.def||{};if(d.charged)return e.type==='mack'?'pileBrace':e.type==='nuko'?'railAim':e.type==='guard8'?'heavySmash':'cleave';
@@ -2672,6 +2675,13 @@ G.publishedMotion={
    if(m.id==='grabSteal'){Q.aLz=1.5;Q.aLy=-.8+.8*ease(k);Q.aRz=.7;Q.lean=.2;}
    if(m.id==='grabTenNagashi')Q.aRz=1.5+Math.sin(t*.63)*1.1;
   }
+  if(m.armory){
+   const sweep=(d.from||0)+((d.to||0)-(d.from||0))*progress;
+   const pulse=Math.sin(progress*Math.PI);
+   Q.aRy+=Math.sin(sweep)*.58;Q.twist+=Math.sin(sweep)*.31;
+   Q.wz+=Math.cos(sweep)*.47;Q.aRz+=(d.len||36)*.003*pulse;
+   if(m.armory.ultimate){Q.lean+=(d.move||0)*.022*pulse;Q.aLz+=.7*pulse;Q.lLz+=.35*pulse;}
+  }
   Q.sq=Q.y=Q.fx=0;
   if(!rig._pubRest){rig._pubRest={hipY:rig._inuRest?.hipY??rig.n.hips.position.y,legs:rig._inuRest?.legs||[rig.n.legL.position.clone(),rig.n.legR.position.clone()],meshes:[]};rig.root.traverse(o=>{if(o.isMesh&&!o.userData.isOutline)rig._pubRest.meshes.push(o);});}
   const signature=m.id+':'+(m.serial||0);if(!rig.st.pubFeet||rig.st.pubFeet.id!==signature||m.time<rig.st.pubFeet.time){rig.root.updateMatrixWorld(true);rig.st.pubFeet={id:signature,time:m.time,root:rig.root.position.clone(),feet:[foot(rig.n.legL,new T.Vector3()),foot(rig.n.legR,new T.Vector3())]};}rig.st.pubFeet.time=m.time;
@@ -2743,6 +2753,7 @@ const G = window.G; const THREE = window.THREE; const U = G.U;
 const types = {};
 const tokens = new Set();
 let nextSquadAttack = -1;
+let lastSquadAttacker = null;
 
 function diff(){ return (G.game && G.game.diff) || { foeHp:1, attackers:2, foeSpeed:1, think:1 }; }
 
@@ -2795,7 +2806,10 @@ const h = {
     e.vx = 0; e.vz = 0;
     const bossFloor=e.def.boss&&(windup==null||windup>0)?18:0;
     const w = Math.max(tactical?d.minWindup:bossFloor, Math.round((windup==null ? 20 : windup) * (d.think||1)));
-    if(tactical)nextSquadAttack=G.time.tick+d.attackSpacing;
+    if(tactical){
+      nextSquadAttack=G.time.tick+d.attackSpacing;
+      lastSquadAttacker=e;
+    }
     e.committedFace=e.face;
     e.punishUntil=0;
     e.pending = { def, t:w };
@@ -2814,6 +2828,14 @@ const h = {
     // drop stale holders
     for(const id of tokens){ let f = null; const ents = G.world.ents; for(let i=0;i<ents.length;i++){ if(ents[i].id===id){ f = ents[i]; break; } } if(!f || f.dead || f.removed) tokens.delete(id); }
     if(tokens.size >= max) return false;
+    if(diff().frenzy&&!e.def.boss&&e===lastSquadAttacker){
+      const target=h.target(e);
+      if(target&&G.world.ents.some(a=>a!==e&&a.team===1&&!a.def?.boss&&!a.dead&&!a.scared&&a.entered&&a.cool<=0&&
+        (a.state==='idle'||a.state==='move')&&h.dist(a,target)<2.4&&(a.x-target.x)*(e.x-target.x)<0)){
+        h.wait(e,8);
+        return false;
+      }
+    }
     tokens.add(e.id); e.hasToken = true; return true;
   },
   release(e){ if(e.hasToken){ tokens.delete(e.id); e.hasToken = false; } },
@@ -2829,7 +2851,8 @@ const h = {
   say(e, text){
     if(!(G.fx && G.fx.text)) return;
     const s = String(text), y = e.y + (e.rig && e.rig.height || 1.3);
-    if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
+    if(e.def?.boss)G.fx.text(s,0,(e.rig?.height||e.height||1.3)+.32,0,'say',{ent:e,life:Math.min(160,78+s.length*3)});
+    else if(s.length > 7) G.fx.text(s, e.x, y + 0.2, e.z, 'say', { life: Math.min(210, 70 + s.length*6) });
     else G.fx.text(s, e.x, y + 0.35, e.z, 'onoma');
   },
   rand(){ return G.rng(); },
@@ -2840,7 +2863,7 @@ const h = {
 G.foes = {
   types, h, tokens,
   init(){
-    G.bus.on('scene', ()=> {tokens.clear();nextSquadAttack=-1;});
+    G.bus.on('scene', ()=> {tokens.clear();nextSquadAttack=-1;lastSquadAttacker=null;});
     // when a boss is purified every helper still standing gives up (safety net for types that ignore e.scared)
     G.bus.on('bossDown', (d)=>{
       const b = d && d.boss; let k = 0;
@@ -2943,6 +2966,7 @@ G.foes = {
       return;
     }
     const def = e.def;
+    if(G.frenzy?.attack(e))return;
     if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; const t = h.target(e); if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
     if(def.ai){ try { def.ai(e); } catch(err){ G.logError('ai '+e.type, err); e.cool = 30; } }
     else defaultAI(e);
@@ -5127,7 +5151,6 @@ Kit.prototype.updMarker = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
-  if(e.introLine) introLine(e);
   if(fl > this.prevFlash){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
   const fv = fl > 0 ? 0.62 : 0;
@@ -5287,19 +5310,7 @@ const O_TRAILDUST = { count:2, scale:0.7, dir:1 }, O_FINDUST = { count:2, scale:
   O_RUMBLE = { count:2, scale:0.8 }, O_SPARK = { count:2, scale:0.5, color:'#dff0ff' }, O_SPINDUST = { count:3, scale:0.8 };
 function dustBehind(e, o, back){ o.dir = -e.face; fx('dust', e.x - e.face*back, 0.05, e.z, o); }
 function say(e, s){ fh().say(e, s); }
-// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
-// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
-// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
-// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
-const BANNER_T = 142, LINE_T = 44;
-G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossA) b.bannerEnd = G.time.tick + BANNER_T; });
-function sayIntro(e, line){ e.introLine = line; introLine(e); }
-function introLine(e){                     // also called every tick from the rig update (it runs in every state)
-  if(e.dead){ e.introLine = null; return; }
-  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
-  say(e, e.introLine); e.introLine = null;
-  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
-}
+function sayIntro(e, line){ if(!e.dead) say(e,line); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 function rng(){ return G.rng(); }
 // horizontal limits the boss should stay within: the visible belt (the boss arena is camera-locked in stages)
@@ -5401,12 +5412,11 @@ function enterPhase(e){
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.gplan = null; e.rageDue = true;
   G.bossPhaseVisual?.(e);
   G.bus.emit('bossPhase', { boss:e, phase:1 });
-  if(e.def.phaseLine) say(e, e.def.phaseLine);
+  if(e.def.phaseLine&&!G.game?.diff?.frenzy) say(e, e.def.phaseLine);
 }
 G.bus.on('hit', (d)=>{ const t = d && d.target; if(t && t.def && t.def.bossA && t.def.boss && t.team===1) enterPhase(t); });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, e.def.rage || PHASE_ROAR, 0); return true; }
   return false;
 }
@@ -6610,7 +6620,6 @@ Kit.prototype.updWorld = function(e, T){
 Kit.prototype.update = function(e){
   const P = this.P, C = this.C, T = G.time.tick + this.seed;
   const fl = e.flashT|0;
-  if(e.introLine) introLine(e);
   this.hitNow = fl > this.prevFlash;
   if(this.hitNow){ this.wob = 1; this.flinch = 9; }
   this.prevFlash = fl;
@@ -6792,19 +6801,7 @@ function sfx(name, o){ if(G.audio && G.audio.sfx) try { G.audio.sfx(name, o); } 
 const NOOPT = {};
 function fx(kind, x, y, z, o){ if(G.fx && G.fx.burst) G.fx.burst(kind, x, y, z, o || NOOPT); }
 function say(e, s){ fh().say(e, s); }
-// An intro line never shares the screen with the boss-name banner. bossIntro shows the name for 140 frames
-// (90_game: banner(name, title, 140)) right where a line above the boss's head lands, and the two texts ran through each
-// other. The line waits until the banner has gone, so a kid reads the name first and then the boss's own catch-phrase.
-// No new move starts while the line waits or is up: the move's "!" telegraph would sit on top of it.
-const BANNER_T = 142, LINE_T = 44;
-G.bus.on('bossIntro', (d)=>{ const b = d && d.boss; if(b && b.def && b.def.bossB) b.bannerEnd = G.time.tick + BANNER_T; });
-function sayIntro(e, line){ e.introLine = line; introLine(e); }
-function introLine(e){                     // also called every tick from the rig update (it runs in every state)
-  if(e.dead){ e.introLine = null; return; }
-  if(e.bannerEnd!=null && G.time.tick < e.bannerEnd){ if(!(e.cool >= 2)) e.cool = 2; return; }
-  say(e, e.introLine); e.introLine = null;
-  if(!(e.cool >= LINE_T)) e.cool = LINE_T;
-}
+function sayIntro(e, line){ if(!e.dead) say(e,line); }
 function shake(p, f){ if(G.cam && G.cam.shake) G.cam.shake(p, f); }
 // preallocated fx option objects (repeated calls must not allocate)
 const O = {
@@ -6937,15 +6934,14 @@ const PHASE_ROAR = { id:'bossB_rage', anim:'roar', len:70, hits:[], noAlert:true
   fn(e, t){ if(t===0) G.setAnim(e, 'roar', 70, 0.3);
     if(t===16){ shake(4, 30); fx('shock', e.x, 0.02, e.z, O.rage); fx('ring', e.x, e.height*0.6, e.z + 0.3, O.rageR); sfx('bossRoar'); } },
   onEnd(e){ e.cool = 24; } };
-// Phase 2 strictly below 50% HP per health bar. The story coordinator holds the
-// rage action until its once-per-form cut-in has completed.
+// Phase 2 strictly below 50% HP per health bar. The roar and battle continue while the dialogue is visible.
 function enterPhase(e){
   if(e.phase!==0 || e.dead || e.transforming || !(e.hp < e.maxHp*0.5) || e.hp <= 0) return;
   e.phase = 1; e.spdMul = 1.2; e.plan = null; e.rageDue = true;
   G.bossPhaseVisual?.(e);
   G.bus.emit('bossPhase', { boss:e, phase: e.form===3 ? 5 : e.form===2 ? 3 : 1 });
   const line = e.form===2 ? e.def.phaseLine2 : e.def.phaseLine;
-  if(line) say(e, line);
+  if(line&&!G.game?.diff?.frenzy) say(e, line);
   log(e.type + ':phase' + (e.form===2 ? 3 : 1));
 }
 G.bus.on('hit', (d)=>{
@@ -6958,7 +6954,6 @@ G.bus.on('hit', (d)=>{
 });
 function phaseCheck(e){
   enterPhase(e);
-  if(e._phaseEventHold)return true;
   if(e.rageDue && !e.dead){ e.rageDue = false; fh().attack(e, PHASE_ROAR, 0); return true; }
   return false;
 }
@@ -7913,7 +7908,7 @@ function beamStart(e, line){
   const far = dir > 0 ? xHi(0) + 3 : xLo(0) - 3;
   B.x1 = dir > 0 ? Math.max(B.x0 + 6, far) : Math.min(B.x0 - 6, far);
   laneOn(e, B.x0, B.x1, e.z, 1.15);
-  if(line) say(e, line);
+  if(line&&!G.game?.diff?.frenzy) say(e, line);
   sfx('charge');
 }
 function beamHit(e){
@@ -8135,7 +8130,6 @@ function empTransform(e){
   shake(6, 40);
   G.bus.emit('bossPhase', { boss:e, phase:2,formTransition:true });
   e.introDue = true; knightIntro(e);
-  // after the new name's banner (a mid-body line still ran through it: 49% of the line's area under the banner)
   sayIntro(e,e.form===3?'天魔王、降臨！ 最後の翼を見よ！':'これが ほんとうの すがた…！');
   // the transformation plays as an "attack" (keeps the AI off and needs no token)
   G.setState(e, 'act'); e.pending = null;
@@ -8371,7 +8365,7 @@ G.stages = [
   { id:'s3', no:3, name:'月夜の森', kana:'つくよみの もり', length:102, bgm:'stage3', theme:THEMES.forest,
     waves:[
       { at:16, width:16, foes:[['pounce',2],['thrower',2]] },
-      { at:38, width:16, foes:[['flyer',2],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
+      { at:38, width:16, foes:[['vampire',1],['flyer',1],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
       { at:62, width:17, foes:[['pierrot',1],['pounce',2],['flyer',1]], then:[['thrower',2]], reward:'bone' },
     ],
     boss:{ type:'ghost', at:86, x:86 },
@@ -8441,8 +8435,8 @@ G.stages = [
 G.stages.push(
  {id:'s8',no:8,name:'戦国和風・わんこ合戦',kana:'せんごく わふう わんこがっせん',length:116,bgm:'stage8',theme:THEMES.sengoku,
   waves:[
-   {at:16,width:17,foes:[['ashigaru',3],['naginata',1]]},
-   {at:38,width:17,foes:[['shinobi',2],['ashigaru',2],['sniper',1]],then:[['naginata',2]],reward:'bone'},
+   {at:16,width:17,foes:[['ashigaru',1],['mikoshiCrew',2],['formationLeader',1]]},
+   {at:38,width:17,foes:[['shinobi',1],['horseCrew',2],['horseLeader',1],['sniper',1]],then:[['naginata',2]],reward:'bone'},
    {at:62,width:18,foes:[['naginata',2],['shinobi',2],['skyarmor',1]],then:[['ashigaru',3],['sniper',1]],reward:'cake'},
   ],boss:{type:'kuroinu',at:98,x:98},
   hints:[{at:5,name:MOFU,text:'足軽はまっすぐ、薙刀は横に広い！ 上下のラインを使い分けるのじゃ。'},{at:32,name:MOFU,text:'狙いイヌの赤い線は撃つ場所の予告。ねらいが決まったらラインを変えるのじゃ！'},{at:57,name:MOFU,text:'スカイアーマーは着地後がつかむチャンス。装甲には方向＋つかみ攻撃じゃ！'}],
@@ -10561,7 +10555,7 @@ function collect(e, p){
   const k = PICK[e.type] || {};
   let value = 0;
   if(k.heal){ const before = p.hp; p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp*k.heal)); value = p.hp - before;if(p.published)G.published.native(p).player.hp=p.hp; }
-  if(k.coins && G.game){ G.game.coins += k.coins; value = k.coins; }
+  if(k.coins && G.game){ value = k.coins*3; G.game.coins += value; }
   if(k.sp){ if(p.published){const r=G.published.native(p).player;r.dim=Math.min(r.dimMax,r.dim+k.sp);p.dim=r.dim;p.sp=r.dim;}else p.sp = Math.min(3, (p.sp||0) + k.sp); value = k.sp; }
   G.bus.emit('pickup', { ent:p, kind:e.type, x:e.x, y:e.y+0.3, z:e.z, value });
   e.removeMe = true;
@@ -15138,6 +15132,10 @@ function beginAttack(type){
   const _isSp=!!(def.charged || def.dimBlade || def.ultMove || slotOfMove(p,type));
   p.atk={type, t:0, def, hold:def.hold|0, chg:0, hitSet:new Set(), lastHit:{},
          evo:_isSp?evoMul(p):1, tier:_isSp?evoTier(p):0};
+  const stock=WEAPONS[p.weapon],stockMoves=WEAPON_SPECIAL[p.weapon];
+  if(stock?.who&&(type===stockMoves?.ult||type===stockMoves?.fwd||WEAPON_COMBO[p.weapon]?.includes(type))){
+    p.atk.armory={id:p.weapon,owner:stock.who,color:stock.col,ultimate:type===stockMoves?.ult};
+  }
   p.cxSlots=[];   // キャンセルの連鎖。ここで切れる（繋いだ側が呼んだ直後に入れ直す）
   p.state='attack';
   if(def.rise){ p.riseVel=def.riseV||9; p.riseG=def.riseG||1.1; p.z=0; sfx.rise(p.x); if(def.shoryu){ p.invuln=Math.max(p.invuln,12); ring(p.x,p.y-40,'#ffe27a'); spark(p.x,p.y-20,'#ffe27a',12,8); } }
@@ -16254,6 +16252,7 @@ function updateHazards(){ for(let i=hazards.length-1;i>=0;i--){ const h=hazards[
     if(h.t>=h.life) hazards.splice(i,1);
   } else if(h.kind==='bomb'){
     if(h.t>=h.life){
+      _pubHooks.bomb?.(h.x,h.y);
       ring(h.x,LANE-10,'#ffae42'); ring(h.x,LANE-10,'#fff'); spark(h.x,LANE-20,'#ffae42',30,13); dust(h.x,LANE,14);
       impactBurst(h.x,LANE-40,'#ffd0a0',true); shake=Math.max(shake,9); sfx.blast(h.x);
       for(const e of enemies){ if(e.dead)continue; if(Math.abs(e.x-h.x)<200 && Math.abs(e.y-h.y)<60){
@@ -17559,6 +17558,18 @@ function updatePlayer(){
     if(def.shoryu && (a.t%3===0)){ spark(p.x,p.y-p.z-30,'#ffe27a',3,5); }   // 上昇の光
     // ヌコの魔法は〈詠唱＝光が集まる／術式＝魔法陣が展開する／放出〉の3段に割る。
     // 1フレームで撃つだけでは「魔法を使った」感じが出ない
+    if(a.armory?.ultimate&&a.t===def.act[1]){
+      const radial=!!(def.omni||def.aoe||def.bighammer);
+      const span=clamp((def.reach||80)*.48,38,124);
+      const x=p.x+(radial?0:p.facing*span),color=def.trail||a.armory.color;
+      const power=Math.round(clamp((def.dmg||1)*.21+(def.pshot?.dmg||0)*.07,8,38)*(p.atkMul||1));
+      for(const e of enemies){
+        if(e.dead||e.grabbedBy||Math.abs(e.x-x)>span||Math.abs(e.y-p.y)>48||e.z>115)continue;
+        damageEnemy(e,power,(e.x<x?-1:1)*(radial?9:5),radial);
+      }
+      ring(x,p.y-18,color);
+      _pubHooks.armoryFinish?.(a.armory,x,p.y,span,color);
+    }
     if(def.cast){
       if(a.t===def.act[0]-10) nukoGather(p, def.trail||'#ffd0f0');
       if(a.t===def.act[0]-4)  nukoSigil(p, def.trail||'#c46bff', 76);
@@ -24076,6 +24087,7 @@ function bigExplosion(x,y,R,col){
 }
 // 爆発（バズーカ弾など）：着弾点周囲に範囲ダメージ
 function projExplode(x,y,R,dmg,color){ color=color||'#ffae42';
+  _pubHooks.explosion?.(x,y,R,color,_pubActiveProjectile);
   bigExplosion(x,y,R,color);
   shake=Math.max(shake,10+Math.round(clamp(R/40,0,8))); flash=Math.max(flash,5); hitStop=Math.max(hitStop,8);
   sfx.blast(x, clamp(R/150,0.7,1.5));
@@ -37209,6 +37221,18 @@ return {
   revive(){resetPlayer(player,false);player.active=true;state='play';},
   gainXp(amount){gainXp(amount*10);},
   incomingProjectile(pr){return projVsPlayer(pr,player);},
+  holdByEnemy(owner){
+    if(!canGrabPlayer(player))return false;
+    startEnemyGrab({owner},player);
+    return true;
+  },
+  releaseEnemyHold(owner){
+    const grip=player.grabbedByEnemy;
+    if(grip?.owner!==owner)return false;
+    const held=grip.escapeMash<5;
+    releaseEnemyGrab(grip);
+    return held;
+  },
   receive(e,dmg,info){
     if(info?.direct){hurtPlayer(player,dmg,info.dir||1,!!info.knock, null,info.inv,info.launch);}
     else {const mult=foeAtkMul(e)*(ETYPE[e.type].boss?2:1);hitOnePlayer(player,e,dmg/mult,!!info?.knock,-100000,100000,!!info?.unblock,info?.zmax??100000,info?.inv,info?.launch);}
@@ -38968,7 +38992,7 @@ if(G.publishedFactory){
     // Read-only display clock. It never selects a move or advances the simulation.
     const pa=r.state==='attack'?r.atk:null;
     p.publishedMotion=pa?{id:pa.type,t:pa.t,hold:pa.hold,holdMax:pa.def.hold||0,air:!!pa.air,def:pa.def,tier:pa.tier||0,
-      chargeTicks:pa.chg,time:pa.t+Math.min(pa.chg,pa.def.hold||0),duration:pa.def.dur,act:pa.def.act}:
+      armory:pa.armory,chargeTicks:pa.chg,time:pa.t+Math.min(pa.chg,pa.def.hold||0),duration:pa.def.dur,act:pa.def.act}:
       r.state==='slide'?{id:'slide',t:r.slideT,time:r.slideT,duration:22,act:[1,15]}:
       r.state==='iaidash'?{id:'iaidash',t:r.iaiT,time:r.iaiT,duration:r.iaiMax,act:[1,r.iaiMax-3]}:
       G.publishedMotion?.describe(r,ctx.ref)||null;
@@ -39016,6 +39040,7 @@ if(G.publishedFactory){
       if(!v)continue;v._owner=ctx;visuals.set(pr,v);G.scene.add(v.obj);}
       const x=pr.x/S,y=Math.max(0,pr.zz)/S,z=p.z+(pr.y-ctx.lane)/S;
       v.obj.position.set(x,y,z);v.update?.({...pr,x,y,z,r:pr.r/S,age:pr.age||0,vx:pr.vx/S,vy:pr.vzz/S,spin:pr.spin});}
+    G.heroCombatFx?.hazards(p,ctx.ref.hazards,ctx.lane,S);
     const particles=ctx.ref.drainParticles();let n=0;
     for(const f of particles){if(G.publishedSwords?.particle(f,p,ctx.lane,ctx.ref.clock,ctx.ref.groundHeight?.(f.x)||0))continue;if(n++>=6)continue;const kind=/holy|slash|cres|blade/.test(f.k)?'slash':/ring|shock/.test(f.k)?'ring':/dust/.test(f.k)?'dust':'sparkle';
       G.fx?.burst?.(kind,(f.x||ctx.ref.player.x)/S,Math.max(0,(ctx.lane-(f.y||ctx.lane))/S),p.z,{count:3,color:f.color||f.col});}
@@ -39057,6 +39082,14 @@ if(G.publishedFactory){
         },
         damageScale(){return G.game?.diff?.heroDmg||1;},
         grabStart(id){ctx.grabAction=id;},grabEnd(){ctx.grabAction=null;},
+        armoryFinish(weapon,x,y,span,color){
+          const family=G.equipmentVisual?.family?.(weapon);
+          const effect={gun:'smoke',magic:'magic',fist:'shock',heavy:'shock',chain:'ring',fan:'windRibbon'}[family]||'slash';
+          G.fx?.burst?.(effect,x/S,.55,p.z+(y-ctx.lane)/S,{scale:Math.max(.8,span/S),angle:0,color,dir:p.face,count:7});
+          G.fx?.burst?.('ring',x/S,.3,p.z+(y-ctx.lane)/S,{scale:1.25,color});
+        },
+        bomb(x,y){G.heroCombatFx?.firePillar(x/S,p.z+(y-ctx.lane)/S);},
+        explosion(x,y,r,color,pr){G.heroCombatFx?.explosion(x/S,p.z+(y-ctx.lane)/S,r/S,color,pr?.glKind);},
         projectile(pr){G.bus.emit('shoot',{ent:p,kind:pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball',x:pr.x/S,y:pr.zz/S,z:p.z+(pr.y-ctx.lane)/S});},
         beforeHit(e,args,source){if(!e.target)return true;const d=ctx.ref.player.atk?.def;
           if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
@@ -39085,8 +39118,10 @@ if(G.publishedFactory){
       const living=new Set(G.world.ents.filter(t=>t.team===1&&!t.removed&&!t.dead));
       for(const t of living)sourceEnemy(p,ctx,t);for(const [t,e]of ctx.foes)if(!living.has(t)){ctx.ref.forget(e);ctx.foes.delete(t);}
       G.commandInputs?.before(p,ctx);ctx.ref.step();G.commands.stickRot=ctx.ref.player.in.stickRot;
+      const grip=r.grabbedByEnemy;
+      if(grip?.owner&&grip.escapeMash>=5)ctx.ref.releaseEnemyHold(grip.owner);
       const a=r.state==='attack'?r.atk:null;
-      if(a&&a.t>=a.def.act[0]&&!ctx.swung.has(a)){ctx.swung.add(a);G.bus.emit('swing',{ent:p,def:a.def,kind:a.def.fist?'blunt':'slash',power:a.def.finisher?3:2});G.fx?.trail?.(p);}
+      if(a&&a.t>=a.def.act[0]&&!ctx.swung.has(a)){ctx.swung.add(a);G.heroCombatFx?.swing(p,a);G.bus.emit('swing',{ent:p,def:a.def,kind:a.def.fist?'blunt':'slash',power:a.def.finisher?3:2});G.fx?.trail?.(p);}
       if(!a)G.fx?.trailStop?.(p);
       // Up/down also move the belt lane while ordinary locomotion is allowed.
       syncHero(p,ctx);G.fx?.commandCue?.(p,p.publishedMotion);props(p,ctx,a);for(const [t,e]of ctx.foes){
@@ -39100,6 +39135,8 @@ if(G.publishedFactory){
     clock(){return G.player?._publishedCtx?.ref.clock??current?.ref.clock??G.time.tick;},
     trace(p=G.player){return engines.get(p)?.trace;},
     native(p=G.player){return engines.get(p)?.ref;},
+    holdByEnemy(p,owner){const ctx=engines.get(p);if(!ctx?.ref.holdByEnemy(owner))return false;syncHero(p,ctx);return true;},
+    releaseEnemyHold(p,owner){return engines.get(p)?.ref.releaseEnemyHold(owner)||false;},
     receiveDamage(p,amount,info){const ctx=engines.get(p);if(!ctx)return false;const r=ctx.ref.player,before=r.hp;
       if(G.story?.blocked)return false;
       const e=info.src?sourceEnemy(p,ctx,info.src):null;
@@ -40239,6 +40276,12 @@ const PDEF = {
       G.look.vmat({rough:0.18, flat:true, emissive:'#1f8fd0', emissiveIntensity:0.35}), 0.015),
     halos:[ HL(T.glow,1.0,'#5fd8ff',0.6,0.5) ],
     tick(h,p,f){ h.mesh.rotation.x += 0.3; h.mesh.scale.x = f; if(h.age%2===0){ sp(T.spark, p.x - f*R(0.1,0.3), p.y + R(-0.1,0.1), p.z); S.s0=R(0.12,0.24); S.curve=3; S.life=18; S.add=1; S.vy=-0.004; sc_(PICK(['#ffffff','#bff6ff'])); emit(); } } },
+  arrow: { mesh:()=> toyMesh(built('arrow',(b,g)=>{
+      b.add(g.box(.52,.035,.035),'#dbb478',[0,0,0]);
+      b.add(g.cone(.067,.18,5),'#e7efff',[.30,0,0],[0,0,-Math.PI/2]);
+      b.add(g.box(.15,.13,.025),'#d97945',[-.22,0,0]);
+    }),G.look.vmat({rough:.6}),.012),
+    halos:null,tick(h,p,f){h.mesh.scale.x=f;} },
   bolt: { mesh:()=> toyMesh(G.look.geo.sphere(0.1,10,8), basicMat('bolt','#ffffff')),
     halos:[ HL(T.glow,1.2,'#ffe23a',0.75,1,{pulse:0.15}), HL(T.bolt,0.8,'#ffe23a',1,0,{jitter:0.5,flick:0.2}), HL(T.flare,0.8,'#ffffff',0.8,1,{jitter:0.3}) ],
     tick(h,p,f){ sp(T.spark, p.x + R(-0.2,0.2), p.y + R(-0.2,0.2), p.z); S.s0=R(0.14,0.24); S.curve=3; S.life=10; S.add=1; S.vx=R(-0.03,0.03); S.vy=R(-0.03,0.03); sc_(PICK(['#fff6a0','#ffffff'])); emit(); } },
@@ -40680,6 +40723,12 @@ const B = {
     for(let i=0;i<cnt(o.count||4);i++){ sp(T.crescent, x + d*i*0.12*s, y + R(-0.2,0.2)*s, z); S.s0 = R(0.9,1.3)*s; S.s1 = S.s0*1.3; S.asp = R(1,1.4); S.curve = 2; S.rot = R(-0.5,0.5);
       S.vx = d*0.05*s; S.life = R(10,14); S.add = 0.8; S.fout = 0.7; S.delay = i*2; S.flags = d<0 ? F_FLIP : 0; sc_(i&1 ? '#ffffff' : (o.color||'#fff1a0')); emit(); }
     sparkle(x + d*0.3*s, y, z, { count:5, scale:0.7*s, color:o.color||'#fff6c0' }); },
+  windRibbon(x,y,z,o){
+    sp(T.crescent,x,y,z);
+    S.s0=o.scale;S.s1=o.scale*1.2;S.asp=1.9;S.rot=Math.sin(o.angle)*.22;
+    S.vx=-Math.sin(o.angle)*.075;S.vy=.027;S.vz=Math.cos(o.angle)*.075;
+    S.life=13;S.add=.8;S.a=.78;S.fout=.75;sc_(o.color);emit();
+  },
   sparkle, stars, hearts, dust, dustRing, poof, ring, confetti, fireworks, heal, levelup, shock, magic,
   notes, paws, smoke, purify, flame: flames, ice: iceBurst, thunder, coin, petals, kira, guard, jump: jumpPuff,
 };
@@ -40972,7 +41021,7 @@ function popNew(str, x, y, z, style, opts){
   style = STY[style] ? style : 'info';
   opts = opts || {};
   x = +x||0; y = +y||0; z = +z||0;
-  let p = null;
+  let p = style==='say'&&opts.ent?pops.find(q=>q.on&&q.style===style&&q.ent===opts.ent):null;
   const rank = opts.rank==null ? 1 : opts.rank;
   if(style==='pow'){ project(x, y, z); const q = powNear(_sp.x, _sp.y); if(q){ if(q.t < 24 && rank <= q.rank) return null; p = q; } }
   // free slot, else recycle the oldest (never recycle a 'big' while another is available)
@@ -43037,7 +43086,7 @@ const ON_CANDY = ring(0.065,'var(--cd)',12)+',0 .1em 0 var(--cd)';              
 const ON_BAR = ring(0.07,'rgba(74,44,20,.78)',10);                                        // white number on a bar
 // rank colours from the original table (fallback when G.game has none)
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
-const DIFFS = [ { k:'easy', t:'やさしい', cls:'k-mint', n:1 }, { k:'normal', t:'ふつう', cls:'k-sky', n:2 }, { k:'hard', t:'つよい', cls:'k-pink', n:3 } ];
+const DIFFS = [ { k:'easy', t:'やさしい', cls:'k-mint', n:1 }, { k:'normal', t:'ふつう', cls:'k-sky', n:2 }, { k:'hard', t:'つよい', cls:'k-pink', n:3 }, { k:'frenzy', t:'狂乱', cls:'k-frenzy', n:4 } ];
 
 const SVG = {
   grip:'<svg viewBox="0 0 24 24"><path d="M7 12V5a2 2 0 0 1 4 0v6-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v8l-2 7H9l-6-7a2 2 0 0 1 3-2l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -43131,13 +43180,14 @@ function buildCSS(){
 #iu .tbot{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:.6em}
 #iu .tdiff{justify-self:start;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;pointer-events:auto}
 #iu .tlab{font-size:max(var(--fm),.85em);color:#fff;padding:0 .3em;text-shadow:${ring(0.1,'#c0602a',12)},0 .12em .2em rgba(74,44,20,.4)}
-#iu .chips{display:flex;gap:.35em}
+#iu .chips{display:flex;flex-wrap:wrap;gap:.35em}
 #iu .chip{font-size:max(var(--fm),.95em);min-height:max(44px,2.2em);padding:.25em .85em .3em;gap:.2em;--c1:#fff;--c2:#fff4e2;color:#8a5a2e;text-shadow:none;opacity:.92}
 #iu .chip .pw{display:flex;gap:.02em}
 #iu .chip .pw i{display:block;width:.7em;height:.7em}
 #iu .chip.sel{--c1:var(--s1);--c2:var(--s2);--cd:var(--s3);color:#fff;text-shadow:${ON_CANDY};transform:scale(1.1);opacity:1}
 #iu .chip.k-mint{--s1:#c8f8e0;--s2:#6fdca8;--s3:#2f9e6c;--cd:#9fd8bc}
 #iu .chip.k-sky{--s1:#d2ecff;--s2:#6fbcf6;--s3:#2f7fc4;--cd:#9cc8ea}
+#iu .chip.k-frenzy{--s1:#edccff;--s2:#c794f6;--s3:#843bc4;--cd:#cf9ced}
 #iu .chip.k-pink{--s1:#ffc9dd;--s2:#ff8fb8;--s3:#d6558a;--cd:#eeb0c8}
 #iu .play{font-size:2.3em;padding:.3em 1.5em .36em;animation:iuPulse 1.5s ease-in-out infinite}
 #iu .play .ic{width:1em;height:1em}
@@ -43397,8 +43447,18 @@ function buildCSS(){
 #iu .lpaws i:nth-child(2){color:#7fc8ff;filter:drop-shadow(0 .12em 0 #2f7fc4)}#iu .lpaws i:nth-child(3){color:#7fe0b0;filter:drop-shadow(0 .12em 0 #2f9e6c)}
 
 /* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
-#iu .stages{z-index:61}
+#iu .stages{z-index:99}
 #iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(max(54em,820px),calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
+#iu .strow.world-route{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7em;padding:1.1em;background:radial-gradient(ellipse at 70% 20%,#edf1bb,transparent 60%),repeating-linear-gradient(27deg,#9cbd8b 0px,#9cbd8b 2px,#adc998 3px,#adc998 24px);border:2px solid #8b9d6f;border-radius:1em}
+#iu .world-route::before{display:none}
+#iu .world-path{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#iu .world-path path{fill:none;stroke:#f8e6ac;stroke-width:6;stroke-dasharray:8 4;stroke-linecap:round}
+#iu .world-route .stc{max-width:none;display:grid;grid-template-columns:auto auto 1fr;gap:.32em;justify-items:center;padding:.4em}
+#iu .world-route .sst{grid-column:1/-1}
+#iu .world-route .world-landmark{font-size:1.5em;line-height:1}
+#iu .world-route .stc .sn{width:1.5em;height:1.5em}
+#iu .world-detail{margin:0;color:#543e26;text-align:center;font-weight:900}
+@media(max-width:520px){#iu .world-route .stc{grid-template-columns:1fr 1fr}#iu .world-route .stn{grid-column:1/-1}}
 #iu .sthd{display:flex;align-items:center;gap:.8em}
 #iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
 #iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
@@ -43595,7 +43655,7 @@ function setPortraitSrc(img, fb, id, expr){
 let ready = false, root = null, fbLayer = null, host = null;
 let reduced = false, kbMode = false, emPx = 14;
 const S = {};                // screens by name: { el, on, data, nav:[], ni, key(e,code), frame(dt), open(data), close() }
-const ORDER = ['loading','pause','over','result','ending','stages','select','title'];   // key focus priority (top first)
+const ORDER = ['loading','pause','over','stages','result','ending','select','title'];   // key focus priority (top first)
 
 // A tap / key that arrives right after a screen (or the help panel) appeared was meant for the screen before it:
 // a double-tap on 「あそぶ」 must not also press whatever the select screen put under the finger.
@@ -43827,15 +43887,20 @@ function buildStages(s){
   const pn = el('div', 'pn stp', s.el);
   const head = el('div', 'sthd', pn);
   const back = s.back = button(head, 'back k-cream', '<span class="ic">'+SVG.left+'</span><span>もどる</span>', ()=> call(s.data.onBack), false);
-  el('div', 'hd', head).textContent = 'どこから はじめる？';
-  const row = el('div', 'strow', pn);
+  el('div', 'hd', head).textContent = '王国のワールドマップ';
+  const row = el('div', 'strow world-route', pn);
+  const detail = el('p','world-detail',pn);
+  const route='<svg class="world-path" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true"><path d="M50 50H250Q282 52 282 100T250 150H50Q18 152 18 200T50 250H250"/></svg>';
   const go = s.go = button(pn, 'stgo k-pink', '', ()=> pick(), false);
   s.list = []; s.els = []; s.focus = 0;
+  const landmarks=['🏘','🏮','🌲','💎','⛵','🏔','🏰','⛩','🌋'];
   const lockSvg = '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="11" rx="2.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.8"/></svg>';
   const usable = (i)=> !!s.list[i] && !s.list[i].locked;
   function paint(){
     s.els.forEach((c, i)=> c.classList.toggle('on', i===s.focus));
-    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' から しゅっぱつ！</span>';
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' へ出発</span>';
+    const stop=s.list[s.focus];
+    detail.textContent=stop?(stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
   }
   function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
   function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
@@ -43843,10 +43908,12 @@ function buildStages(s){
   function nope(c){ sfx('cancel'); c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); }
   s.open = (d)=>{
     s.list = Array.isArray(d.stages) ? d.stages.slice() : [];
-    row.innerHTML = ''; s.els = [];
+    row.innerHTML = route; s.els = [];
     s.list.forEach((st, i)=>{
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
+      c.style.gridColumn=String(Math.floor(i/3)%2===0?i%3+1:3-i%3);c.style.gridRow=String(Math.floor(i/3)+1);
+      el('span', 'world-landmark', c).textContent=landmarks[i]||'◆';
       el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
       wordWrap(el('span', 'stn', c), st.kana || st.name || ('ステージ '+(i+1)));
       const ss = el('span', 'sst', c);
@@ -44639,7 +44706,7 @@ G.bus.on('storyStart',()=>{if(panel)panel.hidden=true;});
 // definitions or command dispatch are owned here.
 (function(){'use strict';const G=window.G;
 // Phase dressing owns its geometry/materials; never recolor shared rig resources.
-G.bossPhaseVisual=function(e,rig=e?.rig){if(!e?.phase||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
+G.bossPhaseVisual=function(e,rig=e?.rig){if((!e?.phase&&!e?._frenzyForm)||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
  const T=window.THREE,height=e.height||e.def?.height||2.5,colors={garm:'#ff8e48',shark:'#5cdde8',ghost:'#c283ff',cerbe:'#ff654e',slime:'#7dff80',dragon:'#ffce48',kuroinu:'#b989ff',emperor:e.form===3?'#ffe7a1':'#ff657a'},color=colors[e.type]||'#ffb36c';
  const group=new T.Group();group.name='rage-dressing-'+e.type+'-'+(e.form||1);const parent=rig.kit?.body||rig.root;parent.add(group);
  const mat=new T.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.65,metalness:.35,roughness:.4}),geos=[];
@@ -44686,29 +44753,36 @@ const BONUS_LINES={
 };
 for(const [id,[start,clear]]of Object.entries(BONUS_LINES)){HEROES[id].start.push(...start);HEROES[id].clear.push(...clear);}
 const BOSSES={garm:['鋼の爪、解放！','連続つっこみと空からの急降下。着地のすきをねらおう。'],shark:['ほんきの がぶがぶ！','連続かみつきに遠くへの水玉。予告の線からよけよう。'],ghost:['三兄弟の ひとだま祭り！','消える突進とひとだま。姿が見えたら反撃しよう。'],cerbe:['三つの声が ひびく！','連続ジャンプと三方向のほえ声。着地を見て動こう。'],slime:['ぷるぷる大あばれ！','ねばねば弾と小さな仲間。着地後のすきがチャンス。'],dragon:['炎のつばさ、全開！','炎の玉と二連の息。予告を見て、着地後をねらおう。'],kuroinu:['こくけんしの 本気！','斬撃と連続の居合い。光る道から外れて反撃しよう。'],emperor:['王の力を 見せよう！','光の柱と包囲弾。足もとの予告を見て動こう。']};
+const CHAPTERS=[
+ ['王都からの救援要請','王都の守りが破られた。街を取り戻し、街道へ逃れた住民の足跡を追う。','守備隊は街の門を閉じた。夕暮れの城下町から、救援を求める鐘が聞こえる。'],
+ ['灯りをつなぐ街道','夕闇の城下町を抜けるには、消された道しるべを一つずつ灯すしかない。','街道の灯りがつながった。森に逃れた隊商を迎えに行ける。'],
+ ['月明かりの道しるべ','隊商が月夜の森で消息を絶った。木立の向こうに、ドラキュラの影が走る。','隊商は無事だった。洞窟の水晶が空の船を導くという話を聞く。'],
+ ['眠る水晶の航路','水晶の光を取り戻し、雲上の飛行艇へ通じる航路を開く。','水晶の道が空へ伸び、海賊飛行艇の航路を照らした。'],
+ ['雲の上の救出作戦','海賊飛行艇は霊峰へ向かっている。甲板を取り戻し、乗客を救う。','船長が礼に雪山の地図をくれた。城に通じる峠は霊峰の奥だ。'],
+ ['雪の先の黒い城','雪に埋もれた峠を越える。城の見張りは、その先で待っている。','霊峰の峠を越えた。ダークワンワン城への最後の門が開く。'],
+ ['王冠に宿る闇','城を覆う闇の源は王座にある。クロイヌと大帝が最後の道をふさぐ。','王座の闇は晴れた。東の城下では、まだ武者たちが戦を続けている。'],
+ ['旗の下のわんこ合戦','神輿と騎馬が街道を封鎖している。組頭と手下が集まる前に攻めよう。','戦旗が下り、鬼の門へ続く道が開いた。城下の人々が帰り始めた。'],
+ ['紅蓮の門と最後の太鼓','鬼の太鼓が谷に響く。門を守る軍勢を越え、王国へ帰る道を開く。','太鼓が止まり、王国へ帰る道に朝日が差した。']
+];
 const queue=[],seen=new Set(),history=[];let active=null,run=0,stage=0,hero='inu',panel=null,parts=null,focus=null,paused=false;
 function clearInput(){G.coop?.clearInputs();G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
-function valid(e){return !e.boss||(!e.boss.dead&&!e.boss.removed&&e.boss.hp>0&&(!e.boss.transforming||e.kind==='form')&&(e.boss.form||1)===e.form);}
-function releaseHold(e){if(e?.boss&&(!e.boss._phaseEventKey||e.boss._phaseEventKey===e.key)){const b=e.boss;b._phaseEventHold=false;delete b._phaseEventKey;if(e.kind==='form'&&(b.form||1)===e.form&&!b.dead&&b.transforming){b.transforming=false;b.intangible=false;G.combat.cancel(b);G.setState(b,'idle');G.setAnim(b,'idle');b.cool=Math.max(b.cool||0,42);}}}
 function hide(){if(panel){panel.remove();panel=null;parts=null;}focus?.focus?.();focus=null;}
 function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.oldAnim;e.actor.animT=e.oldAnimT;}
  if(G.cam){G.cam.focusT=0;G.cam.focusZoom=0;if(G.player)G.cam.follow(G.player);}
  if(G.fx)G.fx.worldFrozen=!!G.paused;
- releaseHold(e);
  if(completed&&G.player&&!G.player.dead){G.player.inv=Math.max(G.player.inv,24);const n=G.published?.native?.();if(n)n.player.invuln=Math.max(n.player.invuln,24);}
- if(e?.kind==='form'&&e.boss&&!e.boss.dead){e.boss.transforming=false;e.boss.intangible=false;e.boss.cool=Math.max(e.boss.cool||0,42);G.setState(e.boss,'idle');}
  G.audio?.pause?.(!!G.paused);
  if(completed){G.coop?.restoreCamera();G.coop?.grace();}if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
-function reset(){if(active)restore(active,false);active=null;paused=false;for(const e of queue)releaseHold(e);queue.length=0;seen.clear();hide();}
+function reset(){if(active)restore(active,false);active=null;paused=false;queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
 function render(){if(!document.createElement||!document.body)return;
  focus=document.activeElement;panel=element('section',document.body);panel.className='inu-story';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
  const css=element('style',panel);css.textContent='.inu-story{position:fixed;inset:0;z-index:12000;background:linear-gradient(120deg,#071629c9,#17213499);display:flex;align-items:center;justify-content:center;color:#fff8df;font:clamp(15px,2.4vmin,23px)/1.5 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;touch-action:manipulation}.inu-story .card{width:min(100%,960px);max-height:96dvh;overflow:auto;border:3px solid var(--story,#ffd264);border-radius:22px;background:#142a3be8;box-shadow:0 12px 80px #0009;padding:clamp(12px,3vmin,28px);box-sizing:border-box;display:grid;grid-template-columns:minmax(110px,30%) minmax(0,1fr);gap:16px;align-items:center}.inu-story img{width:100%;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 5px 15px #0007)}.inu-story h2{font-size:clamp(22px,4vmin,36px);line-height:1.2;margin:4px 0 12px}.inu-story p{margin:8px 0}.inu-story .cue{font-size:.78em;color:#baddf2}.inu-story .chapter{font-size:.75em;letter-spacing:.12em;color:#ffd777}.inu-story .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.inu-story button{font:inherit;font-size:.82em;min-height:44px;border:2px solid #f2ce7c;border-radius:11px;background:#f7e5b7;color:#182f41;padding:8px 16px;touch-action:manipulation}.inu-story button:focus-visible{outline:4px solid #6cd6ff}.inu-story button:disabled{opacity:.5}.inu-story .progress{height:4px;background:#486077;margin-top:12px}.inu-story .progress i{display:block;height:100%;background:#ffd777;width:0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr;text-align:center;gap:5px}.inu-story img{max-height:26dvh;max-width:55%;margin:auto}.inu-story .actions{justify-content:center}}@media(max-height:430px){.inu-story .card{padding:10px 16px;gap:12px}.inu-story h2{font-size:23px;margin:2px 0 6px}.inu-story p{margin:5px 0}.inu-story .actions{margin-top:8px}.inu-story .cue{font-size:12px}}@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important}}';
- const card=element('div',panel);card.className='card';card.style.setProperty('--story',active.boss?'#f3a18c':HEROES[hero]?.color||'#ffd264');
- const image=element('img',card);image.alt=active.boss?(active.boss.def.name||active.boss.type):HEROES[hero]?.name||hero;
- const url=active.boss?G.bossPortrait?.(active.boss,{size:320}):G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});if(url)image.src=url;else {image.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
- const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=active.kind==='form'?'BOSS / FORM '+active.form:active.kind==='boss'?'BOSS · SECOND PHASE':(active.kind==='intro'?'STAGE START':'STAGE CLEAR')+' · '+(stage+1);
+ const card=element('div',panel);card.className='card';card.style.setProperty('--story',HEROES[hero]?.color||'#ffd264');
+ const image=element('img',card);image.alt=HEROES[hero]?.name||hero;
+ const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});if(url)image.src=url;else {image.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
+ const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · 第'+(stage+1)+'章';
  element('h2',body,active.title);const line=element('p',body),cue=element('p',body);cue.className='cue';
  const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
  skip.type=pause.type='button';skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
@@ -44717,10 +44791,8 @@ function render(){if(!document.createElement||!document.body)return;
 function paint(){if(!parts||!active)return;parts.line.textContent=active.lines[active.age<75?0:1];parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
  parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(active.age/active.duration*100)+'%';}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
-function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=e.kind==='form'?205:e.kind==='boss'?170:185;e.actor=e.boss||e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
+function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=185;e.actor=e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;
- if(e.boss){const b=e.boss;b.pending=null;G.combat.cancel(b);b.onInterrupt?.();b.plan=null;b.gplan=null;b.vx=b.vz=0;G.setAnim(b,'roar',170);
-  for(const pr of G.combat.projectiles||[])if(pr.owner===b)pr.life=0;}
  if(e.actor)G.cam?.focus?.(e.actor.x,1.2+(e.actor.height||1.3)*.35,e.actor.z,e.duration,1.2);
  history.push({run,stage,hero,kind:e.kind,key:e.key,started:true});render();G.bus.emit('storyStart',{kind:e.kind,key:e.key,run});}
 const START_POSE={inu:{aRz:1.65,wz:1.5,aLz:.7,nod:-.08},shima:{aLz:1.4,aRz:1.5,aLx:.8,aRx:.8,lLz:.3,lRz:-.2},nuko:{aRz:2.3,aLz:1.8,aLx:.6,wz:.2,nod:.2},guard8:{aRz:1.2,wz:1.8,aLz:1.5,lean:.2,lLz:.3},watch:{aLz:2.5,aLy:.2,aRz:.5,twist:-.25,nod:-.12},wanden:{aRz:.55,aRy:1.2,wz:4,aLz:.5,twist:-.4,nod:-.1},mack:{aRz:1.55,wz:-1.5,aLz:2.5,aRx:.4,twist:.2}};
@@ -44728,16 +44800,28 @@ const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aL
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
-  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
- clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===(G.stages?.length||9)-1?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
- bossPhase(boss,phase){if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||!(boss.hp<boss.maxHp*.5))return false;
-  const form=boss.form||1,key='boss:'+boss.id+':'+form,info=BOSSES[boss.type]||['後半戦、開始！','予告を見て、攻撃の後をねらおう。'];
-  const accepted=enqueue({kind:'boss',key,boss,form,title:boss.type==='emperor'&&form===2?'暗黒の剣、覚醒！':info[0],lines:[(boss.form===2?boss.def.phaseLine2:boss.def.phaseLine)||'ここからが、ほんばんだ！',info[1]],cue:(boss.def.short||boss.def.name||boss.type)+(boss.type==='emperor'?' · 第'+form+'形態':'')+' · 後半戦'});
-  if(accepted){boss._phaseEventHold=true;boss._phaseEventKey=key;}return accepted;},
- bossForm(boss){if(!boss||boss.hp<=0||boss.dead)return false;const form=boss.form||1,key='form:'+boss.id+':'+form;if(form<2)return false;const accepted=enqueue({kind:'form',key,boss,form,title:form===3?'ダークわんわん大帝・天魔王、降臨！':'漆黒の騎士、覚醒！',lines:form===3?['まだ終わらぬ！ 空を裂く、最後の姿だ！','翼の斉射と交差する落雷。予告を見て、攻撃後を狙おう！']:['我が鎧に眠る剣よ、目覚めよ！','二連突進は折り返しにも予告。横と奥行きを使ってかわそう！'],cue:'第'+form+'形態 ・ '+(form===3?'天魔の翼と双剣':'漆黒の鎧と大剣')});if(accepted){boss._phaseEventHold=true;boss._phaseEventKey=key;}return accepted;},
+  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:CHAPTERS[stage]?.[0]||h.name+'、出発！',lines:[CHAPTERS[stage]?.[1]||h.cue,h.start[stage]],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
+ clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:(G.game?.stageName||'王国')+' · 旅の記録',lines:[CHAPTERS[stage]?.[2]||h.win,h.clear[stage]],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
+ frenzyPhase(boss){
+  if(!boss||boss.dead||boss.transforming)return false;
+  const form=boss.form||1;
+  if(boss._frenzyForm===form||boss._frenzySpeech?.form===form)return false;
+  G.foes.h.say(boss,'ここからが本番だ。狂乱の力を見よ！');
+  boss._frenzySpeech={form,at:G.time.tick+48};
+  return true;
+ },
+ bossPhase(boss,phase){
+  if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||boss.hp>=boss.maxHp*.5)return false;
+  if(G.game?.diff?.frenzy)return this.frenzyPhase(boss);
+  const form=boss.form||1;
+  if(boss._spokenPhase===form)return false;
+  boss._spokenPhase=form;
+  if(!(form===2?boss.def.phaseLine2:boss.def.phaseLine))G.foes.h.say(boss,BOSSES[boss.type]?.[0]||'ここからが本番だ！');
+  return true;
+ },
  flush(){if(active||G.paused||G.game?.cutinT>0||G.fx?.cutinActive||G.hitStop>0||G.sceneName!=='play')return false;
-  while(queue.length){const e=queue[0];if(!valid(e)||G.scenes.play?.over){releaseHold(e);queue.shift();continue;}if(G.player?.dead)return false;queue.shift();begin(e);return true;}return false;},
- tick(){if(!active)return;if(!valid(active)){finish();return;}if(active.actor)G.cam?.focus?.(active.actor.x,1.2+(active.actor.height||1.3)*.35,active.actor.z,2,1.2);if(G.input.btn.pause?.pressed){this.pause(!paused);return;}if(paused)return;
+  while(queue.length){const e=queue[0];if(G.scenes.play?.over){queue.shift();continue;}if(G.player?.dead)return false;queue.shift();begin(e);return true;}return false;},
+ tick(){if(!active)return;if(active.actor)G.cam?.focus?.(active.actor.x,1.2+(active.actor.height||1.3)*.35,active.actor.z,2,1.2);if(G.input.btn.pause?.pressed){this.pause(!paused);return;}if(paused)return;
   active.age++;if(active.actor?.rig){active.actor.animT++;active.actor.rig.update?.(active.actor,G.cfg.TICK);}
   if(active.age>=active.duration){finish();return;}paint();},
  skip(){if(!active||paused||active.age<30)return false;finish();return true;},
@@ -44750,7 +44834,6 @@ G.story={heroes:HEROES,bosses:BOSSES,history,
 };
 window.addEventListener('keydown',e=>{if(!active)return;if(e.code==='Tab'){e.preventDefault();e.stopImmediatePropagation();if(parts)(parts.skip.disabled||document.activeElement===parts.skip?parts.pause:parts.skip).focus();return;}e.stopImmediatePropagation();e.preventDefault();if(e.repeat)return;
  if(e.code==='KeyP'||e.code==='Escape')G.story.pause(!paused);else if(e.code==='Enter'||e.code==='Space')G.story.skip();},true);
-G.bus.on('bossForm',d=>G.story.bossForm(d.boss));
 G.bus.on('bossPhase',d=>G.story.bossPhase(d.boss,d.phase));
 G.bus.on('stageStart',d=>G.story.beginStage(G.game.heroId,d.index,!!G._arena));
 G.bus.on('hidden',()=>{if(active)G.story.pause(true);});
@@ -44843,6 +44926,23 @@ function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wal
  s.count.textContent=(HERO[kind]||kind)+'の '+rows.length+' 品 / 装備できる武器 '+all.length+' 品';
  if(!rows.length){element('p',s.list,s.filter==='owned'?'武器庫はまだ空だニャ。専用の武器から選んでね。':'この分類には武器がないニャ。');return;}
  for(const row of rows){const card=element('article',s.list);card.className='cham-item';card.dataset.weaponId=row.id;
+  const art=element('div',card);art.className='cham-display';art.setAttribute('aria-hidden','true');
+  const family=G.equipmentVisual?.family?.(row)||'sword';
+  const artPaths={
+    sword:'M33 82l16-16 11 11-16 16zm10-25 17 17 6-6-17-17zm9-4 11 11 46-46 5-14-14 5z',
+    katana:'M26 83l25-22 10 11-25 22zm22-32 19 21 6-5-19-22zm13 0 10 12q31-22 48-52-24 20-58 40z',
+    pole:'M27 91l64-65 5 5-64 65zm63-68 9 9 19-27z',
+    gun:'M29 42h29v-7h42v5h23v12h-19l-10 14H67l-7 20H45l6-22H29z',
+    heavy:'M33 87l43-47 8 8-43 47zm36-52 21-24 28 26-21 24z',
+    magic:'M42 91l36-49 7 5-35 50zm32-57 5-20 15-9 16 10 2 19-17 15z',
+    fist:'M41 80l-9-22 8-22 13-7 12 5 9-7 9 4 10-4 10 7 6 19-11 25z',
+    chain:'M34 76l14-14 9 9-14 14zm20-17 10-10 8 8-10 10zm16-14 10-10 8 8-10 10zm12-12 13-18 17 3 6 13-11 15-14-1z',
+    fan:'M69 85L33 38Q72 9 112 35L77 85zm2-17 3-32 3 32z',
+    gadget:'M45 83L34 56l12-22h17l3-13h19l3 13h17l12 22-11 27z'
+  };
+  art.innerHTML='<svg viewBox="0 0 145 100" aria-hidden="true"><path d="'+(artPaths[family]||artPaths.sword)+'" /></svg>';
+  art.style.setProperty?.('--metal',/^#[0-9a-f]{3,8}$/i.test(row.col||'')?row.col:'#f3ca83');
+  element('small',art,row.owned?'ARMORY':'CHAM SELECT');
   const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);const price=element('strong',top,row.equipped?'装備中':row.owned?'武器庫・持替え無料':row.cost+' ¢');price.className='cham-price';
   element('p',card,(HERO[row.owner||row.who]||row.owner||row.who||'専用')+' / 攻撃 ×'+Number(row.dmg||1).toFixed(2)+'　間合い ×'+Number(row.reach||1).toFixed(2)+'　吹き飛ばし ×'+Number(row.kb||1).toFixed(2));
   const moves=element('p',card);moves.className='cham-moves';moves.textContent='地上奥義：'+(row.ultName||'キャラ本来の技')+' / 空中奥義：'+(row.airName||'キャラ本来の技');
@@ -44879,9 +44979,31 @@ function open(options,inventory=false){
  if(active||!G.camp?.players||!document.body||(inventory?(!G.camp.toolCatalog||!G.camp.useTool):(!G.camp.catalog||!G.camp.purchase||!G.camp.equip)))return false;
  const opt=inventory?{}:options||{},priorPaused=!!G.paused,scene=G.sceneName,focus=document.activeElement;clearControls();
  if(scene==='play'&&G.scenes.play?.pause)G.scenes.play.pause(true);else G.paused=true;
- const root=element('section',document.body);root.className='cham-shop';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',inventory?'一時停止中の道具袋':'アイテムショップ チャム');
+ const root=element('section',document.body);root.className=inventory?'cham-shop':'cham-shop cham-market';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',inventory?'一時停止中の道具袋':'アイテムショップ チャム');
  const css=element('style',root);css.textContent='.cham-shop{position:fixed;inset:0;z-index:12500;display:grid;place-items:center;background:#142838e8;color:#243a4a;font:15px/1.45 system-ui,sans-serif;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;touch-action:pan-y}.cham-shop *{box-sizing:border-box}.cham-shop .cham-card{width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;border:3px solid #d9b26b;border-radius:22px;background:#fff8e9;box-shadow:0 15px 70px #0007}.cham-shop header,.cham-shop footer{padding:12px 18px;background:#f2dfb8}.cham-shop h2{font-size:clamp(20px,3vmin,28px);margin:0}.cham-shop header p{margin:4px 0 8px}.cham-shop .cham-toolbar,.cham-shop footer{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.cham-shop label{display:flex;gap:6px;align-items:center}.cham-shop button,.cham-shop select{font:inherit;color:#1d3748;min-height:44px;border:2px solid #b8985e;border-radius:10px;padding:7px 12px;background:#fff;touch-action:manipulation}.cham-shop button{cursor:pointer;font-weight:700}.cham-shop button:disabled{opacity:.62;cursor:default}.cham-shop button:focus-visible,.cham-shop select:focus-visible{outline:4px solid #398faa;outline-offset:1px}.cham-shop .cham-wallet{margin-left:auto;font-weight:800;color:#775016;white-space:nowrap}.cham-shop .cham-count{margin:0;padding:7px 18px;background:#fff1d4;font-size:13px}.cham-shop .cham-list{overflow:auto;overscroll-behavior:contain;padding:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-height:70px;touch-action:pan-y}.cham-shop .cham-gacha{grid-column:1/-1}.cham-shop .cham-item{border:1px solid #d7c59f;border-radius:13px;padding:12px;background:#fffdfa;min-width:0}.cham-shop .cham-item-top{display:flex;gap:8px;align-items:start;justify-content:space-between}.cham-shop h3{margin:0;font-size:17px}.cham-shop .cham-price{white-space:nowrap;color:#885b13;font-size:13px}.cham-shop .cham-item p{font-size:12px;margin:7px 0;overflow-wrap:anywhere}.cham-shop .cham-moves{color:#526579}.cham-shop .cham-item button{width:100%}.cham-shop .cham-message{flex:1 1 180px;margin:0;font-size:13px}.cham-shop .cham-finish{background:#245b63;color:white;border-color:#245b63}@media(max-width:620px){.cham-shop .cham-list{grid-template-columns:1fr}.cham-shop header,.cham-shop footer{padding:9px 11px}.cham-shop .cham-wallet{margin-left:0}.cham-shop .cham-card{border-radius:14px}}@media(max-height:470px){.cham-shop{padding:4px 8px}.cham-shop header{padding:5px 10px}.cham-shop header p{display:none}.cham-shop h2{font-size:20px}.cham-shop footer{padding:5px 10px}.cham-shop .cham-count{padding:3px 10px}.cham-shop .cham-list{padding:7px;gap:7px}.cham-shop .cham-item{padding:8px}.cham-shop .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}';
- const card=element('div',root);card.className='cham-card';const header=element('header',card);element('h2',header,inventory?'道具袋 — 一時停止中':'🐱 アイテムショップ「チャム」');element('p',header,inventory?'所持している道具を使えます。閉じると一時停止画面に戻ります。':'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
+ if(!inventory)css.textContent+=`
+ .cham-market{background:radial-gradient(ellipse at 15% 0%,#60402a 0%,transparent 58%),radial-gradient(ellipse at 88% 12%,#244a4a 0%,transparent 57%),#0e1519;color:#f5eee1}
+ .cham-market .cham-card{width:min(1400px,100%);height:100%;max-height:100%;border:1px solid #806849;border-radius:15px;background:#121c21;box-shadow:0 20px 90px #000c}
+ .cham-market header{background:linear-gradient(105deg,#24232a,#13272c);border-bottom:1px solid #735c3a}
+ .cham-market header p{color:#d1cdc1}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#ffe2ac}
+ .cham-market .cham-kicker,.cham-market .cham-display small{font-size:10px;letter-spacing:.24em;font-weight:800;color:#e1bb7e}
+ .cham-market .cham-toolbar{margin-top:6px}.cham-market button,.cham-market select{background:#243238;color:#f8edda;border:1px solid #596163;border-radius:7px}
+ .cham-market button[aria-pressed=true],.cham-market button[data-cham-action=buy],.cham-market .cham-finish{background:linear-gradient(110deg,#ffe0a2,#c79a55);color:#221a10;border-color:#e6c58a}
+ .cham-market .cham-wallet{color:#ffe0a2;background:#211d17;padding:.45em .8em;border:1px solid #8f7144;border-radius:999px}
+ .cham-market .cham-count{background:#18272d;color:#ddd4c3;border-bottom:1px solid #3d4a50}
+ .cham-market .cham-list{flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+ .cham-market .cham-item{background:linear-gradient(150deg,#243137,#192328);border:1px solid #45565d;border-radius:10px;padding:10px}
+ .cham-market .cham-price,.cham-market .cham-moves{color:#f2ca86}.cham-market footer{background:#162229;border-top:1px solid #4a565a}
+ .cham-display{position:relative;display:grid;place-items:center;min-height:80px;margin-bottom:8px;border:1px solid #ffffff26;border-radius:7px;overflow:hidden;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--metal) 33%,#20272c),#11191f 78%)}
+ .cham-display svg{width:110px;height:68px;fill:var(--metal);stroke:#fff0cc;stroke-width:1.2;filter:drop-shadow(0 0 7px var(--metal))}
+ .cham-display small{position:absolute;bottom:5px;left:7px;color:#fff3dc}
+ @media(max-width:720px){.cham-market .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:390px){.cham-market .cham-list{grid-template-columns:1fr}}
+ @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display span{font-size:32px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
+ `;
+ const card=element('div',root);card.className='cham-card';const header=element('header',card);
+ if(!inventory)element('div',header,'CHAM’S ARMORY  /  王国公認商店').className='cham-kicker';
+ element('h2',header,inventory?'道具袋 — 一時停止中':'ちゃむのアイテムショップ');element('p',header,inventory?'所持している道具を使えます。閉じると一時停止画面に戻ります。':'おつかれさまニャ！　買った武器は武器庫に残るよ。コインはみんなで共有、装備は選んだ仲間だけ。');
  const tabs=element('div',header);tabs.className='cham-toolbar';const tabButtons={};if(!inventory){tabButtons.weapons=button(tabs,'武器と武器庫','tab-weapons',()=>{if(active&&!active.busy){active.tab='weapons';renderRows();}});if(G.camp.toolCatalog&&G.camp.purchaseTool&&G.camp.useTool){tabButtons.tools=button(tabs,'道具を買う・使う','tab-tools',()=>{if(active&&!active.busy){active.tab='tools';renderRows();}});}if(G.camp.draw&&G.companions?.pool){tabButtons.companions=button(tabs,'仲間ガチャ・編成','tab-companions',()=>{if(active&&!active.busy){active.tab='companions';renderRows();}});}}
  const tools=element('div',header);tools.className='cham-toolbar';const plabel=element('label',tools,'対象 '),players=roster(),pick=element('select',plabel);pick.dataset.chamPlayer='1';pick.setAttribute('aria-label','装備・道具を使う仲間');
  players.forEach((p,i)=>{const option=element('option',pick,'P'+(i+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind));option.value=String(i);});
@@ -45127,6 +45249,8 @@ const DIFFS = {
   normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.8, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
   hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.1, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
     tactics:true, attackSpacing:12, minWindup:18, punishWindow:28 },
+  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.48, foeHp:1.55, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
+    tactics:true, attackSpacing:8, minWindup:16, punishWindow:19, frenzy:true },
 };
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
 
@@ -45297,14 +45421,15 @@ G.scenes.select = {
 
 // ---------------------------------------------------------------- a run: several stages in a row
 // with saved progress, offer the stage map (cleared stages + the next one); otherwise start at stage 1
-function chooseStage(){
+function chooseStage(continueRun=false){
   // game.unlocked = how many stages are cleared (all n after the ending); the stage after them is open
   const n = stages().length, done = U.clamp(game.unlocked|0, 0, n), open = Math.min(done, Math.max(0, n-1));
-  if(open > 0 && G.ui && G.ui.show && G.ui.hasScreen && G.ui.hasScreen('stages')){
+  if(G.ui?.hasScreen?.('stages')){
     const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < done }));
-    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); startRun(U.clamp(i|0, 0, open)); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
-  } else startRun(0);
+    uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); const stage=U.clamp(i|0,0,open); if(continueRun)G.go('play',{stage});else startRun(stage); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
+  } else if(continueRun)G.go('play',{stage:open});else startRun(0);
 }
+G.chooseStage=chooseStage;
 function startRun(start){
   G._arena = false; G._autoplay = false;
   start = start|0;
@@ -45323,6 +45448,8 @@ const play = G.scenes.play = {
     G.kosodoro?.clear();G.companions?.clear();G.world.clear(); G.combat.clear(); clearDeco(); uiHideAll();
     G.hitStop = 0; G.paused = false; if(G.fx) G.fx.worldFrozen = false;
     game.stageIndex = params.stage|0;
+    this.startCoins = game.coins;
+    this.resultShown = false;
     game.combo = 0; game.comboT = 0; game.comboRank = ''; game.stageTime = 0; game.revives = 0; game.hurtCount = 0;
     game.cutinT = 0; game.clearT = 0; game.koT = 0; this.cleared = false; this.over = false;
     unloadStage(); ARENA.unload();
@@ -45400,7 +45527,7 @@ const play = G.scenes.play = {
       if(e.team===1&&!e.publishedReactive){if(!G.coop?.tickFoe(e)){G.foes.tick(e);G.foes.h.alignPublishedLane(e);}}
       else if(e.kind==='pickup') G.pickups.tick(e);
     }
-    G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
+    G.frenzy?.tick(); G.kosodoro?.tick();G.companions?.tick();G.combat.tick();
     const bounds = S().bounds ? S().bounds() : null;
     for(let i=0;i<ents.length;i++){
       const e = ents[i];
@@ -45449,18 +45576,25 @@ const play = G.scenes.play = {
     const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
+    if(this.resultShown)return;
+    this.resultShown=true;
     const idx = game.stageIndex, last = idx >= stages().length-1;
     let stars = 3 - Math.min(2, game.revives) - (game.hurtCount > 14 ? 1 : 0);
     stars = U.clamp(stars, 1, 3);
     game.unlocked = Math.max(game.unlocked, Math.min(stages().length, idx+1)); persist();
     const p = G.player; if(p) game.ultCarry = p.ult;
-    G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:game.coins });
+    const earned=game.coins-this.startCoins;
+    const armoryBudget=(G.camp?.players?.()||[]).reduce((sum,hero)=>
+      sum+Math.max(0,...G.camp.catalog(hero).filter(w=>w.owner===hero.type&&!w.owned).map(w=>w.cost)),0);
+    const clearReward=Math.max(80+idx*15,armoryBudget-earned);
+    game.coins+=clearReward;
+    G.bus.emit('stageClear', { index:idx, stars, time:Math.round(game.stageTime/60), coins:earned+clearReward });
     G.camp?.creditAtClear();
     touch(false);
     G.input.clear();
-    uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:game.coins, bestCombo:game.bestCombo, last,
+    uiShow('result', { stageName:game.stageName, stars, time:Math.round(game.stageTime/60), coins:earned+clearReward, bestCombo:game.bestCombo, last,
       nextLabel:G.cham?'チャムのお店へ':null,
-      onNext:()=>{const advance=()=>{sfx('ok');if(last)G.go('ending');else G.go('play',{stage:idx+1});};if(G.cham)G.cham.open({onDone:advance});else advance();} });
+      onNext:()=>{const advance=()=>{sfx('ok');if(last)G.go('ending');else{game.publishedCarry=G.published?.native(G.player)?.carry()||null;chooseStage(true);}};if(G.cham)G.cham.open({onDone:advance});else advance();} });
   },
   gameOver(){
     G.story?.reset();
@@ -45735,8 +45869,8 @@ function openMenu(){if(menu)menu.remove();menu=node('section',document.body);men
  const row=node('div',menu);row.style.cssText='display:flex;gap:18px;flex-wrap:wrap';const selects=[];
  for(let i=0;i<2;i++){const col=node('div',row);col.style.cssText='flex:1;min-width:130px';node('label',col,'P'+(i+1)+' キャラクター');const img=node('img',col);img.style.cssText='display:block;width:90px;height:90px;object-fit:contain';const select=node('select',col);select.style.cssText='font:inherit;min-height:44px;max-width:100%';
   for(const id of G.heroes.ids){const opt=node('option',select,G.heroes.get(id)?.name||G.story.heroes[id]?.name||id);opt.value=id;}select.value=ids[i];const refresh=()=>{img.src=G.heroes.portrait(select.value,{size:160})||'';img.alt=G.story.heroes[select.value]?.name||select.value;};select.onchange=refresh;refresh();selects.push(select);}
- const difficulty=node('select',menu);difficulty.style.cssText='font:inherit;min-height:44px;margin:14px';for(const [key,label]of [['easy','やさしい'],['normal','ふつう'],['hard','つよい']]){const o=node('option',difficulty,label);o.value=key;}difficulty.value=G.game.diffKey;
- const start=node('button',menu,'2人で 出発！');start.style.cssText='font:inherit;min-height:48px;padding:10px 20px';start.onclick=()=>{api.enable(selects[0].value,selects[1].value);menu.remove();menu=null;G.debug.play(selects[0].value,0,difficulty.value);G.ui?.touch?.show(false);};
+ const difficulty=node('select',menu);difficulty.style.cssText='font:inherit;min-height:44px;margin:14px';for(const [key,label]of [['easy','やさしい'],['normal','ふつう'],['hard','つよい'],['frenzy','狂乱']]){const o=node('option',difficulty,label);o.value=key;}difficulty.value=G.game.diffKey;
+ const start=node('button',menu,'2人で 出発！');start.style.cssText='font:inherit;min-height:48px;padding:10px 20px';start.onclick=()=>{api.enable(selects[0].value,selects[1].value);menu.remove();menu=null;G.game.heroId=selects[0].value;G.game.diffKey=difficulty.value;G.chooseStage();};
  const back=node('button',menu,'もどる');back.style.cssText='font:inherit;min-height:44px;margin:10px';back.onclick=()=>{menu.remove();menu=null;};node('p',menu,'キーボード：P1 矢印 / J攻撃 Iジャンプ Kよけ Lつかむ H必殺 O奥義。P2 WASD / F攻撃 Rジャンプ Gよけ Tつかむ Y必殺 B奥義。残機は共有、各自のHPと奥義は別です。');}
 function showLaunch(){if(!document.body)return;if(!launch){launch=node('button',document.body,'1台で2人協力');launch.type='button';launch.style.cssText='position:fixed;left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);z-index:1000;min-height:44px;border:3px solid #fff0bc;border-radius:14px;background:#234a72;color:white;font:700 16px system-ui;padding:8px 20px;touch-action:manipulation';launch.onclick=openMenu;}launch.hidden=!['title','select'].includes(G.sceneName);}
 G.bus.on('scene',d=>{if(d.name==='title')api.disable();showLaunch();paint();});
@@ -45754,14 +45888,238 @@ const spawn=F.spawn,tick=F.tick;
 function profile(e){const coop=!!G.coop?.enabled,boss=!!e.def?.boss;return {hp:(boss?1.18:1.25)*(coop?(boss?1.4:1.35):1),cool:coop?(boss?.82:.78):(boss?.88:.84),floor:boss?18:12};}
 function apply(e){if(!e||e._campBalance)return e;const b=profile(e);e._campBalance=b;e.hp=Math.max(1,Math.round(e.hp*b.hp));e.maxHp=Math.max(e.hp,Math.round(e.maxHp*b.hp));e.hpMul*=b.hp;return e;}
 F.spawn=function(...args){return apply(spawn.apply(this,args));};
-F.tick=function(e){const b=e?._campBalance;if(b&&e.cool>b.floor&&!e.dead&&!e.removed&&e.entered!==false&&(e.state==='idle'||e.state==='move')&&!e.pending&&!e.atk&&!e.stun&&!e.grabbedBy&&!(e.punishUntil>G.time.tick)&&!(e.def?.flightAI&&e.skyPhase==='recover')&&!e._phaseEventHold&&!(G.hitStop>0)&&!G.paused&&!G.story?.blocked){e._campCoolCredit=(e._campCoolCredit||0)+(1/b.cool-1);const extra=Math.floor(e._campCoolCredit);if(extra){e.cool=Math.max(b.floor+1,e.cool-extra);e._campCoolCredit-=extra;}}return tick.call(this,e);};
+F.tick=function(e){const b=e?._campBalance;const boost=G.game?.diff?.frenzy?(e._frenzyForm===(e.form||1)?.53:.70):1;if(b&&e.cool>b.floor&&!e.dead&&!e.removed&&e.entered!==false&&(e.state==='idle'||e.state==='move')&&!e.pending&&!e.atk&&!e.stun&&!e.grabbedBy&&!(e.punishUntil>G.time.tick)&&!(e.def?.flightAI&&e.skyPhase==='recover')&&!e._phaseEventHold&&!(G.hitStop>0)&&!G.paused&&!G.story?.blocked){e._campCoolCredit=(e._campCoolCredit||0)+(1/(b.cool*boost)-1);const extra=Math.floor(e._campCoolCredit);if(extra){e.cool=Math.max(b.floor+1,e.cool-extra);e._campCoolCredit-=extra;}}return tick.call(this,e);};
 G.encounterBalance={profile,apply};
+})();
+
+
+// ===== 93_frenzy.js =====
+// High difficulty boss moves and the new encounter actors.
+(function(){'use strict';
+const G=window.G, F=G.foes, H=F.h;
+const quake={id:'frenzyQuake',len:34,recover:22,anim:'slam',
+  areas:[{at:9,r:2.6,zr:1.35,y1:.85,dmg:14,power:3}],
+  fn(e,t){if(t===9)G.fx.burst('shock',e.x,.04,e.z,{scale:2.1,color:'#ff527a'});}};
+const volley={id:'frenzyVolley',len:34,recover:22,anim:'slam',
+  proj:[{at:7,kind:'shadow',count:3,spread:.065,dmg:9,oy:.65,vx:.23},
+        {at:20,kind:'shadow',count:3,spread:.09,dmg:9,oy:.65,vx:.26}]};
+
+G.frenzy={
+  awaken(e,form){
+    e._frenzyForm=form;
+    e._frenzyNext=G.time.tick+34;
+    G.bossPhaseVisual(e);
+    G.fx.burst('shock',e.x,.03,e.z,{scale:2,color:'#ff526f'});
+    G.fx.burst('flame',e.x,e.y+.45,e.z,{count:16,scale:1.6});
+  },
+  attack(e){
+    if(!G.game?.diff?.frenzy||!e.def.boss||e.dead||e.scared||e.transforming)return false;
+    const form=e.form||1;
+    if(e._frenzyForm!==form||e.cool>0||G.time.tick<e._frenzyNext)return false;
+    const p=H.target(e);
+    if(!p||H.dist(e,p)>8)return false;
+    H.face(e,p);
+    const move=H.dist(e,p)<2.25?quake:volley;
+    if(H.attack(e,move,move===quake?34:28)){
+      H.say(e,move===quake?'狂乱衝撃波！':'影の二連射！');
+      e._frenzyNext=G.time.tick+126;
+      return true;
+    }
+    return false;
+  },
+  tick(){
+    for(const e of G.world.ents){
+      if(!e.dead&&e.def?.boss&&G.game?.diff?.frenzy&&!e.transforming&&e.hp>0&&e.hp<e.maxHp*.5&&e._frenzyForm!==(e.form||1))G.story.frenzyPhase(e);
+      if(e._frenzySpeech&&G.time.tick>=e._frenzySpeech.at){
+        const {form}=e._frenzySpeech;
+        delete e._frenzySpeech;
+        if(!e.dead&&!e.transforming&&form===(e.form||1))this.awaken(e,form);
+      }
+      if(!e.dead&&e.crew&&ready(e))assemble(e);
+      if(e.victim&&(e.dead||e.scared||(!e.atk&&!e.pending)))G.published?.releaseEnemyHold(e.victim,e);
+    }
+  }
+};
+
+const ready=e=>!e.dead&&!e.scared&&!e.intangible&&e.entered&&
+  (e.state==='idle'||e.state==='move')&&!e.atk&&!e.pending&&!e.grabbedBy;
+function assemble(e){
+  const allies=G.world.ents.filter(a=>a.type===e.crew&&ready(a)&&H.dist(e,a)<1.55);
+  if(allies.length<2)return;
+  const crew=[e,...allies.slice(0,2)];
+  const rider=F.spawn(e.crew==='mikoshiCrew'?'mikoshi':'mountedArcher',e.x,e.z,{entrance:'ready'});
+  rider.hp=Math.max(1,Math.ceil(rider.maxHp*crew.reduce((sum,a)=>sum+a.hp/a.maxHp,0)/3));
+  for(const a of crew){
+    H.release(a);a.dead=true;a.intangible=true;a.removeMe=true;
+  }
+  H.say(rider,rider.def.name+'、合体！');
+  G.fx.burst('dustRing',rider.x,.05,rider.z,{scale:1.7});
+}
+function rendezvous(e){
+  const leader=e.crew?e:G.world.ents.find(a=>a.crew===e.type&&!a.dead);
+  if(leader&&leader!==e){H.walkTo(e,leader.x+(e.id%2?.65:-.65),leader.z);return;}
+  if(leader&&G.world.ents.filter(a=>a.type===e.crew&&!a.dead).length>=2){H.stop(e);return;}
+  const p=H.target(e);
+  if(!p)return;
+  H.face(e,p);
+  if(H.dist(e,p)>1.35){H.walkTo(e,p.x-e.face,p.z);return;}
+  if(e.cool<=0&&H.token(e))H.attack(e,ram,25);
+}
+const ram={id:'formationRam',len:28,recover:28,anim:'run',
+  move:[{at:2,until:17,vx:.23},{at:18,vx:0}],
+  hits:[{at:4,dur:15,x0:0,x1:1.1,zr:.65,y0:0,y1:1.1,dmg:16,power:3}]};
+const arrows={id:'mountedBow',len:30,recover:27,anim:'throw',
+  proj:[{at:7,kind:'arrow',hitKind:'slash',vx:.30,oy:.85,dmg:12},{at:16,kind:'arrow',hitKind:'slash',vx:.36,oy:.85,dmg:10}]};
+function mounted(e){
+  const p=H.target(e);
+  if(!p)return;
+  H.face(e,p);
+  const dx=Math.abs(p.x-e.x),dz=Math.abs(p.z-e.z);
+  if(dz>.55||dx>6){H.walkTo(e,p.x-e.face*2,p.z);return;}
+  H.stop(e);
+  if(e.cool>0||!H.token(e))return;
+  const bow=e.type==='mountedArcher'&&dx>2.7;
+  if(H.attack(e,bow?arrows:ram,bow?28:34))H.say(e,bow?'弓、構え！':'突撃！');
+}
+
+const bite={id:'vampireBite',len:63,recover:34,anim:'windup',fn(e,t){
+  const p=e.victim;
+  if(!p||p.dead)return;
+  const b=G.stage.bounds();
+  if(t===0){
+    G.fx.burst('smoke',e.x,e.y,e.z,{color:'#944ed4'});
+    e.x=G.U.clamp(p.x-p.face*.9,b.xmin+e.radius,b.xmax-e.radius);
+    e.z=p.z;e.y=.12;e.vy=0;H.face(e,p);
+    G.fx.burst('smoke',e.x,.55,e.z,{color:'#944ed4'});
+    G.fx.alert(e);
+  }
+  if(t===19&&H.dist(e,p)<1.35&&p.y<.4&&G.published?.holdByEnemy(p,e))H.say(e,'吸血！ 連打で脱出！');
+  if(t===49&&G.published?.releaseEnemyHold(p,e)){
+    const before=p.hp;
+    G.combat.damage(p,18,{src:e,dir:e.face,kind:'magic',power:2,unblockable:true});
+    const taken=before-p.hp;
+    if(taken>0){
+      const healed=Math.min(e.maxHp-e.hp,taken);
+      e.hp+=healed;
+      G.fx.burst('hearts',e.x,e.y+1,e.z,{color:'#e8467c',count:9});
+      if(healed>0)G.fx.text('+'+healed,e.x,e.y+1.7,e.z,'heal');
+    }
+  }
+}};
+function vampire(e){
+  const p=H.target(e);
+  if(!p)return;
+  const time=G.time.tick*.055+e.id;
+  e.y=1.4+Math.sin(time)*.52;e.vy=0;e.gravScale=0;e.onGround=false;
+  H.walkTo(e,p.x+Math.cos(time*.57)*3.3,p.z+Math.sin(time*.75)*1.25,.075);
+  if(e.cool<=0&&H.dist(e,p)<5&&H.token(e)){
+    e.victim=p;
+    if(H.attack(e,bite,32))H.say(e,'背後にご用心…');
+  }
+}
+function dogRig(type){
+  const rider=F.build(type==='vampire'?'shinobi':'naginata');
+  const T=window.THREE, g=G.look.geo, b=G.look.builder(), root=new T.Group();
+  const flying=type==='vampire', horse=type==='mountedArcher';
+  const lift=flying?0:horse?.8:1.17;
+  rider.root.position.y=lift;
+  const decor=new T.Group();root.add(decor,rider.root);
+  if(flying){
+    for(const s of [-1,1]){
+      b.add(g.cone(.48,.9,3),'#3a194c',[-.24,.86,s*.62],[s*Math.PI/2,0,0],[.7,1,1.1]);
+      b.add(g.cone(.06,.23,6),'#fff6ec',[.36,.97,s*.11],[0,0,Math.PI]);
+    }
+    b.add(g.box(.15,.89,.81),'#7b234c',[-.33,.63,0],[0,0,-.2]);
+  }else{
+    b.add(g.box(1.48,.17,.94),horse?'#754c39':'#ac283b',[0,.98,0]);
+    for(const s of [-1,1]){
+      b.add(g.sphere(.29,10,8),horse?'#95705d':'#e6c795',[s*.49,.53,0],null,[1.15,1,.85]);
+      b.add(g.sphere(.24,10,8),'#f4d9ad',[s*.56,.76,.04]);
+      b.add(g.sphere(.06,8,6),'#473438',[s*.56+.19,.78,.19]);
+      b.add(g.box(.16,.38,.18),'#523833',[s*.53,.21,.19]);
+    }
+    if(!horse){
+      b.add(g.box(1.16,.16,.86),'#efc35b',[0,2.92,0]);
+      b.add(g.cone(.76,.46,4),'#98253b',[0,3.19,0],[0,Math.PI/4,0]);
+      for(const x of [-.46,.46])for(const z of [-.32,.32])b.add(g.box(.07,1.9,.07),'#e8b449',[x,1.98,z]);
+    }else{
+      b.add(g.sphere(.31,10,8),'#987155',[.77,.87,0],null,[.74,1.28,.85]);
+      b.add(g.torus(.38,.026,6,20,Math.PI),'#d5ad73',[.52,1.75,.37],[0,0,-Math.PI/2]);
+    }
+  }
+  const mat=G.look.vmat({instance:true}), mesh=b.mesh({material:mat});decor.add(mesh);
+  return {root,height:flying?1.65:lift+1.65,update(e){
+    decor.rotation.y=e.face<0?Math.PI:0;
+    decor.rotation.x=flying?Math.sin(G.time.tick*.24)*.14:0;
+    rider.update(e);
+    mat.userData.uFlash.value=e.flashT>0?.65:0;
+  },setAlpha(a){rider.setAlpha(a);mat.transparent=a<1;mat.opacity=a;},dispose(){rider.dispose();mesh.geometry.dispose();mat.dispose();}};
+}
+for(const [type,name] of [['mikoshiCrew','神輿担ぎわんこ'],['horseCrew','騎馬組わんこ']])
+  F.define(type,{name,hp:32,build:()=>F.build('ashigaru'),ai:rendezvous});
+for(const [type,crew] of [['formationLeader','mikoshiCrew'],['horseLeader','horseCrew']])
+  F.define(type,{name:'組頭わんこ',hp:64,armor:1,build:()=>F.build('naginata'),
+    init(e){e.crew=crew;},ai:rendezvous});
+for(const [type,name] of [['mikoshi','おみこしわんこ'],['mountedArcher','騎馬武者わんこ']])
+  F.define(type,{name,hp:139,radius:.7,height:type==='mikoshi'?2.8:2.4,weight:2,armor:2,
+    build:()=>dogRig(type),ai:mounted});
+F.define('vampire',{name:'ドラキュラわんこ',hp:76,flightAI:true,build:()=>dogRig('vampire'),ai:vampire,
+  init(e){e.onInterrupt=()=>{e.gravScale=1;if(e.victim)G.published?.releaseEnemyHold(e.victim,e);};},
+  onKOTick(e){e.gravScale=1;}});
+})();
+
+
+// ===== 94_hero_combat_fx.js =====
+(function(){'use strict';
+const G=window.G;
+const styles={
+  inu:['slash','#ffe37a'], shima:['shock','#ff9d57'], nuko:['magic','#de9cff'],
+  guard8:['guard','#8fe9ff'], watch:['notes','#ff89c6'],
+  wanden:['slash','#a7d8ff'], mack:['smoke','#ffd098'],
+};
+function burst(kind,x,y,z,options){G.fx.burst(kind,x,y,z,options);}
+G.heroCombatFx={
+  swing(p,a){
+    const d=a.def;
+    const [base,tint]=styles[p.type]||styles.inu;
+    const kind=d.firetrail||d.fireCol?'flame':d.ice?'ice':d.kick?'dustRing':d.fist&&p.type==='inu'?'shock':base;
+    const x=p.x+p.face*Math.min(1.1,Math.max(.32,(d.reach||48)/100));
+    const scale=d.finisher||d.special?1.12:.78;
+    burst(kind,x,p.y+.7,p.z,{color:d.trail||tint,dir:p.face,count:p.type==='wanden'?3:4,scale});
+    if(p.type==='wanden'&&(d.iai||d.finisher||d.special))
+      burst('slash',x+p.face*.4,p.y+.9,p.z,{color:'#ffffff',dir:p.face,count:2,scale:1.22});
+  },
+  explosion(x,z,r,color,grenade){
+    const scale=G.U.clamp(r*.68,.68,1.9);
+    burst('shock',x,.07,z,{color,scale});
+    burst('flame',x,.36,z,{count:grenade?8:12,scale});
+    burst('smoke',x,.75,z,{count:grenade?10:6,scale,color:'#5c4d52'});
+    G.fx.impact(x,.57,z,grenade?'pop':'fire',2,{scale:.8*scale,color});
+  },
+  firePillar(x,z){
+    burst('shock',x,.06,z,{scale:1.15,color:'#ffb13c'});
+    for(let i=0;i<5;i++)burst('flame',x,.25+i*.48,z,{count:4,scale:1.25-i*.14});
+  },
+  hazards(p,hazards,lane,units){
+    if(p.type!=='nuko')return;
+    for(const h of hazards){
+      const x=h.x/units,z=p.z+((h.y??lane)-lane)/units;
+      if(h.kind==='ptwister'&&h.t%5===1){
+        for(let i=0;i<7;i++){
+          const a=h.t*.35+i*1.53,r=.22+i*.17;
+          burst('windRibbon',x+Math.cos(a)*r,.28+i*.42,z+Math.sin(a)*r,
+            {angle:a,scale:.54+i*.095,color:i%2?'#ddfff5':'#7fe5e4'});
+        }
+      }
+    }
+  }
+};
 })();
 
 
 }
 </script>
-<script>(function(){'use strict';const BUILD="2594adafff1bf3926ef39fcd3005a401a53bf6a9b2bf5ffbad4945e5e8548cef",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="c17be9b60c7fd40b859c76cb74fa2f0f3e826bed33406e8c47e4c4042857e5ce",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}

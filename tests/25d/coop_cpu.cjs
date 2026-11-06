@@ -30,7 +30,10 @@ function record(s){report.cases.push(s);console.log('PASS '+s);}
  G.coop.release(100);G.coop.release(200);G.coop.press(0,'grab',101);g.step();assert.notEqual(G.published.native(a).player.state,'grab');assert.equal(f.grabbedBy,0);record('shared enemy can be grabbed by only one hero; explicit release frees the target');
 }
 {
- const g=fixture(),{G}=g,[a,b]=G.coop.players;G.coop.press(0,'attack',1);G.coop.press(1,'jump',2);const boss=g.spawn('garm');boss.hp=boss.maxHp*.4;G.bus.emit('hit',{target:boss,dmg:1});G.bus.emit('hit',{target:boss,dmg:1});G.hitStop=0;g.step();assert(G.story.blocked);assert.equal(G.coop.channels[0].input.touch.attack,false);assert.equal(G.coop.channels[1].input.touch.jump,false);const time=G.game.stageTime;g.step(20);assert.equal(G.game.stageTime,time);assert.equal(G.story.skip(),false);g.step(11);assert(G.story.skip());assert.equal(G.story.pending,0);record('one shared boss phase cinematic pauses both fighters and clears both input owners');
+ const g=fixture(),{G}=g,boss=g.spawn('garm'),clocks=G.coop.players.map(p=>G.published.native(p).clock);
+ boss.hp=boss.maxHp*.4;G.bus.emit('hit',{target:boss,dmg:1});G.hitStop=0;g.step(20);
+ assert(!G.story.blocked);assert.equal(G.story.pending,0);
+ G.coop.players.forEach((p,i)=>assert(G.published.native(p).clock>clocks[i]));record('boss dialogue leaves both cooperative fighters running');
 }
 {
  const g=fixture(),{G}=g,[a,b]=G.coop.players;const lives=G.game.lives;G.published.native(b).player.hp=0;b.hp=0;b.dead=true;b.coopKo=99;G.coop.afterCombat(G.scenes.play);assert.equal(b.dead,false);assert.equal(G.game.lives,lives-1);assert(a.hp>0);G.hitStop=0;g.step();assert.equal(G.published.native(b).player.hp,b.maxHp);

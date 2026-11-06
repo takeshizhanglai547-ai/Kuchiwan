@@ -155,7 +155,7 @@ G.stages = [
   { id:'s3', no:3, name:'月夜の森', kana:'つくよみの もり', length:102, bgm:'stage3', theme:THEMES.forest,
     waves:[
       { at:16, width:16, foes:[['pounce',2],['thrower',2]] },
-      { at:38, width:16, foes:[['flyer',2],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
+      { at:38, width:16, foes:[['vampire',1],['flyer',1],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
       { at:62, width:17, foes:[['pierrot',1],['pounce',2],['flyer',1]], then:[['thrower',2]], reward:'bone' },
     ],
     boss:{ type:'ghost', at:86, x:86 },
@@ -225,8 +225,8 @@ G.stages = [
 G.stages.push(
  {id:'s8',no:8,name:'戦国和風・わんこ合戦',kana:'せんごく わふう わんこがっせん',length:116,bgm:'stage8',theme:THEMES.sengoku,
   waves:[
-   {at:16,width:17,foes:[['ashigaru',3],['naginata',1]]},
-   {at:38,width:17,foes:[['shinobi',2],['ashigaru',2],['sniper',1]],then:[['naginata',2]],reward:'bone'},
+   {at:16,width:17,foes:[['ashigaru',1],['mikoshiCrew',2],['formationLeader',1]]},
+   {at:38,width:17,foes:[['shinobi',1],['horseCrew',2],['horseLeader',1],['sniper',1]],then:[['naginata',2]],reward:'bone'},
    {at:62,width:18,foes:[['naginata',2],['shinobi',2],['skyarmor',1]],then:[['ashigaru',3],['sniper',1]],reward:'cake'},
   ],boss:{type:'kuroinu',at:98,x:98},
   hints:[{at:5,name:MOFU,text:'足軽はまっすぐ、薙刀は横に広い！ 上下のラインを使い分けるのじゃ。'},{at:32,name:MOFU,text:'狙いイヌの赤い線は撃つ場所の予告。ねらいが決まったらラインを変えるのじゃ！'},{at:57,name:MOFU,text:'スカイアーマーは着地後がつかむチャンス。装甲には方向＋つかみ攻撃じゃ！'}],

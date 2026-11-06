@@ -2,7 +2,7 @@
 // definitions or command dispatch are owned here.
 (function(){'use strict';const G=window.G;
 // Phase dressing owns its geometry/materials; never recolor shared rig resources.
-G.bossPhaseVisual=function(e,rig=e?.rig){if(!e?.phase||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
+G.bossPhaseVisual=function(e,rig=e?.rig){if((!e?.phase&&!e?._frenzyForm)||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
  const T=window.THREE,height=e.height||e.def?.height||2.5,colors={garm:'#ff8e48',shark:'#5cdde8',ghost:'#c283ff',cerbe:'#ff654e',slime:'#7dff80',dragon:'#ffce48',kuroinu:'#b989ff',emperor:e.form===3?'#ffe7a1':'#ff657a'},color=colors[e.type]||'#ffb36c';
  const group=new T.Group();group.name='rage-dressing-'+e.type+'-'+(e.form||1);const parent=rig.kit?.body||rig.root;parent.add(group);
  const mat=new T.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.65,metalness:.35,roughness:.4}),geos=[];
@@ -49,29 +49,36 @@ const BONUS_LINES={
 };
 for(const [id,[start,clear]]of Object.entries(BONUS_LINES)){HEROES[id].start.push(...start);HEROES[id].clear.push(...clear);}
 const BOSSES={garm:['鋼の爪、解放！','連続つっこみと空からの急降下。着地のすきをねらおう。'],shark:['ほんきの がぶがぶ！','連続かみつきに遠くへの水玉。予告の線からよけよう。'],ghost:['三兄弟の ひとだま祭り！','消える突進とひとだま。姿が見えたら反撃しよう。'],cerbe:['三つの声が ひびく！','連続ジャンプと三方向のほえ声。着地を見て動こう。'],slime:['ぷるぷる大あばれ！','ねばねば弾と小さな仲間。着地後のすきがチャンス。'],dragon:['炎のつばさ、全開！','炎の玉と二連の息。予告を見て、着地後をねらおう。'],kuroinu:['こくけんしの 本気！','斬撃と連続の居合い。光る道から外れて反撃しよう。'],emperor:['王の力を 見せよう！','光の柱と包囲弾。足もとの予告を見て動こう。']};
+const CHAPTERS=[
+ ['王都からの救援要請','王都の守りが破られた。街を取り戻し、街道へ逃れた住民の足跡を追う。','守備隊は街の門を閉じた。夕暮れの城下町から、救援を求める鐘が聞こえる。'],
+ ['灯りをつなぐ街道','夕闇の城下町を抜けるには、消された道しるべを一つずつ灯すしかない。','街道の灯りがつながった。森に逃れた隊商を迎えに行ける。'],
+ ['月明かりの道しるべ','隊商が月夜の森で消息を絶った。木立の向こうに、ドラキュラの影が走る。','隊商は無事だった。洞窟の水晶が空の船を導くという話を聞く。'],
+ ['眠る水晶の航路','水晶の光を取り戻し、雲上の飛行艇へ通じる航路を開く。','水晶の道が空へ伸び、海賊飛行艇の航路を照らした。'],
+ ['雲の上の救出作戦','海賊飛行艇は霊峰へ向かっている。甲板を取り戻し、乗客を救う。','船長が礼に雪山の地図をくれた。城に通じる峠は霊峰の奥だ。'],
+ ['雪の先の黒い城','雪に埋もれた峠を越える。城の見張りは、その先で待っている。','霊峰の峠を越えた。ダークワンワン城への最後の門が開く。'],
+ ['王冠に宿る闇','城を覆う闇の源は王座にある。クロイヌと大帝が最後の道をふさぐ。','王座の闇は晴れた。東の城下では、まだ武者たちが戦を続けている。'],
+ ['旗の下のわんこ合戦','神輿と騎馬が街道を封鎖している。組頭と手下が集まる前に攻めよう。','戦旗が下り、鬼の門へ続く道が開いた。城下の人々が帰り始めた。'],
+ ['紅蓮の門と最後の太鼓','鬼の太鼓が谷に響く。門を守る軍勢を越え、王国へ帰る道を開く。','太鼓が止まり、王国へ帰る道に朝日が差した。']
+];
 const queue=[],seen=new Set(),history=[];let active=null,run=0,stage=0,hero='inu',panel=null,parts=null,focus=null,paused=false;
 function clearInput(){G.coop?.clearInputs();G.ui?.touch?.release?.();for(const k in G.input.touch)G.input.touch[k]=typeof G.input.touch[k]==='boolean'?false:0;G.input.clear();G.published?.resetInput?.();G.commands.reset();}
-function valid(e){return !e.boss||(!e.boss.dead&&!e.boss.removed&&e.boss.hp>0&&(!e.boss.transforming||e.kind==='form')&&(e.boss.form||1)===e.form);}
-function releaseHold(e){if(e?.boss&&(!e.boss._phaseEventKey||e.boss._phaseEventKey===e.key)){const b=e.boss;b._phaseEventHold=false;delete b._phaseEventKey;if(e.kind==='form'&&(b.form||1)===e.form&&!b.dead&&b.transforming){b.transforming=false;b.intangible=false;G.combat.cancel(b);G.setState(b,'idle');G.setAnim(b,'idle');b.cool=Math.max(b.cool||0,42);}}}
 function hide(){if(panel){panel.remove();panel=null;parts=null;}focus?.focus?.();focus=null;}
 function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.oldAnim;e.actor.animT=e.oldAnimT;}
  if(G.cam){G.cam.focusT=0;G.cam.focusZoom=0;if(G.player)G.cam.follow(G.player);}
  if(G.fx)G.fx.worldFrozen=!!G.paused;
- releaseHold(e);
  if(completed&&G.player&&!G.player.dead){G.player.inv=Math.max(G.player.inv,24);const n=G.published?.native?.();if(n)n.player.invuln=Math.max(n.player.invuln,24);}
- if(e?.kind==='form'&&e.boss&&!e.boss.dead){e.boss.transforming=false;e.boss.intangible=false;e.boss.cool=Math.max(e.boss.cool||0,42);G.setState(e.boss,'idle');}
  G.audio?.pause?.(!!G.paused);
  if(completed){G.coop?.restoreCamera();G.coop?.grace();}if(completed)G.bus.emit('storyComplete',{kind:e.kind,key:e.key,run});}
-function reset(){if(active)restore(active,false);active=null;paused=false;for(const e of queue)releaseHold(e);queue.length=0;seen.clear();hide();}
+function reset(){if(active)restore(active,false);active=null;paused=false;queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
 function render(){if(!document.createElement||!document.body)return;
  focus=document.activeElement;panel=element('section',document.body);panel.className='inu-story';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
  const css=element('style',panel);css.textContent='.inu-story{position:fixed;inset:0;z-index:12000;background:linear-gradient(120deg,#071629c9,#17213499);display:flex;align-items:center;justify-content:center;color:#fff8df;font:clamp(15px,2.4vmin,23px)/1.5 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;touch-action:manipulation}.inu-story .card{width:min(100%,960px);max-height:96dvh;overflow:auto;border:3px solid var(--story,#ffd264);border-radius:22px;background:#142a3be8;box-shadow:0 12px 80px #0009;padding:clamp(12px,3vmin,28px);box-sizing:border-box;display:grid;grid-template-columns:minmax(110px,30%) minmax(0,1fr);gap:16px;align-items:center}.inu-story img{width:100%;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 5px 15px #0007)}.inu-story h2{font-size:clamp(22px,4vmin,36px);line-height:1.2;margin:4px 0 12px}.inu-story p{margin:8px 0}.inu-story .cue{font-size:.78em;color:#baddf2}.inu-story .chapter{font-size:.75em;letter-spacing:.12em;color:#ffd777}.inu-story .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.inu-story button{font:inherit;font-size:.82em;min-height:44px;border:2px solid #f2ce7c;border-radius:11px;background:#f7e5b7;color:#182f41;padding:8px 16px;touch-action:manipulation}.inu-story button:focus-visible{outline:4px solid #6cd6ff}.inu-story button:disabled{opacity:.5}.inu-story .progress{height:4px;background:#486077;margin-top:12px}.inu-story .progress i{display:block;height:100%;background:#ffd777;width:0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr;text-align:center;gap:5px}.inu-story img{max-height:26dvh;max-width:55%;margin:auto}.inu-story .actions{justify-content:center}}@media(max-height:430px){.inu-story .card{padding:10px 16px;gap:12px}.inu-story h2{font-size:23px;margin:2px 0 6px}.inu-story p{margin:5px 0}.inu-story .actions{margin-top:8px}.inu-story .cue{font-size:12px}}@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important}}';
- const card=element('div',panel);card.className='card';card.style.setProperty('--story',active.boss?'#f3a18c':HEROES[hero]?.color||'#ffd264');
- const image=element('img',card);image.alt=active.boss?(active.boss.def.name||active.boss.type):HEROES[hero]?.name||hero;
- const url=active.boss?G.bossPortrait?.(active.boss,{size:320}):G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});if(url)image.src=url;else {image.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
- const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=active.kind==='form'?'BOSS / FORM '+active.form:active.kind==='boss'?'BOSS · SECOND PHASE':(active.kind==='intro'?'STAGE START':'STAGE CLEAR')+' · '+(stage+1);
+ const card=element('div',panel);card.className='card';card.style.setProperty('--story',HEROES[hero]?.color||'#ffd264');
+ const image=element('img',card);image.alt=HEROES[hero]?.name||hero;
+ const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});if(url)image.src=url;else {image.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
+ const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · 第'+(stage+1)+'章';
  element('h2',body,active.title);const line=element('p',body),cue=element('p',body);cue.className='cue';
  const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
  skip.type=pause.type='button';skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
@@ -80,10 +87,8 @@ function render(){if(!document.createElement||!document.body)return;
 function paint(){if(!parts||!active)return;parts.line.textContent=active.lines[active.age<75?0:1];parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
  parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(active.age/active.duration*100)+'%';}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
-function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=e.kind==='form'?205:e.kind==='boss'?170:185;e.actor=e.boss||e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
+function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=185;e.actor=e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;
- if(e.boss){const b=e.boss;b.pending=null;G.combat.cancel(b);b.onInterrupt?.();b.plan=null;b.gplan=null;b.vx=b.vz=0;G.setAnim(b,'roar',170);
-  for(const pr of G.combat.projectiles||[])if(pr.owner===b)pr.life=0;}
  if(e.actor)G.cam?.focus?.(e.actor.x,1.2+(e.actor.height||1.3)*.35,e.actor.z,e.duration,1.2);
  history.push({run,stage,hero,kind:e.kind,key:e.key,started:true});render();G.bus.emit('storyStart',{kind:e.kind,key:e.key,run});}
 const START_POSE={inu:{aRz:1.65,wz:1.5,aLz:.7,nod:-.08},shima:{aLz:1.4,aRz:1.5,aLx:.8,aRx:.8,lLz:.3,lRz:-.2},nuko:{aRz:2.3,aLz:1.8,aLx:.6,wz:.2,nod:.2},guard8:{aRz:1.2,wz:1.8,aLz:1.5,lean:.2,lLz:.3},watch:{aLz:2.5,aLy:.2,aRz:.5,twist:-.25,nod:-.12},wanden:{aRz:.55,aRy:1.2,wz:4,aLz:.5,twist:-.4,nod:-.1},mack:{aRz:1.55,wz:-1.5,aLz:2.5,aRx:.4,twist:.2}};
@@ -91,16 +96,28 @@ const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aL
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
-  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:h.name+'、出発！',lines:[h.start[stage],h.cue+'。'+(G.game?.stageName||'')+'へ！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
- clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:h.name+'の ステージクリア！',lines:[h.clear[stage],stage===(G.stages?.length||9)-1?'みんなで王国へ帰ろう！':h.win+'。次の道へ進もう！'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
- bossPhase(boss,phase){if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||!(boss.hp<boss.maxHp*.5))return false;
-  const form=boss.form||1,key='boss:'+boss.id+':'+form,info=BOSSES[boss.type]||['後半戦、開始！','予告を見て、攻撃の後をねらおう。'];
-  const accepted=enqueue({kind:'boss',key,boss,form,title:boss.type==='emperor'&&form===2?'暗黒の剣、覚醒！':info[0],lines:[(boss.form===2?boss.def.phaseLine2:boss.def.phaseLine)||'ここからが、ほんばんだ！',info[1]],cue:(boss.def.short||boss.def.name||boss.type)+(boss.type==='emperor'?' · 第'+form+'形態':'')+' · 後半戦'});
-  if(accepted){boss._phaseEventHold=true;boss._phaseEventKey=key;}return accepted;},
- bossForm(boss){if(!boss||boss.hp<=0||boss.dead)return false;const form=boss.form||1,key='form:'+boss.id+':'+form;if(form<2)return false;const accepted=enqueue({kind:'form',key,boss,form,title:form===3?'ダークわんわん大帝・天魔王、降臨！':'漆黒の騎士、覚醒！',lines:form===3?['まだ終わらぬ！ 空を裂く、最後の姿だ！','翼の斉射と交差する落雷。予告を見て、攻撃後を狙おう！']:['我が鎧に眠る剣よ、目覚めよ！','二連突進は折り返しにも予告。横と奥行きを使ってかわそう！'],cue:'第'+form+'形態 ・ '+(form===3?'天魔の翼と双剣':'漆黒の鎧と大剣')});if(accepted){boss._phaseEventHold=true;boss._phaseEventKey=key;}return accepted;},
+  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:CHAPTERS[stage]?.[0]||h.name+'、出発！',lines:[CHAPTERS[stage]?.[1]||h.cue,h.start[stage]],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
+ clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:(G.game?.stageName||'王国')+' · 旅の記録',lines:[CHAPTERS[stage]?.[2]||h.win,h.clear[stage]],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
+ frenzyPhase(boss){
+  if(!boss||boss.dead||boss.transforming)return false;
+  const form=boss.form||1;
+  if(boss._frenzyForm===form||boss._frenzySpeech?.form===form)return false;
+  G.foes.h.say(boss,'ここからが本番だ。狂乱の力を見よ！');
+  boss._frenzySpeech={form,at:G.time.tick+48};
+  return true;
+ },
+ bossPhase(boss,phase){
+  if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||boss.hp>=boss.maxHp*.5)return false;
+  if(G.game?.diff?.frenzy)return this.frenzyPhase(boss);
+  const form=boss.form||1;
+  if(boss._spokenPhase===form)return false;
+  boss._spokenPhase=form;
+  if(!(form===2?boss.def.phaseLine2:boss.def.phaseLine))G.foes.h.say(boss,BOSSES[boss.type]?.[0]||'ここからが本番だ！');
+  return true;
+ },
  flush(){if(active||G.paused||G.game?.cutinT>0||G.fx?.cutinActive||G.hitStop>0||G.sceneName!=='play')return false;
-  while(queue.length){const e=queue[0];if(!valid(e)||G.scenes.play?.over){releaseHold(e);queue.shift();continue;}if(G.player?.dead)return false;queue.shift();begin(e);return true;}return false;},
- tick(){if(!active)return;if(!valid(active)){finish();return;}if(active.actor)G.cam?.focus?.(active.actor.x,1.2+(active.actor.height||1.3)*.35,active.actor.z,2,1.2);if(G.input.btn.pause?.pressed){this.pause(!paused);return;}if(paused)return;
+  while(queue.length){const e=queue[0];if(G.scenes.play?.over){queue.shift();continue;}if(G.player?.dead)return false;queue.shift();begin(e);return true;}return false;},
+ tick(){if(!active)return;if(active.actor)G.cam?.focus?.(active.actor.x,1.2+(active.actor.height||1.3)*.35,active.actor.z,2,1.2);if(G.input.btn.pause?.pressed){this.pause(!paused);return;}if(paused)return;
   active.age++;if(active.actor?.rig){active.actor.animT++;active.actor.rig.update?.(active.actor,G.cfg.TICK);}
   if(active.age>=active.duration){finish();return;}paint();},
  skip(){if(!active||paused||active.age<30)return false;finish();return true;},
@@ -113,7 +130,6 @@ G.story={heroes:HEROES,bosses:BOSSES,history,
 };
 window.addEventListener('keydown',e=>{if(!active)return;if(e.code==='Tab'){e.preventDefault();e.stopImmediatePropagation();if(parts)(parts.skip.disabled||document.activeElement===parts.skip?parts.pause:parts.skip).focus();return;}e.stopImmediatePropagation();e.preventDefault();if(e.repeat)return;
  if(e.code==='KeyP'||e.code==='Escape')G.story.pause(!paused);else if(e.code==='Enter'||e.code==='Space')G.story.skip();},true);
-G.bus.on('bossForm',d=>G.story.bossForm(d.boss));
 G.bus.on('bossPhase',d=>G.story.bossPhase(d.boss,d.phase));
 G.bus.on('stageStart',d=>G.story.beginStage(G.game.heroId,d.index,!!G._arena));
 G.bus.on('hidden',()=>{if(active)G.story.pause(true);});
