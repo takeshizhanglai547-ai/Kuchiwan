@@ -1,11 +1,28 @@
 'use strict';
 const {game,root}=require('./published_harness.cjs'),{readModule}=require('./input_cpu.cjs'),vm=require('node:vm'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-function fixture(){const g=game('inu',{foes:[],actualRig:true}),{G}=g;G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);G.game.diff={heroDmg:1,heroHp:1,foeHp:1,foeDmg:1,foeSpeed:1,think:1,attackers:3};for(const f of ['30_foes.js','31_zako.js','32_expansion_foes.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','89_kosodoro.js','93_frenzy.js'])vm.runInContext(readModule(f),g.env.c,{filename:f});G.foes.init();return g;}
+function fixture(){const g=game('inu',{foes:[],actualRig:true}),{G}=g;G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);G.game.diff={heroDmg:1,heroHp:1,foeHp:1,foeDmg:1,foeSpeed:1,think:1,attackers:3};for(const f of ['30_foes.js','31_zako.js','32_expansion_foes.js','33_regional_critters.js','35_bosses_a.js','36_bosses_b.js','40_stage.js','89_kosodoro.js','93_frenzy.js'])vm.runInContext(readModule(f),g.env.c,{filename:f});G.foes.init();return g;}
 const cases=[],builds=[];
 {
  const g=fixture(),{G}=g;assert.equal(G.stages.length,9);assert.deepEqual(Array.from(G.stages,s=>s.id),['s1','s2','s3','s4','s5','s6','s7','s8','s9']);for(const s of G.stages){for(const w of s.waves)for(const [id,n]of [...w.foes,...(w.then||[])]){assert(G.foes.types[id],s.id+' unknown '+id);assert(n>0);}assert(G.foes.types[s.boss.type]);}
  for(const i of [7,8]){const s=G.stages[i],ids=new Set(s.waves.flatMap(w=>Array.from(w.foes,v=>v[0]).concat(Array.from(w.then||[],v=>v[0]))));assert(ids.size>=5);assert.equal(s.bgm,'stage'+(i+1));assert(s.hints.length>=2);assert.equal(s.waves.length,3);}
  cases.push('nine stable stage IDs, valid waves/guardians, each new campaign has at leastfive enemy types and unique soundtrack/scenery keys');
+}
+{
+ const {G,p}=fixture();
+ const ids=['breadPup','lanternKit','acornMole','crystalBun','cloudChick','snowSeal','ribbonBat','mochiTanuki','pepperOni'];
+ const attacks=new Set();
+ for(const [i,id] of ids.entries()){
+  assert(G.stages[i].waves[0].foes.some(([type])=>type===id),id+' is reachable in its chapter');
+  const e=G.foes.spawn(id,p.x+1.1,p.z,{entrance:'ready'});
+  e.state='idle';e.cool=0;G.foes.tick(e);
+  assert(e.pending,id+' starts an attack');
+  attacks.add(e.pending.def.id);
+  assert(e.rig.root.children[0].children[0].geometry.attributes.position.count>0);
+  G.foes.h.release(e);G.world.remove(e);
+ }
+ assert.equal(attacks.size,6);
+ assert.deepEqual(Array.from(G.errors),[]);
+ cases.push('all nine regional creatures have actual geometry and working attack decisions');
 }
 for(const i of [1,7,8]){
  const g=fixture(),{G}=g;G.stage.load(i);assert.equal(G.stage.index,i);const stats=G.stage.stats();assert(stats.sceneryTris>0&&stats.sceneryMeshes>0);G.stage.frame(1/60);G.stage.env.root.updateMatrixWorld(true);G.stage.env.root.traverse(o=>{for(const n of o.matrixWorld.elements)assert(Number.isFinite(n),'nonfinite stage transform');});builds.push({stage:G.stages[i].name,...stats});let seen=new Set(),frames=0,spawnCount=0;

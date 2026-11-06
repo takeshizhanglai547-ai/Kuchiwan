@@ -380,16 +380,16 @@ function buildCSS(){
 /* ---- stages: where to start (over the select screen, when there is saved progress) ---- */
 #iu .stages{z-index:99}
 #iu .stp{display:flex;flex-direction:column;align-items:stretch;gap:.75em;width:min(max(54em,820px),calc(100% - 1em));max-height:calc(100% - .6em);overflow:auto;padding:.7em 1.1em 1em}
-#iu .strow.world-route{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7em;padding:1.1em;background:radial-gradient(ellipse at 70% 20%,#edf1bb,transparent 60%),repeating-linear-gradient(27deg,#9cbd8b 0px,#9cbd8b 2px,#adc998 3px,#adc998 24px);border:2px solid #8b9d6f;border-radius:1em}
+#iu .strow.world-route{display:block;position:relative;isolation:isolate;width:100%;height:clamp(280px,57vh,530px);padding:0;background:#bde9ef;border:2px solid #a9bd97;border-radius:1em;overflow:hidden}
 #iu .world-route::before{display:none}
 #iu .world-path{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#iu .world-path path{fill:none;stroke:#f8e6ac;stroke-width:6;stroke-dasharray:8 4;stroke-linecap:round}
-#iu .world-route .stc{max-width:none;display:grid;grid-template-columns:auto auto 1fr;gap:.32em;justify-items:center;padding:.4em}
-#iu .world-route .sst{grid-column:1/-1}
-#iu .world-route .world-landmark{font-size:1.5em;line-height:1}
-#iu .world-route .stc .sn{width:1.5em;height:1.5em}
+#iu .world-route .stc{position:absolute;left:var(--map-x);top:var(--map-y);transform:translate(-50%,-50%);width:clamp(44px,8vw,85px);height:44px;min-height:44px;max-width:none;padding:3px;gap:0;justify-content:center;z-index:1;border-radius:12px}
+#iu .world-route .stc.on{translate:none;scale:1.06;z-index:2}
+#iu .world-route .stc .sst{display:none}
+#iu .world-route .world-landmark{display:none}
+#iu .world-route .stc .sn{width:1.3em;height:1.3em;font-size:.8em}
+#iu .world-route .stc .stn{font-size:clamp(9px,1.35vw,13px);line-height:1.12}
 #iu .world-detail{margin:0;color:#543e26;text-align:center;font-weight:900}
-@media(max-width:520px){#iu .world-route .stc{grid-template-columns:1fr 1fr}#iu .world-route .stn{grid-column:1/-1}}
 #iu .sthd{display:flex;align-items:center;gap:.8em}
 #iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
 #iu .strow{position:relative;display:flex;gap:.45em;justify-content:center;align-items:stretch;padding-top:.45em}
@@ -821,14 +821,40 @@ function buildStages(s){
   el('div', 'hd', head).textContent = '王国のワールドマップ';
   const row = el('div', 'strow world-route', pn);
   const detail = el('p','world-detail',pn);
-  const route='<svg class="world-path" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true"><path d="M50 50H250Q282 52 282 100T250 150H50Q18 152 18 200T50 250H250"/></svg>';
+  const positions=[[13,72],[26,53],[17,30],[36,21],[53,40],[63,18],[76,35],[69,65],[88,72]];
+  const shortNames=['王都','城下町','月夜の森','水晶洞','飛行艇','霊峰','黒い城','わんこ合戦','紅蓮の門'];
+  const route=`<svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true">
+  <defs>
+   <pattern id="inu-waves" width="86" height="55" patternUnits="userSpaceOnUse"><path d="M8 28q9-8 18 0q9-8 18 0m19 18q6-5 12 0" fill="none" stroke="#fff" stroke-opacity=".62" stroke-width="2"/></pattern>
+   <g id="inu-tree" stroke="#668a69" stroke-width="2.4" stroke-linejoin="round"><path d="M0 5v12"/><path fill="#8fc598" d="M-12 7Q-17 0-9-6Q-10-16 0-17Q12-16 10-7Q17-4 13 6Q9 13 0 8Q-8 12-12 7Z"/></g>
+   <g id="inu-mount" stroke="#8d8cb5" stroke-width="3" stroke-linejoin="round"><path fill="#b5b4da" d="M-34 23L-2-32L36 23Z"/><path fill="#fbfaff" d="M-17-7L-2-32L17-5L5-10L-1-4L-8-11Z"/></g>
+   <g id="inu-house" stroke="#a87872" stroke-width="3" stroke-linejoin="round"><path fill="#fff1cc" d="M-21-2H21V25H-21Z"/><path fill="#eb9ba5" d="M-28 0L0-23L28 0Z"/><path fill="#e0ad8f" d="M-5 12H5V25H-5Z"/></g>
+   <g id="inu-cloud"><path fill="#fff9ef" d="M-25 9Q-31-3-15-6Q-13-20 1-16Q11-17 15-6Q32-5 27 8Z"/></g>
+  </defs>
+  <path fill="url(#inu-waves)" d="M0 0H800V480H0Z"/>
+  <path d="M24 352Q17 317 48 289Q18 246 50 206Q29 168 78 147Q61 102 113 79Q141 45 209 69Q233 30 297 49Q342 34 374 82Q416 72 435 119Q469 104 467 154Q444 209 412 219Q415 279 366 294Q333 330 278 327Q247 364 194 372Q158 417 108 400Q52 414 24 352Z" fill="#d8edb0" stroke="#91c49a" stroke-width="8"/>
+  <path d="M434 93Q452 51 491 43Q511 13 570 36Q617 16 655 55Q726 52 760 107Q798 133 777 177Q798 207 765 242Q801 284 779 328Q800 380 753 403Q726 436 680 411Q623 446 586 402Q536 413 506 374Q457 357 479 309Q435 289 452 247Q414 220 449 180Q424 138 434 93Z" fill="#f1e2b7" stroke="#b6c795" stroke-width="8"/>
+  <path d="M82 326Q115 282 161 294Q174 325 159 375Q103 403 70 362Z" fill="#ffe4be"/><path d="M81 130Q130 89 203 112L220 195Q151 212 99 190Z" fill="#add8a6"/>
+  <path d="M242 79Q299 45 349 88L374 136Q301 156 248 130Z" fill="#d7cff1"/><path d="M458 84Q536 17 634 65L635 127Q559 153 467 129Z" fill="#dbe9f8"/>
+  <path d="M512 270Q578 234 652 259L646 343Q564 380 506 332Z" fill="#f8c9ce"/><path d="M657 296Q739 266 777 316L766 380Q702 412 646 382Z" fill="#edafa1"/>
+  <use href="#inu-house" x="81" y="304"/><use href="#inu-house" x="128" y="309"/><use href="#inu-house" x="215" y="212"/>
+  <use href="#inu-tree" x="103" y="120"/><use href="#inu-tree" x="131" y="113"/><use href="#inu-tree" x="159" y="119"/><use href="#inu-tree" x="181" y="144"/><use href="#inu-tree" x="94" y="153"/>
+  <path d="M259 91l15-25 11 24 12-34 19 27 9-12 14 28z" fill="#bba6e5" stroke="#9982c1" stroke-width="3"/>
+  <use href="#inu-cloud" x="388" y="169"/><use href="#inu-cloud" x="460" y="177"/><path d="M395 157q28-34 61 0l-9 8h-43z" fill="#f5a9ae" stroke="#aa767c" stroke-width="2"/>
+  <use href="#inu-mount" x="484" y="67"/><use href="#inu-mount" x="525" y="63"/><use href="#inu-mount" x="554" y="82"/>
+  <path d="M573 146v-36h13v12h13v-18h16v17h13v-11h13v36z" fill="#ad9acb" stroke="#8172aa" stroke-width="3"/>
+  <path d="M521 289v-37m50 37v-37m-61 7h72m-65-10h58" fill="none" stroke="#da8090" stroke-width="6" stroke-linecap="round"/>
+  <use href="#inu-mount" x="715" y="308"/><path d="M699 303l15-25 14 22-10-4-6 7-7-7z" fill="#f28d83"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#aa8c72" stroke-width="11" opacity=".54"/><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#fff3c9" stroke-width="6" stroke-dasharray="6 9"/></g>
+  <g fill="#8b6877" font-family="sans-serif" font-size="16" font-weight="bold" text-anchor="middle"><text x="195" y="400">もふもふ王国</text><text x="606" y="393">東の山並み</text></g>
+  </svg>`;
+
   const go = s.go = button(pn, 'stgo k-pink', '', ()=> pick(), false);
   s.list = []; s.els = []; s.focus = 0;
-  const landmarks=['🏘','🏮','🌲','💎','⛵','🏔','🏰','⛩','🌋'];
   const lockSvg = '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="11" rx="2.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.8"/></svg>';
   const usable = (i)=> !!s.list[i] && !s.list[i].locked;
   function paint(){
-    s.els.forEach((c, i)=> c.classList.toggle('on', i===s.focus));
+    s.els.forEach((c, i)=>{c.classList.toggle('on', i===s.focus);c.setAttribute('aria-pressed',String(i===s.focus));});
     go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' へ出発</span>';
     const stop=s.list[s.focus];
     detail.textContent=stop?(stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
@@ -843,10 +869,9 @@ function buildStages(s){
     s.list.forEach((st, i)=>{
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
-      c.style.gridColumn=String(Math.floor(i/3)%2===0?i%3+1:3-i%3);c.style.gridRow=String(Math.floor(i/3)+1);
-      el('span', 'world-landmark', c).textContent=landmarks[i]||'◆';
+      const [x,y]=positions[i];c.style.setProperty('--map-x',x+'%');c.style.setProperty('--map-y',y+'%');
       el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
-      wordWrap(el('span', 'stn', c), st.kana || st.name || ('ステージ '+(i+1)));
+      wordWrap(el('span', 'stn', c), shortNames[i] || st.name);
       const ss = el('span', 'sst', c);
       if(st.locked) ss.textContent = 'まだ だよ';
       else if(st.cleared){ el('i', '', ss, SVG.star); el('span', '', ss).textContent = 'クリア'; }

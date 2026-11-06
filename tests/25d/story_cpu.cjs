@@ -29,7 +29,7 @@ const heroes=['inu','shima','nuko','guard8','watch','wanden','mack'],signatures=
  assert.equal(b.form,2,'native player hit preserves actual emperor transformation');assert.equal(b.dead,false);assert.equal(G.story.pending,0);
  b.inv=0;b.state='idle';b.hp=b.maxHp*.5;g.key('KeyJ');g.step();g.key('KeyJ',false);g.step(20);
  assert.equal(b.phase,1,'native player hit triggers second-bar half-health hook');assert.equal(G.story.pending,0);report.lifecycle.push('native command damage preserves emperor form change and triggers second-bar speech');}
-{const g=setup(),{G,n}=g;G.story.beginStage('inu',0);G.story.flush();const t=G.time.tick,c=n.clock;g.step(184);assert(G.story.blocked);g.step();assert.equal(G.story.blocked,false);assert.equal(G.time.tick,t);g.step();assert.equal(G.time.tick,t+1);assert.equal(n.clock,c+1);assert.equal(G.cam.focusT,0);report.lifecycle.push('automatic completion resumes combat and restores camera');}
+{const g=setup(),{G,n}=g;G.story.beginStage('inu',0);G.story.flush();const t=G.time.tick,c=n.clock;g.step(240);assert(G.story.blocked);assert(G.story.skip());assert.equal(G.time.tick,t);g.step();assert.equal(G.time.tick,t+1);assert.equal(n.clock,c+1);assert.equal(G.cam.focusT,0);report.lifecycle.push('reading persists until Continue and then resumes combat');}
 for(const hero of heroes){const g=setup(hero),{G,p}=g;
  assert.equal(G.stages.length,9);const spec=G.story.heroes[hero];assert.equal(spec.start.length,9);assert.equal(spec.clear.length,9);
  for(let stage=0;stage<G.stages.length;stage++){

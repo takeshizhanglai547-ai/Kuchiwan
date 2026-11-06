@@ -124,7 +124,7 @@ const MOFU = 'モフじい';
 G.stages = [
   { id:'s1', no:1, name:'王都郊外', kana:'おうとの まちはずれ', length:96, bgm:'stage1', theme:THEMES.town,
     waves:[
-      { at:16, width:16, foes:[['wanhei',3]], reward:'coin' },
+      { at:16, width:16, foes:[['wanhei',2],['breadPup',1]], reward:'coin' },
       { at:40, width:16, foes:[['wanhei',2],['hyena',1]], then:[['hyena',2]] },
       { at:62, width:16, foes:[['wanhei',2],['pounce',1]], then:[['pounce',1],['hyena',1]], reward:'bone' },
     ],
@@ -141,7 +141,7 @@ G.stages = [
   },
   { id:'s2', no:2, name:'黄昏の城下町', kana:'たそがれの じょうかまち', length:100, bgm:'stage2', theme:THEMES.dusk,
     waves:[
-      { at:16, width:16, foes:[['wanhei',3],['boar',1]] },
+      { at:16, width:16, foes:[['wanhei',2],['boar',1],['lanternKit',1]] },
       { at:38, width:16, foes:[['shield',2],['wanhei',2]], then:[['bomber',2]], reward:'coin' },
       { at:62, width:16, foes:[['kire',1],['boar',1],['wanhei',2]], then:[['shield',1],['bomber',1],['wanhei',1]], reward:'bone' },
     ],
@@ -154,7 +154,7 @@ G.stages = [
   },
   { id:'s3', no:3, name:'月夜の森', kana:'つくよみの もり', length:102, bgm:'stage3', theme:THEMES.forest,
     waves:[
-      { at:16, width:16, foes:[['pounce',2],['thrower',2]] },
+      { at:16, width:16, foes:[['pounce',2],['thrower',1],['acornMole',1]] },
       { at:38, width:16, foes:[['vampire',1],['flyer',1],['pounce',2]], then:[['thrower',1],['flyer',1]], reward:'coin' },
       { at:62, width:17, foes:[['pierrot',1],['pounce',2],['flyer',1]], then:[['thrower',2]], reward:'bone' },
     ],
@@ -167,7 +167,7 @@ G.stages = [
   },
   { id:'s4', no:4, name:'瑠璃の水晶洞', kana:'るりの すいしょうどう', length:104, bgm:'stage4', theme:THEMES.cave,
     waves:[
-      { at:16, width:16, foes:[['ari',2],['shield',2]] },
+      { at:16, width:16, foes:[['ari',2],['shield',1],['crystalBun',1]] },
       { at:38, width:16, foes:[['kire',2],['ari',2]], then:[['shield',1],['ari',1]], reward:'coin' },
       { at:62, width:17, foes:[['oni',1],['shield',2],['kire',1]], then:[['ari',2],['kire',1]], reward:'bone' },
     ],
@@ -180,7 +180,7 @@ G.stages = [
   },
   { id:'s5', no:5, name:'海賊飛行艇', kana:'かいぞく ひこうてい', length:106, bgm:'stage5', theme:THEMES.airship,
     waves:[
-      { at:16, width:16, foes:[['hyena',3],['bomber',1]] },
+      { at:16, width:16, foes:[['hyena',2],['bomber',1],['cloudChick',1]] },
       { at:36, width:16, foes:[['boar',2],['flyer',2]], then:[['hyena',2]], reward:'coin' },
       { at:56, width:16, foes:[['thrower',2],['bomber',2],['hyena',1]], then:[['flyer',2]] },
       { at:74, width:16, foes:[['boar',2],['thrower',1],['hyena',2]], then:[['bomber',2],['flyer',1]], reward:'bone' },
@@ -193,7 +193,7 @@ G.stages = [
   },
   { id:'s6', no:6, name:'氷雪の霊峰', kana:'ひょうせつの れいほう', length:108, bgm:'stage6', theme:THEMES.snow,
     waves:[
-      { at:16, width:16, foes:[['wanhei',3],['pounce',2]] },
+      { at:16, width:16, foes:[['wanhei',2],['pounce',2],['snowSeal',1]] },
       { at:36, width:16, foes:[['mecha',2],['ari',2]], then:[['pounce',2]], reward:'coin' },
       { at:56, width:17, foes:[['oni',1],['wanhei',3]], then:[['mecha',1],['ari',2]] },
       { at:76, width:17, foes:[['oni',1],['mecha',2],['pounce',2]], then:[['wanhei',2],['ari',2]], reward:'bone' },
@@ -207,7 +207,7 @@ G.stages = [
   },
   { id:'s7', no:7, name:'ダークワンワン城', kana:'ダークワンワンじょう', length:112, bgm:'stage7', theme:THEMES.castle,
     waves:[
-      { at:16, width:16, foes:[['shield',2],['kire',2],['mecha',1]] },
+      { at:16, width:16, foes:[['shield',2],['kire',1],['mecha',1],['ribbonBat',1]] },
       { at:34, width:16, foes:[['pierrot',1],['oni',1],['mecha',2]], then:[['shield',2],['kire',1]], reward:'coin' },
       { at:70, width:17, foes:[['oni',2],['mecha',2],['kire',2]], then:[['shield',2],['pierrot',1]], reward:'cake' },
     ],
@@ -225,7 +225,7 @@ G.stages = [
 G.stages.push(
  {id:'s8',no:8,name:'戦国和風・わんこ合戦',kana:'せんごく わふう わんこがっせん',length:116,bgm:'stage8',theme:THEMES.sengoku,
   waves:[
-   {at:16,width:17,foes:[['ashigaru',1],['mikoshiCrew',2],['formationLeader',1]]},
+   {at:16,width:17,foes:[['mochiTanuki',1],['mikoshiCrew',2],['formationLeader',1]]},
    {at:38,width:17,foes:[['shinobi',1],['horseCrew',2],['horseLeader',1],['sniper',1]],then:[['naginata',2]],reward:'bone'},
    {at:62,width:18,foes:[['naginata',2],['shinobi',2],['skyarmor',1]],then:[['ashigaru',3],['sniper',1]],reward:'cake'},
   ],boss:{type:'kuroinu',at:98,x:98},
@@ -233,7 +233,7 @@ G.stages.push(
   props:[{kind:'crate',x:9,z:-1.3,drop:'coin'},{kind:'pot',x:29,z:1.1,drop:'bone'},{kind:'crate',x:55,z:-1.5,drop:'star'},{kind:'pot',x:87,z:1.0,drop:'cake'}]},
  {id:'s9',no:9,name:'鬼合戦・紅蓮の門',kana:'おにがっせん ぐれんのもん',length:120,bgm:'stage9',theme:THEMES.onibattle,
   waves:[
-   {at:16,width:17,foes:[['akoni',2],['ao_oni',2]]},
+   {at:16,width:17,foes:[['akoni',2],['ao_oni',1],['pepperOni',1]]},
    {at:40,width:18,foes:[['taiko_oni',1],['akoni',2],['ao_oni',1]],then:[['sniper',1],['ao_oni',2]],reward:'bone'},
    {at:66,width:18,foes:[['taiko_oni',2],['skyarmor',1],['ao_oni',2]],then:[['akoni',2],['taiko_oni',1]],reward:'cake'},
   ],boss:{type:'cerbe',at:102,x:102},
