@@ -34,6 +34,10 @@ function record(s){report.cases.push(s);console.log('PASS '+s);}
  boss.hp=boss.maxHp*.4;G.bus.emit('hit',{target:boss,dmg:1});G.hitStop=0;g.step(20);
  assert(!G.story.blocked);assert.equal(G.story.pending,0);
  G.coop.players.forEach((p,i)=>assert(G.published.native(p).clock>clocks[i]));record('boss dialogue leaves both cooperative fighters running');
+ G.coop.press(0,'attack',301);G.coop.press(1,'jump',302);G.story.beginStage('inu',0);assert(G.story.flush());
+ assert.equal(G.coop.channels[0].input.touch.attack,false);
+ assert.equal(G.coop.channels[1].input.touch.jump,false);
+ g.skip();record('chapter event still clears both sets of held inputs');
 }
 {
  const g=fixture(),{G}=g,[a,b]=G.coop.players;const lives=G.game.lives;G.published.native(b).player.hp=0;b.hp=0;b.dead=true;b.coopKo=99;G.coop.afterCombat(G.scenes.play);assert.equal(b.dead,false);assert.equal(G.game.lives,lives-1);assert(a.hp>0);G.hitStop=0;g.step();assert.equal(G.published.native(b).player.hp,b.maxHp);
