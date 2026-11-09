@@ -1642,6 +1642,30 @@ function buildEnv(i){
   buildGround(def, th);
   const c = makeCtx(def, 1234 + def.no*97);
   SCENERY[th.scenery](c);
+  if(th.roundStyle){
+    const p=prims();
+    for(let x=8;x<def.length;x+=12){
+      const z=-4.5,y=c.h(x,z),color=th.roundColor;
+      c.at(x);
+      if(th.roundStyle==='bug'){
+        c.S(p.cyl6,'#fff0cc',[x,y+.75,z],null,[.2,1.5,.2]);
+        c.S(p.sph,color,[x,y+1.65,z],null,[1.2,.42,1.12]);
+        for(const dx of [-.5,.5])c.S(p.sph,'#ffe6b0',[x+dx,y+1.87,z+.25],null,.16);
+      }else if(th.roundStyle==='space'){
+        c.S(p.sph,'#9b92c4',[x,y+1.4,z],null,[1.4,.24,1.0]);
+        c.S(p.sph,color,[x,y+1.63,z],null,[.68,.38,.64]);
+        c.halo(x,y+1.3,z+.1,'#a8eeff',1.2);
+      }else if(th.roundStyle==='sea'){
+        for(const dx of [-.5,0,.5])c.S(p.cyl6,color,[x+dx,y+.76,z],null,[.16,1.5+Math.abs(dx),.16]);
+        c.S(p.sph,'#fac0b5',[x,y+1.41,z],null,[.78,.22,.42]);
+        c.halo(x,y+1.9,z+.1,'#a0eff0',.85);
+      }else{
+        c.S(p.cyl6,'#a47a69',[x,y+1.45,z],null,[.07,2.9,.07]);
+        c.S(p.box,color,[x+.37,y+2.31,z],null,[.7,.93,.04]);
+        c.S(p.sph,'#fff0cf',[x+.37,y+2.37,z+.04],null,[.17,.17,.04]);
+      }
+    }
+  }
   arenaDecor(c, def);
   if(FARS[th.far]) FARS[th.far](c);
   const st = buildChunks(c);

@@ -66,6 +66,8 @@ const h = {
     e.committedFace=e.face;
     e.punishUntil=0;
     e.pending = { def, t:w };
+    e.armorHitsLeft=e.superArmor||0;
+    if(e.armorHitsLeft)G.fx?.burst?.('ring',e.x,e.y+.12,e.z,{color:'#ffe09b',scale:.75});
     if(w>0){
       G.setAnim(e, def.windupAnim || 'windup', w);
       if(G.fx && G.fx.alert && !def.noAlert) G.fx.alert(e);
@@ -143,7 +145,7 @@ G.foes = {
     const def = types[type];
     if(!def){ G.logError('spawn', 'unknown foe type '+type); return null; }
     const D = diff();
-    const stageMul = 1 + (G.stage && G.stage.index ? G.stage.index*0.07 : 0);
+    const stageMul = 1 + Math.min(1.25,Math.max(0,G.stage?.index||0)*0.07);
     const hpMul = (opts.hpMul || 1) * D.foeHp * (def.boss ? 1 : stageMul);
     const p = G.player;
     const e = G.makeEnt({
@@ -154,6 +156,7 @@ G.foes = {
       state:'spawn', cool: 20 + Math.floor(G.rng()*30), phase:0, minion:!!opts.minion,
       entrance: opts.entrance || def.entrance || 'walk', boss: !!(def.boss || opts.boss),
     });
+    e.superArmor=def.elite?2:D.frenzy&&(def.boss||def.armor||e.id%3===0)?2:0;
     e.rig = G.foes.build(type, e);
     if(e.rig){ if(e.rig.height) e.height = def.height || e.rig.height; }
     // entrance setup
@@ -221,6 +224,18 @@ G.foes = {
     const def = e.def;
     if(G.frenzy?.attack(e))return;
     if(e.scared){ e.vx *= 0.8; e.vz *= 0.8; const t = h.target(e); if(t) h.face(e, t); if(e.anim!=='hurt') G.setAnim(e, 'hurt'); if(e.state==='move') G.setState(e, 'idle'); return; }
+    if(diff().frenzy&&!def.boss&&!def.flightAI&&def.squad!=='ranged'&&!e.crew&&!['mikoshiCrew','horseCrew','vampire'].includes(e.type)){
+      const p=h.target(e), lead=lastSquadAttacker;
+      if(p&&lead&&lead!==e&&!lead.dead&&(lead.atk||lead.pending)&&h.dist(e,p)<5&&h.dist(lead,p)<5){
+        const side=lead.x>=p.x?-1:1;
+        const bounds=G.stage?.bounds?.();
+        const goalX=U.clamp(p.x+side*1.75,bounds?.xmin??-Infinity,bounds?.xmax??Infinity);
+        if((e.x-p.x)*side<.8&&Math.abs(goalX-p.x)>.8){
+          const lane=U.clamp(p.z+(e.id%2?1:-1)*.93,G.cfg.ZMIN,G.cfg.ZMAX);
+          h.walkTo(e,goalX,lane);return;
+        }
+      }
+    }
     if(def.ai){ try { def.ai(e); } catch(err){ G.logError('ai '+e.type, err); e.cool = 30; } }
     else defaultAI(e);
   },

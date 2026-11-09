@@ -18,7 +18,7 @@ function nearest(e){let best=players[0],dist=Infinity;for(const p of players){if
 function restoreCamera(){if(!enabled||!players.length)return;mid.x=(players[0].x+players[1].x)/2;mid.y=Math.max(players[0].y,players[1].y);mid.z=(players[0].z+players[1].z)/2;G.cam.follow(mid);}
 function grace(){for(const p of players)if(!p.dead){p.inv=Math.max(24,p.inv);const n=G.published.native(p);if(n)n.player.invuln=Math.max(24,n.player.invuln);}}
 function paint(){if(!enabled||!controls)return;controls.hidden=G.sceneName!=='play'||G.paused||!!G.story?.blocked||G.scenes.play?.over||G.scenes.play?.cleared;
- for(let i=0;i<players.length;i++){const p=players[i];if(markers[i]&&G.camera){const at=G.toScreen(p.x,p.y+p.height+.25,p.z);markers[i].hidden=!at.visible;markers[i].style.left=at.x+'px';markers[i].style.top=at.y+'px';}if(status[i])status[i].textContent='P'+(i+1)+' '+(p.meta?.name||p.type)+'  HP '+Math.ceil(p.hp)+'/'+p.maxHp+'  ◆'+p.dim+(p.dead?'  ふっかつ待ち':p.publishedVictim?'  つかみ中':'');}}
+ for(let i=0;i<players.length;i++){const p=players[i];if(markers[i]&&G.camera){const at=G.toScreen(p.x,p.y+p.height+.25,p.z);markers[i].hidden=!at.visible;markers[i].style.left=at.x+'px';markers[i].style.top=at.y+'px';}if(status[i])status[i].textContent='P'+(i+1)+' '+(p.meta?.name||p.type)+'  HP '+Math.ceil(p.hp)+'/'+p.maxHp+'  ◆'+p.dim+(p.dead?'  ふっかつ待ち':p.publishedVictim?'  つかみ中':'')+(G.ailments?.labels(p)?'  '+G.ailments.labels(p):'');}}
 const api=G.coop={get enabled(){return enabled;},players,channels,press,release,stick,clearInputs,scoped,restoreCamera,grace,
  enable(a,b){clearInputs();ids=[a,b];enabled=true;carry=null;lastStage=-1;if(G.game)Object.assign(G.game,{level:1,xp:0,xpNext:60,coins:0,bestCombo:0,ultCarry:0,publishedCarry:null});},
  disable(){clearInputs();enabled=false;players.length=0;carry=null;primary.input.player=null;secondary.input.player=null;if(controls)controls.hidden=true;},
@@ -38,7 +38,7 @@ const api=G.coop={get enabled(){return enabled;},players,channels,press,release,
   for(const p of players){p.x=G.U.clamp(p.x,cx-half,cx+half);const n=G.published.native(p);n.player.x=p.x*60;}
   restoreCamera();paint();},
  winGuard(){if(!enabled)return;for(const p of players){p.inv=Math.max(p.inv,9999);if(p.dead){p.dead=false;p.hp=Math.max(1,Math.ceil(p.maxHp*.5));p.coopKo=0;}}},
- enqueueStories(kind,run,stage,enqueue,heroes){if(!enabled||!players[1])return;const p=players[1],h=heroes[p.type];if(!h)return;enqueue({kind,hero:p.type,player:p,key:kind+':'+run+':p2',title:'P2 '+h.name+(kind==='intro'?'、出発！':'の ステージクリア！'),lines:[(kind==='intro'?h.start:h.clear)[stage],kind==='intro'?h.cue:h.win],cue:kind==='intro'?h.cue:h.win});},
+ enqueueStories(kind,run,stage,enqueue,heroes){if(!enabled||!players[1])return;const p=players[1],h=heroes[p.type];if(!h)return;enqueue({kind,hero:p.type,player:p,key:kind+':'+run+':p2',title:'P2 '+h.name+(kind==='intro'?'、出発！':'の ステージクリア！'),lines:[(kind==='intro'?h.start:h.clear)[stage]||(kind==='intro'?G.stages?.[stage]?.intro:G.stages?.[stage]?.epilogue)||h.cue,kind==='intro'?h.cue:h.win],cue:kind==='intro'?h.cue:h.win});},
  openMenu,
 };
 // Damage and pickup callbacks must read the affected hero's channel, never P1's.

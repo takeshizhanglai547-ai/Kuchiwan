@@ -82,6 +82,13 @@ G.combat = {
     G.cam?.shake?.(Math.min(6,1+amount*.1),10);
     if(t.hp<=0&&!t.dead)ko(t,info.dir,d);
   },
+  absorbStagger(t,power,grab){
+    if(!t.armorHitsLeft||(!t.atk&&!t.pending))return false;
+    if(grab||power>=3){t.armorHitsLeft=0;return false;}
+    t.armorHitsLeft--;
+    G.fx?.burst?.('guard',t.x,t.y+t.height*.55,t.z,{color:'#ffe09b',scale:.7});
+    return true;
+  },
   // Applied by the bridge before the reference simulation subtracts HP. Never
   // repair HP after a native lethal hit: that would already have fired KO hooks.
   publishedDamageScale(t,src,context){return armorScale(t,src,context||{});},
@@ -94,7 +101,7 @@ G.combat = {
       dmg:o.dmg||5, r:o.r||0.35, life:o.life||90, age:0, pierce:o.pierce||0, power:o.power||1,
       stun:o.stun||16, kb:o.kb==null?0.08:o.kb, up:o.up||0, hitKind:o.hitKind || kindOf(o.kind), sets:new Set(),
       boom:o.boom||null, homing:o.homing||0, onGround:o.onGround||'die', rehit:o.rehit||0, vis:null, dead:false,
-      reflectable: o.reflectable!==false, spin:o.spin||0, face: o.vx<0?-1:1, onHit:o.onHit||null, onEnd:o.onEnd||null,
+      status:o.status, reflectable: o.reflectable!==false, spin:o.spin||0, face: o.vx<0?-1:1, onHit:o.onHit||null, onEnd:o.onEnd||null,
     };
     try { p.vis = G.fx && G.fx.makeProjectile ? G.fx.makeProjectile(p.kind) : null; } catch(err){ G.logError('makeProjectile', err); }
     if(!p.vis){ const m = new THREE.Mesh(G.look.geo.sphere(p.r*0.8, 12, 8), G.look.mat('#ffe14d', { emissive:'#ffb000', emissiveIntensity:0.6 })); p.vis = { obj:m, update(){}, dispose(){} }; }
@@ -184,7 +191,7 @@ function meleeHit(e, h, set){
     set.add(t.id);
     const mul = e.atkMul || 1;
     damage(t, h.dmg*mul, { src:e, kind:h.kind||'slash', power:h.power||1, kb:h.kb, up:h.up, stun:h.stun, dir,
-      stop:h.stop, crit:!!h.crit, noDown:h.noDown, pull:h.pull, dizzy:h.dizzy, coins:h.coins });
+      stop:h.stop, crit:!!h.crit, noDown:h.noDown, pull:h.pull, dizzy:h.dizzy, coins:h.coins,status:h.status });
   });
 }
 
@@ -227,13 +234,14 @@ function damage(t, amount, info){
   const power = info.power || 1;
   if(G.cam){ G.cam.shake(Math.min(6, 0.8 + dmg*0.12 + (power-1)*1.2), 8 + power*3); if(dmg>=22 || power>=3) G.cam.kick(0.6, 10); }
   G.bus.emit('hit', { src, target:t, x, y, z, dmg, kind:info.kind||'blunt', power, dir, crit:!!info.crit });
-  if(t.team===0) G.bus.emit('hurt', { ent:t, dmg });
+  if(t.team===0){G.ailments?.hit(t,info.status,src);G.bus.emit('hurt', { ent:t, dmg });}
   if(src && src.team===0 && t.team===1 && G.game && G.game.onHeroHit) G.game.onHeroHit(src, t, dmg, info);
   if(info.coins && t.team===1 && G.pickups){ for(let i=0;i<info.coins;i++) G.pickups.spawn('coin', t.x, t.z, { burst:true }); }
 
   if(t.def && t.def.onHurt && t.hp>0){ try { t.def.onHurt(t, info); } catch(err){ G.logError('onHurt '+t.type, err); } }
   if(t.hp<=0){ t.hp = 0; ko(t, dir, info); return true; }
 
+  if(t.team===1&&G.combat.absorbStagger(t,info.power||1,info.grab))return true;
   // bosses: poise instead of flinching on every hit
   const def = t.def;
   if(t.team===1 && def && def.boss){
@@ -333,7 +341,7 @@ function stepProjectiles(){
         if(Math.abs(t.x - p.x) > p.r + t.radius) return;
         if(p.y < t.y - p.r || p.y > t.y + t.height + p.r) return;
         p.sets.add(t.id);
-        const landed = damage(t, p.dmg, { src:p.owner, kind:p.hitKind, power:p.power, kb:p.kb, up:p.up, stun:p.stun, dir:U.sign(p.vx||t.x-p.x),projectile:p });
+        const landed = damage(t, p.dmg, { src:p.owner, kind:p.hitKind, power:p.power, kb:p.kb, up:p.up, stun:p.stun, dir:U.sign(p.vx||t.x-p.x),projectile:p,status:p.status });
         if(p.onHit) try { p.onHit(p, t, landed); } catch(err){ G.logError('proj.onHit', err); }
         if(landed){ if(p.pierce>0) p.pierce--; else end = true; }
         if(end){ killProj(p); }
@@ -357,7 +365,7 @@ function stepAreas(){
       if(dx*dx + dz*dz > 1) return;
       if(t.y + t.height < a.y + a.y0 || t.y > a.y + a.y1) return;
       a.sets.add(t.id);
-      damage(t, a.dmg, { src:a.owner, kind:a.kind, power:a.power, kb:a.kb, up:a.up, stun:a.stun, dir: a.dir || U.sign(t.x - a.x), dizzy:a.dizzy, coins:a.coins });
+      damage(t, a.dmg, { src:a.owner, kind:a.kind, power:a.power, kb:a.kb, up:a.up, stun:a.stun, dir: a.dir || U.sign(t.x - a.x), dizzy:a.dizzy, coins:a.coins,status:a.status });
     });
     a.dur--;
     if(a.dur<=0) areas.splice(i,1);

@@ -16,6 +16,13 @@ const skies=['#c6e6ed','#f2c4bd','#c8c6e8','#d0c0e5','#bbdfe9','#d7e6f1','#cbbad
 const hills=['#9fc9a1','#bdc79e','#99bb9e','#b2a6c8','#a8c6c7','#bccbd8','#a69bb7','#b6c59a','#c59594'];
 const names=['王都','黄昏の城下町','月夜の森','瑠璃の水晶洞','海賊飛行艇','氷雪の霊峰','ダークワンワン城','わんこ合戦','紅蓮の門'];
 function passage(index,clear){
+ if(index>=names.length||(clear&&G.stages?.[index+1]?.lap)){
+  const stages=G.stages||[],current=stages[index],other=stages[index+(clear?1:-1)];
+  if(!current)return null;
+  const from=(clear?current:other)?.name||'王国',to=(clear?other:current)?.name||'王国へ帰還';
+  const panel=({bug:2,space:4,sea:3,war:7})[(clear?other:current)?.journeyStyle||current.journeyStyle]||0;
+  return {caption:from+' → '+to,svg:passage(panel,false).svg};
+ }
  const from=clear?index:Math.max(0,index-1),to=clear?Math.min(index+1,8):index;
  const start=!clear&&index===0,finish=clear&&index===8;
  const left=start?'王都への街道':names[from],right=finish?'王国へ帰還':names[to];

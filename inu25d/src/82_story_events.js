@@ -85,7 +85,8 @@ function render(){if(!document.createElement||!document.body)return;
  const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});
  if(url)image.src=url;else image.hidden=true;
  if(!passage&&!url){scene.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
- const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · 第'+(stage+1)+'章';
+ const body=element('div',card),chapter=element('div',body);chapter.className='chapter';const stop=G.stages?.[stage];
+ chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · '+(stop?.lap?stop.lap+'周目 '+stop.region+' · ':'')+'第'+(stop?.chapter||stage+1)+'章';
  element('h2',body,active.title);const synopsis=element('p',body);synopsis.className='synopsis';const line=element('p',body),cue=element('p',body);line.className='character-line';cue.className='cue';
  const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
  skip.type=pause.type='button';skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
@@ -103,8 +104,8 @@ const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aL
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
-  const h=HEROES[hero];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:CHAPTERS[stage]?.[0]||h.name+'、出発！',lines:[CHAPTERS[stage]?.[1]||h.cue,h.start[stage]],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
- clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:(G.game?.stageName||'王国')+' · 旅の記録',lines:[CHAPTERS[stage]?.[2]||h.win,h.clear[stage]],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
+  const h=HEROES[hero],stop=G.stages?.[stage];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:CHAPTERS[stage]?.[0]||stop?.name||h.name+'、出発！',lines:[CHAPTERS[stage]?.[1]||stop?.intro||h.cue,h.start[stage]||'仲間と一緒なら、きっと先へ行ける！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
+ clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:(G.game?.stageName||'王国')+' · 旅の記録',lines:[(G.stages?.[stage+1]?.lap===2&&!G.stages[stage]?.lap?'王国への道が開いた。街道の先に、巨大な花が咲く蟲の世界が現れた。':CHAPTERS[stage]?.[2])||G.stages?.[stage]?.epilogue||h.win,h.clear[stage]||'ひと休みして、次の旅に備えよう。'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
  frenzyPhase(boss){
   if(!boss||boss.dead||boss.transforming)return false;
   const form=boss.form||1;

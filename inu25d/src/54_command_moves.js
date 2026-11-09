@@ -68,6 +68,7 @@ if(G.publishedFactory){
     if(!t.publishedReactive)e.controlled=false;
   }
   function input(p,ctx){const I=G.input,C=G.commands;
+    if(G.ailments?.asleep(p)){ctx.ref.clearInput();G.commandInputs?.reset(ctx);return;}
     if(G.commandInputs){ctx.ref.input(G.commandInputs.read(p,ctx));return;}
     ctx.ref.input({left:C.forward(-1),right:C.forward(1),up:C.up(),down:C.down(),attack:I.btn.attack.down,grab:I.btn.grab.down,dodge:I.btn.dodge.down,
       pressed:{attack:I.btn.attack.pressed,grab:I.btn.grab.pressed,jump:I.btn.jump.pressed,dodge:I.btn.dodge.pressed},
@@ -104,15 +105,15 @@ if(G.publishedFactory){
       ctx.ref=G.publishedFactory({
         // Native 2D pixels are not 3D walking units. Keep each original 2.5D
         // character's speed, without scaling command lunges or charging costs.
-        walkX(r,mx,slow,gmul){return ctx.referenceMovement?mx*7.4*slow*gmul*(r.spdMul||1):p.dead||r.hp<=0?0:G.input.x*p.spd*S*slow*walkBuff(r);},
-        airX(r,mx){return ctx.referenceMovement?mx*7.4*(r.jDown?.3:1):mx===0||p.dead||r.hp<=0?0:G.input.x*p.spd*S*(r.jDown?.3:1)*walkBuff(r);},
+        walkX(r,mx,slow,gmul){return ctx.referenceMovement?mx*7.4*slow*gmul*(r.spdMul||1):p.dead||r.hp<=0||G.ailments?.asleep(p)?0:G.input.x*p.spd*S*slow*walkBuff(r)*(G.ailments?.speed(p)??1);},
+        airX(r,mx){return ctx.referenceMovement?mx*7.4*(r.jDown?.3:1):mx===0||p.dead||r.hp<=0||G.ailments?.asleep(p)?0:G.input.x*p.spd*S*(r.jDown?.3:1)*walkBuff(r)*(G.ailments?.speed(p)??1);},
         laneClamp(y){if(ctx.referenceMovement)return undefined;const b=G.stage?.bounds?.()||{};return ctx.lane+(G.U.clamp(p.z+(y-ctx.lane)/S,b.zmin??G.cfg.ZMIN,b.zmax??G.cfg.ZMAX)-p.z)*S;},
         laneMove(r,air){
-          if(ctx.referenceMovement||p.dead||r.hp<=0||r.in.pressed.atk||r.in.pressed.grab||air&&r.jAtk>0)return;
+          if(ctx.referenceMovement||p.dead||r.hp<=0||G.ailments?.asleep(p)||r.in.pressed.atk||r.in.pressed.grab||air&&r.jAtk>0)return;
           // This hook runs only where the native simulation accepts ordinary
           // movement, never in a grab/throw, attack, hurt, cinematic or hitstop.
           // Committed aerial dives keep their authored path.
-          const dz=air&&(r.jMkUp||r.jKabuto||r.jDown||r.jDrop||r.jBolt)?0:G.input.z*p.spd*(air?.7:.72)*walkBuff(r)*(r.charge>.1?.4:1);
+          const dz=air&&(r.jMkUp||r.jKabuto||r.jDown||r.jDrop||r.jBolt)?0:G.input.z*p.spd*(air?.7:.72)*walkBuff(r)*(r.charge>.1?.4:1)*(G.ailments?.speed(p)??1);
           const b=G.stage?.bounds?.()||{},old=p.z;
           p.z=G.U.clamp(old+dz,b.zmin??G.cfg.ZMIN,b.zmax??G.cfg.ZMAX);p.vz=p.z-old;
           const delta=p.vz*S;
@@ -134,9 +135,12 @@ if(G.publishedFactory){
         beforeHit(e,args,source){if(!e.target)return true;const d=ctx.ref.player.atk?.def;
           if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
           if(G.combat.publishedBlock(e.target,{src:p,dir:Math.sign(args[1]||p.face),power:args[2]||d?.special||d?.finisher||d?.knock?2:1}))return false;
-          const scale=G.combat.publishedDamageScale?.(e.target,p,{native:e,attack:ctx.ref.player,grab:damageIsGrab(ctx,e,source)})??1;if(scale!==1)args[0]*=scale;return true;},
+          const scale=G.combat.publishedDamageScale?.(e.target,p,{native:e,attack:ctx.ref.player,grab:damageIsGrab(ctx,e,source)})??1;if(scale!==1)args[0]*=scale;
+          const power=d?.ultMove||d?.finisher||args[3]?3:args[2]||d?.special?2:1;
+          source.armor=G.combat.absorbStagger(e.target,power,damageIsGrab(ctx,e,source));
+          return true;},
         hit(e,dmg,args,source){ctx.trace.hits.push({tick:ctx.ref.clock,target:e.target?.id,damage:dmg,requested:args[0]});
-          if(e.target&&!e.protected){if(G.coop?.enabled)e.target._publishedOwner=p;e.controlled=true;if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,grab:damageIsGrab(ctx,e,source),stop:ctx.ref.freeze});}},
+          if(e.target&&!e.protected){if(!source.armor){if(G.coop?.enabled)e.target._publishedOwner=p;e.controlled=true;}if(dmg>0)G.combat.publishedHit(e.target,dmg,{src:p,dir:Math.sign(args[1]||p.face),knock:!!args[2],native:e,grab:damageIsGrab(ctx,e,source),stop:ctx.ref.freeze});}},
         ult(r,name){G.bus.emit('ult',{ent:p,id:r.kind+'_ult',name,heroId:r.kind});G.fx?.cutin?.(r.kind,name,()=>{});},
         action(a){ctx.trace.actions.push({tick:ctx.ref.clock,...a});}
       });
@@ -153,11 +157,12 @@ if(G.publishedFactory){
       p.vz=0;
       const r=ctx.ref.player;if(p.dead){G.input.clearEdges(true);ctx.ref.clearInput();G.commandInputs?.reset(ctx);}
       if(!p.dead&&r.hp<=0){ctx.ref.revive();r.invuln=p.inv||80;G.input.clear();}
+      G.ailments?.tick(p,r);
       r.invuln=Math.max(r.invuln,p.inv||0);ctx.ref.freeze=0;
       const bounds=G.stage?.bounds?.();ctx.ref.setBounds(Math.max(0,(G.cam?.viewRange?.()[0]||0)*S),bounds?(bounds.xmax-p.radius)*S:undefined);input(p,ctx);
       const living=new Set(G.world.ents.filter(t=>t.team===1&&!t.removed&&!t.dead));
       for(const t of living)sourceEnemy(p,ctx,t);for(const [t,e]of ctx.foes)if(!living.has(t)){ctx.ref.forget(e);ctx.foes.delete(t);}
-      G.commandInputs?.before(p,ctx);ctx.ref.step();G.commands.stickRot=ctx.ref.player.in.stickRot;
+      if(!G.ailments?.asleep(p))G.commandInputs?.before(p,ctx);ctx.ref.step();G.commands.stickRot=ctx.ref.player.in.stickRot;
       const grip=r.grabbedByEnemy;
       if(grip?.owner&&grip.escapeMash>=5)ctx.ref.releaseEnemyHold(grip.owner);
       const a=r.state==='attack'?r.atk:null;
@@ -185,7 +190,7 @@ if(G.publishedFactory){
       else ctx.ref.receive(e,amount*(G.game?.diff?.foeDmg||1),{direct:!e,knock:info.power>=3,dir:info.dir,unblock:info.unblockable,zmax:100000});
       const dmg=before-r.hp;if(dmg>0)G.kosodoro?.acceptedHit(p,dmg,{...info,src:info.src||info.projectile?.owner});syncHero(p,ctx);ctx.trace.hurt.push({tick:ctx.ref.clock,damage:dmg});G.hitStop=Math.max(G.hitStop,ctx.ref.freeze);
       if(r.state==='jdodge')G.bus.emit('dodge',{ent:p,just:true});
-      if(dmg>0){G.input.clearEdges(true);ctx.ref.clearEdges();G.commandInputs?.reset(ctx);G.bus.emit('hurt',{ent:p,dmg});if(p.dead)G.bus.emit('heroKO',{ent:p});}
+      if(dmg>0){G.ailments?.hit(p,info.status,info.src);G.input.clearEdges(true);ctx.ref.clearEdges();G.commandInputs?.reset(ctx);G.bus.emit('hurt',{ent:p,dmg});if(p.dead)G.bus.emit('heroKO',{ent:p});}
       return dmg>0||r.state==='jdodge'||r.state==='guard'||r.state==='iparry';
     },
     clearVisuals(){for(const v of visuals.values()){v.obj.parent?.remove(v.obj);v.dispose?.();}visuals.clear();},

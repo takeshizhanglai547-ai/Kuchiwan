@@ -17,7 +17,7 @@ const DIFFS = {
   normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.8, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
   hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.1, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
     tactics:true, attackSpacing:12, minWindup:18, punishWindow:28 },
-  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.48, foeHp:1.55, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
+  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.66, foeHp:1.78, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
     tactics:true, attackSpacing:8, minWindup:16, punishWindow:19, frenzy:true },
 };
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
@@ -193,7 +193,7 @@ function chooseStage(continueRun=false){
   // game.unlocked = how many stages are cleared (all n after the ending); the stage after them is open
   const n = stages().length, done = U.clamp(game.unlocked|0, 0, n), open = Math.min(done, Math.max(0, n-1));
   if(G.ui?.hasScreen?.('stages')){
-    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, locked: i > open, cleared: i < done }));
+    const list = stages().map((s, i)=> ({ name:s.name, kana:s.kana, lap:s.lap||1, chapter:s.chapter||i+1, region:s.region, style:s.journeyStyle, locked: i > open, cleared: i < done }));
     uiShow('stages', { stages:list, onPick:(i)=>{ sfx('ok'); uiHide('stages'); const stage=U.clamp(i|0,0,open); if(continueRun)G.go('play',{stage});else startRun(stage); }, onBack:()=>{ sfx('cancel'); uiHide('stages'); } });
   } else if(continueRun)G.go('play',{stage:open});else startRun(0);
 }
@@ -341,7 +341,7 @@ const play = G.scenes.play = {
   winGuard(){
     for(const pr of G.combat.projectiles) if(pr.team===1) pr.life = 0;
     G.combat.areas.length = 0;
-    const p = G.player;G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
+    const p = G.player;for(const hero of G.coop?.enabled?G.coop.players:[p])G.ailments?.clear(hero);G.coop?.winGuard(); if(p){ p.inv = Math.max(p.inv, 9999); if(p.dead){ p.dead = false; p.hp = Math.max(1, Math.ceil(p.maxHp*0.5)); G.setState(p, 'idle'); G.setAnim(p, 'idle'); } }
   },
   showResult(){
     if(this.resultShown)return;

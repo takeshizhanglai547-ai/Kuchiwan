@@ -389,6 +389,8 @@ function buildCSS(){
 #iu .world-route .world-landmark{display:none}
 #iu .world-route .stc .sn{width:1.3em;height:1.3em;font-size:.8em}
 #iu .world-route .stc .stn{font-size:clamp(9px,1.35vw,13px);line-height:1.12}
+#iu .conditions{position:absolute;top:100%;left:0;color:#fff1ff;background:#573661;border-radius:6px;font-size:12px;padding:0 5px}#iu .conditions:empty{display:none}
+#iu .round-picker{min-height:44px;min-width:0;max-width:100%;font:inherit;color:#5c3e53;background:#fff5de;border:2px solid #dfb689;border-radius:12px;padding:5px 8px}
 #iu .world-detail{margin:0;color:#543e26;text-align:center;font-weight:900}
 #iu .sthd{display:flex;align-items:center;gap:.8em}
 #iu .sthd .hd{font-size:1.7em;--tc:#3a8ad0}
@@ -819,6 +821,8 @@ function buildStages(s){
   const head = el('div', 'sthd', pn);
   const back = s.back = button(head, 'back k-cream', '<span class="ic">'+SVG.left+'</span><span>もどる</span>', ()=> call(s.data.onBack), false);
   el('div', 'hd', head).textContent = '王国のワールドマップ';
+  const selector=el('select','round-picker',pn);
+  selector.setAttribute('aria-label','周回マップ');
   const row = el('div', 'strow world-route', pn);
   const detail = el('p','world-detail',pn);
   const positions=[[13,72],[26,53],[17,30],[36,21],[53,40],[63,18],[76,35],[69,65],[88,72]];
@@ -861,28 +865,39 @@ function buildStages(s){
   const usable = (i)=> !!s.list[i] && !s.list[i].locked;
   function paint(){
     s.els.forEach((c, i)=>{c.classList.toggle('on', i===s.focus);c.setAttribute('aria-pressed',String(i===s.focus));});
-    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.focus+1)+' へ出発</span>';
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.list[s.focus]?.chapter||s.focus+1)+' へ出発</span>';
     const stop=s.list[s.focus];
     detail.textContent=stop?(stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
   }
   function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
   function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
-  function pick(){ if(usable(s.focus)) call(s.data.onPick, s.focus); }
+  function pick(){ if(usable(s.focus)) call(s.data.onPick, s.list[s.focus].index); }
   function nope(c){ sfx('cancel'); c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); }
-  s.open = (d)=>{
-    s.list = Array.isArray(d.stages) ? d.stages.slice() : [];
-    row.innerHTML = route; s.els = [];
+  const extraPins=[[12,73],[25,43],[36,67],[45,26],[57,53],[68,21],[77,58],[88,34],[91,76]];
+  const scenery={
+    bug:['#d8ebbd','#85b58f','<path d="M109 167v68m-42-68q42-77 84 0zM426 265v75m-60-75q60-91 120 0zM653 134v80m-55-80q55-84 110 0z" fill="#eda5b7"/>'],
+    space:['#d0cced','#978abf','<ellipse cx="250" cy="170" rx="72" ry="18" fill="#a9dbe6"/><ellipse cx="600" cy="270" rx="83" ry="24" fill="#e5adc9"/><circle cx="570" cy="125" r="28" fill="#f5de9d"/>'],
+    sea:['#c2e7de','#79b6b6','<path d="M144 243v-65m0 33-33-24m33 40 39-31m400 92v-89m0 44-30-18m30-5 35-25" stroke="#e994a2" stroke-width="12"/><path d="M320 175l62-45 62 45zm17 0v55m45-55v55m45-55v55" fill="#fbefcd"/>'],
+    war:['#efd8ba','#bd9d84','<path d="M150 201h106l-19-32h-68zm14 0v50m79-50v50M583 218h120l-26-40h-68zm15 0v48m87-48v48" fill="#dfa1a9"/>']
+  };
+  function renderPage(page){
+    const group=s.pages[page];
+    s.list=group.rows;
+    const [paper,edge,art]=scenery[group.style]||scenery.bug;
+    const trail=s.list.map((_,i)=>extraPins[i].map((v,j)=>v*(j===0?8:4.8)).join(',')).join(' ');
+    row.innerHTML=group.lap===1?route:`<svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true"><path d="M22 250Q28 86 176 91Q310 26 430 88Q566 25 706 92Q784 103 773 248Q812 345 710 388Q604 450 475 393Q320 455 220 399Q48 426 22 250Z" fill="${paper}" stroke="${edge}" stroke-width="8"/><g stroke="#887387" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">${art}</g><polyline points="${trail}" fill="none" stroke="#a6907a" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${trail}" fill="none" stroke="#fff0c5" stroke-width="6" stroke-dasharray="6 9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    s.els = [];
     s.list.forEach((st, i)=>{
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
-      const [x,y]=positions[i];c.style.setProperty('--map-x',x+'%');c.style.setProperty('--map-y',y+'%');
-      el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(i+1));
-      wordWrap(el('span', 'stn', c), shortNames[i] || st.name);
+      const [x,y]=(group.lap===1?positions:extraPins)[i];c.style.setProperty('--map-x',x+'%');c.style.setProperty('--map-y',y+'%');
+      el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(st.chapter||i+1));
+      wordWrap(el('span', 'stn', c), (group.lap===1&&shortNames[i]) || st.name);
       const ss = el('span', 'sst', c);
       if(st.locked) ss.textContent = 'まだ だよ';
       else if(st.cleared){ el('i', '', ss, SVG.star); el('span', '', ss).textContent = 'クリア'; }
       else ss.textContent = 'つぎは ここ！';
-      c.setAttribute('aria-label', 'ステージ '+(i+1)+' '+(st.kana || st.name || ''));
+      c.setAttribute('aria-label', 'ステージ '+(st.chapter||i+1)+' '+(st.kana || st.name || ''));
       c.addEventListener('click', (ev)=>{ ev.preventDefault(); c.blur(); if(tapBlocked(ev)) return; if(!usable(i)){ nope(c); return; } if(i===s.focus) pick(); else setFocus(i, true); });
       s.els.push(c);
     });
@@ -891,8 +906,31 @@ function buildStages(s){
     for(let i=0;i<s.list.length;i++){ if(usable(i)){ f = i; if(!s.list[i].cleared) break; } }
     s.focus = Math.max(0, f); paint();
     touchReleaseAll();
+  }
+  selector.onchange=()=>renderPage(Number(selector.value)||0);
+  s.open = (d)=>{
+    s.pages=[];
+    for(const [index,stage] of (d.stages||[]).entries()){
+      const lap=stage.lap||1;
+      let group=s.pages.at(-1);
+      if(!group||group.lap!==lap||group.rows.length===9){
+        group={lap,style:stage.style,region:stage.region||'もふもふ王国',rows:[]};s.pages.push(group);
+      }
+      group.rows.push({...stage,index});
+    }
+    if(!s.pages.length)return;
+    selector.replaceChildren();
+    s.pages.forEach((group,i)=>{
+      const opt=el('option','',selector);opt.value=String(i);
+      opt.textContent=group.lap+'周目 · '+group.region+(group.rows[0].chapter>1?'（後半）':'');
+    });
+    selector.hidden=s.pages.length===1;
+    const first=s.pages.findIndex(group=>group.rows.some(stage=>!stage.locked&&!stage.cleared));
+    const page=first<0?Math.max(0,s.pages.findLastIndex(group=>group.rows.some(stage=>!stage.locked))):first;
+    selector.value=String(page);renderPage(page);
   };
   s.key = (e, c)=>{
+    if(e.target===selector)return false;
     if(c==='ArrowLeft'||c==='KeyA'||c==='ArrowUp'||c==='KeyW'){ step(-1); return true; }
     if(c==='ArrowRight'||c==='KeyD'||c==='ArrowDown'||c==='KeyS'){ step(1); return true; }
     if(c==='Enter'||c==='NumpadEnter'||c==='Space'){ if(!e.repeat){ pressFx(go); pick(); } return true; }
@@ -916,6 +954,7 @@ function buildHUD(){
   const hpw = hud.hpw = el('div', 'hpw', bars);
   hud.heart = el('div', 'heart', hpw, SVG.heart);
   const hpb = el('div', 'hpb', hpw);
+  hud.conditions=el('div','conditions',hpw);
   hud.hpc = el('div', 'hpc', hpb); hud.hpf = el('div', 'hpf', hpb); el('div', 'hpgl', hpb); hud.hpn = el('div', 'hpn', hpb);
   const r2 = el('div', 'r2', bars);
   const pips = el('div', 'pips', r2);
@@ -951,6 +990,8 @@ function hudFrame(dt){
     else if(hud.chip > hud.hpF){ hud.chip = Math.max(hud.hpF, hud.chip - dt*(0.35 + (hud.chip-hud.hpF)*1.5)); clipR(hud.hpc, hud.chip); }
     const cls = f<=0.25 ? 'low' : f<=0.5 ? 'mid' : '';
     if(cls!==hud.hpCls){ hud.hpCls = cls; hud.hpf.className = 'hpf '+cls; hud.heart.classList.toggle('low', cls==='low'); }
+    const conditions=G.ailments?.labels(p)||'';
+    if(hud.conditions.textContent!==conditions)hud.conditions.textContent=conditions;
     const hpNum = Math.max(0, Math.ceil(p.hp||0)); if(hpNum!==hud.hpNum){ hud.hpNum = hpNum; txt(hud.hpn, hpNum); }
     // hurt wobble / heal glow
     if(hud.hurtT > 0){ hud.hurtT -= dt; const t = 0.4 - hud.hurtT; const a = reduced ? 0 : Math.sin(t*55)*Math.exp(-t*9)*5; hud.hl.style.transform = hud.hurtT>0 ? 'translateX('+a.toFixed(1)+'px)' : ''; }

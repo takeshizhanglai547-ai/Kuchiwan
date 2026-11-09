@@ -26544,7 +26544,11 @@ const _pubZankai=zankaiBoom;
 zankaiBoom=function(...args){_pubGrabDepth++;try{return _pubZankai.apply(this,args);}finally{_pubGrabDepth--;}};
 bossSteal=function(type){return _pubSteal(_pubSourceTypes.get(type)||type);};
 damageEnemy=function(e,...args){const scale=_pubHooks.damageScale?.()??1;if(scale!==1)args[0]=Math.round(args[0]*scale);
-  const before=e.hp,context={grab:_pubGrabDepth>0||!!_pubActiveProjectile?._pubGrab,projectile:!!_pubActiveProjectile};if(_pubHooks.beforeHit?.(e,args,context)===false)return;_pubDamage(e,...args);
+  const before=e.hp,context={grab:_pubGrabDepth>0||!!_pubActiveProjectile?._pubGrab,projectile:!!_pubActiveProjectile};if(_pubHooks.beforeHit?.(e,args,context)===false)return;
+  if(context.armor&&Math.round(args[0])<e.hp){
+    e.hp-=Math.max(1,Math.round(args[0]));
+    e.hitFace=10;hitFx(e.x,e.y-e.h*.5,args[0],false,'#ffe09b');
+  }else{context.armor=false;_pubDamage(e,...args);}
   if(_pubHooks.hit)_pubHooks.hit(e,before-e.hp,args,context);};
 beginUlt=function(p,name){_pubUlt(p,name);if(_pubHooks.ult)_pubHooks.ult(p,name||ULT_NAME[p.kind]);};
 const _pubCarryKeys=['level','xp','xpNext','maxHp','atkMul','defMul','spdMul','dim','dimMax','weapon','heldWeapon','stolen','ammo','armory','permWeapon','coinMul'];
