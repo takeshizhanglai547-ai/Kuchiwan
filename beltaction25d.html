@@ -43847,6 +43847,9 @@ function buildCSS(){
 #iu.port .stc{flex:none;max-width:none;flex-direction:row;gap:.7em;padding:.35em .9em .35em .45em}
 #iu.port .stc .stn{flex:1;text-align:left}
 #iu.port .stc.on{translate:none;scale:1.03}
+#iu.port .world-route .stc{width:clamp(48px,12vw,84px);flex-direction:column;gap:0;padding:2px 3px}
+#iu.port .world-route .stc .stn{flex:none;text-align:center;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:normal}
+#iu .stgo:disabled{opacity:.58;animation:none}
 
 /* ---- layout variants ---- */
 #iu.tcon .goa{top:calc(var(--pt) + 4.4em)}
@@ -44284,9 +44287,10 @@ function buildStages(s){
   const usable = (i)=> !!s.list[i] && !s.list[i].locked;
   function paint(){
     s.els.forEach((c, i)=>{c.classList.toggle('on', i===s.focus);c.setAttribute('aria-pressed',String(i===s.focus));});
-    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>ステージ '+(s.list[s.focus]?.chapter||s.focus+1)+' へ出発</span>';
-    const stop=s.list[s.focus];
-    detail.textContent=stop?(stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
+    const stop=s.list[s.focus],locked=!usable(s.focus);
+    go.disabled=locked;
+    go.innerHTML = '<span class="ic">'+SVG.paw+'</span><span>'+(locked?'まだ出発できません':'ステージ '+(stop.chapter||s.focus+1)+' へ出発')+'</span>';
+    detail.textContent=stop?(locked?'未解放 · ':stop.cleared?'踏破済み · ':'未踏の地 · ')+stop.name:'';
   }
   function setFocus(i, user){ if(!usable(i) || i===s.focus) return; s.focus = i; paint(); if(user) sfx('select'); }
   function step(d){ const n = s.list.length; for(let k=1;k<n;k++){ const i = s.focus + d*k; if(i<0 || i>=n) break; if(usable(i)){ setFocus(i, true); return; } } }
