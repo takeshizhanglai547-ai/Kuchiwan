@@ -20,6 +20,12 @@ async function transact(row){if(active?.inventory)return;const s=active;if(!s||s
  try{const result=await Promise.resolve(row.owned?G.camp.equip(p,row.id):G.camp.purchase(p,row.id));if(active!==s)return;
   setBusy(false);renderRows();message(result?.ok?(row.owned?'武器庫から「'+row.name+'」に持ち替えたニャ。':'「'+row.name+'」を手に入れたニャ！'):(result?.message||REASON[result?.reason]||result?.reason||'購入できなかったニャ。コインと装備条件を確認してね。'));
  }catch(e){if(active===s){setBusy(false);renderRows();message('購入処理を完了できなかったニャ。所持品とコインを確認してね。');}G.logError?.('cham.purchase',e);}}
+function showMerchandise(card,row,family,label){
+ const art=element('div',card);art.className='cham-display';
+ art.setAttribute('aria-hidden','true');
+ art.innerHTML=G.storybook?.merchandise(row,family)||'';
+ element('small',art,label);
+}
 function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wallet.textContent='みんなのコイン '+wallet()+' ¢';for(const e of s.playerTools)e.hidden=s.tab==='companions';for(const e of s.weaponTools)e.hidden=s.tab!=='weapons';for(const [tab,e]of Object.entries(s.tabs))e.setAttribute('aria-pressed',String(tab===s.tab));if(s.tab==='companions')return renderCompanions(s);if(s.tab==='tools')return renderTools(s);const p=s.players[s.index];
  if(!p){element('p',s.list,'仲間の情報を確認できません。買い物をせずに次へ進めます。');return;}
  const all=catalog(p).filter(r=>r.eligible!==false),kind=p.type||p.kind;
@@ -27,23 +33,7 @@ function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wal
  s.count.textContent=(HERO[kind]||kind)+'の '+rows.length+' 品 / 装備できる武器 '+all.length+' 品';
  if(!rows.length){element('p',s.list,s.filter==='owned'?'武器庫はまだ空だニャ。専用の武器から選んでね。':'この分類には武器がないニャ。');return;}
  for(const row of rows){const card=element('article',s.list);card.className='cham-item';card.dataset.weaponId=row.id;
-  const art=element('div',card);art.className='cham-display';art.setAttribute('aria-hidden','true');
-  const family=G.equipmentVisual?.family?.(row)||'sword';
-  const artPaths={
-    sword:'M33 82l16-16 11 11-16 16zm10-25 17 17 6-6-17-17zm9-4 11 11 46-46 5-14-14 5z',
-    katana:'M26 83l25-22 10 11-25 22zm22-32 19 21 6-5-19-22zm13 0 10 12q31-22 48-52-24 20-58 40z',
-    pole:'M27 91l64-65 5 5-64 65zm63-68 9 9 19-27z',
-    gun:'M29 42h29v-7h42v5h23v12h-19l-10 14H67l-7 20H45l6-22H29z',
-    heavy:'M33 87l43-47 8 8-43 47zm36-52 21-24 28 26-21 24z',
-    magic:'M42 91l36-49 7 5-35 50zm32-57 5-20 15-9 16 10 2 19-17 15z',
-    fist:'M41 80l-9-22 8-22 13-7 12 5 9-7 9 4 10-4 10 7 6 19-11 25z',
-    chain:'M34 76l14-14 9 9-14 14zm20-17 10-10 8 8-10 10zm16-14 10-10 8 8-10 10zm12-12 13-18 17 3 6 13-11 15-14-1z',
-    fan:'M69 85L33 38Q72 9 112 35L77 85zm2-17 3-32 3 32z',
-    gadget:'M45 83L34 56l12-22h17l3-13h19l3 13h17l12 22-11 27z'
-  };
-  art.innerHTML='<svg viewBox="0 0 145 100" aria-hidden="true"><path d="'+(artPaths[family]||artPaths.sword)+'" /></svg>';
-  art.style.setProperty?.('--metal',/^#[0-9a-f]{3,8}$/i.test(row.col||'')?row.col:'#f3ca83');
-  element('small',art,row.owned?'ARMORY':'CHAM SELECT');
+  showMerchandise(card,row,G.equipmentVisual?.family?.(row)||'sword',row.owned?'持っている':'おすすめ');
   const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);const price=element('strong',top,row.equipped?'装備中':row.owned?'武器庫・持替え無料':row.cost+' ¢');price.className='cham-price';
   element('p',card,(HERO[row.owner||row.who]||row.owner||row.who||'専用')+' / 攻撃 ×'+Number(row.dmg||1).toFixed(2)+'　間合い ×'+Number(row.reach||1).toFixed(2)+'　吹き飛ばし ×'+Number(row.kb||1).toFixed(2));
   const moves=element('p',card);moves.className='cham-moves';moves.textContent='地上奥義：'+(row.ultName||'キャラ本来の技')+' / 空中奥義：'+(row.airName||'キャラ本来の技');
@@ -56,7 +46,7 @@ function renderTools(s){const p=s.players[s.index],rows=toolCatalog(p);s.count.t
  const info=element('article',s.list);info.className='cham-item cham-gacha';element('h3',info,'回復の道具');element('p',info,s.inventory?'使う対象は上のP1／P2で選べます。満タンなど効果がないときは消費しません。道具の購入・武器の持替え・仲間の編成はクリア後のチャムのお店でできます。閉じると一時停止画面へ戻ります。':'元の2D版の価格・実効果を使い、購入後に保管できるようにしました。使う対象は上のP1／P2で選べます。各道具は9個まで。満タンなど効果がないときは消費しません。');
  if(p){const r=G.published?.native?.(p)?.player||p;const status=element('p',info,'対象：P'+(s.index+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind)+'　体力 '+Math.max(0,Number(r.hp)||0)+' / '+(Number(r.maxHp)||0)+'　奥義 '+Math.max(0,Number(r.dim??p.dim)||0)+' / '+(Number(r.dimMax??p.dimMax)||0));status.dataset.chamToolTarget='1';}
  if(!rows.length){element('p',info,'道具の情報を確認できません。武器や仲間のタブをご利用ください。');return;}
- for(const row of rows){const count=Math.max(0,Number(row.count)||0),cap=Math.max(1,Number(row.cap)||9),card=element('article',s.list);card.className='cham-item';card.dataset.toolId=row.id;const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);if(!s.inventory){const price=element('strong',top,row.cost+' ¢');price.className='cham-price';}element('p',card,row.description||'');const stock=element('p',card,'共有の所持数 '+count+' / '+cap);stock.dataset.chamToolStock=row.id;
+ for(const row of rows){const count=Math.max(0,Number(row.count)||0),cap=Math.max(1,Number(row.cap)||9),card=element('article',s.list);card.className='cham-item';card.dataset.toolId=row.id;if(!s.inventory)showMerchandise(card,row,row.id,'回復の棚');const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);if(!s.inventory){const price=element('strong',top,row.cost+' ¢');price.className='cham-price';}element('p',card,row.description||'');const stock=element('p',card,'共有の所持数 '+count+' / '+cap);stock.dataset.chamToolStock=row.id;
   if(!s.inventory){const buy=button(card,count>=cap?'所持上限です':'1個購入（'+row.cost+' ¢）','tool-buy',()=>toolAction('buy',row));buy.dataset.toolId=row.id;buy.dataset.chamBlocked=count>=cap?'1':'0';buy.disabled=count>=cap;}
   const usable=!!p&&count>0&&row.canUse===true,use=button(card,p?'P'+(s.index+1)+'に使う':'使用対象がいません','tool-use',()=>toolAction('use',row));use.dataset.toolId=row.id;use.dataset.chamBlocked=usable?'0':'1';use.disabled=!usable;if(!usable){const reason=count===0?'まだ所持していません。':!p?'対象を選んでください。':REASON[row.reason]||row.reason||'今は効果がありません。';element('p',card,reason);}
  }
@@ -86,25 +76,25 @@ function open(options,inventory=false){
  .cham-market{background:radial-gradient(ellipse at 15% 0%,#ffd2ce 0%,transparent 58%),radial-gradient(ellipse at 88% 12%,#d9d6ff 0%,transparent 57%),#fff3df;color:#52364a}
  .cham-market .cham-card{width:min(1400px,100%);height:100%;max-height:100%;border:1px solid #e2a6a9;border-radius:15px;background:#fff8ee;box-shadow:0 20px 90px #000c}
  .cham-market header{position:relative;background:linear-gradient(105deg,#ffe8e3,#ffdbed);border-bottom:1px solid #efb8bb}
- .cham-cat{float:right;width:clamp(70px,15vw,135px);margin:-3px 0 0 10px}.cham-cat svg{width:100%;display:block}.cham-market header p{color:#624057}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#733c56}
+ .cham-market .cham-cat{float:right;width:clamp(75px,16vw,155px);margin:-3px 0 0 10px;border:0;padding:0 6px 3px;background:linear-gradient(transparent 82%,#c68868 82%,#dda984 89%,#a46955 91%);border-radius:10px}.cham-cat:active svg{transform:translateY(2px)}.cham-cat svg{width:100%;display:block}.cham-market header p{color:#624057}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#733c56}
  .cham-market .cham-kicker,.cham-market .cham-display small{font-size:10px;letter-spacing:.24em;font-weight:800;color:#884f69}
  .cham-market .cham-toolbar{margin-top:6px}.cham-market button,.cham-market select{background:#fff4f7;color:#653f52;border:1px solid #dda9b8;border-radius:7px}
  .cham-market button[aria-pressed=true],.cham-market button[data-cham-action=buy],.cham-market .cham-finish{background:linear-gradient(110deg,#ffd4df,#ffadcb);color:#57283e;border-color:#d687a4}
  .cham-market .cham-wallet{color:#ffd4df;background:#fff1be;padding:.45em .8em;border:1px solid #e0b977;border-radius:999px}
  .cham-market .cham-count{background:#fff0e8;color:#6f4553;border-bottom:1px solid #edbfb4}
- .cham-market .cham-list{flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+ .cham-market .cham-list{background:repeating-linear-gradient(90deg,#f3d2ab 0,#f3d2ab 2px,#fce6ca 3px,#fce6ca 34px);flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
  .cham-market .cham-item{background:linear-gradient(150deg,#ffffff,#fff1f7);border:1px solid #e6b6c4;border-radius:10px;padding:10px}
  .cham-market .cham-price,.cham-market .cham-moves{color:#81506c}.cham-market footer{background:#ffe4ed;border-top:1px solid #edb9cb}
- .cham-display{position:relative;display:grid;place-items:center;min-height:80px;margin-bottom:8px;border:1px solid #ffffff26;border-radius:7px;overflow:hidden;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--metal) 33%,#fff4e3),#ffe7f1 78%)}
- .cham-display svg{width:110px;height:68px;fill:var(--metal);stroke:#fff0cc;stroke-width:1.2;filter:drop-shadow(0 0 7px var(--metal))}
- .cham-display small{position:absolute;bottom:5px;left:7px;color:#77465f}
+ .cham-display{position:relative;display:grid;place-items:center;min-height:100px;margin-bottom:8px;border:2px solid #d4a785;border-bottom:10px solid #b78464;border-radius:8px;overflow:hidden;background:radial-gradient(ellipse at 48% 28%,#fff7db,#f1d4b8 76%);box-shadow:inset 0 -5px 13px #bc967e55,0 3px 0 #e8c4a6}
+ .cham-display svg{width:min(100%,158px);height:88px;filter:drop-shadow(1px 3px 2px #72524533)}
+ .cham-display small{position:absolute;bottom:2px;left:5px;padding:0 4px;background:#fff3d7;border-radius:3px;color:#77465f}
  @media(max-width:720px){.cham-market .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
  @media(max-width:390px){.cham-market .cham-list{grid-template-columns:1fr}}
- @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display span{font-size:32px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
+ @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display svg{height:58px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
  `;
  const card=element('div',root);card.className='cham-card';const header=element('header',card);
  if(!inventory){
-  const cat=element('div',header);cat.className='cham-cat';cat.setAttribute('role','img');cat.setAttribute('aria-label','ピンクの前掛けを着た猫の店主、チャム');
+  const cat=button(header,'','cham-greet',()=>message('いらっしゃいニャ！　奥の棚に武器、となりの棚に回復道具があるよ。'));cat.className='cham-cat';cat.setAttribute('aria-label','猫の店主チャムに話しかける');
   cat.innerHTML='<svg viewBox="0 0 150 124"><g stroke="#684452" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M104 109Q142 112 137 90Q135 81 129 87" fill="none" stroke-width="9"/><path d="M46 111Q40 81 74 76Q109 78 103 111Z" fill="#fff1db"/><path d="M57 92Q76 99 94 91L101 114H49Z" fill="#ffafc8"/><path d="M34 44L32 15Q34 9 42 15L63 27Q75 23 88 28L109 13Q115 10 117 18L116 48Q127 61 118 76Q104 92 74 91Q38 92 27 74Q20 61 34 44Z" fill="#fff0d5"/><path d="M40 35L39 21L53 31M98 31L110 22L110 36" fill="#f5abc2" stroke="none"/><path d="M59 54v4m33-4v4M71 65q5 5 10 0m-5 3q-3 8-9 4m9-4q3 8 9 4" fill="none"/><path d="M34 64l-12-2m13 8l-11 3m92-9l13-2m-13 8l12 3" fill="none" stroke-width="2"/><circle cx="46" cy="69" r="6" fill="#ffbdc8" stroke="none"/><circle cx="105" cy="69" r="6" fill="#ffbdc8" stroke="none"/><circle cx="76" cy="99" r="5" fill="#ffd57a"/></g></svg>';
  }
  if(!inventory)element('div',header,'猫の店主 チャム  ·  王国の小さなお店').className='cham-kicker';

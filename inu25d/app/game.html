@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
 <meta name="theme-color" content="#7fc8ff">
-<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,33_regional_critters,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance,93_frenzy,94_hero_combat_fx -->
+<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,33_regional_critters,35_bosses_a,36_bosses_b,40_stage,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,60_fx,61_published_swords,70_audio,79_storybook_art,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance,93_frenzy,94_hero_combat_fx -->
 
 
 
@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="12595bc273efc5f015b75ef08ba1e8d90f24d05395aeb212134345509eaf8a43"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="5084138f9568967cfd4f52e401d4c57ef6ace02fec945757e83cc969c669222f"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -43149,6 +43149,67 @@ G.audio = {
 })();
 
 
+// ===== 79_storybook_art.js =====
+// Inline illustrations keep the shop and storybook available offline.
+(function(){'use strict';
+const G=window.G;
+const landmarks=[
+ '<path d="M-70 32v-44l30-23 30 23v44m17 0v-55l32-28 32 28v55" fill="#ffdfb2"/><path d="M-79-10l39-31 40 31M-1-21l40-34 39 34" stroke="#b97076" stroke-width="9"/><path d="M-49 32V9h15v23M30 32V2h18v30" fill="#ce9d7f"/>',
+ '<path d="M-63 32v-62h126v62M-12 32V1q12-19 24 0v31" fill="#e6b49c"/><path d="M-73-29h146l-18-22H-55Z" fill="#bd8091"/><path d="M-45-20v14m90-14v14" stroke="#ffdc83" stroke-width="9"/>',
+ '<path d="M-65 26q-11-22 9-34-6-25 16-32 21 7 18 31 20 9 11 34zM-13 27q-13-29 15-46-2-27 25-36 29 12 20 37 25 17 12 45Z" fill="#88b894"/><path d="M-39 32V-6m64 38V-10" stroke="#8b6959"/><circle cx="59" cy="-51" r="12" fill="#fff1a5"/>',
+ '<path d="M-78 32Q-63-46-28-48Q30-66 72 32Z" fill="#a296bf"/><path d="M-40 32Q-33-25-3-24Q23-21 31 32Z" fill="#776b9c"/><path d="M26 33l8-38 14-19 11 26-4 31zM-65 31l-5-20 9-15 12 35z" fill="#a4e3e0"/>',
+ '<path d="M-75-16q14-40 75-40 62 0 75 39Q27 9-75-16Z" fill="#e8a5a6"/><path d="M-41-12l16 28h54l16-28M-39 17h78l-20 16h-39z" fill="#e8ba79"/><path d="M-39-42q21 13 12 27m60-29q-16 15-9 29" fill="none" stroke="#fbe8bd" stroke-width="6"/>',
+ '<path d="M-79 32l36-65 17 25 34-56 66 96z" fill="#b6bdd8"/><path d="M-59-5l16-28 17 25 34-56 28 39-19-8-10 10-9-13-13 18-10-7-9 13z" fill="#fffdf7"/>',
+ '<path d="M-68 33v-63h24v14h20v-40H9v40h20v-21h34v70z" fill="#ac98bd"/><path d="M-30-55l23-18 21 18M-74-31l18-15 18 15M24-37l21-19 23 19" fill="#786d9e"/><path d="M-15 33V9Q0-6 15 9v24" fill="#795e8b"/>',
+ '<path d="M-48 32v-66m96 66v-66M-62-17H62M-71-37q70 12 142 0" fill="none" stroke="#c87981" stroke-width="10"/><path d="M-51 21q49-30 98 0" stroke="#f1b7ae" fill="none" stroke-width="4"/>',
+ '<path d="M-83 32l41-53 15 13 19-46h33l59 86z" fill="#c28c90"/><path d="M-8-54h33l14 22-13-6-12 12-11-10-11 7-9-7z" fill="#f9a47f"/><path d="M-19 32V2h42v30M-23 2L2-14 27 2" fill="#f5ce9d"/>'
+];
+const skies=['#c6e6ed','#f2c4bd','#c8c6e8','#d0c0e5','#bbdfe9','#d7e6f1','#cbbad9','#f4cfce','#efbcaa'];
+const hills=['#9fc9a1','#bdc79e','#99bb9e','#b2a6c8','#a8c6c7','#bccbd8','#a69bb7','#b6c59a','#c59594'];
+const names=['王都','黄昏の城下町','月夜の森','瑠璃の水晶洞','海賊飛行艇','氷雪の霊峰','ダークワンワン城','わんこ合戦','紅蓮の門'];
+function passage(index,clear){
+ const from=clear?index:Math.max(0,index-1),to=clear?Math.min(index+1,8):index;
+ const start=!clear&&index===0,finish=clear&&index===8;
+ const left=start?'王都への街道':names[from],right=finish?'王国へ帰還':names[to];
+ return {caption:left+' → '+right,svg:`<svg viewBox="0 0 420 230" aria-hidden="true">
+ <defs><pattern id="inu-book-paper" width="21" height="17" patternUnits="userSpaceOnUse"><path d="M2 5l4-1m8 9l4-2m-7-9l2 1" stroke="#775c5d" stroke-opacity=".18" stroke-width=".7"/></pattern></defs>
+ <rect width="420" height="230" rx="9" fill="${skies[to]}"/><circle cx="320" cy="47" r="25" fill="#fff1b7" opacity=".82"/>
+ <g fill="#fff8eb" opacity=".84"><path d="M23 45q0-12 15-11 8-17 24-3 17-6 25 12zM163 54q6-13 18-12 11-18 25-4 12-1 16 14z"/></g>
+ <path d="M0 140Q77 77 155 136Q224 74 291 128Q348 78 420 111V230H0Z" fill="${hills[to]}"/>
+ <path d="M0 163Q89 145 142 160Q232 174 296 146Q359 120 420 150V230H0Z" fill="#d8d7a7"/>
+ <path d="M57 166q61 43 153 24t147-28" fill="none" stroke="#a98977" stroke-opacity=".48" stroke-width="16" stroke-linecap="round"/>
+ <path d="M57 164q61 43 153 24t147-28" fill="none" stroke="#fff1cb" stroke-width="11" stroke-linecap="round"/>
+ <g stroke="#796270" stroke-width="3" stroke-linejoin="round" transform="translate(89 131) scale(.70)">${start?'':landmarks[from]}</g>
+ <g stroke="#796270" stroke-width="3" stroke-linejoin="round" transform="translate(321 123)">${finish?landmarks[0]:landmarks[to]}</g>
+ <g transform="translate(204 176)" stroke="#725463" stroke-width="2"><path d="M-12 10q-4-16 10-17 13 1 11 17z" fill="#f1b9aa"/><path d="M-11-9q-1-13 9-13 10 0 12 11Q7-2-2-3q-8 0-9-6z" fill="#fff0d7"/><path d="M-10-13l-6 3 2 7 5-4m17-8 6 3-1 7-5-4" fill="#d0a394"/></g>
+ <path d="M8 207l16-6m18 19 15-6m78 3 16-5m102 5 14-5m104 7 15-6" stroke="#809074" stroke-width="2" opacity=".55"/>
+ <rect width="420" height="230" rx="9" fill="url(#inu-book-paper)"/></svg>`};
+}
+const products={
+ sword:'<path d="M29 74l43-43 35-15-14 35-43 43z" fill="#dfecf2"/><path d="M48 75l44-43 15-16-14 35-43 43z" fill="currentColor"/><path d="M33 66l23 23-5 6-24-24z" fill="#e6b66b"/><path d="M37 82l-13 13-7-7 14-14z" fill="#95677f"/>',
+ katana:'<path d="M28 73q45-20 82-55-22 43-71 66z" fill="#e8f3f4"/><path d="M33 78q44-22 72-53" fill="none" stroke="currentColor" stroke-width="4"/><path d="M27 69l17 19-5 5-17-19z" fill="#edc783"/><path d="M30 80L15 94l-5-6 13-14z" fill="#8d6377"/>',
+ pole:'<path d="M22 90l58-60 6 6-59 60z" fill="#b38566"/><path d="M76 30l36-15-14 33-13-4z" fill="currentColor"/><path d="M88 35l19-15" stroke="#fff6e1"/>',
+ gun:'<path d="M22 43h61V33h22v9h14v14h-17l-16 14H57l-8 19H32l7-20H22z" fill="currentColor"/><path d="M25 45h58v12H25zM89 38h14v22H89z" fill="#eee2dc"/><path d="M40 72l-5 13h11l6-13" fill="#a07470"/>',
+ heavy:'<path d="M24 91l49-50 8 9-49 50z" fill="#ab795d"/><path d="M53 42l27-29 31 28-29 29z" fill="currentColor"/><path d="M60 41l21-22 7 6-21 22z" fill="#ffe6ad"/><path d="M79 65l28-27" stroke="#886e79"/>',
+ magic:'<path d="M28 94l45-53 7 5-45 55z" fill="#ac8465"/><path d="M69 46l-3-16 12-18 21 1 11 17-7 19-20 7z" fill="currentColor"/><path d="M70 31l15 3 14-18m-14 18 7 18m-7-18 23-3" fill="none" stroke="#fff0fa"/>',
+ fist:'<path d="M36 79l-7-27 8-16 10 2 7-7 9 4 9-5 9 5 9-3 9 12-1 17-12 20z" fill="currentColor"/><path d="M39 73h51l-7 14H45z" fill="#dbb68c"/><path d="M48 40v16m16-19v18m17-18v17" fill="none" stroke="#f9e8e3"/>',
+ chain:'<path d="M24 85Q33 51 73 58Q88 64 96 39" fill="none" stroke="#bd9d94" stroke-width="8" stroke-dasharray="6 4"/><path d="M83 35l1-15 12-7 14 5 7 14-7 13-16 1z" fill="currentColor"/><path d="M15 83l15-5 4 10-15 5z" fill="#b88061"/>',
+ fan:'<path d="M59 90L30 35Q66 14 112 32L69 91z" fill="currentColor"/><path d="M63 82L44 33m21 49 1-57m0 57 22-55m-21 55 36-48" stroke="#ffefd3" fill="none"/><circle cx="65" cy="84" r="4" fill="#e2ae6a"/>',
+ gadget:'<path d="M42 75l-8-21 12-19 22-4 12-16 11 4 4 17 13 15-10 26z" fill="currentColor"/><path d="M39 49h64l-4 12H43z" fill="#ffe1a9"/><path d="M61 62h18v12H61z" fill="#f5b9bb"/>',
+ manju:'<path d="M30 80q-14-6-7-24 15-26 48-26 35 0 46 25 7 19-9 25z" fill="#ffe4b6"/><path d="M36 69q31-15 66 0" fill="none" stroke="#d1a07b"/><path d="M60 51q9-8 19 0" fill="none" stroke="#ce8794"/>'
+};
+function merchandise(row,family){
+ const color=/^#[0-9a-f]{3,8}$/i.test(row.col||'')?row.col:'#eab5c7';
+ const bottle={potion:'#ed97ad',fullPotion:'#ad9cd6',energy:'#e8b75d'}[row.id];
+ const art=bottle?`<path d="M56 26h24v14q21 11 21 27 0 17-17 17H52q-17 0-17-17 0-16 21-27z" fill="#fff6ea"/><path d="M39 64q15-8 30-2 16 6 29 0v7q-3 11-15 11H54q-13 0-15-11z" fill="${bottle}"/><rect x="53" y="20" width="30" height="10" rx="3" fill="#b78d71"/><path d="M57 50q6-5 12 0m-19 5v11" fill="none" stroke="#fff"/>`:products[family==='cane'?'pole':family]||products.sword;
+ const tint=bottle||color;
+ const variation=String(row.id||'').split('').reduce((sum,c)=>sum+c.charCodeAt(0),0);
+ return `<svg viewBox="0 0 140 105" aria-hidden="true"><ellipse cx="70" cy="88" rx="46" ry="9" fill="#8f625a" opacity=".18"/><g style="color:${tint}" stroke="#775564" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" transform="rotate(${variation%9-4} 70 50)">${art}</g><path d="M112 22l3-7 2 7 7 2-7 2-2 7-3-7-6-2z" fill="#fff2c9" opacity=".83"/></svg>`;
+}
+G.storybook={passage,merchandise};
+})();
+
+
 // ===== 80_ui.js =====
 // 80_ui.js — がめん（タイトル・なかまえらび・HUD・ひとやすみ・けっか・やられちゃった・エンディング・よみこみ）と
 // スマホの タッチそうさ（うかぶスティック＋おおきな まるボタン）。DOM と CSS だけで作り、3D には さわらない。
@@ -43977,6 +44038,7 @@ function buildStages(s){
   const shortNames=['王都','城下町','月夜の森','水晶洞','飛行艇','霊峰','黒い城','わんこ合戦','紅蓮の門'];
   const route=`<svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true">
   <defs>
+   <pattern id="inu-map-grain" width="19" height="16" patternUnits="userSpaceOnUse"><path d="M2 3l4-1m7 9l3-2m-11 4l3-1" stroke="#7f6a55" stroke-opacity=".19" stroke-width=".7"/></pattern>
    <pattern id="inu-waves" width="86" height="55" patternUnits="userSpaceOnUse"><path d="M8 28q9-8 18 0q9-8 18 0m19 18q6-5 12 0" fill="none" stroke="#fff" stroke-opacity=".62" stroke-width="2"/></pattern>
    <g id="inu-tree" stroke="#668a69" stroke-width="2.4" stroke-linejoin="round"><path d="M0 5v12"/><path fill="#8fc598" d="M-12 7Q-17 0-9-6Q-10-16 0-17Q12-16 10-7Q17-4 13 6Q9 13 0 8Q-8 12-12 7Z"/></g>
    <g id="inu-mount" stroke="#8d8cb5" stroke-width="3" stroke-linejoin="round"><path fill="#b5b4da" d="M-34 23L-2-32L36 23Z"/><path fill="#fbfaff" d="M-17-7L-2-32L17-5L5-10L-1-4L-8-11Z"/></g>
@@ -43997,6 +44059,11 @@ function buildStages(s){
   <path d="M573 146v-36h13v12h13v-18h16v17h13v-11h13v36z" fill="#ad9acb" stroke="#8172aa" stroke-width="3"/>
   <path d="M521 289v-37m50 37v-37m-61 7h72m-65-10h58" fill="none" stroke="#da8090" stroke-width="6" stroke-linecap="round"/>
   <use href="#inu-mount" x="715" y="308"/><path d="M699 303l15-25 14 22-10-4-6 7-7-7z" fill="#f28d83"/>
+  <g fill="none" stroke="#78929b" stroke-width="3" stroke-linecap="round" opacity=".65"><path d="M269 146q-51 8-37 53t-19 90-30 54m83-195q-4 30-35 39M647 143q-41 28-25 56t-30 57"/><path d="M321 261q26-12 41 6t-11 26q-32 12-41-3t11-29Z" fill="#9bd0d6"/></g>
+  <g fill="none" stroke="#88917b" stroke-width="1.7" stroke-linecap="round" opacity=".6"><path d="M53 285q13-18 28-10m-16 8 16-5m153 21q24-29 49-16m-30 18 25-10m67-98q20-21 40-10m-27 11 20-7m85 139q12-29 40-33m-29 22 17-12m177-68q21-18 45-7m-33 9 18-5"/><path d="M49 224q12-26 42-21m-37 30q20-27 40-21m565 10q44-30 79-6m-80 17q46-31 79-8"/></g>
+  <use href="#inu-tree" x="173" y="280"/><use href="#inu-tree" x="183" y="261"/><use href="#inu-tree" x="248" y="169"/><use href="#inu-tree" x="278" y="152"/><use href="#inu-tree" x="510" y="222"/><use href="#inu-tree" x="535" y="210"/><use href="#inu-tree" x="663" y="279"/>
+  <g transform="translate(736 59)" stroke="#8d6e70" stroke-width="2"><circle r="27" fill="#fff1d5"/><path d="M0-21L6-5 20 0 6 5 0 20-6 5-20 0-6-5Z" fill="#e3ae98"/><path d="M0-21L6-5 0 0-6-5Z" fill="#9b747d"/><text x="0" y="-32" fill="#7f6369" stroke="none" text-anchor="middle" font-size="13">北</text></g>
+  <rect width="800" height="480" fill="url(#inu-map-grain)"/>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#aa8c72" stroke-width="11" opacity=".54"/><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#fff3c9" stroke-width="6" stroke-dasharray="6 9"/></g>
   <g fill="#8b6877" font-family="sans-serif" font-size="16" font-weight="bold" text-anchor="middle"><text x="195" y="400">もふもふ王国</text><text x="606" y="393">東の山並み</text></g>
   </svg>`;
@@ -44888,9 +44955,15 @@ function render(){if(!document.createElement||!document.body)return;
  focus=document.activeElement;panel=element('section',document.body);panel.className='inu-story';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
  const css=element('style',panel);css.textContent='.inu-story{position:fixed;inset:0;z-index:12000;background:linear-gradient(120deg,#071629c9,#17213499);display:flex;align-items:center;justify-content:center;color:#fff8df;font:clamp(15px,2.4vmin,23px)/1.5 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;touch-action:manipulation}.inu-story .card{width:min(100%,960px);max-height:96dvh;overflow:auto;border:3px solid var(--story,#ffd264);border-radius:22px;background:#142a3be8;box-shadow:0 12px 80px #0009;padding:clamp(12px,3vmin,28px);box-sizing:border-box;display:grid;grid-template-columns:minmax(110px,30%) minmax(0,1fr);gap:16px;align-items:center}.inu-story img{width:100%;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 5px 15px #0007)}.inu-story h2{font-size:clamp(22px,4vmin,36px);line-height:1.2;margin:4px 0 12px}.inu-story p{margin:8px 0}.inu-story .cue{font-size:.78em;color:#baddf2}.inu-story .chapter{font-size:.75em;letter-spacing:.12em;color:#ffd777}.inu-story .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.inu-story button{font:inherit;font-size:.82em;min-height:44px;border:2px solid #f2ce7c;border-radius:11px;background:#f7e5b7;color:#182f41;padding:8px 16px;touch-action:manipulation}.inu-story button:focus-visible{outline:4px solid #6cd6ff}.inu-story button:disabled{opacity:.5}.inu-story .progress{height:4px;background:#486077;margin-top:12px}.inu-story .progress i{display:block;height:100%;background:#ffd777;width:0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr;text-align:center;gap:5px}.inu-story img{max-height:26dvh;max-width:55%;margin:auto}.inu-story .actions{justify-content:center}}@media(max-height:430px){.inu-story .card{padding:10px 16px;gap:12px}.inu-story h2{font-size:23px;margin:2px 0 6px}.inu-story p{margin:5px 0}.inu-story .actions{margin-top:8px}.inu-story .cue{font-size:12px}}@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important}}';
  css.textContent+=' .inu-story .card{background:#fff3ea;color:#654052;border-color:#efafbf;box-shadow:0 12px 80px #432b5266}.inu-story .chapter,.inu-story .cue{color:#885065}.inu-story .synopsis{background:#fffaf3;border:1px solid #ecc1bd;border-radius:14px;padding:12px 15px;font-size:1.08em}.inu-story .character-line{background:#ffe0ed;border-radius:12px;padding:7px 10px}.inu-story .progress{display:none}.inu-story .actions button{background:#ffd0e0;border-color:#d588a5;color:#65354b}';
+ css.textContent+=' .inu-story .card{grid-template-columns:minmax(180px,42%) minmax(0,1fr)}.inu-story .journey-plate{position:relative;margin:0;padding:7px;background:#fff8df;border:1px solid #dfb7a5;border-radius:12px;box-shadow:0 3px 0 #e6c9b5}.inu-story .journey-plate svg{display:block;width:100%;height:auto}.inu-story .journey-plate img{position:absolute;width:25%;max-height:45%;right:3%;bottom:18%;object-fit:contain}.inu-story .journey-plate figcaption{text-align:center;font-size:.78em;font-weight:750;padding:6px 2px 0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr}.inu-story .journey-plate svg{max-height:25dvh}.inu-story .journey-plate img{right:12%}}';
  const card=element('div',panel);card.className='card';card.style.setProperty('--story',HEROES[hero]?.color||'#ffd264');
- const image=element('img',card);image.alt=HEROES[hero]?.name||hero;
- const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});if(url)image.src=url;else {image.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
+ const scene=element('figure',card);scene.className='journey-plate';
+ const passage=G.storybook?.passage(stage,active.kind==='clear');
+ if(passage){scene.innerHTML=passage.svg;element('figcaption',scene,passage.caption);}
+ const image=element('img',scene);image.alt=HEROES[hero]?.name||hero;
+ const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});
+ if(url)image.src=url;else image.hidden=true;
+ if(!passage&&!url){scene.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
  const body=element('div',card),chapter=element('div',body);chapter.className='chapter';chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · 第'+(stage+1)+'章';
  element('h2',body,active.title);const synopsis=element('p',body);synopsis.className='synopsis';const line=element('p',body),cue=element('p',body);line.className='character-line';cue.className='cue';
  const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
@@ -45028,6 +45101,12 @@ async function transact(row){if(active?.inventory)return;const s=active;if(!s||s
  try{const result=await Promise.resolve(row.owned?G.camp.equip(p,row.id):G.camp.purchase(p,row.id));if(active!==s)return;
   setBusy(false);renderRows();message(result?.ok?(row.owned?'武器庫から「'+row.name+'」に持ち替えたニャ。':'「'+row.name+'」を手に入れたニャ！'):(result?.message||REASON[result?.reason]||result?.reason||'購入できなかったニャ。コインと装備条件を確認してね。'));
  }catch(e){if(active===s){setBusy(false);renderRows();message('購入処理を完了できなかったニャ。所持品とコインを確認してね。');}G.logError?.('cham.purchase',e);}}
+function showMerchandise(card,row,family,label){
+ const art=element('div',card);art.className='cham-display';
+ art.setAttribute('aria-hidden','true');
+ art.innerHTML=G.storybook?.merchandise(row,family)||'';
+ element('small',art,label);
+}
 function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wallet.textContent='みんなのコイン '+wallet()+' ¢';for(const e of s.playerTools)e.hidden=s.tab==='companions';for(const e of s.weaponTools)e.hidden=s.tab!=='weapons';for(const [tab,e]of Object.entries(s.tabs))e.setAttribute('aria-pressed',String(tab===s.tab));if(s.tab==='companions')return renderCompanions(s);if(s.tab==='tools')return renderTools(s);const p=s.players[s.index];
  if(!p){element('p',s.list,'仲間の情報を確認できません。買い物をせずに次へ進めます。');return;}
  const all=catalog(p).filter(r=>r.eligible!==false),kind=p.type||p.kind;
@@ -45035,23 +45114,7 @@ function renderRows(){const s=active;if(!s)return;s.list.replaceChildren();s.wal
  s.count.textContent=(HERO[kind]||kind)+'の '+rows.length+' 品 / 装備できる武器 '+all.length+' 品';
  if(!rows.length){element('p',s.list,s.filter==='owned'?'武器庫はまだ空だニャ。専用の武器から選んでね。':'この分類には武器がないニャ。');return;}
  for(const row of rows){const card=element('article',s.list);card.className='cham-item';card.dataset.weaponId=row.id;
-  const art=element('div',card);art.className='cham-display';art.setAttribute('aria-hidden','true');
-  const family=G.equipmentVisual?.family?.(row)||'sword';
-  const artPaths={
-    sword:'M33 82l16-16 11 11-16 16zm10-25 17 17 6-6-17-17zm9-4 11 11 46-46 5-14-14 5z',
-    katana:'M26 83l25-22 10 11-25 22zm22-32 19 21 6-5-19-22zm13 0 10 12q31-22 48-52-24 20-58 40z',
-    pole:'M27 91l64-65 5 5-64 65zm63-68 9 9 19-27z',
-    gun:'M29 42h29v-7h42v5h23v12h-19l-10 14H67l-7 20H45l6-22H29z',
-    heavy:'M33 87l43-47 8 8-43 47zm36-52 21-24 28 26-21 24z',
-    magic:'M42 91l36-49 7 5-35 50zm32-57 5-20 15-9 16 10 2 19-17 15z',
-    fist:'M41 80l-9-22 8-22 13-7 12 5 9-7 9 4 10-4 10 7 6 19-11 25z',
-    chain:'M34 76l14-14 9 9-14 14zm20-17 10-10 8 8-10 10zm16-14 10-10 8 8-10 10zm12-12 13-18 17 3 6 13-11 15-14-1z',
-    fan:'M69 85L33 38Q72 9 112 35L77 85zm2-17 3-32 3 32z',
-    gadget:'M45 83L34 56l12-22h17l3-13h19l3 13h17l12 22-11 27z'
-  };
-  art.innerHTML='<svg viewBox="0 0 145 100" aria-hidden="true"><path d="'+(artPaths[family]||artPaths.sword)+'" /></svg>';
-  art.style.setProperty?.('--metal',/^#[0-9a-f]{3,8}$/i.test(row.col||'')?row.col:'#f3ca83');
-  element('small',art,row.owned?'ARMORY':'CHAM SELECT');
+  showMerchandise(card,row,G.equipmentVisual?.family?.(row)||'sword',row.owned?'持っている':'おすすめ');
   const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);const price=element('strong',top,row.equipped?'装備中':row.owned?'武器庫・持替え無料':row.cost+' ¢');price.className='cham-price';
   element('p',card,(HERO[row.owner||row.who]||row.owner||row.who||'専用')+' / 攻撃 ×'+Number(row.dmg||1).toFixed(2)+'　間合い ×'+Number(row.reach||1).toFixed(2)+'　吹き飛ばし ×'+Number(row.kb||1).toFixed(2));
   const moves=element('p',card);moves.className='cham-moves';moves.textContent='地上奥義：'+(row.ultName||'キャラ本来の技')+' / 空中奥義：'+(row.airName||'キャラ本来の技');
@@ -45064,7 +45127,7 @@ function renderTools(s){const p=s.players[s.index],rows=toolCatalog(p);s.count.t
  const info=element('article',s.list);info.className='cham-item cham-gacha';element('h3',info,'回復の道具');element('p',info,s.inventory?'使う対象は上のP1／P2で選べます。満タンなど効果がないときは消費しません。道具の購入・武器の持替え・仲間の編成はクリア後のチャムのお店でできます。閉じると一時停止画面へ戻ります。':'元の2D版の価格・実効果を使い、購入後に保管できるようにしました。使う対象は上のP1／P2で選べます。各道具は9個まで。満タンなど効果がないときは消費しません。');
  if(p){const r=G.published?.native?.(p)?.player||p;const status=element('p',info,'対象：P'+(s.index+1)+' '+(HERO[p.type||p.kind]||p.type||p.kind)+'　体力 '+Math.max(0,Number(r.hp)||0)+' / '+(Number(r.maxHp)||0)+'　奥義 '+Math.max(0,Number(r.dim??p.dim)||0)+' / '+(Number(r.dimMax??p.dimMax)||0));status.dataset.chamToolTarget='1';}
  if(!rows.length){element('p',info,'道具の情報を確認できません。武器や仲間のタブをご利用ください。');return;}
- for(const row of rows){const count=Math.max(0,Number(row.count)||0),cap=Math.max(1,Number(row.cap)||9),card=element('article',s.list);card.className='cham-item';card.dataset.toolId=row.id;const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);if(!s.inventory){const price=element('strong',top,row.cost+' ¢');price.className='cham-price';}element('p',card,row.description||'');const stock=element('p',card,'共有の所持数 '+count+' / '+cap);stock.dataset.chamToolStock=row.id;
+ for(const row of rows){const count=Math.max(0,Number(row.count)||0),cap=Math.max(1,Number(row.cap)||9),card=element('article',s.list);card.className='cham-item';card.dataset.toolId=row.id;if(!s.inventory)showMerchandise(card,row,row.id,'回復の棚');const top=element('div',card);top.className='cham-item-top';element('h3',top,row.name);if(!s.inventory){const price=element('strong',top,row.cost+' ¢');price.className='cham-price';}element('p',card,row.description||'');const stock=element('p',card,'共有の所持数 '+count+' / '+cap);stock.dataset.chamToolStock=row.id;
   if(!s.inventory){const buy=button(card,count>=cap?'所持上限です':'1個購入（'+row.cost+' ¢）','tool-buy',()=>toolAction('buy',row));buy.dataset.toolId=row.id;buy.dataset.chamBlocked=count>=cap?'1':'0';buy.disabled=count>=cap;}
   const usable=!!p&&count>0&&row.canUse===true,use=button(card,p?'P'+(s.index+1)+'に使う':'使用対象がいません','tool-use',()=>toolAction('use',row));use.dataset.toolId=row.id;use.dataset.chamBlocked=usable?'0':'1';use.disabled=!usable;if(!usable){const reason=count===0?'まだ所持していません。':!p?'対象を選んでください。':REASON[row.reason]||row.reason||'今は効果がありません。';element('p',card,reason);}
  }
@@ -45094,25 +45157,25 @@ function open(options,inventory=false){
  .cham-market{background:radial-gradient(ellipse at 15% 0%,#ffd2ce 0%,transparent 58%),radial-gradient(ellipse at 88% 12%,#d9d6ff 0%,transparent 57%),#fff3df;color:#52364a}
  .cham-market .cham-card{width:min(1400px,100%);height:100%;max-height:100%;border:1px solid #e2a6a9;border-radius:15px;background:#fff8ee;box-shadow:0 20px 90px #000c}
  .cham-market header{position:relative;background:linear-gradient(105deg,#ffe8e3,#ffdbed);border-bottom:1px solid #efb8bb}
- .cham-cat{float:right;width:clamp(70px,15vw,135px);margin:-3px 0 0 10px}.cham-cat svg{width:100%;display:block}.cham-market header p{color:#624057}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#733c56}
+ .cham-market .cham-cat{float:right;width:clamp(75px,16vw,155px);margin:-3px 0 0 10px;border:0;padding:0 6px 3px;background:linear-gradient(transparent 82%,#c68868 82%,#dda984 89%,#a46955 91%);border-radius:10px}.cham-cat:active svg{transform:translateY(2px)}.cham-cat svg{width:100%;display:block}.cham-market header p{color:#624057}.cham-market h2{font-size:clamp(23px,4.6vmin,42px);color:#733c56}
  .cham-market .cham-kicker,.cham-market .cham-display small{font-size:10px;letter-spacing:.24em;font-weight:800;color:#884f69}
  .cham-market .cham-toolbar{margin-top:6px}.cham-market button,.cham-market select{background:#fff4f7;color:#653f52;border:1px solid #dda9b8;border-radius:7px}
  .cham-market button[aria-pressed=true],.cham-market button[data-cham-action=buy],.cham-market .cham-finish{background:linear-gradient(110deg,#ffd4df,#ffadcb);color:#57283e;border-color:#d687a4}
  .cham-market .cham-wallet{color:#ffd4df;background:#fff1be;padding:.45em .8em;border:1px solid #e0b977;border-radius:999px}
  .cham-market .cham-count{background:#fff0e8;color:#6f4553;border-bottom:1px solid #edbfb4}
- .cham-market .cham-list{flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+ .cham-market .cham-list{background:repeating-linear-gradient(90deg,#f3d2ab 0,#f3d2ab 2px,#fce6ca 3px,#fce6ca 34px);flex:1;min-height:0;align-content:start;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
  .cham-market .cham-item{background:linear-gradient(150deg,#ffffff,#fff1f7);border:1px solid #e6b6c4;border-radius:10px;padding:10px}
  .cham-market .cham-price,.cham-market .cham-moves{color:#81506c}.cham-market footer{background:#ffe4ed;border-top:1px solid #edb9cb}
- .cham-display{position:relative;display:grid;place-items:center;min-height:80px;margin-bottom:8px;border:1px solid #ffffff26;border-radius:7px;overflow:hidden;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--metal) 33%,#fff4e3),#ffe7f1 78%)}
- .cham-display svg{width:110px;height:68px;fill:var(--metal);stroke:#fff0cc;stroke-width:1.2;filter:drop-shadow(0 0 7px var(--metal))}
- .cham-display small{position:absolute;bottom:5px;left:7px;color:#77465f}
+ .cham-display{position:relative;display:grid;place-items:center;min-height:100px;margin-bottom:8px;border:2px solid #d4a785;border-bottom:10px solid #b78464;border-radius:8px;overflow:hidden;background:radial-gradient(ellipse at 48% 28%,#fff7db,#f1d4b8 76%);box-shadow:inset 0 -5px 13px #bc967e55,0 3px 0 #e8c4a6}
+ .cham-display svg{width:min(100%,158px);height:88px;filter:drop-shadow(1px 3px 2px #72524533)}
+ .cham-display small{position:absolute;bottom:2px;left:5px;padding:0 4px;background:#fff3d7;border-radius:3px;color:#77465f}
  @media(max-width:720px){.cham-market .cham-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
  @media(max-width:390px){.cham-market .cham-list{grid-template-columns:1fr}}
- @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display span{font-size:32px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
+ @media(max-height:480px){.cham-market .cham-display{min-height:50px}.cham-market .cham-display svg{height:58px}.cham-market .cham-kicker{display:none}.cham-market .cham-toolbar{margin-top:3px}}
  `;
  const card=element('div',root);card.className='cham-card';const header=element('header',card);
  if(!inventory){
-  const cat=element('div',header);cat.className='cham-cat';cat.setAttribute('role','img');cat.setAttribute('aria-label','ピンクの前掛けを着た猫の店主、チャム');
+  const cat=button(header,'','cham-greet',()=>message('いらっしゃいニャ！　奥の棚に武器、となりの棚に回復道具があるよ。'));cat.className='cham-cat';cat.setAttribute('aria-label','猫の店主チャムに話しかける');
   cat.innerHTML='<svg viewBox="0 0 150 124"><g stroke="#684452" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M104 109Q142 112 137 90Q135 81 129 87" fill="none" stroke-width="9"/><path d="M46 111Q40 81 74 76Q109 78 103 111Z" fill="#fff1db"/><path d="M57 92Q76 99 94 91L101 114H49Z" fill="#ffafc8"/><path d="M34 44L32 15Q34 9 42 15L63 27Q75 23 88 28L109 13Q115 10 117 18L116 48Q127 61 118 76Q104 92 74 91Q38 92 27 74Q20 61 34 44Z" fill="#fff0d5"/><path d="M40 35L39 21L53 31M98 31L110 22L110 36" fill="#f5abc2" stroke="none"/><path d="M59 54v4m33-4v4M71 65q5 5 10 0m-5 3q-3 8-9 4m9-4q3 8 9 4" fill="none"/><path d="M34 64l-12-2m13 8l-11 3m92-9l13-2m-13 8l12 3" fill="none" stroke-width="2"/><circle cx="46" cy="69" r="6" fill="#ffbdc8" stroke="none"/><circle cx="105" cy="69" r="6" fill="#ffbdc8" stroke="none"/><circle cx="76" cy="99" r="5" fill="#ffd57a"/></g></svg>';
  }
  if(!inventory)element('div',header,'猫の店主 チャム  ·  王国の小さなお店').className='cham-kicker';
@@ -46232,7 +46295,7 @@ G.heroCombatFx={
 
 }
 </script>
-<script>(function(){'use strict';const BUILD="12595bc273efc5f015b75ef08ba1e8d90f24d05395aeb212134345509eaf8a43",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="5084138f9568967cfd4f52e401d4c57ef6ace02fec945757e83cc969c669222f",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}

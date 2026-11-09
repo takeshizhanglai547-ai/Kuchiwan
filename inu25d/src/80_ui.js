@@ -825,6 +825,7 @@ function buildStages(s){
   const shortNames=['王都','城下町','月夜の森','水晶洞','飛行艇','霊峰','黒い城','わんこ合戦','紅蓮の門'];
   const route=`<svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true">
   <defs>
+   <pattern id="inu-map-grain" width="19" height="16" patternUnits="userSpaceOnUse"><path d="M2 3l4-1m7 9l3-2m-11 4l3-1" stroke="#7f6a55" stroke-opacity=".19" stroke-width=".7"/></pattern>
    <pattern id="inu-waves" width="86" height="55" patternUnits="userSpaceOnUse"><path d="M8 28q9-8 18 0q9-8 18 0m19 18q6-5 12 0" fill="none" stroke="#fff" stroke-opacity=".62" stroke-width="2"/></pattern>
    <g id="inu-tree" stroke="#668a69" stroke-width="2.4" stroke-linejoin="round"><path d="M0 5v12"/><path fill="#8fc598" d="M-12 7Q-17 0-9-6Q-10-16 0-17Q12-16 10-7Q17-4 13 6Q9 13 0 8Q-8 12-12 7Z"/></g>
    <g id="inu-mount" stroke="#8d8cb5" stroke-width="3" stroke-linejoin="round"><path fill="#b5b4da" d="M-34 23L-2-32L36 23Z"/><path fill="#fbfaff" d="M-17-7L-2-32L17-5L5-10L-1-4L-8-11Z"/></g>
@@ -845,6 +846,11 @@ function buildStages(s){
   <path d="M573 146v-36h13v12h13v-18h16v17h13v-11h13v36z" fill="#ad9acb" stroke="#8172aa" stroke-width="3"/>
   <path d="M521 289v-37m50 37v-37m-61 7h72m-65-10h58" fill="none" stroke="#da8090" stroke-width="6" stroke-linecap="round"/>
   <use href="#inu-mount" x="715" y="308"/><path d="M699 303l15-25 14 22-10-4-6 7-7-7z" fill="#f28d83"/>
+  <g fill="none" stroke="#78929b" stroke-width="3" stroke-linecap="round" opacity=".65"><path d="M269 146q-51 8-37 53t-19 90-30 54m83-195q-4 30-35 39M647 143q-41 28-25 56t-30 57"/><path d="M321 261q26-12 41 6t-11 26q-32 12-41-3t11-29Z" fill="#9bd0d6"/></g>
+  <g fill="none" stroke="#88917b" stroke-width="1.7" stroke-linecap="round" opacity=".6"><path d="M53 285q13-18 28-10m-16 8 16-5m153 21q24-29 49-16m-30 18 25-10m67-98q20-21 40-10m-27 11 20-7m85 139q12-29 40-33m-29 22 17-12m177-68q21-18 45-7m-33 9 18-5"/><path d="M49 224q12-26 42-21m-37 30q20-27 40-21m565 10q44-30 79-6m-80 17q46-31 79-8"/></g>
+  <use href="#inu-tree" x="173" y="280"/><use href="#inu-tree" x="183" y="261"/><use href="#inu-tree" x="248" y="169"/><use href="#inu-tree" x="278" y="152"/><use href="#inu-tree" x="510" y="222"/><use href="#inu-tree" x="535" y="210"/><use href="#inu-tree" x="663" y="279"/>
+  <g transform="translate(736 59)" stroke="#8d6e70" stroke-width="2"><circle r="27" fill="#fff1d5"/><path d="M0-21L6-5 20 0 6 5 0 20-6 5-20 0-6-5Z" fill="#e3ae98"/><path d="M0-21L6-5 0 0-6-5Z" fill="#9b747d"/><text x="0" y="-32" fill="#7f6369" stroke="none" text-anchor="middle" font-size="13">北</text></g>
+  <rect width="800" height="480" fill="url(#inu-map-grain)"/>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#aa8c72" stroke-width="11" opacity=".54"/><path d="M104 346Q196 319 208 254Q222 181 136 144Q187 104 288 101Q379 98 424 192Q479 167 504 86Q574 92 608 168Q652 263 552 312Q618 379 704 346" stroke="#fff3c9" stroke-width="6" stroke-dasharray="6 9"/></g>
   <g fill="#8b6877" font-family="sans-serif" font-size="16" font-weight="bold" text-anchor="middle"><text x="195" y="400">もふもふ王国</text><text x="606" y="393">東の山並み</text></g>
   </svg>`;

@@ -1,6 +1,18 @@
 'use strict';
 const {setup,root}=require('./story_harness.cjs'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const report={kind:'Actual boss modules, cinematic coordinator, core stepping and play scene; CPU/DOM fixture only',bosses:[],characterEvents:[],lifecycle:[]};
+{
+ const {G,env}=setup();
+ const panels=Array.from({length:8},(_,i)=>G.storybook.passage(i,true));
+ assert.equal(new Set(panels.map(panel=>panel.svg)).size,8);
+ panels.forEach((panel,i)=>{
+   assert.match(panel.svg,/<svg/);
+   assert.equal(panel.caption,G.storybook.passage(i+1,false).caption);
+ });
+ G.story.beginStage('inu',1);assert(G.story.flush());
+ const walk=e=>[e,...e.children.flatMap(walk)];
+ assert(walk(env.c.document.body).some(e=>e.className==='journey-plate'&&e.innerHTML.includes('<svg')));
+}
 const types=['garm','shark','ghost','cerbe','slime','dragon','kuroinu','emperor'];
 {const {G}=setup();assert.deepEqual(Object.entries(G.foes.types).filter(([id,d])=>d.boss).map(([id])=>id).sort(),types.slice().sort(),'all actual registered bosses covered');assert.deepEqual(Array.from(G.heroes.ids).sort(),Object.keys(G.story.heroes).sort(),'all playable characters covered');}
 for(const type of types)for(const form of (type==='emperor'?[1,2,3]:[1])){
