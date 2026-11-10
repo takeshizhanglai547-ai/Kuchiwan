@@ -383,6 +383,13 @@ function buildCSS(){
 #iu .strow.world-route{display:block;position:relative;isolation:isolate;width:100%;height:clamp(280px,57vh,530px);padding:0;background:#bde9ef;border:2px solid #a9bd97;border-radius:1em;overflow:hidden}
 #iu .world-route::before{display:none}
 #iu .world-path{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#iu .strow.world-route.world-painted{height:clamp(200px,52vw,52vh);background:#e7d5ac}
+#iu .world-painted::after{content:'';position:absolute;inset:0;border:4px solid #fff0cd90;border-radius:inherit;box-shadow:inset 0 0 22px #77563f70;pointer-events:none}
+#iu .world-painted img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+#iu .world-painted .stc{box-shadow:0 0 0 2px #fff1d7,0 3px 6px #59344e70}
+#iu .world-painted .stc.on{box-shadow:0 0 0 3px #ffdc81,0 4px 9px #59344e80}
+#iu .world-painted .stc.lock{opacity:.93}
+
 #iu .world-route .stc{position:absolute;left:var(--map-x);top:var(--map-y);transform:translate(-50%,-50%);width:clamp(44px,8vw,85px);height:44px;min-height:44px;max-width:none;padding:3px;gap:0;justify-content:center;z-index:1;border-radius:12px}
 #iu .world-route .stc.on{translate:none;scale:1.06;z-index:2}
 #iu .world-route .stc .sst{display:none}
@@ -884,17 +891,32 @@ function buildStages(s){
     sea:['#c2e7de','#79b6b6','<path d="M144 243v-65m0 33-33-24m33 40 39-31m400 92v-89m0 44-30-18m30-5 35-25" stroke="#e994a2" stroke-width="12"/><path d="M320 175l62-45 62 45zm17 0v55m45-55v55m45-55v55" fill="#fbefcd"/>'],
     war:['#efd8ba','#bd9d84','<path d="M150 201h106l-19-32h-68zm14 0v50m79-50v50M583 218h120l-26-40h-68zm15 0v48m87-48v48" fill="#dfa1a9"/>']
   };
+  const paintedPins=[
+    [[13,79],[29,63],[27,35],[10,16],[51,43],[83,15],[80,46],[76,80],[92,68]],
+    [[13,73],[26,27],[81,26],[73,66],[52,46]],
+    [[15,75],[34,32],[57,67],[80,35]],
+    [[20,41],[69,34],[86,71]],
+    [[79,22],[19,60],[40,34],[39,76],[58,55],[61,22],[90,53],[82,75],[13,28]],
+    [[35,48],[80,68]]
+  ];
   function renderPage(page){
     const group=s.pages[page];
     s.list=group.rows;
     const [paper,edge,art]=scenery[group.style]||scenery.bug;
     const trail=s.list.map((_,i)=>extraPins[i].map((v,j)=>v*(j===0?8:4.8)).join(',')).join(' ');
     row.innerHTML=group.lap===1?route:`<svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true"><path d="M22 250Q28 86 176 91Q310 26 430 88Q566 25 706 92Q784 103 773 248Q812 345 710 388Q604 450 475 393Q320 455 220 399Q48 426 22 250Z" fill="${paper}" stroke="${edge}" stroke-width="8"/><g stroke="#887387" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">${art}</g><polyline points="${trail}" fill="none" stroke="#a6907a" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${trail}" fill="none" stroke="#fff0c5" stroke-width="6" stroke-dasharray="6 9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const plate=G.mapArt?.[page];
+    const pins=plate?paintedPins[page]:(group.lap===1?positions:extraPins);
+    row.classList.toggle('world-painted',!!plate);
+    if(plate){
+      const path=s.list.map((_,i)=>{const [x,y]=pins[i];return (i?'L':'M')+(x*8)+' '+(y*4.8);}).join(' ');
+      row.innerHTML='<img alt="" draggable="false" src="'+plate+'"><svg class="world-path" viewBox="0 0 800 480" preserveAspectRatio="none" aria-hidden="true"><path d="'+path+'" fill="none" stroke="#6d4f62" stroke-width="10" stroke-opacity=".7" stroke-linecap="round" stroke-linejoin="round"/><path d="'+path+'" fill="none" stroke="#fff2cd" stroke-width="5" stroke-dasharray="4 8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
     s.els = [];
     s.list.forEach((st, i)=>{
       st = st || {};
       const c = el('button', 'stc' + (st.locked ? ' lock' : st.cleared ? ' clr' : ' nxt'), row); c.type = 'button'; c.tabIndex = -1; c.style.setProperty('--i', i);
-      const [x,y]=(group.lap===1?positions:extraPins)[i];c.style.setProperty('--map-x',x+'%');c.style.setProperty('--map-y',y+'%');
+      const [x,y]=pins[i];c.style.setProperty('--map-x',x+'%');c.style.setProperty('--map-y',y+'%');
       el('span', 'sn', c, st.locked ? '<i>'+lockSvg+'</i>' : String(st.chapter||i+1));
       wordWrap(el('span', 'stn', c), (group.lap===1&&shortNames[i]) || st.name);
       const ss = el('span', 'sst', c);
