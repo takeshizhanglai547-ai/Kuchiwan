@@ -56,6 +56,11 @@ if(G.publishedFactory){
     return e;
   }
   function syncFoe(p,e){const t=e.target;if(!t||t.removed)return;if(G.coop?.enabled){if(e.controlled)t._publishedOwner=p;else if(t._publishedOwner&&t._publishedOwner!==p)return;}
+    if(t._frenzyShift){
+      if(p._publishedCtx.ref.player.grabEnemy===e)p._publishedCtx.ref.gripControl('release');
+      e.controlled=false;e.protected=true;e.grabbedBy=-1;e.hp=t.hp;e.state='walk';
+      return;
+    }
     // Existing 3D bosses may replace their phase from onKO; preserve the new living phase.
     if(e.dead&&!t.dead&&t.hp>0){e.hp=t.hp;e.maxHp=t.maxHp;e.dead=false;e.state='walk';e.controlled=false;t.publishedReactive=false;return;}
     t.hp=Math.max(0,e.hp);if(!e.controlled){if(!e.protected)t.x=e.x/S;return;}
@@ -136,6 +141,7 @@ if(G.publishedFactory){
           if(G.coop?.enabled&&e.target._publishedOwner&&e.target._publishedOwner!==p&&e.target.grabbedBy>0)return false;
           if(G.combat.publishedBlock(e.target,{src:p,dir:Math.sign(args[1]||p.face),power:args[2]||d?.special||d?.finisher||d?.knock?2:1}))return false;
           const scale=G.combat.publishedDamageScale?.(e.target,p,{native:e,attack:ctx.ref.player,grab:damageIsGrab(ctx,e,source)})??1;if(scale!==1)args[0]*=scale;
+          args[0]=G.frenzy?.limit(e.target,args[0])??args[0];
           const power=d?.ultMove||d?.finisher||args[3]?3:args[2]||d?.special?2:1;
           source.armor=G.combat.absorbStagger(e.target,power,damageIsGrab(ctx,e,source));
           return true;},

@@ -480,6 +480,7 @@ G.world = {
   },
   remove(e){
     const i = this.ents.indexOf(e); if(i>=0) this.ents.splice(i,1);
+    e._frenzyShift?.halo?.dispose();
     if(e.rig){ if(e.rig.root && e.rig.root.parent) e.rig.root.parent.remove(e.rig.root); try{ e.rig.dispose && e.rig.dispose(); }catch(err){ G.logError('rig.dispose', err); } }
     if(e.shadow){ if(e.shadow.parent) e.shadow.parent.remove(e.shadow); if(e.shadow.userData.dispose) e.shadow.userData.dispose(); e.shadow=null; }
     e.removed = true;

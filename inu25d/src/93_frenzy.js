@@ -8,13 +8,82 @@ const volley={id:'frenzyVolley',len:34,recover:22,anim:'slam',
   proj:[{at:7,kind:'shadow',count:3,spread:.065,dmg:9,oy:.65,vx:.23},
         {at:20,kind:'shadow',count:3,spread:.09,dmg:9,oy:.65,vx:.26}]};
 
+const SHIFT_FRAMES=80;
+const shade={bug:'#ffd271',space:'#86edff',sea:'#8af4de',war:'#ff9486'};
+const eligible=e=>e?.def?.boss&&(G.game?.diff?.frenzy||e.def.roundMoves);
+const belowHalf=e=>e.hp>0&&e.hp<e.maxHp*.5;
+const formOf=e=>e.form||1;
+const glow=(e)=>e.def.frenzyColor||shade[G.stage?.info?.journeyStyle]||'#ffc073';
+const ringGeo=new window.THREE.TorusGeometry(1,.030,6,40);
+const starGeo=new window.THREE.OctahedronGeometry(.12,0);
+function chargeHalo(e,color){
+  if(!G.scene)return null;
+  const T=window.THREE,root=new T.Group();
+  root.name='frenzy-transformation';
+  const mat=new T.MeshBasicMaterial({color,transparent:true,opacity:.7,depthWrite:false});
+  for(let i=0;i<3;i++){
+    const ring=new T.Mesh(ringGeo,mat);ring.rotation.x=Math.PI/2+i*.37;
+    ring.rotation.y=(i-1)*.48;root.add(ring);
+  }
+  for(let i=0;i<8;i++)root.add(new T.Mesh(starGeo,mat));
+  G.scene.add(root);
+  return {root,mat,dispose(){root.removeFromParent();mat.dispose();}};
+}
+function pulse(e,color,charge,t){
+  const h=e.height||2,scale=Math.min(1.12,h*.53);
+  if(charge){
+    const {root,mat}=charge;
+    root.position.set(e.x,e.y+h*.48,e.z);
+    root.rotation.y=t*.055;
+    root.scale.setScalar(scale*(.94+Math.sin(t*.14)*.13+t*.0035));
+    mat.opacity=.63+Math.sin(t*.18)*.20;
+    for(let i=3;i<root.children.length;i++){
+      const a=(i-3)*Math.PI/4-t*.045;
+      root.children[i].position.set(Math.cos(a)*1.23,Math.sin(a*2+t*.07)*.47,Math.sin(a)*1.23);
+    }
+  }
+  if(t===18||t===42||t===62){
+    G.fx?.burst?.('windRibbon',e.x,e.y+h*.45,e.z,{scale:1+t*.012,color,dir:e.face});
+    G.fx?.burst?.('stars',e.x,e.y+h*.60,e.z,{scale:1.5,color,count:9});
+    G.cam?.shake?.(t===62?4:2,10);
+  }
+}
+
 G.frenzy={
-  awaken(e,form){
-    e._frenzyForm=form;
-    e._frenzyNext=G.time.tick+34;
-    G.bossPhaseVisual(e);
-    G.fx.burst('shock',e.x,.03,e.z,{scale:2,color:'#ff526f'});
-    G.fx.burst('flame',e.x,e.y+.45,e.z,{count:16,scale:1.6});
+  duration:SHIFT_FRAMES,
+  limit(e,damage){
+    if(!eligible(e)||e.dead||e.transforming||e._frenzyShift||e._frenzyForm===formOf(e)||e.hp<e.maxHp*.5)return damage;
+    return Math.min(damage,e.hp-Math.max(1,Math.ceil(e.maxHp*.5)-1));
+  },
+  observe(e){
+    if(!eligible(e)||e.dead||e.transforming||e._frenzyShift||e._frenzyForm===formOf(e)||!belowHalf(e))return false;
+    const form=formOf(e),color=glow(e);
+    const shift=e._frenzyShift={form,color,age:0,intangible:!!e.intangible,shadowAlpha:e.shadowAlpha};
+    G.combat.cancel(e);e.pending=null;e.atkArmor=false;e.onInterrupt?.();H.release(e);
+    e.publishedReactive=false;e.grabbedBy=0;e.intangible=true;e.armorHitsLeft=0;e.poiseDmg=0;e.stun=0;
+    e.vx=e.vz=e.vy=0;e.y=0;e.onGround=true;e.gravScale=1;e.shadowAlpha=.36;
+    G.setState(e,'frenzyShift');G.setAnim(e,'roar',SHIFT_FRAMES);
+    shift.halo=chargeHalo(e,color);pulse(e,color,shift.halo,0);
+    H.say(e,e.def.frenzyLine||'さあ、ここからが本番だ！');
+    G.ui?.banner?.('第二形態へ変身！','狂乱 · '+e.def.name,SHIFT_FRAMES);
+    G.cam?.focus?.(e.x,e.height*.67,e.z,44,1.3);
+    G.fx?.flash?.(color,.18,13);
+    G.fx?.burst?.('ring',e.x,.10,e.z,{scale:2.8,color});
+    G.bus.emit('bossFrenzyStart',{boss:e,form});
+    return true;
+  },
+  awaken(e,shift){
+    const {form,color}=shift;
+    e._frenzyForm=form;e._frenzyNext=G.time.tick+23;
+    e.intangible=false;e.shadowAlpha=shift.shadowAlpha;e.cool=12;
+    e.rageDue=false;e.plan=null;e.noStagger=false;
+    if(e.def.roundMoves){e.phase=1;e.spdMul=1.15;}
+    G.setState(e,'idle');G.setAnim(e,'idle');
+    G.bossPhaseVisual?.(e);
+    G.fx?.flash?.(color,.25,16);
+    G.cam?.shake?.(5,25);G.cam?.kick?.(.8,16);
+    for(const fx of ['shock','ring','stars'])G.fx?.burst?.(fx,e.x,fx==='stars'?e.height*.72:.08,e.z,{scale:2.8,color,count:15});
+    G.bus.emit('bossFrenzyReady',{boss:e,form});
   },
   attack(e){
     if(!G.game?.diff?.frenzy||!e.def.boss||e.def.roundMoves||e.dead||e.scared||e.transforming)return false;
@@ -33,12 +102,14 @@ G.frenzy={
   },
   tick(){
     for(const e of G.world.ents){
-      if(!e.dead&&e.def?.boss&&G.game?.diff?.frenzy&&!e.transforming&&e.hp>0&&e.hp<e.maxHp*.5&&e._frenzyForm!==(e.form||1))G.story.frenzyPhase(e);
-      if(e._frenzySpeech&&G.time.tick>=e._frenzySpeech.at){
-        const {form}=e._frenzySpeech;
-        delete e._frenzySpeech;
-        if(!e.dead&&!e.transforming&&form===(e.form||1))this.awaken(e,form);
-      }
+      const shift=e._frenzyShift;
+      if(shift){
+        if(e.dead||e.removed||formOf(e)!==shift.form){
+          shift.halo?.dispose();delete e._frenzyShift;e.intangible=shift.intangible;
+        }else if(++shift.age>=SHIFT_FRAMES){
+          shift.halo?.dispose();delete e._frenzyShift;this.awaken(e,shift);
+        }else pulse(e,shift.color,shift.halo,shift.age);
+      }else this.observe(e);
       if(!e.dead&&e.crew&&ready(e))assemble(e);
       if(e.victim&&(e.dead||e.scared||(!e.atk&&!e.pending)))G.published?.releaseEnemyHold(e.victim,e);
     }

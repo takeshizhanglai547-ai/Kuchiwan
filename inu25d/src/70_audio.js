@@ -663,6 +663,59 @@ function battleArrangement(source,index,rage){
  return s;
 }
 for(let i=1;i<=9;i++){SONGS['boss'+i]=battleArrangement(SONGS['stage'+i],i-1,false);SONGS['boss'+i+'_phase2']=battleArrangement(SONGS['stage'+i],i-1,true);}
+// Two locally written phrases per encounter pair, with different scoring
+// families for insect garden, space, myth and the Sengoku provinces.
+const journeyScores=[
+ // BPM, tonic, mode, opening phrase, answering phrase
+ [119,67,'major',"1 . 3 5 6 - 5 3 | 2 4 6 4 5 - 3 2","4 6 5 3 2 . 3 4 | 5 . 3 2 1 - - ."],
+ [129,65,'mixo',"1 1 3 . 5 6 5 . | 4 . 6 5 3 2 4 .","2 . 4 6 7 6 4 2 | 5 4 2 . 1 3 1 -"],
+ [111,64,'minor',"1 - 3 2 1 5, 6, . | 6, 1 3 - 2 1 2 .","4 3 2 . 5 - 4 2 | 1 . 5, 7, 1 - - ."],
+ [126,62,'minor',"1 . 5, 1 3 . 2 1 | 6, . 6, 1 4 3 1 .","2 4 5 . 6 5 4 2 | 3 5 7 2' 1' - 5 ."],
+ [132,68,'lydian',"3 4 5 - 7 6 5 . | 2 5 6 1' 7 - 5 .","1' . 6 4 5 3 2 4 | 3 - 2 5 1 - - ."],
+ [112,57,'minor',"1 - 5 - 2' 7 6 . | 4 3 1 . 5 6 7 .","5 . 3 6 2' - 1' . | 7 5 3 . 1 - - ."],
+ [130,60,'lydian',"1 . 5 7 2' 1' 5 . | 6 . 1' 5 4 7 6 .","3 6 . 4 2' 5 7 . | 1' 6 4 . 1' - - ."],
+ [136,61,'minor',"5, 1 . 5, 3 2 . 1 | 6, 3 6 . 5 4 3 .","7, 2 5 - 3 6 5 4 | 2 5 7 . 1' - 1 ."],
+ [142,58,'minor',"1 3 1 . 5 7 1' . | 6 . 3 6 2' 1' 7 .","4 2 5 7 6 4 2 . | 3 7 2' 7 1' - - ."],
+ [116,65,'major',"1 5 1' - 7 5 3 . | 6 . 4 6 5 - 2 .","4 6 1' 6 2' . 7 5 | 3 2 5 2 1 - - ."],
+ [109,63,'lydian',"1 3 4 - 5 2 3 . | 6 - 4 6 1' 7 5 .","2 5 2' - 1' - 6 . | 5 . 3 2 1 - - ."],
+ [120,58,'minor',"1 . 3 5 4 - 2 . | 6, 1 4 - 6 5 3 .","4 - 2 6 5 3 7, . | 1 5, 1 3 1 - - ."],
+ [135,60,'minor',"1 5, . 1 3 5 7 . | 6 . 3 1 4 6 5 .","4 6 2' 1' 7 5 4 . | 3 2 7, 2 1 - - ."],
+ [116,64,'mixo',"1 - 2 3 5 . 6 5 | 4 3 . 2 3 - 5 .","6 5 3 . 2 5 6 . | 5 . 2 5 1 - 3 1"],
+ [123,59,'minor',"1 3 5 3 1 . 3 5 | 6 1' 6 5 3 . 4 2","2 - 5 . 4 6 2' . | 7 5 2 5 1 - - ."],
+ [127,62,'minor',"5 - 3 1 5, . 1 2 | 6, 1 4 3 5 4 2 .","2 . 4 6 5 . 3 2 | 5, 7, 2 . 1 - 5, 1"],
+ [121,66,'mixo',"3 . 2 1 5 - 6 . | 5 3 5 6 2' - 1' .","7 . 5 4 3 2 4 . | 5 - 3 2 1 - - ."],
+ [131,62,'minor',"5, 1 1 - 3 2 1 . | 6, . 1 4 6 . 5 4","5 7 1' - 7 4 2 . | 1 - 5, 7, 1 - - ."],
+ [110,67,'minor',"1' - 7 5 4 5 2 . | 6 5 . 3 4 - 2 .","1 . 4 3 5 - 7 . | 6 5 2 7, 1 - - ."],
+ [139,60,'mixo',"1 . 5, 1 2 4 5 . | 6 5 4 6 1' . 5 .","4 . 2 4 6 5 2 . | 5 4 2 5 1 - 3 1"],
+ [114,65,'mixo',"5 . 6 1' 5 - 3 . | 4 . 3 5 2 . 3 4","6 2' 1' 5 4 . 6 3 | 2 - 3 5 1 - - ."],
+ [124,60,'minor',"1 - 1 5, 3 5 3 . | 4 1 4 6 5 - 2 .","2 5 6 5 2 . 4 6 | 5, 5, 7, 2 1 - - ."],
+ [144,57,'minor',"1 3 5 . 1' 7 5 . | 4 6 1' 6 5 4 1 .","2 4 6 1' 7 4 2 . | 3 7 5 2 1 - 5, 1"]
+];
+const ensemble=[
+ ['marimba','fill:flute','pizz8:pizz','bounce','pop','xylo','fest2'],
+ ['pulse','arp:celesta','arp8:glock','drive','pop2','sq','boss2'],
+ ['flute','third:celesta','off:pizz','slow','night','flute','cave2'],
+ ['koto','fill:flute','pizz8:koto','two','sengoku','koto','oni']
+];
+journeyScores.forEach(([bpm,key,mode,a,b],index)=>{
+ const n=index+10,[lead,m2,comp,bass,drum,battleLead,battleDrum]=ensemble[index<5?0:index<9?1:index<12?2:3];
+ const minor=mode==='minor',ch=minor?'i VI iv V':'I IV ii V';
+ const song={bpm,key,mode,room:{beats:.75,fb:.22,wet:.23},ph:{a,b},
+   sec:{A:{ch,mel:'a b',lead,m2,comp,bass,drum},B:{from:'A',ch:minor?'VI i iv i':'vi I V I',mel:'b a'},A2:{from:'A',comp:'off:pizz'},B2:{from:'B',gl:'up'}},
+   order:['A','B','A2','B2']};
+ SONGS['stage'+n]=song;
+ for(const rage of [false,true]){
+  const score=battleArrangement(song,index,rage);
+  score.bpm=bpm+(rage?38:18);
+  for(const sec of Object.values(score.sec)){
+   sec.lead=rage?(index>=12?'koto':'brass'):battleLead;
+   sec.drum=rage?(index>=12?'oni':'final2'):battleDrum;
+   sec.m2=rage?'arp:xylo:16':m2;
+  }
+  if(rage)score.order=['B','A','B2','A2'];
+  SONGS['boss'+n+(rage?'_phase2':'')]=score;
+ }
+});
 SONGS.final_phase2=battleArrangement(SONGS.final,6,true);
 SONGS.final2=battleArrangement(SONGS.final,6,false);SONGS.final2.bpm=164;SONGS.final2.key=65;
 SONGS.final2_phase2=battleArrangement(SONGS.final2,6,true);
@@ -673,7 +726,7 @@ SONGS.final3.ph.a3="1' - 3' 5' 3' - 1' 7 | 6 - 1' 4' 2' - 7 5";
 SONGS.final3.ph.a4="4 - 6 - 7 - 2' - | 1' - - - . . 5, -";
 SONGS.final3_phase2=battleArrangement(SONGS.final3,8,true);SONGS.final3_phase2.bpm=184;
 function bossTrack(stageIndex,bossType,form,rage){
- const n=clamp((stageIndex|0)+1,1,9),base=bossType==='emperor'?(form>=3?'final3':form===2?'final2':'final'):'boss'+n;
+ const candidate=(stageIndex|0)+1,n=SONGS['boss'+candidate]?candidate:clamp(candidate,1,9),base=bossType==='emperor'?(form>=3?'final3':form===2?'final2':'final'):'boss'+n;
  return base+(rage?'_phase2':'');
 }
 
@@ -1313,7 +1366,9 @@ function subscribe(){
   on('hurt', (d)=>{ if(isHero(d.ent) && d.ent.type) voice(d.ent.type, 'hurt'); });
   on('go', ()=> sfx('go'));
   on('bossIntro', ()=> sfx('bossRoar'));
-  on('bossPhase', (d)=>{sfx('bossRoar', { vol:0.8, pitch:1.1 });const b=d.boss;if(G.sceneName==='play'&&b&&!b.dead&&b.hp>0)bgm(bossTrack(G.game?.stageIndex||0,b.type,b.form||1,!d.formTransition));});
+  on('bossPhase', (d)=>{sfx('bossRoar', { vol:0.8, pitch:1.1 });const b=d.boss;if(G.sceneName==='play'&&b&&!b.dead&&!b._frenzyShift&&b.hp>0)bgm(bossTrack(G.game?.stageIndex||0,b.type,b.form||1,!d.formTransition));});
+  on('bossFrenzyStart',({boss})=>{if(G.sceneName!=='play')return;bgm(null);sfx('bossRoar',{vol:.65,pitch:.75});sfx('ult',{delay:.26,vol:.56});});
+  on('bossFrenzyReady',({boss})=>{if(G.sceneName!=='play'||boss.dead)return;sfx('bossRoar',{vol:.85,pitch:1.12});bgm(bossTrack(G.game?.stageIndex||0,boss.type,boss.form||1,true));});
   on('bossForm', (d)=>{const b=d.boss;if(G.sceneName==='play'&&b&&!b.dead&&b.hp>0)bgm(bossTrack(G.game?.stageIndex||0,b.type,b.form||d.form||1,false));});
   on('bossDown', ()=>{ sfx('hitBig'); sfx('star', { delay:0.3 }); });
   // 最終ボスのあとは 90_game が bgm('clear') のジングルを鳴らす。中ボス（ステージ7のクロイヌ）だけはここでファンファーレ

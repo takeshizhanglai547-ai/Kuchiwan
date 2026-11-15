@@ -3,7 +3,7 @@
 const G=window.G,T=window.THREE;
 const ink='#4d3d59',cream='#fff2d7',gold='#f8ce79',mint='#a8e8dc',pink='#eda1bb',silver='#d8e6ef';
 const cache=new Map();
-function sculpt(draw){
+function sculpt(shape){
  const g=G.look.geo,b=G.look.builder();
  const egg=(x,y,z,rx,ry,rz,c)=>b.add(g.sphere(1,16,10),c,[x,y,z],null,[rx,ry,rz]);
  const box=(x,y,z,a,h,d,c,tilt=0)=>b.add(g.rbox(a,h,d,Math.min(.06,Math.min(a,h,d)*.45),2),c,[x,y,z],[0,0,tilt]);
@@ -264,7 +264,67 @@ function sculpt(draw){
    rod(.39,y+.24,.42,.54,y+1.18,.42,.06,'#846378');box(.54,y+1.22,.42,.50,.32,.36,'#a9899a');
   }else blade(.67,y+.91,.39);
  }
- draw(recipes);
+ // Props sit on the silhouette and repeat on both sides of the belt camera.
+ function pin(x,y,z,size,color,kind='star'){
+  const s=size;
+  const geometry=kind==='heart'?g.heart(.5,.1):g.star(.5,.42,.1);
+  b.add(geometry,color,[x,y,z],[0,z<0?Math.PI:0,.12],[s,s,s]);
+ }
+ function blossom(x,y,z,size,color){
+  for(let i=0;i<5;i++){
+   const a=i*Math.PI*2/5;
+   egg(x+Math.cos(a)*size*.58,y+Math.sin(a)*size*.56,z,size*.49,size*.32,size*.22,color);
+  }
+  egg(x,y,z+Math.sign(z)*size*.10,size*.32,size*.30,size*.26,gold);
+ }
+ const details={
+  caterpillar(){for(const z of [-.30,.30])blossom(-.31,.58,z,.139,'#f9ef9a');},
+  mantis(){for(const z of [-.31,.31]){egg(-.36,.70,z,.22,.057,.12,'#a9d891');rod(-.53,.69,z,-.26,.75,z,.013,'#e1f3af');}},
+  bee(){for(const z of [-.31,.31])blossom(.13,.78,z,.121,'#f5a8b2');},
+  spider(){for(const z of [-.43,.43])pin(-.54,.59,z,.24,'#e6bded','heart');},
+  beetle(){for(const z of [-.33,.33])egg(-.50,.86,z,.22,.057,.09,'#c29dc6');},
+  ant(){rod(.45,.23,.38,.63,1.05,.38,.032,'#846572');cone(.64,1.11,.38,.07,.22,'#f8da96',-.17);},
+  moth(){for(const z of [-.59,.59])blossom(-.36,.97,z,.20,'#e2baff');},
+  scytheKnight(){for(const z of [-.35,.35]){blossom(.12,1.01,z,.225,'#f8eab2');egg(-.23,.68,z,.28,.12,.087,'#6c9e76');}},
+  queenBee(){for(const z of [-.41,.41])blossom(.09,1.02,z,.235,'#ffeec0');egg(-.93,.54,0,.18,.11,.17,'#a77c66');},
+  arachne(){for(const z of [-.61,.61]){pin(-.62,.74,z,.31,'#efb8df');blossom(-.28,1.29,z*.57,.166,'#f6bbd6');}},
+  stag(){for(const z of [-.45,.45]){pin(-.40,.80,z,.39,'#d0d9ef');egg(-.32,1.08,z*.63,.13,.11,.12,'#efc38f');}},
+  mothQueen(){for(const z of [-.81,.81]){blossom(-.55,1.24,z,.21,'#fff2c8');pin(-.16,1.03,z*.56,.25,'#d799da','heart');}},
+  alien(){for(const z of [-.23,.23])pin(-.06,.45,z,.24,'#e2c0f2');},
+  rover(){for(const z of [-.34,.34]){pin(-.18,.6,z,.24,'#ffd396');egg(-.28,.29,z*1.18,.071,.060,.031,'#98e5de');}},
+  saucer(){for(const z of [-.61,.61])pin(-.10,.52,z,.19,'#ffe5b6');},
+  blob(){for(const z of [-.36,.36])pin(-.03,.49,z,.18,'#ece0ff');},
+  greyKing(){for(const z of [-.48,.48])pin(-.29,.73,z,.28,'#f6cb97','heart');egg(-.08,1.68,0,.115,.109,.115,'#e5a4ca');},
+  mothership(){for(const z of [-.82,.82])pin(-.30,.51,z,.36,'#adf1e3');},
+  bioCore(){for(const z of [-.51,.51])pin(-.46,.91,z*.83,.45,'#f0dcfa','heart');},
+  starEmperor(){for(const z of [-.68,.68])pin(-.22,.76,z,.37,'#ffe2a0');},
+  jelly(){for(const z of [-.40,.40])pin(-.29,.83,z,.21,'#ffe1ea');},
+  hoplite(){for(const z of [-.36,.36])rim(.36,.50,z,.17,.02,'#f0d59b');},
+  shark(){for(const z of [-.30,.30])pin(-.09,.67,z,.18,'#def9ec');},
+  tideCrab(){for(const z of [-.54,.54])pin(-.18,.58,z,.20,'#ffdbad','heart');},
+  zeus(){for(const z of [-.33,.33]){pin(-.13,1.02,z,.27,'#ffdf8a');egg(-.19,1.36,z,.115,.125,.114,'#e5d3ae');}},
+  poseidon(){for(const z of [-.34,.34]){blossom(-.36,.56,z,.20,'#eac3d5');pin(.13,1.24,z,.25,'#f9dda2');}},
+  hades(){for(const z of [-.40,.40]){pin(-.22,.71,z,.29,'#c8b1e4','heart');egg(-.29,.97,z,.092,.14,.07,mint);}},
+  banner(){pin(-.58,1.49,-.435,.30,cream);},
+  matchlock(){pin(.23,1.29,.32,.21,'#e5c0e0');},
+  helmet(){for(const z of [-.37,.37])blossom(-.13,1.29,z,.144,'#e8bda4');},
+  ninja(){for(const z of [-.34,.34])pin(-.17,.58,z,.22,'#e3cde9');},
+  horse(){for(const z of [-.37,.37])pin(-.29,.67,z,.22,'#eec49b');},
+  nobunaga(){for(const z of [-.55,.55])pin(-.28,.83,z,.29,'#f8d28a');},
+  hideyoshi(){for(const z of [-.42,.42])blossom(-.32,.67,z,.20,'#f8e0a1');},
+  ieyasu(){for(const z of [-.40,.40])blossom(-.24,1.18,z,.16,'#d7e0aa');},
+  yoshimoto(){for(const z of [-.45,.45])pin(-.36,.44,z,.35,'#fbdb9d');},
+  kenshin(){for(const z of [-.36,.36])pin(-.19,.81,z,.25,'#e3dde9');},
+  shingen(){for(const z of [-.47,.47])pin(-.22,.68,z,.32,'#fff0bc');},
+  masamune(){for(const z of [-.42,.42])pin(-.21,.65,z,.29,'#c9e4ff');},
+  yukimura(){for(const z of [-.40,.40])pin(-.35,.66,z,.28,'#f8cd8d');},
+  motonari(){for(const z of [-.41,.41])blossom(-.25,.65,z,.15,'#dbe29b');},
+  ujiyasu(){for(const z of [-.41,.41])pin(-.17,.69,z,.28,'#e9d3a6');},
+  yoshihiro(){for(const z of [-.60,.60])pin(-.34,.61,z,.31,'#f6cadd','heart');}
+ };
+ recipes[shape]();
+ const feature=details[shape];
+ if(feature)feature();
  const geometry=b.build();geometry.userData.shared=true;
  return geometry;
 }
@@ -272,23 +332,25 @@ function sculpt(draw){
 G.roundModels={
  build(shape,scale,height){
   let geometry=cache.get(shape);
-  if(!geometry){geometry=sculpt(recipes=>recipes[shape]());cache.set(shape,geometry);}
+  if(!geometry){geometry=sculpt(shape);cache.set(shape,geometry);}
   const root=new T.Group(),body=new T.Group(),material=G.look.vmat({instance:true,rough:.76});
   const mesh=new T.Mesh(geometry,material);mesh.castShadow=true;body.add(mesh);root.add(body);body.scale.setScalar(scale);
   const outline=G.look.outline(mesh,.012,'#554154');
   const floating=['bee','queenBee','moth','saucer','mothership','jelly','mothQueen'].includes(shape);
   return {root,height,radius:.43*scale,shape,update(e){
    const move=e.atk?.def,pose=move?.pose,frame=e.animT||0,side=e.face||1;
-   const knocking=e.dead||e.state==='down';
+   const knocking=e.dead||e.state==='down',shift=e._frenzyShift;
+   const charge=shift?Math.sin(shift.age*.25)*.065+Math.min(shift.age,70)*.002:0;
    body.rotation.y=(side<0?Math.PI+.48:-.48)+(pose==='spin'?e.atk.t/Math.max(1,move.len-1)*2*Math.PI:0);
    body.scale.z=side*scale;
    const tilt=e.pending?-.145:pose==='sweep'?Math.sin(frame*.23)*.24:pose==='rush'?.19:pose==='cast'?-.10:0;
    body.rotation.z=side*(knocking?-1.1:tilt);
    const striding=e.state==='move'||pose==='rush';
-   body.position.y=knocking?0:floating?.13+Math.sin(frame*.15)*.092:striding?Math.abs(Math.sin(frame*.31))*.09:0;
+   body.position.y=shift?Math.sin(shift.age*.045)**2*.29:knocking?0:floating?.13+Math.sin(frame*.15)*.092:striding?Math.abs(Math.sin(frame*.31))*.09:0;
    const breathe=knocking?1:1+Math.sin(frame*(striding?.62:.115))*(striding?.045:.018);
-   body.scale.y=scale*breathe;
-   material.userData.uFlash.value=e.flashT>0?.7:e.armorHitsLeft>0&&(e.pending||e.atk)?.20:0;
+   body.scale.y=scale*(breathe+charge);
+   body.scale.x=scale*(1+charge*.76);
+   material.userData.uFlash.value=shift?.44+Math.sin(shift.age*.24)*.20:e.flashT>0?.7:e.armorHitsLeft>0&&(e.pending||e.atk)?.20:0;
   },setAlpha(a){
    const transparent=a<1;
    if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}

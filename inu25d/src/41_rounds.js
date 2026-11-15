@@ -2,22 +2,22 @@
 (function(){'use strict';
 const G=window.G,F=G.foes,H=F.h,T=window.THREE;
 const worlds=[
- {name:'蟲の世界', style:'bug', base:'forest', color:'#a7d293', stages:[
+ {name:'蟲の世界', style:'bug', base:'forest', stages:[
   ['大輪の花園','大鎌騎士カマリス','town','scytheKnight',['caterpillarPup','mantisPup','mothPup']],
   ['蜂の巣大空洞','女王蜂ビーヴァ','cave','queenBee',['beePup','caterpillarPup','beetlePup']],
   ['蜘蛛糸の森','糸姫アラクネ','forest','arachne',['spiderPup','mothPup','caterpillarPup']],
   ['地底の蟻帝国','大顎公クワガタス','cave','stag',['antPup','beetlePup','spiderPup']],
   ['蟲の女王の間','蟲の女王チャムルス','castle','mothQueen',['mothPup','beePup','beetlePup']]]},
- {name:'宇宙人の侵略', style:'space', base:'airship', color:'#a5b3ea', stages:[
+ {name:'宇宙人の侵略', style:'space', base:'airship', stages:[
   ['墜ちた円盤','グレイ王','airship','greyKing',['alienPup','rayPup','ufoPup']],
   ['星間回廊','円盤母艦ディスコ','castle','mothership',['ufoPup','rayPup','blobPup']],
   ['母船コア','増殖体バイオブロブ','cave','bioCore',['blobPup','alienPup','rayPup']],
   ['皇帝の玉座','銀河皇帝エックス','castle','starEmperor',['alienPup','ufoPup','blobPup']]]},
- {name:'ポセイドンと神話の世界', style:'sea', base:'cave', color:'#8bdad2', stages:[
+ {name:'ポセイドンと神話の世界', style:'sea', base:'cave', stages:[
   ['オリュンポスの神域','主神ゼウス','snow','zeus',['coralPup','shellPup','tidePup']],
   ['海神の神殿','海神ポセイドン','cave','poseidon',['sharkPup','tidePup','coralPup']],
   ['冥府ステュクスの河','冥王ハデス','forest','hades',['shellPup','sharkPup','coralPup']]]},
- {name:'戦国編', style:'war', base:'sengoku', color:'#ecc097', stages:[
+ {name:'戦国編', style:'war', base:'sengoku', stages:[
   ['炎上する天守','第六天魔王・信長','onibattle','nobunaga',['matchlockPup','bannerPup','helmetPup']],
   ['夕暮れの城下町','秀吉','sengoku','hideyoshi',['bannerPup','ninjaPup','matchlockPup']],
   ['三方ヶ原の野','家康','town','ieyasu',['helmetPup','matchlockPup','horsePup']],
@@ -110,10 +110,10 @@ minions.forEach(args=>soldier(...args));
 const bossSize={queenBee:[1.85,2.45,.72],arachne:[1.75,2.08,.78],stag:[1.65,2.15,.8],
  mothership:[1.66,2.25,.85],bioCore:[1.75,2.45,.77],poseidon:[1.55,2.68,.72],
  yoshimoto:[1.40,3.05,.81],shingen:[1.65,2.64,.75],yukimura:[1.40,3.05,.81]};
-function bossDefinition(id,name,shape,index){
+function bossDefinition(id,name,shape,index,style){
  const moves=G.roundMoves.make(shape,id);
  const [scale,height,radius]=bossSize[shape]||[1.60,2.72,.69];
- F.define(id,{name,boss:true,elite:true,hp:410+index*20,spd:.062,height,radius,weight:2.35,poise:88,score:1600,xp:82,roundMoves:moves,
+ F.define(id,{name,boss:true,elite:true,hp:410+index*20,spd:.062,height,radius,weight:2.35,poise:88,score:1600,xp:82,roundMoves:moves,frenzyColor:G.roundMoves.color(shape),frenzyStyle:style,
   build(e){
    const rig=G.roundModels.build(shape,scale,height);
    if(e){
@@ -128,13 +128,13 @@ function bossDefinition(id,name,shape,index){
   ai(e){
    const p=H.target(e);if(!p){H.stop(e);return;}
    H.face(e,p);
-   const enraged=e.hp<e.maxHp*.5,n=e.roundMove||0;
-   const move=moves[enraged&&!e.roundEnraged?3:n%(enraged?4:3)];
+   const enraged=e._frenzyForm===(e.form||1),n=e.roundMove||0;
+   const move=moves[enraged&&!e.roundEnraged?3:n%(enraged?moves.length:3)];
    if(Math.abs(p.x-e.x)>move.reach||Math.abs(p.z-e.z)>move.lanes){
     H.walkTo(e,p.x-e.face*Math.min(2,move.reach*.68),p.z);return;
    }
    H.stop(e);if(e.cool>0)return;
-   if(H.attack(e,move,move.windup)){
+   if(H.attack(e,move,enraged?Math.round(move.windup*.86):move.windup)){
     e.roundEnraged=enraged;
     e.roundMove=moves.indexOf(move)+1;
     H.say(e,move.name+'！');
@@ -143,23 +143,16 @@ function bossDefinition(id,name,shape,index){
 }
 
 const themes=G.stage.THEMES;
-const weather={
- bug:{sky:['#c2b2ec','#eee0b8','#eff0b0'],fog:'#c6cba3',ground:'#789d6d'},
- space:{sky:['#29254d','#6b609e','#b7acd9'],fog:'#756a99',ground:'#676f9c'},
- sea:{sky:['#244e76','#5aafba','#c8e7da'],fog:'#72b6bd',ground:'#659f9d'},
- war:{sky:['#695173','#c48292','#f1be99'],fog:'#ac8392',ground:'#b4987d'}
-};
 worlds.forEach((w,worldIndex)=>w.stages.forEach(([name,bossName,base,shape,[a,b,c]],i)=>{
- const lap=worldIndex+2,id='lap'+lap+'Boss'+(i+1),th=themes[base]||themes[w.base],env=weather[w.style];
- bossDefinition(id,bossName,shape,i);
+ const lap=worldIndex+2,id='lap'+lap+'Boss'+(i+1),th=G.journeyScenery.theme(themes[base]||themes[w.base],w.style,i);
+ const [first,second,third,arena]=th.marks;
+ bossDefinition(id,bossName,shape,i,w.style);
  const start=i===0?'扉の向こうに「'+w.name+'」が広がっている。仲間と一緒に新しい道を進もう。':name+'へ着いた。'+bossName+'がこの先で待っている。';
  const clear=i===w.stages.length-1?w.name+'を踏破した。次の旅に備えて、チャムの店へ戻ろう。':bossName+'を退けた。次は「'+w.stages[i+1][0]+'」へ向かおう。';
  G.stages.push({id:'lap'+lap+'stage'+(i+1),no:G.stages.length+1,lap,chapter:i+1,region:w.name,journeyStyle:w.style,name,kana:name,
-  intro:start,epilogue:clear,length:108+i,bgm:'stage'+(2+(i+worldIndex)%7),
-  theme:{...th,sky:{...th.sky,top:env.sky[0],mid:env.sky[1],bot:env.sky[2]},fog:{...th.fog,color:env.fog},
-    particles:{...th.particles,a:w.color,b:'#fff2c7'},roundStyle:w.style,roundColor:w.color},
-  waves:[{at:18,width:15,foes:[[a,2],[b,1]]},{at:43,width:16,foes:[[c,2],[a,1]],reward:'bone'},
-    {at:69,width:17,foes:[[a,1],[b,1],[c,2]],then:[[b,1]],reward:'coin'}],
-  boss:{type:id,at:91,x:91},hints:[{at:8,name:'モフじい',text:'地面が光ったら、その場所から離れよう。ボスの体力が半分を切ると大技が来るぞ。'}],props:[]});
+  intro:start,epilogue:clear,length:arena+16,bgm:'stage'+(G.stages.length+1),theme:th,
+  waves:[{at:first,width:15,foes:[[a,2],[b,1]]},{at:second,width:16,foes:[[c,2],[a,1]],reward:'bone'},
+    {at:third,width:17,foes:[[a,1],[b,1],[c,2]],then:[[b,1]],reward:'coin'}],
+  boss:{type:id,at:arena,x:arena},hints:[{at:8,name:'モフじい',text:'地面が光ったら、その場所から離れよう。ボスの体力が半分を切ると大技が来るぞ。'}],props:[]});
 }));
 })();

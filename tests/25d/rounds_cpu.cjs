@@ -5,7 +5,7 @@ function fixture(){
  const g=game('inu',{foes:[],actualRig:true}),{G}=g;
  G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);
  Object.assign(G.game.diff,{foeHp:1,foeSpeed:1,think:1,attackers:3});
- for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_models','41_round_moves','41_rounds','93_frenzy','95_ailments'])
+ for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_models','41_round_moves','41_round_scenery','41_rounds','93_frenzy','95_ailments'])
    vm.runInContext(readModule(f+'.js'),g.env.c,{filename:f});
  G.foes.init();return g;
 }
@@ -13,6 +13,9 @@ function fixture(){
  const g=fixture(),{G}=g;
  assert.deepEqual([1,2,3,4,5].map(lap=>G.stages.filter(s=>(s.lap||1)===lap).length),[9,5,4,3,11]);
  assert.equal(new Set(G.stages.map(s=>s.id)).size,32);
+ const journeys=G.stages.filter(s=>s.lap>1);
+ assert.equal(new Set(journeys.map(s=>s.theme.journey)).size,23);
+ assert.equal(new Set(journeys.map(s=>s.bgm)).size,23);
  for(const s of G.stages){
    for(const w of s.waves)for(const [id] of [...w.foes,...w.then||[]])assert(G.foes.types[id],id);
    assert(G.foes.types[s.boss.type].boss);
@@ -83,7 +86,7 @@ function fixture(){
  for(const stage of laterStages){
   const boss=G.foes.spawn(stage.boss.type,7,0,{entrance:'ready'});
   sculpts.add(mesh(boss.rig));
-  assert.equal(boss.def.roundMoves.length,4);
+  assert.equal(boss.def.roundMoves.length,5);
   for(const move of boss.def.roundMoves){
    p.inv=9999;boss.x=7;boss.y=0;boss.z=0;boss.face=-1;
    G.combat.start(boss,move);
@@ -106,14 +109,18 @@ function fixture(){
   boss.x=p.x+1.15;boss.z=p.z;boss.state='idle';boss.cool=0;boss.def.ai(boss);
   assert.equal(boss.pending.def,boss.def.roundMoves[0]);
   boss.pending=null;boss.state='idle';boss.cool=0;boss.hp=boss.maxHp*.49;
-  G.game.diff.frenzy=true;boss._frenzyForm=1;boss._frenzyNext=0;
+  G.game.diff.frenzy=true;
+  assert(G.frenzy.observe(boss));
+  for(let t=0;t<G.frenzy.duration;t++)G.frenzy.tick();
+  boss.cool=0;
+  assert(boss._frenzyForm===1&&!boss.intangible);
   assert.equal(G.frenzy.attack(boss),false,'Frenzy preserves the boss-specific sequence');
   boss.def.ai(boss);
   assert.equal(boss.pending.def,boss.def.roundMoves[3]);
   G.world.remove(boss);
  }
  assert.equal(sculpts.size,43);
- assert.equal(moves.size,92);assert.equal(names.size,92);assert.equal(traces.size,92);
+ assert.equal(moves.size,115);assert.equal(names.size,115);assert.equal(traces.size,115);
  assert.deepEqual(Array.from(G.errors),[]);
 }
 {
@@ -141,6 +148,12 @@ function fixture(){
   shell.dispose=()=>{shellDisposals++;originalDispose();};
   foe.state='idle';foe.inv=0;
   G.combat.damage(foe,foe.maxHp*2,{src:p,power:3,dir:1});
+  if(foe.def.boss){
+   assert(foe._frenzyShift&&foe.intangible&&foe.hp>0);
+   assert(!G.combat.damage(foe,99999,{src:p,dir:1}));
+   for(let t=0;t<G.frenzy.duration;t++)G.frenzy.tick();
+   G.combat.damage(foe,foe.maxHp*2,{src:p,power:3,dir:1});
+  }
   assert(foe.dead&&foe.ignoreForClear);
   for(let i=0;i<270&&!foe.removeMe;i++){
    G.foes.tick(foe);G.phys(foe,null);foe.rig.update(foe);
@@ -149,7 +162,7 @@ function fixture(){
   assert.equal(shellDisposals,1);
   assert.equal(shell.root.parent,null);
   assert.equal(foe.anim,'run');
-  assert.equal(bubbles.filter(args=>args[5]?.ent===foe&&args[4]==='say').length,1);
+  assert.equal(bubbles.filter(args=>args[5]?.ent===foe&&args[4]==='say'&&/ありがとう|助かった/.test(args[0])).length,1);
   assert.equal(reveals.filter(event=>event.ent===foe&&event.rescued).length,1);
   assert(foe.rig!==shell,type);
   if(foe.def.boss)assert(foe.rig.height<foe.height,type);
@@ -194,4 +207,17 @@ function fixture(){
  }
  for(const frenzy of [false,true])for(const type of ['mantisPup','lap2Boss3'])rhythm(type,frenzy);
 }
-console.log('PASS five routes, 92 boss moves, ailments and armor, puppy rescue and rewards, and faster attacks with original windups');
+{
+ const {G,p,n,key,step}=fixture();
+ const e=G.foes.spawn('lap2Boss1',p.x+.83,p.z,{entrance:'ready'});
+ e.state='idle';e.hp=Math.ceil(e.maxHp*.5)+4;
+ n.player.atkMul=200;
+ key('KeyJ');step(1);key('KeyJ',false);step(34);
+ assert(e._frenzyShift&&!e.dead,'native melee reaches the protected half-HP transition');
+ assert.equal(e.hp,Math.ceil(e.maxHp*.5)-1);
+ assert.equal(e.state,'frenzyShift');
+ const halo=e._frenzyShift.halo;
+ G.world.remove(e);
+ assert.equal(halo.root.parent,null);
+}
+console.log('PASS five routes, 115 boss moves, ailments and armor, puppy rescue and rewards, and faster attacks with original windups');

@@ -2,16 +2,29 @@
 // definitions or command dispatch are owned here.
 (function(){'use strict';const G=window.G;
 // Phase dressing owns its geometry/materials; never recolor shared rig resources.
-G.bossPhaseVisual=function(e,rig=e?.rig){if((!e?.phase&&!e?._frenzyForm)||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
- const T=window.THREE,height=e.height||e.def?.height||2.5,colors={garm:'#ff8e48',shark:'#5cdde8',ghost:'#c283ff',cerbe:'#ff654e',slime:'#7dff80',dragon:'#ffce48',kuroinu:'#b989ff',emperor:e.form===3?'#ffe7a1':'#ff657a'},color=colors[e.type]||'#ffb36c';
+G.bossPhaseVisual=function(e,rig=e?.rig){if(e?._frenzyShift||(!e?.phase&&!e?._frenzyForm)||!rig?.root||rig.phaseDressing)return rig?.phaseDressing||null;
+ const T=window.THREE,height=e.height||e.def?.height||2.5,colors={garm:'#ff8e48',shark:'#5cdde8',ghost:'#c283ff',cerbe:'#ff654e',slime:'#7dff80',dragon:'#ffce48',kuroinu:'#b989ff',emperor:e.form===3?'#ffe7a1':'#ff657a'},color=e.def?.frenzyColor||colors[e.type]||'#ffb36c';
  const group=new T.Group();group.name='rage-dressing-'+e.type+'-'+(e.form||1);const parent=rig.kit?.body||rig.root;parent.add(group);
  const mat=new T.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.65,metalness:.35,roughness:.4}),geos=[];
  const add=(geo,x,y,z,rz=0)=>{geos.push(geo);const m=new T.Mesh(geo,mat);m.position.set(x,y,z);m.rotation.z=rz;group.add(m);return m;};
- const n=e.type==='cerbe'?9:e.type==='ghost'?3:e.type==='slime'?5:7;
- for(let i=0;i<n;i++){const a=(i/(n-1)-.5)*Math.PI*.8,yy=height*.7+Math.cos(a)*height*.2,zz=Math.sin(a)*height*.28;
-  if(e.type==='ghost'||e.type==='slime')add(new T.SphereGeometry(height*.05,8,6),-.13,yy,zz);
-  else add(new T.ConeGeometry(height*.045,height*.2,6),-.16,yy,zz,(i-(n-1)/2)*.18);}
- const halo=add(new T.TorusGeometry(height*.25,height*.015,5,28),-.28,height*.68,0);halo.rotation.y=Math.PI/2;
+ const style=e.def?.frenzyStyle;
+ const n=e.type==='cerbe'||style==='bug'?9:e.type==='ghost'||style==='space'?3:e.type==='slime'?5:7;
+ for(let i=0;i<n;i++){
+  const a=(i/(n-1)-.5)*Math.PI*.8,yy=height*.7+Math.cos(a)*height*.2,zz=Math.sin(a)*height*.28;
+  if(style==='bug'){
+   const petal=add(new T.SphereGeometry(height*.067,9,6),-.29,yy,zz);
+   petal.scale.set(.65,1.8,.85);petal.rotation.x=a;
+  }else if(style==='space'){
+   add(new T.OctahedronGeometry(height*.087),0,height*(.6+i*.03), (i-1)*height*.51, i*.52);
+  }else if(style==='sea'){
+   const pearl=add(new T.SphereGeometry(height*.061,9,6),-.22,yy,zz);
+   pearl.scale.y=1.38;
+  }else if(e.type==='ghost'||e.type==='slime')add(new T.SphereGeometry(height*.05,8,6),-.13,yy,zz);
+  else add(new T.ConeGeometry(height*.045,height*.2,6),-.16,yy,zz,(i-(n-1)/2)*.18);
+ }
+ const halo=add(new T.TorusGeometry(height*(style==='space'?.55:.25),height*.015,5,32),-.28,height*.68,0);
+ if(style==='space'){halo.rotation.x=Math.PI/2+.23;halo.rotation.z=.19;}
+ else halo.rotation.y=Math.PI/2;
  group.userData={type:e.type,form:e.form||1,phase:e.phase,distinctParts:n+1};rig.phaseDressing=group;
  const dispose=rig.dispose?.bind(rig);let disposed=false;rig.dispose=()=>{if(disposed)return;disposed=true;group.removeFromParent();for(const g of geos)g.dispose();mat.dispose();dispose?.();};return group;
 };
@@ -106,14 +119,7 @@ G.story={heroes:HEROES,bosses:BOSSES,history,
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;
   const h=HEROES[hero],stop=G.stages?.[stage];if(!h)return;enqueue({kind:'intro',key:'intro:'+run,title:CHAPTERS[stage]?.[0]||stop?.name||h.name+'、出発！',lines:[CHAPTERS[stage]?.[1]||stop?.intro||h.cue,h.start[stage]||'仲間と一緒なら、きっと先へ行ける！'],cue:h.cue,hero:id,player:G.player});G.coop?.enqueueStories('intro',run,index,enqueue,HEROES);},
  clearStage(){const id=G.game?.heroId||hero,h=HEROES[id];if(!h)return false;const accepted=enqueue({kind:'clear',hero:id,player:G.player,key:'clear:'+run,title:(G.game?.stageName||'王国')+' · 旅の記録',lines:[(G.stages?.[stage+1]?.lap===2&&!G.stages[stage]?.lap?'王国への道が開いた。街道の先に、巨大な花が咲く蟲の世界が現れた。':CHAPTERS[stage]?.[2])||G.stages?.[stage]?.epilogue||h.win,h.clear[stage]||'ひと休みして、次の旅に備えよう。'],cue:h.win});G.coop?.enqueueStories('clear',run,stage,enqueue,HEROES);return accepted;},
- frenzyPhase(boss){
-  if(!boss||boss.dead||boss.transforming)return false;
-  const form=boss.form||1;
-  if(boss._frenzyForm===form||boss._frenzySpeech?.form===form)return false;
-  G.foes.h.say(boss,'ここからが本番だ。狂乱の力を見よ！');
-  boss._frenzySpeech={form,at:G.time.tick+48};
-  return true;
- },
+ frenzyPhase(boss){return G.frenzy?.observe(boss)||false;},
  bossPhase(boss,phase){
   if(phase===2||!boss||boss.hp<=0||boss.dead||boss.transforming||boss.hp>=boss.maxHp*.5)return false;
   if(G.game?.diff?.frenzy)return this.frenzyPhase(boss);

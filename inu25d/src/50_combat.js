@@ -74,6 +74,7 @@ G.combat = {
   publishedHit(t,amount,info){
     if(G.story?.blocked)return;
     const e=info.native,src=info.src;t.hp=Math.max(0,e.hp);t.hpShowT=180;t.flashT=t.def?.boss?2:6;
+    G.frenzy?.observe(t);
     const d={src,target:t,x:t.x,y:t.y+t.height*.55,z:t.z,dmg:amount,kind:info.knock?'blunt':'slash',power:info.knock?2:1,dir:info.dir,grab:!!info.grab};
     G.bus.emit('hit',d);G.game?.onHeroHit?.(src,t,amount,info);
     if(t.hp>0&&t.def?.onHurt)t.def.onHurt(t,d);
@@ -97,7 +98,7 @@ G.combat = {
     const owner = o.owner || null;
     const p = {
       owner, team: o.team!=null ? o.team : (owner ? owner.team : 1), kind: o.kind || 'ball',
-      x:o.x, y:o.y, z:o.z, vx:o.vx||0, vy:o.vy||0, vz:o.vz||0, grav:o.grav||0, drag:o.drag||1,
+      x:o.x, y:o.y, z:o.z, vx:o.vx||0, vy:o.vy||0, vz:o.vz||0, grav:o.grav||0, drag:o.drag||1, returnAt:o.returnAt,
       dmg:o.dmg||5, r:o.r||0.35, life:o.life||90, age:0, pierce:o.pierce||0, power:o.power||1,
       stun:o.stun||16, kb:o.kb==null?0.08:o.kb, up:o.up||0, hitKind:o.hitKind || kindOf(o.kind), sets:new Set(),
       boom:o.boom||null, homing:o.homing||0, onGround:o.onGround||'die', rehit:o.rehit||0, vis:null, dead:false,
@@ -199,7 +200,7 @@ function meleeHit(e, h, set){
 function damage(t, amount, info){
   if(G.story?.blocked)return false;
   info = info || {};
-  if(!t || t.dead) return false;
+  if(!t || t.dead || t._frenzyShift) return false;
   if(t.published)return G.published.receiveDamage(t,amount,info);
   const src = info.src || null;
   const dir = info.dir || (src ? U.sign(t.x - src.x) : 1);
@@ -224,8 +225,10 @@ function damage(t, amount, info){
   if(src && src.team===1 && t.team===0) dmg *= D.foeDmg;
   if(t.team===0 && t.guardMul) dmg *= t.guardMul;
   dmg = Math.max(1, Math.round(dmg));
+  dmg=G.frenzy?.limit(t,dmg)??dmg;
   const launchReq = (info.up||0) > 0 || (t.y > 0.05 && !t.def?.boss) || (info.power||1) >= 3;
   t.hp -= dmg;
+  const shifted=G.frenzy?.observe(t);
   // bosses get hit constantly: a short flash keeps them readable instead of permanently white
   t.flashT = (t.def && t.def.boss) ? 2 : 6; t.hpShowT = 180; t.hurtDir = dir; t.lastHitBy = src;
   const x = t.x - dir*t.radius*0.4, y = t.y + t.height*0.55, z = t.z + 0.35;
@@ -241,6 +244,7 @@ function damage(t, amount, info){
   if(t.def && t.def.onHurt && t.hp>0){ try { t.def.onHurt(t, info); } catch(err){ G.logError('onHurt '+t.type, err); } }
   if(t.hp<=0){ t.hp = 0; ko(t, dir, info); return true; }
 
+  if(shifted)return true;
   if(t.team===1&&G.combat.absorbStagger(t,info.power||1,info.grab))return true;
   // bosses: poise instead of flinching on every hit
   const def = t.def;
@@ -323,6 +327,10 @@ function stepProjectiles(){
       let best=null, bd=1e9; eachTarget(0, (t)=>{ if(t.team!==1) return; const d=Math.abs(t.x-p.x)+Math.abs(t.z-p.z); if(d<bd && U.sign(t.x-p.x)===U.sign(p.vx||1)){ bd=d; best=t; } });
       if(best){ p.vz += U.clamp((best.z-p.z)*0.02, -0.01, 0.01)*p.homing; p.vy += U.clamp((best.y+best.height*0.5-p.y)*0.01, -0.01, 0.01)*p.homing; }
     }
+    if(p.returnAt===p.age){
+      p.vx*=-1.1;p.vz*=-.7;p.sets.clear();
+      G.fx?.burst?.('ring',p.x,p.y,p.z,{scale:.65,color:'#ffdea0'});
+    }
     p.vy += p.grav; p.vx *= p.drag; p.vz *= p.drag;
     p.x += p.vx; p.y += p.vy; p.z += p.vz; p.age++;
     if(p.vis){ p.vis.obj.position.set(p.x, p.y, p.z); try { p.vis.update && p.vis.update(p); } catch(err){ G.logError('proj.update', err); } }
@@ -362,7 +370,7 @@ function stepAreas(){
     eachTarget(a.team, (t)=>{
       if(a.sets.has(t.id)) return;
       const dx = (t.x - a.x)/(a.r + t.radius), dz = (t.z - a.z)/(zr + t.radius*0.5);
-      if(dx*dx + dz*dz > 1) return;
+      if(a.box?Math.max(Math.abs(dx),Math.abs(dz))>1:dx*dx + dz*dz > 1) return;
       if(t.y + t.height < a.y + a.y0 || t.y > a.y + a.y1) return;
       a.sets.add(t.id);
       damage(t, a.dmg, { src:a.owner, kind:a.kind, power:a.power, kb:a.kb, up:a.up, stun:a.stun, dir: a.dir || U.sign(t.x - a.x), dizzy:a.dizzy, coins:a.coins,status:a.status });

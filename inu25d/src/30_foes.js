@@ -170,6 +170,7 @@ G.foes = {
   },
   // framework per tick: reactions + AI
   tick(e){
+    if(e._frenzyShift)return;
     if(e.giveUpT>0 && !e.dead && --e.giveUpT===0){ e.dead = true; e.deadT = 0; e.gaveUp = true; e.atk = null; e.pending = null; G.setState(e, 'ko'); e.vy = 0.12; e.onGround = false; h.release(e); }
     if(e.flashT>0) e.flashT--;
     if(e.inv>0) e.inv--;

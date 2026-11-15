@@ -986,6 +986,56 @@ function fillPath(g, W, H, top, bot, col){
   g.closePath(); g.fill();
 }
 const GROUND = {
+  alloy:{
+    surround(g,W,H,R){
+      g.fillStyle='#455475';g.fillRect(0,0,W,H);g.lineWidth=3;
+      for(let x=0;x<W;x+=64)for(let y=0;y<H;y+=64){
+        g.strokeStyle='#354566';g.strokeRect(x+2,y+2,60,60);
+        g.fillStyle='#809bb2';g.fillRect(x+11,y+9,11,2);
+        if(R()<.55){g.fillStyle='#7fddd7';g.fillRect(x+7,y+17,3,16);}
+      }
+    },
+    belt(g,W,H,R){
+      g.fillStyle='#60749b';g.fillRect(0,0,W,H);
+      for(let y=0;y<H;y+=64)for(let x=-64;x<W;x+=112){
+        const px=x+(y%128?54:0);
+        g.fillStyle=R()<.48?'#6d88a8':'#5f7899';
+        roundRect(g,px+3,y+3,106,57,9);g.fill();
+        g.strokeStyle='#384e76';g.lineWidth=2;g.stroke();
+        g.fillStyle='#9ab6c6';g.fillRect(px+18,y+8,62,2);
+        for(const q of [10,102]){g.fillStyle='#8ea5bf';g.fillRect(px+q,y+49,3,3);}
+      }
+      for(const y of [8,H-17]){
+        g.fillStyle='#324767';g.fillRect(0,y-3,W,14);
+        for(let x=4;x<W;x+=34){g.fillStyle='#a2f1e9';g.fillRect(x,y+2,19,3);}
+      }
+    }
+  },
+  moonDust:{
+    surround(g,W,H,R){g.fillStyle='#887da3';g.fillRect(0,0,W,H);speckle(g,W,H,R,110,['#76698f','#aa9ab5','#9e94b3'],3,21);},
+    belt(g,W,H,R){
+      g.fillStyle='#a292b2';g.fillRect(0,0,W,H);speckle(g,W,H,R,90,['#ada0b9','#9183a6','#c0aeca'],2,12);
+      for(let i=0;i<15;i++){
+        g.fillStyle=i%2?'#8d7e9e':'#9687a8';g.strokeStyle='#b4a5c0';g.lineWidth=2;
+        g.beginPath();g.ellipse(R()*W,R()*H,6+R()*14,3+R()*10,0,0,TAU);g.fill();g.stroke();
+      }
+    }
+  },
+  wax:{
+    surround(g,W,H,R){g.fillStyle='#bb8360';g.fillRect(0,0,W,H);speckle(g,W,H,R,55,['#d59c69','#a9755c','#e2a66c'],7,22);},
+    belt(g,W,H,R){
+      g.fillStyle='#bf8f6b';g.fillRect(0,0,W,H);
+      for(let row=-1;row<9;row++)for(let x=-24;x<W+30;x+=55){
+        g.fillStyle=['#e3b07b','#edbf87','#d6a171'][Math.floor(R()*3)];
+        const cx=x+(row%2?27:0),cy=row*48+18;
+        g.beginPath();for(let j=0;j<6;j++){
+          const q=(j-.5)*TAU/6,u=cx+29*Math.cos(q),v=cy+27*Math.sin(q);if(j)g.lineTo(u,v);else g.moveTo(u,v);
+        }
+        g.closePath();g.fill();g.lineWidth=3;g.strokeStyle='#a9765c';g.stroke();
+      }
+    }
+  },
+
   sengoku:{
     base:'#b7ac87',
     surround(g,W,H,R){g.fillStyle=this.base;g.fillRect(0,0,W,H);speckle(g,W,H,R,55,['#9ca47c','#c3b68c','#a6a47d'],5,18,null,true);tufts(g,W,H,R,55,['#828e63','#a7ad7e'],null,true);},
@@ -1310,14 +1360,14 @@ function buildGround(def, th){
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
     g.computeBoundingSphere();
     const tex = own(paintTex(style, 'belt', 512, 384, 101 + def.no, false));
-    const mat = own(G.look.matInstance(0xffffff, { rough:0.92, rim:0, vertexColors:true }));
+    const mat = own(G.look.matInstance(th.beltTint||0xffffff, { rough:0.92, rim:0, vertexColors:true }));
     mat.map = tex; mat.userData.uRimMul.value = 0; mat.needsUpdate = true;
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.position.y = 0.002; m.name = 'belt';
     addObj(m);
   }
   // surroundings
   {
-    const air = th.scenery==='airship';
+    const air = th.narrowDeck||(!th.journey&&th.scenery==='airship');
     const x0 = -60, x1 = L + 60, z0 = air ? -7.7 : (th.brow != null ? th.brow - 9 : -34), z1 = air ? BELT_Z1 + 1.7 : 17;
     const zs = [];
     for(let z = z0; z < BELT_Z0 - 0.3; z += (z < -8 ? 2.5 : 1.2)) zs.push(z);
@@ -1337,7 +1387,7 @@ function buildGround(def, th){
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere();
     const tex = own(paintTex(style, 'surround', 256, 256, 201 + def.no, true));
-    const mat = own(G.look.matInstance(0xffffff, { rough:0.95, rim:0, vertexColors:true }));
+    const mat = own(G.look.matInstance(th.sideTint||0xffffff, { rough:0.95, rim:0, vertexColors:true }));
     mat.map = tex; mat.userData.uRimMul.value = 0; mat.needsUpdate = true;
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.position.y = air ? -0.004 : 0; m.name = 'surround';
     addObj(m);
@@ -1641,33 +1691,12 @@ function buildEnv(i){
   buildSky(th);
   buildGround(def, th);
   const c = makeCtx(def, 1234 + def.no*97);
-  SCENERY[th.scenery](c);
-  if(th.roundStyle){
-    const p=prims();
-    for(let x=8;x<def.length;x+=12){
-      const z=-4.5,y=c.h(x,z),color=th.roundColor;
-      c.at(x);
-      if(th.roundStyle==='bug'){
-        c.S(p.cyl6,'#fff0cc',[x,y+.75,z],null,[.2,1.5,.2]);
-        c.S(p.sph,color,[x,y+1.65,z],null,[1.2,.42,1.12]);
-        for(const dx of [-.5,.5])c.S(p.sph,'#ffe6b0',[x+dx,y+1.87,z+.25],null,.16);
-      }else if(th.roundStyle==='space'){
-        c.S(p.sph,'#9b92c4',[x,y+1.4,z],null,[1.4,.24,1.0]);
-        c.S(p.sph,color,[x,y+1.63,z],null,[.68,.38,.64]);
-        c.halo(x,y+1.3,z+.1,'#a8eeff',1.2);
-      }else if(th.roundStyle==='sea'){
-        for(const dx of [-.5,0,.5])c.S(p.cyl6,color,[x+dx,y+.76,z],null,[.16,1.5+Math.abs(dx),.16]);
-        c.S(p.sph,'#fac0b5',[x,y+1.41,z],null,[.78,.22,.42]);
-        c.halo(x,y+1.9,z+.1,'#a0eff0',.85);
-      }else{
-        c.S(p.cyl6,'#a47a69',[x,y+1.45,z],null,[.07,2.9,.07]);
-        c.S(p.box,color,[x+.37,y+2.31,z],null,[.7,.93,.04]);
-        c.S(p.sph,'#fff0cf',[x+.37,y+2.37,z+.04],null,[.17,.17,.04]);
-      }
-    }
+  if(th.journey)G.journeyScenery.build(c,prims(),KIT);
+  else{
+    SCENERY[th.scenery](c);
+    arenaDecor(c,def);
+    if(FARS[th.far])FARS[th.far](c);
   }
-  arenaDecor(c, def);
-  if(FARS[th.far]) FARS[th.far](c);
   const st = buildChunks(c);
   buildClouds(th);
   buildSpinners(c);

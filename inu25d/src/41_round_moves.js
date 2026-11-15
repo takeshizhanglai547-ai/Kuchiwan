@@ -127,10 +127,44 @@ const catalog={
   move('鬼島津・噴火の大太鼓','spin',48,62,ring(17,0,0,2.0,1.25,'flame',22,2.4),ring(38,-2.3,-1.03,1.52,.83,'flame',21,2.5),ring(38,2.3,1.03,1.52,.83,'flame',21,2.5),sweep(62,0,0,2.9,1.52,'shock',30,1.1))]]
 };
 
+// A second technique in the transformed form. These use different safe
+// spaces: returning shots, sustained traps, beam lanes and staggered blasts.
+const beam=(at,x,z,r,zr,y1=1.12,dmg=23)=>({...ring(at,x,z,r,zr,'shock',dmg,y1),box:true,linger:10});
+const trap=(at,x,z,r,zr,fx,dmg,status)=>({...ring(at,x,z,r,zr,fx,dmg,.84,status),linger:24});
+const returning=(at,kind,angles,speed,damage,extra={})=>shot(at,kind,angles,speed,damage,{returnAt:19,pierce:2,...extra});
+const transformed={
+ scytheKnight:move('若葉の返り刃','spin',40,44,returning(12,'wave',[-.18,.18],.30,18),sweep(39,0,0,2.32,.91,'petals',23)),
+ queenBee:move('花蜜の落とし穴','cast',40,49,trap(18,1.1,.75,1.18,.58,'magic',15,'slow'),trap(18,-1.1,-.75,1.18,.58,'magic',15,'slow'),shot(42,'star',[-.15,0,.15],.23,15,{height:1.54,vy:.06,grav:-.008,bounce:true})),
+ arachne:move('八脚の糸車','spin',43,48,trap(17,0,-.96,3.1,.26,'magic',12,'slow'),trap(31,0,.96,3.1,.26,'magic',12,'slow'),returning(44,'web',[-.07,0,.07],.23,17,{status:'slow',returnAt:13})),
+ stag:move('樹液坂の大角返し','rush',41,47,dash(8,18,.25,1.32,'dustRing',19,{armor:true}),{...sweep(33,-1.52,0,2.25,.83,'slash',23,2.28),launch:.40}),
+ mothQueen:move('夢紡ぎの羽音','cast',42,48,returning(8,'note',[-.19,-.10,.10,.19],.20,11,{status:'sleep'}),trap(44,0,0,1.44,1.11,'petals',24)),
+ greyKing:move('念力・裏返る星','cast',40,47,returning(9,'ball',[-.18,0,.18],.29,17,{returnAt:21}),beam(47,.43,0,2.18,.38,1.50,24)),
+ mothership:move('母艦レーザー・三面掃射','cast',42,53,beam(19,0,-1.12,4.7,.22,2.42),beam(30,0,1.12,4.7,.22,2.42),beam(49,0,0,4.7,.26,2.42,27)),
+ bioCore:move('核のぜんまい分裂','spin',38,47,call(6,'blobPup',[-2.3,0,2.3]),trap(21,-1.35,.75,1.1,.61,'magic',14,'slow'),trap(29,1.35,-.75,1.1,.61,'magic',14,'slow'),shot(52,'ice',[-.19,.19],.20,19,{vy:.11,grav:-.009,bounce:true})),
+ starEmperor:move('双衛星の包囲砲','cast',38,51,returning(9,'beam',[0],.34,17,{lane:-.96}),returning(19,'beam',[0],.34,17,{lane:.96,opposite:true}),beam(51,0,0,4.0,.40,2.1,28)),
+ zeus:move('稲妻が走る雲階段','cast',41,47,...[0,1,2,3].map(i=>ring(17+11*i,-2.4+i*1.6,i%2?.7:-.7,.81,.74,'thunder',21,3.25))),
+ poseidon:move('三叉槍・返る白波','sweep',41,48,returning(10,'tidal',[0],.24,18,{lane:-.79,height:.23,returnAt:22}),returning(20,'tidal',[0],.24,18,{lane:.79,height:.23,returnAt:22}),ring(47,0,0,2.38,.78,'ice',25,1.33)),
+ hades:move('冥門をめぐる鬼火','cast',43,54,trap(17,1.71,0,1.22,1.22,'magic',14,'poison'),trap(17,-1.71,0,1.22,1.22,'magic',14,'poison'),returning(38,'shadow',[-.18,0,.18],.24,18,{opposite:true,status:'poison'})),
+ nobunaga:move('火縄七連・追い火','cast',40,48,...[-.24,-.16,-.08,0,.08,.16,.24].map((a,i)=>shot(8+4*i,'fire',[a],.29+i*.025,12)),beam(51,0,0,3.9,.35,1.73,26)),
+ hideyoshi:move('金扇・ひらり返し','spin',38,47,returning(10,'card',[-.25,-.13,0,.13,.25],.26,15,{height:1.05}),blink(34,1.65),sweep(52,0,0,2.12,1.11,'stars',23,1.62)),
+ ieyasu:move('三葉の盾陣','sweep',38,49,sweep(14,.95,-.85,1.95,.56,'shock',20),sweep(24,.95,.85,1.95,.56,'shock',20),dash(38,22,.19,1.35,'shock',26,{armor:true,radius:.94})),
+ yoshimoto:move('にわか雨の五連矢','cast',36,48,...[-1.42,-.7,0,.7,1.42].map((z,i)=>shot(8+i*8,'arrow',[0],.24,16,{lane:z,height:1.57,vy:.13,grav:-.012,opposite:i%2===1}))),
+ kenshin:move('月白・影渡り','rush',37,49,blink(7,-2.25),dash(22,12,.25,1.3,'ice',20,{sidestep:.045}),blink(37,2.15),sweep(54,1.32,0,2.22,.77,'slash',24,1.65)),
+ shingen:move('山の軍配、風の返し','cast',42,48,sweep(16,0,0,2.9,.89,'dustRing',23),returning(31,'wave',[-.21,0,.21],.25,18,{returnAt:15})),
+ masamune:move('三日月・雪煙の十字砲','cast',40,49,beam(19,0,0,.84,1.67,1.8,20),shot(37,'ice',[-.13,.13],.29,12,{status:'slow'}),beam(49,0,0,4.42,.31,1.76,27)),
+ yukimura:move('赤駒の跳ね槍','rush',40,51,dash(8,15,.20,1.24,'dustRing',18,{jump:.29,armor:true}),{...sweep(37,0,0,2.27,.78,'shock',24),launch:.34},shot(51,'arrow',[-.15,0,.15],.31,14)),
+ motonari:move('三本の矢・潮の巻き返し','cast',39,48,shot(9,'arrow',[0],.48,17,{lane:-1.45}),shot(20,'arrow',[0],.40,17,{lane:0,opposite:true}),returning(31,'arrow',[0],.37,18,{lane:1.45,returnAt:14}),ring(47,0,0,1.57,1.14,'ice',19,.65,'slow')),
+ ujiyasu:move('石垣・みっつの通せんぼ','cast',42,51,beam(19,-1.78,0,.55,1.57,2.35,21),beam(19,1.78,0,.55,1.57,2.35,21),shot(37,'rock',[-.17,0,.17],.22,17,{vy:.13,grav:-.012,bounce:true}),dash(48,16,.21,1.35,'dustRing',23)),
+ yoshihiro:move('溶岩太鼓の四拍子','spin',42,54,...[[-1.78,0],[0,.9],[1.78,0],[0,-.9]].map(([x,z],i)=>trap(16+i*13,x,z,1.07,.59,'flame',19)),{...sweep(62,0,0,2.5,1.13,'shock',26),launch:.28})
+};
+
 const ringGeometry=new T.RingGeometry(.89,1,36);
 const discGeometry=new T.CircleGeometry(1,36);
 const hexRing=new T.RingGeometry(.89,1,6);
 const hexDisc=new T.CircleGeometry(1,6);
+const boxDisc=new T.PlaneGeometry(2,2);
+const boxBorder=new T.EdgesGeometry(boxDisc);
+const beamGeo=new T.BoxGeometry(2,1,2);
 const signatures={
  queenBee:'honey',arachne:'web',mothership:'column',zeus:'lightning',
  poseidon:'tide',hades:'gate',nobunaga:'fire',yoshihiro:'fire'
@@ -158,10 +192,10 @@ const impactGeometry={
  fire:new T.ConeGeometry(.59,1,16,1,true)
 };
 function impact(e,ev,loc,color,signature){
- const geometry=impactGeometry[signature];
+ const geometry=ev.box?beamGeo:impactGeometry[signature];
  if(!geometry)return;
- const solid=signature==='column'||signature==='fire',height=Math.max(.8,ev.y1);
- const options={color,transparent:true,depthWrite:false,opacity:solid?.59:1};
+ const solid=ev.box||signature==='column'||signature==='fire',height=Math.max(.8,ev.y1);
+ const options={color,transparent:true,depthWrite:false,opacity:ev.box?.33:solid?.59:1};
  const material=solid?new T.MeshBasicMaterial({...options,side:T.DoubleSide}):new T.LineBasicMaterial(options);
  const group=solid?new T.Mesh(geometry,material):new T.LineSegments(geometry,material);
  group.position.set(loc.x,solid?height*.5:.075,loc.z);
@@ -173,14 +207,16 @@ function marker(owner,event,x,z,color,signature){
  const material=new T.MeshBasicMaterial({color,transparent:true,opacity:.96,side:T.DoubleSide,depthWrite:false});
  const fill=material.clone();fill.opacity=.27;
  const group=new T.Group();
- const hex=signature==='honey';
- group.add(new T.Mesh(hex?hexDisc:discGeometry,fill),new T.Mesh(hex?hexRing:ringGeometry,material));
+ const hex=signature==='honey'&&!event.box;
+ group.add(new T.Mesh(event.box?boxDisc:hex?hexDisc:discGeometry,fill));
+ const edge=event.box?new T.LineSegments(boxBorder,new T.LineBasicMaterial({color,transparent:true,opacity:.98,depthWrite:false})):new T.Mesh(hex?hexRing:ringGeometry,material);
+ group.add(edge);
  group.rotation.x=-Math.PI/2;group.scale.set(event.r,event.zr,1);
  group.position.set(x,.073,z);group.renderOrder=7;G.scene.add(group);
- const cue={group,material,fill,attack:owner.atk,expires:event.at};
+ const cue={group,material,fill,edge:edge.material===material?null:edge.material,attack:owner.atk,expires:event.at};
  (owner.roundMarks||=[]).push(cue);
 }
-function removeMark(cue){cue.group.removeFromParent();cue.material.dispose();cue.fill?.dispose();}
+function removeMark(cue){cue.group.removeFromParent();cue.material.dispose();cue.fill?.dispose();cue.edge?.dispose();}
 function marks(e,all=false){
  if(!e.roundMarks?.length)return;
  for(let i=e.roundMarks.length-1;i>=0;i--){
@@ -206,7 +242,7 @@ function shoot(e,ev,target){
  for(const offset of ev.angles){
   const a=angle+offset;
   H.shoot(e,{kind:ev.projectile,x,y:ev.height??.75,z,vx:face*Math.cos(a)*ev.speed,vz:Math.sin(a)*ev.speed,
-   vy:ev.vy||0,grav:ev.grav||0,life:88,r:ev.radius||.28,dmg:ev.damage,status:ev.status,pierce:ev.pierce||0,onGround:ev.bounce?'bounce':'die'});
+   vy:ev.vy||0,grav:ev.grav||0,returnAt:ev.returnAt,life:ev.returnAt?59:88,r:ev.radius||.28,dmg:ev.damage,status:ev.status,pierce:ev.pierce||0,onGround:ev.bounce?'bounce':'die'});
  }
 }
 function compile(card,id,color,signature){
@@ -215,7 +251,7 @@ function compile(card,id,color,signature){
  const tracksPlayer=events.some(e=>e.kind==='blink'||e.kind==='shot'||e.anchor==='target');
  return {
   id,name:card.name,windup:card.windup,reach:tracksPlayer?6.1:dashEvents.length?3.3:2.65,
-  lanes:tracksPlayer?1.35:.67,len:Math.max(...events.map(e=>e.at+(e.frames||0)))+12,
+  lanes:tracksPlayer?1.35:.67,len:Math.max(...events.map(e=>e.at+(e.frames||e.linger||0)))+12,
   anim:card.pose==='rush'?'run':card.pose==='cast'?'throw':'swipe',pose:card.pose,recover:card.recover,
   armor:dashEvents.some(e=>e.armor),onEnd(e){e.vx=e.vz=0;marks(e,true);},
   fn(e,t){
@@ -245,7 +281,11 @@ function compile(card,id,color,signature){
     else if(ev.kind==='zone'){
      const loc=a.roundPositions.get(ev);
      impact(e,ev,loc,color,signature);
-     G.combat.area({owner:e,...loc,y:0,r:ev.r,zr:ev.zr,y1:ev.y1,dmg:ev.dmg,power:ev.dmg>=24?3:2,dur:4,fx:ev.fx,color,status:ev.status});
+     if(ev.linger>10){
+      marker(e,{...ev,at:ev.at+ev.linger},loc.x,loc.z,'#ffc18a',signature);
+     }
+     G.combat.area({owner:e,...loc,y:0,r:ev.r,zr:ev.zr,y1:ev.y1,dmg:ev.dmg,up:ev.launch??.20,
+       power:ev.dmg>=24||ev.launch?3:2,dur:ev.linger||4,box:ev.box,fx:ev.fx,color,status:ev.status});
     }else if(ev.kind==='blink'){
      G.fx?.burst?.('smoke',e.x,.5,e.z,{color});
      [e.x,e.z]=within(p.x+ev.offset*e.face,p.z);
@@ -265,7 +305,8 @@ function compile(card,id,color,signature){
  };
 }
 G.roundMoves={
- make(shape,id){const [color,cards]=catalog[shape];return cards.map((card,i)=>compile(card,id+'Move'+(i+1),color,signatures[shape]));},
+ color:shape=>catalog[shape][0],
+ make(shape,id){const [color,cards]=catalog[shape];return [...cards,transformed[shape]].map((card,i)=>compile(card,id+'Move'+(i+1),color,signatures[shape]));},
  marks
 };
 })();

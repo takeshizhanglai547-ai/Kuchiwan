@@ -17,7 +17,16 @@ function fixture(){
   assert.equal(G.story.pending,0);
   b.hp--;G.frenzy.tick();
   assert.equal(G.story.pending,0);assert(!G.story.blocked);assert(!b._frenzyForm);
-  G.time.tick+=48;G.frenzy.tick();assert.equal(b._frenzyForm,1);
+  assert(b._frenzyShift&&b.intangible&&!b.pending&&!b.atk);
+  const health=b.hp,halo=b._frenzyShift.halo;
+  assert.equal(G.combat.damage(b,9999,{src:p,dir:1}),false);
+  assert.equal(b.hp,health);
+  const events=[];G.bus.on('bossFrenzyReady',d=>events.push(d.boss));
+  for(let t=0;t<G.frenzy.duration-1;t++){G.time.tick++;G.frenzy.tick();}
+  assert(b.intangible&&b._frenzyShift&&!b._frenzyForm);
+  G.frenzy.tick();assert.equal(b._frenzyForm,1);
+  assert(!b.intangible&&!b._frenzyShift&&halo.root.parent===null);
+  assert.deepEqual(events,[b]);G.frenzy.tick();assert.equal(events.length,1);
   b.x=p.x+1.6;b.z=p.z;b.cool=0;b.state='idle';
   G.time.tick+=140;assert(G.frenzy.attack(b));assert.equal(b.pending.def.id,'frenzyQuake');
   b.pending=null;b.state='idle';b.x=p.x+5;
