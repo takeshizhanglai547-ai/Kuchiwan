@@ -152,15 +152,14 @@ const weather={
 worlds.forEach((w,worldIndex)=>w.stages.forEach(([name,bossName,base,shape,[a,b,c]],i)=>{
  const lap=worldIndex+2,id='lap'+lap+'Boss'+(i+1),th=themes[base]||themes[w.base],env=weather[w.style];
  bossDefinition(id,bossName,shape,i);
- const extras=w.style==='bug'&&i===2?[['poisonCap',1]]:[];
  const start=i===0?'扉の向こうに「'+w.name+'」が広がっている。仲間と一緒に新しい道を進もう。':name+'へ着いた。'+bossName+'がこの先で待っている。';
  const clear=i===w.stages.length-1?w.name+'を踏破した。次の旅に備えて、チャムの店へ戻ろう。':bossName+'を退けた。次は「'+w.stages[i+1][0]+'」へ向かおう。';
  G.stages.push({id:'lap'+lap+'stage'+(i+1),no:G.stages.length+1,lap,chapter:i+1,region:w.name,journeyStyle:w.style,name,kana:name,
   intro:start,epilogue:clear,length:108+i,bgm:'stage'+(2+(i+worldIndex)%7),
   theme:{...th,sky:{...th.sky,top:env.sky[0],mid:env.sky[1],bot:env.sky[2]},fog:{...th.fog,color:env.fog},
     particles:{...th.particles,a:w.color,b:'#fff2c7'},roundStyle:w.style,roundColor:w.color},
-  waves:[{at:18,width:15,foes:[[a,2],[b,1]]},{at:43,width:16,foes:[[c,1],[a,1],...extras],reward:'bone'},
-    {at:69,width:17,foes:[[a,1],[b,1],[c,1],...extras],then:[[b,1]],reward:'coin'}],
+  waves:[{at:18,width:15,foes:[[a,2],[b,1]]},{at:43,width:16,foes:[[c,2],[a,1]],reward:'bone'},
+    {at:69,width:17,foes:[[a,1],[b,1],[c,2]],then:[[b,1]],reward:'coin'}],
   boss:{type:id,at:91,x:91},hints:[{at:8,name:'モフじい',text:'地面が光ったら、その場所から離れよう。ボスの体力が半分を切ると大技が来るぞ。'}],props:[]});
 }));
 })();

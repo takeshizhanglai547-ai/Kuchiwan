@@ -66,7 +66,7 @@ function fixture(){
 {
  const {G,p}=fixture();
  const laterStages=G.stages.filter(s=>s.lap>1);
- const types=new Set(laterStages.flatMap(s=>s.waves.flatMap(w=>w.foes.map(([id])=>id))).filter(id=>id!=='poisonCap'));
+ const types=new Set(laterStages.flatMap(s=>s.waves.flatMap(w=>w.foes.map(([id])=>id))));
  const sculpts=new Set(),moves=new Set(),names=new Set(),traces=new Set();
  const mesh=(rig)=>rig.root.children[0].children[0].geometry;
  for(const type of types){
