@@ -1558,13 +1558,13 @@ function onKO(d){
 }
 function onPoof(d){
   const e = d.ent; if(!e || e.x==null || e.removed) return;
-  const boss = isBoss(e), h = (e.rig && e.rig.height) || e.height || 1.2;
+  const boss = isBoss(e), h = d.height || (e.rig && e.rig.height) || e.height || 1.2;
   const s = boss ? clamp(h/2, 1.15, 1.4) : 1;             // bosses a little bigger, but the purified boss must stay visible
   const x = e.x, y = (e.y||0) + clamp(h*0.4, 0.45, 1.1), z = (e.z||0) + 0.3;
   poof(x, y, z, { scale:s });
   sp(T.heart, x, y + 0.25*s, z + 0.15); S.s0 = 0.75*s; S.s1 = 0.6*s; S.curve = 1; S.vy = 0.03; S.life = 60; S.fout = 0.3; S.flags = F_WOB; S.wob = 0.1; S.delay = 6; sc_('#ff5a8a'); emit();
   hearts(x, (e.y||0) + Math.min(h, 1.6), z, { count: boss ? 6 : 3, scale:0.7*s });
-  text('ぽんっ！', x, (e.y||0) + Math.min(h*0.9, 3.4) + 0.3, e.z||0, 'pow', { color:'#ff8fc0', rank:1 });   // over the (standing) pup's head
+  if(!d.rescued)text('ぽんっ！', x, (e.y||0) + Math.min(h*0.9, 3.4) + 0.3, e.z||0, 'pow', { color:'#ff8fc0', rank:1 });
 }
 function onPickup(d){
   const e = d.ent || {};

@@ -1,7 +1,7 @@
 'use strict';
 const {spawnSync}=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'../..'),mutations=[
- {file:'30_foes.js',from:'tactical?d.minWindup:0',to:'0'},
+ {file:'30_foes.js',from:'tactical?d.minWindup:bossFloor',to:'bossFloor'},
  {file:'30_foes.js',from:'h.release(e);h.wait(e,6);return false;',to:'h.wait(e,6);return false;'},
  {file:'30_foes.js',from:'e.punishUntil=G.time.tick+diff().punishWindow',to:'e.punishUntil=G.time.tick'},
 ];

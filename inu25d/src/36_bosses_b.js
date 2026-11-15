@@ -1882,10 +1882,10 @@ G.foes.define('kuroinu', {
   hp:560, poise:80, weight:3, radius:0.8, height:2.4, spd:0.05, score:3000, xp:150, entrance:'drop', recover:26,
   build(){ return buildKuro(); },
   init(e){ common(e); e.atkMul = KURO_ATK; e.trailColor = '#c07aff'; e.parryT = 0; e.counterDue = false; e.parries = 0; },
-  ai: kuroAI,
+  ai: kuroAI, rescueLine:'めがさめたよ。ありがとう！',
   block: kuroBlock,
   onKO: bossKO,
-  onKOTick(e){ const t = koT(e); purifyTick(e, t); if(t===30) e.freed = true; if(t===84) say(e, 'やっと めがさめたよ…ありがとう'); },
+  onKOTick(e){ const t = koT(e); purifyTick(e, t); if(t===30) e.freed = true; },
 });
 const EMPEROR_DEF = G.foes.define('emperor', {
   name:'ダークワンワンたいてい', short:'ワンワンたいてい', title:'ワンワンていこくの こうてい', boss:true, bossB:true,

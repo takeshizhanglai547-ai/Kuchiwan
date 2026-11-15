@@ -526,9 +526,9 @@ function syncVisuals(alpha){
     if(e.rig?.heroId&&G.publishedMotion)G.publishedMotion.renderFeet(e.rig,e);
     if(e.shadow){
       e.shadow.position.set(x, 0.015, z);
-      const h = Math.max(0, y), s = 1/(1+h*0.35);
+      const h = Math.max(0, y), s = (e.rescueAt!=null?Math.min(1,.35/e.radius):1)/(1+h*0.35);
       e.shadow.scale.set(s, s, s);
-      if(e.shadow.material) e.shadow.material.opacity = (e.shadowAlpha==null?0.42:e.shadowAlpha) * s * (e.dead? Math.max(0,1-(e.deadT||0)/40):1);
+      if(e.shadow.material) e.shadow.material.opacity = (e.shadowAlpha==null?0.42:e.shadowAlpha) * s * (e.dead&&!e.happy? Math.max(0,1-(e.deadT||0)/40):1);
     }
   }
 }

@@ -13,12 +13,12 @@ function writeSave(s){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); 
 
 // ---------------------------------------------------------------- difficulty
 const DIFFS = {
-  easy:   { name:'やさしい', heroDmg:1.3, foeDmg:0.5, foeHp:0.8,  attackers:1, foeSpeed:0.85, think:1.35, heroHp:1.2, lives:Infinity },
-  normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.8, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
-  hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.1, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
-    tactics:true, attackSpacing:12, minWindup:18, punishWindow:28 },
-  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.66, foeHp:1.78, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
-    tactics:true, attackSpacing:8, minWindup:16, punishWindow:19, frenzy:true },
+  easy:   { name:'やさしい', heroDmg:1.3, foeDmg:0.53, foeHp:0.8,  attackers:1, foeSpeed:0.85, think:1.35, heroHp:1.2, lives:Infinity },
+  normal: { name:'ふつう',   heroDmg:1.0, foeDmg:0.89, foeHp:1.0,  attackers:2, foeSpeed:1.0,  think:1.0,  heroHp:1.0, lives:Infinity },
+  hard:   { name:'つよい',   heroDmg:1.0, foeDmg:1.22, foeHp:1.0, attackers:3, foeSpeed:1.08, think:0.9, heroHp:1.0, lives:3,
+    tactics:true, attackSpacing:10, minWindup:18, punishWindow:24 },
+  frenzy: { name:'狂乱', heroDmg:1, foeDmg:1.80, foeHp:1.78, attackers:4, foeSpeed:1.19, think:.76, heroHp:1, lives:3,
+    tactics:true, attackSpacing:6, minWindup:16, punishWindow:16, frenzy:true },
 };
 const RANKS = [ [2,'いいね！','#cfd8e6'], [8,'すごい！','#7dd0ff'], [16,'かっこいい！','#7dff5a'], [28,'さいこう！','#ffd24d'], [45,'でんせつ！','#ff9a3a'], [70,'でんせつ！！','#ff5aa0'] ];
 

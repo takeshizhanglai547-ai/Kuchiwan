@@ -128,4 +128,70 @@ function fixture(){
  G.combat.cancel(boss);boss.onInterrupt();
  assert(cues.every(cue=>cue.group.parent===null));
 }
-console.log('PASS five routes, regional scenery and boss progression, spores, sleep and slow, native super armor and flanking, and 92 distinct attacks across 23 redrawn bosses');
+{
+ const {G,p}=fixture();
+ const bubbles=[],drops=[],reveals=[];
+ G.fx.text=(...args)=>bubbles.push(args);
+ G.pickups.spawn=(kind)=>drops.push(kind);
+ G.bus.on('poof',event=>reveals.push(event));
+ for(const type of ['spiderPup','lap4Boss2','wanhei']){
+  const foe=G.foes.spawn(type,p.x+2,0,{entrance:'ready'});
+  const shell=foe.rig;
+  let shellDisposals=0,originalDispose=shell.dispose;
+  shell.dispose=()=>{shellDisposals++;originalDispose();};
+  foe.state='idle';foe.inv=0;
+  G.combat.damage(foe,foe.maxHp*2,{src:p,power:3,dir:1});
+  assert(foe.dead&&foe.ignoreForClear);
+  for(let i=0;i<270&&!foe.removeMe;i++){
+   G.foes.tick(foe);G.phys(foe,null);foe.rig.update(foe);
+  }
+  assert(foe.happy&&foe.rescueAt>0&&foe.noClamp&&foe.removeMe,type);
+  assert.equal(shellDisposals,1);
+  assert.equal(shell.root.parent,null);
+  assert.equal(foe.anim,'run');
+  assert.equal(bubbles.filter(args=>args[5]?.ent===foe&&args[4]==='say').length,1);
+  assert.equal(reveals.filter(event=>event.ent===foe&&event.rescued).length,1);
+  assert(foe.rig!==shell,type);
+  if(foe.def.boss)assert(foe.rig.height<foe.height,type);
+  G.world.sweep();
+  assert.equal(foe.rig.root.parent,null);
+  assert.equal(shellDisposals,1);
+ }
+ assert.equal(drops.filter(item=>item==='cake').length,1);
+ assert(drops.filter(item=>item==='coin').length>=16);
+ assert.deepEqual(Array.from(G.errors),[]);
+}
+{
+ function rhythm(type,frenzy){
+  const {G,p,env}=fixture();
+  if(frenzy)Object.assign(G.game.diff,{frenzy:true,tactics:true,minWindup:16,attackSpacing:6,punishWindow:16});
+  vm.runInContext(readModule('92_encounter_balance.js'),env.c);
+  const fight=(current)=>{
+   const e=G.foes.spawn(type,p.x+1.1,p.z,{entrance:'ready'});
+   e.state='idle';e.cool=70;p.inv=9999;
+   if(!current){
+    const boss=e.def.boss;
+    Object.assign(e._campBalance,{cool:boss?.88:.84,floor:boss?18:12,recovery:1});
+    if(frenzy)G.game.diff.punishWindow=19;
+   }else if(frenzy)G.game.diff.punishWindow=16;
+   G.bus.emit('scene',{name:'play'});
+   let windup;
+   const starts=[];
+   for(let i=0;i<1600;i++){
+    G.time.tick++;
+    const pending=e.pending;
+    G.foes.tick(e);
+    if(e.pending&&e.pending!==pending){starts.push(i);windup??=e.pending.t;}
+    G.combat.tick();
+   }
+   G.world.remove(e);G.combat.clear();
+   assert(starts.length>=7);
+   return {starts:starts.length,interval:starts[6]-starts[0],windup};
+  };
+  const previous=fight(false),current=fight(true);
+  assert(current.interval<previous.interval,type+' attack frequency '+JSON.stringify({frenzy,previous,current}));
+  assert.equal(current.windup,previous.windup);
+ }
+ for(const frenzy of [false,true])for(const type of ['mantisPup','lap2Boss3'])rhythm(type,frenzy);
+}
+console.log('PASS five routes, 92 boss moves, ailments and armor, puppy rescue and rewards, and faster attacks with original windups');

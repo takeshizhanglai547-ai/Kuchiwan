@@ -8,7 +8,11 @@ function sculpt(draw){
  const egg=(x,y,z,rx,ry,rz,c)=>b.add(g.sphere(1,16,10),c,[x,y,z],null,[rx,ry,rz]);
  const box=(x,y,z,a,h,d,c,tilt=0)=>b.add(g.rbox(a,h,d,Math.min(.06,Math.min(a,h,d)*.45),2),c,[x,y,z],[0,0,tilt]);
  const cone=(x,y,z,r,h,c,tilt=0)=>b.add(g.cone(r,h,10),c,[x,y,z],[0,0,tilt]);
- const disk=(x,y,z,r,h,c)=>b.add(g.cylinder(r,r,h,16),c,[x,y,z]);
+ const disk=(x,y,z,r,h,c)=>b.add(g.cylinder(r,r,h,20),c,[x,y,z]);
+ const rim=(x,y,z,r,w,c,rot)=>b.add(g.torus(r,w,7,24),c,[x,y,z],rot);
+ function studs(x,y,z,n,step,color){
+  for(let i=0;i<n;i++)egg(x+(i-(n-1)/2)*step,y,z,.035,.032,.028,color);
+ }
  const rod=(x,y,z,X,Y,Z,r,c)=>{
   const p=new T.Vector3(x,y,z),q=new T.Vector3(X,Y,Z),delta=q.clone().sub(p);
   const quat=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),delta.clone().normalize());
@@ -16,11 +20,14 @@ function sculpt(draw){
  };
  function face(x,y,w,c,eyes=2){
   egg(x,y,0,w,w*.88,w*.98,c);
+  egg(x+w*.79,y-w*.25,0,w*.29,w*.24,w*.50,c===cream?'#fff7e9':c);
   for(const s of [-1,1]){
-   const z=s*w*.51;
-   egg(x+w*.82,y+w*.1,z,w*.12,w*.18,w*.13,ink);
-   egg(x+w*.908,y+w*.16,z+w*.018,w*.045,w*.061,w*.050,'#fff');
-   egg(x+w*.77,y-w*.22,z*1.37,w*.09,w*.10,w*.17,pink);
+   const z=s*w*.55;
+   egg(x+w*.83,y+w*.12,z,w*.123,w*.19,w*.143,ink);
+   egg(x+w*.921,y+w*.180,z+s*w*.032,w*.039,w*.064,w*.051,'#fff9ed');
+   egg(x+w*.906,y+w*.052,z+s*w*.066,w*.025,w*.030,w*.025,'#dbcbe4');
+   egg(x+w*.775,y-w*.19,z*1.34,w*.093,w*.08,w*.155,pink);
+   for(const dx of [0,.057])rod(x+w*(.811+dx),y-w*.212,z*1.43,x+w*(.789+dx),y-w*.166,z*1.43,w*.013,'#f9c3c9');
    if(eyes===4)egg(x+w*.78,y+w*.36,z*.68,w*.072,w*.086,w*.080,ink);
   }
   egg(x+w*.98,y-w*.18,0,w*.07,w*.045,w*.095,ink);
@@ -28,9 +35,11 @@ function sculpt(draw){
  function legs(n,x,y,reach,c,back=.43){
   for(let i=0;i<n;i++)for(const s of [-1,1]){
    const d=(i-(n-1)/2)*.24;
-   rod(x+d,y,s*.23,x+d*1.5,y+.15,s*reach,.052,c);
-   rod(x+d*1.5,y+.15,s*reach,x+d*1.8-back*.3,.12,s*(reach+.14),.046,c);
-   egg(x+d*1.8-back*.3,.10,s*(reach+.14),.088,.069,.084,c);
+   const kx=x+d*(n===4?1.85:1.5),kz=s*(reach-Math.abs(d)*.25);
+   rod(x+d,y,s*.23,kx,y+.15,kz,.052,c);
+   egg(kx,y+.15,kz,.064,.058,.067,c);
+   rod(kx,y+.15,kz,x+d*2-back*.3,.12,s*(reach+.14),.044,c);
+   egg(x+d*2-back*.3,.10,s*(reach+.14),.082,.053,.09,c);
   }
  }
  function antenna(x,y,c){
@@ -43,14 +52,17 @@ function sculpt(draw){
   for(const s of [-1,1]){
    egg(x-.25,y+.27,s*.54,large?.55:.36,.13,large?.57:.38,c);
    egg(x-.49,y+.21,s*.51,.25,.11,.34,'#eaf8fe');
-   rod(x-.02,y+.29,s*.23,x-.56,y+.3,s*.81,.025,'#c8afd5');
+   rod(x-.02,y+.29,s*.23,x-.52,y+.37,s*.79,.016,'#c3a9d1');
+   for(const k of [.40,.58])rod(x-.18,y+.365,s*k,x-.44,y+.385,s*(k+.16),.011,'#ebddf7');
   }
  }
  const crest=(y,c)=>{disk(-.03,y,0,.31,.08,gold);for(const z of [-.19,0,.19])cone(-.03,y+.15,z,.093,.24,c);};
  function beetle(c,extra){
   legs(3,-.18,.43,.44,ink);egg(-.30,.60,0,.65,.44,.51,c);
   for(const z of [-.25,.25])egg(-.43,.73,z,.52,.27,.27,c);
-  rod(-.88,.86,0,.08,.96,0,.025,ink);face(.33,.59,.28,cream);
+  rod(-.88,.86,0,.08,.96,0,.021,ink);
+  for(const z of [-.43,.43]){egg(-.54,.81,z,.25,.085,.041,extra?'#9faccb':'#be9cc2');studs(-.38,.67,z*1.12,3,.101,gold);}
+  face(.33,.59,.28,cream);
   cone(.61,.69,-.15,.084,.43,gold,-1.25);cone(.61,.69,.15,.084,.43,gold,-1.25);
   if(extra){cone(.19,1.07,0,.14,.48,silver,-.24);crest(1.05,gold);}
  }
@@ -60,6 +72,7 @@ function sculpt(draw){
    egg(-.37,.94,s*.57,.51,.15,.69,c);
    egg(-.20,1.09,s*.76,.23,.036,.31,gold);
    egg(-.22,1.12,s*.76,.105,.027,.16,'#8469aa');
+   for(const [x,z] of [[-.30,.92],[-.48,.99],[-.62,.91]])egg(x,1.04,s*z,.057,.025,.057,cream);
    egg(-.64,.92,s*.58,.31,.13,.43,'#bd94d9');
   }
   face(.20,.94,.33,cream);antenna(.12,1.16,c);
@@ -69,7 +82,9 @@ function sculpt(draw){
   legs(3,-.05,.39,.47,'#97778d');egg(-.07,.52,0,.53,.40,.56,c);
   for(const s of [-1,1]){
    egg(.46,.52,s*.48,.28,.18,.23,c);
-   cone(.68,.65,s*.55,.142,.27,c,-1.15);
+   egg(.65,.55,s*.62,.20,.13,.10,'#dc7f98');
+   egg(.63,.65,s*.42,.19,.10,.09,c);
+   studs(-.20,.63,s*.47,3,.12,'#ffd5b9');
    rod(.14,.71,s*.24,.29,.99,s*.26,.061,c);
    egg(.31,.98,s*.26,.12,.12,.11,cream);
    egg(.407,1.01,s*.26,.047,.070,.065,ink);
@@ -78,6 +93,7 @@ function sculpt(draw){
  }
  function robe(c,hood){
   cone(-.09,.47,0,.49,.80,c);disk(-.04,.32,0,.39,.10,c);
+  rim(-.09,.25,0,.42,.023,'#dac6a4',[Math.PI/2,0,0]);
   face(.08,1.01,.37,cream);
   if(hood)egg(-.17,1.14,0,.34,.42,.43,c);
   box(.31,.67,0,.13,.12,.61,gold);
@@ -87,30 +103,54 @@ function sculpt(draw){
   cone(-.77,.67,0,.33,.42,c,Math.PI/2);
   cone(-.17,1,0,.19,.28,c);
   face(.38,.69,large?.34:.23,'#e6f3ef');
-  for(const z of [-.33,.33])egg(-.21,.48,z,.31,.09,.21,mint);
+  for(const z of [-.33,.33]){
+   egg(-.21,.48,z,.31,.065,.21,mint);
+   for(const x of [-.04,-.16,-.28])rod(x,.64,z,x-.04,.76,z*1.09,.011,'#5896a7');
+  }
  }
  const recipes={
-  caterpillar(){for(let i=0;i<5;i++){egg(.08-i*.25,.41+Math.sin(i)*.06,0,.25,.29,.29,i%2?'#a5c987':'#c6dd91');for(const z of [-.21,.21])egg(.12-i*.25,.14,z,.11,.08,.09,'#f3be94');}face(.32,.52,.32,'#d5eaa7');antenna(.27,.73,pink);},
+  caterpillar(){for(let i=0;i<5;i++){egg(.08-i*.25,.41+Math.sin(i)*.06,0,.25,.29,.29,i%2?'#a5c987':'#c6dd91');for(const z of [-.21,.21]){egg(.12-i*.25,.14,z,.11,.08,.09,'#f3be94');egg(.08-i*.25,.49+Math.sin(i)*.06,z*1.23,.073,.087,.025,'#dce8a8');}}face(.32,.52,.32,'#d5eaa7');antenna(.27,.73,pink);},
   mantis(){egg(-.39,.58,0,.48,.23,.28,'#79af81');legs(2,-.12,.54,.42,'#659477');egg(.13,.83,0,.20,.39,.22,'#a3c97f');face(.33,1.19,.34,'#bfe28d');antenna(.26,1.43,gold);for(const s of [-1,1]){rod(.20,.79,s*.22,.50,.94,s*.49,.08,'#6c9d75');cone(.62,1.01,s*.46,.13,.40,'#b9edd0',-.65);}},
   bee(){egg(-.13,.64,0,.55,.36,.37,'#efba62');for(const x of [-.47,-.22])egg(x,.64,0,.103,.35,.37,'#a17a72');wings(-.16,.67,'#cfebf3');face(.29,.70,.31,'#ffe098');antenna(.21,.91,gold);},
-  spider(){legs(4,-.18,.47,.57,'#8c6baf');egg(-.51,.55,0,.47,.36,.47,'#a586c0');egg(-.41,.86,0,.22,.055,.23,pink);face(.19,.47,.33,'#b79acb',4);},
+  spider(){legs(4,-.18,.47,.57,'#8c6baf');egg(-.51,.55,0,.47,.36,.47,'#a586c0');egg(-.41,.86,0,.22,.055,.23,'#c9a8dc');
+   for(const z of [-.29,.29])egg(-.46,.73,z,.10,.077,.057,'#ebadd0');
+   face(.19,.47,.33,'#b79acb',4);},
   beetle(){beetle('#886b9a',false);},
   ant(){legs(3,-.20,.48,.45,'#8b5f70');egg(-.64,.60,0,.35,.34,.34,'#b77c7f');egg(-.15,.5,0,.22,.21,.21,'#d49588');face(.30,.59,.30,'#d39a88');antenna(.28,.78,gold);},
   moth(){moth('#a99ad7',false);},
-  scytheKnight(){recipes.mantis();box(.06,.89,0,.15,.38,.45,'#557e73');for(const s of [-1,1]){cone(.68,1.17,s*.62,.155,.61,silver,-.75);egg(.12,.95,s*.29,.24,.16,.24,gold);}},
+  scytheKnight(){recipes.mantis();box(.06,.89,0,.15,.38,.45,'#557e73');for(const s of [-1,1]){rod(.33,.81,s*.37,.59,1.06,s*.61,.080,'#547b69');
+   cone(.73,1.20,s*.62,.15,.66,silver,-.75);rod(.57,.99,s*.67,.77,1.40,s*.67,.026,'#9dc8c4');
+   egg(.12,.95,s*.29,.22,.16,.23,gold);}},
   queenBee(){recipes.bee();wings(-.32,.89,'#d2dafa',true);crest(1.19,gold);egg(-.47,.55,0,.47,.42,.46,'#e6ab58');for(const x of [-.67,-.43])egg(x,.57,0,.083,.40,.45,'#8f6869');},
-  arachne(){legs(4,-.17,.52,.67,'#69557c');egg(-.64,.66,0,.61,.48,.53,'#7f699f');egg(-.58,1.08,0,.26,.058,.25,pink);robe('#ad7daf',true);for(const z of [-.33,.33])egg(.16,.79,z,.15,.20,.14,'#e2b1d1');},
+  arachne(){legs(4,-.17,.52,.67,'#69557c');egg(-.64,.66,0,.61,.48,.53,'#7f699f');egg(-.58,1.08,0,.26,.058,.25,pink);robe('#a36f9e',true);
+   for(const z of [-.34,.34]){
+    egg(.16,.79,z,.15,.20,.14,'#e2b1d1');
+    for(const x of [-.33,-.22,-.11])egg(x,1.28,z,.044,.063,.044,'#f4cfdf');
+    egg(-.61,.77,z,.19,.18,.15,'#9772b0');
+   }
+   egg(.10,1.31,0,.084,.071,.104,'#f7d1b6');},
   stag(){beetle('#667095',true);for(const s of [-1,1]){rod(.37,.63,s*.28,.86,.83,s*.53,.10,'#969dc0');rod(.86,.83,s*.53,1.02,1.00,s*.22,.08,silver);cone(.70,.97,s*.35,.075,.21,gold,-.6);}},
   mothQueen(){moth('#bb98de',true);for(const s of [-1,1]){egg(-.56,1.14,s*.81,.45,.16,.52,'#f9aebf');egg(-.68,1.28,s*.92,.20,.045,.20,'#fff0b5');}egg(.02,.56,0,.23,.29,.32,'#f5dc9f');},
   alien(){egg(-.09,.50,0,.25,.44,.28,'#88bea7');face(.09,1.03,.43,'#b4e5bc');for(const s of [-1,1]){egg(-.04,.14,s*.21,.22,.12,.13,'#79aaa2');egg(.39,1.06,s*.29,.073,.17,.10,ink);}antenna(-.05,1.31,mint);},
-  rover(){box(-.12,.49,0,.66,.56,.61,'#868cc9');box(.06,.77,0,.43,.28,.52,'#c5c9ef');egg(.31,.78,0,.09,.09,.23,ink);egg(.39,.78,0,.022,.046,.10,mint);for(const z of [-.32,.32]){egg(-.20,.22,z,.32,.22,.10,'#666786');egg(.10,.22,z,.18,.18,.11,'#afb9d4');}},
-  saucer(){disk(-.05,.48,0,.65,.11,'#9c92c8');egg(-.05,.51,0,.65,.15,.65,silver);face(.01,.73,.24,'#b9ecbe');egg(-.04,.71,0,.42,.13,.41,'#c6eaf0');for(let i=0;i<8;i++){const a=i*Math.PI/4;egg(.51*Math.cos(a),.49,.51*Math.sin(a),.07,.06,.07,mint);}},
+  rover(){box(-.12,.49,0,.66,.56,.61,'#868cc9');box(.06,.77,0,.43,.28,.52,'#c5c9ef');egg(.31,.78,0,.09,.09,.23,ink);egg(.39,.78,0,.022,.046,.10,mint);
+   rod(-.31,.73,0,-.42,1.08,0,.026,'#68688e');egg(-.42,1.08,0,.056,.048,.056,'#f1c58c');
+   for(const z of [-.32,.32]){egg(-.20,.22,z,.32,.22,.10,'#666786');egg(.10,.22,z,.18,.18,.11,'#afb9d4');}},
+  saucer(){disk(-.05,.48,0,.65,.11,'#9c92c8');egg(-.05,.51,0,.65,.15,.65,silver);face(.01,.73,.24,'#b9ecbe');egg(-.05,.73,0,.42,.11,.41,'#b1cde7');
+   rim(-.05,.55,0,.57,.026,'#dcb7e5',[Math.PI/2,0,0]);for(let i=0;i<8;i++){const a=i*Math.PI/4;egg(.51*Math.cos(a),.49,.51*Math.sin(a),.07,.06,.07,mint);}},
   blob(){egg(-.09,.52,0,.48,.48,.43,'#a8c8ef');face(.18,.65,.30,'#d3c3ed');for(const [x,z] of [[-.4,.34],[-.3,-.4],[.22,.40]])egg(x,.22,z,.23,.17,.21,'#a7b8e9');},
   greyKing(){recipes.alien();cone(-.19,.43,0,.53,.78,'#8278b5');crest(1.56,mint);for(const z of [-.52,.52])egg(-.27,.72,z,.29,.13,.28,'#aac1ed');},
-  mothership(){recipes.saucer();egg(-.21,.45,0,.88,.13,.86,'#8d7ebd');for(const z of [-.63,.63])egg(-.30,.51,z,.39,.16,.36,'#9cc7e4');disk(-.18,.29,0,.37,.11,'#b9f8e7');},
+  mothership(){recipes.saucer();egg(-.21,.45,0,.88,.13,.86,'#8d7ebd');for(const z of [-.63,.63])egg(-.30,.51,z,.39,.16,.36,'#9cc7e4');disk(-.18,.29,0,.37,.11,'#b9f8e7');
+   for(let i=0;i<10;i++){const a=i*Math.PI*.2;egg(-.21+Math.cos(a)*.82,.48,Math.sin(a)*.80,.068,.064,.070,i%2?'#ffe1a8':mint);}
+   rim(-.17,.63,0,.61,.033,'#c5b3e9',[Math.PI/2,0,0]);},
   bioCore(){recipes.blob();egg(-.44,.84,0,.45,.48,.49,'#93b7e1');egg(-.38,1.13,0,.24,.26,.29,'#d1b1ec');for(const s of [-1,1]){egg(-.39,.45,s*.53,.33,.25,.27,'#aecaf1');egg(-.23,.56,s*.47,.12,.06,.12,mint);}},
   starEmperor(){recipes.rover();face(.06,1.11,.37,'#d8d0ee');crest(1.42,silver);for(const s of [-1,1]){box(-.25,.62,s*.53,.61,.21,.35,'#7776b3');cone(-.49,1.04,s*.50,.22,.42,'#b3d7ed',-.27);egg(.05,.67,s*.68,.29,.19,.16,'#dcb0e1');}egg(.43,.51,0,.11,.15,.20,mint);},
-  jelly(){egg(-.13,.81,0,.46,.37,.45,'#c4b1e8');face(.13,.74,.27,'#dad0ed');for(const z of [-.32,-.13,.13,.32])egg(-.18,.40,z,.09,.34,.09,z>.1?'#d6a9db':'#a5c6e8');},
+  jelly(){
+   egg(-.13,.81,0,.46,.37,.45,'#c4b1e8');rim(-.13,.70,0,.42,.036,'#e5c7eb',[Math.PI/2,0,0]);face(.13,.74,.27,'#dad0ed');
+   for(const z of [-.32,-.13,.13,.32]){
+    egg(-.18,.39,z,.077,.29,.074,z>.1?'#d6a9db':'#a5c6e8');
+    egg(-.15,.14,z,.061,.10,.063,mint);
+   }
+  },
   hoplite(){robe('#95c3b3',false);disk(-.04,1.24,0,.31,.10,gold);egg(.37,.50,.30,.105,.35,.36,'#d3a96f');rod(.37,.22,-.31,.59,1.48,-.31,.041,'#8f7a88');cone(.58,1.55,-.31,.09,.24,silver,-.15);},
   shark(){fish('#8cc8d8',false);},
   tideCrab(){crab('#eea2a9',false);},
@@ -174,17 +214,33 @@ function sculpt(draw){
   const y=lift;
   for(const s of [-1,1])egg(.03,y+.15,s*.19,.22,.13,.16,c);
   egg(-.13,y+.52,0,.39,.41,.45,c);
-  for(let i=0;i<3;i++)box(.11,y+.36+i*.11,0,.26,.087,.64,i===0?gold:c);
+  for(let i=0;i<3;i++){
+   box(.11,y+.36+i*.11,0,.26,.087,.64,i===0?gold:c);
+   for(const z of [-.326,.326])studs(.08,y+.36+i*.11,z,3,.081,i===0?'#f8e2b3':gold);
+  }
+  for(const z of [-.34,.34]){
+   egg(-.13,y+.60,z,.24,.16,.14,c);
+   rod(-.28,y+.54,z*1.3,.04,y+.53,z*1.3,.021,gold);
+  }
   face(.06,y+1,.37,cream);egg(-.015,y+1.21,0,.43,.22,.41,c);disk(.03,y+1.18,0,.42,.075,'#77657d');
   const crown=y+1.39;
-  if(crestType==='sun'||crestType==='moon'){
-   egg(.14,crown,0,.085,.19,.25,gold);if(crestType==='moon')egg(.17,crown+.09,0,.09,.145,.20,c);
+  if(crestType==='sun'){
+   egg(.18,crown,0,.094,.17,.19,gold);
+   for(let i=0;i<7;i++){
+    const a=(i-3)*.45,z=Math.sin(a),u=Math.cos(a);
+    rod(.14,crown+u*.10,z*.15,.15,crown+u*.36,z*.33,.029,gold);
+   }
+  }else if(crestType==='moon'){
+   rim(.22,crown+.08,0,.27,.05,gold,[0,Math.PI/2,-.15]);
+   egg(.24,crown+.17,0,.071,.225,.23,c);
   }else if(crestType==='horns'||crestType==='antlers'||crestType==='arrows'){
    for(const s of [-1,1]){rod(.0,crown,s*.20,-.17,crown+.32,s*.32,.055,gold);cone(-.19,crown+.40,s*.32,.074,.24,gold,.22);}
   }else if(crestType==='coins'){
    for(const z of [-.15,0,.15])for(const dy of [-.015,.10])egg(.295,crown+dy,z,.039,.060,.058,gold);
   }else if(crestType==='fur'){
    for(const z of [-.35,-.18,0,.18,.35])egg(-.22,crown-.10,z,.25,.25,.17,silver);
+  }else if(crestType==='leaf'){
+   for(const z of [-.14,0,.14])egg(.24,crown+(.14-Math.abs(z)),z,.06,.14,.071,'#d9bf77');
   }else if(crestType==='court'){
    box(-.05,crown+.20,0,.27,.47,.27,'#76637e',.10);
   }else cone(.11,crown,0,.095,.24,gold,-.22);
@@ -195,9 +251,12 @@ function sculpt(draw){
   }else if(gear==='gun'){
    box(.47,y+.65,.40,.72,.14,.16,'#9b7782');box(.72,y+.71,.40,.36,.076,.091,ink);
   }else if(gear==='shield'){
-   box(.39,y+.55,.32,.20,.67,.57,'#bb927e');box(.51,y+.55,.32,.045,.53,.43,gold);
+   box(.36,y+.55,.38,.20,.68,.57,'#98786a');box(.39,y+.55,.635,.18,.55,.043,gold);
+   rim(.39,y+.56,.659,.137,.022,'#cba270');studs(.40,y+.55,.68,3,.085,'#fff0bd');
   }else if(gear==='fan'){
-   egg(.62,y+.76,.39,.31,.22,.075,gold);rod(.37,y+.47,.39,.67,y+.88,.39,.043,'#8f687a');
+   egg(.62,y+.76,.39,.31,.22,.075,gold);
+   for(const offset of [-.22,-.11,0,.11,.22])rod(.57,y+.59,.472,.62+offset,y+.91-Math.abs(offset)*.22,.453,.011,'#99767b');
+   rod(.37,y+.47,.39,.58,y+.65,.39,.044,'#8f687a');
   }else if(gear==='bow'){
    for(const s of [-1,1])rod(.66,y+.65,.4,.49,y+.65+s*.43,.4,.047,gold);
    rod(.49,y+.22,.4,.49,y+1.08,.4,.019,cream);
@@ -216,17 +275,25 @@ G.roundModels={
   if(!geometry){geometry=sculpt(recipes=>recipes[shape]());cache.set(shape,geometry);}
   const root=new T.Group(),body=new T.Group(),material=G.look.vmat({instance:true,rough:.76});
   const mesh=new T.Mesh(geometry,material);mesh.castShadow=true;body.add(mesh);root.add(body);body.scale.setScalar(scale);
-  G.look.outline(mesh,.014);
+  const outline=G.look.outline(mesh,.012,'#554154');
   const floating=['bee','queenBee','moth','saucer','mothership','jelly','mothQueen'].includes(shape);
   return {root,height,radius:.43*scale,shape,update(e){
    const move=e.atk?.def,pose=move?.pose,frame=e.animT||0,side=e.face||1;
    const knocking=e.dead||e.state==='down';
-   body.rotation.y=(side<0?Math.PI:0)+(pose==='spin'?e.atk.t/Math.max(1,move.len-1)*2*Math.PI:0);
+   body.rotation.y=(side<0?Math.PI+.48:-.48)+(pose==='spin'?e.atk.t/Math.max(1,move.len-1)*2*Math.PI:0);
+   body.scale.z=side*scale;
    const tilt=e.pending?-.145:pose==='sweep'?Math.sin(frame*.23)*.24:pose==='rush'?.19:pose==='cast'?-.10:0;
    body.rotation.z=side*(knocking?-1.1:tilt);
-   body.position.y=knocking?0:floating?.13+Math.sin(frame*.15)*.092:e.state==='move'?Math.abs(Math.sin(frame*.29))*.085:0;
+   const striding=e.state==='move'||pose==='rush';
+   body.position.y=knocking?0:floating?.13+Math.sin(frame*.15)*.092:striding?Math.abs(Math.sin(frame*.31))*.09:0;
+   const breathe=knocking?1:1+Math.sin(frame*(striding?.62:.115))*(striding?.045:.018);
+   body.scale.y=scale*breathe;
    material.userData.uFlash.value=e.flashT>0?.7:e.armorHitsLeft>0&&(e.pending||e.atk)?.20:0;
-  },setAlpha(a){material.transparent=a<1;material.opacity=a;},dispose(){material.dispose();}};
+  },setAlpha(a){
+   const transparent=a<1;
+   if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+   material.opacity=a;outline.visible=a>.62;
+  },dispose(){material.dispose();}};
  }
 };
 })();

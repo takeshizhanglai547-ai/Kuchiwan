@@ -210,7 +210,9 @@ G.foes = {
       return;
     }
     if(e.atk){ return; }
-    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle'); e.cool = Math.max(e.cool, (e.lastAtk && e.lastAtk.recover) || e.def.recover || 16);
+    if(e.state==='act'){ G.setState(e, 'idle'); G.setAnim(e, 'idle');
+      const recovery=e.lastAtk?.recover||e.def.recover||16;
+      e.cool=Math.max(e.cool,G.encounterBalance?.recovery?.(e,recovery)??recovery);
       if(diff().tactics&&!e.def.boss){e.punishUntil=G.time.tick+diff().punishWindow;e.cool=Math.max(e.cool,diff().punishWindow);}}
     // A committed attack leaves a guaranteed stationary punish opportunity.
     // The native player moves/cancels/resources remain identical to the 2D game.
@@ -256,20 +258,30 @@ function tickSpawn(e){
   G.setState(e, 'idle'); G.setAnim(e, 'idle');
 }
 
+const PUP_THANKS=['ありがとう！','助かったワン！','元気になったよ、ありがとう！','たすけてくれて ありがとう！'];
 function tickKO(e){
   e.deadT = (e.deadT||0) + 1;
   if(e.def.onKOTick){ try { if(e.def.onKOTick(e)===true) return; } catch(err){ G.logError('onKOTick', err); } }
   const boss = e.def.boss;
-  const lie = boss ? 80 : (e.gaveUp ? 8 : 26);
-  if(!e.onGround && e.deadT < 120){ if(e.anim!=='ko') G.setAnim(e, 'ko'); return; }
-  if(e.koLand==null){ e.koLand = e.deadT; G.setAnim(e, 'ko'); e.vx = 0; }
+  const lie = boss ? 34 : (e.gaveUp ? 8 : 14);
+  if(e.koLand==null){
+    if(!e.onGround&&e.deadT<120){if(e.anim!=='ko')G.setAnim(e,'ko');return;}
+    e.koLand=e.deadT;G.setAnim(e,'ko');e.vx=0;
+  }
   const t = e.deadT - e.koLand;
   if(t===lie){
-    // ぽんっ — the grumpy soldier turns into a happy pup
-    if(G.audio && G.audio.sfx) G.audio.sfx('poof');
-    G.bus.emit('poof', { ent:e });
-    G.setAnim(e, 'cheer');
+    const originalHeight = e.height;
+    const rescued = G.foes.rescueRig?.(e);
+    if(rescued){
+      e.rescueAt = e.deadT;
+      e.rescueAway = G.player ? U.sign(e.x-G.player.x) : e.face;
+      e.y=e.vx=e.vz=0;e.onGround=true;e.gravScale=1;e.bounce=0;
+      e.vy=.16;
+    }
     e.happy = true;
+    if(G.audio && G.audio.sfx) G.audio.sfx('poof');
+    G.bus.emit('poof', { ent:e, height:originalHeight, rescued:!!rescued });
+    G.setAnim(e, 'cheer');
     // drops
     if(!e.gaveUp && (!e.minion || G.rng()<0.3)){
       const n = boss ? 12 : 2 + Math.floor(G.rng()*2);
@@ -280,12 +292,17 @@ function tickKO(e){
       else if(r < 0.22) G.pickups.spawn('star', e.x, e.z);
     }
   }
-  if(t > lie + 16){
-    // run away happily, fading out
-    const away = G.player ? U.sign(e.x - G.player.x) : 1;
-    e.face = away; e.vx = away*0.09; e.noClamp = true;
-    if(t % 22 === 0 && e.onGround){ e.vy = 0.1; }
-    const a = U.clamp(1 - (t - lie - 16)/60, 0, 1);
+  const age=t-lie;
+  const wait=boss?58:46;
+  if(age===9&&e.rescueAt!=null){
+    G.fx?.text?.(e.def.rescueLine||PUP_THANKS[e.id%PUP_THANKS.length],0,e.rig.height+.24,0,'say',{ent:e,life:wait+5});
+  }
+  if(age===wait&&e.rescueAt!=null)G.setAnim(e,'run');
+  if(age>=wait){
+    const away=e.rescueAway||(G.player?U.sign(e.x-G.player.x):1);
+    e.face=away;e.vx=away*.103;e.noClamp=true;
+    if((age-wait)%19===0&&e.onGround)e.vy=.075;
+    const a=U.clamp((wait+48-age)/19,0,1);
     if(e.rig && e.rig.setAlpha) e.rig.setAlpha(a);
     e.shadowAlpha = 0.42*a;
     if(a<=0) e.removeMe = true;

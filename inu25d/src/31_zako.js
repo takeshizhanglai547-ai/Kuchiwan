@@ -5,7 +5,7 @@
 //   → 1体あたり描画コール 5（本体・輪郭・表情・影パス・丸影）。形状は種類ごとに1回だけ作って全個体で共有し、
 //     個体ごとに作るのは材質（白フラッシュ・フェード用）と骨だけ。dispose はそれだけを捨てる。
 // 向き：体は進行方向から35°カメラへ、頭はさらに少しカメラへ。左向きは z を鏡像にして、持ち物がいつもカメラ側に来る。
-// やっつけると：×目→ぽんっ→（犬の兵隊はそのまま、犬でない子は子犬の姿になって）にこにこ走り去る。ふうせんは「パーン！」で消える。
+// やっつけると：×目→ぽんっ→子犬が顔を出し、にこにこ走り去る。ふうせんは「パーン！」で消える。
 (function(){ 'use strict';
 const G = window.G; const THREE = window.THREE; const U = G.U;
 if(!G.foes || !G.foes.define){ if(G.logError) G.logError('31_zako', 'needs 30_foes'); return; }
@@ -681,9 +681,10 @@ LOOK.balloon = function(){
 
 // ---------------------------------------------------------------- the happy puppy a non-dog foe turns into (one plain mesh)
 const pupCache = new Map();
-function pupGeo(scarf){
-  if(pupCache.has(scarf)) return pupCache.get(scarf);
-  const R = prim(), fur = '#fff3dc', light = '#fffaf0', ear = '#efd2a4';
+function pupGeo(scarf,coat){
+  const key=coat?scarf+'|'+coat:scarf;
+  if(pupCache.has(key)) return pupCache.get(key);
+  const R = prim(), fur = coat||'#fff3dc', light = '#fffaf0', ear = coat||'#efd2a4';
   const hc = [0.08, 0.53, 0], hr = [0.26, 0.24, 0.26];
   const g = plain((p)=>{
     p.add(R.s, fur, [-0.03, 0.25, 0], null, [0.21, 0.18, 0.17]);
@@ -697,17 +698,60 @@ function pupGeo(scarf){
       p.add(R.sm, fur, [0.12, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
       p.add(R.sm, fur, [-0.14, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
     }
-    p.add(R.cap(0.04, 0.12), fur, [-0.26, 0.36, 0], [0,0,0.75]);
+    if(!coat)p.add(R.cap(0.04, 0.12), fur, [-0.26, 0.36, 0], [0,0,0.75]);
     p.add(R.tor(0.15, 0.035, TAU, 18), scarf, [0.04, 0.37, 0], [HP, 0, 0.15]);
     p.add(R.sm, scarf, [0.19, 0.33, 0.06], null, [0.05, 0.04, 0.04]);
     const F = { c:hc, r:hr };
     const arc = R.tor(0.036, 0.011, PI, 10);
     for(const i of [1,-1]){ feat(p, arc, C.ink, F, i*0.42, 0.1, 0.004, 0, 1); feat(p, R.sl, C.blush, F, i*0.72, -0.12, 0.0, 0, [0.07, 0.04, 0.02]); }
   });
-  pupCache.set(scarf, g);
+  pupCache.set(key, g);
   return g;
 }
 const PUP_SCARF = { boar:'#5aa04a', kire:'#e25a4c', pierrot:'#5a7ad8', oni:'#4a6ad0', ari:'#e24a3a', mecha:'#9aa2b0' };
+const rescues=[
+  ['#e079a1','#f8d3a0'],['#6caeb8','#fff1d6'],['#ad92ce','#e5ccbb'],['#78a870','#f8dfb8']
+];
+G.foes.rescueRig=function(e){
+  let old=e.rig;
+  const root=new THREE.Group(),body=new THREE.Group(),tail=new THREE.Group();
+  const [scarf,coat]=rescues[e.id%rescues.length],size=e.def.boss?1.63:1.33;
+  const material=G.look.vmat({instance:true,rough:.72});
+  const mesh=new THREE.Mesh(pupGeo(scarf,coat),material),outline=G.look.outline(mesh,.014,'#784b5c');
+  const wag=new THREE.Mesh(G.look.geo.capsule(.038,.115,4,8),G.look.mat(coat));
+  tail.position.set(-.205,.29,0);wag.position.set(-.065,.055,0);wag.rotation.z=.80;tail.add(wag);
+  mesh.castShadow=true;body.add(mesh,tail);root.add(body);
+  const shellScale=old?.root?.scale.clone();
+  if(old?.root){root.add(old.root);old.root.position.set(0,0,0);}
+  const freeShell=()=>{
+    if(!old?.root||old.root.parent!==root)return;
+    root.remove(old.root);old.dispose?.();old=null;
+  };
+  const rig={
+    root,height:.79*size,update(pup){
+      const t=pup.deadT-pup.rescueAt,running=pup.anim==='run';
+      if(old?.root?.parent===root){
+        old.root.position.y=-pup.y;old.root.scale.copy(shellScale).multiplyScalar(Math.max(.01,1-t/12));
+        if(t>=12)freeShell();
+      }
+      const pop=U.easeOutBack(U.clamp(t/9,0,1)),stride=Math.sin(t*.70);
+      body.scale.setScalar(Math.max(.02,pop)*size);
+      body.rotation.y=running?(pup.face<0?Math.PI+.56:-.56):-Math.PI/2+pup.rescueAway*.32;
+      body.rotation.z=running?-pup.face*.14:Math.sin(t*.24)*.06;
+      body.position.y=running?Math.abs(stride)*.09:0;
+      tail.rotation.y=Math.sin(t*.58)*.83;
+    },
+    setAlpha(a){
+      const transparent=a<1;
+      if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+      material.opacity=a;outline.visible=a>.65;wag.visible=a>.65;mesh.castShadow=a>.65;
+    },
+    dispose(){freeShell();material.dispose();}
+  };
+  e.rig=rig;
+  G.scene.add(root);root.position.set(e.x,e.y,e.z);
+  return rig;
+};
 
 function blueprint(type){
   if(BP[type]) return BP[type];
