@@ -17,7 +17,7 @@ G.frenzy={
     G.fx.burst('flame',e.x,e.y+.45,e.z,{count:16,scale:1.6});
   },
   attack(e){
-    if(!G.game?.diff?.frenzy||!e.def.boss||e.dead||e.scared||e.transforming)return false;
+    if(!G.game?.diff?.frenzy||!e.def.boss||e.def.roundMoves||e.dead||e.scared||e.transforming)return false;
     const form=e.form||1;
     if(e._frenzyForm!==form||e.cool>0||G.time.tick<e._frenzyNext)return false;
     const p=H.target(e);

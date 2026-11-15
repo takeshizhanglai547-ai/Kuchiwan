@@ -398,6 +398,24 @@ const PDEF = {
     halos:[ HL(T.glow,1.5,'#6fd0ff',0.35,0.6), HL(T.crescent,1.3,'#4ac0ff',0.95,0.45,{asp:1.35,flip:1,pulse:0.06}), HL(T.crescent,1.0,'#ffffff',0.95,1,{asp:1.25,flip:1,ox:0.05}) ],
     tick(h,p,f){ if(h.age%2===0){ sp(T.crescent, p.x - f*0.2, p.y, p.z); S.s0=1.0; S.s1=0.7; S.asp=1.3; S.life=9; S.add=1; S.a=0.55; S.fout=1; S.flags = f<0?F_FLIP:0; sc_('#8fe0ff'); emit(); }
       sp(T.spark, p.x - f*R(0.1,0.5), p.y + R(-0.55,0.55), p.z + R(-0.1,0.1)); S.s0=R(0.14,0.26); S.curve=3; S.life=R(14,22); S.add=1; S.vx=-f*0.01; sc_(PICK(['#ffffff','#bff0ff'])); emit(); } },
+  web: { mesh:()=> toyMesh(built('web',(b,g)=>{
+      for(const r of [.16,.32,.48])b.add(g.torus(r,.012,5,8),'#e6d6ff');
+      for(let i=0;i<4;i++){const a=i*Math.PI/4;b.add(g.box(.96,.022,.018),'#fff5ff',[0,0,0],[0,0,a]);}
+    }),basicMat('web','#ffffff',{vertexColors:true})),
+    halos:[HL(T.glow,.98,'#cb9bfd',.62,.53)],
+    tick(h,p){ h.mesh.rotation.z+=.09;h.mesh.rotation.y=Math.sin(h.age*.14)*.28; } },
+  tidal: { mesh:()=> toyMesh(built('tidal',(b,g)=>{
+      for(let i=-2;i<=2;i++){
+        const edge=Math.abs(i);
+        b.add(g.sphere(1,12,8),edge===2?'#8ce8f0':'#61c7e8',[edge*.09,.05-edge*.023,i*.23],[.21,.27-edge*.055,.28]);
+        b.add(g.sphere(1,10,7),'#efffff',[.02+edge*.09,.26-edge*.088,i*.23],[.18,.10,.22]);
+      }
+    }),basicMat('tidal','#ffffff',{vertexColors:true})),
+    halos:[HL(T.glow,1.38,'#68d9ff',.65,.62)],
+    tick(h,p,f){
+      h.mesh.scale.x=f;h.mesh.rotation.x=Math.sin(h.age*.37)*.18;
+      if(h.age%2===0){sp(T.spark,p.x-f*.18,p.y+R(.01,.29),p.z+R(-.46,.46));S.s0=.17;S.life=12;S.add=1;S.vy=.022;sc_('#d6ffff');emit();}
+    } },
   star: { mesh:()=> toyMesh(G.look.geo.star(0.26,0.5,0.12), G.look.mat('#ffd23a',{rough:0.35, emissive:'#ff9a00', emissiveIntensity:0.35}), 0.02),
     halos:[ HL(T.glow,1.1,'#ffe066',0.5,1,{pulse:0.08}) ],
     tick(h,p,f){ h.mesh.rotation.z -= 0.28*f; if(h.age%2===0){ sp(T.spark, p.x - f*0.2, p.y + R(-0.15,0.15), p.z); S.s0=R(0.16,0.28); S.curve=3; S.life=18; S.add=1; S.vy=R(-0.01,0.01); sc_(PICK(['#fff3a0','#ffd23a','#ffffff'])); emit(); } } },

@@ -5,7 +5,7 @@ function fixture(){
  const g=game('inu',{foes:[],actualRig:true}),{G}=g;
  G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);
  Object.assign(G.game.diff,{foeHp:1,foeSpeed:1,think:1,attackers:3});
- for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_rounds','93_frenzy','95_ailments'])
+ for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_models','41_round_moves','41_rounds','93_frenzy','95_ailments'])
    vm.runInContext(readModule(f+'.js'),g.env.c,{filename:f});
  G.foes.init();return g;
 }
@@ -63,4 +63,69 @@ function fixture(){
  partner.state='idle';partner.cool=0;G.foes.tick(partner);
  assert(partner.vx<0&&Math.abs(partner.vz)>0,'second enemy flanks while first is committed');
 }
-console.log('PASS five routes, regional scenery and boss progression, spores, sleep and slow, native super armor and flanking');
+{
+ const {G,p}=fixture();
+ const laterStages=G.stages.filter(s=>s.lap>1);
+ const types=new Set(laterStages.flatMap(s=>s.waves.flatMap(w=>w.foes.map(([id])=>id))).filter(id=>id!=='poisonCap'));
+ const sculpts=new Set(),moves=new Set(),names=new Set(),traces=new Set();
+ const mesh=(rig)=>rig.root.children[0].children[0].geometry;
+ for(const type of types){
+  const rig=G.foes.build(type);
+  assert(rig.shape,type);
+  sculpts.add(mesh(rig));rig.dispose();
+ }
+ assert.equal(types.size,20);
+ const actionLog=[];
+ const area=G.combat.area,shoot=G.combat.shoot,spawn=G.foes.h.spawnMinion;
+ G.combat.area=o=>{actionLog.push(['area',o.owner.atk?.t,o.r,o.zr,o.y1,o.fx,o.status]);return area(o);};
+ G.combat.shoot=o=>{actionLog.push(['shot',o.owner.atk?.t,o.kind,o.y,o.z,o.vx,o.vz,o.status]);return shoot(o);};
+ G.foes.h.spawnMinion=(type,...args)=>{actionLog.push(['summon',type]);return spawn(type,...args);};
+ for(const stage of laterStages){
+  const boss=G.foes.spawn(stage.boss.type,7,0,{entrance:'ready'});
+  sculpts.add(mesh(boss.rig));
+  assert.equal(boss.def.roundMoves.length,4);
+  for(const move of boss.def.roundMoves){
+   p.inv=9999;boss.x=7;boss.y=0;boss.z=0;boss.face=-1;
+   G.combat.start(boss,move);
+   let hadWarning=false;
+   for(let t=0;t<move.len;t++){
+    G.combat.tick();
+    boss.rig.update(boss);
+    hadWarning||=!!boss.roundMarks?.some(cue=>cue.fill);
+    boss.x+=boss.vx;boss.z+=boss.vz;
+   }
+   assert.equal(boss.atk,null,move.name);
+   assert.equal(boss.roundMarks?.length||0,0,move.name);
+   assert(actionLog.length,move.name);
+   if(actionLog.some(entry=>entry[0]==='area'&&entry[5]))assert(hadWarning,move.name);
+   for(const ent of [...G.world.ents])if(ent.roundSummoner===boss)G.world.remove(ent);
+   traces.add(JSON.stringify(actionLog));actionLog.length=0;
+   moves.add(move.id);names.add(move.name);
+   G.combat.clear();
+  }
+  boss.x=p.x+1.15;boss.z=p.z;boss.state='idle';boss.cool=0;boss.def.ai(boss);
+  assert.equal(boss.pending.def,boss.def.roundMoves[0]);
+  boss.pending=null;boss.state='idle';boss.cool=0;boss.hp=boss.maxHp*.49;
+  G.game.diff.frenzy=true;boss._frenzyForm=1;boss._frenzyNext=0;
+  assert.equal(G.frenzy.attack(boss),false,'Frenzy preserves the boss-specific sequence');
+  boss.def.ai(boss);
+  assert.equal(boss.pending.def,boss.def.roundMoves[3]);
+  G.world.remove(boss);
+ }
+ assert.equal(sculpts.size,43);
+ assert.equal(moves.size,92);assert.equal(names.size,92);assert.equal(traces.size,92);
+ assert.deepEqual(Array.from(G.errors),[]);
+}
+{
+ const {G,p}=fixture();
+ const boss=G.foes.spawn('lap2Boss3',7,0,{entrance:'ready'});
+ const web=boss.def.roundMoves[1];
+ p.x=4;p.z=0;boss.state='idle';
+ G.combat.start(boss,web);p.inv=9999;
+ for(let t=0;t<22;t++){G.combat.tick();boss.rig.update(boss);}
+ assert(boss.roundMarks.some(cue=>cue.group.parent===G.scene),'web warning or strike appears on the battlefield');
+ const cues=[...boss.roundMarks];
+ G.combat.cancel(boss);boss.onInterrupt();
+ assert(cues.every(cue=>cue.group.parent===null));
+}
+console.log('PASS five routes, regional scenery and boss progression, spores, sleep and slow, native super armor and flanking, and 92 distinct attacks across 23 redrawn bosses');
