@@ -968,6 +968,7 @@ function updateRig(rig, e, dt, first){
   const inuDedicated=rig.heroId==='inu'&&G.inuGroundMotion?G.inuGroundMotion.pose(rig,e,Q,rest):null;
   const publishedDedicated=!inuDedicated&&G.publishedMotion?G.publishedMotion.pose(rig,e,Q,rest):null;
   const dedicated=inuDedicated||publishedDedicated;
+  if(e.published)G.heroCombatFx?.accent?.(e,e.publishedMotion,Q,dedicated);
   st.inuPose=inuDedicated||null;st.pubPose=publishedDedicated||null;
   if(dedicated){oneshot=true;tpl=dedicated.id;eyes=dedicated.eyes||'open';glow=dedicated.glow||0;}
   st.tpl = tpl;

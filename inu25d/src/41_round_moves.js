@@ -250,7 +250,7 @@ function compile(card,id,color,signature){
  const dashEvents=events.filter(e=>e.kind==='dash');
  const tracksPlayer=events.some(e=>e.kind==='blink'||e.kind==='shot'||e.anchor==='target');
  return {
-  id,name:card.name,windup:card.windup,reach:tracksPlayer?6.1:dashEvents.length?3.3:2.65,
+  id,name:card.name,motion:events.map(e=>({at:e.at,kind:e.kind,side:Math.sign(e.z||e.sidestep||e.offset||0)})),windup:card.windup,reach:tracksPlayer?6.1:dashEvents.length?3.3:2.65,
   lanes:tracksPlayer?1.35:.67,len:Math.max(...events.map(e=>e.at+(e.frames||e.linger||0)))+12,
   anim:card.pose==='rush'?'run':card.pose==='cast'?'throw':'swipe',pose:card.pose,recover:card.recover,
   armor:dashEvents.some(e=>e.armor),onEnd(e){e.vx=e.vz=0;marks(e,true);},

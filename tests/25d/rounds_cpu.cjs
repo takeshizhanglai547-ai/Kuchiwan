@@ -5,7 +5,7 @@ function fixture(){
  const g=game('inu',{foes:[],actualRig:true}),{G}=g;
  G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);
  Object.assign(G.game.diff,{foeHp:1,foeSpeed:1,think:1,attackers:3});
- for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_models','41_round_moves','41_round_scenery','41_rounds','93_frenzy','95_ailments'])
+ for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_animation','41_round_models','41_round_moves','41_round_scenery','41_rounds','93_frenzy','95_ailments'])
    vm.runInContext(readModule(f+'.js'),g.env.c,{filename:f});
  G.foes.init();return g;
 }
@@ -220,4 +220,31 @@ function fixture(){
  G.world.remove(e);
  assert.equal(halo.root.parent,null);
 }
-console.log('PASS five routes, 115 boss moves, ailments and armor, puppy rescue and rewards, and faster attacks with original windups');
+{
+ const {G,p}=fixture();
+ const roster=Object.values(G.foes.types).filter(def=>def.roundMoves||G.stages.slice(9).some(stage=>stage.waves.some(w=>w.foes.some(([id])=>id===def.type))));
+ assert.equal(roster.length,43);
+ const part=(rig,name)=>rig.root.getObjectByName(name);
+ for(const def of roster){
+  const e=G.foes.spawn(def.type,p.x+1.1,0,{entrance:'ready'});
+  e.state='idle';e.cool=0;e.entered=true;
+  e.rig.update(e);assert(part(e.rig,'idle')?.visible,def.type+' has an idle face');
+  e.def.ai(e);
+  const move=e.pending.def;
+  const body=e.rig.root.children[0],before=body.rotation.toArray().slice(0,3);
+  e.pending.t=2;e.rig.update(e);assert(part(e.rig,'focus').visible);
+  assert.notDeepEqual(body.rotation.toArray().slice(0,3),before,def.type+' winds up');
+  e.pending=null;G.combat.start(e,move);
+  e.atk.t=move.motion?.[0]?.at??move.hits?.[0]?.at??move.proj[0].at;
+  e.rig.update(e);assert.notDeepEqual(body.rotation.toArray().slice(0,3),before,def.type+' strikes');
+  const hp=e.hp;G.combat.damage(e,2,{src:p,dir:1,power:1});
+  e.rig.update(e);assert(hp>e.hp);assert(part(e.rig,'hurt')?.visible,def.type+' shows a damage face');
+  assert(!part(e.rig,'idle').visible);
+  e.dead=true;e.deadT=18;e.rescuePose=0;e.rig.update(e);
+  e.deadT=28;e.rig.update(e);assert(part(e.rig,'ko').visible);
+  const flat=body.scale.y;e.rescuePose=1;e.rig.update(e);
+  assert(body.scale.y<flat,def.type+' tucks before the puppy emerges');
+  G.world.remove(e);
+ }
+}
+console.log('PASS five routes, 115 boss moves, ailments and armor, puppy rescue and rewards, faster attacks, and articulated attack, damage and rescue poses for 43 enemies');

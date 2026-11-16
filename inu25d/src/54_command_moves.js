@@ -82,7 +82,7 @@ if(G.publishedFactory){
   function effects(p,ctx){const active=new Set(ctx.ref.projectiles);
     G.publishedSwords?.tick(ctx.ref.clock);
     for(const [pr,v]of visuals)if(v._owner===ctx&&!active.has(pr)){v.obj.parent?.remove(v.obj);v.dispose?.();visuals.delete(pr);}
-    for(const pr of active){let v=visuals.get(pr);if(!v){v=G.fx?.makeProjectile?.(pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball');
+    for(const pr of active){let v=visuals.get(pr);if(!v){v=G.fx?.makeProjectile?.(pr.glKind?'grenade':pr.wave?'wave':pr.spike?'star':pr.blast?'firework':'ball');
       if(!v)continue;v._owner=ctx;visuals.set(pr,v);G.scene.add(v.obj);}
       const x=pr.x/S,y=Math.max(0,pr.zz)/S,z=p.z+(pr.y-ctx.lane)/S;
       v.obj.position.set(x,y,z);v.update?.({...pr,x,y,z,r:pr.r/S,age:pr.age||0,vx:pr.vx/S,vy:pr.vzz/S,spin:pr.spin});}

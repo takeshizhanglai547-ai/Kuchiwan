@@ -87,10 +87,14 @@ const melee={
  ram:{len:33,recover:32,anim:'run',move:[{at:3,until:19,vx:.16},{at:20,vx:0}],hits:[{...hit,dur:13,dmg:15,power:3}]},
  claw:{len:23,recover:24,anim:'swipe',hits:[{...hit,kind:'slash',dur:6}]}
 };
+const actorPoses={caterpillar:'roll',mantis:'shear',bee:'flutter',spider:'web',beetle:'ram',ant:'jab',moth:'flutter',
+ alien:'psychic',rover:'recoil',saucer:'shot',blob:'roll',jelly:'flutter',hoplite:'ram',tideCrab:'pinch',shark:'swim',
+ banner:'jab',matchlock:'recoil',helmet:'ram',ninja:'flip',horse:'gallop'};
 function soldier(id,name,shape,hp,height,mode,status){
  const ranged=!melee[mode],heavy=mode==='ram',cap=shape==='cap';
  const move=ranged?{id:id+'Cast',len:30,recover:33,anim:'throw',
     proj:[{at:7,kind:mode,dmg:status?8:12,oy:Math.min(1,height*.66),vx:mode==='bolt'?.29:.23,status}]}:{id:id+'Strike',...melee[mode]};
+ move.pose=actorPoses[shape]||(ranged?'shot':mode);
  const reach=ranged?5.0:heavy||mode==='roll'?2.2:1.45;
  F.define(id,{name,hp,spd:heavy?.037:.051,armor:heavy?2:0,elite:heavy,squad:ranged?'ranged':'assault',height,
   build:()=>cap?buildCap(id,capColors[id]):G.roundModels.build(shape,1,height),ai(e){

@@ -270,6 +270,7 @@ function tickKO(e){
     e.koLand=e.deadT;G.setAnim(e,'ko');e.vx=0;
   }
   const t = e.deadT - e.koLand;
+  if(t<=lie)e.rescuePose=U.clamp(t/lie,0,1);
   if(t===lie){
     const originalHeight = e.height;
     const rescued = G.foes.rescueRig?.(e);

@@ -398,6 +398,12 @@ const PDEF = {
     halos:[ HL(T.glow,1.5,'#6fd0ff',0.35,0.6), HL(T.crescent,1.3,'#4ac0ff',0.95,0.45,{asp:1.35,flip:1,pulse:0.06}), HL(T.crescent,1.0,'#ffffff',0.95,1,{asp:1.25,flip:1,ox:0.05}) ],
     tick(h,p,f){ if(h.age%2===0){ sp(T.crescent, p.x - f*0.2, p.y, p.z); S.s0=1.0; S.s1=0.7; S.asp=1.3; S.life=9; S.add=1; S.a=0.55; S.fout=1; S.flags = f<0?F_FLIP:0; sc_('#8fe0ff'); emit(); }
       sp(T.spark, p.x - f*R(0.1,0.5), p.y + R(-0.55,0.55), p.z + R(-0.1,0.1)); S.s0=R(0.14,0.26); S.curve=3; S.life=R(14,22); S.add=1; S.vx=-f*0.01; sc_(PICK(['#ffffff','#bff0ff'])); emit(); } },
+  grenade:{mesh:()=>toyMesh(built('grenade',(b,g)=>{
+    b.add(g.sphere(.17,12,8),'#c2c3ce');b.add(g.cylinder(.083,.11,.22,9),'#927f8d',[0,.10,0]);
+    b.add(g.torus(.146,.021,6,14),'#ffd181',[0,.018,0],[Math.PI/2,0,0]);
+   }),G.look.vmat({rough:.56}),.014),
+   halos:[HL(T.glow,.64,'#ffd38a',.39,.41)],
+   tick(h,p,f){h.mesh.rotation.z-=f*.20;h.mesh.rotation.x+=.15;}},
   web: { mesh:()=> toyMesh(built('web',(b,g)=>{
       for(const r of [.16,.32,.48])b.add(g.torus(r,.012,5,8),'#e6d6ff');
       for(let i=0;i<4;i++){const a=i*Math.PI/4;b.add(g.box(.96,.022,.018),'#fff5ff',[0,0,0],[0,0,a]);}
@@ -1648,14 +1654,34 @@ function commandCue(ent,m){
   v={root,mat,white,ink,arc:add(cueArc,mat),ring:add(cueRing,mat),beam:add(cueBeam,mat),flash:add(cueFlash,white),flame:add(cueFlame,mat),ent,m:null};for(const [i,part]of [v.arc,v.ring,v.beam].entries()){const rim=new THREE.Mesh(cueInk[i],ink),core=new THREE.Mesh(cueCore[i],white);rim.position.z=-.009;core.position.z=.009;rim.renderOrder=23;core.renderOrder=26;rim.name='cue-contrast-rim';core.name='cue-light-core';part.add(rim,core);}
   const flameCore=new THREE.Mesh(cueFlame,white);flameCore.scale.set(.46,.96,.46);flameCore.position.z=.04;flameCore.renderOrder=26;flameCore.name='cue-flame-core';v.flame.add(flameCore);
   root.name='command-cue-'+ent.type;root.userData.commandEffect=true;commandCues.set(ent,v);G.scene.add(root);}
- v.m=m;const row=cueRows.get(ent.type+':'+m.id),slot=row?.slot||(/dash|iai/.test(m.id)?'dash':m.air?'up':'fwd');v.profile=m.id==='nrailfire'?'rail':m.id==='mkflame'||m.def?.flame?'flame':ent.type==='mack'?'shot':ent.type==='nuko'?'sigil':slot==='down'?'sweep':slot==='up'||slot==='dp'?'rise':slot==='du'?'summon':slot==='dash'?'dash':'slash';
- const active=m.t>=m.act[0]&&m.t<=m.act[1],phase=active?'active':m.t<m.act[0]?'wind':'follow',age=Math.max(0,m.t-m.act[1]);v.phase=phase;v.root.visible=phase!=='follow'||age<9;v.root.userData.profile=v.profile;v.root.userData.move=m.id;v.root.userData.phase=phase;
- v.mat.opacity=active?.82:phase==='wind'?.19:Math.max(0,.6-age*.075);v.white.opacity=active?.94:v.mat.opacity*.5;v.ink.opacity=active?.88:v.mat.opacity*.7;
- v.arc.visible=['slash','rise','dash','sweep'].includes(v.profile);v.ring.visible=['summon','sigil','sweep'].includes(v.profile);v.beam.visible=['shot','dash','rail'].includes(v.profile);v.flash.visible=active;v.flame.visible=v.profile==='flame';v.flame.rotation.z=Math.PI/2;v.flame.position.set(1,0,0);v.mat.color.set(v.profile==='flame'?'#ff8a2a':cuePalette[ent.type]||'#9fe0ff');
- v.arc.rotation.set(0,0,v.profile==='rise'?-1.3:v.profile==='sweep'?.1:-.3);v.arc.scale.set(v.profile==='dash'?1.35:1,1,1);v.arc.position.set(.35,v.profile==='rise'?.25:0,.02);
- v.ring.rotation.set(v.profile==='sweep'?Math.PI/2:0,0,0);v.ring.scale.setScalar(v.profile==='summon'?1.35:1);v.ring.position.set(v.profile==='sigil'?.7:.1,v.profile==='sweep'?-.6:.05,0);
- v.beam.position.set(v.profile==='rail'?4.8:1.05,0,0);v.beam.scale.set(v.profile==='rail'?5:v.profile==='dash'?1.6:1,1,1);v.flash.position.set(v.profile==='shot'?1.9:.95,v.profile==='rise'?.65:0,.06);
- const pulse=active?1+.08*Math.sin(m.t*1.1):.72;v.flash.scale.setScalar(pulse);v.root.scale.set(ent.face||1,1,1);v.root.position.set(ent.x,ent.y+.78,ent.z+.12);
+ v.m=m;const row=cueRows.get(ent.type+':'+m.id),slot=row?.slot||(/dash|iai/.test(m.id)?'dash':m.air?'up':'fwd');
+ const style=G.heroCombatFx?.profile?.(ent,m);
+ v.profile=style?.mode||(m.id==='nrailfire'?'rail':m.id==='mkflame'||m.def?.flame?'flame':ent.type==='mack'?'shot':ent.type==='nuko'?'sigil':slot==='down'?'sweep':slot==='up'||slot==='dp'?'rise':slot==='du'?'summon':slot==='dash'?'dash':'slash');
+ const active=m.t>=m.act[0]&&m.t<=m.act[1],phase=active?'active':m.t<m.act[0]?'wind':'follow',age=Math.max(0,m.t-m.act[1]);
+ const travel=clamp((m.t-m.act[0])/Math.max(1,m.act[1]-m.act[0]),0,1),size=style?.scale||1;
+ v.phase=phase;v.root.visible=phase!=='follow'||age<9;v.root.userData.profile=v.profile;v.root.userData.move=m.id;v.root.userData.phase=phase;
+ v.mat.opacity=active?.86:phase==='wind'?.18:Math.max(0,.56-age*.07);v.white.opacity=active?.97:v.mat.opacity*.52;v.ink.opacity=active?.88:v.mat.opacity*.70;
+ const tilt=v.profile==='rise',floor=v.profile==='sweep',column=v.profile==='pillar';
+ v.arc.visible=['slash','rise','dash','sweep'].includes(v.profile);
+ v.ring.visible=['summon','sigil','sweep','impact','pillar'].includes(v.profile);
+ v.beam.visible=['shot','dash','rail'].includes(v.profile);
+ v.flash.visible=active;v.flame.visible=v.profile==='flame'||column;
+ v.flame.rotation.z=column?0:Math.PI/2;v.flame.position.set(column?1.08:1.00,column?.11:0,0);
+ v.flame.scale.set(column?.52:.65,column?.93+.23*travel:1.22,column?.65:.62);
+ v.mat.color.set(style?.tint||(v.profile==='flame'?'#ff8a2a':cuePalette[ent.type]||'#9fe0ff'));
+ const angle=style?.angle??(tilt?-1.3:floor?.1:-.3);
+ v.arc.rotation.set(floor?.38:0,0,angle+(active?.51*(travel-.5):0));
+ v.arc.scale.set(size*(v.profile==='dash'?1.23:1),size*(floor?.59:1),1);
+ v.arc.position.set(.62+travel*.27,tilt?.25+travel*.18:floor?-.35:0,.02);
+ v.ring.rotation.set(floor||column||v.profile==='impact'?Math.PI/2:v.profile==='summon'?.48:0,0,travel*.62);
+ v.ring.scale.setScalar(size*(v.profile==='summon'?1.25:.79+travel*.25));
+ v.ring.position.set(v.profile==='sigil'? .78:.39,floor||column?-.64:v.profile==='impact'?-.31:.04,0);
+ v.beam.position.set(v.profile==='rail'?4.75:1.05,v.profile==='shot'?Math.sin(angle)*.43:0,0);
+ v.beam.rotation.z=v.profile==='shot'?angle*.28:0;
+ v.beam.scale.set(size*(v.profile==='rail'?4.8:v.profile==='dash'?1.41:1),1,1);
+ v.flash.position.set(v.profile==='shot'?1.9:.95,tilt?.65:floor?-.31:.06,.06);
+ v.flash.scale.setScalar(active?1+.12*Math.sin(m.t*1.1):.65);
+ v.root.scale.set(ent.face||1,1,1);v.root.position.set(ent.x,ent.y+.78,ent.z+.12);
 }
 function frameCommandCues(){for(const [e,v]of commandCues){if(e.removed||e.dead||e.rig?.disposed){disposeCue(v);commandCues.delete(e);continue;}const p=e.rig?.root.position||e;v.root.position.set(p.x,p.y+.78,p.z+.12);v.root.scale.x=e.face||1;}}
 function clear(){
@@ -1676,6 +1702,7 @@ function frame(dt){
   const kReal = clamp((dt>0 ? dt : 1/60)*60, 0, 4);
   // world effects follow slow motion a little (but keep animating during hitstop)
   const kw = G.fx.worldFrozen ? 0 : kReal * Math.max(0.4, Math.min(1, G.timeScale || 1));
+  G.heroCombatFx?.frame?.(kw);
   fxT += kReal;
   // the camera controller moved the camera this frame but its matrices update only at render time:
   // refresh them so billboards and DOM popups use this frame's view (not last frame's, which lags under shake)

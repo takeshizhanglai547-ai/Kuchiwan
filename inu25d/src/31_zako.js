@@ -695,8 +695,10 @@ function pupGeo(scarf,coat){
     p.add(R.sm, '#ff7a8a', [0.33, 0.405, 0], [0,0,-0.3], [0.035, 0.022, 0.03]);
     for(const zs of [1,-1]){
       p.add(R.sm, ear, [0.02, 0.56, zs*0.25], [-zs*0.45, 0, 0.1], [0.07, 0.15, 0.04]);
-      p.add(R.sm, fur, [0.12, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
-      p.add(R.sm, fur, [-0.14, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
+      if(!coat){
+        p.add(R.sm, fur, [0.12, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
+        p.add(R.sm, fur, [-0.14, 0.08, zs*0.09], null, [0.06, 0.07, 0.055]);
+      }
     }
     if(!coat)p.add(R.cap(0.04, 0.12), fur, [-0.26, 0.36, 0], [0,0,0.75]);
     p.add(R.tor(0.15, 0.035, TAU, 18), scarf, [0.04, 0.37, 0], [HP, 0, 0.15]);
@@ -720,6 +722,12 @@ G.foes.rescueRig=function(e){
   const mesh=new THREE.Mesh(pupGeo(scarf,coat),material),outline=G.look.outline(mesh,.014,'#784b5c');
   const wag=new THREE.Mesh(G.look.geo.capsule(.038,.115,4,8),G.look.mat(coat));
   tail.position.set(-.205,.29,0);wag.position.set(-.065,.055,0);wag.rotation.z=.80;tail.add(wag);
+  const paws=[];
+  for(const x of [.12,-.14])for(const z of [.099,-.099]){
+    const ankle=new THREE.Group(),paw=new THREE.Mesh(G.look.geo.sphere(.08,10,8),material);
+    ankle.position.set(x,.158,z);paw.position.y=-.081;paw.scale.set(.81,.91,.72);
+    ankle.add(paw);body.add(ankle);paws.push(ankle);
+  }
   mesh.castShadow=true;body.add(mesh,tail);root.add(body);
   const shellScale=old?.root?.scale.clone();
   if(old?.root){root.add(old.root);old.root.position.set(0,0,0);}
@@ -731,15 +739,20 @@ G.foes.rescueRig=function(e){
     root,height:.79*size,update(pup){
       const t=pup.deadT-pup.rescueAt,running=pup.anim==='run';
       if(old?.root?.parent===root){
-        old.root.position.y=-pup.y;old.root.scale.copy(shellScale).multiplyScalar(Math.max(.01,1-t/12));
-        if(t>=12)freeShell();
+        old.rescueShell?.(t,pup.rescueAway);
+        old.root.position.y=-pup.y+Math.sin(Math.min(t/15,1)*Math.PI)*.06;
+        old.root.scale.copy(shellScale).multiplyScalar(Math.max(.01,1-t/15));
+        if(t>=15)freeShell();
       }
-      const pop=U.easeOutBack(U.clamp(t/9,0,1)),stride=Math.sin(t*.70);
-      body.scale.setScalar(Math.max(.02,pop)*size);
+      const emerge=U.clamp((t-2)/10,0,1),pop=Math.max(.02,U.easeOutBack(emerge));
+      const bow=running?0:Math.sin(U.clamp((t-22)/18,0,1)*Math.PI);
+      const stride=Math.sin(t*.70),land=Math.sin(U.clamp((t-10)/13,0,1)*Math.PI);
+      body.scale.set(size*pop*(1+.09*land),size*pop*(1-.15*land),size*pop);
       body.rotation.y=running?(pup.face<0?Math.PI+.56:-.56):-Math.PI/2+pup.rescueAway*.32;
-      body.rotation.z=running?-pup.face*.14:Math.sin(t*.24)*.06;
-      body.position.y=running?Math.abs(stride)*.09:0;
-      tail.rotation.y=Math.sin(t*.58)*.83;
+      body.rotation.z=running?-pup.face*.14:bow*-.23+Math.sin(t*.24)*.05;
+      body.position.y=running?Math.abs(stride)*.045:-.067*bow;
+      for(let i=0;i<paws.length;i++)paws[i].rotation.z=running?(i===0||i===3?1:-1)*stride*.74:i<2?bow*-.64:0;
+      tail.rotation.y=Math.sin(t*(running?.66:.58))*.83;
     },
     setAlpha(a){
       const transparent=a<1;
