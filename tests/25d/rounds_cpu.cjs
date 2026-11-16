@@ -5,7 +5,7 @@ function fixture(){
  const g=game('inu',{foes:[],actualRig:true}),{G}=g;
  G.camera=new g.env.c.THREE.PerspectiveCamera(40,16/9,.1,200);
  Object.assign(G.game.diff,{foeHp:1,foeSpeed:1,think:1,attackers:3});
- for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_animation','41_round_models','41_round_moves','41_round_scenery','41_rounds','93_frenzy','95_ailments'])
+ for(const f of ['30_foes','31_zako','32_expansion_foes','33_regional_critters','35_bosses_a','36_bosses_b','40_stage','41_round_animation','41_round_forms','41_round_models','41_round_moves','41_round_scenery','41_rounds','93_frenzy','95_ailments'])
    vm.runInContext(readModule(f+'.js'),g.env.c,{filename:f});
  G.foes.init();return g;
 }
@@ -227,6 +227,12 @@ function fixture(){
  const part=(rig,name)=>rig.root.getObjectByName(name);
  for(const def of roster){
   const e=G.foes.spawn(def.type,p.x+1.1,0,{entrance:'ready'});
+  e.rig.root.traverse(node=>{
+   if(!node.isMesh)return;
+   const {position,color}=node.geometry.attributes;
+   assert(position.count>0&&position.array.every(Number.isFinite),def.type+' has finite surface geometry');
+   assert.equal(color.count,position.count,def.type+' has baked color on every vertex');
+  });
   e.state='idle';e.cool=0;e.entered=true;
   e.rig.update(e);assert(part(e.rig,'idle')?.visible,def.type+' has an idle face');
   e.def.ai(e);

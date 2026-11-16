@@ -130,7 +130,7 @@ function faceSet(key, F){
         feat(p, R.domeT, C.white, F, az - i*0.04, F.el - s*0.35/F.r[1], s*0.3, 0, s*0.13);
       } else {
         feat(p, R.dome, C.rim, F, az, F.el, -0.004, 0, [s*0.92, s*1.08, s*0.36]);
-        feat(p, R.dome, C.eyeY, F, az, F.el, 0, 0, [s*0.76, s*0.92, s*0.4]);
+        feat(p, R.dome, F.eyeColor||C.eyeY, F, az, F.el, 0, 0, [s*0.76, s*0.92, s*0.4]);
         feat(p, R.domeS, C.pupil, F, az - i*0.05, F.el - s*0.12/F.r[1], s*0.2, 0, [s*0.36, s*0.5, s*0.3]);
         feat(p, R.domeT, C.white, F, az - i*0.02, F.el + s*0.12/F.r[1], s*0.36, 0, s*0.16);
       }
@@ -157,10 +157,8 @@ function faceSet(key, F){
   };
   const mouthO0 = mouthO;
   mouthO = (p)=>{ mouthO0(p); mouth(p, false); };
+  if(F.regional)out.neutral=plain(p=>{eyesOpen(p);if(F.mouth)mouth(p,true);});
   out.angry = plain((p)=>{ eyesOpen(p); brows(p, true); mouthO(p); });
-  out.blink = plain((p)=>{ const cap = R.capL(s*0.17, s*0.9);
-    for(const i of sides) feat(p, cap, C.ink, F, i*F.az, F.el - s*0.25/F.r[1], s*0.1, HP - i*0.18);
-    brows(p, true); mouthO(p); });
   out.x = plain((p)=>{ const cap = R.capL(s*0.16, s*1.15);
     for(const i of sides){ feat(p, cap, C.ink, F, i*F.az, F.el, s*0.08, PI/4); feat(p, cap, C.ink, F, i*F.az, F.el, s*0.08, -PI/4); }
     drop(p); mouthO(p); });
@@ -170,6 +168,10 @@ function faceSet(key, F){
       feat(p, cap, C.ink, F, az, F.el + dy, s*0.08, HP - i*0.55);
       feat(p, cap, C.ink, F, az, F.el - dy, s*0.08, HP + i*0.55); }
     drop(p); mouthO(p); });
+  if(F.regional){ faceCache.set(key,out); return out; }
+  out.blink = plain((p)=>{ const cap = R.capL(s*0.17, s*0.9);
+    for(const i of sides) feat(p, cap, C.ink, F, i*F.az, F.el - s*0.25/F.r[1], s*0.1, HP - i*0.18);
+    brows(p, true); mouthO(p); });
   out.happy = plain((p)=>{ const arc = R.tor(s*0.62, s*0.17, PI, 10);
     for(const i of sides){ feat(p, arc, C.ink, F, i*F.az, F.el - s*0.2/F.r[1], s*0.06, 0, 1);
       feat(p, R.domeS, C.blush, F, i*(F.az + 0.3), F.el - 0.24, 0, 0, [s*1.25, s*0.72, s*0.3]); }
@@ -183,6 +185,8 @@ function faceSet(key, F){
   faceCache.set(key, out);
   return out;
 }
+// Regional enemies use the same surface-fitted expressions as lap one.
+G.foes.expressionMeshes=faceSet;
 // one-eyed robot face (vertex colours glow through the emissive-vertex material)
 function mechaFace(key, c, s){
   if(faceCache.has(key)) return faceCache.get(key);
