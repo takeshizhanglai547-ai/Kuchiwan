@@ -29,6 +29,9 @@ G.bossPhaseVisual=function(e,rig=e?.rig){if(e?._frenzyShift||(!e?.phase&&!e?._fr
  const dispose=rig.dispose?.bind(rig);let disposed=false;rig.dispose=()=>{if(disposed)return;disposed=true;group.removeFromParent();for(const g of geos)g.dispose();mat.dispose();dispose?.();};return group;
 };
 const HEROES={
+ kuro:{name:'黒犬士',color:'#b883a2',cue:'大剣を肩から下ろし、無言で仲間の前へ立つ',win:'大剣を背負い、助けた子犬の頭をなでる',
+  start:['でかい剣だって、守るために使えばいい。行こう。'],clear:['もう大丈夫だ。いっしょに帰るぞ。']},
+
  inu:{name:'聖犬士イッヌ',color:'#e1ac36',cue:'剣を胸にかかげ、仲間にうなずく',win:'剣をおさめ、みんなへおじぎ',
   start:['王都のみんなを、ぼくが守る！','夕やみでも、聖剣の光は消えない！','森でこまった子が待ってる。行こう！','水晶の道を、光でてらそう！','飛行艇のみんなを助けに行くよ！','雪の向こうにも、笑顔をとどけよう！','クロイヌも王さまも、必ず助ける！'],
   clear:['町に笑顔がもどったね！','灯りをつけよう。もう大丈夫！','森のみんな、こわかったね。もう安心！','水晶がきれいに光ってる！','空の旅は、なかよく行こうね！','寒かったね。みんなであたたまろう！','光は、みんなのものだよ！']},
@@ -114,6 +117,8 @@ function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=185;e.actor=
  history.push({run,stage,hero,kind:e.kind,key:e.key,started:true});render();G.bus.emit('storyStart',{kind:e.kind,key:e.key,run});}
 const START_POSE={inu:{aRz:1.65,wz:1.5,aLz:.7,nod:-.08},shima:{aLz:1.4,aRz:1.5,aLx:.8,aRx:.8,lLz:.3,lRz:-.2},nuko:{aRz:2.3,aLz:1.8,aLx:.6,wz:.2,nod:.2},guard8:{aRz:1.2,wz:1.8,aLz:1.5,lean:.2,lLz:.3},watch:{aLz:2.5,aLy:.2,aRz:.5,twist:-.25,nod:-.12},wanden:{aRz:.55,aRy:1.2,wz:4,aLz:.5,twist:-.4,nod:-.1},mack:{aRz:1.55,wz:-1.5,aLz:2.5,aRx:.4,twist:.2}};
 const CLEAR_POSE={inu:{aRz:.6,aRy:1.1,wz:3.8,aLz:.3,nod:-.18,lean:.12},shima:{aLz:1.7,aRz:1.6,aLx:.8,aRx:.7,lean:.12},nuko:{aLz:2.2,aRz:2.7,aLx:.65,wz:.1,nod:.22},guard8:{aLz:1.7,aRz:1.4,aLx:1,aRx:.8,wz:1.8,nod:.08},watch:{aLz:2.55,aLy:.4,aRz:1.3,wz:1.1,lean:.25,nod:-.15},wanden:{aRz:.5,aRy:1.25,wz:4,aLz:.7,twist:-.3,lean:.1,nod:-.22},mack:{aLz:2.6,aRz:.75,wz:1.7,aRy:.6,twist:.3,nod:.1}};
+START_POSE.kuro={aRz:1.5,aRy:.3,wz:1.1,aLz:1.2,lean:.06,nod:-.08};
+CLEAR_POSE.kuro={aRz:1.7,wz:1.35,aLz:.5,lean:.10,nod:-.17};
 G.story={heroes:HEROES,bosses:BOSSES,history,
  get active(){return active;},get blocked(){return !!active;},get pending(){return queue.length;},get paused(){return paused;},get run(){return run;},
  beginStage(id,index,arena=false){reset();run++;hero=id;stage=index;if(arena)return;

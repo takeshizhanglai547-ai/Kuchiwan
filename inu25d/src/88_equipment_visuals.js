@@ -12,12 +12,12 @@ const listed=(id,s)=>s.split(' ').includes(id),family=(w)=>{
  if(listed(id,'kunai smokebomb caltrop sickle bombsatchel lockpick coinpurse'))return 'gadget';
  return w.owner==='wanden'?'katana':w.owner==='watch'?'cane':'sword';
 };
-function blueprint(hero,w){const key=hero+':'+w.id;if(assets.has(key))return assets.get(key);const g=G.look.geo,b=G.look.builder(),f=family(w),col=w.col||'#d2e3ef',metal='#e6f2f7',dark='#364759',gold='#e2bc66',wood='#776047',reach=Math.max(.8,Math.min(2.1,w.reach||1)),len=(hero==='wanden'?.86:.63)*Math.min(1.35,reach),id=w.id;
+function blueprint(hero,w){const key=hero+':'+w.id;if(assets.has(key))return assets.get(key);const g=G.look.geo,b=G.look.builder(),f=family(w),col=w.col||'#d2e3ef',metal='#e6f2f7',dark='#364759',gold='#e2bc66',wood='#776047',reach=Math.max(.8,Math.min(2.1,w.reach||1)),len=(hero==='kuro'?1.03:hero==='wanden'?.86:.63)*Math.min(hero==='kuro'?1.13:1.35,reach),id=w.id;
  const box=(x,y,z)=>g.box(x,y,z),cyl=(r,h)=>g.cylinder(r,r,h,10),orb=r=>g.sphere(r,12,8),add=(geo,c,p,r,s)=>b.add(geo,c,p,r,s),rod=(r,h,c,p)=>add(cyl(r,h),c,p),ring=(r,t,c,p,rot,arc=PI*2)=>add(g.torus(r,t,6,20,arc),c,p,rot);
  function blade(l,width,curve=0,serrate=false){const shape=new T.Shape();shape.moveTo(-width/2,.09);shape.lineTo(width/2,.09);for(let j=1;j<=7;j++){const y=.09+(l-.09)*j/7,x=width/2+curve*Math.sin(j/7*PI/2)+(serrate&&j%2?width*.34:0);shape.lineTo(x,y);}shape.lineTo(curve,l+.10);for(let j=7;j>=1;j--)shape.lineTo(-width/2+curve*Math.sin(j/7*PI/2),.09+(l-.09)*j/7);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.023,bevelEnabled:false,steps:1});add(geo,col,[0,0,-.0115]);geo.dispose();}
  if(f==='sword'||f==='katana'||f==='cane'){
   rod(.025,.15,wood,[0,-.015,0]);add(orb(.037),gold,[0,-.10,0]);
-  const thin=listed(id,'rapier estoc iaito')?.038:listed(id,'gsword claymore zweihander zanbatou2')?.15:.085,curve=listed(id,'katana sabre falchion khopesh nodachi muramasa tachi otachi')?.10:0;
+  const thin=hero==='kuro'?.232:listed(id,'rapier estoc iaito')?.038:listed(id,'gsword claymore zweihander zanbatou2')?.15:.085,curve=listed(id,'katana sabre falchion khopesh nodachi muramasa tachi otachi')?.10:0;
   if(id==='canesword'||f==='cane'){rod(.027,len,col,[0,len/2,0]);ring(.075,.018,metal,[-.07,0,0],[0,0,PI],PI);}
   else{blade(len,thin,curve,id==='flamberge'||id==='urumi');add(box(id==='rapier'?.07:.20,.033,.055),gold,[0,.075,0]);if(id==='rapier')ring(.12,.014,metal,[.05,-.015,0],[0,0,-.5],PI*1.5);}
   if(id==='khopesh')ring(.18,.045,col,[.03,len*.77,0],[0,0,-.7],PI*1.3);if(id==='jitte')add(box(.035,.19,.03),metal,[.10,.16,0]);

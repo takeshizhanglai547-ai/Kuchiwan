@@ -23,8 +23,9 @@ function environment(){
  const e=environment(),a=e.G.audio,rows=[],pass=[];a.init();a.bgm('stage8');assert.equal(e.constructed,0,'init and score selection must await user gesture');
  const signatures=new Set(),melodies=new Set();for(let i=1;i<=9;i++){const score=a.debug.score('stage'+i);assert(score);assert.deepEqual(Array.from(score.warn),[]);const lead=score.steps.flatMap((events,step)=>(events||[]).filter(x=>x.c==='lead').map(x=>({step,m:x.m,d:x.d,i:x.i})));assert(lead.length>40);const sig=crypto.createHash('sha256').update(JSON.stringify(score.steps)).digest('hex'),melody=crypto.createHash('sha256').update(JSON.stringify(lead.map(n=>({step:n.step,interval:n.m-lead[0].m,d:n.d})))).digest('hex');assert(!signatures.has(sig),'stage has identical score');assert(!melodies.has(melody),'stage is only a rhythm/instrument swap');signatures.add(sig);melodies.add(melody);const boss=a.debug.score('boss'+i),rage=a.debug.score('boss'+i+'_phase2');assert.deepEqual(Array.from(boss.warn),[]);assert.deepEqual(Array.from(rage.warn),[]);assert(boss.bpm>score.bpm);assert(rage.bpm>boss.bpm);assert.notDeepEqual(boss.steps,score.steps);assert.notDeepEqual(rage.steps,boss.steps);rows.push({stage:i,bpm:score.bpm,key:score.key,mode:score.mode,events:score.steps.flat().filter(Boolean).length,melodyHash:melody,scoreHash:sig,bossBpm:boss.bpm,rageBpm:rage.bpm});}
  pass.push('nine distinct original melodies/scores; each local boss arrangement and rage arrangement compiles without warnings and differs in actual emitted notes');
- for(let n=10;n<=32;n++){
+ for(let n=10;n<=37;n++){
   const stage=a.debug.score('stage'+n),battle=a.debug.score(a.bossTrack(n-1,'lapBoss',1,false)),rage=a.debug.score(a.bossTrack(n-1,'lapBoss',1,true));
+  for(const score of [stage,battle,rage])assert.deepEqual(Array.from(score.warn),[]);
   assert(stage.bpm<battle.bpm&&battle.bpm<rage.bpm);
   const sig=(score)=>JSON.stringify(score.steps.map((ev)=>ev?.filter(x=>x.c==='lead').map(x=>x.m)));
   assert(!melodies.has(sig(stage)));melodies.add(sig(stage));
@@ -37,7 +38,7 @@ function environment(){
  delete other._frenzyShift;e.G.bus.emit('bossFrenzyReady',{boss:other});
  assert.equal(a.current,'boss12_phase2');a.bgm('stage8');
  e.G.game.stageIndex=0;
- pass.push('23 journey-specific stage scores and faster boss arrangements route at the end of the transformation');
+ pass.push('28 journey-specific stage scores and faster boss arrangements route at the end of the transformation');
  for(const track of a.tracks)assert.deepEqual(Array.from(a.debug.score(track).warn),[],track+' score warning');for(const form of [1,2,3])for(const rage of [false,true]){const name=a.bossTrack(6,'emperor',form,rage),s=a.debug.score(name);assert(s,name);assert.deepEqual(Array.from(s.warn),[]);}assert.notDeepEqual(a.debug.score('final3').steps,a.debug.score('final2').steps);pass.push('emperor three forms and half-HP arrangements are valid and third form has a distinct score');
  assert.equal(a.bossTrack(7,'kuroinu',1),'boss8');assert.equal(a.bossTrack(8,'cerbe',1,true),'boss9_phase2');assert(a.unlock());await Promise.resolve();assert.equal(e.constructed,1);assert.equal(a.current,'stage8');e.advance(.5);assert(a.stats().made>0);const made=a.stats().made;a.bgm('stage8');assert.equal(a.stats().made,made,'same theme must not allocate duplicate voices');pass.push('no AudioContext before gesture; one context starts requested track; same-theme request is allocation-free');
  a.pause(true);const held=a.stats().made;e.advance(1);assert.equal(a.stats().made,held,'paused soundtrack may not schedule new notes');a.pause(false);e.advance(.5);assert(a.stats().made>held);a.setMuted(true);e.advance(2);const silent=a.stats().made;e.advance(1);assert.equal(a.stats().made,silent);a.setMuted(false);e.advance(.5);assert(a.stats().made>silent);pass.push('pause/mute preserve transport and stop new music allocations; resume/unmute restart scheduling');

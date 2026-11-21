@@ -1,4 +1,4 @@
-// 20_heroes.js — 7人の なかま（プレイヤーキャラ）：データ・ちびキャラの立体モデル・手続きアニメ・顔アイコン。
+// 20_heroes.js — 8人の なかま（プレイヤーキャラ）：データ・ちびキャラの立体モデル・手続きアニメ・顔アイコン。
 // 部品（腰・頭・腕・脚・しっぽ・武器・マント…）ごとに G.look.builder() で1メッシュへ結合し、
 // 目・表情だけ別メッシュ（まばたき／×目／にっこり目の切り替え）。材質はリグごとに1枚だけ複製して白フラッシュに使う。
 // 向き：左向きは鏡像（scale.x=-1）にして、武器の手がいつもカメラ側に来るようにする。回り込みの途中で正面を通る。
@@ -43,6 +43,12 @@ const LIST = [
     stats:{ hp:1.0, atk:0.95, spd:1.0, jump:1.0 }, weapon:'gun', range:'ranged',
     specials:{ n:'スターばくだん', up:'ロケットはなび', fwd:'ドリルダッシュ' }, ultName:'はなびだいさくせん',
     voice:{ f0:262, type:'triangle' } },
+  { id:'kuro',name:'黒犬士',nameKanji:'黒犬士',short:'黒犬士',species:'黒い 旅の剣士',
+    desc:'鉄塊の大剣と 突進剣技で、機械の世界から なかまを救う。',color:'#bd829a',
+    stats:{hp:1.18,atk:1.2,spd:.91,jump:.96},weapon:'sword',range:'melee',scale:1.08,
+    specials:{n:'鉄塊・断ち割り',up:'大剣軸・倒立斬り',fwd:'黒牙・突進斬り'},ultName:'黒天・大剣乱舞',voice:{f0:174,type:'sawtooth'} },
+
+
 ];
 for(const h of LIST){ h.specialName = h.specials.n; if(!h.scale) h.scale = 1; }
 const BYID = {}; for(const h of LIST) BYID[h.id] = h;
@@ -260,6 +266,37 @@ const GOLD = '#ffcf4a';
 // ---------------------------------------------------------------- the seven designs
 // lightness is split into 3 steps per hero (dark cloth / mid / light) so parts never merge into one blob
 const DESIGN = {
+  kuro:{fur:'#34333f',muzzle:'#b1a1a6',body:'#45424d',sleeve:'#68616d',paw:'#8d7b83',leg:'#4a4654',foot:'#7e7180',nose:'#25212c',eye:.063,blush:'#c08290',lineCol:'#211b27',
+    build(D){
+      const g=G.look.geo,b=part(D,'body'),h=part(D,'head'),w=part(D,'weapon');
+      b.add(g.rbox(.23,.25,.35,.045,3),'#77727e',[.071,.19,0],[0,0,-.10]);
+      for(const z of [-.175,.175]){
+        b.add(g.sphere(.135,14,9),'#817a86',[-.02,.30,z],null,[1.03,.65,.69]);
+        b.add(g.torus(.125,.020,6,18),'#b3a5b0',[-.014,.31,z],[Math.PI/2,0,0],[1,.8,1]);
+        for(let j=0;j<3;j++)b.add(g.rbox(.15,.055,.045,.012,2),'#aaa0aa',[.087,.13-j*.059,z]);
+      }
+      b.add(g.torus(.19,.027,7,20),'#6e454b',[0,.055,0],[Math.PI/2,0,0]);
+      b.add(g.rbox(.042,.071,.075,.014,2),'#cdb8ad',[.191,.059,0]);
+      for(const az of [-.55,.55]){
+        h.add(g.capsule(.012,.095,3,8),'#c49e9f',onHead(az,.05,.025),[0,.52,az]);
+        h.add(g.capsule(.008,.032,3,8),'#63505b',onHead(az+.05,.12,.034),[0,0,.6]);
+      }
+      h.add(g.cone(.125,.22,5),'#45404e',[-.17,.607,0],[0,0,-.44],[1.2,1,.9]);
+      earsOf(D,'up','#403846','#ae8395');
+      tailOf(D,'fluff','#3b3341','#746070');
+      capeOf(D,'#533a4e',.59,.33,'#332b3b');
+      w.add(g.capsule(.033,.18,4,10),'#6c505c',[0,-.047,0]);
+      for(let i=0;i<5;i++)w.add(g.torus(.034,.006,5,10),'#b3a3a8',[0,-.112+i*.031,0],[Math.PI/2,0,0]);
+      w.add(g.sphere(.047,10,7),'#b7a8ad',[0,-.183,0]);
+      w.add(g.rbox(.33,.065,.10,.021,2),'#7d6f7c',[0,.083,0]);
+      w.add(g.rbox(.232,.82,.082,.018,2),'#81818e',[0,.52,0]);
+      w.add(g.rbox(.167,.78,.093,.012,2),'#4d4d5c',[.012,.52,0]);
+      w.add(g.box(.025,.77,.099),'#dedce2',[-.105,.52,0]);
+      w.add(g.cone(.119,.19,4),'#b9b8c4',[0,1.015,0],null,[1,1,.39]);
+      for(let i=0;i<4;i++)w.add(g.rbox(.085,.011,.008,.003,1),'#b1a4af',[.012,.27+i*.173,.051],[0,0,.37]);
+      D.a.tip=[0,1.11,0];D.a.wbase=[0,.10,0];
+    }},
+
   inu: { fur:'#fff8e6', muzzle:'#fffdf6', body:'#6f9fe0', sleeve:'#6f9fe0', paw:'#fff8e6', leg:'#fff8e6', foot:'#8a5a2e',
     weaponGlow:'#2d5c8a', halo:true,
     build(D){ const geo = G.look.geo, b = part(D,'body'), h = part(D,'head');
@@ -966,8 +1003,9 @@ function updateRig(rig, e, dt, first){
     }
   }
   const inuDedicated=rig.heroId==='inu'&&G.inuGroundMotion?G.inuGroundMotion.pose(rig,e,Q,rest):null;
-  const publishedDedicated=!inuDedicated&&G.publishedMotion?G.publishedMotion.pose(rig,e,Q,rest):null;
-  const dedicated=inuDedicated||publishedDedicated;
+  const kuroDedicated=G.kuroCombat?.pose(rig,e,Q,rest);
+  const publishedDedicated=!inuDedicated&&!kuroDedicated&&G.publishedMotion?G.publishedMotion.pose(rig,e,Q,rest):null;
+  const dedicated=kuroDedicated||inuDedicated||publishedDedicated;
   if(e.published)G.heroCombatFx?.accent?.(e,e.publishedMotion,Q,dedicated);
   st.inuPose=inuDedicated||null;st.pubPose=publishedDedicated||null;
   if(dedicated){oneshot=true;tpl=dedicated.id;eyes=dedicated.eyes||'open';glow=dedicated.glow||0;}
@@ -1000,6 +1038,7 @@ function updateRig(rig, e, dt, first){
   if(rig.heroId==='inu'&&G.inuGroundMotion)G.inuGroundMotion.prepare(rig);
   if(G.publishedMotion)G.publishedMotion.prepare(rig);
   applyPose(rig, e, dt, first, anim, eyes, stars, glow, T, p);
+  if(rig.heroId==='kuro')G.kuroCombat?.postPose(rig,e);
   if(rig.heroId==='inu'&&G.inuGroundMotion)G.inuGroundMotion.settle(rig,e,inuDedicated);
   if(G.publishedMotion)G.publishedMotion.settle(rig,e,publishedDedicated);
 }

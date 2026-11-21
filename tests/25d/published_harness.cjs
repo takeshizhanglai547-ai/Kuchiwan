@@ -17,6 +17,7 @@ function game(hero='inu',opts={}){
   G.stage={bounds:()=>({xmin:0,xmax:200,zmin:-2.4,zmax:2})};
   for(const name of ['50_combat.js','52_published_fighter.js','53_command_reference.js','54_command_moves.js','55_player.js','56_control_actions.js'])
     vm.runInContext(readModule(name),c);
+  if(hero==='kuro')vm.runInContext(readModule('57_kurokenshi.js'),c);
   if(opts.story||process.env.INU25D_WITH_STORY==='1')vm.runInContext(readModule('82_story_events.js'),c);
   const p=G.player=G.playerCtl.create(hero,4,0);G.world.add(p);const n=G.published.native(p);
   // Explicit oracle-only coordinate profile: original 2D displacement/flat lane.

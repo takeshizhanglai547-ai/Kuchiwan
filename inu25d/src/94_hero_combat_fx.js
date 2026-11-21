@@ -10,6 +10,7 @@ const bySlot={
  guard8:['hammerLift','hammer','headbutt','spin','shield','quake','meteor'],
  watch:['smoke','wire','shadow','vault','card','vault','sigil'],
  wanden:['rise','double','lowCut','dash','mist','cleave','draw'],
+ kuro:['rise','dash','lowCut','dash','cleave','rise','double'],
  mack:['lob','bazooka','flame','drill','launcher','sniper','shotgun']
 };
 // Shape, tint, scale and stroke pitch. These profiles also drive active poses.
@@ -31,6 +32,7 @@ const styles={
 const combo={
  inu:['draw','double','cleave','wave'],shima:['fist','fist','kick','flurry'],nuko:['ember','frost','magicLift','lightning'],
  guard8:['hammer','headbutt','hammerLift','quake'],watch:['wire','card','vault','smoke'],wanden:['draw','lowCut','double','cleave'],
+ kuro:['cleave','double','meteor'],
  mack:['sniper','shotgun','sniper','shotgun']
 };
 const armed={gun:'sniper',fist:'flurry',magic:'lightning',chain:'double',pole:'rise',fan:'wave',heavy:'meteor',gadget:'launcher',katana:'mist',cane:'wire'};
@@ -45,7 +47,7 @@ function profile(p,m){
  else if(d.ice&&type==='nuko')key='frost';
  else if(d.mkFlame||m.id==='mkflame')key='flame';
  else if(m.id==='nrailfire'||m.id==='nrailchg')key='rail';
- else if(d.combo)key=(combo[type]||combo.inu)[(d.combo-1)%4];
+ else if(d.combo)key=(combo[type]||combo.inu)[(d.combo-1)%(combo[type]||combo.inu).length];
  else if(!key&&type==='shima'&&d.kick)key='kick';
  if(!key){
   const id=m.id||m.type||'';

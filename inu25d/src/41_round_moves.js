@@ -242,18 +242,19 @@ function shoot(e,ev,target){
  for(const offset of ev.angles){
   const a=angle+offset;
   H.shoot(e,{kind:ev.projectile,x,y:ev.height??.75,z,vx:face*Math.cos(a)*ev.speed,vz:Math.sin(a)*ev.speed,
-   vy:ev.vy||0,grav:ev.grav||0,returnAt:ev.returnAt,life:ev.returnAt?59:88,r:ev.radius||.28,dmg:ev.damage,status:ev.status,pierce:ev.pierce||0,onGround:ev.bounce?'bounce':'die'});
+   vy:ev.vy||0,grav:ev.grav||0,returnAt:ev.returnAt,life:ev.life||(ev.returnAt?59:88),r:ev.radius||.28,dmg:ev.damage,status:ev.status,
+   boom:ev.boom,pierce:ev.pierce||0,onGround:ev.bounce?'bounce':'die'});
  }
 }
 function compile(card,id,color,signature){
  const {events}=card;
  const dashEvents=events.filter(e=>e.kind==='dash');
- const tracksPlayer=events.some(e=>e.kind==='blink'||e.kind==='shot'||e.anchor==='target');
+ const tracksPlayer=events.some(e=>e.kind==='blink'||e.kind==='shot'||e.kind==='custom'||e.anchor==='target');
  return {
   id,name:card.name,motion:events.map(e=>({at:e.at,kind:e.kind,side:Math.sign(e.z||e.sidestep||e.offset||0)})),windup:card.windup,reach:tracksPlayer?6.1:dashEvents.length?3.3:2.65,
   lanes:tracksPlayer?1.35:.67,len:Math.max(...events.map(e=>e.at+(e.frames||e.linger||0)))+12,
   anim:card.pose==='rush'?'run':card.pose==='cast'?'throw':'swipe',pose:card.pose,recover:card.recover,
-  armor:dashEvents.some(e=>e.armor),onEnd(e){e.vx=e.vz=0;marks(e,true);},
+  armor:dashEvents.some(e=>e.armor),onEnd(e){e.vx=e.vz=0;marks(e,true);card.cleanup?.(e);},
   fn(e,t){
    const a=e.atk;
    if(!a.roundTarget)a.roundTarget=H.target(e);
@@ -261,6 +262,7 @@ function compile(card,id,color,signature){
    if(!p||p.dead||p.removed)return;
    a.roundPositions||=new Map();
    for(const ev of events){
+    if(ev.kind==='custom'&&t>=ev.at&&t<=ev.at+ev.frames)ev.fn(e,t-ev.at,p);
     if(ev.kind==='zone'&&t===Math.max(0,ev.at-16)){
      const target=ev.anchor==='boss'?e:p;
      const [x,z]=within(target.x+(ev.anchor==='boss'?e.face:1)*ev.x,target.z+ev.z);
@@ -305,6 +307,7 @@ function compile(card,id,color,signature){
  };
 }
 G.roundMoves={
+ register(shape,color,cards,finisher,signature){catalog[shape]=[color,cards];transformed[shape]=finisher;if(signature)signatures[shape]=signature;},
  color:shape=>catalog[shape][0],
  make(shape,id){const [color,cards]=catalog[shape];return [...cards,transformed[shape]].map((card,i)=>compile(card,id+'Move'+(i+1),color,signatures[shape]));},
  marks

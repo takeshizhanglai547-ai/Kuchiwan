@@ -689,16 +689,23 @@ const journeyScores=[
  [139,60,'mixo',"1 . 5, 1 2 4 5 . | 6 5 4 6 1' . 5 .","4 . 2 4 6 5 2 . | 5 4 2 5 1 - 3 1"],
  [114,65,'mixo',"5 . 6 1' 5 - 3 . | 4 . 3 5 2 . 3 4","6 2' 1' 5 4 . 6 3 | 2 - 3 5 1 - - ."],
  [124,60,'minor',"1 - 1 5, 3 5 3 . | 4 1 4 6 5 - 2 .","2 5 6 5 2 . 4 6 | 5, 5, 7, 2 1 - - ."],
- [144,57,'minor',"1 3 5 . 1' 7 5 . | 4 6 1' 6 5 4 1 .","2 4 6 1' 7 4 2 . | 3 7 5 2 1 - 5, 1"]
+ [144,57,'minor',"1 3 5 . 1' 7 5 . | 4 6 1' 6 5 4 1 .","2 4 6 1' 7 4 2 . | 3 7 5 2 1 - 5, 1"],
+ [112,52,'minor',"1 . 1 5, . 1 3 . | 2 . 1 5, 7, . 1 .","4 . 3 2 . 5 4 . | 2 3 1 . 5, - 1 ."],
+ [124,54,'minor',"1 1 . 5, 1 . 2 3 | 5 . 3 2 1 . 7, .","4 . 4 6 5 . 3 2 | 2 . 5, 7, 1 - 1 ."],
+ [136,55,'minor',"1 . 5 1' . 7 5 3 | 2 . 4 6 . 5 3 2","5 . 7 2' 1' . 7 5 | 4 2 5 7 1' - 1 ."],
+ [120,51,'minor',"1 - 5, . 1 3 2 . | 6, . 1 4 . 3 2 .","5 . 3 6 2' 1' 7 . | 4 . 2 5 1 - 1 ."],
+ [146,53,'minor',"1 5, 1 . 3 2 1 . | 6, 1 4 6 5 . 3 .","5 7 1' . 7 5 3 . | 2 4 5 7 1' - 1 ."]
+
 ];
 const ensemble=[
  ['marimba','fill:flute','pizz8:pizz','bounce','pop','xylo','fest2'],
  ['pulse','arp:celesta','arp8:glock','drive','pop2','sq','boss2'],
  ['flute','third:celesta','off:pizz','slow','night','flute','cave2'],
- ['koto','fill:flute','pizz8:koto','two','sengoku','koto','oni']
+ ['koto','fill:flute','pizz8:koto','two','sengoku','koto','oni'],
+ ['pulse','arp:celesta','arp8:glock','drive','boss2','brass','final2']
 ];
 journeyScores.forEach(([bpm,key,mode,a,b],index)=>{
- const n=index+10,[lead,m2,comp,bass,drum,battleLead,battleDrum]=ensemble[index<5?0:index<9?1:index<12?2:3];
+ const n=index+10,[lead,m2,comp,bass,drum,battleLead,battleDrum]=ensemble[index<5?0:index<9?1:index<12?2:index<23?3:4];
  const minor=mode==='minor',ch=minor?'i VI iv V':'I IV ii V';
  const song={bpm,key,mode,room:{beats:.75,fb:.22,wet:.23},ph:{a,b},
    sec:{A:{ch,mel:'a b',lead,m2,comp,bass,drum},B:{from:'A',ch:minor?'VI i iv i':'vi I V I',mel:'b a'},A2:{from:'A',comp:'off:pizz'},B2:{from:'B',gl:'up'}},
@@ -708,8 +715,8 @@ journeyScores.forEach(([bpm,key,mode,a,b],index)=>{
   const score=battleArrangement(song,index,rage);
   score.bpm=bpm+(rage?38:18);
   for(const sec of Object.values(score.sec)){
-   sec.lead=rage?(index>=12?'koto':'brass'):battleLead;
-   sec.drum=rage?(index>=12?'oni':'final2'):battleDrum;
+   sec.lead=rage?(index>=12&&index<23?'koto':'brass'):battleLead;
+   sec.drum=rage?(index>=12&&index<23?'oni':'final2'):battleDrum;
    sec.m2=rage?'arp:xylo:16':m2;
   }
   if(rage)score.order=['B','A','B2','A2'];

@@ -3707,7 +3707,7 @@ function resetPlayer(p, full){ p.x=clamp(Math.max(120,camX+120)+p.pid*70, camX+3
     if(p.kind==='mack'){ p.atkMul=1.06; p.spdMul=1.12; p.lives=3; p.maxHp=104; p.hp=104; p.ammo=MK_AMMO; }
   } }
 // キャラごとの基本装備（オープニングのカットシーンでも正しい得物を持たせるために共用）
-function defaultWeaponFor(kind){ return kind==='shima'?'fists':kind==='nuko'?'wand':kind==='guard8'?'ghammer':kind==='wanden'?'inuboshi':kind==='mack'?'fists':'dagger'; }
+function defaultWeaponFor(kind){ if(kind==='kuro')return 'kuroSlayer'; return kind==='shima'?'fists':kind==='nuko'?'wand':kind==='guard8'?'ghammer':kind==='wanden'?'inuboshi':kind==='mack'?'fists':'dagger'; }
 // 早撃ちマックの弾数。6発撃つとリロードが挟まる（弾切れは「隙」そのもの）。
 // 空中の射撃だけは弾倉を減らさない（空中ではリロードできないため）
 const MK_AMMO=6;
@@ -4005,6 +4005,7 @@ function fireGroundUlt(p, cost){
   const SH=p.kind==='shima', NK=p.kind==='nuko', GD=p.kind==='guard8',
         WA=p.kind==='watch', WD=p.kind==='wanden', MK=p.kind==='mack';
   // 武器を拾っている間は、その得物の奥義になる
+  if(p.kind==='kuro'){const id=WEAPON_SPECIAL[p.weapon]?.ult||'kuroUlt';beginUlt(p,ATK[id].name);beginAttack(id);p.dim-=cost;p.invuln=Math.max(p.invuln,ATK[id].dur+12);return;}
   const wu=weaponSpecialFor(p,'ult');
   if(wu){ beginUlt(p, ATK[wu].name); beginAttack(wu); p.dim-=cost;
     p.invuln=Math.max(p.invuln, 40); return; }
@@ -4036,7 +4037,7 @@ function comboMoveFor(p,step){ const _s=comboSet(p);
   if(p.kind==='wanden') return 'wd'+clamp(step,1,4);   // ワンデン：長剣「犬干し竿」の居合コンボ（武器を拾っても構えは変えない）
   if(p.kind==='mack') return 'mk'+clamp(step,1,MK_AMMO);   // マック：リボルバーの6連射（拾い物では構えを変えない）
   const s=comboSet(p); if(s) return s[clamp(step,1,s.length)-1]; return (p.kind==='shima'?'sc':p.kind==='watch'?'wc':'c')+step; }
-function chargeMoveFor(p){ if(p.kind==='nuko')return 'nbeam';   // ヌコのビームは nukoCast(6) 側で段位を見る
+function chargeMoveFor(p){ if(p.kind==='kuro')return 'kuroCharge'; if(p.kind==='nuko')return 'nbeam';   // ヌコのビームは nukoCast(6) 側で段位を見る
   const sfx2=['','2','3','3'][evoTier(p)];   // 神域は極と同じ技IDで、威力と演出だけ段位ぶん伸びる                          // タメ攻撃も段位で上位技へ差し替わる
   if(p.kind==='mack')return 'mkCharge'+sfx2;                    // マックのタメ＝ドリル突進
   if(p.kind==='guard8')return 'chargeHammer'+sfx2;
@@ -6453,6 +6454,7 @@ function beginSGMove(p){
   if(p.kind==='wanden') beginMuchiRen(p);
   else if(p.kind==='mack') beginFireworks(p);
   else if(p.kind==='inu') beginMugetsu(p);
+  else if(p.kind==='kuro')beginAttack('kuroBreaker');
   else beginSGAct(p, p.kind);
   return true;
 }
@@ -7562,7 +7564,7 @@ function updatePlayer(){
     if(p.z<=0 && dpReady(p.facing)){ beginAttack(specialFor(p,'dp')); consumeCmd(); p.atkHeld=true; return; }        // 昇竜コマンド（Lv10で上位技へ）
     if(p.z<=0 && hadokenReady(p.facing)){ beginAttack(specialFor(p,'hadou')); consumeCmd(); p.atkHeld=true; return; } // 波動コマンド（Lv10で上位技へ）
     if(p.z<=0 && downUpReady()){ beginAttack(specialFor(p,'du')); consumeCmd(); p.atkHeld=true; return; }             // ↓↑コマンド（Lv5で別技へ）
-    if(K.down && p.z<=0){ const dw=specialUpgraded(p,'down');
+    if(K.down && p.z<=0){ if(p.kind==='kuro'){beginAttack('kuroLow');p.atkHeld=true;return;} const dw=specialUpgraded(p,'down');
       if(dw){ beginAttack(dw); p.atkHeld=true; return; }                                   // 下攻撃の上位技
       if(SH){ beginAttack('sdropkick'); p.atkHeld=true; return; }
       if(NK){ beginAttack('ngnd'); p.atkHeld=true; return; }                              // ヌコ下：時間差爆発
@@ -7572,7 +7574,7 @@ function updatePlayer(){
       if(MK){ beginAttack(specialFor(p,'down')); p.atkHeld=true; return; }                // マック下：火炎放射器（押しっぱなしで吹き続ける）
       beginSlide(); return; }                                                              // ドロップキック / スライディング
     if(K.up){ beginAttack(specialFor(p,'up')); }  // 抜刀切り上げ / 旋風脚 / サイクロン / ハンマー振り上げ / 煙玉 / 昇竜拳（Lv3で上位技へ）
-    else if(stingerReady(p.facing)){ const da=specialUpgraded(p,'dash');
+    else if(stingerReady(p.facing)){ if(p.kind==='kuro'){beginAttack('kuroRush');consumeCmd();p.atkHeld=true;return;} const da=specialUpgraded(p,'dash');
       if(da){ beginAttack(da); if(ATK[da].respin) p.spinCount=1; consumeCmd(); p.atkHeld=true; return; }   // ダッシュ攻撃の上位技
       if(SH){ beginAttack('spindash'); p.spinCount=1; } else if(NK){ beginNukoRail(p); consumeCmd(); return; } else if(GD){ beginAttack('gspin'); p.spinCount=1; } else if(WA){ beginAttack('wheist'); } else if(WD){ beginAttack('dshukuchi'); } else if(MK){ beginAttack('mkPileB'); } else { beginIaiDash(); } consumeCmd(); } // グルグル / 極太レーザー / ハンマー旋風 / 神速強奪 / 居合
     else if(fwd){
@@ -10225,6 +10227,7 @@ function canPick(p,kind){ // 拾える武器はキャラごとに異なる
   if(kind==='hp'||kind==='costume') return true;
   if(CHARMS[kind]) return CHARMS[kind].who==='*' || p.kind===CHARMS[kind].who;   // お守りは専用キャラのみ（イベント品は誰でも）
   const who=(WEAPONS[kind]||{}).who;
+  if(p.kind==='kuro'&&!who)return kind==='kuroSlayer';
   if(who) return who===p.kind || (p.kind==='watch' && who!=='nuko');   // 追加武器は持ち主のみ（ワッチは魔法の触媒以外を扱える）
   if(p.kind==='wanden') return kind==='moon'||kind==='holy'||kind==='inuboshi2';   // ワンデン＝愛刀「犬干し竿」系と聖剣のみ（一刀流の矜持）
   if(p.kind==='watch') return kind!=='tome'&&kind!=='wand'&&kind!=='staff2';   // ワッチ＝魔法以外の全武器を扱える（アイテム攻撃が得意）
@@ -25887,7 +25890,7 @@ function winGame(){ if(scr.dur<=0 && state!=='win'){ goScreen(winGame,'fade',52)
 function togglePause(){ state=state==='pause'?'play':'pause';
   if(state==='pause'){ if(musicGain)musicGain.gain.value=0.0; } else if(musicGain&&sndOn){ musicGain.gain.value=0.55; } }
 function setupRoster(mode){ curMode=mode; TWO_P=(mode==='coop');
-  players[0].kind=(mode==='shima')?'shima':(mode==='nuko')?'nuko':(mode==='guard8')?'guard8':(mode==='watch')?'watch':(mode==='wanden')?'wanden':(mode==='mack')?'mack':'inu'; players[1].kind='shima';
+  players[0].kind=(mode==='kuro')?'kuro':(mode==='shima')?'shima':(mode==='nuko')?'nuko':(mode==='guard8')?'guard8':(mode==='watch')?'watch':(mode==='wanden')?'wanden':(mode==='mack')?'mack':'inu'; players[1].kind='shima';
   players[0].active=true; players[1].active=TWO_P; setTouchMode(TWO_P); }
 // タイトルの「2周目」トグルがONなら、一周目を飛ばして蟲の世界から開始（支度金つき）
 let ng2Sel=0;   // 0=1周目 / 2=蟲の世界から / 3=宇宙人の侵略から / 4=神話から
@@ -26585,9 +26588,11 @@ grabMackGun=_pubObserve('grabMackGun',grabMackGun);
 grabMackRocket=_pubObserve('grabMackRocket',grabMackRocket);
 grabMackDrill=_pubObserve('grabMackDrill',grabMackDrill);
 grabMackBuson=_pubObserve('grabMackBuson',grabMackBuson);
+G.kuroCombat?.install({ATK,WEAPONS,WEAPON_COMBO,SPECIAL_BASE,SPECIAL_UP,AIR_SPECIAL,WEAPON_SPECIAL,AIR_ULT});
 return {
   reset(kind,seed,carry){
     _pubSeedTo(seed||1);gf=0;setupRoster(kind);player=players[0];resetPlayer(player,true);player.invuln=0;
+    if(kind==='kuro'&&!carry){player.maxHp=Math.round(player.maxHp*1.18);player.hp=player.maxHp;}
     player.x=240;player.y=LANE;player.z=0;player.vz=0;players[1].active=false;state='play';
     enemies=[];projectiles=[];particles=[];hazards=[];items=[];vehicles=[];npcs=[];hitStop=0;slowmo=0;resetCombo();_pubDisplay=null;
     if(carry)for(const k of _pubCarryKeys)if(carry[k]!=null)player[k]=Array.isArray(carry[k])?carry[k].slice():carry[k];player.hp=player.maxHp;
@@ -26617,7 +26622,8 @@ return {
     return false;
   },
   step(){gf++;const before={state:player.state,id:player.atk?.type,dim:player.dim},previousProjectiles=new Set(projectiles),grabbing=player.state==='grab'||!!player.grabEnemy;
-    updatePlayer();saveInput(player.in);_pubReactions();
+    const handled=G.kuroCombat?.step({p:player,enemies,damage:damageEnemy,launch:launchEnemy,left:camX+30,right:Math.min(WORLD_END-30,camX+W-30)});
+    if(!handled)updatePlayer();saveInput(player.in);_pubReactions();
     for(const pr of projectiles)if(!previousProjectiles.has(pr)){if(grabbing)pr._pubGrab=true;_pubHooks.projectile?.(pr);}
     try{updateProjectiles();}finally{_pubActiveProjectile=null;}updateHazards();updateCombo();
     const after={state:player.state,id:player.atk?.type,dim:player.dim};
