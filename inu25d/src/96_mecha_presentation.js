@@ -90,4 +90,16 @@ G.fx.frame=dt=>{
  }
 };
 G.bus.on('scene',()=>{for(const p of walls.keys())removeWall(p);});
+let followingJet=false;
+const playFrame=G.scenes.play.frame;
+G.scenes.play.frame=dt=>{
+ const boss=G.world.ents.find(e=>e.def?.boss&&e._mechaJet&&!e.dead),p=G.player;
+ if(boss&&p&&!G.story?.blocked){
+  G.cam.focus((p.x+boss.x)*.5,1.2+boss.y*.5,(p.z+boss.z)*.5,2,-3.6);
+  followingJet=true;
+ }else if(followingJet){
+  followingJet=false;G.cam.focusT=0;G.cam.focusZoom=0;if(p)G.cam.follow(p);
+ }
+ playFrame(dt);
+};
 })();

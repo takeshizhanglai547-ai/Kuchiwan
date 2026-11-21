@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="cb6ce5b655a435060a50f31c5cbbef12a9a28715078624a36ddbd68a77d2f41f"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="9f211d54622dcdd93f1d5fe235f77d905d03c712bb64962a902f9b46c1f4948d"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -49319,12 +49319,24 @@ G.fx.frame=dt=>{
  }
 };
 G.bus.on('scene',()=>{for(const p of walls.keys())removeWall(p);});
+let followingJet=false;
+const playFrame=G.scenes.play.frame;
+G.scenes.play.frame=dt=>{
+ const boss=G.world.ents.find(e=>e.def?.boss&&e._mechaJet&&!e.dead),p=G.player;
+ if(boss&&p&&!G.story?.blocked){
+  G.cam.focus((p.x+boss.x)*.5,1.2+boss.y*.5,(p.z+boss.z)*.5,2,-3.6);
+  followingJet=true;
+ }else if(followingJet){
+  followingJet=false;G.cam.focusT=0;G.cam.focusZoom=0;if(p)G.cam.follow(p);
+ }
+ playFrame(dt);
+};
 })();
 
 
 }
 </script>
-<script>(function(){'use strict';const BUILD="cb6ce5b655a435060a50f31c5cbbef12a9a28715078624a36ddbd68a77d2f41f",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="9f211d54622dcdd93f1d5fe235f77d905d03c712bb64962a902f9b46c1f4948d",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}
