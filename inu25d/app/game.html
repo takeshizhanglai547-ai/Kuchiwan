@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="もふもふイッヌ">
 <meta name="theme-color" content="#7fc8ff">
-<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,33_regional_critters,35_bosses_a,36_bosses_b,40_stage,41_round_animation,41_round_forms,41_round_models,41_round_moves,41_round_scenery,41_rounds,42_mecha_campaign,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,57_kurokenshi,60_fx,61_published_swords,70_audio,78_map_art,79_storybook_art,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance,93_frenzy,94_hero_combat_fx,95_ailments,96_mecha_presentation -->
+<!-- build: 00_core,05_post,06_motion_inputs,10_look,20_heroes,21_inu_choreography,22_published_catalog,23_published_motion,24_command_guide,30_foes,31_zako,32_expansion_foes,33_regional_critters,35_bosses_a,36_bosses_b,40_stage,41_round_animation,41_round_forms,41_round_models,41_round_moves,41_round_scenery,41_rounds,42_mecha_campaign,50_combat,52_published_fighter,53_command_reference,54_command_moves,55_player,56_control_actions,57_kurokenshi,60_fx,61_published_swords,70_audio,78_map_art,79_story_comic,79_storybook_art,80_ui,81_controls_feedback,82_story_events,83_boss_portraits,85_camp_state,86_cham_shop,87_companions,88_equipment_visuals,89_kosodoro,90_game,91_same_screen_coop,92_encounter_balance,93_frenzy,94_hero_combat_fx,95_ailments,96_mecha_presentation -->
 
 
 
@@ -34,7 +34,7 @@
   @keyframes bootdot { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
   @media (prefers-reduced-motion: reduce){ #boot .dots span { animation:none; } }
 </style>
-<meta name="innu-app-build" content="9f211d54622dcdd93f1d5fe235f77d905d03c712bb64962a902f9b46c1f4948d"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
+<meta name="innu-app-build" content="0d0f5d7eaba955bc5b8bc9a99d17cfafe6eca5b6ce1e7c719face3c076bee2ae"><link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="icon" href="./icons/icon-192.png"></head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <div id="ui"></div>
@@ -45706,6 +45706,158 @@ window.G.mapArt = [
 ];
 
 
+// ===== 79_story_comic.js =====
+// Resolution-independent comic art, shared by all chapter intros and endings.
+(function(){'use strict';
+const G=window.G,ink='#594656';
+const palettes={
+ inu:['#fff1d3','#dac299','#749dbb','#bd625e','#d8b15c'],
+ shima:['#dfb68c','#a97860','#73a1b4','#6489a4','#e7bf72'],
+ nuko:['#fff4df','#dbcfc5','#ad8cc0','#796491','#cba8dc'],
+ guard8:['#e5bf88','#b28c6b','#8b9aab','#657686','#d1b47f'],
+ watch:['#fff0da','#c6a28b','#89b5bb','#4f808f','#adcdd2'],
+ wanden:['#f0ddc4','#ba997c','#a57578','#786175','#d5c6ac'],
+ mack:['#e7c596','#b59171','#cc9369','#886d73','#d9ba72'],
+ kuro:['#3b3745','#6e6171','#696471','#4a364b','#b8a5b2']
+};
+const star=(x,y,s=1,color='#f3c887')=>'<path d="M0-13 4-4 13 0 4 4 0 13-4 4-13 0-4-4Z" transform="translate('+x+' '+y+') scale('+s+')" fill="'+color+'" stroke="none"/>';
+function character(id,{happy=false,pose='ready',small=false}={}){
+ const [fur,ears,cloth,cape,trim]=palettes[id]||palettes.inu;
+ const black=id==='kuro',flop=['inu','shima','nuko','wanden','mack','guard8'].includes(id);
+ const muzzle=black?'#b4a3ac':'#fff5e4',line=black?'#282631':ink;
+ const walking=pose==='walk',celebrate=pose==='cheer';
+ const eyes=happy?'<path d="M-30-23q8-12 16 0m28 0q8-12 16 0" fill="none" stroke-width="4.3"/>':
+  '<g fill="'+line+'" stroke="none"><ellipse cx="-22" cy="-23" rx="6.4" ry="9"/><ellipse cx="22" cy="-23" rx="6.4" ry="9"/></g><g fill="#fffef7" stroke="none"><circle cx="-24" cy="-27" r="2.4"/><circle cx="20" cy="-27" r="2.4"/><circle cx="-20" cy="-19" r="1"/><circle cx="24" cy="-19" r="1"/></g>';
+ const weapon=(()=>{
+  if(id==='kuro')return '<g transform="translate(48 54) rotate(24)"><path d="M-11 17V-90l12-24 12 24V17Z" fill="#b7b2c0"/><path d="M-6 10V-89l8-15 6 15V10" fill="#6e6c7b" stroke="none"/><path d="M-11-63 10-72m-20 43 19-9" stroke="#d1c8d0" stroke-width="2"/><path d="M-22 20h46v8h-46Z" fill="#a496a6"/><path d="M-5 29h12v31h-12Z" fill="#725868"/><path d="M-4 34h11m-11 8h11m-11 8h11" stroke="#b9a8ad" stroke-width="2"/></g>';
+  if(id==='guard8')return '<g transform="translate(46 43) rotate(23)"><path d="M-5 2h10v77H-5Z" fill="#b38c70"/><rect x="-31" y="-25" width="62" height="38" rx="8" fill="#abb2bd"/><path d="M-23-21v29m46-29v29" stroke="#e7dfcc" stroke-width="5"/></g>';
+  if(id==='nuko')return '<g transform="translate(52 30) rotate(14)"><path d="M-3 4h7v92H-3Z" fill="#b39b88"/><path d="m0-34 10 20 23 3-17 17 4 23L0 18-20 29l4-23-17-17 23-3Z" fill="#ead28d"/><circle cy="-1" r="6" fill="#baa6d4" stroke="none"/></g>';
+  if(id==='watch')return '<g transform="translate(52 57) rotate(-20)"><path d="M0 0v67" stroke="#b6d5d9" stroke-width="7"/><path d="M0 0q-24-32-29-6" fill="none" stroke="#b6d5d9" stroke-width="7"/><rect x="-65" y="0" width="23" height="32" rx="3" fill="#fff5e4" transform="rotate(22)"/><path d="m-53 5 5 7-5 7-5-7Z" fill="#b66c86" stroke="none"/></g>';
+  if(id==='mack')return '<g transform="translate(43 61)"><path d="M-4-10h37V6H12L9 23H-4L0 4H-7Z" fill="#a99490"/><path d="M11-8h21v10H11Z" fill="#d6cfbf" stroke="none"/></g>';
+  return '<g transform="translate(50 39) rotate('+(id==='wanden'?21:celebrate?-26:15)+')"><path d="M-6 17V-61l7-18 7 18v78Z" fill="'+(id==='wanden'?'#e7ecdf':'#c5e0df')+'"/><path d="M-18 20h37v7h-37Z" fill="'+trim+'"/><path d="M-4 28h11v31H-4Z" fill="'+cape+'"/><path d="M0-55v66" stroke="#fff9dc" stroke-width="2"/></g>';
+ })();
+ const hat=id==='mack'?'<path d="M-43-60q-1-34 15-43h49q14 13 14 43Z" fill="#b69a75"/><path d="M-43-65h80v12h-80" fill="#8b7374"/><path d="M-65-53q65 25 130 0l-7-14q-58 13-116 0Z" fill="#d4b88f"/>'+star(0,-70,.45,'#f8dea3'):
+  id==='watch'?'<path d="M-39-54V-97h73v43Z" fill="#587889"/><path d="M-39-67h73v11h-73Z" fill="#bf9ba8"/><ellipse cy="-52" rx="57" ry="10" fill="#6b94a0"/>':
+  id==='nuko'?'<path d="M-49-56 7-133 38-63Z" fill="#a58cb9"/><path d="m-48-55-15 7q66 23 117-5l-14-9Z" fill="#bfa7d0"/>'+star(5,-89,.47,'#f2d390'):
+  id==='guard8'?'<path d="M-39-66q42-53 79 2l-1 12h-77Z" fill="#96a4b0"/><path d="M-8-88h16v36H-8Z" fill="#c1c7c6"/><path d="M-42-57h86" fill="none" stroke="#d7d3c2" stroke-width="5"/>':
+  id==='wanden'?'<path d="M-38-67q-5-25 18-28 5-20 25-15 20-3 21 17 20 4 13 29Z" fill="#cbbba6"/><path d="M-41-57q40-15 82 0" fill="none" stroke="#a2787b" stroke-width="10"/>':
+  id==='inu'?'<path d="M-37-65q-4-19 13-21 4-19 20-11 14-16 25-1 19-1 21 17" fill="'+fur+'"/><ellipse cy="-111" rx="34" ry="7" fill="none" stroke="#d9b967" stroke-width="4"/>':'';
+ return '<g stroke="'+line+'" stroke-width="'+(small?3.3:3)+'" stroke-linecap="round" stroke-linejoin="round">'+
+ '<path d="M-23 25q-15 33-25 72 44 17 81-3L21 25Z" fill="'+cape+'"/><path d="M-22 78q-10 20-20 24 6 10 23 6l16-22m15-8q13 14 15 26 18 5 21-5L29 76" fill="'+(black?'#6f6374':ears)+'"/>'+
+ '<path d="M-26 25q25-15 51 1l11 53q-29 20-71 0Z" fill="'+cloth+'"/><path d="M-30 60q29 9 60 0v9q-31 9-62-1Z" fill="'+cape+'"/><rect x="-3" y="60" width="13" height="12" rx="2" fill="'+trim+'"/>'+
+ '<path d="M-26 32q-27 1-23 26 9 12 20-1m55-24q26 0 23 23-10 13-22 0" fill="'+cloth+'" transform="rotate('+(celebrate?-28:walking?10:0)+' 0 36)"/>'+
+ (id==='shima'?'<ellipse cx="-38" cy="56" rx="15" ry="13" fill="'+ears+'"/><ellipse cx="39" cy="56" rx="15" ry="13" fill="'+ears+'"/>':weapon)+
+ '<path d="M-59-25q-5-35 18-48 13-12 39-10 31-4 48 14 24 18 15 49-2 37-60 40-56-2-60-45Z" fill="'+fur+'"/>'+
+ (flop?'<path d="M-49-57q-25-9-27 14-2 18 15 38 11 8 18-4l7-29m86-19q25-8 26 16 1 18-14 35-13 8-18-6l-4-28" fill="'+ears+'"/>':
+ '<path d="M-48-56q-7-20-6-45 19 3 31 30m48 0q15-24 31-32 3 27-6 48" fill="'+fur+'"/><path d="m-45-65-2-20 15 16m16 0 22-18-5 23" fill="'+(black?'#bd8ca1':'#d7b3ab')+'" stroke="none"/>')+
+ '<ellipse cy="-4" rx="24" ry="15" fill="'+muzzle+'" stroke="none"/>'+eyes+
+ '<g fill="#de9aa9" stroke="none" opacity=".85"><ellipse cx="-37" cy="-8" rx="9" ry="5"/><ellipse cx="37" cy="-8" rx="9" ry="5"/></g>'+
+ '<path d="M-5-10q5-4 10 0l-5 5Z" fill="'+line+'" stroke-width="1.5"/><path d="M0-5v5m0 0q-6 8-12 1m12-1q6 8 12 1" fill="none" stroke-width="2.2"/>'+
+ (black?'<path d="m21-48 6 13m-9-8 5-2m-2 9 5-2" stroke="#c5a3af" stroke-width="2"/><path d="M-20 24q21 10 41-1l6 22-55 1Z" fill="#aaa1ac"/><path d="m-17 31 29 6m-18 6 24-5" stroke="#d5c4c9" stroke-width="2"/>':'')+
+ (id==='shima'?'<path d="M-42-59q42-12 85 0l-1 11q-39-14-82-1Z" fill="#9b665f"/><path d="m39-52 30 7-10 9-23-6" fill="#bb8075"/>':'')+
+ (id==='watch'?'<circle cx="-22" cy="-23" r="12" fill="none" stroke="#a4c8ce" stroke-width="2.4"/><circle cx="22" cy="-23" r="12" fill="none" stroke="#a4c8ce" stroke-width="2.4"/><path d="M-10-24h20" stroke-width="2"/>':'')+hat+'</g>';
+}
+function theme(index){
+ const s=G.stages?.[index]||{},journey=s.journeyStyle;
+ if(journey)return journey;
+ return ['town','dusk','forest','cave','sky','snow','castle','war','volcano'][index%9];
+}
+const colors={
+ town:['#cbe4df','#9abc9c','#f0d5b1'],dusk:['#dcc6d7','#a4acaa','#e4b9a5'],forest:['#b8d1d1','#6f9c94','#d0d2b4'],
+ cave:['#b7b9d6','#909cb5','#c5c5dd'],sky:['#badbe3','#96b5c8','#f0d9bf'],snow:['#d2e1e5','#a4b9cd','#edf0e5'],
+ castle:['#c3b8d2','#9b9ab7','#d7c0c4'],war:['#e8d0c4','#afbd9d','#d8bd9e'],volcano:['#d9b4b5','#a58490','#edc5a8'],
+ bug:['#c8d9c6','#83ac8c','#e2d9a6'],space:['#a5b2d0','#777f9e','#c6beda'],sea:['#b0d5d4','#78a9b1','#d2e3da'],
+ mecha:['#b8b9c9','#858e9c','#d2c4b9']
+};
+function environment(index,id,clear,wide){
+ const world=theme(index),[sky,hill,earth]=colors[world],s=G.stages?.[index]||{},motif=s.theme?.journey;
+ const prefix='comic-'+index+'-'+id,night=['space','cave','castle','volcano','dusk'].includes(world);
+ const hills='<path d="M-20 230Q85 112 226 226Q356 112 483 218Q591 144 750 204V460H-20Z" fill="'+hill+'"/>';
+ const cloud='<path d="M0 0q-9-13 7-18 3-20 23-13 17-12 26 5 21-1 21 17Z" fill="#fff9ec" stroke="none"/>';
+ const tree=(x,y,n,c=hill)=>'<g transform="translate('+x+' '+y+') scale('+n+')"><path d="M-5-6-8-90 3-97 8-6Z" fill="#a2827a"/><path d="M-39-82q-19-26 6-45-10-37 29-42 27-13 41 12 35 0 37 33 19 34-10 49-18 20-39 6-42 18-64-13Z" fill="'+c+'"/><path d="M-23-127q18-24 39-15" fill="none" stroke="#f9f1d9" stroke-opacity=".4" stroke-width="5"/></g>';
+ const house=(x,y,n,c='#e7c5ac')=>'<g transform="translate('+x+' '+y+') scale('+n+')"><path d="M-55 0v-77L0-117l57 40V0Z" fill="'+c+'"/><path d="m-65-75 65-47 66 47-8 10L0-103l-57 39Z" fill="#bd8792"/><path d="M-52-66h104v8H-52Z" fill="#fff0d3" stroke="none"/><path d="M-14 0v-42q14-16 28 0V0" fill="#a28c88"/><path d="M-42-52h15v20h-15Zm68 0h15v20H26Z" fill="#f7e1aa"/><path d="M-2-111v39" fill="none" stroke-width="2"/></g>';
+ const flower=(x,y,n,c)=>'<g transform="translate('+x+' '+y+') scale('+n+')"><path d="M0 0q-5-45 0-81" fill="none" stroke="#739884" stroke-width="9"/><path d="M-3-34q-38-28-38-2 14 14 38 12m7-24q30-30 36-9-11 20-36 19" fill="#a1bc8a"/><g fill="'+c+'">'+Array.from({length:5},(_,i)=>'<ellipse cy="-104" rx="17" ry="29" transform="rotate('+(i*72)+' 0 -81)"/>').join('')+'</g><circle cy="-81" r="17" fill="#f2d589"/></g>';
+ let scenery='';
+ if(['town','dusk'].includes(world)){
+  scenery=tree(70,285,1.1,'#9abb9b')+house(460,273,1.05)+house(606,274,.80,'#ddc5bc')+tree(680,294,.67,'#a7bd9b');
+  scenery+='<path d="M322 287v-72m-13 12 25-4-2-23-21 3Z" fill="#edc58f"/><path d="M21 300h230m-208-12v27m49-31v23m66-26v23m58-23v22" stroke="#ebdbc0" fill="none" stroke-width="7"/>';
+ }else if(world==='forest'||world==='bug'){
+  scenery=tree(90,323,1.8,'#8aafa3')+tree(606,310,1.9,'#799f99')+tree(390,257,.8,'#a7bca7');
+  if(world==='bug'){
+   if(motif==='honey'){
+    scenery='<g transform="translate(445 182)" fill="#ebcb92" stroke="#9e7d71" stroke-width="4">'+
+     [[-81,-32],[0,-32],[81,-32],[-40,39],[40,39]].map(([x,y])=>'<path transform="translate('+x+' '+y+')" d="m0-46 40 23v46L0 46-40 23v-46Z"/><path transform="translate('+x+' '+y+') scale(.68)" d="m0-46 40 23v46L0 46-40 23v-46Z" fill="#c6a177" stroke="none"/>').join('')+'</g>'+flower(100,316,1.4,'#e4c494');
+   }else if(motif==='web'){
+    scenery+='<g transform="translate(345 139)" fill="none" stroke="#f4ede0" stroke-width="3">'+
+     [31,60,94].map(r=>'<ellipse rx="'+r+'" ry="'+r*.75+'"/>').join('')+
+     '<path d="M-110 0h220m-110-87V87m-84-60 168 120m-168 0L84-60"/></g>';
+   }else if(motif==='burrow'){
+    scenery='<path d="M67 304Q61 117 203 85q159-66 282 52 142-37 203 167Z" fill="#c4a695"/><path d="M201 304q-3-128 129-139 132 4 141 139" fill="#8b7b8c"/><path d="M233 301q5-101 100-106 100 3 104 106" fill="#b29c9e" stroke-width="4"/>'+flower(590,320,.8,'#d4b8c7');
+   }else if(motif==='cocoon'){
+    scenery+='<path d="M246 23v119m244-119v91" stroke="#b6b3ad" fill="none" stroke-width="3"/><ellipse cx="246" cy="171" rx="30" ry="49" fill="#ddbdd2"/><ellipse cx="490" cy="145" rx="25" ry="41" fill="#e8ced9"/><path d="m219 154 53 29m-51-4 47 23m-47-67 50 29m-1-39 44 22" stroke="#f5e7df" stroke-width="4" fill="none"/>';
+   }else scenery+=flower(222,308,1.3,'#e8b5c9')+flower(526,311,1.7,'#e8d1a1')+flower(650,340,.75,'#c5b3d4');
+  }
+  else scenery+='<path d="M315 284q-14-57 11-98l14 8-5 90Z" fill="#b29b8b"/><path d="m327 200 48-22 35 28-79 18Z" fill="#dbc4ac"/>';
+ }else if(world==='cave'){
+  scenery='<path d="M0 0h720v150l-90-49-77 44-100-89-91 77-108-64-98 80-70-49-86 46Z" fill="#9399b2"/>';
+  for(const [x,y,n]of [[90,298,1.3],[580,306,1.7],[410,267,.7],[666,317,.8]]){
+   scenery+='<g transform="translate('+x+' '+y+') scale('+n+')"><path d="m-38 0 5-91 23-43 27 42 8 92Z" fill="#b8ddd8"/><path d="M-10-134v128m0-85 27-1" fill="none" stroke="#f3f6de" stroke-width="3"/><path d="m25 0 9-64 16-22 14 42-6 44Z" fill="#d0bad6"/></g>';
+  }
+ }else if(world==='sky'){
+  scenery='<g transform="translate(445 181) rotate(-6)"><path d="M-154-12q23-118 167-114Q148-111 167-6 31 38-154-12Z" fill="#dfb2b1"/><path d="M-126-25q20-83 132-87 103 4 135 82" fill="none" stroke="#f2ddbc" stroke-width="7"/><path d="M-81 5-49 73m139-68-30 68" fill="none" stroke="#9a8e88" stroke-width="4"/><path d="m-87 73 171-7-40 45-76-2Z" fill="#c39f83"/><path d="M-46 84h80" stroke="#efcf96" stroke-width="5"/></g>';
+ }else if(world==='snow'||world==='volcano'){
+  scenery='<path d="m-30 300 135-227 84 130 138-179 185 262 99-200 146 218Z" fill="'+(world==='snow'?'#a5b7ca':'#ae8994')+'"/><path d="m47 169 58-96 52 82-35-8-16 27-19-21-17 24Zm228-79 52-66 78 111-35-16-21 17-22-26-19 12Z" fill="'+(world==='snow'?'#f2eee5':'#eab3a0')+'"/>'+tree(615,330,1.3,world==='snow'?'#dce5de':'#a4828e');
+ }else if(world==='space'){
+  scenery='<g transform="translate(550 113) rotate(-21)"><circle r="65" fill="#d6c3d6"/><ellipse rx="112" ry="19" fill="none" stroke="#eee0bd" stroke-width="12"/><path d="M-31-35q29-17 49-2" fill="none" stroke="#edd8d4" stroke-width="9"/></g><g transform="translate(210 251) rotate(9)"><path d="M-74-8Q-35-48 5-39q46-4 79 31Q6 29-74-8Z" fill="#b1c6d2"/><path d="M-35-20q-9-58 32-64 47 7 40 63" fill="#d8d8db"/><path d="M-65 0q74 22 139-2" fill="none" stroke="#e3ca9c" stroke-width="5"/><g fill="#f6e6b8" stroke="none"><circle cx="-39" cy="4" r="5"/><circle cx="-9" cy="9" r="5"/><circle cx="21" cy="8" r="5"/><circle cx="49" cy="2" r="5"/></g></g>';
+ }else if(world==='sea'){
+  scenery='<path d="M0 188q105-23 198 4t186-2 190 3 146-3v180H0Z" fill="#8fbfbe" opacity=".6"/>';
+  for(const [x,h]of [[100,111],[168,74],[612,150],[662,100]]){
+   scenery+='<path d="M'+x+' 304v-'+h+'m0 '+(h*.6)+'-24-25m24 4 25-30" fill="none" stroke="'+(x<200?'#e1a6b1':'#bfc4d1')+'" stroke-width="11"/>';
+  }
+  scenery+='<g transform="translate(428 251)"><path d="M-90 12h184v17H-90Z" fill="#dccfb4"/><path d="M-72 10v-99m48 99v-99m48 99v-99m48 99v-99" stroke="#e5d9c2" stroke-width="15"/><path d="m-101-91 102-69 104 69Z" fill="#c1bcbb"/><path d="M-69-97h137" stroke="#ede5ca" stroke-width="5"/></g>';
+ }else if(world==='mecha'){
+  scenery='<g fill="#a6a2af"><path d="M27 296V79L69 61l41 26v208m17 0V132l62-23 34 29v158m331 0V77l43-31 53 35v215m10 0V113l60-19 35 21v181"/></g><g fill="#e8c8aa" stroke="none">'+[54,144,577,665].map(x=>'<path d="M'+x+' 148h17v25h-17Zm0 65h17v22h-17Z"/>').join('')+'</g><path d="M285 293V147m0 20h168v126" stroke="#7f8695" stroke-width="18" fill="none"/><path d="M268 141h202v26H268Z" fill="#b3a9b0"/><path d="M292 298h160" stroke="#b7c2c0" stroke-width="10"/>';
+ }else{
+  scenery='<g transform="translate(455 282)"><path d="M-113 0v-79h36v-40h156v40h39V0Z" fill="'+(world==='castle'?'#b8a4be':'#e1c5b0')+'"/><path d="m-126-80 24-31h29l-6-8 27-31h108l29 31-8 8h32l26 31Z" fill="'+(world==='castle'?'#897a9f':'#a17a85')+'"/><path d="M-28 0v-47q28-29 56 0V0" fill="#a58e9c"/><path d="M-91-67h19v25h-19Zm164 0h19v25H73Z" fill="#f4e0b8"/></g>'+tree(100,311,1.45,world==='war'?'#dfb4c0':'#a3a9bd');
+ }
+ let ground='<path d="M-20 296Q124 258 278 298t258-1 204 5v154H-20Z" fill="'+earth+'"/><path d="M250 410q-5-69 134-90t77-57" stroke="#b5a497" stroke-opacity=".45" stroke-width="40" fill="none"/><path d="M250 410q-5-69 134-90t77-57" stroke="#fff0d3" stroke-width="30" fill="none"/>';
+ if(world==='space')ground='<path d="M-20 295q134-62 271 6t293-6 196 4v157H-20Z" fill="#c9c4d6"/><g fill="#afa6c1" stroke="none"><ellipse cx="71" cy="339" rx="38" ry="10"/><ellipse cx="559" cy="351" rx="53" ry="15"/></g>';
+ if(world==='sea')ground='<path d="M-20 300q164-16 271 5t276-3 213 2v152H-20Z" fill="#d9ddca"/>';
+ if(world==='mecha')ground='<path d="M0 300h720v150H0Z" fill="#b2acb4"/><path d="m0 346 720-8M0 387l720-6m-572-78-34 123m208-123-12 123m192-123 19 123" stroke="#8a8797" fill="none" stroke-width="3"/>';
+ const lights=night?Array.from({length:13},(_,i)=>star(25+(i*67)%696,24+(i*31)%160,.25+(i%3)*.10,'#fff0c9')).join(''):
+  '<g stroke="none" opacity=".8">'+[[-10,74,.8],[240,49,.65],[571,62,.75]].map(([x,y,n])=>'<g transform="translate('+x+' '+y+') scale('+n+')">'+cloud+'</g>').join('')+'</g>';
+ const texture='<pattern id="'+prefix+'-grain" width="33" height="25" patternUnits="userSpaceOnUse"><path d="m4 8 3-1m18 13 2-1" stroke="'+ink+'" stroke-width=".8" opacity=".12"/></pattern>';
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" preserveAspectRatio="'+(wide?'xMidYMid slice':'xMidYMid meet')+'" role="img" aria-label="'+(clear?'仲間を救い、次の道へ向かう':'新しい土地へ出発する')+'漫画の風景"><defs>'+texture+'</defs>'+
+  '<rect width="720" height="420" fill="'+sky+'"/>'+(!night?'<circle cx="567" cy="70" r="37" fill="#f7e6b4" stroke="none"/>':'')+
+  '<g stroke="'+ink+'" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round">'+hills+lights+scenery+ground+'</g>'+
+  '<g opacity=".6" stroke="#a89a91" stroke-width="2">'+Array.from({length:12},(_,i)=>'<path d="m'+((i*71+17)%720)+' '+(329+(i%3)*24)+' 10-3"/>').join('')+'</g>'+
+  '<g transform="translate('+(clear?280:247)+' 265) scale(.47)">'+character('inu',{happy:clear,pose:'walk',small:true})+'</g>'+
+  (clear?'<g transform="translate(352 278) scale(.36)">'+character('nuko',{happy:true,small:true})+'</g>':'<g transform="translate(496 241) scale(.32)">'+character('inu',{small:true})+'</g>')+
+  (clear?star(326,245,1.1,'#ffedb6')+star(219,283,.63,'#f7dcc1'):'')+
+  '<rect width="720" height="420" fill="url(#'+prefix+'-grain)" pointer-events="none"/></svg>';
+}
+function portrait(hero,clear,index){
+ const prefix='comic-face-'+index+(clear?'-clear':'-intro'),[fur,,,cape]=palettes[hero]||palettes.inu;
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 340" aria-hidden="true">'+
+ '<defs><pattern id="'+prefix+'" width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" fill="'+cape+'" opacity=".12"/></pattern></defs>'+
+ '<circle cx="180" cy="168" r="145" fill="'+(clear?'#f7ead0':'#efdee6')+'"/><circle cx="180" cy="168" r="145" fill="url(#'+prefix+')"/>'+
+ '<g transform="translate(175 177) rotate('+(clear?-6:4)+') scale(1.29)">'+character(hero,{happy:clear,pose:clear?'cheer':'ready'})+'</g>'+
+ star(51,111,.68,'#e6b8bd')+star(289,82,.81,'#ddbd83')+star(290,256,.5,'#e0b5c7')+
+ '<path d="m47 237 15-8m-11-11 16-5m216-69 15-4m-14-10 14-7" fill="none" stroke="'+cape+'" stroke-width="3.2" stroke-linecap="round"/></svg>';
+}
+function vignette(hero,clear,index){
+ const world=theme(index),[sky]=colors[world];
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="470" height="220" fill="'+sky+'"/>'+
+ '<g stroke="#b8c3ba" fill="none" stroke-width="2" opacity=".65">'+Array.from({length:7},(_,i)=>'<path d="M'+(i*83-70)+' 220 270 12"/>').join('')+'</g>'+
+ '<ellipse cx="291" cy="187" rx="123" ry="13" fill="'+ink+'" opacity=".10"/>'+
+ '<g transform="translate(287 131) rotate(-7) scale(.88)">'+character(hero,{happy:clear,pose:'walk'})+'</g>'+
+ (clear?'<g transform="translate(183 148) rotate(6) scale(.56)">'+character('inu',{happy:true,small:true})+'</g>':'<path d="M80 151h73m-60-16h43m-41 32h33" stroke="#fff4db" stroke-width="6" stroke-linecap="round"/>')+
+ star(382,75,.74,'#fff0c1')+'</svg>';
+}
+G.storyComic={environment,portrait,vignette};
+})();
+
+
 // ===== 79_storybook_art.js =====
 // Inline illustrations keep the shop and storybook available offline.
 (function(){'use strict';
@@ -47599,28 +47751,144 @@ function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.ol
 function reset(){if(active)restore(active,false);active=null;paused=false;queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
-function render(){if(!document.createElement||!document.body)return;
- focus=document.activeElement;panel=element('section',document.body);panel.className='inu-story';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
- const css=element('style',panel);css.textContent='.inu-story{position:fixed;inset:0;z-index:12000;background:linear-gradient(120deg,#071629c9,#17213499);display:flex;align-items:center;justify-content:center;color:#fff8df;font:clamp(15px,2.4vmin,23px)/1.5 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;touch-action:manipulation}.inu-story .card{width:min(100%,960px);max-height:96dvh;overflow:auto;border:3px solid var(--story,#ffd264);border-radius:22px;background:#142a3be8;box-shadow:0 12px 80px #0009;padding:clamp(12px,3vmin,28px);box-sizing:border-box;display:grid;grid-template-columns:minmax(110px,30%) minmax(0,1fr);gap:16px;align-items:center}.inu-story img{width:100%;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 5px 15px #0007)}.inu-story h2{font-size:clamp(22px,4vmin,36px);line-height:1.2;margin:4px 0 12px}.inu-story p{margin:8px 0}.inu-story .cue{font-size:.78em;color:#baddf2}.inu-story .chapter{font-size:.75em;letter-spacing:.12em;color:#ffd777}.inu-story .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.inu-story button{font:inherit;font-size:.82em;min-height:44px;border:2px solid #f2ce7c;border-radius:11px;background:#f7e5b7;color:#182f41;padding:8px 16px;touch-action:manipulation}.inu-story button:focus-visible{outline:4px solid #6cd6ff}.inu-story button:disabled{opacity:.5}.inu-story .progress{height:4px;background:#486077;margin-top:12px}.inu-story .progress i{display:block;height:100%;background:#ffd777;width:0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr;text-align:center;gap:5px}.inu-story img{max-height:26dvh;max-width:55%;margin:auto}.inu-story .actions{justify-content:center}}@media(max-height:430px){.inu-story .card{padding:10px 16px;gap:12px}.inu-story h2{font-size:23px;margin:2px 0 6px}.inu-story p{margin:5px 0}.inu-story .actions{margin-top:8px}.inu-story .cue{font-size:12px}}@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important}}';
- css.textContent+=' .inu-story .card{background:#fff3ea;color:#654052;border-color:#efafbf;box-shadow:0 12px 80px #432b5266}.inu-story .chapter,.inu-story .cue{color:#885065}.inu-story .synopsis{background:#fffaf3;border:1px solid #ecc1bd;border-radius:14px;padding:12px 15px;font-size:1.08em}.inu-story .character-line{background:#ffe0ed;border-radius:12px;padding:7px 10px}.inu-story .progress{display:none}.inu-story .actions button{background:#ffd0e0;border-color:#d588a5;color:#65354b}';
- css.textContent+=' .inu-story .card{grid-template-columns:minmax(180px,42%) minmax(0,1fr)}.inu-story .journey-plate{position:relative;margin:0;padding:7px;background:#fff8df;border:1px solid #dfb7a5;border-radius:12px;box-shadow:0 3px 0 #e6c9b5}.inu-story .journey-plate svg{display:block;width:100%;height:auto}.inu-story .journey-plate img{position:absolute;width:25%;max-height:45%;right:3%;bottom:18%;object-fit:contain}.inu-story .journey-plate figcaption{text-align:center;font-size:.78em;font-weight:750;padding:6px 2px 0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr}.inu-story .journey-plate svg{max-height:25dvh}.inu-story .journey-plate img{right:12%}}';
- const card=element('div',panel);card.className='card';card.style.setProperty('--story',HEROES[hero]?.color||'#ffd264');
- const scene=element('figure',card);scene.className='journey-plate';
- const passage=G.storybook?.passage(stage,active.kind==='clear');
- if(passage){scene.innerHTML=passage.svg;element('figcaption',scene,passage.caption);}
- const image=element('img',scene);image.alt=HEROES[hero]?.name||hero;
- const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});
- if(url)image.src=url;else image.hidden=true;
- if(!passage&&!url){scene.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
- const body=element('div',card),chapter=element('div',body);chapter.className='chapter';const stop=G.stages?.[stage];
- chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · '+(stop?.lap?stop.lap+'周目 '+stop.region+' · ':'')+'第'+(stop?.chapter||stage+1)+'章';
- element('h2',body,active.title);const synopsis=element('p',body);synopsis.className='synopsis';const line=element('p',body),cue=element('p',body);line.className='character-line';cue.className='cue';
- const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
- skip.type=pause.type='button';skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
- const bar=element('div',body);bar.className='progress';const fill=element('i',bar);parts={synopsis,line,cue,skip,pause,fill};
- panel.addEventListener('pointerdown',e=>e.stopPropagation());panel.addEventListener('click',e=>e.stopPropagation());skip.focus();paint();}
-function paint(){if(!parts||!active)return;parts.synopsis.textContent=active.lines[0];parts.line.textContent='「'+active.lines[1]+'」';parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
- parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(Math.min(1,active.age/30)*100)+'%';}
+const COMIC_CSS=`
+.inu-story{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;background:#253343dc;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#554253;font:16px/1.55 "Hiragino Maru Gothic ProN","Yu Gothic",system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;touch-action:pan-y}
+.inu-story *{box-sizing:border-box}
+.inu-story .card{width:min(100%,1050px);max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;border:2px solid #79616d;border-radius:14px 22px 15px 23px;background-color:#fffaf1;background-image:radial-gradient(#baa69e26 .65px,transparent .65px);background-size:7px 7px;box-shadow:6px 7px 0 #e1b4bf,11px 14px 0 #47354538,0 25px 90px #131e3273;padding:20px 23px 0;isolation:isolate}
+.inu-story .comic-heading{display:flex;align-items:end;gap:14px;padding:0 2px 14px;border-bottom:1.5px solid #d5bfc0;margin-bottom:14px}
+.inu-story .chapter{font-size:12px;font-weight:800;letter-spacing:.08em;color:#997382;margin:0 0 4px}
+.inu-story h2{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(23px,3vmin,33px);line-height:1.25;letter-spacing:.035em;color:#594250;margin:0;font-weight:800;text-wrap:balance}
+.inu-story .chapter-kind{margin:0 0 1px auto;flex:none;color:#9c6777;font-size:12px;font-weight:800;letter-spacing:.12em;border-left:1px solid #d6b8bd;padding-left:11px}
+.inu-story .comic-strip{display:grid;grid-template-columns:1.05fr 1.18fr;grid-template-rows:238px 137px;gap:13px}
+.inu-story .comic-panel{position:relative;min-width:0;overflow:hidden;border:2px solid #6e5664;background:#ede3e1;border-radius:5px 12px 5px 9px;margin:0;isolation:isolate}
+.inu-story .comic-panel svg{display:block;width:100%;height:100%}
+.inu-story .opening{grid-column:1;grid-row:1 / 3;transform:rotate(-.65deg);background:#d1ddd2}
+.inu-story .opening>svg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.inu-story .location{position:absolute;top:11px;left:11px;max-width:calc(100% - 22px);margin:0;background:#fffaf2ed;border:1px solid #b09b9f;box-shadow:3px 3px 0 #71516516;padding:3px 10px;font-size:12px;font-weight:800;line-height:1.45;transform:rotate(-2deg)}
+.inu-story .synopsis{position:absolute;left:12px;right:12px;bottom:12px;margin:0;background:#fffaf2f2;padding:12px 14px;border:1.5px solid #a58a96;box-shadow:3px 4px 0 #78616b22;border-radius:2px 7px 3px 5px;font-size:16px;font-weight:600;line-height:1.8;letter-spacing:.02em;overflow-wrap:anywhere}
+.inu-story .hero-panel{background:#fcf2eb;transform:rotate(.55deg)}
+.inu-story .hero-panel::before{content:'';position:absolute;inset:0;background:radial-gradient(#d6a5b944 .9px,transparent 1px);background-size:9px 9px;z-index:-1}
+.inu-story .hero-art{position:absolute;right:-14px;bottom:-5px;width:68%;height:105%;margin:0}
+.inu-story .hero-art svg{object-fit:contain}
+.inu-story .character-line{position:absolute;top:17px;left:15px;max-width:58%;margin:0;padding:15px 17px 17px;background:#fffef9;color:#574051;border:2px solid #826270;border-radius:49% 47% 44% 41% / 24% 29% 34% 31%;box-shadow:3px 5px 0 #c3a6af33;font-size:clamp(16px,1.8vmin,21px);font-weight:800;line-height:1.7;letter-spacing:.02em;z-index:2;text-wrap:pretty;overflow-wrap:anywhere}
+.inu-story .character-line::after{content:'';position:absolute;right:10px;bottom:-12px;width:19px;height:24px;background:#fffef9;border-right:2px solid #826270;border-bottom:2px solid #826270;transform:skew(18deg) rotate(30deg);clip-path:polygon(15% 0,100% 0,100% 100%)}
+.inu-story .speaker{position:absolute;left:15px;bottom:12px;max-width:50%;margin:0;font-size:12px;font-weight:800;letter-spacing:.05em;background:#f8e9dfd9;padding:3px 8px;border-radius:3px}
+.inu-story .sound{position:absolute;right:16px;top:8px;font-size:22px;letter-spacing:.10em;font-weight:900;transform:rotate(10deg);color:#bc869c;text-shadow:2px 2px 0 #fff5e8}
+.inu-story .after-panel{background:#eff1e4;display:grid;grid-template-columns:1.3fr 1fr;align-items:center;transform:rotate(-.3deg)}
+.inu-story .after-art{align-self:stretch;min-width:0;position:relative;overflow:hidden}
+.inu-story .after-art svg{width:100%;height:100%;object-fit:cover}
+.inu-story .bridge{position:relative;font-size:14px;font-weight:650;line-height:1.75;margin:0;padding:12px 0 12px 14px;z-index:1;overflow-wrap:anywhere}
+.inu-story .after-panel .sound{right:5px;top:5px;font-size:15px;color:#8e9e89}
+.inu-story .actions{position:sticky;bottom:0;display:flex;gap:12px;justify-content:flex-end;align-items:center;padding:16px 0 17px;background:#fffaf1f5;margin-top:5px;border-top:0;z-index:5}
+.inu-story button{appearance:none;font:inherit;font-size:14px;font-weight:750;min-height:46px;min-width:98px;border:1.5px solid #b99daa;border-radius:7px 10px 8px 9px;background:#fbf4f0;color:#7c6675;padding:9px 16px;touch-action:manipulation;cursor:pointer;transition:transform .15s,background .15s}
+.inu-story .continue{background:#866076;border-color:#735169;color:#fffaf4;box-shadow:0 3px 0 #543d53;min-width:148px;font-size:16px;letter-spacing:.06em}
+.inu-story button:hover{transform:translateY(-1px)}
+.inu-story button:active{transform:translateY(2px)}
+.inu-story button:disabled{opacity:.45;cursor:default;transform:none}
+.inu-story button:focus-visible{outline:3px solid #70acb6;outline-offset:3px}
+.inu-story .cue{font-size:12px;line-height:1.5;color:#8f6d7d;margin:0 auto 0 1px;max-width:44%}
+.inu-story .key{font-size:10px;letter-spacing:.03em;opacity:.7;display:inline;margin-left:12px}
+.inu-story .progress{display:none}
+.inu-story .comic-panel{animation:comic-reveal .36s both ease-out}
+.inu-story .hero-panel{animation-delay:.12s}
+.inu-story .after-panel{animation-delay:.24s}
+@keyframes comic-reveal{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+@media(max-aspect-ratio:4/5){
+ .inu-story{padding-left:14px;padding-right:17px}
+ .inu-story .card{padding:16px 13px 0;border-radius:12px 19px 11px 17px;box-shadow:4px 5px 0 #e1b4bf,8px 9px 0 #47354538,0 20px 60px #131e3266}
+ .inu-story .comic-heading{padding:0 3px 12px;margin-bottom:12px}
+ .inu-story h2{font-size:clamp(22px,5.4vw,31px)}
+ .inu-story .chapter{font-size:11px}
+ .inu-story .chapter-kind{font-size:12px}
+ .inu-story .comic-strip{grid-template-columns:1fr;grid-template-rows:clamp(165px,24dvh,255px) clamp(182px,25dvh,260px) auto;gap:12px}
+ .inu-story .opening{grid-row:auto;grid-column:auto}
+ .inu-story .opening>svg{height:140%;top:-22%}
+ .inu-story .synopsis{bottom:10px;left:10px;right:10px;padding:9px 12px;font-size:14px;line-height:1.7}
+ .inu-story .location{top:9px;left:9px;font-size:11px}
+ .inu-story .hero-art{width:65%;height:112%;right:-15px;bottom:-7px}
+ .inu-story .character-line{font-size:16px;max-width:59%;padding:13px 15px 15px;top:17px;left:12px;line-height:1.7}
+ .inu-story .speaker{font-size:11px;left:12px;bottom:10px}
+ .inu-story .sound{font-size:21px;right:13px}
+ .inu-story .after-panel{min-height:108px;grid-template-columns:1.2fr 1fr}
+ .inu-story .bridge{font-size:13px;padding:10px 0 10px 12px;line-height:1.75}
+ .inu-story .after-art{min-height:108px}
+ .inu-story .actions{padding:13px 1px 16px;gap:10px;margin-top:0}
+ .inu-story .continue{min-width:138px}
+}
+@media(max-height:480px) and (min-aspect-ratio:4/5){
+ .inu-story{padding-top:max(7px,env(safe-area-inset-top));padding-bottom:max(8px,env(safe-area-inset-bottom))}
+ .inu-story .card{max-height:calc(100dvh - 18px - env(safe-area-inset-top) - env(safe-area-inset-bottom));padding:11px 15px 0}
+ .inu-story .comic-heading{padding-bottom:8px;margin-bottom:9px}
+ .inu-story h2{font-size:22px}
+ .inu-story .chapter{font-size:10px;margin-bottom:1px}
+ .inu-story .chapter-kind{writing-mode:horizontal-tb;font-size:11px;padding-left:11px;letter-spacing:.06em}
+ .inu-story .comic-strip{grid-template-columns:.95fr 1.25fr;grid-template-rows:minmax(125px,37dvh) minmax(68px,20dvh);gap:8px}
+ .inu-story .synopsis{font-size:13px;line-height:1.65;padding:8px 10px;left:8px;right:8px;bottom:8px}
+ .inu-story .location{top:7px;left:8px;font-size:10px;padding:2px 7px}
+ .inu-story .hero-art{width:55%;height:124%;right:0;bottom:-14px}
+ .inu-story .character-line{font-size:14px;line-height:1.6;top:9px;left:10px;max-width:59%;padding:10px 14px}
+ .inu-story .speaker{bottom:7px;left:10px;font-size:10px;padding:2px 6px}
+ .inu-story .sound{font-size:17px;right:8px;top:7px}
+ .inu-story .bridge{font-size:12px;line-height:1.6;padding:8px 0 8px 11px}
+ .inu-story .after-panel{grid-template-columns:1.7fr 1fr}
+ .inu-story .actions{padding:9px 0 11px;gap:9px;margin-top:0}
+ .inu-story button{min-height:42px;font-size:12px;padding:7px 13px}
+ .inu-story .continue{font-size:14px;min-width:133px}
+}
+@media(hover:none){.inu-story .key{display:none}}
+@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important;transition:none!important}}
+`;
+function render(){
+ if(!document.createElement||!document.body)return;
+ const clear=active.kind==='clear',stop=G.stages?.[stage],art=G.storyComic;
+ focus=document.activeElement;
+ panel=element('section',document.body);panel.className='inu-story';
+ panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
+ const css=element('style',panel);css.textContent=COMIC_CSS;
+ const card=element('article',panel);card.className='card';
+ const heading=element('header',card);heading.className='comic-heading';
+ const title=element('div',heading),chapter=element('p',title);chapter.className='chapter';
+ chapter.textContent=(stop?.lap?stop.lap+'周目 · ':'')+'第'+(stop?.chapter||stage+1)+'章';
+ element('h2',title,active.title);
+ const kind=element('p',heading,clear?'クリアのあと':'出発');kind.className='chapter-kind';
+ const strip=element('div',card);strip.className='comic-strip';
+ const scene=element('figure',strip);scene.className='journey-plate comic-panel opening';
+ const passage=G.storybook?.passage(stage,clear);
+ scene.innerHTML=art?.environment(stage,clear?'clear':'intro',clear,true)||passage?.svg||'';
+ const location=element('p',scene,stop?.name||active.title);location.className='location';
+ const synopsis=element('p',scene);synopsis.className='synopsis';
+ const speech=element('figure',strip);speech.className='comic-panel hero-panel';
+ const heroArt=element('div',speech);heroArt.className='hero-art';
+ heroArt.innerHTML=art?.portrait(hero,clear,stage)||'';
+ const line=element('blockquote',speech);line.className='character-line';
+ const sound=element('span',speech,clear?'にこっ':hero==='kuro'?'すっ…':'きゅっ');sound.className='sound';sound.setAttribute('aria-hidden','true');
+ const speaker=element('figcaption',speech,HEROES[hero]?.name||hero);speaker.className='speaker';
+ const after=element('figure',strip);after.className='comic-panel after-panel';
+ const bridge=element('p',after);bridge.className='bridge';
+ const afterArt=element('div',after);afterArt.className='after-art';afterArt.innerHTML=art?.vignette(hero,clear,stage)||'';
+ const actions=element('footer',card);actions.className='actions';
+ const cue=element('p',actions);cue.className='cue';cue.setAttribute('role','status');
+ const pause=element('button',actions,'一時停止');pause.type='button';
+ const skip=element('button',actions,'つづける');skip.className='continue';skip.type='button';
+ skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
+ const bar=element('div',card);bar.className='progress';const fill=element('i',bar);
+ parts={synopsis,line,bridge,cue,skip,pause,fill,passage};
+ panel.addEventListener('pointerdown',e=>e.stopPropagation());panel.addEventListener('click',e=>e.stopPropagation());
+ skip.focus();paint();
+}
+function paint(){
+ if(!parts||!active)return;
+ const sentences=active.lines[0].match(/[^。！？]+[。！？]?/g)||[active.lines[0]];
+ const first=sentences[0],remaining=sentences.slice(1).join('');
+ const set=(node,text)=>{if(node.textContent!==text)node.textContent=text;};
+ set(parts.synopsis,first);
+ set(parts.bridge,remaining||parts.passage?.caption||active.cue);
+ set(parts.line,active.lines[1]);
+ set(parts.cue,paused?'一時停止中。P でも再開できます。':'');
+ parts.skip.disabled=active.age<30||paused;
+ set(parts.pause,paused?'読むのを再開':'一時停止');
+ parts.fill.style.width=(Math.min(1,active.age/30)*100)+'%';
+}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
 function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=185;e.actor=e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;
@@ -49336,7 +49604,7 @@ G.scenes.play.frame=dt=>{
 
 }
 </script>
-<script>(function(){'use strict';const BUILD="9f211d54622dcdd93f1d5fe235f77d905d03c712bb64962a902f9b46c1f4948d",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
+<script>(function(){'use strict';const BUILD="0d0f5d7eaba955bc5b8bc9a99d17cfafe6eca5b6ce1e7c719face3c076bee2ae",G=window.G,base=new URL('./',location.href);let registration=null,button=null,panel=null,deferred=null,offlineReady=false,savedVersion=null,latest=null,waitingVersion=null,requested=false,reloaded=false,resume=false;
 let status='保存状態を確認しています。';const short=v=>v.slice(0,8),node=(tag,parent,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;};
 function say(text){status=text;if(panel?.status)panel.status.textContent=text;sync();}
 function sync(){if(!button)return;const hide=!!G&&(G.cham?.isOpen||G.sceneName==='play'&&!G.paused&&!G.scenes.play?.over);if(button.hidden!==hide)button.hidden=hide;button.textContent=(latest&&latest!==BUILD||waitingVersion&&waitingVersion!==BUILD||savedVersion&&savedVersion!==BUILD)?'アプリ・更新あり':'アプリ';}

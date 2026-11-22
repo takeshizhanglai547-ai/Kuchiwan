@@ -88,28 +88,144 @@ function restore(e,completed){hide();clearInput();if(e?.actor){e.actor.anim=e.ol
 function reset(){if(active)restore(active,false);active=null;paused=false;queue.length=0;seen.clear();hide();}
 function enqueue(e){if(seen.has(e.key))return false;seen.add(e.key);queue.push(e);return true;}
 function element(tag,parent,text){const e=document.createElement(tag);if(text!=null)e.textContent=text;parent?.append(e);return e;}
-function render(){if(!document.createElement||!document.body)return;
- focus=document.activeElement;panel=element('section',document.body);panel.className='inu-story';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
- const css=element('style',panel);css.textContent='.inu-story{position:fixed;inset:0;z-index:12000;background:linear-gradient(120deg,#071629c9,#17213499);display:flex;align-items:center;justify-content:center;color:#fff8df;font:clamp(15px,2.4vmin,23px)/1.5 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;touch-action:manipulation}.inu-story .card{width:min(100%,960px);max-height:96dvh;overflow:auto;border:3px solid var(--story,#ffd264);border-radius:22px;background:#142a3be8;box-shadow:0 12px 80px #0009;padding:clamp(12px,3vmin,28px);box-sizing:border-box;display:grid;grid-template-columns:minmax(110px,30%) minmax(0,1fr);gap:16px;align-items:center}.inu-story img{width:100%;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 5px 15px #0007)}.inu-story h2{font-size:clamp(22px,4vmin,36px);line-height:1.2;margin:4px 0 12px}.inu-story p{margin:8px 0}.inu-story .cue{font-size:.78em;color:#baddf2}.inu-story .chapter{font-size:.75em;letter-spacing:.12em;color:#ffd777}.inu-story .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.inu-story button{font:inherit;font-size:.82em;min-height:44px;border:2px solid #f2ce7c;border-radius:11px;background:#f7e5b7;color:#182f41;padding:8px 16px;touch-action:manipulation}.inu-story button:focus-visible{outline:4px solid #6cd6ff}.inu-story button:disabled{opacity:.5}.inu-story .progress{height:4px;background:#486077;margin-top:12px}.inu-story .progress i{display:block;height:100%;background:#ffd777;width:0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr;text-align:center;gap:5px}.inu-story img{max-height:26dvh;max-width:55%;margin:auto}.inu-story .actions{justify-content:center}}@media(max-height:430px){.inu-story .card{padding:10px 16px;gap:12px}.inu-story h2{font-size:23px;margin:2px 0 6px}.inu-story p{margin:5px 0}.inu-story .actions{margin-top:8px}.inu-story .cue{font-size:12px}}@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important}}';
- css.textContent+=' .inu-story .card{background:#fff3ea;color:#654052;border-color:#efafbf;box-shadow:0 12px 80px #432b5266}.inu-story .chapter,.inu-story .cue{color:#885065}.inu-story .synopsis{background:#fffaf3;border:1px solid #ecc1bd;border-radius:14px;padding:12px 15px;font-size:1.08em}.inu-story .character-line{background:#ffe0ed;border-radius:12px;padding:7px 10px}.inu-story .progress{display:none}.inu-story .actions button{background:#ffd0e0;border-color:#d588a5;color:#65354b}';
- css.textContent+=' .inu-story .card{grid-template-columns:minmax(180px,42%) minmax(0,1fr)}.inu-story .journey-plate{position:relative;margin:0;padding:7px;background:#fff8df;border:1px solid #dfb7a5;border-radius:12px;box-shadow:0 3px 0 #e6c9b5}.inu-story .journey-plate svg{display:block;width:100%;height:auto}.inu-story .journey-plate img{position:absolute;width:25%;max-height:45%;right:3%;bottom:18%;object-fit:contain}.inu-story .journey-plate figcaption{text-align:center;font-size:.78em;font-weight:750;padding:6px 2px 0}@media(max-aspect-ratio:3/4){.inu-story .card{grid-template-columns:1fr}.inu-story .journey-plate svg{max-height:25dvh}.inu-story .journey-plate img{right:12%}}';
- const card=element('div',panel);card.className='card';card.style.setProperty('--story',HEROES[hero]?.color||'#ffd264');
- const scene=element('figure',card);scene.className='journey-plate';
- const passage=G.storybook?.passage(stage,active.kind==='clear');
- if(passage){scene.innerHTML=passage.svg;element('figcaption',scene,passage.caption);}
- const image=element('img',scene);image.alt=HEROES[hero]?.name||hero;
- const url=G.heroes?.portrait?.(hero,{size:320,expr:active.kind==='clear'?'happy':'normal'});
- if(url)image.src=url;else image.hidden=true;
- if(!passage&&!url){scene.hidden=true;card.style.gridTemplateColumns='minmax(0,1fr)';}
- const body=element('div',card),chapter=element('div',body);chapter.className='chapter';const stop=G.stages?.[stage];
- chapter.textContent=(active.kind==='intro'?'出発':'旅の記録')+' · '+(stop?.lap?stop.lap+'周目 '+stop.region+' · ':'')+'第'+(stop?.chapter||stage+1)+'章';
- element('h2',body,active.title);const synopsis=element('p',body);synopsis.className='synopsis';const line=element('p',body),cue=element('p',body);line.className='character-line';cue.className='cue';
- const actions=element('div',body);actions.className='actions';const skip=element('button',actions,'つづける / Enter'),pause=element('button',actions,'一時停止 / P');
- skip.type=pause.type='button';skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
- const bar=element('div',body);bar.className='progress';const fill=element('i',bar);parts={synopsis,line,cue,skip,pause,fill};
- panel.addEventListener('pointerdown',e=>e.stopPropagation());panel.addEventListener('click',e=>e.stopPropagation());skip.focus();paint();}
-function paint(){if(!parts||!active)return;parts.synopsis.textContent=active.lines[0];parts.line.textContent='「'+active.lines[1]+'」';parts.cue.textContent=paused?'演出を一時停止中。P またはボタンで再開。':active.cue;
- parts.skip.disabled=active.age<30||paused;parts.pause.textContent=paused?'再開 / P':'一時停止 / P';parts.fill.style.width=(Math.min(1,active.age/30)*100)+'%';}
+const COMIC_CSS=`
+.inu-story{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;background:#253343dc;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#554253;font:16px/1.55 "Hiragino Maru Gothic ProN","Yu Gothic",system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;touch-action:pan-y}
+.inu-story *{box-sizing:border-box}
+.inu-story .card{width:min(100%,1050px);max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;border:2px solid #79616d;border-radius:14px 22px 15px 23px;background-color:#fffaf1;background-image:radial-gradient(#baa69e26 .65px,transparent .65px);background-size:7px 7px;box-shadow:6px 7px 0 #e1b4bf,11px 14px 0 #47354538,0 25px 90px #131e3273;padding:20px 23px 0;isolation:isolate}
+.inu-story .comic-heading{display:flex;align-items:end;gap:14px;padding:0 2px 14px;border-bottom:1.5px solid #d5bfc0;margin-bottom:14px}
+.inu-story .chapter{font-size:12px;font-weight:800;letter-spacing:.08em;color:#997382;margin:0 0 4px}
+.inu-story h2{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(23px,3vmin,33px);line-height:1.25;letter-spacing:.035em;color:#594250;margin:0;font-weight:800;text-wrap:balance}
+.inu-story .chapter-kind{margin:0 0 1px auto;flex:none;color:#9c6777;font-size:12px;font-weight:800;letter-spacing:.12em;border-left:1px solid #d6b8bd;padding-left:11px}
+.inu-story .comic-strip{display:grid;grid-template-columns:1.05fr 1.18fr;grid-template-rows:238px 137px;gap:13px}
+.inu-story .comic-panel{position:relative;min-width:0;overflow:hidden;border:2px solid #6e5664;background:#ede3e1;border-radius:5px 12px 5px 9px;margin:0;isolation:isolate}
+.inu-story .comic-panel svg{display:block;width:100%;height:100%}
+.inu-story .opening{grid-column:1;grid-row:1 / 3;transform:rotate(-.65deg);background:#d1ddd2}
+.inu-story .opening>svg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.inu-story .location{position:absolute;top:11px;left:11px;max-width:calc(100% - 22px);margin:0;background:#fffaf2ed;border:1px solid #b09b9f;box-shadow:3px 3px 0 #71516516;padding:3px 10px;font-size:12px;font-weight:800;line-height:1.45;transform:rotate(-2deg)}
+.inu-story .synopsis{position:absolute;left:12px;right:12px;bottom:12px;margin:0;background:#fffaf2f2;padding:12px 14px;border:1.5px solid #a58a96;box-shadow:3px 4px 0 #78616b22;border-radius:2px 7px 3px 5px;font-size:16px;font-weight:600;line-height:1.8;letter-spacing:.02em;overflow-wrap:anywhere}
+.inu-story .hero-panel{background:#fcf2eb;transform:rotate(.55deg)}
+.inu-story .hero-panel::before{content:'';position:absolute;inset:0;background:radial-gradient(#d6a5b944 .9px,transparent 1px);background-size:9px 9px;z-index:-1}
+.inu-story .hero-art{position:absolute;right:-14px;bottom:-5px;width:68%;height:105%;margin:0}
+.inu-story .hero-art svg{object-fit:contain}
+.inu-story .character-line{position:absolute;top:17px;left:15px;max-width:58%;margin:0;padding:15px 17px 17px;background:#fffef9;color:#574051;border:2px solid #826270;border-radius:49% 47% 44% 41% / 24% 29% 34% 31%;box-shadow:3px 5px 0 #c3a6af33;font-size:clamp(16px,1.8vmin,21px);font-weight:800;line-height:1.7;letter-spacing:.02em;z-index:2;text-wrap:pretty;overflow-wrap:anywhere}
+.inu-story .character-line::after{content:'';position:absolute;right:10px;bottom:-12px;width:19px;height:24px;background:#fffef9;border-right:2px solid #826270;border-bottom:2px solid #826270;transform:skew(18deg) rotate(30deg);clip-path:polygon(15% 0,100% 0,100% 100%)}
+.inu-story .speaker{position:absolute;left:15px;bottom:12px;max-width:50%;margin:0;font-size:12px;font-weight:800;letter-spacing:.05em;background:#f8e9dfd9;padding:3px 8px;border-radius:3px}
+.inu-story .sound{position:absolute;right:16px;top:8px;font-size:22px;letter-spacing:.10em;font-weight:900;transform:rotate(10deg);color:#bc869c;text-shadow:2px 2px 0 #fff5e8}
+.inu-story .after-panel{background:#eff1e4;display:grid;grid-template-columns:1.3fr 1fr;align-items:center;transform:rotate(-.3deg)}
+.inu-story .after-art{align-self:stretch;min-width:0;position:relative;overflow:hidden}
+.inu-story .after-art svg{width:100%;height:100%;object-fit:cover}
+.inu-story .bridge{position:relative;font-size:14px;font-weight:650;line-height:1.75;margin:0;padding:12px 0 12px 14px;z-index:1;overflow-wrap:anywhere}
+.inu-story .after-panel .sound{right:5px;top:5px;font-size:15px;color:#8e9e89}
+.inu-story .actions{position:sticky;bottom:0;display:flex;gap:12px;justify-content:flex-end;align-items:center;padding:16px 0 17px;background:#fffaf1f5;margin-top:5px;border-top:0;z-index:5}
+.inu-story button{appearance:none;font:inherit;font-size:14px;font-weight:750;min-height:46px;min-width:98px;border:1.5px solid #b99daa;border-radius:7px 10px 8px 9px;background:#fbf4f0;color:#7c6675;padding:9px 16px;touch-action:manipulation;cursor:pointer;transition:transform .15s,background .15s}
+.inu-story .continue{background:#866076;border-color:#735169;color:#fffaf4;box-shadow:0 3px 0 #543d53;min-width:148px;font-size:16px;letter-spacing:.06em}
+.inu-story button:hover{transform:translateY(-1px)}
+.inu-story button:active{transform:translateY(2px)}
+.inu-story button:disabled{opacity:.45;cursor:default;transform:none}
+.inu-story button:focus-visible{outline:3px solid #70acb6;outline-offset:3px}
+.inu-story .cue{font-size:12px;line-height:1.5;color:#8f6d7d;margin:0 auto 0 1px;max-width:44%}
+.inu-story .key{font-size:10px;letter-spacing:.03em;opacity:.7;display:inline;margin-left:12px}
+.inu-story .progress{display:none}
+.inu-story .comic-panel{animation:comic-reveal .36s both ease-out}
+.inu-story .hero-panel{animation-delay:.12s}
+.inu-story .after-panel{animation-delay:.24s}
+@keyframes comic-reveal{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+@media(max-aspect-ratio:4/5){
+ .inu-story{padding-left:14px;padding-right:17px}
+ .inu-story .card{padding:16px 13px 0;border-radius:12px 19px 11px 17px;box-shadow:4px 5px 0 #e1b4bf,8px 9px 0 #47354538,0 20px 60px #131e3266}
+ .inu-story .comic-heading{padding:0 3px 12px;margin-bottom:12px}
+ .inu-story h2{font-size:clamp(22px,5.4vw,31px)}
+ .inu-story .chapter{font-size:11px}
+ .inu-story .chapter-kind{font-size:12px}
+ .inu-story .comic-strip{grid-template-columns:1fr;grid-template-rows:clamp(165px,24dvh,255px) clamp(182px,25dvh,260px) auto;gap:12px}
+ .inu-story .opening{grid-row:auto;grid-column:auto}
+ .inu-story .opening>svg{height:140%;top:-22%}
+ .inu-story .synopsis{bottom:10px;left:10px;right:10px;padding:9px 12px;font-size:14px;line-height:1.7}
+ .inu-story .location{top:9px;left:9px;font-size:11px}
+ .inu-story .hero-art{width:65%;height:112%;right:-15px;bottom:-7px}
+ .inu-story .character-line{font-size:16px;max-width:59%;padding:13px 15px 15px;top:17px;left:12px;line-height:1.7}
+ .inu-story .speaker{font-size:11px;left:12px;bottom:10px}
+ .inu-story .sound{font-size:21px;right:13px}
+ .inu-story .after-panel{min-height:108px;grid-template-columns:1.2fr 1fr}
+ .inu-story .bridge{font-size:13px;padding:10px 0 10px 12px;line-height:1.75}
+ .inu-story .after-art{min-height:108px}
+ .inu-story .actions{padding:13px 1px 16px;gap:10px;margin-top:0}
+ .inu-story .continue{min-width:138px}
+}
+@media(max-height:480px) and (min-aspect-ratio:4/5){
+ .inu-story{padding-top:max(7px,env(safe-area-inset-top));padding-bottom:max(8px,env(safe-area-inset-bottom))}
+ .inu-story .card{max-height:calc(100dvh - 18px - env(safe-area-inset-top) - env(safe-area-inset-bottom));padding:11px 15px 0}
+ .inu-story .comic-heading{padding-bottom:8px;margin-bottom:9px}
+ .inu-story h2{font-size:22px}
+ .inu-story .chapter{font-size:10px;margin-bottom:1px}
+ .inu-story .chapter-kind{writing-mode:horizontal-tb;font-size:11px;padding-left:11px;letter-spacing:.06em}
+ .inu-story .comic-strip{grid-template-columns:.95fr 1.25fr;grid-template-rows:minmax(125px,37dvh) minmax(68px,20dvh);gap:8px}
+ .inu-story .synopsis{font-size:13px;line-height:1.65;padding:8px 10px;left:8px;right:8px;bottom:8px}
+ .inu-story .location{top:7px;left:8px;font-size:10px;padding:2px 7px}
+ .inu-story .hero-art{width:55%;height:124%;right:0;bottom:-14px}
+ .inu-story .character-line{font-size:14px;line-height:1.6;top:9px;left:10px;max-width:59%;padding:10px 14px}
+ .inu-story .speaker{bottom:7px;left:10px;font-size:10px;padding:2px 6px}
+ .inu-story .sound{font-size:17px;right:8px;top:7px}
+ .inu-story .bridge{font-size:12px;line-height:1.6;padding:8px 0 8px 11px}
+ .inu-story .after-panel{grid-template-columns:1.7fr 1fr}
+ .inu-story .actions{padding:9px 0 11px;gap:9px;margin-top:0}
+ .inu-story button{min-height:42px;font-size:12px;padding:7px 13px}
+ .inu-story .continue{font-size:14px;min-width:133px}
+}
+@media(hover:none){.inu-story .key{display:none}}
+@media(prefers-reduced-motion:reduce){.inu-story *{animation:none!important;transition:none!important}}
+`;
+function render(){
+ if(!document.createElement||!document.body)return;
+ const clear=active.kind==='clear',stop=G.stages?.[stage],art=G.storyComic;
+ focus=document.activeElement;
+ panel=element('section',document.body);panel.className='inu-story';
+ panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',active.title);
+ const css=element('style',panel);css.textContent=COMIC_CSS;
+ const card=element('article',panel);card.className='card';
+ const heading=element('header',card);heading.className='comic-heading';
+ const title=element('div',heading),chapter=element('p',title);chapter.className='chapter';
+ chapter.textContent=(stop?.lap?stop.lap+'周目 · ':'')+'第'+(stop?.chapter||stage+1)+'章';
+ element('h2',title,active.title);
+ const kind=element('p',heading,clear?'クリアのあと':'出発');kind.className='chapter-kind';
+ const strip=element('div',card);strip.className='comic-strip';
+ const scene=element('figure',strip);scene.className='journey-plate comic-panel opening';
+ const passage=G.storybook?.passage(stage,clear);
+ scene.innerHTML=art?.environment(stage,clear?'clear':'intro',clear,true)||passage?.svg||'';
+ const location=element('p',scene,stop?.name||active.title);location.className='location';
+ const synopsis=element('p',scene);synopsis.className='synopsis';
+ const speech=element('figure',strip);speech.className='comic-panel hero-panel';
+ const heroArt=element('div',speech);heroArt.className='hero-art';
+ heroArt.innerHTML=art?.portrait(hero,clear,stage)||'';
+ const line=element('blockquote',speech);line.className='character-line';
+ const sound=element('span',speech,clear?'にこっ':hero==='kuro'?'すっ…':'きゅっ');sound.className='sound';sound.setAttribute('aria-hidden','true');
+ const speaker=element('figcaption',speech,HEROES[hero]?.name||hero);speaker.className='speaker';
+ const after=element('figure',strip);after.className='comic-panel after-panel';
+ const bridge=element('p',after);bridge.className='bridge';
+ const afterArt=element('div',after);afterArt.className='after-art';afterArt.innerHTML=art?.vignette(hero,clear,stage)||'';
+ const actions=element('footer',card);actions.className='actions';
+ const cue=element('p',actions);cue.className='cue';cue.setAttribute('role','status');
+ const pause=element('button',actions,'一時停止');pause.type='button';
+ const skip=element('button',actions,'つづける');skip.className='continue';skip.type='button';
+ skip.onclick=e=>{e.preventDefault();G.story.skip();};pause.onclick=e=>{e.preventDefault();G.story.pause(!paused);};
+ const bar=element('div',card);bar.className='progress';const fill=element('i',bar);
+ parts={synopsis,line,bridge,cue,skip,pause,fill,passage};
+ panel.addEventListener('pointerdown',e=>e.stopPropagation());panel.addEventListener('click',e=>e.stopPropagation());
+ skip.focus();paint();
+}
+function paint(){
+ if(!parts||!active)return;
+ const sentences=active.lines[0].match(/[^。！？]+[。！？]?/g)||[active.lines[0]];
+ const first=sentences[0],remaining=sentences.slice(1).join('');
+ const set=(node,text)=>{if(node.textContent!==text)node.textContent=text;};
+ set(parts.synopsis,first);
+ set(parts.bridge,remaining||parts.passage?.caption||active.cue);
+ set(parts.line,active.lines[1]);
+ set(parts.cue,paused?'一時停止中。P でも再開できます。':'');
+ parts.skip.disabled=active.age<30||paused;
+ set(parts.pause,paused?'読むのを再開':'一時停止');
+ parts.fill.style.width=(Math.min(1,active.age/30)*100)+'%';
+}
 function finish(){if(!active)return;const e=active;history.push({run,stage,hero,kind:e.kind,key:e.key,age:e.age,completed:true});restore(e,true);active=null;paused=false;}
 function begin(e){if(e.hero)hero=e.hero;active=e;e.age=0;e.duration=185;e.actor=e.player||G.player;e.oldAnim=e.actor?.anim;e.oldAnimT=e.actor?.animT;
  clearInput();if(G.fx)G.fx.worldFrozen=true;

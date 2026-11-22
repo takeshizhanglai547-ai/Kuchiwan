@@ -9,9 +9,15 @@ const report={kind:'Actual boss modules, cinematic coordinator, core stepping an
    assert.match(panel.svg,/<svg/);
    assert.equal(panel.caption,G.storybook.passage(i+1,false).caption);
  });
- G.story.beginStage('inu',1);assert(G.story.flush());
+ G.story.beginStage('inu',0);assert(G.story.flush());
  const walk=e=>[e,...e.children.flatMap(walk)];
- assert(walk(env.c.document.body).some(e=>e.className==='journey-plate'&&e.innerHTML.includes('<svg')));
+ const nodes=walk(env.c.document.body);
+ assert(nodes.some(e=>e.className?.split(' ').includes('journey-plate')&&e.innerHTML.includes('<svg')));
+ assert.equal(nodes.filter(e=>e.className?.split(' ').includes('comic-panel')).length,3);
+ assert(nodes.some(e=>e.className==='hero-art'&&e.innerHTML.includes('<svg')));
+ const narration=nodes.find(e=>e.className==='synopsis').textContent;
+ const continuation=nodes.find(e=>e.className==='bridge').textContent;
+ assert.equal(narration+continuation,G.story.active.lines[0],'all story sentences remain readable across the comic panels');
 }
 const types=['garm','shark','ghost','cerbe','slime','dragon','kuroinu','emperor'];
 {const {G}=setup();assert.deepEqual(Object.entries(G.foes.types).filter(([id,d])=>d.boss).map(([id])=>id).sort(),types.slice().sort(),'all actual registered bosses covered');assert.deepEqual(Array.from(G.heroes.ids).sort(),Object.keys(G.story.heroes).sort(),'all playable characters covered');}
